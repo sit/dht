@@ -33,9 +33,9 @@ float
 uniform_random_f (float max)
 {
   float f;
-  int c = random ();
-  f = max*(((float)c)/((float)MAX_INT));
-  if (c > MAX_INT/2) f = -f;
+  unsigned long c = random ();
+  f = 2*max*(((float)c)/((float)MAX_INT));
+  f -= max;
   return f;
 }
 
