@@ -215,8 +215,7 @@ route_dhash::route_dhash (ptr<route_factory> f, chordID blockID, dhash *dh,
 route_dhash::~route_dhash () 
 {
   dh->unregister_block_cb (nonce);
-  delete chord_iterator;
-  chord_iterator = NULL;
+  chord_iterator->goaway();
   timecb_remove (dcb);
   dcb = NULL;
 }
@@ -227,6 +226,7 @@ route_dhash::reexecute ()
   if (retries == 0) {
     warn << "route_dhash: no more retries...giving up\n";
     (*cb) (DHASH_NOENT, NULL, path ());
+    dh->unregister_block_cb (nonce);
   } else {
     // XXX what if 'this' route_dhash was invoked with the other execute() ???
     retries--;

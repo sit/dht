@@ -42,6 +42,27 @@ route_iterator::unmarshall_upcall_res (rpc_program *prog,
   return false;
 }
 
+void
+route_iterator::goaway()
+{
+  if(nbusy == 0)
+    delete this;
+  else
+    notneeded = true;
+}
+
+void
+route_iterator::delwrapper(cbhop_t cb, bool d)
+{
+  if (notneeded && (nbusy == 1)) 
+    delete this;
+  else {
+    if (d) nbusy--;
+    cb (d);
+  }
+}
+
+
 //
 // Finger table routing 
 //
@@ -65,7 +86,7 @@ route_chord::route_chord (ptr<vnode> vi, chordID xi,
 void
 route_chord::first_hop (cbhop_t cbi, chordID guess)
 {
-  cb = cbi;
+  cb = wrap((route_iterator *)this, &route_iterator::delwrapper, cbi);
   search_path.push_back (guess);
   next_hop ();
 }
@@ -74,7 +95,7 @@ void
 route_chord::first_hop (cbhop_t cbi, bool ucs)
 {
   //  warn << v->my_ID () << "; starting a lookup for " << x << "\n";
-  cb = cbi;
+  cb = wrap((route_iterator *)this, &route_iterator::delwrapper, cbi);
   if (v->lookup_closestsucc (v->my_ID () + 1) 
       == v->my_ID ()) {  // is myID the only node?
     search_path.push_back (v->my_ID ());
@@ -97,6 +118,7 @@ route_chord::next_hop ()
   chordID n = search_path.back();
   //  warn << v->my_ID () << "; next_hop: " << n << " is next\n";
   make_hop(n);
+  nbusy++;
 }
 
 
@@ -198,7 +220,9 @@ route_chord::make_hop_cb (ptr<bool> del,
       // last returns itself as best predecessor, but doesn't know
       // what its immediate successor is---higher layer should use
       // succlist to make forward progress
-      warn << "node returned itself as best pred\n";
+      warnx << v->my_ID() << ": make_route_cb: node " << last
+	   << "returned itself as best pred, looking for "
+	   << x << "\n";
       r = CHORD_ERRNOENT;
       cb (done = true);
     } else {
@@ -206,10 +230,11 @@ route_chord::make_hop_cb (ptr<bool> del,
       chordID olddist = distance (search_path.back (), x);
       chordID newdist = distance (res->notinrange->n.x, x);
       if (newdist > olddist) {
-	warnx << "PROBLEM: went in the wrong direction: " << v->my_ID ()
-	      << "looking for " << x << "\n";
+	warnx << v->my_ID() << ": make_route_cb: went in the wrong direction:"
+	      << " looking for " << x << "\n";
 	// xxx surely we can do something more intelligent here.
 	print ();
+	warnx << "sent me to " << res->notinrange->n.x << "\n";
 	assert (0);
       }
       
@@ -385,7 +410,7 @@ createdebruijnkey (chordID p, chordID n, chordID &x, chordID *k, int logbase)
 
 void
 route_debruijn::first_hop (cbhop_t cbi, chordID guess) {
-  cb = cbi;
+  cb = wrap((route_iterator *)this, &route_iterator::delwrapper, cbi);
   k_path.push_back (x);
   search_path.push_back (guess);
   virtual_path.push_back (x);
@@ -395,7 +420,7 @@ route_debruijn::first_hop (cbhop_t cbi, chordID guess) {
 void
 route_debruijn::first_hop (cbhop_t cbi, bool ucs)
 {
-  cb = cbi;
+  cb = wrap((route_iterator *)this, &route_iterator::delwrapper, cbi);
   chordID myID = v->my_ID ();
 
   warnx << "first_hop: " << x << "\n";
@@ -436,6 +461,7 @@ route_debruijn::next_hop ()
   chordID k = k_path.back ();
 
   make_hop (n, x, k, i);
+  nbusy++;
 }
 
 
