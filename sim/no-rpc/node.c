@@ -162,17 +162,6 @@ void pushNode(Request *r, ID nid)
 }
 
 
-/*******************************************************/
-/*      update node state
-/*******************************************************/
-
-void updateNodeState(Node *n, int id)
-{
-  // ??? code to be added
-  updateDocList(n);
-}
-
-
 int printNodeInfo(Node *n)
 {
   Document *doc;

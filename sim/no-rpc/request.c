@@ -30,12 +30,6 @@ void insertRequest(Node *n, Request *r)
 { 
   RequestList *rList = n->reqList;
 
-  /*
-printf("==> Clock=%f req:(x=%d, type=%d, style=%d, i=%d, s=%d, p=%d, s=%d)\n",
-       Clock, r->x, r->type, r->style, r->initiator, r->sender,
-       r->pred, r->succ);
-  */
-
   if (!rList->head) 
     rList->head = rList->tail = r;
   else {

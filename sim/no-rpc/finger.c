@@ -50,6 +50,9 @@ void insertFinger(Node *n, ID id)
   if (n->id == id)
     return;
 
+  updateDocList(n, getNode(id));
+  updateDocList(getNode(id), n);
+
   // remove finger entries that have expired
   cleanFingerList(fList);
 
@@ -80,7 +83,6 @@ void insertFinger(Node *n, ID id)
     // fList empty; insert finger in fList
     fList->size++;
     fList->head = fList->tail = newFinger(id);
-    updateDocList(n);
     return;
   }
 
@@ -89,7 +91,7 @@ void insertFinger(Node *n, ID id)
     fList->head = newFinger(id);
     fList->head->next = ftemp;
     fList->size++;
-    updateDocList(n);
+    // getDocList(n);
     return;
   }
 
@@ -242,3 +244,4 @@ void printFingerList(Node *n)
     
   printf("\n");
 }
+

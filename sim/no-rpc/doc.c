@@ -6,7 +6,6 @@ extern Node *NodeHashTable[HASH_SIZE];
 int insertDocInList(DocList *docList, Document *doc);
 Document *findDocInList(DocList *docList, ID docId);
 void removeDocFromList(DocList *docList, ID docId);
-void updateDocList(Node *n);
 
 DocList PendingDocs = {NULL, 0};
 
@@ -96,7 +95,8 @@ void insertDocumentLocal(Node *n, ID *docId)
       free(doc);
       return;
     } else {
-      printf("The document %d inserted on node %d\n", *docId, n->id);
+      printf("The document %d inserted on node %d at %f\n", 
+	     *docId, n->id, Clock);
       removeDocFromList(&PendingDocs, *docId);
     }
   }
@@ -176,12 +176,13 @@ void *freeDocList(Node *n)
 
 
 /* move documents from n's successor to n */
-void updateDocList(Node *n)
+void updateDocList(Node *n, Node *s)
 {
   Document *doc, *d;
-  Node     *s = getNode(getSuccessor(n)); 
   int       flag = FALSE;
 
+  if (!n || !s)
+    return;
   if (n == s || n->status == ABSENT)
     return;
 
@@ -200,6 +201,8 @@ void updateDocList(Node *n)
       /* ... if not, move document from s' document list to n's 
        * document list 
        */
+if (doc->id == 573508)
+printf ("MOVE %d from %d to %d at %f\n", doc->id, s->id, n->id, Clock);
       s->docList->head = doc->next;
       insertDocInList(n->docList, doc);
     } else
@@ -219,6 +222,7 @@ void updateDocList(Node *n)
       d = d->next;
   }
 }
+
 
 
 /* move documents from n1 to n2 */
