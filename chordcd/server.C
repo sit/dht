@@ -990,7 +990,10 @@ chord_server::fetch_data (bool pfonly, chordID ID, cbdata_t cb)
 }
 
 void
-chord_server::fetch_data_cb (chordID ID, cbdata_t cb, ptr<dhash_block> blk)
+chord_server::fetch_data_cb (chordID ID, cbdata_t cb, 
+			     dhash_stat stat,
+			     ptr<dhash_block> blk,
+			     route path)
 {
   ptr<sfsro_data> data = NULL;
 
