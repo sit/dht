@@ -51,7 +51,11 @@ void
 recroute<T>::sweeper ()
 {
   sweep_cb = NULL;
-  
+
+  u_int swept = 0;
+  u_int started = 0;
+  u_int total = 0;
+
   timespec now;
   clock_gettime (CLOCK_REALTIME, &now);
   timespec maxtime;
@@ -61,16 +65,20 @@ recroute<T>::sweeper ()
   route_recchord *rn = NULL;
   while (r != NULL) {
     rn = routers.next (r);
+    total++;
     if (r->started ()) {
+      started++;
       timespec st = r->start_time ();
       if (now - st > maxtime) {
+	swept++;
 	routers.remove (r);
 	r->handle_timeout ();
       }
     }
     r = rn;
   }
-  
+  rtrace << my_ID () << ": sweeper: swept " << swept  << "/" << started
+	 << " started routers (" << total <<" total).\n";
   sweep_cb = delaycb (maxtime.tv_sec, wrap (this, &recroute<T>::sweeper));
 }
 
