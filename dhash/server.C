@@ -733,7 +733,6 @@ is_keyhash_stale (ref<dbrec> prev, ref<dbrec> d)
 {
   long v0 = keyhash_version (prev);
   long v1 = keyhash_version (d);
-  warn << "comparing keyhash " << v0 << " vs " << v1 << "\n";
   if (v0 >= v1)
     return true;
   return false;
