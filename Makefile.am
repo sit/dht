@@ -1,8 +1,13 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.18 2003/01/06 23:10:56 jsr Exp $
+# $Id: Makefile.am,v 1.19 2003/01/10 22:37:40 fdabek Exp $
 
 #SUBDIRS = svc sfsrodb sfsrocd sfsrosd chord dhash lsd 
-SUBDIRS = svc merkle chord dhash sfsrodb chordcd lsd devel test starcd tst
+DIRS = svc merkle chord dhash sfsrodb lsd devel
+if COND_ALL
+   DIRS = svc merkle chord dhash sfsrodb lsd devel chordcd test tst starcd
+endif
+
+SUBDIRS = $(DIRS)
 
 CLEANFILES = core *.core *~
 

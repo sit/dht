@@ -1,4 +1,4 @@
-dnl $Id: configure.in,v 1.27 2003/01/09 17:35:56 sit Exp $
+dnl $Id: configure.in,v 1.28 2003/01/10 22:37:40 fdabek Exp $
 dnl
 dnl Process this file with autoconf to produce a configure script.
 dnl
@@ -29,6 +29,7 @@ AM_PROG_LIBTOOL
 
 SFS_SFS
 SFS_CFLAGS
+CHORD_BUILDALL
 
 dnl setup db3
 SFS_DB3

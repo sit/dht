@@ -1,4 +1,4 @@
-dnl $Id: acinclude.m4,v 1.7 2003/01/06 21:20:20 sit Exp $
+dnl $Id: acinclude.m4,v 1.8 2003/01/10 22:37:40 fdabek Exp $
 
 # Configure paths for GTK+
 # Owen Taylor     97-11-3
@@ -196,6 +196,14 @@ main ()
 ])
 
 
+
+dnl
+dnl switch for building everyting
+dnl
+AC_DEFUN(CHORD_BUILDALL,
+[AC_ARG_WITH(apps, [--enable-apps Build everything])
+AM_CONDITIONAL(COND_ALL, test "${with_apps}" = yes)
+])
 
 dnl
 dnl Find full path to program
