@@ -48,6 +48,8 @@ class route_iterator {
   chordID last_node () { return search_path.back (); };
   chordID key () { return x; };
   route path () { return search_path; };
+  route failed_path () { return failed_nodes; };
+
   chordstat status () { return r; };
 
   virtual void print ();
