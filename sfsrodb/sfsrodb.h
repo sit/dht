@@ -1,4 +1,4 @@
-/* $Id: sfsrodb.h,v 1.2 2001/03/02 09:49:57 fdabek Exp $ */
+/* $Id: sfsrodb.h,v 1.3 2001/06/30 02:30:31 fdabek Exp $ */
 
 /*
  *
@@ -25,8 +25,8 @@
 #define _SFSRODB_H_
 
 #include "str.h"
-#include <sfsro_prot.h>
-#include <sfsrodb_core.h>
+#include "sfsro_prot_cfs.h"
+#include "sfsrodb_core.h"
 #include "sfsmisc.h"
 
 

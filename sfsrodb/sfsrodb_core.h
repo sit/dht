@@ -1,4 +1,4 @@
-/* $Id: sfsrodb_core.h,v 1.2 2001/03/02 09:49:57 fdabek Exp $ */
+/* $Id: sfsrodb_core.h,v 1.3 2001/06/30 02:30:32 fdabek Exp $ */
 
 /*
  *
@@ -31,12 +31,15 @@
 #include "sha1.h"
 #include "xdrmisc.h"
 #include "dbfe.h"
+#include "dhash_prot.h"
 
 bigint fh2mpz(const void *keydata, size_t keylen);
 
 bool sfsrodb_put (ptr<aclnt> db, const void *keydata, size_t keylen, 
 		  void *contentdata, size_t contentlen);
 
+void
+sfsrodb_put_cb(dhash_stat *res, clnt_stat err);
 /*
   Requires: You have at some point called random_init();
   Given: A filled buffer and allocated fh
@@ -61,5 +64,7 @@ void create_sfsrosig (sfs_sig *sig,  sfsro1_signed_fsinfo *info,
 
 bool verify_sfsrosig (const sfs_sig *sig, const sfsro1_signed_fsinfo *info,
 		      const sfs_pubkey *key);
+
+extern long out;
 
 #endif /* _SFSRODB_CORE_H_ */

@@ -1,4 +1,4 @@
-/* $Id: sfsrodb.C,v 1.8 2001/03/26 08:37:10 fdabek Exp $ */
+/* $Id: sfsrodb.C,v 1.9 2001/06/30 02:30:31 fdabek Exp $ */
 
 /*
  * Copyright (C) 1999 Kevin Fu (fubob@mit.edu)
@@ -48,9 +48,12 @@ ptr<aclnt> sfsrodb;
 
 str root2;
 
+u_int32_t blocksize;
+u_int32_t nfh;
+
 bool initialize;
 bool verbose_mode;
-u_int32_t blocksize;
+
 extern int errno;
 char IV[SFSRO_IVSIZE];
 int relpathlen;
@@ -257,11 +260,11 @@ process_sindirect (int &fd, bool &wrote_stuff, sfsro_inode *inode,
   //  warnx << "Adding sindirect pointers\n"; 
   uint32 blocknum = 0;
   sfsro_data sindir (SFSRO_INDIR);
-  sindir.indir->handles.setsize (SFSRO_NFH);
+  sindir.indir->handles.setsize (nfh);
   
-  while (blocknum < SFSRO_NFH) {
+  while (blocknum < nfh) {
     
-    size = read (fd, block, SFSRO_BLKSIZE);
+    size = read (fd, block, blocksize);
 
     if (size <= 0)
       break;
@@ -325,11 +328,11 @@ process_dindirect (int &fd, bool &wrote_stuff, sfsro_inode *inode,
   //  warnx << "Adding dindirect pointers\n"; 
   uint32 blocknum = 0;
   sfsro_data dindir (SFSRO_INDIR);
-  dindir.indir->handles.setsize (SFSRO_NFH);
+  dindir.indir->handles.setsize (nfh);
   // XXX we could be smarter here by only allocating
   // the number of file handles we actually need in the dindirect.
 
-  while (!done && blocknum < SFSRO_NFH) {
+  while (!done && blocknum < nfh) {
 
     done = process_sindirect (fd, wrote_stuff, inode, block, block_fh, 
 			      &dindir.indir->handles[blocknum]);
@@ -383,11 +386,11 @@ process_tindirect (int &fd, bool &wrote_stuff, sfsro_inode *inode,
   //  warnx << "Adding tindirect pointers\n"; 
   uint32 blocknum = 0;
   sfsro_data tindir (SFSRO_INDIR);
-  tindir.indir->handles.setsize (SFSRO_NFH);
+  tindir.indir->handles.setsize (nfh);
   // XXX we could be smarter here by only allocating
   // the number of file handles we actually need in the tindirect.
   
-  while (!done && blocknum < SFSRO_NFH) {
+  while (!done && blocknum < nfh) {
     
     done = process_dindirect (fd, wrote_stuff, inode, block, block_fh,
 			      &tindir.indir->handles[blocknum]);
@@ -443,7 +446,6 @@ process_tindirect (int &fd, bool &wrote_stuff, sfsro_inode *inode,
 void
 store_file (sfsro_inode *inode, str path)
 {
-  char block[SFSRO_BLKSIZE];
   sfs_hash block_fh;
   int fd;
   size_t size = 0;
@@ -459,21 +461,22 @@ store_file (sfsro_inode *inode, str path)
   uint32 blocknum = 0;
   inode->reg->direct.setsize (SFSRO_NDIR);
   bzero (inode->reg->direct.base (), SFSRO_NDIR * sizeof (sfs_hash));
-  
+  char *block = New char[blocksize];
   while (blocknum < SFSRO_NDIR) {      
     
-    size = read (fd, block, SFSRO_BLKSIZE);
-
+    size = read (fd, block, blocksize);
+    
     if (size <= 0)
       break;
 
     inode->reg->size += size;
 
+   
     /* Check for identical blocks */
     if (store_file_block (&block_fh, block, size)) {
       inode->reg->used += size;
-      //      warnx << "Added direct, size " << size << ", blocknum " 
-      //    << blocknum << "\n";
+      warnx << "Added direct, size " << size << ", blocknum " 
+	    << blocknum << "\n";
     }
 
     inode->reg->direct[blocknum] = block_fh;
@@ -491,7 +494,9 @@ store_file (sfsro_inode *inode, str path)
     done = process_sindirect (fd, wrote_stuff, inode, 
 			      block, block_fh,
 			      &inode->reg->indirect);
-    
+
+    warn << " stored indirecto block at " << hexdump(&inode->reg->indirect, 20) << "\n";
+
     // Deal with dindirect pointers
     if (!done) {
       done = process_dindirect (fd, wrote_stuff, inode, 
@@ -505,7 +510,8 @@ store_file (sfsro_inode *inode, str path)
 				  &inode->reg->triple_indirect);
     }
   }
-  
+
+  delete block;
   if (close (fd) < 0) {
     warn << "store_file: close failed\n";
     exit (1);
@@ -808,7 +814,8 @@ sfsrodb_main (const str root, const str keyfile, const char *dbfile)
   res.sfsro->v1->info.type = SFS_ROFSINFO;
   res.sfsro->v1->info.start = start = time (NULL);
   res.sfsro->v1->info.duration = sfsro_duration;
-
+  res.sfsro->v1->info.blocksize = blocksize;
+  
   end = start + sfsro_duration;
 
   // XX Should make sure timezone is correct
@@ -890,6 +897,7 @@ sfsrodb_main (const str root, const str keyfile, const char *dbfile)
   // in fhdb is the same as the number of database entries (minus
   // the conres and root)
 
+  amain();
   return 0;
 }
 
@@ -934,13 +942,14 @@ main (int argc, char **argv)
 
   verbose_mode = false;
   initialize = false;
-
+  blocksize = 8192;
+  
   int ch;
   while ((ch = getopt (argc, argv, "b:d:e:s:o:h:vi")) != -1)
     switch (ch) {
     case 'b':
       if (!convertint (optarg, &blocksize)
-	  || blocksize < 512 || blocksize > 0x10000)
+	  || blocksize < 512 || blocksize > 0x400000)
 	usage ();
       break;
     case 'd':
@@ -970,6 +979,9 @@ main (int argc, char **argv)
     }
   argc -= optind;
   argv += optind;
+
+  nfh = blocksize / (20*2);
+  if (nfh > SFSRO_NFH) nfh = SFSRO_NFH;
 
   if ( (argc > 0) || !exp_dir || !sk_file || !output_file )
     usage ();

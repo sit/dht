@@ -37,6 +37,14 @@ struct store_cbstate {
   { r = nreplica + 1; };
 };
 
+struct store_state {
+  int read;
+  int size;
+  char *buf;
+  
+  store_state (int z) : read(0), size(z), buf(New char[z]) {};
+  ~store_state () { delete buf; };
+};
 
 struct retry_state {
   sfs_ID n;
@@ -61,7 +69,7 @@ class dhashclient {
   void dispatch (svccb *sbp);
   void cache_on_path(ptr<dhash_insertarg> item, route path);
 
-  void lookup_findsucc_cb (svccb *sbp, sfs_ID n,
+  void lookup_findsucc_cb (svccb *sbp,
 			   searchcb_entry *scb,
 			   sfs_ID succ, route path, sfsp2pstat err);
   void lookup_fetch_cb (dhash_res *res, retry_state *st,  clnt_stat err);
@@ -90,16 +98,19 @@ class dhash {
 
   dbfe *db;
 
+  qhash<sfs_ID, store_state, hashID> pst;
+
   void dispatch (ptr<asrv> dhs, svccb *sbp);
-  void fetchsvc_cb (svccb *sbp, sfs_ID n, ptr<dbrec> val, dhash_stat err);
+  void fetchsvc_cb (svccb *sbp, ptr<dbrec> val, dhash_stat err);
   void storesvc_cb (svccb *sbp, dhash_stat err);
   
   void fetch (sfs_ID id, cbvalue cb);
   void fetch_cb (cbvalue cb,  ptr<dbrec> ret);
 
-  void store (sfs_ID id, dhash_value data, store_status type, cbstore cb);
+  void store (dhash_insertarg *arg, cbstore cb);
   void store_cb(store_status type, sfs_ID id, cbstore cb, int stat);
   void store_repl_cb (cbstore cb, dhash_stat err);
+  bool store_complete (dhash_insertarg *arg);
 
   void replicate_key (sfs_ID key, int degree, callback<void, dhash_stat>::ref cb);
   void replicate_key_succ_cb (sfs_ID key, int degree_remaining, callback<void, dhash_stat>::ref cb,
@@ -131,6 +142,10 @@ class dhash {
   void rereplicate_replicate_cb (dhash_stat err);
 
   char responsible(sfs_ID n);
+
+  void printkeys();
+  void printkeys_walk (sfs_ID k);
+  void printcached_walk (sfs_ID k);
 
   ptr<dbrec> id2dbrec(sfs_ID id);
 

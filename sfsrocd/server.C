@@ -1,4 +1,4 @@
-/* $Id: server.C,v 1.14 2001/06/21 19:04:13 fdabek Exp $ */
+/* $Id: server.C,v 1.15 2001/06/30 02:30:31 fdabek Exp $ */
 
 /*
  *
@@ -77,9 +77,8 @@ server::getreply (nfscall *sbp, sfsro_datares *rores, clnt_stat err,
 }
 
 void
-server::inode_reply (time_t rqtime, nfscall *sbp, cbinode_t cb, 
-		     sfsro_datares *rores, ref<const sfs_hash> fh, 
-		     clnt_stat err) 
+server::inode_reply (time_t rqtime, nfscall *sbp, cbinode_t cb, ref<const sfs_hash> fh,
+		     sfsro_datares *rores, clnt_stat err) 
 {
   sfsro_data data;
 
@@ -151,12 +150,16 @@ server::read_blockres (size_t b, ref<const fattr3> fa,
   read3args *ra = sbp->template getarg<read3args> ();
   read3res nfsres (NFS3_OK);
 
-  size_t off = b * SFSRO_BLKSIZE;
-  size_t start = ra->offset % SFSRO_BLKSIZE;
-  size_t n = MIN (MIN (ra->count, SFSRO_BLKSIZE), len);
+  //  size_t off = b * blocksize;
+  size_t start = ra->offset % blocksize;
+  warn << " client asked for " << ra->count << " and we fetched " << len << "\n";
+
+  size_t n = MIN (MIN (ra->count, blocksize), len - start);
   
+  warn << " copying " << n << "from offset " << start << "\n";
+
   nfsres.resok->count = n;
-  nfsres.resok->eof = (fa->size >= off + n) ? 1 : 0;
+  nfsres.resok->eof = (fa->size >= ra->offset + n) ? 1 : 0;
   nfsres.resok->data.setsize(n);
   memcpy (nfsres.resok->data.base(), d + start, nfsres.resok->data.size ()); 
   nfsres.resok->file_attributes.set_present(1);
@@ -189,6 +192,7 @@ server::read_block (const sfs_hash *fh, nfscall *sbp, cbblock_t cb)
 
     warn << "non pre-fectched read\n";
     ref<const sfs_hash> fh_ref = New refcounted<const sfs_hash> (*fh);
+
     get_data(fh_ref, wrap (mkref (this), &server::block_reply,
 			   timenow, sbp, fh_ref, cb));
   }
@@ -199,18 +203,78 @@ server::get_data (const sfs_hash *fh,
 		  callback<void, sfsro_datares *, clnt_stat>::ref cb) 
 {
   
-  sfsro_datares *res = New sfsro_datares (SFSRO_OK);
-  sfsroc->call (SFSROPROC_GETDATA, fh, res, wrap(this, &server::get_data_cb, cb, res));
+  sfsro_datares *res = New sfsro_datares ();
+  sfsro_getarg arg;
+  arg.fh = *fh;
+  arg.len = 8192;
+  arg.offset = 0;
+
+  sfsroc->call (SFSROPROC_GETDATA, &arg, res, wrap(this, &server::get_data_one_cb, cb, res, fh));
 
 }
 
 void
-server::get_data_cb( callback<void, sfsro_datares *, clnt_stat>::ref cb,
-		     sfsro_datares *res, clnt_stat err) 
+server::get_data_one_cb (callback<void, sfsro_datares *, clnt_stat>::ref cb,
+			 sfsro_datares *res, const sfs_hash *fh, clnt_stat err) 
 {
-  (*cb)(res, err);  
+  
+  warn << "reply status " << res->status << "\n";
+  warn << res->resok->size << " " << res->resok->data.size () << 
+    " " << res->resok->offset << "\n";
+
+  if ((err) || (res->status != SFSRO_OK)) {
+    res->set_status(SFSRO_ERRNOENT);
+    (*cb)(res, RPC_FAILED);
+  } else if (res->resok->size == res->resok->data.size () ) {
+    (*cb)(res, RPC_SUCCESS);  
+  }  else {
+    warn << res->resok->data.size () << " at " << res->resok->offset << " of " << res->resok->size << "\n";
+
+    sfsro_datares *fres = New sfsro_datares ();
+    fres->set_status (SFSRO_OK);
+    fres->resok->data.setsize(res->resok->size);
+    memcpy (fres->resok->data.base (), res->resok->data.base (), 
+	    res->resok->data.size ());
+
+    unsigned int offset = res->resok->data.size ();
+    unsigned int *read = New unsigned int(offset);
+    sfsro_getarg arg;
+    arg.fh = *fh;
+    do {
+      unsigned int n = (8192 + offset < res->resok->size) 
+	? 8192 : res->resok->size - offset;
+      arg.offset = offset;
+      arg.len = n;
+      sfsro_datares *pres = New sfsro_datares();
+      warn << "getting " << arg.len << " at " << arg.offset << "\n";
+      sfsroc->call (SFSROPROC_GETDATA, &arg, res,
+		    wrap(this, &server::get_data_cb, cb, pres, fres, read));
+      offset += n;
+    } while (offset < res->resok->size);
+    delete res;
+  }
+
 }
 
+void
+server::get_data_cb (callback<void, sfsro_datares *, clnt_stat>::ref cb,
+		     sfsro_datares *res, sfsro_datares *fres, 
+		     unsigned int *read, clnt_stat err) 
+{
+  if ((err) || (res->status != SFSRO_OK))
+    cb(res, RPC_FAILED);
+  else {
+    warn << res->resok->data.size () << " at " << res->resok->offset << "\n";
+    memcpy((char *)fres->resok->data.base () + res->resok->offset,
+	   res->resok->data.base (),
+	   res->resok->data.size ());
+    *read += res->resok->data.size ();
+    
+    if (*read == res->resok->size) 
+      cb (fres, RPC_SUCCESS);
+  }
+  delete res;
+}
 
 void 
 server::read_indir (const sfs_hash *fh, nfscall *sbp, cbindir_t cb)
@@ -229,6 +293,8 @@ server::read_indir (const sfs_hash *fh, nfscall *sbp, cbindir_t cb)
     //    warn << "noncache indirect\n";
     cstat.ibc_miss++;
 
+    warn << "reading indirect page from " << hexdump(fh, 20) << "\n";
+
     ref<const sfs_hash> fh_ref = New refcounted<const sfs_hash> (*fh);
     get_data (fh, wrap (mkref (this), &server::indir_reply,
 			timenow, sbp, fh_ref, cb));
@@ -243,10 +309,14 @@ server::read_indirectres (size_t b, ref<const fattr3> fa, nfscall *sbp,
 
   /* the following could happen only by a call from
      read_doubleres or read_tripleres */
-  i = i % SFSRO_NFH;
+  i = i % nfh;
+
+  warn << " reading " << i << "th indirect block\n";
 
   ref<const sfs_hash> block_fh =
     New refcounted<const sfs_hash> (indirect->handles[i]);
+  
+  warn << "block_fh is " << hexdump(block_fh, 20) << "\n";
 
   read_block(block_fh, sbp,
 	     wrap (mkref (this), &server::read_blockres, b, fa, sbp));
@@ -256,12 +326,12 @@ void
 server::read_doubleres (size_t b, ref<const fattr3> fa, nfscall *sbp, 
 			const sfsro_indirect *indirect)
 {
-  size_t i = (b - SFSRO_NDIR) - SFSRO_NFH;
+  size_t i = (b - SFSRO_NDIR) - nfh;
 
   /* the following could happen only by a call from read_tripleres */
-  i = i % (SFSRO_NFH * SFSRO_NFH);
+  i = i % (nfh * nfh);
 
-  i = i / SFSRO_NFH;
+  i = i / nfh;
 
   read_indir(&indirect->handles[i], sbp,
 	     wrap (mkref (this), &server::read_indirectres, b, fa, sbp));
@@ -272,9 +342,9 @@ void
 server::read_tripleres (size_t b, ref<const fattr3> fa, nfscall *sbp, 
 			const sfsro_indirect *indirect)
 {
-  size_t i = (b - SFSRO_NDIR) - SFSRO_NFH - (SFSRO_NFH * SFSRO_NFH);
+  size_t i = (b - SFSRO_NDIR) - nfh - (nfh * nfh);
 
-  i = i / (SFSRO_NFH * SFSRO_NFH);
+  i = i / (nfh * nfh);
 
   read_indir (&indirect->handles[i], sbp,
 	     wrap (mkref (this), &server::read_doubleres, b, fa, sbp));
@@ -290,6 +360,7 @@ server::fh_lookup (size_t b, const sfsro_inode *ip, nfscall *sbp,
   ro2nfsattr(ip, &fa, fh);
   ref<const fattr3> fa_ref (New refcounted<const fattr3> (fa));
 
+  warn << "asking for block " << b << "/" << SFSRO_NDIR << "\n";
 
   if (b < SFSRO_NDIR) {
     read_block(&(ip->reg->direct[b]), sbp,
@@ -299,22 +370,23 @@ server::fh_lookup (size_t b, const sfsro_inode *ip, nfscall *sbp,
   else {
      size_t i = (b - SFSRO_NDIR);
 
-     if (i < SFSRO_NFH) {
+     if (i < nfh) {
+       warn << "reading indirect page from " << hexdump(&(ip->reg->indirect), 20) << "\n";
        read_indir(&(ip->reg->indirect), sbp,
 		  wrap ( mkref (this),
 			 &server::read_indirectres, b, fa_ref, sbp));
      }
      else {
-       i -= SFSRO_NFH;
+       i -= nfh;
 
-       if (i < SFSRO_NFH * SFSRO_NFH)
+       if (i < nfh * nfh)
 	 read_indir(&(ip->reg->double_indirect), sbp,
 	       wrap ( mkref (this),
 		      &server::read_doubleres, b, fa_ref, sbp));
        else {
-	 i -= SFSRO_NFH * SFSRO_NFH;
+	 i -= nfh * nfh;
 	 
-	 if (i < SFSRO_NFH * SFSRO_NFH * SFSRO_NFH)
+	 if (i < nfh * nfh * nfh)
 	   read_indir(&(ip->reg->triple_indirect), sbp,
 		      wrap ( mkref (this), 
 			     &server::read_tripleres, b, fa_ref, sbp));
@@ -335,19 +407,20 @@ server::read_file (const sfsro_inode *ip, nfscall *sbp,
   if (ra->count < 1)
     return;
 
-  size_t first_blknr = ra->offset / SFSRO_BLKSIZE;
-  size_t last_blknr = (ra->offset + (ra->count - 1) ) / SFSRO_BLKSIZE;
-  size_t prefetch_limit_blknr = last_blknr + sfsrocd_prefetch;
+  warn << "read of " << ra->count << " at " << ra->offset << "\n";
 
-  //  nblk = (nblk == 0) ? 1 : nblk;
-  for (size_t i = first_blknr; i <= last_blknr; i++) {
-    fh_lookup (i, ip, sbp, fh);
-  }
+  size_t block = ra->offset / blocksize;
+  //  size_t last_blknr = (ra->offset + (ra->count - 1) ) / blocksize;
+  size_t prefetch_limit = block + sfsrocd_prefetch;
+
+  fh_lookup (block, ip, sbp, fh);
 
   if (sfsrocd_prefetch)
-    for (size_t i = last_blknr; i < prefetch_limit_blknr; i++) 
-      if (i*SFSRO_BLKSIZE < ip->reg->size) 
+    for (size_t i = block + 1; i <= prefetch_limit; i++) 
+      if ((i+1)*blocksize < ip->reg->size) 
 	fh_prefetch(i, ip, fh);
+
+
 }
 
 void 
@@ -541,7 +614,6 @@ server::dir_lookupres (nfscall *sbp, const sfsro_directory *dir)
   nfs2ro(&dirop->dir, &fh);
   ref<const sfs_hash> dir_fh = New refcounted<const sfs_hash> (fh);
 
-  //  warn << "dir_lookupres: looking up " << dirop->name << " wrt " << dir->path << "and the fh is " << hexdump(dirop->dir.data.base(), dirop->dir.data.size()) << "\n";
   if (dirop->name == "."  
       || (dirop->name == ".." && dir->path.len () == 0))
     {
@@ -563,7 +635,6 @@ server::dir_lookupres (nfscall *sbp, const sfsro_directory *dir)
 			  wrap (this, &server::dir_lookup_parentres,
 				sbp, dir_fh));
     } else {
-      //      warn << "looking up " << dirop->name << "in dir w/fh=" << hexdump(&fh,20) << "\n";
       
       const sfsro_dirent *dirent = dirent_lookup(sbp, &(dirop->name), dir);
       
@@ -599,10 +670,6 @@ server::dir_lookupres_dir_attr (nfscall *sbp,
   ro2nfsattr (dir_ip, &fa, dir_fh);
   *nfsres->resok->dir_attributes.attributes = fa;
 
-  //warn << "dir_lookupres_dir_attr dir_fh " << hexdump (&dir_fh[0], 20) << "\n";
-  //warn << "dir_lookupres_dir_attr obj_fh " << hexdump (&obj_fh[0], 20) << "\n";
-
-
   inode_lookup (obj_fh, sbp, wrap (this, &server::dir_lookupres_obj_attr, 
 				   sbp, obj_fh, nfsres));
 }
@@ -625,6 +692,13 @@ server::dir_lookupres_obj_attr (nfscall *sbp,
   ro2nfsattr (obj_ip, &fa, obj_fh);
   *nfsres->resok->obj_attributes.attributes = fa;
 
+#if 0
+  if (obj_ip->type == SFSROREG) {
+    warn << "will prefetch from LOOKUP\n";
+    fh_prefetch (0, obj_ip, obj_fh);
+  }
+#endif
+
   sendreply(sbp, nfsres);
 }
 
@@ -646,9 +720,6 @@ server::dir_lookup (const sfsro_inode *ip, nfscall *sbp, cbdirent_t cb)
     ref<const sfs_hash> fh_ref = 
       New refcounted<const sfs_hash> (ip->reg->direct[0]);
 
-    //    sfsroc->call (SFSROPROC_GETDATA, &ip->reg->direct[0], res,
-    //		  wrap (mkref (this), &server::dir_reply, 
-    //			timenow, sbp, fh_ref, cb, res));
     get_data(&ip->reg->direct[0], wrap (mkref (this), &server::dir_reply,
 					timenow, sbp, fh_ref, cb));
   }
@@ -741,7 +812,7 @@ server::readlinkinode_lookupres (nfscall *sbp, const sfsro_inode *ip)
     sbp->error (NFS3ERR_INVAL);
   else if (ip->lnk->dest.len () <= 0)
     sbp->error (NFS3ERR_INVAL);   // ?????
-  else if (ip->lnk->dest.len () >= SFSRO_BLKSIZE)
+  else if (ip->lnk->dest.len () >= blocksize)
     sbp->error (NFS3ERR_NOTSUPP);   // XXX
   else {
     readlink3res nfsres (NFS3_OK);
@@ -788,13 +859,12 @@ server::inode_lookup (const sfs_hash *fh, nfscall *sbp, cbinode_t cb)
   } else {
     // XX cache
     cstat.ic_miss++;
-    sfsro_datares *res = New sfsro_datares (SFSRO_OK);
 
     ref<const sfs_hash> fh_ref = New refcounted<const sfs_hash> (*fh);
-
-    sfsroc->call (SFSROPROC_GETDATA, fh, res,
-		wrap (mkref (this), &server::inode_reply, 
-		      timenow, sbp, cb, res, fh_ref));
+    get_data (fh, wrap (this, &server::inode_reply, timenow, sbp, cb, fh_ref));
+    //    sfsroc->call (SFSROPROC_GETDATA, fh, res, 
+    //		  wrap (mkref (this), &server::inode_reply, 
+    //			timenow, sbp, cb, res, fh_ref));
   }
 }
 
@@ -810,13 +880,13 @@ void
 server::nfs3_fsinfo (nfscall *sbp)
 {
   fsinfo3res res (NFS3_OK);
-  res.resok->rtmax = 8192;
-  res.resok->rtpref = 8192;
+  res.resok->rtmax = blocksize;
+  res.resok->rtpref = blocksize;
   res.resok->rtmult = 512;
-  res.resok->wtmax = 8192;
-  res.resok->wtpref = 8192;
+  res.resok->wtmax = blocksize;
+  res.resok->wtpref = blocksize;
   res.resok->wtmult = 8192;
-  res.resok->dtpref = 8192;
+  res.resok->dtpref = blocksize;
   res.resok->maxfilesize = INT64 (0x7fffffffffffffff);
   res.resok->time_delta.seconds = 0;
   res.resok->time_delta.nseconds = 1;
@@ -906,6 +976,7 @@ server::dispatch (nfscall *sbp)
       read3args *ra = sbp->template getarg<read3args> ();
       nfs_fh3 *nfh = &(ra->file);
 
+      warn << "read of " << ra->count << " at " << ra->offset << "\n";
       sfs_hash fh;
       nfs2ro(nfh, &fh);
       ref<const sfs_hash> fh_ref = New refcounted<const sfs_hash> (fh);
@@ -961,7 +1032,9 @@ void
 server::lookup_mount(nfscall *sbp, sfs_hash *fh, sfsro_datares *res, clnt_stat err) {
 
   if (err) {
-    fatal << "error looking up mount point\n";
+    warn << "error looking up mount point\n";
+    sbp->error (NFS3ERR_NOENT);
+    return;
   }
   
   rfhc.enter (*fh, res);
@@ -973,6 +1046,13 @@ server::lookup_mount(nfscall *sbp, sfs_hash *fh, sfsro_datares *res, clnt_stat e
     sbp->error (NFS3ERR_NOENT);
     return;
   }
+  
+  blocksize = mounted_fsinfo->sfsro->v1->info.blocksize;
+  nfh = blocksize / (20*2);
+  if (nfh > SFSRO_NFH) nfh = SFSRO_NFH;
+
+  warn << "block size is " << blocksize << "\n";
+  warn << "nfh is " << nfh << "\n";
 
   //  warn << "mounted root fh=" << hexdump (&mounted_fsinfo->sfsro->v1->info.rootfh, 20) << "\n";
   
@@ -1245,7 +1325,7 @@ server::lookup_parent_rofh_lookupres2 (nfscall *sbp,
     lookup_parent_rofh (sbp, &dirent->fh, pathvec, cb);
 }
 
-//-----------------------------------------------------------
+//------------------------ prefetch -----------------------------------
 
 /* b is the block number */
 // fh is the inode "number"
@@ -1263,22 +1343,22 @@ server::fh_prefetch (size_t b, const sfsro_inode *ip,
   else {
     size_t i = (b - SFSRO_NDIR);
     
-    if (i < SFSRO_NFH) {
+    if (i < nfh) {
       prefetch_indir(&(ip->reg->indirect),
 		     wrap ( mkref (this),
 			    &server::prefetch_indirectres, b));
     }
     else {
-      i -= SFSRO_NFH;
+      i -= nfh;
       
-      if (i < SFSRO_NFH * SFSRO_NFH)
+      if (i < nfh * nfh)
 	prefetch_indir(&(ip->reg->double_indirect),
 	       wrap ( mkref (this),
 		      &server::prefetch_doubleres, b));
       else {
-	i -= SFSRO_NFH * SFSRO_NFH;
+	i -= nfh * nfh;
 	
-	if (i < SFSRO_NFH * SFSRO_NFH * SFSRO_NFH)
+	if (i < nfh * nfh * nfh)
 	  prefetch_indir(&(ip->reg->triple_indirect),
 		     wrap ( mkref (this), 
 			    &server::prefetch_tripleres, b));
@@ -1338,7 +1418,7 @@ server::prefetch_block_reply (time_t rqtime, ref<const sfs_hash> fh,
 			      sfsro_datares *rores, clnt_stat err) 
 {
   sfsro_data data;
-  
+
   if (pfreply(rores, err, &data, fh)) {
     assert(data.type == SFSRO_FILEBLK);
     
@@ -1348,7 +1428,6 @@ server::prefetch_block_reply (time_t rqtime, ref<const sfs_hash> fh,
     list<pfpstate, &pfpstate::link> *cb_list = pfpc[*fh];
     pfpstate *p = cb_list->first;
     while (p) {
-      warn << hexdump(fh, 20) << "serviced from pre-fetched data\n";
       (p->cb) (data.data->base (), data.data->size ());
       pfpstate *next = cb_list->next (p);
       cb_list->remove (p);
@@ -1407,7 +1486,7 @@ server::prefetch_indirectres (size_t b, const sfsro_indirect *indirect)
 
   /* the following could happen only by a call from
      read_doubleres or read_tripleres */
-  i = i % SFSRO_NFH;
+  i = i % nfh;
 
   ref<const sfs_hash> block_fh =
     New refcounted<const sfs_hash> (indirect->handles[i]);
@@ -1420,11 +1499,11 @@ server::prefetch_indirectres (size_t b, const sfsro_indirect *indirect)
 void
 server::prefetch_doubleres (size_t b, const sfsro_indirect *indirect)
 {
-  size_t i = (b - SFSRO_NDIR) - SFSRO_NFH;
+  size_t i = (b - SFSRO_NDIR) - nfh;
 
   /* the following could happen only by a call from read_tripleres */
-  i = i % (SFSRO_NFH * SFSRO_NFH);
-  i = i / SFSRO_NFH;
+  i = i % (nfh * nfh);
+  i = i / nfh;
   
   prefetch_indir(&indirect->handles[i],
 		 wrap (mkref (this), &server::prefetch_indirectres, b));
@@ -1434,9 +1513,9 @@ server::prefetch_doubleres (size_t b, const sfsro_indirect *indirect)
 void
 server::prefetch_tripleres (size_t b, const sfsro_indirect *indirect)
 {
-  size_t i = (b - SFSRO_NDIR) - SFSRO_NFH - (SFSRO_NFH * SFSRO_NFH);
+  size_t i = (b - SFSRO_NDIR) - nfh - (nfh * nfh);
 
-  i = i / (SFSRO_NFH * SFSRO_NFH);
+  i = i / (nfh * nfh);
 
   prefetch_indir (&indirect->handles[i],
 		  wrap (mkref (this), &server::prefetch_doubleres, b));
@@ -1468,4 +1547,5 @@ server::pfreply (sfsro_datares *rores, clnt_stat err,
   }
   return 1;
 }
+
 

@@ -1,4 +1,4 @@
-/* $Id: sfsrocd.C,v 1.3 2001/03/26 16:53:07 fdabek Exp $ */
+/* $Id: sfsrocd.C,v 1.4 2001/06/30 02:30:31 fdabek Exp $ */
 
 /*
  *
@@ -27,7 +27,7 @@
 const bool sfsrocd_noverify = (getenv ("SFSROCD_NOVERIFY"));
 const bool sfsrocd_nocache = (getenv ("SFSROCD_NOCACHE"));
 const bool sfsrocd_cache_stat = (getenv ("SFSROCD_CACHE_STAT"));
-const int sfsrocd_prefetch = atoi(getenv ("SFSROCD_PREFETCH"));
+int sfsrocd_prefetch;
 #endif /* !MAINTAINER */
 
 void
@@ -154,6 +154,10 @@ main (int argc, char **argv)
     fatal ("could not get connection to sfscd.\n");
 
 
+  if (getenv("SFSROCD_PREFETCH"))
+    sfsrocd_prefetch = atoi(getenv ("SFSROCD_PREFETCH"));
+  else
+    sfsrocd_prefetch = 0;
 #ifdef MAINTAINER
   sigcb (SIGUSR1, wrap (cpu_time));
 #endif

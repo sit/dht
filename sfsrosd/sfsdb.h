@@ -2,7 +2,7 @@
 #define _SFSDB_H_
 
 #include "str.h"
-#include "sfsro_prot.h"
+#include "sfsro_prot_cfs.h"
 #include "../sfsrodb/dbfe.h"
 #include "dhash_prot.h"
 #include "dhash.h"
@@ -19,11 +19,14 @@ class sfsrodb {
   sfsrodb (const char *dbfile);
   void getinfo (sfs_fsinfo *fsinfo);
   void getconnectres (sfs_connectres *conres);
-  void getdata (sfs_hash *fh, sfsro_datares *res,  callback<void>::ref cb);
+  void getdata (sfsro_getarg *arg, sfsro_datares *res,  callback<void>::ref cb);
 
  private:
 
-  void getdata_cb(callback<void>::ref cb, sfsro_datares *res, dhash_res *res, clnt_stat err);
+  void getdata_cb(callback<void>::ref cb, sfsro_datares *res, dhash_res *dres, unsigned int *read, unsigned int size, 
+		  clnt_stat err);
+  void getdata_one_cb (callback<void>::ref cb, sfsro_datares *res, dhash_res *dres, sfs_ID n, sfsro_getarg *arg,
+		       clnt_stat err);
 };
 
 #endif /* _SFSDB_H_ */

@@ -6,7 +6,7 @@
 #include <dbfe.h>
 #include <arpc.h>
 
-#define REP_DEGREE 5
+#define REP_DEGREE 0
 
 dhash::dhash(str dbname, int k, int ss, int cs) :
   key_store(ss), key_cache(cs) {
@@ -51,11 +51,10 @@ dhash::dispatch(ptr<asrv> dhashsrv, svccb *sbp)
   switch (sbp->proc ()) {
   case DHASHPROC_FETCH:
     {
-
-      warnt("DHASH: FETCH_request");
-
-      sfs_ID *n = sbp->template getarg<sfs_ID> ();
-      fetch(*n, wrap(this, &dhash::fetchsvc_cb, sbp, *n));
+      warnt ("DHASH: FETCH_request");
+      dhash_fetch_arg *arg = 
+	sbp->template getarg<dhash_fetch_arg> ();
+      fetch (arg->key, wrap (this, &dhash::fetchsvc_cb, sbp));
     }
     break;
   case DHASHPROC_STORE:
@@ -64,21 +63,15 @@ dhash::dispatch(ptr<asrv> dhashsrv, svccb *sbp)
       warnt("DHASH: STORE_request");
 
       dhash_insertarg *arg = sbp->template getarg<dhash_insertarg> ();
-      if (arg->type == DHASH_STORE) {
-	if (responsible (arg->key)) {
-	  warnt("DHASH: will store");
-	  store(arg->key, arg->data, arg->type, 
-		wrap(this, &dhash::storesvc_cb, sbp));
-	} else {
-	  warnt("DHASH: retry");
-	  dhash_storeres *res = New dhash_storeres();
-	  res->set_status (DHASH_RETRY);
-	  res->pred->n = defp2p->my_pred ();
-	} 
+
+      if ((arg->type == DHASH_STORE) && (!responsible (arg->key))) {
+	warnt("DHASH: retry");
+	dhash_storeres *res = New dhash_storeres();
+	res->set_status (DHASH_RETRY);
+	res->pred->n = defp2p->my_pred ();
       } else {
 	warnt("DHASH: will store");
-	store(arg->key, arg->data, arg->type, 
-	      wrap(this, &dhash::storesvc_cb, sbp));
+	store(arg, wrap(this, &dhash::storesvc_cb, sbp));	
       }
     }
     break;
@@ -104,37 +97,50 @@ dhash::dispatch(ptr<asrv> dhashsrv, svccb *sbp)
 }
 
 void
-dhash::fetchsvc_cb(svccb *sbp, sfs_ID n, ptr<dbrec> val, dhash_stat err) 
+dhash::fetchsvc_cb (svccb *sbp, ptr<dbrec> val, dhash_stat err)
 {
-  dhash_res *res = New dhash_res();
+  dhash_res *res = New dhash_res ();
+  dhash_fetch_arg *arg = sbp->template getarg<dhash_fetch_arg> ();
   if (err == DHASH_OK) {
     res->set_status (DHASH_OK);
-    res->resok->res.setsize (val->len);
-    memcpy (res->resok->res.base (), val->value, val->len);
+    int n;
+    if (arg->len == 0) {
+      n = val->len;
+      arg->start = 0;
+    } else
+      n = (arg->len + arg->start < val->len) ? arg->len : val->len - arg->start;
+    
+    res->resok->res.setsize (n);
+    res->resok->attr.size = val->len;
+    res->resok->offset = arg->start;
+    memcpy (res->resok->res.base (), (char *)val->value + arg->start, n);
+  } else if (responsible (arg->key)) {
+    res->set_status (DHASH_NOENT);
   } else {
-    sfs_ID p = defp2p->my_pred ();
-    sfs_ID m = defp2p->my_ID ();
-    if (between (p, m, n)) {
-      res->set_status(DHASH_NOENT);
-    } else {
-      warnx << "dispatch: fetch retry\n";
-      res->set_status (DHASH_RETRY);
-      res->pred->n = p;
-    }
+    warnx << "partial_fetch: retry\n";
+    res->set_status (DHASH_RETRY);
+    res->pred->n = defp2p->my_pred ();
   }
 
   warnt("DHASH: FETCH_replying");
   sbp->reply(res);
   delete res;  
 }
-
 void
 dhash::storesvc_cb(svccb *sbp, dhash_stat err) {
   
   warnt("DHASH: STORE_replying");
 
   dhash_storeres *res = New dhash_storeres();
-  res->set_status (err);
+  if (err == DHASH_STORE_PARTIAL) {
+    res->set_status (DHASH_OK);
+    res->resok->done = false;
+  } else if (err == DHASH_OK) {
+    res->set_status (DHASH_OK);
+    res->resok->done = true;
+  } else
+    res->set_status (err);
+
   sbp->reply(res); 
 }
 
@@ -147,13 +153,14 @@ dhash::act_cb(sfs_ID id, char action) {
   sfs_ID m = defp2p->my_ID ();
 
   if (action == ACT_NODE_LEAVE) {
-    //lost a replica?
+#if 0 
+   //lost a replica?
     if (replicas.size () > 0) {
       sfs_ID final_replica = replicas.back ();
       if (between (m, final_replica, id)) 
 	key_store.traverse (wrap (this, &dhash::rereplicate_cb));
     }
-
+#endif
     //lost a master? (handle in fetch)
   } else if (action == ACT_NODE_JOIN) {
     //new node should store some of this node's keys?
@@ -175,7 +182,7 @@ dhash::act_cb(sfs_ID id, char action) {
   } else {
     fatal << "update action not supported\n";
   }
-
+  
 }
 
 void
@@ -195,6 +202,8 @@ dhash::transfer_key_cb (sfs_ID key, dhash_stat err)
     dhash_stat status = key_status (key);
     key_store.remove (key);
     key_cache.enter (key, &status);
+  } else {
+    exit(1);
   }
 }
 
@@ -240,20 +249,29 @@ dhash::transfer_fetch_cb (sfs_ID to, sfs_ID key, store_status stat, callback<voi
   if (err) {
     cb (err);
   } else {
+    int mtu = 1024;
     dhash_storeres *res = New dhash_storeres ();
-    ptr<dhash_insertarg> i_arg = New refcounted<dhash_insertarg> ();
-    i_arg->key = key;
-    i_arg->data.setsize (data->len);
-    i_arg->type = stat;
-    memcpy(i_arg->data.base (), data->value, data->len);
+    int off = 0;
+    do {
+      ptr<dhash_insertarg> i_arg = New refcounted<dhash_insertarg> ();
+      i_arg->key = key;
+      i_arg->offset = off;
+      int remain = (off + mtu <= data->len) ? mtu : data->len - off;
+      i_arg->data.setsize (remain);
+      i_arg->attr.size = data->len;
+      i_arg->type = stat;
+      memcpy(i_arg->data.base () + off, (char *)data->value + off, remain);
 
-    if (stat == DHASH_STORE)
-      warn << "going to transfer (STORE) " << key << " to " << to << "\n";
-    else 
-      warn << "going to transfer (REPLICA) " << key << " to " << to << "\n";
+      if (stat == DHASH_STORE)
+	warn << "going to transfer (STORE) " << key << "(" << off << "/" << data->len << " to " << to << "\n";
+      else 
+	warn << "going to transfer (REPLICA) " << key << " to " << to << "\n";
+ 
+      defp2p->doRPC(to, dhash_program_1, DHASHPROC_STORE, i_arg, res,
+		    wrap(this, &dhash::transfer_store_cb, cb, res));
 
-    defp2p->doRPC(to, dhash_program_1, DHASHPROC_STORE, i_arg, res,
-		  wrap(this, &dhash::transfer_store_cb, cb, res));
+      off += remain;
+     } while (off < data->len);
   }
   
 }
@@ -264,7 +282,7 @@ dhash::transfer_store_cb (callback<void, dhash_stat>::ref cb,
 {
   if (err) 
     cb (DHASH_RPCERR);
-  else 
+  else if (res->resok->done)
     cb (res->status);
 
   delete res;
@@ -301,26 +319,54 @@ dhash::fetch_cb (cbvalue cb, ptr<dbrec> ret)
 }
 
 void 
-dhash::store (sfs_ID id, dhash_value data, store_status type, cbstore cb)
+dhash::store (dhash_insertarg *arg, cbstore cb)
 {
 
-  ptr<dbrec> k = id2dbrec(id);
-  ptr<dbrec> d = New refcounted<dbrec> (data.base (), data.size ());
-
-  warnt("DHASH: STORE_before_db");
-
-  db->insert (k, d, wrap(this, &dhash::store_cb, type, id, cb));
-  dhash_stat stat;
-  if (type == DHASH_STORE) {
-    stat = DHASH_STORED;
-    key_store.enter (id, &stat);
-  } else if (type == DHASH_REPLICA) {
-    stat = DHASH_REPLICATED;
-    key_store.enter (id, &stat);
-  } else {
-    stat = DHASH_CACHED;
-    key_cache.enter (id, &stat);
+  store_state *ss = pst[arg->key];
+  if (arg->data.size () != arg->attr.size) {
+    if (!ss) {
+      store_state nss (arg->attr.size);
+      pst.insert(arg->key, nss);
+      ss = pst[arg->key];
+    }
+    ss->read += arg->data.size ();
+    memcpy (ss->buf + arg->offset, arg->data.base (), arg->data.size ());
   }
+
+  if (store_complete(arg)) {
+    ptr<dbrec> k = id2dbrec(arg->key);
+    ptr<dbrec> d;
+    if (!ss)
+      d = New refcounted<dbrec>(arg->data.base (), arg->data.size ());
+    else 
+      d = New refcounted<dbrec>(ss->buf, ss->size);
+    warnt("DHASH: STORE_before_db");
+    sfs_ID id = arg->key;
+    db->insert (k, d, wrap(this, &dhash::store_cb, arg->type, id, cb));
+    dhash_stat stat;
+    if (arg->type == DHASH_STORE) {
+      stat = DHASH_STORED;
+      key_store.enter (id, &stat);
+    } else if (arg->type == DHASH_REPLICA) {
+      stat = DHASH_REPLICATED;
+      key_store.enter (id, &stat);
+    } else {
+      stat = DHASH_CACHED;
+      key_cache.enter (id, &stat);
+    }
+  } else
+    cb (DHASH_STORE_PARTIAL);
+  
+}
+
+bool
+dhash::store_complete (dhash_insertarg *arg) 
+{
+  if (arg->data.size () == arg->attr.size) return true;
+  store_state *ss = pst[arg->key];
+  if (!ss) return false;
+  else
+    return (ss->read + arg->data.size () >= arg->attr.size);
 }
 
 void
@@ -334,6 +380,9 @@ dhash::store_cb(store_status type, sfs_ID id, cbstore cb, int stat)
     replicate_key (id, REP_DEGREE, wrap (this, &dhash::store_repl_cb, cb));
   else	   
     (*cb)(DHASH_OK);
+  
+  store_state *ss = pst[id];
+  if (ss) pst.remove (id);
 }
 
 void
@@ -454,4 +503,23 @@ dhash::cache_flush_cb (int err) {
   if (err) warn << "err flushing from cache\n";
 }
 
+// ---------- debug ----
+void
+dhash::printkeys () 
+{
+  warn << "ID: " << defp2p->my_ID () << "\n";
+  key_store.traverse (wrap (this, &dhash::printkeys_walk));
+  key_cache.traverse (wrap (this, &dhash::printcached_walk));
+}
 
+void
+dhash::printkeys_walk (sfs_ID k) 
+{
+  warn << k << " STORED\n";
+}
+
+void
+dhash::printcached_walk (sfs_ID k) 
+{
+  warn << k << " CACHED\n";
+}

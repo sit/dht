@@ -33,17 +33,18 @@ dhashclient::dispatch (svccb *sbp)
     return;
   case DHASHPROC_LOOKUP:
     {
-      sfs_ID *n = sbp->template getarg<sfs_ID> ();
+      dhash_fetch_arg *arg = sbp->template getarg<dhash_fetch_arg> ();
 
       warnt("DHASH: lookup_request");
 
       searchcb_entry *scb = NULL;
+#if 0
       if (do_caching)
-	scb = defp2p->registerSearchCallback(wrap(this, &dhashclient::search_cb, *n));
+	scb = defp2p->registerSearchCallback(wrap(this, &dhashclient::search_cb, arg->key));
+#endif
 
-      defp2p->insert_or_lookup = true;
-      defp2p->dofindsucc (*n, wrap(this, &dhashclient::lookup_findsucc_cb, 
-				   sbp, *n, scb));
+      defp2p->dofindsucc (arg->key,wrap(this,&dhashclient::lookup_findsucc_cb, 
+				   sbp, scb));
     } 
     break;
   case DHASHPROC_INSERT:
@@ -80,8 +81,10 @@ dhashclient::insert_findsucc_cb(svccb *sbp, ptr<dhash_insertarg> item,
     defp2p->doRPC(succ, dhash_program_1, DHASHPROC_STORE, item, res,
 		  wrap(this, &dhashclient::insert_store_cb, sbp, res));
 
+#if 0
     if (do_caching) 
       cache_on_path(item, path);
+#endif
 
   }
 }
@@ -130,7 +133,7 @@ dhashclient::cache_store_cb(dhash_stat *res, clnt_stat err)
 }
 
 void
-dhashclient::lookup_findsucc_cb(svccb *sbp, sfs_ID n, 
+dhashclient::lookup_findsucc_cb(svccb *sbp,
 				searchcb_entry *scb,
 				sfs_ID succ, route path,
 				sfsp2pstat err)
@@ -147,11 +150,12 @@ dhashclient::lookup_findsucc_cb(svccb *sbp, sfs_ID n,
 
     warnt("DHASH: lookup_after_dofindsucc");
 
-    ptr<sfs_ID> m = New refcounted<sfs_ID> (n);
+    dhash_fetch_arg *arg = sbp->template getarg<dhash_fetch_arg>();
+    ptr<dhash_fetch_arg> a = New refcounted<dhash_fetch_arg> (*arg);
     dhash_res *res = New dhash_res(DHASH_OK);
-
-    retry_state *st = New retry_state (n, sbp, succ, path, scb);
-    defp2p->doRPC(succ, dhash_program_1, DHASHPROC_FETCH, m, res, 
+    retry_state *st = New retry_state (arg->key, sbp, succ, path, scb);
+    
+    defp2p->doRPC(succ, dhash_program_1, DHASHPROC_FETCH, a, res, 
 		  wrap(this, &dhashclient::lookup_fetch_cb, res, st));
   }
 }
@@ -166,7 +170,7 @@ dhashclient::lookup_fetch_cb(dhash_res *res, retry_state *st, clnt_stat err)
     defp2p->deleteloc (st->succ);
     defp2p->alert (l, st->succ);
     defp2p->dofindsucc (st->n, wrap(this, &dhashclient::lookup_findsucc_cb, 
-				   st->sbp, st->n,  st->scb));
+				   st->sbp, st->scb));
   } else if (res->status == DHASH_RETRY) {
     warnx << "lookup_fetch_cb: retry for " << st->n << " at " 
 	  << st->succ << "\n";
@@ -176,6 +180,7 @@ dhashclient::lookup_fetch_cb(dhash_res *res, retry_state *st, clnt_stat err)
     warnt("DHASH: lookup_after_FETCH");
 
 
+#if 0
     if (do_caching) {
       ptr<dhash_insertarg> di = New refcounted<dhash_insertarg> ();
       di->key = st->n;
@@ -183,6 +188,7 @@ dhashclient::lookup_fetch_cb(dhash_res *res, retry_state *st, clnt_stat err)
       cache_on_path(di, st->path);
       delete di;
     }
+#endif
 
     st->sbp->reply (res);
     

@@ -1,4 +1,4 @@
-/* $Id: sfsrodb_core.C,v 1.10 2001/03/29 16:00:47 kaashoek Exp $ */
+/* $Id: sfsrodb_core.C,v 1.11 2001/06/30 02:30:32 fdabek Exp $ */
 
 /*
  *
@@ -27,6 +27,8 @@
 #include "dhash_prot.h"
 #include "arpc.h"
 
+long out=0;
+
 bigint
 fh2mpz(const void *keydata, size_t keylen) 
 {
@@ -37,8 +39,8 @@ fh2mpz(const void *keydata, size_t keylen)
 
 /* Return false if duplicate key */
 bool
-sfsrodb_put (ptr<aclnt> db, const void *keydata, size_t keylen, 
-	     void *contentdata, size_t contentlen)
+sfsrodb_put (ptr<aclnt> db, const void *okeydata, size_t keylen, 
+	     void *ocontentdata, size_t contentlen)
 {
 
 #if 0
@@ -51,29 +53,49 @@ sfsrodb_put (ptr<aclnt> db, const void *keydata, size_t keylen,
   close (fd);
 #endif
 
-  int err;
-  
+  warn << "put " << contentlen << " bytes\n";
+
+  void *contentdata = malloc (contentlen);
+  void *keydata = malloc (keylen);
+  memcpy(contentdata, ocontentdata, contentlen);
+  memcpy(keydata, okeydata, keylen);
+
   // warn << "inserting " << contentlen << "bytes of data under a " << keylen << " byte key\n";
-  dhash_insertarg *arg = New dhash_insertarg ();
-  
+  unsigned int offset = 0;
+  unsigned int mtu = 8192;
   bigint n = fh2mpz(keydata, keylen);
+  do {
+    ptr<dhash_insertarg> arg = New refcounted<dhash_insertarg> ();
 
-  arg->key = n;
-  arg->data.setsize (contentlen);
-  memcpy(arg->data.base (), contentdata, contentlen);
-  arg->type = DHASH_STORE;
+    int remain = (offset + mtu <= contentlen) ? mtu : contentlen - offset;
+    arg->key = n;
+    arg->data.setsize (remain);
+    arg->offset = offset;
+    arg->attr.size = contentlen;
+    memcpy(arg->data.base (), (char *)contentdata + offset, remain);
+    arg->type = DHASH_STORE;
 
-  dhash_stat res;
-  err = db->scall (DHASHPROC_INSERT, arg, &res);
-  delete arg;
+    dhash_stat *res = New dhash_stat();
+    db->call (DHASHPROC_INSERT, arg, res, wrap(&sfsrodb_put_cb, res));
+    out++;
+    offset += mtu;
+  } while (offset < contentlen);
 
-  if (err) {
-    warn << "insert returned " << err << strerror(err) << "\n";
-    return false;
-  } else return true;
-
+  //XXX - actually check errors?
+  return true;
 }
 
+void
+sfsrodb_put_cb(dhash_stat *res, clnt_stat err)
+{
+
+  if (err) 
+    warn << "insert returned " << err << strerror(err) << "\n";
+
+  out--;
+  warn << out << "\n";
+  if (out <= 0) exit(0);
+}
 
 /* Library SFRODB routines used by the database creation,
    server, and client.  */

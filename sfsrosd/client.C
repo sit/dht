@@ -1,4 +1,4 @@
-//Last modified by $Author: fdabek $ on $Date: 2001/06/21 19:04:13 $
+//Last modified by $Author: fdabek $ on $Date: 2001/06/30 02:30:32 $
 #include <sfsrosd.h>
 #include "sfsdb.h"
 #include "rxx.h"
@@ -92,20 +92,21 @@ sfsroclient::dispatch (ref<bool> d, svccb *sbp)
     case SFSROPROC_GETDATA:
       {
 
-	sfs_hash *fh = sbp->template getarg<sfs_hash> ();
+	sfsro_getarg *arg = sbp->template getarg<sfsro_getarg> ();
 
 
-	if (0) {
-	  u_char *cp = reinterpret_cast<u_char *> (fh->base ());
-	  u_char *lim = cp + fh->size ();
+	if (1) {
+	  u_char *cp = reinterpret_cast<u_char *> (arg->fh.base ());
+	  u_char *lim = cp + arg->fh.size ();
 	  printf ("  { 0x%02x", *cp);
 	  while (++cp < lim)
 	    printf (", 0x%02x", *cp);
 	  printf (" },\n");
 	}
 
+	warn << "request for " << arg->len << " at " << arg->offset << "\n";
 	sfsro_datares *res = New sfsro_datares();
-        db.getdata(fh, res, wrap(this, &sfsroclient::getdata_cb, sbp, res, destroyed));
+        db.getdata(arg, res, wrap(this, &sfsroclient::getdata_cb, sbp, res, destroyed));
         return;
       }
 
@@ -122,11 +123,17 @@ sfsroclient::getdata_cb(svccb *sbp, sfsro_datares *res, ref<bool> d)
   if (*d)
     return;
   
-  if (res->resok->data.size () == 0) 
+  if (res->status != SFSRO_OK) { 
     warn << "key not found\n";
+    res->resok->offset = 0;
+    res->resok->size = 0;
+  }
+
+  warn << "replying: " << res->status << "|" << res->resok->data.size () << " of " << res->resok->size
+       << " at " << res->resok->offset << "\n";
 
   sbp->reply(res);
-  delete (res);
+  delete res;
   return;
 }
 

@@ -113,7 +113,6 @@ main (int argc, char **argv)
 
   db = sfsrodb (sfsrodbfile);	// XXX - this is very poor style
 
-
   
   db.getconnectres (&cres);
   db.getinfo(&fsinfores);

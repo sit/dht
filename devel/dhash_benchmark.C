@@ -34,6 +34,8 @@ store_block(sfs_ID key, void *data, int datasize)
   i_arg.key = key;
   i_arg.data.setsize(datasize);
   i_arg.type = DHASH_STORE;
+  i_arg.attr.size = datasize;
+  i_arg.offset = 0;
   memcpy(i_arg.data.base (), data, datasize);
   
   dhash_stat res;
@@ -50,14 +52,27 @@ int
 fetch_block(int i, sfs_ID key, int datasize) 
 {
   dhash_res res;
+  char *buf = New char[datasize];
 
-  int err = cp2p ()->scall(DHASHPROC_LOOKUP, &key, &res);
+  dhash_fetch_arg arg;
+  arg.key = key;
+  arg.len = datasize/2;
+  arg.start = 0;
+  int err = cp2p ()->scall(DHASHPROC_LOOKUP, &arg, &res);
+  assert (err == 0);
+  memcpy(buf, res.resok->res.base (), res.resok->res.size ());
+  arg.len = datasize/2;
+  arg.start = datasize/2;
+  err = cp2p ()->scall(DHASHPROC_LOOKUP, &arg, &res);
+  memcpy(buf + datasize/2, res.resok->res.base (), res.resok->res.size ());
 
 #define VERIFY
 #ifdef VERIFY
-  int diff = memcmp(data[i], res.resok->res.base (), datasize);
+  int diff = memcmp(data[i], buf, datasize);
   assert (!diff);
 #endif
+
+  delete buf;
 
   if (err) return -err;
   else
@@ -95,14 +110,13 @@ prepare_test_data(int num, int datasize)
 
 int
 store(int num, int size) {
-  prepare_test_data (num, size);
   
   for (int i = 0; i < num; i++) {
     //    struct timeval end;
     // struct timeval start;
     //gettimeofday(&start, NULL);
     int err = store_block(IDs[i], data[i], size);
-    assert(err == 0);
+    warn << err << "\n";
     //gettimeofday(&end, NULL);
     //float elapsed = (end.tv_sec - start.tv_sec)*1000.0 + (end.tv_usec - start.tv_usec)/1000.0;
     //fprintf(outfile, "%f\n", elapsed);
@@ -169,8 +183,12 @@ main (int argc, char **argv)
     outfile = stdout;
   else
     outfile = fopen(output, "w");
-  
-  store(num, datasize);
-  fetch(num, datasize);
+
+  prepare_test_data (num, datasize);
+    
+  if (argv[5][0] == 's')
+    store(num, datasize);
+  else
+    fetch(num, datasize);
 
 }

@@ -1,7 +1,7 @@
 #ifndef _SFSROSD_H_
 #define _SFSROSD_H_
 
-#include <sfsro_prot.h>
+#include <sfsro_prot_cfs.h>
 #include "sfsmisc.h"
 #include "arpc.h"
 #include "crypt.h"

@@ -1,5 +1,5 @@
 // -*-c++-*-
-/* $Id: sfsrocd.h,v 1.7 2001/03/26 16:53:07 fdabek Exp $ */
+/* $Id: sfsrocd.h,v 1.8 2001/06/30 02:30:31 fdabek Exp $ */
 
 /*
  *
@@ -24,7 +24,7 @@
  */
 
 #include "arpc.h"
-#include <sfsro_prot.h>
+#include <sfsro_prot_cfs.h>
 #include "nfs3_prot.h"
 #include "sfscd_prot.h"
 #include "sfsmisc.h"
@@ -61,7 +61,7 @@ extern cache_stat cstat;
 extern const bool sfsrocd_noverify;
 extern const bool sfsrocd_nocache;
 extern const bool sfsrocd_cache_stat;
-extern const int sfsrocd_prefetch;
+extern int sfsrocd_prefetch;
 #else /* !MAINTAINER */
 enum { sfsrocd_noverify = 0, sfsrocd_nocache = 0, sfsrocd_cache_stat = 0 };
 #endif /* !MAINTAINER */
@@ -156,6 +156,10 @@ struct pfpstate {
 struct server : sfsserver {
  
 private:
+
+  unsigned blocksize;
+  unsigned nfh;
+
   cache<sfs_hash, sfsro_inode, 512> ic;             // inode cache
   cache<sfs_hash, sfsro_indirect, 512> ibc;         // Indirect block cache
   cache<sfs_hash, sfsro_directory, 512> dc;         // Directory block cache
@@ -174,18 +178,20 @@ private:
 				    const sfsro_directory *dir);
   uint32 access_check(const sfsro_inode *ip, uint32 access_req);
 
-  void inode_reply (time_t rqtime, nfscall *sbp, cbinode_t cb, 
-		    sfsro_datares *rores, ref<const sfs_hash> fh,
-		    clnt_stat err);
+  void inode_reply (time_t rqtime, nfscall *sbp, cbinode_t cb, ref<const sfs_hash> fh,
+		    sfsro_datares *rores, clnt_stat err);
+
   void dir_reply (time_t rqtime, nfscall *sbp, ref<const sfs_hash> fh, 
 		  cbdirent_t cb, sfsro_datares *rores, clnt_stat err);
   void block_reply (time_t rqtime, nfscall *sbp, ref<const sfs_hash> fh, 
 		    cbblock_t cb, sfsro_datares *rores, clnt_stat err);
+
   void indir_reply (time_t rqtime, nfscall *sbp, ref<const sfs_hash> fh, 
 		     cbindir_t cb, sfsro_datares *rores, clnt_stat err);
   void read_blockres (size_t b, ref<const fattr3> fa, nfscall *sbp, 
 		      const char *d, size_t len);
   void read_block (const sfs_hash *fh, nfscall *sbp, cbblock_t cb);
+  //  void read_block (const sfs_hash *fh, size_t len, size_t offset, nfscall *sbp, cbblock_t cb);
   void read_indir (const sfs_hash *fh, nfscall *sbp, cbindir_t cb);
   void read_indirectres (size_t b, ref<const fattr3> fa, nfscall *sbp, 
 			 const sfsro_indirect *indirect);
@@ -239,10 +245,10 @@ private:
 				      const sfsro_directory *dir);
   void get_data (const sfs_hash *fh, 
 		 callback<void, sfsro_datares *, clnt_stat>::ref cb);
-  void
-  get_data_cb( callback<void, sfsro_datares *, clnt_stat>::ref cb,
-	       sfsro_datares *res, clnt_stat err);
-
+  void get_data_cb( callback<void, sfsro_datares *, clnt_stat>::ref cb,
+		    sfsro_datares *res, sfsro_datares *fres, unsigned int *read, clnt_stat err);
+  void get_data_one_cb (callback<void, sfsro_datares *, clnt_stat>::ref cb,
+			sfsro_datares *res, const sfs_hash *fh, clnt_stat err);
   void lookup_mount(nfscall *sbp, sfs_hash *fh, sfsro_datares *res, clnt_stat err);
 
   void fh_prefetch (size_t b, const sfsro_inode *ip, const sfs_hash *fh);
