@@ -10,7 +10,7 @@ vector<VivaldiTest*> VivaldiTest::_all;
 
 VivaldiTest::VivaldiTest(Node *n) : Protocol(n)
 {
-  _vivaldi = new Vivaldi(n);
+  _vivaldi = new Vivaldi6(n);
   _all.push_back(this);
 
   delaycb(1000, &VivaldiTest::tick, (void *) 0);
@@ -18,6 +18,24 @@ VivaldiTest::VivaldiTest(Node *n) : Protocol(n)
 
 VivaldiTest::~VivaldiTest()
 {
+}
+
+void
+VivaldiTest::join(Args *args)
+{
+  int vo = args->nget<int>("vivaldi-algorithm");
+  switch(vo){
+  case 1: _vivaldi = new Vivaldi1(node()); break;
+  case 2: _vivaldi = new Vivaldi2(node()); break;
+  case 3: _vivaldi = new Vivaldi3(node()); break;
+  case 4: _vivaldi = new Vivaldi4(node()); break;
+  case 5: _vivaldi = new Vivaldi5(node()); break;
+  case 6: _vivaldi = new Vivaldi6(node()); break;
+  default:
+    fprintf(stderr, "VivaldiTest: bad Vivaldi algorithm %s\n",
+            (*args)["vivaldi-algorithm"].c_str());
+    exit(1);
+  }
 }
 
 char *
@@ -88,6 +106,15 @@ VivaldiTest::total_error(double &e05, double &e50, double &e95)
 void
 VivaldiTest::status()
 {
+  static int first = 1;
+  if(first){
+    first = 0;
+    printf("# %s %d %s\n",
+           typeid(*(this->_vivaldi)).name(),
+           _all.size(),
+           typeid(*(Network::Instance()->gettopology())).name());
+  }
+
   Vivaldi::Coord rc = real();
   Vivaldi::Coord vc = _vivaldi->my_location();
   double e05, e50, e95;
@@ -116,7 +143,7 @@ VivaldiTest::tick(void *)
   doRPC(dst, &VivaldiTest::handler, (void*) 0, &c);
   _vivaldi->sample(dst, c, (now() - before) / 2.0);
 
-  if((random() % _all.size()) == 0)
+  if((random() % (10 * _all.size())) == 0)
     status();
 
   delaycb(1000, &VivaldiTest::tick, (void *) 0);

@@ -30,8 +30,10 @@ RandomGraph::latency(Node *n1, Node *n2)
 {
   initialize();
 
+#if 0
   assert(_ip2i.find(n1->ip()) != _ip2i.end());
   assert(_ip2i.find(n2->ip()) != _ip2i.end());
+#endif
 
   int i = _ip2i[n1->ip()];
   int j = _ip2i[n2->ip()];

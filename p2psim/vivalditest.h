@@ -11,7 +11,7 @@ public:
   VivaldiTest(Node*);
   ~VivaldiTest();
 
-  virtual void join(Args*) { }
+  virtual void join(Args*);
   virtual void leave(Args*) { }
   virtual void crash(Args*) { }
   virtual void insert(Args*) { }

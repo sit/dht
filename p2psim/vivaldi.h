@@ -35,9 +35,9 @@ class Vivaldi {
     bool RPC(IPAddress a, void (BT::* fn)(AT *, RT *),
              AT *args, RT *ret);
 
- private:
+ protected:
   Node *_n; // this node
-  int _nsamples; // how many times samples() has been called
+  int _nsamples; // how many times sample() has been called
   Coord _c; // current estimated coordinates
   struct Sample {
     Coord _c;
@@ -46,21 +46,50 @@ class Vivaldi {
   };
   vector<Sample> _samples;
 
-  // algo2()
-  double _damp;
-
-  // algo3()
-  double _jumpprob;
-
   double randf() { return (random()%1000000000) / 1000000000.0; }
   Sample wrongest(vector<Sample> v);
   Sample lowest_latency(vector<Sample> v);
   Coord net_force(vector<Sample> v);
-  void algo1(Sample);
-  void algo2(Sample);
-  void algo3(Sample);
-  void algo4(Sample);
-  void algo5(Sample);
+
+  virtual void algorithm(Sample) = 0; // override this
+};
+
+class Vivaldi1 : public Vivaldi {
+ public:
+  Vivaldi1(Node *n) : Vivaldi(n) { }
+  void algorithm(Sample);
+};
+
+class Vivaldi2 : public Vivaldi {
+ public:
+  double _damp;
+  Vivaldi2(Node *n) : Vivaldi(n), _damp(0.1) { }
+  void algorithm(Sample);
+};
+
+class Vivaldi3 : public Vivaldi {
+ public:
+  double _jumpprob;
+  Vivaldi3(Node *n) : Vivaldi(n), _jumpprob(0.1) { }
+  void algorithm(Sample);
+};
+
+class Vivaldi4 : public Vivaldi3 {
+ public:
+  Vivaldi4(Node *n) : Vivaldi3(n) { }
+  void algorithm(Sample);
+};
+
+class Vivaldi5 : public Vivaldi3 {
+ public:
+  Vivaldi5(Node *n) : Vivaldi3(n) { }
+  void algorithm(Sample);
+};
+
+class Vivaldi6 : public Vivaldi3 {
+ public:
+  Vivaldi6(Node *n) : Vivaldi3(n) { }
+  void algorithm(Sample);
 };
 
 inline double

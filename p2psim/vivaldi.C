@@ -23,16 +23,18 @@ Vivaldi::Vivaldi(Node *n)
   _c._x = (random() % 200) - 100;
   _c._y = (random() % 200) - 100;
 #endif
-
-  // algo2()
-  _damp = 0.1;
-
-  // algo3()
-  _jumpprob = 1.0;
 }
 
 Vivaldi::~Vivaldi()
 {
+}
+
+// latency should be one-way, i.e. RTT / 2
+void
+Vivaldi::sample(IPAddress who, Coord c, double latency)
+{
+  algorithm(Sample(c, latency));
+  _nsamples += 1;
 }
 
 Vivaldi::Coord
@@ -88,7 +90,7 @@ Vivaldi::lowest_latency(vector<Sample> v)
 
 // Figure 1 from SOSP 2003 submission.
 void
-Vivaldi::algo1(Sample s)
+Vivaldi1::algorithm(Sample s)
 {
   _samples.push_back(s);
   if(_samples.size() < 10)
@@ -105,7 +107,7 @@ Vivaldi::algo1(Sample s)
 // algo1(), but starts without much damping, and gradually
 // damps more and more.
 void
-Vivaldi::algo2(Sample s)
+Vivaldi2::algorithm(Sample s)
 {
   _samples.push_back(s);
   if(_samples.size() < 10)
@@ -130,7 +132,7 @@ Vivaldi::algo2(Sample s)
 // away in a random direction to correct for a sample
 // that it's too close to.
 void
-Vivaldi::algo3(Sample s)
+Vivaldi3::algorithm(Sample s)
 {
   _samples.push_back(s);
   if(_samples.size() < 10)
@@ -155,7 +157,7 @@ Vivaldi::algo3(Sample s)
 // Like algo1(), but occasionally jump to correct the distance
 // to the sample with the lowest latency.
 void
-Vivaldi::algo4(Sample s)
+Vivaldi4::algorithm(Sample s)
 {
   _samples.push_back(s);
   if(_samples.size() < 10)
@@ -180,7 +182,7 @@ Vivaldi::algo4(Sample s)
 // Sometimes we will jump to our own location, but it probably
 // doesn't really matter.
 void
-Vivaldi::algo5(Sample s)
+Vivaldi5::algorithm(Sample s)
 {
   _samples.push_back(s);
   if(_samples.size() < 10)
@@ -198,20 +200,32 @@ Vivaldi::algo5(Sample s)
   _samples.clear();
 }
 
-// latency should be one-way, i.e. RTT / 2
+// Occasionally jump to the location of a randomly chosen sample node.
+// Works worse than any of algorithms 1 - 5.
 void
-Vivaldi::sample(IPAddress who, Coord c, double latency)
+Vivaldi6::algorithm(Sample s)
 {
-  algo5(Sample(c, latency));
-  _nsamples += 1;
+  _samples.push_back(s);
+  if(_samples.size() < 10)
+    return;
+
+  if(randf() < _jumpprob){
+    _c = _samples[random() % _samples.size()]._c;
+    _jumpprob /= 2;
+  } else {
+    Coord f = net_force(_samples);
+    _c = _c + (f * 0.001);
+  }
+
+  _samples.clear();
 }
 
 // variants:
+// somehow have a few nodes choose themselves as landmarks,
+//   they agree on positions, everyone else follows.
 // add nodes one at a time
-// force = square of displacement
 // more dimensions
 // every sample by itself, not every 10
-// slowly increase damping
 // random jump at exponentially increasing intervals
 
 // spring relaxation doesn't seem to work any better than the
