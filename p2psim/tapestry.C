@@ -1,4 +1,4 @@
-/* $Id: tapestry.C,v 1.10 2003/10/02 20:00:07 strib Exp $ */
+/* $Id: tapestry.C,v 1.11 2003/10/02 21:06:54 strib Exp $ */
 #include "tapestry.h"
 #include <stdio.h>
 #include <math.h>
@@ -29,8 +29,41 @@ Tapestry::~Tapestry()
 void
 Tapestry::lookup(Args *args) 
 {
-  TapDEBUG(2) << "Tapestry Lookup" << endl;
-  //__tmg_dmalloc_stats();
+
+  GUID key = args->nget<GUID>("key");
+
+  TapDEBUG(2) << "Tapestry Lookup for key " << key << endl;
+
+  lookup_args la;
+  la.key = key;
+  
+  lookup_return lr;
+
+  handle_lookup( &la, &lr );
+
+  TapDEBUG(1) << "Lookup complete for key " << print_guid(key) << ": ip " <<
+    lr.owner_ip << ", id " << print_guid(lr.owner_id) << ", hops " <<
+    lr.hopcount << endl;
+
+}
+
+void 
+Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
+{
+
+  // find the next hop for the key.  if it's me, i'm done
+  IPAddress next = next_hop( args->key );
+  if( next == ip() ) {
+    ret->owner_ip = ip();
+    ret->owner_id = id();
+    // this will be incremented at each hop backwards
+    ret->hopcount = 0;
+  } else {
+    // it's not me, so forward the query
+    doRPC( next, &Tapestry::handle_lookup, args, ret );
+    ret->hopcount++;
+  }
+ 
 }
 
 void
