@@ -40,6 +40,8 @@ class dhashcli {
     vec<str> frags;
     vec<cb_ret> callbacks;
 
+    bool completed;
+
     void timemark () {
       timespec x;
       clock_gettime (CLOCK_REALTIME, &x);
@@ -47,22 +49,21 @@ class dhashcli {
     }
     
     void complete (dhash_stat s, ptr<dhash_block> b) {
+      completed = true;
       for (u_int i = 0; i < callbacks.size (); i++)
 	(callbacks[i]) (s, b, r);
-      delete this;
     }
       
     rcv_state (blockID key) :
       key (key),
       errors (0),
       incoming_rpcs (0),
-      nextsucc (0)
+      nextsucc (0),
+      completed (false)
     {
       timemark ();
     }
   };
-
-  ihash<blockID, rcv_state, &rcv_state::key, &rcv_state::link, bhashID> rcvs;
 
   // State for a fragment store
   struct sto_state {
@@ -93,12 +94,12 @@ private:
   void insert_to_cache_cb (cbinsert_path_t cb, dhash_stat err,
                            chordID id, bool present);
   
-  void fetch_frag (rcv_state *rs);
+  void fetch_frag (ptr<rcv_state> rs);
 
-  void retrieve_frag_hop_cb (blockID blockID, route_iterator *ci, bool done);
-  void retrieve_lookup_cb (blockID blockID, dhash_stat status,
+  void retrieve_frag_hop_cb (ptr<rcv_state> rs, route_iterator *ci, bool done);
+  void retrieve_lookup_cb (ptr<rcv_state> rs, dhash_stat status,
 			   vec<chord_node> succs, route r);
-  void retrieve_fetch_cb (blockID blockID, u_int i,
+  void retrieve_fetch_cb (ptr<rcv_state> rs, u_int i,
 			  ptr<dhash_block> block);
   void retrieve_from_cache_cb (blockID bid, cb_ret cb,
                                int options, ptr<chordID> guess,
@@ -111,10 +112,10 @@ private:
   void insert_succlist_cb (ref<dhash_block> block, cbinsert_path_t cb,
 			   chordID guess,
 			   vec<chord_node> succs, chordstat status);
-  void retrieve_block_hop_cb (blockID blockID, route_iterator *ci,
+  void retrieve_block_hop_cb (ptr<rcv_state> rs, route_iterator *ci,
 			     int options, int retries, ptr<chordID> guess,
 			     bool done);
-  void retrieve_dl_or_walk_cb (blockID blockID, dhash_stat status, int options,
+  void retrieve_dl_or_walk_cb (ptr<rcv_state> rs, dhash_stat status, int options,
 			       int retries, ptr<chordID> guess,
 			       ptr<dhash_block> blk);
 

@@ -75,35 +75,27 @@ dhashcli::retrieve (blockID blockID, cb_ret cb, int options,
   // Only one lookup for a block should be in progress from a node
   // at any given time.
   chordID myID = clntnode->my_ID ();
-  rcv_state *rs = rcvs[blockID];
-  if (rs) {
+
 #ifdef VERBOSE_LOG    
-    trace << myID << ": retrieve (" << blockID << "): simultaneous retrieve!\n";
-#endif /* VERBOSE_LOG */    
-    rs->callbacks.push_back (cb);
+  trace << myID << ": retrieve (" << blockID << "): new retrieve.\n";
+#endif /* VERBOSE_LOG */
+  ptr<rcv_state> rs = New refcounted<rcv_state> (blockID);
+  rs->callbacks.push_back (cb);
+  
+  route_iterator *ci = r_factory->produce_iterator_ptr (blockID.ID);
+
+  if (blockID.ctype == DHASH_KEYHASH) {
+    ci->first_hop (wrap (this, &dhashcli::retrieve_block_hop_cb, rs, ci,
+			 options, 5, guess),
+		   guess);
   } else {
-#ifdef VERBOSE_LOG    
-    trace << myID << ": retrieve (" << blockID << "): new retrieve.\n";
-#endif /* VERBOSE_LOG */    
-    rs = New rcv_state (blockID);
-    rs->callbacks.push_back (cb);
-    rcvs.insert (rs);
-
-    route_iterator *ci = r_factory->produce_iterator_ptr (blockID.ID);
-
-    if(blockID.ctype == DHASH_KEYHASH) {
-      ci->first_hop (wrap (this, &dhashcli::retrieve_block_hop_cb, blockID, ci,
-			   options, 5, guess),
-		     guess);
-    } else {
-      ci->first_hop (wrap (this, &dhashcli::retrieve_frag_hop_cb, blockID, ci),
-		     guess);
-    }
+    ci->first_hop (wrap (this, &dhashcli::retrieve_frag_hop_cb, rs, ci),
+		   guess);
   }
 }
 
 void
-dhashcli::retrieve_block_hop_cb (blockID blockID, route_iterator *ci,
+dhashcli::retrieve_block_hop_cb (ptr<rcv_state> rs, route_iterator *ci,
 				 int options, int retries, ptr<chordID> guess,
 				 bool done)
 {
@@ -113,11 +105,7 @@ dhashcli::retrieve_block_hop_cb (blockID blockID, route_iterator *ci,
   }
 
   chordID myID = clntnode->my_ID ();
-  rcv_state *rs = rcvs[blockID];
-  if (!rs) {
-    trace << myID << ": retrieve (" << blockID << "): not in table?\n";
-    assert (rs);
-  }
+
   rs->timemark ();
   rs->r = ci->path ();
   rs->succs = ci->successors ();
@@ -125,49 +113,42 @@ dhashcli::retrieve_block_hop_cb (blockID blockID, route_iterator *ci,
   delete ci;
   
   if (status != DHASH_OK) {
-    trace << myID << ": retrieve (" << blockID 
+    trace << myID << ": retrieve (" << rs->key
           << "): lookup failure: " << status << "\n";
-    rcvs.remove (rs);
     rs->complete (status, NULL); // failure
     rs = NULL;    
     return;
   }
 
   chord_node s = rs->succs.pop_front ();
-  dhash_download::execute (clntnode, s, blockID, NULL, 0, 0, 0,
+  dhash_download::execute (clntnode, s, rs->key, NULL, 0, 0, 0,
 			   wrap (this, &dhashcli::retrieve_dl_or_walk_cb,
-				 blockID, status, options, retries, guess));
+				 rs, status, options, retries, guess));
 }
 
 void
-dhashcli::retrieve_dl_or_walk_cb (blockID blockID, dhash_stat status,
+dhashcli::retrieve_dl_or_walk_cb (ptr<rcv_state> rs, dhash_stat status,
 				  int options, int retries, ptr<chordID> guess,
 				  ptr<dhash_block> blk)
 {
   chordID myID = clntnode->my_ID ();
-  rcv_state *rs = rcvs[blockID];
-  if (!rs) {
-    trace << myID << ": retrieve (" << blockID << "): not in table?\n";
-    assert (rs);
-  }
 
   if(!blk) {
     if (options & DHASHCLIENT_NO_RETRY_ON_LOOKUP) {
-      rcvs.remove (rs);
       rs->complete (DHASH_NOENT, NULL);
       rs = NULL;
     } else if (rs->succs.size() == 0) {
       warn << "walk: No luck walking successors, retrying..\n";
-      route_iterator *ci = r_factory->produce_iterator_ptr (blockID.ID);
+      route_iterator *ci = r_factory->produce_iterator_ptr (rs->key.ID);
       delaycb (5, wrap (ci, &route_iterator::first_hop, 
 			wrap (this, &dhashcli::retrieve_block_hop_cb,
-			      blockID, ci, options, retries - 1, guess),
+			      rs, ci, options, retries - 1, guess),
 			guess));
     } else {
       chord_node s = rs->succs.pop_front ();
-      dhash_download::execute (clntnode, s, blockID, NULL, 0, 0, 0,
+      dhash_download::execute (clntnode, s, rs->key, NULL, 0, 0, 0,
 			       wrap (this, &dhashcli::retrieve_dl_or_walk_cb,
-				     blockID, status, options, retries,
+				     rs, status, options, retries,
 				     guess));
     }
   } else {
@@ -178,21 +159,20 @@ dhashcli::retrieve_dl_or_walk_cb (blockID blockID, dhash_stat status,
     blk->errors = rs->nextsucc - dhash::num_dfrags ();
     blk->retries = blk->errors;
 
-    rcvs.remove (rs);
     rs->complete (DHASH_OK, blk);
     rs = NULL;
   }
 }
 
 void
-dhashcli::retrieve_frag_hop_cb (blockID blockID, route_iterator *ci, bool done)
+dhashcli::retrieve_frag_hop_cb (ptr<rcv_state> rs, route_iterator *ci, bool done)
 {
   vec<chord_node> cs = ci->successors ();
   if (done) {
     route r = ci->path ();
     dhash_stat stat = ci->status () ? DHASH_CHORDERR : DHASH_OK;
     delete ci;
-    retrieve_lookup_cb (blockID, stat, cs, r);
+    retrieve_lookup_cb (rs, stat, cs, r);
     return;
   }
   // Check to see if we already have enough in our successors.
@@ -204,15 +184,15 @@ dhashcli::retrieve_frag_hop_cb (blockID blockID, route_iterator *ci, bool done)
     else
       left = cs.size () - (dhash::num_dfrags () + 2);
     for (size_t i = 1; i < left; i++) {
-      if (betweenrightincl (cs[i-1].x, cs[i].x, blockID.ID)) {
+      if (betweenrightincl (cs[i-1].x, cs[i].x, rs->key.ID)) {
 	cs.popn_front (i);
 	route r = ci->path ();
 	delete ci;
 	
 	chordID myID = clntnode->my_ID ();
-	trace << myID << ": retrieve (" << blockID << "): skipping " << i
+	trace << myID << ": retrieve (" << rs->key << "): skipping " << i
 	      << " nodes.\n";
-	retrieve_lookup_cb (blockID, DHASH_OK, cs, r);
+	retrieve_lookup_cb (rs, DHASH_OK, cs, r);
 	return;
       }
     }
@@ -222,7 +202,7 @@ dhashcli::retrieve_frag_hop_cb (blockID blockID, route_iterator *ci, bool done)
 }
 
 void
-dhashcli::fetch_frag (rcv_state *rs)
+dhashcli::fetch_frag (ptr<rcv_state> rs)
 {
   register size_t i = rs->nextsucc;
 
@@ -244,7 +224,6 @@ dhashcli::fetch_frag (rcv_state *rs)
     // level know that they should retry.
     trace << myID << ": retrieve (" << rs->key 
           << "): out of successors; failing.\n";
-    rcvs.remove (rs);
     rs->complete (DHASH_NOENT, NULL);
     rs = NULL;
     return;
@@ -254,7 +233,7 @@ dhashcli::fetch_frag (rcv_state *rs)
   dhash_download::execute (clntnode, rs->succs[i], 
 			   blockID(rs->key.ID, rs->key.ctype, DHASH_FRAG),
 			   (char *)NULL, 0, 0, 0, 
-			   wrap (this, &dhashcli::retrieve_fetch_cb, rs->key, i));
+			   wrap (this, &dhashcli::retrieve_fetch_cb, rs, i));
   rs->nextsucc += 1;
 }
 
@@ -298,24 +277,18 @@ order_succs (const vec<float> &me, const vec<chord_node> &succs,
 
 
 void
-dhashcli::retrieve_lookup_cb (blockID blockID,
+dhashcli::retrieve_lookup_cb (ptr<rcv_state> rs,
 			      dhash_stat status,
 			      vec<chord_node> succs,
 			      route r)
 {
   chordID myID = clntnode->my_ID ();
-  rcv_state *rs = rcvs[blockID];
-  if (!rs) {
-    trace << myID << ": retrieve (" << blockID << "): not in table?\n";
-    assert (rs);
-  }
   rs->timemark ();
   rs->r = r;
   
   if (status != DHASH_OK) {
-    trace << myID << ": retrieve (" << blockID 
+    trace << myID << ": retrieve (" << rs->key 
           << "): lookup failure: " << status << "\n";
-    rcvs.remove (rs);
     rs->complete (status, NULL); // failure
     rs = NULL;    
     return;
@@ -325,9 +298,8 @@ dhashcli::retrieve_lookup_cb (blockID blockID,
     succs.pop_back ();
 
   if (succs.size () < dhash::num_dfrags ()) {
-    trace << myID << ": retrieve (" << blockID << "): "
+    trace << myID << ": retrieve (" << rs->key << "): "
 	  << "insufficient number of successors returned!\n";
-    rcvs.remove (rs);
     rs->complete (DHASH_CHORDERR, NULL); // failure
     rs = NULL;
     return;
@@ -337,7 +309,7 @@ dhashcli::retrieve_lookup_cb (blockID blockID,
     // Store list of successors ordered by expected distance.
     // fetch_frag will pull from this list in order.
 #ifdef VERBOSE_LOG    
-    modlogger ("orderer") << "ordering for block " << blockID << "\n";
+    modlogger ("orderer") << "ordering for block " << rs->key << "\n";
 #endif /* VERBOSE_LOG */    
     order_succs (clntnode->my_location ()->coords (),
 		 succs, rs->succs);
@@ -352,24 +324,22 @@ dhashcli::retrieve_lookup_cb (blockID blockID,
 }
 
 void
-dhashcli::retrieve_fetch_cb (blockID blockID, u_int i,
+dhashcli::retrieve_fetch_cb (ptr<rcv_state> rs, u_int i,
 			     ptr<dhash_block> block)
 {
   chordID myID = clntnode->my_ID ();
   // XXX collect fragments and decode block
-  rcv_state *rs = rcvs[blockID];
-  if (!rs) {
+  rs->incoming_rpcs -= 1;
+  if (rs->completed) {
     // Here it might just be that we got a fragment back after we'd
     // already gotten enough to reconstruct the block.
-    trace << myID << ": retrieve (" << blockID << "): unexpected fragment from "
+    trace << myID << ": retrieve (" << rs->key << "): unexpected fragment from "
 	  << i + 1 << ", discarding.\n";
     return;
   }
 
-  rs->incoming_rpcs -= 1;
-
   if (!block) {
-    trace << myID << ": retrieve (" << blockID
+    trace << myID << ": retrieve (" << rs->key
 	  << "): failed from successor " << i+1 << "\n";
     rs->errors++;
     fetch_frag (rs);
@@ -378,7 +348,7 @@ dhashcli::retrieve_fetch_cb (blockID blockID, u_int i,
   
 #ifdef VERBOSE_LOG  
   bigint h = compute_hash (block->data, block->len);
-  trace << myID << ": retrieve (" << blockID << ") got frag " << i
+  trace << myID << ": retrieve (" << rs->key << ") got frag " << i
 	<< " with hash " << h << " " << res->compl_res->res.size () << "\n";
 #endif /* VERBOSE_LOG */
   
@@ -389,8 +359,7 @@ dhashcli::retrieve_fetch_cb (blockID blockID, u_int i,
   
   if (!Ida::reconstruct (rs->frags, newblock)) {
     if (rs->frags.size () >= dhash::num_dfrags ()) {
-      trace << myID << ": retrieve (" << blockID 
-	    << "): reconstruction failed.\n";
+      trace << myID << ": retrieve (" << rs->key << "): reconstruction failed.\n";
       rs->errors++;
       fetch_frag (rs);
     }
@@ -412,7 +381,6 @@ dhashcli::retrieve_fetch_cb (blockID blockID, u_int i,
 			  int (diff.tv_nsec/1000000));
   }
   
-  rcvs.remove (rs);
   rs->complete (DHASH_OK, blk);
   rs = NULL;
 }
@@ -563,7 +531,7 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
   if (m > dhash::num_dfrags ())
     m = dhash::num_dfrags ();
 
-  warnx << "Using m = " << m << " for block size " << block->len << "\n";
+  // warnx << "Using m = " << m << " for block size " << block->len << "\n";
 
   for (u_int i = 0; i < dhash::num_efrags (); i++) {
     assert (i < succs.size ());
