@@ -362,7 +362,7 @@ Node::print_stats()
     allavg += _per_node_avg[i];
 
   if (sz > 0) {
-    printf("BW_PERNODE: 50-p:%.3f 90-p:%.3f 95-p:%.3f 99-p:%.3f 100-p:%.3f avg:%.3f\n", 
+    printf("BW_PERNODE:: 50-p:%.3f 90-p:%.3f 95-p:%.3f 99-p:%.3f 100-p:%.3f avg:%.3f\n", 
       _per_node_avg[sz/2], _per_node_avg[(uint)(sz*0.9)], 
       _per_node_avg[(uint)(sz*0.95)], _per_node_avg[(uint)(sz*0.99)], 
       _per_node_avg[sz-1], allavg/sz);

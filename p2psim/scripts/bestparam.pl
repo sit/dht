@@ -126,6 +126,7 @@ system("$con_cmd /tmp/$tmpfilename-all.con.sorted > /tmp/$tmpfilename-all.convex
 
 open FILE, "/tmp/$tmpfilename-all.convex" or die "cannot open /tmp/$tmpfilename-all.convex\n";
 my @allpts = <FILE>;
+close FILE;
 
 #get the max and min of this thing
 for (my $i = 1; $i <= $#allpts; $i++) {
