@@ -94,19 +94,26 @@ struct store_state {
   bool iscomplete ();
 };
 
-
+struct dhash_lease {
+  chordID key;
+  time_t touch;
+  time_t lease;
+  ihash_entry <dhash_lease> link;
+  dhash_lease (chordID k) : key(k), touch(0), lease(0) { }
+};
 
 struct dhash_block {
   char *data;
   size_t len;
   int hops;
   int errors;
+  int lease;
   chordID source;
 
   ~dhash_block () {  delete [] data; }
 
   dhash_block (const char *buf, size_t buflen)
-    : data (New char[buflen]), len (buflen)
+    : data (New char[buflen]), len (buflen), lease (0)
   {
     if (buf)
       memcpy (data, buf, len);
@@ -143,6 +150,9 @@ class dhash {
 
   ihash<int, pk_partial, &pk_partial::cookie, 
     &pk_partial::link> pk_cache;
+  
+  ihash<chordID, dhash_lease, &dhash_lease::key, 
+    &dhash_lease::link, hashID> leases;
 
   qhash<int, cbblockuc_t> bcpt;
 
@@ -294,21 +304,20 @@ class route_dhash : public route_iterator {
   
  public:
   route_dhash (ptr<vnode> vi, chordID xi, dhash *dh, 
-	       bool ucs = false);
-  route_dhash (ptr<vnode> vi, chordID xi, 
-	       chordID first_hop, bool ucs = false);
+	       bool lease = false, bool ucs = false);
   void next_hop ();
   void first_hop (cbhop_t cb);
   void first_hop (cbhop_t cb, chordID first_hop_guess);
   void execute (cbhop_t cbi, chordID first_hop_guess);
   void execute (cbhop_t cbi);
 
-  ptr<dhash_block> get_block () {return block;};
-  dhash_stat get_status () { return result; };
+  ptr<dhash_block> get_block () const { return block; }
+  dhash_stat get_status () const { return result; }
   route path ();
 
  private:
   ptr<route_chord> chord_iterator;
+  bool ask_for_lease;
   bool use_cached_succ;
   int npending;
   bool fetch_error;
@@ -355,7 +364,8 @@ class dhashcli {
 
  public:
   dhashcli (ptr<chord> node, dhash *dh, bool do_cache);
-  void retrieve (chordID blockID, bool usecachedsucc, cbretrieve_t cb);
+  void retrieve (chordID blockID, bool askforlease,
+                 bool usecachedsucc, cbretrieve_t cb);
   void retrieve (chordID source, chordID blockID, cbretrieve_t cb);
   void insert (chordID blockID, ref<dhash_block> block, 
                bool usecachedsucc, cbinsert_t cb);
@@ -406,8 +416,9 @@ public:
 	       cbinsertgw_t cb, bool usecachedsucc = false);
 
   // retrieve block and verify
-  void retrieve (bigint key, cbretrieve_t cb,
-                 bool usecachedsucc = false);
+#define DHASHCLIENT_RETRIEVE_USE_CACHED_SUCCESSOR 0x1
+#define DHASHCLIENT_RETRIEVE_ASK_FOR_LEASE        0x2
+  void retrieve (bigint key, cbretrieve_t cb, int options = 0);
 
   // synchronouslly call setactive.
   // Returns true on error, and false on success.

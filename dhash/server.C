@@ -37,6 +37,9 @@
 #include <dmalloc.h>
 #endif
 
+#define LEASE_TIME 2
+#define LEASE_INACTIVE 60
+
 int
 dhash::dbcompare (ref<dbrec> a, ref<dbrec> b)
 {
@@ -110,6 +113,22 @@ void
 dhash::sync_cb () 
 {
   db->sync ();
+
+  // benjie: remove stale entries from the lease table
+  vec<dhash_lease *> stale;
+  dhash_lease *l = leases.first ();
+  while (l) {
+    if (timenow-l->lease > LEASE_INACTIVE)
+      stale.push_back (l);
+    l = leases.next (l);
+  }
+  for (unsigned i=0; i<stale.size(); i++) {
+    dhash_lease *l = stale[i];
+    warn << "SYNC: remove " << l->key << " from lease table\n";
+    leases.remove (l);
+    delete l;
+  }
+
   delaycb (30, wrap (this, &dhash::sync_cb));
 }
 
@@ -119,6 +138,7 @@ dhash::route_upcall (int procno, void *args, cbupcalldone_t cb)
   warnt ("DHASH: fetchiter_request");
   
   s_dhash_fetch_arg *farg = static_cast<s_dhash_fetch_arg *>(args);
+
   if (key_status (farg->key) != DHASH_NOTPRESENT) {
     if (farg->len > 0) {
       //fetch the key and return it, end of story
@@ -135,6 +155,7 @@ dhash::route_upcall (int procno, void *args, cbupcalldone_t cb)
       arg->offset = 0;
       arg->source = host_node->my_ID ();
       arg->nonce = farg->nonce;
+      arg->lease = 0;
       dhash_stat *res = New dhash_stat ();
       doRPC (farg->from, dhash_program_1, DHASHPROC_BLOCK,
 	     arg, res, wrap (this, &dhash::sent_block_cb, res));
@@ -149,6 +170,7 @@ dhash::route_upcall (int procno, void *args, cbupcalldone_t cb)
     arg->offset = -1;
     arg->source = host_node->my_ID ();
     arg->nonce = farg->nonce;
+    arg->lease = 0;
     dhash_stat *res = New dhash_stat ();
     doRPC (farg->from, dhash_program_1, DHASHPROC_BLOCK,
 	   arg, res, wrap (this, &dhash::sent_block_cb, res));
@@ -183,6 +205,21 @@ dhash::block_to_res (dhash_stat err, s_dhash_fetch_arg *arg,
     res->compl_res->offset = arg->start;
     res->compl_res->source = host_node->my_ID ();
     res->compl_res->cookie = cookie;
+    res->compl_res->lease = 0;
+    if (arg->lease) {
+      // benjie: return a lease if block has not been touched recently
+      dhash_lease *l = leases[arg->key];
+      if (!l) {
+        l = New dhash_lease (arg->key);
+        leases.insert(l);
+      }
+      if (timenow-l->touch > LEASE_INACTIVE) {
+        warn << "FETCH: block inactive, can return lease\n";
+        if (l->lease < timenow+LEASE_TIME)
+	  l->lease = timenow+LEASE_TIME;
+        res->compl_res->lease = LEASE_TIME;
+      }
+    }
     
     memcpy (res->compl_res->res.base (), (char *)val->value + arg->start, n);
     
@@ -215,6 +252,22 @@ dhash::fetchiter_gotdata_cb (cbupcalldone_t cb, s_dhash_fetch_arg *a,
   arg->source = host_node->my_ID ();
   arg->nonce = a->nonce;
   arg->cookie = cookie;
+  arg->lease = 0;
+  if (a->lease) {
+    // benjie: need to make sure no one has write request on this block
+    dhash_lease *l = leases[a->key];
+    if (!l) {
+      l = New dhash_lease (a->key);
+      leases.insert(l);
+    }
+    if (timenow-l->touch > LEASE_INACTIVE) {
+      warn << "BLOCK: block inactive, can return lease\n";
+      if (l->lease < timenow+LEASE_TIME)
+        l->lease = timenow+LEASE_TIME;
+      arg->lease = LEASE_TIME;
+    }
+  }
+
   dhash_stat *res = New dhash_stat ();
   doRPC (a->from, dhash_program_1, DHASHPROC_BLOCK,
 	 arg, res, wrap (this, &dhash::sent_block_cb, res));  
@@ -239,9 +292,9 @@ dhash::dispatch (svccb *sbp)
 
   case DHASHPROC_FETCHITER:
     {
+
       //the only reason to get here is to fetch the 2-n chunks
       s_dhash_fetch_arg *farg = sbp->template getarg<s_dhash_fetch_arg> ();
-      
       if ((key_status (farg->key) != DHASH_NOTPRESENT) && (farg->len > 0)) {
 	//fetch the key and return it, end of story
 	fetch (farg->key, 
@@ -298,20 +351,18 @@ dhash::dispatch (svccb *sbp)
     break;
   case DHASHPROC_BLOCK:
     {
-
       s_dhash_block_arg *arg = sbp->template getarg<s_dhash_block_arg> ();
 
       cbblockuc_t *cb = bcpt[arg->nonce];
       if (cb) {
 	(*cb) (arg);
 	bcpt.remove (arg->nonce);
-     } else
+      } else
 	warn << "no callback registered\n";
 
       sbp->replyref (DHASH_OK);
     }
     break;
-
   default:
     sbp->replyref (PROC_UNAVAIL);
     break;
@@ -606,7 +657,8 @@ dhash::fetch_cb (int cookie, cbvalue cb, ptr<dbrec> ret)
   if (!ret) {
     (*cb)(cookie, NULL, DHASH_NOENT);
   } else {
-    //make up a cookie and insert in hash if this is the first fetch of a KEYHASH
+    // make up a cookie and insert in hash if this is the first
+    // fetch of a KEYHASH
     if ((cookie == 0) && 
 	dhash::block_type (ret) == DHASH_KEYHASH) {
       pk_partial *part = New pk_partial (ret, pk_partial_cookie);
@@ -638,7 +690,7 @@ dhash::append (ptr<dbrec> key, ptr<dbrec> data,
 	memcpy (m_buf, data->value, buflen);
 	int m_len = x.uio ()->resid ();
 	char *m_dat = suio_flatten (x.uio ());
-	ptr<dbrec> marshalled_data = 
+	ptr<dbrec> marshalled_data =
 	  New refcounted<dbrec> (m_dat, m_len);
 
 	dhash_stat stat;
@@ -683,7 +735,7 @@ dhash::append_after_db_fetch (ptr<dbrec> key, ptr<dbrec> new_data,
 	memcpy (m_buf + b->len, new_data->value, new_data->len);
 	int m_len = x.uio ()->resid ();
 	char *m_dat = suio_flatten (x.uio ());
-	ptr<dbrec> marshalled_data = 
+	ptr<dbrec> marshalled_data =
 	  New refcounted<dbrec> (m_dat, m_len);
 
 	db->insert (key, marshalled_data, 
@@ -716,6 +768,21 @@ dhash::append_after_db_store (cbstore cb, chordID k, int stat)
 void 
 dhash::store (s_dhash_insertarg *arg, cbstore cb)
 {
+  // benjie: check if there is a lease on the block. if there is an
+  // active lease, tell client to wait. in either case, remember that
+  // a client has tried to write the block; server will reject future
+  // leases.
+  dhash_lease *l = leases[arg->key];
+  if (l) {
+    warn << "STORE: found lease; check if it's recent\n";
+    l->touch = timenow;
+    if (l->lease > timenow) {
+      warn << "STORE: lease is active, cannot store\n";
+      cb (DHASH_WAIT);
+      return;
+    }
+  }
+
   store_state *ss = pst[arg->key];
 
   if (ss == NULL) {
@@ -731,8 +798,7 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
 
   if (ss->iscomplete()) {
     ptr<dbrec> k = id2dbrec(arg->key);
-    ptr<dbrec> d = NULL;
-    d = New refcounted<dbrec> (ss->buf, ss->size);
+    ptr<dbrec> d = New refcounted<dbrec> (ss->buf, ss->size);
 
     dhash_ctype ctype = dhash::block_type (d);
 
@@ -777,7 +843,7 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
       bytes_stored += ss->size;
     else
       bytes_stored += arg->data.size ();
-    
+
     db->insert (k, d, wrap(this, &dhash::store_cb, arg->type, id, cb));
 
   } else
@@ -834,7 +900,6 @@ dhash::dbrec2id (ptr<dbrec> r) {
 }
 
 
-
 dhash_stat
 dhash::key_status(const chordID &n) 
 {
@@ -849,7 +914,6 @@ dhash::key_status(const chordID &n)
     return DHASH_REPLICATED;
 }
 
-
 char
 dhash::responsible(const chordID& n) 
 {
@@ -859,8 +923,6 @@ dhash::responsible(const chordID& n)
   chordID m = host_node->my_ID ();
   return (between (p, m, n));
 }
-
-
 
 void
 dhash::doRPC (chordID ID, rpc_program prog, int procno,

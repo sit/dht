@@ -20,10 +20,12 @@ int gnonce;
 route_dhash::route_dhash (ptr<vnode> vi, 
 			  chordID xi,
 			  dhash *dh,
+			  bool lease,
 			  bool ucs) 
   : route_iterator (vi, xi),
+    ask_for_lease (lease),
     use_cached_succ (ucs), 
-    npending (0), fetch_error (false), dh (dh)  
+    npending (0), fetch_error (false), dh (dh)
 {
 
   last_hop = false;
@@ -34,6 +36,7 @@ route_dhash::route_dhash (ptr<vnode> vi,
   arg->len = MTU;
   arg->cookie = 0;
   arg->nonce = gnonce++;
+  arg->lease = ask_for_lease;
 
   dh->register_block_cb (arg->nonce, wrap (this, &route_dhash::block_cb));
   chord_iterator = New refcounted<route_chord> (vi, xi,
@@ -100,11 +103,14 @@ route_dhash::block_cb (s_dhash_block_arg *arg)
   size_t nread     = arg->res.size ();
   chordID sourceID = arg->source;
   int cookie       = arg->cookie;
-  
+
   block            = New refcounted<dhash_block> ((char *)NULL, totsz);
   block->hops      = path().size();
   block->errors    = 0;
   block->source    = sourceID;
+  block->lease     = 0;
+  if (ask_for_lease)
+    block->lease = arg->lease;
   
   npending = 0;
   
@@ -120,6 +126,7 @@ route_dhash::block_cb (s_dhash_block_arg *arg)
       arg->start = offset;
       arg->len   = length;
       arg->cookie = cookie;
+      arg->lease = ask_for_lease;
 
       ptr<dhash_fetchiter_res> res = New refcounted<dhash_fetchiter_res> ();
       v->doRPC (sourceID, dhash_program_1, DHASHPROC_FETCHITER, arg, res,
@@ -166,9 +173,13 @@ route_dhash::finish_block_fetch (ptr<dhash_fetchiter_res> res,
   
   if (err || (res && res->status != DHASH_COMPLETE)) 
     fail (dhasherr2str (res->status));
-  else
+  else {
+    if (ask_for_lease && block->lease > res->compl_res->lease)
+      block->lease = res->compl_res->lease;
+  
     add_data (res->compl_res->res.base (), res->compl_res->res.size (), 
 	      res->compl_res->offset);
+  }
 
   check_finish ();
 }

@@ -94,7 +94,9 @@ dhashgateway::dispatch (svccb *sbp)
     {
       warnt ("DHASHGW: retrieve_request");
       dhash_retrieve_arg *arg = sbp->template getarg<dhash_retrieve_arg> ();
-      dhcli->retrieve (arg->blockID, arg->usecachedsucc,
+      dhcli->retrieve (arg->blockID,
+	               arg->askforlease,
+	               arg->usecachedsucc,
 	               wrap (this, &dhashgateway::retrieve_cb, sbp));
     }
     break;
@@ -134,6 +136,7 @@ dhashgateway::retrieve_cb (svccb *sbp, ptr<dhash_block> block)
     res.resok->block.setsize (block->len);
     res.resok->hops = block->hops % 100;
     res.resok->errors = block->hops / 100;
+    res.resok->lease = block->lease;
     memcpy (res.resok->block.base (), block->data, block->len);
   }
   sbp->reply (&res);
@@ -335,18 +338,17 @@ dhashclient::insertcb (cbinsertgw_t cb, bigint key,
   (*cb) (true, i); // failure
 }
 
-
 void
-dhashclient::retrieve (bigint key, cbretrieve_t cb, bool usecachedsucc)
+dhashclient::retrieve (bigint key, cbretrieve_t cb, int options)
 {
   ref<dhash_retrieve_res> res = New refcounted<dhash_retrieve_res> (DHASH_OK);
   dhash_retrieve_arg arg;
   arg.blockID = key;
-  arg.usecachedsucc = usecachedsucc;
+  arg.usecachedsucc = (options & DHASHCLIENT_RETRIEVE_USE_CACHED_SUCCESSOR);
+  arg.askforlease = (options & DHASHCLIENT_RETRIEVE_ASK_FOR_LEASE);
   gwclnt->call (DHASHPROC_RETRIEVE, &arg, res, 
 		wrap (this, &dhashclient::retrievecb, cb, key, res));
 }
-
 
 void
 dhashclient::retrievecb (cbretrieve_t cb, bigint key, ref<dhash_retrieve_res> res, clnt_stat err)
@@ -369,6 +371,7 @@ dhashclient::retrievecb (cbretrieve_t cb, bigint key, ref<dhash_retrieve_res> re
 	dhash::get_block_contents (res->resok->block.base(), 
 				   res->resok->block.size(), ctype);
       blk->hops = res->resok->hops;
+      blk->lease = res->resok->lease;
       (*cb) (blk);
       return;
     }

@@ -21,7 +21,8 @@ enum dhash_stat {
   DHASH_INVALIDVNODE = 14,
   DHASH_RFETCHDONE = 15,
   DHASH_RFETCHFORWARDED = 16,
-  DHASH_STORE_NOVERIFY = 17
+  DHASH_STORE_NOVERIFY = 17,
+  DHASH_WAIT = 18
 };
 
 enum store_status {
@@ -61,6 +62,7 @@ struct s_dhash_fetch_arg {
   int32 len;
   int32 cookie;
   int32 nonce;
+  bool lease;
 };
 
 struct s_dhash_keystatus_arg {
@@ -110,6 +112,7 @@ struct dhash_fetchiter_complete_res {
   dhash_valueattr attr;
   chordID source;
   int32 cookie;
+  int32 lease;
 };
 
 union dhash_fetchiter_res switch (dhash_stat status) {
@@ -132,6 +135,7 @@ struct s_dhash_block_arg {
   dhash_valueattr attr;
   chordID source;
   int32 cookie;
+  int32 lease;
 };
 
 program DHASH_PROGRAM {
@@ -170,12 +174,14 @@ struct dhash_insert_arg {
 struct dhash_retrieve_arg {
   chordID blockID;
   bool usecachedsucc;
+  bool askforlease;
 };
 
 struct dhash_retrieve_resok {
   dhash_value block;
   int hops;
   int errors;
+  int lease;
 };
 
 struct dhash_insert_resok {

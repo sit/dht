@@ -136,13 +136,14 @@ dhashcli::doRPC (chordID ID, rpc_program prog, int procno,
 
 
 void
-dhashcli::retrieve (chordID blockID, bool usecachedsucc, cbretrieve_t cb)
+dhashcli::retrieve (chordID blockID, bool askforlease, bool usecachedsucc, cbretrieve_t cb)
 {
   ///warn << "dhashcli::retrieve\n";
   ptr<route_dhash> iterator = 
     New refcounted<route_dhash>(clntnode->active,
 				blockID,
 				dh,
+				askforlease,
 				usecachedsucc);
 
   iterator->execute (wrap (this, &dhashcli::retrieve_hop_cb, iterator, cb));
