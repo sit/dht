@@ -1,4 +1,4 @@
-dnl $Id: configure.in,v 1.12 2002/01/26 23:52:11 fdabek Exp $
+dnl $Id: configure.in,v 1.13 2002/02/22 18:05:59 fdabek Exp $
 dnl
 dnl Process this file with autoconf to produce a configure script.
 dnl
@@ -19,7 +19,7 @@ AC_ARG_ENABLE(vis,
 --enable-vis             Build the visualization tool (needs gtk),,
 enable_vis=no)
 if test "$enable_vis" = yes; then
-	AM_PATH_GTK(1.2.0,,AC_MSG_ERROR(devel/vis needs GTK))
+	AM_PATH_GTK_FOO(1.2.0,,AC_MSG_ERROR(devel/vis needs GTK))
 fi
 
 AM_CONDITIONAL(BUILDVIS, test "$enable_vis" = yes)

@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.6 2002/01/26 00:04:47 fdabek Exp $
+# $Id: Makefile.am,v 1.7 2002/02/22 18:05:59 fdabek Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -17,7 +17,7 @@ typetest_SOURCES = test_types.C
 typetest_LDADD = ../dhash/libdhash.a ../chord/libchord.a ../svc/libsvc.la $(LDADD)
 
 vis_SOURCES = vis.C
-INCLUDES = @GTK_CFLAGS@
+INCLUDES = ${CPPFLAGS} @GTK_CFLAGS@
 vis_LDADD =  ../chord/libchord.a ../svc/libsvc.la @GTK_LIBS@ $(LDADD)
 
 
