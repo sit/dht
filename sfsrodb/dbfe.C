@@ -35,6 +35,7 @@
 #define TYPE_OPT "opt_dbtype"
 #define CREATE_OPT "opt_create"
 #define FLAG_OPT   "opt_flag"
+#define DBENV_OPT    "opt_dbenv"
 
 ///////////////// static /////////////////////
 
@@ -54,6 +55,7 @@ dbGetImplInfo() {
   info->supportedOptions.push_back(TYPE_OPT);
   info->supportedOptions.push_back(CREATE_OPT);
   info->supportedOptions.push_back(FLAG_OPT);
+  info->supportedOptions.push_back(DBENV_OPT);
 #endif
   return info;
 }
@@ -305,7 +307,9 @@ int dbfe::IMPL_open_sleepycat(char *filename, dbOptions opts) {
   char cpath[MAXPATHLEN];
   int r = -1, fd = -1;
   bool do_dbenv = false;
-  if(filename) do_dbenv = true;
+
+  long use_dbenv = opts.getOption(DBENV_OPT);
+  if(filename && use_dbenv) do_dbenv = true;
 
   long mode = opts.getOption(PERM_OPT);
   if (mode == -1) mode = 0664;
@@ -318,6 +322,8 @@ int dbfe::IMPL_open_sleepycat(char *filename, dbOptions opts) {
   if(do_dbenv) {
     fd = open(".", O_RDONLY);
     if(fd == -1) fatal << "can't open current working dir\n";
+    close (fd);
+
     mkdir(filename, 0755);
     r = chdir(filename);
     if(r == -1) fatal << "couldn't chdir to " << filename << "\n";
@@ -329,19 +335,24 @@ int dbfe::IMPL_open_sleepycat(char *filename, dbOptions opts) {
       r = dbe->set_cachesize(dbe, 0, cacheSize*1024, 0);
       if (r) return r;
     }
+
     // uncomment the below for slightly better performance
     //    r = dbe->set_flags(dbe, DB_TXN_NOSYNC, 1);
     //    if (r) return r;
     getcwd(cpath, MAXPATHLEN);
+
     r = dbe->set_data_dir(dbe, cpath);
     if (r) return r;
     r = dbe->set_lg_dir(dbe, cpath);
     if (r) return r;
     r = dbe->set_tmp_dir(dbe, cpath);
     if (r) return r;
-
+    
     r = dbe->open(dbe, NULL, DB_CREATE | DB_INIT_MPOOL | DB_INIT_LOCK | DB_INIT_LOG | DB_INIT_TXN | DB_RECOVER , 0);
-    if (r) return r;
+    if (r){
+      warn << "dbe->open returned " << r << " which is " << db_strerror(r) << "\n";
+      return r;
+    }
   }
 
   r = db_create(&db, dbe, 0);
@@ -361,6 +372,7 @@ int dbfe::IMPL_open_sleepycat(char *filename, dbOptions opts) {
 #else
     r = db->open(db, NULL, (const char *)filename, NULL, DB_BTREE, flags, mode);
 #endif
+
   } else {
 #if ((DB_VERSION_MAJOR < 4) || ((DB_VERSION_MAJOR == 4) && (DB_VERSION_MINOR < 1)))
     r = db->open(db, "db", NULL, DB_BTREE, flags, mode);

@@ -89,6 +89,9 @@ dhash_config_init::dhash_config_init ()
   ok = ok && set_int ("merkle.replica_timer", 5*60);
   ok = ok && set_int ("merkle.prt_timer", 5);
 
+  //plab hacks
+  ok = ok && set_int ("dhash.disable_db_env", 0);
+
   assert (ok);
 #undef set_int
 }
@@ -113,6 +116,7 @@ DECL_CONFIG_METHOD(synctm, "dhash.sync_timer")
 DECL_CONFIG_METHOD(num_efrags, "dhash.efrags")
 DECL_CONFIG_METHOD(num_dfrags, "dhash.dfrags")
 DECL_CONFIG_METHOD(dhash_mtu, "dhash.mtu")
+DECL_CONFIG_METHOD(dhash_disable_db_env, "dhash.disable_db_env")
 #undef DECL_CONFIG_METHOD
 
 // Pure virtual destructors still need definitions
@@ -183,6 +187,10 @@ dhash_impl::dhash_impl (str dbname, u_int k) :
   opts.addOption ("opt_async", 1);
   opts.addOption ("opt_cachesize", 1000);
   opts.addOption ("opt_nodesize", 4096);
+  if (dhash::dhash_disable_db_env ())
+    opts.addOption ("opt_dbenv", 0);
+  else
+    opts.addOption ("opt_dbenv", 1);
 
   db = New refcounted<dbfe>();
   keyhash_db = New refcounted<dbfe> ();
