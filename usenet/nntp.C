@@ -28,8 +28,12 @@ nntp::nntp (int _s) :
 
   cmd_hello("MODE READER\r\n");
 
+  add_cmd ("CHECKDHT", wrap (this, &nntp::cmd_check));
+  add_cmd ("TAKEDHT", wrap (this, &nntp::cmd_takedht));
+
   add_cmd ("CHECK", wrap (this, &nntp::cmd_check));
   add_cmd ("TAKETHIS", wrap (this, &nntp::cmd_takethis));
+
   add_cmd ("IHAVE", wrap (this, &nntp::cmd_ihave));
 
   add_cmd ("ARTICLE", wrap (this, &nntp::cmd_article));
@@ -55,15 +59,15 @@ void
 nntp::process_line (const str data, int err)
 {
   if (err < 0) {
-    warnx << "aio oops " << err << "\n";
+    warnx << "nntp aio oops " << err << "\n";
     if (err == ETIMEDOUT) {
-      died ();
+      delete this;
       return;
     }
   }
   if (!data || !data.len()) {
-    warnx << "data oops\n";
-    died ();
+    warnx << "nntp data oops\n";
+    delete this;
     return;
   }
   lines.push_back (data);
@@ -71,12 +75,6 @@ nntp::process_line (const str data, int err)
   process_input ();
   if (!*d)
     aio->readline (wrap (this, &nntp::process_line));
-}
-
-void
-nntp::died (void)
-{
-  delete this;
 }
 
 void
@@ -383,14 +381,14 @@ nntp::read_post (str resp, str bad)
       strbuf postlog;
       if (nntp_trace >= 2)
 	postlog << prefix << "group " << postgrx[1] << ": ";
-      if (g->open (postgrx[1]) < 0)
+      if (g->open (postgrx[1]) < 0) {
 	if (nntp_trace >= 2)
 	  postlog << "unknown, so ignoring.\n";
-      else {
+      } else {
 	g->addid (msgid, ID);
 	posted = true;
 	if (nntp_trace >= 2)
-	  postlog << msgid << "(" << ID << ") posted.\n";
+	  postlog << msgid << " (" << ID << ") posted.\n";
       }
       if (nntp_trace >= 2)
 	warn << postlog;
@@ -487,7 +485,12 @@ nntp::cmd_takethis (str c)
     bad = strbuf () << takethisbadb << takethisrx[1] << takethisbade;
     posting = true;
     process_input = wrap (this, &nntp::read_post, resp, bad);
-    process_input ();
   } else
     aio << syntax;
+}
+
+void
+nntp::cmd_takedht (str c)
+{
+  fatal << s << ": takedht";
 }

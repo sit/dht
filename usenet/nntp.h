@@ -23,11 +23,12 @@ class nntp {
   bool posting;
   ptr<bool> deleted;
 
-  void died (void);
   void process_line (const str, int);
   void command (void);
   void add_cmd (const char *, cbs);
+  
   void cmd_hello (str);
+  void cmd_takedht (str);
   void cmd_list (str);
   void cmd_group (str);
   void cmd_over (str);

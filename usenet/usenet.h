@@ -1,5 +1,5 @@
 // -*-c++-*-
-/* $Id: usenet.h,v 1.3 2004/08/26 21:19:24 sit Exp $ */
+/* $Id: usenet.h,v 1.4 2004/08/30 19:46:17 sit Exp $ */
 
 /*
  *
@@ -39,6 +39,7 @@ struct options {
 
   unsigned int client_timeout;
   u_int16_t listen_port;
+  unsigned int peer_max_queue;
   unsigned int peer_timeout;
   unsigned int sync_interval;
 

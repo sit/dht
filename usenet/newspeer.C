@@ -1,5 +1,6 @@
 #include <async.h>
 #include <aios.h>
+#include <rxx.h>
 #include "usenet.h"
 #include "newspeer.h"
 
@@ -7,7 +8,12 @@ static vec<ptr<newspeer> > peers;
 
 newspeer::newspeer (str h, u_int16_t p) :
   hostname (h),
-  port (p)
+  port (p),
+  s (-1),
+  aio (NULL),
+  state (HELLO_WAIT),
+  dhtok (false),
+  streamok (false)
 {
 }
 
@@ -74,5 +80,103 @@ newspeer::feed_connected (int t, int s)
   }
   aio = aios::alloc (s);
   aio->settimeout (opt->peer_timeout);
-  aio << "MODE STREAM\r\n";
+  // Start lockstep
+  state = HELLO_WAIT;
+  aio->readline (wrap (this, &newspeer::process_line));
+}
+
+static rxx stattxtrx ("^(\\d+)\\s+(.*)$");
+static rxx emptyrxx ("^\\s*$");
+void
+newspeer::process_line (const str data, int err)
+{
+  if (err < 0) {
+    warnx << "newspeer aio oops " << err << "\n";
+    if (err == ETIMEDOUT) {
+      delete this;
+      return;
+    }
+  }
+  if (!data || !data.len()) {
+    warnx << "newspeer data oops\n";
+    delete this;
+    return;
+  }
+  if (stattxtrx.match (data)) {
+    str code = stattxtrx[1];
+    if (state == HELLO_WAIT) {
+      if (code == "200") {
+	state = MODE_CHANGE;
+	aio << "MODE STREAM\r\n";
+      } else {
+	warnx << s << ": Unexpected input from peer: " << data << "\n";
+      }
+    }
+    else if (state == MODE_CHANGE) {
+      state = DHT_CHECK;
+      streamok = false;
+      if (code[0] == '2') {
+	streamok = true;
+	if (code != "203")
+	  warnx << s << ": Unexpected (but ok) response to mode stream: "
+		<< data << "\n";
+      }
+      else if (code != "500") {
+	warnx << s << ": Unexpected response to mode stream: " << data << "\n";
+      }
+    }
+    else if (state == DHT_CHECK || state == FEEDING) {
+      state = FEEDING;
+      if (code == "238") {				// CHECK, CHECKDHT
+	dhtok = true;
+	// send_article (stattxtrx[2]); // XXX
+      } else if (code == "239" || code == "438") { // TAKETHIS, TAKEDHT
+	// fantastic. some article went over ok.
+	// XXX remove from list of articles to send
+      } else if (code == "431" || code == "400" || code == "439") {
+	// something went wrong. try again later... XXX
+	warnx << s << ": dropping to-delay article on the floor " << data << "\n";
+      } else if (code == "480") {			// CHECK*, TAKE*
+	// permission denied.  disconnect and go away.
+	warnx << s << ": permission denied!\n";
+      }
+      else if (code[0] != '5') {
+	warnx << s << ": Unexpected response to mode stream: " << data << "\n";
+      }
+    }
+    else
+      fatal << s << ": UNKNOWN STATE: " << state << "\n";
+  } else if (emptyrxx.match(data)) {
+    warnx << "empty line\n";
+  } else {
+    // XXX what is correct error code?
+    aio << "500 What?\r\n";
+  }
+  
+  aio->readline (wrap (this, &newspeer::process_line));
+  // XXX
+}
+
+void
+newspeer::flush_queue ()
+{
+  while (outq.size ()) {
+    str id = outq.pop_front ();
+    if (dhtok) {
+      aio << "CHECKDHT " << id << "\r\n";
+    } else {
+      aio << "CHECK " << id << "\r\n";
+    } 
+    if (!streamok)
+      break;
+  }
+}
+
+void
+newspeer::queue_article (str id)
+{
+  if (outq.size() > opt->peer_max_queue) {
+    outq.pop_front ();
+  }
+  outq.push_back (id);
 }

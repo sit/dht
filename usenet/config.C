@@ -1,4 +1,4 @@
-/* $Id: config.C,v 1.1 2004/08/26 21:19:23 sit Exp $ */
+/* $Id: config.C,v 1.2 2004/08/30 19:46:17 sit Exp $ */
 
 /*
  *
@@ -34,6 +34,7 @@ options *opt (New options);
 options::options ()
   : client_timeout (300),
     listen_port (11999),
+    peer_max_queue (1024),
     peer_timeout (300),
     sync_interval (5)
 {
@@ -87,6 +88,7 @@ parseconfig (options *op, str cf)
   ct
     .add ("ClientTimeout", &op->client_timeout, 0, 60 * 60)
     .add ("ListenPort", &op->listen_port, 0, 65536)
+    .add ("PeerMaxQueue", &op->peer_max_queue, 0, 1000000)
     .add ("PeerTimeout", &op->peer_timeout, 0, 60 * 60)
     .add ("SyncInterval", &op->sync_interval, 0, 5)
     ;
@@ -117,6 +119,12 @@ parseconfig (options *op, str cf)
       if (!convertint (av[1], &op->listen_port)) {
 	errors = true;
 	WARN << "usage: ListenPort port\n";
+      }
+    } else if (!strcasecmp("PeerMaxQueue", av[0])) {
+      if (!convertint (av[1], &op->peer_max_queue) ||
+	  op->peer_max_queue < 0) {
+	errors = true;
+	WARN << "usage: PeerMaxQueue numarts\n";
       }
     } else if (!strcasecmp("PeerTimeout", av[0])) {
       if (!convertint (av[1], &op->peer_timeout) ||
