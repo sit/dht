@@ -49,18 +49,17 @@ struct store_state {
   store_state (int z) : read(0), size(z), buf(New char[z]) {};
 };
 
-struct retry_state {
-  chordID n;
+struct query_succ_state {
+  vec<chord_node> succ;
+  int pathlen;
   svccb *sbp;
-  chordID succ;
-  route path;
-  int hops;
+  ptr<dhash_fetch_arg> rarg;
+  chordID source;
 
-  retry_state (chordID ni, svccb *sbpi, chordID si,
-	       route pi) :
-    n (ni), sbp (sbpi), succ (si), path (pi) {};
+  query_succ_state (vec<chord_node> s, int p, svccb *sb,
+		    ptr<dhash_fetch_arg> r, chordID so) :
+    succ (s), pathlen (p), sbp (sb), rarg (r), source (so) {};
 };
-
 class dhashclient {
 
   ptr<axprt_stream> x;
@@ -82,12 +81,11 @@ class dhashclient {
   void query_successors (vec<chord_node> succ, 
 			 int pathlen,
 			 svccb *sbp,
-			 ptr<dhash_fetch_arg> rarg);
+			 ptr<dhash_fetch_arg> rarg,
+			 chordID source);
   
-  void query_successors_fetch_cb (vec<chord_node> succ,
-				  int pathlen,
-				  svccb *sbp, 
-				  ptr<dhash_fetch_arg> rarg, 
+  void query_successors_fetch_cb (query_succ_state *st,
+				  chordID prev,
 				  dhash_res *fres, 
 				  clnt_stat err);
 
@@ -112,13 +110,6 @@ class dhashclient {
 		       int offset, void *base, int dsize);
   bool block_memorized (chordID key);
   void forget_block (chordID key);
-
-#if 0
-  void lookup_findsucc_cb (svccb *sbp,
-			   chordID succ, route path, chordstat err);
-  void lookup_fetch_cb (dhash_res *res, retry_state *st,  clnt_stat err);
-  void retry (retry_state *st, chordID p, net_address r, chordstat stat);
-#endif
 
  public:  
   void set_caching(char c) { do_caching = c;};

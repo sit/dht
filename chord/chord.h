@@ -286,7 +286,9 @@ class chord : public virtual refcount {
   chordID nth_successorID (int n) {
     return vnodes.first()->value->nth_successorID (n);
   };
-
+  chordID clnt_ID () {
+    return vnodes.first()->value->my_ID ();
+  }
 };
 
 extern ptr<chord> chordnode;
