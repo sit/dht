@@ -4,7 +4,7 @@ observers_o_SOURCES = kademliaobserver.C protocolobserver.C \
 		    kelipsobserver.C observerfactory.C datastoreobserver.C
 
 EXTRA_DIST = chordobserver.h kademliaobserver.h kelipsobserver.h onehopobserver.h \
-             observerfactory.h protocolobserver.h tapestryobserver.h
+             observerfactory.h protocolobserver.h tapestryobserver.h datastoreobserver.h
 
 LIBS =
 observers_o_LINK = $(LD) -r -o $@

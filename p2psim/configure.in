@@ -1,5 +1,5 @@
 AC_INIT(p2psim/p2psim.h)
-AM_INIT_AUTOMAKE(p2psim, 0.1)
+AM_INIT_AUTOMAKE(p2psim, 0.2)
 AM_CONFIG_HEADER(config.h)
 
 AC_CANONICAL_HOST

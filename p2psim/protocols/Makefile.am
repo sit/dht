@@ -6,7 +6,7 @@ protocols_o_SOURCES = chord.C chordfinger.C chordfingerpns.C \
 
 EXTRA_DIST = chord.h chordfinger.h chordfingerpns.h chordonehop.h \
              chordtoe.h consistenthash.h kademlia.h kelips.h koorde.h \
-             protocolfactory.h sillyprotocol.h tapestry.h
+             protocolfactory.h sillyprotocol.h tapestry.h onehop.h
 
 LIBS =
 protocols_o_LINK = $(LD) -r -o $@
