@@ -124,6 +124,11 @@ Protocol::parse(char *filename)
     string protocol = words[0];
     words.erase(words.begin());
 
+    // if it has no arguments, you still need to register the prototype
+    if( !words.size() ) {
+      xmap[protocol];
+    }
+
     // this is a variable assignment
     while(words.size()) {
       vector<string> xargs = split(words[0], "=");
