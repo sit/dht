@@ -101,6 +101,7 @@ ddns::ddnsRR2block (ptr<ddnsRR> rr, char *data, int datasize)
 		TTL_SIZE, datalen, datasize);
     copy2block (data, (void *) &rr->rdlength, 
 		RDLENGTH_SIZE, datalen, datasize);
+    delete rr->dname;
 
     switch (rr->type) {
     case A:
@@ -117,6 +118,7 @@ ddns::ddnsRR2block (ptr<ddnsRR> rr, char *data, int datasize)
     case PTR:
       copy2block (data, (void *) rr->rdata.hostname, 
 		  rr->rdlength, datalen, datasize);
+      delete rr->rdata.hostname;
       break;
     case SOA:
       copy2block (data, (void *) rr->rdata.soa.mname,
@@ -133,6 +135,8 @@ ddns::ddnsRR2block (ptr<ddnsRR> rr, char *data, int datasize)
 		  fieldsize, datalen, datasize);		
       copy2block (data, (void *) &rr->rdata.soa.minttl,
 		  fieldsize, datalen, datasize);		
+      delete rr->rdata.soa.mname;
+      delete rr->rdata.soa.rname;
       break;
     case WKS:
       copy2block (data, (void *) &rr->rdata.wks.address,
@@ -141,33 +145,41 @@ ddns::ddnsRR2block (ptr<ddnsRR> rr, char *data, int datasize)
 		  sizeof (uint32), datalen, datasize);		  
       copy2block (data, (void *) rr->rdata.wks.bitmap,
 		  strlen (rr->rdata.wks.bitmap) + 1, datalen, datasize);	
+      delete rr->rdata.wks.bitmap;
       break;
     case HINFO:
       copy2block (data, (void *) rr->rdata.hinfo.cpu,
 		  strlen (rr->rdata.hinfo.cpu) + 1, datalen, datasize);
       copy2block (data, (void *) rr->rdata.hinfo.os,
-		  strlen (rr->rdata.hinfo.os) + 1, datalen, datasize);		  
+		  strlen (rr->rdata.hinfo.os) + 1, datalen, datasize);		
+      delete rr->rdata.hinfo.cpu;
+      delete rr->rdata.hinfo.os;
       break;
     case MINFO:
       copy2block (data, (void *) rr->rdata.minfo.rmailbx,
 		  strlen (rr->rdata.minfo.rmailbx) + 1, datalen, datasize);	
       copy2block (data, (void *) rr->rdata.minfo.emailbx,
 		  strlen (rr->rdata.minfo.emailbx) + 1, datalen, datasize);	
+      delete rr->rdata.minfo.rmailbx;
+      delete rr->rdata.minfo.emailbx;
       break;
     case MX:
       copy2block (data, (void *) &rr->rdata.mx.pref,
 		  sizeof (uint32), datalen, datasize);		  
       copy2block (data, (void *) rr->rdata.mx.exchange,
 		  strlen (rr->rdata.mx.exchange) + 1, datalen, datasize);
+      delete rr->rdata.mx.exchange;
       break;
     case TXT:
       copy2block (data, (void *) rr->rdata.txt_data,
 		  rr->rdlength, datalen, datasize);
+      delete rr->rdata.txt_data;
       break;
     case DNULL:
     default:
       copy2block (data, (void *) rr->rdata.rdata,
-		  rr->rdlength, datalen, datasize);      
+		  rr->rdlength, datalen, datasize);
+      delete rr->rdata.rdata;
     }  
     rr = rr->next;
   }

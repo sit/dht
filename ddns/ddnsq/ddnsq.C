@@ -15,10 +15,14 @@ fill_RR (domain_name dname, dns_type dt, dns_class cl,
 	 ttl_t ttl, string rr_data, ref<ddnsRR> rr)
 {
   /* convert into DDNS RR */
-  rr->dname = dname;
+  rr->dname = strdup (dname);
   rr->type = dt;
   rr->cls = cl;
   rr->ttl = ttl;
+
+  string sth = "Can you read this?";
+  string sth2 = "The is the default data.";
+
   switch (dt) {
   case A:
     rr->rdlength = sizeof (rr->rdata.address);
@@ -51,7 +55,44 @@ fill_RR (domain_name dname, dns_type dt, dns_class cl,
     rr->rdata.soa.minttl = 55555;
     rr->rdlength = 6 + 6 + 5*sizeof (uint32);
     break;
+  case WKS:
+    rr->rdata.wks.address = 18;
+    rr->rdata.wks.address = (rr->rdata.address << 8) + 26;
+    rr->rdata.wks.address = (rr->rdata.address << 8) + 4;
+    rr->rdata.wks.address = (rr->rdata.address << 8) + 88;
+    rr->rdata.wks.protocol = 10;
+    rr->rdata.wks.bitmap = (string) malloc (8);
+    rr->rdata.wks.bitmap = "Athicha!";
+    rr->rdlength = sizeof (rr->rdata.wks.address) + sizeof (uint32) + 8;
+    break;
+  case HINFO:
+    rr->rdata.hinfo.cpu = (string) malloc (8);
+    rr->rdata.hinfo.cpu = "Pentium\0";
+    rr->rdata.hinfo.os  = (string) malloc (8);
+    rr->rdata.hinfo.os  = "FreeBSD\0";
+    rr->rdlength = 8 + 8;
+    break;
+  case MINFO:
+    rr->rdata.minfo.rmailbx = (domain_name) malloc (9);
+    rr->rdata.minfo.rmailbx = "new-york\0";
+    rr->rdata.minfo.emailbx = (domain_name) malloc (10);
+    rr->rdata.minfo.emailbx = "amsterdam\0";
+    rr->rdlength = 9 + 10;
+    break;
+  case MX:
+    rr->rdata.mx.pref = 3;
+    rr->rdata.mx.exchange = (domain_name) malloc (4);
+    rr->rdata.mx.exchange = "not\0";
+    rr->rdlength = sizeof (uint32) + 4;
+    break;
+  case TXT:
+    rr->rdata.txt_data = strdup (sth);
+    rr->rdlength = strlen (sth);
+    break;
+  case DNULL:
   default:
+    rr->rdata.rdata = strdup (sth2);
+    rr->rdlength = strlen (sth2);
     break;
   }    
 }
@@ -107,7 +148,29 @@ got_it (ptr<ddnsRR> rr)
       warn << "rdata.soa.expire = " << rr->rdata.soa.expire << "\n";
       warn << "rdata.soa.minttl = " << rr->rdata.soa.minttl << "\n";
       break;
+    case WKS:
+      warn << "rdata.wks.address = " << rr->rdata.wks.address << "\n";
+      warn << "rdata.wks.protocol = " << rr->rdata.wks.protocol << "\n";
+      warn << "rdata.wks.bitmap = " << rr->rdata.wks.bitmap << "\n";
+      break;
+    case HINFO:
+      warn << "rdata.hinfo.cpu = " << rr->rdata.hinfo.cpu << "\n";
+      warn << "rdata.hinfo.os = " << rr->rdata.hinfo.os << "\n";      
+      break;
+    case MINFO:
+      warn << "rdata.minfo.rmailbx = " << rr->rdata.minfo.rmailbx << "\n";
+      warn << "rdata.minfo.emailbx = " << rr->rdata.minfo.emailbx << "\n";
+      break;
+    case MX:
+      warn << "rdata.mx.pref = " << rr->rdata.mx.pref << "\n";
+      warn << "rdata.mx.exchange = " << rr->rdata.mx.exchange << "\n";     
+      break;
+    case TXT:
+      warn << "rdata.txt_data = " << rr->rdata.txt_data << "\n";
+      break;
+    case DNULL:
     default:
+      warn << "rdata.rdata = " << rr->rdata.rdata << "\n";
       break;
     }
     rr = rr->next;
