@@ -23,7 +23,7 @@ private:
   dhash_download (ptr<vnode> clntnode, chord_node source, blockID blockID,
 		  char *data, u_int len, u_int totsz, int cookie,
 		  cbretrieve_t cb);
-  long getchunk (u_int start, u_int len, int cookie, gotchunkcb_t cb);
+  void getchunk (u_int start, u_int len, int cookie, gotchunkcb_t cb);
   void gotchunk (gotchunkcb_t cb, ptr<dhash_fetchiter_res> res,
 		 int chunknum, clnt_stat err);
   void first_chunk_cb  (ptr<dhash_fetchiter_res> res, int chunknum, clnt_stat err);

@@ -26,11 +26,11 @@ dhash_download::dhash_download (ptr<vnode> clntnode, chord_node source,
     getchunk (0, MTU, 0, wrap (this, &dhash_download::first_chunk_cb));
 }
 
-long
+void
 dhash_download::getchunk (u_int start, u_int len, int cookie, gotchunkcb_t cb)
 {
   ptr<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg>;
-  clntnode->locations->lookup (clntnode->my_ID ())->fill_node (arg->from);
+  clntnode->my_location ()->fill_node (arg->from);
   arg->key   = blckID.ID;
   arg->ctype = blckID.ctype;
   arg->dbtype = blckID.dbtype;
@@ -42,9 +42,11 @@ dhash_download::getchunk (u_int start, u_int len, int cookie, gotchunkcb_t cb)
   npending++;
   ptr<dhash_fetchiter_res> res = New refcounted<dhash_fetchiter_res> ();
 
-  return clntnode->doRPC 
+  long seqno = clntnode->doRPC 
     (source, dhash_program_1, DHASHPROC_FETCHITER, arg, res, 
      wrap (this, &dhash_download::gotchunk, cb, res, numchunks++));
+
+  seqnos.push_back (seqno);
 }
   
 void
@@ -76,20 +78,22 @@ void
 dhash_download::process_first_chunk (char *data, size_t datalen, size_t totsz,
 				     int cookie)
 {
-  block            = New refcounted<dhash_block> ((char *)NULL, totsz, blckID.ctype);
-  block->source    = source.x;
-  block->hops      = 0;
-  block->errors    = 0;
-  
+  block = New refcounted<dhash_block> ((char *)NULL, totsz, blckID.ctype);
+  block->source = source.x;
+  block->hops   = 0;
+  block->errors = 0;
+
+  nextchunk++;
   add_data (data, datalen, 0);
 
   //issue the RPCs to get the other chunks
   size_t nread = datalen;
   while (nread < totsz) {
     int length = MIN (MTU, totsz - nread);
-    //      warn << "SENT RPC for [" << nread << ", " << nread + length << "]  at " << (getusec () - start) << "\n";
-    long seqno = getchunk (nread, length, cookie, wrap (this, &dhash_download::later_chunk_cb));
-    seqnos.push_back (seqno);
+    //    warnx << "SENT RPC for [" << nread << ", " << nread + length
+    //	  << "]  at " << (getusec () - start) << "\n";
+    getchunk (nread, length, cookie,
+	      wrap (this, &dhash_download::later_chunk_cb));
     nread += length;
   }
 }
@@ -103,11 +107,13 @@ dhash_download::later_chunk_cb (ptr<dhash_fetchiter_res> res, int chunknum,
   if (err || (res && res->status != DHASH_COMPLETE))
     fail (dhasherr2str (res->status));
   else {
-    //      warn << "GOT RPC for chunk " << chunknum << " at " << (getusec () - start) << "\n";
+    // warn << "GOT RPC for chunk " << chunknum << " at "
+    //	 << (getusec () - start) << "\n";
 
     if (!didrexmit && (chunknum > nextchunk)) {
-      warn << "FAST retransmit: " << blckID << " chunk " << nextchunk << " being retransmitted\n";
-      clntnode->resendRPC(seqnos[nextchunk]);
+      warn << "FAST retransmit: " << blckID << " chunk "
+	   << nextchunk << " being retransmitted.\n";
+      clntnode->resendRPC (seqnos[nextchunk]);
       didrexmit = true;  // be conservative: only fast rexmit once per block
     }
 
@@ -143,7 +149,8 @@ dhash_download::check_finish ()
 void
 dhash_download::fail (str errstr)
 {
-  warn << "dhash_download failed: " << blckID << ": " << errstr << " at " << source.x << "\n";
+  warn << "dhash_download failed: " << blckID << ": "
+       << errstr << " at " << source.x << "\n";
   error = true;
 }
 
