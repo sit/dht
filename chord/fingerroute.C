@@ -142,6 +142,9 @@ fingerroute::closestpred (const chordID &x, const vec<chordID> &failed)
   
   ptr<location> f = fingers_->closestpred (x, failed);
   ptr<location> u = successors->closestpred (x, failed);
+  if (f->id () == myID)
+    return u;
+  
   if (between (myID, f->id (), u->id ())) 
     s = f;
   else
