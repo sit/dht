@@ -103,7 +103,7 @@ main (int argc, char *argv[])
 
     totalsz += data.size;
     
-    err_flush ();
+    aout->flush ();
   }
 
   db->close (db, 0);
