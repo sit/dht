@@ -38,6 +38,7 @@ int do_cache;
 int cache_size;
 dhash *dh[MAX_VNODES + 1];
 int ndhash = 0;
+int myport;
 
 void stats ();
 void stop ();
@@ -74,10 +75,9 @@ client_listening_cb (int fd, int status)
   if (status)
     close (fd);
   else if (listen (fd, 5) < 0) {
-    warn ("not listening for sfskey: listen: %m\n");
+    fatal ("Error from listen: %m\n");
     close (fd);
-  }
-  else {
+  } else {
     fdcb (fd, selread, wrap (client_accept_socket, fd));
   }
 }
@@ -91,34 +91,18 @@ cleanup ()
 static void
 startclntd()
 {
-  sockaddr_un sun;
-  if (p2psocket.len () >= sizeof (sun.sun_path)) {
-    warn ("not listening on socket: path too long: %s\n", p2psocket.cstr ());
-    return;
-  }
-  int clntfd = socket (AF_UNIX, SOCK_STREAM, 0);
-  if (clntfd < 0) {
-    warn ("not listening on socket: socket: %m\n");
-    return;
-  }
-  make_async (clntfd);
 
-  bzero (&sun, sizeof (sun));
-  sun.sun_family = AF_UNIX;
-  strcpy (sun.sun_path, p2psocket);
-
-  umask (077);
-  if (bind (clntfd, (sockaddr *) &sun, sizeof (sun)) < 0) {
-    if (errno == EADDRINUSE)
-      unlink (sun.sun_path);
-    if (bind (clntfd, (sockaddr *) &sun, sizeof (sun)) < 0) {
-      warn ("not listening on socket: %s: %m\n", sun.sun_path);
-      err_flush ();
-      _exit (1);
-    }
-  }
-  
+  unlink (p2psocket);
+  int clntfd = unixsocket (p2psocket);
+  if (clntfd < 0) 
+    fatal << "Error creating client socket (UNIX)" << strerror (errno) << "\n";
   client_listening_cb (clntfd, 0);
+  
+  int tcp_clntfd = inetsocket (SOCK_STREAM, myport);
+  if (tcp_clntfd < 0)
+    fatal << "Error creating client socket (TCP)\n";
+  client_listening_cb (tcp_clntfd, 0);
+
 }
 
 static void
@@ -186,7 +170,7 @@ main (int argc, char **argv)
   do_cache = 0;
   int ss_mode = 0;
 
-  int myport = 0;
+  myport = 0;
   cache_size = 2000;
   int max_loccache = 100;
   str wellknownhost;
@@ -206,6 +190,7 @@ main (int argc, char **argv)
     case 'j': 
       {
 	char *bs_port = strchr(optarg, ':');
+	if (!bs_port) usage ();
 	*bs_port = 0;
 	bs_port++;
 	if (inet_addr (optarg) == INADDR_NONE) {
@@ -220,8 +205,7 @@ main (int argc, char **argv)
 	} else
 	  wellknownhost = optarg;
 
-	if (bs_port)
-	  wellknownport = atoi (bs_port);
+	wellknownport = atoi (bs_port);
 	
 	break;
       }
