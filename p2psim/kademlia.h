@@ -94,8 +94,8 @@ public:
   // insert
   //
   struct insert_args {
-    NodeID id;
-    IPAddress ip;
+    NodeID id;      // node doing the insert
+    IPAddress ip;   // node doing the insert
 
     NodeID key;
     Value val;
@@ -145,10 +145,8 @@ public:
   k_bucket(Kademlia*);
   ~k_bucket();
 
-  peer_t *random_node();
-
   pair<peer_t*, unsigned>
-    insert(NodeID, IPAddress, NodeID = 0, unsigned = 0, k_bucket* = 0);
+    insert(NodeID, IPAddress, string = "", unsigned = 0, k_bucket* = 0);
   bool stabilized(vector<NodeID>, string = "", unsigned = 0);
   void stabilize(string = "", unsigned = 0);
   void dump(string = "", unsigned = 0);
@@ -178,10 +176,12 @@ public:
   void dump() { return _root->dump(); }
   bool empty() { return _nodes.empty(); }
   pair<NodeID, IPAddress> get(NodeID);
+  pair<NodeID, IPAddress> random_node();
+
 
 private:
   k_bucket *_root;
-  set<peer_t*> _nodes;
+  vector<peer_t*> _nodes;
 
   Kademlia *_self;
   NodeID _id; // so that KDEBUG() does work

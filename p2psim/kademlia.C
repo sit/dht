@@ -134,7 +134,7 @@ Kademlia::insert(Args *args)
 // }}}
 // {{{ Kademlia::do_insert
 void
-Kademlia::do_insert(insert_args *iargs, insert_result *result)
+Kademlia::do_insert(insert_args *iargs, insert_result *iresult)
 {
   _tree->insert(iargs->id, iargs->ip);
 
@@ -151,13 +151,8 @@ Kademlia::do_insert(insert_args *iargs, insert_result *result)
     return;
   }
 
-  insert_args ia;
-  insert_result ir;
-
-  // RTM: I don't know how to fill in ia.
-  assert(0);
-
-  doRPC(lr.ip, &Kademlia::do_insert, &ia, &ir);
+  // we're not the one to insert it
+  doRPC(lr.ip, &Kademlia::do_insert, iargs, iresult);
 }
 
 // }}}
@@ -219,7 +214,9 @@ done:
 }
 
 // }}}
-// {{{ Kademlia::do_lookup
+// {{{ Kademlia::do_lookup_wrapper
+
+// wrapper around do_lookup(lookup_args *largs, lookup_result *lresult)
 pair<Kademlia::NodeID, IPAddress>
 Kademlia::do_lookup_wrapper(IPAddress use_ip, Kademlia::NodeID key)
 {
@@ -375,6 +372,7 @@ void
 Kademlia::dump()
 {
   cout << "*** DUMP FOR " << printbits(_id) << endl;
+  printf("_tree = %p\n", _tree);
   cout << "*** -------------------------- ***" << endl;
   _tree->dump();
   cout << "*** -------------------------- ***" << endl;
@@ -404,7 +402,7 @@ unsigned
 k_bucket_tree::insert(NodeID id, IPAddress ip)
 {
   pair<peer_t*, unsigned> pp = _root->insert(id, ip);
-  _nodes.insert(pp.first);
+  _nodes.push_back(pp.first);
   return pp.second;
 }
 
@@ -434,6 +432,15 @@ k_bucket_tree::get(NodeID key)
 }
 
 // }}}
+// {{{ k_bucket_tree::random_node
+pair<k_bucket_tree::NodeID, IPAddress>
+k_bucket_tree::random_node()
+{
+  unsigned r = 1 + (unsigned)(((float) _nodes.size())*rand() / (RAND_MAX+1.0));
+  return make_pair(_nodes[r]->id, _nodes[r]->ip);
+}
+
+// }}}
 
 // {{{ k_bucket::k_bucket
 k_bucket::k_bucket(Kademlia *k) : _self(k)
@@ -460,7 +467,7 @@ k_bucket::~k_bucket()
 // }}}
 // {{{ k_bucket::insert
 pair<peer_t*, unsigned>
-k_bucket::insert(Kademlia::NodeID node, IPAddress ip, Kademlia::NodeID prefix, unsigned depth, k_bucket *root)
+k_bucket::insert(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned depth, k_bucket *root)
 {
   if(!root)
     root = this; // i.e. Kademlia::_root
@@ -469,11 +476,11 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, Kademlia::NodeID prefix, u
   // if[child[0]], go left
   // if[child[1]], go right
   if(depth == 0)
-    KDEBUG(4) << "insert: node = " << Kademlia::printbits(node) << ", ip = " << ip << ", prefix = " << Kademlia::printbits(prefix) << endl;
+    KDEBUG(4) << "insert: node = " << Kademlia::printbits(node) << ", ip = " << ip << ", prefix = " << prefix << endl;
 
   unsigned leftmostbit = Kademlia::getbit(node, depth);
   if(_child[leftmostbit]) {
-    return _child[leftmostbit]->insert(node, ip, ((prefix << 1) | leftmostbit), depth+1, root);
+    return _child[leftmostbit]->insert(node, ip, prefix + (leftmostbit ? "1" : "0"), depth+1, root);
   }
 
 
@@ -511,7 +518,7 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, Kademlia::NodeID prefix, u
   _nodes.clear();
 
   // now insert the node
-  return root->insert(node, ip, 0, 0, root);
+  return root->insert(node, ip, "", 0, root);
 }
 
 // }}}
@@ -519,7 +526,7 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, Kademlia::NodeID prefix, u
 void
 k_bucket::stabilize(string prefix, unsigned depth)
 {
-  // go through tree depth-first and refresh stale buckets
+  // go through tree depth-first and refresh buckets in the leaves of the tree.
   if(_child[0]) {
     assert(_child[1]);
     _child[0]->stabilize(prefix + "0", depth+1);
@@ -627,13 +634,15 @@ k_bucket::get(NodeID key, unsigned depth)
 
 // }}}
 // {{{ k_bucket::dump
+
 void
 k_bucket::dump(string prefix, unsigned depth)
 {
   if(_child[0]) {
     assert(_child[1]);
     _child[0]->dump(prefix + "0", depth+1);
-    _child[0]->dump(prefix + "1", depth+1);
+    _child[1]->dump(prefix + "1", depth+1);
+    return;
   }
 
   for(unsigned i=0; i<_nodes.size(); i++)
