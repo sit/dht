@@ -2114,7 +2114,7 @@ LocTable::~LocTable()
   del_all();
 }
 
-idmapwrap *
+LocTable::idmapwrap *
 LocTable::get_naked_node(ConsistentHash::CHID id)
 {
   if (id == me.id) 
@@ -2334,15 +2334,11 @@ LocTable::add_node(Chord::IDMap n, bool is_succ, bool assertadd, Chord::CHID fs,
   Chord::IDMap succ1; 
   Chord::IDMap pred1; 
 
-  if (me.ip == 404 && n.ip == 280) 
-    printf("wuwu\n");
-
-  assert(n.ip > 0 && n.ip < 32000 && n.heartbeat < 86400000);
   if (vis) {
     succ1 = succ(me.id+1);
     pred1 = pred(me.id-1);
   }
- 
+  assert(n.heartbeat == 0);
   idmapwrap *elm = ring.closestsucc(n.id);
   if (elm->id == n.id) {
     if (n.heartbeat > elm->n.heartbeat) {

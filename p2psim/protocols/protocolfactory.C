@@ -35,6 +35,7 @@
 #include "chordonehop.h"
 #include "tapestry.h"
 #include "kelips.h"
+#include "onehop.h"
 #include "sillyprotocol.h"
 
 extern uint base;
@@ -77,7 +78,9 @@ ProtocolFactory::create(IPAddress i, const char *name)
   if (s == "ChordToe")
     p = New ChordToe(i, a);
   if (s == "ChordOneHop") 
-    p = New ChordOneHop(i, a);
+    p = New ChordOneHop(i, a); //not implemented
+  if (s == "OneHop")
+    p = New OneHop(i,a);
   if (s == "Kademlia")
     p = New Kademlia(i, a);
   if (s == "Tapestry")

@@ -175,7 +175,7 @@ ChordFingerPNS::learn_info(IDMap n)
 
   Topology *t = Network::Instance()->gettopology();
   IDMap ns = loctable->succ(n.id+1,LOC_ONCHECK);
-  idmapwrap *naked_ns = NULL;
+  LocTable::idmapwrap *naked_ns = NULL;
 
   if ((ns.ip==0) || (ns.ip == me.ip))
     goto NEXT_CHECK;
@@ -205,7 +205,7 @@ ChordFingerPNS::learn_info(IDMap n)
 
 NEXT_CHECK:
   IDMap ps = loctable->pred(n.id-1,LOC_ONCHECK);
-  idmapwrap *naked_ps = loctable->get_naked_node(ps.id);
+  LocTable::idmapwrap *naked_ps = loctable->get_naked_node(ps.id);
   if (naked_ps && naked_ns && (!naked_ps->is_succ)) {
     if ((naked_ps->fe == naked_ns->fs) || ConsistentHash::between(naked_ps->fs,naked_ps->fe,n.id)) {
       //good good
@@ -229,7 +229,7 @@ bool
 ChordFingerPNS::replace_node(IDMap n, IDMap &replacement)
 {
   assert(learntable);
-  idmapwrap *naked = loctable->get_naked_node(n.id);
+  LocTable::idmapwrap *naked = loctable->get_naked_node(n.id);
   if (!naked)
     return false;
   if (naked->is_succ) {
@@ -452,7 +452,7 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
 	currf.ip = 0;
 
       if (currf.ip) {
-	idmapwrap *naked = loctable->get_naked_node(currf.id);
+	LocTable::idmapwrap *naked = loctable->get_naked_node(currf.id);
 	if (naked->status == LOC_REPLACEMENT) {
 	  printf("%s re-install replaced crap %u,%qx\n",ts(),currf.ip,currf.id);
 	  loctable->del_node(currf);
@@ -470,7 +470,7 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
       if ((!restart) && (currf.ip)) {
 
 	if (ConsistentHash::between(finger, finger + lap, currf.id)) {
-	  idmapwrap *naked = loctable->get_naked_node(currf.id);
+	  LocTable::idmapwrap *naked = loctable->get_naked_node(currf.id);
 	  if (naked->is_succ) goto PNS_DONE;
 	  assert(naked);
 	  if (!naked->fs) {

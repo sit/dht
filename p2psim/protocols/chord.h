@@ -284,29 +284,28 @@ typedef struct {
 #define LOC_ONCHECK 2
 #define LOC_DEAD 3
 
-struct idmapwrap {
-    Chord::IDMap n;
-    Chord::CHID id;
-    Time timestamp;
-    sklist_entry<idmapwrap> sortlink_;
-    bool is_succ;
-    bool pinned;
-    int status;
-    Chord::CHID fs;
-    Chord::CHID fe;
-    idmapwrap(Chord::IDMap x, Time t = 0) {
-      n = x;
-      id = x.id;
-      pinned = false;
-      timestamp = t;
-      status = 0;
-      fs = fe = 0;
-    }
-};
-
 class LocTable {
 
   public:
+    struct idmapwrap {
+	Chord::IDMap n;
+	Chord::CHID id;
+	Time timestamp;
+	sklist_entry<idmapwrap> sortlink_;
+	bool is_succ;
+	bool pinned;
+	int status;
+	Chord::CHID fs;
+	Chord::CHID fe;
+	idmapwrap(Chord::IDMap x, Time t = 0) {
+	  n = x;
+	  id = x.id;
+	  pinned = false;
+	  timestamp = t;
+	  status = 0;
+	  fs = fe = 0;
+	}
+    };
 
     struct idmapcompare{
       idmapcompare() {}

@@ -173,7 +173,7 @@ ChordFinger::fix_fingers(bool restart)
       
       if ((!restart) && (currf.ip)) { 
 	if (ConsistentHash::between(finger,finger+lap,currf.id)) {
-	  idmapwrap *naked = loctable->get_naked_node(currf.id);
+	  LocTable::idmapwrap *naked = loctable->get_naked_node(currf.id);
 	  assert(naked);
 	  if ((now()-naked->timestamp) < _stab_finger_timer) {
 	    skipped_fingers++;
