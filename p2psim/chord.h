@@ -9,7 +9,7 @@
 #define CHORD_SUCC_NUM 3  // default number of successors maintained
 #define STABLE_TIMER 500
 #define PAD "000000000000000000000000"
-#undef CHORD_DEBUG
+#define CHORD_DEBUG
 
 #include "p2psim.h"
 

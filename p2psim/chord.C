@@ -79,6 +79,9 @@ Chord::find_successors(CHID key, uint m, bool intern)
   na.key = key;
   na.m = m;
 
+#ifdef CHORD_DEBUG
+  CHID diff = key - me.id;
+#endif
 
   while(1){
     assert(count++ < 5000);
@@ -91,7 +94,8 @@ Chord::find_successors(CHID key, uint m, bool intern)
 #ifdef CHORD_DEBUG
       printf("%s find_successor %qx route: ",ts(), key);
       for (unsigned int i = 0; i < route.size(); i++) {
-	printf("(%u,%qx) ", route[i].ip, route[i].id);
+	CHID tmpdiff = key - route[i].id;
+	printf("(%u,%qx %.5f) ", route[i].ip, route[i].id, ((double)tmpdiff)/((double) diff));
       }
       printf("\n");
 #endif
@@ -101,6 +105,11 @@ Chord::find_successors(CHID key, uint m, bool intern)
 
       break;
     } else if (r) {
+#ifdef CHORD_DEBUG
+      CHID newdiff = key - nr.next.id;
+      assert(ConsistentHash::between(me.id, key, nr.next.id));
+      assert(newdiff < diff);
+#endif
       route.push_back(nr.next);
       nprime = nr.next;
     } else {

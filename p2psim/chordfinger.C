@@ -7,17 +7,16 @@ using namespace std;
 
 ChordFinger::ChordFinger(Node *n, uint base, uint successors, uint maxf) : Chord(n, successors), _base(base),_maxf(maxf)
 {
-  uint level = (uint) ConsistentHash::log_b((CHID)-1, _base);
   CHID finger;
-  CHID lap = 1;
+  CHID lap = (CHID) -1;
   _numf = 0;
-  for (unsigned int i = 0; i < level; i++) {
+  while (lap > _base) {
+    lap = lap/_base;
     for (unsigned int j = 1; j <= (_base- 1); j++) {
       finger = lap * j + me.id;
       loctable->pin(finger, 1, 0);
       _numf++;
     }
-    lap = (lap * _base);
   }
 }
 
@@ -37,23 +36,21 @@ ChordFinger::init_state(vector<IDMap> ids)
   CHID min_lap = ids[(my_pos+1) % sz].id - me.id;
 
 
-  uint level = (uint) ConsistentHash::log_b((CHID)-1, _base);
-  CHID lap = 1;
+  CHID lap = (CHID) -1;
 
   CHID finger;
   uint numf = 0;
-  for (uint i = 0; i < level; i++) {
+  while (lap > min_lap) {
+    lap = lap/_base;
     for (uint j = 1; j <= (_base - 1); j++) {
-      if (lap < min_lap) continue;
+      if (lap * j < min_lap) continue;
       if (numf < _maxf) {
 	finger = lap * j + me.id;
 	loctable->pin(finger, 1, 0);
       }
       numf++;
     }
-    lap = (lap * _base);
   }
-
   Chord::init_state(ids);
   printf("ChordFinger: %s inited %d %d %d %d %d %d\n", ts(), ids.size(), loctable->size(), _maxf, numf, _numf, loctable->psize());
 }
@@ -108,14 +105,14 @@ ChordFinger::stabilized(vector<CHID> lid)
   CHID finger;
   uint pos;
 
-  uint level = (uint) ConsistentHash::log_b((CHID)-1, _base);
-  CHID lap = 1;
+  CHID lap = (CHID) -1;
 
   IDMap succ;
   uint numf = 0;
-  for (uint i = 0; i < level; i++) {
+  while (lap > min_lap) {
+    lap = lap / _base;
     for (uint j = 1; j <= (_base - 1); j++) {
-      if (lap < min_lap) continue;
+      if ((lap * j) < min_lap) continue;
       if (numf >= _maxf) return true;
       finger = lap * j + me.id;
       it = upper_bound(lid.begin(), lid.end(), finger);
@@ -125,12 +122,11 @@ ChordFinger::stabilized(vector<CHID> lid)
       }
       succ = loctable->succ(finger);
       if (lid[pos] != succ.id) {
-	printf("%s not stabilized, %d,%d finger (%qx) should be %qx instead of (%u,%qx)\n", ts(), i, j, finger, lid[pos], succ.ip, succ.id); 
+	printf("%s not stabilized, %qx,%d finger (%qx) should be %qx instead of (%u,%qx)\n", ts(), lap, j, finger, lid[pos], succ.ip, succ.id); 
 	return false;
       }
       numf++;
     }
-    lap = (lap * _base);
   }
   return true;
 }
@@ -140,12 +136,18 @@ ChordFinger::dump()
 {
   Chord::dump();
   IDMap succ = loctable->succ(me.id + 1);
-  unsigned int i0 = (uint) ConsistentHash::log_b(succ.id - me.id,2);
+  CHID min_lap = succ.id - me.id;
+  CHID lap = (CHID) -1;
   CHID finger;
-  for (unsigned int i = i0; i < NBCHID; i++) {
-    finger = ConsistentHash::successorID(me.id,i);
-     succ = loctable->succ(finger);
-     if (succ.ip > 0) 
-       printf("%qx: finger: %d : %qx%s : succ %qx%s\n", me.id, i, finger, PAD, succ.id, PAD);
+
+  while (lap > min_lap) {
+    lap = lap / _base;
+    for (uint j = 1; j <= (_base - 1); j++) {
+      if ((lap * j) < min_lap) continue;
+      finger = lap * j + me.id;
+      succ = loctable->succ(finger);
+      if (succ.ip > 0) 
+        printf("%qx: finger: %qx,%d : %qx : succ %qx\n", me.id, lap, j, finger, succ.id);
+    }
   }
 }
