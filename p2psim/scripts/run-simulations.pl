@@ -22,7 +22,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-# $Id: run-simulations.pl,v 1.25 2004/07/05 04:29:49 strib Exp $
+# $Id: run-simulations.pl,v 1.26 2004/07/06 20:48:12 fdabek Exp $
 
 use strict;
 use Getopt::Long;
@@ -70,6 +70,7 @@ run-simulations [options]
     --nice <n>                run p2psim nice
     --command <cmd>           p2psim or some other binary?
     --ipkey <n>		      ipkey 1 or 0?
+    --datakey <n>	      data keys? Can not be used with IPKeys.
     --dontdie<n>              dont die after seg faults
 
 EOUsage
@@ -86,7 +87,8 @@ my %options;
 &GetOptions( \%options, "help|?", "topology=s", "lookupmean=s", "protocol=s", 
 	     "lifemean=s", "deathmean=s", "exittime=s", "churnfile=s", 
 	     "argsfile=s", "logdir=s", "seed=s", "nice=i", "randomize=i",
-             "observer", "stattime=s", "command=s","ipkey=i","dontdie=i") 
+             "observer", "stattime=s", "command=s","ipkey=i","datakey=i", 
+	     "dontdie=i") 
     or &usage;
 
 if( $options{"help"} ) {
@@ -112,6 +114,9 @@ if( $options{"protocol"} ) {
     } elsif ($prot eq "OneHop" or $prot eq "onehop") {
         $protocol = "OneHop";
 	$observer = "OneHopObserver";
+    } elsif ($prot eq "datastore" or $prot eq "data" or $prot eq "DataStore") {
+        $protocol = "DataStore";
+	$observer = "DataStoreObserver";
     } else {
 	die( "Unrecognized protocol: $prot" );
     }
@@ -498,6 +503,11 @@ sub write_events_file {
 	$eg_type = "ChurnFileEventGenerator";
     }
     
+    my $datakeys = 0;
+    if (defined $options{"datakey"}) {
+	$datakeys = $options{"datakey"};
+    }
+
     my $ipkeys = 0;
     if (defined $options{"ipkey"}) {
       $ipkeys = $options{"ipkey"};
@@ -505,7 +515,10 @@ sub write_events_file {
 	$ipkeys = 1;
     }
     
-    print EF "generator $eg_type ipkeys=$ipkeys " .
+    die "ipkeys and datakeys are mutually exclusive\n" 
+	if ($ipkeys and $datakeys);
+     
+    print EF "generator $eg_type ipkeys=$ipkeys datakeys=$datakeys " .
 	"lifemean=$lifemean deathmean=$deathmean lookupmean=$lookupmean " . 
 	    "exittime=$exittime stattime=$stattime";
     
