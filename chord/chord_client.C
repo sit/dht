@@ -47,12 +47,28 @@ chord::chord (str _wellknownhost, int _wellknownport,
 }
 
 
-int
-chord::startchord (int myp)
+void
+chord::tcpclient_cb (int srvfd)
 {
-  int srvfd = inetsocket (SOCK_DGRAM, myp);
+  int fd = accept (srvfd, NULL, NULL);
+  if (fd < 0)
+    warn << "chord: accept failed " << strerror (errno) << "\n";
+  else {
+    ptr<axprt> x = axprt_stream::alloc (fd, 230000);
+    ptr<asrv> s = asrv::alloc (x, chord_program_1);
+    s->setcb (wrap (mkref(this), &chord::dispatch, s));
+  }
+}
+
+
+int
+chord::startchord (int myp, int type)
+{
+  
+  int srvfd = inetsocket (type, myp);
   if (srvfd < 0)
-    fatal ("binding UDP port %d: %m\n", myp);
+    fatal ("binding %s port %d: %m\n",
+	   (type == SOCK_DGRAM ? "UDP" : "TCP"), myp);
 
   if (myp == 0) {
     struct sockaddr_in addr;
@@ -63,11 +79,34 @@ chord::startchord (int myp)
     myp = ntohs (addr.sin_port);
   }
 
-  ptr<axprt_dgram> x = axprt_dgram::alloc (srvfd, sizeof(sockaddr), 230000);
-  ptr<asrv> s = asrv::alloc (x, chord_program_1);
-  s->setcb (wrap (mkref(this), &chord::dispatch, s, x));
+  
+  if (type == SOCK_DGRAM) {
+    ptr<axprt> x = axprt_dgram::alloc (srvfd, sizeof(sockaddr), 230000);
+    ptr<asrv> s = asrv::alloc (x, chord_program_1);
+    s->setcb (wrap (mkref(this), &chord::dispatch, s));
+  }
+  else {
+    int ret = listen (srvfd, 1000);
+    assert (ret == 0);
+    fdcb (srvfd, selread, wrap (this, &chord::tcpclient_cb, srvfd));
+  }
+
   return myp;
 }
+
+
+int
+chord::startchord (int myp)
+{
+  if (getenv("DHASHTCP")) {
+    // Ensure the DGRAM and STREAM sockets are on same port #,
+    // since it is included in the Chord ID's hash.
+    myp = startchord (myp, SOCK_STREAM);
+  }
+
+  return startchord (myp, SOCK_DGRAM);
+}
+
 
 
 ptr<vnode>
@@ -158,9 +197,10 @@ chord::register_handler (int progno, chordID dest, cbdispatch_t hand)
 }
 
 void
-chord::dispatch (ptr<asrv> s, ptr<axprt_dgram> x, svccb *sbp)
+chord::dispatch (ptr<asrv> s, svccb *sbp)
 {
   if (!sbp) {
+    //warn << "chord::dispatch EOF\n";
     s->setcb (NULL);
     return;
   }

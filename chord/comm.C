@@ -46,12 +46,16 @@ long geo_distance (chordID x, chordID y)
 
 const int fclnttrace (getenv ("FCLNT_TRACE")
 		      ? atoi (getenv ("FCLNT_TRACE")) : 0);
+
+const int dhashtcp (getenv ("DHASHTCP") ? 1 : 0);
+
 void
 locationtable::doForeignRPC_cb (frpc_state *C, rpc_program prog,
 				ptr<aclnt> c, 
 				clnt_stat err)
 {
   npending--;
+
   if (C->tmo) {
     timecb_remove (C->tmo);
     C->tmo = NULL;
@@ -60,7 +64,7 @@ locationtable::doForeignRPC_cb (frpc_state *C, rpc_program prog,
   if ((err) || (C->res->status)) {
     nrpcfailed++;
     warn << "locationtable::doForeignRPC_cb rpc failed: err "
-	 << strerror(err) << " status " << C->res->status << "\n";
+	 << err << " status " << C->res->status << "\n";
     chordnode->deletefingers (C->ID);
     if (err)
       (C->cb) (err);
@@ -81,7 +85,8 @@ locationtable::doForeignRPC_cb (frpc_state *C, rpc_program prog,
     }
   }
 
-  rpc_done (C);
+  if (!c->xprt ()->reliable)
+    rpc_done (C);
 
   delete C->res;
   delete C;
@@ -114,6 +119,7 @@ locationtable::reply (long xid,
   
 }
 
+
 #ifdef FAKE_DELAY
 void
 locationtable::doRPC_delayed (RPC_delay_args *args) 
@@ -134,9 +140,7 @@ locationtable::doRPC (chordID &from, chordID &ID,
 		      rpc_program prog, int procno, 
 		      ptr<void> in, void *out, aclnt_cb cb,
 		      u_int64_t sp)
-
 {
-
 #ifdef FAKE_DELAY
   long dist = geo_distance (from, ID);
   if (dist) {
@@ -148,32 +152,77 @@ locationtable::doRPC (chordID &from, chordID &ID,
   }
 #endif /* FAKE_DELAY */
 
-#ifdef WINDOW_SCHEME
-  reset_idle_timer ();
-  if ((prog.progno != CHORD_PROGRAM) && (left + cwind < seqno)) {
-    RPC_delay_args *args = New RPC_delay_args (ID, prog, procno,
-					       in, out, cb, getusec ());
-    enqueue_rpc (args);
+  sp = getusec ();
+
+  if (prog.progno != CHORD_PROGRAM && dhashtcp)
+    doRPC_tcp (from, ID, prog, procno, in, out, cb, sp);
+  else
+    doRPC_udp (from, ID, prog, procno, in, out, cb, sp);
+}
+
+
+void
+locationtable::doRPC_tcp (chordID &from, chordID &ID, 
+			  rpc_program prog, int procno, 
+			  ptr<void> in, void *out, aclnt_cb cb,
+			  u_int64_t sp)
+{
+  location *l = getlocation (ID);
+  assert (l);
+  assert (l->refcnt >= 0);
+  touch_cachedlocs (l);
+
+  // hack to avoid limit on wrap()'s number of arguments
+  RPC_delay_args *args = New RPC_delay_args (ID, prog, procno,
+					     in, out, cb, getusec ());
+
+
+  // wierd: tcpconnect wants the address in NBO, and port in HBO
+  //warn << "connecting to port " << ntohs (l->saddr.sin_port) << "\n";
+  tcpconnect (l->saddr.sin_addr, ntohs (l->saddr.sin_port),
+  	      wrap (this, &locationtable::doRPC_tcp_connect_cb, args));
+}
+
+
+void
+locationtable::doRPC_tcp_connect_cb (RPC_delay_args *args, int fd)
+{
+  if (fd < 0) {
+    warn << "locationtable: connect failed: " << strerror (errno) << "\n";
+    (args->cb) (RPC_CANTSEND);
     return;
   }
-#endif
 
-  sp = getusec ();
+  //warn << "connected to...\n";
+
+  chordID ID = args->ID;
 
   location *l = getlocation (ID);
   assert (l);
   assert (l->refcnt >= 0);
   touch_cachedlocs (l);
 
-  ptr<aclnt> c = aclnt::alloc (dgram_xprt, chord_program_1, 
+  ptr<axprt_stream> stream_xprt = axprt_stream::alloc (fd);
+  assert (stream_xprt);
+  ptr<aclnt> c = aclnt::alloc (stream_xprt, chord_program_1, 
 			       (sockaddr *)&(l->saddr));
-  if (c == NULL) {
-    warn << "locationtable::doRPC: couldn't aclnt::alloc\n";
-    chordnode->deletefingers (ID);
-    (cb) (RPC_CANTSEND);
-    return;
-  }
+  assert (c);
 
+  // this double use of ID looks fishy..
+  doRPC_issue (ID, ID, args->prog,  args->procno,
+	       args->in, args->out,
+	       args->cb, args->s, c);
+  delete args;    
+}
+
+
+void
+locationtable::doRPC_issue (chordID &from, chordID &ID, 
+			    rpc_program prog, int procno, 
+			    ptr<void> in, void *out, aclnt_cb cb,
+			    u_int64_t sp,
+			    ptr<aclnt> c)
+{
   /* statistics */
   nsent++;
 
@@ -212,27 +261,68 @@ locationtable::doRPC (chordID &from, chordID &ID,
       warn << "call " << name << "\n";
     }
     chord_RPC_res *res = New chord_RPC_res ();
+
     frpc_state *C = New frpc_state (res, out, procno, cb,
 				    ID, sp, marshalled_len, seqno);
-    setup_rexmit_timer (ID, C);
-    
-    //add to outstanding Q
-    sent_Q.insert_tail (C);
+
+    if (!c->xprt ()->reliable) {
+      setup_rexmit_timer (ID, C);
+
+      //add to outstanding Q
+      sent_Q.insert_tail (C);
+    }
 
     issue_RPC (seqno, c, farg, res,  wrap (mkref(this), 
-					   &locationtable::doForeignRPC_cb, 
-					   C, prog, c));
+						&locationtable::doForeignRPC_cb, 
+						C, prog, c));
     seqno++;
   }
-
 }
+
+
+
+void
+locationtable::doRPC_udp (chordID &from, chordID &ID, 
+			  rpc_program prog, int procno, 
+			  ptr<void> in, void *out, aclnt_cb cb,
+			  u_int64_t sp)
+
+{
+
+#ifdef WINDOW_SCHEME
+  reset_idle_timer ();
+  if ((prog.progno != CHORD_PROGRAM) && (left + cwind < seqno)) {
+    RPC_delay_args *args = New RPC_delay_args (ID, prog, procno,
+					       in, out, cb, getusec ());
+    enqueue_rpc (args);
+    return;
+  }
+#endif
+
+  location *l = getlocation (ID);
+  assert (l);
+  assert (l->refcnt >= 0);
+  touch_cachedlocs (l);
+
+  ptr<aclnt> c = aclnt::alloc (dgram_xprt, chord_program_1, 
+			       (sockaddr *)&(l->saddr));
+  if (c == NULL) {
+    warn << "locationtable::doRPC: couldn't aclnt::alloc\n";
+    chordnode->deletefingers (ID);
+    (cb) (RPC_CANTSEND);
+    return;
+  }
+
+  doRPC_issue (from, ID, prog, procno, in, out, cb, sp, c);
+}
+
 
 void
 locationtable::issue_RPC (long sq, ptr<aclnt> c, chord_RPC_arg *farg, 
-			  chord_RPC_res *res, aclnt_cb cb) 
+			  chord_RPC_res *res, aclnt_cb cb)
 {
 
-    c->timedcall (TIMEOUT, CHORDPROC_HOSTRPC, 
+  c->timedcall (TIMEOUT, CHORDPROC_HOSTRPC, 
 		farg, res, cb); 
 
 #if 0
@@ -395,7 +485,7 @@ locationtable::doRPCcb (chordID ID, aclnt_cb cb,  u_int64_t s,
 
   if (err) {
     nrpcfailed++;
-    warn << "locationtable::doRPCcb: failed: " << strerror(err) << "\n";
+    warn << "locationtable::doRPCcb: failed: " << err << "\n";
     chordnode->deletefingers (ID);
   } else {
     u_int64_t lat = getusec () - s;

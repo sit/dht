@@ -75,7 +75,7 @@ struct frpc_state {
   frpc_state (chord_RPC_res *r, void *o, int pr, 
 	      aclnt_cb c,
 	      chordID id, u_int64_t S, int out_size, long s) 
-    : res (r), out (o), procno (pr), cb (c), ID (id), s (S), outgoing_len (out_size), seqno (s) {};
+    : res (r), out (o), procno (pr), cb (c), ID (id), s (S), outgoing_len (out_size), tmo (NULL), seqno (s) {};
 };
 
 struct delayed_reply {
@@ -149,7 +149,7 @@ class locationtable : public virtual refcount {
   timecb_t *idle_timer;
 
   ptr<axprt_dgram> dgram_xprt;
-  ptr<aclnt> dgram_clnt;
+  //ptr<aclnt> dgram_clnt;
 
   qhash<long, svccb *> octbl;
   unsigned long last_xid;
@@ -219,6 +219,26 @@ class locationtable : public virtual refcount {
   void doRPC (chordID &from, chordID &n, rpc_program progno, 
 	      int procno, ptr<void> in, 
 	      void *out, aclnt_cb cb, u_int64_t s);
+
+  void doRPC_udp (chordID &from, chordID &n, rpc_program progno, 
+		  int procno, ptr<void> in, 
+		  void *out, aclnt_cb cb, u_int64_t s);
+
+  void doRPC_tcp (chordID &from, chordID &n, rpc_program progno, 
+		  int procno, ptr<void> in, 
+		  void *out, aclnt_cb cb, u_int64_t s);
+
+
+  void doRPC_tcp_connect_cb (RPC_delay_args *args, int fd);
+
+  void doRPC_issue (chordID &from, chordID &ID, 
+		    rpc_program prog, int procno, 
+		    ptr<void> in, void *out, aclnt_cb cb,
+		    u_int64_t sp,
+		    ptr<aclnt> c);
+
+
+
   void stats ();
 
   long new_xid (svccb *sbp);

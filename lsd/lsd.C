@@ -48,10 +48,13 @@ client_accept (int fd)
 {
   if (fd < 0)
     fatal ("EOF\n");
+
   ref<axprt_stream> x = axprt_stream::alloc (fd);
+
+  // XXX these dhashclient objects never get cleaned up
+  //
   dhashclient *c = New dhashclient (x, chordnode);
-  if (do_cache) c->set_caching (1);
-  else c->set_caching (0);
+  c->set_caching (do_cache ? 1 : 0);
 }
 
 static void

@@ -368,6 +368,7 @@ dhash::dispatch (unsigned long procno,
     }
     break;
   default:
+
     break;
   }
   pred = host_node->my_pred ();
@@ -1052,15 +1053,12 @@ dhash::cache_flush_cb (int err) {
 void
 dhash::dhash_reply (long xid, unsigned long procno, void *res) 
 {
-
   xdrproc_t proc = dhash_program_1.tbl[procno].xdr_res;
   assert (proc);
 
   xdrsuio x (XDR_ENCODE);
-  if (!proc (x.xdrp (), static_cast<void *> (res))) {
-    warn << "failed to marshall result\n";
-    assert (0);
-  }
+  if (!proc (x.xdrp (), static_cast<void *> (res)))
+    fatal << "failed to marshall result\n";
 
   size_t marshalled_len = x.uio ()->resid ();
   char *marshalled_data = suio_flatten (x.uio ());

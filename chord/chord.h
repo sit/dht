@@ -231,8 +231,10 @@ class chord : public virtual refcount {
   qhash<chordID, ref<vnode>, hashID> vnodes;
   ptr<vnode> active;
 
-  void dispatch (ptr<asrv> s, ptr<axprt_dgram> x, svccb *sbp);
+  void dispatch (ptr<asrv> s, svccb *sbp);
+  void tcpclient_cb (int srvfd);
   int startchord (int myp);
+  int startchord (int myp, int type);
   void deletefingers_cb (chordID x, const chordID &k, ptr<vnode> v);
   void stats_cb (const chordID &k, ptr<vnode> v);
   void print_cb (const chordID &k, ptr<vnode> v);
