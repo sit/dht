@@ -88,13 +88,14 @@ dhashclient::append (chordID to, const char *buf, size_t buflen,
       
       int m_len = x.uio ()->resid ();
       char *m_dat = suio_flatten (x.uio ());
-      insert (to, m_dat, m_len, cb, DHASH_APPEND, false, buflen);
+      insert (to, m_dat, m_len, cb, DHASH_APPEND, buflen, NULL);
       xfree (m_dat);
     } else {
       (*cb) (DHASH_ERR, NULL); // marshalling failed.
     }
 
 }
+
 
 //content-hash insert
 /* content hash convention
@@ -108,7 +109,8 @@ dhashclient::append (chordID to, const char *buf, size_t buflen,
 
 void
 dhashclient::insert (bigint key, const char *buf,
-                     size_t buflen, cbinsertgw_t cb, int options)
+                     size_t buflen, cbinsertgw_t cb, 
+		     ptr<option_block> options)
 {
   xdrsuio x;
   int size = buflen + 3 & ~3;
@@ -119,7 +121,7 @@ dhashclient::insert (bigint key, const char *buf,
       
       int m_len = x.uio ()->resid ();
       char *m_dat = suio_flatten (x.uio ());
-      insert (key, m_dat, m_len, cb, DHASH_CONTENTHASH, options, buflen);
+      insert (key, m_dat, m_len, cb, DHASH_CONTENTHASH, buflen, options);
       xfree (m_dat);
     } else {
       (*cb) (DHASH_ERR, NULL); // marshalling failed.
@@ -128,7 +130,7 @@ dhashclient::insert (bigint key, const char *buf,
 
 void
 dhashclient::insert (const char *buf, size_t buflen, cbinsertgw_t cb,
-                     int options)
+                     ptr<option_block> options)
 {
   bigint key = compute_hash (buf, buflen);
   insert(key, buf, buflen, cb, options);
@@ -148,7 +150,7 @@ dhashclient::insert (const char *buf, size_t buflen, cbinsertgw_t cb,
  */
 void
 dhashclient::insert (ptr<sfspriv> key, const char *buf, size_t buflen, long ver,
-                     cbinsertgw_t cb, int options)
+                     cbinsertgw_t cb, ptr<option_block> options)
 {
   str msg (buf, buflen);
   sfs_sig2 s;
@@ -161,7 +163,7 @@ dhashclient::insert (ptr<sfspriv> key, const char *buf, size_t buflen, long ver,
 void
 dhashclient::insert (sfs_pubkey2 key, sfs_sig2 sig,
                      const char *buf, size_t buflen, long ver,
-		     cbinsertgw_t cb, int options)
+		     cbinsertgw_t cb, ptr<option_block> options)
 {
   strbuf b;
   ptr<sfspub> pk = sfscrypt.alloc (key);
@@ -174,7 +176,7 @@ dhashclient::insert (sfs_pubkey2 key, sfs_sig2 sig,
 void
 dhashclient::insert (bigint hash, sfs_pubkey2 key, sfs_sig2 sig,
                      const char *buf, size_t buflen, long ver,
-		     cbinsertgw_t cb, int options)
+		     cbinsertgw_t cb, ptr<option_block> options)
 {
   xdrsuio x;
   int size = buflen + 3 & ~3;
@@ -188,10 +190,11 @@ dhashclient::insert (bigint hash, sfs_pubkey2 key, sfs_sig2 sig,
       memcpy (m_buf, buf, buflen);
       int m_len = x.uio ()->resid ();
       char *m_dat = suio_flatten (x.uio ());
-      insert (hash, m_dat, m_len, cb, DHASH_KEYHASH, options, x.uio()->resid());
+      insert (hash, m_dat, m_len, cb, DHASH_KEYHASH, x.uio()->resid(), options);
       xfree (m_dat);
     } else {
-      ptr<insert_info> i = New refcounted<insert_info>(hash, bigint(0));
+      vec<chordID> r;
+      ptr<insert_info> i = New refcounted<insert_info>(hash, r);
       cb (DHASH_ERR, i); // marshalling failed.
     }
 }
@@ -200,7 +203,8 @@ dhashclient::insert (bigint hash, sfs_pubkey2 key, sfs_sig2 sig,
 void
 dhashclient::insert (bigint key, const char *buf, 
 		     size_t buflen, cbinsertgw_t cb,
-		     dhash_ctype t, int options, size_t realsize)
+		     dhash_ctype t, size_t realsize,
+		     ptr<option_block> options)
 {
   dhash_insert_arg arg;
   arg.blockID = key;
@@ -208,7 +212,14 @@ dhashclient::insert (bigint key, const char *buf,
   arg.len = realsize;
   arg.block.setsize (buflen);
   memcpy (arg.block.base (), buf, buflen);
-  arg.options = options;
+  arg.options = 0;
+  if (options) {
+    arg.options = options->flags;
+    if (options->flags & DHASHCLIENT_GUESS_SUPPLIED) {
+      arg.guess = options->guess;
+      warn << "starting with guess: " << arg.guess << "\n";
+    }
+  }
 
   ptr<dhash_insert_res> res = New refcounted<dhash_insert_res> ();
   gwclnt->call (DHASHPROC_INSERT, &arg, res, 
@@ -221,7 +232,8 @@ dhashclient::insertcb (cbinsertgw_t cb, bigint key,
 		       clnt_stat err)
 {
   str errstr;
-  ptr<insert_info> i = New refcounted<insert_info>(key, bigint(0));
+  vec<chordID> r;
+  ptr<insert_info> i = New refcounted<insert_info>(key, r);
   if (err) {
     errstr = strbuf () << "rpc error " << err;
     warn << "1dhashclient::insert failed: " << key << ": " << errstr << "\n";
@@ -234,28 +246,34 @@ dhashclient::insertcb (cbinsertgw_t cb, bigint key,
 	     << ": " << errstr << "\n";
     }
     else {
-      //if I wanted to pass back the destID do this:
-      // (*cb) (false, key, res->resok->destID);
-      i->destID = res->resok->destID;
+      i->path.setsize (res->resok->path.size ());
+      for (unsigned int j = 0; j < res->resok->path.size (); j++)
+	i->path[j] = res->resok->path[j];
     }
     (*cb) (res->status, i); 
   }
 }
 
 void
-dhashclient::retrieve (bigint key, cb_cret cb, int options)
+dhashclient::retrieve (bigint key, cb_cret cb, ptr<option_block> options)
 {
   retrieve(key, DHASH_CONTENTHASH, cb, options);
 }
 
 void
-dhashclient::retrieve (bigint key, dhash_ctype ct, cb_cret cb, int options)
+dhashclient::retrieve (bigint key, dhash_ctype ct, cb_cret cb, 
+		       ptr<option_block> options)
 {
   ref<dhash_retrieve_res> res = New refcounted<dhash_retrieve_res> (DHASH_OK);
   dhash_retrieve_arg arg;
   arg.blockID = key;
   arg.ctype = ct;
-  arg.options = options;
+  arg.options = 0;
+  if (options) {
+    arg.options = options->flags;
+    if (options->flags & DHASHCLIENT_GUESS_SUPPLIED) arg.guess = options->guess;
+  }
+
   gwclnt->call (DHASHPROC_RETRIEVE, &arg, res, 
 		wrap (this, &dhashclient::retrievecb, cb, key, res));
 }

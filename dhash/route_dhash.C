@@ -241,7 +241,7 @@ route_dhash::reexecute ()
     dcb = delaycb (LOOKUP_TIMEOUT, wrap (mkref(this), &route_dhash::timed_out));
     dh->register_block_cb 
       (nonce, wrap (mkref(this), &route_dhash::block_cb));
-    chord_iterator->send (options & DHASHCLIENT_USE_CACHED_SUCCESSOR);
+    chord_iterator->send (NULL); // hint it with the end of the route?
   }
 }
 
@@ -252,7 +252,8 @@ route_dhash::execute (cb_ret cbi, chordID first_hop, u_int _retries)
   retries = _retries;
   cb = cbi;
   dcb = delaycb (LOOKUP_TIMEOUT, wrap (mkref(this), &route_dhash::timed_out));
-  chord_iterator->send (first_hop);
+  ptr<chordID> fh = New refcounted<chordID> (first_hop);
+  chord_iterator->send (fh);
 }
 
 void
@@ -262,7 +263,7 @@ route_dhash::execute (cb_ret cbi, u_int _retries)
   retries = _retries;
   cb = cbi;
   dcb = delaycb (LOOKUP_TIMEOUT, wrap (mkref(this), &route_dhash::timed_out));
-  chord_iterator->send (options & DHASHCLIENT_USE_CACHED_SUCCESSOR);
+  chord_iterator->send (NULL);
 }
 
 void

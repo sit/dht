@@ -119,17 +119,9 @@ route_secchord::sufficient_successors ()
 }
 
 void
-route_secchord::first_hop (cbhop_t cbi, chordID guess)
+route_secchord::first_hop (cbhop_t cbi, ptr<chordID> guess)
 {
-  // Ignore their guess.
-  first_hop (cbi, false);
-}
-
-void
-route_secchord::first_hop (cbhop_t cbi, bool ucs)
-{
-  if (ucs)
-    warnx << "!!!! Use cached successors not yet supported for route_secchord !!!!";
+  //ignores guess
 
   chordID myID = v->my_ID ();
   warnx << myID << ": STARTING a lookup for " << x
@@ -276,16 +268,11 @@ route_secchord::next_hop_cb (ptr<bool> deleted,
 }
 
 void
-route_secchord::send (chordID guess)
+route_secchord::send (ptr<chordID> guess)
 {
   first_hop (wrap (this, &route_secchord::send_hop_cb), guess);
 }
 
-void
-route_secchord::send (bool ucs)
-{
-  first_hop (wrap (this, &route_secchord::send_hop_cb), ucs);
-}
 
 void
 route_secchord::send_hop_cb (bool done)

@@ -145,7 +145,7 @@ void
 vnode_impl::find_route (const chordID &x, cbroute_t cb) 
 {
   route_iterator *ri = factory->produce_iterator_ptr (x);
-  ri->first_hop(wrap (this, &vnode_impl::find_route_hop_cb, cb, ri));
+  ri->first_hop(wrap (this, &vnode_impl::find_route_hop_cb, cb, ri), NULL);
 }
 
 

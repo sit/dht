@@ -234,18 +234,21 @@ program DHASH_PROGRAM {
    };
 */
 
+/* if we get many more optional arguments consider switching to union */
 struct dhash_insert_arg {
   chordID   blockID;      /* the key */
   dhash_ctype ctype;
   int32_t len;
   dhash_value block;      /* the data block */
   int options;
+  chordID guess; /* a guess as to where this block will end up */
 };
 
 struct dhash_retrieve_arg {
   chordID blockID;
   dhash_ctype ctype;
   int options;
+  chordID guess;  /* a guess as to the location of the block */
 };
 
 struct dhash_retrieve_resok {
@@ -260,7 +263,7 @@ struct dhash_retrieve_resok {
 };
 
 struct dhash_insert_resok {
-  chordID destID;
+  chordID path<>;
 };
 
 union dhash_insert_res switch (dhash_stat status) {

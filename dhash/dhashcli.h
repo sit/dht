@@ -7,6 +7,7 @@
 #include <vec.h>
 
 typedef callback<void, dhash_stat, chordID>::ref cbinsert_t;
+typedef callback<void, dhash_stat, vec<chordID> >::ref cbinsert_path_t;
 typedef callback<void, dhash_stat, vec<chord_node>, route>::ref dhashcli_lookupcb_t;
 
 // Forward declarations
@@ -59,14 +60,13 @@ class dhashcli {
   // State for a fragment store
   struct sto_state {
     ref<dhash_block> block;
-    // route r;
     vec<chord_node> succs;
-    cbinsert_t cb;
+    cbinsert_path_t cb;
     
     u_int out;
     u_int good;
     
-    sto_state (ref<dhash_block> b, cbinsert_t x) :
+    sto_state (ref<dhash_block> b, cbinsert_path_t x) :
       block (b), cb (x), out (0), good (0) {}
   };
 
@@ -77,23 +77,15 @@ private:
 
   void lookup_findsucc_cb (chordID blockID, dhashcli_lookupcb_t cb,
 			   vec<chord_node> s, route path, chordstat err);
-  void retrieve_hop_cb (cb_ret cb, chordID key, dhash_stat status,
-			ptr<dhash_block> block, route path);
   void cache_block (ptr<dhash_block> block, route search_path, chordID key);
   void finish_cache (dhash_stat status, chordID dest);
   void retrieve_with_source_cb (cb_ret cb, dhash_stat status, 
 				ptr<dhash_block> block, route path);
-  void insert_lookup_cb (chordID blockID, ref<dhash_block> block,
-			 cbinsert_t cb, int trial,
-			 dhash_stat status, vec<chord_node> succs, route r);
-  void insert_stored_cb (chordID blockID, ref<dhash_block> block,
-			 cbinsert_t cb, int trial,
-			 dhash_stat stat, chordID retID);
     
-  void insert2_lookup_cb (ref<dhash_block> block, cbinsert_t cb, 
+  void insert2_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb, 
 			  dhash_stat status, vec<chord_node> succs, route r);
-  void insert2_store_cb (ref<sto_state> ss, u_int i, ref<dhash_storeres> res,
-			 clnt_stat err);
+  void insert2_store_cb (ref<sto_state> ss, route r, u_int i, 
+			 ref<dhash_storeres> res, clnt_stat err);
 
   void fetch_frag (rcv_state *rs);
 
@@ -104,20 +96,24 @@ private:
 			   ref<dhash_fetchiter_res> res,
 			   clnt_stat err);
 
-
+  void insert2_succlist_cb (ref<dhash_block> block, cbinsert_path_t cb, chordID guess,
+			    vec<chord_node> succs, chordstat status);
  public:
   dhashcli (ptr<vnode> node, dhash *dh, ptr<route_factory> r_factory, 
 	    bool do_cache, int ss_mode = 1);
-  void retrieve (chordID blockID, int options, cb_ret cb);
 
-  void retrieve2 (blockID blockID, int options, cb_ret cb);
-  void retrieve (chordID source, chordID blockID, cb_ret cb);
-  void insert (chordID blockID, ref<dhash_block> block, 
-               int options, cbinsert_t cb);
-  void insert2 (ref<dhash_block> block, int options, cbinsert_t cb);
+
+  void retrieve2 (blockID blockID, cb_ret cb, 
+		  int options = 0, 
+		  ptr<chordID> guess = NULL);
+
+  void insert2 (ref<dhash_block> block, cbinsert_path_t cb, 
+		int options = 0, 
+		ptr<chordID> guess = NULL);
+
   void storeblock (ptr<location> l, chordID blockID, ref<dhash_block> block,
 		   bool last, cbinsert_t cb, store_status stat = DHASH_STORE);
 
-  void lookup (chordID blockID, int options, dhashcli_lookupcb_t cb);
+  void lookup (chordID blockID, dhashcli_lookupcb_t cb);
 };
 

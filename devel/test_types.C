@@ -42,10 +42,12 @@ void store_cb_append_second (dhashclient dhash, dhash_stat status,
 void fetch_cb_append_second (dhashclient dhash, dhash_stat stat, ptr<dhash_block> blk, vec<chordID> path);
 
 void fetch_cb (dhash_stat stat, ptr<dhash_block> blk, vec<chordID> path);
-
+void store_cb_ch2 (dhashclient dhash, chordID pred, 
+		   dhash_stat status, ptr<insert_info> i);
 char *data_one = "This is some test data";
 char *data_too = " so is this.";
 char data[8192];
+bool useGuess = false;
 
 str control_socket;
 unsigned int datasize;
@@ -63,7 +65,44 @@ store_cb_ch (dhashclient dhash, dhash_stat status, ptr<insert_info> i)
   else
     warn << "contenthash store success\n";
 
-  dhash.retrieve (i->key, DHASH_CONTENTHASH, wrap (&fetch_cb));
+  ptr<option_block> options;
+  if (useGuess) {
+    options = New refcounted<option_block> ();
+    options->flags = DHASHCLIENT_GUESS_SUPPLIED;
+    warn << "options->flags " << options->flags << "\n";
+    chordID dest = i->path.pop_back ();
+    chordID pred = i->path.pop_back ();
+    warn << "dest " << dest << " pred " << pred << "\n";
+    options->guess = pred;
+    dhash.insert (data, datasize, wrap(&store_cb_ch2, dhash, pred), options);
+  } else {
+    options = NULL;
+  }
+
+  dhash.retrieve (i->key, DHASH_CONTENTHASH, wrap (&fetch_cb), options);
+}
+
+
+void 
+store_cb_ch2 (dhashclient dhash, chordID pred, 
+	      dhash_stat status, ptr<insert_info> i)
+{
+  if (status != DHASH_OK)
+    warn << "contenthash store error\n";
+  else
+    warn << "contenthash store success\n";
+
+  warn << "path: ";
+  for (unsigned int j = 0; j < i->path.size (); j++)
+    warnx << i->path[j];
+  warnx << "\n";
+
+  ptr<option_block> options;
+  options = New refcounted<option_block> ();
+  options->flags = DHASHCLIENT_GUESS_SUPPLIED;
+  warn << "2 pred " << pred << "\n";
+  options->guess = pred;
+  dhash.retrieve (i->key, DHASH_CONTENTHASH, wrap (&fetch_cb), options);
 }
 
 void
@@ -138,8 +177,12 @@ fetch_cb (dhash_stat stat, ptr<dhash_block> blk, vec<chordID> path)
   }
   else if (datasize != blk->len || memcmp (data, blk->data, datasize) != 0)
     fatal << "verification failed";
-  else 
-    warn << "success\n";
+  else {
+    warn << "success\n path: ";
+    for (unsigned int i = 0; i < path.size (); i++)
+      warnx << path[i] << " ";
+    warnx << "\n";
+  }
   
   exit (0);
 }
@@ -172,8 +215,9 @@ main (int argc, char **argv)
   switch (atoi (argv[3])) {
   case CONTENT_HASH:
     {
-    dhash.insert (data, datasize, wrap(&store_cb_ch, dhash));
-    break;
+      if (atoi(argv[4]) == 1) useGuess = true;
+      dhash.insert (data, datasize, wrap(&store_cb_ch, dhash));
+      break;
     }
   case PUB_KEY:
     {

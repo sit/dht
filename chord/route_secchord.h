@@ -50,10 +50,8 @@ class route_secchord : public route_iterator {
 		  ptr<void> uc_args);
   ~route_secchord ();
   void print ();
-  void send (chordID guess);
-  void send (bool ucs);
-  void first_hop (cbhop_t cb, bool ucs = false);
-  void first_hop (cbhop_t cb, chordID guess);
+  void send (ptr<chordID> guess);
+  void first_hop (cbhop_t cb, ptr<chordID> guess);
   void next_hop ();
   ptr<location> pop_back ();
 };

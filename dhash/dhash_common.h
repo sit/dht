@@ -5,7 +5,7 @@
 #include <dhash_prot.h>
 #include <crypt.h>
 
-#define DHASHCLIENT_USE_CACHED_SUCCESSOR 0x1
+#define DHASHCLIENT_GUESS_SUPPLIED 0x1
 #define DHASHCLIENT_NO_RETRY_ON_LOOKUP   0x2
 
 struct blockID {
@@ -63,9 +63,9 @@ struct dhash_block {
 
 struct insert_info { 
   chordID key;
-  chordID destID;
-  insert_info (chordID k, chordID d) :
-    key (k), destID (d) {};
+  vec<chordID> path;
+  insert_info (chordID k, vec<chordID> p) :
+    key (k), path (p) {};
 };
 
 static inline str dhasherr2str (dhash_stat status)

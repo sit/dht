@@ -79,17 +79,32 @@ dhashgateway::dispatch (svccb *sbp)
       ref<dhash_block> block =
 	New refcounted<dhash_block> (arg->block.base (), arg->len, arg->ctype);
       block->ID = arg->blockID;
-      dhcli->insert2 (block, arg->options,
-		      wrap (this, &dhashgateway::insert_cb, sbp));
+
+      ptr<chordID> guess = NULL;
+      if (arg->options & DHASHCLIENT_GUESS_SUPPLIED) 
+	guess = New refcounted<chordID> (arg->guess);
+
+	 
+      dhcli->insert2 (block, 
+		      wrap (this, &dhashgateway::insert_cb, sbp),
+		      arg->options,
+		      guess);
     }
     break;
     
   case DHASHPROC_RETRIEVE:
     {
       dhash_retrieve_arg *arg = sbp->template getarg<dhash_retrieve_arg> ();
+
+      ptr<chordID> guess = NULL;
+      if (arg->options & DHASHCLIENT_GUESS_SUPPLIED) {
+	guess = New refcounted<chordID> (arg->guess);
+      }
+
+
       dhcli->retrieve2 (blockID(arg->blockID, arg->ctype, DHASH_BLOCK),
-			arg->options, 
-			wrap (this, &dhashgateway::retrieve_cb, sbp));
+			wrap (this, &dhashgateway::retrieve_cb, sbp),
+			arg->options, guess);
     }
     break;
     
@@ -102,11 +117,15 @@ dhashgateway::dispatch (svccb *sbp)
 }
 
 void
-dhashgateway::insert_cb (svccb *sbp, dhash_stat status, chordID destID)
+dhashgateway::insert_cb (svccb *sbp, dhash_stat status, vec<chordID> path)
 {
   dhash_insert_res res (status);
-  if (status == DHASH_OK)
-    res.resok->destID = destID;
+  if (status == DHASH_OK) {
+    res.resok->path.setsize (path.size ());
+    for (unsigned int i = 0; i < path.size (); i++)
+      res.resok->path[i] = path[i];
+  }
+
   sbp->reply (&res);
 }
 
@@ -114,8 +133,6 @@ dhashgateway::insert_cb (svccb *sbp, dhash_stat status, chordID destID)
 void
 dhashgateway::retrieve_cb (svccb *sbp, dhash_stat stat, ptr<dhash_block> block, route path)
 {
-  ///warn << "dhashgateway::retrieve_cb\n";
-
   dhash_retrieve_res res (DHASH_OK);
 
   if (!block)

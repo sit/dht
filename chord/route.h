@@ -86,11 +86,9 @@ class route_iterator {
   chordstat status () { return r; };
 
   virtual void print ();
-  virtual void first_hop (cbhop_t cb, bool ucs = false) = 0;
-  virtual void first_hop (cbhop_t cb, chordID guess) = 0;
+  virtual void first_hop (cbhop_t cb, ptr<chordID> guess) = 0;
   virtual void next_hop () {};
-  virtual void send (chordID guess) = 0;
-  virtual void send (bool ucs) = 0;
+  virtual void send (ptr<chordID> guess) = 0;
 
   virtual ptr<location> pop_back () = 0;
 
@@ -119,10 +117,8 @@ class route_chord : public route_iterator {
 	       ptr<void> uc_args);
 
   ~route_chord () {};
-  virtual void first_hop (cbhop_t cb, bool ucs = false);
-  virtual void first_hop (cbhop_t cb, chordID guess);
-  void send (chordID guess);
-  void send (bool ucs = false);
+  virtual void first_hop (cbhop_t cb, ptr<chordID> guess);
+  void send (ptr<chordID> guess);
 
   void next_hop ();
 
@@ -145,10 +141,9 @@ class route_debruijn : public route_iterator {
 		  int uc_procno,
 		  ptr<void> uc_args);
   ~route_debruijn () {};
-  void send (chordID guess);
-  void send (bool ucs);
-  virtual void first_hop (cbhop_t cb, bool ucs = false);
-  virtual void first_hop (cbhop_t cb, chordID guess);
+  void send (ptr<chordID> guess);
+
+  virtual void first_hop (cbhop_t cb, ptr<chordID> guess);
   void print ();
   void next_hop ();
   ptr<location> pop_back ();

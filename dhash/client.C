@@ -294,7 +294,8 @@ dhashcli::dhashcli (ptr<vnode> node, dhash *dh, ptr<route_factory> r_factory,
 }
 
 void
-dhashcli::retrieve2 (blockID blockID, int options, cb_ret cb)
+dhashcli::retrieve2 (blockID blockID, cb_ret cb, int options, 
+		     ptr<chordID> guess)
 {
   // Only one lookup for a block should be in progress from a node
   // at any given time.
@@ -313,8 +314,10 @@ dhashcli::retrieve2 (blockID blockID, int options, cb_ret cb)
     rs->callbacks.push_back (cb);
     rcvs.insert (rs);
 
+
     route_iterator *ci = r_factory->produce_iterator_ptr (blockID.ID);
-    ci->first_hop (wrap (this, &dhashcli::retrieve2_hop_cb, blockID, ci));
+    ci->first_hop (wrap (this, &dhashcli::retrieve2_hop_cb, blockID, ci), guess);
+
   }
 }
 
@@ -350,7 +353,7 @@ dhashcli::retrieve2_hop_cb (blockID blockID, route_iterator *ci, bool done)
 	return;
       }
     }
-  }
+  } 
   
   ci->next_hop ();
 }
@@ -568,34 +571,6 @@ dhashcli::retrieve2_fetch_cb (blockID blockID, u_int i,
 }
 
 
-void
-dhashcli::retrieve (chordID blockID, int options, cb_ret cb)
-{
-  ///warn << "dhashcli::retrieve\n";
-  /* XXX we need to fix the route iterator code later anyway.
-   *     not worth fixing right now. */
-  assert (0);
-#ifdef ROUTE_DHASH  
-  ref<route_dhash> iterator =
-    New refcounted<route_dhash> (r_factory, blockID, dh, options);
-  iterator->execute (wrap (this, &dhashcli::retrieve_hop_cb, cb, blockID));
-#endif /* 0 */  
-}
-
-void
-dhashcli::retrieve_hop_cb (cb_ret cb, chordID key,
-			   dhash_stat status, 
-			   ptr<dhash_block> blk, 
-			   route path) 
-{
-  if (status) {
-    warn << "iterator exiting w/ status\n";
-    (*cb) (status, NULL, path);
-  } else {
-    cb (status, blk, path); 
-    cache_block (blk, path, key);
-  }
-}
 
 void
 dhashcli::cache_block (ptr<dhash_block> block, route search_path, chordID key)
@@ -621,21 +596,6 @@ dhashcli::finish_cache (dhash_stat status, chordID dest)
     warn << "error caching block\n";
 }
 
-//use this version if you already know where the block is (and guessing
-// that you have the successor cached won't work)
-void
-dhashcli::retrieve (chordID source, chordID blockID, cb_ret cb)
-{
-  assert (0);
-  // This seems like a terrible terrible function.
-#ifdef ROUTE_DHASH
-  ref<route_dhash> iterator = New refcounted<route_dhash>(r_factory, 
-							 blockID, dh);
-  iterator->execute (wrap (this, &dhashcli::retrieve_with_source_cb, cb), 
-		     source);
-#endif /* ROUTE_DHASH */  
-}
-
 void
 dhashcli::retrieve_with_source_cb (cb_ret cb, dhash_stat status, 
 				   ptr<dhash_block> block, route path)
@@ -649,18 +609,46 @@ dhashcli::retrieve_with_source_cb (cb_ret cb, dhash_stat status,
 
 /* Insert using coding */ 
 void
-dhashcli::insert2 (ref<dhash_block> block, int options, cbinsert_t cb)
+dhashcli::insert2 (ref<dhash_block> block, cbinsert_path_t cb, 
+		   int options, ptr<chordID> guess)
 {
-  lookup (block->ID, options,
-          wrap (this, &dhashcli::insert2_lookup_cb, block, cb));
+  if (!guess)
+    lookup (block->ID, 
+	    wrap (this, &dhashcli::insert2_lookup_cb, block, cb));
+  else { 
+    ptr<location> l =  clntnode->locations->lookup (*guess);
+    if (!l) {
+      lookup (block->ID, 
+	      wrap (this, &dhashcli::insert2_lookup_cb, block, cb));
+    } else
+      clntnode->get_succlist (l, wrap (this, &dhashcli::insert2_succlist_cb, 
+				       block, cb, *guess));
+  }
 }
 
 void
-dhashcli::insert2_lookup_cb (ref<dhash_block> block, cbinsert_t cb, 
-			     dhash_stat status, vec<chord_node> succs, route r)
+dhashcli::insert2_succlist_cb (ref<dhash_block> block, cbinsert_path_t cb, chordID guess,
+			       vec<chord_node> succs, chordstat status)
 {
   if (status) {
-    (*cb) (DHASH_CHORDERR, 0);
+    vec<chordID> rrr;
+    cb (DHASH_CHORDERR, rrr);
+    warn << "succlist: failure\n";
+    return;
+  }
+
+  route r;
+  r.push_back (clntnode->locations->lookup (guess));
+  insert2_lookup_cb (block, cb, DHASH_OK, succs, r);
+}
+
+void
+dhashcli::insert2_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb, 
+			     dhash_stat status, vec<chord_node> succs, route r)
+{
+  vec<chordID> mt;
+  if (status) {
+    (*cb) (DHASH_CHORDERR, mt);
     return;
   }
 
@@ -670,7 +658,7 @@ dhashcli::insert2_lookup_cb (ref<dhash_block> block, cbinsert_t cb,
   if (dhash::NUM_EFRAGS > succs.size ()) {
     warn << "Not enough successors: |succs| " << succs.size ()
 	 << ", EFRAGS " << dhash::NUM_EFRAGS << "\n";
-    (*cb) (DHASH_STOREERR, 0); // XXX Not the right error code...
+    (*cb) (DHASH_STOREERR, mt); // XXX Not the right error code...
     return;
   }
   
@@ -707,12 +695,12 @@ dhashcli::insert2_lookup_cb (ref<dhash_block> block, cbinsert_t cb,
     ss->out += 1;
     clntnode->doRPC (succs[i], dhash_program_1, DHASHPROC_STORE, 
 		     arg, res,
-		     wrap (this, &dhashcli::insert2_store_cb, ss, i, res));
+		     wrap (this, &dhashcli::insert2_store_cb, ss, r, i, res));
   }
 }
 
 void
-dhashcli::insert2_store_cb (ref<sto_state> ss, u_int i, ref<dhash_storeres> res,
+dhashcli::insert2_store_cb (ref<sto_state> ss, route r, u_int i, ref<dhash_storeres> res,
 			    clnt_stat err)
 {
   ss->out -= 1;
@@ -725,6 +713,8 @@ dhashcli::insert2_store_cb (ref<sto_state> ss, u_int i, ref<dhash_storeres> res,
   }
 
   // Count down until all outstanding RPCs have returned
+  vec<chordID> r_ret;
+
   if (ss->out == 0) {
     chordID myID = clntnode->my_ID ();
     if (ss->good < dhash::NUM_EFRAGS) {
@@ -733,56 +723,22 @@ dhashcli::insert2_store_cb (ref<sto_state> ss, u_int i, ref<dhash_storeres> res,
       if (ss->good < dhash::NUM_DFRAGS) {
 	trace << myID << ": store (" << ss->block->ID << "): failed;"
 	  " insufficient frags stored.\n";
-	(*ss->cb) (DHASH_STOREERR, ss->succs[0].x);
+	
+	r_ret.push_back (ss->succs[0].x);
+	(*ss->cb) (DHASH_STOREERR, r_ret);
 	// We should do something here to try and store this fragment
 	// somewhere else.
 	return;
       }
     }
-    (*ss->cb) (DHASH_OK, ss->succs[0].x);
+    
+    for (unsigned int i = 0; i < r.size (); i++)
+      r_ret.push_back (r[i]->id ());
+    (*ss->cb) (DHASH_OK, r_ret);
   }
 }
 
-void
-dhashcli::insert (chordID blockID, ref<dhash_block> block, 
-                  int options, cbinsert_t cb)
-{
-  lookup (blockID, options,
-          wrap (this, &dhashcli::insert_lookup_cb, blockID, block, cb, 0));
-}
 
-void
-dhashcli::insert_lookup_cb (chordID blockID, ref<dhash_block> block,
-			    cbinsert_t cb, int trial,
-			    dhash_stat status, vec<chord_node> succs, route r)
-{
-  if (status != DHASH_OK) {
-    warn << "insert_lookup_cb: failure\n";
-    // XXX call dhashcli::insert_stored_cb() to retry
-    (*cb) (status, bigint(0)); // failure
-  } else {
-    ptr<location> dest = clntnode->locations->insert (succs[0]);
-    dhash_store::execute (clntnode, dest, blockID, dh, block, false, 
-			  wrap (this, &dhashcli::insert_stored_cb, 
-				blockID, block, cb, trial));
-  }
-}
-
-void
-dhashcli::insert_stored_cb (chordID blockID, ref<dhash_block> block,
-			    cbinsert_t cb, int trial,
-			    dhash_stat stat, chordID retID)
-{
-  if (stat && stat != DHASH_WAIT && (trial <= 2)) {
-    //try the lookup again if we got a RETRY
-    warn << "got a RETRY failure (" << trial << "). Trying the lookup again\n";
-    lookup (blockID, false, 
-	    wrap (this, &dhashcli::insert_lookup_cb,
-		  blockID, block, cb, trial + 1));
-  } else {
-    cb (stat, retID);
-  }
-}
 //like insert, but doesn't do lookup. used by transfer_key
 void
 dhashcli::storeblock (ptr<location> dest, chordID ID, ref<dhash_block> block, 
@@ -793,17 +749,10 @@ dhashcli::storeblock (ptr<location> dest, chordID ID, ref<dhash_block> block,
 
 
 void
-dhashcli::lookup (chordID blockID, int options, dhashcli_lookupcb_t cb)
+dhashcli::lookup (chordID blockID, dhashcli_lookupcb_t cb)
 {
-  if (options & DHASHCLIENT_USE_CACHED_SUCCESSOR) {
-    ptr<location> x = clntnode->lookup_closestsucc (blockID);
-    vec<chord_node, 1> y;
-    x->fill_node (y[0]);
-    (*cb) (DHASH_OK, y, route ());
-  }
-  else
-    clntnode->find_successor
-      (blockID, wrap (this, &dhashcli::lookup_findsucc_cb, blockID, cb));
+  clntnode->find_successor
+    (blockID, wrap (this, &dhashcli::lookup_findsucc_cb, blockID, cb));
 }
 
 void

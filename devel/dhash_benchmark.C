@@ -98,7 +98,7 @@ store_cb (dhash_stat status, ptr<insert_info> i)
     fprintf (outfile, "store error\n");
   } else {
     bps++;
-    str buf = strbuf () << "stored " << i->key << " at " << i->destID << "\n";
+    str buf = strbuf () << "stored " << i->key << " at " << i->path.back () << "\n";
     fprintf (outfile, "%s", buf.cstr ());
   }
 }

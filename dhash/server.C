@@ -218,15 +218,9 @@ dhash_impl::missing (ptr<location> from, blockID key)
 {
   // throttle the block downloads
   if (missing_outstanding > MISSING_OUTSTANDING_MAX) {
-    warn << "Queueing: q_sz " << missing_q.size ()
-	 << " out " << missing_outstanding
-	 << " key " << key
-	 << "\n";  
     if (missing_q[key] == NULL) {
       missing_state *ms = New missing_state (key, from);
       missing_q.insert (ms);
-    } else {
-      warn << "ignoring dup: " << key << "\n"; 
     }
     return;
   }
@@ -239,18 +233,13 @@ dhash_impl::missing (ptr<location> from, blockID key)
   // calculate key range that we should be storing
   vec<ptr<location> > preds = host_node->preds ();
   assert (preds.size () > 0);
-  ///chordID p = preds.back ().x;
-  //chordID m = host_node->my_ID ();
 
-  warn << tm << " "
-       << host_node->my_ID () << ": missing key " << key
-       << ", from " << from->id () << "\n"; // 
-  //warn << "[" << p << "," << m << "]\n";
+
 #endif
 
   missing_outstanding++;
   assert (missing_outstanding >= 0);
-  cli->retrieve2 (key, 0, wrap (this, &dhash_impl::missing_retrieve_cb, key));
+  cli->retrieve2 (key, wrap (this, &dhash_impl::missing_retrieve_cb, key));
 }
 
 void
@@ -275,7 +264,6 @@ dhash_impl::missing_retrieve_cb (blockID key, dhash_stat err,
 
   while ((missing_outstanding <= MISSING_OUTSTANDING_MAX)
 	 && (missing_q.size () > 0)) {
-    warn << "dequeuing missing key\n";
     missing_state *ms = missing_q.first ();
     assert (ms);
     missing_q.remove (ms);
@@ -347,7 +335,7 @@ dhash_impl::keyhash_mgr_timer ()
         keyhash_mgr_rpcs ++;
         // otherwise, try to sync with the master node
         cli->lookup
-	  (n, 0, wrap (this, &dhash_impl::keyhash_mgr_lookup, n));
+	  (n, wrap (this, &dhash_impl::keyhash_mgr_lookup, n));
         // XXX if we are not a replica, should mark the block so we dont
         // serve it again
       }
@@ -451,15 +439,12 @@ dhash_impl::replica_maintenance_timer (u_int i)
   bigint rngmin = host_node->my_pred ()->id ();
   bigint rngmax = host_node->my_ID ();
   vec<ptr<location> > succs = host_node->succs ();
-#if 1
+#if 0
   warn << "dhash_impl::replica_maintenance_timer index " << i
        << ", #succs " << succs.size() << "\n";
 #endif
-  if (missing_q.size () > 0) {
-    u_int q_sz = missing_q.size ();
-    warn << "not syncing q_sz " << q_sz << " out " << missing_outstanding << "\n";
+  if (missing_q.size () > 0) 
     goto out; // don't find more missing keys, yet!
-  }
   if (succs.size() == 0)
     goto out; // can't do anything
   if (replica_syncer && !replica_syncer->done())
@@ -472,7 +457,7 @@ dhash_impl::replica_maintenance_timer (u_int i)
      wrap (this, &dhash_impl::doRPC_unbundler, succs[i]),
      wrap (this, &dhash_impl::missing, succs[i]));
 
-#if 1
+#if 0
   warn << "sync with " << succs[i]->id ()
        << " range [" << rngmin << ", " << rngmax << "]\n";
 #endif
@@ -572,7 +557,7 @@ dhash_impl::pmaint_next ()
       warn << host_node->my_ID () << " : pmaint_next: key " << key << "\n";
       pmaint_a = key;
       pmaint_b = key;
-      cli->lookup (key, 0, wrap (this, &dhash_impl::pmaint_lookup, pmaint_b));
+      cli->lookup (key, wrap (this, &dhash_impl::pmaint_lookup, pmaint_b));
     } else {
       delaycb (1, wrap (this, &dhash_impl::pmaint_next));
     }

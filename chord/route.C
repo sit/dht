@@ -65,57 +65,35 @@ route_chord::route_chord (ptr<vnode> vi, chordID xi,
 };
 
 void
-route_chord::first_hop (cbhop_t cbi, chordID guess)
+route_chord::first_hop (cbhop_t cbi, ptr<chordID> guess)
 {
-  cb = cbi;
-  ptr<location> l = v->locations->lookup (guess);
-  search_path.push_back (l);
-  assert (l != NULL); // XXX gross.
-  next_hop ();
-}
-
-void
-route_chord::first_hop (cbhop_t cbi, bool ucs)
-{
-  //  warn << v->my_ID () << "; starting a lookup for " << x << "\n";
   cb = cbi;
 
   chordID myID = v->my_ID ();
   ptr<location> succ = v->my_succ ();
   if (betweenrightincl (myID, succ->id (), x) || myID == succ->id ()) {
     search_path.push_back (succ);
-    next_hop (); // deliver the upcall
-  } else {
-    ptr<location> n;
-    if (ucs) 
-      n = v->lookup_closestsucc (x);
-    else
-      n = v->lookup_closestpred (x);
-
-    search_path.push_back (n);
-    next_hop ();
+  } else  {
+    ptr<location> l;
+    if (guess) l = v->locations->lookup (*guess);
+    if (!l) l = v->lookup_closestpred (x); //if the guess isn't cached, ignore it
+    search_path.push_back (l);
   }
+  next_hop (); // deliver the upcall
 }
 
 void
 route_chord::next_hop ()
 {
   ptr<location> n = search_path.back();
-  //  warn << v->my_ID () << "; next_hop: " << n << " is next\n";
   make_hop(n);
 }
 
 
 void
-route_chord::send (chordID guess)
+route_chord::send (ptr<chordID> guess)
 {
   first_hop (wrap (this, &route_chord::send_hop_cb), guess);
-}
-
-void
-route_chord::send (bool ucs)
-{
-  first_hop (wrap (this, &route_chord::send_hop_cb), ucs);
 }
 
 void
@@ -184,14 +162,14 @@ route_chord::make_hop_cb (ptr<bool> del,
       search_path.push_back (v->my_location ());
 
     on_failure (last_node_tried->id ());
-  } else if (res->status == CHORD_STOP) {
+  } 
+
+  else if (res->status == CHORD_STOP || last_hop) {
     r = CHORD_OK;
     cb (done = true);
-  } else if (last_hop) {
-    //talked to the successor
-    r = CHORD_OK;
-    cb (done = true);
-  } else if (res->status == CHORD_INRANGE) { 
+  } 
+
+  else if (res->status == CHORD_INRANGE) { 
     // found the successor
     ptr<location> n0 = v->locations->insert (make_chord_node (res->inrange->n[0]));
     if (!n0) {
@@ -207,7 +185,9 @@ route_chord::make_hop_cb (ptr<bool> del,
     last_hop = true;
     if (stop) done = true; // XXX still needed??
     cb (done);
-  } else if (res->status == CHORD_NOTINRANGE) {
+  } 
+
+  else if (res->status == CHORD_NOTINRANGE) {
     // haven't found the successor yet
     ptr<location> last = search_path.back ();
     chord_node n = make_chord_node (res->notinrange->n);
@@ -233,7 +213,6 @@ route_chord::make_hop_cb (ptr<bool> del,
 	warnx << "XXXXXXXXXXXXXXXXXXX WRONG WAY XXXXXXXXXXXXX\n";
       }
       
-      //BAD LOC (ok)
       ptr<location> n0 = v->locations->insert (n);
       if (!n0) {
 	warnx << v->my_ID () << ": make_hop_cb: notinrange node ("
@@ -368,34 +347,26 @@ createdebruijnkey (chordID p, chordID n, chordID &x, chordID *k, int logbase)
   return r;
 }
 
-void
-route_debruijn::first_hop (cbhop_t cbi, chordID guess) {
-  cb = cbi;
-  k_path.push_back (x);
-  ptr<location> l = v->locations->lookup (guess);
-  search_path.push_back (l);
-  assert (l); // XXX gross
-  virtual_path.push_back (x);
-  next_hop ();
-}
 
 void
-route_debruijn::first_hop (cbhop_t cbi, bool ucs)
+route_debruijn::first_hop (cbhop_t cbi, ptr<chordID> guess)
 {
   cb = cbi;
-  chordID myID = v->my_ID ();
 
-  warnx << "first_hop: " << x << "\n";
+  chordID myID = v->my_ID ();
   if (v->lookup_closestsucc (myID + 1)->id() == myID) {  // is myID the only node?
     done = true;
     search_path.push_back (v->my_location ());
     virtual_path.push_back (x);
     k_path.push_back (x);
   } else {
+    ptr<location> l;
+    if (guess) l = v->locations->lookup (*guess);
+    if (!l) l = v->my_location ();
     chordID k;
     chordID r = createdebruijnkey (myID, v->my_succ ()->id (), x, &k, logbase);
-    //    chordID r = myID + 1;
-    search_path.push_back (v->my_location ());
+
+    search_path.push_back (l);
     virtual_path.push_back (r);
     k_path.push_back (k);
   }
@@ -404,15 +375,9 @@ route_debruijn::first_hop (cbhop_t cbi, bool ucs)
 
 
 void
-route_debruijn::send (chordID guess)
+route_debruijn::send (ptr<chordID> guess)
 {
   first_hop (wrap (this, &route_debruijn::send_hop_cb), guess);
-}
-
-void
-route_debruijn::send (bool ucs)
-{
-  first_hop (wrap (this, &route_debruijn::send_hop_cb), ucs);
 }
 
 void
@@ -580,3 +545,4 @@ void
 route_factory::get_node (chord_node_wire *n) {
   vi->locations->lookup (vi->my_ID ())->fill_node (*n); 
 }
+
