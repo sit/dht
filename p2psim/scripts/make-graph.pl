@@ -6,11 +6,12 @@ my $xstat = "BW_TOTALS:overall_bw";
 my @ystat = ("OVERALL_LOOKUPS:lookup_mean");
 my $xlabel;
 my @ylabel;
-my $hulllabel = "LOOKUP_RATES:success"; 
+my $hulllabel = "BW_TOTALS:live_bw"; 
 my $param;
 my $paramname = "param";
 my %paramvals;
 my $epsfile;
+my $pngfile;
 my @indats = ();
 my $xrange;
 my $yrange;
@@ -53,6 +54,7 @@ make-graph.pl [options]
 			        Can specify more than one ylabel (if more than
 				one is given, the last is the axis label)
     --epsfile <filename>      Save the postscript, instead of using gv
+    --pngfile <filename>      Save the png file
     --param <param_num>       Color the dots by this parameter.  Can be the
 			        parameter name or a number.  To plot only
 				certain values, use "--param base=2,8,32".
@@ -103,7 +105,7 @@ my $con_cmd = "$script_dir/find_convexhull.py";
 # Get the user-defined parameters.
 # First parse options
 my %options;
-&GetOptions( \%options, "help|?", "x=s", "y=s@", "epsfile=s", 
+&GetOptions( \%options, "help|?", "x=s", "y=s@", "epsfile=s", "pngfile=s",
 	     "param=s", "paramname=s", "datfile=s@", "label=s@", 
 	     "xrange=s", "yrange=s", "xlabel=s", "ylabel=s@", "title=s", 
 	     "convex:s", "plottype=s", "grid", "rtmgraph", "hulllabel:s",
@@ -185,6 +187,9 @@ if( defined $options{"yrange"} ) {
 }
 if( defined $options{"epsfile"} ) {
     $epsfile = $options{"epsfile"};
+}
+if (defined $options{"pngfile"}) {
+  $pngfile = $options{"pngfile"};
 }
 if( defined $options{"param"} ) {
     my @paramsplit = split( /=/, $options{"param"} );
@@ -1048,6 +1053,9 @@ if( defined $yrange ) {
 if( defined $epsfile ) {
     print GP "set terminal postscript eps $fontsize\n";
     print GP "set output \"$epsfile\"\n";
+}elsif (defined $pngfile) {
+    print GP "set terminal png color medium\n";
+    print GP "set output \"$pngfile\"\n";
 } else {
     print GP "set terminal postscript color $fontsize\n";
     print GP "set output \"/tmp/paramplot-$$.eps\"\n";
@@ -1260,14 +1268,14 @@ close( GP );
 
 # now make the graph and display it if desired
 system( "gnuplot /tmp/paramplot-$$.gnuplot" ) and die( "No gnuplot" );
-if( !defined $epsfile ) {
+if( (!defined $epsfile) && (!defined $pngfile) ) {
     system( "gv /tmp/paramplot-$$.eps" ) and die( "No gv" );
 }
 
 
 # now cleanup time
 unlink( "/tmp/paramplot-$$.gnuplot" );
-if( !defined $epsfile ) {
+if( (!defined $epsfile) && (!defined($pngfile) )) {
     unlink( "/tmp/paramplot-$$.eps" );
 }
 if( $xparam or grep( /1/, @yparam ) ) {

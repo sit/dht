@@ -33,6 +33,7 @@ extern bool vis;
 bool static_sim;
 unsigned int joins = 0;
 
+vector<uint> Chord::rtable_sz;
 #ifdef RECORD_FETCH_LATENCY
 double _allfetchlat = 0.0;
 double _allfetchsz = 0.0;
@@ -137,6 +138,16 @@ Chord::~Chord()
   if (me.ip == 1) { //same hack as tapestry.C so statistics only gets printed once
 
     Node::print_stats();
+    printf("<-----STATS----->\n");
+    sort(rtable_sz.begin(),rtable_sz.end());
+    uint totalrtable = 0;
+    uint rsz = rtable_sz.size();
+    for (uint i = 0; i < rsz; i++) 
+      totalrtable += rtable_sz[i];
+    printf("RTABLE:: 10p:%u 50p:%u 90p:%u avg:%.2f\n", rtable_sz[(uint)0.1*rsz], rtable_sz[(uint)0.5*rsz],
+	rtable_sz[(uint)0.9*rsz], (double)totalrtable/(double)rsz);
+    printf("<-----ENDSTATS----->\n");
+
 #ifdef RECORD_FETCH_LATENCY
     printf("fetch lat: %.3f %.3f %u\n", _allfetchlat/_allfetchnum, _allfetchsz/_allfetchnum, _allfetchnum); 
 #endif
@@ -1930,6 +1941,10 @@ Chord::crash(Args *args)
   if (vis)
     printf ("vis %llu crash %16qx\n", now (), me.id);
 
+  if ((Node::collect_stat()) && (now()-_last_join_time>600000)){
+    uint rsz = loctable->size(LOC_HEALTHY,0.0);
+    rtable_sz.push_back(rsz);
+  }
   // XXX: Thomer says: not necessary
   //node()->crash ();
   _inited = false;
@@ -2576,6 +2591,9 @@ LocTable::next_close_hops(ConsistentHash::CHID key, uint n, double to)
   uint i = 0;
   l.clear();
   ConsistentHash::CHID dist;
+  vector<Chord::IDMap> all;
+  Chord::IDMap predpred;
+
   while (i < 8) {
     dist = ConsistentHash::distance(elm->n.id,key);
     ConsistentHash::CHID dist2 = ConsistentHash::distance(me.id,elm->n.id);
@@ -2598,13 +2616,20 @@ LocTable::next_close_hops(ConsistentHash::CHID key, uint n, double to)
 	 || to<0.0000000001 
 	 || ti >= to 
 	 || (!elm->n.alivetime && now()-elm->n.timestamp < 800000))) { 
+      all.push_back(elm->n);
       i++;
+
+      if ((n==1) && (i == n) && topo->latency(me.ip,elm->n.ip) < 0.8*topo->median_lat()) {
+	l.push_back(elm->n);
+	return l;
+      }
+
       if (dist > dist2) {
 	l.push_back(elm->n);
       }else {
 	for (iter = l.begin(); iter != l.end(); ++iter) {
 	  if (topo->latency(me.ip,elm->n.ip)
-	      >= topo->latency(me.ip,(*iter).ip))
+	      >= (0.5*topo->latency(me.ip,(*iter).ip)))
 	    break;
 	}
 	if (n > 1 && l.size() == 1) { //if parallelism >1, always choose one as the closest to key
@@ -2620,6 +2645,12 @@ LocTable::next_close_hops(ConsistentHash::CHID key, uint n, double to)
     }
     elm = ring.prev(elm);
     if (!elm) elm = ring.last();
+  }
+  if (p2psim_verbose >=4) {
+  printf("%llu med %llu %u,%qx key %qx all : ",now(),topo->median_lat(),me.ip,me.id,key);
+  for (uint i = 0; i < all.size(); i++) 
+    printf(" (%u,%qx,%llu,%llu,%llu) ",all[i].ip,all[i].id,topo->latency(me.ip,all[i].ip),now()-all[i].timestamp,all[i].alivetime);
+  printf("\n");
   }
   return l;
 }

@@ -292,15 +292,16 @@ Node::record_join()
 
   // do this first to make sure state is initialized for this node
   join_time = now();
+  //node_live_bytes = 0;
+  node_live_inbytes = 0;
+  node_live_outbytes = 0;
+
   check_num_joins_pos();
   if( !collect_stat() ) {
     return;
   }
 
-  //node_live_bytes = 0;
-  node_live_inbytes = 0;
-  node_live_outbytes = 0;
-  assert( _num_joins[_num_joins_pos] == 0 || !_last_joins[_num_joins_pos] );
+    assert( _num_joins[_num_joins_pos] == 0 || !_last_joins[_num_joins_pos] );
   _num_joins[_num_joins_pos]++;
   _last_joins[_num_joins_pos] = now();
 
@@ -325,6 +326,10 @@ Node::record_crash()
       if (_special) {
 	_special_node_out.push_back((double)1000.0*node_live_outbytes/(double)duration);
 	_special_node_in.push_back((double)1000.0*node_live_inbytes/(double)duration);
+	NDEBUG(4) << "special crashed IN: " << node_live_inbytes << " OUT: " 
+	  << node_live_outbytes << " DURATION: " << duration << " AVG_IN: " 
+	  << ((double)1000.0*node_live_outbytes/(double)duration)
+	  << " AVG_OUT: " << ((double)1000.0*node_live_inbytes/(double)duration) << endl;
       }
     }
   }
@@ -349,7 +354,8 @@ Node::print_dist_stats(vector<double> v)
       v[sz/2], v[(uint)(sz*0.9)], 
       v[(uint)(sz*0.95)], v[(uint)(sz*0.99)], 
       v[sz-1], allavg/sz);
-  }
+  }else
+    printf("\n");
 }
 
 void

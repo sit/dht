@@ -22,7 +22,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-# $Id: run-simulations.pl,v 1.29 2004/10/10 21:25:33 jinyang Exp $
+# $Id: run-simulations.pl,v 1.30 2004/11/08 05:05:18 jinyang Exp $
 
 use strict;
 use Getopt::Long;
@@ -37,6 +37,7 @@ my $stattime = 100000;
 my $alpha = 1;
 my $beta = 1800000;
 my $pareto = 1;
+my $uniform = 0;
 my $churnfile = "";
 my $argsfile = "";
 my $logdir = "/tmp";
@@ -435,6 +436,7 @@ sub run_command {
     my $limean = $lifemean;
     my $dmean = $deathmean;
     my $paret = $pareto;
+    my $unifor = $uniform;
     my $alph = $alpha;
     my $bet = $beta;
     my $etime = $exittime;
@@ -464,6 +466,9 @@ sub run_command {
     if (!defined $options{"paret"} & defined $labelhash{"pareto"}) {
       $paret = $labelhash{"pareto"};
     }
+    if (!defined $options{"uniform"} & defined $labelhash{"uniform"}) {
+      $unifor = $labelhash{"uniform"};
+    }
     if (!defined $options{"alpha"} & defined $labelhash{"alpha"}) {
       $alph = $labelhash{"alpha"};
     }
@@ -471,7 +476,10 @@ sub run_command {
       $bet = $labelhash{"beta"};
     }
 
-    &write_events_file( $lomean, $limean, $dmean, $paret, $alph, $bet, $etime, $stime );
+    if ($unifor) {
+      $paret = 0;
+    }
+    &write_events_file( $lomean, $limean, $dmean, $paret, $unifor, $alph, $bet, $etime, $stime );
 
     my $protfile = "$logdir/run-simulations-tmp-prot$$";
     open( PF, ">$protfile" ) or die( "Couldn't write to $protfile" );
@@ -515,6 +523,7 @@ sub write_events_file {
     my $lifemean = shift;
     my $deathmean = shift;
     my $pareto = shift;
+    my $uniform = shift;
     my $alpha = shift;
     my $beta = shift;
     my $exittime = shift;
@@ -544,7 +553,7 @@ sub write_events_file {
 	if ($ipkeys and $datakeys);
      
     print EF "generator $eg_type ipkeys=$ipkeys datakeys=$datakeys " .
-	"lifemean=$lifemean deathmean=$deathmean lookupmean=$lookupmean pareto=$pareto alpha=$alpha beta=$beta " . 
+	"lifemean=$lifemean deathmean=$deathmean lookupmean=$lookupmean pareto=$pareto alpha=$alpha beta=$beta uniform=$uniform " . 
 	    "exittime=$exittime stattime=$stattime";
     
     if( $churnfile ne "" ) {

@@ -121,14 +121,41 @@ class RateControlQueue {
     int quota() { return _quota;}
     uint total_bytes() { return _total_bytes;}
     uint size() { return _qq.size();}
-    bool critical() { if (_qq.size() > 0 || _quota < (_burst/2)) return true; return false;}
-    bool very_critical() { if (_quota == _burst) return true; return false;}
-
+    bool critical() { 
+      if (_fixed_stab) {
+	return false;
+      }else if (_qq.size() > 0 || _quota < (_burst/2)) {
+	return true; 
+      }else 
+	return false;
+    }
+    bool very_critical() { 
+      if (_fixed_stab)
+	return false;
+      if (_last_out_update) {
+	_outquota += ((int) ((now() - _last_out)*_rate));
+	_outquota -= (_node->total_outbytes()-_last_out);
+	if (_outquota < 6*_burst) 
+	  _outquota = 6 * _burst;
+	_last_out_update= now();
+	if (_outquota <= 3*_burst) 
+	  return true;
+	else
+	  return false;
+      }else{
+	_last_out_update= now();
+	return false;
+      }
+    }
    protected :
     void (*_empty_cb)(void *);
     Node *_node;
     int _burst;
-    int _big_burst;
+
+    uint _last_out;
+    Time _last_out_update;
+    int _outquota;
+
     uint _delay_interval;
     priority_queue<q_elm*, vector<q_elm*>, less<q_elm*> > _qq;
     double _rate;

@@ -271,6 +271,8 @@ protected:
 
 private:
   Time _last_join_time;
+  static vector<uint> rtable_sz;
+
 };
 
 #define LOC_REPLACEMENT 0

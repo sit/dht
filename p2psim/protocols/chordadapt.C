@@ -27,6 +27,8 @@
 #include <stdio.h>
 #include <assert.h>
 
+vector<uint> ChordAdapt::rtable_sz;
+
 #define EST_TIMEOUT_SZ 100
 
 vector<IDMap> ChordAdapt::ids;
@@ -79,7 +81,7 @@ ChordAdapt::ChordAdapt(IPAddress i, Args& a) : P2Protocol(i)
   _empty_times = 0;
   _nsucc = a.nget<uint>("successors",16,10);
   _to_multiplier = a.nget<uint>("timeout_multiplier", 3, 10);
-  _learn_num = a.nget<uint>("learn_num",5,10);
+  _learn_num = a.nget<uint>("learn_num",10,10);
   _max_p = _burst_sz/(2*(40 + 8 * _learn_num));
   if (_max_p > 6)
     _max_p = 6;
@@ -119,8 +121,18 @@ ChordAdapt::~ChordAdapt()
 	<< i.value() << endl;
       record_lookup_stat(_me.ip, _me.ip, now()-i.value(), false, false, 0, 0, 0);
     }
-    if (ids.size() == 0) 
+    if (ids.size() == 0)  {
       Node::print_stats();
+      printf("<-----STATS----->\n");
+      sort(rtable_sz.begin(),rtable_sz.end());
+      uint totalrtable = 0;
+      uint rsz = rtable_sz.size();
+      for (uint i = 0; i < rsz; i++) 
+	totalrtable += rtable_sz[i];
+      printf("RTABLE:: 10p:%u 50p:%u 90p:%u avg:%.2f\n", rtable_sz[(uint)(0.1*rsz)], rtable_sz[(uint)(0.5*rsz)],
+	  rtable_sz[(uint)(0.9*rsz)], (double)totalrtable/(double)rsz);
+      printf("<-----ENDSTATS----->\n");
+    }
   }
   delete loctable;
 }
@@ -1211,7 +1223,15 @@ ChordAdapt::adjust_parallelism()
     _next_adjust += _adjust_interval;
   if (_parallelism > _max_p)
     _parallelism = _max_p;
-    
+
+  if ((Node::collect_stat()) && (now()-_last_joined_time>600000)){
+    double ppp = _parallelism > 1? (exp(log(0.1)/(double)_parallelism)):0.1;
+    double ttt = est_timeout(ppp);
+    uint rsz = loctable->size(LOC_HEALTHY,ttt);
+    rtable_sz.push_back(rsz);
+    if (rtable_sz.size() > 10000)
+      rtable_sz.erase(rtable_sz.begin());
+  }
 }
 
 void

@@ -18,6 +18,10 @@ RateControlQueue::RateControlQueue(Node *n, double rate, int burst, Time fixed_s
   _total_bytes = 0;
   _start_time = 0;
   _fixed_stab = fixed_stab;
+
+  _last_out_update = 0;
+  _last_out = 0;
+  _outquota = 0;
 }
 
 void
@@ -107,4 +111,8 @@ RateControlQueue::stop_queue()
   _total_bytes = 0;
   _start_time = 0;
   _last_update = 0;
+
+  _last_out_update = 0;
+  _last_out = 0;
+  _outquota = 0;
 }

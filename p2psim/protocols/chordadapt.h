@@ -169,6 +169,7 @@ class ChordAdapt: public P2Protocol {
     uint _learn_num;
     ConsistentHash::CHID _max_succ_gap;
     vector<Stat> _stat;
+    static vector<uint> rtable_sz;
     vector<double> _calculated_prob;
     Time _last_calculated;
     

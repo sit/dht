@@ -47,6 +47,10 @@ public:
     if (this->find(s) == this->end()) return defaultv;
     return (T) strtoull((*this)[s].c_str(), NULL, base);
   }
+  double fget(string s, double defaultv=0.0) {
+    if (this->find(s) == this->end()) return defaultv;
+    return atof((*this)[s].c_str());
+  }
 };
 
 #endif // __ARGS_H
