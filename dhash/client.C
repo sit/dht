@@ -423,9 +423,19 @@ dhashcli::retrieve_fetch_cb (ptr<rcv_state> rs, u_int i,
     }
     return;
   }
-  rs->timemark ();
   
   str tmp (newblock);
+  if (!verify (rs->key.ID, rs->key.ctype, tmp.cstr (), tmp.len ())) {
+    if (rs->frags.size () >= dhash::num_dfrags ()) {
+      warning << myID << ": retrieve (" << rs->key
+	      << "): verify failed.\n";
+      rs->errors++;
+      fetch_frag (rs);
+    }
+    return;
+  }
+  
+  rs->timemark ();
   ptr<dhash_block> blk = 
     New refcounted<dhash_block> (tmp.cstr (), tmp.len (), rs->key.ctype);
   blk->ID = rs->key.ID;

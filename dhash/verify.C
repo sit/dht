@@ -22,7 +22,7 @@ compute_hash (const void *buf, size_t buflen)
 }
 
 bool
-verify (chordID key, dhash_ctype t, char *buf, int len) 
+verify (chordID key, dhash_ctype t, const char *buf, int len) 
 {
   switch (t) {
   case DHASH_CONTENTHASH:
@@ -43,7 +43,7 @@ verify (chordID key, dhash_ctype t, char *buf, int len)
 }
 
 bool
-verify_content_hash (chordID key, char *buf, int len) 
+verify_content_hash (chordID key, const char *buf, int len) 
 {
   char hashbytes[sha1::hashsize];
   sha1_hash (hashbytes, buf, len);
@@ -53,7 +53,7 @@ verify_content_hash (chordID key, char *buf, int len)
 }
 
 bool
-verify_keyhash (chordID key, char *buf, int len)
+verify_keyhash (chordID key, const char *buf, int len)
 {
   // extract the public key from the message
   sfs_pubkey2 pubkey;
@@ -104,7 +104,7 @@ get_block_contents (ptr<dhash_block> block, dhash_ctype t)
 
 
 ptr<dhash_block> 
-get_block_contents (char *data, unsigned int len, dhash_ctype t)
+get_block_contents (const char *data, unsigned int len, dhash_ctype t)
 {
   char *content;
   long contentlen = len;
@@ -165,7 +165,7 @@ keyhash_version (ptr<dbrec> data)
 }
 
 long
-keyhash_version (char *value, unsigned int len)
+keyhash_version (const char *value, unsigned int len)
 {
   xdrmem x (value, len, XDR_DECODE);
   sfs_pubkey2 k;
