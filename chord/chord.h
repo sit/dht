@@ -225,6 +225,7 @@ class chord : public virtual refcount {
   int nvnode;
   net_address wellknownhost;
   int myport;
+  str myname;
   chordID wellknownID;
   int ss_mode;
 
@@ -246,7 +247,7 @@ class chord : public virtual refcount {
   ptr<locationtable> locations; 
     
   chord (str _wellknownhost, int _wellknownport,
-	 int port, int max_cache, int server_selection_mode);
+	 str _myname, int port, int max_cache, int server_selection_mode);
   ptr<vnode> newvnode (cbjoin_t cb);
   void deletefingers (chordID x);
   int countrefs (chordID &x);
@@ -302,7 +303,7 @@ class chord : public virtual refcount {
 extern ptr<chord> chordnode;
 extern bool nochallenges;
 
-#endif _CHORD_H_
+#endif /* _CHORD_H_ */
 
 
 

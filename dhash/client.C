@@ -436,10 +436,12 @@ store_state::addchunk(unsigned int start, unsigned int end, void *base)
 {
   store_chunk **l, *c;
 
+#if 0
   warn << "store_state";
   for(c=have; c; c=c->next)
     warnx << " [" << (int)c->start << " " << (int)c->end << "]";
   warnx << "; add [" << (int)start << " " << (int)end << "]\n";
+#endif
 
   if(start >= end)
     return false;
@@ -496,7 +498,7 @@ dhashgateway::forget_block (chordID key)
 {
   store_state *ss = pst[key];
   if (ss) {
-    pst.remove (pst[key]);
+    pst.remove (ss);
     delete ss;
   }
 }
@@ -504,10 +506,12 @@ dhashgateway::forget_block (chordID key)
 void
 dhashgateway::cache_on_path (chordID key, route path)
 {
-  warn << clntnode->clnt_ID () << ": fetched " << key << " via";
+
+#if 0
   for (unsigned int i=0; i<path.size (); i++)
     warnx << " " << path[i];
   warnx << "\n";
+#endif
 
   if (!block_complete (key))
     return;
@@ -582,13 +586,6 @@ bigint compute_hash (const void *buf, size_t buflen)
   return n;
 }
 
-static bool verify_hash (bigint expected_n, const void *buf, size_t buflen)
-{
-  bigint actual_n = compute_hash(buf, buflen);
-  return (actual_n == expected_n);
-}
-
-
 
 
 class dhash_insert {
@@ -599,24 +596,26 @@ protected:
   bigint key;
   dhash_block block;
   cbinsert_t cb;
+  dhash_ctype auth_type;
 
   dhash_insert (ptr<aclnt> gwclnt, bigint key, const char *buf, size_t buflen,
-		cbinsert_t cb)
+		cbinsert_t cb, dhash_ctype t)
     : gwclnt (gwclnt), npending_rpcs (0), error (false), key (key),
-      block (buf, buflen), cb (cb)
+      block (buf, buflen), cb (cb), auth_type (t)
   {
     step1();
   }
 
   void step1 ()
   {
-    uint nwrite = MIN (FOO_MTU, block.len);
+    uint nwrite = MIN (FOO_MTU, block.len); 
 
     ptr<dhash_storeres> res = New refcounted<dhash_storeres>();
 
     dhash_insertarg arg;
     arg.type = DHASH_STORE;
     arg.attr.size = block.len;
+    arg.attr.ctype = auth_type;
     arg.key = key;
     arg.offset = 0;
     arg.data.setsize (nwrite);
@@ -636,6 +635,7 @@ protected:
       arg.dest = res->resok->source;
       arg.iarg.type = DHASH_STORE;
       arg.iarg.attr.size = block.len;
+      arg.iarg.attr.ctype = auth_type;
       arg.iarg.key = this->key;
       
       while (nwritten < block.len) {
@@ -667,7 +667,7 @@ protected:
       fail (dhasherr2str (res->status));
 
     if (npending_rpcs == 0 && cb)
-      (*cb) (error);
+      (*cb) (error, key);
   }
 
   void fail (str errstr)
@@ -681,9 +681,9 @@ protected:
 public:
 
   static void execute (ptr<aclnt> gwclnt, bigint key, const char *buf,
-		       size_t buflen, cbinsert_t cb)
+		       size_t buflen, cbinsert_t cb, dhash_ctype t)
   {
-    vNew refcounted<dhash_insert>(gwclnt, key, buf, buflen, cb);
+    vNew refcounted<dhash_insert>(gwclnt, key, buf, buflen, cb, t);
   }
 };
 
@@ -699,10 +699,12 @@ protected:
   cbretrieve_t cb;  
   ptr<dhash_block> block;
   bool verify;
+  dhash_ctype t;
 
-  dhash_retrieve (ptr<aclnt> gwclnt, bigint key, cbretrieve_t cb, bool verify)
+  dhash_retrieve (ptr<aclnt> gwclnt, bigint key, dhash_ctype type,
+		  cbretrieve_t cb, bool verify)
     : gwclnt (gwclnt), npending_rpcs (0), error (false), key (key), cb (cb),
-      block (NULL), verify (verify)
+      block (NULL), verify (verify), t (type)
   {
     step1();
   }
@@ -730,7 +732,8 @@ protected:
       arg.farg.key = key;
 
       // XXX get rid of the cast..
-      block = New refcounted<dhash_block> ((char *)NULL, res->resok->attr.size);
+      block = New refcounted<dhash_block> ((char *)NULL, 
+					   res->resok->attr.size);
 
       while (nread < res->resok->attr.size) {
 	ptr<dhash_res> nres = New refcounted<dhash_res> (DHASH_OK);
@@ -768,14 +771,14 @@ protected:
     if (npending_rpcs == 0) {
       if (error)
 	(*cb) (NULL);
-      else if (verify && !verify_hash (key, block->data, block->len)) {
-	bigint h = compute_hash (block->data, block->len);
-	fail (strbuf() << "bad hash: received " << h);
-	warn << "dhash_retrieve finish: " << block->len << " " 
-	     << hexdump(block->data, block->len) << "\n";
+      else if (verify && 
+	       !dhash::verify (key, t, block->data, block->len)) {
+	fail (strbuf() << "data did not verify " << key);
 	(*cb) (NULL);
-      } else 
-	(*cb) (block);
+      } else {
+	ptr<dhash_block> contents = get_block_contents (block, t);
+	(*cb) (contents);
+      }
     }
   }
 
@@ -786,11 +789,45 @@ protected:
     error = true;
   }
 
+  ptr<dhash_block> 
+  get_block_contents (ptr<dhash_block> block, dhash_ctype t) 
+  {
+    switch (t) {
+    case DHASH_CONTENTHASH:
+    case DHASH_NOAUTH:
+      return block;
+      break;
+    case DHASH_KEYHASH:
+      {
+	bigint a,b;
+
+	long contentlen;
+	xdrmem x1 (block->data, (unsigned)block->len, XDR_DECODE);
+	if (!xdr_getbigint (&x1, a) || 
+	    !xdr_getbigint (&x1, b) ||
+	    !XDR_GETLONG (&x1, &contentlen))
+	return NULL;
+	
+	char *content;
+	if (!(content = (char *)XDR_INLINE (&x1, contentlen)))
+	  return NULL;
+	
+	ptr<dhash_block> ret = New refcounted<dhash_block>
+	  (content, contentlen);
+	return ret;
+      }
+      break;
+    default:
+      return NULL;
+    }
+  }
+
 public:
 
-  static void execute (ptr<aclnt> gwclnt, bigint key, cbretrieve_t cb, bool verify)
+  static void execute (ptr<aclnt> gwclnt, bigint key, dhash_ctype t,
+		       cbretrieve_t cb, bool verify)
   {
-    vNew refcounted<dhash_retrieve>(gwclnt, key, cb, verify);
+    vNew refcounted<dhash_retrieve>(gwclnt, key, t, cb, verify);
   }
 };
 
@@ -810,25 +847,63 @@ void
 dhashclient::insert (const char *buf, size_t buflen, cbinsert_t cb)
 {
   bigint key = compute_hash (buf, buflen);
-  insert (key, buf, buflen, cb);
+  insert (key, buf, buflen, cb, DHASH_CONTENTHASH);
+}
+
+
+/* 
+ * Public Key convention:
+ * 
+ * bigint pub_key
+ * bigint sig
+ * long datalen
+ * char block_data[datalen]
+ *
+ */
+void
+dhashclient::insert (const char *buf, size_t buflen, 
+		     rabin_priv key, cbinsert_t cb)
+{
+  bigint pubkey = key.n;
+  str pk_raw = pubkey.getraw ();
+  char hashbytes[sha1::hashsize];
+  sha1_hash (hashbytes, pk_raw.cstr (), pk_raw.len ());
+  chordID ID;
+  mpz_set_rawmag_be (&ID, hashbytes, sizeof (hashbytes));  // For big endian
+
+  str msg (buf, buflen);
+  bigint sig = key.sign (msg);
+
+  xdrsuio x;
+  char *m_buf;
+  int size = buflen + 3 & ~3;
+  if (!xdr_putbigint (&x, pubkey) ||
+      !xdr_putbigint (&x, sig) ||
+      !XDR_PUTLONG (&x, (long int *)&buflen) ||
+      !(m_buf = (char *)XDR_INLINE (&x, size))) {
+    cb (true, ID);
+    return;
+  }
+  memcpy (m_buf, buf, buflen);
+  
+  int m_len = x.uio ()->resid ();
+  const char *m_dat = suio_flatten (x.uio ());
+  insert (ID, m_dat, m_len, cb, DHASH_KEYHASH);
+  delete m_dat;
 }
 
 void
-dhashclient::insert (bigint key, const char *buf, size_t buflen, cbinsert_t cb)
+dhashclient::insert (bigint key, const char *buf, 
+		     size_t buflen, cbinsert_t cb,
+		     dhash_ctype t)
 {
-  dhash_insert::execute (gwclnt, key, buf, buflen, cb);
+  dhash_insert::execute (gwclnt, key, buf, buflen, cb, t);
 }
 
 void
-dhashclient::retrieve_noverify (bigint key, cbretrieve_t cb)
+dhashclient::retrieve (bigint key, dhash_ctype type, cbretrieve_t cb)
 {
-  dhash_retrieve::execute (gwclnt, key, cb, false);
-}
-
-void
-dhashclient::retrieve (bigint key, cbretrieve_t cb)
-{
-  dhash_retrieve::execute (gwclnt, key, cb, true);
+  dhash_retrieve::execute (gwclnt, key, type, cb, true);
 }
 
 bool

@@ -1,4 +1,4 @@
-/* $Id: sfsrodb_core.C,v 1.17 2002/01/07 22:30:25 cates Exp $ */
+/* $Id: sfsrodb_core.C,v 1.18 2002/01/10 17:11:32 fdabek Exp $ */
 
 /*
  *
@@ -56,11 +56,11 @@ create_sfsrofh (sfs_hash *fh, char *buf, size_t buflen)
 
 
 static void
-sfsrodb_put_cb (bool failed)
+sfsrodb_put_cb (bool failed, chordID key)
 {
   out--;
   if (failed)
-    fatal << "Could not store block";
+    fatal << "Could not store block " << key << "\n";
 }
 
 void

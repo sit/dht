@@ -179,9 +179,16 @@ main (int argc, char **argv)
   int nreplica = 0;
   str db_name = "/var/tmp/db";
   p2psocket = "/tmp/chord-sock";
+  str myname = my_addr ();
 
-  while ((ch = getopt (argc, argv, "S:cd:s:v:j:p:B:n:")) != -1)
+  while ((ch = getopt (argc, argv, "S:cd:s:v:j:p:B:n:l:")) != -1)
     switch (ch) {
+    case 'l':
+      if (inet_addr (optarg) == INADDR_NONE) {
+	warn << "must specify bind address in dotted decimal form\n";
+	exit (1);
+      }
+      myname = optarg;
     case 'n':
       nreplica = atoi (optarg);
       break;
@@ -236,7 +243,8 @@ main (int argc, char **argv)
   if (wellknownport == 0) usage ();
 
   max_loccache = max_loccache * (vnode + 1);
-  chordnode = New refcounted<chord> (wellknownhost, wellknownport, 
+  chordnode = New refcounted<chord> (wellknownhost, wellknownport,
+				     myname,
 				     myport,
 				     max_loccache,
 				     ss_mode);

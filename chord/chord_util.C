@@ -253,11 +253,11 @@ my_addr () {
 
 // XXX for testing purposes include port---in real life we shouldn't include it
 chordID
-init_chordID (int index, int port)
+init_chordID (int index, str addr, int port)
 {
   chordID ID;
   // XXX we probably should marshall this!
-  str ids = my_addr ();
+  str ids = addr;
   ids = ids << "." << port << "." << index;
   char id[sha1::hashsize];
   sha1_hash (id, ids, ids.len());

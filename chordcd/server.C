@@ -989,12 +989,11 @@ chord_server::fetch_data (bool pfonly, chordID ID, cbdata_t cb, bool verify)
     l->insert_head (w);
 
     if (verify)
-      dhash.retrieve (ID, wrap (this, &chord_server::fetch_data_cb, ID, cb));
-    else
-      dhash.retrieve_noverify (ID, wrap (this, &chord_server::fetch_data_cb, ID, cb));
+      dhash.retrieve (ID, DHASH_CONTENTHASH,
+		      wrap (this, &chord_server::fetch_data_cb, ID, cb));
+
   }
 }
-
 
 void
 chord_server::fetch_data_cb (chordID ID, cbdata_t cb, ptr<dhash_block> blk)

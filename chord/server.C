@@ -271,12 +271,8 @@ vnode::get_fingers_cb (chordID x, chord_getfingersres *res,  clnt_stat err)
     net_address dr;
     warnx << "get_fingers_cb: RPC error " << res->status << "\n";
   } else {
-    //    warnx << "get_fingers_cb: " << res->resok->fingers.size () << " fingers\n";
-    for (unsigned i = 0; i < res->resok->fingers.size (); i++) {
-      // warnx << "get_fingers_cb: " << res->resok->fingers[i].x << "\n";
+    for (unsigned i = 0; i < res->resok->fingers.size (); i++) 
       updatefingers (res->resok->fingers[i].x, res->resok->fingers[i].r);
-    }
-    //    print ();
   }
   delete res;
 }

@@ -29,8 +29,9 @@
 #include <chord_util.h>
 
 chord::chord (str _wellknownhost, int _wellknownport, 
-	      int port, int max_cache, 
+	      str _myname, int port, int max_cache, 
 	      int server_selection_mode) :
+  myname (_myname), 
   ss_mode (server_selection_mode % 10),
   active (NULL)
 {
@@ -39,7 +40,7 @@ chord::chord (str _wellknownhost, int _wellknownport,
   wellknownhost.port = _wellknownport ? _wellknownport : myport;
   wellknownID  = make_chordID (wellknownhost.hostname, wellknownhost.port);
 
-  warnx << "chord: running on " << my_addr () << ":" << myport << "\n";
+  warnx << "chord: running on " << myname << ":" << myport << "\n";
   locations = New refcounted<locationtable> (mkref (this), max_cache);
   locations->insert (wellknownID, wellknownhost.hostname, wellknownhost.port);
   nvnode = 0;
@@ -112,9 +113,9 @@ chord::startchord (int myp)
 ptr<vnode>
 chord::newvnode (cbjoin_t cb)
 {
-  chordID newID = init_chordID (nvnode, myport);
+  chordID newID = init_chordID (nvnode, myname, myport);
   if (newID != wellknownID)
-    locations->insert (newID, my_addr (), myport);
+    locations->insert (newID, myname, myport);
   ptr<vnode> vnodep = New refcounted<vnode> (locations, mkref (this), newID, 
 					     nvnode, ss_mode);
   if (!active) active = vnodep;

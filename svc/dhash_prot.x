@@ -20,7 +20,8 @@ enum dhash_stat {
   DHASH_CONTINUE = 13,
   DHASH_INVALIDVNODE = 14,
   DHASH_RFETCHDONE = 15,
-  DHASH_RFETCHFORWARDED = 16
+  DHASH_RFETCHFORWARDED = 16,
+  DHASH_STORE_NOVERIFY = 17
 };
 
 enum store_status {
@@ -33,6 +34,7 @@ enum dhash_ctype {
   DHASH_CONTENTHASH = 0,
   DHASH_KEYHASH = 1,
   DHASH_DNSSEC = 2,
+  DHASH_NOAUTH = 3
 };
 
 struct dhash_blockattr {

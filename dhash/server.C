@@ -660,6 +660,7 @@ dhash::replicate_key (chordID key, cbstat_t cb)
       replicate_key (key, cb);
       return;
     }
+
     transfer_key (replicas[0], key, DHASH_REPLICA, 
 		  wrap (this, &dhash::replicate_key_cb, 1, cb, key));
   }
@@ -680,6 +681,7 @@ dhash::replicate_key_cb (unsigned int replicas_done, cbstat_t cb, chordID key,
       replicate_key (key, cb);
       return;
     }
+
     transfer_key (replicas[replicas_done], key, DHASH_REPLICA,
 		  wrap (this, &dhash::replicate_key_cb, 
 			replicas_done + 1, cb, key));
@@ -869,6 +871,7 @@ dhash::fetch_cb (cbvalue cb, ptr<dbrec> ret)
     (*cb)(ret, DHASH_OK);
 }
 
+
 void 
 dhash::store (dhash_insertarg *arg, cbstore cb)
 {
@@ -879,7 +882,8 @@ dhash::store (dhash_insertarg *arg, cbstore cb)
     pst.insert(ss);
   }
 
-  if (!ss->addchunk(arg->offset, arg->offset+arg->data.size (), arg->data.base ())) {
+  if (!ss->addchunk(arg->offset, arg->offset+arg->data.size (), 
+		    arg->data.base ())) {
     cb (DHASH_ERR);
     return;
   }
@@ -891,6 +895,21 @@ dhash::store (dhash_insertarg *arg, cbstore cb)
       d = New refcounted<dbrec>(arg->data.base (), arg->data.size ());
     else 
       d = New refcounted<dbrec>(ss->buf, ss->size);
+
+    if (!dhash::verify (arg->key, arg->attr.ctype, (char *)d->value, d->len) ||
+	((arg->attr.ctype == DHASH_NOAUTH) 
+	 && key_status (arg->key) != DHASH_NOTPRESENT)) {
+
+      warn << "verification error " << arg->key << " " << arg->attr.ctype << "\n";
+      cb (DHASH_STORE_NOVERIFY);
+      if (ss) {
+	pst.remove (ss);
+	delete ss;
+      }
+      return;
+    }
+
+
     warnt("DHASH: STORE_before_db");
     dhash_stat stat;
     chordID id = arg->key;
@@ -923,14 +942,15 @@ dhash::store_cb(store_status type, chordID id, cbstore cb, int stat)
 
   if (stat != 0) 
     (*cb)(DHASH_STOREERR);
-  else if (type == DHASH_STORE)
-    replicate_key (id, wrap (this, &dhash::store_repl_cb, cb));
   else	   
     (*cb)(DHASH_OK);
-  
+
+  if (type == DHASH_STORE)
+    replicate_key (id, wrap (this, &dhash::store_repl_cb, cb));
+
   store_state *ss = pst[id];
   if (ss) {
-    pst.remove (pst[id]);
+    pst.remove (ss);
     delete ss;
   }
 }
@@ -938,8 +958,8 @@ dhash::store_cb(store_status type, chordID id, cbstore cb, int stat)
 void
 dhash::store_repl_cb (cbstore cb, dhash_stat err) 
 {
-  if (err) cb (err);
-  else cb (DHASH_OK);
+  /*  if (err) cb (err);
+      else cb (DHASH_OK); */
 }
 
 

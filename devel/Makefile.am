@@ -1,9 +1,9 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.4 2002/01/07 23:03:14 cates Exp $
+# $Id: Makefile.am,v 1.5 2002/01/10 17:11:30 fdabek Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
-noinst_PROGRAMS =  dbm 
+noinst_PROGRAMS =  dbm typetest
 
 #noinst_HEADERS = trace_papers.h
 
@@ -11,6 +11,9 @@ noinst_PROGRAMS =  dbm
 #playtrace_single_SOURCES = playtrace_single.C
 dbm_SOURCES = dhash_benchmark.C
 dbm_LDADD = ../dhash/libdhash.a ../chord/libchord.a ../svc/libsvc.la $(LDADD)
+
+typetest_SOURCES = test_types.C
+typetest_LDADD = ../dhash/libdhash.a ../chord/libchord.a ../svc/libsvc.la $(LDADD)
 
 EXTRA_DIST = .cvsignore
 CLEANFILES = core *.core *~ *.rpo

@@ -1,4 +1,4 @@
-/* $Id: sfsrodb.C,v 1.17 2002/01/07 22:30:24 cates Exp $ */
+/* $Id: sfsrodb.C,v 1.18 2002/01/10 17:11:32 fdabek Exp $ */
 
 /*
  * Copyright (C) 1999 Kevin Fu (fubob@mit.edu)
@@ -535,8 +535,8 @@ store_directory (sfsro_inode *inode, sfs_hash *fh,
 static int
 compare_name (const void *file1, const void *file2)
 {
-  return (strcmp (*(static_cast < char **>(file1)),
-		  *(static_cast < char **>(file2))));
+  return (strcmp (*(static_cast < char * const*>(file1)),
+		  *(static_cast < char * const*>(file2))));
 }
 
 

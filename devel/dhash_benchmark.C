@@ -68,7 +68,7 @@ prepare_test_data (int num)
 
 
 void
-store_cb (bool error)
+store_cb (bool error, chordID key)
 {
   out--;
 
@@ -124,7 +124,7 @@ fetch (dhashclient &dhash, int num)
     struct timeval start;
     gettimeofday (&start, NULL);
 
-    dhash.retrieve (IDs[i], wrap (fetch_cb, i, start));
+    dhash.retrieve (IDs[i], DHASH_CONTENTHASH, wrap (fetch_cb, i, start));
     while (out > MAX_OPS_OUT)
       acheck ();
   }
