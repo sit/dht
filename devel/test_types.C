@@ -41,7 +41,11 @@ void store_cb_append_second (dhashclient dhash, dhash_stat status,
 			     ptr<insert_info> i);
 void fetch_cb_append_second (dhashclient dhash, dhash_stat stat, ptr<dhash_block> blk, vec<chordID> path);
 
-void fetch_cb (dhash_stat stat, ptr<dhash_block> blk, vec<chordID> path);
+void fetch_cb (dhashclient dhash, int btype, dhash_stat stat, 
+	       ptr<dhash_block> blk, vec<chordID> path);
+void nonexistent_fetch_cb (dhash_stat stat, ptr<dhash_block> blk, 
+			   vec<chordID> path);
+dhash_ctype magic2ctype(int btype);
 void store_cb_ch2 (dhashclient dhash, chordID pred, 
 		   dhash_stat status, ptr<insert_info> i);
 char *data_one = "This is some test data";
@@ -79,7 +83,9 @@ store_cb_ch (dhashclient dhash, dhash_stat status, ptr<insert_info> i)
     options = NULL;
   }
 
-  dhash.retrieve (i->key, DHASH_CONTENTHASH, wrap (&fetch_cb), options);
+  dhash.retrieve (i->key, DHASH_CONTENTHASH, 
+		  wrap (&fetch_cb, dhash, CONTENT_HASH), 
+	          options);
 }
 
 
@@ -102,7 +108,9 @@ store_cb_ch2 (dhashclient dhash, chordID pred,
   options->flags = DHASHCLIENT_GUESS_SUPPLIED;
   warn << "2 pred " << pred << "\n";
   options->guess = pred;
-  dhash.retrieve (i->key, DHASH_CONTENTHASH, wrap (&fetch_cb), options);
+  dhash.retrieve (i->key, DHASH_CONTENTHASH, 
+	          wrap (&fetch_cb, dhash, CONTENT_HASH), 
+	          options);
 }
 
 void
@@ -113,7 +121,8 @@ store_cb_pk (dhashclient dhash, dhash_stat status, ptr<insert_info> i)
   else
     warn << "pk store successful\n";
 
-  dhash.retrieve (i->key, DHASH_KEYHASH, wrap (&fetch_cb));
+  dhash.retrieve (i->key, DHASH_KEYHASH, 
+		  wrap (&fetch_cb, dhash, PUB_KEY));
 }
 
 void
@@ -124,7 +133,8 @@ store_cb_noauth (dhashclient dhash, dhash_stat status, ptr<insert_info> i)
   else
     warn << "noauth store successful " << i->key << "\n";
 
-  dhash.retrieve (i->key, DHASH_NOAUTH, wrap (&fetch_cb));
+  dhash.retrieve (i->key, DHASH_NOAUTH, 
+	          wrap (&fetch_cb, dhash, NOAUTH));
 }
 
 void
@@ -169,7 +179,8 @@ fetch_cb_append_second (dhashclient dhash, dhash_stat stat, ptr<dhash_block> blk
 }
 
 void
-fetch_cb (dhash_stat stat, ptr<dhash_block> blk, vec<chordID> path)
+fetch_cb (dhashclient dhash, int btype, dhash_stat stat, 
+	  ptr<dhash_block> blk, vec<chordID> path)
 {
 
   if (!blk) {
@@ -183,10 +194,39 @@ fetch_cb (dhash_stat stat, ptr<dhash_block> blk, vec<chordID> path)
       warnx << path[i] << " ";
     warnx << "\n";
   }
-  
-  exit (0);
+
+  // assumption is that no block has ChordID 0.
+  bigint n = 0;
+
+  // end the test sooner rather than later
+  ptr<option_block> ob = New refcounted<option_block>;
+  ob->flags = DHASHCLIENT_NO_RETRY_ON_LOOKUP;
+
+  dhash.retrieve (n, magic2ctype(btype), wrap (&nonexistent_fetch_cb), ob);
 }
 
+void
+nonexistent_fetch_cb (dhash_stat stat, ptr<dhash_block> blk, vec<chordID> path)
+{
+    if (blk) 
+	warn << "Error (unless you have a block with chordID = 0)\n";
+    else
+	warn << "Successfully returned blk == NULL on non-existent block\n";
+
+    exit(0);
+}
+
+dhash_ctype
+magic2ctype(int btype)
+{
+    if (btype == CONTENT_HASH) return DHASH_CONTENTHASH;
+    if (btype == PUB_KEY     ) return DHASH_KEYHASH;
+    if (btype == APPEND      ) return DHASH_APPEND;
+    if (btype == NOAUTH      ) return DHASH_NOAUTH;
+
+    assert(false);
+    return DHASH_UNKNOWN;
+}
 
 void
 usage (char *progname) 
@@ -251,6 +291,6 @@ main (int argc, char **argv)
     usage (argv[0]);
     break;
   }
-	  
+	
   amain ();
 }
