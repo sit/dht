@@ -1,11 +1,15 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.12 2004/01/16 13:43:22 sit Exp $
+# $Id: Makefile.am,v 1.13 2004/11/18 11:51:13 sit Exp $
 
 $(PROGRAMS): $(LDEPS) libsfsrodb.a
 
 noinst_LIBRARIES = libsfsrodb.a
 
 bin_PROGRAMS = sfsrodb 
+
+TESTS = test_dbfe
+
+check_PROGRAMS = $(TESTS)
 
 noinst_HEADERS = \
 sfsrodb.h sfsrodb_core.h dbfe.h
@@ -22,6 +26,9 @@ sfsrodb.C sfsrodb_core.C
 sfsrodb_LDADD = ../dhash/libdhashclient.a ../svc/libsvc.la $(DBLIB) $(LDADD)
 
 #test_callback_LDADD = $(DBLIB) $(LDADD)
+
+test_dbfe_SOURCES = test_dbfe.C
+test_dbfe_LDADD = libsfsrodb.a $(DBLIB) $(LDADD)
 
 EXTRA_DIST = .cvsignore
 CLEANFILES = core *.core *~ *.rpo
