@@ -61,7 +61,7 @@ dhashclient::dispatch (svccb *sbp)
       dhash_transfer_arg *targ = sbp->template getarg<dhash_transfer_arg>();
       ptr<dhash_fetch_arg> farg = 
 	New refcounted<dhash_fetch_arg>(targ->farg);
-      dhash_res *res = New dhash_res ();
+      dhash_res *res = New dhash_res (DHASH_OK);
       clntnode->doRPC (targ->source, dhash_program_1, DHASHPROC_FETCH, 
 		       farg, res, 
 		       wrap (this, &dhashclient::transfer_cb,
@@ -74,7 +74,7 @@ dhashclient::dispatch (svccb *sbp)
       dhash_send_arg *sarg = sbp->template getarg<dhash_send_arg>();
       ptr<dhash_insertarg> iarg = 
 	New refcounted<dhash_insertarg> (sarg->iarg);
-      dhash_storeres *res = New dhash_storeres ();
+      dhash_storeres *res = New dhash_storeres (DHASH_OK);
       clntnode->doRPC (sarg->dest, dhash_program_1, DHASHPROC_STORE,
 		       iarg, res,
 		       wrap (this, &dhashclient::send_cb,
@@ -111,7 +111,7 @@ dhashclient::insert_findsucc_cb(svccb *sbp, ptr<dhash_insertarg> item,
 
     warnt("DHASH: insert_after_dofindsucc|issue_STORE");
 
-    dhash_storeres *res = New dhash_storeres();
+    dhash_storeres *res = New dhash_storeres(DHASH_OK);
     clntnode->doRPC(succ, dhash_program_1, DHASHPROC_STORE, item, res,
 		wrap(this, &dhashclient::insert_store_cb, sbp, res, item, succ));
     
@@ -127,7 +127,7 @@ dhashclient::insert_store_cb(svccb *sbp, dhash_storeres *res,
 {
   warnt("DHASH: insert_after_STORE");
   if (res->status == DHASH_RETRY) {
-    dhash_storeres *nres = New dhash_storeres();
+    dhash_storeres *nres = New dhash_storeres(DHASH_OK);
     clntnode->locations->cacheloc (res->pred->p.x, res->pred->p.r);
     clntnode->doRPC(res->pred->p.x, dhash_program_1, 
 		    DHASHPROC_STORE, item, nres,
@@ -186,7 +186,7 @@ dhashclient::lookup_iter_cb (svccb *sbp,
     if (path.size () > 0) {
       chordID plast = path.back ();
       clntnode->alert (plast, last);
-      dhash_fetchiter_res *nres = New dhash_fetchiter_res ();
+      dhash_fetchiter_res *nres = New dhash_fetchiter_res (DHASH_CONTINUE);
       /* assumes an in-order RPC transport, otherwise retry
 	 might reach prev before alert can update tables*/
       clntnode->doRPC (plast, dhash_program_1, DHASHPROC_FETCHITER, 
@@ -236,7 +236,7 @@ dhashclient::lookup_iter_cb (svccb *sbp,
       warn << "Case IV\n";
       /* CASE IV */
       clntnode->locations->cacheloc (next, res->cont_res->next.r);
-      dhash_fetchiter_res *nres = New dhash_fetchiter_res;
+      dhash_fetchiter_res *nres = New dhash_fetchiter_res (DHASH_CONTINUE);
       path.push_back (next);
       assert (path.size () < 1000);
       clntnode->doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, 
@@ -258,7 +258,7 @@ dhashclient::query_successors (vec<chord_node> succ,
   chord_node first_node = succ.pop_front ();
   clntnode->locations->cacheloc (first_node.x,
 				 first_node.r);
-  dhash_res *fres = New dhash_res ();
+  dhash_res *fres = New dhash_res (DHASH_OK);
   clntnode->doRPC (first_node.x, dhash_program_1, DHASHPROC_FETCH,
 		   rarg, fres,
 		   wrap (this, &dhashclient::query_successors_fetch_cb,
@@ -286,7 +286,7 @@ dhashclient::query_successors_fetch_cb (vec<chord_node> succ,
     clntnode->locations->cacheloc (next_succ.x,
 				   next_succ.r);
 
-    dhash_res *nfres = New dhash_res ();
+    dhash_res *nfres = New dhash_res (DHASH_OK);
     clntnode->doRPC (next_succ.x, dhash_program_1, DHASHPROC_FETCH,
 		     rarg, nfres,
 		     wrap (this, &dhashclient::query_successors_fetch_cb,
@@ -314,7 +314,7 @@ dhashclient::send_cb (svccb *sbp, dhash_storeres *res,
     dhash_send_arg *sarg = sbp->template getarg<dhash_send_arg>();
     ptr<dhash_insertarg> iarg = 
       New refcounted<dhash_insertarg> (sarg->iarg);
-    dhash_storeres *nres = New dhash_storeres ();
+    dhash_storeres *nres = New dhash_storeres (DHASH_OK);
     clntnode->locations->cacheloc (nres->pred->p.x, nres->pred->p.r);
     clntnode->doRPC (nres->pred->p.x, dhash_program_1, DHASHPROC_FETCH,
 		     iarg, nres, wrap (this, &dhashclient::send_cb,
@@ -386,7 +386,7 @@ dhashclient::send_block (chordID key, chordID to, store_status stat)
   unsigned int mtu = 8192;
   unsigned int off = 0;
   do {
-    dhash_storeres *res = New dhash_storeres ();
+    dhash_storeres *res = New dhash_storeres (DHASH_OK);
     ptr<dhash_insertarg> i_arg = New refcounted<dhash_insertarg> ();
     i_arg->key = key;
     i_arg->offset = off;

@@ -224,13 +224,14 @@ dhash::fetchiter_svc_cb (long xid, dhash_fetch_arg *arg,
   dhash_reply (xid, DHASHPROC_FETCHITER, res);
   delete res;
 }
+
 void
 dhash::fetchsvc_cb (long xid,
 		    dhash_fetch_arg *arg, 
 		    ptr<dbrec> val, 
 		    dhash_stat err)
 {
-  dhash_res *res = New dhash_res ();
+  dhash_res *res = New dhash_res (DHASH_OK);
 
   if (err == DHASH_OK) {
     res->set_status (DHASH_OK);
@@ -245,14 +246,8 @@ dhash::fetchsvc_cb (long xid,
     res->resok->attr.size = val->len;
     res->resok->offset = arg->start;
     memcpy (res->resok->res.base (), (char *)val->value + arg->start, n);
-  } else if (responsible (arg->key)) {
-    res->set_status (DHASH_NOENT);
   } else {
-    warnx << "partial_fetch: retry\n";
-    res->set_status (DHASH_RETRY);
-    chordID p = host_node->my_pred ();
-    res->pred->p.x = p;
-    res->pred->p.r = host_node->chordnode->locations->getaddress (p);
+    res->set_status (DHASH_NOENT);
   }
 
   warnt("DHASH: FETCH_replying");
@@ -543,7 +538,7 @@ dhash::transfer_store_cb (callback<void, dhash_stat>::ref cb,
 void
 dhash::get_key (chordID source, chordID key, cbstat_t cb) 
 {
-  dhash_res *res = New dhash_res ();
+  dhash_res *res = New dhash_res (DHASH_OK);
   ptr<dhash_fetch_arg> arg = New refcounted<dhash_fetch_arg>;
   arg->key = key; 
   arg->len = MTU;  
@@ -577,7 +572,7 @@ dhash::get_key_initread_cb (cbstat_t cb, dhash_res *res, chordID source,
       arg->len = (offset + MTU < res->resok->attr.size) ? 
 	MTU : res->resok->attr.size - offset;
       arg->start = offset;
-      dhash_res *new_res = New dhash_res();
+      dhash_res *new_res = New dhash_res(DHASH_OK);
       host_node->chordnode->doRPC(source, dhash_program_1, DHASHPROC_FETCH, 
 				  arg, new_res,
 				  wrap(this, 
@@ -900,5 +895,4 @@ dhash::print_stats ()
   warnx << "  " << bytes_stored << " total bytes held\n";
     
 }
-
 

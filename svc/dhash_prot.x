@@ -78,8 +78,6 @@ struct dhash_getkeys_arg {
 union dhash_res switch (dhash_stat status) {
  case DHASH_OK:
    dhash_resok resok;
- case DHASH_RETRY:
-   dhash_pred pred;
 default:
    void;
 };
