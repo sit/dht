@@ -8,6 +8,9 @@
 #include "dhash_common.h"
 
 
+vec<merkle_hash> database_get_keys (dbfe *db, u_int depth, 
+				    const merkle_hash &prefix);
+
 static inline str err2str (merkle_stat status)
 {
   return rpc_print (strbuf (), status, 0, NULL, NULL);
@@ -95,32 +98,6 @@ dbrec2id (ptr<dbrec> r)
 }
 
 
-static inline vec<merkle_hash>
-database_get_keys (dbfe *db, u_int depth, const merkle_hash &prefix)
-{
-#if 0
-  warn << " >>database_get_keys " << depth << "/" << prefix << "\n";
-#endif
-
-  vec<merkle_hash> ret;
-  ptr<dbEnumeration> iter = db->enumerate ();
-  ptr<dbPair> entry = iter->nextElement (todbrec(prefix));
-
-  while (entry) {
-    merkle_hash key = to_merkle_hash (entry->key);
-    if (!prefix_match (depth, key, prefix))
-      break;
-    ret.push_back (key);
-    entry = iter->nextElement ();
-  }
-
-#if 0
-  warn << " <<database_get_keys, returning " << ret.size () << "\n";
-#endif
-  return ret;
-}
-
-
 static inline int
 database_remove (dbfe *db, block *b)
 {
@@ -131,13 +108,7 @@ database_remove (dbfe *db, block *b)
 static inline int
 database_insert (dbfe *db, block *b)
 {
-#if 0
-  warn << " >>database_insert " << b->key << "\n";
-#endif
   int ret = db->insert (todbrec (b->key), b->data);
-#if 0
-  warn << " <<database_insert\n";
-#endif
   return ret;
 }
 
@@ -145,97 +116,9 @@ database_insert (dbfe *db, block *b)
 static inline ptr<dbrec>
 database_lookup (dbfe *db, const merkle_hash &key)
 {
-#if 0
-  warn << " >>database_lookup " << key << "\n";
-#endif
   ptr<dbrec> ret = db->lookup (todbrec (key));
-#if 0
-  warn << " <<database_lookup\n";
-#endif
   return ret;
 }
-
-
-static inline ptr<dbEnumeration>
-database_enumerate (dbfe *db)
-{
-  // XXX: DEAD CODE?
-
-  assert (0); // WHY??
-  return db->enumerate();
-}
-
-static inline ptr<dbPair>
-nextElement (ptr<dbEnumeration> iterator)
-{
-  // XXX: DEAD CODE?
-
-  assert (0); // want to return pair<merkle_hash, ptr<dbrec>> ?
-  return iterator->nextElement ();
-}
-
-static inline ptr<dbPair>
-nextElement (ptr<dbEnumeration> iterator, const merkle_hash &startkey)
-{
-  // XXX: DEAD CODE?
-
-
-  assert (0); // want to return pair<merkle_hash, ptr<dbrec>> ?
-  return iterator->nextElement (todbrec (startkey));
-}
-
-
-
-// ------------------------------------------------------------------------------
-// database iterators
-
-class db_iterator {
-public:
-  virtual bool more () = 0;
-  virtual merkle_hash next () = 0;
-  virtual merkle_hash peek () = 0;
-};
-
-
-
-class db_range_iterator : public db_iterator {
-  // iterates over a range of database keys   
-private:
-  dbfe *db;
-  ptr<dbEnumeration> iter;
-  ptr<dbPair> entry;
-  u_int depth;
-  merkle_hash prefix;
-
-protected:
-  bool match ();
-
-public:
-  virtual bool more ();
-  virtual merkle_hash peek ();
-  virtual merkle_hash next ();
-  db_range_iterator (dbfe *db, u_int depth, merkle_hash prefix);
-  virtual ~db_range_iterator ();
-};
-
-
-class db_range_xiterator : public db_range_iterator {
-  // iterates over a range of database keys, keys in the exclusion set
-  // (i.e., 'xset') are skipped
-
-private:
-  qhash<merkle_hash, bool> *xset;
-  bigint rngmin;
-  bigint rngmax;
-
-  void advance ();
-
-public:
-  virtual merkle_hash next ();
-  db_range_xiterator (dbfe *db, u_int depth, merkle_hash prefix,
-		      qhash<merkle_hash, bool> *xset, bigint rngmin, bigint rngmax);
-  virtual ~db_range_xiterator ();
-};
 
 
 

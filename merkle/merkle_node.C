@@ -57,7 +57,6 @@ merkle_node::leaf2internal ()
 void
 merkle_node::dump (u_int depth) const
 {
-#if 1
   warnx << "[NODE " 
 	<< strbuf ("0x%x", (u_int)this)
 	<< ", entry " << strbuf ("0x%x", (u_int)entry)
@@ -65,7 +64,6 @@ merkle_node::dump (u_int depth) const
 	<< " hash:" << hash
 	<< ">\n";
   err_flush ();
-#endif
   
   const merkle_node *n = this;
   if (!n->isleaf ()) {
@@ -91,6 +89,9 @@ merkle_node::initialize (u_int64_t _count)
 {
   bzero (this, sizeof (*this));
   this->count = _count; 
+  warnx << "[init NODE " 
+	<< strbuf ("0x%x", (u_int)this) 
+	<< count << "\n";
 }
 
 
@@ -108,11 +109,12 @@ merkle_node::check_invariants (u_int depth, merkle_hash prefix, dbfe *db)
   sha1ctx sc;
   merkle_hash mhash = 0;
   u_int64_t _count = 0;
+
   if (isleaf ()) {
     assert (count <= 64);
 
     vec<merkle_hash> keys = database_get_keys (db, depth, prefix);
-    for (u_int i = 0; i < keys.size (); i++, _count++)
+    for (u_int i = 0; i < keys.size (); i++, _count++) 
       sc.update (keys[i].bytes, keys[i].size);
   } else {
     assert (count > 64);
@@ -125,9 +127,11 @@ merkle_node::check_invariants (u_int depth, merkle_hash prefix, dbfe *db)
     }
   }
   
-  //warn << "[" << strbuf ("0x%x", (u_int)this) << "] cnt " << count << " _cnt " << _count << "\n";
-
-  assert (count == _count);
+  if (count != _count) {
+    warn << "depth: " << depth << " prefix: " << prefix << "\n";
+    dump (depth);
+    fatal << "[" << strbuf ("0x%x", (u_int)this) << "] cnt " << count << " _cnt " << _count << " is leaf: " << isleaf () << "\n";
+  }
   if (count == 0)
     assert (hash == 0);
   else {

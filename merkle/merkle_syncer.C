@@ -358,7 +358,8 @@ format_rpcnode (merkle_tree *ltree, u_int depth, const merkle_hash &prefix,
     if (keys.size () != rpcnode->count) {
       warn << "\n\n\n----------------------------------------------------------\n";
       warn << "BUG BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG BUG\n";
-      warn << "Send this output to cates@mit.edu\n";
+      warn << "Send this output to chord@pdos.lcs.mit.edu\n";
+      warn << "BUG: " << depth << " " << prefix << "\n";
       warn << "BUG: " << keys.size () << " != " << rpcnode->count << "\n";
       ltree->check_invariants ();
       warn << "BUG BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG BUG\n";

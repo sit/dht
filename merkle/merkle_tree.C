@@ -1,6 +1,20 @@
 #include "merkle_tree.h"
 
-merkle_tree::merkle_tree (dbfe *realdb)
+void
+dump_db  (dbfe *db)
+{
+  warn << "db_dump\n";
+  ptr <dbEnumeration> it = db->enumerate ();
+  ptr<dbPair> entry = it->firstElement ();
+  while (entry) {
+    merkle_hash key = to_merkle_hash (entry->key);
+    warn << "db_dump: " << key << "\n";
+    entry = it->nextElement ();
+  }
+  it = NULL;
+}
+
+merkle_tree::merkle_tree (ptr<dbfe> realdb)
 {
   // create a temporary in-memory database
   ptr<dbfe> fakedb = New refcounted<dbfe> ();
@@ -83,7 +97,8 @@ merkle_tree::count_blocks (u_int depth, const merkle_hash &key,
 
 
 void
-merkle_tree::leaf2internal (u_int depth, const merkle_hash &key, merkle_node *n) 
+merkle_tree::leaf2internal (u_int depth, const merkle_hash &key, 
+			    merkle_node *n) 
 {
   assert (n->isleaf ());
   array<u_int64_t, 64> nblocks;
@@ -95,7 +110,7 @@ merkle_tree::leaf2internal (u_int depth, const merkle_hash &key, merkle_node *n)
   
   u_int xmax = (depth == merkle_hash::NUM_SLOTS) ? 16 : 64;
   for (u_int i = 0; i < xmax; i++) {
-    ///warn << "leaf2internal [" << i << "] = " << nblocks[i] << "\n";
+    warn << "leaf2internal [" << i << "] = " << nblocks[i] << "\n";
     
     merkle_node *child = n->child (i);
     child->initialize (nblocks[i]);
@@ -129,6 +144,7 @@ void
 merkle_tree::insert (u_int depth, block *b, merkle_node *n)
 {
   
+    
   if (n->isleaf () && n->leaf_is_full ())
     leaf2internal (depth, b->key, n);
   
@@ -138,13 +154,11 @@ merkle_tree::insert (u_int depth, block *b, merkle_node *n)
     assert (database_lookup (db, b->key));
   } else {
     u_int32_t branch = b->key.read_slot (depth);
-    ///warn << "depth " << depth << ", branch " << branch << "\n";
     insert (depth+1, b, n->child (branch));
   }
   
   n->count += 1;
   rehash (depth, b->key, n);
-  ///warn << "IH: " << n->hash << "\n";
 }
 
 
@@ -154,7 +168,7 @@ merkle_tree::remove (block *b)
 {
   // assert block must exist..
   if (!database_lookup (db, b->key)) {
-    warn << "merkle_tree::remove: key does not exists " << b->key << "\n";
+    fatal << "merkle_tree::remove: key does not exists " << b->key << "\n";
     return;
   }
 
@@ -164,14 +178,11 @@ merkle_tree::remove (block *b)
 void
 merkle_tree::insert (block *b)
 {
-  //warn <<  "\n\n\n **** merkle_tree::insert: " << b->key << "\n";
 
   if (database_lookup (db, b->key))
     fatal << "merkle_tree::insert: key already exists " << b->key << "\n";
 
-  //check_invariants ();
   insert (0, b, &root);
-  //check_invariants ();
 }
 
 

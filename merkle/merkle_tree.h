@@ -29,16 +29,17 @@ private:
   void leaf2internal (u_int depth, const merkle_hash &key, merkle_node *n);
   void remove (u_int depth, block *b, merkle_node *n);
   void insert (u_int depth, block *b, merkle_node *n);
-  merkle_node *lookup (u_int *depth, u_int max_depth, const merkle_hash &key, merkle_node *n);
+  merkle_node *lookup (u_int *depth, u_int max_depth, 
+		       const merkle_hash &key, merkle_node *n);
 
 public:
   enum { max_depth = merkle_hash::NUM_SLOTS }; // XXX off by one? or two?
-  dbfe *db;     // public for testing only
+  ptr<dbfe> db;     // public for testing only
   merkle_node root; // ditto
   merkle_tree_stats stats;
 
 
-  merkle_tree (dbfe *db); 
+  merkle_tree (ptr<dbfe> db); 
   void remove (block *b);
   void insert (block *b);
   merkle_node *lookup_exact (u_int depth, const merkle_hash &key);
