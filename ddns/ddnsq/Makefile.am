@@ -9,9 +9,10 @@ noinst_HEADERS = ddns.h
 with_chord = ${top_builddir}
 
 ddnsq_SOURCES = ddns.C ddnsq.C misc.C
-ddnsq_LDADD = ${with_chord}/chord/libchord.a \
+ddnsq_LDADD = \
 	${with_chord}/dhash/libdhash.a \
 	${with_chord}/svc/libsvc.la \
+	${with_chord}/chord/libchord.a \
 	${LDADD}
 
 EXTRA_DIST = .cvsignore
