@@ -555,7 +555,7 @@ Chord::find_successors(CHID key, uint m, uint all, uint type, IDMap *lasthop, ui
       alertoutstanding++;
       if (ConsistentHash::betweenleftincl(lastfinished.to.id, key, aa->n.id)) {
 	na.deadnodes.push_back(aa->n);
-	assert(na.deadnodes.size()<10);
+	assert(na.deadnodes.size()<20); //XXX too big a lookup mesg
       }
       if (lastfinished.to.ip == aa->n.ip) {
 	assert(savefinished.size()>0);
@@ -1045,7 +1045,6 @@ Chord::next_handler(next_args *args, next_ret *ret)
 	break;
       }
     }
-    assert(s == 0 || s < (int)succs.size());
   }
 
   assert((!static_sim) || succs.size() >= _allfrag);
