@@ -38,6 +38,7 @@ Kademlia::k_nodeinfo_pool *Kademlia::pool = 0;
 bool Kademlia::docheckrep = false;
 
 unsigned Kademlia::k = 0;
+unsigned Kademlia::k_tell = 0;
 unsigned Kademlia::alpha = 0;
 unsigned Kademlia::stabilize_timer = 0;
 unsigned Kademlia::refresh_rate = 0;
@@ -96,6 +97,10 @@ Kademlia::Kademlia(IPAddress i, Args a)
 
   if(!k) {
     k = a.nget<unsigned>("k", 20, 10);
+  }
+
+  if(!k_tell) {
+    k_tell = a.nget<unsigned>("k_tell", k, 10);
   }
 
   if(!alpha) {
@@ -165,40 +170,42 @@ Kademlia::~Kademlia()
   if(ip() == 1) {
     printf("\
 #  1: k\n\
-#  2: alpha\n\
-#  3: stabilize_timer\n\
-#  4: refresh_timer\n\
-#  5: learn\n\
-#  6: rcache\n\
+#  2: k_tell\n\
+#  3: alpha\n\
+#  4: stabilize_timer\n\
+#  5: refresh_timer\n\
+#  6: learn\n\
+#  7: rcache\n\
 #\n\
-#  7: total number of bytes for RPCs\n\
-#  8: number of RPCs sent in lookup (good)\n\
-#  9: number of RPCs sent in lookup (bad)\n\
-# 10: number of good      RPCs reaped by reaper\n\
-# 11: number of timed out RPCs reaped by reaper\n\
+#  8: total number of bytes for RPCs\n\
+#  9: number of RPCs sent in lookup (good)\n\
+# 10: number of RPCs sent in lookup (bad)\n\
+# 11: number of good      RPCs reaped by reaper\n\
+# 12: number of timed out RPCs reaped by reaper\n\
 #\n\
-# 12: number of good lookups\n\
-# 13: number of attempts for good lookups\n\
-# 14: number of attempts for bad lookups\n\
-# 15: number of good lookups, but node was dead\n\
-# 16: number of bad lookups, node was dead\n\
-# 17: number of bad lookups, node was alive\n\
+# 13: number of good lookups\n\
+# 14: number of attempts for good lookups\n\
+# 15: number of attempts for bad lookups\n\
+# 16: number of good lookups, but node was dead\n\
+# 17: number of bad lookups, node was dead\n\
+# 18: number of bad lookups, node was alive\n\
 #\n\
-# 18: avg total lookup latency (good)\n\
-# 19: avg pure lookup latency (good)\n\
-# 20: avg pure ping latency (good)\n\
-# 21: number of timeouts suffered during lookup (good)\n\
+# 19: avg total lookup latency (good)\n\
+# 20: avg pure lookup latency (good)\n\
+# 21: avg pure ping latency (good)\n\
+# 22: number of timeouts suffered during lookup (good)\n\
 #\n\
-# 22: avg number of hops (good)\n\
-# 23: avg latency per hop (good)\n\
+# 23: avg number of hops (good)\n\
+# 24: avg latency per hop (good)\n\
 #\n\
-# 24: avg pure lookup latency (bad)\n\
-# 25: number of timeouts suffered during lookup (bad)\n\
-# 26: avg number of hops (bad)\n\
-# 27: avg latency per hop (bad)\n\
+# 25: avg pure lookup latency (bad)\n\
+# 26: number of timeouts suffered during lookup (bad)\n\
+# 27: avg number of hops (bad)\n\
+# 28: avg latency per hop (bad)\n\
 #\n\
-%u %u %u %u %u %u      %llu %lu %lu %lu %lu     %lu %lu %lu %lu %lu %lu    %.2f %.2f %.2f %lu    %.2f %.2f   %.2f %lu %.2f %.2f\n",
+%u %u %u %u %u %u %u      %llu %lu %lu %lu %lu     %lu %lu %lu %lu %lu %lu    %.2f %.2f %.2f %lu    %.2f %.2f   %.2f %lu %.2f %.2f\n",
         Kademlia::k,
+        Kademlia::k_tell,
         Kademlia::alpha,
         Kademlia::stabilize_timer,
         Kademlia::refresh_rate,

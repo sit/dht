@@ -338,6 +338,7 @@ public:
   static bool docheckrep;
   static use_replacement_cache_t use_replacement_cache;
   static unsigned k;                    // number of nodes per k-bucket
+  static unsigned k_tell;               // number of values returned by find_node
   static unsigned alpha;                // alpha from kademlia paper; no of simultaneous RPCs
   static unsigned debugcounter;         // 
   static unsigned stabilize_timer;      // how often to stabilize
@@ -489,7 +490,7 @@ public:
   void traverse(k_traverser*, Kademlia*, string = "", unsigned = 0, unsigned = 0);
   void insert(Kademlia::NodeID, bool, bool = false, string = "", unsigned = 0);
   void erase(Kademlia::NodeID, string = "", unsigned = 0);
-  void find_node(Kademlia::NodeID, vector<k_nodeinfo*>*, unsigned = Kademlia::k, unsigned = 0);
+  void find_node(Kademlia::NodeID, vector<k_nodeinfo*>*, unsigned = Kademlia::k_tell, unsigned = 0);
   void checkrep();
 
   void divide(unsigned);
