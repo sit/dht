@@ -44,6 +44,7 @@ EventQueue::run()
   while(1) {
     // NB: this is pretty essential.
     // block, (i.e., yield) if the queue is empty.
+    dump();
 
 
     // if the queue is empty
@@ -89,9 +90,8 @@ EventQueue::advance()
   // now process all events with this timestamp
   Queue::iterator pos;
   for(pos = _queue.begin(); pos != _queue.end(); ++pos) {
-    if((*pos)->ts > _time) {
+    if(_time > (*pos)->ts)
       break;
-    }
     (*pos)->execute();
   }
 

@@ -25,12 +25,13 @@ Kademlia::join_kademlia(void *x)
 void
 Kademlia::do_join(void *ip, void *ret)
 {
-  cout << "Node with ip=" << *((IPAddress*)ip) << " just registed." << endl;
+  cout << "Kademlia node with ip=" << *((IPAddress*)ip) << " just registered." << endl;
 }
 
 void
 Kademlia::join(Args *a)
 {
+  cout << "Node " << ip() << " doing a 10ms wait" << endl;
   delaycb(10, Kademlia::join_kademlia, a);
 }
 

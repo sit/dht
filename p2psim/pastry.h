@@ -3,10 +3,12 @@
 
 #include "protocol.h"
 #include "node.h"
+#include <openssl/bn.h>
 
 class Pastry : public Protocol {
 public:
-  typedef long long NodeID;
+  typedef BIGNUM* NodeID;
+  const unsigned idlength;
 
   Pastry(Node*);
   ~Pastry();
@@ -16,6 +18,9 @@ public:
   virtual void crash(Args*);
   virtual void insert_doc(Args*);
   virtual void lookup_doc(Args*);
+
+private:
+  NodeID _id;
 };
 
 #endif // __PASTRY_H

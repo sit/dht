@@ -72,7 +72,6 @@ Node::run()
           cerr << "warning: " << protname << " already running on node " << ip() << endl;
           delete _protmap[protname];
         }
-        cout << "installed " << protname << " on " << ip() << endl;
         _protmap[protname] = prot;
         break;
 

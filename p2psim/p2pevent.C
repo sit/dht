@@ -22,8 +22,12 @@ P2PEvent::P2PEvent()
 P2PEvent::P2PEvent(vector<string> *v) : Event(v)
 {
   // node-id
-  this->node = ip2node((IPAddress) atoi((*v)[0].c_str()));
-  assert(this->node);
+  IPAddress ip = (IPAddress) atoi((*v)[0].c_str());
+  this->node = ip2node(ip);
+  if(!this->node) {
+    cerr << "can't execute event on non-exiting node with id " << ip << endl;
+    return;
+  }
 
   // protocol
   vector<string> proto_action = split((*v)[1], ":");

@@ -41,6 +41,8 @@ Euclidean::parse(ifstream &ifs)
 
     // node-id
     IPAddress ipaddr = atoi(words[0].c_str());
+    if(!ipaddr)
+      cerr << "found node-id 0.  you're asking for trouble." << endl;
     Node *n = new Node(ipaddr);
 
     // x,y coordinates
