@@ -79,6 +79,11 @@ public:
 
   int _k; // number of affinity groups, should be sqrt(n)
 
+  bool _started; // are our timers ticking?
+  bool _live;    // are we joined but not crashed?
+  int _rounds;  // how many?
+  bool _stable;
+
   // Information about one other node.
   class Info {
   public:
@@ -92,9 +97,6 @@ public:
   // Set of nodes that this node knows about.
   // This is the paper's Affinity Group View and Contacts.
   map<IPAddress, Info *> _info;
-
-  int _rounds;  // how many?
-  bool _stable;
 
   void gotinfo(Info i);
   int id2group(ID id) { return(id % _k); }
@@ -119,10 +121,11 @@ public:
   void newold_msg(vector<Info> &msg, vector<IPAddress> l, u_int ration);
   void handle_lookup_final(ID *kp, bool *done);
   void handle_lookup1(ID *kp, IPAddress *res);
-  bool lookup1(ID key);
-  bool lookup2(ID key);
-  bool lookup_loop(ID key);
+  bool lookup1(ID key, vector<IPAddress> &);
+  bool lookup2(ID key, vector<IPAddress> &);
+  bool lookup_loop(ID key, vector<IPAddress> &);
   void handle_lookup2(ID *kp, IPAddress *res);
+  IPAddress find_by_id(ID key);
 };
 
 #endif
