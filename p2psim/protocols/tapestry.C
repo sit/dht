@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.15 2003/10/17 18:19:41 strib Exp $ */
+/* $Id: tapestry.C,v 1.16 2003/10/24 22:35:13 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -45,6 +45,12 @@ Tapestry::Tapestry(Node *n, Args a)
   TapDEBUG(2) << "Constructing" << endl;
   _rt = New RoutingTable(this, a.nget<uint>("redundancy", 3, 10));
   _waiting_for_join = New ConditionVar();
+
+  // initialize locks
+  memset( &initlist_lock, 0, sizeof(QLock) ); 
+  memset( &rt_lock, 0, sizeof(QLock) ); 
+  memset( &stat_lock, 0, sizeof(QLock) ); 
+
 
   //stabilization timer
   _stabtimer = a.nget<uint>("stabtimer", 10000, 10);
@@ -80,7 +86,9 @@ Tapestry::record_stat(stat_type type, uint num_ids, uint num_else )
 
   assert(stat.size() > (uint) type);
   stat[type] += 20 + 4*num_ids + num_else;
+  qlock( &stat_lock );
   num_msgs[type]++;
+  qunlock( &stat_lock );
 
 }
 
@@ -306,13 +314,14 @@ Tapestry::join(Args *args)
     RPCSet ping_rpcset;
     map<unsigned, ping_callinfo*> ping_resultmap;
     Time before_ping = now();
+    qlock( &initlist_lock );
     TapDEBUG(3) << "initing level " << i << " out of " << init_level 
 		<< " size = " << initlist.size() << endl;
     multi_add_to_rt_start( &ping_rpcset, &ping_resultmap, &initlist, true );
 
     RPCSet nn_rpcset;
     map<unsigned, nn_callinfo*> nn_resultmap;
-    unsigned int num_nncalls = 0;    
+    unsigned int num_nncalls = 0;
     for( uint j = 0; j < initlist.size(); j++ ) {
       NodeInfo ni = *(initlist[j]);
 
@@ -330,6 +339,7 @@ Tapestry::join(Args *args)
       num_nncalls++;
 
     }
+    qunlock( &initlist_lock );
 
     multi_add_to_rt_end( &ping_rpcset, &ping_resultmap, before_ping, false );
 
@@ -460,6 +470,7 @@ Tapestry::join(Args *args)
     TapDEBUG(2) << "gathered closest for level " << i << endl;
 
     // these k are the next initlist
+    qlock( &initlist_lock );
     for( uint l = 0; l < initlist.size(); l++ ) {
       delete initlist[l];
     }
@@ -472,12 +483,15 @@ Tapestry::join(Args *args)
 	initlist.push_back( currclose );
       }
     }
+    qunlock( &initlist_lock );
   }
 
+  qlock( &initlist_lock );
   for( uint l = 0; l < initlist.size(); l++ ) {
     delete initlist[l];
   }
   initlist.clear();
+  qunlock( &initlist_lock );
 
   have_joined();
   TapDEBUG(2) << "join done" << endl;
@@ -531,6 +545,7 @@ Tapestry::handle_join(join_args *args, join_return *ret)
       vector<NodeInfo *> thisrow;
       
       bool stop = true;
+      qlock( &rt_lock );
       for( int i = 0; i <= alpha; i++ ) {
 	
 	for( uint j = 0; j < _base; j++ ) {
@@ -548,7 +563,8 @@ Tapestry::handle_join(join_args *args, join_return *ret)
 	stop = true;
 	
       }
-      
+      qunlock( &rt_lock );
+
       nodelist_args na;
       na.nodelist = thisrow;
       nodelist_return nr;
@@ -645,7 +661,9 @@ Tapestry::handle_mc(mc_args *args, mc_return *ret)
   }
 
   // lock this node
+  qlock( &rt_lock );
   _rt->set_lock( args->new_ip, args->new_id );
+  qunlock( &rt_lock );
 
   // make sure that it knows about you as well
   mcnotify_args mca;
@@ -656,6 +674,7 @@ Tapestry::handle_mc(mc_args *args, mc_return *ret)
   // check the watchlist and see if you know about any nodes that
   // can fill those prefixes
   vector<NodeInfo *> nodelist;
+  qlock( &rt_lock );
   for( uint i = 0; i < args->watchlist.size(); i++ ) {
     for( uint j = 0; j < _base; j++ ) {
       if( !args->watchlist[i][j] ) {
@@ -672,6 +691,7 @@ Tapestry::handle_mc(mc_args *args, mc_return *ret)
     }
   }
   mca.nodelist = nodelist;
+  qunlock( &rt_lock );
 
   record_stat(STAT_MCNOTIFY, 1+nodelist.size(), 0);
   bool succ = doRPC( args->new_ip, &Tapestry::handle_mcnotify, &mca, &mcr );
@@ -693,7 +713,9 @@ Tapestry::handle_mc(mc_args *args, mc_return *ret)
   if( args->from_lock ) {
     // we won't be doing a multicast, so it's ok to add it now
     add_to_rt( args->new_ip, args->new_id );
+    qlock( &rt_lock );
     _rt->remove_lock( args->new_ip, args->new_id );
+    qunlock( &rt_lock );
     return;
   }
 
@@ -701,6 +723,7 @@ Tapestry::handle_mc(mc_args *args, mc_return *ret)
   map<unsigned, mc_callinfo*> resultmap;
   unsigned int numcalls = 0;
   // then, find any other node that shares this prefix and multicast
+  qlock( &rt_lock );
   for( uint i = args->alpha; i < _digits_per_id; i++ ) {
     for( uint j = 0; j < _base; j++ ) {
       NodeInfo *ni = _rt->read( i, j );
@@ -754,6 +777,7 @@ Tapestry::handle_mc(mc_args *args, mc_return *ret)
 	numcalls++;
     }
   }
+  qunlock( &rt_lock );
 
   // wait for them all to return
   for( unsigned int i = 0; i < numcalls; i++ ) {
@@ -774,7 +798,9 @@ Tapestry::handle_mc(mc_args *args, mc_return *ret)
   // already, we may send to it even though its locked.
   add_to_rt( args->new_ip, args->new_id );
 
+  qlock( &rt_lock );
   _rt->remove_lock( args->new_ip, args->new_id );
+  qunlock( &rt_lock );
 
   TapDEBUG(2) << "multicast done for " << args->new_ip << endl;
 
@@ -789,6 +815,7 @@ Tapestry::handle_nn(nn_args *args, nn_return *ret)
   // send back all backward pointers
   vector<NodeInfo *> nns;
 
+  qlock( &rt_lock );
   vector<NodeInfo *> *bps = _rt->get_backpointers( args->alpha );
   for( uint i = 0; i < bps->size(); i++ ) {
     NodeInfo *newnode = New NodeInfo( ((*bps)[i])->_addr, ((*bps)[i])->_id ); 
@@ -802,6 +829,7 @@ Tapestry::handle_nn(nn_args *args, nn_return *ret)
       nns.push_back( newnode );
     }
   }
+  qunlock( &rt_lock );
 
   // add yourself to the list
   nns.push_back( New NodeInfo( ip(), id() ) );
@@ -823,6 +851,7 @@ Tapestry::handle_repair(repair_args *args, repair_return *ret)
   assert( args->level < _digits_per_id && args->digit < _base );
 
   // TODO: limit the number?
+  qlock( &rt_lock );
   RouteEntry *re = _rt->get_entry( args->level, args->digit );
   for( uint i = 0; re != NULL && i < re->size(); i++ ) {
     NodeInfo *next = re->get_at(i);
@@ -830,6 +859,7 @@ Tapestry::handle_repair(repair_args *args, repair_return *ret)
 	nns.push_back( *next );
     }
   }
+  qunlock( &rt_lock );
 
   ret->nodelist = nns;
 
@@ -848,7 +878,9 @@ Tapestry::handle_mcnotify(mcnotify_args *args, mcnotify_return *ret)
 
   TapDEBUG(3) << "got mcnotify from " << args->ip << endl;
   NodeInfo *mc_node = New NodeInfo( args->ip, args->id );
+  qlock( &initlist_lock );
   initlist.push_back( mc_node );
+  qunlock( &initlist_lock );
 
   // add all the nodes on the nodelist as well
   nodelist_args na;
@@ -871,7 +903,9 @@ Tapestry::add_to_rt( IPAddress new_ip, GUID new_id )
   if( ok ) {
     // the RoutingTable takes care of placing (and removing) backpointers 
     // for us
+    qlock( &rt_lock );
     _rt->add( new_ip, new_id, distance );
+    qunlock( &rt_lock );
   }
 
   return;
@@ -890,6 +924,8 @@ Tapestry::stabilized(vector<GUID> lid)
 
   // for every GUID, make sure it either exists in your routing table,
   // or someone else does
+
+  // TODO: do we need locking in this function?
 
   for( uint i = 0; i < lid.size(); i++ ) {
 
@@ -938,6 +974,7 @@ Tapestry::check_rt(void *x)
   // the easy way to do this is just to make a vector of all the nodes
   // in the routing table and simply try to add them all to the routing table.
   vector<NodeInfo *> nodes;
+  qlock( &rt_lock );
   for( uint i = 0; i < _digits_per_id; i++ ) {
     for( uint j = 0; j < _base; j++ ) {
       RouteEntry *re = _rt->get_entry( i, j );
@@ -953,6 +990,7 @@ Tapestry::check_rt(void *x)
       }
     }
   }
+  qunlock( &rt_lock );
 
   RPCSet ping_rpcset;
   map<unsigned, ping_callinfo*> ping_resultmap;
@@ -978,6 +1016,8 @@ Tapestry::check_rt(void *x)
 void
 Tapestry::init_state(list<Protocol *> lid)
 {
+
+  // TODO: we shouldn't need locking in here, right?
 
   TapDEBUG(2) << "init_state: about to add everyone" << endl;
   // for every node but this own, add them all to your routing table
@@ -1023,9 +1063,12 @@ Time
 Tapestry::ping( IPAddress other_node, GUID other_id, bool &ok )
 {
   // if it's already in the table, don't worry about it
+  qlock( &rt_lock );
   if( _rt->contains( other_id ) ) {
+    qunlock( &rt_lock );
     return _rt->get_time( other_id );
   }
+  qunlock( &rt_lock );
 
   Time before = now();
   ping_args pa;
@@ -1057,6 +1100,7 @@ Tapestry::multi_add_to_rt_start( RPCSet *ping_rpcset,
 {
   ping_args pa;
   ping_return pr;
+  qlock( &rt_lock );
   for( uint j = 0; j < nodes->size(); j++ ) {
     NodeInfo *ni = (*nodes)[j];
     // do an asynchronous RPC to each one, collecting the ping times in the
@@ -1072,6 +1116,7 @@ Tapestry::multi_add_to_rt_start( RPCSet *ping_rpcset,
       ping_rpcset->insert(rpc);
     }
   }
+  qunlock( &rt_lock );
 }
 
 void
@@ -1111,8 +1156,10 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
     TapDEBUG(4) << "ip: " << pi->ip << endl;
     if( pi->failed ) {
       // failed! remove!
+      qlock( &rt_lock );
       _rt->remove( pi->id );
       assert( !_rt->contains( pi->id ) );
+      qunlock( &rt_lock );
       TapDEBUG(1) << "removing failed node " << pi->ip << endl;
       if( repair ) {
 	  removed.push_back( pi->id );
@@ -1120,7 +1167,9 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
     } else {
       // make sure it's not the default (we actually pinged this one)
       assert( pi->rtt != 87654 );
+      qlock( &rt_lock );
       _rt->add( pi->ip, pi->id, pi->rtt );
+      qunlock( &rt_lock );
     }
     delete pi;
   }
@@ -1137,6 +1186,7 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
 	  assert( match >= 0 ); // shouldn't be me
 	  uint digit = get_digit( *i, match );
 
+	  qlock( &rt_lock );
 	  for( uint j = _digits_per_id-1; j >= (uint) match; j-- ) {
 	      for( uint k = 0; k < _base; k++ ) {
 		  NodeInfo *ni = _rt->read( j, k );
@@ -1166,6 +1216,7 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
 		break;
 	      }
 	  }
+	  qunlock( &rt_lock );
       }
 
       uint rsetsize = repair_rpcset.size();
@@ -1251,6 +1302,10 @@ Tapestry::place_backpointer_end( RPCSet *bp_rpcset,
 
   // wait for each to finish
   uint setsize = bp_rpcset->size();
+  // this is only called from RoutingTable, hence the rt_lock must be
+  // obtained -- we should release it before blocking
+  RoutingTable *rt_old = _rt;
+  qunlock( &rt_lock );
   for( unsigned int j = 0; j < setsize; j++ ) {
     bool ok;
     unsigned donerpc = rcvRPC( bp_rpcset, ok );
@@ -1259,6 +1314,14 @@ Tapestry::place_backpointer_end( RPCSet *bp_rpcset,
     }
     backpointer_args *bpa = (*bp_resultmap)[donerpc];
     delete bpa;
+  }
+  // must have the lock again before returning
+  qlock( &rt_lock );
+  if( _rt != rt_old ) {
+    // the routing table changed while we were away (i.e. we crashed)
+    // TODO: in the future, if place_backpointer_end is ever called not at
+    // the end of an rt function, we might need to do something here
+    TapDEBUG(3) << "rt changed while away in place_backpointer_end" << endl;
   }
 }
 
@@ -1278,11 +1341,13 @@ void
 Tapestry::got_backpointer( IPAddress bpip, GUID bpid, uint level, bool remove )
 {
 
+  qlock( &rt_lock );
   if( remove ) {
     _rt->remove_backpointer( bpip, bpid, level );
   } else {
     _rt->add_backpointer( bpip, bpid, level );
   }
+  qunlock( &rt_lock );
 
 }
 
@@ -1311,6 +1376,7 @@ Tapestry::next_hop( GUID key, IPAddress** ips, uint size )
     return;
   }
 
+  qlock( &rt_lock );
   RouteEntry *re = _rt->get_entry( level, get_digit( key, level ) );
 
   // if it has an entry, use it
@@ -1321,6 +1387,7 @@ Tapestry::next_hop( GUID key, IPAddress** ips, uint size )
      for( uint i = 0; i < re->size() && i < size; i++ ) {
        (*ips)[i] = re->get_at(i)->_addr;
      }
+     qunlock( &rt_lock ); 
      return;
   } else {
     // if there's no such entry, it's time to surrogate route.  yeah baby.
@@ -1352,6 +1419,7 @@ Tapestry::next_hop( GUID key, IPAddress** ips, uint size )
 	for( uint k = 0; k < re->size() && k < size; k++ ) {
 	  (*ips)[k] = re->get_at(k)->_addr;
 	}
+	qunlock( &rt_lock );
 	return;
       }
       re = NULL;
@@ -1363,6 +1431,8 @@ Tapestry::next_hop( GUID key, IPAddress** ips, uint size )
   if( size > 0 ) {
     (*ips)[0] = ip();
   }
+  qunlock( &rt_lock );
+
 }
 
 int
@@ -1399,21 +1469,25 @@ Tapestry::crash(Args *args)
   node()->crash();
 
   // clear out routing table, and any other state that might be lying around
+  qlock( &rt_lock );
   uint r = _rt->redundancy();
   delete _rt;
   joined = false;
 
   // clear join state also
   _joining = false;
+  qlock( &initlist_lock );
   for( uint l = 0; l < initlist.size(); l++ ) {
     delete initlist[l];
   }
   initlist.clear();
+  qunlock( &initlist_lock );
 
   // TODO: should be killing these waiting RPCs instead of allowing them
   // to finish normally.  bah.
   _waiting_for_join->notifyAll();
   _rt = New RoutingTable(this, r);
+  qunlock( &rt_lock );
 
 }
 
