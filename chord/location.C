@@ -502,3 +502,20 @@ locationtable::remove_cachedlocs (location *l)
   cachedlocs.remove (l);
   size_cachedlocs--;
 }
+
+void
+locationtable::ping (chordID id, cbv cb) 
+{
+  ptr<chord_vnode> v = New refcounted<chord_vnode> ();
+  v->n = id;
+  doRPC (id, chord_program_1, CHORDPROC_NULL,
+	 v, NULL,
+	 wrap (this, &locationtable::ping_cb, cb));
+}
+
+void
+locationtable::ping_cb (cbv cb, clnt_stat err) 
+{
+  if (err) warn << "error pinging\n";
+  (*cb)();
+};

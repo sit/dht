@@ -54,7 +54,6 @@ typedef callback<void,chordID,bool,chordstat>::ref cbchallengeID_t;
 typedef callback<void,vnode*,chordstat>::ref cbjoin_t;
 typedef callback<void,chordID,net_address,chordstat>::ref cbchordID_t;
 typedef callback<void,chordID,route,chordstat>::ref cbroute_t;
-typedef unsigned long cxid_t;
 typedef callback<void, svccb *>::ref cbdispatch_t;
 
 struct findpredecessor_cbstate {
@@ -70,6 +69,29 @@ struct finger {
   node first; // first ID after start
 };
 
+class toe_table {
+  static const int max_delay = 800; // ms
+
+  vec<chordID> toes;
+  ptr<locationtable> locations;
+  int in_progress;
+
+  void add_toe_ping_cb (chordID id, int level);
+  void get_toes_rmt_cb (chord_gettoes_res *res, int level, clnt_stat err);
+
+ public:
+  toe_table (ptr<locationtable> locs) : locations (locs) {};
+
+  vec<chordID> get_toes (int level);
+  void add_toe (chordID id, net_address r, int level);
+  int filled_level ();
+  int level_to_delay ();
+  void get_toes_rmt (int level);
+  bool stabilizing () { return (in_progress > 0); };
+  int level_to_delay (int level);
+  void dump ();
+};
+
 class vnode : public virtual refcount {
   static const int stabilize_timer = 1000;  // millseconds
   static const int stabilize_timer_max = 500;      // seconds
@@ -78,6 +100,7 @@ class vnode : public virtual refcount {
   ptr<locationtable> locations;
   finger finger_table[NBIT+1];
   node succlist[NSUCC+1];
+  ptr<toe_table> toes;
   int nsucc;
   node predecessor;
   int myindex;
@@ -113,6 +136,7 @@ class vnode : public virtual refcount {
   u_long ndogetfingers;
   u_long ndogetfingers_ext;
   u_long ndochallenge;
+  u_long ndogettoes;
 
   timecb_t *stabilize_continuous_tmo;
   timecb_t *stabilize_backoff_tmo;
@@ -132,6 +156,7 @@ class vnode : public virtual refcount {
   void stabilize_continuous (u_int32_t t);
   int stabilize_succlist (int s);
   int stabilize_finger (int f);
+  void stabilize_toes ();
   void stabilize_succ (void);
   void stabilize_pred (void);
   void stabilize_getpred_cb (chordID s, net_address r, chordstat status);
@@ -212,6 +237,7 @@ class vnode : public virtual refcount {
   void dogetfingers (svccb *sbp);
   void dogetfingers_ext (svccb *sbp);
   void dochallenge (svccb *sbp, chord_challengearg *ca);
+  void dogettoes (svccb *sbp);
 
   //RPC demux
   void addHandler (rpc_program prog, cbdispatch_t cb);
@@ -287,7 +313,7 @@ class chord : public virtual refcount {
   };
   void doRPC (chordID &n, rpc_program progno, int procno, ptr<void> in, 
 	      void *out, aclnt_cb cb) {
-    locations->doRPC (n, progno, procno, in, out, cb, getusec ());
+    locations->doRPC (n, progno, procno, in, out, cb);
   };
   void alert (chordID &n, chordID &x) {
     active->alert (n, x);

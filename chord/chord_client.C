@@ -295,6 +295,12 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
 	vnodep->dochallenge (sbp, ca);
       }
       break;
+    case CHORDPROC_GETTOES:
+      {
+	warnt("CHORD: get toes");
+	vnodep->dogettoes (sbp);
+      }
+      break;
     default:
       sbp->reject (PROC_UNAVAIL);
       break;

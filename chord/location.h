@@ -178,6 +178,7 @@ class locationtable : public virtual refcount {
   void setup_rexmit_timer (chordID ID, long *sec, long *nsec);
   void timeout_cb (rpc_state *C);
 
+  void ping_cb (cbv cb, clnt_stat err);
 
  public:
   locationtable (ptr<chord> _chordnode, int _max_connections);
@@ -209,15 +210,15 @@ class locationtable : public virtual refcount {
   void checkrefcnt (int i);
   void doRPC (chordID &n, rpc_program progno, 
 	      int procno, ptr<void> in, 
-	      void *out, aclnt_cb cb, u_int64_t s);
+	      void *out, aclnt_cb cb);
 
   void doRPC_udp (chordID &n, rpc_program progno, 
 		  int procno, ptr<void> in, 
-		  void *out, aclnt_cb cb, u_int64_t s);
+		  void *out, aclnt_cb cb);
 
   void doRPC_tcp (chordID &n, rpc_program progno, 
 		  int procno, ptr<void> in, 
-		  void *out, aclnt_cb cb, u_int64_t s);
+		  void *out, aclnt_cb cb);
 
 
   void doRPC_tcp_connect_cb (RPC_delay_args *args, int fd);
@@ -225,8 +226,10 @@ class locationtable : public virtual refcount {
   void doRPC_issue (chordID &ID, 
 		    rpc_program prog, int procno, 
 		    ptr<void> in, void *out, aclnt_cb cb,
-		    u_int64_t sp, ref<aclnt> c);
+		    ref<aclnt> c);
 
+
+  void ping (chordID ID, cbv cb);
 
   void stats ();
 

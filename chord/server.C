@@ -328,6 +328,6 @@ vnode::addHandler (rpc_program prog, cbdispatch_t cb)
 void
 vnode::doRPC (chordID &ID, rpc_program prog, int procno, 
 	      ptr<void> in, void *out, aclnt_cb cb) {
-  locations->doRPC (ID, prog, procno, in, out, cb, getusec ());
+  locations->doRPC (ID, prog, procno, in, out, cb);
 }
 

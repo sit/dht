@@ -49,6 +49,8 @@ vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
   succlist[0].n = myID;
   succlist[0].alive = true;
   nsucc = 0;
+  toes = New refcounted<toe_table> (locations);
+
   stable_fingers = false;
   stable_fingers2 = false;
   stable_succlist = false;
@@ -281,7 +283,12 @@ vnode::print ()
     warnx << "succ " << i << " : " << succlist[i].n << "\n";
   }
   warnx << "pred : " << predecessor.n << "\n";
+#ifdef TOES
+  warnx << "------------- toes ----------------------------------\n";
+  toes->dump ();
+#endif /*TOES*/
   warnx << "=====================================================\n";
+
 }
 
 chordID
@@ -594,6 +601,9 @@ vnode::stabilize_backoff (int f, int s, u_int32_t t)
   } else {
     f = stabilize_finger (f);
     s = stabilize_succlist (s);
+#ifdef TOES
+    stabilize_toes ();
+#endif /*TOES*/
     if (isstable () && (t <= stabilize_timer_max * 1000))
       if(aimd)
         t = (int)(1.2 * t);
@@ -1013,3 +1023,25 @@ vnode::dochallenge (svccb *sbp, chord_challengearg *ca)
   sbp->reply (&res);
 }
 
+void
+vnode::dogettoes (svccb *sbp)
+{
+  chord_gettoes_arg *ta = 
+    sbp->template getarg<chord_gettoes_arg> ();
+  chord_gettoes_res res (CHORD_OK);
+  vec<chordID> t = toes->get_toes (ta->level);
+  
+  ndogettoes++;
+  res.resok->toes.setsize (t.size ());
+  for (unsigned int i = 0; i < t.size (); i++) {
+    location *l = locations->getlocation (t[i]);
+    res.resok->toes[i].x = t[i];
+    res.resok->toes[i].r = locations->getaddress (t[i]);
+    res.resok->toes[i].a_lat = (long)(l->a_lat * 100);
+    res.resok->toes[i].a_var = (long)(l->a_var * 100);
+    res.resok->toes[i].nrpc = l->nrpc;
+  }
+  
+  warnt ("CHORD: dogettoes_reply");
+  sbp->reply (&res);
+}

@@ -7,7 +7,7 @@ noinst_LIBRARIES = libchord.a
 noinst_HEADERS = chord.h chord_util.h location.h
 
 libchord_a_SOURCES = chord.C chord_client.C chord_util.C server.C \
-          comm.C location.C
+          comm.C location.C toe_table.C
 
 EXTRA_DIST = .cvsignore
 CLEANFILES = core *.core *~ *.rpo

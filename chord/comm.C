@@ -53,25 +53,20 @@ int sorter (const void *, const void *);
 void
 locationtable::doRPC (chordID &ID, 
 		      rpc_program prog, int procno, 
-		      ptr<void> in, void *out, aclnt_cb cb,
-		      u_int64_t sp)
+		      ptr<void> in, void *out, aclnt_cb cb)
 {
 
-  sp = getusec ();
-  
   if (dhashtcp)
-    doRPC_tcp (ID, prog, procno, in, out, cb, sp);
+    doRPC_tcp (ID, prog, procno, in, out, cb);
   else
-    doRPC_udp (ID, prog, procno, in, out, cb, sp);
+    doRPC_udp (ID, prog, procno, in, out, cb);
 }
 
 
 void
 locationtable::doRPC_udp (chordID &ID, 
 			  rpc_program prog, int procno, 
-			  ptr<void> in, void *out, aclnt_cb cb,
-			  u_int64_t sp)
-
+			  ptr<void> in, void *out, aclnt_cb cb)
 {
 
   reset_idle_timer ();
@@ -87,7 +82,7 @@ locationtable::doRPC_udp (chordID &ID,
     
     ref<aclnt> c = aclnt::alloc (dgram_xprt, prog, 
 				 (sockaddr *)&(l->saddr));
-    doRPC_issue (ID, prog, procno, in, out, cb, sp, c);
+    doRPC_issue (ID, prog, procno, in, out, cb, c);
   }
 }
 
@@ -95,7 +90,7 @@ void
 locationtable::doRPC_issue (chordID &ID, 
 			    rpc_program prog, int procno, 
 			    ptr<void> in, void *out, aclnt_cb cb,
-			    u_int64_t sp, ref<aclnt> c)
+			    ref<aclnt> c)
 {
   /* statistics */
   nsent++;
@@ -120,8 +115,6 @@ locationtable::doRPC_issue (chordID &ID,
   
   long sec, nsec;
   setup_rexmit_timer (ID, &sec, &nsec);
-  
-  //send it
   C->b->send (sec, nsec);
 
   seqno++;
@@ -191,8 +184,7 @@ locationtable::rpc_done (long acked_seqno)
 	   args->procno, 
 	   args->in,
 	   args->out,
-	   args->cb,
-	   getusec());
+	   args->cb);
     delete args;
     num_qed--;
   }
@@ -262,7 +254,7 @@ locationtable::setup_rexmit_timer (chordID ID, long *sec, long *nsec)
   float alat;
 
   if (nrpc > MIN_SAMPLES)
-    if (avg_lat >  bf_lat + 4*bf_var){
+    if (avg_lat >  bf_lat + 4*bf_var) {
       alat = avg_lat;
     } else {
       alat = bf_lat + 4*bf_var;
@@ -396,8 +388,7 @@ locationtable::stats ()
 void
 locationtable::doRPC_tcp (chordID &ID, 
 			  rpc_program prog, int procno, 
-			  ptr<void> in, void *out, aclnt_cb cb,
-			  u_int64_t sp)
+			  ptr<void> in, void *out, aclnt_cb cb)
 {
   location *l = getlocation (ID);
   assert (l);
@@ -497,7 +488,8 @@ rpccb_chord::send (long _sec, long _nsec)
   sec = _sec;
   nsec = _nsec;
   tmo = delaycb (sec, nsec, wrap (this, &rpccb_chord::timeout_cb, deleted));
-  xmit (0);
+  // alloc has the side effect of sending the RPC so we don't send it here
+  //  xmit (0);
 }
 
 
@@ -510,9 +502,13 @@ rpccb_chord::timeout_cb (ptr<bool> del)
     utmo ();
   
   if (rexmits > MAX_REXMIT) {
-    tmo = 0;
+    tmo = NULL;
     timeout ();
-  } else {
+    return;
+  } else if (rexmits == MAX_REXMIT) {
+    sec = 30;
+    nsec = 0;
+  } else  {
     xmit (rexmits++);
     sec *= 2;
     nsec *= 2;
@@ -520,8 +516,8 @@ rpccb_chord::timeout_cb (ptr<bool> del)
       nsec -= 1000000000;
       sec += 1;
     }
-    tmo = delaycb (sec, nsec, wrap (this, &rpccb_chord::timeout_cb, deleted));
   }
+  tmo = delaycb (sec, nsec, wrap (this, &rpccb_chord::timeout_cb, deleted));
 }
 
 
