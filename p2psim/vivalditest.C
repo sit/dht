@@ -1,12 +1,17 @@
 #include "vivalditest.h"
 #include "packet.h"
 #include "p2psim.h"
+#include "euclidean.h"
 #include <stdio.h>
+#include <algo.h>
 using namespace std;
+
+vector<VivaldiTest*> VivaldiTest::_all;
 
 VivaldiTest::VivaldiTest(Node *n) : Protocol(n)
 {
   _vivaldi = new Vivaldi(n);
+  _all.push_back(this);
 
   delaycb(1000, &VivaldiTest::tick, (void *) 0);
 }
@@ -23,14 +28,92 @@ VivaldiTest::ts()
   return buf;
 }
 
+Vivaldi::Coord
+VivaldiTest::real()
+{
+  Vivaldi::Coord c;
+  Euclidean *t =
+    dynamic_cast<Euclidean*>(Network::Instance()->gettopology());
+  assert(t);
+  Euclidean::Coord rc = t->getcoords(node()->ip());
+  c._x = rc.first;
+  c._y = rc.second;
+  return c;
+}
+
+// Calculate this node's error: sqrt of avg of squares
+// of differences between synthetic and real distances to
+// all other nodes.
+double
+VivaldiTest::error()
+{
+  double sum = 0;
+  Vivaldi::Coord vc = _vivaldi->my_location(), rc = real();
+  for(unsigned i = 0; i < _all.size(); i++){
+    Vivaldi::Coord vc1 = _all[i]->_vivaldi->my_location();
+    Vivaldi::Coord rc1 = _all[i]->real();
+    double vd = dist(vc, vc1);
+    double rd = dist(rc, rc1);
+    sum += (vd - rd) * (vd - rd);
+  }
+  return sqrt(sum / _all.size());
+}
+
+// return 5th, 50th, 95th percentiles of node error
+void
+VivaldiTest::total_error(double &e05, double &e50, double &e95)
+{
+  unsigned n = _all.size();
+  vector<double> a;
+  for(unsigned i = 0; i < n; i++){
+    double e = _all[i]->error();
+    a.push_back(e);
+  }
+  sort(a.begin(), a.end());
+  if(n > 5){
+    e05 = a[n / 20];
+    e50 = a[n / 2];
+    e95 = a[n - (n / 20)];
+  } else if(n > 0) {
+    e05 = a[0];
+    e50 = a[n / 2];
+    e95 = a[n-1];
+  }
+}
+
+void
+VivaldiTest::status()
+{
+  Vivaldi::Coord rc = real();
+  Vivaldi::Coord vc = _vivaldi->my_location();
+  double e05, e50, e95;
+  total_error(e05, e50, e95);
+  printf("vivaldi %u %u %d %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f\n",
+         (unsigned) now(),
+         node()->ip(),
+         _vivaldi->nsamples(),
+         error(),
+         e05,
+         e50,
+         e95,
+         rc._x,
+         rc._y,
+         vc._x,
+         vc._y);
+  fflush(stdout);
+}
+
 void
 VivaldiTest::tick(void *)
 {
-  IPAddress dst = (random() % 100) + 1;
+  IPAddress dst = _all[random() % _all.size()]->node()->ip();
   Vivaldi::Coord c;
   Time before = now();
   doRPC(dst, &VivaldiTest::handler, (void*) 0, &c);
-  _vivaldi->sample(dst, c, now() - before);
+  _vivaldi->sample(dst, c, (now() - before) / 2.0);
+
+  if((random() % _all.size()) == 0)
+    status();
 
   delaycb(1000, &VivaldiTest::tick, (void *) 0);
 }

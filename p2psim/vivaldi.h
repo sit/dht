@@ -1,7 +1,7 @@
 #ifndef __VIVALDI_H
 #define __VIVALDI_H
 
-#include <map>
+#include <vector>
 #include "p2psim.h"
 #include "protocol.h"
 #include "network.h"
@@ -20,13 +20,14 @@ class Vivaldi {
  public:
   Vivaldi(Node *n);
   virtual ~Vivaldi();
+  int nsamples() { return _nsamples; }
 
   struct Coord {
     double _x;
     double _y;
   };
 
-  void sample(IPAddress who, Coord c, unsigned latency);
+  void sample(IPAddress who, Coord c, double latency);
   Coord my_location() { return _c; }
 
   // Anyone can use this to make an RPC and have Vivaldi time it.
@@ -37,8 +38,62 @@ class Vivaldi {
  private:
   Node *_n; // this node
   Coord _c;
-  int _nsamples;
+  struct Sample { Coord _c; double _latency; };
+  vector<Sample> _samples;
+  double _damp;
+
+  int _nsamples; // how many times samples() has been called
+
+  void updatecoords();
 };
+
+inline double
+dist(Vivaldi::Coord a, Vivaldi::Coord b)
+{
+  double dx = a._x - b._x;
+  double dy = a._y - b._y;
+  return sqrt(dx*dx + dy*dy);
+}
+
+inline Vivaldi::Coord
+operator-(Vivaldi::Coord a, Vivaldi::Coord b)
+{
+  Vivaldi::Coord c;
+  c._x = a._x - b._x;
+  c._y = a._y - b._y;
+  return c;
+}
+
+inline Vivaldi::Coord
+operator+(Vivaldi::Coord a, Vivaldi::Coord b)
+{
+  Vivaldi::Coord c;
+  c._x = a._x + b._x;
+  c._y = a._y + b._y;
+  return c;
+}
+
+inline Vivaldi::Coord
+operator/(Vivaldi::Coord c, double x)
+{
+  c._x /= x;
+  c._y /= x;
+  return c;
+}
+
+inline Vivaldi::Coord
+operator*(Vivaldi::Coord c, double x)
+{
+  c._x *= x;
+  c._y *= x;
+  return c;
+}
+
+inline double
+length(Vivaldi::Coord c)
+{
+  return sqrt(c._x*c._x + c._y*c._y);
+}
 
 #if 0
 // Make an RPC call, but time it and tell Vivaldi.

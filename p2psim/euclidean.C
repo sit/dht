@@ -61,14 +61,14 @@ Euclidean::parse(ifstream &ifs)
     // what kind of node?
     Node *n = NodeFactory::Instance()->create(words[2], ipaddr);
 
-    // all the rest are protocols on this node
-    for(unsigned int i=3; i<words.size(); i++)
-      send(n->protchan(), &(words[i]));
-
     // add the new node it to the topology
     if(_nodes.find(n->ip()) != _nodes.end())
       cerr << "warning: node " << ipaddr << " already added!" << endl;
     _nodes[n->ip()] = c;
+
+    // all the rest are protocols on this node
+    for(unsigned int i=3; i<words.size(); i++)
+      send(n->protchan(), &(words[i]));
 
     // add the node to the network
     send(Network::Instance()->nodechan(), &n);
