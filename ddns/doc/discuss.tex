@@ -1,0 +1,197 @@
+\section{Why (or why not) Cooperative DNS?}
+
+Serving DNS data using peer-to-peer systems 
+frees the domain owners from having to configure
+or administer name servers. Now, anyone who 
+wants to publish a domain only needs the higher-level
+domain to sign her public key. DDNS takes care of
+storing, serving, replicating, and caching of her DNS records.
+Below, we discuss various issues in the current DNS, 
+and the extent to which DDNS solves them.
+
+\subsection{DNS Administration}
+
+In their 1988 retrospective~\cite{dns}, Mockapetris and Dunlap
+listed ``distribution of control vs. distribution of expertise
+or responsibility'' as one of the shortcomings of their system,
+lamenting:
+\begin{quote}
+Distributing authority for a database does not distribute
+corresponding amounts of expertise.  Maintainers fix things
+until they work, rather than until they work well, and want to use,
+not understand, the systems they are provided.
+Systems designers should anticipate this, and try to
+compensate by technical means.
+\end{quote}
+To justify their point, they cited three failures:
+they did not require proof that administrators had set up
+truly redundant name servers without a single point of failure;
+in the documentation, they used hour-long TTLs 
+in the examples but suggested
+day-long TTLs in the text, with the result that everyone used
+hour-long TTLs; debugging was made difficult by not requiring
+servers to identify their server version and type in an automated way.
+DDNS eliminates much of the need for expertise by 
+automatically providing the routing infrastructure to finding 
+DNS information, and automatically replicating records 
+after insertion or updating.
+
+In their handbook for the Berkeley DNS server, BIND,
+Albitz and Liu~\cite{dns-bind} listed what they believed to be
+thirteen of the most common problems in configuring
+a name server.
+Of these, our system addresses six of them:
+\begin{description}
+\item[Forget to signal master server.]
+Users do not manage primary servers in DDNS, so this cannot happen.
+Unfortunately, the analogue in our system could be ``forget to
+insert modified records into DDNS.''
+
+\item[Slave server cannot load zone data.]
+DDNS solves this by automatically handling replication 
+via the DHash protocol.
+
+\item[Missing cache data.] Either by forgetting install the 
+cache file or accidentally deleting it. DDNS automatically 
+performs caching via DHash.
+
+\item[Loss of network connectivity.]
+DDNS is robust against server failure or disconnection, so that loss of
+an individual server cannot cripple name service for any part of the
+hierarchy. Unfortunately, it suffers from 
+network partitions. For example, if a backhoe cuts MIT from 
+the rest of the internet,
+even though hosts on the internet will not see a disruption in any
+part of the name space (not even MIT's names), hosts at MIT
+may not even be able to look up their own names! 
+The current DNS also faces the same problem since a lot
+of client machines contacts the root directly for any DNS queries.
+Both systems partially address this problem with caching.
+Most machines will have popular DNS records of local machines
+cached, so lookups are likely to succeed.
+Furthermore, the Chord stabilization protocol ensures that nodes that 
+are still reachable after a partition form their own local 
+Chord ring. DNS records for local machines can be reinserted to
+DDNS after a network partition is detected. 
+This requires that 
+an organization that wishes to ensure the availability of their
+DNS data joins the Chord network (which might not be such a bad thing after all).
+Pastry~\cite{pastry01} suggests the use of IP multicast to rediscover
+other peer-to-peer networks after IP connectivity is resumed.
+
+\item[Missing subdomain delegation.]
+In conventional DNS, if a domain's parent does not
+update the domain's NS records in a timely fashion,
+that domain will not be usable.  
+DDNS partially eliminates this problem, since there are 
+no need for NS records.
+The analogue in DDNS is the domain's parent providing a signature
+of that domain's public key RRSet.
+However, in DDNS, there is no propagation delay: once the
+parent sends you the signed public key, you can publish it yourself.
+
+\item[Incorrect subdomain delegation.]
+In conventional DNS, if the parent is not notified 
+when name servers or IP addresses of a domain change, 
+clients may not receive answers for their DNS queries.
+Worse, DNS servers may not know that the out-of-date 
+records are being served. The analogous in DDNS is when
+a domain changes its public key. However, the domain 
+owner cannot insert any updated records with the new key
+without the parent's new signature, so this error will
+not go undeteced in DDNS.
+\end{description}
+
+On a similar note, Jung {\it et al.}~\cite{dnscache:sigcommimw01} 
+reported 23\% of 
+DNS lookups failed to elicit any response, partially due to loops 
+in name server resolution. 13\% of lookups result in a negative 
+response, many of which are caused by NS records that point to 
+non-existent or inappropriate hosts.
+Conventional DNS requires that domain owners manage two types of
+information. First, base information about the names they wish to
+serve (e.g. A records). Second, routing information (NS records) to
+help clients navigate the set of DNS servers to find the base
+information.  The former is intuitive, like most static routing
+systems. The latter is difficult to manage, requires close
+coordination among servers to maintain consistency, and has proved to
+be highly error-prone. DDNS eliminates the second class of
+information; it automatically configures the machinery required to
+find base information.
+
+%These can be quite subtle to detect; for example, an NS record that points
+%at a wrong name server can cause lookups to fail
+%intermittently, depending on whether the server already has the 
+%desired record cached. DDNS automates the routing mechanism
+%this problem cannot happen.
+
+In summary, we believe that using a peer-to-peer system for
+storing DNS records eliminates many common administrative
+problems, providing a dramatically simple way to server DNS 
+information.
+
+\subsection{Dynamically-generated records}
+
+Our system requires that all queries
+can be anticipated in advance and their answers stored.
+Since the {\tt hosts.txt} approach required this property
+and the original DNS papers are silent on the topic,
+it seems likely that this requirement was never 
+explicitly intended to be relaxed.
+However, the conventional DNS did relax the requirement:
+since domains serve their own data, all possible queries need 
+not be anticipated in advance as long as there is some algorithm
+implemented in the server for responding to queries.
+For example, to avoid the need to publish internal host names,
+the name server for
+{\em cs.bell-labs.com} will return a valid mail exchanger (MX) record
+for any host name ending in {\em .cs.bell-labs.com}, even
+for those that do not exist.
+
+Additionally, responses can be tailored according to factors
+other than the actual query.
+For example, it is standard practice to randomly order the results
+of a query to provide approximate load balancing~\cite{dns-load:rfc}.
+As another example, content distribution networks like Akamai
+use custom DNS responses both for real-time load balancing and
+to route clients to nearby servers~\cite{akamai.rev.eng}.
+% http://www.cs.washington.edu/homes/ratul/akamai.html
+
+DDNS can provide none of these capabilities, which depend
+on the coupling of the administrative hierarchy and the service structure.
+
+Another query type, ALL, requests for every RR 
+under a domain name. This does not cause performance 
+degradation in the current DNS, since a name server
+will have all the records for the domain names it serves.
+In DDNS, we assemble all the records for the ALL 
+request by looking up every record types for a domain 
+name. This results in a significant number of RPCs. 
+We can optimize it by storing an ALL RRSet for every 
+domain, and including the signature for the whole RRSet in
+the SIG RR. We update the ALL RRSet whenever there is 
+a change to the records under a domain name.
+
+\subsection{Denial-of-Service}
+
+DDNS has better fault-tolerance due to denial-of-service attacks 
+over the current DNS. 
+Because there is no name server heirarchy, the 
+attacker has to bring down a diverse
+set of servers before data loss becomes apparent.
+
+Another type of denial-of-service is caused by 
+a domain name owner inserting a large number 
+of DNS records, using up space in the Chord network.
+DDNS has no idea whether those records
+are valid or bogus. We can address this problem 
+by enforcing a quota on how much data each organization
+can insert depending on how much storage the organization
+is contributing to DDNS. The rationale is that if you
+have a lot of DNS entries, then you must have 
+enough server resource to contribute.
+This policy is another incentive,
+in addition to the one above on network partition,
+for people to join the Chord ring.
+
+

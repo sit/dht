@@ -46,7 +46,7 @@ in a pseudo-random fashion, a very large number of servers must
 fail simultaneously before data loss occurs. 
 
 To create or update a DDNS RRSet, the owner of that set prepares
-the RRSet, signs it, and inserts it into DHash marked with type DNS RRSet.
+the RRSet, signs it, and inserts it into DHash.
 The key for the RRSet is the SHA1 hash of the domain name and the RRSet query type
 ({\em e.g.}, SHA1({\em www.nytimes.com}, A)).
 DHash verifies the signature before accepting the data.
@@ -54,15 +54,13 @@ When a client retrieves the RRSet, it also checks
 the signature before using the data.
 
 Naively verifying a DNS RRSet for a name with $n$ 
-path elements requires $n$ public key lookups.
-Some of this cost can be avoided by optionally
-including extra KEY RRSets so that all 
-the data needed to verify a record
-is attached to the record itself.
-This would inflate the size of responses somewhat, although
-common public keys ({\em e.g.}, the key for {\em .com}) could
-be omitted on the assumption that they would be 
-widely cached anyway.
+path elements requires $n$ KEY lookups.
+We eliminate this problem by requiring the owner to
+present all the relevant KEYs. To avoid inflating 
+the responses, we can omit KEYs of popular domains
+(e.g. {\tt .com}) on the assumption that they would be 
+widely cached. Every DHash node will already have the
+root KEY.
 
 To ease transition from conventional DNS to our system,
 a simple loopback server listening on 127.1 could accept

@@ -22,10 +22,10 @@ service of the database: in typical usage, an
 entity is responsible not only for information about its hosts
 but also for the service of that information.
 
-In fact, the service structure {\em needed} to reflect the 
+XXX In fact, the service structure {\em needed} to reflect the 
 administrative hierarchy: this provided a modicum of authentication
-for the returned data.
-Because servers were effectively authenticated by return address,
+for the returned data. Because servers were effectively 
+authenticated by return address,
 a system was susceptible to DNS server impersonation by 
 IP spoofing or other means.
 In response to concerns about this and
@@ -36,6 +36,16 @@ records they retreive are authentic.
 Although DNSSEC is not yet in widespread use, its specification
 has stabilized, and it is supported by a variety of name server
 implementations (eg. ISC BIND server software). 
+
+The current DNS requires significant expertise to administer.
+Albitz and Liu~\cite{dns-bind} listed the most common 
+name server configuration problems. These problems range from
+forgetting to signal the primary master server when the database
+changes to data consistency problems due to loss of network 
+connectivity. DNS name servers are a pain to administer, thus
+ordinary people depends on ISPs to serve their data. A system
+which automates most of operations in name servers seems highly
+desirable.
 
 DNS performance studies have revealed some problems with the
 current DNS. In a study by Danzig {\it et al.}~\cite{dnsroot:sigcomm92},
