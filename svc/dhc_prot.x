@@ -1,5 +1,5 @@
 %#include <chord_types.h>
-%#include <dhc.h>
+%#include <dhash_types.h>
 
 enum dhc_stat {
    DHC_OK = 0,
@@ -9,16 +9,22 @@ enum dhc_stat {
    DHC_NOT_A_REPLICA = 4
 };
 
+struct paxos_seqnum_t {
+  u_int64_t seqnum; 		
+  chordID proposer;
+};
+
 /* prepare message */
 struct dhc_prepare_arg {
    chordID bID; 		/* ID of Public Key block */
    paxos_seqnum_t round; 	/* new Paxos number same as proposal number*/ 
-   long config_seqnum; 		/* sequence number of current replica config */ 
+   u_int64_t config_seqnum; 	/* sequence number of current replica config */ 
 };
 
 struct dhc_prepare_resok {
-   replica_t new_config; 	/* accepted new config for config_seqnum, if any */
+   chordID new_config<>;	/* accepted new config for config_seqnum, if any */
 				/* otherwise, set resok to NULL */
+   /* replica_t new_config; */ 	
 };
 
 /* promise message */
@@ -31,9 +37,10 @@ union dhc_prepare_res switch (dhc_stat status) {
 
 /* accept proposal message */
 struct dhc_accept_arg {
-   chordID id;
+   chordID bID;
    paxos_seqnum_t round;
-   replica_t new_config; 	/* new configuration of nodes */
+   chordID new_config<>;
+   /*replica_t new_config; 	 new configuration of nodes  */
 };
 
 /* accept ack message */
@@ -42,11 +49,22 @@ union dhc_accept_res switch (dhc_stat status) {
    	void;
 };
 
+struct tag_t {
+  u_int64_t ver;
+  chordID writer;
+};
+
+struct keyhash_data {
+  tag_t tag;
+  dhash_value data;
+};
+
 struct dhc_newconfig_arg {
    chordID bID;
-   keyhash_data value;
-   long old_conf_seqnum;
-   replica_t new_config; 
+   keyhash_data data;
+   u_int64_t old_conf_seqnum;
+   chordID new_config<>;
+   //replica_t new_config; 
 };
 
 union dhc_newconfig_res switch (dhc_stat status) {
@@ -79,7 +97,7 @@ struct dhc_gettag_resok {
    tag_t new_tag;
 };
 
-union dhc_gettag_res {
+union dhc_gettag_res switch (dhc_stat status) {
    case DHC_OK:
 	dhc_gettag_resok resok;
    default:
