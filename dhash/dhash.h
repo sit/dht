@@ -102,6 +102,19 @@ struct dhash_lease {
   dhash_lease (chordID k) : key(k), touch(0), lease(0) { }
 };
 
+enum quorum_actions {
+  QUORUM_RESERVE = 1,
+  QUORUM_COMMIT = 2,
+  QUORUM_NUM_ACTIONS = 3
+};
+
+struct quorum_reservation {
+  chordID key;
+  time_t reserved_until;
+  ihash_entry <quorum_reservation> link;
+  quorum_reservation (chordID k, time_t until) : key(k), reserved_until(until) { }
+};
+
 struct dhash_block {
   char *data;
   size_t len;
@@ -154,6 +167,9 @@ class dhash {
   
   ihash<chordID, dhash_lease, &dhash_lease::key, 
     &dhash_lease::link, hashID> leases;
+
+  ihash<chordID, quorum_reservation, &quorum_reservation::key,
+	&quorum_reservation::link, hashID> quorum_reservations;
 
   qhash<int, cbblockuc_t> bcpt;
 
@@ -283,6 +299,7 @@ bool verify (chordID key, dhash_ctype t, char *buf, int len);
 bool verify_content_hash (chordID key,  char *buf, int len);
 bool verify_key_hash (chordID key, char *buf, int len);
 bool verify_dnssec ();
+bool verify_quorum ();
 ptr<dhash_block> get_block_contents (ptr<dbrec> d, dhash_ctype t);
 ptr<dhash_block> get_block_contents (ptr<dhash_block> block, dhash_ctype t);
 ptr<dhash_block> get_block_contents (char *data, 
@@ -428,10 +445,18 @@ public:
                const char *buf, size_t buflen,
 	       cbinsertgw_t cb, bool usecachedsucc = false);
 
+  // insert for quorum blocks
+  void insert (dhashclient dhash, 
+	       bigint key, 
+	       bigint replica_key,
+	       const char *cred, size_t credlen,
+	       const char *data, size_t datalen,
+	       int action, cbinsertgw_t cb);
   // retrieve block and verify
 #define DHASHCLIENT_RETRIEVE_USE_CACHED_SUCCESSOR 0x1
 #define DHASHCLIENT_RETRIEVE_ASK_FOR_LEASE        0x2
   void retrieve (bigint key, cbretrieve_t cb, int options = 0);
+  void retrieve (bigint key, int replicas, cbretrieve_t cb, int options = 0);
 
   // synchronouslly call setactive.
   // Returns true on error, and false on success.

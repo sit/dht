@@ -75,6 +75,7 @@ dhash::dhash(str dbname, vnode *node,
   opts.addOption("opt_nodesize", 4096);
 
   if (int err = db->opendb(const_cast < char *>(dbname.cstr()), opts)) {
+    warn << "db file: " << dbname<<"\n";
     warn << "open returned: " << strerror(err) << err << "\n";
     exit (-1);
   }
@@ -627,7 +628,7 @@ void
 dhash::get_key_got_block (chordID key, cbstat_t cb, ptr<dhash_block> block) 
 {
 
-  if (!block) 
+  if (!block)
     cb (DHASH_STOREERR);
   else {
     ptr<dbrec> k = id2dbrec (key);
@@ -841,6 +842,50 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
       return;
     }
 
+    /* starfish reservations */
+    if (ctype == DHASH_QUORUM) {
+      long action;
+      long type;
+      xdrmem x1 ((char *)d->value, d->len, XDR_DECODE);
+      if (!XDR_GETLONG (&x1, &type) || 
+	  !XDR_GETLONG (&x1, &action)) {
+	warn << "SERVER: QUORUM couldn't determine action\n";
+	cb (DHASH_ERR);
+	return;
+      } 
+      switch (action) {
+      case QUORUM_RESERVE:
+	{
+	  quorum_reservation *reservation;
+	  reservation = quorum_reservations[arg->key];
+	  if (!reservation || reservation->reserved_until <= timenow) {
+	    /* reserve the key */
+	    if (!reservation) {
+	      reservation = New quorum_reservation (arg->key, timenow + 1);
+	      quorum_reservations.insert(reservation);
+	    } else {
+	      reservation->reserved_until = timenow + 1;
+	    }
+	    store_cb (arg->type, arg->key, cb, DHASH_OK);
+	  } else {
+	    store_cb (arg->type, arg->key, cb, DHASH_STOREERR);
+	  }
+	  return;
+	}
+      case QUORUM_COMMIT:
+	quorum_reservation *reservation;
+	reservation = quorum_reservations[arg->key];
+	/* erase the reservation */
+	if (reservation) {
+	  reservation->reserved_until = 0;
+	}
+	break;
+      default:
+	warn<<"action = "<<action<<": SERVER: QUORUM: unknown action!\n";
+	return;
+      }
+
+    }
 
     warnt("DHASH: STORE_before_db");
     dhash_stat stat;
@@ -874,7 +919,7 @@ dhash::store_cb(store_status type, chordID id, cbstore cb, int stat)
 {
   warnt("DHASH: STORE_after_db");
 
-  if (stat != 0) 
+  if (stat != 0)
     (*cb)(DHASH_STOREERR);
   else	   
     (*cb)(DHASH_OK);

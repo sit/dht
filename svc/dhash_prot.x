@@ -37,7 +37,8 @@ enum dhash_ctype {
   DHASH_DNSSEC = 2,
   DHASH_NOAUTH = 3,
   DHASH_APPEND = 4,
-  DHASH_UNKNOWN = 5
+  DHASH_QUORUM = 5,
+  DHASH_UNKNOWN = 6
 };
 
 struct dhash_valueattr {

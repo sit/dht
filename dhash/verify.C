@@ -18,6 +18,9 @@ verify (chordID key, dhash_ctype t, char *buf, int len)
     case DHASH_DNSSEC:
       return verify_dnssec ();
       break;
+    case DHASH_QUORUM:
+      return verify_quorum();
+      break;
     case DHASH_NOAUTH:
     case DHASH_APPEND:
       return true;
@@ -90,6 +93,11 @@ verify_dnssec ()
   return true;
 }
 
+bool
+verify_quorum () 
+{
+  return true;
+}
 
 ptr<dhash_block>
 get_block_contents (ptr<dbrec> d, dhash_ctype t)
@@ -118,6 +126,23 @@ get_block_contents (char *data, unsigned int len, dhash_ctype t)
     return NULL;
   
   switch (t) {
+  case DHASH_QUORUM:
+    {
+      bigint key;
+      long action;
+      long credlen;
+      
+      if (!XDR_GETLONG (&x1, &action) ||
+	  !xdr_getbigint (&x1, key) || 
+	  !XDR_GETLONG (&x1, &credlen) ||
+	  !XDR_GETLONG (&x1, &contentlen)) {
+	return NULL;
+      }
+      if (!(content = (char *) XDR_INLINE (&x1, contentlen))) {
+	return NULL;
+      }
+      break;
+    }
   case DHASH_KEYHASH:
     {
       sfs_pubkey2 k;
