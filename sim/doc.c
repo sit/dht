@@ -9,6 +9,9 @@ void insertReply(Node *n, FindArgStruct *p);
 
 void findDocument(Node *n, int *docId)
 {
+  if (*docId == 783 && n->id == 330)
+    printf("-----\n");
+
   findSuccessor(n, lookupClosestPredecessor(n, *docId), 
 		*docId, findReply);
 }
@@ -19,11 +22,16 @@ void findReply(Node *n, FindArgStruct *p)
   int docId  = p->queryId;
   Document *doc;
 
+  if (!n1) {
+    printf("findNode: node %d has been deleted in the meantime!\n", p->replyId);
+    return;
+  }
+
   if (findDocInList(n1->docList, docId))
-    printf("Document %d found on node %d (%d)\n", p->queryId, 
+    printf("%f Document %d found on node %d (%d)\n", Clock, p->queryId, 
 	   p->replyId, n1->id);
   else 
-    printf("Document %d NOT found on node %d (%d)\n", p->queryId, 
+    printf("%f Document %d NOT found on node %d (%d)\n", Clock, p->queryId, 
 	   p->replyId, n1->id);
     
 }
@@ -41,6 +49,12 @@ void insertReply(Node *n, FindArgStruct *p)
   Node  *n1  = getNode(p->replyId);
   int docId  = p->queryId;
   Document *doc;
+
+  if (!n1) {
+    printf("insertReply: node %d has been deleted in the meantime!\n", p->replyId);
+    return;
+  }
+
 
   /* allocate space for new document */
   if ((doc = (Document *)calloc(1, sizeof(Document))) == NULL)
@@ -67,9 +81,11 @@ int insertDocInList(DocList *docList, Document *doc)
 {
   Document *tmp;
 
-  if (docList->size >= MAX_NUM_DOCS) 
+  if (docList->size >= MAX_NUM_DOCS) {
     /* no room available in document list */
+    printf("======\n");
     return FALSE;
+  }
 
   /* insert document at the head of the list */
   tmp = docList->head;
@@ -112,6 +128,12 @@ void updateDocList(Node *n)
   Node     *s = getNode(getSuccessor(n, 0));
   int       flag = FALSE;
 
+  if (!s) {
+    printf("updateDocList: node has been deleted in the meantime!\n");
+    return;
+  }
+
+
   /* move all documents x stored on s, and that are not between n and s,
    * to n, i.e., n is now closest to documents x than s
    */ 
@@ -147,6 +169,12 @@ void updateDocList(Node *n)
 void moveDocList(Node *n1, Node *n2)
 {
   Document *doc;
+
+  if (!n1) {
+    printf("moveDocList: node has been deleted in the meantime!\n");
+    return;
+  }
+
 
   /* move all documents x stored on s, and that are not between n and s,
    * to n, i.e., n is now closest to documents x than s

@@ -37,16 +37,20 @@ void stabilize(Node *n, void *dummy)
 
   for (i = 0; i < NUM_BITS; i++) {
 
-    if (n->id != getPredecessor(n, i)) {
-      p = newNeighborArgStruct(n->id, i, 0);
-      genEvent(getPredecessor(n, i), getSuccessor_dst, p, 
-	       Clock + intExp(AVG_PKT_DELAY));
+    if (i == 0 || (getPredecessor(n, i) != getPredecessor(n, i - 1))) {
+      if (n->id != getPredecessor(n, i)) {
+	p = newNeighborArgStruct(n->id, i, 0);
+	genEvent(getPredecessor(n, i), getSuccessor_dst, p, 
+		 Clock + intExp(AVG_PKT_DELAY));
+      }
     }
-    
-    if (n->id != getSuccessor(n, i)) {
-      p = newNeighborArgStruct(n->id, i, 0);
-      genEvent(getSuccessor(n, i), getPredecessor_dst, p, 
-	       Clock + intExp(AVG_PKT_DELAY));
+
+    if (i == 0 || (getSuccessor(n, i) != getSuccessor(n, i - 1))) {
+      if (n->id != getSuccessor(n, i)) {
+	p = newNeighborArgStruct(n->id, i, 0);
+	genEvent(getSuccessor(n, i), getPredecessor_dst, p, 
+		 Clock + intExp(AVG_PKT_DELAY));
+      }
     }
   }
 

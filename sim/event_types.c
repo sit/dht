@@ -31,8 +31,6 @@ FindArgStruct *newFindArgStruct(int srcId, void (*fun)(),
   return p;
 }
 
-
-
 int *newInt(int val) 
 { 
   int *p;

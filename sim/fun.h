@@ -19,7 +19,7 @@ void leaveNode(Node *n, int *dummy);
 void join_ev(Node *n, int *nodeId);
 void join(Node *n, int nodeId);
 void boostrap(Node *n, int nodeId);
-void notify(Node *n, int nodeId);  
+void notify(Node *n, int *nodeId);  
 
 /* functions implemented by stabilize.c */
 void stabilize(Node *n, void *dummy);

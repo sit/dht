@@ -17,4 +17,8 @@ typedef struct {
   int   replyId;   /* result (successor/predecessor of queryId */
 } FindArgStruct;
 
+typedef struct {
+  int senderId;
+} NotifyArgStruct;
+
 #endif /* INCL_EVENT_TYPES_ */ 

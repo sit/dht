@@ -17,6 +17,10 @@ void join_ev(Node *n, int *nodeId)
 void join(Node *n, int nodeId) {
   int i;
 
+if (n->id == 4)
+  printf("4444\n");
+
+
   /* initialize all entries */
   for (i = 0; i < NUM_BITS; i++) {
     setSuccessor(n, n->id, i);
@@ -53,8 +57,10 @@ void join2(Node *n, FindArgStruct *p)
     updateSuccessor(n, p->replyId);
     boostrap(n, p->replyId);
     boostrap(n, getPredecessor(n, 0));
-    notify(getNode(p->replyId), n->id);
-    notify(getNode(predId), n->id);
+    genEvent(p->replyId, notify, newInt(n->id), Clock + intExp(AVG_PKT_DELAY));
+    genEvent(predId, notify, newInt(n->id), Clock + intExp(AVG_PKT_DELAY));
+    /* notify(getNode(p->replyId), n->id); */
+    /* notify(getNode(predId), n->id); */
 
   } else {
     /* p->replyId is still a predecessor of n->id; iterate */
@@ -87,9 +93,9 @@ void updatePredecessor1(Node *n, FindArgStruct *p)
 }
 	
 
-/* XXX notify directly -- to be changed later */
-void notify(Node *n, int nodeId)
+/* notify node  */
+void notify(Node *n, int *nodeId)
 {
-  updateSuccessor(n, nodeId);
-  updatePredecessor(n, nodeId);
+  updateSuccessor(n, *nodeId);
+  updatePredecessor(n, *nodeId);
 }

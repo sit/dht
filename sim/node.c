@@ -168,7 +168,7 @@ int printNodeInfo(Node *n)
   
   printf("   doc list: ");
   for (doc = n->docList->head; doc; doc = doc->next)
-    printf("%x, ", doc->id);
+    printf("%d, ", doc->id);
   printf("\n");
 }
 
@@ -203,6 +203,9 @@ void leaveNode(Node *n, int *dummy)
   int i;
   Node *n1;
 
+  if (getSuccessor(n, 0) != n->id)
+    moveDocList(n, getNode(getSuccessor(n, 0)));
+
   for (i = 0; i < HASH_SIZE; i++) {
     for (n1 = NodeHashTable[i]; n1; n1 = n1->next) {
       if (n != n1)
@@ -217,8 +220,10 @@ void deleteRefFromTables(Node *n1, int id, int leave)
 {
   int i;
 
+  /*
   if (leave && getPredecessor(n1, 0) == id) 
     moveDocList(getNode(id), n1);
+  */
 
   for (i = NUM_BITS - 1; i >= 0; i--) {
     if (getSuccessor(n1, i) == id) {

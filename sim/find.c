@@ -39,9 +39,15 @@ int getClosestSuccessor(int *idTable, int x, int s)
 
   for (i = 0; i < NUM_BITS; i++)
     /* is idTable[i] a closest successor for x than s */
-    if (between(idTable[i], x, s, NUM_BITS))
+    if (between(idTable[i], x, s, NUM_BITS)) {
       s = idTable[i];
+      break;
+    }
 
+  if (i == 0)
+    return s;
+  else
+    return idTable[i-1];
   return s;
 }
 
@@ -53,8 +59,15 @@ int getClosestPredecessor(int *idTable, int x, int p)
 
   for (i = 0; i < NUM_BITS; i++)
     /* is idTable[i] a closest predecessor for x than p */
-    if (between(idTable[i], p, x, NUM_BITS))
+    if (between(idTable[i], p, x, NUM_BITS)) {
       p = idTable[i];
+      break;
+    }
+
+  if (i == 0)
+    return p;
+  else
+    return idTable[i-1];
 
   return p;
 }
@@ -91,7 +104,7 @@ void findSuccessor_dst(Node *n, FindArgStruct *p)
   
   pnew = newFindArgStruct(n->id, p->fun, p->queryId, succ);
 
-  if (succ == n->id || pnew->replyId == p->srcId)
+  if (succ == n->id || between(p->queryId, n->id, succ, NUM_BITS))
     genEvent(p->srcId, findSuccessor_end, pnew, 
 	     Clock + intExp(AVG_PKT_DELAY));
   else
@@ -103,6 +116,7 @@ void findSuccessor_dst(Node *n, FindArgStruct *p)
 void findSuccessor_src(Node *n, FindArgStruct *p)
 {
   FindArgStruct *pnew;
+
 
   pnew = newFindArgStruct(n->id, p->fun, p->queryId, p->replyId);
 
@@ -138,7 +152,7 @@ void findPredecessor_dst(Node *n, FindArgStruct *p)
   
   pnew = newFindArgStruct(n->id, p->fun, p->queryId, pred);
 
-  if (pred == n->id || pnew->replyId == p->srcId)
+  if (pred == n->id || between(p->queryId, pred, n->id, NUM_BITS))
     genEvent(p->srcId, findPredecessor_end, pnew, 
 	     Clock + intExp(AVG_PKT_DELAY));
   else

@@ -18,6 +18,17 @@ sources: $(SRCS)
 # DO NOT DELETE THIS LINE -- make depend depends on it.
 
 
+doc.o: def.h event.h event_types.h fun.h incl.h node.h /usr/include/alloca.h
+doc.o: /usr/include/bits/endian.h /usr/include/bits/pthreadtypes.h
+doc.o: /usr/include/bits/sched.h /usr/include/bits/select.h
+doc.o: /usr/include/bits/sigset.h /usr/include/bits/types.h
+doc.o: /usr/include/bits/waitflags.h /usr/include/bits/waitstatus.h
+doc.o: /usr/include/endian.h /usr/include/features.h /usr/include/gnu/stubs.h
+doc.o: /usr/include/stdlib.h /usr/include/sys/cdefs.h
+doc.o: /usr/include/sys/select.h /usr/include/sys/sysmacros.h
+doc.o: /usr/include/sys/types.h /usr/include/time.h /usr/include/xlocale.h
+doc.o: /usr/sww/pkg/gcc-2.95.2/lib/gcc-lib/i686-pc-linux-gnu/2.95.2/include/stddef.h
+doc.o: var.h
 event.o: def.h event.h event_types.h fun.h incl.h node.h
 event.o: /usr/include/bits/pthreadtypes.h /usr/include/bits/sched.h
 event.o: /usr/include/bits/stdio_lim.h /usr/include/bits/types.h
