@@ -548,14 +548,18 @@ dhash::transfer_fetch_cb (chordID to, chordID key, store_status stat,
 			  callback<void, dhash_stat>::ref cb,
 			  int cookie, ptr<dbrec> data, dhash_stat err) 
 {
-  if (!host_node->locations->cached (to)) {
+  if (err || !data) {
+    warn << "where did the block go?\n";
+    (*cb) (DHASH_NOENT);
+  } else if (!host_node->locations->cached (to)) {
     warn << "the successor " << to << "left the cache already\n";
-    return;
+    (*cb) (DHASH_NOENT);
+  } else {
+    ref<dhash_block> blk = New refcounted<dhash_block> (data->value,data->len);
+    cli->storeblock (to, key, blk, 
+		     wrap (this, &dhash::transfer_store_cb, cb),
+		     stat);
   }
-  ref<dhash_block> blk = New refcounted<dhash_block> (data->value, data->len);
-  cli->storeblock (to, key, blk, 
-		   wrap (this, &dhash::transfer_store_cb, cb),
-		   stat);
 }
 
 void
