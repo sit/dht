@@ -1,7 +1,8 @@
 noinst_PROGRAMS = observers.o
 observers_o_SOURCES = kademliaobserver.C protocolobserver.C \
-                         tapestryobserver.C chordobserver.C  \
-			 oldobserverfactory.C
+                    tapestryobserver.C chordobserver.C  \
+	            oldobserverfactory.C
+LIBS =
 observers_o_LINK = $(LD) -r -o $@
 
 include $(top_srcdir)/Makefile.incl
