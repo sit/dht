@@ -47,7 +47,7 @@ threadmain(int argc, char *argv[])
 {
   extern int anyready();
 
-  verbose = getenv("P2PSIM_DEBUG") ? atoi(getenv("P2PSIM_DEBUG")) : 0;
+  p2psim_verbose = getenv("P2PSIM_DEBUG") ? atoi(getenv("P2PSIM_DEBUG")) : 0;
 
   srandom(time(0) ^ (getpid() + (getpid() << 15)));
   parse_args(argc, argv);

@@ -38,8 +38,9 @@
 #define DEFAULT_THREAD_STACKSIZE 4096
 #define THREAD_MULTIPLY 6
 
-extern unsigned verbose;
-#define DEBUG(x) if(verbose >= (x)) cout
+extern unsigned p2psim_verbose;
+
+#define DEBUG(x) if(p2psim_verbose >= (x)) cout
 
 class Node;
 

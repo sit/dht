@@ -28,7 +28,7 @@
 #include "eventgenerators/eventgeneratorfactory.h"
 #include "threadmanager.h"
 
-unsigned verbose = 0;
+unsigned p2psim_verbose = 0;
 
 // New plan for crash-free exit:
 // Goal:

@@ -8,7 +8,7 @@ p2psim_LDADD = p2psim_core.o \
 	       ../observers/observers.o \
 	       ../protocols/protocols.o \
 	       ../topologies/topologies.o \
-               -L/usr/local/lib -lthread -l9 -lfmt -lutf -lgmp -lcrypto
+               -L/usr/local/lib -lthread -l9 -lfmt -lutf -lgmp -lcrypto -lgb
 
 noinst_PROGRAMS = p2psim_core.o
 p2psim_core_o_SOURCES = anyready.C condvar.C p2protocol.C event.C \
