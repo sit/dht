@@ -245,6 +245,7 @@ struct dhash_insert_arg {
 
 struct dhash_retrieve_arg {
   chordID blockID;
+  dhash_ctype ctype;
   int options;
 };
 

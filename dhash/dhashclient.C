@@ -244,9 +244,16 @@ dhashclient::insertcb (cbinsertgw_t cb, bigint key,
 void
 dhashclient::retrieve (bigint key, cb_cret cb, int options)
 {
+  retrieve(key, DHASH_CONTENTHASH, cb, options);
+}
+
+void
+dhashclient::retrieve (bigint key, dhash_ctype ct, cb_cret cb, int options)
+{
   ref<dhash_retrieve_res> res = New refcounted<dhash_retrieve_res> (DHASH_OK);
   dhash_retrieve_arg arg;
   arg.blockID = key;
+  arg.ctype = ct;
   arg.options = options;
   gwclnt->call (DHASHPROC_RETRIEVE, &arg, res, 
 		wrap (this, &dhashclient::retrievecb, cb, key, res));

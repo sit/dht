@@ -87,7 +87,7 @@ dhashgateway::dispatch (svccb *sbp)
   case DHASHPROC_RETRIEVE:
     {
       dhash_retrieve_arg *arg = sbp->template getarg<dhash_retrieve_arg> ();
-      dhcli->retrieve2 (blockID(arg->blockID, DHASH_CONTENTHASH, DHASH_BLOCK),
+      dhcli->retrieve2 (blockID(arg->blockID, arg->ctype, DHASH_BLOCK),
 			arg->options, 
 			wrap (this, &dhashgateway::retrieve_cb, sbp));
     }

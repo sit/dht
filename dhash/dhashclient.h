@@ -48,6 +48,7 @@ class dhashclient {
 
   // retrieve block and verify
   void retrieve (bigint key, cb_cret cb, int options = 0);
+  void retrieve (bigint key, dhash_ctype ct, cb_cret cb, int options = 0);
 
   // synchronouslly call setactive.
   // Returns true on error, and false on success.
