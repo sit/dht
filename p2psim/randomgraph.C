@@ -11,7 +11,7 @@
 #include <stdio.h>
 using namespace std;
 
-RandomGraph::RandomGraph()
+RandomGraph::RandomGraph(vector<string>*)
 {
 }
 

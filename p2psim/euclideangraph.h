@@ -9,6 +9,7 @@
 
 #include <map>
 #include <vector>
+#include <string>
 using namespace std;
 
 #include "topology.h"
@@ -17,7 +18,7 @@ using namespace std;
 
 class EuclideanGraph : public DVGraph {
 public:
-  EuclideanGraph();
+  EuclideanGraph(vector<string>*);
   ~EuclideanGraph();
   
   virtual void parse(ifstream&);

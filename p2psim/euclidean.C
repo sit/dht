@@ -12,7 +12,7 @@
 #include "p2psim.h"
 using namespace std;
 
-Euclidean::Euclidean()
+Euclidean::Euclidean(vector<string>*)
 {
 }
 

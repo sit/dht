@@ -2,6 +2,7 @@
 #define __E2EGRAPH_H
 
 #include <vector>
+#include <string>
 #include <fstream>
 using namespace std;
 
@@ -10,7 +11,7 @@ using namespace std;
 
 class E2EGraph : public Topology {
 public:
-  E2EGraph(unsigned int num);
+  E2EGraph(vector<string>*);
   ~E2EGraph();
   
   typedef pair<unsigned, unsigned> Coord;

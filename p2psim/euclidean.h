@@ -3,6 +3,8 @@
 
 #include <map>
 #include <fstream>
+#include <vector>
+#include <string>
 using namespace std;
 
 #include "topology.h"
@@ -10,7 +12,7 @@ using namespace std;
 
 class Euclidean : public Topology {
 public:
-  Euclidean();
+  Euclidean(vector<string>*);
   ~Euclidean();
   
   typedef pair<unsigned, unsigned> Coord;

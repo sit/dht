@@ -3,10 +3,12 @@
 
 #include "topology.h"
 #include <string>
+#include <vector>
+using namespace std;
 
 class TopologyFactory {
 public:
-  static Topology *create(string s, unsigned int num = 0);
+  static Topology *create(string s, vector<string>*);
 };
 
 #endif // __TOP_FACTORY_H

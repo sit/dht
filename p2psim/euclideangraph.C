@@ -13,7 +13,7 @@
 #include <math.h>
 using namespace std;
 
-EuclideanGraph::EuclideanGraph()
+EuclideanGraph::EuclideanGraph(vector<string>*)
 {
 }
 

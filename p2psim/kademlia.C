@@ -249,6 +249,7 @@ Kademlia::do_insert(void *args, void *result)
   do_lookup(&la, &lr);
 
   if(lr.id == _id) {
+    DEBUG(1) << "Node " << printID(_id) << " storing " << printID(iargs->key) << ":" << iargs->val << "." << endl;
     _values[iargs->key] = iargs->val;
     return;
   }

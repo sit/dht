@@ -40,11 +40,9 @@ Topology::parse(char *filename)
       exit(-1);
     }
 
-    if (words.size() > 2) 
-      top = TopologyFactory::create(words[1], atoi(words[2].c_str()));
-    else
-      top = TopologyFactory::create(words[1]);
-
+    string topology = words[0];
+    words.erase(words.begin());
+    top = TopologyFactory::create(topology, &words);
     break;
   }
 

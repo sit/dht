@@ -13,6 +13,7 @@
 
 #include <map>
 #include <vector>
+#include <string>
 using namespace std;
 
 #include "topology.h"
@@ -21,7 +22,7 @@ using namespace std;
 
 class RandomGraph : public DVGraph {
 public:
-  RandomGraph();
+  RandomGraph(vector<string>*);
   ~RandomGraph();
   
   virtual void parse(ifstream&);

@@ -13,9 +13,9 @@
 
 using namespace std;
 
-E2EGraph::E2EGraph(unsigned int num)
+E2EGraph::E2EGraph(vector<string> *v)
 {
-  _num = num;
+  _num = atoi(v->at(0).c_str());
   assert(_num > 0);
 
   _pairwise.resize(_num);
