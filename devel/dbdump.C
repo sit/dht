@@ -44,6 +44,9 @@ main (int argc, char *argv[])
   assert (r==0);
 
   DBT key, data;
+  unsigned totalsz = 0;
+  unsigned keys = 0;
+
   for (int i = 0; ; i++) {
     bzero (&key, sizeof (key));
     bzero (&data, sizeof (data));
@@ -59,13 +62,19 @@ main (int argc, char *argv[])
     ptr<dbrec> kr = New refcounted<dbrec> (key.data, key.size);
 
     warn << "key[" << i << "] " << to_merkle_hash (kr) << "\n";
-    
+
     bzero (&data, sizeof (data));
     err = db->get (db, NULL, &key, &data, 0);
     if (err)
       warn << "lookup err: " << err << " " << strerror (err) << "\n";
 
+    keys++;
+    totalsz += data.size;
+    
     err_flush ();
   }
+
+  warn << "total keys: " << keys << "\n";
+  warn << "total bytes: " << totalsz << "\n";
 }
 
