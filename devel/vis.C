@@ -121,7 +121,7 @@ struct f_node {
   }
 
   f_node (chordID i, str h, unsigned short p) :
-    ID (i), host (h), port (p), selected (true), highlight (false), vnode_num (0) { 
+    ID (i), host (h), port (p), vnode_num (0), selected (true), highlight (false) { 
     draw = check_get_state ();
     fingers = NULL;
     predecessor = NULL;
