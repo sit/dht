@@ -40,14 +40,12 @@ location::~location () {
   warnx << "~location: delete " << n << "\n";
 }
 
-locationtable::locationtable (ptr<chord> _chordnode, int set_rpcdelay, 
-			      int _max_cache, int _max_connections)
+locationtable::locationtable (ptr<chord> _chordnode, int _max_cache)
   : chordnode (_chordnode), max_cachedlocs (_max_cache), 
-     rpcdelay (set_rpcdelay)
+     rpcdelay (0)
 {
   nrpc = 0;
   nrpcfailed = 0;
-  rpcdelay = 0;
   a_lat = 0.0;
   nsent = 0;
   npending = 0;

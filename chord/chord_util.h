@@ -41,6 +41,7 @@
  u_long log2 (u_long n);
  sfs_hostname my_addr ();
  chordID init_chordID (int index, int p);
+ chordID make_chordID (str hostname, int port, int index = 0);
  bool is_authenticID (chordID &x, sfs_hostname n, int p, int vnode);
 
  void warnt(char *msg);

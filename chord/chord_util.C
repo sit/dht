@@ -262,6 +262,18 @@ init_chordID (int index, int port)
   return ID;
 }
 
+chordID
+make_chordID (str hostname, int port, int index = 0)
+{
+  chordID ID;
+  // XXX we probably should marshall this!
+  str ids = strbuf () << hostname << "." << port << "." << index;
+  char id[sha1::hashsize];
+  sha1_hash (id, ids, ids.len());
+  mpz_set_rawmag_be (&ID, id, sizeof (id));  // For big endian
+  return ID;
+}
+
 bool
 is_authenticID (chordID &x, sfs_hostname n, int p, int vnode)
 {
@@ -274,3 +286,4 @@ is_authenticID (chordID &x, sfs_hostname n, int p, int vnode)
   if (ID == x) return true;
   else return false;
 }
+

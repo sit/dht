@@ -184,8 +184,7 @@ class locationtable : public virtual refcount {
 #endif / *FAKE_DELAY */
 
  public:
-  locationtable (ptr<chord> _chordnode, int set_rpcdelay, int _max_cache,
-		 int _max_connections);
+  locationtable (ptr<chord> _chordnode, int _max_connections);
   bool betterpred1 (chordID current, chordID target, chordID newpred);
   char betterpred2 (chordID myID, chordID current, chordID target, 
 		    chordID newpred);
