@@ -1019,31 +1019,26 @@ vnode::dogetsucc_ext (svccb *sbp)
   chord_getsucc_ext_res res(CHORD_OK);
   ndogetsucc_ext++;
   int n = 1;
-  for (int i = 1; i <= NBIT; i++) {
-    if (!finger_table[i].first.alive) continue;
-    if (finger_table[i].first.n != finger_table[i-1].first.n) {
-      n++;
-    }
+  for (int i = 1; i <= nsucc; i++) {
+    if (finger_table[i].first.alive) n++;
   }
   res.resok->succ.setsize (n);
-  res.resok->succ[0].x = finger_table[0].first.n;
-  location *l = locations->getlocation (finger_table[0].first.n);
-  res.resok->succ[0].r = locations->getaddress (finger_table[0].first.n);
+  res.resok->succ[0].x = succlist[0].n;
+  location *l = locations->getlocation (succlist[0].n);
+  res.resok->succ[0].r = locations->getaddress (succlist[0].n);
   res.resok->succ[0].a_lat = (long)(l->a_lat * 100);
   res.resok->succ[0].a_var = (long)(l->a_var * 100);
   res.resok->succ[0].nrpc = l->nrpc;
   n = 1;
-  for (int i = 1; i <= NBIT; i++) {
-    if (!finger_table[i].first.alive) continue;
-    if (finger_table[i].first.n != finger_table[i-1].first.n) {
-      l = locations->getlocation (finger_table[i].first.n);
-      res.resok->succ[n].x = finger_table[i].first.n;
-      res.resok->succ[n].r = locations->getaddress (finger_table[i].first.n);
-      res.resok->succ[n].a_lat = (long)(l->a_lat * 100);
-      res.resok->succ[n].a_var = (long)(l->a_var * 100);
-      res.resok->succ[n].nrpc = l->nrpc;
-      n++;
-    }
+  for (int i = 1; i <= nsucc; i++) {
+    if (!succlist[i].alive) continue;
+    l = locations->getlocation (succlist[i].n);
+    res.resok->succ[n].x = succlist[i].n;
+    res.resok->succ[n].r = locations->getaddress (succlist[i].n);
+    res.resok->succ[n].a_lat = (long)(l->a_lat * 100);
+    res.resok->succ[n].a_var = (long)(l->a_var * 100);
+    res.resok->succ[n].nrpc = l->nrpc;
+    n++;
   }
   warnt("CHORD: dogetsucc_reply");
   sbp->reply (&res);

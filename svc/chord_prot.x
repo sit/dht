@@ -208,9 +208,9 @@ program CHORD_PROGRAM {
 		CHORDPROC_GETFINGERS_EXT (chord_vnode) = 11;
 
 		chord_getsucc_ext_res
-		CHORDPROC_GETSUCC_EXT (chord_vnode) = 11;
+		CHORDPROC_GETSUCC_EXT (chord_vnode) = 12;
 
 		chord_gettoes_res
-          	CHORDPROC_GETTOES (chord_gettoes_arg) = 12;
+          	CHORDPROC_GETTOES (chord_gettoes_arg) = 13;
 	} = 1;
 } = 344447;

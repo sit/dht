@@ -566,16 +566,16 @@ draw_ring ()
 			 x,y,
 			 a,b);
 	}
-      }
-      if (n->ressucc) {
-	for (unsigned int i=0; i < n->ressucc->resok->succ.size (); i++) {
-	  int a,b;
-	  gdk_gc_set_foreground (draw_gc, &brown);
-	  ID_to_xy (n->ressucc->resok->succ[i].x, &a, &b);
-	  gdk_draw_line (pixmap,
-			 draw_gc,
-			 x,y,
-			 a,b);
+	if (n->ressucc) {
+	  for (unsigned int i=0; i < n->ressucc->resok->succ.size (); i++) {
+	    int a,b;
+	    gdk_gc_set_foreground (draw_gc, &brown);
+	    ID_to_xy (n->ressucc->resok->succ[i].x, &a, &b);
+	    gdk_draw_line (pixmap,
+			   draw_gc,
+			   x,y,
+			   a,b);
+	  }
 	}
       }
     }

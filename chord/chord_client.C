@@ -290,6 +290,12 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
 	vnodep->dogetfingers_ext (sbp);
       }
       break;
+    case CHORDPROC_GETSUCC_EXT:
+      {
+	warnt("CHORD: getfingers_ext_request");
+	vnodep->dogetsucc_ext (sbp);
+      }
+      break;
     case CHORDPROC_CHALLENGE:
       {
 	warnt("CHORD: challenge");
