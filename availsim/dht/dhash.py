@@ -158,6 +158,7 @@ class dhash (chord):
 	events = []
 	read_pieces = my.read_pieces ()
 	min_pieces = my.min_pieces ()
+	repair_pieces = my.repairto_pieces ()
 	insert_piece_size = my.insert_piece_size 
         for b in resp_blocks:
             # Check their availability
@@ -176,7 +177,7 @@ class dhash (chord):
 		    # print "# LOST block", b, "after failure of", an, "|", succs
 	    elif avail < min_pieces:
 		# print "# REPAIR block", b, "after failure of", an
-		needed = min_pieces - avail
+		needed = repair_pieces - avail
                 isz = insert_piece_size (my.blocks[b])
 		fixer = haves.pop (0)
 		# XXX should pick the best fixers? min nextsendtime
@@ -275,12 +276,12 @@ class dhash (chord):
 	    # XXX optimize to only call my.succ when it should change
 	    real_succs = getsucclist (b, la + 1)
 	    if n in real_succs[:-1]:
+		if b in real_succs[-1].blocks:
+		    av[b] -= 1
+		    if b not in uat and av[b] < needed: uat[b] = t
 		av[b] += 1
 		if av[b] == needed:
 		    del uat[b]
-	    if b in real_succs[-1].blocks:
-		av[b] -= 1
-		if b not in uat and av[b] < needed: uat[b] = t
 	return newevs
     def fail_node (my, t, id):
 	try:
@@ -290,6 +291,7 @@ class dhash (chord):
 	    la = my.look_ahead ()
 	    needed = my.read_pieces ()
 	    getsucclist = my.succ
+	    # XXX some bug here
 	    for b in n.blocks:
 		real_succs = getsucclist (b, la)
 		if n in real_succs:
@@ -355,6 +357,9 @@ class dhash (chord):
         """The minimum number of pieces we need before repairing.
         Probably should be at least as big as read_pieces."""
         return 0
+    def repairto_pieces (my):
+	"""The number of pieces to reach for when repairing."""
+	return 0
     def read_pieces (my):
         """The number of pieces on different nodes needed to for successful read."""
         return 0
@@ -381,6 +386,8 @@ class dhash_replica (dhash):
 
     def min_pieces (my):
         return my.replicas
+    def repairto_pieces (my):
+	return my.replicas
     def read_pieces (my):
         return 1
     def insert_pieces (my):
@@ -389,6 +396,33 @@ class dhash_replica (dhash):
         return size
     def look_ahead (my):
 	return 16
+
+class total_recall_replica (dhash):
+    """Total recall's repair algorithm with dhash's placement"""
+    def __init__ (my, args = []):
+	# short and long term redundancy factors
+	try:
+	    my.shortt = int (args.pop (0))
+	except:
+	    my.shortt = 2
+	try:
+	    my.longt = int (args.pop (0))
+	except:
+	    my.longt = 4
+	dhash.__init__ (my, args)
+
+    def min_pieces (my):
+	return my.shortt
+    def repairto_pieces (my):
+	return my.longt
+    def read_pieces (my):
+	return 1
+    def insert_pieces (my):
+	return my.longt
+    def insert_piece_size (my, size):
+	return size
+    def look_ahead (my):
+	return my.longt
 
 class dhash_fragments (dhash):
     def __init__ (my, args = []):
@@ -405,6 +439,9 @@ class dhash_fragments (dhash):
     def min_pieces (my):
         # Should this by dfrags?
         return my.efrags
+    def repairto_pieces (my):
+	# Same as insert_pieces and min_pieces??
+	return my.efrags
     def read_pieces (my):
         return my.dfrags
     def insert_pieces (my):
@@ -418,6 +455,8 @@ class dhash_fragments (dhash):
 class dhash_cates (dhash):
     def min_pieces (my):
         return 14
+    def repairto_pieces (my):
+	return 14
     def read_pieces (my):
         return 7
     def insert_pieces (my):

@@ -183,6 +183,9 @@ class totalrecall_base (chord):
 		del my.unavailable_time[block]
 	return None
 
+    def _update_inode (my, b, livenodes, newnodes):
+	my.inodes[b] = livenodes + newnodes
+
     def repair (my, t, blocks):
 	# The blocks that id was storing are owned by lots of
 	# people.  Each one of them needs to figure out that
@@ -244,7 +247,7 @@ class totalrecall_base (chord):
 			s.sent_bytes_breakdown['failure_repair_read'] += isz
 		    fixer.cached_blocks[b] = 1
 		    # XXX account for disk used by cache
-		my.inodes[b] = livenodes + newnodes
+		my._update_inode (b, livenodes, newnodes)
 	return events
 
     # Because TR tracks explicitly the nodes that hold
@@ -308,6 +311,25 @@ class totalrecall_lazy_replica (totalrecall_base):
     Section 4.3 is the key here."""
     def insert_pieces (my, size):
 	return my.longt, size
+    def read_pieces (my):
+	return 1
+
+class dhash_replica (totalrecall_base):
+    """Do Sostenuto repair for replicas."""
+    def __init__ (my, args = []):
+	try:
+	    my.replicas = int (args[0])
+	except:
+	    my.replicas = 3
+	totalrecall_base.__init__ (my, args)
+	my.shortt = my.replicas
+	my.longt  = my.replicas
+
+    def _update_inode (my, b, livenodes, newnodes):
+	my.inodes[b] += newnodes
+
+    def insert_pieces (my, size):
+	return my.replicas, size
     def read_pieces (my):
 	return 1
 
