@@ -48,10 +48,7 @@ pred_list::preds ()
   ptr<location> cur = pred ();
   ret.push_back (cur);
 #ifdef PRED_LIST
-  ptr<location> start = cur;
-  // XXX it's not always safe to go backwards. Nodes we run
-  //     into going backwards might point off the ring!
-  for (int i = 1; i < npred_ && cur != start; i++) {
+  for (u_int i = 1; i < num_pred (); i++) {
     cur = locations->closestpredloc (decID (cur->id ()));
     ret.push_back (cur);
   }
