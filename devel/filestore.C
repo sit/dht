@@ -114,11 +114,12 @@ struct indirect {
 struct inode : indirect {
   char filename[256];
   int filelen;
-  static const int extralen = sizeof(inode::filename) + sizeof(inode::filelen);
+  int extralen;
 
   inode(char *aname, int alen) : indirect(NULL) {
     strncpy(filename, aname, sizeof(filename));
     filelen = alen;
+    extralen = sizeof(filename) + sizeof(filelen);
   }
 
   int len(void) {
@@ -213,9 +214,9 @@ void gotinode_cb(dhash_stat st, ptr<dhash_block> bl, vec<chordID> vc) {
   if(outfile == NULL)
     fatal("can't open file for writing\n");
 
-  char *buf = bl->data+inode::extralen;
+  char *buf = bl->data+260;
   chordID ID;
-  for(unsigned int i=0; i<(bl->len-inode::extralen); i+=20) {
+  for(unsigned int i=0; i<(bl->len-260); i+=20) {
     mpz_set_rawmag_be(&ID, buf+i, sha1::hashsize);  // For big endian
     dhash->retrieve(ID, wrap(&gotindirect_cb, (BLOCKSIZE/20)*BLOCKSIZE*i/20));
     warnx << "retrieve " << ID << "\n";
