@@ -39,7 +39,8 @@ protected:
   void *_doRPC(IPAddress, member_f, void*);
 
   //
-  // XXX: THIS DOES NOT WORK
+  // XXX: THIS DOES NOT WORK.
+  // More precisely: it's fucking scary.  Check out cbevent.C
   //
 #define delaycb(X, Y, Z) this->_delaycb(X, ((member_f)(&Y)), ((void*) (Z)))
   void _delaycb(Time, member_f, void*);

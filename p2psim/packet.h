@@ -25,7 +25,8 @@ private:
   Channel *_c;
   string _protocol;
   Protocol::member_f _fn; // method to invoke
-  void *_args;  // arguments to pass
+  void *_args;            // arguments to pass
+  void *_ret;             // return value
 
   // the following fields can only be set by the Network layer
   IPAddress _src;

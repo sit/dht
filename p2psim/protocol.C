@@ -44,7 +44,7 @@ Protocol::_doRPC(IPAddress dst, member_f fn, void *args)
 
   // wait for reply. blocking.
   Packet *reply = (Packet *) recvp(p->_c);
-  return reply->_args;
+  return reply->_ret;
 
   // Why don't we need to delete the Packet?
 }
@@ -139,8 +139,9 @@ Protocol::Receive(void *p)
   reply->_dst = origsrc;
   reply->_c = packet->_c;
   reply->_protocol = packet->_protocol;
-  reply->_args = ret;
-  reply->_fn = 0;
+  reply->_args = 0;
+  reply->_ret = ret;
+  reply->_fn = 0;        // indicates that this is a RPC reply
 
   send(Network::Instance()->pktchan(), &reply);
 

@@ -1,10 +1,14 @@
-#first parameter must be the type of message
+#first string on a line is the type of message
 #
 # event type "node"
 #   node timestamp node-id protocol:operation [arguments]
+#   (operations are enumerated protocol.h)
 #
 # event type "simulator"
 #   simulator timestamp exit
+#
 node 0 0 Kademlia:0 wellknown=0
 node 2 1 Kademlia:0 wellknown=0
-#simulator 100 exit
+
+#this doesn't work yet.
+#simulator 100 exi
