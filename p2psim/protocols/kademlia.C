@@ -207,6 +207,9 @@ Kademlia::~Kademlia()
         _bad_timeouts,
         (double) _bad_hops / (_ok_failures + _bad_failures),
         (double) _bad_hop_latency / (_ok_failures + _bad_failures));
+
+
+    print_stats();
   }
 
   if(_all_kademlias) {
@@ -474,6 +477,7 @@ Kademlia::lookup(Args *args)
   }
 
   // failure case
+  IPAddress lasthop = fr.history.size() ? fr.history.back() : ip();
   if(key != fr.succ.id) {
     _bad_lookup_latency += (after - before);
     _bad_hops += fr.hops;
@@ -483,13 +487,16 @@ Kademlia::lookup(Args *args)
 
     if(alive_and_joined) {
       _bad_failures++;
+      record_lookup_stat(ip(), lasthop, after-before, false, false);
     } else {
       _ok_failures++;
+      record_lookup_stat(ip(), lasthop, after-before, true, false);
     }
     return;
   }
 
   // good case
+  record_lookup_stat(ip(), lasthop, after-before, true, true);
   if(outcounter++ >= 1000) {
     KDEBUG(0) <<  pingbegin - before << "ms lookup (" << fr.hops << "h, " << fr.rpcs << "r, " << fr.timeouts << "t), " << after - pingbegin << "ms ping, " << after - before << "ms total." << endl;
     outcounter = 0;
@@ -647,6 +654,7 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
     improved = (distance(successors.begin()->id, fargs->key) < distance(fresult->succ.id, fargs->key));
     if(improved && ci->fr->hop+1 > fresult->hops) {
       fresult->hops = ci->fr->hop+1;
+      fresult->history.push_back(ci->ki.ip);
       fresult->latency += (now() - ci->fr->startts);
     }
     delete ci;
@@ -998,6 +1006,7 @@ void
 Kademlia::record_stat(stat_type type, uint num_ids, uint num_else )
 {
   _rpc_bytes += 20 + num_ids * 4 + num_else; // paper says 40 bytes per node entry
+  record_bw_stat(STAT_LOOKUP, num_ids, num_else);
 }
 // }}}
 // {{{ Kademlia::distance

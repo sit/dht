@@ -231,6 +231,7 @@ public:
     unsigned rpcs;      // total number of RPCs we sent
     unsigned hops;      // number of hops for lookups
     unsigned timeouts;  // number of RPCs to dead nodes
+    vector<IPAddress> history; // history of nodes
     Time latency;   // latency from nodes that make hopcount go up
   };
   // }}}

@@ -83,9 +83,9 @@ Euclidean::parse(ifstream &ifs)
     }
     c.first = atoi(coords[0].c_str());
     c.second = atoi(coords[1].c_str());
-    if (c.first > max_first) 
+    if ((Time) c.first > max_first) 
       max_first = c.first;
-    else if (c.second > max_second)
+    else if ((Time) c.second > max_second)
       max_second = c.second;
 
     // what kind of node?
@@ -100,5 +100,5 @@ Euclidean::parse(ifstream &ifs)
     send(Network::Instance()->nodechan(), &p);
   }
 
-  _med_lat = sqrt(max_first * max_first + max_second * max_second)/3;
+  _med_lat = (Time) sqrt(max_first * max_first + max_second * max_second)/3;
 }
