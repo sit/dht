@@ -222,11 +222,16 @@ public:
   };
 
   class find_value_result { public:
-    find_value_result() { hops = 0; }
+    find_value_result() { rpcs = hops = timeouts = 0; latency = 0; }
     ~find_value_result() { }
     k_nodeinfo succ;
     NodeID rid;
-    unsigned hops;
+    
+    // statistics
+    unsigned rpcs;      // total number of RPCs we sent
+    unsigned hops;      // number of hops for lookups
+    unsigned timeouts;  // number of RPCs to dead nodes
+    Time latency;   // latency from nodes that make hopcount go up
   };
   // }}}
   // {{{ find_node_args and find_node_result
@@ -242,10 +247,13 @@ public:
   };
 
   class find_node_result { public:
-    find_node_result(unsigned h = 0) : hop(h) { }
+    find_node_result(unsigned h = 0) : hop(h) { startts = now(); }
     unsigned hop;
     vector<k_nodeinfo> results;
     NodeID rid;
+
+    //
+    Time startts;
   };
   // }}}
   // {{{ lookup_args and lookup_result
@@ -335,13 +343,18 @@ private:
 
   // global statistics
   static double _rpc_bytes; // total traffic
-  static double _good_latency; // successful lookups, total time
-  static double _ping_latency; // successful lookups, time spent in ping
-  static double _lookup_latency; // successful lookups, time spent in lookup
-  static double _good_hops;
-  static int _good_lookups;
-  static int _ok_failures;
-  static int _bad_failures;
+  static Time _good_latency; // successful lookups, total time
+  static Time _ping_latency; // successful lookups, time spent in ping
+  static Time _lookup_latency; // successful lookups, time spent in lookup
+  static Time _hop_latency; // latency from nodes that improve our hopcount
+  static unsigned _good_hops;
+  static unsigned _rpcs;
+  static unsigned _timeouts;
+  static unsigned _ok_by_reaper;
+  static unsigned _timeouts_by_reaper;
+  static unsigned _good_lookups;
+  static unsigned _ok_failures;
+  static unsigned _bad_failures;
   static unsigned _nkademlias;
 
 
