@@ -59,6 +59,8 @@ private:
   Topology *_top;
   FailureModel *_failure_model;
 
+  set<Protocol*> *_all_protos;
+
   Channel *_nodechan;
 };
 

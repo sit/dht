@@ -51,6 +51,8 @@ Network::Network(Topology *top, FailureModel *fm) : _top(0),
   _failure_model = fm;
   assert(_failure_model);
 
+  _all_protos = NULL;
+
   // get the nodes
   thread();
 }
@@ -62,17 +64,26 @@ Network::~Network()
     delete p->second;
   chanfree(_nodechan);
   delete _top;
+  delete _all_protos;
 }
 
 
 set<Protocol*>
 Network::getallprotocols(string proto)
 {
-  set<Protocol*> pl; // XXX: should we just New this?  return may be expensive
 
-  for(NMCI p = _nodes.begin(); p != _nodes.end(); ++p)
-    pl.insert(p->second->getproto(proto));
-  return pl;
+  // NOTE: Caching this completely breaks the outdated assumption that we
+  // might use this simulator for simulating different types of protocols 
+  // at a time.  We could make a hash table here, but that would just 
+  // be reinforcing this deprecated idea.
+
+  if( _all_protos == NULL ) {
+    _all_protos = New set<Protocol *>;
+    assert( _all_protos );
+    for(NMCI p = _nodes.begin(); p != _nodes.end(); ++p)
+      _all_protos->insert(p->second->getproto(proto));
+  }
+  return *_all_protos;
 }
 
 set<IPAddress>

@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.19 2003/11/17 02:46:31 strib Exp $ */
+/* $Id: tapestry.h,v 1.20 2003/11/17 20:07:58 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -61,6 +61,7 @@ public:
   // how many digits do these keys share
   // returns -1 if they are the same
   int guid_compare( GUID key1, GUID key2 ); 
+  int guid_compare( GUID key1, uint *key2_digits ); 
 
   bool stabilized(vector<GUID> lid);
 

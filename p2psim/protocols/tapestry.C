@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.26 2003/11/17 02:46:31 strib Exp $ */
+/* $Id: tapestry.C,v 1.27 2003/11/17 20:07:58 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -1608,6 +1608,27 @@ Tapestry::guid_compare( GUID key1, GUID key2 )
 
 }
 
+int
+Tapestry::guid_compare( GUID key1, uint key2_digits[] )
+{
+
+  uint i = 0;
+  // otherwise, figure out where they differ
+  for( ; i < _digits_per_id; i++ ) {
+    if( get_digit( key1, i ) != key2_digits[i] ) {
+      break;
+    }
+  }
+
+  // if they're the same, return -1
+  if( i == _digits_per_id ) {
+    return -1;
+  }
+
+  return (int) i;
+
+}
+
 void
 Tapestry::leave(Args *args)
 {
@@ -1645,7 +1666,8 @@ Tapestry::crash(Args *args)
 string
 Tapestry::print_guid( GUID id )
 {
-
+  return "";
+  /*
   char buf[_digits_per_id+1];
 
   //printf( "initial guid: %16qx\n", id );
@@ -1656,7 +1678,7 @@ Tapestry::print_guid( GUID id )
   }
 
   return string(buf);
-
+  */
 }
 
 void
@@ -1695,6 +1717,12 @@ Tapestry::lookup_cheat( GUID key )
   set<Protocol*>::iterator pos;
   vector<Tapestry::GUID> lid;
 
+  // get the keys digits
+  uint key_digits[_digits_per_id];
+  for( uint i = 0; i < _digits_per_id; i++ ) {
+    key_digits[i] = get_digit( key, i );
+  }
+
   Tapestry *c = 0;
   int maxmatch = -2;
   for (pos = l.begin(); pos != l.end(); ++pos) {
@@ -1702,7 +1730,7 @@ Tapestry::lookup_cheat( GUID key )
     assert(c);
     // only care about live, joined nodes (or live nodes in our rt)
     if( c->node()->alive() && (c->is_joined() || _rt->contains(c->id())) ) {
-      int match = guid_compare( c->id(), key );
+      int match = guid_compare( c->id(), key_digits );
       if( match == -1 ) {
 	return c->id();
       } else if( match > maxmatch ) {
@@ -1710,7 +1738,7 @@ Tapestry::lookup_cheat( GUID key )
 	lid.clear();
       }
       if( match == maxmatch ) {
-	lid.push_back(c->id ());
+	lid.push_back(c->id());
       }
     }
   }
@@ -1728,7 +1756,7 @@ Tapestry::lookup_cheat( GUID key )
     for( uint j = 0; j < _digits_per_id - maxmatch; j++ ) {
       uint next_digit = get_digit( next, maxmatch+j );
       uint best_digit = get_digit( bestmatch, maxmatch+j );
-      uint key_digit = get_digit( key, maxmatch+j );
+      uint key_digit = key_digits[maxmatch+j];
       if( (next_digit >= key_digit && best_digit >= key_digit && 
 	   next_digit < best_digit ) ||
 	  (next_digit < key_digit && best_digit < key_digit &&
