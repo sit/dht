@@ -76,7 +76,7 @@ ChordOneHop::stabilize()
   assert(succ.ip);
   //record_stat(); 
   bool ok;
-  ok = doRPC(succ.ip, &Chord::null_handler, (void *)NULL, (void *)NULL);
+  ok = doRPC(succ.ip, &Chord::null_handler, (void *)NULL, &succ);
 
   if (!ok) { //notify the whole world
     loctable->del_node(succ);
@@ -202,7 +202,7 @@ ChordOneHop::find_successors(CHID k, uint m, uint all, bool is_lookup)
   while (1) {
     succ = loctable->succ(k);
     //record_stat(is_lookup?1:0);
-    ok = doRPC(succ.ip, &Chord::null_handler, (void *)NULL, (void *)NULL);
+    ok = doRPC(succ.ip, &Chord::null_handler, (void *)NULL, &succ);
     if ((!ok) && (alive())) {
       timeout++;
       loctable->del_node(succ);

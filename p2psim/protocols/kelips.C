@@ -27,6 +27,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <iostream>
+#include <time.h>
 #include <map>
 
 using namespace std;
@@ -41,9 +42,6 @@ double Kelips::_good_hops = 0;
 int Kelips::_good_lookups = 0;
 int Kelips::_ok_failures = 0;  // # legitimate lookup failures
 int Kelips::_bad_failures = 0; // lookup failed, but node was live
-int Kelips::_connected_sample= 0; // lookup failed, but node was live
-float Kelips::_connected_sz = 0.0;
-vector<u_int> Kelips::_allhops;
 
 Kelips::Kelips(IPAddress i, Args a) : P2Protocol(i)
 {
@@ -64,125 +62,21 @@ Kelips::Kelips(IPAddress i, Args a) : P2Protocol(i)
   _purge_time = a.nget<uint>("purgetime",1000,10);
   _track_conncomp_timer = a.nget<uint>("track_conncomp_timer",0,10);
   _to_multiplier = a.nget<uint>("timeout_multiplier",3,10);
-#ifdef HAVE_LIBGB
-  if ((_track_conncomp_timer) && (ip() == 1)) {
-    delaycb(_track_conncomp_timer, &Kelips::calculate_conncomp, (void*)NULL);
-  }
-#endif
-}
-
-#ifdef HAVE_LIBGB
-#define link z.V
-#define master y.V
-#define sz x.I \
-
-int max_connected_component(Graph *g)
-{
-  Vertex*v;
-  Arc*a;
-  long isol= 0;
-  long comp= 0;
-  int maxsz;
-
-  for(v= g->vertices;v<g->vertices+g->n;v++){
-    v->link= v;
-    v->master= v;
-    assert (v->master);
-    v->sz= 1;
-    isol++;
-    comp++;
-
-    a= v->arcs;
-    while(a&&a->tip> v) {
-      a = a->next;
-    }
-
-    if(!a) {
-      ;
-    } else{
-      for(;a;a = a->next){
-	register Vertex *u = a->tip;
-	
-	assert (u);
-	assert (u->master);
-	u= u->master;
-	if(u!=v->master){
-	  register Vertex*w= v->master,*t;
-	  if(u->sz<w->sz){
-	    w->sz+= u->sz;
-	    if(u->sz==1)isol--;
-	    for(t= u->link;t!=u;t= t->link)t->master= w;
-	    u->master= w;
-	  } else {
-	    if(u->sz==1)isol--;
-	    u->sz+= w->sz;
-	    if(w->sz==1)isol--;
-	    for(t= w->link;t!=w;t= t->link)t->master= u;
-	    w->master= u;
-	  }
-	  t= u->link;
-	  u->link= w->link;
-	  w->link= t;
-	  comp--;
-	}
-	
-      }
-      
-    }
-    
-  }
-    
-  maxsz = 0;
-  for(v= g->vertices;v<g->vertices+g->n;v++) 
-    if (v->master==v  && v->sz > maxsz) 
-      maxsz = v->sz;
-  return maxsz;  
-}
-
-
-void
-Kelips::calculate_conncomp(void *)
-{
-  if (Node::collect_stat()) {
-    _connected_sample++;
-    const set<Node*> *l = Network::Instance()->getallnodes();
-    Graph *g = gb_new_graph(l->size());
-    assert(g);
-    int alive = 0;
-    for(uint i = 1; i <= l->size(); i++) {
-      Kelips *t = dynamic_cast<Kelips*>(Network::Instance()->getnode(i));
-      if (t->alive()) {
-	t->add_gb_edge(g);
-	alive++;
-      }
-    }
-    int max = max_connected_component(g);
-    _connected_sz += (float)max/(float)alive;
-    printf("%llu max_connected_component is %d alive %d\n", now(), max, alive);
-    gb_recycle(g);
-  }
-
-  delaycb(_track_conncomp_timer, &Kelips::calculate_conncomp, (void*)NULL);
+  _to_cheat = a.nget<uint>("timeout_cheat",0,10);
 }
 
 void
-Kelips::add_gb_edge(Graph *g)
+Kelips::add_edge(int *matrix, int sz)
 {
   vector<IPAddress> l;
   l.clear();
   for(map<IPAddress, Info *>::const_iterator ii = _info.begin();
       ii != _info.end();
       ++ii){
-    if (Network::Instance()->getnode(ii->first)->alive()) 
-      l.push_back(ii->first);
-  }
-  sort(l.begin(),l.end());
-  for (uint i = 0; i < l.size(); i++) {
-    if (i>0) assert(l[i] > l[i-1]);
-    gb_new_edge(g->vertices + ip()-1, g->vertices+l[i]-1,1);
+    if (ii->first!=ip() &&Network::Instance()->getnode(ii->first)->alive()) 
+      matrix[(ip()-1)*sz + ii->first-1] = 1;
   }
 }
-#endif
 
 string
 i2s(unsigned long long x)
@@ -199,17 +93,10 @@ Kelips::~Kelips()
     printf("%d good, %d ok failures, %d bad failures\n",
            _good_lookups, _ok_failures, _bad_failures);
 
-    sort(_allhops.begin(), _allhops.end());
-
-    if(_good_lookups > 0){
-      printf("avglat %.1f avghops %.2f 10-hops %u 50-hops %u 90-hops %u\n",
+    if(_good_lookups > 0)
+      printf("avglat %.1f avghops %.2f\n",
              _good_latency / _good_lookups,
-             _good_hops / _good_lookups, 
-	     _allhops[(u_int)(0.1*_allhops.size())],
-	     _allhops[_allhops.size()/2],
-	     _allhops[(u_int)(0.9*_allhops.size())]);
-    }
-    printf("avg connected component: %.2f\n", _connected_sz/_connected_sample);
+             _good_hops / _good_lookups); 
     print_stats();
   }
   if(ip() == 1 && nsta > 0){
@@ -315,7 +202,7 @@ Kelips::join(Args *a)
     // Tell wkn about us, and ask it for a few random nodes.
     IPAddress myip = ip();
     vector<Info> ret;
-    xRPC(wkn, 6, &Kelips::handle_join, &myip, &ret);
+    xRPC(wkn, 1 + 20 * 2 * 2, &Kelips::handle_join, &myip, &ret); //originally, robert sets this to 6, but i think it's actually big
     for(u_int i = 0; i < ret.size(); i++)
       gotinfo(ret[i], -1);
   }
@@ -382,6 +269,9 @@ Kelips::lookup(Args *args)
   a->key = args->nget<ID>("key");
   a->start = now();
   a->retrytimes = 0;
+  a->history.clear();
+  a->total_to = 0;
+  a->num_to = 0;
   lookup_internal(a);
 }
 
@@ -405,10 +295,8 @@ Kelips::lookup_internal(lookup_args *a)
 {
   ID key = a->key;
 
-  vector<IPAddress> history;
-
   Time t1 = now();
-  bool ok = lookup_loop(key, history);
+  bool ok = lookup_loop(a);
   Time t2 = now();
   a->retrytimes++;
 
@@ -417,84 +305,74 @@ Kelips::lookup_internal(lookup_args *a)
     oops = node_key_alive(key);
 
   IPAddress lasthop;
-  if( history.size() > 0 ) {
-    lasthop = history[history.size()-1];
+  if( a->history.size() > 0 ) {
+    lasthop = a->history[a->history.size()-1];
   } else {
     lasthop = ip();
   }
 
-  if(ok){
+  if (t2 - a->start >= _max_lookup_time) {
+    if (Node::collect_stat()) 
+      _bad_failures += 1;
+    record_lookup_stat(ip(), lasthop, t2-a->start, false, false, a->history.size(), a->num_to, a->total_to);
+  }else if (ok) {
+    assert( lasthop == key );
     if (Node::collect_stat()) {
       _good_lookups += 1;
       _good_latency += t2 - t1;
-      _good_hops += history.size();
-      if (_allhops.size() < 50000)
-	_allhops.push_back(history.size());
+      _good_hops += a->history.size();
     }
-    assert( lasthop == key );
-    record_lookup_stat( ip(), lasthop, t2-a->start, true, true, 0 /* hops */, 
-			0 /* num_timeouts */, 0 /* time_timeouts */ );
-  }else if ((t2 - a->start) > _max_lookup_time) {
-    record_lookup_stat( ip(), lasthop, t2-a->start, false, false);
-    if (Node::collect_stat()) {
-	//printf("%u bad failure key %u retrytimes %u now %llu start %llu length %llu\n",ip(),a->key,a->retrytimes,now(),a->start, now()-a->start);
-	_bad_failures += 1;
-    }
-  }else if (oops){
+    record_lookup_stat(ip(), lasthop, t2-a->start, true, true, a->history.size(), a->num_to, a->total_to);
+  }else if (oops) {
     if (Node::collect_stat()) 
       _bad_failures += 1;
     delaycb(100, &Kelips::lookup_internal, a);
     return;
-  } else {
-    //ignore this failure if no retry has been done before
-    if (Node::collect_stat()) 
-      _ok_failures += 1;
+  }else {
+    //the destination node is dead
     if (a->retrytimes >= 2) 
-      record_lookup_stat( ip(), lasthop, t2-a->start, false, false, 
-			  0 /* hops */, 0 /* num_timeouts */, 
-			  0 /* time_timeouts */);
+      record_lookup_stat(ip(),lasthop,t2-a->start,false,false,a->history.size(),a->num_to,a->total_to);
   }
-
   delete a;
   if(0){
     printf("%qd %d lat=%d lookup(%qd) ", now(), ip(), (int)(t2 - t1),
            (unsigned long long) key);
-    for(u_int i = 0; i < history.size(); i++)
-      printf("%d ", history[i]);
+    for(u_int i = 0; i < a->history.size(); i++)
+      printf("%d ", a->history[i]);
     printf("%s%s   \n", ok ? "OK" : "FAIL", (!ok && oops) ? " OOPS" : "");
-/*
-    vector<IPAddress> l = all();
-    for(u_int i = 0; i < l.size(); i++)
-      printf("%d/%d ", l[i], _info[l[i]]->_rtt);
-    printf("\n");
-    */
   }
 }
 
 // Keep trying to lookup.
 bool
-Kelips::lookup_loop(ID key, vector<IPAddress> &history)
+Kelips::lookup_loop(lookup_args *a) 
 {
   // Are we looking for ourselves?
-  if(key == id())
+  if(a->key == id())
     return true;
 
   // Try an ordinary lookup via the closest contact.
-  if(lookup1(key, history))
+  if(lookup1(a))
     return true;
+  else if (now()-a->start>=_max_lookup_time)
+    return false;
 
   // Try via each known contact.
   if(_k > 1){
-    vector<IPAddress> cl = grouplist(id2group(key));
+    vector<IPAddress> cl = grouplist(id2group(a->key));
     for(u_int i = 0; i < cl.size(); i++)
-      if(lookupvia(key, cl[i], history))
+      if(lookupvia(a,cl[i]))
         return true;
+      else if (now()-a->start>=_max_lookup_time)
+	return false;
   }
 
   // Try via random nodes a few times.
   for(int iter = 0; iter < 12; iter++){
-    if(lookup2(key, history))
+    if(lookup2(a)) 
       return true;
+    else if (now()-a->start>=_max_lookup_time)
+      return false;
   }
 
   return false;
@@ -506,59 +384,59 @@ Kelips::lookup_loop(ID key, vector<IPAddress> &history)
 // This is only suitable for the fast/ordinary
 // path, it doesn't try any alternate paths.
 bool
-Kelips::lookup1(ID key, vector<IPAddress> &history)
+Kelips::lookup1(lookup_args *a)
 {
   IPAddress ip1 = 0;
 
-  if(id2group(key) == group()){
-    ip1 = find_by_id(key);
+  if(id2group(a->key) == group()){
+    ip1 = find_by_id(a->key);
     if(ip1 == 0)
       return false;
-  } else if((ip1 = find_by_id(key)) != 0){
+  } else if((ip1 = find_by_id(a->key)) != 0){
     // go direct to a different group!
     // not mentioned in Kelips paper, of course, but seems
     // reasonable by analogy to Chord forwarding lookup to
     // known node with closest ID.
   } else {
-    IPAddress ip = closest_contact(id2group(key));
+    IPAddress ip = closest_contact(id2group(a->key));
     if(ip == 0)
       return false;
-    history.push_back(ip);
-    bool ok = xRPC(ip, 3, &Kelips::handle_lookup1, &key, &ip1);
-    if(!ok || ip1 == 0)
+    bool ok = xRPC(ip, 3, &Kelips::handle_lookup1, &(a->key), &ip1, STAT_LOOKUP, &(a->total_to), &(a->num_to));
+    a->history.push_back(ip);
+    if(!ok || ip1 == 0 || (now()-a->start>=_max_lookup_time))
       return false;
     assert(ip1 != ip);
   }
 
   bool done = false;
-  history.push_back(ip1);
-  bool ok = xRPC(ip1, 2, &Kelips::handle_lookup_final, &key, &done);
-
-  return(ok && done);
+  bool ok = xRPC(ip1, 2, &Kelips::handle_lookup_final, &(a->key), &done, STAT_LOOKUP, &(a->total_to), &(a->num_to));
+  a->history.push_back(ip1);
+  return(ok && done && (now()-a->start < _max_lookup_time));
 }
 
 // Look up a key via a given contact.
 bool
-Kelips::lookupvia(ID key, IPAddress via, vector<IPAddress> &history)
+Kelips::lookupvia(lookup_args *a, IPAddress via)
 {
-  history.push_back(via);
   IPAddress ip1 = 0;
-  bool ok = xRPC(via, 3, &Kelips::handle_lookup1, &key, &ip1);
-  if(ok == false || ip1 == 0)
+  bool ok = xRPC(via, 3, &Kelips::handle_lookup1, &(a->key), &ip1, STAT_LOOKUP,&(a->total_to), &(a->num_to));
+  a->history.push_back(via);
+
+  if(ok == false || ip1 == 0 || (now()-a->start>=_max_lookup_time))
     return false;
 
   bool done = false;
-  history.push_back(ip1);
-  ok = xRPC(ip1, 2, &Kelips::handle_lookup_final, &key, &done);
+  ok = xRPC(ip1, 2, &Kelips::handle_lookup_final, &(a->key), &done, STAT_LOOKUP, &(a->total_to), &(a->num_to));
+  a->history.push_back(ip1);
 
-  return(ok && done);
+  return(ok && done && (now()-a->start<_max_lookup_time));
 }
 
 // ip: someone random we know about.
 // ip1: random contact of ip in the target group.
 // ip2: who ip1 thinks has the key.
 bool
-Kelips::lookup2(ID key, vector<IPAddress> &history)
+Kelips::lookup2(lookup_args *a) 
 {
   vector<IPAddress> l = all();
   if(l.size() < 1)
@@ -566,22 +444,24 @@ Kelips::lookup2(ID key, vector<IPAddress> &history)
   IPAddress ip = l[random() % l.size()];
 
   IPAddress ip1 = 0;
-  history.push_back(ip);
-  bool ok = xRPC(ip, 2, &Kelips::handle_lookup2, &key, &ip1);
-  if(!ok || ip1 == 0)
+  bool ok = xRPC(ip, 2, &Kelips::handle_lookup2, &(a->key), &ip1, STAT_LOOKUP, &(a->total_to),&(a->num_to));
+  a->history.push_back(ip);
+
+  if(!ok || ip1 == 0 || (now()-a->start >= _max_lookup_time))
     return false;
 
   IPAddress ip2 = 0;
-  history.push_back(ip1);
-  ok = xRPC(ip1, 2, &Kelips::handle_lookup1, &key, &ip2);
-  if(!ok || ip2 == 0)
+  ok = xRPC(ip1, 2, &Kelips::handle_lookup1, &(a->key), &ip2, STAT_LOOKUP, &(a->total_to),&(a->num_to));
+  a->history.push_back(ip1);
+
+  if(!ok || ip2 == 0 || (now()-a->start>=_max_lookup_time))
     return false;
 
   bool done = false;
-  history.push_back(ip2);
-  ok = xRPC(ip2, 2, &Kelips::handle_lookup_final, &key, &done);
+  ok = xRPC(ip2, 2, &Kelips::handle_lookup_final, &(a->key), &done, STAT_LOOKUP, &(a->total_to),&(a->num_to));
+  a->history.push_back(ip2);
 
-  return(ok && done);
+  return(ok && done &&(now()-a->start<_max_lookup_time));
 }
 
 // Someone in our group wants us to return them a
@@ -852,14 +732,15 @@ Kelips::gossip(void *junk)
     {
       vector<IPAddress> gl = randomize(grouplist(group()));
       for(u_int i = 0; i < _group_targets && i < gl.size(); i++){
-        xRPC(gl[i], msg.size(), &Kelips::handle_gossip, &msg, (void *) 0);
+	//since each gossip contains the heartbeat timer for a node, add extra 4 byte
+        xRPC(gl[i], 2 * msg.size(), &Kelips::handle_gossip, &msg, (void *) 0);
       }
     }
 
     {
       vector<IPAddress> cl = randomize(notgrouplist(group()));
       for(u_int i = 0; i < _contact_targets && i < cl.size(); i++){
-        xRPC(cl[i], msg.size(), &Kelips::handle_gossip, &msg, (void *) 0);
+        xRPC(cl[i], 2 * msg.size(), &Kelips::handle_gossip, &msg, (void *) 0);
       }
     }
 
@@ -962,15 +843,15 @@ Kelips::stabilized(vector<ID> lid)
 //   20 bytes header, 4 bytes/ID, 1 byte/other
 // (Kelips paper says 40 bytes per gossip entry...)
 void
-Kelips::rpcstat(bool ok, IPAddress dst, int latency, int nitems)
+Kelips::rpcstat(bool ok, IPAddress dst, int latency, int nitems, uint type)
 {
 
   if (Node::collect_stat()) {
     _rpc_bytes += 20 + nitems * 4; // paper says 40 bytes per node entry
-    record_bw_stat( STAT_LOOKUP, nitems, 0 );
+    record_bw_stat( type, nitems, 0 );
     if(ok) {
       _rpc_bytes += 20;
-      record_bw_stat( STAT_LOOKUP, 0, 0 );
+      record_bw_stat( type, 0, 0 );
     }
   }
 

@@ -62,6 +62,7 @@
 #ifdef HAVE_LIBGB
 extern "C" {
   #include "gb_graph.h" 
+  #include <gb_dijk.h>
 }
 #endif
 
@@ -73,6 +74,9 @@ public:
     ID key;
     Time start;
     u_int retrytimes;
+    vector<IPAddress> history;
+    Time total_to;
+    u_int num_to;
   };
 
   Kelips(IPAddress i, Args a);
@@ -88,10 +92,7 @@ public:
   virtual void nodeevent (Args *) {};
 
   void lookup_internal(lookup_args *a);
-#ifdef HAVE_LIBGB
-  void calculate_conncomp(void *);
-  void add_gb_edge(Graph *g);
-#endif
+  void add_edge(int *matrix, int sz);
 
  private:
   // typedef ConsistentHash::CHID ID;
@@ -112,6 +113,7 @@ public:
   u_int _purge_time;      // period the purge timer is run
   u_int _track_conncomp_timer; 
   u_int _to_multiplier; //a retransmit timer
+  u_int _to_cheat;
   
 
   int _timeout;           // (25000???) milliseconds to group item timeout.
@@ -134,9 +136,6 @@ public:
   static int _good_lookups;
   static int _ok_failures;
   static int _bad_failures;
-  static int _connected_sample;
-  static float _connected_sz;
-  static vector<u_int> _allhops;
 
   // Information about one other node.
   class Info {
@@ -179,15 +178,15 @@ public:
   void newold_msg(vector<Info> &msg, vector<IPAddress> l, u_int ration);
   void handle_lookup_final(ID *kp, bool *done);
   void handle_lookup1(ID *kp, IPAddress *res);
-  bool lookup1(ID key, vector<IPAddress> &);
-  bool lookupvia(ID key, IPAddress via, vector<IPAddress> &history);
-  bool lookup2(ID key, vector<IPAddress> &);
-  bool lookup_loop(ID key, vector<IPAddress> &);
+  bool lookup1(lookup_args *a);
+  bool lookupvia(lookup_args *a, IPAddress via);
+  bool lookup2(lookup_args *a);
+  bool lookup_loop(lookup_args *a);
   void handle_lookup2(ID *kp, IPAddress *res);
   IPAddress find_by_id(ID key);
   void init_state(const set<Node*>*);
   bool stabilized(vector<ID> lid);
-  void rpcstat(bool ok, IPAddress dst, int latency, int nitems);
+  void rpcstat(bool ok, IPAddress dst, int latency, int nitems, uint type);
   IPAddress victim(int g);
   void handle_ping(void *, void *);
   inline int contact_score(const Info &i);
@@ -197,19 +196,26 @@ public:
   // RPC that records RTT.
   template<class AT, class RT>
     bool xRPC(IPAddress dst, int nitems, void (Kelips::* fn)(AT *, RT *),
-              AT *args, RT *ret ){
+              AT *args, RT *ret, uint type=1, Time *total_to=NULL, uint *num_to=NULL){
     Time t1 = now();
-    Time timeout;
+    Time timeout = 1000;
 
-    if ((_info.find(dst) == _info.end()) 
+    if (_to_cheat) {
+      timeout = _to_multiplier * (Network::Instance()->gettopology())->latency(ip(),dst);
+    }else if ((_info.find(dst) == _info.end()) 
       || (_info[dst]->_rtt == 9999) || 
-	(_info[dst]->_rtt == -1))
+	(_info[dst]->_rtt == -1)) {
       timeout = 1000; //1 second timeout
-    else
+    } else {
       timeout = _to_multiplier * _info[dst]->_rtt;
+    }
 
     bool ok = doRPC(dst, fn, args, ret, timeout);
-    rpcstat(ok, dst, now() - t1, nitems);
+    rpcstat(ok, dst, now() - t1, nitems,type);
+    if (!ok) {
+      if (total_to) *total_to += timeout; //record the timeout incurred
+      if (num_to) *num_to += 1;
+    }
     return ok;
   };
 

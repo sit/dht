@@ -28,7 +28,12 @@
 #include "p2psim/p2protocol.h"
 #include "consistenthash.h"
 
+#define TIMEOUT_RETRY 5
+
 //#define CHORD_DEBUG
+#define DNODE 853
+//#define RECORD_FETCH_LATENCY
+
 #define PKT_OVERHEAD 20
 
 #define TYPE_USER_LOOKUP 0
@@ -54,7 +59,7 @@ public:
     public:
     ConsistentHash::CHID id; //consistent hashing ID for the node
     IPAddress ip; //the IP address for the node
-    uint choices; //this is a gross hack to help me keep track of how many choices this finger has
+    uint heartbeat; //heartbeat sequence number to prevent successor list from being out of date
     static bool cmp(const IDMap& a, const IDMap& b) { return (a.id <= b.id);}
     bool operator==(const IDMap a) { return (a.id == id); }
   };
@@ -75,6 +80,7 @@ public:
     int dummy;
   };
   struct get_predecessor_ret {
+    IDMap dst; //for obtaining the new heartbeat timer of the node executing get_predecessor_handler
     IDMap n;
   };
 
@@ -108,7 +114,7 @@ public:
   struct next_args {
     CHID key;
     uint m;
-    uint all; //get m out of the first all successors
+    uint alpha; //get m out of the first all successors
     bool retry;
     uint type;
     vector<IDMap> deadnodes;
@@ -164,10 +170,14 @@ public:
     CHID key;
     IPAddress ipkey;
     Time start;
-    vector<uint> retrytimes;
+    Time latency;
+    uint retrytimes;
+    Time total_to;
+    uint num_to;
+    uint hops;
   };
   // RPC handlers.
-  void null_handler (void *args, void *ret);
+  void null_handler (void *args, IDMap *ret);
   void get_predecessor_handler(get_predecessor_args *, 
                                get_predecessor_ret *);
   void get_successor_list_handler(get_successor_list_args *, 
@@ -184,13 +194,15 @@ public:
   void lookup_internal(lookup_args *a);
   void alert_delete(alert_args *aa);
 
-  CHID id () { return me.id; }
+  CHID id() { return me.id; }
+  uint heartbeat() { return me.heartbeat;}
   IDMap idmap() { return me;}
   virtual void initstate();
   virtual bool stabilized(vector<CHID>);
   bool check_correctness(CHID k, vector<IDMap> v);
   virtual void oracle_node_died(IDMap n);
   virtual void oracle_node_joined(IDMap n);
+  void add_edge(int *matrix, int sz);
 
   virtual void dump();
   char *ts();
@@ -206,7 +218,6 @@ protected:
   uint _allfrag;
   uint _timeout;
   uint _to_multiplier;
-  uint _failure_retry;
   bool _stab_basic_running;
   uint _stab_basic_timer;
   uint _stab_succlist_timer;
@@ -223,6 +234,7 @@ protected:
   uint _parallel;
   uint _ipkey;
   uint _last_succlist_stabilized;
+  uint _random_id;
 
   LocTable *loctable;
   IDMap me; 
@@ -232,29 +244,16 @@ protected:
   bool _isstable;
   bool _inited;
 
-  //global statistics of all Chord nodes
-  static vector<double> stat;
-  static double _lookup_num;
-  static double _lookup_int_num;
-  static double _lookup_hops;
-  static double _lookup_timeouts;
-  static double _lookup_to_waste;
-  static double _lookup_interval;
-  static vector<double> _lookup_lat_v;
-  static double _lookup_success;
-  static double _lookup_raw_success;
-  static double _lookup_raw_num;
-  static double _lookup_retries;
+#ifdef RECORD_FETCH_LATENCY
+  static vector<uint> _fetch_lat;
+#endif
 
-
-  virtual vector<IDMap> find_successors_recurs(CHID key, uint m, uint all,
-      uint type, IDMap *lasthop = NULL, uint *lookup_int = NULL, IPAddress ipkey=0);
-  virtual vector<IDMap> find_successors(CHID key, uint m, uint all,
-      uint type, IDMap *lasthop = NULL, uint *lookup_int = NULL, IPAddress ipkey=0);
+  virtual vector<IDMap> find_successors_recurs(CHID key, uint m, uint type, IDMap *lasthop = NULL, lookup_args *a = NULL);
+  virtual vector<IDMap> find_successors(CHID key, uint m, uint type, IDMap *lasthop = NULL, lookup_args *a = NULL);
 
   template<class BT, class AT, class RT>
-    bool Chord::failure_detect(IPAddress dst, void (BT::* fn)(AT *, RT *), AT *args, RT *ret, 
-	uint type, uint num_args_id = 0, uint num_args_else = 0);
+    bool Chord::failure_detect(IDMap dst, void (BT::* fn)(AT *, RT *), AT *args, RT *ret, 
+	uint type, uint num_args_id = 0, uint num_args_else = 0, int num_retry=TIMEOUT_RETRY);
 
   void fix_successor(void *x=NULL);
   void fix_predecessor();
@@ -273,6 +272,10 @@ typedef struct {
   uint pin_pred;
 } pin_entry;
 
+#define LOC_HEALTHY 0
+#define LOC_ONCHECK 1
+#define LOC_DEAD 2
+
 class LocTable {
 
   public:
@@ -284,15 +287,13 @@ class LocTable {
       sklist_entry<idmapwrap> sortlink_;
       bool is_succ;
       bool pinned;
-      bool on_check;
+      int status;
       idmapwrap(Chord::IDMap x, Time t = 0) {
-	n.ip = x.ip;
-	n.id = x.id;
-	n.choices = x.choices;
+	n = x;
 	id = x.id;
 	pinned = false;
 	timestamp = t;
-	on_check = false;
+	status = 0;
       }
     };
 
@@ -313,17 +314,17 @@ class LocTable {
   void init (Chord::IDMap me);
   virtual ~LocTable();
 
-    Chord::IDMap succ(ConsistentHash::CHID id, Time *ts = NULL);
-    vector<Chord::IDMap> succs(ConsistentHash::CHID id, unsigned int m, Time *ts = NULL);
-    vector<Chord::IDMap> preds(Chord::CHID id, uint m, bool ignore_oncheck=true);
-    Chord::IDMap pred(Chord::CHID id);
+    Chord::IDMap succ(ConsistentHash::CHID id, int status = LOC_HEALTHY, Time *ts = NULL);
+    vector<Chord::IDMap> succs(ConsistentHash::CHID id, unsigned int m, int status = LOC_HEALTHY, Time *ts = NULL);
+    vector<Chord::IDMap> preds(Chord::CHID id, uint m, int status = LOC_HEALTHY);
+    Chord::IDMap pred(Chord::CHID id, int status = LOC_ONCHECK);
     void checkpoint();
     void print();
 
-    void add_node(Chord::IDMap n, bool is_succ=false);
-    bool on_check(Chord::IDMap n);
+    int add_node(Chord::IDMap n, bool is_succ=false);
+    int add_check(Chord::IDMap n, int add);
     void add_sortednodes(vector<Chord::IDMap> l);
-    void del_node(Chord::IDMap n);
+    void del_node(Chord::IDMap n, bool force=false);
     virtual void del_all();
     void notify(Chord::IDMap n);
     void pin(Chord::CHID x, uint pin_succ, uint pin_pred);

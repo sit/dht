@@ -46,7 +46,7 @@ ChordFingerPNS::oracle_node_died(IDMap n)
 {
   Chord::oracle_node_died(n);
 
-  IDMap tmp = loctable->succ(n.id);
+  IDMap tmp = loctable->succ(n.id,LOC_ONCHECK);
   if (tmp.ip != n.ip) return;
 
   //lost one my of finger?
@@ -96,7 +96,7 @@ ChordFingerPNS::oracle_node_joined(IDMap n)
 {
   Chord::oracle_node_joined(n);
 
-  IDMap tmp = loctable->succ(n.id);
+  IDMap tmp = loctable->succ(n.id,LOC_ONCHECK);
   if (tmp.ip == n.ip) return;
 
   //is the new node one of my finger?
@@ -107,7 +107,7 @@ ChordFingerPNS::oracle_node_joined(IDMap n)
     lap = lap / _base;
     for (uint j = 1; j <= (_base-1); j++) {
       if (ConsistentHash::between(me.id+lap*j, me.id+lap*(j+1), n.id)) {
-	IDMap s = loctable->succ(me.id + lap * j);
+	IDMap s = loctable->succ(me.id + lap * j,LOC_ONCHECK);
 	if (!ConsistentHash::between(me.id+lap*j, me.id+lap*(j+1), n.id)) {
 	  loctable->add_node(n);
 #ifdef CHORD_DEBUG
@@ -172,9 +172,9 @@ ChordFingerPNS::initstate()
 	if (t->latency(me.ip,ids[i].ip) < min_l) {
 	  min_f = ids[i];
 	  min_l = t->latency(me.ip, ids[i].ip);
-	  k++;
-	  if (_samples > 0 && k>= _samples) break;
 	}
+	k++;
+	if (_samples > 0 && k>= _samples) break;
       }
       loctable->add_node(min_f);//add pns finger
     }
@@ -197,13 +197,17 @@ ChordFingerPNS::join(Args *args)
 {
 
   Chord::join(args);
-  if (static_sim) return;
+  if ((static_sim) || (!alive())) return;
+#ifdef CHORD_DEBUG
+  if (me.ip == DNODE) 
+    printf("%s joincrash pns stabilizer scheduled? %d\n",ts(),_stab_pns_running?1:0);
+#endif
 
   //schedule pns stabilizer, no finger stabilizer
   if (!_stab_pns_running) {
     _stab_pns_running = true;
     reschedule_pns_stabilizer((void *)1);
-  }else{
+  }else if (_join_scheduled == 0){ //successfully joined
     ChordFingerPNS::fix_pns_fingers(true);
   }
 }
@@ -231,7 +235,7 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
 {
   vector<IDMap> scs = loctable->succs(me.id + 1, _nsucc);
 #ifdef CHORD_DEBUG
-  printf("%s ChordFingerPNS stabilize BEFORE ring sz %u succ %d restart %u\n", ts(), loctable->size(), scs.size(), restart?1:0);
+  printf("%s ChordFingerPNS stabilize BEFORE ring sz %u succ %d restart %u _inited? %d\n", ts(), loctable->size(), scs.size(), restart?1:0, _inited?1:0);
 #endif
   uint dead_finger = 0;
   uint missing_finger = 0;
@@ -268,26 +272,35 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
       finger = lap * j + me.id;
       if ((ConsistentHash::betweenrightincl(finger,finger+lap,scs[scs.size()-1].id)) || (!alive()))
 	goto PNS_DONE;
-      currf = loctable->succ(finger, &currf_ts);
+      currf = loctable->succ(finger, LOC_HEALTHY, &currf_ts);
       testf.push_back(currf);//testing
       total_finger++;//testing
       //
-      if (currf.ip == me.ip) continue;
+      //if (currf.ip == me.ip) continue;
 
-      if ((!restart) && (currf.ip)) { 
+      if ((!restart) && (currf.ip) && (currf.ip!=me.ip)) { 
 
 	if (ConsistentHash::between(finger, finger + lap, currf.id)) {
 	  //if lookup has updated the timestamp of this finger, ignore it
 	  if ((now() - currf_ts) < _stab_pns_timer) {
 	    skipped_finger++; //testing
+#ifdef CHORD_DEBUG
+	    if (me.ip == DNODE) 
+	      printf("%s DNODE skipping finger %u,%qx,%qx (%u)\n", ts(),j,lap,finger,currf.ip);
+#endif
 	    continue;
 	  }
 	  assert(currf.ip != prevf.ip);
 	  prevf = currf;
 	  prevfpred.ip = 0;
 	  //just ping this finger to see if it is alive
-	  record_stat(TYPE_PNS_UP,0);
-	  ok = doRPC(currf.ip, &Chord::null_handler, (void *)NULL, (void *)NULL);
+	  //record_stat(TYPE_PNS_UP,0);
+	  ok = failure_detect(currf, &Chord::null_handler, (void *)NULL,&currf,TYPE_PNS_UP,0,0);
+#ifdef CHORD_DEBUG
+	  if (me.ip == DNODE) 
+	      printf("%s DNODE ping finger %u,%qx,%qx (%u) alive? %d \n", ts(),j,lap,finger,currf.ip, ok?1:0);
+#endif
+
 	  if(ok) {
 	    record_stat(TYPE_PNS_UP,0);
 	    loctable->add_node(currf);//update timestamp
@@ -300,7 +313,11 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
 	  }
 	} else if (!restart) {
 	  missing_finger++;//testing
-	  if ((currf.ip == prevf.ip) && (prevfpred.ip) && (!ConsistentHash::between(finger, currf.id, prevfpred.id))) {
+	  if ((currf.ip == prevf.ip) && (prevfpred.ip) && (ConsistentHash::between(prevfpred.id,currf.id,finger))) {
+#ifdef CHORD_DEBUG
+	    if (me.ip == DNODE) 
+	      printf("%s DNODE skip missing finger %u,%qx,%qx coz finger %u,%qx's pred is %u,%qx\n",ts(),j,lap,finger,currf.ip,currf.id,prevfpred.ip,prevfpred.id);
+#endif
 	    skipped_finger++;
 	    continue;
 	  } else if ((currf.ip != prevf.ip) || (!prevfpred.ip)) {
@@ -310,30 +327,51 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
 	    get_predecessor_args gpa;
 	    get_predecessor_ret gpr;
 	    record_stat(TYPE_PNS_UP,0);
-	    ok = doRPC(currf.ip, &Chord::get_predecessor_handler, &gpa, &gpr);
+	    ok = doRPC(currf.ip, &Chord::get_predecessor_handler, &gpa, &gpr, _to_multiplier*2*t->latency(me.ip,currf.ip));
 	    if(ok) {
 	      record_stat(TYPE_PNS_UP,1);
 	      loctable->add_node(currf);//update timestamp
 	      prevfpred = gpr.n;
-	      if (!ConsistentHash::between(finger, currf.id, gpr.n.id)) 
+	      if (ConsistentHash::between(gpr.n.id,currf.id, finger)) { //pred is between finger and currf, there could be new finger coming up
+#ifdef CHORD_DEBUG
+		if (me.ip == DNODE) 
+		  printf("%s DNODE skip missing finger %u,%qx,%qx currf %u,%qx's pred %u,%qx\n",ts(),j,lap,finger, currf.ip,currf.id,prevfpred.ip, prevfpred.id);
+#endif
 		continue;
-	      else
+	      } else {
+#ifdef CHORD_DEBUG
+		if (me.ip == DNODE) 
+		  printf("%s DNODE real missing finger %u,%qx,%qx\n",ts(),j,lap,finger);
+#endif
 		real_missing_finger++; //testing
+	      }
 	    }else{
+#ifdef CHORD_DEBUG
+	      if (me.ip == DNODE) 
+		printf("%s DNODE missing finger %u,%qx,%qx dead finger %u,%qx\n",ts(),j,lap,finger,currf.ip,currf.id);
+#endif
 	      loctable->del_node(currf);
 	      deadf = currf;
 	      dead_finger++; //testing
 	    }
 	  }else{
+#ifdef CHORD_DEBUG
+	    if (me.ip == DNODE) 
+	      printf("%s DNODE missing finger %u,%qx,%qx dead finger %u,%qx\n",ts(),j,lap,finger,currf.ip,currf.id);
+#endif
 	    real_missing_finger++; //testing
 	  }
 	}
       }
+#ifdef CHORD_DEBUG      
+      if (me.ip == DNODE) 
+	printf("%s DNODE start to find finger %u,%qx,%qx\n",ts(),j,lap,finger);
+#endif
 
       if (_recurs)
-	v = find_successors_recurs(finger, _samples, _samples, TYPE_FINGER_LOOKUP);
+	v = find_successors_recurs(finger, _samples, TYPE_FINGER_LOOKUP);
       else
-	v = find_successors(finger, _samples, _samples, TYPE_FINGER_LOOKUP);
+	v = find_successors(finger, _samples, TYPE_FINGER_LOOKUP);
 
       if (!alive()) return;
 
@@ -350,25 +388,35 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
 	      min_l = t->latency(me.ip, v[k].ip);
 	    }
 	  }
-	  newsucc = loctable->succs(me.id+1, _nsucc);
+	  newsucc = loctable->succs(me.id+1, _nsucc, LOC_HEALTHY);
 	  if ((min_f.ip!=me.ip) && newsucc.size() && (!ConsistentHash::betweenrightincl(finger,finger+lap,newsucc[newsucc.size()-1].id))) {
 	    new_added_finger++; //testing
 	    assert(ConsistentHash::between(finger,finger+lap,min_f.id));
 	    //ping this node, coz it might have been dead
-	    record_stat(TYPE_FINGER_LOOKUP,0); 
-	    ok = doRPC(min_f.ip, &Chord::null_handler, (void *)NULL, (void *)NULL);
+	    record_stat(TYPE_PNS_UP,0); 
+	    ok = doRPC(min_f.ip, &Chord::null_handler, (void *)NULL, &min_f, _to_multiplier*2*t->latency(me.ip,min_f.ip));
 	    if (ok) {
-	      record_stat(TYPE_FINGER_LOOKUP,0); 
-	      loctable->add_node(min_f);
-	      tmp = loctable->succ(finger);
+	      record_stat(TYPE_PNS_UP,0); 
+	      int stat = loctable->add_node(min_f);
+	      assert(stat==LOC_HEALTHY); //XXX if there's no packet loss, min_f should not have been put on LOC_ONCHECK befoere
+#ifdef CHORD_DEBUG
+	      if (me.ip == DNODE) 
+		printf("%s DNODE ADD new finger %u,%qx,%qx (%u,%qx)\n",ts(),j,lap,finger,min_f.ip,min_f.id);
+#endif
+	      tmp = loctable->succ(finger,LOC_HEALTHY);
 	      while (tmp.ip != min_f.ip) {
 		if (ConsistentHash::between(finger,finger+lap,tmp.id)) {
-		  loctable->del_node(tmp);
+#ifdef CHORD_DEBUG
+		  if (me.ip == DNODE) 
+		    printf("%s DNODE DEL extra finger %u,%qx,%qx (%u,%qx)\n",ts(),j,lap,finger,tmp.ip,tmp.id);
+#endif
+		  loctable->del_node(tmp,true);
 		  new_deleted_finger++; //testing
 		}else{
+		  fprintf(stderr,"newsucc sz %u (%u,%qx) last new succ (%u,%qx)\n",newsucc.size(),newsucc[0].ip,newsucc[0].id,newsucc[newsucc.size()-1].ip,newsucc[newsucc.size()-1].id);
 		  assert(0);
 		}
-		tmp = loctable->succ(finger);
+		tmp = loctable->succ(finger,LOC_HEALTHY);
 	      }
 	      break;
 	    }else{
@@ -378,7 +426,13 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
 	    break;
 	  }
 	}
+      }else{
+#ifdef CHORD_DEBUG
+	if (me.ip == DNODE) 
+	  printf("%s DNODE failed to find finger %u,%qx,%qx\n",ts(),j,lap,finger);
+#endif
       }
+
     }
   }
 PNS_DONE:
@@ -392,128 +446,22 @@ PNS_DONE:
     printf("\n");
   }
 
-  printf("%s after loctable stat total_finger %d valid_finger %d skipped_finger %d dead_finger %d missing_finger %d real_missing_finger %d new_finger %d new_added_finger %d new_deleted_finger %d\n", 
+  if (me.ip == DNODE) {
+    printf("%s DNODE after loctable stat total_finger %d valid_finger %d skipped_finger %d dead_finger %d missing_finger %d real_missing_finger %d new_finger %d new_added_finger %d new_deleted_finger %d\n", 
       ts(), total_finger, valid_finger, skipped_finger, dead_finger, missing_finger, real_missing_finger, new_finger, new_added_finger, new_deleted_finger);
+  }else{
+    printf("%s after loctable stat total_finger %d valid_finger %d skipped_finger %d dead_finger %d missing_finger %d real_missing_finger %d new_finger %d new_added_finger %d new_deleted_finger %d\n", 
+      ts(), total_finger, valid_finger, skipped_finger, dead_finger, missing_finger, real_missing_finger, new_finger, new_added_finger, new_deleted_finger);
+  }
 #endif
   return;
 }
-
-/*
-void
-ChordFingerPNS::my_next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
-{
-  assert(args->type<=5);
-  doRPC(me.ip, &ChordFingerPNS::pns_next_recurs_handler, args, ret);
-}
-*/
-/*
-void
-ChordFingerPNS::pns_next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
-{
-  vector<IDMap> succs;
-  uint ssz, retsz,x,i;
-  bool done;
-  // bool r;
-  lookup_path tmp;
-  IDMap next;
-
-  check_static_init();
-
-  while (1) {
-    succs = loctable->succs(me.id+1, _stab_succ);
-    ssz = succs.size();
-
-    if ((!_stab_succ) || (ssz < 1)) {
-      ret->v.clear();
-      return;
-    }
-
-    retsz = ret->v.size();
-    for (x = 0; x < retsz; x++) {
-      if (ret->v[x].ip  == me.ip) break;
-    }
-    if (x < retsz) {
-      for (i = 0; i < ssz; i++) {
-	if ((x + i + 1) < retsz) 
-	  ret->v[x+i+1] = succs[i];
-	else {
-	  ret->v.push_back(succs[i]);
-	  if (ret->v.size() == args->all) break;
-	}
-      }
-      return;
-    }
-// for (uint i = 0; i < ssz; i++) {
-//   if (!ConsistentHash::betweenrightincl(me.id, succs[i].id, args->key)) {
-//   }else{
-//     if ((ret->v.size() == 0) || ConsistentHash::between(args->key, succs[i].id, ret->v.back().id)) {
-//	ret->v.push_back(succs[i]);
-//	if (ret->v.size() == _allfrag) break;
-//     }
-//    }
-//  }
-
-  //if ((ret->v.size() >= args->m) || (ConsistentHash::between(me.id, succs[0].id,args->key)))
-
-    if (ConsistentHash::between(me.id, succs[0].id,args->key)) {
-      for (i = 0; i < succs.size(); i++) {
-	ret->v.push_back(succs[i]);
-	if (ret->v.size() >= args->m) return;
-      }
-      return;
-    }else {
-      if (args->path.size() > 20) {
-	printf("%s WRONG!!!!!! key %qx: ",ts(),args->key);
-	for (uint i = 0; i < args->path.size(); i++) 
-	  printf("(%u,%qx,%u) ", args->path[i].n.ip, args->path[i].n.id, args->path[i].tout);
-	printf("\n");
-	assert(0);
-      }
-      // for args->m > 1:
-      //XXX i never check if succ is dead or not
-      //XXX this will break during dynamism. 
-      // since next_hop assumes succ is on ret->v., when it breaks,
-      // it does not attempt to update ret->v
-
-      next = loctable->next_hop(args->key, &done, args->m, 1);
-      assert(next.ip != me.ip);
-      assert(!done);
-      assert(ConsistentHash::between(me.id, args->key, next.id));
-
-      tmp.n = next;
-      tmp.tout = 0;
-      args->path.push_back(tmp);
-
-      record_stat(args->type?1:0,1,1);
-      bool r = doRPC(next.ip, &ChordFingerPNS::pns_next_recurs_handler, args, ret);
-
-      if (!alive()) {
-	ret->v.clear();
-	return;
-      }
-
-      if (r) {
-	record_stat(args->type,ret->v.size());
-	loctable->add_node(next);
-	return;
-      } else {
-#ifdef CHORD_DEBUG
-	printf ("%s next hop to %u,%16qx failed\n", ts(), next.ip, next.id);
-#endif
-	args->path[args->path.size()-1].tout = 1;
-	loctable->del_node(next);
-	//restart this query
-      }
-    }
-  }
-}
-*/
 
 void
 ChordFingerPNS::dump()
 {
   Chord::dump();
-  IDMap succ = loctable->succ(me.id + 1);
+  IDMap succ = loctable->succ(me.id + 1,LOC_ONCHECK);
   CHID min_lap = succ.id - me.id;
   CHID lap = (CHID) -1;
   CHID finger;
@@ -525,7 +473,7 @@ ChordFingerPNS::dump()
     for (uint j = 1; j <= (_base - 1); j++) {
       if ((lap * j) < min_lap) continue;
       finger = lap * j + me.id;
-      succ = loctable->succ(finger);
+      succ = loctable->succ(finger,LOC_HEALTHY);
       if (succ.ip > 0) 
         printf("%qx: finger: %qx,%d : %qx : succ %qx lat %d\n", me.id, lap, j, finger, succ.id, (unsigned) t->latency(me.ip, succ.ip));
     }
