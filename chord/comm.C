@@ -35,6 +35,8 @@
 // and such to those hosts. It uses these statistics to calculate
 // optimal window sizes and delays.
 
+// #define __J__ 1
+
 #include "chord.h"
 #include "dhash_prot.h"
 #include "location.h"
@@ -198,6 +200,7 @@ stp_manager::stp_manager (ptr<chord> c)
     rpcdelay (0),
     seqno (0),
     cwind (1.0),
+    cwind_ewma (1.0),
     ssthresh (6.0),
     left (0),
     cwind_cum (0.0),
@@ -317,7 +320,7 @@ stp_manager::timeout (rpc_state *C)
 #endif
 
 #ifdef __J__
-  warnx << gettime() << " TIMEOUT " << 1 + C->seqno << " cwind " << (int)cwind << "\n";
+  warnx << gettime() << " TIMEOUT " << 1 + C->seqno << " cwind " << (int)cwind << " ssthresh " << (int)ssthresh << "\n";
 #endif
 
   C->s = getusec ();
@@ -444,6 +447,7 @@ void
 stp_manager::idle () 
 {
   cwind = 1.0;
+  cwind_ewma = 1.0;
   ssthresh = 6;
   idle_timer = NULL;
 }
@@ -463,11 +467,13 @@ stp_manager::update_cwind (int seq)
 	left = seqno;
     }
   } else {
-    ssthresh = cwind/2; //MD
+    ssthresh = cwind_ewma/2; // MD
     if (ssthresh < 1.0) ssthresh = 1.0;
-    cwind = 1.0;
+    cwind = cwind/2;
+    if (cwind < 1.0) cwind = 1.0;
   }
 
+  cwind_ewma = (cwind_ewma*49 + cwind)/50;
   cwind_cum += cwind;
   num_cwind_samples++;
   
@@ -503,14 +509,14 @@ stp_manager::setup_rexmit_timer (hostinfo *h, long *sec, long *nsec)
     } else {
       alat = bf_lat + 4*bf_var;
     }
-    alat *= 2;
+    alat *= 1.5;
   }
   else 
     alat = 1000000;
 
   if (h->nrpc > MIN_SAMPLES) {
     alat = h->a_lat + 4*h->a_var;
-    alat *= 2;
+    alat *= 1.5;
   }
 
   //statistics
