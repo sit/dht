@@ -64,6 +64,7 @@ Kademlia::join(Args *args)
 {
   IPAddress wkn = args->nget<IPAddress>("wellknown");
   assert(wkn);
+  assert(node()->alive());
 
   // I am the well-known node
   if(wkn == ip()) {
@@ -79,6 +80,8 @@ Kademlia::join(Args *args)
   lookup_result lr;
   KDEBUG(1) << "join: lookup my id." << endl;
   bool b = doRPC(wkn, &Kademlia::do_lookup, &la, &lr);
+  if(!node()->alive())
+    return;
   assert(b);
 
   // put well known node in k-buckets and all results.
@@ -104,8 +107,10 @@ Kademlia::join(Args *args)
     // XXX: should be random
     lookup_args la(_id, ip(), (_id ^ (1<<i)));
     lookup_result lr;
-    if(!doRPC(ki->ip, &Kademlia::do_lookup, &la, &lr))
+    if(!doRPC(ki->ip, &Kademlia::do_lookup, &la, &lr) && node()->alive())
       erase(ki->id);
+    if(!node()->alive())
+      return;
     for(nodeinfo_set::const_iterator i = lr.results.begin(); i != lr.results.end(); ++i)
       insert((*i)->id, (*i)->ip);
   }
@@ -122,6 +127,7 @@ void
 Kademlia::crash(Args *args)
 {
   // destroy k-buckets
+  assert(node()->alive());
   KDEBUG(1) << "crash begin" << endl;
   node()->crash();
   delete _me;
@@ -140,6 +146,8 @@ Kademlia::crash(Args *args)
 void
 Kademlia::lookup(Args *args)
 {
+  assert(node()->alive());
+
   NodeID key = args->nget<long long>("key", 0, 16);
   KDEBUG(1) << "lookup: " << printID(key) << endl;
 
@@ -167,6 +175,8 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
   unsigned rpc = 0;
   deque<k_nodeinfo*> tasks;
   set<k_nodeinfo*, closer> *results = New set<k_nodeinfo*, closer>;
+
+  assert(node()->alive());
 
   // store caller id and ip
   NodeID callerID = largs->id;
@@ -356,13 +366,16 @@ Kademlia::do_lookup_wrapper(k_nodeinfo *ki, NodeID key, set<k_nodeinfo*> *v)
   lookup_args la(_id, ip(), key, true);
   lookup_result lr;
 
+  assert(node()->alive());
+
   assert(ki->ip);
   controlmsg++;
-  if(!doRPC(ki->ip, &Kademlia::do_lookup, &la, &lr)) {
+  if(!doRPC(ki->ip, &Kademlia::do_lookup, &la, &lr) && node()->alive()) {
     erase(ki->id);
-    assert(false);
     return;
   }
+  if(!node()->alive())
+    return;
   touch(ki->id);
 
   // caller not interested in result
@@ -380,6 +393,8 @@ void
 Kademlia::find_node(lookup_args *largs, lookup_result *lresult)
 {
   KDEBUG(2) << "find_node invoked by " << Kademlia::printbits(largs->id) << ", thread = " << threadid() << endl;
+
+  assert(node()->alive());
 
   // deal with the empty case
   if(!flyweight.size()) {
@@ -408,7 +423,6 @@ Kademlia::reschedule_stabilizer(void *x)
   KDEBUG(1) << "reschedule_stabilizer" << endl;
   if(!node()->alive())
     return;
-
   stabilize();
   delaycb(stabilize_timer, &Kademlia::reschedule_stabilizer, (void *) 0);
 }
@@ -418,6 +432,8 @@ Kademlia::reschedule_stabilizer(void *x)
 void 
 Kademlia::stabilize()
 {
+  assert(node()->alive());
+
   KDEBUG(1) << "stabilize" << endl;
 
   k_stabilizer stab;
@@ -1101,6 +1117,9 @@ k_stabilizer::execute(k_bucket_leaf *k, string prefix, unsigned depth)
       KDEBUG(1) << "threadid = " << threadid() << " stabilize: lookup for " << Kademlia::printbits(*i) << ", on " << Kademlia::printbits(ki->id) << endl;
       // will add it to the tree
       mykademlia->do_lookup_wrapper(ki, *i);
+      // in the mean time we may have crash
+      if(mykademlia->node()->alive())
+        return;
       KDEBUG(1) << "k_stabilizer: lookup for " << Kademlia::printbits(*i) << " returned" << endl;
     }
     return;
@@ -1120,6 +1139,8 @@ k_stabilizer::execute(k_bucket_leaf *k, string prefix, unsigned depth)
   for(k_collect_closest::resultset_t::const_iterator i = getsuccessor.results.begin(); i != getsuccessor.results.end(); ++i) {
     KDEBUG(1) << "k_stabilizer: random lookup for " << Kademlia::printbits(random_key) << ", sending to " << Kademlia::printbits((*i)->id) << endl;
     mykademlia->do_lookup_wrapper((*i), random_key);
+    if(mykademlia->node()->alive())
+      return;
   }
 }
 // }}}
