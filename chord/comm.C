@@ -85,7 +85,6 @@ locationtable::doRPC (chordID &ID, rpc_program prog, int procno,
   assert (l->refcnt >= 0);
   touch_cachedlocs (l);
 
-  warnx << "doRPC: " << l->addr.hostname << " " << l->addr.port << "\n";
   doRPC_cbstate *st = New doRPC_cbstate (prog, procno, in, out, cb, ID);
   aclntudp_create (l->inetaddr,
 		   l->addr.port,
