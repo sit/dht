@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.31 2003/10/23 21:43:05 fdabek Exp $
+# $Id: Makefile.am,v 1.32 2003/10/30 02:02:38 fdabek Exp $
 
 
 BASEDIRS = svc utils merkle chord dhc dhash sfsrodb lsd devel 
@@ -21,3 +21,4 @@ MAINTAINERCLEANFILES = aclocal.m4 install-sh mkinstalldirs \
 dist-hook:
 	rm -f $(srcdir)/p2psim/p2psim.core
 	tar czvf $(distdir)/p2psim.tgz -C $(srcdir) p2psim
+	cp -f depcomp $(distdir)
