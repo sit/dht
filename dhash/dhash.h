@@ -278,8 +278,15 @@ class dhash {
 };
 
 
+struct insert_info {
+  chordID key;
+  chordID destID;
+  insert_info (chordID k, chordID d) :
+    key (k), destID (d) {};
+};
 
 typedef callback<void, bool, chordID>::ref cbinsert_t;
+typedef callback<void, bool, ptr<insert_info> >::ref cbinsertgw_t;
 typedef cbinsert_t cbstore_t;
 typedef callback<void, ptr<dhash_block> >::ref cbretrieve_t;
 typedef callback<void, dhash_stat, route, ptr<dhash_block_chunk> >::ref dhashcli_lookup_itercb_t;
@@ -337,8 +344,9 @@ private:
   // inserts under the specified key
   // (buf need not remain involatile after the call returns)
   void insert (bigint key, const char *buf, size_t buflen, 
-	       cbinsert_t cb,  dhash_ctype t, bool usecachedsucc);
-  void insertcb (cbinsert_t cb, bigint key, dhash_stat *res, clnt_stat err);
+	       cbinsertgw_t cb,  dhash_ctype t, bool usecachedsucc);
+  void insertcb (cbinsertgw_t cb, bigint key, 
+		 ptr<dhash_insert_res>, clnt_stat err);
   void retrievecb (cbretrieve_t cb, bigint key,  
 		   ref<dhash_retrieve_res> res, clnt_stat err);
 
@@ -347,22 +355,22 @@ public:
   // to communicate to lsd. 
   dhashclient(str sockname);
 
-  void append (chordID to, const char *buf, size_t buflen, cbinsert_t cb);
+  void append (chordID to, const char *buf, size_t buflen, cbinsertgw_t cb);
 
   // inserts under the contents hash. 
   // (buf need not remain involatile after the call returns)
-  void insert (const char *buf, size_t buflen, cbinsert_t cb,
+  void insert (const char *buf, size_t buflen, cbinsertgw_t cb,
                bool usecachedsucc = false);
-  void insert (bigint key, const char *buf, size_t buflen, cbinsert_t cb,
+  void insert (bigint key, const char *buf, size_t buflen, cbinsertgw_t cb,
                bool usecachedsucc = false);
 
   //insert under hash of public key
-  void insert (const char *buf, size_t buflen, rabin_priv key, cbinsert_t cb,
+  void insert (const char *buf, size_t buflen, rabin_priv key, cbinsertgw_t cb,
                bool usecachedsucc = false);
   void insert (const char *buf, size_t buflen, bigint sig, rabin_pub key,
-               cbinsert_t cb, bool usecachedsucc = false);
+               cbinsertgw_t cb, bool usecachedsucc = false);
   void insert (bigint hash, const char *buf, size_t buflen, bigint sig,
-               rabin_pub key, cbinsert_t cb, bool usecachedsucc = false);
+               rabin_pub key, cbinsertgw_t cb, bool usecachedsucc = false);
 
   // retrieve block and verify
   void retrieve (bigint key, cbretrieve_t cb,

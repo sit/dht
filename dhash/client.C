@@ -93,8 +93,10 @@ protected:
       fail (dhasherr2str (res->status));
 
     if (npending == 0) {
-      ///warn << "dhash_store....all done and calling back\n";
-      (*cb) (error, blockID);
+      //in the gateway, the second arg is the blockID
+      //here the block ID was already known to the caller
+      //so return something useful: the destID
+      (*cb) (error, destID);
       delete this;
     }
   }
@@ -276,13 +278,15 @@ protected:
   ref<dhash_block> block;
   cbinsert_t cb;
   store_status store_type;
+  chordID destID;
 
   dhash_insert (dhashcli *dhcli, chordID blockID, ref<dhash_block> block, 
 		bool usecachedsucc, store_status store_type, cbinsert_t cb)
     : dhcli (dhcli), blockID (blockID), block (block), cb (cb), 
 		  store_type (store_type)
   {
-    dhcli->lookup (blockID, usecachedsucc, wrap (this, &dhash_insert::lookup_cb));
+    dhcli->lookup (blockID, usecachedsucc, 
+		   wrap (this, &dhash_insert::lookup_cb));
   }
   
   void lookup_cb (dhash_stat status, chordID destID)
@@ -290,13 +294,16 @@ protected:
     //    warn << "store " << blockID << " at " << destID << "\n";
     
     if (status != DHASH_OK)
-      (*cb) (true, blockID); // failure
+      (*cb) (true, bigint(0)); // failure
     else {
-      dhash_store::execute (dhcli, destID, blockID, block, cb, store_type);
+      dhash_store::execute (dhcli, destID, blockID, block, 
+			    cb,
+			    store_type);
 
     }
     delete this;
   }
+
 
 public:
   static void execute (dhashcli *dhcli, 
@@ -421,7 +428,7 @@ dhashcli::next_hop (chordID k, bool cachedsucc)
 #endif    
 }
 
-//use this versin of lookup_iter on the first block fetch
+//use this version of lookup_iter on the first block fetch
 void
 dhashcli::lookup_iter (chordID blockID, uint32 off, uint32 len,
                        bool usecachedsucc, dhashcli_lookup_itercb_t cb)
@@ -523,7 +530,6 @@ void dhashcli::lookup_iter_chalok_cb (ptr<s_dhash_fetch_arg> arg,
 {
   if (ok && s == CHORD_OK) {
     path.push_back (next);
-    warn << arg->key << ": pushed " << next << "\n";
     assert (path.size () < 1000);
 
     arg->v = next;

@@ -111,13 +111,16 @@ dhashgateway::dispatch (svccb *sbp)
 }
 
 void
-dhashgateway::insert_cb (svccb *sbp, bool err, chordID blockID)
+dhashgateway::insert_cb (svccb *sbp, bool err, chordID destID)
 {
-  ///warn << "XXXXXX dhashgateway::insert_cb\n";
-  if (err) 
-    sbp->replyref (DHASH_CHORDERR);
-  else
-    sbp->replyref (DHASH_OK);
+  if (err) {
+    dhash_insert_res res (DHASH_CHORDERR);
+    sbp->reply (&res);
+  } else {
+    dhash_insert_res res (DHASH_OK);
+    res.resok->destID = destID;
+    sbp->reply (&res);
+  }
 }
 
 
@@ -132,7 +135,8 @@ dhashgateway::retrieve_cb (svccb *sbp, ptr<dhash_block> block)
     res.set_status (DHASH_NOENT);
   else {
     res.resok->block.setsize (block->len);
-    res.resok->hops = block->hops;
+    res.resok->hops = block->hops % 100;
+    res.resok->errors = block->hops / 100;
     memcpy (res.resok->block.base (), block->data, block->len);
   }
   sbp->reply (&res);
@@ -164,7 +168,8 @@ dhashclient::dhashclient(str sockname)
  * key = whatever you say
  */
 void
-dhashclient::append (chordID to, const char *buf, size_t buflen, cbinsert_t cb)
+dhashclient::append (chordID to, const char *buf, size_t buflen, 
+		     cbinsertgw_t cb)
 {
   //stick on the [type,contentlen] the server will have to strip it off before appending
   long type = DHASH_APPEND;
@@ -182,7 +187,7 @@ dhashclient::append (chordID to, const char *buf, size_t buflen, cbinsert_t cb)
       insert (to, m_dat, m_len, cb, DHASH_APPEND, false);
       xfree (m_dat);
     } else {
-      cb (true, bigint (0)); // marshalling failed.
+      (*cb) (true, NULL); // marshalling failed.
     }
 
 }
@@ -199,7 +204,7 @@ dhashclient::append (chordID to, const char *buf, size_t buflen, cbinsert_t cb)
 
 void
 dhashclient::insert (bigint key, const char *buf,
-                     size_t buflen, cbinsert_t cb, bool usecachedsucc)
+                     size_t buflen, cbinsertgw_t cb, bool usecachedsucc)
 {
   long type = DHASH_CONTENTHASH;
   xdrsuio x;
@@ -216,12 +221,12 @@ dhashclient::insert (bigint key, const char *buf,
       insert (key, m_dat, m_len, cb, DHASH_CONTENTHASH, usecachedsucc);
       xfree (m_dat);
     } else {
-      cb (true, bigint (0)); // marshalling failed.
+      (*cb) (true, NULL); // marshalling failed.
     }
 }
 
 void
-dhashclient::insert (const char *buf, size_t buflen, cbinsert_t cb,
+dhashclient::insert (const char *buf, size_t buflen, cbinsertgw_t cb,
                      bool usecachedsucc)
 {
   bigint key = compute_hash (buf, buflen);
@@ -242,7 +247,7 @@ dhashclient::insert (const char *buf, size_t buflen, cbinsert_t cb,
  */
 void
 dhashclient::insert (const char *buf, size_t buflen, 
-		     rabin_priv key, cbinsert_t cb, bool usecachedsucc)
+		     rabin_priv key, cbinsertgw_t cb, bool usecachedsucc)
 {
   str msg (buf, buflen);
   bigint sig = key.sign (msg);
@@ -251,7 +256,7 @@ dhashclient::insert (const char *buf, size_t buflen,
 
 void
 dhashclient::insert (const char *buf, size_t buflen, 
-		     bigint sig, rabin_pub key, cbinsert_t cb,
+		     bigint sig, rabin_pub key, cbinsertgw_t cb,
 		     bool usecachedsucc)
 {
   bigint pubkey = key.n;
@@ -262,7 +267,7 @@ dhashclient::insert (const char *buf, size_t buflen,
 
 void
 dhashclient::insert (bigint hash, const char *buf, size_t buflen, 
-		     bigint sig, rabin_pub key, cbinsert_t cb,
+		     bigint sig, rabin_pub key, cbinsertgw_t cb,
 		     bool usecachedsucc)
 {
   long type = DHASH_KEYHASH;
@@ -284,45 +289,50 @@ dhashclient::insert (bigint hash, const char *buf, size_t buflen,
       insert (hash, m_dat, m_len, cb, DHASH_KEYHASH, usecachedsucc);
       xfree (m_dat);
     } else {
-      cb (true, hash); // marshalling failed.
+      ptr<insert_info> i = New refcounted<insert_info>(hash, bigint(0));
+      cb (true, i); // marshalling failed.
     }
 }
 
 //generic insert (called by above methods)
 void
 dhashclient::insert (bigint key, const char *buf, 
-		     size_t buflen, cbinsert_t cb,
+		     size_t buflen, cbinsertgw_t cb,
 		     dhash_ctype t, bool usecachedsucc)
 {
-  dhash_stat *res = New dhash_stat (); // XXX how to make enums refcounted??
   dhash_insert_arg arg;
   arg.blockID = key;
   arg.block.setsize (buflen);
   memcpy (arg.block.base (), buf, buflen);
   arg.ctype = t;
   arg.usecachedsucc = usecachedsucc;
+
+  ptr<dhash_insert_res> res = New refcounted<dhash_insert_res> ();
   gwclnt->call (DHASHPROC_INSERT, &arg, res, 
 		wrap (this, &dhashclient::insertcb, cb, key, res));
 }
 
 void
-dhashclient::insertcb (cbinsert_t cb, bigint key, dhash_stat *res, clnt_stat err)
+dhashclient::insertcb (cbinsertgw_t cb, bigint key, 
+		       ptr<dhash_insert_res> res,
+		       clnt_stat err)
 {
   str errstr;
-
+  ptr<insert_info> i = New refcounted<insert_info>(key, bigint(0));
   if (err)
     errstr = strbuf () << "rpc error " << err;
-  else if (*res != DHASH_OK) 
-    errstr = dhasherr2str (*res);
+  else if (res->status != DHASH_OK) 
+    errstr = dhasherr2str (res->status);
   else {
-    (*cb) (false, key); // success
-    delete res; // XXX make refcounted..
+    //if I wanted to pass back the destID do this:
+    // (*cb) (false, key, res->resok->destID);
+    i->destID = res->resok->destID;
+    (*cb) (false, i); // success
     return;
   }
 
   warn << "dhashclient::insert failed: " << key << ": " << errstr << "\n";
-  (*cb) (true, key); // failure
-  delete res; // XXX make refcounted..
+  (*cb) (true, i); // failure
 }
 
 
