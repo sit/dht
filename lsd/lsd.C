@@ -1,4 +1,4 @@
-*
+/*
  *
  * Copyright (C) 2000 Frans Kaashoek (kaashoek@lcs.mit.edu)
  *                    Frank Dabek (fdabek@mit.edu)
