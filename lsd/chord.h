@@ -178,7 +178,15 @@ class p2p : public virtual refcount  {
   p2p (str host, int hostport, const sfs_ID &hostID, int myport, 
        const sfs_ID &ID);
 
-  ~p2p(); // added to help do RPCs/lookup
+  ~p2p(); // added to help do RPCs/lookup & simulate
+  
+  // added to help simulate
+  int* edges; // holds array of edges
+  int numnodes;
+  void initialize_graph();
+  void doRealRPC (sfs_ID ID, int procno, const void *in, void *out,
+		      aclnt_cb cb);  
+  // end added to help simulate
 
   void deleteloc (sfs_ID &n);
   void updateloc (sfs_ID &x, net_address &r, sfs_ID &source);

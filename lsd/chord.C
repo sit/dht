@@ -10,6 +10,50 @@
  * This file implements the "core" of the chord system
  */
 
+
+// creates an array of edges of a fake network
+// stores in int* edges
+// after this function numnodes holds the number
+// of nodes in the fake network
+// NOTE: may later want to change file input name
+void 
+p2p::initialize_graph() 
+{
+  FILE *graphfp;
+  int cur_node, to_node, length,i,j;
+  int done = 0;
+  graphfp = fopen("gg","r");
+  if(graphfp == NULL)
+    printf("EEK-- didn't open input file correctly\n");
+  // first line of file is number of nodes
+  fscanf(graphfp,"%d",&numnodes); 
+  // create space for a numnodes by numnodes edge array
+  edges = (int *)calloc(numnodes*numnodes,sizeof(int));
+  // initialize edge array as -1 for all accept i,i entries
+  for(i=0;i<numnodes;i++)
+    for(j=0;j<numnodes;j++)
+      if(i == j)
+	*(edges+i*numnodes+j) = 0;
+      else
+	*(edges+i*numnodes+j) = -1;
+  // more nodes to find the edges of
+  while(fscanf(graphfp,"%d",&cur_node) != EOF && done == 0) 
+    {
+      fscanf(graphfp,"%d%d",&to_node,&length);
+      *(edges+cur_node*numnodes + to_node) = length;
+      // while there are more edges for this node
+      while(fscanf(graphfp,"%d",&to_node) != EOF && to_node != -1) 
+	{
+	  fscanf(graphfp,"%d",&length);
+	  *(edges+cur_node*numnodes + to_node) = length;
+	}
+      if(to_node != -1) // reached end of file
+	done = 1;
+    }
+  fclose(graphfp);
+}
+
+
 bool
 p2p::updatepred (wedge &w, sfs_ID &x, net_address &r)
 {
@@ -188,6 +232,8 @@ p2p::print ()
 
 p2p::~p2p()
 {
+  // free memory used by initialize graph when finish
+  free(edges);
 }
 
 p2p::p2p (str host, int hostport, const sfs_ID &hostID,
@@ -199,6 +245,9 @@ p2p::p2p (str host, int hostport, const sfs_ID &hostID,
   lookup_ops = 0;
   lookups_outstanding = 0;
   lookup_RPCs = 0;
+
+  // used to help simulate
+  initialize_graph();
 
   wellknownhost.hostname = host;
   wellknownhost.port = hostport;

@@ -60,8 +60,32 @@ p2p::timing_cb(aclnt_cb cb, location *l, ptr<struct timeval> start, clnt_stat er
 
 }
 
+// just add a time delay to represent distance
 void
 p2p::doRPC (sfs_ID &ID, int procno, const void *in, void *out,
+		      aclnt_cb cb)
+{
+  // will IDs map to node numbers?? (ie. if ID is 
+  // something diff then this may give weird results)
+
+  // get "distance" between self and destination
+  int time = 0;
+
+  #ifdef _SIM_ 
+  int dist = *(edges+(int)myID.getsi()*numnodes+(int)ID.getsi());
+  time = dist*10; // Not sure how to scale time delay
+  #endif
+  // should not be delayed if not simulating
+  timecb_t* decb =  delaycb (time, 0,wrap(mkref (this), &p2p::doRealRPC,ID,procno,in,out,cb));
+}
+
+// NOTE: now passing ID by value instead of referencing it...
+// (getting compiler errors before). now seems ok
+// May want to try to change back later (to avoid passing around
+// sfs_ID instead of a ptr
+
+void
+p2p::doRealRPC (sfs_ID ID, int procno, const void *in, void *out,
 		      aclnt_cb cb)
 {
 
