@@ -237,7 +237,7 @@ Chord::stabilized(vector<CHID> lid)
     iter++;
     if (iter == lid.end()) iter = lid.begin();
     if (succs[i-1].id != *iter) {
-      printf("%s not stablized, %5d succ should be %16qx instead of (%u, %16qx)\n", ts(), i-1, *iter, succs[i-1].ip,  succs[i-1].id);
+      printf("%s not stabilized, %5d succ should be %16qx instead of (%u, %16qx)\n", ts(), i-1, *iter, succs[i-1].ip,  succs[i-1].id);
       return false;
     }
   }
@@ -450,11 +450,11 @@ LocTable::add_sortednodes(vector<Chord::IDMap> l)
   tmppin.ip = 0;
   int pos;
   int ptr;
-  //Chord::IDMap n;
-//  pin_entry p;
+  Chord::IDMap n;
+  pin_entry p;
 
   for (uint i = 0; i < sz; i++) {
- //   p = pinlist[i];
+    p = pinlist[i];
     tmppin.id = pinlist[i].id;
     pos = upper_bound(l.begin(), l.end(), tmppin, Chord::IDMap::cmp) - l.begin();
     if (pos >= lsz) pos = 0;
@@ -464,14 +464,14 @@ LocTable::add_sortednodes(vector<Chord::IDMap> l)
     }
     for (uint k = 0; k < pinlist[i].pin_pred; k++) {
       if (ptr< 0) ptr= (lsz-1);
-   //   n = l[ptr];
+      n = l[ptr];
       add_node(l[ptr]);
       ptr--;
     }
     ptr = pos; 
     for (uint k = 0; k < pinlist[i].pin_succ; k++) {
       if (ptr >= lsz) ptr= 0;
-  //    n = l[ptr];
+      n = l[ptr];
       add_node(l[ptr]);
       ptr++;
     }
@@ -529,6 +529,16 @@ LocTable::del_node(Chord::IDMap n)
   }
 }
 
+void
+LocTable::clear_pins()
+{
+  uint sz = pinlist.size();
+  for (uint i = 0; i < (sz -1); i++) {
+    pinlist.pop_back();
+  }
+  assert(pinlist[0].id == ring[0].id);
+}
+
 // pin maintains sorted list of id's that must be pinned
 void
 LocTable::pin(Chord::CHID x, uint pin_succ, uint pin_pred)
@@ -555,15 +565,16 @@ LocTable::pin(Chord::CHID x, uint pin_succ, uint pin_pred)
     }
   }
 
-  if (pinlist[i].id == x) {
+  if (i < pinlist.size() && pinlist[i].id == x) {
     if (pin_pred > pinlist[i].pin_pred) 
       pinlist[i].pin_pred = pin_pred;
     if (pin_succ > pinlist[i].pin_succ)
       pinlist[i].pin_succ = pin_succ;
   } else {
-    if (pinlist.size () == 1) {
+    if (pinlist.size () == i) {
       pinlist.push_back(pe);
     } else {
+      assert(pinlist[0].id != pe.id);
       pinlist.insert(pinlist.begin() + i, pe);
     }
   }

@@ -24,11 +24,10 @@ ChordFinger::ChordFinger(Node *n, uint base, uint successors, uint maxf) : Chord
 void
 ChordFinger::init_state(vector<IDMap> ids)
 {
-
   loctable->clear_pins();
 
   loctable->pin(me.id,1,0);
-  loctable->pin(me.id+1,1,0);
+  loctable->pin(me.id+1,nsucc,0);
   loctable->pin(me.id-1,0,1);
 
   /* estimates the size of the network by looking at how far away my successor is from me */
@@ -113,9 +112,11 @@ ChordFinger::stabilized(vector<CHID> lid)
   CHID lap = 1;
 
   IDMap succ;
+  uint numf = 0;
   for (uint i = 0; i < level; i++) {
     for (uint j = 1; j <= (_base - 1); j++) {
       if (lap < min_lap) continue;
+      if (numf >= _maxf) return true;
       finger = lap * j + me.id;
       it = upper_bound(lid.begin(), lid.end(), finger);
       pos = it - lid.begin();
@@ -124,9 +125,10 @@ ChordFinger::stabilized(vector<CHID> lid)
       }
       succ = loctable->succ(finger);
       if (lid[pos] != succ.id) {
-	printf("%s not stablized, %d finger (%qx) should be %qx instead of (%u,%qx)\n", ts(), i, finger, lid[pos], succ.ip, succ.id); 
+	printf("%s not stabilized, %d,%d finger (%qx) should be %qx instead of (%u,%qx)\n", ts(), i, j, finger, lid[pos], succ.ip, succ.id); 
 	return false;
       }
+      numf++;
     }
     lap = (lap * _base);
   }

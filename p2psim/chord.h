@@ -148,7 +148,7 @@ class LocTable {
     void notify(Chord::IDMap n);
     void pin(Chord::CHID x, uint pin_succ, uint pin_pred);
     unsigned int size() { return ring.size();}
-    void clear_pins() { pinlist.clear();}
+    void clear_pins();
     unsigned int psize() { return pinlist.size();}
 
   private:
