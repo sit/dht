@@ -98,7 +98,7 @@ Pastry::route(NodeID *D, void*)
   {
     RTEntrySmallestDiff lsd = for_each(_lleafset.begin(), _lleafset.end(), RTEntrySmallestDiff(*D));
     RTEntrySmallestDiff usd = for_each(_hleafset.begin(), _hleafset.end(), RTEntrySmallestDiff(*D));
-    nexthop = lsd.ip < usd.ip ? lsd.ip : usd.ip;
+    nexthop = lsd.diff < usd.diff ? lsd.ip : usd.ip;
   }
   
   // not in leaf set?  try the routing table.
