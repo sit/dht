@@ -125,19 +125,15 @@ sfsrodb::getpartialdata_cb(callback<void>::ref cb, sfsro_datares *res,
     (*cb)();
   } else {
     //warnx << "partial get for " << start << " " << count << " of " << s << " " << l << "\n";
-    assert (start + count <= 64);
-    assert (start >= s);
-    assert (start + count <= s+l);
+    assert (start + count <= STRIPE_BASE);
 
     res->set_status (SFSRO_OK);
     
-    int fracsize = (result->len)/l;
-    int rem = (result->len) % l;
-    int offoff = ((start - s) > rem) ? rem : (start - s);
-    int offset = fracsize*(start - s) + offoff;
-    int numwextra = ( (rem - (start - s)) > 0) ? rem - (start - s) : 0;
-    if (numwextra > count) numwextra = count;
-    int len = fracsize*(count - numwextra) + (fracsize + 1)*numwextra;
+    int fracsize = (result->len)/STRIPE_BASE;
+    int rem = (result->len) % STRIPE_BASE;
+    int len = fracsize*(count);
+    if (start + count == STRIPE_BASE) len += rem;
+    int offset = fracsize*start;
 
     //warn << "r->l " << result->len << " FS " << fracsize << " len " << len << " offset " << offset << "numwextra " << numwextra << "rem " << rem << "\n";
 

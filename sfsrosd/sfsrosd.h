@@ -12,8 +12,6 @@ extern sfs_connectres cres;
 extern sfs_fsinfo fsinfores;
 extern sfsrodb db;
 extern vec<sfsro_mirrorarg> mirrors;
-extern int s;
-extern int l;
 
 class sfsroclient {
   ptr<axprt_stream> x;

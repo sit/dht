@@ -7,8 +7,6 @@ static str mirrorhost;
 static sfs_hostname hostname;
 int sfssfd;
 vec<sfsro_mirrorarg> mirrors;
-int s;
-int l;
 
 void getcres_cb();
 void getinfo_cb();
@@ -39,8 +37,6 @@ add_mirror_cb(int fd) {
 
   ptr<sfsro_mirrorarg>  arg = new refcounted<sfsro_mirrorarg> ();
   arg->host = sfs_hostname(thishost);
-  arg->start = s;
-  arg->len = l;
   warn << "adding " << arg->host << "as a mirror of " << mirrorhost << "\n";
 
   void *res = malloc(4);
@@ -159,9 +155,7 @@ void getinfo_cb() {
 
   //FED - initial fsinfo tells us which part of the DB we are serving
   if (fsinfores.sfsro->v1->mirrors.size () > 0) {
-    s = fsinfores.sfsro->v1->mirrors[0].start;
-    l = fsinfores.sfsro->v1->mirrors[0].len;
-    warnx << "this database contains sections " << s << " through " << s + l - 1 << " of each block\n";
+    warnx << "this database contains mirror info\n";
   } else
     warnx << "database did not contain mirror info\n";
   
