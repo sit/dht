@@ -18,8 +18,6 @@ class toe_table : public fingerlike {
   
   short last_level;
 
-  void real_add_toe (const chord_node &n, int level);
-  void add_toe_ping_cb (chord_node n, int level, chordstat err);
   void get_toes_rmt_cb (chord_nodelistres *res, int level, clnt_stat err);
 
   bool stable_toes;

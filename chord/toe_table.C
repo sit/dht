@@ -12,7 +12,7 @@ toe_table::toe_table ()
   : in_progress (0)
 {
   for (int i=0; i < MAX_LEVELS; i++) {
-    target_size[i] = 3; //must be less than nsucc to bootstrap
+    target_size[i] = 5; //must be less than nsucc to bootstrap
     toes[i] = new vec<chordID>;
   }
   
@@ -33,11 +33,13 @@ void
 toe_table::prune_toes (int level)
 {
   int removeindex = -1;
-  chordID id;
-  //look for stale entries and remove one if it's no good no more
-  for(unsigned int i = 0 ; i < toes[level]->size()  && removeindex < 0 ; i++){
-    id = (*toes[level])[i];
-    if(locations->get_a_lat (id) >= level_to_delay (level))
+  //look for stale entries and remove one
+  vec<float> us = locations->get_coords(myID);
+  for(unsigned int i = 0 ; i < toes[level]->size() && removeindex < 0 ; i++){
+    chordID id = (*toes[level])[i];
+    //do based on coords instead
+    vec<float> them = locations->get_coords(id);
+    if(Coord::distance_f(us, them) >= level_to_delay (level))
       removeindex = i;
   }
   
@@ -105,46 +107,30 @@ toe_table::present (chordID id, int level)
   return false;
 }
 
-
 void
-toe_table::add_toe (const chord_node &n, int level) 
-{
-  if (n.x == myID) return;
-  if (present (n.x, level)) return;
-
-  if (locations->cached (n.x)) {
-    real_add_toe (n, level);
-  } else {
-    // Get some real data on this node before proceding.
-    in_progress++;
-    locations->insert (n);
-    myvnode->ping (n.x, wrap (this, &toe_table::add_toe_ping_cb, n, level));
-  }
-}
-
-void
-toe_table::real_add_toe (const chord_node &n, int level)
+toe_table::add_toe (const chord_node &n, int level)
 {
   assert (level >= 0);
   // Assumes that the node is not already in the toe table.
 
+  if (n.x == myID) return;
+  if (present (n.x, level)) return;
+ 
   chordID id = n.x;
-  // Get distance very defensively.
+
   float dist = -1.0;
-  if (locations->cached (n.x)) {
-    dist = locations->get_a_lat (n.x);
-  }
-  if (dist <= 0.0) {
-    vec<float> them;
-    for (u_int i = 0; i < n.coords.size (); i++)
-      them.push_back (n.coords[i]);
-    vec<float> us = locations->get_coords (myID);
-    dist = Coord::distance_f (them, us);
-    trace << "using estimated latency.\n";
-  }
-  
+
+  vec<float> them;
+  for (u_int i = 0; i < n.coords.size (); i++)
+    them.push_back (n.coords[i]);
+  vec<float> us = locations->get_coords (myID);
+  dist = Coord::distance_f (them, us);
+
+  //verify donors distance agrees with ours
   if (dist >= level_to_delay (level))
     return;
+
+  locations->insert (n);
   
   //bubble through the list looking for out of date and where to place
   //the new id.  alternative would be to use a llist instead
@@ -203,22 +189,13 @@ toe_table::real_add_toe (const chord_node &n, int level)
 
     //try to promote the new one right away
     if(level+1 < MAX_LEVELS){
-      real_add_toe(n, level+1);
+      add_toe(n, level+1);
     }
       
   }
 
 }
   
-void
-toe_table::add_toe_ping_cb (chord_node n, int level, chordstat err)
-{
-  in_progress--;
-  // Can have more than one outstanding to a given node.
-  if (!err && !present (n.x, level))
-    real_add_toe (n, level);
-}
-
 vec<chordID> 
 toe_table::get_toes (int level)
 {
@@ -226,11 +203,9 @@ toe_table::get_toes (int level)
   vec<chordID> res;
   if(level < 0 || level >= MAX_LEVELS)
     return res;
-  for (unsigned int i = 0; i < toes[level]->size (); i++) {
-    //warn << "get toes " << level << " " << toes[level]->size () << "\n";
-    //if (locations->get_a_lat ((*toes[level])[i]) < up)
+  for (unsigned int i = 0; i < toes[level]->size (); i++)
     res.push_back ((*toes[level])[i]);
-  }
+
   return res;
 }
 
