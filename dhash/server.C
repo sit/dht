@@ -48,6 +48,7 @@
 #include <dbfe.h>
 #include <ida.h>
 #include <chord_util.h>
+#include <rpctypes.h>
 
 #ifdef DMALLOC
 #include <dmalloc.h>
@@ -556,7 +557,8 @@ dhash_impl::dispatch (user_args *sbp)
 	chordID startk = k;
 	while (between (start, gkarg->pred_id, k)) {
 	  keys->push_back (k);
-	  if((keys->size()*sha1::hashsize) > 1024) // limit packets to this size
+	  if((keys->size()*sha1::hashsize) > 1024) 
+	    // limit packets to this size
 	    break;
 	  d = it->nextElement();
 	  if(!d)
