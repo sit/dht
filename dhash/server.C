@@ -226,8 +226,10 @@ dhash_impl::init_after_chord (ptr<vnode> node)
   keyhash_mgr_rpcs = 0;
   keyhash_mgr_tcb =
     delaycb (keyhashtm (), wrap (this, &dhash_impl::keyhash_mgr_timer));
+#if 0  
   pmaint_obj = New pmaint (cli, host_node, db, 
 			   wrap (this, &dhash_impl::db_delete_immutable));
+#endif /* 0 */  
 
 #if 0  
   // dhash pk block consistency  
