@@ -57,7 +57,7 @@ class ChordAdapt: public P2Protocol {
       uint parallelism;
       uint type;
       ConsistentHash::CHID overshoot;
-      Time timeout;
+      double timeout;
     };
 
     struct lookup_ret{
@@ -90,7 +90,7 @@ class ChordAdapt: public P2Protocol {
       IDMap n;
       int m;
       IDMap end;
-      Time timeout;
+      double timeout;
     };
 
     struct learn_ret {
@@ -130,8 +130,8 @@ class ChordAdapt: public P2Protocol {
 
     static vector<IDMap> ids;
     static bool sorted;
-    static vector<Time> sort_live;
-    static vector<Time> sort_dead;
+    static vector<double> sort_live;
+    static vector<double> sort_dead;
 
   protected:
     IDMap _me;
@@ -140,12 +140,13 @@ class ChordAdapt: public P2Protocol {
     unsigned PKT_SZ(unsigned ids, unsigned others);
 
   private:
+    struct Stat {
+      bool alive;
+      double ti;
+    };
     Time _join_scheduled;
     uint _burst_sz;
-    /*
     uint _bw_overhead;
-    uint _big_overhead;
-    */
     uint _stab_basic_timer;
     Time _last_joined_time;
     bool _stab_basic_running;
@@ -161,9 +162,8 @@ class ChordAdapt: public P2Protocol {
     uint _to_multiplier;
     uint _learn_num;
     ConsistentHash::CHID _max_succ_gap;
-    vector<Time> _live_stat;
-    vector<Time> _dead_stat;
-    vector<Time> _calculated_prob;
+    vector<Stat> _stat;
+    vector<double> _calculated_prob;
     Time _last_calculated;
     
     HashMap<ConsistentHash::CHID, Time> _outstanding_lookups;
@@ -172,8 +172,9 @@ class ChordAdapt: public P2Protocol {
 
     void consolidate_succ_list(IDMap n, vector<IDMap> oldlist, vector<IDMap> newlist, bool is_succ = true);
     void adjust_parallelism();
-    void add_stat(Time t, bool live);
-    Time est_timeout(double p);
+    void add_stat(double ti, bool live);
+    double est_timeout(double p);
+    void adjust_timeout();
 
     Topology *_top; //i hate obtaining topology pointer every time
 };

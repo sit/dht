@@ -28,15 +28,17 @@
 #include <stdio.h>
 #include <assert.h>
 
+#define EST_TIMEOUT_SZ 100
+
 vector<IDMap> ChordAdapt::ids;
 bool ChordAdapt::sorted;
-vector<Time> ChordAdapt::sort_live;
-vector<Time> ChordAdapt::sort_dead;
+vector<double> ChordAdapt::sort_live;
+vector<double> ChordAdapt::sort_dead;
 
 ChordAdapt::ChordAdapt(IPAddress i, Args& a) : P2Protocol(i)
 {
   _burst_sz = a.nget<uint>("burst_size", 10, 10);
-  uint _bw_overhead = a.nget<uint>("overhead_rate", 10, 10);
+  _bw_overhead = a.nget<uint>("overhead_rate", 10, 10);
   _stab_basic_timer = a.nget<uint>("basictimer", 18000, 10);
   _rate_queue = new RateControlQueue(this, (double)_bw_overhead, _burst_sz, ChordAdapt::empty_cb);
   _adjust_interval = 1000*_burst_sz/_bw_overhead;
@@ -44,10 +46,9 @@ ChordAdapt::ChordAdapt(IPAddress i, Args& a) : P2Protocol(i)
   _next_adjust = _adjust_interval;
 
   _last_calculated = 0;
-  _live_stat.clear();
-  _dead_stat.clear();
+  _stat.clear();
   for (uint i = 0;i < 10; i++) 
-    _calculated_prob.push_back(10*_stab_basic_timer);
+    _calculated_prob.push_back(1-0.1*i);
 
   _lookup_times = 0;
   _empty_times = 0;
@@ -65,6 +66,7 @@ ChordAdapt::ChordAdapt(IPAddress i, Args& a) : P2Protocol(i)
   _me.ip = ip();
   _me.id = ConsistentHash::ip2chid(_me.ip);
   _me.timestamp = 0;
+  _me.alivetime = 0;
   _id = _me.id;
 
   loctable = new LocTable();
@@ -147,6 +149,7 @@ ChordAdapt::join(Args *args)
   while ((!_wkn.ip) || (!Network::Instance()->alive(_wkn.ip))) {
     _wkn.ip = Network::Instance()->getnode(ids[random()%ids.size()].ip)->ip();
     _wkn.id = Network::Instance()->getnode(_wkn.ip)->id();
+    _wkn.alivetime = 0;
   }
   if (args) {
     _last_joined_time = now();
@@ -172,6 +175,7 @@ ChordAdapt::join(Args *args)
   IDMap succ = loctable->succ(_me.id+1);
   if ((args && args->nget<uint>("first",0,10)==1) || (succ.ip && succ.ip!=_me.ip)) {
     //start basic successor stabilization
+    _last_joined_time = 0;
     _join_scheduled = 0;
     if (!_stab_basic_running) {
       _stab_basic_running = true;
@@ -189,11 +193,15 @@ ChordAdapt::join(Args *args)
   la->key = _me.id - 1;
   la->m = _nsucc;
   la->ori = _me;
+  la->ori.timestamp = now()-_last_joined_time;
+  if (!la->ori.timestamp)
+    la->ori.timestamp = 1;
   la->no_drop = true;
   la->parallelism = 1;
   la->type = TYPE_JOIN_LOOKUP;
   la->learnsz = _learn_num;
   la->overshoot = 0;
+  la->nexthop = _wkn;
 
   _rate_queue->do_rpc(_wkn.ip, &ChordAdapt::find_successors_handler,
       &ChordAdapt::null_cb, la, lr, (uint)0, la->type,
@@ -203,6 +211,10 @@ ChordAdapt::join(Args *args)
 int
 ChordAdapt::null_cb(bool b, lookup_args *a, lookup_ret *r)
 {
+  if (!a->nexthop.ip)
+    abort();
+  a->nexthop.timestamp = now();
+  loctable->update_ifexists(a->nexthop);
   if (a) delete a;
   if (r) delete r;
   if (b)
@@ -277,6 +289,7 @@ ChordAdapt::join_learn()
   la->m = 3 * _learn_num; //means i want to learn from all
   la->n = min_n;
   la->src = _me;
+  la->src.alivetime = now()-_last_joined_time;
   la->end = _me;
   NDEBUG(2) << "join_learn from " << la->n.ip << "," 
     << printID(la->n.id) << endl;
@@ -289,24 +302,35 @@ ChordAdapt::join_learn()
 void
 ChordAdapt::find_successors_handler(lookup_args *la, lookup_ret *lr)
 {
+  if (la->nexthop.ip == _me.ip)
+    la->nexthop.alivetime = now()-_last_joined_time;
+  else
+    abort();
   if (loctable->size() < 3) {
+    /*
       lookup_args *lla = new lookup_args;
       lla->src = _me;
+      lla->src.alivetime = now()-_last_joined_time;
       lla->from = _me;
+      lla->from.alivetime = now()-_last_joined_time;
       bcopy(la,lla,sizeof(lookup_args));
       lookup_ret *llr = new lookup_ret;
       llr->v.clear();
+      lla->nexthop.ip = 0;
       _rate_queue->do_rpc(la->ori.ip, &ChordAdapt::join_handler,
 	  &ChordAdapt::null_cb, lla, llr, 1, TYPE_JOIN_LOOKUP, 
 	  PKT_SZ(2*llr->v.size(),0),PKT_SZ(0,0),TIMEOUT(_me.ip, la->ori.ip));
+	  */
 	NDEBUG(2) << "find_successors_handler failed for " << la->ori.ip 
 	  << "," << printID(la->ori.id) << " not joined" << endl;
     }else{
       lookup_args lla;
       bcopy(la,&lla,sizeof(lookup_args));
       lla.src = _me;
+      lla.src.alivetime = now()-_last_joined_time;
       lla.src.timestamp = now();
       lla.from = _me;
+      lla.from.alivetime = lla.src.alivetime;
       lla.no_drop = true;
       NDEBUG(3)<<"find_successors_handler key " << printID(lla.key) << " from " 
 	<< lla.ori.ip << "," << printID(lla.ori.id) << endl;
@@ -324,7 +348,7 @@ void
 ChordAdapt::crash(Args *args)
 {
   double ppp = _parallelism > 1?(exp(log(0.1)/(double)_parallelism)):0.1;
-  Time timeout = est_timeout(ppp);
+  double timeout = est_timeout(ppp);
   NDEBUG(1) << "crashed locsz " << loctable->size() << " livesz " << loctable->live_size() 
     << " locsz_used " << loctable->size(LOC_HEALTHY, timeout) << " livesz_used " 
     << loctable->live_size(timeout) << " live_time " << now()-_last_joined_time 
@@ -344,10 +368,9 @@ ChordAdapt::crash(Args *args)
   vector<IDMap>::iterator p = find(ids.begin(),ids.end(),_me);
   ids.erase(p);
   _max_succ_gap = 0;
-  _live_stat.clear();
-  _dead_stat.clear();
+  _stat.clear();
   for (uint i = 0; i < 10; i++)
-    _calculated_prob[i] = 10*_stab_basic_timer;
+    _calculated_prob[i] = (1-0.1*i);
 }
 
 /* ------------------------ lookup (recursive) ----------------------- */
@@ -368,7 +391,9 @@ ChordAdapt::lookup(Args *args)
   la.no_drop = true;
   la.nexthop = _me;
   la.from = _me;
+  la.from.alivetime = now()-_last_joined_time;
   la.src = _me;
+  la.src.alivetime = now()-_last_joined_time;
   la.src.timestamp = now();
   la.ori.ip = 0;
   la.m = 1;
@@ -384,6 +409,11 @@ ChordAdapt::lookup(Args *args)
 void
 ChordAdapt::donelookup_handler(lookup_args *la, lookup_ret *lr)
 {
+  if (la->nexthop.ip == _me.ip) {
+    la->nexthop.alivetime = now() - _last_joined_time;
+  }else
+    abort();
+
   if (la->from.ip!=_me.ip) {
     la->from.timestamp = now();
     loctable->add_node(la->from);
@@ -397,6 +427,7 @@ ChordAdapt::donelookup_handler(lookup_args *la, lookup_ret *lr)
   if (la->ori.ip) {
     lookup_args *lla = new lookup_args;
     bcopy(la,lla,sizeof(lookup_args));
+    la->nexthop = la->ori;
     lookup_ret *llr = new lookup_ret;
     llr->v = lr->v;
     if (lr->v.size() > 0) {
@@ -426,8 +457,13 @@ ChordAdapt::donelookup_handler(lookup_args *la, lookup_ret *lr)
       2*Network::Instance()->gettopology()->latency(_me.ip, la->from.ip) << " lat " 
       << now()-t << " hops " << la->hops << " timeouts " << la->to_num 
       << " correct? " << (b?1:0) << endl;
-      record_lookup_stat(_me.ip, la->from.ip, now()-t, true,
+      if (now()-t > 4000) {
+	record_lookup_stat(_me.ip, la->from.ip, now()-t, false,
+	  false, la->hops, la->to_num, la->to_lat);
+      }else{
+	record_lookup_stat(_me.ip, la->from.ip, now()-t, true,
 	  b, la->hops, la->to_num, la->to_lat);
+      }
       for (uint i = 0; i < lr->v.size();i++)
 	loctable->add_node(lr->v[i]);
     }
@@ -441,6 +477,9 @@ ChordAdapt::next_recurs(lookup_args *la, lookup_ret *lr)
   if (lr)
     lr->done = true;
 
+  //update my alivetie
+  la->nexthop.alivetime = now() - _last_joined_time;
+
   //learn the src node if this query
   la->src.timestamp = now();
   loctable->add_node(la->src);
@@ -448,12 +487,14 @@ ChordAdapt::next_recurs(lookup_args *la, lookup_ret *lr)
   loctable->add_node(la->from);
   if (lr && la->overshoot) {
     //lr->v = loctable->get_closest_in_gap(la->learnsz, la->key, la->from);
+    /*
     if (_rate_queue->critical())
       la->learnsz = 1;
     else
       la->learnsz = _learn_num;
-    lr->v = loctable->get_closest_in_gap(la->learnsz, la->overshoot, la->from, la->timeout?la->timeout:est_timeout(0.1));
-    if (lr->v.size() < la->learnsz) {
+    */
+    lr->v = loctable->get_closest_in_gap(la->learnsz, la->overshoot, la->from, 20*80*1000/_bw_overhead,la->timeout?la->timeout:est_timeout(0.1));
+    if (!lr->v.size()) {
       lr->v = loctable->succs(_me.id+1,la->learnsz);
       lr->is_succ = true;
     }else{
@@ -497,6 +538,7 @@ ChordAdapt::next_recurs(lookup_args *la, lookup_ret *lr)
     lookup_args *lla = new lookup_args;
     bcopy(la,lla,sizeof(lookup_args));
     lla->from = _me;
+    lla->from.alivetime = now()-_last_joined_time;
     lla->nexthop = lla->src;
     lookup_ret *llr = new lookup_ret;
     llr->done = true;
@@ -523,12 +565,12 @@ ChordAdapt::next_recurs(lookup_args *la, lookup_ret *lr)
   else if (para <= 0)
     para = 1;
   double ppp = para > 1? (exp(log(0.1)/(double)para)):0.1;
-  Time ttt = est_timeout(ppp);
-  vector<IDMap> nexthops = loctable->preds(la->key, para, LOC_HEALTHY, ttt);
-  //vector<IDMap> nexthops = loctable->next_close_hops(la->key, para, ttt);
+  double ttt = est_timeout(ppp);
+  //vector<IDMap> nexthops = loctable->preds(la->key, para, LOC_HEALTHY, ttt);
+  vector<IDMap> nexthops = loctable->next_close_hops(la->key, para, ttt);
   uint nsz = nexthops.size();
   assert(nsz>0 && nsz <= para);
-  if (nsz == 0) 
+  if ((nsz == 0) || (nexthops[0].ip == _me.ip))
     fprintf(stderr,"%llu shit! %u,%qx key %qx succ %qx\n", now(),_me.ip,_me.id, la->key, succ.id);
 
   NDEBUG(3) << "next_recurs " << printID(la->key) << " nsz " << nsz << ": " << print_succs(nexthops) << endl;
@@ -556,13 +598,19 @@ ChordAdapt::next_recurs(lookup_args *la, lookup_ret *lr)
     lookup_ret *llr = new lookup_ret;
     llr->v.clear();
     NDEBUG(3) << "next_recurs key " << printID(la->key) << " quota " << _rate_queue->quota() << " qsz " 
-      << _rate_queue->size() << " locsz " << loctable->size() 
-      << " livesz " << loctable->live_size() 
+      << _rate_queue->size() << " locsz " << loctable->size(LOC_HEALTHY, ttt) 
+      << " livesz " << loctable->live_size(ttt) 
       << " src " << la->src.ip << " ori " << la->ori.ip << " from " << la->from.ip << 
       " forward to next " << nexthops[i].ip << "," << printID(nexthops[i].id)  << "," 
-      << now()-nexthops[i].timestamp << " hops " << lla->hops 
-      << " est_to " << ttt << " est_sz " << (_live_stat.size()+_dead_stat.size())
+      << now()-nexthops[i].timestamp << "," << nexthops[i].alivetime << " to " 
+      << (double)nexthops[i].alivetime/(double)(nexthops[i].alivetime+ now()-nexthops[i].timestamp)
+      << " hops " << lla->hops 
+      << " est_to " << ttt << " est_sz " << _stat.size() 
       << " nsz " << nsz << " i " << i << " nodrop " << lla->no_drop << endl;
+    if (nexthops[i].ip == _me.ip)  {
+      fprintf(stderr,"what?! loop?!!!\n");
+      exit(3);
+    }
     sent_success = _rate_queue->do_rpc(nexthops[i].ip, &ChordAdapt::next_recurs,
 	&ChordAdapt::next_recurs_cb, lla,llr, lla->ori.ip?0:(lla->no_drop?1:3), lla->type,
 	PKT_SZ(1,0), PKT_SZ(2*lla->learnsz,0),TIMEOUT(_me.ip,nexthops[i].ip));
@@ -577,20 +625,27 @@ ChordAdapt::next_recurs_cb(bool b, lookup_args *la, lookup_ret *lr)
 {
   int ret_sz = 0;
   if (alive()) {
-    add_stat(now()-la->nexthop.timestamp, b);
+    Time delta = now()-la->nexthop.timestamp;
+    if (delta < la->nexthop.alivetime && delta > 5000)
+      add_stat((double)(la->nexthop.alivetime-delta)/(double)(la->nexthop.alivetime), b);
     la->nexthop.timestamp = now();
-    if (b) {
-      loctable->update_ifexists(la->nexthop);
-      if (lr->is_succ) {
-	if (lr->v.size() > 0) {
-	  vector<IDMap> oldlist = loctable->between(la->nexthop.id+1,lr->v[lr->v.size()-1].id);
-	  consolidate_succ_list(la->nexthop,oldlist,lr->v,false);
-	}
+    if ((b) && (la->nexthop.ip!=_me.ip)){
+      if (lr->is_succ && lr->v.size()>0){
+	loctable->update_ifexists(la->nexthop,ConsistentHash::distance(la->nexthop.id,lr->v[lr->v.size()-1].id));
+	vector<IDMap> oldlist = loctable->between(la->nexthop.id+1,lr->v[lr->v.size()-1].id);
+	consolidate_succ_list(la->nexthop,oldlist,lr->v,false);
+	vector<IDMap> newlist = loctable->between(la->nexthop.id+1,lr->v[lr->v.size()-1].id);
+	NDEBUG(4) << "next_recurs_cb After consolidate: " << print_succs(newlist) << endl;
+	/*
+	for (uint i = 1; i < lr->v.size(); i++) 
+	  loctable->update_ifexists(lr->v[i-1],lr->v[i].ip);
+	  */
       } else {
+	loctable->update_ifexists(la->nexthop,0);
 	for (uint i = 0; i < lr->v.size(); i++)  {
 	  IDMap xx = loctable->succ(lr->v[i].id,LOC_HEALTHY);
-	  if (xx.ip == lr->v[i].ip && xx.timestamp < lr->v[i].timestamp)
-	    add_stat(lr->v[i].timestamp - xx.timestamp, true);
+	  if (xx.ip == lr->v[i].ip && xx.timestamp < lr->v[i].timestamp && lr->v[i].timestamp - xx.timestamp > 5000)
+	    add_stat((double)xx.alivetime/(double)(lr->v[i].timestamp - xx.timestamp+xx.alivetime), true);
 	  loctable->add_node(lr->v[i]);
 	}
       }
@@ -599,7 +654,7 @@ ChordAdapt::next_recurs_cb(bool b, lookup_args *la, lookup_ret *lr)
 	<< "," << printID(la->nexthop.id) << " learnt " << lr->v.size() << ": " 
 	<< print_succs(lr->v) << " nodes is_succ " << (lr->is_succ?1:0) 
 	<< " overshoot " << printID(la->overshoot) << " locsz " 
-	<< loctable->size() << " livesz " << loctable->live_size() << endl;
+	<< loctable->size(LOC_HEALTHY,0.9) << " livesz " << loctable->live_size(0.9) << endl;
       ret_sz = PKT_SZ(2*lr->v.size(),0);
     } else {
       loctable->del_node(la->nexthop);
@@ -667,6 +722,7 @@ ChordAdapt::fix_pred(void *a)
   gpa->m = 1;
   gpa->n = pred;
   gpa->src = _me;
+  gpa->src.alivetime = now()-_last_joined_time;
   gpr->v.clear();
   NDEBUG(3) << " fix_pred " << pred.ip << "," << printID(pred.id) 
     << " quota " << _rate_queue->quota() << endl;
@@ -717,7 +773,13 @@ ChordAdapt::fix_succ(void *a)
   gpr->v.clear();
   gpa->n = succ;
   gpa->src = _me;
-  gpa->m= _nsucc;
+  gpa->src.alivetime = now()-_last_joined_time;
+
+  vector<IDMap> scs = loctable->succs(_me.id+1,_nsucc);
+  if (scs.size() > _nsucc/2) 
+    gpa->m = 1;
+  else
+    gpa->m= _nsucc;
 
   NDEBUG(2) << "fix_succ succ " << succ.ip << "," << printID(succ.id) << endl;
   _rate_queue->do_rpc(succ.ip, &ChordAdapt::get_predsucc_handler,
@@ -729,6 +791,10 @@ void
 ChordAdapt::get_predsucc_handler(get_predsucc_args *gpa, 
     get_predsucc_ret *gpr)
 {
+  if (gpa->n.ip == _me.ip) 
+    gpa->n.alivetime = now()-_last_joined_time;
+  else
+    abort();
   gpr->pred = loctable->pred(_me.id-1);
   if (gpa->m)
     gpr->v = loctable->succs(_me.id+1,gpa->m);
@@ -784,6 +850,8 @@ ChordAdapt::fix_succ_cb(bool b, get_predsucc_args *gpa, get_predsucc_ret *gpr)
 void
 ChordAdapt::consolidate_succ_list(IDMap n, vector<IDMap> oldlist, vector<IDMap> newlist, bool is_succ)
 {
+  IDMap sss;
+  IDMap mee;
   uint oldi = 0, newi = 0;
   if (is_succ) {
     while (oldi < oldlist.size()) {
@@ -792,16 +860,32 @@ ChordAdapt::consolidate_succ_list(IDMap n, vector<IDMap> oldlist, vector<IDMap> 
       oldi++;
     }
     oldi++;
+    mee = _me;
+  }else{
+    mee = n;
   }
   while (1) {
 
     if (newi >= newlist.size())
       break;
     if (oldi >= oldlist.size()) {
+      if (is_succ)  { // i need to clean up some shit
+	sss = loctable->succ(oldlist[oldi-1].id);
+      }
       while (newi < newlist.size()) {
+	if (is_succ) {
+	  while (newlist[newi].ip!=sss.ip && ConsistentHash::between(mee.id,newlist[newi].id,sss.id)) {
+	    sss.timestamp = now();
+	    loctable->del_node(sss);
+	    sss = loctable->succ(sss.id+1);
+	  }
+	}
 	loctable->add_node(newlist[newi],is_succ);
 	newi++;
 	oldi++;
+	if (is_succ) {
+	  sss = loctable->succ(newlist[newi-1].id+1);
+	}
 	if (is_succ && oldi == _nsucc) 
 	  break;
       }
@@ -847,7 +931,7 @@ ChordAdapt::empty_cb(void *x)  //wrapper function
 void
 ChordAdapt::empty_queue(void *a) 
 {
-
+  IDMap succ = loctable->succ(_me.id+1);
   if (loctable->size() < 3) {
     if (!_join_scheduled || (now()-_join_scheduled)>20000) {
       NDEBUG(4) << "empty_queue locsz " << loctable->size() 
@@ -862,24 +946,15 @@ ChordAdapt::empty_queue(void *a)
   _empty_times++;
 
   double ppp = _parallelism > 1?(exp(log(0.1)/(double)_parallelism)):0.1;
-  Time timeout = est_timeout(ppp);
-  if (timeout && timeout < _stab_basic_timer) {
-    NDEBUG(4) << " wierd para " << _parallelism << " timeout " << timeout 
-      << " deadsz " << _dead_stat.size() << " livesz " << _live_stat.size() << endl;
-  }
+  double timeout = est_timeout(ppp);
 
   IDMap pred, next;
   pred.ip = _me.ip;
-  Time tt = timeout;
-  Time oldest;
+  double tt = timeout;
 
-  while (pred.ip == _me.ip) {
-    oldest = loctable->pred_biggest_gap(pred, next, _max_succ_gap, tt);
-    tt = tt/2;
-    if (tt == 0) break;
-  }
-  if (pred.ip == _me.ip && tt == 0) {
-    NDEBUG(4) << "nothing to learn " << endl;
+  double oldest = loctable->pred_biggest_gap(pred, next, 20*80*1000/_bw_overhead, tt);
+  if (pred.ip == _me.ip) {
+    NDEBUG(4) << "nothing to learn oldest " << oldest << endl;
     return;
   }
 
@@ -892,6 +967,7 @@ ChordAdapt::empty_queue(void *a)
   la->timeout = timeout;
   la->n = pred;
   la->src = _me;
+  la->src.alivetime = now()-_last_joined_time;
   la->end = next;
 
   NDEBUG(2) << "empty_queue quota " << _rate_queue->quota() << " succsz " << loctable->succ_size() 
@@ -901,7 +977,7 @@ ChordAdapt::empty_queue(void *a)
     << " learn from " << la->n.ip << "," 
     << printID(la->n.id) << " old " << (now()-la->n.timestamp) 
     << " para " << _parallelism << " est " << timeout << " tt " << tt << " oldest " << oldest
-    << " statsz " << (_dead_stat.size()+_live_stat.size()) 
+    << " statsz " << _stat.size() 
     << " end " << la->end.ip << endl;
 
   _rate_queue->do_rpc(pred.ip, &ChordAdapt::learn_handler, 
@@ -914,31 +990,17 @@ ChordAdapt::learn_handler(learn_args *la, learn_ret *lr)
 {
   la->src.timestamp = now();
   loctable->add_node(la->src);
+  if (la->n.ip == _me.ip) 
+    la->n.alivetime = now()-_last_joined_time;
+  else
+    abort();
 
   /*
-  int stat = loctable->find_node(la->end);
-  IDMap succ = loctable->succ(_me.id + 1);
-
-  lr->stat = stat;
-  if (ConsistentHash::between(_me.id, succ.id, la->end.id)) 
-    lr->stat = LOC_DEAD;
-
-  if (lr->stat < LOC_DEAD) {
-    lr->v = loctable->get_closest_in_gap(la->m, la->end.id, la->src, la->timeout);
-  }else{
-    lr->v = loctable->succs(_me.id+1,la->m);
-  }
-  if (lr->v.size() == 0 && la->end.ip!=succ.ip){
-    fprintf(stderr,"%u learn_handler from %u, end is %u, my succ is %u locsz %u requested timeout %u\n",
-	_me.ip, la->src.ip, la->end.ip, succ.ip, loctable->size(),la->timeout);
-    IDMap succ = loctable->succ(_me.id+1);
-    fprintf(stderr,"haha %u\n",succ.ip);
-  }
-  */
   if (_rate_queue->critical())
     la->m = 1;
-  lr->v = loctable->get_closest_in_gap(la->m, la->end.id, la->src, la->timeout);
-  if (lr->v.size() < la->m)  {
+    */
+  lr->v = loctable->get_closest_in_gap(la->m, la->end.id, la->src, 20*80*1000/_bw_overhead, la->timeout);
+  if (!lr->v.size()) {
     lr->v = loctable->succs(_me.id+1,la->m);
     lr->is_succ = true;
   }else{
@@ -956,37 +1018,46 @@ ChordAdapt::learn_cb(bool b, learn_args *la, learn_ret *lr)
 {
   uint ret_sz = 0;
   if (alive()) {
-    add_stat(now()-la->n.timestamp,b);
+    Time delta = now()-la->n.timestamp;
+    if (delta < la->n.alivetime && delta > 5000)
+      add_stat((double)(la->n.alivetime-delta)/(double)(la->n.alivetime),b);
     la->n.timestamp = now();
     if (b) {
-      loctable->update_ifexists(la->n);
-      if (lr->is_succ) {
-	if (lr->v.size() > 0) {
-	  ConsistentHash::CHID gap = (lr->v[0].id - la->n.id);
-	  _max_succ_gap = gap;
-	  vector<IDMap> oldlist = loctable->between(la->n.id+1,lr->v[lr->v.size()-1].id);
-	  consolidate_succ_list(la->n,oldlist,lr->v,false);
-	}
+      if ((lr->is_succ) && (lr->v.size() >0)) {
+	loctable->update_ifexists(la->n,ConsistentHash::distance(la->n.id,lr->v[lr->v.size()-1].id));
+	ConsistentHash::CHID gap = (lr->v[0].id - la->n.id);
+	_max_succ_gap = gap;
+	vector<IDMap> oldlist = loctable->between(la->n.id+1,lr->v[lr->v.size()-1].id);
+	consolidate_succ_list(la->n,oldlist,lr->v,false);
+	vector<IDMap> newlist = loctable->between(la->n.id+1,lr->v[lr->v.size()-1].id);
+	NDEBUG(4) << "learn_cb After consolidate " << la->n.ip << "," << la->n.alivetime << " : " << print_succs(newlist) << endl;
+	/*
+	for (uint i = 1; i < lr->v.size();i++) 
+	  loctable->update_ifexists(lr->v[i-1],lr->v[i].ip);
+	  */
       } else {
+	loctable->update_ifexists(la->n);
 	for (uint i = 0; i < lr->v.size(); i++)  {
 	  IDMap xx = loctable->succ(lr->v[i].id,LOC_HEALTHY);
 	  if (xx.ip == lr->v[i].ip && xx.timestamp < lr->v[i].timestamp)
-	    add_stat(lr->v[i].timestamp - xx.timestamp, true);
+	    add_stat((double)xx.alivetime/(double)(lr->v[i].timestamp - xx.timestamp+xx.alivetime), true);
 	  loctable->add_node(lr->v[i]);
 	}
       }
-      NDEBUG(4) << "learn_cb quota " << _rate_queue->quota() << " locsz " << loctable->size() <<" livesz " << loctable->live_size() << " succ_sz " << loctable->succ_size() 
-	<< " max_gap " << printID(_max_succ_gap) << "this_gap " 
-	<< printID(la->end.id - la->n.id) << "learn_cb " << la->m 
-	<< " from " << la->n.ip 
-	<< (lr->stat<LOC_DEAD?" alive ":" dead ") << la->end.ip << " is_succ " << (lr->is_succ?1:0) 
-	<< " sz " << lr->v.size() << ": " << print_succs(lr->v) << endl;
+      NDEBUG(4) << "learn_cb quota " << _rate_queue->quota() << " locsz " 
+	<< loctable->size(LOC_HEALTHY,0.9) <<" livesz " << loctable->live_size(0.9) 
+	<< "learn_cb " << la->m 
+	<< " from " << la->n.ip << ":" << la->end.ip << " " << printID(la->n.id) << ":" <<  printID(la->end.id)
+	<< " is_succ " << (lr->is_succ?1:0) 
+	<< " sz " << lr->v.size() << " ex " << lr->v[0].alivetime << "," << now()-lr->v[0].timestamp << " : " << print_succs(lr->v) << endl;
 
       ret_sz = PKT_SZ(2*lr->v.size()+1,0);
     }else{
       uint bsz = loctable->size();
       loctable->del_node(la->n); //XXX: should not delete a finger after one failure
-      NDEBUG(4) << " learn_cb quota " << _rate_queue->quota() << " node " << la->n.ip << " dead! locsz " 
+      NDEBUG(4) << " learn_cb quota " << _rate_queue->quota() << " node " << la->n.ip 
+	<< "," << printID(la->n.id)<< "," << (now()-la->n.timestamp) << "," << la->n.alivetime << "," <<
+	(double)(la->n.alivetime)/(double)(now()-la->n.timestamp+la->n.alivetime) << " dead! locsz " 
 	<< bsz << "," << loctable->size() << " livesz " << loctable->live_size() << endl;
     }
     if (_rate_queue->empty()) 
@@ -1031,7 +1102,7 @@ ChordAdapt::check_pred_correctness(ConsistentHash::CHID k, IDMap n)
     pos--;
   else
     pos = ids.size()-1;
-  if (ids[pos].ip == n.ip) 
+  if ((ids[pos].ip == n.ip) || (!Network::Instance()->alive(n.ip)))
     return true;
   else {
     NDEBUG(4) << "key " << printID(k) << "wrong " << n.ip << "," 
@@ -1067,82 +1138,107 @@ ChordAdapt::adjust_parallelism()
 }
 
 void
-ChordAdapt::add_stat(Time t, bool live)
+ChordAdapt::add_stat(double ti, bool live)
 {
-  if (t == 0) return;
-  if (live) {
-    _live_stat.push_back(t);
-  }else{
-    _dead_stat.push_back(t);
+  if (ti <= 0.0)
+    return;
+  if (ti >= 1.0) {
+    fprintf(stderr,"wierd!\n");
+    return;
   }
-  uint lsz = _live_stat.size(), dsz = _dead_stat.size();
-  if ((_live_stat.size()+_dead_stat.size())> 1000) {
-    if (_dead_stat.size() == 0) {
-      _live_stat.erase(_live_stat.begin());
-    }else if (_live_stat.size() == 0) {
-      _dead_stat.erase(_dead_stat.begin());
-    }else if (_live_stat.front() < _dead_stat.front())
-      _live_stat.erase(_live_stat.begin());
-    else
-      _dead_stat.erase(_dead_stat.begin());
-  }
+
+  Stat s;
+  s.alive = live;
+  s.ti = ti;
+  _stat.push_back(s);
+  if (_stat.size()> EST_TIMEOUT_SZ) 
+    adjust_timeout();
 }
 
-Time
+double
 ChordAdapt::est_timeout(double prob)
 {
-  //return 360000;
-  if ((now()-_last_calculated > (_adjust_interval)) 
-      && ((_live_stat.size()+_dead_stat.size()) > 50)) {
-    sort_live.clear();
-    sort_live.resize(_live_stat.size());
-    for (uint i = 0; i < _live_stat.size(); i++)
-      sort_live[i] = _live_stat[i];
-    sort_dead.clear();
-    sort_dead.resize(_dead_stat.size());
-    for (uint i = 0; i < _dead_stat.size(); i++)
-      sort_dead[i] = _dead_stat[i];
-
-    sort(sort_live.begin(),sort_live.end());
-    sort(sort_dead.begin(),sort_dead.end());
-
-    for (uint i = 0; i < 10; i++)
-      _calculated_prob[i] = 0;
-
-    uint lsz = sort_live.size();
-    uint dsz = sort_dead.size();
-    uint live = lsz, dead = 0;
-    uint i = 0, j = 0;
-    Time tt;
-    while (1) {
-      if (i < lsz && j < dsz) {
-	if (sort_live[i] < sort_dead[j]) {
-	  tt = sort_live[i];
-	  live--;
-	  i++;
-	}else{
-	  tt = sort_dead[j];
-	  dead++;
-	  j++;
-	}
-      }else if (i < lsz) {
-	tt = sort_live[i];
-	live--;
-	i++;
-      }else if (j < dsz) {
-	tt = sort_dead[j];
-	dead++;
-	j++;
-      }else
-	break;
-      uint p = (uint)(10.0*dead/(double)(dead+live)) + 1;
-      if (p>=10) 
-	p = 9;
-      _calculated_prob[p] = tt;
-    }
-    _last_calculated = now();
-  }
   return _calculated_prob[(uint)(10*prob)];
+}
+
+void
+ChordAdapt::adjust_timeout()
+{
+  /*
+  if ((now()-_last_calculated > (_adjust_interval)) 
+      && (_stat.size() > 50)) {
+      */
+  uint ssz = _stat.size();
+  vector<double> new_prob;
+  sort_live.clear();
+  sort_dead.clear();
+  for (uint i = 0; i < _stat.size(); i++) {
+    if (_stat[i].alive)
+      sort_live.push_back(_stat[i].ti);
+    else
+      sort_dead.push_back(_stat[i].ti);
+  }
+  sort(sort_live.begin(),sort_live.end());
+  sort(sort_dead.begin(),sort_dead.end());
+  _stat.clear();
+  if (sort_dead.size() == 0 || sort_live.size() ==0)
+    return;
+
+  new_prob.resize(10);
+  for (uint i = 0; i < 10; i++)
+    new_prob[i] = 0.0;
+
+  uint lsz = sort_live.size();
+  uint dsz = sort_dead.size();
+  uint live = 0, dead = dsz;
+  uint i = 0, j = 0;
+  double tt;
+  while (1) {
+    if (i < lsz && j < dsz) {
+      if (sort_live[i] < sort_dead[j]) {
+	tt = sort_live[i];
+	live++;
+	i++;
+      }else{
+	tt = sort_dead[j];
+	dead--;
+	j++;
+      }
+    }else if (i < lsz) {
+      tt = sort_live[i];
+      live++;
+      i++;
+    }else if (j < dsz) {
+      tt = sort_dead[j];
+      dead--;
+      j++;
+    }else
+      break;
+    uint p = (uint)(10.0*dead/(double)(dead+live))+ 1;
+    if (p>=10) 
+      p = 9;
+    if (new_prob[p] <= 0.0000001)
+      new_prob[p] = tt;
+  }
+  _last_calculated = now();
+  NDEBUG(4) << "estimated timeout " << _calculated_prob[1] << endl;
+  if (_calculated_prob[1] > 0.99) {
+    printf("sort_live %u:  ",lsz);
+    for (uint i = 0; i < sort_live.size(); i++) 
+      printf("%.2f ",sort_live[i]);
+    printf("\n");
+    printf("sort_dead %u:  ",dsz);
+    for (uint i = 0; i < sort_dead.size(); i++) 
+      printf("%.2f ",sort_dead[i]);
+    printf("\n");
+    printf("calculated prob : ");
+    for (uint i = 0; i < _calculated_prob.size();i++) 
+      printf("%.2f ",_calculated_prob[i]);
+    printf("\n");
+    new_prob[1] = 0.95;
+  }
+  for (uint i = 0; i < 10; i++) 
+    _calculated_prob[i] = 0.9*_calculated_prob[i] + 0.1*new_prob[i];
 }
 
 #include "p2psim/bighashmap.cc"

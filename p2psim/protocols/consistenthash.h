@@ -146,7 +146,10 @@ public:
 
   static CHID distance (CHID a, CHID b)
   {
-    if (a < b) return (b - a);
+    if (a < b) 
+      return (b - a);
+    else if (a == b) 
+      return 0;
     else {
       CHID t;
       memset (&t, 255,sizeof(CHID));

@@ -289,12 +289,14 @@ class LocTable {
 	int status;
 	Chord::CHID fs;
 	Chord::CHID fe;
+	ConsistentHash::CHID follower;
 	idmapwrap(Chord::IDMap x) {
 	  n = x;
 	  id = x.id;
 	  status = 0;
 	  fs = fe = 0;
 	  is_succ = false;
+	  follower = 0;
 	}
     };
 
@@ -318,23 +320,23 @@ class LocTable {
     idmapwrap *get_naked_node(ConsistentHash::CHID id);
     Chord::IDMap succ(ConsistentHash::CHID id, int status = LOC_HEALTHY);
     vector<Chord::IDMap> succs(ConsistentHash::CHID id, unsigned int m, int status = LOC_HEALTHY);
-    vector<Chord::IDMap> preds(Chord::CHID id, uint m, int status = LOC_HEALTHY, Time expire=0);
+    vector<Chord::IDMap> preds(Chord::CHID id, uint m, int status = LOC_HEALTHY, double to=0.0);
     vector<Chord::IDMap> between(ConsistentHash::CHID start, ConsistentHash::CHID end, int status = LOC_HEALTHY);
     Chord::IDMap pred(Chord::CHID id, int status = LOC_ONCHECK);
     void checkpoint();
     void print();
 
-    bool update_ifexists(Chord::IDMap n);
+    bool update_ifexists(Chord::IDMap n, ConsistentHash::CHID gap=0);
     bool add_node(Chord::IDMap n, bool is_succ=false, bool assertadd=false,Chord::CHID fs=0,Chord::CHID fe=0, bool replacement=false);
     int add_check(Chord::IDMap n);
     void add_sortednodes(vector<Chord::IDMap> l);
     bool del_node(Chord::IDMap n, bool force=false);
     virtual void del_all();
     void notify(Chord::IDMap n);
-    uint size(uint status=LOC_HEALTHY, Time to = 0);
+    uint size(uint status=LOC_HEALTHY, double to = 0.0);
     uint succ_size();
     void last_succ(Chord::IDMap n);
-    uint live_size(Time to = 0);
+    uint live_size(double to = 0.0);
     bool is_succ(Chord::IDMap n);
     void set_evict(bool v) { _evict = v; }
     void set_timeout(uint to) {_timeout = to;}
@@ -350,9 +352,9 @@ class LocTable {
     int find_node(Chord::IDMap n);
     void dump();
     void stat();
-    Time pred_biggest_gap(Chord::IDMap &start, Chord::IDMap &end, ConsistentHash::CHID mingap, Time to = 0); //these two functions are too specialized
-    vector<Chord::IDMap> get_closest_in_gap(uint m, ConsistentHash::CHID end, Chord::IDMap src, Time to = 0);
-    vector<Chord::IDMap> next_close_hops(ConsistentHash::CHID key, uint n, Time to, double ratio = 2.0);
+    double pred_biggest_gap(Chord::IDMap &start, Chord::IDMap &end, Time stabtimer, double to = 0.0); //these two functions are too specialized
+    vector<Chord::IDMap> get_closest_in_gap(uint m, ConsistentHash::CHID end, Chord::IDMap src, Time stabtime, double to);
+    vector<Chord::IDMap> next_close_hops(ConsistentHash::CHID key, uint n, double to = 0.0);
 
   protected:
     bool _evict;

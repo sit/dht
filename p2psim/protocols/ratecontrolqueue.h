@@ -89,7 +89,7 @@ class RateControlQueue {
       _quota += more;
       _last_update = now();
 
-      if ((_quota - sz - rsz < (_burst/2)) && p >= DROPABLE_PRIORITY) {
+      if (_node->ip()!=dst && (_quota - sz - rsz < (_burst/2)) && p >= DROPABLE_PRIORITY) {
 	QDEBUG(4) << " drop to dst " << qe->_dst << " priority " << p << endl;
 	if (args)
 	  delete args;
@@ -100,10 +100,11 @@ class RateControlQueue {
 	return false;
       }
 
-      _quota -= (qe->_sz + qe->_rsz);
-
-      if (_quota < _burst)
-	_quota = _burst;
+      if (_node->ip()!=dst) {
+	_quota -= (qe->_sz + qe->_rsz);
+	if (_quota < _burst)
+	  _quota = _burst;
+      }
 
       QDEBUG(5) << " sub " << qe->_sz << " sub " << qe->_rsz << endl;
       _node->delaycb(0,&RateControlQueue::send_one_rpc, (void *)qe, this);
@@ -133,6 +134,7 @@ class RateControlQueue {
     int _quota;
     Time _last_update;
     Time _start_time;
+    static unsigned long long haha;
     unsigned long long _total_bytes;
     
 };

@@ -4,6 +4,7 @@
 
 
 bool operator< (const q_elm& a, const q_elm& b) { return (b._priority < a._priority); }
+unsigned long long RateControlQueue::haha = 0;
 
 RateControlQueue::RateControlQueue(Node *n, double rate, int burst, void (*fn)(void *))
 {
@@ -61,9 +62,13 @@ RateControlQueue::send_one_rpc(void *x)
   q_elm *qe = (q_elm *)x;
 
   QDEBUG(5) << " sending rpc to " << qe->_dst << endl;
-  _node->record_bw_stat(qe->_type,0,qe->_sz-PKT_OVERHEAD);
-  _node->record_inout_bw_stat(qe->_dst,0,qe->_sz-PKT_OVERHEAD);
-  _total_bytes += qe->_sz;
+  if (_node->ip()!=qe->_dst) {
+    _node->record_bw_stat(qe->_type,0,qe->_sz-PKT_OVERHEAD);
+    _node->record_inout_bw_stat(qe->_dst,0,qe->_sz-PKT_OVERHEAD);
+    _total_bytes += qe->_sz;	
+    if (Node::collect_stat())
+      RateControlQueue::haha += qe->_sz;
+  }
   bool b = _node->_doRPC(qe->_dst, qe->_fn, qe->_t, qe->_timeout);
 
   int sz;
@@ -73,11 +78,15 @@ RateControlQueue::send_one_rpc(void *x)
     sz = PKT_OVERHEAD;
 
   int oldq = _quota;
-  _quota += (qe->_rsz-sz);
-  _total_bytes += sz;
-  if (sz > 0)
-    _node->record_bw_stat(qe->_type,0,sz-PKT_OVERHEAD);
-  assert((_total_bytes + _quota) < (now()-_start_time)*_rate);
+  if (_node->ip()!=qe->_dst) {
+    _quota += (qe->_rsz-sz);
+    _total_bytes += sz;
+    if (Node::collect_stat())
+      RateControlQueue::haha += sz;
+    if (sz > 0)
+      _node->record_bw_stat(qe->_type,0,sz-PKT_OVERHEAD);
+    assert((_total_bytes + _quota) < (now()-_start_time)*_rate);
+  }
   QDEBUG(5) << " (send_rpc) adding " << (qe->_rsz-sz) << " from old value " << oldq << endl;
   qe->_killme(qe->_t);
   delete qe;
@@ -93,8 +102,8 @@ RateControlQueue::stop_queue()
     delete qe;
   }
   _running = false;
-  QDEBUG(5) << " stopped total bytes " << _total_bytes << " live time " << (now()-_start_time) << 
-    " avg bytes " << (double)(_total_bytes*1000)/(now()-_start_time) << endl;
+  QDEBUG(4) << " stopped total bytes " << _total_bytes << " live time " << (now()-_start_time) << 
+    " avg bytes " << (double)(_total_bytes*1000)/(now()-_start_time) << " total " << RateControlQueue::haha << endl;
   _quota = 0;
   _total_bytes = 0;
   _start_time = 0;
