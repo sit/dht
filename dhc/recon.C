@@ -134,12 +134,7 @@ dhc::recon (chordID bID, dhc_cb_t cb)
 
   if (rec) {    
     ptr<dhc_block> kb = to_dhc_block (rec);
-#if 0
-    if (kb->masterID != 0) 
-      ask_master (kb, cb);
-    else 
-#endif
-      master_recon (kb, cb);
+    master_recon (kb, cb);
   } else {
     warn << "dhc:recon. Too many deaths. Tough luck.\n";
     //I don't have the block, which means too many pred nodes
@@ -154,16 +149,7 @@ dhc::recv_newconfig (user_args *sbp)
 {
   if (dhc_debug)
     warn << "\n\n" << myNode->my_ID () << " received newconfig msg.\n ";
-
-#if 0
-  dhc_newconfig_arg *newconfig = sbp->template getarg<dhc_newconfig_arg> ();
-  if (newconfig->type == DHC_DHC)
-#endif
     newconfig_normal (sbp);
-#if 0
-  else
-    newconfig_master (sbp);
-#endif
 }
 
 void
@@ -176,7 +162,7 @@ dhc::newconfig_normal (user_args *sbp)
 
   int newer = 1;
   if (!rec)
-    kb = New refcounted<dhc_block> (newconfig->bID); //, newconfig->mID);
+    kb = New refcounted<dhc_block> (newconfig->bID); 
   else {
     kb = to_dhc_block (rec);
     newer = tag_cmp (newconfig->data.tag, kb->data->tag);
@@ -243,76 +229,3 @@ dhc::newconfig_normal (user_args *sbp)
   dhc_newconfig_res res; res.status = DHC_OK;
   sbp->reply (&res);
 }
-#if MLP
-void
-dhc::newconfig_master (user_args *sbp)
-{
-  dhc_newconfig_arg *newconfig = sbp->template getarg<dhc_newconfig_arg> ();
-  ptr<dbrec> key = id2dbrec (newconfig->mID);
-  ptr<dbrec> rec = db->lookup (key);
-
-  if (!rec) {
-    dhc_newconfig_res res; res.status = DHC_NOT_MASTER;
-    sbp->reply (&res);
-  } else {
-    ptr<dhc_block> mb = to_dhc_block (rec);
-    ptr<dhc_block> kb = mb->lookup (newconfig->bID);
-    int newer = 1;
-    
-    //This function is called when a leaf node inserts a new leaf object.
-    //Or, when a the leaf node reconfigures and the master node sends the 
-    //decision to the master replicas.
-    if (!kb)
-      kb = New refcounted<dhc_block> (newconfig->bID); //, newconfig->mID);
-    else
-      newer = (newconfig->old_conf_seqnum >= kb->meta->config.seqnum);
-    
-    if (!newer) {
-      dhc_newconfig_res res; res.status = DHC_CONF_MISMATCH;
-      sbp->reply (&res);
-    } else {
-#if MLP
-      if (newconfig->newblock)
-	send_config_to_succs (mb, newconfig);     //send block to k-1 succs of mID
-#endif
-      kb->meta->config.seqnum = newconfig->old_conf_seqnum + 1;
-      kb->meta->config.nodes.setsize (newconfig->new_config.size ());
-      for (uint i=0; i<kb->meta->config.nodes.size (); i++)
-	kb->meta->config.nodes[i] = newconfig->new_config[i];
-      mb->insert (kb);
-      db->del (key);
-      db->insert (key, to_dbrec (mb));
-
-      dhc_newconfig_res res; res.status = DHC_OK;
-      sbp->reply (&res);
-    }
-  }
-}
-#endif
-#if MLP
-void 
-dhc::send_config_to_succs (ptr<dhc_block> mb, dhc_newconfig_arg *newconfig)
-{
-  ref<dhc_newconfig_arg> arg = New refcounted<dhc_newconfig_arg> ();
-  arg->bID = newconfig->bID;
-  arg->mID = newconfig->mID;
-  arg->type = DHC_MASTER;
-  //arg->data = ignore this value
-  arg->old_conf_seqnum = newconfig->old_conf_seqnum;
-  arg->new_config.setsize (newconfig->new_config.size ());
-  for (uint i=0; i<arg->new_config.size (); i++) 
-    arg->new_config[i] = newconfig->new_config[i];
-
-  dhc_soft *mbs = dhcs[newconfig->mID];
-  if (!mbs) {
-    mbs = New dhc_soft (myNode, mb);
-    dhcs.insert (mbs);
-  }
-
-  for (uint i=0; i<mbs->config.size (); i++) {
-    ptr<dhc_newconfig_res> res = New refcounted<dhc_newconfig_res>;
-    myNode->doRPC (mbs->config[i], dhc_program_1, DHCPROC_NEWCONFIG, arg, res,
-		   wrap (this, &dhc::recv_m_newconf_ack, arg->bID, res));
-  }
-}
-#endif

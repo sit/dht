@@ -170,7 +170,6 @@ dhc::recv_accept (chordID bID, dhc_cb_t cb,
       b->pstat->sent_newconfig = true;
       ptr<dhc_newconfig_arg> arg = New refcounted<dhc_newconfig_arg>;
       arg->bID = kb->id;
-      //arg->mID = kb->masterID;
       arg->data.tag.ver = kb->data->tag.ver;
       arg->data.tag.writer = kb->data->tag.writer;
       arg->data.data.setsize (kb->data->data.size ());

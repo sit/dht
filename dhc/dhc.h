@@ -229,7 +229,7 @@ struct dhc_block {
     ID_put (buf + offst, data->tag.writer);
     offst += ID_size;
     //if (type == DHC_DHC)
-      bcopy (data->data.base (), buf + offst, data->data.size ());
+    bcopy (data->data.base (), buf + offst, data->data.size ());
 
     return buf;
   }
