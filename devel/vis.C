@@ -56,7 +56,6 @@ static GdkColormap *cmap = NULL;
 static GdkFont *courier10 = NULL;
 
 static GtkWidget *lookup;
-static GtkWidget *last_clicked;
 static GtkWidget *total_nodes;
 
 static short interval = -1;
@@ -82,6 +81,8 @@ struct color_pair {
 };
 
 vec<color_pair> lat_map;
+
+char last_clicked[128] = "";
 
 struct f_node {
   chordID ID;
@@ -629,7 +630,7 @@ update_toes_got_toes (chordID ID, str host, unsigned short port,
 void
 initgraf ()
 {
-  courier10 = gdk_font_load ("-*-courier-*-r-*-*-12-*-*-*-*-*-*-*");
+  courier10 = gdk_font_load ("-*-courier-*-r-*-*-*-*-*-*-*-*-*-*");
 
   window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
 
@@ -645,7 +646,6 @@ initgraf ()
   GtkWidget *hsep1 = gtk_hseparator_new ();
   GtkWidget *draw_nothing = gtk_button_new_with_label ("Reset");
   GtkWidget *hsep2 = gtk_hseparator_new ();
-  last_clicked = gtk_label_new ("                    ");
   total_nodes = gtk_label_new ("                    ");
   for (size_t i = 0; i < NELEM (handlers); i++)
     handlers[i].widget = gtk_check_button_new_with_label (handlers[i].name);
@@ -667,7 +667,6 @@ initgraf ()
   gtk_box_pack_start (GTK_BOX (vbox), hsep1, FALSE, TRUE, 0);
   gtk_box_pack_start (GTK_BOX (vbox), draw_nothing, FALSE, FALSE, 0);
   gtk_box_pack_start (GTK_BOX (vbox), hsep2, FALSE, TRUE, 0);
-  gtk_box_pack_start (GTK_BOX (vbox), last_clicked, FALSE, TRUE, 0);
   for (size_t i = 0; i < NELEM (handlers); i++)
     gtk_box_pack_start (GTK_BOX (vbox), handlers[i].widget, FALSE, FALSE, 0);
   gtk_box_pack_start (GTK_BOX (vbox), hsep3, FALSE, TRUE, 0);
@@ -767,7 +766,6 @@ initgraf ()
   gtk_widget_show (draw_nothing);
   for (size_t i = 0; i < NELEM (handlers); i++)
     gtk_widget_show (handlers[i].widget);
-  gtk_widget_show (last_clicked);
   gtk_widget_show (lookup);
   gtk_widget_show (total_nodes);
   gtk_widget_show (in);
@@ -1072,6 +1070,8 @@ draw_nothing_cb (GtkWidget *widget, gpointer data)
   check_set_state (0);
   search_key = 0;
 
+  last_clicked[0] = 0;
+  
   draw_ring ();
 }
 
@@ -1168,15 +1168,12 @@ static gint button_down_event (GtkWidget *widget,
       check_set_state (n->draw);
   }
 
-  char IDs[48];
-  strncpy (IDs, ID.cstr (), 12);
-  IDs[12] = 0;
   char hosts[1024];
   strcpy (hosts, n->hostname);
   strcat (hosts, ":");
-  strcat (hosts, IDs);
+  strcat (hosts, ID.cstr ());
+  strncpy (last_clicked, hosts, sizeof (last_clicked));
 
-  gtk_label_set_text (GTK_LABEL (last_clicked), hosts);
   draw_ring ();
   return TRUE;
 }
@@ -1496,6 +1493,12 @@ draw_ring ()
     }
     n = nodes.next (n);
   }
+  
+  gdk_draw_string (pixmap, courier10,
+		   widget->style->black_gc,
+		   15, 20,
+		   last_clicked);
+  
   redraw ();
 
   if(dual && !ggeo) {
