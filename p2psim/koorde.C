@@ -8,7 +8,6 @@ extern bool vis;
 Koorde::Koorde(Node *n) : Chord(n, k) 
 {
   debruijn = me.id << logbase;
-  isstable = false;
   printf ("Koorde: (%u,%qx) %d debruijn=%qx\n", me.ip, me.id, k, debruijn);
   loctable->pin (debruijn, k, 1);
 }
@@ -99,6 +98,8 @@ Koorde::find_successors(CHID key, uint m, bool intern)
   // printf ("find_successor(ip %u,id %qx, key %qx, i=%qx)\n", me.ip, me.id, 
   //  a.k,  r.i);
 
+  if (vis && !intern) 
+    printf ("vis %lu search %16qx %16qx\n", now(), me.id, key);
   while (1) {
     assert (count++ < 1000);
 
@@ -114,12 +115,18 @@ Koorde::find_successors(CHID key, uint m, bool intern)
     ipath.push_back (a.i);
     kpath.push_back (a.kshift);
 
+    if (vis && !intern) 
+      printf ("vis %lu step %16qx %16qx\n", now (), me.id, r.next.id);
+
     doRPC (r.next.ip, &Koorde::koorde_next, &a, &r);
     
     if (r.done) break;
   }
 
   assert (r.v.size () > 0);
+
+  if (vis & !intern) 
+    printf ("vis %lu step %16qx %16qx\n", now (), me.id, r.v[0].id);
 
   path.push_back (r.next.id);
   ipath.push_back (r.i);
@@ -234,8 +241,11 @@ Koorde::reschedule_stabilizer(void *x)
 void
 Koorde::stabilize()
 {
-  Chord::stabilize();
-  fix_debruijn();
+  if (!isstable) {
+    printf ("stabilize %qx %lu\n", me.id, now ());
+    Chord::stabilize();
+    fix_debruijn();
+  }
 }
 
 bool

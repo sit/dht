@@ -70,12 +70,20 @@ Chord::find_successors(CHID key, uint m, bool intern)
   vector<IDMap> route;
 #endif
   //printf("%s find_successors key %qu\n", ts(), PID(key));
+
+  if (vis && !intern) 
+    printf ("vis %lu search %16qx %16qx\n", now(), me.id, key);
+
   while(1){
     assert(count++ < 100);
     next_args na;
     next_ret nr;
     na.key = key;
     na.m = m;
+
+    if (vis && !intern) 
+       printf ("vis %lu step %16qx %16qx\n", now(), me.id, nprime.id);
+
     doRPC(nprime.ip, &Chord::next_handler, &na, &nr);
     if(nr.done){
 #ifdef CHORD_DEBUG
@@ -86,6 +94,10 @@ Chord::find_successors(CHID key, uint m, bool intern)
       }
       printf("\n");
 #endif
+
+    if (vis && !intern) 
+       printf ("vis %lu step %16qx %16qx\n", now(), me.id, nr.v[0].id);
+
       return nr.v;
     } else {
 #ifdef CHORD_DEBUG

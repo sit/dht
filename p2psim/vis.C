@@ -61,9 +61,7 @@ static bool drawids = false;
 
 static ifstream in;
 
-static GdkColor highlight_color;
-static char *highlight = "cyan4"; // consistent with old presentations
-static GdkColor search_color;
+static GdkGCValues GCValues;
 
 static float zoomx = 1.0;
 static float zoomy = 1.0;
@@ -71,6 +69,7 @@ static float centerx = 0.0;
 static float centery = 0.0;
 
 static bool ggeo = false;
+static bool displaysearch = false;
 
 struct color_pair {
   GdkColor c;
@@ -85,8 +84,10 @@ struct f_node {
   ConsistentHash::CHID pred;
   ConsistentHash::CHID succ;
   ConsistentHash::CHID debruijn;
+  ConsistentHash::CHID key;
   vector<ConsistentHash::CHID> succlist;
   vector<ConsistentHash::CHID> dfingers;
+  vector<ConsistentHash::CHID> search;
   unsigned int draw;
   bool selected;
   bool highlight;
@@ -125,7 +126,7 @@ void step_cb (GtkWidget *widget, gpointer data);
 
 void quit_cb (GtkWidget *widget, gpointer data);
 void redraw_cb (GtkWidget *widget, gpointer data);
-void update_cb (GtkWidget *widget, gpointer data);
+void search_cb (GtkWidget *widget, gpointer data);
 void zoom_in_cb (GtkWidget *widget, gpointer data);
 void geo_cb (GtkWidget *widget, gpointer data);
 void dump_cb (GtkWidget *widget, gpointer data);
@@ -274,23 +275,17 @@ draw_ring ()
     int radius = 5;
     ID_to_xy (iter->id, &x, &y);
 
-    GdkGC *thisgc = widget->style->black_gc;
-    if (iter->highlight) {
-      radius = 7;
-      gdk_gc_set_foreground (draw_gc, &highlight_color);
-      thisgc = draw_gc;
-    }
-
     gdk_draw_arc (pixmap,
-		  thisgc,
+		  draw_gc,
 		  TRUE,
 		  x - radius, y - radius,
 		  2*radius, 2*radius,
 		  (gint16)0, (gint16)64*360);
+
     if (iter->selected) {
       radius += 2;
       gdk_draw_arc (pixmap,
-		    thisgc,
+		    draw_gc,
 		    FALSE,
 		    x - radius, y - radius,
 		    2*radius, 2*radius,
@@ -332,9 +327,11 @@ draw_ring ()
       if ((iter->draw & DRAW_DEBRUIJN) == DRAW_DEBRUIJN) {
 	int a, b;
 	ID_to_xy (iter->debruijn, &a, &b);
-	// gdk_gc_set_foreground (draw_gc, &red);
+
+	gdk_gc_set_foreground (draw_gc, &red);
 	draw_arrow (x, y, a, b,  draw_gc);
-	//	gdk_gc_set_foreground (draw_gc, &black);
+	gdk_gc_set_foreground (draw_gc, &GCValues.foreground);
+
 	for (uint j = 0; j < iter->dfingers.size (); j++) {
 	  int a, b;
 	  ID_to_xy (iter->dfingers[j], &a, &b);
@@ -342,6 +339,29 @@ draw_ring ()
 	}
       }
 
+      if (iter->search.size () > 0) {
+	int k, l;
+	ID_to_xy (iter->key, &k, &l);
+
+	gdk_gc_set_foreground (draw_gc, &red);
+
+        gdk_draw_arc (pixmap,
+		      draw_gc,
+		      FALSE,
+		      k - radius, l - radius,
+		      2*radius, 2*radius,
+		      (gint16)0, (gint16)64*360);
+
+	gdk_gc_set_foreground (draw_gc, &GCValues.foreground);
+
+	for (uint j = 0; j < iter->search.size (); j++) {
+	  int a, b;
+	  ID_to_xy (iter->search[j], &a, &b);
+	  draw_arrow (x, y, a, b, draw_gc);
+	  x = a;
+	  y = b;
+	}
+      }
     }
   }
   
@@ -462,6 +482,21 @@ doevent (bool single)
       }
     }
 
+    if (words[2] == "search") {
+      ConsistentHash::CHID id = strtoull (words[3].c_str (), NULL, 16);
+      uint i = find (id);
+      nodes[i].key = strtoull (words[4].c_str (), NULL, 16);
+      nodes[i].search.clear ();
+      if (displaysearch) single = true;
+    }
+
+    if (words[2] == "step") {
+      ConsistentHash::CHID id = strtoull (words[3].c_str (), NULL, 16);
+      uint i = find (id);
+      ConsistentHash::CHID n = strtoull (words[4].c_str (), NULL, 16);
+      nodes[i].search.push_back(n);
+    }
+
     a--;
     if (a <= 0) {
       draw_ring ();
@@ -519,6 +554,8 @@ init_color_list (char *filename)
 			      GDK_JOIN_MITER);
   cmap = gdk_colormap_get_system ();
 
+  gdk_gc_get_values(draw_gc, &GCValues);
+
   FILE *cf = fopen (filename, "r");
   if (!cf) { 
     cerr << "couldn't open " << filename << " using default color map\n";
@@ -567,7 +604,7 @@ initgraf ()
   GtkWidget *hsep4 = gtk_hseparator_new ();
 
   GtkWidget *in = gtk_button_new_with_label ("Recenter");
-  GtkWidget *refresh = gtk_button_new_with_label ("Refresh All");
+  GtkWidget *search = gtk_button_new_with_label ("Search");
   GtkWidget *run = gtk_button_new_with_label ("Continue");
   GtkWidget *step = gtk_button_new_with_label ("Step");
   GtkWidget *quit = gtk_button_new_with_label ("Quit");
@@ -592,7 +629,7 @@ initgraf ()
   gtk_box_pack_end (GTK_BOX (vbox), quit, FALSE, FALSE, 0);
   gtk_box_pack_end (GTK_BOX (vbox), run, FALSE, FALSE, 0);
   gtk_box_pack_end (GTK_BOX (vbox), step, FALSE, FALSE, 0);
-  gtk_box_pack_end (GTK_BOX (vbox), refresh, FALSE, FALSE, 0);
+  gtk_box_pack_end (GTK_BOX (vbox), search, FALSE, FALSE, 0);
   gtk_box_pack_end (GTK_BOX (vbox), dump_to_file, FALSE, FALSE, 0);
   gtk_box_pack_end (GTK_BOX (vbox), geo, FALSE, FALSE, 0);
   gtk_box_pack_end (GTK_BOX (vbox), in, FALSE, FALSE, 0);
@@ -613,8 +650,8 @@ initgraf ()
   gtk_signal_connect_object (GTK_OBJECT (draw_nothing), "clicked",
 			     GTK_SIGNAL_FUNC (draw_nothing_cb),
 			     NULL);
-  gtk_signal_connect_object (GTK_OBJECT (refresh), "clicked",
-			       GTK_SIGNAL_FUNC (update_cb),
+  gtk_signal_connect_object (GTK_OBJECT (search), "clicked",
+			       GTK_SIGNAL_FUNC (search_cb),
 			       NULL);
   gtk_signal_connect_object (GTK_OBJECT (dump_to_file), "clicked",
 			       GTK_SIGNAL_FUNC (dump_cb),
@@ -673,7 +710,7 @@ initgraf ()
   gtk_widget_show (in);
   gtk_widget_show (dump_to_file);
   gtk_widget_show (geo);
-  gtk_widget_show (refresh);
+  gtk_widget_show (search);
   gtk_widget_show (quit);
   gtk_widget_show (run);
   gtk_widget_show (step);
@@ -688,13 +725,6 @@ initgraf ()
   gtk_widget_show (window);
 
   init_color_list (color_file);
-
-  if (!gdk_color_parse (highlight, &highlight_color) ||
-      !gdk_colormap_alloc_color (cmap, &highlight_color, FALSE, TRUE))
-    cerr << "Couldn't allocate highlight color " << highlight << "\n";
-  if (!gdk_color_parse ("green", &search_color) ||
-      !gdk_colormap_alloc_color (cmap, &search_color, FALSE, TRUE))
-    cerr << "Couldn't allocate search color maroon\n";
 }
 
 
@@ -749,10 +779,9 @@ select_none_cb (GtkWidget *widget,
 }
 
 void
-update_cb (GtkWidget *widget,
-	   gpointer data)
+search_cb (GtkWidget *widget, gpointer data)
 {
-  update ();
+  displaysearch = !displaysearch;
 }
 
 void

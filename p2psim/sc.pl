@@ -94,8 +94,8 @@ sub doevents {
 }
 
 sub doobserve {
-   my ($start,$obv,$interval,$type) = @_;
-   print EV "observe $start $obv $time $interval $type numnodes=$nnodes\n";
+   my ($start,$obv,$interval,$type,@args) = @_;
+   print EV "observe $start $obv $time $interval $type numnodes=$nnodes @args\n";
 }
 
 sub makekey ()
