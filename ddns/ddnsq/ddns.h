@@ -7,6 +7,8 @@
 typedef char* domain_name;
 typedef char* string;
 typedef uint32 ip32addr;
+typedef int32 ttl_t;
+typedef uint32 rdl_t; /* uint16, actually, but it seems to confuse libasync */
 
 #define DMTU 1024
 #define DOMAIN_LEN 256
@@ -113,36 +115,38 @@ struct ddnsRR {
   domain_name dname;
   dns_type type; 
   dns_class cls;
-  int32 ttl;
-  uint32 rdlength; /* uint16, actually, but it seems to confuse libasync */
+  ttl_t ttl;
+  rdl_t rdlength; 
   dns_rdata rdata;
   ptr<ddnsRR> next;
 };
 
 #define DNS_TYPE_SIZE  sizeof (dns_type)
 #define DNS_CLASS_SIZE sizeof (dns_class)
-#define TTL_SIZE       sizeof (int32)
-#define RDLENGTH_SIZE  sizeof (uint32)
+#define TTL_SIZE       sizeof (ttl_t)
+#define RDLENGTH_SIZE  sizeof (rdl_t)
 
 dns_type 
 get_dtype (const char *type);
 
 class ddns {
+  typedef callback<void, ptr<ddnsRR> >::ref lcb_t;
+  
   const char* control_socket;
   ptr<aclnt> dhash_clnt;
   ptr<aclnt> get_dclnt ();
 
   int nlookup, nstore;
   chordID getcID (domain_name);
-  int ddnsRR2block (ref<ddnsRR>, char *, int);
+  int ddnsRR2block (ptr<ddnsRR>, char *, int);
   void store_cb (domain_name, chordID, ref<dhash_storeres>, clnt_stat);
-  void lookup_cb (domain_name, chordID, ref<dhash_res>, clnt_stat);
+  void lookup_cb (domain_name, chordID, ref<dhash_res>, ddns::lcb_t, clnt_stat);
 
  public:
   ddns (const char *, int);
   ~ddns ();
   void store (domain_name, ref<ddnsRR>);
-  void lookup (domain_name);
+  void lookup (domain_name, ddns::lcb_t);
   
 };
 

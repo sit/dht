@@ -11,14 +11,14 @@ usage ()
 }
 
 static void 
-store_it (domain_name dname, dns_type dt, string rr_data)
+fill_RR (domain_name dname, dns_type dt, dns_class cl, 
+	 ttl_t ttl, string rr_data, ref<ddnsRR> rr)
 {
   /* convert into DDNS RR */
-  ref<ddnsRR> rr = New refcounted<ddnsRR>;
   rr->dname = dname;
   rr->type = dt;
-  rr->cls = IN;
-  rr->ttl = 18934;
+  rr->cls = cl;
+  rr->ttl = ttl;
   switch (dt) {
   case A:
     rr->rdlength = sizeof (rr->rdata.address);
@@ -28,11 +28,45 @@ store_it (domain_name dname, dns_type dt, string rr_data)
     rr->rdata.address = (rr->rdata.address << 8) + 53;
     break;
   default:
-    return;
-  }
-    
-  rr->next = NULL;
+    break;
+  }    
+}
+
+static void 
+store_it (domain_name dname, dns_type dt) 
+{
+  ref<ddnsRR> rr = New refcounted<ddnsRR>;
+  fill_RR (dname, dt, IN, 23234, "18.26.4.33", rr);
+  rr->next = New refcounted<ddnsRR>;
+  fill_RR (dname, dt, IN, 54344, "34.5.3.2", rr->next);
+  rr->next->next = NULL;
+
   ddns_clnt->store (dname, rr);
+}
+
+void 
+got_it (ptr<ddnsRR> rr)
+{
+  while (rr) {
+    warn << "dname = " << rr->dname << " len = " << strlen(rr->dname) << "\n";
+    warn << "type = " << rr->type << "\n";
+    warn << "class = " << rr->cls << "\n";
+    warn << "ttl = " << rr->ttl << "\n";
+    warn << "rdlength " << rr->rdlength << "\n";
+    switch (rr->type) {
+    case A:
+      warn << "rdata.address = " 
+	   << (rr->rdata.address >> 24) 
+	   << "." << ((rr->rdata.address << 8)  >> 24) 
+	   << "." << ((rr->rdata.address << 16) >> 24)
+	   << "." << ((rr->rdata.address << 24) >> 24) 
+	   << "\n";
+      break;
+    default:
+      return;
+    }
+    rr = rr->next;
+  }
 }
 
 int 
@@ -50,7 +84,7 @@ main (int argc, char **argv)
   if (argc < 3) 
     usage ();
   else {
-    hostname = (string) malloc (sizeof (argv[2]));
+    hostname = (string) malloc (sizeof (argv[2])+1);
     strcpy (hostname,argv[2]);
     if (strlen (hostname) > DOMAIN_LEN) 
       fatal ("domain name longer than %d\n", DOMAIN_LEN);
@@ -71,10 +105,10 @@ main (int argc, char **argv)
   ddns_clnt = New refcounted<ddns> (control_socket, 0);
   
   if (store) {
-    store_it (hostname, rr_type, rr_data);
+    store_it (hostname, rr_type);
   } else {
     warn << "hostname = " << hostname << "size = " << strlen (hostname) << "\n";
-    ddns_clnt->lookup (hostname);
+    ddns_clnt->lookup (hostname, wrap (got_it));
   }
 
   return 0;

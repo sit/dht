@@ -88,30 +88,34 @@ copy2block (char *data, void *field,
 }
 
 int 
-ddns::ddnsRR2block (ref<ddnsRR> rr, char *data, int datasize)
+ddns::ddnsRR2block (ptr<ddnsRR> rr, char *data, int datasize)
 {
   int datalen = 0;
-  warn << "DMTU = " << DMTU << " data length = " << datasize << "\n";
-  copy2block (data, (void *) rr->dname, 
-	      strlen (rr->dname), datalen, datasize);
-  copy2block (data, (void *) &rr->type, 
-	      DNS_TYPE_SIZE, datalen, datasize);
-  copy2block (data, (void *) &rr->cls, 
-	      DNS_CLASS_SIZE, datalen, datasize);
-  copy2block (data,(void *) &rr->ttl, 
-	      TTL_SIZE, datalen, datasize);
-  copy2block (data, (void *) &rr->rdlength, 
-	      RDLENGTH_SIZE, datalen, datasize);
+  
+  while (rr) {
+    copy2block (data, (void *) rr->dname, 
+		strlen (rr->dname)+1, datalen, datasize);
+    copy2block (data, (void *) &rr->type, 
+		DNS_TYPE_SIZE, datalen, datasize);
+    copy2block (data, (void *) &rr->cls, 
+		DNS_CLASS_SIZE, datalen, datasize);
+    copy2block (data,(void *) &rr->ttl, 
+		TTL_SIZE, datalen, datasize);
+    copy2block (data, (void *) &rr->rdlength, 
+		RDLENGTH_SIZE, datalen, datasize);
 
-  switch (rr->type) {
-  case A:
-    copy2block (data, (void *) &rr->rdata.address, 
-		rr->rdlength, datalen, datasize);
-    break;
-  default:
-    return -1;
-  }  
-  return (datalen); /* real datasize */
+    switch (rr->type) {
+    case A:
+      copy2block (data, (void *) &rr->rdata.address, 
+		  rr->rdlength, datalen, datasize);
+      break;
+    default:
+      return -1;
+    }  
+    rr = rr->next;
+  }
+
+  return datalen; /* real datasize */
 }
 
 chordID 
@@ -162,7 +166,7 @@ ddns::store_cb (domain_name dname, chordID key,
 }
 
 void
-ddns::lookup (domain_name dname)
+ddns::lookup (domain_name dname, ddns::lcb_t lcb)
 {
   nlookup++;
   ref<dhash_res> res = New refcounted<dhash_res> (DHASH_OK);
@@ -172,14 +176,14 @@ ddns::lookup (domain_name dname)
   arg.len = DMTU;
   arg.start = 0;
   dhash_clnt->call (DHASHPROC_LOOKUP, &arg, res, wrap(this, &ddns::lookup_cb, 
-							dname, arg.key, res));
+							dname, arg.key, res, lcb));
   while (nlookup > 0)
     acheck ();
 }
 
 void
 ddns::lookup_cb (domain_name dname, chordID key, 
-		 ref<dhash_res> res, clnt_stat err)
+		 ref<dhash_res> res, ddns::lcb_t lcb, clnt_stat err)
 {
   if (err || (res->status != DHASH_OK)) {
     if (res->status == DHASH_NOENT)
@@ -188,45 +192,46 @@ ddns::lookup_cb (domain_name dname, chordID key,
       warn << "lookup_cb: Err: " << strerror (err) 
 	   << " dhash_lookup status: " << res->status << "\n";
   } else {
-    uint off = res->resok->res.size ();
-    if (off == res->resok->attr.size) {
+    int off = res->resok->res.size ();
+    if (off == (int) res->resok->attr.size) {
       warn << "Done: " << "res->size = " << off << "\n";
-      if (off > 0) {
-	ddnsRR rr;
-	rr.dname = dname;
-	int offset = strlen (dname);
-	memmove (&rr.type, res->resok->res.base () + offset, DNS_TYPE_SIZE);
+      int offset = 0, dnamelen = strlen (dname) + 1;
+      ref<ddnsRR> rr = New refcounted<ddnsRR>;
+      ptr<ddnsRR> rr_tmp = rr;
+      while (off > 0) {
+	warn << "off = " << off << "\n";
+	rr_tmp->dname = (string) malloc (dnamelen);
+	memmove (rr_tmp->dname, res->resok->res.base () + offset, dnamelen);
+	offset += dnamelen;
+	memmove (&rr_tmp->type, res->resok->res.base () + offset, DNS_TYPE_SIZE);
 	offset += DNS_TYPE_SIZE;
-	memmove (&rr.cls, res->resok->res.base () + offset, DNS_CLASS_SIZE);
+	memmove (&rr_tmp->cls, res->resok->res.base () + offset, DNS_CLASS_SIZE);
 	offset += DNS_CLASS_SIZE;
-	memmove (&rr.ttl, res->resok->res.base () + offset, TTL_SIZE);
+	memmove (&rr_tmp->ttl, res->resok->res.base () + offset, TTL_SIZE);
 	offset += TTL_SIZE;
-	memmove (&rr.rdlength, res->resok->res.base () + offset, RDLENGTH_SIZE);
+	memmove (&rr_tmp->rdlength, res->resok->res.base () + offset, RDLENGTH_SIZE);
 	offset += RDLENGTH_SIZE;
 
-	warn << "dname = " << rr.dname << " len = " << strlen(rr.dname) << "\n";
-	warn << "type = " << rr.type << "\n";
-	warn << "class = " << rr.cls << "\n";
-	warn << "ttl = " << rr.ttl << "\n";
-	warn << "rdlength " << rr.rdlength << "\n";
-
-	switch (rr.type) {
+	switch (rr_tmp->type) {
 	case A:
-	  memmove (&rr.rdata.address, res->resok->res.base () + offset, rr.rdlength);
-	  warn << "rdata.address = " 
-	       << (rr.rdata.address >> 24) 
-	       << "." << ((rr.rdata.address << 8)  >> 24) 
-	       << "." << ((rr.rdata.address << 16) >> 24)
- 	       << "." << ((rr.rdata.address << 24) >> 24) 
-	       << "\n";
+	  memmove (&rr_tmp->rdata.address, res->resok->res.base () + offset, rr_tmp->rdlength);
+	  offset += rr_tmp->rdlength;
 	  break;
 	default:
 	  break;
 	}
+	off -= offset;
+	if (off > 0)
+	  rr_tmp->next = New refcounted<ddnsRR>;
+	else rr_tmp->next = NULL;
+	rr_tmp = rr_tmp->next;
       }
+
+      lcb (rr);
     } else warn << "Not done: do more \n";
   }
-    //delete dname;
+
+  delete dname;
   nlookup--;
 }
 
