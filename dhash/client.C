@@ -68,6 +68,19 @@ dhashclient::dispatch (svccb *sbp)
 			     sbp, res));
     }
     break;
+  case DHASHPROC_SEND:
+    {
+      warnt ("DHASH: send_request");
+      dhash_send_arg *sarg = sbp->template getarg<dhash_send_arg>();
+      ptr<dhash_insertarg> iarg = 
+	New refcounted<dhash_insertarg> (sarg->iarg);
+      dhash_storeres *res = New dhash_storeres ();
+      clntnode->doRPC (sarg->dest, dhash_program_1, DHASHPROC_STORE,
+		       iarg, res,
+		       wrap (this, &dhashclient::send_cb,
+			     sbp, res, sarg->dest));
+    }
+    break;
   case DHASHPROC_INSERT:
     {
       warnt("DHASH: insert_request");
@@ -170,7 +183,28 @@ dhashclient::transfer_cb (svccb *sbp, dhash_res *res, clnt_stat err)
   
   sbp->reply (res);
   delete res;
-}				  
+}
+
+void
+dhashclient::send_cb (svccb *sbp, dhash_storeres *res, 
+		      chordID source, clnt_stat err)
+{
+  if (err) res->set_status (DHASH_RPCERR);
+  else if (res->status == DHASH_RETRY) {
+    dhash_send_arg *sarg = sbp->template getarg<dhash_send_arg>();
+    ptr<dhash_insertarg> iarg = 
+      New refcounted<dhash_insertarg> (sarg->iarg);
+    dhash_storeres *nres = New dhash_storeres ();
+    clntnode->locations->cacheloc (nres->pred->p.x, nres->pred->p.r, source);
+    clntnode->doRPC (nres->pred->p.x, dhash_program_1, DHASHPROC_FETCH,
+		     iarg, nres, wrap (this, &dhashclient::send_cb,
+				       sbp, nres, sarg->dest));
+  } else if (res->status == DHASH_OK) {
+    sbp->reply (res);
+  }
+  delete res;
+};
+				  
 void
 dhashclient::memorize_block (dhash_insertarg *item) 
 {

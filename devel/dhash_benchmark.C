@@ -39,26 +39,44 @@ int
 store_block(chordID key, void *data, unsigned int datasize) 
 {
 
-  unsigned int written = 0;
+
   dhash_storeres res;    
-  do {
-    int n = (written + MTU < datasize) ? MTU : datasize - written;
-    dhash_insertarg *i_arg = New dhash_insertarg ();
-    i_arg->key = key;  
-    i_arg->data.setsize(n);
-    i_arg->type = DHASH_STORE;
-    i_arg->attr.size = datasize;
-    i_arg->offset = written;
-    memcpy(i_arg->data.base (), (char *)data + written, n);
-    warn << "writing " << i_arg->data.size() << " bytes  at " << i_arg->offset 
-	 << " of " << datasize << " bytes\n";
-    clnt_stat err = cp2p ()->scall(DHASHPROC_INSERT, i_arg, &res);
+  dhash_insertarg *i_arg = New dhash_insertarg ();
+  i_arg->key = key;  
+  int n = (MTU < datasize) ? MTU : datasize;
+  i_arg->data.setsize(n);
+  i_arg->type = DHASH_STORE;
+  i_arg->attr.size = datasize;
+  i_arg->offset = 0;
+  memcpy(i_arg->data.base (), (char *)data, n);
+  warn << "writing " << i_arg->data.size() << " bytes  at " << i_arg->offset 
+       << " of " << datasize << " bytes\n";
+  clnt_stat err = cp2p ()->scall(DHASHPROC_INSERT, i_arg, &res);
+  if (err) warn << "RPC error: " << err << "\n";
+  if (err) return -err;
+
+  unsigned int written = n;
+  delete i_arg;
+  chordID source = res.resok->source;
+
+  while (!res.resok->done) {
+    n = (written + MTU < datasize) ? MTU : datasize - written;
+    dhash_send_arg *sarg = New dhash_send_arg();
+    sarg->dest = source;
+    sarg->iarg.key = key;
+    sarg->iarg.data.setsize(n);
+    memcpy (sarg->iarg.data.base (), (char *)data + written, n);
+    sarg->iarg.type = DHASH_STORE;
+    sarg->iarg.attr.size = datasize;
+    sarg->iarg.offset = written;
+    
+    clnt_stat err = cp2p ()->scall(DHASHPROC_SEND, sarg, &res);
     if (err) warn << "RPC error: " << err << "\n";
     if (err) return -err;
-    //if (res.status != DHASH_OK) return res.status;
+    if (res.status != DHASH_OK) return res.status;
     written += n;
-    delete i_arg;
-  } while (!res.resok->done);
+    delete sarg;
+  };
 
   return DHASH_OK;
 }

@@ -86,6 +86,7 @@ default:
 
 struct dhash_storeresok {
   bool done;
+  chordID source;
 };
 
 union dhash_storeres switch (dhash_stat status) {
@@ -118,9 +119,9 @@ union dhash_fetchiter_res switch (dhash_stat status) {
    void;
 };
 
-struct dhash_distkey_arg {
-  chordID key;
-  chordID dest_hosts<>;
+struct dhash_send_arg {
+  dhash_insertarg iarg;
+  chordID dest;
 };
 
 program DHASHCLNT_PROGRAM {
@@ -137,6 +138,9 @@ program DHASHCLNT_PROGRAM {
 
 		dhash_storeres
         	DHASHPROC_INSERT (dhash_insertarg) = 4;
+
+		dhash_storeres
+		DHASHPROC_SEND (dhash_send_arg) = 5;
 
 	} = 1;
 } = 344448;

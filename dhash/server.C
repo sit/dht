@@ -185,20 +185,23 @@ dhash::fetchiter_svc_cb (long xid, dhash_fetch_arg *arg,
 			 ptr<dbrec> val, dhash_stat err) 
 {
   dhash_fetchiter_res *res = New dhash_fetchiter_res ();
-  res->set_status (DHASH_COMPLETE);
+  if (err) res->set_status (DHASH_NOENT);
+  else {
+    res->set_status (DHASH_COMPLETE);
   
-  int n = (arg->len + arg->start < val->len) ? 
-    arg->len : val->len - arg->start;
+    int n = (arg->len + arg->start < val->len) ? 
+      arg->len : val->len - arg->start;
 
-  res->compl_res->res.setsize (n);
-  res->compl_res->attr.size = val->len;
-  res->compl_res->offset = arg->start;
-  res->compl_res->source = host_node->my_ID ();
+    res->compl_res->res.setsize (n);
+    res->compl_res->attr.size = val->len;
+    res->compl_res->offset = arg->start;
+    res->compl_res->source = host_node->my_ID ();
 
-  memcpy (res->compl_res->res.base (), 
-	  (char *)val->value + arg->start, 
-	  n);
-
+    memcpy (res->compl_res->res.base (), 
+	    (char *)val->value + arg->start, 
+	    n);
+  }
+  
   dhash_reply (xid, DHASHPROC_FETCHITER, res);
   delete res;
 }
@@ -248,12 +251,12 @@ dhash::storesvc_cb(long xid,
   warnt("DHASH: STORE_replying");
 
   dhash_storeres *res = New dhash_storeres (DHASH_OK);
-  if (err == DHASH_STORE_PARTIAL) 
-    res->resok->done = false;
-  else if (err == DHASH_OK) 
-    res->resok->done = true;
-  else
+  if ((err != DHASH_OK) && (err != DHASH_STORE_PARTIAL)) 
     res->set_status (err);
+  else {
+    res->resok->source = host_node->my_ID ();
+    res->resok->done = (err == DHASH_OK);
+  }
 
   dhash_reply (xid, DHASHPROC_STORE, res);
   delete res;

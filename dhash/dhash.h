@@ -86,6 +86,8 @@ class dhashclient {
 		       clnt_stat err);
 
   void transfer_cb (svccb *sbp, dhash_res *res, clnt_stat err);
+  void send_cb (svccb *sbp, dhash_storeres *res, 
+		      chordID source, clnt_stat err);
 
   void cache_on_path (chordID key, route path);
   void send_block (chordID key, chordID to, store_status stat);
