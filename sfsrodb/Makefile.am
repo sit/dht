@@ -1,7 +1,7 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.8 2003/01/20 20:16:19 cates Exp $
+# $Id: Makefile.am,v 1.9 2003/03/31 15:16:00 sit Exp $
 
-$(PROGRAMS): $(LDEPS) $(DBDEPS)
+$(PROGRAMS): $(LDEPS) libsfsrodb.a
 
 noinst_LIBRARIES = libsfsrodb.a
 
