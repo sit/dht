@@ -1,7 +1,7 @@
 #ifndef _TOE_TABLE_H_
 #define _TOE_TABLE_H_
 
-#define MAX_LEVELS 6
+#define MAX_LEVELS 10
 
 #include "fingerlike.h"
 
