@@ -93,11 +93,12 @@ merkle_tree::merkle_tree (ptr<dbfe> realdb,
     {
       block b (to_merkle_hash (id2dbrec(mis[i])), FAKE_DATA);
       // only fake having a key if: we really don't have it, and
-      // it's already replicated enough
+      //  we've confirmed other node has block
       if (!database_lookup (fakedb, b.key) && 
-	  bsm->pcount (mis[i], succs) >= num_efrags ()) {
+	  bsm->confirmed_on (mis[i], remoteID)) {
 	int ret = insert (0, &b, &root);
-	warn << "added extra key " << mis[i] << " to merkle tree for " << remoteID << "\n";
+	warn << "added extra key " << mis[i] << " to merkle tree for " 
+	     << remoteID << "\n";
 	assert (!ret);
       } else {
 	bsm->unmissing (succs[0], tobigint(b.key));
