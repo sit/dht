@@ -256,13 +256,15 @@ dhc::recv_propose (user_args *sbp)
 	<< "," << propose->round.proposer << ">\n";
 #endif
 
+  ptr<dbrec> rec = db->lookup (id2dbrec (propose->bID));
   dhc_soft *b = dhcs[propose->bID];
-  if (!b) {
+  if (!b || !rec) {
     warn << "dhc::recv_propose Block " << propose->bID 
 	 << " does not exist !!!\n";
     exit (-1);
   }
   dhcs.remove (b);
+  ptr<dhc_block> kb = to_dhc_block (rec);
 
 #if DHC_DEBUG
   warn << "dhc:recv_propose " << b->to_str ();
@@ -274,12 +276,12 @@ dhc::recv_propose (user_args *sbp)
   } else {
     if (set_ac (&b->pstat->acc_conf, *propose)) {
       b->pstat->recon_inprogress = false;
-      //set block's new config
-      //set persistent data
-      //kb->meta->accepted = propose->round;
-      //db->insert (id2dbrec (b->id), to_dbrec (b));
+      kb->meta->accepted.seqnum = propose->round.seqnum;
+      kb->meta->accepted.proposer = propose->round.proposer;
+      db->insert (id2dbrec (kb->id), to_dbrec (kb));
       dhc_propose_res res (DHC_OK);
       sbp->reply (&res);
+      db->sync ();
     } else {
       dhc_propose_res res (DHC_CONF_MISMATCH);
       sbp->reply (&res);

@@ -251,7 +251,7 @@ struct dhc_soft {
   chordID id;
   u_int64_t config_seqnum;
   vec<ptr<location> > config;
-  vec<ptr<location> > new_config;   //next accepted config. Do we need this???
+  vec<ptr<location> > new_config;   //next accepted config. used during recon
   paxos_seqnum_t proposal;
   paxos_seqnum_t promised;
 
