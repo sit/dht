@@ -138,6 +138,8 @@ route_recchord::first_hop (cbhop_t cbi, ptr<chordID> guess)
   ra->x = x;
   ra->retries = 0;
   ra->succs_desired = desired_;
+  trace << v->my_ID () << ": new route_recchord::first_hop: desired = "
+	<< desired_ << "\n";
 
 
   ptr<location> p = v->closestpred (x, failed_nodes);

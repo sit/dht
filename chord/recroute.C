@@ -128,7 +128,7 @@ recroute<T>::dorecroute (user_args *sbp, recroute_route_arg *ra)
   chordID myID = my_ID ();
 
   rtrace << myID << ": dorecroute (" << ra->routeid << ", "
-	 << ra->x << "): starting\n";
+	 << ra->x << "): starting; desired = " << ra->succs_desired << "\n";
   
   vec<ptr<location> > cs = succs ();
   u_long m = ra->succs_desired;
@@ -150,6 +150,9 @@ recroute<T>::dorecroute (user_args *sbp, recroute_route_arg *ra)
 	break;
       }
     }
+    rtrace << myID << ": dorecroute (" << ra->routeid << ", "
+	   << ra->x << "): overlap = " << overlap << " / m = " << m << "\n";
+
     // Try to decide who to talk to next.
     if (overlap >= m) {
       // Enough overlap to finish. XXX check succ_list_shaving?
@@ -461,8 +464,11 @@ recroute<T>::find_succlist (const chordID &x, u_long m, cbroute_t cb,
   }
 
   route_recchord *ri = static_cast<route_recchord *> (produce_iterator_ptr (x));
-  if (shave)
+  if (shave) {
+    rtrace << my_ID () << ": find_succlist (" << x << ", " << m
+	   << ") is shaving.\n";
     ri->set_desired (m);
+  }
   ri->first_hop (wrap (this, &recroute<T>::find_succlist_cb, cb, ri),
 		 guess);
 }
