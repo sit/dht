@@ -98,8 +98,8 @@ Chord::next_handler(next_args *args, next_ret *ret)
 	   */
  }else {
     ret->done = false;
-    //ret->next = loctable->next(args->key);
-    ret->next = succ;
+    ret->next = loctable->next(args->key);
+    //ret->next = succ;
     assert(ret->next.ip != me.ip);
     /*
     printf("%s next_handler NOT done key=%qu, goto next %qu\n",
@@ -329,13 +329,12 @@ Chord::IDMap
 LocTable::next(Chord::CHID n)
 {
   //no locality consideration
-  unsigned int i;
-  for (i = 0; i < (ring.size()-1); i++) {
+  for (unsigned int i = 0; i < (ring.size()-1); i++) {
     if ((ring[i+1].ip == 0) || ConsistentHash::between(ring[i].id, ring[i+1].id, n)) {
       return ring[i];
     } 
   }
-  return ring[i+1];
+  return ring.back();
 }
 
 void
@@ -343,7 +342,7 @@ LocTable::add_node(Chord::IDMap n)
 {
   if (!n.ip || (n.ip == ring[0].ip)) return;
 
-  for (unsigned int i = 1; i <= ring.size() ; i++) {
+  for (unsigned int i = 1; i < ring.size() ; i++) {
 
     if (ring[i].ip == n.ip) {
       return;
@@ -351,7 +350,7 @@ LocTable::add_node(Chord::IDMap n)
       ring[i] = n;
       _changed = true;
       return;
-    } else if ((i == ring.size()) || ConsistentHash::between(ring[i-1].id, ring[i].id, n.id)) {
+    } else if (ConsistentHash::between(ring[i-1].id, ring[i].id, n.id)) {
       ring.insert(ring.begin() + i, n);
       if (i <= CHORD_SUCC_NUM) {
 	_changed = true;
@@ -372,7 +371,7 @@ LocTable::add_node(Chord::IDMap n)
       return;
     }
   }
-  
+  notify(n);
 }
 
 //can this be part of add_node?
@@ -411,7 +410,7 @@ LocTable::del_node(Chord::IDMap n)
 void
 LocTable::pin(Chord::CHID x)
 {
-  for (unsigned int i = 1; i <= pinlist.size(); i++) {
+  for (unsigned int i = 1; i < pinlist.size(); i++) {
     if (pinlist[i] == x) {
       return;
     } else if (ConsistentHash::between(pinlist[i-1], pinlist[i], x)) {
@@ -425,20 +424,17 @@ LocTable::pin(Chord::CHID x)
 unsigned int 
 LocTable::evict() //evict one node
 {
-  int sz;
-  sz = pinlist.size();
+  assert(pinlist.size() < _max);
   if (!pinlist.size()) {
     ring.erase(ring.begin() + _succ_num + 1);
     return (_succ_num + 1);
   }
-  assert(0);
   unsigned int j = 0;
   for (unsigned int i = _succ_num + 1; i < ring.size() - 1 ; i++)  {
-    while (j < pinlist.size() && ConsistentHash::between(ring[0].id, ring[i].id, pinlist[j])) {
+    while (j < pinlist.size() && (ConsistentHash::between(pinlist[j], ring[i].id, pinlist[(j+1)%pinlist.size()]))) {
       j++;
     }
-    assert(j < pinlist.size() -1);
-    if (ConsistentHash::between(pinlist[j], pinlist[j+1], ring[i+1].id)) {
+    if (ConsistentHash::between(pinlist[j], pinlist[(j+1)%pinlist.size()], ring[i+1].id)) {
 	ring.erase(ring.begin() + i + 1);
 	return i + 1;
     }

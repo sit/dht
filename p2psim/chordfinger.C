@@ -9,19 +9,22 @@ ChordFinger::ChordFinger(Node *n) : Chord(n)
   for (unsigned int i = 0; i < NBCHID; i++) {
     loctable->pin(ConsistentHash::successorID(me.id, i));
   }
-
 }
 
 void
 ChordFinger::fix_fingers()
 {
-  int i0 = 1;
+  int i0 = 0;
   IDMap succ = loctable->succ(1);
+
+  if (succ.ip == 0 || succ.id == me.id) return;
+
   CHID gap = succ.id - me.id;
   while (gap > 0) {
     i0++;
     gap = gap >> 1;
   }
+  
   vector<Chord::IDMap> v;
   for (unsigned int i = i0; i < NBCHID; i++) {
     v = find_successors(ConsistentHash::successorID(me.id,i), 1); 
