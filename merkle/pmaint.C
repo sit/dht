@@ -48,11 +48,22 @@ pmaint::stop ()
 void
 pmaint::pmaint_next ()
 {
-
+ 
   if (pmaint_searching) {
     bigint key = db_next (db, pmaint_next_key);
     if (key != -1) {
       pmaint_next_key = key;
+#define PRED_LIST
+#ifdef PRED_LIST
+      vec<ptr<location> > preds = host_node->preds ();
+      if (preds.size () > 1 &&
+	  betweenrightincl (preds[dhash::num_efrags () - 1]->id(), 
+			   host_node->my_ID (),
+			   key)) {
+	active_cb = delaycb (PRTTMTINY, wrap (this, &pmaint::pmaint_next));
+	return;
+      }
+#endif
       cli->lookup (key, wrap (this, &pmaint::pmaint_lookup, pmaint_next_key));
       active_cb = NULL;
     } else { 
@@ -312,9 +323,18 @@ pmaint::handed_off_cb (chord_node dst,
 			  wrap(this, &pmaint::handed_off_cb, dst, keys, res, 
 			       k));  
 	  return;
-	} else {
+	} else if (res->resok->accepted[k] == DHASH_PRESENT) {
 	  // not wanted, proceed to next key
 	  work.inc_rejected (keys[k]);
+	} else { //DHASH_REJECT
+	  //treat this as an error
+	  warning << host_node->my_ID () << " block refused " <<
+	    key_number << " " << pmaint_offer_next_succ << "\n";
+	  
+	  pmaint_next_key = incID (work.left_key ());
+	  pmaint_searching = true;
+	  active_cb = delaycb (PRTTMSHORT, wrap (this, &pmaint::pmaint_next));
+	  return;
 	}
 	k++;
       }
