@@ -18,10 +18,12 @@ typedef callback<void, bigint, bool, callback<void>::ref>::ref sndblkfnc_t;
 
 class merkle_syncer {
  private:
+  void setdone ();
   void error (str err);
-  void timeout (str err);
+  void timeout ();
 
-  enum { BLOCKTIMEOUT = 10 };
+  enum { IDLETIMEOUT = 30 };
+  bool idle;
 
  public:
   typedef enum {

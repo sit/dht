@@ -60,6 +60,7 @@ merkle_syncer::dump ()
 merkle_syncer::merkle_syncer (merkle_tree *ltree, rpcfnc_t rpcfnc, sndblkfnc_t sndblkfnc)
   : ltree (ltree), rpcfnc (rpcfnc), sndblkfnc (sndblkfnc)
 {
+  idle = true; // initial value 
   fatal_err = NULL;
   sync_done = false;
 
@@ -163,7 +164,7 @@ merkle_syncer::next (void)
   }
  
   ///**/warn << "DONE .. in NEXT\n";
-  sync_done = true;
+  setdone ();
   ///**/warn << "OK!\n";
   //XXX_main ();
 }
@@ -181,6 +182,8 @@ merkle_syncer::sendblock (merkle_hash key, bool last)
 void
 merkle_syncer::sendblock_cb ()
 {
+  idle = false;
+
 #ifdef MERKLE_SYNCE_TRACE
   warn << (u_int)this << "  sendblock_cb >>>>>>>>>>>>>>>>>\n";
 #endif
@@ -212,6 +215,8 @@ merkle_syncer::getblocklist (vec<merkle_hash> keys)
 void
 merkle_syncer::getblocklist_cb (ref<getblocklist_res> res, clnt_stat err)
 {
+  idle = false;
+
 #ifdef MERKLE_SYNCE_TRACE
   warn << (u_int)this << " getblocklist_cb >>>>>>>>>>>>>>>>>>>>>>\n";
 #endif
@@ -224,8 +229,6 @@ merkle_syncer::getblocklist_cb (ref<getblocklist_res> res, clnt_stat err)
     error (strbuf () << "GETBLOCKLIST: protocol error " << err2str (res->status));
     return;
   } else {
-    assert (tcb == NULL);
-    tcb = delaycb (BLOCKTIMEOUT, wrap (this, &merkle_syncer::timeout, str ("GETBLOCKLIST: timeout")));
     next ();
   }
 }
@@ -241,6 +244,8 @@ merkle_syncer::sync (bigint _rngmin, bigint _rngmax, mode_t m)
 
   // get remote hosts's root node
   getnode (0, 0);
+  idle = false; // setup the 
+  timeout ();   //   idle timer
 }
 
 
@@ -282,6 +287,8 @@ merkle_syncer::inrange (const merkle_hash &key)
 void
 merkle_syncer::getnode_cb (ref<getnode_arg> arg, ref<getnode_res> res, clnt_stat err)
 {
+  idle = false;
+
 #ifdef MERKLE_SYNCE_TRACE
   warn << (u_int)this << " getnode_cb >>>>>>>>>>>>>>>>>>>>>>\n";
 #endif
@@ -425,6 +432,8 @@ merkle_syncer::getblockrange (merkle_rpc_node *rnode)
 void
 merkle_syncer::getblockrange_cb (ref<getblockrange_arg> arg, ref<getblockrange_res> res, clnt_stat err)
 {
+  idle = false;
+
 #ifdef MERKLE_SYNCE_TRACE
   warn << (u_int)this << " getblockrange_cb >>>>>>>>>>>>>>>>>>>>>>\n";
 #endif
@@ -447,10 +456,6 @@ merkle_syncer::getblockrange_cb (ref<getblockrange_arg> arg, ref<getblockrange_r
 	receiving_blocks = 0;
       else
 	assert (receiving_blocks >= 0);
-    }
-    if (receiving_blocks > 0) {
-      assert (tcb == NULL);
-      tcb = delaycb (BLOCKTIMEOUT, wrap (this, &merkle_syncer::timeout, str ("GETBLOCKRANGE: timeout")));
     }
     next ();
   }
@@ -476,38 +481,46 @@ void
 merkle_syncer::recvblk (bigint key, bool last)
 {
   //warn << (u_int)this << " recvblk >>>>>>>>>>>>>>>>>> last " << last << "\n";
-
-  timecb_remove (tcb);
-  tcb = NULL;
-
+  idle = false;
   if (last) {
     receiving_blocks = 0; 
     next ();
-  } else {
-    assert (tcb == NULL);
-    tcb = delaycb (BLOCKTIMEOUT, wrap (this, &merkle_syncer::timeout, str ("timeout")));
   }
 }
 
 void
+merkle_syncer::setdone ()
+{
+  sync_done = true;
+  timecb_remove (tcb);
+  tcb = NULL;
+}
+
+
+void
 merkle_syncer::error (str err)
 {
-  warn << "SYNCER ERROR: " << err << "\n";
-  fatal_err = err;
-  sync_done = true;
+  if (err) {
+    warn << "SYNCER ERROR: " << err << "\n";
+    fatal_err = err;
+  }
+  setdone ();
 }
 
 void
-merkle_syncer::timeout (str err)
+merkle_syncer::timeout ()
 {
   tcb = NULL;
-  error (err);
+  if (idle)
+    error (str ("No progress in last timer interval"));
+  else {
+    idle = true;
+    tcb = delaycb (IDLETIMEOUT, wrap (this, &merkle_syncer::timeout));
+  }
 }
-
 
 
 merkle_syncer::~merkle_syncer()
 {
-  timecb_remove (tcb);
-  tcb = NULL;
+  setdone ();
 }
