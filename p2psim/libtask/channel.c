@@ -1,4 +1,4 @@
-/* Copyright (c) 2003 Lucent Technologies */
+/* Copyright (c) 2003 Lucent Technologies.  See LICENSE. */
 
 #include "taskimpl.h"
 
