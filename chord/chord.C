@@ -68,6 +68,7 @@ vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
   ngetpredecessor = 0;
   nfindsuccessor = 0;
   nhops = 0;
+  nmaxhops = 0;
   nfindpredecessor = 0;
   nfindsuccessorrestart = 0;
   nfindpredecessorrestart = 0;
@@ -226,7 +227,7 @@ vnode::stats ()
   {
     char buf[100];
     if (nfindsuccessor)
-      sprintf (buf, "   Average # hops: %f\n", ((float)(nhops/nfindsuccessor)));
+      sprintf (buf, "   Average # hops: %f\n", ((float) nhops)/nfindsuccessor);
     warnx << buf;
   }
   warnx << "   # max hops for findsuccessor " << nmaxhops << "\n";

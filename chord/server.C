@@ -107,6 +107,9 @@ vnode::find_successor_cb (chordID x, cbroute_t cb, chordID s,
   //for (unsigned i = 0; i < search_path.size (); i++) {
   //warnx << search_path[i] << "\n";
   //}
+  nhops += search_path.size ();
+  if (search_path.size () > nmaxhops)
+    nmaxhops = search_path.size ();
   cb (s, search_path, status);
 }
 
@@ -276,7 +279,7 @@ vnode::get_fingers_cb (chordID x, chord_getfingersres *res,  clnt_stat err)
 void
 vnode::challenge (chordID &x, cbchallengeID_t cb)
 {
-  if(nochallenges){
+  if (nochallenges) {
     cb (x, true, chordstat (CHORD_OK));
     return;
   }
