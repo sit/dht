@@ -136,7 +136,7 @@ betweenlefincl (sfs_ID &a, sfs_ID &b, sfs_ID &n)
 bool
 betweenrightincl (sfs_ID &a, sfs_ID &b, sfs_ID &n)
 {
-  bool f = (b - a) > 0;  
+  //  bool f = (b - a) > 0;  
   bool r;
   if ((a == b) && (n == a)) {
     r = 1;
