@@ -244,9 +244,6 @@ dhashclient::lookup_iter_cb (svccb *sbp,
     cache_on_path (arg->key, path);
     sbp->reply (fres);
     delete fres;
-  } else if (res->status == DHASH_USE_TCP) {
-    finish_tcp (res, sbp, arg->key);
-    return;
   } else if (res->status == DHASH_CONTINUE) {
     chordID next = res->cont_res->next.x;
     chordID prev = path.back ();
@@ -286,74 +283,6 @@ dhashclient::lookup_iter_cb (svccb *sbp,
   }
 
   delete res;
-}
-
-void
-dhashclient::finish_tcp (dhash_fetchiter_res *res,
-			 svccb *sbp,
-			 chordID key) 
-{
-  tcpconnect (res->tcp_res->tcp_source.hostname, res->tcp_res->tcp_source.port,
-	      wrap (this, &dhashclient::finish_tcp_conn, res, sbp, key));
-}
-
-void
-dhashclient::finish_tcp_conn (dhash_fetchiter_res *res,
-			      svccb *sbp,
-			      chordID key,
-			      int fd) 
-{
-  make_async (fd);
-
-  xdrproc_t inproc = dhash_program_1.tbl[DHASHPROC_TCPFETCH].xdr_arg;
-  assert (inproc);
-  xdrsuio x (XDR_ENCODE);
-  if (!inproc (x.xdrp (), &key)) {
-    sbp->replyref (DHASH_RPCERR);
-    return;
-  }
-  size_t marshalled_len = x.uio ()->resid ();
-  char *marshalled_data = suio_flatten (x.uio ());
-  //assume its writeable
-  write (fd, &marshalled_len, 4);
-  write (fd, marshalled_data, marshalled_len);
-  
-
-  dhash_res *cres = New dhash_res (DHASH_OK);
-  cres->resok->offset = 0;
-  cres->resok->attr.size = res->tcp_res->attr.size;
-  cres->resok->hops = res->tcp_res->hops;
-  cres->resok->source = res->tcp_res->source;
-  //  cres->resok->res.setsize (res->tcp_res.attr.size);
-  cres->resok->res.setsize (0);
-  delete res;
-
-  fdcb (fd, selread, wrap(this, &dhashclient::finish_tcp_readdata, 
-			  cres, sbp, fd));
-
-  
-}
-
-void
-dhashclient::finish_tcp_readdata (dhash_res *res,
-				  svccb *sbp,
-				  int fd) 
-{
-  //  char *buf = (char *)(res->res.base () + bytes_read);
-  char buf[128000];
-  int err = read (fd, buf, 128000);
-  if (err <= 0) {
-    fdcb (fd, selread, NULL);
-    close (fd);
-    if (err == 0) 
-      sbp->reply (res);
-    else {
-      res->set_status (DHASH_RPCERR);
-      sbp->reply (res);
-    }
-    delete res;
-  }
-  
 }
 
 void

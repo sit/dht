@@ -188,12 +188,7 @@ afetch_cb (dhash_res *res, chordID key, char *buf, int i, struct timeval start, 
   unsigned int *read = New unsigned int(res->resok->res.size ());
   unsigned int off = res->resok->res.size ();
 
-  if (off == 0) {
-    warn  << "block came down via TCP\n";
-    finish (buf, read, start, i, res);
-    delete res;
-    return;
-  } if (off == res->resok->attr.size) finish (buf, read, start, i, res);
+  if (off == res->resok->attr.size) finish (buf, read, start, i, res);
   while (off < res->resok->attr.size) {
     ptr<dhash_transfer_arg> arg = New refcounted<dhash_transfer_arg> ();
 

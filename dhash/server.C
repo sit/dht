@@ -48,7 +48,6 @@ dhash::dhash(str dbname, vnode *node, int k, int ss, int cs) :
   install_replica_timer ();
   install_keycheck_timer ();
   transfer_initial_keys ();
-  initialize_transfer_socket ();
 
   // RPC demux
   host_node->addHandler (DHASH_PROGRAM, wrap(this, &dhash::dispatch));
@@ -192,17 +191,11 @@ dhash::fetchiter_svc_cb (long xid, dhash_fetch_arg *arg,
 			 ptr<dbrec> val, dhash_stat err) 
 {
   dhash_fetchiter_res *res = New dhash_fetchiter_res (DHASH_CONTINUE);
-  if (err) res->set_status (DHASH_NOENT);
-  else if (val->len > DGRAM_LIMIT) {
-    res->set_status (DHASH_USE_TCP);
-    res->tcp_res->attr.size = val->len;
-    res->tcp_res->tcp_source.hostname = t_source.hostname;
-    res->tcp_res->tcp_source.port = t_source.port;
-    res->tcp_res->source = host_node->my_ID ();
-    res->tcp_res->hops = 0;
-  } else {
+  if (err) 
+    res->set_status (DHASH_NOENT);
+  else {
     res->set_status (DHASH_COMPLETE);
-  
+    
     int n = (arg->len + arg->start < val->len) ? 
       arg->len : val->len - arg->start;
 
@@ -825,106 +818,6 @@ dhash::dhash_reply (long xid, unsigned long procno, void *res)
   delete marshalled_data;
 }
 
-// ---- TCP SHIT ----
-
-int 
-get_port (int fd) 
-{
-  sockaddr_in sin;
-  socklen_t sinlen = sizeof (sin);
-  bzero (&sin, sinlen);
-  sin.sin_family = AF_INET;
-  if (getsockname (fd, (sockaddr *) &sin, &sinlen) < 0)
-    return -1;
-  else 
-    return ntohs (sin.sin_port);
-} 
-
-void
-dhash::initialize_transfer_socket () 
-{
-  int tfd = inetsocket (SOCK_STREAM, 0);
-  assert (tfd > 0);
-  make_async (tfd);
-  int t_port = get_port (tfd);
-  t_source.port = t_port;
-  t_source.hostname = host_node->chordnode->myaddress.hostname;
-  if (listen (tfd, 5) < 0)
-    fatal << "Couldn't listen on port " << t_port << " for TCP transfers\n";
-  fdcb (tfd, selread, wrap (this, &dhash::transfer_socket_accept, tfd));
-}
-
-void
-dhash::transfer_socket_accept (int tfd )
-{
-  sockaddr_in sin;
-  socklen_t sinlen = sizeof (sin);
-  bzero (&sin, sinlen);
-    
-  int fd = ::accept (tfd, (sockaddr *) &sin, &sinlen);
-  if (fd > 0) {
-    do_tcp_transfer (fd);
-  } else if (errno != EAGAIN) 
-    warn << "Error accepting client for TCP transfer\n";
-}
-
-/* simple protocol for transfering large blocks:
-   
-   ---> length of arg [4 bytes]
-   ---> arg [length bytes]
-   <--- data
-
- */
- 
-void
-dhash::do_tcp_transfer (int fd) 
-{
-  make_async (fd);
-  fdcb (fd, selread, wrap (this, &dhash::tcp_read_header, fd));
-}
-
-void
-dhash::tcp_read_header (int fd) 
-{
-  long buf[1024];
-  int br = read (fd, buf, sizeof(buf));
-  if (br < 0) {
-    close (fd);
-  } else {
-    if (br < 4) fatal << "get a real network\n";
-    long marshalled_len = buf[0];
-    char *marshalled_arg = (char *)(&buf[1]);
-    xdrmem x (marshalled_arg, marshalled_len, XDR_DECODE);
-    xdrproc_t proc = dhash_program_1.tbl[DHASHPROC_TCPFETCH].xdr_arg;
-
-    tcp_fetch_arg arg;
-    if (!proc (x.xdrp (), &arg)) {
-      warn << "DHASH: error unmarshalling arguments\n";
-      return;
-    }
-
-    fdcb (fd, selread, NULL);
-    fetch (arg.key, wrap (this, &dhash::tcp_write_data, fd, 0));
-  }
-  
-}
-
-void
-dhash::tcp_write_data (int fd, int byteswritten, ptr<dbrec> val, dhash_stat err) {
-  if (err) {
-    fdcb (fd, selwrite, NULL);
-    close (fd);
-  } else {
-    int err = write (fd, (char *)val->value + byteswritten, val->len - byteswritten);
-    if (err > 0) byteswritten += err;
-    if (byteswritten == val->len) {
-      fdcb (fd, selwrite, NULL);
-      close (fd);
-    } else
-      fdcb (fd, selwrite, wrap (this, &dhash::tcp_write_data, fd, byteswritten, val, DHASH_OK));
-  }
-
-}
 // ---------- debug ----
 void
 dhash::printkeys () 

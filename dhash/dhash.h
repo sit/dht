@@ -112,16 +112,7 @@ class dhashclient {
   bool block_memorized (chordID key);
   void forget_block (chordID key);
 
-  void finish_tcp (dhash_fetchiter_res *res,
-		   svccb *sbp,
-		   chordID key);
-  void finish_tcp_conn (dhash_fetchiter_res *res,
-			svccb *sbp,
-			chordID key,
-			int fd);
-  void finish_tcp_readdata (dhash_res *res,
-			    svccb *sbp,
-			    int fd);
+
  public:  
   void set_caching(char c) { do_caching = c;};
   dhashclient (ptr<axprt_stream> x, int nreplica, ptr<chord> clnt);
@@ -212,12 +203,6 @@ class dhash {
   void printkeys ();
   void printkeys_walk (chordID k);
   void printcached_walk (chordID k);
-
-  void initialize_transfer_socket ();
-  void transfer_socket_accept (int tfd);
-  void do_tcp_transfer (int fd);
-  void tcp_read_header (int fd);
-  void tcp_write_data (int fd, int bwr, ptr<dbrec> val, dhash_stat err);
 
   ptr<dbrec> id2dbrec(chordID id);
   chordID dbrec2id (ptr<dbrec> r);
