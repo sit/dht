@@ -63,8 +63,7 @@ my $ef = "ef$$";
 $| = 1;
 
 
-print "# n $nnodes k $k dia $diameter life $lifemean ";
-print "death $deathmean lookup $lookupmean exit $exittime\n";
+print "# nnodes $nnodes dia $diameter life $lifemean death $deathmean lookup $lookupmean exit $exittime\n";
 if(defined($king)){
     print "# king $king\n";
 }
@@ -117,6 +116,7 @@ for($iters = 0; $iters < 500; $iters++){
     my $lat;
     my $hops;
 
+    print "# $prefix./p2psim $pf $tf $ef\n";
     open(P, "$prefix./p2psim $pf $tf $ef |");
     while(<P>){
         if(/^rpc_bytes ([0-9]+)/){

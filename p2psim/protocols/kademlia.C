@@ -57,14 +57,25 @@ Kademlia::Kademlia(Node *n, Args a)
   if(getenv("P2PSIM_CHECKREP"))
     docheckrep = strcmp(getenv("P2PSIM_CHECKREP"), "0") ? true : false;
 
-  if(!k)
+  if(!k) {
     k = a.nget<unsigned>("k", 20, 10);
-  if(!alpha)
+    KDEBUG(0) << "k = " << k << endl;
+  }
+
+  if(!alpha) {
     alpha = a.nget<unsigned>("alpha", 3, 10);
-  if(!stabilize_timer)
+    KDEBUG(0) << "alpha = " << alpha << endl;
+  }
+
+  if(!stabilize_timer) {
     stabilize_timer = a.nget<unsigned>("stabilize_timer", 10000, 10);
-  if(!refresh_rate)
+    KDEBUG(0) << "stabilize_timer = " << stabilize_timer << endl;
+  }
+
+  if(!refresh_rate) {
     refresh_rate = a.nget<unsigned>("refresh_rate", 1000, 10);
+    KDEBUG(0) << "refresh_rate = " << refresh_rate << endl;
+  }
 
   _me = New k_nodeinfo(_id, ip());
   char ptr[32]; sprintf(ptr, "%p", _me);
@@ -454,6 +465,15 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
   char ptr[32]; sprintf(ptr, "%p", me);
   KDEBUG(2) << "insert me = " << Kademlia::printID(_me->id) << ", ptr = " << ptr << " to be safe " << endl;
   lresult->results.insert(me);
+
+  // destroy all entries in results that are not part of the best k
+  while(lresult->results.size() > Kademlia::k) {
+    k_nodeinfo *i = *lresult->results.rbegin();
+    char ptr[32]; sprintf(ptr, "%p", i);
+    lresult->results.erase(lresult->results.find(i));
+    KDEBUG(2) << "do_lookup: deleting in truncate id = " << printID(i->id) << ", ip = " << i->ip << ", ptr = " << ptr << endl;
+    delete i;
+  }
 
   // asked: one entry for each node we sent an RPC to
   // replied: one entry for each node we got a reply from
