@@ -1,4 +1,4 @@
-/* $Id: sfsrodb.C,v 1.22 2002/04/20 20:53:10 cates Exp $ */
+/* $Id: sfsrodb.C,v 1.23 2002/09/06 21:02:26 fdabek Exp $ */
 
 /*
  * Copyright (C) 1999 Kevin Fu (fubob@mit.edu)
@@ -60,7 +60,6 @@ u_int32_t nfh;
 bool initialize;
 bool verbose_mode;
 
-extern int errno;
 uint32 relpathlen;
 extern ptr < rabin_priv > sfsrokey;
 
