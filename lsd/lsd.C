@@ -41,6 +41,7 @@ doaccept (int fd)
   tcp_nodelay (fd);
   ref<axprt_stream> x = axprt_stream::alloc (fd);
   vNew client (x);
+  vNew dhash (x);
 }
 
 static void

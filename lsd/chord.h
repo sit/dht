@@ -107,7 +107,7 @@ struct location {
   sfs_ID n;
   net_address addr;
   sfs_ID source;
-  ptr<aclnt> c;
+  ptr<axprt_stream> x;
   bool connecting;
   tailq<doRPC_cbstate, &doRPC_cbstate::connectlink> connectlist;
   ihash_entry<location> fhlink;
@@ -121,7 +121,7 @@ struct location {
     n (_n), addr (_r), source (_source) {
     connecting = false; 
     alive = true;
-    c = NULL;
+    x = NULL;
     total_latency = 0;
     num_latencies = 0;
     nout = 0;
@@ -133,7 +133,7 @@ struct location {
     source = _source;
     connecting = false;
     alive = true;
-    c = NULL;
+    x = NULL;
     nout = 0;
     timeout_cb = NULL;
   }
@@ -201,9 +201,11 @@ class p2p : public virtual refcount  {
   void print ();
 
   void timeout(location *l);
-  void connect_cb (location *l, int fd);
+  void connect_cb (callback<void, ptr<axprt_stream> >::ref cb, int fd);
   void doRPC (sfs_ID &n, int procno, const void *in, void *out,
        aclnt_cb cb);
+  void dorpc_connect_cb(location *l, ptr<axprt_stream> x);
+  void chord_connect(sfs_ID ID, callback<void, ptr<axprt_stream> >::ref cb);
 
   void stabilize (int i);
   void stabilize_getsucc_cb (sfs_ID s, net_address r, sfsp2pstat status);
@@ -249,8 +251,8 @@ class p2p : public virtual refcount  {
   void dofindclosestpred (svccb *sbp, sfsp2p_findarg *fa);
   void donotify (svccb *sbp, sfsp2p_notifyarg *na);
   void doalert (svccb *sbp, sfsp2p_notifyarg *na);
-  void dofindsucc (svccb *sbp, sfs_ID &n);
-  void dofindsucc_cb (svccb *sbp, sfs_ID n, sfs_ID x,
+  void dofindsucc (sfs_ID &n, cbroute_t cb);
+  void dofindsucc_cb (cbroute_t cb, sfs_ID n, sfs_ID x,
 		      route search_path, sfsp2pstat status);
 
   void timing_cb(aclnt_cb cb, location *l, ptr<struct timeval> start, clnt_stat err);

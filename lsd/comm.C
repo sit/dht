@@ -54,41 +54,12 @@ p2p::initialize_graph()
 void
 p2p::timeout(location *l) {
   // warn << "timeout on " << l->n << " closing socket\n";
-  if (l->nout == 0) l->c = NULL;
+  if (l->nout == 0) l->x = NULL;
   else
     {
       // warn << "timeout on node " << l->n << " has overdue RPCs\n";
       l->timeout_cb = delaycb(30,0,wrap(this, &p2p::timeout, l));
     }
-}
-
-void
-p2p::connect_cb (location *l, int fd)
-{
-  if (fd < 0) {
-    warnx << "connect_cb: connect failed\n";
-    doRPC_cbstate *st, *st1;
-    for (st = l->connectlist.first; st; st = st1) {
-      st1 = l->connectlist.next (st);
-      aclnt_cb cb = st->cb;
-      (*cb) (RPC_FAILED);
-    }
-    l->connecting = false;
-  } else {
-    // warnx << "connect_cb: connect to " << l->n << "succeeded (" << fd << ")\n";
-    assert (l->alive);
-    ptr<aclnt> c = aclnt::alloc (axprt_stream::alloc (fd), sfsp2p_program_1);
-    l->c = c;
-    l->connecting = false;
-    l->timeout_cb = delaycb(30,0,wrap(this, &p2p::timeout, l));
-
-    doRPC_cbstate *st, *st1;
-    for (st = l->connectlist.first; st; st = st1) {
-      st1 = l->connectlist.next (st);
-      c->call (st->procno, st->in, st->out, st->cb);
-      l->connectlist.remove(st);
-    }
-  }
 }
 
 void
@@ -142,10 +113,11 @@ p2p::doRealRPC (sfs_ID ID, int procno, const void *in, void *out,
   ptr<struct timeval> start = new refcounted<struct timeval>();
   gettimeofday(start, NULL);
   l->nout++;
-  if (l->c) {    
+  if (l->x) {    
     timecb_remove(l->timeout_cb);
     l->timeout_cb = delaycb(30,0,wrap(this, &p2p::timeout, l));
-    l->c->call (procno, in, out, wrap(mkref(this), &p2p::timing_cb, cb, l, start));
+    ptr<aclnt> c = aclnt::alloc(l->x, sfsp2p_program_1);
+    c->call (procno, in, out, wrap(mkref(this), &p2p::timing_cb, cb, l, start));
   } else {
     // If we are in the process of connecting; we should wait
     // warn << "going to connect to " << ID << " ; nout=" << l->nout << "\n";
@@ -153,8 +125,73 @@ p2p::doRealRPC (sfs_ID ID, int procno, const void *in, void *out,
     l->connectlist.insert_tail (st);
     if (!l->connecting) {
       l->connecting = true;
-      tcpconnect (l->addr.hostname, l->addr.port, wrap (mkref (this), &p2p::connect_cb,
-						l));
+      chord_connect(ID, wrap (mkref (this), &p2p::dorpc_connect_cb, l));
     }
   }
 }
+
+void
+p2p::dorpc_connect_cb(location *l, ptr<axprt_stream> x) {
+
+  if (x == NULL) {
+    warnx << "connect_cb: connect failed\n";
+    doRPC_cbstate *st, *st1;
+    for (st = l->connectlist.first; st; st = st1) {
+      st1 = l->connectlist.next (st);
+      aclnt_cb cb = st->cb;
+      (*cb) (RPC_FAILED);
+    }
+    l->connecting = false;
+    return;
+  }
+
+  assert(l->alive);
+  l->x = x;
+  l->connecting = false;
+  l->timeout_cb = delaycb(30,0,wrap(this, &p2p::timeout, l));
+
+  doRPC_cbstate *st, *st1;
+  ptr<aclnt> c = aclnt::alloc (x, sfsp2p_program_1);
+  for (st = l->connectlist.first; st; st = st1) {
+    st1 = l->connectlist.next (st);
+    c->call (st->procno, st->in, st->out, st->cb);
+    l->connectlist.remove(st);
+  }
+}
+
+void
+p2p::chord_connect(sfs_ID ID, callback<void, ptr<axprt_stream> >::ref cb) {
+  
+  warn << "chord connect\n";
+  location *l = locations[ID];
+  assert (l);
+  assert (l->alive);
+  ptr<struct timeval> start = new refcounted<struct timeval>();
+  gettimeofday(start, NULL);
+  if (l->x) {    
+    timecb_remove(l->timeout_cb);
+    l->timeout_cb = delaycb(30,0,wrap(this, &p2p::timeout, l));
+    (*cb)(l->x);
+  } else {
+    tcpconnect (l->addr.hostname, l->addr.port, wrap (mkref (this), &p2p::connect_cb, cb));
+  }
+}
+
+
+void
+p2p::connect_cb (callback<void, ptr<axprt_stream> >::ref cb, int fd)
+{
+
+  warn << "connect cb\n";
+  if (fd < 0) {
+    (*cb)(NULL);
+  } else {
+    // warnx << "connect_cb: connect to " << l->n << "succeeded (" << fd << ")\n";
+    ptr<axprt_stream> x = axprt_stream::alloc(fd);
+    (*cb)(x);
+  }
+}
+
+
+
+

@@ -57,8 +57,8 @@ program SFSP2P_PROGRAM {
 
 		sfsp2p_findres 
 		SFSP2PPROC_GETSUCCESSOR (void) = 1;
-		sfsp2p_findres 
 
+		sfsp2p_findres 
 		SFSP2PPROC_GETPREDECESSOR (void) = 2;
 
 	  	sfsp2p_findres

@@ -1,4 +1,4 @@
-/* $Id: server.C,v 1.6 2001/02/25 05:28:44 fdabek Exp $ */
+/* $Id: server.C,v 1.7 2001/03/02 04:15:10 fdabek Exp $ */
 
 /*
  *
@@ -597,7 +597,7 @@ server::dir_lookupres (nfscall *sbp, const sfsro_directory *dir)
     }
   else if (dirop->name == "..")
     {
-      //      warn << "Looking up a dot dot w.r.t. " << dir->path << "\n";
+      warn << "Looking up a dot dot w.r.t. " << dir->path << "\n";
 
       vec<str> pv;
       splitpath (pv, dir->path);

@@ -261,9 +261,11 @@ int dbfe::IMPL_open_sleepycat(char *filename, dbOptions opts) {
  return r;
 }
 
-int dbfe::IMPL_create_sleepycat(char *filename, dbOptions opts) { 
-warn << "use open instead\n";
- return 0;
+int 
+dbfe::IMPL_create_sleepycat(char *filename, dbOptions opts) 
+{ 
+  warn << "use open instead\n";
+  return 0;
 } 
 
 int dbfe::IMPL_insert_sync_sleepycat(ref<dbrec> key, ref<dbrec> data) { 
@@ -277,9 +279,13 @@ int dbfe::IMPL_insert_sync_sleepycat(ref<dbrec> key, ref<dbrec> data) {
 
   int r = 0;
   if ((r = db->put(db, NULL, &skey, &content, 0)) != 0) return r;
+  db->sync(db, 0);
   return 0;
 } 
-ptr<dbrec> dbfe::IMPL_lookup_sync_sleepycat(ref<dbrec> key) { 
+
+ptr<dbrec> 
+dbfe::IMPL_lookup_sync_sleepycat(ref<dbrec> key) 
+{ 
   DBT skey, content;
   bzero(&skey, sizeof(skey));
   skey.size = key->len;

@@ -578,7 +578,7 @@ p2p::doalert (svccb *sbp, sfsp2p_notifyarg *na)
 }
 
 void
-p2p::dofindsucc (svccb *sbp, sfs_ID &n)
+p2p::dofindsucc (sfs_ID &n, cbroute_t cb)
 {
 
   int i = successor_wedge (n);
@@ -587,22 +587,22 @@ p2p::dofindsucc (svccb *sbp, sfs_ID &n)
   }
 
   find_successor (predecessor.first, n,
-		  wrap (mkref (this), &p2p::dofindsucc_cb, sbp, n));
+		  wrap (mkref (this), &p2p::dofindsucc_cb, cb, n));
 }
 
 void
-p2p::dofindsucc_cb (svccb *sbp, sfs_ID n, sfs_ID x,
+p2p::dofindsucc_cb (cbroute_t cb, sfs_ID n, sfs_ID x,
 		    route search_path, sfsp2pstat status) 
 {
   if (status) {
     warnx << "lookup_findsucc_cb for " << n << " returned " <<
       status << "\n";
     if (status == SFSP2P_RPCFAILURE)
-      dofindsucc (sbp, n);		// try again; it should terminate
-    else 
-      sbp->replyref (sfsp2pstat (status));
+      dofindsucc (n, cb);		// try again; it should terminate
+    else  
+      cb (x, search_path, SFSP2P_ERRNOENT);
   } else {
-    sfs_ID *res = New sfs_ID(x);
-    sbp->reply(res);
+    cb (x, search_path, SFSP2P_OK);
   }
 }
+
