@@ -15,10 +15,10 @@ BEGIN {
 
 sub guessip {
     die "Can't guess a good IP to use.\n" unless ($^O eq "freebsd");
-    my $DEFINT = (grep { /interface/ } split(/\n/, `route get default`))[0]
+    my $DEFINT = (grep { /interface/ } split(/\n/, `/sbin/route get default`))[0]
 	|| "lo0";
     $DEFINT =~ s/ *interface: //;
-    my $MYIP = (grep {/inet / } split (/\n/, `ifconfig $DEFINT`))[0];
+    my $MYIP = (grep {/inet / } split (/\n/, `/sbin/ifconfig $DEFINT`))[0];
     $MYIP = (split (/\s+/, $MYIP))[2];
     return $MYIP;
 }
