@@ -71,6 +71,7 @@ class dhashclient {
 
   qhash<chordID, store_state, hashID> pst;
 
+  bool straddled (route path, chordID &k);
   void dispatch (svccb *sbp);
   void lookup_iter_cb (svccb *sbp, 
 		       dhash_fetchiter_res *res,

@@ -353,7 +353,7 @@ void
 dhash::update_replica_list () 
 {
   replicas.clear ();
-  for (int i = 0; i < nreplica; i++)
+  for (int i = 1; i < nreplica+1; i++)
     replicas.push_back(host_node->nth_successorID (i));
 }
 
@@ -390,7 +390,7 @@ void
 dhash::check_replicas () 
 {
   for (int i=0; i < nreplica; i++) {
-    chordID nth = host_node->nth_successorID (i);
+    chordID nth = host_node->nth_successorID (i+1);
     if (!isReplica(nth)) 
       key_store.traverse (wrap (this, &dhash::check_replicas_traverse_cb, 
 				nth));

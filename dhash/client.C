@@ -180,6 +180,17 @@ dhashclient::insert_store_cb(svccb *sbp, dhash_storeres *res,
 
    CASE IV: The remote node's prediction is different than its ID. Recurse.
 */
+
+bool
+dhashclient::straddled (route path, chordID &k)
+{
+  int n = path.size ();
+  if (n < 2) return false;
+  chordID prev = path[n-1];
+  chordID pprev = path[n-2];
+  return between (pprev, prev, k);
+}
+
 void 
 dhashclient::lookup_iter_cb (svccb *sbp, 
 			     dhash_fetchiter_res *res,
@@ -207,7 +218,7 @@ dhashclient::lookup_iter_cb (svccb *sbp,
     if (plast == clntnode->clnt_ID ()) {
       /* No more predecessors; lets look for a replica */
       vec<chord_node> succ;
-      for (int i = 0; i < NSUCC; i++) {
+      for (int i = 1; i < NSUCC; i++) {
 	chord_node node;
 	node.x = clntnode->nth_successorID (i);
 	node.r = clntnode->locations->getlocation (node.x)->addr;
@@ -256,17 +267,23 @@ dhashclient::lookup_iter_cb (svccb *sbp,
       }
     } else {
       /* CASE IV */
-      clntnode->locations->cacheloc (next, res->cont_res->next.r);
-      dhash_fetchiter_res *nres = New dhash_fetchiter_res (DHASH_CONTINUE);
-      path.push_back (next);
-      assert (path.size () < 1000);
-      clntnode->doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, 
-		       rarg, nres,
-		       wrap(this, &dhashclient::lookup_iter_cb, 
-			    sbp, nres, path, nerror));
+      if (straddled (path, arg->key)) {
+	sbp->replyref (DHASH_NOENT);
+      } else {
+	clntnode->locations->cacheloc (next, res->cont_res->next.r);
+	dhash_fetchiter_res *nres = New dhash_fetchiter_res (DHASH_CONTINUE);
+	path.push_back (next);
+	assert (path.size () < 1000);
+	clntnode->doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, 
+			 rarg, nres,
+			 wrap(this, &dhashclient::lookup_iter_cb, 
+			      sbp, nres, path, nerror));
+      }
     }
-  } else 
+  } else {
+    /* the last node queried was responbile but doesn't have it */
     sbp->replyref (DHASH_NOENT);
+  }
 
   delete res;
 }
