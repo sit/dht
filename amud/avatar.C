@@ -3,13 +3,14 @@
 #include "avatar.h"
 
 avatar::avatar (str n, str p, ref<dhashclient> d, ptr<room> l=NULL) : 
-  mud_obj (n), dhash (d), passwd (p), location (l)
+  mud_obj (n), dhash (d), passwd (p), buf (NULL), location (l)
 {
   if (!location)
     location = New refcounted <room> (str("Limbo"));
 }
 
-avatar::avatar (char *bytes, uint size, ref<dhashclient> d) : dhash (d), buf (NULL)
+avatar::avatar (char *bytes, uint size, ref<dhashclient> d) : 
+  dhash (d), buf (NULL)
 {
   uint offst = 0;
   uint slen;
@@ -190,7 +191,7 @@ avatar::move (str command)
       location->west.get_name ().len ()) {
     //TODO: change state to limbo
     ref<mud_obj> a = New refcounted<mud_obj> (get_name ());
-    location->remove (a);
+    location->leave (a);
     ref<room> next = New refcounted<room> (location->west.get_name ());
     dhash->insert (location->ID (), location->bytes (), location->size (),
 		   wrap (this, &avatar::done_remove, next), NULL, DHASH_NOAUTH);
@@ -249,9 +250,8 @@ str
 avatar::read_input ()
 {
   cout << "\nType something: ";
-  char *input = (char *) malloc (100);
+  char input[100]; 
   cin >> input;
   str command(input);
-  free (input);
   return command;
 }

@@ -10,7 +10,7 @@ class thing: public mud_obj {
   char *buf;
 
  public:
-  thing (str n, ptr<room> l=NULL) : mud_obj (n) { };
+  thing (str n, ptr<room> l=NULL) : mud_obj (n), buf (NULL) { };
 
   thing (char *bytes, uint size) : buf (NULL) {
     uint offst = 0;

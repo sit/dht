@@ -50,10 +50,9 @@ create_new_char ()
   cout << "considered unfitting.\n\n";
 
   cout << "Enter your avatar's name: ";
-  char *name = (char *) malloc (100);
+  char name[100];
   cin >> name;
   str avn(name);
-  free (name);
 
   mud->lookup (avn, wrap (&done_lookup, avn), true);
 }
@@ -66,8 +65,8 @@ done_lookup (str name, mud_stat stat, ptr<avatar> a)
     main_loop ();
   } else 
     if (stat == MUD_OK) {
-      char *passwd = (char *) malloc (200);
-      char *passwd_conf = (char *) malloc (200);
+      char passwd[200];
+      char passwd_conf[200];
     
       cout << "Great! Your name is " << name << "\n\n";
       cout << "Enter your new password: ";
@@ -83,9 +82,6 @@ done_lookup (str name, mud_stat stat, ptr<avatar> a)
 	cout << "\nPassword mismatch!\n";
 	main_loop ();
       }
-
-      free (passwd);
-      free (passwd_conf);
     }
 }
  
@@ -95,20 +91,20 @@ done_insert (ptr<avatar> a, mud_stat stat)
   if (stat == MUD_OK) {
     cout << "\nAvatar creation successful!\n";
     mud->enter_player (a);
-  }
+  } else
+    cout << "Avatar creation error: stat = " << stat << "\n";
 }
 
 void 
 play_game ()
 {
   cout << "Enter the name of your avatar: ";
-  char *input = (char *) malloc (100);
+  char input[100];
   cin >> input;
   str avn(input);
   cout << "Password: " ;
   cin >> input;
   ref<str> passwd = New refcounted<str> (input);
-  free (input);
   
   mud->lookup (avn, wrap (&play_done_lookup, passwd));
 }
@@ -119,7 +115,8 @@ play_done_lookup (ref<str> passwd, mud_stat stat, ptr<avatar> a)
   if (stat == MUD_OK) {
     warn << "play_done_lookup " << a->to_str ();
     if (a->pw () == *passwd)
-      mud->enter_player (a);
+      a->play ();
+      //mud->enter_player (a);
     else {
       cout << "Wrong password.\n";
       main_loop ();
