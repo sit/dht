@@ -2,9 +2,7 @@
 #define __EVENTQUEUE_H
 
 #include "event.h"
-#include "thread.h"
 #include "../utils/skiplist.h"
-#include <vector>
 using namespace std;
 
 class EventQueue : public Threaded {

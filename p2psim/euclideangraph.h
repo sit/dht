@@ -7,12 +7,6 @@
 // the Euclidean distance between the nodes. The intent is to
 // mimic the Internet more closely than either Euclidean or RandomGraph.
 
-#include <vector>
-#include <string>
-using namespace std;
-
-#include "topology.h"
-#include "node.h"
 #include "dvgraph.h"
 
 class EuclideanGraph : public DVGraph {

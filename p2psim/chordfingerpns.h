@@ -2,7 +2,6 @@
 #define __CHORDFINGERPNS_H
 
 #include "chord.h"
-#include <stdio.h>
 
 /* ChordFingerPNS does Gummadi^2's PNS proximity routing, it's completely static now*/
 

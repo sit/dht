@@ -1,7 +1,4 @@
 #include "threadmanager.h"
-#include <lib9.h>
-#include <thread.h>
-#include <stdio.h>
 
 ThreadManager *ThreadManager::_instance = 0;
 

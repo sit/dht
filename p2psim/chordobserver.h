@@ -2,12 +2,7 @@
 #define __CHORD_OBSERVER_H
 
 #include "observer.h"
-#include "args.h"
-#include <string>
-#include "consistenthash.h"
-#include <vector>
 #include "chord.h"
-#include "koorde.h"
 
 class ChordObserver : public Observer {
 public:

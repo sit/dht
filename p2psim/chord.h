@@ -3,16 +3,10 @@
 
 #include "dhtprotocol.h"
 #include "consistenthash.h"
-
 #include "vivaldi.h"
-#include "../utils/skiplist.h"
-
-#include <vector>
 
 #define CHORD_SUCC_NUM 3  // default number of successors maintained
 #define PAD "000000000000000000000000"
-
-#include "p2psim.h"
 
 class LocTable;
 

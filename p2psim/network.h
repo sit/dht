@@ -7,7 +7,6 @@ using namespace std;
 #include <lib9.h>
 #include <thread.h>
 
-#include "node.h"
 #include "packet.h"
 #include "topology.h"
 #include "threaded.h"

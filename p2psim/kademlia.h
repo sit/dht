@@ -33,7 +33,7 @@ public:
 
   static string printbits(NodeID);
   static string printID(NodeID id);
-  static NodeID distance(NodeID, NodeID);
+  static NodeID distance(const NodeID, const NodeID);
 
   bool stabilized(vector<NodeID>);
   void dump();
@@ -230,13 +230,28 @@ public:
   void stabilize();
   void dump() { return _root->dump(); }
   bool empty() { return _nodes.empty(); }
-  void get(NodeID, vector<peer_t*>*);
+  void get(NodeID, vector<peer_t*>*, unsigned best = _k);
   peer_t* random_node();
 
 
 private:
   k_bucket *_root;
   hash_map<NodeID, peer_t*> _nodes;
+
+  // best_entry
+  struct best_entry {
+    best_entry() { dist = 0; peer = 0; }
+    NodeID dist;
+    peer_t *peer;
+    sklist_entry<best_entry> _sortlink;
+  };
+
+  struct DistCompare {
+    int operator()(const NodeID &n1, const NodeID &n2) const {
+      return Kademlia::distance(n1, _key) < Kademlia::distance(n2, _key);
+    }
+    static NodeID _key;
+  };
 
   Kademlia *_self;
   NodeID _id; // so that KDEBUG() does work

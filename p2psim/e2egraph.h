@@ -1,14 +1,7 @@
 #ifndef __E2EGRAPH_H
 #define __E2EGRAPH_H
 
-#include <vector>
-#include <string>
-#include <fstream>
-using namespace std;
-
 #include "topology.h"
-#include "node.h"
-
 class E2EGraph : public Topology {
 public:
   E2EGraph(vector<string>*);

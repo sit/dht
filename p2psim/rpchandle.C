@@ -1,8 +1,5 @@
 #include <lib9.h>
-#include <thread.h>
 #include "rpchandle.h"
-#include "packet.h"
-#include "thing.h"
 
 RPCHandle::RPCHandle(Channel *c, Packet *p, Thing *t)
   : _c(c), _p(p), _t(t)

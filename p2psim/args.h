@@ -1,9 +1,8 @@
 #ifndef __ARGS_H
 #define __ARGS_H
 
-#include <string>
+
 #include "p2psim_hashmap.h"
-using namespace std;
 
 // arguments
 class Args : public hash_map<string,string> {

@@ -1,6 +1,4 @@
-#include <assert.h>
 #include <lib9.h>
-#include <thread.h>
 
 typedef struct Proc Proc;
 

@@ -1,12 +1,7 @@
 #ifndef __EVENT_FACTORY_H
 #define __EVENT_FACTORY_H
 
-#include <string>
-#include <vector>
 #include "event.h"
-
-using namespace std;
-
 class EventFactory {
 public:
   static EventFactory* Instance();

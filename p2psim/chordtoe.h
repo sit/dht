@@ -1,7 +1,6 @@
 #ifndef __CHORDTOE_H
 #define __CHORDTOE_H
 
-#include "chord.h"
 #include "chordfinger.h"
 
 /* ChordFinger implements finger table in addition to Chord with succ list*/

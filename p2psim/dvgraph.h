@@ -9,9 +9,6 @@
 // So DVGraph implements latency() for you.
 
 #include "topology.h"
-#include "node.h"
-#include <vector>
-#include "p2psim_hashmap.h"
 using namespace std;
 
 class DVGraph : public Topology {

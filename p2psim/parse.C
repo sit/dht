@@ -1,7 +1,5 @@
-#include <ctype.h>
-#include <string>
 #include <vector>
-#include <iostream>
+#include <string>
 using namespace std;
 
 // returns a vector of words in line separated by all characters in delims,

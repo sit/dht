@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <algorithm>
 #include <iostream>
+#include "../utils/skiplist.h"
 #include "p2psim.h"
 using namespace std;
 
@@ -16,6 +17,7 @@ unsigned Kademlia::_alpha = 0;
 
 unsigned k_bucket::_k = 0;
 unsigned k_bucket_tree::_k = 0;
+k_bucket_tree::NodeID k_bucket_tree::DistCompare::_key;
 
 //
 // Notes
@@ -42,9 +44,9 @@ Kademlia::Kademlia(Node *n, Args a)
   _values.clear();
 
   if(!_k)
-    _k = a.nget<unsigned>("k", 10);
+    _k = a.nget<unsigned>("k", 20, 10);
   if(!_alpha)
-    _alpha = a.nget<unsigned>("alpha", 10);
+    _alpha = a.nget<unsigned>("alpha", 3, 10);
 
   // precompute masks
   // if(!_rightmasks[0]) {
@@ -574,26 +576,39 @@ k_bucket_tree::stabilized(vector<NodeID> lid)
 // }}}
 // {{{ k_bucket_tree::get
 void
-k_bucket_tree::get(NodeID key, vector<peer_t*> *v)
+k_bucket_tree::get(NodeID key, vector<peer_t*> *v, unsigned nbest)
 {
-  unsigned j=0;
-  /*
-  NodeID dist_lb = (NodeID) -1;
+  k_bucket_tree::DistCompare::_key = key;
+  skiplist<best_entry, NodeID, &best_entry::dist, &best_entry::_sortlink, DistCompare> best;
 
   for(hash_map<NodeID, peer_t*>::const_iterator i = _nodes.begin(); i != _nodes.end(); i++) {
-    if(v->size() < _k) {
-      v->push_back(*i);
-      if(distance((*i)->id, key) < dist_lb)
-        dist_lb = distance((*i)->id, key)
-      continue;
+    if(best.size() < nbest || (Kademlia::distance(i->second->id, key) < best.last()->dist)) {
+      struct best_entry *be = new best_entry;
+      assert(be);
+      be->dist = Kademlia::distance(i->second->id, key);
+      be->peer = i->second;
+      // note that we ignore it, if it's the same distance
+      best.insert(be);
+      // assert(b);
     }
-
-    if(distance((*i)->id, key) < dist_lb) {
-      dist_lb = distance((*i)->id, key)
+    
+    if(best.size() > nbest) {
+      assert(best.size() == nbest+1);
+      struct best_entry *be = best.last();
+      best.remove(be->dist);
+      delete be;
     }
   }
-  */
 
+  // copy the results into the vector
+  best_entry *next = 0;
+  for(best_entry *cur = best.first(); cur; cur = next) {
+    next = best.next(cur);
+    v->push_back(cur->peer);
+    delete cur;
+  }
+
+#if 0
   // XXX heinously inefficient, but who cares for now.
   vector<peer_t*> tmp;
   KDEBUG(2) << "k_bucket_tree::get putting crap in tmp" << endl;
@@ -622,6 +637,7 @@ k_bucket_tree::get(NodeID key, vector<peer_t*> *v)
     v->push_back(*i);
   }
   // _root->get(key, v);
+#endif
 }
 
 

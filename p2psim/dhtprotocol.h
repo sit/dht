@@ -2,9 +2,6 @@
 #define __DHTPROTOCOL_H
 
 #include "protocol.h"
-#include <string>
-#include "args.h"
-#include "p2psim.h"
 using namespace std;
 
 class Node;
