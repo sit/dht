@@ -24,7 +24,6 @@
 
 #include <typeinfo>
 #include "vivalditest.h"
-#include "topologies/gtitm.h"
 #include "topologies/euclidean.h"
 #include "topologies/euclideangraph.h"
 #include "misc/vivaldinode.h"
@@ -33,6 +32,10 @@
 #include <iostream>
 #include <cmath>
 using namespace std;
+
+#ifdef HAVE_LIBGB
+#include "topologies/gtitm.h"
+#endif // HAVE_LIBGB
 
 vector<VivaldiTest*> VivaldiTest::_all;
 
@@ -71,12 +74,14 @@ VivaldiTest::nodeevent (Args *args)
   if (_queue > 0) 
     queue_delay (_queue);
 
+#ifdef HAVE_LIBGB
   int doswap = args->nget<int> ("doswap", 0, 10);
   if (doswap) {
     cout << "vivaldi SWAP!\n";
     gtitm *t = dynamic_cast<gtitm *>(Network::Instance()->gettopology());
     t->swap ();
   }
+#endif // HAVE_LIBGB
 }
 
 void
@@ -497,3 +502,4 @@ VivaldiTest::status()
 
   fflush(stdout);
 }
+
