@@ -1,4 +1,4 @@
-dnl $Id: acinclude.m4,v 1.14 2003/08/07 05:12:28 benjie Exp $
+dnl $Id: acinclude.m4,v 1.15 2004/04/21 13:56:41 sit Exp $
 
 
 
@@ -1258,9 +1258,11 @@ if test -f ${with_chord}/Makefile -a -f ${with_chord}/config.h; then
     done
     CPPFLAGS="$CPPFLAGS -I${with_chord}/svc"
 
+    LIBDHASHCLIENT=${with_chord}/dhashclient.a
     LIBDHASH=${with_chord}/dhash/libdhash.a
     LIBDHC=${with_chord}/dhc/libdhc.a
     LIBMERKLE=${with_chord}/merkle/libmerkle.a
+    LIBCHORDUTIL=${with_chord}/util/libutil.a
     LIBCHORD=${with_chord}/chord/libchord.a
     LIBCHORDSVC=${with_chord}/svc/libsvc.la
     LIBCHORDSFSRODB=${with_chord}/sfsrodb/libsfsrodb.a
@@ -1301,9 +1303,11 @@ chordincludedir='$(libdir)/include'
 AC_SUBST(chordlibdir)
 AC_SUBST(chordincludedir)
 
+AC_SUBST(LIBDHASHCLIENT)
 AC_SUBST(LIBDHASH)
-AC_SUBST(LIBMERKLE)
 AC_SUBST(LIBDHC)
+AC_SUBST(LIBMERKLE)
+AC_SUBST(LIBCHORDUTIL)
 AC_SUBST(LIBCHORD)
 AC_SUBST(LIBCHORDSVC)
 AC_SUBST(LIBCHORDSFSRODB)
@@ -1312,8 +1316,8 @@ dnl Frank's hacked DB3 macro that forces DB3 to be loaded
 SFS_DB3 
 
 CPPFLAGS="$CPPFLAGS -DSLEEPYCAT"
-LDEPS='$(LIBDHASH) $(LIBCHORD) $(LIBCHORDSVC) $(LIBCHORDSFSRODB)'" $LDADD"
-LDADD='$(LIBDHASH) $(LIBCHORD) $(LIBCHORDSVC) $(LIBCHORDSFSRODB) $(DB3_LIB)'" $LDEPS"
+LDEPS='$(LIBDHASHCLIENT) $(LIBDHASH) $(LIBDHC) $(LIBMERKLE) $(LIBCHORD) $(LIBCHORDUTIL) $(LIBCHORDSVC) $(LIBCHORDSFSRODB)'" $LDADD"
+LDADD="$LDEPS "'$(DB3_LIB)'
 AC_SUBST(LDEPS)
 AC_SUBST(LDADD)
 ])
