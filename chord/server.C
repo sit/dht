@@ -268,6 +268,13 @@ vnode_impl::doRPC (const chordID &ID, const rpc_program &prog, int procno,
   return locations->doRPC (ID, prog, procno, in, out, cb);
 }
 
+
+long
+vnode_impl::doRPC (const chord_node &n, const rpc_program &prog, int procno, 
+	      ptr<void> in, void *out, aclnt_cb cb) {
+  return locations->doRPC (n, prog, procno, in, out, cb);
+}
+
 void
 vnode_impl::resendRPC (long seqno)
 {
