@@ -2,7 +2,8 @@
 #define GROUP_H
 
 #include <dbfe.h>
-#include <chord.h>
+#include <chord_types.h>
+#include "usenetdht_storage.h"
 
 struct grouplist {
   ptr<dbEnumeration> it;
@@ -13,25 +14,38 @@ struct grouplist {
   bool more (void) { return d; };
 };
 
-struct newsgroup {
-  ptr<dbrec> rec;
-  unsigned long cur_art, start, stop;
-  char *c;
-  int len;
+/*
+ * A view of a newsgroup for _one_ connection.
+ */ 
+class newsgroup {
+  // Last fetched information about the group
+  group_entry *group;
+
+  // Private state for xover
+  unsigned long start, stop;
+  unsigned long next_idx;
+
   str group_name;
+  ptr<dbrec> group_name_rec;
+
+  static group_entry *load (ptr<dbrec> g);
+
+public: 
+  unsigned long cur_art;
 
   newsgroup ();
+  ~newsgroup ();
   int open (str);
   int open (str, unsigned long *, unsigned long *, unsigned long *);
   str name (void) { return group_name; };
   
   void xover (unsigned long, unsigned long);
   strbuf next (void);
-  bool more (void) { return start < stop && len > 0; };
-  bool loaded (void) { return rec; };
+  bool more (void);
+  bool loaded (void) { return group != NULL; };
   chordID getid (unsigned long);
   chordID getid (void) { return getid (cur_art); };
-  chordID getid (str);
+  static chordID getid (str msgid);
 
   void addid (str, chordID);
 };

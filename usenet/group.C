@@ -7,47 +7,75 @@ grouplist::grouplist ()
 {
   it = group_db->enumerate();
   d = it->nextElement();    
-};
-
-static rxx listrx ("^(\\d+)(<[^>]+>)([^:]+):");
+}
 
 void
 grouplist::next (str *f, unsigned long *i)
 {
-  ptr<dbrec> data = group_db->lookup (d->key);
-  char *c = data->value;
-  int len = data->len, cnt = 0;
-
-  for (; listrx.search (str (c, len))
-       ; c += listrx.len (0), len -= listrx.len (0) )
-    cnt++;
-
   *f = str (d->key->value, d->key->len);
-  *i = cnt;
+
+  ptr<dbrec> rec = group_db->lookup (d->key);
+
+  xdrmem x (rec->value, rec->len, XDR_DECODE);
+  group_entry *group = New group_entry;
+  bzero (group, sizeof (*group));
+  if (xdr_group_entry (x.xdrp (), group)) {
+    *i = group->articles.size () ;
+    xdr_delete (reinterpret_cast<xdrproc_t> (xdr_group_entry), group);
+  } else {
+    *i = 0;
+  }
+
   d = it->nextElement();
 }
 
 
 newsgroup::newsgroup () :
-  rec (NULL),
-  cur_art (0),
+  group (NULL),
   start (0),
   stop (0),
-  c (NULL),
-  len (0)
+  next_idx (0),
+  group_name_rec (NULL),
+  cur_art (0)
 {
+}
+
+newsgroup::~newsgroup () 
+{
+  if (group) {
+    xdr_delete (reinterpret_cast<xdrproc_t> (xdr_group_entry), group);
+    group = NULL;
+  }
+}
+
+group_entry *
+newsgroup::load (ptr<dbrec> g)
+{
+  ptr<dbrec> rec (NULL);
+  rec = group_db->lookup (g);
+  if (rec == NULL)
+    return NULL; 
+
+  xdrmem x (rec->value, rec->len, XDR_DECODE);
+  group_entry *group = New group_entry;
+  bzero (group, sizeof (*group));
+  if (xdr_group_entry (x.xdrp (), group)) 
+    return group;
+  xdr_delete (reinterpret_cast<xdrproc_t> (xdr_group_entry), group);
+  group = NULL;
+  return NULL;
 }
 
 int
 newsgroup::open (str g)
 {
-  rec = group_db->lookup (New refcounted<dbrec> (g, g.len ()));
-  if (rec == NULL)
+  ptr<dbrec> gn = New refcounted<dbrec> (g, g.len ());
+  group = load (gn);
+  if (group == NULL)
     return -1;
 
-  warn << "group " << g << " rec len " << rec->len << "\n";
-
   group_name = g;
+  group_name_rec = gn;
   cur_art = 1;
 
   return 0;
@@ -55,66 +83,90 @@ newsgroup::open (str g)
 
 int
 newsgroup::open (str g, unsigned long *count,
-	     unsigned long *first, unsigned long *last)
+	         unsigned long *first, unsigned long *last)
 {
   if (open (g) < 0)
     return -1;
 
-  char *c = rec->value;
-  int len = rec->len;
   *count = 0;
   *first = 0;
-  *last = 0;
+  *last  = 0;
 
-  for (; listrx.search (str (c, len))
-       ; c += listrx.len (0), len -= listrx.len (0) ) {
-    if (*count == 0)
-      *first = strtoul (listrx[1], NULL, 10);
-    (*count)++;
-    *last = strtoul (listrx[1], NULL, 10);
+  // Find the first and last article numbers and also
+  // how many articles there are.
+  *count = group->articles.size ();
+  if (*count > 0) {
+    *first = group->articles[0].artno;
+    *last  = group->articles[*count - 1].artno;
   }
 
   return 0;
 }
 
-static rxx listrxend ("(\\d+)(<[^>]+>)([^:]+):$");
-
 void
 newsgroup::addid (str msgid, chordID ID)
 {
-  assert (rec);
-  str old (rec->value, rec->len), updated;
-  ptr<dbrec> k = New refcounted<dbrec> (group_name, group_name.len ());
+  // Must get a new copy of data from disk in case of
+  // other "simultaneous" connections.
+  if (group) {
+    xdr_delete (reinterpret_cast<xdrproc_t> (xdr_group_entry), group);
+    group = NULL;
+  }
+  group = load (group_name_rec);
+  if (!group) {
+    warn << "newsgroup::addid: load failed\n";
+    return;
+  }
 
-  if (listrxend.search (old))
-    updated = strbuf () << old <<
-      strtoul (listrxend[1], NULL, 10) + 1 << msgid << ID << ":";
-  else
-    updated = strbuf () << "1" << msgid << ID << ":";
+  // Find next article number 
+  u_int32_t article_count = group->articles.size (); 
+  u_int32_t lastno = 0;
+  if (article_count > 0)
+    lastno = group->articles[article_count - 1].artno;
 
-  rec = New refcounted<dbrec> (updated, updated.len ());
-  
-  group_db->insert (k, rec);
+  // Add new article to cached listing
+  article_mapping nart;
+  nart.artno = lastno + 1;
+  nart.msgid = msgid;
+  nart.blkid = ID;
+  group->articles.push_back (nart);
+
+#if 0
+  // Dump the complete list of articles for this group
+  for (size_t i = 0; i < group->articles.size (); i++)
+    warn << i << " " 
+         << group->articles[i].artno << " "
+         << group->articles[i].msgid << " "
+         << group->articles[i].blkid << "\n";
+#endif /* 0 */  
+
+  // Marshal listing
+  xdrsuio x (XDR_ENCODE);
+  if (!xdr_group_entry (x.xdrp (), group)) {
+    warn << "newsgroup::addid: marshalling failed\n";
+    return;
+  }
+  mstr m (x.uio ()->resid ());
+  x.uio ()->copyout (m);
+
+  // And schedule a write.
+  ptr<dbrec> rec = New refcounted<dbrec> (m, m.len ());
+  group_db->insert (group_name_rec, rec);
 }
 
 // now returns the chordid
 chordID
 newsgroup::getid (unsigned long index)
 {
-  if (rec == NULL)
+  if (!loaded ())
     return 0;
 
-  char *c = rec->value;
-  int len = rec->len;
-
-  for (; listrx.search (str (c, len))
-       ; c += listrx.len (0), len -= listrx.len (0) ) {
-    if (index == strtoul (listrx[1], NULL, 10))
-      return bigint (listrx[3], 16);
-    else if (index < strtoul (listrx[1], NULL, 10))
+  for (size_t i = 0; i < group->articles.size (); i++) {
+    if (index == group->articles[i].artno)
+      return group->articles[i].blkid;
+    else if (group->articles[i].artno > index)
       return 0;
   }
-
   return 0;
 }
 
@@ -136,15 +188,19 @@ newsgroup::getid (str msgid)
 void
 newsgroup::xover (unsigned long a, unsigned long b)
 {
+  assert (loaded ());
+
   start = a;
   stop = b;
+  for (next_idx = 0; next_idx < group->articles.size (); next_idx++)
+    if (group->articles[next_idx].artno >= start)
+      break;
+}
 
-  assert (rec);
-  c = rec->value;
-  len = rec->len;
-  while (listrx.search (str (c, len)) &&
-	 (strtoul (listrx[1], NULL, 10) < start))
-    c += listrx.len (0), len -= listrx.len (0);
+bool
+newsgroup::more ()
+{ 
+  return start < stop && next_idx < group->articles.size ();
 }
 
 static rxx oversub ("Subject: (.+)\\r");
@@ -154,19 +210,19 @@ static rxx overmsgid ("Message-ID: (.+)\\r");
 static rxx overref ("References: (.+)\\r");
 static rxx overlines ("X-Lines: (.+)\\r");
 
-str
+static str
 tabfilter (str f)
 {
-  unsigned int i;
-  strbuf out;
+  mstr out (f.len ());
+  char *d = out;
 
-  for (i=0; i<f.len (); i++)
-    if (f[i] == '\t')
-      out << " ";
-    else
-      out.tosuio ()->copy (f.cstr() + i, 1); // xxx bleh
+  for (unsigned int i = 0; i < f.len (); i++) {
+    d[i] = f[i];
+    if (d[i] == '\t')
+      d[i] = ' ';
+  }
 
-  return str (out);
+  return out;
 }
 
 // format: "subject\tauthor\tdate\t<msgid>\treferences\tsize\tlines"
@@ -174,16 +230,16 @@ strbuf
 newsgroup::next (void)
 {
   ptr<dbrec> art (NULL);
+  article_mapping m;
   strbuf resp;
 
-  while (more () &&
-	 listrx.search (str (c, len)) &&
-	 art == NULL)
+  while (more () && art == NULL)
   {
-    art = header_db->lookup (New refcounted<dbrec> (listrx[2],
-						    listrx[2].len ()));
-    c += listrx.len (0);
-    len -= listrx.len (0);
+    m = group->articles[next_idx];
+    ptr<dbrec> k = New refcounted<dbrec> (m.msgid.cstr (), m.msgid.len ());
+    next_idx++;
+
+    art = header_db->lookup (k);
     if (art == NULL)
       warn << "missing article " << start << "\n";
     start++;
@@ -205,7 +261,7 @@ newsgroup::next (void)
     if (overmsgid.search (msg))
       resp << tabfilter (overmsgid[1]) << "\t";
     else
-      resp << tabfilter (listrx[2]) << "\t";
+      resp << tabfilter (m.msgid) << "\t";
     if (overref.search (msg))
       resp << tabfilter (overref[1]);
     resp << "\t" << art->len << "\t";
@@ -216,7 +272,7 @@ newsgroup::next (void)
     resp << "\t\r\n";
   } else {
     warn << "msg parse error\n";
-    warn << "msg " << listrx[2] << "\n";
+    warn << "msg " << m.msgid << "\n";
     warn << "header " << msg << "\n";
   }
   

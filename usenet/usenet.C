@@ -6,6 +6,7 @@
 #include "nntp.h"
 #include "newspeer.h"
 #include "usenet.h"
+#include "usenetdht_storage.h"
 
 dbfe *group_db, *header_db;
 // in group_db, each key is a group name. each record contains artnum,messageID,chordID
@@ -41,7 +42,13 @@ bool
 create_group (char *group)
 {
   // xxx sanity check group name
-  static ref<dbrec> d = New refcounted<dbrec> ("", 0);
+  static ptr<dbrec> d (NULL);
+  if (!d) {
+    group_entry g;
+    str m = xdr2str (g);
+    d = New refcounted<dbrec> (m, m.len ());
+  }
+
   ref<dbrec> k = New refcounted<dbrec> (group, strlen (group));
   group_db->insert (k, d);
   return true;
