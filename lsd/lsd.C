@@ -458,9 +458,12 @@ main (int argc, char **argv)
   mp_clearscrub ();
   // sfsconst_init ();
   random_init ();
+  sigcb(SIGUSR1, wrap (&stats));
+  sigcb(SIGUSR2, wrap (&stop));
+  sigcb(SIGHUP, wrap (&halt));
+  sigcb(SIGINT, wrap (&halt));
 
   int ch;
-
   do_cache = false;
   // Terrible, I know, but:
   // ss_mode == 0 means no fragment or lookup server selection
@@ -627,10 +630,6 @@ main (int argc, char **argv)
   ptr<fingerlike> fl = get_fingerlike (mode);
   chordnode->newvnode (wrap (newvnode_cb, 0, f), fl, f);
 
-  sigcb(SIGUSR1, wrap (&stats));
-  sigcb(SIGUSR2, wrap (&stop));
-  sigcb(SIGHUP, wrap (&halt));
-  sigcb(SIGINT, wrap (&halt));
 
   time_t now = time (NULL);
   warn << "lsd starting up at " << ctime ((const time_t *)&now);
