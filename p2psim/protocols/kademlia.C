@@ -1,5 +1,6 @@
+// {{{ headers
 /*
- * Copyright (c) 2003 [NAMES_GO_HERE]
+ * Copyright (c) 2003 Thomer M. Gil
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -19,9 +20,9 @@
  * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
  * LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
  * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+ * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-// {{{ headers
 #include "kademlia.h"
 #include <stdio.h>
 #include <iostream>
@@ -435,13 +436,11 @@ Kademlia::find_node(lookup_args *largs, lookup_result *lresult)
     KDEBUG(3) << "find_node: tree is empty. returning myself, ip = " << ip() << endl;
     peer_t *p = New peer_t(_id, ip());
     lresult->results.push_back(p);
-    goto done;
+  } else {
+    // fill result vector
+    _tree->get(largs->key, &lresult->results);
   }
 
-  // fill result vector
-  _tree->get(largs->key, &lresult->results);
-
-done:
   _tree->insert(largs->id, largs->ip);
   lresult->rid = _id;
 }

@@ -19,14 +19,15 @@
  * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
  * LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
  * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+ * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
 #include "packet.h"
 
 unsigned Packet::_unique = 0;
 
-Packet::Packet() : _fn(0), _killme(0), _args(0), _touchtime(0),
-                   _punished(false), _c(0), _src(0), _dst(0), _ok(true)
+Packet::Packet() : _fn(0), _killme(0), _args(0), _c(0), _src(0), _dst(0),
+                   _ok(true)
 {
   _id = _unique++;
 }
