@@ -47,7 +47,7 @@ VivaldiTest::VivaldiTest(IPAddress i, Args &args)
   _neighbors = args.nget<int>("neighbors", 16, 10);
   _total_nodes = args.nget<uint>("totalnodes", 0, 10);
   _vis = args.nget<int>("vis", 0, 10);
-
+  _far_percent = args.nget<int>("far-percent", 90, 10);
   _ticks = 0;
   _joined = false;
 }
@@ -106,6 +106,16 @@ VivaldiTest::join(Args *args)
     nbr_ip = (int) ip() + row;
     if (nbr_ip <= (int)_total_nodes)
       _nip.push_back(nbr_ip);
+
+
+    //add some "distant" nodes to use at some probability
+    for (int i = 1; i < 10; i++) {
+      uint cand = (random () % (_total_nodes)) + 1;
+      assert(cand <= _total_nodes);
+      _nip_far.push_back(cand);
+      //_nip.push_back(_all[random () % _all.size ()]->ip());
+    }
+    _neighbors_far = _nip_far.size ();
 
     _neighbors = _nip.size();
     printf("%u joined with %d neighbors: ",ip(), _nip.size());
@@ -169,9 +179,15 @@ VivaldiTest::tick(void *)
   if(_neighbors > 0){
     if (random () % 2 == 0 && _nip_best.size () > 0 && false)
       dst = _nip_best[random () % _nip_best.size ()];
-    else
+    else if (_grid_config) {
+      double p = (double)random()/(double)RAND_MAX;
+      if (p*100 > _far_percent)
+	dst = _nip_far[random() % _nip_far.size()];
+      else
+	dst = _nip[random() % _neighbors];
+    } else {
       dst = _nip[random() % _neighbors];
-
+    }
   } else {
     dst = _all[random() % _all.size()]->ip();
   }
@@ -189,8 +205,11 @@ VivaldiTest::tick(void *)
 	//	}
       }
 
-    if (_ticks % 100 == 0 || _vis) print_all_loc();
-  }
+    if (_ticks % 5 == 0 || _vis) print_all_loc();
+  } else if (false && this->ip () >= 1000)
+    {
+      cout << this->ip () << " " << error () << "\n";
+    }
 
   //see if our dest has joined
   Node *n = getpeer (dst);
@@ -269,6 +288,7 @@ VivaldiTest::error()
     double vd = dist(vc, vc1);
     double rd = 2*t->latency(this->ip(), _all[i]->ip());
     double e = fabs(vd - rd);
+    // double e = fabs(vd - rd)/(rd);
     a.push_back (e);
     sum_sz++;
   }
@@ -346,7 +366,8 @@ VivaldiTest::print_all_loc()
       printf ("%s%f", j ? "," : "", vc._v[j]);
     if ((int)vc._ht)
       printf (",ht=%d", (int)vc._ht);
-    printf (" with error %f\n", _all[i]->_last_error);
+    //  (void)_all[i]->error ();
+    printf (" with error %f %f\n", _all[i]->_last_error, _all[i]->my_error ());
   }
 }
 
@@ -364,7 +385,7 @@ VivaldiTest::status()
 
   VivaldiNode::Coord vc = my_location();
   double e05, e50, e95;
-  // total_error(e05, e50, e95);
+  //total_error(e05, e50, e95);
   node_errors (e05, e50, e95);
   
   printf("vivaldi %u %u %d %.5f %.5f %.5f %.5f\n",

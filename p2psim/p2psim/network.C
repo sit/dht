@@ -121,11 +121,11 @@ Network::avglatency()
 // source as the book "Numerical Recipies in C".
 // 
 float
-Network::gaussian()
+Network::gaussian(double variance)
 {
   float fac,rsq,v1,v2;
 
-  if(!_top->noise_variance())
+  if(variance == 0)
     return 0.0;
 
   do {
@@ -135,7 +135,7 @@ Network::gaussian()
   } while (rsq >= 1.0 || rsq == 0.0);
   fac = sqrt(-2.0*log(rsq)/rsq);
 
-  return (v2*fac) * (_top->noise_variance() / (100.00));
+  return (v2*fac) * (variance);
 }
 
 
@@ -185,7 +185,8 @@ Network::send(Packet *p)
 
   NetEvent *ne = New NetEvent();
   assert(ne);
-  Time tmplat = (Time) (latency + gaussian());
+  Time tmplat = (Time) (latency + 
+			gaussian(latency*(_top->noise_variance()/100.0)));
   ne->ts = now() + tmplat;
   ne->node = dst;
   ne->p = p;

@@ -34,6 +34,7 @@
 
 #define MODEL_SPHERE 2
 #define MODEL_EUCLIDEAN 3
+#define MODEL_TORUS 4
 
 class VivaldiNode : public P2Protocol {
 public:
@@ -85,7 +86,7 @@ protected:
   double _radius;
   int _initial_triangulation;
   unsigned int _num_init_samples;
-
+  double _tsize;
 
   Coord _c; // current estimated coordinates
   vector<Sample> _samples;
@@ -96,10 +97,12 @@ protected:
   Sample lowest_latency(vector<Sample> v);
   Coord net_force(Coord c, vector<Sample> v);
   Coord net_force1(Coord c, vector<Sample> v);
+  Coord net_force_toroidal(Coord c, vector<Sample> v);
   vector<double> get_weights (vector<Sample> v);
   void update_error (vector<Sample> v);
   double dist(VivaldiNode::Coord a, VivaldiNode::Coord b);
   double spherical_dist (VivaldiNode::Coord a, VivaldiNode::Coord b);
+  double toroidal_dist (VivaldiNode::Coord a, VivaldiNode::Coord b);
   double spherical_dist_arc (VivaldiNode::Coord a, VivaldiNode::Coord b);
   virtual void algorithm(Sample); // override this
   void initial_triangulation (vector<Sample> isamps);

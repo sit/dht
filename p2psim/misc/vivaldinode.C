@@ -6,6 +6,8 @@
 
 static int usinght = -1;
 #define PI 3.1415927
+#define A_REL_REL 2
+#define A_PRED_ERR 3
 
 double spherical_dist_arc (VivaldiNode::Coord a, VivaldiNode::Coord b);
 VivaldiNode::Coord  cross (VivaldiNode::Coord a, VivaldiNode::Coord b);
@@ -20,19 +22,34 @@ VivaldiNode::VivaldiNode(IPAddress ip) : P2Protocol (ip)
   }
   _nsamples = 0;
   _dim = args().nget<uint>("model-dimension", 3, 10);
-  _adaptive = args().nget<uint>("adaptive", 0, 10);
   long timestep_scaled = args().nget<uint>("timestep", 5000, 10);
   _timestep = ((double)timestep_scaled)/1000000;
   _pred_err  = -1;
   _window_size = args().nget<uint>("window-size", (uint) -1, 10);
   _model = args()["model"];
   _radius = args().nget<uint>("radius", (uint) 20000, 10);
+  _tsize = args().nget<uint>("tsize", (uint) 20000, 10);
   _initial_triangulation = args().nget<uint>("triangulate", (uint) 0, 10);
   _num_init_samples = args().nget<uint>("num_init_samples", (uint) 0, 10);
 
+  string _adaptive_in = args()["adaptive"];
+
+  if (_adaptive_in == "prederr")
+    _adaptive = A_PRED_ERR;
+  else if (_adaptive_in == "relrel")
+    _adaptive = A_REL_REL;
+  else if (_adaptive_in == "const")
+    _adaptive = 0;
+  else 
+    _adaptive = -1;
+
+  assert (_adaptive >= 0);
+
   if (_model == "sphere")
     _model_type = MODEL_SPHERE;
-  else 
+  else if (_model == "torus")
+    _model_type = MODEL_TORUS;
+  else
     _model_type = MODEL_EUCLIDEAN;
 
   // Start out at a random point
@@ -40,7 +57,7 @@ VivaldiNode::VivaldiNode(IPAddress ip) : P2Protocol (ip)
   //   _c._v.push_back (random() % 200000 - 1000000);
   // _c._ht = random() % 200000 - 1000000);
 
-  if (_model_type == MODEL_EUCLIDEAN) {
+  if (_model_type == MODEL_EUCLIDEAN || _model_type == MODEL_TORUS) {
     // Start out at the origin 
     for (int i = 0; i < _dim; i++)
       _c._v.push_back (0.0);
@@ -81,21 +98,22 @@ VivaldiNode::get_weights (vector<Sample> v)
 {
   //calcuate weights
   double sum = 0.0;
+  double small = 1.0/1000.0;
   for (unsigned int i = 0; i < v.size (); i++) {
     if (v[i]._error > 0) sum += 1.0/v[i]._error;
-    else sum += 1.0/1000.0;
+    else sum += small;
   }
 
   vector<double> weights;
-  //  cerr << "weights: ";
+  //  cerr << ip () << "weights: ";
   for (unsigned int i = 0; i < v.size (); i++) {
     if (v[i]._error > 0) 
       weights.push_back (v.size()*(1.0/v[i]._error)/sum);
     else
-      weights.push_back (v.size()*(1.0/1000.0)/sum);
+      weights.push_back (v.size()*(small)/sum);
     //    cerr << "(" << weights.back () << ", " << v[i]._error << ") ";
   }
-
+  //  cerr << endl;
   return weights;
 }
 
@@ -103,16 +121,41 @@ void
 VivaldiNode::update_error (vector<Sample> samples)
 {
 
+
+  double expect = dist (_c, samples[0]._c);
+  double actual = samples[0]._latency;
+  double rel_error = fabs(expect - actual)/actual;
+  if (_pred_err < 0) 
+    _pred_err = rel_error;
+  else if (_samples[0]._error < 0) 
+    //    _pred_err = _pred_err;
+    ;
+  else {
+    double ce = _pred_err*_pred_err;
+    double he = samples[0]._error*samples[0]._error;
+    double new_pred_err = rel_error*(ce/(he + ce)) + _pred_err*(he/(he + ce));
+    _pred_err = (19*_pred_err + new_pred_err)/20.0;
+    if (_pred_err > 1.0) _pred_err = 1.0;
+  }
+
+#if 0
+
   vector<double> weights = get_weights(samples);
 
   double sum = 0.0;
+  //  cerr << ip () << " error = ";
   for (unsigned int i = 0; i < samples.size (); i++) {
     double expect = dist (_c, samples[i]._c);
     double actual = samples[i]._latency;
     double rel_error = fabs(expect - actual)/actual;
+    //    cerr << rel_error << "(" << fabs(expect - actual) 
+    //	 << "/" << actual << " + ";
     sum += weights[i]*rel_error;
   }
+  //  _pred_err = (_pred_err*19 + sum/samples.size ())/20.0;
   _pred_err = sum/samples.size ();
+  //  cerr << " = " << _pred_err << "\n";
+#endif
 }
 
 VivaldiNode::Coord
@@ -120,19 +163,7 @@ VivaldiNode::net_force(Coord c, vector<Sample> v)
 {
   Coord f(v[0]._c.dim());
   
-  //calcuate weights
-  double sum = 0.0;
-  for (unsigned int i = 0; i < v.size (); i++) {
-    if (v[i]._error > 0) sum += 1.0/v[i]._error;
-    else sum += 1.0;
-  }
-  vector<double> weights;
-  for (unsigned int i = 0; i < v.size (); i++) {
-    if (v[i]._error > 0) 
-      weights.push_back (v.size()*(1.0/v[i]._error)/sum);
-    else
-      weights.push_back (1.0);
-  }
+  //  vector<double> weights = get_weights(v);
 
   for(unsigned i = 0; i < v.size(); i++){
     double actual = v[i]._latency;
@@ -149,12 +180,61 @@ VivaldiNode::net_force(Coord c, vector<Sample> v)
 	  dir._ht += (double)(random () % 10) / 10.0;
 	l = length (dir);
       }
-      double unit = weights[i]/(l);
-      VivaldiNode::Coord udir = dir * unit * grad;
+      double unit = 1.0/(l);
+
+      VivaldiNode::Coord udir;
+      if (_adaptive == A_REL_REL) {
+	if (_pred_err > 0 && v[i]._error > 0)
+	  udir = dir * unit * grad * (_pred_err)/(_pred_err + v[i]._error);
+	else if (_pred_err > 0)
+	  udir = dir * unit * grad * 0.0;
+	else if (v[i]._error > 0)
+	  udir = dir * unit * grad * 1.0;
+      } else 
+	udir = dir * unit * grad;
+      
+      //uncomment below for constant for springs
+      //VivaldiNode::Coord udir = dir * unit * 1000;
       f = f + udir;
     }
   }
   f._ht = -f._ht;
+
+  return f;
+}
+
+VivaldiNode::Coord
+VivaldiNode::net_force_toroidal(Coord c, vector<Sample> v)
+{
+  Coord f(v[0]._c.dim());
+  vector<double> weights = get_weights(v);
+
+  for(unsigned i = 0; i < v.size(); i++){
+    double actual = v[i]._latency;
+    double expect = dist (c, v[i]._c);
+    if(actual >= 0){
+      double grad = expect - actual;
+
+      Coord dir = (v[i]._c - c);
+      for (int d=0; d < dir.dim(); d++)
+	if (fabs(dir[d]) > _tsize/2) {
+	  dir[d] = -1 * (_tsize - dir[d]);
+	}
+	  
+
+      double l = length(dir);
+      while (l < 0.0001) { //nodes are on top of one another
+	for (uint j = 0; j < dir._v.size(); j++) //choose a random direction
+	    dir._v[j] += (double)(random () % 10 - 5) / 10.0;
+	l = length (dir);
+      }
+      double unit = weights[i]/(l);
+      VivaldiNode::Coord udir = dir * unit * grad;
+      //uncomment below fro constant for springs
+      //VivaldiNode::Coord udir = dir * unit * 1000;
+      f = f + udir;
+    }
+  }
 
   return f;
 }
@@ -185,17 +265,26 @@ VivaldiNode::algorithm(Sample s)
     }
 
   _samples.push_back(s);
-  if ((int)_samples.size () < _window_size) return;
-
   update_error (_samples);
+  _samples.clear ();
 
   _curts = _curts - 0.025;
   double t;
-  if (_adaptive)
-    t = (_curts > _timestep) ? _curts : _timestep;
-  else 
+  if (_adaptive == A_PRED_ERR) {
+    //(really) old adaptive timestep
+    //  t = (_curts > _timestep) ? _curts : _timestep;
+    t = _pred_err;
+    if (t < 0 || t > 1.0) t = 1.0;
+    t /= 4;
+    if (t < 0.05) t = 0.05;
+  } else if (_adaptive == A_REL_REL) {
     t = _timestep;
-
+  } else if (_adaptive == 0) {
+    t = _timestep;
+  } else {
+    t = 1;
+    assert (_adaptive == -1);
+  }
   // apply the force to our coordinates
   // cout << "move from " << _c << " with force " << f;
 
@@ -222,15 +311,27 @@ VivaldiNode::algorithm(Sample s)
     } else {
       cerr << "rejecting invalid measurement\n";
     }
-  } else  { // EUCLIDEAN
-    Coord f = net_force(_c, _samples);
+  } else if (_model_type == MODEL_EUCLIDEAN) {
+    vector<Sample> S;
+    S.push_back(s);
+    Coord f = net_force(_c, S);
     _c = _c + (f * t);
+  } else if (_model_type == MODEL_TORUS) {
+    Coord f = net_force_toroidal (_c, _samples);
+    _c = _c + (f* t);
+    for (int i = 0; i < _c.dim (); i++) {
+      _c[i] = fmod (_c[i], _tsize); //just clip really bad points
+      if (_c[i] > _tsize/2) _c[i] = -(_tsize - _c[i]);
+      if (_c[i] < -_tsize/2) _c[i] = _tsize + _c[i];
+      assert (fabs(_c[i]) < _tsize/2);
+    }
+  } else {
+    assert (_model_type == -1);
   }
 
   if (usinght && _c._ht <= 1000) // 1000 is 1ms
     _c._ht = 1000; 
 
-  _samples.clear ();
 }
 
 void
@@ -396,6 +497,7 @@ rotate_arb (VivaldiNode::Coord axis, VivaldiNode::Coord vec,
   return ret;
 
 }
+
 double
 flatearth_dist(VivaldiNode::Coord a, VivaldiNode::Coord b)
 {
@@ -407,6 +509,26 @@ flatearth_dist(VivaldiNode::Coord a, VivaldiNode::Coord b)
   if (usinght)
     d += a._ht + b._ht;
   return d;
+}
+
+double 
+VivaldiNode::toroidal_dist (VivaldiNode::Coord a, VivaldiNode::Coord b)
+{
+  assert (a.dim () == b.dim());
+  double d_sum = 0.0;
+  for (int i = 0; i < a.dim (); i++)
+    {
+      double x1, x2;
+      if (a[i] > b[i]) { x1 = a[i]; x2 = b[i]; }
+      else { x1 = b[i]; x2 = a[i]; }
+      double d1 = x1 - x2;
+      double d2 = (_tsize - x2) + x1;
+      double d;
+      if (d1 > d2) d = d1; 
+      else d = d2;
+      d_sum += d*d;
+    }
+  return sqrt (d_sum);
 }
 
 
@@ -439,7 +561,9 @@ VivaldiNode::dist(VivaldiNode::Coord a, VivaldiNode::Coord b)
 {
   if (_model_type == MODEL_SPHERE)
     return spherical_dist (a, b);
-  else 
+  else if (_model_type == MODEL_EUCLIDEAN) 
     return flatearth_dist (a, b);
+  else 
+    return toroidal_dist (a,b);
     
 }

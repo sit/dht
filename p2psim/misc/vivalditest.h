@@ -50,6 +50,8 @@ public:
   void node_errors(double &x05, double &x50, double &x95);
   vector<IPAddress> _nip_best;
   vector<IPAddress> _nip;
+  vector<IPAddress> _nip_far;
+  int _neighbors_far;
 
  private:
   int _ticks;
@@ -64,6 +66,7 @@ public:
   int _vis;
   double _last_error;
   bool _joined;
+  int _far_percent;
 
   uint _old_all_size;
 
