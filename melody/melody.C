@@ -70,7 +70,6 @@ void fromurl(const char *url, char *out) {
 }
 
 
-
 int cs_client::num_active = 0;
 
 void
@@ -187,7 +186,7 @@ cs_client::requestcb()
     warn << (int)this << " error while parsing client headers\n";
     //    warn << "url: \n" << reqheaders.url << "\n";
     warn << (int)this << " header: \n" << reqheaders.headers << "\n";
-    warn << (int)this << " body: \n" << str(req) << "\n";
+    warn << (int)this << " body: \n";// << str(req) << "\n";
     break;
   case 1:
     warn << (int)this << " done parsing client headers\n";
@@ -226,7 +225,7 @@ cs_client::requestcb()
 	  logbuf << "bad request: " << (str)req << "\n";
 	  logbuf.tosuio()->output(log);
 	  fsync(log);
-	  warn << "bad body: " << (str)req << "\n";
+	  warn << "bad body: ";// << (str)req << "\n";
 	  return;
 	}
       }
@@ -266,7 +265,7 @@ cs_client::input(suio *req, str referrer)
   if(!boundryrx.search(reqheaders.headers)) {
     warn << "couldn't find boundry\n";
     warn << "header: \n" << reqheaders.headers << "\n";
-    warn << "body: \n" << str(*req) << "\n";
+    warn << "body: \n";// << str(*req) << "\n";
     return;
     //    exit(1);
   }
@@ -278,7 +277,7 @@ cs_client::input(suio *req, str referrer)
   if(!filerx.search((str)*req)) {
     warn << "couldn't find data\n";
     warn << "header: \n" << reqheaders.headers << "\n";
-    warn << "body: \n" << str(*req) << "\n";
+    warn << "body: \n";// << str(*req) << "\n";
     return;
     //    exit(1);
   }

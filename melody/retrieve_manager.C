@@ -1,8 +1,6 @@
-#ifndef SLEEPER
-#define SLEEPER
 /*
  *
- * Copyright (C) 2002  James Robertson (jsr@mit.edu),
+ * Copyright (C) 2003  James Robertson (jsr@mit.edu),
  *   		       Massachusetts Institute of Technology
  * 
  *
@@ -27,10 +25,36 @@
  *
  */
 
-class sleeper {
- public:
-  tailq_entry <sleeper> sleep_link2;
-  virtual void readcb_wakeup() = 0;
-};
+#include "retrieve_manager.h"
 
-#endif
+void
+retrieve_manager::retrieve (bigint id, callback<void, ptr<dhash_block> >::ptr cb)
+{
+  warn << "retrieve_manager::requested\n";
+  retrieve_block *tmp = New retrieve_block(cb);
+  blocks.insert_tail(tmp);
+  b_count++;
+
+  dhash->retrieve(id, wrap(mkref(this), &retrieve_manager::got_block, tmp));
+}
+
+void
+retrieve_manager::got_block (retrieve_block *tmp, ptr<dhash_block> blk)
+{
+  warn << "retrieve_manager::retrieved\n";
+  if(!blk) {
+    warn << "retrieve_manager::got_block no blk\n";
+    tmp->cb(blk);
+    return;
+  }
+
+  tmp->blk = blk;
+
+  while(blocks.first && blocks.first->blk) {
+    blocks.first->cb(blocks.first->blk);
+    tmp = blocks.first;
+    blocks.remove(tmp);
+    b_count--;
+    delete tmp;
+  }
+}

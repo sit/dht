@@ -109,7 +109,7 @@ melody_file::openw(callback<void, int, bigint>::ptr done_cb, callback<void>::ptr
   blocks = 0;
   wsize = 0;
   error_cb = ecb;
-  vstack = New venti_block(dhash, done_cb);
+  vstack = New venti_block(dhash, wrap(rm, &retrieve_manager::retrieve), done_cb);
 }
 
 void
@@ -141,7 +141,7 @@ melody_file::next_venti_cb(int index, callback<void, int, str>::ref ready_cb, st
 #endif
   index++;
   if(index < venti_depth)
-    vstack = New venti_block(dhash, vstack, wrap(mkref(this), &melody_file::next_venti_cb, index, ready_cb, filename));
+    vstack = New venti_block(dhash, wrap(rm, &retrieve_manager::retrieve), vstack, wrap(mkref(this), &melody_file::next_venti_cb, index, ready_cb, filename));
   else if(index == venti_depth)
     ready_cb(size, filename);
   else
@@ -155,10 +155,10 @@ melody_file::venti_cb(callback<void, int, str>::ref ready_cb, str filename, ptr<
   warn << "venti_cb\n";
 #endif
   blocks++;
-  if(blk == NULL) { warn << "no venti blk\n"; return; }
+  if(blk == NULL) { warn << "MF:venti_cb no venti blk\n"; return; }
   find_venti_depth(((struct melody_block *)blk->data)->offset);
 
-  vstack = New venti_block(dhash, ((struct melody_block *)blk->data), NULL);
+  vstack = New venti_block(dhash, wrap(rm, &retrieve_manager::retrieve), ((struct melody_block *)blk->data), NULL);
   next_venti_cb(0, ready_cb, filename);
 }
 
@@ -180,17 +180,23 @@ melody_file::skip(int blocks)
   vstack->skip(blocks, 0);
 }
 
+#define READAHEAD 20
+
 void
 melody_file::next()
 {
-  vstack->get_block(&cbuf, wrap(mkref(this), &melody_file::next_cb));
+  while(((int)(sent_bytes + (rm->b_count * BLOCKPAYLOAD)) < size) && 
+	(rm->b_count < READAHEAD))
+    vstack->get_block(&cbuf, wrap(mkref(this), &melody_file::next_cb));
 }
 
 void
 melody_file::next_cb(int offset)
 {
-  if(readgo)
+  if(readgo) {
     (*read_cb)(cbuf.data, cbuf.size, offset);
+    sent_bytes += cbuf.size;
+  }
 }
 
 void
@@ -205,10 +211,12 @@ melody_file::melody_file(str csock, callback<void, str>::ptr scb)
 #endif
   warn << "cf1\n";
   dhash = New dhashclient(csock);
+  rm = New refcounted<retrieve_manager>(dhash);
   statuscb = scb;
   vstack = NULL;
   outstanding = 0;
   readgo = true;
+  sent_bytes = 0;
 }
 
 melody_file::~melody_file()

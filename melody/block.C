@@ -29,7 +29,9 @@
 #include "dhash.h"
 #include "block.h"
 
-venti_block::venti_block(dhashclient *dh, melody_block *bl, venti_block *ap)
+venti_block::venti_block(dhashclient *dh, 
+			 callback<void, bigint, callback<void, ptr<dhash_block> >::ptr >::ptr retr,
+			 melody_block *bl, venti_block *ap)
 {
 #ifdef DEBUG
   warn << "venti_block1\n";
@@ -37,9 +39,12 @@ venti_block::venti_block(dhashclient *dh, melody_block *bl, venti_block *ap)
   memcpy(&data, bl, bl->size);
   more_init(ap, 0);
   dhash = dh;
+  retrieve = retr;
 }
 
-venti_block::venti_block(dhashclient *dh, venti_block *ap, cbv acb)
+venti_block::venti_block(dhashclient *dh, 
+			 callback<void, bigint, callback<void, ptr<dhash_block> >::ptr >::ptr retr,
+			 venti_block *ap, cbv acb)
 {
 #ifdef DEBUG
   warn << "venti_block2c\n";
@@ -47,9 +52,12 @@ venti_block::venti_block(dhashclient *dh, venti_block *ap, cbv acb)
   warn << (int)this << " venti_block2c\n";
   ap->get_block(&data, wrap(this, &venti_block::more_init_gb, ap, acb));
   dhash = dh;
+  retrieve = retr;
 }
 
-venti_block::venti_block(dhashclient *dh, callback<void, int, bigint>::ptr dcb)
+venti_block::venti_block(dhashclient *dh, 
+			 callback<void, bigint, callback<void, ptr<dhash_block> >::ptr >::ptr retr,
+			 callback<void, int, bigint>::ptr dcb)
 {
 #ifdef DEBUG
   warn << "venti_block3\n";
@@ -60,6 +68,7 @@ venti_block::venti_block(dhashclient *dh, callback<void, int, bigint>::ptr dcb)
   data.size = 12;
   more_init(NULL, 0);
   dhash = dh;
+  retrieve = retr;
   done_cb = dcb;
 }
 
@@ -148,7 +157,7 @@ venti_block::get_block2 (melody_block *bl, cbi cb, int of)
 #ifdef DEBUG
   warn << "gb trying to retrieve " << blockhash << "\n";
 #endif
-  dhash->retrieve (blockhash, wrap (this, &venti_block::get_block_cb, bl, cb, of));
+  retrieve (blockhash, wrap (this, &venti_block::get_block_cb, bl, cb, of));
 }
 
 // final function in get_block chain.
@@ -166,7 +175,7 @@ venti_block::get_block_cb(melody_block *bl, cbi cb, int of, ptr<dhash_block> blk
     cb(of);
   } else
     // FIXME error?
-    ;
+    warn << "VB:get_block_cb no blk\n";
 }
 
 void
@@ -192,7 +201,7 @@ void
 venti_block::reset(cbv after)
 {
   if(parent == NULL)
-    parent = New venti_block(dhash, done_cb);
+    parent = New venti_block(dhash, retrieve, done_cb);
   warn << (int)this << " reset to " << (int)parent << "\n";
 
   bigint mehash = compute_hash (&data, data.size);
@@ -217,7 +226,7 @@ void
 venti_block::reset_s()
 {
   if(parent == NULL)
-    parent = New venti_block(dhash, done_cb);
+    parent = New venti_block(dhash, retrieve, done_cb);
   warn << (int)this << " reset to " << (int)parent << "\n";
 
   bigint mehash = compute_hash (&data, data.size);
@@ -316,10 +325,7 @@ venti_block::full()
 #ifdef DEBUG
   warn << "full\n";
 #endif
-  if(hashindex >= (data.data + BLOCKPAYLOAD))
-    return true;
-  else
-    return false;
+  return (hashindex >= (data.data + BLOCKPAYLOAD));
 }
 
 bool
@@ -330,10 +336,7 @@ venti_block::empty()
 #ifdef DEBUG
   warn << "empty\n";
 #endif
-  if(hashindex >= (data.data + data.size - 12))
-    return true;
-  else
-    return false;
+  return (hashindex >= (data.data + data.size - 12));
 }
 
 venti_block::~venti_block()

@@ -119,10 +119,10 @@ void
 dir::opendir_got_venti(cbretrieve_t cbr, ptr<dhash_block> blk)
 {
   if(!blk) {
-    warn << (int)cs << " no such path found: ";
-    if(pathelm.front())
-      warn << pathelm.front();
-    warn << "\n";
+    warn << (int)cs << " no such path found:";
+    if(pathelm.size() > 0)
+      warnx << pathelm.front();
+    warnx << "\n";
     // FIXME error reporting
     return;
   }
@@ -181,6 +181,8 @@ void
 dir::find_entry(ptr<dhash_block> blk)
 {
   unsigned int name_index = 0;
+
+  if(!blk) { warn << "D:find_entry no blk\n"; return; }
 
   while(name_index < blk->len) {
     struct dir_record *di = (struct dir_record *) (((char *)blk->data) + name_index);

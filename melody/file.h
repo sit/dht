@@ -33,6 +33,7 @@
 #include "cs_client.h"
 #include "block.h"
 #include "sleeper.h"
+#include "retrieve_manager.h"
 
 /* simple interface for storing and retrieving files in dhash using
 the venti_blocks to keep track of the data.  */
@@ -60,13 +61,14 @@ class melody_file : public virtual refcount {
   bool readgo;
 
  private:
-  int size, wsize, venti_depth, outstanding;
+  int size, wsize, venti_depth, outstanding, sent_bytes;
   melody_block cbuf;
   venti_block *vstack;
   tailq < sleeper, &sleeper::sleep_link2 > sleeping;
   callback<void, const char *, int, int>::ptr read_cb;
   suio wbuf;
   callback<void>::ptr error_cb;
+  ptr<retrieve_manager> rm;
 
   void find_venti_depth(int asize);
   void venti_cb(callback<void, int, str>::ref ready_cb, str filename, ptr<dhash_block> blk);
