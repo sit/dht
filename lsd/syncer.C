@@ -79,6 +79,7 @@ syncer::update_pred_cb (cb_location cb, chord_noderes *res, clnt_stat err)
     locations->insert (x);
     cb (x);
   }
+  delete res;
 }
 
 
@@ -132,6 +133,10 @@ syncer::sync_replicas ()
 void
 syncer::sync_replicas_predupdated (ptr<location> pred)
 {
+  if (!pred) {
+    delaycb (replica_timer, wrap (this, &syncer::sync_replicas)); 
+    return;
+  }
   warn << "sync_replicas: my pred is " << pred->id () << "\n";
   get_succlist (wrap (this, &syncer::sync_replicas_gotsucclist, pred));
 }
@@ -142,7 +147,7 @@ syncer::sync_replicas_gotsucclist (ptr<location> pred,
 			   vec<ptr<location> > succs) 
 {
   if (succs.size () == 0) {
-    delaycb (replica_timer, wrap(this, &syncer::sync_replicas)); 
+    delaycb (replica_timer, wrap (this, &syncer::sync_replicas)); 
     return;
   }
     
