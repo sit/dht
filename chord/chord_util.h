@@ -29,6 +29,7 @@
 #define _CHORD_UTIL_H
 
 #include "chord_prot.h"
+#include "transport_prot.h"
 
 // the identifier for the ihash class
 struct hashID {
@@ -38,12 +39,16 @@ struct hashID {
   }
 };
 
+vec<float> convert_coords (dorpc_arg *arg);
+void convert_coords (dorpc_res *res, vec<float> out);
+
 bool in_vector (vec<chordID> vec, chordID N);
 
 str gettime ();
 u_int64_t getusec ();
 
 u_int32_t uniform_random(double a, double b);
+float uniform_random_f (float max);
 
 chordID incID (const chordID &n);
 chordID decID (const chordID &n);

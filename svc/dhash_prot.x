@@ -49,7 +49,6 @@ struct dhash_valueattr {
 
 
 struct s_dhash_insertarg {
-  chordID v;
   chordID key;
   chord_node from;
   chordID srcID;  // == from.x => redundant
@@ -62,7 +61,6 @@ struct s_dhash_insertarg {
 };
 
 struct s_dhash_fetch_arg {
-  chordID v;
   chordID key;
   chord_node from;
   int32 start;
@@ -72,7 +70,6 @@ struct s_dhash_fetch_arg {
 };
 
 struct s_dhash_keystatus_arg {
-  chordID v;
   chordID key;
 };
 
@@ -93,7 +90,6 @@ default:
 };
 
 struct s_dhash_getkeys_arg {
-  chordID v;
   chordID pred_id;
   chordID start;
 };
@@ -135,7 +131,6 @@ union dhash_fetchiter_res switch (dhash_stat status) {
 
 
 struct s_dhash_block_arg {
-  chordID v;
   int32 nonce;
   dhash_value res;
   int32 offset;
@@ -150,7 +145,6 @@ struct s_dhash_block_arg {
 
 
 struct s_dhash_storecb_arg {
-  chordID v;
   int32 nonce;
   dhash_stat status;
 };

@@ -61,6 +61,7 @@ struct upcall_record {
   upcall_record (int p, cbupcall_t c) : progno (p), cb (c) {};
 };
 
+#define NCOORDS 2
 class vnode_impl : public vnode {
   ptr<fingerlike> fingers;
   
@@ -156,6 +157,15 @@ class vnode_impl : public vnode {
   void doRPC_cb (const rpc_program prog, int procno,
 		 void *out, aclnt_cb cb, 
 		 ref<dorpc_res> res, clnt_stat err);
+
+  float distance_f (vec<float> a, vec<float> b);
+  vec<float> vector_add (vec<float> a, vec<float> b);
+  vec<float> vector_sub (vec<float> a, vec<float> b);
+  float norm (vec<float> a);
+  vec<float> scalar_mult (vec<float> v, float s);
+
+  void update_coords (chordID u, vec<float> uc, float ud);
+
  public:
   chordID myID;
   ptr<chord> chordnode;

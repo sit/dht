@@ -48,8 +48,12 @@ struct location {
   int vnode;  // the vnode # that will make this node legit.
   bool alive; // whether this node responded to its last RPC
 
+  vec<float> coords;
+  float distance;
+
   timecb_t *checkdeadcb; // timer to check if this node has come back to life
-  location (const chordID &_n, const net_address &_r);
+  location (const chordID &_n, const net_address &_r, vec<float> coords);
+  location (const chord_node &n);
   ~location ();
 };
 
@@ -137,9 +141,12 @@ class locationtable : public virtual refcount {
   // Returns false of n is not a plausible chordID for s:p.
   bool insert (const chordID &n, sfs_hostname s, int p);
   bool insert (const chordID &n, const net_address &r);
-  bool insert (const chord_node &n) {
-    return insert (n.x, n.r);
-  }
+  bool insert (const chord_node &n);
+  bool insert (const chordID &n, 
+	       sfs_hostname s, 
+	       int p, 
+	       vec<float> coords);
+
   // Insert node into LT.  Backwards compatibility for old code;
   // Calls cb immediately with good or bad result.
   void insert (const chordID &n, sfs_hostname s, int _p,
@@ -168,6 +175,10 @@ class locationtable : public virtual refcount {
   void ping (const chordID &x, cbping_t cb);
 
   void get_node (const chordID &x, chord_node *n);
+
+  //iterating over locations
+  ptr<location> first_loc ();
+  ptr<location> next_loc (chordID n);
     
   // info about a particular location...
   bool alive (const chordID &x);
@@ -175,9 +186,12 @@ class locationtable : public virtual refcount {
   bool cached (const chordID &x);
   const net_address & getaddress (const chordID &x);
   float get_a_lat (const chordID &x);
+  void fill_chord_node (chord_node &data, const chordID &x);
   void fill_getnodeext (chord_node_ext &data, const chordID &x);
   unsigned int get_nrpc(const chordID &x);
-  
+  void set_coords (const chordID &x, vec<float> coords);
+  vec<float> get_coords (const chordID &x);
+
   //average stats
   float get_avg_lat ();
   float get_avg_var ();

@@ -521,7 +521,6 @@ dhash_impl::partition_maintenance_store2 (bigint key, vec<chord_node> succs, u_i
   ptr<dbrec> blk = db->lookup (id2dbrec (key));
   assert (blk);
 
-  arg->v = dst.x;   // destination chordID
   arg->key = key;   // frag stored under hash(block)
   arg->srcID = host_node->my_ID ();
   host_node->locations->get_node (arg->srcID, &arg->from);
@@ -713,7 +712,6 @@ dhash_impl::route_upcall (int procno,void *args, cbupcalldone_t cb)
       // on zero length request, we just return
       // whether we store the block or not
       ptr<s_dhash_block_arg> arg = New refcounted<s_dhash_block_arg> ();
-      arg->v = farg->from.x;
       arg->res.setsize (0);
       arg->attr.size = 0;
       arg->offset = 0;
@@ -727,7 +725,6 @@ dhash_impl::route_upcall (int procno,void *args, cbupcalldone_t cb)
   } else if (responsible (farg->key)) {
     //no where else to go, return NOENT or RETRY?
     ptr<s_dhash_block_arg> arg = New refcounted<s_dhash_block_arg> ();
-    arg->v = farg->from.x;
     arg->res.setsize (0);
     arg->offset = -1;
     arg->source = host_node->my_ID ();
@@ -804,7 +801,6 @@ dhash_impl::fetchiter_gotdata_cb (cbupcalldone_t cb, s_dhash_fetch_arg *a,
   ptr<s_dhash_block_arg> arg = New refcounted<s_dhash_block_arg> ();
   int n = (a->len + a->start < val->len) ? a->len : val->len - a->start;
   
-  arg->v = a->from.x;
   arg->res.setsize (n);
   memcpy (arg->res.base (), (char *)val->value + a->start, n);
   arg->attr.size = val->len;
@@ -1253,7 +1249,6 @@ dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
   else
     cb (DHASH_STORE_PARTIAL);
 }
-
 
 // --------- utility
 

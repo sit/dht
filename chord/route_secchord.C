@@ -140,7 +140,6 @@ route_secchord::next_hop ()
     ref<chord_testandfindarg> arg = New refcounted<chord_testandfindarg> ();
     chord_nodelistres *res = New chord_nodelistres (CHORD_OK);
 
-    arg->v = n->n_;
     arg->x = x;
     arg->failed_nodes.setsize (0); // never used.
     if (do_upcall && (lasthop_ || !outstanding_)) {

@@ -90,7 +90,9 @@ ignore_challengeresp (chordID x, bool b, chordstat s)
 }
 cbchallengeID_t cbchall_null (wrap (ignore_challengeresp));
 
-location::location (const chordID &_n, const net_address &_r) 
+location::location (const chordID &_n, 
+		    const net_address &_r, 
+		    vec<float> i_coords) 
   : n (_n), addr (_r), alive (true), checkdeadcb (NULL)
 {
   bzero(&saddr, sizeof(sockaddr_in));
@@ -100,6 +102,23 @@ location::location (const chordID &_n, const net_address &_r)
   vnode = is_authenticID (n, addr.hostname, addr.port);
   if (vnode < 0) 
     loctrace << "badnode " << n << " " << addr << "\n";
+  for (unsigned int i = 0; i < i_coords.size (); i++)
+    coords.push_back (i_coords[i]);
+}
+
+location::location (const chord_node &node) 
+  : n (node.x), addr (node.r), alive (true), checkdeadcb (NULL)
+{
+  bzero(&saddr, sizeof(sockaddr_in));
+  saddr.sin_family = AF_INET;
+  inet_aton (node.r.hostname.cstr (), &saddr.sin_addr);
+  saddr.sin_port = htons (addr.port);
+  vnode = is_authenticID (n, addr.hostname, addr.port);
+  if (vnode < 0) 
+    loctrace << "badnode " << n << " " << addr << "\n";
+  //XXXXXX 
+  for (int i = 0; i < 3; i++)
+    coords.push_back (node.coords[i]);
 }
 
 location::~location () {
@@ -183,6 +202,7 @@ locationtable::doRPC (const chord_node &n, const rpc_program &prog,
   assert (0);
   ptr<location> l = lookup (n.x);
   if (!l) {
+    //BAD LOC
     insert (n.x, n.r.hostname, n.r.port);
   }
   return doRPC (n.x, prog, procno, in, out, cb);
@@ -240,6 +260,9 @@ locationtable::doRPCcb (ptr<location> l, aclnt_cb realcb, clnt_stat err)
 	l->checkdeadcb = NULL;
       }
     }
+
+    //update distance estimate for coords
+    l->distance = hosts->get_a_lat (l);
   }
   
   (realcb) (err);
@@ -275,27 +298,49 @@ locationtable::realinsert (ref<location> l)
   return;
 }
 
+bool 
+locationtable::insert (const chord_node &n)
+{
+  vec<float> coords;
+  for (unsigned int i = 0; i < n.coords.size (); i++)
+    coords.push_back (((float)n.coords[i]) / 1000.0);
+  return insert (n.x, n.r.hostname, n.r.port, coords);
+}
+
 bool
 locationtable::insert (const chordID &n, const net_address &r)
 {
-  ptr<location> loc = lookup (n);
-  if (loc != NULL)
-    return true;
-  
-  loc = New refcounted<location> (n, r);
-  if (loc->vnode < 0)
-    return false;
-  realinsert (loc);
-  return true;
+  vec<float> coords;
+  return insert (n, r.hostname, r.port, coords);
 }
 
 bool
 locationtable::insert (const chordID &n, sfs_hostname s, int p)
 {
+  vec<float> coords;
+  return insert (n, s, p, coords);
+}
+
+
+bool
+locationtable::insert (const chordID &n, 
+		       sfs_hostname s, 
+		       int p, 
+		       vec<float> coords)
+{
+    
+  ptr<location> loc = lookup (n);
+  if (loc != NULL)
+    return true;
+    
   net_address r;
   r.hostname = s;
   r.port = p;
-  insert (n, r);
+  
+  loc = New refcounted<location> (n, r, coords);
+  if (loc->vnode < 0)
+    return false;
+  realinsert (loc);
   return true;
 }
 
@@ -318,7 +363,8 @@ locationtable::cacheloc (const chordID &n, const net_address &r, cbchallengeID_t
     return;
   }
 
-  loc = New refcounted<location> (n, r);
+  vec<float> coords;
+  loc = New refcounted<location> (n, r, coords);
   if (loc->vnode < 0) {
     cb (n, false, CHORD_OK);
   } else {
@@ -573,6 +619,51 @@ locationtable::ping_cb (cbping_t cb, clnt_stat err)
   }
 }
 
+vec<float> 
+locationtable::get_coords (const chordID &x)
+{
+ locwrap *lw = locs[x];
+ vec<float> coords;
+  if (!lw || (lw->type_ & LOC_REGULAR) == 0) {
+    return coords;
+  }
+  ptr<location> l = lw->loc_;
+  return l->coords;
+}
+
+void 
+locationtable::set_coords (const chordID &x, vec<float> coords)
+{
+  locwrap *lw = locs[x];
+  if (!lw || (lw->type_ & LOC_REGULAR) == 0) {
+    return;
+  }
+  ptr<location> l = lw->loc_;
+  
+  l->coords.clear ();
+  for (unsigned int i = 0; i < coords.size (); i++)
+    l->coords.push_back(coords[i]);
+
+}
+
+void
+locationtable::fill_chord_node (chord_node &data, const chordID &x) 
+{
+  locwrap *lw = locs[x];
+  if (!lw || (lw->type_ & LOC_REGULAR) == 0) {
+    return;
+  }
+  ptr<location> l = lw->loc_;
+  
+  data.x = x;
+  data.r = l->addr;
+  data.coords.setsize (l->coords.size ());
+  for (unsigned int i = 0; i < l->coords.size (); i++)
+    data.coords[i] = (int)(l->coords[i]*1000.0);
+
+  return;
+}
+
 void
 locationtable::fill_getnodeext (chord_node_ext &data, const chordID &x)
 {
@@ -761,3 +852,23 @@ locationtable::remove (locwrap *lw)
   return true;
 }
   
+ptr<location>
+locationtable::first_loc ()
+{
+  locwrap *f = loclist.first ();
+  while (f && !f->loc_) f = loclist.next (f);
+  if (!f) return NULL;
+  return f->loc_;
+}
+
+ptr<location>
+locationtable::next_loc (chordID n)
+{
+  locwrap *f = locs[n];
+  locwrap *nn = loclist.next (f);
+  while (nn && !nn->loc_) nn = loclist.next (nn);
+  if (nn)
+    return nn->loc_;
+  else
+    return NULL;
+}

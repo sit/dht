@@ -35,7 +35,8 @@
 
 
 // superset of dhashclient
-class dhashclient_test : public dhashclient { public:
+class dhashclient_test : public dhashclient { 
+public:
   dhashclient_test::dhashclient_test(str, str, unsigned, unsigned, unsigned);
   ~dhashclient_test()  {}
 

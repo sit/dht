@@ -187,7 +187,8 @@ succ_list::stabilize_getsucclist_cb (chordID s, vec<chord_node> nlist,
     if (between (myID, succlist[i], nlist[j].x)) {
       // if succlist[i] > nlist[j].x
       // then maybe a new node joined. check it out.
-      bool ok = locations->insert (nlist[j].x, nlist[j].r);
+      //BAD LOC (ok)
+      bool ok = locations->insert (nlist[j]);
       if (!ok) {
 	warnx << myID << ": stabilize_succlist: received bad successor "
 	      << nlist[j].x << " from " << s << "\n";
@@ -212,7 +213,8 @@ succ_list::stabilize_getsucclist_cb (chordID s, vec<chord_node> nlist,
   }
   while (j < newnsucc) {
     assert (!check);
-    bool ok = locations->insert (nlist[j].x, nlist[j].r);
+    //BAD LOC
+    bool ok = locations->insert (nlist[j]);
     if (!ok) {
       warnx << myID << ": stabilize_succlist: received bad successor "
 	    << nlist[j].x << " from " << s << "\n";
@@ -277,6 +279,7 @@ succ_list::stabilize_getpred_cb (chordID sd, chordID p, net_address r,
       // Good, things are as we expect.
     } else if (betweenleftincl (myID, sd, p)) {
       // Did we get someone strictly better?
+      //BAD LOC
       bool ok = locations->insert (p, r);
       if (ok)
 	oldsucc = p;

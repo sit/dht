@@ -32,6 +32,7 @@ struct net_address {
 struct chord_node {
   chordID x;
   net_address r;
+  int32_t coords<>;
 };
 
 union chord_noderes switch (chordstat status) {
@@ -80,17 +81,14 @@ union chord_nodelistextres switch (chordstat status) {
 };
 
 struct chord_findarg {
-  chordID v;
   chordID x;
 };
 
 struct chord_nodearg {
-  chordID v;
   chord_node n;
 };
 
 struct chord_testandfindarg {
-  chordID v;
   chordID x;
   unsigned upcall_prog;
   unsigned upcall_proc;
@@ -114,7 +112,6 @@ union chord_testandfindres switch (chordstat status) {
 };
 
 struct chord_gettoes_arg {
-  chordID v;
   int32_t level;
 };
 

@@ -69,7 +69,8 @@ pred_list::update_pred_fingers_cb (vec<chord_node> nlist, chordstat s)
     return;
   gotfingers_ = true;
   for (unsigned i = 0; i < nlist.size (); i++)
-    locations->insert (nlist[i].x, nlist[i].r);
+    //BAD LOC (ok)
+    locations->insert (nlist[i]);
 }
 
 void
@@ -141,10 +142,11 @@ pred_list::stabilize_predlist_gotsucclist (vec<chord_node> sl, chordstat s)
     stable_predlist = false;
     warnx << myID << ": stabilize_predlist adding " << sl[i].x << "\n";
     // XXX should ping these nodes?
-    bool ok = locations->insert (sl[i].x, sl[i].r);
+    bool ok = locations->insert (sl[i]);
     const char *stat = ok ? " bad " : " new ";
     warnx << myID << ": stabilize_predlist: received " << stat << "predecessor "
 	  << sl[i] << ".\n";
+
   }
 }
 
@@ -191,8 +193,7 @@ pred_list::fill_nodelistres (chord_nodelistres *res)
   res->resok->nlist.setsize (NPRED); // over allocate
   chordID curpred = locations->closestsuccloc (backkey_);
   for (i = 0; (i < NPRED) && curpred != myID; i++) {
-    res->resok->nlist[i].x = curpred;
-    res->resok->nlist[i].r = locations->getaddress (curpred);
+    locations->fill_chord_node (res->resok->nlist[i], curpred);
     curpred = locations->closestsuccloc (incID (curpred));
   }
   res->resok->nlist.setsize (i + 1);

@@ -91,7 +91,6 @@ main (int argc, char *argv[])
 
   ptr<chord_findarg> fa = New refcounted<chord_findarg> ();
   dst.x = make_chordID (dst.r.hostname, dst.r.port);
-  fa->v = dst.x;
   fa->x = x;
   chord_nodelistres *route = New chord_nodelistres ();
   doRPC (dst,

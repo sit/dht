@@ -120,8 +120,7 @@ finger_table::fill_nodelistres (chord_nodelistres *res)
   
   res->resok->nlist.setsize (n);
   for (int i = 0; i < n; i++) {
-    res->resok->nlist[i].x = curfingers[i];
-    res->resok->nlist[i].r = locations->getaddress (curfingers[i]);
+    locations->fill_chord_node (res->resok->nlist[i], curfingers[i]);
   }
 }
 

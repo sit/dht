@@ -38,7 +38,6 @@ toe_table::get_toes_rmt (int level)
   vec<chordID> donors = get_toes (max(level - 1, 0));
   for (unsigned int i = 0; i < donors.size (); i++) {
     ptr<chord_gettoes_arg> arg = New refcounted<chord_gettoes_arg> ();
-    arg->v = donors[i];
     arg->level = max(level - 2, 0);
     
     chord_nodelistextres *res = New chord_nodelistextres ();

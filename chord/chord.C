@@ -71,6 +71,15 @@ vnode_impl::vnode_impl (ptr<locationtable> _locations, ptr<fingerlike> stab,
   locations = _locations;
   warnx << gettime () << " myID is " << myID << "\n";
 
+  vec<float> coords;
+  warn << gettime () << " coords are: ";
+  for (int i = 0; i < NCOORDS; i++) {
+    coords.push_back (uniform_random_f (1000.0));
+    warn << (int)coords.back ();
+  }
+  warn << "\n";
+  locations->set_coords (myID, coords);
+
   fingers = stab;
   fingers->init (mkref(this), locations, myID);
 
@@ -401,7 +410,6 @@ void
 vnode_impl::join (const chord_node &n, cbjoin_t cb)
 {
   ptr<chord_findarg> fa = New refcounted<chord_findarg> ();
-  fa->v = n.x;
   fa->x = incID (myID);
   chord_nodelistres *route = New chord_nodelistres ();
   doRPC (n, chord_program_1, CHORDPROC_FINDROUTE, fa, route,
@@ -452,8 +460,7 @@ vnode_impl::doget_successor (svccb *sbp)
   
   chordID s = successors->succ ();
   chord_noderes res(CHORD_OK);
-  res.resok->x = s;
-  res.resok->r = locations->getaddress (s);
+  locations->fill_chord_node (*res.resok, s);
   doRPC_reply (sbp, &res, chord_program_1, CHORDPROC_GETSUCCESSOR);
 }
 
@@ -463,8 +470,7 @@ vnode_impl::doget_predecessor (svccb *sbp)
   ndogetpredecessor++;
   chordID p = my_pred ();
   chord_noderes res(CHORD_OK);
-  res.resok->x = p;
-  res.resok->r = locations->getaddress (p);
+  locations->fill_chord_node (*res.resok, p);
   doRPC_reply (sbp, &res, chord_program_1, CHORDPROC_GETPREDECESSOR);
 }
 
@@ -518,16 +524,14 @@ vnode_impl::dotestrange_findclosestpred (svccb *sbp, chord_testandfindarg *fa)
   chord_testandfindres *res = New chord_testandfindres ();  
   if (betweenrightincl(myID, succ, x) ) {
     res->set_status (CHORD_INRANGE);
-    res->inrange->n.x = succ;
-    res->inrange->n.r = locations->getaddress (succ);
+    locations->fill_chord_node (res->inrange->n, succ);
   } else {
     res->set_status (CHORD_NOTINRANGE);
     vec<chordID> f;
     for (unsigned int i=0; i < fa->failed_nodes.size (); i++)
       f.push_back (fa->failed_nodes[i]);
     chordID p = lookup_closestpred (fa->x, f);
-    res->notinrange->n.x = p;
-    res->notinrange->n.r = locations->getaddress (p);
+    locations->fill_chord_node (res->notinrange->n, p);
   }
 
   if (fa->upcall_prog)  {
@@ -561,8 +565,7 @@ vnode_impl::dofindclosestpred (svccb *sbp, chord_findarg *fa)
   chord_noderes res(CHORD_OK);
   chordID p = lookup_closestpred (fa->x);
   ndofindclosestpred++;
-  res.resok->x = p;
-  res.resok->r = locations->getaddress (p);
+  locations->fill_chord_node (*res.resok, p);
   assert (0);
   //  sbp->reply (&res);
 }
@@ -712,8 +715,7 @@ vnode_impl::dogetsucclist (svccb *sbp)
   chordID cursucc = myID;
   res.resok->nlist.setsize (curnsucc + 1);
   for (int i = 0; i <= curnsucc; i++) {
-    res.resok->nlist[i].x = cursucc;
-    res.resok->nlist[i].r = locations->getaddress (cursucc);
+    locations->fill_chord_node (res.resok->nlist[i], cursucc);
     cursucc = locations->closestsuccloc (cursucc + 1);
   }
   doRPC_reply (sbp, &res, chord_program_1, CHORDPROC_GETSUCCLIST);
@@ -733,8 +735,7 @@ vnode_impl::dodebruijn (svccb *sbp, chord_debruijnarg *da)
   res = New chord_debruijnres ();
   if (betweenrightincl (myID, succ, da->x)) {
     res->set_status(CHORD_INRANGE);
-    res->inres->node.x = succ;
-    res->inres->node.r = locations->getaddress (succ);
+    locations->fill_chord_node (res->inres->node, succ);
   } else {
     res->set_status (CHORD_NOTINRANGE);
     if (betweenrightincl (myID, succ, da->i)) {
@@ -742,15 +743,13 @@ vnode_impl::dodebruijn (svccb *sbp, chord_debruijnarg *da)
       // assert (d);  // XXXX return error
       // chordID nd =  d->debruijnprt (); 
       chordID nd = lookup_closestpred (doubleID (myID, logbase));
-      res->noderes->node.x = nd;
-      res->noderes->node.r = locations->getaddress (nd);
+      locations->fill_chord_node (res->noderes->node, nd);
       res->noderes->i = doubleID (da->i, logbase);
       res->noderes->i = res->noderes->i | topbits (logbase, da->k);
       res->noderes->k = shifttopbitout (logbase, da->k);
     } else {
-      res->noderes->node.x = lookup_closestpred (da->i); // succ
-      assert (res->noderes->node.x != myID);
-      res->noderes->node.r = locations->getaddress (res->noderes->node.x);
+      chordID x = lookup_closestpred (da->i); // succ
+      locations->fill_chord_node (res->noderes->node, x);
       res->noderes->i = da->i;
       res->noderes->k = da->k;
     }
@@ -795,10 +794,9 @@ vnode_impl::dofindroute_cb (svccb *sbp, chord_findarg *fa,
   } else {
     chord_nodelistres res (CHORD_OK);
     res.resok->nlist.setsize (r.size ());
-    for (unsigned int i = 0; i < r.size (); i++) {
-      res.resok->nlist[i].x = r[i];
-      res.resok->nlist[i].r = locations->getaddress (r[i]);
-    }
+    for (unsigned int i = 0; i < r.size (); i++) 
+      locations->fill_chord_node (res.resok->nlist[i], r[i]);
+
     doRPC_reply (sbp, &res, chord_program_1, CHORDPROC_FINDROUTE);
   }
 }

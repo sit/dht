@@ -232,7 +232,6 @@ protected:
   {
     ref<dhash_storeres> res = New refcounted<dhash_storeres> (DHASH_OK);
     ref<s_dhash_insertarg> arg = New refcounted<s_dhash_insertarg> ();
-    arg->v       = destID;
     arg->key     = blockID;
     arg->srcID   = clntnode->my_ID ();
     clntnode->locations->get_node (arg->srcID, &arg->from);
@@ -357,7 +356,6 @@ dhashcli::fetch_frag (rcv_state *rs)
   ref<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg> ();
   
   clntnode->locations->get_node (clntnode->my_ID (), &arg->from);
-  arg->v      = rs->succs[i].x;
   arg->key    = rs->key;
   arg->start  = 0;
   arg->len    = 65536; // 64K is about as big as an IP packet will go...
@@ -580,7 +578,6 @@ dhashcli::insert2_succs_cb (ref<dhash_block> block, cbinsert_t cb,
 
       ref<s_dhash_insertarg> arg = New refcounted<s_dhash_insertarg> ();
 
-      arg->v = succs[i].x;   // destination chordID
       arg->key = block->ID;  // frag stored under hash(block)
       arg->srcID = clntnode->my_ID ();
       clntnode->locations->get_node (arg->srcID, &arg->from);

@@ -29,6 +29,7 @@
 #include "chord_impl.h"
 #include "route.h"
 #include "transport_prot.h"
+#include "math.h"
 
 void 
 vnode_impl::get_successor (const chordID &n, cbchordID_t cb)
@@ -161,7 +162,6 @@ vnode_impl::notify (const chordID &n, chordID &x)
   chordstat *res = New chordstat;
   nnotify++;
   // warnx << "notify " << n << " about " << x << "\n";
-  na->v   = n;
   na->n.x = x;
   na->n.r = locations->getaddress (x);
   doRPC (n, chord_program_1, CHORDPROC_NOTIFY, na, res, 
@@ -187,9 +187,8 @@ vnode_impl::alert (const chordID &n, chordID &x)
   chordstat *res = New chordstat;
   nalert++;
   warnx << "alert: " << x << " died; notify " << n << "\n";
-  na->v   = n;
-  na->n.x = x;
-  na->n.r = locations->getaddress (x);
+  locations->fill_chord_node (na->n, x);
+
   doRPC (n, chord_program_1, CHORDPROC_ALERT, na, res, 
 		    wrap (mkref (this), &vnode_impl::alert_cb, res));
 }
@@ -281,7 +280,10 @@ vnode_impl::doRPC_reply (svccb *sbp, void *res, const rpc_program &prog,
   dorpc_res *rpc_res = New dorpc_res (DORPC_OK);
   rpc_res->resok->src_id = myID;
   rpc_res->resok->src_vnode_num = myindex;
-  //  res->resok->src_coords<>; uh, like yeah
+  vec<float> coords = locations->get_coords (myID);
+  rpc_res->resok->src_coords.setsize (coords.size ());
+  for (unsigned int i = 0; i < coords.size (); i++)
+    rpc_res->resok->src_coords[i] = (int)(1000.0*coords[i]);
   rpc_res->resok->progno = prog.progno;
   rpc_res->resok->procno = procno;
   rpc_res->resok->results.setsize (res_len);
@@ -332,6 +334,16 @@ vnode_impl::doRPC (const chordID &ID, const rpc_program &prog, int procno,
   }
 }
 
+
+void
+print_vector (str a, vec<float> v)
+{
+  warn << a << ": ";
+  for (unsigned int i = 0; i < v.size (); i++)
+    warnx << (int)(v[i]*1000.0) << " ";
+  warnx << "\n";
+}
+
 void
 vnode_impl::doRPC_cb (const rpc_program prog, int procno,
 		      void *out, aclnt_cb cb, 
@@ -342,9 +354,17 @@ vnode_impl::doRPC_cb (const rpc_program prog, int procno,
   } else if (res->status != DORPC_OK) {
     cb (RPC_CANTRECV);
   } else {
-    //process the response header
+    
+    float distance = locations->get_a_lat (res->resok->src_id);
+    vec<float> u_coords;
+    for (unsigned int i = 0; i < res->resok->src_coords.size (); i++) {
+      float c = ((float)res->resok->src_coords[i])/1000.0;
+      u_coords.push_back (c);
+    }
 
-    //locations->update_coords (res->resok.src_id ...)
+    update_coords (res->resok->src_id, 
+		   u_coords,
+		   distance);
     
     //unmarshall the result and copy to out
     xdrmem x ((char *)res->resok->results.base (), 
@@ -359,11 +379,136 @@ vnode_impl::doRPC_cb (const rpc_program prog, int procno,
   }
 }
 
+float
+vnode_impl::distance_f (vec<float> a, vec<float> b)
+{
+  float f = 0.0;
+  for (unsigned int i = 0; i < a.size (); i++)
+    f += (a[i] - b[i])*(a[i] - b[i]);
+
+  return sqrtf (f);
+}
+
+vec<float>
+vnode_impl::vector_add (vec<float> a, vec<float> b)
+{
+  vec<float> ret;
+  for (unsigned int i = 0; i < a.size (); i++)
+    ret.push_back (a[i] +  b[i]);
+  return ret;
+}
+
+vec<float>
+vnode_impl::vector_sub (vec<float> a, vec<float> b)
+{
+  vec<float> ret;
+  for (unsigned int i = 0; i < a.size (); i++)
+    ret.push_back (a[i] - b[i]);
+  return ret;
+}
+
+float
+vnode_impl::norm (vec<float> a)
+{
+  float ret = 0.0;
+  for (unsigned int i = 0; i < a.size (); i++)
+    ret += a[i]*a[i];
+  return ret;
+}
+
+vec<float>
+vnode_impl::scalar_mult (vec<float> v, float s)
+{
+  vec<float> ret;
+  for (unsigned int i = 0; i < v.size (); i++)
+    ret.push_back (v[i]*s);
+  return ret;
+}
+
+#define MAXDIM 10
+#define DT 0.01
+void
+vnode_impl::update_coords (chordID u, vec<float> uc, float ud)
+{
+
+  //  warn << myID << " --- starting update -----\n";
+  //update the node's coords in the locatoin table
+  locations->set_coords (u, uc);
+  vec<float> coords = locations->get_coords (myID);
+
+  //figure out the force on us by looking at all of the springs
+  //in the location table
+  vec<float> f;
+  ptr<location> l = locations->first_loc ();
+  bool found_meas = false;
+
+  //init f
+  f.push_back (0.0);
+  f.push_back (0.0);
+  f.push_back (0.0);
+
+  //  print_vector ("current coords ", coords);
+
+  while (l) {
+    if ((l->coords.size () > 0) && (l->n != myID)) {
+      //  warn << myID << " setting a spring to " << l->n << "\n";
+      // print_vector ("l->coords", l->coords);
+
+      float actual = l->distance;
+      float expect = distance_f (coords, l->coords);
+      //force magnitude: < 0 --> stretched
+      float grad = expect - actual;
+
+      //printf("actual %f, expect %f\n", actual, expect);
+      vec<float> v = vector_sub (l->coords, coords);
+      //print_vector ("v", v);
+
+      float len = norm (v);
+      float unit = 1.0/sqrtf(len);
+      
+      //scalar_mult(v, unit) is unit force vector
+      //f_p is scaled force vector for this spring
+      vec<float> f_p = scalar_mult(scalar_mult (v, unit), grad);
+      //print_vector ("f_p", f_p);
+
+      //add f_p into the true force vector
+      f = vector_add (f, f_p);
+
+      found_meas = true;
+    }
+    l = locations->next_loc(l->n);
+  }
+
+  //print_vector ("f", f);
+  if (!found_meas) {
+    warn << "no springs!\n";
+    return;
+  }
+
+  //run the simulation for a bit
+  float ftot = 0.0;
+  for (unsigned int k = 0; k < f.size (); k++)
+    ftot += fabs (f[k]);
+  
+  float t = DT;
+  while (ftot*t > 5.0) t /= 2.0;
+  vec<float> new_coords = vector_add (coords,scalar_mult(f, t));
+  
+  //print_vector("old", coords);
+  //print_vector("new", new_coords);
+
+  coords = new_coords;
+  locations->set_coords (myID, new_coords);
+
+  //warn << myID << " --- finished  update -----\n";
+}
+
 long
 vnode_impl::doRPC (const chord_node &n, const rpc_program &prog, int procno, 
 	      ptr<void> in, void *out, aclnt_cb cb) {
 
-  locations->insert (n.x, n.r.hostname, n.r.port);
+  //BAD LOC (ok)
+  locations->insert (n);
   return doRPC (n.x, prog, procno, in, out, cb);
 }
 

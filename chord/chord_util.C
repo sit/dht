@@ -29,9 +29,31 @@
 #include <assert.h>
 #include <chord.h>
 #include <chord_util.h>
+#include <transport_prot.h>
 
 #define MAX_INT 0x7fffffff
 
+vec<float>
+convert_coords (dorpc_arg *arg)
+{
+  vec<float> coords;
+  for (unsigned int i = 0; i < arg->src_coords.size (); i++)
+    coords.push_back ((float)arg->src_coords[i]/1000.0);
+  return coords;
+}
+
+void
+convert_coords (dorpc_res *res, vec<float> out)
+{
+
+  for (unsigned int i = 0; i < res->resok->src_coords.size (); i++) {
+    warn << "converting: " << res->resok->src_coords[i] << "\n";
+    float c = ((float)res->resok->src_coords[i])/1000.0;
+    printf ("c:  %f\n", c);
+    out.push_back (c);
+  }
+
+}
 
 bool
 in_vector (vec<chordID> vec, chordID N)
@@ -57,6 +79,16 @@ getusec ()
   timeval tv;
   gettimeofday (&tv, NULL);
   return tv.tv_sec * INT64(1000000) + tv.tv_usec;
+}
+
+float
+uniform_random_f (float max)
+{
+  float f;
+  int c = random ();
+  f = max*(((float)c)/((float)MAX_INT));
+  if (c > MAX_INT/2) f = -f;
+  return f;
 }
 
 u_int32_t

@@ -472,7 +472,7 @@ stp_manager::timeout (rpc_state *C)
   warn << "\tleft " << left << "\n";
 #endif
 
-  C->s = 0;
+  C->s = getusec ();
   C->rexmits++;
   warn << getusec () << " resent an RPC (" 
        << C->progno << "." << C->procno << ") destined for " 
@@ -699,6 +699,7 @@ stp_manager::setup_rexmit_timer (hostinfo *h, long *sec, long *nsec)
 void
 stp_manager::update_latency (ptr<location> l, u_int64_t lat, bool bf)
 {
+
   //do the gloal latencies
   rpcdelay += lat;
   nrpc++;

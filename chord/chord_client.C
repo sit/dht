@@ -49,14 +49,15 @@ chord::chord (str _wellknownhost, int _wellknownport,
   wellknown_node.r.port = _wellknownport ? _wellknownport : myport;
   wellknown_node.x = make_chordID (wellknown_node.r.hostname,
 				   wellknown_node.r.port);
-
+  
   warnx << "chord: running on " << myname << ":" << myport << "\n";
 
   nrcv = New refcounted<u_int32_t>;
   *nrcv = 0;
   locations = New refcounted<locationtable> (nrcv, max_cache);
 
-  bool ok = locations->insert (wellknown_node);
+  //BAD LOC (ok)
+  bool ok = locations->insert (wellknown_node.x, wellknown_node.r);
   if (!ok) {
     warn << "Well known host failed to verify! Bailing.\n";
     exit (0);
@@ -140,6 +141,7 @@ chord::newvnode (cbjoin_t cb, ptr<fingerlike> fingers, ptr<route_factory> f)
   warn << "creating new vnode: " << newID << "\n";
   if (newID != wellknown_node.x) {
     // It's not yet strictly speaking useful to other nodes yet.
+    ///BAD LOC (ok)
     bool ok = locations->insert (newID, myname, myport);
     assert (ok);
   }
@@ -233,16 +235,28 @@ chord::handleProgram (const rpc_program &prog) {
   }
 }
 
+
 void
 chord::dispatch (ptr<asrv> s, svccb *sbp)
 {
-if (!sbp) {
+  if (!sbp) {
     s->setcb (NULL);
     return;
-}
+  }
   (*nrcv)++;
-
-  //autocache here?
+  
+  //autocache nodes
+  dorpc_arg *arg = sbp->template getarg<dorpc_arg> ();
+  if (arg && !locations->cached (arg->src_id)) {
+    const sockaddr *sa = sbp->getsa ();
+    net_address netaddr;
+    netaddr.port = ((sockaddr_in *)sa)->sin_port;
+    str addrstr (inet_ntoa (((sockaddr_in *)sa)->sin_addr));
+    netaddr.hostname = addrstr;
+    warn << "autocaching " << addrstr << ":" << netaddr.port << " in ::dispatch\n";
+    vec<float> coords = convert_coords (arg);
+    locations->insert (arg->src_id, netaddr.hostname, netaddr.port, coords);
+  }
 
   switch (sbp->proc ()) {
   case TRANSPORTPROC_NULL:
@@ -261,8 +275,6 @@ if (!sbp) {
 	sbp->replyref (chordstat (CHORD_UNKNOWNNODE));
 	return;
       }
-      
-      dorpc_arg *arg = sbp->template getarg<dorpc_arg> ();
       
       //find the program
       rpc_program *prog;

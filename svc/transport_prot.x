@@ -10,7 +10,7 @@ struct dorpc_arg {
   chordID dest_id;
   chordID src_id;
   int32_t src_vnode_num;
-  /*  int32_t src_coords<>; */
+  int32_t src_coords<>;
   int32_t progno;
   int32_t procno;
   opaque  args<>;
@@ -19,7 +19,7 @@ struct dorpc_arg {
 struct dorpc_successres {
   chordID src_id;
   int32_t src_vnode_num;
-  /*  int32_t src_coords<>; */
+  int32_t src_coords<>;
   int32_t progno;
   int32_t procno;
   opaque  results<>;

@@ -65,7 +65,6 @@ private:
   getchunk (u_int start, u_int len, int cookie, gotchunkcb_t cb)
   {
     ptr<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg>;
-    arg->v     = sourceID;
     arg->key   = blockID;
     arg->start = start;
     arg->len   = len;

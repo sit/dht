@@ -62,6 +62,9 @@ static bool simulated_input = false;
 static GdkColor highlight_color;
 static char *highlight = "cyan4"; // consistent with old presentations
 
+static int zoom = 50;
+static bool ggeo = false;
+
 struct color_pair {
   GdkColor c;
   unsigned long lat;
@@ -71,6 +74,8 @@ vec<color_pair> lat_map;
 
 struct f_node {
   chordID ID;
+  vec<float> coords;
+
   str host;
   unsigned short port;
   chord_nodelistextres *fingers;
@@ -158,6 +163,9 @@ void lookup_complete_cb (chordID n, chord_nodelistres *res, clnt_stat err);
 void quit_cb (GtkWidget *widget, gpointer data);
 void redraw_cb (GtkWidget *widget, gpointer data);
 void update_cb (GtkWidget *widget, gpointer data);
+void zoom_in_cb (GtkWidget *widget, gpointer data);
+void zoom_out_cb (GtkWidget *widget, gpointer data);
+void geo_cb (GtkWidget *widget, gpointer data);
 void redraw();
 void draw_ring ();
 void ID_to_xy (chordID ID, int *x, int *y);
@@ -238,6 +246,11 @@ void
 doRPCcb (chordID ID, int procno, dorpc_res *res, void *out, aclnt_cb cb, clnt_stat err)
 {
   f_node *nu = nodes[ID];
+  
+  nu->coords.clear ();
+  for (unsigned int i = 0; i < res->resok->src_coords.size (); i++)
+    nu->coords.push_back (((float)res->resok->src_coords[i])/1000.0);
+
   if (!nu) return;
   // If we've already removed a node, then there's no reason to even
   // notify the cb of anything in this program.
@@ -535,7 +548,6 @@ update_toes (f_node *nu)
 {
   return;
   chord_gettoes_arg n;
-  n.v = nu->ID;
   n.level = glevel;
   chord_nodelistextres *res = New chord_nodelistextres ();
   doRPC (nu, CHORDPROC_GETTOES, &n, res,
@@ -583,9 +595,13 @@ initgraf ()
     handlers[i].widget = gtk_check_button_new_with_label (handlers[i].name);
   GtkWidget *hsep3 = gtk_hseparator_new ();
   lookup = gtk_button_new_with_label ("Visualize Lookup");
+
+  GtkWidget *in = gtk_button_new_with_label ("Zoom In");
+  GtkWidget *out = gtk_button_new_with_label ("Zoom Out");
   GtkWidget *refresh = gtk_button_new_with_label ("Refresh All");
   GtkWidget *quit = gtk_button_new_with_label ("Quit");
   GtkWidget *sep = gtk_vseparator_new ();
+  GtkWidget *geo = gtk_button_new_with_label ("Geo. View");
 
   //organize things into boxes
   GtkWidget *vbox = gtk_vbox_new (FALSE, 0);
@@ -602,6 +618,9 @@ initgraf ()
 
   gtk_box_pack_end (GTK_BOX (vbox), quit, FALSE, FALSE, 0);
   gtk_box_pack_end (GTK_BOX (vbox), refresh, FALSE, FALSE, 0);
+  gtk_box_pack_end (GTK_BOX (vbox), geo, FALSE, FALSE, 0);
+  gtk_box_pack_end (GTK_BOX (vbox), in, FALSE, FALSE, 0);
+  gtk_box_pack_end (GTK_BOX (vbox), out, FALSE, FALSE, 0);
 
   GtkWidget *hbox = gtk_hbox_new (FALSE, 0);
   gtk_box_pack_start (GTK_BOX (hbox), drawing_area, TRUE, FALSE, 0);
@@ -622,11 +641,20 @@ initgraf ()
   gtk_signal_connect_object (GTK_OBJECT (refresh), "clicked",
 			       GTK_SIGNAL_FUNC (update_cb),
 			       NULL);
+  gtk_signal_connect_object (GTK_OBJECT (in), "clicked",
+			       GTK_SIGNAL_FUNC (zoom_in_cb),
+			       NULL);
+  gtk_signal_connect_object (GTK_OBJECT (out), "clicked",
+			       GTK_SIGNAL_FUNC (zoom_out_cb),
+			       NULL);
   gtk_signal_connect_object (GTK_OBJECT (quit), "clicked",
 			       GTK_SIGNAL_FUNC (quit_cb),
 			       NULL);
   gtk_signal_connect_object (GTK_OBJECT (lookup), "clicked",
 			     GTK_SIGNAL_FUNC (lookup_cb),
+			     NULL);
+  gtk_signal_connect_object (GTK_OBJECT (geo), "clicked",
+			     GTK_SIGNAL_FUNC (geo_cb),
 			     NULL);
 
   for (size_t i = 0; i < NELEM (handlers); i++) 
@@ -663,6 +691,9 @@ initgraf ()
     gtk_widget_show (handlers[i].widget);
   gtk_widget_show (last_clicked);
   gtk_widget_show (lookup);
+  gtk_widget_show (in);
+  gtk_widget_show (out);
+  gtk_widget_show (geo);
   gtk_widget_show (refresh);
   gtk_widget_show (quit);
   gtk_widget_show (sep);
@@ -681,6 +712,27 @@ initgraf ()
   if (!gdk_color_parse ("green", &search_color) ||
       !gdk_colormap_alloc_color (cmap, &search_color, FALSE, TRUE))
     fatal << "Couldn't allocate search color maroon\n";
+}
+
+void
+geo_cb (GtkWidget *widget, gpointer data)
+{
+  ggeo = !ggeo;
+  redraw ();
+}
+
+void
+zoom_in_cb (GtkWidget *widget, gpointer data)
+{
+  zoom /= 2;
+  redraw ();
+}
+
+void
+zoom_out_cb (GtkWidget *widget, gpointer data)
+{
+  zoom *= 2;
+  redraw ();
 }
 
 void
@@ -732,6 +784,7 @@ check_set_state (unsigned int newstate)
 void
 draw_toggle_cb (GtkWidget *widget, gpointer data)
 {
+
   // Set the state of all the selected nodes to match what the button says.
   bool active = false;
   unsigned int flag = 0;
@@ -801,7 +854,6 @@ lookup_cb (GtkWidget *widget, gpointer data)
   search_path.push_back (current_node);
 
   chord_findarg fa;
-  fa.v = current_node->ID;
   fa.x = search_key;
   chord_nodelistres *res = New chord_nodelistres ();
   doRPC (current_node, CHORDPROC_FINDROUTE, &fa, res,
@@ -1025,7 +1077,8 @@ static gint button_down_event (GtkWidget *widget,
   strncpy (IDs, ID.cstr (), 12);
   IDs[12] = 0;
   char hosts[1024];
-  strcpy (hosts, n->host.cstr());
+  hostent *he = gethostbyname (n->host.cstr ());
+  strcpy (hosts, he->h_name);
   strcat (hosts, ":");
   strcat (hosts, IDs);
 
@@ -1360,11 +1413,24 @@ void
 ID_to_xy (chordID ID, int *x, int *y)
 {
  
-  double angle = ID_to_angle (ID);
-  double radius = (WINX - 60)/2;
+  f_node *f = nodes[ID];
+  
+  if (ggeo) {
+    if (f->coords.size () > 0) {
+      *x = (int)(WINX/2 + f->coords[0]*WINX/zoom);
+      *y = (int)(WINY/2 + f->coords[1]*WINY/zoom);
+    } else {
+      *x = WINX/2;
+      *y = WINY/2;
+    }
+  } else {
 
-  *x = (int)(WINX/2 + sin (angle)*radius);
-  *y = (int)(WINY/2 - cos (angle)*radius);
+    double angle = ID_to_angle (ID);
+    double radius = (WINX - 60)/2;
+    
+    *x = (int)(WINX/2 + sin (angle)*radius);
+    *y = (int)(WINY/2 - cos (angle)*radius);
+  }
 }
 
 void

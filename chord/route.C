@@ -122,7 +122,6 @@ void
 route_chord::make_hop (chordID &n)
 {
   ptr<chord_testandfindarg> arg = New refcounted<chord_testandfindarg> ();
-  arg->v = n;
   arg->x = x;
   arg->failed_nodes.setsize (failed_nodes.size ());
   for (unsigned int i = 0; i < failed_nodes.size (); i++)
@@ -171,27 +170,23 @@ void
 route_chord::make_hop_cb (ptr<bool> del,
 			  chord_testandfindres *res, clnt_stat err)
 {
-  //  warn << v->my_ID () << "; in make_hop_cb for " << x << "\n";
   if (*del) return;
-  //  warn << v->my_ID () << "; did a hop to " << last_node () << "\n";
   if (err) {
     //back up
     chordID last_node_tried = pop_back ();
     if (search_path.size () == 0) search_path.push_back (v->my_ID ());
     on_failure (last_node_tried);
   } else if (res->status == CHORD_STOP) {
-    //    warn << v->my_ID () << "; got STOP\n";
     r = CHORD_OK;
     cb (done = true);
   } else if (last_hop) {
-    //    warn << v->my_ID () << "; last_hop is true\n";
     //talked to the successor
     r = CHORD_OK;
     cb (done = true);
   } else if (res->status == CHORD_INRANGE) { 
-    //    warn << v->my_ID () << "; in range, succ is " << res->inrange->n.x << "\n";
     // found the successor
-    bool ok = v->locations->insert (res->inrange->n.x, res->inrange->n.r);
+    //BAD LOC (ok)
+    bool ok = v->locations->insert (res->inrange->n);
     if (!ok) {
       warnx << v->my_ID () << ": make_hop_cb: inrange node ("
 	    << res->inrange->n.x << "@" << res->inrange->n.r.hostname
@@ -203,7 +198,6 @@ route_chord::make_hop_cb (ptr<bool> del,
     if (stop) done = true; // XXX still needed??
     cb (done);
   } else if (res->status == CHORD_NOTINRANGE) {
-    //    warn << v->my_ID () << "; not in range, suggestion is " << res->notinrange->n.x << "\n";
     // haven't found the successor yet
     chordID last = search_path.back ();
     if (last == res->notinrange->n.x) {   
@@ -226,7 +220,8 @@ route_chord::make_hop_cb (ptr<bool> del,
 	warnx << "XXXXXXXXXXXXXXXXXXX WRONG WAY XXXXXXXXXXXXX\n";
       }
       
-      bool ok = v->locations->insert (res->notinrange->n.x, res->notinrange->n.r);
+      //BAD LOC (ok)
+      bool ok = v->locations->insert (res->notinrange->n);
       if (!ok) {
 	warnx << v->my_ID () << ": make_hop_cb: notinrange node ("
 	      << res->inrange->n.x << "@" << res->inrange->n.r.hostname
@@ -473,7 +468,8 @@ route_debruijn::make_hop_cb (ptr<bool> del, chord_debruijnres *res,
     cb (done = true);
   } else if (res->status == CHORD_INRANGE) { 
     // found the successor
-    bool ok = v->locations->insert (res->inres->node.x, res->inres->node.r);
+    //BAD LOC (ok)
+    bool ok = v->locations->insert (res->inres->node);
     if (!ok) {
       warnx << v->my_ID () << ": debruijn::make_hop_cb: inrange node ("
 	    << res->inres->node.x << "@" << res->inres->node.r.hostname
@@ -491,7 +487,8 @@ route_debruijn::make_hop_cb (ptr<bool> del, chord_debruijnres *res,
     cb (done);
   } else if (res->status == CHORD_NOTINRANGE) {
     // haven't found the successor yet
-    bool ok = v->locations->insert (res->noderes->node.x, res->noderes->node.r);
+    //BAD LOC (ok)
+    bool ok = v->locations->insert (res->noderes->node);
     if (!ok) {
       warnx << v->my_ID () << ": debruijn::make_hop_cb: inrange node ("
 	    << res->noderes->node.x << "@" << res->noderes->node.r.hostname
