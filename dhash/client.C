@@ -415,22 +415,49 @@ dhashcli::retrieve_fetch_cb (blockID blockID, u_int i,
 }
 
 void
-dhashcli::retrieve_from_cache (blockID blockID, cb_ret cb)
+dhashcli::retrieve_from_cache (blockID n, cb_ret cb,
+                               int options, ptr<chordID> guess)
 {
   chord_node s;
   clntnode->my_location ()->fill_node (s);
-  dhash_download::execute (clntnode, s, blockID, NULL, 0, 0, 0,
-                           wrap (this, &dhashcli::retrieve_from_cache_cb, cb));
+  dhash_download::execute 
+    (clntnode, s, n, NULL, 0, 0, 0,
+     wrap (this, &dhashcli::retrieve_from_cache_cb, n, cb, options, guess));
 }
 
 void
-dhashcli::retrieve_from_cache_cb (cb_ret cb, ptr<dhash_block> block)
+dhashcli::retrieve_and_cache_cb (cb_ret cb, ptr<dhash_block> block, route path,
+                                 dhash_stat err, chordID id, bool present)
+{
+  cb (DHASH_OK, block, path);
+}
+
+void
+dhashcli::retrieve_and_cache (cb_ret cb, dhash_stat stat, 
+                              ptr<dhash_block> block, route path)
+{
+  if (!block)
+    cb (stat, block, path);
+  else
+    dhash_store::execute (clntnode, clntnode->my_location (),
+                          blockID (block->ID, block->ctype, DHASH_BLOCK),
+		          dh, block,
+		          wrap (this, &dhashcli::retrieve_and_cache_cb,
+			        cb, block, path),
+			  DHASH_CACHE);
+}
+
+void
+dhashcli::retrieve_from_cache_cb (blockID n, cb_ret cb,
+                                  int options, ptr<chordID> guess,
+				  ptr<dhash_block> block)
 {
   vec<ptr<location> > ret;
   if (block)
     cb (DHASH_OK, block, ret);
   else
-    cb (DHASH_NOENT, block, ret);
+    retrieve (n, wrap (this, &dhashcli::retrieve_and_cache, cb),
+	      options, guess);
 }
 
 void

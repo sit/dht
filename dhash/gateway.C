@@ -99,21 +99,22 @@ dhashgateway::dispatch (svccb *sbp)
   case DHASHPROC_RETRIEVE:
     {
       dhash_retrieve_arg *arg = sbp->template getarg<dhash_retrieve_arg> ();
+        
+      ptr<chordID> guess = NULL;
+      if (arg->options & DHASHCLIENT_GUESS_SUPPLIED)
+	guess = New refcounted<chordID> (arg->guess);
 
       if (arg->options & DHASHCLIENT_USE_CACHE)
         dhcli->retrieve_from_cache
 	  (blockID (arg->blockID, arg->ctype, DHASH_BLOCK),
-	   wrap (this, &dhashgateway::retrieve_cb, sbp));
-      else {
-        ptr<chordID> guess = NULL;
-        if (arg->options & DHASHCLIENT_GUESS_SUPPLIED) {
-	  guess = New refcounted<chordID> (arg->guess);
-        }
+	   wrap (this, &dhashgateway::retrieve_cb, sbp),
+	   arg->options, guess);
 
-        dhcli->retrieve (blockID(arg->blockID, arg->ctype, DHASH_BLOCK),
-		         wrap (this, &dhashgateway::retrieve_cb, sbp),
-		         arg->options, guess);
-      }
+      else
+        dhcli->retrieve
+	  (blockID (arg->blockID, arg->ctype, DHASH_BLOCK),
+	   wrap (this, &dhashgateway::retrieve_cb, sbp),
+	   arg->options, guess);
     }
     break;
     

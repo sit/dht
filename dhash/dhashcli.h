@@ -93,7 +93,13 @@ private:
 			   vec<chord_node> succs, route r);
   void retrieve_fetch_cb (blockID blockID, u_int i,
 			  ptr<dhash_block> block);
-  void retrieve_from_cache_cb (cb_ret cb, ptr<dhash_block> block);
+  void retrieve_from_cache_cb (blockID bid, cb_ret cb,
+                               int options, ptr<chordID> guess,
+                               ptr<dhash_block> block);
+  void retrieve_and_cache (cb_ret cb, dhash_stat stat, 
+                           ptr<dhash_block> block, route path);
+  void retrieve_and_cache_cb (cb_ret cb, ptr<dhash_block> block, route path,
+                              dhash_stat err, chordID id, bool present);
 
   void insert_succlist_cb (ref<dhash_block> block, cbinsert_path_t cb,
 			   chordID guess,
@@ -109,13 +115,15 @@ private:
 	    bool do_cache, int ss_mode = 1);
 
 
-  void retrieve_from_cache (blockID blockID, cb_ret cb);
-
-  void insert_to_cache (ref<dhash_block> block, cbinsert_path_t cb);
+  void retrieve_from_cache (blockID blockID, cb_ret cb,
+                            int options = 0,
+			    ptr<chordID> guess = NULL);
 
   void retrieve (blockID blockID, cb_ret cb, 
 		 int options = 0, 
 		 ptr<chordID> guess = NULL);
+
+  void insert_to_cache (ref<dhash_block> block, cbinsert_path_t cb);
 
   void insert (ref<dhash_block> block, cbinsert_path_t cb, 
 	       int options = 0, 
