@@ -1,5 +1,6 @@
 #include "p2pevent.h"
 #include "node.h"
+#include "args.h"
 #include "protocol.h"
 #include "network.h"
 #include "parse.h"
@@ -37,7 +38,7 @@ P2PEvent::P2PEvent(vector<string> *v) : Event(v)
   this->event = (Protocol::EventID) atoi(proto_action[1].c_str());
 
   // create a map for the arguments
-  this->args = new Protocol::Args;
+  this->args = new Args;
   assert(this->args);
   for(unsigned int i=2; i<v->size(); i++) {
     vector<string> arg = split((*v)[i], "=");
@@ -56,7 +57,10 @@ P2PEvent::execute()
   // get node, protocol on that node, application interface for that protocol
   // and invoke the event
   Protocol *proto = node->getproto(protocol);
-  assert(proto);
+  if(!proto) {
+    cerr << "ERROR: protocol " << protocol << " not running on node " << node->ip() << endl;
+    threadexitsall(0);
+  }
   Channel *c = proto->appchan();
   assert(c);
 

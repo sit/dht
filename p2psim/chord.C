@@ -92,7 +92,7 @@ Chord::find_successor_handler(find_successor_args *args,
 void
 Chord::join(Args *args)
 {
-  IPAddress wkn = (IPAddress) atoi(((*args)["wellknown"]).c_str());
+  IPAddress wkn = (IPAddress) args->uget("wellknown");
   assert(wkn);
   cout << s() + "::join" << endl;
   find_successor_args fsa;

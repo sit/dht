@@ -199,11 +199,11 @@ Protocol::dispatch(P2PEvent *e)
       break;
 
     case INSERT:
-      insert_doc(e->args);
+      insert(e->args);
       break;
 
     case LOOKUP:
-      lookup_doc(e->args);
+      lookup(e->args);
       break;
 
     default:

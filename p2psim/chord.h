@@ -24,8 +24,7 @@ public:
   virtual void leave(Args*) {};
   virtual void crash(Args*) {};
   virtual void lookup(Args*) {};
-  virtual void insert_doc(Args*) {};
-  virtual void lookup_doc(Args*) {};
+  virtual void insert(Args*) {};
 
   // Chord RPC argument/return types.
   struct find_successor_args {

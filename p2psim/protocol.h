@@ -3,6 +3,7 @@
 
 #include "threaded.h"
 #include "p2psim.h"
+#include "args.h"
 #include <string>
 #include <map>
 using namespace std;
@@ -14,7 +15,6 @@ class Protocol;
 class Protocol : public Threaded {
 public:
   typedef void (Protocol::*member_f)(void*, void *);
-  typedef map<string,string> Args;
   typedef enum {
     JOIN = 0,
     LEAVE,
@@ -31,8 +31,8 @@ public:
   virtual void join(Args*) = 0;
   virtual void leave(Args*) = 0;
   virtual void crash(Args*) = 0;
-  virtual void insert_doc(Args*) = 0;
-  virtual void lookup_doc(Args*) = 0;
+  virtual void insert(Args*) = 0;
+  virtual void lookup(Args*) = 0;
 
 protected:
 #define doRPC(X, Y, A, R) (this->_doRPC((X), ((member_f)(&Y)), \
