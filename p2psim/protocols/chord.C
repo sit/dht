@@ -721,13 +721,15 @@ Chord::next_handler(next_args *args, next_ret *ret)
   ret->next.clear();
 
   if (succs.size() < 1) {
-    ret->done = false;
+    ret->lastnode = me;
+    ret->done = true;
     ret->correct = false;
   } else if (ConsistentHash::betweenrightincl(me.id, succs[0].id, args->key)) { 
     //XXX: need to take care of < m nodes situation in future
     uint max = args->m < succs.size()? args->m: succs.size();
     for (uint i = 0; i < max; i++) 
       ret->v.push_back(succs[i]);
+    ret->lastnode = me;
     ret->done = true;
     ret->correct = check_correctness(args->key,ret->v);
     if (!ret->correct) 

@@ -119,6 +119,7 @@ public:
     vector<IDMap> v;
     vector<IDMap> next;
     bool correct;
+    IDMap lastnode;
   };
 
   struct nextretinfo{

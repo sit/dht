@@ -131,7 +131,6 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
 #ifdef CHORD_DEBUG
   printf("%s ChordFingerPNS stabilize BEFORE ring sz %u succ %d restart %u\n", ts(), loctable->size(), scs.size(), restart?1:0);
 #endif
-    /*
   uint dead_finger = 0;
   uint missing_finger = 0;
   uint real_missing_finger = 0;
@@ -140,23 +139,21 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
   uint new_deleted_finger = 0;
   uint total_finger= 0;
   uint valid_finger = 0;
+  uint skipped_finger = 0;
   vector<IDMap> testf;
   testf.clear();
-
-  if (me.ip == 108) {
-    printf("before ");
-    loctable->stat();
-  }
-  */
 
   if (scs.size() == 0) return;
 
   vector<IDMap> v;
+  vector<IDMap> newsucc;
   CHID finger;
-  Chord::IDMap currf, prevf, prevfpred;
+  Chord::IDMap currf, prevf, prevfpred, deadf, min_f, tmp;
   Time currf_ts;
-  Time t = now();
   bool ok;
+  uint min_l;
+  uint max_l;
+  Topology *t = Network::Instance()->gettopology();
 
   CHID lap = (CHID) -1;
 
@@ -170,15 +167,19 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
       if ((ConsistentHash::betweenrightincl(finger,finger+lap,scs[scs.size()-1].id)) || (!node()->alive()))
 	goto PNS_DONE;
       currf = loctable->succ(finger, &currf_ts);
-//      testf.push_back(currf);
-   //   total_finger++;
-      if (currf.ip == me.ip) continue;
+      testf.push_back(currf);//testing
+      total_finger++;//testing
+      //
+      assert(currf.ip != me.ip);
 
       if ((!restart) && (currf.ip)) { 
 
 	if (ConsistentHash::between(finger, finger + lap, currf.id)) {
 	  //if lookup has updated the timestamp of this finger, ignore it
-	  if ((t - currf_ts) < _stab_pns_timer) continue;
+	  if ((now() - currf_ts) < _stab_pns_timer) {
+	    skipped_finger++; //testing
+	    continue;
+	  }
 	  assert(currf.ip != prevf.ip);
 	  prevf = currf;
 	  prevfpred.ip = 0;
@@ -192,17 +193,19 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
 	  if(ok) {
 	    record_stat(0, TYPE_PNS_UP);
 	    loctable->add_node(currf);//update timestamp
-//	    valid_finger++;
+	    valid_finger++;//testing
 	    continue;
 	  }else{
 	    loctable->del_node(currf);
-//	    dead_finger++;
+	    dead_finger++;//testing
+	    deadf = currf;
 	  }
-	} else {
-//	  missing_finger++;
-	  if ((currf.ip == prevf.ip) && (prevfpred.ip) && (!ConsistentHash::between(finger, currf.id, prevfpred.id))) 
-	      continue;
-	  else if ((currf.ip != prevf.ip) || (!prevfpred.ip)) {
+	} else if (!restart) {
+	  missing_finger++;//testing
+	  if ((currf.ip == prevf.ip) && (prevfpred.ip) && (!ConsistentHash::between(finger, currf.id, prevfpred.id))) {
+	    skipped_finger++;
+	    continue;
+	  } else if ((currf.ip != prevf.ip) || (!prevfpred.ip)) {
 	    prevf = currf;
 	    prevfpred.ip = 0;
 	    //get predecessor, coz new finger within the candidate range might show up
@@ -221,14 +224,15 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
 	      prevfpred = gpr.n;
 	      if (!ConsistentHash::between(finger, currf.id, gpr.n.id)) 
 		continue;
-//	      else
-//		real_missing_finger++;
+	      else
+		real_missing_finger++; //testing
 	    }else{
 	      loctable->del_node(currf);
-//	      dead_finger++;
+	      deadf = currf;
+	      dead_finger++; //testing
 	    }
 	  }else{
-//	    real_missing_finger++;
+	    real_missing_finger++; //testing
 	  }
 	}
       }
@@ -241,32 +245,45 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
       if (!node()->alive()) return;
 
       if (v.size() > 0) {
-//	new_finger++;
-	Topology *t = Network::Instance()->gettopology();
-	uint min_l = 1000000;
-	IDMap min_f = me;
-	for (uint k = 0; k < v.size(); k++) {
-	  if (ConsistentHash::between(finger,finger+lap,v[k].id)
-	    && t->latency(me.ip, v[k].ip) < min_l) {
-	    min_f = v[k];
-	    min_l = t->latency(me.ip, v[k].ip);
-	  }
-	}
-	if (min_f.ip!=me.ip) {
-	  vector<IDMap> newsucc = loctable->succs(me.id+1, _nsucc);
-	  if (newsucc.size() && (!ConsistentHash::betweenrightincl(finger,finger+lap,newsucc[newsucc.size()-1].id))) {
-//	    new_added_finger++;
-	    loctable->add_node(min_f);
-	    while (1) {
-	      IDMap tmp = loctable->succ(finger);
-	      if (tmp.ip == min_f.ip) break;
-	      if (ConsistentHash::between(finger,finger+lap,tmp.id)) {
-		loctable->del_node(tmp);
-//	        new_deleted_finger++;
-	      }
+	new_finger++; //testing
+	max_l = 0;
+	while (1) {
+	  min_l = 1000000;
+	  min_f = me;
+	  for (uint k = 0; k < v.size(); k++) {
+	    if (ConsistentHash::between(finger,finger+lap,v[k].id)
+	      && t->latency(me.ip, v[k].ip) < min_l && deadf.ip != v[k].ip && t->latency(me.ip,v[k].ip) > max_l) {
+	      min_f = v[k];
+	      min_l = t->latency(me.ip, v[k].ip);
 	    }
 	  }
-	  
+	  newsucc = loctable->succs(me.id+1, _nsucc);
+	  if ((min_f.ip!=me.ip) && newsucc.size() && (!ConsistentHash::betweenrightincl(finger,finger+lap,newsucc[newsucc.size()-1].id))) {
+	    new_added_finger++; //testing
+	    assert(ConsistentHash::between(finger,finger+lap,min_f.id));
+	    //ping this node, coz it might have been dead
+	    record_stat(0,TYPE_FINGER_LOOKUP); 
+	    ok = doRPC(min_f.ip, &Chord::null_handler, (void *)NULL, (void *)NULL);
+	    if (ok) {
+	      record_stat(0,TYPE_FINGER_LOOKUP); 
+	      loctable->add_node(min_f);
+	      tmp = loctable->succ(finger);
+	      while (tmp.ip != min_f.ip) {
+		if (ConsistentHash::between(finger,finger+lap,tmp.id)) {
+		  loctable->del_node(tmp);
+		  new_deleted_finger++; //testing
+		}else{
+		  assert(0);
+		}
+		tmp = loctable->succ(finger);
+	      }
+	      break;
+	    }else{
+	      max_l = min_l;
+	    }
+	  }else{
+	    break;
+	  }
 	}
       }
     }
@@ -274,20 +291,18 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
 PNS_DONE:
 #ifdef CHORD_DEBUG
   printf("%s ChordFingerPNS stabilize AFTER ring sz %u restart %d\n", ts(), loctable->size(), restart?1:0);
-#endif
-  return;
-  /*
-  if (me.ip == 108) {
+  if (me.ip == 1) {
     printf("loctable stat tested fingers: ");
     for (uint i = 0; i < testf.size(); i++) {
       printf("(%u,%qx) ", testf[i].ip, testf[i].id);
     }
     printf("\n");
-    printf("after loctable stat total_finger %d valid_finger %d dead_finger %d missing_finger %d real_missing_finger %d new_finger %d new_added_finger %d new_deleted_finger %d\n",
-	total_finger, valid_finger, dead_finger, missing_finger, real_missing_finger, new_finger, new_added_finger, new_deleted_finger);
-    loctable->stat();
   }
-  */
+
+  printf("%s after loctable stat total_finger %d valid_finger %d skipped_finger %d dead_finger %d missing_finger %d real_missing_finger %d new_finger %d new_added_finger %d new_deleted_finger %d\n", 
+      ts(), total_finger, valid_finger, skipped_finger, dead_finger, missing_finger, real_missing_finger, new_finger, new_added_finger, new_deleted_finger);
+#endif
+  return;
 }
 
 /*
