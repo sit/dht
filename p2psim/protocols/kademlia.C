@@ -353,7 +353,8 @@ Kademlia::join(Args *args)
 
   // I am the well-known node
   if(wkn == ip()) {
-    delaycb(stabilize_timer, &Kademlia::reschedule_stabilizer, (void *) 0);
+    if(stabilize_timer)
+      delaycb(stabilize_timer, &Kademlia::reschedule_stabilizer, (void *) 0);
     _joined = true;
     return;
   }
@@ -430,7 +431,9 @@ join_restart:
   }
 
   _joined = true;
-  delaycb(stabilize_timer, &Kademlia::reschedule_stabilizer, (void *) 0);
+
+  if(stabilize_timer)
+    delaycb(stabilize_timer, &Kademlia::reschedule_stabilizer, (void *) 0);
 }
 
 // }}}
@@ -1015,7 +1018,9 @@ Kademlia::reschedule_stabilizer(void *x)
     return;
   }
   stabilize();
-  delaycb(stabilize_timer, &Kademlia::reschedule_stabilizer, (void *) 0);
+
+  if(stabilize_timer)
+    delaycb(stabilize_timer, &Kademlia::reschedule_stabilizer, (void *) 0);
 }
 
 // }}}
