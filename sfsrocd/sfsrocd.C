@@ -1,4 +1,4 @@
-/* $Id: sfsrocd.C,v 1.1 2001/01/16 22:00:08 fdabek Exp $ */
+/* $Id: sfsrocd.C,v 1.2 2001/03/23 06:21:34 fdabek Exp $ */
 
 /*
  *
@@ -27,6 +27,7 @@
 const bool sfsrocd_noverify = (getenv ("SFSROCD_NOVERIFY"));
 const bool sfsrocd_nocache = (getenv ("SFSROCD_NOCACHE"));
 const bool sfsrocd_cache_stat = (getenv ("SFSROCD_CACHE_STAT"));
+const bool sfsrocd_prefetch = (getenv ("SFSROCD_PREFETCH"));
 #endif /* !MAINTAINER */
 
 void

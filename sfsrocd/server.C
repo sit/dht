@@ -1,4 +1,4 @@
-/* $Id: server.C,v 1.11 2001/03/23 05:40:27 fdabek Exp $ */
+/* $Id: server.C,v 1.12 2001/03/23 06:21:34 fdabek Exp $ */
 
 /*
  *
@@ -344,9 +344,10 @@ server::read_file (const sfsro_inode *ip, nfscall *sbp,
     fh_lookup (i, ip, sbp, fh);
   }
 
-  if (prefetch_limit_blknr*SFSRO_BLKSIZE < ip->reg->size) 
-    for (size_t i = last_blknr; i < prefetch_limit_blknr; i++) 
-      fh_prefetch(i, ip, fh);
+  if (sfsrocd_prefetch)
+    if (prefetch_limit_blknr*SFSRO_BLKSIZE < ip->reg->size) 
+      for (size_t i = last_blknr; i < prefetch_limit_blknr; i++) 
+	fh_prefetch(i, ip, fh);
 }
 
 void 
@@ -1340,8 +1341,11 @@ server::prefetch_block_reply (time_t rqtime, ref<const sfs_hash> fh,
     while (p) {
       warn << hexdump(fh, 20) << "serviced from pre-fetched data\n";
       (p->cb) (data.data->base (), data.data->size ());
-      p = cb_list->next (p);
+      pfpstate *next = cb_list->next (p);
+      cb_list->remove (p);
+      p = next;
     }
+    pfpc.remove(*fh);
 
   }
 }

@@ -1,5 +1,5 @@
 // -*-c++-*-
-/* $Id: sfsrocd.h,v 1.5 2001/03/23 05:40:28 fdabek Exp $ */
+/* $Id: sfsrocd.h,v 1.6 2001/03/23 06:21:34 fdabek Exp $ */
 
 /*
  *
@@ -61,6 +61,7 @@ extern cache_stat cstat;
 extern const bool sfsrocd_noverify;
 extern const bool sfsrocd_nocache;
 extern const bool sfsrocd_cache_stat;
+extern const bool sfsrocd_prefetch;
 #else /* !MAINTAINER */
 enum { sfsrocd_noverify = 0, sfsrocd_nocache = 0, sfsrocd_cache_stat = 0 };
 #endif /* !MAINTAINER */
