@@ -4,13 +4,16 @@
 #include "protocol.h"
 #include "node.h"
 #include <map>
+#include <set>
 #include <iostream>
 using namespace std;
 
 extern unsigned kdebugcounter;
-class k_bucket;
+class k_bucket_tree;
 
+// {{{ Kademlia
 class Kademlia : public Protocol {
+// {{{ public
 public:
   typedef short NodeID;
   typedef unsigned Value;
@@ -29,7 +32,7 @@ public:
   static string printID(NodeID id);
   static NodeID distance(NodeID, NodeID);
 
-  bool stabilized(vector<NodeID>, k_bucket* = 0, unsigned = 0);
+  bool stabilized(vector<NodeID>);
   void dump();
   NodeID id () { return _id;}
 
@@ -39,12 +42,37 @@ public:
   static unsigned getbit(NodeID, unsigned);
   static unsigned k()   { return _k; }
 
+  pair<NodeID, IPAddress> do_lookup_wrapper(IPAddress, NodeID);
+
+  // public, because k_bucket needs it.
+  struct lookup_args {
+    NodeID id;
+    IPAddress ip;
+
+    NodeID key;
+  };
+
+  struct lookup_result {
+    NodeID id;      // answer to the lookup
+    IPAddress ip;   // answer to the lookup
+    NodeID rid;     // the guy who's replying
+  };
+// }}}
+// {{{ private
 private:
-  NodeID _id;
-  static unsigned _k;
+  static unsigned _k;           // k from kademlia paper
+  NodeID _id;                   // my id
+  k_bucket_tree *_tree;         // the root of our k-bucket tree
+  map<NodeID, Value> _values;   // key/value pairs
 
+  static NodeID _rightmasks[]; // for bitfucking
 
+  void reschedule_stabilizer(void*);
+  void stabilize();
+  // {{{ structs
+  //
   // join
+  //
   struct join_args {
     NodeID id;
     IPAddress ip;
@@ -55,23 +83,15 @@ private:
   void do_join(void *args, void *result);
 
 
+  //
   // lookup
-  struct lookup_args {
-    NodeID id;
-    IPAddress ip;
-
-    NodeID key;
-  };
-  struct lookup_result {
-    NodeID id;      // answer to the lookup
-    IPAddress ip;   // answer to the lookup
-    NodeID rid;     // the guy who's replying
-  };
-
+  //
   void do_lookup(void *args, void *result);
 
 
+  //
   // insert
+  //
   struct insert_args {
     NodeID id;
     IPAddress ip;
@@ -84,7 +104,9 @@ private:
   void do_insert(void *args, void *result);
 
 
+  //
   // transfer
+  //
   class fingers_t;
   struct transfer_args {
     NodeID id;
@@ -94,106 +116,77 @@ private:
     map<NodeID, Value> values;
   };
   void do_transfer(void *args, void *result);
-
-
-  k_bucket *_root;
-
-
-
-  /*
-  class bucket_t { public:
-    bucket_t(NodeID id) : _id(id) {};
-
-    void insert(NodeID id, IPAddress ip) {
-      if(_root.insert(id))
-        _id2ip[id] = ip;
-    }
-
-      *
-      _ft[i].id = id;
-      _ft[i].valid = true;
-      _ft[i].retries = 0;
-      KDEBUG(5) << "set " << i << endl;
-      KDEBUG(5) << "_id " << printbits(_id) << endl;
-      KDEBUG(5) << " id " << printbits(id) << endl;
-      KDEBUG(5) << " fp " << printbits(Kademlia::flipbitandmaskright(_id, i)) << endl;
-      KDEBUG(5) << " mr " << printbits(Kademlia::maskright(id, i)) << endl;
-      assert(Kademlia::flipbitandmaskright(_id, i) == Kademlia::maskright(id, i));
-      /
-
-    void unset(unsigned i) { _ft[i].valid = false; }
-    void dump(NodeID myid) {
-      for(unsigned i=0; i<Kademlia::idsize; i++) {
-        cout << i << "\t" << Kademlia::printbits(myid ^ (1<<i)) << "\t";
-        if(valid(i))
-          cout << Kademlia::printbits(get_id(i));
-        else
-          cout << "[invalid]";
-        cout << endl;
-      }
-    }
-
-
-    bool valid(unsigned i)          { return _ft[i].valid; }
-    unsigned retries(unsigned i)    { return _ft[i].retries; }
-    IPAddress get_ip(unsigned i)    { return _id2ip[_ft[i].id]; }
-    NodeID get_id(unsigned i)       { return _ft[i].id; }
-    IPAddress get_ipbyid(NodeID id) { return _id2ip[id]; }
-
-  private:
-    k_bucket _root;
-    map<NodeID, IPAddress> _id2ip;
-    NodeID _id;
-  } _buckets;
-  */
-
-  // this is what we're here for: being a NodeID -> value hashtable
-  map<NodeID, Value> _values;
-
-  void reschedule_stabilizer(void*);
-  void stabilize(k_bucket*, NodeID = 0);
-
-  void _dump(k_bucket*, string, unsigned);
-
-
-  static NodeID _rightmasks[];
+  // }}}
+// }}}
 };
 
-
-//
-//
-// K-BUCKETS
-//
-//
+// }}}
+// {{{ peer_t
 // one entry in k_bucket's _nodes vector
 class peer_t {
 public:
-  peer_t(Kademlia::NodeID xid, IPAddress xip, Time t) : retries(0), id(xid), ip(xip), lastts(t) {}
+  typedef Kademlia::NodeID NodeID;
+
+  peer_t(NodeID xid, IPAddress xip, Time t) : retries(0), id(xid), ip(xip), lastts(t) {}
   peer_t(const peer_t &p) : retries(0), id(p.id), ip(p.ip), lastts(p.lastts) {}
   unsigned retries;
-  Kademlia::NodeID id;
+  NodeID id;
   IPAddress ip;
   Time lastts;
 };
 
-
-// a k-bucket
+// }}}
+// {{{ k-bucket
 class k_bucket {
 public:
-  k_bucket(Kademlia::NodeID);
+  typedef Kademlia::NodeID NodeID;
+
+  k_bucket(Kademlia*);
   ~k_bucket();
 
-  vector<peer_t*> _nodes;
-  k_bucket* _child[2]; // subtree
+  peer_t *random_node();
 
-  unsigned insert(Kademlia::NodeID node, IPAddress ip, Kademlia::NodeID prefix = 0, unsigned depth = 0, k_bucket *root = 0);
-  void dump(k_bucket *, Kademlia::NodeID = 0);
+  pair<peer_t*, unsigned>
+    insert(NodeID, IPAddress, NodeID = 0, unsigned = 0, k_bucket* = 0);
+  bool stabilized(vector<NodeID>, string = "", unsigned = 0);
+  void stabilize(string = "", unsigned = 0);
+  void dump(string = "", unsigned = 0);
+  peer_t* get(NodeID, unsigned = 0);
 
 private:
+  k_bucket* _child[2];          // subtree
+  vector<peer_t*> _nodes;       // all nodes
   static unsigned _k;
-  Kademlia::NodeID _id;
+
+  Kademlia *_self;
+  NodeID _id; // so that KDEBUG() works. can be removed later.
 };
 
+
+// }}}
+// {{{ k_bucket_tree
+class k_bucket_tree {
+public:
+  typedef Kademlia::NodeID NodeID;
+
+  k_bucket_tree(Kademlia*);
+  ~k_bucket_tree();
+  unsigned insert(NodeID node, IPAddress ip);
+  bool stabilized(vector<NodeID>);
+  void stabilize();
+  void dump() { return _root->dump(); }
+  bool empty() { return _nodes.empty(); }
+  pair<NodeID, IPAddress> get(NodeID);
+
+private:
+  k_bucket *_root;
+  set<peer_t*> _nodes;
+
+  Kademlia *_self;
+  NodeID _id; // so that KDEBUG() does work
+};
+
+// }}}
 
 #define KDEBUG(x) DEBUG(x) << kdebugcounter++ << ". " << Kademlia::printbits(_id) << " "
 
