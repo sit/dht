@@ -65,10 +65,10 @@ n.processRequest() // called by a periodic mechanism
   if (p \in (r.pred, r.x))
     r.pred = p;
   s = finger.get_closest_succ(r.x);
-  if (p \in (r.x, r.succ))
+  if (s \in (r.x, r.succ))
     r.succ = s;
 
-  if (p < n <= n.successor)
+  if (p < r.x <= n.successor)
     r.done = True;
 
   r.sender = n;
