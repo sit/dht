@@ -48,7 +48,7 @@ ChordFingerPNS::init_state(vector<IDMap> ids)
 	//use a more efficient sampling technique
 	for (int j = 0; j < _samples; j++) {
 	  uint i = uint ((((double)random()/(double)RAND_MAX) * candidates));
-	  assert(i>= 0 && i < candidates);
+	  assert(i>= 0 && i < (uint) candidates);
 	  if (t->latency(me.ip, ids[(s_pos + i) % sz].ip) < min_l) {
 	    min_f = ids[(s_pos + i) % sz];
 	    min_l = t->latency(me.ip, ids[(s_pos + i)%sz].ip);
