@@ -30,10 +30,9 @@ static FILE *LOG = NULL;
 
 void
 warnt(char *msg) {
-  return;
 
   char *filename = getenv("LOG_FILE");
-  if (filename != NULL) 
+  if ( (!LOG) && (filename != NULL) )
     if (filename[0] == '-')
       LOG = stdout;
     else
@@ -43,7 +42,6 @@ warnt(char *msg) {
     str time = gettime(); 
     fprintf(LOG, "%s %s\n", time.cstr(), msg);
     fflush (LOG);
-    fclose (LOG);
   }
 }
 

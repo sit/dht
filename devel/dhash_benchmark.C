@@ -55,7 +55,7 @@ store_block(chordID key, void *data, unsigned int datasize)
     clnt_stat err = cp2p ()->scall(DHASHPROC_INSERT, i_arg, &res);
     if (err) warn << "RPC error: " << err << "\n";
     if (err) return -err;
-    if (res.status != DHASH_OK) return res.status;
+    //if (res.status != DHASH_OK) return res.status;
     written += n;
     delete i_arg;
   } while (!res.resok->done);
@@ -169,16 +169,18 @@ afetch_cb (dhash_res *res, chordID key, char *buf, int i, struct timeval start, 
   unsigned int off = res->resok->res.size ();
   if (off == res->resok->attr.size) finish (buf, read, start, i, res);
   while (off < res->resok->attr.size) {
-    ptr<dhash_fetch_arg> arg = New refcounted<dhash_fetch_arg> ();
+    ptr<dhash_transfer_arg> arg = New refcounted<dhash_transfer_arg> ();
 
-    arg->key = key;
-    arg->len = (off + MTU < res->resok->attr.size) ? MTU : 
+    arg->farg.key = key;
+    arg->farg.len = (off + MTU < res->resok->attr.size) ? MTU : 
       res->resok->attr.size - off;
-    arg->start = off;
+    arg->farg.start = off;
+    arg->source = res->resok->source;
     dhash_res *nres = New dhash_res();
     out_op++;
-    cp2p ()->call(DHASHPROC_LOOKUP, arg, nres, wrap(&afetch_cb2, nres, buf, read, i, start));
-    off += arg->len;
+    cp2p ()->call(DHASHPROC_TRANSFER, arg, nres, 
+		  wrap(&afetch_cb2, nres, buf, read, i, start));
+    off += arg->farg.len;
   };
   delete res;
 }
@@ -218,7 +220,7 @@ make_block(void *data, int size)
 void
 prepare_test_data(int num, int datasize) 
 {
-  IDs = new chordID[num];
+  IDs = New chordID[num];
   data = (void **)malloc(sizeof(void *)*num);
   for (int i = 0; i < num; i++) {
     data[i] = malloc(datasize);

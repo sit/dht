@@ -44,6 +44,11 @@ struct dhash_fetch_arg {
   int32 len;
 };
 
+struct dhash_transfer_arg {
+  dhash_fetch_arg farg;
+  chordID source;
+};
+
 struct dhash_pred {
   chord_node p;
 };
@@ -53,6 +58,7 @@ struct dhash_resok {
   int32 offset;
   dhash_blockattr attr;
   int32 hops;
+  chordID source;
 };
 
 struct dhash_getkeys_ok {
@@ -85,8 +91,10 @@ struct dhash_storeresok {
 union dhash_storeres switch (dhash_stat status) {
  case DHASH_RETRY:
    dhash_pred pred;
- default:
+ case DHASH_OK:
    dhash_storeresok resok;
+ default:
+   void;
 };
 
 struct dhash_fetchiter_continue_res {
@@ -98,6 +106,7 @@ struct dhash_fetchiter_complete_res {
   int32 offset;
   dhash_blockattr attr;
   int32 hops;
+  chordID source;
 };
 
 union dhash_fetchiter_res switch (dhash_stat status) {
@@ -123,8 +132,11 @@ program DHASHCLNT_PROGRAM {
 		dhash_res
 		DHASHPROC_LOOKUP (dhash_fetch_arg) = 2;
 
+		dhash_res
+		DHASHPROC_TRANSFER (dhash_transfer_arg) = 3;
+
 		dhash_storeres
-        	DHASHPROC_INSERT (dhash_insertarg) = 3;
+        	DHASHPROC_INSERT (dhash_insertarg) = 4;
 
 	} = 1;
 } = 344448;

@@ -73,6 +73,8 @@ dhash::dispatch (unsigned long procno,
 
   case DHASHPROC_FETCHITER:
     {
+      warnt ("DHASH: fetchiter_request");
+
       dhash_fetch_arg *farg = New dhash_fetch_arg ();
       if (!proc (x.xdrp (), farg)) {
 	warn << "DHASH: error unmarshalling arguments\n";
@@ -125,7 +127,7 @@ dhash::dispatch (unsigned long procno,
      
       if ((sarg->type == DHASH_STORE) && (!responsible (sarg->key))) {
 	warnt("DHASH: retry");
-	dhash_storeres *res = New dhash_storeres(DHASH_RETRY);
+	dhash_storeres *res = New dhash_storeres (DHASH_RETRY);
 	chordID pred = host_node->my_pred ();
 	res->pred->p.x = pred;
 	res->pred->p.r = host_node->chordnode->locations->getaddress (pred);
@@ -191,6 +193,7 @@ dhash::fetchiter_svc_cb (long xid, dhash_fetch_arg *arg,
   res->compl_res->res.setsize (n);
   res->compl_res->attr.size = val->len;
   res->compl_res->offset = arg->start;
+  res->compl_res->source = host_node->my_ID ();
 
   memcpy (res->compl_res->res.base (), 
 	  (char *)val->value + arg->start, 
@@ -244,14 +247,12 @@ dhash::storesvc_cb(long xid,
   
   warnt("DHASH: STORE_replying");
 
-  dhash_storeres *res = New dhash_storeres();
-  if (err == DHASH_STORE_PARTIAL) {
-    res->set_status (DHASH_OK);
+  dhash_storeres *res = New dhash_storeres (DHASH_OK);
+  if (err == DHASH_STORE_PARTIAL) 
     res->resok->done = false;
-  } else if (err == DHASH_OK) {
-    res->set_status (DHASH_OK);
+  else if (err == DHASH_OK) 
     res->resok->done = true;
-  } else
+  else
     res->set_status (err);
 
   dhash_reply (xid, DHASHPROC_STORE, res);
@@ -658,7 +659,7 @@ dhash::store_cb(store_status type, chordID id, cbstore cb, int stat)
   if (stat != 0) 
     (*cb)(DHASH_STOREERR);
   //  else if (type == DHASH_STORE)
-  //  replicate_key (id,  wrap (this, &dhash::store_repl_cb, cb));
+  //   replicate_key (id,  wrap (this, &dhash::store_repl_cb, cb));
   else	   
     (*cb)(DHASH_OK);
   

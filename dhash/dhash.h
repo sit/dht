@@ -82,7 +82,10 @@ class dhashclient {
 			   route path, chordstat err);
   void insert_store_cb(svccb *sbp,  dhash_storeres *res,
 		       ptr<dhash_insertarg> item,
+		       chordID source,
 		       clnt_stat err);
+
+  void transfer_cb (svccb *sbp, dhash_res *res, clnt_stat err);
 
   void cache_on_path (chordID key, route path);
   void send_block (chordID key, chordID to, store_status stat);
@@ -129,7 +132,7 @@ class dhash {
 
   void fetchiter_svc_cb (long xid, dhash_fetch_arg *farg,
 			 ptr<dbrec> val, dhash_stat stat);
-  
+
   void store (dhash_insertarg *arg, cbstore cb);
   void store_cb(store_status type, chordID id, cbstore cb, int stat);
   void store_repl_cb (cbstore cb, dhash_stat err);
