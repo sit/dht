@@ -161,6 +161,7 @@ class totalrecall_base (chord):
 		for i in livenodes:
 		    if b in i.cached_blocks:
 			fixer = i
+			break
 		# Send to these guys as soon as we can
 		for s in newnodes:
 		    nt = int (fixer.sendremote (t, isz) + 0.5)
