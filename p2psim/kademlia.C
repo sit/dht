@@ -19,6 +19,10 @@ Kademlia::~Kademlia()
 {
 }
 
+bool
+Kademlia::stabilized(vector<NodeID>)
+{
+}
 
 void
 Kademlia::join(Args *args)

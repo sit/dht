@@ -25,6 +25,10 @@ public:
   static string printbits(NodeID);
   static NodeID distance(NodeID, NodeID);
 
+  bool stabilized(vector<NodeID>);
+  void dump() {};
+  NodeID id () { return _id;}
+
 private:
   NodeID _id;
 
