@@ -35,9 +35,9 @@ class ChordFinger: public Chord {
     ~ChordFinger() {};
     string proto_name() { return "ChordFinger"; }
 
-    void stabilize();
+    virtual void stabilize();
     bool stabilized(vector<CHID> lid);
-    void reschedule_stabilizer(void *x);
+    virtual void reschedule_stabilizer(void *x);
     void dump();
     //void init_state(vector<IDMap> ids);
 

@@ -29,8 +29,9 @@
 #include "misc/vivaldi.h"
 #include "consistenthash.h"
 
-#define CHORD_SUCC_NUM 3  // default number of successors maintained
-#define PAD "000000000000000000000000"
+#define CHORD_DEBUG
+#define DNODE 137
+#define PKT_OVERHEAD 20
 
 class LocTable;
 
@@ -73,7 +74,7 @@ public:
   };
 
   struct get_successor_list_args {
-    unsigned int m; //number of successors wanted
+    uint m; //number of successors wanted
   };
   
   struct get_successor_list_ret {
@@ -96,7 +97,7 @@ public:
 
   struct next_args {
     CHID key;
-    int m;
+    uint m;
   };
   struct next_ret {
     bool done;
@@ -106,11 +107,12 @@ public:
 
   struct find_successors_args {
     CHID key;
-    int m;
+    uint m;
   };
 
   struct find_successors_ret {
     vector<IDMap> v;
+    IDMap last;
   };
 
   struct lookup_path {
@@ -141,6 +143,7 @@ public:
   void next_handler(next_args *, next_ret *);
   void find_successors_handler(find_successors_args *, 
                                find_successors_ret *);
+  virtual void my_next_recurs_handler(next_recurs_args *, next_recurs_ret *);
   void next_recurs_handler(next_recurs_args *, next_recurs_ret *);
 
   CHID id () { return me.id; }
@@ -153,16 +156,20 @@ public:
   virtual void stabilize();
   virtual void reschedule_stabilizer(void *);
 
+  bool inited() {return _inited;};
+
 protected:
   //chord parameters
   uint _nsucc;
   uint _allfrag;
   uint _vivaldi_dim;
   uint _timeout;
+  bool _stab_running;
   uint _stabtimer;
+  uint _stab_outstanding;
   uint _frag;
   int _asap;
-  bool _stab_running;
+  uint _stab_succ;
 
   LocTable *loctable;
   IDMap me; 
@@ -177,12 +184,13 @@ protected:
   virtual vector<IDMap> find_successors_recurs(CHID key, uint m, 
       bool is_lookup = false, uint *recurs_int = NULL);
   virtual vector<IDMap> find_successors(CHID key, uint m, 
-      bool is_lookup = false);
+      bool is_lookup = false, IDMap *last = NULL);
 
-  IDMap fix_successor();
+  void fix_successor();
+  void fix_predecessor();
   void fix_successor_list();
   void check_static_init();
-  void record_stat(uint type = 0);
+  void record_stat(uint bytes, uint type = 0);
 };
 
 typedef struct {
@@ -224,7 +232,7 @@ class LocTable {
     };
 
 
-  LocTable(uint timeout = 0);
+  LocTable();
   void init (Chord::IDMap me);
   virtual ~LocTable();
 
@@ -238,13 +246,14 @@ class LocTable {
     void add_node(Chord::IDMap n);
     void add_sortednodes(vector<Chord::IDMap> l);
     void del_node(Chord::IDMap n);
-    void del_all();
+    virtual void del_all();
     void notify(Chord::IDMap n);
     void pin(Chord::CHID x, uint pin_succ, uint pin_pred);
     void clear_pins();
     uint size();
     uint psize() { return pinlist.size();}
     void set_evict(bool v) { _evict = v; }
+    void set_timeout(uint to) {_timeout = to;}
 
     //pick the next hop for lookup;
     virtual Chord::IDMap next_hop(Chord::CHID key, bool *done, uint m = 1, uint nsucc=1); 

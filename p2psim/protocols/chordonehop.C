@@ -71,7 +71,7 @@ ChordOneHop::stabilize()
   //ping successor
   IDMap succ = loctable->succ(me.id + 1);
   assert(succ.ip);
-  record_stat(); 
+  //record_stat(); 
   bool ok;
   if (_vivaldi) {
     Chord *target = dynamic_cast<Chord*>(getpeer(succ.ip));
@@ -93,7 +93,7 @@ ChordOneHop::stabilize()
 
     for (uint i = 0; i < v.size(); i++) {
       if (v[i].ip == me.ip) continue;
-      record_stat();
+      //record_stat();
       //cancelRPC(asyncRPC(v[i].ip, &ChordOneHop::del_handler, 
       //&da, (void *)NULL)); 
       rpc = asyncRPC(v[i].ip, &ChordOneHop::del_handler, &da, (void *)NULL); 
@@ -148,7 +148,7 @@ ChordOneHop::join(Args *args)
   loctable->add_node(wkn);
 
   get_successor_list_ret gr;
-  record_stat();
+  //record_stat();
 
   bool ok = doRPC(wkn.ip, &ChordOneHop::getloctable_handler, (void *)NULL, &gr);
   assert(ok);
@@ -170,7 +170,7 @@ ChordOneHop::join(Args *args)
 
   for (uint i = 0; i < v.size(); i++) {
     if (v[i].ip == me.ip) continue;
-    record_stat();
+    //record_stat();
     assert(v[i].ip);
     //cancelRPC(asyncRPC(v[i].ip, &ChordOneHop::add_handler, 
 	//	&aa, (void *)NULL)); 
@@ -207,7 +207,7 @@ ChordOneHop::find_successors(CHID k, uint m, bool is_lookup)
   //go directly to the successor
   while (1) {
     succ = loctable->succ(k);
-    record_stat(is_lookup?1:0);
+    //record_stat(is_lookup?1:0);
     ok = doRPC(succ.ip, &Chord::null_handler, (void *)NULL, (void *)NULL);
     if ((!ok) && (node()->alive())) {
       timeout++;

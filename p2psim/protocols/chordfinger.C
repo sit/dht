@@ -46,50 +46,58 @@ ChordFinger::ChordFinger(Node *n, Args &a,
 void
 ChordFinger::fix_fingers()
 {
-  IDMap succ = loctable->succ(me.id + 1);
 
-  if (succ.ip == 0 || succ.id == me.id) return;
-  // unsigned int i0 = (uint) ConsistentHash::log_b(succ.id - me.id, 2);
+  vector<IDMap> scs = loctable->succs(me.id + 1, _stab_succ>0?_stab_succ:1);
 
-  vector<Chord::IDMap> v;
+  printf("%s ChordFinger stabilize BEFORE _stab_succ %u ring sz %u succ %d\n", ts(), _stab_succ, loctable->size(), scs.size());
+
+  if (scs.size() == 0) return;
+
+  vector<IDMap> v;
   CHID finger;
   Chord::IDMap currf;
   bool ok;
 
   CHID lap = (CHID) -1;
-  CHID min_lap = succ.id - me.id;
+  CHID min_lap = scs[scs.size()-1].id - me.id;
   while (lap > min_lap) {
     lap = lap/_base;
     for (uint j = 1; j <= (_base-1); j++) {
       finger = lap * j + me.id;
       currf = loctable->succ(finger);
-      if (ConsistentHash::between(finger, finger+lap, currf.id )) {
+      if (currf.ip && ConsistentHash::between(finger, finger+lap, currf.id )) {
 	//just ping this finger to see if it is alive
-	record_stat();
+	get_predecessor_args gpa;
+	get_predecessor_ret gpr;
+	record_stat(0);
 	if (_vivaldi) {
 	  Chord *target = dynamic_cast<Chord*>(getpeer(currf.ip));
-	  ok = _vivaldi->doRPC(currf.ip, target, &Chord::null_handler, 
-	      (void*)NULL, (void *)NULL);
-	}else
-	  ok = doRPC(currf.ip, &Chord::null_handler, 
-	      (void *)NULL, (void *)NULL);
+	  ok = _vivaldi->doRPC(currf.ip, target, &Chord::get_predecessor_handler, 
+	      &gpa, &gpr);
+	}else 
+	  ok = doRPC(currf.ip, &Chord::get_predecessor_handler,
+	      &gpa, &gpr);
+	if(ok) record_stat(4);
 
 	if (!ok) {
 	  loctable->del_node(currf);
 	} else {
 	  loctable->add_node(currf);//update timestamp
+	}
+	if (ConsistentHash::between(gpr.n.id, currf.id, finger)) {
 	  continue;
 	}
       }
-    
       v = find_successors(finger, 1, false);
 #ifdef CHORD_DEBUG
-      printf("%s fix_fingers %d finger (%qx) get (%u,%qx)\n", ts(), i, finger, 
-	v[0].ip, v[0].id);
+      if (v.size() > 0)
+	printf("%s fix_fingers %d finger (%qx) get (%u,%qx)\n", ts(), j, finger, 
+	    v[0].ip, v[0].id);
 #endif
       if (v.size() > 0) loctable->add_node(v[0]);
     }
   }
+  printf("%s ChordFinger stabilize AFTER _stab_succ %u ring sz %u\n", ts(), _stab_succ, loctable->size());
 }
 
 void

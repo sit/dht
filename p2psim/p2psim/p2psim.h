@@ -36,7 +36,7 @@
 
 // multiply per-thread stack size by ...
 #define DEFAULT_THREAD_STACKSIZE 4096
-#define THREAD_MULTIPLY 3
+#define THREAD_MULTIPLY 6
 
 extern unsigned verbose;
 #define DEBUG(x) if(verbose >= (x)) cout

@@ -39,6 +39,7 @@ public:
     CHID kshift;
     CHID i;
     uint nsucc;
+    vector<IDMap> badnodes;
   };
 
   struct koorde_lookup_ret {
@@ -54,7 +55,8 @@ public:
   void koorde_next (koorde_lookup_arg *, koorde_lookup_ret *);
 
   bool stabilized(vector<ConsistentHash::CHID>);
-  vector<Chord::IDMap> Koorde::find_successors(CHID key, uint m, bool is_lookup = false);
+  void join(Args*);
+  vector<Chord::IDMap> Koorde::find_successors(CHID key, uint m, bool is_lookup = false, IDMap *last = NULL);
   void init_state(vector<IDMap> ids);
   void dump();
 
@@ -68,7 +70,6 @@ protected:
   Chord::CHID debruijn;  // = k * me
   Chord::CHID debruijnpred;  // = k * me - x
 
-  IDMap last;
   bool isstable;
   vector<IDMap> lastdfingers;
   
