@@ -1,10 +1,4 @@
-// $Date: 2001/02/05 17:16:10 $
-
-// $Date
-
-// $Author
-
-// last modified by $Author: fdabek $ on $Date: 2001/02/05 17:16:10 $
+//Last modified by $Author: fdabek $ on $Date: 2001/02/05 17:31:29 $
 #include <sfsrosd.h>
 #include "sfsdb.h"
 #include "rxx.h"
