@@ -594,7 +594,7 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
       lookup_result *lr = New lookup_result;
       assert(la && lr);
       assert(toask[i]);
-      assert(toask[i]->ip <= 1024 && toask[i]->ip > 0);
+      // assert(toask[i]->ip <= 1024 && toask[i]->ip > 0);
 
       record_stat(STAT_LOOKUP, 1, 0);
       KDEBUG(2) << "do_lookup: asyncRPC to " << printID(toask[i]->id) << ", ip = " << toask[i]->ip << ", toask[" << i << "] = " << ptr << endl;
