@@ -278,15 +278,6 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
 	vnodep->doget_predecessor (sbp);
       }
       break;
-      /*    case CHORDPROC_FINDCLOSESTPRED:
-	    {
-	    chord_findarg *fa = sbp->template getarg<chord_findarg> ();
-	    warn << "(find_pred) looking for " << fa->v << "\n";
-	    warnt("CHORD: findclosestpred_request");
-	    vnodep->dofindclosestpred (sbp, fa);
-	    }
-	    break;
-      */
     case CHORDPROC_NOTIFY:
       {
 	chord_nodearg *na = sbp->template getarg<chord_nodearg> ();

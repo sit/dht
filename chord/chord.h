@@ -63,6 +63,7 @@ typedef callback<void, int, void *, cbupcalldone_t>::ref cbupcall_t;
 #include "route.h"
 
 extern int logbase;
+extern long outbytes;
 
 // ================ VIRTUAL NODE ================
 
@@ -202,8 +203,9 @@ class vnode : public virtual refcount, public stabilizable {
   void register_upcall (int progno, cbupcall_t cb);
 
   // For other modules
-  void doRPC (const chordID &ID, rpc_program prog, int procno, 
+  long doRPC (const chordID &ID, rpc_program prog, int procno, 
 	      ptr<void> in, void *out, aclnt_cb cb);
+  void resendRPC (long seqno);
   void stats (void);
   void print (void);
   void stop (void);
@@ -325,9 +327,9 @@ class chord : public virtual refcount {
   void cacheloc (chordID &x, net_address &r, cbchallengeID_t cb) {
     active->locations->cacheloc (x, r, cb);
   }
-  void doRPC (chordID &n, rpc_program progno, int procno, ptr<void> in, 
+  long doRPC (chordID &n, rpc_program progno, int procno, ptr<void> in, 
 	      void *out, aclnt_cb cb) {
-    active->locations->doRPC (n, progno, procno, in, out, cb);
+    return active->locations->doRPC (n, progno, procno, in, out, cb);
   };
   void alert (chordID &n, chordID &x) {
     active->alert (n, x);

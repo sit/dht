@@ -162,11 +162,13 @@ route_chord::make_hop_cb (ptr<bool> del,
   if (err) {
     //back up
     chordID last_node_tried = pop_back ();
+    if (search_path.size () == 0) search_path.push_back (v->my_ID ());
     failed_nodes.push_back (last_node_tried);
     //chordID who_told_me = peek_back ();
     //ask who_told_me for a new hint 
     warn << v->my_ID () << ": " << last_node_tried << " is down. ";
-    if (search_path.size () == 0) search_path.push_back (v->my_ID ());
+    warn << "alerting " << search_path.back () << "\n";
+    v->alert (search_path.back (), last_node_tried);
     warn << " Now trying " << search_path.back () << "\n";
     next_hop ();
 

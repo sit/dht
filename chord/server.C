@@ -269,8 +269,14 @@ vnode::register_upcall (int progno, cbupcall_t cb)
   upcall_table.insert (uc);
 }
 
-void
+long
 vnode::doRPC (const chordID &ID, rpc_program prog, int procno, 
 	      ptr<void> in, void *out, aclnt_cb cb) {
-  locations->doRPC (ID, prog, procno, in, out, cb);
+  return locations->doRPC (ID, prog, procno, in, out, cb);
+}
+
+void
+vnode::resendRPC (long seqno)
+{
+  locations->resendRPC (seqno);
 }

@@ -16,8 +16,13 @@ class rpccb_chord : public rpccb_msgbuf {
   cbv utmo;
   ptr<bool> deleted;
 
+private:
+  void timeout_cb (ptr<bool> del);
+  void finish_cb (aclnt_cb cb, ptr<bool> del, clnt_stat err);
+
  public:
   void timeout () { finish (RPC_TIMEDOUT); };
+  void user_rexmit ();
   static rpccb_chord *alloc (ptr<aclnt> c,
 			     aclnt_cb cb,
 			     cbv u_tmo,
@@ -25,8 +30,6 @@ class rpccb_chord : public rpccb_msgbuf {
 			     void *out,
 			     int procno,
 			     struct sockaddr *dest);
-  void timeout_cb (ptr<bool> del);
-  void finish_cb (aclnt_cb cb, ptr<bool> del, clnt_stat err);
   void send (long sec, long nsec);
 };
 

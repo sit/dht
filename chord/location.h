@@ -148,9 +148,10 @@ class locationtable : public virtual refcount {
   chordID closestpredloc (const chordID &x, vec<chordID> failed);
   chordID closestpredloc (const chordID &x);
 
-  void doRPC (const chordID &n, rpc_program progno, 
+  long doRPC (const chordID &n, rpc_program progno, 
 	      int procno, ptr<void> in, 
 	      void *out, aclnt_cb cb);
+  void resendRPC (long seqno);
 
   void ping (const chordID &x, cbping_t cb);
   void challenge (const chordID &x, cbchallengeID_t cb);

@@ -1,7 +1,7 @@
 #ifndef _SUCC_LIST_H_
 #define _SUCC_LIST_H_
 
-#define NSUCC    2*10     // 2 * log of # vnodes
+#define NSUCC    3 //2*10     // 2 * log of # vnodes
 
 class succ_list : public fingerlike {
   chordID myID;

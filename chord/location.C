@@ -167,15 +167,22 @@ locationtable::replace_estimate (u_long o, u_long n)
 }
 
 void
+locationtable::resendRPC (long seqno)
+{
+  return hosts->rexmit (seqno);
+}
+
+long
 locationtable::doRPC (const chordID &n, rpc_program progno, 
 		      int procno, ptr<void> in, 
 		      void *out, aclnt_cb cb)
 {
   ptr<location> l = lookup (n);
   if (!l) fatal << "location is null. forgot to call cacheloc\n?";
-  hosts->doRPC (l, progno, procno, in, out, 
-		wrap (this, &locationtable::doRPCcb, l, cb));
   l->nrpc++;
+  return hosts->doRPC (l, progno, procno, in, out, 
+		       wrap (this, &locationtable::doRPCcb, l, cb));
+
 }
 
 void

@@ -41,6 +41,7 @@
 #include "chord_util.h"
 #include "location.h"
 
+long outbytes;
 // UTILITY FUNCTIONS
 
 const int shortstats (getenv ("SHORT_STATS") ? 1 : 0);
@@ -133,15 +134,17 @@ rpc_manager::get_avg_var ()
   return 0.0;
 }
 
-void
+long
 rpc_manager::doRPC (ptr<location> l,
 		    rpc_program prog, int procno, 
-		    ptr<void> in, void *out, aclnt_cb cb)
+		    ptr<void> in, void *out, aclnt_cb cb,
+		    long fake_seqno = 0)
 {
   ref<aclnt> c = aclnt::alloc (dgram_xprt, prog, 
 			       (sockaddr *)&(l->saddr));
   
   c->call (procno, in, out, wrap (this, &rpc_manager::doRPCcb, cb)); 
+  return 0;
 }
 
 void
@@ -156,10 +159,11 @@ rpc_manager::doRPCcb (aclnt_cb realcb, clnt_stat err)
 }
 
 // -----------------------------------------------------
-void
+long
 tcp_manager::doRPC (ptr<location> l,
 		    rpc_program prog, int procno, 
-		    ptr<void> in, void *out, aclnt_cb cb)
+		    ptr<void> in, void *out, aclnt_cb cb,
+		    long fake_seqno = 0)
 {
   // hack to avoid limit on wrap()'s number of arguments
   RPC_delay_args *args = New RPC_delay_args (l, prog, procno,
@@ -168,6 +172,7 @@ tcp_manager::doRPC (ptr<location> l,
   // wierd: tcpconnect wants the address in NBO, and port in HBO
   tcpconnect (l->saddr.sin_addr, ntohs (l->saddr.sin_port),
   	      wrap (this, &tcp_manager::doRPC_tcp_connect_cb, args));
+  return 0;
 }
 
 void
@@ -207,8 +212,6 @@ stp_manager::stp_manager (ptr<u_int32_t> _nrcv)
     a_lat (0.0),
     a_var (0.0),
     avg_lat (0.0),
-    bf_lat (0.0),
-    bf_var (0.0),
     rpcdelay (0),
     seqno (0),
     cwind (1.0),
@@ -218,11 +221,13 @@ stp_manager::stp_manager (ptr<u_int32_t> _nrcv)
     cwind_cum (0.0),
     num_cwind_samples (0),
     num_qed (0),
-    idle_timer (NULL)
+    idle_timer (NULL),
+    max_host_cache (100)
 {
   delaycb (1, 0, wrap (this, &stp_manager::ratecb));
   reset_idle_timer ();
   st = getusec ();
+  fake_seqno = -1;
 }
 
 stp_manager::~stp_manager ()
@@ -262,8 +267,9 @@ stp_manager::ratecb () {
 #endif
   // do something if nsent (+ nrcv) is too high xxx?
 
+  warn << "sent " << (outbytes - nsent) << " bytes in the last second\n";
   delaycb (1, 0, wrap (this, &stp_manager::ratecb));
-  nsent = 0;
+  nsent = outbytes;
   *nrcv = 0;
 }
 
@@ -293,18 +299,21 @@ stp_manager::get_avg_var ()
   return a_var;
 }
 
-void
+long
 stp_manager::doRPC (ptr<location> l,
 		    rpc_program prog, int procno, 
-		    ptr<void> in, void *out, aclnt_cb cb)
+		    ptr<void> in, void *out, aclnt_cb cb,
+		    long _fake_seqno = 0)
 {
   reset_idle_timer ();
   if (left + cwind < seqno) {
     RPC_delay_args *args = New RPC_delay_args (l, prog, procno,
 					       in, out, cb);
+    args->fake_seqno = fake_seqno;
     enqueue_rpc (args);
+    fake_seqno--;
+    return args->fake_seqno;
   } else {
-    hostinfo *h = lookup_host (l->addr);
 
     ref<aclnt> c = aclnt::alloc (dgram_xprt, prog, 
 				 (sockaddr *)&(l->saddr));
@@ -322,10 +331,21 @@ stp_manager::doRPC (ptr<location> l,
     sent_Q.insert_tail (s);
     
     long sec, nsec;
+    hostinfo *h = lookup_host (l->addr);
     setup_rexmit_timer (h, &sec, &nsec);
+
     C->b->send (sec, nsec);
     seqno++;
     nsent++;
+
+    if (_fake_seqno) {
+      C->rexmit_ID = _fake_seqno;
+    } else {
+      C->rexmit_ID = C->seqno;
+    }
+
+    user_rexmit_table.insert (C);
+    return seqno;
   }
 }
 
@@ -356,21 +376,7 @@ stp_manager::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
 {
   if (err) {
     nrpcfailed++;
-    
     warn << "RPC failure: " << err << " destined for " << C->ID << "\n";
-#ifdef __J__
-    warnx << gettime() << " FAILED " << 1 + C->seqno << " err " << err << "\n";
-
-
-    u_int64_t now = getusec ();
-    warnx << "stp_manager::doRPCcb: failed: " << err << "\n";
-    warnx << "\t**now " << now << "\n";
-    warnx << "\tID " << C->ID << "\n";
-    warnx << "\ts " << C->s << "\n";
-    warnx << "\tprogno " << C->progno << "\n";
-    warnx << "\tseqno " << C->seqno << "\n";
-    warnx << "\trexmits " << C->rexmits << "\n";
-#endif
   } else {
     if (C->s > 0) {
       u_int64_t now = getusec ();
@@ -396,10 +402,10 @@ stp_manager::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
 
   (C->cb) (err);
 
-  if (!c->xprt ()->reliable) {
-    rpc_done (C->seqno);
-    delete C;
-  }
+  rpc_done (C->seqno);
+  user_rexmit_table.remove (C);
+  delete C;
+
 }
 
 void
@@ -443,11 +449,11 @@ stp_manager::rpc_done (long acked_seqno)
   update_cwind (acked_seqno);
 
   while (Q.first && (left + cwind >= seqno) ) {
-    int qsize = (num_qed > 100) ? 100 :  num_qed;
-    int next = (int)(qsize*((float)random()/(float)RAND_MAX));
+    //int qsize = (num_qed > 100) ? 100 :  num_qed;
+    //    int next = (int)(qsize*((float)random()/(float)RAND_MAX));
     RPC_delay_args *args = Q.first;
-    for (int i = 0; (args) && (i < next); i++)
-      args = Q.next (args);
+    //    for (int i = 0; (args) && (i < next); i++)
+    //    args = Q.next (args);
     assert (args);
     Q.remove (args);
 
@@ -455,7 +461,8 @@ stp_manager::rpc_done (long acked_seqno)
 	   args->procno, 
 	   args->in,
 	   args->out,
-	   args->cb);
+	   args->cb,
+	   args->fake_seqno);
     delete args;
     num_qed--;
   }
@@ -478,6 +485,13 @@ stp_manager::idle ()
   idle_timer = NULL;
 }
 
+void
+stp_manager::rexmit (long seqno)
+{
+  rpc_state *C = user_rexmit_table[seqno];
+  assert (C);
+  C->b->user_rexmit ();
+}
 void
 stp_manager::update_cwind (int seq) 
 {
@@ -528,67 +542,48 @@ stp_manager::setup_rexmit_timer (hostinfo *h, long *sec, long *nsec)
 #define MIN_SAMPLES 10
 
   float alat;
-
+  
   if (nrpc > MIN_SAMPLES) {
-    if (avg_lat >  bf_lat + 4*bf_var) {
-      alat = avg_lat;
-    } else {
-      alat = bf_lat + 4*bf_var;
-    }
-    alat *= 1.5;
+    alat = 1.5*avg_lat;
   }
   else 
     alat = 1000000;
 
-  if (h->nrpc > MIN_SAMPLES) {
+#ifdef PERHOST
+  if (h && h->nrpc > MIN_SAMPLES) {
     alat = h->a_lat + 4*h->a_var;
     alat *= 1.5;
   }
+#endif
 
   //statistics
   timers.push_back (alat);
   if (timers.size () > 1000) timers.pop_front ();
-
+  
   *sec = (long)(alat / 1000000);
   *nsec = ((long)alat % 1000000) * 1000;
-
+  
   if (*nsec < 0 || *sec < 0) {
     stats ();
-    panic ("[send to cates@mit.edu] setup: sec %ld, nsec %ld, alat %f, avg_lat %f, bf_lat %f, bf_var %f\n",
-	   *sec, *nsec, alat, avg_lat, bf_lat, bf_var);
+    panic ("[send to cates@mit.edu] setup: sec %ld, nsec %ld, alat %f, avg_lat %f\n", *sec, *nsec, alat, avg_lat);
   }
 }
 
 void
 stp_manager::update_latency (ptr<location> l, u_int64_t lat, bool bf)
 {
-  hostinfo *h = lookup_host (l->addr);
-  if (!h) {
-    warnx << "stp_manager::update_latency: WARNING: lost hostinfo for "
-	  << l->addr.hostname << "\n";
-    return;
-  }
-
-  h->rpcdelay += lat;
-  h->nrpc++;
+  //do the gloal latencies
   rpcdelay += lat;
   nrpc++;
-  
-  //update per-host latency
-  float err = (lat - h->a_lat);
-  h->a_lat = h->a_lat + GAIN*err;
-  if (err < 0) err = -err;
-  h->a_var = h->a_var + GAIN*(err - h->a_var);
-  if (lat > h->maxdelay) h->maxdelay = lat;
 
   //update global latency
-  err = (lat - a_lat);
+  float err = (lat - a_lat);
   a_lat = a_lat + GAIN*err;
   if (err < 0) err = -err;
   a_var = a_var + GAIN*(err - a_var);
 
-  //update the 9xth percentile from the recent per-host averages
-#define PERCENTILE 0.95
+  //update the 9xth percentile latencies from the recent per-host averages
+#define PERCENTILE 0.98
   hostinfo *cur = hosts.first ();
   float host_lats [max_host_cache];
   size_t i;
@@ -598,19 +593,22 @@ stp_manager::update_latency (ptr<location> l, u_int64_t lat, bool bf)
   }
   int which = (int)(PERCENTILE*i);
   avg_lat = myselect (host_lats, 0, i - 1, which + 1);
+
+  lat_history.push_back (avg_lat);
+  if (lat_history.size () > 1000) lat_history.pop_front ();
   
-  //update the recent 1K fetch latencies
-  if (bf) {
-    err = (lat - bf_lat);
-    bf_lat = bf_lat + 0.2*err;
+  //update per-host latency
+  hostinfo *h = lookup_host (l->addr);
+  if (h) {
+    h->rpcdelay += lat;
+    h->nrpc++;
+    err = (lat - h->a_lat);
+    h->a_lat = h->a_lat + GAIN*err;
     if (err < 0) err = -err;
-    bf_var = bf_var + 0.2*(err - bf_var);
-    lat_big.push_back (lat);
-    if (lat_big.size () > 1000) lat_big.pop_front ();
-  } else {
-    lat_little.push_back (lat);
-    if (lat_little.size () > 1000) lat_little.pop_front ();
+    h->a_var = h->a_var + GAIN*(err - h->a_var);
+    if (lat > h->maxdelay) h->maxdelay = lat;
   }
+
 }
 
 void
@@ -649,16 +647,10 @@ void stp_manager::stats ()
     warnx << "t: " << buf << "\n";
   }
 
-  warnx << "Latencies (little):\n";
-  for (unsigned int i = 0; i < lat_little.size (); i++) {
-    sprintf (buf, "%f", lat_little[i]);
-    warnx << "ll: " << buf << "\n";
-  }
-
-  warnx << "Latencies (big):\n";
-  for (unsigned int i = 0; i < lat_big.size (); i++) {
-    sprintf (buf, "%f", lat_big[i]);
-    warnx << "lb: " << buf << "\n";
+  warnx << "Latencies:\n";
+  for (unsigned int i = 0; i < lat_history.size (); i++) {
+    sprintf (buf, "%f", lat_history[i]);
+    warnx << "lat: " << buf << "\n";
   }
 
   warnx << "cwind over time:\n";
@@ -725,6 +717,9 @@ rpccb_chord::alloc (ptr<aclnt> c,
     xid = txid;
   }
 
+  suio *s = x.uio ();
+  outbytes += s->resid ();
+
   // Stolen (mostly) from aclnt::init_call
   if (aclnttrace >= 2) {
     str name;
@@ -777,6 +772,17 @@ rpccb_chord::send (long _sec, long _nsec)
   xmit (0);
 }
 
+
+void 
+rpccb_chord::user_rexmit ()
+{
+  //this function does an immediate retransmit.
+  //it doesn't cost you a rexmit counter bump
+  //and doesn't bump the exponential either (but does reset the timeout timer)
+  timecb_remove (tmo);
+  xmit (rexmits);
+  tmo = delaycb (sec, nsec, wrap (this, &rpccb_chord::timeout_cb, deleted));
+}
 
 void
 rpccb_chord::timeout_cb (ptr<bool> del)

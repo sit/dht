@@ -32,6 +32,7 @@ struct RPC_delay_args {
   ptr<void> in;
   void *out;
   aclnt_cb cb;
+  long fake_seqno;
 
   tailq_entry<RPC_delay_args> q_link;
 
@@ -47,9 +48,11 @@ struct rpc_state {
   u_int64_t s;
   int progno;
   long seqno;
+  long rexmit_ID;
 
   rpccb_chord *b;
   int rexmits;
+  ihash_entry <rpc_state> h_link;
   
   rpc_state (ref<location> l, aclnt_cb c, u_int64_t S, long s, int p)
     : loc (l), cb (c),  s (S), progno (p), seqno (s),
@@ -73,9 +76,10 @@ class rpc_manager {
   ptr<axprt_dgram> dgram_xprt;
   
  public:
+  virtual void rexmit (long seqno) {};
   virtual void stats ();
-  virtual void doRPC (ptr<location> l, rpc_program prog, int procno,
-		 ptr<void> in, void *out, aclnt_cb cb);
+  virtual long doRPC (ptr<location> l, rpc_program prog, int procno,
+		 ptr<void> in, void *out, aclnt_cb cb, long fake_seqno = 0);
   // the following may not necessarily make sense for all implementations.
   virtual float get_a_lat (ptr<location> l);
   virtual float get_a_var (ptr<location> l); 
@@ -94,8 +98,9 @@ class tcp_manager : public rpc_manager {
   void doRPC_tcp_connect_cb (RPC_delay_args *args, int fd);
   void doRPC_tcp_cleanup (RPC_delay_args *args, int fd, clnt_stat err);
  public:
-  void doRPC (ptr<location> l, rpc_program prog, int procno,
-	      ptr<void> in, void *out, aclnt_cb cb);
+  void rexmit (long seqno) {};
+  long doRPC (ptr<location> l, rpc_program prog, int procno,
+	      ptr<void> in, void *out, aclnt_cb cb, long fake_seqno = 0);
   tcp_manager (ptr<u_int32_t> _nrcv) : rpc_manager (_nrcv) {}
   ~tcp_manager () {}
 };
@@ -105,20 +110,16 @@ class tcp_manager : public rpc_manager {
 #define MIN_RPC_FAILURE_TIMER 2
 class stp_manager : public rpc_manager {
   static const float GAIN = 0.2;
-  static const size_t max_host_cache = 100; 
-
+  
   // statistics
   float a_lat;
   float a_var;
   float avg_lat;
-  float bf_lat;
-  float bf_var;
   u_int64_t rpcdelay;
 
   // state
   vec<float> timers;
-  vec<float> lat_little;
-  vec<float> lat_big;
+  vec<float> lat_history;
   vec<float> cwind_time;
   vec<float> cwind_cwind;
   vec<long> acked_seq;
@@ -132,16 +133,20 @@ class stp_manager : public rpc_manager {
   float cwind_cum;
   int num_cwind_samples;
   int num_qed;
+  
+  long fake_seqno;
 
   u_int64_t st;
 
   tailq<RPC_delay_args, &RPC_delay_args::q_link> Q;
   tailq<sent_elm, &sent_elm::q_link> sent_Q;
+  ihash<long, rpc_state, &rpc_state::rexmit_ID, &rpc_state::h_link> user_rexmit_table;
 
   timecb_t *idle_timer;
 
   tailq<hostinfo, &hostinfo::lrulink_> hostlru;
   ihash<sfs_hostname, hostinfo, &hostinfo::host, &hostinfo::hlink_> hosts;
+  size_t max_host_cache; 
 
   hostinfo *lookup_host (const net_address &r);
 
@@ -161,8 +166,9 @@ class stp_manager : public rpc_manager {
  public:
   void stats ();
 		   
-  void doRPC (ptr<location> l, rpc_program prog, int procno,
-	      ptr<void> in, void *out, aclnt_cb cb);
+  void rexmit (long seqno);
+  long doRPC (ptr<location> l, rpc_program prog, int procno,
+	      ptr<void> in, void *out, aclnt_cb cb, long fake_seqno = 0);
   float get_a_lat (ptr<location> l);
   float get_a_var (ptr<location> l);
   float get_avg_lat ();
