@@ -1,4 +1,4 @@
-dnl $Id: acinclude.m4,v 1.15 2004/04/21 13:56:41 sit Exp $
+dnl $Id: acinclude.m4,v 1.16 2004/04/29 13:35:45 sit Exp $
 
 
 
@@ -621,7 +621,7 @@ dnl Find GMP
 dnl
 AC_DEFUN(SFS_GMP,
 [AC_ARG_WITH(gmp,
---with-gmp[[=/usr/local]]   specify path for gmp)
+--with-gmp[[[=/usr/local]]]   specify path for gmp)
 AC_SUBST(GMP_DIR)
 AC_SUBST(LIBGMP)
 AC_MSG_CHECKING([for GMP library])
@@ -638,7 +638,11 @@ if test -z "$with_gmp"; then
     if test "${with_gmp+set}" != set \
 		-a "$GMP_DIR" -a -d "$srcdir/$GMP_DIR"; then
 	GMP_DIR=`echo $GMP_DIR | sed -e 's!/$!!'`
-	CPPFLAGS="$CPPFLAGS "'-I$(top_srcdir)/'"$GMP_DIR"
+	if test -f "$srcdir/$GMP_DIR/gmp-h.in"; then
+	    CPPFLAGS="$CPPFLAGS "'-I$(top_builddir)/'"$GMP_DIR"
+	else
+	    CPPFLAGS="$CPPFLAGS "'-I$(top_srcdir)/'"$GMP_DIR"
+	fi
 	#LDFLAGS="$LDFLAGS "'-L$(top_builddir)/'"$GMP_DIR"
     else
 	GMP_DIR=
@@ -659,7 +663,8 @@ fi
 if test "$with_gmp"; then
     unset GMP_DIR
     if test -f ${with_gmp}/include/gmp.h; then
-	CPPFLAGS="$CPPFLAGS -I${with_gmp}/include"
+	test "${with_gmp}" = /usr \
+	    || CPPFLAGS="$CPPFLAGS -I${with_gmp}/include"
     elif test -f ${with_gmp}/include/gmp3/gmp.h; then
 	CPPFLAGS="$CPPFLAGS -I${with_gmp}/include/gmp3"
     elif test -f ${with_gmp}/include/gmp2/gmp.h; then
@@ -695,7 +700,27 @@ fi
 AC_CONFIG_SUBDIRS($GMP_DIR)
 
 ac_save_CFLAGS="$CFLAGS"
-test "$GMP_DIR" && CFLAGS="$CFLAGS -I${srcdir}/${GMP_DIR}"
+if test "$GMP_DIR"; then
+    if test -f "${srcdir}/${GMP_DIR}"/gmp-h.in; then
+	CFLAGS="$CFLAGS -I${srcdir}/${GMP_DIR}"
+    else
+	CFLAGS="$CFLAGS -I${builddir}/${GMP_DIR}"
+    fi
+fi
+
+AC_CACHE_CHECK(for overloaded C++ operators in gmp.h, sfs_cv_gmp_cxx_ops,
+    if test -f "${srcdir}/${GMP_DIR}"/gmp-h.in; then
+	# More recent versions of GMP all have this
+	sfs_cv_gmp_cxx_ops=yes
+    else
+	AC_EGREP_CPP(operator<<,
+[#define __cplusplus 1
+#include <gmp.h>
+],
+		sfs_cv_gmp_cxx_ops=yes, sfs_cv_gmp_cxx_ops=no)
+    fi)
+test "$sfs_cv_gmp_cxx_ops" = "yes" && AC_DEFINE([HAVE_GMP_CXX_OPS], 1,
+	[Define if gmp.h overloads C++ operators])
 
 AC_CACHE_CHECK(for mpz_xor, sfs_cv_have_mpz_xor,
 unset sfs_cv_have_mpz_xor
