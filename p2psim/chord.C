@@ -587,7 +587,7 @@ Chord::fix_successor()
   }
 
 #ifdef CHORD_DEBUG
-  printf("%s fix_successor (%llu) successor (%u,%qx)'s predecessor is (%u, %qx)\n", ts(), t,succ1.ip, succ1.id, gpr.n.ip, gpr.n.id);
+  printf("%s fix_successor successor (%u,%qx)'s predecessor is (%u, %qx)\n", ts(), succ1.ip, succ1.id, gpr.n.ip, gpr.n.id);
 #endif
 
   if (gpr.n.ip && gpr.n.ip!= me.id) loctable->add_node(gpr.n);
