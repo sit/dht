@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.6 2003/10/10 23:33:35 strib Exp $ */
+/* $Id: tapestry.h,v 1.7 2003/10/12 03:04:36 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -164,7 +164,7 @@ public:
   };
 
   struct nn_return {
-    vector<NodeInfo> nodelist;
+    vector<NodeInfo *> nodelist;
   };
 
   void handle_nn(nn_args *args, nn_return *ret);
@@ -213,6 +213,8 @@ private:
   
   // statitics per message
   vector<uint> stat;
+
+  bool _joining;
 
   /**
    * Convert a given IP address to an id in the Tapestry namespace
@@ -302,12 +304,9 @@ class NodeInfo {
 class RouteEntry {
   
  public:
-  RouteEntry();
-  RouteEntry( NodeInfo *first_node );
+  RouteEntry( uint redundancy );
+  RouteEntry( NodeInfo *first_node, uint redundancy );
   ~RouteEntry();
-  // How many nodes can we keep in each entry (c in the JSAC paper)
-  // must be at least 1
-  static const uint NODES_PER_ENTRY = 3;
   
   /**
    * Return the primary (closest) node
@@ -326,6 +325,10 @@ class RouteEntry {
 
   friend class RoutingTable;
 
+  // How many nodes can we keep in each entry (c in the JSAC paper)
+  // must be at least 1
+  uint NODES_PER_ENTRY;
+
   /**
    * Add a new node.  Indicate the node that's kicked out (if any).
    * Return true if the node was added to the entry
@@ -343,7 +346,7 @@ class RoutingTable {
 
  public:
   typedef Tapestry::GUID GUID;
-  RoutingTable( Tapestry *node );
+  RoutingTable( Tapestry *node, uint redundancy );
   ~RoutingTable();
   
   /**
@@ -373,6 +376,8 @@ class RoutingTable {
   // get the locked nodes that are associated with this node's id
   vector<NodeInfo *> *get_locks( GUID id );
 
+  uint redundancy() { return _redundancy; };
+
  private:
 
 #define TapRTDEBUG(x) DEBUG(x) << now() << ": (" << _node->ip() << "/" << _node->print_guid(_node->id()) << ") "
@@ -383,6 +388,7 @@ class RoutingTable {
   Tapestry *_node;
   vector<NodeInfo *> **_backpointers;
   vector<NodeInfo *> ***_locks;
+  uint _redundancy;
 
 };
 

@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.7 2003/10/10 23:33:35 strib Exp $ */
+/* $Id: tapestry.C,v 1.8 2003/10/12 03:04:36 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -33,15 +33,16 @@ using namespace std;
 
 Tapestry::Tapestry(Node *n, Args a)
   : DHTProtocol(n),
-    _base(16),
+    _base(a.nget<uint>("base", 16, 10)),
     _bits_per_digit((uint) (log10(((double) _base))/log10((double) 2))),
     _digits_per_id((uint) 8*sizeof(GUID)/_bits_per_digit),
-    _redundant_lookup_num(3)
+    _redundant_lookup_num(a.nget<uint>("redunant_lookup_num", 3, 10))
 {
   joined = false;
+  _joining = false;
   _my_id = get_id_from_ip(ip());
   TapDEBUG(2) << "Constructing" << endl;
-  _rt = New RoutingTable(this);
+  _rt = New RoutingTable(this, a.nget<uint>("redundancy", 3, 10));
   _waiting_for_join = New ConditionVar();
 
   //stabilization timer
@@ -90,6 +91,7 @@ Tapestry::print_stats()
     " backpointer " << stat[STAT_BACKPOINTER] <<
     " mcnotify " << stat[STAT_MCNOTIFY] <<
     " nn " << stat[STAT_NN] <<
+    " repair " << stat[STAT_REPAIR] <<
     endl;
 }
 
@@ -186,7 +188,9 @@ void
 Tapestry::have_joined()
 {
    joined = true;
+   _joining = false;
    _waiting_for_join->notifyAll();
+   TapDEBUG(0) << "Finishing joining." << endl;
    delaycb( _stabtimer, &Tapestry::check_rt, (void *) 0 );
 }
 
@@ -195,7 +199,12 @@ Tapestry::have_joined()
 void
 Tapestry::join(Args *args)
 {
-  TapDEBUG(2) << "Tapestry join" << endl;
+  TapDEBUG(0) << "Tapestry join" << endl;
+
+  if( _joining ) {
+    TapDEBUG(0) << "Tried to join while joining -- ignoring" << endl;
+    return;
+  }
 
   IPAddress wellknown_ip = args->nget<IPAddress>("wellknown");
   TapDEBUG(3) << ip() << " Wellknown: " << wellknown_ip << endl;
@@ -210,6 +219,8 @@ Tapestry::join(Args *args)
     have_joined();
     return;
   }
+
+  _joining = true;
 
   // contact the well known machine, and have it start routing to the surrogate
   join_args ja;
@@ -290,11 +301,12 @@ Tapestry::join(Args *args)
 	for( uint k = 0; k < nnr.nodelist.size(); k++ ) {
 	  // make sure this one isn't on there yet
 	  // TODO: make this more efficient.  Maybe use a hash set or something
-	  NodeInfo *currseed = &(nnr.nodelist[k]);
+	  NodeInfo *currseed = nnr.nodelist[k];
 	  
 	  // don't add ourselves, duh
 	  if( currseed->_id == id() ) {
-	  continue;
+	    delete currseed;
+	    continue;
 	  }
 	  bool add = true;
 	  for( uint l = 0; l < seeds.size(); l++ ) {
@@ -304,10 +316,11 @@ Tapestry::join(Args *args)
 	    }
 	  }
 	  if( add ) {
-	    NodeInfo *newseed = New NodeInfo( currseed->_addr, currseed->_id );
-	    seeds.push_back( newseed );
-	    TapDEBUG(3) << " has a seed of " << newseed->_addr << " and " << 
-	      print_guid( newseed->_id ) << endl;
+	    seeds.push_back( currseed );
+	    TapDEBUG(3) << " has a seed of " << currseed->_addr << " and " << 
+	      print_guid( currseed->_id ) << endl;
+	  } else {
+	    delete currseed;
 	  }
 	}
 	TapDEBUG(3) << "done with adding seeds with " << ncall->ip << endl;
@@ -337,7 +350,7 @@ Tapestry::join(Args *args)
       TapDEBUG(3) << "about to get distance for " << currseed->_addr << endl;
       //add_to_rt( currseed->_addr, currseed->_id );
       TapDEBUG(3) << "added to rt for " << currseed->_addr << endl;
-      bool ok = false;;
+      bool ok = false;
       currseed->_distance = ping( currseed->_addr, currseed->_id, ok );
       TapDEBUG(3) << "got distance for " << currseed->_addr << endl;
 
@@ -671,19 +684,19 @@ Tapestry::handle_nn(nn_args *args, nn_return *ret)
 {
 
   // send back all backward pointers
-  vector<NodeInfo> nns;
+  vector<NodeInfo *> nns;
 
   vector<NodeInfo *> *bps = _rt->get_backpointers( args->alpha );
   for( uint i = 0; i < bps->size(); i++ ) {
-    nns.push_back( *((*bps)[i]) );
+    NodeInfo *newnode = New NodeInfo( ((*bps)[i])->_addr, ((*bps)[i])->_id ); 
+    nns.push_back( newnode );
   }
 
   // do we really need to send the forward pointers?  The theory paper says to,
   // but the Java implementation doesn't.  for now we won't.  TODO maybe.
 
   // add yourself to the list
-  NodeInfo self( ip(), id() );
-  nns.push_back( self );
+  nns.push_back( New NodeInfo( ip(), id() ) );
 
   ret->nodelist = nns;
 
@@ -726,7 +739,7 @@ Tapestry::handle_mcnotify(mcnotify_args *args, mcnotify_return *ret)
 {
 
   TapDEBUG(3) << "got mcnotify from " << args->ip << endl;
-  NodeInfo *mc_node = new NodeInfo( args->ip, args->id );
+  NodeInfo *mc_node = New NodeInfo( args->ip, args->id );
   initlist.push_back( mc_node );
 
   // add all the nodes on the nodelist as well
@@ -1261,16 +1274,23 @@ Tapestry::leave(Args *args)
 void
 Tapestry::crash(Args *args)
 {
-  TapDEBUG(1) << "Tapestry crash" << endl;
+  TapDEBUG(0) << "Tapestry crash" << endl;
+
+  if( _joining ) {
+    TapDEBUG(0) << "Tried to crash while joining -- ignoring" << endl;
+    return;
+  }
+  
   node()->crash();
 
   // clear out routing table, and any other state that might be lying around
+  uint r = _rt->redundancy();
   delete _rt;
   joined = false;
   // TODO: should be killing these waiting RPCs instead of allowing them
   // to finish normally.  bah.
   _waiting_for_join->notifyAll();
-  _rt = New RoutingTable(this);
+  _rt = New RoutingTable(this, r);
 
 }
 
@@ -1386,15 +1406,17 @@ Tapestry::lookup_cheat( GUID key )
 
 //////////  RouteEntry  ///////////
 
-RouteEntry::RouteEntry()
+RouteEntry::RouteEntry( uint redundancy )
 {
   _size = 0;
+  NODES_PER_ENTRY = redundancy;
   _nodes = New NodeInfo *[NODES_PER_ENTRY];
 }
 
-RouteEntry::RouteEntry( NodeInfo *first_node )
+RouteEntry::RouteEntry( NodeInfo *first_node, uint redundancy )
 {
   assert( first_node );
+  NODES_PER_ENTRY = redundancy;
   _nodes = New NodeInfo *[NODES_PER_ENTRY];
   _nodes[0] = first_node;
   _size = 1;
@@ -1528,7 +1550,7 @@ RouteEntry::add( NodeInfo *new_node, NodeInfo **kicked_out )
 
 ////////  Routing Table ////////////
 
-RoutingTable::RoutingTable( Tapestry *node )
+RoutingTable::RoutingTable( Tapestry *node, uint redundancy )
 {
   assert(node);
   _node = node;
@@ -1541,6 +1563,8 @@ RoutingTable::RoutingTable( Tapestry *node )
       _table[i][j] = NULL;
     }
   }
+
+  _redundancy = redundancy;
 
   // now we add ourselves to the table
   add( _node->ip(), _node->id(), 0 );
@@ -1617,7 +1641,7 @@ RoutingTable::add( IPAddress ip, GUID id, Time distance, bool sendbp )
     RouteEntry *re = _table[i][j];
     if( re == NULL ) {
       // brand new entry, huzzah
-      re = New RouteEntry( new_node );
+      re = New RouteEntry( new_node, _redundancy );
       _table[i][j] = re;
       in_added = true;
       if( ip != _node->ip() && sendbp ) {
