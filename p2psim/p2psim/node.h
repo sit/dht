@@ -71,6 +71,9 @@ public:
 				 uint num_timeouts= 0, Time time_timeouts = 0);
   static void print_stats();
 
+  int queue_delay () { return _queue_len; };
+  void queue_delay (int q) { _queue_len = q; };
+
 protected:
   typedef set<unsigned> RPCSet;
 
@@ -88,6 +91,7 @@ protected:
   static void print_lookup_stat_helper( vector<Time> times, 
 					vector<double> stretch,
 					bool timeouts = false );
+  int _queue_len;
 
   // find peer protocol of my sub-type on a distant node.
   Node *getpeer(IPAddress);

@@ -392,6 +392,8 @@ Node::_doRPC_send(IPAddress dst, void (*fn)(void *), void (*killme)(void *), voi
   p->_src = ip();
   p->_dst = dst;
   p->_timeout = timeout;
+  Node *n = getpeer (ip());
+  p->_queue_delay = n->queue_delay ();
 
   // where to send the reply, buffered for single reply
   Channel *c = p->_c = chancreate(sizeof(Packet*), 1);
@@ -429,6 +431,8 @@ Node::Receive(void *px)
   reply->_src = p->_dst;
   reply->_dst = p->_src;
   reply->_timeout = p->_timeout;
+  Node *s = Network::Instance()->getnode(reply->src());
+  reply->_queue_delay = s->queue_delay ();
 
   if (proto->alive ()) {
     (p->_fn)(p->_args);

@@ -40,6 +40,7 @@ public:
   virtual void join(Args*) = 0;
   virtual void crash(Args*) {}
   virtual void lookup(Args*) = 0;
+  virtual void nodeevent(Args*) = 0;
 };
 
 #endif // __DHTPROTOCOL_H

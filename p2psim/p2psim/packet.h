@@ -54,6 +54,9 @@ private:
   void *_args;
 
   friend class Node;
+  friend class Network;
+  int _queue_delay;
+
   Channel *_c;            // where to send the reply
   IPAddress _src;
   IPAddress _dst;

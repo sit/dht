@@ -126,6 +126,8 @@ Network::send(Packet *p)
   assert (src);
 
   Time latency = _top->latency(src->ip(), dst->ip(), p->reply());
+  if (src->ip () != dst->ip ())
+    latency += p->_queue_delay;
 
   // if the node was dead, we have to delay the packet a bit. (p->ok is set on
   // the receiving side, so if it's false, this must be a reply. punish the
