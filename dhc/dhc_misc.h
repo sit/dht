@@ -8,6 +8,7 @@ strbuf dhc_errstr (dhc_stat);
 void print_error (str, int, dhc_stat);
 void set_new_config (dhc_soft *, ptr<dhc_propose_arg>, ptr<vnode>, uint);
 void set_new_config (ptr<dhc_newconfig_arg>, vec<chordID>);
+void set_new_config (ptr<dhc_newconfig_arg>, vec<ptr<location> >);
 void set_new_config (ptr<dhc_newconfig_arg>, vec<ptr<location> > *, 
 		     ptr<vnode>, uint);
 //void set_locations (vec<ptr<location> > *, ptr<vnode>, vec<chordID>);
@@ -34,7 +35,7 @@ to_dbrec (ptr<dhc_block> block)
 static inline bool
 set_ac (vec<chordID> *ap, dhc_prepare_resok res)
 {
-  if (ap->size () == 0) {
+  if (ap->size () == 0 && res.new_config.size () != 0) {
     for (uint i=0; i<res.new_config.size (); i++) 
       ap->push_back (res.new_config[i]);
     return true;

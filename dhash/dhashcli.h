@@ -43,8 +43,14 @@ class dhashcli {
     cb_ret callback;
 
     bool completed;
-
-    ptr<dhc_get_res> dhcres;
+    
+    struct dhc_state {
+      ptr<dhc_get_res> res;
+      dhash_stat status;
+      int options;
+      int retries;
+      ptr<chordID> guess;
+    } ds;
 
     void timemark () {
       timespec x;
@@ -112,9 +118,9 @@ class dhashcli {
   void retrieve_block_hop_cb (ptr<rcv_state> rs, route_iterator *ci,
 			     int options, int retries, ptr<chordID> guess,
 			     bool done);
-  void retrieve_dhc_cb (ptr<rcv_state> rs, dhash_stat status,
-			int options, int retries, 
-			ptr<chordID> guess, clnt_stat err);
+  void retrieve_dhc_lookup_cb (ptr<rcv_state> rs, vec<chord_node> succs, 
+			       route path, chordstat err);
+  void retrieve_dhc_cb (ptr<rcv_state> rs, clnt_stat err);
   void retrieve_dl_or_walk_cb (ptr<rcv_state> rs, dhash_stat status,
                                int options, int retries, ptr<chordID> guess,
 			       ptr<dhash_block> blk);

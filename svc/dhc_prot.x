@@ -49,12 +49,6 @@ struct dhc_propose_arg {
    chordID new_config<>;
 };
 
-/* accept message, previously called accept ack */
-union dhc_propose_res switch (dhc_stat status) {
-   default:
-   	void;
-};
-
 struct tag_t {
   u_int64_t ver;
   chordID writer;
@@ -63,6 +57,14 @@ struct tag_t {
 struct keyhash_data {
   tag_t tag;
   dhash_value data;
+};
+
+/* accept message, previously called accept ack */
+union dhc_propose_res switch (dhc_stat status) {
+   case DHC_OK:
+     keyhash_data data;
+   default:
+     void;
 };
 
 struct dhc_newconfig_arg {

@@ -152,12 +152,6 @@ dhc::recon (chordID bID, dhc_cb_t cb)
 
   if (rec) {    
     ptr<dhc_block> kb = to_dhc_block (rec);
-#if 0 //Take out cvalid flag
-    if (!kb->meta->cvalid) {
-      (*cb) (DHC_NOT_A_REPLICA, clnt_stat (0));
-      return;
-    }
-#endif
     dhc_soft *b = dhcs[bID];
     if (b)
       dhcs.remove (b);
@@ -196,13 +190,6 @@ dhc::recon (chordID bID, dhc_cb_t cb)
       myNode->doRPC (dest, dhc_program_1, DHCPROC_PREPARE, arg, res, 
 		     wrap (this, &dhc::recv_promise, b->id, cb, res)); 
     }
-#if 0 //DELETE 
-    } else {
-      warn << "dhc:recon. Another recon is still in progress.\n";
-      (*cb) (DHC_RECON_INPROG, clnt_stat (0));
-    }
-#endif
-
   } else {
     warn << "dhc:recon. Too many deaths. Tough luck.\n";
     //I don't have the block, which means too many pred nodes
@@ -305,6 +292,14 @@ dhc::recv_accept (chordID bID, dhc_cb_t cb,
       exit (-1);
     }
     ptr<dhc_block> kb = to_dhc_block (rec);
+    if (tag_cmp (kb->data->tag, proposal->data->tag) < 0) {
+      kb->data->tag.ver = proposal->data->tag.ver;
+      kb->data->tag.writer = proposal->data->tag.writer;
+      kb->data->data.set (proposal->data->data.base (), proposal->data->data.size ());
+      db->insert (id2dbrec (kb->id), to_dbrec (kb));
+      if (dhc_debug)
+	warn << "dhc::recv_accept update to size " << kb->data->data.size () << "\n"; 
+    }
 
     b->pstat->accept_recvd++;
     if (b->pstat->accept_recvd > n_replica/2 && !b->pstat->sent_newconfig) {
@@ -315,14 +310,13 @@ dhc::recv_accept (chordID bID, dhc_cb_t cb,
       arg->data.tag.writer = kb->data->tag.writer;
       arg->data.data.set (kb->data->data.base (), kb->data->data.size ());
       arg->old_conf_seqnum = kb->meta->config.seqnum;
-      //kb->meta->cvalid = false;
 #if 0
       if (!set_ac (&kb->meta->new_config.nodes, b->pstat->acc_conf)) {
 	warn << "dhc::recv_accept Different accepted configs!!\n";
 	exit (-1);
       }
 #endif
-      set_new_config (arg, b->pstat->acc_conf);
+      set_new_config (arg, b->new_config); //b->pstat->acc_conf);
 
       if (dhc_debug)
 	warn << "\n\n" << "dhc::recv_accept Config accepted for block " << b->id << "\n";
@@ -485,13 +479,6 @@ dhc::recv_propose (user_args *sbp)
   }
   dhcs.remove (b);
   ptr<dhc_block> kb = to_dhc_block (rec);
-#if 0
-  if (!kb->meta->cvalid) {
-    dhc_propose_res res (DHC_NOT_A_REPLICA);
-    sbp->reply (&res);
-    return;
-  }
-#endif
   if (dhc_debug)
     warn << "dhc:recv_propose " << b->to_str ();
 
@@ -500,12 +487,13 @@ dhc::recv_propose (user_args *sbp)
     sbp->reply (&res);
   } else {
     if (set_ac (&b->pstat->acc_conf, *propose)) {
-      //b->status = IDLE;
-      //kb->meta->cvalid = false;
       kb->meta->accepted.seqnum = propose->round.seqnum;
       kb->meta->accepted.proposer = propose->round.proposer;
       db->insert (id2dbrec (kb->id), to_dbrec (kb));
       dhc_propose_res res (DHC_OK);
+      res.data->tag.ver = kb->data->tag.ver;
+      res.data->tag.writer = kb->data->tag.writer;
+      res.data->data.set (kb->data->data.base (), kb->data->data.size ());
       sbp->reply (&res);
       //db->sync ();
     } else {
@@ -545,6 +533,12 @@ dhc::recv_newconfig (user_args *sbp)
       sbp->reply (&res);
       return;
     }    
+    if (kb->meta->config.seqnum > newconfig->old_conf_seqnum + 1) {
+      warn << "dhc::recv_newconfig Older config received.\n";
+      dhc_newconfig_res res; res.status = DHC_CONF_MISMATCH;
+      sbp->reply (&res);
+      return;      
+    }
     if (dhc_debug)
       warn << "\n\n dhc::recv_newconfig. " << kb->to_str ();
   }
@@ -552,7 +546,6 @@ dhc::recv_newconfig (user_args *sbp)
   kb->data->tag.ver = newconfig->data.tag.ver;
   kb->data->tag.writer = newconfig->data.tag.writer;
   kb->data->data.set (newconfig->data.data.base (), newconfig->data.data.size ());
-  //kb->meta->cvalid = true;
   kb->meta->config.seqnum = newconfig->old_conf_seqnum + 1;
   
   kb->meta->config.nodes.setsize (newconfig->new_config.size ());
@@ -811,8 +804,9 @@ dhc::recv_getblock (user_args *sbp)
   res.resok->data.tag.writer = kb->data->tag.writer;
   res.resok->data.data.set (kb->data->data.base (), kb->data->data.size ());
   if (dhc_debug)
-    warn << "dhc::recv_getblock: size = " << res.resok->data.data.size () 
-	 << " value = " << res.resok->data.data.base () << "\n";
+    warn << "dhc::recv_getblock: size = " << res.resok->data.data.size ()
+	 << "\n";
+      //<< " value = " << res.resok->data.data.base () << "\n";
 
   sbp->reply (&res);  
 }
@@ -974,6 +968,10 @@ dhc::putblock_cb (ptr<dhc_block> kb, ptr<location> dest, ptr<write_state> ws,
       if (ws->bcount > n_replica/2) { 
 	if (dhc_debug)
 	  warn << myNode->my_ID () << " dhc::putblock_cb Done writing.\n";
+	dhc_soft *b = dhcs[kb->id];
+	if (b) 
+	  b->status = IDLE;	  
+	dhcs.insert (b);
 	ws->done = true;
 	dhc_put_res pres; pres.status = DHC_OK;
 	ws->sbp->reply (&pres);
@@ -984,8 +982,7 @@ dhc::putblock_cb (ptr<dhc_block> kb, ptr<location> dest, ptr<write_state> ws,
 	  warn << myNode->my_ID () << " dhc::putblock_cb Some chord error.\n";
 	ws->done = true;
 	print_error ("dhc::putblock_cb", err, DHC_OK);
-	dhc_put_arg *put = ws->sbp->template getarg<dhc_put_arg> ();
-	dhc_soft *b = dhcs[put->bID];
+	dhc_soft *b = dhcs[kb->id];
 	if (b) 
 	  b->status = IDLE;	  
 	dhcs.insert (b);

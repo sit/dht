@@ -201,10 +201,20 @@ dhashcli::retrieve (blockID blockID, cb_ret cb, int options,
   }
   
   if (blockID.ctype == DHASH_KEYHASH) {
-    route_iterator *ci = clntnode->produce_iterator_ptr (blockID.ID);
-    ci->first_hop (wrap (this, &dhashcli::retrieve_block_hop_cb, rs, ci,
-			 options, 5, guess),
-		   guess);
+    if (!DHC) {
+      route_iterator *ci = clntnode->produce_iterator_ptr (blockID.ID);
+      ci->first_hop (wrap (this, &dhashcli::retrieve_block_hop_cb, rs, ci,
+			   options, 5, guess),
+		     guess);
+    } else {
+      rs->ds.status = DHASH_OK;
+      rs->ds.options = options;
+      rs->ds.retries = 5;
+      rs->ds.guess = guess;
+      clntnode->find_successor (rs->key.ID, wrap (this, 
+						  &dhashcli::retrieve_dhc_lookup_cb,
+						  rs));
+    }
   } else {
     vec<ptr<location> > sl = clntnode->succs ();
     if ((options & DHASHCLIENT_SUCCLIST_OPT) && 
@@ -257,44 +267,53 @@ dhashcli::retrieve_block_hop_cb (ptr<rcv_state> rs, route_iterator *ci,
   }
 
   chord_node s = rs->succs.pop_front ();
-  if (DHC && rs->key.ctype == DHASH_KEYHASH) {
-    ptr<location> l = clntnode->locations->lookup_or_create (s);
-    ptr<dhc_get_arg> arg = New refcounted<dhc_get_arg>;
-    arg->bID = rs->key.ID;
-    rs->dhcres = New refcounted<dhc_get_res> (DHC_OK);   
-
-    clntnode->doRPC (l, dhc_program_1, DHCPROC_GET, arg, rs->dhcres,
-		     wrap (this, &dhashcli::retrieve_dhc_cb,
-			   rs, status, options, retries, guess));
-
+  //  if (DHC && rs->key.ctype == DHASH_KEYHASH) {
 #if 0
     dhc_mgr->get (l, rs->key.ID, wrap (this, &dhashcli::retrieve_dl_or_walk_cb,
 				       rs, status, options, retries, guess));
 #endif
-  } else 
+    // } else 
     dhash_download::execute (clntnode, s, rs->key, NULL, 0, 0, 0,
 			     wrap (this, &dhashcli::retrieve_dl_or_walk_cb,
 				   rs, status, options, retries, guess));
 }
 
 void 
-dhashcli::retrieve_dhc_cb (ptr<rcv_state> rs, dhash_stat status,
-			   int options, int retries, 
-			   ptr<chordID> guess, clnt_stat err)
+dhashcli::retrieve_dhc_lookup_cb (ptr<rcv_state> rs, vec<chord_node> succs, 
+				  route path, chordstat err)
 {
-  if (rs->dhcres->status == DHC_OK) {
+  if (!err) {
+    ptr<location> l = clntnode->locations->lookup_or_create (succs[0]);
+    warn << "\n\n********** succs[0] = " << succs[0].x << "\n\n\n";
+    ptr<dhc_get_arg> arg = New refcounted<dhc_get_arg>;
+    arg->bID = rs->key.ID;
+    rs->ds.res = New refcounted<dhc_get_res> (DHC_OK);   
+
+    clntnode->doRPC (l, dhc_program_1, DHCPROC_GET, arg, rs->ds.res,
+		     wrap (this, &dhashcli::retrieve_dhc_cb, rs));
+  }
+}
+
+void 
+dhashcli::retrieve_dhc_cb (ptr<rcv_state> rs, clnt_stat err)
+{
+  if (rs->ds.res->status == DHC_OK) {
+    warn << "\n\n Retrieve success\n\n";
     ptr<dhash_block> blk = 
-      New refcounted<dhash_block> (rs->dhcres->resok->data.data.base (), 
-				   rs->dhcres->resok->data.data.size (),
+      New refcounted<dhash_block> (rs->ds.res->resok->data.data.base (), 
+				   rs->ds.res->resok->data.data.size (),
 				   DHASH_KEYHASH);
     blk->ID = rs->key.ID;
     blk->source = clntnode->my_ID ();
     blk->hops   = 0;
     blk->errors = 0;
     
-    retrieve_dl_or_walk_cb (rs, status, options, retries, guess, blk);
+    retrieve_dl_or_walk_cb (rs, rs->ds.status, rs->ds.options, rs->ds.retries, 
+			    rs->ds.guess, blk);
   } else {
-    retrieve_dl_or_walk_cb (rs, status, options, retries, guess, 0); 
+    warn << "dhashcli: DHC retrieve failed dhc_stat " << rs->ds.res->status << "\n";
+    retrieve_dl_or_walk_cb (rs, rs->ds.status, rs->ds.options, rs->ds.retries, 
+			    rs->ds.guess, 0);
   }
 }
 
