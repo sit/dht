@@ -150,6 +150,7 @@ between (const chordID &a, const chordID &b, const chordID &n)
   return r;
 }
 
+// Check whether n in [a,b) on the circle.
 bool
 betweenleftincl (const chordID &a, const chordID &b, const chordID &n)
 {
@@ -164,6 +165,7 @@ betweenleftincl (const chordID &a, const chordID &b, const chordID &n)
   return r;
 }
 
+// Check whether n in (a,b] on the circle.
 bool
 betweenrightincl (const chordID &a, const chordID &b, const chordID &n)
 {
@@ -177,6 +179,22 @@ betweenrightincl (const chordID &a, const chordID &b, const chordID &n)
   }
   return r;
 }
+
+// Check whether n in [a,b] on the circle.
+bool
+betweenbothincl (const chordID &a, const chordID &b, const chordID &n)
+{
+  bool r;
+  if ((a == b) && (n == a)) {
+    r = 1;
+  } else if (a < b) {
+    r = (n >= a) && (n <= b);
+  } else {
+    r = (n >= a) || (n <= b);
+  }
+  return r;
+}
+ 
 
 chordID
 distance(const chordID &a, const chordID &b) 
