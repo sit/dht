@@ -111,6 +111,7 @@ dhashcli::retrieve (blockID blockID, cb_ret cb, int options,
 			 options, 5, guess),
 		   guess);
   } else {
+    delete ci;
 
     vec<ptr<location> > sl = clntnode->succs ();
     if ((options & DHASHCLIENT_SUCCLIST_OPT) && 
