@@ -156,7 +156,9 @@ dhashclient::search_cb(sfs_ID my_target, sfs_ID node, sfs_ID target, cbi cb) {
 
   if (my_target == target) {
     dhash_stat *status = New dhash_stat();
-    defp2p->doRPC (node, dhash_program_1, DHASHPROC_CHECK, &target, status,
+    sfs_ID *target_h = New sfs_ID();
+    *target_h = target;
+    defp2p->doRPC (node, dhash_program_1, DHASHPROC_CHECK, target_h, status,
 		   wrap(this, &dhashclient::search_cb_cb, status, cb));
   } else
     cb (0);
