@@ -154,7 +154,7 @@ dhash_impl::dofetchrec_nexthop (user_args *sbp, dhash_fetchrec_arg *arg,
   farg->path.setsize (arg->path.size () + 1);
   for (size_t i = 0; i < arg->path.size (); i++)
     farg->path[i] = arg->path[i];
-  host_node->my_location ()->fill_node (farg->path[farg->path.size ()]);
+  host_node->my_location ()->fill_node (farg->path[arg->path.size ()]);
   
   doRPC (p, dhash_program_1, DHASHPROC_FETCHREC,
 	 farg, fres,
@@ -167,13 +167,19 @@ dhash_impl::dofetchrec_nexthop_cb (user_args *sbp, dhash_fetchrec_arg *arg,
 				   clnt_stat err)
 {
   blockID id (arg->key, arg->ctype, arg->dbtype);
-  trace << host_node->my_ID () << ": dofetchrec_nexthop (" << id << ")\n";
+  trace << host_node->my_ID () << ": dofetchrec_nexthop (" << id
+	<< ") returned " << err << ".\n";
 
-  dhash_stat rstat (DHASH_RPCERR);
   if (err) {
     // XXX actually, we should do something like retry and try to
     //     find someone else to ask.
-    sbp->replyref (rstat);
+    dhash_fetchrec_res rres (DHASH_RPCERR);
+    rres.resdef->path.setsize (arg->path.size () + 1);
+    for (size_t i = 0; i < arg->path.size (); i++)
+      rres.resdef->path[i] = arg->path[i];
+    host_node->my_location ()->fill_node (arg->path[arg->path.size ()]);
+    
+    sbp->reply (&rres);
     sbp = NULL;
     return;
   }

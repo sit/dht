@@ -105,7 +105,7 @@ void
 dhashcli::dofetchrec_execute (blockID b, cb_ret cb)
 {
   chordID myID = clntnode->my_ID ();
-  trace << myID << ": dofetchrec_execute (" << b << ")\n";
+
   ptr<dhash_fetchrec_arg> arg = New refcounted<dhash_fetchrec_arg> ();
   arg->key    = b.ID;
   arg->ctype  = b.ctype;
@@ -113,7 +113,8 @@ dhashcli::dofetchrec_execute (blockID b, cb_ret cb)
 
   vec<chordID> failed;
   ptr<location> s = clntnode->closestpred (b.ID, failed);
-
+  trace << myID << ": dofetchrec_execute (" << b << ") -> " << s->id () << "\n";
+  
   ptr<dhash_fetchrec_res> res = New refcounted<dhash_fetchrec_res> (DHASH_OK);
   timespec start;
   clock_gettime (CLOCK_REALTIME, &start);
@@ -128,8 +129,8 @@ dhashcli::dofetchrec_cb (timespec start, blockID b, cb_ret cb,
 {
   strbuf prefix;
   prefix << clntnode->my_ID () << ": dofetchrec_execute (" << b << "): ";
+  trace << prefix << "returned " << s << "\n";
   if (s) {
-    trace << prefix << "returned " << s << "\n";
     route r;
     (*cb) (DHASH_RPCERR, NULL, r);
     return;
@@ -142,6 +143,7 @@ dhashcli::dofetchrec_cb (timespec start, blockID b, cb_ret cb,
   for (size_t i = 0; i < path->size (); i++) {
     ptr<location> l = clntnode->locations->lookup_or_create
       (make_chord_node ((*path)[i]));
+    assert (l != NULL);
     r.push_back (l);
   }
   
