@@ -105,7 +105,7 @@ gtitm::parse(ifstream &ifs)
 
   //TODO: bind nodes to vertices in an interesting way
 
-  for (int i = 1; i < _num; i++) {
+  for (int i = 1; i <= _num; i++) {
     ip_addr = i;
     Node *p = ProtocolFactory::Instance()->create(ip_addr);
     assert(!Network::Instance()->getnode(ip_addr));
