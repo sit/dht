@@ -155,7 +155,7 @@ class vnode_impl : public vnode {
 
   void doRPC_cb (const rpc_program prog, int procno,
 		 void *out, aclnt_cb cb, 
-		 dorpc_res *res, clnt_stat err);
+		 ref<dorpc_res> res, clnt_stat err);
  public:
   chordID myID;
   ptr<chord> chordnode;

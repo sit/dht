@@ -324,7 +324,7 @@ vnode_impl::doRPC (const chordID &ID, const rpc_program &prog, int procno,
     memcpy (arg->args.base (), marshalled_args, args_len);
     free (marshalled_args);
 
-    dorpc_res *res = New dorpc_res (DORPC_OK);
+    ref<dorpc_res> res = New refcounted<dorpc_res> (DORPC_OK);
     return locations->doRPC (ID, transport_program_1, TRANSPORTPROC_DORPC, 
 			     arg, res, 
 			     wrap (this, &vnode_impl::doRPC_cb, 
@@ -335,7 +335,7 @@ vnode_impl::doRPC (const chordID &ID, const rpc_program &prog, int procno,
 void
 vnode_impl::doRPC_cb (const rpc_program prog, int procno,
 		      void *out, aclnt_cb cb, 
-		      dorpc_res *res, clnt_stat err) 
+		      ref<dorpc_res> res, clnt_stat err) 
 {
   if (err) {
     cb (err);
