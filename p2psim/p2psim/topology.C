@@ -78,8 +78,8 @@ Topology::parse(char *filename)
         cerr << "topology keyword must appear before loss_rate keyword" << filename << endl;
 	continue;
       }
-      top->_lossrate = atoi(words[1].c_str());
-      assert(top->lossrate() >= 0 && top->lossrate() <= 100);
+      top->_lossrate = (unsigned) (atof(words[1].c_str()) * 100);
+      assert(top->lossrate() >= 0 && top->lossrate() <= 10000);
 
     // failure_model
     } else if(words[0] == "failure_model") {

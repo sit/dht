@@ -39,12 +39,12 @@ public:
   virtual Time latency(IPAddress, IPAddress, bool = false) = 0;
   virtual Time median_lat() { return _med_lat; } 
   virtual ~Topology();
-  double lossrate() { return _lossrate; }
+  unsigned lossrate() { return _lossrate; }
 
 protected:
   Topology();
   Time _med_lat;
-  double _lossrate;
+  unsigned _lossrate;
 };
 
 #endif //  __TOPOLOGY_H
