@@ -22,7 +22,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-# $Id: run-simulations.pl,v 1.17 2004/01/23 20:25:45 strib Exp $
+# $Id: run-simulations.pl,v 1.18 2004/01/27 00:34:10 strib Exp $
 
 use strict;
 use Getopt::Long;
@@ -228,33 +228,7 @@ while( <ARGS> ) {
 }
 close( ARGS );
 
-# now write the events file to use
 my $eventfile = "$logdir/run-simulations-tmp-event$$";
-open( EF, ">$eventfile" ) or die( "Couldn't write to $eventfile" );
-
-my $eg_type = "ChurnEventGenerator";
-if( $churnfile ne "" ) {
-    $eg_type = "ChurnFileEventGenerator";
-}
-
-my $ipkeys = 0;
-if( $protocol eq "Kademlia" or $protocol eq "Kelips" or $protocol eq "ChordFingerPNS") {
-    $ipkeys = 1;
-}
-
-print EF "generator $eg_type ipkeys=$ipkeys " .
-    "lifemean=$lifemean deathmean=$deathmean lookupmean=$lookupmean " . 
-    "exittime=$exittime stattime=$stattime";
-
-if( $churnfile ne "" ) {
-    print EF "file=$churnfile";
-}
-
-print EF "\n";
-if( $withobserver ) {
-    print EF "observer $observer initnodes=1\n";
-}
-close( EF );
 
 # now run the simulation
 do {
@@ -399,23 +373,50 @@ sub check_dependent {
 sub run_command {
     
     my $arg_string = shift;
-
-    my $protfile = "$logdir/run-simulations-tmp-prot$$";
-    open( PF, ">$protfile" ) or die( "Couldn't write to $protfile" );
-    print PF "$protocol $arg_string initstate=1\n";
-    close( PF );
     
     my @splitargs = split( /\s+/, $arg_string );
     my $label = "";
     my $i = 0;
+    my %labelhash = ();
     foreach my $a (@splitargs) {
 	my @val = split( /=/, $a );
 	$label .= $val[1];
+	$labelhash{$val[0]} = $val[1];
 	if( $i != $#splitargs ) {
 	    $label .= "-";
 	}
 	$i++;
     }
+
+    # if no command line arguments are specified for event stuff, se
+    # if the protocol file had these params
+    my $lomean = $lookupmean;
+    my $limean = $lifemean;
+    my $dmean = $deathmean;
+    my $etime = $exittime;
+    my $stime = $stattime;
+
+    if( !defined $options{"lookupmean"} && defined $labelhash{"lookupmean"}) {
+	$lomean = $labelhash{"lookupmean"};
+    }
+    if( !defined $options{"lifemean"} && defined $labelhash{"lifemean"}) {
+	$limean = $labelhash{"lifemean"};
+    }
+    if( !defined $options{"deathmean"} && defined $labelhash{"deathmean"}) {
+	$dmean = $labelhash{"deathmean"};
+    }
+    if( !defined $options{"exittime"} && defined $labelhash{"exittime"}) {
+	$etime = $labelhash{"exittime"};
+    }
+    if( !defined $options{"stattime"} && defined $labelhash{"stattime"}) {
+	$stime = $labelhash{"stattime"};
+    }
+    &write_events_file( $lomean, $limean, $dmean, $etime, $stime );
+
+    my $protfile = "$logdir/run-simulations-tmp-prot$$";
+    open( PF, ">$protfile" ) or die( "Couldn't write to $protfile" );
+    print PF "$protocol $arg_string initstate=1\n";
+    close( PF );
     
     # now run it
     my $logfile = "$logdir/$protocol-$label.log";
@@ -446,5 +447,43 @@ sub run_command {
     unlink( $protfile );
     
     return 1;
+
+}
+
+sub write_events_file {
+
+    my $lookupmean = shift;
+    my $lifemean = shift;
+    my $deathmean = shift;
+    my $exittime = shift;
+    my $stattime = shift;
+
+    # now write the events file to use
+    open( EF, ">$eventfile" ) or die( "Couldn't write to $eventfile" );
+    
+    my $eg_type = "ChurnEventGenerator";
+    if( $churnfile ne "" ) {
+	$eg_type = "ChurnFileEventGenerator";
+    }
+    
+    my $ipkeys = 0;
+    if( $protocol eq "Kademlia" or $protocol eq "Kelips" or $protocol 
+	eq "ChordFingerPNS") {
+	$ipkeys = 1;
+    }
+    
+    print EF "generator $eg_type ipkeys=$ipkeys " .
+	"lifemean=$lifemean deathmean=$deathmean lookupmean=$lookupmean " . 
+	    "exittime=$exittime stattime=$stattime";
+    
+    if( $churnfile ne "" ) {
+	print EF "file=$churnfile";
+    }
+    
+    print EF "\n";
+    if( $withobserver ) {
+	print EF "observer $observer initnodes=1\n";
+    }
+    close( EF );
 
 }
