@@ -128,6 +128,7 @@ dhash::dispatch (unsigned long procno,
 
       dhash_reply (rpc_id, DHASHPROC_FETCHITER, res);
       delete res;
+      delete farg;
     }
     break;
   case DHASHPROC_STORE:
@@ -222,6 +223,7 @@ dhash::fetchiter_svc_cb (long xid, dhash_fetch_arg *arg,
   
   dhash_reply (xid, DHASHPROC_FETCHITER, res);
   delete res;
+  delete arg;
 }
 
 void

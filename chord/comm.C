@@ -138,7 +138,9 @@ locationtable::doRPC_gotaxprt (doRPC_cbstate *st,
 				    l, getusec ());
     c->call (CHORDPROC_HOSTRPC, &farg, res, 
 	     wrap (mkref(this), &locationtable::doForeignRPC_cb, C, prog)); 
+    delete st;
   }
+
 
 }
 

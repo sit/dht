@@ -217,6 +217,7 @@ dhashclient::lookup_iter_cb (svccb *sbp,
     fres->resok->source = path.back ();
     cache_on_path (arg->key, path);
     sbp->reply (fres);
+    delete fres;
   } else if (res->status == DHASH_CONTINUE) {
     chordID next = res->cont_res->next.x;
     chordID prev = path.back ();
@@ -379,11 +380,16 @@ dhashclient::forget_block (chordID key)
 void
 dhashclient::cache_on_path (chordID key, route path)
 {
-  if (!do_caching) return;
+  if (!do_caching) {
+    if (block_memorized (key)) forget_block (key);
+    return;
+  }
   if (!block_memorized (key)) return;
   for (unsigned int i=0; i < path.size (); i++)
     send_block (key, path[i], DHASH_CACHE);
+  forget_block (key);
 }
+
 
 void
 dhashclient::send_block (chordID key, chordID to, store_status stat)
