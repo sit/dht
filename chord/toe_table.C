@@ -76,7 +76,7 @@ toe_table::get_toes_rmt_cb (chord_nodelistres *res, int level, clnt_stat err)
 {
   if (!(err || res->status)){
     for (unsigned int i=0; i < res->resok->nlist.size (); i++) 
-      add_toe (res->resok->nlist[i].x, res->resok->nlist[i].r, level);
+      add_toe (res->resok->nlist[i], level);
   }
   
   in_progress--;
@@ -109,24 +109,23 @@ toe_table::present (chordID id, int level)
 
 
 void
-toe_table::add_toe (chordID id, net_address r, int level) 
+toe_table::add_toe (const chord_node &n, int level) 
 {
 
-  if(id == myID) return;
-  if (present (id, level)) return;
+  if(n.x == myID) return;
+  if (present (n.x, level)) return;
     
   in_progress++;
   
-  //does this do anything?????
-  //locations->cacheloc (id, r, cbchall_null); // XXX
-
-  locations->ping (id, wrap (this, &toe_table::add_toe_ping_cb, id, level));
+  locations->insert (n); // ping sucks.
+  locations->ping (n.x, wrap (this, &toe_table::add_toe_ping_cb, n, level));
 }
 
 void
-toe_table::add_toe_ping_cb (chordID id, int level, chordstat err)
+toe_table::add_toe_ping_cb (chord_node n, int level, chordstat err)
 {
 
+  chordID id = n.x;
   if (!err && locations->get_a_lat (id) < level_to_delay (level)) {
 
   
@@ -193,7 +192,7 @@ toe_table::add_toe_ping_cb (chordID id, int level, chordstat err)
 
       //try to promote the new one right away
       if(level+1 < MAX_LEVELS){
-	add_toe(id, locations->getaddress(id), level+1);
+	add_toe(n, level+1);
       }
       
     }
@@ -285,14 +284,10 @@ toe_table::stabilize_toes ()
   set_last_level (level);
   if (level < 0) { //bootstrap off succ list
     // grab the succlist and stick it in the toe table
-
-    chordID ith_succ = myID;
-    int goodnodes = locations->usablenodes () - 1;
-    int numnodes = (NSUCC > goodnodes) ? goodnodes : NSUCC;
+    vec<chord_node> succs = myvnode->succs ();
     //warnx << "toe bootstrapping " << goodnodes << " " << numnodes << "\n";
-    for (int i = 0; i < numnodes; i++) {
-      ith_succ = locations->closestsuccloc (ith_succ + 1); //XXX ith_succ + 1?
-      add_toe (ith_succ, locations->getaddress (ith_succ), 0);
+    for (u_int i = 0; i < succs.size (); i++) {
+      add_toe (succs[i], 0);
       //warnx << "add_toe called with " << ith_succ << "\n";
       //stable_toes = false;
     }
