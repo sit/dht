@@ -92,7 +92,7 @@ Pastry::route(NodeID *D, void *msg)
   IPAddress nexthop = 0;
 
   // in leaf set?
-  LS::iterator pos;
+  ES::iterator pos;
   if((*(pos = min_element(_lleafset.begin(), _lleafset.end()))) <= *D &&
      (*(pos = max_element(_hleafset.begin(), _lleafset.end()))) > *D)
   {
@@ -124,16 +124,7 @@ Pastry::route(NodeID *D, void *msg)
       }
 
       // search in uleafset
-      for(ES::const_iterator pos = _uleafset.begin(); pos != _uleafset.end(); ++pos) {
-        NodeID T = (*pos).first;
-        if((shared_prefix_len((*pos).first, *D) >= l) && (abs(T - *D) < abs(_id - *D))) {
-          nexthop = (*pos).second;
-          goto done;
-        }
-      }
-
-      // search in routing table
-      for(ES::const_iterator pos = _uleafset.begin(); pos != _uleafset.end(); ++pos) {
+      for(ES::const_iterator pos = _hleafset.begin(); pos != _hleafset.end(); ++pos) {
         NodeID T = (*pos).first;
         if((shared_prefix_len((*pos).first, *D) >= l) && (abs(T - *D) < abs(_id - *D))) {
           nexthop = (*pos).second;

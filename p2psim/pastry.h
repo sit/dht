@@ -80,6 +80,7 @@ private:
 
   // finds node such that shl(RTEntry, D) >= l
   // and |T - D| < |A - D|
+  /*
   class RTEntrySmallestDiff { public:
     RTEntrySmallestDiff(NodeID D, NodeID A) : _D(D), _A(A) {}
     public:
@@ -94,6 +95,7 @@ private:
       NodeID _D;
       NodeID _A;
   };
+  */
 };
 
 #endif // __PASTRY_H
