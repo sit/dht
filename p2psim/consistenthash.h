@@ -1,7 +1,7 @@
 #ifndef __CONSISTENTHASH_H
 #define __CONSISTENTHASH_H 
 
-#define NBCHID sizeof(CHID)
+#define NBCHID (sizeof(CHID)*8)
 
 #include <openssl/sha.h>
 

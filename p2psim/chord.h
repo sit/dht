@@ -72,12 +72,12 @@ public:
 
   string s();
 
-  void stabilize(void *);
+  virtual void stabilize(void *);
 protected:
   LocTable *loctable;
   IDMap me;
 
-  vector<IDMap> find_successors(CHID key, int m);
+  virtual vector<IDMap> find_successors(CHID key, int m);
   void dump();
   void fix_predecessor();
   void fix_successor();

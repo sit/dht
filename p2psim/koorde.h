@@ -22,6 +22,7 @@ public:
   // RPC handlers
   void koorde_lookup (koorde_lookup_arg *, koorde_lookup_ret *);
 
+  void stabilize (void *);
 protected:
   Chord::CHID debruijn;
 

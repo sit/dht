@@ -27,6 +27,16 @@ Koorde::find_successors(CHID key, int m)
   return succs;
 }
 
+void
+Koorde::stabilize (void *) 
+{
+  Chord::stabilize (NULL);
+  cout << "Koorde::stabilzie\n";
+  vector<IDMap> succs = find_successors (debruijn, 1);
+  assert (succs.size () > 0);
+  loctable->add_node(succs[0]);
+}
+
 Koorde::Koorde(Node *n) : Chord(n) {
   debruijn = me.id << 1;
   cout << "Koorde " << me.id << " debruijn " << debruijn << endl;

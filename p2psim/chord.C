@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <iostream>
 
-#define PID(x) (x >> (NBCHID*8 - 32))
+#define PID(x) (x >> (NBCHID - 32))
 #define STABLE_TIMER 500
 
 using namespace std;
