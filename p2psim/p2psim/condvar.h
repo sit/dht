@@ -22,13 +22,12 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: condvar.h,v 1.6 2004/01/31 03:26:33 strib Exp $ */
+/* $Id: condvar.h,v 1.7 2004/02/24 17:15:39 rsc Exp $ */
 
 #ifndef __CONDVAR_H
 #define __CONDVAR_H
 
-#include <lib9.h>
-#include <thread.h>
+#include "libtask/task.h"
 #include "p2psim.h"
 #include <set>
 using namespace std;

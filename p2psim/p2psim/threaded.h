@@ -25,8 +25,7 @@
 #ifndef __THREADED_H
 #define __THREADED_H
 
-#include <lib9.h>
-#include <thread.h>
+#include "libtask/task.h"
 using namespace std;
 
 class Threaded {

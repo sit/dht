@@ -46,7 +46,7 @@ ChurnFileEventGenerator::run()
   if(!in) {
     cerr << "no such file " << _name 
 	 << ", did you supply the file parameter?" << endl;
-    threadexitsall(0);
+    taskexitall(0);
   }
 
   string line;

@@ -1,5 +1,5 @@
 SUBDIRS = observers protocols eventgenerators failuremodels \
-          topologies misc events p2psim
+          topologies misc events libtask p2psim 
 
 EXTRA_DIST = Makefile.incl ../utils/skiplist.h \
 	    example/events.txt \

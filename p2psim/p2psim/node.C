@@ -132,7 +132,7 @@ Node::parse(char *filename)
   ifstream in(filename);
   if(!in) {
     cerr << "no such file " << filename << endl;
-    threadexitsall(0);
+    taskexitall(0);
   }
 
   string line;
@@ -630,7 +630,7 @@ Node::Receive(void *px)
   Network::Instance()->send(reply);
 
   // ...and we're done
-  threadexits(0);
+  taskexit(0);
 }
 
 #include "bighashmap.cc"

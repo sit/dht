@@ -49,7 +49,7 @@ Topology::parse(char *filename)
   ifstream in(filename);
   if(!in) {
     cerr << "no such file " << filename << endl;
-    threadexitsall(0);
+    taskexitall(0);
   }
 
   string line;

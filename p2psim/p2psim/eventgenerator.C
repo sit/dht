@@ -27,8 +27,7 @@
 #include "parse.h"
 #include "eventgenerators/eventgeneratorfactory.h"
 #include "observers/observerfactory.h"
-#include <lib9.h>
-#include <thread.h>
+#include "libtask/task.h"
 #include <vector>
 #include <iostream>
 #include <assert.h>
@@ -40,7 +39,7 @@ EventGenerator::parse(char *filename)
   ifstream in(filename);
   if(!in) {
     cerr << "no such file " << filename << endl;
-    threadexitsall(0);
+    taskexitall(0);
   }
 
   string line;

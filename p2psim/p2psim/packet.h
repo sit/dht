@@ -26,8 +26,7 @@
 #ifndef __PACKET_H
 #define __PACKET_H
 
-#include <lib9.h>
-#include <thread.h>
+#include "libtask/task.h"
 #include "p2psim.h"
 using namespace std;
 

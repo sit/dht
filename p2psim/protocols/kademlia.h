@@ -578,5 +578,5 @@ private:
 };
 // }}}
 
-#define KDEBUG(x) if(p2psim_verbose >= (x)) cout << Kademlia::debugcounter++ << "(" << now() << "). " << Kademlia::printID(_id) << "(" << threadid() << ") "
+#define KDEBUG(x) if(p2psim_verbose >= (x)) cout << Kademlia::debugcounter++ << "(" << now() << "). " << Kademlia::printID(_id) << "(" << taskid() << ") "
 #endif // __KADEMLIA_H

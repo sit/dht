@@ -71,7 +71,7 @@ private:
   bool _ipkeys;
   vector<IPAddress> _ips;
 
-  Time next_exponential( uint mean );
+  Time next_exponential(u_int mean);
   string get_lookup_key();
 
 };

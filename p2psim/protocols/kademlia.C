@@ -1244,7 +1244,7 @@ Kademlia::reap(void *r)
   // ri->k->_riset.remove(ri);
   delete ri;
   // cout << "reaper done" << endl;
-  threadexits(0);
+  taskexit(0);
 }
 // }}}
 

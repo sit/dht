@@ -76,8 +76,6 @@ EventQueue::go()
 void
 EventQueue::run()
 {
-  extern int anyready();
-
   // Wait for threadmain() to call go().
   recvp(_gochan);
 

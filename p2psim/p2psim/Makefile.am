@@ -8,7 +8,8 @@ p2psim_LDADD = p2psim_core.o \
 	       ../observers/observers.o \
 	       ../protocols/protocols.o \
 	       ../topologies/topologies.o \
-               -L/usr/local/lib -lthread -l9 -lfmt -lutf -lcrypto $(GBLIBS)
+	       ../libtask/libtask.a \
+               -lcrypto $(GBLIBS)
 
 EXTRA_DIST = args.h condvar.h event.h eventgenerator.h eventqueue.h \
              eventqueueobserver.h failuremodel.h network.h node.h observed.h \
@@ -18,7 +19,7 @@ EXTRA_DIST = args.h condvar.h event.h eventgenerator.h eventqueue.h \
 	     bighashmap.cc bighashmap.hh
 
 noinst_PROGRAMS = p2psim_core.o
-p2psim_core_o_SOURCES = anyready.C condvar.C p2protocol.C event.C \
+p2psim_core_o_SOURCES = condvar.C p2protocol.C event.C \
 		        eventqueue.C \
 		        eventgenerator.C \
 		        eventqueueobserver.C \

@@ -51,6 +51,6 @@ int
 ThreadManager::create(void (*fn)(void*), void *args, int ss)
 {
   _counter++;
-  int tid = ::threadcreate(fn, args, THREAD_MULTIPLY * ss);
+  int tid = ::taskcreate(fn, args, THREAD_MULTIPLY * ss);
   return tid;
 }

@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: condvar.C,v 1.7 2004/01/31 03:26:33 strib Exp $ */
+/* $Id: condvar.C,v 1.8 2004/02/24 17:15:39 rsc Exp $ */
 
 #include "condvar.h"
 using namespace std;
@@ -64,9 +64,9 @@ void
 ConditionVar::notifyAll()
 {
 
-  uint sz = _waiters->size();
+  u_int sz = _waiters->size();
   Channel * chans[sz];
-  uint j = 0;
+  u_int j = 0;
 
   // wake all the sleeping guys
   for(set<Channel*>::const_iterator i = _waiters->begin(); 
@@ -78,7 +78,7 @@ ConditionVar::notifyAll()
 
   // we wait til after to call send, since otherwise we'll yield and may
   // end up altering waiters while we're still iterating.
-  for( uint i = 0; i < sz; i++ ) {
+  for( u_int i = 0; i < sz; i++ ) {
     send(chans[i], 0);
   }
 

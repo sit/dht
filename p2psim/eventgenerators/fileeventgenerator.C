@@ -44,7 +44,7 @@ FileEventGenerator::run()
   ifstream in(_name.c_str());
   if(!in) {
     cerr << "no such file " << _name << ", did you supply the name parameter?" << endl;
-    threadexitsall(0);
+    taskexitall(0);
   }
 
   string line;

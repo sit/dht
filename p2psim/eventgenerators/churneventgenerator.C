@@ -90,7 +90,7 @@ ChurnEventGenerator::run()
 
     Args *a = New Args();
     (*a)["wellknown"] = _wkn_string;
-    uint jointime;
+    u_int jointime;
     if( ip == _wkn ) {
       jointime = 1;
     } else {
@@ -192,13 +192,13 @@ ChurnEventGenerator::kick(Observed *o, ObserverInfo *oi)
 }
 
 Time
-ChurnEventGenerator::next_exponential( uint mean )
+ChurnEventGenerator::next_exponential( u_int mean )
 {
 
   assert( mean > 0 );
 
   double x = ( (double)random() / (double)(RAND_MAX) );
-  uint rt = (uint) ((-(mean*1.0))*log( 1 - x ));
+  u_int rt = (u_int) ((-(mean*1.0))*log( 1 - x ));
   return (Time) rt;
 
 }

@@ -50,6 +50,6 @@ graceful_exit(void*)
   delete EventQueue::Instance();
   __tmg_dmalloc_stats();
 
-  threadexitsall(0);
+  taskexitall(0);
 }
 

@@ -77,5 +77,5 @@ Event::Execute1(void *ex)
   Event *e = (Event*) ex;
   e->execute();
   delete e;
-  threadexits(0);
+  taskexit(0);
 }
