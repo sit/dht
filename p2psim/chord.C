@@ -56,12 +56,13 @@ Chord::find_successor_x(void *x)
 
 // External event that tells a node to contact the well-known node
 // and try to join.
-// XXX assumes that well-known node has address 1.
 void
-Chord::join(Args*)
+Chord::join(Args *args)
 {
+  IPAddress wkn = (IPAddress) atoi(((*args)["wellknown"]).c_str());
+
   cout << s() + "::join" << endl;
-  void *ret = doRPC((IPAddress) 1, Chord::find_successor_x, me.hid);
+  void *ret = doRPC((IPAddress) wkn, Chord::find_successor_x, me.hid);
   printf("Chord(%u,%u)::join2 %u\n",
          me.id, me.hid, (int) ret);
   // stabilize();
