@@ -1,8 +1,10 @@
 #ifndef _DHC_H_
 #define _DHC_H_
 
-#include "dhash_impl.h"
+//#include "dhash_impl.h"
 #include <dbfe.h>
+#include "chord_types.h"
+#include "dhash_types.h"
 
 // PK blocks data structure for maintaining consistency.
 
@@ -28,10 +30,14 @@ struct proposal_t {
 };
 
 struct keyhash_meta {
-  tag_t tag;
   replica_t config;
   paxos_seqnum_t promised;
   proposal_t accepted;
+};
+
+struct keyhash_data {
+  tag_t tag;
+  dhash_value value;
 };
 
 class dhc {
