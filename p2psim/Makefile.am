@@ -9,7 +9,8 @@ p2psim_SOURCES = main.C node.C network.C chord.C packet.C topology.C \
                  p2pevent.C netevent.C p2psim.C parse.C \
                  eventfactory.C simevent.C pastry.C chordfinger.C chordfingerpns.C\
                  koorde.C anyready.C observeevent.C \
-                 observerfactory.C chordobserver.C observer.C kademliaobserver.C\
+                 observerfactory.C chordobserver.C observer.C \
+		 kademliaobserver.C chordtoe.C \
                  threadmanager.C vivalditest.C nodefactory.C \
                  vivaldi.C randomgraph.C dvgraph.C euclideangraph.C \
                  e2egraph.C g2graph.C threadspeedup.C dhtprotocol.C rpchandle.C

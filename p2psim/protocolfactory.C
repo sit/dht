@@ -9,6 +9,8 @@
 #include <typeinfo>
 #include <iostream>
 #include "p2psim.h"
+#include "chordtoe.h"
+
 using namespace std;
 
 extern uint base;
@@ -55,6 +57,8 @@ ProtocolFactory::create(string s, Node *n)
     p = new ChordFinger(n,base,(successors>resilience? successors:resilience), fingers);
   if (s == "ChordFingerPNS")
     p = new ChordFingerPNS(n,base,successors);
+  if (s == "ChordToe")
+    p = new ChordToe(n, base, successors, fingers);
   if (s == "Kademlia")
     p = new Kademlia(n);
   if (s == "Pastry")

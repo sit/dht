@@ -119,8 +119,6 @@ Chord::find_successors(CHID key, uint m, bool intern)
       printf ("vis %llu step %16qx %16qx\n", now(), me.id, nprime.id);
 
     
-    cout << id() << " --> " << nprime.ip << "\n";
-
     bool r;
     if (_vivaldi) {
       Chord *target = dynamic_cast<Chord *>(getpeer(nprime.ip));
@@ -140,7 +138,6 @@ Chord::find_successors(CHID key, uint m, bool intern)
 #endif
 
       //actually talk to the successor
-      cout << id() << " ---> " << nr.v[0].ip << "\n";
       if (_vivaldi) {
 	Chord *target = dynamic_cast<Chord *>(getpeer(nr.v[0].ip));
 	r = _vivaldi->doRPC(nr.v[0].ip, target, &Chord::null_handler, (void *)NULL, (void *)NULL);
@@ -296,6 +293,7 @@ Chord::join(Args *args)
   if (vis) {
     printf("vis %llu join %16qx\n", now (), me.id);
   }
+
   _inited = true;
 
   int dim = args->nget<int>("model-dimension", 10);
@@ -305,7 +303,6 @@ Chord::join(Args *args)
   }
 
   _vivaldi = new Vivaldi10(node(), 3, 0.05, 1); 
-
 
   IDMap wkn;
   wkn.ip = args->nget<IPAddress>("wellknown");
@@ -362,9 +359,10 @@ Chord::stabilize()
   if (nsucc > 1) fix_successor_list();
 
   //vivaldi random lookups
+#ifdef RANDOM_LOOKUPS
   CHID random_key = ConsistentHash::getRandID ();
-  cerr << ip() << " looking up " << random_key << "\n";
   vector<Chord::IDMap> ignore = find_successors (random_key, 1, false);
+#endif
   
 }
 
