@@ -27,8 +27,9 @@ graceful_exit()
   extern int anyready();
 
   // send an exit packet to the Network
-  send(EventQueue::Instance()->exitchan(), 0);
-  send(Network::Instance()->exitchan(), 0);
+  unsigned e = 1;
+  send(EventQueue::Instance()->exitchan(), &e);
+  send(Network::Instance()->exitchan(), &e);
 
   while(anyready())
     yield();

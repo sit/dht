@@ -23,7 +23,7 @@ void
 SimEvent::execute()
 {
   if(_op == "exit") {
-    cout << "simulation exits" << endl;
+    cout << "simulation exits at the end of cycle " << now() << "." << endl;
     ::graceful_exit();
   } else
     cerr << "SimEvent::execute(): unknown op " << _op << "\n";

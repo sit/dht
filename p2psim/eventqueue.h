@@ -31,8 +31,7 @@ private:
 
   virtual void run();
   void add_event(Event*);
-  void advance();
-  bool should_exit();
+  bool advance();
 
   // for debuging
   void dump();

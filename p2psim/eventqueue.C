@@ -57,13 +57,13 @@ EventQueue::run()
   // Wait for threadmain() to call go().
   recvp(_gochan);
 
-  while(1){
+  while(true) {
     // let others run
     while(anyready())
       yield();
 
     // process any waiting events-to-be-scheduled
-    if((e = (Event*)nbrecvp(_eventchan)) != 0){
+    if((e = (Event*) nbrecvp(_eventchan)) != 0) {
       add_event(e);
       continue;
     }
@@ -76,37 +76,26 @@ EventQueue::run()
       ::graceful_exit();
                                                                                   
     // run events for next time in the queue
-    advance();
+    if(!advance())
+      break;
   }
-}
-
-
-bool
-EventQueue::should_exit()
-{
-  Alt a[2];
-  unsigned exit;
-  
-  a[0].c = _exitchan;
-  a[0].v = &exit;
-  a[0].op = CHANRCV;
-  a[1].op = CHANNOBLK;
-
-  unsigned i = 0;
-  if((i = alt(a)) < 0) {
-    cerr << "interrupted" << endl;
-    assert(false);
-  }
-  return i == 0;
 }
 
 // moves time forward to the next event
-void
+bool
 EventQueue::advance()
 {
   if(!_size) {
     cerr << "queue is empty" << endl;
     exit(-1);
+  }
+
+  // don't advance if we should be exiting
+  // if(nbrecvp(_exitchan) != 0) {
+  unsigned *x;
+  if((x = (unsigned *) nbrecvp(_exitchan)) != 0) {
+    delete this;
+    return false;
   }
 
   // XXX: time is not running smoothly. does that matter?
@@ -115,10 +104,6 @@ EventQueue::advance()
   _time = e->ts;
 
   while(_size > 0) {
-    // is there an exit event?
-    if(should_exit())
-      delete this;
-
     Event *first = _queue.front();
     if(first->ts > _time)
       break;
@@ -126,6 +111,8 @@ EventQueue::advance()
     _size--;
     Event::Execute(first); // new thread, execute(), delete Event
   }
+
+  return true;
 }
 
 
