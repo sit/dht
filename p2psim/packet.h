@@ -22,6 +22,7 @@ private:
   // RPC function and arguments.
   // No explicit reply; put it in the args.
   void (*_fn)(void *);
+  void (*_killme)(void *);
   void *_args;
 
   friend class Node;

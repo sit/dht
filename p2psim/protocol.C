@@ -61,6 +61,7 @@ Protocol::rcvRPC(RPCSet *hset)
   assert(token);
   hset->erase(token);
   cancelRPC(token);
+  delete p;
   return token;
 }
 

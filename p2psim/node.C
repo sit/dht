@@ -107,15 +107,16 @@ Node::run()
 bool
 Node::_doRPC(IPAddress dst, void (*fn)(void *), void *args)
 {
-  return _doRPC_receive(_doRPC_send(dst, fn, args));
+  return _doRPC_receive(_doRPC_send(dst, fn, 0, args));
 }
 
 
 RPCHandle*
-Node::_doRPC_send(IPAddress dst, void (*fn)(void *), void *args)
+Node::_doRPC_send(IPAddress dst, void (*fn)(void *), void (*killme)(void *), void *args)
 {
   Packet *p = New Packet;
   p->_fn = fn;
+  p->_killme = killme;
   p->_args = args;
   p->_src = ip();
   p->_dst = dst;

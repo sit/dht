@@ -2,10 +2,9 @@
 #define __RPCHANDLE_H
 
 #include "packet.h"
-#include "thing.h"
 
 class RPCHandle { public:
-  RPCHandle(Channel*, Packet*, Thing* = 0);
+  RPCHandle(Channel*, Packet*);
   ~RPCHandle();
 
   Channel *channel() { return _c; }
@@ -14,7 +13,6 @@ class RPCHandle { public:
 private:
   Channel* _c;
   Packet* _p;
-  Thing *_t; // this is actually a Thunk
 
 };
 

@@ -41,7 +41,7 @@ public:
       AT *args, RT *ret)
   {
     Thunk<BT, AT, RT> *t = _makeThunk(dst, target, fn, args, ret);
-    RPCHandle *rpch = _doRPC_send(dst, Thunk<BT, AT, RT>::thunk, (void *) t);
+    RPCHandle *rpch = _doRPC_send(dst, Thunk<BT, AT, RT>::thunk, Thunk<BT, AT, RT>::killme, (void *) t);
     return rpch;
   }
 
@@ -51,18 +51,10 @@ public:
   bool alive () { return _alive; }
   void set_alive() { _alive = true;}
 
-  // Parent of Thunk so that RPCHandle can call delete on a Thunk without the
-  // template parameters
-  class Thing {
-  };
-
 private:
 
-  // Thunk inherits from Thing so that we can delete it in RPCHandle without
-  // needing the parameters.  Note, however, that Thunk's constructor will NOT
-  // be called.
   template<class BT, class AT, class RT>
-  class Thunk : public Thing {
+  class Thunk {
   public:
     BT *_target;
     void (BT::*_fn)(AT *, RT *);
@@ -72,10 +64,14 @@ private:
       Thunk *t = (Thunk *) xa;
       (t->_target->*(t->_fn))(t->_args, t->_ret);
     }
+
+    static void killme(void *xa) {
+      delete (Thunk*) xa;
+    }
   };
 
   // implements _doRPC
-  RPCHandle* _doRPC_send(IPAddress, void (*)(void *), void *);
+  RPCHandle* _doRPC_send(IPAddress, void (*)(void *), void (*)(void*), void *);
   bool _doRPC_receive(RPCHandle*);
 
 
