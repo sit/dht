@@ -62,11 +62,6 @@ struct pk_partial {
 		cookie (c) {};
 };
 
-struct keyhash_meta {
-  long version;
-  //XXX ATHICHA this is not used anywhere.
-};
-
 struct missing_state {
   ihash_entry <missing_state> link;
   bigint key;

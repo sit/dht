@@ -1,4 +1,4 @@
-dnl $Id: acinclude.m4,v 1.12 2003/05/06 17:39:13 fdabek Exp $
+dnl $Id: acinclude.m4,v 1.13 2003/07/11 15:00:14 athicha Exp $
 
 
 
@@ -1253,12 +1253,13 @@ if test -f ${with_chord}/Makefile -a -f ${with_chord}/config.h; then
     esac
 
     CPPFLAGS="$CPPFLAGS -I${with_chord}"
-    for lib in merkle svc chord dhash sfsrodb lsd; do
+    for lib in merkle svc chord dhc dhash sfsrodb lsd; do
 	CPPFLAGS="$CPPFLAGS -I${chordsrcdir}/$lib"
     done
     CPPFLAGS="$CPPFLAGS -I${with_chord}/svc"
 
     LIBDHASH=${with_chord}/dhash/libdhash.a
+    LIBDHC=${with_chord}/dhc/libdhc.a
     LIBMERKLE=${with_chord}/merkle/libmerkle.a
     LIBCHORD=${with_chord}/chord/libchord.a
     LIBCHORDSVC=${with_chord}/svc/libsvc.la
@@ -1302,6 +1303,7 @@ AC_SUBST(chordincludedir)
 
 AC_SUBST(LIBDHASH)
 AC_SUBST(LIBMERKLE)
+AC_SUBST(LIBDHC)
 AC_SUBST(LIBCHORD)
 AC_SUBST(LIBCHORDSVC)
 AC_SUBST(LIBCHORDSFSRODB)

@@ -182,24 +182,14 @@ program DHASH_PROGRAM {
     dhash_storeres
     DHASHPROC_STORE (s_dhash_insertarg) = 1;
 
-/* not used
-    dhash_stat
-    DHASHPROC_STORECB (s_dhash_storecb_arg) = 2;
-*/
-
     dhash_getkeys_res
-    DHASHPROC_GETKEYS (s_dhash_getkeys_arg) = 3;
+    DHASHPROC_GETKEYS (s_dhash_getkeys_arg) = 2;
 
     dhash_fetchiter_res
-    DHASHPROC_FETCHITER (s_dhash_fetch_arg) = 4;
-
-/* not used
-    dhash_stat
-    DHASHPROC_BLOCK (s_dhash_block_arg) = 5;
-*/
+    DHASHPROC_FETCHITER (s_dhash_fetch_arg) = 3;
 
     dhash_offer_res
-    DHASHPROC_OFFER (dhash_offer_arg) = 6;
+    DHASHPROC_OFFER (dhash_offer_arg) = 4;
 
   } = 1;
 } = 344449;
