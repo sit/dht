@@ -283,7 +283,7 @@ user_args::fill_from (chord_node *from)
   const struct sockaddr_in *sa = (struct sockaddr_in *)sbp->getsa ();
   if (sa) {
     from->r.hostname = inet_ntoa (sa->sin_addr);
-    from->r.port = ntohs (sa->sin_port);
+    from->r.port = t_arg->src_port;
   } else { //connected sockets don't have the addr field set in the sbp
     /*    ref<axprt> x = (sbp->getsrv ())->xprt ();
     axprt *xs = x->get ();
@@ -366,6 +366,7 @@ vnode_impl::doRPC (const chordID &ID, const rpc_program &prog, int procno,
   //header
   arg->dest_id = ID;
   arg->src_id = myID;
+  arg->src_port = chordnode->get_port ();
   arg->src_vnode_num = myindex;
   
   vec<float> me = locations->get_coords (my_ID ());

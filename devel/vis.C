@@ -255,7 +255,8 @@ doRPCcb (chordID ID, int procno, dorpc_res *res, void *out, aclnt_cb cb, clnt_st
   // If we've already removed a node, then there's no reason to even
   // notify the cb of anything in this program.
   
-  if (err) {
+  if (err || res->status) {
+    if (!err) warn << "status: " << res->status << "\n";
     warn << "deleting " << ID << ":" << nu->host << "\n";
     nodes.remove (nu);
     delete nu;

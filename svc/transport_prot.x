@@ -9,6 +9,7 @@ enum rpcstat {
 struct dorpc_arg {
   chordID dest_id;
   chordID src_id;
+  int32_t src_port;
   u_int64_t send_time;
   int32_t src_vnode_num;
   int32_t src_coords<>;
