@@ -25,12 +25,14 @@
  */
 
 #include "dhash.h"
+#include "test_prot.h"
 #include "ihash.h"
 
 
 typedef struct {
   str name;
   int port;
+  int rpc_port;
 } testslave;
 
 
@@ -100,6 +102,11 @@ private:
 
   unsigned _nhosts;
   bool _busy;
+
+  int _ss;
+  ptr<axprt> _sx;
+  ptr<aclnt> _c;
+  void rpc_done(test_result*, clnt_stat);
 
   void refcount_call_finalize() {}
 };

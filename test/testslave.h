@@ -34,8 +34,6 @@ class testslave { public:
   testslave(int, char *argv[]);
   ~testslave();
 
-
-
 private:
   void tcppipe(const int, const int);
   void udppipe(const int, const u_int16_t, const int tofd = -1);
@@ -48,6 +46,12 @@ private:
   int _lsdsockfd; // slave --> lsd (dhash client protocol)
 
   int _lsd_listener; // incoming data from remote lsd's
+
+  // RPC-related
+  static void dispatch(testslave*, svccb*);
+  int _ss;
+  ptr<axprt> _sx;
+  ptr<asrv> _s;
 };
 
 #endif // __TESTCLIENT_H

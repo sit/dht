@@ -25,6 +25,7 @@
  */
 
 #include "async.h"
+#include "test_prot.h"
 #include "testslave.h"
 #include <ctype.h>
 
@@ -40,11 +41,12 @@ testslave::testslave(int argc, char *argv[])
 {
   srand(time(NULL) & (getpid() + (getpid() << 15)));
 
+
   int opt_masterport = DEFAULT_PORT;
   int opt_lsdport = -1;
-  char *opt_j = 0, *opt_l = 0, *opt_S = 0;
+  char *opt_j = 0, *opt_l = 0, *opt_S = 0, *opt_r = 0;
   int ch;
-  while((ch = getopt(argc, argv, "hs:p:j:l:S:m:")) != -1)
+  while((ch = getopt(argc, argv, "hs:p:j:l:r:S:m:")) != -1)
     switch(ch) {
     case 'h':
       usage();
@@ -61,6 +63,9 @@ testslave::testslave(int argc, char *argv[])
     case 'l':   // -l hostname:port option to lsd
       opt_l = optarg;
       break;
+    case 'r':   // -r RPC socket
+      opt_r = optarg;
+      break;
     case 'S':   // -S <socket> option to lsd
       opt_S = optarg;
       break;
@@ -73,6 +78,17 @@ testslave::testslave(int argc, char *argv[])
   argv += optind;
 
   opt_S = opt_S ? opt_S : getenv("LSD_SOCKET");
+  if(!opt_r) 
+    fatal << "no -r flag\n";
+
+  // set up RPC channel for master
+  _ss = inetsocket(SOCK_DGRAM, atoi(opt_r), INADDR_ANY);
+  if(_ss < 0){
+    fprintf(stderr, "ticker-server: inetsocket failed\n");
+    exit(1);
+  }
+  _sx = axprt_dgram::alloc(_ss);
+  _s = asrv::alloc(_sx, dhash_test_prog_1, wrap(testslave::dispatch, this));
 
   bool do_lsd = false;
   if(opt_l && opt_j && opt_S)
@@ -95,9 +111,6 @@ testslave::testslave(int argc, char *argv[])
   unsigned rndport = 4096 + (int) (8192.0 * rand() / (RAND_MAX + 4096.0));
   randstr << rndport;
 
-  warn << "random port is " << rndport << "\n";
-
-
   // listen for connections from lsd's
   warn << "listening for lsd on port " << opt_lsdport << "\n";
   _lsd_listener = inetsocket(SOCK_DGRAM, opt_lsdport);
@@ -111,18 +124,37 @@ testslave::testslave(int argc, char *argv[])
 }
 
 void
+testslave::dispatch(testslave *ts, svccb *sbp)
+{
+  test_result test_res;
+
+  switch(sbp->proc()){
+  case TEST_BLOCK:
+    // ts->do_submit(sbp->template getarg<submit_args> (), &submit_res);
+    sbp->reply(&test_res);
+    break;
+  case TEST_UNBLOCK:
+    sbp->reply(&test_res);
+    break;
+  default:
+    sbp->reject(PROC_UNAVAIL);
+    break;
+  }
+}
+
+
+void
 testslave::start_lsd(const char *j, const char *l, const char *S, const str p)
 {
   if(!fork()) {
     warn << "spinning off lsd\n";
-    /*
-    char self_j[32] = "127.0.0.1:";
-    if(!strcmp(j, "self")) {
-      strcat(self_j, p.cstr());
-      j = self_j;
-    }
-    */
+    char fake_host[64];
+    strcpy(fake_host, j);
+    char *colon = strchr(fake_host, ':');
+    *colon = '\0';
 
+    setenv("LSD_FAKEMYPORT", strchr(j, ':')+1, 0);
+    setenv("LSD_FAKEMYHOST", fake_host, 0);
     execlp("lsd", "lsd", "-j", j, "-l", l, "-S", S, "-p", p.cstr(), 0);
   }
 
@@ -190,6 +222,7 @@ testslave::udppipe(const int fromfd, const u_int16_t toport, const int tofd)
   bzero (&sin, sizeof (sin));
   n = recvfrom(fromfd, reinterpret_cast<char *> (buf), sizeof (buf),
                 0, reinterpret_cast<sockaddr *> (&sin), &sinlen);
+
   if(n < 0)
     fatal << "error reading: " << strerror(errno) << "\n";
 

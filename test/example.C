@@ -31,8 +31,8 @@
 
 // all testslaves
 testslave slaves[] = {
-  { "localhost", DEFAULT_PORT },   // id: 0
-  { "localhost", DEFAULT_PORT+1 }, // id: 1
+  { "localhost", DEFAULT_PORT, DEFAULT_PORT+1 },   // id: 0
+  { "localhost", DEFAULT_PORT+1, DEFAULT_PORT+2 }, // id: 1
   { "", 0 }
 };
 

@@ -26,11 +26,32 @@
 
 #include "async.h"
 #include "test.h"
+#include "test_prot.h"
 #include "testmaster.h"
 
 testmaster::testmaster() : _nhosts(0)
 {
   test_init();
+
+  // set up RPC channel for master
+  _ss = inetsocket(SOCK_DGRAM);
+  if(_ss < 0){
+    fprintf(stderr, "ticker-server: inetsocket failed\n");
+    exit(1);
+  }
+  _sx = axprt_dgram::alloc(_ss);
+  _c = aclnt::alloc(_sx, dhash_test_prog_1);
+
+
+  /*
+  test_result *res = new test_result;
+  c->call(TEST_BLOCK, 0, res,
+          wrap(this, &test_result::rpc_done, res),
+          (AUTH *) 0,
+          (xdrproc_t) 0, (xdrproc_t) 0,
+          (u_int32_t) 0, (u_int32_t) 0,
+          (struct sockaddr *) sin);
+  */
 }
 
 testmaster::~testmaster()
@@ -39,6 +60,15 @@ testmaster::~testmaster()
   // XXX: unregister fdcb callbacks
   _clients.traverse(wrap(mkref(this), &testmaster::traverse_cb));
 }
+
+void
+testmaster::rpc_done(test_result *res, clnt_stat err)
+{
+  if(err || res->ok != 1)
+    warn << "RPC failed: err=" << err << ", ok=" << res->ok << ", errno=" << errno << "\n";
+  delete res;
+}
+
 
 void
 testmaster::traverse_cb(client *c)
@@ -52,6 +82,14 @@ testmaster::setup(const testslave slaves[], callback<void>::ref cb)
 {
   _busy = true;
   for(unsigned i = 0; slaves[i].name != ""; i++) {
+    // translate their name
+    if (inet_addr (slaves[i].name.cstr()) == INADDR_NONE) {
+      struct hostent *h = gethostbyname (slaves[i].name.cstr());
+      if (!h)
+        warn << "Invalid address or hostname: " << slaves[i].name << "\n";
+    }
+
+
     // create a unix socket
     strbuf p2psocket;
     p2psocket << "/tmp/" << slaves[i].name << ":" << slaves[i].port;

@@ -40,18 +40,26 @@ chord::chord (str _wellknownhost, int _wellknownport,
   wellknownhost.hostname = _wellknownhost;
   wellknownhost.port = _wellknownport ? _wellknownport : myport;
   wellknownID  = make_chordID (wellknownhost.hostname, wellknownhost.port);
+  bool fake = false;
+  char *fakehost = 0;
+  unsigned int fakeport = 0;
 
   warnx << "chord: running on " << myname << ":" << myport << "\n";
   locations = New refcounted<locationtable> (mkref (this), max_cache);
 
+  if((fake = (getenv("LSD_FAKEMYHOST") && getenv("LSD_FAKEMYPORT")))) {
+    fakehost = getenv("LSD_FAKEMYHOST");
+    fakeport = atoi(getenv("LSD_FAKEMYPORT"));
+  }
+
   // trick lsd into thinking it has a different own ID. test purposes.
   chordID testID = make_chordID (myname, myport);
-  if(getenv("LSD_FAKEMYHOST") && getenv("LSD_FAKEMYPORT"))
-    testID = init_chordID(nvnode, getenv("LSD_FAKEMYHOST"), atoi(getenv("LSD_FAKEMYPORT")));
+  if(fake)
+    testID = make_chordID(fakehost, fakeport);
 
   // Special case the very first node: don't need to challenge yourself
   if (wellknownID == testID)
-    locations->insertgood (wellknownID, myname, myport);
+    locations->insertgood (wellknownID, fakehost, fakeport);
   else
     locations->insert (wellknownID, wellknownhost.hostname, wellknownhost.port,
 		       wrap (this, &chord::checkwellknown_cb));
@@ -149,8 +157,10 @@ chord::newvnode (cbjoin_t cb)
   if(getenv("LSD_FAKEMYHOST") && getenv("LSD_FAKEMYPORT"))
     newID = init_chordID(nvnode, getenv("LSD_FAKEMYHOST"), atoi(getenv("LSD_FAKEMYPORT")));
 
-  if (newID != wellknownID)
+  if (newID != wellknownID) {
+    warn << "insertgood\n";
     locations->insertgood (newID, myname, myport);
+  }
 
   ptr<locationtable> nlocations = locations;
 #ifdef PNODE
