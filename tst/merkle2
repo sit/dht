@@ -1,0 +1,105 @@
+#!/usr/bin/perl -w
+
+use strict;
+use POSIX qw(:signal_h);
+use Cwd qw(abs_path);
+use File::Basename;
+
+use ChordTestHarness;
+
+if ($> == 0) {
+   warn "You probably don't want to run this as root. Hit Ctrl-C now to cancel.\n";
+  sleep 5;
+}
+my $SRC = abs_path (dirname ($0));
+
+sub usage {
+  print STDERR "Usage: $0 outputroot buildroot iterations]\n";
+  print STDERR @_, "\n" if @_;
+  exit (1);
+}
+
+
+my $r      = shift || usage ("no output dir");
+my $build  = shift || usage ("no build dir");
+$build = abs_path ($build);
+
+my $iters  = shift || usage ("number of iterations");
+
+my $n      = 2;
+my $v      = 15;
+my $routeprot = "chord";
+my $logbase = 1;
+my $ip     = guessip ();
+my $wkport = 10903; # first prime after my uid
+
+
+my $harness = ChordTestHarness->new ($build, $r);
+
+# Make sure we'll clean up after ourselves properly. Or at least, try.
+$SIG{"INT"} = sub { exit (1); };
+END {
+    if (defined ($harness)) {
+	$harness->reaplsds ();
+	$harness = undef
+    }
+}
+
+######
+
+# three lsd's run
+#   a) the wellknown (a) just run one vnode and never exist
+#   start old
+#   insert old
+#   while (1) {
+#     start new
+#     kill old
+#     fetch new
+#}
+
+# Shift to directory where we will store our working files and results.
+warn "Old $r exists; may lead to incorrect results!\n" if (-d $r);
+mkdir $r, 0755;
+
+my @CONFS;
+# however, leave a mode where we can force all localhost behavior.
+my $i = 1;
+my @args = ("-f",
+	    "-j", "$ip:$wkport",
+	    "-l", $ip,
+	    "-m", $routeprot,
+	    "-b", $logbase,
+	    "-n", 5);
+
+# always start a well-known node running on a particular port.
+$harness->spawnlsd ("wellknown_lsd", @args, "-p", $wkport, "-v", 1);
+sleep 5;
+
+my $old = "lsd_a";
+$harness->spawnlsd ($old, @args, "-v", $v);
+sleep 30; 
+print "Storing on $old\n";
+$harness->store ($old, 0, "store.log");
+sleep 30;  # wait till blocks are replicates
+
+my $new = "lsd_b";
+while ($iters-- >= 0) {
+    $harness->spawnlsd ($new, @args, "-v", $v);  
+    sleep 60;
+
+    $harness->killlsd ($old);
+    sleep 60;
+
+    print "Fetching from $new\n";
+    $harness->fetch ($new, 0, "fetch.log");   # now blocks should be available on b
+
+    my $tmp = $old;   $old = $new;    $new = $tmp;  # XXX  exchange operator??
+}
+
+$harness->reaplsds ();
+
+foreach my $conf (@CONFS) {
+    my $s = "============= NODE $conf ============";
+    system ("echo $s >> $r/dump-$n-$v");
+    system ("cat $r/lsd-$conf/log >> $r/dump-$n-$v");
+}
