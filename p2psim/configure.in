@@ -68,6 +68,25 @@ AM_WITH_TMGDMALLOC
 AC_PROG_INSTALL
 AC_PROG_LN_S
 
+dnl let directories share header files
+CPPFLAGS="-I"'$(top_srcdir)'" $CPPFLAGS"
+
+
+AC_LANG_SAVE
+AC_LANG_C
+CPFSAVE=$CPPFLAGS
+CPPFLAGS="-L/usr/local/lib $CPPFLAGS"
+buildgt=no
+dnl Check for standford graph base and build gtitm if available
+AC_CHECK_LIB(gb,restore_graph,buildgt=yes,AC_MSG_WARN([Stanford graph base not available. gtitm topology will not be built]))
+if test $buildgt=yes; then
+	AM_CONDITIONAL(BUILD_GTITM, test $buildgt=yes)
+	AC_DEFINE(HAVE_SGB,,[Stanford Graph Base is installed])
+fi
+CPPFLAGS=$CPFSAVE
+AC_LANG_RESTORE
+
+
 AC_OUTPUT(Makefile
             vis/Makefile
             eventgenerators/Makefile
