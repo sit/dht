@@ -947,17 +947,15 @@ init_color_list (char *filename)
   
   char color[1024];
   unsigned long lat;
-  while (fscanf (cf, "%ld %s\n", &lat, color) == 2) 
-    {
-      if (!gdk_color_parse (color, &c) ||
-	  !gdk_colormap_alloc_color (cmap, &c, FALSE, TRUE))
-	fatal << "couldn't get the color I wanted\n";
-      p.c = c;
-      p.lat = lat * 1000 * 100; //convert from ms
-      lat_map.push_back (p);
-    }
-  
-
+  while (fscanf (cf, "%ld %s\n", &lat, color) == 2) {
+    if (!gdk_color_parse (color, &c) ||
+	!gdk_colormap_alloc_color (cmap, &c, FALSE, TRUE))
+      fatal << "couldn't get the color I wanted\n";
+    p.c = c;
+    p.lat = lat * 1000 * 100; //convert from ms
+    lat_map.push_back (p);
+  }
+  assert (lat_map.size () != 0);
 }
 
 void
@@ -1035,17 +1033,15 @@ draw_arc (chordID from, chordID to, GdkGC *draw_gc)
 void
 set_foreground_lat (unsigned long lat)
 {
-  unsigned int i = 0; 
+  GdkColor c = lat_map[0].c;
+  unsigned int i = 0;
+
+  // Each map entry indicates the high-limit latency for the entry's
+  // color; we cap everything at the high-end.
   while (i < lat_map.size () && lat > lat_map[i].lat) 
-    i++;
+    c = lat_map[i++].c;
 
-  // XXX quick hack....--josh
-  assert (lat_map.size () != 0);
-  if (i >= lat_map.size ())
-    i = lat_map.size () - 1;
-
-
-  gdk_gc_set_foreground (draw_gc, &lat_map[i].c);
+  gdk_gc_set_foreground (draw_gc, &c);
 }
 
 
