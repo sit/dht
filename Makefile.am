@@ -1,7 +1,8 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.25 2003/07/11 15:00:14 athicha Exp $
+# $Id: Makefile.am,v 1.26 2003/07/14 06:16:02 fdabek Exp $
 
-BASEDIRS = svc utils merkle chord dhc dhash sfsrodb lsd devel
+
+BASEDIRS = svc utils merkle chord dhash dhc sfsrodb lsd devel
 SUBDIRS_ALL = $(BASEDIRS) chordcd test tst melody 
 SUBDIRS_SOME = $(BASEDIRS)
 if COND_ALL
@@ -17,3 +18,6 @@ MAINTAINERCLEANFILES = aclocal.m4 install-sh mkinstalldirs \
 	missing configure config.guess config.sub config.h.in \
 	ltconfig ltmain.sh INSTALL COPYING Makefile.in stamp-h.in
 
+dist-hook:
+	rm -f $(srcdir)/p2psim/p2psim.core
+	tar czvf $(distdir)/p2psim.tgz -C $(srcdir) p2psim
