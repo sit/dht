@@ -2061,7 +2061,7 @@ LocTable::pred(Chord::CHID id, int status)
 }
 
 vector<Chord::IDMap>
-LocTable::preds(Chord::CHID id, uint m, int status) 
+LocTable::preds(Chord::CHID id, uint m, int status, Time expire) 
 {
   vector<Chord::IDMap> v;
   v.clear();
@@ -2071,19 +2071,26 @@ LocTable::preds(Chord::CHID id, uint m, int status)
 
   assert(elm);
   idmapwrap *elmprev;
-
-  while (1) {
-    if (elm->id == me.id) break;
-
-    elmprev = ring.prev(elm);
-    if (!elmprev) elmprev = ring.last();
-
-    if (elm->status <= status) { 
+  while (elm->id!=me.id) {
+    if ((elm->status <= status) && 
+	(!expire || elm->is_succ || (now()-elm->n.timestamp) < expire)) { 
       v.push_back(elm->n);
       if (v.size() == m) break;
     }
-    elm = elmprev;
-    assert((rsz - deleted >= 1));
+    elm = ring.prev(elm);
+    if (!elm) elm = ring.last();
+  }
+
+  if (v.size() < m && expire) {
+    elm = ring.closestpred(id);
+    while (elm->id != me.id) {
+      if ((elm->status <= status) && (now()-elm->n.timestamp) > expire){
+	v.push_back(elm->n);
+	if (v.size() == m) break;
+      }
+      elm = ring.prev(elm);
+      if (!elm) elm = ring.last();
+    }
   }
   return v;
 }
@@ -2165,10 +2172,20 @@ LocTable::add_node(Chord::IDMap n, bool is_succ, bool assertadd, Chord::CHID fs,
     return false;
   } else {
     idmapwrap *newelm = New idmapwrap(n);
-    if (elm && elm->is_succ) 
+    if (elm && elm->is_succ) {
       newelm->is_succ = true;
-    else
+    } else {
       newelm->is_succ = is_succ;
+      if (is_succ) {
+	elm = ring.prev(elm);
+	if (!elm) elm = ring.last();
+	while (elm->n.ip!=me.ip && !elm->is_succ) {
+	  elm->is_succ = true;
+	  elm = ring.prev(elm);
+	  if (!elm) elm = ring.last();
+	}
+      }
+    }
     newelm->fs = fs;
     newelm->fe = fe;
     newelm->status = replacement? LOC_REPLACEMENT:LOC_HEALTHY;
@@ -2176,7 +2193,6 @@ LocTable::add_node(Chord::IDMap n, bool is_succ, bool assertadd, Chord::CHID fs,
     }else{
       assert(0);
     }
-    elm = newelm;
     return true;
   }
 }
@@ -2187,12 +2203,12 @@ LocTable::del_node(Chord::IDMap n, bool force)
   assert(n.ip != me.ip);
   idmapwrap *elm = ring.search(n.id);
   if (!elm) return false;
-
-  if ((elm->is_succ) && (!force)) {
+  if (!force) {
+    if (n.timestamp > elm->n.timestamp)
+      elm->n.timestamp = n.timestamp;
     elm->status = LOC_DEAD;
   } else {
     elm = ring.remove(n.id);
-    //printf("%u,%qx del %p\n", me.ip, me.id, elm);
     bzero(elm,sizeof(*elm));
     delete elm;
   }
@@ -2201,17 +2217,19 @@ LocTable::del_node(Chord::IDMap n, bool force)
 }
 
 uint
-LocTable::size(uint status)
+LocTable::size(uint status, Time to)
 {
   if (status == LOC_DEAD)
     return ring.size();
   idmapwrap *elm = ring.first();
   uint sz = 0;
   while (elm) {
-    if (elm->status <= status)
+    if ((elm->status <= status)
+      && (!to || (now()-elm->n.timestamp < to)))
       sz++;
     elm = ring.next(elm);
   }
+  return sz;
 }
 
 
@@ -2272,17 +2290,63 @@ LocTable::search(ConsistentHash::CHID id)
   return elm->n;
 }
 
+void
+LocTable::last_succ(Chord::IDMap n)
+{
+  if (n.ip == me.ip)
+    return;
+  idmapwrap *elm = ring.closestsucc(n.id+1);
+  while ((elm->is_succ) && (me.ip != elm->n.ip)){
+    elm->is_succ = false;
+    elm = ring.next(elm);
+    if (!elm) elm = ring.first();
+  }
+  if (me.ip == elm->n.ip)
+    elm->is_succ = false;
+}
+
+bool
+LocTable::is_succ(Chord::IDMap n)
+{
+  idmapwrap *elm = ring.search(n.id);
+  return (elm && elm->is_succ);
+}
+
 uint
 LocTable::succ_size()
 {
   idmapwrap *elm = ring.first();
   uint n = 0;
   while (elm) {
-    if (elm->is_succ)
+    if ((elm->is_succ) && (elm->status <= LOC_HEALTHY))
       n++;
     elm = ring.next(elm);
   }
   return n;
+}
+
+uint
+LocTable::live_size(Time to)
+{
+  idmapwrap *elm = ring.first();
+  uint n = 0;
+  while (elm) {
+    if (elm->status <= LOC_HEALTHY && Network::Instance()->alive(elm->n.ip)
+	&& (!to || (now()-elm->n.timestamp)<to))
+      n++;
+    elm = ring.next(elm);
+  }
+  return n;
+}
+
+int
+LocTable::find_node(Chord::IDMap n)
+{
+  idmapwrap *elm = ring.closestsucc(n.id);
+  if (elm->n.ip == n.ip && elm->n.timestamp >= n.timestamp) 
+    return elm->status;
+  else 
+    return -1;
 }
 
 void
@@ -2330,45 +2394,65 @@ LocTable::pred_biggest_gap(Chord::IDMap &start, Chord::IDMap &end, Time mingap, 
   Chord::IDMap maxgap_end = elm->n;
   double maxgap = 0.0;
   Time t = now();
-  Time maxt = 0;
-  uint sz = this->size();
-  uint ssz = this->succ_size();
-
+  Chord::IDMap oldn;
+  oldn.timestamp = t;
   while (1) {
-    if (elm->status <= LOC_HEALTHY) {
-      if (!elm->is_succ) {
-	if (prevelapsed > maxt) maxt = prevelapsed;
+    if (elm->n.ip!=me.ip && elm->status <= LOC_HEALTHY
+	  && elm->n.timestamp < oldn.timestamp) 
+      oldn = elm->n;
+    if ((elm->status <= LOC_HEALTHY) && 
+	(elm->is_succ || !to || elm->n.ip == me.ip || now()-elm->n.timestamp < to)){
+      if ((!elm->is_succ) && (elm->n.ip!=me.ip)){
 	ConsistentHash::CHID gap = (ConsistentHash::CHID)(elm->n.id - prev.id);
 	ConsistentHash::CHID dist = (ConsistentHash::CHID)(prev.id - me.id);
+	if ((ConsistentHash::CHID)(me.id-prev.id) < dist) 
+	  dist = (ConsistentHash::CHID)(me.id-prev.id);
 	double scaled = (double)gap/(double)dist;
-	if ((scaled > maxgap) && (gap > mingap) && (prevelapsed > to)) {
+	if ((scaled > maxgap) && (gap > mingap)) {
 	  maxgap = scaled;
 	  maxgap_n = prev;
 	  maxgap_end = elm->n;
 	}
       }
       prev = elm->n;
-      prevelapsed = t - elm->n.timestamp;
     }
-    if (elm->n.ip == me.ip) break;
+    if (elm->n.ip == me.ip) 
+      break;
     elm = ring.next(elm);
     if (!elm) elm = ring.first();
-  } 
+  }
 
-  start = maxgap_n;
+  Chord::IDMap oldest = maxgap_n;
+  elm = ring.closestsucc(maxgap_n.id+1);
+  while (elm->n.ip!=maxgap_end.ip) {
+    if (elm->status <= LOC_HEALTHY && elm->n.timestamp < oldest.timestamp) 
+      oldest = elm->n;
+    elm = ring.next(elm);
+    if (!elm) elm = ring.first();
+  }
+  start = oldest;
   end = maxgap_end;
-  return maxt;
+  if (start.ip==me.ip) {
+    start = oldn;
+    elm = ring.closestsucc(start.id+1);
+    while (elm->status > LOC_HEALTHY){
+      elm = ring.next(elm);
+      if (!elm) elm = ring.first();
+    }
+    end = elm->n;
+  }
+  return (now()-oldn.timestamp);
 }
 
 vector<Chord::IDMap>
-LocTable::get_closest_in_gap(uint m, ConsistentHash::CHID end, Chord::IDMap src)
+LocTable::get_closest_in_gap(uint m, ConsistentHash::CHID end, Chord::IDMap src, Time to)
 {
   vector<Chord::IDMap> v;
   vector<Chord::IDMap>::iterator i;
   idmapwrap *elm = ring.closestsucc(me.id+1);
   assert(elm);
   while (elm->n.ip!=me.ip && ConsistentHash::between(me.id,end,elm->id)) {
-    if (elm->status <= LOC_HEALTHY) {
+    if ((elm->status <= LOC_HEALTHY) && (!to || (now() - elm->n.timestamp) < to)) {
       for (i = v.begin(); i!= v.end(); ++i) {
 	if (Network::Instance()->gettopology()->latency(src.ip,elm->n.ip) 
 	    >= Network::Instance()->gettopology()->latency(src.ip, (*i).ip)) 
@@ -2382,5 +2466,14 @@ LocTable::get_closest_in_gap(uint m, ConsistentHash::CHID end, Chord::IDMap src)
     elm = ring.next(elm);
     if (!elm) elm = ring.first();
   }
+
+  elm = ring.closestsucc(me.id+1);
+  while ((v.size() < m) && (ConsistentHash::between(me.id,end,elm->n.id))){
+    if ((elm->status <= LOC_HEALTHY) && (to && (now()-elm->n.timestamp > to)))
+      v.push_back(elm->n);
+    elm = ring.next(elm);
+    if (!elm) elm = ring.first();
+  }
+
   return v;
 }

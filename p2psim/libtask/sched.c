@@ -73,9 +73,22 @@ sched(void)
 		fprint(2, "stack overflow\n");
 		abort();
 	}
+#if 0
+	if (*(unsigned int *)(t->stack)!=0xFEFEFEFE){
+	  fprint(2, "stack overflow fence %x %x\n", (ulong)&t, (ulong)t->stack);
+	  abort();
+	}
+#endif 
+
 //fprint(2, "%d: sched ...\n", t->id);
-	if(setlabel(&t->sched)==0)
-		gotolabel(&taskmach->sched);
+	if(setlabel(&t->sched)==0) {
+		if (((((ulong )taskmach->sched.r[0]))>0x080480ac)&& (((ulong )taskmach->sched.r[0])<0x0813168d)) {
+		  gotolabel(&taskmach->sched);
+		}else{
+		  fprintf(2,"eip is crap %x\n", (((ulong )taskmach->sched.r[0])));
+		  abort();
+		}
+	}
 //fprint(2, "%d: endsched ...\n", t->id);
 }
 
@@ -106,6 +119,12 @@ talloc(uint stacksize)
 void
 tfree(Task *t)
 {
+#if 0
+	if (*(unsigned int *)(t->stack)!=0xFEFEFEFE){
+	  fprint(2, "stack overflow fence %x %x\n", (ulong)&t, (ulong)t->stack);
+	  abort();
+	}
+#endif
 	t->magic = 0;
 	free(t);
 }

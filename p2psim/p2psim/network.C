@@ -221,6 +221,7 @@ Network::first_ip(IPAddress newx)
 {
   if(_new2old.find_pair(newx))
     return _new2old[newx];
+  assert(newx <= _nodes.size());
   return newx;
 }
 

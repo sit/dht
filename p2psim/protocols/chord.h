@@ -61,6 +61,7 @@ public:
     ConsistentHash::CHID id; //consistent hashing ID for the node
     IPAddress ip; //the IP address for the node
     Time timestamp; //some kind of heartbeat sequence number
+    Time alivetime; //how long this node has stayed alive
     static bool cmp(const IDMap& a, const IDMap& b) { return (a.id <= b.id);}
     bool operator==(const IDMap a) { return (a.id == id); }
   };
@@ -317,7 +318,7 @@ class LocTable {
     idmapwrap *get_naked_node(ConsistentHash::CHID id);
     Chord::IDMap succ(ConsistentHash::CHID id, int status = LOC_HEALTHY);
     vector<Chord::IDMap> succs(ConsistentHash::CHID id, unsigned int m, int status = LOC_HEALTHY);
-    vector<Chord::IDMap> preds(Chord::CHID id, uint m, int status = LOC_HEALTHY);
+    vector<Chord::IDMap> preds(Chord::CHID id, uint m, int status = LOC_HEALTHY, Time expire=0);
     Chord::IDMap pred(Chord::CHID id, int status = LOC_ONCHECK);
     void checkpoint();
     void print();
@@ -329,8 +330,11 @@ class LocTable {
     bool del_node(Chord::IDMap n, bool force=false);
     virtual void del_all();
     void notify(Chord::IDMap n);
-    uint size(uint status=LOC_DEAD);
+    uint size(uint status=LOC_HEALTHY, Time to = 0);
     uint succ_size();
+    void last_succ(Chord::IDMap n);
+    uint live_size(Time to = 0);
+    bool is_succ(Chord::IDMap n);
     void set_evict(bool v) { _evict = v; }
     void set_timeout(uint to) {_timeout = to;}
 
@@ -342,10 +346,11 @@ class LocTable {
     Chord::IDMap first();
     Chord::IDMap last();
     Chord::IDMap search(ConsistentHash::CHID);
+    int find_node(Chord::IDMap n);
     void dump();
     void stat();
     Time pred_biggest_gap(Chord::IDMap &start, Chord::IDMap &end, ConsistentHash::CHID mingap, Time to = 0); //these two functions are too specialized
-    vector<Chord::IDMap> get_closest_in_gap(uint m, ConsistentHash::CHID end, Chord::IDMap src);
+    vector<Chord::IDMap> get_closest_in_gap(uint m, ConsistentHash::CHID end, Chord::IDMap src, Time to = 0);
 
   protected:
     bool _evict;

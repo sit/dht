@@ -11,7 +11,8 @@
 struct q_elm {
   public:
     uint _priority;
-    int _sz;
+    int _sz; //pkt size
+    int _rsz; //return pkt size
     uint _type;
     Time _timeout;
     IPAddress _dst;
@@ -53,12 +54,16 @@ class RateControlQueue {
 
     template<class BT, class AT, class RT>
     bool do_rpc(IPAddress dst, void (BT::* fn)(AT *, RT *), int (BT::* cb)(bool b, AT *, RT *), 
-	AT *args, RT *ret, uint p, uint type, int sz, Time to) {
+	AT *args, RT *ret, uint p, uint type, int sz, int rsz, Time to) {
 
+      
       if (!_running) {
 	_running = true;
 	_node->delaycb(_delay_interval, &RateControlQueue::delay_send, (void*)0, this);
       }
+      if (!_start_time) 
+	_start_time = now();
+
 
       QueueThunk<BT,AT,RT> *t = new QueueThunk<BT,AT,RT>;
       t->_target = dynamic_cast<BT*>(Network::Instance()->getnode(dst));
@@ -70,6 +75,7 @@ class RateControlQueue {
 
       q_elm *qe = new q_elm;
       qe->_sz = sz;
+      qe->_rsz = rsz;
       qe->_dst = dst;
       qe->_timeout = to;
       qe->_priority = p;
@@ -79,28 +85,37 @@ class RateControlQueue {
       qe->_killme = QueueThunk<BT,AT,RT>::killme;
       qe->_type = type;
 
-      int more = (int) ((now() - _last_update)*_rate);
+      int more = 0;
+      if (_last_update > 0)
+	more = (int) ((now() - _last_update)*_rate);
 
-      if ((_quota + more - sz < (_burst/2)) && (p >= DROPABLE_PRIORITY)) {
+      if ((p>0 && _qq.size() > 2) || ((_quota + more - sz - rsz < (_burst/2)) && (p >= DROPABLE_PRIORITY))) {
+	QDEBUG(4) << " drop to dst " << qe->_dst << " priority " << p << endl;
+	if (args)
 	  delete args;
+	if (ret) 
 	  delete ret;
-	  qe->_killme(qe->_t);
-	  delete qe;
-	  return false;
+	qe->_killme(qe->_t);
+	delete qe;
+	return false;
       }
 
-      if ((_qq.size() == 0) && ((_quota + more - sz) > _burst)) {
-	_quota = _quota + more - qe->_sz;
-	if (_quota > 0)
-	  _quota = 0;
+      if ((_qq.size() == 0) && ((_quota + more - sz - rsz) > _burst)) {
+	int oldq = _quota;
+	_quota = _quota + more - qe->_sz - qe->_rsz;
+	QDEBUG(5) << " add " << more << " sub " << qe->_sz << " sub " << qe->_rsz << " to oldq " << oldq << endl;
 	_last_update = now();
-	QDEBUG(4) << " immediately sendrpc (" << qe->_type << "," << p 
+	QDEBUG(5) << " immediately sendrpc (" << qe->_type << "," << p 
 	  << ") to " << dst << endl;
 	_node->delaycb(0,&RateControlQueue::send_one_rpc, (void *)qe, this);
 	return true;
       } else {
 	_qq.push(qe);
-	QDEBUG(4) << " delay sendrpc (" << qe->_type << "," << p << ") to " 
+	/*
+	if (_qq.size() > 2)
+	  fprintf(stderr,"shit!!! %llu %u,%u sz %u quota %d \n", now(), _node->first_ip(), _node->ip(), _qq.size(),_quota);
+	  */
+	QDEBUG(5) << " delay sendrpc (" << qe->_type << "," << p << ") to " 
 	  << dst << endl;
 	return false;
       }
@@ -110,6 +125,10 @@ class RateControlQueue {
     void send_one_rpc(void *x);
     void stop_queue();
     bool empty() { return (_qq.size() == 0 && (((now()-_last_update) *_rate) +  _quota) > 0) ;}
+    int quota() { return _quota;}
+    uint size() { return _qq.size();}
+    bool critical() { if (_qq.size() > 0 || _quota < (_burst/2)) return true; return false;}
+
 
    protected :
     void (*_empty_cb)(void *);

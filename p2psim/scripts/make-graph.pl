@@ -804,6 +804,11 @@ if( defined $options{"convex"} ) {
 		    # restrain number of y digits
 		    my $tmpcony = int ($cony*10000000);
 		    $cony = ($tmpcony*1.0)/10000000.0;
+		    # add at least one digit
+		    if ($cony =~/\./) {
+		    }else{
+		      $cony = $cony.".0";
+		    }
 		    print CON "$conx $cony\n";
 
 		    if( !defined $max_x or $conx > $max_x ) {

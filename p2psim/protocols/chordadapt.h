@@ -29,7 +29,7 @@
 #include "chord.h"
 #include "ratecontrolqueue.h"
 
-#define PKT_SZ(ids,others) PKT_OVERHEAD + 4 * ids + others
+//#define PKT_SZ(ids,others) (PKT_OVERHEAD + 4 * ids + others)
 
 
 typedef Chord::IDMap IDMap;
@@ -62,6 +62,7 @@ class ChordAdapt: public P2Protocol {
       uint parallelism;
       uint type;
       ConsistentHash::CHID overshoot;
+      Time timeout;
     };
 
     struct lookup_ret{
@@ -99,9 +100,11 @@ class ChordAdapt: public P2Protocol {
       IDMap n;
       int m;
       IDMap end;
+      Time timeout;
     };
 
     struct learn_ret {
+      int stat;
       vector<IDMap> v;
     };
 
@@ -129,42 +132,58 @@ class ChordAdapt: public P2Protocol {
     int notify_pred_cb(bool, notify_succdeath_args *, notify_succdeath_ret *);
 
     static void empty_cb(void *x);
-    bool check_correctness(ConsistentHash::CHID, vector<IDMap> v);
-    void empty_queue();
+    bool check_pred_correctness(ConsistentHash::CHID, IDMap n);
+    void empty_queue(void *a);
 
-    void fix_succ();
-    void fix_pred();
+    void fix_succ(void *a);
+    void fix_pred(void *a);
 
     static string printID(ConsistentHash::CHID id);
     static string print_succs(vector<IDMap> v);
 
     static vector<IDMap> ids;
     static bool sorted;
+    static vector<Time> sort_live;
+    static vector<Time> sort_dead;
 
   protected:
     IDMap _me;
     RateControlQueue *_rate_queue;
     LocTable *loctable;
+    unsigned PKT_SZ(unsigned ids, unsigned others);
 
   private:
-    bool _join_scheduled;
+    Time _join_scheduled;
     uint _burst_sz;
     uint _bw_overhead;
     uint _stab_basic_timer;
+    Time _last_joined_time;
     bool _stab_basic_running;
     Time _last_stab;
-    uint _parallelism;
+    int _parallelism;
+    int _max_p;
+    Time _next_adjust;
+    Time _adjust_interval;
+    uint _lookup_times;
+    uint _empty_times;
     uint _nsucc;
     IDMap _wkn;
     uint _to_multiplier;
     uint _learn_num;
     ConsistentHash::CHID _max_succ_gap;
+    vector<Time> _live_stat;
+    vector<Time> _dead_stat;
+    vector<Time> _calculated_prob;
+    Time _last_calculated;
     
     HashMap<ConsistentHash::CHID, Time> _outstanding_lookups;
     HashMap<ConsistentHash::CHID, Time> _forwarded;
     HashMap<ConsistentHash::CHID, uint> _forwarded_nodrop;
 
     void consolidate_succ_list(IDMap, vector<IDMap>, vector<IDMap>);
+    void adjust_parallelism();
+    void add_stat(Time t, bool live);
+    Time est_timeout(double p);
 
     vector<notify_info> notifyinfo;
     Topology *_top; //i hate obtaining topology pointer every time

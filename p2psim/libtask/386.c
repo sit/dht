@@ -13,7 +13,9 @@ void
 tinitstack(Task *t, void (*f)(void*), void *arg)
 {
 	ulong *tos;
-
+#if 0
+	memset(t->stack, 0xFE, t->stacksize);
+#endif
 	tos = (ulong*)(t->stack+t->stacksize);
 	*--tos = (ulong)arg;
 	*--tos = (ulong)f;
