@@ -414,7 +414,6 @@ k_bucket_tree::~k_bucket_tree()
 unsigned
 k_bucket_tree::insert(NodeID id, IPAddress ip)
 {
-  printf("k_bucket_tree, this = %p\n", this);
   KDEBUG(2) << "k_bucket_tree::insert: BEFORE id = " << Kademlia::printbits(id) << ", ip = " << ip << endl;
   _self->dump();
   pair<peer_t*, unsigned> pp = _root->insert(id, ip);
@@ -538,7 +537,6 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned de
   if(_nodes->size() < _k) {
     KDEBUG(4) <<  "insert: added on level " << depth << endl;
     peer_t *p = new peer_t(node, ip, now());
-    printf("*** push_back 1 on %p\n", _nodes);
     _nodes->push_back(p);
     return make_pair(p, depth);
   }
@@ -564,7 +562,6 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned de
     for(unsigned i=0; i<_nodes->size(); i++) {
       unsigned bit = Kademlia::getbit((*_nodes)[i]->id, depth);
       KDEBUG(4) <<  "insert: pushed entry " << i << " (" << Kademlia::printbits((*_nodes)[i]->id) << ") to side " << bit << endl;
-      printf("*** push_back 2 on %p\n", _nodes);
       assert(_child[bit]);
       assert(_child[bit]->_nodes);
       assert(_child[bit]->_nodes->size() == 0);
@@ -598,16 +595,17 @@ k_bucket::stabilize(string prefix, unsigned depth)
     return;
   }
 
+  assert(_nodes);
   if(_nodes->size()) {
-    for(unsigned i=0; i<_nodes->size(); i++) {
-      if(now() - (*_nodes)[i]->lastts < KADEMLIA_REFRESH)
+    // make a temporary copy
+    vector<peer_t*> tmpcopy(*_nodes);
+    for(unsigned i=0; i<tmpcopy.size(); i++) {
+      if(now() - tmpcopy[i]->lastts < KADEMLIA_REFRESH)
         continue;
 
       // XXX: where?
-      KDEBUG(1) << "stabilize: lookup for " << Kademlia::printbits((*_nodes)[i]->id) << endl;
-      pair<NodeID, IPAddress> pp = _self->do_lookup_wrapper(kademlia_wkn_ip, (*_nodes)[i]->id);
-      (*_nodes)[i]->id = pp.first;
-      (*_nodes)[i]->ip = pp.second;
+      KDEBUG(1) << "stabilize: lookup for " << Kademlia::printbits(tmpcopy[i]->id) << endl;
+      _self->do_lookup_wrapper(kademlia_wkn_ip, (*_nodes)[i]->id);
     }
     return;
   }
@@ -620,12 +618,9 @@ k_bucket::stabilize(string prefix, unsigned depth)
   KDEBUG(1) << "stabilize: mask = " << Kademlia::printbits(mask) << endl;
   NodeID random_key = _self->id() & mask;
   KDEBUG(1) << "stabilize: random lookup for " << Kademlia::printbits(random_key) << endl;
-  pair<NodeID, IPAddress> pp = _self->do_lookup_wrapper(kademlia_wkn_ip, random_key);
+  _self->do_lookup_wrapper(kademlia_wkn_ip, random_key);
 
-  // XXX: nasty.  the lookup itself may have inserted
-  _self->do_insert_wrapper(pp.first, pp.second);
-  // printf("*** push_back 3 on %p\n", _nodes);
-  // _nodes->push_back(new peer_t(pp.first, pp.second, now()));
+  // NB: the lookup itself will add it to the tree!
 }
 
 
@@ -750,7 +745,6 @@ k_bucket::dump(string prefix, unsigned depth)
   }
 
   for(unsigned i=0; i<_nodes->size(); i++) {
-    printf("   *** _nodes = %p, size = %d\n", _nodes, _nodes->size());
     if((*_nodes)[i])
       cout << "   *** " << prefix << " [" << i << "] : " << Kademlia::printbits((*_nodes)[i]->id) << endl;
   }
