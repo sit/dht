@@ -26,7 +26,7 @@ static const unsigned int DRAW_SUCC_LIST  = 1 << 1;
 static const unsigned int DRAW_IMMED_PRED = 1 << 2;
 static const unsigned int DRAW_DEBRUIJN   = 1 << 3;
 static const unsigned int DRAW_FINGERS    = 1 << 4;
-static const unsigned int DRAW_TOES       = 1 << 5;
+// static const unsigned int DRAW_TOES       = 1 << 5;
 static const unsigned int DRAW_TOP_FINGERS       = 1 << 6;
 static const unsigned int DRAW_PRED_LIST  = 1 << 7;
 
@@ -45,8 +45,7 @@ static handler_info handlers[] = {
   { DRAW_DEBRUIJN,  "debruijn node",  NULL, GTK_SIGNAL_FUNC (draw_toggle_cb) },
   { DRAW_IMMED_PRED, "immed. pred", NULL, GTK_SIGNAL_FUNC (draw_toggle_cb) },
   { DRAW_FINGERS,    "fingers",     NULL, GTK_SIGNAL_FUNC (draw_toggle_cb) },
-  { DRAW_TOP_FINGERS,    "top fingers",     NULL, GTK_SIGNAL_FUNC (draw_toggle_cb) },
-  { DRAW_TOES,       "neighbors",   NULL, GTK_SIGNAL_FUNC (draw_toggle_cb) }
+  { DRAW_TOP_FINGERS,    "top fingers",     NULL, GTK_SIGNAL_FUNC (draw_toggle_cb) }
 };
 
 unsigned int check_get_state (void);
@@ -105,7 +104,6 @@ struct f_node {
   chord_nodelistextres *predecessor;
   debruijn_res *debruijn;
   chord_nodelistextres *successors;
-  chord_nodelistextres *toes;
   ihash_entry <f_node> link;
   unsigned int draw;
   bool selected;
@@ -115,7 +113,7 @@ struct f_node {
     ID (n.x), host (n.r.hostname), hostname(""), port (n.r.port),
     vnode_num (n.vnode_num),
     fingers (NULL), predecessor (NULL), debruijn (NULL),
-    successors (NULL), toes (NULL),
+    successors (NULL),
     selected (true), highlight (false)
   {
     draw = check_get_state ();
@@ -130,7 +128,6 @@ struct f_node {
     fingers = NULL;
     predecessor = NULL;
     successors = NULL;
-    toes = NULL;
     debruijn = NULL;
     dnslookup();
   };
@@ -153,7 +150,6 @@ struct f_node {
     if (fingers) delete fingers;
     if (predecessor) delete predecessor;
     if (successors) delete successors;
-    if (toes) delete toes;
     if (debruijn) delete debruijn;
   };
 };
@@ -175,10 +171,6 @@ void get_cb (chordID next);
 void update_fingers (f_node *n);
 void update_fingers_got_fingers (chordID ID, str host, unsigned short port, 
 				 chord_nodelistextres *res, clnt_stat err);
-
-void update_toes (f_node *nu);
-void update_toes_got_toes (chordID ID, str host, unsigned short port, 
-			   chord_nodelistextres *res, clnt_stat err);
 
 void update_succlist (f_node *n);
 void update_succ_got_succ (chordID ID, str host, unsigned short port, 
@@ -251,7 +243,6 @@ update (f_node *n)
   update_pred (n);
   update_debruijn (n);
   update_succlist (n);
-  update_toes (n);
 }
 
 void
@@ -363,11 +354,12 @@ doRPCcb (chordID ID, xdrproc_t outproc, dorpc_res *res, void *out, aclnt_cb cb, 
 }
 
 void
-doRPC (f_node *nu, const rpc_program &prog, int procno, const void *in, void *out, aclnt_cb cb)
+doRPC (f_node *nu, const rpc_program &prog,
+       int procno, const void *in, void *out, aclnt_cb cb)
 {
   ptr<aclnt> c = get_aclnt (nu->host, nu->port);
   if (c == NULL) 
-    fatal << "update_succlist: couldn't aclnt::alloc\n";
+    fatal << "doRPC: couldn't aclnt::alloc\n";
 
   //form the transport RPC
   ptr<dorpc_arg> arg = New refcounted<dorpc_arg> ();
@@ -546,7 +538,6 @@ get_fingers (str file)
 
   strbuf data = strbuf () << file2str (file);
   chord_nodelistextres *nfingers = NULL;
-  chord_nodelistextres *ntoes = NULL;
   while (str line = suio_getline(data.tosuio ())) {
     f_node *n;
     switch (i) {
@@ -557,13 +548,10 @@ get_fingers (str file)
 			file, 0);
 	nodes.insert (n);
 	nfingers = New chord_nodelistextres (CHORD_OK);
-	ntoes = New chord_nodelistextres (CHORD_OK);
 	n->fingers = nfingers;
-	n->toes = ntoes;
       }
       break;
     case 1:
-    case 2:
       {
 	vec<int> ids;
 	vec<int> lats;
@@ -582,21 +570,14 @@ get_fingers (str file)
 	  lats.push_back (atoi (latency));
 	  start = end;
 	}
-	if (i == 1) {
-	  nfingers->resok->nlist.setsize (ids.size ());
-	  for (unsigned int i = 0; i < ids.size (); i++) {
-	    nfingers->resok->nlist[i].a_lat = lats[i] * 1000;
-	  }
-	} else {
-	  ntoes->resok->nlist.setsize (ids.size ());
-	  for (unsigned int i = 0; i < ids.size (); i++) {
-	    ntoes->resok->nlist[i].a_lat = lats[i] * 1000;
-	  }
+	nfingers->resok->nlist.setsize (ids.size ());
+	for (unsigned int i = 0; i < ids.size (); i++) {
+	  nfingers->resok->nlist[i].a_lat = lats[i] * 1000;
 	}
       }
       break;
     }
-    i = (i + 1) % 3;
+    i = (i + 1) % 2;
   }
   draw_ring ();
 }
@@ -624,39 +605,6 @@ get_cb (chordID next)
   }
 
   delaycb (0, 1000*1000*interval, wrap (&get_cb, next));
-}
-//----- update toes -----------------------------------------------------
-
-void
-update_toes (f_node *nu)
-{
-  prox_gettoes_arg n;
-  n.level = glevel;
-  chord_nodelistextres *res = New chord_nodelistextres ();
-  doRPC (nu, prox_program_1, PROXPROC_GETTOES, &n, res,
-	 wrap (&update_toes_got_toes, 
-	       nu->ID, nu->host, nu->port, res));
-}
-
-void
-update_toes_got_toes (chordID ID, str host, unsigned short port, 
-		      chord_nodelistextres *res, clnt_stat err)
-{
-  if (err || res->status != CHORD_OK) {
-    delete res;
-    return;
-  }
-  f_node *nu = nodes[ID];
-
-  if (nu->toes) delete nu->toes;
-  nu->toes = res;
-  
-  for (unsigned int i=0; i < res->resok->nlist.size (); i++) {
-    chord_node n = make_chord_node (res->resok->nlist[i].n);
-    if (nodes[n.x] == NULL) 
-      add_node (n);
-  }
-
 }
 
 // ------- graphics and UI handlers -------------------------------------
@@ -997,7 +945,7 @@ lookup_cb (GtkWidget *widget, gpointer data)
   warnx << "Found an alternate path of length " << alt_search_path.size () << "\n";
   for (size_t i = 0; i < alt_search_path.size (); i++)
     warnx << "  " << alt_search_path[i]->ID << "\n";
-#endif /* 0 */
+#endif /* SHOW_SLOW_LOOKUPS */
   draw_ring ();
 }
 
@@ -1580,14 +1528,6 @@ draw_ring ()
 	for (unsigned int i=1; i < n->predecessor->resok->nlist.size (); i++) {
 	  draw_arc (n->ID, make_chordID (n->predecessor->resok->nlist[i].n),
 		    drawing_area->style->black_gc);
-	}
-      }
-      if (n->toes && ((n->draw & DRAW_TOES) == DRAW_TOES)) {
-	for (unsigned int i=0; i < n->toes->resok->nlist.size (); i++) {
-	  int a,b;
-	  ID_to_xy (make_chordID (n->toes->resok->nlist[i].n), &a, &b);
-	  set_foreground_lat (n->toes->resok->nlist[i].a_lat); 
-	  draw_arrow (x,y,a,b,draw_gc);
 	}
       }
     }
