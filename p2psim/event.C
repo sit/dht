@@ -21,7 +21,7 @@ Event::~Event()
 Event::Event(vector<string> *v)
 {
   _id = _uniqueid++;
-  this->ts = (Time) atoll((*v)[0].c_str());
+  this->ts = (Time) strtoull((*v)[0].c_str(), NULL, 10);
   v->erase(v->begin());
 }
 
