@@ -60,10 +60,10 @@ events:
 
   * fail n t - node n fails at time t
 
-  * insert id n t - insert document id at time t; the operation is
+  * insert n id t - insert document id at time t; the operation is
     initiated by node n
 
-  * find id n t - find document id at time t; the operation is
+  * find n id t - find document id at time t; the operation is
     initiated by node n
 
   * exit t - terminate simulation at time t 
@@ -100,7 +100,9 @@ wait 1000
 exit
 
 2) use the description file to create an event file, i.e., the file
-that contains all events to be executed by the simulator
+that contains all events to be executed by the simulator. (Note that
+the actual example.ev file shown below may differ from machine to
+machine due to the differences in the number generators.)
 
 > traffic_gen example.sc 31 >! example.ev
 > cat example.ev
@@ -135,34 +137,59 @@ The output also displays the status of each node at the end of the
 simulation, i.e., its finger list, document list, and the list of
 outstanding requests, if any.
 
-The "Pending documents" displays the list of documents whose insertion
-has failed. This list is used to differentiate between the two main
-reasons of why a document query may fail. The first is because the
-document insertion has failed in the first place, and thus the
-document was never stored in the network. The second is because the
-lookup has failed. Since Chord implements a basic lookup operation, in
-general, the later failures are the only one we consider in our
-studies.
+The "pending documents" displays the list of documents whose insertion
+has failed. This list is used to differentiate between the documents
+which are not found because the insertion of these documents failed in
+the first place, and other failure cases. Among other cases of
+failures are 
 
->sim example.ev 11
-node 14473638 joins at 239.000000
-node 5410292 joins at 1492.000000
-node 7430505 joins at 2209.000000
-insertdoc_request: hops= 0 timeouts= 0; document 6797233 inserted at node 7430505 at 13117.000000
-insertdoc_request: hops= 0 timeouts= 0; document 1442499 inserted at node 5410292 at 13745.000000
-insertdoc_request: hops= 1 timeouts= 0; document 3167227 inserted at node 5410292 at 13745.000000
-insertdoc_request: hops= 1 timeouts= 0; document 846385 inserted at node 5410292 at 14057.000000
-insertdoc_request: hops= 1 timeouts= 0; document 4720281 inserted at node 5410292 at 15292.000000
-insertdoc_request: hops= 1 timeouts= 0; document 15494887 inserted at node 5410292 at 20953.000000
-insertdoc_request: hops= 1 timeouts= 0; document 625215 inserted at node 5410292 at 22565.000000
-finddoc_request: hops= 1 timeouts= 0; document 1442499 found at node 5410292 at 22565.000000 (0)
-insertdoc_request: hops= 1 timeouts= 0; document 5147555 inserted at node 5410292 at 25161.000000
-finddoc_request: hops= 1 timeouts= 0; document 5147555 found at node 5410292 at 25161.000000 (1)
-finddoc_request: hops= 1 timeouts= 0; document 846385 found at node 5410292 at 25161.000000 (2)
-finddoc_request: hops= 0 timeouts= 0; document 3167227 found at node 5410292 at 25669.000000 (3)
-insertdoc_request: hops= 1 timeouts= 0; document 2591805 inserted at node 5410292 at 26897.000000
-insertdoc_request: hops= 1 timeouts= 0; document 6075249 inserted at node 7430505 at 26943.000000
-finddoc_request: hops= 1 timeouts= 0; document 3167227 found at node 5410292 at 28086.000000 (4)
+  (1) the node that initiates the query is not present in the system.
+  This is either because the node has not joined the system yet or it
+  has left the system before the operation has completed.
+  These situations happen because traffic_gen cannot predict the
+  dynamic behavior of the system. 
+
+  For instance, as soon as a join event is initiated, traffic_gen may
+  use immediately that node to initiate a query. Example:
+
+	# node 10 joins the system at time 100
+        node 10 joins at 100
+	# insert document 11 at time 101 from node 10
+        insert 10 11 101  
+
+  The problem is that by time 101 the join has not completed. A node
+  is consider to be present (i.e., the join operation to complete)
+  only after another node points to the new node as its own successor;
+  setPresent() in finger.c.
+
+  (2) the document is not stored at the node returned by the lookup
+  operation. 
+
+NOTE: For the purpose of studying Chord, the failure due to (2) are
+the only relevant ones, as they actually represent a lookup failure
+due to an transient inconsistent routing state rather than an artifact
+of the interactions between traffic_gen and sim, or because the
+document was not inserted in the system in the first place.
+
+>sim example.ev 13
+node 14473638 joins at time 239.000000
+node 5410292 joins at time 2013.000000
+node 7430505 joins at time 2163.000000
+insert doc request (hops= 0 timeouts= 0 ); document 6797233 inserted at node 7430505 at time 13209.000000
+insert doc request (hops= 0 timeouts= 0 ); document 1442499 inserted at node 5410292 at time 13496.000000
+insert doc request (hops= 1 timeouts= 0 ); document 3167227 inserted at node 5410292 at time 13837.000000
+insert doc request (hops= 1 timeouts= 0 ); document 846385 inserted at node 5410292 at time 14112.000000
+insert doc request (hops= 1 timeouts= 0 ); document 4720281 inserted at node 5410292 at time 15085.000000
+insert doc request (hops= 1 timeouts= 0 ); document 15494887 inserted at node 5410292 at time 21176.000000
+insert doc request (hops= 1 timeouts= 0 ); document 625215 inserted at node 5410292 at time 22454.000000
+find doc request (hops= 1 timeouts= 0 ); document 1442499 found at node 5410292 at time 22454.000000
+insert doc request (hops= 1 timeouts= 0 ); document 5147555 inserted at node 5410292 at time 24495.000000
+find doc request (hops= 1 timeouts= 0 ); document 846385 found at node 5410292 at time 25177.000000
+find doc request (hops= 1 timeouts= 0 ); document 5147555 found at node 5410292 at time 25177.000000
+find doc request (hops= 0 timeouts= 0 ); document 3167227 found at node 5410292 at time 25830.000000
+insert doc request (hops= 1 timeouts= 0 ); document 2591805 inserted at node 5410292 at time 26375.000000
+insert doc request (hops= 1 timeouts= 0 ); document 6075249 inserted at node 7430505 at time 27621.000000
+find doc request (hops= 1 timeouts= 0 ); document 3167227 found at node 5410292 at time 28063.000000
 Exit: 28571.000000
 ---------
 Node = 5410292 (1)
@@ -176,5 +203,5 @@ Node = 7430505 (1)
 Node = 14473638 (1)
    finger list: 5410292, 7430505 (h=5410292, t=7430505, size=2)
    doc list: 
-   request list:
-Pending documents: 
+   request list: 7430506/0/14473638/7430505 (h=7430506, t=7430506)
+pending documents: 

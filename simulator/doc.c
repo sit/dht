@@ -54,7 +54,8 @@ void findDocument(Node *n, ID *docId)
   Request *r;
 
   if (n->status != PRESENT) {
-    printf("findDocument %d: n=%d has not joined or has been deleted in the meantime\n", *docId, n->id);
+    printf("document %d not found at time %f:  initiator node %d not present\n", 
+	   *docId, Clock, n->id);
     return;
   }
   r = newRequest(*docId, REQ_TYPE_FINDDOC, REQ_STYLE_ITERATIVE, n->id);
@@ -67,29 +68,27 @@ void findDocument(Node *n, ID *docId)
 void findDocumentLocal(Node *n, ID *docId)
 {
   if (n->status != PRESENT) {
-    printf("findDocumentLocal %d: node %d has not joined or has been deleted in the meantime!\n", 
-	   *docId, n->id);
+    printf("document %d not found at node %d at time %f: node not present \n", 
+	   *docId, n->id, Clock);
     return;
   }
 
-  if (findDocInList(n->docList, *docId)) {
-    static int i = 0;
-    printf("document %d found at node %d at %f (%d)\n", 
-	   *docId, n->id, Clock, i++);
-  } else {
-    static int i1 = 0, i2 = 0;
+  if (findDocInList(n->docList, *docId)) 
+    printf("document %d found at node %d at time %f\n", 
+	   *docId, n->id, Clock);
+  else {
     // differentiate between failures because douments
     // were never inserted, and failures due to 
     // lookup and node failures
     if (findDocInList(&PendingDocs, *docId)) 
       // this document was never inserted because the insertion failed;
       // thus this shouldn't be counted as a lookup failure
-      printf("document %d not present in system at %f (%d)\n", 
-	     *docId, Clock, i1++);
+      printf("document %d not present in system at time %f\n", 
+	     *docId, Clock);
     else {
       // this is an actual lookup failure
-      printf("document %d not found at node %d at %f (%d)\n", 
-	     *docId, n->id, Clock, i2++);
+      printf("document %d not found at node %d at time %f: document not stored at the node\n", 
+	     *docId, n->id, Clock);
     }
   }
 }
@@ -100,7 +99,8 @@ void insertDocument(Node *n, ID *docId)
   Request *r;
 
   if (n->status != PRESENT) {
-    printf("insertDocument %d: n=%d has not joined or has been deleted in the meantime\n", *docId, n->id);
+    printf("document %d not inserted at time %f: initiator node %d not present\n", 
+	   *docId, Clock, n->id);
     insertDocInList(&PendingDocs, newDoc(*docId));
     return;
   }
@@ -121,19 +121,20 @@ void insertDocumentLocal(Node *n, ID *docId)
   Document *doc;
 
   if (n->status != PRESENT) {
-    printf("insertDocumentLocal %d: node %d has not joined or has been deleted in the meantime!\n", *docId, n->id);
+    printf("document %d not inserted at node %d at time %f: node not present\n",
+	   *docId, n->id, Clock);
   } else {
     // allocate space for new document 
     doc = newDoc(*docId);
 
     if (!insertDocInList(n->docList, doc)) {
       // no room to insert document 
-      printf("cannot insert document %x at node %x at %f\n", 
+      printf("document %x not inserted at node %x at time %f: no more storage space\n", 
 	     doc->id, n->id, Clock); 
       free(doc);
       return;
     } else {
-      printf("document %d inserted at node %d at %f\n", 
+      printf("document %d inserted at node %d at time %f\n", 
 	     *docId, n->id, Clock);
       removeDocFromList(&PendingDocs, *docId);
     }
@@ -227,8 +228,10 @@ void updateDocList(Node *n, Node *s)
     return;
 
   if (!s) {
+#ifdef TRACE
     printf("updateDocList: node %d has been deleted in the meantime!\n",
 	   s->id);
+#endif TRACE
     return;
   }
 
@@ -271,8 +274,10 @@ void moveDocList(Node *n1, Node *n2)
     return;
 
   if (!n1) {
+#ifdef TRACE
     printf("moveDocList: node %d has been deleted in the meantime!\n",
 	   n1->id);
+#endif
     return;
   }
 
@@ -309,7 +314,7 @@ void printPendingDocs()
 {
   Document *doc;
 
-  printf("Pending documents: ");
+  printf("pending documents: ");
 
   for (doc = (&PendingDocs)->head; doc; doc = doc->next) {
     printf("%d", doc->id);

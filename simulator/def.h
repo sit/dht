@@ -45,15 +45,15 @@ typedef int ID;
 #define NUM_BITS     24  
 
 // average latency of a packet between any two nodes in the system.
-// latency is exponnentially distributed 
+// latency is exponentially distributed 
 #define AVG_PKT_DELAY    50  /* ms */
 
-// average interval between two invokation of the
+// average interval between two invocation of the
 // process_request() procedure. The duration of this interval is
 // uniformly distributed in [0.5*PROC_REC_PERIOD, 1.5*PROC_REC_PERIOD)
 #define PROC_REQ_PERIOD  500  /* ms */
 
-// average interval between two inokations of the stabilization()
+// average interval between two invocations of the stabilization()
 // procedure. The duration of this interval is
 // uniformly distributed in [STABILIZDE_REC_PERIOD, 1.5*STABILIZE_PERIOD)
 #define STABILIZE_PERIOD 30000  /* ms */
@@ -69,7 +69,7 @@ typedef int ID;
 // size of hash table used to maintain all nodes
 #define HASH_SIZE        100000 
 
-// callendar queue parameters: number of entries and the time interval
+// calendar queue parameters: number of entries and the time interval
 // covered by an entry (in event.c)
 #define MAX_NUM_ENTRIES  4096
 #define ENTRY_TUNIT 100 /* ms */ 
@@ -82,6 +82,9 @@ typedef int ID;
 // number of successors maintained by each node; these are the first
 // NUM_SUCC nodes in the finger table
 #define NUM_SUCCS 20
+
+// display some debugging  info
+// #define TRACE
 
 #define MAX_CMD_SIZE 128
 

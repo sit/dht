@@ -239,13 +239,13 @@ int processRequest1(Node *n, Request *r)
     switch (r->type) {
 
     case REQ_TYPE_INSERTDOC:
-      printf("insertdoc_request: hops= %d timeouts= %d; ", 
+      printf("insert doc request (hops= %d timeouts= %d ); ", 
 	     r->hops, r->timeouts);
       insertDocumentLocal(getNode(getSuccessor(n)), &r->x);
       return TRUE;
 
     case REQ_TYPE_FINDDOC:
-      printf("finddoc_request: hops= %d timeouts= %d; ", 
+      printf("find doc request (hops= %d timeouts= %d ); ", 
 	     r->hops, r->timeouts);
       s = getNode(getSuccessor(n));
       findDocumentLocal(s, &r->x);
@@ -280,10 +280,14 @@ void insertRequest_wait(Node *n, Request *r)
     getNeighbors(n, r->x, &(r->pred), &(r->succ));
     r->del = r->dst; // delete node
     r->timeouts++;    // increments the number of timeouts 
-    if ((r->dst = popNode(r)) == -1)
+    if ((r->dst = popNode(r)) == -1) {
       // no node to retry; restart the request
+      if (getNode(r->initiator) && 
+	  (getNode(r->initiator)->status != PRESENT)) 
+	printf("request of type %d has failed at time %f: initiator node %d has left the system\n",
+	       r->type, Clock, r->initiator);
       genEvent(r->initiator, insertRequest, (void *)r, Clock + TIME_OUT);
-    else 
+    } else 
       // next hop has failed; forward request to the 
       // previous node visited by the request
       genEvent(r->dst, insertRequest, (void *)r, Clock + TIME_OUT);

@@ -211,8 +211,11 @@ void printNodeInfo(Node *n)
   if (n->status == ABSENT)
     return;
 
+#ifdef TRACE
   if (getSuccessor(n) == n->id)
+    // node is diconnected
     printf("o");
+#endif
 
   printf("Node = %d (%d)\n", n->id, n->status);
 

@@ -171,10 +171,10 @@ void setPresent(ID id)
 
   if (n && n->status == TO_JOIN) {
     Node *s = getNode(getSuccessor(n));
-
     n->status = PRESENT;
     copySuccessorFingers(n);
     updateDocList(n, s);
+    printf("node %d joins at time %f\n", n->id, Clock); 
   }    
 }
 

@@ -56,7 +56,7 @@ void leave(Node *n, void *dummy) {
 	   Clock + intExp(AVG_PKT_DELAY));
 #endif // OPTIMIZATION
 
-  printf("node %d left at %f\n", n->id, Clock);
+  printf("node %d left at time %f\n", n->id, Clock);
   n->status = ABSENT;
 }
 
@@ -76,12 +76,14 @@ void nodeFailure(Node *n, void *dummy) {
     if (n1->status == PRESENT) {
       moveDocList(n, n1);
       n->status = ABSENT;
-      printf("node %d failed at %f\n", n->id, Clock);
+      printf("node %d failed at time %f\n", n->id, Clock);
       return;
     }
   }
 
+#ifdef TRACE
   printf("no finger alive for node %d at %f\n", n->id, Clock);
+#endif
 }
 
 

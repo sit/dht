@@ -46,7 +46,7 @@ void join(Node *n, int *nodeId) {
     n->status = PRESENT;    
     stabilize(n);
     processRequest(n);
-    printf("node %d joins at %f\n", n->id, Clock); 
+    printf("node %d joins at time %f\n", n->id, Clock); 
   }
 }
 
@@ -65,8 +65,7 @@ void join1(ID id, ID succ)
     n->status = TO_JOIN;
     stabilize(n);
     processRequest(n);
-    printf("node %d joins at %f\n", n->id, Clock); 
   } else
-    printf("join for node %d at %f failed\n", n->id, Clock);
+    printf("join for node %d at time %f failed\n", n->id, Clock);
 }
 
