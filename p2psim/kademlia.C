@@ -75,20 +75,20 @@ Kademlia::join(Args *args)
 
   // insert all results in our k-buckets and find the NodeID closest to our own.
   for(unsigned i=0; i<lr.results.size(); i++) {
-    KDEBUG(2) << "join: lookup my id: node " << printID(lr.results[i].first) << endl;
-    if(lr.results[i].first != _id)
-      _tree->insert(lr.results[i].first, lr.results[i].second);
+    KDEBUG(2) << "join: lookup my id: node " << printID(lr.results[i]->id) << endl;
+    if(lr.results[i]->id != _id)
+      _tree->insert(lr.results[i]->id, lr.results[i]->ip);
   }
 
   // get our ``successor''
   // KDEBUG(2) << "join: calling get_closest" << endl;
-  pair<NodeID, IPAddress> *p = &(lr.results[0]);
+  peer_t *p = lr.results[0];
   // assert(p->first == lr.results[0].first);
-  // assert(p->second == lr.results[0].second);
+  // assert(p->ip == lr.results[0]->ip);
 
   // common prefix length
-  unsigned cpl = common_prefix(_id, p->first);
-  KDEBUG(2) << "join: successor is " << printbits(p->first) << ", cpl = " << cpl << endl;
+  unsigned cpl = common_prefix(_id, p->id);
+  KDEBUG(2) << "join: successor is " << printbits(p->id) << ", cpl = " << cpl << endl;
 
   // all entries further away than him need to be refreshed.
   // see section 2.3
@@ -96,14 +96,14 @@ Kademlia::join(Args *args)
     // XXX: should be random
     lookup_args la(_id, ip(), (_id ^ (1<<i)));
     lookup_result lr;
-    KDEBUG(3) << "join: i/cpl = " << i << ", looking up entry " << i << ": " << printbits(la.key) << " at IP = " << p->second << endl;
-    if(!doRPC(p->second, &Kademlia::do_lookup, &la, &lr))
-      _tree->erase(p->first);
+    KDEBUG(3) << "join: i/cpl = " << i << ", looking up entry " << i << ": " << printbits(la.key) << " at IP = " << p->ip << endl;
+    if(!doRPC(p->ip, &Kademlia::do_lookup, &la, &lr))
+      _tree->erase(p->id);
 
     for(unsigned j=0; j<lr.results.size(); j++) {
-      KDEBUG(3) << "join: i/cpl = " << i << " inspect result " << j << ": " << printbits(lr.results[j].first) << endl;
-      if(lr.results[j].first != _id)
-        _tree->insert(lr.results[j].first, lr.results[j].second);
+      KDEBUG(3) << "join: i/cpl = " << i << " inspect result " << j << ": " << printbits(lr.results[j]->id) << endl;
+      if(lr.results[j]->id != _id)
+        _tree->insert(lr.results[j]->id, lr.results[j]->ip);
     }
   }
 
@@ -114,9 +114,9 @@ Kademlia::join(Args *args)
   transfer_result tr;
   ta.id = _id;
   ta.ip = ip();
-  KDEBUG(2) << "join: Node " << printbits(_id) << " initiating transfer from " << printbits(p->first) << endl;
-  if(!doRPC(p->second, &Kademlia::do_transfer, &ta, &tr))
-    _tree->erase(p->first);
+  KDEBUG(2) << "join: Node " << printbits(_id) << " initiating transfer from " << printbits(p->id) << endl;
+  if(!doRPC(p->ip, &Kademlia::do_transfer, &ta, &tr))
+    _tree->erase(p->id);
 
   // merge that data in our _values table
   for(map<NodeID, Value>::const_iterator pos = tr.values.begin(); pos != tr.values.end(); ++pos)
@@ -165,16 +165,16 @@ Kademlia::do_insert(insert_args *iargs, insert_result *iresult)
   do_lookup(&la, &lr);
 
   // if we are the successor for this key, we store it.
-  pair<NodeID, IPAddress> *p = get_closest(&(lr.results), iargs->key);
-  if(p->first == _id) {
+  peer_t *p = get_closest(&(lr.results), iargs->key);
+  if(p->id == _id) {
     KDEBUG(2) << "Node " << printID(_id) << " storing " << printID(iargs->key) << ":" << iargs->val << "." << endl;
     _values[iargs->key] = iargs->val;
     return;
   }
 
   // we're not the one to insert it
-  if(!doRPC(p->second, &Kademlia::do_insert, iargs, iresult))
-    _tree->erase(p->first);
+  if(!doRPC(p->ip, &Kademlia::do_insert, iargs, iresult))
+    _tree->erase(p->id);
 }
 
 // }}}
@@ -197,13 +197,13 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
   KDEBUG(3) << "do_lookup: callerIP = " << callerIP << endl;
   unsigned j = 0;
 
-  vector<pair<NodeID, IPAddress> > *bestset = new vector<pair<NodeID, IPAddress> >;
+  vector<peer_t*> *bestset = new vector<peer_t*>;
   assert(bestset);
 
   // deal with the empty case
   if(_tree->empty()) {
     KDEBUG(3) << "do_lookup: tree is empty. returning myself, ip = " << ip() << endl;
-    lresult->results.push_back(make_pair(_id, ip()));
+    lresult->results.push_back(new peer_t(_id, ip()));
     goto done;
   }
 
@@ -212,25 +212,22 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
   assert(bestset->size());
 
   KDEBUG(3) << "do_lookup: BESTSET:" << endl;
-  for(vector<pair<NodeID, IPAddress> >::const_iterator i = bestset->begin(); i != bestset->end(); ++i)
-    KDEBUG(3) << "do_lookup: bestset[ " << j++ << "]: " << printbits(i->first) << " -> " << i->second << ", dist to " << printbits(largs->key) << " = " << printbits(largs->key ^ i->second) << endl;
+  for(vector<peer_t*>::const_iterator i = bestset->begin(); i != bestset->end(); ++i)
+    KDEBUG(3) << "do_lookup: bestset[ " << j++ << "]: " << printbits((*i)->id) << " -> " << (*i)->ip << ", dist to " << printbits(largs->key) << " = " << printbits(largs->key ^ (*i)->ip) << endl;
 
-  // if we don't know how to forward this key or if we are closer
-  // are we closer? 
-  // XXX: try for all in vector
-  KDEBUG(3) << "do_lookup: closest node = " << printbits((*bestset)[0].first) << endl;
-  if(!(*bestset)[0].second || distance(_id, largs->key) < distance((*bestset)[0].first, largs->key)) {
-    // i am the best
+  // if we are closer than the closest one, then we are the best match.
+  KDEBUG(3) << "do_lookup: closest node = " << printbits((*bestset)[0]->id) << endl;
+  if(!(*bestset)[0]->ip || distance(_id, largs->key) < distance((*bestset)[0]->id, largs->key)) {
     KDEBUG(3) << "do_lookup: i am the best match" << endl;
-    lresult->results.push_back(make_pair(_id, ip()));
+    lresult->results.push_back(new peer_t(_id, ip()));
 
   // recursive lookup
   } else {
-    KDEBUG(3) << "do_lookup: recursive lookup to " << printbits((*bestset)[0].first) << " at ip = " << (*bestset)[0].second << endl;
+    KDEBUG(3) << "do_lookup: recursive lookup to " << printbits((*bestset)[0]->id) << " at ip = " << (*bestset)[0]->ip << endl;
     largs->id = _id;
     largs->ip = ip();
-    if(!doRPC((*bestset)[0].second, &Kademlia::do_lookup, largs, lresult))
-      _tree->erase((*bestset)[0].first);
+    if(!doRPC((*bestset)[0]->ip, &Kademlia::do_lookup, largs, lresult))
+      _tree->erase((*bestset)[0]->id);
   }
 
 done:
@@ -240,6 +237,8 @@ done:
   // insert caller into our tree
   if(callerID != _id)
     _tree->insert(callerID, callerIP);
+
+  delete bestset;
 }
 
 // }}}
@@ -248,20 +247,20 @@ done:
 // wrapper around do_lookup(lookup_args *largs, lookup_result *lresult)
 // if use_ip == 0, use the well-known node
 void
-Kademlia::do_lookup_wrapper(pair<NodeID, IPAddress> p, Kademlia::NodeID key, 
-    vector<pair<NodeID, IPAddress> > *v)
+Kademlia::do_lookup_wrapper(peer_t *p, Kademlia::NodeID key, 
+    vector<peer_t*> *v)
 {
   lookup_args la(_id, ip(), key);
   lookup_result lr;
 
-  if(!doRPC(p.second ? p.second : _wkn, &Kademlia::do_lookup, &la, &lr))
-    _tree->erase(p.first);
+  if(!doRPC(p->ip ? p->ip : _wkn, &Kademlia::do_lookup, &la, &lr))
+    _tree->erase(p->id);
 
   if(!v)
     return;
 
   // XXX: better copy?
-  for(vector<pair<NodeID, IPAddress> >::const_iterator i = lr.results.begin(); i != lr.results.end(); ++i)
+  for(vector<peer_t*>::const_iterator i = lr.results.begin(); i != lr.results.end(); ++i)
     v->push_back(*i);
 }
 
@@ -277,13 +276,13 @@ Kademlia::do_ping(ping_args *pargs, ping_result *presult)
 // }}}
 // {{{ Kademlia::do_ping_wrapper
 bool
-Kademlia::do_ping_wrapper(pair<NodeID, IPAddress> p)
+Kademlia::do_ping_wrapper(peer_t *p)
 {
-  assert(p.second);
+  assert(p->ip);
   ping_args pa(_id, ip());
   ping_result pr;
-  if(!doRPC(p.second, &Kademlia::do_ping, &pa, &pr)) {
-    _tree->erase(p.first);
+  if(!doRPC(p->ip, &Kademlia::do_ping, &pa, &pr)) {
+    _tree->erase(p->id);
     return false;
   }
   return true;
@@ -404,17 +403,17 @@ Kademlia::common_prefix(Kademlia::NodeID k1, Kademlia::NodeID k2)
 
 // }}}
 // {{{ Kademlia::get_closest
-pair<Kademlia::NodeID, IPAddress> *
-Kademlia::get_closest(vector<pair<NodeID, IPAddress> > *v, NodeID id)
+peer_t*
+Kademlia::get_closest(vector<peer_t*> *v, NodeID id)
 {
   // insert all results in our k-buckets and find the NodeID closest to our own.
   NodeID closestDist = (NodeID) -1;
-  pair<NodeID, IPAddress> *closestP = 0;
+  peer_t *closestP = 0;
   for(unsigned i=0; i<v->size(); i++) {
-    NodeID xid = (*v)[i].first;
+    NodeID xid = (*v)[i]->id;
     if(distance(id, xid) < closestDist) {
       closestDist = distance(id, xid);
-      closestP = &((*v)[i]);
+      closestP = (*v)[i];
     }
   }
 
@@ -503,23 +502,23 @@ k_bucket_tree::stabilized(vector<NodeID> lid)
 }
 
 // }}}
-// {{{ k_bucket_tree::getpresult
+// {{{ k_bucket_tree::get
 void
-k_bucket_tree::get(NodeID key, vector<pair<Kademlia::NodeID, IPAddress> > *v)
+k_bucket_tree::get(NodeID key, vector<peer_t*> *v)
 {
   unsigned j=0;
   // XXX heinously inefficient, but who cares for now.
-  vector<pair<Kademlia::NodeID, IPAddress> > tmp;
+  vector<peer_t*> tmp;
   KDEBUG(2) << "k_bucket_tree::get putting crap in tmp" << endl;
   for(map<NodeID, peer_t*>::const_iterator i = _nodes.begin(); i != _nodes.end(); i++) {
     KDEBUG(2) << "k_bucket_tree::get calling assert for id = " << Kademlia::printbits(i->first) << endl;
     assert(i->second);
-    tmp.push_back(make_pair(i->first, i->second->ip));
+    tmp.push_back(i->second);
   }
 
   KDEBUG(2) << "k_bucket_tree::get tmp BEFORE sort" << endl;
-  for(vector<pair<Kademlia::NodeID, IPAddress> >::const_iterator i = tmp.begin(); i != tmp.end(); ++i)
-    KDEBUG(2) << "k_bucket_tree: [" << j++ << "] " << Kademlia::printbits(i->first) << " -> " << i->second << endl;
+  for(vector<peer_t*>::const_iterator i = tmp.begin(); i != tmp.end(); ++i)
+    KDEBUG(2) << "k_bucket_tree: [" << j++ << "] " << Kademlia::printbits((*i)->id) << " -> " << (*i)->ip << endl;
 
 
   SortNodes sn(key);
@@ -527,12 +526,12 @@ k_bucket_tree::get(NodeID key, vector<pair<Kademlia::NodeID, IPAddress> > *v)
 
   j = 0;
   KDEBUG(2) << "k_bucket_tree::get tmp AFTER sort" << endl;
-  for(vector<pair<Kademlia::NodeID, IPAddress> >::const_iterator i = tmp.begin(); i != tmp.end(); ++i)
-    KDEBUG(2) << "k_bucket_tree: [" << j++ << "] " << Kademlia::printbits(i->first) << " -> " << i->second << ", dist = " << Kademlia::printbits(i->first ^ key) << endl;
+  for(vector<peer_t*>::const_iterator i = tmp.begin(); i != tmp.end(); ++i)
+    KDEBUG(2) << "k_bucket_tree: [" << j++ << "] " << Kademlia::printbits((*i)->id) << " -> " << (*i)->ip << ", dist = " << Kademlia::printbits((*i)->id ^ key) << endl;
 
   j = 0;
-  for(vector<pair<Kademlia::NodeID, IPAddress> >::const_iterator i = tmp.begin(); i != tmp.end() && j<_k; ++i, ++j) {
-    KDEBUG(2) << "k_bucket_tree::get [" << j << "] " << Kademlia::printbits(i->first) << " -> " << i->second << ", dist = " << Kademlia::printbits(i->first ^ key) << endl;
+  for(vector<peer_t*>::const_iterator i = tmp.begin(); i != tmp.end() && j<_k; ++i, ++j) {
+    KDEBUG(2) << "k_bucket_tree::get [" << j << "] " << Kademlia::printbits((*i)->id) << " -> " << (*i)->ip << ", dist = " << Kademlia::printbits((*i)->id ^ key) << endl;
     v->push_back(*i);
   }
   // _root->get(key, v);
@@ -541,11 +540,11 @@ k_bucket_tree::get(NodeID key, vector<pair<Kademlia::NodeID, IPAddress> > *v)
 
 // }}}
 // {{{ k_bucket_tree::random_node
-pair<k_bucket_tree::NodeID, IPAddress>
+peer_t*
 k_bucket_tree::random_node()
 {
   unsigned r = 1 + (unsigned)(((float) _nodes.size())*rand() / (RAND_MAX+1.0));
-  return make_pair(_nodes[r]->id, _nodes[r]->ip);
+  return _nodes[r];
 }
 
 // }}}
@@ -637,7 +636,7 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned de
   // OK, then don't do anything.
   set<peer_t*>::const_iterator least_recent = _nodes->begin();
   assert(*least_recent);
-  if(_self->do_ping_wrapper(make_pair((*least_recent)->id, (*least_recent)->ip)))
+  if(_self->do_ping_wrapper(*least_recent))
     return 0;
 
   // evict the dead node
@@ -710,7 +709,7 @@ k_bucket::stabilize(string prefix, unsigned depth)
         continue;
 
       // find the closest node to the ID we're looking for
-      vector<pair<NodeID, IPAddress> > *best = new vector<pair<NodeID, IPAddress> >;
+      vector<peer_t*> *best = new vector<peer_t*>;
       _root->get((*it)->id, best);
       KDEBUG(1) << "stabilize: lookup for " << Kademlia::printbits((*it)->id) << endl;
       _self->do_lookup_wrapper((*best)[0], (*it)->id);
@@ -727,9 +726,9 @@ k_bucket::stabilize(string prefix, unsigned depth)
   KDEBUG(1) << "stabilize: mask = " << Kademlia::printbits(mask) << endl;
   NodeID random_key = _self->id() & mask;
 
-  vector<pair<NodeID, IPAddress> > *best = new vector<pair<NodeID, IPAddress> >;
+  vector<peer_t*> *best = new vector<peer_t*>;
   _root->get(random_key, best);
-  for(vector<pair<NodeID, IPAddress> >::const_iterator i = best->begin(); i != best->end(); ++i) {
+  for(vector<peer_t*>::const_iterator i = best->begin(); i != best->end(); ++i) {
     KDEBUG(1) << "stabilize: random lookup for " << Kademlia::printbits(random_key) << endl;
     _self->do_lookup_wrapper((*i), random_key);
   }
@@ -816,7 +815,7 @@ k_bucket::stabilized(vector<NodeID> lid, string prefix, unsigned depth)
 // Return the k closest entries to
 //
 // void
-// k_bucket::get(NodeID key, vector<pair<Kademlia::NodeID, IPAddress> > *v, unsigned depth)
+// k_bucket::get(NodeID key, vector<peer_t*> *v, unsigned depth)
 // {
 //   // descend into the tree
 //   unsigned b = Kademlia::getbit(key, depth);

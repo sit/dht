@@ -10,6 +10,7 @@ using namespace std;
 
 extern unsigned kdebugcounter;
 class k_bucket_tree;
+class peer_t;
 
 // {{{ Kademlia
 class Kademlia : public DHTProtocol {
@@ -42,10 +43,10 @@ public:
   // static NodeID maskright(NodeID, unsigned);
   static unsigned getbit(NodeID, unsigned);
   static unsigned common_prefix(NodeID, NodeID);
-  static pair<NodeID, IPAddress> *get_closest(vector<pair<NodeID, IPAddress> > *, NodeID);
+  static peer_t* get_closest(vector<peer_t*> *, NodeID);
   static unsigned k()   { return _k; }
 
-  void do_lookup_wrapper(pair<NodeID, IPAddress>, NodeID, vector<pair<NodeID, IPAddress> > * = 0);
+  void do_lookup_wrapper(peer_t*, NodeID, vector<peer_t*> * = 0);
 
   // public, because k_bucket needs it.
   struct lookup_args {
@@ -59,7 +60,7 @@ public:
   struct lookup_result {
     // NodeID id;      // answer to the lookup
     // IPAddress ip;   // answer to the lookup
-    vector<pair<NodeID, IPAddress> > results;
+    vector<peer_t*> results;
     NodeID rid;     // the guy who's replying
   };
 
@@ -73,7 +74,7 @@ public:
   };
   struct ping_result {};
   void do_ping(ping_args*, ping_result*);
-  bool do_ping_wrapper(pair<NodeID, IPAddress>);
+  bool do_ping_wrapper(peer_t*);
 
 // }}}
 // {{{ private
@@ -146,7 +147,8 @@ class peer_t {
 public:
   typedef Kademlia::NodeID NodeID;
 
-  peer_t(NodeID xid, IPAddress xip, Time t) : retries(0), id(xid), ip(xip), firstts(t), lastts(t) {}
+  peer_t(NodeID xid, IPAddress xip, Time t = now())
+    : retries(0), id(xid), ip(xip), firstts(t), lastts(t) {}
   peer_t(const peer_t &p) : retries(0), id(p.id), ip(p.ip), lastts(p.lastts) {}
   unsigned retries;
   NodeID id;
@@ -202,16 +204,16 @@ public:
   void stabilize();
   void dump() { return _root->dump(); }
   bool empty() { return _nodes.empty(); }
-  void get(NodeID, vector<pair<NodeID, IPAddress> >*);
-  pair<NodeID, IPAddress> random_node();
+  void get(NodeID, vector<peer_t*>*);
+  peer_t* random_node();
 
 
 private:
   class SortNodes { public:
     SortNodes(NodeID key) : _key(key) {}
-    bool operator()(const pair<NodeID, IPAddress> &n1, const pair<NodeID, IPAddress> &n2) const {
+    bool operator()(const peer_t* n1, const peer_t* n2) const {
       // cout << "compare " << Kademlia::printbits(_key) << " ^ " << Kademlia::printbits(n1.first) << " = " << Kademlia::printbits(_key ^ n1.first) << " with " << Kademlia::printbits(_key) << " ^ " << Kademlia::printbits(n2.first) << " = " << Kademlia::printbits(_key ^ n2.first) << endl;
-      return (_key ^ n1.first) < (_key ^ n2.first);
+      return (_key ^ n1->id) < (_key ^ n2->id);
     }
   private:
     NodeID _key;
