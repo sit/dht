@@ -54,7 +54,6 @@ private:
     int ok;
   };
   void do_join(void *args, void *result);
-  unsigned merge_into_ftable(NodeID id, IPAddress ip);
 
 
   // lookup
@@ -122,7 +121,7 @@ private:
       vector<peer_t*> _nodes;
       k_bucket* _child[2]; // subtree
 
-      bool insert(NodeID node, IPAddress ip, NodeID prefix = 0, unsigned depth = 0);
+      unsigned insert(NodeID node, IPAddress ip, NodeID prefix = 0, unsigned depth = 0);
       void dump() {}
 
     private:

@@ -13,7 +13,7 @@ unsigned kdebugcounter = 1;
 Kademlia::NodeID Kademlia::_rightmasks[8*sizeof(Kademlia::NodeID)];
 unsigned Kademlia::_k = 8;
 
-Kademlia::Kademlia(Node *n) : Protocol(n), _id(ConsistentHash::ip2chid(n->ip()))
+Kademlia::Kademlia(Node *n) : Protocol(n), _id(ConsistentHash::ip2chid(n->ip()) & 0x0000ffff)
 {
   KDEBUG(1) << "id: " << printbits(_id) << endl;
   _values.clear();
@@ -110,30 +110,29 @@ Kademlia::join(Args *args)
   // lookup my own key with well known node.
   lookup_args la;
   lookup_result lr;
-  la.id = _id;
+  la.id = la.key = _id;
   la.ip = ip();
-  la.key = _id;
   KDEBUG(2) << "join: lookup my id" << endl;
   doRPC(wkn, &Kademlia::do_lookup, &la, &lr);
   KDEBUG(2) << "join: lookup my id: node " << printID(lr.id) << endl;
 
-  // put well known dude in finger table
-  NodeID succ = lr.rid;
-  IPAddress succip = lr.ip;
+  // put well known dude in table
+  unsigned entry = _root->insert(lr.rid, wkn);
 
-  unsigned entry = merge_into_ftable(succ, wkn);
-  KDEBUG(3) << "join: inserted at entry " << entry << endl;
+  // put reply (i.e., ``successor'' of our own ID) in table
+  _root->insert(lr.id, lr.ip);
 
   // all entries further away than him need to be refereshed.
   // see section 2.3
-  for(unsigned i=entry+1; i<idsize; i++) {
-    // always look up on the previous node we learned about.
+  IPAddress succIP = lr.ip;
+  for(int i=entry-1; i>=0; i--) {
+    // XXX: should be random
     la.key = (_id ^ (1<<i));
-    KDEBUG(3) << "join: looking up entry " << i << ": " << printbits(la.key) << endl;
-    doRPC(lr.ip, &Kademlia::do_lookup, &la, &lr);
+    KDEBUG(3) << "join: looking up entry " << i << ": " << printbits(la.key) << " at IP = " << succIP << endl;
+    doRPC(succIP, &Kademlia::do_lookup, &la, &lr);
     KDEBUG(3) << "join: looking result for entry " << i << ": " << printbits(lr.id) << endl;
     if(lr.id != _id)
-      merge_into_ftable(la.key, lr.ip);
+      _root->insert(la.key, lr.ip);
   }
 
   // now get the keys from our successor
@@ -142,7 +141,7 @@ Kademlia::join(Args *args)
   ta.id = _id;
   ta.ip = ip();
   KDEBUG(2) << "join: Node " << printbits(_id) << " initiating transfer from " << printbits(lr.id) << endl;
-  doRPC(succip, &Kademlia::do_transfer, &ta, &tr);
+  doRPC(succIP, &Kademlia::do_transfer, &ta, &tr);
 
   // merge that data in our _values table
   for(map<NodeID, Value>::const_iterator pos = tr.values.begin(); pos != tr.values.end(); ++pos)
@@ -176,7 +175,7 @@ Kademlia::stabilize(void)
     do_lookup(&la, &lr);
     KDEBUG(3) << "stabilize: looking result for entry " << i << ": " << printbits(lr.id) << endl;
     if(lr.id != _id)
-      merge_into_ftable(la.key, lr.ip);
+      _root->insert(la.key, lr.ip);
   }
 }
 
@@ -186,7 +185,7 @@ Kademlia::do_join(void *args, void *result)
 {
   join_args *jargs = (join_args*) args;
   KDEBUG(2) << "do_join " << printbits(jargs->id) << " entering\n";
-  merge_into_ftable(jargs->id, jargs->ip);
+  _root->insert(jargs->id, jargs->ip);
 }
 
 
@@ -195,7 +194,7 @@ Kademlia::do_transfer(void *args, void *result)
 {
   transfer_args *targs = (transfer_args*) args;
   transfer_result *tresult = (transfer_result*) result;
-  merge_into_ftable(targs->id, targs->ip);
+  _root->insert(targs->id, targs->ip);
 
   KDEBUG(2) << "handle_transfer to node " << printID(targs->id) << "\n";
   if(_values.size() == 0) {
@@ -226,19 +225,28 @@ Kademlia::getbit(NodeID n, unsigned i)
   return (n & (1<<((sizeof(NodeID)*8)-i-1))) ? 1 : 0;
 }
 
+
+
 void
 Kademlia::do_lookup(void *args, void *result)
 {
   lookup_args *largs = (lookup_args*) args;
   lookup_result *lresult = (lookup_result*) result;
+  peer_t *closenode = 0;
+  k_bucket *kb = _root;
 
   KDEBUG(3) << "do_lookup: id = " << printbits(largs->id) << ", ip = " << largs->ip << ", key = " << printbits(largs->key) << endl;
+  NodeID callerID = largs->id;
+  NodeID callerIP = largs->ip;
 
-  // insert caller into our tree
-  _root->insert(largs->id, largs->ip);
+  // deal with the empty case
+  if(!_root->_child[0] && !_root->_child[1] && !_root->_nodes.size()) {
+    lresult->id = _id;
+    lresult->ip = ip();
+    goto done;
+  }
 
   // descend into the tree
-  k_bucket *kb = _root;
   for(unsigned i=0; i<idsize; i++) {
     unsigned b = getbit(largs->key, i);
     KDEBUG(3) << "do_lookup: bit " << i << " of key is " << b << endl;
@@ -256,109 +264,33 @@ Kademlia::do_lookup(void *args, void *result)
 
   // are we closer? 
   // XXX: try for all in vector
-  peer_t *closenode = kb->_nodes[0];
+  closenode = kb->_nodes[0];
+  KDEBUG(3) << "do_lookup: closenode = " << printbits(closenode->id) << endl;
   if(distance(_id, largs->key) < distance(closenode->id, largs->key)) {
     // i am the best
     KDEBUG(3) << "do_lookup: i am the best match" << endl;
+    lresult->id = _id;
+    lresult->ip = ip();
     lresult->rid = _id;
 
   // recursive lookup
   } else {
+    KDEBUG(3) << "do_lookup: recursive lookup to " << printbits(kb->_nodes[0]->id) << endl;
     largs->id = _id;
     largs->ip = ip();
-    doRPC(kb->_nodes[0]->id, &Kademlia::do_lookup, args, result);
+    doRPC(kb->_nodes[0]->ip, &Kademlia::do_lookup, args, result);
   }
-
-  // set correct return data
-  lresult->rid = _id;
-}
-
-#if 0
-void
-Kademlia::do_lookup(void *args, void *result)
-{
-  lookup_args *largs = (lookup_args*) args;
-  lookup_result *lresult = (lookup_result*) result;
-  KDEBUG(3) << "do_lookup: id = " << printbits(largs->id) << ", ip = " << largs->ip << ", key = " << printbits(largs->key) << endl;
-
-  NodeID origID = largs->id;
-  IPAddress origIP = largs->ip;
-
-  NodeID bestID = _id;
-  NodeID bestdist = distance(_id, largs->key);
-
-  // XXX: very inefficient
-  for(unsigned i=0; i<idsize; i++) {
-    KDEBUG(3) << "do_lookup: " << printbits(largs->key) << " -> [" << i << "] = ";
-    
-    if(!_fingers.valid(i)) {
-      DEBUG(3) << "invalid" << endl;
-      continue;
-    } else {
-      DEBUG(3) << printbits(_fingers.get_id(i)) << " (dist = " << printbits(distance(_fingers.get_id(i), largs->key)) << ")" << endl;
-    }
-
-    NodeID dist;
-    if((dist = distance(_fingers.get_id(i), largs->key)) < bestdist) {
-      bestdist = dist;
-      bestID = _fingers.get_id(i);
-    }
-  }
-  KDEBUG(2) << "do_lookup: result is key: " << printbits(bestID) << endl;
-
-  // if this is us, then reply
-  if(bestID == _id) {
-    lresult->id = bestID;
-    lresult->ip = ip();
-    KDEBUG(2) << "do_lookup: I am the best match for " << printID(largs->key) << endl;
-    goto done;
-  }
-
-  // otherwise do the lookup call to whomever we think is best
-  KDEBUG(2) << "do_lookup: *** recursive lookup(" << printbits(largs->key) << ") @ " << printbits(bestID) << " (ip = " << _fingers.get_ipbyid(bestID) << ")" << endl;
-  largs->id = _id;
-  largs->ip = ip();
-  doRPC(_fingers.get_ipbyid(bestID), &Kademlia::do_lookup, args, result);
 
 done:
-  // only merge _after_ the lookup to avoid returning a node's own id.
-  if(origID != _id)
-    merge_into_ftable(origID, origIP);
-
-  // put my own id in reply
+  // set correct return data
   lresult->rid = _id;
+
+  // insert caller into our tree
+  _root->insert(callerID, callerIP);
+
 }
 
-#endif
 
-
-unsigned
-Kademlia::merge_into_ftable(NodeID id, IPAddress ip)
-{
-  return 0;
-  /*
-  KDEBUG(3) << "merge_into_ftable: id = " << printbits(id) << ", ip = " << ip << endl;
-  assert(id != _id);
-
-  unsigned called = 0;
-  unsigned entry = 0;
-  for(unsigned i=0; i<idsize; i++) {
-    if(flipbitandmaskright(_id, i) == maskright(id, i)) {
-      KDEBUG(4) << "merge_into_ftable: flipbitandmaskright(_id, " << i << ") == " << printbits(flipbitandmaskright(_id, i)) << endl;
-      KDEBUG(4) << "merge_into_ftable:           maskright(id,  " << i << ") == " << printbits(maskright(id, i)) << endl;
-      KDEBUG(3) << "merge_into_ftable: setting to entry " << i << endl;
-      _fingers.set(i, id, ip);
-      called++;
-      entry = i;
-    }
-  }
-  assert(called <= 1);
-
-  if(verbose >= 4)
-    dump();
-  return entry;
-  */
-}
 
 
 //
@@ -398,7 +330,7 @@ Kademlia::printbits(NodeID id)
   for(int i=idsize-1; i>=0; i--)
     sprintf(&(buf[j++]), "%u", (id >> i) & 0x1);
   // sprintf(&(buf[j]), ":%llx", id);
-  sprintf(&(buf[j]), ":%x", id);
+  sprintf(&(buf[j]), ":%hx", id);
 
   return string(buf);
 }
@@ -455,7 +387,7 @@ void
 Kademlia::do_insert(void *args, void *result)
 {
   insert_args *iargs = (insert_args*) args;
-  merge_into_ftable(iargs->id, iargs->ip);
+  _root->insert(iargs->id, iargs->ip);
 
   lookup_args la;
   lookup_result lr;
@@ -510,22 +442,26 @@ Kademlia::k_bucket::~k_bucket()
     delete _nodes[i];
 }
 
-bool
+unsigned
 Kademlia::k_bucket::insert(NodeID node, IPAddress ip, NodeID prefix, unsigned depth)
 {
   // descend to right level in tree
   // if[child[0]], go left
   // if[child[1]], go right
-  char leftmostbit = (node & (1<<((sizeof(NodeID)*8)-1))) ? 1 : 0;
+  DEBUG(4) <<  "insert: node = " << Kademlia::printbits(node) << ", ip = " << ip << ", prefix = " << Kademlia::printbits(prefix) << ", depth = " << depth << endl;
+  unsigned leftmostbit = (node & (1<<((sizeof(NodeID)*8)-1))) ? 1 : 0;
+  DEBUG(4) <<  "insert: leftmostbit = " << leftmostbit << endl;
   if(_child[leftmostbit]) {
     prefix = (prefix << 1) | (NodeID) leftmostbit;
-    return _child[leftmostbit]->insert(node, prefix, depth+1);
+    DEBUG(4) <<  "insert: descending deeper, going into " << leftmostbit << endl;
+    return _child[leftmostbit]->insert(node, ip, prefix, depth+1);
   }
 
   // if not full, just add the new id.
+  // XXX: is this correct? do we not split on own ID?
   if(_nodes.size() < _k) {
     _nodes.push_back(new peer_t(node, ip));
-    return true; // is this correct? do we not split on own ID?
+    return depth;
   }
 
   // must be equal then.
