@@ -50,8 +50,8 @@ int JOSH = getenv("JOSH") ? atoi(getenv("JOSH")) : 0;
 #define REPTM     10
 #define PRTTM     5
 
-EXITFN(close_databases);
 static vec<dbfe *> open_databases;
+EXITFN(close_databases);
 
 static void
 close_databases ()
@@ -81,7 +81,7 @@ verifydb (dbfe *db)
       warn << "keys not sorted: " << p << " " << k << "\n";
       return 0;
     }
-    if (db->lookup (d->key)) {
+    if (!db->lookup (d->key)) {
       warn << "lookup failed: " << k << "\n";
       return 0;
     }
@@ -419,10 +419,11 @@ dhash::replica_maintenance_timer (u_int index)
 void
 dhash::partition_maintenance_timer ()
 {
+  merkle_part_tcb = NULL;
+
   if (!PARTITION_ENABLED)
     return;
 
-  merkle_part_tcb = NULL;
 #if 0
   warn << "** dhash::partition_maintenance_timer ()\n";
 #endif
