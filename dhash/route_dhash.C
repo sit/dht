@@ -136,8 +136,6 @@ route_dhash::block_cb (s_dhash_block_arg *arg)
   //process the first block
   add_data(arg->res.base (), arg->res.size (), arg->offset);
   check_finish ();
-
-  delete arg;
 }
 
 void
