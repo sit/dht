@@ -157,8 +157,7 @@ dhash::dispatch (svccb *sbp)
 	}
 
 	res.cont_res->next.x = nid;
-	res.cont_res->next.r = 
-	  host_node->chordnode->locations->getaddress (nid);
+	res.cont_res->next.r = host_node->locations->getaddress (nid);
       }
       
       sbp->reply (&res);
@@ -180,7 +179,7 @@ dhash::dispatch (svccb *sbp)
 	dhash_storeres res (DHASH_RETRY);
 	chordID pred = host_node->my_pred ();
 	res.pred->p.x = pred;
-	res.pred->p.r = host_node->chordnode->locations->getaddress (pred);
+	res.pred->p.r = host_node->locations->getaddress (pred);
 	sbp->reply (&res);
       } else {
 	warnt ("DHASH: will store");
@@ -329,9 +328,13 @@ void
 dhash::update_replica_list () 
 {
   replicas.clear ();
-  for (int i = 1; i < nreplica+1; i++) 
-    if (host_node->nth_successorID (i) != host_node->my_ID ())
-      replicas.push_back(host_node->nth_successorID (i));
+  chordID myID = host_node->my_ID ();
+  chordID successor = myID;
+  for (int i = 1; i < nreplica+1; i++) {
+    successor = host_node->locations->closestsuccloc (myID);
+    if (successor != myID)
+      replicas.push_back (successor);
+  }
 }
 
 void
@@ -361,10 +364,12 @@ dhash::check_replicas_cb () {
 void
 dhash::check_replicas () 
 {
+  // xxx write getreplicalist and diff the sorted list. more efficient.
   ////if (!isReplica(nth)) key_store.traverse (wrap (this, &dhash::check_replicas_traverse_cb, nth));
-
+  chordID myID = host_node->my_ID ();
+  chordID nth = myID;
   for (unsigned int i=0; i < replicas.size (); i++) {
-    chordID nth = host_node->nth_successorID (i+1);
+    chordID nth = host_node->locations->closestsuccloc (nth);
     if (isReplica(nth))
       continue;
 
@@ -405,8 +410,7 @@ void
 dhash::replicate_key (chordID key, cbstat_t cb)
 {
   if (replicas.size () > 0) {
-    location *l = host_node->chordnode->locations->getlocation (replicas[0]);
-    if (!l) {
+    if (!host_node->locations->cached (replicas[0])) {
       check_replicas_cb ();
       replicate_key (key, cb);
       return;
@@ -426,8 +430,7 @@ dhash::replicate_key_cb (unsigned int replicas_done, cbstat_t cb, chordID key,
   if (err) (*cb)(DHASH_ERR);
   else if (replicas_done >= replicas.size ()) (*cb)(DHASH_OK);
   else {
-    location *l = host_node->chordnode->locations->getlocation (replicas[replicas_done]);
-    if (!l) {
+    if (!host_node->locations->cached (replicas[replicas_done])) {
       check_replicas_cb ();
       replicate_key (key, cb);
       return;
@@ -492,9 +495,9 @@ dhash::transfer_store_cb (callback<void, dhash_stat>::ref cb,
   else if (res->status == DHASH_RETRY) {
     dhash_storeres *nres = New dhash_storeres (DHASH_OK);
     // XXX challenge
-    host_node->chordnode->locations->cacheloc (res->pred->p.x, 
-					       res->pred->p.r,
-					       cbchall_null);
+    host_node->locations->cacheloc (res->pred->p.x, 
+				    res->pred->p.r,
+				    cbchall_null);
 					       
     doRPC(res->pred->p.x, 
 	  dhash_program_1, DHASHPROC_STORE, 

@@ -2,15 +2,14 @@
 
 bool present (vec<chordID> toes, chordID id);
 
-toe_table::toe_table (ptr<locationtable> locs,
-		      ptr<succ_list> succ) 
-  : locations (locs), successors (succ), in_progress (0) {
-  
+toe_table::toe_table (ptr<locationtable> locs, chordID ID)
+  : locations (locs), myID (ID), in_progress (0)
+{
   for (int i=0; i < MAX_LEVELS; i++) 
     target_size[i] = 2; //must be less than nsucc to bootstrap
   
   last_level = -2;
-};
+}
 
 void
 toe_table::get_toes_rmt (int level) 
@@ -72,11 +71,11 @@ void
 toe_table::add_toe_ping_cb (chordID id, int level, chordstat err)
 {
   // xxx should check err?
-  location *l = locations->getlocation (id);
-  if (l->a_lat < level_to_delay (level)) {
+  if (locations->get_a_lat (id) < level_to_delay (level)) {
     warn << "added " << id << " to level " << level << "\n";
     net_address r = locations->getaddress (id);
-    locations->updateloc (id, r, cbchall_null); // XXX
+    // what was this supposed to do??
+    // locations->updateloc (id, r, cbchall_null); // XXX
     toes.push_back (id);
   }
   in_progress--;
@@ -88,8 +87,7 @@ toe_table::get_toes (int level)
   int up = level_to_delay (level);
   vec<chordID> res;
   for (unsigned int i = 0; i < toes.size (); i++) {
-    location *l = locations->getlocation (toes[i]);
-    if (l->a_lat < up)
+    if (locations->get_a_lat (toes[i]) < up)
       res.push_back (toes[i]);
   }
   return res;
@@ -116,8 +114,8 @@ toe_table::dump ()
     vec<chordID> vl = get_toes (level);
     warn << "Toes at level " << level << ":\n";
     for (unsigned int i=0; i < vl.size (); i++) {
-      location *l = locations->getlocation (vl[i]);
-      warn << "     " << vl[i] << " latency: " << (int)l->a_lat;
+      warn << "     " << vl[i] << " latency: "
+	   << (int)locations->get_a_lat (vl[i]);
     }
   }
 
@@ -145,12 +143,14 @@ toe_table::stabilize_toes ()
 
   set_last_level (level);
   if (level < 0) { //bootstrap off succ list
-    //grab the succlist and stick it in the toe table
-    for (int i = 1; i < successors->num_succ (); i++) 
-      if (successors->nth_alive(i)) {
-	chordID ith_succ = (*successors)[i];
-    	add_toe (ith_succ, locations->getaddress (ith_succ), 0);
-      }
+    // grab the succlist and stick it in the toe table
+    chordID ith_succ = myID;
+    int goodnodes = locations->usablenodes () - 1;
+    int numnodes = (NSUCC > goodnodes) ? goodnodes : NSUCC;
+    for (int i = 1; i < numnodes; i++) {
+      ith_succ = locations->closestsuccloc (myID);
+      add_toe (ith_succ, locations->getaddress (ith_succ), 0);
+    }
   } else if (level < MAX_LEVELS) { //building table
     //contact level (level) nodes and get their level (level) toes
     get_toes_rmt (level + 1);

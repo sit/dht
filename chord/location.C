@@ -33,6 +33,16 @@
 
 bool nochallenges;
 
+#if 0
+static void
+printloc (location *l)
+{
+  assert (l);
+  warnx << "Location " << l->n << " (A=" << l->alive << ", C="
+	<< l->challenged << ")\n";
+}
+#endif /* 0 */
+
 static void
 ignore_challengeresp (chordID x, bool b, chordstat s)
 {
@@ -44,7 +54,6 @@ cbchallengeID_t cbchall_null (wrap (ignore_challengeresp));
 location::location (chordID &_n, net_address &_r) 
   : n (_n), addr (_r), alive (true), challenged (false)
 {
-  refcnt = 0;
   rpcdelay = 0;
   nrpc = 0;
   a_lat = 0.0;
@@ -138,12 +147,13 @@ locationtable::locationtable (const locationtable &src)
 
   idle_timer = NULL;
 
-  // Deep copy the list of locations, rezeroing all the refcnts.
+  // Deep copy the list of locations.
   for (location *l = src.locs.first (); l; l = src.locs.next (l)) {
     if (!l->alive) continue;
     location *loc = New location (l->n, l->addr);
     loc->challenged = l->challenged;
     locs.insert (loc);
+    loclist.insert (loc);
     add_cachedlocs (loc);
     if (loc->challenged) good++;
   }
@@ -184,6 +194,7 @@ locationtable::insertgood (chordID &n, sfs_hostname s, int p)
   location *loc = New location (n, r);
   loc->challenged = true; // force goodness
   locs.insert (loc);
+  loclist.insert (loc);
   add_cachedlocs (loc);
   good++;
   // warnx << "INSERT (good): " << n << "\n";
@@ -198,32 +209,6 @@ locationtable::insert (chordID &n, sfs_hostname s, int p, cbchallengeID_t cb)
   r.hostname = s;
   r.port = p;
   cacheloc (n, r, cb);
-}
-
-location *
-locationtable::getlocation (chordID &x)
-{
-  location *l = locs[x];
-  return l;
-}
-
-#if 0
-void
-locationtable::changenode (node *n, chordID &x, net_address &r)
-{
-  updateloc (x, r, cbchall_null); // XXX
-  if (n->alive) decrefcnt (n->n);
-  n->n = x;
-  n->alive = true;
-}
-#endif /* 0 */
-
-net_address &
-locationtable::getaddress (chordID &n)
-{
-  location *l = locs[n];
-  assert (l);
-  return (l->addr);
 }
 
 bool
@@ -241,27 +226,39 @@ locationtable::lookup_anyloc (chordID &n, chordID *r)
 }
 
 chordID
-locationtable::query_location_table (chordID x) {
-  location *l = locs.first ();
-  chordID min = bigint(1) << 160;
-  chordID ret = -1;
-  while (l) {
-    chordID d = diff(l->n, x);
-    if (d < min) { min = d; ret = l->n; }
-    l = locs.next (l);
-  }
-  return ret;
-}
-
-chordID
 locationtable::closestsuccloc (chordID x) {
-  chordID n = x;
-  for (location *l = locs.first (); l; l = locs.next (l)) {
+  // Find the first actual successor as quickly as possible...
+  location *l = locs[x];
+  if (l) {
+    l = loclist.next (l);
+    if (l == NULL)
+      l = loclist.first ();
+  } else {
+    l = loclist.closestsucc (x);
+  }
+  // ...and now narrow it down to someone who's "good".
+  while (l && (!l->alive || !l->challenged)) {
+    l = loclist.next (l);
+    if (l == NULL)
+      l = loclist.first ();
+  }
+  chordID n = l->n;
+
+#if 0
+  // Brute force check to make sure we have the right answer.
+  chordID nbar = x;
+  for (l = locs.first (); l; l = locs.next (l)) {
     if (!l->alive) continue;
     if (!l->challenged) continue;
-    if ((x == n) || between (x, n, l->n)) n = l->n;
+    if ((x == nbar) || between (x, nbar, l->n)) nbar = l->n;
+  }
+  if (n != nbar) {
+    warnx << "Searching for " << x << "\n";
+    loclist.traverse (wrap (printloc));
+    panic << "locationtable::closestsuccloc " << nbar << " vs " << n << "\n";
   }
   // warnx << "closestsuccloc of " << x << " is " << n << "\n";
+#endif /* 0 */  
   return n;
 }
 
@@ -274,12 +271,35 @@ locationtable::betterpred1 (chordID current, chordID target, chordID candidate)
 chordID
 locationtable::closestpredloc (chordID x) 
 {
-  chordID n = x;
-  for (location *l = locs.first (); l; l = locs.next (l)) {
+  location *l = locs[x];
+  if (l) {
+    l = loclist.prev (l);
+    if (l == NULL)
+      l = loclist.last ();
+  } else {
+    l = loclist.closestpred (x);
+  }
+  while (l && (!l->alive || !l->challenged)) {
+    l = loclist.prev (l);
+    if (l == NULL)
+      l = loclist.last ();
+  }
+  
+  chordID n = l->n;
+
+#if 0
+  chordID nbar = x;
+  for (l = locs.first (); l; l = locs.next (l)) {
     if (!l->alive) continue;
     if (!l->challenged) continue;
-    if ((x == n) || betterpred1 (n, x, l->n)) n = l->n;
+    if ((x == nbar) || betterpred1 (nbar, x, l->n)) nbar = l->n;
   }
+  if (n != nbar) {
+    warnx << "Searching for " << x << "\n";
+    loclist.rtraverse (wrap (printloc));
+    panic << "locationtable::closestpredloc " << nbar << " vs " << n << "\n";
+  }
+#endif /* 0 */  
   // warnx << "findpredloc of " << x << " is " << n << "\n";
   return n;
 }
@@ -292,6 +312,7 @@ locationtable::cacheloc (chordID &x, net_address &r, cbchallengeID_t cb)
     // state = "new";    
     location *loc = New location (x, r);
     locs.insert (loc);
+    loclist.insert (loc);
     add_cachedlocs (loc);
     challenge (x, cb);
   } else if (locs[x]->alive == false || locs[x]->challenged == false) {
@@ -309,17 +330,19 @@ locationtable::cacheloc (chordID &x, net_address &r, cbchallengeID_t cb)
   // warnx << "CACHELOC (" << state << "): " << x << " at port " << r.port << "\n";
 }
 
+#if 0
 void
 locationtable::updateloc (chordID &x, net_address &r, cbchallengeID_t cb)
 {
   if (locs[x] == NULL) {
     // warnx << "UPDATELOC: " << x << " at port " << r.port << "\n";
     location *loc = New location (x, r);
-    loc->refcnt++;
+    // loc->refcnt++;
     locs.insert (loc);
+    loclist.insert (loc);
     challenge (x, cb);
   } else {
-    increfcnt (x);
+    // increfcnt (x);
     if (locs[x]->addr.hostname != r.hostname ||
 	locs[x]->addr.port     != r.port) {
       warnx << "locationtable::updateloc: address changed!!!\n";
@@ -332,7 +355,9 @@ locationtable::updateloc (chordID &x, net_address &r, cbchallengeID_t cb)
     }
   }
 }
+#endif /* 0 */
 
+#if 0
 void
 locationtable::decrefcnt (chordID &n)
 {
@@ -361,46 +386,13 @@ locationtable::increfcnt (chordID &n)
     remove_cachedlocs (l);
   }
 }
-
-void
-locationtable::checkrefcnt (int i)
-{
-  int n;
-  int m;
-  chordID x;
-  size_t realgood = 0;
-
-#ifdef PNODE
-  if (!myvnode) return;
-#else
-  if (!chordnode) return;
-#endif /* PNODE */
-  
-  for (location *l = locs.first (); l != NULL; l = locs.next (l)) {
-    x = l->n;
-#ifdef PNODE
-    n = myvnode->countrefs (x);
-#else /* PNODE */    
-    n = chordnode->countrefs (x);
-#endif /* PNODE */    
-    m = l->refcnt;
-    if (n != m) {
-      panic << "checkrefcnt " << i << " for " << x << " : refcnt " 
-            << m << " appearances " << n << "\n";
-    }
-    if (l->alive && l->challenged) realgood++;
-  }
-  if (good != realgood) {
-    panic << "checkrefcnt " << i << " for " << x << " : good "
-	  << good << " realgood " << realgood << "\n";
-  }
-}
+#endif /* 0 */
 
 void
 locationtable::touch_cachedlocs (location *l)
 {
-  if (l->refcnt > 0) return;
-  assert (l->refcnt == 0);
+  //  if (l->refcnt > 0) return;
+  //  assert (l->refcnt == 0);
   cachedlocs.remove (l);
   cachedlocs.insert_tail (l);
 }
@@ -420,9 +412,10 @@ locationtable::delete_cachedlocs (void)
 {
   location *l = cachedlocs.first;
   assert (l);
-  assert (l->refcnt == 0);
+  //  assert (l->refcnt == 0);
   // warnx << "DELETE: " << l->n << "\n";
   locs.remove (l);
+  loclist.remove (l->n);
   if (l->alive && l->challenged) good--;
   cachedlocs.remove (l);
   size_cachedlocs--;
@@ -432,7 +425,7 @@ locationtable::delete_cachedlocs (void)
 void
 locationtable::remove_cachedlocs (location *l)
 {
-  assert (l->refcnt > 0);
+  //  assert (l->refcnt > 0);
   cachedlocs.remove (l);
   size_cachedlocs--;
 }
@@ -532,6 +525,24 @@ locationtable::challenge_cb (int challenge, chordID x,
   delete res;
 }
 
+void
+locationtable::fill_getnodeext (chord_node_ext &data, chordID &x)
+{
+  location *l = locs[x];
+  if (!l) {
+    data.alive = false;
+    return;
+  }
+  data.x = x;
+  data.r = l->addr;
+  data.a_lat = (long) (l->a_lat * 100);
+  data.a_var = (long) (l->a_var * 100);
+  data.nrpc  = l->nrpc;
+  data.alive = l->alive;
+  
+  return;
+}
+
 bool
 locationtable::challenged (chordID &x)
 {
@@ -540,4 +551,28 @@ locationtable::challenged (chordID &x)
     return l->challenged;
   else
     return false;
+}
+
+bool
+locationtable::cached (chordID &x)
+{
+  location *l = locs[x];
+  return (l != NULL);
+}
+
+net_address &
+locationtable::getaddress (chordID &n)
+{
+  location *l = locs[n];
+  assert (l);
+  return (l->addr);
+}
+
+float
+locationtable::get_a_lat (chordID &x)
+{
+  location *l = locs[x];
+  if (!l)
+    return 1e8; // xxx something big?
+  return l->a_lat;
 }

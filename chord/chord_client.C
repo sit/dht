@@ -175,29 +175,6 @@ chord::newvnode (cbjoin_t cb)
 }
 
 void
-chord::handle_death_cb (chordID x, const chordID &k, ptr<vnode> v) {
-  v->handle_death (x);
-}
-
-void
-chord::handle_death (chordID x)
-{
-  warnx << "chord::handle_death: " << x << "\n";
-  vnodes.traverse (wrap (this, &chord::handle_death_cb, x));
-}
-
-int
-chord::countrefs (chordID &x)
-{
-  int n = 0;
-  for (qhash_slot <chordID, ref<vnode> > *s = vnodes.first(); s != NULL; 
-       s = vnodes.next (s)) {
-    n += s->value->countrefs (x);
-  }
-  return n;
-}
-
-void
 chord::stats_cb (const chordID &k, ptr<vnode> v) { 
   v->stats();
 }

@@ -39,9 +39,9 @@ locationtable::doRPC (chordID &ID,
 		      rpc_program prog, int procno, 
 		      ptr<void> in, void *out, aclnt_cb cb)
 {
-  location *l = getlocation (ID);
+  location *l = locs[ID];
   assert (l);
-  assert (l->refcnt >= 0);
+  //  assert (l->refcnt >= 0);
   touch_cachedlocs (l);
   
   ref<aclnt> c = aclnt::alloc (dgram_xprt, prog, 
@@ -145,16 +145,15 @@ locationtable::doRPC_udp (chordID &ID,
 			  rpc_program prog, int procno, 
 			  ptr<void> in, void *out, aclnt_cb cb)
 {
-
   reset_idle_timer ();
   if (left + cwind < global_seqno) {
     RPC_delay_args *args = New RPC_delay_args (ID, prog, procno,
 					       in, out, cb, getusec ());
     enqueue_rpc (args);
   } else {
-    location *l = getlocation (ID);
+    location *l = locs[ID];
     assert (l);
-    assert (l->refcnt >= 0);
+    //    assert (l->refcnt >= 0);
     touch_cachedlocs (l);
     
     ref<aclnt> c = aclnt::alloc (dgram_xprt, prog, 
@@ -172,9 +171,9 @@ locationtable::doRPC_issue (chordID &ID,
   /* statistics */
   nsent++;
 
-  location *l = getlocation (ID);
+  location *l = locs[ID];
   assert (l);
-  assert (l->refcnt >= 0);
+  //  assert (l->refcnt >= 0);
   touch_cachedlocs (l);
   
   rpc_state *C = New rpc_state (cb, ID, getusec (), global_seqno, prog.progno);
@@ -417,7 +416,7 @@ locationtable::setup_rexmit_timer (chordID ID, long *sec, long *nsec)
     alat = 1000000;
 
 #ifdef USE_PERHOST_LATENCIES
-  location *l = getlocation (ID);
+  location *l = locs[ID];
   if (l->nrpc > MIN_SAMPLES) 
     alat = l->a_lat + 4*l->a_var;
 #endif /* USE_PERHOST_LATENCIES */
@@ -476,7 +475,7 @@ myselect (float *A, int p, int r, int i)
 void
 locationtable::update_latency (chordID ID, u_int64_t lat, bool bf)
 {
-  location *l = getlocation (ID);
+  location *l = locs[ID];
   assert (l);
 
   l->rpcdelay += lat;
@@ -539,8 +538,10 @@ locationtable::stats ()
   sprintf(buf, "       Average cwind: %f\n", cwind_cum/num_cwind_samples);
   warnx << buf << "  Per link avg. RPC latencies\n";
   for (location *l = locs.first (); l ; l = locs.next (l)) {
-    warnx << "    link " << l->n << " : refcnt: " << l->refcnt << " # RPCs: "
-	  << l->nrpc << " challenged: " << l->challenged << "\n";
+    warnx << "    link " << l->n
+       // << " : refcnt: " << l->refcnt
+	  << " # RPCs: " << l->nrpc
+	  << " challenged: " << l->challenged << "\n";
     sprintf (buf, "       Average latency: %f\n"
 	     "       Average variance: %f\n",
 	     l->a_lat, l->a_var);
@@ -591,9 +592,8 @@ locationtable::doRPC_tcp (chordID &ID,
 			  rpc_program prog, int procno, 
 			  ptr<void> in, void *out, aclnt_cb cb)
 {
-  location *l = getlocation (ID);
+  location *l = locs[ID];
   assert (l);
-  assert (l->refcnt >= 0);
   touch_cachedlocs (l);
 
   // hack to avoid limit on wrap()'s number of arguments

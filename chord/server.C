@@ -85,11 +85,13 @@ vnode::get_predecessor_cb (chordID n, cbchordID_t cb, chord_noderes *res,
   delete res;
 }
 
+#if 0
 chordID
 vnode::nth_successorID (int n) 
 {
   return (*successors)[n];
 }
+#endif /* 0 */
 
 void
 vnode::find_successor (chordID &x, cbroute_t cb)
@@ -324,9 +326,8 @@ vnode::get_fingers_cb (chordID x, chord_getfingersres *res,  clnt_stat err)
 void
 vnode::get_fingers_chal_cb (chordID o, chordID x, bool ok, chordstat s)
 {
-  if (ok && s == CHORD_OK)
-    fingers->updatefinger (x);
-  else if (s == CHORD_RPCFAILURE) {
+  // Our successors and fingers are updated automatically.
+  if (s == CHORD_RPCFAILURE) {
     // maybe test for something else??
     // XXX alert o perhaps?
     warnx << myID << ": get_fingers: received bad finger from " << o << "\n";

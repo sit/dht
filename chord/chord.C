@@ -34,17 +34,17 @@ const int chord::max_vnodes = 1024;
 
 vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
 	      chordID _myID, int _vnode, int server_sel_mode) :
-  locations (_locations),
   myindex (_vnode),
   myID (_myID), 
   chordnode (_chordnode),
+  locations (_locations),
   server_selection_mode (server_sel_mode)
 {
   warnx << gettime () << " myID is " << myID << "\n";
 
   fingers = New refcounted<finger_table> (mkref (this), locations, myID);
   successors = New refcounted<succ_list> (mkref (this), locations, myID);
-  toes = New refcounted<toe_table> (locations, successors);
+  toes = New refcounted<toe_table> (locations, myID);
   stabilizer = New refcounted<stabilize_manager> (myID);
 
   stabilizer->register_client (successors);
@@ -55,7 +55,6 @@ vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
   locations->incvnodes ();
 
   predecessor = myID;
-  locations->increfcnt (myID);
 
   ngetsuccessor = 0;
   ngetpredecessor = 0;
@@ -92,18 +91,6 @@ chordID
 vnode::my_succ () 
 {
   return successors->succ ();
-}
-
-int
-vnode::countrefs (chordID &x)
-{
-  int n = 0;
-  if (fingers)
-    n += fingers->countrefs (x);
-  if (successors)
-    n += successors->countrefs (x);
-  if (x == predecessor) n++;
-  return n;
 }
 
 void
@@ -199,7 +186,6 @@ vnode::join (cbjoin_t cb)
     (*cb) (NULL, CHORD_ERRNOENT);
   } else {
     warnx << myID << ": joining at " << n << "\n";
-    fingers->updatefinger (n);
     find_successor (myID, wrap (mkref (this), &vnode::join_getsucc_cb, cb));
   }
 }
@@ -211,7 +197,6 @@ vnode::join_getsucc_cb (cbjoin_t cb, chordID s, route r, chordstat status)
     warnx << myID << ": join_getsucc_cb: " << status << "\n";
     join (cb);  // try again
   } else {
-    fingers->updatefinger (s);
     stabilize ();
     notify (s, myID);
     (*cb) (this, CHORD_OK);
@@ -297,10 +282,7 @@ vnode::updatepred_cb (chordID p, bool ok, chordstat status)
     if (predecessor == myID ||
 	!locations->alive (predecessor) ||
 	between (predecessor, myID, p)) {
-      locations->decrefcnt (predecessor);
       predecessor = p;
-      locations->increfcnt (predecessor);
-      fingers->updatefinger (predecessor);
       get_fingers (predecessor); // XXX perhaps do this only once after join
     }
   }
@@ -332,7 +314,7 @@ vnode::doalert (svccb *sbp, chord_nodearg *na)
 {
   ndoalert++;
   warnt("CHORD: doalert");
-  if (locations->getlocation (na->n.x) != NULL) {
+  if (locations->cached (na->n.x)) {
     // check whether we cannot reach x either
     get_successor (na->n.x, wrap (mkref (this), &vnode::doalert_cb, sbp, 
 				  na->n.x));
@@ -414,30 +396,11 @@ vnode::dogettoes (svccb *sbp)
   ndogettoes++;
   res.resok->toes.setsize (t.size ());
   for (unsigned int i = 0; i < t.size (); i++) {
-    location *l = locations->getlocation (t[i]);
-    res.resok->toes[i].x = t[i];
-    res.resok->toes[i].r = l->addr;
-    res.resok->toes[i].a_lat = (long)(l->a_lat * 100);
-    res.resok->toes[i].a_var = (long)(l->a_var * 100);
-    res.resok->toes[i].nrpc = l->nrpc;
-    res.resok->toes[i].alive = true;
+    locations->fill_getnodeext (res.resok->toes[i], t[i]);
   }
   
   warnt ("CHORD: dogettoes_reply");
   sbp->reply (&res);
-}
-
-void
-vnode::handle_death (chordID &x) 
-{
-  // REQUIRES: x was alive.
-  fingers->deletefinger (x);
-  successors->delete_succ (x);
-  if (x == predecessor) {
-    locations->decrefcnt (predecessor);
-    predecessor = locations->closestpredloc (myID);
-    locations->increfcnt (predecessor);
-  }
 }
 
 void
@@ -451,9 +414,7 @@ void
 vnode::stabilize_pred ()
 {
   if (!locations->alive (predecessor)) {
-    locations->decrefcnt (predecessor);
     predecessor = locations->closestpredloc (myID);
-    locations->increfcnt (predecessor);
   }
   nout_continuous++;
   get_successor (predecessor,

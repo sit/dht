@@ -29,6 +29,7 @@
 
 
 #include "aclnt_chord.h"
+#include "skiplist.h"
 
 typedef callback<void,chordstat>::ptr cbping_t;
 typedef callback<void,chordID,bool,chordstat>::ref cbchallengeID_t;
@@ -88,12 +89,13 @@ struct sent_elm {
 };
 
 struct location {
-  int refcnt;	// locs w. refcnt == 0 are in the cache; refcnt > 0 are fingers
+  //  int refcnt; // locs w. refcnt == 0 are in the cache; refcnt > 0 are fingers
   chordID n;
   net_address addr;
   sockaddr_in saddr;
   ihash_entry<location> fhlink;
   tailq_entry<location> cachelink;
+  sklist_entry<location> skiplink;
   u_int64_t rpcdelay;
   u_int64_t nrpc;
   u_int64_t maxdelay;
@@ -112,14 +114,16 @@ class locationtable : public virtual refcount {
 #ifdef PNODE
   ptr<vnode> myvnode;
 #endif /* PNODE */
-  
-  ihash<chordID,location,&location::n,&location::fhlink,hashID> locs;
-  tailq<location, &location::cachelink> cachedlocs;  // the cached location
 
+  // Indices into our locations... for O(1) access, for expiring,
+  //   for rapid successor/pred lookups.
+  ihash<chordID,location,&location::n,&location::fhlink,hashID> locs;
+  tailq<location, &location::cachelink> cachedlocs;
+  skiplist<location,chordID,&location::n,&location::skiplink> loclist;
   size_t good;
-  
-  int size_cachedlocs;
-  int max_cachedlocs;
+
+  u_int32_t size_cachedlocs;
+  u_int32_t max_cachedlocs;
 
   u_int64_t rpcdelay;
   u_int64_t nrpc;
@@ -173,7 +177,6 @@ class locationtable : public virtual refcount {
 
   void dorpc_connect_cb(location *l, ptr<axprt_stream> x);
   void chord_connect(chordID ID, callback<void, ptr<axprt_stream> >::ref cb);
-  void decrefcnt (location *l);
   void touch_cachedlocs (location *l);
   void add_cachedlocs (location *l);
   void delete_cachedlocs (void);
@@ -190,6 +193,8 @@ class locationtable : public virtual refcount {
   void idle ();
   void setup_rexmit_timer (chordID ID, long *sec, long *nsec);
   void timeout_cb (rpc_state *C);
+  
+  bool betterpred1 (chordID current, chordID target, chordID newpred);
 
   void ping_cb (cbping_t cb, clnt_stat err);
   void challenge_cb (int challenge, chordID x,
@@ -199,35 +204,30 @@ class locationtable : public virtual refcount {
  public:
   locationtable (ptr<chord> _chordnode, int _max_connections);
   locationtable (const locationtable &src);
-  
-  bool betterpred1 (chordID current, chordID target, chordID newpred);
 
   size_t size () { return locs.size (); }
   size_t usablenodes () { return good; }
-  
+  u_long estimate_nodes () { return nnodes; }
+  void replace_estimate (u_long o, u_long n);
+
+  void fill_getnodeext (chord_node_ext &data, chordID &x);
 #ifdef PNODE
   void setvnode (ptr<vnode> v) { myvnode = v; }
 #endif /* PNODE */  
   void incvnodes () { nvnodes++; };
-  void replace_estimate (u_long o, u_long n);
-  u_long estimate_nodes () { return nnodes; }
   void insertgood (chordID &n, sfs_hostname s, int p);
   void insert (chordID &_n, sfs_hostname _s, int _p,
 	       cbchallengeID_t cb);
-  location *getlocation (chordID &x);
   void cacheloc (chordID &x, net_address &r,
 		 cbchallengeID_t cb);
+#if 0  
   void updateloc (chordID &x, net_address &r,
 		  cbchallengeID_t cb);
-  void increfcnt (chordID &n);
-  void decrefcnt (chordID &n);
+#endif /* 0 */  
   bool lookup_anyloc (chordID &n, chordID *r);
   chordID closestsuccloc (chordID x);
   chordID closestpredloc (chordID x);
-  net_address & getaddress (chordID &x);
-  chordID query_location_table (chordID x);
-  //  void changenode (node *n, chordID &n, net_address &r);
-  void checkrefcnt (int i);
+
   void doRPC (chordID &n, rpc_program progno, 
 	      int procno, ptr<void> in, 
 	      void *out, aclnt_cb cb);
@@ -249,10 +249,16 @@ class locationtable : public virtual refcount {
 		    ref<aclnt> c);
 
   void ping (chordID ID, cbping_t cb);
-  bool alive (chordID &x);
   void challenge (chordID &x, cbchallengeID_t cb);
-  bool challenged (chordID &x);
+
   void stats ();
+    
+  // info about a particular location...
+  bool alive (chordID &x);
+  bool challenged (chordID &x);
+  bool cached (chordID &x);
+  net_address & getaddress (chordID &x);
+  float get_a_lat (chordID &x);
 };
 
 extern bool nochallenges;
