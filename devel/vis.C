@@ -28,6 +28,7 @@ static const unsigned int DRAW_DEBRUIJN   = 1 << 3;
 static const unsigned int DRAW_FINGERS    = 1 << 4;
 static const unsigned int DRAW_TOES       = 1 << 5;
 static const unsigned int DRAW_TOP_FINGERS       = 1 << 6;
+static const unsigned int DRAW_PRED_LIST  = 1 << 7;
 
 struct handler_info {
   unsigned int flag;
@@ -40,6 +41,7 @@ void draw_toggle_cb (GtkWidget *widget, gpointer data);
 static handler_info handlers[] = {
   { DRAW_IMMED_SUCC, "immed. succ", NULL, GTK_SIGNAL_FUNC (draw_toggle_cb) },
   { DRAW_SUCC_LIST,  "succ. list",  NULL, GTK_SIGNAL_FUNC (draw_toggle_cb) },
+  { DRAW_PRED_LIST,  "pred. list",  NULL, GTK_SIGNAL_FUNC (draw_toggle_cb) },
   { DRAW_DEBRUIJN,  "debruijn node",  NULL, GTK_SIGNAL_FUNC (draw_toggle_cb) },
   { DRAW_IMMED_PRED, "immed. pred", NULL, GTK_SIGNAL_FUNC (draw_toggle_cb) },
   { DRAW_FINGERS,    "fingers",     NULL, GTK_SIGNAL_FUNC (draw_toggle_cb) },
@@ -100,7 +102,7 @@ struct f_node {
   unsigned short port;
   unsigned short vnode_num;
   chord_nodelistextres *fingers;
-  chord_nodeextres *predecessor;
+  chord_nodelistextres *predecessor;
   debruijn_res *debruijn;
   chord_nodelistextres *successors;
   chord_nodelistextres *toes;
@@ -184,7 +186,7 @@ void update_succ_got_succ (chordID ID, str host, unsigned short port,
 
 void update_pred (f_node *n);
 void update_pred_got_pred (chordID ID, str host, unsigned short port,
-			   chord_nodeextres *res, clnt_stat err);
+			   chord_nodelistextres *res, clnt_stat err);
 
 void update_debruijn (f_node *nu);
 void update_debruijn_got_debruijn (chordID n, debruijn_res *res,
@@ -442,7 +444,7 @@ void
 update_pred (f_node *nu)
 {
   chordID n = nu->ID;
-  chord_nodeextres *res = New chord_nodeextres ();
+  chord_nodelistextres *res = New chord_nodelistextres ();
   doRPC (nu, chord_program_1, CHORDPROC_GETPRED_EXT, &n, res,
 	 wrap (&update_pred_got_pred,
 	       nu->ID, nu->host, nu->port, res));
@@ -450,7 +452,7 @@ update_pred (f_node *nu)
 
 void
 update_pred_got_pred (chordID ID, str host, unsigned short port, 
-		      chord_nodeextres *res, clnt_stat err)
+		      chord_nodelistextres *res, clnt_stat err)
 {
   if (err || res->status != CHORD_OK) {
     delete res;
@@ -461,7 +463,7 @@ update_pred_got_pred (chordID ID, str host, unsigned short port,
   if (nu->predecessor) delete nu->predecessor;
   nu->predecessor = res;
 
-  chord_node n = make_chord_node (res->resok->n);
+  chord_node n = make_chord_node (res->resok->nlist[0].n);
   if (nodes[n.x] == NULL) 
     add_node (n);
 }
@@ -1554,8 +1556,8 @@ draw_ring ()
       if (n->predecessor &&
 	  ((n->draw & DRAW_IMMED_PRED) == DRAW_IMMED_PRED)) {
 	int a,b;
-	set_foreground_lat (n->predecessor->resok->a_lat); 
-	ID_to_xy (make_chordID (n->predecessor->resok->n), &a, &b);
+	set_foreground_lat (n->predecessor->resok->nlist[0].a_lat); 
+	ID_to_xy (make_chordID (n->predecessor->resok->nlist[0].n), &a, &b);
 	draw_arrow (x,y,a,b, draw_gc);
       }
       
@@ -1574,6 +1576,12 @@ draw_ring ()
 	}
       }
       
+      if (n->predecessor && ((n->draw & DRAW_PRED_LIST) == DRAW_PRED_LIST)) {
+	for (unsigned int i=1; i < n->predecessor->resok->nlist.size (); i++) {
+	  draw_arc (n->ID, make_chordID (n->predecessor->resok->nlist[i].n),
+		    drawing_area->style->black_gc);
+	}
+      }
       if (n->toes && ((n->draw & DRAW_TOES) == DRAW_TOES)) {
 	for (unsigned int i=0; i < n->toes->resok->nlist.size (); i++) {
 	  int a,b;
