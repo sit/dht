@@ -247,7 +247,7 @@ dhash::sendblock_XXX (XXX_SENDBLOCK_ARGS *a)
 void
 dhash::sendblock (bigint destID, bigint blockID, bool last, callback<void>::ref cb)
 {
-  // warnx << "sendblock: to " << destID << ", id " << blockID << ", last " << last << "\n";
+  // warnx << "sendblock: to " << destID << ", id " << blockID << ", from " << host_node->my_ID () << "\n";
 
 #if 0
   ptr<location> l = host_node->locations->lookup (destID);
@@ -1448,19 +1448,28 @@ dhash::stop ()
 void
 dhash::dbwrite (ref<dbrec> key, ref<dbrec> data)
 {
-  bool ismutable = (block_type (data) != DHASH_CONTENTHASH);
   if (MERKLE_ENABLED) {
+    char *msg;
     block blk (to_merkle_hash (key), data);
     bool exists = !!database_lookup (mtree->db, blk.key);
-    if (!exists)
+    bool ismutable = (block_type (data) != DHASH_CONTENTHASH);
+    if (!exists) {
+      msg = ", inserting new block\n";
       mtree->insert (&blk);
-    else if (exists && ismutable) {
+    } else if (exists && ismutable) {
       // update an existing mutable block
+      msg = ", updating existing mutable block\n";
       mtree->remove (&blk);
       mtree->insert (&blk);
+    } else {
+      msg = ", ignoring existing content hash block\n";
     }
-  } else
+    warn << "dbwrite: node " << host_node->my_ID () << ", key " << dbrec2id(key) << msg;
+  } else {
     db->insert (key, data);
+  }
+
+
 }
 
 static void
