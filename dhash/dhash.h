@@ -275,7 +275,6 @@ class dhash {
   void printkeys_walk (chordID k);
   void printcached_walk (chordID k);
 
-
   ptr<dbrec> id2dbrec(chordID id);
   chordID dbrec2id (ptr<dbrec> r);
 
@@ -306,7 +305,12 @@ class dhash {
   void stop ();
   void fetch (chordID id, cbvalue cb);
   dhash_stat key_status(chordID n);
-    
+
+  static bool verify (chordID key, dhash_ctype t, char *buf, int len);
+  static bool verify_content_hash (chordID key,  char *buf, int len);
+  static bool verify_key_hash (chordID key, char *buf, int len);
+  static bool verify_dnssec ();
+
 };
 
 
@@ -327,7 +331,7 @@ struct dhash_block {
 };
 
 
-typedef callback<void, bool>::ref cbinsert_t;
+typedef callback<void, bool, chordID>::ref cbinsert_t;
 typedef callback<void, ptr<dhash_block> >::ref cbretrieve_t;
 
 class dhashclient {
@@ -346,18 +350,19 @@ public:
   //
   void insert (const char *buf, size_t buflen, cbinsert_t cb);
 
+  //inert under hash of public key
+  void insert (const char *buf, size_t buflen, 
+	       rabin_priv key, cbinsert_t cb);
+
   // inserts under the specified key
   // (buf need not remain involatile after the call returns)
   //
-  void insert (bigint key, const char *buf, size_t buflen, cbinsert_t cb);
+  void insert (bigint key, const char *buf, size_t buflen, 
+	       cbinsert_t cb, dhash_ctype t = DHASH_CONTENTHASH);
 
-  // retrieve block and verify the content hash
+  // retrieve block and verify
   //
-  void retrieve (bigint key, cbretrieve_t cb);
-
-  // retrieve block but do not verify the content hash. 
-  //
-  void retrieve_noverify (bigint key, cbretrieve_t cb);
+  void retrieve (bigint key, dhash_ctype type, cbretrieve_t cb);
 
   // synchronouslly call setactive.
   // Returns true on error, and false on success.
