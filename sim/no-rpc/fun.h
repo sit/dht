@@ -9,6 +9,8 @@ void findDocumentLocal(Node *n, ID *docId);
 void updateDocList(Node *n);
 void *freeDocList(Node *n);
 void printDocList(Node *n);
+void printPendingDocs();
+
 
 /* functions implemented by join.c */
 void join(Node *n, int *nodeId);

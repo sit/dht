@@ -68,7 +68,7 @@ n.processRequest() // called by a periodic mechanism
   if (p \in (r.x, r.succ))
     r.succ = s;
 
-  if (p == n && s == n.successor)
+  if (p < n <= n.successor)
     r.done = True;
 
   r.sender = n;

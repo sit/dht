@@ -51,18 +51,17 @@ void insertFinger(Node *n, ID id)
   // remove finger entries that have expired
   cleanFingerList(fList);
 
+#ifdef OPTIMIZATION
   // optimization: if n's predecessor changes 
   // announce n's previous predecessor
   if (fList && between(id, getPredecessor(n), n->id, NUM_BITS)) {
     Request *r;
     ID       pred = getPredecessor(n);
 
-    r = newRequest(id, REQ_TYPE_PRED, REQ_STYLE_RECURSIVE, pred);
-    r->done = TRUE;
-    r->x = r->sender = r->succ = id;
- 
+    r = newRequest(id, REQ_TYPE_SETSUCC, REQ_STYLE_RECURSIVE, n->id);
     genEvent(pred, insertRequest, (void *)r, Clock + intExp(AVG_PKT_DELAY));
   }    
+#endif // OPTIMIZATION
 
   if (f = getFinger(fList, id)) {
     // just refresh finger f
@@ -93,7 +92,6 @@ void insertFinger(Node *n, ID id)
   }
 
   for (f = fList->head; f; f = f->next) {
-
     if (!f->next) {
       fList->tail = f->next = newFinger(id);
       fList->size++;
@@ -173,7 +171,7 @@ void cleanFingerList(FingerList *fList)
 
 
 // evict the finger that was not refrerred for the longest time
-// (implement LRU)
+// (it implements LRU)
 void evictFinger(FingerList *fList)
 {
   Finger *f, *ftemp;
@@ -185,8 +183,10 @@ void evictFinger(FingerList *fList)
   }
 
   for (f = fList->head; f; f = f->next) {
-    if (f->last == time) 
+    if (f->last == time) {
       removeFinger(fList, f);
+      return;
+    }
   }
 }
 

@@ -12,11 +12,13 @@
 
 typedef int ID;
 
+#define OPTIMIZATION
+
 #define NUM_BITS     24 /* 24 */
 
 #define AVG_PKT_DELAY    50  /* in ms */
 #define PROC_REQ_PERIOD  500
-#define STABILIZE_PERIOD 10000
+#define STABILIZE_PERIOD 30000
 #define LEAVE_WAIT       (STABILIZE_PERIOD << 1)
 
 /* maximum simulation time */

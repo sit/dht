@@ -11,11 +11,12 @@ void stabilize(Node *n)
 {
   Request *r;
   Finger  *f;
-  ID       x[2];
+  ID       x[2], dst;
   int      i;
 
   if (n->status != PRESENT)
     return;
+
 
   if (n->fingerList->head) {
 
@@ -29,11 +30,15 @@ void stabilize(Node *n)
       r = newRequest(x[i], REQ_TYPE_STABILIZE, REQ_STYLE_ITERATIVE, n->id);
       getNeighbors(n, r->x, &(r->pred), &(r->succ));
       
-      if (r->succ != n->id) {
+      dst = r->succ;
+      if ((funifRand(0., 1.) < 0.1) && 
+	  (n->fingerList->size <  MAX_NUM_FINGERS))
+	dst = getRandomActiveNodeId();
+      if (dst != n->id) {
 	if (f = getFinger(n->fingerList, r->succ))
-	  f->expire = Clock + 10*PROC_REQ_PERIOD;
+	  f->expire = Clock + 2*PROC_REQ_PERIOD;
 	// insert request at r.x's successor
-	genEvent(r->succ, insertRequest, (void *)r, 
+	genEvent(dst, insertRequest, (void *)r, 
 	       Clock + intExp(AVG_PKT_DELAY));
       }
     }
@@ -49,7 +54,8 @@ ID chooseX(Node *n)
 {
   ID      x;
   Finger *f;
-#define PROB_FINGER    0.8
+  int     next;
+#define PROB_FINGER    0.5
 
   // refresh a finger n+2^{i-1} with probability PROB_FINGER 
   if (funifRand(0., 1.) < PROB_FINGER) {
@@ -62,11 +68,17 @@ ID chooseX(Node *n)
     // refresh an arbitrary finger in the list
     if (!n->fingerList->head)
       panic("chooseX: fingerList empty!\n");
-    x = unifRand(0, n->fingerList->size);
+#define NUM_SUCCS 4
+    next = 0;
+    if ((n->fingerList->size >= NUM_SUCCS) && funifRand(0., 1.) < 0.5) {
+      next = unifRand(0, 2);
+      x = unifRand(0, NUM_SUCCS);
+    } else
+      x = unifRand(0, n->fingerList->size);
     for (f = n->fingerList->head; (f && x--) ; f = f->next);
     if (!f)
       panic("chooseX: end of fingerList reached!\n");
-    return f->id;
+    return successorId(f->id, next);
   }
 }
 

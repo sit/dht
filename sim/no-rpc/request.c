@@ -2,6 +2,7 @@
 #include <stdio.h>
 
 #include "incl.h"
+int processRequest1(Node *n, Request *r);
 
 Request *newRequest(ID x, int type, int style, ID initiator)
 {
@@ -62,98 +63,125 @@ Request *getRequest(Node *n)
 void processRequest(Node *n)
 {
   ID      succ, pred, dst, old_succ;
-  Request *r = getRequest(n);
-  
-  // printf("llll C=%f, n=%d\n", Clock, n->id);  
+  Request *r;
+
   // periodicall invoke process request
   if (n->status == PRESENT)
     genEvent(n->id, processRequest, (void *)NULL, 
 	     Clock + unifRand(0.5*PROC_REQ_PERIOD, 1.5*PROC_REQ_PERIOD));
-  if (!r)
-    return;
 
-  // update/refresh finger table
-  insertFinger(n, r->initiator);
-  if (r->initiator != r->sender)
+  while (r  = getRequest(n)) {
+
+    // update/refresh finger table
     insertFinger(n, r->initiator);
+    if (r->initiator != r->sender)
+      insertFinger(n, r->sender);
 
-  // consult finger table to get the best predecessor/successor 
-  // of r.x  
-  getNeighbors(n, r->x, &pred, &succ);
+    // process insert document, find document, and several
+    // optimization requests 
+    if (processRequest1(n, r)) {
+      free(r);
+      continue;
+    }
 
-  // update r's predecessor/successor
-  if (between(pred, r->pred, r->x, NUM_BITS))
+    // consult finger table to get the best predecessor/successor 
+    // of r.x  
+    getNeighbors(n, r->x, &pred, &succ);
+    
+    // update r's predecessor/successor
+    if (between(pred, r->pred, r->x, NUM_BITS))
       r->pred = pred;
-  if (between(succ, r->x, r->succ, NUM_BITS) || (r->x == succ))
+    if (between(succ, r->x, r->succ, NUM_BITS) || (r->x == succ))
       r->succ = succ;
+    
+    if (between(r->x, n->id, getSuccessor(n), NUM_BITS) || 
+	(getSuccessor(n) == r->x)) 
+      // r->x's successor is n's successor
+      r->done = TRUE;
+    
+    r->sender = n->id;
+        
+    if (r->done) {
+      // is n the request's initiator?
+      if (r->initiator == n->id) {
+	switch (r->type) {
+	case REQ_TYPE_STABILIZE:
+	  // if n's successor changes,
+	  // iterate to get a better successor
+	  old_succ = getSuccessor(n);
+	  insertFinger(n, r->succ);
+	  if (old_succ == getSuccessor(n)) {
+	    free(r);
+	    continue;
+	  } else {
+	    dst = r->succ;
+	    r->done = FALSE;
+	    break;
+	  }
+	case REQ_TYPE_INSERTDOC:
+	case REQ_TYPE_FINDDOC:
+          // forward the request to the node responsible
+          // for the document r->x; the processing of this request
+          // takes place in processRequest1 
+	  dst = r->succ;  
+	  break;
+	default:
+	  continue;
+	}
+      } else
+	// send request back to intiator
+	dst = r->initiator;
+    } else {
+      if (r->initiator == n->id)
+	// send to the closest predecessor
+	dst = r->pred;
+      else {
+	if (r->style == REQ_STYLE_ITERATIVE)
+	  dst = r->initiator;
+	else
+	  dst = r->pred;
+      }
+    }
+    
+    // send message to dst
+    genEvent(dst, insertRequest, (void *)r, Clock + intExp(AVG_PKT_DELAY));
+  }
+}  
 
-  if (between(r->x, n->id, getSuccessor(n), NUM_BITS) || 
-      (getSuccessor(n) == r->x)) 
-    // r->x's successor is n's successor
-    r->done = TRUE;
-
-  r->sender = n->id;
+int processRequest1(Node *n, Request *r)
+{
+#ifdef OPTIMIZATION
+  switch (r->type) {
+  case REQ_TYPE_REPLACESUCC:
+    if (r->sender == getSuccessor(n)) {
+      removeFinger(n->fingerList, n->fingerList->head);
+      insertFinger(n, r->x);
+    }
+    return TRUE;
+  case REQ_TYPE_REPLACEPRED:
+    if (r->sender == getPredecessor(n)) {
+      removeFinger(n->fingerList, n->fingerList->tail);
+      insertFinger(n, r->x);
+    }
+    return TRUE;
+  case REQ_TYPE_SETSUCC:
+    insertFinger(n, r->x);
+    return TRUE;
+  }
+#endif // OPTIMIZATION
 
   if (between(r->x, getPredecessor(n), n->id, NUM_BITS) || (r->x == n->id)) {
     switch (r->type) {
     case REQ_TYPE_INSERTDOC:
       insertDocumentLocal(n, &r->x);
-      free(r);
-      return;
+      return TRUE;
     case REQ_TYPE_FINDDOC:
       findDocumentLocal(n, &r->x);
-      free(r);
-      return;
+      return TRUE;
     }
   }
-
-  if (r->done) {
-    // is n the request's initiator?
-    if (r->initiator == n->id) {
-      switch (r->type) {
-      case REQ_TYPE_STABILIZE:
-	// if n's successor changes,
-        // iterate to get a better successor
-	old_succ = getSuccessor(n);
-	insertFinger(n, r->succ);
-	if (old_succ == getSuccessor(n)) {
-	  free(r);
-	  return;
-	} else {
-	  dst = r->succ;
-	  r->done = FALSE;
-	  break;
-	}
-      case REQ_TYPE_PRED:
-	insertFinger(n, r->succ);
-	free(r);
-	return;
-      case REQ_TYPE_INSERTDOC:
-      case REQ_TYPE_FINDDOC:
-	dst = r->succ;
-	break;
-      default:
-	return;
-      }
-	  
-    } else
-      // send request back to intiator
-      dst = r->initiator;
-  } else {
-    if (r->initiator == n->id)
-      // send to the closest predecessor
-      dst = r->pred;
-    else {
-      if (r->style == REQ_STYLE_ITERATIVE)
-	dst = r->initiator;
-      else
-	dst = r->pred;
-    }
-  }
-
-  // send message to dst
-  genEvent(dst, insertRequest, (void *)r, Clock + intExp(AVG_PKT_DELAY));
-}  
+  return FALSE;
+}
 
 
 void printReqList(Node *n)
@@ -173,5 +201,9 @@ void printReqList(Node *n)
 
   printf("\n");
 }
+
+
+
+
 
 

@@ -54,6 +54,7 @@ void exitSim(void)
 {
   printf("Exit: %f\n", Clock);
   printAllNodesInfo();
+  printPendingDocs();
   exit(0);
 }
 

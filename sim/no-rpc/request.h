@@ -11,10 +11,12 @@
 
 typedef struct request_ {
   ID  x;         // request value 
-#define REQ_TYPE_STABILIZE  0
-#define REQ_TYPE_INSERTDOC  1
-#define REQ_TYPE_FINDDOC    2
-#define REQ_TYPE_PRED       3
+#define REQ_TYPE_STABILIZE   0
+#define REQ_TYPE_INSERTDOC   1
+#define REQ_TYPE_FINDDOC     2
+#define REQ_TYPE_REPLACESUCC 3
+#define REQ_TYPE_REPLACEPRED 4
+#define REQ_TYPE_SETSUCC     5
   int type;      // request type
 #define REQ_STYLE_ITERATIVE 0
 #define REQ_STYLE_RECURSIVE 1

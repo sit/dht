@@ -5,14 +5,27 @@ extern Node *NodeHashTable[HASH_SIZE];
 
 int insertDocInList(DocList *docList, Document *doc);
 Document *findDocInList(DocList *docList, ID docId);
+void removeDocFromList(DocList *docList, ID docId);
 void updateDocList(Node *n);
+
+DocList PendingDocs = {NULL, 0};
+
+Document *newDoc(int docId)
+{
+  Document *doc;
+
+  if ((doc = (Document *)calloc(1, sizeof(Document))) == NULL)
+    panic("newDoc: memory allocation error!\n");
+  
+  doc->id = docId;
+  
+  return doc;
+}
+
 
 void findDocument(Node *n, ID *docId)
 { 
   Request *r;
-
-if (*docId == 15059192)
-printf("ppp n=%d, doc=%d\n", n->id, *docId);
 
   if (n->status != PRESENT) {
     printf("findDocument: n=%d was deleted in the meantime\n");
@@ -37,9 +50,16 @@ void findDocumentLocal(Node *n, ID *docId)
     printf("%f Document %d found on node %d (%d)\n", 
 	   Clock, *docId, n->id, i++);
   } else {
-    static int i = 0;
-    printf("%f Document %d NOT found on node %d (%d)\n", 
-	   Clock, *docId, n->id, i++);
+    static int i1 = 0, i2 = 0;
+    // separate between failures because douments
+    // were never inserted, and failures due to 
+    // lookup and node failures
+    if (findDocInList(&PendingDocs, *docId)) 
+      printf("%f Document %d not found on node %d (%d)\n", 
+	     Clock, *docId, n->id, i1++);
+    else
+      printf("%f Document %d NOT found on node %d (%d)\n", 
+	     Clock, *docId, n->id, i2++);
   }
 }
 
@@ -54,6 +74,9 @@ void insertDocument(Node *n, ID *docId)
   r = newRequest(*docId, REQ_TYPE_INSERTDOC, REQ_STYLE_RECURSIVE, n->id);
 
   insertRequest(n, r);
+
+  // keep the list of domuments not stored yet 
+  insertDocInList(&PendingDocs, newDoc(*docId));
 }
   
 
@@ -65,18 +88,17 @@ void insertDocumentLocal(Node *n, ID *docId)
     printf("insertReply: node has been deleted in the meantime!\n");
   } else {
     // allocate space for new document 
-    if ((doc = (Document *)calloc(1, sizeof(Document))) == NULL)
-      panic("insertReply: memory allocation error!\n");
-    
-    doc->id = *docId;
-    
+    doc = newDoc(*docId);
+
     if (!insertDocInList(n->docList, doc)) {
       // no room to insert document 
       printf("cannot insert document %x at node %x\n", doc->id, n->id); 
       free(doc);
       return;
-    } else
+    } else {
       printf("The document %d inserted on node %d\n", *docId, n->id);
+      removeDocFromList(&PendingDocs, *docId);
+    }
   }
 }
 
@@ -90,7 +112,6 @@ int insertDocInList(DocList *docList, Document *doc)
 
   if (docList->size >= MAX_NUM_DOCS) {
     /* no room available in document list */
-    printf("======\n");
     return FALSE;
   }
 
@@ -112,6 +133,32 @@ Document *findDocInList(DocList *docList, ID docId)
       return doc;
 
   return NULL;
+}
+
+
+/* find document with key docId */
+void removeDocFromList(DocList *docList, ID docId)
+{
+  Document *d, *temp;
+
+  if (!docList->head)
+    return;
+
+  if (docList->head->id == docId) {
+    temp = docList->head;
+    docList->head = temp->next;
+    free(temp);
+    return;
+  }
+
+  for (d = docList->head; d->next; d = d->next) {
+    if (d->next->id == docId) {
+      temp = d->next;
+      d->next = temp->next;
+      free(temp);
+      return;
+    }
+  }
 }
 
 
@@ -213,5 +260,18 @@ void printDocList(Node *n)
   printf("\n");
 }
 
+// print the document list that has not been inserted so far
+void printPendingDocs()
+{
+  Document *doc;
 
+  printf("Pending documents: ");
+
+  for (doc = (&PendingDocs)->head; doc; doc = doc->next) {
+    printf("%d", doc->id);
+    if (doc->next)
+      printf(", ");
+  }
+  printf("\n");
+}
                
