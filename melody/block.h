@@ -28,10 +28,12 @@
  */
 
 #include "sfsmisc.h"
-#include "dhash.h"
+#include "dhash_common.h"
 
 #define BLOCKSIZE 8192
 #define BLOCKPAYLOAD (BLOCKSIZE - (3*sizeof(int)))
+
+class dhashclient;
 
 /* this is the format of the blocks stored in dhash. this could
    probably be simplified. size is a bit redundant

@@ -26,7 +26,8 @@
  */
 
 #include "sfsmisc.h"
-#include "dhash.h"
+#include "dhashclient.h"
+#include "verify.h"
 #include "block.h"
 
 venti_block::venti_block(dhashclient *dh, 

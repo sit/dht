@@ -27,6 +27,9 @@
 
 //#define DEBUG
 #include "file.h"
+#include "dhash_common.h"
+#include "dhashclient.h"
+#include "verify.h"
 
 void
 melody_file::write_cb (dhash_stat status, ptr<insert_info> i)

@@ -26,6 +26,8 @@
  */
 
 #include "retrieve_manager.h"
+#include <dhash_common.h>
+#include <dhashclient.h>
 
 void
 retrieve_manager::retrieve (bigint id, callback<void, ptr<dhash_block> >::ptr cb)

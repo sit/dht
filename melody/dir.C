@@ -26,7 +26,8 @@
  */
 
 #include "dir.h"
-#include "dhash.h"
+#include "dhash_common.h"
+#include "dhashclient.h"
 #include <string.h>
 #include "rxx.h"
 #include "vec.h"

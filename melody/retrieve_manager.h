@@ -27,7 +27,16 @@
  *
  */
 
-#include "dhash.h"
+#include <callback.h>
+#include <refcnt.h>
+#include <list.h>
+
+#include <dhash_prot.h>
+#include <chord.h>
+
+class bigint;
+class dhash_block;
+class dhashclient;
 
 class retrieve_block {
  public:
