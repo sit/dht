@@ -64,8 +64,6 @@ int JOSH = getenv("JOSH") ? atoi(getenv("JOSH")) : 0;
 
 #include <configurator.h>
 
-int DHC = getenv("DHC") ? atoi(getenv("DHC")) : 0;
-
 struct dhash_config_init {
   dhash_config_init ();
 } dci;
@@ -168,8 +166,6 @@ dhash_impl::dhash_impl (str dbname, u_int k) :
   pmaint_obj (NULL),
   mtree (NULL),
   replica_syncer (NULL),
-  // dhcs (dbname),
-  // dhc_mgr (NULL),
   keyhash_mgr_rpcs (0),
   merkle_rep_tcb (NULL),
   keyhash_mgr_tcb (NULL),
@@ -195,6 +191,8 @@ dhash_impl::dhash_impl (str dbname, u_int k) :
   open_worker (db, dbname, opts, "db file");
   open_worker (keyhash_db, kdbs, opts, "keyhash db file");
 
+  dhcs = strbuf () << dbname << ".dhc";
+
   // merkle state
   mtree = New merkle_tree (db);
 }
@@ -216,7 +214,7 @@ dhash_impl::init_after_chord (ptr<vnode> node)
   host_node->addHandler (dhash_program_1, wrap(this, &dhash_impl::dispatch));
 
   // the client helper class (will use for get_key etc)
-  cli = New dhashcli (node);
+  cli = New dhashcli (node, dhcs, nreplica);
 
   update_replica_list ();
   delaycb (synctm (), wrap (this, &dhash_impl::sync_cb));
@@ -234,11 +232,6 @@ dhash_impl::init_after_chord (ptr<vnode> node)
 			   wrap (this, &dhash_impl::db_delete_immutable));
 #endif /* 0 */  
 
-#if 0  
-  // dhash pk block consistency  
-  if (DHC) 
-    dhc_mgr = New refcounted<dhc> (host_node, dhcs, nreplica);
-#endif    
 }
 
 
@@ -327,10 +320,10 @@ dhash_impl::keyhash_mgr_timer ()
       chordID n = dbrec2id (entry->key);
       if (responsible (n)) {
         // replicate a block if we are responsible for it
-        for (unsigned j=0; j<replicas.size(); j++) {
+	for (unsigned j=0; j<replicas.size(); j++) {
 	  // trace << "keyhash: " << n << " to " << replicas[j]->id () << "\n";
-          keyhash_mgr_rpcs ++;
-          cli->sendblock (replicas[j], blockID(n, DHASH_KEYHASH, DHASH_BLOCK),
+	  keyhash_mgr_rpcs ++;
+	  cli->sendblock (replicas[j], blockID(n, DHASH_KEYHASH, DHASH_BLOCK),
 			  keyhash_db,
 			  wrap (this, &dhash_impl::keyhash_sync_done));
 	}
@@ -338,9 +331,6 @@ dhash_impl::keyhash_mgr_timer ()
       else {
         keyhash_mgr_rpcs ++;
         // otherwise, try to sync with the master node
-	//XX ATHICHA: Sending a PK block to the primary. 
-	//            Should ask the block's replicas first who the primary is.
-	//            Eliminate this once Paxos is running.
         cli->lookup
 	  (n, wrap (this, &dhash_impl::keyhash_mgr_lookup, n));
       }
@@ -755,7 +745,6 @@ dhash_impl::store (s_dhash_insertarg *arg, bool exists, cbstore cb)
 
     switch (arg->ctype) {
     case DHASH_KEYHASH:
-      //XXX ATHICHA: Add Paxos+Primary prot for writes
       {
 	if (!verify_keyhash (arg->key, ss->buf, ss->size)) {
 	  warning << "keyhash: cannot verify " << ss->size << " bytes\n";

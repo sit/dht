@@ -13,7 +13,8 @@ enum dhc_stat {
    DHC_BLOCK_NEXIST = 8,
    DHC_RW_INPROG = 9,
    DHC_NOT_PRIMARY = 10,
-   DHC_BLOCK_EXIST = 11
+   DHC_BLOCK_EXIST = 11,
+   DHC_DHASHERR = 12
 };
 
 struct paxos_seqnum_t {

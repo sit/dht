@@ -55,6 +55,7 @@
 #define warning modlogger ("dhashcli", modlogger::WARNING)
 #define info  modlogger ("dhashcli", modlogger::INFO)
 #define trace modlogger ("dhashcli", modlogger::TRACE)
+int DHC = getenv("DHC") ? atoi(getenv("DHC")) : 0;
 
 #ifdef DMALLOC
 #include <dmalloc.h>
@@ -85,13 +86,16 @@ dhashcli_config_init::dhashcli_config_init ()
 // DHASHCLI
 
  
-dhashcli::dhashcli (ptr<vnode> node)
+dhashcli::dhashcli (ptr<vnode> node, str dhcs, uint nreplica)
   : clntnode (node), ordersucc_ (true)
 {
   int ordersucc = 1;
   Configurator::only ().get_int ("dhashcli.order_successors", ordersucc);
   ordersucc_ = (ordersucc > 0);
   warn << "will order successors " << ordersucc_ << "\n";
+
+  if (DHC)
+    dhc_mgr = New refcounted<dhc> (clntnode, dhcs, nreplica);
 }
 
 void
@@ -496,28 +500,29 @@ dhashcli::insert (ref<dhash_block> block, cbinsert_path_t cb,
         vec<chord_node> s = get_succs_from_list (sl, block->ID);
         route r;
 	r.push_back (clntnode->my_location ());
-        insert_lookup_cb (block, cb, DHASH_OK, s, r);
+        insert_lookup_cb (block, cb, 0, DHASH_OK, s, r);
         return;
       }
       else if (options & DHASHCLIENT_SUCCLIST_OPT)
 	warn << "cannot use succlist to find succs on insert\n";
     }
-    lookup (block->ID, wrap (this, &dhashcli::insert_lookup_cb, block, cb));
+    lookup (block->ID, wrap (this, &dhashcli::insert_lookup_cb, block, cb, 
+			     options));
   }
   else { 
     ptr<location> l =  clntnode->locations->lookup (*guess);
     if (!l) {
       lookup (block->ID, 
-	      wrap (this, &dhashcli::insert_lookup_cb, block, cb));
+	      wrap (this, &dhashcli::insert_lookup_cb, block, cb, options));
     } else
       clntnode->get_succlist (l, wrap (this, &dhashcli::insert_succlist_cb, 
-				       block, cb, *guess));
+				       block, cb, *guess, options));
   }
 }
 
 void
 dhashcli::insert_succlist_cb (ref<dhash_block> block, cbinsert_path_t cb,
-			      chordID guess,
+			      chordID guess, int options,
 			      vec<chord_node> succs, chordstat status)
 {
   if (status) {
@@ -530,11 +535,11 @@ dhashcli::insert_succlist_cb (ref<dhash_block> block, cbinsert_path_t cb,
 
   route r;
   r.push_back (clntnode->locations->lookup (guess));
-  insert_lookup_cb (block, cb, DHASH_OK, succs, r);
+  insert_lookup_cb (block, cb, options, DHASH_OK, succs, r);
 }
 
 void
-dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb, 
+dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb, int options, 
 			    dhash_stat status, vec<chord_node> succs, route r)
 {
   vec<chordID> mt;
@@ -590,21 +595,32 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
   ss->succs = succs;
 
   if (block->ctype == DHASH_KEYHASH) {
-    for (u_int i = 0; i < succs.size (); i++) {
-      // Count up for each RPC that will be dispatched
-      ss->out += 1;
-
-      ptr<location> dest = clntnode->locations->lookup_or_create (succs[i]);
-      dhash_store::execute (clntnode, dest, 
-			    blockID(block->ID, block->ctype, DHASH_BLOCK),
-			    block,
-			    wrap (this, &dhashcli::insert_store_cb,  
-				  ss, r, i, ss->succs.size (),
-				  // benjie: use dfrags as the number
-				  // of blocks we want to succeed when
-				  // storing whole keyhash blocks
-				  dhash::num_dfrags ()),
-			    i == 0 ? DHASH_STORE : DHASH_REPLICA);
+    if (!DHC)
+      for (u_int i = 0; i < succs.size (); i++) {
+	// Count up for each RPC that will be dispatched
+	ss->out += 1;
+	
+	ptr<location> dest = clntnode->locations->lookup_or_create (succs[i]);
+	dhash_store::execute (clntnode, dest, 
+			      blockID(block->ID, block->ctype, DHASH_BLOCK),
+			      block,
+			      wrap (this, &dhashcli::insert_store_cb,  
+				    ss, r, i, ss->succs.size (),
+				    // benjie: use dfrags as the number
+				    // of blocks we want to succeed when
+				    // storing whole keyhash blocks
+				    dhash::num_dfrags ()),
+			      i == 0 ? DHASH_STORE : DHASH_REPLICA);
+      }
+    else {
+      warning << "dhashcli: Inserting keyhash block " << block->ID 
+	      << " through DHC\n";
+      ptr<location> dest = clntnode->locations->lookup_or_create (succs[0]);
+      ref<dhash_value> value = New refcounted<dhash_value>;
+      value->set (block->data, block->len);
+      dhc_mgr->put (dest, block->ID, block->source, value, 
+		    wrap (this, &dhashcli::insert_dhc_cb, dest, r, ss->cb),
+		    options & DHASHCLIENT_NEWBLOCK);
     }
     return;
   }
@@ -683,6 +699,21 @@ dhashcli::insert_store_cb (ref<sto_state> ss, route r, u_int i,
   }
 }
 
+void
+dhashcli::insert_dhc_cb (ptr<location> dest, route r, 
+			 cbinsert_path_t cb, dhc_stat err)
+{
+  vec<chordID> path;
+  if (!err) {
+    for (uint i=0; i<r.size (); i++) 
+      path.push_back (r[i]->id ());
+    (*cb) (DHASH_OK, path);
+  } else {
+    warning << clntnode->my_ID () << "dhc err: " << err << "\n";
+    path.push_back (dest->id ());
+    (*cb) (DHC_ERR, path);
+  }
+}
 
 void
 dhashcli::lookup (chordID blockID, dhashcli_lookupcb_t cb)

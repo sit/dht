@@ -644,29 +644,35 @@ dhc::recv_getblock (user_args *sbp)
 }
 
 void 
-dhc::put (chordID bID, chordID writer, ref<dhash_value> value, dhc_cb_t cb,
-	  bool newblock)
+dhc::put (ptr<location> dest, chordID bID, chordID writer, ref<dhash_value> value, 
+	  dhc_cb_t cb, bool newblock)
 {
-  ptr<location> l = myNode->locations->lookup (bID);
-  if (l) {
+  //verify_keyhash as in dhash/server.C:747
+  if (dest) {
     ptr<dhc_put_arg> arg = New refcounted<dhc_put_arg>;
     arg->bID = bID;
     arg->writer = writer;
     arg->value.set (value->base (), value->size ());
     ptr<dhc_put_res> res = New refcounted<dhc_put_res>;
     if (!newblock)
-      myNode->doRPC (l, dhc_program_1, DHCPROC_PUT, arg, res,
+      myNode->doRPC (dest, dhc_program_1, DHCPROC_PUT, arg, res,
 		     wrap (this, &dhc::put_result_cb, bID, cb, res));
     else 
-      myNode->doRPC (l, dhc_program_1, DHCPROC_NEWBLOCK, arg, res,
+      myNode->doRPC (dest, dhc_program_1, DHCPROC_NEWBLOCK, arg, res,
 		     wrap (this, &dhc::put_result_cb, bID, cb, res));      
-  } else {
+  } else 
+    (*cb) (DHC_DHASHERR);
+
+#if 0
+  else {
     put_args *pa = New put_args (bID, writer, value);
     myNode->find_successor (bID, wrap (this, &dhc::put_lookup_cb, pa, cb,
 				       newblock));
   }
+#endif
 }
 
+#if 0
 void 
 dhc::put_lookup_cb (put_args *pa, dhc_cb_t cb, bool newblock, 
 		    vec<chord_node> succ, route path, chordstat err)
@@ -688,6 +694,7 @@ dhc::put_lookup_cb (put_args *pa, dhc_cb_t cb, bool newblock,
   } else 
     (*cb) (DHC_CHORDERR);
 }
+#endif
 
 void 
 dhc::put_result_cb (chordID bID, dhc_cb_t cb, ptr<dhc_put_res> res, clnt_stat err)

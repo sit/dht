@@ -1,7 +1,6 @@
 #include "dhash.h"
 #include <pmaint.h>
 #include <dbfe.h>
-//#include <dhc.h>
 
 // Forward declarations.
 class RPC_delay_args;
@@ -83,18 +82,13 @@ class dhash_impl : public dhash {
   ptr<dbfe> keyhash_db;
   ptr<vnode> host_node;
   dhashcli *cli;
+  str dhcs;
 
   merkle_server *msrv;
   pmaint *pmaint_obj;
   merkle_tree *mtree;
 
   ptr<merkle_syncer> replica_syncer;
-
-#if 0
-  /* DHC */
-  str dhcs;
-  ptr<dhc> dhc_mgr;
-#endif
 
   ihash<chordID, store_state, &store_state::key, 
     &store_state::link, hashID> pst;

@@ -412,8 +412,8 @@ class dhc {
   void recv_put (user_args *);
   void recv_putblock (user_args *);
 
-  void put_lookup_cb (put_args *, dhc_cb_t, bool,
-		      vec<chord_node>, route, chordstat);
+  //void put_lookup_cb (put_args *, dhc_cb_t, bool,
+  //		      vec<chord_node>, route, chordstat);
   void put_result_cb (chordID, dhc_cb_t, ptr<dhc_put_res>, clnt_stat);
   void putblock_cb (user_args *, ptr<dhc_block>, ptr<location>, ptr<write_state>, 
 		    ref<dhc_put_res>, clnt_stat);
@@ -429,13 +429,17 @@ class dhc {
   
   void recon (chordID, dhc_cb_t);
   void get (chordID, dhc_getcb_t);
-  void put (chordID, chordID, ref<dhash_value>, dhc_cb_t, 
+  void put (ptr<location>, chordID, chordID, ref<dhash_value>, dhc_cb_t, 
 	    bool newblock=false);
   void dispatch (user_args *);
   
 };
 
 #endif /*_DHC_H_*/
+
+
+
+
 
 
 

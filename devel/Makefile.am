@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.26 2003/10/02 04:03:07 sit Exp $
+# $Id: Makefile.am,v 1.27 2003/10/14 22:47:08 athicha Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -11,7 +11,7 @@ noinst_PROGRAMS = dbm typetest $(VIS) walk builddb dbdump findroute \
 		  coords nodeq filestore \
 		  dhc_test
 
-MYLDADD =  ../dhash/libdhash.a ../merkle/libmerkle.a ../svc/libsvc.la
+MYLDADD =  ../dhash/libdhash.a ../dhc/libdhc.a ../merkle/libmerkle.a ../svc/libsvc.la
 
 walk_SOURCES = walk.C
 walk_LDADD = $(MYLDADD) ../chord/libchord.a ../utils/libutil.a ../svc/libsvc.la  $(LDADD) 
@@ -20,10 +20,10 @@ coords_SOURCES = walk_coords.C
 coords_LDADD = $(MYLDADD) ../chord/libchord.a ../utils/libutil.a ../svc/libsvc.la  $(LDADD) 
 
 filestore_SOURCES = filestore.C
-filestore_LDADD = ../dhash/libdhashclient.a ../utils/libutil.a ../svc/libsvc.la  $(LDADD) 
+filestore_LDADD = ../dhash/libdhashclient.a ../dhc/libdhc.a ../utils/libutil.a ../svc/libsvc.la  $(LDADD) 
 
 builddb_SOURCES = builddb.C
-builddb_LDADD = ../sfsrodb/libsfsrodb.a ../dhash/libdhash.a ../merkle/libmerkle.a ../chord/libchord.a ../utils/libutil.a ../svc/libsvc.la $(DBLIB) $(LDADD)
+builddb_LDADD = ../sfsrodb/libsfsrodb.a ../dhash/libdhash.a ../dhc/libdhc.a ../merkle/libmerkle.a ../chord/libchord.a ../utils/libutil.a ../svc/libsvc.la $(DBLIB) $(LDADD)
 
 dbm_SOURCES = dhash_benchmark.C
 dbm_LDADD = ../dhash/libdhashclient.a ../svc/libsvc.la $(LDADD)

@@ -12,6 +12,7 @@
 #define DHASHCLIENT_USE_CACHE 0x4
 #define DHASHCLIENT_CACHE 0x8
 #define DHASHCLIENT_SUCCLIST_OPT 0x10
+#define DHASHCLIENT_NEWBLOCK 0x20
 
 struct blockID {
   enum { size = sha1::hashsize };

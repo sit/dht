@@ -50,7 +50,9 @@ getcb (chordID bID, dhc_stat err, ptr<keyhash_data> b)
     ref<dhash_value> block = New refcounted<dhash_value>;
     block->setsize (bstr.len ());
     memcpy (block->base (), bstr.cstr (), block->size ());
+#if 0
     dhc_mgr[0]->put (ID1, ID2, block, wrap (putcb, ID1, ID2));
+#endif
   } else 
     warn << "           error status: " << err << "\n"; 
 }
@@ -91,28 +93,9 @@ insert_block (chordID bID)
   ref<dhash_value> value = New refcounted<dhash_value>;
   value->setsize (astr.len ());
   memcpy (value->base (), astr.cstr (), value->size ());
+#if 0
   dhc_mgr[0]->put (bID, vn[0]->my_ID (), value, 
 		   wrap (newconfig_cb, bID), true);
-#if 0  
-  ref<dhc_newconfig_arg> arg = New refcounted<dhc_newconfig_arg>;
-  arg->bID = bID;
-  arg->data.tag.ver = 0;
-  arg->data.tag.writer = vn[0]->my_ID ();
-  arg->data.data.setsize (astr.len ());
-  memcpy (arg->data.data.base (), astr.cstr (), astr.len ());
-  arg->old_conf_seqnum = 0;
-  arg->new_config.setsize (nreplica);
-  for (uint i=0; i<arg->new_config.size (); i++)
-    arg->new_config[i] = vn[i]->my_ID ();
-
-  ref<dhc_newconfig_res> res = New refcounted<dhc_newconfig_res>;
-  ptr<location> dest;
-  for (int i=0; i<nreplica; i++) {
-    dest = vn[i]->my_location ();
-    vn[i]->doRPC (dest, dhc_program_1, DHCPROC_NEWCONFIG, 
-		  arg, res, wrap (newconfig_cb, vn[i]->my_ID (), 
-				  bID, res));
-  }
 #endif
 }
 
