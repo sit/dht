@@ -25,6 +25,8 @@
 #include "p2psim/topology.h"
 #include "p2psim/network.h"
 #include "p2psim/parse.h"
+#include <iostream>
+#include "protocols/protocolfactory.h"
 #ifdef HAVE_LIBGB
 
 #include "gtitm.h"
@@ -47,13 +49,15 @@ Time
 gtitm::latency(IPAddress ip1, IPAddress ip2, bool ignored)
 {
   Vertex *a, *b;
+  ((int)ip1)--;
+  ((int)ip2)--;
   assert ((int)ip1 < _num && (int)ip2 < _num);
   a = &g->vertices[ip1];
   b = &g->vertices[ip2];
   long key = ip1*_num + ip2;
   if (memo[key]) return memo[key];
 
-  Time ret = 1000*dijkstra (a, b, g, NULL);
+  Time ret = dijkstra (a, b, g, NULL);
   memo[key] = ret;
   return ret;
 }
@@ -79,11 +83,11 @@ gtitm::parse(ifstream &ifs)
 
   //TODO: bind nodes to vertices in an interesting way
 
-  for (int i = 0; i < _num; i++) {
+  for (int i = 1; i < _num; i++) {
     ip_addr = i;
-    Node *n = New Node(ip_addr);
+    Node *p = ProtocolFactory::Instance()->create(ip_addr);
     assert(!Network::Instance()->getnode(ip_addr));
-    send(Network::Instance()->nodechan(), &n);
+    send(Network::Instance()->nodechan(), &p);
   }
 }
 

@@ -32,9 +32,9 @@
 #include "g2graph.h"
 #include "randomgraph.h"
 #include "euclideangraph.h"
-// #ifdef HAVE_SGB
-// #include "gtitm.h"
-// #endif
+#ifdef HAVE_LIBGB
+#include "gtitm.h"
+#endif
 
 Topology *
 TopologyFactory::create(string s, vector<string>* v)
@@ -56,7 +56,7 @@ TopologyFactory::create(string s, vector<string>* v)
   if (s == "G2Graph")
     t = New G2Graph(v);
 
-#ifdef HAVE_SGB
+#ifdef HAVE_LIBGB
   if (s == "gtitm")
     t = New gtitm (v);
 #endif
