@@ -164,6 +164,11 @@ class locationtable : public virtual refcount, public stabilizable {
   net_address & getaddress (const chordID &x);
   float get_a_lat (const chordID &x);
   void fill_getnodeext (chord_node_ext &data, const chordID &x);
+  unsigned int get_nrpc(const chordID &x);
+
+  //average stats
+  float get_avg_lat ();
+  float get_avg_var ();
 
   // stabilization --- check to see if dead nodes are still dead; does
   // not really affect the true stabilization of anything.

@@ -630,6 +630,30 @@ locationtable::get_a_lat (const chordID &x)
   return hosts->get_a_lat (l->loc_);
 }
 
+unsigned int
+locationtable::get_nrpc (const chordID &x)
+{
+  locwrap *l = locs[x];
+  assert (l);
+  assert (l->type_ & LOC_REGULAR);
+  
+  return l->loc_->nrpc;
+  
+}
+
+float 
+locationtable::get_avg_lat ()
+{
+  return hosts->get_avg_lat();
+}
+
+float 
+locationtable::get_avg_var ()
+{
+  return hosts->get_avg_var();
+}
+
+
 void
 locationtable::stats ()
 {

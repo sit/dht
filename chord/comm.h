@@ -79,6 +79,8 @@ class rpc_manager {
   // the following may not necessarily make sense for all implementations.
   virtual float get_a_lat (ptr<location> l);
   virtual float get_a_var (ptr<location> l); 
+  virtual float get_avg_lat ();
+  virtual float get_avg_var ();
   rpc_manager (ptr<chord> c);
   virtual ~rpc_manager () {};
 };
@@ -163,7 +165,9 @@ class stp_manager : public rpc_manager {
 	      ptr<void> in, void *out, aclnt_cb cb);
   float get_a_lat (ptr<location> l);
   float get_a_var (ptr<location> l);
-  
+  float get_avg_lat ();
+  float get_avg_var ();
+
   stp_manager (ptr<chord> c);
   ~stp_manager ();
 };

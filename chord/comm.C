@@ -121,6 +121,18 @@ rpc_manager::get_a_var (ptr<location> l)
   return 0.0;
 }
 
+float
+rpc_manager::get_avg_lat ()
+{
+  return 0.0;
+}
+
+float
+rpc_manager::get_avg_var ()
+{
+  return 0.0;
+}
+
 void
 rpc_manager::doRPC (ptr<location> l,
 		    rpc_program prog, int procno, 
@@ -267,6 +279,18 @@ stp_manager::get_a_var (ptr<location> l)
 {
   hostinfo *h = lookup_host (l->addr);
   return h->a_var;
+}
+
+float
+stp_manager::get_avg_lat ()
+{
+  return a_lat;
+}
+
+float
+stp_manager::get_avg_var ()
+{
+  return a_var;
 }
 
 void

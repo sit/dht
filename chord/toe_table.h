@@ -18,8 +18,22 @@ class toe_table : public stabilizable {
   void add_toe_ping_cb (chordID id, int level, chordstat err);
   void get_toes_rmt_cb (chord_nodelistextres *res, int level, clnt_stat err);
 
+  bool stable_toes;
+
  public:
   toe_table (ptr<locationtable> locs, chordID id);
+
+  bool betterpred1 (chordID current, chordID target, chordID newpred);
+  char betterpred2 (chordID myID, chordID current, chordID target, 
+		    chordID newpred);
+  bool betterpred3 (chordID myID, chordID current, chordID target, 
+		    chordID newpred);
+  bool betterpred_greedy (chordID myID, chordID current, chordID target, 
+			  chordID newpred); 
+  char betterpred_distest (chordID myID, chordID current, 
+			   chordID target, 
+			   chordID newpred);
+
 
   vec<chordID> get_toes (int level);
   void add_toe (chordID id, net_address r, int level);
@@ -36,7 +50,7 @@ class toe_table : public stabilizable {
   // Stabilizable methods
   bool backoff_stabilizing () { return in_progress > 0; }
   void do_backoff () { stabilize_toes (); }
-  bool isstable () { return true; } // XXX
+  bool isstable () { return stable_toes; } // XXX
 };
 
 #endif /* _TOE_TABLE_H_ */
