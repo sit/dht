@@ -276,12 +276,14 @@ merkle_getkeyrange::getkeys_cb (ref<getkeys_arg> arg, ref<getkeys_res> res,
     if (!database_lookup (db, key)) 
       (*missing) (key2);
     
-    if (key2 >= current)
-      current = key2 + 1;
+    // if (key2 >= current)
+    //  current = key2 + 1;
+    if (betweenbothincl (current, incID (key2), key2))
+      current = incID (key2);
   }
 
   if (!res->resok->morekeys)
-    current = rngmax + 1;  // set done
+    current = incID (rngmax);  // set done
 
   go ();
 }
