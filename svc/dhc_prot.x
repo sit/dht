@@ -72,9 +72,8 @@ struct dhc_newconfig_arg {
    chordID new_config<>;
 };
 
-union dhc_newconfig_res switch (dhc_stat status) {
-   default:
-   	void;
+struct dhc_newconfig_res {
+   dhc_stat status;
 };
 
 struct dhc_get_arg {

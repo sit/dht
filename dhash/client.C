@@ -618,10 +618,6 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb, int opti
 			      i == 0 ? DHASH_STORE : DHASH_REPLICA);
       }
     else {
-      warn << "dhashcli: Inserting keyhash block " << block->ID 
-	   << " through DHC\n";
-      warn << "          len: " << block->len << " data: " 
-	   << str (block->data, block->len) << "\n";
       ptr<location> dest = clntnode->locations->lookup_or_create (succs[0]);
       ref<dhash_value> value = New refcounted<dhash_value>;
       value->set (block->data, block->len);
@@ -714,6 +710,7 @@ dhashcli::insert_dhc_cb (ptr<location> dest, route r,
   if (!err) {
     for (uint i=0; i<r.size (); i++) 
       path.push_back (r[i]->id ());
+    //warn << "dhashcli:: Insert succeeded \n";
     (*cb) (DHASH_OK, path);
   } else {
     warning << clntnode->my_ID () << "dhc err: " << err << "\n";

@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.28 2003/10/23 21:43:05 fdabek Exp $
+# $Id: Makefile.am,v 1.29 2003/11/09 01:06:56 athicha Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -43,9 +43,7 @@ nodeq_SOURCES = nodeq.C rpclib.C
 nodeq_LDADD = ../svc/libsvc.la ../utils/libutil.a $(LDADD)
 
 dhc_test_SOURCES = dhc_test.C
-dhc_test_LDADD = ../dhash/libdhash.a ../dhc/libdhc.a ../merkle/libmerkle.a \
-		 ../chord/libchord.a ../utils/libutil.a ../svc/libsvc.la \
-                 $(DBLIB) $(LDADD)
+dhc_test_LDADD = ../dhash/libdhashclient.a ../svc/libsvc.la $(LDADD)
 
 if GTK_AVAILABLE
 vis_SOURCES = vis.C

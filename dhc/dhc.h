@@ -10,7 +10,6 @@
 #include <dhc_prot.h>
 
 #define ID_size sha1::hashsize
-#define DHC_DEBUG 1
 
 struct dhash_block;
 
@@ -230,7 +229,7 @@ struct dhc_block {
 	<< "\n data tag ver " << data->tag.ver 
 	<< "\n data tag writer " << data->tag.writer
 	<< "\n data size: " << data->data.size ()
-	<< "\n data data: " << str (data->data.base (), data->data.size ())
+      //<< "\n data data: " << str (data->data.base (), data->data.size ())
 	<< "\n";
     return str(ret);
   }
@@ -361,10 +360,6 @@ struct read_state {
     if (!found) {
       blocks.push_back (kd);
       bcount.push_back (1);
-#if DHC_DEBUG
-      warn << "read_state: size = " << blocks.back().data.size () 
-	   << " value = " << blocks.back().data.base () << "\n";
-#endif      
     }
   }
 

@@ -1,3 +1,4 @@
+#include <sys/time.h>
 #include "dhc.h"
 #include "dhc_misc.h"
 #include <merkle_misc.h>
@@ -5,6 +6,8 @@
 #include <locationtable.h>
 
 int RECON_TM = getenv("DHC_RECON_TM") ? atoi(getenv("DHC_RECON_TM")) : 0;
+//int DHC_DEBUG = getenv("DHC_DEBUG") ? atoi(getenv("DHC_DEBUG")) : 0;
+#define DHC_DEBUG 0
 
 dhc::dhc (ptr<vnode> node, str dbname, uint k) : 
   myNode (node), n_replica (k), recon_tm_rpcs (0)
@@ -23,6 +26,8 @@ dhc::dhc (ptr<vnode> node, str dbname, uint k) :
   myNode->addHandler (dhc_program_1, wrap (this, &dhc::dispatch));
   
   delaycb (RECON_TM, wrap (this, &dhc::recon_timer));
+
+  warn << "******DHC_DEBUG = " << DHC_DEBUG << "\n";
 }
 
 void
@@ -62,6 +67,8 @@ dhc::recon_timer ()
   delaycb (RECON_TM, wrap (this, &dhc::recon_timer));  
 }
 
+u_int64_t start_recon = 0, end_recon = 0;
+
 void 
 dhc::recon_tm_lookup (ref<dhc_block> kb, bool guilty, vec<chord_node> succs, 
 		      route r, chordstat err)
@@ -69,9 +76,13 @@ dhc::recon_tm_lookup (ref<dhc_block> kb, bool guilty, vec<chord_node> succs,
   recon_tm_rpcs--;
   if (!err) {
     if (!up_to_date (kb->meta->config.nodes, succs)) {
-      if (guilty) // Case 1
+      if (guilty) {// Case 1 
+	timeval tp;
+	gettimeofday (&tp, NULL);
+	start_recon = tp.tv_sec * (u_int64_t)1000000 + tp.tv_usec;
+	warn << myNode->my_ID () << " Start RECON at " << start_recon << "\n";
 	recon (kb->id, wrap (this, &dhc::recon_tm_done));
-      else { // Case 2
+      } else { // Case 2
 	ref<location> l = myNode->locations->lookup_or_create (succs[0]);
 
 	ptr<dhc_newconfig_arg> arg = New refcounted<dhc_newconfig_arg>;
@@ -113,7 +124,6 @@ dhc::recon (chordID bID, dhc_cb_t cb)
 
   if (rec) {    
     ptr<dhc_block> kb = to_dhc_block (rec);
-    warn << "dhc_block: " << kb->to_str ();
     if (!kb->meta->cvalid) {
       (*cb) (DHC_NOT_A_REPLICA, clnt_stat (0));
       return;
@@ -229,6 +239,10 @@ dhc::recv_promise (chordID bID, dhc_cb_t cb,
     }
   } else {
     if (err == RPC_CANTSEND) {
+      //Repeat for each message.
+      //TODO: Set l->markalive to true and send the RPC anyway.
+      //      Frank says make sure l is a pointer from a locationtable,
+      //      i.e. from lookup() not lookup_or_create()
       warn << "dhc:recv_promise: cannot send RPC. retry???\n";
     } else {
       print_error ("dhc:recv_promise", err, promise->status);
@@ -263,8 +277,6 @@ dhc::recv_accept (chordID bID, dhc_cb_t cb,
       arg->bID = kb->id;
       arg->data.tag.ver = kb->data->tag.ver;
       arg->data.tag.writer = kb->data->tag.writer;
-      warn << "*******kb->data len " << kb->data->data.size () 
-	   << " kb->data " << kb->data->data.base () << "\n";
       arg->data.data.set (kb->data->data.base (), kb->data->data.size ());
       arg->old_conf_seqnum = kb->meta->config.seqnum;
       kb->meta->cvalid = false;
@@ -290,7 +302,7 @@ dhc::recv_accept (chordID bID, dhc_cb_t cb,
 		       wrap (this, &dhc::recv_newconfig_ack, b->id, cb, res));
       }
       db->insert (id2dbrec (kb->id), to_dbrec (kb));
-      db->sync ();
+      //db->sync ();
     }
   } else {
     if (err == RPC_CANTSEND) {
@@ -325,8 +337,15 @@ dhc::recv_newconfig_ack (chordID bID, dhc_cb_t cb, ref<dhc_newconfig_res> ack,
       b->status = IDLE;
       b->pstat->sent_reply = true;
       dhcs.insert (b);
+#if DHC_DEBUG
       warn << "\n\n" << myNode->my_ID () << " :Recon block " << bID 
 	   << " succeeded !!!!!!\n\n";
+#endif
+      timeval tp;
+      gettimeofday (&tp, NULL);
+      end_recon = tp.tv_sec * (u_int64_t)1000000 + tp.tv_usec;
+      warn << myNode->my_ID () << " End RECON at " << end_recon << "\n";
+      warn << "             time elapse: " << end_recon-start_recon << " usecs\n";
       (*cb) (DHC_OK, clnt_stat (0));
     }    
   } else {
@@ -382,7 +401,6 @@ dhc::recv_prepare (user_args *sbp)
     if (paxos_cmp (prepare->round, b->promised) == 1) {
       b->promised.seqnum = prepare->round.seqnum;
       b->promised.proposer = prepare->round.proposer;
-      warnx << "dhc:recv_prepare " << b->to_str ();
       dhc_prepare_res res (DHC_OK);
       res.resok->new_config.setsize (b->pstat->acc_conf.size ());
       for (uint i=0; i<res.resok->new_config.size (); i++)
@@ -443,7 +461,7 @@ dhc::recv_propose (user_args *sbp)
       db->insert (id2dbrec (kb->id), to_dbrec (kb));
       dhc_propose_res res (DHC_OK);
       sbp->reply (&res);
-      db->sync ();
+      //db->sync ();
     } else {
       dhc_propose_res res (DHC_CONF_MISMATCH);
       sbp->reply (&res);
@@ -455,6 +473,10 @@ dhc::recv_propose (user_args *sbp)
 void 
 dhc::recv_newconfig (user_args *sbp)
 {
+#if DHC_DEBUG
+  warn << "\n\n" << myNode->my_ID () << " received newconfig msg.\n ";
+#endif
+
   dhc_newconfig_arg *newconfig = sbp->template getarg<dhc_newconfig_arg> ();
   ptr<dbrec> key = id2dbrec (newconfig->bID);
   ptr<dbrec> rec = db->lookup (key);
@@ -462,7 +484,7 @@ dhc::recv_newconfig (user_args *sbp)
 
   dhc_soft *b = dhcs[newconfig->bID];
   if (b && b->status == RW_INPROG) {
-    dhc_newconfig_res res (DHC_RW_INPROG);
+    dhc_newconfig_res res; res.status = DHC_RW_INPROG;
     sbp->reply (&res);
     return;
   }
@@ -471,10 +493,10 @@ dhc::recv_newconfig (user_args *sbp)
     kb = New refcounted<dhc_block> (newconfig->bID);
   else {
     kb = to_dhc_block (rec);
-    if (tag_cmp (kb->data->tag, 
-		 newconfig->data.tag) > 0) {
-      warn << "dhc::recv_newconfig Block received is an older version.\n";
-      dhc_newconfig_res res (DHC_OLD_VER);
+    if (tag_cmp (kb->data->tag, newconfig->data.tag) > 0) {
+      warn << "dhc::recv_newconfig Block received is an older version.\n"
+	   << "                    Not updating database\n";
+      dhc_newconfig_res res; res.status = DHC_OLD_VER;
       sbp->reply (&res);
       return;
     }    
@@ -483,7 +505,7 @@ dhc::recv_newconfig (user_args *sbp)
 #endif  
     if (kb->meta->config.seqnum != 0 &&
 	kb->meta->config.seqnum != newconfig->old_conf_seqnum) {
-      dhc_newconfig_res res (DHC_CONF_MISMATCH);
+      dhc_newconfig_res res; res.status = DHC_CONF_MISMATCH;
       sbp->reply (&res);
       return;      
     }
@@ -505,7 +527,11 @@ dhc::recv_newconfig (user_args *sbp)
 #endif
 
   db->insert (key, to_dbrec (kb));
+#if 0
+  // What if we don't sync to disk...
+  // don't have to sync because dbfe already uses transactions
   db->sync (); 
+#endif
 
 #if 0
   // Remove b if it exists in hash table
@@ -516,7 +542,7 @@ dhc::recv_newconfig (user_args *sbp)
   }
 #endif
 
-  dhc_newconfig_res res (DHC_OK);
+  dhc_newconfig_res res; res.status = DHC_OK;
   sbp->reply (&res);
 }
 
@@ -532,9 +558,11 @@ dhc::get (ptr<location> dest, chordID bID, dhc_getcb_t cb)
     ptr<dhc_get_arg> arg = New refcounted<dhc_get_arg>;
     arg->bID = bID;
     ptr<dhc_get_res> res = New refcounted<dhc_get_res> (DHC_OK);
+
 #if DHC_DEBUG
     warn << "dhc::get " << myNode->my_ID () << " sending GET\n";
 #endif
+
     myNode->doRPC (l, dhc_program_1, DHCPROC_GET, arg, res,
 		   wrap (this, &dhc::get_result_cb, bID, cb, res));
   } else {
@@ -575,6 +603,7 @@ dhc::get_result_cb (chordID bID, dhc_getcb_t cb, ptr<dhc_get_res> res,
       New refcounted<dhash_block> (res->resok->data.data.base (), 
 				   res->resok->data.data.size (),
 				   DHASH_KEYHASH);
+    blk->ID = bID;
     blk->source = myNode->my_ID ();
     blk->hops   = 0;
     blk->errors = 0;
@@ -630,7 +659,8 @@ dhc::recv_get (user_args *sbp)
   warn << "         persistent state " << kb->to_str ();
 #endif
 
-  b->status = RW_INPROG;
+  //Don't set RW flag for reads, only for writes.
+  //b->status = RW_INPROG;
   dhcs.insert (b);
   
   ptr<dhc_get_arg> arg = New refcounted<dhc_get_arg>;
@@ -685,6 +715,7 @@ dhc::getblock_cb (user_args *sbp, ptr<location> dest, ptr<read_state> rs,
 	  dhc_get_res gres (res->status);
 	  sbp->reply (&gres);
 	}
+    /*    
     if (rs->done) {
       dhc_get_arg *get = sbp->template getarg<dhc_get_arg> ();
       dhc_soft *b = dhcs[get->bID];
@@ -692,6 +723,7 @@ dhc::getblock_cb (user_args *sbp, ptr<location> dest, ptr<read_state> rs,
 	b->status = IDLE;	  
       dhcs.insert (b);
     }
+    */
   }
 }
 
@@ -720,7 +752,7 @@ dhc::recv_getblock (user_args *sbp)
   dhc_soft *b = dhcs[getblock->bID];
   ptr<dhc_block> kb = to_dhc_block (rec);
   if (b && b->status != IDLE && 
-      !is_primary (myNode->my_ID (), kb->meta->config.nodes)) {
+      !is_primary (getblock->bID, myNode->my_ID (), kb->meta->config.nodes)) {
     dhc_get_res res (DHC_RECON_INPROG);
     sbp->reply (&res);
     return;
@@ -735,7 +767,7 @@ dhc::recv_getblock (user_args *sbp)
   //check if sender is primary!!
   chord_node *from = New chord_node;
   sbp->fill_from (from);
-  if (!is_primary (from->x, kb->meta->config.nodes)) {
+  if (!is_primary (getblock->bID, from->x, kb->meta->config.nodes)) {
     dhc_get_res res (DHC_NOT_PRIMARY);
     sbp->reply (&res);
     delete from;
@@ -758,6 +790,10 @@ void
 dhc::put (ptr<location> dest, chordID bID, chordID writer, ref<dhash_value> value, 
 	  dhc_cb_t cb, bool newblock)
 {
+#if DHC_DEBUG
+  warn << "\n\n" << myNode->my_ID () << " in dhc::put bID " << bID << "\n";
+#endif
+   
   //verify_keyhash as in dhash/server.C:747
   //but already verified by the client!!!
 
@@ -768,9 +804,6 @@ dhc::put (ptr<location> dest, chordID bID, chordID writer, ref<dhash_value> valu
     arg->bID = bID;
     arg->writer = writer;
     arg->value.set (value->base (), value->size ());
-    warn << "*****check 0 block = " << str (arg->value.base (), 
-					    arg->value.size ())
-	 << "\n";
     ptr<dhc_put_res> res = New refcounted<dhc_put_res>;
     if (!newblock)
       myNode->doRPC (dest, dhc_program_1, DHCPROC_PUT, arg, res,
@@ -802,10 +835,6 @@ dhc::put_lookup_cb (put_args *pa, dhc_cb_t cb, bool newblock,
     arg->writer = pa->writer;
     arg->value.setsize (pa->value->size ());
     memcpy (arg->value.base (), pa->value->base (), arg->value.size ());
-    //arg->value.set (pa->value->base (), pa->value->size ());
-    warn << "*****check 2 block = " << str (arg->value.base (), 
-					    arg->value.size ())
-	 << "\n";
     ptr<dhc_put_res> res = New refcounted<dhc_put_res>;
     if (!newblock) 
       myNode->doRPC (l, dhc_program_1, DHCPROC_PUT, arg, res,
@@ -823,7 +852,14 @@ dhc::put_result_cb (chordID bID, dhc_cb_t cb, ptr<dhc_put_res> res, clnt_stat er
 {
   if (err)
     (*cb) (DHC_CHORDERR, clnt_stat (err));
-  else (*cb) (res->status, clnt_stat (err));
+  else {
+    if (res->status == DHC_OK)
+      warn << myNode->my_ID () << "dhc::put_result_cb PUT succeeded\n";
+    else 
+      warn << myNode->my_ID () << "dhc::put_result_cb dhc err " 
+	   << res->status << "\n";
+    (*cb) (res->status, clnt_stat (err));
+  }
 }
 
 void
@@ -856,7 +892,7 @@ dhc::recv_put (user_args *sbp)
     sbp->reply (&res);
     return;
   }
-  if (!is_primary (myNode->my_ID (), kb->meta->config.nodes)) {
+  if (!is_primary (put->bID, myNode->my_ID (), kb->meta->config.nodes)) {
     dhc_put_res res; res.status = DHC_NOT_PRIMARY;
     sbp->reply (&res);
     return;    
@@ -877,7 +913,7 @@ dhc::recv_put (user_args *sbp)
     kb->data->data.set (put->value.base (), put->value.size ());
     db->del (key);
     db->insert (key, to_dbrec (kb));
-    db->sync ();
+    //db->sync ();
 
     ptr<dhc_putblock_arg> arg = New refcounted<dhc_putblock_arg>;
     arg->bID = put->bID;
@@ -902,15 +938,26 @@ void
 dhc::putblock_cb (user_args *sbp, ptr<dhc_block> kb, ptr<location> dest, ptr<write_state> ws, 
 		  ref<dhc_put_res> res, clnt_stat err)
 {
+#if DHC_DEBUG
+  warn << myNode->my_ID () << " dhc::putblock_cb done " << ws->done 
+       << " bcount " << ws->bcount << ".\n";
+#endif  
   if (!ws->done) {
     if (!err && res->status == DHC_OK) {
-      if (++ws->bcount == n_replica) {
+      ws->bcount++; 
+      if (ws->bcount > n_replica/2) {
+#if DHC_DEBUG
+	warn << myNode->my_ID () << " dhc::putblock_cb Done writing.\n";
+#endif
 	ws->done = true;
 	dhc_put_res pres; pres.status = DHC_OK;
 	sbp->reply (&pres);
       }
     } else 
       if (err) {
+#if DHC_DEBUG
+	warn << myNode->my_ID () << " dhc::putblock_cb Some chord error.\n";
+#endif	
 	ws->done = true;
 	print_error ("dhc::putblock_cb", err, 0);
 	dhc_put_res pres; pres.status = DHC_CHORDERR;
@@ -918,8 +965,14 @@ dhc::putblock_cb (user_args *sbp, ptr<dhc_block> kb, ptr<location> dest, ptr<wri
       } else 
 	if (res->status == DHC_RECON_INPROG ||
 	    res->status == DHC_BLOCK_NEXIST) {
+#if DHC_DEBUG
+	  warn << myNode->my_ID () << "dhc::putblock_cb Retry writing.\n";
+#endif
 	  delaycb (60, wrap (this, &dhc::putblock_retry_cb, sbp, kb, dest, ws));
 	} else {
+#if DHC_DEBUG
+	  warn << myNode->my_ID () << "dhc::putblock_cb DHC error " << res->status << "\n";
+#endif
 	  ws->done = true;
 	  dhc_put_res pres; pres.status = res->status;
 	  sbp->reply (&pres);
@@ -967,7 +1020,7 @@ dhc::recv_putblock (user_args *sbp)
   dhc_soft *b = dhcs[putblock->bID];
   ptr<dhc_block> kb = to_dhc_block (rec);
   if (b && b->status != IDLE && 
-      !is_primary (myNode->my_ID (), kb->meta->config.nodes)) {
+      !is_primary (putblock->bID, myNode->my_ID (), kb->meta->config.nodes)) {
     dhc_put_res res; res.status = DHC_RECON_INPROG;
     sbp->reply (&res);
     return;
@@ -982,7 +1035,7 @@ dhc::recv_putblock (user_args *sbp)
   //check if sender is primary!!
   chord_node *from = New chord_node;
   sbp->fill_from (from);
-  if (!is_primary (from->x, kb->meta->config.nodes)) {
+  if (!is_primary (putblock->bID, from->x, kb->meta->config.nodes)) {
     dhc_put_res res; res.status = DHC_NOT_PRIMARY;
     sbp->reply (&res);
     delete from;
@@ -1005,7 +1058,7 @@ dhc::recv_putblock (user_args *sbp)
 			putblock->new_data.data.size ());
     db->del (key);
     db->insert (key, to_dbrec (kb));
-    db->sync ();
+    //db->sync ();
   }
 
   if (tc == -1)
@@ -1038,9 +1091,6 @@ dhc::recv_newblock (user_args *sbp)
   arg->data.tag.ver = 0;
   arg->data.tag.writer = put->writer;
   arg->data.data.set (put->value.base (), put->value.size ());
-  warn << "*****check 3 block = " << str (arg->data.data.base (), 
-					  arg->data.data.size ()) << "\n";
-
   arg->old_conf_seqnum = 0;
   vec<ptr<location> > l;
   set_new_config (arg, &l, myNode, n_replica);

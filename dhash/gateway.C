@@ -116,7 +116,9 @@ void
 dhashgateway::insert_cb (svccb *sbp, dhash_stat status, vec<chordID> path)
 {
   dhash_insert_res res (status);
+  //warn << "dhashgateway::insert_cb dhash_stat = " << status << "\n";
   if (status == DHASH_OK) {
+    //warn << "dhashgateway::insert_cb Insert succeeded\n";
     res.resok->path.setsize (path.size ());
     for (unsigned int i = 0; i < path.size (); i++)
       res.resok->path[i] = path[i];

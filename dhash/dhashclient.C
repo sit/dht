@@ -206,6 +206,7 @@ dhashclient::insertcb (cbinsertgw_t cb, bigint key,
     warn << "dhashclient::insert failed (1): " << key << ": " << errstr << "\n";
     (*cb) (DHASH_RPCERR, i); //RPC failure
   } else {
+    //warn << "dhashclient::insertcb dhash stat " << res->status << "\n";
     if (res->status != DHASH_OK) {
       errstr = dhasherr2str (res->status);
       warn << "dhashclient::insert failed (2): " << key << ": " << errstr << "\n";
