@@ -125,7 +125,7 @@ class vnode : public virtual refcount, public stabilizable {
   void get_succlist_cb (cbchordIDlist_t cb, chord_nodelistres *res,
 			clnt_stat err);
 
-  void find_route_hop_cb (cbroute_t cb, ptr<route_iterator> ri, bool done);
+  void find_route_hop_cb (cbroute_t cb, route_iterator *ri, bool done);
   void find_route (chordID &x, cbroute_t cb);
   void dofindroute_cb (svccb *sbp, chordID s, route r, chordstat err);
   

@@ -5,10 +5,11 @@
 #include "arpc.h"
 #include "crypt.h"
 #include "chord.h"
+#include "refcnt.h"
 
-typedef callback<void,bool>::ptr cbhop_t;
+typedef callback<void, bool>::ptr cbhop_t;
 
-class route_iterator : public virtual refcount {
+class route_iterator {
  protected:
   ptr<vnode> v;
   chordID x;
@@ -27,8 +28,8 @@ class route_iterator : public virtual refcount {
 
  public:
   route_iterator (ptr<vnode> vi, chordID xi) :
-    v (vi), x (xi), r (CHORD_OK), done (false), do_upcall (false), stop (false),
-    last_hop (false) {};
+    v (vi), x (xi), r (CHORD_OK), done (false), do_upcall (false), 
+    stop (false), last_hop (false) {};
   route_iterator (ptr<vnode> vi, chordID xi,
 		  rpc_program uc_prog,
 		  int uc_procno,
@@ -36,7 +37,8 @@ class route_iterator : public virtual refcount {
     v (vi), x (xi), r (CHORD_OK), done (false), do_upcall (true),
     uc_procno (uc_procno), uc_args (uc_args), prog (prog),
     stop (false), last_hop (false) {};
-    
+
+  virtual ~route_iterator () {};
 
   chordID last_node () { return search_path.back (); };
   chordID key () { return x; };

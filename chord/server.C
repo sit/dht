@@ -139,7 +139,7 @@ void
 vnode::find_route (chordID &x, cbroute_t cb) 
 {
 #ifdef FINGERS
-  ptr<route_chord> ri = New refcounted<route_chord> (mkref(this), x);
+  route_chord *ri = New route_chord (mkref(this), x);
 #else
   ptr<route_debruijn> ri = New refcounted<route_debruijn> (mkref(this), x);
 #endif
@@ -148,7 +148,7 @@ vnode::find_route (chordID &x, cbroute_t cb)
 
 
 void
-vnode::find_route_hop_cb (cbroute_t cb, ptr<route_iterator> ri, bool done)
+vnode::find_route_hop_cb (cbroute_t cb, route_iterator *ri, bool done)
 {
   if (done) {
     // warnx << "find_route_hop_cb " << ri->key () << " path: " 
@@ -156,6 +156,7 @@ vnode::find_route_hop_cb (cbroute_t cb, ptr<route_iterator> ri, bool done)
     //  << ri->last_node () << "\n";
     // ri->print ();
     cb (ri->last_node (), ri->path (), ri->status ());
+    delete ri;
   } else {
     // warnx << "find_route_hop_cb " << ri->key () << " hop "<<ri->last_node () 
     //  << "\n";
