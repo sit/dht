@@ -141,20 +141,6 @@ vnode::find_successor_cb (chordID x, cbroute_t cb, chordID s,
 }
 
 void
-vnode::find_route_hop_cb (cbroute_t cb, ptr<route_iterator> ri, bool done)
-{
-  if (done) {
-    //    warnx << "find_route_hop_cb " << ri->key () << " path:\n";
-    // ri->print ();
-    cb (ri->last_node (), ri->path (), ri->status ());
-  } else {
-    //warnx << "find_route_hop_cb " << ri->key () << " hop " << ri->last_node () 
-    //  << "\n";
-    ri->next_hop ();
-  }
-}
-
-void
 vnode::find_route (chordID &x, cbroute_t cb) 
 {
 #ifdef FINGERS
@@ -163,6 +149,23 @@ vnode::find_route (chordID &x, cbroute_t cb)
   ptr<route_debruijn> ri = New refcounted<route_debruijn> (mkref(this), x);
 #endif
   ri->first_hop(wrap (this, &vnode::find_route_hop_cb, cb, ri));
+}
+
+
+void
+vnode::find_route_hop_cb (cbroute_t cb, ptr<route_iterator> ri, bool done)
+{
+  if (done) {
+    //warnx << "find_route_hop_cb " << ri->key () << " path: " 
+    //  << ri->path().size() << " at node " << ri->last_node () << "\n";
+    // ri->print ();
+    cb (ri->last_node (), ri->path (), ri->status ());
+  } else {
+    warnx << "find_route_hop_cb " << ri->key () << " hop " << ri->last_node () 
+	  << "\n";
+    // ri->print ();
+    ri->next_hop ();
+  }
 }
 
 void

@@ -138,13 +138,13 @@ predecessorID (const chordID &n, int p)
 }
 
 chordID
-doubleID (const chordID &n)
+doubleID (const chordID &n, int logbase)
 {
   chordID s;
   chordID b (1);
   
   b = b << NBIT;
-  s = n << 1;
+  s = n << logbase;
   if (s >= b) 
     s = s - b;
   return s;

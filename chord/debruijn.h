@@ -3,11 +3,13 @@
 
 // N.G. de Bruijn (http://www.win.tue.nl/~wsdwnb/)
 
+#define LOGBASE   1   // base=2^LOGBASE
+
 class debruijn : public stabilizable {
   ptr<vnode> myvnode;
   ptr<locationtable> locations;
   chordID myID;  
-  chordID mydoubleID;
+  chordID mydoubleID[LOGBASE];
 
  public:
   debruijn (ptr<vnode> v, ptr<locationtable> locs, chordID myID);

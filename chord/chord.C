@@ -67,7 +67,6 @@ vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
     
   locations->incvnodes ();
 
-  predecessor = myID;
   locations->pinpred (myID);
   locations->pinsucc (myID);
 
@@ -106,6 +105,12 @@ vnode::~vnode ()
 {
   warnx << myID << ": vnode: destroyed\n";
   exit (0);
+}
+
+chordID
+vnode::my_pred() 
+{
+  return locations->closestpredloc (myID);
 }
 
 chordID
@@ -174,7 +179,7 @@ vnode::print ()
 #endif
   successors->print ();
 
-  warnx << "pred : " << predecessor << "\n";
+  warnx << "pred : " << my_pred () << "\n";
 #ifdef TOES
   warnx << "------------- toes ----------------------------------\n";
   toes->dump ();
@@ -266,15 +271,11 @@ void
 vnode::doget_predecessor (svccb *sbp)
 {
   ndogetpredecessor++;
-  if (locations->alive (predecessor)) {
-    chordID p = predecessor;
-    chord_noderes res(CHORD_OK);
-    res.resok->x = p;
-    res.resok->r = locations->getaddress (p);
-    sbp->reply (&res);
-  } else {
-    sbp->replyref (chordstat (CHORD_ERRNOENT));
-  }
+  chordID p = my_pred ();
+  chord_noderes res(CHORD_OK);
+  res.resok->x = p;
+  res.resok->r = locations->getaddress (p);
+  sbp->reply (&res);
 }
 
 void
@@ -285,8 +286,7 @@ vnode::dotestrange_findclosestpred (svccb *sbp, chord_testandfindarg *fa)
   chord_testandfindres *res;
   chordID succ = successors->succ ();
 
-  if (locations->alive (succ) && 
-      betweenrightincl(myID, succ, x) ) {
+  if (betweenrightincl(myID, succ, x)) {
     res = New chord_testandfindres (CHORD_INRANGE);
     warnt("CHORD: testandfind_inrangereply");
 
@@ -323,18 +323,10 @@ vnode::dofindclosestpred (svccb *sbp, chord_findarg *fa)
 void
 vnode::updatepred_cb (chordID p, bool ok, chordstat status)
 {
-  if ((status == CHORD_OK) && ok) {
-    if (predecessor == myID ||
-	!locations->alive (predecessor) ||
-	between (predecessor, myID, p)) {
-      predecessor = p;
-#ifdef FINGERS
-      get_fingers (predecessor); // XXX perhaps do this only once after join
-#endif
-    }
-  }
-  else if (status == CHORD_RPCFAILURE) {
+  if (status == CHORD_RPCFAILURE) {
     warnx << myID << ": updatepred_cb: couldn't authenticate " << p << "\n";
+  } else if ((status == CHORD_OK) & ok) {
+    get_fingers (p);
   }
   // If !ok but status == CHORD_OK, then there's probably another
   // outstanding call somewhere that is already testing this same
@@ -347,9 +339,7 @@ void
 vnode::donotify (svccb *sbp, chord_nodearg *na)
 {
   ndonotify++;
-  if (predecessor == myID ||
-      !locations->alive (predecessor) ||
-      between (predecessor, myID, na->n.x)) {
+  if (my_pred () == myID || between (my_pred (), myID, na->n.x)) {
     locations->cacheloc (na->n.x, na->n.r,
 			 wrap (mkref (this), &vnode::updatepred_cb));
   }
@@ -431,14 +421,10 @@ void
 vnode::dogetpred_ext (svccb *sbp)
 {
   ndogetpred_ext++;
-  if (locations->alive (predecessor)) {
-    chord_nodeextres res(CHORD_OK);
-    res.resok->alive = true;
-    locations->fill_getnodeext (*res.resok, predecessor);
-    sbp->reply (&res);
-  } else {
-    sbp->replyref (chordstat (CHORD_ERRNOENT));
-  }
+  chord_nodeextres res(CHORD_OK);
+  res.resok->alive = true;
+  locations->fill_getnodeext (*res.resok, my_pred ());
+  sbp->reply (&res);
 }
 
 void
@@ -491,10 +477,10 @@ vnode::dodebruijn (svccb *sbp, chord_debruijnarg *da)
 {
   ndodebruijn++;
   chord_debruijnres *res;
-  chordID pred = locations->closestpredloc (myID);
+  chordID pred = my_pred ();
 
   // warnx << myID << " dodebruijn: pred " << pred << " x " << da->x << " d " 
-  // << da->d << "\n";
+  //<< da->d << " between " << betweenrightincl (pred, myID, da->d) << "\n";
 
   if (betweenrightincl (pred, myID, da->x)) {
     res = New chord_debruijnres (CHORD_INRANGE);
@@ -506,12 +492,13 @@ vnode::dodebruijn (svccb *sbp, chord_debruijnarg *da)
   } else {
     res = New chord_debruijnres (CHORD_NOTINRANGE);
     if (betweenrightincl (pred, myID, da->d)) {
-      chordID nd = locations->closestsuccloc (doubleID(myID));
+      chordID nd = lookup_closestsucc (doubleID(myID, LOGBASE));
       res->noderes->node.x = nd;
       res->noderes->node.r = locations->getaddress (nd);
-      res->noderes->d = doubleID(da->d);
+      res->noderes->d = doubleID(da->d, LOGBASE);
     } else {
-      res->noderes->node.x = locations->closestsuccloc (da->d); // pred
+      res->noderes->node.x = lookup_closestsucc (da->d); // pred
+      assert (res->noderes->node.x != myID);
       res->noderes->node.r = locations->getaddress (res->noderes->node.x);
       res->noderes->d = da->d;
     }
@@ -553,13 +540,10 @@ vnode::stop (void)
 void
 vnode::stabilize_pred ()
 {
-  if (!locations->alive (predecessor)) {
-    predecessor = locations->closestpredloc (myID);
-  }
+  chordID p = my_pred ();
+
   nout_continuous++;
-  get_successor (predecessor,
-		 wrap (this, &vnode::stabilize_getsucc_cb,
-		       predecessor));
+  get_successor (p, wrap (this, &vnode::stabilize_getsucc_cb, p));
 }
 
 void
@@ -572,16 +556,13 @@ vnode::stabilize_getsucc_cb (chordID pred,
     warnx << myID << ": stabilize_pred: " << pred 
 	  << " failure " << status << "\n";
   } else {
-    // maybe we're not stable. try this guy's successor as our new pred
-    if (s != myID) {
+    // maybe we're not stable. insert this guy's successor in
+    // location table; maybe he is our predecessor.
+    if (s != myID) { 
       locations->cacheloc (s, r,
 			   wrap (this, &vnode::updatepred_cb));
+    } else {
+      last_pred = pred;
     }
   }
-}
-
-bool
-vnode::isstable ()
-{
-  return locations->alive (predecessor);
 }

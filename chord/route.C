@@ -146,6 +146,15 @@ route_chord::make_hop_done_cb (chordID s, bool ok, chordstat status)
 
 
 void
+route_debruijn::print ()
+{
+  for (unsigned i = 0; i < search_path.size (); i++) {
+    warnx << search_path[i] << " " << virtual_path[i] << "\n";
+  }
+}
+
+
+void
 route_debruijn::first_hop (cbhop_t cbi)
 {
   cb = cbi;
@@ -212,6 +221,7 @@ route_debruijn::make_route_done_cb (chordID s, bool ok,
 {
   if (ok && status == CHORD_OK) {
     search_path.push_back (s);
+    virtual_path.push_back (x);   // push some virtual path node on
   } else if (status == CHORD_RPCFAILURE) {
     // xxx? should we retry locally before failing all the way to
     //      the top-level?
@@ -232,7 +242,7 @@ route_debruijn::make_hop_done_cb (chordID d, chordID s, bool ok,
   if (ok && status == CHORD_OK) {
     search_path.push_back (s);
     virtual_path.push_back (d);
-    if (search_path.size () >= 1000) {
+    if (search_path.size () >= 100) {
       warnx << "make_hop_done_cb: too long a search path: " << v->my_ID() 
 	    << " looking for " << x << "\n";
       print ();
@@ -250,3 +260,5 @@ route_debruijn::make_hop_done_cb (chordID d, chordID s, bool ok,
   }
   cb (done);
 }
+
+

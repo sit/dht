@@ -69,8 +69,8 @@ class vnode : public virtual refcount, public stabilizable {
   ptr<debruijn> dutch;
   ptr<stabilize_manager> stabilizer;
 
-  chordID predecessor;
   int myindex;
+  chordID last_pred;		// for stabilize
 
   qhash<unsigned long, cbdispatch_t> dispatch_table;
 
@@ -141,7 +141,7 @@ class vnode : public virtual refcount, public stabilizable {
 	 int _vnode, int server_sel_mode);
   ~vnode (void);
   chordID my_ID () { return myID; };
-  chordID my_pred () { return predecessor; };
+  chordID my_pred ();
   chordID my_succ ();
 
   // The API
@@ -166,7 +166,7 @@ class vnode : public virtual refcount, public stabilizable {
   // For stabilization of the predecessor
   bool continuous_stabilizing () { return nout_continuous > 0; }
   void do_continuous () { stabilize_pred (); }
-  bool isstable ();
+  bool isstable () { return last_pred == my_pred(); };
   
   // The RPCs
   void doget_successor (svccb *sbp);

@@ -48,6 +48,7 @@ class route_debruijn: public route_iterator {
   void make_hop_done_cb (chordID d, chordID s, bool ok, chordstat status);
  public:
   route_debruijn (ptr<vnode> vi, chordID xi) : route_iterator (vi, xi) {};
+  void print ();
   void first_hop (cbhop_t cb);
   void next_hop ();
 };
