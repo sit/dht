@@ -165,10 +165,11 @@ nntp::cmd_list (str c) {
   unsigned long i;
 
   aio << listb;
-  do {
+  while (g.more ())
+  {
     g.next (&n, &i);
     aio << n << " " << i << " 1 y\r\n";
-  } while (g.more ());
+  }
   aio << period;
 }
 
