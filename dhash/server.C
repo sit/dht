@@ -161,7 +161,6 @@ dhash_impl::dhash_impl (str dbname, u_int k) :
   nreplica (k),
   pk_partial_cookie (1),
   db (NULL),
-  cache_db (NULL),
   keyhash_db (NULL),
   host_node (NULL),
   cli (NULL),
