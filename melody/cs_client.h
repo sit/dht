@@ -32,8 +32,10 @@
 #include "list.h"
 #include "dirpage.h"
 #include "cs_output.h"
+#include "sleeper.h"
 
-class cs_client : public data_sender {
+class cs_client : public data_sender, 
+		  public sleeper {
   int s;
   in_addr ip;
   ptr<melody_file>f;
@@ -53,9 +55,8 @@ public:
 
   cs_client(int cfd, callback<void>::ptr am, in_addr aip);
   ~cs_client();
-  tailq_entry <cs_client> sleep_link2;
-  void readcb_wakeup();
   void wakeup();
+  virtual void readcb_wakeup();
 
 private:
   void xfer_done(str status);

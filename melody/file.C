@@ -155,6 +155,7 @@ melody_file::venti_cb(callback<void, int, str>::ref ready_cb, str filename, ptr<
   warn << "venti_cb\n";
 #endif
   blocks++;
+  if(blk == NULL) { warn << "no venti blk\n"; return; }
   find_venti_depth(((struct melody_block *)blk->data)->offset);
 
   vstack = New venti_block(dhash, ((struct melody_block *)blk->data), NULL);
@@ -218,7 +219,7 @@ melody_file::~melody_file()
 }
 
 bool
-melody_file::sleeptest(cs_client *c) {
+melody_file::sleeptest(sleeper *c) {
   assert((outstanding<1000)&&(outstanding>=0));
   if(outstanding > 20) {
     sleeping.insert_tail(c);
@@ -228,7 +229,7 @@ melody_file::sleeptest(cs_client *c) {
 }
 
 void
-melody_file::sleepdied(cs_client *c) {
+melody_file::sleepdied(sleeper *c) {
   if(sleeping.first)
     sleeping.remove(c);
 }
