@@ -22,7 +22,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-# $Id: run-simulations.pl,v 1.5 2003/11/29 23:16:15 strib Exp $
+# $Id: run-simulations.pl,v 1.6 2003/12/02 20:11:53 strib Exp $
 
 use strict;
 use Getopt::Long;
@@ -174,6 +174,12 @@ my %conditions = ();
 my %dependent = ();
 my $newAr;
 while( <ARGS> ) {
+
+    # skip comments
+    if( /^\#/ ) {
+	next;
+    }
+
     my @args = split( /\s+/ );
     my $argname = shift(@args);
     push @argnames, $argname;
@@ -269,8 +275,9 @@ sub run_sim {
 	    my $arg_string = $args_so_far . "$argname=$val ";
 	    if( $arg_iter == $#argnames+1 ) {
 		# it's the last argument, so just run the test
-		$randomize--;
-		&run_command( $arg_string );
+		if( &run_command( $arg_string ) ) {
+		    $randomize--;
+		}
 	    } else {
 		# recurse again
 		&run_sim( $arg_string, $arg_iter );
@@ -389,6 +396,10 @@ sub run_command {
     
     # now run it
     my $logfile = "$logdir/$protocol-$label.log";
+
+    if( -f $logfile ) { 
+	return 0;
+    }
     
     open( LOG, ">$logfile" ) or die( "Couldn't open $logfile" );
     print LOG "# lookupmean=$lookupmean lifemean=$lifemean " . 
@@ -404,4 +415,6 @@ sub run_command {
     
     unlink( $protfile );
     
+    return 1;
+
 }
