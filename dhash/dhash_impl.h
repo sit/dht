@@ -107,12 +107,13 @@ class dhash_impl : public dhash {
   void sendblock_cb (callback<void>::ref cb, dhash_stat err, chordID blockID);
 
   void keyhash_mgr_timer ();
-  void keyhash_mgr_lookup (chordID key, dhash_stat err, chordID host, route r);
+  void keyhash_mgr_lookup (chordID key, dhash_stat err,
+			   vec<chord_node> hostsl, route r);
   void keyhash_sync_done ();
-  void partition_maintenance_lookup_cb (dhash_stat err, chordID hostID, route r);
+  void partition_maintenance_lookup_cb (dhash_stat err, vec<chord_node> hostsl, route r);
   void partition_maintenance_pred_cb (chordID predID, net_address addr, chordstat stat);
 
-  void partition_maintenance_lookup_cb2 (bigint key, dhash_stat err, chordID hostID, route r);
+  void partition_maintenance_lookup_cb2 (bigint key, dhash_stat err, vec<chord_node> hostsl, route r);
   void partition_maintenance_succs_cb2 (bigint key, vec<chord_node> succs, chordstat err);
   void partition_maintenance_store2 (bigint key, vec<chord_node> succs, u_int already_count);
   void partition_maintenance_store_cb2 (bigint key, vec<chord_node> succs,

@@ -7,8 +7,7 @@
 #include <vec.h>
 
 typedef callback<void, dhash_stat, chordID>::ref cbinsert_t;
-typedef callback<void, dhash_stat, chordID, route>::ref dhashcli_lookupcb_t;
-typedef callback<void, dhash_stat, chordID, route>::ref dhashcli_routecb_t;
+typedef callback<void, dhash_stat, vec<chord_node>, route>::ref dhashcli_lookupcb_t;
 
 // Forward declarations
 class vnode;
@@ -19,6 +18,7 @@ class dhash_block;
 class dhashcli {
   ptr<vnode> clntnode;
   bool do_cache;
+  int server_selection_mode;
   dhash *dh;
   ptr<route_factory> r_factory;
 
@@ -75,7 +75,7 @@ private:
 	      void *out, aclnt_cb cb);
 
   void lookup_findsucc_cb (chordID blockID, dhashcli_lookupcb_t cb,
-			   chordID succID, route path, chordstat err);
+			   vec<chord_node> s, route path, chordstat err);
   void retrieve_hop_cb (cb_ret cb, chordID key, dhash_stat status,
 			ptr<dhash_block> block, route path);
   void cache_block (ptr<dhash_block> block, route search_path, chordID key);
@@ -84,24 +84,20 @@ private:
 				ptr<dhash_block> block, route path);
   void insert_lookup_cb (chordID blockID, ref<dhash_block> block,
 			 cbinsert_t cb, int trial,
-			 dhash_stat status, chordID destID, route r);
+			 dhash_stat status, vec<chord_node> succs, route r);
   void insert_stored_cb (chordID blockID, ref<dhash_block> block,
 			 cbinsert_t cb, int trial,
 			 dhash_stat stat, chordID retID);
     
   void insert2_lookup_cb (ref<dhash_block> block, cbinsert_t cb, 
-			  dhash_stat status, chordID destID, route r);
-  void insert2_succs_cb (ref<dhash_block> block, cbinsert_t cb,
-			 vec<chord_node> succs, chordstat err);
+			  dhash_stat status, vec<chord_node> succs, route r);
   void insert2_store_cb (ref<sto_state> ss, u_int i, ref<dhash_storeres> res,
 			 clnt_stat err);
 
   void fetch_frag (rcv_state *rs);
   
   void retrieve2_lookup_cb (chordID blockID,
-			    dhash_stat status, chordID destID, route r);
-  void retrieve2_succs_cb (chordID blockID,
-			   vec<chord_node> succs, chordstat err);
+			    dhash_stat status, vec<chord_node> succs, route r);
   void retrieve2_fetch_cb (chordID blockID, u_int i,
 			   ref<dhash_fetchiter_res> res,
 			   clnt_stat err);
@@ -109,7 +105,7 @@ private:
 
  public:
   dhashcli (ptr<vnode> node, dhash *dh, ptr<route_factory> r_factory, 
-	    bool do_cache);
+	    bool do_cache, int ss_mode = 0);
   void retrieve (chordID blockID, int options, cb_ret cb);
 
   void retrieve2 (chordID blockID, int options, cb_ret cb);

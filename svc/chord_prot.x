@@ -97,7 +97,7 @@ struct chord_testandfindarg {
 };
 
 struct chord_testandfindres_resok {
-  chord_node n;
+  chord_node n<>;
 };
 
 union chord_testandfindres switch (chordstat status) {

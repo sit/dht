@@ -29,6 +29,7 @@
 #include <qhash.h>
 #include "chord_impl.h"
 #include <coord.h>
+#include <modlogger.h>
 
 const int chord::max_vnodes = 1024;
 
@@ -332,8 +333,45 @@ chordID
 vnode_impl::closestcoordpred (const chordID &x, const vec<float> &n,
 			      const vec<chordID> &failed)
 {
-  chordID s = myID;
+  chordID p = lookup_closestpred (x, failed);
+  vec<float> pcoords = locations->get_coords (p);
+  float dist = -1.0;
+  if (pcoords.size () > 0)
+    dist = Coord::distance_f (pcoords, n);
+  // XXX think about how to better software engineer this.
+  // search the next few successors for the best choice for the querier.
+  for (int i = 0; i < 3; i++) {
+    chordID next = locations->closestsuccloc (incID (p));
+    if (!between (myID, x, next))
+      break;
+    if (in_vector (failed, next))
+      break;
+    pcoords = locations->get_coords (next);
+    if (pcoords.size () > 0) {
+      float ndist = Coord::distance_f (pcoords, n);
+      if (dist < 0 || ndist < dist) {
+	char dstr[24];
+	modlogger log = modlogger ("proximity-finger");
+	log << "improving " << x << " from ";
+	sprintf (dstr, "%10.2f", dist);
+	log << dstr << " to ";
+	sprintf (dstr, "%10.2f", ndist);
+	log << dstr << "\n";
+	
+	p = next;
+	dist = ndist;
+      }
+    }
+  }
+  return p;
+}
 
+chordID
+vnode_impl::closestproxpred (const chordID &x, const vec<float> &n,
+			      const vec<chordID> &failed)
+{
+  chordID s = myID;
+  
   vec<ptr<fingerlike> > sources;
   sources.push_back (toes);
   sources.push_back (fingers);
@@ -358,6 +396,14 @@ vnode_impl::closestcoordpred (const chordID &x, const vec<float> &n,
       // Always pick the possibility with the lowest distance.
       float newdist = Coord::distance_f (n, them);
       if (mindist < 0 || newdist < mindist) {
+	char dstr[24];
+	modlogger log = modlogger ("proximity-toe");
+	log << "improving " << x << " from ";
+	sprintf (dstr, "%10.2f", mindist);
+	log << dstr << " to ";
+	sprintf (dstr, "%10.2f", newdist);
+	log << dstr << "\n";
+	
 	mindist = newdist;
 	s = c;
       }
@@ -375,7 +421,7 @@ vnode_impl::lookup_closestpred (const chordID &x, const vec<chordID> &failed)
   case CHORD_LOOKUP_PROXIMITY:
     {
       vec<float> me = locations->get_coords (my_ID ());
-      s = closestcoordpred (x, me, failed);
+      s = closestproxpred (x, me, failed);
       break;
     }
   case CHORD_LOOKUP_FINGERLIKE:
@@ -412,7 +458,7 @@ vnode_impl::lookup_closestpred (const chordID &x)
     {
       vec<chordID> failed;
       vec<float> me = locations->get_coords (my_ID ());
-      s = closestcoordpred (x, me, failed);
+      s = closestproxpred (x, me, failed);
       break;
     }
   case CHORD_LOOKUP_FINGERLIKE:
@@ -564,23 +610,33 @@ vnode_impl::dotestrange_findclosestpred (user_args *sbp, chord_testandfindarg *f
   chord_testandfindres *res = New chord_testandfindres ();  
   if (betweenrightincl(myID, succ, x) ) {
     res->set_status (CHORD_INRANGE);
-    bool ok = locations->get_node (succ, &res->inrange->n);
-    assert (ok);
+    ref<fingerlike_iter> iter = successors->get_iter ();
+    res->inrange->n.setsize (iter->size ());
+    size_t i = 0;
+    while (!iter->done ()) {
+      chordID n = iter->next ();
+      bool ok = locations->get_node (n, &res->inrange->n[i++]);
+      assert (ok);
+    }
   } else {
     res->set_status (CHORD_NOTINRANGE);
     vec<chordID> f;
     for (unsigned int i=0; i < fa->failed_nodes.size (); i++)
       f.push_back (fa->failed_nodes[i]);
     chordID p;
-    if (lookup_mode == CHORD_LOOKUP_PROXIMITY) {
-      // Don't use lookup_closestpred which returns things from the
-      // point of view of this node.
+    if (server_selection_mode > 1) {
       p = closestcoordpred (fa->x, convert_coords (sbp->transport_header ()),
 			    f);
+    } else if (lookup_mode == CHORD_LOOKUP_PROXIMITY) {
+      // Don't use lookup_closestpred which returns things from the
+      // point of view of this node.
+      p = closestproxpred (fa->x, convert_coords (sbp->transport_header ()),
+			   f);
     } else {
       p = lookup_closestpred (fa->x, f);
     }
-    bool ok = locations->get_node (p, &res->notinrange->n);
+    res->notinrange->n.setsize (1);
+    bool ok = locations->get_node (p, &res->notinrange->n[0]);
     assert (ok);
   }
 
@@ -895,7 +951,7 @@ vnode_impl::dofindroute (user_args *sbp, chord_findarg *fa)
 
 void
 vnode_impl::dofindroute_cb (user_args *sbp, chord_findarg *fa, 
-			    chordID s, route r, chordstat err)
+			    vec<chord_node> s, route r, chordstat err)
 {
   if (err) {
     chord_nodelistres res (CHORD_RPCFAILURE);

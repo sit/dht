@@ -125,8 +125,8 @@ vnode_impl::find_successor (const chordID &x, cbroute_t cb)
 }
 
 void
-vnode_impl::find_successor_cb (chordID x, cbroute_t cb, chordID s, 
-			  route search_path, chordstat status)
+vnode_impl::find_successor_cb (chordID x, cbroute_t cb, vec<chord_node> s, 
+			       route search_path, chordstat status)
 {
   if (status != CHORD_OK) {
     warnx << "find_successor_cb: find successor of " 
@@ -151,7 +151,7 @@ void
 vnode_impl::find_route_hop_cb (cbroute_t cb, route_iterator *ri, bool done)
 {
   if (done) {
-    cb (ri->last_node (), ri->path (), ri->status ());
+    cb (ri->successors (), ri->path (), ri->status ());
     delete ri;
   } else {
     ri->next_hop ();

@@ -113,7 +113,7 @@ debruijn::stabilize ()
 }
 
 void
-debruijn::finddoublesucc_cb (chordID s, route search_path, chordstat status)
+debruijn::finddoublesucc_cb (vec<chord_node> s, route search_path, chordstat status)
 {
   if (status) {   
     warnx << myID << ": finddoublesucc_cb: failure status " << status << "\n";

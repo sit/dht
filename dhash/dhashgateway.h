@@ -22,5 +22,6 @@ class dhashgateway {
   
 public:
   dhashgateway (ptr<axprt_stream> x, ptr<chord> clnt, dhash *dh,
-		ptr<route_factory> f, bool do_cache = false);
+		ptr<route_factory> f, bool do_cache = false,
+		int ss_mode = 0);
 };

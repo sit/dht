@@ -120,15 +120,15 @@ class vnode_impl : public vnode {
 			 clnt_stat err);
   void get_predecessor_cb (chordID n, cbchordID_t cb, chord_noderes *res, 
 			   clnt_stat err);
-  void find_successor_cb (chordID x, 
-			  cbroute_t cb, chordID s, route sp, chordstat status);
+  void find_successor_cb (chordID x, cbroute_t cb,
+			  vec<chord_node> s, route sp, chordstat status);
   void get_succlist_cb (cbchordIDlist_t cb, chord_nodelistres *res,
 			clnt_stat err);
 
   void find_route_hop_cb (cbroute_t cb, route_iterator *ri, bool done);
   void find_route (const chordID &x, cbroute_t cb);
   void dofindroute_cb (user_args *sbp, chord_findarg *fa, 
-		       chordID s, route r, chordstat err);
+		       vec<chord_node> s, route r, chordstat err);
   
   void notify_cb (chordID n, chordstat *res, clnt_stat err);
   void alert_cb (chordstat *res, clnt_stat err);
@@ -161,6 +161,8 @@ class vnode_impl : public vnode {
 
   void update_coords (chordID u, vec<float> uc, float ud);
   chordID closestcoordpred (const chordID &x, const vec<float> &n,
+			    const vec<chordID> &failed);
+  chordID closestproxpred  (const chordID &x, const vec<float> &n,
 			    const vec<chordID> &failed);
 
  public:

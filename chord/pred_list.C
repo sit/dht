@@ -124,16 +124,15 @@ pred_list::stabilize_predlist ()
 }
 
 void
-pred_list::stabilize_predlist_gotpred (chordID p, route r, chordstat stat)
-{
-  assert (locations->cached (p));
-  v_->get_succlist (p, wrap (this, &pred_list::stabilize_predlist_gotsucclist));
-}
-
-void
-pred_list::stabilize_predlist_gotsucclist (vec<chord_node> sl, chordstat s)
+pred_list::stabilize_predlist_gotpred (vec<chord_node> sl,
+				       route r, chordstat stat)
 {
   nout_backoff--;
+
+  // Wait until next time to stabilize me.
+  if (stat)
+    return;
+  
   stable_predlist = true;
   for (u_int i = 0; i < sl.size (); i++) {
     if (locations->cached (sl[i].x))

@@ -211,7 +211,8 @@ finger_table::stabilize_finger_getpred_cb (chordID dn, int i, chord_node p,
 }
 
 void
-finger_table::stabilize_findsucc_cb (chordID dn, int i, chordID s,
+finger_table::stabilize_findsucc_cb (chordID dn, int i,
+				     vec<chord_node> succs,
 				     route search_path, 
 				     chordstat status)
 {
@@ -222,9 +223,13 @@ finger_table::stabilize_findsucc_cb (chordID dn, int i, chordID s,
     stable_fingers = false;
     // Next round, check this finger again.
   } else {
-    while (i < NBIT && finger (i) == s)
+    while (i < NBIT && finger (i) == succs[0].x)
       i++;
     f = i;
+    // XXX this number 3 should probably be configured elsewhere.
+    //     see vnode_impl::closestcoordpred
+    for (u_int j = 0; j < 3 && j < succs.size (); j++)
+      locations->insert (succs[j]);
   }
 }
 

@@ -8,7 +8,9 @@ class debruijn : public fingerlike {
   ptr<locationtable> locations;
   chordID myID;  
   chordID mydoubleID;
-
+  
+  void finddoublesucc_cb (vec<chord_node> sl, route path, chordstat status);
+  
  public:
   debruijn ();
 
@@ -28,7 +30,6 @@ class debruijn : public fingerlike {
   bool backoff_stabilizing () { return false; };
   void do_backoff () { return; };
   void do_continuous () { stabilize (); };
-  void finddoublesucc_cb (chordID s, route path, chordstat status);
   chordID debruijnptr (void);
 
   //fingerlike methods

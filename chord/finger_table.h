@@ -22,8 +22,8 @@ class finger_table : public fingerlike {
 
   void stabilize_finger_getpred_cb (chordID dn, int i, chord_node p,
 				    chordstat status);
-  void stabilize_findsucc_cb (chordID dn,
-			      int i, chordID s, route path, chordstat status);
+  void stabilize_findsucc_cb (chordID dn, int i, vec<chord_node> succs,
+			      route path, chordstat status);
 
   
  public:

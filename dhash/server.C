@@ -296,7 +296,8 @@ dhash_impl::keyhash_mgr_timer ()
 }
 
 void
-dhash_impl::keyhash_mgr_lookup (chordID key, dhash_stat err, chordID host, route r)
+dhash_impl::keyhash_mgr_lookup (chordID key, dhash_stat err,
+				vec<chord_node> hostsl, route r)
 {
   keyhash_mgr_rpcs --;
   if (!err) {
@@ -475,7 +476,8 @@ dhash_impl::partition_maintenance_timer ()
     if (between (p, m, key))
       partition_current = m; // skip range we should be storing
     else {
-      cli->lookup (key, 0, wrap (this, &dhash_impl::partition_maintenance_lookup_cb2, key));
+      cli->lookup (key, 0,
+		   wrap (this, &dhash_impl::partition_maintenance_lookup_cb2, key));
       return;
     }
   }
@@ -486,7 +488,8 @@ dhash_impl::partition_maintenance_timer ()
 
 void
 dhash_impl::partition_maintenance_lookup_cb2 (bigint key, 
-					dhash_stat err, chordID hostID, route r)
+					      dhash_stat err,
+					      vec<chord_node> hostsl, route r)
 {
   if (err) {
     warn << "dhash_impl::partition_maintenance_lookup_cb err " << err << "\n";
@@ -642,7 +645,8 @@ dhash_impl::partition_maintenance_timer ()
 
 
 void
-dhash_impl::partition_maintenance_lookup_cb (dhash_stat err, chordID hostID, route r)
+dhash_impl::partition_maintenance_lookup_cb (dhash_stat err,
+					     vec<chord_node> hostsl, route r)
 {
 #if 0
   if (err) {

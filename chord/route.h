@@ -43,6 +43,7 @@ class route_iterator {
  protected:
   ptr<vnode> v;
   chordID x;
+  vec<chord_node> successors_;
   route search_path;
   chordstat r;
   bool done;
@@ -76,6 +77,7 @@ class route_iterator {
 
   virtual ~route_iterator () { *deleted = true; };
 
+  vec<chord_node> successors () { return successors_; }
   chordID last_node () { return search_path.back (); };
   chordID key () { return x; };
   route path () { return search_path; };

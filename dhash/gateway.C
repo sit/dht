@@ -47,13 +47,14 @@ dhashgateway::dhashgateway (ptr<axprt_stream> x,
 			    ptr<chord> node,
 			    dhash *dh,
 			    ptr<route_factory> f,
-			    bool do_cache)
+			    bool do_cache,
+			    int ss_mode)
 {
   clntsrv = asrv::alloc (x, dhashgateway_program_1, 
 			 wrap (this, &dhashgateway::dispatch));
   clntnode = node;
   this->dh = dh;
-  dhcli = New refcounted<dhashcli>(clntnode->active, dh, f, do_cache);
+  dhcli = New refcounted<dhashcli>(clntnode->active, dh, f, do_cache, ss_mode);
 }
 
 

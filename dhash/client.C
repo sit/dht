@@ -52,8 +52,6 @@
 #endif
 #include <ida.h>
 
-static int SERVERSELECTION = getenv("SERVERSELECTION") ? atoi(getenv("SERVERSELECTION")) : 1;
-
 // ---------------------------------------------------------------------------
 // DHASH_STORE
 //     - store a give block of data on a give nodeID.
@@ -285,8 +283,9 @@ public:
 
  
 dhashcli::dhashcli (ptr<vnode> node, dhash *dh, ptr<route_factory> r_factory,
-                    bool do_cache)
-  : clntnode (node), do_cache (do_cache), dh (dh), r_factory (r_factory)
+                    bool do_cache, int ss_mode)
+  : clntnode (node), do_cache (do_cache),
+    server_selection_mode (ss_mode), dh (dh), r_factory (r_factory)
 {
 }
 
@@ -307,31 +306,6 @@ dhashcli::retrieve2 (chordID blockID, int options, cb_ret cb)
     rcvs.insert (rs);
     lookup (blockID, options,
 	    wrap (this, &dhashcli::retrieve2_lookup_cb, blockID));
-  }
-}
-
-void
-dhashcli::retrieve2_lookup_cb (chordID blockID, 
-			       dhash_stat status, chordID destID, route r)
-{
-  chordID myID = clntnode->my_ID ();
-  rcv_state *rs = rcvs[blockID];
-  if (!rs) {
-    trace << myID << ": retrieve (" << blockID << "): not in table?\n";
-    assert (rs);
-  }
-  rs->timemark ();
-  rs->r = r;
-  
-  if (status != DHASH_OK) {
-    trace << myID << ": retrieve (" << blockID << "): lookup failure:" << status << "\n";
-    rcvs.remove (rs);
-    rs->complete (status, NULL); // failure
-    rs = NULL;
-  } else {
-    assert (r.size () >= 1);
-    clntnode->get_succlist (r.back (), 
-			    wrap (this, &dhashcli::retrieve2_succs_cb, blockID));
   }
 }
 
@@ -415,17 +389,27 @@ order_succs (const vec<float> &me, const vec<chord_node> &succs,
   }
 }
 
+
+
 void
-dhashcli::retrieve2_succs_cb (chordID blockID, vec<chord_node> succs, chordstat err)
+dhashcli::retrieve2_lookup_cb (chordID blockID,
+			       dhash_stat status,
+			       vec<chord_node> succs,
+			       route r)
 {
   chordID myID = clntnode->my_ID ();
   rcv_state *rs = rcvs[blockID];
-  assert (rs);
+  if (!rs) {
+    trace << myID << ": retrieve (" << blockID << "): not in table?\n";
+    assert (rs);
+  }
   rs->timemark ();
-  if (err) {
-    trace << myID << ": retrieve (" << blockID << "): getsucclist failure:" << err << "\n";
+  rs->r = r;
+  
+  if (status != DHASH_OK) {
+    trace << myID << ": retrieve (" << blockID << "): lookup failure:" << status << "\n";
     rcvs.remove (rs);
-    rs->complete (DHASH_CHORDERR, NULL); // failure
+    rs->complete (status, NULL); // failure
     rs = NULL;    
     return;
   }
@@ -442,7 +426,7 @@ dhashcli::retrieve2_succs_cb (chordID blockID, vec<chord_node> succs, chordstat 
     return;
   }
 
-  if (SERVERSELECTION) {
+  if (server_selection_mode) {
     // Store list of successors ordered by expected distance.
     // fetch_frag will pull from this list in order.
     modlogger ("orderer") << "ordering for block " << blockID << "\n";
@@ -610,23 +594,9 @@ dhashcli::insert2 (ref<dhash_block> block, int options, cbinsert_t cb)
 
 void
 dhashcli::insert2_lookup_cb (ref<dhash_block> block, cbinsert_t cb, 
-			     dhash_stat status, chordID destID, route r)
+			     dhash_stat status, vec<chord_node> succs, route r)
 {
-  if (status != DHASH_OK) {
-    warn << "insert2_lookup_cb: failure\n";
-    (*cb) (status, bigint(0)); // failure
-  } else {
-    assert (r.size () >= 1);
-    clntnode->get_succlist (r.back (), 
-			    wrap (this, &dhashcli::insert2_succs_cb, block, cb));
-  }
-}
-
-void
-dhashcli::insert2_succs_cb (ref<dhash_block> block, cbinsert_t cb,
-			    vec<chord_node> succs, chordstat err)
-{
-  if (err) {
+  if (status) {
     (*cb) (DHASH_CHORDERR, 0);
     return;
   }
@@ -722,8 +692,9 @@ dhashcli::insert (chordID blockID, ref<dhash_block> block,
 void
 dhashcli::insert_lookup_cb (chordID blockID, ref<dhash_block> block,
 			    cbinsert_t cb, int trial,
-			    dhash_stat status, chordID destID, route r)
+			    dhash_stat status, vec<chord_node> succs, route r)
 {
+  chordID destID = succs[0].x;
   if (status != DHASH_OK) {
     warn << "insert_lookup_cb: failure\n";
     // XXX call dhashcli::insert_stored_cb() to retry
@@ -763,7 +734,9 @@ dhashcli::lookup (chordID blockID, int options, dhashcli_lookupcb_t cb)
 {
   if (options & DHASHCLIENT_USE_CACHED_SUCCESSOR) {
     chordID x = clntnode->lookup_closestsucc (blockID);
-    (*cb) (DHASH_OK, x, route ());
+    vec<chord_node, 1> y;
+    clntnode->locations->get_node (x, &y[0]);
+    (*cb) (DHASH_OK, y, route ());
   }
   else
     clntnode->find_successor
@@ -772,12 +745,12 @@ dhashcli::lookup (chordID blockID, int options, dhashcli_lookupcb_t cb)
 
 void
 dhashcli::lookup_findsucc_cb (chordID blockID, dhashcli_lookupcb_t cb,
-			      chordID succID, route path, chordstat err)
+			      vec<chord_node> s, route path, chordstat err)
 {
   if (err) 
-    (*cb) (DHASH_CHORDERR, 0, path);
+    (*cb) (DHASH_CHORDERR, s, path);
   else
-    (*cb) (DHASH_OK, succID, path);
+    (*cb) (DHASH_OK, s, path);
 }
 
 

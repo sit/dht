@@ -65,6 +65,7 @@ static char *logfname;
 
 ptr<chord> chordnode;
 static str p2psocket;
+int ss_mode;
 bool do_cache;
 int lbase;
 int cache_size;
@@ -107,7 +108,7 @@ client_accept (int fd)
     fatal << "bad route mode" << mode << "\n";
   }
 
-  vNew dhashgateway (x, chordnode, dh[0], f, do_cache);
+  vNew dhashgateway (x, chordnode, dh[0], f, do_cache, ss_mode);
 }
 
 static void
@@ -459,7 +460,12 @@ main (int argc, char **argv)
   int ch;
 
   do_cache = false;
-  int ss_mode = 0;
+  // Terrible, I know, but:
+  // ss_mode == 0 means no fragment or lookup server selection
+  // ss_mode == 1 means fragment server selection
+  // ss_mode >  1 means fragment server selection + finger lookup
+  // ss_mode overrides -P. 
+  ss_mode = 1;
   lbase = 1;
 
   myport = 0;
@@ -631,6 +637,7 @@ main (int argc, char **argv)
   warn << "  IP/port: " << myname << ":" << myport << "\n";
   warn << "  vnodes: " << vnodes << "\n";
   warn << "  lookup_mode: " << mode << "\n";
+  warn << "  ss_mode: " << ss_mode << "\n";
 
   if (p2psocket) 
     startclntd();

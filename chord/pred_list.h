@@ -32,8 +32,7 @@ class pred_list : public stabilizable {
   void stabilize_getsucc_cb (chordID sd, chord_node s, chordstat status);
 
   void stabilize_predlist ();
-  void stabilize_predlist_gotpred (chordID p, route r, chordstat stat);
-  void stabilize_predlist_gotsucclist (vec<chord_node> sl, chordstat s);
+  void stabilize_predlist_gotpred (vec<chord_node> sl, route r, chordstat stat);
 
   void update_pred_fingers_cb (vec<chord_node> nlist, chordstat s);
   

@@ -186,21 +186,23 @@ route_chord::make_hop_cb (ptr<bool> del,
   } else if (res->status == CHORD_INRANGE) { 
     // found the successor
     //BAD LOC (ok)
-    bool ok = v->locations->insert (res->inrange->n);
+    bool ok = v->locations->insert (res->inrange->n[0]);
     if (!ok) {
       warnx << v->my_ID () << ": make_hop_cb: inrange node ("
-	    << res->inrange->n.x << "@" << res->inrange->n.r.hostname
-	    << ":" << res->inrange->n.r.port << ") not valid vnode!\n";
+	    << res->inrange->n[0] << ") not valid vnode!\n";
       assert (0);
     }
-    search_path.push_back (res->inrange->n.x);
+    search_path.push_back (res->inrange->n[0].x);
+    for (size_t i = 0; i < res->inrange->n.size (); i++)
+      successors_.push_back (res->inrange->n[i]);
+    
     last_hop = true;
     if (stop) done = true; // XXX still needed??
     cb (done);
   } else if (res->status == CHORD_NOTINRANGE) {
     // haven't found the successor yet
     chordID last = search_path.back ();
-    if (last == res->notinrange->n.x) {   
+    if (last == res->notinrange->n[0].x) {   
       warnx << v->my_ID() << ": make_hop_cb: node " << last
 	   << "returned itself as best pred, looking for "
 	   << x << "\n";
@@ -209,26 +211,25 @@ route_chord::make_hop_cb (ptr<bool> del,
     } else {
       // make sure that the new node sends us in the right direction,
       chordID olddist = distance (search_path.back (), x);
-      chordID newdist = distance (res->notinrange->n.x, x);
+      chordID newdist = distance (res->notinrange->n[0].x, x);
       if (newdist > olddist) {
 	warnx << "XXXXXXXXXXXXXXXXXXX WRONG WAY XXXXXXXXXXXXX\n";
 	warnx << v->my_ID() << ": make_hop_cb: went in the wrong direction:"
 	      << " looking for " << x << "\n";
 	// xxx surely we can do something more intelligent here.
 	print ();
-	warnx << v->my_ID() << ": " << search_path.back () << " sent me to " << res->notinrange->n.x << " looking for " << x << "\n";
+	warnx << v->my_ID() << ": " << search_path.back () << " sent me to " << res->notinrange->n[0].x << " looking for " << x << "\n";
 	warnx << "XXXXXXXXXXXXXXXXXXX WRONG WAY XXXXXXXXXXXXX\n";
       }
       
       //BAD LOC (ok)
-      bool ok = v->locations->insert (res->notinrange->n);
+      bool ok = v->locations->insert (res->notinrange->n[0]);
       if (!ok) {
 	warnx << v->my_ID () << ": make_hop_cb: notinrange node ("
-	      << res->inrange->n.x << "@" << res->inrange->n.r.hostname
-	      << ":" << res->inrange->n.r.port << ") not valid vnode!\n";
+	      << res->inrange->n[0] << ") not valid vnode!\n";
 	assert (0);
       }
-      search_path.push_back (res->notinrange->n.x);
+      search_path.push_back (res->notinrange->n[0].x);
       assert (search_path.size () <= 1000);
       cb (done);
     }
