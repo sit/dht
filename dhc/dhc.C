@@ -46,6 +46,9 @@ u_int64_t start_write = 0, end_write = 0;
 void 
 dhc::recv_get (user_args *sbp)
 {
+  if (dhc_debug)
+    warn << "\n\n" << myNode->my_ID () << " recv_get\n";
+
   timeval tp;
   gettimeofday (&tp, NULL);
   start_read = tp.tv_sec * (u_int64_t)1000000 + tp.tv_usec;

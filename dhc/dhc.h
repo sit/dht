@@ -436,7 +436,7 @@ class dhc /*: public virtual refcount*/ {
   void recv_cmp (user_args *);
   void recv_cmp_ack (ptr<dhc_block>, user_args *, 
 		     ref<dhc_prepare_res>, clnt_stat);
-  void recv_leaf_lookup (chordID, user_args *);
+  void recv_m_newconf_ack (chordID, ptr<dhc_newconfig_res>, clnt_stat);
 
   void recv_get (user_args *);
   void getblock_cb (user_args *, ptr<location>, ptr<read_state>, 

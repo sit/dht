@@ -102,8 +102,8 @@ class dhashcli {
   void insert_store_cb (ref<sto_state> ss, route r, u_int i, 
 			u_int nstores, u_int min_needed,
 			dhash_stat err, chordID id, bool present);
-  void insert_dhc_cb (ptr<location> dest, route r, 
-		      cbinsert_path_t cb, clnt_stat cerr);
+  void insert_dhc_cb (ptr<location> dest, route r, cbinsert_path_t cb, 
+		      ptr<dhc_put_res> res, clnt_stat cerr);
   
   void fetch_frag (ptr<rcv_state> rs);
 

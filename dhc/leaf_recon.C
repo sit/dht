@@ -183,8 +183,10 @@ dhc::recv_ask (user_args *sbp)
   dhcs.insert (b);
 
   dhc_soft *mb = dhcs[kb->masterID];
-  if (!mb)
+  if (!mb) {
     mb = New dhc_soft (myNode, master_kb);
+    dhcs.insert (mb);
+  }
 
   ref<dhc_prepare_arg> arg = New refcounted<dhc_prepare_arg> ();
   arg->bID = ask->bID;
@@ -220,6 +222,23 @@ dhc::recv_cmp_ack (ptr<dhc_block> kb, user_args *sbp, ref<dhc_prepare_res> ca,
       dhcs.insert (b);
       master_send_config (b->pstat->acc_conf, sbp);
 
+      dhc_soft *mb = dhcs[kb->masterID];
+      assert (mb);
+
+      ptr<dhc_newconfig_arg> arg = New refcounted<dhc_newconfig_arg>;
+      arg->bID = kb->id;
+      arg->mID = kb->masterID;
+      arg->old_conf_seqnum = kb->meta->config.seqnum;
+      set_new_config (arg, b->pstat->acc_conf); 
+
+      ptr<dhc_newconfig_res> res; 
+      for (uint i=0; i<mb->new_config.size (); i++) {
+	ptr<location> dest = mb->new_config[i];
+	res = New refcounted<dhc_newconfig_res>;
+	myNode->doRPC (dest, dhc_program_1, DHCPROC_NEWCONFIG, arg, res,
+		       wrap (this, &dhc::recv_m_newconf_ack, b->id, res));
+      }      
+
       kb->meta->config.seqnum += 1;
       if (b->pstat->acc_conf.size () > 0) {
 	kb->meta->config.nodes.setsize (b->pstat->acc_conf.size ());
@@ -243,6 +262,12 @@ dhc::recv_cmp_ack (ptr<dhc_block> kb, user_args *sbp, ref<dhc_prepare_res> ca,
     dhc_prepare_res res (ca->status);
     sbp->reply (&res);
   }
+}
+
+void
+dhc::recv_m_newconf_ack (chordID bID, ptr<dhc_newconfig_res> res, clnt_stat err)
+{
+  //Count replies and report when received majority.
 }
 
 /* End master node protocol */

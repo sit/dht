@@ -304,11 +304,13 @@ main (int argc, char **argv)
     }
   case NOAUTH:
     {
+      ptr<option_block> opt = New refcounted<option_block>;
+      opt->flags = DHASHCLIENT_NEWBLOCK;
       dhash.insert (bigint (10), 
 		    data_one, 
 		    strlen (data_one) + 1, 
 		    wrap (&store_cb_noauth, dhash),
-		    NULL,
+		    opt,
 		    DHASH_NOAUTH);
     }
     break;

@@ -199,7 +199,7 @@ dhashcli::retrieve (blockID blockID, cb_ret cb, int options,
   
   ptr<rcv_state> rs = New refcounted<rcv_state> (blockID, cb);
   
-  if (blockID.ctype == DHASH_KEYHASH) {
+  if (blockID.ctype == DHASH_KEYHASH || blockID.ctype == DHASH_NOAUTH) {
       route_iterator *ci = clntnode->produce_iterator_ptr (blockID.ID);
       ci->first_hop (wrap (this, &dhashcli::retrieve_block_hop_cb, rs, ci,
 			   options, 5, guess),
@@ -256,7 +256,8 @@ dhashcli::retrieve_block_hop_cb (ptr<rcv_state> rs, route_iterator *ci,
   }
 
   chord_node s = rs->succs.pop_front ();
-  if (DHC && rs->key.ctype == DHASH_KEYHASH) {
+  if (DHC && 
+      (rs->key.ctype == DHASH_KEYHASH || rs->key.ctype == DHASH_NOAUTH)) {
     ptr<dhc_get_arg> arg = New refcounted<dhc_get_arg>;
     arg->bID = rs->key.ID;
     rs->ds.status = status;
@@ -266,6 +267,8 @@ dhashcli::retrieve_block_hop_cb (ptr<rcv_state> rs, route_iterator *ci,
     rs->ds.res = New refcounted<dhc_get_res> (DHC_OK);
 
     ptr<location> l = clntnode->locations->lookup_or_create (s);
+    
+    warn << l->id () << " is succ of key " << arg->bID << "\n";
 
     clntnode->doRPC (l, dhc_program_1, DHCPROC_GET, arg, rs->ds.res,
 		     wrap (this, &dhashcli::retrieve_dhc_cb, rs));
@@ -299,7 +302,7 @@ dhashcli::retrieve_dhc_cb (ptr<rcv_state> rs, clnt_stat err)
     ptr<dhash_block> blk = 
       New refcounted<dhash_block> (rs->ds.res->resok->data.data.base (), 
 				   rs->ds.res->resok->data.data.size (),
-				   DHASH_KEYHASH);
+				   rs->key.ctype);
     blk->ID = rs->key.ID;
     blk->source = clntnode->my_ID ();
     blk->hops   = 0;
@@ -763,7 +766,7 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb, int opti
   gettimeofday (&tp, NULL);
   start_insert = tp.tv_sec * (u_int64_t) 1000000 + tp.tv_usec;
 
-  if (block->ctype == DHASH_KEYHASH) {
+  if (block->ctype == DHASH_KEYHASH || block->ctype == DHASH_NOAUTH) {
     if (!DHC) {
       for (u_int i = 0; i < dhash::num_replica (); i++) {
 	// Count up for each RPC that will be dispatched
@@ -788,10 +791,10 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb, int opti
 
       if (options & DHASHCLIENT_NEWBLOCK)
 	clntnode->doRPC (dest, dhc_program_1, DHCPROC_NEWBLOCK, arg, res,
-			 wrap (this, &dhashcli::insert_dhc_cb, dest, r, ss->cb));
+			 wrap (this, &dhashcli::insert_dhc_cb, dest, r, ss->cb, res));
       else 
 	clntnode->doRPC (dest, dhc_program_1, DHCPROC_PUT, arg, res,
-			 wrap (this, &dhashcli::insert_dhc_cb, dest, r, ss->cb));	
+			 wrap (this, &dhashcli::insert_dhc_cb, dest, r, ss->cb, res));	
     }
     return;
   }
@@ -872,17 +875,18 @@ dhashcli::insert_store_cb (ref<sto_state> ss, route r, u_int i,
 }
 
 void
-dhashcli::insert_dhc_cb (ptr<location> dest, route r, 
-			 cbinsert_path_t cb, clnt_stat cerr)
+dhashcli::insert_dhc_cb (ptr<location> dest, route r, cbinsert_path_t cb, 
+			 ptr<dhc_put_res> res, clnt_stat cerr)
 {
   vec<chordID> path;
-  if (!cerr) {
+  if (!cerr && res->status == DHC_OK) {
     for (uint i=0; i<r.size (); i++) 
       path.push_back (r[i]->id ());
 
     (*cb) (DHASH_OK, path);
   } else {
-    warning << clntnode->my_ID () << "dhash err: " << cerr << "\n";
+    warning << clntnode->my_ID () << "dhash err: " << cerr 
+	    << " or dhc err: " << res->status << "\n";
     path.push_back (dest->id ());
     (*cb) (DHC_ERR, path);
   }
