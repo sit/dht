@@ -41,7 +41,6 @@ public:
   Time latency(IPAddress, IPAddress, bool = false);
 
 private:
-  unsigned int _num;
   vector<vector<int> > _pairwise;
 };
 
