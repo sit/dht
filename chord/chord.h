@@ -121,7 +121,7 @@ class vnode : public virtual refcount {
 
   void checkfingers (void);
   void updatefingers (chordID &x, net_address &r);
-  void replacefinger (node *n);
+  void replacefinger (chordID &s, node *n);
   u_long estimate_nnodes ();
   chordID findpredfinger (chordID &x);
   chordID findpredfinger2 (chordID &x);

@@ -170,13 +170,13 @@ vnode::updatefingers (chordID &x, net_address &r)
 }
 
 void
-vnode::replacefinger (node *n)
+vnode::replacefinger (chordID &s, node *n)
 {  
   checkfingers ();
 #ifdef PNODE
-  n->n = findsuccfinger (n->n);
+  n->n = findsuccfinger (s);
 #else
-  n->n = locations->findsuccloc (n->n);
+  n->n = locations->findsuccloc (s);
 #endif
   n->alive = true;
   locations->increfcnt (n->n);
@@ -276,7 +276,7 @@ chordID
 vnode::findsuccfinger (chordID &x)
 {
   chordID s = x;
-  for (int i = 1; i <= NBIT; i++) {
+  for (int i = 0; i <= NBIT; i++) {
     if (!finger_table[i].first.alive) continue;
     if ((s == x) || between (x, s, finger_table[i].first.n)) {
       s = finger_table[i].first.n;
@@ -429,7 +429,7 @@ vnode::stabilize_succ ()
 {
   while (!finger_table[1].first.alive) {   // notify() may result in failure
     //  warnx << "stabilize: replace succ\n";
-    replacefinger (&finger_table[1].first);
+    replacefinger (finger_table[1].start, &finger_table[1].first);
     notify (finger_table[1].first.n, myID); 
   }
   nout_continuous++;
@@ -562,7 +562,7 @@ vnode::stabilize_finger (int f)
 
   if (!finger_table[i].first.alive) {
     //  warnx << "stabilize: replace finger " << i << "\n" ;
-    replacefinger (&finger_table[i].first);
+    replacefinger (finger_table[i].start, &finger_table[i].first);
     stable_fingers = false;
   }
   if (i > 1) {
@@ -636,7 +636,7 @@ vnode::stabilize_succlist (int s)
   if (!succlist[j].alive) {
     //  warnx << "stabilize: replace succ " << j << "\n";
     stable_succlist = false;
-    replacefinger (&succlist[j]);
+    replacefinger (succlist[j].n, &succlist[j]);
   }
   nout_backoff++;
   get_successor (succlist[j].n,
