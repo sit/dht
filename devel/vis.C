@@ -322,6 +322,7 @@ update_pred_got_pred (chordID ID, str host, unsigned short port,
 void
 update_debruijn (f_node *nu)
 {
+  return;
   chordID n = nu->ID;
   ptr<chord_debruijnarg> arg = New refcounted<chord_debruijnarg> ();
   arg->n = n;
@@ -490,6 +491,7 @@ get_cb (chordID next)
 void
 update_toes (f_node *nu)
 {
+  return;
   chord_gettoes_arg n;
   n.v = nu->ID;
   n.level = glevel;
@@ -523,7 +525,7 @@ update_toes_got_toes (chordID ID, str host, unsigned short port,
 void
 initgraf ()
 {
-  courier10 = gdk_font_load ("-*-courier-*-r-*-*-10-*-*-*-*-*-*-*");
+  courier10 = gdk_font_load ("-*-courier-*-r-*-*-12-*-*-*-*-*-*-*");
 
   window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
   drawing_area = gtk_drawing_area_new();
@@ -1205,23 +1207,25 @@ draw_ring ()
       thisgc = draw_gc;
     }
 
-    gdk_draw_arc (pixmap,
-		  thisgc,
-		  TRUE,
-		  x - radius, y - radius,
-		  2*radius, 2*radius,
-		  (gint16)0, (gint16)64*360);
-
-    if (n->selected) {
-      radius += 2;
+    if (!drawids) {
       gdk_draw_arc (pixmap,
 		    thisgc,
-		    FALSE,
+		    TRUE,
 		    x - radius, y - radius,
 		    2*radius, 2*radius,
 		    (gint16)0, (gint16)64*360);
+      
+      if (n->selected) {
+	radius += 2;
+	gdk_draw_arc (pixmap,
+		      thisgc,
+		      FALSE,
+		      x - radius, y - radius,
+		      2*radius, 2*radius,
+		      (gint16)0, (gint16)64*360);
+      }
     }
-    
+
     if (drawids) {
       char IDs[48];
       ID_to_string (n->ID, IDs);
