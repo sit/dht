@@ -51,12 +51,12 @@ Chord::Chord(Node *n, Args& a, LocTable *l)
   //whether Chord uses vivaldi
   _vivaldi_dim = a.nget<uint>("vivaldidim", 0, 10);
 
-  //location table timeout values
-  _timeout = a.nget<uint>("timeout", 0, 10);
-
   //stabilization timer
   _stab_basic_timer = a.nget<uint>("basictimer", 10000, 10);
-  _stab_succlist_timer = a.nget<uint>("succlisttimer",10000,10);
+  _stab_succlist_timer = a.nget<uint>("succlisttimer",_stab_basic_timer,10);
+
+  //location table timeout values
+  //_timeout = a.nget<uint>("timeout", 5*_stab_succlist_timer, 10);
 
   //successors
   _nsucc = a.nget<uint>("successors", 1, 10);
@@ -91,7 +91,7 @@ Chord::Chord(Node *n, Args& a, LocTable *l)
   else
     loctable = New LocTable();
 
-  loctable->set_timeout(_timeout);
+  loctable->set_timeout(5*_stab_basic_timer);
   loctable->set_evict(false);
 
   loctable->init (me);
@@ -1428,7 +1428,7 @@ Chord::crash(Args *args)
   if (me.ip == DNODE) 
     fprintf(stderr,"%s crashed\n", ts());
 #endif
-  assert(me.ip!=1);
+  //assert(me.ip!=1);
   printf("%s crashed! loctable sz %d\n",ts(), loctable->size());
 
 }

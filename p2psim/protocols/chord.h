@@ -29,7 +29,7 @@
 #include "misc/vivaldi.h"
 #include "consistenthash.h"
 
-#define CHORD_DEBUG
+//#define CHORD_DEBUG
 #define PKT_OVERHEAD 20
 
 #define TYPE_USER_LOOKUP 0

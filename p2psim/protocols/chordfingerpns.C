@@ -30,12 +30,14 @@ ChordFingerPNS::ChordFingerPNS(Node *n, Args& a, LocTable *l)
   : Chord(n, a, New LocTablePNS()) 
 { 
   _base = a.nget<uint>("base",2,10);
-  _samples = a.nget<uint>("samples",16,10);
+  _samples = a.nget<uint>("samples",_nsucc,10);
 
   _stab_pns_running = false;
   _stab_pns_outstanding = 0;
 
-  _stab_pns_timer = a.nget<uint>("pnstimer",10000,10);
+  _stab_pns_timer = a.nget<uint>("pnstimer",_stab_succlist_timer,10);
+
+  loctable->set_timeout( 5*_stab_pns_timer );
 }
 
 void
