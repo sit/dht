@@ -65,7 +65,7 @@ class chord:
     Time is maintained by the external simulator.  The simulator calls
     time_changed whenever time is updated because of an additional event.
     """
-    def __init__ (my):
+    def __init__ (my, args):
         my.nodes = []
         my.deadnodes = {}
         my.allnodes = {}
@@ -287,18 +287,20 @@ class dhash (chord):
         return 0
 
 class dhash_repair (dhash):
-    def __init__ (my):
-        dhash.__init__ (my)
     def time_changed (my, last_time, new_time):
         for n in my.now_nodes:
             my.repair (n)
 	chord.time_changed (my, last_time, new_time)
 
 class dhash_replica_norepair (dhash):
-    def __init__ (my, replicas = 3):
-        dhash.__init__ (my)
+    def __init__ (my, args):
+        dhash.__init__ (my, args)
         my.bytes = 0
-        my.replicas = replicas
+	try:
+	    my.replicas = int (args[0])
+	except:
+	    my.replicas = 3
+
     def min_pieces (my):
         return 0
     def read_pieces (my):
@@ -317,10 +319,16 @@ class dhash_replica (dhash_replica_norepair):
 	return 3 * my.replicas
 
 class dhash_fragments (dhash_repair):
-    def __init__ (my, dfrags, efrags):
-        dhash.__init__ (my)
-        my.dfrags = dfrags
-        my.efrags = efrags
+    def __init__ (my, args):
+        dhash_repair.__init__ (my, args)
+	try:
+	    my.dfrags = int (args[0])
+	except:
+	    my.dfrags = 3
+	try:
+	    my.efrags = int (args[1])
+	except:
+	    my.efrags = 2 * dfrags
 
     def min_pieces (my):
         # Should this by dfrags?
@@ -471,7 +479,17 @@ class durability_oracle (dhash_oracle):
 	    return
 	my.repair (n)
         my._failure (id, 1)
-
+	
+# For automatic use by availsim
+known_types = {'chord': chord,
+	       'dhash': dhash,
+	       'fragments': dhash_fragments,
+	       'replica': dhash_replica,
+	       'replica_norepair': dhash_replica_norepair,
+	       'cates': dhash_cates,
+	       'replica_durability_oracle': durability_oracle,
+	       'replica_availability_oracle': availability_oracle
+	       }
 
 if __name__ == '__main__':
     gdh = dhash_replica_norepair()

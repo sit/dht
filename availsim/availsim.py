@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from __future__ import generators
+from __future__ import generators	# only 2.2 or newer
 import sys
 
 from utils import str2chordID, size_rounder
@@ -51,6 +51,9 @@ class event:
         
     def __str__ (my):
         return "%ld %s" % (time, type)
+
+    def __cmp__ (my, other):
+	return cmp (my.time, other.time)
 
 class simulator:
     def __init__ (my, dht):
@@ -192,12 +195,17 @@ def parsable_monitor (t, dh):
 	print "%d" % s['sent_bytes::%s' % k],
     print
 
+def usage ():
+    sys.stderr.write ("%s [-i] [-m] [-s] events.txt type args\n" % sys.argv[0])
+    sys.stderr.write ("where type is:\n")
+    a = dhash.known_types.keys ()
+    a.sort ()
+    for t in a:
+	sys.stderr.write ("\t%s\n" % t)
+
 if __name__ == '__main__':
     import sys
     import getopt
-
-    def usage ():
-	sys.stderr.write ("%s events.txt dhash_fragments 7 14\n" % sys.argv[0])
 
     # default monitor
     monitor = print_monitor
@@ -222,35 +230,10 @@ if __name__ == '__main__':
     evfile = cmdv[0]
     dtype  = cmdv[1]
     gdh = None
-    if (dtype == "fragments"):
-	try:
-	    dfrags = int (cmdv[2])
-	except:
-	    dfrags = 3
-	try:
-	    efrags = int (cmdv[3])
-	except:
-	    efrags = 2 * dfrags
-	gdh = dhash.dhash_fragments (dfrags, efrags)
-    elif (dtype == "replica"):
-	try:
-	    replicas = int (cmdv[2])
-	except:
-	    replicas = 3
-	gdh = dhash.dhash_replica (replicas)
-    elif (dtype == "replica_norepair"):
-	try:
-	    replicas = int (cmdv[2])
-	except:
-	    replicas = 3
-	gdh = dhash.dhash_replica_norepair (replicas)
-    elif (dtype == "cates"):
-	gdh = dhash.dhash_cates ()
-    elif (dtype == "replica_durability_oracle"):
-	gdh = dhash.durability_oracle ()
-    elif (dtype == "replica_availability_oracle"):
-	gdh = dhash.availability_oracle ()
-    else:
+    try:
+	dhashclass = dhash.known_types[dtype]
+	gdh = dhashclass (cmdv[2:])
+    except KeyError, e:
 	sys.stderr.write ("invalid dhash type\n")
         usage ()
 	sys.exit (1)
