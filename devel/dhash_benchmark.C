@@ -233,7 +233,11 @@ make_block(void *data, int size)
   for (unsigned int i = 0; i < size/sizeof(long); i++) 
     rd[i] = random();
 
-  return random_ID ();
+  char id[sha1::hashsize];
+  sha1_hash (id, rd, size);
+  chordID ID;
+  mpz_set_rawmag_be (&ID, id, sizeof (id));  // For big endian
+  return ID;
 }
 
 void

@@ -243,7 +243,7 @@ parseconfigfile (str cf, int nvnode, int set_rpcdelay)
   if (!myhost) {
     myhost = myname ();
   }
-  max_loccache = max_loccache * nvnode;
+  max_loccache = max_loccache * (nvnode + 1);
   chordnode = New refcounted<chord> (wellknownhost, wellknownport, 
 				     wellknownID, myport, myhost, set_rpcdelay,
 				     max_loccache, max_connections);
