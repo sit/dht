@@ -62,7 +62,7 @@ p2p::timeout(location *l) {
   else
     {
       // warn << "timeout on node " << l->n << " has overdue RPCs\n";
-      l->timeout_cb = delaycb(30,0,wrap(this, &p2p::timeout, l));
+      l->timeout_cb = delaycb(360,0,wrap(this, &p2p::timeout, l));
     }
 }
 
@@ -164,7 +164,7 @@ p2p::dorpc_connect_cb(location *l, ptr<axprt_stream> x) {
   assert(l->alive);
   l->x = x;
   l->connecting = false;
-  l->timeout_cb = delaycb(30,0,wrap(this, &p2p::timeout, l));
+  l->timeout_cb = delaycb(360,0,wrap(this, &p2p::timeout, l));
 
   doRPC_cbstate *st, *st1;
   for (st = l->connectlist.first; st; st = st1) {
@@ -185,7 +185,7 @@ p2p::chord_connect(sfs_ID ID, callback<void, ptr<axprt_stream> >::ref cb) {
   gettimeofday(start, NULL);
   if (l->x) {    
     timecb_remove(l->timeout_cb);
-    l->timeout_cb = delaycb(30,0,wrap(this, &p2p::timeout, l));
+    l->timeout_cb = delaycb(360,0,wrap(this, &p2p::timeout, l));
     (*cb)(l->x);
   } else {
     tcpconnect (l->addr.hostname, l->addr.port, wrap (mkref (this), &p2p::connect_cb, cb));

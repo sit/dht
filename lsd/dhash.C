@@ -89,7 +89,7 @@ dhashclient::insert_findsucc_cb(svccb *sbp, dhash_insertarg *item,
       *num_entries += 1;
     }
 
-    stats.insert_path_len += path.size ();
+    stats.insert_path_len += path.size () - 1;
     stats.insert_ops++;
 
     dhash_storeres *res = New dhash_storeres();
