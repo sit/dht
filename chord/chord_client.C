@@ -117,9 +117,9 @@ chord::chord (str _wellknownhost, int _wellknownport,
   wkn.x = make_chordID (wkn.r.hostname, wkn.r.port);
   wkn.vnode_num = 0;
 
-  wkn.coords.setsize (NCOORD);
+  wkn.coords.setsize (NCOORD + USING_HT);
   // Make up some random initial information for this other node.
-  for (int i = 0; i < NCOORD; i++)
+  for (int i = 0; i < NCOORD + USING_HT; i++)
     wkn.coords[i] = (int) 0.0;
 
   if (myname != _wellknownhost || myport != _wellknownport) {

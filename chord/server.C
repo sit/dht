@@ -714,10 +714,6 @@ vnode_impl::update_coords (Coord uc, float ud)
   float rmt_err = uc.err ();
   
 
-  //init f
-  Coord f;
-
-
   float actual = ud;
   float expect = coords.distance_f (uc);
 
@@ -731,29 +727,38 @@ vnode_impl::update_coords (Coord uc, float ud)
     float grad = expect - actual;
     v.vector_sub (coords);
     
-    float len = v.norm ();
+    float len = v.plane_norm ();
     while (len < 0.0001) {
       for (int i = 0; i < NCOORD; i++)
-	v.coords[i] = (double)(random () % 100 - 50) / 10.0;
-      len = v.norm ();
+	v.coords[i] = (double)(random () % 200 - 100) / 1.0;
+      //if (USING_HT) v.ht += fabs((double)(random () % 10 - 5) / 10.0);
+      len = v.plane_norm ();
     }
+    len = v.norm ();
+
     float unit = 1.0/sqrtf(len);
-	  
+
     // scalar_mult(v, unit) is unit force vector
     // times grad gives the scaled force vector
     v.scalar_mult (unit*grad);
-    
-    // add v into the overall force vector
-    f.vector_add (v);
-    
+
+
     //timestep is the scaled ratio of our prediction error
     // and the remote node's prediction error
     float pred_err = me_->coords ().err ();
-    float timestep = 0.1 * (pred_err)/(pred_err + rmt_err);
+    float timestep;
+    if (pred_err > 0 && rmt_err > 0)
+      timestep = 0.1 * (pred_err)/(pred_err + rmt_err);
+    else if (pred_err > 0)
+      timestep = 0.0;
+    else
+      timestep = 1.0;
 
-    f.scalar_mult(timestep);
+    v.scalar_mult(timestep);
+    //flip sign on height
+    v.ht = -v.ht;
 
-    coords.vector_add (f);
+    coords.vector_add (v);
 
 #ifdef VIVALDI_DEBUG
     char b[1024];			       
@@ -765,6 +770,7 @@ vnode_impl::update_coords (Coord uc, float ud)
     warn << "----------------\n";
 #endif 
     
+    if (coords.ht <= 100) coords.ht = 100;
     me_->set_coords (coords);
   } else {
     char b[32];
