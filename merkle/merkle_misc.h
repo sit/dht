@@ -65,6 +65,10 @@ tobigint (const merkle_hash &h)
 static inline vec<merkle_hash>
 database_get_keys (dbfe *db, u_int depth, const merkle_hash &prefix)
 {
+#if 0
+  warn << " >>database_get_keys " << depth << "/" << prefix << "\n";
+#endif
+
   vec<merkle_hash> ret;
   ptr<dbEnumeration> iter = db->enumerate ();
   ptr<dbPair> entry = iter->nextElement (todbrec(prefix));
@@ -75,8 +79,26 @@ database_get_keys (dbfe *db, u_int depth, const merkle_hash &prefix)
       break;
     ret.push_back (key);
     entry = iter->nextElement ();
+ 
+    // XXX HACK 
+    //  This is sort of a hack.  The problem was that    
+    //  creating a merkle tree with a large database
+    //  was very close.  When each block was this function
+    //  returned essentially the entire database.
+    
+    //  The crux of the problem is that while a database
+    //  is being reloaded it is out-of-sync vis-a-vis 
+    //  the underlying database. 
+    
+    //  This problem should be fixed in a different way.
+    //  But this hack is easiest for now.
+    if (ret.size () == 64)
+      break;
   }
 
+#if 0
+  warn << " <<database_get_keys, returning " << ret.size () << "\n";
+#endif
   return ret;
 }
 
@@ -91,14 +113,28 @@ database_remove (dbfe *db, block *b)
 static inline int
 database_insert (dbfe *db, block *b)
 {
-  return db->insert (todbrec (b->key), b->data);
+#if 0
+  warn << " >>database_insert " << b->key << "\n";
+#endif
+  int ret = db->insert (todbrec (b->key), b->data);
+#if 0
+  warn << " <<database_insert\n";
+#endif
+  return ret;
 }
 
 
 static inline ptr<dbrec>
 database_lookup (dbfe *db, const merkle_hash &key)
 {
-  return db->lookup (todbrec (key));
+#if 0
+  warn << " >>database_lookup " << key << "\n";
+#endif
+  ptr<dbrec> ret = db->lookup (todbrec (key));
+#if 0
+  warn << " <<database_lookup\n";
+#endif
+  return ret;
 }
 
 

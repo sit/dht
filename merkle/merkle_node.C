@@ -91,7 +91,7 @@ merkle_node::initialize (u_int64_t _count)
 {
   bzero (this, sizeof (*this));
   this->count = _count; 
-}  
+}
 
 
 merkle_node::~merkle_node ()
@@ -105,39 +105,15 @@ merkle_node::~merkle_node ()
 void
 merkle_node::check_invariants (u_int depth, merkle_hash prefix, dbfe *db)
 {
-#if 0
-  warn << "CHECKING: " << strbuf ("0x%x", (u_int)this) << " depth " << depth << " pfx: " << prefix << "\n";
-
-
-  bool ack = (((u_int)this) == 0x8104000);
-  // XXXX
-#endif
-  bool ack = false;
-
   sha1ctx sc;
   merkle_hash mhash = 0;
   u_int64_t _count = 0;
   if (isleaf ()) {
     assert (count <= 64);
 
-#ifdef NEWDB
     vec<merkle_hash> keys = database_get_keys (db, depth, prefix);
-    if (ack) {
-      warn << "depth " << depth << "\n";
-      warn << "prefix " << prefix << "\n";
-      warn << "keys.size () " << keys.size() << "\n";
-    }
-
     for (u_int i = 0; i < keys.size (); i++, _count++)
       sc.update (keys[i].bytes, keys[i].size);
-#else
-    for (block *cur = db->cursor (prefix) ; cur; cur = db->next (cur)) {
-      if (!prefix_match (depth, cur->key, prefix))
-	break;
-      _count += 1;
-      sc.update (cur->key.bytes, cur->key.size);
-    }
-#endif
   } else {
     assert (count > 64);
     for (int i = 0; i < 64; i++) {
