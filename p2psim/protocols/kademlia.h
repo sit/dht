@@ -448,7 +448,8 @@ public:
   bool empty() const { return !_map.size(); }
   void clear();
   void rebuild();
-  inline void checkrep();
+  void checkrep();
+  k_nodeinfo* get(unsigned);
 
   unsigned size() {
     return _map.size() >= (int) Kademlia::k ? Kademlia::k : _map.size();
@@ -458,7 +459,6 @@ public:
     return get(size()-1);
   }
 
-  inline k_nodeinfo* get(unsigned);
 private:
 
   k_bucket *_parent;

@@ -19,6 +19,7 @@
 
 #include "p2psim/bighashmap_arena.hh"
 #include <assert.h>
+#include <string.h>
 
 HashMap_Arena::HashMap_Arena(unsigned element_size)
     : _free(0),

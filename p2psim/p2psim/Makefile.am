@@ -14,7 +14,8 @@ EXTRA_DIST = args.h condvar.h event.h eventgenerator.h eventqueue.h \
              eventqueueobserver.h failuremodel.h network.h node.h observed.h \
              observer.h observerinfo.h p2protocol.h p2psim.h p2psim_hashmap.h \
              packet.h parse.h rpchandle.h threaded.h threadmanager.h tmgdmalloc.h \
-             topology.h skiplist.h keyfunc.h
+             topology.h skiplist.h keyfunc.h bighashmap_arena.hh \
+	     bighashmap.cc bighashmap.hh
 
 noinst_PROGRAMS = p2psim_core.o
 p2psim_core_o_SOURCES = anyready.C condvar.C p2protocol.C event.C \
