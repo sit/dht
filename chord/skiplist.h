@@ -127,7 +127,7 @@ class skiplist {
   // If the list has more than one:
   //   return first element x such that x->key >= k
   //   if it happens that the key is after the last element
-  //   in the list, return the first element. (??)
+  //   in the list, return the first element. (?)
   T *closestsucc (const K &k) const {
     if (head == NULL)
       return NULL;
