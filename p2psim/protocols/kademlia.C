@@ -512,7 +512,8 @@ Kademlia::lookup_wrapper(lookup_wrapper_args *args)
     ping_args pa(fr.succ.id, fr.succ.ip);
     ping_result pr;
     Time pingbegin = now();
-    if(!doRPC(fr.succ.ip, &Kademlia::do_ping, &pa, &pr) && alive(), Kademlia::_default_timeout) {
+    // assert(_nodeid2kademlia[fr.succ.id]->ip() == fr.succ.ip);
+    if(!doRPC(fr.succ.ip, &Kademlia::do_ping, &pa, &pr, Kademlia::_default_timeout) && alive()) {
       _lookup_dead_node++;
       if(flyweight[fr.succ.id])
         erase(fr.succ.id);
