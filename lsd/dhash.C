@@ -171,7 +171,8 @@ dhashclient::search_cb_cb (dhash_stat *res, cbi cb, clnt_stat err) {
     cb (0);
     return;
   } 
-
+  
+  warn << "res was " << *res << "\n";
   if (*res == DHASH_PRESENT)
     cb (1);
   else

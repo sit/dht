@@ -8,7 +8,7 @@
 #include "sys/time.h"
 #include "vec.h"
 
-#define NBIT 8
+#define NBIT 160
 
 typedef int cb_ID;
 
@@ -242,7 +242,7 @@ class p2p : public virtual refcount  {
   void join_getsucc_cb (sfs_ID p, sfs_ID s, net_address r, sfsp2pstat status);
 
   void find_predecessor (sfs_ID &n, sfs_ID &x, cbroute_t cb);
-  void find_predecessor_path (sfs_ID &n, sfs_ID &x, cbroute_t cb, route search_path);
+  void find_pred_test_cache_cb (sfs_ID n, sfs_ID x, cbroute_t cb, int found);
   void find_closestpred_cb (sfs_ID n, cbroute_t cb, sfsp2p_findres *res, 
 			    route search_path, clnt_stat err);
   

@@ -15,7 +15,8 @@ enum sfsp2pstat {
   SFSP2P_OK = 0,
   SFSP2P_ERRNOENT = 1,
   SFSP2P_RPCFAILURE = 2,
-  SFSP2P_ERREXIST = 3
+  SFSP2P_ERREXIST = 3,
+  SFSP2P_CACHEHIT = 4
 };
 
 struct net_address {

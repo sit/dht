@@ -76,7 +76,10 @@ void
 p2p::find_predecessor_cb (cbroute_t cb, sfs_ID p, route search_path, 
 			sfsp2pstat status)
 {
-  if (status != SFSP2P_OK) {
+  if (status == SFSP2P_CACHEHIT) {
+    cb (p, search_path, SFSP2P_OK);
+  }
+  else if (status != SFSP2P_OK) {
     cb (p, search_path, status);
   } else {
     warnx << "find_predecessor_cb: " << p << "\n";
@@ -100,14 +103,27 @@ p2p::find_predecessor(sfs_ID &n, sfs_ID &x, cbroute_t cb)
   if (n == finger_table[1].first) {
     cb (n, search_path, SFSP2P_OK);
   } else {
+    testSearchCallbacks (n, x, wrap (this, &p2p::find_pred_test_cache_cb,
+				     n, x, cb));
+  }
+}
+
+void
+p2p::find_pred_test_cache_cb (sfs_ID n, sfs_ID x, cbroute_t cb, int found) 
+{
+  route search_path;
+  search_path.push_back(n);
+  if (!found) {
     sfsp2p_findarg *fap = New sfsp2p_findarg;
     sfsp2p_findres *res = New sfsp2p_findres (SFSP2P_OK);
     fap->x = x;
     doRPC (n, sfsp2p_program_1, SFSP2PPROC_FINDCLOSESTPRED, fap, res,
 	   wrap (mkref (this), &p2p::find_closestpred_cb, n, cb, res, 
 		 search_path));
+  } else {
+    warn << "CACHE HIT (local node)\n";
+    cb (n, search_path, SFSP2P_CACHEHIT);
   }
-
 }
 
 void
@@ -149,7 +165,7 @@ p2p::find_closestpred_test_cache_cb (sfs_ID node, findpredecessor_cbstate *st, i
   else 
     {
       warn << "CACHE HIT\n";
-      st->cb (st->nprime, st->search_path, SFSP2P_OK);
+      st->cb (st->nprime, st->search_path, SFSP2P_CACHEHIT);
     }
 }
 
