@@ -19,6 +19,11 @@ struct dhash_valueattr {
   unsigned size;
 };
 
+enum dhash_offer_status {
+  DHASH_PRESENT = 1,
+  DHASH_ACCEPT = 2,
+  DHASH_REJECT = 3
+};
 
 struct s_dhash_insertarg {
   chordID key;
@@ -93,11 +98,11 @@ struct s_dhash_block_arg {
 
 
 struct dhash_offer_arg {
-  bigint keys<64>;
+  chordID keys<64>;
 };
 
 struct dhash_offer_resok {
-   bool accepted<64>;
+   dhash_offer_status accepted<64>;
 };
 
 union dhash_offer_res switch (dhash_stat status) {
