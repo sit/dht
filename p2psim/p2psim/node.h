@@ -26,6 +26,7 @@
 #ifndef __NODE_H
 #define __NODE_H
 
+#include <assert.h>
 #include "rpchandle.h"
 #include "observed.h"
 #include "p2psim_hashmap.h"

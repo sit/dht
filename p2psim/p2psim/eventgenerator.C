@@ -30,6 +30,8 @@
 #include <lib9.h>
 #include <thread.h>
 #include <vector>
+#include <iostream>
+#include <assert.h>
 using namespace std;
 
 void

@@ -24,6 +24,7 @@
 
 #include "observers/chordobserver.h"
 #include <stdio.h>
+#include <assert.h>
 extern bool vis;
 bool static_sim;
 
@@ -166,7 +167,7 @@ Chord::lookup(Args *args)
     uint vsz = v.size();
     assert((!static_sim) || (vsz >= _frag && vsz <= _allfrag));
     if (vsz < _frag) {
-      printf("%s lookup failed insufficient key %16qx %d succs 
+      printf("%s lookup failed insufficient key %16qx %d succs \
 	  returned, %d requested\n",ts(), k, vsz, _frag);
       return; 
     }
@@ -211,15 +212,15 @@ Chord::lookup(Args *args)
       pos++;
     }
 
-    Node *nn = Network::Instance()->getnode(v[0].ip);
+    // Node *nn = Network::Instance()->getnode(v[0].ip);
     for (uint i = 0; i < _allfrag; i++) {
       if (i < vsz && (!Network::Instance()->getnode(v[i].ip)->alive())) {
-	printf("%s interval %u %u lookup dead key %16qx %d succ should be (%u,%qx) 
+	printf("%s interval %u %u lookup dead key %16qx %d succ should be (%u,%qx) \
 		instead of (%u, %qx)\n", ts(), lookup_lat, recurs_int,k, i, ids[pos].ip, 
 		ids[pos].id, v[i].ip, v[i].id);
 	return;
       }else if (i < vsz && ids[pos].ip != v[i].ip) {
-	printf("%s interval %u %u lookup incorrect key %16qx, %d succ should be (%u,%qx) 
+	printf("%s interval %u %u lookup incorrect key %16qx, %d succ should be (%u,%qx) \
 		instead of (%u, %qx)\n", ts(), lookup_lat, recurs_int, k, i, ids[pos].ip, 
 		ids[pos].id, v[i].ip, v[i].id);
 	return;
@@ -665,7 +666,7 @@ Chord::join(Args *args)
   }
   printf("\n");
 #endif
-  uint fvz = fr.v.size();
+  // uint fvz = fr.v.size();
   for (uint i = 0; i < fr.v.size(); i++) {
     if (fr.v[i].ip != me.ip) 
       loctable->add_node(fr.v[i],true);

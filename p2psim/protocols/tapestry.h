@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.16 2003/11/04 01:39:38 strib Exp $ */
+/* $Id: tapestry.h,v 1.17 2003/11/04 22:15:48 thomer Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -6,13 +6,15 @@
 #include "chord.h"
 #include "p2psim/p2psim.h"
 #include "p2psim/condvar.h"
-#include <map.h>
+#include <map>
 
 class NodeInfo;
 class RouteEntry;
 class RoutingTable;
 
 class Tapestry : public P2Protocol {
+  friend class RoutingTable; // for RPCSet
+
 public:
 
   typedef unsigned long long GUID;

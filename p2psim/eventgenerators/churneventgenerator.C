@@ -32,6 +32,7 @@
 #include <time.h>
 #include <list>
 #include <stdlib.h>
+#include <iostream>
 using namespace std;
 
 ChurnEventGenerator::ChurnEventGenerator(Args *args)
@@ -64,7 +65,7 @@ ChurnEventGenerator::ChurnEventGenerator(Args *args)
     srand( _seed );
   } else {
     time_t now = time(NULL);
-    cout << "using seed " << now << endl;
+    DEBUG(1) << "using seed " << now << endl;
     srand( now );
   }
 

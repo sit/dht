@@ -6,6 +6,8 @@
 #include <dmalloc.h>
 #endif /* DMALLOC */
 
+#include <assert.h>
+#include <unistd.h>
 #include "keyfunc.h"
 
 /*

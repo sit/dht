@@ -27,6 +27,7 @@
 #include "events/eventfactory.h"
 #include "p2psim/eventqueue.h"
 #include <fstream>
+#include <iostream>
 using namespace std;
 
 FileEventGenerator::FileEventGenerator(Args *args)

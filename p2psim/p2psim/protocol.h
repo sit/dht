@@ -28,6 +28,7 @@
 
 #include "eventqueue.h"
 #include "observed.h"
+#include <assert.h>
 #include <stdio.h>
 class Node;
 

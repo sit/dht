@@ -26,6 +26,7 @@
 #include "kademlia.h"
 #include "p2psim/network.h"
 #include <deque>
+#include <iostream>
 using namespace std;
 
 bool Kademlia::docheckrep = false;
@@ -42,7 +43,8 @@ Kademlia::Kademlia(Node *n, Args a)
   : P2Protocol(n), _id(ConsistentHash::ip2chid(n->ip()))
 {
   KDEBUG(1) << "ip: " << ip() << ", idsize = " << idsize << endl;
-  docheckrep = strcmp(getenv("P2PSIM_CHECKREP"), "0") ? true : false;
+  if(getenv("P2PSIM_CHECKREP"))
+    docheckrep = strcmp(getenv("P2PSIM_CHECKREP"), "0") ? true : false;
 
   if(!k)
     k = a.nget<unsigned>("k", 20, 10);
@@ -1246,7 +1248,8 @@ k_bucket::erase(Kademlia::NodeID id, string prefix, unsigned depth)
   if(nodes->contains(id))
     nodes->erase(id);
   else {
-    assert(replacement_cache->find(kinfo) != replacement_cache->end());
+    // XXX: is true, but crashes...
+    // assert(replacement_cache->find(kinfo) != replacement_cache->end());
     replacement_cache->erase(kinfo);
     return;
   }

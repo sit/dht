@@ -22,14 +22,14 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: condvar.C,v 1.5 2003/10/10 18:04:47 thomer Exp $ */
+/* $Id: condvar.C,v 1.6 2003/11/04 22:15:48 thomer Exp $ */
 
 #include "condvar.h"
 using namespace std;
 
 ConditionVar::ConditionVar()
 {
-  _waiters = New vector<Channel *>;
+  _waiters = New set<Channel *>;
 }
 
 ConditionVar::~ConditionVar()
@@ -46,7 +46,7 @@ ConditionVar::wait()
 
   // create a channel, put it on the queue of waiting threads
   Channel *c = chancreate(sizeof(int*), 0);
-  (*_waiters).push_back( c );
+  (*_waiters).insert( c );
   recvp(c);
   chanfree(c);
 }
@@ -56,23 +56,20 @@ ConditionVar::notifyAll()
 {
 
   // wake all the sleeping guys
-  for( uint i = 0; i < _waiters->size(); i++ ) {
-    Channel *c = (*_waiters)[i];
+  for(set<Channel*>::const_iterator i = _waiters->begin(); i != _waiters->end(); ++i) {
+    Channel *c = (*i);
     send(c, 0);
   }
   _waiters->clear();
-
 }
 
 void
 ConditionVar::notify()
 {
+  if(!_waiters->size())
+    return;
 
-  // wake the first guys
-  if( _waiters->size() > 0 ) {
-    Channel *c = _waiters->front();
-    send(c, 0);
-    _waiters->erase(&(_waiters->front()));
-  }
-
+  Channel *c = *(_waiters->begin());
+  send(c, 0);
+  _waiters->erase(c);
 }

@@ -25,6 +25,7 @@
 #include "dvgraph.h"
 #include <stdio.h>
 #include <iostream>
+#include <assert.h>
 using namespace std;
 
 DVGraph::DVGraph()

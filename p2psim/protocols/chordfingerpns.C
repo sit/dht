@@ -297,7 +297,8 @@ ChordFingerPNS::pns_next_recurs_handler(next_recurs_args *args, next_recurs_ret 
 {
   vector<IDMap> succs;
   uint ssz, retsz,x,i;
-  bool done, r;
+  bool done;
+  // bool r;
   lookup_path tmp;
   IDMap next;
 

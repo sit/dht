@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: condvar.h,v 1.4 2003/10/10 18:04:47 thomer Exp $ */
+/* $Id: condvar.h,v 1.5 2003/11/04 22:15:48 thomer Exp $ */
 
 #ifndef __CONDVAR_H
 #define __CONDVAR_H
@@ -30,6 +30,8 @@
 #include <lib9.h>
 #include <thread.h>
 #include "p2psim.h"
+#include <set>
+using namespace std;
 
 class ConditionVar {
 public:
@@ -41,7 +43,7 @@ public:
   void notifyAll();
 
 private:
-  vector<Channel *> *_waiters;
+  set<Channel*> *_waiters;
 };
 
 #endif // __CONDVAR_H

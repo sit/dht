@@ -51,20 +51,23 @@ sub generate_events
   my ($nnodes) = @_;
 
   my $ef = new FileHandle(">kademlia-events.txt") or die "$!";
-  print $ef "generator ChurnEventGenerator proto=Kademlia\n";
+  print $ef "generator ChurnEventGenerator proto=Kademlia seed=0\n";
   $ef->close();
 }
 
 sub run_kademlia
 {
   open(P, "p2psim/p2psim kademlia-prot.txt kademlia-top.txt kademlia-events.txt |");
+  my $totlatency = 0;
+  my $nlatencies = 0;
+  my $bytes = 0;
   while(<P>){
       if(/^latency ([0-9]+)/){
           $totlatency += $1;
           $nlatencies++;
       }
       if(/^lookup ([0-9.]+)/){
-          $bytes = $1;
+          $bytes += $1;
       }
       if(/^using seed ([0-9.]+)/){
           print "Seed = $1\n";
@@ -72,11 +75,11 @@ sub run_kademlia
   }
   close(P);
 
-  if(!defined($bytes) || !defined($totlatency)){
+  if(!$bytes || !$totlatency){
       print STDERR "kadx.pl: p2psim no output\n";
   }
 
-  print sprintf("%.2f", $totlatency/$nlatencies), $bytes, "\n";
+  print sprintf("%.2f ", $totlatency/$nlatencies), $bytes, "\n";
 }
 
 sub generate_prot

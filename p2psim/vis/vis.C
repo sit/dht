@@ -445,7 +445,7 @@ update ()
 // --- process events ----------------------------------------------------------
 
 vector<string>
-split(string line, string delims = " \t")
+split(string line, string delims)
 {
   string::size_type bi, ei;
   vector<string> words;
