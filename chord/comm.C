@@ -41,7 +41,7 @@ locationtable::doForeignRPC (rpc_program prog,
   char *marshalled_data = suio_flatten (x.uio ());
 
   chord_RPC_arg farg;
-  farg.dest = ID;
+  farg.v.n = ID;
   farg.host_prog = prog.progno;
   farg.host_proc = procno;
   farg.marshalled_args.setsize (marshalled_len);

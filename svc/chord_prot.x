@@ -17,7 +17,8 @@ enum chordstat {
   CHORD_RPCFAILURE = 2,
   CHORD_INRANGE = 3,
   CHORD_NOTINRANGE = 4,
-  CHORD_NOHANDLER = 5
+  CHORD_NOHANDLER = 5,
+  CHORD_UNKNOWNNODE = 6
 };
 
 struct chord_vnode {
@@ -88,7 +89,7 @@ union chord_getfingersres switch (chordstat status) {
 };
 
 struct chord_RPC_arg {
-  chordID  dest;
+  chord_vnode v;
   unsigned host_prog;
   unsigned host_proc;
   opaque marshalled_args<>;

@@ -252,6 +252,12 @@ chord::dispatch (ptr<asrv> s, ptr<axprt_stream> x, svccb *sbp)
   }
   ptr<axprt_stream> x1 = servers[ptr2int(x)];
   assert (x1 == x);
+  chord_vnode *v = sbp->template getarg<chord_vnode> ();
+  vnode *vnodep = vnodes[v->n];
+  if (!vnodep) {
+    sbp->replyref (chordstat (CHORD_UNKNOWNNODE));
+    return;
+  }
   switch (sbp->proc ()) {
   case CHORDPROC_NULL: 
     {
@@ -260,9 +266,6 @@ chord::dispatch (ptr<asrv> s, ptr<axprt_stream> x, svccb *sbp)
     break;
   case CHORDPROC_GETSUCCESSOR:
     {
-      chord_vnode *v = sbp->template getarg<chord_vnode> ();
-      vnode *vnodep = vnodes[v->n];
-      assert (vnodep);
       warnt("CHORD: getsuccessor_request");
       ngetsuccessor++;
       vnodep->doget_successor (sbp);
@@ -270,10 +273,7 @@ chord::dispatch (ptr<asrv> s, ptr<axprt_stream> x, svccb *sbp)
     break;
   case CHORDPROC_GETPREDECESSOR:
     {
-      chord_vnode *v = sbp->template getarg<chord_vnode> ();
-      vnode *vnodep = vnodes[v->n];
       warnt("CHORD: getpredecessor_request");
-      assert (vnodep);
       ngetpredecessor++;
       vnodep->doget_predecessor (sbp);
     }
@@ -281,9 +281,7 @@ chord::dispatch (ptr<asrv> s, ptr<axprt_stream> x, svccb *sbp)
   case CHORDPROC_FINDCLOSESTPRED:
     {
       chord_findarg *fa = sbp->template getarg<chord_findarg> ();
-      vnode *vnodep = vnodes[fa->v.n];
       warn << "(find_pred) looking for " << fa->v.n << "\n";
-      assert (vnodep);
       warnt("CHORD: findclosestpred_request");
       nfindclosestpred++;
       vnodep->dofindclosestpred (sbp, fa);
@@ -292,8 +290,6 @@ chord::dispatch (ptr<asrv> s, ptr<axprt_stream> x, svccb *sbp)
   case CHORDPROC_NOTIFY:
     {
       chord_nodearg *na = sbp->template getarg<chord_nodearg> ();
-      vnode *vnodep = vnodes[na->v.n];
-      assert (vnodep);
       warnt("CHORD: donotify");
       nnotify++;
       vnodep->donotify (sbp, na);
@@ -302,8 +298,6 @@ chord::dispatch (ptr<asrv> s, ptr<axprt_stream> x, svccb *sbp)
   case CHORDPROC_ALERT:
     {
       chord_nodearg *na = sbp->template getarg<chord_nodearg> ();
-      vnode *vnodep = vnodes[na->v.n];
-      assert (vnodep);
       nalert++;
       vnodep->doalert (sbp, na);
     }
@@ -312,9 +306,7 @@ chord::dispatch (ptr<asrv> s, ptr<axprt_stream> x, svccb *sbp)
     {
       warnt("CHORD: testandfindrequest");
       chord_testandfindarg *fa = 
-	sbp->template getarg<chord_testandfindarg> ();
-      vnode *vnodep = vnodes[fa->v.n];
-      assert (vnodep);
+        sbp->template getarg<chord_testandfindarg> ();
       ntestrange++;
       vnodep->dotestrange_findclosestpred (sbp, fa);
     }
@@ -332,9 +324,6 @@ chord::dispatch (ptr<asrv> s, ptr<axprt_stream> x, svccb *sbp)
   case CHORDPROC_HOSTRPC:
     {
       chord_RPC_arg *arg = sbp->template getarg<chord_RPC_arg> ();
-
-      vnode *vnodep = vnodes[arg->dest];
-      assert (vnodep);
       cbdispatch_t dispatch = vnodep->getHandler(arg->host_prog);
       if (dispatch) {
 	long xid = locations->new_xid (sbp);

@@ -9,3 +9,5 @@
 - smart implementation of location table
 - recursive lookup
 - use refcnted locations.
+
+- fix assert when nodeID is not there (dispatch)
