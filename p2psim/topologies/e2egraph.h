@@ -36,7 +36,7 @@ public:
   
   typedef pair<unsigned, unsigned> Coord;
   virtual void parse(ifstream&);
-  virtual Time latency(IPAddress, IPAddress);
+  virtual Time latency(IPAddress, IPAddress, bool = false);
 
 private:
   unsigned int _num;

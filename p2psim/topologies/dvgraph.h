@@ -39,7 +39,7 @@ public:
   DVGraph();
   ~DVGraph();
   
-  Time latency(IPAddress a, IPAddress b);
+  Time latency(IPAddress a, IPAddress b, bool reply = false);
 
  protected:
   // subclass must fill in these values by calling add_node()

@@ -107,7 +107,7 @@ Network::send(Packet *p)
   assert (dstnode);
   assert (srcnode);
 
-  Time latency = _top->latency(srcnode->ip(), dstnode->ip());
+  Time latency = _top->latency(srcnode->ip(), dstnode->ip(), p->reply());
 
   // p->ok is set on the receiving side, so if it's false, this must be a
   // reply.  punish the packet by delaying it according to the failure model.

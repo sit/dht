@@ -34,7 +34,7 @@ public:
   
   typedef pair<int, int> Coord;
   virtual void parse(ifstream&);
-  virtual Time latency(IPAddress, IPAddress);
+  virtual Time latency(IPAddress, IPAddress, bool = false);
   Coord getcoords(IPAddress n) { return _nodes[n]; }
 
 private:

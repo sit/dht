@@ -42,7 +42,7 @@ E2EGraph::~E2EGraph()
 }
 
 Time
-E2EGraph::latency(IPAddress ip1, IPAddress ip2)
+E2EGraph::latency(IPAddress ip1, IPAddress ip2, bool reply)
 {
   //we can not use random ip address for e2egraph now
   assert(ip1 > 0 && ip1 <= _num);

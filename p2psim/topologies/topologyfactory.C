@@ -25,6 +25,9 @@
 #include "topologyfactory.h"
 #include "euclidean.h"
 #include "e2egraph.h"
+#include "e2easymgraph.h"
+#include "e2elinkfailgraph.h"
+#include "e2etimegraph.h"
 #include "g2graph.h"
 #include "randomgraph.h"
 #include "euclideangraph.h"
@@ -48,6 +51,15 @@ TopologyFactory::create(string s, vector<string>* v)
 
   if (s == "G2Graph")
     t = New G2Graph(v);
+
+  if (s == "E2EAsymGraph")
+    t = New E2EAsymGraph(v);
+
+  if (s == "E2ETimeGraph")
+    t = New E2ETimeGraph(v);
+
+  if (s == "E2ELinkFailGraph")
+    t = New E2ELinkFailGraph(v);
 
   return t;
 }

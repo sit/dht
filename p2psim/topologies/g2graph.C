@@ -77,7 +77,7 @@ G2Graph::parse(ifstream &ifs)
 }
 
 Time
-G2Graph::latency(IPAddress ip1, IPAddress ip2)
+G2Graph::latency(IPAddress ip1, IPAddress ip2, bool reply)
 {
 
   if (ip1 == ip2) return 0;

@@ -39,7 +39,7 @@ Euclidean::~Euclidean()
 }
 
 Time
-Euclidean::latency(IPAddress ip1, IPAddress ip2)
+Euclidean::latency(IPAddress ip1, IPAddress ip2, bool reply)
 {
   Coord c1 = _nodes[ip1];
   Coord c2 = _nodes[ip2];
