@@ -79,8 +79,10 @@ ChordFinger::stabilized(vector<CHID> lid)
       pos = 0;
     }
     succ = loctable->succ(finger);
-    if (lid[pos] != succ.id)
+    if (lid[pos] != succ.id) {
+      printf("%s not stablized, %d finger (%qx) should be %qx instead of (%u,%qx)\n", ts(), i, finger, lid[pos], succ.ip, succ.id); 
       return false;
+    }
   }
 
   return true;

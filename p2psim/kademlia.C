@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include "p2psim.h"
 #include <stdio.h>
+#include <algorithm>
 using namespace std;
 
 
@@ -24,9 +25,32 @@ Kademlia::~Kademlia()
 
 
 bool
-Kademlia::stabilized(vector<NodeID>)
+Kademlia::stabilized(vector<NodeID> lid)
 {
-  return false;
+  NodeID key, x;
+  unsigned int bits;
+  vector<NodeID>::iterator it;
+  unsigned int pos;
+
+  for (unsigned int i = 0; i < idsize; i++) {
+    key = _id & (1<<i);
+    bits = idsize - i - 1;
+    x = _fingers.get_id(i);
+    if (x) {
+      assert((x >> bits)  == (key >> bits));
+    } else {
+      it = upper_bound(lid.begin(), lid.end(), key);
+      pos = it - lid.begin();
+      if (pos >= lid.size()) {
+	pos= 0;
+      }
+      if ((lid[pos] >> bits) == (key >> bits)) {
+	printf("(%u, %x) not stablized, %d's finger should be %x instead of empty\n", ip(), _id, i, lid[pos]);
+	return false;
+      }
+    }
+  }
+  return true;
 }
 
 void

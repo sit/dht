@@ -180,7 +180,10 @@ Chord::stabilized(vector<CHID> lid)
   for (unsigned int i = 1; i <= nsucc; i++) {
     iter++;
     if (iter == lid.end()) iter = lid.begin();
-    if (succs[i-1].id != *iter) return false;
+    if (succs[i-1].id != *iter) {
+      printf("%s not stablized, %d succ should be %qx instead of (%u, %qx)\n", ts(), i-1, *iter, succs[i-1].ip,  succs[i-1].id);
+      return false;
+    }
   }
 
   return true;
