@@ -6,16 +6,19 @@ unsigned Event::_uniqueid = 0;
 Event::Event()
 {
   _id = _uniqueid++;
+  this->ts = 0;
+  _fork = true;
 }
 
-Event::Event(Time ts)
+Event::Event(Time ts, bool fork)
 {
   _id = _uniqueid++;
   this->ts = ts;
+  _fork = fork;
 }
 
-
 Event::Event(vector<string> *v)
+  : _fork(true)
 {
   _id = _uniqueid++;
   this->ts = (Time) strtoull((*v)[0].c_str(), NULL, 10);
@@ -32,7 +35,12 @@ Event::~Event()
 void
 Event::Execute(Event *e)
 {
-  ThreadManager::Instance()->create(Event::Execute1, e);
+  if(e->forkp()){
+    ThreadManager::Instance()->create(Event::Execute1, e);
+  } else {
+    e->execute();
+    delete e;
+  }
 }
 
 void

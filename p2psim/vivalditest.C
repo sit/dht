@@ -44,7 +44,9 @@ VivaldiTest::join(Args *args)
   case 8: _vivaldi = New Vivaldi8(node(),_dim); break;
   case 9: _vivaldi = New Vivaldi9(node(),_dim); break;
   case 10: {
+#if 0
     cout << ip() << " joined: " << " t = " << _timestep << "\n";
+#endif
     _vivaldi = New Vivaldi10(node(), _dim, _timestep, _adaptive); 
     break;
   }
@@ -220,10 +222,12 @@ VivaldiTest::tick(void *)
     dst = _all[random() % _all.size()]->node()->ip();
   }
 
+#if 0
   if(node()->ip() == 1) {
     status();
     print_all_loc();
   }
+#endif
 
   Vivaldi::Coord c;
   _vivaldi->doRPC(dst,

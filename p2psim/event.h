@@ -10,10 +10,11 @@ public:
 
   Event();
   Event(vector<string>*);
-  Event(Time);
+  Event(Time, bool fork);
 
   Time ts;  // absolute time
   unsigned id() { return _id; }
+  bool forkp() { return _fork; }
   static void Execute(Event *e);
 
  protected:
@@ -22,6 +23,7 @@ public:
  private:
   unsigned _id;
   static unsigned _uniqueid;
+  bool _fork; // does subclass always want a new thread?
 
   // Rule: when execute() finishes, the Event must be
   // finished. This is to simplify the decision of when to free.

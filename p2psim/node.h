@@ -48,6 +48,7 @@ public:
   void crash () { _alive = false; }
   bool alive () { return _alive; }
   void set_alive() { _alive = true;}
+  void got_packet(Packet *);
   static void Receive(void*);
 
 private:

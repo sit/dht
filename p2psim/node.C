@@ -39,6 +39,21 @@ Node::register_proto(Protocol *p)
   _protmap[name] = p;
 }
 
+//
+// The network has just delivered a packet to a Node.
+// If it's an RPC reply, send to channel of waiting caller.
+// If it's an RPC request, start a new thread to handle it.
+//
+void
+Node::got_packet(Packet *p)
+{
+  if(p->reply()){
+    send(p->channel(), &p);
+  } else {
+    ThreadManager::Instance()->create(Node::Receive, p);
+  }
+}
+
 void
 Node::run()
 {
@@ -65,13 +80,7 @@ Node::run()
 
     switch(i) {
       case 0:
-        // if this is a reply, send it back on the channel where the thread is
-        // waiting a reply.  otherwise call the function.
-        if(p->reply()){
-          send(p->channel(), &p);
-        } else {
-          ThreadManager::Instance()->create(Node::Receive, p);
-        }
+        got_packet(p);
         break;
 
       //exit
@@ -133,8 +142,8 @@ Node::_doRPC_receive(RPCHandle *rpch)
 
 
 //
-// Receive is only invoked for the first half of the RPC.  The reply goes
-// directly to the appropriate channel.
+// Node::run() invokes Receive() when an RPC request arrives.
+// The reply goes back directly to the appropriate channel.
 //
 void
 Node::Receive(void *px)

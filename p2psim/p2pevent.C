@@ -51,7 +51,7 @@ P2PEvent::P2PEvent(string proto, vector<string> *v) : Event(v)
 }
 
 P2PEvent::P2PEvent(Time ts, string proto, IPAddress ip, string operation,
-    Args *a) : Event(ts)
+    Args *a) : Event(ts, true)
 {
   this->protocol = proto;
   this->node = Network::Instance()->getnode(ip);

@@ -30,6 +30,11 @@ my @allnodes;
 my @deadnodes;
 
 sub main {
+  if($#ARGV < 2){
+    print STDERR "Usage: sc.pl protocolfile topofile eventfile [seed] < scenario\n";
+    exit(1);
+  }
+
   srand($ARGV[3]) if ($#ARGV >= 3);
 
   open PROT, ">$ARGV[0]" || die "Could not open $ARGV[0]: $!\n";
