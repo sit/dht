@@ -14,8 +14,8 @@
 
 int n = 0;
 
-dhashclient::dhashclient (ptr<axprt_stream> _x, int n, ptr<chord> node)
-  : x (_x), clntnode(node), do_caching (0), nreplica (n)
+dhashclient::dhashclient (ptr<axprt_stream> _x, ptr<chord> node)
+  : x (_x), clntnode(node), do_caching (0)
 {
   clntsrv = asrv::alloc (x, dhashclnt_program_1,
 			 wrap (this, &dhashclient::dispatch));

@@ -77,7 +77,6 @@ class dhashclient {
   ptr<chord> clntnode;
 
   int do_caching;
-  int nreplica;
 
   ihash<chordID, store_state, &store_state::key, &store_state::link, hashID> pst;
 
@@ -129,7 +128,7 @@ class dhashclient {
 
  public:  
   void set_caching(char c) { do_caching = c;};
-  dhashclient (ptr<axprt_stream> x, int nreplica, ptr<chord> clnt);
+  dhashclient (ptr<axprt_stream> x, ptr<chord> clnt);
 };
 
 class dhash {
