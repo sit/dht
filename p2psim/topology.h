@@ -17,7 +17,7 @@ public:
 
 protected:
   Topology();
-  ~Topology();
+  virtual ~Topology();
 };
 
 #endif //  __TOPOLOGY_H

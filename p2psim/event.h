@@ -7,7 +7,7 @@
 class Event {
 public:
   Event();
-  ~Event();
+  virtual ~Event();
 
   Time ts;
   unsigned id() { return _id; }

@@ -7,7 +7,7 @@
 class Threaded {
 public:
   Threaded();
-  ~Threaded();
+  virtual ~Threaded();
   static void Run(void*);
 
 protected:

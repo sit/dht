@@ -152,6 +152,7 @@ EventQueue::parse(char *file)
     P2PEvent *e = new P2PEvent();
     e->ts = (Time) ts;
     e->node = Network::Instance()->getnode((IPAddress) id);
+    assert(e->node);
     e->protocol = proto;
     e->event = (Protocol::EventID) event;
     e->args = 0;

@@ -13,7 +13,7 @@ using namespace std;
 class Node : public Threaded {
 public:
   Node(IPAddress);
-  ~Node();
+  virtual ~Node();
 
   IPAddress id() { return _id; }
   Channel *pktchan() { return _pktchan; }

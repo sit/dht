@@ -18,11 +18,12 @@ Kademlia::delayedcb(void*)
   cout << "Invoked at: " << now() << endl;
 }
 
-void
+void *
 Kademlia::do_join(void*)
 {
   cout << "do_join at " << now() << endl;
   delaycb(10, Kademlia::delayedcb, 0);
+  return 0;
 }
 
 void

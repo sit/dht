@@ -17,7 +17,7 @@ class Node;
 class Protocol;
 class Protocol : public Threaded {
 public:
-  typedef void (Protocol::*member_f)(void*);
+  typedef void * (Protocol::*member_f)(void*);
   typedef enum {
     JOIN = 0,
     LEAVE,
@@ -27,7 +27,7 @@ public:
   } EventID;
 
   Protocol(Node*);
-  ~Protocol();
+  virtual ~Protocol();
   Channel *appchan() { return _appchan; }
   Channel *netchan() { return _netchan; }
 
@@ -38,7 +38,7 @@ public:
   virtual void lookup_doc(void*) = 0;
 
 protected:
-  void _doRPC(IPAddress, member_f, void*);
+  void *_doRPC(IPAddress, member_f, void*);
   void _delaycb(Time, member_f, void*);
   IPAddress id();
 

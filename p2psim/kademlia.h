@@ -16,7 +16,7 @@ public:
   virtual void lookup_doc(void*);
 
   void delayedcb(void*);
-  void do_join(void*);
+  void *do_join(void*);
 };
 
 #endif // __KADEMLIA_H

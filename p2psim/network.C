@@ -18,7 +18,7 @@ Network::Instance(Topology *top)
 }
 
 
-Network::Network(Topology *top) : _pktchan(0), _nodechan(0), _top(0)
+Network::Network(Topology *top) : _top(0), _pktchan(0), _nodechan(0)
 {
   _pktchan = chancreate(sizeof(Packet*), 0);
   assert(_pktchan);

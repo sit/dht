@@ -2,6 +2,7 @@
 #include <lib9.h>
 #include <thread.h>
 #include <iostream>
+#include <stdio.h>
 using namespace std;
 
 #include "p2psim.h"
@@ -28,7 +29,7 @@ Protocol::~Protocol()
 }
 
 
-void
+void *
 Protocol::_doRPC(IPAddress dst, member_f fn, void *args)
 {
   Packet *p = new Packet();
@@ -42,7 +43,10 @@ Protocol::_doRPC(IPAddress dst, member_f fn, void *args)
   send(Network::Instance()->pktchan(), &p);
 
   // wait for reply. blocking.
-  (void) recvp(p->_c);
+  Packet *reply = (Packet *) recvp(p->_c);
+  return reply->_args;
+
+  // Why don't we need to delete the Packet?
 }
 
 
@@ -126,7 +130,7 @@ Protocol::Receive(void *p)
   Packet *packet = (Packet*) np->packet;
 
   // do upcall using the function pointer in the packet. yuck.
-  (prot->*packet->_fn)(packet->_args);
+  void *ret = (prot->*packet->_fn)(packet->_args);
 
   // send reply
   Packet *reply = new Packet();
@@ -135,8 +139,9 @@ Protocol::Receive(void *p)
   reply->_dst = origsrc;
   reply->_c = packet->_c;
   reply->_protocol = packet->_protocol;
-  reply->_args = packet->_args;
+  reply->_args = ret;
   reply->_fn = 0;
+
   send(Network::Instance()->pktchan(), &reply);
 
   // this is somewhat scary

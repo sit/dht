@@ -1,12 +1,17 @@
 #include "chord.h"
+#include "node.h"
+#include "packet.h"
+#include <stdio.h>
 #include <iostream>
+
 using namespace std;
 
-#if 0
-
 /********* id_util functions *************/
+
+// Is n between a and b?
+// a < n <= b
 static bool
-between(HashedID me, HashedID x, HashedID succ)
+between(HashedID a, HashedID b, HashedID n)
 {
   bool r;
   if (a == b) {
@@ -19,38 +24,50 @@ between(HashedID me, HashedID x, HashedID succ)
   return r;
 }
 
-Chord::Chord()
+Chord::Chord(Node *n)
+  : Protocol(n)
 {
-  me.hID = rand(); //for now, a rand() ID is as good as hashe(IP)
-  me.ID = getIPAddress();
+  me.hid = rand(); //for now, a rand() ID is as good as hashe(IP)
+  me.id = n->id();
 
+  predecessor.id = 0;
+  successor = me;
 }
 
 Chord::~Chord()
 {
 }
 
-void
-Chord::run()
+string
+Chord::s()
 {
-  cout << "Chord running" << endl;
+  char buf[50];
+  sprintf(buf, "Chord(%u,%u)", me.id, me.hid);
+  return string(buf);
 }
 
-void
-Chord::create()
+void *
+Chord::find_successor_x(void *x)
 {
-  predecessor.id = 0;
-  successor = me;
+  printf("Chord(%u,%u)::find_successor_x(%u)\n",
+         me.id, me.hid, (int) x);
+  return (void *) 99;
 }
 
+// External event that tells a node to contact the well-known node
+// and try to join.
+// XXX assumes that well-known node has address 1.
 void
-Chord::join(IPAddress bnode)
+Chord::join(void *)
 {
-  predecessor.id = 0; //0 means null
-  successor = doRPC(bnode, find_successor, myIPAddress); //equivalent to bnode->lookup(myIPAddress, SUCC_NUM);
-  stabilize();
+  cout << s() + "::join" << endl;
+  void *ret = doRPC((IPAddress) 1, Chord::find_successor_x, me.hid);
+  printf("Chord(%u,%u)::join2 %u\n",
+         me.id, me.hid, (int) ret);
+  // stabilize();
 }
 
+#if 0
 IDMap
 Chord::find_successor(HashedID n, bool recursive)
 {
@@ -149,5 +166,4 @@ void
 Chord::lookup_doc(HashedID docID) 
 {
 }
-
 #endif
