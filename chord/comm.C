@@ -37,6 +37,11 @@
 int seqno = 0;
 u_int64_t st = getusec ();
 
+const int aclnttrace (getenv ("ACLNT_TRACE")
+		      ? atoi (getenv ("ACLNT_TRACE")) : 0);
+const int shortstats (getenv ("SHORT_STATS") ? 1 : 0);
+		      
+
 #ifdef FAKE_DELAY
 long geo_distance (chordID x, chordID y) 
 {
@@ -368,7 +373,7 @@ locationtable::stats ()
 	     inet_ntoa (l->saddr.sin_addr));
     warnx << buf;
   }
-
+  if (shortstats) return;
   warnx << "Timer history:\n";
   for (unsigned int i = 0; i < timers.size (); i++) {
     sprintf (buf, "%f", timers[i]);
@@ -459,6 +464,26 @@ int sorter (const void *a, const void *b) {
 
 // ------------- rpccb_chord ----------------
 
+
+// Stolen from aclnt::init_call
+static void
+printreply (aclnt_cb cb, str name, void *res,
+	    void (*print_res) (const void *, const strbuf *, int,
+			       const char *, const char *),
+	    clnt_stat err)
+{
+  if (aclnttrace >= 3) {
+    if (err)
+      warn << "ACLNT_TRACE: reply " << name << ": " << err << "\n";
+    else if (aclnttrace >= 4) {
+      warn << "ACLNT_TRACE: reply " << name << "\n";
+      if (aclnttrace >= 5 && print_res)
+	print_res (res, NULL, aclnttrace - 4, "REPLY", "");
+    }
+  }
+  (*cb) (err);
+}
+
 rpccb_chord *
 rpccb_chord::alloc (ptr<aclnt> c,
 		    aclnt_cb cb,
@@ -486,6 +511,21 @@ rpccb_chord::alloc (ptr<aclnt> c,
     xid = txid;
   }
 
+  // Stolen (mostly) from aclnt::init_call
+  if (aclnttrace >= 2) {
+    str name;
+    const rpcgen_table *rtp;
+    rtp = &prog.tbl[procno];
+    assert (rtp);
+    name = strbuf ("%s:%s x=%x", prog.name, rtp->name, xid);
+
+    warn << "ACLNT_TRACE: call " << name << "\n";
+    if (aclnttrace >= 5 && rtp->print_arg)
+      rtp->print_arg (in, NULL, aclnttrace - 4, "ARGS", "");
+    if (aclnttrace >= 3 && cb != aclnt_cb_null)
+      cb = wrap (printreply, cb, name, out, rtp->print_res);
+  }
+  
   ptr<bool> deleted  = New refcounted<bool> (false);
   rpccb_chord *ret = New rpccb_chord (c,
 				      x,
