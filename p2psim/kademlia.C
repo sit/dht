@@ -467,7 +467,7 @@ k_bucket::k_bucket(Kademlia *k, k_bucket_tree *root) : _leaf(false), _self(k), _
 {
   _child[0] = _child[1] = 0;
   _id = _self->id(); // for KDEBUG purposes only
-  _nodes = new vector<peer_t*>;
+  _nodes = new set<peer_t*, SortedByLastTime>;
   _nodes->clear();
   assert(_nodes);
 }
@@ -483,8 +483,8 @@ k_bucket::~k_bucket()
     delete _child[1];
 
   if(_nodes) {
-    for(unsigned i=0; i<_nodes->size(); i++)
-      delete (*_nodes)[i];
+    for(set<peer_t*>::const_iterator it = _nodes->begin(); it != _nodes->end(); ++it)
+      delete *it;
     delete _nodes;
   }
 }
@@ -523,11 +523,13 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned de
 
   // is this thing is already in the array, bail out.
   // XXX: move it forward
-  for(unsigned i=0; i<_nodes->size(); i++)
-    if((*_nodes)[i]->id == node) {
-      (*_nodes)[i]->lastts = now();
+  for(set<peer_t*>::const_iterator it = _nodes->begin(); it != _nodes->end(); ++it)
+    if((*it)->id == node) {
+      _nodes->erase(*it);
+      (*it)->lastts = now();
+      _nodes->insert(*it); // so that it gets resorted
       KDEBUG(4) <<  "insert: node " << Kademlia::printbits(node) << " already in tree" << endl;
-      return make_pair((*_nodes)[i], depth);
+      return make_pair(*it, depth);
     }
 
   // if not full, just add the new id.
@@ -536,7 +538,7 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned de
   if(_nodes->size() < _k) {
     KDEBUG(4) <<  "insert: added on level " << depth << endl;
     peer_t *p = new peer_t(node, ip, now());
-    _nodes->push_back(p);
+    _nodes->insert(p);
     return make_pair(p, depth);
   }
 
@@ -558,10 +560,10 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned de
     KDEBUG(4) <<  "insert: subchild " << (myleftmostbit ^ 1) << " is a leaf on depth " << depth << endl;
 
     // now divide contents into separate buckets
-    for(unsigned i=0; i<_nodes->size(); i++) {
-      unsigned bit = Kademlia::getbit((*_nodes)[i]->id, depth);
-      KDEBUG(4) <<  "insert: pushed entry " << i << " (" << Kademlia::printbits((*_nodes)[i]->id) << ") to side " << bit << endl;
-      _child[bit]->_nodes->push_back((*_nodes)[i]);
+    for(set<peer_t*>::const_iterator it = _nodes->begin(); it != _nodes->end(); ++it) {
+      unsigned bit = Kademlia::getbit((*it)->id, depth);
+      KDEBUG(4) <<  "insert: pushed entry " << Kademlia::printbits((*it)->id) << " to side " << bit << endl;
+      _child[bit]->_nodes->insert(*it);
     }
     delete _nodes;
     _nodes = 0;
@@ -594,15 +596,15 @@ k_bucket::stabilize(string prefix, unsigned depth)
   assert(_nodes);
   if(_nodes->size()) {
     // make a temporary copy
-    vector<peer_t*> tmpcopy(*_nodes);
-    for(unsigned i=0; i<tmpcopy.size(); i++) {
-      if(now() - tmpcopy[i]->lastts < KADEMLIA_REFRESH)
+    set<peer_t*, SortedByLastTime> tmpcopy(*_nodes);
+    for(set<peer_t*>::const_iterator it = tmpcopy.begin(); it != tmpcopy.end(); ++it) {
+      if(now() - (*it)->lastts < KADEMLIA_REFRESH)
         continue;
 
       // find the closest node to the ID we're looking for
-      pair<NodeID, IPAddress> pp = _root->get((*_nodes)[i]->id);
-      KDEBUG(1) << "stabilize: lookup for " << Kademlia::printbits(tmpcopy[i]->id) << endl;
-      _self->do_lookup_wrapper(pp.second, (*_nodes)[i]->id);
+      pair<NodeID, IPAddress> pp = _root->get((*it)->id);
+      KDEBUG(1) << "stabilize: lookup for " << Kademlia::printbits((*it)->id) << endl;
+      _self->do_lookup_wrapper(pp.second, (*it)->id);
     }
     return;
   }
@@ -716,11 +718,11 @@ k_bucket::get(NodeID key, unsigned depth)
 
   // XXX: use alpha
   NodeID bestdist = (NodeID) -1;
-  for(unsigned i=0; i<_nodes->size(); i++) {
-    NodeID dist = Kademlia::distance(key, (*_nodes)[i]->id);
+  for(set<peer_t*>::const_iterator it = _nodes->begin(); it != _nodes->end(); ++it) {
+    NodeID dist = Kademlia::distance(key, (*it)->id);
     if(dist < bestdist) {
       bestdist = dist;
-      p = (*_nodes)[i];
+      p = *it;
     }
   }
   assert(p);
@@ -741,9 +743,10 @@ k_bucket::dump(string prefix, unsigned depth)
     return;
   }
 
-  for(unsigned i=0; i<_nodes->size(); i++) {
-    if((*_nodes)[i])
-      cout << "   *** " << prefix << " [" << i << "] : " << Kademlia::printbits((*_nodes)[i]->id) << endl;
+  unsigned i = 0;
+  for(set<peer_t*>::const_iterator it = _nodes->begin(); it != _nodes->end(); ++it) {
+    if(*it)
+      cout << "   *** " << prefix << " [" << i++ << "] : " << Kademlia::printbits((*it)->id) << ", ts = " << (*it)->lastts << endl;
   }
 }
 

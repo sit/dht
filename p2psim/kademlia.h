@@ -161,7 +161,12 @@ private:
   k_bucket_tree *_root;         // root of the tree that I'm a part of
 
   // the following are mutually exclusive, they could go into a union.
-  vector<peer_t*> *_nodes;      // for a leaf
+  class SortedByLastTime { public:
+    bool operator()(const peer_t* p1, const peer_t* p2) {
+      return p1->lastts < p2->lastts;
+    }
+  };
+  set<peer_t*, SortedByLastTime> *_nodes;      // for a leaf
   k_bucket* _child[2];          // for a node
 
   NodeID _id; // so that KDEBUG() works. can be removed later.
