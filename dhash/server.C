@@ -325,6 +325,7 @@ dhash_impl::keyhash_mgr_timer ()
         // XXX if we are not a replica, should mark the block so we dont
         // serve it again
       }
+      entry = iter->nextElement ();
     }
   }
   keyhash_mgr_tcb =
