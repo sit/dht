@@ -301,7 +301,7 @@ Kademlia::initstate()
         Kademlia *k = (*_nodeid2kademlia)[*i];
         // KDEBUG(2) << "initstate: inserting candidate = " << Kademlia::printID(k->id()) << endl;
         // assert(k);
-        insert(k->id(), k->ip(), true);
+        insert(k->id(), k->ip(), 0, true);
       }
       continue;
     }
@@ -316,7 +316,7 @@ Kademlia::initstate()
       if(flyweight[k->id()])
         continue;
 
-      insert(k->id(), k->ip(), true);
+      insert(k->id(), k->ip(), 0, true);
       count++;
 
       // make a copy of candidates and remove the selected index
@@ -374,7 +374,7 @@ join_restart:
   // actually talked to the node.
   for(set<k_nodeinfo, older>::const_iterator i = lr.results.begin(); i != lr.results.end(); ++i)
     if(!flyweight[i->id] && i->id != _id) {
-      insert(i->id, i->ip);
+      insert(i->id, i->ip, i->timeouts);
       touch(i->id);
     }
 
@@ -416,7 +416,7 @@ join_restart:
     // fill our finger table
     for(set<k_nodeinfo, older>::const_iterator i = lr.results.begin(); i != lr.results.end(); ++i)
       if(!flyweight[i->id] && i->id != _id)
-        insert(i->id, i->ip);
+        insert(i->id, i->ip, i->timeouts);
         //  ... but not touch.  we didn't actually talk to the node.
   }
 
@@ -518,6 +518,7 @@ Kademlia::lookup_wrapper(lookup_wrapper_args *args)
       KDEBUG(0) <<  pingbegin - args->starttime << "ms lookup (" << args->attempts << "a, " << fr.hops << "h, " << fr.rpcs << "r, " << fr.timeouts << "t), " << after - pingbegin << "ms ping, " << after - args->starttime << "ms total." << endl;
       outcounter = 0;
     }
+    // cout << pingbegin - args->starttime << endl;
 
     _good_lookups++;
     _good_attempts += args->attempts;
@@ -607,6 +608,8 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
   // assert(alive());
   HashMap<NodeID, bool> asked;
   HashMap<NodeID, unsigned> hops;
+  bool deadtime = false;
+  Time deadtimestart;
   if(Kademlia::learn_from_rpc)
     update_k_bucket(fargs->id, fargs->ip);
   fresult->rid = _id;
@@ -636,16 +639,22 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
   // send out the first alpha RPCs
   HashMap<unsigned, callinfo*> *outstanding_rpcs = New HashMap<unsigned, callinfo*>;
   RPCSet *rpcset = New RPCSet;
-  HashMap<NodeID, bool> last_rpcs;
   {
     unsigned a = 0;
+    bool all_dead = true;
     for(set<k_nodeinfo, closer>::const_iterator i=successors.begin(); i != successors.end() && a < Kademlia::alpha; ++i, ++a) {
       k_nodeinfo ki = *i;
       SEND_RPC(ki, fargs, fresult, hops[ki.id]);
+      if(Network::Instance()->getnode(ki.ip)->alive())
+        all_dead = false;
       fresult->rpcs++;
       asked.insert(ki.id, true);
       successors.erase(ki);
-      last_rpcs.insert(ki.id, true);
+    }
+
+    if(all_dead) {
+      deadtime = true;
+      deadtimestart = now();
     }
   }
 
@@ -653,16 +662,12 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
   unsigned useless_replies = 0;
   NodeID last_before_merge = ~fargs->key;
   while(true) {
+    assert(outstanding_rpcs->size() == (int) Kademlia::alpha);
     bool ok;
     unsigned donerpc = rcvRPC(rpcset, ok);
     callinfo *ci = (*outstanding_rpcs)[donerpc];
     outstanding_rpcs->remove(donerpc);
-    bool was_in_last_rpc = false;
     bool improved = false;
-    if(last_rpcs[ci->ki.id]) {
-      was_in_last_rpc = true;
-      last_rpcs.remove(ci->ki.id);
-    }
 
     k_nodeinfo ki;
     if(!alive()) {
@@ -694,7 +699,7 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
 
     for(unsigned i=0; i<ci->fr->results.size(); i++) {
       k_nodeinfo ki = ci->fr->results[i];
-      if(asked[ki.id])
+      if(asked.find_pair(ki.id))
         continue;
       successors.insert(ki);
       if(!hops.find_pair(ki.id))
@@ -716,8 +721,7 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
 
     // if our standing hasn't improved,
     improved = (distance(successors.begin()->id, fargs->key) < distance(fresult->succ.id, fargs->key));
-    if(was_in_last_rpc)
-      useless_replies = improved ? 0 : useless_replies++;
+    useless_replies = improved ? 0 : useless_replies++;
 
     // if the last alpha RPCs didn't yield anything better, give up.  I don't
     // think this should ever happen.  It means we went down a dead end alpha
@@ -733,11 +737,34 @@ next_candidate:
     if(Kademlia::distance(front.id, fargs->key) < Kademlia::distance(fresult->succ.id, fargs->key))
       fresult->succ = front;
     SEND_RPC(front, fargs, fresult, hops[front.id]);
+
     fresult->rpcs++;
-    asked.insert(ki.id, true);
-    if(last_rpcs.size() < (int) Kademlia::alpha)
-      last_rpcs.insert(front.id, true);
+    asked.insert(front.id, true);
     successors.erase(front);
+
+    // for sake of statistics, keep track of time spent waiting for nodes that
+    // are all dead.
+    if(!Network::Instance()->getnode(front.ip)->alive()) {
+      bool all_dead = true;
+      for(HashMap<unsigned, callinfo*>::iterator i = outstanding_rpcs->begin(); i; i++) {
+        if(Network::Instance()->getnode((i.value())->ki.ip)->alive()) {
+          all_dead = false;
+          break;
+        }
+      }
+
+      // all outstanding RPCs to dead nodes, but we're not in deadtime yet.
+      if(all_dead && !deadtime) {
+        deadtime = true;
+        deadtimestart = now();
+      }
+
+      // not all outstanding RPCs to dead nodes, but we're in deadtime.
+      if(!all_dead && deadtime) {
+        deadtime = false;
+        fresult->spent_in_timeout += (now() - deadtimestart);
+      }
+    }
   }
 }
 
@@ -985,7 +1012,7 @@ Kademlia::touch(NodeID id)
 // post: id->ip mapping in flyweight, and k-bucket
 //
 void
-Kademlia::insert(NodeID id, IPAddress ip, bool init_state)
+Kademlia::insert(NodeID id, IPAddress ip, char timeouts, bool init_state)
 {
   // KDEBUG(1) << "Kademlia::insert " << Kademlia::printID(id) << ", ip = " << ip << endl;
   static unsigned counter = 0;
@@ -994,7 +1021,7 @@ Kademlia::insert(NodeID id, IPAddress ip, bool init_state)
   // assert(id && ip);
   // assert(!flyweight.find(id, 0));
 
-  k_nodeinfo *ni = Kademlia::pool->pop(id, ip);
+  k_nodeinfo *ni = Kademlia::pool->pop(id, ip, timeouts);
   assert(ni);
   if(init_state)
     ni->lastts = counter++;

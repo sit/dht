@@ -92,7 +92,7 @@ private:
       }
     }
 
-    k_nodeinfo* pop(Kademlia::NodeID id, IPAddress ip)
+    k_nodeinfo* pop(Kademlia::NodeID id, IPAddress ip, char timeouts)
     {
       if(!_count)
         return New k_nodeinfo(id, ip);
@@ -102,7 +102,7 @@ private:
       newki->ip = ip;
       newki->lastts = 0;
       newki->lasttry = 0;
-      newki->timeouts = 0;
+      newki->timeouts = timeouts;
       _count--;
       return newki;
     }
@@ -231,7 +231,7 @@ public:
   };
 
   class find_value_result { public:
-    find_value_result() { rpcs = hops = timeouts = 0; latency = 0; }
+    find_value_result() { rpcs = hops = timeouts = 0; spent_in_timeout = latency = 0; }
     ~find_value_result() { }
     k_nodeinfo succ;
     NodeID rid;
@@ -239,8 +239,9 @@ public:
     // statistics
     unsigned rpcs;      // total number of RPCs we sent
     unsigned hops;      // number of hops for lookups
-    unsigned timeouts;  // number of RPCs to dead nodes
-    Time latency;   // latency from nodes that make hopcount go up
+    unsigned timeouts;  // number of !ok replies
+    Time spent_in_timeout; // time spent waiting for all-dead nodes
+    Time latency;       // latency from nodes that make hopcount go up
   };
   // }}}
   // {{{ find_node_args and find_node_result
@@ -347,7 +348,7 @@ public:
 // }}}
 // {{{ private
 private:
-  void insert(NodeID, IPAddress, bool = false);
+  void insert(NodeID, IPAddress, char = 0, bool = false);
   void touch(NodeID);
   void erase(NodeID);
   void stabilize();
@@ -575,5 +576,5 @@ private:
 };
 // }}}
 
-#define KDEBUG(x) if(p2psim_verbose >= (x)) cout << "# " << Kademlia::debugcounter++ << "(" << now() << "). " << Kademlia::printID(_id) << "(" << threadid() << ") "
+#define KDEBUG(x) if(p2psim_verbose >= (x)) cout << Kademlia::debugcounter++ << "(" << now() << "). " << Kademlia::printID(_id) << "(" << threadid() << ") "
 #endif // __KADEMLIA_H
