@@ -4,7 +4,7 @@ p2psim_SOURCES = main.C node.C network.C chord.C packet.C topology.C \
                  kademlia.C protocolfactory.C topologyfactory.C \
                  p2pevent.C netevent.C cbevent.C p2psim.C parse.C \
                  eventfactory.C simevent.C pastry.C chordfinger.C \
-                 koorde.C anyready.C vivaldi.C observeevent.C \
+                 koorde.C anyready.C observeevent.C \
                  observerfactory.C chordobserver.C observer.C \
                  threadmanager.C vivalditest.C nodefactory.C \
                  vivaldinode.C

@@ -9,14 +9,9 @@ using namespace std;
 
 class Packet {
 public:
-  // dst = destination address
-  // prot
   Packet();
   ~Packet();
 
-  //  unsigned size;
-  // void (*(fn()))(void*) { return _fn; }
-  // void *args() { return _args; }
   IPAddress src() { return _src; }
   IPAddress dst() { return _dst; }
   Channel *channel() { return _c; }

@@ -41,6 +41,24 @@ Protocol::_delaycb(Time t, member_f fn, void *args)
 }
 
 
+// Create an RPC packet, send it, and wait for the reply.
+// It takes an ordinary function to maximize generality.
+// If you want a return value, put it in args.
+// The return value indicates whether the RPC succeeded
+// (i.e. did not time out).
+//
+// XXX the intent is that the caller put the args and ret
+// on the stack, e.g.
+//   foo_args fa;
+//   foo_ret fr;
+//   fa.xxx = yyy;
+//   doRPC(dst, fn, &fa, &fr);
+// BUT if the RPC times out, the calling function returns,
+// and then the RPC actually completes, we are in trouble.
+// It's not even enough to allocate on the heap. We need
+// garbage collection, or doRPC needs to know the sizes of
+// args/ret and copy them. Even then, naive callers might put
+// pointers into the args/ret structures.
 bool
 Protocol::_doRPC(IPAddress dst, member_f fn, void* args, void* ret)
 {

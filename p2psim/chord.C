@@ -14,7 +14,7 @@ Chord::Chord(Node *n) : Protocol(n)
   me.ip = n->ip();
   me.id = ConsistentHash::ip2chid(me.ip); 
   loctable = new LocTable(me);
-  _vivaldi = Vivaldi::make(n->ip());
+  // _vivaldi = Vivaldi::make(n->ip());
 }
 
 Chord::~Chord()

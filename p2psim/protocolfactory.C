@@ -65,9 +65,3 @@ ProtocolFactory::name(Protocol *s)
 {
   return _protnames[typeid(*s).name()];
 }
-
-string
-ProtocolFactory::name(const type_info &ty)
-{
-  return _protnames[ty.name()];
-}

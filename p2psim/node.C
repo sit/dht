@@ -96,39 +96,20 @@ Node::run()
   }
 }
 
-// Send an RPC packet and wait for the reply.
-// It takes an ordinary function to maximize generality.
-// If you want a return value, put it in args.
-// See rpc.h/doRPC for a nice interface.
-// The return value indicates whether the RPC succeeded
-// (i.e. did not time out).
+
 //
-// XXX the intent is that the caller put the args and ret
-// on the stack, e.g.
-//   foo_args fa;
-//   foo_ret fr;
-//   fa.xxx = yyy;
-//   doRPC(dst, fn, &fa, &fr);
-// BUT if the RPC times out, the calling function returns,
-// and then the RPC actually completes, we are in trouble.
-// It's not even enough to allocate on the heap. We need
-// garbage collection, or doRPC needs to know the sizes of
-// args/ret and copy them. Even then, naive callers might put
-// pointers into the args/ret structures.
+//
+//
 bool
 Node::sendPacket(IPAddress dst, Packet *p)
 {
-  // find source IP address.
-  // Node *srcnode = (Node*) ThreadManager::Instance()->get(threadid());
-  // assert(srcnode);
-  // IPAddress srca = srcnode->ip();
   p->_src = ip();
   p->_dst = dst;
 
   // where to send the reply
   Channel *c = p->_c = chancreate(sizeof(Packet*), 0);
 
-  // send it off.
+  // send it off. blocks, but Network reads constantly
   send(Network::Instance()->pktchan(), &p);
 
   // block on reply
@@ -140,6 +121,7 @@ Node::sendPacket(IPAddress dst, Packet *p)
 
   return true;
 }
+
 
 void
 Node::Receive(void *px)
@@ -166,11 +148,4 @@ Node::Receive(void *px)
 
   // ...and we're done
   threadexits(0);
-}
-
-Protocol *
-Node::getproto(const type_info &ti)
-{
-  string dstprotname = ProtocolFactory::Instance()->name(ti);
-  return getproto(dstprotname);
 }
