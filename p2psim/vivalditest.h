@@ -20,7 +20,8 @@ public:
   Vivaldi *_vivaldi;
 
   void tick(void *);
-  char * ts();
+  char *ts();
+  void handler(void *, Vivaldi::Coord *);
 };
 
 #endif // __VIVALDITEST_H

@@ -8,7 +8,7 @@ VivaldiTest::VivaldiTest(Node *n) : Protocol(n)
 {
   _vivaldi = new Vivaldi(n);
 
-  delaycb(1000, VivaldiTest::tick, NULL);
+  delaycb(1000, &VivaldiTest::tick, (void *) 0);
 }
 
 VivaldiTest::~VivaldiTest()
@@ -26,6 +26,17 @@ VivaldiTest::ts()
 void
 VivaldiTest::tick(void *)
 {
-  printf("%s tick\n", ts());
-  delaycb(1000, VivaldiTest::tick, NULL);
+  IPAddress dst = (random() % 100) + 1;
+  Vivaldi::Coord c;
+  Time before = now();
+  doRPC(dst, &VivaldiTest::handler, (void*) 0, &c);
+  _vivaldi->sample(dst, c, now() - before);
+
+  delaycb(1000, &VivaldiTest::tick, (void *) 0);
+}
+
+void
+VivaldiTest::handler(void *args, Vivaldi::Coord *ret)
+{
+  *ret = _vivaldi->my_location();
 }

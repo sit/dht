@@ -129,7 +129,7 @@ Chord::join(Args *args)
          after - before);
   loctable->add_node(succs[0]);
 
-  delaycb(STABLE_TIMER, Chord::stabilize, NULL);
+  delaycb(STABLE_TIMER, &Chord::stabilize, (void *) 0);
 }
 
 // Which paper is this code from?
@@ -164,7 +164,7 @@ Chord::stabilize(void *x)
            ts(), succ1.ip,PID(succ1.id));
   }
 
-  delaycb(STABLE_TIMER, Chord::stabilize, NULL);
+  delaycb(STABLE_TIMER, &Chord::stabilize, (void *) 0);
 
 }
 

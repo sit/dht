@@ -14,9 +14,8 @@ Kademlia::~Kademlia()
 }
 
 void
-Kademlia::join_kademlia(void *x)
+Kademlia::join_kademlia(Args *a)
 {
-  Args *a = (Args*) x;
   IPAddress wkn = a->nget<IPAddress>("wellknown");
 
   IPAddress myip = ip();
@@ -38,7 +37,7 @@ Kademlia::join(Args *a)
 {
   cout << "Node " << ip() << " doing a 10ms wait" << endl;
   cout << "I'm running on a " << NodeFactory::Instance()->name(node()) << "." << endl;
-  delaycb(10, Kademlia::join_kademlia, a);
+  delaycb(10, &Kademlia::join_kademlia, a);
 }
 
 void

@@ -41,7 +41,18 @@ public:
 
 protected:
 
-#define delaycb(X, Y, Z) this->_delaycb(X, ((member_f)(&Y)), ((void*) (Z)))
+  // Why are we forbidding non-Protocols from using delaycb()?
+  // Use of a template allows us to type-check the argument
+  // to fn(), and to check fn() is a member
+  // of the same sub-class of Protocol as the caller.
+  template<class BT, class AT>
+    void delaycb(int d, void (BT::*fn)(AT), AT args) {
+    // Compile-time check: does BT inherit from Protocol?
+    Protocol *dummy = (BT *) 0; dummy = dummy;
+    // Is BT the same as the calling class?
+    assert(typeid(BT) == typeid(*this));
+    _delaycb(d, (member_f) fn, args);
+  }
   void _delaycb(Time, member_f, void*);
   IPAddress ip();
 

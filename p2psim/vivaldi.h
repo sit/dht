@@ -37,8 +37,10 @@ class Vivaldi {
  private:
   Node *_n; // this node
   Coord _c;
+  int _nsamples;
 };
 
+#if 0
 // Make an RPC call, but time it and tell Vivaldi.
 // Basically wraps the RPC in an RPC to rpc_handler.
 // Use this only for simple RPCs: don't use it for
@@ -95,5 +97,6 @@ bool Vivaldi::RPC(IPAddress dsta,
 
   return ok;
 }
+#endif
 
 #endif

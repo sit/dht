@@ -15,7 +15,7 @@ public:
   virtual void insert(Args*);
   virtual void lookup(Args*);
 
-  void join_kademlia(void *);
+  void join_kademlia(Args *);
   void do_join(IPAddress *, void*);
 };
 
