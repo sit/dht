@@ -33,7 +33,9 @@ class debruijn : public fingerlike {
 
   //fingerlike methods
   chordID closestsucc (const chordID &x);
+  chordID closestpred (const chordID &x, vec<chordID> failed);
   chordID closestpred (const chordID &x);
+
   void init (ptr<vnode> v, ptr<locationtable> locs, chordID ID);
   void print ();
   void stats () { warn << "stats go here\n";};

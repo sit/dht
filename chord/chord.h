@@ -207,6 +207,9 @@ class vnode : public virtual refcount, public stabilizable {
   void stats (void);
   void print (void);
   void stop (void);
+  vec<chordID> succs () { return successors->succs (); };
+
+  chordID lookup_closestpred (const chordID &x, vec<chordID> f);
   chordID lookup_closestpred (const chordID &x);
   chordID lookup_closestsucc (const chordID &x);
 
@@ -299,9 +302,14 @@ class chord : public virtual refcount {
     warn << "Active node now " << active->my_ID () << "\n";
   };
 
+  chordID lookup_closestpred (chordID k, vec<chordID> f) { 
+    return active->lookup_closestpred (k, f); 
+  };
+
   chordID lookup_closestpred (chordID k) { 
     return active->lookup_closestpred (k); 
   };
+
   chordID lookup_closestsucc (chordID k) { 
     return active->lookup_closestsucc (k); 
   };
@@ -333,5 +341,6 @@ class chord : public virtual refcount {
 extern const int CHORD_LOOKUP_FINGERLIKE;
 extern const int CHORD_LOOKUP_LOCTABLE;
 extern const int CHORD_LOOKUP_PROXIMITY;
+extern const int CHORD_LOOKUP_FINGERSANDSUCCS;
 
 #endif /* _CHORD_H_ */

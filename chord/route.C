@@ -93,6 +93,7 @@ void
 route_chord::next_hop ()
 {
   chordID n = search_path.back();
+  //  warn << v->my_ID () << "; next_hop: " << n << " is next\n";
   make_hop(n);
 }
 
@@ -121,6 +122,10 @@ route_chord::make_hop (chordID &n)
   ptr<chord_testandfindarg> arg = New refcounted<chord_testandfindarg> ();
   arg->v = n;
   arg->x = x;
+  arg->failed_nodes.setsize (failed_nodes.size ());
+  for (unsigned int i = 0; i < failed_nodes.size (); i++)
+    arg->failed_nodes[i] = failed_nodes[i];
+
   if (do_upcall) {
     int arglen;
     char *marshalled_args = route_iterator::marshall_upcall_args (&prog,
@@ -142,6 +147,12 @@ route_chord::make_hop (chordID &n)
 
 }
 
+chordID
+route_chord::pop_back () 
+{
+  return search_path.pop_back ();
+}
+
 
 void
 route_chord::make_hop_cb (ptr<bool> del,
@@ -149,9 +160,16 @@ route_chord::make_hop_cb (ptr<bool> del,
 {
   if (*del) return;
   if (err) {
-    warnx << "make_hop_cb: failure " << err << "\n";
-    r = CHORD_RPCFAILURE;
-    cb (done = true);
+    //back up
+    chordID last_node_tried = pop_back ();
+    failed_nodes.push_back (last_node_tried);
+    //chordID who_told_me = peek_back ();
+    //ask who_told_me for a new hint 
+    warn << v->my_ID () << ": " << last_node_tried << " is down. ";
+    if (search_path.size () == 0) search_path.push_back (v->my_ID ());
+    warn << " Now trying " << search_path.back () << "\n";
+    next_hop ();
+
   } else if (res->status == CHORD_STOP) {
     r = CHORD_OK;
     cb (done = true);
@@ -170,6 +188,7 @@ route_chord::make_hop_cb (ptr<bool> del,
       // last returns itself as best predecessor, but doesn't know
       // what its immediate successor is---higher layer should use
       // succlist to make forward progress
+      warn << "node returned itself as best pred\n";
       r = CHORD_ERRNOENT;
       cb (done = true);
     } else {
@@ -531,6 +550,13 @@ route_debruijn::make_hop_done_cb (chordID i, chordID k,
 }
 
 
+chordID
+route_debruijn::pop_back ()
+{
+  return bigint (0);
+}
+
+
 ptr<route_iterator>
 debruijn_route_factory::produce_iterator (chordID xi)
 {
@@ -546,6 +572,7 @@ debruijn_route_factory::produce_iterator (chordID xi,
 {
   return New refcounted<route_debruijn> (vi, xi, uc_prog, uc_procno, uc_args);
 }
+
 
 route_iterator *
 debruijn_route_factory::produce_iterator_ptr (chordID xi)

@@ -455,7 +455,7 @@ locationtable::betterpred1 (chordID current, chordID target, chordID candidate)
 }
 
 chordID
-locationtable::closestpredloc (const chordID &x) 
+locationtable::closestpredloc (const chordID &x, vec<chordID> failed) 
 {
   locwrap *l = locs[x];
   if (l) {
@@ -465,7 +465,7 @@ locationtable::closestpredloc (const chordID &x)
   } else {
     l = loclist.closestpred (x);
   }
-  while (l && !l->good ()) {
+  while (l && (!l->good () || (l->loc_ && in_vector (failed, l->loc_->n)))) {
     l = loclist.prev (l);
     if (l == NULL)
       l = loclist.last ();
@@ -487,6 +487,29 @@ locationtable::closestpredloc (const chordID &x)
     panic << "locationtable::closestpredloc " << nbar << " vs " << n << "\n";
   }
 #endif /* 0 */  
+  // warnx << "findpredloc of " << x << " is " << n << "\n";
+  return n;
+}
+
+chordID
+locationtable::closestpredloc (const chordID &x) 
+{
+  locwrap *l = locs[x];
+  if (l) {
+    l = loclist.prev (l);
+    if (l == NULL)
+      l = loclist.last ();
+  } else {
+    l = loclist.closestpred (x);
+  }
+  while (l && !l->good ()) {
+    l = loclist.prev (l);
+    if (l == NULL)
+      l = loclist.last ();
+  }
+  
+  chordID n = l->loc_->n;
+
   // warnx << "findpredloc of " << x << " is " << n << "\n";
   return n;
 }

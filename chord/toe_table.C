@@ -408,6 +408,15 @@ toe_table::closestsucc (const chordID &x)
 }
 
 chordID
+toe_table::closestpred (const chordID &x, vec<chordID> failed)
+{
+
+  warnx << "doing a toe table closestpred (with failures)\n";
+  return locations->closestpredloc(x, failed);
+}
+
+
+chordID
 toe_table::closestpred (const chordID &x)
 {
 

@@ -30,6 +30,7 @@
 #ifndef _CHORD_UTIL_H
 #define _CHORD_UTIL_H
 
+bool in_vector (vec<chordID> vec, chordID N);
 str gettime ();
 u_int64_t getusec ();
 u_int32_t uniform_random(double a, double b);

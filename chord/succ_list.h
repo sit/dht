@@ -3,7 +3,7 @@
 
 #define NSUCC    2*10     // 2 * log of # vnodes
 
-class succ_list : public stabilizable {
+class succ_list : public fingerlike {
   chordID myID;
   ptr<vnode> myvnode;
   ptr<locationtable> locations;
@@ -42,6 +42,8 @@ class succ_list : public stabilizable {
   void stabilize_succ ();
   void stabilize_succlist ();
   
+  vec<chordID> succs ();
+
   // Stabilizable methods
   bool backoff_stabilizing () { return nout_backoff > 0; }
   bool continuous_stabilizing () { return nout_continuous > 0; }
@@ -53,5 +55,12 @@ class succ_list : public stabilizable {
   void print ();
   void stats () { warn << "stats go here\n"; };
 
+  // Fingerlike methods
+  chordID closestpred (const chordID &x);
+  chordID closestpred (const chordID &x, vec<chordID> fail);
+  chordID closestsucc (const chordID &x);
+  void init (ptr<vnode> v, ptr<locationtable> locs, chordID ID) { warn << "not needed\n";};
+
+ 
 };
 #endif /* _SUCC_LIST_H_ */

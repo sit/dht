@@ -55,6 +55,21 @@ finger_table::closestsucc (const chordID &x)
 }
 
 chordID
+finger_table::closestpred (const chordID &x, vec<chordID> failed)
+{
+  chordID n;
+
+  for (int i = NBIT - 1; i >= 0; i--) {
+    n = finger (i);
+    if (between (myID, x, n) && (!in_vector (failed, n)))
+      return n;
+  }
+  warn << "no good fingers, returning myID = " << myID << "\n";
+  return myID;
+}
+
+
+chordID
 finger_table::closestpred (const chordID &x)
 {
   chordID n;

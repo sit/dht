@@ -26,6 +26,32 @@ succ_list::succ ()
   return locations->closestsuccloc (myID + 1);
 }
 
+//succ_list[0] is the immediate successor
+chordID
+succ_list::operator[] (int n) 
+{
+  assert (n < num_succ ());
+  chordID ret = succ ();
+  for (int i = 0; i < n; i++) 
+    ret = locations->closestsuccloc (ret + 1);
+
+  return ret;
+}
+
+vec<chordID>
+succ_list::succs ()
+{
+  vec<chordID> ret;
+  chordID cur = succ ();
+  ret.push_back (cur);
+
+  for (int i = 1; i < num_succ (); i++) {
+    cur = locations->closestsuccloc (cur + 1);
+    ret.push_back (cur);
+  }
+  return ret;
+}
+
 int
 succ_list::num_succ ()
 {
@@ -259,4 +285,36 @@ succ_list::stabilize_getpred_cb_ok (chordID sd,
   if (ok && (status == CHORD_OK)) {
     oldsucc = p;
   }
+}
+
+// ===== fingerlike methods ======
+// XXX currently an exhaustive search of the successors
+chordID
+succ_list::closestpred (const chordID &x, vec<chordID> failed)
+{
+  chordID best = myID;
+  for (int i = 0; i < num_succ (); i++) {
+    chordID n = locations->closestsuccloc (best + 1);
+    if (between (myID, x, n) && (!in_vector (failed, n)))
+      best = n;
+  }
+  return best;
+}
+
+chordID 
+succ_list::closestpred (const chordID &x)
+{
+  chordID best = myID;
+  for (int i = 0; i < num_succ (); i++) {
+    chordID n = locations->closestsuccloc (best + 1);
+    if (between (myID, x, n))
+      best = n;
+  }
+  return best;
+}
+
+chordID 
+succ_list::closestsucc (const chordID &x) 
+{
+  fatal << "not implemented\n";
 }

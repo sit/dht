@@ -62,6 +62,7 @@ class toe_table : public fingerlike {
 
   //fingerlike methods
   void init (ptr<vnode> v, ptr<locationtable> locs, chordID ID);
+  chordID closestpred (const chordID &x, vec<chordID> fail);
   chordID closestpred (const chordID &x);
   chordID closestsucc (const chordID &x);
   void print () { warn << "I'm a toe table\n";};

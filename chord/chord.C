@@ -34,6 +34,7 @@ const int chord::max_vnodes = 1024;
 const int CHORD_LOOKUP_FINGERLIKE (0);
 const int CHORD_LOOKUP_LOCTABLE (1);
 const int CHORD_LOOKUP_PROXIMITY (2);
+const int CHORD_LOOKUP_FINGERSANDSUCCS (3);
 
 vnode::vnode (ptr<locationtable> _locations, ptr<fingerlike> stab,
 	      ptr<route_factory> f,
@@ -198,13 +199,36 @@ vnode::lookup_closestsucc (const chordID &x)
 
   if (lookup_mode == CHORD_LOOKUP_PROXIMITY)
     s = toes->closestsucc (x);
-  else if (lookup_mode == CHORD_LOOKUP_FINGERLIKE)
+  else if (lookup_mode == CHORD_LOOKUP_FINGERLIKE) {
     s = fingers->closestsucc (x);
-  else
+  } else
     s = locations->closestsuccloc (x);
 
   return s;
 }
+
+chordID
+vnode::lookup_closestpred (const chordID &x, vec<chordID> failed_nodes)
+{
+  chordID s;
+
+  if (lookup_mode == CHORD_LOOKUP_PROXIMITY)
+    s = toes->closestpred (x, failed_nodes);
+  else if (lookup_mode == CHORD_LOOKUP_FINGERLIKE) {
+    s = fingers->closestpred (x, failed_nodes);
+  } else if (lookup_mode == CHORD_LOOKUP_FINGERSANDSUCCS) {
+    chordID f = fingers->closestpred (x, failed_nodes);
+    chordID u = successors->closestpred (x, failed_nodes);
+    if (between (myID, f, u)) 
+      s = f;
+    else
+      s = u;
+  } else 
+    s = locations->closestpredloc (x, failed_nodes);
+
+  return s;
+}
+
 
 chordID
 vnode::lookup_closestpred (const chordID &x)
@@ -213,9 +237,16 @@ vnode::lookup_closestpred (const chordID &x)
 
   if (lookup_mode == CHORD_LOOKUP_PROXIMITY)
     s = toes->closestpred (x);
-  else if (lookup_mode == CHORD_LOOKUP_FINGERLIKE)
+  else if (lookup_mode == CHORD_LOOKUP_FINGERLIKE) {
     s = fingers->closestpred (x);
-  else 
+  } else if (lookup_mode == CHORD_LOOKUP_FINGERSANDSUCCS) {
+    chordID f = fingers->closestpred (x);
+    chordID u = successors->closestpred (x);
+    if (between (myID, f, u)) 
+      s = f;
+    else
+      s = u;
+  }  else 
     s = locations->closestpredloc (x);
 
   return s;
@@ -332,7 +363,10 @@ vnode::dotestrange_findclosestpred (svccb *sbp, chord_testandfindarg *fa)
     res->inrange->n.r = locations->getaddress (succ);
   } else {
     res->set_status (CHORD_NOTINRANGE);
-    chordID p = lookup_closestpred (fa->x);
+    vec<chordID> f;
+    for (unsigned int i=0; i < fa->failed_nodes.size (); i++)
+      f.push_back (fa->failed_nodes[i]);
+    chordID p = lookup_closestpred (fa->x, f);
     res->notinrange->n.x = p;
     res->notinrange->n.r = locations->getaddress (p);
   }

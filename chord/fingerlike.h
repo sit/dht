@@ -39,6 +39,7 @@ public:
   virtual void init (ptr<vnode> v, ptr<locationtable> locs, chordID ID) = 0;
 
   virtual chordID closestpred (const chordID &x) = 0;
+  virtual chordID closestpred (const chordID &x, vec<chordID> fail) = 0;
   virtual chordID closestsucc (const chordID &x) = 0;
 
 };

@@ -26,6 +26,8 @@ class route_iterator {
   bool stop;
   bool last_hop;
 
+  route failed_nodes;
+
  public:
   route_iterator (ptr<vnode> vi, chordID xi) :
     v (vi), x (xi), r (CHORD_OK), done (false), 
@@ -54,6 +56,8 @@ class route_iterator {
   virtual void next_hop () {};
   virtual void send (chordID guess) = 0;
   virtual void send (bool ucs) = 0;
+
+  virtual chordID pop_back () = 0;
 
   static char * marshall_upcall_args (rpc_program *prog, 
 				      int uc_procno,
@@ -89,6 +93,8 @@ class route_chord : public route_iterator {
   void send (bool ucs = false);
 
   void next_hop ();
+
+  chordID pop_back ();
 };
 
 class route_debruijn : public route_iterator {
@@ -115,6 +121,7 @@ class route_debruijn : public route_iterator {
   virtual void first_hop (cbhop_t cb, chordID guess);
   void print ();
   void next_hop ();
+  chordID pop_back ();
 };
 
 class route_factory {

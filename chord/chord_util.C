@@ -33,6 +33,14 @@
 #define MAX_INT 0x7fffffff
 
 
+bool
+in_vector (vec<chordID> vec, chordID N)
+{
+  for (unsigned int i = 0; i < vec.size (); i++)
+    if (vec[i] == N) return true;
+  return false;
+}
+
 str 
 gettime()
 {

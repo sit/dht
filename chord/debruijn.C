@@ -46,6 +46,34 @@ debruijn::closestsucc (const chordID &x)
   return s;
 }
 
+//XXX ignores failed node list.
+chordID
+debruijn::closestpred (const chordID &x, vec<chordID> f)
+{
+  chordID succ = locations->closestsuccloc (myID + 1);
+  chordID p;
+  chordID n;
+
+  if (betweenrightincl (myID, succ, x)) p = myID;
+  else p = succ;
+
+  for (int i = 1; i < logbase; i++) {
+    n = locations->closestsuccloc (succ + 1);
+    if (between (myID, x, n) && between (p, x, n)) {
+      p = n;
+    }
+    succ = n;
+  }
+
+  // use closestpred, because we pinned pred
+  n = locations->closestpredloc (mydoubleID);
+  if (between (myID, x, n) && between (p, x, n)) {
+    p = n;
+  }
+
+  return p;
+}
+
 chordID
 debruijn::closestpred (const chordID &x)
 {

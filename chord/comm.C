@@ -357,9 +357,10 @@ stp_manager::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
   if (err) {
     nrpcfailed++;
     
+    warn << "RPC failure: " << err << " destined for " << C->ID << "\n";
 #ifdef __J__
     warnx << gettime() << " FAILED " << 1 + C->seqno << " err " << err << "\n";
-#endif
+
 
     u_int64_t now = getusec ();
     warnx << "stp_manager::doRPCcb: failed: " << err << "\n";
@@ -369,6 +370,7 @@ stp_manager::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
     warnx << "\tprogno " << C->progno << "\n";
     warnx << "\tseqno " << C->seqno << "\n";
     warnx << "\trexmits " << C->rexmits << "\n";
+#endif
   } else {
     if (C->s > 0) {
       u_int64_t now = getusec ();
@@ -672,7 +674,6 @@ void stp_manager::stats ()
   }
 }
 
-
 // ------------- rpccb_chord ----------------
 
 
@@ -786,11 +787,13 @@ rpccb_chord::timeout_cb (ptr<bool> del)
     utmo ();
 
   if (rexmits > MAX_REXMIT) {
+
+#if 0
     u_int64_t now = getusec ();
     warn << "rpccb_chord::timeout_cb\n"; 
     warn << "\t**now " << now << "\n";
     warn << "\trexmits " << rexmits << "\n";
-
+#endif
     tmo = NULL;
     timeout ();
     return;

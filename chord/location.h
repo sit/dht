@@ -146,6 +146,7 @@ class locationtable : public virtual refcount, public stabilizable {
   
   bool lookup_anyloc (const chordID &n, chordID *r);
   chordID closestsuccloc (const chordID &x);
+  chordID closestpredloc (const chordID &x, vec<chordID> failed);
   chordID closestpredloc (const chordID &x);
 
   void doRPC (const chordID &n, rpc_program progno, 
