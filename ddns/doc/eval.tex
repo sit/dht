@@ -2,17 +2,38 @@
 
 To evaluate the use of Chord to serve DNS data,
 we used data from the study by Jung {\em et al.}\ on
-a network with 1000 DDNS nodes.
+a simulated network with 1000 DDNS nodes.
+For the test, we turned off replication of records.
+We did not simulate node failures,
+so the only effect of replication would be to serve
+as {\em a priori} caching.
+Since the network is a fair amount smaller than the expected
+size of a real Chord ring, we were afraid that replication would
+bias the results in our favor because of the increased caching.
+
 We first inserted answers to all the successful queries into the Chord network
 and then ran a day's worth of successful queries
 (approximately 260,000 queries),
 measuring storage balance, load balance while answering
 queries, and the number of RPCs required to perform each lookup.
+The day's queries are heavy tailed.
+There were about 120,000 distinct queries.  Of these, 93,100 appeared
+just once.
+Only 141 queries were executed more than a hundred times,
+and only two were executed more than a thousand times.
+The most common query, for {\em lcs.mit.edu}'s SOA record,
+was executed 4219 times.
 
 To simulate failed DNS queries, we started a similar network, did not insert
 any data, and executed a day's worth of unresolved queries (approximately
 220,000 queries), measuring
 load balance and RPC counts.
+These queries were distributed similarly to the successful queries.
+Of 17,000 distinct queries, 8,000 were executed only once.
+Only 165 queries were executed more than a hundred times,
+and only eight were executed more than a thousand times.
+The most common query, for {\em 39.246.224.209.in-addr.arpa}'s
+PTR record, was executed 82,000 times.
 
 Finally, to simulate popular entries, we ran what we call the ``slashdot test,''
 inserting one record and then fetching it a hundred thousand times.
@@ -25,7 +46,10 @@ All three tests began each lookup at a random node in the Chord network.
 storage balance for 120,000 records later used as answers to
 260,000 queries.
 The graph shows a cumulative distribution for the number 
-of records stored on each node.}
+of records stored on each node.
+Perfect balance would place the same number of records
+on each node, making the cumulative distribution a vertical line
+around 120.}
 \label{fig:store}
 \end{figure}
 
@@ -76,8 +100,8 @@ proportion to the number of queries that expected the
 desired record to reside on that node.
 This does a worse job of load balancing since there is
 no caching; for example, the node responsible for the
-PTR record for 39.246.224.209.in-addr.arpa suffered
-82,000 queries.
+PTR record for {\em 39.246.224.209.in-addr.arpa} was
+heavily loaded due to the 82,000 queries for that record.
 
 \begin{figure}
 \epsfig{file=figures/hops.eps,angle=270,width=3in}

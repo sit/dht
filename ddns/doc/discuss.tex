@@ -40,7 +40,7 @@ In their handbook for the Berkeley DNS server, BIND,
 Albitz and Liu~\cite{dns-bind} listed what they believed to be
 thirteen of the most common problems in configuring
 a name server.
-Of these, our system addresses six of them.
+Our system addresses six of them.
 
 {\em Forget to signal primary master server.}
 There are no primary servers in DDNS, so this cannot happen.
@@ -166,17 +166,17 @@ structure.
 If some features were determined to be particularly desirable,
 they could be implemented by the clients instead of the servers.
 
-Another query type, ALL, requests all types of RRSets for
+Another query type, ANY, requests all types of RRSets for
 a given domain name. This does not cause performance 
 degradation in the current DNS, since a name server
 will have all the records for the domain names it serves.
-In DDNS, we assemble all the records for the ALL 
-request by looking up every record types for a domain 
+In DDNS, we assemble all the records for the ANY 
+request by looking up every record type for a domain 
 name.
 This results in a significant number of RPCs. 
-We could optimize it by treating ALL just as any other type,
-requiring that ALL records be stored just like A and MX records.
-This invites inconsistency, though; since most ALL queries are
+We could optimize it by treating ANY just as any other type,
+requiring that ANY records be stored just like A and MX records.
+This invites inconsistency, though; since most ANY queries are
 done by humans during debugging, we think the extra
 delay is not a bad price to pay for the consistency guarantee.
 
@@ -191,8 +191,7 @@ set of servers before data loss becomes apparent.
 Another type of denial of service is caused by 
 a domain name owner inserting a large number 
 of DNS records, using up space in the Chord network.
-DDNS has no idea whether those records
-are valid or bogus. We can address this problem 
+We can address this problem 
 by enforcing a quota on how much data each organization
 can insert depending on how much storage the organization
 is contributing to DDNS. The rationale is that if you

@@ -1,13 +1,13 @@
 \section{Introduction and Related Work}
 
 In the beginnings of the Internet, host names were kept
-in a centrally-administered text file, {\tt hosts.txt}, that
-included all sites mirrored from the SRI Network Information Center.
+in a centrally-administered text file, {\tt hosts.txt},
+maintained at the SRI Network Information Center.
 By the early 1980s the host database had become too large
 to disseminate in a cost-effective manner.
 In response, Mockapetris and others began the design and
 implementation of a distributed database that we now know
-as the internet domain name system (DNS).
+as the Internet domain name system (DNS).
 DNS started to replace {\tt hosts.txt} in 1985 and has remained
 substantially the same since then~\cite{dns-concept:rfc, dns}.
 
@@ -18,9 +18,10 @@ three (variable depth hierarchy, organizational structure
 of names, and mail address cooperation) relate directly 
 to the adoption of an administrative hierarchy for the names.
 The administrative hierarchy of DNS is reflected in the 
-service of the database: in typical usage, an
-entity is responsible not only for information about its hosts
-but also for the service of that information.
+structure of DNS servers: in typical usage, an
+entity is responsible not only for maintaining name information
+about its hosts
+but also for the serving that information.
 
 The fact that service structure mirrored administrative hierachy
 provided a modicum of authentication for the returned data.
@@ -55,7 +56,7 @@ The most obvious one is that it requires
 significant expertise to administer.
 In their book on running DNS servers using BIND,
 Albitz and Liu~\cite{dns-bind} note that many of the most
-common name server problems seem are configuration errors.
+common name server problems are configuration errors.
 Name servers are difficult and time-consuming to administer;
 ordinary people typically rely on ISPs to serve their name data.
 Our approach solves this problem by separating service from
