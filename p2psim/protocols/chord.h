@@ -108,6 +108,7 @@ public:
 
   
   struct next_args {
+    IDMap src;
     CHID key;
     uint m;
     uint alpha; //get m out of the first all successors
@@ -131,6 +132,7 @@ public:
   };
 
   struct find_successors_args {
+    IDMap src;
     CHID key;
     uint m;
     uint all;
@@ -147,11 +149,11 @@ public:
   };
 
   struct next_recurs_args {
-    IPAddress src;
     uint type;
     CHID key;
     IPAddress ipkey;
     uint m;
+    IDMap src;
   };
 
   struct next_recurs_ret {
@@ -160,7 +162,8 @@ public:
     bool correct;
     uint finish_time;
     IDMap lasthop;
-    IDMap dst;
+    IDMap prevhop;
+    IDMap nexthop;
   };
 
   struct lookup_args{
@@ -204,6 +207,7 @@ public:
   virtual void reschedule_basic_stabilizer(void *);
 
   bool inited() {return _inited;};
+  char *print_path(vector<lookup_path> &p, char *tmp);
 
 protected:
   //chord parameters
@@ -225,11 +229,13 @@ protected:
   IDMap _wkn;
   uint _join_scheduled;
   uint _parallel;
+  uint _learn;
   uint _ipkey;
   uint _last_succlist_stabilized;
   uint _random_id;
 
   LocTable *loctable;
+  LocTable *learntable;
   IDMap me; 
   CHID _prev_succ;
   uint i0;
@@ -243,6 +249,8 @@ protected:
 
   virtual vector<IDMap> find_successors_recurs(CHID key, uint m, uint type, IDMap *lasthop = NULL, lookup_args *a = NULL);
   virtual vector<IDMap> find_successors(CHID key, uint m, uint type, IDMap *lasthop = NULL, lookup_args *a = NULL);
+  virtual void learn_info(IDMap n);
+  virtual bool replace_node(IDMap n, IDMap &replacement);
 
   template<class BT, class AT, class RT>
     bool Chord::failure_detect(IDMap dst, void (BT::* fn)(AT *, RT *), AT *args, RT *ret, 
@@ -268,27 +276,29 @@ typedef struct {
 #define LOC_HEALTHY 0
 #define LOC_ONCHECK 1
 #define LOC_DEAD 2
+struct idmapwrap {
+    Chord::IDMap n;
+    Chord::CHID id;
+    Time timestamp;
+    sklist_entry<idmapwrap> sortlink_;
+    bool is_succ;
+    bool pinned;
+    int status;
+    Chord::CHID fs;
+    Chord::CHID fe;
+    idmapwrap(Chord::IDMap x, Time t = 0) {
+      n = x;
+      id = x.id;
+      pinned = false;
+      timestamp = t;
+      status = 0;
+      fs = fe = 0;
+    }
+};
 
 class LocTable {
 
   public:
-
-    struct idmapwrap {
-      Chord::IDMap n;
-      ConsistentHash::CHID id;
-      Time timestamp;
-      sklist_entry<idmapwrap> sortlink_;
-      bool is_succ;
-      bool pinned;
-      int status;
-      idmapwrap(Chord::IDMap x, Time t = 0) {
-	n = x;
-	id = x.id;
-	pinned = false;
-	timestamp = t;
-	status = 0;
-      }
-    };
 
     struct idmapcompare{
       idmapcompare() {}
@@ -307,14 +317,16 @@ class LocTable {
   void init (Chord::IDMap me);
   virtual ~LocTable();
 
-    Chord::IDMap succ(ConsistentHash::CHID id, int status = LOC_HEALTHY, Time *ts = NULL);
-    vector<Chord::IDMap> succs(ConsistentHash::CHID id, unsigned int m, int status = LOC_HEALTHY, Time *ts = NULL);
+    idmapwrap *get_naked_node(ConsistentHash::CHID id);
+    Chord::IDMap succ(ConsistentHash::CHID id, int status = LOC_HEALTHY);
+    vector<Chord::IDMap> succs(ConsistentHash::CHID id, unsigned int m, int status = LOC_HEALTHY);
     vector<Chord::IDMap> preds(Chord::CHID id, uint m, int status = LOC_HEALTHY);
     Chord::IDMap pred(Chord::CHID id, int status = LOC_ONCHECK);
     void checkpoint();
     void print();
 
-    int add_node(Chord::IDMap n, bool is_succ=false);
+    bool update_ifexists(Chord::IDMap n);
+    void add_node(Chord::IDMap n, bool is_succ=false, bool assertadd=false,Chord::CHID fs=0,Chord::CHID fe=0);
     int add_check(Chord::IDMap n);
     void add_sortednodes(vector<Chord::IDMap> l);
     void del_node(Chord::IDMap n, bool force=false);
@@ -329,7 +341,7 @@ class LocTable {
 
     //pick the next hop for lookup;
     virtual vector<Chord::IDMap> next_hops(Chord::CHID key, uint nsz = 1);
-    virtual Chord::IDMap next_hop(Chord::CHID key, uint m = 1, uint nsucc=1); 
+    virtual Chord::IDMap next_hop(Chord::CHID key); 
 
     vector<Chord::IDMap> get_all();
     Chord::IDMap first();

@@ -152,7 +152,6 @@ ChordFinger::fix_fingers(bool restart)
   CHID finger;
   Chord::IDMap currf, prevf, prevfpred;
   bool ok;
-  Time currf_ts;
 
   CHID lap = (CHID) -1;
 
@@ -169,12 +168,14 @@ ChordFinger::fix_fingers(bool restart)
 	goto FINGER_DONE;
 
       check_fingers++;
-      currf = loctable->succ(finger, LOC_HEALTHY, &currf_ts);
+      currf = loctable->succ(finger);
       if (currf.ip == me.ip) currf.ip = 0;
       
       if ((!restart) && (currf.ip)) { 
 	if (ConsistentHash::between(finger,finger+lap,currf.id)) {
-	  if ((now()-currf_ts) < _stab_finger_timer) {
+	  idmapwrap *naked = loctable->get_naked_node(currf.id);
+	  assert(naked);
+	  if ((now()-naked->timestamp) < _stab_finger_timer) {
 	    skipped_fingers++;
 	    continue;
 	  }else{
@@ -190,7 +191,7 @@ ChordFinger::fix_fingers(bool restart)
 	    ok = failure_detect(currf, &Chord::get_predsucc_handler, &gpa, &gpr, TYPE_FINGER_UP,0,0);
 	    if(ok) {
 	      valid_fingers++;
-	      record_stat(TYPE_FINGER_UP,1);
+	      record_stat(TYPE_FINGER_UP,1+gpr.v.size());
 	      assert(gpr.dst.ip == currf.ip);
 	      loctable->add_node(gpr.dst);
 	      prevfpred = gpr.n;

@@ -50,6 +50,9 @@ class ChordFingerPNS: public Chord {
     void fix_pns_fingers(bool restart);
     void join(Args*);
 
+    void learn_info(IDMap n);
+    bool replace_node(IDMap n, IDMap &replacement);
+
   protected:
     uint _base;
     int _samples;

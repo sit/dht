@@ -28,7 +28,6 @@
 #include <stdio.h>
 extern bool static_sim;
 
-/* Gummadi's Chord PNS algorithm  (static) */
 ChordFingerPNS::ChordFingerPNS(IPAddress i, Args& a, LocTable *l) 
   : Chord(i, a, New LocTable()) 
 { 
@@ -39,6 +38,13 @@ ChordFingerPNS::ChordFingerPNS(IPAddress i, Args& a, LocTable *l)
   _stab_pns_outstanding = 0;
 
   _stab_pns_timer = a.nget<uint>("pnstimer",_stab_succlist_timer,10);
+
+  if (_learn) {
+    learntable = New LocTable();
+    learntable->set_timeout(_stab_pns_timer);
+    learntable->set_evict(false);
+    learntable->init(me);
+  }
 }
 
 void
@@ -138,6 +144,125 @@ ChordFingerPNS::oracle_node_joined(IDMap n)
   assert(0);
 }
 
+inline static 
+void which_finger(uint base, ConsistentHash::CHID id, ConsistentHash::CHID meid, 
+    ConsistentHash::CHID &fs, ConsistentHash::CHID &fe)
+{
+  ConsistentHash::CHID lap = (ConsistentHash::CHID) -1;
+  ConsistentHash::CHID finger;
+  while (1) {
+    lap = lap/base;
+    for (uint j = (base-1); j >= 1; j--) {
+      finger = lap * j + meid;
+      if (ConsistentHash::between(finger,finger+lap,id)) {
+	fs = finger;
+	fe = finger + lap;
+	return;
+      }
+    }
+  }
+}
+
+void
+ChordFingerPNS::learn_info(IDMap n)
+{
+  assert(learntable);
+
+  if(loctable->update_ifexists(n)) 
+    return;
+
+  if (learntable->update_ifexists(n))
+    return;
+
+  Topology *t = Network::Instance()->gettopology();
+  IDMap ns = loctable->succ(n.id+1,LOC_ONCHECK);
+  idmapwrap *naked_ns = NULL;
+
+  if ((ns.ip==0) || (ns.ip == me.ip))
+    goto NEXT_CHECK;
+
+  naked_ns = loctable->get_naked_node(ns.id);
+  assert(naked_ns);
+
+  if (naked_ns->is_succ) {
+    loctable->add_node(n,true); //accidentally discovered a new successor
+    return;
+  }else if (!naked_ns->fs) 
+    goto NEXT_CHECK;
+
+  //assert(naked_ns->status == LOC_HEALTHY);
+  if (!naked_ns->fs) return;
+
+  if (ConsistentHash::between(naked_ns->fs,naked_ns->fe,n.id)) {
+    if ((t->latency(me.ip,ns.ip) > t->latency(me.ip,n.ip)) || (naked_ns->status==LOC_ONCHECK)) {
+      loctable->del_node(ns,true);
+      loctable->add_node(n,false,true,naked_ns->fs,naked_ns->fe); //a better finger in latency
+      return;
+    }else{
+      learntable->add_node(n);
+      return;
+    }
+  } 
+
+NEXT_CHECK:
+  IDMap ps = loctable->pred(n.id-1,LOC_ONCHECK);
+  idmapwrap *naked_ps = loctable->get_naked_node(ps.id);
+  if (naked_ps && naked_ns && (!naked_ps->is_succ)) {
+    if ((naked_ps->fe == naked_ns->fs) || ConsistentHash::between(naked_ps->fs,naked_ps->fe,n.id)) {
+      //good good
+      if (t->latency(me.ip,ns.ip) > t->latency(me.ip,n.ip)) {
+	loctable->del_node(ns,true);
+	loctable->add_node(n,false,true,naked_ps->fs,naked_ps->fe);
+	return;
+      }
+    }else{
+      learntable->add_node(n);
+      return;
+    }
+  }
+  ConsistentHash::CHID fs,fe;
+
+  which_finger(_base,n.id,me.id,fs,fe);
+  loctable->add_node(n,false,true,fs,fe);
+}
+
+bool
+ChordFingerPNS::replace_node(IDMap n, IDMap &replacement)
+{
+  assert(learntable);
+  idmapwrap *naked = loctable->get_naked_node(n.id);
+  if (!naked)
+    return false;
+  if (naked->is_succ) {
+    //no replacement
+    return false;
+  }else{
+    vector<IDMap> v = learntable->succs(naked->fs,_samples);
+    IDMap min_f = me;
+    Time min_lat = 10000000;
+    Topology *t = Network::Instance()->gettopology();
+    for (uint i = 0; i < v.size(); i++) {
+      if (ConsistentHash::between(naked->fs,naked->fe,v[i].id)) {
+	if (min_lat > t->latency(me.ip,v[i].ip)) {
+	  min_lat = t->latency(me.ip,v[i].ip);
+	  min_f = v[i];
+	}
+      }else{
+	break;
+      }
+    }
+    if (min_f.ip!=me.ip) {
+      loctable->del_node(n);
+      loctable->add_node(min_f);
+      learntable->del_node(min_f,true);
+      replacement = min_f;
+      return true;
+    }
+  }
+  return false;
+}
+
+
 void
 ChordFingerPNS::initstate()
 {
@@ -206,7 +331,7 @@ ChordFingerPNS::join(Args *args)
   //schedule pns stabilizer, no finger stabilizer
   if (!_stab_pns_running) {
     _stab_pns_running = true;
-    reschedule_pns_stabilizer((void *)1);
+    //reschedule_pns_stabilizer((void *)1);
   }else if (_join_scheduled == 0){ //successfully joined
 //    ChordFingerPNS::fix_pns_fingers(true);
   }
@@ -257,7 +382,6 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
   vector<IDMap> newsucc;
   CHID finger;
   Chord::IDMap currf, prevf, prevfpred, deadf, min_f, tmp;
-  Time currf_ts;
   bool ok;
   uint min_l;
   uint max_l;
@@ -274,7 +398,7 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
       finger = lap * j + me.id;
       if ((ConsistentHash::betweenrightincl(finger,finger+lap,scs[scs.size()-1].id)) || (!alive()))
 	goto PNS_DONE;
-      currf = loctable->succ(finger, LOC_HEALTHY, &currf_ts);
+      currf = loctable->succ(finger);
 #ifdef CHORD_DEBUG
       testf.push_back(currf);//testing
 #endif
@@ -285,8 +409,11 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
       if ((!restart) && (currf.ip) && (currf.ip!=me.ip)) { 
 
 	if (ConsistentHash::between(finger, finger + lap, currf.id)) {
+	  idmapwrap *naked = loctable->get_naked_node(currf.id);
+	  assert(naked);
+	  assert(naked->fs == finger && naked->fe == (finger+lap));
 	  //if lookup has updated the timestamp of this finger, ignore it
-	  if ((now() - currf_ts) < _stab_pns_timer) {
+	  if ((now() - naked->timestamp) < _stab_pns_timer) {
 	    skipped_finger++; //testing
 #ifdef CHORD_DEBUG
 	    if (me.ip == DNODE) 
@@ -307,11 +434,13 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
 
 	  if(ok) {
 	    record_stat(TYPE_PNS_UP,0);
-	    loctable->add_node(currf);//update timestamp
+	    //loctable->add_node(currf);//update timestamp
+	    naked->timestamp = now();
 	    valid_finger++;//testing
 	    continue;
 	  }else{
 	    loctable->del_node(currf);
+	    naked = NULL;
 	    dead_finger++;//testing
 	    deadf = currf;
 	  }
@@ -338,7 +467,7 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
 	      record_stat(TYPE_PNS_UP,1);
 	      loctable->add_node(currf);//update timestamp
 	      prevfpred = gpr.n;
-	      if (ConsistentHash::between(gpr.n.id,currf.id, finger)) { //pred is between finger and currf, there could be new finger coming up
+	      if (ConsistentHash::between(gpr.n.id,currf.id, finger)) { //pred is beyond finger, there is no real missing finger
 #ifdef CHORD_DEBUG
 		if (me.ip == DNODE) 
 		  printf("%s DNODE skip missing finger %u,%qx,%qx currf %u,%qx's pred %u,%qx\n",ts(),j,lap,finger, currf.ip,currf.id,prevfpred.ip, prevfpred.id);
@@ -404,8 +533,7 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
 	    ok = doRPC(min_f.ip, &Chord::null_handler, (void *)NULL, &min_f, TIMEOUT(me.ip,min_f.ip));
 	    if (ok) {
 	      record_stat(TYPE_PNS_UP,0); 
-	      int stat = loctable->add_node(min_f);
-	      assert(stat==LOC_HEALTHY); //XXX if there's no packet loss, min_f should not have been put on LOC_ONCHECK befoere
+	      loctable->add_node(min_f,false,true,finger,finger+lap);
 #ifdef CHORD_DEBUG
 	      if (me.ip == DNODE) 
 		printf("%s DNODE ADD new finger %u,%qx,%qx (%u,%qx)\n",ts(),j,lap,finger,min_f.ip,min_f.id);
