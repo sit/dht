@@ -110,7 +110,6 @@ struct dhash_fetchiter_complete_res {
   dhash_value res;
   int32 offset;
   dhash_valueattr attr;
-  int32 hops;
   chordID source;
 };
 
@@ -159,15 +158,19 @@ struct dhash_insert_arg {
   bool usecachedsucc;
 };
 
-
 struct dhash_retrieve_arg {
   chordID blockID;
   bool usecachedsucc;
 };
 
+struct dhash_retrieve_resok {
+  dhash_value block;
+  int hops;
+};
+
 union dhash_retrieve_res switch (dhash_stat status) {
  case DHASH_OK:
-   dhash_value block;
+   dhash_retrieve_resok resok;
  default:
    void;
 };
