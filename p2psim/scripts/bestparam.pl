@@ -148,10 +148,18 @@ for (my $i = 1; $i <= $#allpts; $i++) {
 	$xlimitmaxy = $prevy;
     }
 }
+if (!defined($xlimitminy)) {
+  my ($x,$y) = split(/\s+/,$allpts[$#allpts]);
+  $xlimitminy = $y;
+}
+if (!defined($xlimitmaxy)) {
+  my ($x,$y) = split(/\s+/,$allpts[$#allpts]);
+  $xlimitmaxy = $y;
+}
 die if ((!defined($xlimitmin)) || (!defined($xlimitmax)) ||
 	(!defined($xlimitminy)) || (!defined($xlimitmaxy)));
 
-print "limits: <$xlimitmin,$xlimitminy> <$xlimitmax,$xlimitmaxy>\n";
+print "limits: <$xlimitmin, $xlimitminy> <$xlimitmax, $xlimitmaxy>\n";
 my ($base_area,$xmin,$xminy,$xmax,$xmaxy) = get_hull_area(\@allpts);
 print "base_area $base_area xmin <$xmin,$xminy> xmax <$xmax,$xmaxy>\n";
 print "--------------------\n";
@@ -190,7 +198,7 @@ for (my $i = 0; $i <= $#params; $i++) {
 
 	    #what is the difference between the two hulls???
 	    my ($area,$xmin,$xminy,$xmax,$xmaxy) = get_hull_area(\@pts);
-	    die "area $area param $pos2name[$whichparam] how can this be possible?\n" if ($area < $base_area);
+	    die "area $area base $base_area param $pos2name[$whichparam] how can this be possible?\n" if ($area < $base_area);
 	    my $diff = $area - $base_area;
 	    if ($mindiff > ($diff)) {
 		$mindiff = $diff;
@@ -211,49 +219,50 @@ sub get_hull_area {
 #all points to the array of points belonging to the overall hull
 #one points to the array of points of an individual hull
 #pts is sorted in inverse order based on xval
-    my ($pts) = @_;
-    my $area = 0.0;
-    my @ptsx;
-    my @ptsy;
-    my ($xmin, $xminy, $xmaxy, $xmax);
-    for (my $i = 0; $i <= $#$pts; $i++) {
-	my ($x, $y) = split(/\s+/,$pts->[$i]);
-	push @ptsx,$x;
-	push @ptsy,$y;
-    }
-    $xmax = $ptsx[0];
-    $xmin = $ptsx[$#ptsx];
-    $xmaxy = $ptsy[0];
-    $xminy = $ptsy[$#ptsx];
-    for (my $i = 1; $i <=$#ptsx; $i++) {
-	if ($ptsx[$i] < $xlimitmin) {
-	    if ($ptsx[$i-1] > $xlimitmin) {
-		$xmin = $xlimitmin;
-		$xminy = $ptsy[$i-1] + ($ptsy[$i]-$ptsy[$i-1])*($ptsx[$i-1]-$xlimitmin)/($ptsx[$i-1]-$ptsx[$i]);
-		$area += 0.5*($xminy+$ptsy[$i-1])*($ptsx[$i-1]-$xlimitmin);
-	    }
-	}elsif ($ptsx[$i-1] > $xlimitmax) {
-	    if ($ptsx[$i] < $xlimitmax) {
-		$xmax = $xlimitmax;
-		$xmaxy = $ptsy[$i] - ($ptsy[$i]-$ptsy[$i-1])*($xlimitmax-$ptsx[$i])/($ptsx[$i-1]-$ptsx[$i]);
-		$area += 0.5*($xmaxy+$ptsy[$i])*($xlimitmax-$ptsx[$i]);
-	    }
-	}else {
-	    $area += 0.5 * ($ptsy[$i] + $ptsy[$i-1]) * ($ptsx[$i-1]-$ptsx[$i]);
-	}
-#	if ($i == 1) {
-#	    print "$ptsx[0] $ptsy[0]\n";
-#	}
-#	print "$ptsx[$i] $ptsy[$i] $area\n";
-    }
-    if ($xmin > $xlimitmin) {
-	$area += 0.5*($xmin-$xlimitmin) * ($xlimitminy+$xminy);
-#	print ">>$xmin $xlimitmin $xlimitminy $area\n";
-    }
-    if ($xmax < $xlimitmax) {
-	$area += 0.5*($xlimitmax-$xmax)*($xlimitmaxy+$xmaxy);
-#print ">>$xmax $xlimitmax $xlimitmaxy $area\n";
-    }
-    die if ($area < 0);
-    ($area,$xmin,$xminy,$xmax,$xmaxy);
+#print ">>>\n";
+  my ($pts) = @_;
+  my $area = 0.0;
+  my @ptsx;
+  my @ptsy;
+  my ($xmin, $xminy, $xmaxy, $xmax);
+  for (my $i = 0; $i <= $#$pts; $i++) {
+      my ($x, $y) = split(/\s+/,$pts->[$i]);
+      push @ptsx,$x;
+      push @ptsy,$y;
+  }
+  $xmax = $ptsx[0];
+  $xmin = $ptsx[$#ptsx];
+  $xmaxy = $ptsy[0];
+  $xminy = $ptsy[$#ptsx];
+  if ($xmax < $xlimitmax) {
+    $area += ($xlimitmax-$xmax)*($xmaxy);
+#    print "$xlimitmax $xmaxy\n";
+  }
+  for (my $i = 1; $i <=$#ptsx; $i++) {
+      if ($ptsx[$i] < $xlimitmin) {
+	  if ($ptsx[$i-1] > $xlimitmin) {
+	      $xmin = $xlimitmin;
+	      $xminy = $ptsy[$i-1] + ($ptsy[$i]-$ptsy[$i-1])*($ptsx[$i-1]-$xlimitmin)/($ptsx[$i-1]-$ptsx[$i]);
+	      $area += 0.5*($xminy+$ptsy[$i-1])*($ptsx[$i-1]-$xlimitmin);
+#	      print "$xmin,$xminy\n";
+	  }
+      }elsif ($ptsx[$i-1] > $xlimitmax) {
+	  if ($ptsx[$i] < $xlimitmax) {
+	      $xmax = $xlimitmax;
+	      $xmaxy = $ptsy[$i] - ($ptsy[$i]-$ptsy[$i-1])*($xlimitmax-$ptsx[$i])/($ptsx[$i-1]-$ptsx[$i]);
+	      $area += 0.5*($xmaxy+$ptsy[$i])*($xlimitmax-$ptsx[$i]);
+#	      print "$xmax,$xmaxy\n";
+	  }
+      }else {
+	  $area += 0.5 * ($ptsy[$i] + $ptsy[$i-1]) * ($ptsx[$i-1]-$ptsx[$i]);
+#	  print "$ptsx[$i] $ptsy[$i]\n";
+      }
+  }
+  if ($xmin > $xlimitmin) {
+      $area += ($xmin-$xlimitmin) * ($xlimitminy);
+#      print "$xmin $xlimitminy\n";
+  }
+  die if ($area < 0);
+#  print "<<<\n";
+  ($area,$xmin,$xminy,$xmax,$xmaxy);
 }

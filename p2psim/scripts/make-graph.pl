@@ -702,6 +702,7 @@ if( defined $plottype and
 # if necessary, run each file through the convexinator
 {;}
 my @convexfiles = ();
+my %uniqhash;
 if( defined $options{"convex"} ) {
 
     my $index = 0;
@@ -714,7 +715,6 @@ if( defined $options{"convex"} ) {
 	    my %valshash = ();
 	    my $h;
 	    while( <DAT> ) {
-		
 		if( /^\#/ ) {
 		    $h = $_;
 		    next;
@@ -780,23 +780,27 @@ if( defined $options{"convex"} ) {
 		    }else{
 		      $conx .=".0";
 		    }
+		    if (!defined($uniqhash{"$conx $cony"})) {
+		      $uniqhash{"$conx $cony"} = 1;
+		    }else{
+		      print STDERR "warning: duplicate values $conx $cony\n";
+		      $conx += rand() * 0.00001;
+		      $uniqhash{"$conx $cony"} = 1;
+		    }
 		    # we might need to figure out what this line was later
 		    if (!defined($headerhash{"$conx $cony"})) {
 			$headerhash{"$conx $cony"} = $h;
-		    }else{
-		      my $oldheader = $headerhash{"$conx $cony"};
-		      #print STDERR "warning: same value $conx $cony, different parameter!\n$h\n$oldheader\n";
-		      $conx += 0.00001;
-		      $headerhash{"$conx $cony"} = $h;
 		    }
-		    print CON "$conx $cony\n";
 
+		    print CON "$conx $cony\n";
 		    
 		    if( defined $options{"hulllabel"} ) {
 			$valshash{"$conx $cony"} = $v;
 		    }
+		    undef $h;
 		}
 	    }
+	    undef %uniqhash;
 
 	    close( DAT );
 	    close( CON );
@@ -804,7 +808,7 @@ if( defined $options{"convex"} ) {
 	    # now run it through the convexinator
 	    system( "$con_cmd $datfile.con > $datfile$j.convex" ) and
 		die( "Couldn't run ./find_convexhull.py $datfile.con" );
-#unlink( "$datfile.con" );
+	    unlink( "$datfile.con" );
 	    
 	    push @convexfiles, "$datfile$j.convex";
 	    $xposes{"$datfile$j.convex"} = $xposes{$datfile};
