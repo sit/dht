@@ -1,22 +1,20 @@
 #include "kademlia.h"
 #include "packet.h"
 #include "nodefactory.h"
-#include <iostream>
-#include <stdio.h>
-#include "p2psim.h"
+#include "chord.h"
 #include <stdio.h>
 #include <algorithm>
+#include <iostream>
+#include "p2psim.h"
 using namespace std;
 
 
+unsigned kdebugcounter = 1;
 Kademlia::NodeID Kademlia::_rightmasks[8*sizeof(Kademlia::NodeID)];
 
-Kademlia::Kademlia(Node *n) : Protocol(n), _id((NodeID) random()), _fingers(_id)
+Kademlia::Kademlia(Node *n) : Protocol(n), _id(ConsistentHash::ip2chid(n->ip()) & 0x000f), _fingers(_id)
 {
-  // _id = (((NodeID) random()) << 32) | random();
-  // printf("id = %llx\n", _id);
-  // _id = (NodeID) random();
-  KDEBUG(1) << "constructor: " << printbits(_id) << endl;
+  KDEBUG(1) << "id: " << printbits(_id) << endl;
   _values.clear();
 
   // precompute masks
@@ -100,9 +98,6 @@ Kademlia::stabilized(vector<NodeID> lid)
 void
 Kademlia::join(Args *args)
 {
-  // _id = args->nget<NodeID>("bitkey", 2);
-  // KDEBUG(1) << "Node ID = " << printID(_id) << endl;
-
   IPAddress wkn = args->nget<IPAddress>("wellknown");
   if(wkn == ip()) {
     KDEBUG(1) << "Node " << printID(_id) << " is wellknown." << endl;
@@ -115,25 +110,25 @@ Kademlia::join(Args *args)
   la.id = _id;
   la.ip = ip();
   la.key = _id;
-  KDEBUG(1) << "Doing lookup for my ID." << endl;
+  KDEBUG(2) << "join: lookup my id" << endl;
   doRPC(wkn, &Kademlia::do_lookup, &la, &lr);
-  KDEBUG(1) << "Result of lookup for " << printID(_id) << " is " << printID(lr.id) << ", which is node " << lr.ip << endl;
+  KDEBUG(2) << "join: lookup my id: node " << printID(lr.id) << endl;
 
   // put well known dude in finger table
   NodeID succ = lr.rid;
   IPAddress succip = lr.ip;
 
   unsigned entry = merge_into_ftable(succ, wkn);
-  KDEBUG(3) << "Inserted at entry " << entry << endl;
+  KDEBUG(3) << "join: inserted at entry " << entry << endl;
 
   // all entries further away than him need to be refereshed.
   // see section 2.3
   for(unsigned i=entry+1; i<idsize; i++) {
     // always look up on the previous node we learned about.
-    la.key = (_id ^ (i<<i));
-    KDEBUG(3) << "looking up entry " << i << ": " << printbits(la.key) << endl;
+    la.key = (_id ^ (1<<i));
+    KDEBUG(3) << "join: looking up entry " << i << ": " << printbits(la.key) << endl;
     doRPC(lr.ip, &Kademlia::do_lookup, &la, &lr);
-    KDEBUG(3) << "looking result for entry " << i << ": " << printbits(lr.id) << endl;
+    KDEBUG(3) << "join: looking result for entry " << i << ": " << printbits(lr.id) << endl;
     if(lr.id != _id)
       merge_into_ftable(la.key, lr.ip);
   }
@@ -143,7 +138,7 @@ Kademlia::join(Args *args)
   transfer_result tr;
   ta.id = _id;
   ta.ip = ip();
-  KDEBUG(1) << "Node " << printbits(_id) << " initiating transfer from " << printbits(lr.id) << endl;
+  KDEBUG(2) << "join: Node " << printbits(_id) << " initiating transfer from " << printbits(lr.id) << endl;
   doRPC(succip, &Kademlia::do_transfer, &ta, &tr);
 
   // merge that data in our _values table
@@ -155,7 +150,7 @@ void
 Kademlia::do_join(void *args, void *result)
 {
   join_args *jargs = (join_args*) args;
-  KDEBUG(1) << "do_join " << printbits(jargs->id) << " entering\n";
+  KDEBUG(2) << "do_join " << printbits(jargs->id) << " entering\n";
   merge_into_ftable(jargs->id, jargs->ip);
 }
 
@@ -167,9 +162,9 @@ Kademlia::do_transfer(void *args, void *result)
   transfer_result *tresult = (transfer_result*) result;
   merge_into_ftable(targs->id, targs->ip);
 
-  KDEBUG(1) << "handle_transfer to node " << printID(targs->id) << "\n";
+  KDEBUG(2) << "handle_transfer to node " << printID(targs->id) << "\n";
   if(_values.size() == 0) {
-    KDEBUG(1) << "handle_transfer_cb; no values: done!\n";
+    KDEBUG(2) << "handle_transfer_cb; no values: done!\n";
     return;
   }
 
@@ -191,19 +186,23 @@ Kademlia::do_lookup(void *args, void *result)
 {
   lookup_args *largs = (lookup_args*) args;
   lookup_result *lresult = (lookup_result*) result;
-  KDEBUG(3) << "do_lookup calls merge_into_ftable" << endl;
+  KDEBUG(3) << "do_lookup: id = " << printbits(largs->id) << ", ip = " << largs->ip << ", key = " << printbits(largs->key) << endl;
+
+  NodeID origID = largs->id;
+  IPAddress origIP = largs->ip;
 
   NodeID bestID = _id;
   NodeID bestdist = distance(_id, largs->key);
 
-  KDEBUG(3) << "do_lookup for key " << printID(largs->key) << ", bestID = " << printID(bestID) << ", bestdist =  " << printID(bestdist) << "\n";
-
   // XXX: very inefficient
   for(unsigned i=0; i<idsize; i++) {
-    KDEBUG(3) << "do_lookup, considering _fingers[" << i << "], key: " << printID(_fingers.get_id(i)) << "\n";
+    KDEBUG(3) << "do_lookup: " << printbits(largs->key) << " -> [" << i << "] = ";
+    
     if(!_fingers.valid(i)) {
-      KDEBUG(3) << "entry " << i << " is invalid\n";
+      DEBUG(3) << "invalid" << endl;
       continue;
+    } else {
+      DEBUG(3) << printbits(_fingers.get_id(i)) << " (dist = " << printbits(distance(_fingers.get_id(i), largs->key)) << ")" << endl;
     }
 
     NodeID dist;
@@ -212,21 +211,28 @@ Kademlia::do_lookup(void *args, void *result)
       bestID = _fingers.get_id(i);
     }
   }
-  KDEBUG(2) << "do_lookup, result is key: " << printbits(bestID) << ", distance = " << printbits(bestdist) << "\n";
+  KDEBUG(2) << "do_lookup: result is key: " << printbits(bestID) << endl;
 
   // if this is us, then reply
   if(bestID == _id) {
     lresult->id = bestID;
     lresult->ip = ip();
-    KDEBUG(2) << "I (" << printID(_id) << ") am the best match for " << printID(largs->key) << endl;
-    return;
+    KDEBUG(2) << "do_lookup: I am the best match for " << printID(largs->key) << endl;
+    goto done;
   }
 
   // otherwise do the lookup call to whomever we think is best
+  KDEBUG(2) << "do_lookup: *** recursive lookup(" << printbits(largs->key) << ") @ " << printbits(bestID) << " (ip = " << _fingers.get_ipbyid(bestID) << ")" << endl;
+  largs->id = _id;
+  largs->ip = ip();
   doRPC(_fingers.get_ipbyid(bestID), &Kademlia::do_lookup, args, result);
 
+done:
   // only merge _after_ the lookup to avoid returning a node's own id.
-  merge_into_ftable(largs->id, largs->ip);
+  merge_into_ftable(origID, origIP);
+
+  // put my own id in reply
+  lresult->rid = _id;
 }
 
 
@@ -234,26 +240,25 @@ Kademlia::do_lookup(void *args, void *result)
 unsigned
 Kademlia::merge_into_ftable(NodeID id, IPAddress ip)
 {
+  KDEBUG(3) << "merge_into_ftable: id = " << printbits(id) << ", ip = " << ip << endl;
   assert(id != _id);
-  unsigned entry = 0;
 
-  KDEBUG(2) << "merge_into_ftable" << endl;
-
-  KDEBUG(2) << "merge_into_ftable (_id = " << printbits(_id) << "), id = " << printbits(id) << ", ip = " << ip << endl;
   unsigned called = 0;
+  unsigned entry = 0;
   for(unsigned i=0; i<idsize; i++) {
     if(flipbitandmaskright(_id, i) == maskright(id, i)) {
-      // cout << "flipbitandmaskright(_id, i) == " << printbits(flipbitandmaskright(_id, i)) << endl;
-      // cout << "          maskright(id, i ) == " << printbits(maskright(id, i)) << endl;
-      // cout << "calling for _id " << printbits(_id) << endl;
-      // cout << "calling for  id " << printbits(id) << endl;
-      // cout << "calling for i = " << i << endl;
+      KDEBUG(4) << "merge_into_ftable: flipbitandmaskright(_id, " << i << ") == " << printbits(flipbitandmaskright(_id, i)) << endl;
+      KDEBUG(4) << "merge_into_ftable:           maskright(id,  " << i << ") == " << printbits(maskright(id, i)) << endl;
+      KDEBUG(3) << "merge_into_ftable: setting to entry " << i << endl;
       _fingers.set(i, id, ip);
       called++;
       entry = i;
     }
   }
   assert(called <= 1);
+
+  if(verbose >= 4)
+    dump();
   return entry;
 }
 
@@ -293,9 +298,9 @@ Kademlia::printbits(NodeID id)
 
   unsigned j=0;
   for(int i=idsize-1; i>=0; i--)
-    sprintf(&(buf[j++]), "%u", (unsigned) (id >> i) & 0x1);
+    sprintf(&(buf[j++]), "%u", (char) (id >> i) & 0x1);
   // sprintf(&(buf[j]), ":%llx", id);
-  sprintf(&(buf[j]), ":%hx", id);
+  sprintf(&(buf[j]), ":%hx", (char) id);
 
   return string(buf);
 }
@@ -314,7 +319,7 @@ Kademlia::printID(NodeID id)
 Kademlia::NodeID
 Kademlia::distance(Kademlia::NodeID from, Kademlia::NodeID to)
 {
-  DEBUG(5) << "distance between " << printbits(from) << " and " << printbits(to) << " = ";
+  // KDEBUG(5) << "distance between " << printbits(from) << " and " << printbits(to) << " = ";
   NodeID ret;
 
   ret = from ^ to;
@@ -349,7 +354,7 @@ Kademlia::insert(Args *args)
   ia.key = args->nget<NodeID>("key");
   ia.val = args->nget<Value>("val");
 
-  KDEBUG(1) << "insert " << printID(ia.key) << ":" << ia.val << endl;
+  KDEBUG(2) << "insert " << printID(ia.key) << ":" << ia.val << endl;
   do_insert(&ia, &ir);
 }
 
@@ -368,7 +373,7 @@ Kademlia::do_insert(void *args, void *result)
   do_lookup(&la, &lr);
 
   if(lr.id == _id) {
-    KDEBUG(1) << "Node " << printID(_id) << " storing " << printID(iargs->key) << ":" << iargs->val << "." << endl;
+    KDEBUG(2) << "Node " << printID(_id) << " storing " << printID(iargs->key) << ":" << iargs->val << "." << endl;
     _values[iargs->key] = iargs->val;
     return;
   }

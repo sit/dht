@@ -7,12 +7,13 @@
 #include <iostream>
 using namespace std;
 
-#define KDEBUG(x) DEBUG(x) << printbits(_id) << " "
+extern unsigned kdebugcounter;
+#define KDEBUG(x) DEBUG(x) << kdebugcounter++ << ". " << printbits(_id) << " "
 
 
 class Kademlia : public Protocol {
 public:
-  typedef short NodeID;
+  typedef char NodeID;
   typedef unsigned Value;
   static const unsigned idsize = 8*sizeof(NodeID);
 
@@ -112,10 +113,14 @@ private:
 
     void unset(unsigned i) { _ft[i].valid = false; }
     void dump(NodeID myid) {
-      string s;
-      s = "i\tmyid permu\tnearest node\n";
-      for(unsigned i=0; i<Kademlia::idsize; i++)
-        cout << i << "\t" << Kademlia::printbits(myid ^ (1<<i)) << "\t" << Kademlia::printbits(get_id(i)) << endl;
+      for(unsigned i=0; i<Kademlia::idsize; i++) {
+        cout << i << "\t" << Kademlia::printbits(myid ^ (1<<i)) << "\t";
+        if(valid(i))
+          cout << Kademlia::printbits(get_id(i));
+        else
+          cout << "[invalid]";
+        cout << endl;
+      }
     }
 
     bool valid(unsigned i)          { return _ft[i].valid; }
