@@ -4,6 +4,7 @@
 #include "merkle_misc.h"
 #include "dbfe.h"
 #include "dhash.h"
+#include "verify.h"
 #include <ida.h>
 
 
@@ -75,7 +76,8 @@ gen_frag (ptr<dbrec> block)
   str blk (block->value, block->len);
   str frag = Ida::gen_frag (dhash::NUM_DFRAGS, blk);
   // prepend type of block onto fragment
-  str res (strbuf (block->value, 4) << frag);
+  //str res (strbuf (block->value, 4) << frag);
+  str res (strbuf () << str (block->value, 4) << frag);
   return New refcounted<dbrec> (res.cstr (), res.len ());
 }
 
@@ -104,6 +106,7 @@ main (int argc, char** argv)
 
   ptr<dbfe> db = opendb ();
 
+  vec<str> frags;
 
   char block[block_size];
   bzero (block, block_size);
@@ -123,14 +126,12 @@ main (int argc, char** argv)
       ptr<dbrec> data = marshal_dhashblock (&block[0], block_size);
       ptr<dbrec> frag = gen_frag (data);
       db->insert (key, frag);
-      warn << dbrec2id (key) << "\n";
-    } 
+      bigint h = compute_hash (frag->value, frag->len);
+      warn << dbrec2id (key) << " frag: hash " << h << ", len " << frag->len << "\n";
+    }
   }
 
   db->sync ();
 
   warn << n << "/" << num_blocks << " blocks inserted in " << dbname << ".\n";
 }
-
-
-
