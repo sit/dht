@@ -45,6 +45,7 @@ graceful_exit(void*)
   delete Network::Instance(); // deletes nodes, protocols
   delete ThreadManager::Instance();
   delete EventGeneratorFactory::Instance();
+  delete EventQueue::Instance();
   __tmg_dmalloc_stats();
 
   threadexitsall(0);

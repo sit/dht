@@ -65,6 +65,7 @@ Network::~Network()
   chanfree(_nodechan);
   delete _top;
   delete _all_protos;
+  delete _failure_model;
 }
 
 

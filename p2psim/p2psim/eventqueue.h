@@ -41,6 +41,8 @@ class EventQueue : public Threaded, public Observed {
 
 public:
   static EventQueue* Instance();
+  ~EventQueue();
+
   void add_event(Event*);
   Time time() { return _time; }
   static Time fasttime() { return _instance?_instance->time():0; }
@@ -48,7 +50,6 @@ public:
 
 private:
   EventQueue();
-  ~EventQueue();
 
   struct eq_entry {
     eq_entry() { ts = 0; events.clear(); }

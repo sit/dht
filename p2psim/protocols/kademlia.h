@@ -63,6 +63,7 @@ private:
     }
 
     ~k_nodeinfo_buffer() {
+      delete ki;
     }
 
     k_nodeinfo *ki;
@@ -80,9 +81,6 @@ private:
     }
 
     ~k_nodeinfo_pool() {
-      if(_head != _tail)
-        delete _tail;
-
       k_nodeinfo_buffer *i = _head;
       while(i) {
         k_nodeinfo_buffer *next = i->next;
@@ -120,10 +118,14 @@ private:
 
     void push(k_nodeinfo *ki)
     {
-      // if(_count >= _buffer_limit) {
-        // delete ki;
-        // return;
-      // }
+      // verify that this pointer isn't in here yet.
+      if(Kademlia::docheckrep) {
+        k_nodeinfo_buffer *i = _head;
+        do {
+          assert(i->ki != ki);
+        } while(i->next == 0);
+      }
+
 
       // allocate new space
       if(_tail->next == 0) {
@@ -346,6 +348,7 @@ private:
   static int _good_lookups;
   static int _ok_failures;
   static int _bad_failures;
+  static unsigned _nkademlias;
 
 
   //
@@ -418,7 +421,7 @@ public:
   void traverse(k_traverser*, Kademlia*, string = "", unsigned = 0, unsigned = 0);
   void insert(Kademlia::NodeID, bool, bool = false, string = "", unsigned = 0);
   void erase(Kademlia::NodeID, string = "", unsigned = 0);
-  void find_node(Kademlia::NodeID, set<k_nodeinfo*, Kademlia::closer> *, unsigned = 0);
+  void find_node(Kademlia::NodeID, set<k_nodeinfo*, Kademlia::closer> *, unsigned = Kademlia::k, unsigned = 0);
   void checkrep();
 
   void divide(unsigned);
