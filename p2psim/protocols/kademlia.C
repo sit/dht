@@ -450,6 +450,7 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
   assert(rpcset);
 
   //
+  // - stop if the best result is, in fact, the key we're looking for.
   // - stop if we've had an answer from the best k nodes in the result set
   // - find best alpha unqueried nodes in result set
   // - send an RPC to those alpha nodes
@@ -464,7 +465,14 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
     unsigned k_counter = 0;
     bool we_are_done = false;
     bool asked_all = true;
+
     for(set<k_nodeinfo*, closer>::const_iterator i = lresult->results.begin(); i != lresult->results.end(); ++i) {
+      // did we find an exact match?  bail out.
+      if((*i)->id == largs->id) {
+        we_are_done = true;
+        break;
+      }
+
       KDEBUG(2) << "do_lookup: finished? considering result " << printID((*i)->id) << endl;
       if(asked.find((*i)->id) == replied.end())
         asked_all = false;
