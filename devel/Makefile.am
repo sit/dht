@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.32 2004/05/03 16:30:09 sit Exp $
+# $Id: Makefile.am,v 1.33 2004/05/21 00:59:39 sit Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -8,7 +8,7 @@ VIS = vis
 endif
 
 bin_PROGRAMS = dbm walk findroute filestore nodeq
-noinst_PROGRAMS = typetest $(VIS) builddb dbdump coords dhc_test 
+noinst_PROGRAMS = test_types $(VIS) builddb dbdump coords dhc_test 
 
 noinst_HEADERS = rpclib.h
 
@@ -27,8 +27,8 @@ builddb_LDADD = ../sfsrodb/libsfsrodb.a ../dhash/libdhash.a ../dhc/libdhc.a ../m
 dbm_SOURCES = dhash_benchmark.C
 dbm_LDADD = ../dhash/libdhashclient.a ../svc/libsvc.la $(LDADD)
 
-typetest_SOURCES = test_types.C
-typetest_LDADD = ../dhash/libdhashclient.a ../svc/libsvc.la $(LDADD)
+test_types_SOURCES = test_types.C
+test_types_LDADD = ../dhash/libdhashclient.a ../svc/libsvc.la $(LDADD)
 
 dbdump_SOURCES = dbdump.C
 dbdump_LDADD = ../sfsrodb/libsfsrodb.a ../merkle/libmerkle.a $(DBLIB) $(LDADD)
