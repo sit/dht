@@ -32,6 +32,8 @@ foreach my $log (@logs) {
     my %correct_lat = ();
     my %incorrect_lat = ();
     my %failed_lat = ();
+    my %lives = ();
+    my %joinstarts = ();
     while(<LOG>) {
 	if( /(\d+) \d+ \w+ (\d) (\d) -?(\d+) (\d+) .+ .+ .+ (\d+)/ ) {
 	    my $time = $1;
@@ -63,6 +65,26 @@ foreach my $log (@logs) {
 		$failed_lat{ $key } .= "$time ";
 	    }
 
+	} elsif( /^joinstart (\d+) (\d+)/ ) {
+	    $joinstarts{$1} = $2;
+	} elsif( /^join (\d+) (\d+)/ ) {
+	    my $key = int( $2/$bucket_factor );
+	    $starts{$key} = 1;
+	    if( !defined $lives{$key} ) {
+		$lives{$key} = 0;
+	    }
+	    $lives{$key}++;
+	    $joinstarts{$1} = 0;
+	} elsif( /^crash (\d+) (\d+) (\d)/ ) {
+	    my $key = int( $2/$bucket_factor );
+	    $starts{$key} = 1;
+	    if( !defined $lives{$key} ) {
+		$lives{$key} = 0;
+	    }
+	    if( $3 eq "1" ) {
+		$lives{$key}--;
+	    }
+	    $joinstarts{$1} = 0;
 	} else {
 	    # nothing
 	}
@@ -71,12 +93,19 @@ foreach my $log (@logs) {
 
     close( LOG );
 
+    foreach my $k (keys(%joinstarts)) {
+	if( $joinstarts{$k} ) {
+	    print "joinfail: $k " . $joinstarts{$k} . "\n";
+	}
+    }
+
     $log =~ s/\.dat/\-rrk\.dat/;
     
     open( LOG, ">$log" ) or die( "Couldn't open $log" );	
 
-    print LOG "# complete% correct% ave_lat count\n"; 
+    print LOG "# complete% correct% ave_lat count num_live\n"; 
 
+    my $currlive = 0;
     foreach my $t (sort {$a <=> $b} keys(%starts)) {
 
 	# for each key, figure out the completed and correctness lines,
@@ -116,7 +145,11 @@ foreach my $log (@logs) {
 
 	my $avlat = $tot_lat/$total;
 
-	print LOG "" . ($t*$bucket_factor) . " $comper $corrper $avlat $total\n";
+	if( defined $lives{$t} ) {
+	    $currlive += $lives{$t};
+	}
+
+	print LOG "" . ($t*$bucket_factor) . " $comper $corrper $avlat $total $currlive\n";
 
     }
     

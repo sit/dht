@@ -21,6 +21,8 @@ foreach my $log (@logs) {
     my $oldfd = select(DAT);
     $| = 1;
     my %lookups = ();
+    my %joins = ();
+    my %joined = ();
     my $hash;
     my @stat_vals = ();
     my @stat_nums = ();
@@ -50,9 +52,10 @@ foreach my $log (@logs) {
 		die( "no lookup found for $ip, $key" );
 	    }
 	    &print_stat( DAT, $1-($ht->{"starttime"}), $ip, $key, 0, 0, -1,
-			 $ht->{"failures"}, "NONE", "NONE", "NONE" );
+			 $ht->{"failures"}, "NONE", "NONE", "NONE", 
+			 $ht->{"starttime"} );
 	    delete $lookups{"$ip-$key"};
-	} elsif( /(\d+): \((\d+)\/\w+\).*Lookup complete for key (\w+): ip (\d+), id (\w+), hops (\d+)$/ ) {
+	} elsif( /(\d+): \((\d+)\/\w+\).*Lookup complete for key (\w+): ip (\d+), id (\w+), hops (\d+)/ ) {
 	    my $t = $1;
 	    my $ip = $2;
 	    my $key = $3;
@@ -64,9 +67,10 @@ foreach my $log (@logs) {
 		die( "no lookup found for $ip, $key" );
 	    }
 	    &print_stat( DAT, $1-($ht->{"starttime"}), $ip, $key, 1, 1, $hops,
-			 $ht->{"failures"}, $oip, $owner, "NONE" );
+			 $ht->{"failures"}, $oip, $owner, "NONE",
+			 $ht->{"starttime"});
 	    delete $lookups{"$ip-$key"};
-	} elsif( /(\d+): \((\d+)\/\w+\).*Lookup incorrect for key (\w+): ip (\d+), id (\w+), real root (\d+) hops (\w+)$/ ) {
+	} elsif( /(\d+): \((\d+)\/\w+\).*Lookup incorrect for key (\w+): ip (\d+), id (\w+), real root (\d+) hops (\w+)/ ) {
 	    my $t = $1;
 	    my $ip = $2;
 	    my $key = $3;
@@ -79,8 +83,32 @@ foreach my $log (@logs) {
 		die( "no lookup found for $ip, $key" );
 	    }
 	    &print_stat( DAT, $1-($ht->{"starttime"}), $ip, $key, 1, 0, $hops,
-			 $ht->{"failures"}, $oip, $owner, $realroot );
+			 $ht->{"failures"}, $oip, $owner, $realroot,
+			 $ht->{"starttime"});
 	    delete $lookups{"$ip-$key"};
+	} elsif( /(\d+): \((\d+)\/\w+\).*Tapestry join/ ) {
+	    my $t = $1;
+	    my $ip = $2;
+	    $joins{$ip} = $t;
+	    print "joinstart $ip $t\n";
+	} elsif( /(\d+): \((\d+)\/\w+\).*Finishing joining/ ) {
+	    my $t = $1;
+	    my $ip = $2;
+	    my $time = 0;
+	    $joined{$ip} = $t;
+	    if( defined $joins{$ip} ) {
+		$time = $t - $joins{$ip};
+	    }
+	    print "join $ip $t $time\n";
+	} elsif( /(\d+): \((\d+)\/\w+\).*Tapestry crash/ ) {
+	    my $t = $1;
+	    my $ip = $2;
+	    my $was_joined = 0;
+	    if( defined $joined{$ip} and $joined{$ip} != 0 ) {
+		$was_joined = 1;
+	    }
+	    $joined{$ip} = 0;
+	    print "crash $ip $t $was_joined\n";
 	} elsif( /STATS: (.*)$/ ) {
 
 	    my @statar = split( /\s+/, $1 );
@@ -108,9 +136,9 @@ foreach my $log (@logs) {
 sub print_stat {
 
     my ($fd, $time, $ip, $key, $complete, $correct, $hops, $failures, 
-	$oip, $owner, $real_owner ) = @_;
+	$oip, $owner, $real_owner, $starttime ) = @_;
 
     print "$time $ip $key $complete $correct $hops $failures " . 
-	"$oip $owner $real_owner\n";
+	"$oip $owner $real_owner $starttime\n";
 
 }

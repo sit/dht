@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.21 2003/11/03 06:55:52 strib Exp $ */
+/* $Id: tapestry.C,v 1.22 2003/11/03 17:51:22 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -532,6 +532,7 @@ Tapestry::handle_join(join_args *args, join_return *ret)
   for( uint i = 0; i < _redundant_lookup_num; i++ ) {
     ips[i] = 0;
   }
+  ips[0] = args->ip;
   next_hop( args->id, &ips, _redundant_lookup_num );
   uint i = 0;
   for( ; i < _redundant_lookup_num; i++ ) {
@@ -619,6 +620,7 @@ Tapestry::handle_join(join_args *args, join_return *ret)
       ret->surr_id = id();
       break;
     } else {
+
       // not the surrogate
       // recursive routing yo
       record_stat(STAT_JOIN, 1, 0);
@@ -1383,13 +1385,22 @@ Tapestry::next_hop( GUID key, IPAddress** ips, uint size )
 
   RouteEntry *re = _rt->get_entry( level, get_digit( key, level ) );
 
+  // use the first value passed in in ips as a non-nexthop, that is, if 
+  // ips[0] is nonnull, do NOT return that one as a possible next hop
+  IPAddress dontuse = (*ips)[0];
+
   // if it has an entry, use it
-  if( re != NULL && re->get_first() != NULL ) {
+  if( re != NULL && re->get_first() != NULL && 
+      (re->get_first()->_addr != dontuse || re->size() > 1 ) ) {
     // this cannot be us, since this should be the entry where we differ
     // from the key, but just to be sure . . .
      assert( re->get_first()->_addr != id() );
-     for( uint i = 0; i < re->size() && i < size; i++ ) {
-       (*ips)[i] = re->get_at(i)->_addr;
+     uint used = 0;
+     for( uint i = 0; i < re->size() && used < size; i++ ) {
+       if( re->get_at(i)->_addr != dontuse ) {
+	 (*ips)[used] = re->get_at(i)->_addr;
+	 used++;
+       }
      }
      return;
   } else {
@@ -1401,7 +1412,8 @@ Tapestry::next_hop( GUID key, IPAddress** ips, uint size )
     for( uint i = level; i < _digits_per_id; i++ ) {
 
       uint j = get_digit( key, i );
-      while( re == NULL || re->get_first() == NULL ) {
+      while( re == NULL || re->get_first() == NULL || 
+	     (re->get_first()->_addr == dontuse && re->size() == 1) ) {
 
 	// NOTE: we can't start with looking at the j++ entry, since
 	// this might be the next level up, and we'd want to start at j
@@ -1419,8 +1431,12 @@ Tapestry::next_hop( GUID key, IPAddress** ips, uint size )
       // if it is us, go around another time
       // otherwise, we've found the next hop
       if( re->get_first()->_addr != ip() ) {
-	for( uint k = 0; k < re->size() && k < size; k++ ) {
-	  (*ips)[k] = re->get_at(k)->_addr;
+	uint used = 0;
+	for( uint k = 0; k < re->size() && used < size; k++ ) {
+	  if( re->get_at(k)->_addr != dontuse ) {
+	    (*ips)[used] = re->get_at(k)->_addr;
+	    used++;
+	  }
 	}
 	return;
       }
