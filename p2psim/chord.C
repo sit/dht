@@ -528,7 +528,7 @@ LocTable::evict() // all unnecessary(unpinned) nodes
     //    pinlist[i].pin_pred);
 
     // find successor of pinlist[i]. XXX don't start at j, but where we left off
-    for (j = 0 ; j < ring.size (); j++) {
+    for ( ; j < ring.size (); j++) {
       if (ConsistentHash::betweenrightincl(ring[0].id, ring[j].id, 
 					   pinlist[i].id))
 	break;
