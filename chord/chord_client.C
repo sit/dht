@@ -27,6 +27,7 @@
 
 #include <chord.h>
 #include <chord_util.h>
+#include <dhash.h>
 
 chord::chord (str _wellknownhost, int _wellknownport, 
 	      str _myname, int port, int max_cache, 
@@ -57,7 +58,9 @@ chord::tcpclient_cb (int srvfd)
   else {
     ptr<axprt> x = axprt_stream::alloc (fd, 230000);
     ptr<asrv> s = asrv::alloc (x, chord_program_1);
+    ptr<asrv> s2 = asrv::alloc (x, dhash_program_1);
     s->setcb (wrap (mkref(this), &chord::dispatch, s));
+    s2->setcb (wrap (mkref(this), &chord::dispatch, s2));
   }
 }
 
@@ -82,8 +85,8 @@ chord::startchord (int myp, int type)
 
   
   if (type == SOCK_DGRAM) {
-    ptr<axprt> x = axprt_dgram::alloc (srvfd, sizeof(sockaddr), 230000);
-    ptr<asrv> s = asrv::alloc (x, chord_program_1);
+    x_dgram = axprt_dgram::alloc (srvfd, sizeof(sockaddr), 230000);
+    ptr<asrv> s = asrv::alloc (x_dgram, chord_program_1);
     s->setcb (wrap (mkref(this), &chord::dispatch, s));
   }
   else {
@@ -189,110 +192,124 @@ chord::stop () {
   vnodes.traverse (wrap (this, &chord::stop_cb));
 }
 
-void 
-chord::register_handler (int progno, chordID dest, cbdispatch_t hand)
-{
-  vnode *vnodep = vnodes[dest];
-  assert (vnodep);
-  vnodep->addHandler (progno, hand);
+bool
+chord::isHandled (int progno) {
+  for (unsigned int i = 0; i < handledProgs.size (); i++)
+    if (progno == handledProgs[i]) return true;
+  return false;
 }
-
+void
+chord::handleProgram (rpc_program prog) {
+  if (isHandled (prog.progno)) return;
+  else {
+    handledProgs.push_back (prog.progno);
+    ptr<asrv> s = asrv::alloc (x_dgram, prog);
+    s->setcb (wrap (mkref(this), &chord::dispatch, s));
+  }
+  
+}
 void
 chord::dispatch (ptr<asrv> s, svccb *sbp)
 {
   if (!sbp) {
-    //warn << "chord::dispatch EOF\n";
     s->setcb (NULL);
     return;
   }
+
   nrcv++;
   chord_vnode *v = sbp->template getarg<chord_vnode> ();
   vnode *vnodep = vnodes[v->n];
   if (!vnodep) {
-    warnx << "CHORD: unknown node in " << sbp->proc() << "request " << v->n << "\n";
+    warnx << "CHORD: unknown node in " << sbp->proc() 
+	  << "request " << v->n << "\n";
     sbp->replyref (chordstat (CHORD_UNKNOWNNODE));
     return;
   }
-  switch (sbp->proc ()) {
-  case CHORDPROC_NULL: 
-    {
-      sbp->reply (NULL);
-    }
-    break;
-  case CHORDPROC_GETSUCCESSOR:
-    {
-      warnt("CHORD: getsuccessor_request");
-      vnodep->doget_successor (sbp);
-    }
-    break;
-  case CHORDPROC_GETPREDECESSOR:
-    {
-      warnt("CHORD: getpredecessor_request");
-      vnodep->doget_predecessor (sbp);
-    }
-    break;
-  case CHORDPROC_FINDCLOSESTPRED:
-    {
-      chord_findarg *fa = sbp->template getarg<chord_findarg> ();
-      warn << "(find_pred) looking for " << fa->v.n << "\n";
-      warnt("CHORD: findclosestpred_request");
-      vnodep->dofindclosestpred (sbp, fa);
-    }
-    break;
-  case CHORDPROC_NOTIFY:
-    {
-      chord_nodearg *na = sbp->template getarg<chord_nodearg> ();
-      warnt("CHORD: donotify");
-      vnodep->donotify (sbp, na);
-    }
-    break;
-  case CHORDPROC_ALERT:
-    {
-      chord_nodearg *na = sbp->template getarg<chord_nodearg> ();
-      warnt("CHORD: alert");
-      vnodep->doalert (sbp, na);
-    }
-    break;
-  case CHORDPROC_TESTRANGE_FINDCLOSESTPRED:
-    {
-      warnt("CHORD: testandfindrequest");
-      chord_testandfindarg *fa = 
-        sbp->template getarg<chord_testandfindarg> ();
-      vnodep->dotestrange_findclosestpred (sbp, fa);
-    }
-    break;
-  case CHORDPROC_GETFINGERS: 
-    {
-      warnt("CHORD: getfingers_request");
-      vnodep->dogetfingers (sbp);
-    }
-    break;
-  case CHORDPROC_CHALLENGE:
-    {
-      warnt("CHORD: challenge");
-      chord_challengearg *ca = 
-        sbp->template getarg<chord_challengearg> ();
-      vnodep->dochallenge (sbp, ca);
-    }
-    break;
-  case CHORDPROC_HOSTRPC:
-    {
-      chord_RPC_arg *arg = sbp->template getarg<chord_RPC_arg> ();
-      cbdispatch_t dispatch = vnodep->getHandler(arg->host_prog);
-      if (dispatch) {
-	long xid = locations->new_xid (sbp);
-	(dispatch)(arg->host_proc, arg, xid);
-      } else {
-	chord_RPC_res res;
-	res.set_status (CHORD_NOHANDLER);
-	sbp->replyref (res);
+
+  if (sbp->prog () == CHORD_PROGRAM) {
+    switch (sbp->proc ()) {
+    case CHORDPROC_NULL: 
+      {
+	sbp->reply (NULL);
       }
+      break;
+    case CHORDPROC_GETSUCCESSOR:
+      {
+	warnt("CHORD: getsuccessor_request");
+	vnodep->doget_successor (sbp);
+      }
+      break;
+    case CHORDPROC_GETPREDECESSOR:
+      {
+	warnt("CHORD: getpredecessor_request");
+	vnodep->doget_predecessor (sbp);
+      }
+      break;
+    case CHORDPROC_FINDCLOSESTPRED:
+      {
+	chord_findarg *fa = sbp->template getarg<chord_findarg> ();
+	warn << "(find_pred) looking for " << fa->v.n << "\n";
+	warnt("CHORD: findclosestpred_request");
+	vnodep->dofindclosestpred (sbp, fa);
+      }
+      break;
+    case CHORDPROC_NOTIFY:
+      {
+	chord_nodearg *na = sbp->template getarg<chord_nodearg> ();
+	warnt("CHORD: donotify");
+	vnodep->donotify (sbp, na);
+      }
+      break;
+    case CHORDPROC_ALERT:
+      {
+	chord_nodearg *na = sbp->template getarg<chord_nodearg> ();
+	warnt("CHORD: alert");
+	vnodep->doalert (sbp, na);
+      }
+      break;
+    case CHORDPROC_TESTRANGE_FINDCLOSESTPRED:
+      {
+	warnt("CHORD: testandfindrequest");
+	chord_testandfindarg *fa = 
+	  sbp->template getarg<chord_testandfindarg> ();
+	vnodep->dotestrange_findclosestpred (sbp, fa);
+      }
+      break;
+    case CHORDPROC_GETFINGERS: 
+      {
+	warnt("CHORD: getfingers_request");
+	vnodep->dogetfingers (sbp);
+      }
+      break;
+    case CHORDPROC_GETFINGERS_EXT: 
+      {
+	warnt("CHORD: getfingers_ext_request");
+	vnodep->dogetfingers_ext (sbp);
+      }
+      break;
+    case CHORDPROC_CHALLENGE:
+      {
+	warnt("CHORD: challenge");
+	chord_challengearg *ca = 
+	  sbp->template getarg<chord_challengearg> ();
+	vnodep->dochallenge (sbp, ca);
+      }
+      break;
+    default:
+      sbp->reject (PROC_UNAVAIL);
+      break;
+    }  /* switch sbp->proc () */
+  } else { /* not a CHORDPROG RPC */
+    cbdispatch_t dispatch = vnodep->getHandler(sbp->prog ());
+    if (dispatch) {
+      (dispatch)(sbp);
+    } else {
+      chord_RPC_res res;
+      res.set_status (CHORD_NOHANDLER);
+      sbp->replyref (res);
     }
-    break;
-  default:
-    sbp->reject (PROC_UNAVAIL);
-    break;
   }
+  
 }
 
 

@@ -55,7 +55,7 @@ typedef callback<void,vnode*,chordstat>::ref cbjoin_t;
 typedef callback<void,chordID,net_address,chordstat>::ref cbchordID_t;
 typedef callback<void,chordID,route,chordstat>::ref cbroute_t;
 typedef unsigned long cxid_t;
-typedef callback<void, unsigned long, chord_RPC_arg *, cxid_t>::ref cbdispatch_t;
+typedef callback<void, svccb *>::ref cbdispatch_t;
 
 struct findpredecessor_cbstate {
   chordID x;
@@ -111,6 +111,7 @@ class vnode : public virtual refcount {
   u_long ndoalert;
   u_long ndotestrange;
   u_long ndogetfingers;
+  u_long ndogetfingers_ext;
   u_long ndochallenge;
 
   timecb_t *stabilize_continuous_tmo;
@@ -209,12 +210,12 @@ class vnode : public virtual refcount {
   void donotify (svccb *sbp, chord_nodearg *na);
   void doalert (svccb *sbp, chord_nodearg *na);
   void dogetfingers (svccb *sbp);
+  void dogetfingers_ext (svccb *sbp);
   void dochallenge (svccb *sbp, chord_challengearg *ca);
 
   //RPC demux
-  void addHandler (unsigned long prog, cbdispatch_t cb) {
-    dispatch_table.insert (prog, cb);
-  };
+  void addHandler (rpc_program prog, cbdispatch_t cb);
+
   cbdispatch_t getHandler (unsigned long prog) {
     return dispatch_table [prog];
   };
@@ -228,6 +229,8 @@ class chord : public virtual refcount {
   str myname;
   chordID wellknownID;
   int ss_mode;
+  ptr<axprt> x_dgram;
+  vec<int> handledProgs;
 
   qhash<chordID, ref<vnode>, hashID> vnodes;
   ptr<vnode> active;
@@ -257,8 +260,9 @@ class chord : public virtual refcount {
 
   int get_port () { return myport; }
 
-  //support for demultiplexing RPCs to vnodes
-  void register_handler (int progno, chordID dest, cbdispatch_t hand);
+  //RPC demux
+  void handleProgram (rpc_program prog);
+  bool isHandled (int progno);
 
   //'wrappers' for vnode functions (to be called from higher layers)
   void set_active (int n) { 
@@ -281,9 +285,9 @@ class chord : public virtual refcount {
   void get_predecessor (chordID n, cbchordID_t cb) {
     active->get_predecessor (n, cb);
   };
-  void doRPC (chordID &from, chordID &n, rpc_program progno, int procno, ptr<void> in, 
+  void doRPC (chordID &n, rpc_program progno, int procno, ptr<void> in, 
 	      void *out, aclnt_cb cb) {
-    locations->doRPC (from,  n , progno, procno, in, out, cb, getusec ());
+    locations->doRPC (n, progno, procno, in, out, cb, getusec ());
   };
   void alert (chordID &n, chordID &x) {
     active->alert (n, x);

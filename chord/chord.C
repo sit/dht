@@ -502,23 +502,6 @@ vnode::stabilize_succ ()
 }
 
 void
-vnode::stabilize_getpred_cb_ok (chordID p, bool ok, chordstat status)
-{
-  nout_continuous--;
-  if ((status == CHORD_OK) && ok) {
-    if (betweenleftincl (finger_table[1].start, finger_table[1].first.n, p)) {
-      // warnx << "stabilize_pred_cb_ok: " << myID << " new successor is "
-      //   << p << "\n";
-      net_address r = locations->getaddress (p);
-      locations->changenode (&finger_table[1].first, p, r);
-      updatefingers (p, r);
-      stable_fingers = false;
-      notify (finger_table[1].first.n, myID);
-    }
-  }
-}
-
-void
 vnode::stabilize_getpred_cb (chordID p, net_address r, chordstat status)
 {
   // receive predecessor from my successor; in stable case it is me
@@ -528,15 +511,27 @@ vnode::stabilize_getpred_cb (chordID p, net_address r, chordstat status)
     stable_fingers = false;
     nout_continuous--;
   } else {
-    //    warnx << "stabilize_pred_cb: s " << finger_table[1].start << " first "
-    //  << finger_table[1].first.n << " p " << p << "\n";
     if (betweenleftincl (finger_table[1].start, finger_table[1].first.n, p)) {
-      //      warnx << "stabilize_pred_cb: " << myID << " check " << p 
-      //    << "'s identity\n";
       locations->cacheloc (p, r);
       challenge (p, wrap (mkref (this), &vnode::stabilize_getpred_cb_ok));
     } else {
       nout_continuous--;
+      notify (finger_table[1].first.n, myID);
+    }
+  }
+}
+
+
+void
+vnode::stabilize_getpred_cb_ok (chordID p, bool ok, chordstat status)
+{
+  nout_continuous--;
+  if ((status == CHORD_OK) && ok) {
+    if (betweenleftincl (finger_table[1].start, finger_table[1].first.n, p)) {
+      net_address r = locations->getaddress (p);
+      locations->changenode (&finger_table[1].first, p, r);
+      updatefingers (p, r);
+      stable_fingers = false;
       notify (finger_table[1].first.n, myID);
     }
   }
@@ -563,11 +558,8 @@ vnode::stabilize_getsucc_cb (chordID s, net_address r, chordstat status)
 	  << " failure " << status << "\n";
     stable_fingers = false;
   } else {
-    if (s != myID) {
+    if (s != myID) 
       stable_fingers = false;
-      // warnx << "stabilize_succ_cb: " << myID << " my pred " 
-      //   << predecessor.n << " has " << s << " as succ\n";
-    }
   }
 }
 
@@ -778,7 +770,6 @@ vnode::join (cbjoin_t cb)
   } else {
     net_address r = locations->getaddress (n);
     updatefingers (n, r);
-    // warn << "find succ for me " << myID << "\n";
     find_successor (myID, wrap (mkref (this), &vnode::join_getsucc_cb, cb));
   }
 }
@@ -968,6 +959,43 @@ vnode::dogetfingers (svccb *sbp)
     if (finger_table[i].first.n != finger_table[i-1].first.n) {
       res.resok->fingers[n].x = finger_table[i].first.n;
       res.resok->fingers[n].r = locations->getaddress (finger_table[i].first.n);
+      n++;
+    }
+  }
+  warnt("CHORD: dogetfingers_reply");
+  sbp->reply (&res);
+}
+
+
+void
+vnode::dogetfingers_ext (svccb *sbp)
+{
+  chord_getfingers_ext_res res(CHORD_OK);
+  ndogetfingers_ext++;
+  int n = 1;
+  for (int i = 1; i <= NBIT; i++) {
+    if (!finger_table[i].first.alive) continue;
+    if (finger_table[i].first.n != finger_table[i-1].first.n) {
+      n++;
+    }
+  }
+  res.resok->fingers.setsize (n);
+  res.resok->fingers[0].x = finger_table[0].first.n;
+  location *l = locations->getlocation (finger_table[0].first.n);
+  res.resok->fingers[0].r = locations->getaddress (finger_table[0].first.n);
+  res.resok->fingers[0].a_lat = (long)(l->a_lat * 100);
+  res.resok->fingers[0].a_var = (long)(l->a_var * 100);
+  res.resok->fingers[0].nrpc = l->nrpc;
+  n = 1;
+  for (int i = 1; i <= NBIT; i++) {
+    if (!finger_table[i].first.alive) continue;
+    if (finger_table[i].first.n != finger_table[i-1].first.n) {
+      l = locations->getlocation (finger_table[i].first.n);
+      res.resok->fingers[n].x = finger_table[i].first.n;
+      res.resok->fingers[n].r = locations->getaddress (finger_table[i].first.n);
+      res.resok->fingers[n].a_lat = (long)(l->a_lat * 100);
+      res.resok->fingers[n].a_var = (long)(l->a_var * 100);
+      res.resok->fingers[n].nrpc = l->nrpc;
       n++;
     }
   }

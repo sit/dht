@@ -27,7 +27,8 @@
  *
  */
 
-//#define FAKE_DELAY
+
+#include "aclnt_chord.h"
 
 class chord;
 
@@ -59,42 +60,25 @@ struct RPC_delay_args {
     
 };
 
-struct frpc_state {
-  chord_RPC_res *res;
-  void *out;
-  int procno;
+
+struct rpc_state {
   aclnt_cb cb;
   chordID ID;
   u_int64_t s;
-  int outgoing_len;
-  timecb_t *tmo;
   long seqno;
+  rpccb_chord *b;
+  int rexmits;
 
-  tailq_entry<frpc_state> q_link;
+  rpc_state (aclnt_cb c, chordID id, u_int64_t S, long s) 
+    : cb (c), ID (id), s (S),  seqno (s), b (NULL), rexmits (0) {};
 
-  frpc_state (chord_RPC_res *r, void *o, int pr, 
-	      aclnt_cb c,
-	      chordID id, u_int64_t S, int out_size, long s) 
-    : res (r), out (o), procno (pr), cb (c), ID (id), s (S), outgoing_len (out_size), tmo (NULL), seqno (s) {};
 };
 
-struct delayed_reply {
-  long xid;
-  void *out;
-  long outlen;
+struct sent_elm {
+  tailq_entry<sent_elm> q_link;
+  long seqno;
   
-  tailq_entry <delayed_reply> q_link;
-
-  delayed_reply (long x, void *o, long l) : 
-    xid (x), outlen (l)
-  { 
-    out = (void *)New char[outlen];
-    memcpy (out, o, l);
-  };
-
-  ~delayed_reply () {
-    free (out);
-  }
+  sent_elm (long s) : seqno (s) {};
 };
 
 struct location {
@@ -108,6 +92,7 @@ struct location {
   u_int64_t nrpc;
   u_int64_t maxdelay;
   float a_lat;
+  float a_var;
 
   location (chordID &_n, net_address &_r);
   ~location ();
@@ -132,19 +117,34 @@ class locationtable : public virtual refcount {
   u_int64_t rpcdelay;
   u_int64_t nrpc;
   float a_lat;
+  float a_var;
+  float avg_lat;
+  float bf_lat;
+  float bf_var;
   u_int64_t nrpcfailed;
   u_int64_t nsent;
   u_int64_t npending;
+  vec<float> timers;
+  vec<float> lat_little;
+  vec<float> lat_big;
+  vec<float> cwind_time;
+  vec<float> cwind_cwind;
+  vec<long> acked_seq;
+  vec<float> acked_time;
 
   u_long nnodessum;
   u_long nnodes;
   unsigned nvnodes;
 
   float cwind;
+  float ssthresh;
   int left;
+  float cwind_cum;
+  int num_cwind_samples;
+  int num_qed;
 
   tailq<RPC_delay_args, &RPC_delay_args::q_link> Q;
-  tailq<frpc_state, &frpc_state::q_link> sent_Q;
+  tailq<sent_elm, &sent_elm::q_link> sent_Q;
 
   timecb_t *idle_timer;
 
@@ -152,14 +152,12 @@ class locationtable : public virtual refcount {
   //ptr<aclnt> dgram_clnt;
 
   qhash<long, svccb *> octbl;
-  unsigned long last_xid;
   
   locationtable ();
 
   void connect_cb (location *l, callback<void, ptr<axprt_stream> >::ref cb, 
 		   int fd);
-  void doRPCcb (chordID ID, aclnt_cb cb, u_int64_t s, 
-		ptr<aclnt> c, clnt_stat err);
+  void doRPCcb (ptr<aclnt> c, rpc_state *C, clnt_stat err);
 
   void dorpc_connect_cb(location *l, ptr<axprt_stream> x);
   void chord_connect(chordID ID, callback<void, ptr<axprt_stream> >::ref cb);
@@ -169,24 +167,17 @@ class locationtable : public virtual refcount {
   void delete_cachedlocs (void);
   void remove_cachedlocs (location *l);
 
-  void update_latency (chordID ID, u_int64_t lat);
+  void update_latency (chordID ID, u_int64_t lat, bool bf);
   void ratecb ();
   void update_cwind (int acked);
-  void rexmit_handler (long seqno);
+  void rexmit_handler (rpc_state *s);
   void enqueue_rpc (RPC_delay_args *args);
-  void rpc_done (frpc_state *C);
+  void rpc_done (long seqno);
   void reset_idle_timer ();
   void idle ();
-  void setup_rexmit_timer (chordID ID, frpc_state *C);
-  void timeout_cb (frpc_state *C);
-  void issue_RPC (long seqno, ptr<aclnt> c, chord_RPC_arg *farg, 
-		  chord_RPC_res *res, aclnt_cb cb);
-  void issue_RPC_delay (long seqno, ptr<aclnt> c, chord_RPC_arg *farg, 
-			chord_RPC_res *res, aclnt_cb cb);
+  void setup_rexmit_timer (chordID ID, long *sec, long *nsec);
+  void timeout_cb (rpc_state *C);
 
-#ifdef FAKE_DELAY
-  void doRPC_delayed (RPC_delay_args *args);
-#endif / *FAKE_DELAY */
 
  public:
   locationtable (ptr<chord> _chordnode, int _max_connections);
@@ -216,43 +207,29 @@ class locationtable : public virtual refcount {
   chordID query_location_table (chordID x);
   void changenode (node *n, chordID &n, net_address &r);
   void checkrefcnt (int i);
-  void doRPC (chordID &from, chordID &n, rpc_program progno, 
+  void doRPC (chordID &n, rpc_program progno, 
 	      int procno, ptr<void> in, 
 	      void *out, aclnt_cb cb, u_int64_t s);
 
-  void doRPC_udp (chordID &from, chordID &n, rpc_program progno, 
+  void doRPC_udp (chordID &n, rpc_program progno, 
 		  int procno, ptr<void> in, 
 		  void *out, aclnt_cb cb, u_int64_t s);
 
-  void doRPC_tcp (chordID &from, chordID &n, rpc_program progno, 
+  void doRPC_tcp (chordID &n, rpc_program progno, 
 		  int procno, ptr<void> in, 
 		  void *out, aclnt_cb cb, u_int64_t s);
 
 
   void doRPC_tcp_connect_cb (RPC_delay_args *args, int fd);
 
-  void doRPC_issue (chordID &from, chordID &ID, 
+  void doRPC_issue (chordID &ID, 
 		    rpc_program prog, int procno, 
 		    ptr<void> in, void *out, aclnt_cb cb,
-		    u_int64_t sp,
-		    ptr<aclnt> c);
-
+		    u_int64_t sp, ref<aclnt> c);
 
 
   void stats ();
 
-  long new_xid (svccb *sbp);
-  void reply (long xid, void *out, long outlen);
-  bool doForeignRPC (ptr<aclnt> c, rpc_program prog,
-		     unsigned long procno,
-		     ptr<void> in,
-		     void *out,
-		     chordID ID,
-		     aclnt_cb cb);
-
-  void doForeignRPC_cb (frpc_state *C, rpc_program prog,
-			ptr<aclnt> c,
-			clnt_stat err);
   
 };
 

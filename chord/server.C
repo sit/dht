@@ -319,7 +319,15 @@ vnode::challenge_cb (int challenge, chordID x, cbchallengeID_t cb,
 }
 
 void
+vnode::addHandler (rpc_program prog, cbdispatch_t cb) 
+{
+  dispatch_table.insert (prog.progno, cb);
+  chordnode->handleProgram (prog);
+};
+
+void
 vnode::doRPC (chordID &ID, rpc_program prog, int procno, 
 	      ptr<void> in, void *out, aclnt_cb cb) {
-  locations->doRPC (myID, ID, prog, procno, in, out, cb, getusec ());
+  locations->doRPC (ID, prog, procno, in, out, cb, getusec ());
 }
+
