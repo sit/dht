@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 [NAMES_GO_HERE]
+ * Copyright (c) 2003 [Frank Dabek]
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -22,7 +22,10 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+//chord toe is no longer supported
+
 #include "chordtoe.h"
+#include "observers/chordobserver.h"
 
 #define TOE_GREEDY_LAT 0
 #define TOE_GREEDY_ID 1
@@ -166,11 +169,12 @@ ChordToe::add_toe (IDMap id)
 }
 
 void
-ChordToe::init_state (vector<IDMap> ids) 
+ChordToe::initstate ()
 {
+  vector<IDMap> ids = ChordObserver::Instance(NULL)->get_sorted_nodes();
   loctable->set_evict (false);
 
-  ChordFingerPNS::init_state (ids);
+  ChordFingerPNS::initstate ();
 
   int worst_lat = 1000000; //timeout is a good max
 

@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.34 2003/12/08 15:55:48 thomer Exp $ */
+/* $Id: tapestry.C,v 1.35 2003/12/08 21:28:49 jinyang Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -35,7 +35,6 @@ Tapestry::Tapestry(IPAddress i, Args a) : P2Protocol(i),
     _base(a.nget<uint>("base", 16, 10)),
     _bits_per_digit((uint) (log10(((double) _base))/log10((double) 2))),
     _digits_per_id((uint) 8*sizeof(GUID)/_bits_per_digit),
-    _init_state(a.nget<uint>("init_state", 1, 10)),
     _redundant_lookup_num(a.nget<uint>("redundant_lookup_num", 3, 10))
 {
 
@@ -1148,10 +1147,6 @@ Tapestry::check_rt(void *x)
 void
 Tapestry::initstate()
 {
-  if( !_init_state ) {
-    return;
-  }
-
   const set<Node *> *lid = Network::Instance()->getallnodes();
 
   // TODO: we shouldn't need locking in here, right?

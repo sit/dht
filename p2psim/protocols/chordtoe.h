@@ -53,7 +53,7 @@ public:
   
   void dump() {};
   bool stabilized (vector<CHID> lid) { return true;}
-  void init_state(vector<IDMap> ids);
+  void initstate();
   
 protected:
 

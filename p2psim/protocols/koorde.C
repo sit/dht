@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 [NAMES_GO_HERE]
+ * Copyright (c) 2003 [Frans Kaashoek]
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -23,6 +23,7 @@
  */
 
 #include "koorde.h"
+#include "observers/chordobserver.h"
 #include <stdio.h>
 
 extern bool vis;
@@ -536,8 +537,9 @@ Koorde::stabilized (vector<ConsistentHash::CHID> lid)
 }
 
 void 
-Koorde::init_state(vector<IDMap> ids)
+Koorde::initstate()
 {
+  vector<IDMap> ids = ChordObserver::Instance(NULL)->get_sorted_nodes();
   uint nnodes = ids.size ();
 
   Chord::CHID y = ConsistentHash::log_b ((Chord::CHID) nnodes, 2);
@@ -551,8 +553,7 @@ Koorde::init_state(vector<IDMap> ids)
   if (resilience > 0) {
     loctable->pin (debruijnpred, resilience, 1);
   }
-
-  Chord::init_state (ids);
+  Chord::initstate();
 }
 
 void

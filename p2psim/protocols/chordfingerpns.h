@@ -98,7 +98,7 @@ class ChordFingerPNS: public Chord {
 
     bool stabilized(vector<CHID> lid);
     void dump();
-    void init_state(vector<IDMap> ids);
+    void initstate();
 
     void reschedule_pns_stabilizer(void *x);
     void fix_pns_fingers(bool restart);

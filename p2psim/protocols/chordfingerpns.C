@@ -23,6 +23,7 @@
  */
 
 #include  "chordfingerpns.h"
+#include "observers/chordobserver.h"
 #include <stdio.h>
 
 /* Gummadi's Chord PNS algorithm  (static) */
@@ -41,8 +42,9 @@ ChordFingerPNS::ChordFingerPNS(IPAddress i, Args& a, LocTable *l)
 }
 
 void
-ChordFingerPNS::init_state(vector<IDMap> ids)
+ChordFingerPNS::initstate()
 {
+  vector<IDMap> ids = ChordObserver::Instance(NULL)->get_sorted_nodes();
   uint sz = ids.size();
   uint my_pos = find(ids.begin(), ids.end(), me) - ids.begin();
   assert(ids[my_pos].id == me.id);
@@ -76,22 +78,14 @@ ChordFingerPNS::init_state(vector<IDMap> ids)
 	  if (_samples > 0 && k>= _samples) break;
 	}
       }
- //     loctable->add_node(ids[s_pos]);//add immediate finger
-#ifdef CHORD_DEBUG
-      if (me.ip == 19) {
-	printf("init_state_add_node %qx, %u\n", min_f.id, min_f.ip);
-      }
-#endif
       loctable->add_node(min_f);//add pns finger
     }
   }
 
-  Chord::init_state(ids);
-  // uint lsz = loctable->size();
 #ifdef CHORD_DEBUG
   printf("chordfingerpns %u init_state %d\n", me.ip, lsz);
 #endif
-//  ((LocTablePNS *)loctable)->rebuild_pns_finger_table(_base, _stab_succ);
+  Chord::initstate();
 }
 
 bool

@@ -23,6 +23,7 @@
  */
 
 #include  "chordfinger.h"
+#include "observers/chordobserver.h"
 
 extern bool static_sim;
 
@@ -48,8 +49,9 @@ ChordFinger::ChordFinger(IPAddress i, Args &a, LocTable *l) : Chord(i, a, l)
 }
 
 void
-ChordFinger::init_state(vector<IDMap> ids)
+ChordFinger::initstate()
 {
+  vector<IDMap> ids = ChordObserver::Instance(NULL)->get_sorted_nodes();
   uint sz = ids.size();
   uint my_pos = find(ids.begin(), ids.end(), me) - ids.begin();
   assert(ids[my_pos].id == me.id);
@@ -65,7 +67,7 @@ ChordFinger::init_state(vector<IDMap> ids)
       loctable->add_node(ids[s_pos]);
     }
   }
-  Chord::init_state(ids);
+  Chord::initstate();
 }
 
 void

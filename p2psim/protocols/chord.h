@@ -179,7 +179,7 @@ public:
   void lookup_internal(lookup_args *a);
 
   CHID id () { return me.id; }
-  virtual void init_state(vector<IDMap> ids);
+  virtual void initstate();
   virtual bool stabilized(vector<CHID>);
   bool check_correctness(CHID k, vector<IDMap> v);
 

@@ -38,7 +38,7 @@ class ChordFinger: public Chord {
     bool stabilized(vector<CHID> lid);
     void reschedule_finger_stabilizer(void *x);
     void dump();
-    void init_state(vector<IDMap> ids);
+    void initstate();
     virtual void join(Args *);
 
   protected:

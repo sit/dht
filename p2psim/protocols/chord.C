@@ -106,7 +106,6 @@ Chord::Chord(IPAddress i, Args& a, LocTable *l) : P2Protocol(i), _isstable (fals
   if (vis) {
     printf ("vis %llu node %16qx\n", now (), me.id);
   }
-  _inited = false;
 
   _stab_basic_running = false;
 
@@ -142,19 +141,19 @@ Chord::~Chord()
     for (uint i = 0; i <= TYPE_PNS_UP; i++) 
       allpkts += stat[i];
 
+    printf("%.0f ", allpkts);
     for (uint i = 0; i <= TYPE_PNS_UP; i++)
       printf("%.0f ", stat[i]);
 
-    printf("%.0f ", allpkts);
-    printf("%.3f ", _lookup_interval/_lookup_num);
-    printf("%.3f ", _lookup_success/_lookup_num);
-    printf("%.3f ", _lookup_retries/_lookup_num);
-    printf("%.3f ", _lookup_hops/_lookup_int_num);
-    printf("%.3f ", _lookup_timeouts/_lookup_int_num);
-    printf("%.3f ", _lookup_to_waste/_lookup_int_num);
-    printf("%.0f\n", _lookup_num);
+    printf("%.3f ", _lookup_interval/_lookup_num); //average lookup latency
+    printf("%.3f ", _lookup_success/_lookup_num); //average success rate
+    printf("%.3f ", _lookup_retries/_lookup_num); //average lookup retry
+    printf("%.3f ", _lookup_hops/_lookup_int_num); //average lookup hopcount
+    printf("%.3f ", _lookup_timeouts/_lookup_int_num); //average number of timeouts happened per lookup
+    printf("%.3f ", _lookup_to_waste/_lookup_int_num); //average time wasted in lookup timeouts
+    printf("%.0f\n", _lookup_num); //total number of user lookups
   }
-  delete loctable;
+//  delete loctable; gives me wierd seg faults in skiplist.h
 }
 
 char *
@@ -171,7 +170,7 @@ Chord::check_static_init()
   if (!static_sim) return;
   if (!_inited) {
     _inited = true;
-    this->init_state(ChordObserver::Instance(NULL)->get_sorted_nodes());
+    this->initstate();
   }
 }
 
@@ -731,6 +730,11 @@ Chord::find_successors_recurs(CHID key, uint m, uint all, uint type, uint *recur
 #endif
     if (!fr.correct) 
       fr.v.clear();
+    _lookup_int_num += 1;
+    _lookup_hops += (psz - total_to);
+    _lookup_timeouts += total_to;
+    _lookup_int_num += 1;
+    _lookup_to_waste += wasted;
   }
   assert(psz < 20);
   return fr.v;
@@ -762,7 +766,9 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
     if (succs.size() == 0) {
       //lookup failed
       //XXX do i need to backtrack?
+#ifdef CHORD_DEBUG
       printf("%s succ size is 0, failed request %qx\n", ts(), args->key);
+#endif
       ret->v.clear();
 
       //rejoin baby
@@ -1117,8 +1123,9 @@ Chord::stabilized(vector<CHID> lid)
 }
 
 void
-Chord::init_state(vector<IDMap> ids)
+Chord::initstate()
 {
+  vector<IDMap> ids = ChordObserver::Instance(NULL)->get_sorted_nodes();
   uint sz = ids.size();
   uint my_pos = find(ids.begin(), ids.end(), me) - ids.begin();
   assert(ids[my_pos].id == me.id);
@@ -1134,7 +1141,6 @@ Chord::init_state(vector<IDMap> ids)
   printf("%s inited %d %d succ is %u,%qx\n", ts(), ids.size(), 
       loctable->size(), succ1.ip, succ1.id);
 #endif
-
   _inited = true;
 }
 
