@@ -46,7 +46,6 @@ dhashclient::dispatch (svccb *sbp)
 
       ptr<dhash_fetch_arg> arg = New refcounted<dhash_fetch_arg> (*farg);
       
-      warn << "lookup request for " << arg->key << "\n";
       chordID next = clntnode->lookup_closestpred (arg->key);
       dhash_fetchiter_res *i_res = New dhash_fetchiter_res (DHASH_CONTINUE);
       

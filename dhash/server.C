@@ -90,7 +90,6 @@ dhash::dispatch (unsigned long procno,
 
       dhash_fetchiter_res *res = New dhash_fetchiter_res (DHASH_CONTINUE);
 
-      warn << "requst for " << farg->key << " at " << host_node->my_ID () << "\n";
       if (key_status (farg->key) != DHASH_NOTPRESENT) {
 	//fetch the key and return it, end of story
 	fetch (farg->key, wrap (this, &dhash::fetchiter_svc_cb,

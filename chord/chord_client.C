@@ -53,7 +53,7 @@ chord::startchord (int myp)
   if (srvfd < 0)
     fatal ("binding UDP port %d: %m\n", myp);
 
-  if (myp ==0) {
+  if (myp == 0) {
     struct sockaddr_in addr;
     socklen_t len = sizeof (addr);
     bzero (&addr, sizeof (addr));
