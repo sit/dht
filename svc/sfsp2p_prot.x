@@ -28,6 +28,13 @@ struct mapping {
   route r;
 };
 
+struct wedge {
+  sfs_ID start;
+  sfs_ID end;
+  sfs_ID first;
+  bool alive;
+};
+
 struct sfsp2p_findresok {
   sfs_ID x;
   sfs_ID node;
@@ -82,6 +89,32 @@ union sfsp2p_lookupres switch (sfsp2pstat status) {
    void;
 };
 
+struct sfsp2p_getstatsresok {
+  int total_lookups;
+  int total_lookup_RPCs;
+  int min_RPCs;
+  int max_RPCs;
+};
+
+union sfsp2p_getstatsres switch (sfsp2pstat status) {
+  case SFSP2P_OK:
+    sfsp2p_getstatsresok resok;
+  default:
+   void;
+};
+
+struct sfsp2p_routtablesresok {
+  wedge succ[33];
+  wedge pre[33];
+};
+
+union sfsp2p_routtablesres switch (sfsp2pstat status) {
+  case SFSP2P_OK:
+    sfsp2p_routtablesresok resok;
+  default:
+   void;
+};
+
 program SFSP2P_PROGRAM {
 	version SFSP2P_VERSION {
 		void 
@@ -128,6 +161,12 @@ program SFSP2PCLNT_PROGRAM {
 
 		sfsp2pstat
 		SFSP2PCLNTPROC_INSERT (sfsp2p_insertarg) = 2;
+
+		sfsp2p_getstatsres
+		SFSP2PCLNTPROC_GETSTATS (void) = 3;
+
+		sfsp2p_routtablesres
+		SFSP2PCLNTPROC_ROUTTABLES (void) = 4;
 	} = 1;
 } = 344448;
 
