@@ -216,18 +216,27 @@ Ida::unpack (const str &in, vec<u_long> &out)
 bool
 Ida::reconstruct (const vec<str> &frags, strbuf &out)
 {
+  if (frags.size () == 0) {
+    idatrace << "no fragments!\n";
+    return false;
+  }
   int inp = 0;
 
-  // XXX select a fragment at random until a good one is found.
+#if 0
+  // Select a random combination of the supplied fragments.
+  vec<ptrdiff_t> o;
+  o.setsize (frags.size ());
+#endif /* 0 */  
+  
   u_long len = unpackone (frags[0], inp);
   u_long rawlen = unpackone (frags[0], inp);
   u_long m = unpackone (frags[0], inp);
   if (len < m + 4) {
-    idatrace << "fragment 0 too short.\n";
+    idatrace << "fragment 0 too short; coded length " << frags[0].len () << "\n";
     return false;
   }
   if (frags.size () < m) {
-    idatrace << "not enough fragments.\n";
+    idatrace << "not enough fragments (" << frags.size () << "/" << m << ").\n";
     return false;
   }
   
@@ -244,19 +253,20 @@ Ida::reconstruct (const vec<str> &frags, strbuf &out)
     len = unpackone (in, inp);
     if (len < m + 4) {
       idatrace << "fragment " << i << " length " << len
-	       << "too short; want at least " << m + 4 << "\n";
+	       << " too short; want at least " << m + 4 << "; coded length "
+	       << in.len () << ".\n";
       return false;
     }
     u_long myrawlen = unpackone (in, inp);
     if (myrawlen != rawlen) {
       idatrace << "fragment " << i << " rawlen = " << myrawlen
-	       << "not consistent; expected rawlen = " << rawlen << "\n";
+	       << " not consistent; expected rawlen = " << rawlen << "\n";
       return false;
     }
     u_long mym = unpackone (in, inp);
     if (mym != m) {
       idatrace << "fragment " << i << " m = " << mym
-	       << "not consistent; expected m = " << m << "\n";
+	       << " not consistent; expected m = " << m << "\n";
       return false;
     }
 
@@ -382,3 +392,20 @@ Ida::minvert (int rows, int cols,
   return true;
 }
 
+#if 0
+str
+Ida::frag_get_header (const str &in)
+{
+  // A lot of trouble just to get the true end of the header.
+  int inp = 0;
+  (void) unpackone (in, inp);
+  (void) unpackone (in, inp);
+  u_long m = unpackone (in, inp);
+
+  for (size_t j = 0; j < m; j++) {
+    (void) unpackone (in, inp);
+  }
+  (void) unpackone (in, inp);
+  return substr (in, 0, inp);
+}
+#endif /* 0 */
