@@ -17,6 +17,7 @@ extern bool static_sim;
 Chord::Chord(Node *n, uint numsucc)
   : DHTProtocol(n), _isstable (false)
 {
+  _vivaldi = NULL;
   nsucc = numsucc;
   me.ip = n->ip();
   me.id = ConsistentHash::ip2chid(me.ip); 
@@ -30,7 +31,6 @@ Chord::Chord(Node *n, uint numsucc)
     printf ("vis %llu node %16qx\n", now (), me.id);
   }
   _inited = false;
-  _vivaldi = NULL;
 }
 
 Chord::~Chord()
@@ -68,7 +68,7 @@ Chord::lookup(Args *args)
   Topology *t = Network::Instance()->gettopology();
   if (recurs) {
     IDMap v = find_successors_recurs(k, false);
-    uint lat = t->latency(me.ip, v.ip);
+    //    uint lat = t->latency(me.ip, v.ip);
   } else {
     vector<IDMap> v = find_successors(k, 1, false); 
     uint lat = v.size()>0? t->latency(me.ip, v[0].ip):0;
@@ -191,7 +191,7 @@ Chord::find_successors_recurs(CHID key, bool intern)
   fa.v.push_back(me);
   fa.key = key;
 
-  Time before = now();
+  //  Time before = now();
   doRPC(me.ip, &Chord::next_recurs_handler, &fa, &fr);
   IDMap succ = fr.v.back();
   if (!intern) {
@@ -208,7 +208,7 @@ Chord::find_successors_recurs(CHID key, bool intern)
       total_lat += 2 * t->latency(fr.v[i].ip,fr.v[i+1].ip);
     }
   }
-  uint interval = now() - before;
+  //  uint interval = now() - before;
   //assert(interval == total_lat);
   printf("\n");
 
@@ -836,5 +836,5 @@ LocTable::evict() // all unnecessary(unpinned) nodes
 Chord::IDMap
 LocTable::next_hop(Chord::CHID key)
 {
-  pred(key);
+  return pred(key);
 }
