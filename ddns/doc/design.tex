@@ -8,13 +8,14 @@ Dhash has the following two nice properties:
 
 \begin{list}{$\bullet$}{}
 \item {\em Load balance}.
-If a particular record is looked up $n$ times
+Consistent hashing spread loads for most records.
+For popular records.If a particular record is looked up $n$ times
 in succession by different hosts (where $n$ can be very large),
 then with high probability each server serves a given record 
 only $\log{m}$ times in total, 
 where $m$ is the number of servers. Notice that
 the number of times a record is transferred is 
-{\it independent} of how popular it is.
+{\it independent} of how popular it is. This is due to caching?
 
 \item {\em Robustness}.
 As servers are disconnected from and reconnected to the network,
@@ -34,7 +35,7 @@ All transactions are done on the granularity
 of DDNS records. The reason for grouping RRs is because it 1)
 guarantees that all RRs for a domain name will reside on
 the same server, 2) complements the verification scheme
-of DNSSEC (explained below), and 3) results in a simple
+of DNSSEC, and 3) results in a simple
 and functional design altogether. We feel that this decision 
 will not degrade performance, since RRs are typically 
 very small, a DDNS~record should only take one RPC to transmit.
@@ -65,7 +66,7 @@ Since records are being served from arbitrary hosts rather
 than the hosts responsible for the domain, 
 we use the DNS Security Extensions (DNSSEC)~\cite{dnssec:rfc} to
 verify all records before returning them. DNSSEC stores the 
-signature of the owner of the RRSet~\cite{dns-cla:rfc} in a 
+signature of the owner of the RRSet in a 
 SIG RR.
 % We use one {\tt SIG RR} to carry the owner's signature
 % of the entire DDNS record, since we always transmit data on
