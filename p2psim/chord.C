@@ -4,7 +4,8 @@
 #include <stdio.h>
 #include <iostream>
 
-#define PID(x) (x >> (NBCHID*8 - 10))
+#define PID(x) (x >> (NBCHID*8 - 32))
+#define STABLE_TIMER 500
 
 using namespace std;
 
@@ -18,6 +19,7 @@ Chord::Chord(Node *n) : Protocol(n)
 Chord::~Chord()
 {
   cout << "done " << me.ip << " " << me.id << endl;
+  dump();
   delete loctable;
 }
 
@@ -33,9 +35,9 @@ void
 Chord::lookup(Args *args) 
 {
   CHID k = args->nget<CHID>("key");
-  CHID succ = args->nget<CHID>("answer");
   vector<Chord::IDMap> v = find_successors(k, 1);
-  assert(v.size() > 0 && v[0].id == succ);
+  IPAddress ans = (v.size() > 0) ? v[0].ip:0;
+  printf("Chord(%u, %qu) lookup results %u\n", ans);
 }
 
 // Returns at least m successors of key.
@@ -115,13 +117,14 @@ Chord::join(Args *args)
          after - before);
   loctable->add_node(succs[0]);
 
-  delaycb(20, Chord::stabilize, NULL);
-  // stabilize();
+  delaycb(STABLE_TIMER, Chord::stabilize, NULL);
+  //stabilize(NULL);
 }
 
 void
 Chord::stabilize(void *x)
 {
+  loctable->checkpoint();
   Chord::IDMap succ = loctable->succ(1);
   Time before = now();
   if (succ.ip && (succ.ip != me.ip)) {
@@ -144,7 +147,17 @@ Chord::stabilize(void *x)
   }else{
     printf("Chord(%u,%qu)::stabilize(%d) nothing succ (%u,%qu)\n", me.ip, PID(me.id), before, succ.ip,PID(succ.id));
   }
-  delaycb(20, Chord::stabilize, NULL);
+  if (now() > 100000) { //XXX nasty way to stop
+    dump();
+  }else{
+    delaycb(STABLE_TIMER, Chord::stabilize, NULL);
+  }
+}
+
+bool
+Chord::stabilized()
+{
+  return loctable->stabilized();
 }
 
 void
@@ -206,6 +219,12 @@ Chord::get_predecessor_handler(get_predecessor_args *args,
                                get_predecessor_ret *ret)
 {
   ret->n = loctable->pred();
+}
+
+void
+Chord::dump()
+{
+  loctable->dump();
 }
 
 #if 0
@@ -294,9 +313,10 @@ LocTable::add_node(Chord::IDMap n)
       if (ring.size() > _max) {
 	evict();
       }
-      return;
+      break;
     }
   }
+
 }
 
 //can this be part of add_node?
@@ -365,3 +385,27 @@ LocTable::evict() //evict one node
     }
   }
 }
+
+void
+LocTable::checkpoint()
+{
+  Time tm = now();
+  assert(!_prev_chkp || tm >= (_prev_chkp + STABLE_TIMER));
+  Chord::IDMap curr_succ = succ(1);
+  Chord::IDMap curr_pred = pred();
+  if ((curr_succ.ip == _prev_succ.ip) && (curr_pred.ip == _prev_pred.ip)) {
+    _stablized = true;
+  } else {
+    _stablized = false;
+  }
+  _prev_succ = curr_succ;
+  _prev_pred = curr_pred;
+  _prev_chkp = tm;
+}
+
+void
+LocTable::dump()
+{
+  printf("D %u,%qu %u,%qu %u,%qu\n", ring[0].ip, ring[0].id, ring[1].ip, ring[1].id,ring[2].ip,ring[2].id);
+}
+
