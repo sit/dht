@@ -41,7 +41,7 @@ class dhashcli {
     size_t nextsucc;
     
     vec<str> frags;
-    vec<cb_ret> callbacks;
+    cb_ret callback;
 
     bool completed;
 
@@ -53,16 +53,16 @@ class dhashcli {
     
     void complete (dhash_stat s, ptr<dhash_block> b) {
       completed = true;
-      for (u_int i = 0; i < callbacks.size (); i++)
-	(callbacks[i]) (s, b, r);
+      (callback) (s, b, r);
     }
 
-    rcv_state (blockID key) :
+    rcv_state (blockID key, cb_ret cb) :
       key (key),
       errors (0),
       succopt (false),
       incoming_rpcs (0),
       nextsucc (0),
+      callback (cb),
       completed (false)
     {
       timemark ();
@@ -82,6 +82,11 @@ class dhashcli {
       block (b), cb (x), out (0), good (0) {}
   };
 
+  void doassemble (ptr<rcv_state> rs, vec<chord_node> succs);
+  void dofetchrec_execute (blockID b, cb_ret cb);
+  void dofetchrec_cb (timespec s, blockID b, cb_ret cb,
+		      ptr<dhash_fetchrec_res> res, clnt_stat s);
+  
   void lookup_findsucc_cb (chordID blockID, dhashcli_lookupcb_t cb,
 			   vec<chord_node> s, route path, chordstat err);
     
@@ -118,6 +123,7 @@ class dhashcli {
 public:
   dhashcli (ptr<vnode> node, str dhcs = str("default"), uint nreplica = 5);
 
+  void assemble (blockID b, cb_ret cb, vec<chord_node> succs, route r);
   void retrieve (blockID blockID, cb_ret cb, 
 		 int options = 0, 
 		 ptr<chordID> guess = NULL);

@@ -80,7 +80,8 @@ enum routing_mode_t {
   MODE_PROXREC,
   MODE_PNS,
   MODE_PNSREC,
-  MODE_CHORDREC
+  MODE_CHORDREC,
+  MODE_TCPPNSREC,
 } mode;
 
 struct routing_mode_desc {
@@ -108,7 +109,9 @@ routing_mode_desc modes[] = {
   { MODE_PNSREC, "pnsrec", "g^2 pns recursive",
     wrap (recroute<fingerroutepns>::produce_vnode) },
   { MODE_CHORDREC, "chordrec", "recursive routing with plain finger tables",
-    wrap (recroute<fingerroute>::produce_vnode) }
+    wrap (recroute<fingerroute>::produce_vnode) },
+  { MODE_TCPPNSREC, "tcppnsrec", "g^2 pns recursive with data over tcp",
+    wrap (recroute<fingerroutepns>::produce_vnode) },
 };
 
 void stats ();
@@ -195,6 +198,7 @@ halt ()
 {
   warnx << "Exiting on command.\n";
   info << "stopping.\n";
+  chordnode = NULL;
   exit (0);
 }
 
@@ -640,6 +644,15 @@ main (int argc, char **argv)
   if (cffile) {
     bool ok = Configurator::only ().parse (cffile);
     assert (ok);
+  }
+
+  if (mode == MODE_TCPPNSREC) {
+    // HACK set global indicator variable.
+    // Storage is defined in dhash/client.C.
+    extern bool dhash_tcp_transfers;
+    dhash_tcp_transfers = true;
+
+    Configurator::only ().set_str ("chord.rpc_mode", "tcp");
   }
 
   Configurator::only ().get_int ("chord.max_vnodes", max_vnodes);

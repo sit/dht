@@ -112,12 +112,10 @@ dhash_store::store (ptr<location> dest, blockID blockID, char *data,
   arg->key     = blockID.ID;
   arg->ctype   = blockID.ctype;
   arg->dbtype  = blockID.dbtype;
-  clntnode->my_location ()->fill_node (arg->from);
   arg->data.setsize (len);
   memcpy (arg->data.base (), data, len);
   arg->offset  = off;
   arg->type    = store_type;
-  arg->nonce   = 0; // XXX remove!
   arg->attr.size     = totsz;
   //    arg->last    = last;
     

@@ -35,14 +35,12 @@ void
 dhash_download::getchunk (u_int start, u_int len, int cookie, gotchunkcb_t cb)
 {
   ptr<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg>;
-  clntnode->my_location ()->fill_node (arg->from);
   arg->key   = blckID.ID;
   arg->ctype = blckID.ctype;
   arg->dbtype = blckID.dbtype;
   arg->start = start;
   arg->len   = len;
   arg->cookie = cookie;
-  arg->nonce  = 0;
 
   npending++;
   ptr<dhash_fetchiter_res> res = New refcounted<dhash_fetchiter_res> ();

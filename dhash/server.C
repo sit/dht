@@ -482,6 +482,13 @@ dhash_impl::dispatch (user_args *sbp)
       sbp->reply (&res);
     }
     break;
+  case DHASHPROC_FETCHREC:
+    {
+      // This RPC may take a long time to respond.
+      dhash_fetchrec_arg *arg = sbp->template getarg<dhash_fetchrec_arg> ();
+      dofetchrec (sbp, arg);
+    }
+    break;
   case DHASHPROC_FETCHITER:
     {
       //the only reason to get here is to fetch the 2-n chunks
@@ -526,37 +533,6 @@ dhash_impl::dispatch (user_args *sbp)
 	store (sarg, exists,
 	       wrap(this, &dhash_impl::storesvc_cb, sbp, sarg, exists));	
       }
-    }
-    break;
-  case DHASHPROC_GETKEYS:
-    {
-      s_dhash_getkeys_arg *gkarg = sbp->template getarg<s_dhash_getkeys_arg>();
-      
-      dhash_getkeys_res res (DHASH_OK);
-      chordID start = gkarg->start;
-      ref<vec<chordID> > keys = New refcounted<vec<chordID> >;
-
-      ref<dbrec> startkey = id2dbrec(start);
-      ptr<dbEnumeration> it = db->enumerate();
-      ptr<dbPair> d = it->nextElement(startkey);
-      if(d) {
-	chordID k = dbrec2id (d->key);
-	chordID startk = k;
-	while (between (start, gkarg->pred_id, k)) {
-	  keys->push_back (k);
-	  if((keys->size()*sha1::hashsize) > 1024) 
-	    // limit packets to this size
-	    break;
-	  d = it->nextElement();
-	  if(!d)
-	    d = it->nextElement(id2dbrec(0));
-	  k = dbrec2id(d->key);
-	  if(k == startk)
-	    break;
-	}
-      }
-      res.resok->keys.set (keys->base (), keys->size ());
-      sbp->reply (&res);
     }
     break;
   default:
@@ -863,7 +839,7 @@ dhash_impl::doRPC_unbundler (ptr<location> dst, RPC_delay_args *args)
 void
 dhash_impl::doRPC (const chord_node &n, const rpc_program &prog, int procno,
 	           ptr<void> in,void *out, aclnt_cb cb,
-		   cbtmo_t cb_tmo = NULL) 
+		   cbtmo_t cb_tmo) 
 {
   host_node->doRPC (n, prog, procno, in, out, cb, cb_tmo);
 }
@@ -871,7 +847,7 @@ dhash_impl::doRPC (const chord_node &n, const rpc_program &prog, int procno,
 void
 dhash_impl::doRPC (const chord_node_wire &n, const rpc_program &prog,
                    int procno, ptr<void> in,void *out, aclnt_cb cb,
-		   cbtmo_t cb_tmo = NULL) 
+		   cbtmo_t cb_tmo) 
 {
   host_node->doRPC (make_chord_node (n), prog, procno, in, out, cb, cb_tmo);
 }
@@ -879,7 +855,7 @@ dhash_impl::doRPC (const chord_node_wire &n, const rpc_program &prog,
 void
 dhash_impl::doRPC (ptr<location> ID, const rpc_program &prog, int procno,
 	           ptr<void> in,void *out, aclnt_cb cb,
-		   cbtmo_t cb_tmo = NULL)  
+		   cbtmo_t cb_tmo)  
 {
   host_node->doRPC (ID, prog, procno, in, out, cb, cb_tmo);
 }

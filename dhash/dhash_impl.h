@@ -118,13 +118,13 @@ class dhash_impl : public dhash {
 
   void doRPC (ptr<location> n, const rpc_program &prog, int procno,
 	      ptr<void> in, void *out, aclnt_cb cb, 
-	      cbtmo_t cb_tmo);
+	      cbtmo_t cb_tmo = NULL);
   void doRPC (const chord_node &n, const rpc_program &prog, int procno,
 	      ptr<void> in, void *out, aclnt_cb cb,
-	      cbtmo_t cb_tmo);
+	      cbtmo_t cb_tmo = NULL);
   void doRPC (const chord_node_wire &n, const rpc_program &prog, int procno,
 	      ptr<void> in, void *out, aclnt_cb cb,
-	      cbtmo_t cb_tmo);
+	      cbtmo_t cb_tmo = NULL);
   void doRPC_reply (svccb *sbp, void *res, 
 		    const rpc_program &prog, int procno);
   void dispatch (user_args *a);
@@ -164,6 +164,22 @@ class dhash_impl : public dhash {
   int db_insert_immutable (ref<dbrec> key, ref<dbrec> data, dhash_ctype ctype);
   void db_delete_immutable (ref<dbrec> key);
 
+  void dofetchrec (user_args *sbp, dhash_fetchrec_arg *arg);
+  void dofetchrec_nexthop (user_args *sbp, dhash_fetchrec_arg *arg,
+			   ptr<location> p);
+  void dofetchrec_nexthop_cb (user_args *sbp, dhash_fetchrec_arg *arg,
+			      ptr<dhash_fetchrec_res> res,
+			      clnt_stat err);
+  void dofetchrec_sbp_gotdata_cb (user_args *sbp,
+				  dhash_fetchrec_arg *arg,
+				  int cookie,
+				  ptr<dbrec> val,
+				  dhash_stat err);
+  void dofetchrec_assembler (user_args *sbp, dhash_fetchrec_arg *arg,
+			     vec<ptr<location> > succs);
+  void dofetchrec_assembler_cb (user_args *sbp, dhash_fetchrec_arg *arg,
+				dhash_stat s, ptr<dhash_block> b, route r);
+  
   vec<ptr<location> > replicas;
   timecb_t *merkle_rep_tcb;
   timecb_t *keyhash_mgr_tcb;

@@ -55,7 +55,6 @@ typedef callback<void, int, ptr<dbrec>, dhash_stat>::ptr cbvalue;
 typedef callback<void,dhash_stat>::ptr cbstore;
 typedef callback<void,dhash_stat>::ptr cbstat_t;
 typedef callback<void, s_dhash_block_arg *>::ptr cbblockuc_t;
-typedef callback<void, s_dhash_storecb_arg *>::ptr cbstorecbuc_t;
 typedef callback<void, dhash_stat, ptr<dhash_block>, vec<ptr<location> > >::ptr cb_ret;
 
 class dhash {

@@ -52,6 +52,10 @@
 #include <misc_utils.h>
 #include <modlogger.h>
 
+// HACK global indicator variable for whether or not to
+//      transfer data over TCP pipes.
+bool dhash_tcp_transfers = false;
+
 #define warning modlogger ("dhashcli", modlogger::WARNING)
 #define info  modlogger ("dhashcli", modlogger::INFO)
 #define trace modlogger ("dhashcli", modlogger::TRACE)
@@ -98,6 +102,82 @@ dhashcli::dhashcli (ptr<vnode> node, str dhcs, uint nreplica)
 }
 
 void
+dhashcli::dofetchrec_execute (blockID b, cb_ret cb)
+{
+  chordID myID = clntnode->my_ID ();
+  trace << myID << ": dofetchrec_execute (" << b << ")\n";
+  ptr<dhash_fetchrec_arg> arg = New refcounted<dhash_fetchrec_arg> ();
+  arg->key    = b.ID;
+  arg->ctype  = b.ctype;
+  arg->dbtype = b.dbtype;
+
+  vec<chordID> failed;
+  ptr<location> s = clntnode->closestpred (b.ID, failed);
+
+  ptr<dhash_fetchrec_res> res = New refcounted<dhash_fetchrec_res> (DHASH_OK);
+  timespec start;
+  clock_gettime (CLOCK_REALTIME, &start);
+  clntnode->doRPC (s, dhash_program_1, DHASHPROC_FETCHREC,
+		   arg, res,
+		   wrap (this, &dhashcli::dofetchrec_cb, start, b, cb, res));
+}
+
+void
+dhashcli::dofetchrec_cb (timespec start, blockID b, cb_ret cb,
+			 ptr<dhash_fetchrec_res> res, clnt_stat s)
+{
+  strbuf prefix;
+  prefix << clntnode->my_ID () << ": dofetchrec_execute (" << b << "): ";
+  if (s) {
+    trace << prefix << "returned " << s << "\n";
+    route r;
+    (*cb) (DHASH_RPCERR, NULL, r);
+    return;
+  }
+  
+  route r;
+  rpc_vec<chord_node_wire, RPC_INFINITY> *path = (res->status == DHASH_OK) ?
+    &res->resok->path :
+    &res->resdef->path;
+  for (size_t i = 0; i < path->size (); i++) {
+    ptr<location> l = clntnode->locations->lookup_or_create
+      (make_chord_node ((*path)[i]));
+    r.push_back (l);
+  }
+  
+  if (res->status != DHASH_OK) {
+    trace << prefix << "returned " << dhasherr2str(res->status) << "\n";
+    // XXX perhaps one should do something cleverer here.
+      (*cb) (res->status, NULL, r);
+    return;
+  }
+
+  // Okay, we have the block.  Massage it into a dhash_block
+
+  ptr<dhash_block> blk = New refcounted<dhash_block> (res->resok->res.base (),
+						      res->resok->res.size (),
+						      b.ctype);
+  blk->ID = b.ID;
+  blk->hops = res->resok->path.size ();
+  blk->errors = 0;  // XXX
+  blk->retries = 0; // XXX
+    
+  // We can't directly measure the time it took for a lookup.
+  // However, the remote node does report back to us the amount of time
+  // it took to reconstruct the block.  Since there are only two phases,
+  // we can use this time to construct the actual time required.
+  timespec finish;
+  clock_gettime (CLOCK_REALTIME, &finish);
+  timespec total = finish - start;
+  blk->times.push_back (total.tv_sec * 1000 + int (total.tv_nsec/1000000) -
+			res->resok->fetch_time);
+  blk->times.push_back (res->resok->fetch_time);
+
+  (*cb) (DHASH_OK, blk, r);
+  return;
+}
+
+void
 dhashcli::retrieve (blockID blockID, cb_ret cb, int options, 
 		    ptr<chordID> guess)
 {
@@ -105,8 +185,14 @@ dhashcli::retrieve (blockID blockID, cb_ret cb, int options,
 
   trace << myID << ": retrieve (" << blockID << "): new retrieve.\n";
   
-  ptr<rcv_state> rs = New refcounted<rcv_state> (blockID);
-  rs->callbacks.push_back (cb);
+  ptr<rcv_state> rs = New refcounted<rcv_state> (blockID, cb);
+
+  // First check to see if we're using TCP.  In that case, we should
+  // ship the data over the wire.
+  if (dhash_tcp_transfers) {
+    dofetchrec_execute (blockID, cb); // XXX
+    return;
+  }
   
   if (blockID.ctype == DHASH_KEYHASH) {
     route_iterator *ci = clntnode->produce_iterator_ptr (blockID.ID);
@@ -120,9 +206,8 @@ dhashcli::retrieve (blockID blockID, cb_ret cb, int options,
       rs->succopt = true;
       sl.push_back (clntnode->my_location ());
       vec<chord_node> s = get_succs_from_list (sl, blockID.ID);
-      route r;
-      r.push_back (clntnode->my_location ());
-      retrieve_lookup_cb (rs, s, r, CHORD_OK);
+      rs->r.push_back (clntnode->my_location ());
+      doassemble (rs, s);
       return;
     } else if (options & DHASHCLIENT_SUCCLIST_OPT)
       warn << "cannot use succlist to find succs on retrieve\n";
@@ -167,7 +252,7 @@ dhashcli::retrieve_block_hop_cb (ptr<rcv_state> rs, route_iterator *ci,
 
   chord_node s = rs->succs.pop_front ();
   if (DHC && rs->key.ctype == DHASH_KEYHASH) {
-    ptr<location> l = New refcounted<location> (s);
+    ptr<location> l = clntnode->locations->lookup_or_create (s);
     dhc_mgr->get (l, rs->key.ID, wrap (this, &dhashcli::retrieve_dl_or_walk_cb,
 				       rs, status, options, retries, guess));
   } else 
@@ -336,77 +421,7 @@ dhashcli::retrieve_lookup_cb (ptr<rcv_state> rs, vec<chord_node> succs,
     return;
   }
   
-#if 0
-  // benjie: if number of successors is smaller than num_efrags,
-  // that's likely an indication that the ring is small.
-  if (succs.size () < dhash::num_efrags ()) {
-    chord_node s;
-    clntnode->my_location ()->fill_node (s);
-
-    bool in_succ_list = false;
-    for (unsigned i=0; i<succs.size () && !in_succ_list; i++)
-      if (succs [i].x == s.x)
-	in_succ_list = true;
-
-    if (in_succ_list) {
-      // patch up the succ list so it includes all the node we know
-      // of... mostly, this step will add the predecessor of the block
-      vec<ptr<location> > sl = clntnode->succs ();
-      merge_succ_list (succs, sl, dhash::num_efrags ());
-    }
-    else
-      // clntnode is not in succ list, but there aren't enough
-      // successors. this is probably an indication that the lookup is
-      // done on clntnode itself.
-      succs.push_back (s);
-  }
-#endif
-
-  while (succs.size () > dhash::num_efrags ()) {
-    succs.pop_back ();
-  }
-
-  if (succs.size () < dhash::num_dfrags ()) {
-    warning << myID << ": retrieve (" << rs->key << "): "
-	    << "insufficient number of successors returned!\n";
-    rs->complete (DHASH_CHORDERR, NULL); // failure
-    rs = NULL;
-    return;
-  }
-
-  if (ordersucc_) {
-    if (rs->succopt) {
-      // Have actual measured latencies, so might as well use them
-      vec<float> lt;
-      for (unsigned i=0; i<succs.size (); i++) {
-	ptr<location> l = clntnode->locations->lookup (succs [i].x);
-	if (l)
-	  lt.push_back (l->distance ());
-	else
-	  lt.push_back (100000000);
-      }
-      order_succs_by_latency (lt, succs, rs->succs);
-    }
-    else {
-      // Store list of successors ordered by expected distance.
-      // fetch_frag will pull from this list in order.
-#ifdef VERBOSE_LOG
-      modlogger ("orderer", modlogger::TRACE) << "ordering for block "
-					      << rs->key << "\n";
-#endif /* VERBOSE_LOG */    
-      order_succs (clntnode->my_location ()->coords (),
-		   succs, rs->succs);
-    }
-  } else {
-    rs->succs = succs;
-  }
-
-  // Dispatch NUM_DFRAGS parallel requests, even though we don't know
-  // how many fragments will truly be needed.
-  u_int tofetch = dhash::num_dfrags () + 0;
-  if (tofetch > rs->succs.size ()) tofetch = rs->succs.size ();
-  for (u_int i = 0; i < tofetch; i++)
-    fetch_frag (rs);
+  doassemble (rs, succs);
 }
 
 void
@@ -490,6 +505,94 @@ dhashcli::retrieve_fetch_cb (ptr<rcv_state> rs, u_int i,
   
   rs->complete (DHASH_OK, blk);
   rs = NULL;
+}
+
+
+// Pull block fragments down from a successor list
+// public interface, used by dhash_impl if completing a FETCHREC
+void
+dhashcli::assemble (blockID blockID, cb_ret cb, vec<chord_node> succs, route r)
+{
+  ptr<rcv_state> rs = New refcounted<rcv_state> (blockID, cb);
+  rs->r = r;
+  doassemble (rs, succs);
+}
+
+void
+dhashcli::doassemble (ptr<rcv_state> rs, vec<chord_node> succs)
+{
+  chordID myID = clntnode->my_ID ();
+#if 0
+  // benjie: if number of successors is smaller than num_efrags,
+  // that's likely an indication that the ring is small.
+  if (succs.size () < dhash::num_efrags ()) {
+    chord_node s;
+    clntnode->my_location ()->fill_node (s);
+
+    bool in_succ_list = false;
+    for (unsigned i=0; i<succs.size () && !in_succ_list; i++)
+      if (succs [i].x == s.x)
+	in_succ_list = true;
+
+    if (in_succ_list) {
+      // patch up the succ list so it includes all the node we know
+      // of... mostly, this step will add the predecessor of the block
+      vec<ptr<location> > sl = clntnode->succs ();
+      merge_succ_list (succs, sl, dhash::num_efrags ());
+    }
+    else
+      // clntnode is not in succ list, but there aren't enough
+      // successors. this is probably an indication that the lookup is
+      // done on clntnode itself.
+      succs.push_back (s);
+  }
+#endif
+
+  while (succs.size () > dhash::num_efrags ()) {
+    succs.pop_back ();
+  }
+
+  if (succs.size () < dhash::num_dfrags ()) {
+    warning << myID << ": retrieve (" << rs->key << "): "
+	    << "insufficient number of successors returned!\n";
+    rs->complete (DHASH_CHORDERR, NULL); // failure
+    rs = NULL;
+    return;
+  }
+
+  if (ordersucc_) {
+    if (rs->succopt) {
+      // Have actual measured latencies, so might as well use them
+      vec<float> lt;
+      for (unsigned i=0; i<succs.size (); i++) {
+	ptr<location> l = clntnode->locations->lookup (succs [i].x);
+	if (l)
+	  lt.push_back (l->distance ());
+	else
+	  lt.push_back (100000000);
+      }
+      order_succs_by_latency (lt, succs, rs->succs);
+    }
+    else {
+      // Store list of successors ordered by expected distance.
+      // fetch_frag will pull from this list in order.
+#ifdef VERBOSE_LOG
+      modlogger ("orderer", modlogger::TRACE) << "ordering for block "
+					      << rs->key << "\n";
+#endif /* VERBOSE_LOG */    
+      order_succs (clntnode->my_location ()->coords (),
+		   succs, rs->succs);
+    }
+  } else {
+    rs->succs = succs;
+  }
+
+  // Dispatch NUM_DFRAGS parallel requests, even though we don't know
+  // how many fragments will truly be needed.
+  u_int tofetch = dhash::num_dfrags () + 0;
+  if (tofetch > rs->succs.size ()) tofetch = rs->succs.size ();
+  for (u_int i = 0; i < tofetch; i++)
+    fetch_frag (rs);
 }
 
 void
