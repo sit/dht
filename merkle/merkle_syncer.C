@@ -107,7 +107,7 @@ merkle_syncer::next (void)
   
   ///**/warn << "NEXT....";
   if (receiving_blocks) {
-    ///**/warn << "recving...";
+    ///**/warn << (u_int)this << " recving...\n";
   }
   
   if (sendblocks_iter) {
@@ -324,14 +324,14 @@ merkle_syncer::getnode_cb (ref<getnode_arg> arg, ref<getnode_res> res,
     qhash<merkle_hash, bool> lset, rset;
     make_set (lkeys, lset);
     make_set (rnode->child_hash, rset);
-    
+   
     // send all local keys except a) those the remote side has and b) those out of range
     vec<merkle_hash> keys_to_send;
     for (u_int i = 0; i < lkeys.size (); i++)
       if (rset[lkeys[i]] == NULL)
 	if (inrange (lkeys[i]))
 	  keys_to_send.push_back (lkeys[i]);
-    
+   
     // get all remote keys exception a) those the local side has and b) those out of range
     vec<merkle_hash> keys_to_get;
     for (u_int i = 0; i < rnode->child_hash.size (); i++)
@@ -454,12 +454,12 @@ merkle_syncer::getblockrange_cb (ref<getblockrange_arg> arg,
       for (u_int i = 0; i < arg->xkeys.size (); i++)
 	if (res->resok->desired_xkeys[i])
 	  sendblock (arg->xkeys[i], false); // last flag doesn't really matter
-      
-      if (!res->resok->will_send_blocks)
-	receiving_blocks = 0;
-      else
-	assert (receiving_blocks >= 0);
     }
+      
+    if (!res->resok->will_send_blocks)
+      receiving_blocks = 0;
+    else
+      assert (receiving_blocks >= 0);
     next ();
   }
 }
@@ -483,7 +483,7 @@ merkle_syncer::doRPC (int procno, ptr<void> in, void *out, aclnt_cb cb)
 void
 merkle_syncer::recvblk (bigint key, bool last)
 {
-  //warn << (u_int)this << " recvblk >>>>>>>>>>>>>>>>>> last " << last << "\n";
+  //warn << (u_int)this << " recvblk " << key << ", last " << last << "\n";
   idle = false;
   if (last) {
     receiving_blocks = 0; 
@@ -504,7 +504,7 @@ void
 merkle_syncer::error (str err)
 {
   if (err) {
-    warn << "SYNCER ERROR: " << err << "\n";
+    warn << (u_int)this << ": SYNCER ERROR: " << err << "\n";
     fatal_err = err;
   }
   setdone ();
@@ -530,3 +530,4 @@ merkle_syncer::~merkle_syncer()
   setdone ();
   *deleted = true;
 }
+
