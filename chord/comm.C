@@ -309,6 +309,7 @@ void
 tcp_manager::send_RPC_ateofcb (RPC_delay_args *args)
 {
   (args->cb) (RPC_CANTSEND);
+  delete args;
 }
 
 void
@@ -318,9 +319,9 @@ tcp_manager::doRPC_tcp_connect_cb (RPC_delay_args *args, int fd)
   if (fd < 0) {
     warn << "locationtable: connect failed: " << strerror (errno) << "\n";
     (args->cb) (RPC_CANTSEND);
-    delete args;
     args->l->set_alive (false);
     remove_host (hi);
+    delete args;
   }
   else {
     struct linger li;
