@@ -35,18 +35,6 @@ ChordFinger::ChordFinger(IPAddress i, Args &a, LocTable *l) : Chord(i, a, l)
   _base = a.nget<uint>("base",2,10);
   _fingerlets = a.nget<uint>("fingerlets",1,10);
 
-  CHID finger;
-  CHID lap = (CHID) -1;
-  _numf = 0;
-  while (lap > _base) {
-    lap = lap/_base;
-    for (unsigned int j = 1; j <= (_base- 1); j++) {
-      finger = lap * j + me.id;
-      loctable->pin(finger, 1, 0);
-      _numf++;
-    }
-  }
-
   _stab_finger_running = false;
   _stab_finger_outstanding = 0;
   _stab_finger_timer = a.nget<uint>("fingertimer",10000,10);
@@ -176,7 +164,7 @@ ChordFinger::fix_fingers(bool restart)
 	if (ConsistentHash::between(finger,finger+lap,currf.id)) {
 	  LocTable::idmapwrap *naked = loctable->get_naked_node(currf.id);
 	  assert(naked);
-	  if ((now()-naked->timestamp) < _stab_finger_timer) {
+	  if ((now()-naked->n.timestamp) < _stab_finger_timer) {
 	    skipped_fingers++;
 	    continue;
 	  }else{

@@ -88,7 +88,6 @@ OneHop::OneHop(IPAddress i , Args& a) : P2Protocol(i)
   loctable->set_timeout(0); //no timeouts on loctable entries
   me.id = id();
   me.ip = ip();
-  me.heartbeat = 0;
   loctable->init(me);
   retries = 0; 
   _stab_timer = a.nget<uint>("stab",1000,10);
@@ -616,7 +615,6 @@ OneHop::join_handler(join_leader_args *args, join_leader_ret *ret)
     IDMap newnode;
     newnode.id = node;
     newnode.ip = args->ip;
-    newnode.heartbeat = 0;
     DEBUG_MSG(newnode,"join_handler",newnode);
     loctable->add_node(newnode);
     LogEntry *e = new LogEntry(newnode, ALIVE, now());
@@ -1185,7 +1183,6 @@ OneHop::notifyevent_handler(notifyevent_args *args, general_ret *ret)
   general_ret gr;
   ret->act_sliceleader.id = 0;
   ret->act_sliceleader.ip = 0;
-  ret->act_sliceleader.heartbeat = 0;
   if (!me_leader) {
     //not slice leader, but still got message, forward to correct slice leader
     //must forward message to the correct slice leader
@@ -1193,7 +1190,6 @@ OneHop::notifyevent_handler(notifyevent_args *args, general_ret *ret)
     while (!ok) {
 
       IDMap sliceleader = loctable->slice_leader(me.id);
-      assert(sliceleader.heartbeat == 0);
       DEBUG(1) << ip() << ":Forwarding to " << sliceleader.ip << endl ;
 
       ok = fd_xRPC(sliceleader.ip, &OneHop::notifyevent_handler, args, &gr, 

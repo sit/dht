@@ -102,8 +102,6 @@ Chord::Chord(IPAddress i, Args& a, LocTable *l, const char *name) : P2Protocol(i
       me.id = ConsistentHash::ip2chid(me.ip);
   }
 
-  me.heartbeat = now();
-
   if (l) 
     loctable = l;
   else
@@ -113,14 +111,8 @@ Chord::Chord(IPAddress i, Args& a, LocTable *l, const char *name) : P2Protocol(i
 
   loctable->set_evict(false);
 
-  loctable->init (me);
+  loctable->init(me);
   
-  
-  //pin down nsucc for successor list
-  loctable->pin(me.id + 1, _nsucc, 0);
-  //pin down 1 predecessor
-  loctable->pin(me.id - 1, 0, 1);
-
   if (vis) {
     printf ("vis %llu node %16qx\n", now (), me.id);
   }
@@ -162,7 +154,7 @@ char *
 Chord::ts()
 {
   static char buf[50];
-  sprintf(buf, "%llu %s(%u,%qx,%u)", now(), proto_name().c_str(), me.ip, me.id, me.heartbeat);
+  sprintf(buf, "%llu %s(%u,%qx)", now(), proto_name().c_str(), me.ip, me.id);
   return buf;
 }
 
@@ -552,10 +544,10 @@ Chord::find_successors(CHID key, uint m, uint type, IDMap *lasthop, lookup_args 
     if (!alive()) goto DONE;
 
     if (ok) {
-      record_stat(type,reuse->ret.done?reuse->ret.next.size():reuse->ret.v.size()); //counting for heartbeat timer
+      record_stat(type,reuse->ret.done?reuse->ret.next.size():reuse->ret.v.size()); 
       if (reuse->link.from.ip == me.ip) {
 	assert(reuse->ret.dst.ip == reuse->link.to.ip);
-	loctable->update_ifexists(reuse->ret.dst); //update the timestamp if node contacted exists in my own routing table as well as heartbeat timer
+	loctable->update_ifexists(reuse->ret.dst); 
       }
 
       CDEBUG(2) << "key " << printID(key) << "outstanding " << outstanding 
@@ -565,7 +557,7 @@ Chord::find_successors(CHID key, uint m, uint type, IDMap *lasthop, lookup_args 
 	<< savefinished.size() << endl;
 
       if ((reuse->link.from.ip == me.ip) && (!static_sim))
-	loctable->update_ifexists(reuse->link.to); //update timestamp of MY neighbors
+	loctable->update_ifexists(reuse->link.to); 
 
       if (reuse->ret.done) {
 	lastfinished = reuse->link;
@@ -801,7 +793,6 @@ Chord::find_successors_recurs(CHID key, uint m, uint type, IDMap *lasthop, looku
   IDMap nexthop;
   nexthop.id = key;
   nexthop.ip = 0;
-  nexthop.heartbeat = 0;
   outstanding = 0;
 
   assert(!_stopearly_overshoot || _parallel == 1); //i do not know how to do parallel lookup with stopearly and overshoot
@@ -1172,7 +1163,7 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
       if (ret->path.size() >= 30) {
 	printf("WARNING: path too long for key %qx m %d %s: ", args->key, args->m, ts());
 	for (uint i = 0; i < ret->path.size(); i++) {
-	  printf("(%u,%qx,%u %u) ", ret->path[i].n.ip, ret->path[i].n.id, ret->path[i].n.heartbeat,ret->path[i].tout);
+	  printf("(%u,%qx,%u) ", ret->path[i].n.ip, ret->path[i].n.id, ret->path[i].tout);
 	}
 	if (_recurs_direct) {
 	  ret->finish_time = now(); //not correct, but what the heck
@@ -1219,7 +1210,7 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
       }else{
 	record_stat(args->type,0);
       }
-      if (!static_sim) loctable->update_ifexists(ret->nexthop); //update timestamp
+      if (!static_sim) loctable->update_ifexists(ret->nexthop); 
       ret->nexthop = me;
       return;
     }else{
@@ -1248,7 +1239,6 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
 void
 Chord::null_handler (void *args, IDMap *ret) 
 {
-  ret->heartbeat = me.heartbeat;
   return;
 }
 
@@ -1370,7 +1360,7 @@ Chord::join(Args *args)
       me.id = ConsistentHash::getRandID();
     else 
       me.id = ConsistentHash::ip2chid(me.ip);
-    me.heartbeat = now();
+    me.timestamp = 0;
 
     loctable->init(me);
     if (_learn) 
@@ -1661,7 +1651,7 @@ Chord::fix_predecessor()
 
   if (!alive()) return;
   if (ok) {
-    loctable->update_ifexists(gpr.dst); //refresh timestamp
+    loctable->update_ifexists(gpr.dst); 
     if (gpr.v.size() > 0) {
       IDMap tmp = gpr.v[0];
       loctable->add_node(gpr.v[0]);
@@ -1694,7 +1684,6 @@ Chord::fix_successor(void *x)
     aa.n.ip = 0;
 
     succ1 = loctable->succ(me.id+1,LOC_ONCHECK); 
-    assert(succ1.ip == 0 || succ1.heartbeat < 86400000);
     if (succ1.ip == 0 || succ1.ip == me.ip) {
       //sth. wrong, i lost my succ, join again
       if (!_join_scheduled) {
@@ -1717,7 +1706,7 @@ Chord::fix_successor(void *x)
       aa.n = succ1;
     } else {
       assert(gpr.dst.ip == succ1.ip);
-      loctable->update_ifexists(gpr.dst); //refresh timestamp
+      loctable->update_ifexists(gpr.dst); 
 
       CDEBUG(3) << "fix_successor succ " << succ1.ip << "," << printID(succ1.id)
 	<< " his pred is " << gpr.n.ip << "," << printID(gpr.n.id) << endl;
@@ -1798,7 +1787,7 @@ Chord::fix_successor_list()
     loctable->del_node(succ,true);
   }else{
 
-    loctable->update_ifexists(gpr.dst);//update timestamp
+    loctable->update_ifexists(gpr.dst);
 
     //scs[0] might not be succ anymore
     vector<IDMap> scs = loctable->succs(me.id + 1, _nsucc, LOC_DEAD);
@@ -1968,8 +1957,7 @@ void LocTable::init(Chord::IDMap m)
 {
   ring.repok();
   me = m;
-  pin(me.id, 1, 0);
-  idmapwrap *elm = New idmapwrap(me, now());
+  idmapwrap *elm = New idmapwrap(me);
   ring.insert(elm);
 }
 
@@ -2020,7 +2008,6 @@ LocTable::succ(ConsistentHash::CHID id, int status)
 }
 
 /* returns m successors including or after the number id
-   also returns the timestamp of the first node
  */
 vector<Chord::IDMap>
 LocTable::succs(ConsistentHash::CHID id, unsigned int m, int status)
@@ -2029,7 +2016,6 @@ LocTable::succs(ConsistentHash::CHID id, unsigned int m, int status)
   v.clear();
 
   assert (ring.repok ());
-  Time t = now();
 
   if (m <= 0) return v;
 
@@ -2046,21 +2032,12 @@ LocTable::succs(ConsistentHash::CHID id, unsigned int m, int status)
 
     if ((id == (me.id+1)) && (!ptr->is_succ)) return v;
 
-    if ((!_timeout)||(t - ptr->timestamp) < _timeout) {
-      if (ptr->status <= status) {
-	if (v.size() > 0) 
-	  assert(ptr->n.ip != v[v.size()-1].ip);
-	v.push_back(ptr->n);
-	j++;
-	if (j >= ring.size()) return v;
-      }
-    }else{
-      ring.remove(ptr->id);
-      bzero(ptr, sizeof(*ptr));
-      delete ptr;
-      if (ring.size() <= 1) {
-	return v;
-      }
+    if (ptr->status <= status) {
+      if (v.size() > 0) 
+	assert(ptr->n.ip != v[v.size()-1].ip);
+      v.push_back(ptr->n);
+      j++;
+      if (j >= ring.size()) return v;
     }
     ptr = ptrnext;
   }
@@ -2095,24 +2072,15 @@ LocTable::preds(Chord::CHID id, uint m, int status)
   assert(elm);
   idmapwrap *elmprev;
 
-  Time t = now();
-  uint deleted = 0;
   while (1) {
     if (elm->id == me.id) break;
 
     elmprev = ring.prev(elm);
     if (!elmprev) elmprev = ring.last();
 
-    if ((!_timeout) || (t - elm->timestamp < _timeout)) {
-      if (elm->status <= status) { 
-	v.push_back(elm->n);
-	if (v.size() == m) break;
-      }
-    }else {
-      ring.remove(elm->id);
-      bzero(elm, sizeof(*elm));
-      delete elm;
-      deleted++;
+    if (elm->status <= status) { 
+      v.push_back(elm->n);
+      if (v.size() == m) break;
     }
     elm = elmprev;
     assert((rsz - deleted >= 1));
@@ -2134,46 +2102,6 @@ LocTable::print ()
   }while (i != m);
 }
 
-/* adds a list of nodes, sorted by increasing CHIDs
- * this function will avoid regular eviction calls by adding only pinned nodes
- */
-void
-LocTable::add_sortednodes(vector<Chord::IDMap> l)
-{
-  uint sz = pinlist.size();
-  int lsz = l.size();
-  Chord::IDMap tmppin;
-  tmppin.ip = 0;
-  int pos;
-  int ptr;
-  Chord::IDMap n;
-  pin_entry p;
-
-  for (uint i = 0; i < sz; i++) {
-    p = pinlist[i];
-    tmppin.id = pinlist[i].id;
-    pos = upper_bound(l.begin(),l.end(),tmppin,Chord::IDMap::cmp) - l.begin();
-    if (pos >= lsz) pos = 0;
-    ptr = pos;
-    if (pos < lsz && (l[pos].id != tmppin.id)) {
-      ptr--;
-    }
-    for (uint k = 0; k < pinlist[i].pin_pred; k++) {
-      if (ptr< 0) ptr= (lsz-1);
-      n = l[ptr];
-      add_node(l[ptr]);
-      ptr--;
-    }
-    ptr = pos; 
-    for (uint k = 0; k < pinlist[i].pin_succ; k++) {
-      if (ptr >= lsz) ptr= 0;
-      n = l[ptr];
-      add_node(l[ptr]);
-      ptr++;
-    }
-  }
-}
-
 int
 LocTable::add_check(Chord::IDMap n)
 {
@@ -2183,9 +2111,14 @@ LocTable::add_check(Chord::IDMap n)
   if (!elm) 
     return -1;
 
-  if ((elm->status <= LOC_HEALTHY) && (n.heartbeat >= elm->n.heartbeat)){
-    elm->status = LOC_ONCHECK;
-    return LOC_ONCHECK;
+  if (elm->status <= LOC_HEALTHY) { 
+    if (n.timestamp >= elm->n.timestamp) {
+      elm->n.timestamp = n.timestamp;
+      elm->status = LOC_ONCHECK;
+      return LOC_ONCHECK;
+    } else {
+      return elm->status;
+    }
   }else{
     return LOC_DEAD;
   }
@@ -2196,11 +2129,8 @@ LocTable::update_ifexists(Chord::IDMap n)
 {
   idmapwrap *ptr = ring.search(n.id);
   if (!ptr) return false;
-  ptr->timestamp = now();
-  if (n.heartbeat > ptr->n.heartbeat) {
-    ptr->status = LOC_HEALTHY;
-    ptr->n.heartbeat = n.heartbeat;
-  }
+  ptr->status = LOC_HEALTHY;
+  ptr->n.timestamp = now();
   return true;
 }
 
@@ -2210,21 +2140,22 @@ LocTable::add_node(Chord::IDMap n, bool is_succ, bool assertadd, Chord::CHID fs,
   Chord::IDMap succ1; 
   Chord::IDMap pred1; 
 
+  if (n.ip == me.ip)
+    return false;
+
   if (vis) {
     succ1 = succ(me.id+1);
     pred1 = pred(me.id-1);
   }
   idmapwrap *elm = ring.closestsucc(n.id);
   if (elm && elm->id == n.id) {
-    if (n.heartbeat > elm->n.heartbeat) {
-      assert(n.heartbeat < 86400000);
-      elm->n.heartbeat = n.heartbeat;
+    if (n.timestamp > elm->n.timestamp) {
+      elm->n.timestamp= n.timestamp;
       if (replacement)
 	elm->status = LOC_REPLACEMENT;
       else
 	elm->status = LOC_HEALTHY;
     }
-    elm->timestamp = now();
     if (is_succ) {
       elm->fs = elm->fe = 0;
       elm->is_succ = is_succ;
@@ -2233,7 +2164,7 @@ LocTable::add_node(Chord::IDMap n, bool is_succ, bool assertadd, Chord::CHID fs,
     elm->fe = fe;
     return false;
   } else {
-    idmapwrap *newelm = New idmapwrap(n,now());
+    idmapwrap *newelm = New idmapwrap(n);
     if (elm && elm->is_succ) 
       newelm->is_succ = true;
     else
@@ -2241,7 +2172,6 @@ LocTable::add_node(Chord::IDMap n, bool is_succ, bool assertadd, Chord::CHID fs,
     newelm->fs = fs;
     newelm->fe = fe;
     newelm->status = replacement? LOC_REPLACEMENT:LOC_HEALTHY;
-    newelm->timestamp = now();
     if (ring.insert(newelm)) {
     }else{
       assert(0);
@@ -2249,7 +2179,6 @@ LocTable::add_node(Chord::IDMap n, bool is_succ, bool assertadd, Chord::CHID fs,
     elm = newelm;
     return true;
   }
-
 }
 
 bool
@@ -2271,125 +2200,20 @@ LocTable::del_node(Chord::IDMap n, bool force)
   return true;
 }
 
-void
-LocTable::clear_pins()
-{
-  uint sz = pinlist.size();
-  for (uint i = 0; i < (sz -1); i++) {
-    pinlist.pop_back();
-  }
-}
-
-// pin maintains sorted list of id's that must be pinned
-void
-LocTable::pin(Chord::CHID x, uint pin_succ, uint pin_pred)
-{
-  pin_entry pe;
-
-  pe.id = x;
-  pe.pin_succ = pin_succ;
-  pe.pin_pred = pin_pred;
-
-  _max += (pin_succ + pin_pred);
-
-  if (pinlist.size () == 0) {
-    pinlist.push_back(pe);
-    return;
-  }
-
-  uint i = 0;
-  for (; i < pinlist.size(); i++) {
-    if (ConsistentHash::betweenrightincl(pinlist[0].id, pinlist[i].id, x)) {
-      break;
-    }
-  }
-
-  if (i < pinlist.size() && pinlist[i].id == x) {
-    if (pin_pred > pinlist[i].pin_pred) 
-      pinlist[i].pin_pred = pin_pred;
-    if (pin_succ > pinlist[i].pin_succ)
-      pinlist[i].pin_succ = pin_succ;
-  } else {
-    if (pinlist.size () == i) {
-      pinlist.push_back(pe);
-    } else {
-      assert(pinlist[0].id != pe.id);
-      pinlist.insert(pinlist.begin() + i, pe);
-    }
-  }
-  assert(pinlist.size() <= _max);
-}
-
 uint
-LocTable::size()
+LocTable::size(uint status)
 {
-  return ring.size();
-}
-
-void
-LocTable::evict() // all unnecessary(unpinned) nodes 
-{
-  assert(0);
-  assert(pinlist.size() <= _max);
-  assert(pinlist.size() > 0);
-
-
-  idmapwrap *ptr;
+  if (status == LOC_DEAD)
+    return ring.size();
   idmapwrap *elm = ring.first();
+  uint sz = 0;
   while (elm) {
-    elm->pinned = false;
+    if (elm->status <= status)
+      sz++;
     elm = ring.next(elm);
   }
-  
-  uint i = 0; // index into pinlist
-
-  elm = ring.first();
-  while (i < pinlist.size ()) {
-
-    // find successor of pinlist[i]. 
-    //XXX don't start at j, but where we left off
-    while (elm && elm->id < pinlist[i].id) {
-      elm = ring.next(elm);
-    }
-    if (elm && elm->id > pinlist[i].id ) {
-      ptr = ring.prev(elm);
-    }else {
-      ptr = elm;
-    }
-
-    // pin the predecessors
-    for (uint k = 0; k < pinlist[i].pin_pred; k++) {
-      if (!ptr) ptr = ring.last();
-      ptr->pinned = true;
-      ptr = ring.prev(ptr);
-    }
-
-    ptr = elm;
-    // pin the successors, starting with j
-    for (uint k = 0; k < pinlist[i].pin_succ; k++) {
-      if (!ptr) ptr = ring.first();
-      ptr->pinned = true;
-      ptr = ring.next(ptr);
-    }
-    i++;
-  }
-  // evict entries that are not pinned
-  elm = ring.first();
-  idmapwrap *next; 
-  while (elm) {
-    next = ring.next(elm);
-    if (elm->pinned) {
-      elm->pinned = false;
-    }else{
-      ring.remove(elm->id);
-      delete elm;
-      assert (ring.repok ());
-    } 
-    elm = next;
-  }
-
-  assert(elm == NULL);
 }
+
 
 vector<Chord::IDMap>
 LocTable::next_hops(Chord::CHID key, uint nsz)
@@ -2409,7 +2233,7 @@ LocTable::next_hop(Chord::CHID key)
 }
 
 vector<Chord::IDMap>
-LocTable::get_all()
+LocTable::get_all(uint status)
 {
   vector<Chord::IDMap> v;
   v.clear();
@@ -2417,7 +2241,9 @@ LocTable::get_all()
   idmapwrap *currp; 
   currp = ring.first();
   while (currp) {
-    v.push_back(currp->n);
+    if (currp->status <= status) {
+      v.push_back(currp->n);
+    }
     currp = ring.next(currp);
   }
   return v;
@@ -2446,13 +2272,26 @@ LocTable::search(ConsistentHash::CHID id)
   return elm->n;
 }
 
+uint
+LocTable::succ_size()
+{
+  idmapwrap *elm = ring.first();
+  uint n = 0;
+  while (elm) {
+    if (elm->is_succ)
+      n++;
+    elm = ring.next(elm);
+  }
+  return n;
+}
+
 void
 LocTable::dump()
 {
   printf("===%u,%qx loctable dump at %llu===\n", me.ip, me.id,now());
   idmapwrap *elm = ring.closestsucc(me.id+1);
   while (elm->n.ip != me.ip) {
-    printf("(%qx, %u, %d, %llu)\n", elm->n.id, elm->n.ip, elm->is_succ, elm->timestamp);
+    printf("(%qx, %u, %d, %llu)\n", elm->n.id, elm->n.ip, elm->is_succ, elm->n.timestamp);
     elm = ring.next(elm);
     if (!elm) elm = ring.first();
   }
@@ -2468,41 +2307,80 @@ LocTable::stat()
   uint num_finger = 0;
   idmapwrap *elm = ring.closestsucc(me.id+1);
   while (elm->n.ip != me.ip) {
-    if ((elm->timestamp + _timeout) > t) {
-      if (!succ.ip) succ = elm->n;
-      if (elm->is_succ) 
-	num_succ++;
-      else
-	num_finger++;
-    }
+    if (!succ.ip) succ = elm->n;
+    if (elm->is_succ) 
+      num_succ++;
+    else
+      num_finger++;
     elm = ring.next(elm);
     if (!elm) elm = ring.first();
   }
-  printf("%llu loctable stat for (%u,%qx): succ %u,%qx number of succs %u numer of finger %u\n", 
+  printf("%llu loctable stat for (%u,%qx): succ %u,%qx number of succs %u number of finger %u\n", 
       t, me.ip, me.id, succ.ip, succ.id, num_succ, num_finger);
 }
 
-Chord::IDMap
-LocTable::pred_biggest_gap()
+Time
+LocTable::pred_biggest_gap(Chord::IDMap &start, Chord::IDMap &end, Time mingap, Time to)
 {
   idmapwrap *elm = ring.closestsucc(me.id+1);
   assert(elm);
   Chord::IDMap prev= me;
+  Time prevelapsed = 0;
   Chord::IDMap maxgap_n = me;
+  Chord::IDMap maxgap_end = elm->n;
   double maxgap = 0.0;
-  while (elm->n.ip!=me.ip) {
-    if (!elm->is_succ) {
-      ConsistentHash::CHID gap = (ConsistentHash::CHID)(elm->n.id - prev.id);
-      ConsistentHash::CHID dist = (ConsistentHash::CHID)(prev.id - me.id);
-      double scaled = (double)gap/(double)dist;
-      if (scaled > maxgap) {
-	maxgap = scaled;
-	maxgap_n = prev;
+  Time t = now();
+  Time maxt = 0;
+  uint sz = this->size();
+  uint ssz = this->succ_size();
+
+  while (1) {
+    if (elm->status <= LOC_HEALTHY) {
+      if (!elm->is_succ) {
+	if (prevelapsed > maxt) maxt = prevelapsed;
+	ConsistentHash::CHID gap = (ConsistentHash::CHID)(elm->n.id - prev.id);
+	ConsistentHash::CHID dist = (ConsistentHash::CHID)(prev.id - me.id);
+	double scaled = (double)gap/(double)dist;
+	if ((scaled > maxgap) && (gap > mingap) && (prevelapsed > to)) {
+	  maxgap = scaled;
+	  maxgap_n = prev;
+	  maxgap_end = elm->n;
+	}
       }
+      prev = elm->n;
+      prevelapsed = t - elm->n.timestamp;
     }
-    prev = elm->n;
+    if (elm->n.ip == me.ip) break;
+    elm = ring.next(elm);
+    if (!elm) elm = ring.first();
+  } 
+
+  start = maxgap_n;
+  end = maxgap_end;
+  return maxt;
+}
+
+vector<Chord::IDMap>
+LocTable::get_closest_in_gap(uint m, ConsistentHash::CHID end, Chord::IDMap src)
+{
+  vector<Chord::IDMap> v;
+  vector<Chord::IDMap>::iterator i;
+  idmapwrap *elm = ring.closestsucc(me.id+1);
+  assert(elm);
+  while (elm->n.ip!=me.ip && ConsistentHash::between(me.id,end,elm->id)) {
+    if (elm->status <= LOC_HEALTHY) {
+      for (i = v.begin(); i!= v.end(); ++i) {
+	if (Network::Instance()->gettopology()->latency(src.ip,elm->n.ip) 
+	    >= Network::Instance()->gettopology()->latency(src.ip, (*i).ip)) 
+	  break;
+      }
+      if ( i != v.begin() || v.size() < m) 
+	v.insert(i, elm->n);
+      if (v.size() > m)
+	v.erase(v.begin());
+    }
     elm = ring.next(elm);
     if (!elm) elm = ring.first();
   }
-  return maxgap_n;
+  return v;
 }

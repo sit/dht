@@ -60,7 +60,7 @@ public:
     public:
     ConsistentHash::CHID id; //consistent hashing ID for the node
     IPAddress ip; //the IP address for the node
-    uint heartbeat; //heartbeat sequence number to prevent successor list from being out of date
+    Time timestamp; //some kind of heartbeat sequence number
     static bool cmp(const IDMap& a, const IDMap& b) { return (a.id <= b.id);}
     bool operator==(const IDMap a) { return (a.id == id); }
   };
@@ -83,7 +83,7 @@ public:
   };
   struct get_predsucc_ret {
     vector<IDMap> v;
-    IDMap dst; //for obtaining the new heartbeat timer of the node executing get_predsucc_handler
+    IDMap dst; 
     IDMap n;
   };
 
@@ -192,7 +192,6 @@ public:
   void alert_delete(alert_args *aa);
 
   CHID id() { return me.id; }
-  uint heartbeat() { return me.heartbeat;}
   IDMap idmap() { return me;}
   virtual void initstate();
   virtual bool stabilized(vector<CHID>);
@@ -273,12 +272,6 @@ private:
   Time _last_join_time;
 };
 
-typedef struct {
-  ConsistentHash::CHID id;
-  uint pin_succ;
-  uint pin_pred;
-} pin_entry;
-
 #define LOC_REPLACEMENT 0
 #define LOC_HEALTHY 1
 #define LOC_ONCHECK 2
@@ -290,20 +283,17 @@ class LocTable {
     struct idmapwrap {
 	Chord::IDMap n;
 	Chord::CHID id;
-	Time timestamp;
 	sklist_entry<idmapwrap> sortlink_;
 	bool is_succ;
-	bool pinned;
 	int status;
 	Chord::CHID fs;
 	Chord::CHID fe;
-	idmapwrap(Chord::IDMap x, Time t = 0) {
+	idmapwrap(Chord::IDMap x) {
 	  n = x;
 	  id = x.id;
-	  pinned = false;
-	  timestamp = t;
 	  status = 0;
 	  fs = fe = 0;
+	  is_succ = false;
 	}
     };
 
@@ -339,10 +329,8 @@ class LocTable {
     bool del_node(Chord::IDMap n, bool force=false);
     virtual void del_all();
     void notify(Chord::IDMap n);
-    void pin(Chord::CHID x, uint pin_succ, uint pin_pred);
-    void clear_pins();
-    uint size();
-    uint psize() { return pinlist.size();}
+    uint size(uint status=LOC_DEAD);
+    uint succ_size();
     void set_evict(bool v) { _evict = v; }
     void set_timeout(uint to) {_timeout = to;}
 
@@ -350,19 +338,19 @@ class LocTable {
     virtual vector<Chord::IDMap> next_hops(Chord::CHID key, uint nsz = 1);
     virtual Chord::IDMap next_hop(Chord::CHID key); 
 
-    vector<Chord::IDMap> get_all();
+    vector<Chord::IDMap> get_all(uint status=LOC_HEALTHY);
     Chord::IDMap first();
     Chord::IDMap last();
     Chord::IDMap search(ConsistentHash::CHID);
     void dump();
     void stat();
-    Chord::IDMap pred_biggest_gap();
+    Time pred_biggest_gap(Chord::IDMap &start, Chord::IDMap &end, ConsistentHash::CHID mingap, Time to = 0); //these two functions are too specialized
+    vector<Chord::IDMap> get_closest_in_gap(uint m, ConsistentHash::CHID end, Chord::IDMap src);
 
   protected:
     bool _evict;
     skiplist<idmapwrap, ConsistentHash::CHID, &idmapwrap::id, &idmapwrap::sortlink_, idmapcompare> ring;
     Chord::IDMap me;
-    vector<pin_entry> pinlist;
     uint _max;
     uint _timeout;
 

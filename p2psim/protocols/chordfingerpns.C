@@ -467,7 +467,7 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
 	    naked->fe = finger+lap;
 	  }
 	  //if lookup has updated the timestamp of this finger, ignore it
-	  if ((now() - naked->timestamp) < _stab_pns_timer) {
+	  if ((now() - naked->n.timestamp) < _stab_pns_timer) {
 	    skipped_finger++; //testing
 	    continue;
 	  }

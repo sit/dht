@@ -79,7 +79,7 @@ class RateControlQueue {
       qe->_killme = QueueThunk<BT,AT,RT>::killme;
       qe->_type = type;
 
-      int more = ((now() - _last_update)*_rate);
+      int more = (int) ((now() - _last_update)*_rate);
 
       if ((_quota + more - sz < (_burst/2)) && (p >= DROPABLE_PRIORITY)) {
 	  delete args;

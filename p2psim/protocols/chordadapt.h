@@ -61,6 +61,7 @@ class ChordAdapt: public P2Protocol {
       IDMap ori;
       uint parallelism;
       uint type;
+      ConsistentHash::CHID overshoot;
     };
 
     struct lookup_ret{
@@ -93,13 +94,26 @@ class ChordAdapt: public P2Protocol {
       IDMap succ;
     };
 
+    struct learn_args {
+      IDMap src;
+      IDMap n;
+      int m;
+      IDMap end;
+    };
+
+    struct learn_ret {
+      vector<IDMap> v;
+    };
+
     void find_successors_handler(lookup_args *, lookup_ret *);
     void get_predsucc_handler(get_predsucc_args *, get_predsucc_ret *);
-    int learn_cb(bool, get_predsucc_args *, get_predsucc_ret *);
+    int learn_cb(bool, learn_args *, learn_ret *);
     int fix_succ_cb(bool, get_predsucc_args *, get_predsucc_ret *);
     int fix_pred_cb(bool, get_predsucc_args *, get_predsucc_ret *);
     int null_cb(bool, lookup_args *a, lookup_ret *r);
+    void learn_handler(learn_args *la, learn_ret *lr);
     void join_handler(lookup_args*, lookup_ret *);
+    void join_learn();
     void donelookup_handler(lookup_args *, lookup_ret *);
     void join(Args *);
     void lookup(Args *);
@@ -125,6 +139,7 @@ class ChordAdapt: public P2Protocol {
     static string print_succs(vector<IDMap> v);
 
     static vector<IDMap> ids;
+    static bool sorted;
 
   protected:
     IDMap _me;
@@ -143,13 +158,16 @@ class ChordAdapt: public P2Protocol {
     IDMap _wkn;
     uint _to_multiplier;
     uint _learn_num;
+    ConsistentHash::CHID _max_succ_gap;
     
     HashMap<ConsistentHash::CHID, Time> _outstanding_lookups;
     HashMap<ConsistentHash::CHID, Time> _forwarded;
+    HashMap<ConsistentHash::CHID, uint> _forwarded_nodrop;
 
     void consolidate_succ_list(IDMap, vector<IDMap>, vector<IDMap>);
 
     vector<notify_info> notifyinfo;
+    Topology *_top; //i hate obtaining topology pointer every time
 };
 #endif
 
