@@ -458,7 +458,7 @@ LocTable::add_sortednodes(vector<Chord::IDMap> l)
     pos = upper_bound(l.begin(), l.end(), tmppin, Chord::IDMap::cmp) - l.begin();
     if (pos >= lsz) pos = 0;
     ptr = pos;
-    if (pos < lsz && l[pos].id > tmppin.id) {
+    if (pos < lsz && (l[pos].id != tmppin.id)) {
       ptr--;
     }
     for (uint k = 0; k < pinlist[i].pin_pred; k++) {
