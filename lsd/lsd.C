@@ -211,6 +211,19 @@ tm ()
   return strbuf (" %d.%06d", int (ts.tv_sec), int (ts.tv_nsec/1000));
 }
 
+void 
+clear_stats (const rpc_program &prog)
+{
+#ifdef RPC_PROGRAM_STATS
+  bzero (prog.outcall_num, sizeof (prog.outcall_num));
+  bzero (prog.outcall_bytes, sizeof (prog.outcall_bytes));
+  bzero (prog.outcall_numrex, sizeof (prog.outcall_numrex));
+  bzero (prog.outcall_bytesrex, sizeof (prog.outcall_bytesrex));
+  bzero (prog.outreply_num, sizeof (prog.outreply_num));
+  bzero (prog.outreply_bytes, sizeof (prog.outreply_bytes));
+#endif
+}
+
 void
 dump_rpcstats (const rpc_program &prog, bool first, bool last)
 {
@@ -295,13 +308,6 @@ dump_rpcstats (const rpc_program &prog, bool first, bool last)
 	 << "\n";
   }
 
-
-  bzero (prog.outcall_num, sizeof (prog.outcall_num));
-  bzero (prog.outcall_bytes, sizeof (prog.outcall_bytes));
-  bzero (prog.outcall_numrex, sizeof (prog.outcall_numrex));
-  bzero (prog.outcall_bytesrex, sizeof (prog.outcall_bytesrex));
-  bzero (prog.outreply_num, sizeof (prog.outreply_num));
-  bzero (prog.outreply_bytes, sizeof (prog.outreply_bytes));
 #endif
 }
 
@@ -310,16 +316,27 @@ dump_rpcstats (const rpc_program &prog, bool first, bool last)
 void
 bandwidth ()
 {
-  warnx << tm () << "bandwidth \n";
+  warnx << tm () << " bandwidth\n";
+
+  static bool first_call = true;
   extern const rpc_program chord_program_1;
   extern const rpc_program merklesync_program_1;
   extern const rpc_program dhash_program_1;
 
-  dump_rpcstats (chord_program_1, true, false);
-  dump_rpcstats (dhash_program_1, false, false);
-  dump_rpcstats (merklesync_program_1, false, true);
+  if (!first_call) {
+    // don't dump on the first call, because stats
+    // have not been cleared yet.
+    dump_rpcstats (chord_program_1, true, false);
+    dump_rpcstats (dhash_program_1, false, false);
+    dump_rpcstats (merklesync_program_1, false, true);
+  }
+
+  clear_stats (chord_program_1);
+  clear_stats (dhash_program_1);
+  clear_stats (merklesync_program_1);
 
   delaycb (1, 0, wrap (bandwidth));
+  first_call = false;
 }
 
 
