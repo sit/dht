@@ -56,7 +56,7 @@ pmaint::pmaint_next ()
 #define PRED_LIST
 #ifdef PRED_LIST
       vec<ptr<location> > preds = host_node->preds ();
-      if (preds.size () > 1 &&
+      if (preds.size () >= dhash::num_efrags () &&
 	  betweenrightincl (preds[dhash::num_efrags () - 1]->id(), 
 			   host_node->my_ID (),
 			   key)) {
