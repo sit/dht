@@ -63,10 +63,10 @@ class venti_block {
 
   bool full();
   void reset(cbv after);
-  void reset_cb(cbv after, bool error, chordID key);
+  void reset_cb(cbv after, bool error, ptr<insert_info> i);
   void reset_s();
-  void reset_cb_s(bool error, chordID key);
-  void close_cb(bool error, chordID key);
+  void reset_cb_s(bool error, ptr<insert_info> i);
+  void close_cb(bool error, ptr<insert_info> i);
   void more_init(venti_block *ap, int dummy);
   void more_init_gb(venti_block *ap, cbv cb, int dummy);
 

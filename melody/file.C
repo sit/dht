@@ -29,10 +29,10 @@
 #include "file.h"
 
 void
-melody_file::write_cb (bool error, chordID key)
+melody_file::write_cb (bool error, ptr<insert_info> i)
 {
 #ifdef DEBUG
-  warn << (int)this << " write_cb " << key << "\n";
+  warn << (int)this << " write_cb " << i->key << "\n";
 #endif
   if (error) {
     warn << "melody_file store error\n";

@@ -290,7 +290,7 @@ dir::add2(bigint tmphash, int size, cbs redir, str parent) {
 
 // only creating one layer venti, so dirs are limited to ~700000 entries
 void
-dir::create_venti(cbs redir, str parent, bool error, chordID key)
+dir::create_venti(cbs redir, str parent, bool error, ptr<insert_info> i)
 {
   if(error) {
     warn << "can't add dir block\n";
@@ -304,12 +304,12 @@ dir::create_venti(cbs redir, str parent, bool error, chordID key)
   mb.type = 2;
   mb.offset = 0;
   mb.size = 0;
-  mpz_get_raw (mb.tmp, sha1::hashsize, &key);
+  mpz_get_raw (mb.tmp, sha1::hashsize, &i->key);
   cc->dhash->append(vhash, (char *)&mb, sizeof(mb), wrap(this, &dir::create_venti_done, redir, parent));
 }
 
 void
-dir::create_venti_done(cbs redir, str parent, bool error, chordID key) {
+dir::create_venti_done(cbs redir, str parent, bool error, ptr<insert_info> i) {
   if(error) {
     warn << "can't add venti block\n";
     exit(1);
@@ -318,7 +318,7 @@ dir::create_venti_done(cbs redir, str parent, bool error, chordID key) {
 }
 
 void
-dir::flush_cb(cbs redir, str parent, bool error, chordID key)
+dir::flush_cb(cbs redir, str parent, bool error, ptr<insert_info> i)
 {
   warn << (int)cs << " flush_cb " << (int)this << "\n";
   if (error) {
@@ -335,18 +335,20 @@ dir::flush_cb(cbs redir, str parent, bool error, chordID key)
 }
 
 void
-dir::after_new_dir_block(cbs redir, str parent, bool error, chordID key) {
+dir::after_new_dir_block(cbs redir, str parent, 
+			 bool error, ptr<insert_info> i) {
   if(error) {
     warn << (int)cs << " can't add new dir block.\n";
     exit(1);
   }
   char tmp[sha1::hashsize];
-  mpz_get_raw (tmp, sha1::hashsize, &key);
+  mpz_get_raw (tmp, sha1::hashsize, &i->key);
   cc->dhash->append(vhash, tmp, sha1::hashsize, wrap(this, &dir::after_appended_new_dirhash, redir, parent));
 }
 
 void
-dir::after_appended_new_dirhash(cbs redir, str parent, bool error, chordID key) {
+dir::after_appended_new_dirhash(cbs redir, str parent, 
+				bool error, ptr<insert_info> i) {
   if(error) {
     warn << (int)cs << " can't append new dirhash.\n";
     exit(1);

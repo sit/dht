@@ -97,7 +97,7 @@ static timespec periodic;
 
 
 static void
-sfsrodb_put_cb (timespec ts, bool failed, chordID key)
+sfsrodb_put_cb (timespec ts, bool failed, ptr<insert_info> i)
 {
   if (blkcnt % 1000 == 0) {
     static timespec diff;
@@ -125,7 +125,7 @@ sfsrodb_put_cb (timespec ts, bool failed, chordID key)
 
   out--;
   if (failed)
-    fatal << "Could not store block " << key << "\n";
+    fatal << "Could not store block " << i->key << "\n";
 }
 
 

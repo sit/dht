@@ -68,13 +68,16 @@ prepare_test_data (int num)
 
 
 void
-store_cb (bool error, chordID key)
+store_cb (bool error, ptr<insert_info> i)
 {
   out--;
 
   if (error) {
-    warn << "store_cb: " << key << " " << error << "\n";
+    warn << "store_cb: " << i->key << " " << error << "\n";
     fprintf (outfile, "store error\n");
+  } else {
+    str buf = strbuf () << "stored " << i->key << " at " << i->destID << "\n";
+    fprintf (outfile, "%s", buf.cstr ());
   }
 }
 

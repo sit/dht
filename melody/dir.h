@@ -65,14 +65,17 @@ class dir {
   void find_entry(ptr<dhash_block> blk);
   void found_entry(ptr<dhash_block> blk);
   void root_test_got_rb(ptr<dhash_block> blk);
-  void create_venti(cbs redir, str parent, bool error, chordID key);
-  void create_venti_done(cbs redir, str parent, bool error, chordID key);
+  void create_venti(cbs redir, str parent, bool error, ptr<insert_info> i);
+  void create_venti_done(cbs redir, str parent, bool error, 
+			 ptr<insert_info> i);
   void root_done(str foo);
   void add(str name, int type, bigint tmphash, int size, cbs redir, str parent);
   void add2(bigint tmphash, int size, cbs redir, str parent);
-  void flush_cb(cbs redir, str parent, bool error, chordID key);
-  void after_new_dir_block(cbs redir, str parent, bool error, chordID key);
-  void after_appended_new_dirhash(cbs redir, str parent, bool error, chordID key);
+  void flush_cb(cbs redir, str parent, bool error, ptr<insert_info> i);
+  void after_new_dir_block(cbs redir, str parent, 
+			   bool error, ptr<insert_info> i);
+  void after_appended_new_dirhash(cbs redir, str parent, 
+				  bool error, ptr<insert_info> i);
 
 public:
   cs_client *cs;
