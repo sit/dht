@@ -81,6 +81,28 @@ Kademlia::initstate(set<Protocol*> *l)
     insert(k->id(), k->node()->ip(), true);
     touch(k->id());
   }
+
+
+  KDEBUG(1) << "Kademlia::initstate DUMP for " << printbits(id()) << endl;
+  k_dumper dump;
+  _root->traverse(&dump, this);
+
+
+  // now make sure every single one is in our tree
+  for(set<Protocol*>::const_iterator i = l->begin(); i != l->end(); ++i) {
+    if((*i)->proto_name() != proto_name())
+      continue;
+
+    Kademlia *k = (Kademlia *) *i;
+    if(k->id() == _id)
+      continue;
+
+    KDEBUG(1) << "Kademlia::initstate making sure that " << printbits(k->id()) << " is in tree " << endl;
+    assert(flyweight.find(k->id()) != flyweight.end());
+    k_finder find(k->id());
+    _root->traverse(&find, this);
+    assert(find.found() == 1);
+  }
 }
 
 // }}}
@@ -705,6 +727,7 @@ k_nodes::insert(Kademlia::NodeID n, bool touch)
   // truncate end
   if(nodes.size() > Kademlia::k) {
     k_nodeinfo *ninfo = *nodes.rbegin();
+    KDEBUG(1) << "k_nodes::insert truncating " << Kademlia::printbits(ninfo->id) << endl;
     nodes.erase(ninfo);
     _nodes_by_id.erase(ninfo);
   }
@@ -963,7 +986,14 @@ k_bucket_leaf::divide(unsigned depth)
 
   for(k_nodes::nodeset_t::const_iterator i = nodes->nodes.begin(); i != nodes->nodes.end(); ++i) {
     unsigned bit = Kademlia::getbit((*i)->id, depth);
-    KDEBUG(4) <<  "k_bucket_leaf::divide on depth " << depth << ": pushed entry " << Kademlia::printbits((*i)->id) << " to side " << bit << endl;
+    KDEBUG(4) <<  "k_bucket_leaf::divide on depth " << depth << ": pushed node entry " << Kademlia::printbits((*i)->id) << " to side " << bit << endl;
+    ((k_bucket_leaf*)newnode->child[bit])->nodes->insert((*i)->id, false);
+  }
+
+  // divide the replacement cache
+  for(set<k_nodeinfo*, Kademlia::younger>::const_iterator i = replacement_cache->begin(); i != replacement_cache->end(); ++i) {
+    unsigned bit = Kademlia::getbit((*i)->id, depth);
+    KDEBUG(4) <<  "k_bucket_leaf::divide on depth " << depth << ": pushed replacement_cache entry " << Kademlia::printbits((*i)->id) << " to side " << bit << endl;
     ((k_bucket_leaf*)newnode->child[bit])->nodes->insert((*i)->id, false);
   }
 
@@ -1047,7 +1077,7 @@ k_bucket::~k_bucket()
 // }}}
 // {{{ k_bucket::traverse
 void
-k_bucket::traverse(k_traverser *traverser, Kademlia *k, string prefix, unsigned depth)
+k_bucket::traverse(k_traverser *traverser, Kademlia *k, string prefix, unsigned depth, unsigned leftright)
 {
   checkrep();
 
@@ -1057,17 +1087,18 @@ k_bucket::traverse(k_traverser *traverser, Kademlia *k, string prefix, unsigned 
     KDEBUG(1) << "k_nodes::traverser for " << traverser->type() << endl;
 
   if(!leaf) {
-    ((k_bucket_node*) this)->child[0]->traverse(traverser, k, prefix + "0", depth+1);
+    ((k_bucket_node*) this)->child[0]->traverse(traverser, k, prefix + "0", depth+1, 0);
     if(!k->node()->alive())
       return;
-    ((k_bucket_node*) this)->child[1]->traverse(traverser, k, prefix + "1", depth+1);
+    ((k_bucket_node*) this)->child[1]->traverse(traverser, k, prefix + "1", depth+1, 1);
     if(!k->node()->alive())
       return;
     checkrep();
     return;
   }
 
-  traverser->execute((k_bucket_leaf*) this, prefix, depth);
+  // we're a leaf
+  traverser->execute((k_bucket_leaf*) this, prefix, depth, leftright);
 
   // no checkrep.  the divide() may have killed us.
 }
@@ -1141,10 +1172,8 @@ k_bucket::insert(Kademlia::NodeID id, bool touch, bool init_state, string prefix
   kinfo->lastts = now();
   KDEBUG(4) << "k_bucket::insert adding " << Kademlia::printbits(id) << " to replacement cache." << endl;
   ((k_bucket_leaf*)this)->replacement_cache->insert(kinfo);
-  // while(((k_bucket_leaf*)this)->replacement_cache->size() >= Kademlia::k) {
-  //   k_nodeinfo *ki = *((k_bucket_leaf*)this)->replacement_cache->rbegin();
-  //   ((k_bucket_leaf*)this)->replacement_cache->erase(ki);
-  // }
+  // XXX: we can't really truncate the replacement cache.  it will break the
+  // invariant that everything in the flyweight has to be in a k-bucket
 
   checkrep();
 }
@@ -1232,7 +1261,7 @@ k_bucket::checkrep() const
 
 // {{{ k_stabilizer::execute
 void
-k_stabilizer::execute(k_bucket_leaf *k, string prefix, unsigned depth)
+k_stabilizer::execute(k_bucket_leaf *k, string prefix, unsigned depth, unsigned leftright)
 {
   // XXX: for KDEBUG purposes
   Kademlia *mykademlia = k->kademlia();
@@ -1300,7 +1329,7 @@ k_stabilizer::execute(k_bucket_leaf *k, string prefix, unsigned depth)
 
 // {{{ k_stabilized::execute
 void
-k_stabilized::execute(k_bucket_leaf *k, string prefix, unsigned depth)
+k_stabilized::execute(k_bucket_leaf *k, string prefix, unsigned depth, unsigned leftright)
 {
   // XXX: for debugging purposes only
   Kademlia::NodeID _id = k->kademlia()->id();
@@ -1320,30 +1349,24 @@ k_stabilized::execute(k_bucket_leaf *k, string prefix, unsigned depth)
   if(!k->nodes->empty())
     return;
 
-  KDEBUG(2) << "stabilized: " << prefix << " not present, depth = " << depth << ", prefix = " << prefix << endl;
-  Kademlia::NodeID lower_mask = 0;
+  KDEBUG(2) << "stabilized: " << prefix << " not present, depth = " << depth << ", prefix = " << prefix << ", leftright = " << leftright << endl;
 
   //
   // Node claims there is no node to satisfy this entry in the finger table.
   // Check whether that is true.
   //
-
-  // On every iteration we add another bit.  lower_mask looks like 111...000,
-  // but we use it as 000...111 by ~-ing it.
-  for(unsigned i=0; i<depth; i++)
-    lower_mask |= (((Kademlia::NodeID)1) << (Kademlia::idsize-i-1));
-  KDEBUG(4) << "stabilized: lower_mask on depth " << depth << " = " << Kademlia::printbits(lower_mask) << endl;
-
-  // flip the bit, and turn all bits to the right of the flipped bit into
-  // zeroes.
-  Kademlia::NodeID lower = _id ^ (((Kademlia::NodeID) 1) << (Kademlia::idsize-depth-1));
-  KDEBUG(4) << "stabilized: lower before mask = " << Kademlia::printbits(lower) << endl;
-  lower &= lower_mask;
-  KDEBUG(4) << "stabilized: lower after mask = " << Kademlia::printbits(lower) << endl;
-
-  // upper bound is the id with one bit flipped and all bits to the right of
-  // that turned into ones.
-  Kademlia::NodeID upper = lower | ~lower_mask;
+  Kademlia::NodeID upper = 0, lower = 0;
+  for(unsigned i=0; i<Kademlia::idsize; i++) {
+    if(i < (depth-1)) {
+      unsigned bit = Kademlia::getbit(_id, i);
+      lower |= (((Kademlia::NodeID) bit) << Kademlia::idsize-i-1);
+      upper |= (((Kademlia::NodeID) bit) << Kademlia::idsize-i-1);
+    } else if(i == (depth-1) && leftright) {
+      lower |= (((Kademlia::NodeID) leftright) << Kademlia::idsize-i-1);
+      upper |= (((Kademlia::NodeID) leftright) << Kademlia::idsize-i-1);
+    } else if(i > (depth-1))
+      upper |= (((Kademlia::NodeID) 1) << Kademlia::idsize-i-1);
+  }
 
   KDEBUG(4) << "stabilized: lower = " << Kademlia::printbits(lower) << endl;
   KDEBUG(4) << "stabilized: upper = " << Kademlia::printbits(upper) << endl;
@@ -1356,10 +1379,6 @@ k_stabilized::execute(k_bucket_leaf *k, string prefix, unsigned depth)
   // is no such is WRONG.
   if(it != _v->end() && *it <= upper) {
     KDEBUG(4) << "stabilized: prefix " << prefix << " on depth " << depth << " is invalid, but " << Kademlia::printbits(*it) << " matches " << endl;
-    KDEBUG(4) << "stabilized: lowermask = " << Kademlia::printbits(lower_mask) << endl;
-    KDEBUG(4) << "stabilized: ~lowermask = " << Kademlia::printbits(~lower_mask) << endl;
-    KDEBUG(4) << "stabilized: lower = " << Kademlia::printbits(lower) << endl;
-    KDEBUG(4) << "stabilized: upper = " << Kademlia::printbits(upper) << endl;
     _stabilized = false;
   }
   // assert(false);
@@ -1368,7 +1387,7 @@ k_stabilized::execute(k_bucket_leaf *k, string prefix, unsigned depth)
 
 // {{{ k_finder::execute
 void
-k_finder::execute(k_bucket_leaf *k, string prefix, unsigned depth)
+k_finder::execute(k_bucket_leaf *k, string prefix, unsigned depth, unsigned leftright)
 {
   k->checkrep();
   for(Kademlia::nodeinfo_set::const_iterator i = k->nodes->nodes.begin(); i != k->nodes->nodes.end(); ++i)
@@ -1383,13 +1402,19 @@ k_finder::execute(k_bucket_leaf *k, string prefix, unsigned depth)
 
 // {{{ k_dumper::execute
 void
-k_dumper::execute(k_bucket_leaf *k, string prefix, unsigned depth)
+k_dumper::execute(k_bucket_leaf *k, string prefix, unsigned depth, unsigned leftright)
 {
   string spaces = "";
   for(unsigned i=0; i<depth; i++)
     spaces += "  ";
-  cout << spaces << "prefix: " << prefix << endl;
+  cout << spaces << "prefix: " << prefix << ", depth " << depth << endl;
   for(Kademlia::nodeinfo_set::const_iterator i = k->nodes->nodes.begin(); i != k->nodes->nodes.end(); ++i) {
+    char ptr[32]; sprintf(ptr, "%p", (*i));
+    cout << spaces << "  " << Kademlia::printbits((*i)->id) << ", lastts = " << (*i)->lastts << ", ptr = " << ptr << endl;
+  }
+
+  cout << spaces << "prefix: " << prefix << ", depth " << depth << ", replacement cache: " << endl;
+  for(set<k_nodeinfo*, Kademlia::younger>::const_iterator i = k->replacement_cache->begin(); i != k->replacement_cache->end(); ++i) {
     char ptr[32]; sprintf(ptr, "%p", (*i));
     cout << spaces << "  " << Kademlia::printbits((*i)->id) << ", lastts = " << (*i)->lastts << ", ptr = " << ptr << endl;
   }
@@ -1398,7 +1423,7 @@ k_dumper::execute(k_bucket_leaf *k, string prefix, unsigned depth)
 
 // {{{ k_delete::execute
 void
-k_delete::execute(k_bucket_leaf *k, string prefix, unsigned depth)
+k_delete::execute(k_bucket_leaf *k, string prefix, unsigned depth, unsigned leftright)
 {
   if(k->leaf)
     delete (k_bucket_leaf*) k;
@@ -1409,7 +1434,7 @@ k_delete::execute(k_bucket_leaf *k, string prefix, unsigned depth)
 
 // {{{ k_check::execute
 void
-k_check::execute(k_bucket_leaf *k, string prefix, unsigned depth)
+k_check::execute(k_bucket_leaf *k, string prefix, unsigned depth, unsigned leftright)
 {
   k->checkrep();
 
@@ -1450,7 +1475,7 @@ k_collect_closest::k_collect_closest(Kademlia::NodeID n, unsigned best) :
 // }}}
 // {{{ k_collect_closest::execute
 void
-k_collect_closest::execute(k_bucket_leaf *k, string prefix, unsigned depth)
+k_collect_closest::execute(k_bucket_leaf *k, string prefix, unsigned depth, unsigned leftright)
 {
   checkrep();
   k->checkrep();

@@ -229,7 +229,7 @@ public:
   virtual ~k_bucket();
 
   Kademlia *kademlia()  { return _kademlia; }
-  void traverse(k_traverser*, Kademlia*, string = "", unsigned = 0);
+  void traverse(k_traverser*, Kademlia*, string = "", unsigned = 0, unsigned = 0);
   void insert(Kademlia::NodeID, bool, bool = false, string = "", unsigned = 0);
   void erase(Kademlia::NodeID, string = "", unsigned = 0);
   inline virtual void checkrep() const;
@@ -298,7 +298,7 @@ private:
 class k_traverser { public:
   k_traverser(string type = "") : _type(type) {}
   virtual ~k_traverser() {}
-  virtual void execute(k_bucket_leaf*, string, unsigned) = 0;
+  virtual void execute(k_bucket_leaf*, string, unsigned, unsigned) = 0;
   string type() { return _type; };
 
 private:
@@ -309,7 +309,7 @@ private:
 class k_collect_closest : public k_traverser { public:
   k_collect_closest(Kademlia::NodeID, unsigned best = Kademlia::k);
   virtual ~k_collect_closest() {}
-  virtual void execute(k_bucket_leaf *, string, unsigned);
+  virtual void execute(k_bucket_leaf *, string, unsigned, unsigned);
 
   set<Kademlia::NodeID, Kademlia::IDcloser> results;
 
@@ -324,7 +324,7 @@ private:
 class k_stabilizer : public k_traverser { public:
   k_stabilizer() : k_traverser("k_stabilizer") {}
   virtual ~k_stabilizer() {}
-  virtual void execute(k_bucket_leaf *, string, unsigned);
+  virtual void execute(k_bucket_leaf *, string, unsigned, unsigned);
 };
 // }}}
 // {{{ class k_stabilized
@@ -333,7 +333,7 @@ class k_stabilized : public k_traverser { public:
     k_traverser("k_stabilized"), _v(v), _stabilized(true) {}
 
   virtual ~k_stabilized() {}
-  virtual void execute(k_bucket_leaf*, string, unsigned);
+  virtual void execute(k_bucket_leaf*, string, unsigned, unsigned);
   bool stabilized() { return _stabilized; }
 
 private:
@@ -346,7 +346,7 @@ class k_finder : public k_traverser { public:
   k_finder(Kademlia::NodeID n) : k_traverser("k_finder"), _n(n), _found(0) {}
 
   virtual ~k_finder() {}
-  virtual void execute(k_bucket_leaf*, string, unsigned);
+  virtual void execute(k_bucket_leaf*, string, unsigned, unsigned);
   unsigned found() { return _found; }
 
 private:
@@ -358,7 +358,7 @@ private:
 class k_dumper : public k_traverser { public:
   k_dumper() : k_traverser("k_dumper") {}
   virtual ~k_dumper() {}
-  virtual void execute(k_bucket_leaf*, string, unsigned);
+  virtual void execute(k_bucket_leaf*, string, unsigned, unsigned);
 
 private:
 };
@@ -367,7 +367,7 @@ private:
 class k_delete : public k_traverser { public:
   k_delete() : k_traverser("k_delete") {}
   virtual ~k_delete() {}
-  virtual void execute(k_bucket_leaf*, string, unsigned);
+  virtual void execute(k_bucket_leaf*, string, unsigned, unsigned);
 
 private:
 };
@@ -376,7 +376,7 @@ private:
 class k_check : public k_traverser { public:
   k_check() : k_traverser("k_check") {}
   virtual ~k_check() {}
-  virtual void execute(k_bucket_leaf*, string, unsigned);
+  virtual void execute(k_bucket_leaf*, string, unsigned, unsigned);
 
 private:
 };
