@@ -40,10 +40,11 @@ public:
   //from vivaldi.h
   struct Coord {
     vector<double> _v;
-    void init2d (double x, double y) {_v.clear (); _v.push_back (x); _v.push_back (y); };
-    Coord () {};
+    double _ht;
+    void init2d (double x, double y) {_ht = 0; _v.clear (); _v.push_back (x); _v.push_back (y); };
+    Coord () { _ht = 0;};
     int dim () {return _v.size();};
-    Coord (uint d) {for (uint i=0;i<d;i++) _v.push_back(0.0);};
+    Coord (uint d) { _ht = 0; _v.clear (); for (uint i=0;i<d;i++) _v.push_back(0.0);};
   };
 
   struct Sample {
@@ -106,69 +107,13 @@ protected:
     delete t;
     return ok;
   }
-
-
 };
 
-
-//COORD implementation
-inline double
-dist(VivaldiNode::Coord a, VivaldiNode::Coord b)
-{
-  double d = 0.0;
-  assert (a._v.size () == b._v.size ());
-  for (unsigned int i = 0; i < a._v.size (); i++) 
-    d += (a._v[i] - b._v[i])*(a._v[i] - b._v[i]);
-
-  return sqrt(d);
-}
-
-inline VivaldiNode::Coord
-operator-(VivaldiNode::Coord a, VivaldiNode::Coord b)
-{
-  VivaldiNode::Coord c;
-  assert (a._v.size () == b._v.size ());
-  for (unsigned int i = 0; i < a._v.size (); i++) 
-    c._v.push_back (a._v[i] - b._v[i]);
-  return c;
-}
-
-inline VivaldiNode::Coord
-operator+(VivaldiNode::Coord a, VivaldiNode::Coord b)
-{
-  VivaldiNode::Coord c;
-  assert (a._v.size () == b._v.size ());
-  for (unsigned int i = 0; i < a._v.size (); i++) 
-    c._v.push_back(a._v[i] + b._v[i]);
-
-  return c;
-}
-
-inline VivaldiNode::Coord
-operator/(VivaldiNode::Coord c, double x)
-{
-  for (unsigned int i = 0; i < c._v.size (); i++) 
-    c._v[i] /= x;
-  return c;
-}
-
-inline VivaldiNode::Coord
-operator*(VivaldiNode::Coord c, double x)
-{
-  for (unsigned int i = 0; i < c._v.size (); i++) 
-    c._v[i] *= x;
-  return c;
-}
-
-inline double
-length(VivaldiNode::Coord c)
-{
-  double l = 0.0;
-  for (unsigned int i = 0; i < c._v.size (); i++) 
-    l += c._v[i]*c._v[i];
-  return sqrt(l);
-}
-
-ostream& operator<< (ostream &s, VivaldiNode::Coord &c);
-
+double dist(VivaldiNode::Coord, VivaldiNode::Coord);
+VivaldiNode::Coord operator-(VivaldiNode::Coord, VivaldiNode::Coord);
+VivaldiNode::Coord operator+(VivaldiNode::Coord, VivaldiNode::Coord);
+VivaldiNode::Coord operator/(VivaldiNode::Coord, double);
+VivaldiNode::Coord operator*(VivaldiNode::Coord, double);
+double length(VivaldiNode::Coord);
+ostream& operator<<(ostream&, VivaldiNode::Coord&);
 #endif // __PROTOCOL_H

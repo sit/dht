@@ -2,9 +2,14 @@
 #include "p2psim/network.h"
 #include "topologies/euclidean.h"
 
+static int usinght = -1;
+
 VivaldiNode::VivaldiNode(IPAddress ip) : P2Protocol (ip)
 {
-
+  if(usinght == -1){
+    usinght = args().nget<uint>("using-height-vectors", 0, 10);
+    printf("using-height-vectors = %d\n", usinght);
+  }
   _nsamples = 0;
   _dim = args().nget<uint>("model-dimension", 3, 10);
   _adaptive = args().nget<uint>("adaptive", 0, 10);
@@ -13,10 +18,15 @@ VivaldiNode::VivaldiNode(IPAddress ip) : P2Protocol (ip)
   _pred_err  = -1;
   _window_size = args().nget<uint>("window-size", -1, 10);
 
-  // Start out at a random point/origin
-  for (int i = 0; i < _dim; i++) 
-    // _c._v.push_back(random() % 200000 - 1000000);
-  _c._v.push_back (0.0);
+  // Start out at a random point
+  // for (int i = 0; i < _dim; i++) 
+  //   _c._v.push_back (random() % 200000 - 1000000);
+  // _c._ht = random() % 200000 - 1000000);
+
+  // Start out at the origin
+  for (int i = 0; i < _dim; i++)
+    _c._v.push_back (0);
+  _c._ht = 0;
 }
 
 VivaldiNode::~VivaldiNode()
@@ -112,6 +122,8 @@ VivaldiNode::net_force(Coord c, vector<Sample> v)
       while (l < 0.0001) { //nodes are on top of one another
 	for (uint j = 0; j < dir._v.size(); j++) //choose a random direction
 	    dir._v[j] += (double)(random () % 10 - 5) / 10.0;
+	if (usinght)
+	  dir._ht += (double)(random () % 10) / 10.0;
 	l = length (dir);
       }
       double unit = weights[i]/(l);
@@ -119,6 +131,8 @@ VivaldiNode::net_force(Coord c, vector<Sample> v)
       f = f + udir;
     }
   }
+  f._ht = -f._ht;
+
   return f;
 }
 
@@ -147,8 +161,11 @@ VivaldiNode::algorithm(Sample s)
     t = _timestep;
 
   // apply the force to our coordinates
+  // cout << "move from " << _c << " with force " << f;
   _c = _c + (f * t);
-
+  if (usinght && _c._ht <= 1000) // 1000 is 1ms
+    _c._ht = 1000; 
+  // cout << " to " << _c << "\n";
   _samples.clear ();
 
 }
@@ -167,7 +184,85 @@ VivaldiNode::real_coords ()
   return ret;
 }
 
-ostream& operator<< (ostream &s, VivaldiNode::Coord &c) 
-  {
-    return s << c._v[0] << " " << c._v[1];
+ostream&
+operator<< (ostream &s, VivaldiNode::Coord &c) 
+{
+  for (uint i = 0; i < c._v.size(); i++){
+    if (i)
+      s << ",";
+    s << c._v[i];
   }
+  if (usinght)
+    s << ",ht=" << c._ht;
+  return s;
+}
+
+double
+dist(VivaldiNode::Coord a, VivaldiNode::Coord b)
+{
+  double d = 0.0;
+  assert (a._v.size () == b._v.size ());
+  for (unsigned int i = 0; i < a._v.size (); i++) 
+    d += (a._v[i] - b._v[i])*(a._v[i] - b._v[i]);
+  d = sqrt(d);
+  if (usinght)
+    d += a._ht + b._ht;
+  return d;
+}
+
+VivaldiNode::Coord
+operator-(VivaldiNode::Coord a, VivaldiNode::Coord b)
+{
+  VivaldiNode::Coord c;
+  assert (a._v.size () == b._v.size ());
+  for (unsigned int i = 0; i < a._v.size (); i++) 
+    c._v.push_back (a._v[i] - b._v[i]);
+  if (usinght)
+    c._ht = a._ht+b._ht;
+  return c;
+}
+
+VivaldiNode::Coord
+operator+(VivaldiNode::Coord a, VivaldiNode::Coord b)
+{
+  VivaldiNode::Coord c;
+  assert (a._v.size () == b._v.size ());
+  for (unsigned int i = 0; i < a._v.size (); i++) 
+    c._v.push_back(a._v[i] + b._v[i]);
+  if (usinght)
+    c._ht = a._ht+b._ht;
+  return c;
+}
+
+VivaldiNode::Coord
+operator/(VivaldiNode::Coord c, double x)
+{
+  for (unsigned int i = 0; i < c._v.size (); i++) 
+    c._v[i] /= x;
+  if (usinght)
+    c._ht /= x;
+  return c;
+}
+
+VivaldiNode::Coord
+operator*(VivaldiNode::Coord c, double x)
+{
+  for (unsigned int i = 0; i < c._v.size (); i++) 
+    c._v[i] *= x;
+  if (usinght)
+    c._ht *= x;
+  return c;
+}
+
+double
+length(VivaldiNode::Coord c)
+{
+  double l = 0.0;
+  for (unsigned int i = 0; i < c._v.size (); i++) 
+    l += c._v[i]*c._v[i];
+  l = sqrt(l);
+  if (usinght)
+    l += c._ht;
+  return l;
+}
+
