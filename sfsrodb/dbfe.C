@@ -309,7 +309,11 @@ int dbfe::IMPL_open_sleepycat(char *filename, dbOptions opts) {
    if (r != 0) return r;
  }
 
+#if ((DB_VERSION_MAJOR < 4) || ((DB_VERSION_MAJOR == 4) && (DB_VERSION_MINOR < 1)))
  r = db->open(db, (const char *)filename, NULL, DB_BTREE, flags, mode);
+#else
+ r = db->open(db, NULL, (const char *)filename, NULL, DB_BTREE, flags, mode);
+#endif
  return r;
 }
 
