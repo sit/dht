@@ -59,13 +59,11 @@ static bool simulated_input = false;
 static GdkColor highlight_color;
 static char *highlight = "cyan4"; // consistent with old presentations
 
-
 struct color_pair {
   GdkColor c;
   unsigned long lat;
 };
 
-static rxx finger_rxx ("([0-9]*)\\|([0-9]*) ");
 vec<color_pair> lat_map;
 
 struct f_node {
@@ -119,8 +117,7 @@ void update_toes_got_toes (chordID ID, str host, unsigned short port,
 
 void update_succlist (f_node *n);
 void update_succ_got_succ (chordID ID, str host, unsigned short port, 
-			   chord_nodelistextres *res,
-			   clnt_stat err);
+			   chord_nodelistextres *res, clnt_stat err);
 
 void update_pred (f_node *n);
 void update_pred_got_pred (chordID ID, str host, unsigned short port,
@@ -224,38 +221,52 @@ add_node (str host, unsigned short port)
   add_node (n, host, port);
 }
 
+void
+doRPCcb (chordID ID, aclnt_cb cb, clnt_stat err)
+{
+  f_node *nu = nodes[ID];
+  if (!nu) return;
+  // If we've already removed a node, then there's no reason to even
+  // notify the cb of anything in this program.
+  
+  if (err) {
+    warn << "deleting " << ID << "\n";
+    nodes.remove (nu);
+    delete nu;
+  }
+  cb (err);
+}
+
+void
+doRPC (f_node *nu, int procno, const void *in, void *out, aclnt_cb cb)
+{
+  ptr<aclnt> c = get_aclnt (nu->host, nu->port);
+  if (c == NULL) 
+    fatal << "update_succlist: couldn't aclnt::alloc\n";
+  c->timedcall (TIMEOUT, procno, in, out, wrap (&doRPCcb, nu->ID, cb));
+}  
+
 //----- update successors -----------------------------------------------------
 
 void
 update_succlist (f_node *nu)
 {
-  ptr<aclnt> c = get_aclnt (nu->host, nu->port);
-  if (c == NULL) 
-    fatal << "update_succlist: couldn't aclnt::alloc\n";
-  
   chordID n = nu->ID;
   chord_nodelistextres *res = New chord_nodelistextres ();
-  c->timedcall (TIMEOUT, CHORDPROC_GETSUCC_EXT, &n, res,
-		wrap (&update_succ_got_succ, 
-		      nu->ID, nu->host, nu->port, res));
+  doRPC (nu, CHORDPROC_GETSUCC_EXT, &n, res,
+	 wrap (&update_succ_got_succ, 
+	       nu->ID, nu->host, nu->port, res));
 }
 
 void
 update_succ_got_succ (chordID ID, str host, unsigned short port, 
 		      chord_nodelistextres *res, clnt_stat err)
 {
-  f_node *nu = nodes[ID];
-  if (!nu) return;
-  if (err || res->status == CHORD_RPCFAILURE) {
-    warn << "(update succ) deleting " << ID << "\n";
-    if (nu) {
-      nodes.remove (nu);
-      delete nu;
-    }
+  if (err || res->status != CHORD_OK) {
+    delete res;
     return;
   }
-  if (res->status != CHORD_OK)
-    return;
+  f_node *nu = nodes[ID]; // callback shouldn't be called if not in list.
 
   if (nu->successors) delete nu->successors;
   nu->successors = res;
@@ -271,75 +282,50 @@ update_succ_got_succ (chordID ID, str host, unsigned short port,
 void
 update_pred (f_node *nu)
 {
-  ptr<aclnt> c = get_aclnt (nu->host, nu->port);
-  if (c == NULL)
-    fatal << "update_pred: couldn't aclnt::alloc\n";
   chordID n = nu->ID;
   chord_nodeextres *res = New chord_nodeextres ();
-  c->timedcall (TIMEOUT, CHORDPROC_GETPRED_EXT, &n, res,
-		wrap (&update_pred_got_pred,
-		      nu->ID, nu->host, nu->port, res));
+  doRPC (nu, CHORDPROC_GETPRED_EXT, &n, res,
+	 wrap (&update_pred_got_pred,
+	       nu->ID, nu->host, nu->port, res));
 }
 
 void
 update_pred_got_pred (chordID ID, str host, unsigned short port, 
 		      chord_nodeextres *res, clnt_stat err)
 {
-  f_node *nu = nodes[ID];
-  if (!nu) return;
-  if (err || res->status == CHORD_RPCFAILURE) {
-    warn << "(update pred) deleting " << ID << "\n";
-    if (nu) {
-      nodes.remove (nu);
-      delete nu;
-    }
+  if (err || res->status != CHORD_OK) {
+    delete res;
     return;
   }
-  if (res->status != CHORD_OK)
-    return;
+  f_node *nu = nodes[ID];
 
   if (nu->predecessor) delete nu->predecessor;
   nu->predecessor = res;
 
-  if (nodes[res->resok->x] == NULL) 
+  if (res->resok->alive && nodes[res->resok->x] == NULL) 
     add_node (res->resok->x, res->resok->r.hostname, res->resok->r.port);
 }
 
-
-
-
 //----- update fingers -----------------------------------------------------
-
 void
 update_fingers (f_node *nu)
 {
-  ptr<aclnt> c = get_aclnt (nu->host, nu->port);
-  if (c == NULL) 
-    fatal << "update_fingers: couldn't aclnt::alloc\n";
-  
   chordID n = nu->ID;
   chord_nodelistextres *res = New chord_nodelistextres ();
-  c->timedcall (TIMEOUT, CHORDPROC_GETFINGERS_EXT, &n, res,
-		wrap (&update_fingers_got_fingers, 
-		      nu->ID, nu->host, nu->port, res));
+  doRPC (nu, CHORDPROC_GETFINGERS_EXT, &n, res,
+	 wrap (&update_fingers_got_fingers, 
+	       nu->ID, nu->host, nu->port, res));
 }
 
 void
 update_fingers_got_fingers (chordID ID, str host, unsigned short port, 
 			    chord_nodelistextres *res, clnt_stat err)
 {
-  f_node *nu = nodes[ID];
-  if (!nu) return;
-  if (err || (res->status == CHORD_RPCFAILURE)) {
-    warn << "(update) deleting " << ID << "\n";
-    if (nu) {
-      nodes.remove (nu);
-      delete nu;
-    }
+  if (err || res->status != CHORD_OK) {
+    delete res;
     return;
   }
-  if (res->status != CHORD_OK)
-    return;
+  f_node *nu = nodes[ID];
 
   if (nu->fingers) delete nu->fingers;
   nu->fingers = res;
@@ -452,34 +438,24 @@ get_cb (f_node *node_next)
 void
 update_toes (f_node *nu)
 {
-  ptr<aclnt> c = get_aclnt (nu->host, nu->port);
-  if (c == NULL) 
-    fatal << "update_toes: couldn't aclnt::alloc\n";
-  
   chord_gettoes_arg n;
   n.v = nu->ID;
   n.level = glevel;
   chord_nodelistextres *res = New chord_nodelistextres ();
-  c->timedcall (TIMEOUT, CHORDPROC_GETTOES, &n, res,
-		wrap (&update_toes_got_toes, 
-		      nu->ID, nu->host, nu->port, res));
+  doRPC (nu, CHORDPROC_GETTOES, &n, res,
+	 wrap (&update_toes_got_toes, 
+	       nu->ID, nu->host, nu->port, res));
 }
 
 void
 update_toes_got_toes (chordID ID, str host, unsigned short port, 
 		      chord_nodelistextres *res, clnt_stat err)
 {
-  f_node *nu = nodes[ID];
-  if (!nu) return;
-  if (err || res->status == CHORD_RPCFAILURE) {
-    warn << "(update toes) deleting " << ID << "\n";
-    if (nu) {
-      nodes.remove (nu);
-      delete nu;
-    }
+  if (err || res->status != CHORD_OK) {
+    delete res;
     return;
   }
-  if (res->status != CHORD_OK) return;
+  f_node *nu = nodes[ID];
 
   if (nu->toes) delete nu->toes;
   nu->toes = res;
@@ -616,9 +592,18 @@ redraw_cb (GtkWidget *widget, gpointer data)
 {
   draw_ring ();
 }
+
 void 
 quit_cb (GtkWidget *widget,
-	 gpointer data) {  
+	 gpointer data)
+{
+  f_node *c = nodes.first ();
+  f_node *n;
+  while (c) {
+    n = nodes.next (c);
+    delete c;
+    c = n;
+  }
   gtk_exit (0);
 }
 
@@ -836,7 +821,7 @@ key_release_event (GtkWidget *widget,
     }
   case 'q':
   case 'Q':
-    gtk_exit (0);
+    quit_cb (NULL, NULL);
     break;
   default:
     break;
