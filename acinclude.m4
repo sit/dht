@@ -1,4 +1,4 @@
-dnl $Id: acinclude.m4,v 1.8 2003/01/10 22:37:40 fdabek Exp $
+dnl $Id: acinclude.m4,v 1.9 2003/01/17 15:23:04 jsr Exp $
 
 # Configure paths for GTK+
 # Owen Taylor     97-11-3
@@ -201,7 +201,7 @@ dnl
 dnl switch for building everyting
 dnl
 AC_DEFUN(CHORD_BUILDALL,
-[AC_ARG_WITH(apps, [--enable-apps Build everything])
+[AC_ARG_WITH(apps, [--with-apps Build everything])
 AM_CONDITIONAL(COND_ALL, test "${with_apps}" = yes)
 ])
 
