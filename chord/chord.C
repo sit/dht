@@ -780,11 +780,12 @@ vnode_impl::doalert (user_args *sbp, chord_nodearg *na)
 {
   ndoalert++;
   chord_node n = make_chord_node (na->n);
-  if (locations->cached (n.x)) {
+  ptr<location> l = locations->lookup (n.x);
+  if (l) {
     // check whether we cannot reach x either
     chord_noderes *res = New chord_noderes (CHORD_OK);
     ptr<chordID> v = New refcounted<chordID> (n.x);
-    doRPC (n, chord_program_1, CHORDPROC_GETSUCCESSOR, v, res,
+    doRPC (l, chord_program_1, CHORDPROC_GETSUCCESSOR, v, res,
 	   wrap (mkref (this), &vnode_impl::doalert_cb, res, n.x));
   }
   chordstat res = CHORD_OK;
