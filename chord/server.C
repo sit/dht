@@ -516,7 +516,12 @@ vnode_impl::update_coords (ptr<location> u, vec<float> uc, float ud)
     
     //print_vector ("f", f);
     if (!found_meas) {
-      warn << "no springs!\n";
+      static int printcounter = 0;
+      if (printcounter == 0)
+	warn << "no springs!\n";
+      printcounter++;
+      if (printcounter == 1000)
+	printcounter = 0;
       return;
     } 
       

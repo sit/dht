@@ -66,8 +66,8 @@ pmaint::pmaint_lookup (bigint key, dhash_stat err, vec<chord_node> sl, route r)
   assert (succ == sl[0].x);
 
   if (dhash::num_efrags () > sl.size ()) {
-    warn << "not enough successors: " << sl.size () 
-	 << " vs " << dhash::num_efrags () << "\n";
+    // warn << "not enough successors: " << sl.size () 
+    //	    << " vs " << dhash::num_efrags () << "\n";
     //try again later
     delaycb (PRTTM, wrap (this, &pmaint::pmaint_next));
     return;
