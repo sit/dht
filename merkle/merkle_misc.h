@@ -106,7 +106,7 @@ id2dbrec(chordID id)
 static inline ref<dbrec>
 id2dbrec(const blockID &id)
 {
-  return New refcounted<dbrec> (id.key, id.size);
+  return id2dbrec(id.ID, id.dbtype, id.ctype);
 }
 
 

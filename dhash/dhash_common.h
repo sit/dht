@@ -14,18 +14,15 @@ struct blockID {
   chordID ID;
   dhash_ctype ctype;
   dhash_dbtype dbtype;
-  char key[size];
 
   blockID (chordID k, dhash_ctype c, dhash_dbtype d)
     : ID(k), ctype(c), dbtype(d)
-  { 
-    mpz_get_rawmag_be (key, sha1::hashsize, &k);
-    key[sha1::hashsize] = (char)c;
-    key[sha1::hashsize+1] = (char)d;
-  }
+  {} 
 
   bool operator== (const blockID b) const {
-    return !memcmp (key, b.key, size);
+    return((ID == b.ID) &&
+	   (ctype == b.ctype) &&
+	   (dbtype == b.dbtype));
   }
 };
 
