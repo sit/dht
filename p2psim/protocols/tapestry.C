@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.46 2004/01/26 21:56:59 strib Exp $ */
+/* $Id: tapestry.C,v 1.47 2004/01/27 04:26:31 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -207,7 +207,8 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
   args->num_timeouts += lr.num_timeouts;
   args->time_timeouts += lr.time_timeouts;
 
-  if( !lr.failed && lr.owner_id == lr.real_owner_id ) {
+  if( !lr.failed && lr.owner_id == lr.real_owner_id &&
+      now() - args->starttime < _max_lookup_time ) {
 
     if( _direct_reply && lr.time_done == 0 ) {
       // I was dead when this recursive query got to me.  Ignore;
@@ -246,12 +247,12 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
       delaycb( 100, &Tapestry::lookup_wrapper, args );
     } else {
 
-      if( lr.failed ) {
+      if( lr.failed || lr.owner_id == lr.real_owner_id ) {
 	if( _verbose ) {
 	  TapDEBUG(0) << "Lookup failed for key " << print_guid(args->key) 
 		      << endl;
 	}
-	record_lookup_stat( ip(), ip(), now() - args->starttime,
+	record_lookup_stat( ip(), ip(), _max_lookup_time,
 			    false, false, lr.hopcount, args->num_timeouts, 
 			    args->time_timeouts );
 	_num_fail_lookups++;
@@ -270,7 +271,7 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
 		      << lr.hopcount << ", numtries " << args->num_tries 
 		      << endl;
 	}
-	record_lookup_stat( ip(), ip(), now() - args->starttime,
+	record_lookup_stat( ip(), ip(), _max_lookup_time,
 			    true, false, lr.hopcount, args->num_timeouts, 
 			    args->time_timeouts );
 	_num_inc_lookups++;
@@ -280,10 +281,8 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
 
       _num_lookups++;
       _num_hops += lr.hopcount;
-      // since this is the failure case (both incorrect and failed)
-      // we calculate latency with now() no matter what because 
-      // we incurred timeouts anyway
-      _total_latency += ( now() - args->starttime );
+      // all failures get the max time
+      _total_latency += _max_lookup_time;
 
       delete args;
       
@@ -1553,21 +1552,9 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
 	pi->failed = true;
       } else {
 	// put another shrimp on the barbie . . .
-	ping_args pa;
-	ping_return pr;
-	TapDEBUG(3) << "Rescheduling multi-add for " << pi->ip
-		    << " with timeout " << pi->last_timeout << endl;
-	pi->last_timeout *= 2;
-	record_stat(STAT_PING, 0, 0);
-	TapDEBUG(3) << "Rescheduling multi-add for " << pi->ip
-		    << " with timeout " << pi->last_timeout << endl;
-	unsigned rpc = asyncRPC( pi->ip, 
-				 &Tapestry::handle_ping, &pa, &pr, 
-				 pi->last_timeout );
-	assert(rpc);
-	ping_rpcset->insert(rpc);
-	ping_resultmap->remove( donerpc );
-	ping_resultmap->insert( rpc, pi );
+	check_node_args *ca = New check_node_args();
+	ca->ip = pi->ip;
+	delaycb( 1, &Tapestry::check_node, ca );
       }
       
     } else {
@@ -1594,8 +1581,8 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
     }
   }
   _recently_dead.clear();
-  for(HashMap<unsigned, ping_callinfo*>::iterator j=ping_resultmap->begin(); 
-      j != ping_resultmap->end(); ++j) {
+  for( HashMap<unsigned, ping_callinfo*>::iterator j=ping_resultmap->begin(); 
+      j != ping_resultmap->end(); ++j ) {
     ping_callinfo *pi = j.value();
     //assert( pi->rtt == ping( pi->ip, pi->id ) );
     TapDEBUG(4) << "ip: " << pi->ip << endl;
@@ -1610,8 +1597,9 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
       }
     } else {
       // make sure it's not the default (we actually pinged this one)
-      assert( pi->rtt != 87654 );
-      _rt->add( pi->ip, pi->id, pi->rtt );
+      if( pi->rtt != 87654 ) {
+	_rt->add( pi->ip, pi->id, pi->rtt );
+      }
     }
     delete pi;
   }
