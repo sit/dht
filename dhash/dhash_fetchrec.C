@@ -177,7 +177,7 @@ dhash_impl::dofetchrec_nexthop_cb (user_args *sbp, dhash_fetchrec_arg *arg,
     rres.resdef->path.setsize (arg->path.size () + 1);
     for (size_t i = 0; i < arg->path.size (); i++)
       rres.resdef->path[i] = arg->path[i];
-    host_node->my_location ()->fill_node (arg->path[arg->path.size ()]);
+    host_node->my_location ()->fill_node (rres.resdef->path[arg->path.size ()]);
     
     sbp->reply (&rres);
     sbp = NULL;
