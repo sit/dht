@@ -22,7 +22,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-# $Id: run-simulations.pl,v 1.18 2004/01/27 00:34:10 strib Exp $
+# $Id: run-simulations.pl,v 1.19 2004/01/27 21:57:59 strib Exp $
 
 use strict;
 use Getopt::Long;
@@ -430,8 +430,8 @@ sub run_command {
 	$randseed = $options{"seed"};
     }
     open( LOG, ">$logfile" ) or die( "Couldn't open $logfile" );
-    print LOG "# lookupmean=$lookupmean lifemean=$lifemean " . 
-	"deathmean=$deathmean file=$churnfile exit=$exittime\n";
+    print LOG "# lookupmean=$lomean lifemean=$limean " . 
+	"deathmean=$dmean file=$churnfile exit=$etime stat=$stime\n";
     print LOG "# topology=$topology seed=$randseed\n";
     close( LOG );
     
