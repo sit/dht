@@ -21,6 +21,8 @@ main (int argc, char *argv[])
   DB_ENV* dbe = NULL;
   char cpath[MAXPATHLEN];
 
+  errfd = 1;
+
   if (mode == MODE_ENV) {
 
     r = db_env_create (&dbe, 0);
@@ -91,9 +93,9 @@ main (int argc, char *argv[])
       fatal << "err: " << err << " " << strerror (err) << "\n";
     }
     warn << "key[" << i << "] " << hexdump (key.data, key.size) << "\n";
-    ptr<dbrec> kr = New refcounted<dbrec> (key.data, key.size);
+    //   ptr<dbrec> kr = New refcounted<dbrec> (key.data, key.size);
 
-    warn << "key[" << i << "] " << to_merkle_hash (kr) << "\n";
+    //warn << "key[" << i << "] " << to_merkle_hash (kr) << "\n";
 
     bzero (&data, sizeof (data));
     err = db->get (db, NULL, &key, &data, 0);
