@@ -290,15 +290,17 @@ void
 route_debruijn::first_hop (cbhop_t cbi)
 {
   cb = cbi;
-  if (v->lookup_closestsucc (v->my_ID () + 1) 
-      == v->my_ID ()) {  // is myID the only node?
+  chordID myID = v->my_ID ();
+
+  if (v->lookup_closestsucc (myID + 1) 
+      == myID) {  // is myID the only node?
     done = true;
-    search_path.push_back (v->my_ID ());
+    search_path.push_back (myID);
     virtual_path.push_back (x);
     cb (done);
   } else {
-    chordID r = createdebruijnkey (v->my_pred (), v->my_ID (), x);
-    search_path.push_back (v->my_ID ());
+    chordID r = createdebruijnkey (myID, v->my_succ (), x);
+    search_path.push_back (myID);
     virtual_path.push_back (r);
     next_hop ();
   }

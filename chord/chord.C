@@ -525,12 +525,12 @@ vnode::dodebruijn (svccb *sbp, chord_debruijnarg *da)
 {
   ndodebruijn++;
   chord_debruijnres *res;
-  chordID pred = my_pred ();
+  chordID succ = my_succ ();
 
-  //  warnx << myID << " dodebruijn: pred " << pred << " x " << da->x << " d " 
-  // << da->d << " between " << betweenrightincl (pred, myID, da->d) << "\n";
+  //  warnx << myID << " dodebruijn: succ " << succ << " x " << da->x << " d " 
+  // << da->d << " between " << betweenrightincl (myID, succ, da->d) << "\n";
 
-  if (betweenrightincl (pred, myID, da->x)) {
+  if (betweenrightincl (myID, succ, da->x)) {
     res = New chord_debruijnres (CHORD_INRANGE);
     warnt("CHORD: debruijn_inrangereply");
     res->inres->x = myID;
@@ -539,13 +539,13 @@ vnode::dodebruijn (svccb *sbp, chord_debruijnarg *da)
     delete res;
   } else {
     res = New chord_debruijnres (CHORD_NOTINRANGE);
-    if (betweenrightincl (pred, myID, da->d)) {
+    if (betweenrightincl (myID, succ, da->d)) {
       chordID nd = lookup_closestsucc (doubleID(myID, LOGBASE));
       res->noderes->node.x = nd;
       res->noderes->node.r = locations->getaddress (nd);
       res->noderes->d = doubleID(da->d, LOGBASE);
     } else {
-      res->noderes->node.x = lookup_closestsucc (da->d); // pred
+      res->noderes->node.x = lookup_closestpred (da->d); // succ
       assert (res->noderes->node.x != myID);
       res->noderes->node.r = locations->getaddress (res->noderes->node.x);
       res->noderes->d = da->d;
