@@ -255,7 +255,8 @@ void
 vnode_impl::join (ptr<location> n, cbjoin_t cb)
 {
   ptr<chord_findarg> fa = New refcounted<chord_findarg> ();
-  fa->x = incID (myID);
+  fa->x = decID (myID);
+  fa->return_succs = true;
   chord_nodelistres *route = New chord_nodelistres ();
   doRPC (n, chord_program_1, CHORDPROC_FINDROUTE, fa, route,
 	 wrap (this, &vnode_impl::join_getsucc_cb, n, cb, route));
@@ -284,16 +285,18 @@ vnode_impl::join_getsucc_cb (ptr<location> n,
     status = CHORD_ERRNOENT;
   } else {
     // Just insert a possible predecessor and successor.
-    size_t i = route->resok->nlist.size () - 1;
-    for (size_t j = 0; j < 2 && i >= 0; j++) {
-      locations->insert (make_chord_node (route->resok->nlist[i]));
-      i--;
+    size_t i = route->resok->nlist.size ();
+    for (size_t j = 0; j < i; j++) {
+      warn << my_ID () << " adding " << make_chordID(route->resok->nlist[j]) << " as an initial node\n";
+      if (make_chordID (route->resok->nlist[j]) != my_ID ()) 
+	  locations->insert (make_chord_node (route->resok->nlist[j]));
     }
     stabilize ();
     notify (my_succ (), myID);
     v = mkref (this);
     status = CHORD_OK;
   }
+
   if (status != CHORD_OK) {
     warnx << myID << ": join failed, remove from vnodes?\n";
     n->set_alive (false);
@@ -522,9 +525,21 @@ vnode_impl::dofindroute_cb (user_args *sbp, chord_findarg *fa,
     sbp->reply (&res);
   } else {
     chord_nodelistres res (CHORD_OK);
-    res.resok->nlist.setsize (r.size ());
-    for (unsigned int i = 0; i < r.size (); i++)
-      r[i]->fill_node (res.resok->nlist[i]);
+    int nnodes_returned = r.size ();
+    if (fa->return_succs) nnodes_returned += s.size ();
+    res.resok->nlist.setsize (nnodes_returned);
+
+    unsigned int n = 0;
+    if (fa->return_succs) 
+      for (unsigned int i = 0; i < s.size (); i++, n++) {
+    	ptr<location> l = New refcounted<location> (s[i]);
+    	l->fill_node (res.resok->nlist[n]);
+      }
+    
+    for (unsigned int i = 0; i < r.size (); i++, n++) {
+      r[i]->fill_node (res.resok->nlist[n]);
+    }
+    
     sbp->reply (&res);
   }
 }
