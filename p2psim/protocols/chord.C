@@ -556,11 +556,13 @@ Chord::join(Args *args)
 {
   assert(!static_sim);
 
+
   if (vis) {
     printf("vis %llu join %16qx\n", now (), me.id);
   }
 
   _inited = true;
+  loctable->search(me.id);
 
   if (_vivaldi_dim > 0) {
     _vivaldi = New Vivaldi10(node(), _vivaldi_dim, 0.05, 1); 
@@ -770,6 +772,10 @@ Chord::get_successor_list_handler(get_successor_list_args *args,
 {
   check_static_init();
   ret->v = loctable->succs(me.id+1, args->m);
+  if (ret->v.size() < args->m) {
+    //probably not stabilized yet
+    ret->v.clear();
+  }
 }
 
 
@@ -946,7 +952,7 @@ LocTable::succ(ConsistentHash::CHID id)
   uint before = size();
   vector<Chord::IDMap> v = succs(id, 1);
   if (v.size() == 0) {
-    fprintf(stderr,"ring sz %d before me %d %qx\n", size(), before, me.ip,me.id);
+    fprintf(stderr,"ring sz %u before %u me %d %qx\n", size(), before, me.ip,me.id);
     abort();
   }
   return v[0];
@@ -973,11 +979,13 @@ LocTable::succs(ConsistentHash::CHID id, unsigned int m)
     ptrnext = ring.next(ptr);
     if (!ptrnext) ptrnext = ring.first();
 
+    if (ptr->n.ip == me.ip) return v;
     if ((!_timeout)||(t - ptr->timestamp) < _timeout) {
       v.push_back(ptr->n);
       j++;
       if (j >= ring.size()) return v;
     }else{
+      assert(ptr->n.ip!=me.ip);
       ring.remove(ptr->id);
       //printf("%u,%qx del %p\n", me.ip, me.id, ptr);
       bzero(ptr, sizeof(*ptr));
@@ -1003,6 +1011,14 @@ LocTable::pred(Chord::CHID id)
 {
   assert (ring.repok ());
   idmapwrap *elm = ring.closestpred(id);
+
+  if (!ConsistentHash::betweenrightincl(elm->n.id,me.id,id) && (me.id != id) && (elm->id!=me.id)) {
+    Chord::IDMap f = first();
+    Chord::IDMap l = last();
+    fprintf(stderr,"me %u,%16qx first %qx, last %qx, pred %qx id %qx\n", me.ip,me.id, f.id,l.id,elm->id,id);
+    search(me.id);
+    assert(0);
+  }
   assert(elm);
   idmapwrap *elmprev;
 
@@ -1017,6 +1033,7 @@ LocTable::pred(Chord::CHID id)
 	|| (t - elm->timestamp < _timeout)) { //never delete myself
       break;
     }else {
+      assert(elm->n.ip != me.ip);
       ring.remove(elm->id);
       //printf("%u,%qx del %p\n", me.ip, me.id, elm);
       bzero(elm, sizeof(*elm));
@@ -1027,7 +1044,7 @@ LocTable::pred(Chord::CHID id)
     assert((rsz - deleted >= 1));
   }
   assert(elm->n.id == me.id || me.id == id || 
-      ConsistentHash::betweenrightincl(me.id, id, elm->n.id));
+      ConsistentHash::betweenrightincl(elm->n.id, me.id, id));
   return elm->n;
 }
 
@@ -1088,11 +1105,6 @@ LocTable::add_sortednodes(vector<Chord::IDMap> l)
 void
 LocTable::add_node(Chord::IDMap n)
 {
-  Time t = now();
-  if (n.ip == 276 && me.ip == 572) {
-    fprintf(stderr,"haha %lu\n",t);
-  }
-//  assert(n.choices > 0);
   Chord::IDMap succ1; 
   Chord::IDMap pred1; 
 
@@ -1306,5 +1318,13 @@ Chord::IDMap
 LocTable::last()
 {
   idmapwrap *elm = ring.last();
+  return elm->n;
+}
+
+Chord::IDMap
+LocTable::search(ConsistentHash::CHID id)
+{
+  idmapwrap *elm = ring.search(id);
+  assert(elm);
   return elm->n;
 }

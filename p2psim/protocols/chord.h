@@ -252,6 +252,7 @@ class LocTable {
     vector<Chord::IDMap> get_all();
     Chord::IDMap first();
     Chord::IDMap last();
+    Chord::IDMap search(ConsistentHash::CHID);
 
   protected:
     bool _evict;

@@ -38,13 +38,13 @@ Koorde::Koorde(Node *n, Args &a) : Chord(n, a)
     logbase = 2;
   }
   if (a.find("resilience") != a.end()) {
-    resilience = atoi(a["resilience"].c_str());
+    resilience = atoi(a["successors"].c_str());
   }else{
     resilience = 1;
   }
 
   if (a.find("fingers") != a.end()) {
-    fingers = atoi(a["fingers"].c_str());
+    fingers = atoi(a["successors"].c_str());
   }else{
     fingers = 16;
   }
@@ -149,11 +149,6 @@ Koorde::find_successors(CHID key, uint m, bool is_lookup)
     a.kshift = r.kshift;
     a.i = r.i;
 
-    if (me.ip == 302 && m == (fingers -1)) {
-      printf("%s nexthop is (%u,%qx) key %qx i=%qx, kshift %qx)\n", ts(),
-       r.next.ip, r.next.id, a.k, r.i, r.kshift);
-    }
-
     last = r.next;
 
     path.push_back (r.next);
@@ -167,9 +162,6 @@ Koorde::find_successors(CHID key, uint m, bool is_lookup)
 	break;
       }
       timeout++;
-      if (me.ip == 302 ) {
-	printf ("%s nexthop rpc failure to %u,%16qx at %llu\n", ts(), r.next.ip, r.next.id);
-      }
       assert(r.next.ip != me.ip);
       loctable->del_node (path.back ());
       path.pop_back ();
@@ -261,8 +253,8 @@ Koorde::koorde_next(koorde_lookup_arg *a, koorde_lookup_ret *r)
     r->v.clear ();
     r->v = loctable->succs(me.id + 1, a->nsucc);
     assert (r->v.size () > 0);
-    printf ("%s Koorde_next: done succ key = %qx: (%u,%qx)\n", 
-       ts(), a->k, succ.ip, succ.id);
+    //printf ("%s Koorde_next: done succ key = %qx: (%u,%qx)\n", 
+     //  ts(), a->k, succ.ip, succ.id);
   } else if (a->i == me.id || ConsistentHash::betweenrightincl (me.id, succ.id, a->i)) {
     r->k = a->k;
     r->kshift = a->kshift;
@@ -273,23 +265,17 @@ Koorde::koorde_next(koorde_lookup_arg *a, koorde_lookup_ret *r)
     }while (ConsistentHash::betweenrightincl(me.id,succ.id,r->i));
     r->next = loctable->pred(r->i);
     r->done = false;
-    printf ("%s Koorde_next: contact de bruijn (%u,%qx) i=%qx kshift=%qx debruijn pointer %qx\n", ts(),
-      r->next.ip, r->next.id, r->i, r->kshift, debruijn);
+    //printf ("%s Koorde_next: contact de bruijn (%u,%qx) i=%qx kshift=%qx debruijn pointer %qx\n", ts(),
+     // r->next.ip, r->next.id, r->i, r->kshift, debruijn);
   } else {
     r->k = a->k;
-    if (me.ip == 571) {
-      IDMap more_succ = loctable->succ(me.id + 1);
-      IDMap first = loctable->first();
-      IDMap last = loctable->last();
-      fprintf(stderr,"%s hhaha ready %u,%qx first %u,%qx last %u,%qx\n",ts(),more_succ.ip, more_succ.id, first.ip, first.id, last.ip, last.id);
-    }
     r->next = loctable->pred (a->i);
     r->kshift = a->kshift;
     r->i = a->i;
     r->done = false;
     assert (ConsistentHash::betweenrightincl (me.id, r->i, r->next.id));
-    printf ("%s Koorde_next: follow succ (%u,%qx) pointer to (%u,%qx) i=%qx kshift=%qx debruijn pointer %qx\n", ts(),
-      succ.ip, succ.id, r->next.ip, r->next.id, r->i, r->kshift, debruijn);
+    //printf ("%s Koorde_next: follow succ (%u,%qx) pointer to (%u,%qx) i=%qx kshift=%qx debruijn pointer %qx\n", ts(),
+     // succ.ip, succ.id, r->next.ip, r->next.id, r->i, r->kshift, debruijn);
 
   }
 }
@@ -297,32 +283,62 @@ Koorde::koorde_next(koorde_lookup_arg *a, koorde_lookup_ret *r)
 void
 Koorde::fix_debruijn () 
 {
-  //try a cheap way to test for the validity of debruijn fingers first
-  IDMap dpred = loctable->pred(debruijn);
+
   get_successor_list_args gsa;
   get_successor_list_ret gsr;
+  bool ok;
+
+  //try a cheap way to fix debruijn predecessor first
+  assert(resilience <= _nsucc);
+  IDMap dpred = loctable->pred(debruijnpred);
+
+  if (dpred.ip == me.ip) goto NEXT;
+    
+  gsa.m = _nsucc;
+  record_stat();
+  ok = doRPC(dpred.ip, &Chord::get_successor_list_handler, &gsa,&gsr);
+  if (!node()->alive()) return;
+  if ( ok && gsr.v.size() > 0 && ConsistentHash::between(dpred.id, gsr.v[0].id, debruijnpred)) {
+    loctable->add_node(dpred);
+    for (uint i = 0; i < gsr.v.size(); i++) 
+      loctable->add_node(gsr.v[i]);
+  }else {
+    if (!ok) loctable->del_node(dpred);
+    vector<IDMap> scs = find_successors(debruijnpred, resilience-1, false);
+    if (scs.size() > 0) {
+      loctable->add_node(last);
+      for (uint i = 0; i < scs.size(); i++) {
+	loctable->add_node(scs[i]);
+      }
+    }
+  }
+NEXT:
+  //try a cheap way to test for the validity of debruijn fingers first
+  dpred = loctable->pred(debruijn);
   gsa.m = fingers;
   assert(fingers <= _nsucc);
-  bool ok = doRPC(dpred.ip, &Chord::get_successor_list_handler, &gsa, &gsr);
+  record_stat();
+  ok = doRPC(dpred.ip, &Chord::get_successor_list_handler, &gsa, &gsr);
+  if (!node()->alive()) return;
   if (ok && gsr.v.size() > 0 && ConsistentHash::betweenrightincl(dpred.id, gsr.v[0].id, debruijn)) {
     loctable->add_node(dpred);
     for (uint i = 0; i < gsr.v.size(); i++) {
       loctable->add_node(gsr.v[i]);
     }
-    printf("%s stabilize fix_debruijn cheap finished %qx, its succ %d,%qx its last(pred) %d,%qx\n", 
-	ts(), debruijn, gsr.v[0].ip, gsr.v[0].id, dpred.ip, dpred.id);
-    return;
+    //printf("%s stabilize fix_debruijn cheap finished %qx, its succ %d,%qx its last(pred) %d,%qx\n", 
+//	ts(), debruijn, gsr.v[0].ip, gsr.v[0].id, dpred.ip, dpred.id);
+  } else {
+    if (!ok) loctable->del_node(dpred);
+    vector<IDMap> scs = find_successors (debruijn, fingers - 1, false);
+    if (scs.size() > 0) {
+ //     printf("%s stabilize fix_debruijn finished debruijn %qx, its succ %d,%qx its last(pred) %d,%qx\n", 
+//	  ts(), debruijn, scs[0].ip, scs[0].id, last.ip, last.id);
+      loctable->add_node (last);
+      for (uint i = 0; i < scs.size (); i++) 
+	loctable->add_node (scs[i]);
+    }
   }
-
-  vector<IDMap> scs = find_successors (debruijn, fingers - 1, true);
-  //assert (scs.size () > 0);
-  if (scs.size() == 0) return;
-  printf("%s stabilize fix_debruijn finished debruijn %qx, its succ %d,%qx its last(pred) %d,%qx\n", 
-      ts(), debruijn, scs[0].ip, scs[0].id, last.ip, last.id);
-  loctable->add_node (last);
-  for (uint i = 0; i < scs.size (); i++) {
-    loctable->add_node (scs[i]);
-  }
+  
 #if 0
   printf ("fix_debruijn (%u,%qx): debruijn %qx succ %qx d %u,%qx at %lu\n",
 	  me.ip, me.id, debruijn, scs[0].id, last.ip, last.id, now ());
@@ -331,7 +347,6 @@ Koorde::fix_debruijn ()
 	    scs[i].id);
   }
 #endif
-  assert (scs.size () <= fingers);
   
   if (vis) {
     bool change = false;
@@ -374,9 +389,9 @@ Koorde::reschedule_stabilizer(void *x)
 void
 Koorde::stabilize()
 {
-  printf ("%s Koorde stabilize Chord start\n",ts());
+  //printf ("%s Koorde stabilize Chord start\n",ts());
   Chord::stabilize();
-  printf ("%s Koorde stabilize Chord finish, stabilize debruijn start %qx\n",ts(),debruijn);
+  //printf ("%s Koorde stabilize Chord finish, stabilize debruijn start %qx\n",ts(),debruijn);
   fix_debruijn();
   printf ("%s Koorde stabilize debruijn finish %qx\n",ts(),debruijn);
 }
