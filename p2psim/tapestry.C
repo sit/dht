@@ -1,4 +1,4 @@
-/* $Id: tapestry.C,v 1.11 2003/10/02 21:06:54 strib Exp $ */
+/* $Id: tapestry.C,v 1.12 2003/10/03 21:31:16 strib Exp $ */
 #include "tapestry.h"
 #include <stdio.h>
 #include <math.h>
@@ -106,17 +106,44 @@ Tapestry::join(Args *args)
     
     // go through each member of the init list, add them to your routing 
     // table, and ask them for their forward and backward pointers 
+
+    // to do this, set off two sets of asynchRPCs at once, one to ping all
+    // the nodes and find out their distances, and another to get the nearest
+    // neighbors.  these can't easily be combined since the nearest neighbor
+    // call does a ping itself (so measured rtt would be double).
+    RPCSet ping_rpcset;
+    map<unsigned, ping_callinfo*> ping_resultmap;
+    Time before_ping = now();
+    multi_add_to_rt_start( &ping_rpcset, &ping_resultmap, &initlist );
+
+    RPCSet nn_rpcset;
+    map<unsigned, nn_callinfo*> nn_resultmap;
+    unsigned int num_nncalls = 0;    
     for( uint j = 0; j < initlist.size(); j++ ) {
       NodeInfo ni = *(initlist[j]);
-      TapDEBUG(3) << "adding in join: " << ni._addr << " " << i << endl;
-      add_to_rt( ni._addr, ni._id );
-      nn_args nna;
-      nna.ip = ip();
-      nna.id = id();
-      nna.alpha = i;
-      nn_return nnr;
-      doRPC( ni._addr, &Tapestry::handle_nn, &nna, &nnr );
-      TapDEBUG(3) << ip() << " done with nn with " << ni._addr << endl;
+
+      // also do an async nearest neighbor call
+      nn_args *na = New nn_args();
+      na->ip = ip();
+      na->id = id();
+      na->alpha = i;
+      nn_return *nr = New nn_return();
+      unsigned rpc = asyncRPC( ni._addr, &Tapestry::handle_nn, na, nr );
+      assert(rpc);
+      nn_resultmap[rpc] = New nn_callinfo(ni._addr, na, nr);
+      nn_rpcset.insert(rpc);
+      num_nncalls++;
+
+    }
+
+    multi_add_to_rt_end( &ping_rpcset, &ping_resultmap, before_ping );
+
+    for( uint j = 0; j < num_nncalls; j++ ) {
+
+      unsigned donerpc = rcvRPC( &nn_rpcset );
+      nn_callinfo *ncall = nn_resultmap[donerpc];
+      nn_return nnr = *(ncall->nr);
+      TapDEBUG(3) << ip() << " done with nn with " << ncall->ip << endl;
 
       for( uint k = 0; k < nnr.nodelist.size(); k++ ) {
 	// make sure this one isn't on there yet
@@ -141,8 +168,12 @@ Tapestry::join(Args *args)
 	    print_guid( newseed->_id ) << endl;
 	}
       }
-      TapDEBUG(3) << "done with adding seeds with " << ni._addr << endl;
-
+      TapDEBUG(3) << "done with adding seeds with " << ncall->ip << endl;
+      // TODO: for some reason the compiler gets mad if I try to delete nr
+      // in the destructor
+      delete ncall->nr;
+      ncall->nr = NULL;
+      delete ncall;
     }
 
     // now that we have all the seeds we want from this one, 
@@ -153,11 +184,15 @@ Tapestry::join(Args *args)
       closestk[k] = NULL;
     }
     bool closest_full = false;
+
+    // add these guys to routing table
+    multi_add_to_rt( &seeds );
+
     for( uint j = 0; j < seeds.size(); j++ ) {
       NodeInfo *currseed = seeds[j];
       // add them all to the routing table (this gets us the ping time for free
       TapDEBUG(3) << "about to get distance for " << currseed->_addr << endl;
-      add_to_rt( currseed->_addr, currseed->_id );
+      //add_to_rt( currseed->_addr, currseed->_id );
       TapDEBUG(3) << "added to rt for " << currseed->_addr << endl;
       currseed->_distance = ping( currseed->_addr, currseed->_id );
       TapDEBUG(3) << "got distance for " << currseed->_addr << endl;
@@ -312,10 +347,13 @@ Tapestry::handle_nodelist(nodelist_args *args, nodelist_return *ret)
   TapDEBUG(3) << "handling a nodelist message" << endl;
 
   // add each to your routing table
+  multi_add_to_rt( &(args->nodelist) );
+  /*
   for( uint i = 0; i < args->nodelist.size(); i++ ) {
     NodeInfo * curr_node = args->nodelist[i];
     add_to_rt( curr_node->_addr, curr_node->_id );
   }
+  */
 
 }
 
@@ -373,7 +411,6 @@ Tapestry::handle_mc(mc_args *args, mc_return *ret)
   map<unsigned, mc_callinfo*> resultmap;
   unsigned int numcalls = 0;
   // then, find any other node that shares this prefix and multicast
-  // TODO: asynchronous
   for( uint i = args->alpha; i < _digits_per_id; i++ ) {
     for( uint j = 0; j < _base; j++ ) {
       NodeInfo *ni = _rt->read( i, j );
@@ -564,16 +601,103 @@ Tapestry::ping( IPAddress other_node, GUID other_id )
 }
 
 void
-Tapestry::place_backpointer( IPAddress bpip, int level, bool remove )
+Tapestry::multi_add_to_rt( vector<NodeInfo *> *nodes )
 {
-  backpointer_args bpa;
-  bpa.ip = ip();
-  bpa.id = id();
-  bpa.level = level;
-  bpa.remove = remove;
+  RPCSet ping_rpcset;
+  map<unsigned, ping_callinfo*> ping_resultmap;
+  Time before_ping = now();
+  multi_add_to_rt_start( &ping_rpcset, &ping_resultmap, nodes );
+  multi_add_to_rt_end( &ping_rpcset, &ping_resultmap, before_ping );
+}
+
+void
+Tapestry::multi_add_to_rt_start( RPCSet *ping_rpcset, 
+				 map<unsigned, ping_callinfo*> *ping_resultmap,
+				 vector<NodeInfo *> *nodes )
+{
+  ping_args pa;
+  ping_return pr;
+  for( uint j = 0; j < nodes->size(); j++ ) {
+    NodeInfo *ni = (*nodes)[j];
+    // do an asynchronous RPC to each one, collecting the ping times in the
+    // process
+    // however, no need to ping if we already know the ping time, right?
+    if( !_rt->contains( ni->_id ) ) {
+      unsigned rpc = asyncRPC( ni->_addr, 
+			       &Tapestry::handle_ping, &pa, &pr );
+      assert(rpc);
+      (*ping_resultmap)[rpc] = New ping_callinfo(ni->_addr, 
+						ni->_id);
+      ping_rpcset->insert(rpc);
+    }
+  }
+}
+
+void
+Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset, 
+			       map<unsigned, ping_callinfo*> *ping_resultmap,
+			       Time before_ping )
+{
+  // check for done pings
+  assert( ping_rpcset->size() == ping_resultmap->size() );
+  uint setsize = ping_rpcset->size();
+  for( unsigned int j = 0; j < setsize; j++ ) {
+    unsigned donerpc = rcvRPC( ping_rpcset );
+    Time ping_time = now() - before_ping;
+    ping_callinfo *pi = (*ping_resultmap)[donerpc];
+    TapDEBUG(4) << "donerpc: " << donerpc << " ip: " << pi->ip << endl;
+    // TODO: ok, but now how do I call rt->add without it placing 
+    // backpointers synchronously?
+    pi->rtt = ping_time;
+  }
+  
+  // now that all the pings are done, we can add them to our routing table
+  // (possibly sending synchronous backpointers around) without messing
+  // up the measurements
+  for(map<unsigned, ping_callinfo*>::iterator j=ping_resultmap->begin(); 
+      j != ping_resultmap->end(); ++j) {
+    ping_callinfo *pi = (*j).second;
+    //assert( pi->rtt == ping( pi->ip, pi->id ) );
+    TapDEBUG(4) << "ip: " << pi->ip << endl;
+    // make sure it's not the default (we actually pinged this one)
+    assert( pi->rtt != 87654 );
+    _rt->add( pi->ip, pi->id, pi->rtt );
+    delete pi;
+  }
+  
+}
+
+void
+Tapestry::place_backpointer( RPCSet *bp_rpcset, 
+			     map<unsigned, backpointer_args*> *bp_resultmap, 
+			     IPAddress bpip, int level, 
+			     bool remove )
+{
+  backpointer_args *bpa = New backpointer_args();
+  bpa->ip = ip();
+  bpa->id = id();
+  bpa->level = level;
+  bpa->remove = remove;
   backpointer_return bpr;
   TapDEBUG(3) << "sending bp to " << bpip << endl;
-  doRPC( bpip, &Tapestry::handle_backpointer, &bpa, &bpr );
+  unsigned rpc = asyncRPC( bpip, &Tapestry::handle_backpointer, bpa, &bpr );
+  bp_rpcset->insert(rpc);
+  (*bp_resultmap)[rpc] = bpa;
+  // for now assume no failures
+}
+
+void
+Tapestry::place_backpointer_end( RPCSet *bp_rpcset,
+				 map<unsigned,backpointer_args*>*bp_resultmap) 
+{
+
+  // wait for each to finish
+  uint setsize = bp_rpcset->size();
+  for( unsigned int j = 0; j < setsize; j++ ) {
+    unsigned donerpc = rcvRPC( bp_rpcset );
+    backpointer_args *bpa = (*bp_resultmap)[donerpc];
+    delete bpa;
+  }
 }
 
 void 
@@ -806,7 +930,10 @@ RouteEntry::add( NodeInfo *new_node, NodeInfo **kicked_out )
 	} else {
 	  // distance went down, make sure it's still bigger than what 
 	  // comes before
-	  while( i-1 > 0 && 
+	  if( i > 0 ) {
+	    cout << _nodes[i-1] << " " << endl;
+	  }
+	  while( i > 0 && 
 		 _nodes[i]->_distance < _nodes[i-1]->_distance ) {
 	    NodeInfo * tmp = _nodes[i];
 	    _nodes[i] = _nodes[i-1];
@@ -924,6 +1051,8 @@ RoutingTable::~RoutingTable()
 bool
 RoutingTable::add( IPAddress ip, GUID id, Time distance )
 {
+  Tapestry::RPCSet bp_rpcset;
+  map<unsigned,Tapestry::backpointer_args*> bp_resultmap;
   bool in_added = false;
 
   // find the spots where it fits and add it
@@ -937,7 +1066,7 @@ RoutingTable::add( IPAddress ip, GUID id, Time distance )
       _table[i][j] = re;
       in_added = true;
       if( ip != _node->ip() ) {
-	_node->place_backpointer( ip, i, false );
+	_node->place_backpointer( &bp_rpcset, &bp_resultmap, ip, i, false );
       }
     } else {
       // add it to an existing one
@@ -946,13 +1075,15 @@ RoutingTable::add( IPAddress ip, GUID id, Time distance )
       in_added = in_added | level_added;
       if( kicked_out_node != NULL ) {
 	// tell the node we're no longer pointing to it at this level
-	_node->place_backpointer( kicked_out_node->_addr, i, true );
+	_node->place_backpointer( &bp_rpcset, &bp_resultmap, 
+				  kicked_out_node->_addr, i, 
+				  true );
 	TapRTDEBUG(4) << "kicked out " << kicked_out_node->_addr << endl;
 	delete kicked_out_node;
       }
       if( level_added && ip != _node->ip() ) {
 	// tell the node we are pointing to it
-	_node->place_backpointer( ip, i, false );
+	_node->place_backpointer( &bp_rpcset, &bp_resultmap, ip, i, false );
       } else {
 	delete new_node;
       }
@@ -961,8 +1092,10 @@ RoutingTable::add( IPAddress ip, GUID id, Time distance )
     if( j != _node->get_digit( _node->id(), i ) ) {
       break;
     }
-  }
-  
+  }  
+
+  // wait for bp rpcs to finish
+  _node->place_backpointer_end( &bp_rpcset, &bp_resultmap );
   return in_added;
 }
 
@@ -1033,20 +1166,18 @@ RoutingTable::add_backpointer( IPAddress ip, GUID id, uint level )
 void 
 RoutingTable::remove_backpointer( IPAddress ip, GUID id, uint level )
 {
-  // TODO
-  /*
+  
   vector<NodeInfo> * this_level = get_backpointers(level);
   NodeInfo new_node( ip, id );
-  for( uint i = 0; i < this_level->size(); i++ ) {
-    NodeInfo curr_node = (*this_level)[i];
+  for( vector<NodeInfo>::iterator i = this_level->begin(); 
+       i != this_level->end(); i++ ) {
+    NodeInfo curr_node = *i;
     if( curr_node == new_node ) {
-      //this_level->erase(&curr_node);
+      this_level->erase(i);
       // only erase the first occurance
       return;
     }
   }
-  */
-
 }
 
 vector<NodeInfo> *

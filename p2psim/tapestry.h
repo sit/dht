@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.7 2003/10/02 21:07:22 strib Exp $ */
+/* $Id: tapestry.h,v 1.8 2003/10/03 21:31:16 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -6,6 +6,7 @@
 #include "chord.h"
 #include "p2psim.h"
 #include "condvar.h"
+#include <map.h>
 
 class NodeInfo;
 class RouteEntry;
@@ -45,7 +46,7 @@ public:
   // how many digits do these keys share
   // returns -1 if they are the same
   int guid_compare( GUID key1, GUID key2 ); 
-  void place_backpointer( IPAddress bpip, int level, bool remove );
+
   bool stabilized(vector<GUID> lid);
 
   struct join_args {
@@ -117,6 +118,12 @@ public:
   };
 
   void handle_backpointer(backpointer_args *args, backpointer_return *ret);
+  void place_backpointer( RPCSet *bp_rpcset, 
+			  map<unsigned,backpointer_args*> *bp_resultmap, 
+			  IPAddress bpip, 
+			  int level, bool remove );
+  void place_backpointer_end( RPCSet *bp_rpcset, 
+			      map<unsigned,backpointer_args*> *bp_resultmap);
 
   struct mcnotify_args {
     IPAddress ip;
@@ -187,6 +194,35 @@ private:
     mc_return *mr;
   };
 
+  class ping_callinfo { public:
+    ping_callinfo(IPAddress xip, GUID xid)
+      : ip(xip), id(xid), rtt(87654) {}
+    ~ping_callinfo() {}
+    IPAddress ip;
+    GUID id;
+    Time rtt;
+  };
+
+  class nn_callinfo { public:
+    nn_callinfo(IPAddress xip, nn_args *nna, nn_return *nnr)
+      : ip(xip), na(nna), nr(nnr) {}
+    ~nn_callinfo() { delete na; /*delete nr;*/ }
+    IPAddress ip;
+    nn_args *na;
+    nn_return *nr;
+  };
+
+  void multi_add_to_rt(	vector<NodeInfo *> *nodes );
+
+  void multi_add_to_rt_start( RPCSet *ping_rpcset, 
+			      map<unsigned, ping_callinfo*> *ping_resultmap,
+			      vector<NodeInfo *> *nodes );
+
+  void multi_add_to_rt_end( RPCSet *ping_rpcset,
+			    map<unsigned, ping_callinfo*> *ping_resultmap,
+			    Time before_ping );
+
+
 };
 
 //////// NodeInfo ////////////////
@@ -205,7 +241,6 @@ class NodeInfo {
   IPAddress _addr;
   Time _distance;
 
-  
 };
 
 //////// Routing Table Entry ///////////////
