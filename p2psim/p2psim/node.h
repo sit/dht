@@ -58,6 +58,7 @@ public:
   // the One Node that we're running and its arguments
   static string protocol() { return _protocol; }
   static Args args() { return _args; }
+  static void set_args (Args a) {_args = a; }
 
 protected:
   typedef set<unsigned> RPCSet;

@@ -127,7 +127,8 @@ Node::parse(char *filename)
     while(words.size()) {
       vector<string> xargs = split(words[0], "=");
       words.erase(words.begin());
-      _args.insert(make_pair(xargs[0], xargs[1]));
+      if (_args.find (xargs[0]) == _args.end())
+	_args.insert(make_pair(xargs[0], xargs[1]));
     }
 
     break;

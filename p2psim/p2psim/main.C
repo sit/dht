@@ -37,6 +37,8 @@ using namespace std;
 char *topology_file;
 char *event_file;
 char *protocol_file;
+vector<string> options;
+
 bool vis = false;
 bool with_failure_model = true;
 
@@ -53,9 +55,17 @@ threadmain(int argc, char *argv[])
   srandom(time(0) ^ (getpid() + (getpid() << 15)));
   parse_args(argc, argv);
 
+  //add in the optional args from parse_args
+  Args a = Node::args ();
+  for (unsigned int i = 0; i < options.size (); i++) {
+    vector<string> x = split (options[i], "=");
+    a.insert(make_pair(x[0], x[1]));
+  }
+  Node::set_args (a);
   // Put a protocol on all these nodes.
   Node::parse(protocol_file);
 
+  
   // Creates a network with the appropriate underlying topology and give Network
   // a chance to eat them all.
   Topology::parse(topology_file);
@@ -87,7 +97,7 @@ parse_args(int argc, char *argv[])
   int ch;
   uint seed;
 
-  while ((ch = getopt (argc, argv, "e:fv")) != -1) {
+  while ((ch = getopt (argc, argv, "e:fo:v")) != -1) {
     switch (ch) {
     case 'e':
       seed = atoi(optarg);
@@ -97,6 +107,11 @@ parse_args(int argc, char *argv[])
     case 'f':
       with_failure_model = false;
       break;
+    case 'o':
+      {
+	options.push_back (optarg);
+	break;	
+      }
     case 'v':
       vis = true;
       break;
