@@ -53,12 +53,12 @@ for line in fh.readlines ():
     t = t - firsttime
     t /= 60
 
-    if t != lasttime and t > 200 :
-	if maxblocks > 0:
-	    for t in xrange(lasttime+1,t-1):
+    if t != lasttime:
+	if maxblocks > 0 and t > 200:
+	    for nt in xrange(lasttime+1,t-1):
 		ni = random_interval (mu_i, sd_i)
 		while ni > 0 and maxblocks > 0:
-		    print t, "insert", nnode, random_blockid ()
+		    print nt, "insert", nnode, random_blockid ()
 		    ni -= 1
 		    maxblocks -= 1
 	lasttime = t
