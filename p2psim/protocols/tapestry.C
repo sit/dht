@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.22 2003/11/03 17:51:22 strib Exp $ */
+/* $Id: tapestry.C,v 1.23 2003/11/04 01:39:38 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -49,6 +49,8 @@ Tapestry::Tapestry(Node *n, Args a)
   //stabilization timer
   _stabtimer = a.nget<uint>("stabtimer", 10000, 10);
   _join_num = 0;
+
+  _repair_backups = a.nget<uint>("repair_backups", 0, 10);
 
   // init stats
   while (stat.size() < (uint) STAT_SIZE) {
@@ -863,15 +865,23 @@ Tapestry::handle_repair(repair_args *args, repair_return *ret)
   // send back all backward pointers
   vector<NodeInfo> nns;
 
-  assert( args->level < _digits_per_id && args->digit < _base );
+  for( uint j = 0; j < args->bad_ids->size(); j++ ) {
 
-  // TODO: limit the number?
-  RouteEntry *re = _rt->get_entry( args->level, args->digit );
-  for( uint i = 0; re != NULL && i < re->size(); i++ ) {
-    NodeInfo *next = re->get_at(i);
-    if( next != NULL && next->_addr != ip() && next->_id != args->bad_id ) {
+    GUID bad = (*(args->bad_ids))[j];
+    uint level = (*(args->levels))[j];
+    uint digit = (*(args->digits))[j];
+
+    assert( level < _digits_per_id && digit < _base );
+    
+    // TODO: limit the number?
+    RouteEntry *re = _rt->get_entry( level, digit );
+    for( uint i = 0; re != NULL && i < re->size(); i++ ) {
+      NodeInfo *next = re->get_at(i);
+      if( next != NULL && next->_addr != ip() && next->_id != bad ) {
 	nns.push_back( *next );
+      }
     }
+    
   }
 
   ret->nodelist = nns;
@@ -995,7 +1005,7 @@ Tapestry::check_rt(void *x)
 	// there should be no other duplicates though, so vector is safe
 	continue;
       }
-      for( uint k = 0; k < re->size(); k++ ) {
+      for( uint k = 0; k < re->size() && k < _repair_backups+1; k++ ) {
 	nodes.push_back( re->get_at(k) );
       }
     }
@@ -1165,19 +1175,19 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
   // now that all the pings are done, we can add them to our routing table
   // (possibly sending synchronous backpointers around) without messing
   // up the measurements
-  vector<GUID> removed;
+  set<GUID> removed;
   for(map<unsigned, ping_callinfo*>::iterator j=ping_resultmap->begin(); 
       j != ping_resultmap->end(); ++j) {
     ping_callinfo *pi = (*j).second;
     //assert( pi->rtt == ping( pi->ip, pi->id ) );
     TapDEBUG(4) << "ip: " << pi->ip << endl;
     if( pi->failed ) {
-      // failed! remove!
-      _rt->remove( pi->id );
+      // failed! remove! no need to send a backpointer remove message
+      _rt->remove( pi->id, false );
       assert( !_rt->contains( pi->id ) );
       TapDEBUG(1) << "removing failed node " << pi->ip << endl;
       if( repair ) {
-	  removed.push_back( pi->id );
+	  removed.insert( pi->id );
       }
     } else {
       // make sure it's not the default (we actually pinged this one)
@@ -1193,42 +1203,57 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
   if( repair ) {
       RPCSet repair_rpcset;
       map<unsigned, repair_callinfo*> repair_resultmap;
-      for(vector<GUID>::iterator i=removed.begin(); i != removed.end(); ++i) {
 
-	  int match = guid_compare( id(), *i );
-	  assert( match >= 0 ); // shouldn't be me
-	  uint digit = get_digit( *i, match );
-
-	  for( uint j = _digits_per_id-1; j >= (uint) match; j-- ) {
-	      for( uint k = 0; k < _base; k++ ) {
-		  NodeInfo *ni = _rt->read( j, k );
-		  if( ni == NULL ) { 
-		      continue;
-		  }
-		  assert( ni->_id != *i );
-		  if( ni->_addr != ip() ) {
-		      record_stat(STAT_REPAIR, 1, 2);
-		      repair_return *rr = New repair_return();
-		      repair_args *ra = New repair_args();
-		      ra->bad_id = *i;
-		      ra->level = (uint) match;
-		      ra->digit = digit;
-
-		      unsigned rpc = asyncRPC( ni->_addr, 
-					       &Tapestry::handle_repair, 
-					       ra, rr );
-		      assert(rpc);
-		      repair_resultmap[rpc] = New repair_callinfo( ra, rr );
-		      repair_rpcset.insert(rpc);
-		  }
-		  delete ni;
-	      }
-	      // don't wrap the uint around past 0
-	      if( j == 0 ) {
-		break;
-	      }
+      for( uint j = _digits_per_id-1; j >= 0; j-- ) {
+	for( uint k = 0; k < _base; k++ ) {
+	  NodeInfo *ni = _rt->read( j, k );
+	  if( ni == NULL ) { 
+	    continue;
 	  }
+	  if( ni->_addr != ip() && removed.find(ni->_id) == removed.end() ) {
+	    
+	    repair_return *rr = New repair_return();
+	    repair_args *ra = New repair_args();
+	    ra->bad_ids = New vector<GUID>;
+	    ra->levels = New vector<uint>;
+	    ra->digits = New vector<uint>;
+
+	    for(set<GUID>::iterator i=removed.begin();i != removed.end();++i) {
+
+	      int match = guid_compare( id(), *i );
+	      assert( match >= 0 ); // shouldn't be me
+	      if( j < (uint) match ) continue;
+	      uint digit = get_digit( *i, match );
+
+	      ra->bad_ids->push_back(*i);
+	      ra->levels->push_back( (uint) match);
+	      ra->digits->push_back(digit);
+	      
+	    }
+
+	    if( ra->bad_ids->size() > 0 ) {
+	      record_stat(STAT_REPAIR, ra->bad_ids->size(), 
+			  2*ra->bad_ids->size());
+	      unsigned rpc = asyncRPC( ni->_addr, 
+				       &Tapestry::handle_repair, 
+				       ra, rr );
+	      assert(rpc);
+	      repair_resultmap[rpc] = New repair_callinfo( ra, rr );
+	      repair_rpcset.insert(rpc);
+	    }
+	    
+	  }
+
+	  delete ni;
+
+	}
+
+	// don't wrap the uint around past 0
+	if( j == 0 ) {
+	  break;
+	}
       }
+
 
       uint rsetsize = repair_rpcset.size();
       vector<NodeInfo *> toadd;
@@ -1246,12 +1271,8 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
 		  // that it wasn't removed by us
 		  // TODO: this is all sorts of inefficient
 		  bool add = true;
-		  for( vector<GUID>::iterator k=removed.begin(); 
-		       k != removed.end(); ++k) {
-		      if( *k == (*j)._id ) {
-			  add = false;
-			  break;
-		      }
+		  if( removed.find((*j)._id ) != removed.end() ) {
+		    add = false;
 		  }
 
 		  if( add ) {
@@ -1272,6 +1293,9 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
 	  }
 	  delete rr;
 	  rc->rr = NULL;
+	  delete rc->ra->bad_ids;
+	  delete rc->ra->levels;
+	  delete rc->ra->digits;
 	  delete rc;
       }
 
@@ -1900,6 +1924,12 @@ RoutingTable::add( IPAddress ip, GUID id, Time distance, bool sendbp )
 void
 RoutingTable::remove( GUID id )
 {
+  remove( id, true );
+}
+
+void
+RoutingTable::remove( GUID id, bool sendbp )
+{
   Tapestry::RPCSet bp_rpcset;
   map<unsigned,Tapestry::backpointer_args*> bp_resultmap;
 
@@ -1915,9 +1945,11 @@ RoutingTable::remove( GUID id )
 	  TapRTDEBUG(3) << "going to remove id " << _node->print_guid(id) << 
 	      " from " << i << "," << j << "," << k << endl;
 	  re->remove_at(k);
+	  if( sendbp ) {
+	    _node->place_backpointer( &bp_rpcset, &bp_resultmap, 
+				      ni->_addr, i, true );
+	  }
 	  break;
-	  _node->place_backpointer( &bp_rpcset, &bp_resultmap, 
-				    ni->_addr, i, true );
 	}
       }
     }
@@ -1929,7 +1961,9 @@ RoutingTable::remove( GUID id )
   }  
 
   // wait for bp rpcs to finish
-  _node->place_backpointer_end( &bp_rpcset, &bp_resultmap );
+  if( sendbp ) {
+    _node->place_backpointer_end( &bp_rpcset, &bp_resultmap );
+  }
 
 }
 

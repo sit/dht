@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.15 2003/11/03 06:55:52 strib Exp $ */
+/* $Id: tapestry.h,v 1.16 2003/11/04 01:39:38 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -171,9 +171,9 @@ public:
   void handle_nn(nn_args *args, nn_return *ret);
 
   struct repair_args {
-    GUID bad_id;
-    uint level;
-    uint digit;
+    vector<GUID> *bad_ids;
+    vector<uint> *levels;
+    vector<uint> *digits;
   };
 
   struct repair_return {
@@ -201,6 +201,9 @@ private:
 
   // have we finished our join yet?
   bool joined;
+
+  // monitor how many backups for failures
+  uint _repair_backups;
 
   // how many times have we tried to join?
   uint _join_num;
@@ -366,6 +369,7 @@ class RoutingTable {
   bool add( IPAddress ip, GUID id, Time distance );
   bool add( IPAddress ip, GUID id, Time distance, bool sendbp );
   void remove( GUID id );
+  void remove( GUID id, bool sendbp );
   /**
    * Read the primary neighbor at this position.
    */
