@@ -4,7 +4,7 @@ libtask_o_SOURCES = \
 	channel.c \
 	context.c \
 	print.c \
-	task.c \
+	task.c 
 
 EXTRA_DIST = task.h taskimpl.h tprimes.c
 LIBS =
