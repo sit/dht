@@ -146,6 +146,7 @@ class tcp_manager : public rpc_manager {
 
  public:
   void rexmit (long seqno) {};
+  void stats ();
   long doRPC (ptr<location> from, ptr<location> l, const rpc_program &prog, int procno,
 	      ptr<void> in, void *out, aclnt_cb cb, long fake_seqno = 0);
   long doRPC_dead (ptr<location> l, const rpc_program &prog, int procno,

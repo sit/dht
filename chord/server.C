@@ -417,7 +417,7 @@ vnode_impl::check_dead_node_cb (ptr<location> l, chordstat s)
       nl->set_alive (true);
     else
       locations->insert (n);
-    stabilize ();
+    // stabilize ();
     notify (my_succ (), myID);
   }
 }

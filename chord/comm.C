@@ -220,7 +220,8 @@ rpc_manager::doRPCcb (aclnt_cb realcb, ptr<location> l, u_int64_t sent,
       u_int64_t lat = now - sent;
       update_latency (NULL, l, lat);
     } else {
-      warn << "*** Ignoring timewarp: sent " << sent << " > now " << now << "\n";
+      warn << "*** Ignoring timewarp: sent " << sent
+	   << " > now " << now << "\n";
     }
   }
   
@@ -243,7 +244,7 @@ tcp_manager::doRPC (ptr<location> from, ptr<location> l,
   } else {
     hostinfo *hi = lookup_host (l->address ());
     if (hi->fd == -2) { //no connect initiated
-      // wierd: tcpconnect wants the address in NBO, and port in HBO
+      // weird: tcpconnect wants the address in NBO, and port in HBO
       hi->fd = -1; // signal pending connect
       tcpconnect (l->saddr ().sin_addr, ntohs (l->saddr ().sin_port),
 		  wrap (this, &tcp_manager::doRPC_tcp_connect_cb, args));
@@ -269,7 +270,7 @@ tcp_manager::doRPC_dead (ptr<location> l,
 void
 tcp_manager::remove_host (hostinfo *h) 
 {
-  //XXX unnecessary SO_LINGER already set
+  // unnecessary SO_LINGER already set
   // tcp_abort (h->fd);
   
   if (chord_rpc_style == CHORD_RPC_SFST) {
@@ -299,6 +300,7 @@ tcp_manager::send_RPC (RPC_delay_args *args)
     delaycb (0, 0, wrap (this, &tcp_manager::send_RPC_ateofcb, args));
   }
   else {
+    args->now = getusec ();
     ptr<aclnt> c = aclnt::alloc (hi->xp, args->prog);
     c->call (args->procno, args->in, args->out, 
 	     wrap (this, &tcp_manager::doRPC_tcp_cleanup, c, args));
@@ -349,11 +351,29 @@ tcp_manager::doRPC_tcp_connect_cb (RPC_delay_args *args, int fd)
 }
 
 void
-tcp_manager::doRPC_tcp_cleanup (ptr<aclnt> c, RPC_delay_args *args, clnt_stat err)
+tcp_manager::doRPC_tcp_cleanup (ptr<aclnt> c, RPC_delay_args *args,
+                                clnt_stat err)
 {
+  long now = getusec ();
+  long diff = now - args->now;
+  update_latency (NULL, args->l, diff);
   (*args->cb)(err);
   delete args;
 }
+
+void
+tcp_manager::stats ()
+{
+  char buf[1024];
+  rpc_manager::stats ();
+  for (hostinfo *h = hosts.first (); h ; h = hosts.next (h)) {
+    warnx << "  host " << h->host << ": rpcs " << h->nrpc;
+    sprintf (buf, ", lat %f, var %f\n", h->a_lat, h->a_var);
+    warnx << buf;
+  }
+}
+
+
 
 // -----------------------------------------------------
 stp_manager::stp_manager (ptr<u_int32_t> _nrcv)
