@@ -40,6 +40,8 @@ p2p::get_successor_cb (sfs_ID n, cbsfsID_t cb, sfsp2p_findres *res,
 void 
 p2p::get_predecessor (sfs_ID n, cbsfsID_t cb)
 {
+  warnx << "get_predecessor: " << n << "\n";
+
   sfsp2p_findres *res = New sfsp2p_findres (SFSP2P_OK);
   doRPC (n, sfsp2p_program_1, SFSP2PPROC_GETPREDECESSOR, NULL, res,
 	 wrap (mkref (this), &p2p::get_predecessor_cb, n, cb, res));
@@ -67,18 +69,19 @@ p2p::get_predecessor_cb (sfs_ID n, cbsfsID_t cb, sfsp2p_findres *res,
 void
 p2p::find_successor (sfs_ID &n, sfs_ID &x, cbroute_t cb)
 {
-  //  warn << "FS: " << n << " " << x << "\n";
-  
-  sfs_ID start;
-  if (lsd_location_lookup) {
-    start = query_location_table (x);
-    if (start < 0) start = n;
-    warn << "starting search for " << x << " at " << start << "rather than at " << n << "\n";
-  } else 
-    start = n;
- 
-  find_predecessor (start, x,
+  // warn << "FS: " << n << " " << x << "\n";
+  find_predecessor (n, x,
 		    wrap (mkref (this), &p2p::find_predecessor_cb, cb));
+}
+
+
+void
+p2p::find_successor_restart (sfs_ID &n, sfs_ID &x, route search_path, 
+			     cbroute_t cb)
+{
+  warnx << "find_successor_restart at " << n << "\n";
+  find_predecessor_restart (n, x, search_path,
+			    wrap (mkref (this), &p2p::find_predecessor_cb, cb));
 }
 
 void
@@ -91,7 +94,7 @@ p2p::find_predecessor_cb (cbroute_t cb, sfs_ID p, route search_path,
   else if (status != SFSP2P_OK) {
     cb (p, search_path, status);
   } else {
-    //    warnx << "find_predecessor_cb: " << p << "\n";
+    // warnx << "find_predecessor_cb: get successor of " << p << "\n";
     get_successor (p, wrap (mkref(this), &p2p::find_successor_cb, 
 				   cb, search_path));
   }
@@ -101,7 +104,7 @@ void
 p2p::find_successor_cb (cbroute_t cb, route search_path, sfs_ID s, 
 			net_address r, sfsp2pstat status)
 {
-  //  warnx << "find_successor_cb: " << s << "\n";
+  // warnx << "find_successor_cb: " << s << " status " << status << "\n";
   cb (s, search_path, status);
 }
 
@@ -109,12 +112,24 @@ void
 p2p::find_predecessor(sfs_ID &n, sfs_ID &x, cbroute_t cb) 
 {
   route search_path;
-  if (n == finger_table[1].first) {
+  if (n == finger_table[1].first[0]) {
     cb (n, search_path, SFSP2P_OK);
   } else {
     testSearchCallbacks (n, x, wrap (this, &p2p::find_pred_test_cache_cb,
 				     n, x, cb));
   }
+}
+
+void
+p2p::find_predecessor_restart (sfs_ID &n, sfs_ID &x, route search_path,
+			       cbroute_t cb)
+{
+  sfsp2p_findarg *fap = New sfsp2p_findarg;
+  sfsp2p_findres *res = New sfsp2p_findres (SFSP2P_OK);
+  fap->x = x;
+  doRPC (n, sfsp2p_program_1, SFSP2PPROC_FINDCLOSESTPRED, fap, res,
+	 wrap (mkref (this), &p2p::find_closestpred_cb, n, cb, res, 
+	       search_path));
 }
 
 void
@@ -149,8 +164,8 @@ p2p::find_closestpred_cb (sfs_ID n, cbroute_t cb,
     warnx << "find_closestpred_cb: RPC error" << res->status << "\n";
     cb (n, search_path, res->status);
   } else {
-    //    warnx << "find_closestpred_cb: pred of " << res->resok->x << " is " 
-    //  << res->resok->node << "\n";
+    // warnx << "find_closestpred_cb: pred of " << res->resok->x << " is " 
+    //	  << res->resok->node << "\n";
     updateloc (res->resok->node, res->resok->r, n);
     
     search_path.push_back(res->resok->node);

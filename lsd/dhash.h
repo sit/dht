@@ -36,6 +36,19 @@ struct store_cbstate {
   { r = nreplica + 1; };
 };
 
+
+struct retry_state {
+  sfs_ID n;
+  struct timeval t;
+  svccb *sbp;
+  sfs_ID succ;
+  route path;
+  searchcb_entry *scb;
+  retry_state (sfs_ID ni, struct timeval *tpi, svccb *sbpi, sfs_ID si,
+	       route pi, searchcb_entry *scbi) :
+    n (ni), t (*tpi), sbp (sbpi), succ (si), path (pi), scb (scbi) {};
+};
+
 class dhashclient {
 
   ptr<axprt_stream> x;
@@ -47,15 +60,14 @@ class dhashclient {
   void dispatch (svccb *sbp);
   void cache_on_path(dhash_insertarg *item, route path);
 
-  void lookup_findsucc_cb (svccb *sbp, 
-			   sfs_ID n, 
-			   struct timeval *tp,
+  void lookup_findsucc_cb (svccb *sbp, sfs_ID n, struct timeval *tp,
 			   searchcb_entry *scb,
 			   sfs_ID succ, route path, sfsp2pstat err);
-  void lookup_fetch_cb (svccb *sbp, dhash_res *res, struct timeval *tp, route p, sfs_ID n, clnt_stat err);
-
-  void insert_findsucc_cb (svccb *sbp, dhash_insertarg *item, sfs_ID succ, route path, sfsp2pstat err);
-  void insert_store_cb (svccb *sbp, dhash_stat *res,clnt_stat err);
+  void lookup_fetch_cb (dhash_res *res, retry_state *st, clnt_stat err);
+  void retry (retry_state *st, sfs_ID p, net_address r, sfsp2pstat stat);
+  void insert_findsucc_cb (svccb *sbp, dhash_insertarg *item, sfs_ID succ, 
+			   route path, sfsp2pstat err);
+  void insert_store_cb (svccb *sbp, dhash_storeres *res, clnt_stat err);
 
   void cache_store_cb(dhash_stat *res, clnt_stat err);
 
@@ -74,7 +86,7 @@ class dhash {
   dbfe *db;
 
   void dispatch (ptr<asrv> dhs, svccb *sbp);
-  void fetchsvc_cb (svccb *sbp, ptr<dbrec> val, dhash_stat err);
+  void fetchsvc_cb (svccb *sbp, sfs_ID n, ptr<dbrec> val, dhash_stat err);
   void storesvc_cb (store_cbstate *st, dhash_stat err);
   
   void fetch (sfs_ID id, cbvalue cb);
@@ -92,7 +104,7 @@ class dhash {
 
   void find_replica_cb (store_cbstate *st, sfs_ID s, net_address r, 
 			sfsp2pstat status);
-  void store_replica_cb(store_cbstate *st, dhash_stat *res, clnt_stat err);
+  void store_replica_cb(store_cbstate *st, dhash_storeres *res, clnt_stat err);
 
   void act_cb(sfs_ID id, char action);
 

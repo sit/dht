@@ -10,8 +10,7 @@
 #include "qhash.h"
 
 #define NBIT 160
-
-
+#define NENTRY 3
 
 typedef int cb_ID;
 
@@ -34,8 +33,6 @@ struct chord_stats {
 };
 
 extern chord_stats stats;
-
-
 
 template<class KEY, class VALUE>
 class vs_cache {
@@ -213,7 +210,9 @@ struct location {
 struct wedge {
   sfs_ID start;
   sfs_ID end;
-  sfs_ID first;
+  sfs_ID first[NENTRY];
+  int nentry;
+  int replica;
   bool alive;
 };
 
@@ -266,6 +265,7 @@ class p2p : public virtual refcount  {
   // end added to help simulate
 
   sfs_ID my_ID () { return myID; };
+  sfs_ID my_pred () { return predecessor.first[0]; };
   void deleteloc (sfs_ID &n);
   void updateloc (sfs_ID &x, net_address &r, sfs_ID &source);
   bool lookup_anyloc (sfs_ID &n, sfs_ID *r);
@@ -297,12 +297,15 @@ class p2p : public virtual refcount  {
   void join_getsucc_cb (sfs_ID p, sfs_ID s, net_address r, sfsp2pstat status);
 
   void find_predecessor (sfs_ID &n, sfs_ID &x, cbroute_t cb);
+  void find_predecessor_restart (sfs_ID &n, sfs_ID &x, route search_path,
+				 cbroute_t cb);
   void find_pred_test_cache_cb (sfs_ID n, sfs_ID x, cbroute_t cb, int found);
   void find_closestpred_cb (sfs_ID n, cbroute_t cb, sfsp2p_findres *res, 
 			    route search_path, clnt_stat err);
   
   void find_successor (sfs_ID &n, sfs_ID &x, cbroute_t cb);
-  void find_successor_path (sfs_ID &n, sfs_ID &x, cbroute_t cb, route search_path);
+  void find_successor_restart (sfs_ID &n, sfs_ID &x, route search_path, 
+			       cbroute_t cb);
   void find_predecessor_cb (cbroute_t cb, sfs_ID p, route search_path, 
 			  sfsp2pstat status);
   void find_closestpred_succ_cb (findpredecessor_cbstate *st, sfs_ID s,
@@ -324,10 +327,12 @@ class p2p : public virtual refcount  {
   void alert_cb (sfsp2pstat *res, clnt_stat err);
 
   void bootstrap ();
-  void bootstrap_done ();
+  void bootstrap_done (int r);
   void bootstrap_succ_cb (int i, sfs_ID n, sfs_ID s, route path, 
 			  sfsp2pstat status);
   void bootstrap_pred_cb (sfs_ID n, sfs_ID s, route r, sfsp2pstat status);
+  void bootstrap_getsucc_cb (int r, int i, sfs_ID s, net_address a, 
+			     sfsp2pstat status);
 
   void doget_successor (svccb *sbp);
   void doget_predecessor (svccb *sbp);

@@ -1,4 +1,4 @@
-/* $Id: sfsrodb_core.C,v 1.9 2001/03/22 16:41:19 fdabek Exp $ */
+/* $Id: sfsrodb_core.C,v 1.10 2001/03/29 16:00:47 kaashoek Exp $ */
 
 /*
  *
@@ -53,7 +53,7 @@ sfsrodb_put (ptr<aclnt> db, const void *keydata, size_t keylen,
 
   int err;
   
-  //  warn << "inserting " << contentlen << "bytes of data under a " << keylen << " byte key\n";
+  // warn << "inserting " << contentlen << "bytes of data under a " << keylen << " byte key\n";
   dhash_insertarg *arg = New dhash_insertarg ();
   
   bigint n = fh2mpz(keydata, keylen);
