@@ -56,9 +56,12 @@ Kademlia::stabilized(vector<NodeID> lid)
 void
 Kademlia::join(Args *args)
 {
+  DEBUG(1) << "Node " << printID(_id) << " joining" << endl;
   IPAddress wkn = args->nget<IPAddress>("wellknown");
-  if(wkn == ip())
+  if(wkn == ip()) {
+    DEBUG(1) << "Node " << printID(_id) << " is wellknown." << endl;
     return;
+  }
 
   // add myself in finger table
   for(unsigned i=0; i<idsize; i++)
@@ -69,6 +72,7 @@ Kademlia::join(Args *args)
   lookup_result lr;
   la.key = _id;
   doRPC(wkn, &Kademlia::do_lookup, &la, &lr);
+  DEBUG(1) << "Result of lookup for " << printID(_id) << " is " << printID(lr.id) << ", which is node " << lr.ip << endl;
 
   // now we know the closest node in our ID space.  add him to our finger table.
   handle_join(lr.id, lr.ip);
@@ -77,11 +81,14 @@ Kademlia::join(Args *args)
   transfer_args ta;
   transfer_result tr;
   ta.id = _id;
+  DEBUG(1) << "Node " << printID(_id) << " initiating transfer." << endl;
   doRPC(lr.ip, &Kademlia::do_transfer, &ta, &tr);
 
   // merge that data in our _values table
-  for(map<NodeID, Value>::const_iterator pos = tr.values.begin(); pos != _values.end(); ++pos)
+  for(map<NodeID, Value>::const_iterator pos = tr.values.begin(); pos != tr.values.end(); ++pos)
     _values[pos->first] = pos->second;
+
+  DEBUG(1) << "Transfer done." << endl;
 
   join_args ja;
   join_result jr;
@@ -108,6 +115,8 @@ Kademlia::join(Args *args)
     else
       _fingers.set(i, lr.id, ip);
   }
+
+  dump();
 }
 
 
@@ -154,7 +163,7 @@ Kademlia::do_lookup(void *args, void *result)
 
   NodeID bestID = _id;
   NodeID bestdist = distance(_id, largs->key);
-  DEBUG(3) << "do_lookup, bestID = " << printID(bestID) << ", bestdist =  " << printID(bestdist) << "\n";
+  DEBUG(3) << "do_lookup for key " << printID(largs->key) << ", bestID = " << printID(bestID) << ", bestdist =  " << printID(bestdist) << "\n";
 
   // XXX: very inefficient
   for(unsigned i=0; i<idsize; i++) {
@@ -176,7 +185,7 @@ Kademlia::do_lookup(void *args, void *result)
   if(bestID == _id) {
     lresult->id = bestID;
     lresult->ip = ip();
-    DEBUG(2) << "I am the best match" << endl;
+    DEBUG(2) << "I (" << printID(_id) << ") am the best match for " << printID(largs->key) << endl;
     return;
   }
 
@@ -259,6 +268,8 @@ Kademlia::insert(Args *args)
 
   ia.key = args->nget<NodeID>("key");
   ia.val = args->nget<Value>("val");
+
+  DEBUG(1) << "insert " << printID(ia.key) << ":" << ia.val << endl;
   do_insert(&ia, &ir);
 }
 
