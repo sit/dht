@@ -96,6 +96,16 @@ union chord_getfingersres switch (chordstat status) {
     void;
 };
 
+struct chord_getsucc_ext_resok {
+  chord_node_ext succ<>;
+};
+
+union chord_getsucc_ext_res switch (chordstat status) {
+  case CHORD_OK:
+    chord_getsucc_ext_resok resok;
+  default:
+    void;
+};
 
 struct chord_getfingers_ext_resok {
   chord_node_ext fingers<>;
@@ -196,6 +206,9 @@ program CHORD_PROGRAM {
 
 		chord_getfingers_ext_res
 		CHORDPROC_GETFINGERS_EXT (chord_vnode) = 11;
+
+		chord_getsucc_ext_res
+		CHORDPROC_GETSUCC_EXT (chord_vnode) = 11;
 
 		chord_gettoes_res
           	CHORDPROC_GETTOES (chord_gettoes_arg) = 12;

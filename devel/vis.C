@@ -14,7 +14,7 @@ static GtkWidget *window = NULL;
 static GtkWidget *drawing_area = NULL;
 static GdkGC *draw_gc = NULL;
 static GdkColormap *cmap = NULL;
-static GdkColor red, green, blue;
+static GdkColor red, green, blue, brown;
 static short interval = -1;
 
 struct f_node {
@@ -22,11 +22,12 @@ struct f_node {
   str host;
   short port;
   chord_getfingers_ext_res *res;
+  chord_getsucc_ext_res *ressucc;
   ihash_entry <f_node> link;
   bool draw;
 
-  f_node (chordID i, str h, short p, chord_getfingers_ext_res *r) : 
-    ID (i), host (h), port (p), res (r), draw (true) {};
+  f_node (chordID i, str h, short p) :
+    ID (i), host (h), port (p), draw (true) { res = NULL; ressucc = NULL;};
   ~f_node () { delete res; };
 };
 
@@ -41,6 +42,16 @@ void add_fingers (chordID ID, str host, short port, chord_getfingers_ext_res *re
 void update_fingers (f_node *n);
 void update_fingers_got_fingers (chordID ID, str host, short port, 
 				 chord_getfingers_ext_res *res,
+				 clnt_stat err);
+void get_succ (str host, short port);
+void get_succ (chordID ID, str host, short port);
+void get_succ_got_succ (chordID ID, str host, short port, 
+			      chord_getsucc_ext_res *res,
+			      clnt_stat err);
+void add_succ (chordID ID, str host, short port, chord_getsucc_ext_res *res);
+void update_succlist (f_node *n);
+void update_succ_got_succ (chordID ID, str host, short port, 
+				 chord_getsucc_ext_res *res,
 				 clnt_stat err);
 void update ();
 void initgraf (int argc, char **argv);
@@ -82,6 +93,7 @@ update ()
   f_node *n = nodes.first ();
   while (n) {
     update_fingers (n);
+    update_succlist (n);
     n = nodes.next (n);
   }  
 
@@ -103,6 +115,106 @@ get_aclnt (str host, short port)
 
   return c;
 }
+
+//----- update successors -----------------------------------------------------
+
+void
+update_succlist (f_node *nu)
+{
+  ptr<aclnt> c = get_aclnt (nu->host, nu->port);
+  if (c == NULL) 
+    fatal << "locationtable::doRPC: couldn't aclnt::alloc\n";
+  
+  chord_vnode n;
+  n.n = nu->ID;
+  chord_getsucc_ext_res *res = New chord_getsucc_ext_res ();
+  c->timedcall (TIMEOUT, CHORDPROC_GETSUCC_EXT, &n, res,
+		wrap (&update_succ_got_succ, 
+		      nu->ID, nu->host, nu->port, res));
+}
+
+
+void
+update_succ_got_succ (chordID ID, str host, short port, 
+			    chord_getsucc_ext_res *res, clnt_stat err)
+{
+  if (err || res->status) {
+    warn << "(update succ) deleting " << ID << "\n";
+    if (nodes[ID])
+      nodes.remove (nodes[ID]);
+    return;
+  }
+
+  f_node *nu = nodes[ID];
+  delete nu->ressucc;
+  nu->ressucc = res;
+
+  for (unsigned int i=0; i < res->resok->succ.size (); i++) {
+    if ( nodes[res->resok->succ[i].x] == NULL) 
+      get_fingers (res->resok->succ[i].x, res->resok->succ[i].r.hostname,
+		   res->resok->succ[i].r.port);
+  }
+}
+
+
+void 
+get_succ (str host, short port) 
+{
+  chordID ID = make_chordID (host, port);
+  get_succ (ID, host, port);
+}
+
+void
+get_succ (chordID ID, str host, short port) 
+{
+  ptr<aclnt> c = get_aclnt (host, port);
+  if (c == NULL) 
+    fatal << "locationtable::doRPC: couldn't aclnt::alloc\n";
+
+  chord_vnode n;
+  n.n = ID;
+  chord_getsucc_ext_res *res = New chord_getsucc_ext_res ();
+  c->timedcall (TIMEOUT, CHORDPROC_GETSUCC_EXT, &n, res,
+		wrap (&get_succ_got_succ, 
+		      ID, host, port, res));
+  
+}
+
+void
+get_succ_got_succ (chordID ID, str host, short port, 
+			 chord_getsucc_ext_res *res,
+			 clnt_stat err) 
+{
+  if (err || res->status) {
+    warn << "get succ failed, deleting: " << ID << "\n";
+    if (nodes[ID])
+      nodes.remove (nodes[ID]);
+    draw_ring ();
+  } else
+    add_succ (ID, host, port, res);
+}
+
+void
+add_succ (chordID ID, str host, short port, chord_getsucc_ext_res *res) 
+{
+  f_node *n = nodes[ID];
+
+  if (n && n->ressucc) return;
+  if (!n) {
+    warn << "added " << ID << "\n";
+    n = New f_node (ID, host, port);
+    nodes.insert (n);
+  }
+  n->ressucc = res;
+  for (unsigned int i=0; i < res->resok->succ.size (); i++) {
+    if ( nodes[res->resok->succ[i].x] == NULL) 
+      get_succ (res->resok->succ[i].x, res->resok->succ[i].r.hostname,
+		   res->resok->succ[i].r.port);
+  }
+  draw_ring ();
+}
+
+//----- update fingers -----------------------------------------------------
 
 void
 update_fingers (f_node *nu)
@@ -181,11 +293,16 @@ get_fingers_got_fingers (chordID ID, str host, short port,
 void
 add_fingers (chordID ID, str host, short port, chord_getfingers_ext_res *res) 
 {
-  if (nodes[ID]) return;
+  f_node *n = nodes[ID];
 
-  warn << "added " << ID << "\n";
-  f_node *n = New f_node (ID, host, port, res);
-  nodes.insert (n);
+  if (n && n->res) return;
+
+  if (!n) {
+    warn << "added " << ID << "\n";
+    n = New f_node (ID, host, port);
+    nodes.insert (n);
+  }
+  n->res = res;
   for (unsigned int i=0; i < res->resok->fingers.size (); i++) {
     if ( nodes[res->resok->fingers[i].x] == NULL) 
       get_fingers (res->resok->fingers[i].x, res->resok->fingers[i].r.hostname,
@@ -274,6 +391,8 @@ initgraf (int argc, char **argv)
       !gdk_colormap_alloc_color (cmap, &blue, FALSE, TRUE))
     fatal << "couldn't get the color I wanted\n";
   if (!gdk_color_parse ("red", &red) ||
+      !gdk_colormap_alloc_color (cmap, &red, FALSE, TRUE))
+  if (!gdk_color_parse ("brown", &brown) ||
       !gdk_colormap_alloc_color (cmap, &red, FALSE, TRUE))
     fatal << "couldn't get the color I wanted\n";
 }
@@ -430,22 +549,36 @@ draw_ring ()
 		     x,y,
 		     IDs);
 #endif
-    if (n->draw)
-      for (unsigned int i=0; i < n->res->resok->fingers.size (); i++) {
-	int a,b;
-	if (n->res->resok->fingers[i].a_lat < 2000000) // < 20 ms
-	  gdk_gc_set_foreground (draw_gc, &red);
-	else if (n->res->resok->fingers[i].a_lat < 10000000) // [20, 100] ms
-	  gdk_gc_set_foreground (draw_gc, &green);
-	else // > 100 ms
-	  gdk_gc_set_foreground (draw_gc, &blue);
+    if (n->draw) {
+      if (n->res) {
+	for (unsigned int i=0; i < n->res->resok->fingers.size (); i++) {
+	  int a,b;
+	  if (n->res->resok->fingers[i].a_lat < 2000000) // < 20 ms
+	    gdk_gc_set_foreground (draw_gc, &red);
+	  else if (n->res->resok->fingers[i].a_lat < 10000000) // [20, 100] ms
+	    gdk_gc_set_foreground (draw_gc, &green);
+	  else // > 100 ms
+	    gdk_gc_set_foreground (draw_gc, &blue);
 
-	ID_to_xy (n->res->resok->fingers[i].x, &a, &b);
-	gdk_draw_line (pixmap,
-		       draw_gc,
-		       x,y,
-		       a,b);
+	  ID_to_xy (n->res->resok->fingers[i].x, &a, &b);
+	  gdk_draw_line (pixmap,
+			 draw_gc,
+			 x,y,
+			 a,b);
+	}
       }
+      if (n->ressucc) {
+	for (unsigned int i=0; i < n->ressucc->resok->succ.size (); i++) {
+	  int a,b;
+	  gdk_gc_set_foreground (draw_gc, &brown);
+	  ID_to_xy (n->ressucc->resok->succ[i].x, &a, &b);
+	  gdk_draw_line (pixmap,
+			 draw_gc,
+			 x,y,
+			 a,b);
+	}
+      }
+    }
     n = nodes.next (n);
   }
   redraw ();
@@ -550,6 +683,7 @@ main (int argc, char** argv)
     usage ();
 
   get_fingers (host, port);
+  get_succ (host, port);
 
   if (interval > 0) {
     warn << "enabling auto-update at " << interval << " second intervals\n";

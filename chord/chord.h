@@ -93,7 +93,7 @@ class toe_table {
 };
 
 class vnode : public virtual refcount {
-  static const int stabilize_timer = 5000;  // millseconds
+  static const int stabilize_timer = 5000;  // milliseconds
   static const int stabilize_timer_max = 500;      // seconds
   static const int max_retry = 5;
   
@@ -135,6 +135,7 @@ class vnode : public virtual refcount {
   u_long ndotestrange;
   u_long ndogetfingers;
   u_long ndogetfingers_ext;
+  u_long ndogetsucc_ext;
   u_long ndochallenge;
   u_long ndogettoes;
 
@@ -236,6 +237,7 @@ class vnode : public virtual refcount {
   void doalert (svccb *sbp, chord_nodearg *na);
   void dogetfingers (svccb *sbp);
   void dogetfingers_ext (svccb *sbp);
+  void dogetsucc_ext (svccb *sbp);
   void dochallenge (svccb *sbp, chord_challengearg *ca);
   void dogettoes (svccb *sbp);
 
