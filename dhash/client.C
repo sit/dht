@@ -119,6 +119,7 @@ dhashcli::retrieve (blockID blockID, cb_ret cb, int options,
       sl.push_back (clntnode->my_location ());
       vec<chord_node> s = get_succs_from_list (sl, blockID.ID);
       route r;
+      r.push_back (clntnode->my_location ());
       retrieve_lookup_cb (rs, s, r, CHORD_OK);
       return;
     }
@@ -481,6 +482,7 @@ dhashcli::insert (ref<dhash_block> block, cbinsert_path_t cb,
         sl.push_back (clntnode->my_location ());
         vec<chord_node> s = get_succs_from_list (sl, block->ID);
         route r;
+	r.push_back (clntnode->my_location ());
         insert_lookup_cb (block, cb, DHASH_OK, s, r);
         return;
       }
