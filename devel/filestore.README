@@ -1,5 +1,23 @@
-This is a Chord app that demonstrates how to store and retrieve from
-DHash. It stores files in a simple format.
+Filestore is a basic Chord application that can store and retrieve
+files from a Chord ring. It demonstrates how to use DHash to store
+blocks, and how to program in the style needed by libasync.
+
+technical details
+
+The file storage format is fairly simple. Files are split up into
+16,384-byte "data blocks." They are stored in DHash as content-hash
+blocks. "Inode blocks" contain the file's name and length, and a list
+of hashes for "indirect blocks." The indirect blocks contain a list of
+hashes for the file's data blocks. The file is identified by the hash
+of the inode block.
+
+This simple, fixed, three-layer scheme permits files up to
+10,815,307,776 bytes. For files smaller than 16,384 bytes, it has an
+overhead of one inode block of 280 bytes, and one indirect block of 20
+bytes. The users can view the filename and file length before
+attempting to retrieve the file, so they can avoid retrieving files
+that are larger than they want.
+
 
 Examples of use:
 storing a file:
@@ -16,4 +34,5 @@ fetching a file:
 
 
 todo:
-bette documentation
+better documentation
+throttling of insert/retrieve requests?

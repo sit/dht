@@ -1,6 +1,6 @@
 #define BLOCKSIZE 16384
 // supports files up to (BLOCKSIZE-260)/20 * BLOCKSIZE/20 * BLOCKSIZE
-// currently:  10815307776
+// currently:  10815307776 bytes
 
 #include <chord.h>
 #include <sys/types.h>
@@ -15,23 +15,52 @@ dhashclient *dhash;
 int inflight = 0;
 FILE *outfile;
 
-// indirect block
+// utility functions ----------------------------------
+
+chordID compute_hash(char *buf, int len) {
+  char hashbytes[sha1::hashsize];
+  chordID ID;
+
+  sha1_hash (hashbytes, buf, len);
+  mpz_set_rawmag_be (&ID, hashbytes, sizeof (hashbytes));  // For big endian
+
+  return ID;
+}
+
+void insert_cb(dhash_stat s, ptr<insert_info>) {
+  if(s != DHASH_OK)
+    warn << "bad store\n";
+
+  inflight--;
+  if(inflight == 0)
+    exit(0);
+}
+
+chordID write_block(char *buf, int len) {
+  chordID ID = compute_hash(buf, len);
+  dhash->insert (ID, buf, len, wrap(&insert_cb));
+  inflight++;
+
+  return ID;
+}
+
+
+// indirect block -----------------------------------
+
 struct indirect {
   vec<chordID> hs;
+  indirect *parent;
 
   void add_hash(chordID h) {
     hs.push_back(h);
+
+    if(full()) {
+      // write out indirect block
+      write_out();
+    }
   }
 
-  int len(void) {
-    return hs.size() * sha1::hashsize;
-  }
-
-  bool full(void) {
-    return (len() + sha1::hashsize) > BLOCKSIZE;
-  }
-
-  void print(char *buf, int l) {
+  virtual void print(char *buf, int l) {
     if(len() > l) {
       warnx << len() << "\n";
       fatal("buf too small\n");
@@ -43,18 +72,51 @@ struct indirect {
     }
   }
 
+  chordID write_out(void) {
+    chordID ID;
+    char buf[BLOCKSIZE];
+    
+    if(len() == 0)
+      return 0; // xxx bug for max-sized file?
+
+    print(buf, BLOCKSIZE);
+    warnx << "len " << len() << "\n";
+    ID = write_block(buf, len());
+    clear();
+
+    if(parent) {
+      warnx << "p\n";
+      parent->add_hash(ID);
+    }
+
+    return ID;
+  }
+
   void clear(void) {
     hs.clear();
   }
+
+  virtual int len(void) {
+    return hs.size() * sha1::hashsize;
+  }
+
+  bool full(void) {
+    return (len() + sha1::hashsize) > BLOCKSIZE;
+  }
+
+  indirect(indirect *p) : parent(p) {}
+  virtual ~indirect() {}
 };
 
-// inode block
+
+// inode block -------------------------------------
+
 struct inode : indirect {
   char filename[256];
   int filelen;
   static const int extralen = sizeof(inode::filename) + sizeof(inode::filelen);
 
-  inode(char *aname, int alen) {
+  inode(char *aname, int alen) : indirect(NULL) {
     strncpy(filename, aname, sizeof(filename));
     filelen = alen;
   }
@@ -76,28 +138,14 @@ struct inode : indirect {
 
     indirect::print(buf, l - extralen);
   }
+
+  void write_out(void) {
+    warnx << indirect::write_out() << "\n";
+  }
 };
 
-void insert_cb(dhash_stat s, ptr<insert_info>) {
-  if(s != DHASH_OK)
-    warn << "bad store\n";
 
-  inflight--;
-  if(inflight == 0)
-    exit(0);
-}
-
-chordID write_block(char *buf, int len) {
-  char hashbytes[sha1::hashsize];
-  chordID ID;
-
-  sha1_hash (hashbytes, buf, len);
-  mpz_set_rawmag_be (&ID, hashbytes, sizeof (hashbytes));  // For big endian
-  dhash->insert (ID, buf, len, wrap(&insert_cb));
-  inflight++;
-
-  return ID;
-}
+// callback for printing out inode info --------------------------
 
 void list_cb(dhash_stat st, ptr<dhash_block> bl, vec<chordID> vc) {
   if(st != DHASH_OK)
@@ -112,6 +160,10 @@ void list_cb(dhash_stat st, ptr<dhash_block> bl, vec<chordID> vc) {
   warnx << filename << ": " << filelen << " bytes\n";
   exit(0);
 }
+
+
+// a chain of callbacks for retrieving indirect and file data blocks,
+// to retrieve the file ----------------------------------------------
 
 void gotblock_cb(int len, dhash_stat st, ptr<dhash_block> bl,
 		 vec<chordID> vc) {
@@ -142,6 +194,7 @@ void gotindirect_cb(int len, dhash_stat st, ptr<dhash_block> bl,
   for(unsigned int i=0; i<bl->len; i+=20) {
     mpz_set_rawmag_be (&ID, buf+i, sha1::hashsize);  // For big endian
     dhash->retrieve(ID, wrap(&gotblock_cb, len+BLOCKSIZE*i/20));
+    warnx << "retrieve " << ID << "\n";
     inflight++;
   }
 }
@@ -163,9 +216,37 @@ void gotinode_cb(dhash_stat st, ptr<dhash_block> bl, vec<chordID> vc) {
   char *buf = bl->data+inode::extralen;
   chordID ID;
   for(unsigned int i=0; i<(bl->len-inode::extralen); i+=20) {
-    mpz_set_rawmag_be (&ID, buf+i, sha1::hashsize);  // For big endian
+    mpz_set_rawmag_be(&ID, buf+i, sha1::hashsize);  // For big endian
     dhash->retrieve(ID, wrap(&gotindirect_cb, (BLOCKSIZE/20)*BLOCKSIZE*i/20));
+    warnx << "retrieve " << ID << "\n";
   }
+}
+
+void store(char *name) {
+  struct stat st;
+  if(stat(name, &st) == -1)
+    fatal("couldn't stat file\n");
+
+  inode n(name, st.st_size);
+
+  FILE *f = fopen(name, "r");
+  if(f == NULL)
+    fatal("couldn't open file\n");
+
+  char buf[BLOCKSIZE];
+  int len;
+  indirect in(&n);
+  chordID ID;
+  do {
+    len = fread(buf, 1, BLOCKSIZE, f);
+    warnx << "len " << len << "\n";
+    ID = write_block(buf, len);
+
+    in.add_hash(ID);
+  } while(len == BLOCKSIZE);
+
+  in.write_out();
+  n.write_out();
 }
 
 int main(int argc, char *argv[]) {
@@ -174,50 +255,24 @@ int main(int argc, char *argv[]) {
 
   dhash = New dhashclient(argv[1]);
   chordID ID;
+  char *cmd = argv[2];
+  char *name = argv[3];
 
-  if(!strcmp(argv[2], "-s")) {
+  if(!strcmp(cmd, "-s")) {
     // store
-    struct stat st;
-    if(stat(argv[3], &st) == -1)
-      fatal("couldn't stat file\n");
+    store(name);
 
-    inode n(argv[3], st.st_size);
-
-    FILE *f = fopen(argv[3], "r");
-    if(f == NULL)
-      fatal("couldn't open file\n");
-
-    char buf[BLOCKSIZE];
-    int len;
-    indirect in;
-    do {
-      len = fread(buf, 1, BLOCKSIZE, f);
-      ID = write_block(buf, len);
-
-      in.add_hash(ID);
-      if(in.full()) {
-	// write out indirect block
-	in.print(buf, BLOCKSIZE);
-	ID = write_block(buf, in.len());
-	in.clear();
-	n.add_hash(ID);
-      }
-    } while(len == BLOCKSIZE);
-
-    in.print(buf, BLOCKSIZE);
-    ID = write_block(buf, in.len());
-    n.add_hash(ID);
-    n.print(buf, BLOCKSIZE);
-    ID = write_block(buf, n.len());
-    warnx << ID << "\n";
-  } else if(!strcmp(argv[2], "-l")) {
+  } else if(!strcmp(cmd, "-l")) {
     // list
-    str2chordID(argv[3], ID);
+    str2chordID(name, ID);
     dhash->retrieve(ID, wrap(&list_cb));
-  } else if(!strcmp(argv[2], "-f")) {
+
+  } else if(!strcmp(cmd, "-f")) {
     // retrieve
-    str2chordID(argv[3], ID);
+    str2chordID(name, ID);
     dhash->retrieve(ID, wrap(&gotinode_cb));
+    warnx << "retrieve " << ID << "\n";
+
   } else {
     fatal("filestore [sockname] -[fls] [filename/hash]\n");
   }
