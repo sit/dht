@@ -579,12 +579,15 @@ Chord::find_successors_recurs(CHID key, uint m, uint all, uint type, uint *recur
 
   uint total_to = 0;
   uint total_lat = 0;
+  uint wasted = 0;
   IDMap nn, np;
   np = fa.path[0].n;
   for (uint i = 1; i < psz; i++) {
     nn = fa.path[i].n;
-    if (fa.path[i].tout) 
+    if (fa.path[i].tout) {
+      wasted += (2*t->latency(np.ip, nn.ip));
       total_to++;
+    }
 #ifdef CHORD_DEBUG
     printf("(%u,%qx,%u,%u,%u) ", 
 	nn.ip, nn.id, (unsigned) t->latency(np.ip, nn.ip), nn.choices, fa.path[i].tout);
@@ -604,7 +607,7 @@ Chord::find_successors_recurs(CHID key, uint m, uint all, uint type, uint *recur
     *recurs_int = total_lat + t->latency(fa.path[psz-1].n.ip, me.ip);
 
   if (type == TYPE_USER_LOOKUP) {
-    printf("%s lookup key %qx,%d, hops %d timeout %d\n", ts(), key, m, psz, total_to);
+    printf("%s lookup key %qx,%d, hops %d timeout %d wasted %d\n", ts(), key, m, psz, total_to, wasted);
     if (!fr.correct) 
       fr.v.clear();
   }
@@ -753,6 +756,7 @@ Chord::join(Args *args)
 #endif
 
   if (args) {
+    ChordObserver::Instance(NULL)->addnode();
     _join_scheduled++;
     node()->set_alive(); //if args is NULL, it's an internal join
 #ifdef CHORD_DEBUG
@@ -1282,6 +1286,7 @@ Chord::leave(Args *args)
 void
 Chord::crash(Args *args)
 {
+  ChordObserver::Instance(NULL)->delnode();
   assert(!static_sim);
   if (vis)
     printf ("vis %llu crash %16qx\n", now (), me.id);

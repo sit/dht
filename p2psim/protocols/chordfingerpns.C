@@ -80,7 +80,8 @@ ChordFingerPNS::init_state(vector<IDMap> ids)
   }
 
   Chord::init_state(ids);
-
+  uint lsz = loctable->size();
+  printf("chordfingerpns %u init_state %d\n", me.ip, lsz);
 //  ((LocTablePNS *)loctable)->rebuild_pns_finger_table(_base, _stab_succ);
 }
 
@@ -170,7 +171,7 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
       testf.push_back(currf);//testing
       total_finger++;//testing
       //
-      assert(currf.ip != me.ip);
+      if (currf.ip == me.ip) continue;
 
       if ((!restart) && (currf.ip)) { 
 
