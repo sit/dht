@@ -1,4 +1,4 @@
-dnl $Id: acinclude.m4,v 1.5 2002/02/22 18:05:59 fdabek Exp $
+dnl $Id: acinclude.m4,v 1.6 2002/11/24 00:23:50 jastr Exp $
 
 # Configure paths for GTK+
 # Owen Taylor     97-11-3
@@ -998,11 +998,17 @@ if test "$with_db3" != no; then
 
 	if test -f $with_db3/include/db3.h; then
 	    AC_DEFINE(HAVE_DB3_H, 1, [Define if BerkeleyDB header is db3.h.])
-	    CPPFLAGS="$CPPFLAGS -I${with_db3}/include"
+   	    if test "$with_db3" != /usr; then
+	      CPPFLAGS="$CPPFLAGS -I${with_db3}/include"
+	    fi
 	elif test -f $with_db3/include/db3/db.h; then
-	    CPPFLAGS="$CPPFLAGS -I${with_db3}/include/db3"
+   	    if test "$with_db3" != /usr; then
+	      CPPFLAGS="$CPPFLAGS -I${with_db3}/include/db3"
+	    fi
 	elif test -f $with_db3/include/db.h; then
-	    CPPFLAGS="$CPPFLAGS -I${with_db3}/include"
+	    if test "$with_db3" != /usr; then
+	      CPPFLAGS="$CPPFLAGS -I${with_db3}/include"
+	    fi
 	else
 	    AC_MSG_ERROR([Could not find BerkeleyDB library version 3])
 	fi
