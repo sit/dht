@@ -77,18 +77,20 @@ dhash::dhash(str dbname, ptr<vnode> node,
   host_node = node;
   assert (host_node);
 
-  // merkle state
-  mtree = New merkle_tree (db);
-  msrv = New merkle_server (mtree, 
-			    wrap (node, &vnode::addHandler),
-			    wrap (this, &dhash::sendblock_XXX));
-  replica_syncer_dstID = 0;
-  replica_syncer = NULL;
-  partition_syncer_dstID = 0;
-  partition_syncer_predID = 0;
-  partition_syncer = NULL;
-  partition_enumeration = db->enumerate();
-  partition_dbpair = NULL;
+  if (MERKLE_ENABLED) {
+    // merkle state
+    mtree = New merkle_tree (db);
+    msrv = New merkle_server (mtree, 
+			      wrap (node, &vnode::addHandler),
+			      wrap (this, &dhash::sendblock_XXX));
+    replica_syncer_dstID = 0;
+    replica_syncer = NULL;
+    partition_syncer_dstID = 0;
+    partition_syncer_predID = 0;
+    partition_syncer = NULL;
+    partition_enumeration = db->enumerate();
+    partition_dbpair = NULL;
+  }
 
   // RPC demux
   warn << host_node->my_ID () << " registered dhash_program_1\n";
