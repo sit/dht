@@ -93,7 +93,7 @@ dhash_config_init::dhash_config_init ()
 // Things that read from Configurator
 #define DECL_CONFIG_METHOD(name,key)			\
 u_long							\
-dhash::##name ()					\
+dhash::name ()						\
 {							\
   static bool initialized = false;			\
   static int v = 0;					\
