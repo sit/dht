@@ -52,14 +52,9 @@ EventQueue::run()
 {
   Event *e = 0;
   extern int anyready();
-  Alt a[2];
 
   // Wait for threadmain() to call go().
-  a[0].c = _gochan;
-  a[0].v = 0;
-  a[0].op = CHANRCV;
-  a[1].op = CHANEND;
-  alt(a);
+  recvp(_gochan);
 
   while(1){
     // let others run
