@@ -1503,7 +1503,7 @@ k_nodes::clear()
 
   _map.clear();
   if(_nodes)
-    free(_nodes);
+    delete _nodes;
   _nodes = 0;
   _redo = REBUILD;
 
