@@ -16,7 +16,10 @@ typedef callback<void, RPC_delay_args *>::ref rpcfnc_t;
 typedef callback<void, bigint, bool, callback<void>::ref>::ref sndblkfnc_t;
 
 class merkle_syncer {
-public:
+ private:
+  void error (str err);
+
+ public:
   typedef enum {
     BIDIRECTIONAL,
     UNIDIRECTIONAL
@@ -32,11 +35,12 @@ public:
 
   str fatal_err;
   bool sync_done;
-  //cbv::ptr synccb;
+  cbv::ptr synccb;
 
   bigint rngmin;
   bigint rngmax;
 
+  int pending_rpcs;
   int receiving_blocks;
   uint64 num_sends_pending;
   db_iterator *sendblocks_iter;
@@ -45,6 +49,7 @@ public:
 
   void dump ();
   merkle_syncer (merkle_tree *ltree, rpcfnc_t rpcfnc, sndblkfnc_t sndblkfnc);
+  ~merkle_syncer ();
   void doRPC (int procno, ptr<void> in, void *out, aclnt_cb cb);
   void send_some ();
   void next (void);
@@ -54,8 +59,7 @@ public:
   void getblocklist_cb (ref<getblocklist_res> res, clnt_stat err);
 
   bool done () { return sync_done; }
-  //void sync (cbv::ptr cb, mode_t m);
-  void sync (bigint _leftinc, bigint _rightinc, mode_t m);
+  void sync (bigint _rngmin, bigint _rngmax, mode_t m, cbv::ptr cb);
   void getnode (u_int depth, const merkle_hash &prefix);
   void getnode_cb (ref<getnode_arg> arg, ref<getnode_res> res, clnt_stat err);
   void getblockrange (merkle_rpc_node *rnode);

@@ -20,7 +20,6 @@ private:
   go ()
   {
     while (iter->more () && num_sends_pending < 64) {
-      
       merkle_hash key = iter->next ();
       num_sends_pending++;
       XXX_SENDBLOCK_ARGS a (dstID, tobigint (key), !iter->more(), 
@@ -41,7 +40,12 @@ private:
 
 
 public:
-  merkle_send_range (db_iterator *iter,   sndblkfnc2_t sndblkfnc, chordID dstID)
+  ~merkle_send_range ()
+  {
+    warn << (u_int)this << " DTOR merkle_send_range\n";
+  }
+
+  merkle_send_range (db_iterator *iter, sndblkfnc2_t sndblkfnc, chordID dstID)
     : iter (iter), num_sends_pending (0), sndblkfnc (sndblkfnc), dstID (dstID)
   {
     go ();
@@ -70,10 +74,10 @@ ignorecb ()
 // ---------------------------------------------------------------------------
 // merkle_server
 
-merkle_server::merkle_server (merkle_tree *ltree, vnode *host_node, sndblkfnc2_t sndblkfnc)
-  : ltree (ltree), host_node (host_node), sndblkfnc (sndblkfnc)
+merkle_server::merkle_server (merkle_tree *ltree, addHandler_t addHandler, sndblkfnc2_t sndblkfnc)
+  : ltree (ltree), sndblkfnc (sndblkfnc)
 {
-  host_node->addHandler (merklesync_program_1, wrap(this, &merkle_server::dispatch));
+  (*addHandler) (merklesync_program_1, wrap(this, &merkle_server::dispatch));
 }
 
 

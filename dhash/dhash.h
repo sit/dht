@@ -300,9 +300,6 @@ class dhash {
   int dbcompare (ref<dbrec> a, ref<dbrec> b);
 
 
-  ref<dbrec> id2dbrec(chordID id);
-  chordID dbrec2id (ptr<dbrec> r);
-
   chordID pred;
   vec<chordID> replicas;
   timecb_t *check_replica_tcb;
@@ -317,6 +314,9 @@ class dhash {
   long rpc_answered;
 
  public:
+  static ref<dbrec> id2dbrec(chordID id);
+  static chordID dbrec2id (ptr<dbrec> r);
+
   dhash (str dbname, ptr<vnode> node, ptr<route_factory> r_fact,
 	 u_int nreplica = 0, int ss_mode = 0);
   void accept(ptr<axprt_stream> x);

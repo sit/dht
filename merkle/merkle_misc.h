@@ -18,15 +18,10 @@ struct pair {
   pair (T1 f, T2 s) : first (f), second (s) {}
 };
 
+
 struct block {
   merkle_hash key;
   ptr<dbrec> data;
-  itree_entry<block> link;
-  // XXX CLEAN: fake data should be delete
-  void fakedata () { data = New refcounted<dbrec> ("FAKE", strlen ("FAKE")); }
-  block () { key.randomize (); fakedata (); }
-  block (u_int i) : key (i) { fakedata (); }
-  block (merkle_hash key) : key (key) { fakedata (); }
   block (merkle_hash key, ptr<dbrec> data) : key (key), data (data) {}
 };
 

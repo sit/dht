@@ -111,7 +111,9 @@ dhash::dhash(str dbname, ptr<vnode> node,
 
   // merkle state
   mtree = New merkle_tree (db);
-  msrv = New merkle_server (mtree, node, wrap (this, &dhash::sendblock_XXX));
+  msrv = New merkle_server (mtree, 
+			    wrap (node, &vnode::addHandler),
+			    wrap (this, &dhash::sendblock_XXX));
   replica_syncer_dstID = 0;
   replica_syncer = NULL;
   partition_syncer_dstID = 0;
@@ -224,7 +226,7 @@ dhash::replica_maintenance_timer (u_int index)
       
       warn << "biSYNC with " << replicas[index]
 	   << " range [" << rngmin << ", " << rngmax << "]\n";
-      replica_syncer->sync (rngmin, rngmax, merkle_syncer::BIDIRECTIONAL);
+      replica_syncer->sync (rngmin, rngmax, merkle_syncer::BIDIRECTIONAL, NULL);
       index = (index + 1) % nreplica;
     }
   }

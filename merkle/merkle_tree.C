@@ -200,7 +200,7 @@ merkle_tree::remove (block *b)
 void
 merkle_tree::insert (block *b)
 {
-  warn <<  "\n\n\n **** merkle_tree::insert: " << b->key << "\n";
+  //warn <<  "\n\n\n **** merkle_tree::insert: " << b->key << "\n";
 
   // forbid dups..
 #ifdef NEWDB

@@ -15,6 +15,9 @@ class XXX_SENDBLOCK_ARGS;
 
 // the pair is because of the limit on the max # of args in a wrap 
 typedef callback<void, XXX_SENDBLOCK_ARGS *>::ref sndblkfnc2_t;
+typedef callback<void, const rpc_program &, cbdispatch_t>::ref addHandler_t;
+
+
 
 // One merkle_server runs for each node of the Chord ring.
 //
@@ -36,7 +39,7 @@ public:
   // called when dhash receives a new block
   // void handle_block (...);
 
-  merkle_server (merkle_tree *ltree, vnode *host_node, sndblkfnc2_t sndblkfnc);
+  merkle_server (merkle_tree *ltree, addHandler_t addHandler, sndblkfnc2_t sndblkfnc);
   void dispatch (svccb *sbp);
 };
 

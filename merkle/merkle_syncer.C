@@ -62,7 +62,9 @@ merkle_syncer::merkle_syncer (merkle_tree *ltree, rpcfnc_t rpcfnc, sndblkfnc_t s
 {
   fatal_err = NULL;
   sync_done = false;
+  synccb = NULL;
 
+  pending_rpcs = 0;
   receiving_blocks = 0;
   num_sends_pending = 0;
   sendblocks_iter = NULL;
@@ -88,9 +90,17 @@ void
 merkle_syncer::next (void)
 {
   /**/warn << (u_int)this << " next >>>>>>>>>>>>>>>>>>>>>>>>>>>>\n";
+  /**/warn << (u_int)this << " next >>>>>>>>>>>>>>>> rcving_blks " << receiving_blocks << "\n";
+
 
   if (fatal_err) {
     /**/warn << (u_int)this << " not continuing after error: " << fatal_err << "\n";
+    return;
+  }
+
+  if (sync_done) {
+    /**/warn << (u_int)this << " ignoring extra callbacks\n";
+    assert (0);
     return;
   }
 
@@ -107,7 +117,7 @@ merkle_syncer::next (void)
     send_some ();
   }
   
-  if (receiving_blocks || sendblocks_iter || num_sends_pending > 0) {
+  if (receiving_blocks || sendblocks_iter || num_sends_pending > 0 || pending_rpcs > 0) {
     /**/warn << "\n";
     return;
   }
@@ -149,20 +159,15 @@ merkle_syncer::next (void)
     st.pop_back ();
   }
 
-  if (receiving_blocks || sendblocks_iter || (num_sends_pending > 0)) {
+  if (receiving_blocks || sendblocks_iter || (num_sends_pending > 0) || pending_rpcs > 0) {
     /**/warn << "\n";
     return;
   }
  
+  warn << "DONE .. in NEXT\n";
   sync_done = true;
-
-#if 0
-  if (synccb) {
-    cbv::ptr tmp = synccb;
-    synccb = NULL;
-    tmp ();
-  }
-#endif
+  if (synccb)
+    (*synccb) ();
 
   /**/warn << "OK!\n";
   //XXX_main ();
@@ -181,22 +186,20 @@ merkle_syncer::sendblock_cb ()
 {
   num_sends_pending--;
   next ();
-  //warn << "************* sendblock_cb\n";
+  warn << "************* sendblock_cb\n";
 }
 
 
 void
 merkle_syncer::getblocklist (vec<merkle_hash> keys)
 {
-  //warn << (u_int)this << " getblocklist >>>>>>>>>>>>>>>>>>>>>>\n";
+  warn << (u_int)this << " getblocklist >>>>>>>>>>>>>>>>>>>>>>\n";
   
   if (keys.size () == 0) {
     return;
   }
   
   receiving_blocks = keys.size ();
-
-  fatal << "XXX THIS will never get set to false ... !!!!!!!!\n";
 
   ref<getblocklist_arg> arg = New refcounted<getblocklist_arg> ();
   arg->keys = keys;
@@ -210,43 +213,26 @@ merkle_syncer::getblocklist (vec<merkle_hash> keys)
 void
 merkle_syncer::getblocklist_cb (ref<getblocklist_res> res, clnt_stat err)
 {
-  //warn << (u_int)this << " getblocklist_cb >>>>>>>>>>>>>>>>>>>>>>\n";
+  warn << (u_int)this << " getblocklist_cb >>>>>>>>>>>>>>>>>>>>>>\n";
+  pending_rpcs--;
   
   if (err) {
-    warn << "getblocklst_cb (" << err << ")\n";
-    fatal_err = strbuf () << "GETBLOCKLIST: rpc error " << err;
-    sync_done = true;
+    error (strbuf () << "GETBLOCKLIST: rpc error " << err);
     return;
   } else if (res->status != MERKLE_OK) {
-    warn << "getblocklst_cb (" << err2str (res->status) << ")\n";
-    fatal_err = strbuf () << "GETBLOCKLIST: protocol error " << err2str (res->status);
-    sync_done = true;
+    error (strbuf () << "GETBLOCKLIST: protocol error " << err2str (res->status));
     return;
   } else {
-    
+    next ();
   }
 }
 
 
 
-#if 0
 void
-merkle_syncer::sync (cbv::ptr cb, mode_t m)
+merkle_syncer::sync (bigint _rngmin, bigint _rngmax, mode_t m, cbv::ptr cb)
 {
-  mode = m;
-  assert (synccb == NULL);
   synccb = cb;
-  rngmin  = 0;
-  rngmax = (bigint (1) << 160)  - 1;
-
-  // get remote hosts's root node
-  getnode (0, 0);
-}
-#endif
-
-void
-merkle_syncer::sync (bigint _rngmin, bigint _rngmax, mode_t m)
-{
   mode = m;
   rngmin = _rngmin;
   rngmax = _rngmax;
@@ -259,7 +245,7 @@ merkle_syncer::sync (bigint _rngmin, bigint _rngmax, mode_t m)
 void
 merkle_syncer::getnode (u_int depth, const merkle_hash &prefix)
 {
-  //warn << (u_int)this << " getnode >>>>>>>>>>>>>>>>>>>>>>\n";
+  warn << (u_int)this << " getnode >>>>>>>>>>>>>>>>>>>>>>\n";
   
   assert (sendblocks_iter == NULL);
   
@@ -292,16 +278,13 @@ void
 merkle_syncer::getnode_cb (ref<getnode_arg> arg, ref<getnode_res> res, clnt_stat err)
 {
   warn << (u_int)this << " getnode_cb >>>>>>>>>>>>>>>>>>>>>>\n";
+  pending_rpcs--;
   
   if (err) {
-    warn << "getnode_cb (" << err << ")\n";
-    fatal_err = strbuf () << "GETNODE: rpc error " << err;
-    sync_done = true;
+    error (strbuf () << "GETNODE: rpc error " << err);
     return;
   } else if (res->status != MERKLE_OK) {
-    warn << "getnode_cb (" << err2str (res->status) << ")\n";
-    fatal_err = strbuf () << "GETNODE: protocol error " << err2str (res->status);
-    sync_done = true;
+    error (strbuf () << "GETNODE: protocol error " << err2str (res->status));
     return;
   }
 
@@ -392,7 +375,7 @@ merkle_syncer::getnode_cb (ref<getnode_arg> arg, ref<getnode_res> res, clnt_stat
 void
 merkle_syncer::getblockrange (merkle_rpc_node *rnode)
 {
-  //warn << (u_int)this << " getblockrange >>>>>>>>>>>>>>>>>>>>>>\n";
+  warn << (u_int)this << " getblockrange >>>>>>>>>>>>>>>>>>>>>>\n";
   
   receiving_blocks = rnode->count;
   
@@ -412,27 +395,27 @@ merkle_syncer::getblockrange (merkle_rpc_node *rnode)
 
   receiving_blocks -= xkeys.size ();
   assert (receiving_blocks >= 0); 
+  warn << (u_int)this << " getblockrange >>>>>>>>>>>>>>> rcving_blks " << receiving_blocks << "\n";
 
   arg->xkeys =  xkeys;
   doRPC (MERKLESYNC_GETBLOCKRANGE, arg, res,
 	 wrap (this, &merkle_syncer::getblockrange_cb, arg, res));
+  warn << (u_int)this << " getblockrange <<<<<<<<<<<<<<<<<<<<<<\n";
+
 }
 
 
 void
 merkle_syncer::getblockrange_cb (ref<getblockrange_arg> arg, ref<getblockrange_res> res, clnt_stat err)
 {
-  //warn << (u_int)this << " getblockrange_cb >>>>>>>>>>>>>>>>>>>>>>\n";
+  warn << (u_int)this << " getblockrange_cb >>>>>>>>>>>>>>>>>>>>>>\n";
+  pending_rpcs--;
   
   if (err) {
-    warn << "getblockrange_cb (" << err << ")\n";
-    fatal_err = strbuf () << "GETBLOCKRANGE: rpc error " << err;
-    sync_done = true;
+    error (strbuf () << "GETBLOCKRANGE: rpc error " << err);
     return;
   } else if (res->status != MERKLE_OK) {
-    warn << "getblockrange_cb (" << res->status << ")\n";
-    fatal_err = strbuf () << "GETBLOCKRANGE: protocol error " << err2str (res->status);
-    sync_done = true;
+    error (strbuf () << "GETBLOCKRANGE: protocol error " << err2str (res->status));
     return;
   } else {
     if (mode == BIDIRECTIONAL) {
@@ -461,6 +444,7 @@ merkle_syncer::doRPC (int procno, ptr<void> in, void *out, aclnt_cb cb)
 #else
   // So, resort to bundling all values into one argument for now.
   struct RPC_delay_args args (NULL, merklesync_program_1, procno, in, out, cb);
+  pending_rpcs++;
   (*rpcfnc) (&args);
 #endif
 }
@@ -468,8 +452,30 @@ merkle_syncer::doRPC (int procno, ptr<void> in, void *out, aclnt_cb cb)
 void
 merkle_syncer::recvblk (bigint key, bool last)
 {
+  //warn << (u_int)this << " recvblk >>>>>>>>>>>>>>>>>> last " << last << "\n";
+
   if (last) {
     receiving_blocks = 0; 
     next ();
   }
+}
+
+// XXX 
+//  A merkle syncer can have many async requests outstanding at once.
+//  If one of those gets an error, then this function is called
+//  which could lead to the merkle_syncer being deleted!!!!!
+//
+void
+merkle_syncer::error (str err)
+{
+  warn << "SYNCER ERROR: " << err << "\n";
+  fatal_err = err;
+  sync_done = true;
+  if (synccb)
+    (*synccb) ();
+}
+
+merkle_syncer::~merkle_syncer()
+{
+  warn.fmt ("0x%x DTOR merkle_syncer\n", (u_int)this);
 }
