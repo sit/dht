@@ -109,6 +109,7 @@ Kelips::contact_score(Info i)
 // record rtt after every doRPC: 206 203 207
 // penalize nodes after failed RPC: 189 192 192 189
 // lookup via closest contact, not best score: 191 197 191
+// direct if we know the IP address: 178 168 172
 IPAddress
 Kelips::victim(int g)
 {
@@ -287,6 +288,11 @@ Kelips::lookup1(ID key, vector<IPAddress> &history)
     ip1 = find_by_id(key);
     if(ip1 == 0)
       return false;
+  } else if((ip1 = find_by_id(key)) != 0){
+    // go direct to a different group!
+    // not mentioned in Kelips paper, of course, but seems
+    // reasonable by analogy to Chord forwarding lookup to
+    // known node with closest ID.
   } else {
     IPAddress ip = closest_contact(id2group(key));
     if(ip == 0)

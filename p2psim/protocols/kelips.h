@@ -22,11 +22,9 @@
 // Are lookups iterative or recursive? Who controls various retries?
 
 // To do:
-// route lookups through lowest-rtt contact.
-// make grouplist() &c faster
 // fix churn generator to not lookup dead nodes?
-// learn RTTs from each gossip RPC
-// learn dead nodes from RPC failure
+// split lookup1(): fast path, and random/slow after failure.
+// if we know about the target node, go direct!
 
 // Does it stabilize after the expected number of rounds?
 // Gossip w/o favoring new nodes (nnodes: avg median):
