@@ -113,6 +113,8 @@ stabilize_manager::stabilize_continuous (u_int32_t t)
   stabilize_continuous_tmo = NULL;
   if (continuous_stabilizing ()) { // stabilizing too fast
     t = 2 * t;
+    warnx << gettime () << " " << myID
+	  <<" stabilize_continuous: slow down " << t << "\n";
   } else {
     if (t >= stabilize_timer) t -= stabilize_decrease_timer;
 
