@@ -44,6 +44,8 @@ class E2ETimeGraph : public Topology {
 	private:
 	unsigned int _num_nodes;
 	unsigned int _num_samples;
+	Time _time_per_sample;
+	Time _start_time;
 	vector<vector<vector<Time> > > _pairwise;
 };
 

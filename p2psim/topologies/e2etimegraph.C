@@ -23,6 +23,11 @@
 * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+/**
+ * Usage:
+ * topology E2ETimeGraph <num_nodes> <num_samples> [<time_per_sample> [start_time]]
+ */
+
 #include "p2psim/topology.h"
 #include "p2psim/network.h"
 #include "p2psim/parse.h"
@@ -34,15 +39,27 @@
 E2ETimeGraph::E2ETimeGraph(vector<string> *v)
 {
   // make sure v has size of 2
-  assert(v->size() == 2);
+  assert(v->size() >= 2 && v->size() <= 4 );
   
   // get number of nodes
   _num_nodes = atoi((*v)[0].c_str());
   assert(_num_nodes > 0);
   
-	// get number of time samples
+  // get number of time samples
   _num_samples = atoi((*v)[1].c_str());
   assert(_num_samples > 0);
+
+  if( v->size() > 2 ) {
+    _time_per_sample = (Time) atoi((*v)[2].c_str());
+  } else {
+    _time_per_sample = 900000;
+  }
+
+  if( v->size() > 3 ) {
+    _start_time = (Time) atoi((*v)[3].c_str());
+  } else {
+    _start_time = 0;
+  }
   
   // resize vector to [_num_nodes][_num_nodes][_num_samples]
   _pairwise.resize(_num_nodes);
@@ -81,7 +98,7 @@ E2ETimeGraph::latency(IPAddress ip1, IPAddress ip2, bool reply)
   */
 
   // decide what time it is (assume 15 minute data intervals)
-  int time_index = now() / 900000;
+  int time_index = (_start_time + now()) / _time_per_sample;
   
   // make sure latency exists and return it
   assert(_pairwise[ip1 - 1][ip2 - 1][time_index] >= 0);
