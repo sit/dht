@@ -23,14 +23,14 @@ Jung~{\it et al.}~\cite{dnscache:sigcommimw01} studied
 client-perceived DNS performance in 2000 and 2001.
 They report that 23\% of DNS lookups fail to elicit
 any response, partially due to loops in name server resolution.
-13\% of lookups result in a response which indicates an error.
+13\% of lookups result in a negative response.
 
 DDNS attempts to alleviate the poorly-configured
-name server problem by eliminating individual name servers
-altogether.  Instead, DDNS harnesses a group of machines
+name server problem by replacing name server topology.
+Instead, DDNS harnesses a group of machines
 to form a robust storage system for DNS data.
 
-Jung~{\it et al.} also found that NS record caching
+Jung~{\it et al.} also found that {\tt NS}-record caching
 is critical to DNS scalability since it reduces load on 
 root servers. Our system directly tackles this problem by 
 eliminating the server hierarchy entirely.
@@ -45,10 +45,10 @@ peer-to-peer storage systems
 are highly scalable and resilient to failures. We attempt
 to show that DNS can also acheive such scalability 
 and fault tolerance by operating in a peer-to-peer fashion.
- 
+
 %The study on cooperative Web proxy caching~\cite{coop-web-cache:sosp99}
 %has shown that, based on simulations of using traces of
 %client web access patterns, cooperative caching is a beneficial
-%model transmit small data with reasona
+%model to transmit small data with reasonable ...
 
-
+\subsection{DNS Security}

@@ -1,58 +1,78 @@
 \section{Introduction}
 
-The current DNS relies heavily on its
+The current DNS~\cite{dns, dns-concept:rfc} relies heavily on its
 thirteen root servers, which are responsbile for providing
 information about the root of the hierarchy and many top-level domains.
 The Internet Software Consortium, which runs one of the root servers,
 reported a load of 272 million queries per day in 2001~\cite{isc-root}.
-Chord balances load as a side effect of its lookup and storage 
-algorithms, thus avoiding such hot spots.
+Configuring a name server can be an administrative nightmare.
+Poor network conditions are also to blame for failures in DNS look-ups.
+Potential problems~\cite{dns-bind} that often arise include: 
+\begin{itemize}
+\item Forgetting to increment the serial number when updating the 
+zone's database file in the primary name server (causing slave name 
+servers not to reload the new zone data).
+\item Forgetting to signal the primary name server 
+(to reload new data) after 
+changing the configuration or database file. 
+\item Errors in the configuration or database file. 
+(Our system will eliminate errors in the config file, 
+and the ones in the database relating to {\tt NS}-records.) 
+\item Missing cache data either because the adminstrator 
+forgot to install the cache file or accidentally deleted it. 
+This will cause all lookups outside 
+of the name server's authoritative zone to fail. 
+\item Loss of network connectivity to a name server 
+can cause some DNS look-ups to fail if the name server is
+the only one with the zone data. 
+\item A slave server can fail to load zone data 
+if it lost connectivity to the master server due to 
+network failure, has the wrong IP address for
+the master server in the config file, or if there is 
+a syntax error in the zone data file on the master server.
+%-missing or incorrect subdomain delegation.\\
+\end{itemize}
 
-More configuration problems that DDNS may solve~\cite{dns-bind}:\\
--forgetting to increment serial numbers when updating the zone's db file 
-in the primary name server. The slave name servers won't reload
-the new zone data.\\
--forgetting to signal the primary name server after changing the conf or db file\\
--a slave server can fail to load zone data if it lost connectivity to 
-the master server due to network failure, or has the wrong IP address for
-the master server in the conf file, or if there is a syntax error in 
-the zone data file on the master server.\\
--syntax error in the conf or DNS db file. Error in the conf file will 
-be obsolete in DDNS, but errors in the db file will still persist in DDNS.\\
--missing cache data either because the admin forgot to install the 
-cache file or accidentally deleted it. The will cause all lookups outside 
-of the name server's authoritative zone to fail.\\
--loss of network connectivity to a name server. Lookup might fail if it's
-the only one with the zone data.\\
--missing or incorrect subdomain delegation.\\
-
-We propose a distributed domain name service, DDNS,
-using a robust peer-to-peer lookup service like Chord.
-Such a system avoids some of the most significant
-problems with the current DNS implementation.
- 
-Leslie Lamport's supposed characterization of a
-distributed system (as one in which you can't get work
-done because of a machine you have never heard of is down)
-is all too true in the current implementation of {DNS}.
+%Leslie Lamport's supposed characterization of a
+%distributed system (as one in which you can't get work
+%done because of a machine you have never heard of is down)
+%is all too true in the current implementation of {DNS}.
 Jung {\it et al.}~\cite{dnscache:sigcommimw01} found that approximately
 35\% of DNS queries never receive an answer or receive
-a negative answer.
-Many of these failures are due to improperly configured
-root DNS entries (name server, or {\tt NS}-records).
-Such failures can go undetected because of the hierarchical
-nature of DNS: lookups within an administrative domain might
-succeed but that domain is unknowningly cut off from the rest
-of the hierarchy, so that lookups from outside will fail.
-Using Chord avoids this problem: since there is no hierarchical
-caching, lookups behave identically regardless of source.
+a negative answer. Many of these failures are due to 
+improperly configured name servers or incorrect {\tt NS}-records).
+For example, {\tt NS}-records that point to non-existent 
+or non-authoritative name servers can cause look-ups to fail
+or succeed only some of the times (if the server happens
+to have the record cached).
 
-**How to control caching on others name servers...**
+%Such failures can go undetected because of the hierarchical
+%nature of DNS: lookups within an administrative domain might
+%succeed but that domain is unknowningly cut off from the rest
+%of the hierarchy, so that lookups from outside will fail.
 
+We propose a distributed domain name service, DDNS,
+using a robust peer-to-peer lookup service such as Chord~\cite{chord:sigcomm}.
+Chord balances load as a side effect of its lookup and storage 
+algorithms, thus avoiding such hot spots.
+DDNS acts as a replacement to name servers, so there is no need 
+to manage such servers, thereby eliminating all of 
+the configuration problems and incorrect name server mapping 
+({\tt NS}-records) mentioned above. 
+The Chord protocol is robust against server failures 
+(host down or lost connection),
+hence we can reduce errors due to poor network connectivity as well.
+
+Every DNS look-up is fed directly to a group of servers that form
+the Chord ring. Treat each lookup as flat.
+ 
+Even-handed discussion.\\
 Distributing DNS data in a peer-to-peer network does have some
 disadvantages.In particular, we cannot easily dynamically 
 generate DNS responses. We discuss various solutions to 
 this problem in the implementation section.
 
+%**How to control caching on others name servers...** --obsolete b/c we're 
+%replacing name servers.
 
 

@@ -2,7 +2,7 @@
 
 DDNS makes use of
 DHash~\cite{cfs:sosp01}, a distributed hash table
-built on top of Chord~\cite{chord:sigcomm}, to store
+built on top of Chord, to store
 and retrieve resource records (RRs).
 Dhash has the following two nice properties:
 
@@ -10,11 +10,11 @@ Dhash has the following two nice properties:
 \item {\em Load balance}.
 If a particular record is looked up $n$ times
 in succession by different hosts (where $n$ can be very large),
-then with high probability each server sends
-the record to another server only $\log{m}$ times, 
+then with high probability each server serves a given record 
+only $\log{m}$ times in total, 
 where $m$ is the number of servers. Notice that
 the number of times a record is transferred is 
-{\it independent} of the how popular it is.
+{\it independent} of how popular it is.
 
 \item {\em Robustness}.
 As servers are disconnected from and reconnected to the network,
@@ -63,9 +63,9 @@ not exist.
 
 Since records are being served from arbitrary hosts rather
 than the hosts responsible for the domain, 
-we use the DNS Security Extensions (DNSSEC)~\cite{dnssec-rfc} to
+we use the DNS Security Extensions (DNSSEC)~\cite{dnssec:rfc} to
 verify all records before returning them. DNSSEC stores the 
-signature of the owner of the RRSet~\cite{dnscla-rfc} in a 
+signature of the owner of the RRSet~\cite{dns-cla:rfc} in a 
 SIG RR.
 % We use one {\tt SIG RR} to carry the owner's signature
 % of the entire DDNS record, since we always transmit data on
