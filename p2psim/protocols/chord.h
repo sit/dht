@@ -129,6 +129,7 @@ public:
   struct nextretinfo{
     hop_info link;
     next_ret ret;
+    bool free;
   };
 
   struct find_successors_args {
