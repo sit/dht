@@ -959,7 +959,7 @@ main (int argc, char** argv)
   color_file = ".viscolors";
 
   int ch;
-  while ((ch = getopt (argc, argv, "j:a:l:f:i:s:")) != -1) {
+  while ((ch = getopt (argc, argv, "j:a:l:f:is:")) != -1) {
     switch (ch) {
     case 's':
       {
