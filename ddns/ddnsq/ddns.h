@@ -37,6 +37,7 @@ enum dns_type {
 	MINFO	= 14,
 	MX	= 15,
 	TXT	= 16,
+	ALL     = 255,
 	DT_ERR  = 0
 };
 

@@ -45,18 +45,15 @@ block2wks (wks_data *wks, char *data, int datalen)
 {
   char *begstr = data;
   memmove (&wks->address, begstr, IP32ADDR_SIZE);
-  warn << "wks->address = " << wks->address << "\n";
   begstr += IP32ADDR_SIZE;
 
   int fieldlen = sizeof (uint32);
   memmove (&wks->protocol, begstr, fieldlen);
-  warn << "wks->protocol = " << wks->protocol << "\n";
   begstr += fieldlen;
 
   fieldlen = datalen - IP32ADDR_SIZE - fieldlen;
   wks->bitmap = (string) malloc (fieldlen);
   memmove (wks->bitmap, begstr, fieldlen);
-  warn << "wks->bitmap = " << wks->bitmap << "\n";
 }
 
 void

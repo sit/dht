@@ -151,7 +151,9 @@ got_it (ptr<ddnsRR> rr)
     case WKS:
       warn << "rdata.wks.address = " << rr->rdata.wks.address << "\n";
       warn << "rdata.wks.protocol = " << rr->rdata.wks.protocol << "\n";
-      warn << "rdata.wks.bitmap = " << rr->rdata.wks.bitmap << "\n";
+      warn << "rdata.wks.bitmap = ";
+      write (2, rr->rdata.wks.bitmap, rr->rdlength - IP32ADDR_SIZE - sizeof (uint32));
+      warnx << "\n";
       break;
     case HINFO:
       warn << "rdata.hinfo.cpu = " << rr->rdata.hinfo.cpu << "\n";

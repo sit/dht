@@ -144,7 +144,8 @@ ddns::ddnsRR2block (ptr<ddnsRR> rr, char *data, int datasize)
       copy2block (data, (void *) &rr->rdata.wks.protocol,
 		  sizeof (uint32), datalen, datasize);		  
       copy2block (data, (void *) rr->rdata.wks.bitmap,
-		  strlen (rr->rdata.wks.bitmap) + 1, datalen, datasize);	
+		  rr->rdlength - IP32ADDR_SIZE - sizeof (uint32), 
+		  datalen, datasize);	
       delete rr->rdata.wks.bitmap;
       break;
     case HINFO:
