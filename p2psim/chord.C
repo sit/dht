@@ -39,7 +39,7 @@ Chord::lookup(Args *args)
 {
   CHID k = args->nget<CHID>("key");
   printf("%s lookup key %qx\n", ts (), k);
-  vector<IDMap> v = find_successors(k, 1);
+  vector<IDMap> v = find_successors(k, 1, false);
   IPAddress ans = (v.size() > 0) ? v[0].ip:0;
   printf("%s lookup results (%u,%qx)\n", ts(), ans, (ans != 0) ? v[0].id : 0);
 }
@@ -49,7 +49,7 @@ Chord::lookup(Args *args)
 // A local call, use find_successors_handler for an RPC.
 // Not recursive.
 vector<Chord::IDMap>
-Chord::find_successors(CHID key, uint m)
+Chord::find_successors(CHID key, uint m, bool intern)
 {
   assert(m <= nsucc);
 
@@ -124,7 +124,7 @@ Chord::join(Args *args)
 
   printf("%s join wellknown %qu\n", ts(), PID(wkn.id));
   Time before = now();
-  vector<IDMap> succs = find_successors (me.id + 1, 1);
+  vector<IDMap> succs = find_successors (me.id + 1, 1, true);
   assert (succs.size () > 0);
   Time after = now();
   printf("%s join2 %qu, elapsed %ld\n",

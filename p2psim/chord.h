@@ -84,7 +84,7 @@ protected:
   IDMap me;
   uint nsucc;
 
-  virtual vector<IDMap> find_successors(CHID key, uint m);
+  virtual vector<IDMap> find_successors(CHID key, uint m, bool intern);
   void fix_predecessor();
   void fix_successor();
   void fix_successor_list();

@@ -28,7 +28,7 @@ ChordFinger::fix_fingers()
   
   vector<Chord::IDMap> v;
   for (unsigned int i = i0; i < NBCHID; i++) {
-    v = find_successors(ConsistentHash::successorID(me.id,i), 1); 
+    v = find_successors(ConsistentHash::successorID(me.id,i), 1, true);
     if (v.size() > 0) loctable->add_node(v[0]);
   }
 }

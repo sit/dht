@@ -86,7 +86,7 @@ Koorde::closestpreddfinger (CHID n)
 
 // Iterative version of the figure 2 algo in IPTPS'03 paper.
 vector<Chord::IDMap>
-Koorde::find_successors(CHID key, int m)
+Koorde::find_successors(CHID key, uint m, bool intern)
 {
   int count = 0;
   koorde_lookup_arg a;
@@ -119,11 +119,11 @@ Koorde::find_successors(CHID key, int m)
     if (r.done) break;
   }
 
-  printf ("find_successor for (id %qx, key %qx) is (%u,%qx) hops %d\n", 
-	  me.id, key, r.next.ip, r.next.id, count);
-  for (uint i = 0; i < path.size () - 1; i++) {
-    printf ("  %qx\n", path[i]);
-  }
+    printf ("find_successor for (id %qx, key %qx) is (%u,%qx) hops %d\n", 
+	    me.id, key, r.next.ip, r.next.id, count);
+    for (uint i = 0; i < path.size () - 1; i++) {
+      printf ("  %qx\n", path[i]);
+    }
 
   assert (r.v.size () > 0);
   return r.v;
@@ -171,7 +171,7 @@ void
 Koorde::fix_debruijn () 
 {
   printf ("fix_debruijn %u\n", isstable);
-  vector<IDMap> succs = find_successors (debruijn, k - 1);
+  vector<IDMap> succs = find_successors (debruijn, k - 1, true);
   printf ("fix_debruijn (%u,%qx): debruijn %qx succ %qx d %qx\n",
 	  me.ip, me.id, debruijn, succs[0].id, last.id);
   assert (succs.size () > 0);

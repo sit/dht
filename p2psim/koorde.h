@@ -49,8 +49,7 @@ protected:
   Chord::CHID Koorde::firstimagin (CHID, CHID, CHID, CHID*);
   IDMap Koorde::closestpreddfinger (CHID);
 
-
-  vector<Chord::IDMap> Koorde::find_successors(CHID key, int m);
+  vector<Chord::IDMap> Koorde::find_successors(CHID key, uint m, bool intern);
   void fix_debruijn();
   void stabilize();
   void reschedule_stabilizer(void *x);
