@@ -50,19 +50,32 @@ struct dhash_insertarg {
   dhash_blockattr attr;
 };
 
+
+struct s_dhash_insertarg {
+  chord_vnode v;
+  chordID key;
+  dhash_value data;
+  int offset;
+  store_status type;
+  dhash_blockattr attr;
+};
+
+struct s_dhash_fetch_arg {
+  chord_vnode v;
+  chordID key;
+  int32 start;
+  int32 len;
+};
+
 struct dhash_fetch_arg {
   chordID key;
   int32 start;
   int32 len;
 };
 
-struct dhash_recurs_arg {
+struct s_dhash_keystatus_arg {
+  chord_vnode v;
   chordID key;
-  chord_node return_address;
-  int32 start;
-  int32 len;
-  int32 hops;
-  int nonce;
 };
 
 struct dhash_transfer_arg {
@@ -84,7 +97,9 @@ union dhash_getkeys_res switch (dhash_stat status) {
 default:
    void; 
 };
-struct dhash_getkeys_arg {
+
+struct s_dhash_getkeys_arg {
+  chord_vnode v;
   chordID pred_id;
 };
 
@@ -139,23 +154,6 @@ union dhash_fetchiter_res switch (dhash_stat status) {
    void;
 };
 
-union dhash_fetchrecurs_res switch (dhash_stat status) {
- case DHASH_RFETCHDONE:
-   dhash_fetchiter_complete_res compl_res;
- case DHASH_RFETCHFORWARDED:
-   chordID next;
- default:
-   void;
-};
-
-struct dhash_finish_recurs_arg {
-  int32 nonce;
-  dhash_stat status;
-  chord_node source;
-  int32 hops;
-  dhash_fetchiter_complete_res data;
-};
-
 struct dhash_send_arg {
   dhash_insertarg iarg;
   chordID dest;
@@ -169,9 +167,6 @@ program DHASHGATEWAY_PROGRAM {
 
 		dhash_res
 		DHASHPROC_LOOKUP (dhash_fetch_arg) = 2;
-
-		dhash_res
-		DHASHPROC_LOOKUP_R (dhash_fetch_arg) = 7;
 
 		dhash_res
 		DHASHPROC_TRANSFER (dhash_transfer_arg) = 3;
@@ -192,24 +187,19 @@ program DHASH_PROGRAM {
   version DHASH_VERSION {
 
     dhash_storeres
-    DHASHPROC_STORE (dhash_insertarg) = 1;
+    DHASHPROC_STORE (s_dhash_insertarg) = 1;
 
     dhash_getkeys_res
-    DHASHPROC_GETKEYS (dhash_getkeys_arg) = 3;
+    DHASHPROC_GETKEYS (s_dhash_getkeys_arg) = 3;
 
     dhash_stat
-    DHASHPROC_KEYSTATUS (chordID) = 4;
+    DHASHPROC_KEYSTATUS (s_dhash_keystatus_arg) = 4;
 
     dhash_fetchiter_res
-    DHASHPROC_FETCHITER (dhash_fetch_arg) = 5;
-
-    dhash_fetchrecurs_res
-    DHASHPROC_FETCHRECURS (dhash_recurs_arg) = 6;
-
-    dhash_stat
-    DHASHPROC_FINISHRECURS (dhash_finish_recurs_arg) = 7;
+    DHASHPROC_FETCHITER (s_dhash_fetch_arg) = 5;
 
   } = 1;
 } = 344449;
+
 
 

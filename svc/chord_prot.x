@@ -52,6 +52,14 @@ struct chord_node {
   net_address r;
 };
 
+struct chord_node_ext {
+  chordID x;
+  net_address r;
+  int32_t a_lat;
+  int32_t a_var;
+  u_int64_t nrpc;
+};
+
 struct chord_nodearg {
   chord_vnode v;
   chord_node n;
@@ -84,6 +92,18 @@ struct chord_getfingersresok {
 union chord_getfingersres switch (chordstat status) {
   case CHORD_OK:
     chord_getfingersresok resok;
+  default:
+    void;
+};
+
+
+struct chord_getfingers_ext_resok {
+  chord_node_ext fingers<>;
+};
+
+union chord_getfingers_ext_res switch (chordstat status) {
+  case CHORD_OK:
+    chord_getfingers_ext_resok resok;
   default:
     void;
 };
@@ -125,7 +145,7 @@ union chord_RPC_res switch (chordstat status) {
 
 program CHORD_PROGRAM {
 	version CHORD_VERSION {
-		void 
+		void
 		CHORDPROC_NULL (chord_vnode) = 0;
 
 		chord_noderes 
@@ -147,15 +167,16 @@ program CHORD_PROGRAM {
         	CHORDPROC_CACHE (chord_cachearg) = 6;
 
 		chord_testandfindres
-                CHORDPROC_TESTRANGE_FINDCLOSESTPRED (chord_testandfindarg) = 7; 
-
-		chord_getfingersres
+                CHORDPROC_TESTRANGE_FINDCLOSESTPRED (chord_testandfindarg) = 7; 		chord_getfingersres
 		CHORDPROC_GETFINGERS (chord_vnode) = 8;
-		
+
 		chord_challengeres 
 	        CHORDPROC_CHALLENGE (chord_challengearg) = 9;
 
 		chord_RPC_res
 		CHORDPROC_HOSTRPC (chord_RPC_arg) = 10;
+
+		chord_getfingers_ext_res
+		CHORDPROC_GETFINGERS_EXT (chord_vnode) = 11;
 	} = 1;
 } = 344447;
