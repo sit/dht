@@ -27,7 +27,10 @@ def str2bigint(s):
     return v
 
 def random_blockid ():
-    return str2bigint (sha.sha("%d" % random_id ()).digest ())
+    s = sha.sha("%d" % random_id ())
+    id = str2bigint (s.digest ())
+    return id
+
 
 firsttime = None
 lasttime  = 0
@@ -43,11 +46,11 @@ for line in fh.readlines ():
     t = t - firsttime
     t /= 60
 
-    print t, e, make_chordID (ip, 11977, 0)
     if t != lasttime:
-	for t in xrange(lasttime,t):
+	for t in xrange(lasttime+1,t-1):
 	    ni = random_interval (mu_i, sd_i)
 	    while ni > 0:
 		print t, "insert", nnode, random_blockid ()
 		ni -= 1
-    lasttime = t
+	lasttime = t
+    print t, e, make_chordID (ip, 11977, 0)

@@ -57,7 +57,7 @@ class simulator:
     def run (my, evgen, monitor):
         last_time = 0
         for ev in evgen:
-            assert last_time <= ev.time, "Woah! Time can't go backwards. Bye."
+            assert last_time <= ev.time, "Woah! Time can't go backwards %d > %d." % (last_time, ev.time)
             # Call the monitor before the time changes.
             if last_time != ev.time:
                 my.dh.time_changed (last_time, ev.time)
