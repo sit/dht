@@ -4,7 +4,7 @@
 #include "xdr_suio.h"
 #include "afsnode.h"
 
-#define LSD_SOCKET "/tmp/sock"
+#define LSD_SOCKET "/tmp/chord-sock"
 #define CMTU 1024
 
 void ignore_me (char *data, unsigned int size);
