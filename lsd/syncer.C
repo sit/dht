@@ -11,6 +11,8 @@
 
 #include <syncer.h>
 
+static int sync_trace (getenv ("SYNC_TRACE") ? atoi (getenv ("SYNC_TRACE")) : 0);
+
 syncer::syncer (ptr<locationtable> locations,
 		ptr<location> h,
 		str dbname,
@@ -35,7 +37,9 @@ syncer::syncer (ptr<locationtable> locations,
     fatal << "open returned: " << strerror (err) << "\n";
   }
   
-  replica_timer = 180;
+  replica_timer = 300;
+  if (sync_trace >= 10)
+    replica_timer = sync_trace;
   
   // Initially randomize a little.
   int delay = random_getword () % replica_timer;
@@ -191,7 +195,13 @@ syncer::missing (ptr<location> from,
     bsm->missing (host_loc, key);
     //the other guy must have this key if he told me I am missing it
     bsm->unmissing (from, key);
+    if (sync_trace) {
+      warnx << host_loc->id () << ": " << key << " missing locally\n";
+      warnx << host_loc->id () << ": " << key << " found on " << from->id () << "\n";
+    }
   } else {
+    if (sync_trace) 
+      warnx << host_loc->id () << ": " << key << " missing on " << from->id () << "\n";
     bsm->missing (from, key);
   }
 
