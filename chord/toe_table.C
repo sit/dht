@@ -184,10 +184,11 @@ toe_table::add_toe (const chord_node &n, int level)
 
 	  
   if(newset){
+#ifdef VERBOSE_LOG    
     trace << "added " << id << " to level " << level
 	  << " holding "
 	  << toes[level]->size () << "/" << count_unique() << "\n";
-    
+#endif /* VERBOSE_LOG */    
     //try to promote the new one right away
     if(level+1 < MAX_LEVELS){
       add_toe(n, level+1);
