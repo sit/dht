@@ -1,4 +1,4 @@
-/* $Id: sfsrodb.C,v 1.14 2001/10/08 09:13:58 cates Exp $ */
+/* $Id: sfsrodb.C,v 1.15 2001/10/30 16:44:13 cates Exp $ */
 
 /*
  * Copyright (C) 1999 Kevin Fu (fubob@mit.edu)
@@ -421,11 +421,8 @@ store_file (sfsro_inode *inode, str path)
   size_t size = 0;
   bool done = false;
 
-  if ((fd = open (path, O_RDONLY)) < 0) {
-    warn << "store_file: open failed" << fd << "\n";
-    exit (1);
-  }
-
+  if ((fd = open (path, O_RDONLY)) < 0)
+    fatal << "open failed: " << path << ": " << strerror(errno) << "\n";
 
   // Deal with direct pointers
   uint32 blocknum = 0;
@@ -601,8 +598,8 @@ recurse_path (const str path, sfs_hash * fh)
 
 
   if (lstat (path, &st) < 0)
-    return -1;
-
+    fatal << path << ": " << strerror(errno) << "\n";
+  
   sfsro_inode inode;
 
   if (S_ISLNK (st.st_mode)) {
@@ -822,3 +819,4 @@ main (int argc, char **argv)
 
   return (sfsrodb_main (exp_dir, sk_file));
 }
+
