@@ -6,7 +6,7 @@
 
 class TopologyFactory {
 public:
-  static Topology *create(string);
+  static Topology *create(string s, unsigned int num = 0);
 };
 
 #endif // __TOP_FACTORY_H

@@ -1,11 +1,12 @@
 #include "topologyfactory.h"
 #include "euclidean.h"
+#include "e2egraph.h"
 #include "randomgraph.h"
 #include "euclideangraph.h"
 #include "p2psim.h"
 
 Topology *
-TopologyFactory::create(string s)
+TopologyFactory::create(string s, unsigned int num)
 {
   Topology *t = 0;
 
@@ -18,6 +19,8 @@ TopologyFactory::create(string s)
   if(s == "EuclideanGraph") {
     t = new EuclideanGraph();
   }
-
+  if (s == "E2EGraph") {
+    t = new E2EGraph(num);
+  }
   return t;
 }
