@@ -109,6 +109,7 @@ recroute<T>::dispatch (user_args *a)
       recroute_penult_arg *ra = a->template getarg<recroute_penult_arg> ();
       dopenult (a, ra);
     }
+    break;
   case RECROUTEPROC_COMPLETE:
     {
       // Try to see if this is one of ours.
@@ -259,9 +260,9 @@ recroute<T>::dorecroute_sendpenult (recroute_route_arg *ra,
 template<class T>
 void
 recroute<T>::dorecroute_sendpenult_cb (ptr<recroute_penult_arg> nra,
-				   ptr<location> p,
-				   vec<chordID> failed,
-				   clnt_stat err)
+				       ptr<location> p,
+				       vec<chordID> failed,
+				       clnt_stat err)
 {
   if (err) {
     // Go back to wherever we were going to go in the first place.
@@ -301,7 +302,6 @@ recroute<T>::dorecroute_sendcomplete (recroute_route_arg *ra,
   ca->body.robody->successors.setsize (tofill);
   for (size_t i = 0; i < tofill; i++)
     cs[i]->fill_node (ca->body.robody->successors[i]);
-  
 
   ca->retries = ra->retries;
   
@@ -465,23 +465,34 @@ recroute<T>::dopenult (user_args *sbp, recroute_penult_arg *ra)
   // better hope someone made the right choice in talking to us.
   assert (ra->successors.size () + cs.size () >= m);
   
-  u_long tofill = m - ra->successors.size ();
+  ca->body.robody->successors.setsize (m);
+  
+  size_t lastind = 0;
+  for (size_t i = 0; i < ra->successors.size (); i++) {
+    chord_node foo = make_chord_node (ra->successors[i]);
+    //    rtrace << my_ID () << ": dopenult (" << ra->routeid
+    //           << " filling " << i << "\n";
+    ca->body.robody->successors[i] = ra->successors[i];
+    if (foo.x == my_ID ()) {
+      lastind = i;
+      // rtrace << my_ID () << ": dopenult (" << ra->routeid << "): i'm at "
+      //        << i << "\n";
+      break;
+    }
+  }
+  
+  u_long tofill = m - (lastind + 1);
   if (tofill > cs.size ())
     tofill = cs.size ();
 
-  ca->body.robody->successors.setsize (m);
-  for (size_t i = 0; i < ra->successors.size (); i++) {
-    chord_node foo = make_chord_node (ra->successors[i]);
-    if (foo.x == my_ID ())
-      break;
-    ca->body.robody->successors[i] = ra->successors[i];
-  }
   for (size_t i = 0; i < tofill; i++) {
-    cs[i]->fill_node (ca->body.robody->successors[i + ra->successors.size ()]);
+    //    rtrace << my_ID () << ": dopenult (" << ra->routeid
+    //           << ") filling2 " << i + lastind + 1<< "\n";
+    cs[i]->fill_node (ca->body.robody->successors[i + lastind + 1]);
   }
   
   ca->retries = ra->retries;
-  
+
   ptr<location> l = locations->lookup_or_create (make_chord_node (ra->origin));
   doRPC (l, recroute_program_1, RECROUTEPROC_COMPLETE,
 	 ca, NULL,
@@ -497,6 +508,8 @@ template<class T>
 void
 recroute<T>::docomplete (user_args *sbp, recroute_complete_arg *ca)
 {
+  rtrace << my_ID () << ": docomplete: routeid " << ca->routeid
+	 << " has returned! retries: " << ca->retries << "\n";
   route_recchord *router = routers[ca->routeid];
   if (!router) {
     chord_node src; sbp->fill_from (&src);
@@ -505,9 +518,6 @@ recroute<T>::docomplete (user_args *sbp, recroute_complete_arg *ca)
     sbp->reply (NULL);
     return;
   }
-  rtrace << "docomplete: routeid " << ca->routeid << " for key "
-	 << router->key () << " has returned! "
-	 << " retries: " << ca->retries << "\n";
   
   routers.remove (router);
   router->handle_complete (sbp, ca);
