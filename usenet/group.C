@@ -9,7 +9,7 @@ grouplist::grouplist ()
   d = it->nextElement();    
 };
 
-static rxx listrx ("^(<.+?>)");
+static rxx listrx ("^(\\d+)(<.+?>)");
 
 void
 grouplist::next (str *f, int *i)
@@ -19,7 +19,7 @@ grouplist::next (str *f, int *i)
   int len = data->len, cnt = 0;
 
   for (; listrx.search (str (c, len))
-       ; c += listrx.len (1), len -= listrx.len (1) )
+       ; c += listrx.len (0), len -= listrx.len (0) )
     cnt++;
 
   *f = str (d->key->value, d->key->len);
@@ -41,27 +41,51 @@ group::open (str g)
 
   group_name = g;
   cur_art = 1;
+
+  return 0;
+}
+
+int
+group::open (str g, int *first, int *last)
+{
+  if (open (g) < 0)
+    return -1;
+
   char *c = rec->value;
   int len = rec->len, i = 0;
+  *first = 0;
+  *last = 0;
 
   for (; listrx.search (str (c, len))
-       ; c += listrx.len (1), len -= listrx.len (1) )
+       ; c += listrx.len (0), len -= listrx.len (0) ) {
+    if (i == 0)
+      *first = atoi (listrx[1]);
     i++;
+    *last = atoi (listrx[1]);
+  }
 
   return i;
 }
+
+static rxx listrxend (".*(\\d+)(<.+?>)$");
 
 void
 group::addid (str id)
 {
   assert (rec);
-  str foo (rec->value, rec->len);
+  str old (rec->value, rec->len), updated;
   ptr<dbrec> k = New refcounted<dbrec> (group_name, group_name.len ());
 
-  warn << "addid " << str (rec->value, rec->len) << "\n";
-  foo = strbuf () << foo << id;
-  warn << "addid " << str (foo) << "\n";
-  rec = New refcounted<dbrec> (foo, foo.len ());
+  if (listrxend.search (old)) {
+    //    warn << "addid append " << listrxend[2] << "\n";
+    updated = strbuf () << old << atoi (listrxend[1]) + 1 << id;
+  } else {
+    updated = strbuf () << "1" << id;
+    //    warn << "addid old" << old << "\n";
+    //    warn << "addid " << updated << "\n";
+  }
+
+  rec = New refcounted<dbrec> (updated, updated.len ());
   
   group_db->insert (k, rec);
 }
@@ -74,14 +98,17 @@ group::getid (int index)
 
   char *c = rec->value;
   int len = rec->len;
-  warn << "rec len " << rec->len << "\n";
+  //  warn << "rec len " << rec->len << "\n";
 
-  for (; index && listrx.search (str (c, len))
-       ; c += listrx.len (1), len -= listrx.len (1) )
-    index--;
+  for (; listrx.search (str (c, len))
+       ; c += listrx.len (0), len -= listrx.len (0) ) {
+    warn << "xv " << str (c, len) << "\n";
+    if (index == atoi (listrx[1]))
+      return listrx[2];
+    else if (index < atoi (listrx[1]))
+      return str ();
+  }
 
-  if (listrx[1])
-    return listrx[1];
   return str (); // xxx bad?
 }
 
@@ -95,9 +122,9 @@ group::xover (int a, int b)
   c = rec->value;
   len = rec->len;
   warn << "xv " << str (c, len) << "\n";
-  for (int i = 1; listrx.search (str (c, len)) && (i < start)
-	 ; c += listrx.len (1), len -= listrx.len (1) )
-    i++;
+  for (; listrx.search (str (c, len)) && (atoi (listrx[1]) < start)
+       ; c += listrx.len (0), len -= listrx.len (0) )
+    ;
 }
 
 static rxx oversub ("Subject: (.+)\r");
@@ -119,10 +146,10 @@ group::next (void)
 
   if (more () &&
       listrx.search (str (c, len))) {
-    art = article_db->lookup(New refcounted<dbrec> (listrx[1],
-						    listrx[1].len ()));
+    art = article_db->lookup(New refcounted<dbrec> (listrx[2],
+						    listrx[2].len ()));
 
-    warn << "mgs " << listrx[1] << "\n";
+    warn << "mgs " << listrx[2] << "\n";
 
     if (art == NULL)
       warn << "missing article\n";
@@ -138,7 +165,7 @@ group::next (void)
 	if (overmsgid.search (msg))
 	  resp << overmsgid[1] << "\t";
 	else
-	  resp << listrx[1] << "\t";
+	  resp << listrx[2] << "\t";
 	if (overref.search (msg))
 	  resp << overref[1];
 	for (i = 0; i < art->len; i++)
@@ -150,8 +177,8 @@ group::next (void)
 	warn << "msg parse error\n";
     }
 
-    c += listrx.len (1);
-    len -= listrx.len (1);
+    c += listrx.len (0);
+    len -= listrx.len (0);
   }
   
   start++;

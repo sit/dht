@@ -151,13 +151,13 @@ static rxx grouprx ("^GROUP (.+)\r\n", "m");
 void
 nntp::cmd_group (str c) {
   warn << "group " << c;
-  int i;
+  int i, first, last;
 
   if (grouprx.search (c)) {
-    if ((i = cur_group.open (grouprx[1])) < 0) {
+    if ((i = cur_group.open (grouprx[1], &first, &last)) < 0) {
       out << badgroup;
     } else {
-      out << groupb << i << " 1 " << i << " " << cur_group.name () << groupe;
+      out << groupb << i << " " << first << " " << last << " " << cur_group.name () << groupe;
     }
   } else
     out << syntax;

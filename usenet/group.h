@@ -22,6 +22,7 @@ struct group {
 
   group () : rec (0), cur_art (0) {};
   int open (str);
+  int open (str, int *, int *);
   str name (void) { return group_name; };
   
   void xover (int, int);
