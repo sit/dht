@@ -545,7 +545,7 @@ toe_table::closestpred (const chordID &x)
 }
 
 class toeiter : public fingerlike_iter {
-  friend toe_table;
+  friend class toe_table;
 public:
   toeiter () : fingerlike_iter () {};
 };

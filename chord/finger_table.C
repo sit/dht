@@ -229,7 +229,7 @@ finger_table::stabilize_findsucc_cb (chordID dn, int i, chordID s,
 }
 
 class ftiter : public fingerlike_iter {
-  friend finger_table;
+  friend class finger_table;
 public:
   ftiter () : fingerlike_iter () {};
 };

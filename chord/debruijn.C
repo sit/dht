@@ -132,7 +132,7 @@ debruijn::print ()
 
 
 class dbiter : public fingerlike_iter {
-  friend debruijn;
+  friend class debruijn;
 public:
   dbiter () : fingerlike_iter () {};
 };

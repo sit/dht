@@ -323,7 +323,7 @@ succ_list::closestsucc (const chordID &x)
 
 
 class succiter : public fingerlike_iter {
-  friend succ_list;
+  friend class succ_list;
 public:
   succiter () : fingerlike_iter () {};
 };
