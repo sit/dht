@@ -69,6 +69,7 @@ public:
   void notify_handler(notify_args *, notify_ret *);
   void next_handler(next_args *, next_ret *);
   bool stabilized();
+  void dump();
 
   char *ts();
 
@@ -79,7 +80,6 @@ protected:
   Vivaldi _vivaldi;
 
   virtual vector<IDMap> find_successors(CHID key, int m);
-  void dump();
   void fix_predecessor();
   void fix_successor();
   void fix_successor_list();

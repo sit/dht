@@ -419,6 +419,7 @@ LocTable::checkpoint()
 void
 LocTable::dump()
 {
+  assert(ring.size() >= 3);
   printf("D %u,%qu %u,%qu %u,%qu\n", ring[0].ip, ring[0].id, ring[1].ip, ring[1].id,ring[2].ip,ring[2].id);
 }
 
