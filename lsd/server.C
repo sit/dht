@@ -93,7 +93,8 @@ p2p::find_successor_cb (cbroute_t cb, route search_path, sfs_ID s,
 }
 
 void
-p2p::find_predecessor (sfs_ID &n, sfs_ID &x, cbroute_t cb)
+p2p::find_predecessor (sfs_ID &n, sfs_ID &x, 
+		       cbroute_t cb)
 {
   sfsp2p_findarg *fap = New sfsp2p_findarg;
   sfsp2p_findres *res = New sfsp2p_findres (SFSP2P_OK);
@@ -107,9 +108,9 @@ p2p::find_predecessor (sfs_ID &n, sfs_ID &x, cbroute_t cb)
 
 void
 p2p::find_closestpred_cb (sfs_ID n, cbroute_t cb, 
-		       sfsp2p_findres *res, 
-		       route search_path,
-		       clnt_stat err)
+			  sfsp2p_findres *res, 
+			  route search_path,
+			  clnt_stat err)
 {
   if (err) {
     warnx << "find_closestpred_cb: RPC failure " << err << "\n";
@@ -121,17 +122,17 @@ p2p::find_closestpred_cb (sfs_ID n, cbroute_t cb,
   } else {
     warnx << "find_closestpred_cb: pred of " << res->resok->x << " is " 
 	  << res->resok->node << "\n";
+
+    int found = testSearchCallbacks(res->resok->node);
+
+    updateloc (res->resok->node, res->resok->r, n);
+    search_path.push_back(res->resok->node);
     if (!(between (res->resok->node, n, res->resok->x) ||
-	  res->resok->node == n)) {
-      updateloc (res->resok->node, res->resok->r, n);
-      search_path.push_back(res->resok->r);
+	  res->resok->node == n) && (!found) ) {
       find_successor (res->resok->node, res->resok->x, cb);
     } else {
       warnx << "find_closestpred_cb: find predecessor\n";
-      updateloc (res->resok->node, res->resok->r, n);
-      search_path.push_back(res->resok->r);
       cb (res->resok->node, search_path, SFSP2P_OK);
-      //this is where caching will be ressurected
     }
   }
 }

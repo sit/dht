@@ -12,7 +12,7 @@
 
 
 bool
-p2p::updatepred (wedge &w, sfs_ID &x, net_address &r)
+p2p::updatepred (wedge &w, sfs_ID &x)
 {
   if (w.first == x)
     return false;
@@ -33,7 +33,7 @@ p2p::updatepred (wedge &w, sfs_ID &x, net_address &r)
 }
 
 bool
-p2p::updatesucc (wedge &w, sfs_ID &x, net_address &r)
+p2p::updatesucc (wedge &w, sfs_ID &x)
 {
   if (w.first == x)
     return false;
@@ -58,7 +58,7 @@ p2p::noticesucc (int k, sfs_ID &x, net_address &r)
 {
   bool t = false;
   for (int i = k; i <= NBIT; i++) {
-    if (updatesucc (finger_table[i], x, r))
+    if (updatesucc (finger_table[i], x))
       t = true;
   }
   return t;
@@ -70,7 +70,7 @@ p2p::notice (int k, sfs_ID &x, net_address &r)
   bool t = false;
   if (noticesucc (k, x, r))
     t = true;
-  if (updatepred (predecessor, x, r))
+  if (updatepred (predecessor, x))
     t = true;
   return t;
 }
@@ -110,7 +110,7 @@ p2p::lookup_closeloc (sfs_ID &n, sfs_ID *r)
   }
   sfs_ID x = locations.first ()->n;
   for (location *l = locations.first (); l != NULL; l = locations.next (l)) {
-    warnx << l->n << "\n";
+    //    warnx << l->n << "\n";
     if ((n - l->n) < (n - x))
       x = l->n;
   }
@@ -140,9 +140,11 @@ p2p::updateloc (sfs_ID &x, net_address &r, sfs_ID &source)
     //	  << source << "\n";
     location *loc = New location (x, r, source);
     locations.insert (loc);
+    doActionCallbacks(x, ACT_NODE_JOIN);
   } else {
     // warnx << "update: " << x << " at port " << r.port << " source "
     //	  << source << "\n";
+    doActionCallbacks(x, ACT_NODE_UPDATE);
     locations[x]->addr = r;
     locations[x]->source = source;
   }
@@ -165,6 +167,7 @@ p2p::deleteloc (sfs_ID &n)
       alert (l->source, n);
     l->alive = false;
     locations.remove (l);
+    doActionCallbacks(n, ACT_NODE_LEAVE);
   }
 }
 
@@ -285,7 +288,7 @@ p2p::stabilize_getsucc_cb (sfs_ID s, net_address r, sfsp2pstat status)
     	  << status << "\n";
     bootstrap ();
   } else {
-    if (updatepred (predecessor, s, r)) {
+    if (updatepred (predecessor, s)) {
       // print ();
       bootstrap ();
     }
@@ -301,7 +304,7 @@ p2p::stabilize_getpred_cb (sfs_ID p, net_address r, sfsp2pstat status)
 	  << status << "\n";
     bootstrap ();
   } else {
-    if (updatesucc (finger_table[1], p, r)) {
+    if (updatesucc (finger_table[1], p)) {
       // print ();
       bootstrap ();
     }
@@ -317,8 +320,7 @@ p2p::stabilize_findsucc_cb (int i, sfs_ID s, route search_path,
 	  << status << "\n";
     bootstrap ();
   } else {
-    net_address r = search_path.pop_back();
-    if (updatesucc (finger_table[i], s, r)) {
+    if (updatesucc (finger_table[i], s)) {
       bootstrap ();
     }
   }
@@ -343,9 +345,8 @@ p2p::join_findpred_cb (sfs_ID p, route search_path, sfsp2pstat status)
     warnx << "join_findpred_cb: failed with " << status << "\n";
     join ();  // try again
   } else {
-    net_address r = search_path.pop_back();
-    updatepred (predecessor, p, r);
-    warnx << "join_findpred_cb: pred is " << p << "\n";
+    updatepred (predecessor, p);
+    //    warnx << "join_findpred_cb: pred is " << p << "\n";
     get_successor (p, wrap (mkref (this), &p2p::join_getsucc_cb, p));
   }
 }
@@ -424,11 +425,10 @@ p2p::bootstrap_succ_cb (int i, sfs_ID n, sfs_ID s,
 {
   nbootstrap--;
   if (status) {
-    warnx << "bootstrap_succ_cb: " << status << ": dead : " << n << "\n";
+    //  warnx << "bootstrap_succ_cb: " << status << ": dead : " << n << "\n";
     bootstrap_failure = true;
   } else {
-    net_address r = path.pop_back();
-    if (updatesucc (finger_table[i], s, r)) {
+    if (updatesucc (finger_table[i], s)) {
       // warnx << "bootstrap_succ_cb: updated\n";
       stable = false;
     }
@@ -445,8 +445,7 @@ p2p::bootstrap_pred_cb (sfs_ID n, sfs_ID p, route search_path, sfsp2pstat status
     // warnx << "bootstrap_pred_cb: " << status << ": dead " << n << "\n";
     bootstrap_failure = true;
   } else {
-    net_address r = search_path.pop_back();
-    if (updatepred (predecessor, p, r)) {
+    if (updatepred (predecessor, p)) {
       // warnx << "bootstrap_pred_cb: updated\n";
       stable = false;
     }
@@ -547,7 +546,7 @@ p2p::dofindclosestpred (svccb *sbp, sfsp2p_findarg *fa)
       p = finger_table[i].first;
     }
   }
-  warnx << "dofindclosestpred of " << fa->x << " is " << p << "\n";
+  //  warnx << "dofindclosestpred of " << fa->x << " is " << p << "\n";
   location *l = locations[p];
   assert (l);
   res.resok->x = fa->x;

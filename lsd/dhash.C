@@ -11,6 +11,8 @@ dhashclient::dhashclient (ptr<axprt_stream> _x)
 {
   p2pclntsrv = asrv::alloc (x, dhashclnt_program_1,
 			 wrap (this, &dhashclient::dispatch));
+
+  defp2p->registerActionCallback(wrap(this, &dhashclient::act_cb));
 }
 
 void
@@ -98,6 +100,13 @@ dhashclient::lookup_fetch_cb(svccb *sbp, dhash_res *res, clnt_stat err)
     sbp->replyref(*res);
 }
 
-// ----------- utility
+// ----------- notification
+
+void
+dhashclient::act_cb(sfs_ID id, char action) {
+
+  warn << "node " << id << " just " << action << "ed the network\n";
+
+}
 
 

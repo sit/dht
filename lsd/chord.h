@@ -100,9 +100,15 @@ struct doRPC_cbstate {
   
 };
 
-typedef vec<net_address> route;
+typedef vec<sfs_ID> route;
 typedef callback<void,sfs_ID,net_address,sfsp2pstat>::ref cbsfsID_t;
 typedef callback<void,sfs_ID,route,sfsp2pstat>::ref cbroute_t;
+typedef callback<void,sfs_ID,char>::ref cbaction_t;
+typedef callback<int,sfs_ID>::ref cbsearch_t;
+
+#define ACT_NODE_JOIN 1
+#define ACT_NODE_UPDATE 2
+#define ACT_NODE_LEAVE 3
 
 struct location {
   sfs_ID n;
@@ -164,7 +170,6 @@ class p2p : public virtual refcount  {
   wedge predecessor;
 
   ihash<sfs_ID,location,&location::n,&location::fhlink,hashID> locations;
-  cache<sfs_ID, sfs_ID, 4096> succ_cache;
  
   int nbootstrap;
   bool bootstrap_failure;
@@ -175,6 +180,9 @@ class p2p : public virtual refcount  {
   int lookups_outstanding;
   int lookup_RPCs;
 
+  vec<cbaction_t> actionCallbacks;
+  vec<cbsearch_t> searchCallbacks;
+
  public:
   p2p (str host, int hostport, const sfs_ID &hostID, int myport, 
        const sfs_ID &ID);
@@ -183,7 +191,8 @@ class p2p : public virtual refcount  {
   
   // added to help simulate
   int* edges; // holds array of edges
-  int numnodes;
+  int numnodes; //XXX - why is this a public field?
+
   void initialize_graph();
   void doRealRPC (sfs_ID ID, rpc_program progno, int procno, 
 		  const void *in, void *out,
@@ -195,8 +204,8 @@ class p2p : public virtual refcount  {
   bool lookup_anyloc (sfs_ID &n, sfs_ID *r);
   bool lookup_closeloc (sfs_ID &n, sfs_ID *r);
   void set_closeloc (wedge &w);
-  bool updatesucc (wedge &w, sfs_ID &x, net_address &r);
-  bool updatepred (wedge &w, sfs_ID &x, net_address &r);
+  bool updatesucc (wedge &w, sfs_ID &x);
+  bool updatepred (wedge &w, sfs_ID &x);
   bool noticesucc (int k, sfs_ID &x, net_address &r);
   bool notice (int k, sfs_ID &x, net_address &r);
   int successor_wedge (sfs_ID &n);
@@ -258,6 +267,11 @@ class p2p : public virtual refcount  {
 		      route search_path, sfsp2pstat status);
 
   void timing_cb(aclnt_cb cb, location *l, ptr<struct timeval> start, clnt_stat err);
+
+  void registerSearchCallback(cbsearch_t cb);
+  bool testSearchCallbacks(sfs_ID id);
+  void registerActionCallback(cbaction_t cb);
+  void doActionCallbacks(sfs_ID id, char action);
 };
 
 extern ptr<p2p> defp2p;

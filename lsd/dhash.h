@@ -33,7 +33,8 @@ class dhashclient {
   void insert_findsucc_cb (svccb *sbp, dhash_insertarg *item, sfs_ID succ, route path, sfsp2pstat err);
   void insert_store_cb (svccb *sbp, dhash_stat *res, clnt_stat err);
 
-  
+  void act_cb(sfs_ID id, char action);
+
  public:
   dhashclient (ptr<axprt_stream> x);
 };
