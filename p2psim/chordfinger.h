@@ -12,7 +12,8 @@ class ChordFinger: public Chord {
 
   protected:
     void fix_fingers();
-    void stabilize(void *);
+    void stabilize();
+    void reschedule_stabilizer(void *x);
 };
 
 #endif

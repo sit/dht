@@ -30,7 +30,7 @@ Koorde::find_successors(CHID key, int m)
 void
 Koorde::stabilize (void *) 
 {
-  Chord::stabilize (NULL);
+  Chord::stabilize ();
   cout << "Koorde::stabilzie\n";
   vector<IDMap> succs = find_successors (debruijn, 1);
   assert (succs.size () > 0);

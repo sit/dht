@@ -1,4 +1,5 @@
 #include  "chordfinger.h"
+#include <stdio.h>
 #include <iostream>
 using namespace std;
 
@@ -16,12 +17,7 @@ ChordFinger::fix_fingers()
 {
   int i0 = 1;
   IDMap succ = loctable->succ(1);
-  CHID gap;
-  if (succ.id > me.id) {
-    gap = succ.id - me.id;
-  }else{
-    gap = me.id - succ.id;
-  }
+  CHID gap = succ.id - me.id;
   while (gap > 0) {
     i0++;
     gap = gap >> 1;
@@ -34,8 +30,15 @@ ChordFinger::fix_fingers()
 }
 
 void
-ChordFinger::stabilize(void *x)
+ChordFinger::reschedule_stabilizer(void *x)
 {
-  Chord::stabilize(NULL);
+  ChordFinger::stabilize();
+  delaycb(STABLE_TIMER, &ChordFinger::reschedule_stabilizer, (void *)0);
+}
+
+void
+ChordFinger::stabilize()
+{
+  Chord::stabilize();
   fix_fingers();
 }

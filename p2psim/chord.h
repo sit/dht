@@ -7,6 +7,7 @@
 #include <vector>
 
 #define CHORD_SUCC_NUM 3  //successor list contains CHORD_SUCC_NUM elements
+#define STABLE_TIMER 500
 
 #include "p2psim.h"
 
@@ -73,7 +74,8 @@ public:
   void dump();
   char *ts();
 
-  virtual void stabilize(void *);
+  virtual void stabilize();
+  virtual void reschedule_stabilizer(void *);
 
 protected:
   LocTable *loctable;
@@ -153,7 +155,7 @@ class LocTable {
     bool _stabilized;
     bool _changed;
 
-    void evict(); //evict one node to make sure ring contains <= _max elements
+    unsigned int evict(); //evict one node to make sure ring contains <= _max elements
 };
 
 #endif // __CHORD_H

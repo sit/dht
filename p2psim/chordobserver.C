@@ -50,13 +50,10 @@ ChordObserver::execute()
   }
 
   cout << now() << " STABILIZED" << endl;
+  cout << now() << " CHORD NODE STATS" << endl;
   for (pos = l.begin(); pos != l.end(); ++pos) {
     assert(c);
     c = (Chord *)(*pos);
     c->dump();
   }
-
 }
-
-
-

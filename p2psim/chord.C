@@ -5,7 +5,8 @@
 #include <iostream>
 
 #define PID(x) (x >> (NBCHID - 32))
-#define STABLE_TIMER 500
+
+#define PAD "000000000000000000000000"
 
 using namespace std;
 
@@ -20,7 +21,6 @@ Chord::Chord(Node *n) : Protocol(n)
 Chord::~Chord()
 {
   cout << "done " << me.ip << " " << me.id << endl;
-  dump();
   delete loctable;
 }
 
@@ -129,12 +129,20 @@ Chord::join(Args *args)
          after - before);
   loctable->add_node(succs[0]);
 
-  delaycb(STABLE_TIMER, &Chord::stabilize, (void *) 0);
+  //delaycb(STABLE_TIMER, &Chord::stabilize, (void *) 0);
+  reschedule_stabilizer(NULL);
 }
 
-// Which paper is this code from?
 void
-Chord::stabilize(void *x)
+Chord::reschedule_stabilizer(void *x)
+{
+  stabilize();
+  delaycb(STABLE_TIMER, &Chord::reschedule_stabilizer, (void *) 0);
+}
+
+// Which paper is this code from? -- PODC 
+void
+Chord::stabilize()
 {
   loctable->checkpoint();
   IDMap succ1 = loctable->succ(1);
@@ -163,9 +171,6 @@ Chord::stabilize(void *x)
     printf("%s stabilize nothing succ (%u,%qu)\n",
            ts(), succ1.ip,PID(succ1.id));
   }
-
-  delaycb(STABLE_TIMER, &Chord::stabilize, (void *) 0);
-
 }
 
 bool
@@ -337,28 +342,36 @@ LocTable::add_node(Chord::IDMap n)
 {
   if (!n.ip || (n.ip == ring[0].ip)) return;
 
-  unsigned int i;
-  for (i = 1; i <= ring.size()-1 ; i++) {
+  for (unsigned int i = 1; i <= ring.size() ; i++) {
 
     if (ring[i].ip == n.ip) {
       return;
     } else if (ring[i].ip == 0) {
       ring[i] = n;
-      break;
-    } else if (ConsistentHash::between(ring[i-1].id, ring[i].id, n.id)) {
-
+      _changed = true;
+      return;
+    } else if ((i == ring.size()) || ConsistentHash::between(ring[i-1].id, ring[i].id, n.id)) {
       ring.insert(ring.begin() + i, n);
+      if (i <= CHORD_SUCC_NUM) {
+	_changed = true;
+      }else if (pinlist.size() > 0) {
+	//is it a better finger candidate than one of my existing fingers?
+	for (unsigned int j = 0; j < pinlist.size(); j++) {
+	  if (ConsistentHash::betweenleftincl(pinlist[j], pinlist[(j+1)%(pinlist.size())],ring[i].id)) {
+	    if (ConsistentHash::betweenrightincl(ring[i-1].id, ring[i].id, pinlist[j])) {
+	      _changed = true;
+	    }
+	  }
+	}
+      }
       if (ring.size() > _max) {
 	evict();
 	assert(ring.size() == _max);
       }
-      break;
+      return;
     }
   }
-
-  if ((i <= CHORD_SUCC_NUM) && (!_changed)){
-    _changed = true;
-  }
+  
 }
 
 //can this be part of add_node?
@@ -408,26 +421,28 @@ LocTable::pin(Chord::CHID x)
   pinlist.push_back(x);
 }
 
-void
+unsigned int 
 LocTable::evict() //evict one node
 {
   int sz;
   sz = pinlist.size();
   if (!pinlist.size()) {
     ring.erase(ring.begin() + _succ_num + 1);
-    return;
+    return (_succ_num + 1);
   }
   assert(0);
   unsigned int j = 0;
-  for (unsigned int i = _succ_num + 1; i < ring.size(); i++)  {
-    while (j < pinlist.size() && ConsistentHash::between(ring[0].id, pinlist[j],ring[i].id)) {
+  for (unsigned int i = _succ_num + 1; i < ring.size() - 1 ; i++)  {
+    while (j < pinlist.size() && ConsistentHash::between(ring[0].id, ring[i].id, pinlist[j])) {
       j++;
     }
-    if (ConsistentHash::between(ring[i].id, pinlist[j], ring[i+1].id)) {
-	ring.erase(ring.begin() + i);
-	return;
+    assert(j < pinlist.size() -1);
+    if (ConsistentHash::between(pinlist[j], pinlist[j+1], ring[i+1].id)) {
+	ring.erase(ring.begin() + i + 1);
+	return i + 1;
     }
   }
+  assert(0);
 }
 
 void
@@ -448,11 +463,37 @@ void
 LocTable::dump()
 {
   assert(ring.size() >= 3);
-  printf("D");
-  for (int i=0; i <= CHORD_SUCC_NUM; i++) {
-    printf(" %u:%qu",ring[i].ip,ring[i].id);
+
+  printf("myID is %qx%s %u\n", ring[0].id, PAD, ring[0].ip);
+
+  printf("===== %qx%s =====\n", ring[0].id, PAD);
+
+  for (int i=1; i <= CHORD_SUCC_NUM; i++) {
+    printf("%qx%s: succ %d : %qx%s\n",ring[0].id, PAD, i-1,ring[i].id, PAD);
   }
+
+  Chord::CHID prev_finger = 0;
+  Chord::CHID pin, tmpr;
+  unsigned int i, j;
+  bool booltmp;
+  j = 0;
+  for (i= 0; i < pinlist.size(); i++) {
+    pin  = pinlist[i];
+    while (1) {
+      booltmp = ConsistentHash::betweenrightincl(ring[0].id, ring[j].id, pinlist[i]);
+      if (booltmp) break;
+      tmpr = ring[j].id;
+      //printf(" %qu %qu\n", pin, tmpr);
+      j++;
+      if (j >= ring.size()) goto END;
+    }
+    if (ring[j].id != prev_finger) {
+      printf("%qx: finger: %d : %qx%s : succ %qx%s\n", ring[0].id, i, pinlist[i], PAD,ring[j].id, PAD);
+    }
+    prev_finger = ring[j].id;
+  }
+END:
   int end = ring.size()-1;
-  printf(" %u:%qu\n", ring[end].ip, ring[end].id);
+  printf("pred : %qx%s\n", ring[end].id, PAD);
 }
 

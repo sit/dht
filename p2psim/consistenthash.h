@@ -27,16 +27,31 @@ public:
     bool r;
     if ((a == b) && (n == a)) {
       r = 1;
-    } else if (a < b) {
+    } else if (a <= b) {
       r = (n > a) && (n <= b);
-    } else {
+     } else {
       r = (n > a) || (n <= b);
     }
     return r;
   };
 
+  // return if n is in (a,b] on the circle
+  static bool betweenleftincl(CHID a, CHID b, CHID n) {
+    bool r;
+    if ((a == b) && (n == a)) {
+      r = 1;
+    } else if (a <= b) {
+      r = (n >= a) && (n < b);
+     } else {
+      r = (n >= a) || (n < b);
+    }
+    return r;
+  };
+
+
   static CHID successorID(CHID n, int p) {
-    return (n + (1 << p));
+    CHID one = 1;
+    return (n + (one << p));
   }
 
   static CHID getRandID() {
