@@ -41,7 +41,12 @@ sub Compare
 $DB_BTREE->{'compare'} = \&Compare ;
 $DB_BTREE->{'flags'} = R_DUP ;
 
-$db = tie %h, 'DB_File', "freedb/freedb-complete-2.db", O_RDONLY, 0666, $DB_BTREE
+if(@ARGV != 4) {
+    die "usage: lookupdb.pl localdir remote_host remote_port freedb\n";
+}
+
+
+$db = tie %h, 'DB_File', $ARGV[3], O_RDONLY, 0666, $DB_BTREE
                or die "Cannot open $filename: $!\n";
 
 use_winamp_genres();
@@ -79,25 +84,25 @@ foreach $mp3file (@mp3s) {
 #static rxx s1("^([^-]+) +-+ *(.+)\\.(mp3|MP3)");
 #static rxx s2("^[\\[\\{\\(](.+)[\\]\\}\\)] *(.+)\\.(mp3|MP3)");
 #static rxx s3("^[0-9+] *-+ *(.+) *-+ *(.+)\\.(mp3|MP3)");
-    if($filename =~ /^(?:.* +-+ +)?(.+?) feat.*? *-+ *(.+?)\.(mp3|MP3)/) {
+    if($filename =~ /^(?:.*[\_ ]+-+[\_ ]+)?(.+?)[\_ ]feat.*?[\_ ]*-+[\_ ]*(.+?)\.(mp3|MP3)/) {
 	$artist = $1;
 	$title = $2;
 	$artistt = $1;
 	$titlet = $2;
     } else { 
-	if($filename =~ /^[0-9+] *-+ *(.+?) *-+ *(.+?)\.(mp3|MP3)/) {
+	if($filename =~ /^[0-9+][\_ ]*-+[\_ ]*(.+?)[\_ ]*-+[\_ ]*(.+?)\.(mp3|MP3)/) {
 	    $artist = $1;
 	    $title = $2;
 	    $artistt = $1;
 	    $titlet = $2;
 	} else { 
-	    if ($filename =~ /^[\[\{\(](.+)[\]\}\)] *(.+?)\.(mp3|MP3)/) {
+	    if ($filename =~ /^[\[\{\(](.+)[\]\}\)][\_ ]*(.+?)\.(mp3|MP3)/) {
 		$artist = $1;
 		$title = $2;
 		$artistt = $1;
 		$titlet = $2;
 	    } else {
-		if ($filename =~ /^([^-]+?) *-+ *(.+?)\.(mp3|MP3)/) {
+		if ($filename =~ /^([^-]+?)[\_ ]*-+[\_ ]*(.+?)\.(mp3|MP3)/) {
 		    $artist = $1;
 		    $title = $2;
 		    $artistt = $1;
@@ -139,14 +144,24 @@ foreach $mp3file (@mp3s) {
 #TODO
 # sanitize strings that go into regex
 # remove "the" from artist
+#bias away from "1990s" etc
+
+# convert _ to spaces for artist(+other?) lookups
+    $artist =~ tr/_/ /;
+    $artistt =~ tr/_/ /;
+    $album =~ tr/_/ /;
+    $title =~ tr/_/ /;
+    $titlet =~ tr/_/ /;
+    $genre =~ tr/_/ /;
 
 #freedb
     if($genre eq 'misc') {
 	@freedblist = $db->get_dup($title);
-	foreach $dbentry2 (@freedblist) {
+	foreach $dbentry (@freedblist) {
 	    $dbentry = "\L$dbentry";
-	    if($dbentry =~ /^title=.*? ?[-\/]? ?$artist ?[-\/]? ?.*?\ngenre=(.*)/) {
+	    if($dbentry =~ /^title=.*?[\_ ]?[-\/]?[\_ ]?$artist[\_ ]?[-\/]?[\_ ]?.*?\ngenre=(.*)/) {
 		$genre = "\L$1";
+		$genre =~ tr/_/ /;
 	    }
 #	print "$dbentry\n";
 	}
@@ -157,6 +172,7 @@ foreach $mp3file (@mp3s) {
 	$googlegenre = `googleit "$artist"`;
 	print "gg $googlegenre\n";
 	$genre = "\L$googlegenre";
+	$genre =~ tr/_/ /;
     }
 
 # nothing worked. try again with filename?
@@ -165,10 +181,11 @@ foreach $mp3file (@mp3s) {
 #freedb
 	if($genre eq 'misc') {
 	    @freedblist = $db->get_dup($title);
-	    foreach $dbentry2 (@freedblist) {
+	    foreach $dbentry (@freedblist) {
 		$dbentry = "\L$dbentry";
-		if($dbentry =~ /^title=.*? ?[-\/]? ?$artistt ?[-\/]? ?.*?\ngenre=(.*)/) {
+		if($dbentry =~ /^title=.*?[\_ ]?[-\/]?[\_ ]?$artist[\_ ]?[-\/]?[\_ ]?.*?\ngenre=(.*)/) {
 		    $genre = "\L$1";
+		    $genre =~ tr/_/ /;
 		}
 #	print "$dbentry\n";
 	    }
@@ -176,10 +193,11 @@ foreach $mp3file (@mp3s) {
 #freedb
 	if($genre eq 'misc') {
 	    @freedblist = $db->get_dup($titlet);
-	    foreach $dbentry2 (@freedblist) {
+	    foreach $dbentry (@freedblist) {
 		$dbentry = "\L$dbentry";
-		if($dbentry =~ /^title=.*? ?[-\/]? ?$artist ?[-\/]? ?.*?\ngenre=(.*)/) {
+		if($dbentry =~ /^title=.*?[\_ ]?[-\/]?[\_ ]?$artist[\_ ]?[-\/]?[\_ ]?.*?\ngenre=(.*)/) {
 		    $genre = "\L$1";
+		    $genre =~ tr/_/ /;
 		}
 #	print "$dbentry\n";
 	    }
@@ -187,10 +205,11 @@ foreach $mp3file (@mp3s) {
 #freedb
 	if($genre eq 'misc') {
 	    @freedblist = $db->get_dup($titlet);
-	    foreach $dbentry2 (@freedblist) {
+	    foreach $dbentry (@freedblist) {
 		$dbentry = "\L$dbentry";
-		if($dbentry =~ /^title=.*? ?[-\/]? ?$artistt ?[-\/]? ?.*?\ngenre=(.*)/) {
+		if($dbentry =~ /^title=.*?[\_ ]?[-\/]?[\_ ]?$artistt[\_ ]?[-\/]?[\_ ]?.*?\ngenre=(.*)/) {
 		    $genre = "\L$1";
+		    $genre =~ tr/_/ /;
 		}
 #	print "$dbentry\n";
 	    }
@@ -201,6 +220,7 @@ foreach $mp3file (@mp3s) {
 	    $googlegenre = `googleit "$artistt"`;
 	    print "gg $googlegenre\n";
 	    $genre = "\L$googlegenre";
+	    $genre =~ tr/_/ /;
 	}
 
 	if(!($genre eq 'misc')) {
@@ -211,17 +231,20 @@ foreach $mp3file (@mp3s) {
 
 #try again with 2nd part of filename
     if(($genre eq 'misc') &&
-       ($filename =~ /^(?:[^-]+?) *-+ *([^-]+?) *-+ *(.+?)\.(mp3|MP3)/)) {
+       ($filename =~ /^(?:[^-]+?)[\_ ]*-+[\_ ]*([^-]+?)[\_ ]*-+[\_ ]*(.+?)\.(mp3|MP3)/)) {
 	$artistt = $1;
 	$titlet = $2;
+	$artistt =~ tr/_/ /;
+	$titlet =~ tr/_/ /;
 
 #freedb
 	if($genre eq 'misc') {
 	    @freedblist = $db->get_dup($title);
-	    foreach $dbentry2 (@freedblist) {
+	    foreach $dbentry (@freedblist) {
 		$dbentry = "\L$dbentry";
-		if($dbentry =~ /^title=.*? ?[-\/]? ?$artistt ?[-\/]? ?.*?\ngenre=(.*)/) {
+		if($dbentry =~ /^title=.*?[\_ ]?[-\/]?[\_ ]?$artistt[\_ ]?[-\/]?[\_ ]?.*?\ngenre=(.*)/) {
 		    $genre = "\L$1";
+		    $genre =~ tr/_/ /;
 		}
 #	print "$dbentry\n";
 	    }
@@ -229,10 +252,11 @@ foreach $mp3file (@mp3s) {
 #freedb
 	if($genre eq 'misc') {
 	    @freedblist = $db->get_dup($titlet);
-	    foreach $dbentry2 (@freedblist) {
+	    foreach $dbentry (@freedblist) {
 		$dbentry = "\L$dbentry";
-		if($dbentry =~ /^title=.*? ?[-\/]? ?$artist ?[-\/]? ?.*?\ngenre=(.*)/) {
+		if($dbentry =~ /^title=.*?[\_ ]?[-\/]?[\_ ]?$artist[\_ ]?[-\/]?[\_ ]?.*?\ngenre=(.*)/) {
 		    $genre = "\L$1";
+		    $genre =~ tr/_/ /;
 		}
 #	print "$dbentry\n";
 	    }
@@ -240,10 +264,11 @@ foreach $mp3file (@mp3s) {
 #freedb
 	if($genre eq 'misc') {
 	    @freedblist = $db->get_dup($titlet);
-	    foreach $dbentry2 (@freedblist) {
+	    foreach $dbentry (@freedblist) {
 		$dbentry = "\L$dbentry";
-		if($dbentry =~ /^title=.*? ?[-\/]? ?$artistt ?[-\/]? ?.*?\ngenre=(.*)/) {
+		if($dbentry =~ /^title=.*?[\_ ]?[-\/]?[\_ ]?$artistt[\_ ]?[-\/]?[\_ ]?.*?\ngenre=(.*)/) {
 		    $genre = "\L$1";
+		    $genre =~ tr/_/ /;
 		}
 #	print "$dbentry\n";
 	    }
@@ -254,6 +279,7 @@ foreach $mp3file (@mp3s) {
 	    $googlegenre = `googleit "$artistt"`;
 	    print "gg $googlegenre\n";
 	    $genre = "\L$googlegenre";
+	    $genre =~ tr/_/ /;
 	}
 
 	if(!($genre eq 'misc')) {
@@ -269,10 +295,10 @@ foreach $mp3file (@mp3s) {
 
     if(length($album) > 0) {
 	print "/$genre/$artist/$album/$filename\n";
-	`it '$mp3file' '/$genre/$artist/$album/$filename' $ARGV[1] $ARGV[2]`;
+	`it '$mp3file' '/$genre/$artist/$album/' $ARGV[1] $ARGV[2]`;
     } else {
 	print "/$genre/$artist/$filename\n";
-	`it '$mp3file' '/$genre/$artist/$filename' $ARGV[1] $ARGV[2]`;
+	`it '$mp3file' '/$genre/$artist/' $ARGV[1] $ARGV[2]`;
     }
 }
 
