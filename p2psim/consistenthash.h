@@ -1,6 +1,7 @@
 #ifndef __CONSISTENTHASH_H
 #define __CONSISTENTHASH_H 
 
+#define NBCHID 32
 
 class ConsistentHash {
 public:
@@ -17,6 +18,10 @@ public:
     }
     return r;
   };
+
+  static CHID successorID(CHID n, int p) {
+    return (n + (1 << p));
+  }
 
   static CHID getRandID() {
     return (CHID) rand();

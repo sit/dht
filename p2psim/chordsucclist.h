@@ -3,6 +3,7 @@
 
 #include "chord.h"
 
+#define SUCC_NUM 1  //successor list contains SUCC_NUM elements
 /* in addition to the basic ring traversing chord
    ChordSuccList implements successor list*/
 

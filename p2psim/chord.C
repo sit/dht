@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <iostream>
 
+
 using namespace std;
 
 Chord::Chord(Node *n) : Protocol(n)
@@ -227,16 +228,9 @@ LocTable::add_node(Chord::IDMap n)
       ring[i] = n;
     } else if (ConsistentHash::between(ring[i-1].id, ring[i].id, n.id)) {
 
-      if (end < (_max -1)) {
-	ring.insert(ring.begin() + i, n);
-	return;
-      } else {
-	if (i <= _succ_num) {
-	  ring.erase(ring.begin() + _succ_num);
-	  ring.insert(ring.begin() + i,n);
-	}else{
-	  //what should this eviction policy be? i do not know yet, just throw away this node for the moment
-	}
+      ring.insert(ring.begin() + i, n);
+      if (ring.size() > _max) {
+	evict();
       }
       return;
     }
@@ -256,12 +250,45 @@ LocTable::notify(Chord::IDMap n)
 void
 LocTable::del_node(Chord::IDMap n)
 {
-
   for (unsigned int i = 0; i <= ring.size(); i++) {
     if (ring[i].ip == n.ip) {
-      ring.erase(ring.begin() + i); //STL will shift rest of elments leftwise
+      if (i <= 1 || i == ring.size()) {
+	ring[i].ip = 0;
+      }else {
+	ring.erase(ring.begin() + i); //STL will shift rest of elments leftwise
+      }
       return;
     }
   }
 }
 
+void
+LocTable::pin(Chord::CHID x)
+{
+  for (int i = 1; i <= pinlist.size(); i++) {
+    if (pinlist[i] == x) {
+      return;
+    } else if (ConsistentHash::between(pinlist[i-1], pinlist[i], x)) {
+      pinlist.insert(pinlist.begin() + i, x);
+      return;
+    }
+  }
+  pinlist.push_back(x);
+}
+
+void
+LocTable::evict() //evict one node
+{
+  int j = 0;
+  for (int i = _succ_num + 1; i < ring.size(); i++)  {
+    while (ConsistentHash::between(ring[0].id, pinlist[j],ring[i].id)) {
+      j++;
+      assert(j < pinlist.size());
+    }
+    if (ConsistentHash::between(ring[i].id, pinlist[j], ring[i+1].id)) {
+	ring.erase(ring.begin() + i);
+	return;
+    }
+  }
+  assert(0);
+}

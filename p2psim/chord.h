@@ -4,6 +4,8 @@
 #include "p2psim.h"
 #include "protocol.h"
 #include "consistenthash.h"
+//#include "../utils/skiplist.h"
+
 #include <vector>
 
 class LocTable;
@@ -91,16 +93,16 @@ class LocTable {
       ring.push_back(me);
       ring[1].ip = 0; // ring[1] is always successor, currently null
       ring[2].ip = 0; //ring.back() is always predecessor, currently null
-
+      pinlist.clear();
+      pinlist.push_back(me.id);
     }; 
 
     ~LocTable() {
     }
 
-    void resize(unsigned int max, unsigned int s, unsigned int f) {
+    void resize(unsigned int max, unsigned int s) {
       _max = max;
       _succ_num = s;
-      _finger_num = f;
       ring.clear(); //this is not a general resize, it has to be called immediately after construction
     };
 
@@ -112,13 +114,26 @@ class LocTable {
     void add_node(Chord::IDMap n);
     void del_node(Chord::IDMap n);
     void notify(Chord::IDMap n);
-
+    void pin(Chord::CHID x);
+/*
+    struct idmapwrap {
+      sklist_entry<idmapwrap> sortlink_;
+      Chord::CHID id_;
+      IPAddress ip_;
+    };
+    struct chidwrap {
+      sklist_entry<chidwrap> sortlink_;
+      Chord::CHID id_;
+    };
+    skiplist<idmapwrap, Chord::CHID, &idmapwrap::id_, &idmapwrap::sortlink_> loclist;  emil's skiplist needs sfs's keyfunc.h
+    skiplist<chidwrap, Chord::CHID, &chidwrap::id_, &chidwrap::sortlink_> pinlist;
+    */
   private:
-    // XXX: why not a vector and void all this?
-    vector<Chord::IDMap> ring; //forgive me for not using STL vector 
+    vector<Chord::IDMap> ring;
+    vector<Chord::CHID> pinlist;
     unsigned int _succ_num;
-    unsigned int _finger_num;
     unsigned int _max;
+    void evict(); //evict one node to make sure ring contains <= _max elements
 };
 
 #endif // __CHORD_H

@@ -2,7 +2,6 @@
 #include <iostream>
 using namespace std;
 
-#define SUCC_NUM 1  //successor list contains SUCC_NUM elements
 
 void
 ChordSuccList::get_successor_list_handler(get_successor_list_args *args, get_successor_list_ret *ret)

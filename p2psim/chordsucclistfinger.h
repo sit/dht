@@ -7,7 +7,7 @@
 
 class ChordSuccListFinger: public ChordSuccList {
   public:
-    ChordSuccListFinger(Node *n) : ChordSuccList(n) {};
+    ChordSuccListFinger(Node *n);
     ~ChordSuccListFinger() {};
 
   protected:
