@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.6 2003/09/29 23:08:28 strib Exp $ */
+/* $Id: tapestry.h,v 1.7 2003/10/02 21:07:22 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -58,6 +58,18 @@ public:
   };
 
   void handle_join(join_args *args, join_return *ret);
+
+  struct lookup_args {
+    GUID key;
+  };
+
+  struct lookup_return {
+    IPAddress owner_ip;
+    GUID owner_id;
+    int hopcount;
+  };
+
+  void handle_lookup(lookup_args *args, lookup_return *ret);
 
   struct nodelist_args {
     vector<NodeInfo *> nodelist;
