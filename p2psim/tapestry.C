@@ -1,4 +1,4 @@
-/* $Id: tapestry.C,v 1.9 2003/09/30 19:01:31 strib Exp $ */
+/* $Id: tapestry.C,v 1.10 2003/10/02 20:00:07 strib Exp $ */
 #include "tapestry.h"
 #include <stdio.h>
 #include <math.h>
@@ -246,7 +246,7 @@ Tapestry::handle_join(join_args *args, join_return *ret)
     // make the watchlist
     vector<bool *> wl;
     for( int i = 0; i < alpha+1; i++ ) {
-      bool level[_base];
+      bool *level = new bool[_base];
       wl.push_back(level);
       for( uint j = 0; j < _base; j++ ) {
 	wl[i][j] = false;
@@ -255,6 +255,12 @@ Tapestry::handle_join(join_args *args, join_return *ret)
     mca.watchlist = wl;
 
     handle_mc( &mca, &mcr );
+
+    // free the bools!
+    for( int i = 0; i < alpha+1; i++ ) {
+	bool *level = wl[i];
+	delete level;
+    }
 
     ret->surr_id = id();
     
@@ -781,7 +787,7 @@ RouteEntry::add( NodeInfo *new_node, NodeInfo **kicked_out )
     }
   }
 
-  // see if its closer than any other entry so far
+  // see if it's closer than any other entry so far
   for( uint i = 0; i < _size; i++ ) {
     if( new_node->_distance < _nodes[i]->_distance ) {
       NodeInfo *replacement = new_node;
@@ -828,12 +834,18 @@ RoutingTable::RoutingTable( Tapestry *node )
   // initialize all the rows
   for( uint i = 0; i < _node->_digits_per_id; i++ ) {
     _table[i] = New RouteEntry *[_node->_base];
+    for( uint j = 0; j < _node->_base; j++ ) {
+      _table[i][j] = NULL;
+    }
   }
 
   // now we add ourselves to the table
   add( _node->ip(), _node->id(), 0 );
 
   _backpointers = New vector<NodeInfo> *[_node->_digits_per_id];
+  for( uint i = 0; i < _node->_digits_per_id; i++ ) {
+    _backpointers[i] = 0;
+  }
 
   // init the locks
   _locks = New vector<NodeInfo> **[_node->_digits_per_id];
@@ -924,6 +936,10 @@ RoutingTable::add( IPAddress ip, GUID id, Time distance )
 NodeInfo *
 RoutingTable::read( uint i, uint j )
 {
+    //  TapRTDEBUG(2) << "read " << _table << endl;
+  if( _table[i] == NULL ) {
+    TapRTDEBUG(2) << "read " << i << " " << j << endl;
+  }
   RouteEntry *re = _table[i][j];
   if( re == NULL || re->get_first() == NULL ) {
     return NULL;
