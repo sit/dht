@@ -14,6 +14,7 @@ struct insert_info
 };
 
 class dhash_block;
+class keyhash_payload;
 
 typedef callback<void, dhash_stat, ptr<insert_info> >::ref cbinsertgw_t;
 typedef
