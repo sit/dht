@@ -64,37 +64,6 @@ close_databases ()
 }
 
 
-
-static int
-verifydb (dbfe *db)
-{
-  // populate merkle tree from initial db contents
-  ptr<dbEnumeration> it = db->enumerate ();
-  ptr<dbPair> d = it->firstElement();
-  chordID p = -1;
-  while (d) {
-    chordID k = dbrec2id (d->key);
-    if (k < 0 || k >= (bigint (1) << 160)) {
-      warn << "key out of range: " << k << "\n";
-      return 0;
-    }
-    if (p >= k) {
-      warn << "keys not sorted: " << p << " " << k << "\n";
-      return 0;
-    }
-    if (!db->lookup (d->key)) {
-      warn << "lookup failed: " << k << "\n";
-      return 0;
-    }
-    p = k;
-    d = it->nextElement();
-  }
-
-  return 1; // OK -- db verified
-}
-
-
-
 dhash::dhash(str dbname, u_int k, int _ss_mode) 
 {
   nreplica = k;
@@ -103,8 +72,6 @@ dhash::dhash(str dbname, u_int k, int _ss_mode)
   ss_mode = _ss_mode / 10;
   pk_partial_cookie = 1;
 
-  bool secondtry = false;
-dbagain:
   db = New refcounted<dbfe>();
   
   //set up the options we want
@@ -119,26 +86,10 @@ dbagain:
     exit (-1);
   }
  
-  if (!verifydb (db)) {
-    warn << "Database '" << dbname << "' is corrupt.  deleting it.\n"; 
-    db = NULL; // refcounted
-    int ret = unlink (dbname);
-    if (ret < 0) 
-      warn << "unlink failed: " << strerror(errno) << "\n";
-    if (secondtry) {
-      warn << "Second database verification failed.  Bailing\n";
-      exit (-1);
-    }
-    secondtry = true;
-    goto dbagain;
-  }
-
   open_databases.push_back (db);
 
   if (KEYHASHDB) {
-keyhashdbagain:
     keyhash_db = New refcounted<dbfe>();
-    secondtry = false;
 
     strbuf b = dbname;
     b << ".m";
@@ -151,20 +102,6 @@ keyhashdbagain:
 
     // XXX should check that every public key in db is also in
     // keyhash_db
-
-    if (!verifydb (keyhash_db)) {
-      warn << "Database '" << s << "' is corrupt.  deleting it.\n"; 
-      keyhash_db = NULL; // refcounted
-      int ret = unlink (s);
-      if (ret < 0) 
-        warn << "unlink failed: " << strerror(errno) << "\n";
-      if (secondtry) {
-        warn << "Second database verification failed.  Bailing\n";
-        exit (-1);
-      }
-      secondtry = true;
-      goto keyhashdbagain;
-    }
 
     open_databases.push_back (keyhash_db);
   }
@@ -191,7 +128,6 @@ dhash::init_after_chord(ptr<vnode> node, ptr<route_factory> _r_factory)
   partition_left = 0;
   partition_right = 0;
   partition_syncer = NULL;
-  partition_enumeration = db->enumerate();
 
   merkle_rep_tcb = NULL;
   merkle_part_tcb = NULL;
@@ -440,6 +376,7 @@ dhash::partition_maintenance_timer ()
       partition_syncer = NULL;
     }
 
+    ptr<dbEnumeration> partition_enumeration = db->enumerate();
     // handles initial condition (-1) and key space wrap around..
     ptr<dbPair> d = NULL;
     if (partition_right != -1)

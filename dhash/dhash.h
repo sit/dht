@@ -180,7 +180,6 @@ class dhash {
   chordID partition_left;
   chordID partition_right;
   ptr<merkle_syncer> partition_syncer;
-  ptr<dbEnumeration> partition_enumeration;
 
   ihash<chordID, store_state, &store_state::key, 
     &store_state::link, hashID> pst;
