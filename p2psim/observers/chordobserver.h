@@ -37,7 +37,7 @@ public:
   virtual void kick(Observed *, ObserverInfo *);
   vector<Chord::IDMap> get_sorted_nodes();
   void addnode(Chord::IDMap n) { 
-    assert(!_oracle_num);
+    if(_oracle_num) return;
     vector<Chord::IDMap>::iterator p =
       upper_bound(ids.begin(),ids.end(),n,Chord::IDMap::cmp);
     if (p->id!=n.id) {

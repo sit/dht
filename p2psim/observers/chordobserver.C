@@ -134,6 +134,7 @@ ChordObserver::kick(Observed *o, ObserverInfo *oi)
   const set<Node*> *l = Network::Instance()->getallnodes();
  
   if( event_s == "join" ) {
+    //ids.clear();
 #ifdef CHORD_DEBUG
     printf("ChordObserver oracle node %u,%qx joined\n", n->ip(), n->id());
 #endif
@@ -150,7 +151,8 @@ ChordObserver::kick(Observed *o, ObserverInfo *oi)
       }
     }
     n->initstate();
-  }else if (event_s == "crash") {
+
+  } else if (event_s == "crash") {
 #ifdef CHORD_DEBUG
     printf("%llu ChordObserver oracle node %u,%qx crashed\n", now(), n->ip(), n->id());
 #endif
