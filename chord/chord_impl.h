@@ -128,7 +128,7 @@ class vnode_impl : public vnode {
   
   void notify_cb (chordID n, chordstat *res, clnt_stat err);
   void alert_cb (chordstat *res, clnt_stat err);
-  void ping_cb (cbping_t cb, clnt_stat status);
+  void ping_cb (ptr<location> n, cbping_t cb, clnt_stat status);
   
   void doalert_cb (chord_noderes *res, chordID x, clnt_stat err);
 

@@ -410,22 +410,24 @@ user_args::reply (void *res)
 }
 
 void
-vnode_impl::ping (ptr<location>x, cbping_t cb)
+vnode_impl::ping (ptr<location> x, cbping_t cb)
 {
   //talk directly to the RPC manger to get the dead behaviour
-  
   rpcm->doRPC_dead (x, transport_program_1, TRANSPORTPROC_NULL, 
 		    NULL, NULL, 
-		    wrap (this, &vnode_impl::ping_cb, cb));
+		    wrap (this, &vnode_impl::ping_cb, x, cb));
 }
 
 void
-vnode_impl::ping_cb (cbping_t cb, clnt_stat status) 
+vnode_impl::ping_cb (ptr<location> x, cbping_t cb, clnt_stat status) 
 {
-  if (status)
+  if (status) {
+    x->set_alive (false);
     cb (CHORD_RPCFAILURE);
-  else
+  } else {
+    x->set_alive (true);
     cb (CHORD_OK);
+  }
 }
 
 void
