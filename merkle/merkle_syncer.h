@@ -18,6 +18,8 @@ typedef callback<void, bigint, bool, callback<void>::ref>::ref sndblkfnc_t;
 
 class merkle_syncer {
  private:
+  strbuf log;
+
   void setdone ();
   void error (str err);
   void timeout (ptr<bool> del);
@@ -27,13 +29,21 @@ class merkle_syncer {
   ptr<bool> deleted;
 
  public:
+  struct {
+    u_int rpc_getblocklist;
+    u_int rpc_getblockrange;
+    u_int rpc_getnode;
+    u_int blocks_sent;
+    u_int blocks_rcvd;
+  } stats;
+
+
   typedef enum {
     BIDIRECTIONAL,
     UNIDIRECTIONAL
   } mode_t;
 
   mode_t mode;
-
 
   merkle_tree *ltree; // local tree
   rpcfnc_t rpcfnc;
@@ -54,9 +64,10 @@ class merkle_syncer {
 
   vec<pair<merkle_rpc_node, int> > st;
 
-  void dump ();
   merkle_syncer (merkle_tree *ltree, rpcfnc_t rpcfnc, sndblkfnc_t sndblkfnc);
   ~merkle_syncer ();
+  void dump ();
+  str getsummary ();
   void doRPC (int procno, ptr<void> in, void *out, aclnt_cb cb);
   void send_some ();
   void next (void);

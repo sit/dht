@@ -4,6 +4,8 @@
 #include "bigint.h"
 #include "chord_util.h"
 
+//#define MERKLE_SYNC_TRACE
+
 // ---------------------------------------------------------------------------
 // util junk
 
@@ -60,6 +62,7 @@ merkle_syncer::dump ()
 merkle_syncer::merkle_syncer (merkle_tree *ltree, rpcfnc_t rpcfnc, sndblkfnc_t sndblkfnc)
   : ltree (ltree), rpcfnc (rpcfnc), sndblkfnc (sndblkfnc)
 {
+  bzero (&stats, sizeof (stats));
   deleted = New refcounted<bool>(false);
   fatal_err = NULL;
   sync_done = false;
@@ -140,9 +143,8 @@ merkle_syncer::next (void)
 	unsigned int depth = rnode->depth + 1;
 	merkle_hash prefix = rnode->prefix;
 	prefix.write_slot (rnode->depth, i);
-
 	bigint child_rngmin = tobigint (prefix);
-	bigint child_range_width = bigint (1) << (160 - depth);
+	bigint child_range_width = bigint (1) << (160 - 6*depth);
 	bigint child_rngmax = child_rngmin + child_range_width - 1;
 	if (!overlap (rngmin, rngmax, child_rngmin, child_rngmax))
 	  continue;
@@ -170,9 +172,10 @@ merkle_syncer::next (void)
 void
 merkle_syncer::sendblock (merkle_hash key, bool last)
 {
-#ifdef MERKLE_SYNCE_TRACE
+#ifdef MERKLE_SYNC_TRACE
   warn << (u_int)this << " sendblock >>>>>>> " << key << " last " << last << "\n";
 #endif
+  stats.blocks_sent += 1;
   num_sends_pending++;
   (*sndblkfnc) (tobigint (key), last, wrap (this, &merkle_syncer::sendblock_cb, deleted));
 }
@@ -183,7 +186,7 @@ merkle_syncer::sendblock_cb (ptr<bool> del)
   if (*del) return;
   idle = false;
 
-#ifdef MERKLE_SYNCE_TRACE
+#ifdef MERKLE_SYNC_TRACE
   warn << (u_int)this << "  sendblock_cb >>>>>>>>>>>>>>>>>\n";
 #endif
   num_sends_pending--;
@@ -194,7 +197,7 @@ merkle_syncer::sendblock_cb (ptr<bool> del)
 void
 merkle_syncer::getblocklist (vec<merkle_hash> keys)
 {
-#ifdef MERKLE_SYNCE_TRACE
+#ifdef MERKLE_SYNC_TRACE
   warn << (u_int)this << " getblocklist >>>>>>>>>>>>>>>>>>>>>>\n";
 #endif  
   if (keys.size () == 0) 
@@ -206,6 +209,7 @@ merkle_syncer::getblocklist (vec<merkle_hash> keys)
   arg->keys = keys;
   
   ref<getblocklist_res> res = New refcounted<getblocklist_res> ();
+  stats.rpc_getblocklist += 1;
   doRPC (MERKLESYNC_GETBLOCKLIST, arg, res, 
 	 wrap (this, &merkle_syncer::getblocklist_cb, res, deleted));
 }
@@ -218,7 +222,7 @@ merkle_syncer::getblocklist_cb (ref<getblocklist_res> res, ptr<bool> del,
   if (*del) return;
   idle = false;
 
-#ifdef MERKLE_SYNCE_TRACE
+#ifdef MERKLE_SYNC_TRACE
   warn << (u_int)this << " getblocklist_cb >>>>>>>>>>>>>>>>>>>>>>\n";
 #endif
   pending_rpcs--;
@@ -253,8 +257,10 @@ merkle_syncer::sync (bigint _rngmin, bigint _rngmax, mode_t m)
 void
 merkle_syncer::getnode (u_int depth, const merkle_hash &prefix)
 {
-#ifdef MERKLE_SYNCE_TRACE
+#ifdef MERKLE_SYNC_TRACE
   warn << (u_int)this << " getnode >>>>>>>>>>>>>>>>>>>>>>\n";
+  warn << "GN: " << stats.rpc_getnode
+ << " depth " << depth << " prefix " << prefix << "\n";
 #endif  
   assert (sendblocks_iter == NULL);
   
@@ -263,6 +269,7 @@ merkle_syncer::getnode (u_int depth, const merkle_hash &prefix)
   arg->depth = depth;
   
   ref<getnode_res> res = New refcounted<getnode_res> ();
+  stats.rpc_getnode += 1;
   doRPC (MERKLESYNC_GETNODE, arg, res,
 	      wrap (this, &merkle_syncer::getnode_cb, arg, res, deleted));
 }
@@ -293,8 +300,8 @@ merkle_syncer::getnode_cb (ref<getnode_arg> arg, ref<getnode_res> res,
   if (*del) return;
   idle = false;
 
-#ifdef MERKLE_SYNCE_TRACE
-  warn << (u_int)this << " getnode_cb >>>>>>>>>>>>>>>>>>>>>>\n";
+#ifdef MERKLE_SYNC_TRACE
+  //  warn << (u_int)this << " getnode_cb >>>>>>>>>>>>>>>>>>>>>>\n";
 #endif
   pending_rpcs--;
   
@@ -317,7 +324,7 @@ merkle_syncer::getnode_cb (ref<getnode_arg> arg, ref<getnode_res> res,
   assert (lnode); // XXX fix this
   
   if (lnode->isleaf () && rnode->isleaf) {
-#ifdef MERKLE_SYNCE_TRACE
+#ifdef MERKLE_SYNC_TRACE
     warn << "L vs L\n";
 #endif
     vec<merkle_hash> lkeys = database_get_keys (ltree->db, arg->depth, arg->prefix);
@@ -343,7 +350,7 @@ merkle_syncer::getnode_cb (ref<getnode_arg> arg, ref<getnode_res> res,
       for (u_int i = 0; i < keys_to_send.size (); i++)
 	sendblock (keys_to_send[i], false);
 
-#ifdef MERKLE_SYNCE_TRACE
+#ifdef MERKLE_SYNC_TRACE
     warn << "lkeys.size " << lkeys.size () << "\n";
     warn << "keys_to_send.size " << keys_to_send.size () << "\n";
     warn << "keys_to_get.size " << keys_to_get.size () << "\n";
@@ -352,13 +359,13 @@ merkle_syncer::getnode_cb (ref<getnode_arg> arg, ref<getnode_res> res,
     next ();
   }
   else if (lnode->isleaf () && !rnode->isleaf) {
-#ifdef MERKLE_SYNCE_TRACE
+#ifdef MERKLE_SYNC_TRACE
     warn << "L vs I\n";
 #endif
     getblockrange (rnode);
   }
   else if (!lnode->isleaf () && rnode->isleaf) {
-#ifdef MERKLE_SYNCE_TRACE
+#ifdef MERKLE_SYNC_TRACE
     warn << "I vs L\n";
 #endif    
     vec<merkle_hash> keys_to_get;
@@ -381,7 +388,7 @@ merkle_syncer::getnode_cb (ref<getnode_arg> arg, ref<getnode_res> res,
     next ();
   }
   else {
-#ifdef MERKLE_SYNCE_TRACE
+#ifdef MERKLE_SYNC_TRACE
     warn << "I vs I\n";
 #endif
     st.push_back (pair<merkle_rpc_node, int> (*rnode, 0));
@@ -395,7 +402,7 @@ merkle_syncer::getnode_cb (ref<getnode_arg> arg, ref<getnode_res> res,
 void
 merkle_syncer::getblockrange (merkle_rpc_node *rnode)
 {
-#ifdef MERKLE_SYNCE_TRACE
+#ifdef MERKLE_SYNC_TRACE
   warn << (u_int)this << " getblockrange >>>>>>>>>>>>>>>>>>>>>>\n";
 #endif  
   receiving_blocks = rnode->count;
@@ -416,13 +423,14 @@ merkle_syncer::getblockrange (merkle_rpc_node *rnode)
 
   receiving_blocks -= xkeys.size ();
   assert (receiving_blocks >= 0); 
-#ifdef MERKLE_SYNCE_TRACE
+#ifdef MERKLE_SYNC_TRACE
   warn << (u_int)this << " getblockrange >>>>>>>>>>>>>>> rcving_blks " << receiving_blocks << "\n";
 #endif
   arg->xkeys =  xkeys;
+  stats.rpc_getblockrange += 1;
   doRPC (MERKLESYNC_GETBLOCKRANGE, arg, res,
 	 wrap (this, &merkle_syncer::getblockrange_cb, arg, res, deleted));
-#ifdef MERKLE_SYNCE_TRACE
+#ifdef MERKLE_SYNC_TRACE
   warn << (u_int)this << " getblockrange <<<<<<<<<<<<<<<<<<<<<<\n";
 #endif
 }
@@ -437,7 +445,7 @@ merkle_syncer::getblockrange_cb (ref<getblockrange_arg> arg,
   if (*del) return;
   idle = false;
 
-#ifdef MERKLE_SYNCE_TRACE
+#ifdef MERKLE_SYNC_TRACE
   warn << (u_int)this << " getblockrange_cb >>>>>>>>>>>>>>>>>>>>>>\n";
 #endif
   pending_rpcs--;
@@ -483,6 +491,8 @@ merkle_syncer::doRPC (int procno, ptr<void> in, void *out, aclnt_cb cb)
 void
 merkle_syncer::recvblk (bigint key, bool last)
 {
+  stats.blocks_rcvd += 1;
+
   //warn << (u_int)this << " recvblk " << key << ", last " << last << "\n";
   idle = false;
   if (last) {
@@ -503,11 +513,35 @@ merkle_syncer::setdone ()
 void
 merkle_syncer::error (str err)
 {
-  if (err) {
-    warn << (u_int)this << ": SYNCER ERROR: " << err << "\n";
-    fatal_err = err;
-  }
+  warn << (u_int)this << ": SYNCER ERROR: " << err << "\n";
+  fatal_err = err;
   setdone ();
+}
+
+str
+merkle_syncer::getsummary ()
+{
+  assert (sync_done);
+  strbuf sb;
+  if (mode == BIDIRECTIONAL)
+    sb << "bisync ";
+  else
+    sb << "unisync ";
+
+  sb << "[" << rngmin << "," << rngmax << "] "
+     << " BLKS snd " << stats.blocks_sent
+     << " rcv " << stats.blocks_rcvd
+     << " RPCS nd " << stats.rpc_getnode
+     << " br " << stats.rpc_getblockrange
+     << " bl " << stats.rpc_getblocklist;
+
+  if (fatal_err)
+    sb << fatal_err;
+
+  if (0) 
+    sb  << "<log " << log << ">\n";
+
+  return sb;
 }
 
 void

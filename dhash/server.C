@@ -360,6 +360,9 @@ dhash::replica_maintenance_timer (u_int index)
       chordID replicaID = replicas[index];
 
       if (replica_syncer) {
+#if 1
+        warn << "DONE " << replica_syncer->getsummary () << "\n";
+#endif
 	assert (replica_syncer->done());
 	assert (*active_syncers[replica_syncer_dstID] == replica_syncer);
 	active_syncers.remove (replica_syncer_dstID);
@@ -426,6 +429,9 @@ dhash::partition_maintenance_timer ()
   if (!partition_syncer || partition_syncer->done()) {
     // create a syncer when there is none or the existing one is done
     if (partition_syncer) {
+#if 1
+      warn << "DONE " << partition_syncer->getsummary () << "\n";
+#endif
       assert (partition_syncer->done());
       assert (*active_syncers[partition_right] == partition_syncer);
       active_syncers.remove (partition_right);
