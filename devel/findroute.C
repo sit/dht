@@ -77,9 +77,7 @@ doRPCcb (int procno, dorpc_res *res, void *out, aclnt_cb cb, clnt_stat err)
   assert (proc);
   if (err) {
     warnx << "doRPC: err = " << err << "\n";
-    return;
-  }
-  if (!proc (x.xdrp (), out))
+  } else if (!proc (x.xdrp (), out))
     fatal << "failed to unmarshall result\n";
 
   cb (err);
