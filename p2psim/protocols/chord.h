@@ -41,7 +41,6 @@
 #define TYPE_FINGER_UP 6
 #define TYPE_PNS_UP 7
 
-#define MAX_LOOKUP_TIME 4000
 #define MIN_BASIC_TIMER 100
 
 class LocTable;
@@ -202,6 +201,7 @@ protected:
   uint _stab_basic_timer;
   uint _stab_succlist_timer;
   uint _stab_basic_outstanding;
+  uint _max_lookup_time;
   uint _frag;
   uint _alpha;
   int _asap;

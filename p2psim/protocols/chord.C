@@ -77,6 +77,8 @@ Chord::Chord(Node *n, Args& a, LocTable *l)
 
   _asap = a.nget<uint>("asap",_frag,10);
 
+  _max_lookup_time = a.nget<uint>("maxlookuptime",4000,10);
+
   _vivaldi = NULL;
   _wkn.ip = 0;
 
@@ -257,7 +259,7 @@ Chord::lookup_internal(lookup_args *a)
 #ifdef CHORD_DEBUG
     printf("%s key %qx lookup correct interval ", ts(), a->key);
 #endif
-  }else if (now()-a->start >= MAX_LOOKUP_TIME) {
+  }else if (now()-a->start >= _max_lookup_time) {
 #ifdef CHORD_DEBUG
     printf("%s key %qx lookup incorrect interval ", ts(), a->key); 
 #endif
@@ -420,11 +422,11 @@ Chord::find_successors(CHID key, uint m, uint all, uint type, uint *lookup_int, 
 	loctable->add_node(resultmap[donerpc]->link.to); //update timestamp of MY neighbors
 
       if (resultmap[donerpc]->ret.done) {
-	results = resultmap[donerpc]->ret.v;
 	lastfinished = resultmap[donerpc]->link;
 	goto DONE;//success
       }
 
+      //LJY: to be fixed, does not look like it will work for parallel lookup
       if (resultmap[donerpc]->ret.next.size() == 0 ) {
 //	  && resultmap[donerpc]->link.to.ip == lastfinished.to.ip)  //this will fail coz i cannot mark this node as dead
 	lastfinished = resultmap[donerpc]->link;
@@ -840,9 +842,10 @@ void
 Chord::next_handler(next_args *args, next_ret *ret)
 {
   check_static_init();
-
+/* don't trust other people's information about my dead neighbors coz of non-transitivity
   for (uint i = 0; i < args->deadnodes.size(); i++) 
     loctable->del_node(args->deadnodes[i]);
+    */
 
   vector<IDMap> succs = loctable->succs(me.id+1, _nsucc);
   assert((!static_sim) || succs.size() >= _allfrag);
@@ -866,11 +869,30 @@ Chord::next_handler(next_args *args, next_ret *ret)
       printf("%s incorrect key %qx, succ %u,%qx\n",ts(), args->key, succs[0].ip, succs[0].id);
   } else {
     ret->done = false;
-    ret->next = loctable->next_hops(args->key,_alpha);
-    // uint nextsz = ret->next.size();
-    ret->next.size();
+    ret->next.clear();
+    IDMap n;
+    CHID k = args->key;
+    uint i,j;
+    i = j = 0;
+    //LJY: very inefficient stuff
+    while (i < _alpha) {
+      n = loctable->next_hop(k);
+      if (n.ip == me.ip) break;
+      for (j = 0; j < args->deadnodes.size(); j++) 
+	if (args->deadnodes[j].ip == n.ip) 
+	  break;
+      if (j == args->deadnodes.size()) {
+	ret->next.push_back(n);
+	i++;
+      }
+      k = n.id - 1;
+    }
+    /*
+    uint ss = args->deadnodes.size();
+    IDMap nn = ss>0?args->deadnodes[0]:me;
     assert(ret->next.size()>0);
     assert(ret->next[0].ip != me.ip);
+    */
  }
 }
 
@@ -1375,7 +1397,11 @@ Chord::alert_handler(alert_args *args, void *ret)
   assert(tmp.ip!=args->n.ip);
   */
 
-  loctable->del_node(args->n);
+  //due to non-transitivity problem, i check before i delete, 
+  //this will make find_successor() slower, but fortunately iterative lookup is async
+  record_stat(0,TYPE_JOIN_LOOKUP); //LJY: temporarily lump this as join traffic
+  bool b = doRPC(args->n.ip,&Chord::null_handler,(void *)NULL, (void *)NULL);
+  if (!b) loctable->del_node(args->n);
 }
 
 void
@@ -1865,8 +1891,10 @@ Chord::IDMap
 LocTable::next_hop(Chord::CHID key, uint m, uint nsucc)
 {
   vector<Chord::IDMap> v = next_hops(key, 1);
-  assert(v.size() > 0);
-  return v[0];
+  if (v.size() == 0) 
+    return me;
+  else
+    return v[0];
 }
 
 vector<Chord::IDMap>
