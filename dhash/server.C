@@ -727,11 +727,19 @@ void
 dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
 {
 
-  store_state *ss = pst[arg->key];
+  store_state *ss;
+ 
+  if (arg->type == DHASH_CACHE)
+    ss = pst_cache[arg->key];
+  else
+    ss = pst[arg->key];
 
   if (ss == NULL) {
     ss = New store_state (arg->key, arg->attr.size);
-    pst.insert(ss);
+    if (arg->type == DHASH_CACHE)
+      pst_cache.insert(ss);
+    else
+      pst.insert(ss);
   }
 
   if (!ss->addchunk(arg->offset, arg->offset+arg->data.size (), 
@@ -741,23 +749,27 @@ dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
   }
 
   if (ss->iscomplete()) {
+
     dhash_stat stat = DHASH_OK;
     ref<dbrec> k = id2dbrec(arg->key);
     ref<dbrec> d = New refcounted<dbrec> (ss->buf, ss->size);
 
-
     //Verify removed by cates. noted by fdabek
+
     switch (arg->ctype) {
     case DHASH_KEYHASH:
       {
+	if (!verify_key_hash (arg->key, ss->buf, ss->size)) {
+	  stat = DHASH_STORE_NOVERIFY;
+	  break;
+	}
+
 	ptr<dbrec> prev = keyhash_db->lookup (k);
 	if (prev) {
 	  long v0 = keyhash_version (prev);
 	  long v1 = keyhash_version (d);
-	  // warn << "old version " << v0 << ", new version " << v1 << "\n";
 	  if (v0 >= v1) {
 	    if (arg->type == DHASH_STORE)
-	      // XXX maybe we should also report STALE for replicated blocks?
 	      stat = DHASH_STALE;
 	    break;
 	  } else {
@@ -770,15 +782,21 @@ dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
       }
     case DHASH_APPEND:
       append (k, d, arg, cb);
-      // XXX no stats gathering?
+      if (ss) {
+        if (arg->type == DHASH_CACHE)
+          pst_cache.remove (ss);
+	else
+	  pst.remove (ss);
+        delete ss;
+      }
       return;
     case DHASH_CONTENTHASH:
       if (arg->type == DHASH_CACHE) {
 	if (!verify_content_hash (arg->key, ss->buf, ss->size)) {
-	  cb (DHASH_STORE_NOVERIFY);
-	  return;
+	  warnx << "cache: cannot verify " << ss->size << " bytes\n";
+	  stat = DHASH_STORE_NOVERIFY;
+	  break;
 	}
-	warnx << "cache: insert " << arg->key << "\n";
         bool exists = !!cache_db->lookup (k);
 	if (!exists)
           cache_db->insert (k, d);
@@ -792,29 +810,34 @@ dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
       dbwrite (k, d, arg->ctype);
       break;
     default:
-      cb (DHASH_ERR);
-      return;
+      stat = DHASH_ERR;
+      break;
     }
 
-    if (arg->type == DHASH_STORE) {
-      keys_stored ++;
-    } else if (arg->type == DHASH_REPLICA) {
-      keys_replicated ++;
-    } else if (arg->type == DHASH_CACHE) {
-      keys_cached ++;
-    } else {
-      keys_others ++;
-    }
+    if (stat == DHASH_OK) {
+      if (arg->type == DHASH_STORE)
+        keys_stored ++;
+      else if (arg->type == DHASH_REPLICA)
+        keys_replicated ++;
+      else if (arg->type == DHASH_CACHE)
+        keys_cached ++;
+      else
+        keys_others ++;
 
-    /* statistics */
-    if (ss)
-      bytes_stored += ss->size;
-    else
-      bytes_stored += arg->data.size ();
+      /* statistics */
+      if (ss)
+        bytes_stored += ss->size;
+      else
+        bytes_stored += arg->data.size ();
+    }
 
     cb (stat);
+
     if (ss) {
-      pst.remove (ss);
+      if (arg->type == DHASH_CACHE)
+        pst_cache.remove (ss);
+      else
+	pst.remove (ss);
       delete ss;
     }
   }
@@ -1014,23 +1037,41 @@ join(store_chunk *c)
   }
 }
 
+bool
+store_state::gap ()
+{
+  if (!have)
+    return true;
+
+  store_chunk *c = have;
+  store_chunk *p = 0;
+
+  if (c->start != 0)
+    return true;
+
+  while (c) {
+    if (p && p->end != c->start)
+      return true;
+    p = c;
+    c = c->next;
+  }
+  if (p->end != size)
+    return true;
+  return false;
+}
 
 bool
 store_state::iscomplete()
 {
-  return have && have->start==0 && have->end==(unsigned)size;
+  return have && have->start == 0 && have->end == (unsigned)size && !gap ();
 }
 
 bool
-store_state::addchunk(unsigned int start, unsigned int end,void *base)
+store_state::addchunk(unsigned int start, unsigned int end, void *base)
 {
   store_chunk **l, *c;
 
-
-  if(start >= end)
-    return false;
-
-  if(start >= end || end > size)
+  if (start >= end || end > size)
     return false;
   
   l = &have;

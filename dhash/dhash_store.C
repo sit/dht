@@ -20,6 +20,12 @@ dhash_store::start ()
   nextblock = 0;
   numblocks = 0;
   int blockno = 0;
+
+  unsigned int mtu;
+  if (clntnode->my_location ()->id () == dest->id ())
+    mtu = block->len;
+  else
+    mtu = MTU;
   
   if (dcb)
     timecb_remove (dcb);
@@ -29,7 +35,7 @@ dhash_store::start ()
   
   size_t nstored = 0;
   while (nstored < block->len) {
-    size_t chunklen = MIN (MTU, block->len - nstored);
+    size_t chunklen = MIN (mtu, block->len - nstored);
     char  *chunkdat = &block->data[nstored];
     size_t chunkoff = nstored;
     npending++;

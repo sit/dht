@@ -46,6 +46,7 @@ struct store_state {
       delete c;
     }
   };
+  bool gap ();
   bool addchunk (unsigned int start, unsigned int end, void *base);
   bool iscomplete ();
 };
@@ -108,6 +109,9 @@ class dhash_impl : public dhash {
 
   ihash<chordID, store_state, &store_state::key, 
     &store_state::link, hashID> pst;
+  
+  ihash<chordID, store_state, &store_state::key, 
+    &store_state::link, hashID> pst_cache;
 
   ihash<int, pk_partial, &pk_partial::cookie, 
     &pk_partial::link> pk_cache;

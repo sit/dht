@@ -17,8 +17,10 @@ class dhashgateway {
   dhash *dh;
 
   void dispatch (svccb *sbp);
+  void insert_cache_cb (dhash_stat status, vec<chordID> path);
   void insert_cb (svccb *sbp, dhash_stat status, vec<chordID> path);
-  void retrieve_cb (svccb *sbp, dhash_stat status, ptr<dhash_block> block, route path);
+  void retrieve_cb (svccb *sbp, dhash_stat status, ptr<dhash_block> block,
+                    route path);
   
 public:
   dhashgateway (ptr<axprt_stream> x, ptr<chord> clnt, dhash *dh,

@@ -436,18 +436,18 @@ dhashcli::retrieve_and_cache_cb (cb_ret cb, ptr<dhash_block> block, route path,
 }
 
 void
-dhashcli::retrieve_and_cache (cb_ret cb, dhash_stat stat, 
+dhashcli::retrieve_and_cache (cb_ret cb, int options, dhash_stat stat, 
                               ptr<dhash_block> block, route path)
 {
-  if (!block)
-    cb (stat, block, path);
-  else
+  if (block && (options & DHASHCLIENT_CACHE))
     dhash_store::execute (clntnode, clntnode->my_location (),
                           blockID (block->ID, block->ctype, DHASH_BLOCK),
 		          block,
 		          wrap (this, &dhashcli::retrieve_and_cache_cb,
 			        cb, block, path),
 			  DHASH_CACHE);
+  else
+    cb (stat, block, path);
 }
 
 void
@@ -459,7 +459,7 @@ dhashcli::retrieve_from_cache_cb (blockID n, cb_ret cb,
   if (block)
     cb (DHASH_OK, block, ret);
   else
-    retrieve (n, wrap (this, &dhashcli::retrieve_and_cache, cb),
+    retrieve (n, wrap (this, &dhashcli::retrieve_and_cache, cb, options),
 	      options, guess);
 }
 

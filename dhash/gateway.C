@@ -127,6 +127,13 @@ dhashgateway::dispatch (svccb *sbp)
 }
 
 void
+dhashgateway::insert_cache_cb (dhash_stat status, vec<chordID> path)
+{
+  if (status)
+    warn << "insert into cache failed " << dhasherr2str (status) << "\n";
+}
+
+void
 dhashgateway::insert_cb (svccb *sbp, dhash_stat status, vec<chordID> path)
 {
   dhash_insert_res res (status);
@@ -136,7 +143,19 @@ dhashgateway::insert_cb (svccb *sbp, dhash_stat status, vec<chordID> path)
       res.resok->path[i] = path[i];
   }
 
+  dhash_insert_arg *arg = sbp->template getarg<dhash_insert_arg> ();
+  ptr<dhash_block> block = 0;
+  if (arg->options & DHASHCLIENT_CACHE) {
+    block = New refcounted<dhash_block>
+      (arg->block.base (), arg->len, arg->ctype);
+    block->ID = arg->blockID;
+  }
+
   sbp->reply (&res);
+
+  if (block)
+    dhcli->insert_to_cache
+      (block, wrap (this, &dhashgateway::insert_cache_cb));
 }
 
 

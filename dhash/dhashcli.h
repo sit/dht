@@ -103,7 +103,7 @@ private:
   void retrieve_from_cache_cb (blockID bid, cb_ret cb,
                                int options, ptr<chordID> guess,
                                ptr<dhash_block> block);
-  void retrieve_and_cache (cb_ret cb, dhash_stat stat, 
+  void retrieve_and_cache (cb_ret cb, int options, dhash_stat stat, 
                            ptr<dhash_block> block, route path);
   void retrieve_and_cache_cb (cb_ret cb, ptr<dhash_block> block, route path,
                               dhash_stat err, chordID id, bool present);
