@@ -83,6 +83,9 @@ private:
   void insert_store_cb (ref<sto_state> ss, route r, u_int i, 
 			u_int nstores, u_int min_needed,
 			dhash_stat err, chordID id, bool present);
+  void insert_to_cache_cb (cbinsert_path_t cb, dhash_stat err,
+                           chordID id, bool present);
+  
   void fetch_frag (rcv_state *rs);
 
   void retrieve_frag_hop_cb (blockID blockID, route_iterator *ci, bool done);
@@ -90,6 +93,7 @@ private:
 			   vec<chord_node> succs, route r);
   void retrieve_fetch_cb (blockID blockID, u_int i,
 			  ptr<dhash_block> block);
+  void retrieve_from_cache_cb (cb_ret cb, ptr<dhash_block> block);
 
   void insert_succlist_cb (ref<dhash_block> block, cbinsert_path_t cb,
 			   chordID guess,
@@ -104,6 +108,10 @@ private:
   dhashcli (ptr<vnode> node, dhash *dh, ptr<route_factory> r_factory, 
 	    bool do_cache, int ss_mode = 1);
 
+
+  void retrieve_from_cache (blockID blockID, cb_ret cb);
+
+  void insert_to_cache (ref<dhash_block> block, cbinsert_path_t cb);
 
   void retrieve (blockID blockID, cb_ret cb, 
 		 int options = 0, 

@@ -84,6 +84,7 @@ class dhash_impl : public dhash {
   int pk_partial_cookie;
   
   ptr<dbfe> db;
+  ptr<dbfe> cache_db;
   ptr<dbfe> keyhash_db;
   ptr<vnode> host_node;
   dhashcli *cli;
@@ -215,6 +216,7 @@ class dhash_impl : public dhash {
   long keys_stored;
   long keys_replicated;
   long keys_cached;
+  long keys_others;
   long bytes_served;
   long keys_served;
   long rpc_answered;

@@ -80,15 +80,19 @@ dhashgateway::dispatch (svccb *sbp)
 	New refcounted<dhash_block> (arg->block.base (), arg->len, arg->ctype);
       block->ID = arg->blockID;
 
-      ptr<chordID> guess = NULL;
-      if (arg->options & DHASHCLIENT_GUESS_SUPPLIED) 
-	guess = New refcounted<chordID> (arg->guess);
-
+      if (arg->options & DHASHCLIENT_USE_CACHE)
+        dhcli->insert_to_cache 
+	  (block, wrap (this, &dhashgateway::insert_cb, sbp));
+      else {
+        ptr<chordID> guess = NULL;
+        if (arg->options & DHASHCLIENT_GUESS_SUPPLIED) 
+	  guess = New refcounted<chordID> (arg->guess);
 	 
-      dhcli->insert (block, 
-		     wrap (this, &dhashgateway::insert_cb, sbp),
-		     arg->options,
-		     guess);
+        dhcli->insert (block, 
+		       wrap (this, &dhashgateway::insert_cb, sbp),
+		       arg->options,
+		       guess);
+      }
     }
     break;
     
@@ -96,15 +100,20 @@ dhashgateway::dispatch (svccb *sbp)
     {
       dhash_retrieve_arg *arg = sbp->template getarg<dhash_retrieve_arg> ();
 
-      ptr<chordID> guess = NULL;
-      if (arg->options & DHASHCLIENT_GUESS_SUPPLIED) {
-	guess = New refcounted<chordID> (arg->guess);
+      if (arg->options & DHASHCLIENT_USE_CACHE)
+        dhcli->retrieve_from_cache
+	  (blockID (arg->blockID, arg->ctype, DHASH_BLOCK),
+	   wrap (this, &dhashgateway::retrieve_cb, sbp));
+      else {
+        ptr<chordID> guess = NULL;
+        if (arg->options & DHASHCLIENT_GUESS_SUPPLIED) {
+	  guess = New refcounted<chordID> (arg->guess);
+        }
+
+        dhcli->retrieve (blockID(arg->blockID, arg->ctype, DHASH_BLOCK),
+		         wrap (this, &dhashgateway::retrieve_cb, sbp),
+		         arg->options, guess);
       }
-
-
-      dhcli->retrieve (blockID(arg->blockID, arg->ctype, DHASH_BLOCK),
-		       wrap (this, &dhashgateway::retrieve_cb, sbp),
-		       arg->options, guess);
     }
     break;
     

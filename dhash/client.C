@@ -57,7 +57,6 @@
 #include <ida.h>
 
 
-
 // ---------------------------------------------------------------------------
 // DHASHCLI
 
@@ -126,7 +125,8 @@ dhashcli::retrieve_block_hop_cb (blockID blockID, route_iterator *ci,
   delete ci;
   
   if (status != DHASH_OK) {
-    trace << myID << ": retrieve (" << blockID << "): lookup failure: " << status << "\n";
+    trace << myID << ": retrieve (" << blockID 
+          << "): lookup failure: " << status << "\n";
     rcvs.remove (rs);
     rs->complete (status, NULL); // failure
     rs = NULL;    
@@ -242,7 +242,8 @@ dhashcli::fetch_frag (rcv_state *rs)
     // Should we try harder? Like, try and get more successors and
     // check out the swath? No, let's just fail and have the higher
     // level know that they should retry.
-    trace << myID << ": retrieve (" << rs->key << "): out of successors; failing.\n";
+    trace << myID << ": retrieve (" << rs->key 
+          << "): out of successors; failing.\n";
     rcvs.remove (rs);
     rs->complete (DHASH_NOENT, NULL);
     rs = NULL;
@@ -312,7 +313,8 @@ dhashcli::retrieve_lookup_cb (blockID blockID,
   rs->r = r;
   
   if (status != DHASH_OK) {
-    trace << myID << ": retrieve (" << blockID << "): lookup failure: " << status << "\n";
+    trace << myID << ": retrieve (" << blockID 
+          << "): lookup failure: " << status << "\n";
     rcvs.remove (rs);
     rs->complete (status, NULL); // failure
     rs = NULL;    
@@ -384,7 +386,8 @@ dhashcli::retrieve_fetch_cb (blockID blockID, u_int i,
     strbuf block;
 
     if (!Ida::reconstruct (rs->frags, block)) {
-      trace << myID << ": retrieve (" << blockID << "): reconstruction failed.\n";
+      trace << myID << ": retrieve (" << blockID 
+	    << "): reconstruction failed.\n";
       fetch_frag (rs);
       return;
     }
@@ -409,6 +412,46 @@ dhashcli::retrieve_fetch_cb (blockID blockID, u_int i,
     rs->complete (DHASH_OK, blk);
     rs = NULL;
   }
+}
+
+void
+dhashcli::retrieve_from_cache (blockID blockID, cb_ret cb)
+{
+  chord_node s;
+  clntnode->my_location ()->fill_node (s);
+  dhash_download::execute (clntnode, s, blockID, NULL, 0, 0, 0,
+                           wrap (this, &dhashcli::retrieve_from_cache_cb, cb));
+}
+
+void
+dhashcli::retrieve_from_cache_cb (cb_ret cb, ptr<dhash_block> block)
+{
+  vec<ptr<location> > ret;
+  if (block)
+    cb (DHASH_OK, block, ret);
+  else
+    cb (DHASH_NOENT, block, ret);
+}
+
+void
+dhashcli::insert_to_cache (ref<dhash_block> block, cbinsert_path_t cb)
+{
+  dhash_store::execute (clntnode, clntnode->my_location (),
+                        blockID (block->ID, block->ctype, DHASH_BLOCK),
+		        dh, block,
+		        wrap (this, &dhashcli::insert_to_cache_cb, cb),
+			DHASH_CACHE);
+}
+
+void
+dhashcli::insert_to_cache_cb (cbinsert_path_t cb, dhash_stat err,
+                              chordID id, bool present)
+{
+  vec<chordID> ret;
+  if (err)
+    cb (DHASH_STOREERR, ret);
+  else
+    cb (DHASH_OK, ret);
 }
 
 void
@@ -471,7 +514,7 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
 			    wrap (this, &dhashcli::insert_store_cb,  
 				  ss, r, i,
 				  ss->succs.size (), ss->succs.size () / 2),
-			    DHASH_CACHE);  // XXX really CACHE??
+			    i == 0 ? DHASH_STORE : DHASH_REPLICA);
     }
     return;
   }
@@ -489,11 +532,12 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
     assert (i < succs.size ());
     str frag = Ida::gen_frag (dhash::NUM_DFRAGS, blk);
     
-    ref<dhash_block> blk = New refcounted<dhash_block> ((char *)NULL, frag.len (), DHASH_CONTENTHASH);
+    ref<dhash_block> blk = New refcounted<dhash_block> 
+      ((char *)NULL, frag.len (), DHASH_CONTENTHASH);
     bcopy (frag.cstr (), blk->data, frag.len ());
     
     bigint h = compute_hash (blk->data, blk->len);
-    
+
     // Count up for each RPC that will be dispatched
     ss->out += 1;
 
@@ -504,7 +548,7 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
 			  wrap (this, &dhashcli::insert_store_cb,
 				ss, r, i,
 				dhash::NUM_EFRAGS, dhash::NUM_DFRAGS),
-			  DHASH_CACHE);
+			  DHASH_FRAGMENT);
   }
 }
 

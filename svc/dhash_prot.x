@@ -32,6 +32,7 @@ enum dhash_stat {
 enum store_status {
   DHASH_STORE = 0,
   DHASH_CACHE = 1,
+  DHASH_FRAGMENT = 2,
   DHASH_REPLICA = 3
 };
 

@@ -125,11 +125,19 @@ dhash_impl::dhash_impl (str dbname, u_int k, int _ss_mode)
     exit (-1);
   }
  
-  keyhash_db = New refcounted<dbfe>();
+  cache_db = New refcounted<dbfe> ();
+  keyhash_db = New refcounted<dbfe> ();
 
-  str s = strbuf() << dbname << ".k";
-  if (int err = keyhash_db->opendb(const_cast < char *>(s.cstr()), opts)) {
-    warn << "keyhash db file: " << s <<"\n";
+  str cdbs = strbuf() << dbname << ".c";
+  if (int err = cache_db->opendb(const_cast < char *> (cdbs.cstr()), opts)) {
+    warn << "cache db file: " << cdbs <<"\n";
+    warn << "open returned: " << strerror(err) << "\n";
+    exit (-1);
+  }
+
+  str kdbs = strbuf() << dbname << ".k";
+  if (int err = keyhash_db->opendb(const_cast < char *> (kdbs.cstr()), opts)) {
+    warn << "keyhash db file: " << kdbs <<"\n";
     warn << "open returned: " << strerror(err) << "\n";
     exit (-1);
   }
@@ -180,6 +188,7 @@ dhash_impl::init_after_chord(ptr<vnode> node, ptr<route_factory> _r_factory)
   bytes_stored = 0;
   keys_replicated = 0;
   keys_cached = 0;
+  keys_others = 0;
   keys_served = 0;
   bytes_served = 0;
   rpc_answered = 0;
@@ -256,6 +265,8 @@ dhash_impl::missing_retrieve_cb (bigint key, dhash_stat err,
   }
 }
 
+// --------------------------------------------------------------------------------
+// keyhash maintenance
 
 void
 dhash_impl::sendblock (ptr<location> dst, blockID bID,
@@ -268,12 +279,11 @@ dhash_impl::sendblock (ptr<location> dst, blockID bID,
   ref<dhash_block> dhblk = New refcounted<dhash_block> 
     (blk->value, blk->len, bID.ctype);
 
-  dhash_store::execute (host_node, dst, bID, this, dhblk, 
-			wrap (this, &dhash_impl::sendblock_cb, cb), 
-			DHASH_REPLICA);
-
+  dhash_store::execute 
+    (host_node, dst, bID, this, dhblk,
+     wrap (this, &dhash_impl::sendblock_cb, cb),
+     bID.dbtype == DHASH_BLOCK ? DHASH_REPLICA : DHASH_FRAGMENT);
 }
-
 
 void
 dhash_impl::sendblock_cb (callback<void, dhash_stat, bool>::ref cb, 
@@ -302,7 +312,7 @@ dhash_impl::keyhash_mgr_timer ()
       if (responsible (n)) {
         // replicate a block if we are responsible for it
         for (unsigned j=0; j<replicas.size(); j++) {
-	  warnx << "for " << n << ", replicate to " << replicas[j]->id () << "\n";
+	  // warnx << "keyhash: " << n << " to " << replicas[j]->id () << "\n";
           keyhash_mgr_rpcs ++;
           sendblock (replicas[j], blockID(n, DHASH_KEYHASH, DHASH_BLOCK),
 		     wrap (this, &dhash_impl::keyhash_sync_done));
@@ -313,8 +323,6 @@ dhash_impl::keyhash_mgr_timer ()
         // otherwise, try to sync with the master node
         cli->lookup
 	  (n, wrap (this, &dhash_impl::keyhash_mgr_lookup, n));
-        // XXX if we are not a replica, should mark the block so we dont
-        // serve it again
       }
       entry = iter->nextElement ();
     }
@@ -330,10 +338,9 @@ dhash_impl::keyhash_mgr_lookup (chordID key, dhash_stat err,
   keyhash_mgr_rpcs --;
   if (!err) {
       keyhash_mgr_rpcs ++;
-      warnx << "for " << key << ", sending to " << r.back()->id () << "\n";
+      // warnx << "keyhash: sync " << key << " to " << r.back()->id () << "\n";
       sendblock (r.back (), blockID(key, DHASH_KEYHASH, DHASH_BLOCK),
 		 wrap (this, &dhash_impl::keyhash_sync_done));
-
   }
 }
 
@@ -639,7 +646,7 @@ dhash_impl::sync_cb ()
 
 dhash_fetchiter_res *
 dhash_impl::block_to_res (dhash_stat err, s_dhash_fetch_arg *arg,
-		     int cookie, ptr<dbrec> val)
+		          int cookie, ptr<dbrec> val)
 {
   dhash_fetchiter_res *res;
   if (err) 
@@ -711,16 +718,32 @@ dhash_impl::dispatch (user_args *sbp)
     {
       //the only reason to get here is to fetch the 2-n chunks
       s_dhash_fetch_arg *farg = sbp->template getarg<s_dhash_fetch_arg> ();
-      blockID id(farg->key, farg->ctype, farg->dbtype);
+      blockID id (farg->key, farg->ctype, farg->dbtype);
 
-      if ((key_status (id) != DHASH_NOTPRESENT) && (farg->len > 0)) {
-	//fetch the key and return it, end of story
-	fetch (id, farg->cookie,
-	       wrap (this, &dhash_impl::fetchiter_sbp_gotdata_cb, sbp, farg));
-      } else {
-        dhash_fetchiter_res *res = New dhash_fetchiter_res (DHASH_NOENT);
-	sbp->reply (res);
-        delete res;
+      if (farg->ctype == DHASH_CONTENTHASH && farg->dbtype == DHASH_BLOCK) {
+	// XXX fetch from cache db, since that's the only place right
+	// now we have CONTENTHASH BLOCK. probably need a flag later.
+
+	warnx << "cache: fetch " << farg->key << "\n";
+        ptr<dbrec> ret = cache_db->lookup (id2dbrec (farg->key));
+	if (ret)
+          fetchiter_sbp_gotdata_cb (sbp, farg, -1, ret, DHASH_OK);
+	else {
+          dhash_fetchiter_res *res = New dhash_fetchiter_res (DHASH_NOENT);
+	  sbp->reply (res);
+          delete res;
+	}
+      }
+      else {
+        if ((key_status (id) != DHASH_NOTPRESENT) && (farg->len > 0)) {
+	  //fetch the key and return it, end of story
+	  fetch (id, farg->cookie,
+	         wrap (this, &dhash_impl::fetchiter_sbp_gotdata_cb, sbp, farg));
+        } else {
+          dhash_fetchiter_res *res = New dhash_fetchiter_res (DHASH_NOENT);
+	  sbp->reply (res);
+          delete res;
+        }
       }
     }
     break;
@@ -735,13 +758,25 @@ dhash_impl::dispatch (user_args *sbp)
 	ptr<location> pred = host_node->my_pred ();
 	pred->fill_node (res.pred->p);
 	sbp->reply (&res);
-      } else {
-	bool already_present = 
-	  !!dblookup (blockID (sarg->key, sarg->ctype, sarg->dbtype));
-	store (sarg, wrap(this, &dhash_impl::storesvc_cb, sbp, 
-			  sarg, already_present));	
-      }
+      } 
+      else if (sarg->type == DHASH_CACHE && 
+	       (sarg->ctype != DHASH_CONTENTHASH ||
+		sarg->dbtype != DHASH_BLOCK)) {
+	dhash_storeres res (DHASH_ERR);
+	ptr<location> pred = host_node->my_pred ();
+	pred->fill_node (res.pred->p);
+	sbp->reply (&res);
+      } 
+      else {
+        ref<dbrec> k = id2dbrec(sarg->key);
 
+	bool already_present = (sarg->type == DHASH_CACHE) 
+	  ? (!!cache_db->lookup (k)) 
+	  : (!!dblookup (blockID (sarg->key, sarg->ctype, sarg->dbtype)));
+	
+	store (sarg, wrap(this, &dhash_impl::storesvc_cb, sbp,
+	                  sarg, already_present));	
+      }
     }
     break;
   case DHASHPROC_GETKEYS:
@@ -979,6 +1014,19 @@ dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
       // XXX no stats gathering?
       return;
     case DHASH_CONTENTHASH:
+      if (arg->type == DHASH_CACHE) {
+	if (!verify_content_hash (arg->key, ss->buf, ss->size)) {
+	  cb (DHASH_STORE_NOVERIFY);
+	  return;
+	}
+	warnx << "cache: insert " << arg->key << "\n";
+        bool exists = !!cache_db->lookup (k);
+	if (!exists)
+          cache_db->insert (k, d);
+	break;
+      }
+
+      // not a cache block, falls thru
     case DHASH_DNSSEC:
     case DHASH_NOAUTH:
     case DHASH_UNKNOWN:
@@ -990,11 +1038,13 @@ dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
     }
 
     if (arg->type == DHASH_STORE) {
-      keys_stored += 1;
+      keys_stored ++;
     } else if (arg->type == DHASH_REPLICA) {
-      keys_replicated += 1;
+      keys_replicated ++;
+    } else if (arg->type == DHASH_CACHE) {
+      keys_cached ++;
     } else {
-      keys_cached += 1;
+      keys_others ++;
     }
 
     /* statistics */
@@ -1107,9 +1157,10 @@ dhash_impl::print_stats ()
 {
   warnx << "ID: " << host_node->my_ID () << "\n";
   warnx << "Stats:\n";
-  warnx << "  " << keys_stored << " keys stored\n";
   warnx << "  " << keys_cached << " keys cached\n";
-  warnx << "  " << keys_replicated << " keys replicated\n";
+  warnx << "  " << keys_stored << " blocks stored\n";
+  warnx << "  " << keys_replicated << " blocks replicated\n";
+  warnx << "  " << keys_others << " non-blocks stored\n";
   warnx << "  " << bytes_stored << " total bytes held\n";
   warnx << "  " << keys_served << " keys served\n";
   warnx << "  " << bytes_served << " bytes served\n";

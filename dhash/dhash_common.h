@@ -6,7 +6,8 @@
 #include <crypt.h>
 
 #define DHASHCLIENT_GUESS_SUPPLIED 0x1
-#define DHASHCLIENT_NO_RETRY_ON_LOOKUP   0x2
+#define DHASHCLIENT_NO_RETRY_ON_LOOKUP 0x2
+#define DHASHCLIENT_USE_CACHE 0x4
 
 struct blockID {
   enum { size = sha1::hashsize };
