@@ -7,12 +7,19 @@ void
 usage()
 {
   fprintf(stderr, "\
-Usage: block [-u] BLOCKER[:PORT] BLOCKEE[:PORT]\n\
+To drop traffic from BLOCKEE in BLOCKER:\n\
 \n\
-Instructs BLOCKER to drop traffic from BLOCKEE.\n\
-PORT in BLOCKER:PORT should be the TESLA/lsd control port, %d by default.\n\
-PORT in BLOCKEE:PORT instructs to be block a specific port.  All if omitted.\n\
--u              : unblock\
+  block [-u] BLOCKER[:P1] BLOCKEE[:P2]\n\
+\n\
+  BLOCKER/BLOCKEE are host names or IP addresses.\n\
+  P1 is the TESLA/lsd control port; default %d.\n\
+  If P2 is specified, only traffic from host/port combination is blocked.\n\
+\n\
+To isolate a machine completely:\n\
+  block -i BLOCKEE[:P1]\n\
+\n\
+To undo isolation:\n\
+  block -f BLOCKEE[:P1]\n\
 ", TESLA_CONTROL_PORT);
   exit(-1);
 }
@@ -51,13 +58,19 @@ main(int argc, char *argv[])
 
 
   char ch;
-  while((ch = getopt(argc, argv, "hu")) != -1) {
+  while((ch = getopt(argc, argv, "hifu")) != -1) {
     switch(ch) {
       case 'h':
         usage();
         break;
       case 'u':
         mode = 1;
+        break;
+      case 'i':
+        mode = 2;
+        break;
+      case 'f':
+        mode = 3;
         break;
       default:
         usage();
@@ -72,14 +85,21 @@ main(int argc, char *argv[])
   warn << "BLOCKER host = " << slaves[0].name << ", port = " << slaves[0].port << "\n";
 
   // BLOCKEE
-  set(argv[optind++], &slaves[1]);
-  warn << "BLOCKEE host = " << slaves[1].name << ", port = " << slaves[1].port << "\n";
+  if(mode == 0 || mode == 1) {
+    set(argv[optind++], &slaves[1]);
+    warn << "BLOCKEE host = " << slaves[1].name << ", port = " << slaves[1].port << "\n";
+  }
 
   testmaster tm(slaves);
   if(mode == 0)
     tm.block(0, 1, wrap(&done));
-  else
+  else if(mode == 1)
     tm.unblock(0, 1, wrap(&done));
+  else if(mode == 2)
+    tm.isolate(0, wrap(&done));
+  else if(mode == 3)
+    tm.unisolate(0, wrap(&done));
+
 
   amain();
 }

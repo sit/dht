@@ -39,6 +39,34 @@ testmaster::~testmaster()
 {
 }
 
+// tells <victim> to isolate itself from the network
+void
+testmaster::isolate(int victim, callback<void, int>::ref cb)
+{
+  instruct_thunk *tx = New instruct_thunk(cb);
+
+  tx->type = ISOLATE;
+  tx->blockee = victim;
+  tx->blocker = victim;
+
+  instruct(tx);
+}
+
+
+// tells <victim> to unisolate itself from the network
+void
+testmaster::unisolate(int victim, callback<void, int>::ref cb)
+{
+  instruct_thunk *tx = New instruct_thunk(cb);
+
+  tx->type = UNISOLATE;
+  tx->blockee = victim;
+  tx->blocker = victim;
+
+  instruct(tx);
+}
+
+
 // tells <blocker> to drop traffic coming from <blockee>
 void
 testmaster::block(int blocker, int blockee, callback<void, int>::ref cb)

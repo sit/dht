@@ -39,6 +39,9 @@ class testmaster { public:
   testmaster(const testslave slaves[]);
   ~testmaster();
 
+  void isolate(int victim, callback<void, int>::ref);
+  void unisolate(int victim, callback<void, int>::ref);
+
   void block(int blocker, int blockee, callback<void, int>::ref);
   void unblock(int blocker, int blockee, callback<void, int>::ref);
 
@@ -62,7 +65,9 @@ private:
 
   enum instruct_type {
     BLOCK = 0,
-    UNBLOCK = 1
+    UNBLOCK,
+    ISOLATE,
+    UNISOLATE
   };
 
   typedef union {
