@@ -1,4 +1,4 @@
-/* $Id: server.C,v 1.3 2001/01/25 21:36:00 fdabek Exp $ */
+/* $Id: server.C,v 1.4 2001/02/13 23:53:34 fdabek Exp $ */
 
 /*
  *
@@ -207,47 +207,28 @@ mi_elapsedtime(mirror_info *mi) {
 
 void
 server::get_data (const sfs_hash *fh, 
-		  callback<void, sfsro_datares *, clnt_stat>::ref cb) {
+		  callback<void, sfsro_datares *, clnt_stat>::ref cb) 
+{
 
   ptr<vec<sfsro_datares* > > ress (New refcounted<vec<sfsro_datares *> >());
   ress->setsize(numMirrors);
-  ptr<int> recvd = New refcounted<int>(0);
+  ptr<int> recvd = New refcounted<int> (0);
   
-#if 0
-  //added to play with proxy stuff
-  in_addr_t pubaddr;
-  inet_pton(AF_INET, "18.26.4.124", &pubaddr);
-  char buf[100];
-  warn << "pub is " << inet_ntop(AF_INET, &pubaddr, buf, 100) << "\n"; 
-  for (int currentMirror = 0; currentMirror < mo_size; currentMirror++) {
-    sfsro_datares *res = New sfsro_datares (SFSRO_OK);
-    ptr<aclnt> target = mirrors[mo[currentMirror].aclnt_index];
-    ptr<sfsro_proxygetarg> arg = New refcounted<sfsro_proxygetarg>();      
-    arg->fh = *fh;
-    arg->pub_addr = pubaddr;
-    arg->pub_port = 11977;
-    target->call (SFSROPROC_PROXYGETDATA, arg, res, wrap(mkref (this),
-							 &server::get_data_cb,
-							 ress, res, 0,
-							 recvd, cb));
-  }
-#endif
 
-    
   for (int currentMirror = 0; currentMirror < mo_size; currentMirror++) {
     ptr<aclnt> target = mirrors[mo[currentMirror].aclnt_index];
     sfsro_datares *res = New sfsro_datares (SFSRO_OK);
     
-     ptr<sfsro_partialgetarg> arg = New refcounted<sfsro_partialgetarg>();      
-     arg->key = *fh;
-     arg->offset = mo[currentMirror].slice_start;
-     arg->len = mo[currentMirror].slice_len;
-      
-     mi_timestamp(&(mo[currentMirror]));
-     target->call (SFSROPROC_GETDATA_PARTIAL, arg, res, wrap(mkref (this),
-							      &server::get_data_cb,
-							      ress, res, currentMirror,
-							      recvd, cb));
+    ptr<sfsro_partialgetarg> arg = New refcounted<sfsro_partialgetarg>();      
+    arg->key = *fh;
+    arg->offset = mo[currentMirror].slice_start;
+    arg->len = mo[currentMirror].slice_len;
+    
+    mi_timestamp(&(mo[currentMirror]));
+    target->call (SFSROPROC_GETDATA_PARTIAL, arg, res, wrap(mkref (this),
+							    &server::get_data_cb,
+							    ress, res, currentMirror,
+							    recvd, cb));
   }
   
   
@@ -1046,7 +1027,7 @@ server::setrootfh (const sfs_fsinfo *fsi)
     warn << fsi->sfsro->v1->mirrors[i].host << "is mirroring.";
     warn << "size = " << fsi->sfsro->v1->mirrors.size () << " > " << i << "\n";
     tcpconnect (fsi->sfsro->v1->mirrors[i].host, 
-		11977,  //FED - should be SFS_PORT or something
+		sfs_port,  //FED - should be SFS_PORT or something
 		wrap(this, &server::setrootfh_1));
     warn << "did tcpconnect for i = " << i << "\n";
   }
@@ -1304,9 +1285,6 @@ server::lookup_parent_rofh_lookupres2 (nfscall *sbp,
 }
 
 //FED -- striping hack
-//given a list of spans in mi, a position v
-//returns ids of spans which enclose v
-
 int
 compare_mirrors(const void *a, const void *b) {
   mirror_info *A = (mirror_info *)a;
@@ -1357,14 +1335,14 @@ server::updateMirrorDivision() {
   */
   
   // XXX - bogus division for starters
-  mo_size = 1;
-  mo[0].aclnt_index = mi[0].aclnt_index;
-  mo[0].slice_start = 0;
-  mo[0].slice_len = STRIPE_BASE;
-  warn << "mo_size = " << mo_size << "\n"; 
-  for (int i = 0; i < mo_size; i++)
-  warn << mo[i].aclnt_index << " : " << mo[i].slice_start << " to " << mi[i].slice_start + mo[i].slice_len << "\n";
+  mo_size = numMirrors;
+  for (int i = 0; i < mo_size; i++) {
+    mo[i].aclnt_index = mi[i].aclnt_index;
+    mo[i].slice_start = 0;
+    mo[i].slice_len = STRIPE_BASE;
+  }
 
 }
+
 
 

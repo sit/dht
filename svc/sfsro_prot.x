@@ -121,6 +121,14 @@ struct sfsro_proxygetarg {
   sfs_ipport pub_port;
 };
 
+struct sfsro_partialproxygetarg {
+  sfs_hash fh;
+  sfs_ipaddr pub_addr;
+  sfs_ipport pub_port;
+  int offset;
+  int len;
+};
+
 enum dtype {
    SFSRO_INODE      = 0,
    SFSRO_FILEBLK    = 1, /* File data */
@@ -158,6 +166,9 @@ program SFSRO_PROGRAM {
 
 		sfsro_datares
 		SFSROPROC_GETDATA (sfs_hash) = 1;
+		
+		sfsro_datares
+		SFSROPROC_PROXYGETDATA_PARTIAL (sfsro_partialproxygetarg) = 5;
 		
 		sfsro_datares
 		SFSROPROC_GETDATA_PARTIAL (sfsro_partialgetarg) = 2;

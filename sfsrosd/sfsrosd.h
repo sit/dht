@@ -32,10 +32,25 @@ class sfsroclient {
 
   void dispatch (ref<bool> b, svccb *sbp);
   void getdata_cb(svccb *sbp, sfsro_datares *res, ref<bool> d);
+  void remote_get_data(sfs_hash fh,
+			     struct in_addr *pub_addr, 
+			     short pub_port,
+			     sfsro_datares *res,
+			     callback<void, sfsro_datares *>::ref cb);
 
+
+  void remoteget_cb(sfs_hash fh,
+		    callback<void, sfsro_datares *>::ref cb,
+		    sfsro_datares *res,
+		    int fd);
+  void remotegetdata_cb_call(sfs_hash fh, 
+			     callback<void, sfsro_datares *>::ref cb,
+			     sfsro_datares *res,
+			     clnt_stat err); 
   void proxygetdata_cb(svccb *sbp, sfsro_datares *res, ref<bool> d);
-  void proxygetdata_cb_connect(svccb *sbp, sfsro_datares *res , int fd);
-  void proxygetdata_cb_call(svccb *sbp, sfsro_datares *res, clnt_stat err);
+  void proxygetdata_cb_call(svccb *sbp, sfsro_datares *res);
+  void partialproxygetdata_cb(svccb *sbp, sfsro_datares *res, ref<bool> d);
+  void partialproxygetdata_cb_call(svccb *sbp, sfsro_datares *res);
 
 public:
   sfsroclient (ptr<axprt_stream> x, const authunix_parms *aup = NULL);

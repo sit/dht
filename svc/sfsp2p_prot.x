@@ -73,10 +73,18 @@ union sfsp2p_moveres switch (sfsp2pstat status) {
    void;
 };
 
+struct sfsp2p_cacheinsertarg {
+  sfs_ID d;
+  route r;
+  int32_t expires;
+  route primary; 
+};
+
 struct sfsp2p_insertarg {
   sfs_ID d;
   route r;
 };
+
 
 struct sfsp2p_lookupresok {
   route r;
@@ -146,6 +154,9 @@ program SFSP2P_PROGRAM {
 
 		sfsp2p_lookupres
 		SFSP2PPROC_LOOKUP (sfs_ID) = 9;
+
+		sfsp2pstat
+		SFSP2PPROC_CACHEITEM (sfsp2p_cacheinsertarg) = 10;
 
 	} = 1;
 } = 344447;

@@ -1,4 +1,4 @@
-#include <assert.h>
+  #include <assert.h>
 #include "sfsp2p.h"
 #include <qhash.h>
 #include <sys/time.h>
@@ -307,6 +307,11 @@ void
 p2p::timeout(location *l) {
   warn << "timeout on " << l->n << " closing socket\n";
   if (l->nout == 0) l->c = NULL;
+  else
+    {
+      warn << "timeout on node " << l->n << " has overdue RPCs\n";
+      l->timeout_cb = delaycb(30,0,wrap(this, &p2p::timeout, l));
+    }
 }
 
 void
@@ -346,7 +351,6 @@ p2p::timing_cb(aclnt_cb cb, location *l, ptr<struct timeval> start, clnt_stat er
   l->total_latency += (now.tv_sec - start->tv_sec)*1000000 + (now.tv_usec - start->tv_usec);
   l->num_latencies++;
   l->nout--;
-  warn << "nout(tcb) " << l->n << " " << l->nout << "\n";
   (*cb)(err);
 
 }
@@ -365,7 +369,6 @@ p2p::doRPC (sfs_ID &ID, int procno, const void *in, void *out,
   gettimeofday(start, NULL);
   l->nout++;
   if (l->c) {    
-    warn << "found allocated aclnt " << l->nout << " ID: " << ID << "\n";
     timecb_remove(l->timeout_cb);
     l->timeout_cb = delaycb(30,0,wrap(this, &p2p::timeout, l));
     l->c->call (procno, in, out, wrap(mkref(this), &p2p::timing_cb, cb, l, start));
@@ -403,9 +406,7 @@ p2p::print ()
 }
 p2p::~p2p()
 {
-  // upon exiting the function, print number of RPCs
-  // warnx << "Number of RPC CALLS: " << lookupRPCs << "\n";
-  //printf("NUM RPC CALLS= %d \n",lookupRPCs);
+
 }
 p2p::p2p (str host, int hostport, const sfs_ID &hostID,
 	  int port, const sfs_ID &ID) :
@@ -527,7 +528,8 @@ p2p::stabilize_getpred_cb (sfs_ID p, route r, sfsp2pstat status)
 }
 
 void
-p2p::stabilize_findsucc_cb (int i, sfs_ID s, route r, sfsp2pstat status)
+p2p::stabilize_findsucc_cb (int i, sfs_ID s, routes search_path, 
+			    sfsp2pstat status)
 {
   if (status) {
     // warnx << "stabilize_findsucc_cb: " << successor[i].first << " failure " 
@@ -536,6 +538,7 @@ p2p::stabilize_findsucc_cb (int i, sfs_ID s, route r, sfsp2pstat status)
   } else {
     // warnx << "stabilize_findsucc_cb from " << successor[i].first 
     //  << " : " << s << "\n";
+    route r = search_path.pop_back();
     if (updatesucc (successor[i], s, r)) {
       // print ();
       bootstrap ();
@@ -687,7 +690,8 @@ p2p::bootstrap_done ()
 }
 
 void
-p2p::bootstrap_succ_cb (int i, sfs_ID n, sfs_ID s, route r, sfsp2pstat status)
+p2p::bootstrap_succ_cb (int i, sfs_ID n, sfs_ID s, 
+			routes path, sfsp2pstat status)
 {
   nbootstrap--;
   if (status) {
@@ -696,6 +700,8 @@ p2p::bootstrap_succ_cb (int i, sfs_ID n, sfs_ID s, route r, sfsp2pstat status)
   } else {
     // warnx << "bootstrap_succ_cb: " << i << " is " << n 
     //  << " propose: " << s << "\n";
+    
+    route r = path.pop_back();
     if (updatesucc (successor[i], s, r)) {
       // warnx << "bootstrap_succ_cb: updated\n";
       stable = false;
@@ -783,8 +789,8 @@ p2p::insert (svccb *sbp,  sfsp2p_insertarg *ia)
 }
 
 void
-p2p::insert_findsucc_cb (svccb *sbp, sfsp2p_insertarg *ia, sfs_ID x, route r,
-			 sfsp2pstat status) 
+p2p::insert_findsucc_cb (svccb *sbp, sfsp2p_insertarg *ia, sfs_ID x,
+			 routes search_path, sfsp2pstat status) 
 {
   if (status) {
     //warnx << "insert_findsucc_cb for " << ia->d << " returned " <<
@@ -852,12 +858,6 @@ p2p::lookup (svccb *sbp, sfs_ID &n)
     set_closeloc (predecessor[i]);
   }
 
-  /*  if((lookupRPCs - last_lookupRPCs) > max_lRPCs && lookups > 0)
-      max_lRPCs = lookupRPCs - last_lookupRPCs;
-      if((lookupRPCs - last_lookupRPCs) < min_lRPCs && lookups > 0)
-      min_lRPCs = lookupRPCs - last_lookupRPCs;  
-      last_lookupRPCs = lookupRPCs;
-  */
   lookup_ops++;
   lookups_outstanding++;
   find_successor (predecessor[i].first, n,
@@ -865,8 +865,8 @@ p2p::lookup (svccb *sbp, sfs_ID &n)
 }
 
 void
-p2p::lookup_findsucc_cb (svccb *sbp, sfs_ID n, sfs_ID x, route r,
-			 sfsp2pstat status) 
+p2p::lookup_findsucc_cb (svccb *sbp, sfs_ID n, sfs_ID x,
+			 routes search_path, sfsp2pstat status) 
 {
   if (status) {
     warnx << "lookup_findsucc_cb for " << n << " returned " <<
@@ -877,13 +877,14 @@ p2p::lookup_findsucc_cb (svccb *sbp, sfs_ID n, sfs_ID x, route r,
       sbp->replyref (sfsp2pstat (status));
   } else {
     sfsp2p_lookupres *res = New sfsp2p_lookupres (SFSP2P_OK);
-    doRPC (x, SFSP2PPROC_LOOKUP, &n, res, wrap (mkref (this), 
-					      &p2p::lookup_cb, sbp, res));
+    doRPC (x, SFSP2PPROC_LOOKUP, &n, res, 
+	   wrap (mkref (this), &p2p::lookup_cb, sbp, res, search_path));
   }
 }
 
 void
-p2p::lookup_cb (svccb *sbp, sfsp2p_lookupres *res, clnt_stat err)
+p2p::lookup_cb (svccb *sbp, sfsp2p_lookupres *res, 
+		routes search_path, clnt_stat err)
 {
   lookups_outstanding--;
 
@@ -893,9 +894,16 @@ p2p::lookup_cb (svccb *sbp, sfsp2p_lookupres *res, clnt_stat err)
     sbp->replyref (res->status);
   } else {
     sbp->reply (res);
+    cache_item(res, search_path);
   }
 }
 
+void
+p2p::cache_item(sfsp2p_lookupres *res, routes search_path) 
+{
+  warn << "cache_item: not implemented\n";
+  
+}
 
 void 
 p2p::get_successor (sfs_ID n, cbsfsID_t cb)
@@ -953,41 +961,43 @@ p2p::get_predecessor_cb (sfs_ID n, cbsfsID_t cb, sfsp2p_findres *res,
 }
 
 void
-p2p::find_successor (sfs_ID &n, sfs_ID &x, cbsfsID_t cb)
+p2p::find_successor (sfs_ID &n, sfs_ID &x, succcb cb)
 {
   lookup_closestsucc (n, x, cb);
 }
 
 void 
-p2p::lookup_closestsucc (sfs_ID &n, sfs_ID &x, cbsfsID_t cb)
+p2p::lookup_closestsucc (sfs_ID &n, sfs_ID &x, succcb cb)
 {
   sfsp2p_findarg *fap = New sfsp2p_findarg;
   sfsp2p_findres *res = New sfsp2p_findres (SFSP2P_OK);
   fap->x = x;
-  // warnx << "RPC CALL: SFSP2PPROC_FINDCLOSESTSUCC" << "\n";
+
+  vec<route> search_path;
   doRPC (n, SFSP2PPROC_FINDCLOSESTSUCC, fap, res,
-	 wrap (mkref (this), &p2p::lookup_closestsucc_cb, n, cb, res));
+	 wrap (mkref (this), &p2p::lookup_closestsucc_cb, n, cb, res, search_path));
 }
 
 void
-p2p::lookup_closestsucc_cb (sfs_ID n, cbsfsID_t cb, 
-			   sfsp2p_findres *res, clnt_stat err)
+p2p::lookup_closestsucc_cb (sfs_ID n, succcb cb, 
+			    sfsp2p_findres *res, 
+			    vec<route> search_path, clnt_stat err)
 {
   if (err) {
-    route dr;
     warnx << "find_closestsucc_cb: RPC failure " << err << "\n";
     deleteloc (n);
-    cb (n, dr, SFSP2P_RPCFAILURE);
+    cb (n, search_path, SFSP2P_RPCFAILURE);
   } else if (res->status) {
-    route dr;
     warnx << "find_closestsucc_cb: RPC error" << res->status << "\n";
-    cb (n, dr, res->status);
+    cb (n, search_path, res->status);
   } else if (n != res->resok->node) {
     updateloc (res->resok->node, res->resok->r, n);
+    search_path.push_back(res->resok->r);
     lookup_closestsucc (res->resok->node, res->resok->x, cb);
   } else {
     updateloc (res->resok->node, res->resok->r, n);
-    cb (res->resok->node, res->resok->r, SFSP2P_OK);
+    search_path.push_back(res->resok->r);
+    cb (res->resok->node, search_path, SFSP2P_OK);
   }
 }
 
@@ -1168,17 +1178,31 @@ p2p::doinsert (svccb *sbp, sfsp2p_insertarg *ia)
 void
 p2p::dolookup (svccb *sbp, sfs_ID *n)
 {
-  // warnx << "dolookup for " << *n << ": ";
-  attribute *a = attributes[*n];
-  if (a) {
-    // warnx << a->r.server << "\n";
+  const sfsp2p_cacheinsertarg *crec = doc_cache.lookup(*n);
+  if (crec) {
     sfsp2p_lookupres res = (SFSP2P_OK);
-    res.resok->r = a->r;
+    res.resok->r = crec->r;
     sbp->reply (&res);
   } else {
-    //warnx << "no entry\n";
-    sbp->replyref (sfsp2pstat (SFSP2P_ERRNOENT));
+    attribute *a = attributes[*n];
+    if (a) {
+      // warnx << a->r.server << "\n";
+      sfsp2p_lookupres res = (SFSP2P_OK);
+      res.resok->r = a->r;
+      sbp->reply (&res);
+    }
+    else {
+      //warnx << "no entry\n";
+      sbp->replyref (sfsp2pstat (SFSP2P_ERRNOENT));
+    }
   }
+}
+
+void
+p2p::docache_item(sfsp2p_cacheinsertarg *ca) 
+{
+  assert(ca);
+  doc_cache.enter(ca->d, ca);
 }
 
 client::client (ptr<axprt_stream> x)
@@ -1246,6 +1270,12 @@ client::dispatch (svccb *sbp)
     {
       sfs_ID *n = sbp->template getarg<sfs_ID> ();
       defp2p->dolookup (sbp, n);
+    }
+    break;
+  case SFSP2PPROC_CACHEITEM:
+    {
+      sfsp2p_cacheinsertarg *ca = sbp->template getarg<sfsp2p_cacheinsertarg> ();
+      defp2p->docache_item(ca);
     }
     break;
   default:

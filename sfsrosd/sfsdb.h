@@ -15,8 +15,10 @@ class sfsrodb {
   void getinfo (sfs_fsinfo *fsinfo, callback<void>::ref cb);
   void getconnectres (sfs_connectres *conres, callback<void>::ref cb);
   void getdata (sfs_hash *fh, sfsro_datares *res,  callback<void>::ref cb);
-  void getpartialdata (sfs_hash *fh, sfsro_datares *res,  callback<void>::ref cb,
-		       int fraction, int whole);
+  void getpartialdata (sfs_hash *fh, sfsro_datares *res,  
+		       callback<void>::ref cb,int fraction, int whole);
+  void putdata (sfs_hash *fh, sfsro_datares *res);
+
  private:
   void getinfo_cb(callback<void>::ref cb, sfs_fsinfo *fsinfo, ptr<dbrec> res);
   void getconnectres_cb(callback<void>::ref cb, sfs_connectres *cres, 
@@ -27,6 +29,7 @@ class sfsrodb {
 		  int whole,
 		  ptr<dbrec> res);
 
+  void putdata_cb (int err);
 };
 
 #endif /* _SFSDB_H_ */

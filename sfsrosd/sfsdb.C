@@ -124,7 +124,6 @@ sfsrodb::getpartialdata_cb(callback<void>::ref cb, sfsro_datares *res,
     res->set_status(SFSRO_ERRNOENT);
     (*cb)();
   } else {
-    //warnx << "partial get for " << start << " " << count << " of " << s << " " << l << "\n";
     assert (start + count <= STRIPE_BASE);
 
     res->set_status (SFSRO_OK);
@@ -134,8 +133,6 @@ sfsrodb::getpartialdata_cb(callback<void>::ref cb, sfsro_datares *res,
     int len = fracsize*(count);
     if (start + count == STRIPE_BASE) len += rem;
     int offset = fracsize*start;
-
-    //warn << "r->l " << result->len << " FS " << fracsize << " len " << len << " offset " << offset << "numwextra " << numwextra << "rem " << rem << "\n";
 
     res->resok->data.setsize(len);
     memcpy (res->resok->data.base (), 
@@ -147,4 +144,20 @@ sfsrodb::getpartialdata_cb(callback<void>::ref cb, sfsro_datares *res,
   }
 }
 
+void
+sfsrodb::putdata(sfs_hash *fh, sfsro_datares *res) 
+{
+  ref<dbrec> key = new refcounted<dbrec>( (void *) fh->base (),
+					  fh->size ());
+  ref<dbrec> data = new refcounted<dbrec>( (void *)res->resok->data.base (),
+					   res->resok->data.size () );
+  
+  dbp->insert(key, data, wrap(this, &sfsrodb::putdata_cb));
+  return;
+}
 
+void
+sfsrodb::putdata_cb(int err) 
+{
+  if (err) warn << "insert from putdata returned" << err << "\n";
+}

@@ -98,7 +98,7 @@ start_server ()
   //now that we are running, add ourselves to the mirror list if necessary
   if (mirrorhost) {
     warn << "mirrorhost is " << mirrorhost << "\n"; 
-    tcpconnect(mirrorhost, 11977, wrap (&add_mirror_cb));
+    tcpconnect(mirrorhost, sfs_port, wrap (&add_mirror_cb));
   }
 
 }

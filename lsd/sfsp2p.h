@@ -6,8 +6,17 @@
 #include "arpc.h"
 #include "crypt.h"
 #include "sys/time.h"
+#include "vec.h"
 
 #define NBIT 32
+
+
+struct hashID {
+  hashID () {}
+  hash_t operator() (const sfs_ID &ID) const {
+    return ID.getui ();
+  }
+};
 
 template<class KEY, class VALUE, u_int max_cache_entries>
 class cache {
@@ -45,8 +54,8 @@ class cache {
   };
 
 private:
-  friend class cache_entry;
-  ihash<const KEY, cache_entry, &cache_entry::k, &cache_entry::fhlink> entries;
+  friend class cache_entry;                      //XXX hashid is a hack that ruins the generic nature of the cache
+  ihash<const KEY, cache_entry, &cache_entry::k, &cache_entry::fhlink, hashID> entries;
   u_int num_cache_entries;
   tailq<cache_entry, &cache_entry::lrulink> lrulist;
 
@@ -77,13 +86,14 @@ public:
 class sfsp2pclient {
   ptr<axprt_stream> x;
   ptr<asrv> p2pclntsrv;
-  //cache<sfs_hash, sfs_hostname, 1024> docs;
   void dispatch (svccb *sbp);
 public:
   sfsp2pclient (ptr<axprt_stream> x);
 };
 
+typedef vec<route> routes;
 typedef callback<void,sfs_ID,route,sfsp2pstat>::ref cbsfsID_t;
+typedef callback<void,sfs_ID,routes,sfsp2pstat>::ref succcb;
 
 struct location;
 
@@ -161,13 +171,6 @@ class client {
   client (ptr<axprt_stream> x);
 };
 
-struct hashID {
-  hashID () {}
-  hash_t operator() (const sfs_ID &ID) const {
-    return ID.getui ();
-  }
-};
-
 class p2p : public virtual refcount  {
   static const int stabilize_timer = 30;      // seconds
   static const int max_retry = 5;
@@ -183,6 +186,7 @@ class p2p : public virtual refcount  {
 
   ihash<sfs_ID,location,&location::n,&location::fhlink,hashID> locations;
   ihash<sfs_ID,attribute,&attribute::n,&attribute::fhlink,hashID> attributes;
+  cache<sfs_ID, sfsp2p_cacheinsertarg, 1024> doc_cache;
 
   int nbootstrap;
   bool bootstrap_failure;
@@ -222,7 +226,7 @@ class p2p : public virtual refcount  {
   void stabilize (int i);
   void stabilize_getsucc_cb (sfs_ID s, route r, sfsp2pstat status);
   void stabilize_getpred_cb (sfs_ID s, route r, sfsp2pstat status);
-  void stabilize_findsucc_cb (int i, sfs_ID s, route r, sfsp2pstat status);
+  void stabilize_findsucc_cb (int i, sfs_ID s, routes path, sfsp2pstat status);
   void stabilize_findpred_cb (int i, sfs_ID p, route r, sfsp2pstat status);
 
   void join ();
@@ -232,10 +236,11 @@ class p2p : public virtual refcount  {
   void lookup_closestpred (sfs_ID &n, sfs_ID &x, cbsfsID_t cb);
   void lookup_closestpred_cb (sfs_ID n, cbsfsID_t cb, 
 			     sfsp2p_findres *res, clnt_stat err);
-  void find_successor (sfs_ID &n, sfs_ID &x, cbsfsID_t cb);
-  void lookup_closestsucc (sfs_ID &n, sfs_ID &x, cbsfsID_t cb);
-  void lookup_closestsucc_cb (sfs_ID n, cbsfsID_t cb, 
-			     sfsp2p_findres *res, clnt_stat err);
+  void find_successor (sfs_ID &n, sfs_ID &x, succcb cb);
+  void lookup_closestsucc (sfs_ID &n, sfs_ID &x, succcb cb);
+  void lookup_closestsucc_cb (sfs_ID n, succcb cb, 
+			     sfsp2p_findres *res, 
+			      routes sp, clnt_stat err);
   void get_successor (sfs_ID n, cbsfsID_t cb);
   void get_successor_cb (sfs_ID n, cbsfsID_t cb, sfsp2p_findres *res, 
 			 clnt_stat err);
@@ -252,20 +257,21 @@ class p2p : public virtual refcount  {
 
   void bootstrap ();
   void bootstrap_done ();
-  void bootstrap_succ_cb (int i, sfs_ID n, sfs_ID s, route r, 
+  void bootstrap_succ_cb (int i, sfs_ID n, sfs_ID s, routes path, 
 			  sfsp2pstat status);
   void bootstrap_pred_cb (int i, sfs_ID n, sfs_ID s, route r, 
 			  sfsp2pstat status);
 
   void insert (svccb *sbp,  sfsp2p_insertarg *ia);
-  void insert_findsucc_cb (svccb *sbp, sfsp2p_insertarg *ia, sfs_ID x, route r,
-			   sfsp2pstat status);
+  void insert_findsucc_cb (svccb *sbp, sfsp2p_insertarg *ia, sfs_ID x, 
+			   routes r, sfsp2pstat status);
   void insert_cb (svccb *sbp, sfsp2pstat *res, clnt_stat err);
 
   void lookup (svccb *sbp, sfs_ID &n);
-  void lookup_findsucc_cb (svccb *sbp, sfs_ID n, sfs_ID x, route r,
-		    sfsp2pstat status);
-  void lookup_cb (svccb *sbp, sfsp2p_lookupres *res, clnt_stat err);
+  void lookup_findsucc_cb (svccb *sbp, sfs_ID n, sfs_ID x, routes path,
+			   sfsp2pstat status);
+  void lookup_cb (svccb *sbp, sfsp2p_lookupres *res, 
+		  routes search_path, clnt_stat err);
 
   void doget_successor (svccb *sbp);
   void doget_predecessor (svccb *sbp);
@@ -276,6 +282,9 @@ class p2p : public virtual refcount  {
   void domove (svccb *sbp, sfsp2p_movearg *ma);
   void doinsert (svccb *sbp, sfsp2p_insertarg *ia);
   void dolookup (svccb *sbp, sfs_ID *n);
+
+  void cache_item(sfsp2p_lookupres *res, routes search_path);
+  void docache_item(sfsp2p_cacheinsertarg *ca);
 
   void timing_cb(aclnt_cb cb, location *l, ptr<struct timeval> start, clnt_stat err);
 };
