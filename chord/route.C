@@ -75,10 +75,12 @@ route_chord::first_hop (cbhop_t cbi, bool ucs)
 {
   //  warn << v->my_ID () << "; starting a lookup for " << x << "\n";
   cb = cbi;
-  if (v->lookup_closestsucc (v->my_ID () + 1) 
-      == v->my_ID ()) {  // is myID the only node?
-    search_path.push_back (v->my_ID ());
-    next_hop (); //do it anyways
+
+  chordID myID = v->my_ID ();
+  chordID succ = v->my_succ ();
+  if (betweenrightincl (myID, succ, x) || myID == succ) {
+    search_path.push_back (succ);
+    next_hop (); // deliver the upcall
   } else {
     chordID n;
     if (ucs) 
