@@ -234,13 +234,12 @@ struct location {
 // For predecessor finger: first is the highest node in the interval
 struct finger {
   sfs_ID start;
-  sfs_ID end;
   sfs_ID first;
   bool alive;
 };
 
 class p2p : public virtual refcount  {
-  static const int stabilize_timer = 10;      // seconds
+  static const int stabilize_timer = 1;      // seconds
   static const int max_retry = 5;
 
   bool lsd_location_lookup;
@@ -279,6 +278,10 @@ class p2p : public virtual refcount  {
   sfs_ID my_ID () { return myID; };
   sfs_ID my_pred () { return predecessor; };
   sfs_ID my_succ () { return finger_table[1].first; };
+
+
+  void updateall (sfs_ID &x);
+  sfs_ID findclosestpred (sfs_ID &x);
 
   void deleteloc (sfs_ID &n);
   void updateloc (sfs_ID &x, net_address &r, sfs_ID &source);

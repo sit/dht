@@ -86,7 +86,7 @@ p2p::get_predecessor_cb (sfs_ID n, cbsfsID_t cb, sfsp2p_findres *res,
 void
 p2p::find_successor (sfs_ID &n, sfs_ID &x, cbroute_t cb)
 {
-  //  warn << "FS: " << n << " " << x << "\n";
+  // warn << "find_successor: " << n << " " << x << "\n";
   find_predecessor (n, x,
 		    wrap (mkref (this), &p2p::find_predecessor_cb, cb));
 }
@@ -96,7 +96,7 @@ void
 p2p::find_successor_restart (sfs_ID &n, sfs_ID &x, route search_path, 
 			     cbroute_t cb)
 {
-  warnx << "find_successor_restart at " << n << "\n";
+  // warnx << "find_successor_restart: at " << n << "\n";
   find_predecessor_restart (n, x, search_path,
 			    wrap (mkref (this), &p2p::find_predecessor_cb, cb));
 }
@@ -112,7 +112,6 @@ p2p::find_predecessor_cb (cbroute_t cb, sfs_ID p, route search_path,
     cb (p, search_path, status);
   } else {
     // warnx << "find_predecessor_cb: get successor of " << p << "\n";
-
     if (search_path.size () == 0) 
       get_successor (p, wrap (mkref(this), &p2p::find_successor_cb, 
 			      cb, search_path));
@@ -193,7 +192,7 @@ p2p::find_closestpred_cb (sfs_ID n, cbroute_t cb,
     cb (n, search_path, res->status);
   } else {
     // warnx << "find_closestpred_cb: pred of " << res->resok->x << " is " 
-    //	  << res->resok->node << "\n";
+    //  << res->resok->node << "\n";
     updateloc (res->resok->node, res->resok->r, n);
     
     search_path.push_back(res->resok->node);
@@ -284,14 +283,14 @@ p2p::find_closestpred_succ_cb (findpredecessor_cbstate *st,
     warnx << "find_closestpred_succ_cb: failure " << status << "\n";
     st->cb (st->x, st->search_path, status);
   } else {
-    //    warnx << "find_closestpred_succ_cb: succ of " << st->nprime << " is " << s 
-    //	  << "\n";
+    // warnx << "find_closestpred_succ_cb: succ of " 
+    // << st->nprime << " is " << s << "\n";
     if (st->nprime == s) {
-      //      warnx << "find_closestpred_succ_cb: " << s << " is the only Chord node\n";
+      warnx << "find_closestpred_succ_cb: " << s << " is the only Chord node\n";
       st->cb (st->nprime, st->search_path, SFSP2P_OK);
     } else if (!betweenrightincl (st->nprime, s, st->x)) {
-      //      warnx << "find_closestpred_succ_cb: " << st->x << " is not between " 
-      //    << st->nprime << " and " << s << "\n";
+      // warnx << "find_closestpred_succ_cb: " << st->x << " is not between " 
+      //      << st->nprime << " and " << s << "\n";
       ptr<sfsp2p_findarg> fap = New refcounted<sfsp2p_findarg>;
       sfsp2p_findres *res = New sfsp2p_findres (SFSP2P_OK);
       fap->x = st->x;
@@ -300,8 +299,8 @@ p2p::find_closestpred_succ_cb (findpredecessor_cbstate *st,
 	     wrap (mkref (this), &p2p::find_closestpred_cb, st->nprime, st->cb, 
 		   res, st->search_path));
     } else {
-      //      warnx << "find_closestpred_succ_cb: " << st->x << " is between " 
-      //	    << st->nprime << " and " << s << "\n";
+      // warnx << "find_closestpred_succ_cb: " << st->x << " is between " 
+      //       << st->nprime << " and " << s << "\n";
       st->cb (st->nprime, st->search_path, SFSP2P_OK);
     }
   }

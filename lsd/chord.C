@@ -10,6 +10,32 @@
  * This file implements the "core" of the chord system
  */
 
+void p2p::updateall (sfs_ID &x)
+{
+  for (int i = 1; i <= NBIT; i++) {
+    if (between (finger_table[i].start, finger_table[i].first, x)) {
+      finger_table[i].first = x;
+    }
+  }
+  if (between (predecessor, myID, x)) {
+    predecessor = x;
+  }
+}
+
+sfs_ID p2p::findclosestpred (sfs_ID &x)
+{
+  sfs_ID p = myID;
+  for (int i = NBIT; i >= 0; i--) {
+    if ((finger_table[i].alive) && 
+	between (myID, x, finger_table[i].first)) {
+      p = finger_table[i].first;
+      break;
+    }
+  }
+  // warnx << "findclosestpred of " << fa->x << " is " << p << "\n";
+  return p;
+}
+
 bool
 p2p::lookup_anyloc (sfs_ID &n, sfs_ID *r)
 {
@@ -105,7 +131,7 @@ p2p::deleteloc (sfs_ID &n)
 static void
 finger_print (finger &w)
 {
-  warnx << w.start << " " << w.end << " alive? " << w.alive << " finger :";
+  warnx << w.start << " alive? " << w.alive << " finger :";
   warnx << "  " << w.first << "\n";
 }
 
@@ -113,10 +139,14 @@ void
 p2p::print ()
 {
   for (int i = 1; i <= NBIT; i++) {
+#if 0
+    finger_print (finger_table[i]);
+#else
     if (finger_table[i].first != finger_table[i-1].first) {
       warnx << "succ " << i << ": ";
       finger_print (finger_table[i]);
     }
+#endif
   }
   warnx << "pred : " << predecessor << "\n";
 #if 0
@@ -158,7 +188,7 @@ p2p::p2p (str host, int hostport, const sfs_ID &hostID,
   myaddress.port = port;
   myaddress.hostname = myhost;
 
-  finger_table[0].start = finger_table[0].end = finger_table[0].first = myID;
+  finger_table[0].start = finger_table[0].first = myID;
   finger_table[0].alive = true;
   warnx << "myname is " << myaddress.hostname << "\n";
   warnx << "myID is " << myID << "\n";
@@ -166,12 +196,8 @@ p2p::p2p (str host, int hostport, const sfs_ID &hostID,
   warnx << "wellknowID is " << wellknownID << "\n";
   for (int i = 1; i <= NBIT; i++) {
     finger_table[i].start = successorID(myID, i-1);
-    finger_table[i].end = successorID(myID, i);
-    finger_table[i].end = decID (finger_table[i].end);
     finger_table[i].first = myID;
     finger_table[i].alive = true;
-    //    warnx << "succ " << i << ": ";
-    // finger_print (finger_table[i]);
   }
   predecessor = myID;
 
@@ -200,7 +226,7 @@ p2p::stabilize (int c)
   get_predecessor (finger_table[1].first, 
 		   wrap (mkref (this), &p2p::stabilize_getpred_cb));
   if (i > 1) {
-    find_successor (finger_table[i].first, finger_table[i].start,
+    find_successor (myID, finger_table[i].start,
 			  wrap (mkref (this), &p2p::stabilize_findsucc_cb, i));
   }
   int time = uniform_random (0.5 * stabilize_timer, 1.5 * stabilize_timer);
@@ -217,10 +243,11 @@ p2p::stabilize_getpred_cb (sfs_ID p, net_address r, sfsp2pstat status)
   } else {
     if ((finger_table[1].first == myID) ||
 	between (myID, finger_table[1].first, p)) {
-      warnx << "stabilize_pred_cb: new successor " << p << "\n";
+      warnx << "stabilize_pred_cb: new successor is " << p << "\n";
       finger_table[1].first = p;
+      updateall (p);
+      print ();
     }
-    print ();
     notify (finger_table[1].first, myID);
   }
 }
@@ -233,8 +260,13 @@ p2p::stabilize_findsucc_cb (int i, sfs_ID s, route search_path,
     warnx << "stabilize_findsucc_cb: " << finger_table[i].first << " failure " 
 	  << status << "\n";
   } else {
-      warnx << "stabilize_findsucc_cb: update " << i << "  " << s << "\n";
+    if (finger_table[i].first != s) {
+      warnx << "stabilize_findsucc_cb: new successor of " << 
+	finger_table[i].start << " is " << s << "\n";
       finger_table[i].first = s;
+      updateall (s);
+      print ();
+    }
   }
 }
 
@@ -258,6 +290,7 @@ p2p::join_getsucc_cb (sfs_ID s, route r, sfsp2pstat status)
   } else {
     warnx << "join_getsucc_cb: " << s << "\n";   
     finger_table[1].first = s;
+    updateall (s);
     print ();
   }
 }
@@ -268,12 +301,11 @@ p2p::notify (sfs_ID &n, sfs_ID &x)
   ptr<sfsp2p_notifyarg> na = New refcounted<sfsp2p_notifyarg>;
   sfsp2pstat *res = New sfsp2pstat;
 
-  warnx << "notify " << n << " about " << x << "\n";
+  // warnx << "notify " << n << " about " << x << "\n";
   location *l = locations[x];
   assert (l);
   na->x = x;
   na->r = l->addr;
-
   doRPC (n, sfsp2p_program_1, SFSP2PPROC_NOTIFY, na, res, 
 	 wrap (mkref (this), &p2p::notify_cb, res));
 }
@@ -351,7 +383,7 @@ p2p::dotestandfind (svccb *sbp, sfsp2p_testandfindarg *fa)
   sfsp2p_testandfindres *res;
   
 
-  if (between(myID, finger_table[1].first, x) ) {
+  if (betweenrightincl(myID, finger_table[1].first, x) ) {
 
     res = New sfsp2p_testandfindres (SFSP2P_INRANGE);
     warnt("CHORD: testandfind_inrangereply");
@@ -362,28 +394,13 @@ p2p::dotestandfind (svccb *sbp, sfsp2p_testandfindarg *fa)
     sbp->reply(res);
     delete res;
   } else {
-
     res = New sfsp2p_testandfindres (SFSP2P_NOTINRANGE);
-
-    sfs_ID p = myID;
-    sfs_ID s = myID + 1;
-    
-    //  print ();
-    for (int i = NBIT; i >= 0; i--) {
-      if ((finger_table[i].alive) && 
-	  between (s, fa->x, finger_table[i].first)) {
-	p = finger_table[i].first;
-	break;
-      }
-    }
-    //  warnx << "dofindclosestpred of " << fa->x << " is " << p << "\n";
+    sfs_ID p = findclosestpred (fa->x);
     location *l = locations[p];
     assert (l);
-    
     res->findres->x = fa->x;
     res->findres->node = p;
     res->findres->r = l->addr;
-
     warnt("CHORD: testandfind_notinrangereply");
     sbp->reply(res);
     delete res;
@@ -395,18 +412,7 @@ void
 p2p::dofindclosestpred (svccb *sbp, sfsp2p_findarg *fa)
 {
   sfsp2p_findres res(SFSP2P_OK);
-  sfs_ID p = myID;
-  sfs_ID s = myID + 1;
-
-  //  print ();
-  for (int i = NBIT; i >= 0; i--) {
-    if ((finger_table[i].alive) && 
-	between (s, fa->x, finger_table[i].first)) {
-      p = finger_table[i].first;
-      break;
-    }
-  }
-  //  warnx << "dofindclosestpred of " << fa->x << " is " << p << "\n";
+  sfs_ID p = findclosestpred (fa->x);
   location *l = locations[p];
   assert (l);
   res.resok->x = fa->x;
@@ -422,10 +428,11 @@ p2p::donotify (svccb *sbp, sfsp2p_notifyarg *na)
 {
   warnt("CHORD: donotify");
   updateloc (na->x, na->r, na->x);
-
   if ((predecessor == myID) || between (predecessor, myID, na->x)) {
     warnx << "donotify: updated predecessor: new pred is " << na->x << "\n";
     predecessor = na->x;
+    updateall (predecessor);
+    print ();
   }
   sbp->replyref (sfsp2pstat (SFSP2P_OK));
 }

@@ -106,10 +106,10 @@ predecessorID (sfs_ID &n, int p)
 bool
 between (sfs_ID &a, sfs_ID &b, sfs_ID &n)
 {
-
-  bool f = (b - a) > 0;  
   bool r;
-  if (f) {
+  if (a == b) {
+    r = 1;
+  } else if (a < b) {
     r = (n > a) && (n < b);
   } else {
     r = (n > a) || (n < b);
@@ -121,9 +121,10 @@ between (sfs_ID &a, sfs_ID &b, sfs_ID &n)
 bool
 betweenlefincl (sfs_ID &a, sfs_ID &b, sfs_ID &n)
 {
-  bool f = (b - a) > 0;  
   bool r;
-  if (f) {
+  if ((a == b) && (n == a)) {
+    r = 1;
+  } else if (a < b) {
     r = (n >= a) && (n < b);
   } else {
     r = (n >= a) || (n < b);
@@ -137,7 +138,9 @@ betweenrightincl (sfs_ID &a, sfs_ID &b, sfs_ID &n)
 {
   bool f = (b - a) > 0;  
   bool r;
-  if (f) {
+  if ((a == b) && (n == a)) {
+    r = 1;
+  } if (a < b) {
     r = (n > a) && (n <= b);
   } else {
     r = (n > a) || (n <= b);
