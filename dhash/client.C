@@ -91,6 +91,7 @@ dhashcli::dhashcli (ptr<vnode> node)
   int ordersucc = 1;
   Configurator::only ().get_int ("dhashcli.order_successors", ordersucc);
   ordersucc_ = (ordersucc > 0);
+  warn << "will order successors " << ordersucc_ << "\n";
 }
 
 void
@@ -109,8 +110,7 @@ dhashcli::retrieve (blockID blockID, cb_ret cb, int options,
     ci->first_hop (wrap (this, &dhashcli::retrieve_block_hop_cb, rs, ci,
 			 options, 5, guess),
 		   guess);
-  }
-  else {
+  } else {
     vec<ptr<location> > sl = clntnode->succs ();
     if ((options & DHASHCLIENT_SUCCLIST_OPT) && 
 	use_succlist (sl, clntnode->my_pred ())) {
@@ -121,8 +121,7 @@ dhashcli::retrieve (blockID blockID, cb_ret cb, int options,
       r.push_back (clntnode->my_location ());
       retrieve_lookup_cb (rs, s, r, CHORD_OK);
       return;
-    }
-    else if (options & DHASHCLIENT_SUCCLIST_OPT)
+    } else if (options & DHASHCLIENT_SUCCLIST_OPT)
       warn << "cannot use succlist to find succs on retrieve\n";
 
     // XXX jinyang won't say if 1.5 works in general, but for num_dfrags
@@ -238,11 +237,22 @@ dhashcli::fetch_frag (ptr<rcv_state> rs)
   }
   
   rs->incoming_rpcs += 1;
+
   dhash_download::execute (clntnode, rs->succs[i], 
 			   blockID(rs->key.ID, rs->key.ctype, DHASH_FRAG),
 			   (char *)NULL, 0, 0, 0, 
-			   wrap (this, &dhashcli::retrieve_fetch_cb, rs, i));
+			   wrap (this, &dhashcli::retrieve_fetch_cb, rs, i),
+			   wrap (this, &dhashcli::on_timeout, rs));
   rs->nextsucc += 1;
+}
+
+void
+dhashcli::on_timeout (ptr<rcv_state> rs, 
+		      chord_node dest,
+		      int retry_num) 
+{
+  //  if (retry_num == 1)
+  //    fetch_frag (rs);
 }
 
 struct orderer {
@@ -263,7 +273,7 @@ order_succs (const vec<float> &me, const vec<chord_node> &succs,
   for (size_t i = 0; i < succs.size (); i++) {
     cursucc.setsize (succs[i].coords.size ());
     for (size_t j = 0; j < succs[i].coords.size (); j++) 
-      cursucc[j] = (float) succs[i].coords[j] / 1000.0;
+      cursucc[j] = (float) succs[i].coords[j];
     d2me[i].d_ = Coord::distance_f (me, cursucc);
     d2me[i].i_ = i;
   }
@@ -317,6 +327,7 @@ dhashcli::retrieve_lookup_cb (ptr<rcv_state> rs, vec<chord_node> succs,
     return;
   }
   
+#if 0
   // benjie: if number of successors is smaller than num_efrags,
   // that's likely an indication that the ring is small.
   if (succs.size () < dhash::num_efrags ()) {
@@ -340,9 +351,11 @@ dhashcli::retrieve_lookup_cb (ptr<rcv_state> rs, vec<chord_node> succs,
       // done on clntnode itself.
       succs.push_back (s);
   }
+#endif
 
-  while (succs.size () > dhash::num_efrags ())
+  while (succs.size () > dhash::num_efrags ()) {
     succs.pop_back ();
+  }
 
   if (succs.size () < dhash::num_dfrags ()) {
     warning << myID << ": retrieve (" << rs->key << "): "
@@ -398,13 +411,13 @@ dhashcli::retrieve_fetch_cb (ptr<rcv_state> rs, u_int i,
     // Here it might just be that we got a fragment back after we'd
     // already gotten enough to reconstruct the block.
     trace << myID << ": retrieve (" << rs->key
-          << "): unexpected fragment from " << i + 1 << ", discarding.\n";
+          << "): unexpected fragment from " << rs->succs[i] << ", discarding.\n";
     return;
   }
 
   if (!block) {
     trace << myID << ": retrieve (" << rs->key
-	  << "): failed from successor " << i+1 << "\n";
+	  << "): failed from successor " << rs->succs[i] << "\n";
     rs->errors++;
     fetch_frag (rs);
     return;
@@ -599,7 +612,7 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
     info << "Number of successors less than desired: |succs| " << succs.size ()
 	 << ", EFRAGS " << dhash::num_efrags () << "\n";
 
-  while (succs.size () > dhash::num_efrags ())
+  while (succs.size () > dhash::num_efrags ()) 
     succs.pop_back ();
 
   ref<sto_state> ss = New refcounted<sto_state> (block, cb);
@@ -645,6 +658,7 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
     ss->out += 1;
 
     ptr<location> dest = clntnode->locations->lookup_or_create (succs[i]);
+
     dhash_store::execute (clntnode, dest,
 			  blockID (block->ID, block->ctype, DHASH_FRAG),
 			  blk,
@@ -666,6 +680,9 @@ dhashcli::insert_store_cb (ref<sto_state> ss, route r, u_int i,
 	 << " fragment " << i << "/" << nstores
 	 << ": " << err << "\n";
   } else {
+    info << "fragment/block store ok: " << ss->block->ID
+	 << " fragment " << i << "/" << nstores
+	 << " at " << id << "\n";
     ss->good += 1;
   }
 

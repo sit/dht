@@ -110,7 +110,9 @@ class dhashcli {
 
   void sendblock_cb (callback<void, dhash_stat, bool>::ref cb, 
 		     dhash_stat err, chordID dest, bool present);
-
+  void on_timeout (ptr<rcv_state> rs, 
+		   chord_node dest,
+		   int retry_num);
 public:
   dhashcli (ptr<vnode> node);
 
