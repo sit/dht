@@ -140,11 +140,10 @@ update ()
   while (n) {
     update_fingers (n);
     update_succlist (n);
+    update_toes (n);
     n = nodes.next (n);
   }  
 
-  if (interval > 0)
-    delaycb (interval, 0, wrap (&update));
 }
 
 ptr<aclnt>
@@ -446,7 +445,7 @@ initgraf ()
     gtk_check_button_new_with_label ("immed. succ.");
   check_succ_list = gtk_check_button_new_with_label ("succ. list");
   check_neighbors = gtk_check_button_new_with_label ("neighbors");
-  GtkWidget *refresh = gtk_button_new_with_label ("Refresh");
+  GtkWidget *refresh = gtk_button_new_with_label ("Refresh All");
   GtkWidget *quit = gtk_button_new_with_label ("Quit");
   GtkWidget *sep = gtk_vseparator_new ();
 
@@ -739,7 +738,7 @@ draw_arc (chordID from, chordID to, GdkGC *draw_gc)
 
   int oldx = fromx;
   int oldy = fromy;
-  for (float t=0.0; t < 0.99; t += 0.01) {
+  for (float t=0.0; t < 0.99; t += 0.15) {
     float a = t;
     float b = 1 - t;
       
