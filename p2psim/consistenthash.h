@@ -1,11 +1,13 @@
 #ifndef __CONSISTENTHASH_H
 #define __CONSISTENTHASH_H 
 
-#define NBCHID 32
+#define NBCHID sizeof(CHID)
+
+#include <openssl/sha.h>
 
 class ConsistentHash {
 public:
-  typedef unsigned CHID;
+  typedef unsigned long long CHID;
 
   // return if n is in (a,b) on the circle
   static bool between(CHID a, CHID b, CHID n) {
@@ -38,11 +40,16 @@ public:
   }
 
   static CHID getRandID() {
-    return (CHID) ((random() << 16) ^ random());
+    CHID r = random();
+    r = (r << 32) | random ();
+    return r;
   }
 
   static CHID ip2chid(IPAddress ip) {
-    return (CHID) ip;  // XXXX fix to use sha1
+    CHID r;
+    unsigned char *buf = SHA1 ((const unsigned char *) &ip, sizeof(ip), NULL);
+    memcpy (&r, buf, 8);
+    return r;
   }
 };
 
