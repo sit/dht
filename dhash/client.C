@@ -698,10 +698,8 @@ dhashcli::insert2_lookup_cb (ref<dhash_block> block, cbinsert_t cb,
     arg->attr.size  = realfraglen;
     arg->last    = false;
     
-    warn << "Frag " << i << " to " << succs[i].x << "\n";
     bigint h = compute_hash (arg->data.base (), arg->data.size ());
-    warn << "Put frag: " << i << " " << h << " " << arg->data.size () << "\n";
-      
+    warnx << "Put frag: " << i << " " << h << " " << arg->data.size () << " to " << succs[i].x << "\n";
     
     ref<dhash_storeres> res = New refcounted<dhash_storeres> (DHASH_OK);
     // Count up for each RPC that will be dispatched
