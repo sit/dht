@@ -1,0 +1,112 @@
+#!/usr/bin/perl -w
+
+use strict;
+use POSIX qw(:signal_h);
+use Cwd qw(abs_path);
+use File::Basename;
+
+use ChordTestHarness;
+
+if ($> == 0) {
+   warn "You probably don't want to run this as root. Hit Ctrl-C now to cancel.\n";
+  sleep 5;
+}
+my $SRC = abs_path (dirname ($0));
+
+sub usage {
+  print STDERR "Usage: $0 outputroot buildroot numnodes numvnodes [routeprot logbase IP [wkp]]\n";
+  print STDERR @_, "\n" if @_;
+  exit (1);
+}
+
+
+my $r      = shift || usage ("no output dir");
+my $build  = shift || usage ("no build dir");
+$build = abs_path ($build);
+
+my $n      = 2;
+my $v      = 15;
+my $routeprot = "chord";
+my $logbase = 1;
+my $ip     = guessip ();
+my $wkport = 10903; # first prime after my uid
+
+
+my $harness = ChordTestHarness->new ($build, $r);
+
+# Make sure we'll clean up after ourselves properly. Or at least, try.
+$SIG{"INT"} = sub { exit (1); };
+END {
+    if (defined ($harness)) {
+	$harness->reaplsds ();
+	$harness = undef
+    }
+}
+
+######
+
+# Shift to directory where we will store our working files and results.
+warn "Old $r exists; may lead to incorrect results!\n" if (-d $r);
+mkdir $r, 0755;
+
+my @CONFS;
+# however, leave a mode where we can force all localhost behavior.
+my $i = 1;
+my @args = ("-f",
+	    "-j", "$ip:$wkport",
+	    "-l", $ip,
+	    "-v", $v,
+	    "-m", $routeprot,
+	    "-b", $logbase,
+	    "-n", 5);
+
+# always start a well-known node running on a particular port.
+$harness->spawnlsd ("a", @args, "-p", $wkport);
+sleep 10;
+
+print "Storing.\n";
+$harness->store ("a", 0, "store.log");
+sleep 30;   # wait till a replicates
+
+$harness->spawnlsd ("b", @args);
+sleep 30;  # wait till b gets its blocks
+$harness->killlsd ("a");  # kill a 
+sleep 60; # give b time to recover
+print "Fetching.\n";
+$harness->fetch ("b", 0, "fetch.log");   # now blocks should be available on b
+sleep 10;
+$harness->reaplsds ();
+
+foreach my $conf (@CONFS) {
+    my $s = "============= NODE $conf ============";
+    system ("echo $s >> $r/dump-$n-$v");
+    system ("cat $r/lsd-$conf/log >> $r/dump-$n-$v");
+}
+
+
+
+sub wait_for_stable {
+    my @pids = $harness->pids ();
+    my $n = scalar (@pids);
+
+    print "## wait_for_stable n=$n\n";
+
+    # wait stable
+    print "Waiting for nodes to go stable...\n";
+    my $waitcount = 0;
+    while (1) {
+	sleep 20;
+	my $hit = kill SIGUSR1, $harness->pids (); # what stat.pl does
+	die "Only signalled $hit of $n processes!\n" if ($hit != $n);
+	
+	sleep 10;
+	my $t = $n * $v; # total expected vnodes
+	my $s = system ("$SRC/stable.pl $t $r/lsd-*/log"); # yeah, shell globbing.
+	if ((($s >> 8) & 0xFF) == 17) {
+	    last;
+	}
+	$waitcount++;
+	die "Took too long to stabilize.\n" if $waitcount > 15;
+	# xxx dynamically compute waitcount based on $n??
+    }
+}

@@ -75,6 +75,26 @@ sub spawnlsd {
     }
 }
 
+sub killlsd {
+    ## kill a specified lsd 
+    ##  XXX this code is cheezy
+
+    my $self = shift;
+    my $conf = shift;
+    my $pid = $self->getpid ($conf);
+
+    kill SIGHUP, $pid;
+    my $reapedpid = waitpid (-1, WNOHANG);
+    die "WTF: REAPED $reapedpid, EXPECTED $pid" if ($pid != $reapedpid);
+    sleep 5;
+    kill SIGKILL, $pid;
+
+    delete $self->{pids}->{$pid};
+    delete $self->{confs}->{$conf};
+}
+
+
+
 sub reaplsds {
     my $self = shift;
     my $n = scalar keys %{$self->{pids}};
@@ -122,7 +142,7 @@ sub store {
     my $self = shift;
     my $conf = shift;
     my $vnode = shift;
-    my $count = 1000;
+    my $count = shift || 1000;
     my $size = 4; # bytes
     my $seed = 0;
     my $log = shift || "store.log";
@@ -133,7 +153,7 @@ sub fetch {
     my $self = shift;
     my $conf = shift;
     my $vnode = shift;
-    my $count = 1000;
+    my $count = shift || 1000;
     my $size = 4; # bytes
     my $seed = 0;
     my $log = shift || "fetch.log";
