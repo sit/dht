@@ -219,6 +219,7 @@ finger_table::fill_getfingersresext (chord_getfingers_ext_res *res)
   res->resok->fingers[0].a_lat = (long)(l->a_lat * 100);
   res->resok->fingers[0].a_var = (long)(l->a_var * 100);
   res->resok->fingers[0].nrpc = l->nrpc;
+  res->resok->fingers[0].alive = true;
   n = 1;
   for (int i = 1; i <= NBIT; i++) {
     if (!fingers[i].first.alive) continue;
@@ -229,6 +230,7 @@ finger_table::fill_getfingersresext (chord_getfingers_ext_res *res)
       res->resok->fingers[n].a_lat = (long)(l->a_lat * 100);
       res->resok->fingers[n].a_var = (long)(l->a_var * 100);
       res->resok->fingers[n].nrpc = l->nrpc;
+      res->resok->fingers[n].alive = true;
       n++;
     }
   }

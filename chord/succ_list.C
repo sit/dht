@@ -134,6 +134,7 @@ succ_list::fill_getsuccres (chord_getsucc_ext_res *res)
   res->resok->succ[0].a_lat = (long)(l->a_lat * 100);
   res->resok->succ[0].a_var = (long)(l->a_var * 100);
   res->resok->succ[0].nrpc = l->nrpc;
+  res->resok->succ[0].alive = true;
   n = 1;
   for (int i = 1; i <= nsucc; i++) {
     if (!succlist[i].alive) continue;
@@ -143,6 +144,7 @@ succ_list::fill_getsuccres (chord_getsucc_ext_res *res)
     res->resok->succ[n].a_lat = (long)(l->a_lat * 100);
     res->resok->succ[n].a_var = (long)(l->a_var * 100);
     res->resok->succ[n].nrpc = l->nrpc;
+    res->resok->succ[n].alive = true;
     n++;
   }
 }

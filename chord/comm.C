@@ -29,9 +29,10 @@
 #include "dhash_prot.h"
 #include "math.h"
 
-#define TIMEOUT 10
 #define GAIN 0.2
 #define MAX_REXMIT 3
+#define USE_PERHOST_LATENCIES 1
+#define MIN_RPC_FAILURE_TIMER 3
 
 int seqno = 0;
 u_int64_t st = getusec ();
@@ -268,6 +269,12 @@ locationtable::setup_rexmit_timer (chordID ID, long *sec, long *nsec)
     }
   else 
     alat = 1000000;
+
+#ifdef USE_PERHOST_LATENCIES
+  location *l = getlocation (ID);
+  if (l->nrpc > MIN_SAMPLES) 
+    alat = l->a_lat + 4*l->a_var;
+#endif /* USE_PERHOST_LATENCIES */
 
   //statistics
   timers.push_back (alat);
@@ -525,7 +532,7 @@ rpccb_chord::timeout_cb (ptr<bool> del)
 
     xmit (rexmits);
     if (rexmits == MAX_REXMIT) {
-      sec = 30;
+      sec = MIN_RPC_FAILURE_TIMER;
       nsec = 0;
     } else {
       sec *= 2;

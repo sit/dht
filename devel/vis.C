@@ -838,7 +838,8 @@ draw_ring ()
       }
 
       if (n->res && 
-	  gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (check_pred))) {
+	  gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (check_pred)) &&
+	  n->res->resok->pred.alive) {
 	  int a,b;
 	  ID_to_xy (n->res->resok->pred.x, &a, &b);
 	  draw_arrow (x,y,a,b, draw_gc);

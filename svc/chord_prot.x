@@ -58,6 +58,7 @@ struct chord_node_ext {
   int32_t a_lat;
   int32_t a_var;
   u_int64_t nrpc;
+  bool alive;
 };
 
 struct chord_nodearg {

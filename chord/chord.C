@@ -385,11 +385,10 @@ vnode::dogetfingers_ext (svccb *sbp)
   ndogetfingers_ext++;
 
   fingers->fill_getfingersresext (&res);
+  res.resok->pred.alive = predecessor.alive;
   if (predecessor.alive) {
     res.resok->pred.x = predecessor.n;
     res.resok->pred.r = locations->getaddress (predecessor.n);
-  } else {
-    res.resok->pred.x = bigint (0);
   }
 
   warnt("CHORD: dogetfingers_reply");
@@ -433,6 +432,7 @@ vnode::dogettoes (svccb *sbp)
     res.resok->toes[i].a_lat = (long)(l->a_lat * 100);
     res.resok->toes[i].a_var = (long)(l->a_var * 100);
     res.resok->toes[i].nrpc = l->nrpc;
+    res.resok->toes[i].alive = true;
   }
   
   warnt ("CHORD: dogettoes_reply");
