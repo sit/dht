@@ -26,7 +26,7 @@ p2psim_core_o_SOURCES = condvar.C p2protocol.C event.C \
 		        network.C node.C observed.C \
 		        p2psim.C packet.C parse.C \
 		        rpchandle.C threaded.C threadmanager.C \
-		        threadspeedup.C tmgdmalloc.C topology.C \
+		        tmgdmalloc.C topology.C \
 			bighashmap_arena.cc
 
 p2psim_core_o_LIBS = 
