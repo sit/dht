@@ -78,9 +78,10 @@ location::fill_node (chord_node &data) const
 void
 location::fill_node (chord_node_wire &data) const
 {
-  data.r = addr_;
-  data.vnode_num = vnode_;
-  data.coords.setsize (coords_.size ());
+  /* saddr fields are already in network byte order */
+  data.ipv4_addr = saddr_.sin_addr.s_addr;
+  data.port_vnnum = (saddr_.sin_port << 16) | htons (vnode_);
+  assert (coords_.size () == 3);
   for (unsigned int i = 0; i < coords_.size (); i++)
     data.coords[i] = static_cast<int> (coords_[i]);
 }

@@ -1,3 +1,4 @@
+#include <misc_utils.h>
 #include <chord.h>
 #include <chord_util.h>
 
@@ -55,8 +56,7 @@ findroute_cb (chord_node n,
 	 << n.x << "@" << n.r.hostname << ":" << n.r.port << "\n";
     for (size_t i = 0; i < route->resok->nlist.size (); i++) {
       chord_node_wire &hop = route->resok->nlist[i];
-      warnx << i << ": "
-	    << make_chordID (hop) << "@" << hop.r.hostname << ":" << hop.r.port << "\n";
+      warnx << i << ": " << hop << "\n";
     }
   }      
   delete route;

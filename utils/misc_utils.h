@@ -16,6 +16,20 @@ float uniform_random_f (float max);
 
 chord_hostname my_addr ();
 
+inline const chord_node
+make_chord_node (const chord_node_wire &nl)
+{
+  chord_node n;
+  struct in_addr x;
+  x.s_addr = nl.ipv4_addr;
+  n.r.hostname = inet_ntoa (x);
+  n.r.port     = ntohs (nl.port_vnnum >> 16);
+  n.vnode_num  = ntohs (nl.port_vnnum & 0xFFFF);
+  n.x = make_chordID (n.r.hostname, n.r.port, n.vnode_num);
+  n.coords = nl.coords;
+  return n;
+}
+
 inline const strbuf &
 strbuf_cat (const strbuf &sb, const net_address &r)
 {
@@ -33,29 +47,8 @@ strbuf_cat (const strbuf &sb, const chord_node &n)
 inline const strbuf &
 strbuf_cat (const strbuf &sb, const chord_node_wire &n)
 {
-  sb << make_chordID (n.r.hostname, n.r.port) << "@" << n.r;
+  sb << make_chord_node (n); // XXX gross
   return sb;
-}
-
-inline const chord_node
-make_chord_node (const chord_node_wire &nl)
-{
-  chord_node n;
-  n.x = make_chordID (nl);
-  n.r = nl.r;
-  n.vnode_num = nl.vnode_num;
-  n.coords = nl.coords;
-  return n;
-}
-
-inline const chord_node_wire
-make_chord_node_wire (const chord_node &n)
-{
-  chord_node_wire nl;
-  nl.r = n.r;
-  nl.vnode_num = n.vnode_num;
-  nl.coords = n.coords;
-  return nl;
 }
 
 #endif /* _MISC_UTILS_H_ */

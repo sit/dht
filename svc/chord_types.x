@@ -24,10 +24,11 @@ struct chord_node {
   int32_t coords<>;
 };
 
+/* Strict encoding to minimize wire length */
 struct chord_node_wire {
-  net_address r;
-  int32_t vnode_num;
-  int32_t coords<>;
+  u_int32_t ipv4_addr;  /* IPV4 addr in network byte order */
+  u_int32_t port_vnnum; /* htons(port) << 16 | htons(vnnum) */
+  int32_t coords[3];    /* XXX hardcoded length of 3; cf NCOORD in chord.h */
 };
 
 struct chord_node_ext {

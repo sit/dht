@@ -133,11 +133,11 @@ getsucc_cb (chordID dest, str desthost,
 	  << "\n";
   }
 
-
-  chordID n    = make_chordID (res->resok->nlist[1].n);
-  str host     = res->resok->nlist[1].n.r.hostname;
-  u_short port = res->resok->nlist[1].n.r.port;
-
+  chord_node z = make_chord_node (res->resok->nlist[1].n);
+  chordID n    = z.x;
+  str host     = z.r.hostname;
+  u_short port = z.r.port;
+  
   // wrapped around ring. done.
   if (n == wellknown_ID) {
     warnx << getusec () << "--------------------------\n";

@@ -28,6 +28,7 @@
 #include <assert.h>
 #include "chord.h"
 #include "chord_util.h"
+#include "misc_utils.h"
 #include <sha1.h>
 #include <transport_prot.h>
 
@@ -61,6 +62,13 @@ make_chordID (str addr, int port, int index)
   sha1_hash (id, ids, ids.len());
   mpz_set_rawmag_be (&ID, id, sizeof (id));  // For big endian
   return ID;
+}
+
+chordID
+make_chordID (const chord_node_wire &n)
+{
+  chord_node z = make_chord_node (n);
+  return z.x;
 }
 
 bool

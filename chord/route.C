@@ -453,8 +453,7 @@ route_debruijn::make_hop_cb (ptr<bool> del, chord_debruijnres *res,
     ptr<location> n0 = v->locations->insert (make_chord_node (res->inres->node));
     if (!n0) {
       warnx << v->my_ID () << ": debruijn::make_hop_cb: inrange node ("
-	    << make_chordID (res->inres->node) << "@" << res->inres->node.r.hostname
-	    << ":" << res->inres->node.r.port << ") not valid vnode!\n";
+	    << res->inres->node << ") not valid vnode!\n";
       assert (0); // XXX handle malice more intelligently
     }
     search_path.push_back (n0);
@@ -476,8 +475,7 @@ route_debruijn::make_hop_cb (ptr<bool> del, chord_debruijnres *res,
     ptr<location> n0 = v->locations->insert (make_chord_node (res->noderes->node));
     if (!n0) {
       warnx << v->my_ID () << ": debruijn::make_hop_cb: inrange node ("
-	    << make_chordID (res->noderes->node) << "@" << res->noderes->node.r.hostname
-	    << ":" << res->noderes->node.r.port << ") not valid vnode!\n";
+	    << res->noderes->node << ") not valid vnode!\n";
       assert (0); // XXX handle malice more intelligently
     }
     

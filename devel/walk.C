@@ -1,5 +1,6 @@
 #include "chord.h"
 #include "chord_util.h"
+#include "misc_utils.h"
 #include "math.h"
 #include "rxx.h"
 #include "async.h"
@@ -108,10 +109,11 @@ getsucc_cb (chord_nodelistextres *res, clnt_stat err)
   assert (err == 0 && res->status == CHORD_OK);
   assert (res->resok->nlist.size () >= 2);
 
-  chordID n    = make_chordID (res->resok->nlist[1].n);
-  str host     = res->resok->nlist[1].n.r.hostname;
-  u_short port = res->resok->nlist[1].n.r.port;
-  int index    = res->resok->nlist[1].n.vnode_num;
+  chord_node z = make_chord_node (res->resok->nlist[1].n);
+  chordID n    = z.x;
+  str host     = z.r.hostname;
+  u_short port = z.r.port;
+  int index    = z.vnode_num;
   assert (index >= 0);
   warnx << n << " " << host << " " << port << " " << index << "\n";
 
