@@ -1,4 +1,4 @@
-#include <dhash_prot.h>
+#include <dhashgateway_prot.h>
 #include <route.h>
 class insert_info;
 class dhash_block;

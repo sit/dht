@@ -481,7 +481,8 @@ dhashcli::insert_succlist_cb (ref<dhash_block> block, cbinsert_path_t cb,
   if (status) {
     vec<chordID> rrr;
     cb (DHASH_CHORDERR, rrr);
-    info << "insert_succlist_cb: failure (" << block->ID << "\n";
+    info << "insert_succlist_cb: failure (" << block->ID << "): "
+	 << status << "\n";
     return;
   }
 
@@ -523,7 +524,7 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
   if (dhash::num_efrags () > succs.size ()) {
     info << "Not enough successors: |succs| " << succs.size ()
 	 << ", EFRAGS " << dhash::num_efrags () << "\n";
-    (*cb) (DHASH_STOREERR, mt); // XXX Not the right error code...
+    (*cb) (DHASH_STOREERR, mt);
     return;
   }
   

@@ -28,6 +28,7 @@
 
 #include <chord.h>
 #include <chord_types.h>
+#include <dhashgateway_prot.h>
 #include <location.h>
 
 #include "dhash_common.h"

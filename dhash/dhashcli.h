@@ -14,6 +14,7 @@ typedef callback<void, dhash_stat, vec<chord_node>, route>::ref dhashcli_lookupc
 typedef	callback<void, dhash_stat, bool>::ref sendblockcb_t;
 
 // Forward declarations
+class dbfe;
 class vnode;
 class dhash;
 class route_factory;

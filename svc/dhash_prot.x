@@ -1,48 +1,13 @@
 %#include <chord_types.h>
-%#include <merkle_hash.h>
+%#include <dhash_types.h>
 
-typedef opaque dhash_value<>;
 typedef int32_t dhash_hopcount;
-
-enum dhash_stat {
-  DHASH_OK = 0,
-  DHASH_NOENT = 1,
-  DHASH_NOTPRESENT = 2,
-  DHASH_RETRY = 3,
-  DHASH_STORED = 4,
-  RPC_NOHANDLER = 5,
-  DHASH_REPLICATED = 6,
-  DHASH_ERR = 7,
-  DHASH_CHORDERR = 8,
-  DHASH_RPCERR = 9,
-  DHASH_STOREERR = 10,
-  DHASH_STORE_PARTIAL = 11,
-  DHASH_COMPLETE = 12,
-  DHASH_CONTINUE = 13,
-  DHASH_INVALIDVNODE = 14,
-  DHASH_RFETCHDONE = 15,
-  DHASH_RFETCHFORWARDED = 16,
-  DHASH_STORE_NOVERIFY = 17,
-  DHASH_STALE = 18,
-  DHASH_CACHED = 19,
-  DHASH_WAIT = 20,
-  DHASH_TIMEDOUT = 21
-};
 
 enum store_status {
   DHASH_STORE = 0,
   DHASH_CACHE = 1,
   DHASH_FRAGMENT = 2,
   DHASH_REPLICA = 3
-};
-
-enum dhash_ctype {
-  DHASH_CONTENTHASH = 0,
-  DHASH_KEYHASH = 1,
-  DHASH_DNSSEC = 2,
-  DHASH_NOAUTH = 3,
-  DHASH_APPEND = 4,
-  DHASH_UNKNOWN = 5
 };
 
 enum dhash_dbtype {
@@ -193,107 +158,3 @@ program DHASH_PROGRAM {
 
   } = 1;
 } = 344449;
-
-
-
-/*  -------------------------------------------------------------------------- 
- *  The DHASHGATEWAY_PROGRAM is the very narrow interface between clients of 
- *  dhash (such as chordcd, sfsrodb, dbm) and the lsd process.  Since this RPC 
- *  interface is intended to be transported over a unix domain socket, blocks 
- *  are retrieved/inserted in their entirety, ie. are not broken into chunks. 
- */
-
-/* struct dhash_contenthash_block {
-   chordID     key;    
-   dhash_value block;  
-   };
- 
-   struct dhash_publickey_block {
-   sfs_pubkey2 pub_key;
-   sfs_sig2 sig;
-   dhash_value block;
-   };
- 
-   union dhash_rpc_block switch (dhash_ctype ctype) {
-   case DHASH_CONTENTHASH:
-   dhash_contenthash_block chash;
-   case DHASH_KEYHASH:
-   dhash_publickey_block pkhash;
-   default:
-   void;
-   };
- 
-   struct dhash_insert2_arg {
-   dhash_rpc_block block;
-   int options;
-   };
-*/
-
-/* if we get many more optional arguments consider switching to union */
-struct dhash_insert_arg {
-  chordID   blockID;      /* the key */
-  dhash_ctype ctype;
-  int32_t len; /* XXX fix to not need len */
-  dhash_value block;      /* the data block */
-  int options;
-  chordID guess; /* a guess as to where this block will end up */
-};
-
-struct dhash_retrieve_arg {
-  chordID blockID;
-  dhash_ctype ctype; /* XXX fix to not need */
-  int options;
-  chordID guess;  /* a guess as to the location of the block */
-};
-
-struct dhash_retrieve_resok {
-  dhash_value block;
-  dhash_ctype ctype; /* XXX fix to not need */
-  int32_t len; /* XXX not needed */
-  int hops;
-  int errors;
-  int retries;
-  u_int32_t times<>;
-  chordID path<>;
-};
-
-struct dhash_insert_resok {
-  chordID path<>;
-};
-
-union dhash_insert_res switch (dhash_stat status) {
- case DHASH_OK:
-   dhash_insert_resok resok;
- default:
-   void;
-};
-
-union dhash_retrieve_res switch (dhash_stat status) {
- case DHASH_OK:
-   dhash_retrieve_resok resok;
- default:
-   void;
-};
-
-
-program DHASHGATEWAY_PROGRAM {
-	version DHASHCLNT_VERSION {
-		void 
-		DHASHPROC_NULL (void) = 1;
-
-	        dhash_insert_res
-		DHASHPROC_INSERT (dhash_insert_arg) = 2;
-
-                dhash_retrieve_res
-		DHASHPROC_RETRIEVE (dhash_retrieve_arg) = 4;
-                
-		dhash_stat
-         	DHASHPROC_ACTIVE (int32_t) = 5;
-
-	} = 1;
-} = 344448;
-
-
-
-
-

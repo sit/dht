@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.23 2003/06/23 22:25:30 fdabek Exp $
+# $Id: Makefile.am,v 1.24 2003/07/14 18:47:57 sit Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -18,16 +18,16 @@ coords_SOURCES = walk_coords.C
 coords_LDADD = $(MYLDADD) ../chord/libchord.a ../utils/libutil.a ../svc/libsvc.la  $(LDADD) 
 
 filestore_SOURCES = filestore.C
-filestore_LDADD = $(MYLDADD) ../chord/libchord.a ../utils/libutil.a ../svc/libsvc.la  $(LDADD) 
+filestore_LDADD = ../dhash/libdhashclient.a ../utils/libutil.a ../svc/libsvc.la  $(LDADD) 
 
 builddb_SOURCES = builddb.C
 builddb_LDADD = ../sfsrodb/libsfsrodb.a ../dhash/libdhash.a ../merkle/libmerkle.a ../chord/libchord.a ../utils/libutil.a ../svc/libsvc.la $(DBLIB) $(LDADD)
 
 dbm_SOURCES = dhash_benchmark.C
-dbm_LDADD = $(MYLDADD) $(LDADD)
+dbm_LDADD = ../dhash/libdhashclient.a ../svc/libsvc.la $(LDADD)
 
 typetest_SOURCES = test_types.C
-typetest_LDADD = $(MYLDADD) $(LDADD)
+typetest_LDADD = ../dhash/libdhashclient.a ../svc/libsvc.la $(LDADD)
 
 dbdump_SOURCES = dbdump.C
 dbdump_LDADD = ../sfsrodb/libsfsrodb.a ../merkle/libmerkle.a $(DBLIB) $(LDADD)

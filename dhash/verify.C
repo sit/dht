@@ -8,6 +8,19 @@
 #include <chord_types.h>
 #include <chord_util.h>
 
+bigint
+compute_hash (const void *buf, size_t buflen)
+{
+  char h[sha1::hashsize];
+  bzero(h, sha1::hashsize);
+  sha1_hash (h, buf, buflen);
+  
+  bigint n;
+  mpz_set_rawmag_be(&n, h, sha1::hashsize);  // For big endian
+  return n;
+}
+
+
 bool
 verify (chordID key, dhash_ctype t, char *buf, int len) 
 {
