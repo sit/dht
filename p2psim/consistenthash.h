@@ -7,14 +7,28 @@ class ConsistentHash {
 public:
   typedef unsigned CHID;
 
+  // return if n is in (a,b) on the circle
   static bool between(CHID a, CHID b, CHID n) {
     bool r;
     if (a == b) {
-      r = (n!=a);
+      r = (n != a); // n is the only node not in the interval (n,n)
     }else if (a < b) {
       r = (n > a) && (n < b);
     }else {
       r = (n > a) || (n < b);
+    }
+    return r;
+  };
+
+  // return if n is in (a,b] on the circle
+  static bool betweenrightincl(CHID a, CHID b, CHID n) {
+    bool r;
+    if ((a == b) && (n == a)) {
+      r = 1;
+    } else if (a < b) {
+      r = (n > a) && (n <= b);
+    } else {
+      r = (n > a) || (n <= b);
     }
     return r;
   };
