@@ -18,7 +18,6 @@ Kademlia::NodeID Kademlia::_rightmasks[8*sizeof(Kademlia::NodeID)];
 unsigned k_bucket::_k = Kademlia::k();
 unsigned k_bucket_tree::_k = Kademlia::k();
 
-
 // XXX: hack for now.
 IPAddress kademlia_wkn_ip = 0;
 // }}}
@@ -70,23 +69,13 @@ Kademlia::join(Args *args)
   bool b = doRPC(wkn, &Kademlia::do_lookup, &la, &lr);
   assert(b);
 
-  // put well known node in k-buckets
+  // put well known node in k-buckets and all results.
   _tree->insert(lr.rid, wkn);
+  _tree->insert(&(lr.results));
 
-  // insert all results in our k-buckets and find the NodeID closest to our own.
-  for(unsigned i=0; i<lr.results.size(); i++) {
-    KDEBUG(2) << "join: lookup my id: node " << printID(lr.results[i]->id) << endl;
-    if(lr.results[i]->id != _id)
-      _tree->insert(lr.results[i]->id, lr.results[i]->ip);
-  }
-
-  // get our ``successor''
-  // KDEBUG(2) << "join: calling get_closest" << endl;
+  // get our ``successor'' and compute length
+  // of prefix we have in common
   peer_t *p = lr.results[0];
-  // assert(p->first == lr.results[0].first);
-  // assert(p->ip == lr.results[0]->ip);
-
-  // common prefix length
   unsigned cpl = common_prefix(_id, p->id);
   KDEBUG(2) << "join: successor is " << printbits(p->id) << ", cpl = " << cpl << endl;
 
@@ -96,31 +85,18 @@ Kademlia::join(Args *args)
     // XXX: should be random
     lookup_args la(_id, ip(), (_id ^ (1<<i)));
     lookup_result lr;
-    KDEBUG(3) << "join: i/cpl = " << i << ", looking up entry " << i << ": " << printbits(la.key) << " at IP = " << p->ip << endl;
     if(!doRPC(p->ip, &Kademlia::do_lookup, &la, &lr))
       _tree->erase(p->id);
-
-    for(unsigned j=0; j<lr.results.size(); j++) {
-      KDEBUG(3) << "join: i/cpl = " << i << " inspect result " << j << ": " << printbits(lr.results[j]->id) << endl;
-      if(lr.results[j]->id != _id)
-        _tree->insert(lr.results[j]->id, lr.results[j]->ip);
-    }
+    _tree->insert(&(lr.results));
   }
 
-  KDEBUG(3) << "join: done with cpl" << endl;
-
   // now get the keys from our successor
-  transfer_args ta;
+  transfer_args ta(_id, ip());
   transfer_result tr;
-  ta.id = _id;
-  ta.ip = ip();
+  tr.values = &_values;
   KDEBUG(2) << "join: Node " << printbits(_id) << " initiating transfer from " << printbits(p->id) << endl;
   if(!doRPC(p->ip, &Kademlia::do_transfer, &ta, &tr))
     _tree->erase(p->id);
-
-  // merge that data in our _values table
-  for(map<NodeID, Value>::const_iterator pos = tr.values.begin(); pos != tr.values.end(); ++pos)
-    _values[pos->first] = pos->second;
 
   delaycb(STABLE_TIMER, &Kademlia::reschedule_stabilizer, (void *) 0);
   _joined = true;
@@ -157,22 +133,22 @@ Kademlia::insert(Args *args)
 void
 Kademlia::do_insert(insert_args *iargs, insert_result *iresult)
 {
-  if(iargs->id != _id)
-    _tree->insert(iargs->id, iargs->ip);
+  // insert caller into tree
+  _tree->insert(iargs->id, iargs->ip);
 
   lookup_args la(_id, ip(), iargs->key);
   lookup_result lr;
   do_lookup(&la, &lr);
 
   // if we are the successor for this key, we store it.
-  peer_t *p = get_closest(&(lr.results), iargs->key);
+  peer_t *p = lr.results[0];
   if(p->id == _id) {
     KDEBUG(2) << "Node " << printID(_id) << " storing " << printID(iargs->key) << ":" << iargs->val << "." << endl;
     _values[iargs->key] = iargs->val;
     return;
   }
 
-  // we're not the one to insert it
+  // we're not the one to insert it.  forward it.
   if(!doRPC(p->ip, &Kademlia::do_insert, iargs, iresult))
     _tree->erase(p->id);
 }
@@ -190,15 +166,15 @@ Kademlia::lookup(Args *args)
 void
 Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
 {
-  KDEBUG(3) << "do_lookup: id = " << printbits(largs->id) << ", ip = " << largs->ip << ", key = " << printbits(largs->key) << endl;
-  dump();
+  //
+  // XXX: do_lookup not correct yet.
+  //
+  vector<peer_t*> *bestset = 0;
+  peer_t *p = 0;
+
+  // stare caller id and ip
   NodeID callerID = largs->id;
   IPAddress callerIP = largs->ip;
-  KDEBUG(3) << "do_lookup: callerIP = " << callerIP << endl;
-  unsigned j = 0;
-
-  vector<peer_t*> *bestset = new vector<peer_t*>;
-  assert(bestset);
 
   // deal with the empty case
   if(_tree->empty()) {
@@ -208,36 +184,34 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
   }
 
   // get the best fitting entry in the tree
+  bestset = new vector<peer_t*>;
+  assert(bestset);
+
   _tree->get(largs->key, bestset);
   assert(bestset->size());
 
-  KDEBUG(3) << "do_lookup: BESTSET:" << endl;
-  for(vector<peer_t*>::const_iterator i = bestset->begin(); i != bestset->end(); ++i)
-    KDEBUG(3) << "do_lookup: bestset[ " << j++ << "]: " << printbits((*i)->id) << " -> " << (*i)->ip << ", dist to " << printbits(largs->key) << " = " << printbits(largs->key ^ (*i)->ip) << endl;
+  p = (*bestset)[0];
+  assert(p);
 
   // if we are closer than the closest one, then we are the best match.
-  KDEBUG(3) << "do_lookup: closest node = " << printbits((*bestset)[0]->id) << endl;
-  if(!(*bestset)[0]->ip || distance(_id, largs->key) < distance((*bestset)[0]->id, largs->key)) {
+  KDEBUG(3) << "do_lookup: closest node = " << printbits(p->id) << endl;
+  if(!p->ip || distance(_id, largs->key) < distance(p->id, largs->key)) {
     KDEBUG(3) << "do_lookup: i am the best match" << endl;
     lresult->results.push_back(new peer_t(_id, ip()));
-
-  // recursive lookup
-  } else {
-    KDEBUG(3) << "do_lookup: recursive lookup to " << printbits((*bestset)[0]->id) << " at ip = " << (*bestset)[0]->ip << endl;
-    largs->id = _id;
-    largs->ip = ip();
-    if(!doRPC((*bestset)[0]->ip, &Kademlia::do_lookup, largs, lresult))
-      _tree->erase((*bestset)[0]->id);
+    goto done;
   }
 
+  // recursive lookup
+  KDEBUG(3) << "do_lookup: recursive lookup to " << printbits(p->id) << " at ip = " << p->ip << endl;
+  largs->id = _id;
+  largs->ip = ip();
+  if(!doRPC(p->ip, &Kademlia::do_lookup, largs, lresult))
+    _tree->erase(p->id);
+
 done:
-  // set correct return data
+  // set correct return data and insert caller into our tree
   lresult->rid = _id;
-
-  // insert caller into our tree
-  if(callerID != _id)
-    _tree->insert(callerID, callerIP);
-
+  _tree->insert(callerID, callerIP);
   delete bestset;
 }
 
@@ -256,12 +230,8 @@ Kademlia::do_lookup_wrapper(peer_t *p, Kademlia::NodeID key,
   if(!doRPC(p->ip ? p->ip : _wkn, &Kademlia::do_lookup, &la, &lr))
     _tree->erase(p->id);
 
-  if(!v)
-    return;
-
-  // XXX: better copy?
-  for(vector<peer_t*>::const_iterator i = lr.results.begin(); i != lr.results.end(); ++i)
-    v->push_back(*i);
+  if(v)
+    copy(lr.results.begin(), lr.results.end(), v->begin());
 }
 
 // }}}
@@ -269,8 +239,8 @@ Kademlia::do_lookup_wrapper(peer_t *p, Kademlia::NodeID key,
 void
 Kademlia::do_ping(ping_args *pargs, ping_result *presult)
 {
-  if(pargs->id != _id)
-    _tree->insert(pargs->id, pargs->ip);
+  // insert caller into our tree
+  _tree->insert(pargs->id, pargs->ip);
 }
 
 // }}}
@@ -281,6 +251,7 @@ Kademlia::do_ping_wrapper(peer_t *p)
   assert(p->ip);
   ping_args pa(_id, ip());
   ping_result pr;
+
   if(!doRPC(p->ip, &Kademlia::do_ping, &pa, &pr)) {
     _tree->erase(p->id);
     return false;
@@ -317,28 +288,26 @@ Kademlia::reschedule_stabilizer(void *x)
 
 // }}}
 // {{{ Kademlia::do_transfer
+//
+// XXX: this is scary because we're deleting nodes before the other guy has
+// them.  what if the reply fails?
 void
 Kademlia::do_transfer(transfer_args *targs, transfer_result *tresult)
 {
-  if(targs->id != _id)
-    _tree->insert(targs->id, targs->ip);
+  // insert caller into our tree
+  _tree->insert(targs->id, targs->ip);
 
   KDEBUG(2) << "handle_transfer to node " << printbits(targs->id) << "\n";
-  if(_values.size() == 0) {
-    KDEBUG(2) << "handle_transfer_cb; no values: done!\n";
+  if(!_values.size())
     return;
-  }
 
-  // XXX: this is wrong, I think.  shouldn't we be using the correct distance
-  // metric here?
-  //
-  // XXX: this is scary because we're deleting nodes before the other guy has
-  // them.  what if the reply fails?
-  for(map<NodeID, Value>::const_iterator pos = _values.begin(); pos != _values.end(); ++pos)
-    if(pos->first >= targs->id) {
-      tresult->values.insert(*pos);
-      _values.erase(pos->first);
-    }
+  // copy all key/value pairs that targs->id is supposed to have
+  for(map<NodeID, Value>::const_iterator pos = _values.begin(); pos != _values.end(); ++pos) {
+    if(distance(pos->first, _id) < distance(pos->first, targs->id))
+      continue;
+    tresult->values->insert(*pos);
+    _values.erase(pos->first);
+  }
 }
 
 // }}}
@@ -402,26 +371,6 @@ Kademlia::common_prefix(Kademlia::NodeID k1, Kademlia::NodeID k2)
 }
 
 // }}}
-// {{{ Kademlia::get_closest
-peer_t*
-Kademlia::get_closest(vector<peer_t*> *v, NodeID id)
-{
-  // insert all results in our k-buckets and find the NodeID closest to our own.
-  NodeID closestDist = (NodeID) -1;
-  peer_t *closestP = 0;
-  for(unsigned i=0; i<v->size(); i++) {
-    NodeID xid = (*v)[i]->id;
-    if(distance(id, xid) < closestDist) {
-      closestDist = distance(id, xid);
-      closestP = (*v)[i];
-    }
-  }
-
-  assert(closestP);
-  return closestP;
-}
-
-// }}}
 // {{{ Kademlia::crash
 void
 Kademlia::crash(Args*)
@@ -462,17 +411,26 @@ k_bucket_tree::~k_bucket_tree()
 }
 
 // }}}
-// {{{ k_bucket_tree::insert
+// {{{ k_bucket_tree::insert (pair)
 void
 k_bucket_tree::insert(NodeID id, IPAddress ip)
 {
-  KDEBUG(2) << "k_bucket_tree::insert: BEFORE id = " << Kademlia::printbits(id) << ", ip = " << ip << endl;
-  _self->dump();
+  if(id == _id)
+    return;
+
   peer_t *p = 0;
   if((p = _root->insert(id, ip)))
     _nodes[id] = p;
-  KDEBUG(2) << "k_bucket_tree::insert: AFTER id = " << Kademlia::printbits(id) << ", ip = " << ip << endl;
-  _self->dump();
+}
+
+// }}}
+// {{{ k_bucket_tree::insert (vector)
+void
+k_bucket_tree::insert(vector<peer_t*> *v)
+{
+  for(unsigned j=0; j<v->size(); j++)
+    if((*v)[j]->id != _id)
+      _root->insert((*v)[j]->id, (*v)[j]->ip);
 }
 
 // }}}
@@ -605,16 +563,18 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned de
   // TRY TO INSERT AT THE NODE WE END UP AT THROUGH RECURSION
   //
 
-  // is this thing is already in the array, bail out.
-  // XXX: move it forward
-  for(set<peer_t*>::const_iterator it = _nodes->begin(); it != _nodes->end(); ++it)
-    if((*it)->id == node) {
-      _nodes->erase(*it);
-      (*it)->lastts = now();
-      _nodes->insert(*it); // so that it gets resorted.  will go to tail.
-      KDEBUG(4) <<  "insert: node " << Kademlia::printbits(node) << " already in tree" << endl;
-      return *it;
-    }
+  // if this thing is already in the array, move to the right
+  // place and bail out
+  for(set<peer_t*>::const_iterator it = _nodes->begin(); it != _nodes->end(); ++it) {
+    if((*it)->id != node)
+      continue;
+
+    _nodes->erase(*it);
+    (*it)->lastts = now();
+    _nodes->insert(*it);
+    KDEBUG(4) <<  "insert: node " << Kademlia::printbits(node) << " already in tree" << endl;
+    return *it;
+  }
 
   // if not full, just add the new id.
   if(_nodes->size() < _k) {
@@ -649,41 +609,35 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned de
   _nodes->insert(p);
 
   //
-  // Now if this k-bucket contains the node own ID, then split it,
+  // Now if the range in this k-bucket includes the node own ID, then split it,
   // otherwise just return the peer_t we just inserted.
   //
-  if(!(node >= (*_nodes->begin())->id &&
-       node <= (*_nodes->end())->id &&
-       (*_nodes->begin())->id != (*_nodes->end())->id))
-  {
+  if(!(node >= (*_nodes->begin())->id && node <= (*_nodes->end())->id &&
+        (*_nodes->begin())->id != (*_nodes->end())->id))
     return p;
-  } else {
-    assert(!_leaf);
 
-  // split if this is not a final leaf
-  // if(!_leaf) {
-    // create both children
-    KDEBUG(4) <<  "insert: not a leaf.  creating subchildren" << endl;
-    _child[0] = new k_bucket(_self, _root);
-    _child[1] = new k_bucket(_self, _root);
-    _child[myleftmostbit ^ 1]->_leaf = true;
-    KDEBUG(4) <<  "insert: subchild " << (myleftmostbit ^ 1) << " is a leaf on depth " << depth << endl;
+  assert(!_leaf);
+  // create both children
+  KDEBUG(4) <<  "insert: not a leaf.  creating subchildren" << endl;
+  _child[0] = new k_bucket(_self, _root);
+  _child[1] = new k_bucket(_self, _root);
+  _child[myleftmostbit ^ 1]->_leaf = true;
+  KDEBUG(4) <<  "insert: subchild " << (myleftmostbit ^ 1) << " is a leaf on depth " << depth << endl;
 
-    // now divide contents into separate buckets
-    // XXX: we have to ping these guys?
-    for(set<peer_t*>::const_iterator it = _nodes->begin(); it != _nodes->end(); ++it) {
-      assert(*it);
-      unsigned bit = Kademlia::getbit((*it)->id, depth);
-      KDEBUG(4) <<  "insert: pushed entry " << Kademlia::printbits((*it)->id) << " to side " << bit << endl;
-      _child[bit]->_nodes->insert(*it);
-    }
-    delete _nodes;
-    _nodes = 0;
-
-    // now insert at the right child
-    KDEBUG(4) <<  "insert: after split, calling insert for prefix " << (prefix + (leftmostbit ? "1" : "0")) << " to depth " << (depth+1) << endl;
-    return _child[leftmostbit]->insert(node, ip, prefix + (leftmostbit ? "1" : "0"), depth+1, root);
+  // now divide contents into separate buckets
+  // XXX: we have to ping these guys?
+  for(set<peer_t*>::const_iterator it = _nodes->begin(); it != _nodes->end(); ++it) {
+    assert(*it);
+    unsigned bit = Kademlia::getbit((*it)->id, depth);
+    KDEBUG(4) <<  "insert: pushed entry " << Kademlia::printbits((*it)->id) << " to side " << bit << endl;
+    _child[bit]->_nodes->insert(*it);
   }
+  delete _nodes;
+  _nodes = 0;
+
+  // now insert at the right child
+  KDEBUG(4) <<  "insert: after split, calling insert for prefix " << (prefix + (leftmostbit ? "1" : "0")) << " to depth " << (depth+1) << endl;
+  return _child[leftmostbit]->insert(node, ip, prefix + (leftmostbit ? "1" : "0"), depth+1, root);
 }
 
 // }}}
@@ -901,6 +855,26 @@ Kademlia::NodeID
 Kademlia::maskright(NodeID n, unsigned i)
 {
   return n & _rightmasks[i];
+}
+
+// }}}
+// {{{ Kademlia::get_closest
+peer_t*
+Kademlia::get_closest(vector<peer_t*> *v, NodeID id)
+{
+  // insert all results in our k-buckets and find the NodeID closest to our own.
+  NodeID closestDist = (NodeID) -1;
+  peer_t *closestP = 0;
+  for(unsigned i=0; i<v->size(); i++) {
+    NodeID xid = (*v)[i]->id;
+    if(distance(id, xid) < closestDist) {
+      closestDist = distance(id, xid);
+      closestP = (*v)[i];
+    }
+  }
+
+  assert(closestP);
+  return closestP;
 }
 
 // }}}
