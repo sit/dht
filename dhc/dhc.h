@@ -341,7 +341,9 @@ class dhc {
   void recv_newconfig (user_args *);
   void recv_newconfig_ack (chordID, ref<dhc_newconfig_res>, clnt_stat);
   void recv_get (user_args *);
-  void getblock_cb (user_args *, ptr<read_state>, ref<dhc_get_res>, clnt_stat);
+  void getblock_cb (user_args *, ptr<location>, ptr<read_state>, 
+		    ref<dhc_get_res>, clnt_stat);
+  void getblock_retry_cb (user_args *, ptr<location>, ptr<read_state>);
   void recv_getblock (user_args *);
 
   void get_lookup_cb (chordID, dhc_getcb_t, vec<chord_node>, route, chordstat);

@@ -434,12 +434,13 @@ dhc::recv_get (user_args *sbp)
     ptr<dhc_get_res> res = New refcounted<dhc_get_res>;
     for (uint i=0; i<b->config.size (); i++)
       myNode->doRPC (b->config[i], dhc_program_1, DHCPROC_GETBLOCK, arg, res,
-		     wrap (this, &dhc::getblock_cb, sbp, rs, res));
+		     wrap (this, &dhc::getblock_cb, sbp, b->config[i], rs, res));
   }
 }
 
 void 
-dhc::getblock_cb (user_args *sbp, ptr<read_state> rs, ref<dhc_get_res> res, clnt_stat err)
+dhc::getblock_cb (user_args *sbp, ptr<location> dest, ptr<read_state> rs, 
+		  ref<dhc_get_res> res, clnt_stat err)
 {
   if (!rs->done && !err && res->status == DHC_OK) {
     rs->add (res->resok->data);
@@ -463,15 +464,27 @@ dhc::getblock_cb (user_args *sbp, ptr<read_state> rs, ref<dhc_get_res> res, clnt
       sbp->reply (&res);
       rs->done = true;
     }
-    else {
+    else
       if (res->status == DHC_RECON_INPROG ||
-	  res->status == DHC_BLOCK_NEXIST)
-	; // wait and retry
-      else {
+	  res->status == DHC_BLOCK_NEXIST) {
+        // wait and retry in 60 seconds
+	// dest, sbp, rs
+	delaycb (60, wrap (this, &dhc::getblock_retry_cb, sbp, dest, rs));
+      } else {
 	sbp->reply (res);
 	rs->done = true;
       }
-    }
+}
+
+void 
+dhc::getblock_retry_cb (user_args *sbp, ptr<location> dest, ptr<read_state> rs)
+{
+  dhc_get_arg *get = sbp->template getarg<dhc_get_arg> ();
+  ptr<dhc_get_arg> arg = New refcounted<dhc_get_arg>;
+  arg->bID = get->bID; 
+  ptr<dhc_get_res> res = New refcounted<dhc_get_res>;
+  myNode->doRPC (dest, dhc_program_1, DHCPROC_GETBLOCK, arg, res,
+		 wrap (this, &dhc::getblock_cb, sbp, dest, rs, res));
 }
 
 void
