@@ -1,0 +1,101 @@
+
+typedef struct {
+  ID      x;
+  Type    type;      // lookup or stabilize
+  Type    style;     // iterative orrecursive  
+  Node*   initiator; // original initiator of the message
+  Node*   sender;    // sender of current message
+  Node*   pred;      // best known predecessor of x
+  Node*   succ;      // best known successor of x
+  Bool    done;      // TRUE after message has arrived at node n
+                     // where n < r.x <= n.successor
+} Request;
+
+// finger is no longer restricted to log n entries of the specific
+// fingers in the paper, it is generalized to a fixed size cache that
+// uses LRU replacement policy
+
+// n1 is a node already in Chord, from bootstrapping mechanism
+n.join(n1)
+  finger.add(n);
+  finger.add(n1);
+
+n.lookup(x)
+  r = new Request;
+  r.type  = lookup;
+  r.style = recursive;
+  r.x = x;
+  r.initiator = r.sender = r.succ = r.pred = n;
+  r.done = False;
+  n.enqueue(r); // the queue holds pending requests
+
+n.stablize() // called by a periodic mechanism
+  r = new Request;
+  r.type  = stablize;
+  r.style = iterative;
+  r.x = choose_id(); // choose an ID on the identifier circle;
+                     // with a high probability r.x is n + 2^{i-1} 
+  r.initiator = r.sender = n;
+
+  // get closest predecessor known by n
+  r.pred = finger.get_closest_pred(r.x);
+  // get closest successor known by n
+  r.succ = finger.get_closest_succ(r.x);
+
+  r.done = False;
+ 
+  // insert request at r.x's successor
+  (r.succ).enqueue(r);
+
+n.enqueue(r)
+  request_list.add(r);
+
+n.dequeue()  // this is invoked only locally
+  return request_list.dequeue();
+
+n.processRequest() // called by a periodic mechanism
+
+  r = n.dequeue(); // this call is a local, so no RPC !
+
+  finger.add(r.initiator);
+  finger.add(r.sender);
+
+  // update r.pred and r.succ to best known ones
+  p = finger.get_closest_pred(r.x);
+  if (p \in (r.pred, r.x))
+    r.pred = p;
+  s = finger.get_closest_succ(r.x);
+  if (p \in (r.x, r.succ))
+    r.succ = s;
+
+  if (p == n && s == n.successor)
+    r.done = True;
+
+  r.sender = n;
+
+  if (r.done)
+    if (r.initiator == n)
+      if (r.type == stabilize)
+        finger.add(r.succ); // new potential finger
+      else 
+        // ... this is a lookup operation;
+        // we need to return it to the client; probably the client
+        // address will also be stored in r
+      return;
+    else
+      // send back to original initiator
+      (r.initiator).enqueue(r);
+  else
+    if (r.initiator == n)
+      // send to best known predecessor
+      (r.pred).enqueue(r);
+    else
+      if (r.style == iterative)
+        // send back to initiator
+        (r.initiator).enqueue(r);
+      else
+        // recursive
+        (r.pred).enqueue(r);
+
+
+
