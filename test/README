@@ -1,0 +1,84 @@
+DTest Overview
+--------------
+
+DTest makes it extremely easy to write DHash testing programs!
+
+A library with 2 methods allows a master program to instruct slaves
+anywhere on the network to perform DHash operations on its behalf. The
+full DHash client interface is available (even when that interface
+changes) since the master _is_ really using the dhashclient class.
+
+DTest consists of one program (testslave) and one library
+(testmaster). Slaves can run anywhere on the network and can be used
+in an already deployed Chord network without having to restart lsd
+anywhere.
+
+There is a tiny example file (example.C) that inserts a block from one
+node and fetches it from another and compares the data.
+
+More functionality will be added; most notably creating and healing
+network partitions. There's more, though.
+
+DTest Usage
+-----------
+
+This stuff is in sfsnet/build/test.
+
+DTest slave: run testslave on any machine that also runs lsd.
+options:
+    -s <socket> : connect to lsd behind unix domain socket <socket>
+    -p <port>   : listen to master on port <port>; default is 3344
+
+DTest master: link a test program with testmaster.o. You can then do:
+
+testmaster tm;
+tm.setup(...);         // tell it where the slaves are
+tm[3]->insert(...);    // do a DHash insert from node 3.
+tm[1]->retrieve(...);  // do DHash retrieve from node 1/
+
+See also example.C.
+
+Currently you can not run more than one DTest master on a machine.
+Will be fixed soon.
+
+
+DTest Implementation
+--------------------
+
+   +---------------+
+   |               |
+   | Test Program  |
+   |      |        |
++--+------|--------+--+
+|         v           |
+|     DTest Master    |
+|         |           |
+| +-------|-------+   |
+| |       v       |-+ |                    
+| |   Unmodified  | | |                    .
+| |     DHash     | | |                    .
+| |       |       | | |                    .  
+| +-------|-------+ | |                     
+|   +-----|--|------+ |                    ^           
+|         |  |        |         +----------|----------+
+|         v  v        |         |          |          |
+|      Fake LSDs      |         |         LSD         |--+
+|                     |         |          ^          |  |
+|    (Unix sockets    |         +----------|----------+  |
+|      created by     |         |          |          |  |
+|     DTest Master)   |         |     DTest Slave     |  |
+|          | |        |         |          ^          |  |
++----------|-|--------+         +----------|----------+  |
+           | |                     |       |   |         |
+           | |                     +-------|---|---------+
+           | |                             |   |
+           +-|-----------------------------+   |
+             |                                 |
+             +---------------------------------+
+
+The essence is that DTest master creates Unix sockets just like LSD
+does---one for each remote DTest slave. Per slave it creates a DHash
+client instance that talks to the Unix socket. In so doing, it tricks
+DHash into believing it is talking to LSD. In reality, DTest pipes all
+raw data to the appropriate slave, which passes it on through a Unix
+socket to LSD.
