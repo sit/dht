@@ -36,8 +36,8 @@ public:
 
   // Functions callable from events file.
   virtual void join(Args*);
-  virtual void leave(Args*) {};
-  virtual void crash(Args*) {};
+  virtual void leave(Args*);
+  virtual void crash(Args*);
   virtual void lookup(Args*);
   virtual void insert(Args*) {};
 

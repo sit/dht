@@ -334,20 +334,18 @@ Chord::dump()
   printf("pred is %5u,%16qx\n", p.ip, p.id);
 }
 
-#if 0
 void
-Chord::leave()
+Chord::leave(Args *args)
 {
+  crash (args);
 }
 
 void
-Chord::crash()
+Chord::crash(Args *args)
 {
-  //suspend the currently running thread?
+  printf ("vis %lu crash %16qx\n", now (), me.id);
+  node()->crash ();
 }
-#endif
-
-
 
 
 /*************** LocTable ***********************/

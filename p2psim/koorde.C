@@ -117,7 +117,10 @@ Koorde::find_successors(CHID key, uint m, bool intern)
     ipath.push_back (a.i);
     kpath.push_back (a.kshift);
 
-    doRPC (r.next.ip, &Koorde::koorde_next, &a, &r);
+    if (!doRPC (r.next.ip, &Koorde::koorde_next, &a, &r)) {
+      printf ("rpc failure for %u\n", r.next.ip);
+      assert (0);
+    }
 
     if (vis && !intern) 
       printf ("vis %lu step %16qx %16qx %16qx\n", now (), me.id, last.id,
