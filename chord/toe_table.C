@@ -122,12 +122,12 @@ toe_table::add_toe (const chord_node &n, int level)
 
   vec<float> them;
   for (u_int i = 0; i < n.coords.size (); i++)
-    them.push_back (n.coords[i]);
+    them.push_back ((float)n.coords[i]);
   vec<float> us = locations->get_coords (myID);
   dist = Coord::distance_f (them, us);
 
   //verify donors distance agrees with ours
-  if (dist >= level_to_delay (level))
+  if (dist >= level_to_delay (level) || dist <= 0)
     return;
 
   locations->insert (n);
@@ -186,6 +186,7 @@ toe_table::add_toe (const chord_node &n, int level)
     trace << "added " << id << " to level " << level
 	  << " now " << toes[level]->size () << " index "
 	  << newindex << "\n";
+    trace << "now " << count_unique() << "unique toes\n";
 
     //try to promote the new one right away
     if(level+1 < MAX_LEVELS){
@@ -221,6 +222,22 @@ toe_table::filled_level ()
   return 0;
 }
 
+//probably useful for stats
+int
+toe_table::count_unique ()
+{
+  vec<chordID> nodes;
+  for (int level=0; level < MAX_LEVELS; level++) {
+    vec<chordID> vl = get_toes (level);
+    for (unsigned int i=0; i < vl.size (); i++) {
+      if(!in_vector(nodes, vl[i]))
+	nodes.push_back(vl[i]);
+    }
+  }
+  return nodes.size();
+
+}
+
 void
 toe_table::print ()
 {
@@ -233,6 +250,8 @@ toe_table::print ()
 	   << " max " << level_to_delay(level) << "\n";
     }
   }
+  
+  warn << "Unique toe entries: " <<  count_unique() << "\n";
 
 }
 
