@@ -319,6 +319,12 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
 	vnodep->doalert (sbp, na);
       }
       break;
+    case CHORDPROC_GETSUCCLIST:
+      {
+	warnt("CHORD: getsucclist request");
+	vnodep->dogetsucclist (sbp);
+      }
+      break;
     case CHORDPROC_TESTRANGE_FINDCLOSESTPRED:
       {
 	warnt("CHORD: testandfindrequest");

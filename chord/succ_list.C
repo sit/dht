@@ -81,125 +81,112 @@ void
 succ_list::stabilize_succlist ()
 {
   assert (nout_backoff == 0);
-  int next = s % (nsucc + 1); // probe past the end.
   
-  // warnx << myID << ": stabilize_succlist next = " << next
-  //       << " nsucc = " << nsucc << "\n";
-  if (next == 0) {
-    stable_succlist2 = stable_succlist;
-    stable_succlist = true;
-    
-    int goodnodes = locations->usablenodes () - 1;
-    int newnsucc = (NSUCC > goodnodes) ? goodnodes : NSUCC;
-    warnx << myID << ": estimating total number of nodes as "
-	  << locations->estimate_nodes () << ";"
-    // warnx << myID << ": stabilize_succlist newnsucc = " << newnsucc
-	  << " goodnodes = " << goodnodes << "\n";
+  stable_succlist2 = stable_succlist;
+  stable_succlist = true;
 
-    // wait until we've discovered some other node via cts process.
-    if (newnsucc == 0)
-      return;
-
-    // At each round, just walk through our list, skipping the first.
-    nextsucc = succ ();
-    next = 1;
-
-    nsucc = newnsucc;
-  }
-  
-  if (next < nsucc + 1) { // in case we've gotten really small
-    chordID expected = locations->closestsuccloc (nextsucc);
-    nout_backoff++;
-    myvnode->get_successor
-      (nextsucc, wrap (this, &succ_list::stabilize_getsucc_cb,
-		       expected, next));
-  } else {
-    s = 0;
-  }
-  // Update s in the callbacks.
+  nout_backoff++;
+  chordID s = succ ();
+  myvnode->get_succlist
+    (s, wrap (this, &succ_list::stabilize_getsucclist_cb, s));
 }
 
-
 void
-succ_list::stabilize_getsucc_cb (chordID expected, int j,
-				 chordID succ, net_address r, 
-				 chordstat status)
+succ_list::stabilize_getsucclist_cb (chordID s, vec<chord_node> nlist,
+				     chordstat status)
 {
-  // the person we asked in nextsucc
   nout_backoff--;
   if (status) {
-    warnx << myID << ": stabilize_getsucc_cb: " << j << " : " 
-	  << expected << " failure " << status << "\n";
+    warnx << myID << ": stabilize_getsucclist_cb: " << s << " : " 
+	  << "failure " << status << "\n";
     stable_succlist = false;
-    s = 0;
-  } else if (j <= nsucc) {
-    if (succ == myID) {
-      if (j != nsucc)
-	warnx << myID << ": stabilize_getsucc_cb full circle; nsucc = "
-	      << nsucc << " j = " << j << "\n";
-      s = 0;
-    } else if (expected != succ) {
+    return;
+  }
+  assert (s == nlist[0].x);
+
+  // PODC paper says, set our succlist to successors succlist mod last guy
+  // We're going to merge his succlist with our succlist and make sure
+  // deletions and insertions are accurate from our POV.
+  unsigned int i, j;
+  vec<chordID> succlist;
+  unsigned int curnsucc = num_succ ();
+  chordID cursucc = succ ();
+  for (i = 0; i < curnsucc; i++) {
+    succlist.push_back (cursucc);
+    cursucc = locations->closestsuccloc (cursucc);
+  }
+
+  i = 0; j = 0;
+  unsigned int newnsucc = nlist.size () - 1; // drop last guy.
+  while ((i < curnsucc) && (j < newnsucc)) {    
+    if (succlist[i] == nlist[j].x) { i++; j++; continue; }
+    if (between (myID, nlist[j].x, succlist[i])) {
+      // if succlist[i] < nlist[j].x
+      // then, maybe someone we knew about is dead now. best be sure.
       nout_backoff++;
-      stable_succlist = false;
-      if (between (nextsucc, expected, succ)) {
-	warnx << myID << ": stabilize_getsucc_cb caching new successor "
-	      << j << " = " << succ << "\n";
-	locations->cacheloc (succ, r,
-			     wrap (this, &succ_list::stabilize_getsucc_ok, 
-				   j));
-      } else {
-	// We got someone worse than expected; better check it out.
-	warnx << myID << ": got new successor " << succ << " worse than "
-	      << expected << "; checking.\n";
-	locations->ping (expected,
-			 wrap (this, &succ_list::stabilize_getsucc_checkold_cb,
-			       j, succ, r));
-      }
-    } else {
-      nextsucc = expected;
-      s = j + 1;
+      locations->ping
+	(succlist[i], wrap (this, &succ_list::stabilize_getsucclist_check,
+			    s, succlist[i]));
+      i++;
+      continue;
     }
-    // ring probably changed a lot recently, esp if j != nsucc.
-    // better start the whole process over again.
+    if (between (myID, succlist[i], nlist[j].x)) {
+      // if succlist[i] > nlist[j].x
+      // then maybe a new node joined. check it out.
+      nout_backoff++;
+      locations->cacheloc
+	(nlist[j].x, nlist[j].r,
+	 wrap (this, &succ_list::stabilize_getsucclist_ok, s));
+      j++;
+      continue;
+    }
   }
-  u_long n = estimate_nnodes ();
-  locations->replace_estimate (nnodes, n);
-  nnodes = n;
+  bool check = false;
+  while (i < curnsucc) {
+    check = true;
+    nout_backoff++;
+    locations->ping
+      (succlist[i], wrap (this, &succ_list::stabilize_getsucclist_check,
+			  s, succlist[i]));
+    i++;
+  }
+  while (j < newnsucc) {
+    assert (!check);
+    nout_backoff++;
+    locations->cacheloc
+      (nlist[j].x, nlist[j].r,
+       wrap (this, &succ_list::stabilize_getsucclist_ok, s));
+    j++;
+  }
 }
 
 void
-succ_list::stabilize_getsucc_checkold_cb (int j, chordID succ, net_address r,
-					  chordstat status)
-{
-  // we expect that the old guy is dead.
-  if (!status) {
-    warnx << myID
-	  << ": old successor is alive!\n";
-    // xxx do we need to do anything special? notify the node
-    //     we got this answer from?
-  }
-  // There is no harm in caching this new guy anyway though; we
-  // will challenge him anyway, and for all we know he's a useful
-  // node to keep in mind.
-  
-  // warnx << myID << ": stabilize_getsucc_checkold_cb caching new successor "
-  //	<< j << " = " << succ << "\n";
-  locations->cacheloc (succ, r,
-		       wrap (this, &succ_list::stabilize_getsucc_ok, 
-			     j));
-}
-
-void
-succ_list::stabilize_getsucc_ok (int j, chordID succ, bool ok, chordstat status)
+succ_list::stabilize_getsucclist_check (chordID src, chordID chk,
+					chordstat status)
 {
   nout_backoff--;
-  if ((status == CHORD_OK) && ok) {
-    nextsucc = succ;
-    s = j + 1;
-    warnx << myID << ": stabilize_getsucc_ok: s incremented to " << s << "\n";
+  if (status) {
+    stable_succlist = false;
+    warnx << myID << ": stabilize_succlist: found dead successor " << chk
+	  << " from " << src << "\n";
   }
 }
 
+void
+succ_list::stabilize_getsucclist_ok (chordID source,
+				     chordID ns, bool ok, chordstat status)
+{
+  nout_backoff--;
+  if (!ok || status) {
+    warnx << myID << ": stabilize_succlist: received bad successor "
+	  << ns << " from " << source << "\n";
+    // XXX do something about it?
+  } else {
+    stable_succlist = false;
+    warnx << myID << ": stabilize_succlist: received new successor "
+	  << ns << " from " << source << "\n";
+  }
+}
 
 // ============
 void

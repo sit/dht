@@ -58,6 +58,35 @@ vnode::get_successor_cb (chordID n, cbchordID_t cb, chord_noderes *res,
   delete res;
 }
 
+void
+vnode::get_succlist (const chordID &n, cbchordIDlist_t cb)
+{
+  ngetsucclist++;
+  chord_nodelistres *res = New chord_nodelistres (CHORD_OK);
+  ptr<chord_vnode> v = New refcounted<chord_vnode>;
+  v->n = n;
+  doRPC (n, chord_program_1, CHORDPROC_GETSUCCLIST, v, res,
+	 wrap (mkref (this), &vnode::get_succlist_cb, cb, res));
+}
+
+void
+vnode::get_succlist_cb (cbchordIDlist_t cb, chord_nodelistres *res,
+			clnt_stat err)
+{
+  vec<chord_node> nlist;
+  if (err) {
+    cb (nlist, CHORD_RPCFAILURE);
+  } else if (res->status) {
+    cb (nlist, res->status);
+  } else {
+    // xxx there must be something more intelligent to do here
+    for (unsigned int i = 0; i < res->resok->nlist.size (); i++)
+      nlist.push_back (res->resok->nlist[i]);
+    cb (nlist, CHORD_OK);
+  }
+  delete res;
+}
+
 void 
 vnode::get_predecessor (chordID n, cbchordID_t cb)
 {
@@ -119,7 +148,7 @@ void
 vnode::find_route (chordID &x, cbroute_t cb) 
 {
   nfindpredecessor++;
-  if (myID == (*fingers)[1]) {    // is n the only node?
+  if (myID == (*fingers)[0]) {    // is n the only node?
     route search_path;
     cb (myID, search_path, CHORD_OK);
   } else {
@@ -342,7 +371,7 @@ vnode::addHandler (const rpc_program &prog, cbdispatch_t cb)
 };
 
 void
-vnode::doRPC (chordID &ID, rpc_program prog, int procno, 
+vnode::doRPC (const chordID &ID, rpc_program prog, int procno, 
 	      ptr<void> in, void *out, aclnt_cb cb) {
   locations->doRPC (ID, prog, procno, in, out, cb);
 }

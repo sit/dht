@@ -48,6 +48,7 @@ typedef int cb_ID;
 typedef vec<chordID> route;
 typedef callback<void,vnode*,chordstat>::ref cbjoin_t;
 typedef callback<void,chordID,net_address,chordstat>::ref cbchordID_t;
+typedef callback<void,vec<chord_node>,chordstat>::ref cbchordIDlist_t;
 typedef callback<void,chordID,route,chordstat>::ref cbroute_t;
 typedef callback<void, svccb *>::ref cbdispatch_t;
 
@@ -176,11 +177,12 @@ class succ_list : public stabilizable {
 				chordID p, bool ok, chordstat status);
 
   // Helpers for stabilize_succlist
-  void stabilize_getsucc_cb (chordID jid, int j, chordID s, net_address r, 
-			     chordstat status);
-  void stabilize_getsucc_checkold_cb (int j, chordID succ, net_address r,
-				      chordstat status);
-  void stabilize_getsucc_ok (int j, chordID s, bool ok, chordstat status);
+  void stabilize_getsucclist_cb (chordID s, vec<chord_node> nlist,
+				chordstat err);
+  void stabilize_getsucclist_check (chordID src, chordID chk, chordstat status);
+  void stabilize_getsucclist_ok (chordID source,
+				 chordID ns, bool ok, chordstat status);
+
 
  public:  
   succ_list (ptr<vnode> v, ptr<locationtable> locs, chordID myID);
@@ -221,6 +223,7 @@ class vnode : public virtual refcount, public stabilizable {
 
   u_long ngetsuccessor;
   u_long ngetpredecessor;
+  u_long ngetsucclist;
   u_long nfindsuccessor;
   u_long nhops;
   u_long nmaxhops;
@@ -237,6 +240,7 @@ class vnode : public virtual refcount, public stabilizable {
   u_long ndofindclosestpred;
   u_long ndonotify;
   u_long ndoalert;
+  u_long ndogetsucclist;
   u_long ndotestrange;
   u_long ndogetfingers;
   u_long ndogetfingers_ext;
@@ -258,6 +262,9 @@ class vnode : public virtual refcount, public stabilizable {
   void find_route (chordID &x, cbroute_t cb);
   void find_successor_cb (chordID x, 
 			  cbroute_t cb, chordID s, route sp, chordstat status);
+  void get_succlist_cb (cbchordIDlist_t cb, chord_nodelistres *res,
+			clnt_stat err);
+
   void testrange_findclosestpred (chordID node, chordID x, 
 				  findpredecessor_cbstate *st);
   void testrange_findclosestpred_cb (chord_testandfindres *res, 
@@ -293,12 +300,13 @@ class vnode : public virtual refcount, public stabilizable {
   void join (cbjoin_t cb);
   void get_successor (chordID n, cbchordID_t cb);
   void get_predecessor (chordID n, cbchordID_t cb);
+  void get_succlist (const chordID &n, cbchordIDlist_t cb);
   void find_successor (chordID &x, cbroute_t cb);
   void notify (chordID &n, chordID &x);
   void alert (chordID &n, chordID &x);
 
   // For other modules
-  void doRPC (chordID &ID, rpc_program prog, int procno, 
+  void doRPC (const chordID &ID, rpc_program prog, int procno, 
 	      ptr<void> in, void *out, aclnt_cb cb);
   void stats (void);
   void print (void);
@@ -314,11 +322,11 @@ class vnode : public virtual refcount, public stabilizable {
   // The RPCs
   void doget_successor (svccb *sbp);
   void doget_predecessor (svccb *sbp);
-  void dofindclosestsucc (svccb *sbp, chord_findarg *fa);  
   void dofindclosestpred (svccb *sbp, chord_findarg *fa);
   void dotestrange_findclosestpred (svccb *sbp, chord_testandfindarg *fa);
   void donotify (svccb *sbp, chord_nodearg *na);
   void doalert (svccb *sbp, chord_nodearg *na);
+  void dogetsucclist (svccb *sbp);
   void dogetfingers (svccb *sbp);
   void dogetfingers_ext (svccb *sbp);
   void dogetsucc_ext (svccb *sbp);

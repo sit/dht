@@ -30,6 +30,11 @@ struct net_address {
   int32_t port;
 };
 
+struct chord_node {
+  chordID x;
+  net_address r;
+};
+
 struct chord_noderesok {
   chordID node;
   net_address r;
@@ -42,14 +47,20 @@ union chord_noderes switch (chordstat status) {
    void;
 };
 
+struct chord_nodelistresok {
+  chord_node nlist<>;
+};
+
+union chord_nodelistres switch (chordstat status) {
+ case CHORD_OK:
+   chord_nodelistresok resok;
+ default:
+   void;
+};
+
 struct chord_findarg {
   chord_vnode v;
   chordID x;
-};
-
-struct chord_node {
-  chordID x;
-  net_address r;
 };
 
 struct chord_node_ext {
@@ -191,8 +202,8 @@ program CHORD_PROGRAM {
 		chordstat
 		CHORDPROC_ALERT (chord_nodearg) = 5;
 
-		chordstat
-        	CHORDPROC_CACHE (chord_cachearg) = 6;
+		chord_nodelistres
+        	CHORDPROC_GETSUCCLIST (chord_vnode) = 6;
 
 		chord_testandfindres
                 CHORDPROC_TESTRANGE_FINDCLOSESTPRED (chord_testandfindarg) = 7;

@@ -66,6 +66,7 @@ vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
 
   ngetsuccessor = 0;
   ngetpredecessor = 0;
+  ngetsucclist = 0;
   nfindsuccessor = 0;
   nhops = 0;
   nmaxhops = 0;
@@ -81,6 +82,7 @@ vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
   ndofindclosestpred = 0;
   ndonotify = 0;
   ndoalert = 0;
+  ndogetsucclist = 0;
   ndotestrange = 0;
   ndogetfingers = 0;
   ndochallenge = 0;
@@ -114,6 +116,7 @@ vnode::stats ()
   warnx << "# getsuccesor requests " << ndogetsuccessor << "\n";
   warnx << "# getpredecessor requests " << ndogetpredecessor << "\n";
   warnx << "# findclosestpred requests " << ndofindclosestpred << "\n";
+  warnx << "# getsucclist requests " << ndogetsucclist << "\n";
   warnx << "# notify requests " << ndonotify << "\n";  
   warnx << "# alert requests " << ndoalert << "\n";  
   warnx << "# testrange requests " << ndotestrange << "\n";  
@@ -122,6 +125,7 @@ vnode::stats ()
 
   warnx << "# getsuccesor calls " << ngetsuccessor << "\n";
   warnx << "# getpredecessor calls " << ngetpredecessor << "\n";
+  warnx << "# getsucclist calls " << ngetsucclist << "\n";
   warnx << "# findsuccessor calls " << nfindsuccessor << "\n";
   warnx << "# hops for findsuccessor " << nhops << "\n";
   {
@@ -406,6 +410,23 @@ vnode::dogettoes (svccb *sbp)
   }
   
   warnt ("CHORD: dogettoes_reply");
+  sbp->reply (&res);
+}
+
+void
+vnode::dogetsucclist (svccb *sbp)
+{
+  chord_nodelistres res (CHORD_OK);
+  ndogetsucclist++;
+  
+  int curnsucc = successors->num_succ ();
+  chordID cursucc = myID;
+  res.resok->nlist.setsize (curnsucc + 1);
+  for (int i = 0; i <= curnsucc; i++) {
+    res.resok->nlist[i].x = cursucc;
+    res.resok->nlist[i].r = locations->getaddress (cursucc);
+    cursucc = locations->closestsuccloc (cursucc);
+  }
   sbp->reply (&res);
 }
 
