@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.53 2004/06/18 18:41:27 strib Exp $ */
+/* $Id: tapestry.C,v 1.54 2004/06/21 02:32:15 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -342,8 +342,8 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
   // if we're learning from lookups, learn about the last hop as well as
   // the source of the query
   if( _lookup_learn && args->lasthop != ip() ) {
-    GUID id1 = ((Tapestry *)Network::Instance()->getnode(args->looker))->id();
-    GUID id2 = ((Tapestry *)Network::Instance()->getnode(args->lasthop))->id();
+    GUID id1 = get_id_from_ip(args->looker);
+    GUID id2 = get_id_from_ip(args->lasthop);
     if( !_rt->contains( id1 ) ) {
       _cachebag->add( args->looker, id1, MAXTIME, false );
     }
@@ -358,7 +358,11 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
   for( uint i = 0; i < _redundant_lookup_num; i++ ) {
     ips[i] = 0;
   }
-  next_hop( args->key, &ips, _redundant_lookup_num );
+  GUID *ids = New GUID[_redundant_lookup_num];
+  for( uint i = 0; i < _redundant_lookup_num; i++ ) {
+    ids[i] = 0;
+  }
+  next_hop( args->key, &ips, &ids, _redundant_lookup_num );
   uint i = 0;
   uint curr_join = _join_num;
   for( ; i < _redundant_lookup_num; i++ ) {
@@ -389,7 +393,7 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
       // it's not me, so forward the query
       record_stat(STAT_LOOKUP, 1, 0);
       Time before = now();
-      GUID nextid = ((Tapestry *)Network::Instance()->getnode(next))->id();
+      GUID nextid = ids[i];
       // don't want to route to nodes who have recently timed out
       if( _rt->get_timeout( nextid ) ) {
 	continue;
@@ -413,6 +417,7 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
 	// remove it from our routing table
 	check_node_args *cna = New check_node_args();
 	cna->ip = next;
+	cna->id = nextid;
 	_check_nodes->push_back( cna );
 	_check_nodes_waiting->notifyAll();
 	TapDEBUG(3) << "Forking off check (due to lookup) of (" << cna->ip 
@@ -435,6 +440,7 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
 	  ret->failed = true;
 	  TapDEBUG(2) << "Lookup aborting, dead or rejoined" << endl;
 	  delete ips;
+	  delete ids;
 	  return;
 	}
 
@@ -449,7 +455,7 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
     }
 
     // we're retrying if we've gotten down here, so if we've
-    // exceeded the max time we should quite
+    // exceeded the max time we should quit
     if( now() - args->starttime > _max_lookup_time ) {
       i = _redundant_lookup_num;
       TapDEBUG(1) << "Timed out looking for " << print_guid(args->key) << endl;
@@ -466,6 +472,7 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
   }
 
   delete ips;
+  delete ids;
   TapDEBUG(5) << "hl exit " << endl;
 
 }
@@ -484,7 +491,7 @@ Tapestry::retryRPC(IPAddress dst, void (BT::* fn)(AT *, RT *),
 		   uint num_args_else)
 {
   Time starttime = now();
-  GUID dstid = ((Tapestry *)Network::Instance()->getnode(dst))->id();
+  GUID dstid = get_id_from_ip(dst);
   Time timeout;
   if( dst != ip() && _rt->contains( dstid ) ) {
     timeout = _rtt_timeout_factor * _rt->get_time( dstid );
@@ -542,12 +549,19 @@ Tapestry::check_node_loop(void * args)
 	check_node_args *check = *i;
 	assert( check );
 	IPAddress checkip = check->ip;
-	GUID checkid = 
-	  ((Tapestry *)Network::Instance()->getnode(checkip))->id();
+	GUID checkid = check->id;
+
+	TapDEBUG(2) << "Going to check (" << checkip << "/" 
+		    << print_guid(checkid) << ") in check_node_loop." << endl;
 	
 	if( checkid == id() || !_rt->contains(checkid) || 
 	    _rt->get_timeout( checkid ) ) {
 	  // we're already checking this person
+	  TapDEBUG(2) << "We're already checking (" << checkip << "/" 
+		      << print_guid(checkid) << ") " << _rt->contains(checkid) 
+		      << " " << _rt->get_timeout( checkid ) 
+		      << ", so ignoring." << endl;
+	  delete check;
 	  continue;
 	}
 
@@ -609,6 +623,8 @@ Tapestry::check_node_loop(void * args)
       ping_callinfo *pi = ping_resultmap[rpc];
       pi->times_tried++;
       if( ok ) {
+	TapDEBUG(2) << "check_node_loop found that (" << pi->ip << "/" <<
+	  print_guid( pi->id ) << ") is alive." << endl;
 	// this RPC succeeded, so this node wasn't dead after all.  apologize.
 	if( pi->ip != ip() ) {
 	  record_stat( STAT_PING, 0, 0);
@@ -997,8 +1013,12 @@ Tapestry::handle_join(join_args *args, join_return *ret)
   for( uint i = 0; i < _redundant_lookup_num; i++ ) {
     ips[i] = 0;
   }
+  GUID *ids = New GUID[_redundant_lookup_num];
+  for( uint i = 0; i < _redundant_lookup_num; i++ ) {
+    ids[i] = 0;
+  }
   ips[0] = args->ip;
-  next_hop( args->id, &ips, _redundant_lookup_num );
+  next_hop( args->id, &ips, &ids, _redundant_lookup_num );
   uint i = 0;
   for( ; i < _redundant_lookup_num; i++ ) {
     IPAddress next = ips[i];
@@ -1117,6 +1137,7 @@ Tapestry::handle_join(join_args *args, join_return *ret)
     ret->failed = true;
   }
   delete [] ips;
+  delete [] ids;
 
   TapDEBUG(5) << "hj exit" << endl;
 
@@ -1272,7 +1293,7 @@ Tapestry::handle_mc(mc_args *args, mc_return *ret)
 	// do it again sam
 	mc_callinfo *ci = resultmap[donerpc];
 	resultmap.remove( donerpc );
-	GUID ci_id = ((Tapestry *)Network::Instance()->getnode(ci->ip))->id();
+	GUID ci_id = get_id_from_ip(ci->ip);
 	Time timeout = MAXTIME;
 	if( _rt->contains( ci_id ) ) {
 	  timeout = _rtt_timeout_factor*_rt->get_time( ci_id );
@@ -1822,6 +1843,7 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
 		    << print_guid(pi->id) << ")" << endl;
 	check_node_args *cna = New check_node_args();
 	cna->ip = pi->ip;
+	cna->id = pi->id;
 	_check_nodes->push_back( cna );
 	_check_nodes_waiting->notifyAll();
       }
@@ -2021,7 +2043,7 @@ Tapestry::place_backpointer( RPCSet *bp_rpcset,
   backpointer_return bpr;
   TapDEBUG(3) << "sending bp to " << bpip << endl;
   record_stat(STAT_BACKPOINTER, 1, 2);
-  GUID bpid = ((Tapestry *)Network::Instance()->getnode(bpip))->id();
+  GUID bpid = get_id_from_ip(bpip);
   Time timeout = MAXTIME;
   if( _rt->contains( bpid ) ) {
     timeout = _rtt_timeout_factor*_rt->get_time( bpid );
@@ -2092,14 +2114,16 @@ Tapestry::next_hop( GUID key )
 {
   IPAddress *ip = New IPAddress[1];
   ip[0] = 0;
-  next_hop( key, &ip, 1 );
+  GUID *id = New GUID[1];
+  id[0] = 0;
+  next_hop( key, &ip, &id, 1 );
   IPAddress rt = ip[0];
   delete ip;
   return rt;
 }
 
 void
-Tapestry::next_hop( GUID key, IPAddress** ips, uint size )
+Tapestry::next_hop( GUID key, IPAddress** ips, GUID **ids, uint size )
 {
   // first, figure out how many digits we share, and start looking at 
   // that level
@@ -2108,6 +2132,7 @@ Tapestry::next_hop( GUID key, IPAddress** ips, uint size )
     // it's us!
     if( size > 0 ) {
       (*ips)[0] = ip();
+      (*ids)[0] = id();
     }
     return;
   }
@@ -2128,6 +2153,7 @@ Tapestry::next_hop( GUID key, IPAddress** ips, uint size )
      for( uint i = 0; i < re->size() && used < size; i++ ) {
        if( re->get_at(i)->_addr != dontuse ) {
 	 (*ips)[used] = re->get_at(i)->_addr;
+	 (*ids)[used] = re->get_at(i)->_id;
 	 used++;
        }
      }
@@ -2164,6 +2190,7 @@ Tapestry::next_hop( GUID key, IPAddress** ips, uint size )
 	for( uint k = 0; k < re->size() && used < size; k++ ) {
 	  if( re->get_at(k)->_addr != dontuse ) {
 	    (*ips)[used] = re->get_at(k)->_addr;
+	    (*ids)[used] = re->get_at(k)->_id;
 	    used++;
 	  }
 	}
@@ -2177,6 +2204,7 @@ Tapestry::next_hop( GUID key, IPAddress** ips, uint size )
   // didn't find a better surrogate, so it must be us
   if( size > 0 ) {
     (*ips)[0] = ip();
+    (*ids)[0] = id();
   }
 
 }

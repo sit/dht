@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.41 2004/06/17 23:58:23 strib Exp $ */
+/* $Id: tapestry.h,v 1.42 2004/06/21 02:32:15 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -83,6 +83,7 @@ public:
 
   struct check_node_args {
     IPAddress ip;
+    GUID id;
   };
 
   void check_node_loop(void *args);
@@ -331,6 +332,7 @@ private:
   // returns ip() if we are the root
   IPAddress next_hop( GUID key );
   void next_hop( GUID key, IPAddress** ips, uint size );
+  void next_hop( GUID key, IPAddress** ips, GUID** ids, uint size );
   Time ping( IPAddress other_node, GUID other_id, bool &ok );
   GUID lookup_cheat( GUID key );
   void record_stat( stat_type type, uint num_ids, uint num_else );
