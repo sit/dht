@@ -36,7 +36,6 @@ struct hashID {
 
 struct location;
 
-#ifdef FAKE_DELAY
 struct RPC_delay_args {
   chordID ID;
   rpc_program prog;
@@ -46,26 +45,51 @@ struct RPC_delay_args {
   aclnt_cb cb;
   u_int64_t s;
 
+  tailq_entry<RPC_delay_args> q_link;
+
   RPC_delay_args (chordID _ID, rpc_program _prog, int _procno,
 		 ptr<void> _in, void *_out, aclnt_cb _cb, u_int64_t _s) :
     ID (_ID), prog (_prog), procno (_procno), 
 		   in (_in), out (_out), cb (_cb), s (_s) {};
     
 };
-#endif /* FAKE_DELAY */
 
 struct frpc_state {
   chord_RPC_res *res;
   void *out;
   int procno;
   aclnt_cb cb;
-  location *l;
+  chordID ID;
   u_int64_t s;
+  int outgoing_len;
+  timecb_t *tmo;
+  long seqno;
+
+  tailq_entry<frpc_state> q_link;
 
   frpc_state (chord_RPC_res *r, void *o, int pr, 
 	      aclnt_cb c,
-	      location *L, u_int64_t S) : res (r), out (o),  
-    procno (pr), cb (c), l (L), s (S) {};
+	      chordID id, u_int64_t S, int out_size, long s) 
+    : res (r), out (o), procno (pr), cb (c), ID (id), s (S), outgoing_len (out_size), seqno (s) {};
+};
+
+struct delayed_reply {
+  long xid;
+  void *out;
+  long outlen;
+  
+  tailq_entry <delayed_reply> q_link;
+
+  delayed_reply (long x, void *o, long l) : 
+    xid (x), outlen (l)
+  { 
+    out = (void *)New char[outlen];
+    memcpy (out, o, l);
+  };
+
+  ~delayed_reply () {
+    free (out);
+  }
 };
 
 struct location {
@@ -78,6 +102,7 @@ struct location {
   u_int64_t rpcdelay;
   u_int64_t nrpc;
   u_int64_t maxdelay;
+  float a_lat;
 
   location (chordID &_n, net_address &_r);
   ~location ();
@@ -101,6 +126,7 @@ class locationtable : public virtual refcount {
 
   u_int64_t rpcdelay;
   u_int64_t nrpc;
+  float a_lat;
   u_int64_t nrpcfailed;
   u_int64_t nsent;
   u_int64_t npending;
@@ -108,6 +134,14 @@ class locationtable : public virtual refcount {
   u_long nnodessum;
   u_long nnodes;
   unsigned nvnodes;
+
+  float cwind;
+  int left;
+
+  tailq<RPC_delay_args, &RPC_delay_args::q_link> Q;
+  tailq<frpc_state, &frpc_state::q_link> sent_Q;
+
+  timecb_t *idle_timer;
 
   ptr<axprt_dgram> dgram_xprt;
   ptr<aclnt> dgram_clnt;
@@ -130,7 +164,20 @@ class locationtable : public virtual refcount {
   void delete_cachedlocs (void);
   void remove_cachedlocs (location *l);
 
+  void update_latency (chordID ID, u_int64_t lat);
   void ratecb ();
+  void update_cwind (int acked);
+  void rexmit_handler (long seqno);
+  void enqueue_rpc (RPC_delay_args *args);
+  void rpc_done (frpc_state *C);
+  void reset_idle_timer ();
+  void idle ();
+  void setup_rexmit_timer (chordID ID, frpc_state *C);
+  void timeout_cb (frpc_state *C);
+  void issue_RPC (long seqno, ptr<aclnt> c, chord_RPC_arg *farg, 
+		  chord_RPC_res *res, aclnt_cb cb);
+  void issue_RPC_delay (long seqno, ptr<aclnt> c, chord_RPC_arg *farg, 
+			chord_RPC_res *res, aclnt_cb cb);
 
 #ifdef FAKE_DELAY
   void doRPC_delayed (RPC_delay_args *args);
@@ -182,6 +229,8 @@ class locationtable : public virtual refcount {
   void doForeignRPC_cb (frpc_state *C, rpc_program prog,
 			ptr<aclnt> c,
 			clnt_stat err);
+  
 };
 
 #endif _LOCATION_H_
+

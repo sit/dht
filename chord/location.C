@@ -28,6 +28,7 @@ location::location (chordID &_n, net_address &_r)
   refcnt = 0;
   rpcdelay = 0;
   nrpc = 0;
+  a_lat = 0.0;
   maxdelay = 0;
   bzero(&saddr, sizeof(sockaddr_in));
   saddr.sin_family = AF_INET;
@@ -47,6 +48,7 @@ locationtable::locationtable (ptr<chord> _chordnode, int set_rpcdelay,
   nrpc = 0;
   nrpcfailed = 0;
   rpcdelay = 0;
+  a_lat = 0.0;
   nsent = 0;
   npending = 0;
   size_cachedlocs = 0;
@@ -54,13 +56,18 @@ locationtable::locationtable (ptr<chord> _chordnode, int set_rpcdelay,
   nnodes = 0;
   nnodessum = 0;
   last_xid = 0;
-  
+  cwind = 1;
+  left = 0;
+  idle_timer = NULL;
+
   int dgram_fd = inetsocket (SOCK_DGRAM);
   if (dgram_fd < 0) fatal << "Failed to allocate dgram socket\n";
   dgram_xprt = axprt_dgram::alloc (dgram_fd, sizeof(sockaddr), 230000);
   if (!dgram_xprt) fatal << "Failed to allocate dgram xprt\n";
 
   delaycb (1, 0, wrap (this, &locationtable::ratecb));
+
+  reset_idle_timer ();
 }
 
 void
