@@ -99,7 +99,8 @@ locationtable::locationtable (ptr<chord> _chordnode, int _max_cache)
     nnodessum (0),
     nnodes (0),
     nvnodes (0),
-    nchallenge (0)
+    nchallenge (0),
+    nout_continuous (0)
 {
   initialize_rpcs ();
 }
@@ -121,6 +122,7 @@ locationtable::locationtable (const locationtable &src)
   nnodes = 0;
   nnodessum = 0;
   nchallenge = 0;
+  nout_continuous = 0;
 
   // Deep copy the list of locations. Do not copy pins because those
   // reflect the needs of the individual vnodes; each vnode should
