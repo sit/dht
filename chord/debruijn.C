@@ -129,3 +129,18 @@ debruijn::print ()
   warnx << myID << ": double: " << mydoubleID
 	<< " : d " << locations->closestpredloc (mydoubleID) << "\n";
 }
+
+
+class dbiter : public fingerlike_iter {
+  friend debruijn;
+public:
+  dbiter () : fingerlike_iter () {};
+};
+
+ref<fingerlike_iter>
+debruijn::get_iter ()
+{
+  ref<dbiter> iter = New refcounted<dbiter> ();
+  // XXX do something useful here.
+  return iter;
+}

@@ -32,6 +32,23 @@
 class vnode;
 class locationtable;
 
+class fingerlike_iter {
+ protected:
+  vec<chordID> nodes;
+  size_t next_;
+ public:
+  virtual void reset () { next_ = 0; }
+  virtual size_t size () { return nodes.size (); }
+  virtual chordID next () {
+    assert (next_ < nodes.size ());
+    return nodes[next_++];
+  };
+  virtual bool done () { return next_ >= nodes.size (); };
+
+  fingerlike_iter () : next_ (0) {};
+  virtual ~fingerlike_iter () {};
+};
+
 class fingerlike : public stabilizable {
 public:
   virtual void print () = 0;
@@ -42,5 +59,8 @@ public:
   virtual chordID closestpred (const chordID &x, vec<chordID> fail) = 0;
   virtual chordID closestsucc (const chordID &x) = 0;
 
+  // Snapshot the current set of fingers and allow code to iterate
+  // through their chordIDs
+  virtual ref<fingerlike_iter> get_iter () = 0;
 };
 #endif /* _FINGERLIKE_H_ */

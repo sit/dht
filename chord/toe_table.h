@@ -70,6 +70,7 @@ class toe_table : public fingerlike {
   void print () { warn << "I'm a toe table\n";};
   void stats () { warn << "I'm a toe table\n";};
 
+  ref<fingerlike_iter> get_iter ();
 };
 
 #endif /* _TOE_TABLE_H_ */

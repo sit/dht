@@ -103,24 +103,14 @@ finger_table::print ()
 void
 finger_table::fill_nodelistres (chord_nodelistres *res)
 {
-  int n = 1; // number of valid entries in curfingers
-  chordID curfingers[NBIT + 1]; // current unique fingers (plus me)
-  chordID curfinger = myID;
-  chordID prevfinger = myID;
+  ref<fingerlike_iter> iter = get_iter ();
+  res->resok->nlist.setsize (iter->size () + 1);
 
-  curfingers[0] = myID;
-  for (int i = 1; i <= NBIT; i++) {
-    curfinger = finger (i - 1);
-    if (curfinger != prevfinger) {
-      curfingers[n] = curfinger;
-      prevfinger = curfinger;
-      n++;
-    }
-  }
-  
-  res->resok->nlist.setsize (n);
-  for (int i = 0; i < n; i++) {
-    bool ok = locations->get_node (curfingers[i], &res->resok->nlist[i]);
+  bool ok = locations->get_node (myID, &res->resok->nlist[0]);
+  assert (ok);
+  for (size_t i = 1; i <= iter->size (); i++) {
+    chordID f = iter->next ();
+    ok = locations->get_node (f, &res->resok->nlist[i]);
     assert (ok);
   }
 }
@@ -128,25 +118,14 @@ finger_table::fill_nodelistres (chord_nodelistres *res)
 void
 finger_table::fill_nodelistresext (chord_nodelistextres *res)
 {
-  // XXX code duplication with fill_getfingersres
-  int n = 1; // number of valid entries in curfingers
-  chordID curfingers[NBIT + 1]; // current unique fingers (plus me)
-  chordID curfinger = myID;
-  chordID prevfinger = myID;
+  ref<fingerlike_iter> iter = get_iter ();
+  res->resok->nlist.setsize (iter->size () + 1);
 
-  curfingers[0] = myID;
-  for (int i = 1; i <= NBIT; i++) {
-    curfinger = finger (i - 1);
-    if (curfinger != prevfinger) {
-      curfingers[n] = curfinger;
-      prevfinger = curfinger;
-      n++;
-    }
+  locations->fill_getnodeext (res->resok->nlist[0], myID);
+  for (size_t i = 1; i <= iter->size (); i++) {
+    chordID f = iter->next ();
+    locations->fill_getnodeext (res->resok->nlist[i], f);
   }
-    
-  res->resok->nlist.setsize (n);
-  for (int i = 0; i < n; i++)
-    locations->fill_getnodeext (res->resok->nlist[i], curfingers[i]);
 }
 
 void
@@ -249,3 +228,25 @@ finger_table::stabilize_findsucc_cb (chordID dn, int i, chordID s,
   }
 }
 
+class ftiter : public fingerlike_iter {
+  friend finger_table;
+public:
+  ftiter () : fingerlike_iter () {};
+};
+
+ref<fingerlike_iter>
+finger_table::get_iter ()
+{
+  ref<ftiter> iter = New refcounted<ftiter> ();
+  chordID curfinger = myID;
+  chordID prevfinger = myID;
+
+  for (int i = 0; i < NBIT; i++) {
+    curfinger = finger (i);
+    if (curfinger != prevfinger) {
+      iter->nodes.push_back (curfinger);
+      prevfinger = curfinger;
+    }
+  }
+  return iter;
+}

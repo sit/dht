@@ -55,6 +55,6 @@ class succ_list : public fingerlike {
   chordID closestsucc (const chordID &x);
   void init (ptr<vnode> v, ptr<locationtable> locs, chordID ID) { warn << "not needed\n";};
 
- 
+  ref<fingerlike_iter> get_iter (); 
 };
 #endif /* _SUCC_LIST_H_ */

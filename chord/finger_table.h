@@ -50,6 +50,7 @@ class finger_table : public fingerlike {
   chordID closestpred (const chordID &x);
   chordID closestsucc (const chordID &x);
 
+  ref<fingerlike_iter> get_iter ();
 };
 
 #endif /* _FINGER_TABLE_H_ */

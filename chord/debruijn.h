@@ -39,7 +39,8 @@ class debruijn : public fingerlike {
   void init (ptr<vnode> v, ptr<locationtable> locs, chordID ID);
   void print ();
   void stats () { warn << "stats go here\n";};
-
+  
+  ref<fingerlike_iter> get_iter ();
 };
 
 #endif /* _DEBRUIN_H_ */

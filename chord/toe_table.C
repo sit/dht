@@ -550,3 +550,17 @@ toe_table::closestpred (const chordID &x)
   //warnx << "doing a toe table closestpred\n";
   return locations->closestpredloc(x);
 }
+
+class toeiter : public fingerlike_iter {
+  friend toe_table;
+public:
+  toeiter () : fingerlike_iter () {};
+};
+
+ref<fingerlike_iter>
+toe_table::get_iter ()
+{
+  ref<toeiter> iter = New refcounted<toeiter> ();
+  // XXX put something in here.
+  return iter;
+}

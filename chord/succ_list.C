@@ -320,3 +320,24 @@ succ_list::closestsucc (const chordID &x)
 {
   fatal << "not implemented\n";
 }
+
+
+class succiter : public fingerlike_iter {
+  friend succ_list;
+public:
+  succiter () : fingerlike_iter () {};
+};
+
+ref<fingerlike_iter>
+succ_list::get_iter ()
+{
+  ref<succiter> iter = New refcounted<succiter> ();
+
+  chordID id = myID;
+  for (u_int i = 0; i < num_succ (); i++) {
+    id = locations->closestsuccloc (id + 1);  
+    iter->nodes.push_back (id);
+  }
+
+  return iter;
+}
