@@ -32,6 +32,7 @@ static str wellknownhost;
 static int wellknownport;
 static sfs_ID wellknownID;
 static str p2psocket;
+dhash *dhs;
 
 void
 doaccept (int fd)
@@ -41,7 +42,7 @@ doaccept (int fd)
   tcp_nodelay (fd);
   ref<axprt_stream> x = axprt_stream::alloc (fd);
   vNew client (x);
-  vNew dhash (x);
+  dhs->accept (x);
 }
 
 static void
@@ -164,6 +165,9 @@ startp2pd (int myp)
   }
   listen (srvfd, 1000);
   fdcb (srvfd, selread, wrap (accept_standalone, srvfd));
+
+  //instantiate single dhash object
+  dhs = New dhash();
   return p;
 }
 
@@ -177,7 +181,9 @@ initID (int n, sfs_ID *ID)
 static void
 initID (sfs_ID *ID, size_t s)
 {
-  *ID = random_bigint (NBIT);
+
+  bigint start = bigint(1) << NBIT - 1;
+  *ID = start + random_bigint (NBIT - 1);
 }
 
 static void

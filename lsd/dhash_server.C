@@ -5,7 +5,7 @@
 #include <dbfe.h>
 #include <arpc.h>
 
-dhash::dhash(ptr<axprt_stream> x) {
+dhash::dhash() {
 
   db = new dbfe();
 
@@ -16,19 +16,29 @@ dhash::dhash(ptr<axprt_stream> x) {
   opts.addOption("opt_nodesize", 4096);
   opts.addOption("opt_create", 1);
 
-  if (int err = db->opendb(const_cast < char *>(DHASH_STORE), opts)) {
+  warn << "init dhash\n";
+  char dbname[1024];
+  sprintf(dbname, "/tmp/dhash.db.%ld", getpid ());
+  if (int err = db->opendb(const_cast < char *>(dbname), opts)) {
     warn << "open returned: " << strerror(err) << err << "\n";
     exit (-1);
   }
   
-  dhashsrv = asrv::alloc (x, dhash_program_1,  wrap (this, &dhash::dispatch));
+
 }
-    
+
 void
-dhash::dispatch(svccb *sbp) 
+dhash::accept(ptr<axprt_stream> x) {
+  ptr<asrv> dhashsrv = asrv::alloc (x, dhash_program_1);
+  dhashsrv->setcb( wrap (this, &dhash::dispatch, dhashsrv));
+}    
+
+void
+dhash::dispatch(ptr<asrv> dhashsrv, svccb *sbp) 
 {
   if (!sbp) {
-    delete this;
+    dhashsrv = NULL;
+    //    delete this;
     return;
   }
 
@@ -99,7 +109,7 @@ void
 dhash::store(sfs_ID id, dhash_value data, cbstat cb) 
 {
 
-  //  warn << "STORING \n\n\n STORING " << id << "\n\n\n";
+  warn << "STORING " << id << "\n";
   ptr<dbrec> k = id2dbrec(id);
   ptr<dbrec> d = New refcounted<dbrec> (data.base (), data.size ());
   db->insert(k, d, wrap(this, &dhash::store_cb, cb));

@@ -8,7 +8,7 @@
 #include "sys/time.h"
 #include "vec.h"
 
-#define NBIT 160
+#define NBIT 8
 
 struct hashID {
   hashID () {}
@@ -104,7 +104,7 @@ typedef vec<sfs_ID> route;
 typedef callback<void,sfs_ID,net_address,sfsp2pstat>::ref cbsfsID_t;
 typedef callback<void,sfs_ID,route,sfsp2pstat>::ref cbroute_t;
 typedef callback<void,sfs_ID,char>::ref cbaction_t;
-typedef callback<int,sfs_ID>::ref cbsearch_t;
+typedef callback<int,sfs_ID,sfs_ID>::ref cbsearch_t;
 
 #define ACT_NODE_JOIN 1
 #define ACT_NODE_UPDATE 2
@@ -269,7 +269,7 @@ class p2p : public virtual refcount  {
   void timing_cb(aclnt_cb cb, location *l, ptr<struct timeval> start, clnt_stat err);
 
   void registerSearchCallback(cbsearch_t cb);
-  bool testSearchCallbacks(sfs_ID id);
+  bool testSearchCallbacks(sfs_ID id, sfs_ID target);
   void registerActionCallback(cbaction_t cb);
   void doActionCallbacks(sfs_ID id, char action);
 };

@@ -43,7 +43,6 @@ dbGetImplInfo() {
   info->supportedOptions.push_back(ASYNC_OPT);
   info->supportedOptions.push_back(CREATE_OPT);
 #else
-  warn << "using DB3\n";
   info->supportedOptions.push_back(PERM_OPT);
   info->supportedOptions.push_back(TYPE_OPT);
   info->supportedOptions.push_back(CREATE_OPT);

@@ -34,16 +34,17 @@ class dhashclient {
   void insert_store_cb (svccb *sbp, dhash_stat *res, clnt_stat err);
 
   void act_cb(sfs_ID id, char action);
+  int search_cb(sfs_ID node, sfs_ID target);
 
  public:
   dhashclient (ptr<axprt_stream> x);
 };
 
 class dhash {
-  ptr<asrv> dhashsrv;
+
   dbfe *db;
 
-  void dispatch (svccb *sbp);
+  void dispatch (ptr<asrv> dhs, svccb *sbp);
   void fetchsvc_cb (svccb *sbp, ptr<dbrec> val, dhash_stat err);
   void storesvc_cb (svccb *sbp, dhash_stat err);
   
@@ -55,7 +56,8 @@ class dhash {
   ptr<dbrec> id2dbrec(sfs_ID id);
 
  public:
-  dhash (ptr<axprt_stream> x);
+  dhash ();
+  void accept(ptr<axprt_stream> x);
 };
 
 

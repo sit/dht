@@ -358,12 +358,12 @@ p2p::join_getsucc_cb (sfs_ID p, sfs_ID s, net_address r, sfsp2pstat status)
     warnx << "join_getsucc_cb: " << status << "\n";
     join ();  // try again
   } else {
-    warnx << "join_getsucc_cb: " << p << " " << s << "\n";
+    //    warnx << "join_getsucc_cb: " << p << " " << s << "\n";
     if (between (p, s, myID) || (p == s)) {
       // we found the first successor of myID: s. if p == s, then there is 
       // only one other node in the system; that node is my successor and 
       // predecessor.
-      warnx << "join_getsucc_cb: succ is " << s << "\n";
+      //      warnx << "join_getsucc_cb: succ is " << s << "\n";
       notice (1, s, r);
       if (finger_table[1].alive) notify (finger_table[1].first, myID);
       if (predecessor.alive) notify (predecessor.first, myID);
@@ -382,7 +382,7 @@ p2p::bootstrap ()
     //warnx << "bootstrap: we are busy bootstrapping\n";
     return;
   }
-  print ();
+  //print ();
   nbootstrap = NBIT + 1;
   bootstrap_failure = false;
   stable = true;
@@ -415,8 +415,7 @@ p2p::bootstrap_done ()
 
   if (!stable) 
     bootstrap ();
-  else
-    print ();
+
 }
 
 void
@@ -546,7 +545,7 @@ p2p::dofindclosestpred (svccb *sbp, sfsp2p_findarg *fa)
       p = finger_table[i].first;
     }
   }
-  //  warnx << "dofindclosestpred of " << fa->x << " is " << p << "\n";
+  warnx << "dofindclosestpred of " << fa->x << " is " << p << "\n";
   location *l = locations[p];
   assert (l);
   res.resok->x = fa->x;
@@ -579,7 +578,8 @@ p2p::doalert (svccb *sbp, sfsp2p_notifyarg *na)
 void
 p2p::dofindsucc (sfs_ID &n, cbroute_t cb)
 {
-
+  
+  warn << "do find succ " << n << "\n";
   int i = successor_wedge (n);
   if (!predecessor.alive) {
     set_closeloc (predecessor);

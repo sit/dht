@@ -13,6 +13,8 @@ dhashclient::dhashclient (ptr<axprt_stream> _x)
 			 wrap (this, &dhashclient::dispatch));
 
   defp2p->registerActionCallback(wrap(this, &dhashclient::act_cb));
+
+  defp2p->registerSearchCallback(wrap(this, &dhashclient::search_cb));
 }
 
 void
@@ -60,6 +62,10 @@ dhashclient::insert_findsucc_cb(svccb *sbp, dhash_insertarg *item,
     res->set_status(DHASH_NOENT);
     sbp->reply(res);
   } else {
+
+    for (int i = 0; i < path.size (); i++) warn << path[i] << " ";
+    warn << "\n";
+
     dhash_stat *stat = New dhash_stat ();
     defp2p->doRPC(succ, dhash_program_1, DHASHPROC_STORE, item, stat, 
 		  wrap(this, &dhashclient::insert_store_cb, sbp, stat));
@@ -105,8 +111,13 @@ dhashclient::lookup_fetch_cb(svccb *sbp, dhash_res *res, clnt_stat err)
 void
 dhashclient::act_cb(sfs_ID id, char action) {
 
-  warn << "node " << id << " just " << action << "ed the network\n";
+  //  warn << "node " << id << " just " << action << "ed the network\n";
 
 }
 
+int
+dhashclient::search_cb(sfs_ID node, sfs_ID target) {
 
+  warn << "just asked " << node << " about " << target << "\n";
+  return 0;
+}

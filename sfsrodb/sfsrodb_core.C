@@ -1,4 +1,4 @@
-/* $Id: sfsrodb_core.C,v 1.3 2001/03/11 18:50:29 fdabek Exp $ */
+/* $Id: sfsrodb_core.C,v 1.4 2001/03/16 01:04:02 frank Exp $ */
 
 /*
  *
@@ -31,13 +31,11 @@ bigint
 fh2mpz(const void *keydata, size_t keylen) 
 {
 
-  str s ((const char *)keydata, keylen);
+ 
   bigint n;
-  n.setraw (s);
-  if (n < bigint(0)) 
-    n *= bigint(-1);
+  mpz_set_rawmag_be(&n, (const char *)keydata, 1);
   
-  
+  warnx << n << "\n";
   return n;
 }
 
