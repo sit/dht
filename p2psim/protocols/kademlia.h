@@ -329,6 +329,7 @@ public:
   static unsigned debugcounter;         // 
   static unsigned stabilize_timer;      // how often to stabilize
   static unsigned refresh_rate;         // how often to refresh info
+  static bool learn_from_rpc;           // do we learn from RPCs?
   static Time max_lookup_time;          // how long do we keep retrying
   static k_nodeinfo_pool *pool;         // pool of k_nodeinfo_pool
   static const unsigned idsize = 8*sizeof(Kademlia::NodeID);

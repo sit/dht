@@ -43,6 +43,7 @@ unsigned Kademlia::alpha = 0;
 unsigned Kademlia::stabilize_timer = 0;
 unsigned Kademlia::refresh_rate = 0;
 Time Kademlia::max_lookup_time = 0;
+bool Kademlia::learn_from_rpc = true;
 
 long unsigned Kademlia::_rpc_bytes = 0;
 long unsigned Kademlia::_good_rpcs = 0;
@@ -87,6 +88,7 @@ Kademlia::Kademlia(IPAddress i, Args a)
 
   use_replacement_cache = a.nget<use_replacement_cache_t>("rcache", ENABLED, 10);
   max_lookup_time = a.nget<Time>("maxlookuptime", 4000, 10);
+  learn_from_rpc = a.nget<unsigned>("learn", 1, 10) == 1 ? true : false;
 
   if(!k) {
     k = a.nget<unsigned>("k", 20, 10);
@@ -161,37 +163,41 @@ Kademlia::~Kademlia()
 #  2: alpha\n\
 #  3: stabilize_timer\n\
 #  4: refresh_timer\n\
+#  5: learn\n\
+#  6: rcache\n\
 #\n\
-#  5: total number of bytes for RPCs\n\
-#  6: number of RPCs sent in lookup (good)\n\
-#  7: number of RPCs sent in lookup (bad)\n\
-#  8: number of good      RPCs reaped by reaper\n\
-#  9: number of timed out RPCs reaped by reaper\n\
+#  7: total number of bytes for RPCs\n\
+#  8: number of RPCs sent in lookup (good)\n\
+#  9: number of RPCs sent in lookup (bad)\n\
+# 10: number of good      RPCs reaped by reaper\n\
+# 11: number of timed out RPCs reaped by reaper\n\
 #\n\
-# 10: number of good lookups\n\
-# 11: number of attempts for good lookups\n\
-# 12: number of good lookups, but node was dead\n\
-# 13: number of bad lookups, node was dead\n\
-# 14: number of bad lookups, node was alive\n\
+# 12: number of good lookups\n\
+# 13: number of attempts for good lookups\n\
+# 14: number of good lookups, but node was dead\n\
+# 15: number of bad lookups, node was dead\n\
+# 16: number of bad lookups, node was alive\n\
 #\n\
-# 15: avg total lookup latency (good)\n\
-# 16: avg pure lookup latency (good)\n\
-# 17: avg pure ping latency (good)\n\
-# 18: number of timeouts suffered during lookup (good)\n\
+# 17: avg total lookup latency (good)\n\
+# 18: avg pure lookup latency (good)\n\
+# 19: avg pure ping latency (good)\n\
+# 20: number of timeouts suffered during lookup (good)\n\
 #\n\
-# 19: avg number of hops (good)\n\
-# 20: avg latency per hop (good)\n\
+# 21: avg number of hops (good)\n\
+# 22: avg latency per hop (good)\n\
 #\n\
-# 21: avg pure lookup latency (bad)\n\
-# 22: number of timeouts suffered during lookup (bad)\n\
-# 23: avg number of hops (bad)\n\
-# 24: avg latency per hop (bad)\n\
+# 23: avg pure lookup latency (bad)\n\
+# 24: number of timeouts suffered during lookup (bad)\n\
+# 25: avg number of hops (bad)\n\
+# 26: avg latency per hop (bad)\n\
 #\n\
-%u %u %u %u    %lu %lu %lu %lu %lu    %lu %lu %lu %lu %lu    %.2f %.2f %.2f %lu    %.2f %.2f   %.2f %lu %.2f %.2f\n",
+%u %u %u %u %u %u      %lu %lu %lu %lu %lu    %lu %lu %lu %lu %lu    %.2f %.2f %.2f %lu    %.2f %.2f   %.2f %lu %.2f %.2f\n",
         Kademlia::k,
         Kademlia::alpha,
         Kademlia::stabilize_timer,
         Kademlia::refresh_rate,
+        Kademlia::learn_from_rpc ? 1 : 0,
+        Kademlia::use_replacement_cache,
 
         _rpc_bytes,
         _good_rpcs,
@@ -553,7 +559,8 @@ Kademlia::do_ping(ping_args *args, ping_result *result)
 {
   // put the caller in the tree, but never ourselves
   // KDEBUG(1) << "Kademlia::do_ping from " << printID(args->id) << endl;
-  update_k_bucket(args->id, args->ip);
+  if(Kademlia::learn_from_rpc)
+    update_k_bucket(args->id, args->ip);
 }
 
 // }}}
@@ -592,7 +599,8 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
   // assert(alive());
   HashMap<NodeID, bool> asked;
   HashMap<NodeID, unsigned> hops;
-  update_k_bucket(fargs->id, fargs->ip);
+  if(Kademlia::learn_from_rpc)
+    update_k_bucket(fargs->id, fargs->ip);
   fresult->rid = _id;
   fresult->hops = 0;
 
@@ -732,7 +740,8 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
 {
   // KDEBUG(1) << "Kademlia::do_lookup: node " << printID(largs->id) << " does lookup for " << printID(largs->key) << ", flyweight.size() = " << endl;
   // assert(alive());
-  update_k_bucket(largs->id, largs->ip);
+  if(Kademlia::learn_from_rpc)
+    update_k_bucket(largs->id, largs->ip);
   lresult->rid = _id;
 
   // find successors of this key
@@ -864,7 +873,8 @@ Kademlia::find_node(find_node_args *largs, find_node_result *lresult)
   // KDEBUG(2) << "find_node invoked by " << printID(largs->id) << ", looking for " << printID(largs->key) << ", calling thread = " << largs->tid << endl;
   // assert(alive());
 
-  update_k_bucket(largs->id, largs->ip);
+  if(Kademlia::learn_from_rpc)
+    update_k_bucket(largs->id, largs->ip);
   lresult->rid = _id;
 
   // deal with the empty case
