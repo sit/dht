@@ -21,19 +21,6 @@
 
 #include "chord.h"
 
-void
-locationtable::timeout(location *l) 
-{
-  assert(l);
-  warn << "timeout on " << l->n << " closing socket\n";
-  if (l->nout == 0) l->x = NULL;
-  else {
-      warn << "timeout on node " << l->n << " has overdue RPCs\n";
-      l->timeout_cb = delaycb(360, 0, wrap(mkref(this), 
-					   &locationtable::timeout, l));
-  }
-}
-
 bool
 locationtable::doForeignRPC (rpc_program prog,
 			     unsigned long procno,
@@ -125,18 +112,16 @@ locationtable::doRPC (chordID &ID, rpc_program prog, int procno,
   location *l = getlocation (ID);
   assert (l);
   assert (l->refcnt >= 0);
-  touchlru (l);
-  l->nout++;
+  touch_cachedlocs (l);
   if (l->x) {    
-    timecb_remove(l->timeout_cb);
-    l->timeout_cb = delaycb(360,0,wrap(this, &locationtable::timeout, l));
-
     if (prog.progno == CHORD_PROGRAM) {
       ptr<aclnt> c = aclnt::alloc(l->x, prog);
       if (c == 0) {
 	(*cb) (RPC_CANTSEND);
+	delete_connections (l);
       } else {
 	u_int64_t s = getnsec ();
+	touch_connections (l);
 	c->call (procno, in, out, wrap (mkref (this), &locationtable::doRPCcb,
 				      cb, l, s));
       }
@@ -165,6 +150,7 @@ locationtable::doRPCcb (aclnt_cb cb, location *l, u_int64_t s, clnt_stat err)
     nrpc++;
     if (lat > l->maxdelay) l->maxdelay = lat;
   }
+  //  l->x = 0;
   (*cb) (err);
 }
 
@@ -190,7 +176,9 @@ locationtable::dorpc_connect_cb(location *l, ptr<axprt_stream> x)
   assert (l->refcnt >= 0);
   l->x = x;
   l->connecting = false;
-  l->timeout_cb = delaycb (360, 0, wrap(this, &locationtable::timeout, l));
+  add_connections (l);
+  nconnections++;
+  //  l->timeout_cb = delaycb (360, 0, wrap(this, &locationtable::timeout, l));
   doRPC_cbstate *st, *st1;
   for (st = l->connectlist.first; st; st = st1) {
     if (st->progno.progno == CHORD_PROGRAM) {
@@ -217,9 +205,6 @@ locationtable::chord_connect(chordID ID, callback<void,
   ptr<struct timeval> start = new refcounted<struct timeval>();
   gettimeofday(start, NULL);
   if (l->x) {    
-    timecb_remove(l->timeout_cb);
-    l->timeout_cb = delaycb (360, 0, wrap(mkref(this), 
-    					 &locationtable::timeout, l));
     (*cb)(l->x);
   } else {
     warnx << "tcpconnect: " << l->addr.hostname << " " << l->addr.port << "\n";
@@ -242,6 +227,38 @@ locationtable::connect_cb (callback<void, ptr<axprt_stream> >::ref cb, int fd)
 }
 
 void
+locationtable::add_connections (location *l)
+{
+  assert (l->x);
+  if (size_connections >= max_connections) {
+    delete_connections (connections.first);
+  }
+  connections.insert_tail (l);
+  size_connections++;
+}
+
+void
+locationtable::touch_connections (location *l)
+{
+  assert (l->x);
+  connections.remove (l);
+  connections.insert_tail (l);
+}
+
+void
+locationtable::delete_connections (location *l)
+{
+  assert (l);
+  assert (!l->connecting);
+  if (l->x) {
+    warnx << "delete_connections: delete stream to " << l->n << "\n";
+    connections.remove (l);
+    size_connections--;
+    l->x = NULL;
+  }
+}
+
+void
 locationtable::stats () 
 {
   char buf[1024];
@@ -249,6 +266,7 @@ locationtable::stats ()
   warnx << "LOCATION TABLE STATS\n";
   warnx << "total # of RPCs: good " << nrpc << " failed " << nrpcfailed << "\n";
     fprintf(stderr, "       Average latency: %f\n", ((float) (rpcdelay/nrpc)));
+  warnx << "total # of connections opened: " << nconnections << "\n";
   warnx << "  Per link avg. RPC latencies\n";
   for (location *l = locs.first (); l ; l = locs.next (l)) {
     warnx << "    link " << l->n << " : # RPCs: " << l->nrpc << "\n";

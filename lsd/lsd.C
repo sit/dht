@@ -137,7 +137,7 @@ initID (str s, chordID *ID)
 }
 
 static void
-parseconfigfile (str cf, int nvnode, int set_rpcdelay, int max_cache)
+parseconfigfile (str cf, int nvnode, int set_rpcdelay)
 {  
   parseargs pa (cf);
   bool errors = false;
@@ -154,6 +154,9 @@ parseconfigfile (str cf, int nvnode, int set_rpcdelay, int max_cache)
   int ss = 10000;
   int cs = 1000;
   myport = 0;
+  int max_connections = 100;
+  int max_loccache = 250;
+
   while (pa.getline (&av, &line)) {
     if (!strcasecmp (av[0], "#")) {
     } else if (!strcasecmp (av[0], "myport")) {
@@ -214,21 +217,29 @@ parseconfigfile (str cf, int nvnode, int set_rpcdelay, int max_cache)
        errors = true;
        warn << cf << ":" << line << ": usage: cachesize <size in elements>\n";
      }
+   } else if (!strcasecmp (av[0], "maxopenconnections")) {
+     if (av.size () != 2 || !convertint (av[1], &max_connections)) {
+       errors = true;
+       warn << cf << ":" << line << ": usage: maxopenconnections <number>\n";
+     }
+   } else if (!strcasecmp (av[0], "maxlocationcache")) {
+     if (av.size () != 2 || !convertint (av[1], &max_loccache)) {
+       errors = true;
+       warn << cf << ":" << line << ": usage: maxlocationcache <number>\n";
+     }
    }
-  }
-  if (!myhost) {
-    myhost = myname ();
   }
   if (errors) {
     fatal ("errors in config file\n");
   }
+  if (!myhost) {
+    myhost = myname ();
+  }
   chordnode = New refcounted<chord> (wellknownhost, wellknownport, 
 				     wellknownID, myport, myhost, set_rpcdelay,
-				     max_cache);
-
+				     max_loccache, max_connections);
   if (myid) chordnode->newvnode (myID, wrap (newvnode_cb, nvnode-1));
   else chordnode->newvnode (wrap (newvnode_cb, nvnode-1));
-
   sigcb(SIGUSR1, wrap (chordnode, &chord::stats));
 }
 
@@ -236,7 +247,7 @@ static void
 usage ()
 {
   warnx << "Usage: " << progname 
-	<< "-d <dbfile> -S <sock> -v <nvnode> -l <max-loc-cache> -f <conffile> -c <cache?>\n"; 
+	<< "-d <dbfile> -S <sock> -v <nvnode> -c <cache?> -f <conffile>\n"; 
   exit (1);
 }
 
@@ -251,9 +262,8 @@ main (int argc, char **argv)
   do_cache = 0;
   int set_name = 0;
   int set_rpcdelay = 0;
-  int max_cache = 250;
   
-  while ((ch = getopt (argc, argv, "d:S:v:f:c:l:")) != -1)
+  while ((ch = getopt (argc, argv, "d:S:v:f:c:")) != -1)
     switch (ch) {
     case 'S':
       p2psocket = optarg;
@@ -266,13 +276,10 @@ main (int argc, char **argv)
       break;
     case 'f':
       if (!set_name) fatal("must specify db name\n");
-      parseconfigfile (optarg, vnode, set_rpcdelay, max_cache);
+      parseconfigfile (optarg, vnode, set_rpcdelay);
       break;
     case 'c':
       do_cache = 1;
-      break;
-    case 'l':
-      max_cache = atoi (optarg);
       break;
     case 'd':
       db_name = optarg;

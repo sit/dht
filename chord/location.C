@@ -23,13 +23,16 @@
 #include "chord.h"
 
 locationtable::locationtable (ptr<chord> _chordnode, int set_rpcdelay, 
-			      int _max_cache)
-  : chordnode (_chordnode), max_lrulist (_max_cache), rpcdelay (set_rpcdelay)
+			      int _max_cache, int _max_connections)
+  : chordnode (_chordnode), max_cachedlocs (_max_cache), 
+    max_connections (_max_connections), rpcdelay (set_rpcdelay)
 {
   nrpc = 0;
   nrpcfailed = 0;
   rpcdelay = 0;
-  size_lrulist = 0;
+  nconnections = 0;
+  size_cachedlocs = 0;
+  size_connections = 0;
 }
 
 void
@@ -37,7 +40,7 @@ locationtable::insert (chordID &n, sfs_hostname s, int p, chordID &source)
 {
   location *l = New location (n, s, p, source);
   locs.insert (l);
-  addlru (l);
+  add_cachedlocs (l);
 }
 
 location *
@@ -155,8 +158,7 @@ locationtable::cacheloc (chordID &x, net_address &r, chordID &source)
     //  << source << "\n";
     location *loc = New location (x, r, source);
     locs.insert (loc);
-    addlru (loc);
-
+    add_cachedlocs (loc);
   }
 }
 
@@ -188,7 +190,7 @@ locationtable::decrefcnt (location *l)
 {
   l->refcnt--;
   assert (l->refcnt >= 0);
-  if (l->refcnt == 0) addlru (l);
+  if (l->refcnt == 0) add_cachedlocs (l);
 }
 
 void
@@ -198,7 +200,7 @@ locationtable::increfcnt (chordID &n)
   assert (l);
   l->refcnt++;
   if (l->refcnt == 1) {
-    removelru (l);
+    remove_cachedlocs (l);
   }
 }
 
@@ -222,44 +224,45 @@ locationtable::checkrefcnt (int i)
 }
 
 void
-locationtable::touchlru (location *l)
+locationtable::touch_cachedlocs (location *l)
 {
   if (l->refcnt > 0) return;
   assert (l->refcnt == 0);
-  lrulist.remove (l);
-  lrulist.insert_tail (l);
+  cachedlocs.remove (l);
+  cachedlocs.insert_tail (l);
 }
 
 void
-locationtable::addlru (location *l)
+locationtable::add_cachedlocs (location *l)
 {
-  warnx << "addlru : add " << l->n << " size lru " << size_lrulist 
-	<< " max lru " << max_lrulist << "\n";
-  if (size_lrulist >= max_lrulist) {
-    deletelru ();
+  //  warnx << "add_cachedlocs : add " << l->n << " size lru " 
+  //          << size_cachedlocs << " max lru " << max_cachedlocs << "\n";
+  if (size_cachedlocs >= max_cachedlocs) {
+    delete_cachedlocs ();
   }
-  lrulist.insert_tail (l);
-  size_lrulist++;
+  cachedlocs.insert_tail (l);
+  size_cachedlocs++;
 }
 
 void
-locationtable::deletelru (void)
+locationtable::delete_cachedlocs (void)
 {
-  location *l = lrulist.first;
+  location *l = cachedlocs.first;
   assert (l);
   assert (l->refcnt == 0);
   warnx << "DELETE: " << l->n << "\n";
   assert (!l->connecting);
   locs.remove (l);
-  lrulist.remove (l);
-  size_lrulist--;
+  delete_connections (l);
+  cachedlocs.remove (l);
+  size_cachedlocs--;
   delete l;
 }
 
 void
-locationtable::removelru (location *l)
+locationtable::remove_cachedlocs (location *l)
 {
   assert (l->refcnt > 0);
-  lrulist.remove (l);
-  size_lrulist--;
+  cachedlocs.remove (l);
+  size_cachedlocs--;
 }

@@ -28,10 +28,9 @@ chord::doaccept (int fd)
   if (fd < 0)
     fatal ("EOF\n");
   tcp_nodelay (fd);
-  ref<axprt_stream> x = axprt_stream::alloc (fd);
-  s = asrv::alloc (x, chord_program_1,  wrap (mkref(this), &chord::dispatch));
-  srv.push_back (s);
-  //  dhs->accept (x);
+  ptr<axprt_stream> x = axprt_stream::alloc (fd);
+  s = asrv::alloc (x, chord_program_1);
+  s->setcb (wrap (mkref(this), &chord::dispatch, s, x));
 }
 
 void
@@ -71,7 +70,8 @@ chord::startchord (int myp)
 
 chord::chord (str _wellknownhost, int _wellknownport, 
 	      const chordID &_wellknownID,
-	      int port, str myhost, int set_rpcdelay, int max_cache) :
+	      int port, str myhost, int set_rpcdelay, int max_cache, 
+	      int max_connections) :
   wellknownID (_wellknownID)
 {
   myaddress.port = startchord (port);
@@ -81,7 +81,7 @@ chord::chord (str _wellknownhost, int _wellknownport,
   warnx << "chord: myport is " << myaddress.port << "\n";
   warnx << "chord: myname is " << myaddress.hostname << "\n";
   locations = New refcounted<locationtable> (mkref (this), set_rpcdelay, 
-					     max_cache);
+					     max_cache, max_connections);
   locations->insert (wellknownID, wellknownhost.hostname, wellknownhost.port, 
 		     wellknownID);
   nvnode = 0;
@@ -196,6 +196,7 @@ chord::stats ()
     v->stats ();
   }
   locations->stats ();
+  exit (0);
 }
 
 void 
@@ -205,11 +206,12 @@ chord::register_handler (int progno, chordID dest, cbdispatch_t hand)
   assert (vnodep);
   vnodep->addHandler (progno, hand);
 }
+
 void
-chord::dispatch (svccb *sbp)
+chord::dispatch (ptr<asrv> s, ptr<axprt_stream> x, svccb *sbp)
 {
   if (!sbp) {
-    warnx << "a connection was closed\n"; // XXX remove asrv from list
+    s->setcb (NULL);		// allow s and x to be freed
     return;
   }
   switch (sbp->proc ()) {

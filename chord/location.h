@@ -71,19 +71,16 @@ struct location {
   bool connecting;
   tailq<doRPC_cbstate, &doRPC_cbstate::connectlink> connectlist;
   ihash_entry<location> fhlink;
-  tailq_entry<location> lrulink;
+  tailq_entry<location> cachelink;
+  tailq_entry<location> connlink;
   u_int64_t rpcdelay;
   u_int64_t nrpc;
   u_int64_t maxdelay;
-  int nout;
-  timecb_t *timeout_cb;
 
   location (chordID &_n, net_address &_r, chordID _source) : 
     n (_n), addr (_r), source (_source) {
     connecting = false; 
     x = NULL;
-    nout = 0;
-    timeout_cb = NULL;
     refcnt = 0;
     rpcdelay = 0;
     nrpc = 0;
@@ -95,18 +92,13 @@ struct location {
     source = _source;
     connecting = false;
     x = NULL;
-    nout = 0;
-    timeout_cb = NULL;
     refcnt = 0;
     rpcdelay = 0;
     nrpc = 0;
     maxdelay = 0;
-    
-    
-  }
+  };
   ~location () {
     warnx << "~location: delete " << n << "\n";
-    x = NULL;
   }
 };
 
@@ -118,12 +110,16 @@ struct node {
 class locationtable : public virtual refcount {
   ptr<chord> chordnode;
   ihash<chordID,location,&location::n,&location::fhlink,hashID> locs;
-  tailq<location, &location::lrulink> lrulist;  // the cached locations
-  int size_lrulist;
-  int max_lrulist;
+  tailq<location, &location::cachelink> cachedlocs;  // the cached location
+  tailq<location, &location::connlink> connections;  // open connections
+  int size_cachedlocs;
+  int max_cachedlocs;
+  int size_connections;
+  int max_connections;
   u_int64_t rpcdelay;
   u_int64_t nrpc;
   u_int64_t nrpcfailed;
+  unsigned nconnections;
 
   qhash<long, svccb *> octbl;
   unsigned long last_xid;
@@ -134,16 +130,19 @@ class locationtable : public virtual refcount {
   void doRPCcb (aclnt_cb cb, location *l, u_int64_t s, clnt_stat err);
   void dorpc_connect_cb(location *l, ptr<axprt_stream> x);
   void chord_connect(chordID ID, callback<void, ptr<axprt_stream> >::ref cb);
-  void timeout(location *l);
   void decrefcnt (location *l);
-  void touchlru (location *l);
-  void addlru (location *l);
-  void deletelru (void);
-  void removelru (location *l);
+  void touch_cachedlocs (location *l);
+  void add_cachedlocs (location *l);
+  void delete_cachedlocs (void);
+  void remove_cachedlocs (location *l);
+  void touch_connections (location *l);
+  void delete_connections (location *l);
+  void add_connections (location *l);
  public:
+  locationtable (ptr<chord> _chordnode, int set_rpcdelay, int _max_cache,
+		 int _max_connections);
   bool betterpred1 (chordID current, chordID target, chordID newpred);
   bool betterpred2 (chordID current, chordID target, chordID newpred);
-  locationtable (ptr<chord> _chordnode, int set_rpcdelay, int _max_cache);
   void insert (chordID &_n, sfs_hostname _s, int _p, chordID &_source);
   location *getlocation (chordID &x);
   void deleteloc (chordID &n);

@@ -2,7 +2,7 @@
 - test lookups during joins
 - test inserts during joins
 
+- implement nodeID identification
+- reimplement alert
 - smart implementation of location table
 - recursive lookup
-- out of fd
-- keep max hops ever seen

@@ -131,13 +131,14 @@ void
 vnode::find_predecessor_cb (cbroute_t cb, chordID x, chordID p, 
 			    route search_path, chordstat status)
 {
-  nhops += search_path.size ();
-  if (status == CHORD_CACHEHIT) {
-    cb (p, search_path, CHORD_OK);
-  }
-  else if (status != CHORD_OK) {
+  if (status != CHORD_OK) {
     cb (p, search_path, status);
   } else {
+
+    nhops += search_path.size ();
+    if (search_path.size () > nmaxhops)
+      nmaxhops = search_path.size ();
+
     if (search_path.size () == 0) {
       // warnx << "find_predecessor_cb: get successor of " << p << "\n";
       get_successor (p, wrap (mkref(this), &vnode::find_successor_cb, 

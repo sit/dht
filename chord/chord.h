@@ -93,25 +93,26 @@ class vnode : public virtual refcount  {
 
   qhash<unsigned long, cbdispatch_t> dispatch_table;
 
-  int ngetsuccessor;
-  int ngetpredecessor;
-  int nfindsuccessor;
-  int nhops;
-  int nfindpredecessor;
-  int nfindsuccessorrestart;
-  int nfindpredecessorrestart;
-  int ntestrange;
-  int nnotify;
-  int nalert;
-  int ngetfingers;
+  unsigned ngetsuccessor;
+  unsigned ngetpredecessor;
+  unsigned nfindsuccessor;
+  unsigned nhops;
+  unsigned nmaxhops;
+  unsigned nfindpredecessor;
+  unsigned nfindsuccessorrestart;
+  unsigned nfindpredecessorrestart;
+  unsigned ntestrange;
+  unsigned nnotify;
+  unsigned nalert;
+  unsigned ngetfingers;
 
-  int ndogetsuccessor;
-  int ndogetpredecessor;
-  int ndofindclosestpred;
-  int ndonotify;
-  int ndoalert;
-  int ndotestrange;
-  int ndogetfingers;
+  unsigned ndogetsuccessor;
+  unsigned ndogetpredecessor;
+  unsigned ndofindclosestpred;
+  unsigned ndonotify;
+  unsigned ndoalert;
+  unsigned ndotestrange;
+  unsigned ndogetfingers;
 
   timecb_t *stabilize_tmo;
   vec<cbaction_t> actionCallbacks;
@@ -222,7 +223,6 @@ class vnode : public virtual refcount  {
 
 class chord : public virtual refcount {
   int nvnode;
-  vec< ptr<asrv> > srv;
   net_address wellknownhost;
   net_address myaddress;
   chordID wellknownID;
@@ -236,7 +236,7 @@ class chord : public virtual refcount {
   int ntestrange;
   int ngetfingers;
 
-  void dispatch (svccb *sbp);
+  void dispatch (ptr<asrv> s, ptr<axprt_stream> x, svccb *sbp);
   void doaccept (int fd);
   void accept_standalone (int lfd);
   int startchord (int myp);
@@ -247,7 +247,8 @@ class chord : public virtual refcount {
   // a number of cached nodes.  the cached nodes have refcnt = 0
   ptr<locationtable> locations; 
   chord (str _wellknownhost, int _wellknownport, const chordID &_wellknownID,
-	 int port, str myhost, int set_rpcdelay, int max_cache);
+	 int port, str myhost, int set_rpcdelay, int max_cache, 
+	 int max_connections);
   ptr<vnode> newvnode (cbjoin_t cb);
   ptr<vnode> newvnode (chordID &x, cbjoin_t cb);
   void deletefingers (chordID &x);
