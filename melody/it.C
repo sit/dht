@@ -176,7 +176,7 @@ inserter::add(str localpath, vec<str> *webpath) { // FIXME finish
   todo_file.push_back(localpath);
   todo.push_back(webpath);
   if(sleeping)
-;    //    send();
+    send();
 }
 
 void

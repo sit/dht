@@ -257,7 +257,7 @@ cs_client::requestcb()
   timeout = delaycb(10, 0, wrap(this, &cs_client::died));
 }
 
-static rxx boundryrx ("boundary=-+(.+)\r\n", "i");
+static rxx boundryrx ("boundary=-*(.+)-*\r\n", "i");
 
 void
 cs_client::input(suio *req, str referrer)
