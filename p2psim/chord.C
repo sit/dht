@@ -6,6 +6,7 @@
 #include <algorithm>
 
 using namespace std;
+extern bool vis;
 
 Chord::Chord(Node *n, uint numsucc) : Protocol(n)
 {
@@ -115,13 +116,16 @@ Chord::next_handler(next_args *args, next_ret *ret)
 void
 Chord::join(Args *args)
 {
+  if (vis) {
+    printf("vis %lu join %16qx\n", now (), me.id);
+  }
+
   IDMap wkn;
   wkn.ip = args->nget<IPAddress>("wellknown");
   assert (wkn.ip);
   wkn.id = ConsistentHash::ip2chid(wkn.ip);
   loctable->add_node (wkn);
 
-  printf("%s join wellknown %16qx\n", ts(), wkn.id);
   Time before = now();
   vector<IDMap> succs = find_successors (me.id + 1, 1, true);
   assert (succs.size () > 0);
@@ -200,14 +204,6 @@ Chord::fix_successor()
   doRPC(succ1.ip, &Chord::get_predecessor_handler, &gpa, &gpr);
 
   if (gpr.n.ip) loctable->add_node(gpr.n);
-
-  IDMap succ2 = loctable->succ(me.id+1);
-
-  /*
-  if(succ1.id != succ2.id)
-    printf("%s changed succ from %16qx to %16qx\n",
-	   ts(), succ1.id, succ2.id);
-  */
 }
 
 void
@@ -227,7 +223,6 @@ Chord::fix_successor_list()
   for (unsigned int i = 0; i < (gsr.v).size(); i++) {
     loctable->add_node(gsr.v[i]);
   }
-
   // printf ("fix_successor_list: %u,%16qx at %lu succ %u,%16qx\n", me.ip, me.id, 
   //now(), succ.ip, succ.id);
   //vector<IDMap> scs = loctable->succs(me.id + 1, nsucc);
@@ -242,13 +237,6 @@ Chord::notify_handler(notify_args *args, notify_ret *ret)
 {
   IDMap p1 = loctable->pred();
   loctable->add_node(args->me);
-  IDMap p2 = loctable->pred();
-
-  /*
-  if(p1.id != p2.id)
-    printf("%s notify changed pred from %16qx to %16qx\n",
-         ts(), p1.id, p2.id);
-  */
 }
 
 void
@@ -292,7 +280,7 @@ Chord::crash()
 
 LocTable::LocTable(Chord::IDMap me) {
   pin(me.id, 1, 0);
-  add_node (me); //ring[0] is always me
+  ring.push_back (me); //ring[0] is always me
 } 
 
 uint
@@ -364,6 +352,9 @@ LocTable::print ()
 void
 LocTable::add_node(Chord::IDMap n)
 {
+  Chord::IDMap succ1 = (vis == true) ? succ(ring[0].id + 1) : ring[0];
+  Chord::IDMap pred1 = (vis == true) ? pred () : ring[0];
+
   if (ring.size () == 0) {
     ring.push_back (n);
   } else {
@@ -382,6 +373,19 @@ LocTable::add_node(Chord::IDMap n)
   if (ring.size() > _max) {
     evict();
     assert(ring.size() <= _max);
+  }
+
+  Chord::IDMap succ2 = succ(ring[0].id + 1);
+  Chord::IDMap pred2 = pred ();
+
+  if (vis) {
+    if(succ1.id != succ2.id) {
+      printf("vis %lu succ %16qx %16qx\n", now (), ring[0].id, succ2.id);
+    }
+
+    if(pred1.id != pred2.id) {
+      printf("vis %lu pred %16qx %16qx\n", now (), ring[0].id, pred2.id);
+    }
   }
 }
 

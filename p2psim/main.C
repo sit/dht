@@ -14,9 +14,10 @@
 
 char *topology_file;
 char *event_file;
+bool vis = false;
   
 void parse_args(int argc, char *argv[]);
-void usage(char *);
+void usage();
 
 void
 threadmain(int argc, char *argv[])
@@ -45,8 +46,25 @@ threadmain(int argc, char *argv[])
 void
 parse_args(int argc, char *argv[])
 {
+  setprogname (argv[0]);
+
+  int ch;
+  while ((ch = getopt (argc, argv, "v")) != -1) {
+    switch (ch) {
+    case 'v':
+      {
+	vis = true;
+	argc--;
+	argv++;
+      }
+      break;
+  default:
+    usage ();
+    }
+  };
+
   if(argc != 3) {
-    usage(argv[0]);
+    usage();
     exit(1);
   }
 
@@ -56,7 +74,7 @@ parse_args(int argc, char *argv[])
 
 
 void
-usage(char *argv0)
+usage()
 {
-  cout << argv0 << " [-h] TOPOLOGY EVENTS" << endl;
+  cout << "Usage: p2psim [-v] TOPOLOGY EVENTS" << endl;
 }

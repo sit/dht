@@ -1,4 +1,8 @@
-bin_PROGRAMS = p2psim
+if GTK_AVAILABLE
+VIS = vis
+endif
+
+bin_PROGRAMS = p2psim $(VIS)
 p2psim_SOURCES = main.C node.C network.C chord.C packet.C topology.C \
                  euclidean.C threaded.C protocol.C event.C eventqueue.C \
                  kademlia.C protocolfactory.C topologyfactory.C \
@@ -10,6 +14,11 @@ p2psim_SOURCES = main.C node.C network.C chord.C packet.C topology.C \
                  vivaldi.C randomgraph.C dvgraph.C euclideangraph.C e2egraph.C  \
                  threadspeedup.C 
 p2psim_LDADD = -L/usr/local/lib -lthread -l9 -lfmt -lutf -lgmp -lcrypto
-INCLUDES = -I/usr/local/include
 CXXFLAGS = -g -Wall -fno-exceptions  -O2
 
+if GTK_AVAILABLE
+vis_SOURCES = vis.C
+GTKINCLUDES = $(GSTUFF_CFLAGS) 
+vis_LDADD = $(GSTUFF_LIBS)
+endif
+INCLUDES = -I/usr/local/include $(GTKINCLUDES)

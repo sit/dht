@@ -9,6 +9,14 @@ AC_PROG_CPP
 AC_PROG_CXX
 AC_PATH_PROGS(M4, gm4 gnum4 m4, '$(top_srcdir)/missing')
 
+dnl Check for GTK and allow conditional Makefile.am statements
+dnl AM_PATH_GTK(1.2.0,,AC_MSG_WARN(gtk not available; vis will not be built))
+
+PKG_CHECK_MODULES(GSTUFF, gtk+-2.0 >= 2.0, AC_MSG_WARN([Found GTK...]), AC_MSG_WARN([You don't have GTK. Vis won't be built]))
+AM_CONDITIONAL(GTK_AVAILABLE, test "$GSTUFF_CFLAGS")
+AC_SUBST(GSTUFF_CFLAGS)
+AC_SUBST(GSTUFF_LIBS)
+
 AM_WITH_DMALLOC
 
 AC_PROG_INSTALL
