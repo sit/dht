@@ -29,6 +29,10 @@
 #include "vec.h"
 #include "qhash.h"
 
+#ifdef DMALLOC
+#include "dmalloc.h"
+#endif
+
 #include <chord_prot.h>
 #include <chord_util.h>
 #include <location.h>
@@ -170,6 +174,7 @@ class vnode : public virtual refcount  {
   void notify (chordID &n, chordID &x);
   void alert (chordID &n, chordID &x);
   void dofindsucc (chordID &n, cbroute_t cb);
+  chordID nth_successorID (int n);
 
   // The RPCs
   void doget_successor (svccb *sbp);
@@ -185,9 +190,6 @@ class vnode : public virtual refcount  {
   int countrefs (chordID &x);
   void deletefingers (chordID &x);
   void stats (void);
-
-  void timing_cb(aclnt_cb cb, location *l, ptr<struct timeval> start, 
-		 int procno, rpc_program progno, clnt_stat err);
 
   searchcb_entry * registerSearchCallback(cbsearch_t cb);
   void removeSearchCallback(searchcb_entry *scb);

@@ -1,4 +1,4 @@
-/* $Id: fhdb.C,v 1.1 2001/01/16 22:00:08 fdabek Exp $ */
+/* $Id: fhdb.C,v 1.2 2001/07/11 04:00:05 fdabek Exp $ */
 
 /*
  * Copyright (C) 1999, 2000 Kevin Fu (fubob@mit.edu)
@@ -241,7 +241,7 @@ void fhdb_copydb ()
 		      content.data, content.size)) {
 
 #else
-    bIteration *cursor = new bIteration();
+    bIteration *cursor = New bIteration();
     record *item;
     
     while (sfsrofhdb->iterate(cursor, &item) == 0) {
@@ -264,7 +264,7 @@ create_fhdb (sfs_hash *fhdb, const char *dbfile, char *iv)
   ref<dbImplInfo> info = dbGetImplInfo();
 
   //create the generic object
-  dbfe* db = new dbfe();
+  dbfe* db = New dbfe();
 
   //set up the options we want
   dbOptions opts;

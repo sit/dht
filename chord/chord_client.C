@@ -163,7 +163,7 @@ chord::newvnode (chordID &x)
 void
 chord::deletefingers (chordID &x)
 {
-  warnx << "deletefingers: " << x << "\n";
+  //  warnx << "deletefingers: " << x << "\n";
   for (vnode *v = vnodes.first (); v != NULL; v = vnodes.next (v)) {
     v->deletefingers (x);
   }
@@ -272,7 +272,6 @@ chord::dispatch (svccb *sbp)
       warnt("CHORD: testandfindrequest");
       chord_testandfindarg *fa = 
 	sbp->template getarg<chord_testandfindarg> ();
-      warn << "looking for " << fa->v.n << "\n";
       vnode *vnodep = vnodes[fa->v.n];
       assert (vnodep);
       ntestrange++;

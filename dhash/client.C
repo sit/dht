@@ -6,6 +6,9 @@
 #include "crypt.h"
 #include <sys/time.h>
 #include "chord_util.h"
+#ifdef DMALLOC
+#include "dmalloc.h"
+#endif
 
 /*
  * Implementation of the distributed hash service.
@@ -47,7 +50,6 @@ dhashclient::dispatch (svccb *sbp)
       dhash_insertarg *item = sbp->template getarg<dhash_insertarg> ();
       ptr<dhash_insertarg> p_item = New refcounted<dhash_insertarg> (*item);
       chordID n = item->key;
-      warn << "inserting " << n << "\n";
       clntnode->find_successor (n, wrap(this, &dhashclient::insert_findsucc_cb, 
 				    sbp, p_item));
     }
@@ -69,8 +71,6 @@ dhashclient::insert_findsucc_cb(svccb *sbp, ptr<dhash_insertarg> item,
     sbp->reply(&res);
   } else {
 
-    warn << "succ was " << succ << "\n";
-
     warnt("DHASH: insert_after_dofindsucc|issue_STORE");
 
     dhash_storeres *res = New dhash_storeres();
@@ -86,14 +86,15 @@ dhashclient::insert_store_cb(svccb *sbp,  dhash_storeres *res,
 {
 
   warnt("DHASH: insert_after_STORE");
-  
+#if 0 
   if (res->status) {
     // error in insertion/replication: return to caller
     warnx << "insert_store_cb: failed " << res->status << "\n";
     sbp->replyref(dhash_stat (DHASH_STOREERR));
   } else 
     sbp->replyref(dhash_stat (DHASH_OK));
-
+#endif
+  sbp->reply (res);
   delete res;
 }
    
@@ -166,12 +167,15 @@ dhashclient::lookup_fetch_cb(dhash_res *res, retry_state *st, clnt_stat err)
     warnx << "lookup_fetch_cb: retry for " << st->n << " at " 
 	  << st->succ << "\n";
     clntnode->get_predecessor (st->succ, wrap (this, &dhashclient::retry, st));
-  } else {
+  } else if (res->status == DHASH_OK) {
 
     warnt("DHASH: lookup_after_FETCH");
 
     st->sbp->reply (res);
     
+  } else {
+    warn << "error on lookup " << res->status << "\n";
+    st->sbp->reply (res);
   }
   delete res;
   delete st;

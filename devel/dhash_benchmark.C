@@ -13,6 +13,7 @@ static str control_socket;
 static FILE *outfile;
 
 int out = 0;
+int out_op = 0;
 
 void afetch_cb (dhash_res *res, chordID key, char *buf, int i, struct timeval start, clnt_stat err);
 void afetch_cb2 (dhash_res *res, char *buf, unsigned int *read, int i, struct timeval start, clnt_stat err);
@@ -36,24 +37,27 @@ cp2p ()
 int
 store_block(chordID key, void *data, unsigned int datasize) 
 {
-  dhash_insertarg i_arg;
+
   unsigned int written = 0;
-  i_arg.key = key;  
+  dhash_storeres res;    
   do {
     int n = (written + MTU < datasize) ? MTU : datasize - written;
-    i_arg.data.setsize(n);
-    i_arg.type = DHASH_STORE;
-    i_arg.attr.size = datasize;
-    i_arg.offset = written;
-    memcpy(i_arg.data.base (), (char *)data + written, n);
-    dhash_stat res;
-    warn << "writing " << i_arg.data.size() << " bytes  at " << i_arg.offset 
+    dhash_insertarg *i_arg = New dhash_insertarg ();
+    i_arg->key = key;  
+    i_arg->data.setsize(n);
+    i_arg->type = DHASH_STORE;
+    i_arg->attr.size = datasize;
+    i_arg->offset = written;
+    memcpy(i_arg->data.base (), (char *)data + written, n);
+    warn << "writing " << i_arg->data.size() << " bytes  at " << i_arg->offset 
 	 << " of " << datasize << " bytes\n";
-    int err = cp2p ()->scall(DHASHPROC_INSERT, &i_arg, &res);
+    clnt_stat err = cp2p ()->scall(DHASHPROC_INSERT, i_arg, &res);
+    if (err) warn << "RPC error: " << err << "\n";
     if (err) return -err;
-    if (res != DHASH_OK) return res;
+    if (res.status != DHASH_OK) return res.status;
     written += n;
-  } while (written < datasize);
+    delete i_arg;
+  } while (!res.resok->done);
 
   return DHASH_OK;
 }
@@ -124,39 +128,9 @@ fetch_block_async(int i, chordID key, int datasize)
 }
 
 void
-afetch_cb (dhash_res *res, chordID key, char *buf, int i, struct timeval start, clnt_stat err) 
+finish (char *buf, unsigned int *read, struct timeval start, int i) 
 {
-  assert (err == 0);
-  assert (res->status == DHASH_OK);
-
-  memcpy(buf, res->resok->res.base (), res->resok->res.size ());
-  unsigned int *read = New unsigned int(res->resok->res.size ());
-  unsigned int off = res->resok->res.size ();
-  if (off == res->resok->attr.size) out--;
-  while (off < res->resok->attr.size) {
-    ptr<dhash_fetch_arg> arg = New refcounted<dhash_fetch_arg> ();
-
-    arg->key = key;
-    arg->len = (off + MTU < res->resok->attr.size) ? MTU : 
-      res->resok->attr.size - off;
-    arg->start = off;
-    dhash_res *nres = New dhash_res();
-    cp2p ()->call(DHASHPROC_LOOKUP, arg, nres, wrap(&afetch_cb2, nres, buf, read, i, start));
-    off += arg->len;
-  };
-  delete res;
-}
-
-void
-afetch_cb2 (dhash_res *res, char *buf, unsigned int *read, int i, struct timeval start, clnt_stat err) 
-{
-  assert(err == 0);
-  assert(res->status == DHASH_OK);
-  memcpy(buf + res->resok->offset, res->resok->res.base (), res->resok->res.size ());
-  *read += res->resok->res.size ();
-
-  if (*read == res->resok->attr.size) {
-    out--;
+  out--;
       
 #define VERIFY
 #ifdef VERIFY
@@ -168,10 +142,55 @@ afetch_cb2 (dhash_res *res, char *buf, unsigned int *read, int i, struct timeval
     float elapsed = (end.tv_sec - start.tv_sec)*1000.0 + (end.tv_usec - start.tv_usec)/1000.0;
     fprintf(outfile, "%f\n", elapsed);
 #endif
-    
+    delete read;
     delete buf;
-    
+}
+void
+afetch_cb (dhash_res *res, chordID key, char *buf, int i, struct timeval start, clnt_stat err) 
+{
+  
+  if (err) {
+    warn << "RPC error: " << err << "\n";
+    exit(0);
   }
+
+  if (res->status != DHASH_OK) {
+    warn << "error: " << res->status << "\n";
+    exit(0);
+  }
+
+  memcpy(buf, res->resok->res.base (), res->resok->res.size ());
+  unsigned int *read = New unsigned int(res->resok->res.size ());
+  unsigned int off = res->resok->res.size ();
+  if (off == res->resok->attr.size) finish (buf, read, start, i);
+  while (off < res->resok->attr.size) {
+    ptr<dhash_fetch_arg> arg = New refcounted<dhash_fetch_arg> ();
+
+    arg->key = key;
+    arg->len = (off + MTU < res->resok->attr.size) ? MTU : 
+      res->resok->attr.size - off;
+    arg->start = off;
+    dhash_res *nres = New dhash_res();
+    out_op++;
+    cp2p ()->call(DHASHPROC_LOOKUP, arg, nres, wrap(&afetch_cb2, nres, buf, read, i, start));
+    off += arg->len;
+    //    while (out_op > 10) acheck ();
+  };
+  delete res;
+}
+
+void
+afetch_cb2 (dhash_res *res, char *buf, unsigned int *read, int i, struct timeval start, clnt_stat err) 
+{
+  if (err) warn << "err: " << err << "\n";
+  assert(err == 0);
+  assert(res->status == DHASH_OK);
+  memcpy(buf + res->resok->offset, res->resok->res.base (), res->resok->res.size ());
+  *read += res->resok->res.size ();
+  out_op--;
+  warn << "read " << *read << " of " << res->resok->attr.size << "\n";
+  if (*read == res->resok->attr.size) finish (buf, read, start, i);
+  
   delete res;
 }
 
@@ -211,7 +230,7 @@ store(int num, int size) {
     // struct timeval start;
     //gettimeofday(&start, NULL);
     int err = store_block(IDs[i], data[i], size);
-    warn << err << "\n";
+    if (err) warn << "ERROR: " << err << "\n";
     //gettimeofday(&end, NULL);
     //float elapsed = (end.tv_sec - start.tv_sec)*1000.0 + (end.tv_usec - start.tv_usec)/1000.0;
     //fprintf(outfile, "%f\n", elapsed);
@@ -225,6 +244,7 @@ fetch(int num, int size) {
   
   for (int i = 0; i < num; i++) {
     fetch_block_async(i, IDs[i],  size);
+    while (out > 10) acheck ();
   }
 
   while (out > 0) acheck();

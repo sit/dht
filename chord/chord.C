@@ -139,6 +139,7 @@ vnode::stats ()
   warnx << "# notify calls " << ndonotify << "\n";  
   warnx << "# alert calls " << ndoalert << "\n";  
   warnx << "# getfingers calls " << ndogetfingers << "\n";
+  exit(0);
 }
 
 void
@@ -173,7 +174,7 @@ vnode::findpredfinger (chordID &x)
       break;
     }
   }
-  warnx << "findpredfinger: " << myID << " of " << x << " is " << p << "\n";
+  //  warnx << "findpredfinger: " << myID << " of " << x << " is " << p << "\n";
   return p;
 }
 
@@ -190,14 +191,14 @@ vnode::stabilize (int c)
   locations->checkrefcnt (1);
 
   while (!finger_table[1].first.alive) {   // notify() may result in failure
-    warnx << "stabilize: replace succ\n";
+    //  warnx << "stabilize: replace succ\n";
     locations->replacenode (&finger_table[1].first);
     notify (finger_table[1].first.n, myID); 
   }
   get_predecessor (finger_table[1].first.n, 
 		   wrap (mkref (this), &vnode::stabilize_getpred_cb));
   if (!finger_table[i].first.alive) {
-    warnx << "stabilize: replace finger " << i << "\n" ;
+    //  warnx << "stabilize: replace finger " << i << "\n" ;
     locations->replacenode (&finger_table[i].first);
   }
   if (i > 1) {
@@ -210,7 +211,7 @@ vnode::stabilize (int c)
 		   wrap (mkref (this), &vnode::stabilize_getsucc_cb));
   }
   if (!succlist[j].alive) {
-    warnx << "stabilize: replace succ " << j << "\n";
+    //  warnx << "stabilize: replace succ " << j << "\n";
     locations->replacenode (&succlist[j]);
   }
   get_successor (succlist[j].n,
@@ -226,12 +227,12 @@ vnode::stabilize_getpred_cb (chordID p, net_address r, chordstat status)
 {
   // receive predecessor from my successor; in stable case it is me
   if (status) {
-    warnx << "stabilize_getpred_cb: " << myID << " " 
+        warnx << "stabilize_getpred_cb: " << myID << " " 
 	  << finger_table[1].first.n << " failure " << status << "\n";
   } else {
     if (!finger_table[1].first.alive || (finger_table[1].first.n == myID) ||
 	between (myID, finger_table[1].first.n, p)) {
-      warnx << "stabilize_pred_cb: new successor is " << p << "\n";
+      //    warnx << "stabilize_pred_cb: new successor is " << p << "\n";
       locations->changenode (&finger_table[1].first, p, r);
       updatefingers (p, r);
       print ();
@@ -249,9 +250,9 @@ vnode::stabilize_findsucc_cb (int i, chordID s, route search_path,
 	  << finger_table[i].first.n << " failure " << status << "\n";
   } else {
     if (!finger_table[i].first.alive || (finger_table[i].first.n != s)) {
-      warnx << "stabilize_findsucc_cb: " << myID << " " 
-	    << "new successor of " << finger_table[i].start 
-	    << " is " << s << "\n";
+      //      warnx << "stabilize_findsucc_cb: " << myID << " " 
+      //	    << "new successor of " << finger_table[i].start 
+      //	    << " is " << s << "\n";
       locations->changenode (&finger_table[i].first, s, 
 			     locations->getaddress(s));
       updatefingers (s, locations->getaddress(s));
@@ -269,8 +270,8 @@ vnode::stabilize_getsucc_cb (chordID s, net_address r, chordstat status)
 	  << " failure " << status << "\n";
   } else {
     if (s != myID) {
-      warnx << "stabilize_succ_cb: " << myID << " WEIRD my pred " 
-	    << predecessor.n << " has " << s << " as succ\n";
+      //    warnx << "stabilize_succ_cb: " << myID << " WEIRD my pred " 
+      //	    << predecessor.n << " has " << s << " as succ\n";
     }
   }
 }
@@ -283,9 +284,9 @@ vnode::stabilize_getsucclist_cb (int i, chordID s, net_address r,
     warnx << "stabilize_getsucclist_cb: " << myID << " " << i << " : " 
 	  << succlist[i].n << " failure " << status << "\n";
   } else {
-    warnx << "stabilize_getsucclist_cb: " << myID << " " << i 
-	  << " : successor of " 
-	  << succlist[i].n << " is " << s << "\n";
+    //    warnx << "stabilize_getsucclist_cb: " << myID << " " << i 
+    //	  << " : successor of " 
+    //	  << succlist[i].n << " is " << s << "\n";
     locations->checkrefcnt (3);
     if (s == myID) {  // did we go full circle?
       if (nsucc > i) {  // remove old entries?
@@ -311,10 +312,10 @@ vnode::join ()
 {
   chordID n(69);
 
-  warn << "n before lookup_anyloc " << n << "\n";
+  //  warn << "n before lookup_anyloc " << n << "\n";
   if (!locations->lookup_anyloc(myID, &n))
     fatal ("No nodes left to join\n");
-  warn << "find succ from join " << n << " " << myID << "\n";
+  // warn << "find succ from join " << n << " " << myID << "\n";
   find_successor (n, myID, wrap (mkref (this), &vnode::join_getsucc_cb));
 }
 
@@ -325,7 +326,7 @@ vnode::join_getsucc_cb (chordID s, route r, chordstat status)
     warnx << "join_getsucc_cb: " << myID << " " << status << "\n";
     join ();  // try again
   } else {
-    warnx << "join_getsucc_cb: " << myID << " " << s << "\n";
+    //    warnx << "join_getsucc_cb: " << myID << " " << s << "\n";
     locations->changenode (&finger_table[1].first, s, locations->getaddress(s));
     updatefingers (s, locations->getaddress(s));
     print ();

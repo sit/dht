@@ -82,7 +82,7 @@ program DHASHCLNT_PROGRAM {
 		dhash_res
 		DHASHPROC_LOOKUP (dhash_fetch_arg) = 2;
 
-		dhash_stat
+		dhash_storeres
         	DHASHPROC_INSERT (dhash_insertarg) = 3;
 
 	} = 1;

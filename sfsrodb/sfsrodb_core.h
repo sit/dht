@@ -1,4 +1,4 @@
-/* $Id: sfsrodb_core.h,v 1.4 2001/07/05 14:11:38 fdabek Exp $ */
+/* $Id: sfsrodb_core.h,v 1.5 2001/07/11 04:00:06 fdabek Exp $ */
 
 /*
  *
@@ -32,6 +32,9 @@
 #include "xdrmisc.h"
 #include "dbfe.h"
 #include "dhash_prot.h"
+#ifdef DMALLOC
+#include "dmalloc.h"
+#endif
 
 #define CONCUR_OPS 512
 

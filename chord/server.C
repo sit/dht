@@ -25,7 +25,7 @@
 void 
 vnode::get_successor (chordID n, cbsfsID_t cb)
 {
-  warn << "get successor of " << n << "\n";
+  //  warn << "get successor of " << n << "\n";
   ngetsuccessor++;
   chord_noderes *res = New chord_noderes (CHORD_OK);
   ptr<chord_vnode> v = New refcounted<chord_vnode>;
@@ -51,6 +51,7 @@ vnode::get_successor_cb (chordID n, cbsfsID_t cb, chord_noderes *res,
   } else {
     cb (res->resok->node, res->resok->r, CHORD_OK);
   }
+  delete res;
 }
 
 // short hand version of get_successor to avoid passing net_address around 
@@ -95,6 +96,14 @@ vnode::get_predecessor_cb (chordID n, cbsfsID_t cb, chord_noderes *res,
   } else {
     cb (res->resok->node, res->resok->r, CHORD_OK);
   }
+  delete res;
+}
+
+chordID
+vnode::nth_successorID (int n) 
+{
+  if (n > nsucc) return chordID(0);
+  return succlist[n].n;
 }
 
 void
@@ -134,9 +143,9 @@ vnode::find_predecessor_cb (cbroute_t cb, chordID x, chordID p,
       get_successor (p, wrap (mkref(this), &vnode::find_successor_cb, 
 			      cb, search_path));
     } else {
-      warnx << "find_predecessor_cb: " << myID << " find succ of " << x << "\n";
+      //      warnx << "find_predecessor_cb: " << myID << " find succ of " << x << "\n";
       for (unsigned i = 0; i < search_path.size (); i++) {
-	warnx << search_path[i] << "\n";
+	//warnx << search_path[i] << "\n";
       }
       chordID s = search_path.pop_back ();
       cb(s, search_path, status);
@@ -195,7 +204,7 @@ vnode::find_closestpred (chordID &n, chordID &x, findpredecessor_cbstate *st)
   fap->v.n = n;
   fap->x = x;
   warnt("CHORD: issued_FINDCLOSESTPRED_RPC");
-  warn << "issuing rpc w/ n=" << n << "\n";
+  //  warn << "issuing rpc w/ n=" << n << "\n";
   locations->doRPC (n, chord_program_1, CHORDPROC_FINDCLOSESTPRED, fap, res,
 		    wrap (mkref (this), &vnode::find_closestpred_cb, n, st, 
 			  res));
@@ -206,7 +215,7 @@ vnode::find_closestpred_cb (chordID n, findpredecessor_cbstate *st,
 			  chord_noderes *res, clnt_stat err)
 {
   warnt("CHORD: find_closestpred_cb");
-  warn << "looking for closestpred of " << res->resok->node << "\n";
+  //  warn << "looking for closestpred of " << res->resok->node << "\n";
   if (err) {
     warnx << "find_closestpred_cb: RPC failure " << err << "\n";
     chordnode->deletefingers (n);
@@ -234,7 +243,7 @@ void
 vnode::testrange_findclosestpred (chordID n, chordID x, 
 				  findpredecessor_cbstate *st)
 {
-  warn << "looking for closestpred of " << n << " " << x << "\n";
+  //  warn << "looking for closestpred of " << n << " " << x << "\n";
   ptr<chord_testandfindarg> arg = New refcounted<chord_testandfindarg> ();
   arg->v.n = n;
   arg->x = x;
@@ -282,6 +291,7 @@ vnode::testrange_findclosestpred_cb (chord_testandfindres *res,
     warn("WTF");
     delete st;
   }
+  delete res;
 }
 
 // XXX out of date
@@ -346,6 +356,7 @@ vnode::notify_cb (chordID n, chordstat *res, clnt_stat err)
   } else if (*res != CHORD_OK) {
     warnx << "notify_cb: RPC error" << n << " " << *res << "\n";
   }
+  delete res;
 }
 
 void
@@ -395,13 +406,14 @@ vnode::get_fingers_cb (chordID x, chord_getfingersres *res,  clnt_stat err)
     net_address dr;
     warnx << "get_fingers_cb: RPC error " << res->status << "\n";
   } else {
-    warnx << "get_fingers_cb: " << res->resok->fingers.size () << " fingers\n";
+    //    warnx << "get_fingers_cb: " << res->resok->fingers.size () << " fingers\n";
     for (unsigned i = 0; i < res->resok->fingers.size (); i++) {
-      warnx << "get_fingers_cb: " << res->resok->fingers[i].x << "\n";
+      // warnx << "get_fingers_cb: " << res->resok->fingers[i].x << "\n";
       updatefingers (res->resok->fingers[i].x, res->resok->fingers[i].r);
     }
     print ();
   }
+  delete res;
 }
 
 

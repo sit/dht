@@ -19,6 +19,9 @@
  */
 
 #include "dbfe.h"
+#ifdef DMALLOC
+#include "dmalloc.h"
+#endif
 
 //adb options
 #define CACHE_OPT "opt_cachesize"
@@ -35,8 +38,9 @@
 ///////////////// static /////////////////////
 ref<dbImplInfo>
 dbGetImplInfo() {
+
   
-  ref<dbImplInfo> info = new refcounted<dbImplInfo>();
+  ref<dbImplInfo> info = New refcounted<dbImplInfo>();
 #ifndef SLEEPYCAT
   info->supportedOptions.push_back(CACHE_OPT);
   info->supportedOptions.push_back(NODESIZE_OPT);
@@ -94,12 +98,12 @@ dbEnumeration::dbEnumeration(DB *db ) {
 #else
 dbEnumeration::dbEnumeration(btreeSync *adb) {
 
-  it = new bIteration();
+  it = New bIteration();
   ADB_sync = adb;
   ADB_async = NULL;
 }
 dbEnumeration::dbEnumeration(btreeDispatch *adb) {
-  it = new bIteration();
+  it = New bIteration();
   ADB_async = adb;
   ADB_sync = NULL;
 }
@@ -137,10 +141,10 @@ ptr<dbPair> dbEnumeration::nextElement() {
   cursor_init = 1;
   if (err) return NULL;
   
-  ref<dbrec> keyrec = new refcounted<dbrec>(key.data, key.size);
-  ref<dbrec> valrec = new refcounted<dbrec>(data.data, data.size);
+  ref<dbrec> keyrec = New refcounted<dbrec>(key.data, key.size);
+  ref<dbrec> valrec = New refcounted<dbrec>(data.data, data.size);
   
-  return new refcounted<dbPair>(keyrec, valrec);
+  return New refcounted<dbPair>(keyrec, valrec);
 }
 void dbEnumeration::nextElement(callback<void, ptr<dbPair> >::ref cb) {
   
@@ -164,10 +168,10 @@ ptr<dbPair> dbEnumeration::nextElement() {
   val = rec->getValue(&valLen);
   key = rec->getKey(&keyLen);
   
-  ref<dbrec> keyrec = new refcounted<dbrec>(key, keyLen);
-  ref<dbrec> valrec = new refcounted<dbrec>(val, valLen);
+  ref<dbrec> keyrec = New refcounted<dbrec>(key, keyLen);
+  ref<dbrec> valrec = New refcounted<dbrec>(val, valLen);
   
-  return new refcounted<dbPair>(keyrec, valrec);
+  return New refcounted<dbPair>(keyrec, valrec);
   
 }
 
@@ -192,10 +196,10 @@ void dbEnumeration::ne_cb(callback<void, ptr<dbPair> >::ref cb,
   val = rec->getValue(&valLen);
   key = rec->getKey(&keyLen);
   
-  ref<dbrec> keyrec = new refcounted<dbrec>(key, keyLen);
-  ref<dbrec> valrec = new refcounted<dbrec>(val, valLen);
+  ref<dbrec> keyrec = New refcounted<dbrec>(key, keyLen);
+  ref<dbrec> valrec = New refcounted<dbrec>(val, valLen);
   
-  (*cb)(new refcounted<dbPair>(keyrec, valrec));
+  (*cb)(New refcounted<dbPair>(keyrec, valrec));
   
 }
 #endif
@@ -219,6 +223,7 @@ dbfe::dbfe() {
     gADB_async = NULL;
 #else
     db = NULL;
+
     create_impl = wrap(this, &dbfe::IMPL_create_sleepycat);
     open_impl = wrap(this, &dbfe::IMPL_open_sleepycat);
     close_impl = wrap(this, &dbfe::IMPL_close_sleepycat);
@@ -298,7 +303,7 @@ dbfe::IMPL_lookup_sync_sleepycat(ref<dbrec> key)
 
   
   if ((r = db->get(db, NULL, &skey, &content, 0)) != 0) return NULL;
-  ptr<dbrec> ret = new refcounted<dbrec>(content.data, content.size);
+  ptr<dbrec> ret = New refcounted<dbrec>(content.data, content.size);
 
   // warnx << "return " << content.size << "\n";
 
@@ -331,7 +336,7 @@ int
 dbfe::IMPL_close_sleepycat() { return db->close(db, 0); };
 
 ptr<dbEnumeration> dbfe::IMPL_make_enumeration_sleepycat() {
-  return new refcounted<dbEnumeration>(db);
+  return New refcounted<dbEnumeration>(db);
 }
 
 void 
@@ -345,9 +350,9 @@ dbfe::IMPL_delete_async_sleepycat(ptr<dbrec> key, errReturn_cb cb) {
 ptr<dbEnumeration> dbfe::IMPL_make_enumeration_adb() {
   
   if (gADB_sync)
-    return new refcounted<dbEnumeration>(gADB_sync);
+    return New refcounted<dbEnumeration>(gADB_sync);
   else
-    return new refcounted<dbEnumeration>(gADB_async);
+    return New refcounted<dbEnumeration>(gADB_async);
 }
 
 int
@@ -375,11 +380,11 @@ dbfe::IMPL_open_adb(char *filename, dbOptions opts) {
   if (async == -1) async = 0;
   warn << cacheSize << async;
   if (async) {
-    gADB_async = new btreeDispatch(filename, cacheSize);
+    gADB_async = New btreeDispatch(filename, cacheSize);
     if (gADB_async) return 0;
     else return -1;  
   } else {
-    gADB_sync = new btreeSync();
+    gADB_sync = New btreeSync();
     return gADB_sync->open(filename, cacheSize);
   }
 
@@ -400,7 +405,7 @@ ptr<dbrec> dbfe::IMPL_lookup_sync_adb(ref<dbrec> key) {
   if (err) return NULL;
   
   retValue = rec->getValue(&retLen);
-  ptr<dbrec> ret = new refcounted<dbrec>(retValue, retLen);
+  ptr<dbrec> ret = New refcounted<dbrec>(retValue, retLen);
   return ret;
   
 } 
@@ -427,7 +432,7 @@ void dbfe::IMPL_lookup_async_adb_comp(itemReturn_cb cb, tid_t tid, int err,recor
   
   val = res->getValue(&len);
 
-  ref<dbrec> ret = new refcounted<dbrec>(val, len);
+  ref<dbrec> ret = New refcounted<dbrec>(val, len);
   (*cb)(ret);
 }
 

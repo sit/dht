@@ -58,7 +58,8 @@ locationtable::doForeignRPC (rpc_program prog,
   farg.host_proc = procno;
   farg.marshalled_args.setsize (marshalled_len);
   memcpy (farg.marshalled_args.base (), marshalled_data, marshalled_len);
-  
+  delete marshalled_data;
+
   location *l = getlocation (ID);
   assert (l);
   ptr<aclnt> c = aclnt::alloc (l->x, chord_program_1);
@@ -176,6 +177,7 @@ locationtable::dorpc_connect_cb(location *l, ptr<axprt_stream> x)
       aclnt_cb cb = st->cb;
       (*cb) (RPC_FAILED);
       l->connectlist.remove(st);
+      delete st;
     }
     decrefcnt (l);
     return;
@@ -197,6 +199,7 @@ locationtable::dorpc_connect_cb(location *l, ptr<axprt_stream> x)
     
       st1 = l->connectlist.next (st);
     l->connectlist.remove(st);
+    delete st;
   }
   //  decrefcnt (l);
 }

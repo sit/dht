@@ -5,6 +5,9 @@
 #include <chord_util.h>
 #include <dbfe.h>
 #include <arpc.h>
+#ifdef DMALLOC
+#include <dmalloc.h>
+#endif
 
 #define REP_DEGREE 0
 
@@ -260,6 +263,8 @@ dhash::rereplicate_replicate_cb (dhash_stat err)
 void
 dhash::transfer_key (chordID to, chordID key, store_status stat, callback<void, dhash_stat>::ref cb) 
 {
+  return;
+
   fetch(key, wrap(this, &dhash::transfer_fetch_cb, to, key, stat, cb));
 }
 
@@ -326,7 +331,7 @@ dhash::fetch_cb (cbvalue cb, ptr<dbrec> ret)
 
   warnt("DHASH: FETCH_after_db");
 
-  if (ret == NULL) {
+  if (!ret) {
     (*cb)(NULL, DHASH_NOENT);
     warn << "key not found in DB\n";
   } else
@@ -340,12 +345,9 @@ dhash::store (dhash_insertarg *arg, cbstore cb)
   store_state *ss = pst[arg->key];
   if (arg->data.size () != arg->attr.size) {
     if (!ss) {
-      warn << "ss is null\n";
       store_state nss (arg->attr.size);
-      warn << nss.read << " " << nss.size << "\n";
       pst.insert(arg->key, nss);
       ss = pst[arg->key];
-      warn << ss->read << " " << ss->size << "\n";
     }
     ss->read += arg->data.size ();
     memcpy (ss->buf + arg->offset, arg->data.base (), arg->data.size ());
@@ -359,9 +361,8 @@ dhash::store (dhash_insertarg *arg, cbstore cb)
     else 
       d = New refcounted<dbrec>(ss->buf, ss->size);
     warnt("DHASH: STORE_before_db");
-    chordID id = arg->key;
-    db->insert (k, d, wrap(this, &dhash::store_cb, arg->type, id, cb));
     dhash_stat stat;
+    chordID id = arg->key;
     if (arg->type == DHASH_STORE) {
       stat = DHASH_STORED;
       key_store.enter (id, &stat);
@@ -372,9 +373,12 @@ dhash::store (dhash_insertarg *arg, cbstore cb)
       stat = DHASH_CACHED;
       key_cache.enter (id, &stat);
     }
+    
+    db->insert (k, d, wrap(this, &dhash::store_cb, arg->type, id, cb));
+
   } else
     cb (DHASH_STORE_PARTIAL);
-  
+
 }
 
 bool
@@ -392,10 +396,11 @@ dhash::store_cb(store_status type, chordID id, cbstore cb, int stat)
 {
   warnt("DHASH: STORE_after_db");
 
+  if (stat) warn << "DB3 gave the error : " << stat << "\n";
   if (stat != 0) 
     (*cb)(DHASH_STOREERR);
-  else if (type == DHASH_STORE)
-    replicate_key (id, REP_DEGREE, wrap (this, &dhash::store_repl_cb, cb));
+  //  else if (type == DHASH_STORE)
+  // replicate_key (id, REP_DEGREE, wrap (this, &dhash::store_repl_cb, cb));
   else	   
     (*cb)(DHASH_OK);
   
@@ -418,6 +423,7 @@ dhash::store_repl_cb (cbstore cb, dhash_stat err)
 void 
 dhash::replicate_key (chordID key, int degree, callback<void, dhash_stat>::ref cb) 
 {
+  return;
   warnt ("DHASH: replicate_key");
   if (degree > 0) {
     chordID succ = host_node->my_succ ();
@@ -470,12 +476,10 @@ dhash::replicate_key_transfer_cb (chordID key, int degree_remaining, callback<vo
 ptr<dbrec>
 dhash::id2dbrec(chordID id) 
 {
-  warn << "id2dbrec " << id << "\n";
   str whipme = id.getraw ();
   void *key = (void *)whipme.cstr ();
   int len = whipme.len ();
   
-  warn << "id2dbrec: " << id << "=" << hexdump(key, len) << "\n";
   ptr<dbrec> q = New refcounted<dbrec> (key, len);
   return q;
 }
@@ -546,6 +550,7 @@ dhash::dhash_reply (long xid, unsigned long procno, void *res)
 
   host_node->chordnode->locations->reply(xid, marshalled_data, 
 					 marshalled_len);
+  delete marshalled_data;
 }
 
 // ---------- debug ----
