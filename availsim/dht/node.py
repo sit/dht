@@ -53,9 +53,10 @@ class node:
 	del my.blocks[block]
 
     def sendremote (my, t, size):
+	"""Schedule time to send data in the future."""
 	# t is now
-	my.nrpc += 1
-	my.sent_bytes += size
+	# We'll do the accounting for bytes sent later,
+	# if this actually succeeds.
 	delta_t = float(size)/my.bandwidth
 
 	if my.nexttimetosend < t:
