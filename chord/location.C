@@ -31,6 +31,9 @@
 #include <math.h>
 #include "comm.h"
 #include "location.h"
+#include "modlogger.h"
+
+#define loctrace modlogger ("loctable")
 
 // XXX should include succ_list.h but that's too much hassle.
 #define NSUCC 10
@@ -94,16 +97,15 @@ location::location (const chordID &_n, const net_address &_r)
   inet_aton (_r.hostname.cstr (), &saddr.sin_addr);
   saddr.sin_port = htons (addr.port);
   vnode = is_authenticID (n, addr.hostname, addr.port);
-  warnx << "new location " << n << "@" << addr.hostname << ":"
-	<< addr.port << " is vnode " << vnode << ".\n";
-};
+  if (vnode < 0) 
+    loctrace << "badnode " << n << " " << addr << "\n";
+}
 
 location::~location () {
   if (checkdeadcb) {
     timecb_remove (checkdeadcb);
     checkdeadcb = NULL;
   }
-  warnx << "~location: delete " << n << "\n";
 }
 
 void
@@ -217,6 +219,7 @@ locationtable::doRPCcb (ptr<location> l, aclnt_cb realcb, clnt_stat err)
     if (l->alive) {
       good--;
       l->alive = false;
+      loctrace << "dead " << l->n << " " << l->addr << "\n";
       if (!l->checkdeadcb)
 	l->checkdeadcb = delaycb (60, 0,
 	  wrap(this, &locationtable::check_dead, l, 120));
@@ -225,6 +228,7 @@ locationtable::doRPCcb (ptr<location> l, aclnt_cb realcb, clnt_stat err)
     if (!l->alive) {
       l->alive = true;
       good++;
+      loctrace << "alive " << l->n << " " << l->addr << "\n";
     }
   }
 
@@ -237,6 +241,7 @@ locationtable::realinsert (ref<location> l)
   if (size_cachedlocs >= max_cachedlocs) {
     delete_cachedlocs ();
   }
+  loctrace << "insert " << l->n << " " << l->addr << " " << l->vnode << "\n";
   locwrap *lw = locs[l->n];
   if (lw) {
     if (lw->type_ & LOC_REGULAR) {
@@ -270,7 +275,6 @@ locationtable::insert (const chordID &n, const net_address &r)
   loc = New refcounted<location> (n, r);
   if (loc->vnode < 0)
     return false;
-  
   realinsert (loc);
   return true;
 }
@@ -681,8 +685,10 @@ locationtable::check_dead_cb (ptr<location> l, unsigned int newwait,
   // alive. We're just here to reschedule a check in case the node was
   // still unreachable.
   
-  if (s == CHORD_OK)
+  if (s == CHORD_OK) {
+    l->checkdeadcb = NULL;
     return;
+  }
 
   if (newwait > 3600) {
     warnx << "check_dead: " << l->n << " dead too long. Giving up.\n";
@@ -729,6 +735,8 @@ locationtable::remove (locwrap *lw)
       good = mygood;
     }
   }
+  if (lw->type_ & LOC_REGULAR)
+    loctrace << "delete " << lw->loc_->n << " " << lw->loc_->addr << "\n";
   delete lw;
   return true;
 }

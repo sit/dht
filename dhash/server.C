@@ -26,7 +26,7 @@
  *
  */
 
-#include <dhash.h>
+#include "dhash.h"
 #include <dhash_prot.h>
 #include <chord.h>
 #include <chord_prot.h>
@@ -37,6 +37,9 @@
 #ifdef DMALLOC
 #include <dmalloc.h>
 #endif
+
+#include <modlogger.h>
+#define dhashtrace modlogger ("dhash")
 
 #include <merkle_sync_prot.h>
 static int MERKLE_ENABLED = getenv("MERKLE_ENABLED") ? atoi(getenv("MERKLE_ENABLED")) : 1;
@@ -1449,22 +1452,23 @@ void
 dhash::dbwrite (ref<dbrec> key, ref<dbrec> data)
 {
   if (MERKLE_ENABLED) {
-    char *msg;
+    char *action;
     block blk (to_merkle_hash (key), data);
     bool exists = !!database_lookup (mtree->db, blk.key);
     bool ismutable = (block_type (data) != DHASH_CONTENTHASH);
     if (!exists) {
-      msg = ", inserting new block\n";
+      action = "new";
       mtree->insert (&blk);
     } else if (exists && ismutable) {
       // update an existing mutable block
-      msg = ", updating existing mutable block\n";
+      action = "update";
       mtree->remove (&blk);
       mtree->insert (&blk);
     } else {
-      msg = ", ignoring existing content hash block\n";
+      action = "repeat-store";
     }
-    warn << "dbwrite: node " << host_node->my_ID () << ", key " << dbrec2id(key) << msg;
+    dhashtrace << "dbwrite: " << host_node->my_ID ()
+	       << " " << action << " " << dbrec2id(key) << "\n";
   } else {
     db->insert (key, data);
   }

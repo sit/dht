@@ -37,6 +37,9 @@
 
 #include "route_secchord.h"
 
+#include <modlogger.h>
+#define lsdtrace modlogger ("lsd")
+
 //#define PROFILING 
 
 // When a process starts up profiling is not happening.  But by
@@ -210,6 +213,7 @@ void
 halt ()
 {
   warnx << "Exiting on command.\n";
+  lsdtrace << "stopping.\n";
   exit (0);
 }
 
@@ -423,7 +427,10 @@ usage ()
     "[-S <sock>] [-v <nvnode>] [-c <cache?>] "
     "-B <cache size> "
     "-b logbase "
-    "[-s <server select mode>]\n";
+    "[-s <server select mode>] "
+    "[-L <warn/fatal/panic output file name>] "
+    "[-T <trace file name (aka new log)>] "
+    "\n";
   exit (1);
 }
 
@@ -459,8 +466,8 @@ main (int argc, char **argv)
   bool setmode = false;
   mode = MODE_CHORD;
   lookup_mode = CHORD_LOOKUP_LOCTABLE;
-
-  while ((ch = getopt (argc, argv, "PfFB:b:cd:j:l:M:n:p:S:s:v:m:L:")) != -1)
+  
+  while ((ch = getopt (argc, argv, "PfFB:b:cd:j:l:M:n:p:S:s:v:m:L:T:")) != -1)
     switch (ch) {
     case 'm':
       if (strcmp (optarg, "debruijn") == 0)
@@ -555,6 +562,14 @@ main (int argc, char **argv)
 	errfd = logfd;
 	break;
       }
+    case 'T':
+      {
+	int logfd = open (optarg, O_WRONLY|O_APPEND|O_CREAT, 0666);
+	if (logfd < 0)
+	  fatal << "Couldn't open " << optarg << " for append.\n";
+	modlogger::setlogfd (logfd);
+	break;
+      }
     default:
       usage ();
       break;
@@ -569,6 +584,13 @@ main (int argc, char **argv)
   }
   
   max_loccache = max_loccache * (vnodes + 1);
+  
+  {
+    strbuf x = strbuf ("starting: ");
+    for (int i = 0; i < argc; i++) { x << argv[i] << " "; }
+    x << "\n";
+    lsdtrace << x;
+  }
 
   chordnode = New refcounted<chord> (wellknownhost, wellknownport,
 				     myname,
@@ -585,6 +607,7 @@ main (int argc, char **argv)
   sigcb(SIGUSR1, wrap (&stats));
   sigcb(SIGUSR2, wrap (&stop));
   sigcb(SIGHUP, wrap (&halt));
+  sigcb(SIGINT, wrap (&halt));
 
   time_t now = time (NULL);
   warn << "lsd starting up at " << ctime ((const time_t *)&now);
@@ -592,10 +615,10 @@ main (int argc, char **argv)
   warn << "  IP/port: " << myname << ":" << myport << "\n";
   warn << "  vnodes: " << vnodes << "\n";
   warn << "  lookup_mode: " << mode << "\n";
-    
-    
+
   if (p2psocket) 
     startclntd();
+  lsdtrace << "starting amain.\n";
   amain ();
 }
 
