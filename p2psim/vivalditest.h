@@ -26,6 +26,9 @@ public:
   Vivaldi *_vivaldi;
   static vector<VivaldiTest*> _all;
 
+  int _neighbors; // if > 0, fix the number of neighbors
+  vector<IPAddress> _nip; // our fixed neigbhors
+
   void tick(void *);
   char *ts();
   void handler(void *, Vivaldi::Coord *);

@@ -8,7 +8,8 @@ using namespace std;
 
 vector<VivaldiTest*> VivaldiTest::_all;
 
-VivaldiTest::VivaldiTest(Node *n) : Protocol(n)
+VivaldiTest::VivaldiTest(Node *n)
+  : Protocol(n), _neighbors(0)
 {
   _vivaldi = new Vivaldi6(n);
 
@@ -21,7 +22,7 @@ VivaldiTest::~VivaldiTest()
 void
 VivaldiTest::join(Args *args)
 {
-  int vo = args->nget<int>("vivaldi-algorithm");
+  int vo = atoi((*args)["vivaldi-algorithm"].c_str());
   switch(vo){
   case 1: _vivaldi = new Vivaldi1(node()); break;
   case 2: _vivaldi = new Vivaldi2(node()); break;
@@ -37,6 +38,16 @@ VivaldiTest::join(Args *args)
             (*args)["vivaldi-algorithm"].c_str());
     exit(1);
   }
+
+  _neighbors = atoi((*args)["neighbors"].c_str());
+
+  if(_neighbors > 0){
+    int i;
+    for(i = 0; i < _neighbors; i++){
+      _nip.push_back(_all[random() % _all.size()]->node()->ip());
+    }
+  }
+
   _all.push_back(this);
   delaycb(1000, &VivaldiTest::tick, (void *) 0);
 }
@@ -129,10 +140,11 @@ VivaldiTest::status()
   static int first = 1;
   if(first){
     first = 0;
-    printf("# %s %d %s\n",
+    printf("# %s nnodes=%d %s neighbors=%d\n",
            typeid(*(this->_vivaldi)).name(),
            _all.size(),
-           typeid(*(Network::Instance()->gettopology())).name());
+           typeid(*(Network::Instance()->gettopology())).name(),
+           _neighbors);
   }
 
   Vivaldi::Coord rc = real();
@@ -157,7 +169,12 @@ VivaldiTest::status()
 void
 VivaldiTest::tick(void *)
 {
-  IPAddress dst = _all[random() % _all.size()]->node()->ip();
+  IPAddress dst;
+  if(_neighbors > 0){
+    dst = _nip[random() % _neighbors];
+  } else {
+    dst = _all[random() % _all.size()]->node()->ip();
+  }
   Vivaldi::Coord c;
   Time before = now();
   doRPC(dst, &VivaldiTest::handler, (void*) 0, &c);

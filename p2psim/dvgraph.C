@@ -25,17 +25,17 @@ DVGraph::~DVGraph()
 
 // return the latency along the path from n1 to n2.
 latency_t
-DVGraph::latency(Node *n1, Node *n2)
+DVGraph::latency(IPAddress a, IPAddress b)
 {
   dv();
 
 #if 1
-  assert(_ip2i.find(n1->ip()) != _ip2i.end());
-  assert(_ip2i.find(n2->ip()) != _ip2i.end());
+  assert(_ip2i.find(a) != _ip2i.end());
+  assert(_ip2i.find(b) != _ip2i.end());
 #endif
 
-  int i = _ip2i[n1->ip()];
-  int j = _ip2i[n2->ip()];
+  int i = _ip2i[a];
+  int j = _ip2i[b];
   assert(i < _n && j < _n && i >= 0 && j >= 0);
 
   int m = routes(i, j)._metric;
@@ -128,7 +128,7 @@ DVGraph::dv()
         neighbors_sum += 1;
     }
   }
-  fprintf(stderr, "dv: %d iters, avg metric %.1f, hops %.1f, degree %.1f\n",
+  fprintf(stderr, "DVGraph: %d iters, avg metric %.1f, hops %.1f, degree %.1f\n",
           iters,
           metric_sum / (_n * _n),
           hop_sum / (_n * _n),

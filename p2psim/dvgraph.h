@@ -19,7 +19,10 @@ public:
   DVGraph();
   ~DVGraph();
   
-  virtual latency_t latency(Node*, Node*);
+  latency_t latency(Node *a, Node *b) {
+    return latency(a->ip(), b->ip());
+  }
+  latency_t latency(IPAddress a, IPAddress b);
 
  protected:
   // subclass must fill in these values by calling add_node()

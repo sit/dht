@@ -85,4 +85,20 @@ EuclideanGraph::parse(ifstream &ifs)
       links(k, i) = m;
     }
   }
+
+  // Guess what the likely Vivaldi errors will be.
+  // That is, the difference between direct Euclidean distance
+  // and latency over the shortest path.
+  double sum = 0;
+  for(i = 0; i < _n; i++){
+    Coord c1 = _coords[i];
+    for(j = 0; j < _n; j++){
+      Coord c2 = _coords[j];
+      double d = hypot(c2._x - c1._x, c2._y - c1._y);
+      latency_t lat = latency(_i2ip[i], _i2ip[j]);
+      sum += fabs(d - lat);
+    }
+  }
+  fprintf(stderr, "EuclideanGraph: typical Vivaldi error %.1f\n",
+          sum / (_n * _n));
 }

@@ -44,11 +44,12 @@ Vivaldi::net_force(Coord c, vector<Sample> v)
   f._x = 0;
   f._y = 0;
   for(unsigned i = 0; i < v.size(); i++){
-    double d = dist(c, v[i]._c);
+    Sample s = v[i];
+    double d = dist(c, s._c);
     if(d > 0.01){
-      Coord direction = (v[i]._c - c);
+      Coord direction = (s._c - c);
       direction = direction / d;
-      f = f + (direction * (d - v[i]._latency));
+      f = f + (direction * (d - s._latency));
     }
   }
   return f;
@@ -296,12 +297,26 @@ Vivaldi9::algorithm(Sample s)
 }
 
 // variants:
-// each node talks to a fixed (random) set of other nodes.
 // somehow have a few nodes choose themselves as landmarks,
 //   they agree on positions, everyone else follows.
 // add nodes one at a time
 // more dimensions
 // every sample by itself, not every 10
+
+// hmm, it seems like the system does *exactly* as well if each
+// node only talks to a few other nodes as it does when all nodes
+// cycle randomly among the other nodes. maybe that's because the
+// "few" nodes i talk to are the next higher ones in IP address
+// space, so information flows pretty regularly, just a bit slower.
+// perhaps also because everybody is joining at the same time, so
+// at least early on there is not much point in talking to lots
+// of other nodes.
+// OK, this turns out probably not to be true. I think early on
+// it's relatively easy to fix errors with local movement,
+// so things look good with just a few neighbors. Easy to see
+// this with Euclidean cross layout.
+
+// general lesson from occasional jumps: they don't work.
 
 // spring relaxation doesn't seem to work any better than the
 // much stupider scheme of moving to eliminate 1/100th of the
