@@ -155,7 +155,7 @@ program DHC_PROGRAM {
     DHCPROC_PUTBLOCK (dhc_putblock_arg) = 7;
     
     dhc_put_res
-    DHCPROC_NEWBLOCK (dhc_newblock_arg) = 8; 
+    DHCPROC_NEWBLOCK (dhc_put_arg) = 8; 
 
     dhc_prepare_res 
     DHCPROC_ASK (dhc_propose_arg) = 9;

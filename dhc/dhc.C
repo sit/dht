@@ -408,7 +408,7 @@ dhc::recv_newblock (user_args *sbp)
   if (dhc_debug)
     warn << "\n\n" << myNode->my_ID () << " recv_newblock\n";
 
-  dhc_newblock_arg *nb = sbp->template getarg<dhc_newblock_arg> ();
+  dhc_put_arg *nb = sbp->template getarg<dhc_put_arg> ();
   ptr<dbrec> key = id2dbrec (nb->bID);
   ptr<dbrec> rec = db->lookup (key);
   
@@ -423,7 +423,7 @@ dhc::recv_newblock (user_args *sbp)
   
   ptr<dhc_newconfig_arg> arg = New refcounted<dhc_newconfig_arg>;
   arg->bID = nb->bID;
-  arg->mID = nb->mID;
+  arg->mID = 0;
   arg->type = DHC_DHC;
   arg->data.tag.ver = 0;
   arg->data.tag.writer = nb->writer;

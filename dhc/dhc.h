@@ -190,9 +190,7 @@ struct dhc_block {
 	warn << "dhc_block: Fatal exceeded end of pointer!!!\n";
 	exit (-1);
       }
-    } else {
-      //
-    }
+    } 
   }
 
   ~dhc_block () 
