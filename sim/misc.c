@@ -1,42 +1,32 @@
 #include "incl.h"
 
-void setFinger(Node *n, int i, int id)
-{
-  for (; i >= 0; i--) 
-    if (id == fingerStart(n, i) ||
-	between(id, fingerStart(n, i), n->finger[i], NUM_BITS))
-      n->finger[i] = id;
- 
-  n->successor = n->finger[0];
-}
 
-void replaceFinger(Node *n, int oldSucc, int newSucc)
+int prefixLen(int a, int b)
 {
-  int i;
+  int i, t;
 
+  if (a == b)
+    return NUM_BITS;
+
+  t = 1 << NUM_BITS;
   for (i = 0; i < NUM_BITS; i++) {
-    if (n->finger[i] == oldSucc) {
-      if (i == 0)
-	updateSuccessor(n, newSucc);
-      else
-	n->finger[i] = newSucc;
+    if ((a & t) != (b & t)) {
+      return i;
     }
+    t = t >> 1;
   }
-}
 
-int fingerStart(Node *n, int i)
-{
-  return successorId(n->id, i);
+  return NUM_BITS;
 }
-
 
 /* compute (id + i) mod 2^NUM_BITS */
 int successorId(int id, int i)
 {
-  id = id + (1 << i);
+  //  id = id + (1 << i);
+  id = id + i;
 
   if (id >= (1 << NUM_BITS))
-      id -= (1 << NUM_BITS);
+    id -= (1 << NUM_BITS);
 
   return id;
 }
@@ -44,10 +34,11 @@ int successorId(int id, int i)
 /* compute (id - i) mod 2^NUM_BITS */
 int predecessorId(int id, int i)
 {
-  id = id - (1 << i);
+  // id = id - (1 << i);
+  id = id - i;
 
   if (id < 0)
-      id += (1 << NUM_BITS);
+    id += (1 << NUM_BITS);
 
   return id;
 }

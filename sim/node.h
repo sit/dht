@@ -1,30 +1,21 @@
 #ifndef INCL_NODE
 #define INCL_NODE
 
-typedef int DocId;
-
-typedef struct _document {
-  DocId             id;
-  struct _document *next;
-} Document;
-
-
-
-
-typedef struct _docList {
-  Document *head;
-  int       size;
-} DocList;
+#include "doc.h"
+#include "finger.h"
+#include "request.h"
 
 typedef struct _node {
-  int           id;    /* node identifier */
-#define PRESENT 1
-#define ABSENT  0
-  int           status;
-  DocList       docList[MAX_NUM_DOCS];
-  int           finger[NUM_BITS];
-  int           successor;
-  int           predecessor;
+  ID             id;       // node identifier
+#define ABSENT   0
+#define PRESENT  1         
+#define TO_LEAVE 2
+  int            status;  
+  int            fingerId; // id of the finger to be refreshed, where 
+                           // id is of the form id + 2^{i-1}
+  DocList       *docList;
+  FingerList    *fingerList;
+  RequestList   *reqList;
   struct _node *next;
 } Node;
 

@@ -11,10 +11,23 @@ Node *newNode(int id)
   Node *n;
 
   if (!(n = (Node *)calloc(1, sizeof(Node))))
-    panic("allocNode: memory alloc. error\n");
+    panic("newNode: memory allocation error 1\n");
+  if (!(n->fingerList = (FingerList *)calloc(1, sizeof(FingerList))))
+    panic("newNode: memory allocation error 2\n");
+  if (!(n->docList = (DocList *)calloc(1, sizeof(DocList))))
+    panic("newNode: memory allocation error 2\n");
+  if (!(n->reqList = (RequestList *)calloc(1, sizeof(RequestList))))
+    panic("newNode: memory allocation error 3\n");
   n->id = id;
 
   return n;
+}
+
+void freeNode(Node *n) 
+{ 
+  free(n->docList);
+  free(n->fingerList);
+  free(n);
 }
 
 
@@ -66,7 +79,7 @@ void deleteNode(Node *n)
 
   NodeHashTable[n->id % HASH_SIZE] = 
     removeFromList(NodeHashTable[n->id % HASH_SIZE], n);
-  free(n); 
+  freeNode(n); 
 }
 
 
@@ -74,12 +87,34 @@ Node *getNode(int id)
 {
   Node *n = NodeHashTable[id % HASH_SIZE];
 
+  if (id == -1)
+    return NULL;
+
   for (; n; n = n->next)
     if (n->id == id)
       return n;
 
   return NULL;
 }
+
+
+int getRandomActiveNodeId()
+{
+  int i, cnt = 0, idx;
+
+  idx = unifRand(0, HASH_SIZE);
+
+  for (i = idx; i < HASH_SIZE; i++)
+    if (NodeHashTable[i] && NodeHashTable[i]->status == PRESENT)
+      return (NodeHashTable[i])->id;
+  
+  for (i = idx; i; i--)
+    if (NodeHashTable[i] && NodeHashTable[i]->status == PRESENT)
+      return (NodeHashTable[i])->id;
+
+  return -1;
+}
+
 
 
 int getRandomNodeId()
@@ -110,32 +145,10 @@ int getRandomNodeId()
 /*      update node state
 /*******************************************************/
 
-void updateNodeState(Node *n, int idx, int id)
+void updateNodeState(Node *n, int id)
 {
-  int i;
-
-  for (i = idx; i < NUM_BITS; i++) 
-    if (!between(id, n->id, fingerStart(n, i), NUM_BITS))
-      break;
-  
-  for (; i < NUM_BITS; i++) {
-    if (id == fingerStart(n, i) || 
-	between(id, fingerStart(n, i), n->finger[i], NUM_BITS)) {
-      if (i == 0)
-	updateSuccessor(n, id);
-      else
-	n->finger[i] = id;
-    }
-  }
-  /*
-  if ((n->id == n->successor) || 
-      between(n->finger[0], n->id, n->successor, NUM_BITS)) 
-    n->successor = n->finger[0];
-  else
-    n->finger[0] = n->successor;
-  */    
-  if (n->predecessor == n->id || between(id, n->predecessor, n->id, NUM_BITS)) 
-    n->predecessor = id;
+  // ??? code to be added
+  updateDocList(n);
 }
 
 
@@ -144,18 +157,17 @@ int printNodeInfo(Node *n)
   Document *doc;
   int  i;
 
-  printf("Node = %d | ", n->id);
+  if (n->status == ABSENT)
+    return;
 
-  for (i = 0; i < NUM_BITS; i++) {
-    printf("<%d:%d> ", fingerStart(n, i), n->finger[i]);
-  }
-  printf("   predecessor = %d\n", n->predecessor);
-  printf("\n");
-  
-  printf("   doc list: ");
-  for (doc = n->docList->head; doc; doc = doc->next)
-    printf("%d, ", doc->id);
-  printf("\n");
+  if (getSuccessor(n) == n->id)
+    printf("o");
+
+  printf("Node = %d\n", n->id);
+
+  printFingerList(n);
+  printDocList(n);
+  printReqList(n);
 }
 
 void printAllNodesInfo()
@@ -163,36 +175,12 @@ void printAllNodesInfo()
   int i;
   Node *n;
 
+  printf("---------\n");
+
   for (i = 0; i < HASH_SIZE; i++) {
     for (n = NodeHashTable[i]; n; n = n->next)
       printNodeInfo(n);
   }
 }
 
-
-void faultyNode(Node *n, int *dummy)
-{
-  int i;
-  Node *n1;
-
-  for (i = 0; i < HASH_SIZE; i++) {
-    for (n1 = NodeHashTable[i]; n1; n1 = n1->next) {
-      if (n != n1)
-	deleteRefFromTables(n1, n->id);
-    }
-  }
-  deleteNode(n);
-}
-
-
-void updateSuccessor(Node *n, int id)
-{
-
-  if (n->successor == id || n->id == id)
-    return;
-
-  n->successor = n->finger[0] = id;
-
-  updateDocList(n);
-}
 

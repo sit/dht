@@ -12,7 +12,6 @@ int main(int argc, char **argv)
   Node  *n;
   int   i = 0;
 
-
   if (argc != 3) {
     printf("usage: %s input_file seed\n", argv[0]);
     exit (-1);
@@ -22,10 +21,7 @@ int main(int argc, char **argv)
   EventQueue.size = MAX_NUM_ENTRIES;
 
   initRand(atoi(argv[2]));
-  
-
   readInputFile(argv[1]);
-
 
   while (Clock < MAX_TIME) {
     ev = getEvent(&EventQueue, Clock);
@@ -39,20 +35,24 @@ int main(int argc, char **argv)
           tsec += 1.0;
 	}
       }
-      /*
-      if ((ev->time) >= 30299020) {
-	printf("time = %f\n", ev->time);
-	exit (-1);
-      }*/
+      if (ev->fun == exitSim) {
+	exitSim();
+      }
       if (n = getNode(ev->nodeId)) 
 	ev->fun(n, ev->params);
       free(ev);
     }
   }
-
-  printAllNodesInfo();
 }
 
+
+void exitSim(void)
+{
+  printf("Exit: %f\n", Clock);
+  printAllNodesInfo();
+  printPendingDocs();
+  exit(0);
+}
 
 
 

@@ -1,42 +1,28 @@
 #ifndef INCL_FUN
 #define INCL_FUN
 
-/* functions implemented in doc.c */
-void findDocument(Node *n, int *docId);
-void findReply(Node *n, Stack *stack);
+/* functions implemented by doc.c */
 void insertDocument(Node *n, int *docId);
-void insertReply(Node *n, Stack *stack);
+void insertDocumentLocal(Node *n, int *docId);
+void findDocument(Node *n, int *docId);
+void findDocumentLocal(Node *n, ID *docId);
 void updateDocList(Node *n);
 void *freeDocList(Node *n);
-
-/* functions implemented in find.c */
-void findSuccessor_entry(Node *n, Stack *stack);
-void findPredecessor_entry(Node *n, Stack *stack);
-void getSuccessor(Node *n, void *stack);
-void getPredecessor(Node *n, void *stack);
+void printDocList(Node *n);
+void printPendingDocs();
 
 /* functions implemented by join.c */
 void join(Node *n, int *nodeId);
-void notify(Node *n);
 
-/* functions implemented by leave.c */
-void leave(Node *n, int *dummy);
-
-/* functions implemented by notify.c */
-void notify(Node *n);
-void notify_entry(Node *n, Stack *stack);
+/* functions implemented by join.c */
+void leave(Node *n, void *dummy);
+void faultyNode(Node *n, void *dummy);
 
 /* functions implemented by stabilize.c */
-void stabilize_entry(Node *n, Stack *stack);
 void stabilize(Node *n);
 
-/* functions implemented by bootstrap.c */
-void bootstrap_entry(Node *n, Stack *stack);
-
 /* functions implemented by misc.c */
-void setFinger(Node *n, int i, int id);
-void replaceFinger(Node *n, int oldId, int newId);
-int fingerStart(Node *n, int i);
+int prefixLent(int a, int b);
 int successorId(int id, int i);
 int predecessorId(int id, int i);
 int isGreater(int a, int b, int numBits);
@@ -44,25 +30,16 @@ int isGreaterOrEqual(int a, int b, int numBits);
 int between(int x, int a, int b, int numBits);
 
 /* functions implemented by node.c */
-void updateNodeState(Node *n, int idx, int id);
+Node *newNode(ID id);
+void updateNodeState(Node *n, int id);
 void initNodeHashTable();
 Node *addNode(int id);
 void deleteNode(Node *n);
 Node *getNode(int id);
 int getRandomNodeId();
 void printAllNodesInfo();
-void faultyNode(Node *n, int *dummy);
 void updateSuccessor(Node *n, int id);
 
-
-/* functions implemented by stack.c */
-Stack *newStackItem(int nodeId, void (*fun)()); 
-Stack *pushStack(Stack *stack, Stack *s);
-Stack *popStack(Stack *stack);
-Stack *topStack(Stack *stack);
-void freeStack(Stack *stack);
-void returnStack(int nodeId /* local node id */, Stack *stack);
-void callStack(int nodeId, void (*fun)(), Stack *stack);
 
 /* functions implemented by event.c */
 void genEvent(int nodeType, void (*fun)(), void *params, double time);
@@ -73,8 +50,26 @@ void removeEvent(CalQueue *evCal, Event *ev);
 /* functions implemented by in.c */
 void readInputFile(char *file);
 
-/* functions implemented in misc.c */
+/* functions implemented by misc.c */
 int *newInt(int val);
+
+/* functions implemented by sim.c */
+void exitSim(void);
+
+/* functions implemented by finger.c */
+Finger *getFinger(FingerList *fList, ID id);
+void insertFinger(Node *n, ID id);
+void getNeighbors(Node *n, ID x, ID *pred, ID *succ);
+void printFingerList(Node *n);
+ID   getSuccessor(Node *n);
+ID   getPredecessor(Node *n);
+
+/* functions implemented by request.c */
+Request *newRequest(ID x, int type, int style, ID initiator);
+void insertRequest(Node *n, Request *r);
+Request *getRequest(Node *n);
+void printReqList(Node *n);
+
 
 /* functions in util.c */
 int   initRand(unsigned seed);
@@ -89,5 +84,6 @@ double funifVecRand(double a, double b);
 double fVecExp(double mean);
 double fVecParetoMean(double mean);
 void panic(char *str);
+
 
 #endif /* INC_FUN */

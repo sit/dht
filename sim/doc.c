@@ -3,90 +3,104 @@
 
 extern Node *NodeHashTable[HASH_SIZE];
 
-void findDocument_return(Node *n, Stack *stack);
-void insertDocument_return(Node *n, Stack *stack);
-
 int insertDocInList(DocList *docList, Document *doc);
-Document *findDocInList(DocList *docList, DocId docId);
+Document *findDocInList(DocList *docList, ID docId);
+void removeDocFromList(DocList *docList, ID docId);
 void updateDocList(Node *n);
 
+DocList PendingDocs = {NULL, 0};
 
-void findDocument(Node *n, int *docId)
+Document *newDoc(int docId)
 {
-  Stack *stack;
-
-  if (n->status != PRESENT)
-    return;
-
-  stack = pushStack(NULL, newStackItem(n->id, findDocument_return));
-  stack->data.key = *docId;
-  CALL(n->id, findSuccessor_entry, stack);
-}
-
-void findDocument_return(Node *n, Stack *stack)
-{
-  Stack *top = topStack(stack);
-
-  Node  *n1  = getNode(top->ret.nid);
-  int docId  = top->data.key;
   Document *doc;
 
+  if ((doc = (Document *)calloc(1, sizeof(Document))) == NULL)
+    panic("newDoc: memory allocation error!\n");
+  
+  doc->id = docId;
+  
+  return doc;
+}
 
-  if (!n1) {
-    printf("findNode: node %d has been deleted in the meantime!\n", 
-	   top->ret.nid);
+
+void findDocument(Node *n, ID *docId)
+{ 
+  Request *r;
+
+  if (n->status != PRESENT) {
+    printf("findDocument: n=%d was deleted in the meantime\n");
+    return;
+  }
+  r = newRequest(*docId, REQ_TYPE_FINDDOC, REQ_STYLE_RECURSIVE, n->id);
+
+  insertRequest(n, r);
+}
+
+
+void findDocumentLocal(Node *n, ID *docId)
+{
+  if (n->status != PRESENT) {
+    printf("findDocumentLocal: node %d has been deleted in the meantime!\n", 
+	   n->id);
     return;
   }
 
-  if (findDocInList(n1->docList, docId))
-    printf("%f Document %d found on node %d\n", Clock, docId, n1->id);
-  else 
-    printf("%f Document %d NOT found on node %d\n", Clock, docId, n1->id);
-
-  RETURN(n->id, stack = popStack(stack));
+  if (findDocInList(n->docList, *docId)) {
+    static int i = 0;
+    printf("%f Document %d found on node %d (%d)\n", 
+	   Clock, *docId, n->id, i++);
+  } else {
+    static int i1 = 0, i2 = 0;
+    // separate between failures because douments
+    // were never inserted, and failures due to 
+    // lookup and node failures
+    if (findDocInList(&PendingDocs, *docId)) 
+      printf("%f Document %d not found on node %d (%d)\n", 
+	     Clock, *docId, n->id, i1++);
+    else
+      printf("%f Document %d NOT found on node %d (%d)\n", 
+	     Clock, *docId, n->id, i2++);
+  }
 }
 
-
-void insertDocument(Node *n, int *docId)
+void insertDocument(Node *n, ID *docId)
 {
-  Stack *stack;
+  Request *r;
 
-  stack = pushStack(NULL, newStackItem(n->id, insertDocument_return));
-  stack->data.key = *docId;
-  CALL(n->id, findSuccessor_entry, stack);
+  if (n->status != PRESENT) {
+    printf("insertDocument: n=%d was deleted in the meantime\n");
+    return;
+  }
+  r = newRequest(*docId, REQ_TYPE_INSERTDOC, REQ_STYLE_RECURSIVE, n->id);
+
+  insertRequest(n, r);
+
+  // keep the list of domuments not stored yet 
+  insertDocInList(&PendingDocs, newDoc(*docId));
 }
   
 
-void insertDocument_return(Node *n, Stack *stack)
+void insertDocumentLocal(Node *n, ID *docId)
 {
-  Stack *top = topStack(stack);
-  Node  *n1  = getNode(top->ret.nid);
-  int docId  = top->data.key;
   Document *doc;
 
-  if (!n1) {
+  if (n->status != PRESENT) {
     printf("insertReply: node has been deleted in the meantime!\n");
-    free(doc);
-    KILL_REQ(stack);
   } else {
-    /* allocate space for new document */
-    if ((doc = (Document *)calloc(1, sizeof(Document))) == NULL)
-      panic("insertReply: memory allocation error!\n");
-    
-    doc->id = docId;
-    
-    if (!insertDocInList(n1->docList, doc)) {
-      /* no room to insert document */
-      printf("cannot insert document %x at node %x\n", doc->id, n1->id); 
+    // allocate space for new document 
+    doc = newDoc(*docId);
+
+    if (!insertDocInList(n->docList, doc)) {
+      // no room to insert document 
+      printf("cannot insert document %x at node %x\n", doc->id, n->id); 
       free(doc);
       return;
-    } else
-      printf("The document %d inserted on node %d\n", docId, n1->id);
+    } else {
+      printf("The document %d inserted on node %d\n", *docId, n->id);
+      removeDocFromList(&PendingDocs, *docId);
+    }
   }
-
-  RETURN(n->id, stack = popStack(stack));
 }
-
 
 /* insert specified document at the head of document list 
  *   return TRUE if document successfully inserted, and FALSE otherwise
@@ -98,7 +112,6 @@ int insertDocInList(DocList *docList, Document *doc)
 
   if (docList->size >= MAX_NUM_DOCS) {
     /* no room available in document list */
-    printf("======\n");
     return FALSE;
   }
 
@@ -111,7 +124,7 @@ int insertDocInList(DocList *docList, Document *doc)
 }
 
 /* find document with key docId */
-Document *findDocInList(DocList *docList, DocId docId)
+Document *findDocInList(DocList *docList, ID docId)
 {
   Document *doc;
 
@@ -120,6 +133,32 @@ Document *findDocInList(DocList *docList, DocId docId)
       return doc;
 
   return NULL;
+}
+
+
+/* find document with key docId */
+void removeDocFromList(DocList *docList, ID docId)
+{
+  Document *d, *temp;
+
+  if (!docList->head)
+    return;
+
+  if (docList->head->id == docId) {
+    temp = docList->head;
+    docList->head = temp->next;
+    free(temp);
+    return;
+  }
+
+  for (d = docList->head; d->next; d = d->next) {
+    if (d->next->id == docId) {
+      temp = d->next;
+      d->next = temp->next;
+      free(temp);
+      return;
+    }
+  }
 }
 
 
@@ -140,17 +179,16 @@ void *freeDocList(Node *n)
 void updateDocList(Node *n)
 {
   Document *doc, *d;
-  Node     *s = getNode(n->successor);
+  Node     *s = getNode(getSuccessor(n)); 
   int       flag = FALSE;
 
-  if (n == s || n->status != PRESENT)
+  if (n == s || n->status == ABSENT)
     return;
 
   if (!s) {
     printf("updateDocList: node has been deleted in the meantime!\n");
     return;
   }
-
 
   /* move all documents x stored on s, and that are not between n and s,
    * to n, i.e., n is now closest to documents x than s
@@ -209,7 +247,31 @@ void moveDocList(Node *n1, Node *n2)
 }
 
 
+void printDocList(Node *n)
+{
+  Document *doc;
 
+  printf("   doc list: ");
+  for (doc = n->docList->head; doc; doc = doc->next) {
+    printf("%d", doc->id);
+    if (doc->next)
+      printf(", ");
+  }
+  printf("\n");
+}
 
+// print the document list that has not been inserted so far
+void printPendingDocs()
+{
+  Document *doc;
 
+  printf("Pending documents: ");
+
+  for (doc = (&PendingDocs)->head; doc; doc = doc->next) {
+    printf("%d", doc->id);
+    if (doc->next)
+      printf(", ");
+  }
+  printf("\n");
+}
                

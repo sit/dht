@@ -57,6 +57,9 @@ void readLine(FILE *fp)
     /* arg1 - nodeId; arg2 - argId; arg3 - time */
     if (getNode(arg1))
       genEvent(arg1, insertDocument, (void *)newInt(arg2), arg3);
+  } else if (strcmp(cmd, "exit") == 0) {
+    /* arg1 - time */
+    genEvent(0, exitSim, NULL, arg1);
   } else {
     printf("command \"%s\" not known!\n", cmd);
     panic("");

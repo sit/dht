@@ -1,88 +1,87 @@
-#include <stdlib.h>
-
+#include "stdlib.h"
 #include "incl.h"
 
-void stabilize_loop(Node *n, Stack *stack);
-void stabilize_succ(Node *n, Stack *stack);
-void stabilize_pred(Node *n, Stack *stack);
+ID chooseX(Node *n);
 
+// used for refreshing/updating nodes in the finger table.
+// ask for the successor of a value x, and insert/refresh that
+// successor (see processRequest) in the finger table
 
-/*******************************************************/
-/*       stabilize (always called by local node)
-/*******************************************************/
-  
 void stabilize(Node *n)
 {
-  notify_entry(n, NULL);
-}
+  Request *r;
+  Finger  *f;
+  ID       x[2], dst;
+  int      i;
 
-void stabilize_entry(Node *n, Stack *stack)
-{
-  Stack *top = topStack(stack);
-
-  if (n->status != PRESENT) {
-    Node *n1 = getNode(getRandomNodeId());
-    if (n1 && n1->status == PRESENT)
-      join_entry(n, n1);
+  if (n->status != PRESENT)
     return;
+
+
+  if (n->fingerList->head) {
+
+    x[0] = chooseX(n);
+    x[1] = successorId(n->id, 1);
+
+    i = (x[0] == x[1] ? 1 : 0);    
+      
+    for (; i < 2; i++) {
+      // printf("ooo c=%f, n=%d, x=%d\n", Clock, n->id, x[i]);
+      r = newRequest(x[i], REQ_TYPE_STABILIZE, REQ_STYLE_ITERATIVE, n->id);
+      getNeighbors(n, r->x, &(r->pred), &(r->succ));
+      
+      dst = r->succ;
+      if ((funifRand(0., 1.) < 0.1) && 
+	  (n->fingerList->size <  MAX_NUM_FINGERS))
+	dst = getRandomActiveNodeId();
+      if (dst != n->id) {
+	if (f = getFinger(n->fingerList, r->succ))
+	  f->expire = Clock + 2*PROC_REQ_PERIOD;
+	// insert request at r.x's successor
+	genEvent(dst, insertRequest, (void *)r, 
+	       Clock + intExp(AVG_PKT_DELAY));
+      }
+    }
   }
 
-  stack = pushStack(stack, newStackItem(n->id, stabilize_loop));
-  topStack(stack)->data.i = 0;
-  CALL(n->id, stabilize_loop, stack);
+  genEvent(n->id, stabilize, (void *)NULL, 
+	   Clock + unifRand(0.5*STABILIZE_PERIOD, 1.5*STABILIZE_PERIOD));
 }
 
-void stabilize_loop(Node *n, Stack *stack)
+
+// choose value x for stabilization
+ID chooseX(Node *n)
 {
-  Stack *top = topStack(stack);
-  int      i = top->data.i;
+  ID      x;
+  Finger *f;
+  int     next;
+#define PROB_FINGER    0.5
 
-  /*
-  for (; i < NUM_BITS; i++)
-    if (n->finger[i] != n->id)
-      break;
-  */
-  if (i < NUM_BITS) {
-    top->data.i = i;
-    top->fun = stabilize_succ;
-    CALL(n->finger[i], getPredecessor, stack);
+  // refresh a finger n+2^{i-1} with probability PROB_FINGER 
+  if (funifRand(0., 1.) < PROB_FINGER) {
+    if (n->fingerId >= NUM_BITS)
+      n->fingerId = 1;
+    x = successorId(n->id, (1 << n->fingerId));
+    n->fingerId++;
+    return x;
   } else {
-    top->fun = stabilize_pred;
-    CALL(n->predecessor, getSuccessor, stack);
+    // refresh an arbitrary finger in the list
+    if (!n->fingerList->head)
+      panic("chooseX: fingerList empty!\n");
+#define NUM_SUCCS 4
+    next = 0;
+    if ((n->fingerList->size >= NUM_SUCCS) && funifRand(0., 1.) < 0.5) {
+      next = unifRand(0, 2);
+      x = unifRand(0, NUM_SUCCS);
+    } else
+      x = unifRand(0, n->fingerList->size);
+    for (f = n->fingerList->head; (f && x--) ; f = f->next);
+    if (!f)
+      panic("chooseX: end of fingerList reached!\n");
+    return successorId(f->id, next);
   }
 }
 
+      
 
-void stabilize_succ(Node *n, Stack *stack)
-{ 
-  Stack *top = topStack(stack);
-  int     id = top->ret.nid;
-  int      i = top->data.i;
-
-  if (id == fingerStart(n, i) || 
-      between(id, fingerStart(n, i), n->finger[i], NUM_BITS)) {
-    setFinger(n, i, id);
-  }
-  (top->data.i)++;
-  CALL(n->id, stabilize_loop, stack);
-}
-
-void stabilize_pred(Node *n, Stack *stack)
-{ 
-  Stack *top = topStack(stack);
-  int     id = top->ret.nid;
- 
-  if (between(id, n->predecessor, n->id, NUM_BITS)) 
-    n->predecessor = id;
-  top->fun = stabilize_pred;
-  top->data.nid  = n->id;
-
-  /* invoke stabilize */
-  if (n->status == PRESENT)
-    genEvent(n->id, stabilize_entry, (void *)NULL, 
-	     Clock + unifRand(0.5*STABILIZE_PERIOD, 1.5*STABILIZE_PERIOD));
-
-  updateDocList(n);
-  RETURN(n->id, stack = popStack(stack));
-}
-
+    
