@@ -51,6 +51,10 @@ public:
     if (this->find(s) == this->end()) return defaultv;
     return atof((*this)[s].c_str());
   }
+  string sget(string s, string defaultv="?") {
+    if (this->find(s)==this->end()) return defaultv;
+    return ((*this)[s]);
+  }
 };
 
 #endif // __ARGS_H

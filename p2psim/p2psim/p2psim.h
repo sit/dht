@@ -40,7 +40,7 @@
 
 // multiply per-thread stack size by ...
 #define DEFAULT_THREAD_STACKSIZE 4096
-#define THREAD_MULTIPLY 6
+#define THREAD_MULTIPLY 2
 
 extern unsigned p2psim_verbose;
 

@@ -67,6 +67,7 @@ public:
   // statistic collection
   typedef uint stat_type;
   const static stat_type STAT_LOOKUP = 0;
+  unsigned long get_out_bw_stat() { return node_live_outbytes;}
   void record_bw_stat(stat_type type, uint num_ids, uint num_else);
   static void record_inout_bw_stat(IPAddress src, IPAddress dst, uint num_ids, uint num_else);
   void record_in_bytes(uint b) { node_live_inbytes += b;}

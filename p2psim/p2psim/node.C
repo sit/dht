@@ -423,16 +423,20 @@ Node::print_stats()
 
   //print out b/w distribution of out b/w
   cout <<  "BW_PERNODE_IN:: ";
-  print_dist_stats(_per_node_in);
+  if (_per_node_in.size())
+    print_dist_stats(_per_node_in);
 
   cout << "BW_PERNODE:: ";
-  print_dist_stats(_per_node_out);
+  if (_per_node_out.size())
+    print_dist_stats(_per_node_out);
 
   cout << "BW_SPENODE_IN:: ";
-  print_dist_stats(_special_node_in);
+  if (_special_node_in.size())
+    print_dist_stats(_special_node_in);
 
   cout << "BW_SPENODE:: ";
-  print_dist_stats(_special_node_out);
+  if (_special_node_out.size())
+    print_dist_stats(_special_node_out);
 
   // then do lookup stats
   double total_lookups = _correct_lookups.size() + _incorrect_lookups.size() +
