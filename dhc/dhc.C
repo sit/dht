@@ -33,6 +33,7 @@ dhc::recon (chordID bID)
       b->meta->proposal.seqnum += 1;
       b->meta->proposal.proposer = myNode->my_ID ();
       b->meta->pstat.promise_recvd = 0;
+      b->meta->pstat.accept_recvd = 0;
       db->insert (id2dbrec (bID), to_dbrec (b));
       
       ptr<dhc_prepare_arg> arg = New refcounted<dhc_prepare_arg> ();
@@ -103,7 +104,6 @@ dhc::recv_accept (ptr<dhc_block> b, ref<dhc_propose_res> proposal,
   if (!err && proposal->status == DHC_OK) {
     b->meta->pstat.accept_recvd++;
     if (b->meta->pstat.accept_recvd > n_replica/2) {
-      //insert b into db
       ptr<dhc_newconfig_arg> arg = New refcounted<dhc_newconfig_arg>;
       arg->bID = b->id;
       arg->data = *b->data; //Good enough?
@@ -117,6 +117,11 @@ dhc::recv_accept (ptr<dhc_block> b, ref<dhc_propose_res> proposal,
 	myNode->doRPC (dest, dhc_program_1, DHCPROC_NEWCONFIG, arg, res,
 		       wrap (this, &dhc::recv_newconfig_ack, b, res));
       }
+
+      //End of recon protocol !!!
+      warn << "dhc::recv_accept End of recon for block " << b->id << "\n";
+      b->meta->pstat.recon_inprogress = false;
+      db->insert (id2dbrec (b->id), to_dbrec (b));
     }
   } else
     print_error ("dhc:recv_propose", errno, proposal->status);
