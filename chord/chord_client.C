@@ -143,6 +143,12 @@ chord::newvnode (cbjoin_t cb)
   warn << "insert: " << newID << "\n";
   vnodes.insert (newID, vnodep);
 
+  // Must block until at least one good node in table...
+  while (!locations->challenged (wellknownID)) {
+    warnx << newID << ": Waiting for challenge of wellknown ID\n";
+    acheck ();
+  }
+  
   if (newID != wellknownID) {
     vnodep->join (cb);
   } else {
@@ -237,8 +243,8 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
   chord_vnode *v = sbp->template getarg<chord_vnode> ();
   vnode *vnodep = vnodes[v->n];
   if (!vnodep) {
-    warnx << "CHORD: unknown node in " << sbp->proc() 
-	  << "request " << v->n << "\n";
+    warnx << "CHORD: unknown node processing procedure " << sbp->proc ()
+	  << " request " << v->n << "\n";
     sbp->replyref (chordstat (CHORD_UNKNOWNNODE));
     return;
   }

@@ -339,6 +339,7 @@ class vnode : public virtual refcount, public stabilizable {
   void alert_cb (chordstat *res, clnt_stat err);
   void get_fingers (chordID &x);
   void get_fingers_cb (chordID x, chord_getfingersres *res, clnt_stat err);
+  void get_fingers_chal_cb (chordID o, chordID x, bool ok, chordstat s);
 
   void doalert_cb (svccb *sbp, chordID x, chordID s, net_address r, 
 		   chordstat stat);

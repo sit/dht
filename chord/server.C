@@ -200,31 +200,23 @@ void
 vnode::testrange_fcp_done_cb (findpredecessor_cbstate *st,
 			      chordID s, bool ok, chordstat status)
 {
-#if 0  
   if (ok && status == CHORD_OK) {
-    warnx << "testrange_findclosest_pred: last challenge ok for " << s << "\n";
-#endif /* 0 */
     st->search_path.push_back (s);
     assert (st->search_path.size () < 1000);
     st->cb (st->search_path.back (), st->search_path, CHORD_OK);
     delete st;
-#if 0    
   } else {
-    warnx << "testrange_findclosest_pred: last challenge for "
+    warnx << myID << ": testrange_findclosest_pred: last challenge for "
 	  << s << " failed.\n";
     assert (0); // XXX handle malice more intelligently
   }
-#endif /* 0 */  
 }
 
 void
 vnode::testrange_fcp_step_cb (findpredecessor_cbstate *st,
 			      chordID s, bool ok, chordstat status)
 {
-#if 0  
   if (ok && status == CHORD_OK) {
-    warnx << "testrange_findclosest_pred: step challenge ok for " << s << "\n";
-#endif /* 0 */    
     st->search_path.push_back (s);
     if (st->search_path.size () >= 1000) {
       warnx << "PROBLEM: too long a search path: " << myID << " looking for "
@@ -235,13 +227,11 @@ vnode::testrange_fcp_step_cb (findpredecessor_cbstate *st,
       assert (0);
     }
     testrange_findclosestpred (s, st->x, st);
-#if 0    
   } else {
-    warnx << "testrange_findclosest_pred: step challenge for "
+    warnx << myID << ": testrange_findclosest_pred: step challenge for "
 	  << s << " failed.\n";
     assert (0); // XXX handle malice more intelligently
   }
-#endif /* 0 */  
 }
   
 
@@ -316,12 +306,24 @@ vnode::get_fingers_cb (chordID x, chord_getfingersres *res,  clnt_stat err)
   } else if (res->status) {
     warnx << "get_fingers_cb: RPC error " << res->status << "\n";
   } else {
-    // XXX we should challenge the new entries!
-    for (unsigned i = 0; i < res->resok->fingers.size (); i++) 
-      fingers->updatefinger (res->resok->fingers[i].x, 
-			     res->resok->fingers[i].r);
+    for (unsigned i = 0; i < res->resok->fingers.size (); i++)
+      locations->cacheloc (res->resok->fingers[i].x, 
+			   res->resok->fingers[i].r,
+			   wrap (this, &vnode::get_fingers_chal_cb, x));
   }
   delete res;
+}
+
+void
+vnode::get_fingers_chal_cb (chordID o, chordID x, bool ok, chordstat s)
+{
+  if (ok && s == CHORD_OK)
+    fingers->updatefinger (x);
+  else if (s == CHORD_RPCFAILURE) {
+    // maybe test for something else??
+    // XXX alert o perhaps?
+    warnx << myID << ": get_fingers: received bad finger from " << o << "\n";
+  }
 }
 
 void

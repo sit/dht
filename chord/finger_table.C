@@ -317,9 +317,15 @@ finger_table::stabilize_getpred_cb (chordID sd,
   if (status) {
     warnx << myID << ": stabilize_getpred_cb " << sd
 	  << " failure status " << status << "\n";
-    stable_fingers = false;
-    if (status == CHORD_RPCFAILURE)
-      myvnode->deletefingers (sd);
+    if (status == CHORD_ERRNOENT) {
+      warnx << myID << ": stabilize_getpred_cb " << sd
+	    << " doesn't know about his predecessor?? notifying...\n";
+      myvnode->notify (sd, myID);
+    } else {
+      stable_fingers = false;
+      if (status == CHORD_RPCFAILURE)
+	myvnode->deletefingers (sd);
+    }
     nout_continuous--;
   } else {
     if (better_ith_finger (1, p)) {

@@ -168,6 +168,7 @@ bool
 locationtable::lookup_anyloc (chordID &n, chordID *r)
 {
   for (location *l = locs.first (); l != NULL; l = locs.next (l)) {
+    if (!l->challenged) continue;
     if (l->n != n) {
       *r = l->n;
       return true;
@@ -193,6 +194,7 @@ chordID
 locationtable::closestsuccloc (chordID x) {
   chordID n = x;
   for (location *l = locs.first (); l; l = locs.next (l)) {
+    if (!l->challenged) continue;
     if (l->refcnt == 0) continue;
     if ((x == n) || between (x, n, l->n)) n = l->n;
   }
@@ -211,6 +213,7 @@ locationtable::closestpredloc (chordID x)
 {
   chordID n = x;
   for (location *l = locs.first (); l; l = locs.next (l)) {
+    if (!l->challenged) continue;
     if (l->refcnt == 0) continue;
     if ((x == n) || betterpred1 (n, x, l->n)) n = l->n;
   }
@@ -249,6 +252,7 @@ locationtable::updateloc (chordID &x, net_address &r, cbchallengeID_t cb)
 	locs[x]->addr.port     != r.port) {
       warnx << "locationtable::updateloc: address changed!!!\n";
       locs[x]->addr = r;
+      locs[x]->challenged = false;
       challenge (x, cb);
     } else if (cb != cbchall_null) {
       // warnx << "UPDATELOC (old): " << x << " at port " << r.port << "\n";

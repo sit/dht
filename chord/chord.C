@@ -312,10 +312,15 @@ vnode::updatepred_cb (chordID p, bool ok, chordstat status)
       fingers->updatefinger (predecessor.n);
       get_fingers (predecessor.n); // XXX perhaps do this only once after join
     }
-  } else if (status == CHORD_OK) {
-    warnx << "updatepred_cb: couldn't authenticate " << p << "\n";
-    // or not yet authenticated, if called from cacheloc or updateloc
   }
+  else if (status == CHORD_RPCFAILURE) {
+    warnx << myID << ": updatepred_cb: couldn't authenticate " << p << "\n";
+  }
+  // If !ok but status == CHORD_OK, then there's probably another
+  // outstanding call somewhere that is already testing this same
+  // node. We can ignore the failure and wait until the outstanding
+  // challenge returns. If they all fail, then we'll never get called
+  // and that's okay too.
 }
 
 void
