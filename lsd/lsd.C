@@ -163,7 +163,7 @@ parseconfigfile (str cf, int nvnode, int set_rpcdelay)
   int cs = 1000;
   myport = 0;
   int max_connections = 400;
-  int max_loccache = 250;
+  int max_loccache = 100;
 
   while (pa.getline (&av, &line)) {
     if (!strcasecmp (av[0], "#")) {
@@ -243,6 +243,7 @@ parseconfigfile (str cf, int nvnode, int set_rpcdelay)
   if (!myhost) {
     myhost = myname ();
   }
+  max_loccache = max_loccache * nvnode;
   chordnode = New refcounted<chord> (wellknownhost, wellknownport, 
 				     wellknownID, myport, myhost, set_rpcdelay,
 				     max_loccache, max_connections);
