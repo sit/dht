@@ -27,7 +27,7 @@
 
 #include "cs_output.h"
 
-cs_output::cs_output(int as, callback<void>::ptr foo, cs_client *acs, callback<void>::ptr adpcb)
+cs_output::cs_output(int as, callback<void>::ptr foo, data_sender *acs, callback<void>::ptr adpcb)
 {
   s = as;
   nomore = false;
@@ -39,10 +39,11 @@ cs_output::cs_output(int as, callback<void>::ptr foo, cs_client *acs, callback<v
 }
 
 bool
-cs_output::take(const char *buf, int len, cs_client *c)
+cs_output::take(const char *buf, int len, data_sender *c)
 {
   take(buf, len);
   if(out.resid() >= 256*1024) {
+    warn << "tosleep\n";
     sleeping.insert_tail(c);
     return false;
   } else
@@ -72,6 +73,7 @@ cs_output::cb(void)
   timecb_remove(timeout);
   timeout = NULL;
 
+  warn << "go\n";
   int res = out.output(s);
   if(res == 0)
     warn << (int)cs << " sEAGAIN\n";
@@ -85,7 +87,8 @@ cs_output::cb(void)
     bytes_out += tmp - out.resid();
 
   if((out.resid() < 256*1024) && sleeping.first) { //FIXME tune?
-    sleeping.first->dir_wakeup();
+    warn << "wakup\n";
+    sleeping.first->wakeup();
     sleeping.remove(sleeping.first);
   }
 
@@ -101,7 +104,9 @@ warn << (int)cs << " wrote " << bytes_out << " bytes\n";
     return;
   }
 
-  timeout = delaycb(10, 0, wrap(this, &cs_output::died));
+  if(!timeout)
+    timeout = delaycb(10, 0, wrap(this, &cs_output::died));
+  warn << "e2\n";
 }
 
 void

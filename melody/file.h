@@ -62,7 +62,7 @@ class melody_file : public virtual refcount {
   int size, wsize, venti_depth, outstanding;
   melody_block cbuf;
   venti_block *vstack;
-  tailq < cs_client, &cs_client::sleep_link > sleeping;
+  tailq < cs_client, &cs_client::sleep_link2 > sleeping;
   callback<void, const char *, int, int>::ptr read_cb;
   suio wbuf;
   callback<void>::ptr error_cb;

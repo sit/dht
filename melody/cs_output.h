@@ -28,7 +28,14 @@
  */
 
 #include "async.h"
-#include "cs_client.h"
+#include "list.h"
+
+class data_sender {
+ public:
+  virtual void wakeup() = 0;
+  tailq_entry<data_sender> sleep_link;
+  virtual ~data_sender() {};
+};
 
 class cs_output {
   int s;
@@ -36,18 +43,18 @@ class cs_output {
   suio out;
   bool nomore;
   callback<void>::ptr ccd, dpcb;
-  cs_client *cs;
-  tailq < cs_client, &cs_client::sleep_link > sleeping;
+  data_sender *cs;
+  tailq < data_sender, &data_sender::sleep_link > sleeping;
 public:
   int bytes_out;
-  bool take(const char *buf, int len, cs_client *c);
+  bool take(const char *buf, int len, data_sender *c);
   void take(const char *buf, int len);
   void take(const char *buf);
   void cb(void);
   void done(void);
   void died(void);
   ~cs_output();
-  cs_output(int as, callback<void>::ptr foo, cs_client *cs, callback<void>::ptr adpcb);
+  cs_output(int as, callback<void>::ptr foo, data_sender *cs, callback<void>::ptr adpcb);
 };
 
 #endif

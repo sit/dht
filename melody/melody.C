@@ -86,7 +86,7 @@ cs_client::put2sleep()
 }
 
 void
-cs_client::dir_wakeup()
+cs_client::wakeup()
 {
   f->next();
 }
@@ -488,11 +488,13 @@ main (int argc, char *argv[])
 }
 
 // FIXME todos:
+// adding files is way too hard. horrible commandline utility with idiosyncractic nature. need some graphical drag-and-drop simplicity.
+
 // why not use apache? -can't use real dirs, must use cgi arg instead
 //                     -do redirects work?
 //                     -can cgi's read in MIME posted files?
 //                     -can cgi's throttle outgoing bytes?
-//                     -how to synchronize multiple users of dhash pipe?
+//    ** nevermind ->  -how to synchronize multiple users of dhash unix domain socket?
 // look at fixed-size buffers. some are "bad"
 // reverse sort by time
 // make sure error web page is returned for every error condition. (memory leaks otherwise?)

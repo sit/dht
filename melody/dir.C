@@ -119,7 +119,10 @@ void
 dir::opendir_got_venti(cbretrieve_t cbr, ptr<dhash_block> blk)
 {
   if(!blk) {
-    warn << (int)cs << " no such path found: " << pathelm.front() << "\n";
+    warn << (int)cs << " no such path found: ";
+    if(pathelm.front())
+      warn << pathelm.front();
+    warn << "\n";
     // FIXME error reporting
     return;
   }

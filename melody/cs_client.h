@@ -27,15 +27,13 @@
  *
  */
 
-class cs_output;
-
 #include "async.h"
 #include "http.h"
 #include "list.h"
 #include "dirpage.h"
-//#include "cs_output.h"
+#include "cs_output.h"
 
-class cs_client {
+class cs_client : public data_sender {
   int s;
   in_addr ip;
   ptr<melody_file>f;
@@ -52,12 +50,12 @@ class cs_client {
 
 public:
   static int num_active;
-  tailq_entry <cs_client> sleep_link;
 
   cs_client(int cfd, callback<void>::ptr am, in_addr aip);
   ~cs_client();
+  tailq_entry <cs_client> sleep_link2;
   void readcb_wakeup();
-  void dir_wakeup();
+  void wakeup();
 
 private:
   void xfer_done(str status);
