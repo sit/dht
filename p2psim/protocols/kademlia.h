@@ -286,8 +286,6 @@ public:
   struct lookup_wrapper_args {
     NodeID key;
     Time starttime;
-    unsigned timeout_count;
-    Time timeout_time;
     unsigned attempts;
   };
   // }}}

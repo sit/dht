@@ -480,8 +480,6 @@ Kademlia::lookup(Args *args)
   lookup_wrapper_args *lwa = new lookup_wrapper_args();
   lwa->key = key;
   lwa->starttime = now();
-  lwa->timeout_count = 0;
-  lwa->timeout_time = 0;
   lwa->attempts = 0;
 
   lookup_wrapper(lwa);
@@ -521,8 +519,7 @@ Kademlia::lookup_wrapper(lookup_wrapper_args *args)
     after = now();
 
     record_lookup_stat(ip(), fr.succ.ip, after - args->starttime, true, true,
-		       0 /* hops */, 0 /* num_timeouts */ , 
-		       0 /* time_timeouts */);
+		       fr.hops, fr.timeouts, fr.spent_in_timeout);
     if(outcounter++ >= 1000) {
       KDEBUG(0) <<  pingbegin - args->starttime << "ms lookup (" << args->attempts << "a, " << fr.hops << "h, " << fr.rpcs << "r, " << fr.timeouts << "t), " << after - pingbegin << "ms ping, " << after - args->starttime << "ms total." << endl;
       outcounter = 0;
@@ -552,10 +549,10 @@ Kademlia::lookup_wrapper(lookup_wrapper_args *args)
   if(now() - args->starttime > Kademlia::max_lookup_time) {
     if(alive_and_joined) {
       _bad_failures++;
-      record_lookup_stat(ip(), target_ip, after - args->starttime, false, false, 0 /* hops */, args->timeout_count, args->timeout_time);
+      record_lookup_stat(ip(), target_ip, after - args->starttime, false, false, fr.hops, fr.timeouts, fr.spent_in_timeout);
     } else {
       _ok_failures++;
-      record_lookup_stat(ip(), target_ip, after - args->starttime, true, false, 0 /* hops */, args->timeout_count, args->timeout_time);
+      record_lookup_stat(ip(), target_ip, after - args->starttime, true, false, fr.hops, fr.timeouts, fr.spent_in_timeout);
     }
     _bad_attempts += args->attempts;
     delete args;
@@ -665,6 +662,7 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
     if(all_dead) {
       deadtime = true;
       deadtimestart = now();
+      fresult->timeouts++;
     }
   }
 
@@ -692,7 +690,6 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
     // node was dead
     closer::n = fargs->key;
     if(!ok) {
-      fresult->timeouts++;
       if(flyweight[ci->ki.id])
         erase(ci->ki.id);
       delete ci;
@@ -773,6 +770,7 @@ next_candidate:
         if(all_dead) {
           deadtime = true;
           deadtimestart = now();
+          fresult->timeouts++;
         }
       }
     }
