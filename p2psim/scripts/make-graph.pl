@@ -28,6 +28,7 @@ my $hullparen = "";
 my $grid = 0;
 my $rtmgraph = 0;
 my $fontsize = 26;
+my $linewidth = 1;
 
 sub usage {
     select(STDERR);
@@ -80,6 +81,7 @@ make-graph.pl [options]
 				 statistic or parameter.  Defaults to
 			         "LOOKUP_RATES:success".
     --fontsize <size>         How big is the font?  Default=26.
+    --linewidth <size>        How fat are the lines?  Default=1.
     --rtmgraph                Only valid with --param and --convex.  Holds all
                                  parameters but --param constant to values of
 				 points on the convex hull, and shows the
@@ -109,7 +111,7 @@ my %options;
 	     "param=s", "paramname=s", "datfile=s@", "label=s@", 
 	     "xrange=s", "yrange=s", "xlabel=s", "ylabel=s@", "title=s", 
 	     "convex:s", "plottype=s", "grid", "rtmgraph", "hulllabel:s",
-	     "overallconvex:s", "fontsize=s", "extend" )
+	     "overallconvex:s", "fontsize=s", "linewidth=s", "extend" )
     or &usage;
 
 if( $options{"help"} ) {
@@ -261,6 +263,9 @@ if( defined $options{"rtmgraph"} ) {
 }
 if( defined $options{"fontsize"} ) {
     $fontsize = $options{"fontsize"};
+}
+if( defined $options{"linewidth"} ) {
+    $linewidth = $options{"linewidth"};
 }
 
 #figure out label issues
@@ -1160,6 +1165,8 @@ foreach my $file (@iterfiles) {
 	if( defined $options{"overallconvex"} and 
 	    defined $labelhash{"$file.overall"} ) {
 	    print GP " lw 6";
+	} else {
+	    print GP " lw $linewidth";
 	}
 
 	if( @convexfiles ) {
@@ -1253,7 +1260,8 @@ foreach my $file (@iterfiles) {
 
 		print GP ", \"$datfile\" using " . 
 		    "($xparen\$$oldxpos):($yparen[$k]\$$oldypos) " . 
-		    "$t with $type lt " . ($k+($j-1)*($#ystat+1)+1);
+		    "$t with $type lw $linewidth lt " . 
+			($k+($j-1)*($#ystat+1)+1);
 
 	    }
 
