@@ -65,12 +65,13 @@ struct rpc_state {
   aclnt_cb cb;
   chordID ID;
   u_int64_t s;
+  int progno;
   long seqno;
   rpccb_chord *b;
   int rexmits;
-
-  rpc_state (aclnt_cb c, chordID id, u_int64_t S, long s) 
-    : cb (c), ID (id), s (S),  seqno (s), b (NULL), rexmits (0) {};
+  
+  rpc_state (aclnt_cb c, chordID id, u_int64_t S, long s, int p) 
+    : cb (c), ID (id), s (S), progno (p), seqno (s), b (NULL), rexmits (0) {};
 
 };
 
@@ -171,6 +172,7 @@ class locationtable : public virtual refcount {
   void ratecb ();
   void update_cwind (int acked);
   void rexmit_handler (rpc_state *s);
+  void timeout (rpc_state *s);
   void enqueue_rpc (RPC_delay_args *args);
   void rpc_done (long seqno);
   void reset_idle_timer ();

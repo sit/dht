@@ -26,6 +26,7 @@
  */
 
 #include "chord.h"
+#include "dhash_prot.h"
 #include "math.h"
 
 #define TIMEOUT 10
@@ -100,11 +101,11 @@ locationtable::doRPC_issue (chordID &ID,
   assert (l->refcnt >= 0);
   touch_cachedlocs (l);
   
-  rpc_state *C = New rpc_state (cb, ID, getusec (), seqno);
+  rpc_state *C = New rpc_state (cb, ID, getusec (), seqno, prog.progno);
   
   C->b = rpccb_chord::alloc (c, 
 			     wrap (this, &locationtable::doRPCcb, c, C),
-			     wrap (this, &locationtable::rpc_done, -1),
+			     wrap (this, &locationtable::timeout, C),
 			     in,
 			     out,
 			     procno, 
@@ -120,6 +121,12 @@ locationtable::doRPC_issue (chordID &ID,
   seqno++;
 }
 
+void
+locationtable::timeout (rpc_state *C)
+{
+  C->s = 0;
+  rpc_done (-1);
+}
 
 void
 locationtable::doRPCcb (ptr<aclnt> c, rpc_state *C, clnt_stat err)
@@ -131,7 +138,7 @@ locationtable::doRPCcb (ptr<aclnt> c, rpc_state *C, clnt_stat err)
     chordnode->deletefingers (C->ID);
   } else if (C->s > 0) {
     u_int64_t lat = getusec () - C->s;
-    update_latency (C->ID, lat, false);
+    update_latency (C->ID, lat, (C->progno == DHASH_PROGRAM));
   }
 
   (C->cb) (err);
