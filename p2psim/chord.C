@@ -13,7 +13,7 @@ using namespace std;
 extern bool vis;
 extern bool static_sim;
 
-#undef CHORD_DEBUG
+#define CHORD_DEBUG
 Chord::Chord(Node *n, Args& a, LocTable *l)
   : DHTProtocol(n), _isstable (false)
 {
@@ -117,9 +117,11 @@ Chord::lookup(Args *args)
     printf("%s lookup start\n",ts());
     vector<IDMap> v = find_successors(k, 1, false, true); 
     if (v.size() == 0) {
-      if (node()->alive())
+      if (node()->alive()) {
 	printf("%s lookup failed %16qx interval %llu\n", ts(),k, 
 	    now() - begin);
+	return;
+      }
     }else{
       result = v[0];
       uint lat = t->latency(me.ip, v[0].ip);
@@ -133,7 +135,19 @@ Chord::lookup(Args *args)
   IDMap tmp;
   tmp.id = k;
   uint pos = upper_bound(ids.begin(), ids.end(), tmp, Chord::IDMap::cmp) - ids.begin();
-  assert(ids[pos].ip == result.ip);
+  while (1) {
+    Node *n = Network::Instance()->getnode(ids[pos].ip);
+    if (n->alive()) 
+      break;
+    pos++;
+    if (pos >= ids.size()) 
+      pos = 0;
+  }
+  if (ids[pos].ip == result.ip) {
+    printf("%s lookup result correct %u,%16qx for key %16qx \n", ts(), result.ip, result.id, k);
+  }else{
+    printf("%s lookup result incorrect %u,%16qx for key %16qx, should be %u,%qx\n", ts(), result.ip, result.id, k, ids[pos].ip, ids[pos].id);
+  }
 #endif
 }
 
@@ -166,10 +180,6 @@ Chord::find_successors(CHID key, uint m, bool intern, bool is_lookup)
   na.key = key;
   na.m = m;
 
-#ifdef CHORD_DEBUG
-  CHID diff = key - me.id;
-#endif
-
   IDMap nprime = me;
 
   route.clear();
@@ -192,15 +202,6 @@ Chord::find_successors(CHID key, uint m, bool intern, bool is_lookup)
 
     if(r && nr.done){
       route.push_back(nr.v[0]);
-#ifdef CHORD_DEBUG
-      printf("%s find_successor %qx route: ",ts(), key);
-      for (unsigned int i = 0; i < route.size(); i++) {
-	CHID tmpdiff = key - route[i].id;
-	printf("(%u,%qx %.5f) ", route[i].ip, route[i].id, ((double)tmpdiff)/((double) diff));
-      }
-      printf("\n");
-#endif
-
       //actually talk to the successor
       record_stat(is_lookup?1:0);
       if (_vivaldi) {
@@ -214,11 +215,6 @@ Chord::find_successors(CHID key, uint m, bool intern, bool is_lookup)
 
       break;
     } else if (r) {
-#ifdef CHORD_DEBUG
-      CHID newdiff = key - nr.next.id;
-      assert(ConsistentHash::between(me.id, key, nr.next.id));
-      assert(newdiff < diff);
-#endif
       route.push_back(nr.next);
       assert(route.size() < 15);
       nprime = nr.next;
@@ -462,7 +458,7 @@ Chord::stabilize()
   fix_successor ();
 
   IDMap succ1 = loctable->succ(me.id+1);
-  assert(succ1.ip < 513);
+  assert(succ1.ip < 1025);
 
   if (succ1.ip != oldsucc.ip) {
 
@@ -704,6 +700,9 @@ Chord::IDMap
 LocTable::succ(ConsistentHash::CHID id)
 {
   vector<Chord::IDMap> v = succs(id, 1);
+  if (size() == 1) {
+    return me;
+  }
   assert(v.size() > 0);
   return v[0];
   /*
@@ -738,6 +737,9 @@ LocTable::succ(ConsistentHash::CHID id)
 vector<Chord::IDMap>
 LocTable::succs(ConsistentHash::CHID id, unsigned int m)
 {
+  //XXX now it is a special case
+  assert(id == (me.id + 1));
+
   vector<Chord::IDMap> v;
   v.clear();
 
@@ -747,33 +749,24 @@ LocTable::succs(ConsistentHash::CHID id, unsigned int m)
   if (m <= 0) return v;
 
   idmapwrap *ptr = ring.closestsucc(id);
-  if (!ptr) {
-    fprintf(stderr,"null ptr sz %d\n",size());
-    assert(0);
-  }
+  assert(ptr);
   idmapwrap *ptrnext;
-
-  uint rsz = size();
-  uint deleted = 0;
 
   uint j = 0;
   while (j < m) {
     ptrnext = ring.next(ptr);
     if (!ptrnext) ptrnext = ring.first();
 
-    assert(ptr);
+    if (ptr->id == me.id) break; //i should never timeout myself
+
     if ((!_timeout)||(t - ptr->timestamp) < _timeout) {
       v.push_back(ptr->n);
       j++;
     }else{
-      assert(0);
       ring.remove(ptr->id);
       delete ptr;
-      deleted++;
     }
     ptr = ptrnext;
-    if (ptr->n.ip == me.ip) break;;
-    if ((rsz - deleted) < (m +1)) break;
   }
   return v;
 }
@@ -789,27 +782,26 @@ LocTable::pred(Chord::CHID id)
 {
   assert (ring.repok ());
   idmapwrap *elm = ring.closestpred(id);
+  assert(elm);
   idmapwrap *elmprev;
 
-  uint rsz = size();
-  uint deleted = 0;
   Time t = now();
+  uint deleted = 0;
+  uint rsz = ring.size();
   while (1) {
-
     elmprev = ring.prev(elm);
     if (!elmprev) elmprev = ring.last();
 
-    assert(elm && elm->n.ip);
-    if ((!_timeout) || (t - elm->timestamp < _timeout)) {
+    if ((!_timeout) || (elm->id == me.id)
+	|| (t - elm->timestamp < _timeout)) { //never delete myself
       break;
     }else {
-      assert(0);
       ring.remove(elm->id);
       delete elm;
       deleted++;
       elm = elmprev;
     }
-    assert((rsz - deleted > 1) && (elm->id != me.id));
+    assert((rsz - deleted >= 1));
   }
   assert(elm->n.id == me.id || ConsistentHash::betweenrightincl(me.id, id, elm->n.id));
   return elm->n;
@@ -875,7 +867,7 @@ LocTable::add_node(Chord::IDMap n)
   Chord::IDMap succ1; 
   Chord::IDMap pred1; 
 
-  assert(n.ip > 0 && n.ip < 513);
+  assert(n.ip > 0 && n.ip < 1025);
   if (vis) {
     succ1 = succ(me.id+1);
     pred1 = pred();
