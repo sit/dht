@@ -47,8 +47,7 @@ merkle_server::dispatch (user_args *sbp)
       if (lnode_depth != rnode->depth) {
 	warn << "local depth ( " << lnode_depth 
 	     << ") is not equal to remote depth (" << rnode->depth << ")\n";
-	warn << "prefix is " << lnode_prefix << "\n";
-	fatal << "exiting\n";
+	warn << "prefix is " << rnode->prefix << "\n";
       }
       lnode_prefix = rnode->prefix;
       // XXX isn't this a NOP, given the previous assertion about equal depths 

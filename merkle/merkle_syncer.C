@@ -210,7 +210,6 @@ merkle_syncer::sendnode_cb (ref<sendnode_arg> arg, ref<sendnode_res> res,
 
 
   merkle_rpc_node *rnode = &res->resok->node;
-  assert (rnode->depth == arg->node.depth); // XXX relax this
 
   merkle_node *lnode = ltree->lookup_exact (rnode->depth, rnode->prefix);
   if (!lnode) {
