@@ -43,7 +43,7 @@ dhashclient::dispatch (svccb *sbp)
 
       chordID next = clntnode->lookup_closestpred (arg->key);
       //chordID next = clntnode->clnt_ID ();
-      warn << clntnode->clnt_ID () << " " << arg->key  << " " << next << "\n";
+      //      warn << clntnode->clnt_ID () << " " << arg->key  << " " << next << "\n";
       dhash_fetchiter_res *i_res = New dhash_fetchiter_res (DHASH_CONTINUE);
       route path;
       path.push_back (next);
@@ -277,7 +277,6 @@ dhashclient::lookup_iter_cb (svccb *sbp,
   } else if (res->status == DHASH_CONTINUE) {
     chordID next = res->cont_res->next.x;
     chordID prev = path.back ();
-    //    warn << "node " << prev << " returned " << next << "\n";
     if ((next == prev) || (straddled (path, arg->key))) {
       sbp->replyref (DHASH_NOENT);
     } else {
@@ -286,7 +285,7 @@ dhashclient::lookup_iter_cb (svccb *sbp,
       path.push_back (next);
       assert (path.size () < 1000);
 
-      warn << clntnode->clnt_ID () << " " << arg->key  << " " << next << "\n";
+      //      warn << clntnode->clnt_ID () << " " << arg->key  << " " << next << "\n";
       doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, 
 	     rarg, nres,
 	     wrap(this, &dhashclient::lookup_iter_cb, 
@@ -377,7 +376,6 @@ dhashclient::memorize_block (chordID key, int tsize,
 {
   store_state *ss = pst[key];
   if (!ss) {
-    warn << "allocate store_state (client) for " << key << "\n";
     store_state *nss = New store_state(key, tsize);
     pst.insert(nss);
     ss = nss;

@@ -176,6 +176,7 @@ class dhash {
   bool store_complete (dhash_insertarg *arg);
 
   void get_keys_traverse_cb (ptr<vec<chordID> > vKeys,
+			     chordID mypred,
 			     chordID predid,
 			     chordID key);
 

@@ -43,7 +43,7 @@ dhash::dhash(str dbname, vnode *node, int k, int ss, int cs, int _ss_mode) :
   keys_replicated = 0;
   keys_cached = 0;
 
-  //  init_key_status ();
+  init_key_status ();
   update_replica_list ();
   install_replica_timer ();
   install_keycheck_timer ();
@@ -292,7 +292,6 @@ dhash::dispatch (unsigned long procno,
 	  (!responsible (sarg->key)) && 
 	  (!pst[sarg->key])) {
 	warnt("DHASH: retry");
-	warn << "RETRY for " << sarg->key << "\n";
 	dhash_storeres *res = New dhash_storeres (DHASH_RETRY);
 	chordID pred = host_node->my_pred ();
 	res->pred->p.x = pred;
@@ -315,8 +314,9 @@ dhash::dispatch (unsigned long procno,
       
       dhash_getkeys_res *res = New dhash_getkeys_res (DHASH_OK);
       ref<vec<chordID> > keys = New refcounted<vec<chordID> >;
+      chordID mypred = host_node->my_pred ();
       key_store.traverse (wrap (this, &dhash::get_keys_traverse_cb, keys, 
-				gkarg->pred_id));
+				mypred, gkarg->pred_id));
 
       res->resok->keys.set (keys->base (), keys->size (), freemode::NOFREE);
       dhash_reply (rpc_id, DHASHPROC_GETKEYS, res);
@@ -460,10 +460,12 @@ dhash::storesvc_cb(long xid,
 
 void
 dhash::get_keys_traverse_cb (ptr<vec<chordID> > vKeys,
+			     chordID mypred,
 			     chordID predid,
 			     chordID key)
 {
-  if (key < predid) 
+  
+  if (between (mypred, predid, key)) 
     vKeys->push_back (key);
 }
 
@@ -474,7 +476,6 @@ dhash::get_keys_traverse_cb (ptr<vec<chordID> > vKeys,
 void
 dhash::init_key_status () 
 {
-  warn << "EXAMINING DATABASE\n";
   dhash_stat c = DHASH_CACHED;
   dhash_stat s = DHASH_STORED;
   /* probably not safe if I ever fix ADB */
@@ -487,7 +488,6 @@ dhash::init_key_status ()
     else
       key_store.enter (k, &c);
 
-    warn << "found " << k << " in database\n";
     d = it->nextElement();
   } 
 }
@@ -496,6 +496,7 @@ void
 dhash::transfer_initial_keys ()
 {
   chordID succ = host_node->my_succ ();
+  if (succ ==  host_node->my_ID ()) return;
 
   ptr<dhash_getkeys_arg> arg = New refcounted<dhash_getkeys_arg>;
   arg->pred_id = host_node->my_ID ();
@@ -516,9 +517,9 @@ dhash::transfer_init_getkeys_cb (dhash_getkeys_res *res, clnt_stat err)
 
   chordID succ = host_node->my_succ ();
   for (unsigned int i = 0; i < res->resok->keys.size (); i++) {
-    get_key (succ, res->resok->keys[i], 
-	     wrap (this, &dhash::transfer_init_gotk_cb));
-    warn << res->resok->keys[i] << "\n";
+    if (key_status (res->resok->keys[i]) == DHASH_NOTPRESENT)
+      get_key (succ, res->resok->keys[i], 
+	       wrap (this, &dhash::transfer_init_gotk_cb));
   }
   delete res;
 }
@@ -840,7 +841,6 @@ dhash::store (dhash_insertarg *arg, cbstore cb)
   store_state *ss = pst[arg->key];
   if (arg->data.size () != arg->attr.size) {
     if (!ss) {
-      warn << "allocating an ss for " << arg->key << "\n";
       store_state *nss = New store_state (arg->key, arg->attr.size);
       pst.insert(nss);
       ss = nss;
