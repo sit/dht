@@ -23,52 +23,37 @@
  *
  */
 
-#ifndef INCL_DEF
-#define INCL_DEF
+#ifndef INCL_TRAFFIC_GEN
+#define INCL_TRAFFIC_GEN
 
-#define EOL          0xa
+typedef struct _nodeStructGen {
+  int id;
+#define PRESENT  1
+#define ABSENT   0
+  int status;
+} NodeGen;
 
-#ifndef MAX_INT
-#define MAX_INT  0x7fffffff
+
+#define MAX_NUM_NODES 10000
+
+NodeGen *Nodes;
+int  *Docs;
+int  NumNodes = 0;  /* number of nodes in teh network */
+int  NumDocs  = 0;
+
+void readInputFileGen(char *file);
+void ignoreCommentLineGen(FILE *fp);
+void readLineGen(FILE *fp);
+void allocData(int numNodes, int numDocs);
+int getNodeGen();
+int insertNodeGen();
+void deleteNodeGen(int nodeId);
+int getDocGen();
+int insertDoc();
+void deleteDocGen(int docId);
+void events(int numEvents, int avgEventInt, 
+	    int wJoin, int wLeave, int wFail, 
+	    int wInsertDoc, int wFindDoc, 
+	    int *time);
+
 #endif
-
-#ifndef TRUE
-#define TRUE  1
-#define FALSE 0
-#endif
-
-typedef int ID;
-
-#define OPTIMIZATION
-
-#define NUM_BITS     24
-
-#define AVG_PKT_DELAY    50  /* in ms */
-#define PROC_REQ_PERIOD  500
-#define STABILIZE_PERIOD 30000
-#define LEAVE_WAIT       (STABILIZE_PERIOD << 1)
-#define TIME_OUT        500
-
-/* maximum simulation time */
-#define MAX_TIME     5e+07 /* in ms */   
-
-/* used in node.c */
-#define POWER_HASH_TABLE 10
-#define HASH_SIZE        100000
-
-/* used in event.c */
-#define MAX_NUM_ENTRIES  4096
-#define ENTRY_TUNIT 100 /* msec */ 
-
-#define MAX_NUM_DOCS    100000
-#define MAX_NUM_FINGERS 40
-#define NUM_SUCCS 20
-
-#define MAX_CMD_SIZE 128
-
-#endif 
-
-
-
-
-

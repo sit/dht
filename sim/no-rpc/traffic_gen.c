@@ -1,60 +1,191 @@
+/*
+ *
+ * Copyright (C) 2001 Ion Stoica (istoica@cs.berkeley.edu)
+ *
+ *  Permission is hereby granted, free of charge, to any person obtaining
+ *  a copy of this software and associated documentation files (the
+ *  "Software"), to deal in the Software without restriction, including
+ *  without limitation the rights to use, copy, modify, merge, publish,
+ *  distribute, sublicense, and/or sell copies of the Software, and to
+ *  permit persons to whom the Software is furnished to do so, subject to
+ *  the following conditions:
+ *
+ *  The above copyright notice and this permission notice shall be
+ *  included in all copies or substantial portions of the Software.
+ *
+ *  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ *  EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ *  MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ *  NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+ *  LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+ *  OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+ *  WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ *
+ */
+
 #include <stdlib.h>
 #include <stdio.h>
+#include <ctype.h>
 
-#ifndef TRUE
-#define TRUE 1
-#define FALSE 0
-#endif
+#include "incl.h"
+#include "traffic_gen.h"
 
-#define NUM_BITS  24 /*24 */
+// This program reads a script file and generates
+// a list of events to be processed by ./sim
+//
+// usage: ./traffic_gen input_file seed 
+//   
+// - input_file can contain three commands
+//
+//  1) events num avg wjoin wleave wfail winsert wfind
+//    
+//    Description: this command generates join, leave, fail
+//    insert document, and find document events 
+//
+//     num - represents the total number of events to be 
+//           generated
+//     avg - represents the average distance in ms between
+//           two consecutive events; this distance is 
+//           randomly distributed
+//     wjoin, wleave, wfail, winsert, wfind - represebt weights
+//           associated to each event type; an even of a certain
+//           type is generated with a probability inverese 
+//           proportional to its weight
+//
+//  2) wait time
+//
+//     Description: this commad generate an even that inserts a
+//     pause in the simulation (usually this command is used to 
+//     wait for network stabilization)
+//
+//  3) exit 
+//
+//     Description: generate an even to end simulation 
+//
+//  Example:
+//
+// > cat input_file
+// events 1000 10000 100 0 0 0 0 
+// wait 60000
+// events 1000 1000 0 0 0 100 0 
+// wait 60000
+// events 10000 1000 10 10 0 20 100
+// wait 60000
+// exit
+// >
+//
+// Description: 
+//
+// - 1st line creates a network of 1000 nodes; the command
+//   will generate 1000 node join operations with an average frequency
+//   of 1/10000ms = 1/10 sec
+//
+// - 2nd line inserts a pause of 1 min (60000ms); waiting for the
+//   network to stabilize
+//
+// - 3rd line inserts 1000 documents in the network with a frequency
+//   of one document per second
+//
+// - 4th line inserts a 1 sec pause
+//
+// - 5th line generates 10000 joins, leaves, finds, and inserts with a
+//   frequency of one event per second
+//
+//  - 6th line introduces a 1-sec pause; waiting for all outstanding
+//    operation to finish
+//
+//  - 7th line generates the end of the simulation
+//
 
-#define EXIT_DELAY      60000 /* wait 1 min after last event before 
-				 terminating the simulation */
+int main(int argc, char **argv) 
+{
+  if (argc != 3) {
+    printf("usage: %s input_file seed\n", argv[0]);
+    exit (-1);
+  }
 
-#define NUM_INIT_JOINS   1000 /* 500 */
-#define NUM_INIT_INSERTS 1000  /* 100 */ 
-#define AVG_JOIN_INT     10000 /* 10 sec */
-#define AVG_INSERT_INT   1000  /* 1 sec */
+  initRand(atoi(argv[2]));
 
+  allocData(MAX_NUM_NODES, MAX_NUM_DOCS);
 
-#define AVG_EVENT_INT    714  /* 820 (1), 794 (3), 781 (4), 758 (6), 745 (7)
-                                 735 (8), 806 (2), 769 (5), 725 (9),
-				 714 (10) 625 (20/5) 650 (17/6) 675 (14/7) 
-			         694 (12/8) 704 (11/9) */  /* ms */
-#define NUM_EVENTS       10000 
+  readInputFileGen(argv[1]);
 
-/* an even is generated with a frequence proportional to TKS_* */
-#define TKS_JOIN      35 /*9*/
-#define TKS_LEAVE     35 /*9*/
-#define TKS_INSERT    20
-#define TKS_FIND      100
-    
-typedef struct _nodeStruct {
-  int id;
-#define PRESENT  1
-#define ABSENT   0
-  int status;
-} Node;
+  return 0;
+}
 
 
-#define MAX_NUM_NODES 10000
-#define MAX_NUM_DOCS  100000
 
-Node *Nodes;
-int  *Docs;
-int  NumNodes = 0;  /* number of nodes in teh network */
-int  NumDocs  = 0;
+void readInputFileGen(char *file)
+{
+  FILE *fp;
+  char ch;
+
+  if ((fp = fopen(file, "r")) == NULL) {
+    printf("%s: file open error.\n", file);
+    panic("");
+  }
+
+  while (!feof(fp)) {
+    if ((ch = getc(fp)) == '#') {
+      ignoreCommentLineGen(fp);
+      continue;
+    } else {
+      if (feof(fp))
+	break;
+      ungetc(ch, fp);
+    }
+    readLineGen(fp);
+  }
+}
+
+
+void readLineGen(FILE *fp)
+{
+  char  cmd[MAX_CMD_SIZE];
+  int   num, avg, wjoin, wleave, wfail, winsert, wfind, t, i;
+  static int time = 0;
+
+  fscanf(fp, "%s", cmd);
+
+  for (i = 0; i < strlen(cmd); i++) 
+   cmd[i] = tolower(cmd[i]);
+
+  if (strcmp(cmd, "events") == 0) {
+    fscanf(fp, "%d %d %d %d %d %d %d", &num, &avg, 
+	   &wjoin, &wleave, &wfail, &winsert, &wfind);
+     events(num, avg, 
+	   wjoin, wleave, wfail, winsert, wfind, &time);
+  } else if (strcmp(cmd, "wait") == 0) {
+    fscanf(fp, "%d", &t);
+    time += t;
+  } else if (strcmp(cmd, "exit") == 0) {
+    printf("exit %d\n", time);
+  } else {
+    printf("command \"%s\" not known!\n", cmd);
+    panic("");
+  }
+
+  fscanf(fp, "\n");
+}
+
+
+void ignoreCommentLineGen(FILE *fp)
+{
+  char ch;
+
+  while ((ch = getc(fp)) != EOL);
+}
 
 void allocData(int numNodes, int numDocs)
 {
-  if (!(Nodes = (Node *)calloc(MAX_NUM_NODES, sizeof(Node))))
+  if (!(Nodes = (NodeGen *)calloc(MAX_NUM_NODES, sizeof(Node))))
     panic("allocData: memory allocation error\n");
   if (!(Docs = (int *)calloc(MAX_NUM_DOCS, sizeof(int)))) 
     panic("allocData: memory allocation error\n");
 }
 
 
-int getNode()
+int getNodeGen()
 {
   int i;
   int idx = unifRand(0, NumNodes);
@@ -66,10 +197,12 @@ int getNode()
       idx--;
   }
   panic("node out of range\n");
+  return -1; // to make the compiler happy 
+             // (otherwise we get warning) ...
 }
   
 
-int insertNode()
+int insertNodeGen()
 {
   int i, flag, idx;
 
@@ -97,9 +230,10 @@ int insertNode()
   }
 
   panic("no more room in Nodes table\n");
+  return -1;
 }
   
-int deleteNode(int nodeId)
+void deleteNodeGen(int nodeId)
 {
   
   int i;
@@ -112,11 +246,11 @@ int deleteNode(int nodeId)
       return;
     }
   }
-  panic("deleteNode: Node not found!\n");
+  panic("deleteNodeGen: Node not found!\n");
 }
     
 
-int getDoc()
+int getDocGen()
 {
   int i;
   int idx1 = unifRand(0, NumDocs);
@@ -129,7 +263,8 @@ int getDoc()
     if (Docs[i])
 	idx--;
   }
-  panic("getDoc: doc out of range\n");
+  panic("getDocGen: doc out of range\n");
+  return -1;
 }
   
 
@@ -160,10 +295,11 @@ int insertDoc()
   }
 
   panic("no more room in Docs table\n");
+  return -1;
 }
   
 
-int deleteDoc(int docId)
+void deleteDocGen(int docId)
 {
   int i;
 
@@ -174,68 +310,46 @@ int deleteDoc(int docId)
       return;
     } 
   }
-  panic("deleteDoc: document not found\n");
+  panic("deleteDocGen: document not found\n");
 }
 
-
-
-
-int main(int argc, char **argv) 
+void events(int numEvents, int avgEventInt, 
+	    int wJoin, int wLeave, int wFail, 
+	    int wInsertDoc, int wFindDoc, 
+	    int *time)
 {
-  int time = 0, i, idx, op;
+  int op, i, idx;
 
+  // use lotery scheduling to generate join, leave, fail, insert, 
+  // and find events. Each event type is associated a weight.
+  // Various even types are generated according to this weight,
+  // For example, out of a total of num events, 
+  // num*wJoin/(wJoin+wLeave+wFail+wInsertDoc+wFindDoc) are
+  // join events
 
-  if (argc != 2) {
-    printf("usage: %s seed\n", argv[0]);
-    exit (-1);
-  }
+  for (i = 0; i < numEvents; i++) {
+    op = unifRand(0, wJoin + wLeave + wFail + wInsertDoc + wFindDoc);
 
-  initRand(atoi(argv[1]));
-
-  allocData(MAX_NUM_NODES, MAX_NUM_DOCS);
-
-  for (i = 0; i < NUM_INIT_JOINS; i++) {
-    time += intExp(AVG_JOIN_INT);
-    printf ("join %d %d\n", insertNode(), time);
-  }
-
-  time += 60000; /* wait for one minute */
-
-  time += AVG_JOIN_INT;
-
-  for (i = 0; i < NUM_INIT_INSERTS; i++) {
-    time += intExp(AVG_INSERT_INT);
-    idx = getNode();
-    printf ("insert %d %d %d\n", idx, insertDoc(), time);
-  }
-
-  time += 60000; /* wait for one minute */
-  time += AVG_INSERT_INT;
-
-  /* do inserts, retrieves, new node joins, and leaves 
-   * use lottery scheduling to do this
-   */
-  for (i = 0; i < NUM_EVENTS; i++) {
-    op = unifRand(0, TKS_JOIN + TKS_LEAVE + TKS_INSERT + TKS_FIND);
-
-    time += intExp(AVG_EVENT_INT);
+    *time += intExp(avgEventInt);
    
-    if (op < TKS_JOIN) 
-     printf ("join %d %d\n", insertNode(), time);
-    else if (op < TKS_JOIN + TKS_LEAVE) {
-      idx = getNode();
-      printf ("leave %d %d\n", idx, time);
-      deleteNode(idx);
-    } else if (op < TKS_JOIN + TKS_LEAVE + TKS_INSERT) {
-      idx = getNode();
-      printf ("insert %d %d %d\n", idx, insertDoc(), time);
+    if (op < wJoin)
+     printf ("join %d %d\n", insertNodeGen(), *time);
+    else if (op < wJoin + wLeave) {
+      idx = getNodeGen();
+      printf ("leave %d %d\n", idx, *time);
+      deleteNodeGen(idx);
+    } else if (op < wJoin + wLeave + wFail) {
+      idx = getNodeGen();
+      printf ("fail %d %d\n", idx, *time);
+      deleteNodeGen(idx);
+    } else if (op < wJoin + wLeave + wFail + wInsertDoc) {
+      idx = getNodeGen();
+      printf ("insert %d %d %d\n", idx, insertDoc(), *time);
     } else {
-      idx = getNode();
-      printf ("find %d %d %d\n", idx, getDoc(), time);
+      idx = getNodeGen();
+      printf ("find %d %d %d\n", idx, getDocGen(), *time);
     }
   }
-
-  printf("exit %d\n", time + EXIT_DELAY);
-
 }
+
 

@@ -29,9 +29,6 @@
 
 #include "incl.h"
 
-#define EOL          0xa
-#define MAX_CMD_SIZE 128
-
 
 void ignoreCommentLine(FILE *fp)
 {
@@ -114,8 +111,11 @@ void readInputFile(char *file)
     if ((ch = getc(fp)) == '#') {
       ignoreCommentLine(fp);
       continue;
-    } else
+    } else {
+      if (feof(fp))
+	break;
       ungetc(ch, fp);
+    }
     readLine(fp);
   }
 }
