@@ -37,5 +37,6 @@ ObserveEvent::~ObserveEvent()
 void
 ObserveEvent::execute()
 {
+  assert (_observer);
   _observer->execute();
 }

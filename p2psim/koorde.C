@@ -3,12 +3,13 @@
 #include <iostream>
 using namespace std;
 
-Koorde::Koorde(Node *n) : Chord(n, CHORD_SUCC_NUM) 
+Koorde::Koorde(Node *n) : Chord(n, 1) 
 {
   debruijn = me.id << logbase;
   isstable = false;
   printf ("Koorde: (%u,%qx) %d debruijn=%qx\n", me.ip, me.id, k, debruijn);
-  dfingers.push_back(me);
+  //  dfingers.push_back(me);
+  loctable->pin (debruijn, false, 1);
 }
 
   
@@ -20,7 +21,7 @@ Koorde::firstimagin (CHID start, CHID succ, CHID k, CHID *kr)
   Chord::CHID i;
 
   if (start == succ) {  // XXX yuck
-    i = start;
+    i = start + 1;
     *kr = k;
   } else {
     int bm = ConsistentHash::bitposmatch (start, succ) - 1;
@@ -56,8 +57,8 @@ Koorde::firstimagin (CHID start, CHID succ, CHID k, CHID *kr)
       
       // shift bs top bits out k
       *kr = k << (bs + 1);
-      // printf ("start %qx succ %qx i %qx k %qx bs %d kr %qx\n",
-      //     start, succ, i, k, bs, *kr);
+      printf ("start %qx succ %qx i %qx k %qx bs %d kr %qx\n",
+	           start, succ, i, k, bs, *kr);
     } else {
       *kr = k;
     }
@@ -66,22 +67,14 @@ Koorde::firstimagin (CHID start, CHID succ, CHID k, CHID *kr)
   return i;
 }
 
-Chord::IDMap
-Koorde::closestpreddfinger (CHID n)
+Chord::CHID 
+Koorde::nextimagin (CHID i, CHID kshift)
 {
-  assert (dfingers.size () > 0);
-
-  if (dfingers.size () == 1) {
-    return dfingers[0];
-  }
-  for (uint i = 0; i < dfingers.size (); i++) {
-    if (ConsistentHash::betweenrightincl (dfingers[i].id, 
-					  dfingers[(i+1) % dfingers.size ()].id,
-					  n)) {
-      return dfingers[i];
-    }
-  }
-  return dfingers[dfingers.size () - 1];
+  uint t = ConsistentHash::getbit (kshift, NBCHID - logbase, logbase);
+  CHID r = (i << logbase) | t;
+  printf ("nextimagin: kshift %qx topbit is %u, i is %qx new i is %qx\n",
+	  kshift, t, i, r);
+  return r;
 }
 
 // Iterative version of the figure 2 algo in IPTPS'03 paper.
@@ -100,7 +93,8 @@ Koorde::find_successors(CHID key, uint m, bool intern)
   r.k = key;
   r.i = firstimagin (me.id, mysucc.id, a.k, &r.kshift);
 
-  printf ("find_successor(ip %u,id %qx, key %qx)\n", me.ip, me.id, a.k);
+  printf ("find_successor(ip %u,id %qx, key %qx, i=%qx)\n", me.ip, me.id, 
+	  a.k,  r.i);
 
   while (1) {
     assert (count++ < 1000);
@@ -108,7 +102,7 @@ Koorde::find_successors(CHID key, uint m, bool intern)
     a.kshift = r.kshift;
     a.i = r.i;
 
-    printf("nexthop (%u,%qx) is (%u,%qx) key %qx i %qx, kshift %qx)\n", 
+    printf("nexthop (%u,%qx) is (%u,%qx) key %qx i=%qx, kshift %qx)\n", 
 	   me.ip, me.id, r.next.ip, r.next.id, a.k, r.i, r.kshift);
 
     last = r.next;
@@ -152,14 +146,14 @@ Koorde::koorde_next(koorde_lookup_arg *a, koorde_lookup_ret *r)
     printf ("Koorde_next: done succ key = %qx: (%u,%qx)\n", 
 	    a->k, succ.ip, succ.id);
   } else if (ConsistentHash::betweenrightincl (me.id, succ.id, a->i)) {
-    assert (dfingers.size () > 0);
+    //    assert (dfingers.size () > 0);
     r->k = a->k;
     r->kshift = a->kshift << logbase;
     r->i = nextimagin (a->i, a->kshift);
-    r->next = closestpreddfinger (r->i);
+    r->next = loctable->pred(r->i);
     r->done = false;
-    printf ("Koorde_next: contact de bruijn finger (%u,%qx)\n", r->next.ip, 
-	    r->next.id);
+    printf ("Koorde_next: contact debruijn finger (%u,%qx) i=%qx kshift=%qx\n", 
+	    r->next.ip, r->next.id, r->i, r->kshift);
   } else {
     printf ("Koorde_next: contact successor (%u,%qx)\n", succ.ip, succ.id);
     r->k = a->k;
@@ -167,6 +161,14 @@ Koorde::koorde_next(koorde_lookup_arg *a, koorde_lookup_ret *r)
     r->kshift = a->kshift;
     r->i = a->i;
     r->done = false;
+    if (succ.id != r->next.id) {
+      printf (" next: succ %qx is different from %qx\n", succ.id, r->next.id);
+      loctable->print ();
+    }
+    if (!ConsistentHash::betweenrightincl (me.id, r->i, r->next.id)) {
+      r->next = succ;
+    }
+    // assert (ConsistentHash::betweenrightincl (me.id, r->i, r->next.id));
   }
 }
 
@@ -175,15 +177,24 @@ Koorde::fix_debruijn ()
 {
   printf ("fix_debruijn %u\n", isstable);
   vector<IDMap> scs = find_successors (debruijn, k - 1, true);
+  assert (scs.size () > 0);
+  loctable->add_node (last);
+  for (uint i = 0; i < k - 2; i++) {
+    loctable->add_node (scs[i]);
+  }
+#if 0
+  dfingers.clear ();
+  dfingers.push_back (last);
+  for (uint i = 0; i < k - 2; i++) {
+    dfingers.push_back (scs[i]);
+  }
+  assert (dfingers.size () <= k - 1);
+#endif
   printf ("fix_debruijn (%u,%qx): debruijn %qx succ %qx d %qx at %lu\n",
 	  me.ip, me.id, debruijn, scs[0].id, last.id, now ());
-  assert (scs.size () > 0);
-  scs.insert (scs.begin(), last);
-  dfingers.clear ();
-  dfingers = scs;
-  for (uint i = 0; i < dfingers.size (); i++) {
-    printf ("  Koorde %d debruijn fingers %u,%qx\n", i, dfingers[i].ip,
-	    dfingers[i].id);
+  for (uint i = 0; i < k-1; i++) {
+    printf ("  Koorde %d debruijn fingers %u,%qx\n", i+1, scs[i].ip,
+	    scs[i].id);
   }
 }
 
@@ -197,17 +208,30 @@ Koorde::reschedule_stabilizer(void *x)
 void
 Koorde::stabilize()
 {
-  printf ("stabilize()? %u,%qx, %u, %lu\n", me.ip, me.id, isstable, now ());
+  printf ("koorde::stabilize()? %u,%qx at %lu\n", me.ip, me.id, now ());
   Chord::stabilize();
   fix_debruijn();
 }
 
-// XXX should also check dfingers
 bool
 Koorde::stabilized (vector<ConsistentHash::CHID> lid)
 {
   bool r = Chord::stabilized (lid);
   if (!r) return false;
+
+  loctable->print ();
+
+  IDMap d = loctable->pred (debruijn);
+  vector<IDMap> sc = loctable->succs (d.id + 1, k - 1);
+  vector<IDMap> dfingers;
+
+  dfingers.clear ();
+  dfingers.push_back (d);
+  for (uint i = 0; i < k - 2; i++) {
+    dfingers.push_back (sc[i]);
+    printf ("succ finger %d is %qx\n", i, sc[i].id);
+  }
+  assert (dfingers.size () < k);
 
   r = false;
   printf ("koorde::stabilized? %u,%qx debruijn %qx d %qx at %lu\n", me.ip,
@@ -216,7 +240,7 @@ Koorde::stabilized (vector<ConsistentHash::CHID> lid)
   assert (lid.size () > 0);
 
   if (lid.size () == 1) {
-    assert (dfingers[0].id == lid.front ());
+    assert (d.id == lid.front ());
     r = true;
   } else {
     uint i, j;
@@ -254,8 +278,8 @@ Koorde::dump ()
 {
   Chord::dump ();
   printf ("Koorde (%u,%qx) debruijn %qx\n", me.ip, me.id, debruijn);
-  for (uint i = 0; i < dfingers.size (); i++) {
-    printf ("Koorde %d debruijn finger %qx\n", i+1, dfingers[i].id);
-  }
+  //  for (uint i = 0; i < dfingers.size (); i++) {
+  //printf ("Koorde %d debruijn finger %qx\n", i, dfingers[i].id);
+  //}
 	  
 }

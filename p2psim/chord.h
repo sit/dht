@@ -86,7 +86,6 @@ protected:
   uint nsucc;
 
   virtual vector<IDMap> find_successors(CHID key, uint m, bool intern);
-  void fix_predecessor();
   void fix_successor();
   void fix_successor_list();
 };
@@ -108,8 +107,8 @@ class LocTable {
     vector<Chord::IDMap> succs(ConsistentHash::CHID id, unsigned int m);
     Chord::IDMap pred();
     Chord::IDMap pred(Chord::CHID n);
-    vector<Chord::IDMap> succ_for_key(Chord::CHID key);
     void checkpoint();
+    void print();
 
     void add_node(Chord::IDMap n);
     void del_node(Chord::IDMap n);
@@ -133,7 +132,7 @@ class LocTable {
     vector<pin_entry> pinlist;
     unsigned int _max;
 
-    unsigned int evict(); //evict one node to make sure ring contains <= _max elements
+    void evict(); //evict one node to make sure ring contains <= _max elements
 };
 
 #endif // __CHORD_H

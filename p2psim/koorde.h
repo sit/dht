@@ -32,20 +32,14 @@ public:
   void dump();
 
 protected:
-  static const uint k = 4;  // k-degree de bruijn graph; 
+  static const uint k = 2;  // k-degree de bruijn graph; 
   static const uint logbase = k >> 1;  // degree k = 2 ^ logbase
   Chord::CHID debruijn;  // = k * me
-  vector<IDMap> dfingers;  // predecessor(debruijn) + k - 1 successors
+  // vector<IDMap> dfingers;  // predecessor(debruijn) + k - 1 successors
   IDMap last;
   bool isstable;
 
-  static Chord::CHID Koorde::nextimagin (CHID i, CHID kshift) {
-    uint t = ConsistentHash::getbit (kshift, NBCHID - logbase, logbase);
-    CHID r = i << logbase | t;
-    // printf ("nextimagin: kshift %qx topbit is %u, i is %qx new i is %qx\n",
-    //  kshift, t, i, r);
-    return r;
-  }
+  Chord::CHID Koorde::nextimagin (CHID i, CHID kshift);
   Chord::CHID Koorde::firstimagin (CHID, CHID, CHID, CHID*);
   IDMap Koorde::closestpreddfinger (CHID);
 

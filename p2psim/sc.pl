@@ -34,7 +34,7 @@ while ($line = <STDIN>) {
     } elsif ($line =~/^events: (.*)/) {
 	doevents (split(/,/, $1));
     } elsif ($line =~/^observe: (.*)/) {
-	doobserve (split(/,/, $1);
+	doobserve (split(/,/, $1));
     } else {
 	print EV "$line\n";
     }
