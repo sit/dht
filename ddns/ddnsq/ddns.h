@@ -9,6 +9,7 @@ typedef char* string;
 typedef uint32 ip32addr;
 
 #define DMTU 1024
+#define DOMAIN_LEN 256
 
 enum ddns_stat {
   DDNS_OK = 0,
@@ -118,6 +119,11 @@ struct ddnsRR {
   ptr<ddnsRR> next;
 };
 
+#define DNS_TYPE_SIZE  sizeof (dns_type)
+#define DNS_CLASS_SIZE sizeof (dns_class)
+#define TTL_SIZE       sizeof (int32)
+#define RDLENGTH_SIZE  sizeof (uint32)
+
 dns_type 
 get_dtype (const char *type);
 
@@ -128,7 +134,7 @@ class ddns {
 
   int nlookup, nstore;
   chordID getcID (domain_name);
-  int ddnsRR2block (ref<ddnsRR>, char *);
+  int ddnsRR2block (ref<ddnsRR>, char *, int);
   void store_cb (domain_name, chordID, ref<dhash_storeres>, clnt_stat);
   void lookup_cb (domain_name, chordID, ref<dhash_res>, clnt_stat);
 

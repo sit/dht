@@ -1,6 +1,8 @@
 #include "dhash.h"
 #include "ddns.h"
 
+ptr<ddns> ddns_clnt;
+
 static void 
 usage ()
 {
@@ -9,23 +11,38 @@ usage ()
 }
 
 static void 
-store (domain_name dname, dns_type dt, string rr_data)
+store_it (domain_name dname, dns_type dt, string rr_data)
 {
   /* convert into DDNS RR */
   ref<ddnsRR> rr = New refcounted<ddnsRR>;
-
+  rr->dname = dname;
+  rr->type = dt;
+  rr->cls = IN;
+  rr->ttl = 18934;
+  switch (dt) {
+  case A:
+    rr->rdlength = sizeof (rr->rdata.address);
+    rr->rdata.address = 18;
+    rr->rdata.address = (rr->rdata.address << 8) + 26;
+    rr->rdata.address = (rr->rdata.address << 8) + 4;
+    rr->rdata.address = (rr->rdata.address << 8) + 53;
+    break;
+  default:
+    return;
+  }
+    
+  rr->next = NULL;
   ddns_clnt->store (dname, rr);
 }
 
-store (
 int 
 main (int argc, char **argv)
 {
 
   setprogname (argv[0]);
   domain_name hostname;
-  dns_type rr_type;
-  string rr_data;
+  dns_type rr_type = A;
+  string rr_data = NULL;
   bool store = false;
 
   sfsconst_init ();
@@ -35,6 +52,8 @@ main (int argc, char **argv)
   else {
     hostname = (string) malloc (sizeof (argv[2]));
     strcpy (hostname,argv[2]);
+    if (strlen (hostname) > DOMAIN_LEN) 
+      fatal ("domain name longer than %d\n", DOMAIN_LEN);
     if (!strcasecmp(argv[1], "s")) {
       store = true;
       if (argc < 5) 
@@ -49,17 +68,15 @@ main (int argc, char **argv)
   }
   
   const char *control_socket = "/tmp/chord-sock";
-  ref<ddns> ddns_clnt = New refcounted<ddns> (control_socket, 0);
+  ddns_clnt = New refcounted<ddns> (control_socket, 0);
   
   if (store) {
-    warn << "hostname = " << hostname << " rr_type = " << rr_type << " rr_data = " 
-	 << rr_data << "\n";
-    store (hostname, rr_type, rr_data);
-    //ddns_clnt->store (hostname, rr_type, rr_data);
+    store_it (hostname, rr_type, rr_data);
   } else {
-    warn << "hostname = " << hostname << "\n";
+    warn << "hostname = " << hostname << "size = " << strlen (hostname) << "\n";
     ddns_clnt->lookup (hostname);
   }
 
   return 0;
 }
+
