@@ -2,7 +2,6 @@
 #define __TOP_FACTORY_H
 
 #include "topology.h"
-#include "euclidean.h"
 #include <string>
 
 class TopologyFactory {

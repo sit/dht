@@ -34,10 +34,14 @@ VivaldiTest::real()
   Vivaldi::Coord c;
   Euclidean *t =
     dynamic_cast<Euclidean*>(Network::Instance()->gettopology());
-  assert(t);
-  Euclidean::Coord rc = t->getcoords(node()->ip());
-  c._x = rc.first;
-  c._y = rc.second;
+  if(t){
+    Euclidean::Coord rc = t->getcoords(node()->ip());
+    c._x = rc.first;
+    c._y = rc.second;
+  } else {
+    c._x = 0;
+    c._y = 0;
+  }
   return c;
 }
 
@@ -47,13 +51,13 @@ VivaldiTest::real()
 double
 VivaldiTest::error()
 {
+  Topology *t = (Network::Instance()->gettopology());
   double sum = 0;
-  Vivaldi::Coord vc = _vivaldi->my_location(), rc = real();
+  Vivaldi::Coord vc = _vivaldi->my_location();
   for(unsigned i = 0; i < _all.size(); i++){
     Vivaldi::Coord vc1 = _all[i]->_vivaldi->my_location();
-    Vivaldi::Coord rc1 = _all[i]->real();
     double vd = dist(vc, vc1);
-    double rd = dist(rc, rc1);
+    double rd = t->latency(node(), _all[i]->node());
     sum += (vd - rd) * (vd - rd);
   }
   return sqrt(sum / _all.size());
