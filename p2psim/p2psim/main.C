@@ -63,9 +63,11 @@ threadmain(int argc, char *argv[])
     yield();
 
   // Initialize all protocols
-  const set<Node*> *all = Network::Instance()->getallnodes();
-  for(set<Node*>::const_iterator i = all->begin(); i != all->end(); ++i)
-    (*i)->initstate();
+  if (Node::init_state()) {
+    const set<Node*> *all = Network::Instance()->getallnodes();
+    for(set<Node*>::const_iterator i = all->begin(); i != all->end(); ++i)
+      (*i)->initstate();
+  }
 
   // make sure the network ate all the nodes
   while(anyready())
