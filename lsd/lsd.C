@@ -245,8 +245,6 @@ main (int argc, char **argv)
   str myname = my_addr ();
 
   while ((ch = getopt (argc, argv, "B:cd:j:l:M:n:p:S:s:v:")) != -1) {
-    printf("opt ch = %c\n", ch);
-    printf("opt arg = %s\n", optarg);
     switch (ch) {
     case 'B':
       cache_size = atoi (optarg);
