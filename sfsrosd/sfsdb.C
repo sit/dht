@@ -45,6 +45,7 @@ sfsrodb::getinfo_cb(callback<void>::ref cb, sfs_fsinfo *fsinfo, ptr<dbrec> res)
     warnx << "couldn't decode sfs_fsinfo\n";
   }
 
+  warn << "root fh is " << hexdump(&fsinfo->sfsro->v1->info.rootfh, 20) << "\n";
   (*cb)();
 }
 

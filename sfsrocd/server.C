@@ -1,4 +1,4 @@
-/* $Id: server.C,v 1.5 2001/02/23 04:44:46 fdabek Exp $ */
+/* $Id: server.C,v 1.6 2001/02/25 05:28:44 fdabek Exp $ */
 
 /*
  *
@@ -28,7 +28,6 @@
 #include "sfsrodb_core.h"
 
 cache_stat cstat;
-int compare_mirrors(const void *a, const void *b);
 
 void
 server::sendreply (nfscall *sbp, void *res)
@@ -210,6 +209,8 @@ server::get_data (const sfs_hash *fh,
 		  callback<void, sfsro_datares *, clnt_stat>::ref cb) 
 {
 
+  warn << "getting data for " << hexdump(fh, 20) << "\n";
+
   ptr<vec<sfsro_datares* > > ress (New refcounted<vec<sfsro_datares *> >());
   ress->setsize(numMirrors);
   ptr<int> recvd = New refcounted<int> (0);
@@ -253,26 +254,6 @@ server::get_data_cb(ptr<vec< sfsro_datares * > > ress, sfsro_datares *res,
   
   (*ress)[offset] = res;
   ++*recvd;
-
-  /*  if (*recvd == numMirrors) {
-    int off = 0;
-    // XXX - assumes that mirrors are in the same order as slices
-    for (int i=0; i < numMirrors; i++) {
-      //warn << "copying to " << off << " from mirror " << i << "\n";
-      memcpy(buf + off, (*ress)[i]->resok->data.base (), (*ress)[i]->resok->data.size ());
-      off += (*ress)[i]->resok->data.size ();
-      free ( (*ress)[i] );
-    }
-     
-    sfsro_datares *final = New sfsro_datares(SFSRO_OK);
-    final->resok->data.setsize(off);
-    memcpy(final->resok->data.base (), 
-	   buf,
-	   off);
-    
-    (*cb)(final, err);
-  }
-  */
 
   (*cb)(res, err);
 
@@ -919,7 +900,7 @@ server::dispatch (nfscall *sbp)
 	  //case I: lookup is on root level and must be translated into a 
 	  //        request for fsinfo.
 	  
-	  warn << "mount request for " << dirop->name << "\n";
+	  warn << "mount request for " << dirop->name.cstr() << " (" << dirop->name.len () << ")\n";
 	  sfs_hash *fsinfo_fh = New sfs_hash ();
 	  memcpy(fsinfo_fh->base(), dirop->name.cstr(), 20);
 	  get_data(fsinfo_fh, wrap(this, &server::lookup_mount, sbp));
@@ -927,6 +908,7 @@ server::dispatch (nfscall *sbp)
 	} 
       else
 	{
+	  warn << "not in root level\n";
 	  // case II: lookup not on root level. "Normal" case.
 	  sfs_hash fh;
 	  nfs2ro(nfh, &fh);
@@ -1026,6 +1008,8 @@ server::lookup_mount(nfscall *sbp, sfsro_datares *res, clnt_stat err) {
   xdrmem x (static_cast<char *>(res->resok->data.base ()), res->resok->data.size (), XDR_DECODE);
   if (!xdr_sfs_fsinfo (x.xdrp (), mounted_fsinfo)) {
     warn << "error decoding returned fsinfo\n";
+    sbp->error (NFS3ERR_NOENT);
+    return;
   }
 
   warn << "mounted root fh=" << hexdump (&mounted_fsinfo->sfsro->v1->info.rootfh, 20) << "\n";
@@ -1061,6 +1045,8 @@ server::setrootfh (const sfs_fsinfo *fsi)
   sfsroc = aclnt::alloc (x, sfsro_program_1);
   ro2nfs (&fsi->sfsro->v1->info.rootfh, &rootfh);
 
+  warn << "root fh is " << hexdump(&fsi->sfsro->v1->info.rootfh, 20) << "\n";
+
   // FED - STRIPING HACK
   mirrors.setsize (0);
   mirrors.push_back (sfsroc);
@@ -1070,16 +1056,17 @@ server::setrootfh (const sfs_fsinfo *fsi)
   numMirrors = 1;
   updateMirrorDivision ();
   
-  warn << "attempting to contact " << fsi->sfsro->v1->mirrors.size () << " mirrors\n";
-  for (unsigned int i = 0; i < fsi->sfsro->v1->mirrors.size (); i++) {
-    warn << "trying Mirror " << i << "\n";
-    warn << fsi->sfsro->v1->mirrors[i].host << "is mirroring.";
-    warn << "size = " << fsi->sfsro->v1->mirrors.size () << " > " << i << "\n";
-    tcpconnect (fsi->sfsro->v1->mirrors[i].host, 
-		sfs_port,  //FED - should be SFS_PORT or something
-		wrap(this, &server::setrootfh_1));
-    warn << "did tcpconnect for i = " << i << "\n";
-  }
+  /* warn << "attempting to contact " << fsi->sfsro->v1->mirrors.size () << " mirrors\n";
+     for (unsigned int i = 0; i < fsi->sfsro->v1->mirrors.size (); i++) {
+     warn << "trying Mirror " << i << "\n";
+     warn << fsi->sfsro->v1->mirrors[i].host << "is mirroring.";
+     warn << "size = " << fsi->sfsro->v1->mirrors.size () << " > " << i << "\n";
+     tcpconnect (fsi->sfsro->v1->mirrors[i].host, 
+     sfs_port,  //FED - should be SFS_PORT or something
+     wrap(this, &server::setrootfh_1));
+     warn << "did tcpconnect for i = " << i << "\n";
+     }
+     */
   return true;
 }
 void

@@ -1,4 +1,4 @@
-/* $Id: sfs_prot.x,v 1.2 2001/01/25 21:36:50 fdabek Exp $ */
+/* $Id: sfs_prot.x,v 1.3 2001/02/25 05:28:46 fdabek Exp $ */
 
 /*
  * This file was written by David Mazieres.  Its contents is
@@ -250,14 +250,9 @@ struct sfsro1_signed_fsinfo {
   sfs_hash fhdb;
 };
 
-struct sfsro_mirrorarg {
-  sfs_hostname host;
-};
-
 struct sfsro1_fsinfo {
   sfsro1_signed_fsinfo info;
   sfs_sig sig;
-  sfsro_mirrorarg mirrors<>;
 };
 
 union sfsro_fsinfo switch (int vers) {

@@ -173,9 +173,6 @@ program SFSRO_PROGRAM {
 		sfsro_datares
 		SFSROPROC_GETDATA_PARTIAL (sfsro_partialgetarg) = 2;
 		
-		void
-		SFSROPROC_ADDMIRROR (sfsro_mirrorarg) = 3;
-
 	} = 1;
 } = 344446;
 

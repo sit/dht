@@ -11,7 +11,6 @@
 extern sfs_connectres cres;
 extern sfs_fsinfo fsinfores;
 extern sfsrodb db;
-extern vec<sfsro_mirrorarg> mirrors;
 
 class sfsroclient {
   ptr<axprt_stream> x;
@@ -26,9 +25,6 @@ class sfsroclient {
   bool authid_valid;
   sfs_hash authid;
 
-
-  void updatemirrorinfo();
-  void addmirror(sfsro_mirrorarg *arg);
 
   void dispatch (ref<bool> b, svccb *sbp);
   void getdata_cb(svccb *sbp, sfsro_datares *res, ref<bool> d);

@@ -1,4 +1,4 @@
-/* $Id: sfsrodb.C,v 1.2 2001/01/25 21:36:22 fdabek Exp $ */
+/* $Id: sfsrodb.C,v 1.3 2001/02/25 05:28:45 fdabek Exp $ */
 
 /*
  * Copyright (C) 1999 Kevin Fu (fubob@mit.edu)
@@ -44,7 +44,9 @@
 dbfe *sfsrodb;
 dbfe *sfsrofhdb;
 
-bool incremental_mode;
+str root2;
+
+bool initialize;
 bool verbose_mode;
 u_int32_t blocksize;
 extern int errno;
@@ -760,9 +762,12 @@ sfsrodb_main (const str root, const str keyfile, const char *dbfile)
   opts.addOption("opt_nodesize", 4096);
   opts.addOption("opt_create", 1);
 
-  if (int err = sfsrodb->createdb(const_cast < char *>(dbfile), opts)) {
-    warn << "createdb failed\n" << strerror(err) << "\n";
+  if (initialize) {
+    if (int err = sfsrodb->createdb(const_cast < char *>(dbfile), opts)) {
+      warn << "createdb failed\n" << strerror(err) << "\n";
+    }
   }
+
   if (int err = sfsrodb->opendb(const_cast < char *>(dbfile), opts)) {
     warn << "open returned: " << strerror(err) << err << "\n";
     exit (-1);
@@ -801,7 +806,7 @@ sfsrodb_main (const str root, const str keyfile, const char *dbfile)
   // Set IV
   sfs_hash id;
   sfs_mkhostid (&id, cres.reply->servinfo.host);
-  memcpy (&IV[0], id.base(), SFSRO_IVSIZE);
+  memcpy (&IV[0], "squeamish_ossifrage_", SFSRO_IVSIZE);
 
   // store file system in db
   sfs_hash root_fh;
@@ -814,24 +819,12 @@ sfsrodb_main (const str root, const str keyfile, const char *dbfile)
   memcpy (res.sfsro->v1->info.iv.base (), &IV[0], SFSRO_IVSIZE);
   res.sfsro->v1->info.rootfh = root_fh;
 
-#if 0
-  // fhdb is not necessary in this shape; XXX FIX
-  create_fhdb (&res.sfsro->v1->info.fhdb, dbfile, IV);
-#endif
-
   time_t start, end;
 
   res.sfsro->v1->info.type = SFS_ROFSINFO;
   res.sfsro->v1->info.start = start = time (NULL);
   res.sfsro->v1->info.duration = sfsro_duration;
-  
-  //FED dummy mirror entry
-  vec<sfsro_mirrorarg> defaultMirrors;
-  sfsro_mirrorarg ma;
-  ma.host = "localhost";
 
-  defaultMirrors.push_back(ma);
-  res.sfsro->v1->mirrors.set (defaultMirrors.base(), defaultMirrors.size (), freemode::NOFREE); 
   end = start + sfsro_duration;
 
   // XX Should make sure timezone is correct
@@ -843,26 +836,39 @@ sfsrodb_main (const str root, const str keyfile, const char *dbfile)
   create_sfsrosig (&(res.sfsro->v1->sig), &(res.sfsro->v1->info),
 		   keyfile);
 
+  str fsinfo_name;
+  if  (initialize) 
+    fsinfo_name = str("fsinfo");
+  else {
+    const char *pk_raw = sk->n.cstr ();
+    char hashed_pk[21];
+    sha1_hash(hashed_pk, pk_raw, strlen(pk_raw));
+    fsinfo_name = armor32(hashed_pk, 20);
+  }
+  warn << "inserting fsinfo under " << fsinfo_name << "\n";
+ 
 
   xdrsuio x (XDR_ENCODE);
   if (xdr_sfs_fsinfo (x.xdrp (), &res)) {
     void *v = suio_flatten (x.uio ());
     int l =  x.uio ()->resid ();
-    if (!sfsrodb_put (sfsrodb, "fsinfo", 6, v, l)) {
-      warn << "Found identical fsinfo.  You found a collision!\n";
-      exit (-1);
-    }
+    if (initialize)  sfsrodb_put (sfsrodb, "fsinfo", 6, v, l);
+    else  sfsrodb_put (sfsrodb, fsinfo_name.cstr (), 20, v, l);
+
     warn << "Added fsinfo\n";
   }
 
-  xdrsuio x2 (XDR_ENCODE);
-  if (xdr_sfs_connectres (x2.xdrp (), &cres)) {
-    int l = x2.uio ()->resid ();
-    void *v = suio_flatten (x2.uio ());
-    warn << "put conres in db\n";
-    if (!sfsrodb_put (sfsrodb, "conres", 6, v, l)) {
-      warn << "Found identical conres. You found a collision!\n";
-      exit (-1);
+  if (initialize) {
+    warn << "adding cres, do not use this option with chord\n";
+    xdrsuio x2 (XDR_ENCODE);
+    if (xdr_sfs_connectres (x2.xdrp (), &cres)) {
+      int l = x2.uio ()->resid ();
+      void *v = suio_flatten (x2.uio ());
+      warn << "put conres in db\n";
+      if (!sfsrodb_put (sfsrodb, "conres", 6, v, l)) {
+	warn << "Found identical conres. You found a collision!\n";
+	exit (-1);
+      }
     }
   }
 
@@ -914,7 +920,7 @@ usage ()
   warnx << "-s <SK keyfile>       : Path to the secret key file\n";
   warnx << "-o <dbfile>           : Filename to output database\n";
   warnx << "Optional directives:\n";
-  warnx << "-i                    : Incremental mode, update a database\n";
+  warnx << "-i                    : Initialize local DB (for testing only)\n";
   warnx << "-h <hostname for db>  : Hostname of replication, if not this machine\n";
   warnx << "-v                    : Verbose debugging output\n";
   warnx << "-b <blocksize>        : Page size of underlying database\n";
@@ -938,11 +944,11 @@ main (int argc, char **argv)
   char *sk_file = NULL;
   char *output_file = NULL;
 
-  incremental_mode = false;
   verbose_mode = false;
+  initialize = false;
 
   int ch;
-  while ((ch = getopt (argc, argv, "b:d:s:o:h:vi")) != -1)
+  while ((ch = getopt (argc, argv, "b:d:e:s:o:h:vi")) != -1)
     switch (ch) {
     case 'b':
       if (!convertint (optarg, &blocksize)
@@ -951,6 +957,9 @@ main (int argc, char **argv)
       break;
     case 'd':
       exp_dir = optarg;
+      break;
+    case 'e':
+      root2 = optarg;
       break;
     case 's':
       sk_file = optarg;
@@ -962,7 +971,7 @@ main (int argc, char **argv)
       hostname = optarg;
       break;
     case 'i':
-      incremental_mode = true;
+      initialize = true;
       break;
     case 'v':
       verbose_mode = true;
@@ -981,8 +990,8 @@ main (int argc, char **argv)
     warnx << "export directory : " << exp_dir << "\n";
     warnx << "SK keyfile       : " << sk_file << "\n";
     warnx << "dbfile           : " << output_file << "\n";
-    warnx << "Incremental mode : ";
-    if (incremental_mode) 
+    warnx << "Initialize mode : ";
+    if (initialize) 
       warnx << "On\n";
     else
       warnx << "Off\n";

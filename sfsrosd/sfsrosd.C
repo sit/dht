@@ -3,15 +3,11 @@
 #include "rxx.h"
 
 static str sfsrodbfile;
-static str mirrorhost;
 static sfs_hostname hostname;
 int sfssfd;
-vec<sfsro_mirrorarg> mirrors;
 
 void getcres_cb();
 void getinfo_cb();
-void add_mirror_cb(int fd);
-void added_mirror(clnt_stat err);
 
 ptr<axprt_stream>
 client_accept (int fd)
@@ -24,28 +20,6 @@ client_accept (int fd)
   vNew sfsroclient (x);
 
   return x;
-}
-
-void
-add_mirror_cb(int fd) {
-  
-  ref<axprt_stream> x = axprt_stream::alloc (fd);
-  ptr<aclnt> clnt = aclnt::alloc (x, sfsro_program_1);
-  char thishost[256];
-  gethostname(thishost, 256);
-  warn << thishost << "\n";
-
-  ptr<sfsro_mirrorarg>  arg = new refcounted<sfsro_mirrorarg> ();
-  arg->host = sfs_hostname(thishost);
-  warn << "adding " << arg->host << "as a mirror of " << mirrorhost << "\n";
-
-  void *res = malloc(4);
-  clnt->call (SFSROPROC_ADDMIRROR, arg, res, wrap (&added_mirror));
-}
-
-void
-added_mirror(clnt_stat err) {
-  warn << "made mirror_add RPC successfully\n";
 }
 
 static void
@@ -95,12 +69,6 @@ start_server ()
   listen (sfssfd, 1000);
   fdcb (sfssfd, selread, wrap (client_accept_standalone));
 
-  //now that we are running, add ourselves to the mirror list if necessary
-  if (mirrorhost) {
-    warn << "mirrorhost is " << mirrorhost << "\n"; 
-    tcpconnect(mirrorhost, sfs_port, wrap (&add_mirror_cb));
-  }
-
 }
 
 
@@ -117,13 +85,10 @@ main (int argc, char **argv)
   setprogname (argv[0]);
 
   int ch;
-  while ((ch = getopt (argc, argv, "f:m:")) != -1)
+  while ((ch = getopt (argc, argv, "f:")) != -1)
     switch (ch) {
     case 'f':
       sfsrodbfile = optarg;
-      break;
-    case 'm':
-      mirrorhost = optarg;
       break;
     case '?':
     default:
@@ -137,7 +102,6 @@ main (int argc, char **argv)
 
   sfsconst_init ();
 
-  mirrors = vec<sfsro_mirrorarg>();
 
   db = sfsrodb (sfsrodbfile);	// XXX - this is very poor style
   db.getconnectres (&cres, wrap(&getcres_cb));
@@ -152,13 +116,6 @@ void getcres_cb() {
 }
 
 void getinfo_cb() {
-
-  //FED - initial fsinfo tells us which part of the DB we are serving
-  if (fsinfores.sfsro->v1->mirrors.size () > 0) {
-    warnx << "this database contains mirror info\n";
-  } else
-    warnx << "database did not contain mirror info\n";
-  
 
   start_server ();
 }

@@ -1,4 +1,4 @@
-//Last modified by $Author: fdabek $ on $Date: 2001/02/05 17:31:29 $
+//Last modified by $Author: fdabek $ on $Date: 2001/02/25 05:28:45 $
 #include <sfsrosd.h>
 #include "sfsdb.h"
 #include "rxx.h"
@@ -14,7 +14,6 @@ const bool dumptrace (getenv ("SFSRO_TRACE"));
 sfsrodb db;
 sfs_connectres cres;
 sfs_fsinfo fsinfores;
-extern vec<sfsro_mirrorarg> mirrors;
 
 #ifdef STATS
 int proxy_requests;
@@ -39,23 +38,6 @@ sfsroclient::sfsroclient (ptr<axprt_stream> _x, const authunix_parms *aup)
   proxy_requests = 0;
   proxy_misses = 0;
 #endif
-}
-
-void
-sfsroclient::updatemirrorinfo() 
-{
-  
-  //FED - update fsinfo
-  fsinfores.sfsro->v1->mirrors.set (mirrors.base(), mirrors.size (), freemode::NOFREE); 
-}
-
-void
-sfsroclient::addmirror(sfsro_mirrorarg *mirror) 
-{
-
-  //FED - update global mirror list
-  mirrors.push_back(*mirror);
-  warn << "added " << mirror->host << "as a mirror. It is the " << mirrors.size () << "\n";
 }
 
 sfsroclient::~sfsroclient()
@@ -107,6 +89,7 @@ sfsroclient::dispatch (ref<bool> d, svccb *sbp)
       {
 
 	sfs_hash *fh = sbp->template getarg<sfs_hash> ();
+
 #if 0
 	if (dumptrace) {
 	  u_char *cp = reinterpret_cast<u_char *> (fh->base ());
@@ -118,6 +101,8 @@ sfsroclient::dispatch (ref<bool> d, svccb *sbp)
 	}
 #endif
 	sfsro_datares *res = New sfsro_datares();
+
+	warn << "GETDATA request for " << hexdump(fh, 20) << "\n";
         db.getdata(fh, res, wrap(this, &sfsroclient::getdata_cb, sbp, res, destroyed));
         return;
       }
@@ -180,14 +165,6 @@ sfsroclient::dispatch (ref<bool> d, svccb *sbp)
 			       sbp, res, destroyed),
 			  arg->offset, arg->len);
         return;
-      }
-    case SFSROPROC_ADDMIRROR:
-      {
-	sfsro_mirrorarg *arg = sbp->template getarg<sfsro_mirrorarg> ();
-	warn << "got add_mirror message for " << arg->host << "\n";
-	addmirror(arg);
-	updatemirrorinfo();
-	return;
       }
     default:
       sbp->reject (PROC_UNAVAIL);

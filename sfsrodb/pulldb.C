@@ -437,11 +437,6 @@ constate::getfsinfo (enum clnt_stat err)
   }
 
   memcpy (IV, si.sfsro->v1->info.iv.base (), SFSRO_IVSIZE);
-  vec<sfsro_mirrorarg> defaultMirrors;
-  sfsro_mirrorarg ma;
-  ma.host = "localhost";
-  defaultMirrors.push_back(ma);
-  si.sfsro->v1->mirrors.set (defaultMirrors.base(), defaultMirrors.size (), freemode::NOFREE);
   
   // at this point, we have two fsinfo structures that both have
   // been verified by the same public key.
