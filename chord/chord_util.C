@@ -43,23 +43,21 @@ convert_coords (dorpc_arg *arg)
 }
 
 void
-convert_coords (dorpc_res *res, vec<float> out)
+convert_coords (dorpc_res *res, vec<float> &out)
 {
-
   for (unsigned int i = 0; i < res->resok->src_coords.size (); i++) {
     warn << "converting: " << res->resok->src_coords[i] << "\n";
     float c = ((float)res->resok->src_coords[i]);
     printf ("c:  %f\n", c);
     out.push_back (c);
   }
-
 }
 
 bool
-in_vector (vec<chordID> vec, chordID N)
+in_vector (const vec<chordID> &v, chordID N)
 {
-  for (unsigned int i = 0; i < vec.size (); i++)
-    if (vec[i] == N) return true;
+  for (unsigned int i = 0; i < v.size (); i++)
+    if (v[i] == N) return true;
   return false;
 }
 

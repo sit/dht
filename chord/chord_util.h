@@ -40,9 +40,9 @@ struct hashID {
 };
 
 vec<float> convert_coords (dorpc_arg *arg);
-void convert_coords (dorpc_res *res, vec<float> out);
+void convert_coords (dorpc_res *res, vec<float> &out);
 
-bool in_vector (vec<chordID> vec, chordID N);
+bool in_vector (const vec<chordID> &v, chordID N);
 
 str gettime ();
 u_int64_t getusec ();
