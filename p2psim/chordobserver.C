@@ -111,9 +111,7 @@ ChordObserver::init_nodes(unsigned int num)
 void
 ChordObserver::execute()
 {
-  if (!_reschedule) {
-    return;
-  }
+  if (!_reschedule) return;
 
   list<Protocol*> l = Network::Instance()->getallprotocols(_type);
   list<Protocol*>::iterator pos;

@@ -8,7 +8,7 @@
 using namespace std;
 
 Chord::IDMap 
-LocTableToe::next_hop(Chord::CHID key, Chord::IDMap me)
+LocTableToe::next_hop(Chord::CHID key, bool *done) 
 {
   idmapwrap *e = ring.first ();
   Topology *t = Network::Instance()->gettopology ();
@@ -34,6 +34,8 @@ LocTableToe::next_hop(Chord::CHID key, Chord::IDMap me)
   
   assert (ret.ip != me.ip);
   assert (ConsistentHash::betweenrightincl(me.id, key, ret.id));
+
+  *done = false;
   return ret;
 }
 

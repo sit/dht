@@ -72,14 +72,25 @@ Chord::lookup(Args *args)
   uint recurs = args->nget<int>("recurs");
   Time begin = now();
   Topology *t = Network::Instance()->gettopology();
+  IDMap result;
   if (recurs) {
-    IDMap v = find_successors_recurs(k, false);
+    result = find_successors_recurs(k, false);
     //    uint lat = t->latency(me.ip, v.ip);
   } else {
     vector<IDMap> v = find_successors(k, 1, false); 
-    uint lat = v.size()>0? t->latency(me.ip, v[0].ip):0;
+    assert(v.size() > 0);
+    result = v[0];
+    uint lat = t->latency(me.ip, v[0].ip);
     printf("%s lookup %16qx results (%u,%16qx) interval %u %llu\n", ts(),k, v.size() > 0 ?v[0].ip:0, v.size() > 0 ? v[0].id:0, 2 * lat, now() - begin);
   }
+
+#ifdef CHORD_DEBUG
+  vector<IDMap> ids = ChordObserver::Instance(NULL)->get_sorted_nodes(0);
+  IDMap tmp;
+  tmp.id = k;
+  uint pos = upper_bound(ids.begin(), ids.end(), tmp, Chord::IDMap::cmp) - ids.begin();
+  assert(ids[pos].ip == result.ip);
+#endif
 }
 
 void
@@ -198,28 +209,30 @@ Chord::find_successors_recurs(CHID key, bool intern)
   fa.v.push_back(me);
   fa.key = key;
 
-  //  Time before = now();
+  Time before = now();
+  if (!intern) {
+    printf("%s find_successors_recurs for key %qx\n", ts(), key);
+  }
+
   doRPC(me.ip, &Chord::next_recurs_handler, &fa, &fr);
   IDMap succ = fr.v.back();
-  if (!intern) {
-    printf("find_successors_recurs for (id %qx, key %qx) is (%u, %qx) hops %d\n", me.id, key, succ.ip, succ.id, fr.v.size());
-  }
+
 #ifdef CHORD_DEBUG
   Topology *t = Network::Instance()->gettopology();
   printf("%s find_successors_recurs %qx route ",ts(),key);
   uint total_lat = 0;
   for (uint i = 0; i < fr.v.size(); i++) {
     IDMap n = fr.v[i];
-    printf("(%u,%qx,%u) ", n.ip, n.id, i < (fr.v.size()-1)? 2 * t->latency(fr.v[i].ip, fr.v[i+1].ip): 0);
-    if (i < (fr.v.size() - 3)) {
+    printf("(%u,%qx,%u, %u) ", n.ip, n.id, total_lat, i < (fr.v.size()-1)? 2 * t->latency(fr.v[i].ip, fr.v[i+1].ip): 0);
+    if (i < (fr.v.size() - 1)) {
       total_lat += 2 * t->latency(fr.v[i].ip,fr.v[i+1].ip);
     }
   }
-  //  uint interval = now() - before;
-  //assert(interval == total_lat);
+  uint interval = now() - before;
   printf("\n");
 
-  printf("%s lookup %16qx results (%u,%16qx) interval %u %u\n", ts(), key, succ.ip, succ.id, 2 * t->latency(me.ip, succ.ip), total_lat);
+  printf("%s lookup %16qx results (%u,%16qx) hops %d interval %u %u %u %u\n", ts(), key, succ.ip, succ.id, fr.v.size(), 2 * t->latency(me.ip, succ.ip), total_lat, interval, total_lat + t->latency(fr.v[fr.v.size()-3].ip, fr.v[fr.v.size()-1].ip));
+  //assert(interval == total_lat);
 
 #endif
   return succ;
@@ -230,8 +243,12 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
   check_static_init();
 
   IDMap succ = loctable->succ(me.id+1);
-  if(ConsistentHash::betweenrightincl(me.id, succ.id, args->key) ||
-      succ.id == me.id) {
+  IDMap pred = loctable->pred();
+  /*
+  if (ConsistentHash::betweenrightincl(pred.id, me.id, args->key)) {
+    ret->v = args->v;
+  }else */if (ConsistentHash::betweenrightincl(me.id, succ.id, args->key) || succ.id == me.id) {
+    printf("haha\n");
     ret->v = args->v;
     ret->v.push_back(succ);
   }else{
@@ -256,8 +273,15 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
 
     assert(nargs.v.size() < 100);
 
+    //XXX i never check if succ is dead or not
     while (!r) {
-      IDMap next = loctable->next_hop(args->key, me);
+      bool done;
+      IDMap next = loctable->next_hop(args->key, &done);
+      if (done) {
+	ret->v = nargs.v;
+	ret->v.push_back(next);
+	return;
+      }
       nargs.v.push_back(next);
 
       if (_vivaldi) {
@@ -301,8 +325,16 @@ Chord::next_handler(next_args *args, next_ret *ret)
  } else {
     ret->done = false;
     // XXX for iterative, me should really be the requesting node
-    ret->next = loctable->next_hop(args->key, me);
-    assert(ret->next.ip != me.ip);
+    bool done;
+    IDMap next = loctable->next_hop(args->key,&done);
+    if (!done) {
+      ret->next = next;
+      assert(ret->next.ip != me.ip);
+    } else {
+      ret->done = true;
+      ret->v.clear();
+      ret->v.push_back(next);
+    }
  }
 }
 
@@ -566,9 +598,9 @@ LocTable::LocTable()
   rsz = 0;
 } 
 
-void LocTable::init (Chord::IDMap me)
+void LocTable::init (Chord::IDMap m)
 {
-  myid = me.id;
+  me = m;
   pin(me.id, 1, 0);
   idmapwrap *elm = new idmapwrap(me);
 
@@ -618,7 +650,7 @@ LocTable::succs(ConsistentHash::CHID id, unsigned int m)
 Chord::IDMap
 LocTable::pred()
 {
-  return pred(myid-1);
+  return pred(me.id -1);
 }
 
 Chord::IDMap
@@ -626,22 +658,22 @@ LocTable::pred(Chord::CHID id)
 {
   idmapwrap *elm = ring.closestpred(id);
   assert(elm);
-  assert(elm->n.id == myid || ConsistentHash::betweenrightincl(myid, id, elm->n.id));
+  assert(elm->n.id == me.id || ConsistentHash::betweenrightincl(me.id, id, elm->n.id));
   return elm->n;
 }
 
 void
 LocTable::print ()
 {
-  idmapwrap *me = ring.search(myid);
-  assert(me);
+  idmapwrap *m = ring.search(me.id);
+  assert(m);
   printf ("ring:\n");
-  idmapwrap *i = me;
+  idmapwrap *i = m;
   do {
     printf ("  %5u,%16qx\n", i->n.ip, i->n.id);
     i = ring.next(i);
     if (!i) i = ring.first();
-  }while (i != me);
+  }while (i != m);
 }
 
 /* adds a list of nodes, sorted by increasing CHIDs
@@ -692,7 +724,7 @@ LocTable::add_node(Chord::IDMap n)
 
   assert (ring.repok ());
   if (vis) {
-    succ1 = succ(myid+1);
+    succ1 = succ(me.id+1);
     pred1 = pred();
   }
 
@@ -710,16 +742,16 @@ LocTable::add_node(Chord::IDMap n)
   }
 
   assert (ring.repok ());
-  Chord::IDMap succ2 = succ(myid + 1);
+  Chord::IDMap succ2 = succ(me.id + 1);
   Chord::IDMap pred2 = pred ();
 
   if (vis) {
     if(succ1.id != succ2.id) {
-      printf("vis %llu succ %16qx %16qx\n", now (), myid, succ2.id);
+      printf("vis %llu succ %16qx %16qx\n", now (), me.id, succ2.id);
     }
 
     if(pred1.id != pred2.id) {
-      printf("vis %llu pred %16qx %16qx\n", now (), myid, pred2.id);
+      printf("vis %llu pred %16qx %16qx\n", now (), me.id, pred2.id);
     }
   }
 }
@@ -860,7 +892,8 @@ LocTable::evict() // all unnecessary(unpinned) nodes
 }
 
 Chord::IDMap
-LocTable::next_hop(Chord::CHID key, Chord::IDMap requestor)
+LocTable::next_hop(Chord::CHID key, bool *done)
 {
+  *done = false; 
   return pred(key);
 }

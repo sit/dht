@@ -11,7 +11,7 @@ public:
   LocTableToe () : LocTable () {};
   virtual ~LocTableToe () {};
 
-  Chord::IDMap next_hop(Chord::CHID key, Chord::IDMap me); 
+  Chord::IDMap next_hop(Chord::CHID key, bool *done);
 };
 
 class ChordToe : public ChordFinger {

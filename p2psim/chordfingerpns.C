@@ -68,7 +68,7 @@ ChordFingerPNS::init_state(vector<IDMap> ids)
 	}
       }
       loctable->add_node(min_f);
-      ((LocTablePNS *)loctable)->add_finger(make_pair(min_f_pred, min_f));
+//      ((LocTablePNS *)loctable)->add_finger(make_pair(min_f_pred, min_f));
       //Gummadi assumes the node knows the idspace each of the neighbors is 
       //responsible for. this is equivalent to knowing each of the neighbors' predecessor.
       //so add the predecessor for this finger
@@ -82,6 +82,7 @@ ChordFingerPNS::init_state(vector<IDMap> ids)
   for (uint i = 1; i <= nsucc; i++) {
     loctable->add_node(ids[(my_pos + i) % sz]);
   }
+ // ((LocTablePNS *)loctable)->add_finger(make_pair(ids[my_pos %sz],ids[(my_pos+1)%sz]));
   //add predecessor
   loctable->add_node(ids[(my_pos-1) % sz]);
   printf("ChordFingerPNS::init_state (%u,%qx) loctable size %d\n", me.ip, me.id, loctable->size());
