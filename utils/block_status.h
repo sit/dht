@@ -17,12 +17,14 @@ class block_status {
   sklist_entry<block_status> sklink;
   chordID id;
   vec<ptr<location> > missing; 
+  vec<ptr<location> > confirmed;
 
 public:
   block_status (chordID b) : id (b) {};
   bool is_missing_on (chordID n);
   void missing_on (ptr<location> l);
   void found_on (ptr<location> l);
+  void clear_confirmed () { confirmed.clear (); };
   void print (strbuf &out);
 };
 
@@ -40,6 +42,7 @@ public:
   void missing (ptr<location> remote, const chordID &b);
   const vec<chordID> missing_what (const chordID &n);
   bool  missing_on (const chordID &b, chordID &n);
+  bool  confirmed_on (const chordID &b, chordID &n);
 
   const ptr<location> best_missing (const chordID &b, vec<ptr<location> > succs);
   void unmissing (ptr<location> remote, const chordID &b);

@@ -40,6 +40,14 @@ block_status::found_on (ptr<location> l)
       return;
     }
   }
+
+  //add it to the confirmed list
+  for (size_t i = 0; i < confirmed.size (); i++)
+    if (confirmed[i]->id () == l->id ()) {
+      assert (confirmed[i] == l);
+      return;
+    }
+  confirmed.push_back (l);
 }
 
 bool
@@ -102,6 +110,11 @@ block_status_manager::unmissing (ptr<location> remote, const chordID &b)
   if (blocks[b] == NULL)
     return;
   blocks[b]->found_on (remote);
+
+  // now that we have the block, we don't need to remember
+  // who we confirmed to have it
+  if (remote->id () == my_id) 
+    blocks[b]->clear_confirmed ();
 }
 
 chordID
@@ -138,16 +151,33 @@ block_status_manager::where_missing (const chordID &b)
   return bs->missing;
 }
 
+bool
+search_vec (vec<ptr<location> > m, chordID &n)
+{
+  for (u_int i = 0; i < m.size (); i++)
+    if (m[i]->id () == n) return true;
+  return false;
+}
+
 bool 
 block_status_manager::missing_on (const chordID &b, chordID &n)
 {
   block_status *bs = blocks[b];
   if (bs == NULL) return false;
   vec<ptr<location> > m = bs->missing;
-   for (u_int i = 0; i < m.size (); i++)
-     if (m[i]->id () == n) return true;
-   return false;
+  return search_vec (m, n);
 }
+
+
+bool 
+block_status_manager::confirmed_on (const chordID &b, chordID &n)
+{
+  block_status *bs = blocks[b];
+  if (bs == NULL) return false;
+  vec<ptr<location> > m = bs->confirmed;
+  return search_vec (m, n);
+}
+
 
 const vec<chordID>
 block_status_manager::missing_what (const chordID &n)
