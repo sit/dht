@@ -1,4 +1,4 @@
-dnl $Id: acinclude.m4,v 1.9 2003/01/17 15:23:04 jsr Exp $
+dnl $Id: acinclude.m4,v 1.10 2003/01/23 23:54:51 fdabek Exp $
 
 # Configure paths for GTK+
 # Owen Taylor     97-11-3
@@ -964,12 +964,12 @@ dnl
 dnl Find BekeleyDB 3
 dnl
 AC_DEFUN(SFS_DB3,
-[AC_SUBST(DB3_DIR)
+[AC_ARG_WITH(db3,
+--with-db3[[=/usr/local]]   specify path for BerkeleyDB-3)
+AC_SUBST(DB3_DIR)
 AC_CONFIG_SUBDIRS($DB3_DIR)
 AC_SUBST(DB3_LIB)
 unset DB3_LIB
-AC_ARG_WITH(db3,
---with-db3[[=/usr/local]]   Use Btree from BerkeleyDB-3 library)
 
 DB3_DIR=`cd $srcdir && echo db-3.*/dist/`
 if test -d "$srcdir/$DB3_DIR"; then
@@ -989,7 +989,10 @@ if test "$with_db3" != no; then
 	DB3_LIB='-L$(top_builddir)/'"$DB3_DIR -ldb"
 	AC_MSG_RESULT([using distribution in $DB3_DIR subdirectory])
     else
-	libdbrx='^libdb([[3.-]].*)?.(la|so)$'
+	libdbrx='^libdb-?([[3.-]].*)?.(la|so|a)$'
+	libdbrxla='^libdb-?([[3.-]].*)?.la$'
+	libdbrxso='^libdb-?([[3.-]].*)?.so$'
+	libdbrxa='^libdb-?([[3.-]].*)?.a$'
 	if test "$with_db3" = yes; then
 	    for dir in "$prefix/BerkeleyDB.3.1" /usr/local/BerkeleyDB.3.1 \
 		    "$prefix/BerkeleyDB.3.0" /usr/local/BerkeleyDB.3.0 \
@@ -997,7 +1000,7 @@ if test "$with_db3" != no; then
 		test -f $dir/include/db.h -o -f $dir/include/db3.h \
 			-o -f $dir/include/db3/db.h || continue
 		if test -f $dir/lib/libdb.a \
-			|| ls $dir/lib | egrep -q "$libdbrx"; then
+			|| ls $dir/lib | egrep "$libdbrx" >/dev/null 2>&1; then
 		    with_db3="$dir"
 		    break
 		fi
@@ -1021,7 +1024,11 @@ if test "$with_db3" != no; then
 	    AC_MSG_ERROR([Could not find BerkeleyDB library version 3])
 	fi
 
-	DB3_LIB=`ls $with_db3/lib | egrep "$libdbrx" | tail -1`
+	DB3_LIB=`ls $with_db3/lib | egrep "$libdbrxla" | tail -1`
+	test ! -f "$with_db3/lib/$DB3_LIB" \
+	    && DB3_LIB=`ls $with_db3/lib | egrep "$libdbrxso" | tail -1`
+	test ! -f "$with_db3/lib/$DB3_LIB" \
+	    && DB3_LIB=`ls $with_db3/lib | egrep "$libdbrxa" | tail -1`
 	if test -f "$with_db3/lib/$DB3_LIB"; then
 	    DB3_LIB="$with_db3/lib/$DB3_LIB"
 	elif test "$with_db3" = /usr; then
