@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.19 2004/03/24 02:16:24 benjie Exp $
+# $Id: Makefile.am,v 1.20 2004/04/28 18:35:55 sit Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -27,6 +27,7 @@ lsd_LDADD = ../dhash/libdhash.a ../dhc/libdhc.a ../merkle/libmerkle.a \
 	    $(DBLIB) ${LDADD} 
 
 lsdctl_SOURCES = lsdctl_prot.C lsdctl.C
+lsdctl_LDADD = ../svc/libsvc.la $(LDADD)
 
 
 EXTRA_DIST = .cvsignore

@@ -33,6 +33,9 @@
 
 #include "lsdctl_prot.h"
 
+#include <location.h>
+#include <locationtable.h>
+
 #include <debruijn.h>
 #include <fingerroute.h>
 #include <fingerroutepns.h>
@@ -128,7 +131,7 @@ lsdctl_dispatch (ptr<asrv> s, svccb *sbp)
     s->setcb (NULL);
     return;
   }
-  warnx << "received lsdctl " << sbp->proc () << "\n";
+  info << "received lsdctl " << sbp->proc () << "\n";
 
   switch (sbp->proc ()) {
   case LSDCTL_NULL:
@@ -140,6 +143,14 @@ lsdctl_dispatch (ptr<asrv> s, svccb *sbp)
     halt ();
     break;
 
+  case LSDCTL_SETTRACELEVEL:
+    {
+      int *lvl = sbp->template getarg<int> ();
+      info << "Setting new maxprio to " << *lvl << "\n";
+      modlogger::setmaxprio (*lvl); /* XXX should validate this value! */
+      sbp->reply (NULL);
+    }
+    break;
   case LSDCTL_SETSTABILIZE:
     {
       bool *s = sbp->template getarg<bool> ();
@@ -162,6 +173,34 @@ lsdctl_dispatch (ptr<asrv> s, svccb *sbp)
 	  dh[i]->stop ();
       }
       sbp->replyref (a->enable);
+    }
+    break;
+  case LSDCTL_GETLOCTABLE:
+    {
+      // int *v = sbp->template getarg<int> ();
+      // Ignore v
+      ptr<lsdctl_nodeinfolist> nl = New refcounted<lsdctl_nodeinfolist> ();
+      nl->nlist.setsize (chordnode->locations->size ());
+      ptr<location> l = chordnode->locations->first_loc ();
+      int i = 0;
+      while (l != NULL) {
+	nl->nlist[i].n = l->id ();
+	nl->nlist[i].addr = l->address ();
+	nl->nlist[i].vnode_num = l->vnode ();
+	const vec<float> c = l->coords ();
+	for (int j = 0; j < 3; j++)
+	  nl->nlist[i].coords[j] = (int32_t) c[j];
+	nl->nlist[i].a_lat = (u_int32_t) l->distance ();
+	nl->nlist[i].a_var = (u_int32_t) l->a_var ();
+	nl->nlist[i].nrpc = l->nrpc ();
+	nl->nlist[i].pinned = chordnode->locations->pinned (l->id ());
+	nl->nlist[i].alive = l->alive ();
+	nl->nlist[i].dead_time = l->dead_time ();
+
+	l = chordnode->locations->next_loc (l->id ());
+	i++;
+      }
+      sbp->reply (nl);
     }
     break;
   default:

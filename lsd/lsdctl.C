@@ -14,6 +14,7 @@ void lsdctl_exit (int argc, char *argv[]);
 void lsdctl_trace (int argc, char *argv[]);
 void lsdctl_stabilize (int argc, char *argv[]);
 void lsdctl_replicate (int argc, char *argv[]);
+void lsdctl_getloctab (int argc, char *argv[]);
 
 struct modevec {
   const char *name;
@@ -26,6 +27,7 @@ const modevec modes[] = {
   { "trace", lsdctl_trace, "trace crit|warning|info|trace" },
   { "stabilize", lsdctl_stabilize, "stabilize start|stop" },
   { "replicate", lsdctl_replicate, "replicate [-r] start|stop" },
+  { "loctab", lsdctl_getloctab, "loctab [vnodenum]" },
   { NULL, NULL, NULL }
 };
 
@@ -170,6 +172,37 @@ lsdctl_replicate (int argc, char *argv[])
   exit (0);
 }
    
+void
+lsdctl_getloctab (int argc, char *argv[])
+{
+  int vnode = 0; // XXX should actually get vnode from cmd line.
+  ptr<lsdctl_nodeinfolist> nl = New refcounted <lsdctl_nodeinfolist> ();
+  ptr<aclnt> c = lsdctl_connect (control_socket);
+
+  clnt_stat err = c->scall (LSDCTL_GETLOCTABLE, &vnode, nl);
+  if (err)
+    fatal << "lsdctl_loctab: " << err << "\n";
+  strbuf out;
+  for (size_t i = 0; i < nl->nlist.size (); i++) {
+    out << nl->nlist[i].n << " "
+        << nl->nlist[i].addr.hostname << " "
+        << nl->nlist[i].addr.port << " "
+        << nl->nlist[i].vnode_num << " "
+        << nl->nlist[i].coords[0] << " "
+        << nl->nlist[i].coords[1] << " "
+        << nl->nlist[i].coords[2] << " "
+        << nl->nlist[i].a_lat << " "
+        << nl->nlist[i].a_var << " "
+        << nl->nlist[i].nrpc << " "
+        << nl->nlist[i].pinned << " "
+        << nl->nlist[i].alive << " "
+        << nl->nlist[i].dead_time << "\n";
+  }
+  make_sync (1);
+  out.tosuio ()->output (1);
+  exit (0);
+}
+
 int
 main (int argc, char *argv[])
 {

@@ -5,6 +5,24 @@ struct lsdctl_setreplicate_arg {
   bool randomize; /* start at 0 at the same time if false */
 };
 
+/* Cf location.h */
+struct lsdctl_nodeinfo {
+  chordID n;
+  net_address addr;
+  int32_t vnode_num;
+  int32_t coords[3]; /* XXX hardcoded length of 3; cf NCOORD in chord.h */
+  u_int32_t a_lat;
+  u_int32_t a_var;
+  u_int32_t nrpc;
+  bool pinned;
+  bool alive;
+  int32_t dead_time;
+};
+
+struct lsdctl_nodeinfolist {
+  lsdctl_nodeinfo nlist<>;
+};
+
 program LSDCTL_PROG {
 	version LSDCTL_VERSION {
 		void
@@ -27,5 +45,10 @@ program LSDCTL_PROG {
 		LSDCTL_SETREPLICATE (lsdctl_setreplicate_arg) = 4;
 		/** Enable (true) or disable (false) replica maintenance.
 		 *  Returns new replication state. */
+
+		lsdctl_nodeinfolist
+		LSDCTL_GETLOCTABLE (int) = 5;
+		/** Return location table for given vnode.
+		 *  This is often the same, regardless of vnode. */
 	} = 1;
 } = 344500;
