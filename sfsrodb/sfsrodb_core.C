@@ -1,4 +1,4 @@
-/* $Id: sfsrodb_core.C,v 1.15 2001/09/10 01:21:59 fdabek Exp $ */
+/* $Id: sfsrodb_core.C,v 1.16 2001/11/07 22:58:32 cates Exp $ */
 
 /*
  *
@@ -56,7 +56,6 @@ sfsrodb_put (const void *keydata, size_t keylen,
   arg->data.setsize (remain);
   arg->offset = 0;
   arg->attr.size = contentlen;
-  memset(arg->data.base (), 'a', remain);
   memcpy(arg->data.base (), (char *)contentdata, remain);
   arg->type = DHASH_STORE;
 
