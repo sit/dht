@@ -173,20 +173,46 @@ startp2pd (int myp)
 
 
 static void
-initID (int n, sfs_ID *ID)
+initID (str s, sfs_ID *ID)
 {
-  *ID = n;
+  sfs_ID n (s);
+  sfs_ID b (1);
+  b = b << NBIT;
+  b = b - 1;
+  *ID = n & b;
 }
 
 static void
-initID (sfs_ID *ID, size_t s)
+initID (sfs_ID *ID, int index)
 {
-
+#if 0
   *ID = random_bigint (NBIT);
+#endif
+  vec<in_addr> addrs;
+  if (!myipaddrs (&addrs))
+    fatal ("cannot find my IP address.\n");
+
+  in_addr *addr = addrs.base ();
+  while (addr < addrs.lim () && ntohl (addr->s_addr) == INADDR_LOOPBACK)
+    addr++;
+  if (addr >= addrs.lim ())
+    fatal ("cannot find my IP address.\n");
+
+  str ids = inet_ntoa (*addr);
+  ids = ids << "." << index;
+  warnx << "my address: " << ids << "\n";
+  char id[sha1::hashsize];
+  sha1_hash (id, ids, ids.len());
+  mpz_set_rawmag_be (ID, id, sizeof (id));  // For big endian
+  sfs_ID b (1);
+  b = b << NBIT;
+  b = b - 1;
+  *ID = *ID & b;
+  warnx << "myid: " << *ID << "\n";
 }
 
 static void
-parseconfigfile (str cf)
+parseconfigfile (str cf, int index)
 {  
   parseargs pa (cf);
   bool errors = false;
@@ -208,21 +234,19 @@ parseconfigfile (str cf)
         warn << cf << ":" << line << ": usage: wellknownport <number>\n";
       }
     } else if (!strcasecmp (av[0], "myID")) {
-      unsigned n;
-      if (av.size () != 2 || !convertint (av[1], &n)) {
+      if (av.size () != 2) {
         errors = true;
         warn << cf << ":" << line << ": usage: myID <number>\n";
       } else {
-	initID (n, &myID);
+	initID (av[1], &myID);
 	myid = true;
       }
     } else if (!strcasecmp (av[0], "wellknownID")) {
-      unsigned n;
-      if (av.size () != 2 || !convertint (av[1], &n)) {
+      if (av.size () != 2) {
         errors = true;
-        warn << cf << ":" << line << ": usage: myID <number>\n";
+        warn << cf << ":" << line << ": usage: wellknownID <number>\n";
       } else {
-	initID (n, &wellknownID);
+	initID (av[1], &wellknownID);
       }
     } else if (!strcasecmp (av[0], "wellknownport")) {
       if (av.size () != 2 || !convertint (av[1], &wellknownport)) {
@@ -239,7 +263,7 @@ parseconfigfile (str cf)
     }
   }
   if (!myid) {
-    initID (&myID, NBIT);
+    initID (&myID, index);
   }
   if (errors) {
     fatal ("errors in config file\n");
@@ -259,17 +283,21 @@ usage ()
 int
 main (int argc, char **argv)
 {
+  int index = 0;
   setprogname (argv[0]);
   sfsconst_init ();
   random_init ();
   int ch;
-  while ((ch = getopt (argc, argv, "S:f:")) != -1)
+  while ((ch = getopt (argc, argv, "S:i:f:")) != -1)
     switch (ch) {
     case 'S':
       p2psocket = optarg;
       break;
+    case 'i':
+      index = atoi (optarg);
+      break;
     case 'f':
-      parseconfigfile (optarg);
+      parseconfigfile (optarg, index);
       break;
     default:
       usage ();

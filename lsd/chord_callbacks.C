@@ -50,6 +50,6 @@ p2p::registerActionCallback(cbaction_t cb)
 void
 p2p::doActionCallbacks(sfs_ID id, char action) 
 {
-  for (int i=0; i < actionCallbacks.size (); i++)
+  for (unsigned int i=0; i < actionCallbacks.size (); i++)
     actionCallbacks[i] (id, action);
 }

@@ -222,6 +222,7 @@ p2p::p2p (str host, int hostport, const sfs_ID &hostID,
   finger_table[0].alive = true;
   warnx << "namemyID " << myaddress.hostname << "\n";
   warnx << "myID is " << myID << "\n";
+  warnx << "wellknowID is " << wellknownID << "\n";
   warnx << "myport is " << myaddress.port << "\n";
   for (int i = 1; i <= NBIT; i++) {
     finger_table[i].start = successorID(myID, i-1);

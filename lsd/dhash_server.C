@@ -18,7 +18,7 @@ dhash::dhash() {
 
   warn << "init dhash\n";
   char dbname[1024];
-  sprintf(dbname, "dhash.db.%ld", getpid ());
+  sprintf(dbname, "dhash.db.%d", getpid ());
   if (int err = db->opendb(const_cast < char *>(dbname), opts)) {
     warn << "open returned: " << strerror(err) << err << "\n";
     exit (-1);

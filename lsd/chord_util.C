@@ -138,7 +138,7 @@ between (sfs_ID &a, sfs_ID &b, sfs_ID &n)
   } else {
     r = (n >= a) || (n <= b);
   }
-  warnx << n << " between( " << a << ", " <<  b << "): " <<  r << "\n";
+  // warnx << n << " between( " << a << ", " <<  b << "): " <<  r << "\n";
   return r;
 }
 
@@ -150,3 +150,4 @@ betweenabs (sfs_ID &a, sfs_ID &b, sfs_ID &n)
   //  warnx << n << " between( " << a << ", " <<  b << "): " <<  r << "\n";
   return r;
 }
+

@@ -64,7 +64,7 @@ dhashclient::insert_findsucc_cb(svccb *sbp, dhash_insertarg *item,
     sbp->reply(res);
   } else {
 
-    for (int i = 0; i < path.size (); i++) warnx << path[i] << " ";
+    for (unsigned int i = 0; i < path.size (); i++) warnx << path[i] << " ";
     warnx << "were touched to insert " << item->key << "\n";
 
     dhash_stat *stat = New dhash_stat ();
@@ -89,8 +89,7 @@ dhashclient::insert_store_cb(svccb *sbp, dhash_stat *res, clnt_stat err)
 void
 dhashclient::cache_on_path(dhash_insertarg *item, route path) 
 {
-  
-  for (int i = 0; i < path.size (); i++) {
+  for (unsigned int i = 0; i < path.size (); i++) {
     warn << "caching " << i << " out of " << path.size () << "\n";
     warn << "item is " << item->key << "\n";
     item->type = DHASH_CACHE;
@@ -98,7 +97,6 @@ dhashclient::cache_on_path(dhash_insertarg *item, route path)
     defp2p->doRPC(path[i], dhash_program_1, DHASHPROC_STORE, item, res,
 		  wrap(this, &dhashclient::cache_store_cb, res));
   }
-
 }
 
 void
