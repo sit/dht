@@ -231,7 +231,7 @@ public:
   // }}}
   // {{{ find_node_args and find_node_result
   struct find_node_args {
-    find_node_args(NodeID xid, IPAddress xip, NodeID k = 0) :
+    find_node_args(NodeID xid, IPAddress xip, NodeID k) :
       id(xid), ip(xip), key(k), tid(threadid()) {}
     NodeID id;
     IPAddress ip;
@@ -242,7 +242,8 @@ public:
   };
 
   class find_node_result { public:
-    find_node_result() { }
+    find_node_result(unsigned h = 0) : hop(h) { }
+    unsigned hop;
     vector<k_nodeinfo> results;
     NodeID rid;
   };
@@ -334,7 +335,9 @@ private:
 
   // global statistics
   static double _rpc_bytes; // total traffic
-  static double _good_latency; // successful lookups
+  static double _good_latency; // successful lookups, total time
+  static double _ping_latency; // successful lookups, time spent in ping
+  static double _lookup_latency; // successful lookups, time spent in lookup
   static double _good_hops;
   static int _good_lookups;
   static int _ok_failures;
