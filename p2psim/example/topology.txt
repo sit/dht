@@ -9,7 +9,7 @@
 # node-id can't be 0
 topology Euclidean
 failure_model NullFailureModel
-loss_rate 2
+loss_rate 2.14
 
 1 0,0
 2 5,5
