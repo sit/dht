@@ -51,7 +51,7 @@ finger_table::closestpred (const chordID &x, vec<chordID> failed)
   ptr<location> n;
 
   for (int i = NBIT - 1; i >= 0; i--) {
-    n = finger_table::finger (i);
+    n = finger (i);
     if (between (myID, x, n->id ()) && (!in_vector (failed, n->id ())))
       return n;
   }
@@ -127,6 +127,9 @@ finger_table::stabilize_finger ()
   // For each node that we consider, if it has changed since the last time
   // we looked, do the full work to find out who is right. Otherwise,
   // just quickly check to see if its predecessor has changed.
+  
+    warn << "stabilize_finger: " << nout_backoff << "\n";
+
   nout_backoff++;
   if (fingers[i] != finger_table::finger (i)) {
     fingers[i] = finger_table::finger (i);
@@ -150,6 +153,8 @@ void
 finger_table::stabilize_finger_getpred_cb (chordID dn, int i, chord_node p,
 					   chordstat status)
 {
+    warn << "stabilize_finger_getpred__cb: " << nout_backoff << "\n";
+
   nout_backoff--;
   if (status) {
     warnx << myID << ": stabilize_finger_getpred_cb: " 
@@ -172,6 +177,7 @@ finger_table::stabilize_finger_getpred_cb (chordID dn, int i, chord_node p,
       warnx << myID << ": stabilize_finger_getpred_cb: "
 	    << "fixing finger " << i << "\n";
       nslowfinger++;
+	warn << "stabilize_fingergetpred_cb (2): " << nout_backoff << "\n";
       nout_backoff++;
       myvnode->find_successor
 	(s, wrap (this, &finger_table::stabilize_findsucc_cb, s, i));
@@ -185,6 +191,7 @@ finger_table::stabilize_findsucc_cb (chordID dn, int i,
 				     route search_path, 
 				     chordstat status)
 {
+    warn << "stabilize_findsucc_cb: " << nout_backoff << "\n";
   nout_backoff--;
   if (status) {
     warnx << myID << ": stabilize_findsucc_cb: "

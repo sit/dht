@@ -10,6 +10,11 @@
 #define trace   modlogger ("finger_table_pns", modlogger::TRACE)
 #define warning modlogger ("finger_table_pns", modlogger::WARNING)
 
+pnsfinger::pnsfinger (ptr<location> l_)
+ : n_ (l_->id ()), loc_ (l_) 
+{
+}
+
 ptr<finger_table> 
 finger_table_pns::produce_finger_table (ptr<vnode> v, ptr<locationtable> l)
 {
@@ -19,19 +24,26 @@ finger_table_pns::produce_finger_table (ptr<vnode> v, ptr<locationtable> l)
 finger_table_pns::finger_table_pns (ptr<vnode> v, ptr<locationtable> l)
   : finger_table (v, l), fp (0)
 {
-  for (int i = 0; i < NBIT; i++) 
-    pns_fingers[i] = NULL;
+}
+
+finger_table_pns::~finger_table_pns ()
+{
+  pnsfinger *f, *nf;
+  f = pnsfingers.first ();
+  while (f != NULL) {
+    nf = pnsfingers.next (f);
+    delete f;
+    f = nf;
+  }
 }
 
 ptr<location>
 finger_table_pns::finger (int i)
 {
-  ptr<location> l;
-  l = pns_fingers[i];
-  if (!l || !l->alive ())
-    l = finger_table::finger (i);
-
-  return l;
+  pnsfinger *l = pnsfingers.closestsucc (starts[i]);
+  if (l && l->loc_->alive ())
+    return l->loc_;
+  return finger_table::finger (i);
 }
 
 ptr<location>
@@ -57,6 +69,7 @@ finger_table_pns::stabilize_finger ()
   // now check on one of the real fingers to make sure 
   // that we have the fastest finger in the "fan" in our table
   // find the first unique finger after fp
+  int left = fp;
   ptr<location> real_finger = finger_table::finger (fp);
   int checked = 0; // don't keep looping if there is one unique finger
   while (real_finger == finger_table::finger (fp) && checked++ < NBIT) {
@@ -67,13 +80,14 @@ finger_table_pns::stabilize_finger ()
   
   if (checked < NBIT) {
     myvnode->get_succlist (real_finger,
-			   wrap (this, &finger_table_pns::getsucclist_cb, fp));
+			   wrap (this, &finger_table_pns::getsucclist_cb,
+				 left, fp));
   }
 
 }
 
 void
-finger_table_pns::getsucclist_cb (int target_finger, vec<chord_node> succs,
+finger_table_pns::getsucclist_cb (int l, int r, vec<chord_node> succs,
 				  chordstat err)
 {
   if (err) {
@@ -83,12 +97,8 @@ finger_table_pns::getsucclist_cb (int target_finger, vec<chord_node> succs,
     int best_succ = -1;
     vec<float> my_coords = myvnode->my_location ()->coords ();
 
-    chordID left = starts[target_finger];
-    chordID right;
-    if (target_finger < NBIT)
-      right = starts[target_finger + 1];
-    else 
-      right = myvnode->my_ID ();
+    chordID left = starts[l];
+    chordID right = starts[r];
     
     int real_lat = 0;
     
@@ -96,8 +106,8 @@ finger_table_pns::getsucclist_cb (int target_finger, vec<chord_node> succs,
     for (u_int i = 0; i < succs.size (); i++) {
       // We restrict fingers to be within the real range.
       if (!betweenleftincl (left, right, succs[i].x)) {
-	trace << myvnode->my_ID () << ": terminating early for finger "
-	      << target_finger << " i = " << i << ".\n";
+	trace << myvnode->my_ID () << ": terminating early for fingers "
+	      << l << " thru " << r << "; i = " << i << ".\n";
 	break;
       }
       
@@ -114,10 +124,12 @@ finger_table_pns::getsucclist_cb (int target_finger, vec<chord_node> succs,
     }
 
     if (best_succ > 0) {
-      trace << "new PNS finger " << target_finger << " is successor "
+      trace << "new PNS finger " << l << " is successor "
 	    << best_succ << "; latency: " << (int)mindist
 	    << " is better than " << real_lat << "\n";
-      pns_fingers[target_finger] = locations->insert (succs[best_succ]);
+      ptr<location> l = locations->insert (succs[best_succ]); 
+      pnsfinger *pnsf = New pnsfinger (l);
+      pnsfingers.insert (pnsf);
     }
   }
 }
