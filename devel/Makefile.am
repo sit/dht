@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.17 2003/03/10 09:12:04 fdabek Exp $
+# $Id: Makefile.am,v 1.18 2003/03/13 23:38:37 jastr Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -12,7 +12,7 @@ noinst_PROGRAMS = dbm typetest $(VIS) walk builddb dbdump findroute
 MYLDADD =  ../dhash/libdhash.a ../merkle/libmerkle.a ../svc/libsvc.la
 
 walk_SOURCES = walk.C
-walk_LDADD = $(MYLDADD) ../chord/libchord.a ../utils/libutil.a $(LDADD) ../svc/libsvc.la
+walk_LDADD = $(MYLDADD) ../chord/libchord.a ../utils/libutil.a ../svc/libsvc.la  $(LDADD) 
 
 builddb_SOURCES = builddb.C
 builddb_LDADD = ../sfsrodb/libsfsrodb.a ../chord/libchord.a ../utils/libutil.a $(DBLIB) $(MYLDADD) $(LDADD)
