@@ -215,7 +215,7 @@ add_node (chordID ID, str host, unsigned short port)
 {
   f_node *nu = nodes[ID];
   if (!nu) {
-    warn << "added " << ID << "\n";
+    warn << "added " << ID << ":" << host << "\n";
     nu = New f_node (ID, host, port);
     nodes.insert (nu);
   }
@@ -241,7 +241,7 @@ doRPCcb (chordID ID, aclnt_cb cb, clnt_stat err)
   // notify the cb of anything in this program.
   
   if (err) {
-    warn << "deleting " << ID << "\n";
+    warn << "deleting " << ID << ":" << nu->host << "\n";
     nodes.remove (nu);
     delete nu;
   }
@@ -978,10 +978,16 @@ static gint button_down_event (GtkWidget *widget,
     if (n->selected)
       check_set_state (n->draw);
   }
+
   char IDs[48];
   strncpy (IDs, ID.cstr (), 12);
   IDs[12] = 0;
-  gtk_label_set_text (GTK_LABEL (last_clicked), IDs);
+  char hosts[1024];
+  strcpy (hosts, n->host.cstr());
+  strcat (hosts, ":");
+  strcat (hosts, IDs);
+
+  gtk_label_set_text (GTK_LABEL (last_clicked), hosts);
   draw_ring ();
   return TRUE;
 }
