@@ -81,7 +81,7 @@ class vnode : public virtual refcount {
 
   // The API
   virtual void stabilize (void) = 0;
-  virtual void join (cbjoin_t cb) = 0;
+  virtual void join (const chord_node &n, cbjoin_t cb) = 0;
   virtual void get_successor (const chordID &n, cbchordID_t cb) = 0;
   virtual void get_predecessor (const chordID &n, cbchordID_t cb) = 0;
   virtual void get_succlist (const chordID &n, cbchordIDlist_t cb) = 0;
@@ -135,10 +135,9 @@ class vnode : public virtual refcount {
 
 class chord : public virtual refcount {
   int nvnode;
-  net_address wellknownhost;
+  chord_node wellknown_node;
   int myport;
   str myname;
-  chordID wellknownID;
   int ss_mode;
   int lookup_mode;
   ptr<axprt> x_dgram;
@@ -153,7 +152,6 @@ class chord : public virtual refcount {
   void stats_cb (const chordID &k, ptr<vnode> v);
   void print_cb (const chordID &k, ptr<vnode> v);
   void stop_cb (const chordID &k, ptr<vnode> v);
-  void checkwellknown_cb (chordID s, bool ok, chordstat status);
   
   // Number of received RPCs, for locationtable comm stuff
   ptr<u_int32_t> nrcv;

@@ -44,9 +44,11 @@ chord::chord (str _wellknownhost, int _wellknownport,
 {
   logbase = _logbase;
   myport = startchord (port);
-  wellknownhost.hostname = _wellknownhost;
-  wellknownhost.port = _wellknownport ? _wellknownport : myport;
-  wellknownID  = make_chordID (wellknownhost.hostname, wellknownhost.port);
+
+  wellknown_node.r.hostname = _wellknownhost;
+  wellknown_node.r.port = _wellknownport ? _wellknownport : myport;
+  wellknown_node.x = make_chordID (wellknown_node.r.hostname,
+				   wellknown_node.r.port);
 
   warnx << "chord: running on " << myname << ":" << myport << "\n";
 
@@ -54,7 +56,7 @@ chord::chord (str _wellknownhost, int _wellknownport,
   *nrcv = 0;
   locations = New refcounted<locationtable> (nrcv, max_cache);
 
-  bool ok = locations->insert (wellknownID, wellknownhost);
+  bool ok = locations->insert (wellknown_node);
   if (!ok) {
     warn << "Well known host failed to verify! Bailing.\n";
     exit (0);
@@ -62,16 +64,6 @@ chord::chord (str _wellknownhost, int _wellknownport,
 
   nvnode = 0;
   srandom ((unsigned int) (getusec() & 0xFFFFFFFF));
-}
-
-void
-chord::checkwellknown_cb (chordID s, bool ok, chordstat status)
-{
-  if (!ok || status != CHORD_OK) {
-    warn << "Well known host failed to verify! Bailing.\n";
-    exit (0);
-  }
-  // If okay, can ignore this.
 }
 
 void
@@ -154,7 +146,7 @@ chord::newvnode (cbjoin_t cb, ptr<fingerlike> fingers, ptr<route_factory> f)
     
   chordID newID = init_chordID (nvnode, myname, myport);
   warn << "creating new vnode: " << newID << "\n";
-  if (newID != wellknownID) {
+  if (newID != wellknown_node.x) {
     // It's not yet strictly speaking useful to other nodes yet.
     bool ok = locations->insert (newID, myname, myport);
     assert (ok);
@@ -169,16 +161,9 @@ chord::newvnode (cbjoin_t cb, ptr<fingerlike> fingers, ptr<route_factory> f)
   if (!active) active = vnodep;
   nvnode++;
   vnodes.insert (newID, vnodep);
-
-  // Must block until at least one good node in table...
-  while (!locations->challenged (wellknownID)) {
-    warnx << newID << ": Waiting for challenge of wellknown ID: " 
-	  << wellknownID << "\n";
-    acheck ();
-  }
   
-  if (newID != wellknownID) {
-    vnodep->join (cb);
+  if (newID != wellknown_node.x) {
+    vnodep->join (wellknown_node, cb);
   } else {
     vnodep->stabilize ();
     (*cb) (vnodep, CHORD_OK);

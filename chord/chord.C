@@ -295,31 +295,51 @@ vnode_impl::stabilize (void)
 }
 
 void
-vnode_impl::join (cbjoin_t cb)
+vnode_impl::join (const chord_node &n, cbjoin_t cb)
 {
-  chordID n;
-
-  if (!locations->lookup_anyloc (myID, &n)) {
-    warnx << myID << ": couldn't lookup anyloc for join\n";
-    locations->stats ();
-    (*cb) (NULL, CHORD_ERRNOENT);
-  } else {
-    chordID s = myID + 1;
-    find_successor (s, wrap (mkref (this), &vnode_impl::join_getsucc_cb, cb));
-  }
+  ptr<chord_findarg> fa = New refcounted<chord_findarg> ();
+  fa->v = n.x;
+  fa->x = incID (myID);
+  chord_nodelistres *route = New chord_nodelistres ();
+  doRPC (n, chord_program_1, CHORDPROC_FINDROUTE, fa, route,
+	 wrap (this, &vnode_impl::join_getsucc_cb, n, cb, route));
 }
 
 void 
-vnode_impl::join_getsucc_cb (cbjoin_t cb, chordID s, route r, chordstat status)
+vnode_impl::join_getsucc_cb (const chord_node n,
+			     cbjoin_t cb, chord_nodelistres *route,
+			     clnt_stat err)
 {
-  if (status) {
-    warnx << myID << ": join_getsucc_cb: " << status << "\n";
-    join (cb);  // try again
+  ptr<vnode> v = NULL;
+  chordstat status = CHORD_OK;
+  
+  if (err) {
+    warnx << myID << ": join RPC failed: " << err << "\n";
+    if (err == RPC_TIMEDOUT) {
+      // try again. XXX limit the number of retries??
+      join (n, cb);
+      return;
+    }
+    status = CHORD_RPCFAILURE;
+  } else if (route->status != CHORD_OK) {
+    status = route->status;
+  } else if (route->resok->nlist.size () < 1) {
+    status = CHORD_ERRNOENT;
   } else {
+    for (size_t i = 0; i < route->resok->nlist.size(); i++) {
+      locations->insert (route->resok->nlist[i]);
+    }
     stabilize ();
-    notify (s, myID);
-    (*cb) (mkref(this), CHORD_OK);
+    notify (my_succ (), myID);
+    v = mkref (this);
+    status = CHORD_OK;
   }
+  if (status != CHORD_OK) {
+    // XXX
+    warnx << myID << ": should remove me from vnodes since I failed to join.\n";
+  }
+  cb (v, status);
+  delete route;
 }
 
 void

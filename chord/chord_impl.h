@@ -112,7 +112,7 @@ class vnode_impl : public vnode {
   void stabilize_getsucc_cb (chordID pred,
 			     chordID s, net_address r, chordstat status);
   
-  void join_getsucc_cb (cbjoin_t cb, chordID s, route r, chordstat status);
+  void join_getsucc_cb (const chord_node n, cbjoin_t cb, chord_nodelistres *r, clnt_stat err);
   void get_successor_cb (chordID n, cbchordID_t cb, chord_noderes *res, 
 			 clnt_stat err);
   void get_predecessor_cb (chordID n, cbchordID_t cb, chord_noderes *res, 
@@ -165,7 +165,7 @@ class vnode_impl : public vnode {
 
   // The API
   void stabilize (void);
-  void join (cbjoin_t cb);
+  void join (const chord_node &n, cbjoin_t cb);
   void get_successor (const chordID &n, cbchordID_t cb);
   void get_predecessor (const chordID &n, cbchordID_t cb);
   void get_succlist (const chordID &n, cbchordIDlist_t cb);
