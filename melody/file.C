@@ -170,7 +170,7 @@ melody_file::openr(bigint filehash, callback<void, const char *, int, int>::ptr 
 #ifdef DEBUG
   warn << "trying to retrieve " << filehash << "\n";
 #endif
-  dhash->retrieve (filehash, DHASH_CONTENTHASH, wrap(mkref(this), &melody_file::venti_cb, ready_cb, filename));
+  dhash->retrieve (filehash, wrap(mkref(this), &melody_file::venti_cb, ready_cb, filename));
 }
 
 void

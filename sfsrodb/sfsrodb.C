@@ -1,4 +1,4 @@
-/* $Id: sfsrodb.C,v 1.23 2002/09/06 21:02:26 fdabek Exp $ */
+/* $Id: sfsrodb.C,v 1.24 2002/09/18 19:19:43 fdabek Exp $ */
 
 /*
  * Copyright (C) 1999 Kevin Fu (fubob@mit.edu)
@@ -740,7 +740,7 @@ get_root_inode_and_dir (bigint rootkey, sfsro_inode *rootino, sfsro_data *rootdi
 {
   // fetch the filesystem root.
   //  
-  ptr<sfsro_data> root_dat = sfsrodb_get (rootkey, DHASH_KEYHASH);
+  ptr<sfsro_data> root_dat = sfsrodb_get (rootkey);
   if (!root_dat) {
     warn << "root block was null\n";
     return false;

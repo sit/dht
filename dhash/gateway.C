@@ -56,11 +56,11 @@ compute_hash (const void *buf, size_t buflen)
 // ------------------------------------------------------------------------
 // DHASHGATEWAY
 
-dhashgateway::dhashgateway (ptr<axprt_stream> x, ptr<chord> node)
+dhashgateway::dhashgateway (ptr<axprt_stream> x, ptr<chord> node, bool do_cache)
 {
   clntsrv = asrv::alloc (x, dhashgateway_program_1, wrap (this, &dhashgateway::dispatch));
   clntnode = node;
-  dhcli = New refcounted<dhashcli> (clntnode);
+  dhcli = New refcounted<dhashcli> (clntnode, do_cache);
 }
 
 
@@ -82,7 +82,7 @@ dhashgateway::dispatch (svccb *sbp)
       warnt ("DHASHGW: insert_request");
       dhash_insert_arg *arg = sbp->template getarg<dhash_insert_arg> ();
       ref<dhash_block> block = New refcounted<dhash_block> (arg->block.base (), arg->block.size ());
-      dhcli->insert (arg->blockID, block, arg->ctype, arg->usecachedsucc, wrap (this, &dhashgateway::insert_cb, sbp));
+      dhcli->insert (arg->blockID, block, arg->usecachedsucc, wrap (this, &dhashgateway::insert_cb, sbp));
     }
     break;
 
@@ -155,8 +155,8 @@ dhashclient::dhashclient(str sockname)
 }
 
 //append
-/* block layout [in db, not on the upload]
- * long type
+/* block layout 
+ * long type = DHASH_APPEND
  * long contentlen
  * char data[contentlen}
  *
@@ -165,8 +165,25 @@ dhashclient::dhashclient(str sockname)
 void
 dhashclient::append (chordID to, const char *buf, size_t buflen, cbinsert_t cb)
 {
-  //just insert this at the right node, the server has to do all of the work
-  insert (to, buf, buflen, cb, DHASH_APPEND);
+  //stick on the [type,contentlen] the server will have to strip it off before appending
+  long type = DHASH_APPEND;
+  xdrsuio x;
+  int size = buflen + 3 & ~3;
+  char *m_buf;
+  if (XDR_PUTLONG (&x, (long int *)&type) &&
+      XDR_PUTLONG (&x, (long int *)&buflen) &&
+      (m_buf = (char *)XDR_INLINE (&x, size)))
+    {
+      memcpy (m_buf, buf, buflen);
+      
+      int m_len = x.uio ()->resid ();
+      char *m_dat = suio_flatten (x.uio ());
+      insert (to, m_dat, m_len, cb, DHASH_APPEND, false);
+      xfree (m_dat);
+    } else {
+      cb (true, bigint (0)); // marshalling failed.
+    }
+
 }
 
 //content-hash insert
@@ -309,34 +326,34 @@ dhashclient::insertcb (cbinsert_t cb, bigint key, dhash_stat *res, clnt_stat err
 
 
 void
-dhashclient::retrieve (bigint key, dhash_ctype type, cbretrieve_t cb,
-                       bool usecachedsucc)
+dhashclient::retrieve (bigint key, cbretrieve_t cb, bool usecachedsucc)
 {
   ref<dhash_retrieve_res> res = New refcounted<dhash_retrieve_res> (DHASH_OK);
   dhash_retrieve_arg arg;
   arg.blockID = key;
   arg.usecachedsucc = usecachedsucc;
   gwclnt->call (DHASHPROC_RETRIEVE, &arg, res, 
-		wrap (this, &dhashclient::retrievecb, cb, key, type, res));
+		wrap (this, &dhashclient::retrievecb, cb, key, res));
 }
 
 
 void
-dhashclient::retrievecb (cbretrieve_t cb, bigint key, dhash_ctype ctype, 
-			 ref<dhash_retrieve_res> res, clnt_stat err)
+dhashclient::retrievecb (cbretrieve_t cb, bigint key, ref<dhash_retrieve_res> res, clnt_stat err)
 {
   str errstr;
-
   if (err)
     errstr = strbuf () << "rpc error " << err;
   else if (res->status != DHASH_OK)
     errstr = dhasherr2str (res->status);
-  else if (!dhash::verify (key, ctype, res->block->base (), res->block->size ()))
-    errstr = strbuf () << "data did not verify";
   else {
-    // success
-    (*cb) (dhash::get_block_contents (res->block->base(), res->block->size(), ctype));
-    return;
+    dhash_ctype ctype = dhash::block_type (res->block->base (), res->block->size ());
+    if (!dhash::verify (key, ctype, res->block->base (), res->block->size ()))
+      errstr = strbuf () << "data did not verify";
+    else {
+      // success
+      (*cb) (dhash::get_block_contents (res->block->base(), res->block->size(), ctype));
+      return;
+    }
   }
 
   // warn << "dhashclient::retrieve failed: " << key << ": " << errstr << "\n";

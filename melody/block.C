@@ -148,7 +148,7 @@ venti_block::get_block2 (melody_block *bl, cbi cb, int of)
 #ifdef DEBUG
   warn << "gb trying to retrieve " << blockhash << "\n";
 #endif
-  dhash->retrieve (blockhash, DHASH_CONTENTHASH, wrap (this, &venti_block::get_block_cb, bl, cb, of));
+  dhash->retrieve (blockhash, wrap (this, &venti_block::get_block_cb, bl, cb, of));
 }
 
 // final function in get_block chain.

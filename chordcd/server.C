@@ -100,8 +100,7 @@ chord_server::setrootfh (str root, cbfh_t rfh_cb)
     chordID ID;
     mpz_set_rawmag_be (&ID, dearm.cstr (), dearm.len ());
     //fetch the root file handle too..
-    fetch_data (false, ID, wrap (this, &chord_server::getroot_fh, rfh_cb), 
-		DHASH_KEYHASH);
+    fetch_data (false, ID, wrap (this, &chord_server::getroot_fh, rfh_cb));
   }
 }
 
@@ -970,7 +969,7 @@ chord_server::read_file_data_bmap_cb (bool pfonly, cbdata_t cb, chordID ID, bool
 //      but don't call it back.
 //
 void
-chord_server::fetch_data (bool pfonly, chordID ID, cbdata_t cb, dhash_ctype t)
+chord_server::fetch_data (bool pfonly, chordID ID, cbdata_t cb)
 {
   if (ptr<sfsro_data> dat = data_cache [ID]) {
     (*cb) (dat);
@@ -986,7 +985,7 @@ chord_server::fetch_data (bool pfonly, chordID ID, cbdata_t cb, dhash_ctype t)
     wait_list *l = pf_waiters[ID];
     fetch_wait_state *w = New fetch_wait_state (cb);
     l->insert_head (w);
-    dhash.retrieve (ID, t, wrap (this, &chord_server::fetch_data_cb, ID, cb));
+    dhash.retrieve (ID, wrap (this, &chord_server::fetch_data_cb, ID, cb));
   }
 }
 

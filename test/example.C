@@ -67,7 +67,7 @@ insert_cb(bool failed, chordID id)
 {
   if(failed)
     fatal << "test failed\n";
-  tm[1]->retrieve(id, DHASH_CONTENTHASH, wrap(retrieve_cb));
+  tm[1]->retrieve(id, wrap(retrieve_cb));
 }
 
 

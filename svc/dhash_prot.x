@@ -41,7 +41,6 @@ enum dhash_ctype {
 
 struct dhash_valueattr {
   unsigned size;
-  dhash_ctype ctype;
 };
 
 
@@ -59,7 +58,6 @@ struct s_dhash_fetch_arg {
   chordID key;
   int32 start;
   int32 len;
-  bool usecachedsucc;
 };
 
 struct s_dhash_keystatus_arg {
@@ -88,20 +86,6 @@ struct s_dhash_getkeys_arg {
   chordID pred_id;
 };
 
-struct dhash_resok {
-  dhash_value res;
-  int32 offset;
-  dhash_valueattr attr;
-  int32 hops;
-  chordID source;
-};
-
-union dhash_res switch (dhash_stat status) {
- case DHASH_OK:
-   dhash_resok resok;
- default:
-   int32 hops;
-};
 
 struct dhash_storeresok {
   bool done;

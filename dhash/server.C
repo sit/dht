@@ -76,10 +76,10 @@ dhash::dhash(str dbname, vnode *node, int k, int ss, int cs, int _ss_mode)
 
   host_node = node;
   assert (host_node);
-
-  //recursive state
-  qnonce = 1;
-
+  
+  //the client helper class (will use for get_key etc)
+  //don't cache here: only cache on user generated requests
+  cli = New dhashcli (node->chordnode, false);
 
   // pred = 0; // XXX initialize to what?
   check_replica_tcb = NULL;
@@ -153,9 +153,6 @@ dhash::dispatch (svccb *sbp)
 	  //     wouldn't this save one hop???
 	  //
 	  //     --josh
-	  if (farg->usecachedsucc)
-	    nid = host_node->lookup_closestsucc (farg->key);
-	  else
 #ifdef FINGERS
 	    nid = host_node->lookup_closestpred (farg->key);
 #else
@@ -328,7 +325,7 @@ dhash::transfer_init_getkeys_cb (dhash_getkeys_res *res, clnt_stat err)
 void
 dhash::transfer_init_gotk_cb (dhash_stat err) 
 {
-  if (err) fatal << "Error fetching key\n";
+  if (err) warn << "Error fetching key\n";
 }
 
 void
@@ -461,146 +458,47 @@ dhash::transfer_fetch_cb (chordID to, chordID key, store_status stat,
 			  callback<void, dhash_stat>::ref cb,
 			  ptr<dbrec> data, dhash_stat err) 
 {
-  
-  if (err) {
-    cb (err);
-  } else {
-    unsigned int mtu = 1024;
-    unsigned int off = 0;
-    do {
-      dhash_storeres *res = New dhash_storeres (DHASH_OK);
-      ptr<s_dhash_insertarg> i_arg = New refcounted<s_dhash_insertarg> ();
-      i_arg->v = to;
-      i_arg->key = key;
-      i_arg->offset = off;
-      int remain = (off + mtu <= static_cast<unsigned long>(data->len)) ? 
-	mtu : data->len - off;
-      i_arg->data.setsize (remain);
-      i_arg->attr.size = data->len;
-      i_arg->type = stat;
-      memcpy(i_arg->data.base (), (char *)data->value + off, remain);
- 
-      doRPC(to, dhash_program_1, DHASHPROC_STORE, 
-				  i_arg, res,
-				  wrap(this, 
-				       &dhash::transfer_store_cb, cb, 
-				       res, i_arg, to));
-
-      off += remain;
-     } while (off < static_cast<unsigned long>(data->len));
-  }
-  
+  ref<dhash_block> blk = New refcounted<dhash_block> (data->value, data->len);
+  cli->storeblock (to, key, blk, 
+		   wrap (this, &dhash::transfer_store_cb, cb),
+		   stat);
 }
 
 void
 dhash::transfer_store_cb (callback<void, dhash_stat>::ref cb, 
-			  dhash_storeres *res, ptr<s_dhash_insertarg> i_arg,
-			  chordID to, clnt_stat err) 
+			  bool err,
+			  chordID blockID) 
 {
   if (err) 
     cb (DHASH_RPCERR);
-  else if (res->status == DHASH_RETRY) {
-    dhash_storeres *nres = New dhash_storeres (DHASH_OK);
-    // XXX challenge
-    host_node->locations->cacheloc (res->pred->p.x, 
-				    res->pred->p.r,
-				    cbchall_null);
-					       
-    doRPC(res->pred->p.x, 
-	  dhash_program_1, DHASHPROC_STORE, 
-	  i_arg, nres,
-	  wrap(this, 
-	       &dhash::transfer_store_cb, 
-	       cb, nres, i_arg,
-	       res->pred->p.x));
-  } else if (res->resok->done)
-    cb (res->status);
-
-  delete res;
+  else 
+    cb (DHASH_OK);
 }
 
 void
 dhash::get_key (chordID source, chordID key, cbstat_t cb) 
 {
-  dhash_fetchiter_res *res = New dhash_fetchiter_res (DHASH_OK);
-  ptr<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg>;
-  arg->key = key; 
-  arg->len = MTU;  
-  arg->start = 0;
-  arg->v = source;
-
-  doRPC(source, dhash_program_1, DHASHPROC_FETCHITER, 
-			      arg, res,
-			      wrap(this, 
-				   &dhash::get_key_initread_cb, 
-				   cb, res, source, key));
+  warn << "fetching a block (" << key << " from " << source << "\n";
+  warn << host_node->my_ID () << " my succ is " << host_node->my_succ () << "\n";
+  cli->retrieve(source, key, wrap (this, &dhash::get_key_got_block, key, cb));
 }
 
+
 void
-dhash::get_key_initread_cb (cbstat_t cb, dhash_fetchiter_res *res, 
-			    chordID source, 
-			    chordID key, clnt_stat err) 
+dhash::get_key_got_block (chordID key, cbstat_t cb, ptr<dhash_block> block) 
 {
-  if ((err) || (res->status != DHASH_COMPLETE)) {
-    (cb)(DHASH_RPCERR);
-  } else if (res->compl_res->attr.size == res->compl_res->res.size ()) {
-    get_key_finish (res->compl_res->res.base (), res->compl_res->res.size (), 
-		    key, cb);
-  } else {
-    char *buf = New char[res->compl_res->attr.size];
-    memcpy (buf, res->compl_res->res.base (), res->compl_res->res.size ());
-    unsigned int *read = New unsigned int(res->compl_res->res.size ());
-    unsigned int offset = *read;
-    do {
-      ptr<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg>;
-      arg->v = source;
-      arg->key = key;
-      arg->len = (offset + MTU < res->compl_res->attr.size) ? 
-	MTU : res->compl_res->attr.size - offset;
-      arg->start = offset;
-      dhash_fetchiter_res *new_res = New dhash_fetchiter_res(DHASH_OK);
-      doRPC(source, dhash_program_1, DHASHPROC_FETCHITER,
-				  arg, new_res,
-				  wrap(this, 
-				       &dhash::get_key_read_cb, key, 
-				       buf, read, new_res, cb));
-      offset += arg->len;
-    } while (offset  < res->compl_res->attr.size);
+
+  if (!block) 
+    cb (DHASH_STOREERR);
+  else {
+    ptr<dbrec> k = id2dbrec (key);
+    ptr<dbrec> d = New refcounted<dbrec> (block->data, block->len);
+    db->insert (k, d, wrap(this, &dhash::get_key_stored_block, cb));
   }
-  
-  delete res;
 }
 
 void
-dhash::get_key_read_cb (chordID key, char *buf, unsigned int *read, 
-			dhash_fetchiter_res *res, cbstat_t cb, clnt_stat err) 
-{
-  if ( (err) || (res->status != DHASH_COMPLETE)) {
-    // XXX caller of get_key can get one error cb for each chunk!!!
-    (*cb) (DHASH_RPCERR);
-  } else {
-    *read += res->compl_res->res.size ();
-    memcpy (buf + res->compl_res->offset, res->compl_res->res.base (), 
-	    res->compl_res->res.size ());
-    if (*read == res->compl_res->attr.size) {
-      get_key_finish (buf, res->compl_res->res.size (), key, cb);
-      delete read;
-      delete [] buf;
-    }
-  }
-  delete res;
-}
-
-void
-dhash::get_key_finish (char *buf, unsigned int size, chordID key, cbstat_t cb) 
-{
-  ptr<dbrec> k = id2dbrec (key);
-  ptr<dbrec> d = New refcounted<dbrec> (buf, size);
-  db->insert (k, d, wrap(this, &dhash::get_key_finish_store, cb));
-}
-
-void
-dhash::get_key_finish_store (cbstat_t cb, int err)
+dhash::get_key_stored_block (cbstat_t cb, int err)
 {
   if (err)
     (cb)(DHASH_STOREERR);
@@ -749,18 +647,19 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
   if (ss->iscomplete()) {
     ptr<dbrec> k = id2dbrec(arg->key);
     ptr<dbrec> d = NULL;
-    if (!ss)
-      d = New refcounted<dbrec> (arg->data.base (), arg->data.size ());
-    else 
-      d = New refcounted<dbrec> (ss->buf, ss->size);
+    d = New refcounted<dbrec> (ss->buf, ss->size);
 
-    if (arg->attr.ctype == DHASH_APPEND) {
-      append (k, d, arg, cb);
+    dhash_ctype ctype = dhash::block_type (d);
+
+    if (ctype == DHASH_APPEND) {
+      ptr<dhash_block> contents = dhash::get_block_contents(d, ctype);
+      ptr<dbrec> c = New refcounted<dbrec>(contents->data, contents->len);
+      append (k, c, arg, cb);
       return;
     }
     
-    if (!dhash::verify (arg->key, arg->attr.ctype, (char *)d->value, d->len) ||
-	((arg->attr.ctype == DHASH_NOAUTH) 
+    if (!dhash::verify (arg->key, ctype, (char *)d->value, d->len) ||
+	((ctype == DHASH_NOAUTH) 
 	 && key_status (arg->key) != DHASH_NOTPRESENT)) {
 
       warn << "*** NO VERIFY\n";
@@ -783,24 +682,20 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
       stat = DHASH_REPLICATED;
       keys_replicated += 1;
     } else {
+      warn << "got a cache store\n";
       stat = DHASH_CACHED;
       keys_cached += 1;
     }
 
-#if 1
+
     /* statistics */
     if (ss)
       bytes_stored += ss->size;
     else
       bytes_stored += arg->data.size ();
-#endif
     
-#if 1
-    ///warn << "insert: " << dbrec2id (k) << " type " << arg->attr.ctype << "\n";
     db->insert (k, d, wrap(this, &dhash::store_cb, arg->type, id, cb));
-#else
-    store_cb (arg->type, id, cb, 0);
-#endif
+
   } else
     cb (DHASH_STORE_PARTIAL);
 }

@@ -60,7 +60,7 @@ store_cb_ch (dhashclient dhash, bool error, chordID key)
   else
     warn << "contenthash store success\n";
 
-  dhash.retrieve (key, DHASH_CONTENTHASH, wrap (&fetch_cb));
+  dhash.retrieve (key, wrap (&fetch_cb));
 }
 
 void
@@ -71,7 +71,7 @@ store_cb_pk (dhashclient dhash, bool error, chordID key)
   else
     warn << "pk store successful\n";
 
-  dhash.retrieve (key, DHASH_KEYHASH, wrap (&fetch_cb));
+  dhash.retrieve (key, wrap (&fetch_cb));
 }
 
 void
@@ -82,7 +82,7 @@ store_cb_noauth (dhashclient dhash, bool error, chordID key)
   else
     warn << "noauth store successful " << key << "\n";
 
-  dhash.retrieve (key, DHASH_NOAUTH, wrap (&fetch_cb));
+  dhash.retrieve (key, wrap (&fetch_cb));
 }
 
 void
@@ -93,7 +93,7 @@ store_cb_append (dhashclient dhash, bool error, chordID key)
   else
     warn << "store db successful " << key << "\n";
   
-  dhash.retrieve (key, DHASH_APPEND, wrap (&fetch_cb_append, dhash));
+  dhash.retrieve (key, wrap (&fetch_cb_append, dhash));
 }
 
 void
@@ -112,7 +112,7 @@ store_cb_append_second (dhashclient dhash, bool error, chordID key)
   if (error)
     warn << "append error " << key << "\n";
 
-  dhash.retrieve (key, DHASH_APPEND, wrap (&fetch_cb_append_second, dhash));
+  dhash.retrieve (key, wrap (&fetch_cb_append_second, dhash));
 }
 
 void

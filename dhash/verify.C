@@ -148,8 +148,26 @@ dhash::get_block_contents (char *data, unsigned int len, dhash_ctype t)
 dhash_ctype
 dhash::block_type (ptr<dbrec> data)
 {
+  return dhash::block_type (data->value, data->len);
+}
+
+dhash_ctype
+dhash::block_type (ref<dhash_block> data)
+{
+  return dhash::block_type (data->data, data->len);
+}
+
+dhash_ctype
+dhash::block_type (ptr<dhash_block> data)
+{
+  return dhash::block_type (data->data, data->len);
+}
+
+dhash_ctype
+dhash::block_type (char *value, unsigned int len)
+{
   long type;
-  xdrmem x1 (data->value, (unsigned)data->len, XDR_DECODE);
+  xdrmem x1 (value, len, XDR_DECODE);
   if (!XDR_GETLONG (&x1, &type)) return DHASH_UNKNOWN;
   else return (dhash_ctype)type;
 }
