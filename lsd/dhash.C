@@ -92,8 +92,8 @@ dhashclient::insert_findsucc_cb(svccb *sbp, dhash_insertarg *item,
     defp2p->doRPC(succ, dhash_program_1, DHASHPROC_STORE, item, res, 
 		  wrap(this, &dhashclient::insert_store_cb, sbp, res));
 
-    if (do_caching)
-      cache_on_path(item, path);
+    //    if (do_caching)
+    //  cache_on_path(item, path);
 
   }
 }
@@ -115,8 +115,8 @@ void
 dhashclient::cache_on_path(dhash_insertarg *item, route path) 
 {
   for (unsigned int i = 0; i < path.size (); i++) {
-    //    warn << "caching " << i << " out of " << path.size () << "\n";
-    //warn << "item is " << item->key << "\n";
+    warn << "caching " << i << " out of " << path.size () << " on " << path[i] << "\n";
+    warn << "item is " << item->key << "\n";
     item->type = DHASH_CACHE;
     dhash_stat *res = New dhash_stat();
     defp2p->doRPC(path[i], dhash_program_1, DHASHPROC_STORE, item, res,
@@ -146,7 +146,7 @@ dhashclient::lookup_findsucc_cb(svccb *sbp, sfs_ID n,
 {
   if (scb)
     defp2p->removeSearchCallback(scb);
-  dhash_res *res = New dhash_res();
+
   if (err) {
     warnx << "lookup_findsucc_cb: FETCH FAILURE " << err << "\n";
     dhash_res *res = New dhash_res();
@@ -225,6 +225,7 @@ dhashclient::retry (retry_state *st, sfs_ID p, net_address a, sfsp2pstat stat)
   }
 }
 
+
 // ----------- notification
 
 
@@ -256,7 +257,7 @@ dhashclient::search_cb_cb (dhash_stat *res, cbi cb, clnt_stat err) {
   if (*res != DHASH_NOTPRESENT) {
     warn << "CACHE HIT\n";
     cb (1);
- } else
+  } else
     cb (0);
 }
 
