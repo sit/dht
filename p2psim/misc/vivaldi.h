@@ -37,7 +37,7 @@
 // RPC, and then call my_location().
 // Or you can use Vivaldi::doRPC.
 
-class Vivaldi : Node {
+class Vivaldi : public Node {
  public:
   Vivaldi(Node *n, int d);
   virtual ~Vivaldi();
