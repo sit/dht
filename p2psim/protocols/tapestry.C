@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.54 2004/06/21 02:32:15 strib Exp $ */
+/* $Id: tapestry.C,v 1.55 2004/07/04 19:33:31 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -704,7 +704,7 @@ Tapestry::join(Args *args)
   if( _join_num == 0 && wellknown_ip == ip() ) {
     notifyObservers();
   } else if( _join_num > 0 ) {
-    notifyObservers( (ObserverInfo *) "join" );
+
     // move these constructions to here since after a crash we won't
     // know our new IP/ID pair until the next join.
     delete _rt;
@@ -713,6 +713,8 @@ Tapestry::join(Args *args)
       delete _cachebag;
       _cachebag = New RoutingTable(this, _redundancy);
     }
+
+    notifyObservers( (ObserverInfo *) "join" );
   }
 
   if( _joining ) {
