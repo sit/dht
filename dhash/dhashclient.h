@@ -1,7 +1,12 @@
+
+#ifndef __DHASH_CLIENT_H__
+#define __DHASH_CLIENT_H__
+
 #include <dhashgateway_prot.h>
 #include <route.h>
 
-struct insert_info { 
+struct insert_info
+{
   chordID key;
   vec<chordID> path;
   insert_info (chordID k, vec<chordID> p) :
@@ -11,15 +16,44 @@ struct insert_info {
 class dhash_block;
 
 typedef callback<void, dhash_stat, ptr<insert_info> >::ref cbinsertgw_t;
-typedef callback<void, dhash_stat, ptr<dhash_block>, vec<chordID> >::ptr cb_cret;
+typedef
+  callback<void, dhash_stat, ptr<dhash_block>, vec<chordID> >::ptr cb_cret;
 
-struct option_block {
+struct option_block
+{
   int flags;
   chordID guess;
 };
 
-class dhashclient {
- private:
+class keyhash_payload
+{
+private:
+  char _salt [20];
+  long _version;
+  str _buf;
+
+public:
+  keyhash_payload ();
+  keyhash_payload (char *s);
+  keyhash_payload (long version, str buf);
+  keyhash_payload (char *s, long version, str buf);
+  ~keyhash_payload () {}
+  
+  const char* salt () const { return _salt; }
+  long version () const { return _version; }
+  const str& buf () const { return _buf; }
+
+  chordID id (sfs_pubkey2 pk) const;
+  bool verify (sfs_pubkey2 pk, sfs_sig2 sig) const;
+  void sign (ptr<sfspriv> key, sfs_pubkey2& pk, sfs_sig2& sig) const;
+  int encode (xdrsuio &x, sfs_pubkey2 pk, sfs_sig2 sig) const;
+  static ptr<keyhash_payload> decode (xdrmem &x, long payloadlen);
+  static ptr<keyhash_payload> decode (ptr<dhash_block> b);
+};
+
+class dhashclient
+{
+private:
   ptr<aclnt> gwclnt;
 
   // inserts under the specified key
@@ -33,31 +67,26 @@ class dhashclient {
   void retrievecb (cb_cret cb, bigint key,  
 		   ref<dhash_retrieve_res> res, clnt_stat err);
 
- public:
-  // sockname is the unix path (ex. /tmp/chord-sock) used
-  // to communicate to lsd. 
+public:
+  // sockname is the unix path (ex. /tmp/chord-sock) used to
+  // communicate to lsd. 
   dhashclient(str sockname);
 
-  //this version connects to the dhash service on TCP
-  // this is for RSC
+  //this version connects to the dhash service on TCP this is for RSC
   dhashclient(ptr<axprt_stream> xprt);
 
   void append (chordID to, const char *buf, size_t buflen, cbinsertgw_t cb);
 
-  // inserts under the contents hash. 
-  // (buf need not remain involatile after the call returns)
+  // inserts under the contents hash.  (buf need not remain involatile
+  // after the call returns)
   void insert (const char *buf, size_t buflen, cbinsertgw_t cb, 
 	       ptr<option_block> options = NULL);
   void insert (bigint key, const char *buf, size_t buflen, cbinsertgw_t cb,
                ptr<option_block> options = NULL);
 
   // insert under hash of public key
-  void insert (ptr<sfspriv> key, const char *buf, size_t buflen, long ver,
-               cbinsertgw_t cb, ptr<option_block> options = NULL);
-  void insert (sfs_pubkey2 pk, sfs_sig2 sig, const char *buf, size_t buflen,
-               long ver, cbinsertgw_t cb, ptr<option_block> options = NULL);
   void insert (bigint hash, sfs_pubkey2 pk, sfs_sig2 sig,
-               const char *buf, size_t buflen, long ver,
+               keyhash_payload &p,
 	       cbinsertgw_t cb, ptr<option_block> options = NULL);
 
   // retrieve block and verify
@@ -66,3 +95,6 @@ class dhashclient {
 		 ptr<option_block> options = NULL);
 
 };
+
+#endif
+

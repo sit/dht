@@ -1,6 +1,8 @@
+
 #include "dhash_common.h"
 #include "dhash.h"
 #include "verify.h"
+#include "dhashclient.h" // keyhash_payload
 #include <dbfe.h>
 #include <sfscrypt.h>
 #include <dhash_prot.h>
@@ -20,27 +22,25 @@ compute_hash (const void *buf, size_t buflen)
   return n;
 }
 
-
 bool
 verify (chordID key, dhash_ctype t, char *buf, int len) 
 {
-  switch (t) 
-    {
-    case DHASH_CONTENTHASH:
-      return verify_content_hash (key, buf, len);
-      break;
-    case DHASH_KEYHASH:
-      return verify_key_hash (key, buf, len);
-      break;
-    case DHASH_DNSSEC: // XXX should be punted.
-    case DHASH_NOAUTH:
-    case DHASH_APPEND:
-      return true;
-      break;
-    default:
-      warn << "bad type " << t << "\n";
-      return false;
-    }
+  switch (t) {
+  case DHASH_CONTENTHASH:
+    return verify_content_hash (key, buf, len);
+    break;
+  case DHASH_KEYHASH:
+    return verify_keyhash (key, buf, len);
+    break;
+  case DHASH_DNSSEC: // XXX should be punted.
+  case DHASH_NOAUTH:
+  case DHASH_APPEND:
+    return true;
+    break;
+  default:
+    warn << "bad type " << t << "\n";
+    return false;
+  }
   return false;
 }
 
@@ -55,38 +55,33 @@ verify_content_hash (chordID key, char *buf, int len)
 }
 
 bool
-verify_key_hash (chordID key, char *buf, int len)
+verify_keyhash (chordID key, char *buf, int len)
 {
   // extract the public key from the message
   sfs_pubkey2 pubkey;
   sfs_sig2 sig;
+  long plen;
 
-  long contentlen;
-  long v;
-  xdrmem x1 (buf, (unsigned)len, XDR_DECODE);
+  xdrmem x (buf, (unsigned)len, XDR_DECODE);
+  if (!xdr_sfs_pubkey2 (&x, &pubkey))
+    return false;
+  if (!xdr_sfs_sig2 (&x, &sig))
+    return false;
+  if (!XDR_GETLONG (&x, &plen))
+    return false;
+  if (plen <= 0)
+    return false;
 
-  if (!xdr_sfs_pubkey2 (&x1, &pubkey)) return false;
-  if (!xdr_sfs_sig2 (&x1, &sig)) return false;
-  if (!XDR_GETLONG (&x1, &v)) return false;
-  if (!XDR_GETLONG (&x1, &contentlen)) return false;
+  ptr<keyhash_payload> p = keyhash_payload::decode (x, plen);
+  if (!p)
+    return false;
 
-  char *content;
-  if (!(content = (char *)XDR_INLINE (&x1, contentlen)))
-      return false;
-
-  ptr<sfspub> pk = sfscrypt.alloc (pubkey, SFS_VERIFY);
-
-  // verify that public key hashes to ID
-  strbuf b;
-  pk->export_pubkey (b, false);
-  str pk_raw = b;
-  chordID hash = compute_hash (pk_raw.cstr (), pk_raw.len ());
-  if (hash != key) return false;
+  chordID hash = p->id (pubkey);
+  if (hash != key)
+    return false;
 
   // verify signature
-  str msg (content, contentlen);
-  bool ok = pk->verify (sig, msg);
-
+  bool ok = p->verify (pubkey, sig);
   return ok;
 }
 
@@ -111,25 +106,20 @@ get_block_contents (ptr<dhash_block> block, dhash_ctype t)
 
 
 ptr<dhash_block> 
-get_block_contents (char *data, unsigned int len, dhash_ctype t) 
+get_block_contents (char *data, unsigned int len, dhash_ctype t)
 {
-  // XXX make this function shorter...
-  long version = 0;
   char *content;
   long contentlen = len;
 
-  xdrmem x1 (data, len, XDR_DECODE);
-  
+  xdrmem x (data, len, XDR_DECODE);
   switch (t) {
   case DHASH_KEYHASH:
     {
       sfs_pubkey2 k;
       sfs_sig2 s;
-      if (!xdr_sfs_pubkey2 (&x1, &k) || !xdr_sfs_sig2 (&x1, &s))
-	return NULL;
-      if (!XDR_GETLONG (&x1, &version))
-	return NULL;
-      if (!XDR_GETLONG (&x1, &contentlen))
+      if (!xdr_sfs_pubkey2 (&x, &k) ||
+	  !xdr_sfs_sig2 (&x, &s) ||
+          !XDR_GETLONG (&x, &contentlen))
 	return NULL;
     }
     /* FALL THROUGH */
@@ -138,7 +128,7 @@ get_block_contents (char *data, unsigned int len, dhash_ctype t)
   case DHASH_NOAUTH:
   case DHASH_APPEND:
     {
-      if (len && !(content = (char *)XDR_INLINE (&x1, contentlen)))
+      if (len && !(content = (char *)XDR_INLINE (&x, contentlen)))
 	return NULL;
     }
     break;
@@ -148,7 +138,6 @@ get_block_contents (char *data, unsigned int len, dhash_ctype t)
   }
 
   ptr<dhash_block> d = New refcounted<dhash_block> (content, contentlen, t);
-  d->version = version;
   return d;
 }
 
@@ -180,14 +169,155 @@ keyhash_version (ptr<dbrec> data)
 long
 keyhash_version (char *value, unsigned int len)
 {
-  xdrmem x1 (value, len, XDR_DECODE);
+  xdrmem x (value, len, XDR_DECODE);
   sfs_pubkey2 k;
   sfs_sig2 s;
-  if (!xdr_sfs_pubkey2 (&x1, &k) || !xdr_sfs_sig2 (&x1, &s))
+  long plen;
+  if (!xdr_sfs_pubkey2 (&x, &k) ||
+      !xdr_sfs_sig2 (&x, &s) ||
+      !XDR_GETLONG (&x, &plen))
     return -1;
-  long v;
-  if (!XDR_GETLONG (&x1, &v))
+  if (plen <= 0)
     return -1;
-  return v;
+
+  ptr<keyhash_payload> p = keyhash_payload::decode (x, plen);
+  if (!p)
+    return -1;
+  return p->version ();
+}
+
+
+/*
+ * keyhash_payload
+ */
+
+keyhash_payload::keyhash_payload (long version, str buf)
+  : _version (version), _buf (buf)
+{
+  memset (_salt, 0, 20);
+}
+
+keyhash_payload::keyhash_payload (char *s, long version, str buf)
+  : _version (version), _buf (buf)
+{
+  memmove (_salt, s, 20);
+}
+
+// empty payload, useful only for computing ids
+keyhash_payload::keyhash_payload ()
+  : _version (0), _buf ("")
+{
+  memset (_salt, 0, 20);
+}
+
+keyhash_payload::keyhash_payload (char *s)
+  : _version (0), _buf ("")
+{
+  memmove (_salt, s, 20);
+}
+
+chordID
+keyhash_payload::id (sfs_pubkey2 pk) const
+{
+  char digest[sha1::hashsize];
+
+  // get the public key into raw form
+  strbuf pkstrbuf;
+  ptr<sfspub> pubkey = sfscrypt.alloc (pk, SFS_VERIFY);
+  pubkey->export_pubkey (pkstrbuf, false);
+  str pubkeystr(pkstrbuf);
+
+  sha1ctx ctx;
+  ctx.update (pubkeystr.cstr(), pubkeystr.len());
+  ctx.update (_salt, 20);
+  ctx.final (digest);
+
+  bigint chordid;
+  mpz_set_rawmag_be(&chordid, digest, sha1::hashsize);
+  return chordid;
+}
+
+void
+keyhash_payload::sign (ptr<sfspriv> key, sfs_pubkey2& pk, sfs_sig2& sig) const
+{
+  iovec iovs [3];
+  iovs [0].iov_base = const_cast<char *> (_salt);
+  iovs [0].iov_len = 20;
+  iovs [1].iov_base = (char *) &_version;
+  iovs [1].iov_len = sizeof (long);
+  iovs [2].iov_base = const_cast<char *> (_buf.cstr ());
+  iovs [2].iov_len = _buf.len ();
+  str m (iovs, 3);
+  key->sign (&sig, m);
+  key->export_pubkey (&pk); 
+}
+  
+bool
+keyhash_payload::verify (sfs_pubkey2 pubkey, sfs_sig2 sig) const
+{
+  ptr<sfspub> pk = sfscrypt.alloc (pubkey, SFS_VERIFY);
+  iovec iovs [3];
+  iovs [0].iov_base = const_cast<char *> (_salt);
+  iovs [0].iov_len = 20;
+  iovs [1].iov_base = (char *) &_version;
+  iovs [1].iov_len = sizeof (long);
+  iovs [2].iov_base = const_cast<char *> (_buf.cstr ());
+  iovs [2].iov_len = _buf.len ();
+  str m (iovs, 3);
+  return pk->verify (sig, m);
+}
+
+int
+keyhash_payload::encode (xdrsuio &x, sfs_pubkey2 pk, sfs_sig2 sig) const
+{
+  long plen = _buf.len () + sizeof (long) + 20;
+  long v = _version;
+
+  if (!xdr_sfs_pubkey2 (&x, &pk) ||
+      !xdr_sfs_sig2 (&x, &sig) ||
+      !XDR_PUTLONG (&x, &plen) ||
+      !XDR_PUTLONG (&x, &v))
+    return -1;
+
+  // stuff the salt into the xdr structure
+  char* salt_slot;
+  if ((salt_slot = (char *)XDR_INLINE(&x, 20)) == NULL)
+    return -1;
+  memmove (salt_slot, _salt, 20);
+
+  char *m_buf;
+  int size = _buf.len () + 3 & ~3;
+  if (!(m_buf = (char *)XDR_INLINE (&x, size)))
+    return -1;
+  memcpy (m_buf, _buf.cstr (), _buf.len ());
+  return 0;
+}
+
+ptr<keyhash_payload>
+keyhash_payload::decode (xdrmem &x, long plen)
+{
+  ptr<keyhash_payload> p = 0;
+  long version;
+  char *salt;
+  char *buf;
+  long buflen = plen - sizeof (long) - 20;
+
+  if (plen < (long)((sizeof (long))+20))
+    return p;
+  if (!XDR_GETLONG (&x, &version))
+    return p;
+  if (!(salt = (char *)XDR_INLINE (&x, 20)))
+    return p;
+  if (!(buf = (char *)XDR_INLINE (&x, buflen)))
+    return p;
+  p = New refcounted<keyhash_payload> (salt, version, str (buf, buflen));
+  return p;
+}
+
+ptr<keyhash_payload>
+keyhash_payload::decode (ptr<dhash_block> b)
+{
+  xdrmem x (b->data, b->len, XDR_DECODE);
+  return decode (x, b->len);
 }
 

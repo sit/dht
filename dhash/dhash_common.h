@@ -46,7 +46,6 @@ struct dhash_block {
   dhash_ctype ctype;
   char *data;
   size_t len;
-  long version;
   int hops;
   int errors;
   int retries;

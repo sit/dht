@@ -733,6 +733,7 @@ is_keyhash_stale (ref<dbrec> prev, ref<dbrec> d)
 {
   long v0 = keyhash_version (prev);
   long v1 = keyhash_version (d);
+  warn << "comparing keyhash " << v0 << " vs " << v1 << "\n";
   if (v0 >= v1)
     return true;
   return false;
@@ -775,7 +776,7 @@ dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
     case DHASH_KEYHASH:
       //XXX ATHICHA: Add Paxos+Primary prot for writes
       {
-	if (!verify_key_hash (arg->key, ss->buf, ss->size)) {
+	if (!verify_keyhash (arg->key, ss->buf, ss->size)) {
 	  warning << "keyhash: cannot verify " << ss->size << " bytes\n";
 	  stat = DHASH_STORE_NOVERIFY;
 	  break;

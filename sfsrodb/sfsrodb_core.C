@@ -159,7 +159,12 @@ sfsrodb_put (ptr<sfspriv> sk, void *data, size_t len)
   //warn << t() << " -- INSERT\n";
   timespec ts;
   clock_gettime (CLOCK_REALTIME, &ts);
-  dhash_cli->insert (sk, (char *)data, len, 0, wrap (sfsrodb_put_cb, ts));
+
+  keyhash_payload p (0, str((char*)data, len));
+  sfs_pubkey2 pk;
+  sfs_sig2 s;
+  p.sign (sk, pk, s);
+  dhash_cli->insert (p.id (pk), pk, s, p, wrap (sfsrodb_put_cb, ts));
 }
 
 

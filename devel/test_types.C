@@ -225,7 +225,11 @@ main (int argc, char **argv)
 
     str key = file2wstr (argv[4]);
     ptr<sfspriv> sk = sfscrypt.alloc_priv (key, SFS_SIGN);
-    dhash.insert (sk, data, datasize, 0, wrap (&store_cb_pk, dhash));
+    keyhash_payload p (0, str (data, datasize));
+    sfs_pubkey2 pk;
+    sfs_sig2 s;
+    p.sign (sk, pk, s);
+    dhash.insert (p.id (pk), pk, s, p, wrap (&store_cb_pk, dhash));
     break;
     }
   case NOAUTH:

@@ -37,8 +37,9 @@
 #include "dmalloc.h"
 #endif
 
-// -----------------------------------------------------------------------------
-// DHASHCLIENT
+/*
+ * dhashclient
+ */
 
 dhashclient::dhashclient(str sockname)
 {
@@ -48,7 +49,8 @@ dhashclient::dhashclient(str sockname)
 	   sockname.cstr (), strerror (errno));
   }
 
-  gwclnt = aclnt::alloc (axprt_unix::alloc (fd, 1024*1025), dhashgateway_program_1);
+  gwclnt = aclnt::alloc
+    (axprt_unix::alloc (fd, 1024*1025), dhashgateway_program_1);
 }
 
 dhashclient::dhashclient (ptr<axprt_stream> xprt)
@@ -56,9 +58,10 @@ dhashclient::dhashclient (ptr<axprt_stream> xprt)
   gwclnt = aclnt::alloc (xprt, dhashgateway_program_1);
 }
 
-//append
-/* block layout 
- * long type = DHASH_APPEND
+
+/* 
+ * append block layout 
+ *
  * long contentlen
  * char data[contentlen}
  *
@@ -68,7 +71,8 @@ void
 dhashclient::append (chordID to, const char *buf, size_t buflen, 
 		     cbinsertgw_t cb)
 {
-  //stick on the [type,contentlen] the server will have to strip it off before appending
+  // stick on the [type,contentlen] the server will have to strip it
+  // off before appending
   xdrsuio x;
   int size = buflen + 3 & ~3;
   char *m_buf;
@@ -87,16 +91,14 @@ dhashclient::append (chordID to, const char *buf, size_t buflen,
 }
 
 
-//content-hash insert
-/* content hash convention
-   
-   long type
-   long contentlen
-   char data[contentlen]
-
-   key = HASH (data)
-*/
-
+/*
+ * content hash block layout
+ * 
+ * long contentlen
+ * char data[contentlen]
+ *
+ * key = HASH (data)
+ */
 void
 dhashclient::insert (bigint key, const char *buf,
                      size_t buflen, cbinsertgw_t cb, 
@@ -123,73 +125,42 @@ dhashclient::insert (const char *buf, size_t buflen, cbinsertgw_t cb,
                      ptr<option_block> options)
 {
   bigint key = compute_hash (buf, buflen);
-  insert(key, buf, buflen, cb, options);
+  insert (key, buf, buflen, cb, options);
 }
-
 
 
 /* 
- * Public Key convention:
+ * keyhash block convention:
  * 
- * long type;
  * sfs_pubkey2 pub_key
  * sfs_sig2 sig
- * long version
- * long datalen
- * char block_data[datalen]
+ * long payload_len
+ * signed payload (see struct keyhash_payload)
+ *   long version
+ *   char salt [20];
+ *   char block_data[payload_len-20-sizeof(long)]
  */
 void
-dhashclient::insert (ptr<sfspriv> key, const char *buf, size_t buflen, long ver,
-                     cbinsertgw_t cb, ptr<option_block> options)
-{
-  str msg (buf, buflen);
-  sfs_sig2 s;
-  key->sign (&s, msg);
-  sfs_pubkey2 pk;
-  key->export_pubkey (&pk);
-  insert(pk, s, buf, buflen, ver, cb, options);
-}
-
-void
-dhashclient::insert (sfs_pubkey2 key, sfs_sig2 sig,
-                     const char *buf, size_t buflen, long ver,
-		     cbinsertgw_t cb, ptr<option_block> options)
-{
-  strbuf b;
-  ptr<sfspub> pk = sfscrypt.alloc (key);
-  pk->export_pubkey (b, false);
-  str pk_raw = b;
-  chordID hash = compute_hash (pk_raw.cstr (), pk_raw.len ());
-  insert (hash, key, sig, buf, buflen, ver, cb, options);
-}
-
-void
 dhashclient::insert (bigint hash, sfs_pubkey2 key, sfs_sig2 sig,
-                     const char *buf, size_t buflen, long ver,
+                     keyhash_payload& p,
 		     cbinsertgw_t cb, ptr<option_block> options)
 {
   xdrsuio x;
-  int size = buflen + 3 & ~3;
-  char *m_buf;
-  if (xdr_sfs_pubkey2 (&x, &key) &&
-      xdr_sfs_sig2 (&x, &sig) &&
-      XDR_PUTLONG (&x, &ver) &&
-      XDR_PUTLONG (&x, (long int *)&buflen) &&
-      (m_buf = (char *)XDR_INLINE (&x, size)))
-    {
-      memcpy (m_buf, buf, buflen);
-      int m_len = x.uio ()->resid ();
-      char *m_dat = suio_flatten (x.uio ());
-      insert (hash, m_dat, m_len, cb, DHASH_KEYHASH, x.uio()->resid(), options);
-      xfree (m_dat);
-    } else {
-      vec<chordID> r;
-      ptr<insert_info> i = New refcounted<insert_info>(hash, r);
-      cb (DHASH_ERR, i); // marshalling failed.
-    }
+  if (p.encode (x, key, sig)) {
+    vec<chordID> r;
+    ptr<insert_info> i = New refcounted<insert_info>(hash, r);
+    cb (DHASH_ERR, i); // marshalling failed.
+  }
+  int m_len = x.uio ()->resid ();
+  char *m_dat = suio_flatten (x.uio ());
+  insert (hash, m_dat, m_len, cb, DHASH_KEYHASH, x.uio()->resid(), options);
+  xfree (m_dat);
 }
 
-// generic insert (called by above methods)
+
+/*
+ * generic insert (called by above methods)
+ */
 void
 dhashclient::insert (bigint key, const char *buf, 
 		     size_t buflen, cbinsertgw_t cb,
@@ -226,12 +197,12 @@ dhashclient::insertcb (cbinsertgw_t cb, bigint key,
   ptr<insert_info> i = New refcounted<insert_info>(key, r);
   if (err) {
     errstr = strbuf () << "rpc error " << err;
-    warn << "1dhashclient::insert failed: " << key << ": " << errstr << "\n";
+    warn << "dhashclient::insert failed: " << key << ": " << errstr << "\n";
     (*cb) (DHASH_RPCERR, i); //RPC failure
   } else {
     if (res->status != DHASH_OK) {
       errstr = dhasherr2str (res->status);
-      warn << "2dhashclient::insert failed: " << key << ": " << errstr << "\n";
+      warn << "dhashclient::insert failed: " << key << ": " << errstr << "\n";
     }
     else {
       i->path.setsize (res->resok->path.size ());
@@ -242,6 +213,9 @@ dhashclient::insertcb (cbinsertgw_t cb, bigint key,
   }
 }
 
+/*
+ * retrieve code
+ */
 void
 dhashclient::retrieve (bigint key, cb_cret cb, ptr<option_block> options)
 {
@@ -259,7 +233,8 @@ dhashclient::retrieve (bigint key, dhash_ctype ct, cb_cret cb,
   arg.options = 0;
   if (options) {
     arg.options = options->flags;
-    if (options->flags & DHASHCLIENT_GUESS_SUPPLIED) arg.guess = options->guess;
+    if (options->flags & DHASHCLIENT_GUESS_SUPPLIED)
+      arg.guess = options->guess;
   }
 
   gwclnt->call (DHASHPROC_RETRIEVE, &arg, res, 
@@ -279,7 +254,8 @@ dhashclient::retrievecb (cb_cret cb, bigint key,
   else {
     if (!verify (key, res->resok->ctype, res->resok->block.base (), 
 		      res->resok->len)) {
-      errstr = strbuf () << "data did not verify. len: " << res->resok->len << " ctype " << res->resok->ctype;
+      errstr = strbuf () << "data did not verify. len: " << res->resok->len
+	                 << " ctype " << res->resok->ctype;
     } else {
       // success
       ptr<dhash_block> blk = get_block_contents (res->resok->block.base(), 
