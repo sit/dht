@@ -43,19 +43,20 @@ E2EGraph::parse(ifstream &ifs)
 
   while(getline(ifs,line)) {
     vector<string> words = split(line);
-
     // skip empty lines and commented lines
     if(words.empty() || words[0][0] == '#')
       continue;
 
     // XXX Thomer:  The else clause also seems
     // to expect 2 words per line?
-    if (words.size() >= 2) {
-      IPAddress ipaddr = atoi(words[0].c_str());
+    if (words[0] == "node") {
+      IPAddress ipaddr = atoi(words[1].c_str());
       assert(ipaddr > 0 && ipaddr <= _num);
 
       // what kind of node?
       Node *n = new Node(ipaddr);
+
+      assert(!Network::Instance()->getnode(ipaddr));
 
       // add the node to the network
       send(Network::Instance()->nodechan(), &n);
