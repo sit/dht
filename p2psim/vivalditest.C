@@ -21,8 +21,8 @@ void
 VivaldiTest::join(Args *args)
 {
 
-  int vo = args->nget<int>("vivaldi-algorithm");
-  int dim = args->nget<int>("model-dimension");
+  int vo = args->nget<int>("vivaldi-algorithm", 10);
+  int dim = args->nget<int>("model-dimension", 10);
   if (dim <= 0) {
     cerr << "dimension must be specified (and positive)\n";
     exit (0);
