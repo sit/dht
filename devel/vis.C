@@ -68,7 +68,7 @@ void update_succ_got_succ (chordID ID, str host, short port,
 				 chord_getsucc_ext_res *res,
 				 clnt_stat err);
 void update ();
-void initgraf (int argc, char **argv);
+void initgraf ();
 static gint configure_event (GtkWidget *widget, GdkEventConfigure *event);
 static gint expose_event (GtkWidget *widget, GdkEventExpose *event);
 static gint delete_event(GtkWidget *widget, GdkEvent *event, gpointer data);
@@ -365,10 +365,8 @@ update_toes_got_toes (chordID ID, str host, short port,
 }
 
 void
-initgraf (int argc, char **argv)
+initgraf ()
 {
-  gtk_init (&argc, &argv);
-
   window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
   drawing_area = gtk_drawing_area_new();
   gtk_drawing_area_size ((GtkDrawingArea *)drawing_area, WINX, WINY);
@@ -387,7 +385,6 @@ initgraf (int argc, char **argv)
   //organize things into boxes
   GtkWidget *vbox = gtk_vbox_new (FALSE, 0);
   gtk_box_pack_start (GTK_BOX (vbox), draw_all, TRUE, FALSE, 0);
-  gtk_box_pack_start (GTK_BOX (vbox), draw_none, TRUE, FALSE, 0);
   gtk_box_pack_start (GTK_BOX (vbox), check_fingers, TRUE, FALSE, 0);
   gtk_box_pack_start (GTK_BOX (vbox), check_immed_succ, TRUE, FALSE, 0);
   gtk_box_pack_start (GTK_BOX (vbox), check_succ_list, TRUE, FALSE, 0);
@@ -485,8 +482,7 @@ redraw_cb (GtkWidget *widget, gpointer data)
 void 
 quit_cb (GtkWidget *widget,
 	 gpointer data) {  
-  gtk_main_quit ();
-  exit (0);
+  gtk_exit (0);
 }
 void 
 draw_all_cb (GtkWidget *widget,
@@ -525,8 +521,8 @@ delete_event(GtkWidget *widget,
              GdkEvent  *event,
 	     gpointer   data )
 {
-  gtk_main_quit ();
-  return(FALSE);
+  gtk_exit (0);
+  return (FALSE);
 }
 
 
@@ -782,7 +778,8 @@ main (int argc, char** argv)
   random_init ();
 
   setup ();
-  initgraf (argc, argv);
+  gtk_init (&argc, &argv);
+  
   str host = "not set";
   short port = 0;
   interval = -1;
@@ -825,6 +822,8 @@ main (int argc, char** argv)
   if (host == "not set")
     usage ();
 
+  initgraf ();
+
   get_fingers (host, port);
   get_succ (host, port);
 
@@ -840,10 +839,9 @@ main (int argc, char** argv)
 void
 gtk_poll () 
 {
-  if (gtk_main_iteration_do (false)) {
-    //    gtk_exit (0);
-    //exit (0);
-  }
-  
+  // We never call main_loop so there's no reason to
+  // ever use gtk_main_quit. Thus we don't care about
+  // this return value. But we don't want this to block.
+  (void) gtk_main_iteration_do (false);
   delaycb (0, 5000000, wrap (&gtk_poll));
 }
