@@ -38,9 +38,26 @@ TapestryObserver::~TapestryObserver()
 }
 
 void
+TapestryObserver::init_state()
+{
+  list<Protocol*> l = Network::Instance()->getallprotocols(_type);
+  DEBUG(1) << "TapestryObserver::init_state " << now() << endl;
+  for(list<Protocol*>::iterator pos = l.begin(); pos != l.end(); ++pos) {
+    Tapestry *t = (Tapestry*) *pos;
+    t->init_state(l);
+  }
+}
+
+void
 TapestryObserver::execute()
 {
-  cout << "TapestryObserver executing" << endl;
+
+  if(_init_num) {
+    init_state();
+    _init_num = 0;
+  }
+
+  DEBUG(1) << "TapestryObserver executing" << endl;
   list<Protocol*> l = Network::Instance()->getallprotocols(_type);
   list<Protocol*>::iterator pos;
 
@@ -61,12 +78,12 @@ TapestryObserver::execute()
     c = (Tapestry *)(*pos);
     assert(c);
     if (!c->stabilized(lid)) {
-      cout << now() << " NOT STABILIZED" << endl;
+      DEBUG(1) << now() << " NOT STABILIZED" << endl;
       if (_reschedule > 0) reschedule(_reschedule);
       return;
     }
 
   }
 
-  cout << now() << " STABILIZED" << endl;
+  DEBUG(0) << now() << " STABILIZED" << endl;
 }

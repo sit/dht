@@ -17,6 +17,8 @@ private:
   unsigned int _num_nodes;
   unsigned int _init_num;
 
+  void init_state();
+
   vector<Tapestry::GUID> lid;
 };
 

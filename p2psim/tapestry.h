@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.8 2003/10/03 21:31:16 strib Exp $ */
+/* $Id: tapestry.h,v 1.9 2003/10/05 01:36:02 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -118,6 +118,7 @@ public:
   };
 
   void handle_backpointer(backpointer_args *args, backpointer_return *ret);
+  void got_backpointer(IPAddress bpip, GUID bpid, uint level, bool remove);
   void place_backpointer( RPCSet *bp_rpcset, 
 			  map<unsigned,backpointer_args*> *bp_resultmap, 
 			  IPAddress bpip, 
@@ -149,6 +150,7 @@ public:
 
   void handle_nn(nn_args *args, nn_return *ret);
 
+  void init_state( list<Protocol*> );
 
 private:
 
@@ -292,6 +294,7 @@ class RoutingTable {
    * as a result.
    */
   bool add( IPAddress ip, GUID id, Time distance );
+  bool add( IPAddress ip, GUID id, Time distance, bool sendbp );
   /**
    * Read the primary neighbor at this position.
    */
