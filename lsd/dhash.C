@@ -14,7 +14,6 @@ dhashclient::dhashclient (ptr<axprt_stream> _x)
 
   defp2p->registerActionCallback(wrap(this, &dhashclient::act_cb));
 
-  defp2p->registerSearchCallback(wrap(this, &dhashclient::search_cb));
 }
 
 void
@@ -32,8 +31,10 @@ dhashclient::dispatch (svccb *sbp)
   case DHASHPROC_LOOKUP:
     {
       sfs_ID *n = sbp->template getarg<sfs_ID> ();
+      cb_ID scbid = defp2p->registerSearchCallback(wrap(this, &dhashclient::search_cb, *n));
+      
       defp2p->dofindsucc (*n, wrap(this, &dhashclient::lookup_findsucc_cb, 
-				   sbp, n));
+				   sbp, n, scbid));
     } 
     break;
   case DHASHPROC_INSERT:
@@ -63,12 +64,14 @@ dhashclient::insert_findsucc_cb(svccb *sbp, dhash_insertarg *item,
     sbp->reply(res);
   } else {
 
-    for (int i = 0; i < path.size (); i++) warn << path[i] << " ";
-    warn << "\n";
+    for (int i = 0; i < path.size (); i++) warnx << path[i] << " ";
+    warnx << "were touched to insert " << item->key << "\n";
 
     dhash_stat *stat = New dhash_stat ();
     defp2p->doRPC(succ, dhash_program_1, DHASHPROC_STORE, item, stat, 
 		  wrap(this, &dhashclient::insert_store_cb, sbp, stat));
+    cache_on_path(item, path);
+
   }
 }
 
@@ -77,22 +80,52 @@ dhashclient::insert_store_cb(svccb *sbp, dhash_stat *res, clnt_stat err)
 {
   if (err) {
     sbp->replyref(dhash_stat (DHASH_NOENT));
-  } else
+  } else {
     sbp->reply(res);
+  }
+  delete res;
 }
 
 void
-dhashclient::lookup_findsucc_cb(svccb *sbp, sfs_ID *n,
+dhashclient::cache_on_path(dhash_insertarg *item, route path) 
+{
+  
+  for (int i = 0; i < path.size (); i++) {
+    warn << "caching " << i << " out of " << path.size () << "\n";
+    warn << "item is " << item->key << "\n";
+    item->type = DHASH_CACHE;
+    dhash_stat *res = New dhash_stat();
+    defp2p->doRPC(path[i], dhash_program_1, DHASHPROC_STORE, item, res,
+		  wrap(this, &dhashclient::cache_store_cb, res));
+  }
+
+}
+
+void
+dhashclient::cache_store_cb(dhash_stat *res, clnt_stat err) 
+{
+
+  if (err) {
+    warn << "cache store failed\n";
+  } else {
+    warn << "CACHE: propogated item\n";
+  }
+  delete res;
+
+}
+
+void
+dhashclient::lookup_findsucc_cb(svccb *sbp, sfs_ID *n, cb_ID scbid,
 				sfs_ID succ, route path,
 				sfsp2pstat err) 
 {
   dhash_res *res = New dhash_res();
   if (err) {
-    res->set_status(DHASH_NOENT);
-    sbp->reply(res);
+    res->set_status (DHASH_NOENT);
+    sbp->reply (res);
   } else {
     dhash_res *res = New dhash_res();
-    defp2p->doRPC(succ, dhash_program_1, DHASHPROC_FETCH, n, res, 
+    defp2p->doRPC (succ, dhash_program_1, DHASHPROC_FETCH, n, res, 
 		  wrap(this, &dhashclient::lookup_fetch_cb, sbp, res));
   }
 }
@@ -103,7 +136,7 @@ dhashclient::lookup_fetch_cb(svccb *sbp, dhash_res *res, clnt_stat err)
   if (err) 
     sbp->reject (SYSTEM_ERR);
   else
-    sbp->replyref(*res);
+    sbp->replyref (*res);
 }
 
 // ----------- notification
@@ -115,9 +148,32 @@ dhashclient::act_cb(sfs_ID id, char action) {
 
 }
 
-int
-dhashclient::search_cb(sfs_ID node, sfs_ID target) {
+void
+dhashclient::search_cb(sfs_ID my_target, sfs_ID node, sfs_ID target, cbi cb) {
 
   warn << "just asked " << node << " about " << target << "\n";
-  return 0;
+  warn << "I'm interested in " << my_target << "\n";
+
+  if (my_target == target) {
+    dhash_stat *status = New dhash_stat();
+    defp2p->doRPC (node, dhash_program_1, DHASHPROC_CHECK, &target, status,
+		   wrap(this, &dhashclient::search_cb_cb, status, cb));
+  } else
+    cb (0);
+  
+}
+
+void
+dhashclient::search_cb_cb (dhash_stat *res, cbi cb, clnt_stat err) {
+
+  if (err) {
+    warn << "DHASH_CHECK failed in search_cb\n";
+    cb (0);
+    return;
+  } 
+
+  if (*res == DHASH_PRESENT)
+    cb (1);
+  else
+    cb (0);
 }

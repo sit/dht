@@ -5,21 +5,35 @@
 
 #define MAX_INT 0x7fffffff
 
-void
+cb_ID
 p2p::registerSearchCallback(cbsearch_t cb) 
 {
+  warn << "registered a search callback\n";
   searchCallbacks.push_back(cb); 
 }
 
-bool
-p2p::testSearchCallbacks(sfs_ID id, sfs_ID x) 
+void
+p2p::testSearchCallbacks(sfs_ID id, sfs_ID target, cbtest_t cb) 
 {
-  warn << "testing callbacks " << id << " " << x << "\n";
-  int ret = -1;
-  for (int i=0; i < searchCallbacks.size (); i++)
-    if ( (searchCallbacks[i] (id, x)) && (ret != 0) ) ret = 1;
+  warn << "testing callbacks " << id << " " << target << "\n";
+  tscb(id, target, 0, cb);
+}
 
-  return (ret > 0);
+void
+p2p::tscb (sfs_ID id, sfs_ID x, int i, cbtest_t cb) {
+  if (searchCallbacks.size () == i) 
+    cb (0);
+  else
+    (searchCallbacks[i] (id, x, wrap(this, &p2p::tscb_cb, id, x, i, cb)));
+}
+
+void
+p2p::tscb_cb (sfs_ID id, sfs_ID x, 
+	      int i, cbtest_t cb, int result) {
+  if (result) 
+    cb (1);
+  else 
+    tscb(id, x, i + 1, cb);
 }
 
 void

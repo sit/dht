@@ -4,7 +4,9 @@ typedef opaque dhash_value<>;
 
 enum dhash_stat {
   DHASH_OK = 0,
-  DHASH_NOENT = 1
+  DHASH_NOENT = 1,
+  DHASH_PRESENT = 2,
+  DHASH_NOTPRESENT =3
 };
 
 enum store_status {
@@ -53,6 +55,9 @@ program DHASH_PROGRAM {
     
     dhash_res
     DHASHPROC_FETCH (sfs_ID) = 2;
+
+    dhash_stat
+    DHASHPROC_CHECK (sfs_ID) = 3;
 
   } = 1;
 } = 344449;

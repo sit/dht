@@ -182,8 +182,7 @@ static void
 initID (sfs_ID *ID, size_t s)
 {
 
-  bigint start = bigint(1) << NBIT - 1;
-  *ID = start + random_bigint (NBIT - 1);
+  *ID = random_bigint (NBIT);
 }
 
 static void

@@ -1,4 +1,4 @@
-/* $Id: sfsrodb_core.C,v 1.5 2001/03/16 22:27:34 fdabek Exp $ */
+/* $Id: sfsrodb_core.C,v 1.6 2001/03/19 01:52:45 fdabek Exp $ */
 
 /*
  *
@@ -51,6 +51,7 @@ sfsrodb_put (ptr<aclnt> db, const void *keydata, size_t keylen,
   arg->key = n;
   arg->data.setsize (contentlen);
   memcpy(arg->data.base (), contentdata, contentlen);
+  arg->type = DHASH_STORE;
 
   dhash_stat res;
   err = db->scall (DHASHPROC_INSERT, arg, &res);

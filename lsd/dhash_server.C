@@ -38,7 +38,6 @@ dhash::dispatch(ptr<asrv> dhashsrv, svccb *sbp)
 {
   if (!sbp) {
     dhashsrv = NULL;
-    //    delete this;
     return;
   }
 
@@ -52,7 +51,17 @@ dhash::dispatch(ptr<asrv> dhashsrv, svccb *sbp)
   case DHASHPROC_STORE:
     {
       dhash_insertarg *arg = sbp->template getarg<dhash_insertarg> ();
-      store(arg->key, arg->data, wrap(this, &dhash::storesvc_cb, sbp));
+      store(arg->key, arg->data, arg->type, wrap(this, &dhash::storesvc_cb, sbp));
+    }
+    break;
+  case DHASHPROC_CHECK:
+    {
+      sfs_ID *n = sbp->template getarg<sfs_ID> ();
+      int *status = key_status[*n];
+      if (NULL == status) 
+	sbp->replyref (dhash_stat (DHASH_NOTPRESENT));
+      else
+	sbp->replyref (dhash_stat (DHASH_PRESENT));
     }
     break;
   default:
@@ -90,7 +99,7 @@ dhash::storesvc_cb(svccb *sbp, dhash_stat err) {
 void
 dhash::fetch(sfs_ID id, cbvalue cb) 
 {
-  //  warn << "FETCHING \n\n\n FETCHING " << id << "\n\n\n";
+  warn << "FETCHING " << id << "\n";
   ptr<dbrec> q = id2dbrec(id);
   db->lookup(q, wrap(this, &dhash::fetch_cb, cb));
 }
@@ -106,18 +115,25 @@ dhash::fetch_cb(cbvalue cb, ptr<dbrec> ret)
 }
 
 void 
-dhash::store(sfs_ID id, dhash_value data, cbstat cb) 
+dhash::store(sfs_ID id, dhash_value data, store_status type, cbstat cb) 
 {
 
-  warn << "STORING " << id << "\n";
+  if (type == DHASH_STORE) warn << "STORING " << id << "\n";
+  else if (type == DHASH_CACHE) warn << "CACHING " << id << "\n";
+  else warn << "don't know what the hell I'm doing\n";
+
   ptr<dbrec> k = id2dbrec(id);
   ptr<dbrec> d = New refcounted<dbrec> (data.base (), data.size ());
+
   db->insert(k, d, wrap(this, &dhash::store_cb, cb));
+  key_status.insert (id, type);
+
 
 #if 0
   defp2p->getsuccessor (id, wrap (this, &dhash::find_replica_cb, nreplica, 
 				  data, cb));
 #endif
+
 }
 
 void

@@ -289,7 +289,7 @@ p2p::stabilize_getsucc_cb (sfs_ID s, net_address r, sfsp2pstat status)
     bootstrap ();
   } else {
     if (updatepred (predecessor, s)) {
-      // print ();
+      print ();
       bootstrap ();
     }
   }
@@ -382,7 +382,7 @@ p2p::bootstrap ()
     //warnx << "bootstrap: we are busy bootstrapping\n";
     return;
   }
-  //print ();
+  //  print ();
   nbootstrap = NBIT + 1;
   bootstrap_failure = false;
   stable = true;
@@ -587,7 +587,10 @@ p2p::dofindsucc (sfs_ID &n, cbroute_t cb)
     set_closeloc (predecessor);
   }
 
+
+  warn << "calling f_s " << predecessor.first << " " << n << "\n";
   find_successor (myID, n, wrap (mkref (this), &p2p::dofindsucc_cb, cb, n));
+
 }
 
 void
@@ -602,6 +605,7 @@ p2p::dofindsucc_cb (cbroute_t cb, sfs_ID n, sfs_ID x,
     else  
       cb (x, search_path, SFSP2P_ERRNOENT);
   } else {
+    warn << "succ was " << x << "\n";
     cb (x, search_path, SFSP2P_OK);
   }
 }

@@ -10,6 +10,8 @@
 
 #define NBIT 8
 
+typedef int cb_ID;
+
 struct hashID {
   hashID () {}
   hash_t operator() (const sfs_ID &ID) const {
@@ -54,7 +56,7 @@ class cache {
   };
 
 private:
-  friend class cache_entry;                      //XXX hashid is a hack that ruins the generic nature of the cache
+  friend class cache_entry;   //XXX hashid is a hack that ruins the generic nature of the cache
   ihash<const KEY, cache_entry, &cache_entry::k, &cache_entry::fhlink, hashID> entries;
   u_int num_cache_entries;
   tailq<cache_entry, &cache_entry::lrulink> lrulist;
@@ -104,7 +106,8 @@ typedef vec<sfs_ID> route;
 typedef callback<void,sfs_ID,net_address,sfsp2pstat>::ref cbsfsID_t;
 typedef callback<void,sfs_ID,route,sfsp2pstat>::ref cbroute_t;
 typedef callback<void,sfs_ID,char>::ref cbaction_t;
-typedef callback<int,sfs_ID,sfs_ID>::ref cbsearch_t;
+typedef callback<void,sfs_ID,sfs_ID,callback<void,int>::ref >::ref cbsearch_t;
+typedef callback<void,int>::ref cbtest_t;
 
 #define ACT_NODE_JOIN 1
 #define ACT_NODE_UPDATE 2
@@ -239,14 +242,17 @@ class p2p : public virtual refcount  {
   void join_getsucc_cb (sfs_ID p, sfs_ID s, net_address r, sfsp2pstat status);
 
   void find_predecessor (sfs_ID &n, sfs_ID &x, cbroute_t cb);
+  void find_predecessor_path (sfs_ID &n, sfs_ID &x, cbroute_t cb, route search_path);
   void find_closestpred_cb (sfs_ID n, cbroute_t cb, sfsp2p_findres *res, 
 			    route search_path, clnt_stat err);
-
+  
   void find_successor (sfs_ID &n, sfs_ID &x, cbroute_t cb);
+  void find_successor_path (sfs_ID &n, sfs_ID &x, cbroute_t cb, route search_path);
   void find_predecessor_cb (cbroute_t cb, sfs_ID p, route search_path, 
 			  sfsp2pstat status);
   void find_closestpred_succ_cb (findpredecessor_cbstate *st, sfs_ID s,
 				 net_address r, sfsp2pstat status);
+  void find_closestpred_test_cache_cb (sfs_ID node, findpredecessor_cbstate *st, int found);
   void find_successor_cb (cbroute_t cb, route sp, sfs_ID s, net_address r,
 			    sfsp2pstat status);
 
@@ -280,8 +286,11 @@ class p2p : public virtual refcount  {
 
   void timing_cb(aclnt_cb cb, location *l, ptr<struct timeval> start, clnt_stat err);
 
-  void registerSearchCallback(cbsearch_t cb);
-  bool testSearchCallbacks(sfs_ID id, sfs_ID target);
+  cb_ID registerSearchCallback(cbsearch_t cb);
+  void testSearchCallbacks(sfs_ID id, sfs_ID target, cbtest_t cb);
+  void tscb (sfs_ID id, sfs_ID x, int i, cbtest_t cb);
+  void tscb_cb (sfs_ID id, sfs_ID x, int i, cbtest_t cb, int result);
+  //  void tscb_cb (sfs_ID id, sfs_ID x, int ret, int i, cbtest_t cb, int result);
   void registerActionCallback(cbaction_t cb);
   void doActionCallbacks(sfs_ID id, char action);
 };
