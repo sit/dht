@@ -20,24 +20,6 @@ struct rpcstats {
 extern ihash<str, rpcstats, &rpcstats::key, &rpcstats::h_link> rpc_stats_tab;
 
 
-// store latency information about a host.
-struct hostinfo {
-  sfs_hostname host;
-  str key;
-  u_int64_t rpcdelay;
-  u_int64_t nrpc;
-  u_int64_t maxdelay;
-  float a_lat;
-  float a_var;
-  int fd;
-  ptr<axprt_stream> xp;
-  vec<cbv> connect_waiters;
-
-  ihash_entry<hostinfo> hlink_;
-  tailq_entry<hostinfo> lrulink_;
-
-  hostinfo (const net_address &r);
-};
 
 struct sent_elm {
   tailq_entry<sent_elm> q_link;
@@ -79,6 +61,25 @@ struct rpc_state {
   ihash_entry <rpc_state> h_link;
   
   rpc_state (ref<location> l, aclnt_cb c, u_int64_t S, long s, int p);
+};
+
+// store latency information about a host.
+struct hostinfo {
+  sfs_hostname host;
+  str key;
+  u_int64_t rpcdelay;
+  u_int64_t nrpc;
+  u_int64_t maxdelay;
+  float a_lat;
+  float a_var;
+  int fd;
+  ptr<axprt_stream> xp;
+  vec<RPC_delay_args *> connect_waiters;
+
+  ihash_entry<hostinfo> hlink_;
+  tailq_entry<hostinfo> lrulink_;
+
+  hostinfo (const net_address &r);
 };
 
 // Default implementation, udp aclnt
