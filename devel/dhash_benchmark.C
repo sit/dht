@@ -111,7 +111,7 @@ fetch_cb (int i, struct timeval start, ptr<dhash_block> blk)
     struct timeval end;
     gettimeofday(&end, NULL);
     float elapsed = (end.tv_sec - start.tv_sec)*1000.0 + (end.tv_usec - start.tv_usec)/1000.0;
-    fprintf (outfile, "%f\n", elapsed);
+    fprintf (outfile, "%f %d\n", elapsed, blk->hops);
   }
 }
 
