@@ -282,12 +282,12 @@ Chord::lookup_internal(lookup_args *a)
   _lookup_interval += a->retrytimes[a->retrytimes.size()-1];
   _lookup_retries +=  a->retrytimes.size();
   if (_lookup_lat_v.size() < 10000) 
-    _lookup_lat_v.push_back(a->retrytimes[a->retrytimes.size()-1]);
+    _lookup_lat_v.push_back((double)a->retrytimes[a->retrytimes.size()-1]);
   else {
     int k = random() % 10001;
     //displace a random sample
     if (k < 10000) 
-      _lookup_lat_v[k] = a->retrytimes[a->retrytimes.size()-1];
+      _lookup_lat_v[k] = (double)a->retrytimes[a->retrytimes.size()-1];
   }
 
 #ifdef CHORD_DEBUG
@@ -377,6 +377,7 @@ Chord::find_successors(CHID key, uint m, uint all, uint type, uint *lookup_int, 
       assert(0);
     }
 #endif
+
     assert(totalrpc < 100);
 
     lastwasted = 0;
