@@ -8,7 +8,7 @@
 
 %#include "bigint.h"
 %#include "sfs_prot.h"
-%#include "chord.h"
+%#include "chord_prot.h"
 
 const STARFS_FHSIZE = 20;
 const STARFS_NDIR = 128;

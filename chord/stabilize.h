@@ -28,9 +28,6 @@
 
 #include "chord_prot.h"
 // only needed so that we can print out myID
-#include "chord.h"
-
-class vnode;
 
 // Parent class for things that need stabilization.
 class stabilizable {

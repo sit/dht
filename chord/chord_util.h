@@ -25,10 +25,10 @@
  *
  */
 
-#include <chord.h>
-
 #ifndef _CHORD_UTIL_H
 #define _CHORD_UTIL_H
+
+#include "chord_prot.h"
 
 bool in_vector (vec<chordID> vec, chordID N);
 str gettime ();

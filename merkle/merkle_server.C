@@ -1,5 +1,4 @@
 #include "merkle_server.h"
-#include "dhash.h"
 
 // ---------------------------------------------------------------------------
 // merkle_send_range
