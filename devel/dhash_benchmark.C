@@ -16,8 +16,20 @@ int out = 0;
 int out_op = 0;
 int OPS_OUT = 1024;
 
-void afetch_cb (dhash_res *res, chordID key, char *buf, int i, struct timeval start, clnt_stat err);
-void afetch_cb2 (dhash_res *res, char *buf, unsigned int *read, int i, struct timeval start, clnt_stat err);
+void afetch_cb (dhash_res *res, chordID key, char *buf, int i,
+		struct timeval start, clnt_stat err);
+void afetch_cb2 (dhash_res *res, char *buf, unsigned int *read, int i, 
+		 struct timeval start, clnt_stat err);
+
+void store_cb (dhash_storeres *res, clnt_stat err);
+void store_cb_after_insert (chordID key, void *data, int written, 
+			    int datasize, dhash_storeres *res, clnt_stat err);
+
+
+void finish (char *buf, unsigned int *read, 
+	     struct timeval start, 
+	     int i,
+	     dhash_res *res);
 
 ref<aclnt>
 cp2p ()
@@ -35,12 +47,12 @@ cp2p ()
 
 #define DMTU 1024
 
-int
+void
 store_block(chordID key, void *data, unsigned int datasize) 
 {
 
-
-  dhash_storeres res;    
+  out++;
+  dhash_storeres *res = New dhash_storeres ();
   dhash_insertarg *i_arg = New dhash_insertarg ();
   i_arg->key = key;  
   int n = (DMTU < datasize) ? DMTU : datasize;
@@ -49,17 +61,34 @@ store_block(chordID key, void *data, unsigned int datasize)
   i_arg->attr.size = datasize;
   i_arg->offset = 0;
   memcpy(i_arg->data.base (), (char *)data, n);
-  clnt_stat err = cp2p ()->scall(DHASHPROC_INSERT, i_arg, &res);
-  if (err) warn << "RPC error: " << err << "\n";
-  if (err) return -err;
-
-  unsigned int written = n;
+  cp2p ()->call(DHASHPROC_INSERT, i_arg, res, wrap (store_cb_after_insert,
+						    key, data, n, datasize, res));
   delete i_arg;
-  chordID source = res.resok->source;
+}
 
-  while (!res.resok->done) {
-    n = (written + DMTU < datasize) ? DMTU : datasize - written;
-    dhash_send_arg *sarg = New dhash_send_arg();
+void
+store_cb_after_insert (chordID key, void *data, int m, int datasize, dhash_storeres *res,
+		       clnt_stat err)
+{
+
+  if (err || (res->status)) {
+    warn << "store error\n";
+    out--;
+    return;
+  }
+
+  chordID source = res->resok->source;
+
+  int written = m;
+  if (written >= datasize) {
+    out--;
+    return;
+  }
+
+  while (written < datasize) {
+    int n = (written + DMTU < datasize) ? DMTU : datasize - written;
+    dhash_storeres *res2 = New dhash_storeres ();
+    dhash_send_arg *sarg = New dhash_send_arg ();
     sarg->dest = source;
     sarg->iarg.key = key;
     sarg->iarg.data.setsize(n);
@@ -68,60 +97,27 @@ store_block(chordID key, void *data, unsigned int datasize)
     sarg->iarg.attr.size = datasize;
     sarg->iarg.offset = written;
     
-    clnt_stat err = cp2p ()->scall(DHASHPROC_SEND, sarg, &res);
-    if (err) warn << "RPC error: " << err << "\n";
-    if (err) return -err;
-    if (res.status != DHASH_OK) return res.status;
+    cp2p ()->call(DHASHPROC_SEND, sarg, res2, wrap (store_cb, res2));
     written += n;
     delete sarg;
   };
-
-  return DHASH_OK;
+  delete res;
 }
 
-
-int
-fetch_block(int i, chordID key, int datasize) 
+void
+store_cb (dhash_storeres *res, clnt_stat err)
 {
-  dhash_res res;
-  char *buf = New char[datasize];
-
-  dhash_fetch_arg arg;
-  arg.key = key;
-  arg.len = DMTU;
-  arg.start = 0;
-  int err = cp2p ()->scall(DHASHPROC_LOOKUP, &arg, &res);
-  assert (err == 0);
-  if (res.status != DHASH_OK) 
-    warn << "error " << res.status << "fetching data\n";
-
-  memcpy(buf, res.resok->res.base (), res.resok->res.size ());
-  unsigned int read = res.resok->res.size ();
+  if ( (err) || (res->status)) {
+    warn << "store error\n";
+    out--;
+  } else if (res->resok->done) {
+    out--;
+  }
   
-  while (read < res.resok->attr.size) {
-    arg.len = (read + DMTU < res.resok->attr.size) ? DMTU : 
-      res.resok->attr.size - read;
-    arg.start = read;
-    err = cp2p ()->scall(DHASHPROC_LOOKUP, &arg, &res);
-    if (res.status != DHASH_OK) 
-      warn << "error fetching data\n";
-    memcpy(buf + read, res.resok->res.base (), res.resok->res.size ());
-    read += res.resok->res.size ();
-  };
-  
-#define VERIFY
-#ifdef VERIFY
-  int diff = memcmp(data[i], buf, datasize);
-  assert (!diff);
-#endif
+  delete res;
 
-  delete buf;
-
-  if (err) return -err;
-  else
-    return DHASH_OK;
-  
 }
+
 
 int
 fetch_block_async(int i, chordID key, int datasize) 
@@ -140,27 +136,6 @@ fetch_block_async(int i, chordID key, int datasize)
   return 0;
 }
 
-void
-finish (char *buf, unsigned int *read, 
-	struct timeval start, 
-	int i,
-	dhash_res *res) 
-{
-  out--;
-      
-#ifdef VERIFY
-    int diff = memcmp(data[i], buf, *read);
-    assert (!diff);
-#endif
-
-    struct timeval end;
-    gettimeofday(&end, NULL);
-    float elapsed = (end.tv_sec - start.tv_sec)*1000.0 + (end.tv_usec - start.tv_usec)/1000.0;
-    fprintf(outfile, "%f %d\n", elapsed, res->resok->hops);
-    
-    delete read;
-    delete buf;
-}
 
 void
 afetch_cb (dhash_res *res, chordID key, char *buf, int i, struct timeval start, clnt_stat err) 
@@ -224,6 +199,28 @@ afetch_cb2 (dhash_res *res, char *buf, unsigned int *read, int i, struct timeval
 }
 
 
+void
+finish (char *buf, unsigned int *read, 
+	struct timeval start, 
+	int i,
+	dhash_res *res) 
+{
+  out--;
+      
+#ifdef VERIFY
+    int diff = memcmp(data[i], buf, *read);
+    assert (!diff);
+#endif
+
+    struct timeval end;
+    gettimeofday(&end, NULL);
+    float elapsed = (end.tv_sec - start.tv_sec)*1000.0 + (end.tv_usec - start.tv_usec)/1000.0;
+    fprintf(outfile, "%f %d\n", elapsed, res->resok->hops);
+    
+    delete read;
+    delete buf;
+}
+
 //size must be word sized
 chordID
 make_block(void *data, int size) 
@@ -255,9 +252,11 @@ int
 store(int num, int size) {
   
   for (int i = 0; i < num; i++) {
-    int err = store_block(IDs[i], data[i], size);
-    if (err) warn << "ERROR: " << err << "\n";
-    warn << i << "\n";
+    store_block(IDs[i], data[i], size);
+    while (out > OPS_OUT) acheck ();
+  }
+  while (out > 0) {
+    acheck ();
   }
 
   return 0;
