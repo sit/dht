@@ -3,11 +3,11 @@
 
 #include "protocol.h"
 #include "consistenthash.h"
-// #include "vivaldi.h"
+#include "vivaldi.h"
 
 #include <vector>
 
-#define CHORD_SUCC_NUM 1  //successor list contains CHORD_SUCC_NUM elements
+#define CHORD_SUCC_NUM 3  //successor list contains CHORD_SUCC_NUM elements
 
 #include "p2psim.h"
 
@@ -17,7 +17,7 @@ class Chord : public Protocol {
 public:
   typedef ConsistentHash::CHID CHID;
   struct IDMap {
-    CHID id; //consistent hashing ID for the node
+    ConsistentHash::CHID id; //consistent hashing ID for the node
     IPAddress ip; //the IP address for the node
   };
 
@@ -39,7 +39,7 @@ public:
   };
 
   struct get_successor_list_args {
-    Chord::CHID m; //number of successors wanted
+    unsigned int m; //number of successors wanted
   };
   
   struct get_successor_list_ret {
@@ -66,18 +66,20 @@ public:
   // RPC handlers.
   void get_predecessor_handler(get_predecessor_args *, get_predecessor_ret *);
   void get_successor_list_handler(get_successor_list_args *, get_successor_list_ret *);
+  //void get_successor_list_handler(get_predecessor_args *, get_predecessor_ret *);
   void notify_handler(notify_args *, notify_ret *);
   void next_handler(next_args *, next_ret *);
+
   bool stabilized();
   void dump();
-
   char *ts();
 
   virtual void stabilize(void *);
+
 protected:
   LocTable *loctable;
   IDMap me;
-  // Vivaldi *_vivaldi;
+  Vivaldi *_vivaldi;
 
   virtual vector<IDMap> find_successors(CHID key, int m);
   void fix_predecessor();
@@ -104,27 +106,26 @@ class LocTable {
       pinlist.clear();
 
       _prev_chkp = 0;
-      _stablized = false;
-      _prev_succ = ring[1];
-      _prev_pred = ring[2];
+      _stabilized = false;
+      _changed = false;
     }; 
 
     ~LocTable() {
     }
 
     void resize(unsigned int max, unsigned int s) {
-      _max = max;
+      _max = max; //this is not a general resize, it has to be called immediately after construction, it does not re-init
       _succ_num = s;
-      ring.clear(); //this is not a general resize, it has to be called immediately after construction
     };
 
-    Chord::IDMap succ(unsigned int m);
+    Chord::IDMap succ(unsigned int which);
+    vector<Chord::IDMap> succs(unsigned int m);
     Chord::IDMap pred(Chord::CHID n);
     Chord::IDMap pred();
     Chord::IDMap next(Chord::CHID n);
     vector<Chord::IDMap> succ_for_key(Chord::CHID key);
     void checkpoint();
-    bool stabilized() {return _stablized;};
+    bool stabilized() {return _stabilized;};
 
     void add_node(Chord::IDMap n);
     void del_node(Chord::IDMap n);
@@ -150,10 +151,9 @@ class LocTable {
     unsigned int _succ_num;
     unsigned int _max;
 
-    Chord::IDMap _prev_pred; 
-    Chord::IDMap _prev_succ;
     Time _prev_chkp;
-    bool _stablized;
+    bool _stabilized;
+    bool _changed;
 
     void evict(); //evict one node to make sure ring contains <= _max elements
 };

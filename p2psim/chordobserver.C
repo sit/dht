@@ -23,6 +23,8 @@ ChordObserver::Instance(Args *a)
 ChordObserver::ChordObserver(Args *a)
 {
   cout << "Instantiated with jinyang = " << (*a)["jinyang"] << endl;
+  _reschedule = 0;
+  _reschedule = atoi((*a)["reschedule"].c_str());
 }
 
 ChordObserver::~ChordObserver()
@@ -42,6 +44,7 @@ ChordObserver::execute()
     assert(c);
     if (!c->stabilized()) {
       cout << now() << " NOT STABILIZED" << endl;
+      if (_reschedule > 0) reschedule(_reschedule);
       return;
     }
   }
@@ -53,5 +56,7 @@ ChordObserver::execute()
     c->dump();
   }
 
-  reschedule(500);
 }
+
+
+

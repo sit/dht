@@ -13,6 +13,7 @@ private:
   static ChordObserver *_instance;
   ChordObserver(Args*);
   ~ChordObserver();
+  unsigned int _reschedule;
 };
 
 #endif // __CHORD_OBSERVER_H

@@ -10,3 +10,5 @@ p2psim_SOURCES = main.C node.C network.C chord.C packet.C topology.C \
                  vivaldinode.C
 p2psim_LDADD = -L/usr/local/lib -lthread -l9 -lfmt -lutf -lgmp -lcrypto
 INCLUDES = -I/usr/local/include
+CXXFLAGS = -g -fno-exceptions 
+

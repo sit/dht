@@ -14,7 +14,8 @@ Chord::Chord(Node *n) : Protocol(n)
   me.ip = n->ip();
   me.id = ConsistentHash::ip2chid(me.ip); 
   loctable = new LocTable(me);
-  // _vivaldi = Vivaldi::make(n->ip());
+  loctable->resize(2+CHORD_SUCC_NUM, CHORD_SUCC_NUM);
+//  _vivaldi = Vivaldi::make(n->ip());
 }
 
 Chord::~Chord()
@@ -83,7 +84,8 @@ Chord::next_handler(next_args *args, next_ret *ret)
     printf("%s next_handler key=%u, %u succs, %u\n",
            ts(), args->key, v.size(), v[0].id);
     */
-  IDMap succ = loctable->succ(args->m);
+  //IDMap succ = loctable->succ(args->m);
+  IDMap succ = loctable->succ(1);
   if(ConsistentHash::betweenrightincl(me.id, succ.id, args->key) ||
      succ.id == me.id){
     ret->done = true;
@@ -150,17 +152,15 @@ Chord::stabilize(void *x)
     doRPC(succ2.ip, &Chord::notify_handler, &na, &nr);
 
     fix_predecessor();
-    //fix_successor();
+    fix_successor();
     if (CHORD_SUCC_NUM > 1) fix_successor_list();
   }else{
     printf("%s stabilize nothing succ (%u,%qu)\n",
            ts(), succ1.ip,PID(succ1.id));
   }
-  if (now() > 100000) { //XXX nasty way to stop
-    dump();
-  }else{
-    delaycb(STABLE_TIMER, Chord::stabilize, NULL);
-  }
+
+  delaycb(STABLE_TIMER, Chord::stabilize, NULL);
+
 }
 
 bool
@@ -194,9 +194,7 @@ Chord::fix_successor()
 void
 Chord::get_successor_list_handler(get_successor_list_args *args, get_successor_list_ret *ret)
 {
-  IDMap succ = loctable->succ(CHORD_SUCC_NUM);
-  ret->v.clear();
-  ret->v.push_back(succ);
+  ret->v = loctable->succs(CHORD_SUCC_NUM);
 }
 
 
@@ -204,12 +202,10 @@ void
 Chord::fix_successor_list()
 {
   IDMap succ = loctable->succ(1);
-  if (succ.ip == 0) return;
-
+  if ((succ.ip == 0) || (succ.ip == me.ip)) return;
   get_successor_list_args gsa;
   get_successor_list_ret gsr;
   doRPC(succ.ip, &Chord::get_successor_list_handler, &gsa, &gsr);
-
   for (unsigned int i = 0; i < (gsr.v).size(); i++) {
     loctable->add_node(gsr.v[i]);
   }
@@ -225,6 +221,7 @@ Chord::notify_handler(notify_args *args, notify_ret *ret)
   if(p1.id != p2.id)
     printf("%s notify changed pred from %qu to %qu\n",
          ts(), PID(p1.id), PID(p2.id));
+
 }
 
 void
@@ -255,11 +252,33 @@ Chord::crash()
 #endif
 
 Chord::IDMap
-LocTable::succ(unsigned int m)
+LocTable::succ(unsigned int which)
 {
-  assert(m == 1);
-  //pass only one successor now, should be able to pass m in the future
-  return ring[1];
+  assert(which == 1);
+  assert(which <= CHORD_SUCC_NUM && which >= 1);
+  if (which < (ring.size() -1)) {
+    return ring[which];
+  }else{
+    Chord::IDMap nr;
+    nr.ip = 0;
+    nr.id = 0;
+    return nr;
+  }
+}
+
+vector<Chord::IDMap>
+LocTable::succs(unsigned int m)
+{
+  assert(m <= CHORD_SUCC_NUM);
+  int end = (CHORD_SUCC_NUM > (ring.size()-2))? (ring.size() - 2) : CHORD_SUCC_NUM;
+  vector<Chord::IDMap> v;
+  v.clear();
+  for (int i = 1; i <= end; i++) {
+    if (ring[i].ip) {
+      v.push_back(ring[i]);
+    }
+  }
+  return v;
 }
 
 vector<Chord::IDMap>
@@ -311,25 +330,30 @@ LocTable::next(Chord::CHID n)
 void
 LocTable::add_node(Chord::IDMap n)
 {
-  assert(n.ip);
-  int end = ring.size() -1;
-  for (int i = 1; i < end ; i++) {
+  if (!n.ip || (n.ip == ring[0].ip)) return;
+
+  int i;
+  for (i = 1; i <= ring.size()-1 ; i++) {
 
     if (ring[i].ip == n.ip) {
       return;
     } else if (ring[i].ip == 0) {
-      assert(i == 1);
       ring[i] = n;
+      break;
     } else if (ConsistentHash::between(ring[i-1].id, ring[i].id, n.id)) {
 
       ring.insert(ring.begin() + i, n);
       if (ring.size() > _max) {
 	evict();
+	assert(ring.size() == _max);
       }
       break;
     }
   }
 
+  if ((i <= CHORD_SUCC_NUM) && (!_changed)){
+    _changed = true;
+  }
 }
 
 //can this be part of add_node?
@@ -341,8 +365,10 @@ LocTable::notify(Chord::IDMap n)
   if ((ring.back().ip == 0) || (ConsistentHash::between(ring.back().id, ring.front().id, n.id))) {
     ring.pop_back();
     ring.push_back(n);
+    if (!_changed) _changed = true;
   }
   if ((ring[1].ip == 0) || (ring[1].ip == ring[0].ip)){
+    if (!_changed) _changed = true;
     ring[1] = n;
   }
 }
@@ -404,22 +430,24 @@ LocTable::checkpoint()
 {
   Time tm = now();
   assert(!_prev_chkp || tm >= (_prev_chkp + STABLE_TIMER));
-  Chord::IDMap curr_succ = succ(1);
-  Chord::IDMap curr_pred = pred();
-  if ((curr_succ.ip == _prev_succ.ip) && (curr_pred.ip == _prev_pred.ip)) {
-    _stablized = true;
+  if (!_changed) {
+    _stabilized = true;
   } else {
-    _stablized = false;
+    _stabilized = false;
   }
-  _prev_succ = curr_succ;
-  _prev_pred = curr_pred;
   _prev_chkp = tm;
+  _changed = false;
 }
 
 void
 LocTable::dump()
 {
   assert(ring.size() >= 3);
-  printf("D %u,%qu %u,%qu %u,%qu\n", ring[0].ip, ring[0].id, ring[1].ip, ring[1].id,ring[2].ip,ring[2].id);
+  printf("D");
+  for (int i=0; i <= CHORD_SUCC_NUM; i++) {
+    printf(" %u:%qu",ring[i].ip,ring[i].id);
+  }
+  int end = ring.size()-1;
+  printf(" %u:%qu\n", ring[end].ip, ring[end].id);
 }
 
