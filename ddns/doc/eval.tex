@@ -28,12 +28,12 @@ XXPublic key cryptography is an expensive operation.
 DDNS computes pub keys every time.
 
 DDNS is not going to disappear without an answer for a lookup,
-unlike current DNS. So we can't really compare this, but should
+unlike in the current DNS. So we can't really compare this, but should
 mention about it.
 
 \subsection{Discussion}
 
-\subsubsection{DNS Administration Problems}
+\subsubsection{DNS Administration}
 
 In their 1988 retrospective~\cite{dns}, Mockapetris and Dunlap
 listed ``distribution of control vs. distribution of expertise
@@ -66,8 +66,8 @@ Of these, our system addresses six of them:
 \begin{description}
 \item[Forget to signal primary master server.]
 There are no primary servers in DDNS, so this cannot happen.
-Unfortunately, the analogue in our system could be ``forgot to
-insert modified records into DHash.''
+Unfortunately, the analogue in our system could be ``forget to
+insert modified records into DDNS.''
 \item[Slave server can't load zone data.]
 There are no slave servers in DDNS, so this cannot happen.
 Further, replication is handled automatically, so there is no
@@ -78,14 +78,22 @@ DDNS handles caching automatically via DHash, so this cannot happen.
 DDNS is robust against server failure or disconnection, so that loss of
 an individual server cannot cripple name service for any part of the
 hierarchy.
-Unfortunately, DDNS is much worse off against network partitions.
+Unfortunately, it is more vulnerable to network partitions.
 For example, if a backhoe cuts MIT from the rest of the internet,
 even though hosts on the internet will not see a disruption in any
 part of the name space (not even MIT's names), hosts at MIT
 may not even be able to look up their own names!
-This could be addressed by having a local name ring as well
-as the global internet name ring, but such a solution seems half-baked:
-it brings back the hierarchy we eliminated.
+Nevertheless, the Chord stabilization protocol ensures that nodes that 
+are still reachable after a partition form their own local 
+Chord ring. DNS records for local machines can be reinserted to
+DDNS after a network partition is detected. This requires that 
+an organization that wishes to ensure the availability of their
+DNS data joins the Chord network (which might not be such a bad thing after all).
+Pastry~\cite{pastry01} suggests the use of IP multicast to rediscover
+other peer-to-peer networks after IP connectivity is resumed.
+%This could be addressed by having a local name ring as well
+%as the global internet name ring, but such a solution seems half-baked:
+%it brings back the hierarchy we eliminated.
 \item[Missing subdomain delegation.]
 In conventional DNS, if a domain's parent does not
 update the domain's name server records in a timely fashion,
@@ -124,13 +132,6 @@ configured public key records, which seem just as likely.
 Any solution that applies to one problem
 probably applies equally well to the other.
 
-DDNS has better fault-tolerance over current DNS due to 
-denial-of-service attacks. No longer is a few name servers need
-to be taken down, before the records from that zone 
-are inaccessible to others on the Internet. Because there is no 
-name server heirarchy, the attacker has bring down a diverse
-set of servers before data loss become apparent.
-
 In summary, we believe that using a peer-to-peer system for
 storing DNS records eliminates many common administrative
 problems, but adds others.
@@ -167,5 +168,39 @@ to route clients to nearby servers~\cite{akamai.rev.eng}.
 
 DDNS can provide none of these capabilities, which depend
 on the coupling of the administrative hierarchy and the service structure.
+
+Another query type, ALL, requests for every RR 
+under a domain name. This does not cause performance 
+degradation in the current DNS, since a name server
+will have all the records for the domain names it serves.
+In DDNS, we assemble all the records for the ALL 
+request by looking up every record types for a domain 
+name. This results in a significant number of RPCs. 
+We can optimize it by storing an ALL RRSet for every 
+domain, and including the signature for the whole RRSet in
+the SIG RR. We update the ALL RRSet whenever there is 
+a change to the records under a domain name.
+
+\subsubsection{Denial-of-Service}
+
+DDNS has better fault-tolerance due to denial-of-service attacks 
+over the current DNS. 
+Because there is no name server heirarchy, the 
+attacker has to bring down a diverse
+set of servers before data loss becomes apparent.
+
+Another type of denial-of-service is caused by 
+a domain name owner inserting a large number 
+of DNS records, using up space in the Chord network.
+DDNS has no idea whether those records
+are valid or bogus. We can address this problem 
+by enforcing a quota on how much data each organization
+can insert depending on how much storage the organization
+is contributing to DDNS. The rationale is that if you
+have a lot of DNS entries, then you must have 
+enough server resource to contribute.
+This policy is another incentive,
+in addition to the one above on network partition,
+for people to join the Chord ring.
 
 

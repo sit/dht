@@ -5,7 +5,7 @@ in a centrally-administered text file, {\tt hosts.txt}, that
 included all sites mirrored from the SRI Network Information Center.
 By the early 1980s the host database had become too large
 to disseminate in a cost-effective manner.
-In response, Mockapetris (et al?XXX) began the design and
+In response, Mockapetris {\it et al.} began the design and
 implementation of a distributed database that we now know
 as the internet domain name system (DNS).
 DNS started to replace {\tt hosts.txt} in 1985 and has remained
@@ -42,7 +42,7 @@ current DNS. In a study by Danzig {\it et al.}~\cite{dnsroot:sigcomm92},
 most DNS traffic was caused by misconfiguration and faulty implementation
 in the name servers. It also found that one third of the 
 traffic that traversed the NSFNet was directed to one of 
-(in 1992) seven root name servers. 
+the seven root name servers (in 1992). 
 Jung {\it et al.}~\cite{dnscache:sigcommimw01}
 found that approximately 35\% of DNS queries never receive
 an answer or receive a negative answer, and attributed
@@ -52,12 +52,12 @@ The study (in 2000) also reported as much as 18\% of DNS lookups
 reaching the root servers. 
 CERT~\cite{cert} issued warnings on recent 
 denial-of-service attacks on name 
-servers due to vulnerabilities in name server implementation.
+servers due to vulnerabilities in name server implementations.
 
 These reports have provoked us to rethink the current 
 implementation of the DNS. 
 Due to the advent of DNSSEC, the service structure no longer needs
-to reflect the administrative hierarchy. 
+to reflect administrative hierarchy. 
 This observation enables the exploration of alternate service 
 structures to achieve desirable properties not possible
 with conventional DNS.  In this paper, we explore one such

@@ -11,7 +11,7 @@ for ({\em www.nytimes.com}, A).
 
 DNSSEC uses public key cryptography to sign resource record
 sets.  When we retrieve an RRSet from an arbitrary
-DHash server, we need to verify the signature (included as a 
+server, we need to verify the signature (included as a 
 signature (SIG) record).
 To find the public key that should have signed the RRSet,
 we need to execute another DNS lookup, 
@@ -34,14 +34,15 @@ DHash uses consistent hashing to allocate keys to nodes evenly.
 Further, as each block is retrieved, it is cached along
 the lookup path.
 If a particular record is looked up $n$ times in succession
-starting at random locations in a chord ring of size $m$, then with high probability
+starting at random locations in a Chord ring of $m$ nodes, 
+then with high probability
 each server transfers a given record only $\log{m}$ times total
 before every server has the record cached.
 
 DHash is also robust: as servers come and go, DHash automatically
 moves data so that it is always stored on a fixed number of replicas
 (typically six).  Because the replicas that store a block are chosen
-in a pseudo-random fashion, a very large number of servers all have to
+in a pseudo-random fashion, a very large number of servers must
 fail simultaneously before data loss occurs. 
 
 To create or update a DDNS RRSet, the owner of that set prepares
@@ -49,21 +50,23 @@ the RRSet, signs it, and inserts it into DHash marked with type DNS RRSet.
 The key for the RRSet is the SHA1 hash of the domain name and the RRSet query type
 ({\em e.g.}, SHA1({\em www.nytimes.com}, A)).
 DHash verifies the signature before accepting the data.
-When a client retrieves the RRSet, they also check the signature before using the data.
+When a client retrieves the RRSet, it also checks 
+the signature before using the data.
 
-In the scheme described so far, verifying a DNS RRSet for a name with $n$ 
+Naively verifying a DNS RRSet for a name with $n$ 
 path elements requires $n$ public key lookups.
-To avoid some of this cost, we can optionally
-include extra public key RRSets so that all the data needed to verify a record
+Some of this cost can be avoided by optionally
+including extra KEY RRSets so that all 
+the data needed to verify a record
 is attached to the record itself.
-This would inflate the size of records somewhat, although
+This would inflate the size of responses somewhat, although
 common public keys ({\em e.g.}, the key for {\em .com}) could
 be omitted on the assumption that they would be 
 widely cached anyway.
 
 To ease transition from conventional DNS to our system,
 a simple loopback server listening on 127.1 could accept
-conventional DNS queries, perform the appropriate chord lookup,
+conventional DNS queries, perform the appropriate Chord lookup,
 and then send a conventional response.
 Then systems could simply be configured to 
 point at 127.1 as their name server.
