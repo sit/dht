@@ -45,8 +45,6 @@
 
 typedef int cb_ID;
 
-// #define FINGERS 1
-
 typedef vec<chordID> route;
 
 typedef callback<void,vnode*,chordstat>::ref cbjoin_t;
