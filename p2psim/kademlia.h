@@ -38,35 +38,41 @@ public:
   NodeID id () { return _id;}
 
   // bit twiddling utility functions
-  static NodeID flipbitandmaskright(NodeID, unsigned);
-  static NodeID maskright(NodeID, unsigned);
+  // static NodeID flipbitandmaskright(NodeID, unsigned);
+  // static NodeID maskright(NodeID, unsigned);
   static unsigned getbit(NodeID, unsigned);
+  static unsigned common_prefix(NodeID, NodeID);
+  static pair<NodeID, IPAddress> *get_closest(vector<pair<NodeID, IPAddress> > *, NodeID);
   static unsigned k()   { return _k; }
 
-  pair<NodeID, IPAddress> do_lookup_wrapper(IPAddress, NodeID);
+  void do_lookup_wrapper(IPAddress, NodeID, vector<pair<NodeID, IPAddress> > * = 0);
 
   // public, because k_bucket needs it.
   struct lookup_args {
+    lookup_args(NodeID xid, IPAddress xip, NodeID k = 0) :
+      id(xid), ip(xip), key(k) {};
     NodeID id;
     IPAddress ip;
-
     NodeID key;
   };
 
   struct lookup_result {
-    NodeID id;      // answer to the lookup
-    IPAddress ip;   // answer to the lookup
+    // NodeID id;      // answer to the lookup
+    // IPAddress ip;   // answer to the lookup
+    vector<pair<NodeID, IPAddress> > results;
     NodeID rid;     // the guy who's replying
   };
 
   //
   // ping
   //
-  struct ping_args {};
+  struct ping_args {
+    NodeID id;
+    IPAddress ip;
+  };
   struct ping_result {};
   void do_ping(ping_args*, ping_result*);
   bool do_ping_wrapper(IPAddress, ping_args*, ping_result*);
-
 
 // }}}
 // {{{ private
@@ -139,12 +145,13 @@ class peer_t {
 public:
   typedef Kademlia::NodeID NodeID;
 
-  peer_t(NodeID xid, IPAddress xip, Time t) : retries(0), id(xid), ip(xip), lastts(t) {}
+  peer_t(NodeID xid, IPAddress xip, Time t) : retries(0), id(xid), ip(xip), firstts(t), lastts(t) {}
   peer_t(const peer_t &p) : retries(0), id(p.id), ip(p.ip), lastts(p.lastts) {}
   unsigned retries;
   NodeID id;
   IPAddress ip;
-  Time lastts;
+  Time firstts; // when we saw it first
+  Time lastts;  // when we saw it last
 };
 
 // }}}
@@ -156,12 +163,11 @@ public:
   k_bucket(Kademlia*, k_bucket_tree*);
   ~k_bucket();
 
-  pair<peer_t*, unsigned>
-    insert(NodeID, IPAddress, string = "", unsigned = 0, k_bucket* = 0);
+  peer_t* insert(NodeID, IPAddress, string = "", unsigned = 0, k_bucket* = 0);
   bool stabilized(vector<NodeID>, string = "", unsigned = 0);
   void stabilize(string = "", unsigned = 0);
   void dump(string = "", unsigned = 0);
-  peer_t* get(NodeID, unsigned = 0);
+  // void get(NodeID, vector<pair<NodeID, IPAddress> >*, unsigned = 0);
 
 private:
   static unsigned _k;
@@ -181,7 +187,6 @@ private:
   NodeID _id; // so that KDEBUG() works. can be removed later.
 };
 
-
 // }}}
 // {{{ k_bucket_tree
 class k_bucket_tree {
@@ -190,21 +195,32 @@ public:
 
   k_bucket_tree(Kademlia*);
   ~k_bucket_tree();
-  unsigned insert(NodeID node, IPAddress ip);
+  void insert(NodeID node, IPAddress ip);
+  void erase(NodeID node);
   bool stabilized(vector<NodeID>);
   void stabilize();
   void dump() { return _root->dump(); }
   bool empty() { return _nodes.empty(); }
-  pair<NodeID, IPAddress> get(NodeID);
+  void get(NodeID, vector<pair<NodeID, IPAddress> >*);
   pair<NodeID, IPAddress> random_node();
 
 
 private:
+  class SortNodes { public:
+    SortNodes(NodeID key) : _key(key) {}
+    bool operator()(const pair<NodeID, IPAddress> &n1, const pair<NodeID, IPAddress> &n2) const {
+      return (_key ^ n1.first) < (_key ^ n2.first);
+    }
+  private:
+    NodeID _key;
+  };
+
   k_bucket *_root;
-  vector<peer_t*> _nodes;
+  map<NodeID, peer_t*> _nodes;
 
   Kademlia *_self;
   NodeID _id; // so that KDEBUG() does work
+  static unsigned _k;
 };
 
 // }}}
