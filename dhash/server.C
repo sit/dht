@@ -99,11 +99,12 @@ dhash::produce_dhash (str dbname, u_int nrepl, int ss_mode)
 dhash_impl::~dhash_impl ()
 {
   // XXX Do we need to free stuff?
+  delete pmaint_obj;
 }
 
 dhash_impl::dhash_impl (str dbname, u_int k, int _ss_mode) 
 {
-  pmaint_offers_pending = 0;
+
   missing_outstanding = 0;
   nreplica = k;
   kc_delay = 11;
@@ -144,6 +145,7 @@ dhash_impl::dhash_impl (str dbname, u_int k, int _ss_mode)
 
   // merkle state
   mtree = New merkle_tree (db);
+			   
 }
 
 void
@@ -169,7 +171,6 @@ dhash_impl::init_after_chord(ptr<vnode> node, ptr<route_factory> _r_factory)
 
 
   merkle_rep_tcb = NULL;
-  merkle_part_tcb = NULL;
   keyhash_mgr_tcb = NULL;
 
   // RPC demux
@@ -178,7 +179,7 @@ dhash_impl::init_after_chord(ptr<vnode> node, ptr<route_factory> _r_factory)
 
   //the client helper class (will use for get_key etc)
   //don't cache here: only cache on user generated requests
-  cli = New dhashcli (node, this, r_factory, false);
+  cli = New dhashcli (node, r_factory, 1); // XXX pick real server selection mode?
 
   // pred = 0; // XXX initialize to what?
   check_replica_tcb = NULL;
@@ -200,13 +201,14 @@ dhash_impl::init_after_chord(ptr<vnode> node, ptr<route_factory> _r_factory)
   if (!JOSH) {
     merkle_rep_tcb = 
       delaycb (REPTM, wrap (this, &dhash_impl::replica_maintenance_timer, 0));
-    merkle_part_tcb =
-      delaycb (PRTTM, wrap (this, &dhash_impl::partition_maintenance_timer));
   }
 
   keyhash_mgr_rpcs = 0;
   keyhash_mgr_tcb =
     delaycb (KEYHASHTM, wrap (this, &dhash_impl::keyhash_mgr_timer));
+  pmaint_obj = New pmaint (cli, host_node, db, 
+			   wrap (this, &dhash_impl::dbdelete));
+
 }
 
 
@@ -265,32 +267,8 @@ dhash_impl::missing_retrieve_cb (bigint key, dhash_stat err,
   }
 }
 
-// --------------------------------------------------------------------------------
+// ------------------------------------------------------------------
 // keyhash maintenance
-
-void
-dhash_impl::sendblock (ptr<location> dst, blockID bID,
-		       callback<void, dhash_stat, bool>::ref cb)
-{
-  ptr<dbrec> blk = dblookup(bID);
-  if(!blk)
-    cb(DHASH_NOTPRESENT, false);
-
-  ref<dhash_block> dhblk = New refcounted<dhash_block> 
-    (blk->value, blk->len, bID.ctype);
-
-  dhash_store::execute 
-    (host_node, dst, bID, this, dhblk,
-     wrap (this, &dhash_impl::sendblock_cb, cb),
-     bID.dbtype == DHASH_BLOCK ? DHASH_REPLICA : DHASH_FRAGMENT);
-}
-
-void
-dhash_impl::sendblock_cb (callback<void, dhash_stat, bool>::ref cb, 
-			  dhash_stat err, chordID dest, bool present)
-{
-  (*cb) (err, present);
-}
 
 void
 dhash_impl::keyhash_sync_done (dhash_stat err, bool present)
@@ -314,8 +292,9 @@ dhash_impl::keyhash_mgr_timer ()
         for (unsigned j=0; j<replicas.size(); j++) {
 	  // warnx << "keyhash: " << n << " to " << replicas[j]->id () << "\n";
           keyhash_mgr_rpcs ++;
-          sendblock (replicas[j], blockID(n, DHASH_KEYHASH, DHASH_BLOCK),
-		     wrap (this, &dhash_impl::keyhash_sync_done));
+          cli->sendblock (replicas[j], blockID(n, DHASH_KEYHASH, DHASH_BLOCK),
+			  keyhash_db,
+			  wrap (this, &dhash_impl::keyhash_sync_done));
 	}
       }
       else {
@@ -339,8 +318,9 @@ dhash_impl::keyhash_mgr_lookup (chordID key, dhash_stat err,
   if (!err) {
       keyhash_mgr_rpcs ++;
       // warnx << "keyhash: sync " << key << " to " << r.back()->id () << "\n";
-      sendblock (r.back (), blockID(key, DHASH_KEYHASH, DHASH_BLOCK),
-		 wrap (this, &dhash_impl::keyhash_sync_done));
+      cli->sendblock (r.back (), blockID(key, DHASH_KEYHASH, DHASH_BLOCK),
+		      keyhash_db,
+		      wrap (this, &dhash_impl::keyhash_sync_done));
   }
 }
 
@@ -380,258 +360,6 @@ dhash_impl::replica_maintenance_timer (u_int i)
     delaycb (REPTM, wrap (this, &dhash_impl::replica_maintenance_timer, i));
 }
 
-
-// --------------------------------------------------------------------------------
-// partition maintenance
-
-// coding and karger suggestion
-
-// return the next key after or equal to 'a' in the database.
-// wrapping around the end of the database.
-//  returns -1, if the db is empty.
-//
-static bigint
-db_next (ptr<dbfe> db, bigint a)
-{
-  ptr<dbEnumeration> enumer = db->enumerate ();
-  ptr<dbPair> d = enumer->nextElement (id2dbrec(a)); // >=
-  if (!d) 
-    d = enumer->firstElement ();
-  if (d) {
-    return dbrec2id(d->key);
-  }
-  else
-    return -1; // db is empty
-}
-
-// return a vector up a max 'maxcount' holding the keys
-// in the range [a,b]-on-the-circle.   Starting with a.
-//
-static vec<bigint>
-get_keys (ptr<dbfe> db, bigint a, bigint b, u_int maxcount)
-{
-  vec<bigint> vres;
-  bigint key = a;
-  while (vres.size () < maxcount) {
-    key = db_next (db, key);
-    if (!betweenbothincl (a, b, key))
-      break;
-    if (vres.size () && vres[0] == key)
-      break;
-    vres.push_back (key);
-    key = incID (key);
-  }
-  return vres;
-}
-
-
-void
-dhash_impl::partition_maintenance_timer ()
-{
-  merkle_part_tcb = NULL;
-
-  pmaint_a = host_node->my_ID();
-  pmaint_b = host_node->my_ID();
-  pmaint_next ();
-}
-
-
-void
-dhash_impl::pmaint_next ()
-{
-  if (pmaint_handoff_tbl.size () > 0) {
-    return;
-  }
-
-  if (pmaint_offers_pending > 0) {
-    return;
-  }
-
-  assert (incID (pmaint_b) != pmaint_a);
-
-  if (pmaint_a == pmaint_b) { 
-    bigint key = db_next (db, pmaint_a);
-    if (key != -1) {
-      pmaint_a = key;
-      pmaint_b = key;
-      cli->lookup (key, wrap (this, &dhash_impl::pmaint_lookup, pmaint_b));
-    } else { 
-      //data base is empty
-      //check back later
-      delaycb (PRTTM, wrap (this, &dhash_impl::pmaint_next));
-    }
-  } else {
-    pmaint_offer ();
-  }
-}
-
-
-
-void
-dhash_impl::pmaint_lookup (bigint key, 
-			   dhash_stat err, vec<chord_node> sl, route r)
-{
-  if (err) {
-    warn << "pmaint: lookup failed. key " << key << ", err " << err << "\n";
-    pmaint_next (); //XXX delay?
-    return;
-  }
-
-  assert (r.size () >= 2);
-  assert (sl.size () >= 1);
-
-  chordID succ = r.pop_back ()->id ();
-  chordID pred = r.pop_back ()->id ();
-  assert (succ == sl[0].x);
-
-  if (dhash::NUM_EFRAGS > sl.size ()) {
-    warn << "not enough successors: " << sl.size () << " vs " << dhash::NUM_EFRAGS << "\n";
-    //try again later
-    delaycb (PRTTM, wrap (this, &dhash_impl::pmaint_next));
-    return;
-  }
-
-  if (betweenbothincl (sl[0].x, sl[dhash::NUM_EFRAGS - 1].x, host_node->my_ID ())) { 
-    //case I: we are a replica of the key. i.e. in the successor list. Do nothing.
-    pmaint_a = incID (pmaint_a);
-    pmaint_b = pmaint_a;
-    //next time we'll do a lookup with the next key
-    delaycb (PRTTM, wrap (this, &dhash_impl::pmaint_next));
-  } else {
-    //case II: this key doesn't belong to us. Offer it to another node
-    pmaint_a = pred;
-    pmaint_b = succ;
-    pmaint_succs = sl;
-    pmaint_offer ();
-  }
-}
-
-
-// offer a list of keys to each node in 'sl'.
-// first node to accept key gets it.
-//
-void
-dhash_impl::pmaint_offer ()
-{
-  warn << host_node->my_ID () << " : pmaint_offer: a "
-       << pmaint_a << ", b " << pmaint_b << "\n";
-
-  // XXX first: don't send bigint over wire. then: change 46 to 64
-  //these are the keys that belong to succ. All successors should have them
-  vec<bigint> keys = get_keys (db, pmaint_a, pmaint_b, 46); 
-
-  if (keys.size () == 0) {
-    pmaint_a = pmaint_b; 
-    //we're done with the offer phase
-    //signal that we should start scanning again.
-    pmaint_next ();
-    return;
-  } else {
-    pmaint_a = incID (keys.back ()); 
-    //next time we'll start with the next
-    //key we couldn't send
-    //and a != b so we won't lookup
-  }
-
-  //  for (u_int i = 0; i < keys.size (); i++)
-  //  warn << host_node->my_ID () << " : pmaint_offer: "
-  //	 << "keys[" << i << "] " << keys[i] << "\n";
-
-  //form an OFFER RPC
-  ref<dhash_offer_arg> arg = New refcounted<dhash_offer_arg> ();
-  arg->keys.setsize (keys.size ());
-  for (u_int i = 0; i < keys.size (); i++)
-    arg->keys[i] = keys[i];
-
-  assert (pmaint_offers_pending == 0);
-  pmaint_offers_erred = 0;
-  for (u_int i = 0; i < pmaint_succs.size () && i < dhash::NUM_EFRAGS; i++) {
-    ref<dhash_offer_res> res = New refcounted<dhash_offer_res> (DHASH_OK);
-    pmaint_offers_pending += 1;
-    doRPC (pmaint_succs[i], dhash_program_1, DHASHPROC_OFFER, arg, res, 
-	   wrap (this, &dhash_impl::pmaint_offer_cb, pmaint_succs[i], keys, res));
-  }
-}
-
-
-
-void
-dhash_impl::pmaint_offer_cb (chord_node dst, vec<bigint> keys, 
-			     ref<dhash_offer_res> res, 
-			     clnt_stat err)
-{
-  //  warn << host_node->my_ID () << " : pmaint_offer_cb\n";
-
-  pmaint_offers_pending -= 1;
-  if (err) {
-    pmaint_offers_erred += 1;
-    //may err because of the race on adding the handler
-    //we'll just redo some work since we won't delete the fragment
-  }
-
-  for (u_int i = 0; i < res->resok->accepted.size (); i++)
-    if (res->resok->accepted[i])
-      if (db->lookup (id2dbrec (keys[i])))
-	  pmaint_handoff (dst, keys[i]);
-
-
-  // we can delete the fragment in two cases:
-  //  1) by handing off
-  //  2) fragment was held at each of the NUM_EFRAGS succs.
-  if (pmaint_offers_pending == 0 && pmaint_offers_erred == 0) {
-    for (u_int i = 0; i < keys.size (); i++) {
-      bigint key = keys[i];
-      if (pmaint_handoff_tbl[key])
-	continue;
-
-      //if we get here no one wanted the block (i.e. needed it)
-      // therefore it is safe to delete it
-      
-      if (db->lookup (id2dbrec (key))) 
-	dbdelete (id2dbrec (key));
-    }
-  }
-
-  pmaint_next ();
-}
-
-// handoff 'key' to 'dst'
-//
-void
-dhash_impl::pmaint_handoff (chord_node dst, bigint key)
-{
-
-  if (pmaint_handoff_tbl[key]) {
-    return;
-  }
-
-  pmaint_handoff_tbl.insert (key, true);
-  
-  ptr<location> dstloc = host_node->locations->lookup_or_create (dst);
-  blockID bid (key, DHASH_CONTENTHASH, DHASH_FRAG);
-
-  warn << "sending " << key << " to " << dst << "\n";
-  sendblock (dstloc, bid, wrap (this, &dhash_impl::pmaint_handoff_cb, key));
-}
-
-void
-dhash_impl::pmaint_handoff_cb (bigint key, 
-			       dhash_stat err,
-			       bool present)
-{
-
-  pmaint_handoff_tbl.remove (key);
-
-  if (err) {
-    warn << "handoff failed for key\n";
-  } else if (!present) 
-      dbdelete (id2dbrec(key));
-
-  pmaint_next ();
-}
-
-
-// ----------------------------------------------------------------------
 
 
 
@@ -1181,11 +909,6 @@ dhash_impl::stop ()
     timecb_remove (merkle_rep_tcb);
     merkle_rep_tcb = NULL;
     warn << "stop merkle replication timer\n";
-  }
-  if (merkle_part_tcb) {
-    timecb_remove (merkle_part_tcb);
-    merkle_part_tcb = NULL;
-    warn << "stop merkle partition timer\n";
   }
 }
 

@@ -16,12 +16,12 @@ public:
   
   static void execute (ptr<vnode> clntnode, ptr<location> dest, 
 		       blockID bid,
-		       dhash *dh, ref<dhash_block> block, 
+		       ref<dhash_block> block, 
 		       cbclistore_t cb, 
 		       store_status store_type = DHASH_STORE)
   {
     ptr<dhash_store> d = New refcounted<dhash_store> 
-      (clntnode, dest, bid, dh, block, store_type, cb);
+      (clntnode, dest, bid, block, store_type, cb);
   }
 
 
@@ -30,7 +30,6 @@ protected:
   bool error;
   dhash_stat status;
 
-  dhash *dh;
   ptr<location> dest;
   ptr<dhash_block> block;
   blockID bid;
@@ -47,9 +46,9 @@ protected:
   bool returned;
 
   dhash_store (ptr<vnode> clntnode, ptr<location> dest, blockID bid,
-               dhash *dh, ptr<dhash_block> _block, store_status store_type, 
+               ptr<dhash_block> _block, store_status store_type, 
 	       cbclistore_t cb)
-    : dh (dh), dest (dest), block (_block), bid (bid), cb (cb),
+    : dest (dest), block (_block), bid (bid), cb (cb),
       ctype (_block->ctype), store_type (store_type),
       clntnode (clntnode), num_retries (0)
   {

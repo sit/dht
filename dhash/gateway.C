@@ -55,7 +55,7 @@ dhashgateway::dhashgateway (ptr<axprt_stream> x,
 			 wrap (this, &dhashgateway::dispatch));
   clntnode = node;
   this->dh = dh;
-  dhcli = New refcounted<dhashcli>(clntnode->active, dh, f, do_cache, ss_mode);
+  dhcli = New refcounted<dhashcli>(clntnode->active, f, ss_mode);
 }
 
 

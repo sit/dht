@@ -69,12 +69,9 @@ class dhash {
   enum { SYNCTM = 30 };
   enum { KEYHASHTM = 10 };
   enum { REPTM = 3 };
-  enum { PRTTM = 5 };
-
 
   // these 2 are only public for testing purposes
   virtual void replica_maintenance_timer (u_int index) = 0;
-  virtual void partition_maintenance_timer () = 0;
 
   static ref<dhash> produce_dhash
     (str dbname, u_int nreplica = 0, int ss_mode = 0);

@@ -38,6 +38,7 @@
 #include <route.h>
 #include <location.h>
 #include <locationtable.h>
+#include <merkle_misc.h>
 
 #include "dhash_common.h"
 #include "dhash.h"
@@ -61,10 +62,9 @@
 // DHASHCLI
 
  
-dhashcli::dhashcli (ptr<vnode> node, dhash *dh, ptr<route_factory> r_factory,
-                    bool do_cache, int ss_mode)
-  : clntnode (node), do_cache (do_cache),
-    server_selection_mode (ss_mode), dh (dh), r_factory (r_factory)
+dhashcli::dhashcli (ptr<vnode> node, ptr<route_factory> r_factory, int ss = 1)
+                    
+  : clntnode (node), r_factory (r_factory), server_selection_mode (ss)
 {
 }
 
@@ -441,7 +441,7 @@ dhashcli::retrieve_and_cache (cb_ret cb, dhash_stat stat,
   else
     dhash_store::execute (clntnode, clntnode->my_location (),
                           blockID (block->ID, block->ctype, DHASH_BLOCK),
-		          dh, block,
+		          block,
 		          wrap (this, &dhashcli::retrieve_and_cache_cb,
 			        cb, block, path),
 			  DHASH_CACHE);
@@ -465,7 +465,7 @@ dhashcli::insert_to_cache (ref<dhash_block> block, cbinsert_path_t cb)
 {
   dhash_store::execute (clntnode, clntnode->my_location (),
                         blockID (block->ID, block->ctype, DHASH_BLOCK),
-		        dh, block,
+		        block,
 		        wrap (this, &dhashcli::insert_to_cache_cb, cb),
 			DHASH_CACHE);
 }
@@ -537,7 +537,7 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
       ptr<location> dest = clntnode->locations->lookup_or_create (succs[i]);
       dhash_store::execute (clntnode, dest, 
 			    blockID(block->ID, block->ctype, DHASH_BLOCK),
-			    dh, block,
+			    block,
 			    wrap (this, &dhashcli::insert_store_cb,  
 				  ss, r, i,
 				  ss->succs.size (), ss->succs.size () / 2),
@@ -571,7 +571,7 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
     ptr<location> dest = clntnode->locations->lookup_or_create (succs[i]);
     dhash_store::execute (clntnode, dest,
 			  blockID(block->ID, block->ctype, DHASH_FRAG),
-			  dh, blk,
+			  blk,
 			  wrap (this, &dhashcli::insert_store_cb,
 				ss, r, i,
 				dhash::NUM_EFRAGS, dhash::NUM_DFRAGS),
@@ -638,3 +638,27 @@ dhashcli::lookup_findsucc_cb (chordID blockID, dhashcli_lookupcb_t cb,
 }
 
 
+void
+dhashcli::sendblock (ptr<location> dst, blockID bid_to_send, ptr<dbfe> from_db,
+		     callback<void, dhash_stat, bool>::ref cb)
+{
+  
+  ptr<dbrec> blk = from_db->lookup (id2dbrec (bid_to_send.ID));
+  if(!blk)
+    cb (DHASH_NOTPRESENT, false);
+
+  ref<dhash_block> dhblk = New refcounted<dhash_block> 
+    (blk->value, blk->len, bid_to_send.ctype);
+
+  dhash_store::execute 
+    (clntnode, dst, bid_to_send, dhblk,
+     wrap (this, &dhashcli::sendblock_cb, cb),
+     bid_to_send.dbtype == DHASH_BLOCK ? DHASH_REPLICA : DHASH_FRAGMENT);
+}
+
+void
+dhashcli::sendblock_cb (callback<void, dhash_stat, bool>::ref cb, 
+			  dhash_stat err, chordID dest, bool present)
+{
+  (*cb) (err, present);
+}

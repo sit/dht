@@ -1,4 +1,5 @@
 #include "dhash.h"
+#include <pmaint.h>
 #include <dbfe.h>
 
 // Forward declarations.
@@ -91,6 +92,7 @@ class dhash_impl : public dhash {
   ptr<route_factory> r_factory;
 
   merkle_server *msrv;
+  pmaint *pmaint_obj;
   merkle_tree *mtree;
   qhash<chordID, ptr<merkle_syncer>, hashID> active_syncers;
 
@@ -118,8 +120,6 @@ class dhash_impl : public dhash {
   
   void sendblock (ptr<location> dst, blockID blockID,
 		  callback<void, dhash_stat, bool>::ref cb);
-  void sendblock_cb (callback<void, dhash_stat, bool>::ref cb, dhash_stat err, 
-		     chordID dest, bool present);
 
   void keyhash_mgr_timer ();
   void keyhash_mgr_lookup (chordID key, dhash_stat err,
@@ -127,34 +127,6 @@ class dhash_impl : public dhash {
   void keyhash_sync_done (dhash_stat stat, bool present);
 
 
-  void pmaint_next ();
-  void pmaint_lookup (bigint key, dhash_stat err, vec<chord_node> sl, route r);
-  void pmaint_offer ();
-  void pmaint_offer_cb (chord_node dst, vec<bigint> keys, ref<dhash_offer_res> res, 
-			clnt_stat err);
-  void pmaint_handoff (chord_node dst, bigint key);
-  void pmaint_handoff_cb (bigint key, dhash_stat err, bool present);
-
-  bigint pmaint_a;
-  bigint pmaint_b;
-  vec<chord_node> pmaint_succs;
-  qhash<chordID, bool, hashID> pmaint_handoff_tbl;
-  u_int pmaint_offers_pending;
-  u_int pmaint_offers_erred;
-
-
-  void partition_maintenance_timer2 (chordID curID);
-
-  void partition_maintenance_lookup_cb (dhash_stat err, vec<chord_node> hostsl, route r);
-  void partition_maintenance_pred_cb (chordID predID, net_address addr, chordstat stat);
-
-  void partition_maintenance_lookup_cb2 (blockID key, dhash_stat err, vec<chord_node> hostsl, route r);
-  void partition_maintenance_succs_cb2 (blockID key, vec<chord_node> succs, chordstat err);
-  void partition_maintenance_store2 (blockID key, vec<chord_node> succs, u_int already_count);
-  void partition_maintenance_store_cb2 (blockID key, vec<chord_node> succs,
-					u_int already_count, ref<dhash_storeres> res,
-					clnt_stat err);
-  
   void doRPC_unbundler (ptr<location> dst, RPC_delay_args *args);
 
 
@@ -171,7 +143,8 @@ class dhash_impl : public dhash {
   void dispatch (user_args *a);
   void sync_cb ();
 
-  void storesvc_cb (user_args *sbp, s_dhash_insertarg *arg, bool already_present, dhash_stat err);
+  void storesvc_cb (user_args *sbp, s_dhash_insertarg *arg, 
+		    bool already_present, dhash_stat err);
   dhash_fetchiter_res * block_to_res (dhash_stat err, s_dhash_fetch_arg *arg,
 				      int cookie, ptr<dbrec> val);
   void fetchiter_gotdata_cb (cbupcalldone_t cb, s_dhash_fetch_arg *farg,
@@ -208,7 +181,6 @@ class dhash_impl : public dhash {
   vec<ptr<location> > replicas;
   timecb_t *check_replica_tcb;
   timecb_t *merkle_rep_tcb;
-  timecb_t *merkle_part_tcb;
   timecb_t *keyhash_mgr_tcb;
 
   /* statistics */

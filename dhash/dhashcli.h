@@ -1,3 +1,5 @@
+#ifndef __DHASH_CLI_H_
+#define __DHASH_CLI_H_
 
 #include <sys/types.h>
 
@@ -9,6 +11,7 @@
 typedef callback<void, dhash_stat, chordID>::ref cbinsert_t;
 typedef callback<void, dhash_stat, vec<chordID> >::ref cbinsert_path_t;
 typedef callback<void, dhash_stat, vec<chord_node>, route>::ref dhashcli_lookupcb_t;
+typedef	callback<void, dhash_stat, bool>::ref sendblockcb_t;
 
 // Forward declarations
 class vnode;
@@ -19,10 +22,8 @@ class route_iterator;
 
 class dhashcli {
   ptr<vnode> clntnode;
-  bool do_cache;
-  int server_selection_mode;
-  dhash *dh;
   ptr<route_factory> r_factory;
+  int server_selection_mode;
 
   struct rcv_state {
     ihash_entry <rcv_state> link;
@@ -110,10 +111,11 @@ private:
   void retrieve_dl_or_walk_cb (blockID blockID, dhash_stat status, int options,
 			       int retries, ptr<chordID> guess,
 			       ptr<dhash_block> blk);
- public:
-  dhashcli (ptr<vnode> node, dhash *dh, ptr<route_factory> r_factory, 
-	    bool do_cache, int ss_mode = 1);
 
+  void sendblock_cb (callback<void, dhash_stat, bool>::ref cb, 
+		     dhash_stat err, chordID dest, bool present);
+ public:
+  dhashcli (ptr<vnode> node, ptr<route_factory> r_factory, int ss);
 
   void retrieve_from_cache (blockID blockID, cb_ret cb,
                             int options = 0,
@@ -129,6 +131,10 @@ private:
 	       int options = 0, 
 	       ptr<chordID> guess = NULL);
 
+  void sendblock (ptr<location> dst, blockID bid,
+		  ptr<dbfe> db, sendblockcb_t cb);
+
   void lookup (chordID blockID, dhashcli_lookupcb_t cb);
 };
 
+#endif
