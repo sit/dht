@@ -1,6 +1,9 @@
 #include "chordobserver.h"
+#include "protocol.h"
 #include "args.h"
+#include "network.h"
 #include <iostream>
+#include <list>
 using namespace std;
 
 ChordObserver* ChordObserver::_instance = 0;

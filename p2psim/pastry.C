@@ -3,6 +3,7 @@
 #include <iostream>
 #include "p2psim.h"
 #include <stdlib.h>
+#include <stdio.h>
 using namespace std;
 
 Pastry::Pastry(Node *n) : Protocol(n),
