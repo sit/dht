@@ -25,8 +25,6 @@ class route_iterator {
 
   bool stop;
   bool last_hop;
-  bool notneeded;
-  int nbusy;
 
   route failed_nodes;
 
@@ -34,8 +32,7 @@ class route_iterator {
   route_iterator (ptr<vnode> vi, chordID xi) :
     v (vi), x (xi), r (CHORD_OK), done (false), 
     deleted (New refcounted<bool> (false)),
-    do_upcall (false), stop (false), last_hop (false), 
-    notneeded(false), nbusy(0) {};
+    do_upcall (false), stop (false), last_hop (false) {};
   route_iterator (ptr<vnode> vi, chordID xi,
 		  rpc_program uc_prog,
 		  int uc_procno,
@@ -44,7 +41,7 @@ class route_iterator {
     deleted (New refcounted<bool> (false)),
     do_upcall (true),
     uc_procno (uc_procno), uc_args (uc_args), prog (prog),
-    stop (false), last_hop (false), notneeded(false), nbusy(0) {};
+    stop (false), last_hop (false) {};
 
   virtual ~route_iterator () {};
 
@@ -74,9 +71,6 @@ class route_iterator {
 				     void *upcall_res,
 				     int upcall_res_len,
 				     void *dest);
-
-  void goaway();
-  void delwrapper(cbhop_t cb, bool d);
 };
 
 class route_chord : public route_iterator {
