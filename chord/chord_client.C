@@ -98,8 +98,18 @@ chord::chord (str _wellknownhost, int _wellknownport,
   active (NULL)
 {
   logbase = _logbase;
-  myport = startchord (port);
 
+  str rpcstr;
+  bool ok = Configurator::only ().get_str ("chord.rpc_mode", rpcstr);
+  assert (ok);
+
+  chord_rpc_style = CHORD_RPC_STP;
+  if (rpcstr == "tcp" || rpcstr == "TCP")
+    chord_rpc_style = CHORD_RPC_SFST;
+  else if (rpcstr == "udp" || rpcstr == "UDP")
+    chord_rpc_style = CHORD_RPC_SFSU;
+
+  myport = startchord (port);
   warnx << "chord: running on " << myname << ":" << myport << "\n";
 
   nrcv = New refcounted<u_int32_t>;

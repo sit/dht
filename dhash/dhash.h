@@ -59,8 +59,6 @@ typedef callback<void, s_dhash_block_arg *>::ptr cbblockuc_t;
 typedef callback<void, s_dhash_storecb_arg *>::ptr cbstorecbuc_t;
 typedef callback<void, dhash_stat, ptr<dhash_block>, vec<ptr<location> > >::ptr cb_ret;
 
-extern unsigned int MTU;
-
 class dhash {
  public:
   static u_long reptm ();
@@ -69,6 +67,7 @@ class dhash {
   
   static u_long num_efrags ();
   static u_long num_dfrags ();
+  static u_long dhash_mtu ();
 
   // these 2 are only public for testing purposes
   virtual void replica_maintenance_timer (u_int index) = 0;

@@ -2,10 +2,9 @@
 #include <location.h>
 #include <locationtable.h>
 #include <dhash_common.h>
+#include <dhash.h>
 #include <misc_utils.h>
 #include "download.h"
-
-u_int MTU = (getenv ("DHASH_MTU") ? atoi (getenv ("DHASH_MTU")) : 1210);
 
 // ---------------------------------------------------------------------------
 // dhash_download -- downloads a block of a specific chord node.  That node
@@ -23,7 +22,8 @@ dhash_download::dhash_download (ptr<vnode> clntnode, chord_node source,
     process_first_chunk (data, len, totsz, cookie);
     check_finish ();
   } else {
-    unsigned mtu = (clntnode->my_location ()->id () == source.x) ? 8192 : MTU;
+    unsigned mtu = (clntnode->my_location ()->id () == source.x)
+      ? 8192 : dhash::dhash_mtu ();
     getchunk (0, mtu, 0, wrap (this, &dhash_download::first_chunk_cb));
   }
 }
@@ -91,7 +91,8 @@ dhash_download::process_first_chunk (char *data, size_t datalen, size_t totsz,
   //issue the RPCs to get the other chunks
   size_t nread = datalen;
   while (nread < totsz) {
-    unsigned mtu = (clntnode->my_location ()->id () == source.x) ? 8192 : MTU;
+    unsigned mtu = (clntnode->my_location ()->id () == source.x)
+      ? 8192 : dhash::dhash_mtu ();
     int length = MIN (mtu, totsz - nread);
     //    warnx << "SENT RPC for [" << nread << ", " << nread + length
     //	  << "]  at " << (getusec () - start) << "\n";

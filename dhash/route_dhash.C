@@ -12,7 +12,6 @@
 #endif
 #include "download.h"
 
-extern u_int MTU;
 #define LOOKUP_TIMEOUT 60
 static int gnonce;
 
@@ -30,7 +29,7 @@ route_dhash::route_dhash (ptr<route_factory> f, blockID blockID, dhash *dh,
   arg->dbtype = blckID.dbtype;
   f->get_node (&arg->from);
   arg->start = 0;
-  arg->len = MTU;
+  arg->len = dhash::dhash_mtu ();
   arg->cookie = 0;
   arg->nonce = gnonce++;
   nonce = arg->nonce;

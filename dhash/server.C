@@ -73,6 +73,8 @@ dhash_config_init::dhash_config_init ()
   bool ok = true;
 
 #define set_int Configurator::only ().set_int
+  /** MTU **/
+  ok = ok && set_int ("dhash.mtu", 1210);
   /** Number of fragments to encode each block into */
   ok = ok && set_int ("dhash.efrags", 14);
   /** Number of fragments needed to reconstruct a given block */
@@ -110,6 +112,7 @@ DECL_CONFIG_METHOD(keyhashtm, "merkle.keyhash_timer")
 DECL_CONFIG_METHOD(synctm, "dhash.sync_timer")
 DECL_CONFIG_METHOD(num_efrags, "dhash.efrags")
 DECL_CONFIG_METHOD(num_dfrags, "dhash.dfrags")
+DECL_CONFIG_METHOD(dhash_mtu, "dhash.mtu")
 #undef DECL_CONFIG_METHOD
 
 // Pure virtual destructors still need definitions
@@ -275,7 +278,7 @@ dhash_impl::missing_retrieve_cb (bigint key, dhash_stat err,
     assert (b);
     // Oh, the memory copies.
     str blk (b->data, b->len);
-    u_long m = Ida::optimal_dfrag (b->len, MTU);
+    u_long m = Ida::optimal_dfrag (b->len, dhash::dhash_mtu ());
     if (m > num_dfrags ())
       m = num_dfrags ();
     str frag = Ida::gen_frag (m, blk);

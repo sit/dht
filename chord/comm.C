@@ -56,11 +56,8 @@ const int CHORD_RPC_STP (0);
 const int CHORD_RPC_SFSU (1);
 const int CHORD_RPC_SFST (2);
 const int CHORD_RPC_SFSBT (3);
-const int CHORD_RPC_DEFAULT (CHORD_RPC_STP);
 
-int chord_rpc_style (getenv ("CHORD_RPC_STYLE") ?
-                     atoi (getenv ("CHORD_RPC_STYLE")) :
-                     CHORD_RPC_DEFAULT);
+int chord_rpc_style = CHORD_RPC_STP;
 
 // UTILITY FUNCTIONS
 
@@ -533,15 +530,18 @@ stp_manager::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
   if (err) {
     nrpcfailed++;
     C->loc->set_alive (false);
-    warnx << gettime () << " RPC failure: " << err << " destined for " << C->ID << " seqno " << C->seqno << "\n";
+    warnx << gettime () << " RPC failure: " << err
+          << " destined for " << C->ID << " seqno " << C->seqno << "\n";
   } else if (res->status == DORPC_MARSHALLERR) {
     err = RPC_CANTDECODEARGS;
-    warnx << gettime () << " RPC Failure: DORPC_MARSHALLERR for " << C->ID << "\n";
+    warnx << gettime () << " RPC Failure: DORPC_MARSHALLERR for " << C->ID 
+          << "\n";
   } else if (res->status == DORPC_UNKNOWNNODE) {
     nrpcfailed++;
     C->loc->set_alive (false);
     err = RPC_SYSTEMERROR;
-    warnx << gettime () << " RPC Failure: DORPC_UNKNOWNNODE for " << C->ID << "\n";
+    warnx << gettime () << " RPC Failure: DORPC_UNKNOWNNODE for " << C->ID 
+          << "\n";
   } else {
     assert (res->status == DORPC_OK);
     u_int64_t sent_time = res->resok->send_time_echo;

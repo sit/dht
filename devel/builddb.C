@@ -74,7 +74,7 @@ gen_frag (ptr<dbrec> block)
 {
   // see: dhashcli::insert2_succs_cb ()
   str blk (block->value, block->len);
-  u_long m = Ida::optimal_dfrag (block->len, MTU);
+  u_long m = Ida::optimal_dfrag (block->len, dhash::dhash_mtu ());
   if (m > dhash::num_dfrags ())
       m = dhash::num_dfrags ();
   str frag = Ida::gen_frag (m, blk);

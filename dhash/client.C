@@ -60,6 +60,8 @@
 #endif
 #include <ida.h>
 
+#include "succopt.h"
+
 
 // ---------------------------------------------------------------------------
 // DHASHCLI
@@ -91,6 +93,17 @@ dhashcli::retrieve (blockID blockID, cb_ret cb, int options,
 			 options, 5, guess),
 		   guess);
   } else {
+
+    vec<ptr<location> > sl = clntnode->succs ();
+    if ((options & DHASHCLIENT_SUCCLIST_OPT) && 
+	use_succlist (sl, clntnode->my_pred ())) {
+      sl.push_back (clntnode->my_location ());
+      vec<chord_node> s = get_succs_from_list (sl, blockID.ID);
+      route r;
+      retrieve_lookup_cb (rs, s, r, CHORD_OK);
+      return;
+    }
+
     clntnode->find_succlist (blockID.ID, dhash::num_dfrags () + 2,
 			     wrap (this, &dhashcli::retrieve_lookup_cb, rs),
 			     guess);
@@ -292,6 +305,8 @@ dhashcli::retrieve_lookup_cb (ptr<rcv_state> rs, vec<chord_node> succs,
 	in_succ_list = true;
 
     if (in_succ_list) {
+      // patch up the succ list so it includes all the node we know
+      // of... mostly, this step will add the predecessor of the block
       vec<ptr<location> > sl = clntnode->succs ();
       patch_succ_list (succs, sl, dhash::num_efrags ());
     }
@@ -428,9 +443,19 @@ void
 dhashcli::insert (ref<dhash_block> block, cbinsert_path_t cb, 
 		  int options, ptr<chordID> guess)
 {
-  if (!guess)
-    lookup (block->ID, 
-	    wrap (this, &dhashcli::insert_lookup_cb, block, cb));
+  if (!guess) {
+    vec<ptr<location> > sl = clntnode->succs ();
+    if ((options & DHASHCLIENT_SUCCLIST_OPT) && 
+	use_succlist (sl, clntnode->my_pred ())) {
+      sl.push_back (clntnode->my_location ());
+      vec<chord_node> s = get_succs_from_list (sl, block->ID);
+      route r;
+      insert_lookup_cb (block, cb, DHASH_OK, s, r);
+      return;
+    }
+
+    lookup (block->ID, wrap (this, &dhashcli::insert_lookup_cb, block, cb));
+  }
   else { 
     ptr<location> l =  clntnode->locations->lookup (*guess);
     if (!l) {
@@ -482,6 +507,8 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
 	in_succ_list = true;
 
     if (in_succ_list) {
+      // patch up the succ list so it includes all the node we know
+      // of... mostly, this step will add the predecessor of the block
       vec<ptr<location> > sl = clntnode->succs ();
       patch_succ_list (succs, sl, dhash::num_efrags ());
     }
@@ -537,7 +564,7 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
   str blk (block->data, block->len);
 
   // Cap the maximum.
-  u_long m = Ida::optimal_dfrag (block->len, MTU);
+  u_long m = Ida::optimal_dfrag (block->len, dhash::dhash_mtu ());
   if (m > dhash::num_dfrags ())
     m = dhash::num_dfrags ();
 

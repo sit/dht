@@ -23,7 +23,7 @@ dhash_store::start ()
   if (clntnode->my_location ()->id () == dest->id ())
     mtu = block->len;
   else
-    mtu = MTU;
+    mtu = dhash::dhash_mtu ();
   
   if (dcb)
     timecb_remove (dcb);
