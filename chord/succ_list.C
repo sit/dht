@@ -68,11 +68,11 @@ succ_list::num_succ ()
 }
 
 void
-succ_list::print ()
+succ_list::print (strbuf &outbuf)
 {
   vec<ptr<location> > s = succs ();
   for (u_int i = 0; i < s.size (); i++)
-    warnx << myID << ": succ " << i + 1 << " : " << s[i]->id () << "\n";
+    outbuf << myID << ": succ " << i + 1 << " : " << s[i]->id () << "\n";
 }
 
 u_long

@@ -89,14 +89,14 @@ finger_table::closestpred (const chordID &x)
 }
 
 void
-finger_table::print ()
+finger_table::print (strbuf &outbuf)
 {
   ptr<location> curfinger = myvnode->my_location ();
   ptr<location> prevfinger = curfinger;
   for (int i = 0; i < NBIT; i++) {
     curfinger = finger (i);
     if (curfinger != prevfinger) {
-      warnx << myID << ": finger: " << i << " : " << starts[i]
+      outbuf << myID << ": finger: " << i << " : " << starts[i]
 	    << " : succ " << curfinger->id () << "\n";
       prevfinger = curfinger;
     }

@@ -136,10 +136,10 @@ debruijn::finddoublesucc_cb (vec<chord_node> s, route search_path, chordstat sta
 }
 
 void
-debruijn::print ()
+debruijn::print (strbuf &outbuf)
 {
-  warnx << myID << ": double: " << mydoubleID
-	<< " : d " << locations->closestpredloc (mydoubleID)->id () << "\n";
+  outbuf << myID << ": double: " << mydoubleID
+	 << " : d " << locations->closestpredloc (mydoubleID)->id () << "\n";
 }
 
 

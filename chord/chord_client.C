@@ -257,13 +257,13 @@ chord::stats ()
 }
 
 void
-chord::print_cb (const chordID &k, ptr<vnode> v) {
-  v->print ();
+chord::print_cb (strbuf outbuf, const chordID &k, ptr<vnode> v) {
+  v->print (outbuf);
 }
 
 void
-chord::print () {
-  vnodes.traverse (wrap (this, &chord::print_cb));
+chord::print (strbuf &outbuf) {
+  vnodes.traverse (wrap (this, &chord::print_cb, outbuf));
 }
 
 void

@@ -55,7 +55,7 @@ class toe_table : public fingerlike {
   ptr<location> closestpred (const chordID &x, vec<chordID> fail);
   ptr<location> closestpred (const chordID &x);
   ptr<location> closestsucc (const chordID &x);
-  void print ();
+  void print (strbuf &outbuf);
   void stats () { warn << "I'm a toe table\n";};
 
   ref<fingerlike_iter> get_iter ();

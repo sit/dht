@@ -242,20 +242,19 @@ toe_table::count_unique ()
 }
 
 void
-toe_table::print ()
+toe_table::print (strbuf &outbuf)
 {
   for (int level=0; level < MAX_LEVELS; level++) {
     vec<ptr<location> > vl = get_toes (level);
-    warn << "Toes at level " << level << ":\n";
+    outbuf << "Toes at level " << level << ":\n";
     for (unsigned int i=0; i < vl.size (); i++) {
-      warn << "     " << vl[i]->id () << " latency: "
+      outbuf << "     " << vl[i]->id () << " latency: "
 	   << (int)vl[i]->distance ()
 	   << " max " << level_to_delay(level) << "\n";
     }
   }
   
-  warn << "Unique toe entries: " <<  count_unique() << "\n";
-
+  outbuf << "Unique toe entries: " <<  count_unique() << "\n";
 }
 
 void

@@ -51,7 +51,7 @@ class fingerlike_iter {
 
 class fingerlike : public stabilizable {
 public:
-  virtual void print () = 0;
+  virtual void print (strbuf &outbuf) = 0;
   virtual void stats () = 0;
   virtual void init (ptr<vnode> v, ptr<locationtable> locs) = 0;
 

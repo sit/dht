@@ -47,7 +47,7 @@ class succ_list : public fingerlike {
   bool isstable () { return stable_succlist && stable_succlist2; } // XXX
   void fill_nodelistresext (chord_nodelistextres *res);
   void fill_nodelistres (chord_nodelistres *res);
-  void print ();
+  void print (strbuf &outbuf);
   void stats () { warn << "stats go here\n"; };
 
   // Fingerlike methods

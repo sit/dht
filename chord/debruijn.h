@@ -38,7 +38,7 @@ class debruijn : public fingerlike {
   ptr<location> closestpred (const chordID &x);
 
   void init (ptr<vnode> v, ptr<locationtable> locs);
-  void print ();
+  void print (strbuf &outbuf);
   void stats () { warn << "stats go here\n";};
   
   ref<fingerlike_iter> get_iter ();

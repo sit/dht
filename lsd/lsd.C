@@ -64,6 +64,7 @@ int vnodes = 1;
 u_int initialized_dhash = 0;
 
 static char *logfname;
+static char *monitor_host;
 
 ptr<chord> chordnode;
 static str p2psocket;
@@ -408,10 +409,67 @@ stats ()
   chordnode->stats ();
   for (unsigned int i = 0 ; i < initialized_dhash; i++)
     dh[i]->print_stats ();
-  chordnode->print ();
+  strbuf x;
+  chordnode->print (x);
+  warnx << x;
 #endif
 }
 
+// ====================================================================
+
+void
+monitor_writer (int fd, strbuf liveout)
+{
+  int left = liveout.tosuio ()->output (fd);
+  if (!left)
+    fdcb (fd, selwrite, NULL);
+}
+
+void
+monitor_stats (int fd, strbuf out)
+{
+  // Hack around the fact that chordnode prints using 'warn'.
+  // Probably would cause probablys with async-mp.
+  out << "STATS" << gettime () << "\n";
+  chordnode->print (out);
+  out << "ENDSTATS\n";
+  
+  fdcb (fd, selwrite, wrap (monitor_writer, fd, out));
+  
+  // "Thank you, come again."
+  delaycb (30, 0, wrap (&monitor_stats, fd, out));
+}
+
+void
+monitor_connected (int fd)
+{
+  if (fd < 0) {
+    warnx << "monitor_connected: error: " << strerror (errno) << "\n";
+    return;
+  }
+  char nbuf[256];
+  sprintf (nbuf, "BAD_HOSTNAME");
+  gethostname (nbuf, 256);
+  
+  strbuf liveout;
+  liveout << "HELO " << nbuf << " " << vnodes << "\n";
+  
+  monitor_stats (fd, liveout);
+}
+
+void
+monitor_start (const char *monitor)
+{
+  char *bs_port = strchr(monitor, ':');
+  if (!bs_port) {
+    warnx << "monitor_start: invalid address or hostname: `" << monitor << "'\n";
+    return;
+  }
+  int port = atoi (bs_port + 1);
+  
+  str mon (monitor, bs_port - monitor);
+  tcpconnect (mon, port, wrap (&monitor_connected));
+}
 
 void
 stop ()
@@ -481,7 +539,7 @@ main (int argc, char **argv)
 
   char *cffile = NULL;
 
-  while ((ch = getopt (argc, argv, "B:b:cd:fFj:l:L:M:m:n:O:Pp:S:s:T:v:")) != -1)
+  while ((ch = getopt (argc, argv, "B:b:cd:fFj:l:L:M:m:n:O:Pp:S:s:T:v:w:")) != -1)
     switch (ch) {
     case 'B':
       cache_size = atoi (optarg);
@@ -577,8 +635,9 @@ main (int argc, char **argv)
       break;
     case 'v':
       vnodes = atoi (optarg);
-      if (vnodes >= chord::max_vnodes)
-	fatal << "Too many virtual nodes (" << vnodes << ")\n";
+      break;
+    case 'w':
+      monitor_host = optarg;
       break;
     default:
       usage ();
@@ -645,6 +704,9 @@ main (int argc, char **argv)
   if (p2psocket) 
     startclntd();
   lsdtrace << "starting amain.\n";
+  if (monitor_host)
+    monitor_start (monitor_host);
+
   amain ();
 }
 

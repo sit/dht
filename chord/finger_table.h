@@ -39,7 +39,7 @@ class finger_table : public fingerlike {
   bool backoff_stabilizing () { return nout_backoff > 0; }
   void do_backoff () { stabilize_finger (); }
   bool isstable () { return stable_fingers && stable_fingers2; }
-  void print ();
+  void print (strbuf &outbuf);
   void fill_nodelistres (chord_nodelistres *res);
   void fill_nodelistresext (chord_nodelistextres *res);
   void stats ();

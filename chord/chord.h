@@ -149,7 +149,7 @@ class vnode : public virtual refcount {
   virtual void fill_user_args (user_args *a) = 0;
 
   virtual void stats (void) const = 0;
-  virtual void print (void) const = 0;
+  virtual void print (strbuf &outbuf) const = 0;
   virtual void stop (void) = 0;
   virtual vec<ptr<location> > succs () = 0;
   virtual vec<ptr<location> > preds () = 0;
@@ -201,7 +201,7 @@ class chord : public virtual refcount {
   int startchord (int myp);
   int startchord (int myp, int type);
   void stats_cb (const chordID &k, ptr<vnode> v);
-  void print_cb (const chordID &k, ptr<vnode> v);
+  void print_cb (strbuf outbuf, const chordID &k, ptr<vnode> v);
   void stop_cb (const chordID &k, ptr<vnode> v);
   
   // Number of received RPCs, for locationtable comm stuff
@@ -223,7 +223,7 @@ class chord : public virtual refcount {
   ptr<vnode> newvnode (cbjoin_t cb, ptr<fingerlike> fingers,
 		       ptr<route_factory> f);
   void stats (void);
-  void print (void);
+  void print (strbuf &outbuf);
   void stop (void);
 
   int get_port () { return myport; }

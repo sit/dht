@@ -214,7 +214,7 @@ class vnode_impl : public vnode {
 
 
   void stats (void) const;
-  void print (void) const;
+  void print (strbuf &outbuf) const;
   void stop (void);
   vec<ptr<location> > succs () { return successors->succs (); };
   vec<ptr<location> > preds () { return predecessors->preds (); };

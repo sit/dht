@@ -311,21 +311,18 @@ vnode_impl::stats () const
 }
 
 void
-vnode_impl::print () const
+vnode_impl::print (strbuf &outbuf) const
 {
-  warnx << "======== " << myID << "====\n";
-  fingers->print ();
-  successors->print ();
+  outbuf << "======== " << myID << " ====\n";
+  fingers->print (outbuf);
+  successors->print (outbuf);
 
-  warnx << "pred : " << my_pred ()->id () << "\n";
+  outbuf << "pred : " << my_pred ()->id () << "\n";
   if (toes) {
-    warnx << "------------- toes ----------------------------------\n";
-    toes->print ();
+    outbuf << "------------- toes ----------------------------------\n";
+    toes->print (outbuf);
   }
-  warnx << "=====================================================\n";
-
-
-
+  outbuf << "=====================================================\n";
 }
 
 ptr<location>
