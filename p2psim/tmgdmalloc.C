@@ -1,70 +1,70 @@
-#define TMG_DMALLOC
 #include "tmgdmalloc.h"
 
 
-// maps class names to __tmg_dmalloc_entries
-hash_map<string, __tmg_dmalloc_entry*> __tmg_dmalloc_map;
-
-// maps pointers to class names
-hash_map<void*, string> __tmg_dmalloc_typemap;
+__TMG_classmap __tmg_cmap;
+__TMG_p2infomap __tmg_p2infomap;
+unsigned __tmg_totalallocs;
 
 
 void
 __tmg_dmalloc_del(void *p)
 {
-  // find class name for this pointer and remove entry
-  assert(__tmg_dmalloc_typemap.find(p) != __tmg_dmalloc_typemap.end());
-  string name = __tmg_dmalloc_typemap[p];
-  __tmg_dmalloc_typemap.erase(p);
+  __TMG_p2info *p2i = 0;
+  assert(__tmg_p2infomap.find(p) != __tmg_p2infomap.end());
+  p2i = __tmg_p2infomap[p];
+  __tmg_p2infomap.erase(p);
 
-  // find class type name
-  if(__tmg_dmalloc_map.find(name) == __tmg_dmalloc_map.end()) {
-    assert(false);
-    return;
-  }
+  assert(__tmg_cmap.find(p2i->cname) != __tmg_cmap.end());
+  __TMG_c2info *c2i = __tmg_cmap[p2i->cname];
+  c2i->allocs--;
 
-  // lower number of references and remove file/line entry
-  __tmg_dmalloc_entry *ne = 0;
-  ne = __tmg_dmalloc_map[name];
-  ne->where.erase(p);
-  if(!(--ne->nobj)) {
-    __tmg_dmalloc_map.erase(name);
-    delete ne;
+  assert(c2i->files->find(p2i->file) != c2i->files->end());
+  __TMG_linemap *linemap = (*c2i->files)[p2i->file];
+
+  assert(linemap->find(p2i->line) != linemap->end());
+  if(!(--(*linemap)[p2i->line]))
+    linemap->erase(p2i->line);
+
+  if(!linemap->size())
+    c2i->files->erase(p2i->file);
+
+  if(!c2i->allocs) {
+    assert(!c2i->files->size());
+    __tmg_cmap.erase(p2i->cname);
+    delete c2i;
   }
+  __tmg_totalallocs--;
 };
 
 
-
 void
-__tmg_dmalloc_dump()
+__tmg_dmalloc_info(void *p)
 {
-  cout << "--- NORMAL DUMP ----------\n";
-  for(hash_map<string, __tmg_dmalloc_entry*>::const_iterator i = __tmg_dmalloc_map.begin();
-      i != __tmg_dmalloc_map.end();
-      ++i)
-  {
-    cout << "Class: " << i->first << endl;
-    cout << "instances: " << i->second->nobj << endl;
-  }
+  __TMG_p2info *p2i = 0;
+  assert(__tmg_p2infomap.find(p) != __tmg_p2infomap.end());
+  p2i = __tmg_p2infomap[p];
+
+  printf("pointer %p, class %s, file %s, line %d\n",
+      p,
+      p2i->cname.c_str(),
+      p2i->file.c_str(),
+      p2i->line);
 }
 
 
 void
-__tmg_dmalloc_large_dump()
+__tmg_dmalloc_stats()
 {
-  cout << "--- LARGE DUMP -----------\n";
-  for(hash_map<string, __tmg_dmalloc_entry*>::const_iterator i = __tmg_dmalloc_map.begin();
-      i != __tmg_dmalloc_map.end();
-      ++i)
-  {
-    printf("Total of class %s: %d\n", i->first.c_str(), i->second->nobj);
-    for(hash_map<void*, pair<string, unsigned> >::const_iterator j = i->second->where.begin();
-      j != i->second->where.end();
-      ++j)
-    {
-      printf("Class %s -> %p ", i->first.c_str(), j->first);
-      printf("alloc in %s:%d\n", j->second.first.c_str(), j->second.second);
+  // for each class
+  printf("TMG Dmalloc Stats\n------------------------------\n");
+  printf("Total allocs: %d\n", __tmg_totalallocs);
+  for(__TMG_classmap::const_iterator i = __tmg_cmap.begin(); i != __tmg_cmap.end(); ++i) {
+    printf("class %s, allocated: %d\n", i->first.c_str(), i->second->allocs);
+    for(__TMG_filemap::const_iterator j = i->second->files->begin(); j != i->second->files->end(); j++) {
+      for(__TMG_linemap::const_iterator k = j->second->begin(); k != j->second->end(); ++k) {
+        printf("  %s:%d %d\n", j->first.c_str(), k->first, k->second);
+      }
     }
   }
+  printf("\n");
 }
-

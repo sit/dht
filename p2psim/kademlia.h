@@ -237,15 +237,29 @@ private:
 
   // best_entry
   struct best_entry {
-    best_entry() { dist = 0; peer = 0; }
+    best_entry() { dist = 0; peers.clear(); }
     NodeID dist;
-    peer_t *peer;
+    vector<peer_t*> peers;
     sklist_entry<best_entry> _sortlink;
   };
 
   struct DistCompare {
     int operator()(const NodeID &n1, const NodeID &n2) const {
-      return Kademlia::distance(n1, _key) < Kademlia::distance(n2, _key);
+      // cout << "DistCompare uses key " << Kademlia::printbits(_key) << endl;
+      // cout << "DistCompare compares " << Kademlia::printbits(n1) << " and " << Kademlia::printbits(n2) << endl;
+      NodeID dist1 = Kademlia::distance(n1, _key);
+      NodeID dist2 = Kademlia::distance(n2, _key);
+      // cout << "DistCompare compares (with key) " << Kademlia::printbits(dist1) << " and " << Kademlia::printbits(dist2) << endl;
+      if(dist1 < dist2) {
+        // cout << "DistCompare dist1 less than dist2\n";
+        return 1;
+      } else if(dist1 > dist2) {
+        // cout << "DistCompare dist2 less than dist1\n";
+        return -1;
+      } else {
+        // cout << "DistCompare dist2 equal to dist1\n";
+        return 0;
+      }
     }
     static NodeID _key;
   };

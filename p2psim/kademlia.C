@@ -304,6 +304,7 @@ done:
   KDEBUG(2) << "do_lookup: done" << endl;
   // this is the answer
   lresult->results = *results;
+  Delete(results);
 
   // put the caller in the tree
   _tree->insert(callerID, callerIP);
@@ -380,7 +381,7 @@ Kademlia::do_ping_wrapper(peer_t *p)
 bool
 Kademlia::stabilized(vector<NodeID> lid)
 {
-  __tmg_dmalloc_large_dump();
+  // __tmg_dmalloc_stats();
   return _tree->stabilized(lid);
 }
 
@@ -586,22 +587,35 @@ k_bucket_tree::get(NodeID key, vector<peer_t*> *v, unsigned nbest)
   k_bucket_tree::DistCompare::_key = key;
   skiplist<best_entry, NodeID, &best_entry::dist, &best_entry::_sortlink, DistCompare> best;
 
+  // printf("------ k_bucket_tree::get START ---------\n");
+
+  unsigned best_entries = 0;
   for(hash_map<NodeID, peer_t*>::const_iterator i = _nodes.begin(); i != _nodes.end(); i++) {
-    if(best.size() < nbest || (Kademlia::distance(i->second->id, key) < best.last()->dist)) {
-      struct best_entry *be = New(best_entry);
-      assert(be);
-      be->dist = Kademlia::distance(i->second->id, key);
-      be->peer = i->second;
-      // note that we ignore it, if it's the same distance
-      best.insert(be);
-      // assert(b);
+    // if best still has space OR
+    // if this entry is better than the worst entry, then add new if it doesn't
+    // exist, or add to existing.
+    NodeID dist = Kademlia::distance(i->second->id, key);
+    if(best_entries < nbest || dist < best.last()->dist) {
+      struct best_entry *be = 0;
+      if(!(be = best.search(dist))) {
+        be = New(best_entry);
+        be->dist = dist;
+        bool b = best.insert(be);
+        assert(b);
+      }
+      be->peers.push_back(i->second);
+      best_entries++;
     }
-    
-    if(best.size() > nbest) {
-      assert(best.size() == nbest+1);
+
+    if(best_entries > nbest) {
+      assert(best_entries == nbest+1);
       struct best_entry *be = best.last();
-      best.remove(be->dist);
-      Delete(be);
+      be->peers.pop_back();
+      if(!be->peers.size()) {
+        best.remove(be->dist);
+        Delete(be);
+      }
+      best_entries--;
     }
   }
 
@@ -609,7 +623,8 @@ k_bucket_tree::get(NodeID key, vector<peer_t*> *v, unsigned nbest)
   best_entry *next = 0;
   for(best_entry *cur = best.first(); cur; cur = next) {
     next = best.next(cur);
-    v->push_back(cur->peer);
+    for(vector<peer_t*>::const_iterator j = cur->peers.begin(); j != cur->peers.end(); ++j)
+      v->push_back(*j);
     Delete(cur);
   }
 
