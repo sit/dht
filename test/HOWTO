@@ -1,0 +1,42 @@
+Assume the setup consists of 3 lsd nodes; 2 on node X, 1 on node Y.  
+We're running the test from node Z.  The testslave is in test/ .
+
+On node X:
+
+nodeX $ lsd [your flags go here] -S /tmp/lsd_X1
+nodeX $ lsd [your flags go here] -S /tmp/lsd_X2
+nodeX $ testslave -s /tmp/lsd_X1 -p 3344
+nodeX $ testslave -s /tmp/lsd_X2 -p 3345
+
+-p 3344 wasn't really necessary as it is the slave's default port
+-p 3345 _was_ necessary not to conflict with 3344
+
+On node Y:
+
+nodeY $ lsd [your flags go here] -S /tmp/lsd_X1
+nodeY $ testslave -S /tmp/lsd
+
+
+On node Z:
+
+In your code, declare an array of testslave-s:
+
+  testslave slaves[] = {
+    { "nodeX", 3344 }, 
+    { "nodeX", 3345 }, 
+    { "nodeY", 3344 },
+    { "", 0 }
+  };
+
+Create the testmaster:
+
+  testmaster tm;
+  tm.setup(slaves, <some callback>);
+  
+Which allows you to do:
+
+  tm[0]->insert(...);     // will issue insert from node X
+  
+  ...
+  
+  tm[2]->retrieve(...);   // will issue insert from node Y

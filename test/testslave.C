@@ -49,6 +49,9 @@ testslave::~testslave()
   DEBUG(2) << "testslave destructor\n";
   fdcb(_srvfd, selread, 0);
   fdcb(_sockfd, selread, 0);
+  // XXX: how about closing connections?
+  close(_srvfd);
+  close(_sockfd);
 }
 
 void
