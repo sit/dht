@@ -22,11 +22,9 @@
 // Are lookups iterative or recursive? Who controls various retries?
 
 // To do:
-// vary timeout as a parameter, maybe it's key to eliminate dead contacts
-// vary k also, jinyang wants one-hop
+// gossip to nearby nodes preferentially?
 // hmm, we get a LOT of lookup failures in kx.pl runs, like 1/2 of lookups
 //   any way to make it more persistent?
-// init_state initialize _rtt
 
 // Does it stabilize after the expected number of rounds?
 // Gossip w/o favoring new nodes (nnodes: avg median):
@@ -92,6 +90,7 @@ public:
   // global statistics
   static double _rpc_bytes; // total traffic
   static double _good_latency; // successful lookups
+  static double _good_hops;
   static int _good_lookups;
   static int _ok_failures;
   static int _bad_failures;
@@ -114,7 +113,7 @@ public:
   // This is the paper's Affinity Group View and Contacts.
   map<IPAddress, Info *> _info;
 
-  void gotinfo(Info i);
+  void gotinfo(Info i, int rtt);
   int id2group(ID id) { return(id % _k); }
   int ip2group(IPAddress xip) { return(id2group(ip2id(xip))); }
   ID ip2id(IPAddress xip) {

@@ -36,6 +36,7 @@ int nsta;
 
 double Kelips::_rpc_bytes = 0;
 double Kelips::_good_latency = 0;
+double Kelips::_good_hops = 0;
 int Kelips::_good_lookups = 0;
 int Kelips::_ok_failures = 0;  // # legitimate lookup failures
 int Kelips::_bad_failures = 0; // lookup failed, but node was live
@@ -74,7 +75,9 @@ Kelips::~Kelips()
     printf("%d good, %d ok failures, %d bad failures\n",
            _good_lookups, _ok_failures, _bad_failures);
     if(_good_lookups > 0){
-      printf("avglat %.1f\n", _good_latency / _good_lookups);
+      printf("avglat %.1f avghops %.2f\n",
+             _good_latency / _good_lookups,
+             _good_hops / _good_lookups);
     }
   }
   if(ip() == 1 && nsta > 0){
@@ -135,7 +138,9 @@ Kelips::victim(int g)
   }
 }
 
-// Return contact w/ lowest rtt, or zero.
+// Return contact w/ lowest rtt,
+// or contact w/ newest hearbeat,
+// or zero.
 IPAddress
 Kelips::closest_contact(int g)
 {
@@ -146,9 +151,11 @@ Kelips::closest_contact(int g)
       ++ii){
     Info *in = ii->second;
     if(ip2group(in->_ip) == g){
-      if(best == 0 || best->_rtt == -1 ||
-         (in->_rtt < best->_rtt && in->_rtt != -1))
+      if(best == 0 ||
+         (in->_rtt != -1 && best->_rtt != -1 && in->_rtt < best->_rtt) ||
+         (in->_heartbeat > best->_heartbeat)){
         best = in;
+      }
     }
   }
   if(best)
@@ -170,14 +177,14 @@ Kelips::join(Args *a)
 
   if(wkn != ip()){
     // Remember well known node.
-    gotinfo(Info(wkn, now()));
+    gotinfo(Info(wkn, now()), -1);
 
     // Tell wkn about us, and ask it for a few random nodes.
     IPAddress myip = ip();
     vector<Info> ret;
     xRPC(wkn, 6, &Kelips::handle_join, &myip, &ret);
     for(u_int i = 0; i < ret.size(); i++)
-      gotinfo(ret[i]);
+      gotinfo(ret[i], -1);
   }
 
   if(_started == false){
@@ -255,6 +262,7 @@ Kelips::lookup(Args *args)
   if(ok){
     _good_lookups += 1;
     _good_latency += t2 - t1;
+    _good_hops += history.size();
   } else if(oops){
     _bad_failures += 1;
   } else {
@@ -375,16 +383,12 @@ Kelips::lookup2(ID key, vector<IPAddress> &history)
   IPAddress ip2 = 0;
   history.push_back(ip1);
   ok = xRPC(ip1, 2, &Kelips::handle_lookup1, &key, &ip2);
-  if(ok)
-    gotinfo(Info(ip1, now()));
   if(!ok || ip2 == 0)
     return false;
 
   bool done = false;
   history.push_back(ip2);
   ok = xRPC(ip2, 2, &Kelips::handle_lookup_final, &key, &done);
-  if(ok)
-    gotinfo(Info(ip2, now()));
 
   return(ok && done);
 }
@@ -467,7 +471,7 @@ Kelips::insert(Args *a)
 void
 Kelips::handle_join(IPAddress *caller, vector<Info> *ret)
 {
-  gotinfo(Info(*caller, now())); // XXX caller should supply an Info
+  gotinfo(Info(*caller, now()), -1); // XXX caller should supply an Info
 
   // send a super-big ration on join, per Indranil's e-mail.
   *ret = gossip_msg(ip2group(*caller), 20, 20);
@@ -477,8 +481,9 @@ Kelips::handle_join(IPAddress *caller, vector<Info> *ret)
 // Remember the information, prepare to gossip it.
 // Enforce the invariant that we have at most 2 contacts
 // for each foreign group.
+// If rtt != -1, it's newly measured.
 void
-Kelips::gotinfo(Info i)
+Kelips::gotinfo(Info i, int rtt)
 {
   if(i._ip == ip())
     return;
@@ -511,6 +516,9 @@ Kelips::gotinfo(Info i)
   } else if (i._heartbeat > _info[i._ip]->_heartbeat){
     _info[i._ip]->_heartbeat = i._heartbeat;
   }
+
+  if(rtt != -1 && _info.find(i._ip) != _info.end())
+    _info[i._ip]->_rtt = rtt;
 }
 
 // Return a list of all the IP addresses in _info.
@@ -682,7 +690,7 @@ Kelips::handle_gossip(vector<Info> *msg, void *ret)
   u_int i;
 
   for(i = 0; i < msg->size(); i++){
-    gotinfo((*msg)[i]);
+    gotinfo((*msg)[i], -1);
   }
 }
 
@@ -719,7 +727,8 @@ Kelips::init_state(set<Protocol*> lid)
     assert(k);
     if(k->ip() == ip())
       continue;
-    gotinfo(Info(k->ip(), now()));
+    Time rtt = 2 * Network::Instance()->gettopology()->latency(ip(), k->ip());
+    gotinfo(Info(k->ip(), now()), rtt);
   }
 }
 
@@ -762,12 +771,11 @@ Kelips::rpcstat(bool ok, IPAddress dst, int latency, int nitems)
   if(ok)
     _rpc_bytes += 20;
 
-  if(ok && _info.find(dst) != _info.end()){
-    _info[dst]->_rtt = latency;
-  }
+  if(ok)
+    gotinfo(Info(dst, now()), latency);
 
   if(ok == false && _info.find(dst) != _info.end()){
-    _info[dst]->_rtt = -1;
+    _info[dst]->_rtt = 9999;
     _info[dst]->_heartbeat = 1;
   }
 }

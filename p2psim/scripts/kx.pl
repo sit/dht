@@ -70,6 +70,7 @@ for($iters = 0; $iters < 200; $iters++){
 
     my $bytes;
     my $lat;
+    my $hops;
 
     open(P, "./p2psim $pf $tf $ef |");
     while(<P>){
@@ -78,6 +79,9 @@ for($iters = 0; $iters < 200; $iters++){
         }
         if(/^avglat ([0-9.]+)/){
             $lat = $1;
+        }
+        if(/avghops ([0-9.]+)/){
+            $hops = $1;
         }
         if(/^([0-9]+) good, ([0-9]+) ok failures, ([0-9]+) bad f/){
             print "# $1 good, $2 ok failures, $3 bad failures\n";
@@ -89,5 +93,5 @@ for($iters = 0; $iters < 200; $iters++){
         print STDERR "kx.pl: p2psim no output\n";
     }
 
-    print "$bytes $lat\n";
+    print "$bytes $lat $hops\n";
 }
