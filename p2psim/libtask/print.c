@@ -29,7 +29,7 @@ printstr(char *dst, char *edst, char *s)
 }
 
 static char*
-printnum(char *dst, char *edst, uint fl, uint base, va_list arg)
+printnum(char *dst, char *edst, uint fl, uint base, va_list *arg)
 {
 	static char digits[] = "0123456789abcdef";
 	char buf[30], *p;
@@ -38,20 +38,20 @@ printnum(char *dst, char *edst, uint fl, uint base, va_list arg)
 
 	if(fl&FlagLongLong){
 		if(fl&FlagUnsigned)
-			luv = va_arg(arg, uvlong);
+			luv = va_arg(*arg, uvlong);
 		else
-			luv = va_arg(arg, vlong);
+			luv = va_arg(*arg, vlong);
 	}else{
 		if(fl&FlagLong){
 			if(fl&FlagUnsigned)
-				luv = va_arg(arg, ulong);
+				luv = va_arg(*arg, ulong);
 			else
-				luv = va_arg(arg, long);
+				luv = va_arg(*arg, long);
 		}else{
 			if(fl&FlagUnsigned)
-				luv = va_arg(arg, uint);
+				luv = va_arg(*arg, uint);
 			else
-				luv = va_arg(arg, int);
+				luv = va_arg(*arg, int);
 		}
 	}
 
@@ -83,6 +83,7 @@ vseprint(char *dst, char *edst, char *fmt, va_list arg)
 {
 	int fl, base;
 	char *p, *w;
+	char cbuf[2];
 
 	w = dst;
 	for(p=fmt; *p && w<edst-1; p++){
@@ -114,7 +115,12 @@ vseprint(char *dst, char *edst, char *fmt, va_list arg)
 					base = 16;
 					goto num;
 				num:
-					w = printnum(w, edst, fl, base, arg);
+					w = printnum(w, edst, fl, base, &arg);
+					goto break2;
+				case 'c':
+					cbuf[0] = va_arg(arg, int);
+					cbuf[1] = 0;
+					w = printstr(w, edst, cbuf);
 					goto break2;
 				case 's':
 					w = printstr(w, edst, va_arg(arg, char*));
