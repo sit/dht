@@ -31,7 +31,7 @@ struct block {
 static inline void
 reverse (u_char *buf, u_int size)
 {
-  assert (size == blockID::size);
+  assert (size == sha1::hashsize);
 
   for (u_int i = 0; i < (size / 2); i++) {
     char tmp = buf[i];
@@ -69,7 +69,7 @@ tobigint (const merkle_hash &h)
   return ret;
 #else
   bigint ret = 0;
-  for (int i = h.size - 1; i >= (blockID::size - sha1::hashsize); i--) {
+  for (int i = h.size - 1; i >= 1; i--) {
     ret <<= 8;
     ret += h.bytes[i];
   }
@@ -91,7 +91,6 @@ id2dbrec(chordID id)
 static inline chordID
 dbrec2id (ptr<dbrec> r)
 {
-  // tobigint(.) strips of the dhash_dbtype
   return tobigint (to_merkle_hash (r));
 }
 
