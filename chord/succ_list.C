@@ -334,7 +334,13 @@ succ_list::get_iter ()
   ref<succiter> iter = New refcounted<succiter> ();
 
   chordID id = myID;
-  for (u_int i = 0; i < num_succ (); i++) {
+  u_int ns = num_succ ();
+  if (ns == 0) {
+    iter->nodes.push_back (id);
+    return iter;
+  }
+  
+  for (u_int i = 0; i < ns; i++) {
     id = locations->closestsuccloc (id + 1);  
     iter->nodes.push_back (id);
   }
