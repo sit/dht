@@ -96,7 +96,7 @@ Chord::Chord(IPAddress i, Args& a, LocTable *l, const char *name) : P2Protocol(i
       me.id = ConsistentHash::ipname2chid(name);
     else
       me.id = ConsistentHash::ip2chid(me.ip);
-    printf("ipname %s id %qx\n",name,me.id);
+    printf("ip %u ipname %s id %qx\n", me.ip, name,me.id);
   }
 
   me.heartbeat = now();
@@ -319,7 +319,6 @@ Chord::lookup_internal(lookup_args *a)
   lasthop.ip = 0;
 
   a->retrytimes++;
-  //Time oldlat = a->latency;
 
   if (_recurs) {
     v = find_successors_recurs(a->key, _frag, TYPE_USER_LOOKUP, &lasthop,a);
@@ -776,6 +775,7 @@ Chord::final_recurs_hop(next_recurs_args *args, next_recurs_ret *ret)
   tmp.tout = 0;
   ret->path.push_back(tmp);
   ret->finish_time = now();
+  assert(ret->v.size() >= 7);
 }
 
 vector<Chord::IDMap>
@@ -898,13 +898,13 @@ Chord::find_successors_recurs(CHID key, uint m, uint type, IDMap *lasthop, looku
     if (ok) {
       loctable->update_ifexists(reuse->nexthop);
       record_stat(type,resultmap[donerpc]->v.size());
-      goto RECURS_DONE;//mohaha! i am done
+      goto RECURS_DONE;
     }else{
       //do a long check to see if next hop is really dead
       assert(reuse->path.size()>0);
       IDMap n = reuse->path[reuse->path.size()-1].n;
 #ifdef CHORD_DEBUG
-      printf("%s nexthop <%u,%qx,%u> failed outstanding %d parallel %u\n",ts(),a?a->ipkey:0,key,n.ip,n.id,n.heartbeat,outstanding,parallel);
+      printf("%s key ipkey %u key %qx nexthop <%u,%qx,%u> failed outstanding %d parallel %u\n",ts(),a?a->ipkey:0,key,n.ip,n.id,n.heartbeat,outstanding,parallel);
 #endif
       reuse->path[reuse->path.size()-1].tout=1;
       IDMap replacement;
@@ -927,19 +927,12 @@ RECURS_DONE:
     *lasthop = (reuse->lasthop);
   }
 #ifdef CHORD_DEBUG
-  printf("%s finished lookuping up key %qx via lasthop <%u,%qx,%u> correct? %d route:",ts(),key,reuse->lasthop.ip,reuse->lasthop.id,reuse->lasthop.heartbeat,reuse->correct?1:0);
+  printf("%s finished lookuping up key %qx via lasthop <%u,%qx,%u> v.size %u correct? %d route(%u):",ts(),key, reuse->lasthop.ip,reuse->lasthop.id, reuse->lasthop.heartbeat, reuse->v.size(), reuse->correct?1:0,reuse->path.size());
   Time x = 0;
   Topology *t = Network::Instance()->gettopology();
 #endif
 
   if (a) {
-    /*
-    printf("%s finished key %qx, ipkey %u lookup path %d : ",ts(),a->key,a->ipkey,reuse->path.size());
-    for(uint i = 0; i < reuse->path.size(); i++) {
-      printf(" <%u,%qx,%u %u>",reuse->path[i].n.ip,reuse->path[i].n.id,reuse->path[i].n.heartbeat,reuse->path[i].tout);
-    }
-    printf("\n");
-    */
 
     IDMap prev = me;
     if (_recurs_direct) {
@@ -950,9 +943,6 @@ RECURS_DONE:
     }
     a->hops += reuse->path.size();
     for (uint j= 0; j< reuse->path.size(); j++) {
-#ifdef CHORD_DEBUG
-	printf(" (%u,%qx,%u %u)",reuse->path[j].n.ip,reuse->path[j].n.id,reuse->path[j].n.heartbeat,reuse->path[j].tout);
-#endif
       if (reuse->path[j].tout>0) {
 	a->num_to++;
 	a->total_to += TIMEOUT(prev.ip,reuse->path[j].n.ip);
@@ -968,19 +958,16 @@ RECURS_DONE:
 #endif
 	prev = reuse->path[j].n;
       }
+#ifdef CHORD_DEBUG
+      printf(" (%u,%qx,%u %u %u)",reuse->path[j].n.ip,reuse->path[j].n.id,reuse->path[j].n.heartbeat,reuse->path[j].tout, x);
+#endif
+
     }
-/*#ifdef CHORD_DEBUG
-  if (alive() && reuse->path.size() < 30) {
-    if(_recurs_direct) 
-      assert((reuse->finish_time-before)==x);
-    else
-      assert((now()-before)==x);
   }
+#ifdef CHORD_DEBUG
   printf("\n");
 #endif
-*/
 
-  }
   if (!a || reuse->correct) {
     results = reuse->v;
   }else{
@@ -1072,8 +1059,8 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
       ret->correct = false;
       ret->lasthop = me;
       if (args->type==TYPE_USER_LOOKUP && _recurs_direct) {
-	//r = failure_detect(args->src, &Chord::final_recurs_hop, args, ret, args->type,1,0);
 	record_stat(args->type,ret->v.size(),0);
+	assert(0);
 	r = doRPC(args->src.ip, &Chord::final_recurs_hop, args, ret);
 	if (r) 
 	  record_stat(args->type,0);
@@ -1106,7 +1093,7 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
 
       ret->lasthop = me;
       if (_recurs_direct) {
-	//r = failure_detect(args->src, &Chord::final_recurs_hop, args, ret, args->type,1,0);
+	assert(ret->v.size() >= args->m);
 	record_stat(args->type,ret->v.size(),0);
 	r = doRPC(args->src.ip, &Chord::final_recurs_hop, args, ret);
 	if (r) 
@@ -1132,9 +1119,9 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
 	ret->correct = check_correctness(args->key,ret->v);
 	assert(ret->correct);
 	if (_recurs_direct) {
-	  //r = failure_detect(args->src, &Chord::final_recurs_hop, args, ret, args->type,1,0);
 	  record_stat(args->type,1,0); 
-	  r = doRPC(args->src.ip, &Chord::final_recurs_hop, args, ret);//XXX
+	  assert(ret->v.size() >= args->m && args->m >= 7);
+	  r = doRPC(args->src.ip, &Chord::final_recurs_hop, args, ret);
 	  if (r) 
 	    record_stat(args->type,0);
 	}
@@ -1194,8 +1181,8 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
 	  ret->correct = check_correctness(args->key,ret->v);
 	  assert(ret->correct);
 	  if (_recurs_direct) {
-	    //r = failure_detect(args->src, &Chord::final_recurs_hop, args, ret, args->type,1,0);
 	    record_stat(args->type,1,0);
+	    assert(ret->v.size() >= args->m);
 	    r = doRPC(args->src.ip, &Chord::final_recurs_hop, args, ret);
 	    if (r)
 	      record_stat(args->type,0);

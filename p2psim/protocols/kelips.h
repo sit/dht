@@ -201,7 +201,7 @@ public:
     Time timeout = 1000;
 
     if (_to_cheat) {
-      timeout = _to_multiplier * (Network::Instance()->gettopology())->latency(ip(),dst);
+      timeout = _to_multiplier * 2 * (Network::Instance()->gettopology())->latency(ip(),dst);
     }else if ((_info.find(dst) == _info.end()) 
       || (_info[dst]->_rtt == 9999) || 
 	(_info[dst]->_rtt == -1)) {

@@ -93,9 +93,13 @@ public:
   }
 
   static CHID ipname2chid(const char *name) {
-    unsigned char *buf = SHA1 ((const unsigned char *)name, strlen(name)+1, NULL);
-    CHID r;
-    memcpy(&r, buf, 8);
+    unsigned char *buf = SHA1 ((const unsigned char *)name, strlen(name), NULL);
+    CHID r = 0;
+    for (int i = 0; i < 8; i++) {
+      r += (CHID) buf[i];
+      if (i < 7) r <<= 8;
+    }
+    // memcpy(&r, buf, 8);
     return r;
   }
 
