@@ -29,7 +29,7 @@
 #include <iostream>
 using namespace std;
 
-/* the Gummadi brother's graph */
+/* the Gummadi brothers' graph */
 G2Graph::G2Graph(vector<string> *v)
 {
   _num = atoi((*v)[0].c_str());

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 [NAMES_GO_HERE]
+ * Copyright (c) 2003 Frank Dabek
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -22,52 +22,35 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "topologyfactory.h"
-#include "euclidean.h"
-#include "e2egraph.h"
-#include "e2easymgraph.h"
-#include "e2elinkfailgraph.h"
-#include "e2etimegraph.h"
-#include "g2graph.h"
-#include "randomgraph.h"
-#include "euclideangraph.h"
-#ifdef HAVE_SGB
-#include "gtitm.h"
-#endif
+#ifndef __GTITM_H
+#define __GTITM_H
 
-Topology *
-TopologyFactory::create(string s, vector<string>* v)
-{
-  Topology *t = 0;
+#include <string>
 
-  if(s == "Euclidean")
-    t = New Euclidean(v);
-
-  if(s == "RandomGraph")
-    t = New RandomGraph(v);
-
-  if(s == "EuclideanGraph")
-    t = New EuclideanGraph(v);
-
-  if (s == "E2EGraph")
-    t = New E2EGraph(v);
-
-  if (s == "G2Graph")
-    t = New G2Graph(v);
-
-#ifdef HAVE_SGB
-  if (s == "gtitm")
-    t = New gtitm (v);
-#endif
-
-  if (s == "E2EAsymGraph")
-    t = New E2EAsymGraph(v);
-
-  if (s == "E2ETimeGraph")
-    t = New E2ETimeGraph(v);
-
-  if (s == "E2ELinkFailGraph")
-    t = New E2ELinkFailGraph(v);
-
-  return t;
+extern "C" {
+#include "gb_graph.h"
+#include "gb_save.h"
+#include "gb_dijk.h"
 }
+
+using namespace std;
+
+
+class gtitm : public Topology {
+public:
+  gtitm(vector<string>*);
+  ~gtitm();
+  
+  virtual void parse(ifstream&);
+  virtual Time latency(IPAddress, IPAddress, bool);
+
+private:
+  hash_map<int, int> memo;
+  char _filename[64];
+  int _num;
+  Graph *g;
+};
+
+#endif //  __gTITm_H
+
+

@@ -73,6 +73,10 @@ Euclidean::parse(ifstream &ifs)
     // x,y coordinates
     vector<string> coords = split(words[1], ",");
     Coord c;
+    if (coords.size () < 2) {
+      cerr << "malformed coordinates " << endl;
+      exit (-1);
+    }
     c.first = atoi(coords[0].c_str());
     c.second = atoi(coords[1].c_str());
 
