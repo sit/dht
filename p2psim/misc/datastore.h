@@ -43,6 +43,22 @@ struct fetch_res {
   bool present;
 };
 
+struct getdb_args {
+  int max_keys;
+};
+
+struct getdb_res {
+  vector<DataItem> keys;
+};
+
+struct senddata_args {
+  vector<DataItem> keys;
+};
+
+struct senddata_res {
+  bool ok;
+};
+
 class DataStore : public ChordFingerPNS {
 
 public:
@@ -69,10 +85,16 @@ private:
   //"database:" maps a blockID to its size (if present)
   hash_map <CHID, DataItem> db;
 
+  //state
+  int _curr_succ;
+
   void stabilize_data (void *a);
 
   //handlers
   void fetch_handler (fetch_args *args, fetch_res *ret);
+  void getdb_handler (getdb_args *args, getdb_res *res);
+  void senddata_handler (senddata_args *args, senddata_res *res);
+
 };
 
 #endif /* _DATASTORE_H */

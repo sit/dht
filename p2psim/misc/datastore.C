@@ -78,7 +78,8 @@ DataStore::join (Args* a)
 {
 
   //start stabilization for data
-  // delaycb (1000, &DataStore::stabilize_data, (void *) 0);
+  int start = random () % 5000;
+  delaycb (start, &DataStore::stabilize_data, (void *) 0);
   ChordFingerPNS::join (a);
 }
 
@@ -101,7 +102,6 @@ DataStore::lookup (Args *args)
 
   IDMap lasthop;
   vector<IDMap> v;
-
   if (_recurs)
     v = find_successors_recurs(a->key, _nreplicas,
 				     TYPE_USER_LOOKUP, &lasthop, a);
@@ -113,7 +113,7 @@ DataStore::lookup (Args *args)
 
   if (v.size() > 0) {
     bool done = false;
-    uint nsucc = 0;
+    int nsucc = 0;
     while (!done) {
       IDMap succ = v[nsucc];
 
@@ -127,7 +127,7 @@ DataStore::lookup (Args *args)
       if (!alive()) break; 
       
       if (res.present) {
-	cerr << ip () << ": data object " << a->key 
+	cerr << ip () << " " << now () << " : data object " << a->key 
 	     << " found successfully at node " << succ.id << " ("
 	     << nsucc << ")\n";
 	record_lookup_stat (me.ip, succ.ip, now () - a->start, true, true);
@@ -151,9 +151,77 @@ void
 DataStore::stabilize_data (void *a)
 {
 
+  if (!alive() || _nreplicas < 2) return; 
+
+  cerr << ip () << " " << now () << " starting stabilize\n";
+
+
+  //merkle-like scheme
+  vector<IDMap> succs = loctable->succs(me.id+1,_nsucc,LOC_ONCHECK);
+
+  //get a successor's database
+  getdb_args args;
+  getdb_res res;
+  doRPC (succs[_curr_succ].ip, &DataStore::getdb_handler, &args, &res);
+
+  if (!alive ()) return;
+
+  senddata_args sd_arg;
+  senddata_res sd_res;
+  //make sure that he has all of the keys that we do
+  hash_map<CHID, DataItem>::iterator it = db.begin ();
+  for (; it != db.end (); ++it) {
+    uint i = 0;
+    for (; i < res.keys.size (); i++)
+    {
+      //      cerr << "comparing " << (*it).first << " and " << res.keys[i].key << "\n";
+      if ((*it).first == res.keys[i].key) break;
+    }
+    if (i == res.keys.size ()) {
+      //add it to the database
+      cerr << "sending " << (*it).first 
+	   << " to succ # " << _curr_succ << "\n";
+      sd_arg.keys.push_back ((*it).second);
+    }
+  }
+  
+  //send the message
+  if (sd_arg.keys.size () > 0) {
+    cerr << "sending " << sd_arg.keys.size () << " keys to succ # " 
+	 << _curr_succ << " of " << db.size () << "\n";
+    doRPC (succs[_curr_succ].ip, &DataStore::senddata_handler, &sd_arg, &sd_res);
+
+    if (!alive ()) return;
+  }
+
+  
+  _curr_succ++;
+  if (_curr_succ >= _nreplicas - 1) curr_succ = 0;
+  int start = random () % 5000;
+  delaycb (start, &DataStore::stabilize_data, (void *) 0);
 }
 
+void
+DataStore::senddata_handler (senddata_args *args, senddata_res *res)
+{
+  for (uint i = 0; i < args->keys.size (); i++)
+    {
+      store (args->keys[i]);
+    }
+}
 
+void
+DataStore::getdb_handler (getdb_args *args, getdb_res *res)
+{
+  hash_map<CHID, DataItem>::iterator i = db.begin ();
+  for (; i != db.end (); ++i)
+    {
+      res->keys.push_back ((*i).second);
+    }
+
+  cerr << ip () << " getdb_handler: returned " << res->keys.size () << " keys of "
+       << db.size () << "\n";
+}
 //----- database routines
 
 void
