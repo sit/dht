@@ -189,6 +189,14 @@ class p2p : public virtual refcount  {
   ~p2p(); // added to help do RPCs/lookup
   void routtables (svccb *sbp);
   void getstats (svccb *sbp);
+
+  int lookupRPCs;
+  int last_lookupRPCs;
+  int min_lRPCs;
+  int max_lRPCs;
+  int lookups;
+  int inlookups;
+
   //
 
   void deleteloc (sfs_ID &n);

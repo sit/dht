@@ -1,19 +1,10 @@
 #include <assert.h>
-#include <fstream.h> // added by Emma to do num_hops stuff
 #include "sfsp2p.h"
 #include <qhash.h>
 #include <sys/time.h>
 
 
 #define MAX_INT 0x7fffffff
-
-int lookupRPCs;
-int last_lookupRPCs;
-int min_lRPCs;
-int max_lRPCs;
-int lookups;
-
-int in_lookup; // global variable used to tell if doing a lookup
 
 static
 str gettime()
@@ -405,12 +396,12 @@ p2p::p2p (str host, int hostport, const sfs_ID &hostID,
   myport (port), myID (ID)
 {
   // used for calculating num hops
-  in_lookup = 0;
   lookups = 0; // no lookups yet
   lookupRPCs = 0;
   last_lookupRPCs = 0; 
   min_lRPCs = 30000;
   max_lRPCs = 0;
+  inlookups = 0; // no lookups so far
 
   namemyID = myname ();
   successor[0].start = successor[0].end = successor[0].first = myID;
@@ -831,15 +822,10 @@ void // used by the client to get avg RPCs/lookup
 p2p::getstats (svccb *sbp)
 {
   sfsp2p_getstatsres res = (SFSP2P_OK);
-  if(lookupRPCs - last_lookupRPCs > max_lRPCs)
-    max_lRPCs = lookupRPCs - last_lookupRPCs;
-  if(lookupRPCs - last_lookupRPCs < min_lRPCs)
-    min_lRPCs = lookupRPCs - last_lookupRPCs;
   res.resok->total_lookups = lookups;
   res.resok->total_lookup_RPCs = lookupRPCs;
   res.resok->max_RPCs = max_lRPCs;
   res.resok->min_RPCs = min_lRPCs;
-  last_lookupRPCs = lookupRPCs;
   sbp->reply (&res);
 }
 
@@ -848,17 +834,19 @@ p2p::lookup (svccb *sbp, sfs_ID &n)
 {
   char s[20];
   sprintf(s,"nhops%d",myport);
-  /******** Used to track average number of hops per lookup ***/
-  ofstream outFile(s,ios::app);
-  outFile << "Lookup File : " << n.cstr() << "\n";
-  outFile.close();
-  warnx << "******************   INSIDE p2p::lookup!!!!!!!!!!!!! **********\n";
-  /**************************/
-  in_lookup = 1;
+
   int i = successor_wedge (n);
   if (!predecessor[i].alive) {
     set_closeloc (predecessor[i]);
   }
+
+  if((lookupRPCs - last_lookupRPCs) > max_lRPCs && lookups > 0)
+    max_lRPCs = lookupRPCs - last_lookupRPCs;
+  if((lookupRPCs - last_lookupRPCs) < min_lRPCs && lookups > 0)
+    min_lRPCs = lookupRPCs - last_lookupRPCs;  
+  last_lookupRPCs = lookupRPCs;
+
+  inlookups++; // 
 
   lookups++; // one more lookup
   lookupRPCs++;
@@ -996,12 +984,9 @@ p2p::lookup_closestsucc_cb (sfs_ID n, cbsfsID_t cb,
 
   char s[20];
   sprintf(s,"nh%d",myport);
-  /******** Used to track average number of hops per lookup ***/
-  ofstream outFile(s,ios::app);
-  outFile << "Lookup File : " << n.cstr() << " in lookup: " << in_lookup << "\n";
-  outFile.close();
-  /**************************/
-lookupRPCs++; 
+  
+  if(inlookups > 0) // check to see if in middle of lookups
+    lookupRPCs++; 
     lookup_closestsucc (res->resok->node, res->resok->x, cb);
   } else {
     warnx << "FINISHED WITH LOOKUP: find_closestsucc_cb of " << res->resok->x 
@@ -1010,7 +995,6 @@ lookupRPCs++;
     //  << " from " << n << " returns " << res->resok->node << "\n";
     updateloc (res->resok->node, res->resok->r, n);
     cb (res->resok->node, res->resok->r, SFSP2P_OK);
-    in_lookup = 0;
   }
 }
 
@@ -1199,9 +1183,12 @@ p2p::dolookup (svccb *sbp, sfs_ID *n)
     // warnx << a->r.server << "\n";
     sfsp2p_lookupres res = (SFSP2P_OK);
     res.resok->r = a->r;
+    inlookups--; // finished one lookup
+
     sbp->reply (&res);
   } else {
     warnx << "no entry\n";
+    inlookups--; // finished one lookup
     sbp->replyref (sfsp2pstat (SFSP2P_ERRNOENT));
   }
 }
