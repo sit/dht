@@ -68,9 +68,10 @@ dhash::dhash(str dbname, vnode *node, int k, int ss, int cs, int _ss_mode) :
   /* statistics */
   keys_stored = 0;
   bytes_stored = 0;
-  bytes_served = 0;
   keys_replicated = 0;
   keys_cached = 0;
+  keys_served = 0;
+  bytes_served = 0;
 
   init_key_status ();
   update_replica_list ();
@@ -418,6 +419,7 @@ dhash::fetchrecurs_havedata_cb (unsigned long rpc_id,
 	  n);
 
   /* statistics */
+  keys_served++;
   bytes_served += n;
   
   dhash_stat *done_res = New dhash_stat;
@@ -460,6 +462,7 @@ dhash::fetchiter_svc_cb (long xid, dhash_fetch_arg *arg,
 	    (char *)val->value + arg->start, 
 	    n);
     /* statistics */
+    keys_served++;
     bytes_served += n;
   }
   
@@ -1110,10 +1113,12 @@ dhash::print_stats ()
 {
   warnx << "ID: " << host_node->my_ID () << "\n";
   warnx << "Stats:\n";
-  warnx << "  " << keys_stored << " stored\n";
+  warnx << "  " << keys_stored << " keys stored\n";
   warnx << "  " << keys_cached << " keys cached\n";
   warnx << "  " << keys_replicated << " keys replicated\n";
   warnx << "  " << bytes_stored << " total bytes held\n";
+  warnx << "  " << keys_served << " keys served\n";
+  warnx << "  " << bytes_served << " bytes served\n";
 
   printkeys ();
 }

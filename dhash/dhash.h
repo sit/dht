@@ -278,6 +278,7 @@ class dhash {
   long keys_replicated;
   long keys_cached;
   long bytes_served;
+  long keys_served;
 
  public:
   dhash (str dbname, vnode *node, 
