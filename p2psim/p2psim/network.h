@@ -37,7 +37,7 @@ public:
   static Network* Instance() { return Instance(0, 0); }
   static Network* Instance(Topology*, FailureModel*);
   Channel* nodechan() { return _nodechan; }
-  void here(Packet *);
+  void send(Packet *);
 
   // information
   Node* getnode(IPAddress id) { return _nodes[id]; }

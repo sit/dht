@@ -99,7 +99,7 @@ Node::_doRPC_send(IPAddress dst, void (*fn)(void *), void (*killme)(void *), voi
   // where to send the reply, buffered for single reply
   Channel *c = p->_c = chancreate(sizeof(Packet*), 1);
 
-  Network::Instance()->here(p);
+  Network::Instance()->send(p);
 
   return New RPCHandle(c, p);
 }
@@ -143,7 +143,7 @@ Node::Receive(void *px)
 
   // send it back, potentially with a latency punishment for when this node was
   // dead.
-  Network::Instance()->here(reply);
+  Network::Instance()->send(reply);
 
   // ...and we're done
   threadexits(0);

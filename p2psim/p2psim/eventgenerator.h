@@ -37,8 +37,8 @@ public:
   EventGenerator() {};
   virtual ~EventGenerator() {};
 
-  // to parse the first line and generate an EventGenerator subtype
-  static EventGenerator* EventGenerator::parse(char *filename);
+  // creates all specified event generators and observers
+  static void EventGenerator::parse(char *filename);
 };
 
 #endif //  __EVENT_GENERATOR_H

@@ -28,16 +28,16 @@
 #include "protocolobserver.h"
 #include "protocols/kademlia.h"
 
-class KademliaObserver : ProtocolObserver {
+class KademliaObserver : public ProtocolObserver {
 public:
   KademliaObserver(Args *args);
   ~KademliaObserver();
-  virtual void kick();
+  virtual void kick(Observed*, ObserverInfo* = 0);
   virtual bool stabilized();
 
 private:
-  unsigned int _num_nodes;
-  unsigned int _init_num;
+  unsigned int _nnodes;
+  bool _initstate;
   string _type;
 
   void init_state();

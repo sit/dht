@@ -26,51 +26,104 @@
 #ifndef __KADEMLIA_H
 #define __KADEMLIA_H
 
-#include "chord.h"
+#include "p2psim/p2protocol.h"
+#include "consistenthash.h"
+#include <list>
+using namespace std;
 
-extern unsigned kdebugcounter;
-class k_bucket_tree;
-class peer_t;
 // }}}
-// {{{ Kademlia
+// {{{ class k_nodeinfo
+class k_nodeinfo {
+public:
+  // typedef ConsistentHash::CHID NodeID;
+  typedef unsigned NodeID;
+  k_nodeinfo(NodeID, IPAddress);
+  NodeID id;
+  IPAddress ip;
+  Time firstts; // when we saw it first
+  Time lastts;  // when we saw it last
+
+  void checkrep() const;
+};
+// }}}
+// {{{ class Kademlia
+class k_bucket;
 class Kademlia : public P2Protocol {
 // {{{ public
 public:
-  typedef ConsistentHash::CHID NodeID;
-  typedef unsigned Value;
-  static const unsigned idsize = 8*sizeof(NodeID);
-
+  class older;
+  // typedef ConsistentHash::CHID NodeID;
+  typedef unsigned NodeID;
+  typedef set<k_nodeinfo*, older> nodeinfo_set;
   Kademlia(Node*, Args);
-  ~Kademlia();
+  ~Kademlia() {}
+
   string proto_name() { return "Kademlia"; }
-
   virtual void join(Args*);
-  virtual void leave(Args*);
-  virtual void crash(Args*);
-  virtual void insert(Args*);
-  virtual void lookup(Args*);
+  virtual void crash(Args*) {}
+  virtual void lookup(Args*) {}
 
+  //
+  // functors
+  //
+  class older { public:
+    bool operator()(const k_nodeinfo* p1, const k_nodeinfo* p2) const {
+      if(p1->id == p2->id)
+        return false;
+      if(p1->lastts == p2->lastts)
+        return p1->id <  p2->id;
+      return p1->lastts < p2->lastts;
+    }
+  };
+
+  class younger { public:
+    bool operator()(const k_nodeinfo* p1, const k_nodeinfo* p2) const {
+      if(p1->id == p2->id)
+        return false;
+      if(p1->lastts == p2->lastts)
+        return p1->id >  p2->id;
+      return p1->lastts > p2->lastts;
+    }
+  };
+
+  class closer { public:
+    bool operator()(const k_nodeinfo* p1, const k_nodeinfo* p2) const {
+      if(p1->id == p2->id)
+        return false;
+      Kademlia::NodeID dist1 = Kademlia::distance(p1->id, n);
+      Kademlia::NodeID dist2 = Kademlia::distance(p2->id, n);
+      if(dist1 == dist2)
+        return p1->id < p2->id;
+      return dist1 < dist2;
+    }
+    static NodeID n;
+  };
+
+  //
+  // static utility methods
+  //
   static string printbits(NodeID);
   static string printID(NodeID id);
   static NodeID distance(const NodeID, const NodeID);
-
-  void init_state(list<Protocol*>);
-
-  bool stabilized(vector<NodeID>);
-  void dump();
-  NodeID id () { return _id;}
-
-  // bit twiddling utility functions
-  // static NodeID flipbitandmaskright(NodeID, unsigned);
-  // static NodeID maskright(NodeID, unsigned);
-  static unsigned getbit(NodeID, unsigned);
   static unsigned common_prefix(NodeID, NodeID);
-  static peer_t* get_closest(vector<peer_t*> *, NodeID);
-  static unsigned k()   { return _k; }
+  static unsigned getbit(NodeID, unsigned);
 
-  void do_lookup_wrapper(peer_t*, NodeID, vector<peer_t*> * = 0);
+  //
+  // non-static utility methods
+  //
+  void do_lookup_wrapper(k_nodeinfo*, NodeID, set<k_nodeinfo*> * = 0);
 
-  // public, because k_bucket needs it.
+  //
+  // observer methods
+  //
+  NodeID id()      { return _id; }
+  k_bucket *root() { return _root; }
+  bool stabilized(vector<NodeID>*);
+
+  //
+  // RPC arguments
+  // 
+  // {{{ lookup_args and lookup_result
   struct lookup_args {
     lookup_args(NodeID xid, IPAddress xip, NodeID k = 0, bool b = false) :
       id(xid), ip(xip), key(k), controlmsg(b) {};
@@ -81,89 +134,55 @@ public:
   };
 
   struct lookup_result {
-    vector<peer_t*> results;
+    nodeinfo_set results;
     NodeID rid;     // the guy who's replying
   };
+  // }}}
+
+  //
+  // RPCable methods
+  //
+  void do_lookup(lookup_args*, lookup_result*);
   void find_node(lookup_args*, lookup_result*);
 
-  //
-  // ping
-  //
-  struct ping_args {
-    ping_args(NodeID xid, IPAddress xip) : id(xid), ip(xip) {}
-    NodeID id;
-    IPAddress ip;
-  };
-  struct ping_result {};
-  void do_ping(ping_args*, ping_result*);
-  bool do_ping_wrapper(peer_t*);
 
+  //
+  // set methods
+  //
+
+  // hack to pre-initialize k-buckets
+  void init_state(list<Protocol*>);
+  void reschedule_stabilizer(void*);
+
+  //
+  // member variables
+  //
+  static unsigned k;                    // number of nodes per k-bucket
+  static unsigned alpha;                // alpha from kademlia paper; no of simultaneous RPCs
+  static unsigned debugcounter;         // 
+  static unsigned joined;               // how many have joined so far
+  static unsigned stabilize_timer;      // how often to stabilize
+  static unsigned refresh_rate;         // how often to refresh info
+  static const unsigned idsize = 8*sizeof(NodeID);
+  hash_map<NodeID, k_nodeinfo*> flyweight;
 // }}}
 // {{{ private
- private:
-  static unsigned _k;           // k from kademlia paper
-  static unsigned _alpha;       // alpha from kademlia paper
-  NodeID _id;                   // my id
-  k_bucket_tree *_tree;         // the root of our k-bucket tree
-  hash_map<NodeID, Value> _values;   // key/value pairs
-  peer_t *_me;
-  static unsigned _joined;      // how many have joined
+private:
+  void insert(NodeID, IPAddress, bool = false);
+  void touch(NodeID);
+  void erase(NodeID);
+  void stabilize();
+
+  NodeID _id;           // my id
+  k_nodeinfo *_me;      // info about me
+  k_bucket *_root;
 
   // statistics
-  static unsigned _controlmsg;  //
-
-  void reschedule_stabilizer(void*);
-  void stabilize();
-  // {{{ structs
-  //
-  // join
-  //
-  struct join_args {
-    NodeID id;
-    IPAddress ip;
-  };
-  struct join_result {
-    int ok;
-  };
-  void do_join(void *args, void *result);
-
+  static unsigned controlmsg;
 
   //
-  // lookup
+  // utility 
   //
-  void do_lookup(lookup_args *largs, lookup_result *lresult);
-
-
-  //
-  // insert
-  //
-  struct insert_args {
-    NodeID id;      // node doing the insert
-    IPAddress ip;   // node doing the insert
-
-    NodeID key;
-    Value val;
-  };
-  struct insert_result {
-  };
-  void do_insert(insert_args *args, insert_result *result);
-
-  //
-  // transfer
-  //
-  class fingers_t;
-  struct transfer_args {
-    transfer_args(NodeID xid, IPAddress xip) : id(xid), ip(xip) {}
-    NodeID id;
-    IPAddress ip;
-  };
-  struct transfer_result {
-    hash_map<NodeID, Value> *values;
-  };
-  void do_transfer(transfer_args *targs, transfer_result *tresult);
-
-  void _tree_insert(peer_t&);
-
   class callinfo { public:
     callinfo(IPAddress xip, lookup_args *xla, lookup_result *xlr)
       : ip(xip), la(xla), lr(xlr) {}
@@ -173,150 +192,114 @@ public:
     lookup_result *lr;
   };
 
-  // }}}
 // }}}
-};
-// }}}
-// {{{ peer_t
-// one entry in k_bucket's _nodes vector
-class peer_t {
-public:
-  typedef Kademlia::NodeID NodeID;
-
-  peer_t(NodeID xid, IPAddress xip, Time t = now())
-    : retries(0), id(xid), ip(xip), firstts(t), lastts(t) {}
-  peer_t(const peer_t &p) : retries(0), id(p.id), ip(p.ip), lastts(p.lastts) {}
-  unsigned retries;
-  NodeID id;
-  IPAddress ip;
-  Time firstts; // when we saw it first
-  Time lastts;  // when we saw it last
 };
 
 // }}}
-// {{{ SortNodes
-class SortNodes { public:
-  SortNodes(Kademlia::NodeID key) : _key(key) {}
-  bool operator()(const peer_t* n1, const peer_t* n2) const {
-    Kademlia::NodeID dist1 = _key ^ n1->id;
-    Kademlia::NodeID dist2 = _key ^ n2->id;
-    return dist1 < dist2;
-  }
-private:
-  Kademlia::NodeID _key;
-};
-
-
-class EqualNodes { public:
-  EqualNodes(Kademlia::NodeID key) : _key(key) {}
-  bool operator()(const peer_t* n1, const peer_t* n2) const {
-    Kademlia::NodeID dist1 = _key ^ n1->id;
-    Kademlia::NodeID dist2 = _key ^ n2->id;
-    return dist1 == dist2;
-  }
-private:
-  Kademlia::NodeID _key;
-};
-
-
-
-// }}}
-// {{{ k-bucket
+// {{{ class k_bucket 
+class k_traverser;
 class k_bucket {
 public:
-  typedef Kademlia::NodeID NodeID;
+  k_bucket(k_bucket*, bool, Kademlia * = 0);
 
-  k_bucket(Kademlia*, k_bucket_tree*);
-  ~k_bucket();
+  Kademlia *kademlia()  { return _kademlia; }
+  void traverse(k_traverser*, string = "", unsigned = 0);
+  void insert(Kademlia::NodeID, bool = false, string = "", unsigned = 0);
+  void erase(Kademlia::NodeID);
+  virtual void checkrep() const;
 
-  peer_t* insert(NodeID, IPAddress, bool = false, string = "", unsigned = 0, k_bucket* = 0);
-  void k_bucket::erase(NodeID, IPAddress, string = "", unsigned = 0);
-  bool stabilized(vector<NodeID>, string = "", unsigned = 0);
-  void stabilize(string = "", unsigned = 0);
-  void dump(string = "", unsigned = 0);
-  // void get(NodeID, vector<pair<NodeID, IPAddress> >*, unsigned = 0);
+  bool leaf;
 
 private:
-  static unsigned _k;
-  bool _leaf;                   // this should/can not be split further
-  Kademlia *_self;              // the kademlia node that this tree is part of
-  k_bucket_tree *_root;         // root of the tree that I'm a part of
-  NodeID _id;                   // XXX: so that KDEBUG() works. can be removed later.
-
-  /*
-   * LEAFS
-   */
-  class OldestFirst { public:
-    bool operator()(const peer_t* p1, const peer_t* p2) {
-      return p1->lastts != p2->lastts ?
-             p1->lastts < p2->lastts :
-             p1 < p2;
-    }
-  };
-  set<peer_t*, OldestFirst> *_nodes;
-
-  class NewestFirst { public:
-    bool operator()(const peer_t* p1, const peer_t* p2) {
-      return p1->lastts != p2->lastts ?
-             p1->lastts > p2->lastts :
-             p1 > p2;
-    }
-  };
-  set<peer_t*, NewestFirst> *_replacement_cache;
-
-  /*
-   * NON-LEAFS
-   */
-  k_bucket* _child[2];          // for a node
+  k_bucket *_parent;
+  Kademlia *_kademlia;
 };
-
 // }}}
-// {{{ k_bucket_tree
-class k_bucket_tree {
+// {{{ class k_bucket_node
+class k_bucket_node : public k_bucket {
 public:
-  typedef Kademlia::NodeID NodeID;
+  k_bucket_node(k_bucket *parent);
+  k_bucket *child[2];
+  virtual void checkrep() const;
+};
+// }}}
+// {{{ class k_bucket_leaf
+class k_nodes;
+class k_bucket_leaf : public k_bucket {
+public:
+  k_bucket_leaf(Kademlia *);
+  k_bucket_leaf(k_bucket *);
+  virtual void checkrep() const;
 
-  k_bucket_tree(Kademlia*);
-  ~k_bucket_tree();
-  void insert(NodeID node, IPAddress ip, bool = false);
-  void insert(vector<peer_t*>*);
-  void erase(NodeID node);
-  bool stabilized(vector<NodeID>);
-  void stabilize();
-  void dump() { return _root->dump(); }
-  bool empty() { return _nodes.empty(); }
-  void get(NodeID, vector<peer_t*>*, unsigned best = _k);
-  peer_t* random_node();
+  k_nodes *nodes;
+  set<k_nodeinfo*, Kademlia::younger> *replacement_cache;
+};
+// }}}
+// {{{ class k_nodes
+class k_bucket_leaf;
 
+/*
+ * keeps a sorted set of nodes.  the size of the set never exceeds Kademlia::k.
+ */
+class k_nodes {
+public:
+  typedef set<k_nodeinfo*, Kademlia::older> nodeset_t;
+  k_nodes(k_bucket_leaf *_parent);
+  void insert(Kademlia::NodeID n);
+  void erase(Kademlia::NodeID n);
+  bool contains(Kademlia::NodeID n);
+  bool full() { return nodes.size() >= Kademlia::k; }
+  bool empty() { return !nodes.size(); }
+  void checkrep() const;
+
+  nodeset_t nodes;
 
 private:
-  k_bucket *_root;
-  hash_map<NodeID, peer_t*> _nodes;
-
-  // best_entry
-  struct best_entry {
-    best_entry() { dist = 0; peers.clear(); }
-    NodeID dist;
-    vector<peer_t*> peers;
-    sklist_entry<best_entry> _sortlink;
-  };
-
-  // must return same results as SortNodes
-  struct DistCompare {
-    int operator()(const NodeID &n1, const NodeID &n2) const {
-      NodeID dist1 = Kademlia::distance(n1, _key);
-      NodeID dist2 = Kademlia::distance(n2, _key);
-      return dist1 < dist2;
-    }
-    static NodeID _key;
-  };
-
-  Kademlia *_self;
-  NodeID _id; // so that KDEBUG() does work
-  static unsigned _k;
+  k_bucket_leaf *_parent;
 };
-
 // }}}
 
-#define KDEBUG(x) DEBUG(x) << kdebugcounter++ << "(" << now() << "). " << Kademlia::printbits(_id) << " "
+// {{{ class k_traverser
+class k_traverser { public:
+  virtual void execute(k_bucket_leaf*, string, unsigned) = 0;
+};
+// }}}
+// {{{ class k_collect_closest
+class k_collect_closest : public k_traverser { public:
+  typedef set<k_nodeinfo*, Kademlia::closer> resultset_t;
+  k_collect_closest(Kademlia::NodeID, unsigned best = Kademlia::k);
+  virtual ~k_collect_closest() {}
+  virtual void execute(k_bucket_leaf *, string, unsigned);
+
+  resultset_t results;
+
+private:
+  void checkrep();
+  Kademlia::NodeID _node;
+  Kademlia::NodeID _lowest;
+  unsigned _best;
+};
+// }}}
+// {{{ class k_stabilizer
+class k_stabilizer : public k_traverser { public:
+  k_stabilizer() {}
+  virtual ~k_stabilizer() {}
+  virtual void execute(k_bucket_leaf *, string, unsigned);
+};
+// }}}
+// {{{ class k_stabilized
+class k_stabilized : public k_traverser { public:
+  k_stabilized(vector<Kademlia::NodeID> *v) : _v(v), _stabilized(true) {}
+
+  virtual ~k_stabilized() {}
+  virtual void execute(k_bucket_leaf*, string, unsigned);
+  bool stabilized() { return _stabilized; }
+
+private:
+  vector<Kademlia::NodeID> *_v;
+  bool _stabilized;
+};
+// }}}
+
+#define KDEBUG(x) DEBUG(x) << Kademlia::debugcounter++ << "(" << now() << "). " << Kademlia::printbits(_id) << " "
 #endif // __KADEMLIA_H

@@ -38,7 +38,9 @@ public:
 
 private:
   unsigned _size;
+  IPAddress _wkn;
   string _proto;
+  IPAddress _current_ip;
 };
 
 #endif // __CHURN_EVENT_GENERATOR_H

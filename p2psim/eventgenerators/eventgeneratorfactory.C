@@ -46,11 +46,9 @@ EventGeneratorFactory::~EventGeneratorFactory()
 
 
 EventGenerator *
-EventGeneratorFactory::create(string type, vector<string> *v)
+EventGeneratorFactory::create(string type, Args *a)
 {
   EventGenerator *eg = 0;
-  Args *a = New Args(v);
-  assert(a);
 
   if(type == "FileEventGenerator")
     eg = New FileEventGenerator(a);

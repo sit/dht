@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 [NAMES_GO_HERE]
+ * Copyright (c) 2003 Thomer M. Gil
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -23,16 +23,25 @@
  */
 
 #include "kademliaobserver.h"
+#include "p2psim/network.h"
 #include <iostream>
 using namespace std;
 
 KademliaObserver::KademliaObserver(Args *a) : _type("Kademlia")
 {
-  _num_nodes = atoi((*a)["numnodes"].c_str());
-  assert(_num_nodes > 0);
+  _nnodes = atoi((*a)["nodes"].c_str());
+  assert(_nnodes > 0);
 
-  _init_num = atoi((*a)["initnodes"].c_str());
+  _initstate = atoi((*a)["initstate"].c_str()) ? true : false;
   lid.clear();
+
+  // register as an observer of all Kadmelia instances
+  list<Protocol*> l = Network::Instance()->getallprotocols(_type);
+  for(list<Protocol*>::iterator pos = l.begin(); pos != l.end(); ++pos) {
+    Kademlia *k = (Kademlia*) *pos;
+    k->registerObserver(this);
+    DEBUG(1) << "KademliaObserver registered with " << k->id() << endl;
+  }
 }
 
 
@@ -54,12 +63,14 @@ KademliaObserver::init_state()
 
 
 void
-KademliaObserver::kick()
+KademliaObserver::kick(Observed *, ObserverInfo *)
 {
-  if(_init_num) {
+  if(_initstate) {
     init_state();
-    _init_num = 0;
+    _initstate = false;
   }
+
+  stabilized();
 }
 
 bool
@@ -69,28 +80,28 @@ KademliaObserver::stabilized()
   list<Protocol*>::iterator pos;
 
   //i only want to sort it once after all nodes have joined! 
-  Kademlia *c = 0;
-  if (lid.size() != _num_nodes) {
+  Kademlia *k = 0;
+  if (lid.size() != _nnodes) {
     lid.clear();
     for (pos = l.begin(); pos != l.end(); ++pos) {
-      c = (Kademlia *)(*pos);
-      assert(c);
-      lid.push_back(c->id ());
+      k = (Kademlia *)(*pos);
+      assert(k);
+      lid.push_back(k->id());
     }
 
     sort(lid.begin(), lid.end());
 
     // vector<Kademlia::NodeID>::iterator i;
-    // printf ("sorted nodes %d %d\n", lid.size (), _num_nodes);
+    // printf ("sorted nodes %d %d\n", lid.size (), _nnodes);
     // for (i = lid.begin (); i != lid.end() ; ++i)
     //   printf ("%hx\n", *i);
   }
 
   for (pos = l.begin(); pos != l.end(); ++pos) {
-    c = (Kademlia *)(*pos);
-    assert(c);
-    c->dump();
-    if (!c->stabilized(lid)) {
+    k = (Kademlia *)(*pos);
+    assert(k);
+    // k->dump();
+    if (!k->stabilized(&lid)) {
       DEBUG(1) << now() << " NOT STABILIZED" << endl;
       return false;
     }
@@ -99,9 +110,9 @@ KademliaObserver::stabilized()
   DEBUG(1) << now() << " STABILIZED" << endl;
   DEBUG(1) << now() << " Kademlia finger tables" << endl;
   for (pos = l.begin(); pos != l.end(); ++pos) {
-    assert(c);
-    c = (Kademlia *)(*pos);
-    c->dump();
+    assert(k);
+    k = (Kademlia *)(*pos);
+    // k->dump();
   }
   return true;
 }

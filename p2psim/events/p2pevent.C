@@ -35,14 +35,14 @@ P2PEvent::P2PEvent()
 P2Protocol::event_f
 P2PEvent::name2fn(string name)
 {
+  // XXX: no longer supported
+  if(name == "insert" || name == "3" || name == "leave" || name == "1")
+    assert(false);
+
   if(name == "join" || name == "0")
     return &P2Protocol::join;
-  if(name == "leave" || name == "1")
-    return &P2Protocol::leave;
   if(name == "crash" || name == "2")
     return &P2Protocol::crash;
-  if(name == "insert" || name == "3")
-    return &P2Protocol::insert;
   if(name == "lookup" || name == "4")
     return &P2Protocol::lookup;
   assert(0);
@@ -84,6 +84,7 @@ P2PEvent::P2PEvent(Time ts, string proto, IPAddress ip, string operation,
     this->args = New Args();
     assert(this->args);
   }
+  cout << "p2pevent args wkn = " << (*this->args)["wkn"] << endl;
 }
 
 

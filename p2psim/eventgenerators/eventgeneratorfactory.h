@@ -25,15 +25,15 @@
 #ifndef __EVENT_GENERATOR_FACTORY_H
 #define __EVENT_GENERATOR_FACTORY_H
 
+#include "p2psim/args.h"
 #include "p2psim/eventgenerator.h"
 #include <string>
-#include <vector>
 using namespace std;
 
 class EventGeneratorFactory {
 public:
   static EventGeneratorFactory* Instance();
-  EventGenerator *create(string type, vector<string>* v);
+  EventGenerator *create(string type, Args*);
   ~EventGeneratorFactory();
 
 private:

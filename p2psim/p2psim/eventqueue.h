@@ -41,7 +41,7 @@ class EventQueue : public Threaded, public Observed {
 
 public:
   static EventQueue* Instance();
-  void here(Event *e);
+  void add_event(Event*);
   Time time() { return _time; }
   void go();
 
@@ -63,7 +63,6 @@ private:
   Channel *_gochan;
 
   virtual void run();
-  void add_event(Event*);
   bool advance();
 
   // for debuging

@@ -70,7 +70,7 @@ ChordFingerPNS::init_state(vector<IDMap> ids)
 	  min_f = ids[i];
 	  min_l = t->latency(me.ip, ids[i].ip);
 	  j++;
-	  if (j>= _samples) break;
+	  if (j >= (uint) _samples) break;
 	}
       }
       printf("%s finger %u,%qx distance %d candidates %d\n", ts(), min_f.ip, min_f.id, min_l, (e_pos-s_pos)%sz);
@@ -299,7 +299,7 @@ DONE:
   if (nr.v.size() > 0) {
     printf("%s find_successors %qx route: ", ts(), key);
     for (uint i = 0; i < route.size(); i++) {
-      printf("(%u,%qx,%u,%u) ", route[i].ip, route[i].id, 2*t->latency(me.ip,route[i].ip), route[i].choices);
+      printf("(%u, %qx, %llu, %u) ", route[i].ip, route[i].id, 2*t->latency(me.ip,route[i].ip), route[i].choices);
     }
     printf("\n");
   }

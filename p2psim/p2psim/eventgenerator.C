@@ -23,14 +23,16 @@
  */
 
 #include "eventgenerator.h"
+#include "p2psim/p2psim.h"
 #include "parse.h"
 #include "eventgenerators/eventgeneratorfactory.h"
+#include "observers/observerfactory.h"
 #include <lib9.h>
 #include <thread.h>
 #include <vector>
 using namespace std;
 
-EventGenerator*
+void
 EventGenerator::parse(char *filename)
 {
   ifstream in(filename);
@@ -41,6 +43,7 @@ EventGenerator::parse(char *filename)
 
   string line;
   EventGenerator *gen = 0;
+  Observer *obs = 0;
   while(getline(in,line)) {
     vector<string> words = split(line);
 
@@ -48,28 +51,43 @@ EventGenerator::parse(char *filename)
     if(words.empty() || words[0][0] == '#')
       continue;
 
-    // read generator string
-    if(words[0] != "generator") {
-      cerr << "first word of each line in event file should be ``generator''" << endl;
+    //
+    // generator
+    //
+    if(words[0] == "generator") {
+      words.erase(words.begin());
+      string generator = words[0];
+      words.erase(words.begin());
+      Args *a = New Args(&words);
+      assert(a);
+      if(!(gen = EventGeneratorFactory::Instance()->create(generator, a))) {
+        cerr << "unknown generator " << generator << endl;
+        exit(-1);
+      }
+      // spawn off this event generator thread
+      gen->thread();
+
+    //
+    // observer
+    //
+    } else if(words[0] == "observer") {
+      words.erase(words.begin());
+      string observer = words[0];
+      words.erase(words.begin());
+      Args *a = New Args(&words);
+      assert(a);
+      if(!(obs = ObserverFactory::Instance()->create(observer, a))) {
+        cerr << "unknown observer " << observer << endl;
+        exit(-1);
+      }
+    } else {
+      cerr << "first word of each line in event file should be ``generator'' or ``observer''" << endl;
       exit(-1);
     }
-    words.erase(words.begin());
-
-    string generator = words[0];
-    words.erase(words.begin());
-    if(!(gen = EventGeneratorFactory::Instance()->create(generator, &words))) {
-      cerr << "unknown generator " << generator << endl;
-      exit(-1);
-    }
-
-    // spawn off this event generator thread
-    gen->thread();
   }
 
   if(!gen) {
-    cerr << "you should specify at least one generator" << endl;
+    cerr << "you should specify at least one event generator in the events file" << endl;
     exit(-1);
   }
-
-  return gen;
 }

@@ -256,7 +256,7 @@ Koorde::find_successors(CHID key, uint m, bool is_lookup, IDMap *last)
        printf ("  %16qx i %16qx k %16qx\n", path[i].id, ipath[i], kpath[i]);
       }
 
-      CHID s = r.v[0].id;
+      // CHID s = r.v[0].id;
   //    assert ((me.id == mysucc.id) || (me.id == s) ||
 //	      ConsistentHash::betweenrightincl (me.id, s, key));
     } else {
@@ -464,7 +464,7 @@ Koorde::stabilize()
   Chord::stabilize();
   Time t = now();
   fix_debruijn();
-  printf ("%s Koorde stabilize debruijn finish %qx in time %d\n",ts(),debruijn, now()-t);
+  printf ("%s Koorde stabilize debruijn finish %qx in time %lld\n",ts(),debruijn, now()-t);
 }
 
 bool

@@ -68,12 +68,6 @@ EventQueue::go()
   send(_gochan, 0);
 }
 
-// Call here() to schedule a new event.
-void
-EventQueue::here(Event *e)
-{
-  add_event(e);
-}
 
 void
 EventQueue::run()
@@ -104,7 +98,6 @@ EventQueue::run()
 bool
 EventQueue::advance()
 {
-
   if(!_queue.size())
     return false;
 
@@ -124,8 +117,10 @@ EventQueue::advance()
   }
   delete eqe;
 
-  if(!_queue.size())
+  if(!_queue.size()) {
+    cout << "queue empty" << endl;
     return false;
+  }
 
   return true;
 }
@@ -143,7 +138,8 @@ EventQueue::add_event(Event *e)
     bool b = _queue.insert(ee);
     assert(b);
   }
-  // assert(ee->ts);
+
+  //assert(ee->ts);
   //assert(e->ts);
   ee->events.push_back(e);
 

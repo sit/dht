@@ -77,7 +77,7 @@ Network::getallprotocols(string proto)
 
 // Protocols should call here() to send a packet into the network.
 void
-Network::here(Packet *p)
+Network::send(Packet *p)
 {
   extern bool with_failure_model;
 
@@ -98,7 +98,7 @@ Network::here(Packet *p)
   ne->ts = now() + latency;
   ne->node = dstnode;
   ne->p = p;
-  EventQueue::Instance()->here(ne);
+  EventQueue::Instance()->add_event(ne);
 }
 
 void

@@ -79,7 +79,7 @@ protected:
     e->_fn = fn;
     e->_args = args;
 
-    EventQueue::Instance()->here(e);
+    EventQueue::Instance()->add_event(e);
   }
 
   // Send an RPC from a Protocol on one Node to a method

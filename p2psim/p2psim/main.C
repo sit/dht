@@ -62,10 +62,8 @@ threadmain(int argc, char *argv[])
     yield();
 
   // Creates an event queue, parses the file, etc.
+  // Will fire off the EventQueue
   EventGenerator::parse(event_file);
-
-  // will be done by one of the event generators
-  // EventQueue::Instance()->go();
 }
 
 
