@@ -194,7 +194,8 @@ locationtable::doRPCcb (ptr<location> l, aclnt_cb realcb, clnt_stat err)
       //     maybe should increase granularity of hostinfo cache for
       //     stp from per-host to per ip/port... but this is no worse
       //     than before.
-      good--;
+      if (l->challenged)
+	good--;
       l->alive = false;
       if (!l->checkdeadcb)
 	l->checkdeadcb = delaycb (60, 0,

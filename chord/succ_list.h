@@ -34,9 +34,9 @@ class succ_list : public fingerlike {
   succ_list (ptr<vnode> v, ptr<locationtable> locs, chordID myID);
   
   chordID succ ();
-  chordID operator[] (int n);
+  chordID operator[] (unsigned int n);
   
-  int num_succ ();
+  unsigned int num_succ ();
   u_long estimate_nnodes ();
   
   void stabilize_succ ();

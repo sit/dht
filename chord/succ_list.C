@@ -31,11 +31,11 @@ succ_list::succ ()
 
 //succ_list[0] is the immediate successor
 chordID
-succ_list::operator[] (int n) 
+succ_list::operator[] (unsigned int n) 
 {
   assert (n < num_succ ());
   chordID ret = succ ();
-  for (int i = 0; i < n; i++) 
+  for (u_int i = 0; i < n; i++) 
     ret = locations->closestsuccloc (ret + 1);
 
   return ret;
@@ -48,18 +48,23 @@ succ_list::succs ()
   chordID cur = succ ();
   ret.push_back (cur);
 
-  for (int i = 1; i < num_succ (); i++) {
+  for (u_int i = 1; i < num_succ (); i++) {
     cur = locations->closestsuccloc (cur + 1);
     ret.push_back (cur);
   }
   return ret;
 }
 
-int
+unsigned int
 succ_list::num_succ ()
 {
   int goodnodes = locations->usablenodes () - 1;
   int newnsucc = (NSUCC > goodnodes) ? goodnodes : NSUCC;
+  
+  if (newnsucc < 0) {
+    warn << "succ_list::num_succ () n:" << newnsucc << " g:" << goodnodes << "\n";
+    newnsucc = 0;
+  }
   return newnsucc;
 }
 
@@ -67,7 +72,7 @@ void
 succ_list::print ()
 {
   chordID id = myID;
-  for (int i = 0; i < num_succ (); i++) {
+  for (u_int i = 0; i < num_succ (); i++) {
     id = locations->closestsuccloc (id + 1);
     warnx << myID << ": succ " << i + 1 << " : " << id << "\n";
   }
@@ -296,7 +301,7 @@ chordID
 succ_list::closestpred (const chordID &x, vec<chordID> failed)
 {
   chordID best = myID;
-  for (int i = 0; i < num_succ (); i++) {
+  for (u_int i = 0; i < num_succ (); i++) {
     chordID n = locations->closestsuccloc (best + 1);
     if (between (myID, x, n) && (!in_vector (failed, n)))
       best = n;
@@ -308,7 +313,7 @@ chordID
 succ_list::closestpred (const chordID &x)
 {
   chordID best = myID;
-  for (int i = 0; i < num_succ (); i++) {
+  for (u_int i = 0; i < num_succ (); i++) {
     chordID n = locations->closestsuccloc (best + 1);
     if (between (myID, x, n))
       best = n;
