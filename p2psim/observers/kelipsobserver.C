@@ -46,15 +46,22 @@ KelipsObserver::Instance(Args *a)
 }
 
 
-KelipsObserver::KelipsObserver(Args *a) : Oldobserver(a)
+KelipsObserver::KelipsObserver(Args *a)
+  : _type("Kelips")
 {
-  _reschedule = 0;
-  _reschedule = atoi((*a)["reschedule"].c_str());
   _num_nodes = atoi((*a)["numnodes"].c_str());
   assert(_num_nodes > 0);
 
   _init_num = atoi((*a)["initnodes"].c_str());
   lid.clear();
+
+  list<Protocol*> l = Network::Instance()->getallprotocols(_type);
+  DEBUG(1) << "TapestryObserver::init_state " << now() << endl;
+  for(list<Protocol*>::iterator pos = l.begin(); pos != l.end(); ++pos) {
+    Kelips *t = (Kelips*) *pos;
+    t->registerObserver(this);
+  }
+  _stabilized = false;
 }
 
 KelipsObserver::~KelipsObserver()
@@ -73,12 +80,16 @@ KelipsObserver::init_state()
 }
 
 void
-KelipsObserver::execute()
+KelipsObserver::kick(Observed *, ObserverInfo *)
 {
 
   if(_init_num) {
     init_state();
     _init_num = 0;
+  }
+
+  if( _stabilized ) {
+    return;
   }
 
   DEBUG(1) << "KelipsObserver executing" << endl;
@@ -105,11 +116,10 @@ KelipsObserver::execute()
     assert(c);
     if (c->node()->alive() && !c->stabilized(lid)) {
       DEBUG(1) << now() << " NOT STABILIZED" << endl;
-      if (_reschedule > 0) reschedule(_reschedule);
       return;
     }
-
   }
 
+  _stabilized = true;
   DEBUG(0) << now() << " STABILIZED" << endl;
 }

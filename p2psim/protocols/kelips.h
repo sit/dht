@@ -21,6 +21,14 @@
 //   As well as reducing contact timeout dramatically.
 // Are lookups iterative or recursive? Who controls various retries?
 
+// To do:
+// prefer low-rtt contacts
+// make grouplist() &c faster
+// allow varying of parameters
+// read Indranil's e-mail
+// batch up consideration of new contacts:
+//   faster and gives time to collect RTT
+
 // Does it stabilize after the expected number of rounds?
 // Gossip w/o favoring new nodes (nnodes: avg median):
 //   100: 10 10
@@ -85,6 +93,11 @@ public:
   int _rounds;  // how many?
   bool _stable;
 
+  // global statistics
+  static double _rpc_bytes; // total traffic
+  static double _total_latency;
+  static int _lookups;
+
   // Information about one other node.
   class Info {
   public:
@@ -129,6 +142,8 @@ public:
   IPAddress find_by_id(ID key);
   void init_state(list<Protocol*>);
   bool stabilized(vector<ID> lid);
+  void rpcstat(bool ok, int nsent, int nrecv);
+  IPAddress victim(int g);
 
   friend class KelipsObserver;
 };

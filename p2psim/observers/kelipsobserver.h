@@ -25,21 +25,22 @@
 #ifndef __KELIPS_OBSERVER_H
 #define __KELIPS_OBSERVER_H
 
-#include "p2psim/oldobserver.h"
+#include "p2psim/observer.h"
 #include "protocols/kelips.h"
 
-class KelipsObserver : public Oldobserver {
+class KelipsObserver : public Observer {
 public:
+  KelipsObserver(Args*);
+  ~KelipsObserver();
   static KelipsObserver* Instance(Args*);
-  virtual void execute();
+  virtual void kick(Observed *, ObserverInfo *);
 
 private:
   static KelipsObserver *_instance;
-  KelipsObserver(Args*);
-  ~KelipsObserver();
-  unsigned int _reschedule;
   unsigned int _num_nodes;
   unsigned int _init_num;
+  bool _stabilized;
+  string _type;
 
   void init_state();
 
