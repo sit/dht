@@ -9,11 +9,9 @@ using namespace std;
 
 class Args : public map<string,string> {
 public:
-  unsigned uget(string s) {
-    return (unsigned) atoi((*this)[s].c_str());
-  }
-  int iget(string s) {
-    return (int) atoi((*this)[s].c_str());
+  template<class T>
+  T nget(string s) {
+    return (T) atoi((*this)[s].c_str());
   }
 };
 

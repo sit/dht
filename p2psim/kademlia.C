@@ -16,7 +16,7 @@ void
 Kademlia::join_kademlia(void *x)
 {
   Args *a = (Args*) x;
-  IPAddress wkn = (IPAddress) a->uget("wellknown");
+  IPAddress wkn = a->nget<IPAddress>("wellknown");
 
   IPAddress myip = ip();
   doRPC(wkn, &Kademlia::do_join, &myip, (void*) 0);
@@ -54,7 +54,7 @@ Kademlia::insert(Args*)
 }
 
 void
-Kademlia::lookup(Args*)
+Kademlia::lookup(Args *args)
 {
   cout << "Kademlia lookup" << endl;
 }

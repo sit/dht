@@ -15,6 +15,7 @@ Chord::Chord(Node *n) : Protocol(n)
 
 Chord::~Chord()
 {
+  delete loctable;
 }
 
 string
@@ -92,7 +93,7 @@ Chord::find_successor_handler(find_successor_args *args,
 void
 Chord::join(Args *args)
 {
-  IPAddress wkn = (IPAddress) args->uget("wellknown");
+  IPAddress wkn = args->nget<IPAddress>("wellknown");
   assert(wkn);
   cout << s() + "::join" << endl;
   find_successor_args fsa;

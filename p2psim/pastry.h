@@ -27,6 +27,10 @@ private:
   const unsigned _L; // config. parameter L from paper, 
   const unsigned _M; // config. parameter M from paper, size of neighborhood
 
+  void route(NodeID);
+  unsigned shared_prefix_len(NodeID, NodeID);
+  unsigned get_digit(NodeID, unsigned);
+
 
   //
   // ROUTING TABLE
