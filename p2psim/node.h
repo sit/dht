@@ -15,7 +15,7 @@ public:
   Node(IPAddress);
   virtual ~Node();
 
-  IPAddress id() { return _id; }
+  IPAddress ip() { return _ip; }
   Channel *pktchan() { return _pktchan; }
   Channel *protchan() { return _protchan; }
   Protocol *getproto(string p) { return _protmap[p]; }
@@ -23,7 +23,7 @@ public:
 private:
   virtual void run();
 
-  IPAddress _id;
+  IPAddress _ip;
   Channel *_pktchan;    // for packets
   Channel *_protchan;   // to register protocols
   map<string, Protocol*> _protmap;

@@ -39,7 +39,11 @@ Topology::parse(char *filename)
     top = TopologyFactory::create(words[1]);
     break;
   }
-  assert(top);
+
+  if(!top) {
+    cerr << "the topology you specified is unknown" << endl;
+    exit(-1);
+  }
 
   // create the network
   Network::Instance(top);

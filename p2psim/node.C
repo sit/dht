@@ -7,7 +7,7 @@ using namespace std;
 #include "node.h"
 #include "packet.h"
 
-Node::Node(IPAddress id) : _id(id), _pktchan(0)
+Node::Node(IPAddress ip) : _ip(ip), _pktchan(0)
 {
   _pktchan = chancreate(sizeof(Packet*), 0);
   assert(_pktchan);
@@ -56,7 +56,10 @@ Node::run()
           send(p->channel(), &p);
         else {
           prot = _protmap[p->protocol()];
-          assert(prot);
+          if(!prot) {
+            cerr << "WARNING: protocol " << p->protocol() << " is not running on " << ip() << endl;
+            break;
+          }
           send(prot->netchan(), &p);
         }
         break;
@@ -66,10 +69,10 @@ Node::run()
         prot = ProtocolFactory::Instance()->create(protname, this);
         assert(prot);
         if(_protmap[protname]) {
-          cerr << "warning: " << protname << " already running on node " << id() << endl;
+          cerr << "warning: " << protname << " already running on node " << ip() << endl;
           delete _protmap[protname];
         }
-        cout << "installed " << protname << " on " << id() << endl;
+        cout << "installed " << protname << " on " << ip() << endl;
         _protmap[protname] = prot;
         break;
 

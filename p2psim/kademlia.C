@@ -18,14 +18,14 @@ Kademlia::join_kademlia(void *x)
   Args *a = (Args*) x;
   IPAddress wkn = (IPAddress) atoi(((*a)["wellknown"]).c_str());
 
-  unsigned myid = id();
-  doRPC(wkn, Kademlia::do_join, &myid);
+  IPAddress myip = ip();
+  doRPC(wkn, Kademlia::do_join, &myip);
 }
 
 void
-Kademlia::do_join(void *id)
+Kademlia::do_join(void *ip)
 {
-  cout << "Node with id=" << *((int*)id) << " just registed." << endl;
+  cout << "Node with ip=" << *((IPAddress*)ip) << " just registed." << endl;
 }
 
 void

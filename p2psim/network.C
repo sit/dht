@@ -80,9 +80,9 @@ Network::run()
     
       // register node on network
       case 1:
-        if(_nodes[node->id()])
-          cerr << "warning: " << node->id() << " already in network" << endl;
-        _nodes[node->id()] = node;
+        if(_nodes[node->ip()])
+          cerr << "warning: " << node->ip() << " already in network" << endl;
+        _nodes[node->ip()] = node;
         break;
 
       default:

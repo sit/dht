@@ -21,8 +21,8 @@ Euclidean::~Euclidean()
 latency_t
 Euclidean::latency(Node *n1, Node *n2)
 {
-  Coord c1 = _nodes[n1->id()];
-  Coord c2 = _nodes[n2->id()];
+  Coord c1 = _nodes[n1->ip()];
+  Coord c2 = _nodes[n2->ip()];
 
   return (latency_t) hypot(labs(c2.first - c1.first), labs(c2.second - c1.second));
 }
@@ -55,14 +55,14 @@ Euclidean::parse(ifstream &ifs)
       Protocol *p = ProtocolFactory::Instance()->create(words[i], n);
       send(n->protchan(), &(words[i]));
       assert(p);
-
-      // add the node to the network
-      send(Network::Instance()->nodechan(), &n);
     }
 
     // add the new node it to the topology
-    if(_nodes.find(n->id()) != _nodes.end())
+    if(_nodes.find(n->ip()) != _nodes.end())
       cerr << "warning: node " << ipaddr << " already added!" << endl;
-    _nodes[n->id()] = c;
+    _nodes[n->ip()] = c;
+
+    // add the node to the network
+    send(Network::Instance()->nodechan(), &n);
   }
 }

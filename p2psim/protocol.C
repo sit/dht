@@ -34,7 +34,7 @@ Protocol::_doRPC(IPAddress dst, member_f fn, void *args)
 {
   Packet *p = new Packet();
   p->_dst = dst;
-  p->_src = _node->id();
+  p->_src = _node->ip();
   p->_c = chancreate(sizeof(Packet*), 0);
   p->_protocol = ProtocolFactory::Instance()->name(this);
   p->_fn = fn;
@@ -64,9 +64,9 @@ Protocol::_delaycb(Time t, member_f fn, void *args)
 
 
 IPAddress
-Protocol::id()
+Protocol::ip()
 {
-  return _node->id();
+  return _node->ip();
 }
 
 
@@ -135,7 +135,7 @@ Protocol::Receive(void *p)
   // send reply
   Packet *reply = new Packet();
   IPAddress origsrc = packet->_src;
-  reply->_src = prot->id();
+  reply->_src = prot->ip();
   reply->_dst = origsrc;
   reply->_c = packet->_c;
   reply->_protocol = packet->_protocol;
