@@ -10,6 +10,7 @@
 
 struct chord_findarg {
   chordID x;
+  bool return_succs;
 };
 
 struct chord_nodearg {
