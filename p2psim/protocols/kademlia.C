@@ -41,15 +41,16 @@ unsigned Kademlia::k = 0;
 unsigned Kademlia::alpha = 0;
 unsigned Kademlia::stabilize_timer = 0;
 unsigned Kademlia::refresh_rate = 0;
+unsigned Kademlia::erase_count = 0;
 Time Kademlia::max_lookup_time = 0;
 bool Kademlia::learn_stabilize_only = false;
+bool Kademlia::force_stabilization = false;
 
 long long unsigned Kademlia::_rpc_bytes = 0;
 long unsigned Kademlia::_good_rpcs = 0;
 long unsigned Kademlia::_bad_rpcs = 0;
 long unsigned Kademlia::_ok_by_reaper = 0;
 long unsigned Kademlia::_timeouts_by_reaper = 0;
-Time Kademlia::_time_spent_timeouts = 0;
 
 long unsigned Kademlia::_good_lookups = 0;
 long unsigned Kademlia::_good_attempts = 0;
@@ -91,25 +92,26 @@ Kademlia::Kademlia(IPAddress i, Args a)
   use_replacement_cache = a.nget<use_replacement_cache_t>("rcache", ENABLED, 10);
   max_lookup_time = a.nget<Time>("maxlookuptime", 4000, 10);
   learn_stabilize_only = a.nget<unsigned>("stablearn_only", 1, 10) == 1 ? true : false;
+  force_stabilization = a.nget<unsigned>("force_stab", 0, 10) == 1 ? true : false;
 
   if(!k) {
     k = a.nget<unsigned>("k", 20, 10);
-    // KDEBUG(1) << "k = " << k << endl;
   }
 
   if(!alpha) {
     alpha = a.nget<unsigned>("alpha", 3, 10);
-    // KDEBUG(1) << "alpha = " << alpha << endl;
   }
 
   if(!stabilize_timer) {
     refresh_rate = stabilize_timer = a.nget<unsigned>("stabilize_timer", 10000, 10);
-    // KDEBUG(1) << "stabilize_timer = " << stabilize_timer << endl;
+  }
+
+  if(!erase_count) {
+    erase_count = a.nget<unsigned>("erase_count", 5, 10);
   }
 
   if(!_default_timeout) {
     _default_timeout = a.nget<Time>("default_timeout", 5000, 10);
-    // KDEBUG(1) << "default_timeout = " << _default_timeout << endl;
   }
 
   if(!Kademlia::pool)
@@ -174,29 +176,28 @@ Kademlia::~Kademlia()
 #  9: number of RPCs sent in lookup (bad)\n\
 # 10: number of good      RPCs reaped by reaper\n\
 # 11: number of timed out RPCs reaped by reaper\n\
-# 12: time spent in timeouts\n\
 #\n\
-# 13: number of good lookups\n\
-# 14: number of attempts for good lookups\n\
-# 15: number of attempts for bad lookups\n\
-# 16: number of good lookups, but node was dead\n\
-# 17: number of bad lookups, node was dead\n\
-# 18: number of bad lookups, node was alive\n\
+# 12: number of good lookups\n\
+# 13: number of attempts for good lookups\n\
+# 14: number of attempts for bad lookups\n\
+# 15: number of good lookups, but node was dead\n\
+# 16: number of bad lookups, node was dead\n\
+# 17: number of bad lookups, node was alive\n\
 #\n\
-# 19: avg total lookup latency (good)\n\
-# 20: avg pure lookup latency (good)\n\
-# 21: avg pure ping latency (good)\n\
-# 22: number of timeouts suffered during lookup (good)\n\
+# 18: avg total lookup latency (good)\n\
+# 19: avg pure lookup latency (good)\n\
+# 20: avg pure ping latency (good)\n\
+# 21: number of timeouts suffered during lookup (good)\n\
 #\n\
-# 23: avg number of hops (good)\n\
-# 24: avg latency per hop (good)\n\
+# 22: avg number of hops (good)\n\
+# 23: avg latency per hop (good)\n\
 #\n\
-# 25: avg pure lookup latency (bad)\n\
-# 26: number of timeouts suffered during lookup (bad)\n\
-# 27: avg number of hops (bad)\n\
-# 28: avg latency per hop (bad)\n\
+# 24: avg pure lookup latency (bad)\n\
+# 25: number of timeouts suffered during lookup (bad)\n\
+# 26: avg number of hops (bad)\n\
+# 27: avg latency per hop (bad)\n\
 #\n\
-%u %u %u %u %u %u      %llu %lu %lu %lu %lu %.2f    %lu %lu %lu %lu %lu %lu    %.2f %.2f %.2f %lu    %.2f %.2f   %.2f %lu %.2f %.2f\n",
+%u %u %u %u %u %u      %llu %lu %lu %lu %lu     %lu %lu %lu %lu %lu %lu    %.2f %.2f %.2f %lu    %.2f %.2f   %.2f %lu %.2f %.2f\n",
         Kademlia::k,
         Kademlia::alpha,
         Kademlia::stabilize_timer,
@@ -209,7 +210,6 @@ Kademlia::~Kademlia()
         _bad_rpcs,
         _ok_by_reaper,
         _timeouts_by_reaper,
-        (double) _time_spent_timeouts / (_good_attempts + _bad_attempts),
 
         _good_lookups,
         _good_attempts,
@@ -498,9 +498,6 @@ Kademlia::lookup_wrapper(lookup_wrapper_args *args)
   Time after = now();
   args->attempts++;
 
-  if(collect_stat())
-    _time_spent_timeouts += fr.spent_in_timeout;
-
   // if we found the node, ping it.
   if(args->key == fr.succ.id) {
     ping_args pa(fr.succ.id, fr.succ.ip);
@@ -511,11 +508,12 @@ Kademlia::lookup_wrapper(lookup_wrapper_args *args)
       if(collect_stat()) _lookup_dead_node++;
       if(flyweight[fr.succ.id] && !Kademlia::learn_stabilize_only)
         erase(fr.succ.id);
+      fr.timeouts++;
     }
     after = now();
 
     record_lookup_stat(ip(), fr.succ.ip, after - args->starttime, true, true,
-		       fr.hops, fr.timeouts, fr.spent_in_timeout);
+		       fr.hops, fr.timeouts, 0);
     if(outcounter++ >= 1000) {
       KDEBUG(0) <<  pingbegin - args->starttime << "ms lookup (" << args->attempts << "a, " << fr.hops << "h, " << fr.rpcs << "r, " << fr.timeouts << "t), " << after - pingbegin << "ms ping, " << after - args->starttime << "ms total." << endl;
       outcounter = 0;
@@ -547,10 +545,10 @@ Kademlia::lookup_wrapper(lookup_wrapper_args *args)
   if(now() - args->starttime > Kademlia::max_lookup_time) {
     if(alive_and_joined) {
       if(collect_stat()) _bad_failures++;
-      record_lookup_stat(ip(), target_ip, after - args->starttime, false, false, fr.hops, fr.timeouts, fr.spent_in_timeout);
+      record_lookup_stat(ip(), target_ip, after - args->starttime, false, false, fr.hops, fr.timeouts, 0);
     } else {
       if(alive_and_joined) _ok_failures++;
-      record_lookup_stat(ip(), target_ip, after - args->starttime, true, false, fr.hops, fr.timeouts, fr.spent_in_timeout);
+      record_lookup_stat(ip(), target_ip, after - args->starttime, true, false, fr.hops, fr.timeouts, 0);
     }
     if(collect_stat()) {
       _bad_attempts += args->attempts;
@@ -745,7 +743,7 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
     delete ci;
 
 next_candidate:
-    assert(outstanding_rpcs->size() == Kademlia::alpha - 1);
+    assert((unsigned) outstanding_rpcs->size() == Kademlia::alpha - 1);
     // while((outstanding_rpcs->size() < (int) Kademlia::alpha) && successors.size()) {
       k_nodeinfo front = *successors.begin();
       if(Kademlia::distance(front.id, fargs->key) < Kademlia::distance(fresult->succ.id, fargs->key))
@@ -1108,7 +1106,7 @@ Kademlia::erase(NodeID id)
   k_nodeinfo *ki = flyweight[id];
 
   // 5, taken from Kademlia paper
-  if(++ki->timeouts >= 5) {
+  if(++ki->timeouts >= Kademlia::erase_count) {
     _root->erase(id);
     flyweight.remove(id);
     Kademlia::pool->push(ki);
@@ -1726,16 +1724,18 @@ k_stabilizer::execute(k_bucket *k, string prefix, unsigned depth, unsigned leftr
     return;
 
   // return if any entry in this k-bucket is fresh
-  for(unsigned i = 0; i < k->nodes->size(); i++) {
-    // XXX: this is the sign of bad shit going on.  get out.
-    // it doesn't really, really matter that we're not completing this round of
-    // stabilization.  better than crashing the simulator, anyway.
-    k_nodeinfo *ki = k->nodes->get(i);
-    if(!mykademlia->flyweight[ki->id])
-      return;
+  if(!Kademlia::force_stabilization) {
+    for(unsigned i = 0; i < k->nodes->size(); i++) {
+      // XXX: this is the sign of bad shit going on.  get out.
+      // it doesn't really, really matter that we're not completing this round of
+      // stabilization.  better than crashing the simulator, anyway.
+      k_nodeinfo *ki = k->nodes->get(i);
+      if(!mykademlia->flyweight[ki->id])
+        return;
 
-    if(now() - ki->lastts < Kademlia::refresh_rate)
-      return;
+      if(now() - ki->lastts < Kademlia::refresh_rate)
+        return;
+    }
   }
 
   // Oh.  stuff in this k-bucket is old, or we don't know anything. Lookup a
@@ -1749,25 +1749,7 @@ k_stabilizer::execute(k_bucket *k, string prefix, unsigned depth, unsigned leftr
   }
 
   Kademlia::NodeID random_key = _id & mask;
-  KDEBUG(2) << "k_stabilizer: prefix = " << prefix << ", mask = " << Kademlia::printbits(mask) << ", random_key = " << Kademlia::printbits(random_key) << endl;
-
-  // find first successor that we believe is alive.
-  vector<k_nodeinfo*> successors;
-  mykademlia->root()->find_node(random_key, &successors);
-  k_nodeinfo *ki = 0;
-  for(unsigned i=0; i<successors.size(); i++) {
-    if(!mykademlia->flyweight[successors[i]->id])
-      continue;
-    ki = mykademlia->flyweight[successors[i]->id];
-    break;
-  }
-
-  // we don't know a single soul in the universe. not even well-known node. this
-  // can happen when stabilize() gets called right after we joined, but before
-  // we got a reply back from well-known node.  just return.  this will get
-  // better soon.
-  if(!ki)
-    return;
+  // KDEBUG(2) << "k_stabilizer: prefix = " << prefix << ", mask = " << Kademlia::printbits(mask) << ", random_key = " << Kademlia::printbits(random_key) << endl;
 
   // lookup the random key and update this k-bucket with what we learn
   Kademlia::lookup_args la(mykademlia->id(), mykademlia->ip(), random_key);
@@ -1779,8 +1761,9 @@ k_stabilizer::execute(k_bucket *k, string prefix, unsigned depth, unsigned leftr
     return;
 
   // update our k-buckets
-  NODES_ITER(&lr.results)
+  NODES_ITER(&lr.results) {
     mykademlia->update_k_bucket(i->id, i->ip);
+  }
 }
 // }}}
 // {{{ k_stabilized::execute
@@ -1857,6 +1840,7 @@ k_dumper::execute(k_bucket *k, string prefix, unsigned depth, unsigned leftright
   cout << spaces << "prefix: " << prefix << ", depth " << depth << endl;
   for(unsigned i = 0; i < k->nodes->size(); i++) {
     k_nodeinfo *ki = k->nodes->get(i);
+
     cout << spaces << "  " << Kademlia::printbits(ki->id) << ", lastts = " << ki->lastts << endl;
   }
 

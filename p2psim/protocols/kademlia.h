@@ -45,7 +45,7 @@ public:
   IPAddress ip;
   Time lastts;   // last time we know it was alive
 
-  char timeouts; // how often we did not get a reply
+  unsigned timeouts; // how often we did not get a reply
   Time RTT;
 
   inline void checkrep() const;
@@ -240,7 +240,7 @@ public:
   };
 
   class find_value_result { public:
-    find_value_result() { rpcs = hops = timeouts = 0; spent_in_timeout = latency = 0; }
+    find_value_result() { rpcs = hops = timeouts = 0; latency = 0; }
     ~find_value_result() { }
     k_nodeinfo succ;
     NodeID rid;
@@ -249,7 +249,6 @@ public:
     unsigned rpcs;      // total number of RPCs we sent
     unsigned hops;      // number of hops for lookups
     unsigned timeouts;  // number of !ok replies
-    Time spent_in_timeout; // time spent waiting for all-dead nodes
     Time latency;       // latency from nodes that make hopcount go up
   };
   // }}}
@@ -343,7 +342,9 @@ public:
   static unsigned debugcounter;         // 
   static unsigned stabilize_timer;      // how often to stabilize
   static unsigned refresh_rate;         // how often to refresh info
-  static bool learn_stabilize_only;           // do we learn from RPCs?
+  static unsigned erase_count;          // after how many timeouts to remove
+  static bool learn_stabilize_only;     // do we learn from RPCs?
+  static bool force_stabilization;      // stabilize all buckets, not only old ones
   static Time max_lookup_time;          // how long do we keep retrying
   static Time _default_timeout;         // default timeout
   static k_nodeinfo_pool *pool;         // pool of k_nodeinfo_pool
@@ -576,5 +577,5 @@ private:
 };
 // }}}
 
-#define KDEBUG(x) if(p2psim_verbose >= (x)) cout << Kademlia::debugcounter++ << "(" << now() << "). " << Kademlia::printbits(_id) << "(" << threadid() << ") "
+#define KDEBUG(x) if(p2psim_verbose >= (x)) cout << Kademlia::debugcounter++ << "(" << now() << "). " << Kademlia::printID(_id) << "(" << threadid() << ") "
 #endif // __KADEMLIA_H
