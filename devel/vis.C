@@ -156,6 +156,7 @@ struct f_node {
 static size_t search_step;
 static chordID search_key; // 0 means no search in progress
 static vec<f_node *> search_path;
+static vec<f_node *> alt_search_path;
 static GdkColor search_color;
 
 void recenter ();
@@ -918,6 +919,7 @@ chordID
 closestpredfinger (f_node *n, chordID &x)
 {
   chordID p = n->ID;
+  if (!n->fingers) return n->ID;
   for (int i = n->fingers->resok->nlist.size () - 1; i >= 1; i--) {
     chordID t = make_chordID (n->fingers->resok->nlist[i].n);
     if (between (n->ID, x, t)) {
@@ -964,22 +966,22 @@ lookup_cb (GtkWidget *widget, gpointer data)
 	 wrap (&lookup_complete_cb, current_node->ID, res));
   // XXX display a dialog box for progress...
 
-#if 0	 
-  // XXX one day this should make some sort of RPC into a chord node
-  //     and call its find_route method.
+#define SHOW_SLOW_LOOKUPS
+#ifdef SHOW_SLOW_LOOKUPS
+  alt_search_path.setsize (0);
   f_node *old_node = NULL;
   while (old_node != current_node) {
     old_node = current_node;
-    search_path.push_back (current_node);
+    alt_search_path.push_back (current_node);
     chordID bestfinger = closestpredfinger (current_node, search_key);
     current_node = nodes[bestfinger];
   }
-  current_node = nodes[current_node->successors->resok->nlist[1].n.x];
-  search_path.push_back (current_node);
+  //  current_node = nodes[current_node->successors->resok->nlist[1].n.x];
+  //  search_path.push_back (current_node);
   
-  warnx << "Found a path of length " << search_path.size () << "\n";
-  for (size_t i = 0; i < search_path.size (); i++)
-    warnx << "  " << search_path[i]->ID << "\n";
+  warnx << "Found an alternate path of length " << alt_search_path.size () << "\n";
+  for (size_t i = 0; i < alt_search_path.size (); i++)
+    warnx << "  " << alt_search_path[i]->ID << "\n";
 #endif /* 0 */
   draw_ring ();
 }
@@ -1013,6 +1015,7 @@ draw_search_progress ()
 {
   GdkColor black;
   gdk_color_parse ("black", &black);
+
   gdk_gc_set_line_attributes (draw_gc, 5,
 			      GDK_LINE_SOLID,
 			      GDK_CAP_NOT_LAST,
@@ -1024,18 +1027,33 @@ draw_search_progress ()
     search_path[i]->draw = 0;
   }
 
+  for (size_t i = 0; i < search_step && i < alt_search_path.size (); i++) {
+    alt_search_path[i]->selected = false;
+    alt_search_path[i]->highlight = true;
+    alt_search_path[i]->draw = 0;
+  }
+
   for (size_t i = 1; i < search_step; i++)
-    if (ggeo) {
+    if (1) {
       int tox, toy, fromx, fromy;
-      ID_to_xy(search_path[0]->ID, &fromx, &fromy);
+      ID_to_xy(search_path[i-1]->ID, &fromx, &fromy);
       ID_to_xy(search_path[i]->ID, &tox, &toy);
       draw_arrow (fromx, fromy, tox, toy, draw_gc);
+
+      gdk_gc_set_foreground (draw_gc, &lat_map[0].c);
+      if (i < alt_search_path.size ()) {
+	ID_to_xy(alt_search_path[i-1]->ID, &fromx, &fromy);
+	ID_to_xy(alt_search_path[i]->ID, &tox, &toy);
+	draw_arrow (fromx, fromy, tox, toy, draw_gc);
+      }
+      gdk_gc_set_foreground (draw_gc, &black);
+	
     } else
       draw_arc (search_path[0]->ID, search_path[i]->ID, draw_gc);
 
   search_path[0]->selected = true;
-  if (search_step != search_path.size ())
-    search_path[search_step - 1]->draw = DRAW_FINGERS;
+  //  if (search_step != search_path.size ())
+  //  search_path[search_step - 1]->draw = DRAW_FINGERS;
 
   gdk_gc_set_line_attributes (draw_gc, 3,
 			      GDK_LINE_SOLID,
