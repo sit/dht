@@ -152,6 +152,7 @@ finger_table::stabilize_finger ()
     // warnx << myID << ": stabilize_finger i = " << i << " f = " << f << "\n";
     stable_fingers2 = stable_fingers;
     stable_fingers = true;
+    i = 1; // leave the successor handling to stabilize_succ.
   }
   f = i;
   
@@ -203,10 +204,9 @@ finger_table::stabilize_finger_getpred_cb (chordID dn, int i, chordID p,
       warnx << myID << ": stabilize_finger_getpred_cb: "
 	    << "fixing finger " << i << "\n";
       nslowfinger++;
-      chordID n = start (i);
       nout_backoff++;
       myvnode->find_successor
-	(n, wrap (this, &finger_table::stabilize_findsucc_cb, n, i));
+	(s, wrap (this, &finger_table::stabilize_findsucc_cb, s, i));
     }
   }
 }
