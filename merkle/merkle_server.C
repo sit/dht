@@ -102,7 +102,15 @@ format_rpcnode (merkle_tree *ltree, u_int depth, const merkle_hash &prefix,
   } else {
     vec<merkle_hash> keys = database_get_keys (ltree->db, depth, prefix);
 
-    assert (keys.size () == rpcnode->count);
+    if (keys.size () != rpcnode->count) {
+      warn << "\n\n\n----------------------------------------------------------\n";
+      warn << "BUG BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG BUG\n";
+      warn << "Send this output to cates@mit.edu\n";
+      warn << "BUG: " << keys.size () << " != " << rpcnode->count << "\n";
+      ltree->check_invariants ();
+      warn << "BUG BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG BUG\n";
+      fatal << "----------------------------------------------------------\n\n\n";
+    }
 
     rpcnode->child_hash.setsize (keys.size ());
     for (u_int i = 0; i < keys.size (); i++) {
