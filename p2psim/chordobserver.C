@@ -64,6 +64,7 @@ ChordObserver::get_sorted_nodes(unsigned int max)
     assert(c);
     n.ip = c->node()->ip();
     n.id = c->id();
+    n.choices = 1;
     ids.push_back(n);
 
     if (++i == max) {

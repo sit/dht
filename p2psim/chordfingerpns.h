@@ -9,27 +9,47 @@
 class LocTablePNS : public LocTable {
   public:
     LocTablePNS() : LocTable() {
-      fingers.clear();
     };
     ~LocTablePNS() {};
 
-    Chord::IDMap next_hop(Chord::CHID key, bool *done) {
-      //check if one of my finger is directly responsible for it
-      for (uint i = 0; i < fingers.size(); i++){
-	if (ConsistentHash::betweenrightincl(fingers[i].first.id, fingers[i].second.id, key)){
-//	  return fingers[i].second;
-	  *done = true;
-	  return fingers[i].second;
+    Chord::IDMap next_hop(Chord::CHID key, bool *done, uint m, uint nsucc) {
+      //implement SOSP'03's case 1
+      //if my successor list includes less than m successors for key, 
+      //then pick the physically closest successor to be the next_hop
+      if (nsucc > 1) {
+	uint num = 0;
+	latency_t min_lat = 100000000;
+	latency_t lat;
+	Chord::IDMap min_s = me;
+	Topology *t = Network::Instance()->gettopology();
+	vector<Chord::IDMap> succs = this->succs(me.id+1, nsucc);
+	bool seen_succ = false;
+	for (int i = ((int)succs.size()) - 1; i >= 0; i--) {
+	  assert(i >= 0 && i < (int)succs.size());
+	  if (ConsistentHash::betweenrightincl(me.id, succs[i].id,key)) {
+	    seen_succ = true;
+	  } else if (seen_succ) {
+	    if (num <= (nsucc-m)) {
+	      lat = t->latency(me.ip, succs[i].ip);
+	      if (min_lat > lat) {
+		min_lat = lat;
+		min_s = succs[i];
+	      }
+	    }else{
+	      break;
+	    }
+	    num++;
+	  }
 	}
-      }
+	*done = false;
+	if (seen_succ) {
+	  printf("%u,%qx shortcut query %qx to node %u,%qx (succ sz %d)\n", me.ip, me.id, key, min_s.ip, min_s.id,succs.size());
+	  assert(min_s.ip != me.ip);
+	  return min_s;
+	}
+      } 
       return LocTable::next_hop(key, done);
     };
-
-    void add_finger(pair<Chord::IDMap, Chord::IDMap> finger) {
-      fingers.push_back(finger);
-    };
-
-    vector<pair<Chord::IDMap, Chord::IDMap> > fingers;
 };
 
 class ChordFingerPNS: public Chord {
@@ -38,9 +58,17 @@ class ChordFingerPNS: public Chord {
     ~ChordFingerPNS() {};
     string proto_name() { return "ChordFingerPNS"; }
 
+    struct pns_next_recurs_ret {
+      vector< pair<IDMap,IDMap> > v;
+      vector<IDMap> path;
+    };
+
     bool stabilized(vector<CHID> lid);
     void dump();
     void init_state(vector<IDMap> ids);
+
+    vector<Chord::IDMap> find_successors_recurs(CHID key, uint m, bool is_lookup, uint *recurs_int);
+    void ChordFingerPNS::pns_next_recurs_handler(next_recurs_args *, pns_next_recurs_ret *);
 
   protected:
     uint _base;

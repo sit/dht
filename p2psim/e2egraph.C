@@ -23,10 +23,15 @@ E2EGraph::latency(IPAddress ip1, IPAddress ip2)
   //we can not use random ip address for e2egraph now
   assert(ip1 > 0 && ip1 <= _num);
   assert(ip2 > 0 && ip2 <= _num);
-  if (ip1 < ip2) 
+  if (ip1 < ip2)  {
+    assert(_pairwise[ip1-1][ip2-1] > 0);
     return (latency_t) _pairwise[ip1-1][ip2-1];
-  else
+  } else if (ip1 > ip2) {
+    assert(_pairwise[ip2-1][ip1-1] > 0);
     return (latency_t) _pairwise[ip2-1][ip1-1];
+  } else{
+    return 0;
+  }
 }
 
 
@@ -57,7 +62,6 @@ E2EGraph::parse(ifstream &ifs)
 
     } else {
 
-      // x,y coordinates
       vector<string> pair = split(words[0], ",");
       IPAddress ip1 = atoi(pair[0].c_str());
       IPAddress ip2 = atoi(pair[1].c_str());
@@ -66,7 +70,7 @@ E2EGraph::parse(ifstream &ifs)
 
       int lat = atoi(words[1].c_str());
       if (lat < 0) {
-	lat = 100000;
+	lat = 100000; //XXX missing data is treated as infinity, this is sketchy
       }
       // latency between node1 and node2
       _pairwise[ip1 -1][ip2 -1] = (latency_t) lat;

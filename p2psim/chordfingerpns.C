@@ -3,7 +3,7 @@
 
 /* Gummadi's Chord PNS algorithm  (static) */
 ChordFingerPNS::ChordFingerPNS(Node *n, Args& a, LocTable *l) 
-  : Chord(n, a, l) 
+  : Chord(n, a, new LocTablePNS()) 
 { 
   _base = a.nget<uint>("base",2,10);
   _samples = a.nget<uint>("samples",16,10);
@@ -38,9 +38,9 @@ ChordFingerPNS::init_state(vector<IDMap> ids)
       e_pos = e_pos % sz;
       int candidates = (e_pos - s_pos) % sz;
       double prob = (double)_samples/(double)(candidates);
-      IDMap min_f = me;
-      IDMap min_f_pred = me;
-      uint min_l = 100000000;
+      IDMap min_f = ids[s_pos];
+      IDMap min_f_pred = ids[(s_pos-1)%sz];
+      uint min_l = t->latency(me.ip,min_f.ip);
       if (_samples > 0 && candidates > 10 * _samples) {
 	//use a more efficient sampling technique
 	for (int j = 0; j < _samples; j++) {
@@ -64,7 +64,8 @@ ChordFingerPNS::init_state(vector<IDMap> ids)
 	  }
 	}
       }
-      printf("%s finger %d distance %d\n", ts(), ++f, min_l);
+      min_f.choices = ((candidates > 0)? candidates:1);
+      printf("%s finger shit %d %u,%qx distance %d candidates %d\n", ts(), ++f, min_f.ip, min_f.id, min_l, min_f.choices);
       loctable->add_node(min_f);
 //      ((LocTablePNS *)loctable)->add_finger(make_pair(min_f_pred, min_f));
       //Gummadi assumes the node knows the idspace each of the neighbors is 
@@ -83,12 +84,137 @@ ChordFingerPNS::init_state(vector<IDMap> ids)
   //add predecessor
   loctable->add_node(ids[(my_pos-1) % sz]);
   printf("ChordFingerPNS::init_state (%u,%qx) loctable size %d\n", me.ip, me.id, loctable->size());
+
 }
 
 bool
 ChordFingerPNS::stabilized(vector<CHID> lid)
 {
   return true;
+}
+
+//damn!! play the optimal trick on lowest latency lookup+fetch
+vector<Chord::IDMap>
+ChordFingerPNS::find_successors_recurs(CHID key, uint m, bool is_lookup, uint *recurs_int)
+{
+  next_recurs_args fa;
+  pns_next_recurs_ret fr;
+  fr.v.clear();
+  fa.path.clear();
+  fa.path.push_back(me);
+  fa.key = key;
+  fa.m = m;
+  fa.is_lookup = is_lookup;
+
+  doRPC(me.ip, &ChordFingerPNS::pns_next_recurs_handler, &fa, &fr);
+
+  Topology *t = Network::Instance()->gettopology();
+
+  printf("%s pns_find_successors_recurs %qx route ",ts(),key);
+  uint total_lat = 0;
+  for (uint i = 0; i < fr.path.size(); i++) {
+    IDMap n = fr.path[i];
+    IDMap np = (i == 0)? fr.path[fr.path.size()-1]:fr.path[i-1];
+    printf("(%u,%qx,%u,%u) ", n.ip, n.id, t->latency(np.ip, fr.path[i].ip), fr.path[i].choices);
+    if ((i+2) <= fr.path.size()) {
+      total_lat += 2 * t->latency(fr.path[i].ip,fr.path[i+1].ip);
+    }
+  }
+  printf("\n");
+
+  //calculate the optimal route
+  vector<latency_t> lat;
+  lat.clear();
+  uint j = 0;
+  latency_t total_forward = 0;
+
+  vector<IDMap> results;
+  results.clear();
+  for (uint i = 0; i < fr.v.size(); i++) {
+    results.push_back(fr.v[i].first);
+    while (true) {
+      if (fr.path[j].ip == fr.v[i].second.ip) {
+	break;
+      }
+      j++;
+      assert(j < fr.path.size());
+      total_forward += t->latency(fr.path[j-1].ip, fr.path[j].ip);
+    }
+
+    lat.push_back(total_forward + t->latency(me.ip,fr.path[j].ip) + 2 * t->latency(me.ip, fr.v[i].first.ip));
+  }
+  sort(lat.begin(), lat.end());
+  total_lat = lat[m-1];
+
+  lat.clear();
+  for (uint i = 0; i < fr.v.size(); i++) {
+    lat.push_back(t->latency(me.ip, fr.v[i].first.ip));
+  }
+  sort(lat.begin(), lat.end());
+
+  //now when is the lookup and when is the fetch is fuzzy
+  printf("%s pns_recurs INTERVAL %u %u %u\n", ts(), lat[m-1], total_lat - lat[m-1], total_lat - lat[m-1]);
+
+  return results;
+}
+
+void
+ChordFingerPNS::pns_next_recurs_handler(next_recurs_args *args, pns_next_recurs_ret *ret)
+{
+  check_static_init();
+
+  vector<IDMap> succs = loctable->succs(me.id+1, _nsucc);
+
+  pair<IDMap,IDMap> succ;
+  for (uint i = 0; i < succs.size(); i++) {
+    if (!ConsistentHash::betweenrightincl(me.id, succs[i].id, args->key)) {
+    }else{
+      if ((ret->v.size() == 0) || ConsistentHash::between(args->key, succs[i].id, ret->v.back().first.id)) {
+	succ.first = succs[i];
+	succ.second = me;
+	ret->v.push_back(succ);
+      }
+    }
+  }
+
+  if ((ret->v.size() >= _nsucc) 
+      || (succs.size() < _nsucc)) { //this means there's < m nodes in the system 
+    ret->path = args->path;
+  }else {
+#ifdef CHORD_DEBUG
+    uint x = find(args->path.begin(), args->path.end(), me) - args->path.begin();
+    if (x != (args->path.size() - 1)) {
+      printf("%s error! back to me!\n", ts());
+      for (uint xx = 0; xx < args->path.size(); xx++) {
+	printf("route %u,%qx\n", args->path[xx].ip, args->path[xx].id);
+      }
+      abort();
+    }
+    printf("%s not enough succs to answer this query %d\n", ts(), ret->v.size());
+#endif
+    assert(args->path.size() < 100);
+
+    //XXX i never check if succ is dead or not
+    bool r = false;
+    while (!r) {
+      bool done;
+      IDMap next = loctable->next_hop(args->key, &done, args->m, _nsucc);
+      assert(!done);
+      assert(next.choices > 0);
+
+      args->path.push_back(next);
+
+      r = doRPC(next.ip, &ChordFingerPNS::pns_next_recurs_handler, args, ret);
+
+      assert(r);
+      if ((!r) && (node()->alive())) {
+	printf ("%16qx rpc to %16qx failed %llu\n", me.id, next.id, now ());
+	args->path.pop_back();
+	loctable->del_node(next);
+      }
+    }
+  }
+
 }
 
 void

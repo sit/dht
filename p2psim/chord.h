@@ -20,6 +20,7 @@ public:
     public:
     ConsistentHash::CHID id; //consistent hashing ID for the node
     IPAddress ip; //the IP address for the node
+    uint choices; //this is a gross hack to help me keep track of how many choices this finger has
     static bool cmp(const IDMap& a, const IDMap& b) { return (a.id <= b.id);}
     bool operator==(const IDMap a) { return (a.id == id); }
   };
@@ -143,7 +144,7 @@ protected:
   vector<uint> stat;
 
   virtual vector<IDMap> find_successors_recurs(CHID key, uint m, 
-					       bool is_lookup = false);
+					       bool is_lookup = false, uint *recurs_int = NULL);
   virtual vector<IDMap> find_successors(CHID key, uint m, 
                                         bool is_lookup = false);
 
@@ -172,6 +173,7 @@ class LocTable {
       idmapwrap(Chord::IDMap x, Time t = 0) {
 	n.ip = x.ip;
 	n.id = x.id;
+	n.choices = x.choices;
 	id = x.id;
 	pinned = false;
 	timestamp = t;
@@ -208,7 +210,7 @@ class LocTable {
     void set_evict(bool v) { _evict = v; }
 
     //pick the next hop for lookup;
-    virtual Chord::IDMap next_hop(Chord::CHID key, bool *done); 
+    virtual Chord::IDMap next_hop(Chord::CHID key, bool *done, uint m = 1, uint nsucc=1); 
 
     vector<Chord::IDMap> get_all();
 

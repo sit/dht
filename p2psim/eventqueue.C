@@ -95,6 +95,7 @@ EventQueue::advance()
   if(!_queue.size())
     return false;
 
+
   // XXX: time is not running smoothly. does that matter?
   eq_entry *eqe = _queue.first();
   assert(eqe);
@@ -108,6 +109,10 @@ EventQueue::advance()
 
   _queue.remove(eqe->ts);
   delete eqe;
+
+  if(!_queue.size())
+    return false;
+
   return true;
 }
 
