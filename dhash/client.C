@@ -25,7 +25,6 @@ void
 dhashclient::dispatch (svccb *sbp)
 {
   if (!sbp) {
-    delete this;
     return;
   }
   assert (clntnode);
