@@ -154,11 +154,17 @@ syncer::sync_replicas_gotsucclist (ptr<location> pred,
     
   // succs[0] is the vnode we are working for
   //  ptr<location> pred = locations->closestopredloc (succs[0]);
+  assert (pred);
+  assert (succs[0]);
+  assert (host_loc);
+
   bigint rngmin = pred->id ();
   bigint rngmax = succs[0]->id ();
   
   cur_succ++; // start at 1 (0 is me)
   if (cur_succ >= succs.size ()) cur_succ = 1;
+
+  assert(succs[cur_succ]);
 
   //sync with the next node
   if (tmptree) delete tmptree;
@@ -170,7 +176,8 @@ syncer::sync_replicas_gotsucclist (ptr<location> pred,
   warn << host_loc->id () << " tree build: " 
 	<< getusec () - start << " usecs\n";
 
-  warn << host_loc->id () << " syncing with " << succs[cur_succ] << "\n";
+  warn << host_loc->id () << " syncing with " << succs[cur_succ]->id () 
+       << " for range [ " << rngmin << ", " << rngmax << " ]\n";
 
   replica_syncer = New refcounted<merkle_syncer> 
     (tmptree, 
@@ -197,14 +204,22 @@ syncer::missing (ptr<location> from,
 		 bigint key, bool missingLocal)
 {
   if (missingLocal) {
-    //XXX check the DB to make sure we really are missing this block
-    bsm->missing (host_loc, key);
+
     //the other guy must have this key if he told me I am missing it
     bsm->unmissing (from, key);
-    if (sync_trace) {
-      warnx << host_loc->id () << ": " << key << " missing locally\n";
-      warnx << host_loc->id () << ": " << key << " found on " << from << "\n";
-    }
+
+    //XXX check the DB to make sure we really are missing this block
+    // might have gotten this because I tweaked the tree
+    ptr<dbrec> kr = id2dbrec(key);
+    if (!db->lookup (kr)) {
+      if (sync_trace) {
+	warnx << host_loc->id () << ": " << key << " missing locally\n";
+	warnx << host_loc->id () << ": " << key << " found on "<< from << "\n";
+      }
+      bsm->missing (host_loc, key);
+    } else 
+      return; //don't update in this case: we aren't actually missing a block
+
   } else {
     if (sync_trace) 
       warnx << host_loc->id () << ": " << key << " missing on " << from << "\n";
