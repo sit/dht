@@ -11,20 +11,21 @@
 #define EXIT_DELAY      60000 /* wait 1 min after last event before 
 				 terminating the simulation */
 
-#define NUM_INIT_JOINS   500 /* 500 */
-#define NUM_INIT_INSERTS 100  /* 100 */ 
+#define NUM_INIT_JOINS   1000 /* 500 */
+#define NUM_INIT_INSERTS 1000  /* 100 */ 
 #define AVG_JOIN_INT     10000 /* 10 sec */
 #define AVG_INSERT_INT   1000  /* 1 sec */
 
 
 #define AVG_EVENT_INT    714  /* 820 (1), 794 (3), 781 (4), 758 (6), 745 (7)
                                  735 (8), 806 (2), 769 (5), 725 (9),
-				 714 (10) */  /* ms */
-#define NUM_EVENTS       20000 /* 10000 */
+				 714 (10) 625 (20/5) 650 (17/6) 675 (14/7) 
+			         694 (12/8) 704 (11/9) */  /* ms */
+#define NUM_EVENTS       10000 
 
 /* an even is generated with a frequence proportional to TKS_* */
-#define TKS_JOIN      10 /*9*/
-#define TKS_LEAVE     10 /*9*/
+#define TKS_JOIN      35 /*9*/
+#define TKS_LEAVE     35 /*9*/
 #define TKS_INSERT    20
 #define TKS_FIND      100
     

@@ -1,3 +1,28 @@
+/*
+ *
+ * Copyright (C) 2001 Ion Stoica (istoica@cs.berkeley.edu)
+ *
+ *  Permission is hereby granted, free of charge, to any person obtaining
+ *  a copy of this software and associated documentation files (the
+ *  "Software"), to deal in the Software without restriction, including
+ *  without limitation the rights to use, copy, modify, merge, publish,
+ *  distribute, sublicense, and/or sell copies of the Software, and to
+ *  permit persons to whom the Software is furnished to do so, subject to
+ *  the following conditions:
+ *
+ *  The above copyright notice and this permission notice shall be
+ *  included in all copies or substantial portions of the Software.
+ *
+ *  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ *  EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ *  MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ *  NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+ *  LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+ *  OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+ *  WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ *
+ */
+
 #include <stdio.h>
 #include <malloc.h>
 #include <math.h>
@@ -5,6 +30,10 @@
 #include "incl.h"
 
 Node *NodeHashTable[HASH_SIZE];
+
+// nodes are maintained in a closed hash data structure, i.e., 
+// each entry in the hash points to a list of all nodes whose
+// ids are hashed to that entry
 
 Node *newNode(int id) 
 { 
@@ -31,7 +60,7 @@ void freeNode(Node *n)
 }
 
 
-/* add node n ad the head of the list */
+// add node n at the head of the list 
 Node *addToList(Node *head, Node *n)
 {
   n->next = head;
@@ -70,6 +99,8 @@ Node *addNode(int id)
   
   NodeHashTable[id % HASH_SIZE] = 
     addToList(NodeHashTable[id % HASH_SIZE], n);
+
+  return n;
 }
 
 void deleteNode(Node *n)
@@ -100,7 +131,7 @@ Node *getNode(int id)
 
 int getRandomActiveNodeId()
 {
-  int i, cnt = 0, idx;
+  int i, idx;
 
   idx = unifRand(0, HASH_SIZE);
 
@@ -116,20 +147,19 @@ int getRandomActiveNodeId()
 }
 
 
-
+// return a random node
 int getRandomNodeId()
 {
   int i;
 
-  /* check whether there hash  is empty -- probably we should just 
-   * maintain # of nodes in the network for easy check...
-   */
+  // check whether there hash  is empty -- probably we should just 
+  // maintain # of nodes in the network for easy check...
   for (i = 0; i < HASH_SIZE; i++)
     if (NodeHashTable[i])
       break;
 
   if (i == HASH_SIZE)
-    /* hash empty */
+    // hash empty 
     return -1;
 
   while (1) {
@@ -162,18 +192,29 @@ void pushNode(Request *r, ID nid)
 }
 
 
-int printNodeInfo(Node *n)
+// each node fails independently with probability p
+void netFailure(Node *n, int *percentage)
 {
-  Document *doc;
-  int  i;
+  double p = *percentage / 100.;
+  int    i;
 
+  for (i = 0; i < HASH_SIZE; i++) {
+    for (n = NodeHashTable[i]; n; n = n->next)
+      if (n->status == PRESENT && unifRand(0., 1.) < p)
+	nodeFailure(n, NULL);
+  }
+}
+
+
+void printNodeInfo(Node *n)
+{
   if (n->status == ABSENT)
     return;
 
   if (getSuccessor(n) == n->id)
     printf("o");
 
-  printf("Node = %d\n", n->id);
+  printf("Node = %d (%d)\n", n->id, n->status);
 
   printFingerList(n);
   printDocList(n);

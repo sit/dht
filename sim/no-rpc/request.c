@@ -1,3 +1,28 @@
+/*
+ *
+ * Copyright (C) 2001 Ion Stoica (istoica@cs.berkeley.edu)
+ *
+ *  Permission is hereby granted, free of charge, to any person obtaining
+ *  a copy of this software and associated documentation files (the
+ *  "Software"), to deal in the Software without restriction, including
+ *  without limitation the rights to use, copy, modify, merge, publish,
+ *  distribute, sublicense, and/or sell copies of the Software, and to
+ *  permit persons to whom the Software is furnished to do so, subject to
+ *  the following conditions:
+ *
+ *  The above copyright notice and this permission notice shall be
+ *  included in all copies or substantial portions of the Software.
+ *
+ *  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ *  EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ *  MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ *  NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+ *  LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+ *  OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+ *  WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ *
+ */
+
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -5,9 +30,6 @@
 int processRequest1(Node *n, Request *r);
 
 void insertRequest_wait(Node *n, Request *r);
-void copySuccessorFingers(Node *n);
-
-// #define PREFIX_MATCH
 
 Request *newRequest(ID x, int type, int style, ID initiator)
 {
@@ -65,12 +87,12 @@ void processRequest(Node *n)
   ID      succ, pred, dst, old_succ;
   Request *r;
 
-  // periodicall invoke process request
+  // periodically invoke process request
   if (n->status != ABSENT)
     genEvent(n->id, processRequest, (void *)NULL, 
 	     Clock + unifRand(0.5*PROC_REQ_PERIOD, 1.5*PROC_REQ_PERIOD));
 
-  while (r  = getRequest(n)) {
+  while ((r  = getRequest(n))) {
 
     if (r->del != -1) {
       Finger *f = getFinger(n->fingerList, r->del);
@@ -78,12 +100,9 @@ void processRequest(Node *n)
       r->del = -1;
     }
 
-//if (r->x == 16323724 && r->initiator == 16323723 && Clock > 7133176) {
-//   printf("xxx n=%d, x=%d, succ=%d, pred=%d at %f\n",
-//    n->id, r->x, r->succ, r->pred, Clock);
-//   printf("   xxx ");
-//   printFingerList(n);
-// }
+    // update # of hops
+    if (r->initiator != n->id)
+      r->hops++;
 
 
     // update/refresh finger table
@@ -91,7 +110,7 @@ void processRequest(Node *n)
     if (r->initiator != r->sender)
       insertFinger(n, r->sender);
 
-    // process insert document, find document, and several
+    // process: insert document, find document, and several
     // optimization requests 
     if (processRequest1(n, r)) {
       free(r);
@@ -103,12 +122,12 @@ void processRequest(Node *n)
     getNeighbors(n, r->x, &pred, &succ);
     
     // update r's predecessor/successor
-    if (between(pred, r->pred, r->x, NUM_BITS))
+    if (between(pred, r->pred, r->x))
       r->pred = pred;
-    if (between(succ, r->x, r->succ, NUM_BITS) || (r->x == succ))
+    if (between(succ, r->x, r->succ) || (r->x == succ))
       r->succ = succ;
     
-    if (between(r->x, n->id, getSuccessor(n), NUM_BITS) || 
+    if (between(r->x, n->id, getSuccessor(n)) || 
 	(getSuccessor(n) == r->x)) 
       // r->x's successor is n's successor
       r->done = TRUE;
@@ -120,16 +139,24 @@ void processRequest(Node *n)
       if (r->initiator == n->id) {
 	switch (r->type) {
 	case REQ_TYPE_STABILIZE:
+
 	  // if n's successor changes,
 	  // iterate to get a better successor
 	  old_succ = getSuccessor(n);
-	  insertFinger(n, r->succ);
+
+	  // update old successor, just in case r->succ will replace it
+          // otherwise the old successor timeouts and it is evicted
+	  insertFinger(n, n->fingerList->head->id); 
+
+	  // the following test is a little bit of cheating; this 
+          // approximates an implementation in which n checks
+          // r->succ right away to see whether it is up
+	  if (getNode(r->succ)->status != ABSENT)
+	    insertFinger(n, r->succ);
 	  if (old_succ == getSuccessor(n)) {
 	    free(r);
-	    if (n->status == TO_JOIN) {
+	    if (n->status == TO_JOIN) 
 	      copySuccessorFingers(n);
-	      n->status = PRESENT;
-	    }
 	    continue;
 	  } else {
 	    dst = r->succ;
@@ -141,20 +168,13 @@ void processRequest(Node *n)
           // forward the request to the node responsible
           // for the document r->x; the processing of this request
           // takes place in processRequest1 
-#ifdef PREFIX_MATCH
-	  if (prefixLen(r->x, r->succ) > prefixLen(r->x, r->pred))
-	    dst = r->succ;
-	  else 
-	    dst = r->pred;
-#else
 	  dst = r->succ;  
-#endif
 	  break;
 	default:
 	  continue;
 	}
       } else
-	// send request back to intiator
+	// send request back to initiator
 	dst = r->initiator;
     } else {
       if (r->initiator == n->id)
@@ -171,6 +191,13 @@ void processRequest(Node *n)
     // send message to dst
     if (n->id == r->initiator) {
       r->dst = dst;
+      // fake transmission to dst, without leaving
+      // node n (i.e., the request's initiator).
+      // this is used to implement lookup retries: 
+      // if dst is alive when the request is processed,
+      // the request is forwarded immediately to dst;
+      // otherwise, the request is forwarded to the previous
+      // node visited by the request 
       genEvent(n->id, insertRequest_wait, (void *)r, 
 	       Clock + intExp(AVG_PKT_DELAY));
     } else {
@@ -179,8 +206,12 @@ void processRequest(Node *n)
   }
 }  
 
+
+// resolve request locally
 int processRequest1(Node *n, Request *r)
 {
+  Node *s;
+
 #ifdef OPTIMIZATION
   switch (r->type) {
   case REQ_TYPE_REPLACESUCC:
@@ -201,14 +232,29 @@ int processRequest1(Node *n, Request *r)
   }
 #endif // OPTIMIZATION
 
-  if  (between(r->x, n->id, getSuccessor(n), NUM_BITS) || 
-       (r->x == getSuccessor(n))) {
+  // process insert/find document and node join requests
+  if  ((between(r->x, n->id, getSuccessor(n)) || 
+       (r->x == getSuccessor(n))) || 
+	((r->type == REQ_TYPE_JOIN && 
+	  r->initiator == r->pred && r->pred == r->succ))) {
     switch (r->type) {
+
     case REQ_TYPE_INSERTDOC:
+      printf("insertdoc_request: %d %d %f\n", r->hops, r->timeouts, Clock);
       insertDocumentLocal(getNode(getSuccessor(n)), &r->x);
       return TRUE;
+
     case REQ_TYPE_FINDDOC:
-      findDocumentLocal(getNode(getSuccessor(n)), &r->x);
+      printf("finddoc_request: %d %d %f\n", r->hops, r->timeouts, Clock);
+      s = getNode(getSuccessor(n));
+      findDocumentLocal(s, &r->x);
+      if (s->status == ABSENT)
+	removeFinger(n->fingerList, n->fingerList->head);
+      return TRUE;
+
+    case REQ_TYPE_JOIN:
+      printf("join_request: %d %d %f\n", r->hops, r->timeouts, Clock);
+      join1(r->x, getSuccessor(n));
       return TRUE;
     }
   }
@@ -216,24 +262,35 @@ int processRequest1(Node *n, Request *r)
 }
 
 
-// add request at the tail of the pending request list
+// used to implement backtracking when the next hop 
+// (r->dst) along the request r's path fails.
+// if r->dst is alive, r is forwarded immediately 
+// to r->dst; otherwise, r->dst is forwarded to the 
+// previous node visited by the request 
+// 
+// NOTE: This works only for ITERATIVE requests
+
 void insertRequest_wait(Node *n, Request *r)
 {
+
   // send message to dst
   if (getNode(r->dst)->status != PRESENT) {
-    printf("NOT_PRESENT=%d, %f\n", r->dst, Clock);
+
     r->done = FALSE;
-    r->succ = r->pred = r->initiator;
+    getNeighbors(n, r->x, &(r->pred), &(r->succ));
     r->del = r->dst; // delete node
+    r->timeouts++;    // increments the number of timeouts 
     if ((r->dst = popNode(r)) == -1)
+      // no node to retry; restart the request
       genEvent(r->initiator, insertRequest, (void *)r, Clock + TIME_OUT);
     else 
+      // next hop has failed; forward request to the 
+      // previous node visited by the request
       genEvent(r->dst, insertRequest, (void *)r, Clock + TIME_OUT);
-  }
-  else {
+
+  } else {
     pushNode(r, r->dst);
     genEvent(r->dst, insertRequest, (void *)r, Clock);
-    printf("present\n");
   }
 }
 
@@ -256,10 +313,12 @@ void printReqList(Node *n)
 }
 
 
+// get successor's finger table;
+// this function is called when a 
+// node joins the system
 
 void copySuccessorFingers(Node *n)
 {
-  Node *s = getNode(getSuccessor(n));
   Finger *f;
   int    i;
 
