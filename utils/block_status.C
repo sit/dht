@@ -4,7 +4,6 @@
 #include <configurator.h>
 #include "block_status.h"
 #include "misc_utils.h"
-#include "dhash.h"
 
 u_long
 num_efrags ()
