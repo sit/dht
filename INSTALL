@@ -56,3 +56,8 @@ SFSNET Install Instructions
 
 
 --Frank
+
+added 3-14-01
+NOTE:
+It appears important for the machine which is running sfsrosd and
+the machine running sfsrocd to have the same version of sfs installed.
