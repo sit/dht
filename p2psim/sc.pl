@@ -12,13 +12,15 @@ use strict;
 # net: <number of nodes>,<topology>,<placement>,<protocol>
 #    <placement> ::= linear | random <number> <number>
 #
-# event: <number of events>,<event-type>,<args>
+# event: <node id>,<event-type>,<args>
+# events: <number of events>,<interval>,<event-type>,<args>
 
 open TOP, ">$ARGV[0]" || die "Could not open $ARGV[0]: $!\n";
 open EV, ">$ARGV[1]" || die "Could not open $ARGV[1]: $!\n";
 
 my $line;
 my $nnodes;
+my $time = 1;
 
 while ($line = <STDIN>) {
     chomp($line);
@@ -27,6 +29,9 @@ while ($line = <STDIN>) {
     }
     if ($line =~/^event: (.*)/) {
 	doevent (split(/,/, $1));
+    }
+    if ($line =~/^events: (.*)/) {
+	doevents (split(/,/, $1));
     }
 }
 
@@ -53,10 +58,18 @@ sub donet {
 }
 
 sub doevent {
-    my ($n, $type,@args) = @_;
+    my ($n,$type,@args) = @_;
     print "doevent: $n $type @args\n";
+    print EV "node $time $n $type @args\n";
+}
+
+sub doevents {
+    my ($n,$interval,$type,@args) = @_;
+    print "doevents: $n $interval $type @args\n";
     for (my $i = 1; $i <= $n; $i++) {
 	my $node = int(rand $nnodes) + 1;
-	print EV "node $i $node $type @args\n";
+	$time = $time + $interval;
+	print EV "node $time $node $type @args\n";
     }
 }
+
