@@ -60,7 +60,6 @@ merkle_syncer::dump ()
 merkle_syncer::merkle_syncer (merkle_tree *ltree, rpcfnc_t rpcfnc, sndblkfnc_t sndblkfnc)
   : ltree (ltree), rpcfnc (rpcfnc), sndblkfnc (sndblkfnc)
 {
-  idle = true; // initial value 
   deleted = New refcounted<bool>(false);
   fatal_err = NULL;
   sync_done = false;
@@ -100,7 +99,6 @@ merkle_syncer::next (void)
 
   if (sync_done) {
     ///**/warn << (u_int)this << " ignoring extra callbacks\n";
-    //assert (0);
     return;
   }
 
@@ -167,7 +165,6 @@ merkle_syncer::next (void)
   ///**/warn << "DONE .. in NEXT\n";
   setdone ();
   ///**/warn << "OK!\n";
-  //XXX_main ();
 }
 
 void
@@ -184,7 +181,6 @@ void
 merkle_syncer::sendblock_cb (ptr<bool> del)
 {
   if (*del) return;
-
   idle = false;
 
 #ifdef MERKLE_SYNCE_TRACE
@@ -220,7 +216,6 @@ merkle_syncer::getblocklist_cb (ref<getblocklist_res> res, ptr<bool> del,
 				clnt_stat err)
 {
   if (*del) return;
-
   idle = false;
 
 #ifdef MERKLE_SYNCE_TRACE
@@ -251,7 +246,7 @@ merkle_syncer::sync (bigint _rngmin, bigint _rngmax, mode_t m)
   // get remote hosts's root node
   getnode (0, 0);
   idle = false;      // setup the 
-  timeout (deleted); //   idle timer
+  timeout (deleted);   //   idle timer
 }
 
 
@@ -382,13 +377,6 @@ merkle_syncer::getnode_cb (ref<getnode_arg> arg, ref<getnode_res> res,
       sendblocks_iter = New db_range_xiterator
 	(ltree->db, arg->depth, arg->prefix, make_set (rnode->child_hash),
 	 rngmin, rngmax);
-      
-      if (!sendblocks_iter->more ()) {
-#ifdef MERKLE_SYNCE_TRACE
-	warn << "DAMN IT\n";
-#endif
-	sendblocks_iter = NULL;
-      }
     }
     next ();
   }
