@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.1 2001/01/16 22:00:08 fdabek Exp $
+# $Id: Makefile.am,v 1.2 2001/03/02 09:49:57 fdabek Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -14,7 +14,7 @@ libsfsrodb_a_SOURCES = \
 sfsrodb_core.C dbfe.C
 
 sfsrodb_SOURCES = \
-sfsrodb.C fhdb.C 
+sfsrodb.C 
 
 printdb_SOURCES = \
 printdb.C

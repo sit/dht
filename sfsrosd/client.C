@@ -1,4 +1,4 @@
-//Last modified by $Author: fdabek $ on $Date: 2001/02/25 05:28:45 $
+//Last modified by $Author: fdabek $ on $Date: 2001/03/02 09:49:58 $
 #include <sfsrosd.h>
 #include "sfsdb.h"
 #include "rxx.h"
@@ -107,6 +107,7 @@ sfsroclient::dispatch (ref<bool> d, svccb *sbp)
         return;
       }
 
+#if 0
     case SFSROPROC_PROXYGETDATA:
       {
 	sfsro_proxygetarg *arg = sbp->template getarg<sfsro_proxygetarg> ();
@@ -166,6 +167,7 @@ sfsroclient::dispatch (ref<bool> d, svccb *sbp)
 			  arg->offset, arg->len);
         return;
       }
+#endif
     default:
       sbp->reject (PROC_UNAVAIL);
       break;
@@ -264,7 +266,7 @@ sfsroclient::proxygetdata_cb_call(svccb *sbp, sfsro_datares *res)
   
   sfsro_proxygetarg *arg = sbp->template getarg<sfsro_proxygetarg> ();
   ref<sfs_hash> fh = New refcounted<sfs_hash>(arg->fh);
-  db.putdata(fh, res);
+  //  db.putdata(fh, res);
 
   sbp->reply(res);
 }
@@ -307,7 +309,7 @@ sfsroclient::partialproxygetdata_cb_call(svccb *sbp, sfsro_datares *res) {
   
   sfsro_partialproxygetarg *arg = sbp->template getarg<sfsro_partialproxygetarg> ();
   ref<sfs_hash> fh = New refcounted<sfs_hash>(arg->fh);
-  db.putdata(fh, res);
+  //  db.putdata(fh, res);
 
   //res is a full data block, we must segment it here
   sfsro_datares *split_res = New sfsro_datares();

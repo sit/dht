@@ -107,6 +107,7 @@ main (int argc, char **argv)
   db.getconnectres (&cres, wrap(&getcres_cb));
   sigcb (SIGINT, wrap (exit, 1));
   sigcb (SIGTERM, wrap (exit, 1));
+
   
   amain();
 }
@@ -116,8 +117,8 @@ void getcres_cb() {
 }
 
 void getinfo_cb() {
-
   start_server ();
+
 }
 
 

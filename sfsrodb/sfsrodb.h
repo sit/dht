@@ -1,4 +1,4 @@
-/* $Id: sfsrodb.h,v 1.1 2001/01/16 22:00:08 fdabek Exp $ */
+/* $Id: sfsrodb.h,v 1.2 2001/03/02 09:49:57 fdabek Exp $ */
 
 /*
  *
@@ -33,21 +33,7 @@
 #define SFSROSD_DB_FILE "/etc/sfsro.sdb"
 
 #include "dbfe.h"
-extern dbfe *sfsrodb;
-extern dbfe *sfsrofhdb;
-
-#if 0
-#ifdef SLEEPYCAT
-extern DB *sfsrodb;
-extern DB *sfsrofhdb;
-#else
-extern btreeSync *sfsrodb;
-extern btreeSync *sfsrofhdb;
-#define NODE_SIZE 2048
-#define DATA_MULT 1
-#define CACHE_SIZE 2000000
-#endif
-#endif
+extern ptr<aclnt> sfsrodb;
 
 /* Statistics */
 extern u_int32_t reginode_cnt;

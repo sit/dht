@@ -1,4 +1,4 @@
-/* $Id: sfsrodb_core.h,v 1.1 2001/01/16 22:00:08 fdabek Exp $ */
+/* $Id: sfsrodb_core.h,v 1.2 2001/03/02 09:49:57 fdabek Exp $ */
 
 /*
  *
@@ -32,7 +32,9 @@
 #include "xdrmisc.h"
 #include "dbfe.h"
 
-bool sfsrodb_put (dbfe *db, const void *keydata, size_t keylen, 
+bigint fh2mpz(const void *keydata, size_t keylen);
+
+bool sfsrodb_put (ptr<aclnt> db, const void *keydata, size_t keylen, 
 		  void *contentdata, size_t contentlen);
 
 /*

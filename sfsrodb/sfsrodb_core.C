@@ -1,4 +1,4 @@
-/* $Id: sfsrodb_core.C,v 1.1 2001/01/16 22:00:08 fdabek Exp $ */
+/* $Id: sfsrodb_core.C,v 1.2 2001/03/02 09:49:57 fdabek Exp $ */
 
 /*
  *
@@ -23,17 +23,45 @@
  */
 
 #include "sfsrodb_core.h"
+#include "dhash.h"
+#include "dhash_prot.h"
+#include "arpc.h"
+
+bigint
+fh2mpz(const void *keydata, size_t keylen) 
+{
+
+  str s ((const char *)keydata, keylen);
+  bigint n;
+  n.setraw (s);
+  if (n < bigint(0)) {
+    n *= bigint(-1);
+    warn << "N was less than zero\n";
+  }
+  warn << "after all of that n =" << n << "\n";
+  
+  return n;
+}
 
 /* Return false if duplicate key */
 bool
-sfsrodb_put (dbfe *db, const void *keydata, size_t keylen, 
+sfsrodb_put (ptr<aclnt> db, const void *keydata, size_t keylen, 
 	     void *contentdata, size_t contentlen)
 {
   int err;
 
-  ref<dbrec> key = new refcounted<dbrec>((void *) keydata, keylen);
-  ref<dbrec> data = new refcounted<dbrec>((void *) contentdata, contentlen);
-  err = db->insert(key, data);
+  warn << "inserting " << contentlen << "bytes of data under a " << keylen << " byte key\n";
+  dhash_insertarg *arg = New dhash_insertarg ();
+  
+  bigint n = fh2mpz(keydata, keylen);
+
+  arg->key = n;
+  arg->data.setsize (contentlen);
+  memcpy(arg->data.base (), contentdata, contentlen);
+
+  dhash_stat *res = New dhash_stat ();
+  err = db->scall (DHASHPROC_INSERT, arg, res);
+
   if (err) {
     warn << "insert returned " << err << strerror(err) << "\n";
     return false;

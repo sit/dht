@@ -36,14 +36,9 @@ dhashclient::dispatch (svccb *sbp)
     {
       dhash_insertarg *item = sbp->template getarg<dhash_insertarg> ();
       sfs_ID n = item->key;
-      warn << "looking up " << n << " to insert \n";    
+      //warn << "looking up " << n << " to insert \n";    
       warn << "whatever I got was " << item->data.size () << " bytes long\n";
-      char temp[4096];
-      int len = (item->data.size () < 4095) ? item->data.size () : 4095;
-      memcpy(temp, item->data.base (), len);
-      temp[len + 1] = 0;
-      warn << "going to insert " << temp << "\n";
-
+      
       defp2p->dofindsucc (n, wrap(this, &dhashclient::insert_findsucc_cb, 
 				  sbp, item));
     }
@@ -58,7 +53,7 @@ void
 dhashclient::insert_findsucc_cb(svccb *sbp, dhash_insertarg *item,
 				sfs_ID succ, route path,
 				sfsp2pstat err) {
-  warn << "insert_findsucc_cb: succ was " << succ << "\n";
+  //warn << "insert_findsucc_cb: succ was " << succ << "\n";
 
   dhash_res *res = New dhash_res();
   if (err) {
@@ -66,7 +61,7 @@ dhashclient::insert_findsucc_cb(svccb *sbp, dhash_insertarg *item,
     res->set_status(DHASH_NOENT);
     sbp->reply(res);
   } else {
-    warn << "going to connect to ID " << succ << "\n";
+    //warn << "going to connect to ID " << succ << "\n";
     defp2p->chord_connect(succ, wrap(this, &dhashclient::insert_connect_cb, sbp, item));
   }
 }
@@ -74,7 +69,7 @@ dhashclient::insert_findsucc_cb(svccb *sbp, dhash_insertarg *item,
 void
 dhashclient::insert_connect_cb(svccb *sbp, dhash_insertarg *item, ptr<axprt_stream> x) 
 {
-  warn << "in insert_connect_cb for " << item->key << "\n";
+  //  warn << "in insert_connect_cb for " << item->key << "\n";
   dhash_stat *stat = New dhash_stat ();
   if (x == NULL) {
     warn << "connect failed\n";

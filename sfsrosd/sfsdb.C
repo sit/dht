@@ -1,5 +1,6 @@
 #include "sfsdb.h"
 #include "sfsrosd.h"
+#include "sfsrodb_core.h"
 
 sfsrodb::sfsrodb ()
 {
@@ -8,39 +9,34 @@ sfsrodb::sfsrodb ()
 
 sfsrodb::sfsrodb (const char *dbfile)
 {
-  ref<dbImplInfo> info = dbGetImplInfo();
 
-  //create the generic object
-  dbp = new dbfe();
+  int fd = unixsocket_connect(dbfile);
+  if (fd < 0)
+    fatal << "error on " << dbfile << "\n";
+  
+  dbp = aclnt::alloc (axprt_unix::alloc (fd), dhashclnt_program_1);
 
-  //set up the options we want
-  dbOptions opts;
-  //ideally, we would check the validity of these...
-  opts.addOption("opt_async", 1);
-  opts.addOption("opt_cachesize", 80000);
-  opts.addOption("opt_nodesize", 4096);
-
-  if (dbp->opendb (const_cast < char *>(dbfile), opts) != 0) {
-    warn << "opendb failed " << strerror (errno) << "\n";
-    exit (1);
-  }
 }
 
 void
 sfsrodb::getinfo(sfs_fsinfo *fsinfo, callback<void>::ref cb)
 {
-  ref<dbrec> key = new refcounted<dbrec>((void *)"fsinfo", 6);
-  dbp->lookup (key, wrap(this, &sfsrodb::getinfo_cb, cb, fsinfo));
+  
+  bigint n = fh2mpz((const void *)"fsinfo", 6);
+  
+  dhash_res *dres = New dhash_res();
+  dbp->call(DHASHPROC_LOOKUP, &n, dres, wrap(this, &sfsrodb::getinfo_cb, cb, fsinfo, dres));
+  
 }
 
 void
-sfsrodb::getinfo_cb(callback<void>::ref cb, sfs_fsinfo *fsinfo, ptr<dbrec> res) 
+sfsrodb::getinfo_cb(callback<void>::ref cb, sfs_fsinfo *fsinfo, dhash_res *res, clnt_stat err) 
 {
   warnx << "getinfo_cb\n";
-  if (res == NULL) {
+  if (err != 0) {
     exit (1);
   }
-  xdrmem x (static_cast<char *>(res->value), res->len, XDR_DECODE);
+  xdrmem x (static_cast<char *>(res->resok->res.base ()), res->resok->res.size (), XDR_DECODE);
   if (!xdr_sfs_fsinfo (x.xdrp(), fsinfo)) {
     warnx << "couldn't decode sfs_fsinfo\n";
   }
@@ -52,22 +48,26 @@ sfsrodb::getinfo_cb(callback<void>::ref cb, sfs_fsinfo *fsinfo, ptr<dbrec> res)
 void
 sfsrodb::getconnectres (sfs_connectres *conres, callback<void>::ref cb)
 {
-  ref<dbrec> key = new refcounted<dbrec>((void *)"conres", 6);
-  dbp->lookup (key, wrap(this, &sfsrodb::getconnectres_cb, cb, 
-					conres));
+    
+  bigint n = fh2mpz((const void *)"conres", 6);
+  
+  dhash_res *dres = New dhash_res();
+  dbp->call(DHASHPROC_LOOKUP, &n, dres, wrap(this, &sfsrodb::getconnectres_cb, cb, conres, dres));
+  
 }
 
 
 void
-sfsrodb::getconnectres_cb(callback<void>::ref cb, sfs_connectres *conres, 
-			  ptr<dbrec> res) 
+sfsrodb::getconnectres_cb(callback<void>::ref cb, sfs_connectres *conres, dhash_res *res,
+			  clnt_stat err) 
 {
   warnx << "getconnectres_cb\n";
 
-  if (res == NULL)
+  if (err != 0)
     exit (-1);
 
-  xdrmem x (static_cast<char *>(res->value), res->len, XDR_DECODE);
+  xdrmem x (static_cast<char *>(res->resok->res.base ()), res->resok->res.size (), XDR_DECODE);
+  //  xdrmem x (static_cast<char *>(res->value), res->len, XDR_DECODE);
 
   if (!xdr_sfs_connectres (x.xdrp(), conres)) {
     warnx << "couldn't decode sfs_connectres\n";
@@ -77,31 +77,34 @@ sfsrodb::getconnectres_cb(callback<void>::ref cb, sfs_connectres *conres,
   (*cb)();
 }
 
+
+
 void
 sfsrodb::getdata (sfs_hash *fh, sfsro_datares *res, callback<void>::ref cb)
 {
-  ref<dbrec> key = new refcounted<dbrec>((void *)fh->base (), fh->size ());
-  dbp->lookup (key, wrap(this, &sfsrodb::getdata_cb, cb, res));
+  bigint n = fh2mpz((const void *)fh->base (), fh->size ());
+  dhash_res *dres = New dhash_res();
+  dbp->call(DHASHPROC_LOOKUP, &n, res, wrap(this, &sfsrodb::getdata_cb, cb, dres, res));
 }
 
 void
-sfsrodb::getdata_cb(callback<void>::ref cb, sfsro_datares *res, 
-		    ptr<dbrec> result)  
+sfsrodb::getdata_cb(callback<void>::ref cb, dhash_res *res, sfsro_datares *dres, clnt_stat err)  
 {
-  if (result == 0) {
-    res->set_status(SFSRO_ERRNOENT);
+  if (err != 0) {
+    dres->set_status(SFSRO_ERRNOENT);
     (*cb)();
   } else {
-    res->set_status (SFSRO_OK);
-
-    res->resok->data.setsize(result->len);
-    memcpy (res->resok->data.base (), result->value, result->len);
+    dres->set_status (SFSRO_OK);
+    
+    dres->resok->data.setsize(res->resok->res.size ());
+    memcpy (dres->resok->data.base (), res->resok->res.base (), res->resok->res.size ());
     
     (*cb)();
     
   }
 }
 
+/*
 //FED - start and count are in units of the understood base: 64
 //      start is zero based
 void
@@ -162,3 +165,4 @@ sfsrodb::putdata_cb(int err)
 {
   if (err) warn << "insert from putdata returned" << err << "\n";
 }
+*/

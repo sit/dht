@@ -1,4 +1,4 @@
-/* $Id: sfsrodb.C,v 1.3 2001/02/25 05:28:45 fdabek Exp $ */
+/* $Id: sfsrodb.C,v 1.4 2001/03/02 09:49:57 fdabek Exp $ */
 
 /*
  * Copyright (C) 1999 Kevin Fu (fubob@mit.edu)
@@ -38,11 +38,13 @@
 #include "sfsrodb.h"
 #include "parseopt.h"
 #include "vec.h"
+#include "arpc.h"
+#include "dhash.h"
+#include "dhash_prot.h"
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
 
-dbfe *sfsrodb;
-dbfe *sfsrofhdb;
+ptr<aclnt> sfsrodb;
 
 str root2;
 
@@ -64,7 +66,7 @@ u_int32_t sindir_cnt = 0;
 u_int32_t dindir_cnt = 0;
 u_int32_t tindir_cnt = 0;
 u_int32_t directory_cnt = 0;
-u_int32_t fhdb_cnt = 0;
+//int32_t fhdb_cnt = 0;
 u_int32_t fh_cnt = 0;
 
 u_int32_t identical_block = 0;
@@ -74,7 +76,7 @@ u_int32_t identical_tindir = 0;
 u_int32_t identical_dir = 0;
 u_int32_t identical_inode = 0;
 u_int32_t identical_sym = 0;
-u_int32_t identical_fhdb = 0;
+//u_int32_t identical_fhdb = 0;
 u_int32_t identical_fh = 0;
 
 time_t sfsro_duration = 86400; /* default to 1 day */
@@ -747,32 +749,13 @@ recurse_path (const str path, sfs_hash * fh)
 int
 sfsrodb_main (const str root, const str keyfile, const char *dbfile)
 {
-  ref<dbImplInfo> info = dbGetImplInfo();
 
-  for (unsigned int i=0; i < info->supportedOptions.size(); i++) 
-    warn << info->supportedOptions[i] << "\n";
-
-  //create the generic object
-  sfsrodb = new dbfe();
-
-  //set up the options we want
-  dbOptions opts;
-  opts.addOption("opt_async", 0);
-  opts.addOption("opt_cachesize", 80000);
-  opts.addOption("opt_nodesize", 4096);
-  opts.addOption("opt_create", 1);
-
-  if (initialize) {
-    if (int err = sfsrodb->createdb(const_cast < char *>(dbfile), opts)) {
-      warn << "createdb failed\n" << strerror(err) << "\n";
-    }
-  }
-
-  if (int err = sfsrodb->opendb(const_cast < char *>(dbfile), opts)) {
-    warn << "open returned: " << strerror(err) << err << "\n";
-    exit (-1);
-  }
-
+  int fd = unixsocket_connect(dbfile);
+  if (fd < 0)
+    fatal << "error on " << dbfile << "\n";
+  
+  sfsrodb = aclnt::alloc (axprt_unix::alloc (fd), dhashclnt_program_1);
+  
   /* Set the sfs_connectres structure (with pub key) to db */
   sfs_connectres cres (SFS_OK);
   cres.reply->servinfo.release = SFS_RELEASE;
@@ -880,7 +863,7 @@ sfsrodb_main (const str root, const str keyfile, const char *dbfile)
     warn << "identical dirs:     " << identical_dir << "\n";
     warn << "identical inodes:   " << identical_inode << "\n";
     warn << "identical symlinks: " << identical_sym << "\n";
-    warn << "identical fhdb:     " << identical_fhdb << "\n\n\n";
+    //    warn << "identical fhdb:     " << identical_fhdb << "\n\n\n";
 
     warn << "Database contents:\n";
     warn << "Regular inodes:      " << reginode_cnt << "\n";
@@ -890,7 +873,7 @@ sfsrodb_main (const str root, const str keyfile, const char *dbfile)
     warn << "Single indir blocks: " << sindir_cnt << "\n";
     warn << "Double indir blocks: " << dindir_cnt << "\n";
     warn << "Triple indir blocks: " << tindir_cnt << "\n";
-    warn << "Fhdb blocks:         " << fhdb_cnt << "\n\n\n";
+    //    warn << "Fhdb blocks:         " << fhdb_cnt << "\n\n\n";
 
     warn << "identical fh's overall : " << identical_fh << "\n";
     warn << "unique fh's overall    : " << fh_cnt << "\n\n\n";
@@ -898,9 +881,9 @@ sfsrodb_main (const str root, const str keyfile, const char *dbfile)
 
   warn << "close db\n";
 
-  sfsrodb->closedb ();
+  //  sfsrodb->closedb ();
 
-  delete sfsrodb;
+  //  delete sfsrodb;
 
   // XXX here we should verify for debugging that the number of entries
   // in fhdb is the same as the number of database entries (minus
