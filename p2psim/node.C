@@ -65,7 +65,8 @@ Node::run()
         if(p->reply()){
           send(p->channel(), &p);
         } else {
-          ThreadManager::Instance()->create(this, Node::Receive, p);
+          pair<Node*, Packet*> px = make_pair(this, p);
+          ThreadManager::Instance()->create(this, Node::Receive, &px);
         }
         break;
 
@@ -115,13 +116,22 @@ Node::run()
 // args/ret and copy them. Even then, naive callers might put
 // pointers into the args/ret structures.
 bool
-Node::_doRPC(IPAddress srca, IPAddress dsta,
-                      void (*fn)(void*), void *args)
+Node::sendPacket(IPAddress dst, Packet *p)
 {
-  Channel *c = chancreate(sizeof(Packet*), 0);
-  Packet *p = new Packet(c, fn, args, srca, dsta);
+  // find source IP address.
+  // Node *srcnode = (Node*) ThreadManager::Instance()->get(threadid());
+  // assert(srcnode);
+  // IPAddress srca = srcnode->ip();
+  p->_src = ip();
+  p->_dst = dst;
 
+  // where to send the reply
+  Channel *c = p->_c = chancreate(sizeof(Packet*), 0);
+
+  // send it off.
   send(Network::Instance()->pktchan(), &p);
+
+  // block on reply
   Packet *reply = (Packet *) recvp(c);
 
   chanfree(c);
@@ -131,30 +141,30 @@ Node::_doRPC(IPAddress srca, IPAddress dsta,
   return true;
 }
 
-bool
-Node::_doRPC(IPAddress dsta, void (*fn)(void*), void *args)
-{
-  // find source IP address.
-  Node *srcnode = (Node*) ThreadManager::Instance()->get(threadid());
-  assert(srcnode);
-  IPAddress srca = srcnode->ip();
-
-  return _doRPC(srca, dsta, fn, args);
-}
-
 void
 Node::Receive(void *px)
 {
-  Packet *p = (Packet*) px;
+  pair<Node*, Packet*> *pr = (pair<Node*, Packet*>*) px;
+  Packet *p = pr->second;
 
-  (p->fn())(p->args());
+  // get pointer to protocol
+  Protocol *proto = pr->first->getproto(p->_proto);
+
+  // invoke function call
+  // send it up to the protocol
+  (proto->*(p->_fn))(p->_args, p->_ret);
 
   // send reply
-  Packet *reply = new Packet(p->channel(),
-                             0, 0, p->dst(), p->src());
+  Packet *reply = new Packet();
+  reply->_c = p->_c;
+  reply->_src = p->_dst;
+  reply->_dst = p->_src;
+  reply->_ret = p->_ret; // contains the reply
 
+  // send it back
   send(Network::Instance()->pktchan(), &reply);
 
+  // ...and we're done
   threadexits(0);
 }
 

@@ -55,14 +55,9 @@ Euclidean::parse(ifstream &ifs)
     // what kind of node?
     Node *n = NodeFactory::Instance()->create(words[2], ipaddr);
 
-
     // all the rest are protocols on this node
-    for(unsigned int i=3; i<words.size(); i++) {
-      // run the specified protocol on the node
-      Protocol *p = ProtocolFactory::Instance()->create(words[i], n);
+    for(unsigned int i=3; i<words.size(); i++)
       send(n->protchan(), &(words[i]));
-      assert(p);
-    }
 
     // add the new node it to the topology
     if(_nodes.find(n->ip()) != _nodes.end())

@@ -41,6 +41,17 @@ Protocol::_delaycb(Time t, member_f fn, void *args)
 }
 
 
+bool
+Protocol::_doRPC(IPAddress dst, member_f fn, void* args, void* ret)
+{
+  Packet *p = new Packet();
+  p->_fn = fn;
+  p->_args = args;
+  p->_ret = ret;
+  p->_proto = ProtocolFactory::Instance()->name(this);
+  return _node->sendPacket(dst, p);
+}
+
 
 IPAddress
 Protocol::ip()

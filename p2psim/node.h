@@ -23,10 +23,9 @@ public:
   Protocol *getproto(string p) { return _protmap[p]; }
   Protocol *getproto(const type_info &);
 
-  static bool _doRPC(IPAddress srca, IPAddress dsta,
-                     void (*)(void*), void*);
-  static bool _doRPC(IPAddress dsta,
-                     void (*)(void*), void*);
+  // Sends whatever data to the specified protocol on the node with the
+  // specified IPAddress.
+  bool sendPacket(IPAddress, Packet*);
 
 private:
   virtual void run();

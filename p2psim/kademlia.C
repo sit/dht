@@ -19,13 +19,17 @@ Kademlia::join_kademlia(void *x)
   IPAddress wkn = a->nget<IPAddress>("wellknown");
 
   IPAddress myip = ip();
-  doRPC(wkn, &Kademlia::do_join, &myip, (void*) 0);
+
+  int reply = 0;
+  doRPC(wkn, &Kademlia::do_join, &myip, &reply);
+  cout << "reply is now " << reply << endl;
 }
 
 void
-Kademlia::do_join(IPAddress *ip, void *ret)
+Kademlia::do_join(IPAddress *ip, void *reply)
 {
   cout << "Kademlia node with ip=" << *ip << " just registered." << endl;
+  *((int *) reply) = 2206;
 }
 
 void
