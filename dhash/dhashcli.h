@@ -131,7 +131,7 @@ class dhashcli {
 		   chord_node dest,
 		   int retry_num);
 public:
-  dhashcli (ptr<vnode> node, uint nreplica = 5);
+  dhashcli (ptr<vnode> node);
 
   void assemble (blockID b, cb_ret cb, vec<chord_node> succs, route r);
   void retrieve (blockID blockID, cb_ret cb, 

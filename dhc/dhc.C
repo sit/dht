@@ -9,7 +9,7 @@
 int RECON_TM = getenv("DHC_RECON_TM") ? atoi(getenv("DHC_RECON_TM")) : 15;
 int dhc_debug = getenv("DHC_DEBUG") ? atoi(getenv("DHC_DEBUG")) : 0;
 char *host = getenv("HOST");
-str path(".");
+str path("./recon");
 const char *reconf = getenv("RF") ? getenv("RF") : path.cstr ();
 int fd, fd2;
 
@@ -92,6 +92,7 @@ dhc::recon_tm_lookup (ref<dhc_block> kb, bool guilty, vec<chord_node> succs,
 		      route r, chordstat err)
 {
   recon_tm_rpcs--;
+  warn << myNode->my_ID () << ": End find_successor \n";
   if (!err) {
 #if 0
     if (dhc_debug) {
@@ -819,6 +820,7 @@ dhc::recv_put (user_args *sbp)
   ws->new_data->tag.ver = kb->data->tag.ver + 1;
   ws->new_data->tag.writer = put->writer;
   ws->new_data->data.setsize (put->value.size ());
+  ws->start = start_write;
 
   ptr<dhc_putblock_arg> arg = New refcounted<dhc_putblock_arg>;
   arg->bID = put->bID;
@@ -846,14 +848,6 @@ dhc::putblock_cb (ptr<location> dest, ptr<write_state> ws,
     if (!err && res->status == DHC_OK) {
       ws->bcount++; 
       if (ws->bcount > n_replica/2) { 
-	  timeval tp;
-	  gettimeofday (&tp, NULL);
-	  end_write = tp.tv_sec * (u_int64_t)1000000 + tp.tv_usec;
-	  str buf = strbuf () << end_write
-			      << " WRITE 1 " << end_write-start_write 
-			      << " usecs\n";
-	  write (fd2, buf.cstr (), buf.len ());
-
 	if (dhc_debug)
 	  warn << myNode->my_ID () << " dhc::putblock_cb Done writing.\n";
 
@@ -874,6 +868,14 @@ dhc::putblock_cb (ptr<location> dest, ptr<write_state> ws,
 	  db->insert (key, to_dbrec (kb));
 	  //db->sync ();
 	}
+	timeval tp;
+	gettimeofday (&tp, NULL);
+	end_write = tp.tv_sec * (u_int64_t)1000000 + tp.tv_usec;
+	str buf = strbuf () << end_write
+			    << " WRITE 1 " << end_write-ws->start
+			    << " usecs\n";
+	write (fd2, buf.cstr (), buf.len ());
+
 	dhc_put_res pres; pres.status = DHC_OK;
 	ws->sbp->reply (&pres);
       }

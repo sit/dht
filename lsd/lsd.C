@@ -719,7 +719,7 @@ main (int argc, char **argv)
   for (int i = 0; i < vnodes; i++) {
     str db_name_prime = strbuf () << db_name << "-" << i;
     warn << "lsd: created new dhash\n";
-    dh.push_back( dhash::produce_dhash (db_name_prime, nreplica));
+    dh.push_back( dhash::produce_dhash (db_name_prime));
   }
 
   chordnode->newvnode (modes[mode].producer, wrap (newvnode_cb, 0));

@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.34 2004/07/27 22:42:40 fdabek Exp $
+# $Id: Makefile.am,v 1.35 2004/08/13 15:24:46 athicha Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -8,7 +8,7 @@ VIS = vis
 endif
 
 bin_PROGRAMS = dbm walk findroute filestore nodeq dbdump
-noinst_PROGRAMS = test_types $(VIS) builddb coords dhc_test 
+noinst_PROGRAMS = test_types $(VIS) builddb coords dhc_test pkc
 
 noinst_HEADERS = rpclib.h
 
@@ -41,6 +41,9 @@ nodeq_LDADD = ../svc/libsvc.la ../utils/libutil.a $(LDADD)
 
 dhc_test_SOURCES = dhc_test.C
 dhc_test_LDADD = ../dhash/libdhashclient.a ../svc/libsvc.la $(LDADD)
+
+pkc_SOURCES = pk_consistency.C
+pkc_LDADD = ../dhash/libdhashclient.a ../svc/libsvc.la $(LDADD)
 
 if GTK_AVAILABLE
 vis_SOURCES = vis.C

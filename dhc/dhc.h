@@ -369,6 +369,7 @@ struct write_state {
   bool done;
   uint bcount;
   user_args *sbp;
+  u_int64_t start;
   ptr<keyhash_data> new_data;
   
   write_state (user_args *s) : done (false), bcount (0), sbp (s) 

@@ -89,7 +89,7 @@ dhashcli_config_init::dhashcli_config_init ()
 // ---------------------------------------------------------------------------
 // DHASHCLI
 
-dhashcli::dhashcli (ptr<vnode> node, uint nrep)
+dhashcli::dhashcli (ptr<vnode> node)
   : clntnode (node), ordersucc_ (true)
 {
   int ordersucc = 1;
@@ -97,7 +97,6 @@ dhashcli::dhashcli (ptr<vnode> node, uint nrep)
   ordersucc_ = (ordersucc > 0);
   warn << "will order successors " << ordersucc_ << "\n";
 
-  //nreplica = nrep; //ATHICHA
 }
 
 void
@@ -766,7 +765,7 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb, int opti
 
   if (block->ctype == DHASH_KEYHASH) {
     if (!DHC) {
-      for (u_int i = 0; i < dhash::num_efrags (); i++) {
+      for (u_int i = 0; i < dhash::num_replica (); i++) {
 	// Count up for each RPC that will be dispatched
 	ss->out += 1;
 	
@@ -775,11 +774,8 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb, int opti
 			      blockID(block->ID, block->ctype, DHASH_BLOCK),
 			      block,
 			      wrap (this, &dhashcli::insert_store_cb,  
-				    ss, r, i, dhash::num_efrags (),
-				    // benjie: use dfrags as the number
-				    // of blocks we want to succeed when
-				    // storing whole keyhash blocks
-				    dhash::num_dfrags ()),
+				    ss, r, i, dhash::num_replica (), 
+				    dhash::num_replica ()/2 + 1),
 			      i == 0 ? DHASH_STORE : DHASH_REPLICA);
       }
     } else {

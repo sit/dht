@@ -1,5 +1,6 @@
+-do not allow inserting of a NEW block twice!
 
--major code clean up
+-make sure number of replicas is exactly as specified. I just saw 6 replicas when n=5
 
 -make it so that only reconfigure when nodes in the configuration die,
 or when primary changes.
@@ -17,6 +18,8 @@ Can do all this in recon_timer ().
 
 
 DONE:
+-major code clean up
+
 -ping for rtts between emulab nodes = 20ms
 
 -Right now keyhash_meta has a cvalid tag that is set to false

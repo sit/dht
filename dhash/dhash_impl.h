@@ -76,7 +76,6 @@ class dhash_impl : public dhash {
   enum { MISSING_OUTSTANDING_MAX = 15 };
   u_int missing_outstanding;
 
-  u_int nreplica;
   int pk_partial_cookie;
   
   ptr<dbfe> db;
@@ -194,7 +193,7 @@ class dhash_impl : public dhash {
   long rpc_answered;
 
  public:
-  dhash_impl (str dbname, u_int nreplica = 0);
+  dhash_impl (str dbname);
   ~dhash_impl ();
 
   void replica_maintenance_timer (u_int index);

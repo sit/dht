@@ -79,6 +79,8 @@ dhash_config_init::dhash_config_init ()
   ok = ok && set_int ("dhash.efrags", 14);
   /** Number of fragments needed to reconstruct a given block */
   ok = ok && set_int ("dhash.dfrags", 7);
+  /** Number of replica for each mutable block **/
+  ok = ok && set_int ("dhash.replica", 5);
   /** How frequently to sync database to disk */
   ok = ok && set_int ("dhash.sync_timer", 30);
 
@@ -115,6 +117,7 @@ DECL_CONFIG_METHOD(keyhashtm, "merkle.keyhash_timer")
 DECL_CONFIG_METHOD(synctm, "dhash.sync_timer")
 DECL_CONFIG_METHOD(num_efrags, "dhash.efrags")
 DECL_CONFIG_METHOD(num_dfrags, "dhash.dfrags")
+DECL_CONFIG_METHOD(num_replica, "dhash.replica")
 DECL_CONFIG_METHOD(dhash_mtu, "dhash.mtu")
 DECL_CONFIG_METHOD(dhash_disable_db_env, "dhash.disable_db_env")
 #undef DECL_CONFIG_METHOD
@@ -123,9 +126,9 @@ DECL_CONFIG_METHOD(dhash_disable_db_env, "dhash.disable_db_env")
 dhash::~dhash () {}
 
 ref<dhash>
-dhash::produce_dhash (str dbname, u_int nrepl)
+dhash::produce_dhash (str dbname)
 {
-  return New refcounted<dhash_impl> (dbname, nrepl);
+  return New refcounted<dhash_impl> (dbname);
 }
 
 dhash_impl::~dhash_impl ()
@@ -158,9 +161,8 @@ open_worker (ptr<dbfe> mydb, str name, dbOptions opts, str desc)
   }
 }
 
-dhash_impl::dhash_impl (str dbname, u_int k) :
+dhash_impl::dhash_impl (str dbname) :
   missing_outstanding (0),
-  nreplica (k),
   pk_partial_cookie (1),
   db (NULL),
   keyhash_db (NULL),
@@ -223,12 +225,12 @@ dhash_impl::init_after_chord (ptr<vnode> node)
 
   // helper class for PK block consistency
   if (DHC_SERVER) {
-    dhc_mgr = New refcounted<dhc> (host_node, dhcs, nreplica);
+    dhc_mgr = New refcounted<dhc> (host_node, dhcs, dhash::num_replica ());
     dhc_mgr->init ();
   } 
 
   // the client helper class (will use for get_key etc)
-  cli = New dhashcli (node, nreplica);
+  cli = New dhashcli (node);
 
   update_replica_list ();
   delaycb (synctm (), wrap (this, &dhash_impl::sync_cb));
@@ -567,7 +569,7 @@ dhash_impl::update_replica_list ()
 {
   replicas = host_node->succs ();
   // trim down successors to just the replicas
-  while (replicas.size () > nreplica)
+  while (replicas.size () > dhash::num_replica ())
     replicas.pop_back ();
 }
 

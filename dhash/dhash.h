@@ -65,14 +65,14 @@ class dhash {
   
   static u_long num_efrags ();
   static u_long num_dfrags ();
+  static u_long num_replica ();
   static u_long dhash_disable_db_env ();
   static u_long dhash_mtu ();
 
   // these 2 are only public for testing purposes
   virtual void replica_maintenance_timer (u_int index) = 0;
 
-  static ref<dhash> produce_dhash
-    (str dbname, u_int nreplica = 0);
+  static ref<dhash> produce_dhash (str dbname);
 
   virtual ~dhash () = 0;
   
