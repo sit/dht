@@ -88,23 +88,39 @@ def file_evgen (fname):
         except Exception, e:
             sys.stderr.write ("Bad event at line %d: %s\n" % (lineno, e))
 
+def _monitor (t, dh):
+    allb = sum (dh.blocks.values ())
+    sb   = sum ([n.sent_bytes for n in dh.allnodes.values ()])
+    ub   = sum ([n.bytes      for n in dh.allnodes.values ()])
+
+    blocks = {}
+    for n in dh.nodes:
+	for b in n.blocks:
+	    blocks[b] = blocks.get (b, 0) + 1
+    extant = blocks.values ()
+    try: 
+	avg = sum (extant, 0.0) / len (extant)
+	minimum = min (extant)
+	maximum = max (extant)
+    except:
+	avg, minimum, maximum = 0, 0, 0
+    return allb, sb, ub, avg, minimum, maximum
 
 def print_monitor (t, dh):
-    allb = sum (dh.blocks.values ())
-    sb   = sum ([n.sent_bytes for n in dh.nodes])
-    ub   = sum ([n.bytes      for n in dh.nodes])
-    
-    print t, "%d nodes;" % len(dh.nodes), 
-    print "%s bytes sent;" % size_rounder (sb),
-    print "%s bytes put;" % size_rounder (allb),
-    print "%s bytes used;" % size_rounder (ub),
+    allb, sb, ub, avg, minimum, maximum = _monitor (t, dh)
+
+    print "%4d" % t, "%4d nodes;" % len(dh.nodes), 
+    print "%sB sent;" % size_rounder (sb),
+    print "%sB put;" % size_rounder (allb),
+    print "%sB used;" % size_rounder (ub),
+    print "%d/%5.2f/%d extant;" % (minimum, avg, maximum),
     print "%d/%d blocks avail" % (dh.available_blocks (), len (dh.blocks))
 
 def parsable_monitor (t, dh):
-    allb = sum (dh.blocks.values ())
-    sb   = sum ([n.sent_bytes for n in dh.nodes])
-    ub   = sum ([n.bytes      for n in dh.nodes])
-    print t, len(dh.nodes), sb, allb, ub, dh.available_blocks (), len (dh.blocks)
+    allb, sb, ub, avg, minimum, maximum = _monitor (t, dh)
+
+    print t, len(dh.nodes), sb, allb, ub, minimum, "%.2f" % avg, maximum,
+    print dh.available_blocks (), len (dh.blocks)
 
 if __name__ == '__main__':
     import sys
