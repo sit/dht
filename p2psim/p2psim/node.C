@@ -376,14 +376,14 @@ Node::packet_handler(Packet *p)
 // i.e. absence of time-out.
 //
 bool
-Node::_doRPC(IPAddress dst, void (*fn)(void *), void *args)
+Node::_doRPC(IPAddress dst, void (*fn)(void *), void *args, unsigned timeout)
 {
-  return _doRPC_receive(_doRPC_send(dst, fn, 0, args));
+  return _doRPC_receive(_doRPC_send(dst, fn, 0, args, timeout));
 }
 
 
 RPCHandle*
-Node::_doRPC_send(IPAddress dst, void (*fn)(void *), void (*killme)(void *), void *args)
+Node::_doRPC_send(IPAddress dst, void (*fn)(void *), void (*killme)(void *), void *args, unsigned timeout)
 {
   Packet *p = New Packet;
   p->_fn = fn;
@@ -391,6 +391,7 @@ Node::_doRPC_send(IPAddress dst, void (*fn)(void *), void (*killme)(void *), voi
   p->_args = args;
   p->_src = ip();
   p->_dst = dst;
+  p->_timeout = timeout;
 
   // where to send the reply, buffered for single reply
   Channel *c = p->_c = chancreate(sizeof(Packet*), 1);
@@ -427,11 +428,9 @@ Node::Receive(void *px)
   reply->_c = p->_c;
   reply->_src = p->_dst;
   reply->_dst = p->_src;
+  reply->_timeout = p->_timeout;
 
   if (proto->alive ()) {
-      // &&
-      //    Network::Instance()->gettopology()->latency(p->_src, 
-      //					  p->_dst) != 50000) {
     (p->_fn)(p->_args);
     reply->_ok = true;
   } else {

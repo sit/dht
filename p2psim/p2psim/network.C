@@ -127,10 +127,23 @@ Network::send(Packet *p)
 
   Time latency = _top->latency(src->ip(), dst->ip(), p->reply());
 
-  // p->ok is set on the receiving side, so if it's false, this must be a
-  // reply.  punish the packet by delaying it according to the failure model.
-  if(with_failure_model && !p->ok())
-    latency += _failure_model->failure_latency(p);
+  // if the node was dead, we have to delay the packet a bit. (p->ok is set on
+  // the receiving side, so if it's false, this must be a reply. punish the
+  // packet by delaying it according to the failure model.)
+  //
+  // if timeout value was passed to doRPC(), then doRPC has to return
+  // [timeout]ms after it was started.  make sure we return by then.
+  //
+  // if timeout == 0, then let the failure model ADD some punishment.
+  //
+  if(!p->ok()) {
+    if(p->timeout()) {
+      int tmplat = p->timeout() - _top->latency(dst->ip(), src->ip(), false);
+      latency = tmplat <= 0 ? 0 : (unsigned) tmplat;
+    } else if(with_failure_model) {
+      latency += _failure_model->failure_latency(p);
+    }
+  }
 
   NetEvent *ne = New NetEvent();
   assert(ne);

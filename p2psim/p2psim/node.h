@@ -127,11 +127,11 @@ protected:
   // Send an RPC from a Node on one Node to a method
   // of the same Node sub-class with a different ip
   template<class BT, class AT, class RT> 
-  bool doRPC(IPAddress dst, void (BT::* fn)(AT *, RT *), AT *args, RT *ret)
+  bool doRPC(IPAddress dst, void (BT::* fn)(AT *, RT *), AT *args, RT *ret, unsigned timeout = 0)
   {
     assert(dst > 0);
     Thunk<BT, AT, RT> *t = _makeThunk(dst, dynamic_cast<BT*>(getpeer(dst)), fn, args, ret);
-    bool ok = _doRPC(dst, Thunk<BT, AT, RT>::thunk, (void *) t);
+    bool ok = _doRPC(dst, Thunk<BT, AT, RT>::thunk, (void *) t, timeout);
     delete t;
     return ok;
   }
@@ -192,8 +192,8 @@ protected:
 
   // implements _doRPC
   friend class Vivaldi;
-  bool _doRPC(IPAddress, void (*fn)(void *), void *args);
-  RPCHandle* _doRPC_send(IPAddress, void (*)(void *), void (*)(void*), void *);
+  bool _doRPC(IPAddress, void (*fn)(void *), void *args, unsigned timeout = 0);
+  RPCHandle* _doRPC_send(IPAddress, void (*)(void *), void (*)(void*), void *, unsigned = 0);
   bool _doRPC_receive(RPCHandle*);
 
   // creates a Thunk object with the necessary croft for an RPC
