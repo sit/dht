@@ -40,7 +40,7 @@ inserting one record and then fetching it a hundred thousand times.
 
 All three tests began each lookup at a random node in the Chord network.
 
-\begin{figure}
+\begin{figure}[h]
 \epsfig{file=figures/ok.store.eps}
 \caption{
 Storage balance for 120,000 records later used as answers to
@@ -72,20 +72,20 @@ run multiple nodes in proportion to their storage capacities.
 We conclude that DDNS does an adequate job of balancing
 storage among the peers.
 
-\begin{figure}
+\begin{figure}[h]
 \epsfig{file=figures/both.fetch.eps}%,angle=270,width=3in}
 \caption{Load balance for the three tests.
 The graph shows a cumulative distribution for the number
 of RPCs served per lookup by each node during the test.
 Since there are a thousand nodes, ideal behavior would be
-involving each node in $n/1000$ lookups, where $n$
+involving each node in $n/1000$ RPCs, where $n$
 is the median number of RPCs executed per lookup (see Figure~\ref{fig:hops}).}
 \label{fig:both-rpc}
 \end{figure}
 
 DHash's block caching helped provide load balance as
 measured by RPCs served per lookup per node.
-As shown in figure~\ref{fig:both-rpc},
+As shown in Figure~\ref{fig:both-rpc},
 in the successful query test, nodes served RPCs in
 approximate proportion to the number of records they stored.
 Specifically, each node serves each of its popular blocks about
@@ -114,7 +114,7 @@ successful and unsuccessful queries, unlike in the current
 DNS, where unresponsive queries might result in spurious 
 retransmissions of requests.
 
-\begin{figure}
+\begin{figure}[h]
 \epsfig{file=figures/hops.eps}%,angle=270,width=3in}
 \caption{Client load to perform lookups. 
 The graph shows a cumulative distribution for the number
@@ -131,7 +131,7 @@ a cached copy of the block.
 Since the slashdot record got cached everywhere very quickly,
 virtually all lookups never left the requesting node.
 
-\begin{figure}
+\begin{figure}[h]
 \epsfig{file=figures/03.ok.lat.eps}
 \caption{Lookup latency distribution for successful one-server
 queries over conventional DNS in the Jung.~{\em et al.}\ data.
@@ -141,25 +141,9 @@ those lookups are plotted.}
 \label{fig:oklat}
 \end{figure}
 
-\begin{figure}
-\epsfig{file=figures/hopslat.eps}
-\caption{Hops per lookup in the simulation of the Jung.~{\em et al.} traces
-over Chord.}
-\label{fig:hopslat}
-\end{figure}
-
-\begin{figure}
-\epsfig{file=figures/imaglat.ok.eps}
-\caption{Imaginary latency to perform DNS lookups over Chord.
-Assuming the latency distribution from the Jung.~{\em et al.} trace plotted
-in Figure~\ref{fig:oklat}, this graph plots the latency distribution
-of our simulated lookups over Chord.}
-\label{fig:imaglat}
-\end{figure}
-
 We would like to be able to compare the latency for DNS over Chord
 with the latency for conventional DNS.  This is made difficult by the fact
-that we don't have an internet-wide Chord ring serving DNS records.
+that we do not have an Internet-wide Chord ring serving DNS records.
 To compensate, we took the latency distribution measured in the Jung.~{\em et al.}\ study
 and used it to compute the expected latencies of DNS over Chord
 in a similar environment.
@@ -179,12 +163,28 @@ to use them for our calculations.
 To be fair, we also cut the smallest 2.5\% of the latencies 
 from the traces, leaving the middle 95\%.
 
+\begin{figure}[h]
+\epsfig{file=figures/hopslat.eps}
+\caption{Hops per lookup in the simulation of the Jung.~{\em et al.} traces
+over Chord.}
+\label{fig:hopslat}
+\end{figure}
+
 Figure~\ref{fig:hopslat} shows the correlation between
 hops per lookup and expected latency.
 For each hop count $h$, we randomly selected and summed $h$ latencies
 from the Jung.~{\em et al.}\ distribution.
 Each point in the graph is the average of 1000 random sums;
 the bars show the standard deviations in each direction.
+
+\begin{figure}[h]
+\epsfig{file=figures/imaglat.ok.eps}
+\caption{Imaginary latency to perform DNS lookups over Chord.
+Assuming the latency distribution from the Jung.~{\em et al.} trace plotted
+in Figure~\ref{fig:oklat}, this graph plots the latency distribution
+of our simulated lookups over Chord.}
+\label{fig:imaglat}
+\end{figure}
 
 Figure~\ref{fig:imaglat} displays the expected latency
 in another way.
@@ -193,7 +193,7 @@ latency (the sum of $h$ random latencies from the Jung.~{\em et al.}\ distributi
 and used that as the query latency.
 The cumulative distribution of these query latencies is plotted.
 
-From these calculations you can see that lookups in DDNS take longer
+These experiments show that lookups in DDNS take longer
 than lookups in conventional DNS: our median response time is 350ms
 while conventional DNS's is about 43ms.
 We have increased the median in favor of removing the

@@ -11,7 +11,9 @@ Our system inherits Chord's fault-tolerance and load balance
 properties, at the same time eliminating many administrative
 problems with the current DNS.
 Unfortunately, our system requires significantly more time
-per lookup.
+per lookup in the median case. However, 
+long lookups (on the order of tens of seconds) can simply
+never happen.
 
 \end{abstract}
 

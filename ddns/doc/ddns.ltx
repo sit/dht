@@ -1,20 +1,23 @@
 \documentclass[twocolumn,10pt]{article}
 \usepackage{epsfig}
-%\usepackage{lucmtime}
+\usepackage{fullpage}
 \renewcommand{\rmdefault}{ptm}
 \renewcommand{\sfdefault}{phv}
 \renewcommand{\ttdefault}{pcr}
 
-%%%
-%%%
-%%%
+% margins
+%\setlength{\topmargin}{-.5in}
+\setlength{\textheight}{8.25in}
+%\setlength{\oddsidemargin}{-.25in}
+\setlength{\textwidth}{6in}
+\setlength{\columnsep}{.4in}
 
 \newcommand{\sha}{{\mathrm{SHA{\mathchar"002D}1}}}
 \newcommand{\dd}{\discretionary{.}{}{.}}
 \newcommand{\np}{{\penalty 0}}
 
 
-\title{\sffamily\bfseries Serving DNS using Chord}
+\title{\sffamily\bfseries Serving DNS using a Peer-to-Peer Lookup Service}
 \author{\sffamily Russ Cox, Athicha Muthitacharoen \\
 \sffamily\normalsize MIT Laboratory for Computer Science \\
 \sffamily \{rsc,athicha\}@lcs.mit.edu}
