@@ -1,23 +1,27 @@
-/* $Id: config.C,v 1.3 2005/02/20 20:50:49 sit Exp $ */
+/* $Id: config.C,v 1.4 2005/02/22 14:29:06 sit Exp $ */
 
 /*
  *
  * Copyright (C) 2004 Emil Sit (sit@mit.edu)
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2, or (at
- * your option) any later version.
+ *  Permission is hereby granted, free of charge, to any person obtaining
+ *  a copy of this software and associated documentation files (the
+ *  "Software"), to deal in the Software without restriction, including
+ *  without limitation the rights to use, copy, modify, merge, publish,
+ *  distribute, sublicense, and/or sell copies of the Software, and to
+ *  permit persons to whom the Software is furnished to do so, subject to
+ *  the following conditions:
  *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
+ *  The above copyright notice and this permission notice shall be
+ *  included in all copies or substantial portions of the Software.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307
- * USA
+ *  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ *  EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ *  MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ *  NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+ *  LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+ *  OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+ *  WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
  */
 
@@ -30,6 +34,7 @@
 #include "newspeer.h"
 
 options *opt (New options);
+str config_file ("/dev/null");
 
 options::options ()
   : client_timeout (300),
@@ -38,6 +43,10 @@ options::options ()
     peer_timeout (300),
     create_unknown_groups (false),
     sync_interval (5)
+{
+}
+
+options::~options ()
 {
 }
 
@@ -59,10 +68,16 @@ options::parse_peer (vec<str> &av)
       if (!convertint (out[1], &port))
 	return "Bad port!";
   }
+
   // warnx << "New peer: " << host << ":" << port << "\n";
-  ptr<newspeer> np = newspeer::alloc (host, port);
+  for (size_t i = 0; i < peers.size (); i++)
+    if (peers[i]->hostname == host && peers[i]->port == port)
+      return "duplicate peer!";
+
+  ptr<peerinfo> np = New refcounted<peerinfo> (host, port);
   if (!np)
-    return "duplicate peer!";
+    return NULL;
+  peers.push_back (np);
 
   if (av.size () < 3) {
     np->add_pattern ("*");
@@ -100,16 +115,16 @@ parseconfig (options *op, str cf)
   vec<str> av;
   while (pa.getline (&av, &line)) {
 #if 0    
-    if (ct.match (av, cf, line, &errors))
+    if (ct.match (av, cf, line, &errors)) {
       continue;
-#endif /* 0 */
+#else
     if (!strcasecmp ("Peer", av[0])) {
       str err = op->parse_peer (av);
       if (err) {
 	errors = true;
 	WARN << err << "\n";
-	//	warn << cf << ":" << line << ": " <<  err << "\n";
       }
+#endif /* 0 */
 #if 1      
     } else if (!strcasecmp("ClientTimeout", av[0])) {
       if (!convertint (av[1], &op->client_timeout) ||

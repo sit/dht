@@ -20,22 +20,33 @@ collect_stats ()
   s << "nconn " << nntp::nconn () << "\r\n";
   s << "fedinbytes " << nntp::fedinbytes () << "\r\n";
   s << "dhashbytes " << nntp::dhashbytes () << "\r\n";
-  s << "npeers " << peers.size () << "\r\n";
-
-  u_int64_t totalout (0);
-  for (size_t i = 0; i < peers.size (); i++)
-    totalout += peers[i]->fedoutbytes ();
-  s << "fedoutbytes " << totalout << "\r\n";
+  s << "npeers " << opt->peers.size () << "\r\n";
+  s << "fedoutbytes " << newspeer::totalfedbytes () << "\r\n";
 
   return s;
 }
 
-void
+static void
 stop ()
 {
   // XXX shutdown open connections cleanly....
   warn << "Shutting down on signal.\n";
   exit (1);
+}
+
+static void
+reconfig ()
+{
+  warn << "Re-reading configuration file\n";
+  options *nopt = New options;
+  if (!parseconfig (nopt, config_file)) {
+    delete nopt;
+    warn ("errors found in config file, keeping old configuration\n");
+    return;
+  }
+
+  delete opt;
+  opt = nopt;
 }
 
 // boring network accept code
@@ -89,7 +100,6 @@ main (int argc, char *argv[])
 
   char *sock = "/tmp/chord-sock";
   char *dirbase = NULL;
-  char *cffile  = NULL;
   bool create_groups = opt->create_unknown_groups;
 
   int ch;
@@ -100,7 +110,7 @@ main (int argc, char *argv[])
       dirbase = optarg;
       break;
     case 'f':
-      cffile = optarg;
+      config_file = optarg;
       break;
     case 'g':
       create_groups = true;
@@ -116,7 +126,7 @@ main (int argc, char *argv[])
   if (dirbase && chdir (dirbase) < 0)
     fatal << "chdir(" << dirbase << "): " << strerror (errno) << "\n";
 
-  if (cffile && !parseconfig (opt, cffile))
+  if (!parseconfig (opt, config_file))
     fatal << "errors parsing configuration file\n";
 
   // Override any configuration file settings from command line.
@@ -138,6 +148,7 @@ main (int argc, char *argv[])
 
   sigcb (SIGINT,  wrap (&stop));
   sigcb (SIGTERM, wrap (&stop));
+  sigcb (SIGHUP, wrap (&reconfig));
 
   startlisten ();
   delaycb (opt->sync_interval, wrap (&syncdb));

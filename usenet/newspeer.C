@@ -1,35 +1,99 @@
 #include <async.h>
 #include <aios.h>
 #include <rxx.h>
+#include <qhash.h>
+
 #include <dbfe.h>
 #include "usenet.h"
 #include "newspeer.h"
 
-vec<ptr<newspeer> > peers;
+// XXX should gc newspeers if connections are closed.
+qhash<str, ref<newspeer> > newspeers;
 
 void
 feed_article (str id, const vec<str> &groups)
 {
-  for (size_t i = 0; i < peers.size (); i++) {
+  ptr<peerinfo> pi (NULL);
+  ptr<newspeer> np (NULL);
+  for (size_t i = 0; i < opt->peers.size (); i++) {
+    pi = opt->peers[i];
+    np = newspeers[pi->peerkey];
+    if (np == NULL) {
+      np = New refcounted<newspeer> (pi->hostname, pi->port);
+      newspeers.insert (pi->peerkey, np);
+    }
     for (size_t j = 0; j < groups.size (); j++) {
-      if (peers[i]->desired (groups[j])) {
-	peers[i]->queue_article (id);
+      if (pi->desired (groups[j])) {
+	np->queue_article (id);
 	break;
       }
     }
   }
 }
 
-newspeer::newspeer (str h, u_int16_t p) :
+peerinfo::peerinfo (str h, u_int16_t p) :
   hostname (h),
   port (p),
+  peerkey (strbuf ("%s:%d", h.cstr (), p))
+{
+}
+
+peerinfo::~peerinfo ()
+{
+}
+
+bool
+peerinfo::add_pattern (str p)
+{
+  const char *c = p.cstr ();
+  while (*c) {
+    if (!isalnum(*c) && *c != '.' && *c != '*')
+      return false;
+    c++;
+  }
+  patterns.push_back (p);
+  return true;
+}
+
+bool
+peerinfo::desired (str group)
+{
+  // case sensitivity?
+  for (size_t d = 0; d < patterns.size (); d++) {
+    str pattern = patterns[d];
+    for (size_t i = 0; i < pattern.len () && i < group.len (); i++) {
+      if (pattern[i] == '*' && i == pattern.len () - 1)
+	return true;
+      if (pattern[i] != group[i])
+	break;
+    }
+  }
+  return false;
+}
+
+
+u_int64_t
+newspeer::totalfedbytes ()
+{
+  u_int64_t totalout (0);
+  qhash_slot<str, ref<newspeer> > *s = newspeers.first ();
+  while (s) {
+    totalout += s->value->fedoutbytes ();
+    s = newspeers.next (s);
+  }
+  return totalout;
+}
+
+newspeer::newspeer (str h, u_int16_t p) :
   s (-1),
   aio (NULL),
   conncb (NULL),
   state (HELLO_WAIT),
   dhtok (false),
   streamok (false),
-  fedoutbytes_ (0)
+  fedoutbytes_ (0),
+  hostname (h),
+  port (p)
 {
   start_feed ();
 }
@@ -45,9 +109,8 @@ newspeer::~newspeer ()
 void
 newspeer::reset ()
 {
-  close (s);
+  aio = NULL; // aios destructor will close socket cleanly.
   s = -1;
-  aio = NULL;
   if (conncb) {
     timecb_remove (conncb);
     conncb = NULL;
@@ -55,47 +118,6 @@ newspeer::reset ()
   state = HELLO_WAIT;
   dhtok = false;
   streamok = false;
-}
-
-ptr<newspeer>
-newspeer::alloc (str h, u_int16_t p)
-{
-  for (size_t i = 0; i < peers.size (); i++)
-    if (peers[i]->hostname == h && peers[i]->port == p)
-      return NULL;
-  
-  ptr<newspeer> np = New refcounted<newspeer> (h, p);
-  peers.push_back (np);
-  return np;
-}
-
-bool
-newspeer::add_pattern (str p)
-{
-  const char *c = p.cstr ();
-  while (*c) {
-    if (!isalnum(*c) && *c != '.' && *c != '*')
-      return false;
-    c++;
-  }
-  patterns.push_back (p);
-  return true;
-}
-
-bool
-newspeer::desired (str group)
-{
-  // case sensitivity?
-  for (size_t d = 0; d < patterns.size (); d++) {
-    str pattern = patterns[d];
-    for (size_t i = 0; i < pattern.len () && i < group.len (); i++) {
-      if (pattern[i] == '*' && i == pattern.len () - 1)
-	return true;
-      if (pattern[i] != group[i])
-	break;
-    }
-  }
-  return false;
 }
 
 void

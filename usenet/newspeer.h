@@ -1,6 +1,32 @@
 #ifndef _NEWSPEER_H_
 #define _NEWSPEER_H_
 
+/*
+ * Information about each peer is kept in a peerinfo object,
+ * which gates whether or not an article is desired by a
+ * given peer.
+ *
+ * Separately, we maintain a table of open connections to
+ * peers.  This is mostly so that if the peer configuration
+ * changes, we can continue to process out-bound feeds to
+ * that peer until completion.
+ */
+
+class peerinfo {
+  vec<str> patterns;
+
+public:
+  const str hostname;
+  const u_int16_t port;
+  const str peerkey;
+
+  peerinfo (str h, u_int16_t p);
+  ~peerinfo ();
+
+  bool add_pattern (str p);
+  bool desired (str group);
+};
+
 struct aios;
 struct timecb_t;
 
@@ -12,16 +38,12 @@ enum peerstate {
 };
 
 class newspeer {
-  str hostname;
-  u_int16_t port;
-
   int s;
   ptr<aios> aio;
   timecb_t *conncb;
   peerstate state;
 
   // what remote host desires
-  vec<str> patterns;
   bool dhtok;
   bool streamok;
 
@@ -39,18 +61,18 @@ class newspeer {
   void reset ();
   
  public:
-  static ptr<newspeer> alloc (str h, u_int16_t p);
+  const str hostname;
+  const u_int16_t port;
+
   newspeer (str h, u_int16_t p);
   ~newspeer ();
 
-  bool add_pattern (str p);
-  bool desired (str group);
-  
   void start_feed (int t = 60);
   void queue_article (str id);
-  u_int64_t fedoutbytes (bool reset = false);
-};
 
-extern vec<ptr<newspeer> > peers;
+  static u_int64_t totalfedbytes ();
+  u_int64_t fedoutbytes (bool reset = false);
+
+};
 
 #endif /* _NEWSPEER_H_ */
