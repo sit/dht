@@ -3,10 +3,14 @@
 
 #include "node.h"
 #include "p2psim.h"
+#include <vector>
+#include <string>
+using namespace std;
 
 class Event {
 public:
   Event();
+  Event(vector<string>*);
   virtual ~Event();
 
   Time ts;

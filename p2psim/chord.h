@@ -16,13 +16,12 @@ public:
   Chord(Node *n);
   virtual ~Chord();
 
-  // Events from the event file.
-  virtual void join(void*);
-  virtual void leave(void*) {};
-  virtual void crash(void*) {};
-  virtual void lookup(void*) {};
-  virtual void insert_doc(void*) {};
-  virtual void lookup_doc(void*) {};
+  virtual void join(Args*);
+  virtual void leave(Args*) {};
+  virtual void crash(Args*) {};
+  virtual void lookup(Args*) {};
+  virtual void insert_doc(Args*) {};
+  virtual void lookup_doc(Args*) {};
 
   // RPC handlers.
   void *find_successor_x(void *);

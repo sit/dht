@@ -76,16 +76,16 @@ Protocol::run()
 {
   Alt a[3];
   Packet *packet;
-  P2PEvent *e;
-  appdispatch_t *ad = 0;
-  netdispatch_t *nd = 0;
+  P2PEvent *event;
+  pair<Protocol*, Packet*> *np;
+  pair<Protocol*, Event*> *ap;
 
   a[0].c = _netchan;
   a[0].v = &packet;
   a[0].op = CHANRCV;
 
   a[1].c = _appchan;
-  a[1].v = &e;
+  a[1].v = &event;
   a[1].op = CHANRCV;
 
   a[2].op = CHANEND;
@@ -100,18 +100,18 @@ Protocol::run()
     switch(i) {
       case 0:
         // packet from network
-        nd = new netdispatch_t;
-        nd->p = this;
-        nd->packet = packet;
-        threadcreate(Protocol::Receive, (void*)nd, mainstacksize);
+        np = new pair<Protocol*, Packet*>();
+        np->first = this;
+        np->second = packet;
+        threadcreate(Protocol::Receive, (void*)np, mainstacksize);
         break;
 
       case 1:
         // application call
-        ad = new appdispatch_t;
-        ad->p = this;
-        ad->e = e;
-        threadcreate(Protocol::Dispatch, (void*)ad, mainstacksize);
+        ap = new pair<Protocol*, Event*>();
+        ap->first = this;
+        ap->second = event;
+        threadcreate(Protocol::Dispatch, (void*)ap, mainstacksize);
         break;
 
       default:
@@ -125,9 +125,9 @@ Protocol::run()
 void
 Protocol::Receive(void *p)
 {
-  netdispatch_t *np = (netdispatch_t*) p;
-  Protocol *prot = (Protocol*) np->p;
-  Packet *packet = (Packet*) np->packet;
+  pair<Protocol*, Packet*> *np = (pair<Protocol*, Packet*> *) p;
+  Protocol *prot = (Protocol*) np->first;
+  Packet *packet = (Packet*) np->second;
 
   // do upcall using the function pointer in the packet. yuck.
   void *ret = (prot->*packet->_fn)(packet->_args);
@@ -151,12 +151,12 @@ Protocol::Receive(void *p)
 
 
 void
-Protocol::Dispatch(void *d)
+Protocol::Dispatch(void *p)
 {
-  appdispatch_t *dp = (appdispatch_t*) d;
-  Protocol *p = (Protocol*) dp->p;
-  p->dispatch((P2PEvent*) dp->e);
-  delete dp;
+  pair<Protocol*, Event*> *ap = (pair<Protocol*, Event*>*) p;
+  Protocol *prot = (Protocol*) ap->first;
+  prot->dispatch((P2PEvent*) ap->second);
+  delete ap;
   threadexits(0);
 }
 
@@ -167,23 +167,23 @@ Protocol::dispatch(P2PEvent *e)
 {
   switch(e->event) {
     case JOIN:
-      join(0);
+      join(e->args);
       break;
 
     case LEAVE:
-      leave(0);
+      leave(e->args);
       break;
 
     case CRASH:
-      crash(0);
+      crash(e->args);
       break;
 
     case INSERT:
-      insert_doc(0);
+      insert_doc(e->args);
       break;
 
     case LOOKUP:
-      lookup_doc(0);
+      lookup_doc(e->args);
       break;
 
     default:

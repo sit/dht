@@ -9,14 +9,14 @@ public:
   Kademlia(Node*);
   ~Kademlia();
 
-  virtual void join(void*);
-  virtual void leave(void*);
-  virtual void crash(void*);
-  virtual void insert_doc(void*);
-  virtual void lookup_doc(void*);
+  virtual void join(Args*);
+  virtual void leave(Args*);
+  virtual void crash(Args*);
+  virtual void insert_doc(Args*);
+  virtual void lookup_doc(Args*);
 
-  void delayedcb(void*);
-  void *do_join(void*);
+  void join_kademlia(void *);
+  void do_join(void*);
 };
 
 #endif // __KADEMLIA_H

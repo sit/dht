@@ -1,5 +1,10 @@
-0 0 0 Kademlia
-1 1 0 Kademlia
-2 2 0 Kademlia
-3 3 0 Kademlia
-10 4 0 Kademlia
+#first parameter must be the type of message
+#
+# event type "node"
+#   node timestamp node-id protocol:operation [arguments]
+#
+# event type "simulator"
+#   simulator timestamp exit
+node 0 0 Kademlia:0 wellknown=0
+node 2 1 Kademlia:0 wellknown=0
+#simulator 100 exit

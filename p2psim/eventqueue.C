@@ -1,6 +1,8 @@
 #include "eventqueue.h"
 #include "network.h"
 #include "p2pevent.h"
+#include "parse.h"
+#include "eventfactory.h"
 #include <iostream>
 #include <fstream>
 #include <list>
@@ -71,13 +73,11 @@ EventQueue::run()
 void
 EventQueue::advance()
 {
-  // if there's nothing on the queue something is wrong, I think.
   if(_queue.empty()) {
-    cerr << "no more events to run" << endl;
-    exit(0);
+    cerr << "queue is empty" << endl;
+    exit(-1);
   }
 
-  // get time of next event.
   // XXX: time is not running smoothly. does that matter?
   Event *e = _queue.front();
   _time = e->ts;
@@ -136,26 +136,20 @@ EventQueue::parse(char *file)
   ifstream in(file);
 
   // XXX: this is bullshit. make better.
-  while(!in.eof()) {
-    int ts, id, event;
-    string proto;
+  string line;
+  while(getline(in,line)) {
+    vector<string> words = split(line);
 
-    in.setf(ios::dec);
-    in >> ts >> id >> event;
+    // skip empty lines and commented lines
+    if(words.empty() || words[0][0] == '#')
+      continue;
 
-    // XXX: WHY?
-    if(in.eof())
-      break;
-    in.unsetf(ios::dec);
-    in >> proto;
-
-    P2PEvent *e = new P2PEvent();
-    e->ts = (Time) ts;
-    e->node = Network::Instance()->getnode((IPAddress) id);
-    assert(e->node);
-    e->protocol = proto;
-    e->event = (Protocol::EventID) event;
-    e->args = 0;
+    // create the appropriate event type (based on the first word of the line)
+    // and let that event parse the rest of the line
+    string event_type = words[0];
+    words.erase(words.begin());
+    Event *e = EventFactory::Instance()->create(event_type, &words);
+    assert(e);
     add_event(e);
   }
 }

@@ -58,7 +58,7 @@ Chord::find_successor_x(void *x)
 // and try to join.
 // XXX assumes that well-known node has address 1.
 void
-Chord::join(void *)
+Chord::join(Args*)
 {
   cout << s() + "::join" << endl;
   void *ret = doRPC((IPAddress) 1, Chord::find_successor_x, me.hid);

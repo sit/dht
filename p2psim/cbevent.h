@@ -12,7 +12,10 @@ public:
 
   Protocol *prot;
   Protocol::member_f fn;
-  void *args; // ???
+  void *args;
+
+private:
+  static void Dispatch(void *);
 };
 
 #endif // __CBEVENT_H

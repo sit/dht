@@ -13,46 +13,47 @@ Kademlia::~Kademlia()
 }
 
 void
-Kademlia::delayedcb(void*)
+Kademlia::join_kademlia(void *x)
 {
-  cout << "Invoked at: " << now() << endl;
-}
+  Args *a = (Args*) x;
+  IPAddress wkn = (IPAddress) atoi(((*a)["wellknown"]).c_str());
 
-void *
-Kademlia::do_join(void*)
-{
-  cout << "do_join at " << now() << endl;
-  delaycb(10, Kademlia::delayedcb, 0);
-  return 0;
+  unsigned myid = id();
+  doRPC(wkn, Kademlia::do_join, &myid);
 }
 
 void
-Kademlia::join(void*)
+Kademlia::do_join(void *id)
 {
-  // send my id to next node in ring
-  doRPC((IPAddress) ((id()+1) % 5), Kademlia::do_join, 0);
+  cout << "Node with id=" << *((int*)id) << " just registed." << endl;
 }
 
 void
-Kademlia::leave(void*)
+Kademlia::join(Args *a)
+{
+  delaycb(10, Kademlia::join_kademlia, a);
+}
+
+void
+Kademlia::leave(Args*)
 {
   cout << "Kademlia leave" << endl;
 }
 
 void
-Kademlia::crash(void*)
+Kademlia::crash(Args*)
 {
   cout << "Kademlia crash" << endl;
 }
 
 void
-Kademlia::insert_doc(void*)
+Kademlia::insert_doc(Args*)
 {
   cout << "Kademlia insert_doc" << endl;
 }
 
 void
-Kademlia::lookup_doc(void*)
+Kademlia::lookup_doc(Args*)
 {
   cout << "Kademlia lookup_doc" << endl;
 }
