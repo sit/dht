@@ -291,9 +291,11 @@ route_dhash::walk (vec<chord_node> succs)
   } else {
     bool ok = false;
     chord_node s;
+    ptr<location> l;
     while (!ok && succs.size () > 0) {
       chord_node s = succs.pop_front ();
-      ok = f->get_vnode ()->locations->insert (s);
+      l = f->get_vnode ()->locations->lookup_or_create (s);
+      // XXX
     }
     if (ok) {
       dhash_download::execute

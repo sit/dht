@@ -221,6 +221,7 @@ chord::newvnode (cbjoin_t cb, ptr<fingerlike> fingers, ptr<route_factory> f)
   ptr<location> l = locations->insert (newID, myname, myport, nvnode, coords);
   if (wellknown_node == NULL)
     wellknown_node = l;
+  locations->pin (newID);
 
   ptr<vnode> vnodep = vnode::produce_vnode (locations, rpcm, fingers, f,
 					    mkref (this), newID, 

@@ -9,12 +9,17 @@ class location;
 struct hashID;
 
 class locationtable {
-  typedef unsigned short loctype;
-  static const loctype LOC_REGULAR = 1 << 0;
-  static const loctype LOC_PINSUCC = 1 << 1;
-  static const loctype LOC_PINPRED = 1 << 2;
-  static const loctype LOC_PINSUCCLIST = 1 << 3;
-  static const loctype LOC_PINPREDLIST = 1 << 4;
+  struct pininfo {
+    sklist_entry<pininfo> sortlink_;
+    
+    chordID n_;
+    bool pinself_;
+    u_short pinsucc_;
+    u_short pinpred_;
+    pininfo (chordID n, bool pinself, u_short pinsucc, u_short pinpred) :
+      n_ (n), pinself_ (pinself), pinsucc_ (pinsucc), pinpred_ (pinpred)
+    {};
+  };
   
   struct locwrap {
     ihash_entry<locwrap> hlink_;
@@ -22,11 +27,9 @@ class locationtable {
     sklist_entry<locwrap> sortlink_;
 
     ptr<location> loc_; 
-    loctype type_;
     chordID n_;
-    locwrap (ptr<location> l, loctype lt = LOC_REGULAR);
-    locwrap (const chordID &x, loctype lt) :
-      loc_ (NULL), type_ (lt), n_ (x) { }
+    bool pinned_;
+    locwrap (ptr<location> l);
     bool good ();
   };
   
@@ -36,14 +39,19 @@ class locationtable {
   tailq<locwrap, &locwrap::uselink_> cachedlocs;
   skiplist<locwrap, chordID, &locwrap::n_, &locwrap::sortlink_> loclist;
 
-  u_int32_t size_cachedlocs;
+  // Pin list
+  skiplist<pininfo, chordID, &pininfo::n_, &pininfo::sortlink_> pinlist;
+  
   u_int32_t max_cachedlocs;
 
   u_long nnodessum;
   u_long nnodes;
   unsigned nvnodes;
 
-  void delete_cachedlocs ();
+  bool pins_updated_;
+  
+  void figure_pins ();
+  void evict (size_t n);
   void realinsert (ref<location> l);
 
   // Circular, in-order traversal of all known nodes.
@@ -51,13 +59,13 @@ class locationtable {
   locwrap *prev (locwrap *lw);
 
   bool remove (locwrap *l);
-  void pin (const chordID &x, loctype pt);
 
   // NOT IMPLEMENTED (copy constructor)
   locationtable (const locationtable &src);
 
  public:
   locationtable (int _max_cache);
+  ~locationtable ();
 
   size_t size ();
   size_t usablenodes ();
@@ -73,17 +81,18 @@ class locationtable {
 			const chord_hostname &s, 
 			int p, int v,
 			const vec<float> &coords);
-  
-  void pinpredlist (const chordID &x);
-  void pinsucclist (const chordID &x);
-  void pinsucc (const chordID &x);
-  void pinpred (const chordID &x);
+
+  void pin (const chordID &x, short num = 0);
+  void flush (void);
   
   bool lookup_anyloc (const chordID &n, chordID *r);
   ptr<location> closestsuccloc (const chordID &x);
   ptr<location> closestpredloc (const chordID &x, vec<chordID> failed);
   ptr<location> closestpredloc (const chordID &x);
 
+  // Like insert, but doesn't cache it.  If it is already
+  // cached, return the existing object.
+  ptr<location> lookup_or_create (const chord_node &n);
   ptr<location> lookup (const chordID &x);
   bool cached (const chordID &x);
 

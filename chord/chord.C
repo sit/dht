@@ -602,8 +602,11 @@ vnode_impl::join_getsucc_cb (ptr<location> n,
   } else if (route->resok->nlist.size () < 1) {
     status = CHORD_ERRNOENT;
   } else {
-    for (size_t i = 0; i < route->resok->nlist.size(); i++) {
+    // Just insert a possible predecessor and successor.
+    size_t i = route->resok->nlist.size () - 1;
+    for (size_t j = 0; j < 2 && i >= 0; j++) {
       locations->insert (make_chord_node (route->resok->nlist[i]));
+      i--;
     }
     stabilize ();
     notify (my_succ (), myID);

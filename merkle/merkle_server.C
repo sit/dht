@@ -1,5 +1,6 @@
 #include "merkle_server.h"
 #include <location.h>
+#include <locationtable.h>
 #include <comm.h>
 #include "transport_prot.h"
 
@@ -50,7 +51,7 @@ merkle_server::dispatch (user_args *sbp)
       // Get remote sides ip:port and chordID
       chord_node from;
       sbp->fill_from (&from);
-      ptr<location> l = New refcounted<location> (from);
+      ptr<location> l = host_node->locations->lookup_or_create (from);
 
       compare_nodes (ltree, arg->rngmin, arg->rngmax, lnode, rnode,
 		     wrap (this, &merkle_server::missing, l),

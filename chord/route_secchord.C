@@ -202,17 +202,15 @@ route_secchord::next_hop_cb (ptr<bool> deleted,
       // Ensure that this is a valid location, and further make
       // sure that it will be counted for later use in sufficient_successors
       chord_node cn = make_chord_node (res->resok->nlist[i]);
-      if (!v->locations->insert (cn))
+      ptr<location> l = v->locations->insert (cn);
+      if (!l)
 	continue; // XXX one bad node in reply ==> untrustworthy source??
       node *n = nexthops_.search (cn.x);
       if (!n) {
-	ptr<location> l = New refcounted<location> (cn);
-	if (l->vnode () >= 0) {
-	  n = New node (l);
-	  warnx << v->my_ID () <<  ": secchord::next_hop: " << x << " attempting to insert " << n->n_ << "\n";
-	  bool ok = nexthops_.insert (n);
-	  assert (ok);
-	}
+	n = New node (l);
+	warnx << v->my_ID () <<  ": secchord::next_hop: " << x << " attempting to insert " << n->n_ << "\n";
+	bool ok = nexthops_.insert (n);
+	assert (ok);
       } else {
 	n->count_++;
       }

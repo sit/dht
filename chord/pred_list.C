@@ -1,5 +1,13 @@
+// Predecessor lists are totally broken. DO NOT USE!
+// This implementation is just set up to maintain strict predecessors.
+#undef PRED_LIST
+
 #include "chord.h"
 #include "pred_list.h"
+
+#ifdef PRED_LIST
+#include <configurator.h>
+#endif /* PRED_LIST */
 #include <id_utils.h>
 #include <location.h>
 #include <locationtable.h>
@@ -17,8 +25,13 @@ pred_list::pred_list (ptr<vnode> v,
 
   oldpred_ = v->my_location ();
   
-  locations->pinpred (myID);
-  locations->pinpredlist (myID);
+  locations->pin (myID, -1);
+#ifdef PRED_LIST  
+  size_t npred;
+  bool ok = Configurator::only ().get_int ("chord.nsucc", npred);
+  assert (ok);
+  locations->pinpredlist (myID, npred);
+#endif /* PRED_LIST */  
 }
 
 ptr<location>
@@ -33,15 +46,16 @@ pred_list::preds ()
   vec<ptr<location> > ret;
   
   ptr<location> cur = pred ();
-  ptr<location> start = cur;
   ret.push_back (cur);
-
+#ifdef PRED_LIST
+  ptr<location> start = cur;
   // XXX it's not always safe to go backwards. Nodes we run
   //     into going backwards might point off the ring!
   for (u_int i = 1; i < NPRED && cur != start; i++) {
     cur = locations->closestpredloc (decID (cur->id ()));
     ret.push_back (cur);
   }
+#endif /* PRED_LIST */
   return ret;
 }
   
@@ -68,7 +82,6 @@ pred_list::update_pred_fingers_cb (vec<chord_node> nlist, chordstat s)
     return;
   gotfingers_ = true;
   for (unsigned i = 0; i < nlist.size (); i++)
-    //BAD LOC (ok)
     locations->insert (nlist[i]);
 }
 
@@ -103,6 +116,7 @@ pred_list::stabilize_getsucc_cb (chordID pred, chord_node s, chordstat status)
 void
 pred_list::stabilize_predlist ()
 {
+#ifdef PRED_LIST  
   u_long n = locations->usablenodes ();
   chordID preddist (1);
   // XXX should this depend on NPRED?
@@ -120,6 +134,7 @@ pred_list::stabilize_predlist ()
   nout_backoff++;
   v_->find_successor (backkey_,
 		      wrap (this, &pred_list::stabilize_predlist_gotpred));
+#endif /* PRED_LIST */  
 }
 
 void
@@ -156,7 +171,9 @@ pred_list::do_continuous ()
 void
 pred_list::do_backoff ()
 {
-  //stabilize_predlist ();
+#ifdef PRED_LIST  
+  stabilize_predlist ();
+#endif /* PRED_LIST */  
   return;
 }
 
@@ -164,8 +181,11 @@ bool
 pred_list::isstable ()
 {
   // Won't be true until update_pred has been called once.
+#ifndef PRED_LIST  
   return oldpred_ == pred ();
-  // return oldpred_ == pred () && stable_predlist;
+#else /* !PRED_LIST */  
+  return oldpred_ == pred () && stable_predlist;
+#endif /* PRED_LIST */  
 }
 
 void

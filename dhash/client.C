@@ -219,7 +219,7 @@ protected:
 
     if (npending == 0) {
       if (status == DHASH_RETRY) {
-	ptr<location> pn = clntnode->locations->insert (pred_node);
+	ptr<location> pn = clntnode->locations->lookup_or_create (pred_node);
 	if (!pn && !returned) {
 	  (*cb) (DHASH_CHORDERR, dest->id ());
 	  returned = true;
@@ -691,7 +691,7 @@ dhashcli::insert2_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
   }
 
   if(block->ctype == DHASH_KEYHASH) {
-    ref<location> dest = New refcounted<location>(succs[0]);
+    ptr<location> dest = clntnode->locations->lookup_or_create (succs[0]);
     dhash_store::execute (clntnode, dest, block->ID, dh, block, false,  
 			  wrap (this, &dhashcli::insert_stored_cb,  
 				block->ID, block, cb, 0));  

@@ -29,8 +29,8 @@ succ_list::succ_list (ptr<vnode> v,
   nout_backoff = 0;
   nout_continuous = 0;
 
-  locations->pinsucc (myID);
-  locations->pinsucclist (myID);
+  locations->pin (myID, 1);
+  locations->pin (myID, nsucc_);
 }
    
 ptr<location>
@@ -180,7 +180,6 @@ succ_list::stabilize_getsucclist_cb (chordID s, vec<chord_node> nlist,
     if (between (myID, succlist[i]->id (), nlist[j].x)) {
       // if succlist[i] > nlist[j].x
       // then maybe a new node joined. check it out.
-      //BAD LOC (ok)
       ptr<location> newsucc = locations->insert (nlist[j]);
       if (!newsucc) {
 	warnx << myID << ": stabilize_succlist: received bad successor "
@@ -206,7 +205,6 @@ succ_list::stabilize_getsucclist_cb (chordID s, vec<chord_node> nlist,
   }
   while (j < newnsucc) {
     assert (!check);
-    //BAD LOC
     ptr<location> newsucc = locations->insert (nlist[j]);
     if (!newsucc) {
       warnx << myID << ": stabilize_succlist: received bad successor "

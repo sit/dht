@@ -463,7 +463,7 @@ vnode_impl::update_coords (ptr<location> u, vec<float> uc, float ud)
 
 
   //  warn << myID << " --- starting update -----\n";
-  //update the node's coords in the location table
+  //update the node's coords
   u->set_coords (uc);
   int iterations = 0;
   float ftot = 0.0;
@@ -479,7 +479,8 @@ vnode_impl::update_coords (ptr<location> u, vec<float> uc, float ud)
     for (int i = 0; i < chord::NCOORDS; i++)
       f.push_back (0.0);
 
-    ptr<location> l = locations->first_loc ();
+    bool ucached = locations->cached (u->id ());
+    ptr<location> l = ucached ? locations->first_loc () : u;
     bool found_meas = false;
     int cit = 0;
 
@@ -495,29 +496,33 @@ vnode_impl::update_coords (ptr<location> u, vec<float> uc, float ud)
 	float expect = Coord::distance_f (coords, v);
 
 
-	if (actual >= 0)
-	  {
-	    //force magnitude: > 0 --> stretched
-	    float grad = expect - actual;
-
-	    Coord::vector_sub (v, coords);
-	
-	    float len = Coord::norm (v);
-	    float unit = 1.0/sqrtf(len);
-	    
-	    //scalar_mult(v, unit) is unit force vector
-	    // times grad gives the scaled force vector
-	    Coord::scalar_mult (v, unit*grad);
-	    
-	    //add v into the overall force vector
-	    Coord::vector_add (f, v);
-	    
-	    //	Coord::print_vector ("f ", f);
-	    found_meas = true;
-	    cit++;
-	  }
-      } 
-      l = locations->next_loc(l->id ());
+	if (actual >= 0) {
+	  // force magnitude: > 0 --> stretched
+	  float grad = expect - actual;
+	  
+	  Coord::vector_sub (v, coords);
+	  
+	  float len = Coord::norm (v);
+	  float unit = 1.0/sqrtf(len);
+	  
+	  // scalar_mult(v, unit) is unit force vector
+	  // times grad gives the scaled force vector
+	  Coord::scalar_mult (v, unit*grad);
+	  
+	  // add v into the overall force vector
+	  Coord::vector_add (f, v);
+	  
+	  // Coord::print_vector ("f ", f);
+	  found_meas = true;
+	  cit++;
+	}
+      }
+      if (ucached)
+	l = locations->next_loc (l->id ());
+      else {
+	ucached= true;
+	l = locations->first_loc ();
+      }
     }
     
     //print_vector ("f", f);
@@ -552,8 +557,7 @@ long
 vnode_impl::doRPC (const chord_node &n, const rpc_program &prog, int procno, 
 	      ptr<void> in, void *out, aclnt_cb cb)
 {
-  //BAD LOC (ok)
-  ptr<location> l = locations->insert (n);
+  ptr<location> l = locations->lookup_or_create (n);
   return doRPC (l, prog, procno, in, out, cb);
 }
 

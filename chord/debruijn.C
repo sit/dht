@@ -26,7 +26,7 @@ debruijn::init (ptr<vnode> v, ptr<locationtable> locs)
   myID = v->my_ID ();
 
   mydoubleID = doubleID (myID, logbase);
-  locations->pinpred (mydoubleID);
+  locations->pin (mydoubleID, -1);
   warn << myID << " de bruijn: double :" << mydoubleID << "\n";
 }
 

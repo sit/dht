@@ -37,35 +37,22 @@
 
 #include "configurator.h"
 
-// XXX should use configurator value??
-#define NSUCC 16
-
 struct locationtable_init {
   locationtable_init ();
 } li;
 
 locationtable_init::locationtable_init ()
 {
+  // Gross hack.
   Configurator::only ().set_int ("locationtable.maxcache",
 				 (160 + 16 + 16 + 16));
 }
 
-#if 0
-void
-locationtable::printloc (locwrap *l)
+locationtable::locwrap::locwrap (ptr<location> l) :
+  loc_ (l),
+  n_ (l->id ()),
+  pinned_ (false)
 {
-  assert (l);
-  warnx << "Locwrap " << l->n_;
-  warnx << " type " << l->type_;
-  if (l->type_ & LOC_REGULAR)
-    warnx << " (A=" << l->loc_->alive () << ")\n";
-}
-#endif /* 0 */
-
-locationtable::locwrap::locwrap (ptr<location> l, loctype lt) :
-  loc_ (l), type_ (lt)
-{
-  n_ = l->id ();
 }
 
 locationtable::locwrap *
@@ -93,20 +80,33 @@ locationtable::prev (locwrap *lw)
 inline bool
 locationtable::locwrap::good ()
 {
-  return ((type_ & LOC_REGULAR) &&
-	  loc_ &&
-	  loc_->alive () &&
-	  loc_->vnode () >= 0);
+  assert (loc_->vnode () >= 0);
+  return loc_->alive ();
 }
 
 
 locationtable::locationtable (int _max_cache)
-  : size_cachedlocs (0),
-    max_cachedlocs (_max_cache), 
+  : max_cachedlocs (_max_cache), 
     nnodessum (0),
     nnodes (0),
-    nvnodes (0)
+    nvnodes (0),
+    pins_updated_ (false)
 {
+}
+
+locationtable::~locationtable ()
+{
+  locwrap *lcur, *lnext;
+  for (lcur = loclist.first (); lcur; lcur = lnext) {
+    lnext = loclist.next (lcur);
+    remove (lcur);
+  }
+  
+  pininfo *pcur, *pnext;
+  for (pcur = pinlist.first (); pcur; pcur = pnext) {
+    pnext = pinlist.next (pcur);
+    delete pcur;
+  }
 }
 
 size_t
@@ -147,31 +147,19 @@ locationtable::replace_estimate (u_long o, u_long n)
 void
 locationtable::realinsert (ref<location> l)
 {
-  if (size_cachedlocs >= max_cachedlocs) {
-    delete_cachedlocs ();
-  }
   loctrace << "insert " << l->id () << " " << l->address ()
 	   << " " << l->vnode () << "\n";
   locwrap *lw = locs[l->id ()];
-  if (lw) {
-    if (lw->type_ & LOC_REGULAR) {
-      warnx << "locationtable::realinsert: duplicate insertion of "
-	    << l->id () << "\n";
-      cachedlocs.remove (lw);
-      cachedlocs.insert_tail (lw);
-      return;
-    }
-    lw->type_ |= LOC_REGULAR;
-    lw->loc_ = l;
-  } else {
-    lw = New locwrap (l, LOC_REGULAR);
-    locs.insert (lw);
-    loclist.insert (lw);
-  }
-
+  assert (!lw);
+  
+  lw = New locwrap (l);
+  locs.insert (lw);
+  loclist.insert (lw);
   cachedlocs.insert_tail (lw);
-  size_cachedlocs++;
-  return;
+
+  pins_updated_ = false;
+  if (size () > max_cachedlocs)
+    evict (size () - max_cachedlocs);
 }
 
 ptr<location>
@@ -206,99 +194,193 @@ locationtable::insert (const chordID &n,
   return loc;
 }
 
+// XXX this code currently only handles a single predecessor. NOT pred lists.
 void
-locationtable::delete_cachedlocs (void)
+locationtable::figure_pins (void)
 {
-  if (!size_cachedlocs)
+  warnx << "locationtable::figure_pins\n";
+  bool done = false;
+  
+  // Set this up front.
+  pins_updated_ = true;
+
+  pininfo *cpin = pinlist.first ();
+  locwrap *cur = loclist.first ();
+
+  // Clear everything initially.  Then turn stuff on later.
+  while (cur) {
+    cur->pinned_ = false;
+    cur = loclist.next (cur);
+  }
+  
+  if (cpin == NULL)
     return;
 
-  // First, try to find a bad node
-  locwrap *lw = cachedlocs.first;
-  while (lw && lw->good ()) {
-      lw = cachedlocs.next (lw);
-      continue;
+  // Pin the predecessors.
+  // XXX I am too lame to figure out how to merge this in with
+  //     the scan below, though of course, it should be possible.
+  while (cpin) {
+    if (cpin->pinpred_ > 0) {
+      locwrap *p = loclist.closestpred (cpin->n_);
+      p->pinned_ = true;
+      warnx << "pinning pred " << p->n_ << "\n";
+    }
+    cpin = pinlist.next (cpin);
   }
-  if (lw) {
-    remove (lw);
-    return;
+  
+  cpin = pinlist.first ();
+  cur = loclist.first ();  
+  unsigned short to_pin = 0;
+  
+  // Walk through both the pinlist and the loclist.
+  // We always want the pin's ID to be ahead of the loclist ID
+  // so that we know how far forward we'll have to go.
+  
+  // warnx << "cur pin = " << cpin->n_ << ", " << cpin->pinsucc_ << "\n";
+  while (!done) {
+    while (cpin && cpin->n_ < cur->n_) {
+      // All consecutive pins [between two nodes] are effectively collapsed;
+      // select the "max" pin amount from among these two locwraps.
+      if (cpin->pinsucc_ > to_pin)
+	to_pin = cpin->pinsucc_;
+      
+      cpin = pinlist.next (cpin);
+      if (!cpin) break;
+      // warnx << "<>step pin = " << cpin->n_ << " " << cpin->pinsucc_ << "\n";
+    }
+    // cpin->n_ >= cur->n_
+    if (!cpin) {
+      // Last pin.  Scan until its influence expires...
+      while (cur && to_pin > 0) {
+  	warnx << "pinning cur " << cur->n_ << "\n";
+	cur->pinned_ = true;
+	to_pin--;
+	cur  = next (cur);
+//  	warnx << "<>step cur = " << cur->n_ << "\n";
+      }
+      done = true;
+      // ...done.
+    } else {
+      // Scan until the appearance of the next pin.
+      while (cur && cur->n_ < cpin->n_) {
+//  	warnx << "<>step cur = " << cur->n_ << "\n";
+	if (to_pin > 0) {
+	  warnx << "pinning cur " << cur->n_ << "\n";
+	  cur->pinned_ = true;
+	  to_pin--;
+	}
+	cur  = loclist.next (cur);
+      }
+      // cpin->n_ <= cur->n_
+      // There's some oddity here b/c strictly speaking succ(x) := x.
+      // However the n elements of the pinned successors of x does not
+      // include x.  Thus if you want to pin the node itself, you have
+      // to call pin(x) so that pinself is set.
+      if (cur->n_ == cpin->n_) {
+	if (cpin->pinself_) {
+	  cur->pinned_ = true;
+	  if (to_pin > 0)
+	    to_pin--;
+	  warnx << "pinning self " << cur->n_ << "\n";
+	}
+	cur  = loclist.next (cur);
+      }
+      // cpin->n_ <= cur->n_
+    }
   }
-  // Else, find some unimportant cached node to evict.
-  assert (!lw);
-  warnx << "locationtable::delete_cachedlocs: no bad nodes to evict.\n";
+}
 
-  lw = cachedlocs.first;
-  unsigned int n = NSUCC;
-  locwrap *c = NULL;
-  while (lw) {
-    // Continue to skip over those that are directly pinned
-    if ((prev (lw) && prev (lw)->type_ & LOC_PINSUCC) ||
-	(next (lw) && next (lw)->type_ & LOC_PINPRED)) {
-      goto nextcandidate;
-    }
-    // Next, check to see if it is part of a predecessor or
-    // successor list by scanning to try and find a PINSUCCLIST/PINPREDLIST
-    // within NSUCC.
-    n = NSUCC;
-    c = lw;
-    while (n > 0) {
-      c = prev (c);
-      if (c == lw) break; // loop, so this check is okay
-      if (c->type_ & LOC_PINSUCCLIST)
-	goto nextcandidate;
-      n--;
-    }
-    n = NSUCC; c = lw;
-    while (n > 0) {
-      c = next (c);
-      if (c == lw) break; 
-      if (c->type_ & LOC_PINPREDLIST)
-	goto nextcandidate;
-      n--;
-    }
-    // If we're here, then this node has no reason to be saved.
-    remove (lw);
+// Evict n nodes. If n == 0, evict as many as you can.
+void
+locationtable::evict (size_t n)
+{
+  if (!pins_updated_)
+    figure_pins ();
+
+  pins_updated_ = false;
+  bool done = false;
+  
+  bool all = (n == 0);
+  if (all) n = size ();
     
-  nextcandidate:
-    lw = cachedlocs.next (lw);
+  // Attempt to evict in least recently used order.
+  bool badonly = true;
+  locwrap *cur = cachedlocs.first;
+  locwrap *next = NULL;
+  while (!done) {
+    while (cur && n > 0) {
+      next = cachedlocs.next (cur);
+      // Definitely skip pinned nodes.
+      // If flushing all, that's the only condition.
+      // If we're not flushing all, then check to see if we're looking
+      // for bad nodes only.
+      if (!cur->pinned_ &&
+	  (all || (badonly ? !cur->good () : true)))
+      {
+	remove (cur);
+	n--;
+      }
+      cur = next;
+    }
+    if (n == 0)
+      done = true; // satisfied the user's request
+    else if (all) {
+      assert (cur == NULL);
+      done = true; // one iteration is enough
+    } else if (badonly == false)
+      done = true; // two iterations is enough.
+    else {
+      // Restart for second time, if necessary.
+      cur = cachedlocs.first;
+      badonly = false;
+    }
+  }
+  if (n > 0 && !all) 
+    loctrace << "evict: failed to evict all requested; "
+	     << n << " more requested.\n";
+}
+
+void
+locationtable::pin (const chordID &x, short num)
+{
+  pininfo *p = pinlist.search (x);
+  if (num < -1)
+    fatal << "unsupported predecessor pin amount " << num << ".\n";
+  if (p) {
+    if (num == 0)
+      p->pinself_ = true;
+    else if (num > 0)
+      p->pinsucc_ = num;
+    else
+      p->pinpred_ = -num;
+  } else {
+    if (num == 0)
+      p = New pininfo (x, true, 0, 0);
+    else if (num > 0)
+      p = New pininfo (x, false, num, 0);
+    else
+      p = New pininfo (x, false, 0, -num);
+    pinlist.insert (p);
   }
 }
 
 void
-locationtable::pin (const chordID &x, loctype pt)
+locationtable::flush (void)
 {
-  locwrap *lw = locs[x];
-  if (lw)
-    lw->type_ |= pt;
-  else {
-    lw = New locwrap (x, pt);
-    locs.insert (lw);
-    loclist.insert (lw);
-    // DO NOT insert into cachedlocs.
-  }
+  evict (0);
 }
 
-void
-locationtable::pinpred (const chordID &x)
+ptr<location>
+locationtable::lookup_or_create (const chord_node &n)
 {
-  pin (x, LOC_PINPRED);
-}
+  ptr<location> loc = lookup (n.x);
+  if (loc != NULL)
+    return loc;
 
-void
-locationtable::pinpredlist (const chordID &x)
-{
-  pin (x, LOC_PINPREDLIST);
-}
-
-void
-locationtable::pinsucc (const chordID &x)
-{
-  pin (x, LOC_PINSUCC);
-}
-
-void
-locationtable::pinsucclist (const chordID &x)
-{
-  pin (x, LOC_PINSUCCLIST);
+  loc = New refcounted<location> (n);
+  if (loc->vnode () < 0)
+    return NULL;
+  return loc;
 }
 
 ptr<location>
@@ -307,10 +389,6 @@ locationtable::lookup (const chordID &n)
   locwrap *l = locs[n];
   if (!l)
     return NULL;
-  if ((l->type_ & LOC_REGULAR) == 0) {
-    warnx << "locationtable::lookup " << n << " is not REGULAR\n";
-    return NULL;
-  }
 
   // XXX only MTF (okay, it's really "MTT") if the node is alive?
   cachedlocs.remove (l);
@@ -350,7 +428,6 @@ locationtable::closestsuccloc (const chordID &x) {
   // Brute force check to make sure we have the right answer.
   chordID nbar = x;
   for (l = locs.first (); l; l = locs.next (l)) {
-    if ((l->type_ & LOC_REGULAR) == 0) continue;
     if (!l->loc_->alive) continue;
     if (l->loc_->vnode < 0) continue;
     if ((x == nbar) || between (x, nbar, l->loc_->n)) nbar = l->loc_->n;
@@ -383,7 +460,6 @@ locationtable::closestpredloc (const chordID &x, vec<chordID> failed)
 
   chordID nbar = x;
   for (l = locs.first (); l; l = locs.next (l)) {
-    if ((l->type_ & LOC_REGULAR) == 0) continue;
     if (!l->loc_->alive) continue;
     if (l->loc_->vnode < 0) continue;
     if ((x == nbar) || between (nbar, x, l->loc_->n)) nbar = l->loc_->n;
@@ -418,7 +494,7 @@ bool
 locationtable::cached (const chordID &x)
 {
   locwrap *l = locs[x];
-  return (l && l->type_ & LOC_REGULAR);
+  return (l != NULL);
 }
 
 bool
@@ -427,14 +503,15 @@ locationtable::remove (locwrap *lw)
   if (!lw)
     return false;
   
+  loctrace << "delete " << lw->loc_->id () << " "
+	   << lw->loc_->address () << "\n";
+  
+  pins_updated_ = false;
+  
   locs.remove (lw);
   loclist.remove (lw->n_);
   cachedlocs.remove (lw);
-  size_cachedlocs--;
 
-  if (lw->type_ & LOC_REGULAR)
-    loctrace << "delete " << lw->loc_->id () << " "
-	     << lw->loc_->address () << "\n";
   delete lw;
   return true;
 }
@@ -442,10 +519,10 @@ locationtable::remove (locwrap *lw)
 ptr<location>
 locationtable::first_loc ()
 {
-  locwrap *f = cachedlocs.first;
+  locwrap *f = loclist.first ();
   while (f && !f->loc_) {
     warn << "spinning in first_loc\n";
-    f = cachedlocs.next (f);
+    f = loclist.next (f);
   }
   if (!f) return NULL;
   return f->loc_;
@@ -456,10 +533,10 @@ locationtable::next_loc (chordID n)
 {
   locwrap *f = locs[n];
   assert (f);
-  locwrap *nn = cachedlocs.next (f);
+  locwrap *nn = loclist.next (f);
   while (nn && !nn->loc_) {
     warn << "spinning in next_loc\n";
-    nn = cachedlocs.next (nn);
+    nn = loclist.next (nn);
   }
   if (nn)
     return nn->loc_;
