@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.38 2005/01/22 20:23:11 sit Exp $
+# $Id: Makefile.am,v 1.39 2005/01/22 21:41:07 sit Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -7,10 +7,11 @@ if GTK_AVAILABLE
 VIS = vis
 endif
 
-bin_PROGRAMS = dbm walk findroute filestore nodeq dbdump
-bin_SCRIPTS = dbm.py usenetlsdmon.py vischat.py RPC.py RPCProto.py
-noinst_PROGRAMS = test_types $(VIS) builddb coords dhc_test pkc
+bin_PROGRAMS = dbm walk findroute filestore nodeq dbdump $(VIS) 
+bin_SCRIPTS = dbm.py usenetlsdmon.py
+chorddata_DATA =  RPC.py RPCProto.py vischat.py
 
+noinst_PROGRAMS = test_types coords dhc_test pkc builddb
 noinst_HEADERS = rpclib.h
 
 walk_SOURCES = walk.C rpclib.C

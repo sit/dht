@@ -1,4 +1,4 @@
-dnl $Id: configure.in,v 1.48 2004/10/12 02:45:30 athicha Exp $
+dnl $Id: configure.in,v 1.49 2005/01/22 21:41:07 sit Exp $
 dnl
 dnl Process this file with autoconf to produce a configure script.
 dnl
@@ -71,6 +71,22 @@ for lib in utils merkle chord dhc dhash sfsrodb svc lsd; do
     CPPFLAGS="-I"'$(top_srcdir)'"/$lib $CPPFLAGS"
 done
     CPPFLAGS="-I"'$(top_builddir)'"/svc $CPPFLAGS"
+
+dnl Auxilliary files in chord specific subdirs.
+dnl if test -z "$chordlibdir"; then
+dnl        chordlibdir='${pkglibdir}-${VERSION}'
+dnl fi
+dnl AC_SUBST(chordlibdir)
+if test -z "$chorddatadir"; then
+        chorddatadir='${pkgdatadir}-${VERSION}'
+fi
+AC_SUBST(chordincludedir)
+if test -z "$chordincludedir"; then
+        chordincludedir='${pkgincludedir}-${VERSION}'
+fi
+AC_SUBST(chorddatadir)
+chordexecdir="$chordlibdir"
+AC_SUBST(chordexecdir)
 
 ETAGS_ARGS='-C /dev/null'
 AC_SUBST(ETAGS_ARGS)

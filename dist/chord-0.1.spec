@@ -14,17 +14,9 @@ Requires: sfs >= 0.7.1, db4 >= 4.0
 BuildRequires: sfs >= 0.7.1
 
 %description
-The Self-Certifying File System (SFS) is a secure, global file system
-with completely decentralized control. SFS lets you access your files
-from anywhere and share them with anyone, anywhere. Anyone can set up
-an SFS server, and any user can access any server from any client. SFS
-lets you share files across administrative realms without involving
-administrators or certification authorities.
-
-This file includes the core files necessary for SFS clients.  Also
-included are libraries and header files useful for development of
-SFS-enabled tools.
-
+Chord and DHash are building blocks for developing distributed applications.
+Chord and DHash together provide a distributed hash table implementation.
+This package also includes the UsenetDHT server.
 
 %prep
 %setup -q
@@ -47,18 +39,35 @@ rm -rf $RPM_BUILD_ROOT
 %files
 %defattr(-,root,root)
 %doc  README
-%{_bindir}/lsd
-%{_bindir}/sfsrodb
+%{_bindir}/dbdump
 %{_bindir}/dbm
+%{_bindir}/dbm.py
 %{_bindir}/filestore
 %{_bindir}/findroute
+%{_bindir}/lsd
 %{_bindir}/lsdctl
 %{_bindir}/nodeq
-%{_bindir}/walk
-%{_bindir}/dbdump
+%{_bindir}/sfsrodb
 %{_bindir}/usenet
+%{_bindir}/usenetlsdmon.py
+%{_bindir}/walk
+%{_bindir}/vis
+%{_includedir}/chord-%{version}/chord_types.x
+%{_includedir}/chord-%{version}/dhash_types.x
+%{_includedir}/chord-%{version}/dhashgateway_prot.x
+%{_datadir}/chord-%{version}/bigint.py
+%{_datadir}/chord-%{version}/chord_types.py
+%{_datadir}/chord-%{version}/dhashgateway_prot.py
+%{_datadir}/chord-%{version}/dhash_types.py
+%{_datadir}/chord-%{version}/RPCProto.py
+%{_datadir}/chord-%{version}/RPC.py
+%{_datadir}/chord-%{version}/vischat.py
+
 
 %changelog
+* Sat Jan 22 2005 Emil Sit <sit@mit.edu>
+- Add some python stuff
+
 * Sun Jan 02 2005 Emil Sit <sit@mit.edu>
 - Don't link against special db4
 

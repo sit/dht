@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.35 2005/01/22 20:23:11 sit Exp $
+# $Id: Makefile.am,v 1.36 2005/01/22 21:41:06 sit Exp $
 
 
 BASEDIRS = svc utils merkle chord dhc dhash sfsrodb lsd devel 
@@ -21,3 +21,35 @@ MAINTAINERCLEANFILES = aclocal.m4 install-sh mkinstalldirs \
 dist-hook:
 	rm -f $(srcdir)/p2psim/p2psim.core
 	tar czvf $(distdir)/p2psim.tgz -C $(srcdir) p2psim
+
+
+install-data-local:
+	-src=$(DESTDIR)$(chorddatadir); dst=$(DESTDIR)$(pkgdatadir); \
+        rm -f $$dst; \
+        if test "`dirname $$src`" = "`dirname $$dst`"; then \
+                ln -s "`basename $$src`" $$dst; \
+        else \
+                ln -s $(chorddatadir) $$dst; \
+        fi
+	-src=$(DESTDIR)$(chordincludedir); dst=$(DESTDIR)$(pkgincludedir); \
+        rm -f $$dst; \
+        if test "`dirname $$src`" = "`dirname $$dst`"; then \
+                ln -s "`basename $$src`" $$dst; \
+        else \
+                ln -s $(chordincludedir) $$dst; \
+        fi
+
+# install-exec-local:
+# 	-src=$(DESTDIR)$(chordlibdir); dst=$(DESTDIR)$(pkglibdir); \
+#        rm -f $$dst; \
+#        if test "`dirname $$src`" = "`dirname $$dst`"; then \
+#                ln -s "`basename $$src`" $$dst; \
+#        else \
+#                ln -s $(chordlibdir) $$dst; \
+#        fi
+
+uninstall-local:
+	-rm -f $(DESTDIR)$(pkgdatadir) $(DESTDIR)$(chorddatadir)
+#	-rm -f $(DESTDIR)$(pkglibdir) $(DESTDIR)$(chordlibdir) 
+	-rm -f $(DESTDIR)$(pkgincludedir) $(DESTDIR)$(chordincludedir) 
+	-rmdir $(DESTDIR)$(confdir)
