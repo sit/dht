@@ -532,8 +532,8 @@ dhash_impl::dispatch (user_args *sbp)
         ref<dbrec> k = id2dbrec(sarg->key);
 
 	bool already_present = (sarg->type == DHASH_CACHE) 
-	  ? (!!cache_db->lookup (k)) 
-	  : (!!dblookup (blockID (sarg->key, sarg->ctype, sarg->dbtype)));
+	  ? (cache_db->lookup (k)) 
+	  : (dblookup (blockID (sarg->key, sarg->ctype, sarg->dbtype)));
 	
 	store (sarg, wrap(this, &dhash_impl::storesvc_cb, sbp,
 	                  sarg, already_present));	
@@ -1051,7 +1051,7 @@ void
 dhash_impl::dbdelete (ref<dbrec> key)
 {
   merkle_hash hkey = to_merkle_hash (key);
-  bool exists = !!database_lookup (mtree->db, hkey);
+  bool exists = database_lookup (mtree->db, hkey);
   assert (exists);
   block blk (hkey, NULL);
   mtree->remove (&blk);
