@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <queue>
 
-#define QDEBUG(x) if(p2psim_verbose>=(x)) cout << _node->header() << " qsz " << _qq.size() << " quota " << _quota << " last " << _last_update << " total " << _total_bytes
+#define QDEBUG(x) if(p2psim_verbose>=(x)) cout << _node->header() << " qsz " << _qq.size() << " q " << _quota << " last " << _last_update << " total " << _total_bytes
 #define DROPABLE_PRIORITY 3
 
 struct q_elm {
@@ -50,7 +50,7 @@ class RateControlQueue {
 
   public:
 
-    RateControlQueue(Node *, double, double, int, void (*fn)(void *));
+    RateControlQueue(Node *, double, int, void (*fn)(void *));
 
     template<class BT, class AT, class RT>
     bool do_rpc(IPAddress dst, void (BT::* fn)(AT *, RT *), int (BT::* cb)(bool b, AT *, RT *), 
@@ -83,19 +83,13 @@ class RateControlQueue {
       qe->_killme = QueueThunk<BT,AT,RT>::killme;
       qe->_type = type;
 
-      int more;
+      int more = 0;
       if (_last_update > 0) 
 	more = (int) ((now() - _last_update)*_rate);
       _quota += more;
       _last_update = now();
 
-      if (_big_last_update > 0) 
-	more = (int)((now() - _big_last_update)*_big_rate);
-      _big_quota += more;
-      _big_last_update = now();
-
-      if (((_quota - sz - rsz < (_burst/2)) && (p >= DROPABLE_PRIORITY))
-	  || (p && (_big_quota-sz-rsz < _burst))) {
+      if ((_quota - sz - rsz < (_burst/2)) && p >= DROPABLE_PRIORITY) {
 	QDEBUG(4) << " drop to dst " << qe->_dst << " priority " << p << endl;
 	if (args)
 	  delete args;
@@ -107,10 +101,9 @@ class RateControlQueue {
       }
 
       _quota -= (qe->_sz + qe->_rsz);
+
       if (_quota < _burst)
 	_quota = _burst;
-      if (_big_quota > (-1*_burst))
-	  _big_quota = (-1*_burst);
 
       QDEBUG(5) << " sub " << qe->_sz << " sub " << qe->_rsz << endl;
       _node->delaycb(0,&RateControlQueue::send_one_rpc, (void *)qe, this);
@@ -132,15 +125,13 @@ class RateControlQueue {
     void (*_empty_cb)(void *);
     Node *_node;
     int _burst;
+    int _big_burst;
     uint _delay_interval;
     priority_queue<q_elm*, vector<q_elm*>, less<q_elm*> > _qq;
     double _rate;
-    double _big_rate;
     bool _running;
     int _quota;
-    int _big_quota;
     Time _last_update;
-    Time _big_last_update;
     Time _start_time;
     unsigned long long _total_bytes;
     

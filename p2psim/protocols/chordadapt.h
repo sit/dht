@@ -41,12 +41,6 @@ class ChordAdapt: public P2Protocol {
     IDMap idmap() { return _me;}
     ConsistentHash::CHID id() { return _me.id;}
 
-    struct notify_info {
-      IDMap n;
-      uint ttl;
-      bool dead;
-    };
-
     struct lookup_args{
       ConsistentHash::CHID key;
       uint hops;
@@ -55,6 +49,7 @@ class ChordAdapt: public P2Protocol {
       uint learnsz;
       bool no_drop;
       IDMap nexthop;
+      IDMap to;
       IDMap from;
       IDMap src;
       uint m;
@@ -84,12 +79,6 @@ class ChordAdapt: public P2Protocol {
     struct get_predsucc_ret {
       vector<IDMap> v;
       IDMap pred;
-    };
-
-    struct notify_succdeath_args {
-      vector<notify_info> info;
-      IDMap src;
-      IDMap n;
     };
 
     struct notify_succdeath_ret {
@@ -129,10 +118,6 @@ class ChordAdapt: public P2Protocol {
     void next_recurs(lookup_args *, lookup_ret *);
     int next_recurs_cb(bool, lookup_args *, lookup_ret *);
 
-    void notify_pred();
-    void notify_succdeath_handler(notify_succdeath_args *, notify_succdeath_ret *);
-    int notify_pred_cb(bool, notify_succdeath_args *, notify_succdeath_ret *);
-
     static void empty_cb(void *x);
     bool check_pred_correctness(ConsistentHash::CHID, IDMap n);
     void empty_queue(void *a);
@@ -157,8 +142,10 @@ class ChordAdapt: public P2Protocol {
   private:
     Time _join_scheduled;
     uint _burst_sz;
+    /*
     uint _bw_overhead;
     uint _big_overhead;
+    */
     uint _stab_basic_timer;
     Time _last_joined_time;
     bool _stab_basic_running;
@@ -188,7 +175,6 @@ class ChordAdapt: public P2Protocol {
     void add_stat(Time t, bool live);
     Time est_timeout(double p);
 
-    vector<notify_info> notifyinfo;
     Topology *_top; //i hate obtaining topology pointer every time
 };
 #endif

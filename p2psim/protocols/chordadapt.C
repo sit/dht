@@ -36,10 +36,9 @@ vector<Time> ChordAdapt::sort_dead;
 ChordAdapt::ChordAdapt(IPAddress i, Args& a) : P2Protocol(i)
 {
   _burst_sz = a.nget<uint>("burst_size", 10, 10);
-  _bw_overhead = a.nget<uint>("overhead_rate", 10, 10);
-  _big_overhead = a.nget<uint>("big_rate",100,10);
+  uint _bw_overhead = a.nget<uint>("overhead_rate", 10, 10);
   _stab_basic_timer = a.nget<uint>("basictimer", 18000, 10);
-  _rate_queue = new RateControlQueue(this, (double)_bw_overhead, _big_overhead, _burst_sz, ChordAdapt::empty_cb);
+  _rate_queue = new RateControlQueue(this, (double)_bw_overhead, _burst_sz, ChordAdapt::empty_cb);
   _adjust_interval = 1000*_burst_sz/_bw_overhead;
   _parallelism = 1;
   _next_adjust = _adjust_interval;
@@ -74,8 +73,6 @@ ChordAdapt::ChordAdapt(IPAddress i, Args& a) : P2Protocol(i)
   _wkn.ip = 0;
 
   ids.push_back(_me);
-
-  notifyinfo.clear();
 
   _top = Network::Instance()->gettopology();
   _max_succ_gap = 0;
@@ -346,7 +343,6 @@ ChordAdapt::crash(Args *args)
   _forwarded_nodrop.clear();
   vector<IDMap>::iterator p = find(ids.begin(),ids.end(),_me);
   ids.erase(p);
-  notifyinfo.clear();
   _max_succ_gap = 0;
   _live_stat.clear();
   _dead_stat.clear();
@@ -528,8 +524,8 @@ ChordAdapt::next_recurs(lookup_args *la, lookup_ret *lr)
     para = 1;
   double ppp = para > 1? (exp(log(0.1)/(double)para)):0.1;
   Time ttt = est_timeout(ppp);
-  //vector<IDMap> nexthops = loctable->preds(la->key, para, LOC_HEALTHY, ttt);
-  vector<IDMap> nexthops = loctable->next_close_hops(la->key, para, ttt);
+  vector<IDMap> nexthops = loctable->preds(la->key, para, LOC_HEALTHY, ttt);
+  //vector<IDMap> nexthops = loctable->next_close_hops(la->key, para, ttt);
   uint nsz = nexthops.size();
   assert(nsz>0 && nsz <= para);
   if (nsz == 0) 
@@ -660,67 +656,7 @@ ChordAdapt::stab_succ(void *x)
   _last_stab = now();
   delaycb(_stab_basic_timer, &ChordAdapt::stab_succ, (void *)0);
 }
-/*
-void
-ChordAdapt::notify_pred()
-{
-  IDMap pred = loctable->pred(_me.id-1);
 
-  notify_succdeath_args *nsa = new notify_succdeath_args;
-  notify_succdeath_ret *nsr = new notify_succdeath_ret;
-
-  nsa->info = notifyinfo;
-  assert(nsa->notifyinfo.size() <= 2*_nsucc);
-  notifyinfo.clear();
-  nsa->n = pred;
-  nsa->src = _me;
-  _rate_queue->do_rpc(pred.ip, &ChordAdapt::notify_succdeath_handler,
-      &ChordAdapt::notify_pred_cb, nsa, nsr, 0, TYPE_FIXPRED_UP, PKT_SZ(0,1),PKT_SZ(1,1),
-      TIMEOUT(_me.ip,pred.ip));
-
-}
-
-void
-ChordAdapt::notify_succdeath_handler(notify_succdeath_args *nsa, notify_succdeath_ret *nsr)
-{
-  nsr->succ = loctable->succ(_me.id+1);
-  if (nsr->succ.ip != nsa->src.ip) {
-    return;
-  }else{
-    bool b;
-    for (uint i = 0; i < nsa->info.size(); i++) {
-      if (nsa->info[i].dead) {
-	b = loctable->del_node(nsa->info[i].n); 
-      }else{
-	b = loctable->add_node(nsa->info[i].n);
-      }
-      nsa->info[i].ttl--;
-      if (b && nsa->info[i].ttl>0)
-	notifyinfo.push_back(nsa->info[i]);
-    }
-  }
-}
-
-int
-ChordAdapt::notify_pred_cb(bool b, notify_succdeath_args *nsa, notify_succdeath_ret *nsr)
-{
-  int ret_sz = 0;
-  if (alive()) {
-    if ((!b) || nsr->succ.ip!=_me.ip) {
-      notifyinfo = nsa->info;
-    }
-    if (b) {
-      ret_sz += PKT_SZ(nsa->info.size(),0);
-    }else{
-      //XXX
-      loctable->del_node(nsa->n);
-    }
-  }
-  delete nsa;
-  delete nsr;
-  return ret_sz;
-}
-*/
 void
 ChordAdapt::fix_pred(void *a)
 {

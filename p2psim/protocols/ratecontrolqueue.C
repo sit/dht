@@ -5,19 +5,16 @@
 
 bool operator< (const q_elm& a, const q_elm& b) { return (b._priority < a._priority); }
 
-RateControlQueue::RateControlQueue(Node *n, double rate, double bigrate, int burst, void (*fn)(void *))
+RateControlQueue::RateControlQueue(Node *n, double rate, int burst, void (*fn)(void *))
 {
   _node = n;
   _rate = rate/1000.0;
-  _big_rate = bigrate/1000.0;
   _delay_interval = (uint)(40/_rate);
   _burst = -1*burst;
   _running = false;
   _empty_cb = fn;
   _quota = 0;
-  _big_quota = 0;
   _last_update = 0;
-  _big_last_update = 0;
   _running = false;
   _total_bytes = 0;
   _start_time = 0;
@@ -99,9 +96,7 @@ RateControlQueue::stop_queue()
   QDEBUG(5) << " stopped total bytes " << _total_bytes << " live time " << (now()-_start_time) << 
     " avg bytes " << (double)(_total_bytes*1000)/(now()-_start_time) << endl;
   _quota = 0;
-  _big_quota = 0;
   _total_bytes = 0;
   _start_time = 0;
   _last_update = 0;
-  _big_last_update = 0;
 }

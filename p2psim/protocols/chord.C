@@ -2137,6 +2137,7 @@ LocTable::update_ifexists(Chord::IDMap n)
   idmapwrap *ptr = ring.search(n.id);
   if (!ptr) return false;
   ptr->status = LOC_HEALTHY;
+  ptr->n = n;
   ptr->n.timestamp = now();
   return true;
 }
@@ -2157,7 +2158,7 @@ LocTable::add_node(Chord::IDMap n, bool is_succ, bool assertadd, Chord::CHID fs,
   idmapwrap *elm = ring.closestsucc(n.id);
   if (elm && elm->id == n.id) {
     if (n.timestamp > elm->n.timestamp) {
-      elm->n.timestamp= n.timestamp;
+      elm->n = n;
       if (replacement)
 	elm->status = LOC_REPLACEMENT;
       else
