@@ -88,7 +88,7 @@ protected:
 
   // stats
   uint _track_conncomp_timer;
-  static vector<ulong> _bw_stats;
+  static vector<unsigned long> _bw_stats;
   static vector<uint> _bw_counts;
   static vector<Time> _correct_lookups;
   static vector<Time> _incorrect_lookups;
