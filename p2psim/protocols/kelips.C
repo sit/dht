@@ -269,7 +269,7 @@ Kelips::lookup(Args *args)
     _ok_failures += 1;
   }
 
-  if(ok == false){
+  if(0){
     printf("%qd %d lat=%d lookup(%qd) ", now(), ip(), (int)(t2 - t1), key);
     for(u_int i = 0; i < history.size(); i++)
       printf("%d ", history[i]);
@@ -295,10 +295,12 @@ Kelips::lookup_loop(ID key, vector<IPAddress> &history)
     return true;
 
   // Try via each known contact.
-  vector<IPAddress> cl = grouplist(id2group(key));
-  for(u_int i = 0; i < cl.size(); i++)
-    if(lookupvia(key, cl[i], history))
-      return true;
+  if(_k > 1){
+    vector<IPAddress> cl = grouplist(id2group(key));
+    for(u_int i = 0; i < cl.size(); i++)
+      if(lookupvia(key, cl[i], history))
+        return true;
+  }
 
   // Try via random nodes a few times.
   for(int iter = 0; iter < 12; iter++){

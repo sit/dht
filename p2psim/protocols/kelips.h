@@ -22,9 +22,16 @@
 // Are lookups iterative or recursive? Who controls various retries?
 
 // To do:
+// why does one-hop (k=1) w/ n=1024 suck so much?
+//   should be fabulous if you gossip enough!
 // gossip to nearby nodes preferentially?
 // hmm, we get a LOT of lookup failures in kx.pl runs, like 1/2 of lookups
 //   any way to make it more persistent?
+// why doesn't 1024 get down to 1 RTT?
+//   not moving info fast enough?
+// examine effect of each paramter individually
+// maybe try parameters that move more info?
+// is there an explicit "dead" flag on gossip entries?
 
 // Does it stabilize after the expected number of rounds?
 // Gossip w/o favoring new nodes (nnodes: avg median):

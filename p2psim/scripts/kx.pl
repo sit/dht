@@ -7,13 +7,13 @@
 # name, min, max
 my $params =
     [
-     [ "round_interval", 500, 2000, 8000, 16000, 32000 ],
-     [ "group_targets", 1, 2, 4, 8 ],
-     [ "contact_targets", 1, 2, 4, 8 ],
-     [ "group_ration", 1, 2, 4, 8, 16 ],
-     [ "contact_ration", 1, 2, 4, 8 ],
+     [ "round_interval", 125, 500, 2000, 8000, 24000 ],
+     [ "group_targets", 1, 4, 16, 64 ],
+     [ "contact_targets", 1, 4, 16 ],
+     [ "group_ration", 1, 4, 16, 64 ],
+     [ "contact_ration", 1, 4, 16 ],
      [ "n_contacts", 2, 4, 8 ],
-     [ "item_rounds", 0, 1, 2, 4 ],
+     [ "item_rounds", 0, 1, 4 ],
      [ "timeout", 5000, 10000, 20000, 40000 ]
      ];
 
