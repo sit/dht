@@ -94,6 +94,7 @@ struct store_state {
 struct dhash_block {
   char *data;
   size_t len;
+  int hops;
 
   ~dhash_block () {  delete [] data; }
 
@@ -110,7 +111,9 @@ struct dhash_block_chunk {
   size_t chunk_len;
   size_t chunk_offset;
   size_t total_len;
+  int hops;
   chordID source;
+  chordID key;
 
   ~dhash_block_chunk () {delete chunk_data; };
   

@@ -129,10 +129,11 @@ dhashgateway::retrieve_cb (svccb *sbp, ptr<dhash_block> block)
   dhash_retrieve_res res (DHASH_OK);
 
   if (!block) 
-    res.set_status (DHASH_ERR); // XXX what about DHASH_NOTPRESENT
+    res.set_status (DHASH_NOENT);
   else {
-    res.block->setsize (block->len);
-    memcpy (res.block->base (), block->data, block->len);
+    res.resok->block.setsize (block->len);
+    res.resok->hops = block->hops;
+    memcpy (res.resok->block.base (), block->data, block->len);
   }
   sbp->reply (&res);
 }
@@ -346,12 +347,15 @@ dhashclient::retrievecb (cbretrieve_t cb, bigint key, ref<dhash_retrieve_res> re
   else if (res->status != DHASH_OK)
     errstr = dhasherr2str (res->status);
   else {
-    dhash_ctype ctype = dhash::block_type (res->block->base (), res->block->size ());
-    if (!dhash::verify (key, ctype, res->block->base (), res->block->size ()))
+    dhash_ctype ctype = dhash::block_type (res->resok->block.base (), res->resok->block.size ());
+    if (!dhash::verify (key, ctype, res->resok->block.base (), res->resok->block.size ()))
       errstr = strbuf () << "data did not verify";
     else {
       // success
-      (*cb) (dhash::get_block_contents (res->block->base(), res->block->size(), ctype));
+      ptr<dhash_block> blk = dhash::get_block_contents (res->resok->block.base(), 
+							res->resok->block.size(), ctype);
+      blk->hops = res->resok->hops;
+      (*cb) (blk);
       return;
     }
   }

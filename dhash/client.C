@@ -176,6 +176,7 @@ protected:
       size_t nread     = chunk->chunk_len;
       chordID sourceID = chunk->source;
       block            = New refcounted<dhash_block> ((char *)NULL, totsz);
+      block->hops      = chunk->hops;
       while (nread < totsz) {
 	uint32 offset = nread;
 	uint32 length = MIN (MTU, totsz - nread);
@@ -196,7 +197,7 @@ protected:
   {
     ///warn << "dhash_retrieve::finish(), npending=" << npending << "\n";
     npending--;
-
+    
     if (status != DHASH_OK) 
       fail (dhasherr2str (status));
     else {
@@ -312,17 +313,6 @@ public:
 
 // ---------------------------------------------------------------------------
 // UTIL ROUTINES
-/*
-static void
-iterres2res (dhash_fetchiter_res *ires, dhash_res *res) 
-{
-    res->resok->offset = ires->compl_res->offset;
-    res->resok->attr = ires->compl_res->attr;
-    res->resok->source = ires->compl_res->source;
-    res->resok->res = ires->compl_res->res;
-    res->resok->hops = 0;
-}
-*/
 
 static bool
 straddled (route path, chordID &k)
@@ -469,7 +459,7 @@ dhashcli::lookup_iter_cb (chordID blockID, dhashcli_lookup_itercb_t cb,
     /* CASE I */
     chordID last;
     chordID plast;
-    nerror++;
+    nerror += 1; //nerror = hops + 100*errors
     if (path.size () > 0)
       last = path.pop_back ();
     if (path.size () > 0) {
@@ -499,8 +489,8 @@ dhashcli::lookup_iter_cb (chordID blockID, dhashcli_lookup_itercb_t cb,
 					 res->compl_res->offset,
 					 res->compl_res->attr.size,
 					 path.back ());
-    //    fres->resok->hops = path.size() - 1 + nerror*100;
 
+    chunk->hops = path.size () + nerror*100;
     (*cb) (DHASH_OK, path, chunk);
   } else if (res->status == DHASH_CONTINUE) {
     chordID next = res->cont_res->next.x;
@@ -527,6 +517,7 @@ void dhashcli::lookup_iter_chalok_cb (ptr<s_dhash_fetch_arg> arg,
 {
   if (ok && s == CHORD_OK) {
     path.push_back (next);
+    warn << arg->key << ": pushed " << next << "\n";
     assert (path.size () < 1000);
 
     arg->v = next;
