@@ -178,7 +178,7 @@ class dhash_impl : public dhash {
   void printcached_walk (const chordID &k);
 
   ptr<dbrec> dblookup(const blockID &i);
-  void dbwrite (ref<dbrec> key, ref<dbrec> data, dhash_ctype ctype);
+  int dbwrite (ref<dbrec> key, ref<dbrec> data, dhash_ctype ctype);
   void dbdelete (ref<dbrec> key);
 
   chordID pred;

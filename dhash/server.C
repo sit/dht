@@ -285,7 +285,9 @@ dhash_impl::missing_retrieve_cb (bigint key, dhash_stat err,
     str frag = Ida::gen_frag (m, blk);
     ref<dbrec> d = New refcounted<dbrec> (frag.cstr (), frag.len ());
     ref<dbrec> k = id2dbrec (key);
-    dbwrite (k, d, DHASH_CONTENTHASH);
+    int ret = dbwrite (k, d, DHASH_CONTENTHASH);
+    if (ret != 0)
+      warn << "merkle dbwrite failure: " << db_strerror (ret) << "\n";
   }
 
   while ((missing_outstanding <= MISSING_OUTSTANDING_MAX)
@@ -663,7 +665,8 @@ dhash_impl::append (ref<dbrec> key, ptr<dbrec> data,
 
 	keys_stored += 1;
 
-	dbwrite (key, marshalled_data, DHASH_APPEND);
+	int ret = dbwrite (key, marshalled_data, DHASH_APPEND);
+	assert (!ret);
 	append_after_db_store (cb, arg->key, 0);
 	delete m_dat;
       } else {
@@ -696,7 +699,8 @@ dhash_impl::append_after_db_fetch (ref<dbrec> key, ptr<dbrec> new_data,
 	ptr<dbrec> marshalled_data =
 	  New refcounted<dbrec> (m_dat, m_len);
 
-	dbwrite (key, marshalled_data, DHASH_APPEND);
+	int ret = dbwrite (key, marshalled_data, DHASH_APPEND);
+	assert (!ret);
 	append_after_db_store (cb, arg->key, 0);
 	delete m_dat;
       } else {
@@ -806,7 +810,13 @@ dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
     case DHASH_DNSSEC:
     case DHASH_NOAUTH:
     case DHASH_UNKNOWN:
-      dbwrite (k, d, arg->ctype);
+      {
+	int ret = dbwrite (k, d, arg->ctype);
+	if (ret != 0) {
+	  warn << "dbwrite failure: " << db_strerror (ret) << "\n";
+	  stat = DHASH_STOREERR;
+	}
+      }
       break;
     default:
       stat = DHASH_ERR;
@@ -973,7 +983,7 @@ dhash_impl::dblookup (const blockID &i) {
     return db->lookup (id2dbrec (i.ID));
 }
 
-void
+int
 dhash_impl::dbwrite (ref<dbrec> key, ref<dbrec> data, dhash_ctype ctype)
 {
   char *action;
@@ -981,14 +991,15 @@ dhash_impl::dbwrite (ref<dbrec> key, ref<dbrec> data, dhash_ctype ctype)
   chordID bid = dbrec2id(key);
   bool exists = !!database_lookup (mtree->db, blk.key);
   bool ismutable = (ctype != DHASH_CONTENTHASH);
+  int ret = 0;
   if (!exists) {
     action = "new";
-    mtree->insert (&blk);
+    ret = mtree->insert (&blk);
   } else if (exists && ismutable) {
     // update an existing mutable block
     action = "update";
     mtree->remove (&blk);
-    mtree->insert (&blk);
+    ret = mtree->insert (&blk);
   } else {
     action = "repeat-store";
   }
@@ -1004,6 +1015,7 @@ dhash_impl::dbwrite (ref<dbrec> key, ref<dbrec> data, dhash_ctype ctype)
   //  warn << "dbwrite: " << host_node->my_ID ()
   //  << " " << action << " " << dbrec2id(key) << x << "\n";
 
+  return ret;
 }
 
 void
