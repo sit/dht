@@ -1,3 +1,6 @@
+# If you use the obsolete FileEventGenerator, then the file it reads has to
+# follow this format.  However, we advise you use the ChurnGenerator.
+#
 #first string on a line is the type of message
 #
 # event type "node"

@@ -832,7 +832,8 @@ Chord::join(Args *args)
   if (args) {
     ChordObserver::Instance(NULL)->addnode();
     _join_scheduled++;
-    node()->set_alive(); //if args is NULL, it's an internal join
+    // XXX: Thomer says: not necessary
+    // node()->set_alive(); //if args is NULL, it's an internal join
 #ifdef CHORD_DEBUG
     assert(before<5000 || (!_inited));
     printf("%s start to join inited? %u basic stab running %u\n",ts(), _inited?1:0, _stab_basic_running?1:0);
@@ -1363,7 +1364,8 @@ Chord::crash(Args *args)
   if (vis)
     printf ("vis %llu crash %16qx\n", now (), me.id);
 
-  node()->crash ();
+  // XXX: Thomer says: not necessary
+  //node()->crash ();
   _inited = false;
   loctable->del_all();
   loctable->init(me);

@@ -38,7 +38,7 @@ public:
 
   typedef void (P2Protocol::*event_f)(Args*);
   virtual void join(Args*) = 0;
-  virtual void crash(Args*) = 0;
+  virtual void crash(Args*) {}
   virtual void lookup(Args*) = 0;
 };
 

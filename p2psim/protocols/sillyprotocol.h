@@ -35,7 +35,6 @@ public:
 
   string proto_name() { return "SillyProtocol"; }
   virtual void join(Args*);
-  virtual void crash(Args*) { node()->crash(); }
   virtual void lookup(Args*);
 
   struct silly_args {

@@ -68,9 +68,8 @@ public:
     return rpch;
   }
 
-  void crash () { _alive = false; }
+  void set_alive(bool a) { _alive = a;}
   bool alive () { return _alive; }
-  void set_alive() { _alive = true;}
   void got_packet(Packet *);
   static void Receive(void*);
 

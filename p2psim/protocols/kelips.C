@@ -208,7 +208,8 @@ Kelips::crash(Args *a)
   assert(_live == true);
   _live = false;
 
-  node()->crash();
+  // XXX: Thomer says: not necessary
+  // node()->crash();
   _info.clear();
   assert(_info.size() == 0);
 }

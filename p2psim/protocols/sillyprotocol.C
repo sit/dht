@@ -28,6 +28,11 @@ using namespace std;
 
 SillyProtocol::SillyProtocol(Node *n, Args a) : P2Protocol(n)
 {
+  // to get the bogus parameter, do this:
+  //  0 : default
+  // 10 : base in which to interpret the number
+  //
+  // unsigned bogus = a.nget<unsigned>("bogus_parameter", 0, 10);
 }
 
 SillyProtocol::~SillyProtocol()
@@ -42,10 +47,20 @@ SillyProtocol::join(Args *args)
 void
 SillyProtocol::lookup(Args *args)
 {
+  // there is an ip parameter in args.  get it.
   IPAddress ip = args->nget<IPAddress>("ip", 1, 10);
+
+  // these are the parameters and the return value for the RPC
   silly_args a;
   silly_result r;
+
+  // do the RPC
+  Time before = now();
   doRPC(ip, &SillyProtocol::be_silly, &a, &r);
+  Time after = now();
+
+  cout << "RPC latency from ip `" << node()->ip() << "' to `" << ip <<
+    "' is " << after - before << " ms." << endl;
 }
 
 void

@@ -329,7 +329,6 @@ Kademlia::crash(Args *args)
   // destroy k-buckets
   KDEBUG(1) << "Kademlia::crash" << endl;
   assert(node()->alive());
-  node()->crash();
   for(hash_map<NodeID, k_nodeinfo*>::iterator i = flyweight.begin(); i != flyweight.end(); ++i)
     Kademlia::pool->push((*i).second);
 
@@ -400,14 +399,14 @@ Kademlia::lookup(Args *args)
   // now ping that node
   ping_args pa(ki->id, ki->ip);
   ping_result pr;
-  record_stat(STAT_PING, 0, 0);
+  // record_stat(STAT_PING, 0, 0);
   assert(ki->ip <= 1837);
   if(!doRPC(ki->ip, &Kademlia::do_ping, &pa, &pr) && node()->alive()) {
     KDEBUG(2) << "Kademlia::lookup: ping RPC to " << Kademlia::printID(ki->id) << " failed " << endl;
     if(flyweight.find(ki->id) != flyweight.end())
       erase(ki->id);
   }
-  record_stat(STAT_PING, 0, 0);
+  // record_stat(STAT_PING, 0, 0);
   Time after = now();
 
   KDEBUG(0) << "Kademlia::lookup, latency " << after - before << endl;

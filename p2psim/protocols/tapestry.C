@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.29 2003/11/18 23:31:27 strib Exp $ */
+/* $Id: tapestry.C,v 1.30 2003/11/22 17:39:18 thomer Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -1645,7 +1645,8 @@ Tapestry::crash(Args *args)
 {
   TapDEBUG(0) << "Tapestry crash" << endl;
   
-  node()->crash();
+  // XXX: Thomer says: not necessary
+  // node()->crash();
 
   // clear out routing table, and any other state that might be lying around
   uint r = _rt->redundancy();

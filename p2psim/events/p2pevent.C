@@ -105,9 +105,15 @@ P2PEvent::execute()
   // and invoke the event
   P2Protocol *proto = dynamic_cast<P2Protocol*>(node->getproto(protocol));
   assert(proto);
+
+  // if join: set node-alive flag
   if (fn == &P2Protocol::join) 
-    node->set_alive();
+    node->set_alive(true);
 
   if (proto->node()->alive())
     (proto->*fn)(args);
+
+  // if this was a crash: set node-dead flag
+  if (fn == &P2Protocol::crash) 
+    node->set_alive(false);
 }

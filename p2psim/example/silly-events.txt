@@ -1,0 +1,1 @@
+generator SillyEventGenerator proto=SillyProtocol exittime=1000

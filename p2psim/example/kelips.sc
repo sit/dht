@@ -1,3 +1,4 @@
+# OBSOLETE.  IGNORE THIS.
 # Kelips test file
 
 protocol: Kelips, k=10
