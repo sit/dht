@@ -25,19 +25,6 @@ class toe_table : public fingerlike {
  public:
   toe_table ();
 
-#if 0  
-  //these will probably not stay here
-  bool betterpred1 (chordID current, chordID target, chordID newpred);
-  char betterpred2 (chordID myID, chordID current, chordID target, 
-		    chordID newpred);
-  bool betterpred3 (chordID myID, chordID current, chordID target, 
-		    chordID newpred);
-  bool betterpred_greedy (chordID myID, chordID current, chordID target, 
-			  chordID newpred); 
-  char betterpred_distest (chordID myID, chordID current, 
-			   chordID target, 
-			   chordID newpred);
-#endif /* 0 */
   
   bool present (chordID id);
   bool present (chordID id, int level);
