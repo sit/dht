@@ -99,7 +99,6 @@ class LocTable {
       ring[1].ip = 0; // ring[1] is always successor, currently null
       ring[2].ip = 0; //ring.back() is always predecessor, currently null
       pinlist.clear();
-      pinlist.push_back(me.id);
     }; 
 
     ~LocTable() {

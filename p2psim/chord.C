@@ -115,8 +115,7 @@ Chord::join(Args *args)
          after - before);
   loctable->add_node(succs[0]);
 
-  printf("Chord(%u, %u) trying to stablize\n", me.ip, me.id);
-  delaycb(10, Chord::stabilize, NULL);
+  delaycb(20, Chord::stabilize, NULL);
   // stabilize();
 }
 
@@ -124,25 +123,28 @@ void
 Chord::stabilize(void *x)
 {
   Chord::IDMap succ = loctable->succ(1);
-  if ((succ.ip == 0) || (succ.ip == me.ip))return;
+  Time before = now();
+  if (succ.ip && (succ.ip != me.ip)) {
+    get_predecessor_args gpa;
+    get_predecessor_ret gpr;
+    doRPC(succ.ip, &Chord::get_predecessor_handler, &gpa, &gpr);
+    if (gpr.n.ip) loctable->add_node(gpr.n);
 
-  get_predecessor_args gpa;
-  get_predecessor_ret gpr;
-  doRPC(succ.ip, &Chord::get_predecessor_handler, &gpa, &gpr);
-  if (gpr.n.ip) loctable->add_node(gpr.n);
+    succ = loctable->succ(1);
+    notify_args na;
+    notify_ret nr;
+    na.me = me;
+    doRPC(succ.ip, &Chord::notify_handler, &na, &nr);
 
-  succ = loctable->succ(1);
-  notify_args na;
-  notify_ret nr;
-  na.me = me;
-  doRPC(succ.ip, &Chord::notify_handler, &na, &nr);
-
-  printf("Chord(%u,%u)::stabilize succ %u pred %u", me.ip, me.id, succ.id, loctable->pred().ip);
-  fix_predecessor();
-  //fix_successor();
-  fix_successor_list();
-
-  delaycb(10, Chord::stabilize, NULL);
+    Time after = now();
+    printf("Chord(%u,%u)::stabilize(%u) succ %u pred %u elapsed %u\n", me.ip, me.id, before,succ.id, loctable->pred().ip, after-before);
+    fix_predecessor();
+    //fix_successor();
+    if (CHORD_SUCC_NUM > 1) fix_successor_list();
+  }else{
+    printf("Chord(%u,%u)::stabilize(%u) nothing succ %u\n", me.ip, me.id, before, succ.ip);
+  }
+  delaycb(20, Chord::stabilize, NULL);
 }
 
 void
@@ -196,6 +198,7 @@ void
 Chord::notify_handler(notify_args *args, notify_ret *ret)
 {
   loctable->notify(args->me);
+  printf("Chord(%u,%u) notified of %u succ %u pred %u\n", me.ip,me.id, args->me.id, loctable->succ(1).ip, loctable->pred().ip);
 }
 
 void
@@ -301,9 +304,13 @@ void
 LocTable::notify(Chord::IDMap n)
 {
   assert(n.ip);
+  assert(ring.size() >= 3);
   if ((ring.back().ip == 0) || (ConsistentHash::between(ring.back().id, ring.front().id, n.id))) {
     ring.pop_back();
     ring.push_back(n);
+  }
+  if ((ring[1].ip == 0) || (ring[1].ip == ring[0].ip)){
+    ring[1] = n;
   }
 }
 
@@ -340,10 +347,14 @@ LocTable::pin(Chord::CHID x)
 void
 LocTable::evict() //evict one node
 {
-  int j = 0;
+  int sz;
+  sz = pinlist.size();
   if (!pinlist.size()) {
     ring.erase(ring.begin() + _succ_num + 1);
+    return;
   }
+  assert(0);
+  int j = 0;
   for (int i = _succ_num + 1; i < ring.size(); i++)  {
     while (j < pinlist.size() && ConsistentHash::between(ring[0].id, pinlist[j],ring[i].id)) {
       j++;
@@ -353,5 +364,4 @@ LocTable::evict() //evict one node
 	return;
     }
   }
-  assert(0);
 }
