@@ -10,6 +10,7 @@ using namespace std;
 class Kademlia : public Protocol {
 public:
   typedef long long NodeID;
+  typedef unsigned Value;
   static const unsigned idsize = 8*sizeof(NodeID);
 
   Kademlia(Node*);
@@ -49,6 +50,16 @@ private:
     IPAddress ip;
   };
   void do_lookup(void *args, void *result);
+
+
+  // transfer
+  struct transfer_args {
+    NodeID id;
+  };
+  struct transfer_result {
+    map<NodeID, Value> values;
+  };
+  void do_transfer(void *args, void *result);
                                                                                   
 
   // finger table
@@ -85,6 +96,8 @@ private:
     } _ft[8*sizeof(NodeID)];
   } _fingers;
 
+  // this is what we're here for: being a NodeID -> value hashtable
+  map<NodeID, Value> _values;
 };
 
 #endif // __KADEMLIA_H

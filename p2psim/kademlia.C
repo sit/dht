@@ -12,6 +12,7 @@ using namespace std;
 Kademlia::Kademlia(Node *n) : Protocol(n)
 {
   _id = (((NodeID) random()) << 32) | random();
+  _values.clear();
 }
 
 Kademlia::~Kademlia()
@@ -30,13 +31,42 @@ Kademlia::join(Args *args)
   for(unsigned i=0; i<idsize; i++)
     _fingers.set(i, _id, ip());
 
-  // lookup my own key with well known node
+  // lookup my own key with well known node.
   lookup_args la;
-  la.key = _id;
   lookup_result lr;
+  la.key = _id;
   doRPC(wkn, &Kademlia::do_lookup, &la, &lr);
 
-  //
+  // now we know the closest node in our ID space.  add him to our finger table.
+  handle_join(lr.id, lr.ip);
+
+  // ...and get his data
+  transfer_args ta;
+  transfer_result tr;
+  ta.id = _id;
+  doRPC(lr.ip, &Kademlia::do_transfer, &ta, &tr);
+
+  // merge that data in our _values table
+  for(map<NodeID, Value>::const_iterator pos = tr.values.begin(); pos != _values.end(); ++pos)
+    _values[pos->first] = pos->second;
+}
+
+
+void
+Kademlia::do_transfer(void *args, void *result)
+{
+  transfer_args *targs = (transfer_args*) args;
+  transfer_result *tresult = (transfer_result*) result;
+
+  DEBUG(1) << "handle_transfer to node " << targs->id << "\n";
+  if(_values.size() == 0) {
+    DEBUG(1) << "handle_transfer_cb; no values: done!\n";
+    return;
+  }
+
+  for(map<NodeID, Value>::const_iterator pos = _values.begin(); pos != _values.end(); ++pos)
+    if(pos->first >= targs->id)
+      tresult->values.insert(*pos);
 }
 
 
