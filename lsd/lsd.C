@@ -43,7 +43,7 @@
 #include <modlogger.h>
 #define info modlogger ("lsd")
 
-//#define PROFILING 
+// #define PROFILING 
 
 // When a process starts up profiling is not happening.  But by
 // sending a SIGUSR1, profiling is turned on.  (Another SIGUSR1 turns
@@ -69,10 +69,13 @@ static char *monitor_host;
 ptr<chord> chordnode;
 static str p2psocket;
 int ss_mode;
-bool nojoin_ok = false;
 int lbase;
 vec<ref<dhash> > dh;
 int myport;
+ 
+bool useproxy = false;
+str proxyhost;
+int proxyport = 0;
 
 #define MODE_DEBRUIJN 1
 #define MODE_CHORD 2
@@ -93,10 +96,12 @@ client_accept (int fd)
 
   ref<axprt_stream> x = axprt_stream::alloc (fd, 1024*1025);
 
-  // vNew a refcounted dhashgateway structure, whose constructor calls
-  // mkref to maintain a reference to itself until the program is
-  // gone.
-  vNew refcounted<dhashgateway> (x, chordnode);
+  // constructor of dhashgateway object calls mkref to maintain a
+  // reference to itself until the program is gone.
+  if (useproxy)
+    vNew refcounted<dhashgateway> (x, chordnode, proxyhost, proxyport);
+  else
+    vNew refcounted<dhashgateway> (x, chordnode);
 }
 
 static void
@@ -116,7 +121,8 @@ client_listen (int fd)
   if (listen (fd, 5) < 0) {
     fatal ("Error from listen: %m\n");
     close (fd);
-  } else {
+  }
+  else {
     fdcb (fd, selread, wrap (client_accept_socket, fd));
   }
 }
@@ -178,7 +184,7 @@ get_fingerlike (int mode)
 static void
 newvnode_cb (int n, ptr<vnode> my, chordstat stat)
 {  
-  if (stat != CHORD_OK && !nojoin_ok) {
+  if (stat != CHORD_OK) {
     warnx << "newvnode_cb: status " << stat << "\n";
     fatal ("unable to join\n");
   }
@@ -294,11 +300,13 @@ dump_rpcstats (const rpc_program &prog, bool first, bool last)
 	    subtotal.outreply_num[0],
 	    subtotal.outreply_bytes[0]);
 
-  warn << "TOTAL " << prog.name << "  out*_num " 
-	 << subtotal.outcall_num[0] + subtotal.outcall_numrex[0] + subtotal.outreply_num[0]
-	 << " out*_bytes " 
-	 << subtotal.outcall_bytes[0] + subtotal.outcall_bytesrex[0] + subtotal.outreply_bytes[0]
-	 << "\n";
+  warn << "TOTAL " << prog.name << "  out*_num "
+       << subtotal.outcall_num[0]
+          + subtotal.outcall_numrex[0] + subtotal.outreply_num[0]
+       << " out*_bytes " 
+       << subtotal.outcall_bytes[0]
+          + subtotal.outcall_bytesrex[0] + subtotal.outreply_bytes[0]
+       << "\n";
 
   warn << "\n";
 
@@ -320,9 +328,11 @@ dump_rpcstats (const rpc_program &prog, bool first, bool last)
 	      total.outreply_bytes[0]);
 
     warn << "TOTAL all protocols      out*_num " 
-	 << total.outcall_num[0] + total.outcall_numrex[0] + total.outreply_num[0]
+	 << total.outcall_num[0]
+	    + total.outcall_numrex[0] + total.outreply_num[0]
 	 << " out*_bytes " 
-	 << total.outcall_bytes[0] + total.outcall_bytesrex[0] + total.outreply_bytes[0]
+	 << total.outcall_bytes[0]
+	    + total.outcall_bytesrex[0] + total.outreply_bytes[0]
 	 << "\n";
   }
 
@@ -444,9 +454,10 @@ monitor_connected (int fd)
 void
 monitor_start (const char *monitor)
 {
-  char *bs_port = strchr(monitor, ':');
+  char *bs_port = strchr (monitor, ':');
   if (!bs_port) {
-    warnx << "monitor_start: invalid address or hostname: `" << monitor << "'\n";
+    warnx << "monitor_start: invalid address or hostname: `"
+          << monitor << "'\n";
     return;
   }
   int port = atoi (bs_port + 1);
@@ -480,6 +491,7 @@ usage ()
     "[-s <server select mode>] "
     "[-L <warn/fatal/panic output file name>] "
     "[-T <trace file name (aka new log)>] "
+    "[-x <proxy hostname:port>] "
     "\n";
   exit (1);
 }
@@ -521,7 +533,7 @@ main (int argc, char **argv)
 
   char *cffile = NULL;
 
-  while ((ch = getopt (argc, argv, "b:d:fFj:l:L:M:m:n:O:Pp:S:s:T:tv:w:x"))!=-1)
+  while ((ch = getopt (argc, argv, "b:d:fFj:l:L:M:m:n:O:Pp:S:s:T:tv:w:x:"))!=-1)
     switch (ch) {
     case 'b':
       lbase = atoi (optarg);
@@ -541,7 +553,7 @@ main (int argc, char **argv)
       break;
     case 'j': 
       {
-	char *bs_port = strchr(optarg, ':');
+	char *bs_port = strchr (optarg, ':');
 	if (!bs_port) usage ();
 	char *sep = bs_port;
 	*bs_port = 0;
@@ -555,7 +567,8 @@ main (int argc, char **argv)
 	  }
 	  struct in_addr *ptr = (struct in_addr *)h->h_addr;
 	  wellknownhost = inet_ntoa (*ptr);
-	} else
+	}
+	else
 	  wellknownhost = optarg;
 
 	wellknownport = atoi (bs_port);
@@ -565,7 +578,8 @@ main (int argc, char **argv)
     case 'L':
       {
 	int logfd = open (optarg, O_RDWR | O_CREAT, 0666);
-	if (logfd <= 0) fatal << "Could not open logfile " << optarg << " for appending\n";
+	if (logfd <= 0)
+	  fatal << "Could not open logfile " << optarg << " for appending\n";
 	lseek (logfd, 0, SEEK_END);
 	errfd = logfd;
 	break;
@@ -619,14 +633,37 @@ main (int argc, char **argv)
       monitor_host = optarg;
       break;
     case 'x':
-      nojoin_ok = true;
-      break;
+      {
+	char *bs_port = strchr (optarg, ':');
+	if (!bs_port) usage ();
+	char *sep = bs_port;
+	*bs_port = 0;
+	bs_port++;
+	if (inet_addr (optarg) == INADDR_NONE) {
+	  //yep, this blocks
+	  struct hostent *h = gethostbyname (optarg);
+	  if (!h) {
+	    warn << "Invalid address or hostname: " << optarg << "\n";
+	    usage ();
+	  }
+	  struct in_addr *ptr = (struct in_addr *)h->h_addr;
+	  proxyhost = inet_ntoa (*ptr);
+	}
+	else
+	  proxyhost = optarg;
+
+	proxyport = atoi (bs_port);
+	*sep = ':'; // restore optarg for argv printing later.
+	useproxy = true;
+	break;
+      }
     default:
       usage ();
       break;
     }
 
-  if (wellknownport == 0) usage ();
+  if (wellknownport == 0)
+    usage ();
 
   if (vnodes > chord::max_vnodes) {
     warn << "Requested vnodes (" << vnodes << ") more than maximum allowed ("
