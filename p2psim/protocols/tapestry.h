@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.30 2003/12/17 22:02:44 strib Exp $ */
+/* $Id: tapestry.h,v 1.31 2004/01/07 23:36:53 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -28,19 +28,17 @@ public:
   const unsigned _digits_per_id;
 
   // types of statistics we can record
-  enum stat_type
-  {
-    STAT_JOIN = 0,
-    STAT_LOOKUP,
-    STAT_NODELIST,
-    STAT_MC,
-    STAT_PING,
-    STAT_BACKPOINTER,
-    STAT_MCNOTIFY,
-    STAT_NN,
-    STAT_REPAIR,
-    STAT_SIZE
-  };
+  //  enum stat_type
+  //{
+  const static stat_type STAT_JOIN = 1;
+  const static stat_type STAT_NODELIST = 2;
+  const static stat_type STAT_MC = 3;
+  const static stat_type STAT_PING = 4;
+  const static stat_type STAT_BACKPOINTER = 5;
+  const static stat_type STAT_MCNOTIFY = 6;
+  const static stat_type STAT_NN = 7;
+  const static stat_type STAT_REPAIR = 8;
+  const static stat_type STAT_SIZE = 9;
 
   Tapestry(IPAddress i, Args a);
   virtual ~Tapestry();

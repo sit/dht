@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.39 2003/12/17 22:02:44 strib Exp $ */
+/* $Id: tapestry.C,v 1.40 2004/01/07 23:36:53 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -102,6 +102,7 @@ Tapestry::record_stat(stat_type type, uint num_ids, uint num_else )
   TapDEBUG(5) << "record stat " << type << endl;
 
   assert(stat.size() > (uint) type);
+  Node::record_bw_stat( type, num_ids, num_else );
   stat[type] += 20 + 4*num_ids + num_else;
   num_msgs[type]++;
 
@@ -142,6 +143,8 @@ Tapestry::print_stats()
     cout << "fail rate: " 
 	 << (((double)_num_fail_lookups)/((double) _num_lookups)) << endl;
     _num_lookups = 0;
+
+    Node::print_stats();
   }
 
 }
@@ -209,8 +212,12 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
     _num_hops += lr.hopcount;
     if( _direct_reply ) {
       _total_latency += ( lr.time_done - args->starttime );
+      record_lookup_stat( ip(), lr.owner_ip, lr.time_done - args->starttime,
+			  true, true );
     } else {
       _total_latency += ( now() - args->starttime );
+      record_lookup_stat( ip(), lr.owner_ip, now() - args->starttime,
+			  true, true );
     }
     delete args;
   } else {
@@ -229,6 +236,8 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
 	  TapDEBUG(0) << "Lookup failed for key " << print_guid(args->key) 
 		      << endl;
 	}
+	record_lookup_stat( ip(), ip(), now() - args->starttime,
+			    false, false );
 	_num_fail_lookups++;
       } else if( lr.owner_id != lr.real_owner_id ) {
 
@@ -245,6 +254,8 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
 		      << lr.hopcount << ", numtries " << args->num_tries 
 		      << endl;
 	}
+	record_lookup_stat( ip(), ip(), now() - args->starttime,
+			    true, false );
 	_num_inc_lookups++;
       } else {
 	assert(0); // this can't be!
