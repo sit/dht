@@ -2,7 +2,6 @@
 using namespace std;
 
 #include <assert.h>
-#include <stdio.h>
 
 #include "protocolfactory.h"
 #include "node.h"
@@ -21,9 +20,12 @@ Node::~Node()
 {
   chanfree(_pktchan);
   chanfree(_protchan);
-  typedef map<string,Protocol*>::const_iterator CI;
-  for(CI p = _protmap.begin(); p != _protmap.end(); ++p)
+  /*
+  for(PMCI p = _protmap.begin(); p != _protmap.end(); ++p) {
+    cout << "deleting protocol" << endl;
     delete p->second;
+  }
+  */
   _protmap.clear();
 }
 
@@ -35,6 +37,7 @@ Node::run()
   Packet *p;
   string protname;
   Protocol *prot;
+  unsigned exit;
 
   a[0].c = _pktchan;
   a[0].v = &p;
@@ -44,7 +47,11 @@ Node::run()
   a[1].v = &protname;
   a[1].op = CHANRCV;
 
-  a[2].op = CHANEND;
+  a[2].c = _exitchan;
+  a[2].v = &exit;
+  a[2].op = CHANRCV;
+
+  a[3].op = CHANEND;
   
   while(1) {
     int i;
@@ -79,6 +86,16 @@ Node::run()
         }
         _protmap[protname] = prot;
         break;
+
+      //exit
+      case 2:
+        // send all protocols an exit
+        // cout << "exit node channel" << endl;
+        for(PMCI p = _protmap.begin(); p != _protmap.end(); ++p)
+          send(p->second->exitchan(), 0);
+        _protmap.clear();
+        delete this;
+
 
       default:
         break;

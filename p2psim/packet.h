@@ -1,10 +1,10 @@
 #ifndef __PACKET_H
 #define __PACKET_H
 
-#include "p2psim.h"
 #include <lib9.h>
 #include <thread.h>
 #include "protocol.h"
+#include "p2psim.h"
 
 class Packet {
 public:

@@ -6,6 +6,7 @@
 #include <assert.h>
 #include <iostream>
 #include <stdio.h>
+#include "p2psim.h"
 using namespace std;
 
 Network *Network::_instance = 0;
@@ -47,7 +48,7 @@ Network::~Network()
   while(_nodelist.size() > 0){
     Node *n = _nodelist.front();
     _nodelist.pop_front();
-    delete n;
+    send(n->exitchan(), 0);
   }
 }
 

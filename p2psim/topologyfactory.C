@@ -1,4 +1,5 @@
 #include "topologyfactory.h"
+#include "p2psim.h"
 
 Topology *
 TopologyFactory::create(string s)

@@ -1,11 +1,15 @@
 #include "threaded.h"
+#include <assert.h>
 
 Threaded::Threaded()
 {
+  _exitchan = chancreate(sizeof(unsigned), 0);
+  assert(_exitchan);
 }
 
 Threaded::~Threaded()
 {
+  chanfree(_exitchan);
 }
 
 void

@@ -5,7 +5,6 @@
 #include <stdio.h>
 using namespace std;
 
-#include "p2psim.h"
 #include "protocol.h"
 #include "protocolfactory.h"
 #include "packet.h"
@@ -14,6 +13,7 @@ using namespace std;
 #include "node.h"
 #include "cbevent.h"
 #include "eventqueue.h"
+#include "p2psim.h"
 
 Protocol::Protocol(Node *n) : _node(n)
 {
@@ -96,6 +96,7 @@ Protocol::run()
   Alt a[3];
   Packet *packet;
   P2PEvent *event;
+  unsigned *exit;
   pair<Protocol*, Packet*> *np;
   pair<Protocol*, Event*> *ap;
 
@@ -107,7 +108,11 @@ Protocol::run()
   a[1].v = &event;
   a[1].op = CHANRCV;
 
-  a[2].op = CHANEND;
+  a[2].c = _exitchan;
+  a[2].v = &exit;
+  a[2].op = CHANRCV;
+
+  a[3].op = CHANEND;
   
   while(1) {
     int i;
@@ -132,6 +137,11 @@ Protocol::run()
         ap->second = event;
         threadcreate(Protocol::Dispatch, (void*)ap, mainstacksize);
         break;
+
+      case 2:
+        // graceful exit
+        // cout << "Protocol exit!" << endl;
+        delete this;
 
       default:
         break;

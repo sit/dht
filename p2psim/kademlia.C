@@ -1,7 +1,7 @@
-#include "p2psim.h"
 #include "kademlia.h"
 #include "packet.h"
 #include <iostream>
+#include "p2psim.h"
 using namespace std;
 
 Kademlia::Kademlia(Node *n) : Protocol(n)

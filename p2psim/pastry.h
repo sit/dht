@@ -3,13 +3,13 @@
 
 #include "protocol.h"
 #include "node.h"
-#include <openssl/bn.h>
+#include "bigint.h"
 #include <vector>
 using namespace std;
 
 class Pastry : public Protocol {
 public:
-  typedef BIGNUM* NodeID;
+  typedef bigint NodeID;
   const unsigned idlength;
 
   Pastry(Node*);

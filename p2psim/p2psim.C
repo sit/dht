@@ -1,6 +1,6 @@
-#include "p2psim.h"
 #include "eventqueue.h"
 #include "network.h"
+#include "p2psim.h"
 
 Time
 now() {

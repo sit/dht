@@ -1,13 +1,13 @@
 #ifndef __NODE_H
 #define __NODE_H
 
-#include "p2psim.h"
 #include "threaded.h"
 #include "protocol.h"
 #include <lib9.h>
 #include <thread.h>
 #include <map>
 #include <string>
+#include "p2psim.h"
 using namespace std;
 
 class Node : public Threaded {
@@ -26,7 +26,10 @@ private:
   IPAddress _ip;
   Channel *_pktchan;    // for packets
   Channel *_protchan;   // to register protocols
-  map<string, Protocol*> _protmap;
+
+  typedef map<string,Protocol*> PM;
+  typedef PM::const_iterator PMCI;
+  PM _protmap;
 };
 
 #endif // __NODE_H

@@ -28,6 +28,8 @@ private:
   void add_event(Event*);
   void advance();
 
+  void graceful_exit();
+
   // for debuging
   void dump();
 };

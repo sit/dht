@@ -1,5 +1,6 @@
 AC_INIT(protocol.h)
 AM_INIT_AUTOMAKE(p2psim, 0.1)
+AM_CONFIG_HEADER(config.h)
 
 AC_CANONICAL_HOST
 
@@ -7,6 +8,8 @@ AC_PROG_CC
 AC_PROG_CPP
 AC_PROG_CXX
 AC_PATH_PROGS(M4, gm4 gnum4 m4, '$(top_srcdir)/missing')
+
+AM_WITH_DMALLOC
 
 AC_PROG_INSTALL
 AC_PROG_LN_S

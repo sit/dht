@@ -6,6 +6,7 @@
 #include <iostream>
 #include <fstream>
 #include <list>
+#include "p2psim.h"
 using namespace std;
 
 EventQueue *EventQueue::_instance = 0;
@@ -51,18 +52,29 @@ EventQueue::run()
     // everyone else is quiet.
     // must be time for the next event.
                                                                                   
-    if(_queue.empty()){
-      // no more events.  we're done!
-      cout << "End of simulation\n";
-      Network::DeleteInstance();
-      threadexitsall(0);
-    }
+    // no more events.  we're done!
+    if(_queue.empty())
+      graceful_exit();
                                                                                   
     // run events for next time in the queue
     advance();
   }
 }
 
+void
+EventQueue::graceful_exit()
+{
+  extern int anyready();
+  cout << "End of simulation, chances are I'm going to segfault now.\n";
+  Network::DeleteInstance();
+
+  // give everyone a chance to clean up
+  while(anyready()) {
+    // cout << "Others are ready in exit" << endl;
+    yield();
+  }
+  threadexitsall(0);
+}
 
 // moves time forward to the next event
 void

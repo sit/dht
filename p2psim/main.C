@@ -9,7 +9,6 @@
 #include "eventqueue.h"
 #include "topology.h"
 
-
 char *topology_file;
 char *event_file;
   
@@ -20,6 +19,8 @@ void
 threadmain(int argc, char *argv[])
 {
   parse_args(argc, argv);
+
+  Packet *p = (Packet*) malloc(sizeof(Packet));
 
   // Creates a network with the appropriate underlying topology.
   Topology::parse(topology_file);

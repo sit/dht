@@ -1,9 +1,9 @@
 #ifndef __TOPOLOGY_H
 #define __TOPOLOGY_H
 
-#include "p2psim.h"
 #include "node.h"
 #include <fstream>
+#include "p2psim.h"
 using namespace std;
 
 // abstract super class of a topology

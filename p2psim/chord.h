@@ -1,7 +1,6 @@
 #ifndef __CHORD_H
 #define __CHORD_H
 
-#include "p2psim.h"
 #include "protocol.h"
 #include "consistenthash.h"
 //#include "../utils/skiplist.h"
@@ -9,6 +8,8 @@
 #include <vector>
 
 #define CHORD_SUCC_NUM 1  //successor list contains CHORD_SUCC_NUM elements
+
+#include "p2psim.h"
 
 class LocTable;
 

@@ -8,6 +8,7 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
+#include "p2psim.h"
 using namespace std;
 
 Euclidean::Euclidean()

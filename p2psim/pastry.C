@@ -1,7 +1,8 @@
-#include "p2psim.h"
 #include "pastry.h"
 #include "packet.h"
 #include <iostream>
+// #include "bigint.h"
+#include "p2psim.h"
 using namespace std;
 
 Pastry::Pastry(Node *n) : Protocol(n),
@@ -12,16 +13,20 @@ Pastry::Pastry(Node *n) : Protocol(n),
   _M(2 << _b)
 {
   // create a random 128-bit ID
+  /*
   _id = BN_new();
   BN_init(_id);
   BN_pseudo_rand(_id, idlength, -1, 0);
-  cout << "Pastry id = " << BN_bn2hex(_id) << endl;
+  */
+  _id = 5;
+  // cout << "Pastry id = " << BN_bn2hex(_id) << endl;
+  cout << "Pastry id = " << _id.getstr() << endl;
 }
 
 
 Pastry::~Pastry()
 {
-  BN_free(_id);
+  // BN_free(_id);
 }
 
 void
@@ -60,9 +65,11 @@ Pastry::lookup(Args *args)
 unsigned
 Pastry::shared_prefix_len(NodeID n, NodeID m)
 {
+  /*
   for(int i=0; i<idlength; i++)
     if(BN_is_bit_set(n, i) != BN_is_bit_set(m, i))
       return i;
+  */
   return idlength;
 }
 
@@ -74,6 +81,7 @@ Pastry::shared_prefix_len(NodeID n, NodeID m)
 unsigned
 Pastry::get_digit(NodeID nx, unsigned d)
 {
+  /*
   NodeID n = BN_new();
   BN_rshift(n, nx, (idlength - _b*d)); // n = n << (idlength-b*d)
   BN_mask_bits(n, _b);                 // n |= b
@@ -84,6 +92,8 @@ Pastry::get_digit(NodeID nx, unsigned d)
       r |= 1<<i;
   BN_free(n);
   return r;
+  */
+  return 5;
 }
 
 
@@ -103,7 +113,7 @@ Pastry::route(NodeID D, void*)
   // if it's in our routing table, forward it.
   unsigned l = shared_prefix_len(D, _id);
   if((nexthop = _rtable[get_digit(D, l)][l].second)) {
-    doRPC(nexthop, &Pastry::route, D, (void*)0);
+    // doRPC(nexthop, &Pastry::route, D, (void*)0);
     return;
   }
 

@@ -5,6 +5,7 @@
 #include "koorde.h"
 #include <typeinfo>
 #include <iostream>
+#include "p2psim.h"
 
 
 ProtocolFactory *ProtocolFactory::_instance = 0;

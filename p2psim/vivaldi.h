@@ -1,8 +1,8 @@
 #ifndef __VIVALDI_H
 #define __VIVALDI_H
 
-#include "p2psim.h"
 #include <map> // huh? what's the correct header file for pair?
+#include "p2psim.h"
 using namespace std;
 
 // Compute Vivaldi synthetic coordinates.
