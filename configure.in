@@ -1,4 +1,4 @@
-dnl $Id: configure.in,v 1.44 2003/08/21 20:46:44 athicha Exp $
+dnl $Id: configure.in,v 1.45 2004/08/07 18:29:04 amdragon Exp $
 dnl
 dnl Process this file with autoconf to produce a configure script.
 dnl
@@ -81,4 +81,5 @@ AC_OUTPUT(Makefile svc/Makefile utils/Makefile
 	merkle/Makefile chord/Makefile chordcd/Makefile 
 	proxy/Makefile devel/Makefile
 	test/Makefile tst/Makefile
-	melody/Makefile dhc/Makefile usenet/Makefile)
+	melody/Makefile dhc/Makefile usenet/Makefile
+	arpeggio/Makefile)
