@@ -111,13 +111,18 @@ class skiplist {
   }
 
   T *search (const K &k) const {
-    T *x = head;
+    if (head == NULL)
+      return NULL;
+    if (cmp (k, head->*key) < 0)
+      return NULL;
+    if (cmp (k, head->*key) == 0)
+      return head;
 
-    for (int i = lvl - 1; i >= 0; i--) {
-      while (x && (cmp (x->*key, k) < 0))
-	x = (x->*field).forward[i];
-    }
-    if (x && (cmp (x->*key, k) == 0))
+    T *x = closestpred (k);
+    if (x == NULL)
+      return NULL;
+    x = (x->*field).forward[0];
+    if (x && cmp (x->*key, k) == 0)
       return x;
     
     return NULL;

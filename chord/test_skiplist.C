@@ -159,9 +159,18 @@ int main (int argc, char *argv[])
   for (int i = 0; i < 500; i++) {
     test.insert (New item (2*i, "blah"));
   }
-  for (int i = 0; i < 500; i++) {
-    test.insert (New item (2*i + 1, "blah"));
+  for (int i = 499; i >= 0; i--) {
+    test.insert (New item (2*i + 1, "foo"));
   }
+
+  item *c = test.search (1000);
+  assert (c == NULL);
+  for (int i = 0; i < 1000; i++) {
+    c = test.search (i);
+    assert (c != NULL);
+    assert (c->key == i);
+  }
+      
   
   item *a = test.first ();
   item *b = test.next (a);
