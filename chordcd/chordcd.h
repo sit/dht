@@ -94,7 +94,8 @@ class chord_server {
 
   void fetch_data (bool pfonly, chordID ID, cbdata_t cb);
   void fetch_data (bool pfonly, chordID ID, dhash_ctype ct, cbdata_t cb);
-  void fetch_data_cb (chordID ID, cbdata_t cb, 
+  void fetch_data_cb (chordID ID, dhash_ctype ct,
+		      cbdata_t cb,
 		      dhash_stat stat,
 		      ptr<dhash_block> blk,
 		      vec<chordID> path);

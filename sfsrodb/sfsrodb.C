@@ -1,4 +1,4 @@
-/* $Id: sfsrodb.C,v 1.30 2003/04/17 19:21:53 jsr Exp $ */
+/* $Id: sfsrodb.C,v 1.31 2003/09/26 21:00:08 sit Exp $ */
 
 /*
  * Copyright (C) 1999 Kevin Fu (fubob@mit.edu)
@@ -835,11 +835,7 @@ sfsrodb_main (const str root, const str keyfile)
     fatal ("errors!\n");
   }
   str pk_raw = b;
-  char pk_hash[sha1::hashsize];
-  sha1_hash (pk_hash, pk_raw.cstr (), pk_raw.len ());
-  str pk_name = armor64A(pk_hash, sha1::hashsize);
   bigint pk_hash_bi = compute_hash (pk_raw.cstr (), pk_raw.len ());
-
 
   // store file system in db
   sfs_hash root_fh;
@@ -860,7 +856,7 @@ sfsrodb_main (const str root, const str keyfile)
     bool found = false;
     if (!wipe_flag)
       found = get_root_inode_and_dir (pk_hash_bi, &inode, &directory);
-
+    // XXX is something wrong with pk_hash_bi???
     if (wipe_flag || !found) {
       // fake up an empty directory
       directory.dir->eof = true;
@@ -913,13 +909,13 @@ sfsrodb_main (const str root, const str keyfile)
   // XX Should make sure timezone is correct
   str etime (ctime (&end));
   warn << "Database good from: \n " << stime << "until:\n " << etime;
-  warn << "exporting file system under " << pk_name << "\n";
 
   xdrsuio x (XDR_ENCODE);
   if (xdr_sfsro_data (x.xdrp (), &dat)) {
     void *v = suio_flatten (x.uio ());
     int l =  x.uio ()->resid ();
-    sfsrodb_put (sk, v, l);
+    chordID ID = sfsrodb_put (sk, v, l);
+    warn << "exported file system under " << ID << "\n";
     xfree (v);
   }
 

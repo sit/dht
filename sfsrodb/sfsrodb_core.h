@@ -1,4 +1,4 @@
-/* $Id: sfsrodb_core.h,v 1.14 2003/04/17 19:21:53 jsr Exp $ */
+/* $Id: sfsrodb_core.h,v 1.15 2003/09/26 21:00:08 sit Exp $ */
 
 /*
  *
@@ -43,7 +43,7 @@
 
 bigint fh2mpz(const void *keydata, size_t keylen);
 sfs_hash sfsrodb_put (void *data, size_t len);
-void sfsrodb_put (ptr <sfspriv> sk, void *data, size_t len);
+chordID sfsrodb_put (ptr <sfspriv> sk, void *data, size_t len);
 ptr<sfsro_data> sfsrodb_get (bigint key, dhash_ctype ct);
 
 void sfsrodb_core_sigusr1 ();

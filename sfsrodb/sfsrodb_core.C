@@ -148,7 +148,7 @@ sfsrodb_put (void *data, size_t len)
 }
 
 
-void
+chordID
 sfsrodb_put (ptr<sfspriv> sk, void *data, size_t len)
 {
   if (blkcnt == 0) clock_gettime (CLOCK_REALTIME, &periodic);
@@ -164,7 +164,9 @@ sfsrodb_put (ptr<sfspriv> sk, void *data, size_t len)
   sfs_pubkey2 pk;
   sfs_sig2 s;
   p.sign (sk, pk, s);
-  dhash_cli->insert (p.id (pk), pk, s, p, wrap (sfsrodb_put_cb, ts));
+  chordID ID = p.id (pk);
+  dhash_cli->insert (ID, pk, s, p, wrap (sfsrodb_put_cb, ts));
+  return ID;
 }
 
 

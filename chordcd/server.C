@@ -59,6 +59,7 @@
 #include "arpc.h"
 #include "xdr_suio.h"
 #include "afsnode.h"
+#include "id_utils.h"
 
 #define LSD_SOCKET "/tmp/chord-sock"
 #define CMTU 1024
@@ -97,9 +98,12 @@ chord_server::setrootfh (str root, cbfh_t rfh_cb)
   }
   else {
     str rootfhstr = path_regexp[1];
-    str dearm = dearmor64A (rootfhstr);
     chordID ID;
-    mpz_set_rawmag_be (&ID, dearm.cstr (), dearm.len ());
+    if (!str2chordID (rootfhstr, ID)) {
+      warn << "Malformed root filesystem name: " << root << "\n";
+      (*rfh_cb) (NULL);
+    }
+    warn << "reading root " << ID << "\n";
     //fetch the root file handle too..
     fetch_data (false, ID, DHASH_KEYHASH, 
 		wrap (this, &chord_server::getroot_fh, rfh_cb));
@@ -993,12 +997,12 @@ chord_server::fetch_data (bool pfonly, chordID ID, dhash_ctype ct, cbdata_t cb)
     wait_list *l = pf_waiters[ID];
     fetch_wait_state *w = New fetch_wait_state (cb);
     l->insert_head (w);
-    dh.retrieve (ID, ct, wrap (this, &chord_server::fetch_data_cb, ID, cb));
+    dh.retrieve (ID, ct, wrap (this, &chord_server::fetch_data_cb, ID, ct, cb));
   }
 }
 
 void
-chord_server::fetch_data_cb (chordID ID, cbdata_t cb, 
+chord_server::fetch_data_cb (chordID ID, dhash_ctype ct, cbdata_t cb, 
 			     dhash_stat stat,
 			     ptr<dhash_block> blk,
 			     vec<chordID> path)
@@ -1006,12 +1010,33 @@ chord_server::fetch_data_cb (chordID ID, cbdata_t cb,
   ptr<sfsro_data> data = NULL;
 
   if (blk) {
-    data = New refcounted<sfsro_data>;
-    xdrmem x (blk->data, blk->len, XDR_DECODE);
-    if (xdr_sfsro_data (x.xdrp (), data)) {
-      data_cache.insert (ID, data);
-    } else {
-      warn << "Couldn't unmarshall data\n";
+    switch (ct) {
+    case DHASH_CONTENTHASH:
+      {
+	data = New refcounted<sfsro_data>;
+	xdrmem x (blk->data, blk->len, XDR_DECODE);
+	if (xdr_sfsro_data (x.xdrp (), data)) {
+	  data_cache.insert (ID, data);
+	} else {
+	  warn << "Couldn't unmarshall data\n";
+	}
+	break;
+      }
+    case DHASH_KEYHASH:
+      {
+	data = New refcounted<sfsro_data>;
+	ptr<keyhash_payload> p = keyhash_payload::decode (blk);
+	xdrmem x (p->buf ().cstr (), p->buf ().len (), XDR_DECODE);
+	if (xdr_sfsro_data (x.xdrp (), data)) {
+	  data_cache.insert (ID, data);
+	} else {
+	  warn << "Couldn't unmarshall pk data\n";
+	}
+	break;
+      }
+    default:
+      warn << "WTF\n";
+      break;
     }
   }
 
