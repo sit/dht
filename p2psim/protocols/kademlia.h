@@ -29,6 +29,7 @@
 #include "p2psim/p2protocol.h"
 #include "consistenthash.h"
 #include <list>
+#include <iostream>
 using namespace std;
 
 // }}}
@@ -268,54 +269,8 @@ private:
 };
 
 // }}}
-// {{{ class k_bucket 
-class k_traverser;
-class k_bucket {
-public:
-  k_bucket(k_bucket*, bool, Kademlia * = 0);
-  virtual ~k_bucket();
-
-  Kademlia *kademlia()  { return _kademlia; }
-  void traverse(k_traverser*, Kademlia*, string = "", unsigned = 0, unsigned = 0);
-  void insert(Kademlia::NodeID, bool, bool = false, string = "", unsigned = 0);
-  void erase(Kademlia::NodeID, string = "", unsigned = 0);
-  inline virtual void checkrep() const;
-
-  bool leaf;
-
-protected:
-  k_bucket *parent;
-
-private:
-  Kademlia *_kademlia;
-};
-// }}}
-// {{{ class k_bucket_node
-class k_bucket_node : public k_bucket {
-public:
-  k_bucket_node(k_bucket *);
-  k_bucket_node(Kademlia *);
-  virtual ~k_bucket_node();
-  k_bucket *child[2];
-  inline virtual void checkrep() const;
-};
-// }}}
-// {{{ class k_bucket_leaf
-class k_nodes;
-class k_bucket_leaf : public k_bucket {
-public:
-  k_bucket_leaf(Kademlia *);
-  k_bucket_leaf(k_bucket *);
-  virtual ~k_bucket_leaf();
-  k_bucket_node* divide(unsigned);
-  inline virtual void checkrep();
-
-  k_nodes *nodes;
-  set<k_nodeinfo*, Kademlia::younger> *replacement_cache;
-};
-// }}}
 // {{{ class k_nodes
-class k_bucket_leaf;
+class k_bucket;
 
 /*
  * keeps a sorted set of nodes.  the size of the set never exceeds Kademlia::k.
@@ -323,7 +278,7 @@ class k_bucket_leaf;
 class k_nodes {
 public:
   typedef set<k_nodeinfo*, Kademlia::older> nodeset_t;
-  k_nodes(k_bucket_leaf *parent);
+  k_nodes(k_bucket *parent);
   ~k_nodes();
   void insert(Kademlia::NodeID, bool);
   void erase(Kademlia::NodeID);
@@ -336,8 +291,41 @@ public:
   nodeset_t nodes;
 
 private:
-  k_bucket_leaf *_parent;
+  k_bucket *_parent;
   set<k_nodeinfo*, Kademlia::idless> _nodes_by_id;
+};
+// }}}
+// {{{ class k_bucket 
+class k_traverser;
+class k_bucket {
+public:
+  k_bucket(k_bucket*, Kademlia * = 0);
+  ~k_bucket();
+
+  Kademlia *kademlia()  { return _kademlia; }
+  void traverse(k_traverser*, Kademlia*, string = "", unsigned = 0, unsigned = 0);
+  void insert(Kademlia::NodeID, bool, bool = false, string = "", unsigned = 0);
+  void erase(Kademlia::NodeID, string = "", unsigned = 0);
+  void checkrep();
+
+  void divide(unsigned);
+  void collapse();
+
+  bool leaf;
+
+  // in case we are a leaf
+  k_nodes *nodes;
+  set<k_nodeinfo*, Kademlia::younger> *replacement_cache;
+
+  // in case are a node, i.e., not a leaf
+  k_bucket *child[2];
+
+protected:
+  k_bucket *parent;
+
+private:
+  Kademlia *_kademlia;
+
 };
 // }}}
 
@@ -345,7 +333,7 @@ private:
 class k_traverser { public:
   k_traverser(string type = "") : _type(type) {}
   virtual ~k_traverser() {}
-  virtual void execute(k_bucket_leaf*, string, unsigned, unsigned) = 0;
+  virtual void execute(k_bucket*, string, unsigned, unsigned) = 0;
   string type() { return _type; };
 
 private:
@@ -356,7 +344,7 @@ private:
 class k_collect_closest : public k_traverser { public:
   k_collect_closest(Kademlia::NodeID);
   virtual ~k_collect_closest() {}
-  virtual void execute(k_bucket_leaf *, string, unsigned, unsigned);
+  virtual void execute(k_bucket*, string, unsigned, unsigned);
 
   set<Kademlia::NodeID, Kademlia::IDcloser> results;
 
@@ -368,7 +356,7 @@ private:
 class k_stabilizer : public k_traverser { public:
   k_stabilizer() : k_traverser("k_stabilizer") {}
   virtual ~k_stabilizer() {}
-  virtual void execute(k_bucket_leaf *, string, unsigned, unsigned);
+  virtual void execute(k_bucket*, string, unsigned, unsigned);
 };
 // }}}
 // {{{ class k_stabilized
@@ -377,7 +365,7 @@ class k_stabilized : public k_traverser { public:
     k_traverser("k_stabilized"), _v(v), _stabilized(true) {}
 
   virtual ~k_stabilized() {}
-  virtual void execute(k_bucket_leaf*, string, unsigned, unsigned);
+  virtual void execute(k_bucket*, string, unsigned, unsigned);
   bool stabilized() { return _stabilized; }
 
 private:
@@ -390,7 +378,7 @@ class k_finder : public k_traverser { public:
   k_finder(Kademlia::NodeID n) : k_traverser("k_finder"), _n(n), _found(0) {}
 
   virtual ~k_finder() {}
-  virtual void execute(k_bucket_leaf*, string, unsigned, unsigned);
+  virtual void execute(k_bucket*, string, unsigned, unsigned);
   unsigned found() { return _found; }
 
 private:
@@ -402,7 +390,7 @@ private:
 class k_dumper : public k_traverser { public:
   k_dumper() : k_traverser("k_dumper") {}
   virtual ~k_dumper() {}
-  virtual void execute(k_bucket_leaf*, string, unsigned, unsigned);
+  virtual void execute(k_bucket*, string, unsigned, unsigned);
 
 private:
 };
@@ -411,7 +399,7 @@ private:
 class k_delete : public k_traverser { public:
   k_delete() : k_traverser("k_delete") {}
   virtual ~k_delete() {}
-  virtual void execute(k_bucket_leaf*, string, unsigned, unsigned);
+  virtual void execute(k_bucket*, string, unsigned, unsigned);
 
 private:
 };
@@ -420,7 +408,7 @@ private:
 class k_check : public k_traverser { public:
   k_check() : k_traverser("k_check") {}
   virtual ~k_check() {}
-  virtual void execute(k_bucket_leaf*, string, unsigned, unsigned);
+  virtual void execute(k_bucket*, string, unsigned, unsigned);
 
 private:
 };
