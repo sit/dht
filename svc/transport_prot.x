@@ -39,6 +39,9 @@ union dorpc_res switch (rpcstat status) {
 
 program TRANSPORT_PROGRAM {
   version TRANSPORT_VERSION {
+    void
+    TRANSPORTPROC_NULL (void) = 2;
+    
     dorpc_res
     TRANSPORTPROC_DORPC (dorpc_arg) = 1;
   } = 1;
