@@ -25,20 +25,46 @@
 
 #include "datastore.h"
 #include "observers/datastoreobserver.h"
+#include "observers/chordobserver.h"
 #include "protocols/consistenthash.h"
 #include "hash_map.h"
+
+DataStore::DataStore (IPAddress i, Args& a, LocTable *l = NULL) :
+  ChordFingerPNS(i, a, l)
+{
+  _nreplicas = a.nget<uint>("replicas", 3, 10);
+}
+
 
 void
 DataStore::initstate ()
 {
   ChordFingerPNS::initstate();
+  
+  //find the range of keys we should be storing using global knowledge
+  vector<IDMap> ids = ChordObserver::Instance(NULL)->get_sorted_nodes();
+  IDMap pred;
+  int index = -1;
+  assert (ids.size () > 0);
+  for (int i = ids.size () - 1; i >= 0; i--)
+    {
+      //found ourselves,  
+      if (ids[i].id == me.id) {
+	//count back _nreplicas
+	index = i - _nreplicas;
+	if (index < 0) index = ids.size () + index;
+	pred = ids[index];
+      }
+      
+    }
+  assert (index >= 0);
 
+  cerr << me.id << ": storing items between " << pred.id << 
+    " and " << me.id << "\n";
   vector<DataItem> vd = DataStoreObserver::Instance(NULL)->get_data();
-
   for (unsigned int i = 0; i < vd.size (); i++) 
     {
       DataItem d = vd[i];
-      IDMap pred = loctable->pred(me.id);
       if (ConsistentHash::between (pred.id, me.id, d.key))
 	store (d);
     }
@@ -50,8 +76,16 @@ DataStore::join (Args* a)
 
   //start stabilization for data
   // delaycb (1000, &DataStore::stabilize_data, (void *) 0);
-
   ChordFingerPNS::join (a);
+}
+
+void
+DataStore::fetch_handler (fetch_args *args, fetch_res *ret)
+{
+  if (data_present (args->key))
+    ret->present = true;
+  else
+    ret->present = false;
 }
 
 void
@@ -63,18 +97,40 @@ DataStore::lookup (Args *args)
   a->start = now();
 
   IDMap lasthop;
-  vector<IDMap> v = find_successors (a->key, _frag, 
+  vector<IDMap> v = find_successors (a->key, _nreplicas, 
 				     TYPE_USER_LOOKUP, &lasthop, a);
 
   if (v.size() > 0) {
-    IDMap succ = v[0];
-    DataStore *succ_node = (DataStore *)getpeer(succ.ip);
-    if (succ_node->data_present (a->key))
-      cerr << ip () << ": data object " << a->key 
-	   << " found successfully at node " << succ.id << "\n";
-    else 
-      cerr << ip () << ": error looking up " << a->key << "\n";
-    
+    bool done = false;
+    int nsucc = 0;
+    while (!done) {
+      IDMap succ = v[nsucc];
+
+      //send an RPC to get the data
+      // we should really have it returned directly
+      fetch_args *args = new fetch_args ();
+      args->key = a->key;
+      fetch_res *res = new fetch_res ();
+      doRPC (succ.ip, &DataStore::fetch_handler, args, res);
+      
+      if (res->present) {
+	cerr << ip () << ": data object " << a->key 
+	     << " found successfully at node " << succ.id << " ("
+	     << nsucc << ")\n";
+	record_lookup_stat (me.ip, succ.ip, now () - a->start, true, true);
+	done = true;
+      }  else {
+	nsucc++;
+	if (nsucc >= _nreplicas  || nsucc >= v.size ()) {
+	  cerr << ip () << ": error looking up " << a->key << " "
+	       << nsucc << " " << _nreplicas << " " << v.size () << "\n";
+	  record_lookup_stat (me.ip, succ.ip, now () - a->start, true, false);
+	  done = true;
+	}
+      }
+      delete args;
+      delete res;
+    }
   }
 
   delete a;
@@ -94,7 +150,6 @@ DataStore::store (DataItem d)
 {
   db[d.key] = d;
   db_size += d.size;
-  cerr << me.id << ": storing " << d.key << "\n";
 }
 
 void

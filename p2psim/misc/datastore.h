@@ -36,12 +36,19 @@
 #include <stdio.h>
 
 
+struct fetch_args {
+  Chord::CHID key;
+};
+
+struct fetch_res {
+  bool present;
+};
+
 class DataStore : public ChordFingerPNS {
 
 public:
 
-  DataStore (IPAddress i, Args& a, LocTable *l = NULL) :
-  ChordFingerPNS(i, a, l) {};
+  DataStore (IPAddress i, Args& a, LocTable *l = NULL);
 
   virtual void initstate ();
   virtual void join(Args*);
@@ -54,6 +61,9 @@ public:
 
 private:
 
+  //configuration
+  int _nreplicas;
+
   //stats
   long db_size;
 
@@ -61,6 +71,9 @@ private:
   hash_map <CHID, DataItem> db;
 
   void stabilize_data (void *a);
+
+  //handlers
+  void fetch_handler (fetch_args *args, fetch_res *ret);
 };
 
 #endif /* _DATASTORE_H */
