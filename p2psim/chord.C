@@ -29,7 +29,7 @@ char *
 Chord::ts()
 {
   static char buf[50];
-  sprintf(buf, "%lu Chord(%u,%qx)", now(), me.ip, me.id);
+  sprintf(buf, "%lu Chord(%5u,%16qx)", now(), me.ip, me.id);
   return buf;
 }
 
@@ -37,10 +37,10 @@ void
 Chord::lookup(Args *args) 
 {
   CHID k = args->nget<CHID>("key");
-  printf("%s lookup key %qx\n", ts (), k);
+  printf("%s lookup key %16qx\n", ts (), k);
   vector<IDMap> v = find_successors(k, 1, false);
   IPAddress ans = (v.size() > 0) ? v[0].ip:0;
-  printf("%s lookup results (%u,%qx)\n", ts(), ans, (ans != 0) ? v[0].id : 0);
+  printf("%s lookup results (%u,%16qx)\n", ts(), ans, (ans != 0) ? v[0].id : 0);
 }
 
 // Returns at least m successors of key.
@@ -121,12 +121,12 @@ Chord::join(Args *args)
   wkn.id = ConsistentHash::ip2chid(wkn.ip);
   loctable->add_node (wkn);
 
-  printf("%s join wellknown %qx\n", ts(), wkn.id);
+  printf("%s join wellknown %16qx\n", ts(), wkn.id);
   Time before = now();
   vector<IDMap> succs = find_successors (me.id + 1, 1, true);
   assert (succs.size () > 0);
   Time after = now();
-  printf("%s join2 %qx, elapsed %ld\n",
+  printf("%s join2 %16qx, elapsed %ld\n",
          ts(), succs[0].id,
          after - before);
   loctable->add_node(succs[0]);
@@ -168,9 +168,9 @@ Chord::stabilized(vector<CHID> lid)
   vector<IDMap> succs = loctable->succs(me.id+1, nsucc);
 
 #if 0
-  printf ("stable? successor list %u,%qx at %lu\n", me.ip, me.id, now ());
+  printf ("stable? successor list %u,%16qx at %lu\n", me.ip, me.id, now ());
   for (unsigned int i = 0; i < succs.size (); i++) {
-    printf (" successor %d: %u, %qx\n", i, succs[i].ip, succs[i].id);
+    printf (" successor %d: %u, %16qx\n", i, succs[i].ip, succs[i].id);
   }
 #endif
 
@@ -181,7 +181,7 @@ Chord::stabilized(vector<CHID> lid)
     iter++;
     if (iter == lid.end()) iter = lid.begin();
     if (succs[i-1].id != *iter) {
-      printf("%s not stablized, %d succ should be %qx instead of (%u, %qx)\n", ts(), i-1, *iter, succs[i-1].ip,  succs[i-1].id);
+      printf("%s not stablized, %d succ should be %16qx instead of (%u, %16qx)\n", ts(), i-1, *iter, succs[i-1].ip,  succs[i-1].id);
       return false;
     }
   }
@@ -205,7 +205,7 @@ Chord::fix_successor()
 
   /*
   if(succ1.id != succ2.id)
-    printf("%s changed succ from %qx to %qx\n",
+    printf("%s changed succ from %16qx to %16qx\n",
 	   ts(), succ1.id, succ2.id);
   */
 }
@@ -228,11 +228,11 @@ Chord::fix_successor_list()
     loctable->add_node(gsr.v[i]);
   }
 
-  // printf ("fix_successor_list: %u,%qx at %lu succ %u,%qx\n", me.ip, me.id, 
+  // printf ("fix_successor_list: %u,%16qx at %lu succ %u,%16qx\n", me.ip, me.id, 
   //now(), succ.ip, succ.id);
   //vector<IDMap> scs = loctable->succs(me.id + 1, nsucc);
   //for (uint i = 0; i < scs.size (); i++) {
-  //printf ( "succ %d %u,%qx\n", i, scs[i].ip, scs[i].id);
+  //printf ( "succ %d %u,%16qx\n", i, scs[i].ip, scs[i].id);
   //}
 }
 
@@ -246,7 +246,7 @@ Chord::notify_handler(notify_args *args, notify_ret *ret)
 
   /*
   if(p1.id != p2.id)
-    printf("%s notify changed pred from %qx to %qx\n",
+    printf("%s notify changed pred from %16qx to %16qx\n",
          ts(), p1.id, p2.id);
   */
 }
@@ -261,13 +261,15 @@ Chord::get_predecessor_handler(get_predecessor_args *args,
 void
 Chord::dump()
 {
-  printf("myID is %qx %u\n", me.id, me.ip);
-  printf("===== %qx =====\n", me.id);
+  printf("myID is %16qx %5u\n", me.id, me.ip);
+  printf("===== %16qx =====\n", me.id);
 
   vector<IDMap> v = loctable->succs(me.id+1, nsucc);
   for (unsigned int i = 0; i < v.size(); i++) {
-    printf("%qx: succ %d : %qx\n", me.id, i, v[i].id);
+    printf("%16qx: succ %5d : %16qx\n", me.id, i, v[i].id);
   }
+  IDMap p = loctable->pred();
+  printf("pred is %5u,%16qx\n", p.ip, p.id);
 }
 
 #if 0
@@ -303,7 +305,7 @@ LocTable::findsuccessor (ConsistentHash::CHID x)
       break;
     }
   }
-  // printf ("ring: findsuccessor %qx is ring %d %qx\n", x, r, ring[r].id);
+  // printf ("ring: findsuccessor %16qx is ring %d %16qx\n", x, r, ring[r].id);
   return r;
 }
 
@@ -354,7 +356,7 @@ LocTable::print ()
 {
   printf ("ring:\n");
   for (uint i = 0; i < ring.size (); i++) {
-    printf ("  %u,%qx\n", ring[i].ip, ring[i].id);
+    printf ("  %5u,%16qx\n", ring[i].ip, ring[i].id);
 
   }
 }
@@ -453,7 +455,7 @@ LocTable::evict() // all unnecessary(unpinned) nodes
   uint j = 0; // index into ring
   while (i < pinlist.size ()) {
 
-    //    printf ("pin %d %qx %d %d\n", i, pinlist[i].id, pinlist[i].pin_succ,
+    //    printf ("pin %d %16qx %d %d\n", i, pinlist[i].id, pinlist[i].pin_succ,
     //    pinlist[i].pin_pred);
 
     // find successor of pinlist[i]. XXX don't start at j, but where we left off

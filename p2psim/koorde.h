@@ -32,8 +32,9 @@ public:
   void dump();
 
 protected:
-  static const uint k = 2;  // k-degree de bruijn graph; 
-  static const uint logbase = k >> 1;  // degree k = 2 ^ logbase
+  static const uint logbase = 16;
+  static const uint k = 1 << logbase;  // k-degree de bruijn graph; 
+
   Chord::CHID debruijn;  // = k * me
   // vector<IDMap> dfingers;  // predecessor(debruijn) + k - 1 successors
   IDMap last;
