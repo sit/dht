@@ -143,6 +143,22 @@ union chord_RPC_res switch (chordstat status) {
    void;
 };
 
+struct chord_gettoes_arg {
+  chord_vnode v;
+  int32_t level;
+};
+
+struct chord_gettoes_resok {
+  chord_node_ext toes<>;
+};
+
+union chord_gettoes_res switch (chordstat status ){
+ case CHORD_OK:
+   chord_gettoes_resok resok;
+ default:
+   void;
+};
+
 program CHORD_PROGRAM {
 	version CHORD_VERSION {
 		void
@@ -167,7 +183,9 @@ program CHORD_PROGRAM {
         	CHORDPROC_CACHE (chord_cachearg) = 6;
 
 		chord_testandfindres
-                CHORDPROC_TESTRANGE_FINDCLOSESTPRED (chord_testandfindarg) = 7; 		chord_getfingersres
+                CHORDPROC_TESTRANGE_FINDCLOSESTPRED (chord_testandfindarg) = 7;
+
+ 		chord_getfingersres
 		CHORDPROC_GETFINGERS (chord_vnode) = 8;
 
 		chord_challengeres 
@@ -178,5 +196,8 @@ program CHORD_PROGRAM {
 
 		chord_getfingers_ext_res
 		CHORDPROC_GETFINGERS_EXT (chord_vnode) = 11;
+
+		chord_gettoes_res
+          	CHORDPROC_GETTOES (chord_gettoes_arg) = 12;
 	} = 1;
 } = 344447;
