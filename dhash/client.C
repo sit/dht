@@ -44,6 +44,7 @@
 #include "dhashcli.h"
 #include "verify.h"
 #include "download.h"
+#include "dhash_store.h"
 
 #include <coord.h>
 #include <misc_utils.h>
@@ -54,201 +55,6 @@
 #include <dmalloc.h>
 #endif
 #include <ida.h>
-
-// ---------------------------------------------------------------------------
-// DHASH_STORE
-//     - store a give block of data on a give nodeID.
-//     - the address of the nodeID must already by in the location cache.
-//     - XXX don't really handle RACE conditions..
-
-#define STORE_TIMEOUT 60
-
-class dhash_store : public virtual refcount {
-protected:
-  uint npending;
-  bool error;
-  dhash_stat status;
-
-  ptr<location> dest;
-  chord_node pred_node;
-  blockID blckID;
-  dhash *dh;
-  ptr<dhash_block> block;
-  cbinsert_t cb;
-  dhash_ctype ctype;
-  store_status store_type;
-  ptr<vnode> clntnode;
-  int num_retries;
-  bool last;
-  int nextblock;
-  int numblocks;
-  vec<long> seqnos;
-  timecb_t *dcb;
-  bool returned;
-  u_int64_t startt;
-
-  void done ()
-  {
-    if (!returned && npending == 0) {
-      (*cb) (status, dest->id ());
-      returned = true;
-    }
-  }
-
-  dhash_store (ptr<vnode> clntnode, ptr<location> dest, blockID blockID,
-               dhash *dh, ptr<dhash_block> _block, store_status store_type, 
-	       bool last, cbinsert_t cb)
-    : dest (dest), blckID (blockID), dh (dh), block (_block), cb (cb),
-      ctype (_block->ctype), store_type (store_type),
-      clntnode (clntnode), num_retries (0), last (last)
-  {
-    startt = getusec ();
-    returned = false;
-    dcb = NULL;
-    start ();
-  }
-  
-  ~dhash_store ()
-  {
-    if (dcb)
-      timecb_remove (dcb);
-    dcb = NULL;
-  }
-
-  void timed_out ()
-  {
-    dcb = 0;
-    error = true;
-    status = DHASH_TIMEDOUT;
-    npending = 0;
-    done ();
-  }
-    
-  void start ()
-  {
-    error = false;
-    status = DHASH_OK;
-    npending = 0;
-    nextblock = 0;
-    numblocks = 0;
-    int blockno = 0;
-  
-    if (dcb)
-      timecb_remove (dcb);
-
-    dcb = delaycb
-      (STORE_TIMEOUT, wrap (mkref(this), &dhash_store::timed_out));
-
-    size_t nstored = 0;
-    while (nstored < block->len) {
-      size_t chunklen = MIN (MTU, block->len - nstored);
-      char  *chunkdat = &block->data[nstored];
-      size_t chunkoff = nstored;
-      npending++;
-      store (dest, blckID, chunkdat, chunklen, chunkoff, 
-	     block->len, blockno, ctype, store_type);
-      nstored += chunklen;
-      blockno++;
-    }
-    numblocks = blockno;
-  }
-
-  void finish (ptr<dhash_storeres> res, int num, clnt_stat err)
-  {
-    npending--;
-
-    if (err) {
-      error = true;
-      warn << "dhash_store failed: " << blckID << ": RPC error" << "\n";
-    } 
-    else if (res->status != DHASH_OK) {
-      if (res->status == DHASH_RETRY) {
-	pred_node = make_chord_node (res->pred->p);
-      }
-      else if (res->status != DHASH_WAIT)
-        warn << "dhash_store failed: " << blckID << ": "
-	     << dhasherr2str(res->status) << "\n";
-      if (!error)
-	status = res->status;
-      error = true;
-    }
-    else { 
-      //      warn << blckID << "(store timing) got store reply for " << num << " at " << (getusec () - startt) << "\n";
-      if ((num > nextblock) && (numblocks - num > 1)) {
-	warn << "(store) FAST retransmit: " << blckID << " got " 
-	     << num << " chunk " << nextblock << " of " << numblocks 
-	     << " being retransmitted\n";
-	clntnode->resendRPC(seqnos[nextblock]);
-	//only one per fetch; finding more is too much bookkeeping
-	numblocks = -1;
-      }
-      nextblock++;
-    }
-
-    if (npending == 0) {
-      if (status == DHASH_RETRY) {
-	ptr<location> pn = clntnode->locations->lookup_or_create (pred_node);
-	if (!pn && !returned) {
-	  (*cb) (DHASH_CHORDERR, dest->id ());
-	  returned = true;
-	  return;
-	}
-	num_retries++;
-	if (num_retries > 2) {
-	  if (!returned) {
-	    (*cb)(DHASH_RETRY, dest->id ());
-	    returned = true;
-	    return;
-	  }
-	} else {
-	  warn << "retrying (" << num_retries << "): dest was " 
-	       << dest->id () << " now is " << pred_node.x << "\n";
-	  dest = pn;
-	  start ();
-	}
-      }
-      else
-	done ();
-    }
-  }
-
-
-  void store (ptr<location> dest, blockID blockID, char *data, size_t len,
-	      size_t off, size_t totsz, int num, dhash_ctype ctype, 
-	      store_status store_type)
-  {
-    ref<dhash_storeres> res = New refcounted<dhash_storeres> (DHASH_OK);
-    ref<s_dhash_insertarg> arg = New refcounted<s_dhash_insertarg> ();
-    arg->key     = blockID.ID;
-    arg->ctype   = blockID.ctype;
-    arg->dbtype  = blockID.dbtype;
-    clntnode->my_location ()->fill_node (arg->from);
-    arg->data.setsize (len);
-    memcpy (arg->data.base (), data, len);
-    arg->offset  = off;
-    arg->type    = store_type;
-    arg->nonce   = 0; // XXX remove!
-    arg->attr.size     = totsz;
-    arg->last    = last;
-    
-    //    warn << blockID << "(store timing) store RPC for " << num << " at " << (getusec () - startt) << "\n";
-    long rexmitid = clntnode->doRPC
-      (dest, dhash_program_1, DHASHPROC_STORE, arg, res,
-       wrap (mkref(this), &dhash_store::finish, res, num));
-    seqnos.push_back (rexmitid);
-  }
-  
-public:
-  
-  static void execute (ptr<vnode> clntnode, ptr<location> dest, blockID blockID,
-                       dhash *dh, ref<dhash_block> block, bool last,
-		       cbinsert_t cb, store_status store_type = DHASH_STORE)
-  {
-    ptr<dhash_store> d = New refcounted<dhash_store> 
-      (clntnode, dest, blockID, dh, block, store_type, last, cb);
-  }
-};
-
 
 
 
@@ -661,7 +467,7 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
       ptr<location> dest = clntnode->locations->lookup_or_create (succs[i]);
       dhash_store::execute (clntnode, dest, 
 			    blockID(block->ID, block->ctype, DHASH_BLOCK),
-			    dh, block, false,  
+			    dh, block,
 			    wrap (this, &dhashcli::insert_store_cb,  
 				  ss, r, i,
 				  ss->succs.size (), ss->succs.size () / 2),
@@ -687,7 +493,6 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
     bcopy (frag.cstr (), blk->data, frag.len ());
     
     bigint h = compute_hash (blk->data, blk->len);
-    warnx << "Put frag: " << i << " " << h << " " << blk->len << " to " << succs[i].x << "\n";
     
     // Count up for each RPC that will be dispatched
     ss->out += 1;
@@ -695,7 +500,7 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
     ptr<location> dest = clntnode->locations->lookup_or_create (succs[i]);
     dhash_store::execute (clntnode, dest,
 			  blockID(block->ID, block->ctype, DHASH_FRAG),
-			  dh, blk, false,
+			  dh, blk,
 			  wrap (this, &dhashcli::insert_store_cb,
 				ss, r, i,
 				dhash::NUM_EFRAGS, dhash::NUM_DFRAGS),
@@ -706,7 +511,7 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
 void
 dhashcli::insert_store_cb (ref<sto_state> ss, route r, u_int i,
 			   u_int nstores, u_int min_needed,
-			   dhash_stat err, chordID id)
+			   dhash_stat err, chordID id, bool present)
 {
   ss->out -= 1;
   if (err) {
@@ -741,16 +546,6 @@ dhashcli::insert_store_cb (ref<sto_state> ss, route r, u_int i,
       r_ret.push_back (r[i]->id ());
     (*ss->cb) (DHASH_OK, r_ret);
   }
-}
-
-
-//like insert, but doesn't do lookup. used by transfer_key
-void
-dhashcli::storeblock (ptr<location> dest, chordID ID, ref<dhash_block> block, 
-		      bool last, cbinsert_t cb, store_status stat)
-{
-  dhash_store::execute (clntnode, dest, blockID(ID, block->ctype, DHASH_BLOCK),
-			dh, block, last, cb, stat);
 }
 
 

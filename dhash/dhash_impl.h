@@ -115,13 +115,15 @@ class dhash_impl : public dhash {
   void missing_retrieve_cb (bigint key, dhash_stat err, ptr<dhash_block> b,
 			    route r);
   
-  void sendblock (ptr<location> dst, blockID blockID, bool last, callback<void>::ref cb);
-  void sendblock_cb (callback<void>::ref cb, dhash_stat err, chordID blockID);
+  void sendblock (ptr<location> dst, blockID blockID,
+		  callback<void, dhash_stat, bool>::ref cb);
+  void sendblock_cb (callback<void, dhash_stat, bool>::ref cb, dhash_stat err, 
+		     chordID dest, bool present);
 
   void keyhash_mgr_timer ();
   void keyhash_mgr_lookup (chordID key, dhash_stat err,
 			   vec<chord_node> hostsl, route r);
-  void keyhash_sync_done ();
+  void keyhash_sync_done (dhash_stat stat, bool present);
 
 
   void pmaint_next ();
@@ -130,7 +132,7 @@ class dhash_impl : public dhash {
   void pmaint_offer_cb (chord_node dst, vec<bigint> keys, ref<dhash_offer_res> res, 
 			clnt_stat err);
   void pmaint_handoff (chord_node dst, bigint key);
-  void pmaint_handoff_cb (chord_node dst, bigint key, ref<dhash_storeres> res, clnt_stat err);
+  void pmaint_handoff_cb (bigint key, dhash_stat err, bool present);
 
   bigint pmaint_a;
   bigint pmaint_b;

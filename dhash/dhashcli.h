@@ -82,7 +82,7 @@ private:
 			 dhash_stat status, vec<chord_node> succs, route r);
   void insert_store_cb (ref<sto_state> ss, route r, u_int i, 
 			u_int nstores, u_int min_needed,
-			dhash_stat err, chordID id);
+			dhash_stat err, chordID id, bool present);
   void fetch_frag (rcv_state *rs);
 
   void retrieve_frag_hop_cb (blockID blockID, route_iterator *ci, bool done);
@@ -112,9 +112,6 @@ private:
   void insert (ref<dhash_block> block, cbinsert_path_t cb, 
 	       int options = 0, 
 	       ptr<chordID> guess = NULL);
-
-  void storeblock (ptr<location> l, chordID blockID, ref<dhash_block> block,
-		   bool last, cbinsert_t cb, store_status stat = DHASH_STORE);
 
   void lookup (chordID blockID, dhashcli_lookupcb_t cb);
 };
