@@ -29,10 +29,10 @@ static bool simulated_input = false;
 
 struct get_fingers_args {
   str hostname;
-  short port;
+  unsigned short port;
   chordID ID;
   ihash_entry <get_fingers_args> link;
-  get_fingers_args (chordID I, str h, short p) :
+  get_fingers_args (chordID I, str h, unsigned short p) :
     hostname (h), port (p), ID (I) { };
 };
 
@@ -47,14 +47,14 @@ vec<color_pair> lat_map;
 struct f_node {
   chordID ID;
   str host;
-  short port;
+  unsigned short port;
   chord_getfingers_ext_res *res;
   chord_getsucc_ext_res *ressucc;
   chord_gettoes_res *restoes;
   ihash_entry <f_node> link;
   bool draw;
 
-  f_node (chordID i, str h, short p) :
+  f_node (chordID i, str h, unsigned short p) :
     ID (i), host (h), port (p), draw (true) { 
     res = NULL; 
     ressucc = NULL; 
@@ -68,27 +68,27 @@ struct f_node {
 };
 
 void setup ();
-ptr<aclnt> get_aclnt (str host, short port);
+ptr<aclnt> get_aclnt (str host, unsigned short port);
 
-void queue_node (chordID ID, str hostname, short port);
-void get_fingers (str host, short port);
-void get_fingers (chordID ID, str host, short port);
-void get_fingers_got_fingers (chordID ID, str host, short port, 
+void queue_node (chordID ID, str hostname, unsigned short port);
+void get_fingers (str host, unsigned short port);
+void get_fingers (chordID ID, str host, unsigned short port);
+void get_fingers_got_fingers (chordID ID, str host, unsigned short port, 
 			      chord_getfingers_ext_res *res,
 			      clnt_stat err);
 void get_cb (f_node *node_next);
-void add_fingers (chordID ID, str host, short port, chord_getfingers_ext_res *res);
+void add_fingers (chordID ID, str host, unsigned short port, chord_getfingers_ext_res *res);
 void update_fingers (f_node *n);
-void update_fingers_got_fingers (chordID ID, str host, short port, 
+void update_fingers_got_fingers (chordID ID, str host, unsigned short port, 
 				 chord_getfingers_ext_res *res,
 				 clnt_stat err);
 
 void update_toes (f_node *nu);
-void update_toes_got_toes (chordID ID, str host, short port, 
+void update_toes_got_toes (chordID ID, str host, unsigned short port, 
 			   chord_gettoes_res *res, clnt_stat err);
 
 void update_succlist (f_node *n);
-void update_succ_got_succ (chordID ID, str host, short port, 
+void update_succ_got_succ (chordID ID, str host, unsigned short port, 
 				 chord_getsucc_ext_res *res,
 				 clnt_stat err);
 void update ();
@@ -147,7 +147,7 @@ update ()
 }
 
 ptr<aclnt>
-get_aclnt (str host, short port)
+get_aclnt (str host, unsigned short port)
 {
   sockaddr_in saddr;
   bzero(&saddr, sizeof(sockaddr_in));
@@ -180,7 +180,7 @@ update_succlist (f_node *nu)
 
 
 void
-update_succ_got_succ (chordID ID, str host, short port, 
+update_succ_got_succ (chordID ID, str host, unsigned short port, 
 			    chord_getsucc_ext_res *res, clnt_stat err)
 {
   if (err || res->status) {
@@ -215,7 +215,7 @@ update_fingers (f_node *nu)
 }
 
 void
-update_fingers_got_fingers (chordID ID, str host, short port, 
+update_fingers_got_fingers (chordID ID, str host, unsigned short port, 
 			    chord_getfingers_ext_res *res, clnt_stat err)
 {
   if (err || res->status) {
@@ -306,14 +306,14 @@ get_fingers (str file)
 }
 
 void
-get_fingers (str host, short port) 
+get_fingers (str host, unsigned short port) 
 {
   chordID ID = make_chordID (host, port);
   get_fingers (ID, host, port);
 }
 
 void
-get_fingers (chordID ID, str host, short port) 
+get_fingers (chordID ID, str host, unsigned short port) 
 {
   ptr<aclnt> c = get_aclnt (host, port);
   if (c == NULL) 
@@ -329,7 +329,7 @@ get_fingers (chordID ID, str host, short port)
 }
 
 void
-get_fingers_got_fingers (chordID ID, str host, short port, 
+get_fingers_got_fingers (chordID ID, str host, unsigned short port, 
 			 chord_getfingers_ext_res *res,
 			 clnt_stat err) 
 {
@@ -343,7 +343,7 @@ get_fingers_got_fingers (chordID ID, str host, short port,
 }
 
 void
-add_fingers (chordID ID, str host, short port, chord_getfingers_ext_res *res) 
+add_fingers (chordID ID, str host, unsigned short port, chord_getfingers_ext_res *res) 
 {
   f_node *n = nodes[ID];
 
@@ -365,7 +365,7 @@ add_fingers (chordID ID, str host, short port, chord_getfingers_ext_res *res)
 }
 
 void
-queue_node (chordID ID, str hostname, short port)
+queue_node (chordID ID, str hostname, unsigned short port)
 {
   if (!get_queue[ID]) {
     get_fingers_args *args = New get_fingers_args (ID, hostname, port);
@@ -413,7 +413,7 @@ update_toes (f_node *nu)
 }
 
 void
-update_toes_got_toes (chordID ID, str host, short port, 
+update_toes_got_toes (chordID ID, str host, unsigned short port, 
 		      chord_gettoes_res *res, clnt_stat err)
 {
   if (err || res->status) {
@@ -954,7 +954,7 @@ main (int argc, char** argv)
 
   str host = "not set";
   str sim_file = "network";
-  short port = 0;
+  unsigned short port = 0;
   interval = 100;
   color_file = ".viscolors";
 
@@ -987,7 +987,7 @@ main (int argc, char** argv)
 	  host = optarg;
 
 	port = atoi (bs_port);
-	
+
 	break;
       }
     case 'a':
