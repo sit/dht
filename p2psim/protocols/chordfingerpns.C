@@ -87,7 +87,7 @@ ChordFingerPNS::init_state(vector<IDMap> ids)
   }
 
   Chord::init_state(ids);
-  uint lsz = loctable->size();
+  // uint lsz = loctable->size();
 #ifdef CHORD_DEBUG
   printf("chordfingerpns %u init_state %d\n", me.ip, lsz);
 #endif
