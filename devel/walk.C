@@ -86,6 +86,7 @@ getsucc_cb (chord_nodelistextres *res, clnt_stat err)
   str host     = res->resok->nlist[1].r.hostname;
   u_short port = res->resok->nlist[1].r.port;
   int index    = is_authenticID (n, host, port);
+  assert (index >= 0);
   warnx << n << " " << host << " " << " " << index << "\n";
 
   // wrapped around ring. done.
