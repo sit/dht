@@ -134,8 +134,9 @@ dhashgateway::insert_cb (svccb *sbp, dhash_stat status, vec<chordID> path)
       res.resok->path[i] = path[i];
   }
 
-  dhash_insert_arg *arg = sbp->template getarg<dhash_insert_arg> ();
   ptr<dhash_block> block = 0;
+ 
+  dhash_insert_arg *arg = sbp->template getarg<dhash_insert_arg> ();
   if (arg->options & DHASHCLIENT_CACHE) {
     block = New refcounted<dhash_block>
       (arg->block.base (), arg->len, arg->ctype);
@@ -177,9 +178,9 @@ dhashgateway::retrieve_cb (svccb *sbp, dhash_stat stat,
 
   // this must be before sbp->reply, otherwise sbp object is not
   // guaranteed to be around
-  dhash_retrieve_arg *arg = sbp->template getarg<dhash_retrieve_arg> ();
   ptr<dhash_block> nb = 0;
 
+  dhash_retrieve_arg *arg = sbp->template getarg<dhash_retrieve_arg> ();
   if (block && (arg->options & DHASHCLIENT_CACHE)) {
     nb = New refcounted<dhash_block>
       (block->data, block->len, block->ctype);

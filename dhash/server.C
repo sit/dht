@@ -896,7 +896,8 @@ dhash_impl::responsible(const chordID& n)
 void
 dhash_impl::doRPC_unbundler (ptr<location> dst, RPC_delay_args *args)
 {
-  host_node->doRPC (dst, args->prog, args->procno, args->in, args->out, args->cb);
+  host_node->doRPC
+    (dst, args->prog, args->procno, args->in, args->out, args->cb);
 }
 
 

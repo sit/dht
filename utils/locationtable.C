@@ -378,8 +378,11 @@ void
 locationtable::unpin (const chordID &x)
 {
   pins_updated_ = false;
-  pinlist.remove (x);
-  
+  pininfo *p = pinlist.search (x);
+  if (p) {
+    pinlist.remove (x);
+    delete p;
+  }
 }
 
 void

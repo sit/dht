@@ -4,13 +4,13 @@
 #include <sys/types.h>
 
 // SFS includes
-#include <ihash.h>
 #include <refcnt.h>
 #include <vec.h>
 
 typedef callback<void, dhash_stat, chordID>::ref cbinsert_t;
 typedef callback<void, dhash_stat, vec<chordID> >::ref cbinsert_path_t;
-typedef callback<void, dhash_stat, vec<chord_node>, route>::ref dhashcli_lookupcb_t;
+typedef callback<void, dhash_stat, vec<chord_node>, route>::ref
+  dhashcli_lookupcb_t;
 typedef	callback<void, dhash_stat, bool>::ref sendblockcb_t;
 
 #include "download.h" // for cbretrieve_t
@@ -29,7 +29,6 @@ class dhashcli {
   bool ordersucc_;
 
   struct rcv_state {
-    ihash_entry <rcv_state> link;
     blockID key;
     route r;
     vec<timespec> times;
@@ -107,13 +106,14 @@ class dhashcli {
   void retrieve_block_hop_cb (ptr<rcv_state> rs, route_iterator *ci,
 			     int options, int retries, ptr<chordID> guess,
 			     bool done);
-  void retrieve_dl_or_walk_cb (ptr<rcv_state> rs, dhash_stat status, int options,
-			       int retries, ptr<chordID> guess,
+  void retrieve_dl_or_walk_cb (ptr<rcv_state> rs, dhash_stat status,
+                               int options, int retries, ptr<chordID> guess,
 			       ptr<dhash_block> blk);
 
   void sendblock_cb (callback<void, dhash_stat, bool>::ref cb, 
 		     dhash_stat err, chordID dest, bool present);
- public:
+
+public:
   dhashcli (ptr<vnode> node);
 
   void retrieve_from_cache (blockID blockID, cbretrieve_t cb);
