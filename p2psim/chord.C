@@ -268,27 +268,29 @@ Chord::find_successors_recurs(CHID key, bool intern, bool is_lookup)
     printf("%s find_successors_recurs for key %qx\n", ts(), key);
   }
 
+  Time before = now();
   record_stat(fa.is_lookup?1:0);
   doRPC(me.ip, &Chord::next_recurs_handler, &fa, &fr);
 
   IDMap succ = fr.v.back();
 
 #ifdef CHORD_DEBUG
-  Time before = now();
   Topology *t = Network::Instance()->gettopology();
-  printf("%s find_successors_recurs %qx route ",ts(),key);
+  printf("%s find_successors_recurs %qx route [%d]",ts(),key,fr.v.size());
   uint total_lat = 0;
   for (uint i = 0; i < fr.v.size(); i++) {
     IDMap n = fr.v[i];
     printf("(%u,%qx,%u, %u) ", n.ip, n.id, total_lat, i < (fr.v.size()-1)? 2 * t->latency(fr.v[i].ip, fr.v[i+1].ip): 0);
-    if (i < (fr.v.size() - 1)) {
+    if ((i+3) <= fr.v.size()) {
       total_lat += 2 * t->latency(fr.v[i].ip,fr.v[i+1].ip);
     }
   }
+  printf(" [%d] \n",fr.v.size());
   uint interval = now() - before;
-  printf("\n");
+  assert(interval == total_lat);
 
-  printf("%s lookup %16qx results (%u,%16qx) hops %d interval %u %u %u %u\n", ts(), key, succ.ip, succ.id, fr.v.size(), 2 * t->latency(me.ip, succ.ip), total_lat, interval, total_lat + t->latency(fr.v[fr.v.size()-3].ip, fr.v[fr.v.size()-1].ip));
+
+  printf("%s lookup %16qx results (%u,%16qx) hops %d interval %u %u\n", ts(), key, succ.ip, succ.id, fr.v.size(), 2 * t->latency(me.ip, succ.ip), interval);
   //assert(interval == total_lat);
 
 #endif

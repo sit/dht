@@ -32,7 +32,10 @@ E2EGraph::latency(IPAddress ip1, IPAddress ip2)
   //we can not use random ip address for e2egraph now
   assert(ip1 > 0 && ip1 <= _num);
   assert(ip2 > 0 && ip2 <= _num);
-  return (latency_t) _pairwise[ip1-1][ip2-1];
+  if (ip1 < ip2) 
+    return (latency_t) _pairwise[ip1-1][ip2-1];
+  else
+    return (latency_t) _pairwise[ip2-1][ip1-1];
 }
 
 
