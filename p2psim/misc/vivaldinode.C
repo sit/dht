@@ -1,8 +1,15 @@
 #include "vivaldinode.h"
 #include "p2psim/network.h"
 #include "topologies/euclidean.h"
+#include "math.h"
 
 static int usinght = -1;
+#define PI 3.1415927
+
+double spherical_dist_arc (VivaldiNode::Coord a, VivaldiNode::Coord b);
+VivaldiNode::Coord  cross (VivaldiNode::Coord a, VivaldiNode::Coord b);
+VivaldiNode::Coord rotate_arb (VivaldiNode::Coord axis, VivaldiNode::Coord vec,
+			       double angle);
 
 VivaldiNode::VivaldiNode(IPAddress ip) : P2Protocol (ip)
 {
@@ -17,15 +24,34 @@ VivaldiNode::VivaldiNode(IPAddress ip) : P2Protocol (ip)
   _timestep = ((double)timestep_scaled)/1000000;
   _pred_err  = -1;
   _window_size = args().nget<uint>("window-size", (uint) -1, 10);
+  _model = args()["model"];
+  _radius = args().nget<uint>("radius", (uint) 20000, 10);
+
+  if (_model == "sphere")
+    _model_type = MODEL_SPHERE;
+  else 
+    _model_type = MODEL_EUCLIDEAN;
 
   // Start out at a random point
   // for (int i = 0; i < _dim; i++) 
   //   _c._v.push_back (random() % 200000 - 1000000);
   // _c._ht = random() % 200000 - 1000000);
 
-  // Start out at the origin
-  for (int i = 0; i < _dim; i++)
-    _c._v.push_back (0);
+  if (_model_type == MODEL_EUCLIDEAN) {
+    // Start out at the origin 
+    for (int i = 0; i < _dim; i++)
+      _c._v.push_back (0.0);
+  } else if (_model_type == MODEL_SPHERE) {
+    for (int i = 0; i < _dim; i++)
+      _c._v.push_back (random ());
+    //now unitize it
+    _c = _c / length (_c);
+    // now make it as long as the radius of the circle
+    _c = _c * _radius;
+  } else {
+    assert (0);
+  }
+
   _c._ht = 0;
 }
 
@@ -98,22 +124,16 @@ VivaldiNode::net_force(Coord c, vector<Sample> v)
     else sum += 1.0;
   }
   vector<double> weights;
-  //  cerr << "weights: ";
   for (unsigned int i = 0; i < v.size (); i++) {
     if (v[i]._error > 0) 
       weights.push_back (v.size()*(1.0/v[i]._error)/sum);
     else
       weights.push_back (1.0);
-    //    cerr << "(" << weights.back () << ", " << v[i]._error << ") ";
   }
-  //  cerr << "\n";
 
   for(unsigned i = 0; i < v.size(); i++){
-    //    double noise = (double)(random () % (int)v[i]._latency) / 10.0;
-    double noise = 0;
-    double actual = v[i]._latency + noise;
+    double actual = v[i]._latency;
     double expect = dist (c, v[i]._c);
-    //    cerr << "force " << c << " " << actual << " " << expect << "\n";
     if(actual >= 0){
 
       double grad = expect - actual;
@@ -136,7 +156,6 @@ VivaldiNode::net_force(Coord c, vector<Sample> v)
   return f;
 }
 
-
 // the current implementation
 void
 VivaldiNode::algorithm(Sample s)
@@ -151,8 +170,6 @@ VivaldiNode::algorithm(Sample s)
 
   update_error (_samples);
 
-  Coord f = net_force(_c, _samples);
-
   _curts = _curts - 0.025;
   double t;
   if (_adaptive)
@@ -162,7 +179,38 @@ VivaldiNode::algorithm(Sample s)
 
   // apply the force to our coordinates
   // cout << "move from " << _c << " with force " << f;
-  _c = _c + (f * t);
+
+
+
+  if (_model_type == MODEL_SPHERE) {
+    assert (_samples.size () == 1); // XXX only work with one sample for now
+    Coord s = _samples[0]._c;
+
+    //    cerr << "inputs are " << _c << " and " << s << "\n";    
+
+    //get the great-circle distance (as radians)
+    double theta_predicted = spherical_dist_arc (_c, s); 
+    double theta_actual = (_samples[0]._latency) / (_radius);
+
+    if(theta_actual >= 0){
+      //find the vector we'll rotate around
+      Coord rot = cross (_c, s);
+      //cerr << "rot: " << rot << "\n";
+      //calculate how far to rotate
+      //cerr << "pred=" << theta_predicted << " actual=" << theta_actual << "\n";
+      double theta_correct = t * (theta_predicted - theta_actual);
+      //cerr << "rotating by " << theta_correct << "\n";
+      Coord new_pos = rotate_arb (rot, _c, theta_correct);
+      //cerr << "new pos: " << new_pos << "\n";
+      _c = new_pos;
+    } else {
+      cerr << "rejecting invalid measurement\n";
+    }
+  } else  { // EUCLIDEAN
+    Coord f = net_force(_c, _samples);
+    _c = _c + (f * t);
+  }
+
   if (usinght && _c._ht <= 1000) // 1000 is 1ms
     _c._ht = 1000; 
   // cout << " to " << _c << "\n";
@@ -197,18 +245,6 @@ operator<< (ostream &s, VivaldiNode::Coord &c)
   return s;
 }
 
-double
-dist(VivaldiNode::Coord a, VivaldiNode::Coord b)
-{
-  double d = 0.0;
-  assert (a._v.size () == b._v.size ());
-  for (unsigned int i = 0; i < a._v.size (); i++) 
-    d += (a._v[i] - b._v[i])*(a._v[i] - b._v[i]);
-  d = sqrt(d);
-  if (usinght)
-    d += a._ht + b._ht;
-  return d;
-}
 
 VivaldiNode::Coord
 operator-(VivaldiNode::Coord a, VivaldiNode::Coord b)
@@ -255,6 +291,16 @@ operator*(VivaldiNode::Coord c, double x)
 }
 
 double
+operator* (VivaldiNode::Coord a, VivaldiNode::Coord b)
+{
+  assert (a.dim () == b.dim ());
+  double ret = 0.0;
+  for (int i = 0; i < a.dim (); i++)
+    ret += a[i]*b[i];
+  return ret;
+}
+
+double
 length(VivaldiNode::Coord c)
 {
   double l = 0.0;
@@ -266,3 +312,100 @@ length(VivaldiNode::Coord c)
   return l;
 }
 
+VivaldiNode::Coord 
+cross (VivaldiNode::Coord a, VivaldiNode::Coord b)
+{
+  assert (a.dim () == b.dim ());
+
+  VivaldiNode::Coord ret(a.dim ());
+  ret[0] = a[1]*b[2] - a[2]*b[1];
+  ret[1] = a[2]*b[0] - a[0]*b[2];
+  ret[2] = a[0]*b[1] - a[1]*b[0];
+  return ret;
+}
+
+VivaldiNode::Coord
+rotate_arb (VivaldiNode::Coord axis, VivaldiNode::Coord vec,
+	    double angle)
+{
+  //unitize axis
+  VivaldiNode::Coord a = axis / (length (axis));
+  
+  //calculate the rotation matrix
+  // do the multiply
+  assert (a.dim () == vec.dim ());
+  VivaldiNode::Coord ret (vec.dim());
+  
+  //helpful intermediates
+  double cos_a = cos (angle);
+  double sin_a = sin (angle);
+  //let's just write out all nine components of the rotation
+  // matrix. I know that this is slow. Hopefully -O2 will eat this up.
+  // This is from Strang, Intro. To Linear Algebra, p. 371
+  double M_11 = cos_a + (1 - cos_a)*a[0]*a[0];
+  double M_12 = (1 - cos_a)*a[0]*a[1] - sin_a*a[2];
+  double M_13 = (1 - cos_a)*a[0]*a[2] + sin_a*a[1];
+  double M_21 = (1 - cos_a)*a[0]*a[1] + sin_a*a[2];
+  double M_22 = cos_a + (1 - cos_a)*a[1]*a[1];
+  double M_23 = (1 - cos_a)*a[1]*a[2] - sin_a*a[0];
+  double M_31 = (1 - cos_a)*a[0]*a[2] - sin_a*a[1];
+  double M_32 = (1 - cos_a)*a[1]*a[2] + sin_a*a[0];
+  double M_33 = cos_a + (1 - cos_a)*a[2]*a[2];
+
+  //now let's write out the result of the matrix
+  // multiplication in terms of the variables above
+
+  ret[0] = M_11*vec[0] + M_12*vec[1] + M_13*vec[2];
+  ret[1] = M_21*vec[0] + M_22*vec[1] + M_23*vec[2];
+  ret[2] = M_31*vec[0] + M_32*vec[1] + M_33*vec[2];
+  
+  return ret;
+
+}
+double
+flatearth_dist(VivaldiNode::Coord a, VivaldiNode::Coord b)
+{
+  double d = 0.0;
+  assert (a._v.size () == b._v.size ());
+  for (unsigned int i = 0; i < a._v.size (); i++) 
+    d += (a._v[i] - b._v[i])*(a._v[i] - b._v[i]);
+  d = sqrt(d);
+  if (usinght)
+    d += a._ht + b._ht;
+  return d;
+}
+
+
+// return the angle between to points on a sphere in radians
+double 
+VivaldiNode::spherical_dist_arc (VivaldiNode::Coord a, VivaldiNode::Coord b)
+{
+  //coords are in cartesian space, vectors to points on a sphere
+  // of radius RADIUS
+  assert (a._v.size () == 3);
+
+  //vectors are constructed to be RADIUS long, so 
+  // we don't calculate the norm
+  double cos_angle = (a * b)/(_radius*_radius); 
+  
+  return acos (cos_angle);
+}
+
+double 
+VivaldiNode::spherical_dist (VivaldiNode::Coord a, VivaldiNode::Coord b)
+{
+  double arc_dist = spherical_dist_arc (a, b);
+  //  cerr << "dist from " << a << " to " << b << " is " << dist << "\n";
+  return arc_dist * _radius;
+}
+
+
+double
+VivaldiNode::dist(VivaldiNode::Coord a, VivaldiNode::Coord b)
+{
+  if (_model_type == MODEL_SPHERE)
+    return spherical_dist (a, b);
+  else 
+    return flatearth_dist (a, b);
+    
+}

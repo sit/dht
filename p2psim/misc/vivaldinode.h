@@ -32,6 +32,9 @@
 #include <assert.h>
 #include <stdio.h>
 
+#define MODEL_SPHERE 2
+#define MODEL_EUCLIDEAN 3
+
 class VivaldiNode : public P2Protocol {
 public:
   VivaldiNode(IPAddress);
@@ -41,9 +44,12 @@ public:
   struct Coord {
     vector<double> _v;
     double _ht;
+
+    int dim () {return _v.size();};
+    double& operator[] (int i) { return _v[i]; };
+
     void init2d (double x, double y) {_ht = 0; _v.clear (); _v.push_back (x); _v.push_back (y); };
     Coord () { _ht = 0;};
-    int dim () {return _v.size();};
     Coord (uint d) { _ht = 0; _v.clear (); for (uint i=0;i<d;i++) _v.push_back(0.0);};
   };
 
@@ -74,6 +80,9 @@ protected:
   double _curts;
   double _pred_err; // running average of prediction error
   int _window_size;
+  string _model;
+  int _model_type;
+  double _radius;
 
   Coord _c; // current estimated coordinates
   vector<Sample> _samples;
@@ -85,7 +94,9 @@ protected:
   Coord net_force1(Coord c, vector<Sample> v);
   vector<double> get_weights (vector<Sample> v);
   void update_error (vector<Sample> v);
-
+  double dist(VivaldiNode::Coord a, VivaldiNode::Coord b);
+  double spherical_dist (VivaldiNode::Coord a, VivaldiNode::Coord b);
+  double spherical_dist_arc (VivaldiNode::Coord a, VivaldiNode::Coord b);
   virtual void algorithm(Sample); // override this
   //end vivaldi.h
 

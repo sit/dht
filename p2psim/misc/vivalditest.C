@@ -328,9 +328,9 @@ VivaldiTest::print_all_loc()
   VivaldiNode::Coord vc;
   for (uint i = 0; i < n; i++) {
     vc = _all[i]->my_location();
-    printf ("%d at ", (int) _all[i]->ip());
+    printf ("%d at ",  _all[i]->ip());
     for (uint j = 0; j < vc._v.size(); j++)
-      printf ("%s%d", j ? "," : "", (int)vc._v[j]);
+      printf ("%s%f", j ? "," : "", vc._v[j]);
     if ((int)vc._ht)
       printf (",ht=%d", (int)vc._ht);
     printf (" with error %f\n", _all[i]->_last_error);
