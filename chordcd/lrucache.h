@@ -61,7 +61,7 @@ class lrucache {
 
   size_t size () const { return entries.size(); }
 
-  void insert (const K &k, CREF (V) v) {
+  void insert (const K &k, typename CREF (V) v) {
     if (maxsize && size() == maxsize)
       remove_oldest();
     lrucache_entry *e = New lrucache_entry(k, v);
@@ -69,7 +69,7 @@ class lrucache {
     lrulist.insert_tail(e);
   }
 
-  void insert (const K &k, NCREF (V) v) {
+  void insert (const K &k, typename NCREF (V) v) {
     if (max_size && size() == max_size)
       remove_oldest();
     lrucache_entry *e = New lrucache_entry(k, v);

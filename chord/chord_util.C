@@ -267,7 +267,7 @@ init_chordID (int index, str addr, int port)
 }
 
 chordID
-make_chordID (str hostname, int port, int index = 0)
+make_chordID (str hostname, int port, int index)
 {
   chordID ID;
   // XXX we probably should marshall this!

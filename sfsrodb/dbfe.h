@@ -254,7 +254,7 @@ class dbfe {
 #ifdef SLEEPYCAT
   typedef callback<int, ref<dbrec>, ref<dbrec> >::ptr compare_fcn_t;
   compare_fcn_t compare;
-  int set_compare_fcn (compare_fcn_t fn) { compare = fn; }
+  void set_compare_fcn (compare_fcn_t fn) { compare = fn; }
 #endif
 
   dbfe();

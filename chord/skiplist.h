@@ -273,14 +273,14 @@ class skiplist {
     return (elm->*field).previous;
   }
 
-  void traverse (callback<void, T *>::ref cb) const {
+  void traverse (typename callback<void, T *>::ref cb) const {
     T *p, *np;
     for (p = head; p; p = np) {
       np = (p->*field).forward[0];
       (*cb) (p);
     }
   }
-  void rtraverse (callback<void, T *>::ref cb) const {
+  void rtraverse (typename callback<void, T *>::ref cb) const {
     T *p, *np;
     for (p = tail; p; p = np) {
       np = (p->*field).previous;
