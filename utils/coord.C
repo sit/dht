@@ -8,7 +8,7 @@ Coord::print_vector (str a, const vec<float> &v)
 {
   warn << a << ": ";
   for (unsigned int i = 0; i < v.size (); i++)
-    warnx << (int)(v[i]*1000.0) << " ";
+    warnx << (int)(v[i]) << " ";
   warnx << "\n";
 }
 
@@ -24,22 +24,18 @@ Coord::distance_f (const vec<float> &a, const vec<float> &b)
   return sqrtf (f);
 }
 
-vec<float>
-Coord::vector_add (const vec<float> &a, const vec<float> &b)
+void
+Coord::vector_add (vec<float> &a, const vec<float> &b)
 {
-  vec<float> ret;
   for (unsigned int i = 0; i < a.size (); i++)
-    ret.push_back (a[i] +  b[i]);
-  return ret;
+    a[i] = (a[i] +  b[i]);
 }
 
-vec<float>
-Coord::vector_sub (const vec<float> &a, const vec<float> &b)
+void
+Coord::vector_sub (vec<float> &a, const vec<float> &b)
 {
-  vec<float> ret;
   for (unsigned int i = 0; i < a.size (); i++)
-    ret.push_back (a[i] - b[i]);
-  return ret;
+    a[i] = (a[i] - b[i]);
 }
 
 float
@@ -51,11 +47,9 @@ Coord::norm (const vec<float> &a)
   return ret;
 }
 
-vec<float>
-Coord::scalar_mult (const vec<float> &v, float s)
+void
+Coord::scalar_mult (vec<float> &v, float s)
 {
-  vec<float> ret;
   for (unsigned int i = 0; i < v.size (); i++)
-    ret.push_back (v[i]*s);
-  return ret;
+    v[i] = (v[i]*s);
 }

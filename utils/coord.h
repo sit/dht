@@ -7,8 +7,11 @@ class str;
 struct Coord {
   static void print_vector (str a, const vec<float> &v);
   static float distance_f (const vec<float> &a, const vec<float> &b);
-  static vec<float> vector_add (const vec<float> &a, const vec<float> &b);
-  static vec<float> vector_sub (const vec<float> &a, const vec<float> &b);
+  //  static vec<float> vector_add (const vec<float> &a, const vec<float> &b);
+  //  static vec<float> vector_sub (const vec<float> &a, const vec<float> &b);
+  static void vector_add (vec<float> &a, const vec<float> &b);
+  static void vector_sub (vec<float> &a, const vec<float> &b);
   static float norm (const vec<float> &a);
-  static vec<float> scalar_mult (const vec<float> &v, float s);
+  static void scalar_mult (vec<float> &v, float s);
+  //  static vec<float> scalar_mult (const vec<float> &v, float s);
 };
