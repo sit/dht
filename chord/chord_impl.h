@@ -134,6 +134,9 @@ class vnode_impl : public vnode {
 
   void doalert_cb (chord_noderes *res, chordID x, clnt_stat err);
 
+  void secchord_upcall_done (chord_nodelistres *res,
+			     svccb *sbp,
+			     bool stop);
   void chord_upcall_done (chord_testandfindarg *fa,
 			  chord_testandfindres *res,
 			  svccb *sbp,
@@ -204,7 +207,7 @@ class vnode_impl : public vnode {
   void dogetfingers_ext (svccb *sbp);
   void dogetsucc_ext (svccb *sbp);
   void dogetpred_ext (svccb *sbp);
-  void dochallenge (svccb *sbp, chord_challengearg *ca);
+  void dosecfindsucc (svccb *sbp, chord_testandfindarg *fa);
   void dogettoes (svccb *sbp);
   void dodebruijn (svccb *sbp, chord_debruijnarg *da);
   void dofindroute (svccb *sbp, chord_findarg *fa);

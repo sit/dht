@@ -121,7 +121,7 @@ class vnode : public virtual refcount {
   virtual void dogetfingers_ext (svccb *sbp) = 0;
   virtual void dogetsucc_ext (svccb *sbp) = 0;
   virtual void dogetpred_ext (svccb *sbp) = 0;
-  virtual void dochallenge (svccb *sbp, chord_challengearg *ca) = 0;
+  virtual void dosecfindsucc (svccb *sbp, chord_testandfindarg *fa) = 0;
   virtual void dogettoes (svccb *sbp) = 0;
   virtual void dodebruijn (svccb *sbp, chord_debruijnarg *da) = 0;
   virtual void dofindroute (svccb *sbp, chord_findarg *fa) = 0;

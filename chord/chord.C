@@ -535,13 +535,47 @@ vnode_impl::dogetpred_ext (svccb *sbp)
 }
 
 void
-vnode_impl::dochallenge (svccb *sbp, chord_challengearg *ca)
+vnode_impl::dosecfindsucc (svccb *sbp, chord_testandfindarg *fa)
 {
-  chord_challengeres res(CHORD_OK);
-  ndochallenge++;
-  res.resok->index = myindex;
-  res.resok->challenge = ca->challenge;
-  sbp->reply (&res);
+  size_t i = 0;
+  chord_nodelistres *res = New chord_nodelistres (CHORD_OK);
+  chordID s = fingers->closestpred (fa->x);
+  // XXX what if there aren't that many truely maintained successors
+  //     in the location table???
+  chordID start = s;
+
+  vec<chord_node> answers;
+  chord_node n;
+  for (i = 0; i < NSUCC; i++) {
+    locations->get_node (s, &n);
+    answers.push_back (n);
+    s = locations->closestsuccloc (incID (s));
+    if (s == start) break;
+  }
+  res->resok->nlist.setsize (answers.size ());
+  for (i = 0; i < answers.size (); i++)
+    res->resok->nlist[i] = answers[i];
+
+  if (fa->upcall_prog) {
+    warnx << myID << ": doing upcall for " << fa->x << "\n";
+    do_upcall (fa->upcall_prog, fa->upcall_proc,
+	       fa->upcall_args.base (), fa->upcall_args.size (),
+	       wrap (this, &vnode_impl::secchord_upcall_done, res, sbp));
+  } else {
+    sbp->reply(res);
+    delete res;
+  }
+}
+
+void
+vnode_impl::secchord_upcall_done (chord_nodelistres *res, svccb *sbp,
+				  bool stop)
+{
+  if (stop) {
+    warnx << "secchord_upcall_done would've told someone to stop searching...\n";
+  }
+  sbp->reply (res);
+  delete res;
 }
 
 void

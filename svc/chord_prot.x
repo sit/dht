@@ -113,23 +113,6 @@ union chord_testandfindres switch (chordstat status) {
    void;
 };
 
-struct chord_challengearg {
-  chordID v;
-  int challenge;
-};
-
-struct chord_challengeresok {
-  int challenge;
-  int index;
-};
-
-union chord_challengeres switch (chordstat status) {
- case CHORD_OK:
-   chord_challengeresok resok;
- default:
-   void;
-};
-
 struct chord_gettoes_arg {
   chordID v;
   int32_t level;
@@ -189,8 +172,8 @@ program CHORD_PROGRAM {
  		chord_nodelistres
 		CHORDPROC_GETFINGERS (chordID) = 8;
 
-		chord_challengeres 
-	        CHORDPROC_CHALLENGE (chord_challengearg) = 9;
+		chord_nodelistres 
+	        CHORDPROC_SECFINDSUCC (chord_testandfindarg) = 9;
 
 		chord_nodeextres
 		CHORDPROC_GETPRED_EXT (chordID) = 10;

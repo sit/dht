@@ -26,6 +26,7 @@ finger_table::init (ptr<vnode> v, ptr<locationtable> locs, chordID ID)
     starts[i] = successorID (myID, i);
     fingers[i] = myID;
     locations->pinsucc (starts[i]);
+    locations->pinsucclist (starts[i]);
   }
 
 }

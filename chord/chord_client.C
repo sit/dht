@@ -318,11 +318,11 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
 	vnodep->dogetsucc_ext (sbp);
       }
       break;
-    case CHORDPROC_CHALLENGE:
+    case CHORDPROC_SECFINDSUCC:
       {
-	chord_challengearg *ca = 
-	  sbp->template getarg<chord_challengearg> ();
-	vnodep->dochallenge (sbp, ca);
+	chord_testandfindarg *fa = 
+	  sbp->template getarg<chord_testandfindarg> ();
+	vnodep->dosecfindsucc (sbp, fa);
       }
       break;
     case CHORDPROC_GETTOES:

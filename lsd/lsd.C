@@ -35,6 +35,8 @@
 #include "finger_table.h"
 #include "succ_list.h" // XXX only for NSUCC!
 
+#include "route_secchord.h"
+
 //#define PROFILING 
 
 // When a process starts up profiling is not happening.  But by
@@ -62,6 +64,8 @@ int myport;
 
 #define MODE_DEBRUIJN 1
 #define MODE_CHORD 2
+#define MODE_SECCHORD 3
+
 int mode;
 int lookup_mode;
 
@@ -80,10 +84,19 @@ client_accept (int fd)
   // XXX these dhashgateway objects are leaked
   //
   ptr<route_factory> f;
-  if (mode == MODE_DEBRUIJN)
+  switch (mode) {
+  case MODE_DEBRUIJN:
     f = New refcounted<debruijn_route_factory> (chordnode->active);
-  else
+    break;
+  case MODE_CHORD:
     f = New refcounted<chord_route_factory> (chordnode->active);
+    break;
+  case MODE_SECCHORD:
+    f = New refcounted<secchord_route_factory> (chordnode->active);
+    break;
+  default:
+    fatal << "bad route mode" << mode << "\n";
+  }
 
   vNew dhashgateway (x, chordnode, dh[0], f, do_cache);
 }
@@ -140,10 +153,21 @@ startclntd()
 ptr<route_factory> 
 get_factory (int mode) 
 {
-  if (mode == MODE_DEBRUIJN) 
-    return New refcounted<debruijn_route_factory> ();
-  else
-    return New refcounted<chord_route_factory> ();
+  ptr<route_factory> f;
+  switch (mode) {
+  case MODE_DEBRUIJN:
+    f = New refcounted<debruijn_route_factory> ();
+    break;
+  case MODE_CHORD:
+    f = New refcounted<chord_route_factory> ();
+    break;
+  case MODE_SECCHORD:
+    f = New refcounted<secchord_route_factory> ();
+    break;
+  default:
+    fatal << "bad route mode" << mode << "\n";
+  }
+  return f;
 }
 
 ptr<fingerlike> 
@@ -441,15 +465,17 @@ main (int argc, char **argv)
 	mode = MODE_DEBRUIJN;
       else if (strcmp (optarg, "chord") == 0)
 	mode = MODE_CHORD;
+      else if (strcmp (optarg, "secchord") == 0)
+	mode = MODE_SECCHORD;
       else
-	fatal << "allowed modes are chord and debruijn\n";
+	fatal << "allowed modes are secchord, chord and debruijn\n";
       setmode = true;
       break;
     case 'b':
       lbase = atoi (optarg);
-      if (!((mode == MODE_DEBRUIJN) 
-	    || ((mode == MODE_CHORD) && (lbase == 1)))) {
-	fatal << "logbase 1 only supported in other routing modes\n";
+      if (mode != MODE_DEBRUIJN && lbase != 1) {
+	warnx << "logbase " << lbase << " only supported in debruijn\n";
+	lbase = 1;
       }
       break;
     case 'P':

@@ -19,6 +19,7 @@ noinst_HEADERS = aclnt_chord.h \
 		 location.h \
 		 pred_list.h \
 		 route.h \
+		 route_secchord.h \
 		 skiplist.h \
 		 stabilize.h \
 		 succ_list.h \
@@ -26,6 +27,7 @@ noinst_HEADERS = aclnt_chord.h \
 
 libchord_a_SOURCES = chord.C \
 		      route.C \
+		      route_secchord.C \
 		      stabilize.C \
 		      chord_client.C \
 		      chord_util.C \
