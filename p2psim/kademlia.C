@@ -23,7 +23,7 @@ IPAddress kademlia_wkn_ip = 0;
 // }}}
 // {{{ Kademlia::Kademlia
 Kademlia::Kademlia(Node *n)
-  : Protocol(n), _id(ConsistentHash::ip2chid(n->ip()) & 0x0000ffff)
+  : DHTProtocol(n), _id(ConsistentHash::ip2chid(n->ip()) & 0x0000ffff)
 {
   KDEBUG(1) << "id: " << printbits(_id) << endl;
   _values.clear();

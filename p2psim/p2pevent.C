@@ -1,6 +1,6 @@
 #include "p2pevent.h"
 #include "node.h"
-#include "protocol.h"
+#include "dhtprotocol.h"
 #include "network.h"
 #include "parse.h"
 #include <lib9.h>
@@ -15,19 +15,19 @@ P2PEvent::P2PEvent()
 {
 }
 
-Protocol::event_f
+DHTProtocol::event_f
 P2PEvent::name2fn(string name)
 {
   if(name == "join" || name == "0")
-    return &Protocol::join;
+    return &DHTProtocol::join;
   if(name == "leave" || name == "1")
-    return &Protocol::leave;
+    return &DHTProtocol::leave;
   if(name == "crash" || name == "2")
-    return &Protocol::crash;
+    return &DHTProtocol::crash;
   if(name == "insert" || name == "3")
-    return &Protocol::insert;
+    return &DHTProtocol::insert;
   if(name == "lookup" || name == "4")
-    return &Protocol::lookup;
+    return &DHTProtocol::lookup;
   assert(0);
 }
 
@@ -71,11 +71,8 @@ P2PEvent::execute()
 {
   // get node, protocol on that node, application interface for that protocol
   // and invoke the event
-  Protocol *proto = node->getproto(protocol);
-  if(!proto) {
-    cerr << "ERROR: protocol " << protocol << " not running on node " << node->ip() << endl;
-    threadexitsall(0);
-  }
+  DHTProtocol *proto = dynamic_cast<DHTProtocol*>(node->getproto(protocol));
+  assert(proto);
   if (proto->node()->alive())
     (proto->*fn)(args);
 }

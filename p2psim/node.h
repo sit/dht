@@ -18,6 +18,7 @@ public:
   virtual ~Node();
 
   IPAddress ip() { return _ip; }
+  void register_proto(Protocol *);
   Protocol *getproto(string p) { return _protmap[p]; }
   bool _doRPC(IPAddress, void (*fn)(void *), void *args);
 

@@ -10,7 +10,7 @@ using namespace std;
 vector<VivaldiTest*> VivaldiTest::_all;
 
 VivaldiTest::VivaldiTest(Node *n)
-  : Protocol(n), _neighbors(0)
+  : DHTProtocol(n), _neighbors(0)
 {
 }
 

@@ -1,7 +1,7 @@
 #ifndef __KADEMLIA_H
 #define __KADEMLIA_H
 
-#include "protocol.h"
+#include "dhtprotocol.h"
 #include "node.h"
 #include <map>
 #include <set>
@@ -12,7 +12,7 @@ extern unsigned kdebugcounter;
 class k_bucket_tree;
 
 // {{{ Kademlia
-class Kademlia : public Protocol {
+class Kademlia : public DHTProtocol {
 // {{{ public
 public:
   typedef short NodeID;

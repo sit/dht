@@ -6,7 +6,7 @@
 #include "p2psim.h"
 using namespace std;
 
-Pastry::Pastry(Node *n) : Protocol(n),
+Pastry::Pastry(Node *n) : DHTProtocol(n),
   // suggested values in paper
   idlength(8*sizeof(NodeID)),
   _b(4),

@@ -63,7 +63,6 @@ ProtocolFactory::create(string s, Node *n)
                         fingers);
 
   assert(p);
-  assert(p->proto_name() == s);
 
   return p;
 }

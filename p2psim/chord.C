@@ -9,7 +9,7 @@ using namespace std;
 extern bool vis;
 
 Chord::Chord(Node *n, uint numsucc)
-  : Protocol(n), _isstable (false)
+  : DHTProtocol(n), _isstable (false)
 {
   nsucc = numsucc;
   me.ip = n->ip();

@@ -2,33 +2,25 @@
 #define __PROTOCOL_H
 
 #include "protocolfactory.h"
-#include "args.h"
-#include "network.h"
-#include "eventqueue.h"
 #include <string>
-#include <map>
-#include <typeinfo>
-#include "p2psim.h"
 #include "event.h"
+#include "eventqueue.h"
+#include "p2psim.h"
 using namespace std;
 
 class Node;
-class P2PEvent;
-class Protocol;
 
+// A Protocol is just a named object attached to a Node.
+// The point is, for example, to help the Chord object on
+// one node find the Chord on another node by calling
+// getpeer(IPAddress). DHTProtocol has the DHT-specific
+// abstract methods.
 class Protocol {
 public:
   Protocol(Node*);
   virtual ~Protocol();
   Node *node() { return _node; }
   virtual string proto_name() = 0;
-
-  typedef void (Protocol::*event_f)(Args*);
-  virtual void join(Args*) = 0;
-  virtual void leave(Args*) = 0;
-  virtual void crash(Args*) = 0;
-  virtual void insert(Args*) = 0;
-  virtual void lookup(Args*) = 0;
 
 protected:
 

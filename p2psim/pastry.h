@@ -1,13 +1,13 @@
 #ifndef __PASTRY_H
 #define __PASTRY_H
 
-#include "protocol.h"
+#include "dhtprotocol.h"
 #include "node.h"
 #include <vector>
 #include <set>
 using namespace std;
 
-class Pastry : public Protocol {
+class Pastry : public DHTProtocol {
 public:
   const unsigned idlength;
   typedef long long NodeID;

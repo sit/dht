@@ -27,6 +27,16 @@ Node::~Node()
   _protmap.clear();
 }
 
+void
+Node::register_proto(Protocol *p)
+{
+  string name = p->proto_name();
+  if(_protmap[name]){
+    cerr << "warning: " << name << " already running on node " << ip() << endl;
+    delete _protmap[name];
+  }
+  _protmap[name] = p;
+}
 
 void
 Node::run()
@@ -72,12 +82,7 @@ Node::run()
       // add protocol to node
       case 1:
         prot = ProtocolFactory::Instance()->create(protname, this);
-        assert(prot);
-        if(_protmap[protname]) {
-          cerr << "warning: " << protname << " already running on node " << ip() << endl;
-          delete _protmap[protname];
-        }
-        _protmap[protname] = prot;
+        register_proto(prot);
         break;
 
       //exit

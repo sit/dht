@@ -1,7 +1,7 @@
 #ifndef __CHORD_H
 #define __CHORD_H
 
-#include "protocol.h"
+#include "dhtprotocol.h"
 #include "consistenthash.h"
 
 #include <vector>
@@ -15,7 +15,7 @@
 
 class LocTable;
 
-class Chord : public Protocol {
+class Chord : public DHTProtocol {
 public:
   typedef ConsistentHash::CHID CHID;
   /*

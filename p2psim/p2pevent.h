@@ -5,7 +5,7 @@
 #include <string>
 #include "args.h"
 #include "event.h"
-#include "protocol.h"
+#include "dhtprotocol.h"
 
 class P2PEvent : public Event {
 public:
@@ -14,7 +14,7 @@ public:
 
   Node *node;
   string protocol;
-  Protocol::event_f fn;
+  DHTProtocol::event_f fn;
   Args *args;
 
  protected:
@@ -22,7 +22,7 @@ public:
 
  private:
   virtual void execute();
-  Protocol::event_f name2fn(string name);
+  DHTProtocol::event_f name2fn(string name);
 };
 
 #endif // __P2PEVENT_H

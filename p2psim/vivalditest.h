@@ -1,12 +1,12 @@
 #ifndef __VIVALDITEST_H
 #define __VIVALDITEST_H
 
-#include "protocol.h"
+#include "dhtprotocol.h"
 #include "node.h"
 #include "vivaldi.h"
 #include <vector>
 
-class VivaldiTest : public Protocol {
+class VivaldiTest : public DHTProtocol {
 public:
   VivaldiTest(Node*);
   ~VivaldiTest();

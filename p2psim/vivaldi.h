@@ -37,8 +37,8 @@ class Vivaldi {
 
   // Anyone can use this to make an RPC and have Vivaldi time it.
   template<class BT, class AT, class RT>
-    bool RPC(IPAddress a, void (BT::* fn)(AT *, RT *),
-             AT *args, RT *ret);
+    bool doRPC(IPAddress dst, BT *target, void (BT::*fn)(AT*, RT*),
+               AT *args, RT *ret);
 
  protected:
   Node *_n; // this node
@@ -182,6 +182,42 @@ length(Vivaldi::Coord c)
   return sqrt(l);
 }
 
+template<class BT, class AT, class RT>
+bool Vivaldi::doRPC(IPAddress dst, BT *target, void (BT::*fn)(AT*, RT*),
+                    AT *args, RT *ret) {
+  // target is probably the result of a dynamic_cast<BT*>...
+  assert(target);
+
+  class Thunk {
+  public:
+    BT *_target;
+    void (BT::*_fn)(AT *, RT *);
+    AT *_args;
+    RT *_ret;
+    Vivaldi *_vtarget;
+    Coord _c;
+    static void thunk(void *xa) {
+      Thunk *t = (Thunk *) xa;
+      (t->_target->*(t->_fn))(t->_args, t->_ret);
+      t->_c = t->_vtarget->my_location();
+    }
+  };
+
+  Thunk *t = new Thunk;
+  t->_target = target;
+  t->_fn = fn;
+  t->_args = args;
+  t->_ret = ret;
+  t->_vtarget = find(dst);
+  
+  Time before = now();
+  bool ok = _n->_doRPC(dst, Thunk::thunk, (void *) t);
+  if(ok)
+    sample(dst, t->_c, now() - before);
+
+  delete t;
+  return ok;
+}
 
 #if 0
 // Make an RPC call, but time it and tell Vivaldi.
