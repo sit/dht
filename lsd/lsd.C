@@ -223,7 +223,8 @@ parseconfigfile (str cf, int index)
   vec<str> av;
   bool myid = false;
   int nreplica = 0;
-  
+  int ss = 10000;
+  int cs = 1000;
   myport = 0;
   while (pa.getline (&av, &line)) {
     if (!strcasecmp (av[0], "#")) {
@@ -269,8 +270,19 @@ parseconfigfile (str cf, int index)
       }
       else
         wellknownhost = av[1];
-    }
+   } else if (!strcasecmp (av[0], "storesize")) {
+     if (av.size () != 2 || !convertint (av[1], &ss)) {
+       errors = true;
+       warn << cf << ":" << line << ": usage: storesize <size in elements>\n";
+     }
+   } else if (!strcasecmp (av[0], "cachesize")) {
+     if (av.size () != 2 || !convertint (av[1], &cs)) {
+       errors = true;
+       warn << cf << ":" << line << ": usage: cachesize <size in elements>\n";
+     }
+   }
   }
+
   if (!myid) {
     initID (&myID, index);
   }
@@ -281,7 +293,7 @@ parseconfigfile (str cf, int index)
   defp2p = New refcounted<p2p> (wellknownhost, wellknownport, wellknownID, 
 				myport, myID);
     //instantiate single dhash object
-  dhs = New dhash(db_name, nreplica);
+  dhs = New dhash(db_name, nreplica, ss, cs);
 }
 
 static void

@@ -1,6 +1,12 @@
 #include <sfsrosd.h>
 #include "parseopt.h"
 #include "rxx.h"
+#ifdef __linux__
+#include <sysconf.h>
+#include <unistd.h>       
+#define __USE_BSD
+#include <grp.h>
+#endif /* __linux__ */
 
 static str sfsrodbfile;
 static sfs_hostname hostname;

@@ -7,7 +7,7 @@
 
 
 dhash::dhash(str dbname, int k, int ss, int cs) :
-  key_store(1000), key_cache(100) {
+  key_store(ss), key_cache(cs) {
 
   db = new dbfe();
   nreplica = k;
