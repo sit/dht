@@ -472,9 +472,13 @@ Kademlia::stabilize()
 // {{{ Kademlia::init_state
 // NASTY HACK to stabilize faster
 void 
-Kademlia::init_state(list<Protocol*>)
+Kademlia::init_state(list<Protocol*> l)
 {
-  KDEBUG(1) << "init_state" << endl;
+  // just bloody call insert on everyone
+  for(list<Protocol*>::const_iterator i = l.begin(); i != l.end(); ++i) {
+    Kademlia *k = (Kademlia *) *i;
+    _tree->insert(k->id(), k->node()->ip());
+  }
 }
 
 // }}}

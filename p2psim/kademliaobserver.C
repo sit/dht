@@ -40,6 +40,7 @@ KademliaObserver::init_state()
   }
 }
 
+
 void
 KademliaObserver::execute()
 {
