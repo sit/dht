@@ -119,7 +119,8 @@ ChurnEventGenerator::run()
     // also schedule their first lookup
     a = New Args();
     Time tolookup = next_exponential( _lookupmean );
-    (*a)["key"] = get_lookup_key();
+    string s = get_lookup_key();
+    (*a)["key"] = s;
     if( _lookupmean > 0 && now() + jointime + tolookup < _exittime ) {
       P2PEvent *e = New P2PEvent(now() + jointime + tolookup, ip, "lookup", a);
       add_event(e);
@@ -198,8 +199,8 @@ ChurnEventGenerator::kick(Observed *o, ObserverInfo *oi)
   } else if( p2p_observed->type == "lookup" ) {
     // pick a time for the next lookup
     Time tolookup = next_exponential( _lookupmean );
-    (*a)["key"] = get_lookup_key();
-    string tmptmp = (*a)["key"];
+    string s = get_lookup_key();
+    (*a)["key"] = s;
     if( now() + tolookup < _exittime ) {
       //      cout << now() << ": Scheduling lookup to " << ip << " in " << tolookup 
       //	   << " for " << (*a)["key"] << endl;
@@ -272,9 +273,8 @@ ChurnEventGenerator::get_lookup_key()
         return string(buf);
       }
     }
-    assert(0);
+    assert(0);//XXX wierd; assertion wont' fire
   }
-  
   // look up random 64-bit keys
   char buffer[20];
   // random() returns only 31 random bits.
