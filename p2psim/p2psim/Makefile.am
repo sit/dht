@@ -25,7 +25,7 @@ libp2psim_a_SOURCES = anyready.C condvar.C dhtprotocol.C event.C \
 		      eventqueue.C \
 		      eventgenerator.C \
 		      eventqueueobserver.C \
-		      network.C node.C observed.C observer.C \
+		      network.C node.C observed.C \
 		      p2psim.C packet.C parse.C protocol.C \
 		      rpchandle.C threaded.C threadmanager.C \
 		      threadspeedup.C tmgdmalloc.C topology.C \
