@@ -8,6 +8,24 @@ reported a load of 272 million queries per day in 2001~\cite{isc-root}.
 Chord balances load as a side effect of its lookup and storage 
 algorithms, thus avoiding such hot spots.
 
+More configuration problems that DDNS may solve~\cite{dns-bind}:\\
+-forgetting to increment serial numbers when updating the zone's db file 
+in the primary name server. The slave name servers won't reload
+the new zone data.\\
+-forgetting to signal the primary name server after changing the conf or db file\\
+-a slave server can fail to load zone data if it lost connectivity to 
+the master server due to network failure, or has the wrong IP address for
+the master server in the conf file, or if there is a syntax error in 
+the zone data file on the master server.\\
+-syntax error in the conf or DNS db file. Error in the conf file will 
+be obsolete in DDNS, but errors in the db file will still persist in DDNS.\\
+-missing cache data either because the admin forgot to install the 
+cache file or accidentally deleted it. The will cause all lookups outside 
+of the name server's authoritative zone to fail.\\
+-loss of network connectivity to a name server. Lookup might fail if it's
+the only one with the zone data.\\
+-missing or incorrect subdomain delegation.\\
+
 We propose a distributed domain name service, DDNS,
 using a robust peer-to-peer lookup service like Chord.
 Such a system avoids some of the most significant
@@ -19,7 +37,7 @@ done because of a machine you have never heard of is down)
 is all too true in the current implementation of {DNS}.
 Jung {\it et al.}~\cite{dnscache:sigcommimw01} found that approximately
 35\% of DNS queries never receive an answer or receive
-an incorrect negative answer.
+a negative answer.
 Many of these failures are due to improperly configured
 root DNS entries (name server, or NS records).
 Such failures can go undetected because of the hierarchical
