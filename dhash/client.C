@@ -708,7 +708,7 @@ dhashcli::insert_store_cb (ref<sto_state> ss, route r, u_int i,
 
 void
 dhashcli::insert_dhc_cb (ptr<location> dest, route r, 
-			 cbinsert_path_t cb, dhc_stat err)
+			 cbinsert_path_t cb, dhc_stat err, clnt_stat cerr)
 {
   vec<chordID> path;
   if (!err) {

@@ -11,6 +11,7 @@
 
 #define ID_size sha1::hashsize
 #define DHC_DEBUG 1
+#define RECON_TM 10
 
 struct dhash_block;
 
@@ -377,7 +378,7 @@ struct write_state {
   write_state () : done (false), bcount (0) {}
 };
 
-typedef callback<void, dhc_stat>::ref dhc_cb_t;
+typedef callback<void, dhc_stat, clnt_stat>::ref dhc_cb_t;
 typedef callback<void, ptr<dhash_block> >::ref dhc_getcb_t;
 
 struct put_args {
@@ -400,6 +401,12 @@ class dhc : public virtual refcount {
   ihash<chordID, dhc_soft, &dhc_soft::id, &dhc_soft::link, hashID> dhcs;
 
   uint n_replica;
+  uint recon_tm_rpcs;
+  
+  void recon_timer ();
+  void recon_tm_lookup (ref<dhc_block>, bool, vec<chord_node>, route, chordstat);
+  void recon_tm_done (dhc_stat, clnt_stat);
+  void recon (chordID, dhc_cb_t);
 
   void recv_prepare (user_args *);
   void recv_promise (chordID, dhc_cb_t, ref<dhc_prepare_res>, clnt_stat);
@@ -434,7 +441,6 @@ class dhc : public virtual refcount {
   dhc (ptr<vnode>, str, uint);
   ~dhc () {};
   
-  void recon (chordID, dhc_cb_t);
   void get (ptr<location>, chordID, dhc_getcb_t);
   void put (ptr<location>, chordID, chordID, ref<dhash_value>, dhc_cb_t, 
 	    bool newblock=false);

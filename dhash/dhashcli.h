@@ -91,7 +91,7 @@ class dhashcli {
 			u_int nstores, u_int min_needed,
 			dhash_stat err, chordID id, bool present);
   void insert_dhc_cb (ptr<location> dest, route r, 
-		      cbinsert_path_t cb, dhc_stat err);
+		      cbinsert_path_t cb, dhc_stat err, clnt_stat cerr);
   
   void fetch_frag (ptr<rcv_state> rs);
 

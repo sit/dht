@@ -5,7 +5,7 @@
 #include <locationtable.h>
 
 dhc::dhc (ptr<vnode> node, str dbname, uint k) : 
-  myNode (node), n_replica (k)
+  myNode (node), n_replica (k), recon_tm_rpcs (0)
 {
 
   dbOptions opts;
@@ -19,7 +19,78 @@ dhc::dhc (ptr<vnode> node, str dbname, uint k) :
   
   warn << myNode->my_ID () << " registered dhc_program_1\n";
   myNode->addHandler (dhc_program_1, wrap (this, &dhc::dispatch));
+  
+  delaycb (RECON_TM, wrap (this, &dhc::recon_timer));
+}
 
+void
+dhc::recon_timer ()
+{
+
+  /*
+    Cases where I need to reconfigure a block's replicas:
+    1. I am responsible for this block,
+       but the replicas do not match the current successors.
+       Call recon on the block.
+    2. I am in the current config, but I am not responsible for the block,
+       but the current set of replicas do not match the current successors.
+       Send the block to the potential primary.
+   */
+
+  if (recon_tm_rpcs == 0) {
+    bool guilty;
+    ptr<dbEnumeration> iter = db->enumerate ();
+    ptr<dbPair> entry = iter->nextElement (id2dbrec (0));
+    while (entry) {
+      chordID key = dbrec2id (entry->key);
+      ref<dhc_block> kb = to_dhc_block (entry->data);
+      if ((guilty = responsible (myNode, key)) || kb->meta->cvalid) {
+	recon_tm_rpcs++;
+	myNode->find_successor (key, wrap (this, &dhc::recon_tm_lookup, kb, guilty));	
+      }
+      entry = iter->nextElement ();
+    }
+  }
+
+  delaycb (RECON_TM, wrap (this, &dhc::recon_timer));  
+}
+
+void 
+dhc::recon_tm_lookup (ref<dhc_block> kb, bool guilty, vec<chord_node> succs, 
+		      route r, chordstat err)
+{
+  recon_tm_rpcs--;
+  if (!err) {
+    if (!up_to_date (kb->meta->config.nodes, succs)) {
+      if (guilty) // Case 1
+	recon (kb->id, wrap (this, &dhc::recon_tm_done));
+      else { // Case 2
+	ref<location> l = myNode->locations->lookup_or_create (succs[0]);
+
+	ptr<dhc_newconfig_arg> arg = New refcounted<dhc_newconfig_arg>;
+	arg->bID = kb->id;
+	arg->data.tag.ver = 0;
+	arg->data.tag.writer = 0;
+	arg->data.data.setsize (0); // Send a NULL block
+	arg->old_conf_seqnum = kb->meta->config.seqnum - 1; //set it to last config
+	arg->new_config.setsize (kb->meta->config.nodes.size ());
+	for (uint i=0; arg->new_config.size (); i++) 
+	  arg->new_config[i] = kb->meta->config.nodes[i];
+
+	ptr<dhc_newconfig_res> res = New refcounted<dhc_newconfig_res>;
+
+	recon_tm_rpcs++;
+	myNode->doRPC (l, dhc_program_1, DHCPROC_NEWCONFIG, arg, res,
+		       wrap (this, &dhc::recon_tm_done, DHC_OK));
+      }
+    }
+  }
+}
+
+void 
+dhc::recon_tm_done (dhc_stat derr, clnt_stat err)
+{
+  recon_tm_rpcs--;
 }
 
 void 
@@ -37,7 +108,7 @@ dhc::recon (chordID bID, dhc_cb_t cb)
     ptr<dhc_block> kb = to_dhc_block (rec);
     warn << "dhc_block: " << kb->to_str ();
     if (!kb->meta->cvalid) {
-      (*cb) (DHC_NOT_A_REPLICA);
+      (*cb) (DHC_NOT_A_REPLICA, clnt_stat (0));
       return;
     }
     dhc_soft *b = dhcs[bID];
@@ -78,15 +149,27 @@ dhc::recon (chordID bID, dhc_cb_t cb)
       }
     } else {
       warn << "dhc:recon. Another recon is still in progress.\n";
-      (*cb) (DHC_RECON_INPROG);
+      (*cb) (DHC_RECON_INPROG, clnt_stat (0));
     }
   } else {
     warn << "dhc:recon. Too many deaths. Tough luck.\n";
     //I don't have the block, which means too many pred nodes
     //died before replicating the block on me. Tough luck.
-    (*cb) (DHC_BLOCK_NEXIST);
+    (*cb) (DHC_BLOCK_NEXIST, clnt_stat (0));
   }
 
+}
+
+void
+set_locations (vec<ptr<location> > *locs, ptr<vnode> myNode, 
+	       vec<chordID> ids)
+{
+  ptr<location> l;
+  locs->clear ();
+  for (uint i=0; i<ids.size (); i++)
+    if (l = myNode->locations->lookup (ids[i]))
+      locs->push_back (l);
+    else warn << "Node " << ids[i] << " does not exist !!!!\n";
 }
 
 void 
@@ -140,7 +223,7 @@ dhc::recv_promise (chordID bID, dhc_cb_t cb,
     }
   } else {
     print_error ("dhc:recv_promise", err, promise->status);
-    (*cb) (promise->status);
+    (*cb) (promise->status, clnt_stat (0));
   }
 }
 
@@ -201,7 +284,7 @@ dhc::recv_accept (chordID bID, dhc_cb_t cb,
     }
   } else {
     print_error ("dhc:recv_propose", err, proposal->status);
-    (*cb) (proposal->status);
+    (*cb) (proposal->status, clnt_stat (0));
   }
 }
 
@@ -228,11 +311,11 @@ dhc::recv_newconfig_ack (chordID bID, dhc_cb_t cb, ref<dhc_newconfig_res> ack,
       b->status = IDLE;
       b->pstat->sent_reply = true;
       dhcs.insert (b);
-      (*cb) (DHC_OK);
+      (*cb) (DHC_OK, clnt_stat (0));
     }    
   } else {
     print_error ("dhc:recv_newconfig_ack", err, ack->status);
-    (*cb) (ack->status);
+    (*cb) (ack->status, clnt_stat (0));
   }
 }
 
@@ -711,7 +794,7 @@ dhc::put_lookup_cb (put_args *pa, dhc_cb_t cb, bool newblock,
       myNode->doRPC (l, dhc_program_1, DHCPROC_NEWBLOCK, arg, res,
 		     wrap (this, &dhc::put_result_cb, pa->bID, cb, res)); 
   } else 
-    (*cb) (DHC_CHORDERR);
+    (*cb) (DHC_CHORDERR, clnt_stat (0));
   delete pa;
 }
 
@@ -719,8 +802,8 @@ void
 dhc::put_result_cb (chordID bID, dhc_cb_t cb, ptr<dhc_put_res> res, clnt_stat err)
 {
   if (err)
-    (*cb) (DHC_CHORDERR);
-  else (*cb) (res->status);
+    (*cb) (DHC_CHORDERR, clnt_stat (0));
+  else (*cb) (res->status, clnt_stat (0));
 }
 
 void

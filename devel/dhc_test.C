@@ -75,7 +75,7 @@ start_recon_cb (dhc_stat err)
 void
 start_recon (chordID bID)
 {
-  dhc_mgr[0]->recon (bID, wrap (start_recon_cb));
+  //dhc_mgr[0]->recon (bID, wrap (start_recon_cb));
 }
 
 void 
