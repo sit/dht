@@ -164,9 +164,10 @@ vnode_impl::notify (const chordID &n, chordID &x)
   ptr<chord_nodearg> na = New refcounted<chord_nodearg>;
   chordstat *res = New chordstat;
   nnotify++;
-  // warnx << "notify " << n << " about " << x << "\n";
-  na->n.x = x;
-  na->n.r = locations->getaddress (x);
+  // warnx << gettime () << ": notify " << n << " about " << x << "\n";
+  bool ok = locations->get_node (x, &na->n);
+  assert (ok);
+  
   doRPC (n, chord_program_1, CHORDPROC_NOTIFY, na, res, 
 	 wrap (mkref (this), &vnode_impl::notify_cb, n, res));
 }
