@@ -1482,6 +1482,8 @@ ID_to_xy (chordID ID, int *x, int *y)
   f_node *f = nodes[ID];
   
   if (ggeo) {
+    if (!f) // assume it is a lookup target
+      f = nodes[search_path[search_path.size() - 1]->ID];
     if (f && f->coords.size () > 0) {
       *x = (int)(WINX/2 + ((f->coords[0] - centerx)/zoomx)*WINX);
       *y = (int)(WINY/2 + ((f->coords[1] - centery)/zoomy)*WINY);
