@@ -27,4 +27,5 @@ lookuplearn 0 1
 direct_reply 0 1
 # how many people do we ask to repair a dead node?
 max_repair_num 1 3 5 10
-
+# instead of contacting all entries during each phase of join, choose k random
+nnrandom 1
