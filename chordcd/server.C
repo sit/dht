@@ -27,6 +27,8 @@
  */
 
 // KNOWN ISSUES:
+//   * READDIR
+//     - client always re-requests entries in a directory, why?
 //   * READDIRP
 //     - completely broken/not really implemented
 //   * READ
@@ -46,6 +48,7 @@
 //     - search for this and find more things to fix
 
 
+
 // 
 // fileids == lower_64_bits (sha1(path))
 // sfs_hash == chordID == nfs_fh3
@@ -59,6 +62,7 @@
 
 #define LSD_SOCKET "/tmp/chord-sock"
 #define CMTU 1024
+#define PREFETCH_BLOCKS 8
 
 static void splitpath (vec<str> &out, str in);
 static fattr3 ro2nfsattr (sfsro_inode *si);
@@ -78,6 +82,7 @@ path2fileid(const str path)
 chord_server::chord_server (u_int cache_maxsize)
   : data_cache (cache_maxsize)
 {
+
   int fd = unixsocket_connect (LSD_SOCKET);
   if (fd < 0) 
     fatal << "Failed to bind to lsd control socket on " << LSD_SOCKET << "\n";
@@ -100,7 +105,7 @@ chord_server::setrootfh (str root, cbfh_t rfh_cb)
     chordID ID;
     mpz_set_rawmag_be (&ID, dearm.cstr (), dearm.len ());
     //fetch the root file handle too..
-    fetch_data (ID, wrap (this, &chord_server::getroot_fh, rfh_cb));
+    fetch_data (false, ID, wrap (this, &chord_server::getroot_fh, rfh_cb));
   }
 }
 
@@ -122,7 +127,7 @@ chord_server::getroot_fh (cbfh_t rfh_cb, ptr<sfsro_data> d)
     warn << "  blocksize : " << d->fsinfo->info.blocksize << "\n";
     this->rootdirID = d->fsinfo->info.rootfh;
     this->fsinfo = *d->fsinfo;
-    fetch_data (rootdirID, wrap (this, &chord_server::getrootdir_cb, rfh_cb));
+    fetch_data (false, rootdirID, wrap (this, &chord_server::getrootdir_cb, rfh_cb));
   }
 }
 
@@ -153,14 +158,14 @@ chord_server::dispatch (ref<nfsserv> ns, nfscall *sbp)
     {
     nfs_fh3 *nfh = sbp->template getarg<nfs_fh3> ();
     chordID fh = nfsfh_to_chordid (nfh);
-    fetch_data (fh,wrap (this, &chord_server::readlink_inode_cb, sbp, fh));
+    fetch_data (false, fh, wrap (this, &chord_server::readlink_inode_cb, sbp, fh));
     }
     break;
   case NFSPROC3_GETATTR: 
     {
       nfs_fh3 *nfh = sbp->template getarg<nfs_fh3> ();
       chordID fh = nfsfh_to_chordid (nfh);
-      fetch_data (fh,wrap (this, &chord_server::getattr_inode_cb, sbp, fh));
+      fetch_data (false, fh, wrap (this, &chord_server::getattr_inode_cb, sbp, fh));
     }
     break;
   case NFSPROC3_FSSTAT:
@@ -193,7 +198,7 @@ chord_server::dispatch (ref<nfsserv> ns, nfscall *sbp)
       access3args *aa = sbp->template getarg<access3args> ();
       nfs_fh3 *nfh = &(aa->object);
       chordID fh = nfsfh_to_chordid (nfh);
-      fetch_data (fh, wrap (this, &chord_server::access_inode_cb, sbp, fh));
+      fetch_data (false, fh, wrap (this, &chord_server::access_inode_cb, sbp, fh));
     }
     break;
   case NFSPROC3_LOOKUP: 
@@ -202,7 +207,7 @@ chord_server::dispatch (ref<nfsserv> ns, nfscall *sbp)
 
       nfs_fh3 *nfh = &(dirop->dir);
       chordID fh = nfsfh_to_chordid (nfh);
-      fetch_data (fh, wrap (this, &chord_server::lookup_inode_cb, sbp, fh));
+      fetch_data (false, fh, wrap (this, &chord_server::lookup_inode_cb, sbp, fh));
     }
     break;
   case NFSPROC3_READDIR:
@@ -210,7 +215,7 @@ chord_server::dispatch (ref<nfsserv> ns, nfscall *sbp)
       readdir3args *readdirop = sbp->template getarg<readdir3args> ();
       nfs_fh3 *nfh = &(readdirop->dir);
       chordID fh = nfsfh_to_chordid (nfh);
-      fetch_data (fh, wrap (this, &chord_server::readdir_inode_cb, sbp, fh));
+      fetch_data (false, fh, wrap (this, &chord_server::readdir_inode_cb, sbp, fh));
     }
     break;
   case NFSPROC3_READDIRPLUS:
@@ -218,7 +223,7 @@ chord_server::dispatch (ref<nfsserv> ns, nfscall *sbp)
       readdirplus3args *readdirop = sbp->template getarg<readdirplus3args> ();
       nfs_fh3 *nfh = &(readdirop->dir);
       chordID fh = nfsfh_to_chordid (nfh);
-      fetch_data (fh, wrap (this, &chord_server::readdirp_inode_cb, sbp, fh));
+      fetch_data (false, fh, wrap (this, &chord_server::readdirp_inode_cb, sbp, fh));
     }
     break;
   case NFSPROC3_READ:
@@ -226,7 +231,7 @@ chord_server::dispatch (ref<nfsserv> ns, nfscall *sbp)
       read3args *ra = sbp->template getarg<read3args> ();
       nfs_fh3 *nfh = &(ra->file);
       chordID fh = nfsfh_to_chordid (nfh);
-      fetch_data (fh, wrap (this, &chord_server::read_inode_cb, sbp, fh));
+      fetch_data (false, fh, wrap (this, &chord_server::read_inode_cb, sbp, fh));
     }
     break;
   case NFSPROC3_NULL:
@@ -384,7 +389,7 @@ chord_server::readdir_inode_cb (nfscall *sbp, chordID dataID, ptr<sfsro_data> da
   else {
     readdir3args *nfsargs = sbp->template getarg<readdir3args> ();
     uint32 blockno = nfsargs->cookie >> 32;
-    read_file_data (blockno, data->inode->reg, false,
+    read_file_data (false, blockno, data->inode->reg, 
 		    wrap (this, &chord_server::readdir_fetch_dirdata_cb,
 			  sbp, data, dataID));
   }
@@ -451,7 +456,7 @@ chord_server::readdirp_inode_cb (nfscall *sbp, chordID ID, ptr<sfsro_data> data)
   else if (data->inode->type != SFSRODIR && data->inode->type != SFSRODIR_OPAQ)
     sbp->error (NFS3ERR_NOTDIR);
   else {
-    fetch_data (sfshash_to_chordid(&data->inode->reg->direct[0]),
+    fetch_data (false, sfshash_to_chordid(&data->inode->reg->direct[0]),
 		wrap (this, &chord_server::readdirp_fetch_dir_data, 
 		      sbp, data, ID));
   }
@@ -516,7 +521,8 @@ chord_server::read_inode_cb (nfscall *sbp, chordID ID, ptr<sfsro_data> data)
     sbp->error (NFS3ERR_IO);
   else if (data->inode->type != SFSROREG && data->inode->type != SFSROREG_EXEC) {
     sbp->error (NFS3ERR_IO);
-  } else if (ra->offset >= data->inode->reg->size) {
+  }
+  else if (ra->offset >= data->inode->reg->size) {
     read3res nfsres(NFS3_OK);
     
     nfsres.resok->count = 0;
@@ -529,18 +535,23 @@ chord_server::read_inode_cb (nfscall *sbp, chordID ID, ptr<sfsro_data> data)
     //XXX if a read straddles two blocks we will do a short read 
     ///   i.e. only read the first block
     size_t block = ra->offset / fsinfo.info.blocksize;
-    read_file_data (block, data->inode->reg, false,
+    read_file_data (false, block, data->inode->reg, 
 		    wrap (this, &chord_server::read_data_cb,
 			  sbp, data, ID));
 
-    // #define PF 8
-    //     size_t pf_lim = block + PF;
-    //    for (size_t b = block + 1; b < pf_lim ; b++)
-    //      if ((b+1)*fsinfo.info.blocksize < data->inode->reg->size) 
-    //	read_file_block (b, data->inode, true, wrap (&ignore_me));
+    size_t ftch_lim = block + PREFETCH_BLOCKS;
+    size_t file_bytes = roundup (data->inode->reg->size, fsinfo.info.blocksize);
+    size_t file_blks = file_bytes / fsinfo.info.blocksize;
+
+    for (size_t b = block + 1; b <= ftch_lim && b < file_blks; b++)
+      read_file_data (true, b, data->inode->reg, wrap (this, &chord_server::ignore_data_cb));
   }
 }
 
+void
+chord_server::ignore_data_cb (ptr<sfsro_data> data)
+{
+}
 
 void
 chord_server::read_data_cb (nfscall *sbp, ptr<sfsro_data> inode, chordID inodeID,
@@ -727,7 +738,7 @@ chord_server::lookup_scandir_nextblock(ref<lookup_state> st)
   } else {
     size_t curblock = st->curblock;
     st->curblock++;
-    read_file_data (curblock, st->dirinode, false,
+    read_file_data (false, curblock, st->dirinode, 
     		    wrap (this, &chord_server::lookup_scandir_nextblock_cb, st));
   }
 }
@@ -742,7 +753,7 @@ chord_server::lookup_scandir_nextblock_cb(ref<lookup_state> st, ptr<sfsro_data> 
     sfsro_dirent *dirent = dirent_lookup (st->component, dat->dir);
     if (dirent) {
       chordID componentID = sfshash_to_chordid (&dirent->fh);
-      fetch_data (componentID,
+      fetch_data (false, componentID,
 		  wrap (this, &chord_server::lookup_component_inode_cb, st, componentID));
     } else {
       lookup_scandir_nextblock(st);
@@ -860,7 +871,7 @@ splitpath (vec<str> &out, str in)
 // -------------------------- bmap --------------------------
 
 void
-chord_server::bmap(size_t block, sfsro_inode_reg *inode, cbbmap_t cb)
+chord_server::bmap (bool pfonly, size_t block, sfsro_inode_reg *inode, cbbmap_t cb)
 {
   chordID ID;
 
@@ -874,14 +885,15 @@ chord_server::bmap(size_t block, sfsro_inode_reg *inode, cbbmap_t cb)
   else if (block < SFSRO_NDIR + nfh) {
     ID = sfshash_to_chordid (&(inode->indirect));
     unsigned int slotno1 = block - SFSRO_NDIR;
-    bmap_recurse (cb, slotno1, ID, true);
+    bmap_recurse (pfonly, cb, slotno1, ID, true);
   }
   else if (block < SFSRO_NDIR + nfh * nfh) {
     unsigned int slotno1 = (block - SFSRO_NDIR) / nfh;
     unsigned int slotno2 = (block - SFSRO_NDIR) % nfh;
 
     ID = sfshash_to_chordid (&(inode->double_indirect));
-    bmap_recurse (wrap (this, &chord_server::bmap_recurse, cb, slotno2), slotno1, ID, true);
+    bmap_recurse (pfonly, wrap (this, &chord_server::bmap_recurse, pfonly, cb, slotno2),
+		  slotno1, ID, true);
   }
   else if (block < SFSRO_NDIR + nfh * nfh * nfh) {
     unsigned int slotno1 = (block - SFSRO_NDIR) / (nfh * nfh);
@@ -889,10 +901,9 @@ chord_server::bmap(size_t block, sfsro_inode_reg *inode, cbbmap_t cb)
     unsigned int slotno3 = (block - SFSRO_NDIR) % nfh;
 
     ID = sfshash_to_chordid (&(inode->triple_indirect));
-    bmap_recurse (wrap (this, &chord_server::bmap_recurse,
-			wrap (this, &chord_server::bmap_recurse, cb, slotno3),
-			slotno2),
-		  slotno1, ID, true);
+    bmap_recurse (pfonly, wrap (this, &chord_server::bmap_recurse, pfonly,
+				wrap (this, &chord_server::bmap_recurse, pfonly,
+				      cb, slotno3), slotno2), slotno1, ID, true);
   }
   else {
     warn << "bmap: block out of range: " << block << "\n";
@@ -901,17 +912,19 @@ chord_server::bmap(size_t block, sfsro_inode_reg *inode, cbbmap_t cb)
 }
 
 void
-chord_server::bmap_recurse(cbbmap_t cb, unsigned int slotno, chordID ID, bool success)
+chord_server::bmap_recurse(bool pfonly, cbbmap_t cb, u_int32_t slotno, chordID ID, bool success)
 {
   if (success) {
-    fetch_data (ID, wrap (this, &chord_server::bmap_recurse_data_cb, cb, slotno));
+    fetch_data (pfonly, ID,
+		wrap (this, &chord_server::bmap_recurse_data_cb, pfonly, cb, slotno));
   } else {
     (*cb) (0, false);
   }
 }
 
 void
-chord_server::bmap_recurse_data_cb(cbbmap_t cb, unsigned int slotno, ptr<sfsro_data> dat)
+chord_server::bmap_recurse_data_cb (bool pfonly, cbbmap_t cb,
+				    u_int32_t slotno, ptr<sfsro_data> dat)
 {
   if (dat) {
     assert (dat->type == SFSRO_INDIR);
@@ -933,21 +946,21 @@ chord_server::bmap_recurse_data_cb(cbbmap_t cb, unsigned int slotno, ptr<sfsro_d
 // XXX should this call check the type of the block? 
 // XXX the ref counting is questionable here.. 
 void
-chord_server::read_file_data (size_t block, sfsro_inode_reg *inode, bool pfonly,
-			      cbgetdata_t cb)
+chord_server::read_file_data (bool pfonly, size_t block, sfsro_inode_reg *inode, cbgetdata_t cb)
 {
   // the caller must ensure that block is within the size of the file
 
   // convert logical file block to chordID
-  bmap(block, inode, wrap (this, &chord_server::read_file_data_bmap_cb, cb, pfonly));
+  bmap (pfonly, block, inode, wrap (this, &chord_server::read_file_data_bmap_cb, pfonly, cb));
 }
 
 
+
 void
-chord_server::read_file_data_bmap_cb (cbgetdata_t cb, bool pfonly, chordID ID, bool success)
+chord_server::read_file_data_bmap_cb (bool pfonly, cbgetdata_t cb, chordID ID, bool success)
 {
   if (success) {
-    getdata (ID, cb);
+    getdata (pfonly, ID, cb);
   } else {
     (*cb) (NULL);
   }
@@ -957,15 +970,17 @@ chord_server::read_file_data_bmap_cb (cbgetdata_t cb, bool pfonly, chordID ID, b
 // ------------------------ raw data fetch ------------------
 
 void
-chord_server::fetch_data (chordID ID, cbfetch_block_t cb)
+chord_server::fetch_data (bool pfonly, chordID ID, cbfetch_block_t cb)
 {
-  getdata (ID, cb);
+  getdata (pfonly, ID, cb);
 }
 
 struct getdata_state {
   // interface variables
+  bool pfonly;
   chordID ID;
   cbgetdata_t cb;
+
 
   // state variables
   char *buf;       // block is accumulated here   
@@ -973,30 +988,40 @@ struct getdata_state {
   uint32 nread;    // bytes copied into buf so far (not necessarily contigous) 
   uint32 npending; // pending RPCs
 
-  getdata_state(chordID ID, cbgetdata_t cb) :
-    ID (ID), cb (cb), buf (NULL), bufsize (0), nread (0), npending (0) {}
+  getdata_state(bool pfonly, chordID ID, cbgetdata_t cb) :
+    pfonly (pfonly), ID (ID), cb (cb), buf (NULL), bufsize (0), nread (0), npending (0) {}
   ~getdata_state() { delete [] buf; }
 };
 
 
+// pfonly:
+//   -- if the data is cached, then call it back.
+//   -- otherwise, ensure the data is read in, but don't call it back.
+//
 void
-chord_server::getdata (chordID ID, cbgetdata_t cb)
+chord_server::getdata (bool pfonly, chordID ID, cbgetdata_t cb)
 {
-  if (wait_list *l = pf_waiters[ID]) {
-    fetch_wait_state *w = New fetch_wait_state (cb);
-    l->insert_head (w);
-  }
-  else if (ptr<sfsro_data> dat = data_cache [ID]) {
+  if (ptr<sfsro_data> dat = data_cache [ID]) {
     (*cb) (dat);
   }
+  else if (wait_list *l = pf_waiters[ID]) {
+    if (!pfonly) {
+      fetch_wait_state *w = New fetch_wait_state (cb);
+      l->insert_head (w);
+    }
+  }
   else {
-    ptr<getdata_state> st = New refcounted<getdata_state>(ID, cb);
+    pf_waiters.insert (ID);
+    wait_list *l = pf_waiters[ID];
+    fetch_wait_state *w = New fetch_wait_state (cb);
+    l->insert_head (w);
+
+    ptr<getdata_state> st = New refcounted<getdata_state> (pfonly, ID, cb);
     ptr<dhash_res> res = New refcounted<dhash_res> (DHASH_OK);
-    dhash_fetch_arg arg; // = { .key = ID, .len = CMTU, .start = 0 };
+    dhash_fetch_arg arg;
     arg.key = ID;
     arg.len = CMTU;
-    arg.start = 0; // XXX perhaps, lookup should be pointed at the last fragment, 
-                   // otherwise both the first and last frags are not maximally sized.
+    arg.start = 0;
     cclnt->call (DHASHPROC_LOOKUP, &arg, res, 
 		 wrap (this, &chord_server::getdata_initial_cb, st, res));
   }
@@ -1004,7 +1029,7 @@ chord_server::getdata (chordID ID, cbgetdata_t cb)
 
 
 void
-chord_server::getdata_initial_cb(ptr<getdata_state> st,
+chord_server::getdata_initial_cb (ptr<getdata_state> st,
 				  ptr<dhash_res> res, 
 				  clnt_stat err)
 {
@@ -1030,7 +1055,6 @@ chord_server::getdata_initial_cb(ptr<getdata_state> st,
       arg.farg.len = MIN (CMTU, res->resok->attr.size - offset);
       cclnt->call (DHASHPROC_TRANSFER, &arg, new_res,
 		   wrap (this, &chord_server::getdata_fragment_cb, st, new_res));
-      
       offset += arg.farg.len;
     }
   }
@@ -1039,8 +1063,8 @@ chord_server::getdata_initial_cb(ptr<getdata_state> st,
 
 void
 chord_server::getdata_fragment_cb(ptr<getdata_state> st,
-				   ptr<dhash_res> res,
-				   clnt_stat err)
+				  ptr<dhash_res> res,
+				  clnt_stat err)
 {
   if (err)
     fatal << "get_data_fragment_cb err: " << strerror(err) << "\n";
@@ -1074,15 +1098,17 @@ chord_server::getdata_finish (ptr<getdata_state> st)
     warn << "Couldn't unmarshall data\n";
     (*st->cb) (NULL);
   } else {
-    (*st->cb) (data);
-
     data_cache.insert (st->ID, data);
 
-    if (wait_list *l = pf_waiters[st->ID]) {
-      while (fetch_wait_state *w = l->first) {
-	(*w->cb) (data);
-	l->remove (w);
-      }
+    wait_list *l = pf_waiters[st->ID];
+    assert (l); 
+
+    while (fetch_wait_state *w = l->first) {
+      (*w->cb) (data);
+      l->remove (w);
+      delete w;
     }
+
+    pf_waiters.remove (st->ID);
   }
 }

@@ -34,7 +34,7 @@ struct fetch_wait_state {
 
 typedef list<fetch_wait_state, &fetch_wait_state::link> wait_list;
 
-class chord_server  {
+class chord_server {
   cfs_fsinfo fsinfo;
   ptr<sfsro_data> rootdir;
   chordID rootdirID;
@@ -44,8 +44,7 @@ class chord_server  {
   ptr<aclnt> cclnt;
 
   lrucache<chordID, ref<sfsro_data>, hashID> data_cache;
-  qhash<chordID, list<fetch_wait_state, &fetch_wait_state::link>, hashID> pf_waiters;
-
+  qhash<chordID, wait_list, hashID> pf_waiters;
 
   chordID nfsfh_to_chordid (nfs_fh3 *nfh);
   void chordid_to_nfsfh (chordID *n, nfs_fh3 *nfh);
@@ -76,28 +75,27 @@ class chord_server  {
   void read_inode_cb (nfscall *sbp, chordID ID, ptr<sfsro_data> data);
   void read_data_cb (nfscall *sbp, ptr<sfsro_data> inode, chordID inodeID,
 		     ptr<sfsro_data> data);
-
-
+  void ignore_data_cb (ptr<sfsro_data> data);
 
   void lookup(ptr<sfsro_data> dirdata, chordID dirID, str component, cblookup_t cb);
   void lookup_scandir_nextblock(ref<lookup_state> st);
   void lookup_scandir_nextblock_cb(ref<lookup_state> st, ptr<sfsro_data> dat);
   void lookup_component_inode_cb (ref<lookup_state> st, chordID ID, ptr<sfsro_data> data);
 
-  void bmap(size_t block, sfsro_inode_reg *inode, cbbmap_t cb);
-  void bmap_recurse(cbbmap_t cb, unsigned int slotno, chordID ID, bool success);
-  void bmap_recurse_data_cb(cbbmap_t cb, unsigned int slotno, ptr<sfsro_data> dat);
+  void bmap(bool pfonly, size_t block, sfsro_inode_reg *inode, cbbmap_t cb);
+  void bmap_recurse(bool pfonly, cbbmap_t cb, unsigned int slotno, chordID ID, bool success);
+  void bmap_recurse_data_cb(bool pfonly, cbbmap_t cb, unsigned int slotno, ptr<sfsro_data> dat);
 
   void namei (str path, cbnamei_t cb);
   void namei_iter (ref<namei_state> st, ptr<sfsro_data> inode, chordID inodeID);
   void namei_iter_cb (ref<namei_state> st, ptr<sfsro_data> data, chordID dataID, nfsstat3 status);
 
-  void fetch_data (chordID ID, cbfetch_block_t cb);
+  void fetch_data (bool pfonly, chordID ID, cbfetch_block_t cb);
 
-  void read_file_data (size_t block, sfsro_inode_reg *inode, bool pfonly, cbgetdata_t cb);
-  void read_file_data_bmap_cb (cbgetdata_t cb, bool pfonly, chordID ID, bool success);
+  void read_file_data (bool pfonly, size_t block, sfsro_inode_reg *inode, cbgetdata_t cb);
+  void read_file_data_bmap_cb (bool pfonly, cbgetdata_t cb, chordID ID, bool success);
 
-  void getdata (chordID ID, cbgetdata_t cb);
+  void getdata (bool pfonly, chordID ID, cbgetdata_t cb);
   void getdata_initial_cb(ptr<getdata_state> st,
 			    ptr<dhash_res> res, 
 			    clnt_stat err);
@@ -108,10 +106,8 @@ class chord_server  {
   void getdata_finish (ptr<getdata_state> st);
 
 
-
-
-
  public:
+
   void dispatch (ref<nfsserv> ns, nfscall *sbp);
   void setrootfh (str root, cbfh_t cb);
   chord_server (u_int cache_maxsize);
