@@ -101,6 +101,9 @@ ChurnEventGenerator::run()
     if( now() + jointime < _exittime ) {
       P2PEvent *e = New P2PEvent(now() + jointime, _proto, ip, "join", a);
       add_event(e);
+    } else {
+      delete a;
+      a = NULL;
     }
 
     // also schedule their first lookup
@@ -111,6 +114,8 @@ ChurnEventGenerator::run()
       P2PEvent *e = New P2PEvent(now() + jointime + tolookup, _proto, 
 				 ip, "lookup", a);
       add_event(e);
+    } else {
+      delete a;
     }
 
   }
@@ -147,6 +152,8 @@ ChurnEventGenerator::kick(Observed *o, ObserverInfo *oi)
 	add_event(e);
       }
 
+    } else {
+      delete a;
     }
 
   } else if( p2p_observed->type == "crash" ) {
@@ -156,6 +163,8 @@ ChurnEventGenerator::kick(Observed *o, ObserverInfo *oi)
     if( now() + tojoin < _exittime ) {
       P2PEvent *e = New P2PEvent(now() + tojoin, _proto, ip, "join", a);
       add_event(e);
+    } else {
+      delete a;
     }
 
   } else if( p2p_observed->type == "lookup" ) {
@@ -165,8 +174,12 @@ ChurnEventGenerator::kick(Observed *o, ObserverInfo *oi)
     if( now() + tolookup < _exittime ) {
       P2PEvent *e = New P2PEvent(now() + tolookup, _proto, ip, "lookup", a);
       add_event(e);
+    } else {
+      delete a;
     }
 
+  } else {
+    delete a;
   }
 
 }
