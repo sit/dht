@@ -449,7 +449,7 @@ DONE:
     for (uint i = recorded.size()-1; i >= 0; i--) {
       if (last.ip == me.ip) break;
       if (recorded[i].to.ip == last.ip) {
-	printf("(%u,%qx %u) ", recorded[i].to.ip, recorded[i].to.id, (uint)2*t->latency(me.ip, last.ip));
+	printf("(%u,%qx %llu) ", recorded[i].to.ip, recorded[i].to.id, (uint)2*t->latency(me.ip, last.ip));
 	last = recorded[i].from;
 	assert(last.ip <= 1024 && last.ip > 0);
       }
@@ -811,7 +811,8 @@ Chord::next_handler(next_args *args, next_ret *ret)
   } else {
     ret->done = false;
     ret->next = loctable->next_hops(args->key,_alpha);
-    uint nextsz = ret->next.size();
+    // uint nextsz = ret->next.size();
+    ret->next.size();
     assert(ret->next.size()>0);
     assert(ret->next[0].ip != me.ip);
  }
@@ -1427,17 +1428,17 @@ LocTable::succ(ConsistentHash::CHID id, Time *ts)
   uint vsz = v.size();
   if (vsz > 0) {
     return v[0];
-  }else{
-#ifdef CHORD_DEBUG
-    if (id == (me.id + 1)) {
-      idmapwrap *ptr = ring.closestsucc(id);
-      fprintf(stderr,"ring sz %u before %u me %d %qx ptr %u,%qx is_succ %d timestamp %llu\n", size(), before, me.ip,me.id,ptr->n.ip,ptr->n.id,ptr->is_succ?1:0, ptr->timestamp);
-    }
-#endif
-    Chord::IDMap tmp;
-    tmp.ip = 0;
-    return tmp;
   }
+#ifdef CHORD_DEBUG
+
+  if (id == (me.id + 1)) {
+    idmapwrap *ptr = ring.closestsucc(id);
+    fprintf(stderr,"ring sz %u before %u me %d %qx ptr %u,%qx is_succ %d timestamp %llu\n", size(), before, me.ip,me.id,ptr->n.ip,ptr->n.id,ptr->is_succ?1:0, ptr->timestamp);
+  }
+#endif
+  Chord::IDMap tmp;
+  tmp.ip = 0;
+  return tmp;
 }
 
 /* returns m successors including or after the number id
