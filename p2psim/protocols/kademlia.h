@@ -55,7 +55,7 @@ public:
   typedef ConsistentHash::CHID NodeID;
   typedef set<k_nodeinfo*, older> nodeinfo_set;
   Kademlia(Node*, Args);
-  ~Kademlia() {}
+  ~Kademlia();
 
   string proto_name() { return "Kademlia"; }
   virtual void join(Args*);
@@ -146,8 +146,6 @@ public:
   // RPC arguments
   // 
   // {{{ lookup_args and lookup_result
-#define MSG_OVERHEAD
-#define LOOKUP_ARGS_SIZE (4+4+4+MSG_OVERHEAD)
   struct lookup_args {
     lookup_args(NodeID xid, IPAddress xip, NodeID k = 0, bool b = false) :
       id(xid), ip(xip), key(k) {};
@@ -204,8 +202,7 @@ private:
 
   // statistics
   enum stat_type {
-    STAT_JOIN = 0,
-    STAT_LOOKUP,
+    STAT_LOOKUP = 0,
     STAT_SIZE
   };
   vector<unsigned> stat;
