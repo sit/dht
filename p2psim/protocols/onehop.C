@@ -37,6 +37,7 @@
 #define TESTPRINT(me,he,tag) if (me.ip==1159 && he.ip==2047) printf("WUWU now %llu tag %s\n", now(),tag);
 
 #define MAX_IDS_MSG 295
+#define MAX_LOOKUP_TIME 4000
 
 //XXX:Strange bug - delaycb gives join a 0ed argument
 
@@ -89,7 +90,7 @@ OneHop::OneHop(IPAddress i , Args& a) : P2Protocol(i)
   leader_log.clear();
   outer_log.clear();
   _join_complete = false;
-  _retry_timer = 5000;//jy: this does not do anything
+  _retry_timer = 1000;
   prev_slice_leader = false;
   _to_multiplier = 3; //jy  doRPC suffer from timeout if the dst is dead, the min of this value = 3
  // slice_size = 0xffffffffffffffff / _k;   
@@ -138,6 +139,104 @@ OneHop::check_correctness(CHID k, IDMap n)
 }
 
 void
+OneHop::lookup(Args *args)
+{
+  if (!alive()) return;
+
+  lookup_internal_args *la = new lookup_internal_args;
+  la->k = args->nget<CHID>("key");
+  la->start_time = now();
+  la->hops = 0;
+  la->timeouts = 0;
+  la->timeout_lat = 0;
+  lookup_internal(la);
+}
+
+void
+OneHop::lookup_internal(lookup_internal_args *la) 
+{
+
+  if (!alive() || now()-la->start_time > MAX_LOOKUP_TIME) {
+    record_lookup_stat(me.ip, me.ip, now()-la->start_time, false, false,
+	la->hops,la->timeouts,la->timeout_lat);
+    delete la;
+    return;
+  }
+
+  if (!_join_complete) {
+    DEBUG(1) << me.ip << ": failed at time "<<now()<< "coz join is incomplete last_join time " << last_join << endl;
+    delaycb(100, &OneHop::lookup_internal, la);
+    /*
+    record_lookup_stat(me.ip, me.ip, now()-la->start_time, false, false,
+	la->hops,la->timeouts,la->timeout_lat);
+    delete la;
+    */
+    return;
+  }
+
+  //DEBUG(1) << ip() << ":(slice " << slice(id()) << "): Lookup for " << k << "(slice " << slice(k) << ")" << endl;
+  lookup_args a;
+  lookup_ret r;
+  a.key = la->k;
+  a.sender = me;
+
+  IDMap succ_node = me;
+  while ((now()-la->start_time) < MAX_LOOKUP_TIME) {
+    succ_node = loctable->succ(la->k);
+    assert(succ_node.ip);
+
+    record_stat(TYPE_USER_LOOKUP,2);
+    bool ok = doRPC(succ_node.ip,&OneHop::lookup_handler,&a,&r,
+	TIMEOUT(me.ip,succ_node.ip));
+    if (ok) record_stat(TYPE_USER_LOOKUP,r.is_owner?0:1,1);
+
+    if (me.ip!=succ_node.ip)
+      la->hops++;
+
+    if (!alive()) break;
+    if (ok) {
+      if (r.is_owner) {
+	break;
+      }else{
+	loctable->add_node(r.correct_owner);
+      }
+    }else{
+      la->timeouts++;
+      la->timeout_lat += TIMEOUT(me.ip, succ_node.ip);
+      loctable->del_node(succ_node);
+      test_inform_dead_args *aa = new test_inform_dead_args;
+      aa->suspect= succ_node;
+      aa->informed = me;
+      delaycb(0,&OneHop::test_dead_inform,aa);
+    }
+  }
+
+  if (!alive()) {
+    record_lookup_stat(me.ip, me.ip, now()-la->start_time, false, false,
+	la->hops,la->timeouts,la->timeout_lat);
+    delete la;
+    return;
+  }else if (check_correctness(la->k,succ_node)) {
+    record_lookup_stat(me.ip, succ_node.ip, now()-la->start_time, true, true,
+	la->hops,la->timeouts,la->timeout_lat);
+    delete la;
+    return;
+  }else{
+    /*
+    record_lookup_stat(me.ip, succ_node.ip, now()-la->start_time, true, false,
+	la->hops,la->timeouts,la->timeout_lat);
+    delete la;
+    return;
+    */
+    delaycb(100,&OneHop::lookup_internal, la);
+  }
+}
+
+
+/* anjali's old lookup procedure
+   it only tries two hops and declare failure
+   why not try more hops?? 
+void
 OneHop::lookup(Args *args) {
   if (!alive()) return;
   if (!_join_complete) {
@@ -175,13 +274,6 @@ OneHop::lookup(Args *args) {
     two_failed++;
     if (same) same_failed++;
     DEBUG(5) << ip() << ":Lookup failed due to dead node "<< succ_node.ip << endl;
-    /*
-    if (me.id != succ_node.id)
-    loctable->del_node(succ_node);
-    LogEntry *e = new LogEntry(succ_node, DEAD, now());
-    leader_log.push_back(*e);
-    delete e;
-    */
     IDMap *n = new IDMap();
     *n = succ_node;
     assert(n->ip>0);
@@ -195,14 +287,6 @@ OneHop::lookup(Args *args) {
     
     lookup_bandwidth += 24;
     if (!ok) {
-      /*
-      if (me.id != succ_node.id)
-      loctable->del_node(succ_node);
-      LogEntry *e = new LogEntry(succ_node, DEAD, now());
-      leader_log.push_back(*e);
-      record_lookup_stat(me.ip, succ_node.ip, now()-before0, false, false, 2, 2, now()-before0);
-      delete e;
-      */
       IDMap *nn = new IDMap;
       *nn = succ_node;
       assert(nn->ip>0);
@@ -242,10 +326,6 @@ OneHop::lookup(Args *args) {
 	else
 	  record_lookup_stat(me.ip, corr_owner.ip, now()-before0, false, false, 2, 0, 0); //jy: record lookup stat
       }else if (!ok) {
-	/*
-       if (me.id != succ_node.id)
-	 loctable->del_node(corr_owner);
-	 */
 	record_lookup_stat(me.ip, corr_owner.ip, now()-before0, false, false, 2, 1, now()-before1); //jy: record lookup stat
       }else { //ok && !r.is_owner
 	record_lookup_stat(me.ip, corr_owner.ip, now()-before0, false, false, 2, 0, 0); //jy: record lookup stat
@@ -260,6 +340,7 @@ OneHop::lookup(Args *args) {
 LOOKUP_DONE:
   delete a;
 }
+*/
 
 void 
 OneHop::lookup_handler(lookup_args *a, lookup_ret *r) {
@@ -288,22 +369,15 @@ OneHop::join(Args *args)
   me.ip = ip();
   me.id = ConsistentHash::ip2chid(me.ip);
   OneHopObserver::Instance(NULL)->addnode(me); //jy
-
-  //the first node will start off a statistics publishing process
-  if (!alive())
-    return;
+  last_join = now();
+  assert(alive());
+  //jy: get a random alive node from observer
   IDMap wkn;
-  if (args) {
-    wkn.ip = args->nget<IPAddress>("wellknown");
-    _wkn.ip = wkn.ip;
-  }
-  else 
-    wkn.ip = _wkn.ip;
-
-  assert(wkn.ip);
-  wkn.id = ConsistentHash::ip2chid(wkn.ip);
-
-  DEBUG(1) << "ip " << me.ip << " id "<< me.id << " joined at time " << now() << " loc " << loctable->size() << endl;
+  wkn.ip = me.ip;
+  while (wkn.ip == me.ip)
+    wkn = OneHopObserver::Instance(NULL)->get_rand_alive_node();
+  
+  DEBUG(1) << me.ip << ": id "<< me.id << " start to join at time " << now() << " wkn " << wkn.ip << endl;
   loctable->init(me);
 
   if (args && args->nget<uint>("first",0,10)==1) { //jy: a dirty hack, one hop does not like many nodes join at once
@@ -405,7 +479,7 @@ OneHop::crash(Args *args)
 }
 
 void
-OneHop::join_leader (IDMap la, IDMap sender, Args *args) {
+OneHop::join_leader(IDMap la, IDMap sender, Args *args) {
 
   IPAddress leader_ip = la.ip;
   DEBUG(1) << ip() <<":Trying to join " << leader_ip << " as " << id() << " in slice " << slice(id()) << " at time " << now() << endl; 
@@ -417,13 +491,14 @@ OneHop::join_leader (IDMap la, IDMap sender, Args *args) {
 
   //send mesg to node, if it is slice leader will respond with
   //routing table, else will respond with correct slice leader
-  bool ok = fd_xRPC (leader_ip, &OneHop::join_handler, &ja, jr, 
-      ONEHOP_JOIN_LOOKUP,2);
+  record_stat( ONEHOP_JOIN_LOOKUP,1);
+  bool ok = doRPC (leader_ip, &OneHop::join_handler, &ja, jr, 
+      TIMEOUT(me.ip,leader_ip));
   if (ok) record_stat(ONEHOP_JOIN_LOOKUP,jr->table.size(),1);
 
   if (!alive()) return;
   bool tmpok = false;
-  if (!jr->is_join_complete) {
+  if (ok && !jr->is_join_complete) {
     DEBUG(5) << ip() << ":" << leader_ip << " is still in the join process\n"; 
     ok = false;
     tmpok = true;
@@ -462,20 +537,21 @@ OneHop::join_leader (IDMap la, IDMap sender, Args *args) {
     if (!tmpok) {
       DEBUG(5) << ip() << ":" << leader_ip << "failed, repeating.\n"; 
       DEBUG(5) << ip() << ":" << "Informing " << sender.ip << " that " << leader_ip << " has failed\n";
-      dead_ok = inform_dead (la, sender);
+
+      //dead_ok = inform_dead (la, sender);
+      test_inform_dead_args *aa = new test_inform_dead_args;
+      aa->suspect = la;
+      aa->informed = sender;
+      delaycb(0,&OneHop::test_dead_inform,aa);
+      if (dead_ok) {
+	DEBUG(5) << ip() << ":Inform successful\n";
+	join(args);
+      }
     }
-    if (dead_ok) {
-      DEBUG(5) << ip() << ":Inform successful\n";
-      join(args);
-    }
-    /*
     else {
       DEBUG(1) << ip() << ":No inform or inform not successful, rescheduling join\n";
-
-      DEBUG(1) << ip() << ":Inside wkn.ip = " << args->nget<IPAddress>("wellknown") << endl;
-      //delaycb (_retry_timer, &OneHop::join, (Args *)0);
+      delaycb (_retry_timer, &OneHop::join, (Args *)0);
     }
-    */
   }
   delete jr;
 }
@@ -1242,20 +1318,24 @@ OneHop::notify_unit_leaders(notifyevent_args *args, general_ret *ret)
 }
 
 void
-OneHop::test_dead(IDMap *suspect)
+OneHop::test_dead_inform(test_inform_dead_args *a)
 {
-  bool ok = fd_xRPC (suspect->ip, &OneHop::test_dead_handler, (void *)NULL, (void *)NULL,
-      ONEHOP_INFORMDEAD,0);
+  bool ok = fd_xRPC (a->suspect.ip, &OneHop::test_dead_handler, 
+      (void *)NULL, (void *)NULL, ONEHOP_INFORMDEAD,0);
   if (ok) {
     record_stat(ONEHOP_INFORMDEAD,0);
-    delete suspect;
+    loctable->add_node(a->suspect);
+    delete a;
     return;
   }
-  loctable->del_node(*suspect);
-  LogEntry *e = new LogEntry(*suspect, DEAD, now());
-  leader_log.push_back(*e);
-  delete e;
-  delete suspect;
+
+  inform_dead_args ia;
+  ia.ip = a->suspect.ip;
+  ia.key = a->suspect.id;
+  ok = fd_xRPC(a->informed.ip,&OneHop::inform_dead_handler,
+      &ia, (void *)NULL, ONEHOP_INFORMDEAD,1);
+  if ((ok)&&(a->informed.ip!=me.ip)) record_stat(ONEHOP_INFORMDEAD);
+  delete a;
 }
 
 void

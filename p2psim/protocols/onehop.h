@@ -169,6 +169,11 @@ public:
 
   typedef join_leader_args inform_dead_args;
   
+  struct test_inform_dead_args {
+    IDMap informed;
+    IDMap suspect;
+  };
+  
   struct notifyevent_args {
     vector<LogEntry> log;
     IDMap sender;
@@ -185,6 +190,13 @@ public:
     IDMap correct_owner;
   };
 
+  struct lookup_internal_args {
+    CHID k;
+    uint hops;
+    Time start_time;
+    Time timeout_lat;
+    uint timeouts;
+  };
   OneHop(IPAddress i, Args& a);
   ~OneHop();
   string proto_name() { return "OneHop";}
@@ -199,6 +211,7 @@ public:
   virtual void insert(Args*) {};
   virtual void nodeevent (Args *) {};
 
+  void lookup_internal(lookup_internal_args *);
   bool check_correctness(CHID k, IDMap n);
   void join_leader (IDMap la, IDMap sender, Args *args);
   void join_handler (join_leader_args *args, join_leader_ret *ret);
@@ -207,7 +220,7 @@ public:
   //period_keepalive which comes first
   void stabilize (void *x);
   void leader_stabilize (void *x);
-  void test_dead(IDMap *x); //jy
+  void test_dead_inform(test_inform_dead_args *x); //jy
   void test_dead_handler(void *, void *);
   int num_nbrs;
   int* nbr_log_ptrs;
@@ -237,7 +250,8 @@ public:
     Time retry_to = TIMEOUT(me.ip,dst);
     uint checks = 1;
     while (checks < FAILURE_DETECT_RETRY) {
-      record_stat(type,num_args_id,num_args_else);
+      if (me.ip!=dst)
+	record_stat(type,num_args_id,num_args_else);
       r = doRPC(dst, fn, args, ret, retry_to);
       if (r) {
 	return true;
@@ -303,6 +317,7 @@ protected:
   bool sent_high;
   ConsistentHash::CHID slice_size;
   IDMap _wkn;
+  Time last_join;
 };
 
 #endif /* __ONEHOP_H */
