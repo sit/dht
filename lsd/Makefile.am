@@ -1,7 +1,7 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.13 2002/04/18 17:56:17 fdabek Exp $
+# $Id: Makefile.am,v 1.14 2002/10/23 20:48:25 fdabek Exp $
 
-$(PROGRAMS): $(LDEPS) $(DBLIB)
+$(PROGRAMS): $(LDEPS) $(DBDEPS)
 
 bin_PROGRAMS = lsd
 
