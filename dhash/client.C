@@ -69,15 +69,28 @@ protected:
   int nextblock;
   int numblocks;
   vec<long> seqnos;
+  bool got_storecb;
+
+  void done ()
+  {
+    if (got_storecb && npending == 0) {
+      (*cb) (status, destID);
+      delete this;
+    }
+  }
 
   void storecb_cb (s_dhash_storecb_arg *arg)
   {
+    got_storecb = true;
+
     // warn << "STORECB_CB " << nonce << "\n";
-    if (arg->status)
-      (*cb) (arg->status, destID);
-    else
-      (*cb) (DHASH_OK, destID);
-    delete this;
+    if (arg->status) {
+      if (!error)
+	status = arg->status;
+      error = true;
+    }
+
+    done ();
   }
 
   dhash_store (ptr<vnode> clntnode, chordID destID, chordID blockID,
@@ -108,6 +121,9 @@ protected:
     nextblock = 0;
     numblocks = 0;
     int blockno = 0;
+    got_storecb = true;
+    if (store_type == DHASH_STORE)
+      got_storecb = false;
     
     size_t nstored = 0;
     while (nstored < block->len) {
@@ -129,20 +145,27 @@ protected:
 
     if (err) {
       error = true;
+      got_storecb = true;
       warn << "dhash_store failed: " << blockID << ": RPC error" << "\n";
-    } else if (res->status != DHASH_OK) {
+    } 
+    else if (res->status != DHASH_OK) {
       if (res->status == DHASH_RETRY) {
 	predID = res->pred->p.x;
 	pred_addr = res->pred->p.r;
-      } else if (res->status != DHASH_WAIT)
+      }
+      else if (res->status != DHASH_WAIT)
         warn << "dhash_store failed: " << blockID << ": "
 	     << dhasherr2str(res->status) << "\n";
       if (!error)
 	status = res->status;
       error = true;
-    } else { 
+      got_storecb = true;
+    }
+    else { 
       if ((num > nextblock) && (numblocks - num > 1)) {
-	warn << "(store) FAST retransmit: " << blockID << " got " << num << " chunk " << nextblock << " of " << numblocks << " being retransmitted\n";
+	warn << "(store) FAST retransmit: " << blockID << " got " 
+	     << num << " chunk " << nextblock << " of " << numblocks 
+	     << " being retransmitted\n";
 	clntnode->resendRPC(seqnos[nextblock]);
 	//only one per fetch; finding more is too much bookkeeping
 	numblocks = -1;
@@ -152,15 +175,13 @@ protected:
 
     if (npending == 0) {
       if (status == DHASH_RETRY) {
+	npending ++;
 	clntnode->locations->cacheloc (predID, pred_addr, 
 				       wrap (this, 
 					     &dhash_store::retry_cachedloc));
-      } else {
-	if (error || store_type != DHASH_STORE) {
-	  (*cb) (status, destID);
-	  delete this;
-	}
       }
+      else
+	done ();
     }
   }
 
@@ -183,23 +204,27 @@ protected:
     arg->last    = last;
     
     
-    long rexmitid = clntnode->doRPC (destID, dhash_program_1, DHASHPROC_STORE, arg, res,
-				     wrap (this, &dhash_store::finish, res, num));
+    long rexmitid = clntnode->doRPC
+      (destID, dhash_program_1, DHASHPROC_STORE, arg, res,
+       wrap (this, &dhash_store::finish, res, num));
     seqnos.push_back (rexmitid);
   }
   
   void retry_cachedloc (chordID id, bool ok, chordstat stat) 
   {
+    npending --;
     if (!ok || stat) {
       warn << "challenge of " << id << " failed\n";
       (*cb) (DHASH_CHORDERR, destID);
       delete this;
-    } else {
+    }
+    else {
       num_retries++;
       if (num_retries > 2) {
 	(*cb)(DHASH_RETRY, destID);
 	delete this;
-      } else {
+      }
+      else {
 	warn << "retrying(" << num_retries << "): dest was " 
 	     << destID << " now is " << predID << "\n";
 	destID = predID;

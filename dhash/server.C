@@ -40,11 +40,12 @@
 
 #include <merkle_sync_prot.h>
 static int MERKLE_ENABLED = getenv("MERKLE_ENABLED") ? atoi(getenv("MERKLE_ENABLED")) : 1;
+static int PARTITION_ENABLED = getenv("PARTITION_ENABLED") ? atoi(getenv("PARTITION_ENABLED")) : 0;
 static int REPLICATE      = getenv("REPLICATE") ? atoi(getenv("REPLICATE")) : 1;
 
 #define SYNCTM 30
 #define REPTM 10
-#define PRTTM 10
+#define PRTTM 5
 
 #define LEASE_TIME 2
 #define LEASE_INACTIVE 60
@@ -184,8 +185,10 @@ dhash::dhash(str dbname, ptr<vnode> node,
   delaycb (SYNCTM, wrap (this, &dhash::sync_cb));
 
   if (MERKLE_ENABLED) {
-    merkle_tcb = delaycb (REPTM, wrap (this, &dhash::replica_maintenance_timer, 0));
-    // delaycb (PRTTM, wrap (this, &dhash::partition_maintenance_timer));
+    merkle_tcb =
+      delaycb (REPTM, wrap (this, &dhash::replica_maintenance_timer, 0));
+    if (PARTITION_ENABLED)
+      delaycb (PRTTM, wrap (this, &dhash::partition_maintenance_timer));
   } else {
     install_replica_timer ();
     transfer_initial_keys ();
@@ -252,19 +255,23 @@ dhash::replica_maintenance_timer (u_int index)
 
       if (replica_syncer) {
 	assert (replica_syncer->done());
-	assert (*active_syncers[replica_syncer_dstID] == replica_syncer);
-	active_syncers.remove (replica_syncer_dstID);
+	assert (*active_bi_syncers[replica_syncer_dstID] == replica_syncer);
+	active_bi_syncers.remove (replica_syncer_dstID);
       }
 
-      if (active_syncers[replicaID])
-	fatal << "Strange: already syncing with " << replicaID << "\n";
+      if (active_bi_syncers[replicaID])
+	fatal << "strange: already syncing with " << replicaID << "\n";
+      else if (active_uni_syncers[replicaID]) {
+        warn << "change uni to bi sync\n";
+	active_uni_syncers.remove (replicaID);
+      }
 
       replica_syncer_dstID = replicaID;
       replica_syncer = New refcounted<merkle_syncer> 
 	(mtree, 
 	 wrap (this, &dhash::doRPC_unbundler, replicaID),
 	 wrap (this, &dhash::sendblock, replicaID));
-      active_syncers.insert (replicaID, replica_syncer);
+      active_bi_syncers.insert (replicaID, replica_syncer);
       
       bigint rngmin = host_node->my_pred ();
       bigint rngmax = host_node->my_ID ();
@@ -300,7 +307,9 @@ dhash::replica_maintenance_timer (u_int index)
 void
 dhash::partition_maintenance_timer ()
 {
-  warn << "\n** dhash::partition_maintenance_timer ()\n";
+#if 0
+  warn << "** dhash::partition_maintenance_timer ()\n";
+#endif
 
   update_replica_list ();
 
@@ -308,8 +317,9 @@ dhash::partition_maintenance_timer ()
     // create a syncer when there is none or the existing one is done
     if (partition_syncer) {
       assert (partition_syncer->done());
-      assert (*active_syncers[partition_right] == partition_syncer);
-      active_syncers.remove (partition_right);
+      assert (active_uni_syncers[partition_right] == 0 ||
+              *active_uni_syncers[partition_right] == partition_syncer);
+      active_uni_syncers.remove (partition_right);
     }
 
     // handles initial condition (-1) and key space wrap around..
@@ -322,7 +332,9 @@ dhash::partition_maintenance_timer ()
     if (d) {
       partition_left = dbrec2id(d->key);
       partition_right = -1;
-      cli->lookup (partition_left, true, wrap (this, &dhash::partition_maintenance_lookup_cb));
+      cli->lookup
+	(partition_left, true,
+	 wrap (this, &dhash::partition_maintenance_lookup_cb));
       return;
     } else {
       // database must be empty 
@@ -344,13 +356,15 @@ dhash::partition_maintenance_lookup_cb (dhash_stat err, chordID hostID)
     delaycb (PRTTM, wrap (this, &dhash::partition_maintenance_timer));
   } else {
     partition_right = hostID;
-    host_node->get_predecessor (hostID, wrap (this, &dhash::partition_maintenance_pred_cb));
+    host_node->get_predecessor
+      (hostID, wrap (this, &dhash::partition_maintenance_pred_cb));
   }
 }
 
 
 void
-dhash::partition_maintenance_pred_cb (chordID predID, net_address addr, chordstat status)
+dhash::partition_maintenance_pred_cb (chordID predID, net_address addr,
+                                      chordstat status)
 {
   if (status) {
     warn << "dhash::partition_maintenance_pred_cb status " << status << "\n";
@@ -360,17 +374,23 @@ dhash::partition_maintenance_pred_cb (chordID predID, net_address addr, chordsta
     //   but we sync the range  [partition_left, partition_right]
     partition_left = incID(predID);
 
-    if (active_syncers[partition_right])
-      warn << "Strange: already syncing with " << partition_right << "\n";
-    else {    
+    if (active_uni_syncers[partition_right] ||
+	active_bi_syncers[partition_right]) {
+      // warn << "Strange: already syncing with " << partition_right << "\n";
+    }
+    else {
       partition_syncer = New refcounted<merkle_syncer> 
 	(mtree, 
 	 wrap (this, &dhash::doRPC_unbundler, partition_right),
 	 wrap (this, &dhash::sendblock, partition_right));
-      active_syncers.insert (partition_right, partition_syncer);
+      active_uni_syncers.insert (partition_right, partition_syncer);
       
-      warn << "uniSYNC range [" << partition_left << ", " << partition_right << "]\n";
-      partition_syncer->sync (partition_left, partition_right, merkle_syncer::UNIDIRECTIONAL);
+#if 0
+      warn << "uniSYNC range [" 
+	   << partition_left << ", " << partition_right << "]\n";
+#endif
+      partition_syncer->sync
+	(partition_left, partition_right, merkle_syncer::UNIDIRECTIONAL);
     }
   }
 
@@ -382,7 +402,7 @@ dhash::partition_maintenance_pred_cb (chordID predID, net_address addr, chordsta
 void 
 dhash::sync_cb () 
 {
-  //warn << "** SYNC\n";
+  // warn << "** SYNC\n";
   db->sync ();
 
   // benjie: remove stale entries from the lease table
@@ -1102,11 +1122,14 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
     ref<dbrec> k = id2dbrec(arg->key);
     ref<dbrec> d = New refcounted<dbrec> (ss->buf, ss->size);
 
-    if (active_syncers[arg->srcID]) {
-      ptr<merkle_syncer> syncer = *active_syncers[arg->srcID];
+    if (active_bi_syncers[arg->srcID]) {
+      ptr<merkle_syncer> syncer = *active_bi_syncers[arg->srcID];
       syncer->recvblk (arg->key, arg->last);
     }
-
+    else if (active_uni_syncers[arg->srcID]) {
+      ptr<merkle_syncer> syncer = *active_uni_syncers[arg->srcID];
+      syncer->recvblk (arg->key, arg->last);
+    }
 
     dhash_ctype ctype = block_type (d);
 

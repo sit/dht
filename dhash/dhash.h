@@ -184,7 +184,8 @@ class dhash {
 
   merkle_server *msrv;
   merkle_tree *mtree;
-  qhash<chordID, ptr<merkle_syncer>, hashID> active_syncers;
+  qhash<chordID, ptr<merkle_syncer>, hashID> active_bi_syncers;
+  qhash<chordID, ptr<merkle_syncer>, hashID> active_uni_syncers;
 
   chordID replica_syncer_dstID;
   ptr<merkle_syncer> replica_syncer;
