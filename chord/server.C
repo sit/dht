@@ -319,7 +319,7 @@ user_args::fill_from (chord_node *from)
   if (sa) {
     from->r.hostname = inet_ntoa (sa->sin_addr);
     from->r.port = t_arg->src_port;
-    from->vnode_num = myindex;
+    from->vnode_num = t_arg->src_vnode_num;
   } else {
     // connected sockets don't have the addr field set in the sbp, so
     // we have to dig harder
@@ -339,7 +339,7 @@ user_args::fill_from (chord_node *from)
       if (getpeername (fd, (sockaddr *) &sin, &sinlen) == 0) {
         from->r.hostname = inet_ntoa (sin.sin_addr);
         from->r.port = t_arg->src_port;
-        from->vnode_num = myindex;
+        from->vnode_num = t_arg->src_vnode_num;
 	hasname = true;
       }
     }
