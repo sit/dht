@@ -1,6 +1,6 @@
-net: 1024,Euclidean,random 100 100,Node,Koorde
+net: 1024,Euclidean,random 100 100,Node,ChordFinger
 event: 1,join,wellknown=1
 events: 1023,100,50,linear,join,wellknown=1
-observe: 100000,ChordObserver,reschedule=10000,type=Koorde,initnodes=1023
-events: 100,110000,2000,constant,lookup,
-simulator 200000 exit
+observe: 5000,ChordObserver,reschedule=5000,type=ChordFinger
+events: 100,450000,2000,constant,lookup,
+simulator 800000 exit

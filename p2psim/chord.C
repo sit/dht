@@ -195,7 +195,7 @@ Chord::join(Args *args)
          after - before);
   loctable->add_node(fr.v[0]);
 
-  //reschedule_stabilizer(NULL);
+  reschedule_stabilizer(NULL);
 }
 
 void
@@ -379,31 +379,23 @@ Chord::crash(Args *args)
 /*************** LocTable ***********************/
 
 LocTable::LocTable(Chord::IDMap me) {
+
+  myid = me.id;
   pin(me.id, 1, 0);
-  ring.push_back (me); //ring[0] is always me
+  idmapwrap *elm = new idmapwrap(me);
+
+  ring.insert(elm);
+  rsz = 1;
 } 
-
-uint
-LocTable::findsuccessor (ConsistentHash::CHID x)
-{
-  uint r = 0;
-  for (uint i = 0; i < ring.size(); i++) {
-    if (ConsistentHash::betweenrightincl(ring[0].id, ring[i].id, x)) {
-      r = i;
-      break;
-    }
-  }
-  // printf ("ring: findsuccessor %16qx is ring %d %16qx\n", x, r, ring[r].id);
-  return r;
-}
-
 
 //get the succ node including or after this id 
 Chord::IDMap
 LocTable::succ(ConsistentHash::CHID id)
 {
-  uint i = findsuccessor (id);
-  return ring[i];
+  idmapwrap *elm;
+  elm = ring.closestsucc(id);
+  assert(elm);
+  return elm->n;
 }
 
 /* returns m successors including or after the number id*/
@@ -414,10 +406,15 @@ LocTable::succs(ConsistentHash::CHID id, unsigned int m)
   v.clear();
 
   if (m <= 0) return v;
-  uint i = findsuccessor (id);
-  m = (m > ring.size ()) ? ring.size () : m;
+  idmapwrap *elm = ring.closestsucc(id);
+  idmapwrap *ptr = elm;
   for (uint j = 0; j < m; j++) {
-    v.push_back(ring[(i + j) % ring.size ()]);
+    v.push_back(ptr->n);
+    ptr = ring.next(ptr);
+    if (ptr == elm) break; //if the ring does not have m elements
+    if (!ptr) {
+      ptr = ring.first(); //wrap around
+    }
   }
   return v;
 }
@@ -425,27 +422,29 @@ LocTable::succs(ConsistentHash::CHID id, unsigned int m)
 Chord::IDMap
 LocTable::pred()
 {
-  Chord::IDMap pred = ring.back();
-  return pred;
+  return pred(myid-1);
 }
 
 Chord::IDMap
-LocTable::pred(Chord::CHID n) {
-  uint i = findsuccessor (n);
-  Chord::IDMap p;
-  if (i == 0) p = ring.back ();
-  else p = ring[i-1];
-  return p;
+LocTable::pred(Chord::CHID id) 
+{
+  idmapwrap *elm = ring.closestpred(id);
+  assert(elm);
+  return elm->n;
 }
 
 void
 LocTable::print ()
 {
+  idmapwrap *me = ring.search(myid);
+  assert(me);
   printf ("ring:\n");
-  for (uint i = 0; i < ring.size (); i++) {
-    printf ("  %5u,%16qx\n", ring[i].ip, ring[i].id);
-
-  }
+  idmapwrap *i = me;
+  do {
+    printf ("  %5u,%16qx\n", i->n.ip, i->n.id);
+    i = ring.next(i);
+    if (!i) i = ring.first();
+  }while (i != me);
 }
 
 /* adds a list of nodes, sorted by increasing CHIDs
@@ -491,39 +490,35 @@ LocTable::add_sortednodes(vector<Chord::IDMap> l)
 void
 LocTable::add_node(Chord::IDMap n)
 {
-  Chord::IDMap succ1 = (vis == true) ? succ(ring[0].id + 1) : ring[0];
-  Chord::IDMap pred1 = (vis == true) ? pred () : ring[0];
+  Chord::IDMap succ1; 
+  Chord::IDMap pred1; 
 
-  if (ring.size () == 0) {
-    ring.push_back (n);
-  } else {
-    uint i = findsuccessor (n.id);
-    if (ring[i].id != n.id) {
-      if ((ring.size () == 1) || (i == 0)) {
-	ring.push_back (n);
-      } else {
-        ring.insert(ring.begin() + i, n);
-      }
-    }
+  if (vis) {
+    succ1 = succ(myid+1);
+    pred1 = pred();
   }
 
-  assert ((pinlist.size () == 0) || (ring[0].id == pinlist[0].id));
+  idmapwrap *elm = new idmapwrap(n);
+  if (ring.insert(elm)) {
+    rsz++; //no n existed in ring before, ring_sz increases
+  }
+  assert (ring.repok ());
 
-  if (ring.size() > _max) {
+  if (rsz > _max) {
     evict();
-    assert(ring.size() <= _max);
+    assert(rsz <= _max);
   }
 
-  Chord::IDMap succ2 = succ(ring[0].id + 1);
+  Chord::IDMap succ2 = succ(myid + 1);
   Chord::IDMap pred2 = pred ();
 
   if (vis) {
     if(succ1.id != succ2.id) {
-      printf("vis %llu succ %16qx %16qx\n", now (), ring[0].id, succ2.id);
+      printf("vis %llu succ %16qx %16qx\n", now (), myid, succ2.id);
     }
 
     if(pred1.id != pred2.id) {
-      printf("vis %llu pred %16qx %16qx\n", now (), ring[0].id, pred2.id);
+      printf("vis %llu pred %16qx %16qx\n", now (), myid, pred2.id);
     }
   }
 }
@@ -531,12 +526,12 @@ LocTable::add_node(Chord::IDMap n)
 void
 LocTable::del_node(Chord::IDMap n)
 {
-  for (unsigned int i = 0; i < ring.size(); i++) {
-    if (ring[i].id == n.id) {
-      ring.erase(ring.begin() + i); //STL will shift rest of elments leftwise
-      break;
-    }
-  }
+  idmapwrap *elm = ring.search(n.id);
+  assert(elm); //just a check
+  elm = ring.remove(n.id);
+  delete elm;
+  rsz--;
+  assert (ring.repok ());
 }
 
 void
@@ -546,7 +541,6 @@ LocTable::clear_pins()
   for (uint i = 0; i < (sz -1); i++) {
     pinlist.pop_back();
   }
-  assert(pinlist[0].id == ring[0].id);
 }
 
 // pin maintains sorted list of id's that must be pinned
@@ -565,8 +559,6 @@ LocTable::pin(Chord::CHID x, uint pin_succ, uint pin_pred)
     pinlist.push_back(pe);
     return;
   }
-
-  assert (pinlist[0].id == ring[0].id);
 
   uint i = 0;
   for (; i < pinlist.size(); i++) {
@@ -588,64 +580,89 @@ LocTable::pin(Chord::CHID x, uint pin_succ, uint pin_pred)
       pinlist.insert(pinlist.begin() + i, pe);
     }
   }
-
-  assert (pinlist[0].id == ring[0].id);
   assert(pinlist.size() <= _max);
 }
 
+uint
+LocTable::size()
+{
+  idmapwrap *elm = ring.first();
+  uint sz = 0;
+  while (elm) {
+    sz++;
+    elm = ring.next(elm);
+  }
+  return sz;
+}
 
 void
 LocTable::evict() // all unnecessary(unpinned) nodes 
 {
   assert(pinlist.size() <= _max);
   assert(pinlist.size() > 0);
-  assert(pinlist[0].id == ring[0].id);
 
-  vector<bool> pinned; 
+  assert(rsz == size());
 
-  for (unsigned int i = 0; i < ring.size (); i++) {
-    pinned.push_back(false);
+  idmapwrap *ptr;
+  idmapwrap *elm = ring.first();
+  for (uint i = 0; i < rsz; i++) {
+    elm->pinned = false;
+    elm = ring.next(elm);
   }
+  assert(elm == NULL);
 
   uint i = 0; // index into pinlist
-  uint j = 0; // index into ring
+
+  elm = ring.first();
   while (i < pinlist.size ()) {
 
     //    printf ("pin %d %16qx %d %d\n", i, pinlist[i].id, pinlist[i].pin_succ,
     //    pinlist[i].pin_pred);
-
     // find successor of pinlist[i]. XXX don't start at j, but where we left off
-    for ( ; j < ring.size (); j++) {
-      if (ConsistentHash::betweenrightincl(ring[0].id, ring[j].id, 
-					   pinlist[i].id))
-	break;
+    while (elm && elm->id < pinlist[i].id) {
+      elm = ring.next(elm);
     }
-    if (j == ring.size ()) j = 0;
+    if (elm && elm->id > pinlist[i].id ) {
+      ptr = ring.prev(elm);
+    }else {
+      ptr = elm;
+    }
 
     // pin the predecessors
-    for (unsigned int k = 0; k < pinlist[i].pin_pred; k++) {
-      int v =  j - 1 - k;
-      int p =  (v > 0) ? v : (v + ring.size ());
-      pinned[p] = true;
+    for (uint k = 0; k < pinlist[i].pin_pred; k++) {
+      if (!ptr) ptr = ring.last();
+      ptr->pinned = true;
+      ptr = ring.prev(ptr);
     }
 
+    ptr = elm;
     // pin the successors, starting with j
-    for (unsigned int k = 0; k < pinlist[i].pin_succ; k++) {
-      pinned[(j + k) % ring.size ()] = true;
+    for (uint k = 0; k < pinlist[i].pin_succ; k++) {
+      if (!ptr) ptr = ring.first();
+      ptr->pinned = true;
+      ptr = ring.next(ptr);
     }
-
     i++;
   }
-
   // evict entries that are not pinned
-  j = 0;
-  for (uint i = 0; i < pinned.size (); i++) {
-    if (!pinned[i]) {
-      ring.erase(ring.begin() + j);
-    } else {
-      j++;
-    }
+  assert(rsz == size());
+  elm = ring.first();
+  idmapwrap *next; 
+  while (elm) {
+    next = ring.next(elm);
+    if (elm->pinned) {
+      elm->pinned = false;
+    }else{
+      ring.remove(elm->id);
+      delete elm;
+      assert (ring.repok ());
+      rsz--;
+    } 
+    elm = next;
   }
-  assert(ring.size() <= _max);
+
+  uint tmpsz = size();
+  assert(tmpsz == rsz);
+  assert(elm == NULL);
 }
 

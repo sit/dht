@@ -9,6 +9,7 @@ class ChordFinger: public Chord {
   public:
     ChordFinger(Node *n, uint base, uint successors, uint maxf);
     ~ChordFinger() {};
+    string proto_name() { return "ChordFinger"; }
 
     void stabilize();
     bool stabilized(vector<CHID> lid);

@@ -3,12 +3,12 @@
 
 #include "dhtprotocol.h"
 #include "consistenthash.h"
+#include "../utils/skiplist.h"
 
 #include <vector>
 
 #define CHORD_SUCC_NUM 3  // default number of successors maintained
 #define STABLE_TIMER 500
-#define PAD "000000000000000000000000"
 #define CHORD_DEBUG
 
 #include "p2psim.h"
@@ -18,10 +18,6 @@ class LocTable;
 class Chord : public DHTProtocol {
 public:
   typedef ConsistentHash::CHID CHID;
-  /*
-  static int cmp_idmap(const IDMap a, const IDMap b) {
-    return a.id - b.id;
-  }*/
 
   class IDMap{
     public:
@@ -133,6 +129,26 @@ class LocTable {
 
   public:
 
+    struct idmapwrap {
+      Chord::IDMap n;
+      ConsistentHash::CHID id;
+      sklist_entry<idmapwrap> sortlink_;
+      bool pinned;
+      idmapwrap(Chord::IDMap x) {
+	n.ip = x.ip;
+	n.id = x.id;
+	id = x.id;
+	pinned = false;
+      }
+    };
+
+    struct idmapcompare{
+      idmapcompare() {}
+      int operator() (ConsistentHash::CHID a, ConsistentHash::CHID b) const
+      { return a < b ? -1 : b < a; }
+    };
+
+
     LocTable(Chord::IDMap me);
     ~LocTable() {};
 
@@ -148,16 +164,17 @@ class LocTable {
     void del_node(Chord::IDMap n);
     void notify(Chord::IDMap n);
     void pin(Chord::CHID x, uint pin_succ, uint pin_pred);
-    unsigned int size() { return ring.size();}
     void clear_pins();
+    uint size();
     unsigned int psize() { return pinlist.size();}
 
   private:
-    vector<Chord::IDMap> ring;
+    skiplist<idmapwrap, ConsistentHash::CHID, &idmapwrap::id, &idmapwrap::sortlink_, idmapcompare> ring;
+    ConsistentHash::CHID myid;
     vector<pin_entry> pinlist;
     unsigned int _max;
+    unsigned int rsz;
 
-    uint findsuccessor (ConsistentHash::CHID x);
     void evict(); //evict one node to make sure ring contains <= _max elements
 };
 
