@@ -326,20 +326,21 @@ dhashclient::insertcb (cbinsertgw_t cb, bigint key,
   if (err) {
     errstr = strbuf () << "rpc error " << err;
     warn << "1dhashclient::insert failed: " << key << ": " << errstr << "\n";
+    (*cb) (DHASH_RPCERR, i); //RPC failure
+  } else {
+    if (res->status != DHASH_OK) {
+      errstr = dhasherr2str (res->status);
+      if (res->status != DHASH_WAIT)
+	warn << "2dhashclient::insert failed: " << key 
+	     << ": " << errstr << "\n";
+    }
+    else {
+      //if I wanted to pass back the destID do this:
+      // (*cb) (false, key, res->resok->destID);
+      i->destID = res->resok->destID;
+    }
+    (*cb) (res->status, i); 
   }
-  else if (res->status != DHASH_OK) {
-    errstr = dhasherr2str (res->status);
-    if (res->status != DHASH_WAIT)
-      warn << "2dhashclient::insert failed: " << key << ": " << errstr << "\n";
-  }
-  else {
-    //if I wanted to pass back the destID do this:
-    // (*cb) (false, key, res->resok->destID);
-    i->destID = res->resok->destID;
-    (*cb) (DHASH_OK, i); // success
-    return;
-  }
-  (*cb) (res->status, i); // failure
 }
 
 void
