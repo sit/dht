@@ -1,0 +1,67 @@
+Disclaimer
+----------
+This is a pre alpha version of p2psim. We would value your feedback with
+suggestions and improvements.
+
+Requirements
+------------
+We compile and run p2psim on Linux and FreeBSD with GCC 2.95.3 and GCC 3.3.2.
+However, we recommend using GCC 2.95.3. In addition, you need the openssl
+header files (libssl-dev package in Debian), and you need libcrypto.
+
+Compile threads package
+-----------------------
+p2psim depends on a user-level threads package that you need to install.
+Specifically, you need libutf, libfmt. lib9, and libthread.
+
+The following commands (to be run as root) will download, compile, and install
+these libraries. (You may have to use gmake, rather than make, on FreeBSD.)
+Note that you need to download slightly modified versions of thread.h and
+lib9.h and install them in /usr/local/include. Also, we provide a modified
+Makefile for libthread, a proctab.c for libthread, and a modified Makefile for
+lib9.
+
+The following commands take care of all of this. As root, do:
+
+  wget -q -O - http://pdos.lcs.mit.edu/~rsc/software/libutf.tgz | tar xvfz -
+  wget -q -O - http://pdos.lcs.mit.edu/~rsc/software/libfmt.tgz | tar xvfz -
+  wget -q -O - http://pdos.lcs.mit.edu/~rsc/software/lib9.tgz | tar xvfz -
+  wget -q -O - http://pdos.lcs.mit.edu/~rsc/software/libthread.tgz | tar xvfz -
+  mkdir -p /usr/local/man/man1
+  mkdir -p /usr/local/man/man3
+  mkdir -p /usr/local/man/man7
+  cd libutf; make install
+  cd ..; cd libfmt; make install
+  cd ..; cd lib9
+  wget -q -O Makefile http://pdos.lcs.mit.edu/p2psim/Makefile-lib9
+  make install
+  cd ..; cd libthread
+  wget -q -O Makefile http://pdos.lcs.mit.edu/p2psim/Makefile-threads
+  wget -q -O proctab.c http://pdos.lcs.mit.edu/p2psim/proctab.c
+  make install
+  cd ..
+  wget -q -O /usr/local/include/lib9.h http://pdos.lcs.mit.edu/p2psim/lib9.h
+  wget -q -O /usr/local/include/thread.h http://pdos.lcs.mit.edu/p2psim/thread.h
+
+If you get errors during the installation, you were probably not running make
+install as root. 
+
+Compile p2psim
+--------------
+tar xvfz p2psim-0.1.tar.gz
+cd p2psim-0.1
+./configure
+make
+
+(use gmake in stead of make on FreeBSD)
+
+The binary (p2psim) will be in the p2psim/ subdirectory.
+
+Running p2psim
+--------------
+See the README file.
+
+Questions?
+----------
+Please see our FAQ at: http://pdos.lcs.mit.edu/p2psim/faq.html, or send us
+email at p2psim-dev@pdos.lcs.mit.edu.
