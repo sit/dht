@@ -367,21 +367,26 @@ Ida::minvert (int rows, int cols,
     to.push_back (row);
   }
 
-#if 0
-  for (r = 0; r < rows; r++) {
-    for (c = 0; c < 2*cols; c++)
-      warnx ("%8lu,", to[r][c]);
-    warnx ("\n");
-  }
-#endif /* 0 */
-
   // Row reduction
   for (r = 0; r < rows; r++){
     x = to[r][r];
 
     // No pivot? [Swap rows??? XXX]
-    if (x == 0)
+    if (x == 0) {
+      for (r = 0; r < rows; r++) {
+	strbuf s;
+	for (c = 0; c < cols; c++)
+	  s.fmt ("%8lu,", from[r][c]);
+	idatrace << "from: " << s << "\n";
+      }
+      for (r = 0; r < rows; r++) {
+	strbuf s;
+	for (c = 0; c < 2*cols; c++)
+	  s.fmt ("%8lu,", to[r][c]);
+	idatrace << "to:   " << s << "\n";
+      }
       return false;
+    }
     
     for (c = 0; c < cols*2; c++)
       to[r][c] = DIV(to[r][c], x);
