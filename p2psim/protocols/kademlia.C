@@ -41,7 +41,7 @@ unsigned Kademlia::refresh_rate = 0;
 Kademlia::Kademlia(Node *n, Args a)
   : P2Protocol(n), _id(ConsistentHash::ip2chid(n->ip()))
 {
-  KDEBUG(1) << "ip: " << ip() << endl;
+  KDEBUG(1) << "ip: " << ip() << ", idsize = " << idsize << endl;
 
   if(!k)
     k = a.nget<unsigned>("k", 20, 10);
@@ -69,6 +69,7 @@ Kademlia::join(Args *args)
   if(wkn == ip()) {
     KDEBUG(1) << "Node " << printID(_id) << " is wellknown." << endl;
     joined++;
+    cout << joined << ": " << Kademlia::printbits(_id) << " joined" << endl;
     delaycb(stabilize_timer, &Kademlia::reschedule_stabilizer, (void *) 0);
     return;
   }
@@ -408,7 +409,13 @@ Kademlia::stabilize()
 bool
 Kademlia::stabilized(vector<NodeID> *lid)
 {
-  k_stabilized stab(lid);
+  // remove ourselves from lid
+  vector<NodeID> copylid;
+  for(vector<NodeID>::const_iterator i = lid->begin(); i != lid->end(); ++i)
+    if(*i != id())
+      copylid.push_back(*i);
+
+  k_stabilized stab(&copylid);
   _root->traverse(&stab);
   return stab.stabilized();
 }
@@ -440,7 +447,7 @@ Kademlia::getbit(NodeID n, unsigned i)
 
 // }}}
 // {{{ Kademlia::touch
-// pre: id is in the flyweight
+// pre: id is in the flyweight and id is in the tree
 // post: lastts for id is updated, update propagated to k-bucket.  if this is
 //    the first touch, then firstts is updated as well
 void
@@ -449,7 +456,11 @@ Kademlia::touch(NodeID id)
   assert(id);
   assert(flyweight.find(id) != flyweight.end());
 
-  KDEBUG(1) << "Kademlia::touch" << endl;
+  k_finder find(id);
+  _root->traverse(&find);
+  assert(find.found() == 1);
+
+  KDEBUG(1) << "Kademlia::touch " << Kademlia::printbits(id) << endl;
 
   if(!flyweight[id]->firstts)
     flyweight[id]->firstts = now();
@@ -534,6 +545,7 @@ Kademlia::printID(NodeID id)
 // {{{ k_nodes::k_nodes
 k_nodes::k_nodes(k_bucket_leaf *parent) : _parent(parent)
 {
+  assert(_parent);
   nodes.clear();
 }
 // }}}
@@ -547,10 +559,10 @@ k_nodes::k_nodes(k_bucket_leaf *parent) : _parent(parent)
 void
 k_nodes::insert(Kademlia::NodeID n)
 {
-  Kademlia::NodeID _id = _parent->kademlia()->id();
+  checkrep(false);
 
+  Kademlia::NodeID _id = _parent->kademlia()->id();
   KDEBUG(1) << "k_nodes::insert " << Kademlia::printbits(n) << endl;
-  checkrep();
 
   assert(n);
   assert(_parent->kademlia()->flyweight.find(n) != _parent->kademlia()->flyweight.end());
@@ -563,18 +575,19 @@ k_nodes::insert(Kademlia::NodeID n)
   if(pos != nodes.end()) {
     KDEBUG(1) << "k_nodes::insert found " << Kademlia::printbits(n) << ", removing..." << endl;
     nodes.erase(pos);
+    _nodes_by_id.erase(ninfo);
   }
 
   // update timestamp
   ninfo->lastts = now();
-  if(!nodes.insert(ninfo).second) {
-    KDEBUG(1) << "k_nodes::insert failed" << endl;
-    checkrep();
+  if(!(nodes.insert(ninfo).second && _nodes_by_id.insert(ninfo).second))
     assert(false);
-  }
 
-  if(nodes.size() > Kademlia::k)
-    nodes.erase(nodes.end());
+  if(nodes.size() > Kademlia::k) {
+    k_nodeinfo *ninfo = *nodes.rbegin();
+    nodes.erase(ninfo);
+    _nodes_by_id.erase(ninfo);
+  }
 
   checkrep(false);
 }
@@ -587,16 +600,20 @@ k_nodes::insert(Kademlia::NodeID n)
 void
 k_nodes::erase(Kademlia::NodeID n)
 {
+  cout << "erase in" << endl;
   checkrep();
   assert(n);
   assert(_parent->kademlia()->flyweight.find(n) != _parent->kademlia()->flyweight.end());
   k_nodeinfo *ninfo = _parent->kademlia()->flyweight[n];
   ninfo->checkrep();
   assert(nodes.find(ninfo) != nodes.end());
+  assert(_nodes_by_id.find(ninfo) != nodes.end());
 
   nodes.erase(ninfo);
+  _nodes_by_id.erase(ninfo);
 
   checkrep();
+  cout << "erase out" << endl;
 }
 // }}}
 // {{{ k_nodes::contains
@@ -623,11 +640,16 @@ k_nodes::contains(Kademlia::NodeID id) const
 bool
 k_nodes::inrange(Kademlia::NodeID id) const
 {
+  // XXX: for KDEBUG purposes
+  Kademlia::NodeID _id = _parent->kademlia()->id();
+
   checkrep(false);
-  k_nodeinfo *first = *nodes.begin();
-  k_nodeinfo *last = *nodes.rbegin();
-  if(first->id == last->id)
+
+  if(nodes.size() <= 1)
     return false;
+  k_nodeinfo *first = *_nodes_by_id.begin();
+  k_nodeinfo *last = *_nodes_by_id.rbegin();
+  KDEBUG(4) <<  "k_nodes::inrange " << Kademlia::printbits(id) << " between " << Kademlia::printbits(first->id) << " and " << Kademlia::printbits(last->id) << endl;
   return(id >= first->id && id <= last->id);
 }
 // }}}
@@ -635,17 +657,28 @@ k_nodes::inrange(Kademlia::NodeID id) const
 void
 k_nodes::checkrep(bool rangecheck) const
 {
-  // XXX: for KDEBUG
-  // Kademlia::NodeID _id = _parent->kademlia()->id();
-
   assert(_parent);
   assert(_parent->nodes == this);
   assert(nodes.size() <= Kademlia::k);
+  assert(nodes.size() == _nodes_by_id.size());
+  assert(_parent->kademlia());
+  assert(_parent->kademlia()->id());
 
-  // all nodes are in flyweight and all nodes are unique
+  // all nodes are in flyweight
+  // all nodes are unique
+  // all nodes are also in _nodes_by_id
   hash_map<Kademlia::NodeID, bool> haveseen;
   for(set<k_nodeinfo*, Kademlia::older>::const_iterator i = nodes.begin(); i != nodes.end(); ++i) {
     assert(_parent->kademlia()->flyweight.find((*i)->id) != _parent->kademlia()->flyweight.end());
+    assert(haveseen.find((*i)->id) == haveseen.end());
+    assert(_nodes_by_id.find(*i) != _nodes_by_id.end());
+    haveseen[(*i)->id] = true;
+  }
+
+  // all nodes in _nodes_by_id are also in nodes
+  haveseen.clear();
+  for(set<k_nodeinfo*, Kademlia::idless>::const_iterator i = _nodes_by_id.begin(); i != _nodes_by_id.end(); ++i) {
+    assert(nodes.find(*i) != nodes.end());
     assert(haveseen.find((*i)->id) == haveseen.end());
     haveseen[(*i)->id] = true;
   }
@@ -665,8 +698,8 @@ k_nodes::checkrep(bool rangecheck) const
   // we would have returned already if size() <= 1
   // so first and last must be different.
   if(rangecheck) {
-    k_nodeinfo *first = *nodes.begin();
-    k_nodeinfo *last = *nodes.rbegin();
+    k_nodeinfo *first = *_nodes_by_id.begin();
+    k_nodeinfo *last = *_nodes_by_id.rbegin();
     assert(first != last);
     assert(!(_parent->kademlia()->id() >= first->id && _parent->kademlia()->id() <= last->id));
   }
@@ -702,12 +735,16 @@ k_nodeinfo::checkrep() const
 // {{{ k_bucket_node::k_bucket_node
 k_bucket_node::k_bucket_node(k_bucket *parent) : k_bucket(parent, false)
 {
+  child[0] = New k_bucket_leaf(this);
+  child[1] = New k_bucket_leaf(this);
   checkrep();
 }
 // }}}
 // {{{ k_bucket_node::k_bucket_node
 k_bucket_node::k_bucket_node(Kademlia *k) : k_bucket(0, false, k)
 {
+  child[0] = New k_bucket_leaf(this);
+  child[1] = New k_bucket_leaf(this);
   checkrep();
 }
 // }}}
@@ -715,7 +752,8 @@ k_bucket_node::k_bucket_node(Kademlia *k) : k_bucket(0, false, k)
 void
 k_bucket_node::checkrep() const
 {
-  assert(child[0] || child[1]);
+  assert(child[0] && child[1]);
+  assert(!leaf);
   k_bucket::checkrep();
 }
 // }}}
@@ -733,6 +771,7 @@ k_bucket_leaf::k_bucket_leaf(k_bucket *parent) : k_bucket(parent, true)
 k_bucket_leaf::k_bucket_leaf(Kademlia *k) : k_bucket(0, true, k)
 {
   nodes = New k_nodes(this);
+  nodes->checkrep();
   replacement_cache = New set<k_nodeinfo*, Kademlia::younger>;
   assert(replacement_cache);
   checkrep();
@@ -758,13 +797,13 @@ k_bucket_leaf::divide(unsigned depth)
     newnode = New k_bucket_node(parent);
     k_bucket **pointertome = &(((k_bucket_node*)parent)->child[(((k_bucket_node*)parent)->child[0] == this ? 0 : 1)]);
     *pointertome = newnode;
-  } else
+  } else {
+    assert(kademlia()->root() == this);
     newnode = New k_bucket_node(kademlia());
+  }
 
   // create both children
   KDEBUG(4) <<  "k_bucket_leaf::creating subchildren" << endl;
-  newnode->child[0] = New k_bucket_leaf(newnode);
-  newnode->child[1] = New k_bucket_leaf(newnode);
 
   // KDEBUG(4) <<  "erase: subchild " << (myleftmostbit ^ 1) << " is a leaf on depth " << depth << endl;
 
@@ -776,6 +815,11 @@ k_bucket_leaf::divide(unsigned depth)
     ((k_bucket_leaf*)newnode->child[bit])->nodes->insert((*i)->id);
   }
 
+  if(((k_bucket_leaf*)newnode->child[0])->nodes->inrange(kademlia()->id()))
+    ((k_bucket_leaf*)newnode->child[0])->divide(depth+1);
+  if(((k_bucket_leaf*)newnode->child[1])->nodes->inrange(kademlia()->id()))
+    ((k_bucket_leaf*)newnode->child[1])->divide(depth+1);
+
   // XXX: what to do with replacement cache?!
   delete this;
   newnode->checkrep();
@@ -786,6 +830,7 @@ k_bucket_leaf::divide(unsigned depth)
 void
 k_bucket_leaf::checkrep() const
 {
+  assert(leaf);
   assert(nodes);
   assert(replacement_cache);
   nodes->checkrep();
@@ -818,7 +863,9 @@ k_bucket::k_bucket(k_bucket *parent, bool leaf, Kademlia *k) : leaf(leaf), paren
   if(k) {
     _kademlia = k;
     _kademlia->setroot(this);
-  }
+  } else
+    _kademlia = parent->_kademlia;
+  checkrep();
 }
 // }}}
 // {{{ k_bucket::traverse
@@ -827,15 +874,23 @@ k_bucket::traverse(k_traverser *traverser, string prefix, unsigned depth)
 {
   checkrep();
 
+  // XXX: for KDEBUG
+  Kademlia::NodeID _id = kademlia()->id();
+
   if(!leaf) {
+    KDEBUG(1) << "k_nodes::traverser " << prefix << " going to 0" << endl;
     ((k_bucket_node*) this)->child[0]->traverse(traverser, prefix + "0", depth+1);
+    KDEBUG(1) << "k_nodes::traverser " << prefix << " going to 1" << endl;
     ((k_bucket_node*) this)->child[1]->traverse(traverser, prefix + "1", depth+1);
     checkrep();
     return;
   }
+
+  KDEBUG(1) << "k_nodes::traverser " << prefix << " calling execute " << endl;
   traverser->execute((k_bucket_leaf*) this, prefix, depth);
 
-  checkrep();
+  // the divide() may have killed us.
+  // checkrep();
 }
 // }}}
 // {{{ k_bucket::insert
@@ -876,7 +931,9 @@ k_bucket::insert(Kademlia::NodeID id, bool init_state, string prefix, unsigned d
   // if this node is not in the k-bucket, and there's still space, add it.
   k_nodes *nodes = ((k_bucket_leaf*)this)->nodes;
   if(nodes->contains(id) || !nodes->full()) {
+    assert(!nodes->inrange(kademlia()->id()));
     nodes->insert(id);
+    nodes->checkrep(false);
     if(nodes->inrange(kademlia()->id())) {
       k_bucket_node *newnode = ((k_bucket_leaf*)this)->divide(depth);
       newnode->checkrep();
@@ -974,42 +1031,50 @@ void
 k_stabilizer::execute(k_bucket_leaf *k, string prefix, unsigned depth)
 {
   // XXX: for KDEBUG purposes
-  Kademlia::NodeID _id = k->kademlia()->id();
+  Kademlia *mykademlia = k->kademlia();
+  Kademlia::NodeID _id = mykademlia->id();
 
   if(k->nodes->nodes.size()) {
-    // make a temporary copy to avoid scary lock shit
-    k_nodes::nodeset_t tmpcopy(k->nodes->nodes);
-    for(set<k_nodeinfo*, Kademlia::older>::const_iterator it = tmpcopy.begin(); it != tmpcopy.end(); ++it) {
-      if(now() - (*it)->lastts < Kademlia::refresh_rate)
+    // make safe copy of node IDs.
+    vector<Kademlia::NodeID> idvec;
+    for(set<k_nodeinfo*, Kademlia::older>::const_iterator i = k->nodes->nodes.begin(); i != k->nodes->nodes.end(); ++i) {
+      assert(*i);
+      idvec.push_back((*i)->id);
+    }
+    
+    for(vector<Kademlia::NodeID>::const_iterator i = idvec.begin(); i != idvec.end(); ++i) {
+      assert(mykademlia->flyweight.find(*i) != mykademlia->flyweight.end());
+      Time lastts = mykademlia->flyweight[(*i)]->lastts;
+      if(now() - lastts < Kademlia::refresh_rate)
         continue;
 
       // find the closest node to the ID we're looking for
-      k_collect_closest getsuccessor((*it)->id, 1);
-      k->kademlia()->root()->traverse(&getsuccessor);
+      k_collect_closest getsuccessor(*i, 1);
+      mykademlia->root()->traverse(&getsuccessor);
       k_nodeinfo *ki = *getsuccessor.results.begin();
 
-      KDEBUG(1) << "threadid = " << threadid() << " stabilize: lookup for " << Kademlia::printbits((*it)->id) << ", on " << Kademlia::printbits(ki->id) << ":" << ki->ip << endl;
+      KDEBUG(1) << "threadid = " << threadid() << " stabilize: lookup for " << Kademlia::printbits(*i) << ", on " << Kademlia::printbits(ki->id) << endl;
       // will add it to the tree
-      k->kademlia()->do_lookup_wrapper(ki, (*it)->id);
-      KDEBUG(1) << "stabilize: lookup for " << Kademlia::printbits((*it)->id) << " returned" << endl;
+      mykademlia->do_lookup_wrapper(ki, *i);
+      KDEBUG(1) << "k_stabilizer: lookup for " << Kademlia::printbits(*i) << " returned" << endl;
     }
     return;
   }
 
-  // we have no information on thi part of the ID space.
+  // we have no information on this part of the ID space.
   // lookup a random key
   Kademlia::NodeID mask = 0;
   for(unsigned i=0; i<depth; i++)
-    mask |= (1<<(Kademlia::idsize-depth-i));
+    mask |= (((Kademlia::NodeID) 1) << (Kademlia::idsize-depth-i));
 
-  KDEBUG(1) << "stabilize: mask = " << Kademlia::printbits(mask) << endl;
-  Kademlia::NodeID random_key = k->kademlia()->id() & mask;
+  KDEBUG(1) << "k_stabilizer: mask = " << Kademlia::printbits(mask) << endl;
+  Kademlia::NodeID random_key = _id & mask;
 
   k_collect_closest getsuccessor(random_key);
-  k->kademlia()->root()->traverse(&getsuccessor);
+  mykademlia->root()->traverse(&getsuccessor);
   for(k_collect_closest::resultset_t::const_iterator i = getsuccessor.results.begin(); i != getsuccessor.results.end(); ++i) {
-    KDEBUG(1) << "stabilize: random lookup for " << Kademlia::printbits(random_key) << endl;
-    k->kademlia()->do_lookup_wrapper((*i), random_key);
+    KDEBUG(1) << "k_stabilizer: random lookup for " << Kademlia::printbits(random_key) << endl;
+    mykademlia->do_lookup_wrapper((*i), random_key);
   }
 }
 // }}}
@@ -1047,12 +1112,12 @@ k_stabilized::execute(k_bucket_leaf *k, string prefix, unsigned depth)
   // On every iteration we add another bit.  lower_mask looks like 111...000,
   // but we use it as 000...111 by ~-ing it.
   for(unsigned i=0; i<depth; i++)
-    lower_mask |= (1<<(Kademlia::idsize-i-1));
+    lower_mask |= (((Kademlia::NodeID)1) << (Kademlia::idsize-i-1));
   KDEBUG(4) << "stabilized: lower_mask on depth " << depth << " = " << Kademlia::printbits(lower_mask) << endl;
 
   // flip the bit, and turn all bits to the right of the flipped bit into
   // zeroes.
-  Kademlia::NodeID lower = _id ^ (1<<(Kademlia::idsize-depth-1));
+  Kademlia::NodeID lower = _id ^ (((Kademlia::NodeID) 1) << (Kademlia::idsize-depth-1));
   KDEBUG(4) << "stabilized: lower before mask = " << Kademlia::printbits(lower) << endl;
   lower &= lower_mask;
   KDEBUG(4) << "stabilized: lower after mask = " << Kademlia::printbits(lower) << endl;
@@ -1079,8 +1144,18 @@ k_stabilized::execute(k_bucket_leaf *k, string prefix, unsigned depth)
     _stabilized = false;
     return;
   }
+  // assert(false);
+}
+// }}}
 
-  assert(false);
+// {{{ k_finder::execute
+void
+k_finder::execute(k_bucket_leaf *k, string prefix, unsigned depth)
+{
+  k->checkrep();
+  for(Kademlia::nodeinfo_set::const_iterator i = k->nodes->nodes.begin(); i != k->nodes->nodes.end(); ++i)
+    if((*i)->id == _n)
+      _found++;
 }
 // }}}
 
@@ -1133,7 +1208,6 @@ k_collect_closest::execute(k_bucket_leaf *k, string prefix, unsigned depth)
 void
 k_collect_closest::checkrep()
 {
-  assert(_node);
   assert(_best);
   assert(results.size() <= _best);
   if(results.size() == 0)

@@ -97,6 +97,12 @@ public:
     static NodeID n;
   };
 
+  class idless { public:
+    bool operator()(const k_nodeinfo* p1, const k_nodeinfo* p2) const {
+      return p1->id < p2->id;
+    }
+  };
+
   //
   // static utility methods
   //
@@ -163,7 +169,7 @@ public:
   static unsigned joined;               // how many have joined so far
   static unsigned stabilize_timer;      // how often to stabilize
   static unsigned refresh_rate;         // how often to refresh info
-  static const unsigned idsize = 8*sizeof(NodeID);
+  static const unsigned idsize = 8*sizeof(Kademlia::NodeID);
   hash_map<NodeID, k_nodeinfo*> flyweight;
 // }}}
 // {{{ private
@@ -261,6 +267,7 @@ public:
 
 private:
   k_bucket_leaf *_parent;
+  set<k_nodeinfo*, Kademlia::idless> _nodes_by_id;
 };
 // }}}
 
@@ -303,6 +310,19 @@ class k_stabilized : public k_traverser { public:
 private:
   vector<Kademlia::NodeID> *_v;
   bool _stabilized;
+};
+// }}}
+// {{{ class k_finder
+class k_finder : public k_traverser { public:
+  k_finder(Kademlia::NodeID n) : _n(n), _found(0) {}
+
+  virtual ~k_finder() {}
+  virtual void execute(k_bucket_leaf*, string, unsigned);
+  unsigned found() { return _found; }
+
+private:
+  Kademlia::NodeID _n;
+  unsigned _found;
 };
 // }}}
 
