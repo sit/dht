@@ -29,10 +29,10 @@ nntp::nntp (int _s) :
   cmd_hello ("READER");
 
   add_cmd ("CHECKDHT", wrap (this, &nntp::cmd_check));
-  add_cmd ("TAKEDHT", wrap (this, &nntp::cmd_takedht));
+  add_cmd ("TAKEDHT", wrap (this, &nntp::cmd_takethis, true));
 
   add_cmd ("CHECK", wrap (this, &nntp::cmd_check));
-  add_cmd ("TAKETHIS", wrap (this, &nntp::cmd_takethis));
+  add_cmd ("TAKETHIS", wrap (this, &nntp::cmd_takethis, false));
 
   add_cmd ("IHAVE", wrap (this, &nntp::cmd_ihave));
 
@@ -61,6 +61,7 @@ nntp::process_line (const str data, int err)
   if (err < 0) {
     warn << s << ": nntp aio oops " << err << "\n";
     if (err == ETIMEDOUT) {
+      aio << "205 Timed out.\r\n";
       delete this;
       return;
     }
@@ -306,18 +307,19 @@ nntp::cmd_post (str c)
 {
   aio << postgo;
   posting = true;
-  process_input = wrap (this, &nntp::read_post, postok, postbad);
+  process_input = wrap (this, &nntp::read_post, postok, postbad, false);
 }
 
 static rxx postmrx ("^Message-ID: (<.+>)\\s*$", "i");
 static rxx postngrx ("^Newsgroups: (.+?)\\s*$", "i");
 static rxx postgrx (",?([^,]+)");
-static rxx postcontrol ("^Control: (.+?)\\s*$", "m");
+static rxx postcontrol ("^Control: (.+?)\\s*$", "i");
 static rxx postend ("^\\.$");
 static rxx postheadend ("^\\s?$");
+static rxx postchordid ("^X-ChordID: (.+?)\\s*$", "i");
 
 void
-nntp::read_post (str resp, str bad)
+nntp::read_post (str resp, str bad, bool takedht)
 {
   str ng, msgid;
   chordID ID;
@@ -353,11 +355,18 @@ nntp::read_post (str resp, str bad)
       if (nntp_trace >= 4)
 	warn << prefix << "found newsgroup list " << postngrx[1] << "\n";
       ng = postngrx[1];
+    } else if (postchordid.search (lines[i])) {
+      if (nntp_trace >= 4) {
+	warn << prefix << "found "
+	     << (takedht ? "" : "un") << "expected chordID "
+	     << postchordid[1] << "\n";
+	ID = bigint (postchordid[1], 16);
+      }
     }
   }
   int linecount = lines.size () - headerend;
 
-  if (!msgid || !ng || linecount <= 0) {
+  if (!msgid || !ng || linecount <= 0 || (takedht && !ID)) {
     aio << bad;
     lines.setsize (0);
     posting = false;
@@ -380,9 +389,11 @@ nntp::read_post (str resp, str bad)
 
   str wholeart = strbuf () << header << body;
 
-  ID = compute_hash (wholeart, wholeart.len ());
-  
-  header << "X-Lines: " << linecount << "\r\n" << "X-ChordID: " << ID << "\r\n";
+  if (!takedht) {
+    ID = compute_hash (wholeart, wholeart.len ());  
+    header << "X-Lines: " << linecount << "\r\n"
+	   << "X-ChordID: " << ID << "\r\n";
+  }
   str h (header);
   if (nntp_trace >= 5)
     warn << "----\n" << h << "----\n";
@@ -413,8 +424,9 @@ nntp::read_post (str resp, str bad)
     ptr<dbrec> k = New refcounted<dbrec> (msgid, msgid.len ());
     ptr<dbrec> d = New refcounted<dbrec> (h, h.len ());
     header_db->insert (k, d);
-    dhash->insert (wholeart, wholeart.len (),
-		   wrap (this, &nntp::read_post_cb, k, groups));
+    if (!takedht)
+      dhash->insert (wholeart, wholeart.len (),
+		     wrap (this, &nntp::read_post_cb, k, groups));
   }
 
   posting = false;
@@ -462,7 +474,7 @@ nntp::cmd_ihave (str c)
     if (!d) {
       aio << ihavesend;
       posting = true;
-      process_input = wrap (this, &nntp::read_post, ihaveok, ihavebad);
+      process_input = wrap (this, &nntp::read_post, ihaveok, ihavebad, false);
     } else
       aio << ihaveno;
   } else
@@ -496,7 +508,7 @@ char *takethisbadb = "439 ";
 char *takethisbade = " article transfer failed\r\n";
 
 void
-nntp::cmd_takethis (str c)
+nntp::cmd_takethis (bool takedht, str c)
 {
   str resp, bad;
 
@@ -504,13 +516,7 @@ nntp::cmd_takethis (str c)
     resp = strbuf () << takethisokb << c << takethisoke;
     bad = strbuf () << takethisbadb << c << takethisbade;
     posting = true;
-    process_input = wrap (this, &nntp::read_post, resp, bad);
+    process_input = wrap (this, &nntp::read_post, resp, bad, takedht);
   } else
     aio << syntax;
-}
-
-void
-nntp::cmd_takedht (str c)
-{
-  fatal << s << ": takedht";
 }

@@ -44,6 +44,7 @@ newspeer::~newspeer ()
 void
 newspeer::reset ()
 {
+  close (s);
   s = -1;
   aio = NULL;
   if (conncb) {
@@ -104,8 +105,9 @@ newspeer::start_feed (int t)
 }
 
 void
-newspeer::feed_connected (int t, int s)
+newspeer::feed_connected (int t, int ns)
 {
+  s = ns;
   if (s < 0) {
     t *= 2; if (t > 3600) t = 3600;
     warn << "Connection to " << hostname << ":" << port << " failed: "
@@ -121,7 +123,6 @@ newspeer::feed_connected (int t, int s)
   aio->readline (wrap (this, &newspeer::process_line));
 }
 
-static rxx stattxtrx ("^(\\d+)\\s+(.*)$");
 static rxx emptyrxx ("^\\s*$");
 void
 newspeer::process_line (const str data, int err)
@@ -139,8 +140,11 @@ newspeer::process_line (const str data, int err)
     reset ();
     return;
   }
-  if (stattxtrx.match (data)) {
-    str code = stattxtrx[1];
+
+  vec<str> cmdargs;
+  int n = split (&cmdargs, rxx("\\s+"), data);
+  if (n > 0) {
+    str code = cmdargs[0];
     if (state == HELLO_WAIT) {
       if (code == "200") {
 	state = MODE_CHANGE;
@@ -167,10 +171,11 @@ newspeer::process_line (const str data, int err)
       if (code == "238") {				// CHECK, CHECKDHT
 	if (state == DHT_CHECK)
 	  dhtok = true;
-	send_article (stattxtrx[2]);
+	send_article (cmdargs[1]);
       } else if (code == "239" || code == "438") { // TAKETHIS, TAKEDHT
 	// fantastic. some article went over ok.
 	// XXX remove from list of articles to send
+	warn << prefix << "sent successfully.\n";
       } else if (code == "431" || code == "400" || code == "439") {
 	// something went wrong. try again later... XXX
 	warn << prefix << "dropping to-delay article on the floor " << data << "\n";
@@ -244,7 +249,7 @@ newspeer::send_article (str id)
   str header (d->value, d->len);
   if (dhtok) {
     aio << "TAKEDHT " << id << "\r\n";
-    aio << header << ".\r\n";
+    aio << header << "\r\n.\r\n"; // need extra \r\n for feed parsing other side
   } else {
     // dispatch a body fetch
     // aio << "TAKETHIS " << id << "\r\n";
