@@ -139,12 +139,6 @@ Chord::record_stat(uint bytes, uint type)
 
 Chord::~Chord()
 {
-#ifdef CHORD_DEBUG
-  printf("Chord done (%u,%qx)", me.ip, me.id);
-  for (uint i = 0; i < stat.size(); i++) 
-    printf(" %u", stat[i]);
-  printf("\n");
-#endif
   if (me.ip == 1) {
     double allpkts = 0.0;
     for (uint i = 0; i <= TYPE_PNS_UP; i++) 
@@ -754,6 +748,7 @@ Chord::find_successors_recurs(CHID key, uint m, uint all, uint type, uint *recur
   }
 
   if (type == TYPE_USER_LOOKUP) {
+    assert(!static_sim || !total_to);
 #ifdef CHORD_DEBUG
     printf("%s lookup key %qx,%d, hops %d timeout %d wasted %d\n", ts(), key, m, psz-total_to, total_to, wasted);
 #endif
@@ -762,7 +757,6 @@ Chord::find_successors_recurs(CHID key, uint m, uint all, uint type, uint *recur
     _lookup_int_num += 1;
     _lookup_hops += (psz - total_to);
     _lookup_timeouts += total_to;
-    _lookup_int_num += 1;
     _lookup_to_waste += wasted;
   }
   assert(psz < 20);

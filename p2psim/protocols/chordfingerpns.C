@@ -32,7 +32,7 @@ ChordFingerPNS::ChordFingerPNS(IPAddress i, Args& a, LocTable *l)
   : Chord(i, a, New LocTablePNS()) 
 { 
   _base = a.nget<uint>("base",2,10);
-  _samples = a.nget<uint>("samples",_nsucc,10);
+  _samples = a.nget<int>("samples",_nsucc,10);
 
   _stab_pns_running = false;
   _stab_pns_outstanding = 0;
@@ -85,7 +85,7 @@ ChordFingerPNS::initstate()
   }
 
 #ifdef CHORD_DEBUG
-  printf("chordfingerpns %u init_state %d\n", me.ip, loctable->size());
+  printf("chordfingerpns %u init_state %d _samples %d\n", me.ip, loctable->size(), _samples);
 #endif
   Chord::initstate();
 }
