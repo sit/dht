@@ -173,10 +173,6 @@ pmaint::pmaint_offer_cb (chord_node dst, vec<bigint> keys,
 
   if (err) {
     pmaint_offer_next_succ++;
-    //may err because of the race on adding the handler
-    //just move onto the next succ; in the worst case
-    //we'll just redo some work since we won't delete the fragment
-    //don't update key_left and start over
     pmaint_offer ();
     return;
   }
@@ -195,6 +191,21 @@ pmaint::handed_off_cb (chord_node dst,
 		       int key_number,
 		       int status)
 {
+
+  if (status == PMAINT_HANDOFF_ERROR) 
+    {
+      //an error doesn't necessarily mean that the node didn't
+      // get this fragment. It might be that 4 acks were dropped
+      // or that some monster queue prevented a reply. In this
+      // case we've just created a duplicate block. Which is
+      // bad since it causes reconstruction failure and permanently
+      // reduces the replication level of the block
+
+      //don't try to send him any more keys
+      pmaint_offer_next_succ++;
+      pmaint_offer ();
+      return;
+    }
 
   if (status == PMAINT_HANDOFF_PRESENT) 
     pmaint_present_count[key_number]--; 
@@ -255,6 +266,7 @@ pmaint::pmaint_handoff_cb (bigint key,
   } else if (!present) {
     warn << host_node->my_ID () << "deleting " << key << " because someone didn't have it\n";
     delete_helper (id2dbrec(key));
+    assert (!db->lookup (id2dbrec (key)));
     cb (PMAINT_HANDOFF_NOTPRESENT); //ok, not present
   } else { 
     cb (PMAINT_HANDOFF_PRESENT); //ok, present
