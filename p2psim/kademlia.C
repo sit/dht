@@ -2,6 +2,7 @@
 #include "packet.h"
 #include "nodefactory.h"
 #include <iostream>
+#include <stdio.h>
 #include "p2psim.h"
 using namespace std;
 

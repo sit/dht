@@ -15,7 +15,7 @@ using namespace std;
 
 E2EGraph::E2EGraph(vector<string> *v)
 {
-  _num = atoi(v->at(0).c_str());
+  _num = atoi((*v)[0].c_str());
   assert(_num > 0);
 
   _pairwise.resize(_num);
