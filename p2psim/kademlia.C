@@ -287,14 +287,14 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
       // cut off all entries larger than the first _k
       if(_k < newresults->size())
         newresults->resize(_k);
-      delete results;
+      Delete(results);
       results = newresults;
 
       // mark new nodes as not yet asked
       for(vector<peer_t*>::const_iterator i=results->begin(); i != results->end(); ++i)
         if(asked.find((*i)->id) == asked.end())
           asked[(*i)->id] = false;
-      delete ci;
+      Delete(ci);
     } while(select(&rpcset));
   }
 
@@ -526,7 +526,7 @@ k_bucket_tree::k_bucket_tree(Kademlia *k) : _self(k)
 // {{{ k_bucket_tree::~k_bucket_tree
 k_bucket_tree::~k_bucket_tree()
 {
-  delete _root;
+  Delete(_root);
 }
 
 // }}}
@@ -601,7 +601,7 @@ k_bucket_tree::get(NodeID key, vector<peer_t*> *v, unsigned nbest)
       assert(best.size() == nbest+1);
       struct best_entry *be = best.last();
       best.remove(be->dist);
-      delete be;
+      Delete(be);
     }
   }
 
@@ -610,7 +610,7 @@ k_bucket_tree::get(NodeID key, vector<peer_t*> *v, unsigned nbest)
   for(best_entry *cur = best.first(); cur; cur = next) {
     next = best.next(cur);
     v->push_back(cur->peer);
-    delete cur;
+    Delete(cur);
   }
 
 #if 0
@@ -677,14 +677,15 @@ k_bucket::k_bucket(Kademlia *k, k_bucket_tree *root) : _leaf(false), _self(k), _
 k_bucket::~k_bucket()
 {
   if(_child[0])
-    delete _child[0];
+    Delete(_child[0]);
   if(_child[1])
-    delete _child[1];
+    Delete(_child[1]);
 
   if(_nodes) {
-    for(set<peer_t*>::const_iterator it = _nodes->begin(); it != _nodes->end(); ++it)
-      delete *it;
-    delete _nodes;
+    for(set<peer_t*>::const_iterator it = _nodes->begin(); it != _nodes->end(); ++it) {
+      Delete(*it);
+    }
+    Delete(_nodes);
   }
 }
 
@@ -786,7 +787,7 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned de
     KDEBUG(4) <<  "insert: pushed entry " << Kademlia::printbits((*it)->id) << " to side " << bit << endl;
     _child[bit]->_nodes->insert(*it);
   }
-  delete _nodes;
+  Delete(_nodes);
   _nodes = 0;
 
   // now insert at the right child
@@ -821,7 +822,7 @@ k_bucket::stabilize(string prefix, unsigned depth)
       _root->get((*it)->id, best);
       KDEBUG(1) << "stabilize: lookup for " << Kademlia::printbits((*it)->id) << endl;
       _self->do_lookup_wrapper((*best)[0], (*it)->id);
-      delete best;
+      Delete(best);
     }
     return;
   }
@@ -840,7 +841,7 @@ k_bucket::stabilize(string prefix, unsigned depth)
     KDEBUG(1) << "stabilize: random lookup for " << Kademlia::printbits(random_key) << endl;
     _self->do_lookup_wrapper((*i), random_key);
   }
-  delete best;
+  Delete(best);
 
   // NB: the lookup itself will add it to the tree!
 }
@@ -1069,7 +1070,7 @@ Kademlia::get_closest(vector<peer_t*> *v, NodeID id)
 //   // set correct return data and insert caller into our tree
 //   lresult->rid = _id;
 //   _tree->insert(callerID, callerIP);
-//   delete bestset;
+//   Delete(bestset);
 // }}}
 #endif
 /// }}}

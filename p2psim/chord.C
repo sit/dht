@@ -561,7 +561,7 @@ Chord::init_state(vector<IDMap> ids)
 Chord::IDMap
 Chord::fix_successor()
 {
-  Time t = now();
+  // Time t = now();
   IDMap succ1 = loctable->succ(me.id+1);
 
   get_predecessor_args gpa;

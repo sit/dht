@@ -1,6 +1,8 @@
 #ifndef __KADEMLIA_H
 #define __KADEMLIA_H
 
+#define TMG_DMALLOC
+#include "tmgdmalloc.h"
 #include "chord.h"
 using namespace std;
 
@@ -138,7 +140,7 @@ public:
   class callinfo { public:
     callinfo(IPAddress xip, lookup_args *xla, lookup_result *xlr)
       : ip(xip), la(xla), lr(xlr) {}
-    ~callinfo() { delete la; delete lr; }
+    ~callinfo() { Delete(la); Delete(lr); }
     IPAddress ip;
     lookup_args *la;
     lookup_result *lr;
