@@ -1,5 +1,11 @@
 #!/usr//bin/perl
 
+# script to print out all the nodes in a chord ring in sorted order:
+#  nodes.pl list of log files (e.g., nodes.pl result-dir/out*)
+# it converts SHA-1 output to floating point numbers, so your mileage
+# may vary, since two different node is may get converted to the same
+# floating point number
+
 my @ids;
 my $nv = 0;
 
