@@ -26,14 +26,11 @@ The output also displays the status of each node at the end of the
 simulation, i.e., its finger list, document list, and the list of
 outstanding requests, if any.
 
-The "Pending documents" displays the list of documents whose insertion
-has failed. This list is used to differentiate between the two main
-reasons of why a document query may fail. The first is because the
-document insertion has failed in the first place, and thus the
-document was never stored in the network. The second is because the
-lookup has failed. Since Chord implements a basic lookup operation, in
-general, the later failures are the only one we consider in our
-studies.
+The "pending documents" displays the list of documents whose insertion
+has failed. This list is used to differentiate between the documents
+which are not found because the insertion of these documents failed in
+the first place, and other failure cases. For a detailed discussion
+see ../README
 
 
 
