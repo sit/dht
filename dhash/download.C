@@ -22,8 +22,10 @@ dhash_download::dhash_download (ptr<vnode> clntnode, chord_node source,
   if (data) {
     process_first_chunk (data, len, totsz, cookie);
     check_finish ();
-  } else
-    getchunk (0, MTU, 0, wrap (this, &dhash_download::first_chunk_cb));
+  } else {
+    unsigned mtu = (clntnode->my_location ()->id () == source.x) ? 8192 : MTU;
+    getchunk (0, mtu, 0, wrap (this, &dhash_download::first_chunk_cb));
+  }
 }
 
 void
@@ -89,7 +91,8 @@ dhash_download::process_first_chunk (char *data, size_t datalen, size_t totsz,
   //issue the RPCs to get the other chunks
   size_t nread = datalen;
   while (nread < totsz) {
-    int length = MIN (MTU, totsz - nread);
+    unsigned mtu = (clntnode->my_location ()->id () == source.x) ? 8192 : MTU;
+    int length = MIN (mtu, totsz - nread);
     //    warnx << "SENT RPC for [" << nread << ", " << nread + length
     //	  << "]  at " << (getusec () - start) << "\n";
     getchunk (nread, length, cookie,

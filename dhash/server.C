@@ -483,7 +483,6 @@ dhash_impl::dispatch (user_args *sbp)
 	// XXX fetch from cache db, since that's the only place right
 	// now we have CONTENTHASH BLOCK. probably need a flag later.
 
-	warnx << "cache: fetch " << farg->key << "\n";
         ptr<dbrec> ret = cache_db->lookup (id2dbrec (farg->key));
 	if (ret)
           fetchiter_sbp_gotdata_cb (sbp, farg, -1, ret, DHASH_OK);
