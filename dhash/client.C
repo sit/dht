@@ -43,7 +43,7 @@
 // DHASH_STORE
 //     - store a give block of data on a give nodeID.
 //     - the address of the nodeID must already by in the location cache.
-//     - XXX don't really handle RETRY/FAILURE/RACE conditions..
+//     - XXX don't really handle RACE conditions..
 
 class dhash_store {
 protected:
@@ -52,21 +52,32 @@ protected:
   dhash_stat status;
 
   chordID destID;
+  chordID predID;
+  net_address pred_addr;
   chordID blockID;
   ptr<dhash_block> block;
   cbinsert_t cb;
   dhash_ctype ctype;
   store_status store_type;
   ptr<chord> clntnode;
+  int num_retries;
 
   dhash_store (ptr<chord> clntnode, chordID destID, chordID blockID, 
 	       ptr<dhash_block> _block, store_status store_type, cbinsert_t cb)
-    : npending (0), error (false), status (DHASH_OK), destID (destID), 
-		 blockID (blockID), cb (cb), store_type (store_type),
-		 clntnode (clntnode)
+    : destID (destID), 
+		 blockID (blockID), block (_block), cb (cb), 
+		 ctype (block_type(_block)), 
+		 store_type (store_type),
+		 clntnode (clntnode), num_retries (0)
   {
-    ctype = block_type (_block);
-    block = _block;
+    start ();
+  }
+    
+  void start ()
+  {
+    error = false;
+    status = DHASH_OK;
+    npending = 0;
 
     size_t nstored = 0;
     while (nstored < block->len) {
@@ -79,29 +90,35 @@ protected:
       nstored += chunklen;
     }
   }
-  
 
   void finish (ptr<dhash_storeres> res, clnt_stat err)
   {
     ///warn << "dhash_store....finish: " << npending << "\n";
     npending--;
 
-    //XXX sure res isn't null?
-    if (res->status != DHASH_OK) {
-      if (res->status != DHASH_WAIT)
+    if (err) {
+      error = true;
+      warn << "dhash_store failed: " << blockID << ": RPC error" << "\n";
+    } else if (res->status != DHASH_OK) {
+      if (res->status == DHASH_RETRY) {
+	predID = res->pred->p.x;
+	pred_addr = res->pred->p.r;
+      } else if (res->status != DHASH_WAIT)
         warn << "dhash_store failed: " << blockID << ": "
 	     << dhasherr2str(res->status) << "\n";
       if (!error)
 	status = res->status;
       error = true;
     }
-
+    
     if (npending == 0) {
-      //in the gateway, the second arg is the blockID
-      //here the block ID was already known to the caller
-      //so return something useful: the destID
-      (*cb) (status, destID);
-      delete this;
+      if (status == DHASH_RETRY) {
+	clntnode->cacheloc (predID, pred_addr, 
+			    wrap (this, &dhash_store::retry_cachedloc));
+      } else {
+	(*cb) (status, destID);
+	delete this;
+      }
     }
   }
 
@@ -125,6 +142,20 @@ protected:
 		     wrap (this, &dhash_store::finish, res));
   }
   
+  void retry_cachedloc (chordID id, bool ok, chordstat stat) 
+  {
+    if (!ok || stat) fatal << "challenge of " << id << " failed\n";
+    num_retries++;
+    if (num_retries > 5) {
+      (*cb)(DHASH_RETRY, destID);
+      delete this;
+    } else {
+      warn << "retrying(" << num_retries << "): dest was " 
+	   << destID << " now is " << predID << "\n";
+      destID = predID;
+      start ();
+    }
+  }
 public:
   
   static void execute (ptr<chord> clntnode, chordID destID, chordID blockID,
