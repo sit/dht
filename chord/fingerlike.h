@@ -29,8 +29,6 @@
 #include "chord_prot.h"
 #include "stabilize.h"
 
-// only needed so that we can print out myID
-
 class vnode;
 class locationtable;
 

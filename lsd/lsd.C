@@ -137,7 +137,7 @@ get_factory (int mode)
   if (mode == MODE_DEBRUIJN) 
     return New refcounted<debruijn_route_factory> ();
   else 
-    return new refcounted<chord_route_factory> ();
+    return New refcounted<chord_route_factory> ();
 }
 
 ptr<fingerlike> 
@@ -146,7 +146,7 @@ get_fingerlike (int mode)
   if (mode == MODE_DEBRUIJN) 
     return New refcounted<debruijn> ();
   else 
-    return new refcounted<finger_table> ();
+    return New refcounted<finger_table> ();
 }
 
 static void

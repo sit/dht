@@ -307,6 +307,4 @@ class chord : public virtual refcount {
     
 };
 
-extern ptr<chord> chordnode;
-
 #endif /* _CHORD_H_ */

@@ -189,7 +189,7 @@ vnode::lookup_closestsucc (const chordID &x)
 #ifdef LOCLOOKUP
   chordID s = locations->closestsuccloc (x);
 #else
-  chord ID s = fingers->closestsucc (x);
+  chordID s = fingers->closestsucc (x);
 #endif
   return s;
 }
