@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.7 2003/01/18 13:13:50 jsr Exp $
+# $Id: Makefile.am,v 1.8 2003/01/20 20:16:19 cates Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -19,7 +19,7 @@ sfsrodb.C
 #test_callback_SOURCES = test_callback.C
 #test_fhdb_SOURCES = sfsrodb_core.C test_fhdb.C fhdb.C
 
-sfsrodb_LDADD = ../dhash/libdhash.a ../svc/libsvc.la $(DBLIB) $(LDADD)
+sfsrodb_LDADD = ../dhash/libdhash.a ../merkle/libmerkle.a ../svc/libsvc.la $(DBLIB) $(LDADD)
 
 
 #test_callback_LDADD = $(DBLIB) $(LDADD)

@@ -194,6 +194,12 @@ dbEnumeration::lastElement()
   return getElement(DB_LAST, NULL);
 }
 
+ptr<dbPair>
+dbEnumeration::firstElement()
+{
+  return getElement(DB_FIRST, NULL);
+}
+
 #else
 ptr<dbPair> dbEnumeration::nextElement() {
   assert(ADB_sync);

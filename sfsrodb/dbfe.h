@@ -169,6 +169,7 @@ struct dbEnumeration {
   ptr<dbPair> prevElement();
   ptr<dbPair> nextElement(ref<dbrec> startkey);
   ptr<dbPair> lastElement();
+  ptr<dbPair> firstElement();
 
   //ptr<dbPair> prevElement(ref<dbrec> startkey); -- not implemented
   char hasMoreElements();  // broken -- don't use

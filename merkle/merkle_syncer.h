@@ -39,7 +39,6 @@ class merkle_syncer {
 
   str fatal_err;
   bool sync_done;
-  cbv::ptr synccb;
 
   bigint rngmin;
   bigint rngmax;
@@ -64,7 +63,7 @@ class merkle_syncer {
   void getblocklist_cb (ref<getblocklist_res> res, clnt_stat err);
 
   bool done () { return sync_done; }
-  void sync (bigint _rngmin, bigint _rngmax, mode_t m, cbv::ptr cb);
+  void sync (bigint _rngmin, bigint _rngmax, mode_t m);
   void getnode (u_int depth, const merkle_hash &prefix);
   void getnode_cb (ref<getnode_arg> arg, ref<getnode_res> res, clnt_stat err);
   void getblockrange (merkle_rpc_node *rnode);

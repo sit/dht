@@ -42,6 +42,10 @@
 static int MERKLE_ENABLED = getenv("MERKLE_ENABLED") ? atoi(getenv("MERKLE_ENABLED")) : 1;
 static int REPLICATE      = getenv("REPLICATE") ? atoi(getenv("REPLICATE")) : 1;
 
+#define SYNCTM 30
+#define REPTM 10
+#define PRTTM 10
+
 #define LEASE_TIME 2
 #define LEASE_INACTIVE 60
 
@@ -85,11 +89,10 @@ dhash::dhash(str dbname, ptr<vnode> node,
 			      wrap (this, &dhash::sendblock_XXX));
     replica_syncer_dstID = 0;
     replica_syncer = NULL;
-    partition_syncer_dstID = 0;
-    partition_syncer_predID = 0;
+    partition_left = 0;
+    partition_right = 0;
     partition_syncer = NULL;
     partition_enumeration = db->enumerate();
-    partition_dbpair = NULL;
   }
 
   // RPC demux
@@ -116,13 +119,14 @@ dhash::dhash(str dbname, ptr<vnode> node,
 
 
   update_replica_list ();
-  install_replica_timer ();
-  transfer_initial_keys ();
+  delaycb (SYNCTM, wrap (this, &dhash::sync_cb));
 
-  delaycb (30, wrap (this, &dhash::sync_cb));
   if (MERKLE_ENABLED) {
-    delaycb (10, wrap (this, &dhash::replica_maintenance_timer, 0));
-    //delaycb (5, wrap (this, &dhash::partition_maintenance_timer));
+    delaycb (REPTM, wrap (this, &dhash::replica_maintenance_timer, 0));
+    //delaycb (PRTTM, wrap (this, &dhash::partition_maintenance_timer));
+  } else {
+    install_replica_timer ();
+    transfer_initial_keys ();
   }
 }
 
@@ -146,7 +150,8 @@ dhash::sendblock (bigint destID, bigint blockID, bool last, callback<void>::ref 
 
   warn << "dhash::sendblock: XXX DHASH_REPLICA hardcoded\n";
   cli->storeblock (destID, blockID, dhblk, last,
-		   wrap (this, &dhash::sendblock_cb, cb), DHASH_REPLICA);
+		   wrap (this, &dhash::sendblock_cb, cb), 
+		   DHASH_REPLICA);
 }
 
 
@@ -197,12 +202,12 @@ dhash::replica_maintenance_timer (u_int index)
       
       warn << "biSYNC with " << replicas[index]
 	   << " range [" << rngmin << ", " << rngmax << "]\n";
-      replica_syncer->sync (rngmin, rngmax, merkle_syncer::BIDIRECTIONAL, NULL);
+      replica_syncer->sync (rngmin, rngmax, merkle_syncer::BIDIRECTIONAL);
       index = (index + 1) % nreplica;
     }
   }
 
-  delaycb (5, wrap (this, &dhash::replica_maintenance_timer, index));
+  delaycb (REPTM, wrap (this, &dhash::replica_maintenance_timer, index));
 }
 
 #if 0
@@ -224,31 +229,37 @@ dhash::replica_maintenance_timer (u_int index)
 void
 dhash::partition_maintenance_timer ()
 {
+  warn << "\n** dhash::partition_maintenance_timer ()\n";
+
   update_replica_list ();
 
   if (!partition_syncer || partition_syncer->done()) {
-      if (partition_syncer) {
-	assert (partition_syncer->done());
-	assert (*active_syncers[partition_syncer_dstID] == partition_syncer);
-	active_syncers.remove (partition_syncer_dstID);
-      }
+    // create a syncer when there is none or the existing one is done
+    if (partition_syncer) {
+      assert (partition_syncer->done());
+      assert (*active_syncers[partition_right] == partition_syncer);
+      active_syncers.remove (partition_right);
+    }
 
-      assert (0); // skip by [predID,nodeID] chunks
-      if (partition_dbpair)
-	partition_dbpair = partition_enumeration->prevElement ();
+    // handles initial condition (-1) and key space wrap around..
+    ptr<dbPair> d = NULL;
+    if (partition_right != -1)
+      d = partition_enumeration->nextElement (id2dbrec(partition_right));
+    if (!d)
+      d = partition_enumeration->firstElement ();
 
-      if (!partition_dbpair) {
-	// get the largest database key
-	partition_enumeration = db->enumerate();
-	partition_dbpair = partition_enumeration->lastElement ();
-	assert (partition_dbpair);
-      }
-
-      chordID blockID = dbrec2id(partition_dbpair->key);
-      cli->lookup (blockID, true, wrap (this, &dhash::partition_maintenance_lookup_cb));
-  } else {
-    delaycb (5, wrap (this, &dhash::partition_maintenance_timer));
+    if (d) {
+      partition_left = dbrec2id(d->key);
+      partition_right = -1;
+      cli->lookup (partition_left, true, wrap (this, &dhash::partition_maintenance_lookup_cb));
+      return;
+    } else {
+      // database must be empty 
+      assert (mtree->root.count == 0);
+    }
   }
+
+  delaycb (PRTTM, wrap (this, &dhash::partition_maintenance_timer));
 }
   
 
@@ -257,33 +268,42 @@ dhash::partition_maintenance_timer ()
 void
 dhash::partition_maintenance_lookup_cb (dhash_stat err, chordID hostID)
 {
-  assert (err == 0);
-  host_node->get_predecessor (hostID, wrap (this, &dhash::partition_maintenance_pred_cb, hostID));
+  if (err) {
+    warn << "dhash::partition_maintenance_lookup_cb err " << err << "\n";
+    delaycb (PRTTM, wrap (this, &dhash::partition_maintenance_timer));
+  } else {
+    partition_right = hostID;
+    host_node->get_predecessor (hostID, wrap (this, &dhash::partition_maintenance_pred_cb));
+  }
 }
 
 
 void
-dhash::partition_maintenance_pred_cb (chordID hostID, 
-				     chordID predID, net_address addr, chordstat status)
+dhash::partition_maintenance_pred_cb (chordID predID, net_address addr, chordstat status)
 {
-  assert (status == 0);
-  assert (hostID != host_node->my_ID());
+  if (status) {
+    warn << "dhash::partition_maintenance_pred_cb status " << status << "\n";
+  } else {
+    // incID because
+    //   hostID is responsible for (pred, hostID]
+    //   but we sync the range  [partition_left, partition_right]
+    partition_left = incID(predID);
 
-  if (active_syncers[hostID])
-    fatal << "Strange: already syncing with " << hostID << "\n";
+    if (active_syncers[partition_right])
+      warn << "Strange: already syncing with " << partition_right << "\n";
+    else {    
+      partition_syncer = New refcounted<merkle_syncer> 
+	(mtree, 
+	 wrap (this, &dhash::doRPC_unbundler, partition_right),
+	 wrap (this, &dhash::sendblock, partition_right));
+      active_syncers.insert (partition_right, partition_syncer);
+      
+      warn << "uniSYNC range [" << partition_left << ", " << partition_right << "]\n";
+      partition_syncer->sync (partition_left, partition_right, merkle_syncer::UNIDIRECTIONAL);
+    }
+  }
 
-  partition_syncer = New refcounted<merkle_syncer> 
-    (mtree, 
-     wrap (this, &dhash::doRPC_unbundler, hostID),
-     wrap (this, &dhash::sendblock, hostID));
-  active_syncers.insert (hostID, partition_syncer);
-  
-  warn << "uniSYNC range [" << predID << ", " << hostID << "]\n";
-  replica_syncer->sync (predID, hostID, merkle_syncer::UNIDIRECTIONAL, NULL);
-  partition_syncer_predID = predID;
-  partition_syncer_dstID = hostID;
-
-  delaycb (5, wrap (this, &dhash::partition_maintenance_timer));
+  delaycb (PRTTM, wrap (this, &dhash::partition_maintenance_timer));
 }
 
 
@@ -309,7 +329,7 @@ dhash::sync_cb ()
     delete l;
   }
 
-  delaycb (30, wrap (this, &dhash::sync_cb));
+  delaycb (SYNCTM, wrap (this, &dhash::sync_cb));
 }
 
 void 
@@ -1141,7 +1161,7 @@ dhash::responsible(const chordID& n)
   if (ss) return true; //finish any store we start
   chordID p = host_node->my_pred ();
   chordID m = host_node->my_ID ();
-  return (between (p, m, n));
+  return (between (p, m, n)); // XXX leftinc? rightinc?
 }
 
 void

@@ -62,7 +62,6 @@ merkle_syncer::merkle_syncer (merkle_tree *ltree, rpcfnc_t rpcfnc, sndblkfnc_t s
 {
   fatal_err = NULL;
   sync_done = false;
-  synccb = NULL;
 
   tcb = NULL;
   pending_rpcs = 0;
@@ -167,9 +166,6 @@ merkle_syncer::next (void)
  
   warn << "DONE .. in NEXT\n";
   sync_done = true;
-  if (synccb)
-    (*synccb) ();
-
   /**/warn << "OK!\n";
   //XXX_main ();
 }
@@ -232,9 +228,8 @@ merkle_syncer::getblocklist_cb (ref<getblocklist_res> res, clnt_stat err)
 
 
 void
-merkle_syncer::sync (bigint _rngmin, bigint _rngmax, mode_t m, cbv::ptr cb)
+merkle_syncer::sync (bigint _rngmin, bigint _rngmax, mode_t m)
 {
-  synccb = cb;
   mode = m;
   rngmin = _rngmin;
   rngmax = _rngmax;
@@ -472,19 +467,12 @@ merkle_syncer::recvblk (bigint key, bool last)
   }
 }
 
-// XXX 
-//  A merkle syncer can have many async requests outstanding at once.
-//  If one of those gets an error, then this function is called
-//  which could lead to the merkle_syncer being deleted!!!!!
-//
 void
 merkle_syncer::error (str err)
 {
   warn << "SYNCER ERROR: " << err << "\n";
   fatal_err = err;
   sync_done = true;
-  if (synccb)
-    (*synccb) ();
 }
 
 void

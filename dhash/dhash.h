@@ -183,14 +183,14 @@ class dhash {
   merkle_server *msrv;
   merkle_tree *mtree;
   qhash<chordID, ptr<merkle_syncer>, hashID> active_syncers;
+
   chordID replica_syncer_dstID;
   ptr<merkle_syncer> replica_syncer;
-  chordID partition_syncer_predID;
-  chordID partition_syncer_dstID;
+
+  chordID partition_left;
+  chordID partition_right;
   ptr<merkle_syncer> partition_syncer;
-  bigint partition_position;
   ptr<dbEnumeration> partition_enumeration;
-  ptr<dbPair> partition_dbpair;
 
   ihash<chordID, store_state, &store_state::key, 
     &store_state::link, hashID> pst;
@@ -213,8 +213,7 @@ class dhash {
   void replica_maintenance_timer (u_int index);
   void partition_maintenance_timer ();
   void partition_maintenance_lookup_cb (dhash_stat err, chordID hostID);
-  void partition_maintenance_pred_cb (chordID hostID, 
-				     chordID predID, net_address addr, chordstat stat);
+  void partition_maintenance_pred_cb (chordID predID, net_address addr, chordstat stat);
   void doRPC_unbundler (chordID ID, RPC_delay_args *args);
 
 

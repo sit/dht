@@ -190,7 +190,7 @@ route_dhash::route_dhash (ptr<route_factory> f, chordID blockID, dhash *dh,
 			  bool lease, bool ucs)
 
   : dh (dh), ask_for_lease (lease), use_cached_succ (ucs), 
-    blockID (blockID), f (f)
+    blockID (blockID), f (f), dcb (NULL)
 {
   ptr<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg> ();
   arg->key = blockID;
@@ -254,6 +254,7 @@ route_dhash::execute (cb_ret cbi, u_int _retries)
 void
 route_dhash::timed_out ()
 {
+  dcb = NULL;
   warn << "lookup TIMED OUT\n";
   reexecute ();
 }

@@ -232,7 +232,7 @@ test (merkle_syncer::mode_t m, uint progress, uint data_points)
   warn << "\n\n ************************* RUNNING TEST ************************\n";
   bigint rngmin  = 0;
   bigint rngmax = (bigint (1) << 160)  - 1;
-  SYNCER.syncer->sync (rngmin, rngmax, m, NULL);
+  SYNCER.syncer->sync (rngmin, rngmax, m);
 
   while (!SYNCER.syncer->done ()) {
     acheck ();
