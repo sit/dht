@@ -39,6 +39,19 @@ fill_RR (domain_name dname, dns_type dt, dns_class cl,
     rr->rdata.hostname = (string) malloc (rr->rdlength);
     memmove (rr->rdata.hostname, rr_data, rr->rdlength);
     break;
+  case SOA:
+    rr->rdata.soa.mname = (string) malloc (6);
+    memmove (rr->rdata.soa.mname, "hello\0", 6);
+    rr->rdata.soa.rname = (string) malloc (6);
+    memmove (rr->rdata.soa.rname, "there\0", 6);
+    rr->rdata.soa.serial = 343;
+    rr->rdata.soa.refresh = 224;
+    rr->rdata.soa.retry = 6;
+    rr->rdata.soa.expire = 87;
+    rr->rdata.soa.minttl = 6578;
+    rr->rdlength = 6 + 6 + 5*sizeof (uint32);
+    warn << "mname = " << rr->rdata.soa.mname << "\n";
+    break;
   default:
     break;
   }    
@@ -49,10 +62,10 @@ store_it (domain_name dname, dns_type dt)
 {
   ref<ddnsRR> rr = New refcounted<ddnsRR>;
   //fill_RR (dname, dt, IN, 23234, "18.26.4.33", rr);
-  fill_RR (dname, dt, IN, 23234, "sth.sth.com", rr);
+  fill_RR (dname, dt, IN, 23234, "sth.sth.com\0", rr);
   rr->next = New refcounted<ddnsRR>;
   //fill_RR (dname, dt, IN, 54344, "34.5.3.2", rr->next);
-  fill_RR (dname, dt, IN, 34242, "hello.org", rr->next);
+  fill_RR (dname, dt, IN, 34242, "hello.org\0", rr->next);
   rr->next->next = NULL;
 
   ddns_clnt->store (dname, rr);
@@ -86,8 +99,17 @@ got_it (ptr<ddnsRR> rr)
     case PTR:
       warn << "rdata.hostname = " << rr->rdata.hostname << "\n";
       break;
+    case SOA:
+      warn << "rdata.soa.mname = " << rr->rdata.soa.mname << "\n";
+      warn << "rdata.soa.rname = " << rr->rdata.soa.rname << "\n";
+      warn << "rdata.soa.serial = " << rr->rdata.soa.serial << "\n";
+      warn << "rdata.soa.refresh = " << rr->rdata.soa.refresh << "\n";
+      warn << "rdata.soa.retry = " << rr->rdata.soa.retry << "\n";
+      warn << "rdata.soa.expire = " << rr->rdata.soa.expire << "\n";
+      warn << "rdata.soa.minttl = " << rr->rdata.soa.minttl << "\n";
+      break;
     default:
-      return;
+      break;
     }
     rr = rr->next;
   }

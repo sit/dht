@@ -2,6 +2,7 @@
 #include "dhash.h"
 #include "ddns.h"
 #include "sfsmisc.h"
+#include <iostream.h>
 
 dns_type 
 get_dtype (const char *type) 
@@ -74,17 +75,14 @@ void
 copy2block (char *data, void *field, 
 	    int fieldlen, int &datalen, int &datasize)
 {
-  warn << "datasize = " << datasize << "\n";
-  warn << "datap - data = " << datalen << "\n";
-  
   if (datasize - datalen < fieldlen) {
     datasize *= 2;
     data = (char *) realloc (data, datasize);
     assert(data);
   }
   memmove (data + datalen, (const char *) field, fieldlen);
+  warn << "data + " << datalen << " = " << data+datalen << "\n";
   datalen += fieldlen;
-  warn << "datap - data = " << datalen << "\n";
 }
 
 int 
@@ -120,8 +118,39 @@ ddns::ddnsRR2block (ptr<ddnsRR> rr, char *data, int datasize)
       copy2block (data, (void *) rr->rdata.hostname, 
 		  rr->rdlength, datalen, datasize);
       break;
+    case SOA:
+      warn << "soa.mname = " << rr->rdata.soa.mname << "\n";
+      warn << "soa.rname = " << rr->rdata.soa.rname << "\n";
+      warn << "soa.serial = " << rr->rdata.soa.serial << "\n";
+      warn << "soa.refresh = " << rr->rdata.soa.refresh << "\n";
+      warn << "soa.retry = " << rr->rdata.soa.retry << "\n";
+      copy2block (data, (void *) rr->rdata.soa.mname,
+		  rr->rdlength, datalen, datasize);		  
+      break;
+    case WKS:
+      copy2block (data, (void *) &rr->rdata.wks,
+		  rr->rdlength, datalen, datasize);		  
+      break;
+    case HINFO:
+      copy2block (data, (void *) &rr->rdata.hinfo,
+		  rr->rdlength, datalen, datasize);		  
+      break;
+    case MINFO:
+      copy2block (data, (void *) &rr->rdata.minfo,
+		  rr->rdlength, datalen, datasize);		  
+      break;
+    case MX:
+      copy2block (data, (void *) &rr->rdata.mx,
+		  rr->rdlength, datalen, datasize);		  
+      break;
+    case TXT:
+      copy2block (data, (void *) rr->rdata.txt_data,
+		  rr->rdlength, datalen, datasize);
+      break;
+    case DNULL:
     default:
-      return -1;
+      copy2block (data, (void *) rr->rdata.rdata,
+		  rr->rdlength, datalen, datasize);      
     }  
     rr = rr->next;
   }
@@ -148,13 +177,12 @@ void
 ddns::store (domain_name dname, ref<ddnsRR> rr)
 {
   nstore++;
-  warn << "dname = " << dname << "\n";
   ref<dhash_storeres> res = New refcounted<dhash_storeres> (); 
   ref<dhash_insertarg> i_arg = New refcounted<dhash_insertarg> ();
   i_arg->key = getcID (dname, rr->type);
   char *data = (char *) malloc(DMTU);
   int datasize = ddnsRR2block (rr, data, DMTU);
-  warn << "final datasize = " << datasize << "\n";
+
   i_arg->data.setsize (datasize);
   i_arg->type = DHASH_STORE;
   i_arg->attr.size = datasize;
@@ -197,6 +225,55 @@ ddns::lookup (domain_name dname, dns_type dt, ddns::lcb_t lcb)
     acheck ();
 }
 
+void 
+block2soa (soa_data *soa, char *data, int datalen)
+{
+
+#if 1
+  char *begstr, *endstr = strchr (data, '\0');
+  begstr = endstr + 1; 
+  int fieldlen = endstr - data + 1;
+  
+  soa->mname = (char *) malloc (fieldlen);
+  memmove (soa->mname, data, fieldlen);
+  warn << "soa->mname = " << soa->mname << "\n";
+
+  warn << "data = " << data << "\n";
+
+  endstr = strchr (data + fieldlen + 1, '\0');
+  warn << "data + " << fieldlen +1 << " = " << data + fieldlen + 1 << "\n";
+
+  fieldlen = endstr - (data + fieldlen);
+  soa->rname = (char *) malloc (fieldlen);
+  memmove (soa->rname, data + 7, fieldlen);
+  warn << "soa->rname = " << soa->rname << "\n";
+  
+  fieldlen = sizeof (uint32);
+  begstr = endstr;
+  memmove (&soa->serial, begstr, fieldlen);
+  warn << "soa->serial = " << soa->serial << "\n";
+  begstr += fieldlen;
+  memmove (&soa->refresh, begstr, fieldlen);
+  warn << "soa->refresh = " << soa->refresh << "\n";
+  begstr += fieldlen;
+  memmove (&soa->retry, begstr, fieldlen);
+  warn << "soa->retry = " << soa->retry << "\n";
+  begstr += fieldlen;
+  memmove (&soa->expire, begstr, fieldlen);
+  warn << "soa->expire = " << soa->expire << "\n";
+  begstr += fieldlen;
+  memmove (&soa->minttl, begstr, fieldlen);
+  warn << "soa->minttl = " << soa->minttl << "\n";
+
+  warn << "datalen = " << datalen << " copiedlen = " << (begstr-data)+fieldlen << "\n";
+#else
+  //streambuf *sbuf = New streambuf (); // = New iostream(data);
+  //istream datastr (sbuf->setbuf (data, datalen));
+  data >> soa->mname;
+  
+#endif
+}
+
 void
 ddns::lookup_cb (domain_name dname, chordID key, 
 		 ref<dhash_res> res, ddns::lcb_t lcb, clnt_stat err)
@@ -210,13 +287,11 @@ ddns::lookup_cb (domain_name dname, chordID key,
   } else {
     int off = res->resok->res.size ();
     if (off == (int) res->resok->attr.size) {
-      warn << "Done: " << "res->size = " << off << "\n";
       int offset = 0, dnamelen = strlen (dname) + 1;
       char *data = (char *)res->resok->res.base ();
       ref<ddnsRR> rr = New refcounted<ddnsRR>;
       ptr<ddnsRR> rr_tmp = rr;
       while (off > 0) {
-	warn << "off = " << off << "\n";
 	rr_tmp->dname = (string) malloc (dnamelen);
 	memmove (rr_tmp->dname, data, dnamelen); 
 	data = data + dnamelen;
@@ -246,8 +321,35 @@ ddns::lookup_cb (domain_name dname, chordID key,
 	  rr_tmp->rdata.hostname = (string) malloc (rr_tmp->rdlength);
 	  memmove (rr_tmp->rdata.hostname, data, rr_tmp->rdlength);	
 	  break;
-	default:
+	case SOA:
+	  block2soa (&rr_tmp->rdata.soa, data, rr_tmp->rdlength);
 	  break;
+#if 0
+	case WKS:
+	  &rr_tmp->rdata.wks = (string) malloc (rr_tmp->rdlength);
+	  memmove (rr_tmp->rdata.wks, data, rr_tmp->rdlength);	
+	  break;
+	case HINFO:
+	  &rr_tmp->rdata.hinfo = (string) malloc (rr_tmp->rdlength);
+	  memmove (rr_tmp->rdata.hinfo, data, rr_tmp->rdlength);	
+	  break;
+	case MINFO:
+	  &rr_tmp->rdata.minfo = (string) malloc (rr_tmp->rdlength);
+	  memmove (rr_tmp->rdata.minfo, data, rr_tmp->rdlength);	
+	  break;
+	case MX:
+	  &rr_tmp->rdata.mx = (string) malloc (rr_tmp->rdlength);
+	  memmove (rr_tmp->rdata.mx, data, rr_tmp->rdlength);	
+	  break;
+#endif
+	case TXT:
+	  rr_tmp->rdata.txt_data = (string) malloc (rr_tmp->rdlength);
+	  memmove (rr_tmp->rdata.txt_data, data, rr_tmp->rdlength);	
+	  break;	
+	case DNULL:
+	default:
+	  rr_tmp->rdata.rdata = (string) malloc (rr_tmp->rdlength);
+	  memmove (rr_tmp->rdata.rdata, data, rr_tmp->rdlength);	
 	}
 	data = data + rr_tmp->rdlength;
 	offset += rr_tmp->rdlength;
