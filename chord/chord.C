@@ -533,8 +533,8 @@ vnode::dodebruijn (svccb *sbp, chord_debruijnarg *da)
   if (betweenrightincl (myID, succ, da->x)) {
     res = New chord_debruijnres (CHORD_INRANGE);
     warnt("CHORD: debruijn_inrangereply");
-    res->inres->x = myID;
-    res->inres->r = locations->getaddress (myID);
+    res->inres->x = succ;
+    res->inres->r = locations->getaddress (succ);
     sbp->reply(res);
     delete res;
   } else {
