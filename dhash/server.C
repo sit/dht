@@ -42,11 +42,11 @@ dhash::dhash(str dbname, vnode *node, int k, int ss, int cs, int _ss_mode) :
   keys_replicated = 0;
   keys_cached = 0;
 
-  //  init_key_status ();
+  init_key_status ();
   update_replica_list ();
-  //  install_replica_timer ();
-  // install_keycheck_timer ();
-  //transfer_initial_keys ();
+  install_replica_timer ();
+  install_keycheck_timer ();
+  transfer_initial_keys ();
 
   // RPC demux
   host_node->addHandler (DHASH_PROGRAM, wrap(this, &dhash::dispatch));

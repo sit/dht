@@ -1,10 +1,10 @@
-dnl $Id: acinclude.m4,v 1.2 2001/01/18 16:21:42 fdabek Exp $
+dnl $Id: acinclude.m4,v 1.3 2001/08/23 00:42:19 kaashoek Exp $
 dnl
 dnl Find full path to program
 dnl
 AC_DEFUN(SFS_PATH_PROG,
 [AC_PATH_PROG(PATH_[]translit($1, [a-z], [A-Z]), $1,,
-/usr/bin:/bin:/sbin:/usr/sbin:/usr/etc:/usr/libexec:/usr/ucb:/usr/bsd:/usr/5bin:$PATH:/usr/local/bin:/usr/local/sbin:/usr/X11R6/bin)
+$2[]ifelse($2,,,:)/usr/bin:/bin:/sbin:/usr/sbin:/usr/etc:/usr/libexec:/usr/ucb:/usr/bsd:/usr/5bin:$PATH:/usr/local/bin:/usr/local/sbin:/usr/X11R6/bin)
 if test "$PATH_[]translit($1, [a-z], [A-Z])"; then
     AC_DEFINE_UNQUOTED(PATH_[]translit($1, [a-z], [A-Z]),
 		       "$PATH_[]translit($1, [a-z], [A-Z])",
@@ -122,7 +122,7 @@ if test $ac_cv_func_openpty = no; then
 	AC_CHECK_LIB(util, openpty, PTYLIB="-lutil"
 		AC_DEFINE(HAVE_OPENPTY, 1,
 			Define if you have the openpty function.)
-		AC_CHECK_HEADERS(util.h))
+		AC_CHECK_HEADERS(util.h libutil.h))
 fi
 
 AC_MSG_CHECKING(for pseudo ttys)
@@ -464,6 +464,8 @@ AC_DEFUN(SFS_CHECK_NFSMNT,
 need_nfs_nfs_h=no
 AC_EGREP_HEADER(nfs_args, sys/mount.h,,
 	AC_EGREP_HEADER(nfs_args, nfs/mount.h, AC_DEFINE(NEED_NFS_MOUNT_H))
+	AC_EGREP_HEADER(nfs_args, nfs/nfsmount.h,
+		AC_DEFINE(NEED_NFS_NFSMOUNT_H))
 	AC_EGREP_HEADER(nfs_args, nfs/nfs.h, AC_DEFINE(NEED_NFS_NFS_H)
 			need_nfs_nfs_h=yes))
 AC_CACHE_CHECK(for nfs_args mount structure, sfs_cv_nfsmnt_ok,
@@ -630,8 +632,9 @@ if test -z "$with_gmp"; then
     else
 	GMP_DIR=
 	for dir in "$prefix" /usr/local /usr; do
-	    if test -f $dir/lib/libgmp.a -a -f $dir/include/gmp.h \
-		-o -f $dir/lib/libgmp.la -a -f $dir/include/gmp.h; then
+	    if test \( -f $dir/lib/libgmp.a -o -f $dir/lib/libgmp.la \) \
+		-a \( -f $dir/include/gmp.h -o -f $dir/include/gmp3/gmp.h \
+			-o -f $dir/include/gmp2/gmp.h \); then
 		    with_gmp=$dir
 		    break
 	    fi
@@ -639,12 +642,21 @@ if test -z "$with_gmp"; then
 	if test -z "$with_gmp"; then
 	    AC_MSG_ERROR([Could not find GMP library])
 	fi
-	test "$with_gmp" = /usr && unset with_gmp
+	test "$with_gmp" = /usr -a -f /usr/include/gmp.h && unset with_gmp
     fi
 fi
 if test "$with_gmp"; then
     unset GMP_DIR
-    CPPFLAGS="$CPPFLAGS -I${with_gmp}/include"
+    if test -f ${with_gmp}/include/gmp.h; then
+	CPPFLAGS="$CPPFLAGS -I${with_gmp}/include"
+    elif test -f ${with_gmp}/include/gmp3/gmp.h; then
+	CPPFLAGS="$CPPFLAGS -I${with_gmp}/include/gmp3"
+    elif test -f ${with_gmp}/include/gmp2/gmp.h; then
+	CPPFLAGS="$CPPFLAGS -I${with_gmp}/include/gmp2"
+    else
+	AC_MSG_ERROR([Could not find gmp.h header])
+    fi
+
     #LDFLAGS="$LDFLAGS -L${with_gmp}/lib"
     #LIBGMP=-lgmp
     if test -f "${with_gmp}/lib/libgmp.la"; then
@@ -669,29 +681,31 @@ else
     fi
 fi
 
-unset have_mpz_xo
-if test "$GMP_DIR"; then
-	have_mpz_xor=yes
-else
-	ac_save_LIBS="$LIBS"
-	LIBS="$LIBS $LIBGMP"
-	AC_CHECK_FUNC(mpz_xor, have_mpz_xor=yes)
-	LIBS="$ac_save_LIBS"
-fi
-test "$have_mpz_xor" && AC_DEFINE([HAVE_MPZ_XOR], 1,
-	[Define you have mpz_xor in your GMP library.])
-
 AC_CONFIG_SUBDIRS($GMP_DIR)
-AC_CACHE_CHECK(size of GMP mp_limb_t, sfs_cv_mp_limb_t_size,
-sfs_cv_mp_limb_t_size=no
+
 ac_save_CFLAGS="$CFLAGS"
 test "$GMP_DIR" && CFLAGS="$CFLAGS -I${srcdir}/${GMP_DIR}"
+
+AC_CACHE_CHECK(for mpz_xor, sfs_cv_have_mpz_xor,
+unset sfs_cv_have_mpz_xor
+if test "$GMP_DIR"; then
+	sfs_cv_have_mpz_xor=yes
+else
+	AC_EGREP_HEADER(mpz_xor, [gmp.h], sfs_cv_have_mpz_xor=yes)
+fi)
+test "$sfs_cv_have_mpz_xor" && AC_DEFINE([HAVE_MPZ_XOR], 1,
+	[Define if you have mpz_xor in your GMP library.])
+
+AC_CACHE_CHECK(size of GMP mp_limb_t, sfs_cv_mp_limb_t_size,
+sfs_cv_mp_limb_t_size=no
 for size in 2 4 8; do
     AC_TRY_COMPILE([#include <gmp.h>],
     [switch (0) case 0: case (sizeof (mp_limb_t) == $size):;],
     sfs_cv_mp_limb_t_size=$size; break)
-done
-CFLAGS="$ac_save_CFLAGS")
+done)
+
+CFLAGS="$ac_save_CFLAGS"
+
 test "$sfs_cv_mp_limb_t_size" = no \
     && AC_MSG_ERROR(Could not determine size of mp_limb_t.)
 AC_DEFINE_UNQUOTED(GMP_LIMB_SIZE, $sfs_cv_mp_limb_t_size,
@@ -773,12 +787,13 @@ if test "$with_db3" != no; then
 	DB3_LIB='-L$(top_builddir)/'"$DB3_DIR -ldb"
 	AC_MSG_RESULT([using distribution in $DB3_DIR subdirectory])
     else
-	libdbrx='^libdb([[3.-]].*)?.la$'
+	libdbrx='^libdb([[3.-]].*)?.(la|so)$'
 	if test "$with_db3" = yes; then
 	    for dir in "$prefix/BerkeleyDB.3.1" /usr/local/BerkeleyDB.3.1 \
 		    "$prefix/BerkeleyDB.3.0" /usr/local/BerkeleyDB.3.0 \
 		    /usr "$prefix" /usr/local; do
-		test -f $dir/include/db.h -o -f $dir/include/db3.h || continue
+		test -f $dir/include/db.h -o -f $dir/include/db3.h \
+			-o -f $dir/include/db3/db.h || continue
 		if test -f $dir/lib/libdb.a \
 			|| ls $dir/lib | egrep -q "$libdbrx"; then
 		    with_db3="$dir"
@@ -789,10 +804,14 @@ if test "$with_db3" != no; then
 
 	if test -f $with_db3/include/db3.h; then
 	    AC_DEFINE(HAVE_DB3_H, 1, [Define if BerkeleyDB header is db3.h.])
-	elif test ! -f $with_db3/include/db.h; then
+	    CPPFLAGS="$CPPFLAGS -I${with_db3}/include"
+	elif test -f $with_db3/include/db3/db.h; then
+	    CPPFLAGS="$CPPFLAGS -I${with_db3}/include/db3"
+	elif test -f $with_db3/include/db.h; then
+	    CPPFLAGS="$CPPFLAGS -I${with_db3}/include"
+	else
 	    AC_MSG_ERROR([Could not find BerkeleyDB library version 3])
 	fi
-	CPPFLAGS="$CPPFLAGS -I${with_db3}/include"
 
 	DB3_LIB=`ls $with_db3/lib | egrep "$libdbrx" | tail -1`
 	if test -f "$with_db3/lib/$DB3_LIB"; then
@@ -1018,12 +1037,32 @@ fi
 dnl
 dnl Check for getgrouplist function
 dnl
+AC_DEFUN(SFS_GETGROUPLIST_TRYGID, [
+if test "$sfs_cv_grouplist_t" != gid_t; then
+    AC_TRY_COMPILE([
+#include <sys/types.h>
+#include <unistd.h>
+#include <grp.h>
+int getgrouplist ([$*]);
+		    ], 0, sfs_cv_grouplist_t=gid_t)
+fi
+])
 AC_DEFUN(SFS_GETGROUPLIST,
 [AC_CHECK_FUNCS(getgrouplist)
 AC_CACHE_CHECK([whether getgrouplist uses int or gid_t], sfs_cv_grouplist_t,
     if test "$ac_cv_func_getgrouplist" = yes; then
+	sfs_cv_grouplist_t=int
 	AC_EGREP_HEADER(getgrouplist.*gid_t *\*, unistd.h,
-			sfs_cv_grouplist_t=gid_t, sfs_cv_grouplist_t=int)
+			sfs_cv_grouplist_t=gid_t)
+	if test "$sfs_cv_grouplist_t" != gid_t; then
+	    AC_EGREP_HEADER(getgrouplist.*gid_t *\*, grp.h,
+			    sfs_cv_grouplist_t=gid_t)
+	fi
+
+	SFS_GETGROUPLIST_TRYGID(const char *, gid_t, gid_t *, int *)
+	SFS_GETGROUPLIST_TRYGID(const char *, int , gid_t *, int *)
+	SFS_GETGROUPLIST_TRYGID(char *, gid_t, gid_t *, int *)
+	SFS_GETGROUPLIST_TRYGID(char *, int, gid_t *, int *)
     else
 	sfs_cv_grouplist_t=gid_t
     fi)
@@ -1047,7 +1086,7 @@ dnl
 AC_DEFUN(SFS_AUTHUNIX_GROUP_T,
 [AC_CACHE_CHECK([what last authunix_create arg points to],
 	sfs_cv_authunix_group_t,
-AC_EGREP_HEADER([auth(unix|sys)_create.*(uid_t|gid_t)], rpc/rpc.h,
+AC_EGREP_HEADER([(authunix|authsys)_create.*(uid_t|gid_t)], rpc/rpc.h,
 	sfs_cv_authunix_group_t=gid_t, sfs_cv_authunix_group_t=int))
 if test "$sfs_cv_authunix_group_t" = gid_t; then
     AC_DEFINE_UNQUOTED(AUTHUNIX_GID_T, 1,
@@ -1104,6 +1143,7 @@ if test -f ${with_sfs}/Makefile -a -f ${with_sfs}/autoconf.h; then
     LIBSFSCRYPT=${with_sfs}/crypt/libsfscrypt.la
     LIBSFSMISC=${with_sfs}/sfsmisc/libsfsmisc.la
     LIBSVC=${with_sfs}/svc/libsvc.la
+    MALLOCK=${with_sfs}/sfsmisc/mallock.o
     RPCC=${with_sfs}/rpcc/rpcc
 elif test -f ${with_sfs}/include/sfs/autoconf.h \
 	-a -f ${with_sfs}/lib/sfs/libasync.la; then
@@ -1119,11 +1159,29 @@ elif test -f ${with_sfs}/include/sfs/autoconf.h \
     LIBARPC=${sfslibdir}/libarpc.la
     LIBSFSCRYPT=${sfslibdir}/libsfscrypt.la
     LIBSFSMISC=${sfslibdir}/libsfsmisc.la
-    LIBSVC=../svc//libsvc.la
+    LIBSVC=${sfslibdir}/libsvc.la
+    MALLOCK=${sfslibdir}/mallock.o
     RPCC=${with_sfs}/bin/rpcc
 else
     AC_MSG_ERROR("Can\'t find SFS libraries")
 fi
+
+if test "$enable_static" = yes -a -z "${NOPAGING+set}"; then
+    case "$host_os" in
+	openbsd*)
+	    test "$ac_cv_prog_gcc" = yes && NOPAGING="-Wl,-Bstatic,-N"
+	    MALLOCK=		# mallock.o panics the OpenBSD kernel
+	;;
+	freebsd*)
+	    test "$ac_cv_prog_gcc" = yes && NOPAGING="-Wl,-Bstatic"
+	;;
+    esac
+fi
+
+sfslibdir='$(libdir)/sfs'
+sfsincludedir='$(libdir)/include'
+AC_SUBST(sfslibdir)
+AC_SUBST(sfsincludedir)
 
 AC_SUBST(LIBASYNC)
 AC_SUBST(LIBARPC)
@@ -1131,6 +1189,8 @@ AC_SUBST(LIBSFSCRYPT)
 AC_SUBST(LIBSFSMISC)
 AC_SUBST(LIBSVC)
 AC_SUBST(RPCC)
+AC_SUBST(MALLOCK)
+AC_SUBST(NOPAGING)
 
 SFS_GMP
 SFS_DMALLOC

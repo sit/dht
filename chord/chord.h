@@ -59,11 +59,10 @@ typedef callback<void, unsigned long, chord_RPC_arg *, cxid_t>::ref cbdispatch_t
 
 struct findpredecessor_cbstate {
   chordID x;
-  chordID nprime;
   route search_path;
   cbroute_t cb;
-  findpredecessor_cbstate (chordID xi, chordID npi, route spi, cbroute_t cbi) :
-    x (xi), nprime (npi), search_path (spi), cb (cbi) {};
+  findpredecessor_cbstate (chordID xi, route spi, cbroute_t cbi) :
+    x (xi), search_path (spi), cb (cbi) {};
 };
 
 struct finger {
@@ -144,25 +143,16 @@ class vnode : public virtual refcount {
   void stabilize_getsucclist_ok (int i, chordID s, bool ok, chordstat status);
   void join_getsucc_ok (cbjoin_t cb, chordID s, bool ok, chordstat status);
   void join_getsucc_cb (cbjoin_t cb, chordID s, route r, chordstat status);
-  void find_closestpred (chordID &n, chordID &x, findpredecessor_cbstate *st);
-  void find_closestpred_cb (chordID n, findpredecessor_cbstate *st,
-			    chord_noderes *res, clnt_stat err);
-  void find_successor_cb (cbroute_t cb, route sp, chordID s, net_address r,
-			    chordstat status);
-  void find_predecessor_cb (cbroute_t cb, chordID x, chordID p, 
-			    route search_path, chordstat status);
+  void get_successor_cb (chordID n, cbchordID_t cb, chord_noderes *res, 
+			 clnt_stat err);
+  void get_predecessor_cb (chordID n, cbchordID_t cb, chord_noderes *res, 
+			   clnt_stat err);
+  void find_successor_cb (chordID x, 
+			  cbroute_t cb, chordID s, route sp, chordstat status);
   void testrange_findclosestpred (chordID node, chordID x, 
 				  findpredecessor_cbstate *st);
   void testrange_findclosestpred_cb (chord_testandfindres *res, 
 			 findpredecessor_cbstate *st, clnt_stat err);
-  void find_closestpred_succ_cb (findpredecessor_cbstate *st, chordID s,
-				 net_address r, chordstat status);
-  void get_successor_cb (chordID n, cbchordID_t cb, chord_noderes *res, 
-			 clnt_stat err);
-  void get_succ_cb (callback<void, chordID, chordstat>::ref cb, 
-		    chordID succ, net_address r, chordstat err);
-  void get_predecessor_cb (chordID n, cbchordID_t cb, chord_noderes *res, 
-			 clnt_stat err);
   void donotify_cb (chordID p, bool ok, chordstat status);
   void notify_cb (chordID n, chordstat *res, clnt_stat err);
   void alert_cb (chordstat *res, clnt_stat err);
@@ -171,8 +161,6 @@ class vnode : public virtual refcount {
   void challenge (chordID &x, cbchallengeID_t cb);
   void challenge_cb (int challenge, chordID x, cbchallengeID_t cb, 
 		     chord_challengeres *res, clnt_stat err);
-  void dofindsucc_cb (cbroute_t cb, chordID n, chordID x,
-		      route search_path, chordstat status);
   void doalert_cb (svccb *sbp, chordID x, chordID s, net_address r, 
 		   chordstat stat);
   void doRPC (chordID &ID, rpc_program prog, int procno, 
@@ -192,18 +180,12 @@ class vnode : public virtual refcount {
   // The API
   void stabilize (void);
   void join (cbjoin_t cb);
-  void find_predecessor (chordID &n, chordID &x, cbroute_t cb);
-  void find_predecessor_restart (chordID &n, chordID &x, route search_path,
-				 cbroute_t cb);
-  void find_successor (chordID &n, chordID &x, cbroute_t cb);
-  void find_successor_restart (chordID &n, chordID &x, route search_path, 
-			       cbroute_t cb);
   void get_successor (chordID n, cbchordID_t cb);
-  void get_succ (chordID n, callback<void, chordID, chordstat>::ref cb);
   void get_predecessor (chordID n, cbchordID_t cb);
+  void find_successor (chordID &n, chordID &x, cbroute_t cb);
+  void find_route (chordID &n, chordID &x, cbroute_t cb);
   void notify (chordID &n, chordID &x);
   void alert (chordID &n, chordID &x);
-  void dofindsucc (chordID &n, cbroute_t cb);
   chordID nth_successorID (int n);
 
   // The RPCs
@@ -289,7 +271,8 @@ class chord : public virtual refcount {
     return active->lookup_closestpred (k); 
   };
   void find_successor (chordID n, cbroute_t cb) {
-    active->dofindsucc (n, cb);
+    chordID myID = active->my_ID ();
+    active->find_successor (myID, n, cb);
   };
   void get_predecessor (chordID n, cbchordID_t cb) {
     active->get_predecessor (n, cb);

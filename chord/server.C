@@ -53,21 +53,6 @@ vnode::get_successor_cb (chordID n, cbchordID_t cb, chord_noderes *res,
   delete res;
 }
 
-// short hand version of get_successor to avoid passing net_address around 
-// if we don't need it
-void
-vnode::get_succ (chordID n, callback<void, chordID, chordstat>::ref cb) 
-{
-  get_successor (n, wrap(this, &vnode::get_succ_cb, cb));
-}
-
-void
-vnode::get_succ_cb (callback<void, chordID, chordstat>::ref cb, 
-		  chordID succ, net_address r, chordstat err) 
-{
-  cb (succ, err);
-}
-
 void 
 vnode::get_predecessor (chordID n, cbchordID_t cb)
 {
@@ -109,144 +94,30 @@ vnode::find_successor (chordID &n, chordID &x, cbroute_t cb)
 {
   // warn << "find_successor: " << n << " " << x << "\n";
   nfindsuccessor++;
-  find_predecessor (n, x,
-		    wrap (mkref (this), &vnode::find_predecessor_cb, cb, x));
-}
-
-
-void
-vnode::find_successor_restart (chordID &n, chordID &x, route search_path, 
-			     cbroute_t cb)
-{
-  // warnx << "find_successor_restart: at " << n << "\n";
-  nfindsuccessorrestart++;
-  find_predecessor_restart (n, x, search_path,
-			    wrap (mkref (this), &vnode::find_predecessor_cb, 
-				  cb, x));
+  find_route (n, x, wrap (mkref (this), &vnode::find_successor_cb, x, cb));
 }
 
 void
-vnode::find_predecessor_cb (cbroute_t cb, chordID x, chordID p, 
-			    route search_path, chordstat status)
+vnode::find_successor_cb (chordID x, cbroute_t cb, chordID s, 
+			  route search_path, chordstat status)
 {
-  if (status != CHORD_OK) {
-    cb (p, search_path, status);
-  } else {
-
-    nhops += search_path.size ();
-    if (search_path.size () > nmaxhops)
-      nmaxhops = search_path.size ();
-
-    if (search_path.size () == 0) {
-      // warnx << "find_predecessor_cb: get successor of " << p << "\n";
-      get_successor (p, wrap (mkref(this), &vnode::find_successor_cb, 
-			      cb, search_path));
-    } else {
-      // warnx << "find_predecessor_cb: " << myID << " found succ of " 
-      //   << x << "\n";
-      chordID s = search_path.pop_back ();
-      cb(s, search_path, status);
-    }
-  }
-}
-
-void
-vnode::find_successor_cb (cbroute_t cb, route search_path, chordID s, 
-			net_address r, chordstat status)
-{
-  //  warnx << "find_successor_cb: " << s << " status " << status << "\n";
   cb (s, search_path, status);
 }
 
-
-// XXX with OPT it finds the successor!
 void
-vnode::find_predecessor (chordID &n, chordID &x, cbroute_t cb) 
+vnode::find_route (chordID &n, chordID &x, cbroute_t cb) 
 {
   nfindpredecessor++;
-  warnt("CHORD: find_predecessor_enter");
-  if (n == finger_table[1].first.n) {
-    //n is only node
-    warnt("CHORD: find_pred_early_exit");
+  if (n == finger_table[1].first.n) {    // is n the only node?
     route search_path;
+    search_path.push_back (n);
     cb (n, search_path, CHORD_OK);
   } else {
     route search_path;
-    search_path.push_back(n);
+    search_path.push_back (n);
     findpredecessor_cbstate *st = 
-      New findpredecessor_cbstate (x, n, search_path, cb);
-#ifdef UNOPT
-    find_closestpred (n, x, st);
-#else
+      New findpredecessor_cbstate (x, search_path, cb);
     testrange_findclosestpred (n, x, st);
-#endif /* UNOPT */
-  }
-}
-
-void
-vnode::find_predecessor_restart (chordID &n, chordID &x, route search_path,
-			       cbroute_t cb)
-{
-  findpredecessor_cbstate *st = 
-      New findpredecessor_cbstate (x, n, search_path, cb);
-  nfindpredecessorrestart++;
-  find_closestpred (n, x, st);
-}
-
-void
-vnode::find_closestpred (chordID &n, chordID &x, findpredecessor_cbstate *st)
-{
-  ptr<chord_findarg> fap = New refcounted<chord_findarg>;
-  chord_noderes *res = New chord_noderes (CHORD_OK);
-  fap->v.n = n;
-  fap->x = x;
-  warnt("CHORD: issued_FINDCLOSESTPRED_RPC");
-  //  warn << "issuing rpc w/ n=" << n << "\n";
-  doRPC (n, chord_program_1, CHORDPROC_FINDCLOSESTPRED, fap, 
-		    res,
-		    wrap (mkref (this), &vnode::find_closestpred_cb, n, st, 
-			  res));
-}
-
-void
-vnode::find_closestpred_cb (chordID n, findpredecessor_cbstate *st, 
-			  chord_noderes *res, clnt_stat err)
-{
-  warnt("CHORD: find_closestpred_cb");
-  //  warn << "looking for closestpred of " << res->resok->node << "\n";
-  if (err) {
-    warnx << "find_closestpred_cb: RPC failure " << err << "\n";
-    st->cb (n, st->search_path, CHORD_RPCFAILURE);
-    delete st;
-  } else if (res->status) {
-    warnx << "find_closestpred_cb: RPC error" << res->status << "\n";
-    st->cb (n, st->search_path, res->status);
-    delete st;
-  } else if (res->resok->node == n) {
-    warnx << "find_closestpred_cb: next hops returns itself\n";
-    st->cb (n, st->search_path, CHORD_ERRNOENT);
-    delete st;
-    //    delete res;
-  } else {
-    // warnx << "find_closestpred_cb: pred of " << st->x << " is " 
-    //  << res->resok->node << "\n";
-    locations->cacheloc (res->resok->node, res->resok->r);
-    st->search_path.push_back(res->resok->node);
-    if (st->search_path.size () >= 1000) {
-      warnx << "PROBLEM: too long a search path: " << myID << " looking for "
-	    << st->x << "\n";
-      if (res->resok->node == n) warnx << "next hop returns itself\n";
-      for (unsigned i = 0; i < st->search_path.size (); i++) {
-	warnx << st->search_path[i] << "\n";
-      }
-      assert (0);
-    }
-#ifdef UNOPT
-    get_successor (res->resok->node, 
-		   wrap (mkref (this), &vnode::find_closestpred_succ_cb, st));
-#else
-    testrange_findclosestpred (res->resok->node, st->x, st);
-#endif /* UNOPT */
   }
 }
 
@@ -254,19 +125,14 @@ void
 vnode::testrange_findclosestpred (chordID n, chordID x, 
 				  findpredecessor_cbstate *st)
 {
-  //  warn << "looking for closestpred of " << n << " " << x << "\n";
+  // warn << "looking for closestpred of " << n << " " << x << "\n";
   ptr<chord_testandfindarg> arg = New refcounted<chord_testandfindarg> ();
   arg->v.n = n;
   arg->x = x;
-  st->nprime = n;
   chord_testandfindres *nres = New chord_testandfindres (CHORD_OK);
-  warnt("CHORD: issued_testandfind");
   ntestrange++;
-  doRPC (n, chord_program_1, 
-	 CHORDPROC_TESTRANGE_FINDCLOSESTPRED, 
-	 arg, nres, 
-	 wrap (this, &vnode::testrange_findclosestpred_cb, 
-	       nres, st));
+  doRPC (n, chord_program_1, CHORDPROC_TESTRANGE_FINDCLOSESTPRED, arg, nres, 
+	 wrap (this, &vnode::testrange_findclosestpred_cb, nres, st));
 }
 
 void
@@ -274,33 +140,40 @@ vnode::testrange_findclosestpred_cb (chord_testandfindres *res,
 				     findpredecessor_cbstate *st, 
 				     clnt_stat err) 
 {
-  warnt("CHORD: testrange_findclosestpred_cb");
   if (err) {
     warnx << "testrange_findclosestpred_cb: failure " << err << "\n";
-    st->cb(st->nprime, st->search_path, CHORD_RPCFAILURE);
+    chordID l = st->search_path.back ();
+    st->cb(l, st->search_path, CHORD_RPCFAILURE);
     delete st;
-    warnt("CHORD: test_and_find RPC ERROR");
   } else if (res->status == CHORD_INRANGE) { 
+    // found the successor
     st->search_path.push_back(res->inres->x);
     assert (st->search_path.size () < 1000);
     locations->cacheloc (res->inres->x, res->inres->r);
-    //    warn << "testrange_findclosestpred_cb: " << myID << " succ of " 
-    // << st->nprime << " is " << res->inres->x << "\n";
-    st->cb (st->nprime, st->search_path, CHORD_OK);
+    st->cb (st->search_path.back (), st->search_path, CHORD_OK);
     delete st;
   } else if (res->status == CHORD_NOTINRANGE) {
-    if (st->nprime == res->noderes->node) {
-      // st->nprime is the only node in the network
-      st->search_path.push_back (res->noderes->node);
-      st->cb (st->nprime, st->search_path, CHORD_OK);
+    // haven't found the successor yet
+    chordID last = st->search_path.back ();
+    if (last == res->noderes->node) {   
+      // last returns itself as best predecessor, but doesn't know
+      // what its immediate successor is---higher layer should use
+      // succlist to make forward progress
+      st->cb (st->search_path.back (), st->search_path, CHORD_ERRNOENT);
       delete st;
     } else {
-      chord_noderes *fres = New chord_noderes ();
-      fres->resok->node = res->noderes->node;
-      fres->resok->r = res->noderes->r;
-      assert (st->search_path.size () < 1000);
-      find_closestpred_cb (st->nprime, st, fres, RPC_SUCCESS);
-      delete fres;
+      // ask the new node for its best predecessor
+      locations->cacheloc (res->noderes->node, res->noderes->r);
+      st->search_path.push_back(res->noderes->node);
+      if (st->search_path.size () >= 1000) {
+	warnx << "PROBLEM: too long a search path: " << myID << " looking for "
+	    << st->x << "\n";
+	for (unsigned i = 0; i < st->search_path.size (); i++) {
+	  warnx << st->search_path[i] << "\n";
+	}
+	assert (0);
+      }
+      testrange_findclosestpred (res->noderes->node, st->x, st);
     }
   } else {
     warn("WTF");
@@ -431,38 +304,4 @@ void
 vnode::doRPC (chordID &ID, rpc_program prog, int procno, 
 	      ptr<void> in, void *out, aclnt_cb cb) {
   locations->doRPC (myID, ID, prog, procno, in, out, cb, getusec ());
-}
-
-void
-vnode::dofindsucc (chordID &n, cbroute_t cb)
-{
-  // warn << "dofindsucc " << myID << " " << n << "\n";
-  find_successor (myID, n, wrap (mkref (this), &vnode::dofindsucc_cb, cb, n));
-}
-
-void
-vnode::dofindsucc_cb (cbroute_t cb, chordID n, chordID x,
-                    route search_path, chordstat status) 
-{
-  if (status) {
-    warnx << "dofindsucc_cb for " << n << " returned " <<  status << "\n";
-    if (status == CHORD_RPCFAILURE) {
-      warnx << "dofindsucc_cb: try to recover\n";
-      chordID last = search_path.pop_back ();
-      chordID lastOK = search_path.back ();
-      warnx << "dofindsucc_cb: last node " << last << " contacted failed\n";
-      alert (lastOK, last);
-      find_successor_restart (lastOK, x, search_path,
-                              wrap (mkref (this), &vnode::dofindsucc_cb, cb, 
-				    n));
-    } else {
-      cb (x, search_path, CHORD_ERRNOENT);
-    }
-  } else {
-    // warnx << "dofindsucc_cb: " << myID << " done\n";
-    // for (unsigned i = 0; i < search_path.size (); i++) {
-    // warnx << search_path[i] << "\n";
-    // }
-    cb (x, search_path, CHORD_OK);
-  }
 }
