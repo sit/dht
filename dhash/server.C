@@ -241,6 +241,8 @@ dhash_impl::missing (ptr<location> from, bigint key)
     return;
   }
 
+  warn << "merkle: missing key "  << key << ", fetching\n";
+
   timespec ts;
   clock_gettime (CLOCK_REALTIME, &ts);
   str tm =  strbuf (" %d.%06d", int (ts.tv_sec), int (ts.tv_nsec/1000));
