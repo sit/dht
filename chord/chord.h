@@ -38,7 +38,7 @@
 #include <location.h>
 
 #define NBIT     160     // size of Chord identifiers in bits
-#define NIMM     32      // log of # vnodes
+#define NSUCC     32      // log of # vnodes
 
 typedef int cb_ID;
 
@@ -86,7 +86,7 @@ class vnode : public virtual refcount  {
   
   ptr<locationtable> locations;
   finger finger_table[NBIT+1];
-  node succlist[NBIT+1];
+  node succlist[NSUCC+1];
   int nsucc;
   node predecessor;
   int stable;
@@ -121,7 +121,6 @@ class vnode : public virtual refcount  {
 
   void updatefingers (chordID &x, net_address &r);
   void replacefinger (node *n);
-  void print ();
   u_long estimate_nnodes ();
   chordID findpredfinger (chordID &x);
   chordID findpredfinger2 (chordID &x);
@@ -204,6 +203,7 @@ class vnode : public virtual refcount  {
   chordID findsuccfinger (chordID &x);
   void deletefingers (chordID &x);
   void stats (void);
+  void print (void);
   chordID lookup_closestpred (chordID &x);
 
   searchcb_entry * registerSearchCallback(cbsearch_t cb);
@@ -260,6 +260,7 @@ class chord : public virtual refcount {
   void deletefingers (chordID &x);
   int countrefs (chordID &x);
   void stats (void);
+  void print (void);
 
   //support for demultiplexing RPCs to vnodes
   void register_handler (int progno, chordID dest, cbdispatch_t hand);

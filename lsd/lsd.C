@@ -239,6 +239,7 @@ parseconfigfile (str cf, int nvnode, int set_rpcdelay)
   if (myid) chordnode->newvnode (myID, wrap (newvnode_cb, nvnode-1));
   else chordnode->newvnode (wrap (newvnode_cb, nvnode-1));
   sigcb(SIGUSR1, wrap (chordnode, &chord::stats));
+  sigcb(SIGUSR2, wrap (chordnode, &chord::print));
 }
 
 static void

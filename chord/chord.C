@@ -41,7 +41,7 @@ vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
   stable = 0;
   locations->incvnodes ();
   locations->increfcnt (myID);
-  for (int i = 1; i <= NBIT; i++) {
+  for (int i = 1; i <= NSUCC; i++) {
     succlist[i].alive = false;
   }
   for (int i = 1; i <= NBIT; i++) {
@@ -122,6 +122,8 @@ vnode::deletefingers (chordID &x)
       locations->deleteloc (finger_table[i].first.n);
       finger_table[i].first.alive = false;
     }
+  }
+  for (int i = 1; i <= NSUCC; i++) {
     if (succlist[i].alive && (x == succlist[i].n)) {
       locations->deleteloc (succlist[i].n);
       succlist[i].alive = false;
@@ -423,7 +425,7 @@ vnode::stabilize_getsucclist_cb (int i, chordID s, net_address r,
     // locations->checkrefcnt (3);
     if (s == myID) {  // did we go full circle?
       if (nsucc > i) {  // remove old entries?
-	for (int j = nsucc+1; j <= NBIT; j++) {
+	for (int j = nsucc+1; j <= NSUCC; j++) {
 	  if (succlist[j].alive) {
 	    locations->deleteloc (succlist[j].n);
 	    succlist[j].alive = false;
@@ -432,7 +434,7 @@ vnode::stabilize_getsucclist_cb (int i, chordID s, net_address r,
       }
       nsucc = i;
       //      locations->checkrefcnt (4);
-    } else if (i < NBIT) {
+    } else if (i < NSUCC) {
       locations->changenode (&succlist[i+1], s, r);
       if ((i+1) > nsucc) nsucc = i+1;
       //      locations->checkrefcnt (5);

@@ -196,7 +196,14 @@ chord::stats ()
     v->stats ();
   }
   locations->stats ();
-  exit (0);
+}
+
+void
+chord::print ()
+{
+  for (vnode *v = vnodes.first (); v != NULL; v = vnodes.next (v)) {
+    v->print ();
+  }
 }
 
 void 
