@@ -22,7 +22,7 @@ struct paxos_seqnum_t {
   chordID proposer;
 };
 
-/* prepare message */
+/* prepare/ask message */
 struct dhc_prepare_arg {
    chordID bID; 		/* ID of Public Key block */
    paxos_seqnum_t round; 	/* new Paxos number same as proposal number*/ 
@@ -71,6 +71,7 @@ union dhc_propose_res switch (dhc_stat status) {
 
 struct dhc_newconfig_arg {
    chordID bID;
+   chordID mID;
    keyhash_data data;
    u_int64_t old_conf_seqnum;
    chordID new_config<>;
@@ -94,25 +95,6 @@ union dhc_get_res switch (dhc_stat status) {
    default:
 	void;
 };
-
-/*
-struct dhc_gettag_arg {
-   chordID bID;
-   chordID writer;
-};
-
-struct dhc_gettag_resok {
-   chordID primary;
-   tag_t new_tag;
-};
-
-union dhc_gettag_res switch (dhc_stat status) {
-   case DHC_OK:
-	dhc_gettag_resok resok;
-   default:
-	void;
-};
-*/
 
 struct dhc_put_arg {
    chordID bID;
@@ -148,12 +130,16 @@ program DHC_PROGRAM {
     DHCPROC_GETBLOCK (dhc_get_arg) = 5;
 
     dhc_put_res
-    DHCPROC_PUT (dhc_put_arg) = 7;
+    DHCPROC_PUT (dhc_put_arg) = 6;
 
     dhc_put_res
-    DHCPROC_PUTBLOCK (dhc_putblock_arg) = 8;
+    DHCPROC_PUTBLOCK (dhc_putblock_arg) = 7;
     
     dhc_put_res
-    DHCPROC_NEWBLOCK (dhc_put_arg) = 9; 
+    DHCPROC_NEWBLOCK (dhc_put_arg) = 8; 
+
+    dhc_prepare_res 
+    DHCPROC_ASK (dhc_prepare_arg) = 9;
+
   } = 1;	
 } = 344452;

@@ -8,8 +8,14 @@
 #include <dhash_types.h>
 #include <location.h>
 #include <dhc_prot.h>
+#include <modlogger.h>
 
 #define ID_size sha1::hashsize
+#define dhc_trace modlogger ("dhct")
+
+extern int dhc_debug;
+extern int RECON_TM;
+extern char *host;
 
 struct dhash_block;
 
@@ -142,11 +148,12 @@ struct keyhash_meta {
 
 struct dhc_block {
   chordID id;
+  chordID masterID;   //ID of object that decides which node is the recon leader.
   keyhash_meta *meta;
   keyhash_data *data;
   char *buf;
 
-  dhc_block (chordID ID) : id (ID), buf (NULL)
+  dhc_block (chordID ID, chordID mID) : id (ID), masterID (mID), buf (NULL)
   {
     meta = New keyhash_meta;
     data = New keyhash_data;
@@ -157,6 +164,8 @@ struct dhc_block {
     //warnx << "dhc_block: " << sz << "\n";
     uint msize, offst = 0;
     ID_get (&id, bytes);
+    offst += ID_size;
+    ID_get (&masterID, bytes);
 
     offst += ID_size;
     bcopy (bytes + offst, &msize, sizeof (uint));
@@ -188,7 +197,7 @@ struct dhc_block {
 
   uint size ()
   {
-    return (ID_size + meta->size () + sizeof (u_int64_t) + 
+    return (ID_size + ID_size + meta->size () + sizeof (u_int64_t) + 
 	    ID_size + data->data.size ());
   }
   
@@ -200,6 +209,8 @@ struct dhc_block {
 
     uint offst = 0;
     ID_put (buf, id);
+    offst += ID_size;
+    ID_put (buf, masterID);
     offst += ID_size;
 
     bcopy (meta->bytes (), buf + offst, meta->size ());
@@ -217,7 +228,8 @@ struct dhc_block {
   {
     strbuf ret;
     ret << "\n*************** DHC block *****************\n" 
-	<< "\n id: " << id 
+	<< "\n id: " << id
+	<< "\n master ID " << masterID 
 	<< "\n meta data: " << meta->to_str ()
 	<< "\n data tag ver " << data->tag.ver 
 	<< "\n data tag writer " << data->tag.writer
@@ -295,6 +307,7 @@ struct dhc_soft {
     bzero (&proposal.proposer, sizeof (chordID));    
     promised.seqnum = kb->meta->accepted.seqnum;
     promised.proposer = kb->meta->accepted.proposer;
+
     
     pstat = New refcounted<paxos_state_t>;
   }
@@ -403,18 +416,24 @@ class dhc /*: public virtual refcount*/ {
   uint n_replica;
   uint recon_tm_rpcs;
   timecb_t *recon_tm;
+  u_int64_t start_recon, end_recon;
 
   void recon_timer ();
   void recon_tm_lookup (ref<dhc_block>, bool, vec<chord_node>, route, chordstat);
   void recon_tm_done (dhc_stat, clnt_stat);
   void recon (chordID, dhc_cb_t);
+  void master_recon (ptr<dhc_block>, dhc_cb_t);
+  void ask_master (ptr<dhc_block>, dhc_cb_t);
 
   void recv_prepare (user_args *);
   void recv_promise (chordID, dhc_cb_t, ref<dhc_prepare_res>, clnt_stat);
   void recv_propose (user_args *);
   void recv_accept (chordID, dhc_cb_t, ref<dhc_propose_res>, clnt_stat);
   void recv_newconfig (user_args *);
-  void recv_newconfig_ack (chordID, dhc_cb_t cb, ref<dhc_newconfig_res>, clnt_stat);
+  void recv_newconfig_ack (chordID, dhc_cb_t, ref<dhc_newconfig_res>, clnt_stat);
+
+  void recv_permission (chordID, dhc_cb_t, ref<dhc_prepare_res>, clnt_stat);
+
   void recv_get (user_args *);
   void getblock_cb (user_args *, ptr<location>, ptr<read_state>, 
 		    ref<dhc_get_res>, clnt_stat);

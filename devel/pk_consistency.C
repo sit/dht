@@ -45,16 +45,19 @@ pk_read_cb (dhashclient dhash, dhash_stat stat, ptr<dhash_block> blk,
     
     ptr<keyhash_payload> p = keyhash_payload::decode (blk);
     
-    trace << tp.tv_sec << "." << tp.tv_usec << ": "
+    trace //<< tp.tv_sec << "." << tp.tv_usec << ": "
 	  << "READ key " << p->id (pk)
-	  << " version " << p->version ()  << "\n";
-
-    delaycb (interval, wrap (&pk_read, dhash, p->id (pk)));
+	  << " version " << p->version ()  
+	  << " lastnode " << path[path.size()-1] << "\n"; 
 
   } else {
-    warn << "READ error dhash_stat: " << stat << "\n";
-    exit (-1);
+    trace << "READ error dhash_stat: " << stat << "\n";
+    //exit (-1);
   }
+
+  keyhash_payload tp;
+  delaycb (interval, wrap (&pk_read, dhash, tp.id (pk)));
+
 }
 
 void 
@@ -83,15 +86,17 @@ pk_write_cb (dhashclient dhash, long version,
     timeval tp;
     gettimeofday (&tp, NULL);
     
-    trace << tp.tv_sec << "." << tp.tv_usec << ": "
+    trace //<< tp.tv_sec << "." << tp.tv_usec << ": "
 	  << "WROTE key " << i->key 
-	  << "  version " << version << "\n";
+	  << "  version " << version 
+	  << "  lastnode " << i->path[i->path.size ()-1] << "\n";
 
-    delaycb (interval, wrap (&pk_write, dhash, version));
   } else {
-    warn << "WRITE error dhash_stat: " << stat << "\n";
-    exit (-1);
+    trace << "WRITE error dhash_stat: " << stat << "\n";
+    //exit (-1);
   }
+
+  delaycb (interval, wrap (&pk_write, dhash, version));
 }
 
 void 
@@ -112,7 +117,7 @@ static void
 usage ()
 {
   warnx << "usage: " << progname
-	<< " sock mode frequency[ops/minute] pubkeyfile \n";
+	<< " sock mode frequency[ops/minute] privkeyfile \n";
   exit (1);
 }
 
