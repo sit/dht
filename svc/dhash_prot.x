@@ -7,9 +7,16 @@ enum dhash_stat {
   DHASH_NOENT = 1
 };
 
+enum store_status {
+  DHASH_STORE = 0,
+  DHASH_CACHE = 1,
+  DHASH_REPLICA = 3
+};
+
 struct dhash_insertarg {
   sfs_ID key;
   dhash_value data;
+  store_status type;
 };
 
 struct dhash_resok {
