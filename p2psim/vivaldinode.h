@@ -15,7 +15,7 @@ public:
   VivaldiNode(IPAddress);
   ~VivaldiNode();
 
-  bool sendPacket(IPAddress, Packet*);
+  virtual bool sendPacket(IPAddress, Packet*);
   Coord getCoords() { return _c; }
 
 private:

@@ -25,7 +25,7 @@ public:
 
   // Sends whatever data to the specified protocol on the node with the
   // specified IPAddress.
-  bool sendPacket(IPAddress, Packet*);
+  virtual bool sendPacket(IPAddress, Packet*);
 
 private:
   virtual void run();

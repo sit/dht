@@ -54,7 +54,6 @@ ProtocolFactory::create(string s, Node *n)
   if (s == "VivaldiTest")
     p = new VivaldiTest(n);
 
-  cout << "_protnames " << typeid(*p).name() << " = " << s << endl;
   _protnames[typeid(*p).name()] = s;
   return p;
 }
