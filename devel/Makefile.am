@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.35 2004/08/13 15:24:46 athicha Exp $
+# $Id: Makefile.am,v 1.36 2004/08/13 21:49:21 athicha Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -43,7 +43,7 @@ dhc_test_SOURCES = dhc_test.C
 dhc_test_LDADD = ../dhash/libdhashclient.a ../svc/libsvc.la $(LDADD)
 
 pkc_SOURCES = pk_consistency.C
-pkc_LDADD = ../dhash/libdhashclient.a ../svc/libsvc.la $(LDADD)
+pkc_LDADD = ../dhash/libdhashclient.a ../utils/libutil.a ../svc/libsvc.la $(LDADD)
 
 if GTK_AVAILABLE
 vis_SOURCES = vis.C
