@@ -243,11 +243,15 @@ dhash::sendblock (chord_node dst, bigint blockID, bool last, callback<void>::ref
 {
   // warnx << "sendblock: to " << dst.x << ", id " << blockID << ", from " << host_node->my_ID () << "\n";
 
-  // XXX insert dst into the location table...
+  bool r = host_node->locations->insert (dst);
+  assert (r == true);
 
   ptr<dbrec> blk = db->lookup (id2dbrec (blockID));
   assert (blk); // XXX: don't assert here, maybe just callback?
   ref<dhash_block> dhblk = New refcounted<dhash_block> (blk->value, blk->len);
+
+  // XXX pass 'dst' not 'dst.x' to storeblock so that the store
+  // works even if dst.x is evicted from the location table
   cli->storeblock (dst.x, blockID, dhblk, last,
 		   wrap (this, &dhash::sendblock_cb, cb), 
 		   DHASH_REPLICA);
