@@ -52,9 +52,9 @@ client_accept (int fd)
 
   ref<axprt_stream> x = axprt_stream::alloc (fd);
 
-  // XXX these dhashclient objects never get cleaned up
+  // XXX these dhashgateway objects are leaked
   //
-  dhashclient *c = New dhashclient (x, chordnode);
+  dhashgateway *c = New dhashgateway (x, chordnode);
   c->set_caching (do_cache ? 1 : 0);
 }
 

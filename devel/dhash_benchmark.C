@@ -31,291 +31,121 @@
 #include "crypt.h"
 #include <sys/time.h>
 
-float avg_lookupRPCs;
-
-static ptr<aclnt> p2pclnt;
 static bigint *IDs;
 static void **data;
-static str control_socket;
+str control_socket;
 static FILE *outfile;
+unsigned int datasize;
 
 int out = 0;
-int out_op = 0;
-int OPS_OUT = 1024;
-
-void afetch_cb (dhash_res *res, chordID key, char *buf, int i,
-		struct timeval start, clnt_stat err);
-void afetch_cb2 (dhash_res *res, char *buf, unsigned int *read, int i, 
-		 struct timeval start, clnt_stat err);
-
-void store_cb (dhash_storeres *res, clnt_stat err);
-void store_cb_after_insert (chordID key, void *data, int written, 
-			    int datasize, dhash_storeres *res, clnt_stat err);
+int MAX_OPS_OUT = 1024;
 
 
-void finish (char *buf, unsigned int *read, 
-	     struct timeval start, 
-	     int i,
-	     dhash_res *res);
 
-ref<aclnt>
-cp2p ()
-{
-  int fd;
-
-  if (p2pclnt)
-    return p2pclnt;
-  fd = unixsocket_connect (control_socket);
-  if (fd < 0)
-      fatal ("%s: %m\n", control_socket.cstr ());
-  p2pclnt = aclnt::alloc (axprt_unix::alloc (fd), dhashclnt_program_1);
-  return p2pclnt;
-}
-
-#define DMTU 1024
-
-void
-store_block(chordID key, void *data, unsigned int datasize) 
-{
-
-  out++;
-  dhash_storeres *res = New dhash_storeres ();
-  dhash_insertarg *i_arg = New dhash_insertarg ();
-  i_arg->key = key;  
-  int n = (DMTU < datasize) ? DMTU : datasize;
-  i_arg->data.setsize(n);
-  i_arg->type = DHASH_STORE;
-  i_arg->attr.size = datasize;
-  i_arg->offset = 0;
-  memcpy(i_arg->data.base (), (char *)data, n);
-  cp2p ()->call(DHASHPROC_INSERT, i_arg, res, wrap (store_cb_after_insert,
-						    key, data, n, datasize, res));
-  delete i_arg;
-}
-
-void
-store_cb_after_insert (chordID key, void *data, int m, int datasize, dhash_storeres *res,
-		       clnt_stat err)
-{
-
-  if (err || (res->status)) {
-    warn << "store error\n";
-    out--;
-    return;
-  }
-
-  chordID source = res->resok->source;
-
-  int written = m;
-  if (written >= datasize) {
-    out--;
-    return;
-  }
-
-  while (written < datasize) {
-    int n = (written + DMTU < datasize) ? DMTU : datasize - written;
-    dhash_storeres *res2 = New dhash_storeres ();
-    dhash_send_arg *sarg = New dhash_send_arg ();
-    sarg->dest = source;
-    sarg->iarg.key = key;
-    sarg->iarg.data.setsize(n);
-    memcpy (sarg->iarg.data.base (), (char *)data + written, n);
-    sarg->iarg.type = DHASH_STORE;
-    sarg->iarg.attr.size = datasize;
-    sarg->iarg.offset = written;
-    
-    cp2p ()->call(DHASHPROC_SEND, sarg, res2, wrap (store_cb, res2));
-    written += n;
-    delete sarg;
-  };
-  delete res;
-}
-
-void
-store_cb (dhash_storeres *res, clnt_stat err)
-{
-  if ( (err) || (res->status)) {
-    warn << "store error\n";
-    out--;
-  } else if (res->resok->done) {
-    out--;
-  }
-  
-  delete res;
-
-}
-
-
-int
-fetch_block_async(int i, chordID key, int datasize) 
-{
-  dhash_res *res = New dhash_res (DHASH_OK);
-  char *buf = New char[datasize];
-  struct timeval start;
-  gettimeofday (&start, NULL);
-
-  dhash_fetch_arg arg;
-  arg.key = key;
-  arg.len = DMTU;
-  arg.start = 0;
-  out++;
-  cp2p ()->call(DHASHPROC_LOOKUP, &arg, res, wrap(&afetch_cb, res, key, buf, i, start));
-  return 0;
-}
-
-
-void
-afetch_cb (dhash_res *res, chordID key, char *buf, int i, struct timeval start, clnt_stat err) 
-{
-  if (err) {
-    strbuf sb;
-    rpc_print (sb, key, 5, NULL, " ");
-    str s = sb;
-    fprintf(outfile, "RPC error: %d %s", err, s.cstr());
-    out--;
-    return;
-  }
-
-  if (res->status != DHASH_OK) {
-    strbuf sb;
-    rpc_print (sb, key, 5, NULL, " ");
-    str s = sb;
-    fprintf(outfile, "Error: %d %s", res->status, s.cstr());
-    out--;
-    return;
-  }
-
-  memcpy(buf, res->resok->res.base (), res->resok->res.size ());
-  unsigned int *read = New unsigned int(res->resok->res.size ());
-  unsigned int off = res->resok->res.size ();
-
-  if (off == res->resok->attr.size) finish (buf, read, start, i, res);
-  while (off < res->resok->attr.size) {
-    ptr<dhash_transfer_arg> arg = New refcounted<dhash_transfer_arg> ();
-
-    arg->farg.key = key;
-    arg->farg.len = (off + DMTU < res->resok->attr.size) ? DMTU : 
-      res->resok->attr.size - off;
-    arg->farg.start = off;
-    arg->source = res->resok->source;
-    dhash_res *nres = New dhash_res(DHASH_OK);
-    out_op++;
-    cp2p ()->call(DHASHPROC_TRANSFER, arg, nres, 
-		  wrap(&afetch_cb2, nres, buf, read, i, start));
-    off += arg->farg.len;
-  };
-  delete res;
-}
-
-void
-afetch_cb2 (dhash_res *res, char *buf, unsigned int *read, int i, struct timeval start, clnt_stat err) 
-{
-  if (err) {
-    out_op--;
-    warn << "err: " << err << "\n";
-    return;
-  }
-  assert(err == 0);
-  assert(res->status == DHASH_OK);
-  memcpy(buf + res->resok->offset, res->resok->res.base (), res->resok->res.size ());
-  *read += res->resok->res.size ();
-  out_op--;
-  if (*read == res->resok->attr.size) finish (buf, read, start, i, res);
-  
-  delete res;
-}
-
-
-void
-finish (char *buf, unsigned int *read, 
-	struct timeval start, 
-	int i,
-	dhash_res *res) 
-{
-  out--;
-      
-#ifdef VERIFY
-    int diff = memcmp(data[i], buf, *read);
-    assert (!diff);
-#endif
-
-    struct timeval end;
-    gettimeofday(&end, NULL);
-    float elapsed = (end.tv_sec - start.tv_sec)*1000.0 + (end.tv_usec - start.tv_usec)/1000.0;
-    fprintf(outfile, "%f %d\n", elapsed, res->resok->hops);
-    
-    delete read;
-    delete buf;
-}
-
-//size must be word sized
 chordID
-make_block(void *data, int size) 
+make_block (void *data) 
 {
+  // size must be word sized
+  assert (datasize % sizeof (long) == 0);
   
   long *rd = (long *)data;
-  for (unsigned int i = 0; i < size/sizeof(long); i++) 
+  for (unsigned int i = 0; i < datasize/sizeof(long); i++) 
     rd[i] = random();
 
-  char id[sha1::hashsize];
-  sha1_hash (id, rd, size);
-  chordID ID;
-  mpz_set_rawmag_be (&ID, id, sizeof (id));  // For big endian
-  return ID;
+  return compute_hash (rd, datasize);
 }
 
 void
-prepare_test_data(int num, int datasize) 
+prepare_test_data (int num) 
 {
   IDs = New chordID[num];
   data = (void **)malloc(sizeof(void *)*num);
   for (int i = 0; i < num; i++) {
     data[i] = malloc(datasize);
-    IDs[i] = make_block(data[i], datasize);
+    IDs[i] = make_block(data[i]);
   }
 }
 
+
+void
+store_cb (bool error)
+{
+  out--;
+
+  if (error)
+    fprintf (outfile, "store error\n");
+}
+
+
 int
-store(int num, int size) {
-  
+store (dhashclient &dhash, int num) 
+{
   for (int i = 0; i < num; i++) {
-    store_block(IDs[i], data[i], size);
-    while (out > OPS_OUT) acheck ();
+    out++;
+    dhash.insert ((char *)data[i], datasize, wrap (store_cb));
+    while (out > MAX_OPS_OUT) 
+      acheck ();
   }
-  while (out > 0) {
+
+  while (out > 0) 
     acheck ();
-  }
 
   return 0;
 }
 
-int
-fetch(int num, int size) {
 
+
+void
+fetch_cb (int i, struct timeval start, ptr<dhash_block> blk)
+{
+  out--;
+
+  if (!blk) {
+    strbuf buf;
+    buf << "Error: " << IDs[i] << "\n";
+    fprintf (outfile, str (buf).cstr ());
+  }
+  else if (datasize != blk->len || memcmp (data[i], blk->data, datasize) != 0)
+    fatal << "verification failed";
+  else {
+    struct timeval end;
+    gettimeofday(&end, NULL);
+    float elapsed = (end.tv_sec - start.tv_sec)*1000.0 + (end.tv_usec - start.tv_usec)/1000.0;
+    fprintf (outfile, "%f\n", elapsed);
+  }
+}
+
+
+void
+fetch (dhashclient &dhash, int num)
+{
   for (int i = 0; i < num; i++) {
-    fetch_block_async(i, IDs[i],  size);
-    while (out > OPS_OUT) acheck ();
+    out++;
+    struct timeval start;
+    gettimeofday (&start, NULL);
+
+    dhash.retrieve (IDs[i], wrap (fetch_cb, i, start));
+    while (out > MAX_OPS_OUT)
+      acheck ();
   }
 
-  while (out > 0) acheck();
-  return 0;
+  while (out > 0) 
+    acheck();
 }
 
 void
-usage(char *progname) 
+usage (char *progname) 
 {
-  printf("%s: vnode_num control_socket num_trials data_size file <f or s> nops seed\n", 
-	 progname);
+  warn << "vnode_num control_socket num_trials data_size file <f or s> nops seed\n";
   exit(0);
 }
+
+
 
 int
 main (int argc, char **argv)
 {
-
-
-  dhash_fetchiter_res *res = New dhash_fetchiter_res (DHASH_CONTINUE);
-  res = NULL;
+  setprogname (argv[0]);
 
   sfsconst_init ();
 
@@ -325,8 +155,10 @@ main (int argc, char **argv)
   }
 
   control_socket = argv[2];
+  dhashclient dhash (control_socket);
+
   int num = atoi(argv[3]);
-  int datasize = atoi(argv[4]);
+  datasize = atoi(argv[4]);
 
   char *output = argv[5];
   if (strcmp(output, "-") == 0)
@@ -340,22 +172,22 @@ main (int argc, char **argv)
   }
 
   int i = atoi(argv[1]);
-  dhash_stat ares;
-  cp2p ()->scall(DHASHPROC_ACTIVE, &i, &ares);
+  bool err = dhash.sync_setactive (i);
+  assert (!err);
 
   unsigned int seed = strtoul (argv[8], NULL, 10);
   srandom (seed);
-  prepare_test_data (num, datasize);
+  prepare_test_data (num);
 
-  OPS_OUT = atoi(argv[7]);
+  MAX_OPS_OUT = atoi(argv[7]);
 
   struct timeval start;
   gettimeofday (&start, NULL);
 
   if (argv[6][0] == 's')
-    store(num, datasize);
+    store (dhash, num);
   else
-    fetch(num, datasize);
+    fetch (dhash, num);
   
   struct timeval end;
   gettimeofday (&end, NULL);

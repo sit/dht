@@ -32,7 +32,7 @@
 #include "qhash.h"
 
 //
-// NB. perhaps should build the lrucache ontop of an ilrucache.
+// NB. perhaps should build the lrucache on top of an ilrucache.
 //
 
 

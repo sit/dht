@@ -2,13 +2,14 @@
 #include "sfsclient.h"
 #include "bigint.h"
 #include "chord.h"
+#include "dhash.h"
 #include "qhash.h"
 #include "sfsro_prot_cfs.h"
 #include "dhash_prot.h"
 #include "lrucache.h"
 
 
-typedef callback<void, ptr<sfsro_data> >::ref cbgetdata_t;
+typedef callback<void, ptr<sfsro_data> >::ref cbdata_t;
 typedef callback<void, sfsro_inode * >::ref cbinode_t;
 typedef callback<void, char *, size_t>::ref cbblock_t;
 typedef callback<void, chordID, bool>::ref cbbmap_t; // XXX change the bool to an nfsstat3??
@@ -17,7 +18,6 @@ typedef cblookup_t cbnamei_t;
 
 typedef callback<void, nfs_fh3 *>::ref cbfh_t;
 
-typedef callback<void, ptr<sfsro_data> >::ref cbfetch_block_t; // XXX fix name
 typedef callback<void, char *, size_t>::ref cbfetch_buffer_t;
 typedef callback<void, ptr<sfsro_inode> >::ref cbfetch_inode_t;
 
@@ -27,21 +27,19 @@ struct lookup_state;
 struct getdata_state;
 
 struct fetch_wait_state {
-  cbgetdata_t cb;
+  cbdata_t cb;
   list_entry<fetch_wait_state> link;
-  fetch_wait_state (cbgetdata_t CB) : cb (CB) {};
+  fetch_wait_state (cbdata_t CB) : cb (CB) {};
 };
 
 typedef list<fetch_wait_state, &fetch_wait_state::link> wait_list;
 
 class chord_server {
+  dhashclient dhash;
+
   cfs_fsinfo fsinfo;
   ptr<sfsro_data> rootdir;
   chordID rootdirID;
-
-
-  ptr<aclnt> lsdclnt;
-  ptr<aclnt> cclnt;
 
   lrucache<chordID, ref<sfsro_data>, hashID> data_cache;
   qhash<chordID, wait_list, hashID> pf_waiters;
@@ -90,21 +88,11 @@ class chord_server {
   void namei_iter (ref<namei_state> st, ptr<sfsro_data> inode, chordID inodeID);
   void namei_iter_cb (ref<namei_state> st, ptr<sfsro_data> data, chordID dataID, nfsstat3 status);
 
-  void fetch_data (bool pfonly, chordID ID, cbfetch_block_t cb);
+  void read_file_data (bool pfonly, size_t block, sfsro_inode_reg *inode, cbdata_t cb);
+  void read_file_data_bmap_cb (bool pfonly, cbdata_t cb, chordID ID, bool success);
 
-  void read_file_data (bool pfonly, size_t block, sfsro_inode_reg *inode, cbgetdata_t cb);
-  void read_file_data_bmap_cb (bool pfonly, cbgetdata_t cb, chordID ID, bool success);
-
-  void getdata (bool pfonly, chordID ID, cbgetdata_t cb);
-  void getdata_initial_cb(ptr<getdata_state> st,
-			    ptr<dhash_res> res, 
-			    clnt_stat err);
-  void getdata_fragment_cb(ptr<getdata_state> st,
-			    ptr<dhash_res> res,
-			    clnt_stat err);
-
-  void getdata_finish (ptr<getdata_state> st);
-
+  void fetch_data (bool pfonly, chordID ID, cbdata_t cb, bool verify = true);
+  void fetch_data_cb (chordID ID, cbdata_t cb, ptr<dhash_block> blk);
 
  public:
 

@@ -113,7 +113,7 @@ struct query_succ_state {
 		    ptr<dhash_fetch_arg> r, chordID so) :
     succ (s), pathlen (p), sbp (sb), rarg (r), source (so) {};
 };
-class dhashclient {
+class dhashgateway {
 
   ptr<axprt_stream> x;
   ptr<asrv> clntsrv;
@@ -171,7 +171,7 @@ class dhashclient {
 
  public:  
   void set_caching(char c) { do_caching = c;};
-  dhashclient (ptr<axprt_stream> x, ptr<chord> clnt);
+  dhashgateway (ptr<axprt_stream> x, ptr<chord> clnt);
 };
 
 class dhash {
@@ -308,5 +308,69 @@ class dhash {
   dhash_stat key_status(chordID n);
     
 };
+
+
+
+
+struct dhash_block {
+  char *data;
+  size_t len;
+
+  ~dhash_block () {  delete [] data; }
+
+  dhash_block (const char *buf, size_t buflen)
+    : data (New char[buflen]), len (buflen)
+  {
+    if (buf)
+      memcpy (data, buf, len);
+  }
+};
+
+
+typedef callback<void, bool>::ref cbinsert_t;
+typedef callback<void, ptr<dhash_block> >::ref cbretrieve_t;
+
+class dhashclient {
+private:
+  ptr<aclnt> gwclnt;
+
+public:
+  //
+  // sockname is the unix path (ex. /tmp/chord-sock) used
+  // to communicate to lsd. 
+  //
+  dhashclient(str sockname);
+
+  // inserts under the contents hash. 
+  // (buf need not remain involatile after the call returns)
+  //
+  void insert (const char *buf, size_t buflen, cbinsert_t cb);
+
+  // inserts under the specified key
+  // (buf need not remain involatile after the call returns)
+  //
+  void insert (bigint key, const char *buf, size_t buflen, cbinsert_t cb);
+
+  // retrieve block and verify the content hash
+  //
+  void retrieve (bigint key, cbretrieve_t cb);
+
+  // retrieve block but do not verify the content hash. 
+  //
+  void retrieve_noverify (bigint key, cbretrieve_t cb);
+
+  // synchronouslly call setactive.
+  // Returns true on error, and false on success.
+  //
+  bool sync_setactive (int32 n);
+};
+
+bigint compute_hash (const void *buf, size_t buflen);
+
+
+static inline str dhasherr2str (dhash_stat status)
+{
+  return rpc_print (strbuf (), status, 0, NULL, NULL);
+}
 
 #endif

@@ -159,7 +159,7 @@ struct dhash_send_arg {
   chordID dest;
 };
 
-program DHASHCLNT_PROGRAM {
+program DHASHGATEWAY_PROGRAM {
 	version DHASHCLNT_VERSION {
 
 		void 

@@ -1,4 +1,4 @@
-/* $Id: sfsrodb_core.h,v 1.6 2001/08/30 14:16:52 fdabek Exp $ */
+/* $Id: sfsrodb_core.h,v 1.7 2002/01/07 22:30:25 cates Exp $ */
 
 /*
  *
@@ -40,12 +40,6 @@
 
 bigint fh2mpz(const void *keydata, size_t keylen);
 
-bool sfsrodb_put (const void *keydata, size_t keylen, 
-		  void *contentdata, size_t contentlen);
-void sfsrodb_put_cb(dhash_storeres *res, void *contentdata, size_t contentlen, 
-		    bigint n, int offset, clnt_stat err);
-void sfsrodb_put_finish_cb (dhash_storeres *res, clnt_stat err);
-
 /*
   Requires: You have at some point called random_init();
   Given: A filled buffer and allocated fh
@@ -55,19 +49,9 @@ void sfsrodb_put_finish_cb (dhash_storeres *res, clnt_stat err);
 void create_sfsrofh (sfs_hash *fh, 
 		     char *buf, size_t buflen);
 
-
-/*
-  Given: A filled buffer and allocated fh
-  Return: True if the file handle verifies as cryptographically secure
-*/
-bool verify_sfsrofh (const sfs_hash *fh, 
-		     char *buf, size_t buflen);
-
-void create_sfsrosig (sfs_sig *sig,  sfsro1_signed_fsinfo *info,
-		      const char *seckeyfile);
-
-bool verify_sfsrosig (const sfs_sig *sig, const sfsro1_signed_fsinfo *info,
-		      const sfs_pubkey *key);
+void sfsrodb_put (void *data, size_t len);
+void sfsrodb_put (const void *keydata, size_t keylen, void *data, size_t len);
+void sfsrodb_put (bigint key, void *data, size_t len);
 
 
 #endif /* _SFSRODB_CORE_H_ */

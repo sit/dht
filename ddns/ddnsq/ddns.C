@@ -9,7 +9,7 @@ ddns::ddns (const char *control_skt, int vnode) :
   int fd = unixsocket_connect (control_socket);
   if (fd < 0)
     fatal ("%s: %m\n", control_socket);
-  dhash_clnt = aclnt::alloc (axprt_unix::alloc (fd), dhashclnt_program_1);
+  dhash_clnt = aclnt::alloc (axprt_unix::alloc (fd), dhashgateway_program_1);
   dhash_stat ares;
   dhash_clnt->scall (DHASHPROC_ACTIVE, &vnode, &ares);
 }
@@ -31,7 +31,7 @@ ddns::get_dclnt ()
   fd = unixsocket_connect (control_socket);
   if (fd < 0)
     fatal ("%s: %m\n", control_socket);
-  dhash_clnt = aclnt::alloc (axprt_unix::alloc (fd), dhashclnt_program_1);
+  dhash_clnt = aclnt::alloc (axprt_unix::alloc (fd), dhashgateway_program_1);
   return dhash_clnt;
 }
 

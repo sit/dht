@@ -80,13 +80,9 @@ path2fileid(const str path)
 
 
 chord_server::chord_server (u_int cache_maxsize)
-  : data_cache (cache_maxsize)
+  : dhash (LSD_SOCKET), data_cache (cache_maxsize)
 {
 
-  int fd = unixsocket_connect (LSD_SOCKET);
-  if (fd < 0) 
-    fatal << "Failed to bind to lsd control socket on " << LSD_SOCKET << "\n";
-  cclnt = aclnt::alloc (axprt_unix::alloc (fd), dhashclnt_program_1);
 }
 
 
@@ -105,7 +101,7 @@ chord_server::setrootfh (str root, cbfh_t rfh_cb)
     chordID ID;
     mpz_set_rawmag_be (&ID, dearm.cstr (), dearm.len ());
     //fetch the root file handle too..
-    fetch_data (false, ID, wrap (this, &chord_server::getroot_fh, rfh_cb));
+    fetch_data (false, ID, wrap (this, &chord_server::getroot_fh, rfh_cb), false);
   }
 }
 
@@ -946,7 +942,7 @@ chord_server::bmap_recurse_data_cb (bool pfonly, cbbmap_t cb,
 // XXX should this call check the type of the block? 
 // XXX the ref counting is questionable here.. 
 void
-chord_server::read_file_data (bool pfonly, size_t block, sfsro_inode_reg *inode, cbgetdata_t cb)
+chord_server::read_file_data (bool pfonly, size_t block, sfsro_inode_reg *inode, cbdata_t cb)
 {
   // the caller must ensure that block is within the size of the file
 
@@ -957,10 +953,10 @@ chord_server::read_file_data (bool pfonly, size_t block, sfsro_inode_reg *inode,
 
 
 void
-chord_server::read_file_data_bmap_cb (bool pfonly, cbgetdata_t cb, chordID ID, bool success)
+chord_server::read_file_data_bmap_cb (bool pfonly, cbdata_t cb, chordID ID, bool success)
 {
   if (success) {
-    getdata (pfonly, ID, cb);
+    fetch_data (pfonly, ID, cb);
   } else {
     (*cb) (NULL);
   }
@@ -969,37 +965,13 @@ chord_server::read_file_data_bmap_cb (bool pfonly, cbgetdata_t cb, chordID ID, b
 
 // ------------------------ raw data fetch ------------------
 
-void
-chord_server::fetch_data (bool pfonly, chordID ID, cbfetch_block_t cb)
-{
-  getdata (pfonly, ID, cb);
-}
-
-struct getdata_state {
-  // interface variables
-  bool pfonly;
-  chordID ID;
-  cbgetdata_t cb;
-
-
-  // state variables
-  char *buf;       // block is accumulated here   
-  uint32 bufsize;
-  uint32 nread;    // bytes copied into buf so far (not necessarily contigous) 
-  uint32 npending; // pending RPCs
-
-  getdata_state(bool pfonly, chordID ID, cbgetdata_t cb) :
-    pfonly (pfonly), ID (ID), cb (cb), buf (NULL), bufsize (0), nread (0), npending (0) {}
-  ~getdata_state() { delete [] buf; }
-};
-
-
 // pfonly:
 //   -- if the data is cached, then call it back.
-//   -- otherwise, ensure the data is read in, but don't call it back.
+//   -- otherwise, ensure the data is read in (it might already be incoming),
+//      but don't call it back.
 //
 void
-chord_server::getdata (bool pfonly, chordID ID, cbgetdata_t cb)
+chord_server::fetch_data (bool pfonly, chordID ID, cbdata_t cb, bool verify)
 {
   if (ptr<sfsro_data> dat = data_cache [ID]) {
     (*cb) (dat);
@@ -1016,99 +988,40 @@ chord_server::getdata (bool pfonly, chordID ID, cbgetdata_t cb)
     fetch_wait_state *w = New fetch_wait_state (cb);
     l->insert_head (w);
 
-    ptr<getdata_state> st = New refcounted<getdata_state> (pfonly, ID, cb);
-    ptr<dhash_res> res = New refcounted<dhash_res> (DHASH_OK);
-    dhash_fetch_arg arg;
-    arg.key = ID;
-    arg.len = CMTU;
-    arg.start = 0;
-    cclnt->call (DHASHPROC_LOOKUP, &arg, res, 
-		 wrap (this, &chord_server::getdata_initial_cb, st, res));
+    if (verify)
+      dhash.retrieve (ID, wrap (this, &chord_server::fetch_data_cb, ID, cb));
+    else
+      dhash.retrieve_noverify (ID, wrap (this, &chord_server::fetch_data_cb, ID, cb));
   }
 }
 
 
 void
-chord_server::getdata_initial_cb (ptr<getdata_state> st,
-				  ptr<dhash_res> res, 
-				  clnt_stat err)
+chord_server::fetch_data_cb (chordID ID, cbdata_t cb, ptr<dhash_block> blk)
 {
-  if (err) 
-    fatal << "EOF from chord daemon. Shutting down\n";
-  else if (res->status != DHASH_OK) {
-    fatal << "error fetching " << st->ID << "\n";
+  if (!blk) {
+    warn << "fetch_data failed\n";
+    (*cb) (NULL);
   } else {
-    st->bufsize = res->resok->attr.size;
+    ptr<sfsro_data> data = New refcounted<sfsro_data>;
+    xdrmem x (blk->data, blk->len, XDR_DECODE);
+    if (!xdr_sfsro_data (x.xdrp (), data)) {
+      warn << "Couldn't unmarshall data\n";
+      (*cb) (NULL);
+    } else {
+      data_cache.insert (ID, data);
+      
+      wait_list *l = pf_waiters[ID];
+      assert (l); 
+      
+      while (fetch_wait_state *w = l->first) {
+	(*w->cb) (data);
+	l->remove (w);
+	delete w;
+      }
 
-    st->buf = New char[st->bufsize];
-    st->npending = 1; // fake a fragment callback..
-    getdata_fragment_cb (st, res, RPC_SUCCESS);
-
-    uint32 offset = res->resok->res.size ();
-    while (offset < res->resok->attr.size) {
-      st->npending++;
-      ptr<dhash_res> new_res = New refcounted<dhash_res> (DHASH_OK);
-      dhash_transfer_arg arg;
-      arg.source = res->resok->source;
-      arg.farg.key = st->ID;
-      arg.farg.start = offset;
-      arg.farg.len = MIN (CMTU, res->resok->attr.size - offset);
-      cclnt->call (DHASHPROC_TRANSFER, &arg, new_res,
-		   wrap (this, &chord_server::getdata_fragment_cb, st, new_res));
-      offset += arg.farg.len;
+      pf_waiters.remove (ID);
     }
   }
 }
 
-
-void
-chord_server::getdata_fragment_cb(ptr<getdata_state> st,
-				  ptr<dhash_res> res,
-				  clnt_stat err)
-{
-  if (err)
-    fatal << "get_data_fragment_cb err: " << strerror(err) << "\n";
-  else if (res->status != DHASH_OK) 
-    fatal << "get_data_fragment_cb bad status: " << strerror(res->status) << "\n";
-  else {
-    st->npending--;
-    st->nread += res->resok->res.size ();
-
-    uint32 offset = res->resok->offset;
-    uint32 length = res->resok->res.size();
-    if (offset + length > st->bufsize) {
-      fatal << "get_data_fragment_cb: " << st->ID << ", offset " << offset
-	    << ", length " << length << ", bufsize " << st->bufsize << "\n";
-    }
-
-    memcpy (&st->buf[offset], res->resok->res.base (), length);
-    
-    if (st->npending == 0 && st->nread == st->bufsize)
-      getdata_finish(st);
-  }
-}
-
-
-void
-chord_server::getdata_finish (ptr<getdata_state> st)
-{
-  ptr<sfsro_data> data = New refcounted<sfsro_data>;
-  xdrmem x (st->buf, st->bufsize, XDR_DECODE);
-  if (!xdr_sfsro_data (x.xdrp (), data)) {
-    warn << "Couldn't unmarshall data\n";
-    (*st->cb) (NULL);
-  } else {
-    data_cache.insert (st->ID, data);
-
-    wait_list *l = pf_waiters[st->ID];
-    assert (l); 
-
-    while (fetch_wait_state *w = l->first) {
-      (*w->cb) (data);
-      l->remove (w);
-      delete w;
-    }
-
-    pf_waiters.remove (st->ID);
-  }
-}

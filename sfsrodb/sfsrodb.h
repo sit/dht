@@ -1,4 +1,4 @@
-/* $Id: sfsrodb.h,v 1.4 2001/08/30 14:16:52 fdabek Exp $ */
+/* $Id: sfsrodb.h,v 1.5 2002/01/07 22:30:24 cates Exp $ */
 
 /*
  *
@@ -28,12 +28,12 @@
 #include "sfsro_prot_cfs.h"
 #include "sfsrodb_core.h"
 #include "sfsmisc.h"
-
+#include "dhash.h"
 
 #define SFSROSD_DB_FILE "/etc/sfsro.sdb"
 
 #include "dbfe.h"
-extern ptr<aclnt> cclnt;
+extern ptr<dhashclient> dhash;
 extern long out;
 
 /* Statistics */

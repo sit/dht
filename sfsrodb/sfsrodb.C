@@ -1,4 +1,4 @@
-/* $Id: sfsrodb.C,v 1.16 2001/10/30 22:44:13 cates Exp $ */
+/* $Id: sfsrodb.C,v 1.17 2002/01/07 22:30:24 cates Exp $ */
 
 /*
  * Copyright (C) 1999 Kevin Fu (fubob@mit.edu)
@@ -47,7 +47,7 @@
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define LSD_SOCKET "/tmp/chord-sock"
 
-ptr<aclnt> cclnt;
+ptr<dhashclient> dhash;
 
 u_int32_t blocksize;
 u_int32_t nfh;
@@ -742,12 +742,8 @@ int
 sfsrodb_main (const str root, const str keyfile)
 {
 
-  int fd = unixsocket_connect(LSD_SOCKET);
-  if (fd < 0)
-    fatal << "error connecting to " << LSD_SOCKET << "\n";
-  
-  cclnt = aclnt::alloc (axprt_unix::alloc (fd), dhashclnt_program_1);
-  
+  dhash = New refcounted <dhashclient> (LSD_SOCKET);
+
   ptr < rabin_priv > sk;
   if (!keyfile) {
     warn << "cannot locate default file sfs_host_key\n";
