@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 Thomer M. Gil (thomer@csail.mit.edu)
+ * Copyright (c) 2003 Jeremy Stribling (thomer@csail.mit.edu)
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -22,48 +22,24 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "eventgeneratorfactory.h"
-#include "fileeventgenerator.h"
+#ifndef __CHURN_FILE_EVENT_GENERATOR_H
+#define __CHURN_FILE_EVENT_GENERATOR_H
+
 #include "churneventgenerator.h"
-#include "churnfileeventgenerator.h"
-#include "sillyeventgenerator.h"
+#include "p2psim/p2psim.h"
+#include "p2psim/args.h"
+#include <string>
+using namespace std;
 
-EventGeneratorFactory *EventGeneratorFactory::_instance = 0;
+class ChurnFileEventGenerator : public ChurnEventGenerator {
+public:
+  ChurnFileEventGenerator(Args*);
+  virtual void kick(Observed *, ObserverInfo*);
+  virtual void run();
 
-EventGeneratorFactory*
-EventGeneratorFactory::Instance()
-{
-  if(!_instance)
-    _instance = New EventGeneratorFactory();
-  return _instance;
-}
-
-EventGeneratorFactory::EventGeneratorFactory()
-{
-}
-
-EventGeneratorFactory::~EventGeneratorFactory()
-{
-}
+private:
+  string _name;
+};
 
 
-EventGenerator *
-EventGeneratorFactory::create(string type, Args *a)
-{
-  EventGenerator *eg = 0;
-
-  if(type == "FileEventGenerator")
-    eg = New FileEventGenerator(a);
-
-  if(type == "ChurnFileEventGenerator")
-    eg = New ChurnFileEventGenerator(a);
-
-  if(type == "ChurnEventGenerator")
-    eg = New ChurnEventGenerator(a);
-
-  if(type == "SillyEventGenerator")
-    eg = New SillyEventGenerator(a);
-
-  delete a;
-  return eg;
-}
+#endif // __CHURN_FILE_EVENT_GENERATOR_H

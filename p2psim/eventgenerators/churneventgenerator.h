@@ -52,6 +52,9 @@ means given above.
 using namespace std;
 
 class ChurnEventGenerator : public EventGenerator {
+
+  friend class ChurnFileEventGenerator;
+
 public:
   ChurnEventGenerator(Args *);
   virtual void kick(Observed *, ObserverInfo*);
