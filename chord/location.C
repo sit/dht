@@ -104,7 +104,9 @@ locationtable::locationtable (ptr<chord> _chordnode, int _max_cache)
 locationtable::locationtable (const locationtable &src)
 {
   chordnode = src.chordnode;
+#ifdef PNODE  
   myvnode = NULL;
+#endif /* PNODE */  
   max_cachedlocs = src.max_cachedlocs;
 
   // State parameters will be zeroed in the copy
