@@ -33,6 +33,7 @@
 #include "dhash_impl.h"
 #include "dhashcli.h"
 #include "verify.h"
+#include "block_status.h"
 
 #include <merkle.h>
 #include <merkle_server.h>
@@ -157,8 +158,8 @@ static void
 open_worker (ptr<dbfe> mydb, str name, dbOptions opts, str desc)
 {
   if (int err = mydb->opendb (const_cast <char *> (name.cstr ()), opts)) {
-    warning << desc << ": " << name <<"\n";
-    warning << "open returned: " << strerror (err) << "\n";
+    warn << desc << ": " << name <<"\n";
+    warn << "open returned: " << strerror (err) << "\n";
     exit (-1);
   }
 }
@@ -170,6 +171,8 @@ dhash_impl::dhash_impl (str dbname) :
   keyhash_db (NULL),
   host_node (NULL),
   cli (NULL),
+  dhc_mgr (NULL),
+  bsm (NULL),
   msrv (NULL),
   pmaint_obj (NULL),
   mtree (NULL),
@@ -205,6 +208,8 @@ dhash_impl::dhash_impl (str dbname) :
 
   dhcs = strbuf () << dbname;
 
+  bsm = New refcounted<block_status_manager> ();
+
   // merkle state
   mtree = New merkle_tree (db);
 }
@@ -218,7 +223,7 @@ dhash_impl::init_after_chord (ptr<vnode> node)
   // merkle state
   msrv = New merkle_server (mtree, 
 			    wrap (node, &vnode::addHandler),
-			    wrap (this, &dhash_impl::missing),
+			    wrap (this, &dhash_impl::needed),
 			    host_node);
 
   // RPC demux
@@ -245,6 +250,21 @@ dhash_impl::init_after_chord (ptr<vnode> node)
     start ();
 }
 
+void
+dhash_impl::needed (ptr<location> from, bigint key)
+{
+  // XXX should batch this so that we don't send 100 bytes of
+  //     RPC header for each key we send!
+  trace << "merkle says we should have block " << key
+	<< "; notifying successor.\n";
+
+  ptr<dhash_ineed_arg> arg = New refcounted<dhash_ineed_arg> ();
+  arg->needed.setsize (1);
+  arg->needed[0] = key;
+
+  doRPC (from, dhash_program_1, DHASHPROC_INEED, arg, NULL, aclnt_cb_null);
+  // XXX should perhaps check what happens after this call goes out!
+}
 
 void
 dhash_impl::missing (ptr<location> from, bigint key)
@@ -258,15 +278,7 @@ dhash_impl::missing (ptr<location> from, bigint key)
     return;
   }
 
-  warn << "merkle: missing key "  << key << ", fetching\n";
-
-  timespec ts;
-  clock_gettime (CLOCK_REALTIME, &ts);
-  str tm =  strbuf (" %d.%06d", int (ts.tv_sec), int (ts.tv_nsec/1000));
-
-  // calculate key range that we should be storing
-  vec<ptr<location> > preds = host_node->preds ();
-  assert (preds.size () > 0);
+  trace << "merkle says we should have block " << key << ", fetching.\n";
 
   missing_outstanding++;
   assert (missing_outstanding >= 0);
@@ -282,7 +294,8 @@ dhash_impl::missing_retrieve_cb (bigint key, dhash_stat err,
   assert (missing_outstanding >= 0);
 
   if (err) {
-    trace << "Could not retrieve key " << key << "\n";
+    trace << "retrieve missing block " << key << " failed: " << err << "\n";
+    /* XXX need to do something here? */
   } else {
     assert (b);
     // Oh, the memory copies.
@@ -482,7 +495,7 @@ dhash_impl::dispatch (user_args *sbp)
       res.resok->accepted.setsize (arg->keys.size ());
 
       //we'll use the predecessor list to determine if we 
-      // should accept the key (when we fix pred lists that is)
+      // should accept the key
       vec<ptr<location> > preds = host_node->preds ();
       
       for (u_int i = 0; i < arg->keys.size (); i++) {
@@ -496,20 +509,16 @@ dhash_impl::dispatch (user_args *sbp)
 				host_node->my_ID (),
 				arg->keys[i])) { 
 	    res.resok->accepted[i] = DHASH_REJECT;
-	    warn << "I shouldn't store " << arg->keys[i] << " not in [" <<
-	      preds[dhash::num_efrags () - 1]->id () << " , " 
-	         << host_node->my_ID () << "\n";
 	  } else {
 	    res.resok->accepted[i] = DHASH_ACCEPT;
-	    warn << "I should store " << arg->keys[i] << " in [" <<
-	      preds[dhash::num_efrags () - 1]->id () << " , " 
-	         << host_node->my_ID () << "\n";
 	  }
 	}
 
 	info << host_node->my_ID () << ": " << arg->keys[i]
 	     << (res.resok->accepted[i] == DHASH_ACCEPT ? " " : " not ") 
-	     << "accepted\n";
+	     << "accepted; range is ("
+	     << preds[dhash::num_efrags () - 1]->id () << " , " 
+	     << host_node->my_ID () << "]\n";
       }
 
       sbp->reply (&res);
@@ -565,6 +574,23 @@ dhash_impl::dispatch (user_args *sbp)
 	  dblookup (blockID (sarg->key, sarg->ctype, sarg->dbtype));
 	store (sarg, exists,
 	       wrap(this, &dhash_impl::storesvc_cb, sbp, sarg, exists));	
+      }
+    }
+    break;
+  case DHASHPROC_INEED:
+    {
+      dhash_ineed_arg *arg = sbp->template getarg<dhash_ineed_arg> ();
+      chord_node remote;
+      sbp->fill_from (&remote);
+      ptr<location> l = host_node->locations->lookup (remote.x);
+      if (!l) {
+	sbp->reply (NULL);
+      } else {
+	for (size_t i = 0; i < arg->needed.size (); i++) {
+	  bsm->missing (l, arg->needed[i]);
+	  warnx << host_node->my_ID () << ": " << arg->needed[i]
+		<< " needed on " << l->id () << "\n";
+	}
       }
     }
     break;
@@ -898,65 +924,88 @@ dhash_impl::doRPC (ptr<location> ID, const rpc_program &prog, int procno,
 void
 dhash_impl::printkeys () 
 {
-  
-  ptr<dbEnumeration> it = db->enumerate();
-  ptr<dbPair> d = it->nextElement();    
-  while (d) {
-    // XXX now only prints DHASH_CONTENTHASH records
-    chordID k = dbrec2id (d->key);
-    printkeys_walk (k);
-    d = it->nextElement();
-  }
+  warn << key_info ();
 }
 
-void
+strbuf
 dhash_impl::printkeys_walk (const chordID &k) 
 {
   // DHASH_BLOCK is ignored on the line below
+  strbuf sb;
   dhash_stat status = key_status (blockID (k, DHASH_CONTENTHASH, DHASH_BLOCK));
   if (status == DHASH_STORED)
-    warn << k << " STORED @ " << host_node->my_ID () << "\n";
+    sb << k << " STORED @ " << host_node->my_ID ();
   else if (status == DHASH_REPLICATED)
-    warn << k << " REPLICATED @ " << host_node->my_ID () << "\n";
+    sb << k << " REPLICATED @ " << host_node->my_ID ();
   else
-    warn << k << " UNKNOWN\n";
+    sb << k << " UNKNOWN";
+  return sb;
 }
 
+#if 0
+/* Hrm. This should remind someone to print cached blocks, once we
+ * figure out what to cache and when... */
 void
 dhash_impl::printcached_walk (const chordID &k) 
 {
   warn << host_node->my_ID () << " " << k << " CACHED\n";
 }
+#endif /* 0 */
 
 void
 dhash_impl::print_stats () 
 {
   warnx << "ID: " << host_node->my_ID () << "\n";
   warnx << "Stats:\n";
-  warnx << "  " << keys_cached << " keys cached\n";
-  warnx << "  " << keys_stored << " blocks stored\n";
-  warnx << "  " << keys_replicated << " blocks replicated\n";
-  warnx << "  " << keys_others << " non-blocks stored\n";
-  warnx << "  " << bytes_stored << " total bytes held\n";
-  warnx << "  " << keys_served << " keys served\n";
-  warnx << "  " << bytes_served << " bytes served\n";
-  warnx << "  " << rpc_answered << " rpc answered\n";
+  vec<dstat> ds = stats ();
+  for (size_t i = 0; i < ds.size (); i++)
+    warnx << "  " << ds[i].value << " " << ds[i].desc << "\n";
 
   printkeys ();
+}
+
+vec<dstat>
+dhash_impl::stats ()
+{
+  vec<dstat> s;
+  s.push_back(dstat ("keys cached", keys_cached));
+  s.push_back(dstat ("blocks stored", keys_stored));
+  s.push_back(dstat ("blocks replicated", keys_replicated));
+  s.push_back(dstat ("non-blocks?", keys_others));
+  s.push_back(dstat ("bytes stored", bytes_stored));
+  s.push_back(dstat ("keys served", keys_served));
+  s.push_back(dstat ("bytes served", bytes_served));
+  s.push_back(dstat ("RPC's answered", rpc_answered));
+  return s;
+}
+
+strbuf
+dhash_impl::key_info ()
+{
+  ptr<dbEnumeration> it = db->enumerate();
+  ptr<dbPair> d = it->nextElement();
+  strbuf out;
+  while (d) {
+    // XXX now only prints DHASH_CONTENTHASH records
+    chordID k = dbrec2id (d->key);
+    out << printkeys_walk (k) << " missing on " << bsm->mcount (k) << "\n";;
+    d = it->nextElement();
+  }
+  return out;
 }
 
 void
 dhash_impl::stop ()
 {
   if (keyhash_mgr_tcb) {
-    warnx << "stop replica timer\n";
+    warning << "stop replica timer\n";
     timecb_remove (keyhash_mgr_tcb);
     keyhash_mgr_tcb = NULL;
   }
   if (merkle_rep_tcb) {
     timecb_remove (merkle_rep_tcb);
     merkle_rep_tcb = NULL;
-    warn << "stop merkle replication timer\n";
+    warning << "stop merkle replication timer\n";
   }
   if (pmaint_obj)
     pmaint_obj->stop ();

@@ -138,23 +138,34 @@ union dhash_fetchrec_res switch (dhash_stat status) {
    dhash_fetchrec_resdefault resdef;
 };
 
+struct dhash_ineed_arg {
+  chordID needed<>;
+  /* Should this include vectors of dbtypes and ctypes too? ugh. */
+};
 
 program DHASH_PROGRAM {
   version DHASH_VERSION {
     void
     DHASHPROC_NULLX (void) = 0;
-    
+
+    /* Basic store */
     dhash_storeres
     DHASHPROC_STORE (s_dhash_insertarg) = 1;
 
+    /* Ideal for TCP transfers, minimizing new connections */
     dhash_fetchrec_res
     DHASHPROC_FETCHREC (dhash_fetchrec_arg) = 2;
-    
+
+    /* Downloads over UDP */
     dhash_fetchiter_res
     DHASHPROC_FETCHITER (s_dhash_fetch_arg) = 3;
 
+    /* "Put that block back where it came from, or so help me..." */
     dhash_offer_res
     DHASHPROC_OFFER (dhash_offer_arg) = 4;
+
+    void
+    DHASHPROC_INEED (dhash_ineed_arg) = 5;
 
   } = 1;
 } = 344449;

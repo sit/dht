@@ -255,6 +255,22 @@ lsdctl_dispatch (ptr<asrv> s, svccb *sbp)
       sbp->reply (nl);
     }
     break;
+  case LSDCTL_GETDHASHSTATS:
+    {
+      int *v = sbp->template getarg<int> ();
+      ptr<lsdctl_dhashstats> ds = New refcounted<lsdctl_dhashstats> ();
+      if (*v < vnodes) {
+	vec<dstat> stats = dh[*v]->stats ();
+	ds->stats.setsize (stats.size ());
+	for (unsigned int i = 0; i < stats.size (); i++) {
+	  ds->stats[i].desc = stats[i].desc;
+	  ds->stats[i].value = stats[i].value;
+	}
+	ds->hack = dh[*v]->key_info ();
+      }
+      sbp->reply (ds);
+    }
+    break;
   default:
     sbp->reject (PROC_UNAVAIL);
     break;

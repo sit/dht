@@ -1,3 +1,4 @@
+#include <parseopt.h>
 #include <arpc.h>
 #include "lsdctl_prot.h"
 
@@ -17,6 +18,7 @@ void lsdctl_replicate (int argc, char *argv[]);
 void lsdctl_getloctab (int argc, char *argv[]);
 void lsdctl_getrpcstats (int argc, char *argv[]);
 void lsdctl_getmyids (int argc, char *argv[]);
+void lsdctl_getdhashstats (int argc, char *argv[]);
 
 struct modevec {
   const char *name;
@@ -32,6 +34,7 @@ const modevec modes[] = {
   { "loctab", lsdctl_getloctab, "loctab [vnodenum]" },
   { "rpcstats", lsdctl_getrpcstats, "rpcstats [-rf]" },
   { "myids", lsdctl_getmyids, "myids" },
+  { "dhashstats", lsdctl_getdhashstats, "dhashstats [vnodenum]" },
   { NULL, NULL, NULL }
 };
 
@@ -287,6 +290,33 @@ lsdctl_getrpcstats (int argc, char *argv[])
 	     ndx[i].nreply);
   }
   delete[] ndx;
+  make_sync (1);
+  out.tosuio ()->output (1);
+  exit (0);
+}
+
+void
+lsdctl_getdhashstats (int argc, char *argv[])
+{
+  int vnode (0);
+
+  if (optind != argc)
+    if (!convertint (argv[optind], &vnode))
+      usage ();
+  
+  ptr<aclnt> c = lsdctl_connect (control_socket);
+  ptr<lsdctl_dhashstats> ds = New refcounted <lsdctl_dhashstats> ();
+  clnt_stat err = c->scall (LSDCTL_GETDHASHSTATS, &vnode, ds);
+  if (err)
+    fatal << "lsdctl_getdhashstats: " << err << "\n";
+
+  strbuf out;
+  out << "Statistics:\n";
+  for (size_t i = 0; i < ds->stats.size (); i++)
+    out << "  " << ds->stats[i].desc << " " << ds->stats[i].value << "\n";
+  for (size_t i = 0; i < ds->blocks.size (); i++) 
+    out << ds->blocks[i].id << "\t" << ds->blocks[i].missing.size () << "\n";
+  out << ds->hack;
   make_sync (1);
   out.tosuio ()->output (1);
   exit (0);

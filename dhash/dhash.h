@@ -1,7 +1,7 @@
 #ifndef _DHASH_H_
 #define _DHASH_H_
 /*
- *
+ * Copyright (C) 2004  Emil Sit (sit@csail.mit.edu)
  * Copyright (C) 2001  Frank Dabek (fdabek@lcs.mit.edu), 
  *                     Frans Kaashoek (kaashoek@lcs.mit.edu),
  *   		       Massachusetts Institute of Technology
@@ -50,6 +50,11 @@ class blockID;
  * Include file for the distributed hash service
  */
 
+struct dstat {
+  str desc;
+  u_int64_t value;
+  dstat (str s, u_int64_t n) : desc (s), value (n) {};
+};
 
 typedef callback<void, int, ptr<dbrec>, dhash_stat>::ptr cbvalue;
 typedef callback<void,dhash_stat>::ptr cbstore;
@@ -69,7 +74,6 @@ class dhash {
   static u_long dhash_disable_db_env ();
   static u_long dhash_mtu ();
 
-  // these 2 are only public for testing purposes
   virtual void replica_maintenance_timer (u_int index) = 0;
 
   static ref<dhash> produce_dhash (str dbname);
@@ -79,12 +83,13 @@ class dhash {
   // XXX gross
   virtual void init_after_chord (ptr<vnode> node) = 0;
 
+  virtual vec<dstat> stats () = 0;
+  virtual strbuf key_info () = 0;
   virtual void print_stats () = 0;
+  
   virtual void start (bool randomize) = 0;
   virtual void stop () = 0;
   virtual void fetch (blockID id, int cookie, cbvalue cb) = 0;
-
-  virtual dhash_stat key_status(const blockID &n) = 0;
 };
 
 #endif

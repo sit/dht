@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.14 2004/01/22 15:15:54 sit Exp $
+# $Id: Makefile.am,v 1.15 2004/10/08 13:43:23 sit Exp $
 
 $(PROGRAMS): $(LDEPS)
 
@@ -7,9 +7,9 @@ noinst_LIBRARIES = libdhash.a libdhashclient.a
 
 libdhashclient_a_SOURCES = dhashclient.C verify.C
 
-noinst_HEADERS = dhash.h dhash_common.h dhash_impl.h dhashcli.h dhashclient.h dhashgateway.h download.h verify.h vsc.h dhash_store.h succopt.h
+noinst_HEADERS = dhash.h dhash_common.h dhash_impl.h dhashcli.h dhashclient.h dhashgateway.h download.h verify.h vsc.h dhash_store.h succopt.h block_status.h
 
-libdhash_a_SOURCES = server.C client.C verify.C gateway.C download.C dhash_store.C dhash_fetchrec.C
+libdhash_a_SOURCES = server.C client.C verify.C gateway.C download.C dhash_store.C dhash_fetchrec.C block_status.C
 
 EXTRA_DIST = .cvsignore
 CLEANFILES = core *.core *~ *.rpo

@@ -17,6 +17,8 @@ class merkle_tree;
 
 class dhashcli;
 
+class block_status_manager;
+
 // Helper structs/classes
 struct store_chunk {
   store_chunk *next;
@@ -85,6 +87,8 @@ class dhash_impl : public dhash {
   str dhcs;
   ptr<dhc> dhc_mgr;
 
+  ptr<block_status_manager> bsm;
+
   merkle_server *msrv;
   pmaint *pmaint_obj;
   merkle_tree *mtree;
@@ -99,9 +103,13 @@ class dhash_impl : public dhash {
   
   unsigned keyhash_mgr_rpcs;
 
+  /* Called by merkle_syncer to notify of blocks we are succ to */
   void missing (ptr<location> from, bigint key);
   void missing_retrieve_cb (bigint key, dhash_stat err, ptr<dhash_block> b,
 			    route r);
+
+  /* Called by merkle_server to notify of blocks we should have rep/frag of */
+  void needed (ptr<location> from, bigint key);
   
   void sendblock (ptr<location> dst, blockID blockID,
 		  callback<void, dhash_stat, bool>::ref cb);
@@ -151,15 +159,14 @@ class dhash_impl : public dhash {
   
   void store (s_dhash_insertarg *arg, bool exists, cbstore cb);
   
-  void init_key_status ();
+  dhash_stat key_status (const blockID &n);
 
   void update_replica_list ();
   
   char responsible(const chordID& n);
 
   void printkeys ();
-  void printkeys_walk (const chordID &k);
-  void printcached_walk (const chordID &k);
+  strbuf printkeys_walk (const chordID &k);
 
   ptr<dbrec> dblookup(const blockID &i);
   int db_insert_immutable (ref<dbrec> key, ref<dbrec> data, dhash_ctype ctype);
@@ -200,10 +207,11 @@ class dhash_impl : public dhash {
 
   void init_after_chord (ptr<vnode> node);
 
+  vec<dstat> stats ();
+  strbuf key_info ();
   void print_stats ();
+  
   void stop ();
   void start (bool randomize = false);
   void fetch (blockID id, int cookie, cbvalue cb);
-
-  dhash_stat key_status (const blockID &n);
 };

@@ -38,6 +38,22 @@ struct lsdctl_rpcstatlist {
   lsdctl_rpcstat stats<>;
 };
 
+struct lsdctl_stat {
+  str desc;
+  u_int64_t value;
+};
+
+struct lsdctl_blockstatus {
+  chordID id;
+  chord_node_wire missing<>;
+};
+
+struct lsdctl_dhashstats {
+  lsdctl_stat stats<>;
+  lsdctl_blockstatus blocks<>;
+  str hack;
+};
+
 program LSDCTL_PROG {
 	version LSDCTL_VERSION {
 		void
@@ -73,5 +89,9 @@ program LSDCTL_PROG {
 		lsdctl_nodeinfolist
 		LSDCTL_GETMYIDS (void) = 7;
 		/** Get the list of vnode IDs on this lsd */
+
+		lsdctl_dhashstats
+		LSDCTL_GETDHASHSTATS (int) = 8;
+		/** Tell me somthing about the status of DHash on vnode i*/
 	} = 1;
 } = 344500;
