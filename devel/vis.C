@@ -184,6 +184,7 @@ void redraw_cb (GtkWidget *widget, gpointer data);
 void update_cb (GtkWidget *widget, gpointer data);
 void zoom_in_cb (GtkWidget *widget, gpointer data);
 void geo_cb (GtkWidget *widget, gpointer data);
+void dump_cb (GtkWidget *widget, gpointer data);
 void redraw();
 void draw_ring ();
 void ID_to_xy (chordID ID, int *x, int *y);
@@ -603,6 +604,7 @@ initgraf ()
   courier10 = gdk_font_load ("-*-courier-*-r-*-*-12-*-*-*-*-*-*-*");
 
   window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+
   drawing_area = gtk_drawing_area_new();
   gtk_drawing_area_size ((GtkDrawingArea *)drawing_area, WINX, WINY);
 
@@ -622,6 +624,7 @@ initgraf ()
   GtkWidget *quit = gtk_button_new_with_label ("Quit");
   GtkWidget *sep = gtk_vseparator_new ();
   GtkWidget *geo = gtk_button_new_with_label ("Geo. View");
+  GtkWidget *dump_to_file = gtk_button_new_with_label ("Save...");
 
   //organize things into boxes
   GtkWidget *vbox = gtk_vbox_new (FALSE, 0);
@@ -638,6 +641,7 @@ initgraf ()
 
   gtk_box_pack_end (GTK_BOX (vbox), quit, FALSE, FALSE, 0);
   gtk_box_pack_end (GTK_BOX (vbox), refresh, FALSE, FALSE, 0);
+  gtk_box_pack_end (GTK_BOX (vbox), dump_to_file, FALSE, FALSE, 0);
   gtk_box_pack_end (GTK_BOX (vbox), geo, FALSE, FALSE, 0);
   gtk_box_pack_end (GTK_BOX (vbox), in, FALSE, FALSE, 0);
 
@@ -659,6 +663,9 @@ initgraf ()
 			     NULL);
   gtk_signal_connect_object (GTK_OBJECT (refresh), "clicked",
 			       GTK_SIGNAL_FUNC (update_cb),
+			       NULL);
+  gtk_signal_connect_object (GTK_OBJECT (dump_to_file), "clicked",
+			       GTK_SIGNAL_FUNC (dump_cb),
 			       NULL);
   gtk_signal_connect_object (GTK_OBJECT (in), "clicked",
 			       GTK_SIGNAL_FUNC (zoom_in_cb),
@@ -709,6 +716,7 @@ initgraf ()
   gtk_widget_show (last_clicked);
   gtk_widget_show (lookup);
   gtk_widget_show (in);
+  gtk_widget_show (dump_to_file);
   gtk_widget_show (geo);
   gtk_widget_show (refresh);
   gtk_widget_show (quit);
@@ -719,15 +727,27 @@ initgraf ()
   gtk_widget_show (hbox);
   gtk_widget_show (vbox);
   gtk_widget_show (window);
-
   init_color_list (color_file);
-  
+
   if (!gdk_color_parse (highlight, &highlight_color) ||
       !gdk_colormap_alloc_color (cmap, &highlight_color, FALSE, TRUE))
     fatal << "Couldn't allocate highlight color " << highlight << "\n";
   if (!gdk_color_parse ("green", &search_color) ||
       !gdk_colormap_alloc_color (cmap, &search_color, FALSE, TRUE))
     fatal << "Couldn't allocate search color maroon\n";
+}
+
+void
+dump_cb (GtkWidget *widget, gpointer data)
+{
+  GdkPixbuf *pbuf = gdk_pixbuf_get_from_drawable (NULL,
+						  pixmap,
+						  NULL,
+						  0,0,
+						  0,0,
+						  -1, -1);
+  
+  gdk_pixbuf_save (pbuf, "vis.jpeg", "jpeg", NULL, "quality", "100", NULL);
 }
 
 void
@@ -1123,8 +1143,10 @@ init_color_list (char *filename)
 {
   GdkColor c;
   color_pair p;
+  draw_gc = NULL;
   draw_gc = gdk_gc_new (drawing_area->window);
   assert (draw_gc);
+  
   gdk_gc_set_line_attributes (draw_gc, 3,
 			      GDK_LINE_SOLID,
 			      GDK_CAP_NOT_LAST,

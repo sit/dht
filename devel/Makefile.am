@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.19 2003/03/19 03:05:10 fdabek Exp $
+# $Id: Makefile.am,v 1.20 2003/05/02 00:51:00 fdabek Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -34,8 +34,8 @@ findroute_LDADD = ../chord/libchord.a ../svc/libsvc.la ../utils/libutil.a $(LDAD
 
 if GTK_AVAILABLE
 vis_SOURCES = vis.C
-INCLUDES = $(GTK_CFLAGS)
-vis_LDADD =  ../chord/libchord.a ../svc/libsvc.la ../utils/libutil.a $(GTK_LIBS) $(LDADD)
+INCLUDES = $(GSTUFF_CFLAGS) 
+vis_LDADD =  ../chord/libchord.a ../svc/libsvc.la ../utils/libutil.a $(GSTUFF_LIBS) $(LDADD)
 endif
 
 EXTRA_DIST = .cvsignore
