@@ -89,6 +89,15 @@ dhash::dhash(str dbname, vnode *node, int k, int ss, int cs, int _ss_mode) :
 
   // RPC demux
   host_node->addHandler (dhash_program_1, wrap(this, &dhash::dispatch));
+  delaycb (30, wrap (this, &dhash::sync_cb));
+}
+
+void
+dhash::sync_cb () 
+{
+  warn << "sync\n";
+  db->sync ();
+  delaycb (30, wrap (this, &dhash::sync_cb));
 }
 
 void
@@ -163,27 +172,8 @@ dhash::dispatch (svccb *sbp)
 	  res.cont_res->succ_list[i] = s_list[i];
 
 	chordID best_succ = res.cont_res->succ_list[0].x;
-	
-	if ((ss_mode > 0) && (nid == my_succ)) {
-	  //returning a node which will hold the key, pick the fastest
-	  locationtable *locations = host_node->chordnode->locations;
-	  location *c = locations->getlocation (best_succ);
-	  location *n;
-	  int lim = ((int)s_list.size () < nreplica) ? 
-	    s_list.size ():
-	    nreplica;
-	  for (int i = 1; i < lim; i++) {
-	    n = locations->getlocation(res.cont_res->succ_list[i].x);
-	    if (n->nrpc == 0) continue;
-	    if ((c->nrpc == 0) || 
-		(n->rpcdelay/n->nrpc) < (c->rpcdelay/c->nrpc)) {
-	      c = n;
-	      best_succ = res.cont_res->succ_list[i].x;
-	    }
-	  }
-	}
 
-	res.cont_res->next.x = best_succ;
+	res.cont_res->next.x = nid;
 	res.cont_res->next.r = 
 	  host_node->chordnode->locations->getaddress (best_succ);
 #endif

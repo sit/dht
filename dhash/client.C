@@ -369,14 +369,18 @@ void
 dhashgateway::send_cb (svccb *sbp, dhash_storeres *res, 
 		      ptr<s_dhash_insertarg> iarg, clnt_stat err)
 {
-  if (err) res->set_status (DHASH_RPCERR);
-  else if (res->status == DHASH_RETRY) {
+  if (err) {
+    res->set_status (DHASH_RPCERR);
+    sbp->reply (res);
+  } else if (res->status == DHASH_RETRY) {
     dhash_storeres *nres = New dhash_storeres (DHASH_OK);
     // XXX challenge
-    clntnode->locations->cacheloc (nres->pred->p.x, nres->pred->p.r, cbchall_null);
-    doRPC (nres->pred->p.x, dhash_program_1, DHASHPROC_STORE,
-		     iarg, nres, wrap (this, &dhashgateway::send_cb,
-				       sbp, nres, iarg));
+    clntnode->locations->cacheloc (res->pred->p.x, res->pred->p.r,
+				   cbchall_null);
+    doRPC (res->pred->p.x, dhash_program_1, DHASHPROC_STORE,
+	   iarg, nres, wrap (this, &dhashgateway::send_cb,
+			     sbp, nres, iarg));
+
   } else if (res->status == DHASH_OK) {
     sbp->reply (res);
   }

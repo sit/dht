@@ -208,6 +208,7 @@ class dhash {
 	      ptr<void> in, void *out, aclnt_cb cb);
 
   void dispatch (svccb *sbp);
+  void sync_cb ();
 
   void storesvc_cb (svccb *sbp, s_dhash_insertarg *arg, dhash_stat err);
   void fetch_cb (cbvalue cb,  ptr<dbrec> ret);
