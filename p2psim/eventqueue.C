@@ -21,7 +21,7 @@ EventQueue::Instance()
 }
 
 
-EventQueue::EventQueue() : _time(0), _size(0)
+EventQueue::EventQueue() : _time(0)
 {
   _eventchan = chancreate(sizeof(Event*), 0);
   assert(_eventchan);
@@ -34,8 +34,13 @@ EventQueue::EventQueue() : _time(0), _size(0)
 EventQueue::~EventQueue()
 {
   // delete the entire queue and say bye bye
-  for(Queue::iterator pos = _queue.begin(); pos != _queue.end(); ++pos)
-    delete *pos;
+  eq_entry *next = 0;
+  for(eq_entry *cur = _queue.first(); cur; cur = next) {
+    next = _queue.next(cur);
+    for(vector<Event*>::const_iterator i = cur->events.begin(); i != cur->events.end(); ++i)
+      delete (*i);
+    delete cur;
+  }
   chanfree(_eventchan);
   chanfree(_gochan);
 }
@@ -64,6 +69,7 @@ EventQueue::run()
 
     // process any waiting events-to-be-scheduled
     if((e = (Event*) nbrecvp(_eventchan)) != 0) {
+      assert(e->ts);
       add_event(e);
       continue;
     }
@@ -72,7 +78,7 @@ EventQueue::run()
     // must be time for the next event.
                                                                                   
     // no more events.  we're done!
-    if(!_size)
+    if(!_queue.size())
       ::graceful_exit();
                                                                                   
     // run events for next time in the queue
@@ -85,7 +91,7 @@ EventQueue::run()
 bool
 EventQueue::advance()
 {
-  if(!_size) {
+  if(!_queue.size()) {
     cerr << "queue is empty" << endl;
     exit(-1);
   }
@@ -99,19 +105,17 @@ EventQueue::advance()
   }
 
   // XXX: time is not running smoothly. does that matter?
-  Event *e = _queue.front();
-  assert(e->ts >= _time && e->ts < _time + 100000000);
-  _time = e->ts;
-
-  while(_size > 0) {
-    Event *first = _queue.front();
-    if(first->ts > _time)
-      break;
-    _queue.pop_front();
-    _size--;
-    Event::Execute(first); // new thread, execute(), delete Event
+  eq_entry *eqe = _queue.first();
+  for(vector<Event*>::const_iterator i = eqe->events.begin(); i != eqe->events.end(); ++i) {
+    assert((*i)->ts == eqe->ts &&
+           (*i)->ts >= _time &&
+           (*i)->ts < _time + 100000000);
+    Event::Execute(*i); // new thread, execute(), delete Event
   }
+  _time = eqe->ts;
 
+  _queue.remove(eqe->ts);
+  delete eqe;
   return true;
 }
 
@@ -119,33 +123,50 @@ EventQueue::advance()
 void
 EventQueue::add_event(Event *e)
 {
+  assert(e->ts);
   assert(e->ts >= _time);
 
+  eq_entry *ee = 0;
+  if(!(ee = _queue.search(e->ts))) {
+    ee = new eq_entry(e);
+    assert(ee);
+    bool b = _queue.insert(ee);
+    assert(b);
+  }
+  assert(ee->ts);
+  assert(e->ts);
+  ee->events.push_back(e);
+
+#if 0
   // empty queue
   if(!_size) {
-    _queue.push_back(e);
+    _queue.insert(ee);
     _size++;
     return;
   }
-
   // find the location where to insert
-  Queue::iterator pos;
-  for(pos = _queue.begin(); pos != _queue.end(); ++pos)
+  for(eq_entry *cur = _queue.first(); cur; cur = next) {
     if((*pos)->ts > e->ts)
       break;
 
   _queue.insert(pos, e);
   _size++;
+#endif
 }
 
 
 void
 EventQueue::dump()
 {
-  cout << "List: ";
-  Queue::iterator pos;
-  for(pos = _queue.begin(); pos != _queue.end(); ++pos)
-    cout << (*pos)->id() << ":" << (*pos)->ts << ", ";
+  cout << "List: " << endl;
+  eq_entry *next = 0;
+  for(eq_entry *cur = _queue.first(); cur; cur = next) {
+    cout << "*** Vector with ts = " << cur->ts << " ***" << endl;
+    for(vector<Event*>::const_iterator i = cur->events.begin(); i != cur->events.end(); ++i)
+      cout << (*i)->id() << ":" << (*i)->ts << ", ";
+    cout << endl;
+    next = _queue.next(cur);
+  }
   cout << endl;
 }
 

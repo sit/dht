@@ -3,7 +3,8 @@
 
 #include "event.h"
 #include "thread.h"
-#include <list>
+#include "../utils/skiplist.h"
+#include <vector>
 using namespace std;
 
 class EventQueue : public Threaded {
@@ -20,14 +21,24 @@ public:
   void go();
 
 private:
-  typedef list<Event*> Queue;
+  struct eq_entry {
+    eq_entry() { ts = 0; events.clear(); }
+    eq_entry(Event *e) { ts = e->ts; events.clear(); }
+    Time ts;
+    vector<Event*> events;
+    sklist_entry<eq_entry> _sortlink;
+  };
+  /*
+  class TimeCompare { public:
+    int operator()(const Time &t1, const Time &t2) const { return t1 < t2; }
+  };
+  */
+  skiplist<eq_entry, Time, &eq_entry::ts, &eq_entry::_sortlink> _queue;
 
   static EventQueue *_instance;
   Time _time;
-  Queue _queue;
   Channel *_eventchan;
   Channel *_gochan;
-  unsigned _size; // because list.size() is so slow
 
   virtual void run();
   void add_event(Event*);
