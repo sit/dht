@@ -111,14 +111,15 @@ RandomGraph::initialize()
     for(j = 0; j < _n; j++){
       routes(i, j)._next = -1;
       routes(i, j)._metric = 30000; // infinity
+      routes(i, j)._hops = 30000;
     }
   }
 
   // five links per node
   for(i = 0; i < _n; i++){
-    for(j = 0; j < 5; j++){
-      int k = random() % _n;  // pick a random node.
-      int m = random() % 200; // pick a random metric.
+    for(j = 0; j < degree; j++){
+      int k = random() % _n;          // pick a random node.
+      int m = random() % maxlatency;  // pick a random link metric.
       links(i, k) = m;
       links(k, i) = m;
     }
@@ -128,6 +129,7 @@ RandomGraph::initialize()
   for(i = 0; i < _n; i++){
     routes(i, i)._next = i;
     routes(i, i)._metric = 0;
+    routes(i, i)._hops = 0;
   }
 
   // run distance-vector until it converges.
@@ -146,6 +148,7 @@ RandomGraph::initialize()
                routes(i, k)._metric + m < routes(j, k)._metric){
               routes(j, k)._next = i;
               routes(j, k)._metric = routes(i, k)._metric + m;
+              routes(j, k)._hops = routes(i, k)._hops + 1;
 #if 0
               printf("%d to %d via %d metric %d\n",
                      j, k, i, routes(j, k)._metric);
@@ -160,15 +163,26 @@ RandomGraph::initialize()
       break;
   }
 
-  fprintf(stderr, "dv is done, %d iters\n", iters);
-
   // check that the network is connected.
+  // and find the average path length in milliseconds.
+  double hop_sum = 0;
+  double metric_sum = 0;
+  double neighbors_sum = 0;
   for(i = 0; i < _n; i++){
     for(j = 0; j < _n; j++){
       if(routes(i, j)._next == -1){
         fprintf(stderr, "RandomGraph: not connected!\n");
         exit(1);
       }
+      metric_sum += routes(i, j)._metric;
+      hop_sum += routes(i, j)._hops;
+      if(routes(i, j)._next == j && i != j)
+        neighbors_sum += 1;
     }
   }
+  fprintf(stderr, "dv: %d iters, avg metric %.1f, hops %.1f, degree %.1f\n",
+          iters,
+          metric_sum / (_n * _n),
+          hop_sum / (_n * _n),
+          neighbors_sum / _n);
 }

@@ -27,6 +27,8 @@ public:
   virtual latency_t latency(Node*, Node*);
 
 private:
+  static const int degree = 5;       // links per node
+  static const int maxlatency = 200; // link latency 0..maxlatency
   int _initialized;
   int _n; // number of nodes
   
@@ -42,6 +44,7 @@ private:
   struct Entry {
     int _next;
     int _metric;
+    int _hops;
   };
   Entry *_routes;
   Entry& routes(int i, int j) { return _routes[i*_n + j]; }
