@@ -4,6 +4,7 @@
 #include <merkle_misc.h>
 #include <dbfe.h>
 #include <locationtable.h>
+#include <misc_utils.h>
 
 pmaint::pmaint (dhashcli *cli, ptr<vnode> host_node, 
 		ptr<dbfe> db, delete_t delete_helper) : 
@@ -14,7 +15,8 @@ pmaint::pmaint (dhashcli *cli, ptr<vnode> host_node,
   pmaint_searching (true),
   pmaint_next_key (0)
 {
-  delaycb (PRTTMLONG, wrap (this, &pmaint::pmaint_next));
+  int jitter = uniform_random (0, PRTTMLONG);
+  delaycb (PRTTMLONG + jitter, wrap (this, &pmaint::pmaint_next));
 }
 
 
@@ -42,7 +44,7 @@ void
 pmaint::pmaint_lookup (bigint key, dhash_stat err, vec<chord_node> sl, route r)
 {
   if (err) {
-    warn << "pmaint: lookup failed. key " << key << ", err " << err << "\n";
+    warn << host_node->my_ID () << "pmaint: lookup failed. key " << key << ", err " << err << "\n";
     pmaint_next (); //XXX delay?
     return;
   }
@@ -71,11 +73,17 @@ pmaint::pmaint_lookup (bigint key, dhash_stat err, vec<chord_node> sl, route r)
     delaycb (PRTTMSHORT, wrap (this, &pmaint::pmaint_next));
   } else {
     //case II: this key doesn't belong to us. Offer it to another node
+
+
     pmaint_offer_left = pred;
     pmaint_offer_next_succ = 0;
     pmaint_offer_right = succ;
     pmaint_searching = false;
     pmaint_succs = sl;
+
+    warn << host_node->my_ID () << " : pmaint_offer: left "
+	 << pmaint_offer_left << ", right " << pmaint_offer_right << "\n";
+
     pmaint_offer ();
   }
 }
@@ -87,9 +95,6 @@ pmaint::pmaint_lookup (bigint key, dhash_stat err, vec<chord_node> sl, route r)
 void
 pmaint::pmaint_offer ()
 {
-
-  warn << host_node->my_ID () << " : pmaint_offer: left "
-       << pmaint_offer_left << ", right " << pmaint_offer_right << "\n";
 
   // XXX first: don't send bigint over wire. then: change 46 to 64
   //these are the keys that belong to succ. All successors should have them
@@ -134,19 +139,25 @@ pmaint::pmaint_offer ()
 		      wrap (this, &pmaint::pmaint_offer_cb, 
 			    pmaint_succs[i], keys, res));
 
-    for (u_int i = 0; i < keys.size (); i++)  
-      pmaint_present_count[i]++; //we gave one more guy a crack at this key
+    for (u_int k = 0; k < keys.size (); k++)  
+      pmaint_present_count[k]++; //we gave one more guy a crack at this key
   } else {
+    //we may never get here if we manage to give all the keys away
+    // the check for keys.size () > 0 above will trigger
+    // that's ok, since it means we were done anyways
+
     //if any key was already present on all nodes
     // then we can delete it
     // 0 -> as many people rejected it as had a chance to take it
-    for (u_int i = 0; i < keys.size (); i++)
-      if (pmaint_present_count[i] == 0)
-	delete_helper (id2dbrec (keys[i]));
-
+    for (u_int j = 0; j < keys.size (); j++)
+      if (pmaint_present_count[j] == 0) {
+	warn << host_node->my_ID () << "deleting " << keys[j] << " because no one wanted it\n";
+	delete_helper (id2dbrec (keys[j]));
+      }
     //no more nodes to offer the keys to
     //update the keys_left and start again
     pmaint_offer_left = incID (keys.back ());
+
     pmaint_offer ();
   }
 }
@@ -193,7 +204,9 @@ pmaint::handed_off_cb (chord_node dst,
 
   unsigned int k = key_number + 1;
   while (k < keys.size ()) {
-    if (res->resok->accepted[k] && db->lookup (id2dbrec (keys[k]))) {
+    if (res->resok->accepted[k] 
+	//if lookup fails another node already took it
+	&& db->lookup (id2dbrec (keys[k]))) { 
       pmaint_handoff (dst, keys[k], 
 		      wrap(this, &pmaint::handed_off_cb, dst, keys, res, 
 			   k));  
@@ -224,7 +237,7 @@ pmaint::pmaint_handoff (chord_node dst, bigint key, cbi cb)
   assert (dstloc);
   blockID bid (key, DHASH_CONTENTHASH, DHASH_FRAG);
 
-  warn << "sending " << key << " to " << dst.x << "\n";
+  warn << host_node->my_ID () << " sending " << key << " to " << dst.x << "\n";
   cli->sendblock (dstloc, bid, db, 
 		  wrap (this, &pmaint::pmaint_handoff_cb, key, cb));
 }
@@ -240,6 +253,7 @@ pmaint::pmaint_handoff_cb (bigint key,
     warn << "handoff failed for key\n";
     cb (PMAINT_HANDOFF_ERROR); //error
   } else if (!present) {
+    warn << host_node->my_ID () << "deleting " << key << " because someone didn't have it\n";
     delete_helper (id2dbrec(key));
     cb (PMAINT_HANDOFF_NOTPRESENT); //ok, not present
   } else { 

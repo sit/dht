@@ -17,7 +17,7 @@ public:
   pmaint (dhashcli *cli, ptr<vnode> host_node, ptr<dbfe> db, 
 	  delete_t delete_helper);
 
-  enum { PRTTMSHORT = 5, PRTTMLONG = 60, MAX_PENDING = 20};
+  enum { PRTTMSHORT = 1, PRTTMLONG = 60, MAX_PENDING = 20};
   enum { PMAINT_HANDOFF_ERROR = 0, PMAINT_HANDOFF_NOTPRESENT = 1, 
 	 PMAINT_HANDOFF_PRESENT = -1};
 
