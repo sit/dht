@@ -1,9 +1,10 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.8 2002/11/22 07:46:41 thomer Exp $
+# $Id: Makefile.am,v 1.9 2002/11/25 20:37:34 thomer Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
-noinst_PROGRAMS = example1 example2 block testslave
+bin_PROGRAMS = block testslave
+noinst_PROGRAMS = example1 example2
 noinst_LIBRARIES = libdtest.a
 
 libdtest_a_SOURCES = testmaster.C test.C

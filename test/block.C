@@ -7,6 +7,8 @@ void
 usage()
 {
   fprintf(stderr, "\
+Sets and unsets network blockades on running lsd's.\n\
+\n\
   block [flags] N[:P]\n\
 \n\
   The following flags can be used:\n\

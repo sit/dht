@@ -37,10 +37,10 @@ retrieve_cb(ptr<insert_info> i, ptr<dhash_block> b)
 
   if(str(b->data) == str(buf)) {
     warn << "test OK\n";
-    exit(-1);
+    exit(0);
   } else {
     warn << "test failed\n";
-    exit(0);
+    exit(-1);
   }
 }
 
@@ -50,6 +50,8 @@ insert_cb(testmaster *tm, dhash_stat status, ptr<insert_info> i)
 {
   if(status != DHASH_OK || !i)
     fatal << "test failed\n";
+
+  warn << "insert_cb\n";
   (*tm)[1]->retrieve(i->key, wrap(retrieve_cb, i));
 }
 
@@ -57,12 +59,16 @@ insert_cb(testmaster *tm, dhash_stat status, ptr<insert_info> i)
 void
 start_test(testmaster *tm)
 {
+  warn << "start_test\n";
   (*tm)[0]->insert(buf, 10, wrap(insert_cb, tm));
 }
 
 int
 main(int argc, char *argv[])
 {
+  if(argc != 2)
+    fatal << "usage:\n\texample1 <config file>\n";
+
   testmaster *tm = New testmaster(argv[1]);
   tm->setup(wrap(start_test, tm));
   amain();

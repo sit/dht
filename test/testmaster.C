@@ -44,23 +44,22 @@ testmaster::testmaster(char *filename) : _nhosts(0), _slaves(0)
   int n = 0;
   testslave *slaves = 0;
   while(!feof(f)) {
-    char l[1024];
-    if(!fgets(l, sizeof(l), f))
-      fatal << "fgets";
-
-    str line = str(l);
-    free(l);
-
-    // comment
-    rxx commentrxx("^\\s*#");
-    if(commentrxx.search(line))
-      continue;
-
     // XXX: very stupid
     testslave *newslaves = New testslave[n+1];
     memcpy(newslaves, slaves, n*sizeof(testslave));
     free(slaves);
     slaves = newslaves;
+
+    char l[1024];
+    if(!fgets(l, sizeof(l), f))
+      break;
+
+    str line = str(l);
+
+    // comment
+    rxx commentrxx("^\\s*#");
+    if(commentrxx.search(line))
+      continue;
 
     rxx linerxx("^\\s*(\\S+)\\s+(\\d+)\\s+(\\d+)\\s*$");
     if(!linerxx.search(line))

@@ -1,5 +1,22 @@
-# host     slave port    control port
-#  slave port is the -p flag that testslave was started with
-#  control port is the -port flag to the dhash_test handler for tesla
-127.0.0.1 3344 8002
-127.0.0.1 3345 8003
+# path to ssh, default "ssh"
+# SSH = ssh
+
+# You can set Makefile-style variables
+TESLA_PATH = /home/thomer/install/bin/tesla
+LSD_PATH = /home/thomer/install/bin/lsd
+SLAVE_PATH = /home/thomer/install/bin/testslave
+
+#
+# All hosts involved.
+#
+
+# hostname, path to tesla, path to lsd, path to testslave
+127.0.0.1 $TESLA_PATH $LSD_PATH $SLAVE_PATH
+127.0.0.1 $TESLA_PATH $LSD_PATH $SLAVE_PATH
+
+# determines how long to sleep before starting the tests.
+# default is 5
+# SLEEP = 5
+
+# all programs to run.  must exit(0) if OK.
+/home/thomer/prog/sfsnet/build/test/example1
