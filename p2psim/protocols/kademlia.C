@@ -45,14 +45,16 @@ unsigned Kademlia::refresh_rate = 0;
 Time Kademlia::max_lookup_time = 0;
 bool Kademlia::learn_from_rpc = true;
 
-long unsigned Kademlia::_rpc_bytes = 0;
+long long unsigned Kademlia::_rpc_bytes = 0;
 long unsigned Kademlia::_good_rpcs = 0;
 long unsigned Kademlia::_bad_rpcs = 0;
 long unsigned Kademlia::_ok_by_reaper = 0;
 long unsigned Kademlia::_timeouts_by_reaper = 0;
+Time Kademlia::_time_spent_timeouts = 0;
 
 long unsigned Kademlia::_good_lookups = 0;
 long unsigned Kademlia::_good_attempts = 0;
+long unsigned Kademlia::_bad_attempts = 0;
 long unsigned Kademlia::_lookup_dead_node = 0;
 long unsigned Kademlia::_ok_failures = 0;
 long unsigned Kademlia::_bad_failures = 0;
@@ -177,27 +179,29 @@ Kademlia::~Kademlia()
 #  9: number of RPCs sent in lookup (bad)\n\
 # 10: number of good      RPCs reaped by reaper\n\
 # 11: number of timed out RPCs reaped by reaper\n\
+# 12: time spent in timeouts\n\
 #\n\
-# 12: number of good lookups\n\
-# 13: number of attempts for good lookups\n\
-# 14: number of good lookups, but node was dead\n\
-# 15: number of bad lookups, node was dead\n\
-# 16: number of bad lookups, node was alive\n\
+# 13: number of good lookups\n\
+# 14: number of attempts for good lookups\n\
+# 15: number of attempts for bad lookups\n\
+# 16: number of good lookups, but node was dead\n\
+# 17: number of bad lookups, node was dead\n\
+# 18: number of bad lookups, node was alive\n\
 #\n\
-# 17: avg total lookup latency (good)\n\
-# 18: avg pure lookup latency (good)\n\
-# 19: avg pure ping latency (good)\n\
-# 20: number of timeouts suffered during lookup (good)\n\
+# 19: avg total lookup latency (good)\n\
+# 20: avg pure lookup latency (good)\n\
+# 21: avg pure ping latency (good)\n\
+# 22: number of timeouts suffered during lookup (good)\n\
 #\n\
-# 21: avg number of hops (good)\n\
-# 22: avg latency per hop (good)\n\
+# 23: avg number of hops (good)\n\
+# 24: avg latency per hop (good)\n\
 #\n\
-# 23: avg pure lookup latency (bad)\n\
-# 24: number of timeouts suffered during lookup (bad)\n\
-# 25: avg number of hops (bad)\n\
-# 26: avg latency per hop (bad)\n\
+# 25: avg pure lookup latency (bad)\n\
+# 26: number of timeouts suffered during lookup (bad)\n\
+# 27: avg number of hops (bad)\n\
+# 28: avg latency per hop (bad)\n\
 #\n\
-%u %u %u %u %u %u      %lu %lu %lu %lu %lu    %lu %lu %lu %lu %lu    %.2f %.2f %.2f %lu    %.2f %.2f   %.2f %lu %.2f %.2f\n",
+%u %u %u %u %u %u      %llu %lu %lu %lu %lu %.2f    %lu %lu %lu %lu %lu %lu    %.2f %.2f %.2f %lu    %.2f %.2f   %.2f %lu %.2f %.2f\n",
         Kademlia::k,
         Kademlia::alpha,
         Kademlia::stabilize_timer,
@@ -210,9 +214,11 @@ Kademlia::~Kademlia()
         _bad_rpcs,
         _ok_by_reaper,
         _timeouts_by_reaper,
+        (double) _time_spent_timeouts / (_good_attempts + _bad_attempts),
 
         _good_lookups,
         _good_attempts,
+        _bad_attempts,
         _lookup_dead_node,
         _ok_failures,
         _bad_failures,
@@ -225,10 +231,10 @@ Kademlia::~Kademlia()
         (double) _good_hops / _good_lookups,
         (double) _good_hop_latency / _good_hops,
 
-        (double) _bad_lookup_latency / (_ok_failures + _bad_failures),
+        (double) _bad_lookup_latency / _bad_attempts,
         _bad_timeouts,
-        (double) _bad_hops / (_ok_failures + _bad_failures),
-        (double) _bad_hop_latency / (_ok_failures + _bad_failures));
+        (double) _bad_hops / _bad_attempts,
+        (double) _bad_hop_latency / _bad_attempts);
 
 
     print_stats();
@@ -499,7 +505,7 @@ Kademlia::lookup_wrapper(lookup_wrapper_args *args)
   find_value(&fa, &fr);
   Time after = now();
   args->attempts++;
-  // XXX: timeout_count and timeout_time
+  _time_spent_timeouts += fr.spent_in_timeout;
 
   // if we found the node, ping it.
   if(args->key == fr.succ.id) {
@@ -548,6 +554,7 @@ Kademlia::lookup_wrapper(lookup_wrapper_args *args)
       _ok_failures++;
       record_lookup_stat(ip(), target_ip, after - args->starttime, true, false, args->timeout_count, args->timeout_time);
     }
+    _bad_attempts += args->attempts;
     delete args;
     return;
   }
@@ -609,7 +616,7 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
   HashMap<NodeID, bool> asked;
   HashMap<NodeID, unsigned> hops;
   bool deadtime = false;
-  Time deadtimestart;
+  Time deadtimestart = 0;
   if(Kademlia::learn_from_rpc)
     update_k_bucket(fargs->id, fargs->ip);
   fresult->rid = _id;
@@ -668,6 +675,11 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
     callinfo *ci = (*outstanding_rpcs)[donerpc];
     outstanding_rpcs->remove(donerpc);
     bool improved = false;
+
+    if(deadtime) {
+      deadtime = false;
+      fresult->spent_in_timeout += (now() - deadtimestart);
+    }
 
     k_nodeinfo ki;
     if(!alive()) {
@@ -754,15 +766,10 @@ next_candidate:
       }
 
       // all outstanding RPCs to dead nodes, but we're not in deadtime yet.
-      if(all_dead && !deadtime) {
+      assert(!deadtime);
+      if(all_dead) {
         deadtime = true;
         deadtimestart = now();
-      }
-
-      // not all outstanding RPCs to dead nodes, but we're in deadtime.
-      if(!all_dead && deadtime) {
-        deadtime = false;
-        fresult->spent_in_timeout += (now() - deadtimestart);
       }
     }
   }

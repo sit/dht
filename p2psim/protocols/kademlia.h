@@ -375,14 +375,16 @@ private:
   static unsigned _nkademlias;
 
   // global statistics
-  static long unsigned _rpc_bytes;
+  static long long unsigned _rpc_bytes;
   static long unsigned _good_rpcs;
   static long unsigned _bad_rpcs;
   static long unsigned _ok_by_reaper;
   static long unsigned _timeouts_by_reaper;
+  static Time _time_spent_timeouts;
 
   static long unsigned _good_lookups;
   static long unsigned _good_attempts;
+  static long unsigned _bad_attempts;
   static long unsigned _lookup_dead_node;
   static long unsigned _ok_failures;
   static long unsigned _bad_failures;
