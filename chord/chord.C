@@ -24,7 +24,7 @@
 #include <qhash.h>
 
 #define PNODE
-#define STOPSTABILIZE		// for testing purposes
+// #define STOPSTABILIZE		// for testing purposes
 
 vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
 	      chordID _myID) :
