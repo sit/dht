@@ -151,6 +151,7 @@ class dhashgateway {
   void insert_store_cb(svccb *sbp,  dhash_storeres *res,
 		       ptr<s_dhash_insertarg> item,
 		       chordID source,
+		       unsigned int attempts,
 		       clnt_stat err);
 
   void transfer_cb (chordID key, svccb *sbp, dhash_fetchiter_res *res, clnt_stat err);

@@ -93,7 +93,7 @@ class toe_table {
 };
 
 class vnode : public virtual refcount {
-  static const int stabilize_timer = 1000;  // millseconds
+  static const int stabilize_timer = 5000;  // millseconds
   static const int stabilize_timer_max = 500;      // seconds
   static const int max_retry = 5;
   

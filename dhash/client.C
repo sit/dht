@@ -170,7 +170,7 @@ dhashgateway::insert_findsucc_cb(svccb *sbp, ptr<dhash_insertarg> item,
 
     dhash_storeres *res = New dhash_storeres(DHASH_OK);
     doRPC(succ, dhash_program_1, DHASHPROC_STORE, s_item, res,
-		wrap(this, &dhashgateway::insert_store_cb, sbp, res, s_item, succ));
+	  wrap(this, &dhashgateway::insert_store_cb, sbp, res, s_item, succ, 1));
     
   }
 }
@@ -179,20 +179,29 @@ void
 dhashgateway::insert_store_cb(svccb *sbp, dhash_storeres *res, 
 			     ptr<s_dhash_insertarg> item,
 			     chordID source,
+			     unsigned int attempts,
 			     clnt_stat err )
 {
+#define DHASH_MAX_INSERT_ATTEMPTS 10
+
   warnt("DHASH: insert_after_STORE");
   if (res->status == DHASH_RETRY) {
-    dhash_storeres *nres = New dhash_storeres(DHASH_OK);
-    clntnode->locations->cacheloc (res->pred->p.x, res->pred->p.r);
-    doRPC(res->pred->p.x, dhash_program_1, 
-		    DHASHPROC_STORE, item, nres,
-		    wrap(this, &dhashgateway::insert_store_cb, sbp, nres, item, source));
-
-  } else
+    if (attempts < DHASH_MAX_INSERT_ATTEMPTS) {
+      attempts++;
+      dhash_storeres *nres = New dhash_storeres(DHASH_OK);
+      clntnode->locations->cacheloc (res->pred->p.x, res->pred->p.r);
+      doRPC(res->pred->p.x, dhash_program_1, 
+	    DHASHPROC_STORE, item, nres,
+	    wrap(this, &dhashgateway::insert_store_cb, sbp, nres, item, source, attempts));
+    } else {
+      warn << "store failed, attempts " << DHASH_MAX_INSERT_ATTEMPTS << "\n";
+      dhash_storeres res2 (DHASH_ERR); 
+      sbp->reply (&res2);
+    }
+  } else {
     sbp->reply (res);
-
-  delete res;
+    delete res;
+  }
 }
 
 

@@ -30,7 +30,7 @@
 EXITFN (cleanup);
 
 #define MAX_VNODES 1024
-#define STORE_SIZE 10000 //size of block store per vnode (in blocks)
+#define STORE_SIZE 60000 //size of block store per vnode (in blocks)
 
 ptr<chord> chordnode;
 static str p2psocket;
