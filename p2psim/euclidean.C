@@ -48,7 +48,7 @@ Euclidean::parse(ifstream &ifs)
     }
 
     // node-id
-    IPAddress ipaddr = atoll(words[0].c_str());
+    IPAddress ipaddr = (IPAddress) strtoull(words[0].c_str(), NULL, 10);
     if(!ipaddr)
       cerr << "found node-id 0.  you're asking for trouble." << endl;
 
