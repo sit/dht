@@ -2,11 +2,13 @@ noinst_PROGRAMS = protocols.o
 protocols_o_SOURCES = chord.C chordfinger.C chordfingerpns.C \
 		      chordonehop.C chordtoe.C kademlia.C \
 		      koorde.C protocolfactory.C tapestry.C onehop.C\
-                      kelips.C sillyprotocol.C
+                      kelips.C sillyprotocol.C \
+		      chordadapt.C ratecontrolqueue.C 
 
 EXTRA_DIST = chord.h chordfinger.h chordfingerpns.h chordonehop.h \
              chordtoe.h consistenthash.h kademlia.h kelips.h koorde.h \
-             protocolfactory.h sillyprotocol.h tapestry.h onehop.h
+             protocolfactory.h sillyprotocol.h tapestry.h onehop.h \
+	     chordadapt.h ratecontrolqueue.h 
 
 LIBS =
 protocols_o_LINK = $(LD) -r -o $@

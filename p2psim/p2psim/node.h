@@ -45,8 +45,11 @@ public:
   virtual ~Node();
   static void Node::parse(char*);
   virtual void initstate() {};
+  virtual string proto_name() { return "Node";}
 
   IPAddress ip() { return _ip; }
+  unsigned long long id() { return _id;}
+  string header();
   IPAddress set_alive(bool a);
   bool alive () { return _alive; }
   static bool init_state() { return (_args.nget<unsigned>("initstate",0,10) != 0); }
@@ -83,7 +86,7 @@ public:
 
   IPAddress first_ip() { return _first_ip; }
 
-protected:
+//protected: thomer will kill jy
   typedef set<unsigned> RPCSet;
 
   // stats
@@ -123,9 +126,9 @@ protected:
   // to fn(), and to check fn() is a member
   // of the same sub-class of Node as the caller.
   template<class BT, class AT>
-    void delaycb(int d, void (BT::*fn)(AT), AT args) {
+    void delaycb(int d, void (BT::*fn)(AT), AT args, BT *target=NULL) {
     // Compile-time check: does BT inherit from Node?
-    Node *dummy = (BT *) 0; dummy = dummy;
+    //Node *dummy = (BT *) 0; dummy = dummy;
 
     class XEvent : public Event {
     public:
@@ -141,7 +144,10 @@ protected:
 
     XEvent *e = New XEvent;
     e->ts = now() + d;
-    e->_target = dynamic_cast<BT*>(this);
+    if (target)
+      e->_target = dynamic_cast<BT*>(target);
+    else
+      e->_target = dynamic_cast<BT*>(this);
     assert(e->_target);
     e->_fn = fn;
     e->_args = args;
@@ -185,6 +191,7 @@ protected:
   unsigned rcvRPC(RPCSet*, bool&);
 
   IPAddress _ip;
+  unsigned long long _id;
   bool _alive;
 
   HashMap<unsigned, RPCHandle*> _rpcmap;
@@ -246,5 +253,7 @@ protected:
   IPAddress _first_ip;
   IPAddress _prev_ip;
 };
+
+#define NDEBUG(x) if(p2psim_verbose >= (x)) cout << header() 
 
 #endif // __PROTOCOL_H

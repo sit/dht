@@ -116,7 +116,7 @@ ChordFingerPNS::oracle_node_joined(IDMap n)
     for (uint j = 1; j <= (_base-1); j++) {
       if (ConsistentHash::between(me.id+lap*j, me.id+lap*(j+1), n.id)) {
 	IDMap s = loctable->succ(me.id + lap * j,LOC_ONCHECK);
-	if (!ConsistentHash::between(me.id+lap*j, me.id+lap*(j+1), n.id)) {
+	if (!ConsistentHash::between(me.id+lap*j, me.id+lap*(j+1), s.id)) {
 	  loctable->add_node(n);
 	  CDEBUG(3) << "oracle_node_joined finger add " << n.ip << ","
 	    << printID(n.id) << endl;

@@ -333,10 +333,10 @@ class LocTable {
     void print();
 
     bool update_ifexists(Chord::IDMap n);
-    void add_node(Chord::IDMap n, bool is_succ=false, bool assertadd=false,Chord::CHID fs=0,Chord::CHID fe=0, bool replacement=false);
+    bool add_node(Chord::IDMap n, bool is_succ=false, bool assertadd=false,Chord::CHID fs=0,Chord::CHID fe=0, bool replacement=false);
     int add_check(Chord::IDMap n);
     void add_sortednodes(vector<Chord::IDMap> l);
-    void del_node(Chord::IDMap n, bool force=false);
+    bool del_node(Chord::IDMap n, bool force=false);
     virtual void del_all();
     void notify(Chord::IDMap n);
     void pin(Chord::CHID x, uint pin_succ, uint pin_pred);
@@ -356,6 +356,7 @@ class LocTable {
     Chord::IDMap search(ConsistentHash::CHID);
     void dump();
     void stat();
+    Chord::IDMap pred_biggest_gap();
 
   protected:
     bool _evict;

@@ -37,6 +37,7 @@
 #include "tapestry.h"
 #include "kelips.h"
 #include "onehop.h"
+#include "chordadapt.h"
 #include "sillyprotocol.h"
 
 extern uint base;
@@ -78,8 +79,8 @@ ProtocolFactory::create(IPAddress i, const char *name)
     p = New ChordFingerPNS(i, a, NULL, name); 
   if (s == "ChordToe")
     p = New ChordToe(i, a);
-  if (s == "ChordOneHop") 
-    p = New ChordOneHop(i, a); //not implemented
+  if (s == "ChordAdapt")
+    p = New ChordAdapt(i,a);
   if (s == "OneHop")
     p = New OneHop(i,a);
   if (s == "Kademlia")

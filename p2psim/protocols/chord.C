@@ -1579,15 +1579,11 @@ Chord::oracle_node_died(IDMap n)
 
   //lost one of my successors
   vector<IDMap> succs = loctable->succs(me.id+1,_nsucc,LOC_ONCHECK);
-  uint ssz = succs.size();
-  assert(ssz==_nsucc);
   IDMap last = succs[succs.size()-1];
   if (ConsistentHash::betweenrightincl(me.id, succs[succs.size()-1].id, n.id)) {
     loctable->del_node(n);
     loctable->add_node(ids[(my_pos+_nsucc)%sz],true);
     vector<IDMap> newsucc = loctable->succs(me.id+1,_nsucc,LOC_ONCHECK);
-    uint nssz = newsucc.size();
-    assert(nssz == _nsucc);
     CDEBUG(3) << "chord_oracle_node_died succ del " << n.ip << ","
       << printID(n.id) << "add " << ids[(my_pos+_nsucc)%sz].ip 
       << "," << printID(ids[(my_pos+_nsucc)%sz].id) << endl;
@@ -2101,7 +2097,6 @@ LocTable::preds(Chord::CHID id, uint m, int status)
 
   Time t = now();
   uint deleted = 0;
-  uint rsz = ring.size();
   while (1) {
     if (elm->id == me.id) break;
 
@@ -2208,7 +2203,8 @@ LocTable::update_ifexists(Chord::IDMap n)
   }
   return true;
 }
-void
+
+bool
 LocTable::add_node(Chord::IDMap n, bool is_succ, bool assertadd, Chord::CHID fs,Chord::CHID fe, bool replacement)
 {
   Chord::IDMap succ1; 
@@ -2235,6 +2231,7 @@ LocTable::add_node(Chord::IDMap n, bool is_succ, bool assertadd, Chord::CHID fs,
     }
     elm->fs = fs;
     elm->fe = fe;
+    return false;
   } else {
     idmapwrap *newelm = New idmapwrap(n,now());
     if (elm && elm->is_succ) 
@@ -2250,36 +2247,17 @@ LocTable::add_node(Chord::IDMap n, bool is_succ, bool assertadd, Chord::CHID fs,
       assert(0);
     }
     elm = newelm;
+    return true;
   }
 
-  assert (ring.repok ());
-
-  if (_evict && ring.size() > _max) {
-    evict();
-  }
-
-  if (vis) {
-
-    Chord::IDMap succ2 = succ(me.id + 1);
-    Chord::IDMap pred2 = pred(me.id-1);
-
-    if(succ1.id != succ2.id) {
-      printf("vis %llu succ %16qx %16qx\n", now (), me.id, succ2.id);
-    }
-
-    if(pred1.id != pred2.id) {
-      printf("vis %llu pred %16qx %16qx\n", now (), me.id, pred2.id);
-    }
-  }
-  assert(!assertadd || elm->status <= LOC_HEALTHY);
 }
 
-void
+bool
 LocTable::del_node(Chord::IDMap n, bool force)
 {
   assert(n.ip != me.ip);
   idmapwrap *elm = ring.search(n.id);
-  if (!elm) return;
+  if (!elm) return false;
 
   if ((elm->is_succ) && (!force)) {
     elm->status = LOC_DEAD;
@@ -2290,6 +2268,7 @@ LocTable::del_node(Chord::IDMap n, bool force)
     delete elm;
   }
   assert (ring.repok ());
+  return true;
 }
 
 void
@@ -2501,4 +2480,29 @@ LocTable::stat()
   }
   printf("%llu loctable stat for (%u,%qx): succ %u,%qx number of succs %u numer of finger %u\n", 
       t, me.ip, me.id, succ.ip, succ.id, num_succ, num_finger);
+}
+
+Chord::IDMap
+LocTable::pred_biggest_gap()
+{
+  idmapwrap *elm = ring.closestsucc(me.id+1);
+  assert(elm);
+  Chord::IDMap prev= me;
+  Chord::IDMap maxgap_n = me;
+  double maxgap = 0.0;
+  while (elm->n.ip!=me.ip) {
+    if (!elm->is_succ) {
+      ConsistentHash::CHID gap = (ConsistentHash::CHID)(elm->n.id - prev.id);
+      ConsistentHash::CHID dist = (ConsistentHash::CHID)(prev.id - me.id);
+      double scaled = (double)gap/(double)dist;
+      if (scaled > maxgap) {
+	maxgap = scaled;
+	maxgap_n = prev;
+      }
+    }
+    prev = elm->n;
+    elm = ring.next(elm);
+    if (!elm) elm = ring.first();
+  }
+  return maxgap_n;
 }

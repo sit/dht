@@ -664,6 +664,15 @@ Node::Receive(void *px)
   taskexit(0);
 }
 
+string
+Node::header()
+{
+  char buf[128];
+  sprintf(buf,"%llu %s(%u,%u,%qx) ", now(), proto_name().c_str(), _first_ip, 
+      _ip,_id);
+  return string(buf);
+}
+
 IPAddress
 Node::set_alive(bool a)
 { 
