@@ -968,7 +968,7 @@ dhc::putblock_cb (ptr<dhc_block> kb, ptr<location> dest, ptr<write_state> ws,
   if (!ws->done) {
     if (!err && res->status == DHC_OK) {
       ws->bcount++; 
-      if (ws->bcount > n_replica) { //HACK!!! Should be nrep/2
+      if (ws->bcount > n_replica/2) { 
 	if (dhc_debug)
 	  warn << myNode->my_ID () << " dhc::putblock_cb Done writing.\n";
 	ws->done = true;
@@ -981,6 +981,11 @@ dhc::putblock_cb (ptr<dhc_block> kb, ptr<location> dest, ptr<write_state> ws,
 	  warn << myNode->my_ID () << " dhc::putblock_cb Some chord error.\n";
 	ws->done = true;
 	print_error ("dhc::putblock_cb", err, DHC_OK);
+	dhc_put_arg *put = ws->sbp->template getarg<dhc_put_arg> ();
+	dhc_soft *b = dhcs[put->bID];
+	if (b) 
+	  b->status = IDLE;	  
+	dhcs.insert (b);
 	dhc_put_res pres; pres.status = DHC_CHORDERR;
 	ws->sbp->reply (&pres);
       } else 
@@ -998,13 +1003,6 @@ dhc::putblock_cb (ptr<dhc_block> kb, ptr<location> dest, ptr<write_state> ws,
 	  dhc_put_res pres; pres.status = res->status;
 	  ws->sbp->reply (&pres);
 	}
-    if (ws->done) {
-      dhc_put_arg *put = ws->sbp->template getarg<dhc_put_arg> ();
-      dhc_soft *b = dhcs[put->bID];
-      if (b) 
-	b->status = IDLE;	  
-      dhcs.insert (b);
-    }
   }
 }
 
