@@ -135,7 +135,6 @@ EventQueue::parse(char *file)
 {
   ifstream in(file);
 
-  // XXX: this is bullshit. make better.
   string line;
   while(getline(in,line)) {
     vector<string> words = split(line);

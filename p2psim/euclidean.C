@@ -3,10 +3,11 @@
 #include "protocolfactory.h"
 #include "euclidean.h"
 #include "network.h"
+#include "parse.h"
 #include <cmath>
 #include <iostream>
 #include <fstream>
-
+#include <vector>
 using namespace std;
 
 Euclidean::Euclidean()
@@ -30,42 +31,38 @@ Euclidean::latency(Node *n1, Node *n2)
 void
 Euclidean::parse(ifstream &ifs)
 {
-  // XXX: this is crap
-  while(!ifs.eof()) {
-    string node, prot;
-    int id, x, y;
+  string line;
+  while(getline(ifs,line)) {
+    vector<string> words = split(line);
 
-    // XXX: fix this bug. why didn't it find the eof earlier?
-    ifs >> node;
-    if(ifs.eof())
-      break;
-
-    if(node[0] == '#')
+    // skip empty lines and commented lines
+    if(words.empty() || words[0][0] == '#')
       continue;
 
-    ifs.setf(ios::dec);
-    ifs >> id >> x >> y;
-    ifs.unsetf(ios::dec);
-    ifs >> prot;
+    // node-id
+    IPAddress ipaddr = atoi(words[0].c_str());
+    Node *n = new Node(ipaddr);
 
-    // create the node
-    Node *n = new Node((IPAddress) id);
-
-    // run the specified protocol on the node
-    // TODO: should be possible to run many
-    Protocol *p = ProtocolFactory::Instance()->create(prot, n);
-    send(n->protchan(), &prot);
-    assert(p);
-
-    // add it to the topology
+    // x,y coordinates
+    vector<string> coords = split(words[1], ",");
     Coord c;
-    c.first = x;
-    c.second = y;
-    if(_nodes.find(n->id()) != _nodes.end())
-      cerr << "warning: node " << id << " already added!" << endl;
-    _nodes[n->id()] = c;
+    c.first = atoi(coords[0].c_str());
+    c.second = atoi(coords[1].c_str());
 
-    // add the node to the network
-    send(Network::Instance()->nodechan(), &n);
+    // all the rest are protocols on this node
+    for(int i=2; i<words.size(); i++) {
+      // run the specified protocol on the node
+      Protocol *p = ProtocolFactory::Instance()->create(words[i], n);
+      send(n->protchan(), &(words[i]));
+      assert(p);
+
+      // add the node to the network
+      send(Network::Instance()->nodechan(), &n);
+    }
+
+    // add the new node it to the topology
+    if(_nodes.find(n->id()) != _nodes.end())
+      cerr << "warning: node " << ipaddr << " already added!" << endl;
+    _nodes[n->id()] = c;
   }
 }
