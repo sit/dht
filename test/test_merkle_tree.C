@@ -1,7 +1,8 @@
 #include "merkle.h"
+#define NEWDB
 
 #ifdef NEWDB
-dbfe *db = NULL;
+ptr<dbfe> db = NULL;
 #else
 database *db = NULL;
 #endif
@@ -133,7 +134,7 @@ create_database ()
 #ifdef NEWDB
   unlink (DBNAME);
 
-  db = New dbfe ();
+  db = New refcounted<dbfe> ();
 
   //set up the options we want
   dbOptions opts;

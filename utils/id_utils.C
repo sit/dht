@@ -26,7 +26,11 @@
  */
 
 #include <assert.h>
+#include <str.h>
+#include <sha1.h>
+#include "configurator.h"
 #include "id_utils.h"
+#include "misc_utils.h"
 
 chordID
 incID (const chordID &n)
@@ -290,4 +294,44 @@ str2chordID (str c, chordID &newID)
     }
   }
   return true;
+}
+
+chordID
+make_chordID (str addr, int port, int index)
+{
+  chordID ID;
+  // XXX we probably should marshall this!
+  str ids = strbuf () << addr << "." << port << "." << index;
+  char id[sha1::hashsize];
+  sha1_hash (id, ids, ids.len());
+  mpz_set_rawmag_be (&ID, id, sizeof (id));  // For big endian
+  return ID;
+}
+
+chordID
+make_chordID (const chord_node_wire &n)
+{
+  chord_node z = make_chord_node (n);
+  return z.x;
+}
+
+bool
+is_authenticID (const chordID &x, chord_hostname n, int p, int vnode)
+{  
+  int max_vnodes = 0;
+  if (max_vnodes == 0) {
+    bool ok = Configurator::only ().get_int ("chord.max_vnodes", max_vnodes);
+    assert (ok);
+  }
+
+  // xxx presumably there's really a smaller actual range
+  //     of valid ports.
+  if (p < 0 || p > 65535)
+    return false;
+
+  if (vnode > max_vnodes)
+    return false;
+
+  chordID ID = make_chordID (n, p, vnode);
+  return (ID == x);
 }

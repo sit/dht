@@ -4,7 +4,6 @@
 #include <chord_types.h>
 #include <str.h>
 #include <vec.h>
-#include <chord_util.h>
 
 bool in_vector (const vec<chordID> &v, chordID N);
 
@@ -16,19 +15,7 @@ float uniform_random_f (float max);
 
 chord_hostname my_addr ();
 
-inline const chord_node
-make_chord_node (const chord_node_wire &nl)
-{
-  chord_node n;
-  struct in_addr x;
-  x.s_addr = htonl (nl.machine_order_ipv4_addr);
-  n.r.hostname = inet_ntoa (x);
-  n.r.port     = nl.machine_order_port_vnnum >> 16;
-  n.vnode_num  = nl.machine_order_port_vnnum & 0xFFFF;
-  n.x = make_chordID (n.r.hostname, n.r.port, n.vnode_num);
-  n.coords = nl.coords;
-  return n;
-}
+chord_node make_chord_node (const chord_node_wire &nl);
 
 inline const strbuf &
 strbuf_cat (const strbuf &sb, const net_address &r)

@@ -514,6 +514,8 @@ main (int argc, char **argv)
   // ensure enough room for fingers and successors.
   int max_loccache;
   Configurator::only ().get_int ("locationtable.maxcache", max_loccache);
+  int max_vnodes = 1;
+
   str wellknownhost;
   int wellknownport = 0;
   int nreplica = 0;
@@ -659,12 +661,6 @@ main (int argc, char **argv)
   if (wellknownport == 0)
     usage ();
 
-  if (vnodes > chord::max_vnodes) {
-    warn << "Requested vnodes (" << vnodes << ") more than maximum allowed ("
-	 << chord::max_vnodes << ")\n";
-    usage ();
-  }
-
   {
     int logfd = open (logfname, O_WRONLY|O_APPEND|O_CREAT, 0666);
     if (logfd < 0)
@@ -675,6 +671,13 @@ main (int argc, char **argv)
   if (cffile) {
     bool ok = Configurator::only ().parse (cffile);
     assert (ok);
+  }
+
+  Configurator::only ().get_int ("chord.max_vnodes", max_vnodes);
+  if (vnodes > max_vnodes) {
+    warn << "Requested vnodes (" << vnodes << ") more than maximum allowed ("
+	 << max_vnodes << ")\n";
+    usage ();
   }
 
   // Override cf file stuff

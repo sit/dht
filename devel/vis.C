@@ -10,7 +10,7 @@
 #include "fingers_prot.h"
 #include "transport_prot.h"
 #include "misc_utils.h"
-#include "chord_util.h"
+#include "id_utils.h"
 #include "dns.h"
 
 #define WINX 700

@@ -58,4 +58,8 @@ u_long log2 (u_long n);
 
 bool str2chordID (str c, chordID &newID);
 
+chordID make_chordID (str hostname, int port, int index = 0);
+chordID make_chordID (const chord_node_wire &n);
+bool is_authenticID (const chordID &x, chord_hostname n, int p, int vnode);
+
 #endif /* _ID_UTILS_H */

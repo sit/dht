@@ -6,9 +6,7 @@
 
 #include "location.h"
 #include "misc_utils.h"
-#if 0
-#include <chord_util.h>
-#endif /* 0 */
+#include "id_utils.h"
 #include "modlogger.h"
 
 
@@ -21,12 +19,10 @@ location::init ()
   saddr_.sin_family = AF_INET;
   inet_aton (addr_.hostname.cstr (), &saddr_.sin_addr);
   saddr_.sin_port = htons (addr_.port);
-#if 0
   if (!is_authenticID (n_, addr_.hostname, addr_.port, vnode_)) {
     trace << "badnode " << n_ << " " << addr_ << " " << vnode_ << "\n";
     vnode_ = -1;
   }
-#endif /* 0 */  
 }
 
 location::location (const chordID &n, 

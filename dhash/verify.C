@@ -7,7 +7,7 @@
 #include <dhash_prot.h>
 #include <chord.h>
 #include <chord_types.h>
-#include <chord_util.h>
+#include <id_utils.h>
 
 bigint
 compute_hash (const void *buf, size_t buflen)

@@ -26,9 +26,9 @@
  */
 
 #include "chord.h"
-#include "chord_util.h"
 
 #include <misc_utils.h>
+#include <id_utils.h>
 #include <location.h>
 #include <locationtable.h>
 #include "comm.h"
@@ -50,6 +50,8 @@ chord_config_init::chord_config_init ()
 
 #define set_int Configurator::only ().set_int
 #define set_str Configurator::only ().set_str
+  ok = ok && set_int ("chord.max_vnodes", 1024);
+
   ok = ok && set_int ("chord.nsucc", 16);
   ok = ok && set_int ("chord.npred", 1);
   ok = ok && set_int ("chord.ncoords", 3);
@@ -76,7 +78,12 @@ chord::chord (str _wellknownhost, int _wellknownport,
   active (NULL)
 {
   str rpcstr;
-  bool ok = Configurator::only ().get_str ("chord.rpc_mode", rpcstr);
+  bool ok;
+
+  ok = Configurator::only ().get_int ("chord.max_vnodes", max_vnodes);
+  assert (ok);
+  
+  ok = Configurator::only ().get_str ("chord.rpc_mode", rpcstr);
   assert (ok);
 
   chord_rpc_style = CHORD_RPC_STP;

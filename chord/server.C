@@ -315,11 +315,13 @@ void
 user_args::fill_from (chord_node *from)
 { 
   dorpc_arg *t_arg = transport_header ();
+  from->x = t_arg->src_id;
+  from->r.port = t_arg->src_port;
+  from->vnode_num = t_arg->src_vnode_num;
+  from->coords = t_arg->src_coords;
   const struct sockaddr_in *sa = (struct sockaddr_in *)sbp->getsa ();
   if (sa) {
     from->r.hostname = inet_ntoa (sa->sin_addr);
-    from->r.port = t_arg->src_port;
-    from->vnode_num = t_arg->src_vnode_num;
   } else {
     // connected sockets don't have the addr field set in the sbp, so
     // we have to dig harder
@@ -338,15 +340,12 @@ user_args::fill_from (chord_node *from)
       socklen_t sinlen = sizeof (sin);
       if (getpeername (fd, (sockaddr *) &sin, &sinlen) == 0) {
         from->r.hostname = inet_ntoa (sin.sin_addr);
-        from->r.port = t_arg->src_port;
-        from->vnode_num = t_arg->src_vnode_num;
 	hasname = true;
       }
     }
     if (!hasname)
       warn << "XXX cannot run fill_from on stream (?) connection\n";
   }
-  from->x = t_arg->src_id;
 }
 
 void 

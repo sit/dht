@@ -47,7 +47,7 @@
 #include <misc_utils.h>
 #include <dbfe.h>
 #include <ida.h>
-#include <chord_util.h>
+#include <id_utils.h>
 #include <rpctypes.h>
 
 #ifdef DMALLOC

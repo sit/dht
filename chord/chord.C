@@ -40,12 +40,10 @@
 #include <coord.h>
 #include <modlogger.h>
 #include <misc_utils.h>
-#include "chord_util.h"
+#include <id_utils.h>
 #include <locationtable.h>
 
 #include <configurator.h>
-
-const int chord::max_vnodes = 1024;
 
 ref<vnode>
 vnode::produce_vnode (ref<chord> _chordnode,

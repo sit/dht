@@ -170,6 +170,8 @@ class vnode : public virtual refcount {
 
 
 class chord : public virtual refcount {
+  // system wide default on the maximum number of vnodes/node.
+  int max_vnodes;
 
   int nvnode;
   ptr<location> wellknown_node;
@@ -194,8 +196,6 @@ class chord : public virtual refcount {
  public:
   enum { NCOORDS = 3 };
 
-  // system wide default on the maximum number of vnodes/node.
-  static const int max_vnodes;
   ptr<vnode> active;
   ptr<locationtable> locations; 
     

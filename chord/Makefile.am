@@ -7,7 +7,6 @@ noinst_LIBRARIES = libchord.a
 noinst_HEADERS = aclnt_chord.h \
 	         chord.h \
 		 chord_impl.h \
-		 chord_util.h \
 		 comm.h \
 		 debruijn.h \
 		 finger_table.h \
@@ -22,7 +21,6 @@ noinst_HEADERS = aclnt_chord.h \
 
 libchord_a_SOURCES = chord.C \
 		      chord_client.C \
-		      chord_util.C \
 		      comm.C \
 		      debruijn.C \
 		      finger_table.C \
