@@ -223,10 +223,6 @@ afetch_cb2 (dhash_res *res, char *buf, unsigned int *read, int i, struct timeval
   delete res;
 }
 
-chordID
-random_ID () {
-  return random_bigint(NBIT);
-}
 
 //size must be word sized
 chordID
@@ -281,7 +277,7 @@ fetch(int num, int size) {
 void
 usage(char *progname) 
 {
-  printf("%s: vnode_num control_socket num_trials data_size file <f or s> nops\n", 
+  printf("%s: vnode_num control_socket num_trials data_size file <f or s> nops seed\n", 
 	 progname);
   exit(0);
 }
@@ -296,7 +292,7 @@ main (int argc, char **argv)
 
   sfsconst_init ();
 
-  if (argc < 8) {
+  if (argc < 9) {
     usage (argv[0]);
     exit (1);
   }
@@ -320,6 +316,8 @@ main (int argc, char **argv)
   dhash_stat ares;
   cp2p ()->scall(DHASHPROC_ACTIVE, &i, &ares);
 
+  unsigned int seed = strtoul (argv[8], NULL, 10);
+  srandom (seed);
   prepare_test_data (num, datasize);
 
   OPS_OUT = atoi(argv[7]);
