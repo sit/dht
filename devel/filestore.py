@@ -244,13 +244,16 @@ class storer (actor):
         self.go()
 
 # main
+def usage ():
+    # print help information and exit:
+    print "Usage: filestore [-n nops] -h host:port [-f key:level -o output| -s file]"
+    sys.exit(2)
+
 if __name__ == "__main__":
     try:
         opts, cmdv = getopt.getopt(sys.argv[1:], "h:n:f:s:o:")
     except getopt.GetoptError:
-        # print help information and exit:
-        print "filestore -h host:port -[f|s] -n nops -F file [-f key:level]"
-        sys.exit(2)
+	usage ()
 
     nops = 1
     for o, a in opts:
@@ -269,9 +272,12 @@ if __name__ == "__main__":
         if o == '-n':
             nops = int(a)
     
-    if mode not in ['f', 's']:
-        sys.stderr.write ("Unknown mode '%s'; bailing.\n" % (mode))
-        sys.exit (1)
+    try:
+	if mode not in ['f', 's']:
+	    sys.stderr.write ("Unknown mode '%s'; bailing.\n" % (mode))
+	    sys.exit (1)
+    except:
+	usage ()
     
     #create the client
     try:
