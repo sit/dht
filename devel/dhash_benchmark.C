@@ -166,7 +166,10 @@ main (int argc, char **argv)
   int datasize = atoi(argv[3]);
 
   char *output = argv[4];
-  outfile = fopen(output, "w");
+  if (strcmp(output, "-") == 0)
+    outfile = stdout;
+  else
+    outfile = fopen(output, "w");
   
   store(num, datasize);
   fetch(num, datasize);
