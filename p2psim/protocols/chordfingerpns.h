@@ -34,62 +34,6 @@ using namespace std;
 
 #define USE_OVERLAP 0
 
-class LocTablePNS : public LocTable {
-  public:
-    LocTablePNS() : LocTable() {
-    };
-    ~LocTablePNS() {};
-
-    class pns_entry{
-      public:
-      Chord::IDMap n;
-      Chord::CHID f_s;
-      Chord::CHID f_e;
-      static bool cmp(const pns_entry& a, const pns_entry& b) {return a.n.id <= b.n.id;}
-    };
-
-    Chord::IDMap next_hop(Chord::CHID key, uint m, uint nsucc) {
-      //implement SOSP'03's case 1
-      //if my successor list includes less than m successors for key, 
-      //then pick the physically closest successor to be the next_hop
-      assert(nsucc == 1); //XXX i have not implemented multiple next hops for this case
-      if (nsucc > 1) {
-	uint num = 0;
-	Time min_lat = 100000000;
-	Time lat;
-	Chord::IDMap min_s = me;
-	Topology *t = Network::Instance()->gettopology();
-	vector<Chord::IDMap> succs = this->succs(me.id+1, nsucc);
-	bool seen_succ = false;
-	for (int i = ((int)succs.size()) - 1; i >= 0; i--) {
-	  if (ConsistentHash::betweenrightincl(me.id, succs[i].id,key)) {
-	    seen_succ = true;
-	  } 
-	  if (seen_succ) {
-	    if (ConsistentHash::betweenrightincl(me.id,succs[i].id,key)) {
-	      if (!USE_OVERLAP) continue;
-	    }else {
-	      if (num > (nsucc - m)) goto DDONE;
-	      num++;
-	    }
-	    lat = t->latency(me.ip, succs[i].ip);
-	    if (min_lat > lat) {
-	      min_lat = lat;
-	      min_s = succs[i];
-	    }
-	  }
-	}
-DDONE:
-	if (seen_succ) {
-	  printf("%u,%qx shortcut query %qx to node %u,%qx (succ sz %d)\n", me.ip, me.id, key, min_s.ip, min_s.id,succs.size());
-	  assert(min_s.ip != me.ip);
-	  return min_s;
-	}
-      } 
-      return LocTable::next_hop(key);
-    };
-};
-
 class ChordFingerPNS: public Chord {
   public:
     ChordFingerPNS(IPAddress i, Args& a, LocTable *l = NULL);

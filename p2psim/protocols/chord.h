@@ -207,6 +207,7 @@ protected:
   int _asap;
   uint _recurs;
   uint _recurs_direct;
+  uint _stopearly_overshoot;
   IDMap _wkn;
   uint _join_scheduled;
   uint _parallel;

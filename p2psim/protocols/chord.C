@@ -73,6 +73,7 @@ Chord::Chord(IPAddress i, Args& a, LocTable *l) : P2Protocol(i), _isstable (fals
   //recursive routing?
   _recurs = a.nget<uint>("recurs",0,10);
   _recurs_direct = a.nget<uint>("recurs_direct",0,10);
+  _stopearly_overshoot = a.nget<uint>("stopearlyovershoot",0,10);
   assert(!_recurs_direct || static_sim);
 
   //parallel lookup? parallelism only works in iterative lookup now
@@ -808,16 +809,56 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
       sz = args->m < succs.size()? args->m : succs.size();
       for (i = 0; i < sz; i++) {
 	ret->v.push_back(succs[i]);
-	if (ret->v.size() > args->m) return;
+	if (ret->v.size() >= args->m) break;
       }
       ret->correct = check_correctness(args->key,ret->v);
-      assert(!static_sim || ret->correct);
 #ifdef CHORD_DEBUG
       if (!ret->correct)
 	printf("%s incorrect key %qx, succ %u,%qx\n",ts(), args->key, succs[0].ip, succs[0].id);
 #endif
       return;
-    }else {
+    }else if (_stopearly_overshoot && ConsistentHash::betweenrightincl(me.id, succs[succs.size()-1].id, args->key)) {
+      assert(static_sim);
+      uint start = 0;
+      for (i = 0; i < succs.size(); i++) {
+	if ( ConsistentHash::betweenrightincl(me.id, succs[i].id, args->key)) {
+	  ret->v.push_back(succs[i]);
+	  if (!start) start = i;
+	}
+      }
+      if (ret->v.size() >= args->m) {
+	ret->correct = check_correctness(args->key,ret->v);
+	return;
+      }
+      uint stop;
+      if (start > (_nsucc - args->m)) 
+	stop = start - (_nsucc - args->m);
+      else 
+	stop = 0;
+      assert(stop < succs.size()-1);
+      Topology *t = Network::Instance()->gettopology();
+      //find the closest node that could potentially satisfy the query
+      Time min_lat = 1000000;
+      Time lat;
+      for (i = succs.size() - 1; i >= stop; i--) {
+	lat = t->latency(me.ip, succs[i].ip);
+	if (min_lat > lat) {
+	  min_lat = lat;
+	  next = succs[i];
+	}
+      }
+      assert(min_lat < 1000000);
+    }else if (_stopearly_overshoot && ret->v.size() > 0) {
+      //handling overshoot, just append my succ list
+      for (i = 0; i < succs.size(); i++) {
+	ret->v.push_back(succs[i]);
+	if (ret->v.size() >= args->m) {
+	  ret->correct = check_correctness(args->key,ret->v);
+	  return;
+	}
+      }
+      assert(0);
+    } else {
       if (args->path.size() >= 20) {
 	fprintf(stderr,"path too long %s: ", ts());
 	for (uint i = 0; i < args->path.size(); i++) {
@@ -829,39 +870,39 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
       //XXX i never check if succ is dead or not
       next = loctable->next_hop(args->key,1,1);
       assert(ConsistentHash::between(me.id, args->key, next.id));
+    }
 
-      tmp.n = next;
-      tmp.tout = 0;
-      args->path.push_back(tmp);
+    tmp.n = next;
+    tmp.tout = 0;
+    args->path.push_back(tmp);
 
-      record_stat(4,args->type);
-      if (_vivaldi) {
-	target = dynamic_cast<Chord *>(getpeer(next.ip));
-	r = _vivaldi->doRPC(next.ip, target, &Chord::next_recurs_handler, args, ret);
-      } else
-	r = doRPC(next.ip, &Chord::next_recurs_handler, args, ret);
+    record_stat(4,args->type);
+    if (_vivaldi) {
+      target = dynamic_cast<Chord *>(getpeer(next.ip));
+      r = _vivaldi->doRPC(next.ip, target, &Chord::next_recurs_handler, args, ret);
+    } else
+      r = doRPC(next.ip, &Chord::next_recurs_handler, args, ret);
 
-      if (!alive()) {
+    if (!alive()) {
 #ifdef CHORD_DEBUG
-	printf("%s lost lookup request %qx\n", ts(), args->key);
+      printf("%s lost lookup request %qx\n", ts(), args->key);
 #endif
-	ret->v.clear();
-	return;
-      }
+      ret->v.clear();
+      return;
+    }
 
-      if (r) {
-	record_stat(ret->v.size()*4,args->type);
-	loctable->add_node(next); //update timestamp
-	return;
-      }else{
+    if (r) {
+      record_stat(ret->v.size()*4,args->type);
+      loctable->add_node(next); //update timestamp
+      return;
+    }else{
 #ifdef CHORD_DEBUG
-	printf ("%s next hop to %u,%16qx failed\n", ts(), next.ip, next.id);
+      printf ("%s next hop to %u,%16qx failed\n", ts(), next.ip, next.id);
 #endif
-	if (vis) 
-	  printf ("vis %llu delete %16qx %16qx succ %u,%qx\n", now (), me.id, next.id, succ.ip,succ.id);
-	args->path[args->path.size()-1].tout = 1;
-	loctable->del_node(next);
-      }
+      if (vis) 
+	printf ("vis %llu delete %16qx %16qx succ %u,%qx\n", now (), me.id, next.id, succ.ip,succ.id);
+      args->path[args->path.size()-1].tout = 1;
+      loctable->del_node(next);
     }
   }
 }
