@@ -252,6 +252,7 @@ recroute<T>::recroute_hop_cb (ptr<recroute_route_arg> nra,
     // We don't really care if this is lost beyond the RPC system's
     // retransmits.
     delete res; res = NULL;
+    return;
   }
   nra->retries++;
   failed.push_back (p->id ());
@@ -287,6 +288,21 @@ recroute<T>::docomplete (user_args *sbp, recroute_complete_arg *ca)
   routers.remove (router);
   router->handle_complete (sbp, ca);
   // XXX Print out something about ca->retries?
+}
+
+template<class T>
+void
+recroute<T>::stats () const
+{
+  T::stats ();
+  warnx << "Outstanding routing lookups:\n";
+  route_recchord *ri = routers.first ();
+  while (ri != NULL) {
+    timespec ts = ri->start_time ();
+    warnx << "  " << ri->routeid_ << " for " << ri->key ()
+	  << " started " << ts.tv_sec << "." << ts.tv_nsec << "\n";
+    ri = routers.next (ri);
+  }
 }
 
 // override produce_iterator*
@@ -334,3 +350,4 @@ recroute<T>::produce_iterator_ptr (chordID xi,
   routers.insert (ri);
   return ri;
 }
+

@@ -15,7 +15,7 @@ struct recroute_complete_arg;
 class route_recchord : public route_iterator {
   timespec start_time_;
   
-  static long get_nonce ();
+  static u_long get_nonce ();
   void first_hop_cb (ptr<bool> del,
 		     ptr<recroute_route_arg> ra,
 		     recroute_route_stat *res,
@@ -24,7 +24,7 @@ class route_recchord : public route_iterator {
 
  public:
   // must be public for ihash??
-  long routeid_;
+  u_long routeid_;
   ihash_entry<route_recchord> hlink_;
 
   route_recchord (ptr<vnode> vi, chordID xi);

@@ -10,7 +10,7 @@ template<class T>
 class recroute : public T {
  private:
   timecb_t *sweep_cb;
-  ihash<long, route_recchord,
+  ihash<u_long, route_recchord,
     &route_recchord::routeid_, &route_recchord::hlink_> routers;
   
  protected:
@@ -35,8 +35,11 @@ class recroute : public T {
   static ref<vnode> produce_vnode (ref<chord> _chordnode,
 				   ref<rpc_manager> _rpcm,
 				   ref<location> _l);
+
   
   // Override select routing related methods of vnode
+  void stats () const;
+
   ptr<route_iterator> produce_iterator (chordID xi);
   ptr<route_iterator> produce_iterator (chordID xi,
 					const rpc_program &uc_prog,

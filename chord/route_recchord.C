@@ -37,7 +37,7 @@ route_recchord::~route_recchord ()
 }
 
 // static class method
-long
+u_long
 route_recchord::get_nonce ()
 {
   return random_getword ();
