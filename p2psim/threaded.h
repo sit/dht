@@ -15,6 +15,7 @@ public:
 
 protected:
   void thread();
+  void thread(Threaded*);
   Channel *_exitchan;
   int _thread;
 

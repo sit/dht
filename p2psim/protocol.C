@@ -22,7 +22,7 @@ Protocol::Protocol(Node *n) : _node(n)
   assert(_netchan);
   _appchan = chancreate(sizeof(P2PEvent*), 0);
   assert(_appchan);
-  thread();
+  thread(_node); // run, but map this thread to the node we're running in
 }
 
 Protocol::~Protocol()

@@ -14,11 +14,20 @@ Threaded::~Threaded()
   threadexits(0);
 }
 
+
 void
 Threaded::thread()
 {
-  _thread = ThreadManager::Instance()->create(this, Threaded::Run, this);
+  thread(this);
 }
+
+
+void
+Threaded::thread(Threaded *t)
+{
+  _thread = ThreadManager::Instance()->create(t, Threaded::Run, this);
+}
+
 
 void
 Threaded::Run(void *t)
