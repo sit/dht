@@ -9,7 +9,7 @@ using namespace std;
 
 /* Gummadi's Chord PNS algorithm  (static) */
 
-ChordFingerPNS::ChordFingerPNS(Node *n, uint base, uint successors, int samples) : Chord(n, successors), _base(base), _samples(samples)
+ChordFingerPNS::ChordFingerPNS(Node *n, uint base, uint successors, int samples) : Chord(n, successors, new LocTablePNS()), _base(base), _samples(samples)
 {
 }
 
@@ -39,14 +39,14 @@ ChordFingerPNS::init_state(vector<IDMap> ids)
       tmpf.id = lap * (j+1) + me.id;
       uint e_pos = upper_bound(ids.begin(), ids.end(), tmpf, Chord::IDMap::cmp) - ids.begin();
       e_pos = e_pos % sz;
-      uint candidates = (e_pos - s_pos) % sz;
+      int candidates = (e_pos - s_pos) % sz;
       double prob = (double)_samples/(double)(candidates);
       IDMap min_f = me;
       IDMap min_f_pred = me;
       uint min_l = 100000000;
       if (_samples > 0 && candidates > 10 * _samples) {
 	//use a more efficient sampling technique
-	for (uint j = 0; j < _samples; j++) {
+	for (int j = 0; j < _samples; j++) {
 	  uint i = uint ((((double)random()/(double)RAND_MAX) * candidates));
 	  assert(i>= 0 && i < candidates);
 	  if (t->latency(me.ip, ids[(s_pos + i) % sz].ip) < min_l) {
@@ -68,6 +68,7 @@ ChordFingerPNS::init_state(vector<IDMap> ids)
 	}
       }
       loctable->add_node(min_f);
+      ((LocTablePNS *)loctable)->add_finger(make_pair(min_f_pred, min_f));
       //Gummadi assumes the node knows the idspace each of the neighbors is 
       //responsible for. this is equivalent to knowing each of the neighbors' predecessor.
       //so add the predecessor for this finger
