@@ -110,7 +110,7 @@ ChurnEventGenerator::run()
     a = New Args();
     Time tolookup = next_exponential( _lookupmean );
     (*a)["key"] = get_lookup_key();
-    if( now() + jointime + tolookup < _exittime ) {
+    if( _lookupmean > 0 && now() + jointime + tolookup < _exittime ) {
       P2PEvent *e = New P2PEvent(now() + jointime + tolookup, ip, "lookup", a);
       add_event(e);
     } else {
