@@ -56,11 +56,15 @@ compute_hash (const void *buf, size_t buflen)
 // ------------------------------------------------------------------------
 // DHASHGATEWAY
 
-dhashgateway::dhashgateway (ptr<axprt_stream> x, ptr<chord> node, bool do_cache)
+dhashgateway::dhashgateway (ptr<axprt_stream> x, ptr<chord> node,
+			    dhash *dh,
+			    bool do_cache)
 {
-  clntsrv = asrv::alloc (x, dhashgateway_program_1, wrap (this, &dhashgateway::dispatch));
+  clntsrv = asrv::alloc (x, dhashgateway_program_1, 
+			 wrap (this, &dhashgateway::dispatch));
   clntnode = node;
-  dhcli = New refcounted<dhashcli> (clntnode, do_cache);
+  this->dh = dh;
+  dhcli = New refcounted<dhashcli> (clntnode, dh, do_cache);
 }
 
 
@@ -94,15 +98,8 @@ dhashgateway::dispatch (svccb *sbp)
 	               wrap (this, &dhashgateway::retrieve_cb, sbp));
     }
     break;
-
-  case DHASHPROC_ACTIVE:
-    {
-      warnt ("DHASHGW: change_active_request");
-      int32 *n =  sbp->template getarg<int32> ();
-      clntnode->set_active (*n);
-      sbp->replyref (DHASH_OK);
-    }
-    break;
+    
+    //XXX DHASHPROC_ACTIVE messes up the back-call scheme. Disabled. --FED
 
   default:
     sbp->reject (PROC_UNAVAIL);

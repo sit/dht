@@ -80,7 +80,7 @@ dhash::dhash(str dbname, vnode *node, int k, int ss, int cs, int _ss_mode)
   
   //the client helper class (will use for get_key etc)
   //don't cache here: only cache on user generated requests
-  cli = New dhashcli (node->chordnode, false);
+  cli = New dhashcli (node->chordnode, this, false);
 
   // pred = 0; // XXX initialize to what?
   check_replica_tcb = NULL;
@@ -117,35 +117,53 @@ void
 dhash::route_upcall (int procno, void *args, cbupcalldone_t cb)
 {
   warnt ("DHASH: fetchiter_request");
-
+  
   s_dhash_fetch_arg *farg = static_cast<s_dhash_fetch_arg *>(args);
-
-  dhash_fetchiter_res *res;
   if (key_status (farg->key) != DHASH_NOTPRESENT) {
     if (farg->len > 0) {
       //fetch the key and return it, end of story
       fetch (farg->key, 
 	     farg->cookie,
 	     wrap (this, &dhash::fetchiter_gotdata_cb, cb, farg));
-      return;
     } else {
       // on zero length request, we just return
       // whether we store the block or not
-      res  = New dhash_fetchiter_res (DHASH_CONTINUE);
-      res->compl_res->res.setsize (0);
-      res->compl_res->attr.size = 0;
-      res->compl_res->offset = 0;
-      res->compl_res->source = host_node->my_ID ();
+      ptr<s_dhash_block_arg> arg = New refcounted<s_dhash_block_arg> ();
+      arg->v = farg->from;
+      arg->res.setsize (0);
+      arg->attr.size = 0;
+      arg->offset = 0;
+      arg->source = host_node->my_ID ();
+      arg->nonce = farg->nonce;
+      dhash_stat *res = New dhash_stat ();
+      doRPC (farg->from, dhash_program_1, DHASHPROC_BLOCK,
+	     arg, res, wrap (this, &dhash::sent_block_cb, res));
+      (*cb)(true);
     } 
-  } else if (responsible (farg->key)) 
+  } else if (responsible (farg->key)) {
     //no where else to go, return NOENT or RETRY?
-    res = New dhash_fetchiter_res (DHASH_NOENT);
-  else 
-    res = New dhash_fetchiter_res (DHASH_CONTINUE);
+    warn << "sending NOENT WARNING\n";
+    ptr<s_dhash_block_arg> arg = New refcounted<s_dhash_block_arg> ();
+    arg->v = farg->from;
+    arg->res.setsize (0);
+    arg->offset = -1;
+    arg->source = host_node->my_ID ();
+    arg->nonce = farg->nonce;
+    dhash_stat *res = New dhash_stat ();
+    doRPC (farg->from, dhash_program_1, DHASHPROC_BLOCK,
+	   arg, res, wrap (this, &dhash::sent_block_cb, res));
+    (*cb)(true);
+  } else
+    (*cb)(false);
   
-  (*cb) (res);
 }
 
+void
+dhash::sent_block_cb (dhash_stat *s, clnt_stat err) 
+{
+  if (err || !s || (s && *s))
+    warn << "error sending block\n";
+}
 
 dhash_fetchiter_res *
 dhash::block_to_res (dhash_stat err, s_dhash_fetch_arg *arg,
@@ -166,9 +184,7 @@ dhash::block_to_res (dhash_stat err, s_dhash_fetch_arg *arg,
     res->compl_res->source = host_node->my_ID ();
     res->compl_res->cookie = cookie;
     
-    memcpy (res->compl_res->res.base (), 
-	    (char *)val->value + arg->start, 
-	    n);
+    memcpy (res->compl_res->res.base (), (char *)val->value + arg->start, n);
     
     //free the cookie if we just read the last byte
     pk_partial *part = pk_cache[cookie];
@@ -185,12 +201,24 @@ dhash::block_to_res (dhash_stat err, s_dhash_fetch_arg *arg,
 }
 		     
 void
-dhash::fetchiter_gotdata_cb (cbupcalldone_t cb, s_dhash_fetch_arg *arg,
+dhash::fetchiter_gotdata_cb (cbupcalldone_t cb, s_dhash_fetch_arg *a,
 			     int cookie, ptr<dbrec> val, dhash_stat err) 
 {
-  dhash_fetchiter_res *res = block_to_res (err, arg, cookie, val);
-  (*cb) (res);
-  delete res;
+  ptr<s_dhash_block_arg> arg = New refcounted<s_dhash_block_arg> ();
+  int n = (a->len + a->start < val->len) ? a->len : val->len - a->start;
+  
+  arg->v = a->from;
+  arg->res.setsize (n);
+  memcpy (arg->res.base (), (char *)val->value + a->start, n);
+  arg->attr.size = val->len;
+  arg->offset = a->start;
+  arg->source = host_node->my_ID ();
+  arg->nonce = a->nonce;
+  arg->cookie = cookie;
+  dhash_stat *res = New dhash_stat ();
+  doRPC (a->from, dhash_program_1, DHASHPROC_BLOCK,
+	 arg, res, wrap (this, &dhash::sent_block_cb, res));  
+  (*cb) (true);
 }
 
 void
@@ -249,7 +277,7 @@ dhash::dispatch (svccb *sbp)
     break;
   case DHASHPROC_GETKEYS:
     {
-      s_dhash_getkeys_arg *gkarg = sbp->template getarg<s_dhash_getkeys_arg> ();
+      s_dhash_getkeys_arg *gkarg = sbp->template getarg<s_dhash_getkeys_arg>();
       
       dhash_getkeys_res res (DHASH_OK);
       ref<vec<chordID> > keys = New refcounted<vec<chordID> >;
@@ -268,11 +296,22 @@ dhash::dispatch (svccb *sbp)
       sbp->reply (&res);
     }
     break;
-  case DHASHPROC_KEYSTATUS:
+  case DHASHPROC_BLOCK:
     {
-      fatal << "screw off\n";
+
+      s_dhash_block_arg *arg = sbp->template getarg<s_dhash_block_arg> ();
+
+      cbblockuc_t *cb = bcpt[arg->nonce];
+      if (cb) {
+	(*cb) (arg);
+	bcpt.remove (arg->nonce);
+     } else
+	warn << "no callback registered\n";
+
+      sbp->replyref (DHASH_OK);
     }
     break;
+
   default:
     sbp->replyref (PROC_UNAVAIL);
     break;
@@ -281,6 +320,12 @@ dhash::dispatch (svccb *sbp)
   pred = host_node->my_pred ();
   return;
   }
+
+void
+dhash::register_block_cb (int nonce, cbblockuc_t cb)
+{
+  bcpt.insert (nonce, cb);
+}
 
 void
 dhash::storesvc_cb(svccb *sbp,
@@ -505,7 +550,6 @@ dhash::transfer_store_cb (callback<void, dhash_stat>::ref cb,
 void
 dhash::get_key (chordID source, chordID key, cbstat_t cb) 
 {
-  return;
   warn << "fetching a block (" << key << " from " << source << "\n";
   cli->retrieve(source, key, wrap (this, &dhash::get_key_got_block, key, cb));
 }

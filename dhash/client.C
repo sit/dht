@@ -119,6 +119,14 @@ public:
 // ---------------------------------------------------------------------------
 // DHASHCLI
 
+dhashcli::dhashcli (ptr<chord> node, dhash *dh, bool do_cache) : 
+  clntnode (node), 
+  do_cache (do_cache),
+  dh (dh)
+{
+  
+}
+
 void
 dhashcli::doRPC (chordID ID, rpc_program prog, int procno,
 		 ptr<void> in, void *out, aclnt_cb cb)
@@ -134,25 +142,25 @@ dhashcli::retrieve (chordID blockID, bool usecachedsucc, cbretrieve_t cb)
   ptr<route_dhash> iterator = 
     New refcounted<route_dhash>(clntnode->active,
 				blockID,
+				dh,
 				usecachedsucc);
 
-  iterator->first_hop (wrap (this, &dhashcli::retrieve_hop_cb, iterator, cb));
+  iterator->execute (wrap (this, &dhashcli::retrieve_hop_cb, iterator, cb));
 }
 
 void
 dhashcli::retrieve_hop_cb (ptr<route_dhash> iterator, cbretrieve_t cb,
 			   bool done) 
 {
-  if (done) {
-    if (iterator->status ()) {
-      (*cb) (NULL);
-    } else {
-      ptr<dhash_block> res = iterator->get_block ();
-      cb (res); 
-      cache_block (res, iterator->path (), iterator->key ());
-    }
-  } else 
-    iterator->next_hop ();
+  assert (done);
+  if (iterator->status ()) {
+    warn << "iterator exiting w/ status\n";
+    (*cb) (NULL);
+  } else {
+    ptr<dhash_block> res = iterator->get_block ();
+    cb (res); 
+    cache_block (res, iterator->path (), iterator->key ());
+  }
 }
 
 void
@@ -185,32 +193,27 @@ void
 dhashcli::retrieve (chordID source, chordID blockID, cbretrieve_t cb)
 {
   ptr<route_dhash> iterator = 
-    New refcounted<route_dhash>(clntnode->active,
-				blockID,
-				source); //this is the "guess"
+    New refcounted<route_dhash>(clntnode->active, blockID, dh);
 
-  iterator->first_hop (wrap (this, &dhashcli::retrieve_with_source_cb, 
-			     iterator, cb));  
+  iterator->execute (wrap (this, &dhashcli::retrieve_with_source_cb, 
+			   iterator, cb), source);  
 }
 
 void
 dhashcli::retrieve_with_source_cb (ptr<route_dhash> iterator,
 				   cbretrieve_t cb, bool done)
 {
-  if (done) {
-    if (iterator->status ()) 
-      (*cb) (NULL);
-    else 
-      cb (iterator->get_block ()); 
-  } else 
-    iterator->next_hop ();
+  assert (done);
+  if (iterator->status ()) 
+    (*cb) (NULL);
+  else 
+    cb (iterator->get_block ()); 
 }
 
 void
 dhashcli::insert (chordID blockID, ref<dhash_block> block, 
                   bool usecachedsucc, cbinsert_t cb)
 {
-  //  dhash_insert::execute (this, blockID, block, usecachedsucc, cb);
   lookup (blockID, usecachedsucc, 
 	  wrap (this, &dhashcli::insert_lookup_cb,
 		blockID, block, cb));
@@ -272,6 +275,7 @@ dhashcli::store_cb (dhashcli_storecb_t cb, ref<dhash_storeres> res,
 void
 dhashcli::lookup (chordID blockID, bool usecachedsucc, dhashcli_lookupcb_t cb)
 {
+  
   if (usecachedsucc) {
     chordID x = clntnode->lookup_closestsucc (blockID);
     (*cb) (DHASH_OK, x);
@@ -293,28 +297,3 @@ dhashcli::lookup_findsucc_cb (chordID blockID, dhashcli_lookupcb_t cb,
 }
 
 
-
-void
-dhashcli::lookup_route (chordID blockID, bool usecachedsucc, dhashcli_routecb_t cb)
-{
-  if (usecachedsucc) {
-    chordID x = clntnode->lookup_closestsucc (blockID);
-    route e_path;
-    (*cb) (DHASH_OK, x, e_path);
-    return;
-  }
-  clntnode->find_successor (blockID,
-			    wrap (this, &dhashcli::lookup_findsucc_route_cb,
-				  blockID, cb));
-}
-
-void
-dhashcli::lookup_findsucc_route_cb (chordID blockID, dhashcli_routecb_t cb,
-				    chordID succID, route path, chordstat err)
-{
-  if (err) {
-    route e_path;
-    (*cb) (DHASH_CHORDERR, 0, e_path);
-  }  else
-    (*cb) (DHASH_OK, succID, path);
-}

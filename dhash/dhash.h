@@ -56,6 +56,7 @@ typedef callback<void, int, ptr<dbrec>, dhash_stat>::ptr cbvalue;
 typedef callback<void, struct store_cbstate *,dhash_stat>::ptr cbstat;
 typedef callback<void,dhash_stat>::ptr cbstore;
 typedef callback<void,dhash_stat>::ptr cbstat_t;
+typedef callback<void, s_dhash_block_arg *>::ptr cbblockuc_t;
 
 extern unsigned int MTU;
 
@@ -137,8 +138,13 @@ class dhash {
   vnode *host_node;
   dhashcli *cli;
 
-  ihash<chordID, store_state, &store_state::key, &store_state::link, hashID> pst;
-  ihash<int, pk_partial, &pk_partial::cookie, &pk_partial::link> pk_cache;
+  ihash<chordID, store_state, &store_state::key, 
+    &store_state::link, hashID> pst;
+
+  ihash<int, pk_partial, &pk_partial::cookie, 
+    &pk_partial::link> pk_cache;
+
+  qhash<int, cbblockuc_t> bcpt;
 
   void route_upcall (int procno, void *args, cbupcalldone_t cb);
 
@@ -156,6 +162,7 @@ class dhash {
 			     int cookie, ptr<dbrec> val, dhash_stat stat);
   void fetchiter_sbp_gotdata_cb (svccb *sbp, s_dhash_fetch_arg *farg,
 				 int cookie, ptr<dbrec> val, dhash_stat stat);
+  void sent_block_cb (dhash_stat *s, clnt_stat err);
 
   void append (ptr<dbrec> key, ptr<dbrec> data,
 	       s_dhash_insertarg *arg,
@@ -247,6 +254,8 @@ class dhash {
   void print_stats ();
   void stop ();
   void fetch (chordID id, int cookie, cbvalue cb);
+  void register_block_cb (int nonce, cbblockuc_t cb);
+
   dhash_stat key_status(const chordID &n);
 
   static bool verify (chordID key, dhash_ctype t, char *buf, int len);
@@ -280,11 +289,54 @@ typedef callback<void, ptr<dhash_storeres> >::ref dhashcli_storecb_t;
 typedef callback<void, dhash_stat, chordID>::ref dhashcli_lookupcb_t;
 typedef callback<void, dhash_stat, chordID, route>::ref dhashcli_routecb_t;
 
-class route_dhash;
+
+class route_dhash : public route_iterator {
+  
+ public:
+  route_dhash (ptr<vnode> vi, chordID xi, dhash *dh, 
+	       bool ucs = false);
+  route_dhash (ptr<vnode> vi, chordID xi, 
+	       chordID first_hop, bool ucs = false);
+  void next_hop ();
+  void first_hop (cbhop_t cb);
+  void first_hop (cbhop_t cb, chordID first_hop_guess);
+  void execute (cbhop_t cbi, chordID first_hop_guess);
+  void execute (cbhop_t cbi);
+
+  ptr<dhash_block> get_block () {return block;};
+  dhash_stat get_status () { return result; };
+  route path ();
+
+ private:
+  ptr<route_chord> chord_iterator;
+  bool use_cached_succ;
+  int npending;
+  bool fetch_error;
+  ptr<dhash_block> block;
+  dhash_stat result;
+  bool last_hop;
+  dhash *dh;
+
+  void check_finish ();
+  void block_cb (s_dhash_block_arg *arg);
+  void hop_cb (bool done);
+  void make_hop (chordID &n);
+  void make_hop_cb (ptr<dhash_fetchiter_res> res, 
+		    clnt_stat err);
+  void nexthop_chalok_cb (chordID s, bool ok, chordstat status);  
+  chordID lookup_next_hop (chordID k);
+  bool straddled (route path, chordID &k);
+  
+  void add_data (char *data, int len, int off);
+  void finish_block_fetch (ptr<dhash_fetchiter_res> res, clnt_stat err);
+  void fail (str errstr);
+};
+
 
 class dhashcli {
   ptr<chord> clntnode;
   bool do_cache;
+  dhash *dh;
 
  private:
   void doRPC (chordID ID, rpc_program prog, int procno, ptr<void> in, 
@@ -293,8 +345,6 @@ class dhashcli {
   void store_cb (dhashcli_storecb_t cb, ref<dhash_storeres> res,clnt_stat err);
   void lookup_findsucc_cb (chordID blockID, dhashcli_lookupcb_t cb,
 			   chordID succID, route path, chordstat err);
-  void lookup_findsucc_route_cb (chordID blockID, dhashcli_routecb_t cb,
-				 chordID succID, route path, chordstat err);
   void retrieve_hop_cb (ptr<route_dhash> iterator, cbretrieve_t cb, bool done);
   void cache_block (ptr<dhash_block> block, route search_path, chordID key);
   void finish_cache (bool error, chordID dest);
@@ -304,8 +354,7 @@ class dhashcli {
 			 cbinsert_t cb, dhash_stat status, chordID destID);
 
  public:
-  dhashcli (ptr<chord> node, bool do_cache) : clntnode (node), 
-    do_cache (do_cache) {};
+  dhashcli (ptr<chord> node, dhash *dh, bool do_cache);
   void retrieve (chordID blockID, bool usecachedsucc, cbretrieve_t cb);
   void retrieve (chordID source, chordID blockID, cbretrieve_t cb);
   void insert (chordID blockID, ref<dhash_block> block, 
@@ -316,8 +365,6 @@ class dhashcli {
               size_t off, size_t totsz, dhash_ctype ctype,
 	      store_status store_type, dhashcli_storecb_t cb);
   void lookup (chordID blockID, bool usecachedsucc, dhashcli_lookupcb_t cb);
-  void lookup_route (chordID blockID, bool usedcachedsucc, dhashcli_routecb_t cb); 
-  //same as above ::lookup but returns the whole route in callback
 };
 
 
@@ -372,54 +419,16 @@ class dhashgateway {
   ptr<asrv> clntsrv;
   ptr<chord> clntnode;
   ptr<dhashcli> dhcli;
+  dhash *dh;
 
   void dispatch (svccb *sbp);
   void insert_cb (svccb *sbp, bool err, chordID blockID);
   void retrieve_cb (svccb *sbp, ptr<dhash_block> block);
 
 public:
-  dhashgateway (ptr<axprt_stream> x, ptr<chord> clnt, bool do_cache = false);
+  dhashgateway (ptr<axprt_stream> x, ptr<chord> clnt, dhash *dh,
+		bool do_cache = false);
 };
-
-
-class route_dhash : public route_iterator {
-  
- public:
-  route_dhash (ptr<vnode> vi, chordID xi, 
-	       bool ucs = false);
-  route_dhash (ptr<vnode> vi, chordID xi,
-	       chordID first_hop, bool ucs = false);
-  void next_hop ();
-  void first_hop (cbhop_t cb);
-  ptr<dhash_block> get_block () {return block;};
-  dhash_stat get_status () { return result; };
-  route path ();
-
- private:
-  ptr<route_chord> chord_iterator;
-  int nerror;
-  int nhops;
-  bool use_cached_succ;
-  int npending;
-  bool fetch_error;
-  ptr<dhash_block> block;
-  dhash_stat result;
-  bool given_first;
-  chordID first_hop_guess;
-  bool last_hop;
-
-  void hop_cb (bool done);
-  void make_hop (chordID &n);
-  void make_hop_cb (ptr<dhash_fetchiter_res> res, 
-		    clnt_stat err);
-  void nexthop_chalok_cb (chordID s, bool ok, chordstat status);  
-  chordID lookup_next_hop (chordID k);
-  bool straddled (route path, chordID &k);
-
-  void finish_block_fetch (ptr<dhash_fetchiter_res> res, clnt_stat err);
-  void fail (str errstr);
-};
-
 
 bigint compute_hash (const void *buf, size_t buflen);
 
