@@ -166,13 +166,7 @@ toe_table::add_toe (const chord_node &n, int level)
   if(newset && id != toes[level]->front()){
     //need to expand?
     if((int) toes[level]->size() < target_size[level]){
-      toes[level]->push_back(toes[level]->back());
-      //warn << "done expanding " << level << "\n";
-    }
-    else {
-      //warn << "going to eject "
-      //     << toes[level]->back()
-      //     << " from level " << level << "\n";
+      toes[level]->push_back();
     }
     for(i = toes[level]->size() - 1; i > newindex ; i--)
       (*toes[level])[i] = (*toes[level])[i-1];
