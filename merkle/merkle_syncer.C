@@ -237,7 +237,7 @@ merkle_syncer::sendnode_cb (ref<sendnode_arg> arg, ref<sendnode_res> res,
 void
 merkle_getkeyrange::go ()
 {
-  if (current > rngmax) {
+  if (between (rngmax, incID (current), current)) {
 #ifdef MERKLE_SYNC_TRACE
     warn << "merkle_getkeyrange::go () ==> DONE\n";
 #endif
