@@ -98,7 +98,7 @@ location::fill_node_ext (chord_node_ext &data) const
 void
 location::set_alive (bool alive)
 {
-  if (!alive) {
+  if (!alive && alive_) {
     timespec ts;
     clock_gettime (CLOCK_REALTIME, &ts);
     dead_time_ = ts.tv_sec;

@@ -209,8 +209,7 @@ rpc_manager::doRPCcb (aclnt_cb realcb, ptr<location> l, u_int64_t sent,
 {
   if (err) {
     nrpcfailed++;
-    if (l->alive ())
-      l->set_alive (false);
+    l->set_alive (false);
   } else {
     nrpc++;
     // Only update latency on successful RPC.
@@ -295,8 +294,7 @@ tcp_manager::send_RPC (RPC_delay_args *args)
   else if (hi->xp->ateof()) {
     hostlru.remove (hi);
     hostlru.insert_tail (hi);
-    if (args->l->alive ())
-      args->l->set_alive (false);
+    args->l->set_alive (false);
     remove_host (hi);
     delaycb (0, 0, wrap (this, &tcp_manager::send_RPC_ateofcb, args));
   }
@@ -321,8 +319,7 @@ tcp_manager::doRPC_tcp_connect_cb (RPC_delay_args *args, int fd)
     warn << "locationtable: connect failed: " << strerror (errno) << "\n";
     (args->cb) (RPC_CANTSEND);
     delete args;
-    if (args->l->alive ())
-      args->l->set_alive (false);
+    args->l->set_alive (false);
     remove_host (hi);
   }
   else {
@@ -515,16 +512,14 @@ stp_manager::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
   dorpc_res *res = (dorpc_res *)C->out;
   if (err) {
     nrpcfailed++;
-    if (C->loc->alive ())
-      C->loc->set_alive (false);
+    C->loc->set_alive (false);
     warnx << gettime () << " RPC failure: " << err << " destined for " << C->ID << " seqno " << C->seqno << "\n";
   } else if (res->status == DORPC_MARSHALLERR) {
     err = RPC_CANTDECODEARGS;
     warnx << gettime () << " RPC Failure: DORPC_MARSHALLERR for " << C->ID << "\n";
   } else if (res->status == DORPC_UNKNOWNNODE) {
     nrpcfailed++;
-    if (C->loc->alive ())
-      C->loc->set_alive (false);
+    C->loc->set_alive (false);
     err = RPC_SYSTEMERROR;
     warnx << gettime () << " RPC Failure: DORPC_UNKNOWNNODE for " << C->ID << "\n";
   } else {
