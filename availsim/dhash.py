@@ -15,6 +15,7 @@ class node:
     def __init__ (my, id):
         my.id = id
         my.blocks = {}
+	my.cached_blocks = {}
         my.alive = 1
         my.bytes = 0
 
@@ -167,11 +168,6 @@ class dhash (chord):
         n.nrpc += len (succs)
         n.sent_bytes += isz * len (succs)
 
-	# Cache a copy of the block
-	if my.read_pieces () != 1:
-	    n.sent_bytes += size
-	    # XXX account for bytes of disk spaced used on succs[0]
-
         return succs[0]
 
     def _repair (my, an, succs, resp_blocks):
@@ -201,7 +197,7 @@ class dhash (chord):
 		    fixer.sent_bytes += isz
 		    needed -= 1
 		    if needed <= 0: break
-		if fixer != succs[0]: # first successor has a cached block
+		if b not in fixer.cached_blocks:
 		    # Account for bytes needed to reassemble the block.
 		    nread = my.read_pieces () 
 		    for s in haves:
@@ -209,6 +205,7 @@ class dhash (chord):
 			nread -= 1
 			if nread <= 0: break
 			s.sent_bytes += isz
+		    fixer.cached_blocks[b] = 1
 		    # XXX account for disk used by cache
 
     # XXX How long to wait until we do repair?
