@@ -194,6 +194,7 @@ class dhash {
   
   void init_key_status ();
   void transfer_initial_keys ();
+  void transfer_initial_keys_range (chordID start, chordID succ);
   void transfer_init_getkeys_cb (chordID succ,
 				 dhash_getkeys_res *res, 
 				 clnt_stat err);

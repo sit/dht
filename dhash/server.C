@@ -348,17 +348,26 @@ dhash::dispatch (svccb *sbp)
       s_dhash_getkeys_arg *gkarg = sbp->template getarg<s_dhash_getkeys_arg>();
       
       dhash_getkeys_res res (DHASH_OK);
+      chordID start = gkarg->start;
       ref<vec<chordID> > keys = New refcounted<vec<chordID> >;
 
-      // XXX this is really inefficient!  ==> use cursors!
-      // XXX and may produce huge RPCs    ==> use chunking!
+      ref<dbrec> startkey = id2dbrec(start);
       ptr<dbEnumeration> it = db->enumerate();
-      ptr<dbPair> d = it->nextElement();    
-      while (d) {
+      ptr<dbPair> d = it->nextElement(startkey);
+      if(d) {
 	chordID k = dbrec2id (d->key);
-	if (between (pred, gkarg->pred_id, k))
+	chordID startk = k;
+	while (between (start, gkarg->pred_id, k)) {
 	  keys->push_back (k);
-	d = it->nextElement();
+	  if((keys->size()*sha1::hashsize) > 1024) // limit packets to this size
+	    break;
+	  d = it->nextElement();
+	  if(!d)
+	    d = it->nextElement(id2dbrec(0));
+	  k = dbrec2id(d->key);
+	  if(k == startk)
+	    break;
+	}
       }
       res.resok->keys.set (keys->base (), keys->size (), freemode::NOFREE);
       sbp->reply (&res);
@@ -419,10 +428,26 @@ void
 dhash::transfer_initial_keys ()
 {
   chordID succ = host_node->my_succ ();
+
+  ptr<dbEnumeration> it = db->enumerate();
+  ptr<dbPair> d = it->nextElement();    
+  while (d) {
+    chordID k = dbrec2id (d->key);
+    warn << "db " << k.getstr_zp(sha1::hashsize*2) << "\n";
+    d = it->nextElement();
+  }
+
   if (succ ==  host_node->my_ID ()) return;
 
+  transfer_initial_keys_range (host_node->my_ID(), succ);
+}
+
+void
+dhash::transfer_initial_keys_range (chordID start, chordID succ)
+{
   ptr<s_dhash_getkeys_arg> arg = New refcounted<s_dhash_getkeys_arg>;
   arg->pred_id = host_node->my_ID ();
+  arg->start = start;
   arg->v = succ;
 
   dhash_getkeys_res *res = New dhash_getkeys_res (DHASH_OK);
@@ -437,7 +462,6 @@ dhash::transfer_init_getkeys_cb (chordID succ,
 				 dhash_getkeys_res *res, 
 				 clnt_stat err)
 {
-  
   if ((err) || (res->status != DHASH_OK)) 
     fatal << "Couldn't transfer keys from my successor\n";
 
@@ -446,6 +470,10 @@ dhash::transfer_init_getkeys_cb (chordID succ,
     if (key_status (k) == DHASH_NOTPRESENT)
       get_key (succ, k, wrap (this, &dhash::transfer_init_gotk_cb));
   }
+
+  if(res->resok->keys.size () > 0)
+    transfer_initial_keys_range(res->resok->keys[res->resok->keys.size () - 1]+1, succ); // '+1' need to skip start key
+
   delete res;
 }
 
@@ -504,22 +532,24 @@ dhash::check_replicas ()
     if (isReplica(nth))
       continue;
 
-    // XXX this is really inefficient!
-    //     We only need to transfer blocks in the range for which we are
-    //     the home node, ie blocks in the range (predID, myID].  Since, 
-    //     the database is already sorted by key, we should be able to
-    //     use cursors to do much better than iterating over the whole
-    //     database as we do here..
-    //
+    chordID start = host_node->my_pred();
+    ref<dbrec> startkey = id2dbrec(start);
     ptr<dbEnumeration> it = db->enumerate();
-    ptr<dbPair> d = it->nextElement();    
-    while (d) {
+    ptr<dbPair> d = it->nextElement(startkey);
+    if(d) {
       chordID k = dbrec2id (d->key);
-      if (responsible (k)) {
+      chordID startk = k;
+      while (responsible (k)) {
 	transfer_key (nth, k, DHASH_REPLICA, 
 		      wrap (this, &dhash::fix_replicas_txerd));
+
+	d = it->nextElement();
+	if(!d)
+	  d = it->nextElement(id2dbrec(0));
+	k = dbrec2id(d->key);
+	if(k == startk)
+	  break;
       }
-      d = it->nextElement();
     }
   }
 
@@ -884,10 +914,12 @@ dhash::store_repl_cb (cbstore cb, dhash_stat err)
 ref<dbrec>
 dhash::id2dbrec(chordID id) 
 {
-  str whipme = id.getraw ();
- void *key = (void *)whipme.cstr ();
+  mstr whipme(sha1::hashsize+1);
+  whipme[0] = 0;
+  mpz_get_raw (whipme.cstr()+1, sha1::hashsize, &id);
+  void *key = (void *)whipme.cstr ();
   int len = whipme.len ();
-  
+
   ptr<dbrec> q = New refcounted<dbrec> (key, len);
   return q;
 }
