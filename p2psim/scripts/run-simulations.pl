@@ -22,7 +22,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-# $Id: run-simulations.pl,v 1.4 2003/11/29 22:27:29 strib Exp $
+# $Id: run-simulations.pl,v 1.5 2003/11/29 23:16:15 strib Exp $
 
 use strict;
 use Getopt::Long;
@@ -171,11 +171,21 @@ open( ARGS, "<$argsfile" ) or die( "Couldn't open args file: $argsfile" );
 my @argnames = ();
 my %argtable = ();
 my %conditions = ();
+my %dependent = ();
 my $newAr;
 while( <ARGS> ) {
     my @args = split( /\s+/ );
     my $argname = shift(@args);
     push @argnames, $argname;
+
+    # look for any dependencies
+    while( $args[0] =~ /^\=/ or $args[0] =~ /^\+/ or $args[0] =~ /^\*/ ) {
+	my $dep = shift(@args);
+	if( defined $dependent{$argname} ) {
+	    die( "More than one dependent listed for $argname." ); 
+	}
+	$dependent{$argname} = $dep;
+    }
 
     # look for any conditions
     while( $args[0] =~ /^\</ or $args[0] =~ /^\<\=/ or $args[0] =~ /^\>/ ) {
@@ -184,7 +194,6 @@ while( <ARGS> ) {
 	    $conditions{$argname} = "";
 	}
 	$conditions{$argname} .= "$cond ";
-	print "$argname $cond\n";
     }
 
     $newAr = \@args; 
@@ -237,6 +246,7 @@ sub run_sim {
 
     if( !defined $randomize ) {
 	foreach my $val (@args) {
+	    $val = &check_dependent( $argname, $val, $args_so_far );
 	    if( !&check_conditions( $argname, $val, $args_so_far ) ) {
 		next;
 	    }
@@ -254,6 +264,7 @@ sub run_sim {
 	# pick a random value and recurse
 	my $val = $args[int(rand($#args+1))];
 	if( !defined $val ) { die( "value not defined" ) };
+	$val = &check_dependent( $argname, $val, $args_so_far );
 	if( &check_conditions( $argname, $val, $args_so_far ) ) {
 	    my $arg_string = $args_so_far . "$argname=$val ";
 	    if( $arg_iter == $#argnames+1 ) {
@@ -313,6 +324,45 @@ sub check_conditions {
     }
 
     return 1;
+
+}
+
+sub check_dependent {
+    my $arg = shift;
+    my $val = shift;
+    my $arg_string = shift;
+
+    if( defined $dependent{$arg} ) {
+
+	my $dep = $dependent{$arg};
+	
+	if( $dep =~ /^\=(\w*)$/ ) {
+	    my $oarg = $1;
+	    if( $arg_string =~ /$oarg\=(\d*)/ ) {
+		return $1;
+	    } else {
+		die( "dep doesn't match: $dep, $arg_string" );
+	    }
+	} elsif( $dep =~ /^\+(\w*)$/ ) {
+	    my $oarg = $1;
+	    if( $arg_string =~ /$oarg=(\d*)/ ) {
+		return $1 + $val;
+	    } else {
+		die( "dep doesn't match: $dep, $arg_string" );
+	    }
+	} elsif( $dep =~ /^\*(\w*)$/ ) {
+	    my $oarg = $1;
+	    if( $arg_string =~ /$oarg=(\d*)/ ) {
+		return $1*$val;
+	    } else {
+		die( "dep doesn't match: $dep, $arg_string" );
+	    }
+	} else {
+	    die( "unrecognized dep: $dep" );
+	}
+    }
+
+    return $val;
 
 }
 
