@@ -1,0 +1,60 @@
+#! /bin/sh -e
+# $Id: setup,v 1.1 2001/01/16 22:00:07 fdabek Exp $
+#
+# This script builds the files necessary to configure this package for
+# development.  Once you run this script, you will need GNU make,
+# autoconf, and automake to build the software.  You must run "make
+# dist" if you the wish to create a source tree that can be built
+# without these tools.
+#
+# You should generally only need to run this script if you just
+# checked sfs out of a CVS repository, or else somehow badly mangled
+# the Makefile.
+
+if test ! -f configure.in; then
+	echo Must run this from source directory >&2
+	exit 1
+fi
+
+M4=gm4
+$M4 --version < /dev/null 2>&1 | grep GNU >/dev/null 2>&1 || M4=gnum4
+$M4 --version < /dev/null 2>&1 | grep GNU >/dev/null 2>&1 || M4=m4
+$M4 --version < /dev/null 2>&1 | grep GNU >/dev/null 2>&1 \
+    || (echo Cannot locate GNU m4 >&2; exit 1)
+
+for file in acconfig.h acinclude.m4; do
+    if test ! -f $file -a -f ../$file; then
+	echo "+ ln -s -f ../$file $file"
+	ln -s -f ../$file $file 
+    fi
+done
+
+for file in Makefile.am.m4 */Makefile.am.m4; do
+    if test -f $file; then
+	out=`echo $file | sed -e 's/\.m4$//'`
+	echo "+ $M4 $file > $out"
+	rm -f $out~
+	$M4 $file > $out~
+	mv -f $out~ $out
+    fi
+done
+
+for dir in *; do
+    if test -x ${dir}/setup; then
+	echo "+ ${dir}/setup";
+	(cd ${dir} && ./setup)
+    fi
+done
+
+set -x
+chmod +x setup
+aclocal
+autoheader
+automake --add-missing
+autoconf
+set +x
+
+if test -f config.status; then
+    set -x
+    sh config.status
+fi

@@ -1,0 +1,289 @@
+How to start the ro server and client:
+
+server:
+setenv SFS_RUNINPLACE /disk/gr0/fubob/build
+setenv SFS_PORT 6666
+sfsrosd/sfsrosd
+
+client: (as root)
+setenv SFS_RUNINPLACE /disk/eb0/fubob/build
+setenv SFS_PORT 6666
+setenv SFS_ROOT /sfstest
+sfscd/sfscd
+
+Todo list of various SFSRO stuff for OSDI deadline.
+
+High priority fixes:
+
+ For incremental:
+  Move the modification time into the directory so that incremental
+  updates touch less of the database.  Embed these in each
+  directory entry.
+
+  Incremental updates should take an old database and any
+  new file system.  Remove fhdb data before adding?  Must
+  new data share data with old?  How do we know what data is
+  old and can be removed?
+
+  Incremental in that running time is proportional to
+  size of update, not size of database?
+
+  Get rid of "used" -- synthesize with size/blocksize.  The
+  used concept does not have any meaning in our model, especially
+  since like blocks can share the same space unknowningly.
+
+
+ Proving non-existence of a file handle.
+
+ The server will close all connections when updating a database.
+ After the client's kernel asks for NFS stuff, the client attempts to
+ reconnect with a call to GETFSINFO.  The worst an adversarial server
+ can do is cause this reconnect to hang.  If GETFSINFO returns, the
+ client verifies the signature. If the signature is good, the client
+ returns from the callback.  If the signature is bad, the
+ client keeps retrying (hangs) until a good signature results.
+ We might allow a timeout with NMOPT_SOFT.  If the IV has changed,
+ flush all caches because all the file handles will 
+
+ Note, we serialize the call to GETFSINFO on each client with a lock.
+ There should never be multiple outstanding GETFSINFO requets.
+
+ If client calls GETDATA, but the server replies, "void, no such fh"
+ we ask the server to prove that the fh does not exist.  The idea
+ is that the client will do a binary search by iteratively calling
+ GETDATA on a special tree of all the file handles.  The server
+ maintains a special set of file handles in its database.  After
+ the SFSRO database adds the data from the original file server, the
+ sfsrodb program creates a lexically ordered list of all the file handles.
+ Then it divides the list into chunks of approximately 256 
+ file handles.  Each chunk is hashed to obtain a new file handle.
+ The chunk is added to the SFSRO database.  We now group
+ consecutive file handles of chunks.  We hash, add to the database, etc.
+ We continue until we have only enough file handles to fill one
+ chunk.  We hash this.  This hash is the fsinfo->fhdb.
+ 
+
+ The protocol for a server to prove the non-existence of a file handle
+ is as follows:
+
+  The client calls GETDATA on the fsinfo->fhdb.  
+  This returns an inner node of the n-ary tree.  Hash the node
+  to verify the fhdb file handle matches.  If no match, then
+  an adversary is playing with the client.  I guess we hang?
+  Otherwise, the client compares the
+  value of the disputed file handle to the keys in the node.  The
+  client then follows the appropriate branch to a child node.  This
+  process continues until the client reaches a leaf node.  A
+  leaf node contains one of the "chunks" of lexigraphically ordered
+  file handles.  
+
+  The client verifies that two adjacent file handles in the chunk
+  sandwich around the value of the disputed file handle.  Note,
+  special case when the value of the disputed file handle
+  falls between two different chunks.  Maybe we should duplicate
+  the file handles on chunk boundaries so that we do not need
+  to fetch multiple chunks?
+
+  If the verification is good, the client returns a stale file handle
+  error.  Otherwise...not sure.  Adverserial.
+
+  Note, we shouldn't actually returns a stale file handle.  This should
+  be transparent to the NFS client in the client machine's kernel.
+  To fix this, we need a mapping from evolving SFSRO file handles to 
+  static NFS file handles.  That is, NFS file handles should never
+  change.  But we currently set the NFS file handle as the SFSRO
+  file handle.  Doh.
+  
+
+
+Comments:
+
+  We want to keep the server simple.  The server does NOT have a
+  "Prove non-existence" RPC which takes as arugments the
+  disputed file handle and returns a list of sibling hashes to
+  the path of the disputed handle.  Instead we have the client perform the
+  n-ary search.  This also makes it harder to mount a denial of
+  service attack against the server.  Had the server returned
+  a complete "proof," it would have to perform O(log n) comparisons
+  where n is the number of file handles in the original database.
+  By making the client do this, we prevent malicious clients from
+  hosing the server with bogus "prove this doesn't exist" requests.
+
+
+	Incremental updates.  Time them.
+
+	Performance test comparing SFSRO to a GET of a web page.
+
+	Performance test of fetching a page deep beneath
+	a directory hierarchy.  Web will resolve names on the server
+	in one call.  SFSRO will incrementally resolve names
+	in several calls (one per directory) to the server.
+
+done	remove code to special case the zero blocks.  make
+	sure compression still works when many 8KB blocks of
+	zeros though.
+
+	fix sfsrocd code.  detect when the server closes tcp
+	connection.. close, but do not flush cache.
+
+	global structure mapping previously or currently mounted
+	hostids to most durations,
+
+	retry or reconnect if file handle does not match hash of data
+	should check that not rolled back (start time).
+
+	use duration time to flush caches if fsinfo different.
+
+	pin down the root inode in the cache
+
+done	env vars to disable caching, verification of hashse
+
+	Limit directory entry blocks to 8KB.
+	
+	Selectively hide directory enties
+	Set opaque directory type.  Allow client not to fetch
+        more directory entries if directory marked as opaque.
+	This improves the availability of central servers like
+	Verisign.  if every client were to download ALL the self-
+	certifying pathnames, the verisign server would get hosed.
+	With the opaque option, the client will only download
+	the directory structure.  Calls to ACCESS and READDIR must fail
+	or return nothing but whats in the cache.  Calls to LOOKUP
+	will enter directory info into the cache.
+
+done	Add statistics to sfsrocd to determine effectiveness
+	of cache (hit/miss ratio).  Add buffer cache.
+
+
+Low priority fixes:
+
+	Add swap to eb
+
+	Use a dummy root NFS file handle on the client because we
+	cannot change this value after mounting.
+	use the rootfh elsewhere.  because We cannot unmount/remount
+	when the rootfh changes.
+
+	Allow argument to specify update of database.  maintain old IV?
+	
+	Get rid of nlink in inode except for directories.
+	The nlink from the original file system might be
+	bogus w.r.t. the ROFS because hard links could point
+	to inodes shared by other files on the orignal
+	file system.  But we might not add an entire partition
+	to the ROFS.  So other hard links shouldn't get counted.
+
+	nlink is not useful since we perform no deletions or rmdirs.
+	however, many OS's will fail if a directory's nlink is <= 2.
+	Then it assumes the directory is empty.  So we might have
+	to special case nlinks for directories by counting
+	the number of directory entries.
+	
+	Create a special mapping from the internal file handle rep
+	to the NFS3 file handle rep.  This way the SFSRO file handles
+	can change (say, directory update), while the application
+	level will see the same NFS FH.
+
+	Allow targets of CAs to cache partial paths so that if
+	verisign goes down, amazon and still prove authenticity.
+	But this doesn't work because the hostid includes the 
+	hostname.
+
+	To avoid stale directory file handles, add a new
+	tree of updated directory file handles to prove 
+	whether a directory exists.
+
+	acknowledge PDOS and hari's group /robert
+
+
+	we do everything in an integrated way.  verisign
+	could issue new serverID certs every morning, but
+	this is not a clean interface.  We provide
+	system integrity in addition to file integrity.
+
+Necessary measurements:
+
+\item A single sfsrosd server can support many more short connections
+than sfsrwsd. This is important for certificate authorities. 
+
+	What is bottleneck in server performance? B-tree?  ARPC
+	library?
+
+	Test use as a certificate authority: make short connections.
+	Compare CPS.  The SFSRO client simulator should get the
+	root inode, readlink "sfsro.fooworld.org",   
+	connect to sfsro.fooworld.org,.  Compare to the run time
+	of connecting to https://snafu.fooworld.org with openssl
+	and verifying the server certificate.  
+	Make sure SSL cert and SFS sfs_host_key have similar key lengths.
+
+	Test connection setup time
+
+	Benchmark lookup of ..
+
+
+
+A single sfsrosd server can support many more long downloads than
+sfsrwsd. This is important for distributing large software packages.
+Compare throughput of large reads from sfsrosd and sfsrwsd.  sfsrosd
+should do better because encryption is disabled.
+
+	Test connection throughput by:
+		installing various software packages
+		large compile (SFS)
+		searching files for strings that do not exist
+		sequential reads of large file
+		random reads of large file
+		followed by sequential reads of the same file (test cache)
+		Total the run times.
+
+		Also compile a large software package like the OpenBSD kernel?
+
+	Test the same things when we disable the inode and/or block
+	caches on the client.
+
+	Test the same things when we disable FSINFO signature
+	verification and SFSRO file handle verification.
+
+	
+
+
+Replicating sfsrosd servers improves throughput linearly.  (sfsrwsd
+much harder to replicate; private key must be replicated too.)
+
+	Test throughput of short connections.
+
+	Test round-robin DNS.
+
+Individual client performance is hardly effected by pushing work to
+the client.  Microbenchmarks to test read performance. How expensive
+is recomputing hashes? Test some a few large benchmarks to get
+application numbers (large compile).
+
+
+	??
+
+Database can be updated relatively frequent.  This is important to
+enable certificate authorities to add new certificates efficiently.
+Measure how long it takes to create database.  (Incremental update
+performance?)
+
+	Measure how long it takes to create database and how fast to
+	update.
+
+Storage overhead over sfsrodb is acceptable. Database size is
+acceptable (should be close to the file system size). Test how
+efficient database is representing file system data.  Cool side thing:
+how much compression do we get because blocks with the same data will
+be stored once in the database.
+
+	Measure database size with btree/sleepycat
+
+	Measure how much compression do we get because blocks with the
+	same data will be stored once in the database.
+
+
+
+
+
+

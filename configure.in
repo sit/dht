@@ -1,0 +1,53 @@
+dnl $Id: configure.in,v 1.1 2001/01/16 22:00:07 fdabek Exp $
+dnl
+dnl Process this file with autoconf to produce a configure script.
+dnl
+
+AC_INIT(config.h.in)
+AM_INIT_AUTOMAKE(ufs, 0.0)
+AM_CONFIG_HEADER(config.h)
+
+AC_CANONICAL_HOST
+
+dnl Checks for programs.
+AC_PROG_CC
+AC_PROG_CPP
+AC_PROG_CXX
+SFS_WFLAGS
+AC_PROG_INSTALL
+AC_PROG_LN_S
+dnl AC_PROG_RANLIB
+
+AM_DISABLE_SHARED
+AM_PROG_LIBTOOL
+
+SFS_SFS
+SFS_CFLAGS
+
+dnl setup db3
+SFS_DB3
+AC_SUBST(DBLIB)
+AC_SUBST(DBDEPS)
+DBLIB='$(top_builddir)/sfsrodb/libsfsrodb.a'
+DBDEPS='$(top_builddir)/sfsrodb/libsfsrodb.a'
+if test "${with_db3}" != no; then
+	CPPFLAGS="$CPPFLAGS -DSLEEPYCAT"
+	DBLIB="$DBLIB $DB3_LIB"
+else
+	DBLIB="$DBLIB"' $(top_builddir)/adb/libbtree.a'
+	DBDEPS="$DBDEPS"' $(top_builddir)/adb/libbtree.a'
+fi
+
+dnl let directories share header files
+for lib in sfsrodb svc lsd; do
+    CPPFLAGS="-I"'$(top_srcdir)'"/$lib $CPPFLAGS"
+done
+    CPPFLAGS="-I../svc $CPPFLAGS"
+
+ETAGS_ARGS='-C /dev/null'
+AC_SUBST(ETAGS_ARGS)
+
+AC_OUTPUT(Makefile svc/Makefile sfsrocd/Makefile 
+	sfsrodb/Makefile sfsrosd/Makefile lsd/Makefile
+	lsclnt/Makefile)
+
