@@ -190,14 +190,9 @@ class p2p : public virtual refcount  {
   void routtables (svccb *sbp);
   void getstats (svccb *sbp);
 
-  int lookupRPCs;
-  int last_lookupRPCs;
-  int min_lRPCs;
-  int max_lRPCs;
-  int lookups;
-  int inlookups;
-
-  //
+  int lookup_ops;
+  int lookups_outstanding;
+  int lookup_RPCs;
 
   void deleteloc (sfs_ID &n);
   void updateloc (sfs_ID &x, route &r, sfs_ID &source);
