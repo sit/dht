@@ -1155,53 +1155,6 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
       return;
     }
 
-    /* starfish reservations */
-    if (ctype == DHASH_QUORUM) {
-      long action;
-      long type;
-      xdrmem x1 ((char *)d->value, d->len, XDR_DECODE);
-      if (!XDR_GETLONG (&x1, &type) || 
-	  !XDR_GETLONG (&x1, &action)) {
-	warn << "SERVER: QUORUM couldn't determine action\n";
-	cb (DHASH_ERR);
-	return;
-      } 
-      switch (action) {
-      case QUORUM_RESERVE:
-	{
-	  quorum_reservation *reservation;
-	  reservation = quorum_reservations[arg->key];
-	  if (!reservation || reservation->reserved_until <= timenow) {
-	    /* reserve the key */
-	    if (!reservation) {
-	      reservation = New quorum_reservation (arg->key, timenow + 1);
-	      quorum_reservations.insert(reservation);
-	    } else {
-	      reservation->reserved_until = timenow + 1;
-	    }
-	    store_cb (arg->type, arg->from, arg->key, arg->srcID, arg->nonce,
-		      cb, DHASH_OK);
-	  } else {
-	    store_cb (arg->type, arg->from, arg->key, arg->srcID, arg->nonce,
-		      cb, DHASH_STOREERR);
-	  }
-	  return;
-	}
-      case QUORUM_COMMIT:
-	quorum_reservation *reservation;
-	reservation = quorum_reservations[arg->key];
-	/* erase the reservation */
-	if (reservation) {
-	  reservation->reserved_until = 0;
-	}
-	break;
-      default:
-	warn<<"action = "<<action<<": SERVER: QUORUM: unknown action!\n";
-	return;
-      }
-
-    }
-
     dhash_stat stat;
     chordID id = arg->key;
     if (arg->type == DHASH_STORE) {

@@ -200,45 +200,6 @@ dhashclient::insert (bigint hash, sfs_pubkey2 key, sfs_sig2 sig,
       cb (DHASH_ERR, i); // marshalling failed.
     }
 }
-// insert for quorum blocks.
-void
-dhashclient::insert (dhashclient dhash, 
-		     bigint key, 
-		     bigint replica_key,
-		     const char *cred, size_t credlen,
-		     const char *data, size_t datalen,
-		     int action, cbinsertgw_t cb)
-{
-  long type = DHASH_QUORUM;
-  //char *cred_buf;
-  long act = (long int) action;
-  char *data_buf;
-  int m_len = 0;
-  char *m_dat = NULL;
-  xdrsuio x;
-  //int credsize = credlen + 3 & ~3;
-  int datasize = datalen + 3 & ~3;
-  if (XDR_PUTLONG (&x, (long int *)&type) &&
-      XDR_PUTLONG (&x, (long int *)&act) &&
-      xdr_putbigint(&x, key) &&
-      XDR_PUTLONG (&x, (long int *)&credlen) &&
-      XDR_PUTLONG (&x, (long int *)&datalen) &&
-      (data_buf = (char *)XDR_INLINE (&x, datasize)))
-    {
-      memcpy (data_buf, data, datalen);
-      m_len = x.uio ()->resid ();
-      m_dat = suio_flatten (x.uio ());
-      //warn <<"DHASH_QUORUM_WRITE:  cred: " << cred_buf <<"\n";
-      //warn <<"DHASH_QUORUM_WRITE: block: " << data_buf << "\n";
-      insert (replica_key, m_dat, m_len, cb, DHASH_QUORUM, 0);
-      xfree (m_dat);
-    } else {
-      ptr<insert_info> i = New refcounted<insert_info>(replica_key, bigint(0));
-      cb (DHASH_ERR, i); // marshalling failed.
-    }
-
-}
-
 // generic insert (called by above methods)
 void
 dhashclient::insert (bigint key, const char *buf, 
