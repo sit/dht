@@ -38,6 +38,7 @@
 
 #define ALG_VIVALDI 1
 #define ALG_SIMPLEX 2
+#define ALG_PERFECT 3
 
 class VivaldiNode : public P2Protocol {
 public:

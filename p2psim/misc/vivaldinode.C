@@ -11,6 +11,7 @@ static int usinght = -1;
 #define A_PRED_ERR 3
 
 static VivaldiNode::Coord run_simplex(VivaldiNode*);
+static VivaldiNode::Coord run_perfect_spring(VivaldiNode*);
 
 double spherical_dist_arc (VivaldiNode::Coord a, VivaldiNode::Coord b);
 VivaldiNode::Coord  cross (VivaldiNode::Coord a, VivaldiNode::Coord b);
@@ -58,6 +59,12 @@ VivaldiNode::VivaldiNode(IPAddress ip) : P2Protocol (ip)
 
   if (_algorithm == "simplex") {
     _algorithm_type = ALG_SIMPLEX;
+    if(_window_size < _dim+1){
+      cerr << "not enough window slots for simplex\n";
+      abort();
+    }
+  }else if(_algorithm == "perfect"){
+    _algorithm_type = ALG_PERFECT;
     if(_window_size < _dim+1){
       cerr << "not enough window slots for simplex\n";
       abort();
@@ -261,7 +268,12 @@ VivaldiNode::algorithm(Sample s)
     _c = run_simplex(this);
     return;
   }
-  
+
+  if(_algorithm_type == ALG_PERFECT){
+    _c = run_perfect_spring(this);
+    return;
+  }
+
   update_error (_samples);
 
   _curts = _curts - 0.025;
@@ -598,6 +610,19 @@ simplex_error(double *x, int dim, void *v)
     tot += square((actual-estimate)/actual);
   }
   return tot;
+}
+
+static VivaldiNode::Coord
+run_perfect_spring(VivaldiNode *node)
+{
+  VivaldiNode::Coord c = node->_c;
+  VivaldiNode::Coord f;
+
+  do{
+    f = node->net_force(c, node->_samples);
+    c = c+f;
+  }while(length(f) > .01);
+  return c;
 }
 
 static VivaldiNode::Coord
