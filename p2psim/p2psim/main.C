@@ -74,12 +74,6 @@ threadmain(int argc, char *argv[])
 
   DEBUG(0) << "average RTT = " << Network::Instance()->avglatency()*2 << "ms" << endl;
 
-  // Initialize all protocols
-  if (Node::init_state()) {
-    const set<Node*> *all = Network::Instance()->getallnodes();
-    for(set<Node*>::const_iterator i = all->begin(); i != all->end(); ++i)
-      (*i)->initstate();
-  }
 
   // make sure the network ate all the nodes
   while(anyready())
@@ -88,6 +82,14 @@ threadmain(int argc, char *argv[])
   // Creates an event queue, parses the file, etc.
   // Will fire off the EventQueue
   EventGenerator::parse(event_file);
+
+  // Initialize all protocols
+  if (Node::init_state()) {
+    const set<Node*> *all = Network::Instance()->getallnodes();
+    for(set<Node*>::const_iterator i = all->begin(); i != all->end(); ++i)
+      (*i)->initstate();
+  }
+
 }
 
 

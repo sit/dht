@@ -47,7 +47,9 @@ public:
   virtual void initstate() {};
 
   IPAddress ip() { return _ip; }
-  void set_alive(bool a) { _alive = a;}
+  void set_alive(bool a) { 
+    _alive = a;
+  }
   bool alive () { return _alive; }
   static bool init_state() { return (_args.nget<unsigned>("initstate",0,10) != 0); }
   static bool collect_stat();
