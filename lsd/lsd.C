@@ -54,6 +54,8 @@ EXITFN (cleanup);
 
 #define STORE_SIZE 2000000 //size of block store per vnode (in blocks)
 
+int vnodes = 1;
+
 ptr<chord> chordnode;
 static str p2psocket;
 bool do_cache;
@@ -194,11 +196,12 @@ newvnode_cb (int nreplica, str db_name, int ss_mode,
   dh.push_back( New dhash (db_name_prime, my, f_old, nreplica, 
 			   ss_mode));
 
-  if (n > 0) {
+  n += 1;
+  if (n < vnodes) {
     ptr<route_factory> f = get_factory (mode);
     ptr<fingerlike> fl = get_fingerlike (mode);
     chordnode->newvnode (wrap (newvnode_cb, nreplica, db_name, 
-			       ss_mode, n-1, f), fl, f);
+			       ss_mode, n, f), fl, f);
   }
 }
 
@@ -432,7 +435,6 @@ main (int argc, char **argv)
   toggle_profiling (); // turn profiling off
 #endif
 
-  int vnode = 1;
   setprogname (argv[0]);
   mp_clearscrub ();
   // sfsconst_init ();
@@ -541,9 +543,9 @@ main (int argc, char **argv)
       ss_mode = atoi(optarg);
       break;
     case 'v':
-      vnode = atoi (optarg);
-      if (vnode >= chord::max_vnodes)
-	fatal << "Too many virtual nodes (" << vnode << ")\n";
+      vnodes = atoi (optarg);
+      if (vnodes >= chord::max_vnodes)
+	fatal << "Too many virtual nodes (" << vnodes << ")\n";
       break;
     case 'L':
       {
@@ -560,13 +562,13 @@ main (int argc, char **argv)
 
   if (wellknownport == 0) usage ();
 
-  if (vnode > chord::max_vnodes) {
-    warn << "Requested vnodes (" << vnode << ") more than maximum allowed ("
+  if (vnodes > chord::max_vnodes) {
+    warn << "Requested vnodes (" << vnodes << ") more than maximum allowed ("
 	 << chord::max_vnodes << ")\n";
     usage ();
   }
   
-  max_loccache = max_loccache * (vnode + 1);
+  max_loccache = max_loccache * (vnodes + 1);
 
   chordnode = New refcounted<chord> (wellknownhost, wellknownport,
 				     myname,
@@ -578,7 +580,7 @@ main (int argc, char **argv)
   ptr<route_factory> f = get_factory (mode);
   ptr<fingerlike> fl = get_fingerlike (mode);
   chordnode->newvnode (wrap (newvnode_cb, nreplica, db_name, ss_mode, 
-			     vnode-1, f), fl, f);
+			     0, f), fl, f);
 
   sigcb(SIGUSR1, wrap (&stats));
   sigcb(SIGUSR2, wrap (&stop));
@@ -588,7 +590,7 @@ main (int argc, char **argv)
   warn << "lsd starting up at " << ctime ((const time_t *)&now);
   warn << " running with options: \n";
   warn << "  IP/port: " << myname << ":" << myport << "\n";
-  warn << "  vnodes: " << vnode << "\n";
+  warn << "  vnodes: " << vnodes << "\n";
   warn << "  lookup_mode: " << mode << "\n";
     
     
