@@ -943,8 +943,12 @@ LocTable::succ(ConsistentHash::CHID id)
   if (size() == 1) {
     return me;
   }
+  uint before = size();
   vector<Chord::IDMap> v = succs(id, 1);
-  assert(v.size() > 0);
+  if (v.size() == 0) {
+    fprintf(stderr,"ring sz %d before me %d %qx\n", size(), before, me.ip,me.id);
+    abort();
+  }
   return v[0];
 }
 
@@ -1022,7 +1026,7 @@ LocTable::pred(Chord::CHID id)
     }
     assert((rsz - deleted >= 1));
   }
-  assert(elm->n.id == me.id || 
+  assert(elm->n.id == me.id || me.id == id || 
       ConsistentHash::betweenrightincl(me.id, id, elm->n.id));
   return elm->n;
 }
@@ -1084,6 +1088,10 @@ LocTable::add_sortednodes(vector<Chord::IDMap> l)
 void
 LocTable::add_node(Chord::IDMap n)
 {
+  Time t = now();
+  if (n.ip == 276 && me.ip == 572) {
+    fprintf(stderr,"haha %lu\n",t);
+  }
 //  assert(n.choices > 0);
   Chord::IDMap succ1; 
   Chord::IDMap pred1; 
@@ -1286,3 +1294,17 @@ LocTable::get_all()
   return v;
 }
 
+//for debugging purpose
+Chord::IDMap
+LocTable::first()
+{
+  idmapwrap *elm = ring.first();
+  return elm->n;
+}
+
+Chord::IDMap
+LocTable::last()
+{
+  idmapwrap *elm = ring.last();
+  return elm->n;
+}

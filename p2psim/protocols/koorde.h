@@ -54,7 +54,7 @@ public:
   void koorde_next (koorde_lookup_arg *, koorde_lookup_ret *);
 
   bool stabilized(vector<ConsistentHash::CHID>);
-  vector<Chord::IDMap> Koorde::find_successors(CHID key, uint m, bool intern, bool is_lookup = false);
+  vector<Chord::IDMap> Koorde::find_successors(CHID key, uint m, bool is_lookup = false);
   void init_state(vector<IDMap> ids);
   void dump();
 

@@ -214,7 +214,13 @@ class LocTable {
     struct idmapcompare{
       idmapcompare() {}
       int operator() (ConsistentHash::CHID a, ConsistentHash::CHID b) const
-      { return a < b ? -1 : b < a; }
+      { if (a == b) 
+	  return 0;
+	else if (a < b)
+	  return -1;
+	else 
+	  return 1;
+      }
     };
 
 
@@ -244,11 +250,12 @@ class LocTable {
     virtual Chord::IDMap next_hop(Chord::CHID key, bool *done, uint m = 1, uint nsucc=1); 
 
     vector<Chord::IDMap> get_all();
+    Chord::IDMap first();
+    Chord::IDMap last();
 
   protected:
     bool _evict;
-    skiplist<idmapwrap, ConsistentHash::CHID, &idmapwrap::id, 
-             &idmapwrap::sortlink_> ring;
+    skiplist<idmapwrap, ConsistentHash::CHID, &idmapwrap::id, &idmapwrap::sortlink_, idmapcompare> ring;
     Chord::IDMap me;
     vector<pin_entry> pinlist;
     uint _max;
