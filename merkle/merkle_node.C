@@ -89,9 +89,11 @@ merkle_node::initialize (u_int64_t _count)
 {
   bzero (this, sizeof (*this));
   this->count = _count; 
+#if 0
   warnx << "[init NODE " 
 	<< strbuf ("0x%x", (u_int)this) 
 	<< count << "\n";
+#endif
 }
 
 

@@ -111,7 +111,7 @@ merkle_tree::leaf2internal (u_int depth, const merkle_hash &key,
   
   u_int xmax = (depth == merkle_hash::NUM_SLOTS) ? 16 : 64;
   for (u_int i = 0; i < xmax; i++) {
-    warn << "leaf2internal [" << i << "] = " << nblocks[i] << "\n";
+    // warn << "leaf2internal [" << i << "] = " << nblocks[i] << "\n";
     
     merkle_node *child = n->child (i);
     child->initialize (nblocks[i]);
