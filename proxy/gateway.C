@@ -148,6 +148,8 @@ proxygateway::proxy_insert_cb (int options, svccb *sbp,
                                ptr<dhash_insert_res> res, clnt_stat err)
 {
   if (err || res->status) {
+    if (err)
+      res->set_status (DHASH_RPCERR);
     sbp->reply (res);
     return;
   }
@@ -209,6 +211,8 @@ proxygateway::proxy_retrieve_cb (int options, svccb *sbp,
                                  ptr<dhash_retrieve_res> res, clnt_stat err)
 {
   if (err || res->status) {
+    if (err)
+      res->set_status (DHASH_RPCERR);
     sbp->reply (res);
     return;
   }
