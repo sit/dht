@@ -208,7 +208,7 @@ lsdctl_getmyids (int argc, char *argv[])
 
   clnt_stat err = c->scall (LSDCTL_GETMYIDS, NULL, nl);
   if (err)
-    fatal << "lsdctl_loctab: " << err << "\n";
+    fatal << "lsdctl_getmyids: " << err << "\n";
   strbuf out (lsdctl_nlist_printer (nl));
   make_sync (1);
   out.tosuio ()->output (1);
@@ -224,7 +224,7 @@ lsdctl_getloctab (int argc, char *argv[])
 
   clnt_stat err = c->scall (LSDCTL_GETLOCTABLE, &vnode, nl);
   if (err)
-    fatal << "lsdctl_loctab: " << err << "\n";
+    fatal << "lsdctl_getloctab: " << err << "\n";
   strbuf out (lsdctl_nlist_printer (nl));
   make_sync (1);
   out.tosuio ()->output (1);
