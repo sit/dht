@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.43 2004/01/24 21:59:40 strib Exp $ */
+/* $Id: tapestry.C,v 1.44 2004/01/26 02:34:40 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -661,7 +661,9 @@ Tapestry::join(Args *args)
 
     // add these guys to routing table
     map< IPAddress, Time> timing;
+    TapDEBUG(3) << "About to add seeds to the routing table." << endl;
     multi_add_to_rt( &seeds, &timing );
+    TapDEBUG(3) << "Done with adding seeds to the routing table." << endl;
 
     // make sure we haven't crashed and/or started another join
     if( !alive() || _join_num != curr_join ) {
@@ -1500,12 +1502,13 @@ Tapestry::multi_add_to_rt_start( RPCSet *ping_rpcset,
       } else {
 	pi->last_timeout = MAXTIME;
       }
+      TapDEBUG(3) << "Starting multi-add for " << ni->_addr << ", timeout: " 
+		  << pi->last_timeout << endl;
       unsigned rpc = asyncRPC( ni->_addr, 
 			       &Tapestry::handle_ping, &pa, &pr, 
 			       pi->last_timeout );
       assert(rpc);
-      ping_resultmap->insert(rpc, New ping_callinfo(ni->_addr, 
-						    ni->_id, now()));
+      ping_resultmap->insert(rpc, pi);
       ping_rpcset->insert(rpc);
       if( timing != NULL ) {
 	(*timing)[ni->_addr] = 1000000;
@@ -1525,47 +1528,48 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
   // check for done pings
   assert( ping_rpcset->size() == (uint) ping_resultmap->size() );
   while( ping_rpcset->size() > 0 ) {
-    uint setsize = ping_rpcset->size();
-    for( unsigned int j = 0; j < setsize; j++ ) {
-      bool ok;
-      unsigned donerpc = rcvRPC( ping_rpcset, ok );
-      ping_callinfo *pi = (*ping_resultmap)[donerpc];
-      assert( pi );
-      Time ping_time = now() - pi->pingstart;
-      if( !ok ) {
-
-	// this ping failed.  remove if you've reached the max time limit,
-	// otherwise try the ping again.
-	if( now() - before_ping >= _declare_dead_time ) {
-	  pi->failed = true;
-	} else {
-	  // put another shrimp on the barbie . . .
-	  //	  cout << "oh yeah rescheduling baby for " << pi->ip << endl;
-	  ping_args pa;
-	  ping_return pr;
-	  pi->last_timeout *= 2;
-	  record_stat(STAT_PING, 0, 0);
-	  unsigned rpc = asyncRPC( pi->ip, 
-				   &Tapestry::handle_ping, &pa, &pr, 
-				   pi->last_timeout );
-	  assert(rpc);
-	  ping_rpcset->insert(rpc);
-	  ping_resultmap->remove( donerpc );
-	  ping_resultmap->insert( rpc, pi );
-	}
-
+    bool ok;
+    unsigned donerpc = rcvRPC( ping_rpcset, ok );
+    ping_callinfo *pi = (*ping_resultmap)[donerpc];
+    assert( pi );
+    Time ping_time = now() - pi->pingstart;
+    if( !ok ) {
+      
+      // this ping failed.  remove if you've reached the max time limit,
+      // otherwise try the ping again.
+      if( now() - before_ping >= _declare_dead_time ) {
+	pi->failed = true;
       } else {
-	record_stat( STAT_PING, 0, 0 );
-	// TODO: ok, but now how do I call rt->add without it placing 
-	// backpointers synchronously?
-	pi->rtt = ping_time;
-	if( timing != NULL ) {
-	  (*timing)[pi->ip] = ping_time; //_rt->get_time( pi->id );
-	}
+	// put another shrimp on the barbie . . .
+	ping_args pa;
+	ping_return pr;
+	TapDEBUG(3) << "Rescheduling multi-add for " << pi->ip
+		    << " with timeout " << pi->last_timeout << endl;
+	pi->last_timeout *= 2;
+	record_stat(STAT_PING, 0, 0);
+	TapDEBUG(3) << "Rescheduling multi-add for " << pi->ip
+		    << " with timeout " << pi->last_timeout << endl;
+	unsigned rpc = asyncRPC( pi->ip, 
+				 &Tapestry::handle_ping, &pa, &pr, 
+				 pi->last_timeout );
+	assert(rpc);
+	ping_rpcset->insert(rpc);
+	ping_resultmap->remove( donerpc );
+	ping_resultmap->insert( rpc, pi );
       }
-      TapDEBUG(3) << "multidone ip: " << pi->ip << " finished " << (j+1) << 
-	" total " << setsize << endl;
+      
+    } else {
+      TapDEBUG(3) << "Finished multi-add for " << pi->ip << endl;
+      record_stat( STAT_PING, 0, 0 );
+      // TODO: ok, but now how do I call rt->add without it placing 
+      // backpointers synchronously?
+      pi->rtt = ping_time;
+      if( timing != NULL ) {
+	(*timing)[pi->ip] = ping_time; //_rt->get_time( pi->id );
+      }
     }
+    TapDEBUG(3) << "multidone ip: " << pi->ip << 
+      " total left " << ping_rpcset->size() << endl;
   }
   // now that all the pings are done, we can add them to our routing table
   // (possibly sending synchronous backpointers around) without messing

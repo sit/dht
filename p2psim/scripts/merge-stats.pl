@@ -61,7 +61,8 @@ foreach my $log (@logs) {
     my @logname = split( /\-/, $log );
     print "# ";
     for( my $i = 1; $i <= $#logname; $i++ ) {
-	print $logname[$i] . " ";
+	my @s = split( /\./, $logname[$i] );
+	print $s[0] . " ";
     }
     print "\n";
     print "@log_stats\n";
