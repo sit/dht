@@ -138,11 +138,14 @@ class dhash_impl : public dhash {
   void route_upcall (int procno, void *args, cbupcalldone_t cb);
 
   void doRPC (ptr<location> n, const rpc_program &prog, int procno,
-	      ptr<void> in, void *out, aclnt_cb cb);
+	      ptr<void> in, void *out, aclnt_cb cb, 
+	      cbtmo_t cb_tmo);
   void doRPC (const chord_node &n, const rpc_program &prog, int procno,
-	      ptr<void> in, void *out, aclnt_cb cb);
+	      ptr<void> in, void *out, aclnt_cb cb,
+	      cbtmo_t cb_tmo);
   void doRPC (const chord_node_wire &n, const rpc_program &prog, int procno,
-	      ptr<void> in, void *out, aclnt_cb cb);
+	      ptr<void> in, void *out, aclnt_cb cb,
+	      cbtmo_t cb_tmo);
   void doRPC_reply (svccb *sbp, void *res, 
 		    const rpc_program &prog, int procno);
   void dispatch (user_args *a);

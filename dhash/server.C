@@ -912,23 +912,26 @@ dhash_impl::doRPC_unbundler (ptr<location> dst, RPC_delay_args *args)
 
 void
 dhash_impl::doRPC (const chord_node &n, const rpc_program &prog, int procno,
-	           ptr<void> in,void *out, aclnt_cb cb) 
+	           ptr<void> in,void *out, aclnt_cb cb,
+		   cbtmo_t cb_tmo = NULL) 
 {
-  host_node->doRPC (n, prog, procno, in, out, cb);
+  host_node->doRPC (n, prog, procno, in, out, cb, cb_tmo);
 }
 
 void
 dhash_impl::doRPC (const chord_node_wire &n, const rpc_program &prog,
-                   int procno, ptr<void> in,void *out, aclnt_cb cb) 
+                   int procno, ptr<void> in,void *out, aclnt_cb cb,
+		   cbtmo_t cb_tmo = NULL) 
 {
-  host_node->doRPC (make_chord_node (n), prog, procno, in, out, cb);
+  host_node->doRPC (make_chord_node (n), prog, procno, in, out, cb, cb_tmo);
 }
 
 void
 dhash_impl::doRPC (ptr<location> ID, const rpc_program &prog, int procno,
-	           ptr<void> in,void *out, aclnt_cb cb) 
+	           ptr<void> in,void *out, aclnt_cb cb,
+		   cbtmo_t cb_tmo = NULL)  
 {
-  host_node->doRPC (ID, prog, procno, in, out, cb);
+  host_node->doRPC (ID, prog, procno, in, out, cb, cb_tmo);
 }
 
 
@@ -994,6 +997,7 @@ dhash_impl::stop ()
   if (merkle_rep_tcb) {
     timecb_remove (merkle_rep_tcb);
     merkle_rep_tcb = NULL;
+    pmaint_obj->stop ();
     warn << "stop merkle replication timer\n";
   }
 }

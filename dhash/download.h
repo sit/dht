@@ -14,7 +14,7 @@ private:
   chord_node source;
   blockID blckID;
   cbretrieve_t cb;
-
+  cbtmo_t cb_tmo;
   ptr<dhash_block> block;
   int nextchunk;     //  fast
   int numchunks;     //   retransmit
@@ -25,7 +25,7 @@ private:
 
   dhash_download (ptr<vnode> clntnode, chord_node source, blockID blockID,
 		  char *data, u_int len, u_int totsz, int cookie,
-		  cbretrieve_t cb);
+		  cbretrieve_t cb, cbtmo_t cb_tmo = NULL);
   void getchunk (u_int start, u_int len, int cookie, gotchunkcb_t cb);
   void gotchunk (gotchunkcb_t cb, ptr<dhash_fetchiter_res> res,
 		 int chunknum, clnt_stat err);
@@ -42,10 +42,12 @@ private:
 public:
   static void execute (ptr<vnode> clntnode, chord_node source, blockID blockID,
 		       char *data, u_int len, u_int totsz, int cookie,
-		       cbretrieve_t cb) // XXX wtf is this cookie shit
+		       cbretrieve_t cb,
+		       cbtmo_t cb_tmo = NULL) 
+    // XXX wtf is this cookie shit
   {
     vNew dhash_download
-      (clntnode, source, blockID, data, len, totsz, cookie, cb);
+      (clntnode, source, blockID, data, len, totsz, cookie, cb, cb_tmo);
   }
 };
 

@@ -12,9 +12,12 @@
 
 dhash_download::dhash_download (ptr<vnode> clntnode, chord_node source,
 				blockID blockID, char *data, u_int len,
-				u_int totsz, int cookie, cbretrieve_t cb)
+				u_int totsz, int cookie, cbretrieve_t cb,
+				cbtmo_t cb_tmo)
   : clntnode (clntnode),  npending (0), error (false), source (source), 
-    blckID (blockID), cb (cb), nextchunk (0), numchunks (0), didrexmit (false)
+				  blckID (blockID), cb (cb), cb_tmo (cb_tmo),
+				  nextchunk (0), numchunks (0), 
+				  didrexmit (false)
 {
   start = getusec ();
   // the first chunk of data may be passed in
@@ -46,7 +49,8 @@ dhash_download::getchunk (u_int start, u_int len, int cookie, gotchunkcb_t cb)
 
   long seqno = clntnode->doRPC 
     (source, dhash_program_1, DHASHPROC_FETCHITER, arg, res, 
-     wrap (this, &dhash_download::gotchunk, cb, res, numchunks++));
+     wrap (this, &dhash_download::gotchunk, cb, res, numchunks++),
+     cb_tmo);
 
   seqnos.push_back (seqno);
 }
@@ -94,8 +98,6 @@ dhash_download::process_first_chunk (char *data, size_t datalen, size_t totsz,
     unsigned mtu = (clntnode->my_location ()->id () == source.x)
       ? 8192 : dhash::dhash_mtu ();
     int length = MIN (mtu, totsz - nread);
-    //    warnx << "SENT RPC for [" << nread << ", " << nread + length
-    //	  << "]  at " << (getusec () - start) << "\n";
     getchunk (nread, length, cookie,
 	      wrap (this, &dhash_download::later_chunk_cb));
     nread += length;
@@ -111,8 +113,6 @@ dhash_download::later_chunk_cb (ptr<dhash_fetchiter_res> res, int chunknum,
   if (err || (res && res->status != DHASH_COMPLETE))
     fail (dhasherr2str (res->status));
   else {
-    // warn << "GOT RPC for chunk " << chunknum << " at "
-    //	 << (getusec () - start) << "\n";
 
     if (!didrexmit && (chunknum > nextchunk)) {
       warn << "FAST retransmit: " << blckID << " chunk "

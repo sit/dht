@@ -311,7 +311,7 @@ dhashcli::retrieve_lookup_cb (ptr<rcv_state> rs, vec<chord_node> succs,
     rs = NULL;
     return;
   }
-
+  
   // benjie: if number of successors is smaller than num_efrags,
   // that's likely an indication that the ring is small.
   if (succs.size () < dhash::num_efrags ()) {
@@ -376,7 +376,9 @@ dhashcli::retrieve_lookup_cb (ptr<rcv_state> rs, vec<chord_node> succs,
 
   // Dispatch NUM_DFRAGS parallel requests, even though we don't know
   // how many fragments will truly be needed.
-  for (u_int i = 0; i < dhash::num_dfrags (); i++)
+  u_int tofetch = dhash::num_dfrags () + 0;
+  if (tofetch > rs->succs.size ()) tofetch = rs->succs.size ();
+  for (u_int i = 0; i < tofetch; i++)
     fetch_frag (rs);
 }
 
