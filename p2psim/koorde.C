@@ -3,11 +3,11 @@
 #include <iostream>
 using namespace std;
 
-Koorde::Koorde(Node *n) : Chord(n, k) 
+Koorde::Koorde(Node *n) : Chord(n, CHORD_SUCC_NUM) 
 {
   debruijn = me.id << logbase;
   isstable = false;
-  printf ("Koorde: (%u,%qx) debruijn=%qx\n", me.ip, me.id, debruijn);
+  printf ("Koorde: (%u,%qx) %d debruijn=%qx\n", me.ip, me.id, k, debruijn);
   dfingers.push_back(me);
 }
 
@@ -107,10 +107,11 @@ Koorde::find_successors(CHID key, uint m, bool intern)
 
     a.kshift = r.kshift;
     a.i = r.i;
-    last = r.next;
 
     printf("nexthop (%u,%qx) is (%u,%qx) key %qx i %qx, kshift %qx)\n", 
 	   me.ip, me.id, r.next.ip, r.next.id, a.k, r.i, r.kshift);
+
+    last = r.next;
 
     doRPC (r.next.ip, &Koorde::koorde_next, &a, &r);
     
@@ -119,11 +120,13 @@ Koorde::find_successors(CHID key, uint m, bool intern)
     if (r.done) break;
   }
 
+  if (!intern) {
     printf ("find_successor for (id %qx, key %qx) is (%u,%qx) hops %d\n", 
 	    me.id, key, r.next.ip, r.next.id, count);
     for (uint i = 0; i < path.size () - 1; i++) {
       printf ("  %qx\n", path[i]);
     }
+  }
 
   assert (r.v.size () > 0);
   return r.v;
@@ -142,8 +145,8 @@ Koorde::koorde_next(koorde_lookup_arg *a, koorde_lookup_ret *r)
     r->kshift = a->kshift;
     r->i = a->i;
     r->done = true;
-    r->v.clear ();
     assert (a->nsucc <= CHORD_SUCC_NUM);
+    r->v.clear ();
     r->v = loctable->succs(me.id + 1, a->nsucc);
     assert (r->v.size () > 0);
     printf ("Koorde_next: done succ key = %qx: (%u,%qx)\n", 
@@ -171,15 +174,16 @@ void
 Koorde::fix_debruijn () 
 {
   printf ("fix_debruijn %u\n", isstable);
-  vector<IDMap> succs = find_successors (debruijn, k - 1, true);
-  printf ("fix_debruijn (%u,%qx): debruijn %qx succ %qx d %qx\n",
-	  me.ip, me.id, debruijn, succs[0].id, last.id);
-  assert (succs.size () > 0);
-  succs.insert (succs.begin(), last);
+  vector<IDMap> scs = find_successors (debruijn, k - 1, true);
+  printf ("fix_debruijn (%u,%qx): debruijn %qx succ %qx d %qx at %lu\n",
+	  me.ip, me.id, debruijn, scs[0].id, last.id, now ());
+  assert (scs.size () > 0);
+  scs.insert (scs.begin(), last);
   dfingers.clear ();
-  dfingers = succs;
+  dfingers = scs;
   for (uint i = 0; i < dfingers.size (); i++) {
-    printf ("  Koorde %d debruijn fingers %qx\n", i+1, dfingers[i].id);
+    printf ("  Koorde %d debruijn fingers %u,%qx\n", i, dfingers[i].ip,
+	    dfingers[i].id);
   }
 }
 
@@ -193,11 +197,9 @@ Koorde::reschedule_stabilizer(void *x)
 void
 Koorde::stabilize()
 {
-  printf ("stabilize()? %u\n", isstable);
-  if (!isstable) {
-    Chord::stabilize();
-    fix_debruijn();
-  }
+  printf ("stabilize()? %u,%qx, %u, %lu\n", me.ip, me.id, isstable, now ());
+  Chord::stabilize();
+  fix_debruijn();
 }
 
 // XXX should also check dfingers
@@ -205,12 +207,11 @@ bool
 Koorde::stabilized (vector<ConsistentHash::CHID> lid)
 {
   bool r = Chord::stabilized (lid);
-
   if (!r) return false;
-  r = false;
 
-  printf ("koorde::stabilized? me %qx debruijn %qx d %qx\n", me.id, debruijn, 
-	  dfingers[0].id);
+  r = false;
+  printf ("koorde::stabilized? %u,%qx debruijn %qx d %qx at %lu\n", me.ip,
+	  me.id, debruijn, dfingers[0].id, now ());
 
   assert (lid.size () > 0);
 
@@ -218,29 +219,29 @@ Koorde::stabilized (vector<ConsistentHash::CHID> lid)
     assert (dfingers[0].id == lid.front ());
     r = true;
   } else {
-    uint i;
+    uint i, j;
 
     for (i = 0; i < lid.size (); i++) {
-      uint j;
       // printf ("stable? %qx %qx %qx, %qx\n", lid[i], lid[(i+1)%lid.size ()], 
       //      dfingers[0].id, debruijn);
       if (ConsistentHash::betweenrightincl (lid[i], lid[(i+1) % lid.size ()], 
 					    debruijn)) {
-	r = true;
-	for (j = 0; j < k - 1; j++) {
-	  if (lid[i] != dfingers[j].id) {
-	    r = false;
-	    break;
-	  }
-	  i = (i + 1) % lid.size ();
-	}
-	if (!r) {
-	  printf ("loop: not stable: finger %d should be %qx but is %qx\n", 
-		  j, lid[i], dfingers[j].id);
-	}
-	r = true;
 	break;
       }
+    }
+
+    for (j = 0; j < k - 1; j++) {
+      if (lid[i] != dfingers[j].id) {
+	break;
+      }
+      i = (i + 1) % lid.size ();
+    }
+
+    if (j == k - 1) {
+      r = true;
+    } else {
+      printf ("loop: not stable: finger %d should be %qx but is %qx\n", 
+	      j, lid[i], dfingers[j].id);
     }
   }
   

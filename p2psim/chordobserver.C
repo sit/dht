@@ -56,7 +56,7 @@ ChordObserver::execute()
     sort(lid.begin(), lid.end());
 
     vector<ConsistentHash::CHID>::iterator i;
-    printf ("sorted nodes\n");
+    printf ("sorted nodes %d %d\n", lid.size (), _num_nodes);
     for (i = lid.begin (); i != lid.end() ; ++i) {
       printf ("%qx\n", *i);
     }

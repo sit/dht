@@ -33,6 +33,8 @@ while ($line = <STDIN>) {
 	doevent (split(/,/, $1));
     } elsif ($line =~/^events: (.*)/) {
 	doevents (split(/,/, $1));
+    } elsif ($line =~/^observe: (.*)/) {
+	doobserve (split(/,/, $1);
     } else {
 	print EV "$line\n";
     }
@@ -89,6 +91,11 @@ sub doevents {
 
 	$time = $time + $interval;
     }
+}
+
+sub doobserve {
+   my ($start,$obv,$interval,$type) = @_;
+   print EV "observe $start $obv $time $interval $type numnodes=$nnodes\n";
 }
 
 sub makekey ()

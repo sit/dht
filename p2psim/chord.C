@@ -32,7 +32,7 @@ char *
 Chord::ts()
 {
   static char buf[50];
-  sprintf(buf, "%lu Chord(%u,%qu)", now(), me.ip, PID(me.id));
+  sprintf(buf, "%lu Chord(%u,%qx)", now(), me.ip, me.id);
   return buf;
 }
 
@@ -193,6 +193,12 @@ Chord::stabilized(vector<CHID> lid)
     if (iter == lid.end()) iter = lid.begin();
     if (succs[i-1].id != *iter) return false;
   }
+
+  // printf ("stable successor list %u,%qx at %lu\n", me.ip, me.id, now ());
+  // for (unsigned int i = 0; i < succs.size (); i++) {
+  // printf (" successor %d: %u, %qx\n", i, succs[i].ip, succs[i].id);
+  // }
+
   return true;
 }
 
@@ -229,13 +235,21 @@ void
 Chord::fix_successor_list()
 {
   IDMap succ = loctable->succ(me.id+1);
-  if ((succ.ip == 0) || (succ.ip == me.ip)) return;
+  // if ((succ.ip == 0) || (succ.ip == me.ip)) return;
   get_successor_list_args gsa;
   get_successor_list_ret gsr;
   doRPC(succ.ip, &Chord::get_successor_list_handler, &gsa, &gsr);
+  printf ("fix_successor_list: %u,%qx at %lu succ %u,%qx\n", me.ip, me.id, 
+	  now(), succ.ip, succ.id);
   for (unsigned int i = 0; i < (gsr.v).size(); i++) {
     loctable->add_node(gsr.v[i]);
   }
+
+  vector<IDMap> scs = loctable->succs(me.id + 1, nsucc);
+  for (uint i = 0; i < scs.size (); i++) {
+     printf ( "succ %d %u,%qx\n", i, scs[i].ip, scs[i].id);
+  }
+
 }
 
 
@@ -246,8 +260,8 @@ Chord::notify_handler(notify_args *args, notify_ret *ret)
   loctable->notify(args->me);
   IDMap p2 = loctable->pred();
   if(p1.id != p2.id)
-    printf("%s notify changed pred from %qu to %qu\n",
-         ts(), PID(p1.id), PID(p2.id));
+    printf("%s notify changed pred from %qx to %qx\n",
+         ts(), p1.id, p2.id);
 
 }
 
@@ -326,6 +340,9 @@ LocTable::succs(ConsistentHash::CHID id, unsigned int m)
       num--;
       if (num <= 0) return v;
     }
+  }
+  if (v.size () == 0) {
+    v.push_back (ring[0]);
   }
   return v;
 }
@@ -473,7 +490,7 @@ LocTable::evict() //all unnecessary(unpinned) nodes
 
   int extra;
   bool end = false;
-  int j = 0;
+  uint j = 0;
   int tmp;
   for (unsigned int i = 0; i < pinlist.size(); i++) {
     while ((!end) && j < ring.size()) {
