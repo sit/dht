@@ -48,7 +48,7 @@ public:
   IPAddress ip() { return _ip; }
   void set_alive(bool a) { _alive = a;}
   bool alive () { return _alive; }
-  static bool init_state() { return _args.nget<uint>("initstate",0,10);}
+  static bool init_state() { return (_args.nget<unsigned>("initstate",0,10) != 0); }
   void packet_handler(Packet *);
   static void Receive(void*);
 

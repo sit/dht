@@ -50,6 +50,7 @@ my $param_lists = {
 
   "Kademlia" =>
     [
+     [ "initstate", 1 ],
      [ "alpha", 1, 2, 3, 4, 5 ],
      [ "k", 8, 16, 32 ],
      [ "stabilize_timer", 32000 ],
@@ -165,6 +166,7 @@ sub process_args {
     if(/^-h$/ || /^--help$/)     { &usage(); exit; }
     if(/^-k$/ || /^--king$/)     { $king = shift @args; next; }
     if(/^-l$/ || /^--lifemean$/) { $lifemean = shift @args; next; }
+    if(/^-m$/ || /^--lookupmean$/) { $lookupmean = shift @args; next; }
     if(/^-n$/ || /^--nnodes$/)   { $nnodes = shift @args; next; }
     if(/^-o$/ || /^--observer$/) { $observer = 0; next; }
     if(/^-p$/ || /^--protocol$/) { $protocol = shift @args; next; }
@@ -179,6 +181,7 @@ sub usage {
 -h : help
 -k : king file
 -l : lifemean
+-m : lookupmean
 -n : nnodes
 -o : NO observer
 -p : protocol
