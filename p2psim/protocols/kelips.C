@@ -35,17 +35,27 @@ int sta[1000];
 int nsta;
 
 double Kelips::_rpc_bytes = 0;
-double Kelips::_total_latency = 0;
-int Kelips::_lookups = 0;
+double Kelips::_good_latency = 0;
+int Kelips::_good_lookups = 0;
+double Kelips::_bad_latency = 0;
+int Kelips::_bad_lookups = 0;
 
 Kelips::Kelips(Node *n, Args a)
   : P2Protocol(n)
 {
-  _k = a.nget<unsigned>("k", 20, 10);
-  assert(_k > 0);
   _rounds = 0;
   _started = false;
   _live = false;
+
+  // settable parameters.
+  _k = a.nget<unsigned>("k", 20, 10);
+  _round_interval = a.nget<int>("round_interval", 2000, 10);
+  _group_targets = a.nget<u_int>("group_targets", 3, 10);
+  _contact_targets = a.nget<u_int>("contact_targets", 3, 10);
+  _group_ration = a.nget<u_int>("group_ration", 4, 10);
+  _contact_ration = a.nget<u_int>("contact_ration", 2, 10);
+  _n_contacts = a.nget<u_int>("n_contacts", 2, 10);
+  _item_rounds = a.nget<u_int>("item_rounds", 1, 10);
 }
 
 string
@@ -60,8 +70,9 @@ Kelips::~Kelips()
 {
   if(ip() == 1){
     printf("rpc_bytes %.0f\n", _rpc_bytes);
-    if(_lookups > 0){
-      printf("avglat %.1f\n", _total_latency / _lookups);
+    printf("%d good, %d failed\n", _good_lookups, _bad_lookups);
+    if(_good_lookups > 0){
+      printf("avglat %.1f\n", _good_latency / _good_lookups);
     }
   }
   if(ip() == 1 && nsta > 0){
@@ -110,7 +121,7 @@ Kelips::join(Args *a)
   _live = true;
 
   IPAddress wkn = a->nget<IPAddress>("wellknown");
-  cout << "Kelips::join ip=" << ip() << " wkn=" << wkn << "\n";
+  printf("%qd %d join known=%d\n", now(), ip(), _info.size());
   assert(wkn != 0);
 
   if(wkn != ip()){
@@ -180,8 +191,11 @@ Kelips::lookup(Args *args)
   Time t2 = now();
 
   if(ok){
-    _lookups += 1;
-    _total_latency += t2 - t1;
+    _good_lookups += 1;
+    _good_latency += t2 - t1;
+  } else {
+    _bad_lookups += 1;
+    _bad_latency += t2 - t1;
   }
 
   printf("%qd %d lat=%d lookup(%qd) ", now(), ip(), (int)(t2 - t1), key);
@@ -553,7 +567,7 @@ Kelips::gossip(void *junk)
     _rounds++;
   }
 
-  delaycb(_round_interval, &Kelips::gossip, (void *) 0);
+  delaycb(random() % (2 *_round_interval), &Kelips::gossip, (void *) 0);
 }
 
 void
@@ -592,8 +606,6 @@ Kelips::purge(void *junk)
 void
 Kelips::init_state(list<Protocol*> lid)
 {
-  printf("%qd %d init_state _live=%d\n",
-         now(), ip(), _live);
   for(list<Protocol*>::const_iterator i = lid.begin(); i != lid.end(); ++i) {
     Kelips *k = dynamic_cast<Kelips*>(*i);
     assert(k);
@@ -632,10 +644,13 @@ Kelips::stabilized(vector<ID> lid)
 
 // Kelips just did an RPC. The request contained nsent IDs,
 // the reply contained nrecv IDs. Update the RPC statistics.
+// Jinyang/Jeremy convention:
+//   20 bytes header, 4 bytes/ID, 1 byte/other
+// (Kelips paper says 40 bytes per gossip entry...)
 void
 Kelips::rpcstat(bool ok, int nsent, int nrecv)
 {
-  _rpc_bytes += 20 + nsent * 40; // paper says 40 bytes per node entry
+  _rpc_bytes += 20 + nsent * 4; // paper says 40 bytes per node entry
   if(ok)
-    _rpc_bytes += 20 + nrecv * 40;
+    _rpc_bytes += 20 + nrecv * 4;
 }

@@ -65,26 +65,22 @@ public:
  private:
   typedef ConsistentHash::CHID ID;
 
-  // send gossip every two seconds, to 3 targets in group,
-  // and three contacts outside the group. Section 4.
-  static const int _round_interval = 2000;
-  static const u_int _group_targets = 3;
-  static const u_int _contact_targets = 3;
+  // Parameters, with defaults from Kelips paper.
 
-  // Items per gossip packet. Sections 2 and 4 imply 272/40 = 8 total.
-  // XXX but doesn't specify the group vs contact breakdown.
-  static const u_int _group_ration = 4;
-  static const u_int _contact_ration = 2;
+  int _round_interval;    // (2000) inter-gossip interval.
+  u_int _group_targets;   // (3) gossip to X targets in group.
+  u_int _contact_targets; // (3) gossip to X contacts.
 
-  // number of contacts to remember for each foreign group. Section 2.
-  static const int _n_contacts = 2;
+  u_int _group_ration;    // (4) group items per gossip packet.
+  u_int _contact_ration;  // (2) contact items per gossip packet.
 
-  // how many times to gossip a new item. XXX not specified in paper.
-  static const int _item_rounds = 1;
+  int _n_contacts;        // (2) contacts to remember per foreign group.
+
+  int _item_rounds;       // (1???) how many times to gossip a new item.
 
   // hearbeat timeouts. XXX not specified in paper.
-  static const int _group_timeout = (_round_interval * 25);
-  static const int _contact_timeout = (_round_interval * 50);
+  static const int _group_timeout = 25000;
+  static const int _contact_timeout = 50000;
 
   int _k; // number of affinity groups, should be sqrt(n)
 
@@ -94,8 +90,10 @@ public:
 
   // global statistics
   static double _rpc_bytes; // total traffic
-  static double _total_latency;
-  static int _lookups;
+  static double _good_latency; // successful lookups
+  static int _good_lookups;
+  static double _bad_latency;  // failed lookups
+  static int _bad_lookups;
 
   // Information about one other node.
   class Info {

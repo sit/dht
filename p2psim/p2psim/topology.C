@@ -77,7 +77,7 @@ Topology::parse(char *filename)
       if(!with_failure_model)
         cerr << "warning: -f flag but found failure_model keyword. ignoring failure_model!" << filename << endl;
     } else {
-      cerr << "first line in topology file should be ``topology [T]'' or ``failure_model [F]" << endl;
+      cerr << "header lines in topology file should be ``topology [T]'' or ``failure_model [F]" << endl;
       exit(-1);
     }
   }
