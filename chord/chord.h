@@ -88,11 +88,10 @@ struct user_args {
   template<class T> T *getarg () { return static_cast<T *> (args); };
   template<class T> const T *getarg () const {return static_cast<T *> (args);};
   
-  void reject (auth_stat s) {sbp->reject (s); };
-  void reject (accept_stat s) {sbp->reject (s); };
+  void reject (auth_stat s) {sbp->reject (s); delete this; }
+  void reject (accept_stat s) {sbp->reject (s); delete this; }
   void reply (void *res);
-  void replyref (const int &res)
-    { sbp->replyref (res); }
+  void replyref (const int &res) { sbp->replyref (res); delete this; }
   
   dorpc_arg * transport_header () 
     { return sbp->template getarg<dorpc_arg> (); };
