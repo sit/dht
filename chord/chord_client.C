@@ -21,6 +21,33 @@
 #include <chord.h>
 #include <chord_util.h>
 
+chord::chord (str _wellknownhost, int _wellknownport, 
+	      const chordID &_wellknownID,
+	      int port, str myhost, int set_rpcdelay, int max_cache, 
+	      int max_connections) :
+  wellknownID (_wellknownID),
+  servers (max_connections /2)
+{
+  myaddress.port = startchord (port);
+  myaddress.hostname = myhost;
+  wellknownhost.hostname = _wellknownhost;
+  wellknownhost.port = _wellknownport;
+  warnx << "chord: myport is " << myaddress.port << "\n";
+  warnx << "chord: myname is " << myaddress.hostname << "\n";
+  locations = New refcounted<locationtable> (mkref (this), set_rpcdelay, 
+					     max_cache, max_connections/2);
+  locations->insert (wellknownID, wellknownhost.hostname, wellknownhost.port);
+  servers.set_flushcb (wrap (this, &chord::flush_server));
+  nvnode = 0;
+  ngetsuccessor = 0;
+  ngetpredecessor = 0;
+  nfindclosestpred = 0;
+  nnotify = 0;
+  nalert = 0;
+  ntestrange = 0;
+  ngetfingers = 0;
+}
+
 void
 chord::doaccept (int fd)
 {
@@ -31,6 +58,25 @@ chord::doaccept (int fd)
   ptr<axprt_stream> x = axprt_stream::alloc (fd);
   s = asrv::alloc (x, chord_program_1);
   s->setcb (wrap (mkref(this), &chord::dispatch, s, x));
+  // servers.traverse (wrap (this, &chord::print_conn));
+  if (!servers.insert (ptr2int(x), x)) {
+    fatal ("doaccept: couldn't insert server\n");
+  }
+}
+
+void
+chord::print_conn (u_int32_t k, ref<axprt_stream> x)
+{
+  char buf[100];
+  axprt_stream *x1 = x;
+  sprintf (buf, "k 0x%x x 0x%x\n", k, reinterpret_cast<u_int32_t> (x1));
+  warnx << "print_conn: " << buf;
+}
+
+void
+chord::flush_server (u_int32_t k, ref<axprt_stream> x)
+{
+  x->reclaim ();
 }
 
 void
@@ -66,32 +112,6 @@ chord::startchord (int myp)
   listen (srvfd, 1000);
   fdcb (srvfd, selread, wrap (mkref (this), &chord::accept_standalone, srvfd));
   return p;
-}
-
-chord::chord (str _wellknownhost, int _wellknownport, 
-	      const chordID &_wellknownID,
-	      int port, str myhost, int set_rpcdelay, int max_cache, 
-	      int max_connections) :
-  wellknownID (_wellknownID)
-{
-  myaddress.port = startchord (port);
-  myaddress.hostname = myhost;
-  wellknownhost.hostname = _wellknownhost;
-  wellknownhost.port = _wellknownport;
-  warnx << "chord: myport is " << myaddress.port << "\n";
-  warnx << "chord: myname is " << myaddress.hostname << "\n";
-  locations = New refcounted<locationtable> (mkref (this), set_rpcdelay, 
-					     max_cache, max_connections);
-  locations->insert (wellknownID, wellknownhost.hostname, wellknownhost.port);
-  nvnode = 0;
-  ngetsuccessor = 0;
-  ngetpredecessor = 0;
-  nfindclosestpred = 0;
-  nnotify = 0;
-  nalert = 0;
-  ntestrange = 0;
-  ngetfingers = 0;
-
 }
 
 
@@ -202,6 +222,7 @@ chord::stats ()
   warnx << "# getfingers requests " << ngetfingers << "\n";
   vnodes.traverse (wrap (this, &chord::stats_cb));
   locations->stats ();
+  exit (0);
 }
 
 void
@@ -226,9 +247,11 @@ void
 chord::dispatch (ptr<asrv> s, ptr<axprt_stream> x, svccb *sbp)
 {
   if (!sbp) {
-    s->setcb (NULL);		// allow s and x to be freed
+    s->setcb (NULL);
     return;
   }
+  ptr<axprt_stream> x1 = servers[ptr2int(x)];
+  assert (x1 == x);
   switch (sbp->proc ()) {
   case CHORDPROC_NULL: 
     {

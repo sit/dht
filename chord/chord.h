@@ -33,9 +33,10 @@
 #include "dmalloc.h"
 #endif
 
-#include <chord_prot.h>
-#include <chord_util.h>
-#include <location.h>
+#include "cache.h"
+#include "chord_prot.h"
+#include "chord_util.h"
+#include "location.h"
 
 #define NBIT     160     // size of Chord identifiers in bits
 #define NSUCC     32      // log of # vnodes
@@ -218,13 +219,28 @@ class vnode : public virtual refcount {
   };
 };
 
+
 class chord : public virtual refcount {
+
+  struct server {
+    ptr<asrv> srv;
+    ptr<axprt_stream> x;
+    ~server (void) { 
+      warnx << "server: delete\n";
+      srv = 0;
+      x->reclaim ();
+    };
+  };
+
   int nvnode;
   net_address wellknownhost;
   net_address myaddress;
   chordID wellknownID;
   qhash<chordID, ref<vnode>, hashID> vnodes;
-  //  ihash<chordID,ref<vnode >,&vnode::myID,&vnode::fhlink,hashID> vnodes;
+  myvs_cache<u_int32_t, ref<axprt_stream> > servers;
+  u_int32_t ptr2int (ptr<axprt_stream> x) { 
+    axprt_stream *x1 = x; return reinterpret_cast<u_int32_t> (x1);
+  }
 
   int ngetsuccessor;
   int ngetpredecessor;
@@ -236,6 +252,8 @@ class chord : public virtual refcount {
 
   void dispatch (ptr<asrv> s, ptr<axprt_stream> x, svccb *sbp);
   void doaccept (int fd);
+  void print_conn (u_int32_t k, ref<axprt_stream> x);
+  void flush_server (u_int32_t k, ref<axprt_stream> x);
   void accept_standalone (int lfd);
   int startchord (int myp);
   chordID initID (int index);

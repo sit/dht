@@ -270,6 +270,8 @@ locationtable::delete_connections (location *l)
   assert (l);
   assert (!l->connecting);
   if (l->x) {
+    warnx << "delete connection to " << l->n << "@" << l->addr.hostname << " "
+	  << l->addr.port << "\n";
     connections.remove (l);
     size_connections--;
     l->x = NULL;
