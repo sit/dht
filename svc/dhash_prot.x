@@ -100,6 +100,7 @@ struct s_dhash_getkeys_arg {
 
 
 struct dhash_storeresok {
+  bool already_present;
   bool done;
   chordID source;
 };

@@ -4,6 +4,7 @@
 #include "merkle_hash.h"
 #include "merkle_node.h"
 #include "merkle_tree.h"
+#include "merkle_server.h"
 #include "merkle_sync_prot.h"
 #include <bigint.h>
 #include <chord.h>
@@ -11,10 +12,7 @@
 // see comment in merkle_syncer::doRPC for this work around.
 #include "comm.h"
 typedef callback<void, RPC_delay_args *>::ref rpcfnc_t;
-//typedef callback<void, rpc_program, int, ptr<void>, void *, aclnt_cb>::ref rpcfnc_t;
-
-
-typedef callback<void, bigint, bool, callback<void>::ref>::ref sndblkfnc_t;
+typedef callback<void, bigint>::ref missingfnc_t;
 
 class merkle_syncer {
  private:
@@ -22,32 +20,13 @@ class merkle_syncer {
 
   void setdone ();
   void error (str err);
-  void timeout (ptr<bool> del);
-
-  enum { IDLETIMEOUT = 30 };
-  bool idle;
-  ptr<bool> deleted;
+  void missing (const merkle_hash &key);
 
  public:
-  struct {
-    u_int rpc_getblocklist;
-    u_int rpc_getblockrange;
-    u_int rpc_getnode;
-    u_int blocks_sent;
-    u_int blocks_rcvd;
-  } stats;
-
-
-  typedef enum {
-    BIDIRECTIONAL,
-    UNIDIRECTIONAL
-  } mode_t;
-
-  mode_t mode;
 
   merkle_tree *ltree; // local tree
   rpcfnc_t rpcfnc;
-  sndblkfnc_t sndblkfnc;
+  missingfnc_t missingfnc;
 
 
   str fatal_err;
@@ -56,44 +35,63 @@ class merkle_syncer {
   bigint rngmin;
   bigint rngmax;
 
-  timecb_t *tcb;
   int pending_rpcs;
+
   int receiving_blocks;
   uint64 num_sends_pending;
   db_iterator *sendblocks_iter;
 
   vec<pair<merkle_rpc_node, int> > st;
 
-  merkle_syncer (merkle_tree *ltree, rpcfnc_t rpcfnc, sndblkfnc_t sndblkfnc);
-  ~merkle_syncer ();
+  merkle_syncer (merkle_tree *ltree, rpcfnc_t rpcfnc, missingfnc_t missingfnc);
+  ~merkle_syncer () {}
   void dump ();
   str getsummary ();
   void doRPC (int procno, ptr<void> in, void *out, aclnt_cb cb);
   void send_some ();
   void next (void);
-  void sendblock (merkle_hash key, bool last);
-  void sendblock_cb (ptr<bool> del);
-  void getblocklist (vec<merkle_hash> keys);
-  void getblocklist_cb (ref<getblocklist_res> res, ptr<bool> del, 
-			clnt_stat err);
 
   bool done () { return sync_done; }
-  void sync (bigint _rngmin, bigint _rngmax, mode_t m);
-  void getnode (u_int depth, const merkle_hash &prefix);
-  void getnode_cb (ref<getnode_arg> arg, ref<getnode_res> res, 
-		   ptr<bool> del, clnt_stat err);
-  void getblockrange (merkle_rpc_node *rnode);
-  void getblockrange_cb (ref<getblockrange_arg> arg, 
-			 ref<getblockrange_res> res, 
-			 ptr<bool> del,
-			 clnt_stat err);
-
-  bool inrange (const merkle_hash &key);
-
-  void recvblk (bigint key, bool last);
+  void sync (bigint _rngmin, bigint _rngmax);
+  void sendnode (u_int depth, const merkle_hash &prefix);
+  void sendnode_cb (ref<sendnode_arg> arg, ref<sendnode_res> res, 
+		    clnt_stat err);
 };
 
 
+// ---------------------------------------------------------------------------
 
+class merkle_getkeyrange {
+private:
+  dbfe *db;
+  bigint rngmin;
+  bigint rngmax;
+  bigint current;
+  missingfnc_t missing;
+  rpcfnc_t rpcfnc;
+  void go ();
+  void getkeys_cb (ref<getkeys_arg> arg, ref<getkeys_res> res, clnt_stat err);
+  void doRPC (int procno, ptr<void> in, void *out, aclnt_cb cb);
+
+public:
+  ~merkle_getkeyrange () {}
+  merkle_getkeyrange (dbfe *db, bigint rngmin, bigint rngmax, 
+		      missingfnc_t missing, rpcfnc_t rpcfnc)
+    : db (db), rngmin (rngmin), rngmax (rngmax), current (rngmin), 
+    missing (missing), rpcfnc (rpcfnc)
+    { go (); }
+};
+
+
+// ---------------------------------------------------------------------------
+
+void
+format_rpcnode (merkle_tree *ltree, u_int depth, const merkle_hash &prefix,
+		const merkle_node *node, merkle_rpc_node *rpcnode);
+
+void
+compare_nodes (merkle_tree *ltree, bigint rngmin, bigint rngmax, 
+	       merkle_node *lnode, merkle_rpc_node *rnode,
+	       missingfnc_t missingfnc, rpcfnc_t rpcfnc);
 
 #endif /* _MERKLE_SYNCER_H_ */

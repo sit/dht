@@ -1,5 +1,4 @@
 #include "merkle_tree.h"
-#include "dhash.h"
 
 void
 merkle_tree::rehash (u_int depth, const merkle_hash &key, merkle_node *n)
@@ -121,7 +120,7 @@ merkle_tree::insert (u_int depth, block *b, merkle_node *n)
 }
 
 merkle_node *
-merkle_tree::lookup (u_int *depth, u_int max_depth, merkle_hash &key, merkle_node *n)
+merkle_tree::lookup (u_int *depth, u_int max_depth, const merkle_hash &key, merkle_node *n)
 {
   // recurse down as much as possible
   if (*depth == max_depth || n->isleaf ())
@@ -191,7 +190,7 @@ merkle_tree::insert (block *b)
 // return the node a given depth matching key
 // returns NULL if no such node exists
 merkle_node *
-merkle_tree::lookup_exact (u_int depth, merkle_hash &key)
+merkle_tree::lookup_exact (u_int depth, const merkle_hash &key)
 {
   u_int realdepth = 0;
   merkle_node *n = lookup (&realdepth, depth, key, &root);
@@ -203,14 +202,14 @@ merkle_tree::lookup_exact (u_int depth, merkle_hash &key)
 // Never returns NULL.
 // Never returns a node deeper than depth.
 merkle_node *
-merkle_tree::lookup (u_int depth, merkle_hash &key)
+merkle_tree::lookup (u_int depth, const merkle_hash &key)
 {
   u_int depth_ignore = 0;
   return lookup (&depth_ignore, depth, key, &root);
 }
 
 merkle_node *
-merkle_tree::lookup (u_int *depth, u_int max_depth, merkle_hash &key)
+merkle_tree::lookup (u_int *depth, u_int max_depth, const merkle_hash &key)
 {
   *depth = 0;
   return lookup (depth, max_depth, key, &root);
@@ -219,7 +218,7 @@ merkle_tree::lookup (u_int *depth, u_int max_depth, merkle_hash &key)
 // return the deepest node whose prefix matches key
 // Never returns NULL
 merkle_node *
-merkle_tree::lookup (merkle_hash &key)
+merkle_tree::lookup (const merkle_hash &key)
 {
   return lookup (merkle_hash::NUM_SLOTS, key);
 }

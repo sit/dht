@@ -42,6 +42,7 @@
 #include <chord.h>
 #include <route.h>
 #include <sfscrypt.h>
+#include <comm.h>
 
 #include <merkle.h>
 #include <merkle_server.h>
@@ -61,7 +62,7 @@ struct store_cbstate;
 
 typedef callback<void, int, ptr<dbrec>, dhash_stat>::ptr cbvalue;
 typedef callback<void, struct store_cbstate *,dhash_stat>::ptr cbstat;
-typedef callback<void,dhash_stat>::ptr cbstore;
+typedef callback<void, dhash_stat>::ptr cbstore;
 typedef callback<void,dhash_stat>::ptr cbstat_t;
 typedef callback<void, s_dhash_block_arg *>::ptr cbblockuc_t;
 typedef callback<void, s_dhash_storecb_arg *>::ptr cbstorecbuc_t;
@@ -177,9 +178,12 @@ class dhash {
   chordID replica_syncer_dstID;
   ptr<merkle_syncer> replica_syncer;
 
+  //ptr<dbEnumumeration> partition_enumeration;
   chordID partition_left;
   chordID partition_right;
   ptr<merkle_syncer> partition_syncer;
+
+  chordID partition_current;
 
   ihash<chordID, store_state, &store_state::key, 
     &store_state::link, hashID> pst;
@@ -196,11 +200,26 @@ class dhash {
   void sendblock (chord_node dst, bigint blockID, bool last, callback<void>::ref cb);
   void sendblock_cb (callback<void>::ref cb, dhash_stat err, chordID blockID);
 
+  void missing (chord_node from, bigint key);
+  void missing_retrieve_cb (bigint key, dhash_stat err, ptr<dhash_block> b, route r);
+
   void keyhash_mgr_timer ();
   void keyhash_mgr_lookup (chordID key, dhash_stat err, chordID host, route r);
   void keyhash_sync_done ();
   void partition_maintenance_lookup_cb (dhash_stat err, chordID hostID, route r);
   void partition_maintenance_pred_cb (chordID predID, net_address addr, chordstat stat);
+
+  void partition_maintenance_lookup_cb2 (bigint key, dhash_stat err, chordID hostID, route r);
+  void partition_maintenance_succs_cb2 (bigint key, vec<chord_node> succs, chordstat err);
+  void partition_maintenance_store2 (bigint key, vec<chord_node> succs, u_int already_count);
+  void partition_maintenance_store_cb2 (bigint key, vec<chord_node> succs, 
+				       u_int already_count, ref<dhash_storeres> res,
+				       clnt_stat err);
+
+
+
+
+
   void doRPC_unbundler (chord_node dst, RPC_delay_args *args);
 
 
@@ -213,7 +232,7 @@ class dhash {
   void dispatch (svccb *sbp, void *args, int procno);
   void sync_cb ();
 
-  void storesvc_cb (svccb *sbp, s_dhash_insertarg *arg, dhash_stat err);
+  void storesvc_cb (svccb *sbp, s_dhash_insertarg *arg, bool already_present, dhash_stat err);
   void fetch_cb (int cookie, cbvalue cb,  ptr<dbrec> ret);
   dhash_fetchiter_res * block_to_res (dhash_stat err, s_dhash_fetch_arg *arg,
 				      int cookie, ptr<dbrec> val);

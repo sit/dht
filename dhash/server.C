@@ -121,13 +121,18 @@ dhash::init_after_chord(ptr<vnode> node, ptr<route_factory> _r_factory)
   // merkle state
   msrv = New merkle_server (mtree, 
 			    wrap (node, &vnode::addHandler),
-			    wrap (this, &dhash::sendblock_XXX),
+			    wrap (this, &dhash::missing),
 			    host_node);
+
   replica_syncer_dstID = 0;
   replica_syncer = NULL;
   partition_left = 0;
   partition_right = 0;
   partition_syncer = NULL;
+  //XXX fix this...partition_enumeration = NULL;
+
+  partition_current = 0;
+
 
   merkle_rep_tcb = NULL;
   merkle_part_tcb = NULL;
@@ -196,6 +201,29 @@ dhash::sendblock (chord_node dst, bigint blockID, bool last, callback<void>::ref
   cli->storeblock (dst.x, blockID, dhblk, last,
 		   wrap (this, &dhash::sendblock_cb, cb), 
 		   DHASH_REPLICA);
+}
+
+
+void
+dhash::missing (chord_node from, bigint key)
+{
+  warn << host_node->my_ID () << ": missing key " << key << ", from " << from.x << "\n"; // 
+  cli->retrieve2 (key, 0, wrap (this, &dhash::missing_retrieve_cb, key));
+}
+
+void
+dhash::missing_retrieve_cb (bigint key, dhash_stat err, ptr<dhash_block> b, route r)
+{
+  if (err) {
+    warn << "Could not retrieve key " << key << "\n";
+    return;
+  } 
+
+  assert (b);
+  ref<dbrec> k = id2dbrec (key);
+  ref<dbrec> d = New refcounted<dbrec> (b->data, b->len);
+
+  dbwrite (k, d);
 }
 
 
@@ -277,6 +305,76 @@ dhash::keyhash_mgr_lookup (chordID key, dhash_stat err, chordID host, route r)
   }
 }
 
+// --------------------------------------------------------------------------------
+// replica maintenance
+
+void
+dhash::replica_maintenance_timer (u_int index)
+{
+  return;
+
+
+  merkle_rep_tcb = NULL;
+  update_replica_list ();
+
+#if 1
+  warn << "dhash::replica_maintenance_timer index " << index
+       << ", #replicas " << replicas.size() << "\n";
+#endif
+  
+  if (!replica_syncer || replica_syncer->done()) {
+    // watch out for growing/shrinking replica list
+    if (index >= replicas.size())
+      index = 0;
+    
+    if (replicas.size() > 0) {
+      chord_node replica = replicas[index];
+
+      if (replica_syncer) {
+#if 1
+        warn << "DONE " << replica_syncer->getsummary () << "\n";
+#endif
+	assert (replica_syncer->done());
+	assert (*active_syncers[replica_syncer_dstID] == replica_syncer);
+	active_syncers.remove (replica_syncer_dstID);
+	replica_syncer = NULL;
+      }
+
+      if (active_syncers[replica.x]) {
+	warnx << "replica_maint: already syncing with "
+	      << replica.x << ", skip\n";
+	replica_syncer = NULL;
+      }
+      else {
+        replica_syncer_dstID = replica.x;
+        replica_syncer = New refcounted<merkle_syncer> 
+	  (mtree, 
+	   wrap (this, &dhash::doRPC_unbundler, replica),
+	   wrap (this, &dhash::missing, replica));
+        active_syncers.insert (replica.x, replica_syncer);
+        
+        bigint rngmin = 0; //host_node->my_pred ();
+        bigint rngmax = bigint (1) << 160; //host_node->my_ID ();
+
+    
+#if 1
+        warn << "biSYNC with " << replicas[index]
+	     << " range [" << rngmin << ", " << rngmax << "]\n";
+#endif
+        replica_syncer->sync (rngmin, rngmax);
+      }
+
+      index = (index + 1) % nreplica;
+    }
+  }
+
+  merkle_rep_tcb =
+    delaycb (REPTM, wrap (this, &dhash::replica_maintenance_timer, index));
+}
+
+
+
+#if 0
 void
 dhash::replica_maintenance_timer (u_int index)
 {
@@ -326,7 +424,7 @@ dhash::replica_maintenance_timer (u_int index)
         warn << "biSYNC with " << replicas[index]
 	     << " range [" << rngmin << ", " << rngmax << "]\n";
 #endif
-        replica_syncer->sync (rngmin, rngmax, merkle_syncer::BIDIRECTIONAL);
+        replica_syncer->sync (rngmin, rngmax);
       }
 
       index = (index + 1) % nreplica;
@@ -336,6 +434,129 @@ dhash::replica_maintenance_timer (u_int index)
   merkle_rep_tcb =
     delaycb (REPTM, wrap (this, &dhash::replica_maintenance_timer, index));
 }
+#endif
+
+
+// --------------------------------------------------------------------------------
+// partition maintenance
+
+
+
+
+void
+dhash::partition_maintenance_timer ()
+{
+  return;
+  fatal << "XXX fix the delaycb values\n"; 
+
+  fatal <<  " XXX fix partition_enumeration\n";
+#if 0
+  ptr<dbPair> d = partition_enumeration->nextElement ();
+  if (!d)
+    d = partition_enumeration->firstElement ();
+  if (!d)
+    assert (mtree->root.count == 0);
+  else {
+    fatal << "we might legitimately hold d\n";
+
+    bigint key = dbrec2id(d->key);
+    cli->lookup (key, 0, wrap (this, &dhash::partition_maintenance_lookup_cb2, key));
+    return;
+  }
+
+  merkle_part_tcb = delaycb (PRTTM, wrap (this, &dhash::partition_maintenance_timer));
+#endif
+}
+
+
+void
+dhash::partition_maintenance_lookup_cb2 (bigint key, 
+					dhash_stat err, chordID hostID, route r)
+{
+  if (err) {
+    warn << "dhash::partition_maintenance_lookup_cb err " << err << "\n";
+    merkle_part_tcb = delaycb (0, wrap (this, &dhash::partition_maintenance_timer));
+    return;
+  } 
+
+  host_node->get_succlist (r.back (), 
+			   wrap (this, &dhash::partition_maintenance_succs_cb2, key));
+}
+
+
+void
+dhash::partition_maintenance_succs_cb2 (bigint key,
+					vec<chord_node> succs, chordstat err)
+{
+  if (err) {
+    warn << "dhash::partition_maintenance_lookup_cb err " << err << "\n";
+    merkle_part_tcb = delaycb (0, wrap (this, &dhash::partition_maintenance_timer));
+    return;
+  }
+
+  // only try to upload frags to the first 'NUM_EFRAGS' successors
+  while (succs.size () > NUM_EFRAGS)
+    succs.pop_back ();
+
+  assert (succs.size () == NUM_EFRAGS);
+  partition_maintenance_store2 (key, succs, 0);
+}
+
+void
+dhash::partition_maintenance_store2 (bigint key, vec<chord_node> succs, u_int already_count)
+{
+  if (succs.size () == 0) {
+    if (already_count == NUM_EFRAGS)
+      fatal << "DELETE " << key << "\n";
+
+    merkle_part_tcb = delaycb (0, wrap (this, &dhash::partition_maintenance_timer));
+    return;
+  }
+
+  ref<dhash_storeres> res = New refcounted<dhash_storeres> (DHASH_OK);
+  ref<s_dhash_insertarg> arg = New refcounted<s_dhash_insertarg> ();
+  chord_node dst = succs.pop_front ();
+  ptr<dbrec> blk = db->lookup (id2dbrec (key));
+  assert (blk);
+
+  arg->v = dst.x;   // destination chordID
+  arg->key = key;   // frag stored under hash(block)
+  arg->srcID = host_node->my_ID ();
+  host_node->locations->get_node (arg->srcID, &arg->from);
+  arg->data.setsize (blk->len);
+  memcpy (arg->data.base (), blk->value, blk->len);
+  arg->offset  = 0;
+  arg->type    = DHASH_CACHE; // XXX bit of a hack..see server.C::dispatch()
+  arg->nonce   = 0;
+  arg->attr.size  = arg->data.size ();
+  arg->last    = false;
+
+  // XXX use dst not dst.x
+  doRPC (dst.x, dhash_program_1, DHASHPROC_STORE,
+	 arg, res, wrap (this, &dhash::partition_maintenance_store_cb2, 
+			 key, succs, already_count, res));
+}
+
+
+void
+dhash::partition_maintenance_store_cb2 (bigint key, vec<chord_node> succs, 
+				       u_int already_count, ref<dhash_storeres> res,
+				       clnt_stat err)
+{
+  if (err)
+    fatal << "dhash::pms_cb: store failed: " << err << "\n";
+  else if (res->status != DHASH_OK)
+    fatal << "dhash::pms_cb: store failed: " << res->status << "\n";
+
+  if (res->resok->already_present) 
+    partition_maintenance_store2 (key, succs, already_count + 1);
+  else {
+    fatal << "DELETE " << key << "\n";
+    merkle_part_tcb = delaycb (0, wrap (this, &dhash::partition_maintenance_timer));
+  }
+}
+
+
 
 #if 0
    // maintenance is continual
@@ -353,9 +574,12 @@ dhash::replica_maintenance_timer (u_int index)
           if (key == NO_MORE_KEYS)
              break;
 #endif
+
+#if 0
 void
 dhash::partition_maintenance_timer ()
 {
+#if 0
   merkle_part_tcb = NULL;
 
 #if 0
@@ -397,6 +621,7 @@ dhash::partition_maintenance_timer ()
   }
 
   merkle_part_tcb = delaycb (PRTTM, wrap (this, &dhash::partition_maintenance_timer));
+#endif
 }
   
 
@@ -405,6 +630,7 @@ dhash::partition_maintenance_timer ()
 void
 dhash::partition_maintenance_lookup_cb (dhash_stat err, chordID hostID, route r)
 {
+#if 0
   if (err) {
     warn << "dhash::partition_maintenance_lookup_cb err " << err << "\n";
     delaycb (PRTTM, wrap (this, &dhash::partition_maintenance_timer));
@@ -413,6 +639,7 @@ dhash::partition_maintenance_lookup_cb (dhash_stat err, chordID hostID, route r)
     host_node->get_predecessor
       (hostID, wrap (this, &dhash::partition_maintenance_pred_cb));
   }
+#endif
 }
 
 
@@ -420,6 +647,7 @@ void
 dhash::partition_maintenance_pred_cb (chordID predID, net_address addr,
                                       chordstat status)
 {
+#if 0
   if (status) {
     warn << "dhash::partition_maintenance_pred_cb status " << status << "\n";
   }
@@ -455,8 +683,9 @@ dhash::partition_maintenance_pred_cb (chordID predID, net_address addr,
   }
 
   delaycb (PRTTM, wrap (this, &dhash::partition_maintenance_timer));
+#endif
 }
-
+#endif
 
 
 void 
@@ -639,8 +868,10 @@ dhash::dispatch (svccb *sbp, void *args, int procno)
 	res.pred->p.x = pred;
         res.pred->p.r = host_node->locations->getaddress (pred);
 	doRPC_reply (sbp, &res, dhash_program_1, DHASHPROC_STORE);
-      } else
-	store (sarg, wrap(this, &dhash::storesvc_cb, sbp, sarg));	
+      } else {
+	bool already_present = !!db->lookup (id2dbrec (sarg->key));
+	store (sarg, wrap(this, &dhash::storesvc_cb, sbp, sarg, already_present));	
+      }
 
     }
     break;
@@ -741,12 +972,14 @@ dhash::unregister_block_cb (int nonce)
 void
 dhash::storesvc_cb(svccb *sbp,
 		   s_dhash_insertarg *arg,
+		   bool already_present,
 		   dhash_stat err) {
   
   dhash_storeres res (DHASH_OK);
   if ((err != DHASH_OK) && (err != DHASH_STORE_PARTIAL)) 
     res.set_status (err);
   else {
+    res.resok->already_present = already_present;
     res.resok->source = host_node->my_ID ();
     res.resok->done = (err == DHASH_OK);
   }
@@ -1128,10 +1361,12 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
     ref<dbrec> k = id2dbrec(arg->key);
     ref<dbrec> d = New refcounted<dbrec> (ss->buf, ss->size);
 
+#if 0
     if (active_syncers[arg->srcID]) {
       ptr<merkle_syncer> syncer = *active_syncers[arg->srcID];
       syncer->recvblk (arg->key, arg->last);
     }
+#endif
 
     dhash_ctype ctype = block_type (d);
 
@@ -1206,7 +1441,8 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
     dhash_stat stat = DHASH_OK;
     if (ignore && arg->type == DHASH_STORE)
       stat = DHASH_STALE;
-    store_cb (arg->type, arg->from, arg->key, arg->srcID, arg->nonce, cb, stat);
+
+    cb (stat);
   }
   else
     cb (DHASH_STORE_PARTIAL);
@@ -1245,26 +1481,6 @@ dhash::send_storecb (chord_node sender, chordID srcID, uint32 nonce, dhash_stat 
   host_node->locations->cacheloc (sender.x, sender.r,
 				  wrap (this, &dhash::send_storecb_cacheloc,
 				        srcID, nonce, stat));
-}
-
-void
-dhash::store_cb (store_status type, chord_node sender,
-                 chordID key, chordID srcID, int32 nonce, cbstore cb, dhash_stat stat) 
-{
-  (*cb) (stat);
-
-  if (!stat && type == DHASH_STORE)
-    replicate_key
-      (key, wrap (this, &dhash::store_repl_cb, cb, sender, srcID, nonce));
-
-  // don't need to send storecb RPC if type is NOT DHASH_STORE or if
-  // there is an error
-
-  store_state *ss = pst[key];
-  if (ss) {
-    pst.remove (ss);
-    delete ss;
-  }
 }
 
 void
@@ -1307,23 +1523,6 @@ dhash::responsible(const chordID& n)
 void
 dhash::doRPC_unbundler (chord_node dst, RPC_delay_args *args)
 {
-  // All values bundled in 'args' because of the limit on
-  // the max number of wrap argument (in callback.h)
-  //
-  // All merkle RPCs start with dst and src (chord_node).
-  // This code stamps these on the RPC, so the merkle 
-  // code doesn't have to.
-
-  chord_node self;
-  self.x = -1;  // XXX hacky
-  host_node->locations->get_node (host_node->my_ID (), &self);
-  assert (self.x != -1); 
-
-  void *in = args->in;
-  getnode_arg *arg = static_cast<getnode_arg *>(in);
-  arg->dst = dst;
-  arg->src = self;
-
   host_node->doRPC (dst, args->prog, args->procno, args->in, args->out, args->cb);
 }
 

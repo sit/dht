@@ -236,4 +236,5 @@ public:
 };
 
 
+
 #endif /* _MERKLE_MISC_H_ */

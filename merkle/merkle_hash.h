@@ -10,14 +10,7 @@
 
 #undef setbit
 
-#if 1
-#define NEWDB 1
 #include "dbfe.h"
-#else
-class database;
-typedef database dbfe;
-#endif
-
 
 class merkle_hash {
 private:

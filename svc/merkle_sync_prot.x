@@ -86,6 +86,45 @@ union getblockrange_res switch (merkle_stat status) {
    void;
 };
 
+/***********************************************************/
+/* GETKEYS */
+
+struct getkeys_arg {
+  bigint rngmin;
+  bigint rngmax;
+};
+
+struct getkeys_res_ok {
+  merkle_hash keys<64>;
+  bool morekeys;
+};
+
+union getkeys_res switch (merkle_stat status) {
+ case MERKLE_OK:
+   getkeys_res_ok resok;
+ default:
+   void;
+};
+
+
+/***********************************************************/
+/* SENDNODE */
+
+struct sendnode_arg {
+  chord_node dst;
+  chord_node src;
+  merkle_rpc_node node;
+};
+
+union sendnode_res switch (merkle_stat status) {
+ case MERKLE_OK:
+   merkle_rpc_node node;
+ default:
+   void;
+};
+
+
+
 program MERKLESYNC_PROGRAM {
 	version MERKLESYNC_VERSION {
 	        getnode_res
@@ -96,6 +135,12 @@ program MERKLESYNC_PROGRAM {
 		 
 		getblockrange_res
                 MERKLESYNC_GETBLOCKRANGE (getblockrange_arg) = 4;
+
+	        sendnode_res
+		MERKLESYNC_SENDNODE (sendnode_arg) = 5;
+
+                getkeys_res
+                MERKLESYNC_GETKEYS (getkeys_arg) = 6;
 
 	} = 1;
 } = 344450;
