@@ -1,6 +1,12 @@
 %#include <chord_types.h>
 %#include <dhash_types.h>
 
+%#if 0
+%# Imports for Python
+%import chord_types
+%import dhash_types
+%#endif /* 0 */
+
 /*  -------------------------------------------------------------------------- 
  *  The DHASHGATEWAY_PROGRAM is the very narrow interface between clients of 
  *  dhash (such as chordcd, sfsrodb, dbm) and the lsd process.  Since this RPC 
