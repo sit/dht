@@ -29,8 +29,15 @@ enum store_status {
   DHASH_REPLICA = 3
 };
 
+enum dhash_ctype {
+  DHASH_CONTENTHASH = 0,
+  DHASH_KEYHASH = 1,
+  DHASH_DNSSEC = 2,
+};
+
 struct dhash_blockattr {
   unsigned size;
+  dhash_ctype ctype;
 };
 
 struct dhash_insertarg {
@@ -90,8 +97,8 @@ struct dhash_resok {
 union dhash_res switch (dhash_stat status) {
  case DHASH_OK:
    dhash_resok resok;
-default:
-   void;
+ default:
+   int32 hops;
 };
 
 struct dhash_storeresok {

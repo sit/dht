@@ -14,6 +14,13 @@ ddns::ddns (const char *control_skt, int vnode) :
   dhash_clnt->scall (DHASHPROC_ACTIVE, &vnode, &ares);
 }
 
+void
+ddns::setactive (int vnode)
+{
+  dhash_stat ares;
+  dhash_clnt->scall (DHASHPROC_ACTIVE, &vnode, &ares);
+}
+
 ptr<aclnt> 
 ddns::get_dclnt () 
 {
@@ -217,12 +224,15 @@ ddns::lookup_cb (domain_name dname, chordID key,
 		 ref<dhash_res> res, ddns::lcb_t lcb, clnt_stat err)
 {
   if (err || (res->status != DHASH_OK)) {
+    if (res->status != DHASH_OK)
+      warn << *res->hops << " hops: ";
     if (res->status == DHASH_NOENT)
-      warn << globalhops << " hops: no entry for " << dname << "\n";
+      warn << "no entry for " << dname << "\n";
     else 
       warn << "lookup_cb: Err: " << strerror (err) 
 	   << " dhash_lookup status: " << res->status << "\n";
   } else {
+    warn << res->resok->hops << " hops: ";
     int off = res->resok->res.size ();
     if (off == (int) res->resok->attr.size) {
       int offset = 0, dnamelen = strlen (dname) + 1;

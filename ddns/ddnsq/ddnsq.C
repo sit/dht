@@ -156,6 +156,7 @@ cmdinsert(int argc, char **argv)
   ptr<ddnsRR> rr = mkrr(strdup(argv[0]), get_dtype(argv[1]), argc-2, &argv[2]);
   if(rr == nil)
     return "parse error";
+  ddns_clnt->setactive(rand()&0xFFFF);
   ddns_clnt->store(strdup(argv[0]), rr);
   return nil;
 }
@@ -203,7 +204,6 @@ printrr(ptr<ddnsRR> rr)
 {
   unsigned char *a;
 
-  cout << globalhops << "hops: ";
   cout << rr->dname << " " << typestr(rr->type);
   for(; rr; rr=rr->next){
     cout << " ";
@@ -267,6 +267,7 @@ cmdlookup(int argc, char **argv)
 {
   if(argc != 2)
     return "usage: lookup name type";
+  ddns_clnt->setactive(rand()&0xFFFF);
   ddns_clnt->lookup(strdup(argv[0]), get_dtype(argv[1]), wrap(printrr));
   return nil;
 }
@@ -305,6 +306,7 @@ main (int argc, char **argv)
     usage();
   }
     
+  srand(getpid()+time(0));
   sfsconst_init ();
   ddns_clnt = New refcounted<ddns> (control_socket, 0);
   for(;;){

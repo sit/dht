@@ -262,6 +262,7 @@ class chord : public virtual refcount {
   //'wrappers' for vnode functions (to be called from higher layers)
   void set_active (int n) { 
     int i=0;
+    n %= nvnode;
     qhash_slot<chordID, ref<vnode> > *s = vnodes.first ();
     while ( (s) && (i++ < n)) s = vnodes.next (s);
     if (!s) active = vnodes.first ()->value;

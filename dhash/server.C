@@ -872,19 +872,19 @@ dhash::fetch_cb (cbvalue cb, ptr<dbrec> ret)
 void 
 dhash::store (dhash_insertarg *arg, cbstore cb)
 {
-
   store_state *ss = pst[arg->key];
-  if (arg->data.size () != arg->attr.size) {
-    if (!ss) {
-      store_state *nss = New store_state (arg->key, arg->attr.size);
-      pst.insert(nss);
-      ss = nss;
-    }
-    ss->read += arg->data.size ();
-    memcpy (ss->buf + arg->offset, arg->data.base (), arg->data.size ());
+
+  if (ss == NULL) {
+    ss = New store_state (arg->key, arg->attr.size);
+    pst.insert(ss);
   }
 
-  if (store_complete(arg)) {
+  if (!ss->addchunk(arg->offset, arg->offset+arg->data.size (), arg->data.base ())) {
+    cb (DHASH_ERR);
+    return;
+  }
+
+  if (ss->iscomplete()) {
     ptr<dbrec> k = id2dbrec(arg->key);
     ptr<dbrec> d = NULL;
     if (!ss)
@@ -895,39 +895,25 @@ dhash::store (dhash_insertarg *arg, cbstore cb)
     dhash_stat stat;
     chordID id = arg->key;
     if (arg->type == DHASH_STORE) {
-      keys_stored++;
       stat = DHASH_STORED;
-      key_store.enter (id, &stat);
+      keys_stored += key_store.enter (id, &stat);
     } else if (arg->type == DHASH_REPLICA) {
-      keys_replicated++;
       stat = DHASH_REPLICATED;
-      key_replicate.enter (id, &stat);
+      keys_replicated += key_replicate.enter (id, &stat);
     } else {
-      keys_cached++;
       stat = DHASH_CACHED;
-      key_cache.enter (id, &stat);
+      keys_cached += key_cache.enter (id, &stat);
     }
 
     /* statistics */
-    if (ss) bytes_stored += ss->size;
-    else bytes_stored += arg->data.size ();
+    if (ss)
+      bytes_stored += ss->size;
+    else
+      bytes_stored += arg->data.size ();
     
     db->insert (k, d, wrap(this, &dhash::store_cb, arg->type, id, cb));
-
-    
   } else
     cb (DHASH_STORE_PARTIAL);
-
-}
-
-bool
-dhash::store_complete (dhash_insertarg *arg) 
-{
-  if (arg->data.size () == arg->attr.size) return true;
-  store_state *ss = pst[arg->key];
-  if (!ss) return false;
-  else
-    return (ss->read >= arg->attr.size);
 }
 
 void

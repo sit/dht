@@ -79,13 +79,16 @@ public:
 
   ~vs_cache () { entries.deleteall (); }
   void flush () { entries.deleteall (); }
-  void enter ( KEY& kk,  VALUE *vv)
+  int enter ( KEY& kk,  VALUE *vv)
     {
       cache_entry *ad = entries[kk];
-      if (!ad)
+      if (!ad) {
 	vNew cache_entry (this, kk, vv);
-      else 
+        return 1;
+      } else {
 	ad->touch ();
+        return 0;
+      }
     }
   
   void remove (KEY& k) 

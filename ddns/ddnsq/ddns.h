@@ -142,6 +142,7 @@ class ddns {
   ~ddns ();
   void store (domain_name, ref<ddnsRR>);
   void lookup (domain_name, dns_type, ddns::lcb_t);
+  void setactive (int);
   
 };
 

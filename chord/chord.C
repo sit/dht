@@ -571,6 +571,16 @@ vnode::stabilize_getsucc_cb (chordID s, net_address r, chordstat status)
   }
 }
 
+/*
+ * RSC: I think that we should be using some sort of AI/MD so that
+ * if things start changing we can adapt.  Right now once we get slow
+ * we stay slow forever.  At the least, we need some sort of increase
+ * (right now we're just MD).  However, if I turn on aimd, then the
+ * Chord finger tables start dying, presumably because the increased
+ * update frequency tickles a bug elsewhere.  That's a project for
+ * another day.
+ */
+#define aimd 0
 void
 vnode::stabilize_backoff (int f, int s, u_int32_t t)
 {
@@ -583,15 +593,22 @@ vnode::stabilize_backoff (int f, int s, u_int32_t t)
     stable = false;
   }
   if (nout_backoff > 0) {
-    t = 2 * t;
+    if(aimd)
+      t = (int)(1.2 * t);
+    else
+     t *= 2;
     // warnx << "stabilize_backoff: " << myID << " " << nout_backoff 
     //  << " slow down " << t << "\n";
   } else {
     f = stabilize_finger (f);
     s = stabilize_succlist (s);
-    if (isstable () && (t <= stabilize_timer_max * 1000)) {
-      t = 2 * t;
-    }
+    if (isstable () && (t <= stabilize_timer_max * 1000))
+      if(aimd)
+        t = (int)(1.2 * t);
+      else
+        t *= 2;
+    else if (aimd && t > 100)
+      t -= 100;
   }
   u_int32_t t1 = uniform_random (0.5 * t, 1.5 * t);
   u_int32_t sec = t1 / 1000;

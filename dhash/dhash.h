@@ -68,21 +68,38 @@ struct store_cbstate {
   { r = nreplica + 1; };
 };
 
+struct store_chunk {
+  store_chunk *next;
+  unsigned int start;
+  unsigned int end;
+
+  store_chunk (unsigned int s, unsigned int e, store_chunk *n) : next(n), start(s), end(e) {};
+  ~store_chunk () {};
+};
+
 struct store_state {
   chordID key;
-  unsigned int read;
   unsigned int size;
+  store_chunk *have;
   char *buf;
   route path;
 
   ihash_entry <store_state> link;
-
-  store_state (chordID k, int z) : key(k), 
-    read(0), size(z), buf(New char[z]) { };
+   
+  store_state (chordID k, unsigned int z) : key(k), 
+    size(z), have(0), buf(New char[z]) { };
 
   ~store_state () { 
     delete[] buf; 
+    store_chunk *cnext;
+    for (store_chunk *c=have; c; c=cnext) {
+      cnext = c->next;
+      delete c;
+    }
   };
+
+  bool addchunk (unsigned int start, unsigned int end, void *base);
+  bool iscomplete ();
 };
 
 struct query_succ_state {
@@ -145,11 +162,11 @@ class dhashclient {
   void send_block (chordID key, chordID to, store_status stat);
   void send_store_cb (dhash_storeres *res, clnt_stat err);
 
-  void memorize_block (chordID key, dhash_fetchiter_res *res, route path);
-  void memorize_block (chordID key, dhash_fetchiter_res *res);
-  void memorize_block (chordID key, int tsize, 
+  void save_chunk (chordID key, dhash_fetchiter_res *res, route path);
+  void save_chunk (chordID key, dhash_fetchiter_res *res);
+  void save_chunk (chordID key, int tsize, 
 		       int offset, void *base, int dsize);
-  bool block_memorized (chordID key);
+  bool block_complete (chordID key);
   void forget_block (chordID key);
 
  public:  
@@ -198,7 +215,6 @@ class dhash {
   void store (dhash_insertarg *arg, cbstore cb);
   void store_cb(store_status type, chordID id, cbstore cb, int stat);
   void store_repl_cb (cbstore cb, dhash_stat err);
-  bool store_complete (dhash_insertarg *arg);
 
   void get_keys_traverse_cb (ptr<vec<chordID> > vKeys,
 			     chordID mypred,
@@ -292,7 +308,5 @@ class dhash {
   dhash_stat key_status(chordID n);
     
 };
-
-extern long globalhops;
 
 #endif

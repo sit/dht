@@ -70,13 +70,10 @@ dhashclient::dispatch (svccb *sbp)
       
       ptr<dhash_fetch_arg> arg = New refcounted<dhash_fetch_arg> (*farg);
 
-      chordID next = clntnode->lookup_closestpred (arg->key);
-      //chordID next = clntnode->clnt_ID ();
-      //      warn << clntnode->clnt_ID () << " " << arg->key  << " " << next << "\n";
       dhash_fetchiter_res *i_res = New dhash_fetchiter_res (DHASH_CONTINUE);
       route path;
-      path.push_back (next);
-      doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, arg,i_res,
+      path.push_back (clntnode->clnt_ID ());
+      doRPC (path[0], dhash_program_1, DHASHPROC_FETCHITER, arg,i_res,
 		       wrap(this, &dhashclient::lookup_iter_cb, 
 			    sbp, i_res, path, 0));
     } 
@@ -167,7 +164,7 @@ dhashclient::lookup_res_cb (svccb *sbp, dhash_fetchrecurs_res *res, clnt_stat er
     fres->resok->hops = res->compl_res->hops;
     fres->resok->source = res->compl_res->source;
   } else
-    fres->set_status (DHASH_NOENT);
+    *fres->hops = res->compl_res->hops;
 
   sbp->reply (fres);
   
@@ -183,6 +180,7 @@ dhashclient::insert_findsucc_cb(svccb *sbp, ptr<dhash_insertarg> item,
     dhash_res res;
     warn << "error finding sucessor\n";
     res.set_status(DHASH_CHORDERR);
+    *res.hops = path.size()-1;
     sbp->reply(&res);
   } else {
 
@@ -256,6 +254,17 @@ dhashclient::straddled (route path, chordID &k)
   return between (pprev, prev, k);
 }
 
+static void
+replyerror(svccb *sbp, dhash_stat stat, int hops)
+{
+  assert (stat != DHASH_OK);
+  dhash_res *res = New dhash_res (stat);
+  *res->hops = hops;
+  sbp->reply (res);
+  delete res;
+}
+  
+
 void 
 dhashclient::lookup_iter_cb (svccb *sbp, 
 			     dhash_fetchiter_res *res,
@@ -281,8 +290,7 @@ dhashclient::lookup_iter_cb (svccb *sbp,
       path.push_back (plast);
     }
     if (plast == clntnode->clnt_ID ()) {
-      globalhops = path.size();
-      sbp->replyref (DHASH_NOENT);
+      replyerror (sbp, DHASH_NOENT, path.size()-1 + nerror*100);
     } else {
       dhash_fetchiter_res *nres = New dhash_fetchiter_res (DHASH_CONTINUE);
       /* assumes an in-order RPC transport, otherwise retry
@@ -294,12 +302,12 @@ dhashclient::lookup_iter_cb (svccb *sbp,
     }
   } else if (res->status == DHASH_COMPLETE) {
     /* CASE II */
-    memorize_block (arg->key, res, path);
+    save_chunk (arg->key, res, path);
     dhash_res *fres = New dhash_res (DHASH_OK);
     fres->resok->res = res->compl_res->res;
     fres->resok->offset = res->compl_res->offset;
     fres->resok->attr = res->compl_res->attr;
-    fres->resok->hops = path.size () + nerror * 100;
+    fres->resok->hops = path.size()-1 + nerror*100;
     fres->resok->source = path.back ();
     cache_on_path (arg->key, path);
     sbp->reply (fres);
@@ -308,8 +316,7 @@ dhashclient::lookup_iter_cb (svccb *sbp,
     chordID next = res->cont_res->next.x;
     chordID prev = path.back ();
     if ((next == prev) || (straddled (path, arg->key))) {
-      globalhops = path.size();
-      sbp->replyref (DHASH_NOENT);
+      replyerror (sbp, DHASH_NOENT, path.size()-1 + nerror*100);
     } else {
       clntnode->locations->cacheloc (next, res->cont_res->next.r);
       dhash_fetchiter_res *nres = New dhash_fetchiter_res (DHASH_CONTINUE);
@@ -325,8 +332,7 @@ dhashclient::lookup_iter_cb (svccb *sbp,
 
   } else {
     /* the last node queried was responbile but doesn't have it */
-    globalhops = path.size();
-    sbp->replyref (DHASH_NOENT);
+    replyerror (sbp, DHASH_NOENT, path.size()-1 + nerror*100);
   }
 
   delete res;
@@ -351,7 +357,7 @@ dhashclient::transfer_cb (chordID key, svccb *sbp,
     res->set_status (DHASH_RPCERR);
   else {
     iterres2res(ires, res);
-    memorize_block (key, ires);
+    save_chunk (key, ires);
     assert (pst[key]);
     cache_on_path (key, pst[key]->path);
   }
@@ -381,10 +387,11 @@ dhashclient::send_cb (svccb *sbp, dhash_storeres *res,
 };
 				  
 void
-dhashclient::memorize_block (chordID key, dhash_fetchiter_res *res, route path) 
+dhashclient::save_chunk (chordID key, dhash_fetchiter_res *res, route path) 
 {
-  if (res->status != DHASH_COMPLETE) return;
-  memorize_block (key, res->compl_res->attr.size,
+  if (res->status != DHASH_COMPLETE)
+    return;
+  save_chunk (key, res->compl_res->attr.size,
 		  res->compl_res->offset,
 		  res->compl_res->res.base (),
 		  res->compl_res->res.size ());
@@ -394,17 +401,79 @@ dhashclient::memorize_block (chordID key, dhash_fetchiter_res *res, route path)
 
 }
 void
-dhashclient::memorize_block (chordID key, dhash_fetchiter_res *res) 
+dhashclient::save_chunk (chordID key, dhash_fetchiter_res *res) 
 {
-  if (res->status != DHASH_COMPLETE) return;
-  memorize_block (key, res->compl_res->attr.size,
+  if (res->status != DHASH_COMPLETE)
+    return;
+  save_chunk (key, res->compl_res->attr.size,
 		  res->compl_res->offset,
 		  res->compl_res->res.base (),
 		  res->compl_res->res.size ());
 }
+
+static void
+join(store_chunk *c)
+{
+  store_chunk *cnext;
+
+  while (c->next && c->end >= c->next->start) {
+    cnext = c->next;
+    if (c->end < cnext->end)
+      c->end = cnext->end;
+    c->next = cnext->next;
+    delete cnext;
+  }
+}
+
+bool
+store_state::iscomplete()
+{
+  return have && have->start==0 && have->end==(unsigned)size;
+}
+
+bool
+store_state::addchunk(unsigned int start, unsigned int end, void *base)
+{
+  store_chunk **l, *c;
+
+  warn << "store_state";
+  for(c=have; c; c=c->next)
+    warnx << " [" << (int)c->start << " " << (int)c->end << "]";
+  warnx << "; add [" << (int)start << " " << (int)end << "]\n";
+
+  if(start >= end)
+    return false;
+
+  if(start >= end || end > size)
+    return false;
+  
+  l = &have;
+  for (l=&have; *l; l=&(*l)->next) {
+    c = *l;
+    // our start touches this block
+    if (c->start <= start && start <= c->end) {
+      // we have new data
+      if (end > c->end) {
+        memmove (buf+start, base, end-start);
+        c->end = end;
+        join(c);
+      }
+      return true;
+    }
+    // our start comes before this block; break to insert
+    if (start < c->start)
+      break;
+  }
+  *l = New store_chunk(start, end, *l);
+  memmove(buf+start, base, end-start);
+  join(*l);
+  return true;
+}
+
+
 void
-dhashclient::memorize_block (chordID key, int tsize, 
-			     int offset, void *base, int dsize)
+dhashclient::save_chunk (chordID key, int tsize, 
+			     int start, void *base, int dsize)
 {
   store_state *ss = pst[key];
   if (!ss) {
@@ -412,15 +481,14 @@ dhashclient::memorize_block (chordID key, int tsize,
     pst.insert(nss);
     ss = nss;
   } 
-  ss->read += dsize;
-  memcpy (ss->buf + offset, base, dsize);
+  ss->addchunk(start, start+dsize, base);
 }
 
 bool
-dhashclient::block_memorized (chordID key) 
+dhashclient::block_complete (chordID key) 
 {
   store_state *ss = pst[key];
-  return (ss->read == ss->size);
+  return ss && ss->iscomplete();
 }
 
 void 
@@ -436,15 +504,16 @@ dhashclient::forget_block (chordID key)
 void
 dhashclient::cache_on_path (chordID key, route path)
 {
-  if (!do_caching) {
-    if (block_memorized (key)) forget_block (key);
+  warn << clntnode->clnt_ID () << ": fetched " << key << " via";
+  for (unsigned int i=0; i<path.size (); i++)
+    warnx << " " << path[i];
+  warnx << "\n";
+
+  if (!block_complete (key))
     return;
-  }
-  if (!block_memorized (key)) return;
 
-  if (path.size () < 2) return;
-
-  send_block (key, path[path.size () - 2], DHASH_CACHE);
+  if (do_caching && path.size () >= 2)
+    send_block (key, path[path.size () - 2], DHASH_CACHE);
   forget_block (key);
 }
 
@@ -468,6 +537,7 @@ dhashclient::send_block (chordID key, chordID to, store_status stat)
     i_arg->type = stat;
     memcpy(i_arg->data.base (), ss->buf + off, remain);
     
+    warn << "DHASH STORE " << key << " " << off << "+" << remain << " on " << to << "\n";
     doRPC(to, dhash_program_1, DHASHPROC_STORE, 
 		    i_arg, res,
 		    wrap(this, &dhashclient::send_store_cb, res));
@@ -491,5 +561,3 @@ dhashclient::doRPC (chordID ID, rpc_program prog, int procno,
   clntnode->doRPC (from, ID, prog, procno,
 		   in, out, cb);
 }
-
-long globalhops;

@@ -146,6 +146,7 @@ stop ()
   for (int i = 0 ; i < ndhash; i++)
     dh[i]->stop ();
 }
+
 static void
 usage ()
 {
