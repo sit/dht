@@ -129,7 +129,8 @@ dhash::produce_dhash (str dbname, u_int nrepl)
 dhash_impl::~dhash_impl ()
 {
   // XXX Do we need to free stuff?
-  delete pmaint_obj;
+  if (pmaint_obj)
+    delete pmaint_obj;
 }
 
 static void
