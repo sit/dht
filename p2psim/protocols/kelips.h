@@ -22,12 +22,11 @@
 // Are lookups iterative or recursive? Who controls various retries?
 
 // To do:
-// prefer low-rtt contacts
+// route lookups through lowest-rtt contact.
 // make grouplist() &c faster
-// allow varying of parameters
-// read Indranil's e-mail
-// batch up consideration of new contacts:
-//   faster and gives time to collect RTT
+// fix churn generator to not lookup dead nodes?
+// learn RTTs from each gossip RPC
+// learn dead nodes from RPC failure
 
 // Does it stabilize after the expected number of rounds?
 // Gossip w/o favoring new nodes (nnodes: avg median):
@@ -101,8 +100,12 @@ public:
     IPAddress _ip;
     Time _heartbeat; // when _ip last spoke to anyone.
     int _rounds;     // how many rounds to send for.
-    Info(IPAddress ip, Time hb) { _ip = ip; _heartbeat = hb; _rounds = 0; }
-    Info() { _ip = 0; _heartbeat = 0; _rounds = 0; }
+    int _rtt;        // measured by us, -1 if not valid
+    Info(IPAddress ip, Time hb) { 
+      _ip = ip; _heartbeat = hb; _rounds = 0; _rtt = -1;
+    }
+    Info() { _ip = 0; _heartbeat = 0; _rounds = 0; _rtt = -1; }
+    int age() { return now() - _heartbeat; }
   };
 
   // Set of nodes that this node knows about.
@@ -139,8 +142,21 @@ public:
   IPAddress find_by_id(ID key);
   void init_state(list<Protocol*>);
   bool stabilized(vector<ID> lid);
-  void rpcstat(bool ok, int nsent, int nrecv);
+  void rpcstat(bool ok, IPAddress dst, int latency, int nitems);
   IPAddress victim(int g);
+  void handle_ping(void *, void *);
+  int contact_score(Info i);
+  IPAddress closest_contact(int g);
+
+  // RPC that records RTT.
+  template<class AT, class RT>
+    bool xRPC(IPAddress dst, int nitems, void (Kelips::* fn)(AT *, RT *),
+              AT *args, RT *ret ){
+    Time t1 = now();
+    bool ok = doRPC(dst, fn, args, ret);
+    rpcstat(ok, dst, now() - t1, nitems);
+    return ok;
+  };
 
   friend class KelipsObserver;
 };

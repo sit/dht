@@ -84,11 +84,31 @@ Kelips::~Kelips()
   }
 }
 
+// assign a score to a contact, to help decide which to keep.
+// lower is better. pretty ad-hoc.
+int
+Kelips::contact_score(Info i)
+{
+  int rtt = i._rtt;
+  if(rtt < 1)
+    rtt = 200; // make a guess on the high side.
+  int score = rtt + (i.age() / 100);
+  return score;
+}
+
 // Find the worst contact in the given group.
-// Right now that means the contact with the
-// oldest heartbeat; should be highest RTT (?).
 // Actually oldest heartbeat has some freshness advantages.
 // Returns 0 if there are less than _n_contacts.
+//
+// w/o rtt: p100/t100/e100 217.4 218.7 220.2
+// w/ evict oldest rtt: 216.8 209.2 212.2
+//    hmm: 237.2 231.5 232
+//    zzz: 223 223 223
+// w/ lookup via contact w/ best score: 225 229 216 222 204
+// fix initial _rtt bug:  219 219
+// record rtt after every doRPC: 206 203 207
+// penalize nodes after failed RPC: 189 192 192 189
+// lookup via closest contact, not best score: 191 197 191
 IPAddress
 Kelips::victim(int g)
 {
@@ -101,7 +121,7 @@ Kelips::victim(int g)
     Info *in = ii->second;
     if(ip2group(in->_ip) == g){
       n_in_group++;
-      if(worst == 0 || in->_heartbeat < worst->_heartbeat)
+      if(worst == 0 || contact_score(*in) > contact_score(*worst))
         worst = in;
     }
   }
@@ -110,6 +130,27 @@ Kelips::victim(int g)
   } else {
     return 0;
   }
+}
+
+// Return contact w/ lowest rtt, or zero.
+IPAddress
+Kelips::closest_contact(int g)
+{
+  Info *best = 0;
+
+  for(map<IPAddress, Info *>::const_iterator ii = _info.begin();
+      ii != _info.end();
+      ++ii){
+    Info *in = ii->second;
+    if(ip2group(in->_ip) == g){
+      if(best == 0 || best->_rtt == -1 ||
+         (in->_rtt < best->_rtt && in->_rtt != -1))
+        best = in;
+    }
+  }
+  if(best)
+    return best->_ip;
+  return 0;
 }
 
 void
@@ -131,8 +172,7 @@ Kelips::join(Args *a)
     // Tell wkn about us, and ask it for a few random nodes.
     IPAddress myip = ip();
     vector<Info> ret;
-    bool ok = doRPC(wkn, &Kelips::handle_join, &myip, &ret);
-    rpcstat(ok, 1, ret.size());
+    xRPC(wkn, 6, &Kelips::handle_join, &myip, &ret);
     for(u_int i = 0; i < ret.size(); i++)
       gotinfo(ret[i]);
   }
@@ -205,7 +245,7 @@ Kelips::lookup(Args *args)
 
   vector<IPAddress> l = all();
   for(u_int i = 0; i < l.size(); i++)
-    printf("%d ", l[i]);
+    printf("%d/%d ", l[i], _info[l[i]]->_rtt);
   printf("\n");
 }
 
@@ -235,10 +275,9 @@ Kelips::lookup_loop(ID key, vector<IPAddress> &history)
   return false;
 }
 
-// Look up a key via a randomly chosen contact.
+// Look up a key via closest contact.
 // The contact should return the IP address of
 // the lookup target, which we then try to talk to.
-// XXX Try closer contact first.
 bool
 Kelips::lookup1(ID key, vector<IPAddress> &history)
 {
@@ -249,22 +288,18 @@ Kelips::lookup1(ID key, vector<IPAddress> &history)
     if(ip1 == 0)
       return false;
   } else {
-    vector<IPAddress> cl = grouplist(id2group(key));
-    if(cl.size() < 1)
+    IPAddress ip = closest_contact(id2group(key));
+    if(ip == 0)
       return false;
-    IPAddress ip = cl[random() % cl.size()];
-
     history.push_back(ip);
-    bool ok = doRPC(ip, &Kelips::handle_lookup1, &key, &ip1);
-    rpcstat(ok, 1, 2);
+    bool ok = xRPC(ip, 3, &Kelips::handle_lookup1, &key, &ip1);
     if(!ok || ip1 == 0)
       return false;
   }
 
   bool done = false;
   history.push_back(ip1);
-  bool ok = doRPC(ip1, &Kelips::handle_lookup_final, &key, &done);
-  rpcstat(ok, 1, 1);
+  bool ok = xRPC(ip1, 2, &Kelips::handle_lookup_final, &key, &done);
 
   return(ok && done);
 }
@@ -281,22 +316,19 @@ Kelips::lookup2(ID key, vector<IPAddress> &history)
 
   IPAddress ip1 = 0;
   history.push_back(ip);
-  bool ok = doRPC(ip, &Kelips::handle_lookup2, &key, &ip1);
-  rpcstat(ok, 1, 1);
+  bool ok = xRPC(ip, 2, &Kelips::handle_lookup2, &key, &ip1);
   if(!ok || ip1 == 0)
     return false;
 
   IPAddress ip2 = 0;
   history.push_back(ip1);
-  ok = doRPC(ip1, &Kelips::handle_lookup1, &key, &ip2);
-  rpcstat(ok, 1, 1);
+  ok = xRPC(ip1, 2, &Kelips::handle_lookup1, &key, &ip2);
   if(!ok || ip2 == 0)
     return false;
 
   bool done = false;
   history.push_back(ip2);
-  ok = doRPC(ip2, &Kelips::handle_lookup_final, &key, &done);
-  rpcstat(ok, 1, 1);
+  ok = xRPC(ip2, 2, &Kelips::handle_lookup_final, &key, &done);
 
   return(ok && done);
 }
@@ -385,8 +417,6 @@ Kelips::handle_join(IPAddress *caller, vector<Info> *ret)
 // Remember the information, prepare to gossip it.
 // Enforce the invariant that we have at most 2 contacts
 // for each foreign group.
-// XXX should choose closest contacts.
-// XXX actually favors contacts with newer heartbeats. not in paper...
 void
 Kelips::gotinfo(Info i)
 {
@@ -405,7 +435,7 @@ Kelips::gotinfo(Info i)
       assert(x == 0 || ip2group(x) == g);
       if(x == 0){
         add = true;
-      } else if(i._heartbeat > _info[x]->_heartbeat){
+      } else if(i.age() < 4 * _info[x]->age()){
         Info *in = _info[x];
         assert(in);
         _info.erase(x);
@@ -416,6 +446,7 @@ Kelips::gotinfo(Info i)
     if(add){
       _info[i._ip] = New Info(i);
       _info[i._ip]->_rounds = _item_rounds;
+      _info[i._ip]->_rtt = -1;
     }
   } else if (i._heartbeat > _info[i._ip]->_heartbeat){
     _info[i._ip]->_heartbeat = i._heartbeat;
@@ -539,6 +570,11 @@ Kelips::gossip_msg(int g)
   return msg;
 }
 
+void
+Kelips::handle_ping(void *xx, void *yy)
+{
+}
+
 // One round of gossiping.
 // Pick a few items to send, and send them to a few other nodes.
 // XXX ought to send to nearby nodes preferentially (Section 2.1).
@@ -551,16 +587,26 @@ Kelips::gossip(void *junk)
     {
       vector<IPAddress> gl = randomize(grouplist(group()));
       for(u_int i = 0; i < _group_targets && i < gl.size(); i++){
-        bool ok = doRPC(gl[i], &Kelips::handle_gossip, &msg, (void *) 0);
-        rpcstat(ok, msg.size(), 0);
+        xRPC(gl[i], msg.size(), &Kelips::handle_gossip, &msg, (void *) 0);
       }
     }
 
     {
       vector<IPAddress> cl = randomize(notgrouplist(group()));
       for(u_int i = 0; i < _contact_targets && i < cl.size(); i++){
-        bool ok = doRPC(cl[i], &Kelips::handle_gossip, &msg, (void *) 0);
-        rpcstat(ok, msg.size(), 0);
+        xRPC(cl[i], msg.size(), &Kelips::handle_gossip, &msg, (void *) 0);
+      }
+    }
+
+    // ping one random node to find its RTT.
+    {
+      vector<IPAddress> l = all();
+      for(int iters = 0; l.size() > 0 && iters < 10; iters++){
+        IPAddress xip = l[random() % l.size()];
+        if(_info[xip]->_rtt == -1){
+          xRPC(xip, 2, &Kelips::handle_ping, (void*)0, (void*)0);
+          break;
+        }
       }
     }
 
@@ -648,9 +694,18 @@ Kelips::stabilized(vector<ID> lid)
 //   20 bytes header, 4 bytes/ID, 1 byte/other
 // (Kelips paper says 40 bytes per gossip entry...)
 void
-Kelips::rpcstat(bool ok, int nsent, int nrecv)
+Kelips::rpcstat(bool ok, IPAddress dst, int latency, int nitems)
 {
-  _rpc_bytes += 20 + nsent * 4; // paper says 40 bytes per node entry
+  _rpc_bytes += 20 + nitems * 4; // paper says 40 bytes per node entry
   if(ok)
-    _rpc_bytes += 20 + nrecv * 4;
+    _rpc_bytes += 20;
+
+  if(ok && _info.find(dst) != _info.end()){
+    _info[dst]->_rtt = latency;
+  }
+
+  if(ok == false && _info.find(dst) != _info.end()){
+    _info[dst]->_rtt = -1;
+    _info[dst]->_heartbeat = 1;
+  }
 }
