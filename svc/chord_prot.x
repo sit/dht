@@ -93,6 +93,7 @@ struct chord_testandfindarg {
   unsigned upcall_prog;
   unsigned upcall_proc;
   opaque upcall_args<>;
+  chordID failed_nodes<>;
 };
 
 struct chord_testandfindres_resok {
