@@ -3,6 +3,9 @@
 #include "dhash_prot.h"
 #include "merkle_misc.h"
 #include "dbfe.h"
+#include "dhash.h"
+#include <ida.h>
+
 
 #include "rxx.h"
 #include "async.h"
@@ -22,7 +25,7 @@ usage ()
 ptr<dbfe>
 opendb()
 {
-  unlink (dbname);
+  // unlink (dbname);
 
   dbOptions opts;
   opts.addOption("opt_async", 1);
@@ -63,6 +66,17 @@ marshal_dhashblock (char *buf, size_t buflen)
   } else {
     fatal << "Marshaling failed\n";
   }
+}
+
+ptr<dbrec>
+gen_frag (ptr<dbrec> block)
+{
+  // see: dhashcli::insert2_succs_cb ()
+  str blk (block->value, block->len);
+  str frag = Ida::gen_frag (NUM_DFRAGS, blk);
+  // prepend type of block onto fragment
+  str res (strbuf (block->value, 4) << frag);
+  return New refcounted<dbrec> (res.cstr (), res.len ());
 }
 
 int
@@ -107,7 +121,8 @@ main (int argc, char** argv)
       n++;
       ref<dbrec> key = New refcounted<dbrec> (&hash[0], sha1::hashsize);
       ptr<dbrec> data = marshal_dhashblock (&block[0], block_size);
-      db->insert (key, data);
+      ptr<dbrec> frag = gen_frag (data);
+      db->insert (key, frag);
       warn << dbrec2id (key) << "\n";
     } 
   }
