@@ -329,6 +329,41 @@ vnode_impl::lookup_closestsucc (const chordID &x)
   return s;
 }
 
+static inline
+bool candidate_is_closer (const chordID &c, // new candidate node
+			  const chordID &myID,
+			  const chordID &x, // target
+			  const vec<chordID> &failed, // avoid these
+			  const vec<float> &qc, // their coords
+			  float &mindist,   // previous best dist
+			  const ref<locationtable> locations)
+{
+  // Don't give back nodes that querier doesn't want.
+  if (in_vector (failed, c)) return false;
+  // Do not overshoot, do not go backwards.
+  if (!between (myID, x, c)) return false;
+      
+  vec<float> them = locations->get_coords (c);
+  if (!them.size ())
+    return false; // XXX weird.
+      
+  // See if this improves the distance.
+  float newdist = Coord::distance_f (qc, them);
+  if (mindist < 0 || newdist < mindist) {
+#if 0	
+    char dstr[24];
+    modlogger log = modlogger ("proximity-toe");
+    log << "improving " << x << " from ";
+    sprintf (dstr, "%10.2f", mindist);
+    log << dstr << " to ";
+    sprintf (dstr, "%10.2f", newdist);
+    log << dstr << "\n";
+#endif /* 0 */	
+    mindist = newdist;
+    return true;
+  }
+}
+
 chordID
 vnode_impl::closestcoordpred (const chordID &x, const vec<float> &n,
 			      const vec<chordID> &failed)
@@ -342,76 +377,53 @@ vnode_impl::closestcoordpred (const chordID &x, const vec<float> &n,
   // search the next few successors for the best choice for the querier.
   for (int i = 0; i < 3; i++) {
     chordID next = locations->closestsuccloc (incID (p));
-    if (!between (myID, x, next))
-      break;
-    if (in_vector (failed, next))
-      break;
-    pcoords = locations->get_coords (next);
-    if (pcoords.size () > 0) {
-      float ndist = Coord::distance_f (pcoords, n);
-      if (dist < 0 || ndist < dist) {
-#if 0	
-	char dstr[24];
-	modlogger log = modlogger ("proximity-finger");
-	log << "improving " << x << " from ";
-	sprintf (dstr, "%10.2f", dist);
-	log << dstr << " to ";
-	sprintf (dstr, "%10.2f", ndist);
-	log << dstr << "\n";
-#endif /* 0 */	
-	p = next;
-	dist = ndist;
-      }
-    }
+    if (candidate_is_closer (next, myID, x, failed, n, dist, locations))
+      p = next;
   }
   return p;
 }
 
+/*
+ * Find the best proximity or ID space move we can make for the chord
+ * querier located at n, towards x.
+ *
+ * This code assumes that myID is not the predecessor of x; in this
+ * case, testrange should be "inrange" and not doing this stuff.
+ */
 chordID
 vnode_impl::closestproxpred (const chordID &x, const vec<float> &n,
-			      const vec<chordID> &failed)
+			     const vec<chordID> &failed)
 {
-  chordID s = myID;
-  
-  vec<ptr<fingerlike> > sources;
-  sources.push_back (toes);
-  sources.push_back (fingers);
-  sources.push_back (successors);
+  chordID p = myID;
   
   float mindist = -1.0;
-  
-  for (size_t i = 0; i < sources.size (); i++) {
-    ref<fingerlike_iter> iter = sources[i]->get_iter ();
-    while (!iter->done ()) {
-      chordID c = iter->next ();
-      
-      // Don't give back nodes that querier doesn't want.
-      if (in_vector (failed, c)) continue;
-      // Do not overshoot, do not go backwards.
-      if (!between (myID, x, c)) continue;
-      
-      vec<float> them = locations->get_coords (c);
-      if (!them.size ())
-	continue; // XXX weird.
-      
-      // Always pick the possibility with the lowest distance.
-      float newdist = Coord::distance_f (n, them);
-      if (mindist < 0 || newdist < mindist) {
-#if 0	
-	char dstr[24];
-	modlogger log = modlogger ("proximity-toe");
-	log << "improving " << x << " from ";
-	sprintf (dstr, "%10.2f", mindist);
-	log << dstr << " to ";
-	sprintf (dstr, "%10.2f", newdist);
-	log << dstr << "\n";
-#endif /* 0 */	
-	mindist = newdist;
-	s = c;
-      }
-    }
+
+  ref<fingerlike_iter> iter = toes->get_iter ();
+  while (!iter->done ()) {
+    chordID c = iter->next ();
+    if (candidate_is_closer (c, myID, x, failed, n, mindist, locations))
+      p = c;
   }
-  return s;
+  // We have a toe that makes progress and is acceptable to the
+  // querier, let's go for it.
+  if (mindist >= 0.0)
+    return p;
+    
+  // No good toes?  Either we are too close, or they were all rejected.
+  // Fall back on making progress in ID space.
+  // XXX this is not what rtm had originally envisioned, which makes use
+  //     of knowledge of the successor list, but maybe it will do
+  //     for now.
+  {
+    chordID f = fingers->closestpred (x, failed);
+    chordID u = successors->closestpred (x, failed);
+    if (between (myID, f, u)) 
+      p = f;
+    else
+      p = u;
+  }
+
+  return p;
 }
 
 chordID
