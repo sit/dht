@@ -29,8 +29,10 @@ putcb (chordID bID, chordID writer, dhc_stat err)
   warn << "In putcb bID: " << bID << " writer: " << writer << "\n";
   if (!err) {
     warn << "            succeeded\n";
+#if 0
     if (n_writes++ < 1) 
       dhc_mgr[0]->get (ID1, wrap (getcb, ID1));
+#endif
   } else 
     warn << "            error status: " << err << "\n"; 
 }
@@ -62,7 +64,9 @@ start_recon_cb (dhc_stat err)
 {
   if (!err) {
     warn << "Recon succeeded\n";
+#if 0
     dhc_mgr[0]->get (ID1, wrap (getcb, ID1));
+#endif
   } else {
     warn << "Recon failed: " << err << "\n";
   }

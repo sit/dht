@@ -186,8 +186,12 @@ fetch_cb (dhashclient dhash, int btype, dhash_stat stat,
   if (!blk) {
     warn << "Error\n";
   }
-  else if (datasize != blk->len || memcmp (data, blk->data, datasize) != 0)
+  ptr<keyhash_payload> p = keyhash_payload::decode (blk);
+  if (!p ||
+      datasize != p->buf ().len () ||
+      memcmp (data, p->buf ().cstr (), datasize) != 0) {
     fatal << "verification failed";
+  }
   else {
     warn << "success\n path: ";
     for (unsigned int i = 0; i < path.size (); i++)
@@ -265,6 +269,7 @@ main (int argc, char **argv)
 
     str key = file2wstr (argv[4]);
     ptr<sfspriv> sk = sfscrypt.alloc_priv (key, SFS_SIGN);
+  
     keyhash_payload p (0, str (data, datasize));
     sfs_pubkey2 pk;
     sfs_sig2 s;
