@@ -61,8 +61,8 @@ extern unsigned int MTU;
 class dhash {
  public:
 
-  enum { NUM_EFRAGS = 12 };
-  enum { NUM_DFRAGS = 6 };
+  enum { NUM_EFRAGS = 14 };
+  enum { NUM_DFRAGS = 7 };
   enum { SYNCTM = 30 };
   enum { KEYHASHTM = 10 };
   enum { REPTM = 10 };
