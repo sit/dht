@@ -132,6 +132,7 @@ class ChordAdapt: public P2Protocol {
     static bool sorted;
     static vector<double> sort_live;
     static vector<double> sort_dead;
+    static vector<double> min_bw;
 
   protected:
     IDMap _me;

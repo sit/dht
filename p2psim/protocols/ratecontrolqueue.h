@@ -119,8 +119,10 @@ class RateControlQueue {
     void stop_queue();
     bool empty() { return (_qq.size() == 0 && (_quota) > 0) ;}
     int quota() { return _quota;}
+    uint total_bytes() { return _total_bytes;}
     uint size() { return _qq.size();}
     bool critical() { if (_qq.size() > 0 || _quota < (_burst/2)) return true; return false;}
+    bool very_critical() { if (_quota == _burst) return true; return false;}
 
    protected :
     void (*_empty_cb)(void *);

@@ -2444,8 +2444,9 @@ LocTable::pred_biggest_gap(Chord::IDMap &start, Chord::IDMap &end, Time stabtime
   double ti;
   idmapwrap *elmdel;
   while (1) {
+    ti = ((double)elm->n.alivetime/(double)(elm->n.alivetime+t-elm->n.timestamp));
+    /* i need to think more carefully about when to get rid of old nodes
     while (elm->status > LOC_HEALTHY) {
-      ti = ((double)elm->n.alivetime/(double)(elm->n.alivetime+t-elm->n.timestamp));
       if (ti >= 0.5)
 	break; //safe to evict this node
       elmdel = elm;
@@ -2453,7 +2454,9 @@ LocTable::pred_biggest_gap(Chord::IDMap &start, Chord::IDMap &end, Time stabtime
       if (!elm) elm = ring.first();
       ring.remove(elmdel->id);
       delete elmdel;
+      ti = ((double)elm->n.alivetime/(double)(elm->n.alivetime+t-elm->n.timestamp));
     }
+    */
     if (elm->n.ip!=me.ip && elm->status <= LOC_HEALTHY) {
       if (!oldn.ip ||  (elm->n.alivetime && ti < to && ti > oldti))
       oldti = ti;
@@ -2525,7 +2528,7 @@ LocTable::get_closest_in_gap(uint m, ConsistentHash::CHID end, Chord::IDMap src,
   idmapwrap *elm = ring.closestsucc(me.id+1);
   assert(elm);
   double ti;
-  while (elm->n.ip!=me.ip && ConsistentHash::between(me.id,end,elm->id)) {
+  while (elm->n.ip!=me.ip && elm->id!=end && ConsistentHash::between(me.id,end,elm->id)) {
     ti = (double)elm->n.alivetime/(double)(now() - elm->n.timestamp+elm->n.alivetime);
     if ((elm->status <= LOC_HEALTHY) && 
 	(to<0.000000001 
