@@ -2,6 +2,7 @@
 #include "packet.h"
 #include <iostream>
 #include "p2psim.h"
+#include "rpc.h"
 #include <stdlib.h>
 #include <stdio.h>
 using namespace std;
@@ -16,7 +17,6 @@ Pastry::Pastry(Node *n) : Protocol(n),
   _id = random();
   _id <<= 32;   // XXX: not very portable
   _id |= random();
-  printf("id = %llX\n", _id);
 }
 
 
@@ -60,10 +60,10 @@ Pastry::lookup(Args *args)
 unsigned
 Pastry::shared_prefix_len(NodeID n, NodeID m)
 {
-  NodeID mask;
-  for(unsigned int i=0; i<idlength; i++) {
-    mask = 1 << (idlength - i);
-    if(n | mask != m | mask)
+  NodeID mask = 0;
+  for(unsigned i=0; i<idlength; i++) {
+    mask = ((NodeID) 1) << (idlength-i-1);
+    if((n & mask) != (m & mask))
       return i;
   }
   return idlength;
@@ -71,13 +71,16 @@ Pastry::shared_prefix_len(NodeID n, NodeID m)
 
 // returns the value of digit d in n, given base 2^_b
 //
-// basically, the strategy is to divide the bits into groups of _b bits, and
-// then taking the d'th group.
+// The part before the & considers the number to be divided in chunks of _b
+// bits.  Since we want the d'th chunk (counted from the left) we shift to the
+// right until the chunk we want is on the right side of the number.
 //
+// The part after the & simply creates a mask of _b 1's to mask out the chunks
+// we don't want.
 unsigned
-Pastry::get_digit(NodeID nx, unsigned d)
+Pastry::get_digit(NodeID n, unsigned d)
 {
-  return (nx >> (idlength-_b*d)) | _b;
+  return (n >> (idlength-_b*d)) & ((((NodeID) 1) << _b) - 1);
 }
 
 
@@ -85,7 +88,7 @@ Pastry::get_digit(NodeID nx, unsigned d)
 // Routing algorithm from Table 1 in Pastry paper.
 //
 void
-Pastry::route(NodeID D, void*)
+Pastry::route(NodeID *D, void*)
 {
   IPAddress nexthop;
 
@@ -95,9 +98,9 @@ Pastry::route(NodeID D, void*)
   //
 
   // if it's in our routing table, forward it.
-  unsigned l = shared_prefix_len(D, _id);
-  if((nexthop = _rtable[get_digit(D, l)][l].second)) {
-    // doRPC(nexthop, &Pastry::route, D, (void*)0);
+  unsigned l = shared_prefix_len(*D, _id);
+  if((nexthop = _rtable[get_digit(*D, l)][l].second)) {
+    doRPC(nexthop, &Pastry::route, D, (void*)0);
     return;
   }
 

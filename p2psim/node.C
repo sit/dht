@@ -4,11 +4,10 @@ using namespace std;
 #include <assert.h>
 
 #include "protocolfactory.h"
+#include "threadmanager.h"
 #include "node.h"
 #include "packet.h"
 #include "network.h"
-
-map<int,Node*> Node::_threads; // map thread ID to Node
 
 Node::Node(IPAddress ip) : _ip(ip), _pktchan(0)
 {
@@ -23,12 +22,6 @@ Node::~Node()
 {
   chanfree(_pktchan);
   chanfree(_protchan);
-  /*
-  for(PMCI p = _protmap.begin(); p != _protmap.end(); ++p) {
-    cout << "deleting protocol" << endl;
-    delete p->second;
-  }
-  */
   _protmap.clear();
 }
 
@@ -70,9 +63,7 @@ Node::run()
         if(p->reply()){
           send(p->channel(), &p);
         } else {
-          //int tid = threadcreate(p->fn(), p->args(), mainstacksize);
-          int tid = threadcreate(Node::Receive, p, mainstacksize);
-          _threads[tid] = this;
+          ThreadManager::Instance()->create(this, Node::Receive, p);
         }
         break;
 
@@ -139,8 +130,10 @@ Node::_doRPC(IPAddress srca, IPAddress dsta,
 }
 
 void
-Node::Receive(Packet *p)
+Node::Receive(void *px)
 {
+  Packet *p = (Packet*) px;
+
   (p->fn())(p->args());
 
   // send reply

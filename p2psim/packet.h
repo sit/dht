@@ -7,10 +7,7 @@
 
 class Packet {
 public:
-  Packet(Channel *c, void (*fn)(void*), void *args,
-         IPAddress src, IPAddress dst) {
-    _c = c; _fn = fn; _args = args; _src = src; _dst = dst;
-  }
+  Packet(Channel*, void (*)(void*), void *, IPAddress, IPAddress);
   ~Packet();
 
   //  unsigned size;

@@ -52,4 +52,6 @@ ChordObserver::execute()
     c = (Chord *)(*pos);
     c->dump();
   }
+
+  reschedule(500);
 }

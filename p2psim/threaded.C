@@ -1,4 +1,5 @@
 #include "threaded.h"
+#include "threadmanager.h"
 #include <assert.h>
 
 Threaded::Threaded()
@@ -16,7 +17,7 @@ Threaded::~Threaded()
 void
 Threaded::thread()
 {
-  _thread = threadcreate(Threaded::Run, this, mainstacksize);
+  _thread = ThreadManager::Instance()->create(this, Threaded::Run, this);
 }
 
 void
@@ -24,3 +25,4 @@ Threaded::Run(void *t)
 {
   ((Threaded *) t)->run();
 }
+

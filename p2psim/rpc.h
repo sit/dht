@@ -1,27 +1,27 @@
-#ifndef _RPC_H
-#define _RPC_H
+#ifndef __RPC_H
+#define __RPC_H
 
-#include <typeinfo>
 #include "threaded.h"
-#include "p2psim.h"
-#include <string>
-#include <map>
-using namespace std;
 #include "protocol.h"
 #include "protocolfactory.h"
 #include "network.h"
+#include "threadmanager.h"
+#include <typeinfo>
+#include <string>
+#include <map>
+#include "p2psim.h"
+using namespace std;
 
 // Anyone can call this doRPC, not just a Protocol.
 // But the called function must inherit from Protocol.
 // And this implementation correctly delivers to the
 // Protocol of the callee rather than the caller.
-template<class BT,
-  class AT,
-  class RT> bool doRPC(IPAddress dsta,
-                       void (BT::* fn)(AT *, RT *),
-                       AT *args,
-                       RT *ret) {
-
+template<class BT, class AT, class RT>
+bool doRPC(IPAddress dsta,
+           void (BT::* fn)(AT *, RT *),
+           AT *args,
+           RT *ret)
+{
   // find target node from IP address.
   Node *dstnode = Network::Instance()->getnode(dsta);
   assert(dstnode && dstnode->ip() == dsta);
@@ -32,10 +32,10 @@ template<class BT,
   assert(dstproto);
 
   // find source IP address.
-  extern int rtm_thread_id();
-  int tid = rtm_thread_id();
-  assert(tid != -1);
-  Node *srcnode = Node::thread2node(tid);
+  // XXX: I think this assumes that we're executing this within the context of a
+  // Node.  But when that's true, why is doRPC not implemented as a member
+  // function of Node?
+  Node *srcnode = (Node*) ThreadManager::Instance()->get(threadid());
   assert(srcnode);
   IPAddress srca = srcnode->ip();
 
@@ -62,4 +62,4 @@ template<class BT,
   return ok;
 }
 
-#endif
+#endif // __RPC_H

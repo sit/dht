@@ -7,6 +7,7 @@ using namespace std;
 
 #include "protocol.h"
 #include "protocolfactory.h"
+#include "threadmanager.h"
 #include "packet.h"
 #include "network.h"
 #include "p2pevent.h"
@@ -22,7 +23,6 @@ Protocol::Protocol(Node *n) : _node(n)
   _appchan = chancreate(sizeof(P2PEvent*), 0);
   assert(_appchan);
   thread();
-  Node::SetThread(_thread, n);
 }
 
 Protocol::~Protocol()
@@ -92,8 +92,7 @@ Protocol::run()
         ap = new pair<Protocol*, Event*>();
         ap->first = this;
         ap->second = event;
-        tid = threadcreate(Protocol::Dispatch, (void*)ap, mainstacksize);
-        Node::SetThread(tid, _node);
+        ThreadManager::Instance()->create(this->_node, Protocol::Dispatch, ap);
         break;
 
       case 2:

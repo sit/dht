@@ -16,13 +16,5 @@ node 2 3 Chord:0 wellknown=1
 node 3 4 Chord:0 wellknown=1
 
 observe 100 ChordObserver jinyang=happy
-observe 500 ChordObserver jinyang=happy
-observe 1000 ChordObserver jinyang=happy
-observe 1500 ChordObserver jinyang=happy
-observe 2000 ChordObserver jinyang=happy
-observe 2500 ChordObserver jinyang=happy
-observe 3000 ChordObserver jinyang=happy
-observe 3500 ChordObserver jinyang=happy
 
-#this doesn't work yet.
 simulator 5000 exit

@@ -3,6 +3,8 @@
 
 #include <lib9.h>
 #include <thread.h>
+#include <map>
+using namespace std;
 
 class Threaded {
 public:
