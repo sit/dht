@@ -150,7 +150,7 @@ class LocTable {
 
 
     LocTable(Chord::IDMap me);
-    ~LocTable() {};
+    ~LocTable();
 
     Chord::IDMap succ(ConsistentHash::CHID id);
     vector<Chord::IDMap> succs(ConsistentHash::CHID id, unsigned int m);
@@ -169,7 +169,7 @@ class LocTable {
     unsigned int psize() { return pinlist.size();}
 
   private:
-    skiplist<idmapwrap, ConsistentHash::CHID, &idmapwrap::id, &idmapwrap::sortlink_, idmapcompare> ring;
+    skiplist<idmapwrap, ConsistentHash::CHID, &idmapwrap::id, &idmapwrap::sortlink_> ring;
     ConsistentHash::CHID myid;
     vector<pin_entry> pinlist;
     unsigned int _max;

@@ -388,6 +388,15 @@ LocTable::LocTable(Chord::IDMap me) {
   rsz = 1;
 } 
 
+LocTable::~LocTable()
+{
+  idmapwrap *next;
+  idmapwrap *cur;
+  for (cur = ring.first(); cur; cur = next) {
+    next = ring.next(cur);
+    delete cur;
+  }
+}
 //get the succ node including or after this id 
 Chord::IDMap
 LocTable::succ(ConsistentHash::CHID id)
@@ -430,6 +439,7 @@ LocTable::pred(Chord::CHID id)
 {
   idmapwrap *elm = ring.closestpred(id);
   assert(elm);
+  assert(elm->n.id == myid || ConsistentHash::betweenrightincl(myid, id, elm->n.id));
   return elm->n;
 }
 
@@ -493,6 +503,7 @@ LocTable::add_node(Chord::IDMap n)
   Chord::IDMap succ1; 
   Chord::IDMap pred1; 
 
+  assert (ring.repok ());
   if (vis) {
     succ1 = succ(myid+1);
     pred1 = pred();
@@ -501,7 +512,11 @@ LocTable::add_node(Chord::IDMap n)
   idmapwrap *elm = new idmapwrap(n);
   if (ring.insert(elm)) {
     rsz++; //no n existed in ring before, ring_sz increases
+  }else{
+    delete elm;
+    return;
   }
+
   assert (ring.repok ());
 
   if (rsz > _max) {
@@ -509,6 +524,7 @@ LocTable::add_node(Chord::IDMap n)
     assert(rsz <= _max);
   }
 
+  assert (ring.repok ());
   Chord::IDMap succ2 = succ(myid + 1);
   Chord::IDMap pred2 = pred ();
 
