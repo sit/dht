@@ -475,8 +475,8 @@ main (int argc, char *argv[])
 
   // check that root dir exists
   ptr<melody_file>f = New refcounted<melody_file>(chord_socket, wrap(g1));
-  bool err = f->dhash->sync_setactive (1);
-  assert (!err);
+  //  bool err = f->dhash->sync_setactive (1);
+  //  assert (!err);
   dir *dr = New dir(f, wrap(g2), wrap(g3), (cs_client *)66);
   dr->root_test(); // FIXME adds ".." everytime??
 
