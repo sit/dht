@@ -26,16 +26,16 @@ merkle_server::doRPC (chord_node dst, RPC_delay_args *args)
 }
 
 void
-merkle_server::dispatch (svccb *sbp, void *args, int procno)
+merkle_server::dispatch (user_args *sbp)
 {
   if (!sbp)
     return;
 
-  switch (procno) {
+  switch (sbp->procno) {
   case MERKLESYNC_SENDNODE:
     // request a node of the merkle tree
     {
-      sendnode_arg *arg = (static_cast<sendnode_arg *> (args));
+      sendnode_arg *arg = sbp->template getarg<sendnode_arg> ();
       merkle_rpc_node *rnode = &arg->node;
       merkle_node *lnode;
       u_int lnode_depth;
@@ -47,12 +47,8 @@ merkle_server::dispatch (svccb *sbp, void *args, int procno)
       lnode_prefix.clear_suffix (lnode_depth);
 
       // Get remote sides ip:port and chordID
-      dorpc_arg *t_arg = sbp->template getarg<dorpc_arg> ();
-      const struct sockaddr_in *sa = (struct sockaddr_in *)sbp->getsa ();
       chord_node from;
-      from.r.hostname = inet_ntoa (sa->sin_addr);
-      from.r.port = ntohs (sa->sin_port);
-      from.x = t_arg->src_id;
+      sbp->fill_from (&from);
 
       vec<chord_node> preds = host_node->preds ();
       assert (preds.size () > 0);
@@ -70,14 +66,13 @@ merkle_server::dispatch (svccb *sbp, void *args, int procno)
 
       sendnode_res res (MERKLE_OK);
       format_rpcnode (ltree, lnode_depth, lnode_prefix, lnode, res.node);
-      host_node->doRPC_reply (sbp, &res, merklesync_program_1, 
-			      MERKLESYNC_SENDNODE);
+      sbp->reply (&res);
       break;
     }
      
   case MERKLESYNC_GETKEYS:
     {
-      getkeys_arg *arg = (static_cast<getkeys_arg *> (args));
+      getkeys_arg *arg = sbp->template getarg<getkeys_arg> ();
 
       ptr<dbPair> d;
       vec<ptr<dbrec> > keys;
@@ -106,13 +101,12 @@ merkle_server::dispatch (svccb *sbp, void *args, int procno)
       for (u_int i = 0; i < keys.size (); i++)
 	res.resok->keys[i] = to_merkle_hash (keys[i]);
 
-      host_node->doRPC_reply (sbp, &res, merklesync_program_1, 
-			      MERKLESYNC_GETKEYS);
+      sbp->reply (&res);
       break;
     }
 
   default:
-    fatal << "unknown proc in merkle " << procno << "\n";
+    fatal << "unknown proc in merkle " << sbp->procno << "\n";
     sbp->reject (PROC_UNAVAIL);
     break;
   }

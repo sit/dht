@@ -222,16 +222,6 @@ chord::handleProgram (const rpc_program &prog) {
   if (isHandled (prog.progno)) return;
   else {
     handledProgs.push_back (prog);
-
-    /*    ptr<asrv> s = asrv::alloc (x_dgram, prog);
-	  s->setcb (wrap (mkref(this), &chord::dispatch, s));
-
-	  //handle this program on current connections
-	  for (unsigned int i = 0; i < persistent_xprts.size (); i++) {
-	  warn << "handling on a persistent xprt\n";
-	  ptr<asrv> s2 = asrv::alloc (persistent_xprts[i], prog);
-	  s2->setcb (wrap (mkref(this), &chord::dispatch, s2));
-    */
   }
 }
 
@@ -288,14 +278,17 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
       xdrproc_t proc = prog->tbl[arg->procno].xdr_arg;
       assert (proc);
       
-      char *unmarshalled_args = New char[arg_len];
-      bzero (unmarshalled_args, arg_len);
+      void *unmarshalled_args = prog->tbl[arg->procno].alloc_arg ();
       if (!proc (x.xdrp (), unmarshalled_args)) {
 	warn << "dispatch: error unmarshalling arguments\n";
 	sbp->replyref (chordstat (CHORD_RPCFAILURE));
 	return;
       }
       
+      user_args *ua = New user_args (sbp, unmarshalled_args, 
+				     prog, arg->procno);
+      vnodep->fill_user_args (ua);
+
       //call the handler
       if (!vnodep->progHandled (arg->progno)) {
 	warn << "program not handled!\n";
@@ -303,7 +296,7 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
 	sbp->replyref (res);
       } else {
 	cbdispatch_t dispatch = vnodep->getHandler(arg->progno);
-	(dispatch)(sbp, unmarshalled_args, arg->procno);
+	(dispatch)(ua);
       }  
       
     }

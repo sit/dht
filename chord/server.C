@@ -263,12 +263,19 @@ vnode_impl::register_upcall (int progno, cbupcall_t cb)
 
 }
 
+void 
+vnode_impl::fill_user_args (user_args *a)
+{
+  a->myID = myID;
+  a->myindex = myindex;
+  a->coords = locations->get_coords (myID);
+}
+
 void
-vnode_impl::doRPC_reply (svccb *sbp, void *res, const rpc_program &prog, 
-			 int procno)
+user_args::reply (void *res)
 {
   //marshall result
-  xdrproc_t inproc = prog.tbl[procno].xdr_res;
+  xdrproc_t inproc = prog->tbl[procno].xdr_res;
   xdrsuio x (XDR_ENCODE);
   if ((!inproc) || (!inproc (x.xdrp (), res))) 
     fatal << "couldn't marshall result\n";
@@ -276,19 +283,21 @@ vnode_impl::doRPC_reply (svccb *sbp, void *res, const rpc_program &prog,
   void *marshalled_res = suio_flatten (x.uio ());
 
 #ifdef RPC_PROGRAM_STATS
-  prog.outreply_num[procno] += 1;
-  prog.outreply_bytes[procno] += res_len;
+  prog->outreply_num[procno] += 1;
+  prog->outreply_bytes[procno] += res_len;
 #endif
 
   //stuff into a transport wrapper
   dorpc_res *rpc_res = New dorpc_res (DORPC_OK);
+
   rpc_res->resok->src_id = myID;
   rpc_res->resok->src_vnode_num = myindex;
-  vec<float> coords = locations->get_coords (myID);
   rpc_res->resok->src_coords.setsize (coords.size ());
   for (unsigned int i = 0; i < coords.size (); i++)
     rpc_res->resok->src_coords[i] = (int)(1000.0*coords[i]);
-  rpc_res->resok->progno = prog.progno;
+
+
+  rpc_res->resok->progno = prog->progno;
   rpc_res->resok->procno = procno;
   rpc_res->resok->results.setsize (res_len);
   memcpy (rpc_res->resok->results.base (), marshalled_res, res_len);
@@ -299,7 +308,7 @@ vnode_impl::doRPC_reply (svccb *sbp, void *res, const rpc_program &prog,
   //reply
   sbp->reply (rpc_res);
   delete rpc_res;
-
+  delete this;
 }
 
 long

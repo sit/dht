@@ -829,24 +829,25 @@ dhash_impl::block_cached_loc (ptr<s_dhash_block_arg> arg,
 }
 
 void
-dhash_impl::fetchiter_sbp_gotdata_cb (svccb *sbp, s_dhash_fetch_arg *arg,
-				 int cookie, ptr<dbrec> val, dhash_stat err)
+dhash_impl::fetchiter_sbp_gotdata_cb (user_args *sbp, s_dhash_fetch_arg *arg,
+				      int cookie, ptr<dbrec> val, 
+				      dhash_stat err)
 {
   dhash_fetchiter_res *res = block_to_res (err, arg, cookie, val);
-  doRPC_reply (sbp, res, dhash_program_1, DHASHPROC_FETCHITER);
+  sbp->reply (res);
   delete res;
 }
 
 void
-dhash_impl::dispatch (svccb *sbp, void *args, int procno) 
+dhash_impl::dispatch (user_args *sbp) 
 {
   rpc_answered++;
-  switch (procno) {
+  switch (sbp->procno) {
   case DHASHPROC_FETCHITER:
     {
       //the only reason to get here is to fetch the 2-n chunks
-      //      s_dhash_fetch_arg *farg = sbp->template getarg<s_dhash_fetch_arg> ();
-      s_dhash_fetch_arg *farg = (static_cast<s_dhash_fetch_arg *> (args));
+      s_dhash_fetch_arg *farg = sbp->template getarg<s_dhash_fetch_arg> ();
+
       if ((key_status (farg->key) != DHASH_NOTPRESENT) && (farg->len > 0)) {
 	//fetch the key and return it, end of story
 	fetch (farg->key, 
@@ -854,14 +855,14 @@ dhash_impl::dispatch (svccb *sbp, void *args, int procno)
 	       wrap (this, &dhash_impl::fetchiter_sbp_gotdata_cb, sbp, farg));
       } else {
         dhash_fetchiter_res *res = New dhash_fetchiter_res (DHASH_NOENT);
-	doRPC_reply (sbp, res, dhash_program_1, DHASHPROC_FETCHITER);
+	sbp->reply (res);
         delete res;
       }
     }
     break;
   case DHASHPROC_STORE:
     {
-      s_dhash_insertarg *sarg = (static_cast<s_dhash_insertarg *> (args));
+      s_dhash_insertarg *sarg = sbp->template getarg<s_dhash_insertarg> ();
 
       if ((sarg->type == DHASH_STORE) && 
 	  (!responsible (sarg->key)) && 
@@ -870,7 +871,7 @@ dhash_impl::dispatch (svccb *sbp, void *args, int procno)
 	chordID pred = host_node->my_pred ();
 	res.pred->p.x = pred;
         res.pred->p.r = host_node->locations->getaddress (pred);
-	doRPC_reply (sbp, &res, dhash_program_1, DHASHPROC_STORE);
+	sbp->reply (&res);
       } else {
 	bool already_present = !!db->lookup (id2dbrec (sarg->key));
 	store (sarg, wrap(this, &dhash_impl::storesvc_cb, sbp, sarg, already_present));	
@@ -880,8 +881,7 @@ dhash_impl::dispatch (svccb *sbp, void *args, int procno)
     break;
   case DHASHPROC_GETKEYS:
     {
-      //      s_dhash_getkeys_arg *gkarg = sbp->template getarg<s_dhash_getkeys_arg>();
-      s_dhash_getkeys_arg *gkarg = (static_cast<s_dhash_getkeys_arg *> (args));
+      s_dhash_getkeys_arg *gkarg = sbp->template getarg<s_dhash_getkeys_arg>();
       
       dhash_getkeys_res res (DHASH_OK);
       chordID start = gkarg->start;
@@ -906,26 +906,25 @@ dhash_impl::dispatch (svccb *sbp, void *args, int procno)
 	}
       }
       res.resok->keys.set (keys->base (), keys->size (), freemode::NOFREE);
-      doRPC_reply (sbp, &res, dhash_program_1, DHASHPROC_GETKEYS);
+      sbp->reply (&res);
     }
     break;
   case DHASHPROC_STORECB:
     {
-      //      s_dhash_storecb_arg *arg = sbp->template getarg<s_dhash_storecb_arg> ();
-      s_dhash_storecb_arg *arg = (static_cast<s_dhash_storecb_arg *> (args));
+      s_dhash_storecb_arg *arg = sbp->template getarg<s_dhash_storecb_arg> ();
+
       cbstorecbuc_t *cb = scpt[arg->nonce];
       if (cb) {
 	(*cb) (arg);
 	scpt.remove (arg->nonce);
       }
       dhash_stat stat = DHASH_OK;
-      doRPC_reply (sbp, &stat, dhash_program_1, DHASHPROC_STORECB);
+      sbp->reply (&stat);
     }
     break;
   case DHASHPROC_BLOCK:
     {
-      //      s_dhash_block_arg *arg = sbp->template getarg<s_dhash_block_arg> ();
-      s_dhash_block_arg *arg = (static_cast<s_dhash_block_arg *> (args));
+      s_dhash_block_arg *arg = sbp->template getarg<s_dhash_block_arg> ();
 
       cbblockuc_t *cb = bcpt[arg->nonce];
       if (cb) {
@@ -935,7 +934,7 @@ dhash_impl::dispatch (svccb *sbp, void *args, int procno)
 	warn << "no callback for " << arg->nonce << "\n";
 
       dhash_stat stat = DHASH_OK;
-      doRPC_reply (sbp, &stat, dhash_program_1, DHASHPROC_BLOCK);
+      sbp->reply (&stat);
     }
     break;
   default:
@@ -973,7 +972,7 @@ dhash_impl::unregister_block_cb (int nonce)
 }
 
 void
-dhash_impl::storesvc_cb(svccb *sbp,
+dhash_impl::storesvc_cb(user_args *sbp,
 		   s_dhash_insertarg *arg,
 		   bool already_present,
 		   dhash_stat err) {
@@ -987,7 +986,7 @@ dhash_impl::storesvc_cb(svccb *sbp,
     res.resok->done = (err == DHASH_OK);
   }
 
-  doRPC_reply (sbp, &res, dhash_program_1, DHASHPROC_STORE);
+  sbp->reply (&res);
 }
 
 //---------------- no sbp's below this line --------------
@@ -1289,12 +1288,6 @@ dhash_impl::doRPC (chordID ID, const rpc_program &prog, int procno,
   host_node->doRPC (ID, prog, procno, in, out, cb);
 }
 
-void
-dhash_impl::doRPC_reply (svccb *sbp, void *res, 
-		    const rpc_program &prog, int procno) 
-{
-  host_node->doRPC_reply (sbp, res, prog, procno);
-}
 
 // ---------- debug ----
 void

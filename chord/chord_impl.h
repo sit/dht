@@ -110,7 +110,7 @@ class vnode_impl : public vnode {
   u_long ndogettoes;
   u_long ndodebruijn;
 
-  void dispatch (svccb *sbp, void *args, int procno);
+  void dispatch (user_args *a);
   void stabilize_pred (void);
   void stabilize_getsucc_cb (chordID pred,
 			     chordID s, net_address r, chordstat status);
@@ -127,7 +127,7 @@ class vnode_impl : public vnode {
 
   void find_route_hop_cb (cbroute_t cb, route_iterator *ri, bool done);
   void find_route (const chordID &x, cbroute_t cb);
-  void dofindroute_cb (svccb *sbp, chord_findarg *fa, 
+  void dofindroute_cb (user_args *sbp, chord_findarg *fa, 
 		       chordID s, route r, chordstat err);
   
   void notify_cb (chordID n, chordstat *res, clnt_stat err);
@@ -139,15 +139,15 @@ class vnode_impl : public vnode {
   void doalert_cb (chord_noderes *res, chordID x, clnt_stat err);
 
   void secchord_upcall_done (chord_nodelistres *res,
-			     svccb *sbp,
+			     user_args *sbp,
 			     bool stop);
   void chord_upcall_done (chord_testandfindarg *fa,
 			  chord_testandfindres *res,
-			  svccb *sbp,
+			  user_args *sbp,
 			  bool stop);
   void debruijn_upcall_done (chord_debruijnarg *da,
 			     chord_debruijnres *res,
-			     svccb *sbp,
+			     user_args *sbp,
 			     bool stop);
   void do_upcall (int upcall_prog, int upcall_proc,
 		  void *uc_args, int uc_args_len,
@@ -202,33 +202,35 @@ class vnode_impl : public vnode {
   long doRPC (const chord_node &ID, const rpc_program &prog, int procno, 
 	      ptr<void> in, void *out, aclnt_cb cb);
   void resendRPC (long seqno);
+  void fill_user_args (user_args *a);
+
+
   void stats (void) const;
   void print (void) const;
   void stop (void);
   vec<chord_node> succs () { return successors->succs (); };
   vec<chord_node> preds () { return predecessors->preds (); };
-  void doRPC_reply (svccb *sbp, void *res, const rpc_program &prog, int procno);
 
   chordID lookup_closestpred (const chordID &x, vec<chordID> f);
   chordID lookup_closestpred (const chordID &x);
   chordID lookup_closestsucc (const chordID &x);
   
   // The RPCs
-  void doget_successor (svccb *sbp);
-  void doget_predecessor (svccb *sbp);
-  void dofindclosestpred (svccb *sbp, chord_findarg *fa);
-  void dotestrange_findclosestpred (svccb *sbp, chord_testandfindarg *fa);
-  void donotify (svccb *sbp, chord_nodearg *na);
-  void doalert (svccb *sbp, chord_nodearg *na);
-  void dogetsucclist (svccb *sbp);
-  void dogetfingers (svccb *sbp);
-  void dogetfingers_ext (svccb *sbp);
-  void dogetsucc_ext (svccb *sbp);
-  void dogetpred_ext (svccb *sbp);
-  void dosecfindsucc (svccb *sbp, chord_testandfindarg *fa);
-  void dogettoes (svccb *sbp, chord_gettoes_arg *ta);
-  void dodebruijn (svccb *sbp, chord_debruijnarg *da);
-  void dofindroute (svccb *sbp, chord_findarg *fa);
+  void doget_successor (user_args *sbp);
+  void doget_predecessor (user_args *sbp);
+  void dofindclosestpred (user_args *sbp, chord_findarg *fa);
+  void dotestrange_findclosestpred (user_args *sbp, chord_testandfindarg *fa);
+  void donotify (user_args *sbp, chord_nodearg *na);
+  void doalert (user_args *sbp, chord_nodearg *na);
+  void dogetsucclist (user_args *sbp);
+  void dogetfingers (user_args *sbp);
+  void dogetfingers_ext (user_args *sbp);
+  void dogetsucc_ext (user_args *sbp);
+  void dogetpred_ext (user_args *sbp);
+  void dosecfindsucc (user_args *sbp, chord_testandfindarg *fa);
+  void dogettoes (user_args *sbp, chord_gettoes_arg *ta);
+  void dodebruijn (user_args *sbp, chord_debruijnarg *da);
+  void dofindroute (user_args *sbp, chord_findarg *fa);
 
   //RPC demux
   void addHandler (const rpc_program &prog, cbdispatch_t cb);

@@ -27,7 +27,7 @@ class merkle_server {
 
   void missing (chord_node n, bigint key);
   void doRPC (chord_node n, RPC_delay_args *args);
-  void dispatch (svccb *sbp, void *args, int procno);
+  void dispatch (user_args *a);
   merkle_server (merkle_tree *ltree, addHandler_t addHandler, 
 		 missingfnc2_t missingfnc, vnode *host_node);
 };

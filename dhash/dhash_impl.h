@@ -128,16 +128,16 @@ class dhash_impl : public dhash {
 	      ptr<void> in, void *out, aclnt_cb cb);
   void doRPC_reply (svccb *sbp, void *res, 
 		    const rpc_program &prog, int procno);
-  void dispatch (svccb *sbp, void *args, int procno);
+  void dispatch (user_args *a);
   void sync_cb ();
 
-  void storesvc_cb (svccb *sbp, s_dhash_insertarg *arg, bool already_present, dhash_stat err);
+  void storesvc_cb (user_args *sbp, s_dhash_insertarg *arg, bool already_present, dhash_stat err);
   void fetch_cb (int cookie, cbvalue cb,  ptr<dbrec> ret);
   dhash_fetchiter_res * block_to_res (dhash_stat err, s_dhash_fetch_arg *arg,
 				      int cookie, ptr<dbrec> val);
   void fetchiter_gotdata_cb (cbupcalldone_t cb, s_dhash_fetch_arg *farg,
 			     int cookie, ptr<dbrec> val, dhash_stat stat);
-  void fetchiter_sbp_gotdata_cb (svccb *sbp, s_dhash_fetch_arg *farg,
+  void fetchiter_sbp_gotdata_cb (user_args *sbp, s_dhash_fetch_arg *farg,
 				 int cookie, ptr<dbrec> val, dhash_stat stat);
   void sent_block_cb (dhash_stat *s, clnt_stat err);
 
