@@ -165,7 +165,10 @@ succ_list::stabilize_getsucclist_cb (chordID s, vec<chord_node> nlist,
   i = 0; j = 0;
   unsigned int newnsucc = nlist.size () - 1; // drop last guy.
   while ((i < curnsucc) && (j < newnsucc)) {    
-    if (succlist[i]->id () == nlist[j].x) { i++; j++; continue; }
+    if (succlist[i]->id () == nlist[j].x) {
+      succlist[i]->set_coords (nlist[j]);
+      i++; j++; continue;
+    }
     if (between (myID, nlist[j].x, succlist[i]->id ())) {
       // if succlist[i] < nlist[j].x
       // then, maybe someone we knew about is dead now. best be sure.
