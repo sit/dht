@@ -13,6 +13,7 @@ static bool xdr_putentry3 (XDR *x, u_int64_t ino,
 			   filename name, u_int32_t cookie);
 static int readdir_xdr (XDR *x, void *_uio);
 
+
 chord_server::chord_server () 
 {
   int fd = unixsocket_connect (LSD_SOCKET);
@@ -25,9 +26,17 @@ void
 chord_server::setrootfh (str root, callback<void, nfs_fh3 *>::ref rfh_cb) 
 {
   //                       chord:ade58209f
-  static rxx path_regexp ("chord:([0-9a-zA-Z]*)$"); 
+  // static rxx path_regexp ("chord:([0-9a-zA-Z]*)$");
+  static rxx path_regexp ("chord:([0-9a-zA-Z+-]*)$");
 
-  if (!path_regexp.search (root)) (*rfh_cb) (NULL);
+  // if (!path_regexp.search (root)) (*rfh_cb) (NULL);
+
+  if (!path_regexp.search (root)) {
+    warn << "Malformated root filesystem name: " << root << "\n";
+    (*rfh_cb) (NULL);
+    return;
+  }
+
   str rootfhstr = path_regexp[1];
   str dearm = dearmor64A (rootfhstr);
   chordID rootfh;
@@ -36,6 +45,7 @@ chord_server::setrootfh (str root, callback<void, nfs_fh3 *>::ref rfh_cb)
   //fetch the root file handle too..
   get_data (rootfh, wrap (this, &chord_server::getroot_fh, rfh_cb), false);
 }
+
 
 void
 chord_server::getroot_fh (callback<void, nfs_fh3 *>::ref rfh_cb, sfsro_data *d) 
@@ -316,11 +326,13 @@ chord_server::read_fetch_inode (nfscall *sbp, chordID ID,sfsro_inode *f_ip)
 					     &chord_server::read_fetch_block,
 					     sbp, f_ip, ID));
 
+#if 0
 #define PF 8
     size_t pf_lim = block + PF;
     for (size_t b = block + 1; b < pf_lim ; b++)
       if ((b+1)*fsinfo.info.blocksize < f_ip->reg->size) 
 	read_file_block (b, f_ip, true, wrap (&ignore_me));
+#endif
   }
 
 }
@@ -510,15 +522,104 @@ void
 chord_server::read_file_block (size_t block, sfsro_inode *f_ip, bool pfonly,
 			       cbblock_t cb) 
 {
-  if (block < SFSRO_NDIR) {
-    chordID bid = sfshash_to_chordid (&(f_ip->reg->direct[block]));
-    get_data (bid, wrap (this, &chord_server::read_fblock_cb, cb), pfonly);
-  }
-  else {
-    warn << "no support for indirect blocks yet\n";
+  // the caller must ensure that block is within the size of the file
+
+  // convert logical file block to chordID
+  bmap(block, f_ip, wrap (this, &chord_server::read_file_block_bmap_cb, cb, pfonly));
+}
+
+
+void
+chord_server::read_file_block_bmap_cb (cbblock_t cb, bool pfonly, chordID ID, bool success)
+{
+  if (success) {
+    get_data (ID, wrap (this, &chord_server::read_file_block_get_data_cb, cb), pfonly);
+  } else {
     (*cb) (NULL, 0);
   }
+}
 
+
+void
+chord_server::read_file_block_get_data_cb (cbblock_t cb, sfsro_data *dat)
+{
+  if (dat) {
+    assert (dat->type == SFSRO_FILEBLK);
+    (*cb) (dat->data->base (), dat->data->size ());
+  } else {
+    (*cb) (NULL, 0);
+  }
+}
+
+
+void
+chord_server::bmap(size_t block, sfsro_inode *f_ip, cbbmap_t cb)
+{
+  chordID ID;
+
+  // XXX this is the same caculation that is at the end of sfsrodb/sfsrodb.C
+  u_int32_t nfh = (fsinfo.info.blocksize - 100) / (20*2);
+
+  // XXX should make all the mods and divs of nfh faster
+
+  if (block < SFSRO_NDIR) {
+    ID = sfshash_to_chordid (&(f_ip->reg->direct[block]));
+    (*cb) (ID, true);
+  }
+  else if (block < SFSRO_NDIR + nfh) {
+    ID = sfshash_to_chordid (&(f_ip->reg->indirect));
+    unsigned int slotno1 = block - SFSRO_NDIR;
+    bmap_recurse (cb, slotno1, ID, true);
+  }
+  else if (block < SFSRO_NDIR + nfh * nfh) {
+    unsigned int slotno1 = (block - SFSRO_NDIR) / nfh;
+    unsigned int slotno2 = (block - SFSRO_NDIR) % nfh;
+
+    ID = sfshash_to_chordid (&(f_ip->reg->double_indirect));
+    bmap_recurse (wrap (this, &chord_server::bmap_recurse, cb, slotno2), slotno1, ID, true);
+  }
+  else if (block < SFSRO_NDIR + nfh * nfh * nfh) {
+    unsigned int slotno1 = (block - SFSRO_NDIR) / (nfh * nfh);
+    unsigned int slotno2 = ((block - SFSRO_NDIR) % (nfh * nfh)) / nfh;
+    unsigned int slotno3 = (block - SFSRO_NDIR) % nfh;
+
+    ID = sfshash_to_chordid (&(f_ip->reg->triple_indirect));
+    bmap_recurse (wrap (this, &chord_server::bmap_recurse,
+			wrap (this, &chord_server::bmap_recurse, cb, slotno3),
+			slotno2),
+		  slotno1, ID, true);
+  }
+  else {
+    warn << "bmap: block out of range: " << block << "\n";
+    (*cb) (0, false);
+  }
+}
+
+
+
+
+void
+chord_server::bmap_recurse(cbbmap_t cb, unsigned int slotno, chordID ID, bool success)
+{
+  if (success) {
+    get_data (ID, wrap (this, &chord_server::bmap_recurse_get_data_cb, cb, slotno), false);
+  } else {
+    (*cb) (0, false);
+  }
+}
+
+void
+chord_server::bmap_recurse_get_data_cb(cbbmap_t cb, unsigned int slotno, sfsro_data *dat)
+{
+  if (dat) {
+    assert (dat->type == SFSRO_INDIR);
+    sfsro_indirect *indirect =  dat->indir;
+    sfs_hash *fh = &indirect->handles[slotno];
+    chordID ID =  sfshash_to_chordid (fh);
+    (*cb) (ID, true);
+  } else {
+    (*cb) (0, false);
+  }
 }
 
 void

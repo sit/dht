@@ -9,6 +9,7 @@
 typedef callback<void, sfsro_data *>::ref cbgetdata_t;
 typedef callback<void, sfsro_inode * >::ref cbinode_t;
 typedef callback<void, char *, size_t>::ref cbblock_t;
+typedef callback<void, chordID, bool>::ref cbbmap_t;
 
 struct fetch_wait_state {
   cbgetdata_t cb;
@@ -19,7 +20,6 @@ struct fetch_wait_state {
 typedef list<fetch_wait_state, &fetch_wait_state::link> wait_list;
 
 class chord_server  {
-  
   cfs_fsinfo fsinfo;
 
   ptr<aclnt> lsdclnt;
@@ -56,6 +56,15 @@ class chord_server  {
   void inode_lookup_fetch_cb (cbinode_t cb, sfsro_data *dat);
   void read_file_block (size_t block, sfsro_inode *f_ip, bool pfonly,
 			cbblock_t cb);
+
+  void read_file_block_bmap_cb (cbblock_t cb, bool pfonly, chordID ID, bool success);
+  void read_file_block_get_data_cb (cbblock_t cb, sfsro_data *dat);
+  void bmap(size_t block, sfsro_inode *f_ip, cbbmap_t cb);
+  void bmap_recurse(cbbmap_t cb, unsigned int slotno, chordID ID, bool success);
+  void bmap_recurse_get_data_cb(cbbmap_t cb, unsigned int slotno, sfsro_data *dat);
+
+
+
   void read_fblock_cb (cbblock_t cb, sfsro_data *dat);
 
   chordID nfsfh_to_chordid (nfs_fh3 *nfh);
