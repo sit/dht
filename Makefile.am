@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.34 2004/10/12 02:45:30 athicha Exp $
+# $Id: Makefile.am,v 1.35 2005/01/22 20:23:11 sit Exp $
 
 
 BASEDIRS = svc utils merkle chord dhc dhash sfsrodb lsd devel 
@@ -15,10 +15,9 @@ CLEANFILES = core *.core *~
 
 EXTRA_DIST = .cvsignore
 MAINTAINERCLEANFILES = aclocal.m4 install-sh mkinstalldirs \
-	missing configure config.guess config.sub config.h.in \
+	missing depcomp configure config.guess config.sub config.h.in \
 	ltconfig ltmain.sh INSTALL COPYING Makefile.in stamp-h.in
 
 dist-hook:
 	rm -f $(srcdir)/p2psim/p2psim.core
 	tar czvf $(distdir)/p2psim.tgz -C $(srcdir) p2psim
-	cp -f depcomp $(distdir)
