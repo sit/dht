@@ -1,4 +1,4 @@
-dnl $Id: configure.in,v 1.20 2002/09/26 18:55:46 sit Exp $
+dnl $Id: configure.in,v 1.21 2002/11/25 16:36:19 fdabek Exp $
 dnl
 dnl Process this file with autoconf to produce a configure script.
 dnl
@@ -75,6 +75,14 @@ AC_EGREP_HEADER(rpccb_msgbuf,
 		aclnt.h,
 		AC_MSG_RESULT("found"),
 		AC_MSG_ERROR("aclnt.h that defines rpccb_msgbuf not found. Install the latest build of SFS")
+)
+
+dnl Make sure we have sfscrypt.h
+AC_MSG_CHECKING("for sfscrypt.h")
+AC_EGREP_HEADER(sfspriv,
+		sfscrypt.h,
+		AC_MSG_RESULT("found"),
+		AC_MSG_ERROR("new style sfscrypt not found. Install the latest build of SFS")
 )
 
 dnl let directories share header files
