@@ -45,7 +45,10 @@
 
 typedef int cb_ID;
 
+#define FINGERS 1
+
 typedef vec<chordID> route;
+
 typedef callback<void,vnode*,chordstat>::ref cbjoin_t;
 typedef callback<void,chordID,net_address,chordstat>::ref cbchordID_t;
 typedef callback<void,vec<chord_node>,chordstat>::ref cbchordIDlist_t;
@@ -55,17 +58,19 @@ typedef callback<void, svccb *>::ref cbdispatch_t;
 struct findpredecessor_cbstate {
   chordID x;
   route search_path;
+  route virtual_path;
   cbroute_t cb;
   findpredecessor_cbstate (chordID xi, route spi, cbroute_t cbi) :
     x (xi), search_path (spi), cb (cbi) {};
+  findpredecessor_cbstate (chordID xi, route spi, route vpi, cbroute_t cbi) :
+    x (xi), search_path (spi), virtual_path (vpi), cb (cbi) {};
 };
 
-#define FINGERS 1
 
 #include "toe_table.h"
 #include "finger_table.h"
 #include "succ_list.h"
-#include "debruin.h"
+#include "debruijn.h"
 
 // ================ VIRTUAL NODE ================
 
@@ -73,7 +78,7 @@ class vnode : public virtual refcount, public stabilizable {
   ptr<finger_table> fingers;
   ptr<succ_list> successors;
   ptr<toe_table> toes;
-  ptr<debruin> dutch;
+  ptr<debruijn> dutch;
   ptr<stabilize_manager> stabilizer;
 
   chordID predecessor;
@@ -108,7 +113,7 @@ class vnode : public virtual refcount, public stabilizable {
   u_long ndogetpred_ext;
   u_long ndochallenge;
   u_long ndogettoes;
-  u_long ndodebruin;
+  u_long ndodebruijn;
 
   u_long nout_continuous;
   void stabilize_pred (void);
@@ -139,13 +144,13 @@ class vnode : public virtual refcount, public stabilizable {
   void testrange_fcp_step_cb (findpredecessor_cbstate *st,
 			      chordID s, bool ok, chordstat status);
 #else
-  void find_debruin_route (chordID n, chordID x, chordID d, 
+  void find_debruijn_route (chordID n, chordID x, chordID d, 
 			   findpredecessor_cbstate *st);
-  void debruin_cb (chord_debruinres *res,
+  void debruijn_cb (chordID d, chord_debruijnres *res,
 		     findpredecessor_cbstate *st, clnt_stat err);
-  void debruin_fcp_done_cb (findpredecessor_cbstate *st,
+  void debruijn_fcp_done_cb (findpredecessor_cbstate *st,
 			    chordID s, bool ok, chordstat status);
-  void debruin_fcp_step_cb (chordID e, findpredecessor_cbstate *st, chordID s, 
+  void debruijn_fcp_step_cb (chordID e, findpredecessor_cbstate *st, chordID s, 
 			    bool ok, chordstat status);
 #endif
   
@@ -208,7 +213,7 @@ class vnode : public virtual refcount, public stabilizable {
   void dogetpred_ext (svccb *sbp);
   void dochallenge (svccb *sbp, chord_challengearg *ca);
   void dogettoes (svccb *sbp);
-  void dodebruin (svccb *sbp, chord_debruinarg *da);
+  void dodebruijn (svccb *sbp, chord_debruijnarg *da);
   void dofindroute (svccb *sbp, chord_findarg *fa);
 
   //RPC demux

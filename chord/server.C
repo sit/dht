@@ -275,53 +275,51 @@ vnode::find_route (chordID &x, cbroute_t cb)
     cb (myID, search_path, CHORD_OK);
   } else {
     route search_path;
+    route virtual_path;
     chordID n = lookup_closestsucc (x);
     search_path.push_back (n);
+    virtual_path.push_back (x);
     findpredecessor_cbstate *st = 
-      New findpredecessor_cbstate (x, search_path, cb);
+      New findpredecessor_cbstate (x, search_path, virtual_path, cb);
     warnx << myID << " find_route " << x << " @ " << n << "\n";
-    find_debruin_route (n, x, n, st);
+    find_debruijn_route (n, x, x, st);
   }
 }
 
 void
-vnode::find_debruin_route (chordID n, chordID x, chordID d, 
+vnode::find_debruijn_route (chordID n, chordID x, chordID d, 
 				  findpredecessor_cbstate *st)
 {
-  ptr<chord_debruinarg> arg = New refcounted<chord_debruinarg> ();
+  ptr<chord_debruijnarg> arg = New refcounted<chord_debruijnarg> ();
   arg->v = n;
   arg->x = x;
   arg->d = d;
-  chord_debruinres *nres = New chord_debruinres (CHORD_OK);
-  doRPC (n, chord_program_1, CHORDPROC_DEBRUIN, arg, nres, 
-	 wrap (this, &vnode::debruin_cb, nres, st));
+  chord_debruijnres *nres = New chord_debruijnres (CHORD_OK);
+  doRPC (n, chord_program_1, CHORDPROC_DEBRUIJN, arg, nres, 
+	 wrap (this, &vnode::debruijn_cb, d, nres, st));
 
 }
 
 void
-vnode::debruin_cb (chord_debruinres *res,
+vnode::debruijn_cb (chordID d, chord_debruijnres *res,
 			     findpredecessor_cbstate *st,
 			     clnt_stat err)
 {
+  chordID l = st->search_path.back ();
+
   if (err) {
-    warnx << "find_debruin_cb: failure " << err << "\n";
-    chordID l = st->search_path.back ();
+    warnx << "find_debruijn_cb: failure " << err << "\n";
     st->cb (l, st->search_path, CHORD_RPCFAILURE);
     delete st;
   } else if (res->status == CHORD_INRANGE) { 
     // found the successor
+    warnx << "find_debruijn_cb: succ = " << res->inres->x << "\n";
     locations->cacheloc (res->inres->x, res->inres->r,
-			 wrap (this, &vnode::debruin_fcp_done_cb, st));
+			 wrap (this, &vnode::debruijn_fcp_done_cb, st));
   } else if (res->status == CHORD_NOTINRANGE) {
     // haven't found the successor yet; ask the new node
-    warnx << "debruin_cb: " << st->x << " next " << res->noderes->node.x 
-	  << " d " << res->noderes->d << ":";
-    for (unsigned i = 0; i < st->search_path.size (); i++) {
-      warnx << st->search_path[i] << "\n";
-    }
-
     locations->cacheloc (res->noderes->node.x, res->noderes->node.r,
-			 wrap (this, &vnode::debruin_fcp_step_cb, 
+			 wrap (this, &vnode::debruijn_fcp_step_cb, 
 			       res->noderes->d, st));
   } else {
     warn("WTF");
@@ -332,14 +330,19 @@ vnode::debruin_cb (chord_debruinres *res,
 
 
 void
-vnode::debruin_fcp_done_cb (findpredecessor_cbstate *st,
+vnode::debruijn_fcp_done_cb (findpredecessor_cbstate *st,
 			      chordID s, bool ok, chordstat status)
 {
   if (ok && status == CHORD_OK) {
     st->search_path.push_back (s);
-    warnx << "debruin_fcp_done_cb: path size " << st->search_path.size () 
+    st->virtual_path.push_back (myID);
+    warnx << "debruijn_fcp_done_cb: path size " << st->search_path.size () 
 	  << "\n";
-    assert (st->search_path.size () < 1000);
+
+    for (unsigned i = 0; i < st->search_path.size (); i++) {
+      warnx << st->search_path[i] << " " << st->virtual_path[i] << "\n";
+    }
+
     st->cb (st->search_path.back (), st->search_path, CHORD_OK);
     delete st;
   } else if (status == CHORD_RPCFAILURE) {
@@ -347,7 +350,7 @@ vnode::debruin_fcp_done_cb (findpredecessor_cbstate *st,
     //      the top-level?
     st->cb (st->search_path.back (), st->search_path, CHORD_RPCFAILURE);
   } else {
-    warnx << myID << ": debruin_fcp_done_cb: last challenge for "
+    warnx << myID << ": debruijn_fcp_done_cb: last challenge for "
 	  << s << " failed. (chordstat " << status << ")\n";
     assert (0); // XXX handle malice more intelligently
   }
@@ -355,26 +358,27 @@ vnode::debruin_fcp_done_cb (findpredecessor_cbstate *st,
 
 
 void
-vnode::debruin_fcp_step_cb (chordID e, findpredecessor_cbstate *st, chordID s, 
+vnode::debruijn_fcp_step_cb (chordID d, findpredecessor_cbstate *st, chordID s, 
       bool ok, chordstat status)
 {
   if (ok && status == CHORD_OK) {
     st->search_path.push_back (s);
+    st->virtual_path.push_back (d);
     if (st->search_path.size () >= 100) {
-      warnx << "PROBLEM: too long a search path: " << myID << " looking for "
-	    << st->x << "\n";
+      warnx << "PROBLEM: with search path: " << myID << " looking for "
+	    << st->x << " last d: "  << d << "\n";
       for (unsigned i = 0; i < st->search_path.size (); i++) {
-	warnx << st->search_path[i] << "\n";
+	warnx << st->search_path[i] << " " << st->virtual_path[i] << "\n";
       }
       assert (0);
     }
-    find_debruin_route (s, st->x, e, st);
+    find_debruijn_route (s, st->x, d, st);
   } else if (status == CHORD_RPCFAILURE) {
     // xxx? should we retry locally before failing all the way to
     //      the top-level?
     st->cb (st->search_path.back (), st->search_path, CHORD_RPCFAILURE);
   } else {
-    warnx << myID << ": debruin_fcp_step_cb: step challenge for "
+    warnx << myID << ": debruijn_fcp_step_cb: step challenge for "
 	  << s << " failed. (chordstat " << status << ")\n";
     assert (0); // XXX handle malice more intelligently
   }

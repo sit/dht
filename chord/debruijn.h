@@ -1,14 +1,16 @@
 #ifndef _DEBRUIN_H_
 #define _DEBRUIN_H_
 
-class debruin : public stabilizable {
+// N.G. de Bruijn (http://www.win.tue.nl/~wsdwnb/)
+
+class debruijn : public stabilizable {
   ptr<vnode> myvnode;
   ptr<locationtable> locations;
   chordID myID;  
   chordID mydoubleID;
 
  public:
-  debruin (ptr<vnode> v, ptr<locationtable> locs, chordID myID);
+  debruijn (ptr<vnode> v, ptr<locationtable> locs, chordID myID);
 
   // void print ();
   // void stats ();

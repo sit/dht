@@ -123,22 +123,22 @@ struct chord_gettoes_arg {
 };
 
 
-struct chord_debruinarg {
+struct chord_debruijnarg {
   chordID v;
   chordID x;
   chordID d;
 };
 
-struct chord_debruinnoderes {
+struct chord_debruijnnoderes {
   chord_node node;
   chordID d;
 };
 
-union chord_debruinres switch (chordstat status) {
+union chord_debruijnres switch (chordstat status) {
  case CHORD_INRANGE:
    chord_node inres;
  case CHORD_NOTINRANGE:
-   chord_debruinnoderes noderes;
+   chord_debruijnnoderes noderes;
  default:
    void;
 };
@@ -187,8 +187,8 @@ program CHORD_PROGRAM {
 		chord_nodelistextres
           	CHORDPROC_GETTOES (chord_gettoes_arg) = 13;
 
-		chord_debruinres
-		CHORDPROC_DEBRUIN (chord_debruinarg) = 14;
+		chord_debruijnres
+		CHORDPROC_DEBRUIJN (chord_debruijnarg) = 14;
 
 		chord_nodelistres
 		CHORDPROC_FINDROUTE (chord_findarg) = 15;

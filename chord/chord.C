@@ -44,7 +44,7 @@ vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
 #ifdef FINGERS
   fingers = New refcounted<finger_table> (mkref (this), locations, myID);
 #endif
-  dutch = New refcounted<debruin> (mkref (this), locations, myID);
+  dutch = New refcounted<debruijn> (mkref (this), locations, myID);
   successors = New refcounted<succ_list> (mkref (this), locations, myID);
   toes = New refcounted<toe_table> (locations, myID);
   stabilizer = New refcounted<stabilize_manager> (myID);
@@ -308,7 +308,9 @@ vnode::updatepred_cb (chordID p, bool ok, chordstat status)
 	!locations->alive (predecessor) ||
 	between (predecessor, myID, p)) {
       predecessor = p;
+#ifdef FINGERS
       get_fingers (predecessor); // XXX perhaps do this only once after join
+#endif
     }
   }
   else if (status == CHORD_RPCFAILURE) {
@@ -465,32 +467,32 @@ vnode::dogetsucclist (svccb *sbp)
 }
 
 void
-vnode::dodebruin (svccb *sbp, chord_debruinarg *da)
+vnode::dodebruijn (svccb *sbp, chord_debruijnarg *da)
 {
-  ndodebruin++;
-  chord_debruinres *res;
+  ndodebruijn++;
+  chord_debruijnres *res;
   chordID pred = locations->closestpredloc (myID);
 
-  warnx << myID << " dodebruin: pred " << pred << " x " << da->x << " d " 
-	<< da->d << "\n";
+  // warnx << myID << " dodebruijn: pred " << pred << " x " << da->x << " d " 
+  // << da->d << "\n";
 
   if (betweenrightincl (pred, myID, da->x)) {
-    res = New chord_debruinres (CHORD_INRANGE);
-    warnt("CHORD: debruin_inrangereply");
+    res = New chord_debruijnres (CHORD_INRANGE);
+    warnt("CHORD: debruijn_inrangereply");
     res->inres->x = myID;
     res->inres->r = locations->getaddress (myID);
     sbp->reply(res);
     delete res;
   } else {
-    res = New chord_debruinres (CHORD_NOTINRANGE);
+    res = New chord_debruijnres (CHORD_NOTINRANGE);
     if (betweenrightincl (pred, myID, da->d)) {
       chordID nd = locations->closestsuccloc (doubleID(myID));
       res->noderes->node.x = nd;
       res->noderes->node.r = locations->getaddress (nd);
       res->noderes->d = doubleID(da->d);
     } else {
-      res->noderes->node.x = pred;
-      res->noderes->node.r = locations->getaddress (pred);
+      res->noderes->node.x = locations->closestsuccloc (da->d); // pred
+      res->noderes->node.r = locations->getaddress (res->noderes->node.x);
       res->noderes->d = da->d;
     }
     sbp->reply(res);

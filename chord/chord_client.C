@@ -373,12 +373,12 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
 	vnodep->dogettoes (sbp);
       }
       break;
-    case CHORDPROC_DEBRUIN:
+    case CHORDPROC_DEBRUIJN:
       {
-	warnt("CHORD: debruin");
-	chord_debruinarg *da = 
-	  sbp->template getarg<chord_debruinarg> ();
-	vnodep->dodebruin (sbp, da);
+	warnt("CHORD: debruijn");
+	chord_debruijnarg *da = 
+	  sbp->template getarg<chord_debruijnarg> ();
+	vnodep->dodebruijn (sbp, da);
       }
       break;
     case CHORDPROC_FINDROUTE:
