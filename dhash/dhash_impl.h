@@ -98,12 +98,12 @@ class dhash_impl : public dhash {
 
   unsigned keyhash_mgr_rpcs;
 
-  void sendblock (chord_node dst, bigint blockID, bool last, callback<void>::ref cb);
-  void sendblock_cb (callback<void>::ref cb, dhash_stat err, chordID blockID);
-  
   void missing (chord_node from, bigint key);
   void missing_retrieve_cb (bigint key, dhash_stat err, ptr<dhash_block> b, route r);
   
+  void sendblock (chord_node dst, bigint blockID, bool last, callback<void>::ref cb);
+  void sendblock_cb (callback<void>::ref cb, dhash_stat err, chordID blockID);
+
   void keyhash_mgr_timer ();
   void keyhash_mgr_lookup (chordID key, dhash_stat err, chordID host, route r);
   void keyhash_sync_done ();
@@ -148,61 +148,11 @@ class dhash_impl : public dhash {
 			      int cookie, ptr<dbrec> data, dhash_stat err);
   
   void store (s_dhash_insertarg *arg, cbstore cb);
-  void store_repl_cb (cbstore cb, chord_node sender, chordID srcID,
-                      int32 nonce, dhash_stat err);
-  void send_storecb (chord_node sender, chordID srcID, uint32 nonce,
-                     dhash_stat stat);
-  void send_storecb_cacheloc (chordID srcID, uint32 nonce, dhash_stat status,
-	                      chordID ID, bool ok, chordstat stat);
-
-  void sent_storecb_cb (dhash_stat *s, clnt_stat err);
-  
-  void get_keys_traverse_cb (ptr<vec<chordID> > vKeys,
-			     chordID mypred,
-			     chordID predid,
-			     const chordID &key);
   
   void init_key_status ();
-  void transfer_initial_keys ();
-  void transfer_initial_keys_range (chordID start, chordID succ);
-  void transfer_init_getkeys_cb (chordID succ,
-				 dhash_getkeys_res *res, 
-				 clnt_stat err);
-  void transfer_init_gotk_cb (dhash_stat err);
 
   void update_replica_list ();
-  bool isReplica(chordID id);
-  void replicate_key (chordID key, cbstat_t cb);
-  void replicate_key_cb (int* replicas, int *replica_err,
-                         cbstat_t cb, chordID key, dhash_stat err);
-
-  void install_replica_timer ();
-  void check_replicas_cb ();
-  void check_replicas ();
-  void check_replicas_traverse_cb (chordID to, const chordID &key);
-  void fix_replicas_txerd (dhash_stat err);
-
-  void change_status (chordID key, dhash_stat newstatus);
-
-  void transfer_key (chordID to, chordID key, store_status stat, 
-		     callback<void, dhash_stat>::ref cb);
-  void transfer_fetch_cb (chordID to, chordID key, store_status stat, 
-			  callback<void, dhash_stat>::ref cb,
-			  int cookie, ptr<dbrec> data, dhash_stat err);
-  void transfer_store_cb (callback<void, dhash_stat>::ref cb, 
-			  dhash_stat status, chordID blockID);
-
-  void get_key (chordID source, chordID key, cbstat_t cb);
-  void get_key_got_block (chordID key, cbstat_t cb, dhash_stat err, ptr<dhash_block> block, route path);
-  void get_key_stored_block (cbstat_t cb, int err);
   
-  void store_flush (chordID key, dhash_stat value);
-  void store_flush_cb (int err);
-  void cache_flush (chordID key, dhash_stat value);
-  void cache_flush_cb (int err);
-
-  void transfer_key_cb (chordID key, dhash_stat err);
-
   char responsible(const chordID& n);
 
   void printkeys ();

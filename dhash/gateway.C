@@ -76,14 +76,9 @@ dhashgateway::dispatch (svccb *sbp)
 
       ref<dhash_block> block =
 	New refcounted<dhash_block> (arg->block.base (), arg->block.size ());
-      if (CODING) {
-	block->ID = arg->blockID;
-	dhcli->insert2 (block, arg->options,
-			wrap (this, &dhashgateway::insert_cb, sbp));
-      } else
-	dhcli->insert (arg->blockID, block, arg->options,
-		       wrap (this, &dhashgateway::insert_cb, sbp));
-
+      block->ID = arg->blockID;
+      dhcli->insert2 (block, arg->options,
+		      wrap (this, &dhashgateway::insert_cb, sbp));
     }
     break;
     
@@ -100,12 +95,8 @@ dhashgateway::dispatch (svccb *sbp)
   case DHASHPROC_RETRIEVE:
     {
       dhash_retrieve_arg *arg = sbp->template getarg<dhash_retrieve_arg> ();
-      if (CODING) {
-	dhcli->retrieve2 (arg->blockID, arg->options,
-			  wrap (this, &dhashgateway::retrieve_cb, sbp));
-      } else
-	dhcli->retrieve (arg->blockID, arg->options,
-			 wrap (this, &dhashgateway::retrieve_cb, sbp));
+      dhcli->retrieve2 (arg->blockID, arg->options,
+			wrap (this, &dhashgateway::retrieve_cb, sbp));
     }
     break;
     

@@ -87,6 +87,5 @@ class dhash {
 
 // see dhash/server.C
 extern int JOSH;
-extern int CODING; 
 
 #endif

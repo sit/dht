@@ -52,24 +52,12 @@
 #include <merkle_sync_prot.h>
 static int KEYHASHDB = getenv("KEYHASHDB") ? atoi(getenv("KEYHASHDB")) : 0;
 int JOSH = getenv("JOSH") ? atoi(getenv("JOSH")) : 0;
-int CODING = getenv("CODING") ? atoi(getenv("CODING")) : 0;
 
 #define SYNCTM    30
 #define KEYHASHTM 10
 #define REPTM     10
 #define PRTTM     5
 
-static vec<dbfe *> open_databases;
-EXITFN(close_databases);
-
-static void
-close_databases ()
-{  
-  for (size_t i = 0; i < open_databases.size (); i++) {
-    open_databases[i]->sync ();
-    open_databases[i]->closedb ();
-  }
-}
 
 // Pure virtual destructors still need definitions
 dhash::~dhash () {}
@@ -107,8 +95,6 @@ dhash_impl::dhash_impl (str dbname, u_int k, int _ss_mode)
     exit (-1);
   }
  
-  open_databases.push_back (db);
-
   if (KEYHASHDB) {
     keyhash_db = New refcounted<dbfe>();
 
@@ -123,8 +109,6 @@ dhash_impl::dhash_impl (str dbname, u_int k, int _ss_mode)
 
     // XXX should check that every public key in db is also in
     // keyhash_db
-
-    open_databases.push_back (keyhash_db);
   }
 
   // merkle state
@@ -200,26 +184,6 @@ dhash_impl::init_after_chord(ptr<vnode> node, ptr<route_factory> _r_factory)
 }
 
 void
-dhash_impl::sendblock (chord_node dst, bigint blockID, bool last, callback<void>::ref cb)
-{
-  // warnx << "sendblock: to " << dst.x << ", id " << blockID << ", from " << host_node->my_ID () << "\n";
-
-  bool r = host_node->locations->insert (dst);
-  assert (r == true);
-
-  ptr<dbrec> blk = db->lookup (id2dbrec (blockID));
-  assert (blk); // XXX: don't assert here, maybe just callback?
-  ref<dhash_block> dhblk = New refcounted<dhash_block> (blk->value, blk->len);
-
-  // XXX pass 'dst' not 'dst.x' to storeblock so that the store
-  // works even if dst.x is evicted from the location table
-  cli->storeblock (dst.x, blockID, dhblk, last,
-		   wrap (this, &dhash_impl::sendblock_cb, cb), 
-		   DHASH_REPLICA);
-}
-
-
-void
 dhash_impl::missing (chord_node from, bigint key)
 {
   warn << host_node->my_ID () << ": missing key " << key << ", from " << from.x << "\n"; // 
@@ -239,6 +203,26 @@ dhash_impl::missing_retrieve_cb (bigint key, dhash_stat err, ptr<dhash_block> b,
   ref<dbrec> d = New refcounted<dbrec> (b->data, b->len);
 
   dbwrite (k, d);
+}
+
+
+void
+dhash_impl::sendblock (chord_node dst, bigint blockID, bool last, callback<void>::ref cb)
+{
+  // warnx << "sendblock: to " << dst.x << ", id " << blockID << ", from " << host_node->my_ID () << "\n";
+  
+  bool r = host_node->locations->insert (dst);
+  assert (r == true);
+
+  ptr<dbrec> blk = db->lookup (id2dbrec (blockID));
+  assert (blk); // XXX: don't assert here, maybe just callback?
+  ref<dhash_block> dhblk = New refcounted<dhash_block> (blk->value, blk->len);
+
+  // XXX pass 'dst' not 'dst.x' to storeblock so that the store
+  // works even if dst.x is evicted from the location table
+  cli->storeblock (dst.x, blockID, dhblk, last,
+		   wrap (this, &dhash_impl::sendblock_cb, cb), 
+		   DHASH_REPLICA);
 }
 
 
@@ -1006,55 +990,6 @@ dhash_impl::storesvc_cb(svccb *sbp,
  
 // -------- reliability stuff
 
-void
-dhash_impl::transfer_initial_keys ()
-{
-  chordID succ = host_node->my_succ ();
-  if (succ ==  host_node->my_ID ()) return;
-
-  transfer_initial_keys_range (host_node->my_ID(), succ);
-}
-
-void
-dhash_impl::transfer_initial_keys_range (chordID start, chordID succ)
-{
-  ptr<s_dhash_getkeys_arg> arg = New refcounted<s_dhash_getkeys_arg>;
-  arg->pred_id = host_node->my_ID ();
-  arg->start = start;
-  arg->v = succ;
-
-  dhash_getkeys_res *res = New dhash_getkeys_res (DHASH_OK);
-  doRPC(succ, dhash_program_1, DHASHPROC_GETKEYS, 
-			      arg, res,
-			      wrap(this, &dhash_impl::transfer_init_getkeys_cb, 
-				   succ, res));
-}
-
-void
-dhash_impl::transfer_init_getkeys_cb (chordID succ,
-				 dhash_getkeys_res *res, 
-				 clnt_stat err)
-{
-  if ((err) || (res->status != DHASH_OK)) 
-    fatal << "Couldn't transfer keys from my successor\n";
-
-  for (unsigned int i = 0; i < res->resok->keys.size (); i++) {
-    chordID k = res->resok->keys[i];
-    if (key_status (k) == DHASH_NOTPRESENT)
-      get_key (succ, k, wrap (this, &dhash_impl::transfer_init_gotk_cb));
-  }
-
-  if(res->resok->keys.size () > 0)
-    transfer_initial_keys_range(res->resok->keys[res->resok->keys.size () - 1]+1, succ); // '+1' need to skip start key
-
-  delete res;
-}
-
-void
-dhash_impl::transfer_init_gotk_cb (dhash_stat err) 
-{
-  if (err) warn << "Error fetching key: " << err << "\n";
-}
 
 void
 dhash_impl::update_replica_list () 
@@ -1078,150 +1013,6 @@ dhash_impl::update_replica_list ()
 #endif
 }
 
-void
-dhash_impl::install_replica_timer () 
-{
-  check_replica_tcb = delaycb (rc_delay, 0, 
-			       wrap (this, &dhash_impl::check_replicas_cb));
-}
-
-
-
-/* O( (number of replicas)^2 ) (but doesn't assume anything about
-ordering of chord::succlist*/
-bool 
-dhash_impl::isReplica(chordID id) { 
-  for (unsigned int i=0; i < replicas.size(); i++)
-    if (replicas[i].x == id) return true;
-  return false;
-}
-
-void
-dhash_impl::check_replicas_cb () {
-  check_replicas ();
-  install_replica_timer ();
-}
-
-void
-dhash_impl::check_replicas () 
-{
-  //XXX removed by fdabek: replace with something smart
-  // using merkle
-}
-
-void
-dhash_impl::fix_replicas_txerd (dhash_stat err) 
-{
-  if (err) warn << "error replicating key\n";
-}
-
-// --- node to node transfers ---
-void
-dhash_impl::replicate_key (chordID key, cbstat_t cb)
-{
-  update_replica_list ();
-  
-  if (replicas.size () == 0) {
-    (cb) (DHASH_OK);
-    return;
-  }
-  
-  int *replica_cnt = New int;
-  int *replica_err  = New int;
-  *replica_cnt = replicas.size ();
-  *replica_err  = 0;
-  
-  for (unsigned i=0; i<replicas.size (); i++) {
-    transfer_key (replicas[i].x, key, DHASH_REPLICA, 
-		  wrap (this, &dhash_impl::replicate_key_cb,
-			replica_cnt, replica_err, cb, key));
-  }
-}
-
-
-void
-dhash_impl::replicate_key_cb (int* replica_cnt, int *replica_err,
-                         cbstat_t cb, chordID key, dhash_stat err) 
-{
-  *replica_cnt = *replica_cnt -1;
-  if (err)
-    *replica_err = 1;
-
-  if (*replica_cnt == 0) {
-    int err = *replica_err;
-    delete replica_cnt;
-    delete replica_err;
-    if (err)
-      (*cb) (DHASH_STOREERR);
-    else
-      (*cb) (DHASH_OK);
-  }
-}
-
-void
-dhash_impl::transfer_key (chordID to, chordID key, store_status stat, 
-		     callback<void, dhash_stat>::ref cb) 
-{
-  fetch (key, -1, wrap(this, &dhash_impl::transfer_fetch_cb, to, key, stat, cb));
-}
-
-void
-dhash_impl::transfer_fetch_cb (chordID to, chordID key, store_status stat, 
-			  callback<void, dhash_stat>::ref cb,
-			  int cookie, ptr<dbrec> data, dhash_stat err) 
-{
-  if (err || !data) {
-    warn << "where did the block go?\n";
-    (*cb) (DHASH_NOENT);
-  } else if (!host_node->locations->cached (to)) {
-    warn << "the successor " << to << "left the cache already\n";
-    (*cb) (DHASH_NOENT);
-  } else {
-    ref<dhash_block> blk = New refcounted<dhash_block> (data->value,data->len);
-    cli->storeblock (to, key, blk, false,
-		     wrap (this, &dhash_impl::transfer_store_cb, cb),
-		     stat);
-  }
-}
-
-void
-dhash_impl::transfer_store_cb (callback<void, dhash_stat>::ref cb, 
-			  dhash_stat status,
-			  chordID blockID) 
-{
-  cb (status);
-}
-
-void
-dhash_impl::get_key (chordID source, chordID key, cbstat_t cb) 
-{
-  cli->retrieve(source, key, wrap (this, &dhash_impl::get_key_got_block, key, cb));
-}
-
-
-void
-dhash_impl::get_key_got_block (chordID key, cbstat_t cb, dhash_stat err, ptr<dhash_block> b, route path) 
-{
-
-  if (err)
-    cb (err);
-  else {
-    ref<dbrec> k = id2dbrec (key);
-    ref<dbrec> d = New refcounted<dbrec> (b->data, b->len);
-
-    dbwrite (k, d);
-    get_key_stored_block (cb, 0);
-  }
-}
-
-void
-dhash_impl::get_key_stored_block (cbstat_t cb, int err)
-{
-  if (err)
-    (cb)(DHASH_STOREERR);
-  else
-    (cb)(DHASH_OK);
-}
 
 
 // --- node to database transfers --- 
@@ -1406,7 +1197,7 @@ dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
         return;
       }
      
-      if (!CODING) {
+#if 0
 	if (!verify (arg->key, ctype, (char *)d->value, d->len) ||
 	    ((ctype == DHASH_NOAUTH) 
 	     && key_status (arg->key) != DHASH_NOTPRESENT)) {
@@ -1418,7 +1209,7 @@ dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
 	  }
 	  return;
 	}
-      }
+#endif
 
       dhash_stat stat;
       chordID id = arg->key;
@@ -1465,51 +1256,6 @@ dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
   }
   else
     cb (DHASH_STORE_PARTIAL);
-}
-
-void
-dhash_impl::sent_storecb_cb (dhash_stat *s, clnt_stat err) 
-{
-  if (err || !s || (s && *s))
-    warn << "error sending storecb\n";
-  delete s;
-}
-
-void
-dhash_impl::send_storecb_cacheloc (chordID srcID, uint32 nonce, dhash_stat status,
-                              chordID ID, bool ok, chordstat stat)
-{
-  if (!ok || stat) {
-    warn << "challenge of " << ID << " failed\n";
-    // just fail, store will time out
-  }
-  else {
-    ptr<s_dhash_storecb_arg> arg = New refcounted<s_dhash_storecb_arg> ();
-    arg->v = ID;
-    arg->nonce = nonce;
-    arg->status = status;
-    dhash_stat *res = New dhash_stat ();
-    doRPC (ID, dhash_program_1, DHASHPROC_STORECB,
-	   arg, res, wrap (this, &dhash_impl::sent_storecb_cb, res));
-  }
-}
-
-void
-dhash_impl::send_storecb (chord_node sender, chordID srcID, uint32 nonce, dhash_stat stat)
-{
-  host_node->locations->cacheloc (sender.x, sender.r,
-				  wrap (this, &dhash_impl::send_storecb_cacheloc,
-				        srcID, nonce, stat));
-}
-
-void
-dhash_impl::store_repl_cb (cbstore cb, chord_node sender, chordID srcID, int32 nonce,
-                      dhash_stat err) 
-{
-  if (err)
-    send_storecb (sender, srcID, nonce, DHASH_STOREERR);
-  else
-    send_storecb (sender, srcID, nonce, DHASH_OK);
 }
 
 
@@ -1649,7 +1395,8 @@ dhash_impl::dbwrite (ref<dbrec> key, ref<dbrec> data)
 	     << " " << action << " " << dbrec2id(key) << "\n";
 }
 
-
+// ----------------------------------------------------------------------------
+// store state 
 
 static void
 join(store_chunk *c)

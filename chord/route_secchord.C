@@ -2,7 +2,7 @@
 #include "location.h"
 #include "route_secchord.h"
 
-#define NSUCC 10 // XXX blah blah blah
+#define NSUCC 16
 
 // XXX should timeout if outstanding is too high for too long? maybe
 //     can tolerate a few failures.

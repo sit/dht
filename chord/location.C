@@ -37,7 +37,7 @@
 #define loctrace modlogger ("loctable")
 
 // XXX should include succ_list.h but that's too much hassle.
-#define NSUCC 10
+#define NSUCC 16
 
 const int CHORD_RPC_STP (0);
 const int CHORD_RPC_SFSU (1);
