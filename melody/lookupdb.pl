@@ -154,7 +154,7 @@ foreach $mp3file (@mp3s) {
 
 #google
     if($genre eq 'misc') {
-	$googlegenre = `/shome/am1/jsr/googleit "$artist"`;
+	$googlegenre = `googleit "$artist"`;
 	print "gg $googlegenre\n";
 	$genre = "\L$googlegenre";
     }
@@ -198,7 +198,7 @@ foreach $mp3file (@mp3s) {
 
 #google
 	if($genre eq 'misc') {
-	    $googlegenre = `/shome/am1/jsr/googleit "$artistt"`;
+	    $googlegenre = `googleit "$artistt"`;
 	    print "gg $googlegenre\n";
 	    $genre = "\L$googlegenre";
 	}
@@ -251,7 +251,7 @@ foreach $mp3file (@mp3s) {
 
 #google
 	if($genre eq 'misc') {
-	    $googlegenre = `/shome/am1/jsr/googleit "$artistt"`;
+	    $googlegenre = `googleit "$artistt"`;
 	    print "gg $googlegenre\n";
 	    $genre = "\L$googlegenre";
 	}
