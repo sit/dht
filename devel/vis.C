@@ -8,6 +8,7 @@
 #include "transport_prot.h"
 #include "misc_utils.h"
 #include "chord_util.h"
+#include "dns.h"
 
 #define WINX 700
 #define WINY 700
@@ -48,12 +49,15 @@ void check_set_state (unsigned int newstate);
 static GdkPixmap *pixmap = NULL;
 static GtkWidget *window = NULL;
 static GtkWidget *drawing_area = NULL;
+static GtkWidget *drawing_area_r = NULL;
+static GtkWidget *drawing_area_g = NULL;
 static GdkGC *draw_gc = NULL;
 static GdkColormap *cmap = NULL;
 static GdkFont *courier10 = NULL;
 
 static GtkWidget *lookup;
 static GtkWidget *last_clicked;
+static GtkWidget *total_nodes;
 
 static short interval = -1;
 static int glevel = 1;
@@ -70,6 +74,7 @@ static float centerx = 0.0;
 static float centery = 0.0;
 
 static bool ggeo = false;
+static bool dual = false;
 
 struct color_pair {
   GdkColor c;
@@ -82,7 +87,7 @@ struct f_node {
   chordID ID;
   vec<float> coords;
 
-  str host;
+  str host, hostname;
   unsigned short port;
   chord_nodelistextres *fingers;
   chord_nodeextres *predecessor;
@@ -95,7 +100,7 @@ struct f_node {
   bool highlight;
 
   f_node (const chord_node &n) :
-    ID (n.x), host (n.r.hostname), port (n.r.port),
+    ID (n.x), host (n.r.hostname), hostname(""), port (n.r.port),
     fingers (NULL), predecessor (NULL), debruijn (NULL),
     successors (NULL), toes (NULL),
     selected (true), highlight (false)
@@ -103,6 +108,7 @@ struct f_node {
     draw = check_get_state ();
     for (u_int i = 0; i < n.coords.size (); i++)
       coords.push_back (n.coords[i]);
+    dnslookup();
   }
 
   f_node (chordID i, str h, unsigned short p) :
@@ -113,8 +119,23 @@ struct f_node {
     successors = NULL;
     toes = NULL;
     debruijn = NULL;
+    dnslookup();
   };
+
+  void dnslookup (void) {
+    struct in_addr ar;
+    inet_aton (host, &ar);
+    dns_hostbyaddr (ar, wrap (this, &f_node::dnslookup_cb));
+    hostname = host;
+  }
   
+  void dnslookup_cb (ptr<hostent> he, int err) {
+    if (err)
+      warn << "dns lookup error\n";
+    else
+      hostname = he->h_name;
+  }
+
   ~f_node () { 
     if (fingers) delete fingers;
     if (predecessor) delete predecessor;
@@ -247,6 +268,10 @@ add_node (const chord_node &n)
     warn << "added " << n << "\n";
     nu = New f_node (n);
     nodes.insert (nu);
+
+    char nodess[1024];
+    sprintf (nodess, "%d nodes", nodes.size ());
+    gtk_label_set_text (GTK_LABEL (total_nodes), nodess);
   }
   get_queue.push_back (n.x);
   return nu;
@@ -278,6 +303,9 @@ doRPCcb (chordID ID, int procno, dorpc_res *res, void *out, aclnt_cb cb, clnt_st
     if (!err) warn << "status: " << res->status << "\n";
     warn << "deleting " << ID << ":" << nu->host << "\n";
     nodes.remove (nu);
+    char nodess[1024];
+    sprintf (nodess, "%d nodes", nodes.size ());
+    gtk_label_set_text (GTK_LABEL (total_nodes), nodess);
     delete nu;
     return;
   }
@@ -605,8 +633,12 @@ initgraf ()
 
   window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
 
-  drawing_area = gtk_drawing_area_new();
-  gtk_drawing_area_size ((GtkDrawingArea *)drawing_area, WINX, WINY);
+  drawing_area = drawing_area_r = gtk_drawing_area_new();
+  gtk_drawing_area_size ((GtkDrawingArea *)drawing_area_r, WINX, WINY);
+  if (dual) {
+    drawing_area_g = gtk_drawing_area_new();
+    gtk_drawing_area_size ((GtkDrawingArea *)drawing_area_g, WINX, WINY);
+  }
 
   GtkWidget *select_all = gtk_button_new_with_label ("Select All");
   GtkWidget *select_none = gtk_button_new_with_label ("Select None");
@@ -614,10 +646,12 @@ initgraf ()
   GtkWidget *draw_nothing = gtk_button_new_with_label ("Reset");
   GtkWidget *hsep2 = gtk_hseparator_new ();
   last_clicked = gtk_label_new ("                    ");
+  total_nodes = gtk_label_new ("                    ");
   for (size_t i = 0; i < NELEM (handlers); i++)
     handlers[i].widget = gtk_check_button_new_with_label (handlers[i].name);
   GtkWidget *hsep3 = gtk_hseparator_new ();
   lookup = gtk_button_new_with_label ("Visualize Lookup");
+  GtkWidget *hsep4 = gtk_hseparator_new ();
 
   GtkWidget *in = gtk_button_new_with_label ("Recenter");
   GtkWidget *refresh = gtk_button_new_with_label ("Refresh All");
@@ -638,6 +672,8 @@ initgraf ()
     gtk_box_pack_start (GTK_BOX (vbox), handlers[i].widget, FALSE, FALSE, 0);
   gtk_box_pack_start (GTK_BOX (vbox), hsep3, FALSE, TRUE, 0);
   gtk_box_pack_start (GTK_BOX (vbox), lookup, FALSE, TRUE, 0);
+  gtk_box_pack_start (GTK_BOX (vbox), hsep4, FALSE, TRUE, 0);
+  gtk_box_pack_start (GTK_BOX (vbox), total_nodes, FALSE, TRUE, 0);
 
   gtk_box_pack_end (GTK_BOX (vbox), quit, FALSE, FALSE, 0);
   gtk_box_pack_end (GTK_BOX (vbox), refresh, FALSE, FALSE, 0);
@@ -646,7 +682,9 @@ initgraf ()
   gtk_box_pack_end (GTK_BOX (vbox), in, FALSE, FALSE, 0);
 
   GtkWidget *hbox = gtk_hbox_new (FALSE, 0);
-  gtk_box_pack_start (GTK_BOX (hbox), drawing_area, TRUE, FALSE, 0);
+  gtk_box_pack_start (GTK_BOX (hbox), drawing_area_r, TRUE, FALSE, 0);
+  if (dual)
+    gtk_box_pack_start (GTK_BOX (hbox), drawing_area_g, TRUE, FALSE, 0);
   gtk_box_pack_start (GTK_BOX (hbox), sep, FALSE, TRUE, 5);
   gtk_box_pack_start (GTK_BOX (hbox), vbox, TRUE, FALSE, 0);
 
@@ -692,22 +730,38 @@ initgraf ()
 		      GTK_SIGNAL_FUNC (key_release_event), NULL);
   gtk_widget_set_events (window, GDK_KEY_RELEASE_MASK);
   
-  gtk_signal_connect (GTK_OBJECT (drawing_area), "expose_event",
+  gtk_signal_connect (GTK_OBJECT (drawing_area_r), "expose_event",
 		      (GtkSignalFunc) expose_event, NULL);
-  gtk_signal_connect (GTK_OBJECT(drawing_area),"configure_event",
+  gtk_signal_connect (GTK_OBJECT(drawing_area_r),"configure_event",
 		      (GtkSignalFunc) configure_event, NULL);
-  gtk_signal_connect (GTK_OBJECT (drawing_area), "button_press_event",
+  gtk_signal_connect (GTK_OBJECT (drawing_area_r), "button_press_event",
 		      (GtkSignalFunc) button_down_event,
 		      NULL);
 
-  gtk_widget_set_events (drawing_area, GDK_EXPOSURE_MASK
+  gtk_widget_set_events (drawing_area_r, GDK_EXPOSURE_MASK
 			 | GDK_LEAVE_NOTIFY_MASK
 			 | GDK_BUTTON_PRESS_MASK
 			 | GDK_POINTER_MOTION_MASK
 			 | GDK_POINTER_MOTION_HINT_MASK);
 
+  gtk_widget_show (drawing_area_r);
 
-  gtk_widget_show (drawing_area);
+  if (dual) {
+    gtk_signal_connect (GTK_OBJECT (drawing_area_g), "expose_event",
+			(GtkSignalFunc) expose_event, NULL);
+    gtk_signal_connect (GTK_OBJECT(drawing_area_g),"configure_event",
+			(GtkSignalFunc) configure_event, NULL);
+    gtk_signal_connect (GTK_OBJECT (drawing_area_g), "button_press_event",
+			(GtkSignalFunc) button_down_event,
+			NULL);
+    gtk_widget_set_events (drawing_area_g, GDK_EXPOSURE_MASK
+			   | GDK_LEAVE_NOTIFY_MASK
+			   | GDK_BUTTON_PRESS_MASK
+			   | GDK_POINTER_MOTION_MASK
+			   | GDK_POINTER_MOTION_HINT_MASK);
+    gtk_widget_show (drawing_area_g);
+  }
+
   gtk_widget_show (select_all);
   gtk_widget_show (select_none);
   gtk_widget_show (draw_nothing);
@@ -715,6 +769,7 @@ initgraf ()
     gtk_widget_show (handlers[i].widget);
   gtk_widget_show (last_clicked);
   gtk_widget_show (lookup);
+  gtk_widget_show (total_nodes);
   gtk_widget_show (in);
   gtk_widget_show (dump_to_file);
   gtk_widget_show (geo);
@@ -724,6 +779,7 @@ initgraf ()
   gtk_widget_show (hsep1);
   gtk_widget_show (hsep2);
   gtk_widget_show (hsep3);
+  gtk_widget_show (hsep4);
   gtk_widget_show (hbox);
   gtk_widget_show (vbox);
   gtk_widget_show (window);
@@ -953,7 +1009,13 @@ draw_search_progress ()
   }
 
   for (size_t i = 1; i < search_step; i++)
-    draw_arc (search_path[0]->ID, search_path[i]->ID, draw_gc);
+    if (ggeo) {
+      int tox, toy, fromx, fromy;
+      ID_to_xy(search_path[0]->ID, &fromx, &fromy);
+      ID_to_xy(search_path[i]->ID, &tox, &toy);
+      draw_arrow (fromx, fromy, tox, toy, draw_gc);
+    } else
+      draw_arc (search_path[0]->ID, search_path[i]->ID, draw_gc);
 
   search_path[0]->selected = true;
   if (search_step != search_path.size ())
@@ -1028,6 +1090,7 @@ key_release_event (GtkWidget *widget,
       search_step++;
       if (search_step > search_path.size ()) {
 	search_key = 0;
+	search_path.setsize (0);
 	draw_nothing_cb (NULL, NULL);
 	break;
       }
@@ -1109,8 +1172,7 @@ static gint button_down_event (GtkWidget *widget,
   strncpy (IDs, ID.cstr (), 12);
   IDs[12] = 0;
   char hosts[1024];
-  hostent *he = gethostbyname (n->host.cstr ());
-  strcpy (hosts, he->h_name);
+  strcpy (hosts, n->hostname);
   strcat (hosts, ":");
   strcat (hosts, IDs);
 
@@ -1302,6 +1364,11 @@ draw_arrow (int fromx, int fromy,
 void
 draw_ring ()
 {
+  if (ggeo)
+    drawing_area = drawing_area_g;
+  else
+    drawing_area = drawing_area_r;
+
   int x, y;
   GtkWidget *widget = drawing_area;
 
@@ -1319,7 +1386,7 @@ draw_ring ()
 		      0,0,
 		      WINX - 1, WINY - 1);
 
-  if (search_key != 0) {
+  if (search_key != 0 && (!ggeo || search_path.size () > 1)) {
     // Draw what we are looking for.
     ID_to_xy (search_key, &x, &y);
     gdk_gc_set_foreground (draw_gc, &search_color);
@@ -1373,6 +1440,8 @@ draw_ring ()
 		       IDs);
     }
 
+    if(!ggeo) {
+
     if (n->successors && ((n->draw & DRAW_IMMED_SUCC) == DRAW_IMMED_SUCC) &&
 	n->successors->resok->nlist.size () > 1) {
       int a,b;
@@ -1421,9 +1490,17 @@ draw_ring ()
 	draw_arrow (x,y,a,b,draw_gc);
       }
     }
+    }
     n = nodes.next (n);
   }
   redraw ();
+
+  if(dual && !ggeo) {
+    ggeo = true;
+    draw_ring ();
+  } else {
+    ggeo = false;
+  }
 }
 
 void
@@ -1482,8 +1559,8 @@ ID_to_xy (chordID ID, int *x, int *y)
   f_node *f = nodes[ID];
   
   if (ggeo) {
-    if (!f) // assume it is a lookup target
-      f = nodes[search_path[search_path.size() - 1]->ID];
+    if (!f && search_path.size () > 0) // assume it is a lookup target
+      f = nodes[search_path[search_path.size () - 1]->ID];
     if (f && f->coords.size () > 0) {
       *x = (int)(WINX/2 + ((f->coords[0] - centerx)/zoomx)*WINX);
       *y = (int)(WINY/2 + ((f->coords[1] - centery)/zoomy)*WINY);
@@ -1539,7 +1616,7 @@ main (int argc, char** argv)
   color_file = ".viscolors";
 
   int ch;
-  while ((ch = getopt (argc, argv, "h:j:a:l:f:is:")) != -1) {
+  while ((ch = getopt (argc, argv, "h:j:a:l:f:is:d")) != -1) {
     switch (ch) {
     case 's':
       {
@@ -1588,6 +1665,11 @@ main (int argc, char** argv)
     case 'i':
       {
 	drawids = true;
+      }
+      break;
+    case 'd':
+      {
+	dual = true;
       }
       break;
     case 'h':
