@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.27 2003/11/17 20:07:58 strib Exp $ */
+/* $Id: tapestry.C,v 1.28 2003/11/17 23:20:36 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -140,7 +140,7 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
   lr.hopcount = 0;
   lr.failed = false;
   
-  uint curr_join =_join_num;
+  uint curr_join = _join_num;
   handle_lookup( &la, &lr );
   if( !node()->alive() || _join_num != curr_join ) {
     delete args;
@@ -196,6 +196,7 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
   }
   next_hop( args->key, &ips, _redundant_lookup_num );
   uint i = 0;
+  uint curr_join = _join_num;
   for( ; i < _redundant_lookup_num; i++ ) {
     IPAddress next = ips[i];
     TapDEBUG(3) << "Trying " << next << endl;
@@ -217,19 +218,20 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
       if( succ ) {
 	record_stat( STAT_LOOKUP, 1, 2 );
       }
-      // since we're using recursive routing, looking for this is stupid
-      // make sure we haven't crashed and/or started another join
-      //if( !node()->alive() || _join_num != curr_join ) {
-      //ret->failed = true;
-      //TapDEBUG(2) << "Lookup aborting, dead or rejoined" << endl;
-      //delete ips;
-      //return;
-      //}
       if( succ && !ret->failed ) {
 	// don't need to try the next one
 	ret->hopcount++;
 	break;
       } else {
+	// since we're using recursive routing, we only do this check in the
+	// case of non-success.
+	// make sure we haven't crashed and/or started another join
+	if( !node()->alive() || _join_num != curr_join ) {
+	  ret->failed = true;
+	  TapDEBUG(2) << "Lookup aborting, dead or rejoined" << endl;
+	  delete ips;
+	  return;
+	}
 	// print out that a failure happened
 	TapDEBUG(1) << "Failure happened during the lookup of key " << 
 	  print_guid(args->key) << ", trying to reach node " << next << 
@@ -1666,8 +1668,7 @@ Tapestry::crash(Args *args)
 string
 Tapestry::print_guid( GUID id )
 {
-  return "";
-  /*
+
   char buf[_digits_per_id+1];
 
   //printf( "initial guid: %16qx\n", id );
@@ -1678,7 +1679,7 @@ Tapestry::print_guid( GUID id )
   }
 
   return string(buf);
-  */
+
 }
 
 void
