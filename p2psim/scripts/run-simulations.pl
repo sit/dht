@@ -22,7 +22,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-# $Id: run-simulations.pl,v 1.3 2003/11/29 21:09:44 strib Exp $
+# $Id: run-simulations.pl,v 1.4 2003/11/29 22:27:29 strib Exp $
 
 use strict;
 use Getopt::Long;
@@ -170,11 +170,23 @@ if( $seed ne "" ) {
 open( ARGS, "<$argsfile" ) or die( "Couldn't open args file: $argsfile" );
 my @argnames = ();
 my %argtable = ();
+my %conditions = ();
 my $newAr;
 while( <ARGS> ) {
     my @args = split( /\s+/ );
     my $argname = shift(@args);
     push @argnames, $argname;
+
+    # look for any conditions
+    while( $args[0] =~ /^\</ or $args[0] =~ /^\<\=/ or $args[0] =~ /^\>/ ) {
+	my $cond = shift(@args);
+	if( !defined $conditions{$argname} ) {
+	    $conditions{$argname} = "";
+	}
+	$conditions{$argname} .= "$cond ";
+	print "$argname $cond\n";
+    }
+
     $newAr = \@args; 
     $argtable{$argname} = $newAr;
 }
@@ -225,6 +237,9 @@ sub run_sim {
 
     if( !defined $randomize ) {
 	foreach my $val (@args) {
+	    if( !&check_conditions( $argname, $val, $args_so_far ) ) {
+		next;
+	    }
 	    my $arg_string = $args_so_far . "$argname=$val ";
 	    if( $arg_iter == $#argnames+1 ) {
 		# it's the last argument, so just run the test
@@ -238,17 +253,66 @@ sub run_sim {
 	
 	# pick a random value and recurse
 	my $val = $args[int(rand($#args+1))];
-	my $arg_string = $args_so_far . "$argname=$val ";
-	if( $arg_iter == $#argnames+1 ) {
-	    # it's the last argument, so just run the test
-	    $randomize--;
-	    &run_command( $arg_string );
-	} else {
-	    # recurse again
-	    &run_sim( $arg_string, $arg_iter );
+	if( !defined $val ) { die( "value not defined" ) };
+	if( &check_conditions( $argname, $val, $args_so_far ) ) {
+	    my $arg_string = $args_so_far . "$argname=$val ";
+	    if( $arg_iter == $#argnames+1 ) {
+		# it's the last argument, so just run the test
+		$randomize--;
+		&run_command( $arg_string );
+	    } else {
+		# recurse again
+		&run_sim( $arg_string, $arg_iter );
+	    }
 	}
 
     }
+
+}
+
+sub check_conditions {
+    my $arg = shift;
+    my $val = shift;
+    my $arg_string = shift;
+
+    if( defined $conditions{$arg} ) {
+
+	my @conds = split( /\s+/, $conditions{$arg} );
+	
+	foreach my $cond (@conds) {
+	    if( $cond =~ /^\<(\w*)$/ ) {
+		my $oarg = $1;
+		if( $arg_string =~ /$oarg\=(\d*)/ ) {
+		    if( $val >= $1 ) {
+			return 0;
+		    }
+		} else {
+		    die( "condition doesn't match: $cond, $arg_string" );
+		}
+	    } elsif( $cond =~ /^\<\=(\w*)$/ ) {
+		my $oarg = $1;
+		if( $arg_string =~ /$oarg=(\d*)/ ) {
+		    if( $val > $1 ) {
+			return 0;
+		    }
+		} else {
+		    die( "condition doesn't match: $cond, $arg_string" );
+		}
+	    } elsif( $cond =~ /^\>(\w*)$/ ) {
+		my $oarg = $1;
+		if( $arg_string =~ /$oarg=(\d*)/ ) {
+		    if( $val <= $1 ) {
+			return 0;
+		    }
+		} else {
+		    die( "condition doesn't match: $cond, $arg_string" );
+		}
+	    }	    
+	}
+
+    }
+
+    return 1;
 
 }
 
