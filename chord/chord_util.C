@@ -166,7 +166,7 @@ betweenrightincl (chordID &a, chordID &b, chordID &n)
   bool r;
   if ((a == b) && (n == a)) {
     r = 1;
-  } if (a < b) {
+  } else if (a < b) {
     r = (n > a) && (n <= b);
   } else {
     r = (n > a) || (n <= b);
