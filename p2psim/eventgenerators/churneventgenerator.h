@@ -38,7 +38,7 @@ deathmean       lifemean        average time (ms) a node is dead at a time
 lookupmean      10000           average time (ms) between lookups per node
 exittime        200000          length of the experiment (in ms)
 ipkeys          false           generate lookups where keys are node IPs
-                                                                                
+datakeys        false           generate lookups where keys are data items      
 Join, crash, and lookup events will be exponentially distributed about the
 means given above.
  */
@@ -70,6 +70,7 @@ private:
   string _exittime_string;
   Time _exittime;
   bool _ipkeys;
+  bool _datakeys;
   vector<IPAddress> *_ips;
 
   Time next_exponential(u_int mean);

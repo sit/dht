@@ -36,6 +36,8 @@
 #include <list>
 #include <stdlib.h>
 #include <iostream>
+#include "observers/datastoreobserver.h"
+
 using namespace std;
 
 ChurnEventGenerator::ChurnEventGenerator(Args *args)
@@ -63,6 +65,8 @@ ChurnEventGenerator::ChurnEventGenerator(Args *args)
   Node::set_collect_stat_time(args->nget("stattime",0,10));
 
   _ipkeys = args->nget("ipkeys", 0, 10);
+  _datakeys = args->nget("datakeys", 0, 10);
+
   _ips = NULL;
 
   EventQueue::Instance()->registerObserver(this);
@@ -210,6 +214,14 @@ ChurnEventGenerator::next_exponential( u_int mean )
 string
 ChurnEventGenerator::get_lookup_key()
 {
+
+  if (_datakeys) {
+    DataItem vd = DataStoreObserver::Instance(NULL)->get_random_item();
+    char buf[10];
+    sprintf (buf, "%llX", vd.key);
+    return string (buf);
+  }
+
   if((!_ips) || Network::Instance()->changed()) {
     _ips = Network::Instance()->getallfirstips();
   }
