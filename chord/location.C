@@ -63,7 +63,7 @@ ignore_challengeresp (chordID x, bool b, chordstat s)
 cbchallengeID_t cbchall_null (wrap (ignore_challengeresp));
 
 location::location (const chordID &_n, const net_address &_r) 
-  : n (_n), addr (_r), alive (true), challenged (false)
+  : n (_n), addr (_r), alive (true), checkdeadcb (NULL), challenged (false)
 {
   bzero(&saddr, sizeof(sockaddr_in));
   saddr.sin_family = AF_INET;
@@ -72,6 +72,8 @@ location::location (const chordID &_n, const net_address &_r)
 };
 
 location::~location () {
+  if (checkdeadcb)
+    timecb_remove (checkdeadcb);
   warnx << "~location: delete " << n << "\n";
 }
 
@@ -96,8 +98,7 @@ locationtable::locationtable (ptr<chord> _chordnode, int _max_cache)
     nnodessum (0),
     nnodes (0),
     nvnodes (0),
-    nchallenge (0),
-    nout_continuous (0)
+    nchallenge (0)
 {
   initialize_rpcs ();
 }
@@ -116,7 +117,6 @@ locationtable::locationtable (const locationtable &src)
   nnodes = 0;
   nnodessum = 0;
   nchallenge = 0;
-  nout_continuous = 0;
 
   // Deep copy the list of locations. Do not copy pins because those
   // reflect the needs of the individual vnodes; each vnode should
@@ -189,6 +189,9 @@ locationtable::doRPCcb (ptr<location> l, aclnt_cb realcb, clnt_stat err)
       //     than before.
       good--;
       l->alive = false;
+      if (!l->checkdeadcb)
+	l->checkdeadcb = delaycb (60, 0,
+	  wrap(this, &locationtable::check_dead, l, 120));
     }
   } else {
     if (!l->alive) {
@@ -296,23 +299,7 @@ locationtable::delete_cachedlocs (void)
     }
   }
   assert (lw);
-
-  if (lw->good ()) good--;
-  locs.remove (lw);
-  loclist.remove (lw->n_);
-  cachedlocs.remove (lw);
-  size_cachedlocs--;
-  {
-    locwrap *foo = locs.first ();
-    size_t mygood = 0;
-    while (foo) {
-      if (foo->good ())
-	mygood++;
-      foo = locs.next (foo);
-    }
-    assert (good == mygood);
-  }
-  delete lw;
+  remove (lw);
 }
 
 void
@@ -682,58 +669,64 @@ locationtable::stats ()
   hosts->stats ();
 }
 
-bool
-locationtable::continuous_stabilizing ()
+void
+locationtable::check_dead (ptr<location> l, unsigned int newwait)
 {
-  return nout_continuous > 0;
+  warnx << "check_dead: " << l->n << "\n";
+  l->checkdeadcb = NULL;
+  
+  // make sure we actually go out on the network and check if the node
+  // is alive. if we're allowed to challenge, do that as well.
+  if (nochallenges)
+    ping (l->n, wrap (this, &locationtable::check_dead_cb, l, newwait,
+			    l->n, false));
+  else
+    challenge (l->n, wrap (this, &locationtable::check_dead_cb, l, newwait));
 }
 
 void
-locationtable::do_continuous ()
+locationtable::check_dead_cb (ptr<location> l, unsigned int newwait,
+			      chordID x, bool b, chordstat s)
 {
-  check_dead ();
-}
+  // the challenge_cb and doRPCcb has already fixed up the
+  // the cases where the node is alive. We're just here to
+  // reschedule a check in case the node was still unreachable.
+  
+  if (s == CHORD_OK)
+    return;
 
-bool
-locationtable::isstable ()
-{
-  return true;
-}
-
-void
-locationtable::check_dead ()
-{
-  for (locwrap *l = cachedlocs.first; l != NULL; l = cachedlocs.next (l)) {
-    if ((l->type_ & LOC_REGULAR) && !l->loc_->alive) {
-      warnx << "check_dead: " << l->loc_->n << "\n";
-      nout_continuous++;
-      // make sure we actually go out on the network and check if the node
-      // is alive. if we're allowed to challenge, do that as well.
-      if (nochallenges)
-	ping (l->loc_->n, wrap (this, &locationtable::check_dead_cb,
-				l->loc_->n, false));
-      else
-	challenge (l->loc_->n, wrap (this, &locationtable::check_dead_cb));
-      return;
-    }
+  if (newwait > 3600) {
+    warnx << "check_dead: " << l->n << " dead too long. Giving up.\n";
+    remove (locs[l->n]);
+  } else {
+    warnx << "check_dead: " << l->n << " still dead; waiting " << newwait << "\n";
+    l->checkdeadcb = delaycb (newwait, 0,
+      wrap (this, &locationtable::check_dead, l, newwait*2));
   }
 }
 
-void
-locationtable::check_dead_cb (chordID x, bool b, chordstat s)
+bool
+locationtable::remove (locwrap *lw)
 {
-  nout_continuous--;
+  if (!lw)
+    return false;
+  
+  if (lw->good ()) good--;
+  locs.remove (lw);
+  loclist.remove (lw->n_);
+  cachedlocs.remove (lw);
+  size_cachedlocs--;
+  {
+    locwrap *foo = locs.first ();
+    size_t mygood = 0;
+    while (foo) {
+      if (foo->good ())
+	mygood++;
+      foo = locs.next (foo);
+    }
+    assert (good == mygood);
+  }
+  delete lw;
+  return true;
 }
-
-
-void
-locationtable::fill_nodelistresext (chord_nodelistextres *res)
-{
-  res->resok->nlist.setsize (0);
-}
-
-void
-locationtable::fill_nodelistres (chord_nodelistres *res)
-{
-  res->resok->nlist.setsize (0);
-}
+  

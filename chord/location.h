@@ -53,6 +53,7 @@ struct location {
   sockaddr_in saddr;
   unsigned int nrpc;
   bool alive; // whether this node responded to its last RPC
+  timecb_t *checkdeadcb; // timer to check if this node has come back to life
   bool challenged; // whether this node has been succesfully challenged
   vec<cbchallengeID_t> outstanding_cbs;
   location (const chordID &_n, const net_address &_r);
@@ -61,7 +62,7 @@ struct location {
 
 #include "comm.h"
 
-class locationtable : public virtual refcount, public stabilizable {
+class locationtable : public virtual refcount {
   typedef unsigned short loctype;
   static const loctype LOC_REGULAR = 1 << 0;
   static const loctype LOC_PINSUCC = 1 << 1;
@@ -116,9 +117,11 @@ class locationtable : public virtual refcount, public stabilizable {
   void printloc (locwrap *l);
   void doRPCcb (ptr<location> l, aclnt_cb realcb, clnt_stat err);
 
-  u_int nout_continuous;
-  void check_dead ();
-  void check_dead_cb (chordID x, bool b, chordstat s);
+  void check_dead (ptr<location> l, unsigned int newwait);
+  void check_dead_cb (ptr<location> l, unsigned int newwait,
+		      chordID x, bool b, chordstat s);
+
+  bool remove (locwrap *l);
   
  public:
   locationtable (ptr<chord> _chordnode, int _max_connections);
@@ -164,16 +167,7 @@ class locationtable : public virtual refcount, public stabilizable {
   float get_avg_lat ();
   float get_avg_var ();
 
-  // stabilization --- check to see if dead nodes are still dead; does
-  // not really affect the true stabilization of anything.
-  bool continuous_stabilizing ();
-  void do_continuous ();
-  bool isstable ();
-  void print () { warn << "location table::print\n";};
   void stats ();
-  void fill_nodelistresext (chord_nodelistextres *res);
-  void fill_nodelistres (chord_nodelistres *res);
-
 };
 
 extern bool nochallenges;
