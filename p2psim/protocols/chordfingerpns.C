@@ -25,6 +25,7 @@
 #include  "chordfingerpns.h"
 #include "observers/chordobserver.h"
 #include <stdio.h>
+extern bool static_sim;
 
 /* Gummadi's Chord PNS algorithm  (static) */
 ChordFingerPNS::ChordFingerPNS(IPAddress i, Args& a, LocTable *l) 
@@ -38,7 +39,8 @@ ChordFingerPNS::ChordFingerPNS(IPAddress i, Args& a, LocTable *l)
 
   _stab_pns_timer = a.nget<uint>("pnstimer",_stab_succlist_timer,10);
 
-  loctable->set_timeout( 5*_stab_pns_timer );
+  if (!static_sim)
+    loctable->set_timeout( 5*_stab_pns_timer );
 }
 
 void
@@ -83,7 +85,7 @@ ChordFingerPNS::initstate()
   }
 
 #ifdef CHORD_DEBUG
-  printf("chordfingerpns %u init_state %d\n", me.ip, lsz);
+  printf("chordfingerpns %u init_state %d\n", me.ip, loctable->size());
 #endif
   Chord::initstate();
 }
@@ -97,10 +99,9 @@ ChordFingerPNS::stabilized(vector<CHID> lid)
 void
 ChordFingerPNS::join(Args *args)
 {
-  //ChordFinger::join(args);
-  //assert(args);
-  Chord::join(args);
+  if (static_sim) return;
 
+  Chord::join(args);
   //schedule pns stabilizer, no finger stabilizer
   if (!_stab_pns_running) {
     _stab_pns_running = true;

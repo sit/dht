@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 [NAMES_GO_HERE]
+ * Copyright (c) 2003 [Jinyang Li]
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -148,8 +148,9 @@ FINGER_DONE:
 void
 ChordFinger::join(Args *args)
 {
-  Chord::join(args);
+  if (static_sim) return;
 
+  Chord::join(args);
   //schedule finger stabilizer
   if (!_stab_finger_running) {
     _stab_finger_running = true;

@@ -206,6 +206,7 @@ protected:
   uint _alpha;
   int _asap;
   uint _recurs;
+  uint _recurs_direct;
   IDMap _wkn;
   uint _join_scheduled;
   uint _parallel;
@@ -227,6 +228,7 @@ protected:
   static double _lookup_timeouts;
   static double _lookup_to_waste;
   static double _lookup_interval;
+  static vector<double> _lookup_lat_v;
   static double _lookup_success;
   static double _lookup_retries;
 

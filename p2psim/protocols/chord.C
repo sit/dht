@@ -30,6 +30,7 @@ bool static_sim;
 
 //global statistics collecting varaibles
 vector<double> Chord::stat;
+vector<double> Chord::_lookup_lat_v;
 double Chord::_lookup_num = 0;
 double Chord::_lookup_int_num = 0;
 double Chord::_lookup_hops = 0;
@@ -46,6 +47,8 @@ Chord::Chord(IPAddress i, Args& a, LocTable *l) : P2Protocol(i), _isstable (fals
 
   if(a.find("static_sim") != a.end())
     static_sim = true;
+  else
+    static_sim = false;
 
   //whether Chord uses vivaldi
   _vivaldi_dim = a.nget<uint>("vivaldidim", 0, 10);
@@ -69,6 +72,8 @@ Chord::Chord(IPAddress i, Args& a, LocTable *l) : P2Protocol(i), _isstable (fals
 
   //recursive routing?
   _recurs = a.nget<uint>("recurs",0,10);
+  _recurs_direct = a.nget<uint>("recurs_direct",0,10);
+  assert(!_recurs_direct || static_sim);
 
   //parallel lookup? parallelism only works in iterative lookup now
   _parallel = a.nget<uint>("parallelism",1,10);
@@ -92,7 +97,10 @@ Chord::Chord(IPAddress i, Args& a, LocTable *l) : P2Protocol(i), _isstable (fals
   else
     loctable = New LocTable();
 
-  loctable->set_timeout(5*_stab_basic_timer);
+  if (static_sim)
+    loctable->set_timeout(0);
+  else
+    loctable->set_timeout(5*_stab_basic_timer);
   //loctable->set_timeout(0);
   loctable->set_evict(false);
 
@@ -117,6 +125,7 @@ Chord::Chord(IPAddress i, Args& a, LocTable *l) : P2Protocol(i), _isstable (fals
     stat.clear();
     for (uint i = 0; i <= TYPE_PNS_UP; i++) 
       stat.push_back(0.0);
+    _lookup_lat_v.clear();
   }
 
 }
@@ -145,7 +154,13 @@ Chord::~Chord()
     for (uint i = 0; i <= TYPE_PNS_UP; i++)
       printf("%.0f ", stat[i]);
 
+    sort(_lookup_lat_v.begin(),_lookup_lat_v.end());
+    uint sz = _lookup_lat_v.size();
+
     printf("%.3f ", _lookup_interval/_lookup_num); //average lookup latency
+    printf("%.3f ", _lookup_lat_v[(int)sz*0.1]);
+    printf("%.3f ", _lookup_lat_v[(int)sz*0.5]);
+    printf("%.3f ", _lookup_lat_v[(int)sz*0.9]);
     printf("%.3f ", _lookup_success/_lookup_num); //average success rate
     printf("%.3f ", _lookup_retries/_lookup_num); //average lookup retry
     printf("%.3f ", _lookup_hops/_lookup_int_num); //average lookup hopcount
@@ -153,7 +168,7 @@ Chord::~Chord()
     printf("%.3f ", _lookup_to_waste/_lookup_int_num); //average time wasted in lookup timeouts
     printf("%.0f\n", _lookup_num); //total number of user lookups
   }
-//  delete loctable; gives me wierd seg faults in skiplist.h
+  delete loctable; 
 }
 
 char *
@@ -240,13 +255,13 @@ Chord::lookup_internal(lookup_args *a)
 
 
   if (_recurs) {
-    v = find_successors_recurs(a->key, _frag, _allfrag, TYPE_USER_LOOKUP);
+    v = find_successors_recurs(a->key, _frag, _allfrag, TYPE_USER_LOOKUP, _recurs_direct>0?(&lookup_int):NULL);
   } else {
     v = find_successors(a->key, _frag, _allfrag, TYPE_USER_LOOKUP, &lookup_int);
   }
   if (lookup_int > 0) {
     extra_time = now() - before - lookup_int;
-    assert(extra_time >=0);
+    assert(extra_time >=0 || (_recurs_direct));
   }
 
   if (!alive()) {
@@ -262,15 +277,26 @@ Chord::lookup_internal(lookup_args *a)
     printf("%s key %qx lookup incorrect interval ", ts(), a->key); 
 #endif
   }else{
+    assert(!static_sim);
     a->retrytimes.push_back((uint)(now() - a->start - extra_time));
     delaycb((100-extra_time)>0?100-extra_time:0, &Chord::lookup_internal, a);
     return;
   }
 
   a->retrytimes.push_back((uint)(now()-a->start-extra_time));
+
   _lookup_num += 1;
   _lookup_interval += a->retrytimes[a->retrytimes.size()-1];
   _lookup_retries +=  a->retrytimes.size();
+  if (_lookup_lat_v.size() < 10000) 
+    _lookup_lat_v.push_back(a->retrytimes[a->retrytimes.size()-1]);
+  else {
+    int k = random() % 10001;
+    //displace a random sample
+    if (k < 10000) 
+      _lookup_lat_v[k] = a->retrytimes[a->retrytimes.size()-1];
+  }
+
 #ifdef CHORD_DEBUG
   for (uint i = 0; i < a->retrytimes.size(); i++) 
     printf("%u ", a->retrytimes[i]);
@@ -397,10 +423,11 @@ Chord::find_successors(CHID key, uint m, uint all, uint type, uint *lookup_int, 
 
     //fill out all my allowed parallel connections, wait for response
     donerpc = rcvRPC(&rpcset, ok);
-
+#ifdef CHORD_DEBUG
     if (me.ip == DNODE) {
       fprintf(stderr,"%s find_successor key %qx outstanding RPC %d\n", ts(), key, outstanding);
     }
+#endif
 
     outstanding--;
     reuse = resultmap[donerpc];
@@ -721,8 +748,10 @@ Chord::find_successors_recurs(CHID key, uint m, uint all, uint type, uint *recur
 #endif
 
   //XXX recursive lookup has a different way of calculating lookup latency
-  if (recurs_int) 
+  if (recurs_int) {
+    assert(static_sim);
     *recurs_int = total_lat + t->latency(fa.path[psz-1].n.ip, me.ip);
+  }
 
   if (type == TYPE_USER_LOOKUP) {
 #ifdef CHORD_DEBUG
@@ -788,8 +817,11 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
 	if (ret->v.size() > args->m) return;
       }
       ret->correct = check_correctness(args->key,ret->v);
+      assert(!static_sim || ret->correct);
+#ifdef CHORD_DEBUG
       if (!ret->correct)
 	printf("%s incorrect key %qx, succ %u,%qx\n",ts(), args->key, succs[0].ip, succs[0].id);
+#endif
       return;
     }else {
       if (args->path.size() >= 20) {
@@ -816,7 +848,9 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
 	r = doRPC(next.ip, &Chord::next_recurs_handler, args, ret);
 
       if (!alive()) {
+#ifdef CHORD_DEBUG
 	printf("%s lost lookup request %qx\n", ts(), args->key);
+#endif
 	ret->v.clear();
 	return;
       }
@@ -908,7 +942,7 @@ Chord::next_handler(next_args *args, next_ret *ret)
 void
 Chord::join(Args *args)
 {
-  assert(!static_sim);
+  if (static_sim) return;
 
 #ifdef CHORD_DEBUG
   Time before = now();
@@ -1037,7 +1071,9 @@ Chord::reschedule_basic_stabilizer(void *x)
   assert(!static_sim);
   if (!alive()) {
     _stab_basic_running = false;
+#ifdef CHORD_DEBUG
     printf("%s node dead cancel stabilizing\n",ts());
+#endif
     return;
   }
 
@@ -1059,6 +1095,7 @@ Chord::reschedule_basic_stabilizer(void *x)
 void
 Chord::stabilize()
 {
+  assert(!static_sim);
 #ifdef CHORD_DEBUG
   if (me.ip == DNODE) {
     printf("%s special treatment\n",ts());
@@ -1461,9 +1498,8 @@ Chord::crash(Args *args)
 #ifdef CHORD_DEBUG
   if (me.ip == DNODE) 
     fprintf(stderr,"%s crashed\n", ts());
-#endif
-  //assert(me.ip!=1);
   printf("%s crashed! loctable sz %d\n",ts(), loctable->size());
+#endif
 
 }
 

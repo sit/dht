@@ -105,6 +105,8 @@ Koorde::nextimagin (CHID i, CHID kshift)
 void
 Koorde::join(Args *args)
 {
+  if (!static_sim) return;
+
   IDMap wkn;
   wkn.ip = args->nget<IPAddress>("wellknown");
   assert (wkn.ip);
