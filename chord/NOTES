@@ -1,10 +1,6 @@
-- test lookups during joins/leaves
-- test inserts during joins/leaves
 - remove hard constants
-
 - smart implementation of location table
 - recursive lookup
-- use refcnted locations.
+- perhaps use refcnted locations.
 - cache whether a location is authenticated
-- grep for XXX
 - new UDP transport layer

@@ -4,6 +4,8 @@
 /*
  *
  * Copyright (C) 2000 Frans Kaashoek (kaashoek@lcs.mit.edu)
+ * Copyright (C) 2001 Frans Kaashoek (kaashoek@lcs.mit.edu) and 
+ *  Frank Dabek (fdabek@lcs.mit.edu).
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as

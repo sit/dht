@@ -1,6 +1,8 @@
 /*
  *
  * Copyright (C) 2000 Frans Kaashoek (kaashoek@lcs.mit.edu)
+ * Copyright (C) 2001 Frans Kaashoek (kaashoek@lcs.mit.edu) and 
+ *  Frank Dabek (fdabek@lcs.mit.edu).
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -222,8 +224,6 @@ log2 (u_long n)
   return l;
 }
 
-// XXX for testing purposes include port---in real life we shouldn't include it
-
 sfs_hostname
 my_addr () {
   vec<in_addr> addrs;
@@ -247,6 +247,7 @@ my_addr () {
   return ids;
 }
 
+// XXX for testing purposes include port---in real life we shouldn't include it
 chordID
 init_chordID (int index, int port)
 {
