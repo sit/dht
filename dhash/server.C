@@ -83,7 +83,7 @@ dhash_config_init::dhash_config_init ()
   /** Number of replica for each mutable block **/
   ok = ok && set_int ("dhash.replica", 5);
   /** How frequently to sync database to disk */
-  ok = ok && set_int ("dhash.sync_timer", 30);
+  ok = ok && set_int ("dhash.sync_timer", 45);
   /** Should replication run initially? */
   ok = ok && set_int ("dhash.start_maintenance", 1);
 
@@ -553,10 +553,14 @@ dhash_impl::replica_maintenance_timer (u_int i)
 void 
 dhash_impl::sync_cb () 
 {
-  // warn << "** SYNC\n";
+  // Probably only one of sync or checkpoint is needed.
   db->sync ();
   db->checkpoint ();
   keyhash_db->sync ();
+  keyhash_db->checkpoint ();
+  cache_db->sync ();
+  cache_db->checkpoint ();
+
   delaycb (synctm (), wrap (this, &dhash_impl::sync_cb));
 }
 
