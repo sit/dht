@@ -23,7 +23,7 @@ dhc::dhc (ptr<vnode> node, str dbname, uint k) :
 }
 
 void 
-dhc::recon (chordID bID)
+dhc::recon (chordID bID, dhc_reconcb_t cb)
 {
 
 #if DHC_DEBUG
@@ -71,7 +71,7 @@ dhc::recon (chordID bID)
 #endif
 	res = New refcounted<dhc_prepare_res> ();
 	myNode->doRPC (dest, dhc_program_1, DHCPROC_PREPARE, arg, res, 
-		       wrap (this, &dhc::recv_promise, b->id, res)); 
+		       wrap (this, &dhc::recv_promise, b->id, cb, res)); 
       }
     } else
       warn << "dhc:recon. Another recon is still in progress.\n";
@@ -84,7 +84,8 @@ dhc::recon (chordID bID)
 }
 
 void 
-dhc::recv_promise (chordID bID, ref<dhc_prepare_res> promise, clnt_stat err)
+dhc::recv_promise (chordID bID, dhc_reconcb_t cb, 
+		   ref<dhc_prepare_res> promise, clnt_stat err)
 {
 #if DHC_DEBUG
   warn << "\n\n" << myNode->my_ID () << " received promise msg. bID: " << bID << "\n";
@@ -128,7 +129,7 @@ dhc::recv_promise (chordID bID, ref<dhc_prepare_res> promise, clnt_stat err)
 	ptr<location> dest = b->config[i];
 	res = New refcounted<dhc_propose_res> ();
 	myNode->doRPC (dest, dhc_program_1, DHCPROC_PROPOSE, arg, res,
-		       wrap (this, &dhc::recv_accept, b->id, res));
+		       wrap (this, &dhc::recv_accept, b->id, cb, res));
      }
     }
   } else
@@ -136,8 +137,8 @@ dhc::recv_promise (chordID bID, ref<dhc_prepare_res> promise, clnt_stat err)
 }
 
 void
-dhc::recv_accept (chordID bID, ref<dhc_propose_res> proposal,
-		  clnt_stat err)
+dhc::recv_accept (chordID bID, dhc_reconcb_t cb, 
+		  ref<dhc_propose_res> proposal, clnt_stat err)
 {
   if (!err && proposal->status == DHC_OK) {
 
@@ -188,6 +189,7 @@ dhc::recv_accept (chordID bID, ref<dhc_propose_res> proposal,
       }
       db->insert (id2dbrec (kb->id), to_dbrec (kb));
       db->sync ();
+      cb (DHC_OK);
     }
   } else
     print_error ("dhc:recv_propose", err, proposal->status);
@@ -442,38 +444,40 @@ void
 dhc::getblock_cb (user_args *sbp, ptr<location> dest, ptr<read_state> rs, 
 		  ref<dhc_get_res> res, clnt_stat err)
 {
-  if (!rs->done && !err && res->status == DHC_OK) {
-    rs->add (res->resok->data);
-    if (!rs->done && rs->blocks_rcvd >= n_replica/2) {
-      uint i;
-      for (i=0; i<rs->blocks.size (); i++)
-	if (rs->bcount[i] >= n_replica/2)
-	  break;
-      if (rs->bcount[i] >= n_replica/2) {
-	rs->done = true;
-	dhc_get_res res (DHC_OK);
-	(*res.resok).data.tag.ver = rs->blocks[i].tag.ver;
-	(*res.resok).data.tag.writer = rs->blocks[i].tag.writer;
-	(*res.resok).data.data.set (rs->blocks[i].data.base (), rs->blocks[i].data.size ());
-	sbp->reply (&res);
+  if (!rs->done) {
+    if (!err && res->status == DHC_OK) {
+      rs->add (res->resok->data);
+      if (!rs->done && rs->blocks_rcvd >= n_replica/2) {
+	uint i;
+	for (i=0; i<rs->blocks.size (); i++)
+	  if (rs->bcount[i] >= n_replica/2)
+	    break;
+	if (rs->bcount[i] >= n_replica/2) {
+	  rs->done = true;
+	  dhc_get_res gres (DHC_OK);
+	  (*gres.resok).data.tag.ver = rs->blocks[i].tag.ver;
+	  (*gres.resok).data.tag.writer = rs->blocks[i].tag.writer;
+	  (*gres.resok).data.data.set (rs->blocks[i].data.base (), rs->blocks[i].data.size ());
+	  sbp->reply (&gres);
+	}
       }
-    }
-  } else 
-    if (err) {
-      dhc_get_res res (DHC_CHORDERR);
-      sbp->reply (&res);
-      rs->done = true;
-    }
-    else
-      if (res->status == DHC_RECON_INPROG ||
-	  res->status == DHC_BLOCK_NEXIST) {
-        // wait and retry in 60 seconds
-	// dest, sbp, rs
-	delaycb (60, wrap (this, &dhc::getblock_retry_cb, sbp, dest, rs));
-      } else {
-	sbp->reply (res);
+    } else 
+      if (err) {
+	dhc_get_res gres (DHC_CHORDERR);
+	sbp->reply (&gres);
 	rs->done = true;
       }
+      else
+	if (res->status == DHC_RECON_INPROG ||
+	    res->status == DHC_BLOCK_NEXIST) {
+	  // wait and retry in 60 seconds
+	  delaycb (60, wrap (this, &dhc::getblock_retry_cb, sbp, dest, rs));
+	} else {
+	  dhc_get_res gres (res->status);
+	  sbp->reply (&gres);
+	  rs->done = true;
+	}
+  }
 }
 
 void 

@@ -21,10 +21,28 @@ str idstr("23");
 chordID ID1;
 int blocks_inserted = 0;
 
+void 
+getcb (chordID bID, dhc_stat err, ptr<keyhash_data> b) 
+{
+  warn << "In getcb bID " << bID << "\n";
+  if (!err) {
+    warn << "           data size: " << b->data.size () << "\n";
+  }
+}
+
+void 
+start_recon_cb (dhc_stat err)
+{
+  if (!err) {
+    warn << "Recon succeeded\n";
+    dhc_mgr[0]->get (ID1, wrap (getcb, ID1));
+  }
+}
+
 void
 start_recon (chordID bID)
 {
-  dhc_mgr[0]->recon (bID);
+  dhc_mgr[0]->recon (bID, wrap (start_recon_cb));
 }
 
 void 

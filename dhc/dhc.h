@@ -324,6 +324,7 @@ struct read_state {
   }
 };
 
+typedef callback<void, dhc_stat>::ref dhc_reconcb_t;
 typedef callback<void, dhc_stat, ptr<keyhash_data> >::ref dhc_getcb_t;
 
 class dhc {
@@ -335,9 +336,9 @@ class dhc {
   uint n_replica;
 
   void recv_prepare (user_args *);
-  void recv_promise (chordID, ref<dhc_prepare_res>, clnt_stat);
+  void recv_promise (chordID, dhc_reconcb_t, ref<dhc_prepare_res>, clnt_stat);
   void recv_propose (user_args *);
-  void recv_accept (chordID, ref<dhc_propose_res>, clnt_stat);
+  void recv_accept (chordID, dhc_reconcb_t, ref<dhc_propose_res>, clnt_stat);
   void recv_newconfig (user_args *);
   void recv_newconfig_ack (chordID, ref<dhc_newconfig_res>, clnt_stat);
   void recv_get (user_args *);
@@ -354,7 +355,7 @@ class dhc {
   dhc (ptr<vnode>, str, uint);
   ~dhc () {};
   
-  void recon (chordID);
+  void recon (chordID, dhc_reconcb_t);
   void get (chordID, dhc_getcb_t);
   void dispatch (user_args *);
   
