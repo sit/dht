@@ -248,10 +248,7 @@ void
 Chord::init_state(vector<IDMap> ids)
 {
   printf("%s inited %d\n", ts(), ids.size());
-  for (vector<IDMap>::iterator iter = ids.begin (); iter < ids.end (); 
-       ++iter) {
-    loctable->add_node(*iter);
-  }
+  loctable->add_sortednodes(ids);
 }
 
 void
@@ -437,6 +434,44 @@ LocTable::print ()
   }
 }
 
+/* adds a list of nodes, sorted by increasing CHIDs
+ * this function will avoid regular eviction calls by adding only pinned nodes
+ */
+void
+LocTable::add_sortednodes(vector<Chord::IDMap> l)
+{
+  uint sz = pinlist.size();
+  uint lsz = l.size();
+  Chord::IDMap tmppin;
+  tmppin.ip = 0;
+  uint pos;
+  uint ptr;
+
+  for (uint i = 0; i < sz; i++) {
+    tmppin.id = pinlist[i].id;
+    pos = upper_bound(l.begin(), l.end(), tmppin, Chord::IDMap::cmp) - l.begin();
+    if (pos > 1) {
+      assert(l[pos-1].id < tmppin.id);
+    }else if (pos < lsz) {
+      assert(l[pos].id >= tmppin.id);
+    }
+    if (pos < lsz && l[pos].id == tmppin.id) {
+      ptr--;
+    }
+    for (uint k = 0; k < pinlist[i].pin_pred; k++) {
+      if (ptr< 0) ptr= (lsz-1);
+      add_node(l[ptr]);
+      ptr--;
+    }
+    ptr = pos; 
+    for (uint k = 0; k < pinlist[i].pin_succ; k++) {
+      if (ptr >= lsz) ptr= 0;
+      add_node(l[ptr]);
+      ptr++;
+    }
+  }
+}
+
 void
 LocTable::add_node(Chord::IDMap n)
 {
@@ -515,8 +550,10 @@ LocTable::pin(Chord::CHID x, uint pin_succ, uint pin_pred)
   }
 
   if (pinlist[i].id == x) {
-    pinlist[i].pin_pred = pin_pred;
-    pinlist[i].pin_succ = pin_succ;
+    if (pin_pred > pinlist[i].pin_pred) 
+      pinlist[i].pin_pred = pin_pred;
+    if (pin_succ > pinlist[i].pin_succ)
+      pinlist[i].pin_succ = pin_succ;
   } else {
     if (pinlist.size () == 1) {
       pinlist.push_back(pe);

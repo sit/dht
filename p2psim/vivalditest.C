@@ -74,14 +74,18 @@ VivaldiTest::error()
 {
   Topology *t = (Network::Instance()->gettopology());
   double sum = 0;
+  uint sum_sz = 0;
   Vivaldi::Coord vc = _vivaldi->my_location();
   for(unsigned i = 0; i < _all.size(); i++){
     Vivaldi::Coord vc1 = _all[i]->_vivaldi->my_location();
     double vd = dist(vc, vc1);
     double rd = t->latency(node(), _all[i]->node());
-    sum += sqrt((vd - rd) * (vd - rd));
+    if (rd > 0.0) {
+      sum += (abs(vd - rd)/rd);
+      sum_sz++;
+    }
   }
-  return (sum / _all.size());
+  return (sum / sum_sz);
 }
 
 // return 5th, 50th, 95th percentiles of node error
@@ -111,10 +115,12 @@ VivaldiTest::print_all_loc()
 {
   unsigned int n = _all.size();
   Vivaldi::Coord vc;
+  printf("COORD %u: ", (unsigned) now() );
   for (uint i = 0; i < n; i++) {
     vc = _all[i]->_vivaldi->my_location();
-    printf("COORD %u: %.1f %.1f\n", (unsigned) now(), vc._x, vc._y);
+    printf("(%.1f,%.1f)", vc._x, vc._y);
   }
+  printf("\n");
 }
 
 void
@@ -133,7 +139,7 @@ VivaldiTest::status()
   Vivaldi::Coord vc = _vivaldi->my_location();
   double e05, e50, e95;
   total_error(e05, e50, e95);
-  printf("vivaldi %u %u %d %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f\n",
+  printf("vivaldi %u %u %d %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f\n",
          (unsigned) now(),
          node()->ip(),
          _vivaldi->nsamples(),
@@ -146,7 +152,6 @@ VivaldiTest::status()
          vc._x,
          vc._y);
   fflush(stdout);
-  print_all_loc();
 }
 
 void
@@ -159,8 +164,10 @@ VivaldiTest::tick(void *)
   if ((now() - before) > 0)
     _vivaldi->sample(dst, c, (now() - before) / 2.0);
 
-  if((random() % (10 * _all.size())) == 0)
+  if((random() % (10 * _all.size())) == 0) {
     status();
+//    print_all_loc();
+  }
 
   delaycb(1000, &VivaldiTest::tick, (void *) 0);
 }

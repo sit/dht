@@ -27,7 +27,7 @@ public:
     public:
     ConsistentHash::CHID id; //consistent hashing ID for the node
     IPAddress ip; //the IP address for the node
-    static bool cmp(const IDMap& a, const IDMap& b) { return (a.id < b.id);}
+    static bool cmp(const IDMap& a, const IDMap& b) { return (a.id <= b.id);}
     bool operator==(const IDMap a) { return (a.id == id); }
   };
 
@@ -143,6 +143,7 @@ class LocTable {
     void print();
 
     void add_node(Chord::IDMap n);
+    void add_sortednodes(vector<Chord::IDMap> l);
     void del_node(Chord::IDMap n);
     void notify(Chord::IDMap n);
     void pin(Chord::CHID x, uint pin_succ, uint pin_pred);
