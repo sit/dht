@@ -9,7 +9,7 @@ grouplist::grouplist ()
   d = it->nextElement();    
 };
 
-static rxx listrx ("^(\\d+)(<.+?>)");
+static rxx listrx ("^(\\d+)(<[^>]+>)");
 
 void
 grouplist::next (str *f, unsigned long *i)
@@ -54,6 +54,7 @@ group::open (str g, volatile unsigned long *count,
 
   char *c = rec->value;
   int len = rec->len;
+  warn << "xv " << str (c, len) << "\n";
   *count = 0;
   *first = 0;
   *last = 0;
@@ -69,7 +70,7 @@ group::open (str g, volatile unsigned long *count,
   return 0;
 }
 
-static rxx listrxend (".*(\\d+)(<.+?>)$");
+static rxx listrxend ("(\\d+)(<[^>]+>)$");
 
 void
 group::addid (str id)
@@ -118,17 +119,16 @@ group::xover (unsigned long a, unsigned long b)
   assert (rec);
   c = rec->value;
   len = rec->len;
-  warn << "xv " << str (c, len) << "\n";
   while (listrx.search (str (c, len)) &&
 	 (strtoul (listrx[1], NULL, 10) < start))
     c += listrx.len (0), len -= listrx.len (0);
 }
 
-static rxx oversub ("Subject: (.+)\r");
-static rxx overfrom ("From: (.+)\r");
-static rxx overdate ("Date: (.+)\r");
-static rxx overmsgid ("Message-ID: (.+)\r");
-static rxx overref ("References: (.+)\r");
+static rxx oversub ("Subject: (.+)\\r");
+static rxx overfrom ("From: (.+)\\r");
+static rxx overdate ("Date: (.+)\\r");
+static rxx overmsgid ("Message-ID: (.+)\\r");
+static rxx overref ("References: (.+)\\r");
 
 //  char *foomsg = "foosub\tfooauth\tfoodate\t<dd>\tfooref\t10000\t100";
 strbuf
@@ -137,9 +137,6 @@ group::next (void)
   ptr<dbrec> art;
   strbuf resp;
   resp << start << "\t";
-
-  warn << "ss " << start << " - " << stop << "\n";
-  warn << "xv " << str (c, len) << "\n";
 
   if (more () &&
       listrx.search (str (c, len))) {
@@ -167,7 +164,7 @@ group::next (void)
 	  resp << overref[1];
 	for (i = 0; i < art->len; i++)
 	  if (art->value[i] == '\n')
-	    line++;
+	    line++; // xxx make this only count lines of body
 	resp << "\t" << art->len  << "\t" << line;
       // xxx filter out tabs
       } else

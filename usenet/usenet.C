@@ -90,14 +90,6 @@ main (int argc, char *argv[])
     group_db->insert(k, d);
   }
 
-#if 0
-  // construct a dummy message
-  k = New refcounted<dbrec> ("<dd>", 4);
-  char *foomsg = "foosub\tfooauth\tfoodate\t<dd>\tfooref\t10000\t100";
-  d = New refcounted<dbrec> (foomsg, strlen (foomsg));
-  article_db->insert(k, d);
-#endif
-
   startlisten ();
   delaycb (SYNCTM, wrap (&syncdb));
   amain ();

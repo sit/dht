@@ -17,12 +17,14 @@ typedef struct c_jmp_entry {
 
 struct nntp {
   int s;
+  suio in;
   strbuf out;
-  suio post;
   group cur_group;
+  cbv process_input;
 
   nntp (int _s);
   ~nntp ();
+  void input (void);
   void command (void);
   void output (void);
   void add_cmd (const char *, cbs);
@@ -32,7 +34,7 @@ struct nntp {
   void cmd_over (str);
   void cmd_article (str);
   void cmd_post (str);
-  void read_post (const char *, const char *, str);
+  void read_post (const char *, const char *);
   void cmd_quit (str);
   void cmd_help (str);
   void cmd_ihave (str);

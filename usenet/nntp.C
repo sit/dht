@@ -31,13 +31,15 @@ char *checksendb = "238 ";
 char *checksende = " no such article found, please send it to me\r\n";
 char *checknob = "438 ";
 char *checknoe = " already have it, please don't send it to me\r\n";
-char *takethisok = "239 article transferred ok ";
-char *takethisbad = "439 article transfer failed ";
+char *takethisokb = "239 ";
+char *takethisoke = " article transferred ok\r\n";
+char *takethisbadb = "439 ";
+char *takethisbade = " article transfer failed\r\n";
 
-nntp::nntp (int _s) : s (_s)
+nntp::nntp (int _s) : s (_s), process_input (wrap (this, &nntp::command))
 {
   warn << "connect " << s << "\n";
-  fdcb (s, selread, wrap (this, &nntp::command));
+  fdcb (s, selread, wrap (this, &nntp::input));
 
   cmd_hello("MODE READER");
   fdcb (s, selwrite, wrap (this, &nntp::output));
@@ -53,8 +55,8 @@ nntp::nntp (int _s) : s (_s)
   add_cmd ("POST", wrap (this, &nntp::cmd_post));
 
   add_cmd ("MODE", wrap (this, &nntp::cmd_hello));
-  add_cmd ("QUIT", wrap (this, &nntp::cmd_quit));
   add_cmd ("HELP", wrap (this, &nntp::cmd_help));
+  add_cmd ("QUIT", wrap (this, &nntp::cmd_quit));
 }
 
 nntp::~nntp (void)
@@ -84,9 +86,8 @@ nntp::output (void)
 }
 
 void
-nntp::command (void)
+nntp::input (void)
 {
-  suio in;
   int res;
 
   res = in.input (s);
@@ -96,16 +97,32 @@ nntp::command (void)
   }
   fdcb (s, selwrite, wrap (this, &nntp::output));
 
-  str cmd (in);
-  for (unsigned int i = 0; i < cmd_table.size(); i++) {
-    if (!strncasecmp (cmd, cmd_table[i].cmd, cmd_table[i].len)) {
-      cmd_table[i].fn (cmd);
-      return;
+  process_input ();
+}
+
+static rxx cmdrx ("(.+\\r\\n)", "m");
+
+void
+nntp::command (void)
+{
+  unsigned int i;
+  str cmd;
+
+  while (cmdrx.search (str (in))) {  // xxx makes a big str if "in" is big
+    in.rembytes (cmdrx.len (0));
+
+    for (i = 0; i < cmd_table.size (); i++) {
+      if (!strncasecmp (cmdrx[1], cmd_table[i].cmd, cmd_table[i].len)) {
+	cmd_table[i].fn (cmdrx[1]);
+	break;
+      }
+    }
+
+    if (i == cmd_table.size ()) {
+      warn << "unknown command: " << cmdrx[1];
+      out << unknown;
     }
   }
-
-  warn << "unknown command: " << cmd;
-  out << unknown;
 }
 
 static rxx hellorx ("^MODE (READER)?(STREAM)?", "i");
@@ -185,7 +202,7 @@ nntp::cmd_over (str c) {
   }
 }
 
-static rxx grouprx ("^GROUP (.+)\r\n", "mi");
+static rxx grouprx ("^GROUP (.+)\\r", "i");
 
 void
 nntp::cmd_group (str c) {
@@ -202,7 +219,7 @@ nntp::cmd_group (str c) {
     out << syntax;
 }
 
-static rxx artrx ("^ARTICLE ?(<.+?>)?(.+?)?", "i");
+static rxx artrx ("^ARTICLE ?(<.+?>)?(\\d+?)?", "i");
 
 void
 nntp::cmd_article (str c) {
@@ -251,37 +268,31 @@ nntp::cmd_post (str c)
 {
   warn << "post\n";
   out << postgo;
-  fdcb (s, selread, wrap (this, &nntp::read_post, postok, postbad, ""));
+  process_input = wrap (this, &nntp::read_post, postok, postbad);
 }
 
-static rxx postrx ("(.+\n)\\.\r\n", "ms");
-static rxx postmrx ("Message-ID: (<.+>)\r");
-static rxx postngrx ("Newsgroups: (.+)\r");
+static rxx postrx ("^(.+?\\n)\\.\\r\\n", "ms");
+static rxx postmrx ("Message-ID: (<.+>)\\r");
+static rxx postngrx ("Newsgroups: (.+)\\r");
 static rxx postgrx (",?([^,]+)");
 
 void
-nntp::read_post (const char *resp, const char *bad, str msg)
+nntp::read_post (const char *resp, const char *bad)
 {
-  int res = 1;
   ptr<dbrec> k, d;
   ptr<group> g;
   str ng, msgid;
   bool posted = false;
 
-  if (msg)
-    post.copy (msg, msg.len ());
-  else
-    res = post.input (s);
-  if (res <= 0) {
-    delete this;
-    return;
-  }
+  warn << "rp " << hexdump (str (in), in.resid ()) << "\n";
+  warn << str (in) << "\n";
 
-  warn << "rp " << str (post) << "\n";
+  if (postrx.search (str (in))) {
+warn << " resid " << in.resid () << " rem " << postrx.len (0) << "\n";
 
-  if (postrx.search (str (post))) {
     if (postmrx.search (postrx[1])) {
       warn << "found msgid " << postmrx[1] << "\n";
+      warn << "mdg len " << postrx.len (0) << "\n";
       msgid = postmrx[1];
     } else {
       char hashbytes[sha1::hashsize];
@@ -311,16 +322,17 @@ nntp::read_post (const char *resp, const char *bad, str msg)
 	ng = ng + postgrx[0].len ();
       }
     }
+    in.rembytes (postrx.len (0));
+    warn << "ok\n";
+
+    if (posted)
+      out << resp;
+    else
+      out << bad;
+
+    fdcb (s, selwrite, wrap (this, &nntp::output));
+    process_input = wrap (this, &nntp::command);
   }
-  post.clear ();
-
-  if (posted)
-    out << resp;
-  else
-    out << bad;
-
-  fdcb (s, selwrite, wrap (this, &nntp::output));
-  fdcb (s, selread, wrap (this, &nntp::command));
 }
 
 void
@@ -357,7 +369,7 @@ nntp::cmd_ihave (str c)
     d = article_db->lookup (key);
     if (!d) {
       out << ihavesend;
-      fdcb (s, selread, wrap (this, &nntp::read_post, ihaveok, ihavebad, ""));
+      process_input = wrap (this, &nntp::read_post, ihaveok, ihavebad);
     } else
       out << ihaveno;
   } else
@@ -389,13 +401,12 @@ void
 nntp::cmd_takethis (str c)
 {
   warn << "takethis " << c;
-  str resp, bad, msg;
+  str resp, bad;
 
   if (takethisrx.search (c)) {
-    resp = strbuf () << takethisok << takethisrx[1] << "\r\n";
-    bad = strbuf () << takethisbad << takethisrx[1] << "\r\n";
-    msg = c + takethisrx.end(1);
-    read_post (resp, bad, msg);
+    resp = strbuf () << takethisokb << takethisrx[1] << takethisoke;
+    bad = strbuf () << takethisbadb << takethisrx[1] << takethisbade;
+    read_post (resp, bad);
   } else
     out << syntax;
 }
