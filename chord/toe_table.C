@@ -64,7 +64,7 @@ toe_table::add_toe (chordID id, net_address r, int level)
   if (present (toes, id)) return;
   
   in_progress++;
-  locations->cacheloc (id, r);
+  locations->cacheloc (id, r, cbchall_null); // XXX
   locations->ping (id, wrap (this, &toe_table::add_toe_ping_cb, id, level));
 }
 
@@ -75,7 +75,7 @@ toe_table::add_toe_ping_cb (chordID id, int level)
   if (l->a_lat < level_to_delay (level)) {
     warn << "added " << id << " to level " << level << "\n";
     net_address r = locations->getaddress (id);
-    locations->updateloc (id, r);
+    locations->updateloc (id, r, cbchall_null); // XXX
     toes.push_back (id);
   }
   in_progress--;
@@ -120,4 +120,41 @@ toe_table::dump ()
     }
   }
 
+}
+
+
+void
+toe_table::stabilize_toes ()
+{
+  return;
+
+  int level = filled_level ();
+  warn << "stabilizing toes at level " << level << "\n";
+  if (backoff_stabilizing () || continuous_stabilizing ()) return;
+  
+  if ((level < MAX_LEVELS) 
+      && (level == get_last_level ())
+      && (level > 0)) {
+    //we failed to find enough nodes to fill the last level we tried
+    //go back and get more donors and try again
+    bump_target (level - 1);
+    warn << "bumped " << level - 1 << " and retrying\n";
+    level = filled_level ();
+  }
+
+  set_last_level (level);
+  if (level < 0) { //bootstrap off succ list
+    //grab the succlist and stick it in the toe table
+    for (int i = 1; i < successors->num_succ (); i++) 
+      if (successors->nth_alive(i)) {
+	chordID ith_succ = (*successors)[i];
+    	add_toe (ith_succ, locations->getaddress (ith_succ), 0);
+      }
+  } else if (level < MAX_LEVELS) { //building table
+    //contact level (level) nodes and get their level (level) toes
+    get_toes_rmt (level + 1);
+  } else { //steady state
+    
+  }
+  return;
 }

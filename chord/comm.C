@@ -356,6 +356,7 @@ locationtable::stats ()
 
   warnx << "LOCATION TABLE STATS: estimate # nodes " << nnodes << "\n";
   warnx << "total # of RPCs: good " << nrpc << " failed " << nrpcfailed << "\n";
+  warnx << "# challenge calls " << nchallenge << "\n";
   sprintf(buf, "       Average latency/variance: %f/%f\n", a_lat, a_var);
   warnx << buf;
   sprintf(buf, "       Average cwind: %f\n", cwind_cum/num_cwind_samples);

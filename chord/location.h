@@ -30,6 +30,9 @@
 
 #include "aclnt_chord.h"
 
+typedef callback<void,chordID,bool,chordstat>::ref cbchallengeID_t;
+extern cbchallengeID_t cbchall_null;
+
 class chord;
 
 // the identifier for the ihash class
@@ -94,6 +97,7 @@ struct location {
   u_int64_t maxdelay;
   float a_lat;
   float a_var;
+  bool challenged; // whether this node has been succesfully challenged
 
   location (chordID &_n, net_address &_r);
   ~location ();
@@ -125,6 +129,7 @@ class locationtable : public virtual refcount {
   u_int64_t nrpcfailed;
   u_int64_t nsent;
   u_int64_t npending;
+  u_int64_t nchallenge;
   vec<float> timers;
   vec<float> lat_little;
   vec<float> lat_big;
@@ -155,7 +160,7 @@ class locationtable : public virtual refcount {
   qhash<long, svccb *> octbl;
   
   locationtable ();
-
+  
   void connect_cb (location *l, callback<void, ptr<axprt_stream> >::ref cb, 
 		   int fd);
   void doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err);
@@ -181,18 +186,26 @@ class locationtable : public virtual refcount {
   void timeout_cb (rpc_state *C);
 
   void ping_cb (cbv cb, clnt_stat err);
+  void challenge_cb (int challenge, chordID x, cbchallengeID_t cb, 
+		     chord_challengeres *res, clnt_stat err);
 
+  
  public:
   locationtable (ptr<chord> _chordnode, int _max_connections);
   bool betterpred1 (chordID current, chordID target, chordID newpred);
 
   void incvnodes () { nvnodes++; };
   void replace_estimate (u_long o, u_long n);
-  void insert (chordID &_n, sfs_hostname _s, int _p);
+  u_long estimate_nodes () { return nnodes; }
+  void insertgood (chordID &n, sfs_hostname s, int p);
+  void insert (chordID &_n, sfs_hostname _s, int _p,
+	       cbchallengeID_t cb);
   location *getlocation (chordID &x);
   void deleteloc (chordID &n);
-  void cacheloc (chordID &x, net_address &r);
-  void updateloc (chordID &x, net_address &r);
+  void cacheloc (chordID &x, net_address &r,
+		 cbchallengeID_t cb);
+  void updateloc (chordID &x, net_address &r,
+		  cbchallengeID_t cb);
   void increfcnt (chordID &n);
   bool lookup_anyloc (chordID &n, chordID *r);
   chordID closestsuccloc (chordID x);
@@ -221,13 +234,13 @@ class locationtable : public virtual refcount {
 		    ptr<void> in, void *out, aclnt_cb cb,
 		    ref<aclnt> c);
 
-
   void ping (chordID ID, cbv cb);
-
+  void challenge (chordID &x, cbchallengeID_t cb);
+  bool challenged (chordID &x);
   void stats ();
-
-  
 };
+
+extern bool nochallenges;
 
 #endif /* _LOCATION_H_ */
 

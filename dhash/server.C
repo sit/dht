@@ -533,8 +533,10 @@ dhash::transfer_store_cb (callback<void, dhash_stat>::ref cb,
     cb (DHASH_RPCERR);
   else if (res->status == DHASH_RETRY) {
     dhash_storeres *nres = New dhash_storeres (DHASH_OK);
+    // XXX challenge
     host_node->chordnode->locations->cacheloc (res->pred->p.x, 
-					       res->pred->p.r);
+					       res->pred->p.r,
+					       cbchall_null);
 					       
     doRPC(res->pred->p.x, 
 	  dhash_program_1, DHASHPROC_STORE, 

@@ -43,11 +43,25 @@ chord::chord (str _wellknownhost, int _wellknownport,
 
   warnx << "chord: running on " << myname << ":" << myport << "\n";
   locations = New refcounted<locationtable> (mkref (this), max_cache);
-  locations->insert (wellknownID, wellknownhost.hostname, wellknownhost.port);
+  // Special case the very first node: don't need to challenge yourself
+  if (wellknownID == make_chordID (myname, myport))
+    locations->insertgood (wellknownID, myname, myport);
+  else
+    locations->insert (wellknownID, wellknownhost.hostname, wellknownhost.port,
+		       wrap (this, &chord::checkwellknown_cb));
   nvnode = 0;
   srandom ((unsigned int) (getusec() & 0xFFFFFFFF));
 }
 
+void
+chord::checkwellknown_cb (chordID s, bool ok, chordstat status)
+{
+  if (!ok || status != CHORD_OK) {
+    warn << "Well known host failed to verify! Bailing.\n";
+    exit (0);
+  }
+  // If okay, can ignore this.
+}
 
 void
 chord::tcpclient_cb (int srvfd)
@@ -121,7 +135,7 @@ chord::newvnode (cbjoin_t cb)
     
   chordID newID = init_chordID (nvnode, myname, myport);
   if (newID != wellknownID)
-    locations->insert (newID, myname, myport);
+    locations->insertgood (newID, myname, myport);
   ptr<vnode> vnodep = New refcounted<vnode> (locations, mkref (this), newID, 
 					     nvnode, ss_mode);
   if (!active) active = vnodep;

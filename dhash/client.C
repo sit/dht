@@ -189,7 +189,8 @@ dhashgateway::insert_store_cb(svccb *sbp, dhash_storeres *res,
     if (attempts < DHASH_MAX_INSERT_ATTEMPTS) {
       attempts++;
       dhash_storeres *nres = New dhash_storeres(DHASH_OK);
-      clntnode->locations->cacheloc (res->pred->p.x, res->pred->p.r);
+      // XXX challenge
+      clntnode->locations->cacheloc (res->pred->p.x, res->pred->p.r, cbchall_null);
       doRPC(res->pred->p.x, dhash_program_1, 
 	    DHASHPROC_STORE, item, nres,
 	    wrap(this, &dhashgateway::insert_store_cb, sbp, nres, item, source, attempts));
@@ -315,7 +316,8 @@ dhashgateway::lookup_iter_cb (svccb *sbp,
     if ((next == prev) || (straddled (path, arg->key))) {
       replyerror (sbp, DHASH_NOENT, path.size()-1 + nerror*100);
     } else {
-      clntnode->locations->cacheloc (next, res->cont_res->next.r);
+      // XXX challenge
+      clntnode->locations->cacheloc (next, res->cont_res->next.r, cbchall_null);
       dhash_fetchiter_res *nres = New dhash_fetchiter_res (DHASH_CONTINUE);
       path.push_back (next);
       assert (path.size () < 1000);
@@ -370,7 +372,8 @@ dhashgateway::send_cb (svccb *sbp, dhash_storeres *res,
   if (err) res->set_status (DHASH_RPCERR);
   else if (res->status == DHASH_RETRY) {
     dhash_storeres *nres = New dhash_storeres (DHASH_OK);
-    clntnode->locations->cacheloc (nres->pred->p.x, nres->pred->p.r);
+    // XXX challenge
+    clntnode->locations->cacheloc (nres->pred->p.x, nres->pred->p.r, cbchall_null);
     doRPC (nres->pred->p.x, dhash_program_1, DHASHPROC_STORE,
 		     iarg, nres, wrap (this, &dhashgateway::send_cb,
 				       sbp, nres, iarg));
@@ -616,6 +619,7 @@ protected:
 
   void check_exists_cb (ptr<dhash_res> res, clnt_stat err)
   {
+    // XXSEC: What if they lie about key existing?
     if (!err && res->status == DHASH_OK) {
       ///warn << "exists: " << key << "\n";
       // if the data is already inserted, report back success

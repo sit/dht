@@ -27,8 +27,6 @@
  *
  */
 
-bool nochallenges;
-
 void 
 vnode::get_successor (chordID n, cbchordID_t cb)
 {
@@ -162,11 +160,8 @@ vnode::testrange_findclosestpred_cb (chord_testandfindres *res,
     delete st;
   } else if (res->status == CHORD_INRANGE) { 
     // found the successor
-    st->search_path.push_back(res->inres->x);
-    assert (st->search_path.size () < 1000);
-    locations->cacheloc (res->inres->x, res->inres->r);
-    st->cb (st->search_path.back (), st->search_path, CHORD_OK);
-    delete st;
+    locations->cacheloc (res->inres->x, res->inres->r,
+			 wrap (this, &vnode::testrange_fcp_done_cb, st));
   } else if (res->status == CHORD_NOTINRANGE) {
     // haven't found the successor yet
     chordID last = st->search_path.back ();
@@ -177,18 +172,22 @@ vnode::testrange_findclosestpred_cb (chord_testandfindres *res,
       st->cb (st->search_path.back (), st->search_path, CHORD_ERRNOENT);
       delete st;
     } else {
-      // ask the new node for its best predecessor
-      locations->cacheloc (res->noderes->node, res->noderes->r);
-      st->search_path.push_back(res->noderes->node);
-      if (st->search_path.size () >= 1000) {
-	warnx << "PROBLEM: too long a search path: " << myID << " looking for "
-	    << st->x << "\n";
+      // make sure that the new node sends us in the right direction,
+      chordID olddist = distance (st->search_path.back (), st->x);
+      chordID newdist = distance (res->noderes->node,      st->x);
+      if (newdist > olddist) {
+	warnx << "PROBLEM: went in the wrong direction: " << myID
+	      << "looking for " << st->x << "\n";
+	// xxx surely we can do something more intelligent here.
 	for (unsigned i = 0; i < st->search_path.size (); i++) {
 	  warnx << st->search_path[i] << "\n";
 	}
 	assert (0);
       }
-      testrange_findclosestpred (res->noderes->node, st->x, st);
+      
+      // ask the new node for its best predecessor
+      locations->cacheloc (res->noderes->node, res->noderes->r,
+			   wrap (this, &vnode::testrange_fcp_step_cb, st));
     }
   } else {
     warn("WTF");
@@ -196,6 +195,55 @@ vnode::testrange_findclosestpred_cb (chord_testandfindres *res,
   }
   delete res;
 }
+
+void
+vnode::testrange_fcp_done_cb (findpredecessor_cbstate *st,
+			      chordID s, bool ok, chordstat status)
+{
+#if 0  
+  if (ok && status == CHORD_OK) {
+    warnx << "testrange_findclosest_pred: last challenge ok for " << s << "\n";
+#endif /* 0 */
+    st->search_path.push_back (s);
+    assert (st->search_path.size () < 1000);
+    st->cb (st->search_path.back (), st->search_path, CHORD_OK);
+    delete st;
+#if 0    
+  } else {
+    warnx << "testrange_findclosest_pred: last challenge for "
+	  << s << " failed.\n";
+    assert (0); // XXX handle malice more intelligently
+  }
+#endif /* 0 */  
+}
+
+void
+vnode::testrange_fcp_step_cb (findpredecessor_cbstate *st,
+			      chordID s, bool ok, chordstat status)
+{
+#if 0  
+  if (ok && status == CHORD_OK) {
+    warnx << "testrange_findclosest_pred: step challenge ok for " << s << "\n";
+#endif /* 0 */    
+    st->search_path.push_back (s);
+    if (st->search_path.size () >= 1000) {
+      warnx << "PROBLEM: too long a search path: " << myID << " looking for "
+	    << st->x << "\n";
+      for (unsigned i = 0; i < st->search_path.size (); i++) {
+	warnx << st->search_path[i] << "\n";
+      }
+      assert (0);
+    }
+    testrange_findclosestpred (s, st->x, st);
+#if 0    
+  } else {
+    warnx << "testrange_findclosest_pred: step challenge for "
+	  << s << " failed.\n";
+    assert (0); // XXX handle malice more intelligently
+  }
+#endif /* 0 */  
+}
+  
 
 void
 vnode::notify (chordID &n, chordID &x)
@@ -274,44 +322,6 @@ vnode::get_fingers_cb (chordID x, chord_getfingersres *res,  clnt_stat err)
     for (unsigned i = 0; i < res->resok->fingers.size (); i++) 
       fingers->updatefinger (res->resok->fingers[i].x, 
 			     res->resok->fingers[i].r);
-  }
-  delete res;
-}
-
-void
-vnode::challenge (chordID &x, cbchallengeID_t cb)
-{
-  if (nochallenges) {
-    cb (x, true, chordstat (CHORD_OK));
-    return;
-  }
-  int c = random ();
-  ptr<chord_challengearg> ca = New refcounted<chord_challengearg>;
-  chord_challengeres *res = New chord_challengeres (CHORD_OK);
-  nchallenge++;
-  ca->v.n = x;
-  ca->challenge = c;
-  doRPC (x, chord_program_1, CHORDPROC_CHALLENGE, ca, res, 
-		    wrap (mkref (this), &vnode::challenge_cb, c, x, cb, res));
-}
-
-void
-vnode::challenge_cb (int challenge, chordID x, cbchallengeID_t cb, 
-		     chord_challengeres *res, clnt_stat err)
-{
-  if (err) {
-    //    warnx << "challenge_cb: RPC failure " << err << "\n";
-    cb (x, false, CHORD_RPCFAILURE);
-  } else if (res->status) {
-    //    warnx << "challenge_cb: error " << res->status << "\n";
-    cb (x, false, res->status);
-  } else if (challenge != res->resok->challenge) {
-    //    warnx << "challenge_cb: challenge mismatch\n";
-    cb (x, false, res->status);
-  } else {
-    net_address r = locations->getaddress (x);
-    bool ok = is_authenticID (x, r.hostname, r.port, res->resok->index);
-    cb (x, ok, res->status);
   }
   delete res;
 }

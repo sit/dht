@@ -28,8 +28,18 @@
 #include <math.h>
 #include "chord.h"
 
+bool nochallenges;
+
+static void
+ignore_challengeresp (chordID x, bool b, chordstat s)
+{
+  warnx << "Ignoring " << ((b && s == CHORD_OK) ? "good" : "bad")
+	<< " challenge response for " << x << "\n";
+}
+cbchallengeID_t cbchall_null (wrap (ignore_challengeresp));
+
 location::location (chordID &_n, net_address &_r) 
-  : n (_n), addr (_r) 
+  : n (_n), addr (_r), challenged (false)
 {
   refcnt = 0;
   rpcdelay = 0;
@@ -59,6 +69,7 @@ locationtable::locationtable (ptr<chord> _chordnode, int _max_cache)
   bf_var = 0.0;
   nsent = 0;
   npending = 0;
+  nchallenge = 0;
   size_cachedlocs = 0;
   nvnodes = 0;
   nnodes = 0;
@@ -94,6 +105,7 @@ locationtable::ratecb () {
   nsent = 0;
   chordnode->nrcv = 0;
 }
+
 void
 locationtable::replace_estimate (u_long o, u_long n)
 {
@@ -103,15 +115,29 @@ locationtable::replace_estimate (u_long o, u_long n)
 }
 
 void
-locationtable::insert (chordID &n, sfs_hostname s, int p)
+locationtable::insertgood (chordID &n, sfs_hostname s, int p)
 {
+  assert (!locs[n]);
+
+  net_address r;
+  r.hostname = s; r.port = p;
+  
+  location *loc = New location (n, r);
+  loc->challenged = true; // force goodness
+  locs.insert (loc);
+  add_cachedlocs (loc);
+  // warnx << "INSERT (good): " << n << "\n";
+}
+
+void
+locationtable::insert (chordID &n, sfs_hostname s, int p, cbchallengeID_t cb)
+{
+  assert (!locs[n]);
+  
   net_address r;
   r.hostname = s;
   r.port = p;
-  location *l = New location (n, r);
-  assert (!locs[n]);
-  locs.insert (l);
-  add_cachedlocs (l);
+  cacheloc (n, r, cb);
 }
 
 location *
@@ -122,9 +148,9 @@ locationtable::getlocation (chordID &x)
 }
 
 void
-locationtable::changenode(node *n, chordID &x, net_address &r)
+locationtable::changenode (node *n, chordID &x, net_address &r)
 {
-  updateloc (x, r);
+  updateloc (x, r, cbchall_null); // XXX
   if (n->alive) deleteloc (n->n);
   n->n = x;
   n->alive = true;
@@ -193,26 +219,41 @@ locationtable::closestpredloc (chordID x)
 }
 
 void
-locationtable::cacheloc (chordID &x, net_address &r)
+locationtable::cacheloc (chordID &x, net_address &r, cbchallengeID_t cb)
 {
   if (locs[x] == NULL) {
-    // warnx << "cacheloc: " << x << " at port " << r.port << "\n";
+    // warnx << "CACHELOC: " << x << " at port " << r.port << "\n";
     location *loc = New location (x, r);
     locs.insert (loc);
     add_cachedlocs (loc);
+    challenge (x, cb);
+  } else {
+    // warnx << "CACHELOC (old): " << x << " at port " << r.port << "\n";
+    if (cb != cbchall_null)
+      cb (x, locs[x]->challenged, CHORD_OK);
   }
 }
 
 void
-locationtable::updateloc (chordID &x, net_address &r)
+locationtable::updateloc (chordID &x, net_address &r, cbchallengeID_t cb)
 {
   if (locs[x] == NULL) {
+    // warnx << "UPDATELOC: " << x << " at port " << r.port << "\n";
     location *loc = New location (x, r);
     loc->refcnt++;
     locs.insert (loc);
+    challenge (x, cb);
   } else {
     increfcnt (x);
-    // XXX check whether address hasn't changed.
+    if (locs[x]->addr.hostname != r.hostname ||
+	locs[x]->addr.port     != r.port) {
+      warnx << "locationtable::updateloc: address changed!!!\n";
+      locs[x]->addr = r;
+      challenge (x, cb);
+    } else if (cb != cbchall_null) {
+      // warnx << "UPDATELOC (old): " << x << " at port " << r.port << "\n";
+      cb (x, locs[x]->challenged, CHORD_OK);
+    }
   }
 }
 
@@ -287,7 +328,7 @@ locationtable::delete_cachedlocs (void)
   location *l = cachedlocs.first;
   assert (l);
   assert (l->refcnt == 0);
-  warnx << "DELETE: " << l->n << "\n";
+  // warnx << "DELETE: " << l->n << "\n";
   locs.remove (l);
   cachedlocs.remove (l);
   size_cachedlocs--;
@@ -318,3 +359,55 @@ locationtable::ping_cb (cbv cb, clnt_stat err)
   if (err) warn << "error pinging\n";
   (*cb)();
 };
+
+
+void
+locationtable::challenge (chordID &x, cbchallengeID_t cb)
+{
+  if (nochallenges) {
+    locs[x]->challenged = true;
+    cb (x, true, chordstat (CHORD_OK));
+    return;
+  }
+  int c = random ();
+  ptr<chord_challengearg> ca = New refcounted<chord_challengearg>;
+  chord_challengeres *res = New chord_challengeres (CHORD_OK);
+  nchallenge++;
+  ca->v.n = x;
+  ca->challenge = c;
+  doRPC (x, chord_program_1, CHORDPROC_CHALLENGE, ca, res, 
+	 wrap (mkref (this), &locationtable::challenge_cb, c, x, cb, res));
+}
+
+void
+locationtable::challenge_cb (int challenge, chordID x, cbchallengeID_t cb, 
+			     chord_challengeres *res, clnt_stat err)
+{
+  if (err) {
+    //    warnx << "challenge_cb: RPC failure " << err << "\n";
+    cb (x, false, CHORD_RPCFAILURE);
+  } else if (res->status) {
+    //    warnx << "challenge_cb: error " << res->status << "\n";
+    cb (x, false, res->status);
+  } else if (challenge != res->resok->challenge) {
+    //    warnx << "challenge_cb: challenge mismatch\n";
+    cb (x, false, res->status);
+  } else {
+    net_address r = getaddress (x);
+    bool ok = is_authenticID (x, r.hostname, r.port, res->resok->index);
+    assert (locs[x]);
+    locs[x]->challenged = ok;
+    cb (x, ok, res->status);
+  }
+  delete res;
+}
+
+bool
+locationtable::challenged (chordID &x)
+{
+  location *l = locs[x];
+  if (l)
+    return l->challenged;
+  else
+    return false;
+}
