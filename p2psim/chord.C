@@ -258,12 +258,28 @@ Chord::fix_successor_list()
   for (unsigned int i = 0; i < (gsr.v).size(); i++) {
     loctable->add_node(gsr.v[i]);
   }
+
   // printf ("fix_successor_list: %u,%16qx at %lu succ %u,%16qx\n", me.ip, me.id, 
   //now(), succ.ip, succ.id);
-  //vector<IDMap> scs = loctable->succs(me.id + 1, nsucc);
-  //for (uint i = 0; i < scs.size (); i++) {
-  //printf ( "succ %d %u,%16qx\n", i, scs[i].ip, scs[i].id);
-  //}
+  
+  if (vis) {
+    bool change = false;
+
+    vector<IDMap> scs = loctable->succs(me.id + 1, nsucc);
+    for (uint i = 0; i < scs.size (); i++) {
+      if ((i >= lastscs.size ()) || lastscs[i].id != scs[i].id) {
+	change = true;
+      }
+    }
+    if (change) {
+      printf ( "vis %lu succlist %16qx", now (), me.id);
+      for (uint i = 0; i < scs.size (); i++) {
+	printf ( " %16qx", scs[i].id);
+      }
+      printf ( "\n");
+    }
+    lastscs = scs;
+  }
 }
 
 
@@ -345,14 +361,13 @@ LocTable::succ(ConsistentHash::CHID id)
 vector<Chord::IDMap>
 LocTable::succs(ConsistentHash::CHID id, unsigned int m)
 {
-  unsigned int num = m;
   vector<Chord::IDMap> v;
   v.clear();
 
   if (m <= 0) return v;
   uint i = findsuccessor (id);
   m = (m > ring.size ()) ? ring.size () : m;
-  for (uint j = 0; j < num; j++) {
+  for (uint j = 0; j < m; j++) {
     v.push_back(ring[(i + j) % ring.size ()]);
   }
   return v;

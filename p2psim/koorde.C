@@ -3,6 +3,8 @@
 #include <iostream>
 using namespace std;
 
+extern bool vis;
+
 Koorde::Koorde(Node *n) : Chord(n, k) 
 {
   debruijn = me.id << logbase;
@@ -192,6 +194,34 @@ Koorde::fix_debruijn ()
   }
 #endif
   assert (scs.size () <= k);
+  
+  if (vis) {
+    bool change = false;
+    IDMap d = loctable->pred (debruijn);
+    vector<IDMap> sc = loctable->succs (d.id + 1, k - 1);
+    vector<IDMap> dfingers;
+
+    dfingers.push_back (d);
+    for (uint i = 0; i < sc.size (); i++) {
+      dfingers.push_back (sc[i]);
+    }
+
+    for (uint i = 0; i < dfingers.size (); i++) {
+      if ((i >= lastdfingers.size ()) || lastdfingers[i].id != dfingers[i].id) {
+	change = true;
+      }
+    }
+
+    if (change) {
+      printf ( "vis %lu dfingers %16qx %16qx", now (), me.id, debruijn);
+      for (uint i = 0; i < dfingers.size (); i++) {
+	printf ( " %16qx", dfingers[i].id);
+      }
+      printf ( "\n");
+    }
+    lastdfingers = dfingers;
+  }
+
 }
 
 void

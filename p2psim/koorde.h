@@ -39,7 +39,8 @@ protected:
   // vector<IDMap> dfingers;  // predecessor(debruijn) + k - 1 successors
   IDMap last;
   bool isstable;
-
+  vector<IDMap> lastdfingers;
+  
   Chord::CHID Koorde::nextimagin (CHID i, CHID kshift);
   Chord::CHID Koorde::firstimagin (CHID, CHID, CHID, CHID*);
   IDMap Koorde::closestpreddfinger (CHID);

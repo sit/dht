@@ -96,6 +96,7 @@ protected:
   uint nsucc;
   CHID _prev_succ;
   uint i0;
+  vector<IDMap> lastscs;
 
   virtual vector<IDMap> find_successors(CHID key, uint m, bool intern);
   void fix_successor();
