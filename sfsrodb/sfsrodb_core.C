@@ -1,4 +1,4 @@
-/* $Id: sfsrodb_core.C,v 1.4 2001/03/16 01:04:02 frank Exp $ */
+/* $Id: sfsrodb_core.C,v 1.5 2001/03/16 22:27:34 fdabek Exp $ */
 
 /*
  *
@@ -30,11 +30,8 @@
 bigint
 fh2mpz(const void *keydata, size_t keylen) 
 {
-
- 
   bigint n;
-  mpz_set_rawmag_be(&n, (const char *)keydata, 1);
-  
+  mpz_set_rawmag_be(&n, (const char *)keydata, 1); 
   warnx << n << "\n";
   return n;
 }
@@ -55,8 +52,9 @@ sfsrodb_put (ptr<aclnt> db, const void *keydata, size_t keylen,
   arg->data.setsize (contentlen);
   memcpy(arg->data.base (), contentdata, contentlen);
 
-  dhash_stat *res = New dhash_stat ();
-  err = db->scall (DHASHPROC_INSERT, arg, res);
+  dhash_stat res;
+  err = db->scall (DHASHPROC_INSERT, arg, &res);
+  delete arg;
 
   if (err) {
     warn << "insert returned " << err << strerror(err) << "\n";
