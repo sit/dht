@@ -36,6 +36,7 @@
 
 #include "debruijn.h"
 #include "fingerroute.h"
+#include "fingerroutepns.h"
 #include "proxroute.h"
 #if 0
 #include "route_secchord.h"
@@ -72,12 +73,10 @@ int myport;
  
 enum routing_mode_t {
   MODE_SUCC,
-  //  MODE_LOCTABLE,
   MODE_CHORD,
   MODE_DEBRUIJN,
   MODE_PROX,
-  //  MODE_SECCHORD,
-  //  MODE_CHORD_RECURSIVE
+  MODE_PNS,
 } mode;
 
 struct routing_mode_desc {
@@ -91,18 +90,14 @@ struct routing_mode_desc {
 routing_mode_desc modes[] = {
   { MODE_SUCC, "successors", "use only successor lists",
     wrap (vnode::produce_vnode) },
-  //  { MODE_LOCTABLE, "loctable", "use any node in loctable",
-  //  wrap (locroute::produce_vnode) },
   { MODE_CHORD, "chord", "use fingers and successors",
     wrap (fingerroute::produce_vnode) },
   { MODE_DEBRUIJN, "debruijn", "use debruijn routing",
     wrap (debruijn::produce_vnode) },
   { MODE_PROX, "prox", "use toes in some ad hoc way to improve routing",
     wrap (proxroute::produce_vnode) },
-//    { MODE_SECCHORD, "secchord", "use careful routing (broken)",
-//      wrap (secchord::produce_vnode) },
-//    { MODE_CHORD_RECURSIVE, "recchord", "chord, but do lookups recursively",
-//      wrap (recchord::produce_vnode) }
+  { MODE_PNS, "pns", "use proximity neighbor selection",
+    wrap (fingerroutepns::produce_vnode) }
 };
 
 void stats ();
