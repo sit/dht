@@ -296,16 +296,15 @@ dhash_impl::repair_timer ()
   chordID b = first;
   do {
     u_int count = bsm->pcount (b, succs);
-    if (count < num_efrags ())
-      {
-	trace << host_node->my_ID () << ": adding " << b 
-	      << " to outgoing queue "
-	      << "count= " << count << "\n";
+    if (count < num_efrags ()) {
+      trace << host_node->my_ID () << ": adding " << b 
+	    << " to outgoing queue "
+	    << "count = " << count << "\n";
 
-	//decide where to send it
-	ptr<location> to = bsm->best_missing (b, succs);
-	repair (blockID (b, DHASH_CONTENTHASH, DHASH_FRAG), to);
-      } 
+      //decide where to send it
+      ptr<location> to = bsm->best_missing (b, succs);
+      repair (blockID (b, DHASH_CONTENTHASH, DHASH_FRAG), to);
+    } 
     b = bsm->next_block (b);
   } while (b != first && b != 0);
 }
@@ -1069,9 +1068,13 @@ dhash_impl::start (bool randomize)
   if (!keyhash_mgr_tcb) {
     if (randomize)
       delay = random_getword () % keyhashtm (); 
-    repair_tcb = delaycb (reptm () + delay, wrap (this, &dhash_impl::repair_timer));
     keyhash_mgr_tcb =
       delaycb (keyhashtm () + delay, wrap (this, &dhash_impl::keyhash_mgr_timer));
+  }
+  if (!repair_tcb) {
+    if (randomize)
+      delay = random_getword () % reptm ();
+    repair_tcb = delaycb (reptm () + delay, wrap (this, &dhash_impl::repair_timer));
   }
   if (pmaint_obj)
     pmaint_obj->start ();
