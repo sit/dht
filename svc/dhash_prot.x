@@ -58,6 +58,7 @@ struct s_dhash_fetch_arg {
   chordID key;
   int32 start;
   int32 len;
+  int32 cookie;
 };
 
 struct s_dhash_keystatus_arg {
@@ -111,6 +112,7 @@ struct dhash_fetchiter_complete_res {
   int32 offset;
   dhash_valueattr attr;
   chordID source;
+  int32 cookie;
 };
 
 union dhash_fetchiter_res switch (dhash_stat status) {
