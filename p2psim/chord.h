@@ -127,7 +127,7 @@ protected:
   bool _stab_running;
 
   LocTable *loctable;
-  IDMap me, oldsucc;
+  IDMap me; 
   CHID _prev_succ;
   uint i0;
   vector<IDMap> lastscs;
@@ -139,7 +139,7 @@ protected:
   IDMap find_successors_recurs(CHID key, bool intern, bool is_lookup = false);
   virtual vector<IDMap> find_successors(CHID key, uint m, bool is_lookup);
 
-  void fix_successor();
+  IDMap fix_successor();
   void fix_successor_list();
   void check_static_init();
   void record_stat(uint type = 0);

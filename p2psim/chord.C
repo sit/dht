@@ -13,7 +13,7 @@ using namespace std;
 extern bool vis;
 extern bool static_sim;
 
-#define CHORD_DEBUG
+#undef CHORD_DEBUG
 Chord::Chord(Node *n, Args& a, LocTable *l)
   : DHTProtocol(n), _isstable (false)
 {
@@ -51,7 +51,6 @@ Chord::Chord(Node *n, Args& a, LocTable *l)
     printf ("vis %llu node %16qx\n", now (), me.id);
   }
   _inited = false;
-  oldsucc = me;
 
   stat.clear();
   _stab_running = false;
@@ -136,12 +135,13 @@ Chord::lookup(Args *args)
   tmp.id = k;
   uint pos = upper_bound(ids.begin(), ids.end(), tmp, Chord::IDMap::cmp) - ids.begin();
   while (1) {
+    if (pos >= ids.size()) 
+      pos = 0;
+
     Node *n = Network::Instance()->getnode(ids[pos].ip);
     if (n->alive()) 
       break;
     pos++;
-    if (pos >= ids.size()) 
-      pos = 0;
   }
   if (ids[pos].ip == result.ip) {
     printf("%s lookup result correct %u,%16qx for key %16qx \n", ts(), result.ip, result.id, k);
@@ -369,6 +369,12 @@ Chord::next_handler(next_args *args, next_ret *ret)
   IDMap succ = loctable->succ(me.id+1);
   if(ConsistentHash::betweenrightincl(me.id, succ.id, args->key) ||
      succ.id == me.id){
+#ifdef CHORD_DEBUG
+    printf("%s i think it is done %u,%qx (%qx, %qx, %qx)\n", ts(), succ.ip, succ.id, me.id, args->key, succ.id);
+#endif
+    Node *n = Network::Instance()->getnode(succ.ip);
+    if (!n->alive())
+      printf("really succ is dead %d\n", succ.ip);
     ret->done = true;
     ret->v.clear();
     ret->v.push_back(succ);
@@ -438,27 +444,59 @@ Chord::join(Args *args)
 void
 Chord::reschedule_stabilizer(void *x)
 {
+  assert(0);
+  assert(!static_sim);
   if (!node()->alive()) {
     _stab_running = false;
     return;
   }
+
+  Time t = now();
   stabilize();
-  delaycb(_stabtimer, &Chord::reschedule_stabilizer, (void *) 0);
+
+  if ( t + _stabtimer >= now()) { //stabilizating has run past _stabtime seconds
+    reschedule_stabilizer(NULL);
+  }else{
+    delaycb(now() - t - _stabtimer, &Chord::reschedule_stabilizer, (void *) 0);
+  }
 }
 
 // Which paper is this code from? -- PODC 
 void
 Chord::stabilize()
 {
-  //get my predecessor's successor
-  fix_successor ();
+
+  //ping my predecessor
+  IDMap pred = loctable->pred(me.id-1);
+  assert(pred.ip);
+  bool ok;
+  get_successor_list_args gsa;
+  get_successor_list_ret gsr;
+
+  gsa.m = 1;
+  record_stat();
+  if (_vivaldi) {
+      Chord *target = dynamic_cast<Chord *>(getpeer(pred.ip));
+      ok = _vivaldi->doRPC(pred.ip, target, &Chord::get_successor_list_handler, &gsa, &gsr);
+  } else 
+      ok = doRPC(pred.ip, &Chord::get_successor_list_handler, &gsa, &gsr);
+
+  if (ok) {
+    loctable->add_node(pred); //refresh timestamp
+    if (gsr.v.size() > 0)
+      loctable->add_node(gsr.v[0]);
+  } else
+    loctable->del_node(pred); 
+
 
   IDMap succ1 = loctable->succ(me.id+1);
-  assert(succ1.ip < 1025);
 
-  if (succ1.ip != oldsucc.ip) {
+  //ping my successor and get my successor's predecessor
+  IDMap pred1 = fix_successor ();
 
-    //notify my succ of his predesessor change
+  if (pred1.ip != me.ip && ConsistentHash::between(pred1.id, succ1.id, me.id)) {
+    //my successor's predecessor is behind me
+    //notify my succ of his predecessor change
     notify_args na;
     notify_ret nr;
     na.me = me;
@@ -473,9 +511,7 @@ Chord::stabilize()
     
     if (!ok) {
       loctable->del_node(succ1);
-    } else {
-      oldsucc = succ1;
-    }
+    } 
   }
 
   //get succ list from my successor
@@ -517,13 +553,15 @@ void
 Chord::init_state(vector<IDMap> ids)
 {
   loctable->add_sortednodes(ids);
-  printf("Chord: %s inited %d %d\n", ts(), ids.size(), loctable->size());
+  IDMap succ1 = loctable->succ(me.id+1);
+  printf("Chord: %s inited %d %d succ is %u,%qx\n", ts(), ids.size(), loctable->size(), succ1.ip, succ1.id);
   _inited = true;
 }
 
-void
+Chord::IDMap
 Chord::fix_successor()
 {
+  Time t = now();
   IDMap succ1 = loctable->succ(me.id+1);
 
   get_predecessor_args gpa;
@@ -538,22 +576,28 @@ Chord::fix_successor()
     ok = doRPC(succ1.ip, &Chord::get_predecessor_handler, &gpa, &gpr);
 
   if (!ok) {
+#ifdef CHORD_DEBUG
+    printf("%s fix_successor old (%llu) succcessor (%u,%qx) died\n", ts(), t, succ1.ip, succ1.id);
+#endif
     loctable->del_node(succ1);
-    return;
+    return me;
+  }else{
+    loctable->add_node(succ1); //refresh timestamp
   }
 
 #ifdef CHORD_DEBUG
-  printf("%s fix_successor old successor (%u,%qx)'s predecessor is (%u, %qx)\n", ts(), succ1.ip, succ1.id, gpr.n.ip, gpr.n.id);
+  printf("%s fix_successor (%llu) successor (%u,%qx)'s predecessor is (%u, %qx)\n", ts(), t,succ1.ip, succ1.id, gpr.n.ip, gpr.n.id);
 #endif
 
-  if (gpr.n.ip) loctable->add_node(gpr.n);
+  if (gpr.n.ip && gpr.n.ip!= me.id) loctable->add_node(gpr.n);
+  return gpr.n;
 }
 
 void
 Chord::get_successor_list_handler(get_successor_list_args *args, get_successor_list_ret *ret)
 {
   assert(!static_sim);
-  ret->v = loctable->succs(me.id+1, _nsucc);
+  ret->v = loctable->succs(me.id+1, args->m);
 }
 
 
@@ -565,12 +609,23 @@ Chord::fix_successor_list()
   get_successor_list_ret gsr;
   bool ok;
 
+  gsa.m = _nsucc;
+
   record_stat();
   if (_vivaldi) {
     Chord *target = dynamic_cast<Chord *>(getpeer(succ.ip));
     ok = _vivaldi->doRPC(succ.ip, target, &Chord::get_successor_list_handler, &gsa, &gsr);
   } else
     ok = doRPC(succ.ip, &Chord::get_successor_list_handler, &gsa, &gsr);
+
+#ifdef CHORD_DEBUG
+  vector<IDMap> v = loctable->succs(me.id+1,_nsucc);
+  printf("%s fix_successor_list: ",ts());
+  for (uint i = 0; i < v.size(); i++) {
+    printf("%u,%qx ",v[i].ip, v[i].id);
+  }
+  printf("\n");
+#endif
 
   if (!ok) {
     loctable->del_node(succ);
@@ -661,6 +716,9 @@ Chord::crash(Args *args)
   assert(!static_sim);
   if (vis)
     printf ("vis %llu crash %16qx\n", now (), me.id);
+#ifdef CHORD_DEBUG
+  printf("%s crashed\n", ts());
+#endif
   node()->crash ();
 }
 

@@ -87,12 +87,18 @@ ChordFinger::fix_fingers()
 void
 ChordFinger::reschedule_stabilizer(void *x)
 {
+  printf("%s stabilizing\n",ts());
   if (!node()->alive()) {
     _stab_running = false;
     return;
   }
-  assert(!static_sim);
+
+  Time t = now();
   ChordFinger::stabilize();
+  printf("%s end stabilizing\n",ts());
+
+  t = now() - t - _stabtimer;
+  if (t < 0) t = 0;
   delaycb(_stabtimer, &ChordFinger::reschedule_stabilizer, (void *)0);
 }
 
