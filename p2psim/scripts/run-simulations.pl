@@ -22,7 +22,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-# $Id: run-simulations.pl,v 1.16 2004/01/23 05:59:52 jinyang Exp $
+# $Id: run-simulations.pl,v 1.17 2004/01/23 20:25:45 strib Exp $
 
 use strict;
 use Getopt::Long;
@@ -65,7 +65,7 @@ run-simulations [options]
     --randomize <num>         Randomizes the order of param combos.  The number
 	                        supplied specifies how many times to iterate.
     --observer                Use an observer
-    --command                 p2psim or some other binary?
+    --command <cmd>           p2psim or some other binary?
 
 EOUsage
     
@@ -425,6 +425,9 @@ sub run_command {
     }
   
     my $randseed = int 1000000 * rand();
+    if( defined $options{"seed"} ) {
+	$randseed = $options{"seed"};
+    }
     open( LOG, ">$logfile" ) or die( "Couldn't open $logfile" );
     print LOG "# lookupmean=$lookupmean lifemean=$lifemean " . 
 	"deathmean=$deathmean file=$churnfile exit=$exittime\n";
