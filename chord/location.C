@@ -248,7 +248,21 @@ locationtable::doRPCcb (ptr<location> l, aclnt_cb realcb, clnt_stat err)
 void
 locationtable::insertgood (const chordID &n, sfs_hostname s, int p)
 {
-  assert (!locs[n]);
+  locwrap *lw;
+  if ((lw = locs[n])) {
+    warnx << "re-INSERT (good): " << n << "\n";
+    if (lw->type_ & LOC_REGULAR) {
+      if (!lw->good ()) {
+      lw->loc_->challenged = true;
+      lw->loc_->alive = true;
+      good++;
+      return;
+      }
+      // if already good, nothing to do.
+    }
+    // if it was here as part of a pin, then the fall
+    // through path will finish the insert (via realinsert).
+  }
 
   net_address r;
   r.hostname = s; r.port = p;

@@ -152,9 +152,11 @@ chord::newvnode (cbjoin_t cb, ptr<fingerlike> fingers, ptr<route_factory> f)
     fatal << "Maximum number of vnodes (" << max_vnodes << ") reached.\n";
     
   chordID newID = init_chordID (nvnode, myname, myport);
-
-  if (newID != wellknownID)
+  warn << "creating new vnode: " << newID << "\n";
+  if (newID != wellknownID) {
+    // It's not yet strictly speaking useful to other nodes yet.
     locations->insertgood (newID, myname, myport);
+  }
 
   ptr<vnode> vnodep = vnode::produce_vnode (locations, fingers, f,
 					    mkref (this), newID, 
@@ -164,7 +166,6 @@ chord::newvnode (cbjoin_t cb, ptr<fingerlike> fingers, ptr<route_factory> f)
 
   if (!active) active = vnodep;
   nvnode++;
-  warn << "insert: " << newID << "\n";
   vnodes.insert (newID, vnodep);
 
   // Must block until at least one good node in table...
