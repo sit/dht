@@ -277,7 +277,7 @@ struct paxos_state_t {
 enum stat_t {
   IDLE = 0,
   RECON_INPROG = 1,
-  RW_INPROG = 2
+  W_INPROG = 2
 };
 
 struct dhc_soft {

@@ -7,3 +7,11 @@ but still be able to carry additional recons.
 -When b->status == RECON_INPROG, allow additional recons, 
 but not any reads or writes. The accepted proposal is kept in persistent database,
 so it is safe to carry out Paxos.
+
+-If received error RPC_CANTSEND, set l->markalive to true and send the RPC anyway.
+Frank says make sure l is a pointer from a locationtable,
+i.e. from lookup() not lookup_or_create()
+
+-Make dhc_soft data structure should be per reconfiguration. Or, change
+it so that an outstanding recon times out after a period of time. 
+Can do all this in recon_timer ().
