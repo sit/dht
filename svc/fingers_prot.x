@@ -6,9 +6,9 @@ program FINGERS_PROGRAM {
     FINGERSPROC_NULL (void) = 0;
 
     chord_nodelistres
-    FINGERSPROC_GETFINGERS (void) = 1;
+    FINGERSPROC_GETFINGERS (chordID) = 1;
     
     chord_nodelistextres
-    FINGERSPROC_GETFINGERS_EXT (void) = 2;
+    FINGERSPROC_GETFINGERS_EXT (chordID) = 2;
   } = 1;
 } = 344454;
