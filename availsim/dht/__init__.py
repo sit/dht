@@ -7,7 +7,7 @@ known_types = {
     'fragments': dhash.dhash_fragments,
     'replica': dhash.dhash_replica,
     'cates': dhash.dhash_cates,
-    'replica_durability_oracle': oracle.durability_oracle,
-    'replica_availability_oracle': oracle.availability_oracle,
+    'durability_oracle_replica': oracle.durability_oracle,
+    'availability_oracle_replica': oracle.availability_oracle,
     'total_recall_replica': totalrecall.totalrecall_lazy_replica
 }
