@@ -378,3 +378,13 @@ toe_table::betterpred_greedy (chordID myID, chordID current,
   return r;
 }
 
+
+void toe_table::fill_nodelistresext (chord_nodelistextres *res)
+{
+}
+
+void 
+toe_table::fill_nodelistres (chord_nodelistres *res)
+{
+  
+}

@@ -40,8 +40,8 @@
 #define LEASE_TIME 2
 #define LEASE_INACTIVE 60
 
-int
-dhash::dbcompare (ref<dbrec> a, ref<dbrec> b)
+
+int dhash::dbcompare (ref<dbrec> a, ref<dbrec> b)
 {
   chordID ax = dbrec2id (a);
   chordID bx = dbrec2id (b);
@@ -52,10 +52,12 @@ dhash::dbcompare (ref<dbrec> a, ref<dbrec> b)
   else
     return 1;
 }
-
-
-dhash::dhash(str dbname, vnode *node, int k, int ss, int cs, int _ss_mode) 
+ 
+dhash::dhash(str dbname, vnode *node, 
+	     ptr<route_factory> _r_factory,
+	     int k, int _ss_mode) 
 {
+  this->r_factory = _r_factory;
   nreplica = k;
   kc_delay = 11;
   rc_delay = 7;
@@ -83,7 +85,7 @@ dhash::dhash(str dbname, vnode *node, int k, int ss, int cs, int _ss_mode)
   
   //the client helper class (will use for get_key etc)
   //don't cache here: only cache on user generated requests
-  cli = New dhashcli (node->chordnode, this, false);
+  cli = New dhashcli (node->chordnode, this, r_factory, false);
 
   // pred = 0; // XXX initialize to what?
   check_replica_tcb = NULL;
@@ -109,7 +111,7 @@ dhash::dhash(str dbname, vnode *node, int k, int ss, int cs, int _ss_mode)
   delaycb (30, wrap (this, &dhash::sync_cb));
 }
 
-void
+void 
 dhash::sync_cb () 
 {
   db->sync ();
@@ -132,11 +134,11 @@ dhash::sync_cb ()
   delaycb (30, wrap (this, &dhash::sync_cb));
 }
 
-void
-dhash::route_upcall (int procno, void *args, cbupcalldone_t cb)
+void 
+dhash::route_upcall (int procno,void *args, cbupcalldone_t cb)
 {
   warnt ("DHASH: fetchiter_request");
-  
+
   s_dhash_fetch_arg *farg = static_cast<s_dhash_fetch_arg *>(args);
 
   if (key_status (farg->key) != DHASH_NOTPRESENT) {
@@ -149,38 +151,40 @@ dhash::route_upcall (int procno, void *args, cbupcalldone_t cb)
       // on zero length request, we just return
       // whether we store the block or not
       ptr<s_dhash_block_arg> arg = New refcounted<s_dhash_block_arg> ();
-      arg->v = farg->from;
+      arg->v = farg->from.x;
       arg->res.setsize (0);
       arg->attr.size = 0;
       arg->offset = 0;
       arg->source = host_node->my_ID ();
       arg->nonce = farg->nonce;
       arg->lease = 0;
-      dhash_stat *res = New dhash_stat ();
-      doRPC (farg->from, dhash_program_1, DHASHPROC_BLOCK,
-	     arg, res, wrap (this, &dhash::sent_block_cb, res));
+      //could need caching...
+      host_node->locations->cacheloc (farg->from.x, farg->from.r,
+				      wrap (this, &dhash::block_cached_loc, arg));
+      //      doRPC (farg->from, dhash_program_1, DHASHPROC_BLOCK,
+      //	     arg, res, wrap (this, &dhash::sent_block_cb, res));
       (*cb)(true);
     } 
   } else if (responsible (farg->key)) {
     //no where else to go, return NOENT or RETRY?
-    warn << "sending NOENT WARNING\n";
     ptr<s_dhash_block_arg> arg = New refcounted<s_dhash_block_arg> ();
-    arg->v = farg->from;
+    arg->v = farg->from.x;
     arg->res.setsize (0);
     arg->offset = -1;
     arg->source = host_node->my_ID ();
     arg->nonce = farg->nonce;
     arg->lease = 0;
-    dhash_stat *res = New dhash_stat ();
-    doRPC (farg->from, dhash_program_1, DHASHPROC_BLOCK,
-	   arg, res, wrap (this, &dhash::sent_block_cb, res));
+    host_node->locations->cacheloc (farg->from.x, farg->from.r,
+				    wrap (this, &dhash::block_cached_loc, arg));
+    //    doRPC (farg->from, dhash_program_1, DHASHPROC_BLOCK,
+    //   arg, res, wrap (this, &dhash::sent_block_cb, res));
     (*cb)(true);
-  } else
+  } else {
     (*cb)(false);
-  
+  }
 }
 
-void
+void 
 dhash::sent_block_cb (dhash_stat *s, clnt_stat err) 
 {
   if (err || !s || (s && *s))
@@ -244,7 +248,7 @@ dhash::fetchiter_gotdata_cb (cbupcalldone_t cb, s_dhash_fetch_arg *a,
   ptr<s_dhash_block_arg> arg = New refcounted<s_dhash_block_arg> ();
   int n = (a->len + a->start < val->len) ? a->len : val->len - a->start;
   
-  arg->v = a->from;
+  arg->v = a->from.x;
   arg->res.setsize (n);
   memcpy (arg->res.base (), (char *)val->value + a->start, n);
   arg->attr.size = val->len;
@@ -268,10 +272,21 @@ dhash::fetchiter_gotdata_cb (cbupcalldone_t cb, s_dhash_fetch_arg *a,
     }
   }
 
-  dhash_stat *res = New dhash_stat ();
-  doRPC (a->from, dhash_program_1, DHASHPROC_BLOCK,
-	 arg, res, wrap (this, &dhash::sent_block_cb, res));  
+  //could need caching...
+  host_node->locations->cacheloc (a->from.x, a->from.r,
+				  wrap (this, &dhash::block_cached_loc,	arg));
   (*cb) (true);
+}
+
+void
+dhash::block_cached_loc (ptr<s_dhash_block_arg> arg, 
+			 chordID ID, bool ok, chordstat stat)
+{
+  if (!ok || stat) fatal << "challenge of " << ID << " failed\n";
+
+  dhash_stat *res = New dhash_stat ();
+  doRPC (ID, dhash_program_1, DHASHPROC_BLOCK,
+	 arg, res, wrap (this, &dhash::sent_block_cb, res));  
 }
 
 void
@@ -396,17 +411,6 @@ dhash::storesvc_cb(svccb *sbp,
   sbp->reply (&res);
 }
 
-void
-dhash::get_keys_traverse_cb (ptr<vec<chordID> > vKeys,
-			     chordID mypred,
-			     chordID predid,
-			     const chordID &key)
-{
-  
-  if (between (mypred, predid, key)) 
-    vKeys->push_back (key);
-}
-
 //---------------- no sbp's below this line --------------
  
 // -------- reliability stuff
@@ -424,8 +428,8 @@ dhash::transfer_initial_keys ()
   dhash_getkeys_res *res = New dhash_getkeys_res (DHASH_OK);
   doRPC(succ, dhash_program_1, DHASHPROC_GETKEYS, 
 			      arg, res,
-			      wrap(this, 
-				   &dhash::transfer_init_getkeys_cb, succ, res));
+			      wrap(this, &dhash::transfer_init_getkeys_cb, 
+				   succ, res));
 }
 
 void
@@ -475,7 +479,7 @@ dhash::install_replica_timer ()
 
 /* O( (number of replicas)^2 ) (but doesn't assume anything about
 ordering of chord::succlist*/
-bool 
+ bool 
 dhash::isReplica(chordID id) { 
   for (unsigned int i=0; i < replicas.size(); i++)
     if (replicas[i] == id) return true;
@@ -521,8 +525,6 @@ dhash::check_replicas ()
 
   update_replica_list ();
 }
-
-
 
 void
 dhash::fix_replicas_txerd (dhash_stat err) 
@@ -654,10 +656,12 @@ dhash::fetch_cb (int cookie, cbvalue cb, ptr<dbrec> ret)
   if (!ret) {
     (*cb)(cookie, NULL, DHASH_NOENT);
   } else {
+
     // make up a cookie and insert in hash if this is the first
     // fetch of a KEYHASH
+
     if ((cookie == 0) && 
-	dhash::block_type (ret) == DHASH_KEYHASH) {
+	block_type (ret) == DHASH_KEYHASH) {
       pk_partial *part = New pk_partial (ret, pk_partial_cookie);
       pk_partial_cookie++;
       pk_cache.insert (part);
@@ -714,11 +718,11 @@ dhash::append_after_db_fetch (ptr<dbrec> key, ptr<dbrec> new_data,
 			      s_dhash_insertarg *arg, cbstore cb,
 			      int cookie, ptr<dbrec> data, dhash_stat err)
 {
-  if (dhash::block_type (data) != DHASH_APPEND) {
+  if (block_type (data) != DHASH_APPEND) {
     cb (DHASH_STORE_NOVERIFY);
   } else {
     long type = DHASH_APPEND;
-    ptr<dhash_block> b = dhash::get_block_contents (data, DHASH_APPEND);
+    ptr<dhash_block> b = get_block_contents (data, DHASH_APPEND);
     long buflen = b->len + new_data->len;
     xdrsuio x;
     int size = buflen + 3 & ~3;
@@ -797,16 +801,16 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
     ptr<dbrec> k = id2dbrec(arg->key);
     ptr<dbrec> d = New refcounted<dbrec> (ss->buf, ss->size);
 
-    dhash_ctype ctype = dhash::block_type (d);
+    dhash_ctype ctype = block_type (d);
 
     if (ctype == DHASH_APPEND) {
-      ptr<dhash_block> contents = dhash::get_block_contents(d, ctype);
+      ptr<dhash_block> contents = get_block_contents(d, ctype);
       ptr<dbrec> c = New refcounted<dbrec>(contents->data, contents->len);
       append (k, c, arg, cb);
       return;
     }
     
-    if (!dhash::verify (arg->key, ctype, (char *)d->value, d->len) ||
+    if (!verify (arg->key, ctype, (char *)d->value, d->len) ||
 	((ctype == DHASH_NOAUTH) 
 	 && key_status (arg->key) != DHASH_NOTPRESENT)) {
 
@@ -881,7 +885,7 @@ ref<dbrec>
 dhash::id2dbrec(chordID id) 
 {
   str whipme = id.getraw ();
-  void *key = (void *)whipme.cstr ();
+ void *key = (void *)whipme.cstr ();
   int len = whipme.len ();
   
   ptr<dbrec> q = New refcounted<dbrec> (key, len);
@@ -923,7 +927,7 @@ dhash::responsible(const chordID& n)
 
 void
 dhash::doRPC (chordID ID, rpc_program prog, int procno,
-	      ptr<void> in, void *out, aclnt_cb cb) 
+	      ptr<void> in,void *out, aclnt_cb cb) 
 {
 #ifdef PNODE
   host_node->doRPC (ID, prog, procno, in, out, cb);
@@ -1017,7 +1021,7 @@ store_state::iscomplete()
 }
 
 bool
-store_state::addchunk(unsigned int start, unsigned int end, void *base)
+store_state::addchunk(unsigned int start, unsigned int end,void *base)
 {
   store_chunk **l, *c;
 

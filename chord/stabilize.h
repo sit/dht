@@ -28,6 +28,9 @@
 
 #include "chord_prot.h"
 // only needed so that we can print out myID
+#include "chord.h"
+
+class vnode;
 
 // Parent class for things that need stabilization.
 class stabilizable {
@@ -45,6 +48,9 @@ class stabilizable {
   // indicator that we believe that we are stable.
   // You must implement this function!
   virtual bool isstable () = 0;
+
+  virtual void fill_nodelistres (chord_nodelistres *res) = 0;
+  virtual void fill_nodelistresext (chord_nodelistextres *res) = 0;
 };
 
 // Class to manage stabilization timers, etc.

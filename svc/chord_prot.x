@@ -89,7 +89,6 @@ struct chord_nodearg {
 struct chord_testandfindarg {
   chordID v;
   chordID x;
-  int nonce;
   unsigned upcall_prog;
   unsigned upcall_proc;
   opaque upcall_args<>;
@@ -136,16 +135,20 @@ struct chord_debruijnarg {
   chordID v;
   chordID x;
   chordID d;
+  unsigned upcall_prog;
+  unsigned upcall_proc;
+  opaque upcall_args<>;
 };
 
 struct chord_debruijnnoderes {
   chord_node node;
   chordID d;
+  bool stop;
 };
 
 union chord_debruijnres switch (chordstat status) {
  case CHORD_INRANGE:
-   chord_node inres;
+   chord_debruijnnoderes inres;
  case CHORD_NOTINRANGE:
    chord_debruijnnoderes noderes;
  default:

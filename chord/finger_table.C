@@ -1,16 +1,8 @@
 #include "chord.h"
 
 // fingers are now zero-indexed!
-finger_table::finger_table (ptr<vnode> v,
-			    ptr<locationtable> locs,
-			    chordID ID)
-  : myvnode (v), locations (locs), myID (ID) 
+finger_table::finger_table ()  
 {
-  for (int i = 0; i < NBIT; i++) {
-    starts[i] = successorID (myID, i);
-    fingers[i] = myID;
-    locations->pinsucc (starts[i]);
-  }
 
   f = 0;
   stable_fingers = false;
@@ -19,6 +11,21 @@ finger_table::finger_table (ptr<vnode> v,
 
   nslowfinger = 0;
   nfastfinger = 0;
+}
+
+void 
+finger_table::init (ptr<vnode> v, ptr<locationtable> locs, chordID ID)
+{
+  locations  = locs;
+  myvnode = v;
+  myID = ID;
+  
+  for (int i = 0; i < NBIT; i++) {
+    starts[i] = successorID (myID, i);
+    fingers[i] = myID;
+    locations->pinsucc (starts[i]);
+  }
+
 }
 
 chordID
@@ -76,7 +83,7 @@ finger_table::print ()
 }
 
 void
-finger_table::fill_getfingersres (chord_nodelistres *res)
+finger_table::fill_nodelistres (chord_nodelistres *res)
 {
   int n = 1; // number of valid entries in curfingers
   chordID curfingers[NBIT + 1]; // current unique fingers (plus me)
@@ -101,7 +108,7 @@ finger_table::fill_getfingersres (chord_nodelistres *res)
 }
 
 void
-finger_table::fill_getfingersresext (chord_nodelistextres *res)
+finger_table::fill_nodelistresext (chord_nodelistextres *res)
 {
   // XXX code duplication with fill_getfingersres
   int n = 1; // number of valid entries in curfingers

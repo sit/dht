@@ -1,8 +1,10 @@
+#include "fingerlike.h"
+
 #ifndef _FINGER_TABLE_H_
 #define _FINGER_TABLE_H_
 
 #define NBIT     160     // size of Chord identifiers in bits
-class finger_table : public stabilizable {
+class finger_table : public fingerlike {
   ptr<vnode> myvnode;
   ptr<locationtable> locations;
   
@@ -26,28 +28,28 @@ class finger_table : public stabilizable {
 
   
  public:
-  finger_table (ptr<vnode> v, ptr<locationtable> locs, chordID myID);
-
-  chordID closestpred (const chordID &x);
-  chordID closestsucc (const chordID &x);
+  finger_table ();
 
   chordID finger (int i);
   chordID operator[] (int i);
   chordID start (int i) { return starts[i]; }
 
-  void print ();
-
-  void fill_getfingersres (chord_nodelistres *res);
-  void fill_getfingersresext (chord_nodelistextres *res);
-
   void stabilize_finger ();
-
-  void stats ();
 
   // Stabilize methods
   bool backoff_stabilizing () { return nout_backoff > 0; }
   void do_backoff () { stabilize_finger (); }
   bool isstable () { return stable_fingers && stable_fingers2; }
+  void print ();
+  void fill_nodelistres (chord_nodelistres *res);
+  void fill_nodelistresext (chord_nodelistextres *res);
+  void stats ();
+
+  //fingerlike methods
+  void init (ptr<vnode> v, ptr<locationtable> locs, chordID ID);
+  chordID closestpred (const chordID &x);
+  chordID closestsucc (const chordID &x);
+
 };
 
 #endif /* _FINGER_TABLE_H_ */

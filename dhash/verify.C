@@ -5,7 +5,7 @@
 #include <chord_util.h>
 
 bool
-dhash::verify (chordID key, dhash_ctype t, char *buf, int len) 
+verify (chordID key, dhash_ctype t, char *buf, int len) 
 {
   switch (t) 
     {
@@ -29,7 +29,7 @@ dhash::verify (chordID key, dhash_ctype t, char *buf, int len)
 }
 
 bool
-dhash::verify_content_hash (chordID key, char *buf, int len) 
+verify_content_hash (chordID key, char *buf, int len) 
 {
   long contentlen, type;
   xdrmem x1 (buf, (unsigned)len, XDR_DECODE);
@@ -49,7 +49,7 @@ dhash::verify_content_hash (chordID key, char *buf, int len)
 }
 
 bool
-dhash::verify_key_hash (chordID key, char *buf, int len)
+verify_key_hash (chordID key, char *buf, int len)
 {
   // extract the public key from the message
   sfs_pubkey2 pubkey;
@@ -85,28 +85,28 @@ dhash::verify_key_hash (chordID key, char *buf, int len)
 }
 
 bool
-dhash::verify_dnssec () 
+verify_dnssec () 
 {
   return true;
 }
 
 
 ptr<dhash_block>
-dhash::get_block_contents (ptr<dbrec> d, dhash_ctype t)
+get_block_contents (ptr<dbrec> d, dhash_ctype t)
 {
   return get_block_contents (d->value, d->len, t);
 }
 
 
 ptr<dhash_block> 
-dhash::get_block_contents (ptr<dhash_block> block, dhash_ctype t) 
+get_block_contents (ptr<dhash_block> block, dhash_ctype t) 
 {
   return get_block_contents (block->data, block->len, t);
 }
 
 
 ptr<dhash_block> 
-dhash::get_block_contents (char *data, unsigned int len, dhash_ctype t) 
+get_block_contents (char *data, unsigned int len, dhash_ctype t) 
 {
   // XXX make this function shorter...
   long type;
@@ -147,25 +147,25 @@ dhash::get_block_contents (char *data, unsigned int len, dhash_ctype t)
 
 
 dhash_ctype
-dhash::block_type (ptr<dbrec> data)
+block_type (ptr<dbrec> data)
 {
-  return dhash::block_type (data->value, data->len);
+  return block_type (data->value, data->len);
 }
 
 dhash_ctype
-dhash::block_type (ref<dhash_block> data)
+block_type (ref<dhash_block> data)
 {
-  return dhash::block_type (data->data, data->len);
+  return block_type (data->data, data->len);
 }
 
 dhash_ctype
-dhash::block_type (ptr<dhash_block> data)
+block_type (ptr<dhash_block> data)
 {
-  return dhash::block_type (data->data, data->len);
+  return block_type (data->data, data->len);
 }
 
 dhash_ctype
-dhash::block_type (char *value, unsigned int len)
+block_type (char *value, unsigned int len)
 {
   long type;
   xdrmem x1 (value, len, XDR_DECODE);

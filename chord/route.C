@@ -44,13 +44,13 @@ route_iterator::unmarshall_upcall_res (rpc_program *prog,
 //
 
 route_chord::route_chord (ptr<vnode> vi, chordID xi) : 
-  route_iterator (vi, xi), do_upcall (false), last_hop (false) {};
+  route_iterator (vi, xi) {};
 
 route_chord::route_chord (ptr<vnode> vi, chordID xi,
 			  rpc_program uc_prog,
 			  int uc_procno,
 			  ptr<void> uc_args) : 
-  route_iterator (vi, xi), do_upcall (true), last_hop (false)
+  route_iterator (vi, xi, uc_prog, uc_procno, uc_args)
 {
 
   prog = uc_prog;
@@ -236,11 +236,40 @@ route_chord::make_hop_done_cb (chordID s, bool ok, chordstat status)
 }
 
 
+ptr<route_iterator>
+chord_route_factory::produce_iterator (chordID xi)
+{
+  return New refcounted<route_chord> (vi, xi);
+}
+
+ptr<route_iterator> 
+chord_route_factory::produce_iterator (chordID xi,
+				       rpc_program uc_prog,
+				       int uc_procno,
+				       ptr<void> uc_args)
+{
+  return New refcounted<route_chord> (vi, xi, uc_prog, uc_procno, uc_args);
+}
+
 //
 // de Bruijn routing 
 //
 
+route_debruijn::route_debruijn (ptr<vnode> vi, chordID xi) : 
+  route_iterator (vi, xi), hops (0) {};
 
+route_debruijn::route_debruijn (ptr<vnode> vi, chordID xi,
+				rpc_program uc_prog,
+				int uc_procno,
+				ptr<void> uc_args) : 
+  route_iterator (vi, xi, uc_prog, uc_procno, uc_args), hops (0)
+{
+
+  prog = uc_prog;
+  this->uc_args = uc_args;
+  this->uc_procno = uc_procno;
+
+};
 void
 route_debruijn::print ()
 {
@@ -287,23 +316,45 @@ createdebruijnkey (chordID p, chordID n, chordID &x)
 }
 
 void
-route_debruijn::first_hop (cbhop_t cbi)
+route_debruijn::first_hop (cbhop_t cbi, chordID guess) {
+  cb = cbi;
+  search_path.push_back (guess);
+  virtual_path.push_back (x);
+  next_hop ();
+}
+
+void
+route_debruijn::first_hop (cbhop_t cbi, bool ucs = false)
 {
   cb = cbi;
   chordID myID = v->my_ID ();
 
+  warn << "first hop\n";
   if (v->lookup_closestsucc (myID + 1) 
       == myID) {  // is myID the only node?
     done = true;
     search_path.push_back (myID);
     virtual_path.push_back (x);
-    cb (done);
+    next_hop (); //do it anyways
   } else {
     chordID r = createdebruijnkey (myID, v->my_succ (), x);
     search_path.push_back (myID);
     virtual_path.push_back (r);
     next_hop ();
   }
+}
+
+
+void
+route_debruijn::send (chordID guess)
+{
+  first_hop (wrap (this, &route_debruijn::send_hop_cb), guess);
+}
+
+void
+route_debruijn::send (bool ucs)
+{
+  first_hop (wrap (this, &route_debruijn::send_hop_cb), ucs);
 }
 
 void
@@ -314,6 +365,13 @@ route_debruijn::next_hop ()
   make_hop (n, x, d);
 }
 
+
+void
+route_debruijn::send_hop_cb (bool done)
+{
+  if (!done) next_hop ();
+}
+
 void
 route_debruijn::make_hop (chordID &n, chordID &x, chordID &d)
 {
@@ -321,6 +379,22 @@ route_debruijn::make_hop (chordID &n, chordID &x, chordID &d)
   arg->v = n;
   arg->x = x;
   arg->d = d;
+
+ if (do_upcall) {
+    int arglen;
+    char *marshalled_args = route_iterator::marshall_upcall_args (&prog,
+								  uc_procno,
+								  uc_args,
+								  &arglen);
+								  
+    arg->upcall_prog = prog.progno;
+    arg->upcall_proc = uc_procno;
+    arg->upcall_args.setsize (arglen);
+    memcpy (arg->upcall_args.base (), marshalled_args, arglen);
+    delete marshalled_args;
+  } else
+    arg->upcall_prog = 0;
+
   chord_debruijnres *nres = New chord_debruijnres (CHORD_OK);
   v->doRPC (n, chord_program_1, CHORDPROC_DEBRUIJN, arg, nres, 
 	 wrap (this, &route_debruijn::make_hop_cb, nres));
@@ -329,16 +403,25 @@ route_debruijn::make_hop (chordID &n, chordID &x, chordID &d)
 void
 route_debruijn::make_hop_cb (chord_debruijnres *res, clnt_stat err)
 {
+  if (res->status == CHORD_INRANGE)
+    stop = res->inres->stop;
+  else
+    stop = res->noderes->stop;
+
   if (err) {
     warnx << "make_hop_cb: failure " << err << "\n";
     r = CHORD_RPCFAILURE;
-    done = 1;
-    cb (done);
+    cb (done = true);
+  } else if (last_hop) {
+    r = CHORD_OK;
+    cb (done = true);
   } else if (res->status == CHORD_INRANGE) { 
+    //warn << "in range: succ is " << res->inres->node.x << "\n";
     // found the successor
-    v->locations->cacheloc (res->inres->x, res->inres->r,
+    v->locations->cacheloc (res->inres->node.x, res->inres->node.r,
 			    wrap (this, &route_debruijn::make_route_done_cb));
   } else if (res->status == CHORD_NOTINRANGE) {
+    //    warn << "not in range\n";
     // haven't found the successor yet
     v->locations->cacheloc (res->noderes->node.x, res->noderes->node.r,
 			    wrap (this, &route_debruijn::make_hop_done_cb,
@@ -366,7 +449,8 @@ route_debruijn::make_route_done_cb (chordID s, bool ok,
 	  << s << " failed. (chordstat " << status << ")\n";
     assert (0); // XXX handle malice more intelligently
   }
-  done = true;
+  if (stop) done = true;
+  last_hop = true;
   cb (done);
 }
 
@@ -394,7 +478,23 @@ route_debruijn::make_hop_done_cb (chordID d, chordID s, bool ok,
 	  << s << " failed. (chordstat " << status << ")\n";
     assert (0); // XXX handle malice more intelligently
   }
+  if (stop) done = true;
   cb (done);
 }
 
 
+ptr<route_iterator>
+debruijn_route_factory::produce_iterator (chordID xi)
+{
+  return New refcounted<route_debruijn> (vi, xi);
+}
+
+
+ptr<route_iterator> 
+debruijn_route_factory::produce_iterator (chordID xi,
+					  rpc_program uc_prog,
+					  int uc_procno,
+					  ptr<void> uc_args)
+{
+  return New refcounted<route_debruijn> (vi, xi, uc_prog, uc_procno, uc_args);
+}

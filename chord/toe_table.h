@@ -51,6 +51,11 @@ class toe_table : public stabilizable {
   bool backoff_stabilizing () { return in_progress > 0; }
   void do_backoff () { stabilize_toes (); }
   bool isstable () { return stable_toes; } // XXX
+  void fill_nodelistresext (chord_nodelistextres *res);
+  void fill_nodelistres (chord_nodelistres *res);
+  void print () { warn << "I'm a toe table\n";};
+  void stats () { warn << "I'm a toe table\n";};
+  void attach_vnode (ptr<vnode> v) {};
 };
 
 #endif /* _TOE_TABLE_H_ */

@@ -134,16 +134,17 @@ struct pk_partial {
 class dhashcli;
 
 class dhash {
-
+  
   int nreplica;
   int kc_delay;
   int rc_delay;
   int ss_mode;
   int pk_partial_cookie;
-
+  
   dbfe *db;
   vnode *host_node;
   dhashcli *cli;
+  ptr<route_factory> r_factory;
 
   ihash<chordID, store_state, &store_state::key, 
     &store_state::link, hashID> pst;
@@ -181,16 +182,16 @@ class dhash {
   void append_after_db_fetch (ptr<dbrec> key, ptr<dbrec> new_data,
 			      s_dhash_insertarg *arg, cbstore cb,
 			      int cookie, ptr<dbrec> data, dhash_stat err);
-
+  
   void store (s_dhash_insertarg *arg, cbstore cb);
   void store_cb(store_status type, chordID id, cbstore cb, int stat);
   void store_repl_cb (cbstore cb, dhash_stat err);
-
+  
   void get_keys_traverse_cb (ptr<vec<chordID> > vKeys,
 			     chordID mypred,
 			     chordID predid,
 			     const chordID &key);
-
+  
   void init_key_status ();
   void transfer_initial_keys ();
   void transfer_init_getkeys_cb (chordID succ,
@@ -224,7 +225,7 @@ class dhash {
   void get_key (chordID source, chordID key, cbstat_t cb);
   void get_key_got_block (chordID key, cbstat_t cb, ptr<dhash_block> block);
   void get_key_stored_block (cbstat_t cb, int err);
-
+  
   void store_flush (chordID key, dhash_stat value);
   void store_flush_cb (int err);
   void cache_flush (chordID key, dhash_stat value);
@@ -238,7 +239,11 @@ class dhash {
   void printkeys_walk (const chordID &k);
   void printcached_walk (const chordID &k);
 
+  void block_cached_loc (ptr<s_dhash_block_arg> arg, 
+			 chordID ID, bool ok, chordstat stat);
+
   int dbcompare (ref<dbrec> a, ref<dbrec> b);
+
 
   ref<dbrec> id2dbrec(chordID id);
   chordID dbrec2id (ptr<dbrec> r);
@@ -257,8 +262,8 @@ class dhash {
   long rpc_answered;
 
  public:
-  dhash (str dbname, vnode *node, 
-	 int nreplica = 0, int ss = 10000, int cs = 1000, int ss_mode = 0);
+  dhash (str dbname, vnode *node, ptr<route_factory> r_fact,
+	 int nreplica = 0, int ss_mode = 0);
   void accept(ptr<axprt_stream> x);
 
   void print_stats ();
@@ -268,21 +273,24 @@ class dhash {
 
   dhash_stat key_status(const chordID &n);
 
-  static bool verify (chordID key, dhash_ctype t, char *buf, int len);
-  static bool verify_content_hash (chordID key,  char *buf, int len);
-  static bool verify_key_hash (chordID key, char *buf, int len);
-  static bool verify_dnssec ();
-  static ptr<dhash_block> get_block_contents (ptr<dbrec> d, dhash_ctype t);
-  static ptr<dhash_block> get_block_contents (ptr<dhash_block> block, dhash_ctype t);
-  static ptr<dhash_block> get_block_contents (char *data, unsigned int len, dhash_ctype t);
 
 
-  static dhash_ctype block_type (ptr<dbrec> d);
-  static dhash_ctype block_type (ref<dhash_block> d);
-  static dhash_ctype block_type (ptr<dhash_block> d);
-  static dhash_ctype block_type (char *value, unsigned int len);
 };
 
+/* verify.C */
+bool verify (chordID key, dhash_ctype t, char *buf, int len);
+bool verify_content_hash (chordID key,  char *buf, int len);
+bool verify_key_hash (chordID key, char *buf, int len);
+bool verify_dnssec ();
+ptr<dhash_block> get_block_contents (ptr<dbrec> d, dhash_ctype t);
+ptr<dhash_block> get_block_contents (ptr<dhash_block> block, dhash_ctype t);
+ptr<dhash_block> get_block_contents (char *data, 
+				     unsigned int len, 
+				     dhash_ctype t);
+dhash_ctype block_type (ptr<dbrec> d);
+dhash_ctype block_type (ref<dhash_block> d);
+dhash_ctype block_type (ptr<dhash_block> d);
+dhash_ctype block_type (char *value, unsigned int len);
 
 struct insert_info {
   chordID key;
@@ -294,28 +302,29 @@ struct insert_info {
 typedef callback<void, dhash_stat, chordID>::ref cbinsert_t;
 typedef callback<void, dhash_stat, ptr<insert_info> >::ref cbinsertgw_t;
 typedef callback<void, ptr<dhash_block> >::ref cbretrieve_t;
-typedef callback<void, ptr<dhash_storeres> >::ref dhashcli_storecb_t;
 typedef callback<void, dhash_stat, chordID>::ref dhashcli_lookupcb_t;
 typedef callback<void, dhash_stat, chordID, route>::ref dhashcli_routecb_t;
 
 
-class route_dhash : public route_iterator {
+class route_dhash {
   
- public:
-  route_dhash (ptr<vnode> vi, chordID xi, dhash *dh, 
-	       bool lease = false, bool ucs = false);
-  void next_hop ();
-  void first_hop (cbhop_t cb);
-  void first_hop (cbhop_t cb, chordID first_hop_guess);
+public:
+  route_dhash (ptr<route_factory> f,
+	       chordID xi, 
+	       dhash *dh, 
+	       bool lease = false,
+	       bool ucs = false);
+  
+
   void execute (cbhop_t cbi, chordID first_hop_guess);
   void execute (cbhop_t cbi);
-
+  dhash_stat status () { return result; }
+  chordID key () {return xi;}
   ptr<dhash_block> get_block () const { return block; }
-  dhash_stat get_status () const { return result; }
   route path ();
 
  private:
-  ptr<route_chord> chord_iterator;
+  ptr<route_iterator> chord_iterator;
   bool ask_for_lease;
   bool use_cached_succ;
   int npending;
@@ -323,7 +332,9 @@ class route_dhash : public route_iterator {
   ptr<dhash_block> block;
   dhash_stat result;
   bool last_hop;
-  dhash *dh;
+  chordID xi;
+  cbhop_t cb;
+  ptr<route_factory> f;
 
   void check_finish ();
   void block_cb (s_dhash_block_arg *arg);
@@ -340,39 +351,36 @@ class route_dhash : public route_iterator {
   void fail (str errstr);
 };
 
-
 class dhashcli {
   ptr<chord> clntnode;
   bool do_cache;
   dhash *dh;
+  ptr<route_factory> r_factory;
 
- private:
+private:
   void doRPC (chordID ID, rpc_program prog, int procno, ptr<void> in, 
 	      void *out, aclnt_cb cb);
 
-  void store_cb (dhashcli_storecb_t cb, ref<dhash_storeres> res,clnt_stat err);
   void lookup_findsucc_cb (chordID blockID, dhashcli_lookupcb_t cb,
 			   chordID succID, route path, chordstat err);
   void retrieve_hop_cb (ptr<route_dhash> iterator, cbretrieve_t cb, bool done);
   void cache_block (ptr<dhash_block> block, route search_path, chordID key);
   void finish_cache (dhash_stat status, chordID dest);
   void retrieve_with_source_cb (ptr<route_dhash> iterator,
-				cbretrieve_t cb, bool done);
+  				cbretrieve_t cb, bool done);
   void insert_lookup_cb (chordID blockID, ref<dhash_block> block,
 			 cbinsert_t cb, dhash_stat status, chordID destID);
 
  public:
-  dhashcli (ptr<chord> node, dhash *dh, bool do_cache);
-  void retrieve (chordID blockID, bool askforlease,
-                 bool usecachedsucc, cbretrieve_t cb);
+  dhashcli (ptr<chord> node, dhash *dh, ptr<route_factory> r_factory, bool do_cache);
+  void retrieve (chordID blockID, bool askforlease, bool usecachedsucc, cbretrieve_t cb);
+
   void retrieve (chordID source, chordID blockID, cbretrieve_t cb);
   void insert (chordID blockID, ref<dhash_block> block, 
                bool usecachedsucc, cbinsert_t cb);
   void storeblock (chordID dest, chordID blockID, ref<dhash_block> block,
 		   cbinsert_t cb, store_status stat = DHASH_STORE);
-  void store (chordID destID, chordID blockID, char *data, size_t len,
-              size_t off, size_t totsz, dhash_ctype ctype,
-	      store_status store_type, dhashcli_storecb_t cb);
+
   void lookup (chordID blockID, bool usecachedsucc, dhashcli_lookupcb_t cb);
 };
 
@@ -424,7 +432,6 @@ public:
   bool sync_setactive (int32 n);
 };
 
-
 class dhashgateway {
   ptr<asrv> clntsrv;
   ptr<chord> clntnode;
@@ -434,10 +441,10 @@ class dhashgateway {
   void dispatch (svccb *sbp);
   void insert_cb (svccb *sbp, dhash_stat status, chordID blockID);
   void retrieve_cb (svccb *sbp, ptr<dhash_block> block);
-
+  
 public:
   dhashgateway (ptr<axprt_stream> x, ptr<chord> clnt, dhash *dh,
-		bool do_cache = false);
+		ptr<route_factory> f, bool do_cache = false);
 };
 
 bigint compute_hash (const void *buf, size_t buflen);

@@ -27,6 +27,7 @@
 #include "dhash.h"
 #include "parseopt.h"
 #include <sys/types.h>
+#include "route.h"
 
 //#define PROFILING 
 
@@ -44,17 +45,18 @@ extern "C" {
 
 EXITFN (cleanup);
 
-// XXX temporary hack -- reset to something reasonable soon.
-//     [used to be 60000]
-//     --josh
 #define STORE_SIZE 2000000 //size of block store per vnode (in blocks)
 
 ptr<chord> chordnode;
 static str p2psocket;
 bool do_cache;
 int cache_size;
-vec<dhash *> dh;
+vec<dhash* > dh;
 int myport;
+
+#define MODE_DEBRUIJN 1
+#define MODE_CHORD 2
+int mode;
 
 void stats ();
 void stop ();
@@ -70,7 +72,13 @@ client_accept (int fd)
 
   // XXX these dhashgateway objects are leaked
   //
-  vNew dhashgateway (x, chordnode, dh[0], do_cache);
+  ptr<route_factory> f;
+  if (mode == MODE_DEBRUIJN)
+    f = New refcounted<debruijn_route_factory> (chordnode->active);
+  else
+    f = New refcounted<chord_route_factory> (chordnode->active);
+
+  vNew dhashgateway (x, chordnode, dh[0], f, do_cache);
 }
 
 static void
@@ -122,22 +130,30 @@ startclntd()
 }
 
 static void
-newvnode_cb (int nreplica, str db_name, int ss_mode, int n, vnode *my,
+newvnode_cb (int nreplica, str db_name, int ss_mode, int n, ptr<vnode> my,
 	     chordstat stat)
 {
+  ptr<route_factory> f;
+  ptr<fingerlike> fl;
+
+  if (mode == MODE_DEBRUIJN) {
+    f = New refcounted<debruijn_route_factory> (my);
+    fl = New refcounted<debruijn> ();
+  } else {
+    f = New refcounted<chord_route_factory> (my);
+    fl = New refcounted<finger_table> ();
+  }
+  
   if (stat != CHORD_OK) {
     warnx << "newvnode_cb: status " << stat << "\n";
     fatal ("unable to join\n");
   }
   str db_name_prime = strbuf () << db_name << "-" << n;
-  if ((int)dh.size () >= chord::max_vnodes)
-    fatal << "Too many virtual nodes (" << chord::max_vnodes << ")\n";
-  dh.push_back( New dhash (db_name_prime, my, nreplica, 
-			    STORE_SIZE, 
-			    cache_size, 
-			    ss_mode));
+  dh.push_back( New dhash (db_name_prime, my, f, nreplica, 
+			   ss_mode));
+
   if (n > 0) chordnode->newvnode (wrap (newvnode_cb, nreplica, db_name, 
-					ss_mode, n-1));
+					ss_mode, n-1), fl);
 }
 
 
@@ -232,9 +248,18 @@ main (int argc, char **argv)
   str db_name = "/var/tmp/db";
   p2psocket = "/tmp/chord-sock";
   str myname = my_addr ();
+  mode = MODE_CHORD;
 
-  while ((ch = getopt (argc, argv, "B:cd:j:l:M:n:p:S:s:v:")) != -1)
+  while ((ch = getopt (argc, argv, "B:cd:j:l:M:n:p:S:s:v:m:")) != -1)
     switch (ch) {
+    case 'm':
+      if (strcmp (optarg, "debruijn") == 0)
+	mode = MODE_DEBRUIJN;
+      else if (strcmp (optarg, "chord") == 0)
+	mode = MODE_CHORD;
+      else
+	fatal << "allowed modes are chord and debruijn\n";
+      break;
     case 'B':
       cache_size = atoi (optarg);
       break;
@@ -288,6 +313,8 @@ main (int argc, char **argv)
       break;
     case 'v':
       vnode = atoi (optarg);
+      if (vnode >= chord::max_vnodes)
+	fatal << "Too many virtual nodes (" << vnode << ")\n";
       break;
     default:
       usage ();
@@ -313,8 +340,9 @@ main (int argc, char **argv)
 				     myport,
 				     max_loccache,
 				     ss_mode);
+  ptr<debruijn> deb = New refcounted<debruijn> ();
   chordnode->newvnode (wrap (newvnode_cb, nreplica, db_name, ss_mode, 
-			     vnode-1));
+			     vnode-1), deb);
 
   sigcb(SIGUSR1, wrap (&stats));
   sigcb(SIGUSR2, wrap (&stop));

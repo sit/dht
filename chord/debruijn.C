@@ -1,17 +1,19 @@
 #include "chord.h"
 
-debruijn::debruijn (ptr<vnode> v,
-		  ptr<locationtable> locs,
-		  chordID ID)
-  : myvnode (v), locations (locs), myID (ID)
+debruijn::debruijn () {}
+
+void 
+debruijn::init (ptr<vnode> v, ptr<locationtable> locs, chordID ID)
 {
+  myvnode = v;
+  locations = locs;
+  myID = ID;
+  warn << myID << " debruijn: double " << mydoubleID[0] << "\n";
   for (int i=0; i < LOGBASE; i++) 
     mydoubleID[i] = doubleID (myID, i+1);
   for (int i=0; i < LOGBASE; i++) 
     locations->pinsucc (mydoubleID[i]);
-  warn << myID << " debruijn: double " << mydoubleID[0] << "\n";
 }
-
 
 chordID
 debruijn::closestsucc (const chordID &x)

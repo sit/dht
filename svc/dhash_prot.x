@@ -57,7 +57,7 @@ struct s_dhash_insertarg {
 struct s_dhash_fetch_arg {
   chordID v;
   chordID key;
-  chordID from;
+  chord_node from;
   int32 start;
   int32 len;
   int32 cookie;

@@ -154,8 +154,7 @@ class locationtable : public virtual refcount, public stabilizable {
 
   void ping (const chordID &x, cbping_t cb);
   void challenge (const chordID &x, cbchallengeID_t cb);
-
-  void stats ();
+  void get_node (const chordID &x, chord_node *n);
     
   // info about a particular location...
   bool alive (const chordID &x);
@@ -165,7 +164,7 @@ class locationtable : public virtual refcount, public stabilizable {
   float get_a_lat (const chordID &x);
   void fill_getnodeext (chord_node_ext &data, const chordID &x);
   unsigned int get_nrpc(const chordID &x);
-
+  
   //average stats
   float get_avg_lat ();
   float get_avg_var ();
@@ -175,6 +174,11 @@ class locationtable : public virtual refcount, public stabilizable {
   bool continuous_stabilizing ();
   void do_continuous ();
   bool isstable ();
+  void print () { warn << "location table::print\n";};
+  void stats ();
+  void fill_nodelistresext (chord_nodelistextres *res);
+  void fill_nodelistres (chord_nodelistres *res);
+
 };
 
 extern bool nochallenges;

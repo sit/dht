@@ -64,7 +64,7 @@ succ_list::estimate_nnodes ()
 }
 
 void
-succ_list::fill_getsuccres (chord_nodelistextres *res)
+succ_list::fill_nodelistresext (chord_nodelistextres *res)
 {
   // succ[0] is me. the rest are our actual successors.
   int curnsucc = num_succ ();
@@ -74,6 +74,12 @@ succ_list::fill_getsuccres (chord_nodelistextres *res)
     locations->fill_getnodeext (res->resok->nlist[i], cursucc);
     cursucc = locations->closestsuccloc (cursucc + 1);
   }
+}
+
+void
+succ_list::fill_nodelistres (chord_nodelistres *res)
+{
+  res->resok->nlist.setsize (0);
 }
 
 void

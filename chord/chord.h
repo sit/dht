@@ -47,7 +47,7 @@ typedef int cb_ID;
 
 typedef vec<chordID> route;
 
-typedef callback<void,vnode*,chordstat>::ref cbjoin_t;
+typedef callback<void,ptr<vnode>,chordstat>::ref cbjoin_t;
 typedef callback<void,chordID,net_address,chordstat>::ref cbchordID_t;
 typedef callback<void,vec<chord_node>,chordstat>::ref cbchordIDlist_t;
 typedef callback<void,chordID,route,chordstat>::ref cbroute_t;
@@ -62,14 +62,16 @@ class route_iterator;
 #include "finger_table.h"
 #include "succ_list.h"
 #include "debruijn.h"
+#include "fingerlike.h"
 
 // ================ VIRTUAL NODE ================
 
 class vnode : public virtual refcount, public stabilizable {
-  ptr<finger_table> fingers;
+
+  ptr<fingerlike> fingers;
+
   ptr<succ_list> successors;
   ptr<toe_table> toes;
-  ptr<debruijn> dutch;
   ptr<stabilize_manager> stabilizer;
 
   int myindex;
@@ -140,7 +142,10 @@ class vnode : public virtual refcount, public stabilizable {
 			  chord_testandfindres *res,
 			  svccb *sbp,
 			  bool stop);
-  
+  void debruijn_upcall_done (chord_debruijnarg *da,
+			     chord_debruijnres *res,
+			     svccb *sbp,
+			     bool stop);
   void do_upcall (int upcall_prog, int upcall_proc,
 		  void *uc_args, int uc_args_len,
 		  cbupcalldone_t app_cb);
@@ -151,8 +156,8 @@ class vnode : public virtual refcount, public stabilizable {
   ptr<locationtable> locations;
   int server_selection_mode;
 
-  vnode (ptr<locationtable> _locations, ptr<chord> _chordnode, chordID _myID,
-	 int _vnode, int server_sel_mode);
+  vnode (ptr<locationtable> _locations, ptr<fingerlike> stab,
+	 ptr<chord> _chordnode, chordID _myID, int _vnode, int server_sel_mode);
   ~vnode (void);
   chordID my_ID () { return myID; };
   chordID my_pred ();
@@ -202,6 +207,10 @@ class vnode : public virtual refcount, public stabilizable {
   void dodebruijn (svccb *sbp, chord_debruijnarg *da);
   void dofindroute (svccb *sbp, chord_findarg *fa);
 
+  //bogus
+  void fill_nodelistresext (chord_nodelistextres *res);
+  void fill_nodelistres (chord_nodelistres *res);
+
   //RPC demux
   void addHandler (const rpc_program &prog, cbdispatch_t cb);
 
@@ -240,7 +249,7 @@ class chord : public virtual refcount {
     
   chord (str _wellknownhost, int _wellknownport,
 	 str _myname, int port, int max_cache, int server_selection_mode);
-  ptr<vnode> newvnode (cbjoin_t cb);
+  ptr<vnode> newvnode (cbjoin_t cb, ptr<fingerlike> fingers);
   void stats (void);
   void print (void);
   void stop (void);

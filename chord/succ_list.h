@@ -38,9 +38,6 @@ class succ_list : public stabilizable {
   
   int num_succ ();
   u_long estimate_nnodes ();
-  void print ();
-  
-  void fill_getsuccres (chord_nodelistextres *res);
   
   void stabilize_succ ();
   void stabilize_succlist ();
@@ -51,5 +48,10 @@ class succ_list : public stabilizable {
   void do_continuous () { stabilize_succ (); }
   void do_backoff () { stabilize_succlist (); }
   bool isstable () { return stable_succlist && stable_succlist2; } // XXX
+  void fill_nodelistresext (chord_nodelistextres *res);
+  void fill_nodelistres (chord_nodelistres *res);
+  void print ();
+  void stats () { warn << "stats go here\n"; };
+
 };
 #endif /* _SUCC_LIST_H_ */

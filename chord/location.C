@@ -178,6 +178,7 @@ locationtable::doRPC (const chordID &n, rpc_program progno,
 		      void *out, aclnt_cb cb)
 {
   ptr<location> l = lookup (n);
+  if (!l) fatal << "location is null. forgot to call cacheloc\n?";
   hosts->doRPC (l, progno, procno, in, out, 
 		wrap (this, &locationtable::doRPCcb, l, cb));
   l->nrpc++;
@@ -373,6 +374,14 @@ locationtable::realinsert (ref<location> l)
   size_cachedlocs++;
 }
 
+void
+locationtable::get_node (const chordID &x, chord_node *n)
+{
+  ptr<location> loc = lookup (x);
+  if (!loc) return;
+  n->x = loc->n;
+  n->r = loc->addr;
+}
 ptr<location>
 locationtable::lookup (const chordID &n)
 {
@@ -705,4 +714,17 @@ void
 locationtable::check_dead_cb (chordID x, bool b, chordstat s)
 {
   nout_continuous--;
+}
+
+
+void
+locationtable::fill_nodelistresext (chord_nodelistextres *res)
+{
+  res->resok->nlist.setsize (0);
+}
+
+void
+locationtable::fill_nodelistres (chord_nodelistres *res)
+{
+  res->resok->nlist.setsize (0);
 }

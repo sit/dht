@@ -17,21 +17,24 @@ unsigned int MTU = (getenv ("DHASH_MTU") ?
 
 int gnonce;
 
-route_dhash::route_dhash (ptr<vnode> vi, 
+
+route_dhash::route_dhash (ptr<route_factory> f,
 			  chordID xi,
 			  dhash *dh,
 			  bool lease,
 			  bool ucs) 
-  : route_iterator (vi, xi),
-    ask_for_lease (lease),
+
+  : ask_for_lease (lease),
     use_cached_succ (ucs), 
-    npending (0), fetch_error (false), dh (dh)
+    npending (0), fetch_error (false),
+    xi (xi),
+    f (f)
 {
 
   last_hop = false;
   ptr<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg> ();
   arg->key = xi;
-  arg->from = vi->my_ID ();
+  f->get_node (&arg->from);
   arg->start = 0;
   arg->len = MTU;
   arg->cookie = 0;
@@ -39,25 +42,8 @@ route_dhash::route_dhash (ptr<vnode> vi,
   arg->lease = ask_for_lease;
 
   dh->register_block_cb (arg->nonce, wrap (this, &route_dhash::block_cb));
-  chord_iterator = New refcounted<route_chord> (vi, xi,
-						dhash_program_1,
-						DHASHPROC_FETCHITER,
-						arg);
+  chord_iterator = f->produce_iterator (xi, dhash_program_1, DHASHPROC_FETCHITER, arg);
 };
-
-void
-route_dhash::first_hop (cbhop_t cbi, chordID first_hop) {
-  cb = cbi;
-  chord_iterator->first_hop (wrap (this, &route_dhash::hop_cb), first_hop);
-}
-
-void
-route_dhash::first_hop (cbhop_t cbi)
-{
-  cb = cbi;
-  chord_iterator->first_hop (wrap (this, &route_dhash::hop_cb), 
-			     use_cached_succ);
-}
 
 void
 route_dhash::execute (cbhop_t cbi, chordID first_hop)
@@ -71,21 +57,6 @@ route_dhash::execute (cbhop_t cbi)
 {
   cb = cbi;
   chord_iterator->send (use_cached_succ);
-}
-
-void 
-route_dhash::hop_cb (bool done)
-{
-  if (done) {
-    last_hop = true;
- } else
-    (*cb)(false);
-}
-
-void
-route_dhash::next_hop ()
-{
-  chord_iterator->next_hop ();
 }
 
 void
@@ -122,15 +93,16 @@ route_dhash::block_cb (s_dhash_block_arg *arg)
 
       ptr<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg>;
       arg->v     = sourceID;
-      arg->key   = x;
+      arg->key   = xi;
       arg->start = offset;
       arg->len   = length;
       arg->cookie = cookie;
       arg->lease = ask_for_lease;
 
       ptr<dhash_fetchiter_res> res = New refcounted<dhash_fetchiter_res> ();
-      v->doRPC (sourceID, dhash_program_1, DHASHPROC_FETCHITER, arg, res,
-	     wrap (this, &route_dhash::finish_block_fetch, res));
+      f->get_vnode ()->doRPC (sourceID, dhash_program_1, DHASHPROC_FETCHITER, 
+			   arg, res,
+			   wrap (this, &route_dhash::finish_block_fetch, res));
       nread += length;
     }
   //process the first block
@@ -159,7 +131,7 @@ route_dhash::check_finish ()
       result = DHASH_NOENT;
     }
     result = DHASH_OK;
-    cb (done = true);
+    cb (true);
   }
 }
 
@@ -186,7 +158,9 @@ route_dhash::finish_block_fetch (ptr<dhash_fetchiter_res> res,
 void
 route_dhash::fail (str errstr)
 {
-  warn << "dhash_fetch failed: " << x << ": " << errstr << "\n";
+
+  warn << "dhash_store failed: " << xi << ": " << errstr << "\n";
+
   fetch_error = true;
 }
 

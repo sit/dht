@@ -57,14 +57,15 @@ compute_hash (const void *buf, size_t buflen)
 // DHASHGATEWAY
 
 dhashgateway::dhashgateway (ptr<axprt_stream> x, ptr<chord> node,
-			    dhash *dh,
-			    bool do_cache)
+			       dhash *dh,
+			       ptr<route_factory> f,
+			       bool do_cache)
 {
   clntsrv = asrv::alloc (x, dhashgateway_program_1, 
 			 wrap (this, &dhashgateway::dispatch));
   clntnode = node;
   this->dh = dh;
-  dhcli = New refcounted<dhashcli> (clntnode, dh, do_cache);
+  dhcli = New refcounted<dhashcli>(clntnode, dh, f, do_cache);
 }
 
 
@@ -85,13 +86,15 @@ dhashgateway::dispatch (svccb *sbp)
     {
       warnt ("DHASHGW: insert_request");
       dhash_insert_arg *arg = sbp->template getarg<dhash_insert_arg> ();
+
       ref<dhash_block> block =
 	New refcounted<dhash_block> (arg->block.base (), arg->block.size ());
       dhcli->insert (arg->blockID, block, arg->usecachedsucc,
 	             wrap (this, &dhashgateway::insert_cb, sbp));
+
     }
     break;
-
+    
   case DHASHPROC_RETRIEVE:
     {
       warnt ("DHASHGW: retrieve_request");
@@ -322,12 +325,12 @@ dhashclient::insertcb (cbinsertgw_t cb, bigint key,
   ptr<insert_info> i = New refcounted<insert_info>(key, bigint(0));
   if (err) {
     errstr = strbuf () << "rpc error " << err;
-    warn << "dhashclient::insert failed: " << key << ": " << errstr << "\n";
+    warn << "1dhashclient::insert failed: " << key << ": " << errstr << "\n";
   }
   else if (res->status != DHASH_OK) {
     errstr = dhasherr2str (res->status);
     if (res->status != DHASH_WAIT)
-      warn << "dhashclient::insert failed: " << key << ": " << errstr << "\n";
+      warn << "2dhashclient::insert failed: " << key << ": " << errstr << "\n";
   }
   else {
     //if I wanted to pass back the destID do this:
@@ -352,7 +355,9 @@ dhashclient::retrieve (bigint key, cbretrieve_t cb, int options)
 }
 
 void
-dhashclient::retrievecb (cbretrieve_t cb, bigint key, ref<dhash_retrieve_res> res, clnt_stat err)
+dhashclient::retrievecb (cbretrieve_t cb, bigint key, 
+			 ref<dhash_retrieve_res> res, 
+			 clnt_stat err)
 {
   str errstr;
   if (err)
@@ -360,17 +365,17 @@ dhashclient::retrievecb (cbretrieve_t cb, bigint key, ref<dhash_retrieve_res> re
   else if (res->status != DHASH_OK)
     errstr = dhasherr2str (res->status);
   else {
-    dhash_ctype ctype = dhash::block_type (res->resok->block.base (), 
+    dhash_ctype ctype = block_type (res->resok->block.base (), 
 					   res->resok->block.size ());
-    if (!dhash::verify (key, ctype, res->resok->block.base (), 
+    if (!verify (key, ctype, res->resok->block.base (), 
 			res->resok->block.size ())) {
       errstr = strbuf () << "data did not verify";
       printf("%s\n", res->resok->block.base ());
     } else {
       // success
-      ptr<dhash_block> blk = 
-	dhash::get_block_contents (res->resok->block.base(), 
-				   res->resok->block.size(), ctype);
+      ptr<dhash_block> blk = get_block_contents (res->resok->block.base(), 
+						 res->resok->block.size(), 
+						 ctype);
       blk->hops = res->resok->hops;
       blk->lease = res->resok->lease;
       (*cb) (blk);

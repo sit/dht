@@ -1,4 +1,4 @@
-/* $Id: sfsrodb.C,v 1.26 2002/10/16 19:54:01 benjie Exp $ */
+/* $Id: sfsrodb.C,v 1.27 2002/11/13 05:49:52 fdabek Exp $ */
 
 /*
  * Copyright (C) 1999 Kevin Fu (fubob@mit.edu)
@@ -49,7 +49,7 @@
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define LSD_SOCKET "/tmp/chord-sock"
 
-ptr<dhashclient> dhash;
+ptr<dhashclient> dhash_cli;
 
 // backup options
 bool x_flag = false;
@@ -804,7 +804,7 @@ sfsrodb_main (const str root, const str keyfile)
     //timestamp = "SHIT";
   }
 
-  dhash = New refcounted <dhashclient> (LSD_SOCKET);
+  dhash_cli = New refcounted <dhashclient> (LSD_SOCKET);
 
   ptr <sfspriv> sk;
   if (!keyfile) {

@@ -143,7 +143,7 @@ sfsrodb_put (void *data, size_t len)
   //warn << t() << " -- INSERT (" << blkcnt << ")\n";
   timespec ts;
   clock_gettime (CLOCK_REALTIME, &ts);
-  dhash->insert ((char *)data, len, wrap (sfsrodb_put_cb, ts));
+  dhash_cli->insert ((char *)data, len, wrap (sfsrodb_put_cb, ts));
 
   return h;
 }
@@ -160,7 +160,7 @@ sfsrodb_put (ptr<sfspriv> sk, void *data, size_t len)
   //warn << t() << " -- INSERT\n";
   timespec ts;
   clock_gettime (CLOCK_REALTIME, &ts);
-  dhash->insert (sk, (char *)data, len, wrap (sfsrodb_put_cb, ts));
+  dhash_cli->insert (sk, (char *)data, len, wrap (sfsrodb_put_cb, ts));
 }
 
 
@@ -197,7 +197,7 @@ sfsrodb_get (bigint key)
   get_done = false; // reset
 
   //warn << "---------------------- get: " << key << "\n";
-  dhash->retrieve (key, wrap (&sfsrodb_get_cb));
+  dhash_cli->retrieve (key, wrap (&sfsrodb_get_cb));
 
   while (!get_done)
     acheck ();

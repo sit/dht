@@ -159,7 +159,7 @@ chord::startchord (int myp)
 
 
 ptr<vnode>
-chord::newvnode (cbjoin_t cb)
+chord::newvnode (cbjoin_t cb, ptr<fingerlike> fingers)
 {
   if (nvnode > max_vnodes)
     fatal << "Maximum number of vnodes (" << max_vnodes << ") reached.\n";
@@ -185,7 +185,8 @@ chord::newvnode (cbjoin_t cb)
     nlocations = New refcounted<locationtable> (*locations);
 #endif /* PNODE */  
   
-  ptr<vnode> vnodep = New refcounted<vnode> (nlocations, mkref (this), newID, 
+  ptr<vnode> vnodep = New refcounted<vnode> (nlocations, fingers, 
+					     mkref (this), newID, 
 					     nvnode, ss_mode);
 #ifdef PNODE
   nlocations->setvnode (vnodep);

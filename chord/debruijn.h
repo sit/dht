@@ -5,21 +5,25 @@
 
 #define LOGBASE   1   // base=2^LOGBASE
 
-class debruijn : public stabilizable {
+class debruijn : public fingerlike {
   ptr<vnode> myvnode;
   ptr<locationtable> locations;
   chordID myID;  
   chordID mydoubleID[LOGBASE];
 
  public:
-  debruijn (ptr<vnode> v, ptr<locationtable> locs, chordID myID);
+  debruijn ();
 
-  void print ();
-  // void stats ();
+  void fill_nodelistres (chord_nodelistres *res)
+  {
+    res->resok->nlist.setsize (0);
+  }
+  void fill_nodelistresext (chord_nodelistextres *res)
+  {
+    res->resok->nlist.setsize (0);
+  }
 
   void stabilize();
-  chordID closestsucc (const chordID &x);
-  chordID closestpred (const chordID &x);
 
   bool isstable () { return true; };
   bool continous_stabilizing () { return true; };
@@ -27,6 +31,14 @@ class debruijn : public stabilizable {
   void do_backoff () { return; };
   void do_continuous () { stabilize (); };
   void finddoublesucc_cb (chordID s, route path, chordstat status);
+
+  //fingerlike methods
+  chordID closestsucc (const chordID &x);
+  chordID closestpred (const chordID &x);
+  void init (ptr<vnode> v, ptr<locationtable> locs, chordID ID);
+  void print ();
+  void stats () { warn << "stats go here\n";};
+
 };
 
 #endif /* _DEBRUIN_H_ */
