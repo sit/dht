@@ -117,12 +117,13 @@ struct dhash_fetchrec_arg {
 
 struct dhash_fetchrec_resok {
   dhash_value res;
-  u_int32_t fetch_time;
+  u_int32_t times<>;
   chord_node_wire path<>;
 };
 
 struct dhash_fetchrec_resdefault {
   chord_node_wire path<>;
+  u_int32_t times<>;
 };
 
 union dhash_fetchrec_res switch (dhash_stat status) {

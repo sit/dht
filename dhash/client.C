@@ -167,7 +167,7 @@ dhashcli::dofetchrec_cb (timespec start, blockID b, cb_ret cb,
   blk->hops = res->resok->path.size ();
   blk->errors = 0;  // XXX
   blk->retries = 0; // XXX
-    
+
   // We can't directly measure the time it took for a lookup.
   // However, the remote node does report back to us the amount of time
   // it took to reconstruct the block.  Since there are only two phases,
@@ -175,9 +175,14 @@ dhashcli::dofetchrec_cb (timespec start, blockID b, cb_ret cb,
   timespec finish;
   clock_gettime (CLOCK_REALTIME, &finish);
   timespec total = finish - start;
-  blk->times.push_back (total.tv_sec * 1000 + int (total.tv_nsec/1000000) -
-			res->resok->fetch_time);
-  blk->times.push_back (res->resok->fetch_time);
+  blk->times.push_back (total.tv_sec * 1000 + int (total.tv_nsec/1000000));
+
+  u_int32_t othertimes = 0;
+  for (size_t i = 0; i < res->resok->times.size (); i++) {
+    blk->times.push_back (res->resok->times[i]);
+    othertimes += res->resok->times[i];
+  }
+  blk->times[0] -= othertimes;
 
   (*cb) (DHASH_OK, blk, r);
   return;

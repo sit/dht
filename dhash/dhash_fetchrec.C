@@ -100,7 +100,6 @@ dhash_impl::dofetchrec (user_args *sbp, dhash_fetchrec_arg *arg)
       dofetchrec_assembler (sbp, arg, cs);
       return;
     }
-#if 0    
     else if ((int)m - (int)overlap < (int)cs.size ()) {
       // Override the absolute best we could've done, which probably
       // is the predecessor since our succlist spans the key, and
@@ -109,20 +108,25 @@ dhash_impl::dofetchrec (user_args *sbp, dhash_fetchrec_arg *arg)
       size_t minind = 0;
 
       size_t start = m - overlap;
-      trace << header << "going to choose a distance from ";
+      strbuf distbuf;
+      distbuf << "going to choose a distance from ";
       for (size_t i = start; i < cs.size (); i++) {
 	float dist = Coord::distance_f (mycoords,
 					cs[i]->coords ());
-	warn << cs[i]->id () << "at " << (int)dist << " ";
+	distbuf << cs[i]->id () << "(" << (int)dist << ") ";
 	if (mindist < 0 || dist < mindist) {
 	  mindist = dist;
 	  minind  = i;
 	}
       }
-      trace << " i chose " << cs[minind]->id () << " at " << (int)mindist << "\n";;
       if (minind < succind) {
+	distbuf << "; i chose " << cs[minind]->id ()
+		<< "(" << (int)mindist << ")\n";;
+	trace << header << distbuf;
 	p = cs[minind];
-      } else {
+      }
+#if 0      
+      else {
 	ptr<location> nexthop = cs[minind];
 	trace << header << "going for penult from " << nexthop->id () << "\n";
 	cs.popn_front (succind); // just the overlap please
@@ -132,8 +136,8 @@ dhash_impl::dofetchrec (user_args *sbp, dhash_fetchrec_arg *arg)
 	// dorecroute_sendpenult (ra, nexthop, p, cs);
 	return;
       }
-    }
 #endif /* 0 */    
+    }
   }
   dofetchrec_nexthop (sbp, arg, p);
 }
@@ -155,25 +159,39 @@ dhash_impl::dofetchrec_nexthop (user_args *sbp, dhash_fetchrec_arg *arg,
   for (size_t i = 0; i < arg->path.size (); i++)
     farg->path[i] = arg->path[i];
   host_node->my_location ()->fill_node (farg->path[arg->path.size ()]);
-  
+
+  timespec localstart;
+  clock_gettime (CLOCK_REALTIME, &localstart);
   doRPC (p, dhash_program_1, DHASHPROC_FETCHREC,
 	 farg, fres,
-	 wrap (this, &dhash_impl::dofetchrec_nexthop_cb, sbp, arg, fres));	 
+	 wrap (this, &dhash_impl::dofetchrec_nexthop_cb, sbp, arg, fres,
+	       localstart));
 }
 
 void
 dhash_impl::dofetchrec_nexthop_cb (user_args *sbp, dhash_fetchrec_arg *arg,
 				   ptr<dhash_fetchrec_res> res,
+				   timespec start,
 				   clnt_stat err)
 {
   blockID id (arg->key, arg->ctype, arg->dbtype);
   trace << host_node->my_ID () << ": dofetchrec_nexthop (" << id
 	<< ") returned " << err << ".\n";
-
+  
+  timespec localfinish, diff;
+  clock_gettime (CLOCK_REALTIME, &localfinish);
+  diff = localfinish - start;
+  
   if (err) {
     // XXX actually, we should do something like retry and try to
     //     find someone else to ask.
     dhash_fetchrec_res rres (DHASH_RPCERR);
+
+    rres.resdef->times.setsize (2);
+    rres.resdef->times[0] = diff.tv_sec * 1000 +
+      int (diff.tv_nsec / 1000000);
+    rres.resdef->times[1] = 0; // fetch time 
+    
     rres.resdef->path.setsize (arg->path.size () + 1);
     for (size_t i = 0; i < arg->path.size (); i++)
       rres.resdef->path[i] = arg->path[i];
@@ -183,7 +201,26 @@ dhash_impl::dofetchrec_nexthop_cb (user_args *sbp, dhash_fetchrec_arg *arg,
     sbp = NULL;
     return;
   }
-  // Just pass the reply we got from our next hop back to the previous hop.
+  
+  // Just pass the reply we got from our next hop back to the previous hop,
+  // Except for inserting the RTT it took to get from there and back...
+
+  rpc_vec<u_int32_t, RPC_INFINITY> *rtimes = (res->status == DHASH_OK) ?
+    &res->resok->times :
+    &res->resdef->times;
+  vec<u_int32_t> times;
+  u_int32_t othertime = 0;
+  for (size_t i = 0; i < rtimes->size (); i++) {
+    times.push_back ((*rtimes)[i]);
+    othertime += (*rtimes)[i];
+  }
+  rtimes->setsize (rtimes->size () + 1);
+  (*rtimes)[0] = diff.tv_sec * 1000 + int (diff.tv_nsec / 1000000) - othertime;
+  for (size_t i = 1; i < rtimes->size (); i++) {
+    (*rtimes)[i] = times.pop_front ();
+  }
+  assert (times.size () == 0);
+
   sbp->reply (res);
   sbp = NULL;
   return;
@@ -198,7 +235,10 @@ dhash_impl::dofetchrec_local (user_args *sbp, dhash_fetchrec_arg *arg)
   
   res.resok->res.setsize (b->len);
   memcpy (res.resok->res.base (), b->value, b->len);
-  res.resok->fetch_time = 0;
+  
+  res.resok->times.setsize (1);
+  res.resok->times[0] = 0; // local assembly is fast.
+  
   res.resok->path.setsize (arg->path.size () + 1);
   for (size_t i = 0; i < arg->path.size (); i++) {
     res.resok->path[i] = arg->path[i];
@@ -249,7 +289,10 @@ dhash_impl::dofetchrec_assembler_cb (user_args *sbp, dhash_fetchrec_arg *arg,
     {
       res.resok->res.setsize (b->len);
       memcpy (res.resok->res.base (), b->data, b->len);
-      res.resok->fetch_time = b->times.pop_back ();
+      
+      res.resok->times.setsize (1);
+      res.resok->times[0] = b->times.pop_back ();
+      
       res.resok->path.setsize (arg->path.size () + 1);
       for (size_t i = 0; i < arg->path.size (); i++) {
 	res.resok->path[i] = arg->path[i];
