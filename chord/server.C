@@ -28,7 +28,6 @@
 #include "chord_impl.h"
 
 #include "stabilize.h"
-#include "toe_table.h"
 #include "succ_list.h"
 #include "pred_list.h"
 
