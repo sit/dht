@@ -23,14 +23,14 @@ public:
   
   virtual void parse(ifstream&);
 
-private:
-  static const int degree = 5;       // links per node
-  static const int maxlatency = 200; // link latency 0..maxlatency
-
   struct Coord {
     double _x;
     double _y;
   };
+  Coord getcoords(IPAddress);
+
+private:
+  static const int degree = 5;       // links per node
 
   vector<Coord> _coords;
 };

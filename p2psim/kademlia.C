@@ -133,9 +133,8 @@ Kademlia::insert(Args *args)
 // }}}
 // {{{ Kademlia::do_insert
 void
-Kademlia::do_insert(void *args, void *result)
+Kademlia::do_insert(insert_args *iargs, insert_result *result)
 {
-  insert_args *iargs = (insert_args*) args;
   _tree->insert(iargs->id, iargs->ip);
 
   lookup_args la;
@@ -151,7 +150,13 @@ Kademlia::do_insert(void *args, void *result)
     return;
   }
 
-  doRPC(lr.ip, &Kademlia::do_insert, &la, &lr);
+  insert_args ia;
+  insert_result ir;
+
+  // RTM: I don't know how to fill in ia.
+  assert(0);
+
+  doRPC(lr.ip, &Kademlia::do_insert, &ia, &ir);
 }
 
 // }}}
@@ -165,10 +170,8 @@ Kademlia::lookup(Args *args)
 // }}}
 // {{{ Kademlia::do_lookup
 void
-Kademlia::do_lookup(void *args, void *result)
+Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
 {
-  lookup_args *largs = (lookup_args*) args;
-  lookup_result *lresult = (lookup_result*) result;
   pair<NodeID, IPAddress> pp;
 
   KDEBUG(3) << "do_lookup: id = " << printbits(largs->id) << ", ip = " << largs->ip << ", key = " << printbits(largs->key) << endl;
@@ -201,7 +204,7 @@ Kademlia::do_lookup(void *args, void *result)
     KDEBUG(3) << "do_lookup: recursive lookup to " << printbits(pp.first) << endl;
     largs->id = _id;
     largs->ip = ip();
-    doRPC(pp.second, &Kademlia::do_lookup, args, result);
+    doRPC(pp.second, &Kademlia::do_lookup, largs, lresult);
   }
 
 done:
@@ -258,10 +261,8 @@ Kademlia::reschedule_stabilizer(void *x)
 // }}}
 // {{{ Kademlia::do_transfer
 void
-Kademlia::do_transfer(void *args, void *result)
+Kademlia::do_transfer(transfer_args *targs, transfer_result *tresult)
 {
-  transfer_args *targs = (transfer_args*) args;
-  transfer_result *tresult = (transfer_result*) result;
   _tree->insert(targs->id, targs->ip);
 
   KDEBUG(2) << "handle_transfer to node " << printbits(targs->id) << "\n";

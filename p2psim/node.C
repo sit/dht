@@ -83,8 +83,10 @@ Node::run()
       //exit
       case 2:
         // cout << "Node exit" << endl;
-        for(PMCI p = _protmap.begin(); p != _protmap.end(); ++p)
-          send(p->second->exitchan(), 0);
+        for(PMCI p = _protmap.begin(); p != _protmap.end(); ++p){
+          // send(p->second->exitchan(), 0);
+          delete p->second; // XXX bad but so was Protocol::run().
+        }
         _protmap.clear();
         delete this;
 
@@ -97,11 +99,17 @@ Node::run()
 
 
 //
-// sendPacket should only be used by
+// Send off a request packet asking Node::Receive to
+// call fn(args), wait for reply.
+// Return value indicates whether we received a reply,
+// i.e. absence of time-out.
 //
 bool
-Node::sendPacket(IPAddress dst, Packet *p)
+Node::_doRPC(IPAddress dst, void (*fn)(void *), void *args)
 {
+  Packet *p = new Packet();
+  p->_fn = fn;
+  p->_args = args;
   p->_src = ip();
   p->_dst = dst;
 
@@ -139,13 +147,7 @@ Node::Receive(void *px)
   reply->_dst = p->_src;
 
   if (n->alive ()) {
-    // get pointer to protocol
-    Protocol *proto = n->getproto(p->_proto);
-
-    // invoke function call
-    // send it up to the protocol
-    (proto->*(p->_fn))(p->_args, p->_ret);
-    reply->_ret = p->_ret; // the reply for the layer above
+    (p->_fn)(p->_args);
     reply->_ok = true;
   } else {
     reply->_ok = false;  // XXX delete reply for timeout?

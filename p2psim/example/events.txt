@@ -14,7 +14,16 @@ node 0 1 Chord:join wellknown=1
 node 1 2 Chord:join wellknown=1
 node 2 3 Chord:join wellknown=1
 node 3 4 Chord:join wellknown=1
+#node 4 1 Kademlia:join wellknown=2
+#node 5 2 Kademlia:join wellknown=2
+#node 6 3 Kademlia:join wellknown=2
+#node 7 4 Kademlia:join wellknown=2
+#node 8 5 Kademlia:join wellknown=2
+node 9 5 Koorde:join wellknown=4
+node 10 6 Koorde:join wellknown=4
+node 11 7 Koorde:join wellknown=4
+node 12 4 Koorde:join wellknown=4
 
-observe 100 ChordObserver reschedule=500 type=Chord numnodes=4
+# observe 100 ChordObserver reschedule=500 type=Chord numnodes=4
 
 simulator 5000 exit

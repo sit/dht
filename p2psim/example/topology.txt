@@ -8,6 +8,7 @@ topology Euclidean
 1 0,0 Node Kademlia Chord
 2 5,5 Node Kademlia Chord
 3 8,8 Node Kademlia Chord
-4 12,6 Node Kademlia Chord
-5 13,8 Node Kademlia
-6 0,0 Node Pastry
+4 12,6 Node Kademlia Chord Koorde
+5 13,8 Node Kademlia Koorde
+6 0,0 Node Koorde
+7 20,34 Node Koorde

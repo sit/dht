@@ -19,7 +19,7 @@ public:
 
   IPAddress ip() { return _ip; }
   Protocol *getproto(string p) { return _protmap[p]; }
-  virtual bool sendPacket(IPAddress, Packet*);
+  bool _doRPC(IPAddress, void (*fn)(void *), void *args);
 
   Channel *pktchan() { return _pktchan; }
   Channel *protchan() { return _protchan; }

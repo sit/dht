@@ -7,6 +7,8 @@
 #include <string>
 using namespace std;
 
+// The only thing Packet is useful for is to send RPCs,
+// as managed by Node::_doRPC() and Node::Receive().
 class Packet {
 public:
   Packet();
@@ -18,26 +20,16 @@ public:
   bool reply() { return _fn == 0; }
 
 private:
-  // this is just like a real network packet.  different layers write their own
-  // fields.
+  // RPC function and arguments.
+  // No explicit reply; put it in the args.
+  void (*_fn)(void *);
+  void *_args;
 
-  //
-  // P2P PROTOCOL LAYER
-  //
-  friend class Protocol;
-  string _proto;             // which protocol
-  void (Protocol::*_fn)(void*,void*);    // method to invoke
-  void *_args;               // caller-supplied argument
-  void *_ret;                // put return value in here
-
-  //
-  // NODE LAYER
-  //
   friend class Node;
   Channel *_c;            // where to send the reply
   IPAddress _src;
   IPAddress _dst;
-  bool _ok;
+  bool _ok; // was the target node available?
 };
 
 #endif // __PACKET_H

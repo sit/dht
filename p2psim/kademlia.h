@@ -59,7 +59,7 @@ public:
   };
 // }}}
 // {{{ private
-private:
+ private:
   static unsigned _k;           // k from kademlia paper
   NodeID _id;                   // my id
   k_bucket_tree *_tree;         // the root of our k-bucket tree
@@ -86,7 +86,7 @@ private:
   //
   // lookup
   //
-  void do_lookup(void *args, void *result);
+  void do_lookup(lookup_args *largs, lookup_result *lresult);
 
 
   //
@@ -101,7 +101,7 @@ private:
   };
   struct insert_result {
   };
-  void do_insert(void *args, void *result);
+  void do_insert(insert_args *args, insert_result *result);
 
 
   //
@@ -115,7 +115,7 @@ private:
   struct transfer_result {
     map<NodeID, Value> values;
   };
-  void do_transfer(void *args, void *result);
+  void do_transfer(transfer_args *targs, transfer_result *tresult);
   // }}}
 // }}}
 };

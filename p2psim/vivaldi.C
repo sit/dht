@@ -364,6 +364,11 @@ Vivaldi9::algorithm(Sample s)
 // more dimensions
 // every sample by itself, not every 10
 
+// EuclideanGraph is too hard a case, since there is no locality
+// in where a node's links go.
+
+// algorithm 10 works dramatically better than algorithm 1.
+
 // hmm, it seems like the system does *exactly* as well if each
 // node only talks to a few other nodes as it does when all nodes
 // cycle randomly among the other nodes. maybe that's because the

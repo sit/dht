@@ -2,6 +2,7 @@
 #include "packet.h"
 #include "p2psim.h"
 #include "euclidean.h"
+#include "euclideangraph.h"
 #include <stdio.h>
 #include <algorithm>
 using namespace std;
@@ -71,13 +72,16 @@ Vivaldi::Coord
 VivaldiTest::real()
 {
   Vivaldi::Coord c;
-  Euclidean *t =
-    dynamic_cast<Euclidean*>(Network::Instance()->gettopology());
-  if(t){
-    Euclidean::Coord rc = t->getcoords(node()->ip());
+  Topology *t = Network::Instance()->gettopology();
+  if(Euclidean *xt = dynamic_cast<Euclidean*>(t)){
+    Euclidean::Coord rc = xt->getcoords(node()->ip());
     c.init2d(rc.first, rc.second);
-  } else 
+  } else  if(EuclideanGraph *xt = dynamic_cast<EuclideanGraph*>(t)){
+    EuclideanGraph::Coord rc = xt->getcoords(node()->ip());
+    c.init2d(rc._x, rc._y);
+  } else {
     c.init2d(0,0);
+  }
   return c;
 }
 

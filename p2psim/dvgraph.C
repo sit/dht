@@ -29,7 +29,7 @@ DVGraph::latency(IPAddress a, IPAddress b)
 {
   dv();
 
-#if 1
+#if 0
   assert(_ip2i.find(a) != _ip2i.end());
   assert(_ip2i.find(b) != _ip2i.end());
 #endif

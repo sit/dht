@@ -1,7 +1,6 @@
 #ifndef __PROTOCOL_H
 #define __PROTOCOL_H
 
-#include "threaded.h"
 #include "protocolfactory.h"
 #include "args.h"
 #include "network.h"
@@ -17,15 +16,14 @@ class Node;
 class P2PEvent;
 class Protocol;
 
-class Protocol : public Threaded {
+class Protocol {
 public:
-  typedef void (Protocol::*member_f)(void*, void *);
-
   Protocol(Node*);
   virtual ~Protocol();
   Node *node() { return _node; }
-  Channel *appchan() { return _appchan; }
-  Channel *netchan() { return _netchan; }
+  string proto_name() {
+    return ProtocolFactory::Instance()->name(this);
+  }
 
   typedef void (Protocol::*event_f)(Args*);
   virtual void join(Args*) = 0;
@@ -44,8 +42,6 @@ protected:
     void delaycb(int d, void (BT::*fn)(AT), AT args) {
     // Compile-time check: does BT inherit from Protocol?
     Protocol *dummy = (BT *) 0; dummy = dummy;
-    // Is BT the same as the calling class?
-    assert(typeid(BT) == typeid(*this));
 
     class XEvent : public Event {
     public:
@@ -61,24 +57,58 @@ protected:
     XEvent *e = new XEvent;
     e->ts = now() + d;
     e->_target = dynamic_cast<BT*>(this);
+    assert(e->_target);
     e->_fn = fn;
     e->_args = args;
 
     send(EventQueue::Instance()->eventchan(), &e);
   }
 
-  IPAddress ip();
+  IPAddress ip() { return _node->ip(); }
 
-#define doRPC(DST, FN, ARGS, RET) this->_doRPC(DST, ((member_f)(FN)), \
-      ((void*) (ARGS)), ((void*) (RET)))
-  bool _doRPC(IPAddress, member_f, void*, void*);
+  // Send an RPC from a Protocol on one Node to a method
+  // of the same Protocol class on a different Node.
+  template<class BT, class AT, class RT>
+    bool doRPC(IPAddress dst, void (BT::* fn)(AT *, RT *),
+               AT *args, RT *ret) {
+    // Compile-time check: does BT inherit from Protocol?
+    Protocol *dummy1 = (BT *) 0; dummy1 = dummy1;
+
+    class Thunk {
+    public:
+      BT *_target;
+      void (BT::*_fn)(AT *, RT *);
+      AT *_args;
+      RT *_ret;
+      static void thunk(void *xa) {
+        Thunk *t = (Thunk *) xa;
+        (t->_target->*(t->_fn))(t->_args, t->_ret);
+      }
+    };
+
+    Thunk *t = new Thunk;
+    t->_target = dynamic_cast<BT*>
+      (Network::Instance()->getnode(dst)->getproto(proto_name()));
+    t->_fn = fn;
+    t->_args = args;
+    t->_ret = ret;
+
+    // Will fail if it's not legal to call BT::fn
+    // in the target Protocol sub-class. I.e. if BT is not
+    // the same as the calling Protocol sub-class, or
+    // a super-class. We want to let Koorde call Chord methods,
+    // but we want to prevent Koorde from calling a Kademlia
+    // method on a Koorde Protocol.
+    assert(t->_target);
+
+    bool ok = _node->_doRPC(dst, Thunk::thunk, (void *) t);
+
+    delete t;
+    return ok;
+  }
 
 private:
   Node *_node;
-  Channel *_appchan; // to receive calls from applications
-  Channel *_netchan; // to receive packets from network
-
-  void run();
 };
 
 #endif // __PROTOCOL_H

@@ -102,3 +102,11 @@ EuclideanGraph::parse(ifstream &ifs)
   fprintf(stderr, "EuclideanGraph: typical Vivaldi error %.1f\n",
           sum / (_n * _n));
 }
+
+EuclideanGraph::Coord
+EuclideanGraph::getcoords(IPAddress a)
+{
+  unsigned int i = _ip2i[a];
+  assert(i >= 0 && i < _coords.size() && _i2ip[i] == a);
+  return _coords[i];
+}
