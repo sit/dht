@@ -1109,7 +1109,7 @@ dhash::id2dbrec(chordID id)
 {
   char buf[sha1::hashsize];
   bzero (buf, sha1::hashsize);
-  mpz_get_raw (buf, sha1::hashsize, &id);
+  mpz_get_rawmag_be (buf, sha1::hashsize, &id);
   return New refcounted<dbrec> (buf, sha1::hashsize);
 }
 
