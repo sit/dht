@@ -1,4 +1,4 @@
-dnl $Id: configure.in,v 1.45 2004/08/07 18:29:04 amdragon Exp $
+dnl $Id: configure.in,v 1.46 2004/08/24 19:34:36 fdabek Exp $
 dnl
 dnl Process this file with autoconf to produce a configure script.
 dnl
@@ -37,17 +37,16 @@ SFS_CFLAGS
 CHORD_BUILDALL
 
 dnl setup db3
-SFS_DB3
+SFS_SLEEPYCAT(4.2 4 3, no)
 AC_SUBST(DBLIB)
 AC_SUBST(DBDEPS)
 DBLIB='$(top_builddir)/sfsrodb/libsfsrodb.a'
 DBDEPS='$(top_builddir)/sfsrodb/libsfsrodb.a'
 if test "${with_db3}" != no; then
 	CPPFLAGS="$CPPFLAGS -DSLEEPYCAT"
-	DBLIB="$DBLIB $DB3_LIB"
+	DBLIB="$DBLIB $DB_LIB"
 else
-	DBLIB="$DBLIB"' $(top_builddir)/adb/libbtree.a'
-	DBDEPS="$DBDEPS"' $(top_builddir)/adb/libbtree.a'
+	AC_MSG_ERROR("Sleepycat is required to build");
 fi
 
 

@@ -1,4 +1,4 @@
-dnl $Id: acinclude.m4,v 1.16 2004/04/29 13:35:45 sit Exp $
+dnl $Id: acinclude.m4,v 1.17 2004/08/24 19:34:36 fdabek Exp $
 
 
 
@@ -746,133 +746,154 @@ test "$sfs_cv_mp_limb_t_size" = no \
     && AC_MSG_ERROR(Could not determine size of mp_limb_t.)
 AC_DEFINE_UNQUOTED(GMP_LIMB_SIZE, $sfs_cv_mp_limb_t_size,
 		   Define to be the size of GMP's mp_limb_t type.)])
-dnl dnl
-dnl dnl Find BekeleyDB 2
-dnl dnl
-dnl AC_DEFUN(SFS_DB2,
-dnl [AC_SUBST(DB2_DIR)
-dnl AC_ARG_WITH(db2,
-dnl --with-db2[[=/usr/local]]   Find BerkeleyDB library version 2)
-dnl AC_MSG_CHECKING([for DB2 library])
-dnl test "$with_db2" = "no" && unset with_db2
-dnl if test -z "$with_db2"; then
-dnl     DB2_DIR=`cd $srcdir && echo db-2.*/`
-dnl     if test "${with_db2+set}" != set -a -d "$srcdir/$DB2_DIR"; then
-dnl 	DB2_DIR=`echo $DB2_DIR | sed -e 's!/$!!'`
-dnl 	CPPFLAGS="$CPPFLAGS "'-I$(top_builddir)/'"$DB2_DIR"'/dist'
-dnl 	LDFLAGS="$LDFLAGS "'-L$(top_builddir)/'"$DB2_DIR"'/dist'
-dnl     else
-dnl 	DB2_DIR=
-dnl 	for dir in "$prefix/BerkeleyDB" /usr/local/BerkeleyDB \
-dnl 		/usr "$prefix" /usr/local; do
-dnl 	    if test -f $dir/lib/libdb.a -a -f $dir/include/db.h; then
-dnl 		with_db2=$dir
-dnl 		break
-dnl 	    fi
-dnl 	done
-dnl 	if test -z "$with_db2"; then
-dnl 	    AC_MSG_ERROR([Could not find BerkeleyDB library version 2])
-dnl 	fi
-dnl 	test "$with_db2" = /usr && unset with_db2
-dnl     fi
-dnl fi
-dnl if test "$with_db2"; then
-dnl     unset DB2_DIR
-dnl     AC_MSG_RESULT([$with_db2])
-dnl     CPPFLAGS="$CPPFLAGS -I${with_db2}/include"
-dnl     LDFLAGS="$LDFLAGS -L${with_db2}/lib"
-dnl elif test "$DB2_DIR"; then
-dnl     AC_MSG_RESULT([using distribution in $DB2_DIR subdirectory])
-dnl     test -d $DB2_DIR || mkdir $DB2_DIR
-dnl dnl ac_configure_args="${ac_configure_args}${ac_configure_args+ }--enable-cxx"
-dnl     AC_CONFIG_SUBDIRS($DB2_DIR/dist)
-dnl else
-dnl     AC_MSG_RESULT(yes)
-dnl fi])
+
+
+
+dnl pushdef([arglist], [ifelse($#, 0, , $#, 1, [[$1]],
+dnl 		    [[$1] arglist(shift($@))])])dnl
 
 dnl
-dnl Find BekeleyDB 3
+dnl SFS_TRY_SLEEPYCAT_VERSION(vers, dir)
 dnl
-AC_DEFUN(SFS_DB3,
-[AC_ARG_WITH(db3,
---with-db3[[=/usr/local]]   specify path for BerkeleyDB-3)
-AC_SUBST(DB3_DIR)
-AC_CONFIG_SUBDIRS($DB3_DIR)
-AC_SUBST(DB3_LIB)
-unset DB3_LIB
+AC_DEFUN(SFS_TRY_SLEEPYCAT_VERSION,
+[vers=$1
+dir=$2
+majvers=`echo $vers | sed -e 's/\..*//'`
+minvers=`echo $vers | sed -e 's/[^.]*\.//' -e 's/\..*//'`
+escvers=`echo $vers | sed -e 's/\./\\./g'`
+catvers=`echo $vers | sed -e 's/\.//g'`
+: sfs_try_sleepycat_version $vers $dir $majvers $minvers $escvers $catvers
 
-DB3_DIR=`cd $srcdir && echo db-3.*/dist/`
-if test -d "$srcdir/$DB3_DIR"; then
-    DB3_DIR=`echo $DB3_DIR | sed -e 's!/$!!'`
-else
-    unset DB3_DIR
-fi
+unset db_header
+unset db_library
 
-if test ! "${with_db3+set}"; then
-	with_db3=yes
-fi
+for header in \
+	$dir/include/db$vers/db.h $dir/include/db$catvers/db.h \
+	$dir/include/db$majvers/db.h \
+	$dir/include/db$catvers.h $dir/include/db$majvers.h \
+	$dir/include/db.h
+do
+    test -f $header || continue
+    AC_EGREP_CPP(^db_version_is $majvers *\. *$minvers *\$,
+[#include "$header"
+db_version_is DB_VERSION_MAJOR.DB_VERSION_MINOR
+], db_header=$header; break)
+done
 
-if test "$with_db3" != no; then
-    AC_MSG_CHECKING([for DB3 library])
-    if test "$DB3_DIR" -a "$with_db3" = yes; then
-	CPPFLAGS="$CPPFLAGS "'-I$(top_builddir)/'"$DB3_DIR"
-	DB3_LIB='-L$(top_builddir)/'"$DB3_DIR -ldb"
-	AC_MSG_RESULT([using distribution in $DB3_DIR subdirectory])
+if test "$db_header"; then
+    for vdir in "$dir/lib/db$catvers" "$dir/lib/db$majvers" \
+		"$dir/lib/db" "$dir/lib"
+    do
+        for library in $vdir/libdb-$vers.la $vdir/libdb$catvers.la \
+	    $vdir/libdb.la $vdir/libdb-$vers.a $vdir/libdb$catvers.a
+        do
+    	if test -f $library; then
+    	    db_library=$library
+    	    break 2;
+    	fi
+        done
+    done
+    if test -z "$db_library"; then
+	case $db_header in
+	*/db.h)
+	    test -f $dir/lib/libdb.a && db_library=$dir/lib/libdb.a
+	    ;;
+	esac
+    fi
+    if test "$db_library"; then
+	case $db_header in
+	*/db.h)
+	    CPPFLAGS="$CPPFLAGS -I"`dirname $db_header`
+	    ;;
+	*)
+	    ln -s $db_header db.h
+	    ;;
+	esac
+	case $db_library in
+	*.la)
+	    DB_LIB=$db_library
+	    ;;
+	*.a)
+	    minusl=`echo $db_library | sed -e 's/^.*\/lib\(.*\)\.a$/-l\1/'`
+	    DB_LIB=-L`dirname $db_library`" $minusl"
+	    ;;
+	*/lib*.so.*)
+	    minusl=`echo $db_library | sed -e 's/^.*\/lib\(.*\)\.so\..*/-l\1/'`
+	    DB_LIB=-L`dirname $db_library`" $minusl"
+	    ;;
+	esac
+    fi
+fi])
+
+dnl
+dnl SFS_SLEEPYCAT(v1 v2 v3 ..., required)
+dnl
+dnl   Find BekeleyDB version v1, v2, or v3...
+dnl      required can be "no" if DB is not required
+dnl
+AC_DEFUN(SFS_SLEEPYCAT,
+[AC_ARG_WITH(db,
+--with-db[[[=/usr/local]]]    specify path for BerkeleyDB (from sleepycat.com))
+AC_SUBST(DB_DIR)
+AC_CONFIG_SUBDIRS($DB_DIR)
+AC_SUBST(DB_LIB)
+unset DB_LIB
+
+rm -f db.h
+
+for vers in $1; do
+    DB_DIR=`cd $srcdir && echo db-$vers.*/dist/`
+    if test -d "$srcdir/$DB_DIR"; then
+        DB_DIR=`echo $DB_DIR | sed -e 's!/$!!'`
+	break
     else
-	libdbrx='^libdb-?([[3.-]].*)?.(la|so|a)$'
-	libdbrxla='^libdb-?([[3.-]].*)?.la$'
-	libdbrxso='^libdb-?([[3.-]].*)?.so$'
-	libdbrxa='^libdb-?([[3.-]].*)?.a$'
-	if test "$with_db3" = yes; then
-	    for dir in "$prefix/BerkeleyDB.3.1" /usr/local/BerkeleyDB.3.1 \
-		    "$prefix/BerkeleyDB.3.0" /usr/local/BerkeleyDB.3.0 \
-		    /usr "$prefix" /usr/local; do
-		test -f $dir/include/db.h -o -f $dir/include/db3.h \
-			-o -f $dir/include/db3/db.h || continue
-		if test -f $dir/lib/libdb.a \
-			|| ls $dir/lib | egrep "$libdbrx" >/dev/null 2>&1; then
-		    with_db3="$dir"
-		    break
-		fi
+	unset DB_DIR
+    fi
+done
+
+test -z "${with_db+set}" && with_db=yes
+
+AC_MSG_CHECKING(for BerkeleyDB library)
+if test "$DB_DIR" -a "$with_db" = yes; then
+    CPPFLAGS="$CPPFLAGS "'-I$(top_builddir)/'"$DB_DIR/dist"
+    DB_LIB='$(top_builddir)/'"$DB_DIR/dist/.libs/libdb-*.a"
+    AC_MSG_RESULT([using distribution in $DB_DIR subdirectory])
+elif test x"$with_db" != xno; then
+    if test "$with_db" = yes; then
+	for vers in $1; do
+	    for dir in "$prefix/BerkeleyDB.$vers" \
+			"/usr/BerkeleyDB.$vers" \
+			"/usr/local/BerkeleyDB.$vers" \
+			$prefix /usr /usr/local; do
+		SFS_TRY_SLEEPYCAT_VERSION($vers, $dir)
+		test -z "$DB_LIB" || break 2
 	    done
-	fi
-
-	if test -f $with_db3/include/db3.h; then
-	    AC_DEFINE(HAVE_DB3_H, 1, [Define if BerkeleyDB header is db3.h.])
-   	    if test "$with_db3" != /usr; then
-	      CPPFLAGS="$CPPFLAGS -I${with_db3}/include"
-	    fi
-	elif test -f $with_db3/include/db3/db.h; then
-   	    if test "$with_db3" != /usr; then
-	      CPPFLAGS="$CPPFLAGS -I${with_db3}/include/db3"
-	    fi
-	elif test -f $with_db3/include/db.h; then
-	    if test "$with_db3" != /usr; then
-	      CPPFLAGS="$CPPFLAGS -I${with_db3}/include"
-	    fi
-	else
-	    AC_MSG_ERROR([Could not find BerkeleyDB library version 3])
-	fi
-
-	DB3_LIB=`ls $with_db3/lib | egrep "$libdbrxla" | tail -1`
-	test ! -f "$with_db3/lib/$DB3_LIB" \
-	    && DB3_LIB=`ls $with_db3/lib | egrep "$libdbrxso" | tail -1`
-	test ! -f "$with_db3/lib/$DB3_LIB" \
-	    && DB3_LIB=`ls $with_db3/lib | egrep "$libdbrxa" | tail -1`
-	if test -f "$with_db3/lib/$DB3_LIB"; then
-	    DB3_LIB="$with_db3/lib/$DB3_LIB"
-	elif test "$with_db3" = /usr; then
-	    with_db3=yes
-	    DB3_LIB="-ldb"
-	else
-	    DB3_LIB="-L${with_db3}/lib -ldb"
-	fi
-	AC_MSG_RESULT([$with_db3])
+	done
+    else
+	for vers in $1; do
+	    SFS_TRY_SLEEPYCAT_VERSION($vers, $with_db)
+	    test -z "$DB_LIB" || break
+	done
+	test -z "$DB_LIB" && AC_MSG_ERROR(Cannot find BerkeleyDB in $with_db)
     fi
 fi
 
-AM_CONDITIONAL(USE_DB3, test "${with_db3}" != no)
+if test x"$DB_LIB" != x; then
+    AC_MSG_RESULT($DB_LIB)
+    USE_DB=yes
+else
+    AC_MSG_RESULT(no)
+    USE_DB=no
+    if test "$2" != "no"; then
+        AC_MSG_ERROR(Cannot find BerkeleyDB)
+    fi
+fi
+
+AM_CONDITIONAL(USE_DB, test "$USE_DB" = yes)
 ])
+
+
+
 
 dnl
 dnl Find OpenSSL
