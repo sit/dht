@@ -180,17 +180,17 @@ class vnode_impl : public vnode {
 						ptr<void> uc_args);
 
   // The API
-  void stabilize (void);
-  void join (ptr<location> n, cbjoin_t cb);
-  void get_successor (ptr<location> n, cbchordID_t cb);
-  void get_predecessor (ptr<location> n, cbchordID_t cb);
-  void get_succlist (ptr<location> n, cbchordIDlist_t cb);
-  void notify (ptr<location> n, chordID &x);
-  void alert (ptr<location> n, ptr<location> x);
-  void ping (ptr<location> n, cbping_t cb);
-  void find_successor (const chordID &x, cbroute_t cb);
-  void find_succlist (const chordID &x, u_long m, cbroute_t cb,
-		      ptr<chordID> guess = NULL);
+  virtual void stabilize (void);
+  virtual void join (ptr<location> n, cbjoin_t cb);
+  virtual void get_successor (ptr<location> n, cbchordID_t cb);
+  virtual void get_predecessor (ptr<location> n, cbchordID_t cb);
+  virtual void get_succlist (ptr<location> n, cbchordIDlist_t cb);
+  virtual void notify (ptr<location> n, chordID &x);
+  virtual void alert (ptr<location> n, ptr<location> x);
+  virtual void ping (ptr<location> n, cbping_t cb);
+  virtual void find_successor (const chordID &x, cbroute_t cb);
+  virtual void find_succlist (const chordID &x, u_long m, cbroute_t cb,
+			      ptr<chordID> guess = NULL);
 
   //upcall
   void register_upcall (int progno, cbupcall_t cb);
