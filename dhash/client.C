@@ -36,12 +36,29 @@ dhashclient::dispatch (svccb *sbp)
     return;
   case DHASHPROC_LOOKUP:
     {
-      dhash_fetch_arg *arg = sbp->template getarg<dhash_fetch_arg> ();
-      
       warnt("DHASH: lookup_request");
-            clntnode->find_successor (arg->key, 
+      
+      /*
+      clntnode->find_successor (arg->key, 
 				wrap (this, &dhashclient::lookup_findsucc_cb, 
-				     sbp));
+				      sbp));
+      */
+      dhash_fetch_arg *farg = sbp->template getarg<dhash_fetch_arg>();
+
+      ptr<dhash_fetch_arg> arg = New refcounted<dhash_fetch_arg>;
+      arg->key = farg->key;
+      arg->start = farg->start;
+      arg->len = farg->len;
+
+      chordID next = clntnode->lookup_closestpred (arg->key);
+      warn << "next was " << next << "\n";
+      warn << "about to allocate i_res\n";
+      dhash_fetchiter_res *i_res = New dhash_fetchiter_res ();
+
+      clntnode->doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, arg, i_res,
+		       wrap(this, &dhashclient::lookup_iter_cb, 
+			    sbp, i_res, next));
+
     } 
     break;
   case DHASHPROC_INSERT:
@@ -123,8 +140,41 @@ dhashclient::cache_store_cb(dhash_stat *res, clnt_stat err)
 
 }
 
+void 
+dhashclient::lookup_iter_cb (svccb *sbp, 
+			     dhash_fetchiter_res *res,
+			     chordID prev,
+			     clnt_stat err) 
+{
+  if (err) {
+    sbp->replyref (DHASH_RPCERR);
+  } else if (res->status == DHASH_COMPLETE) {
+    dhash_res *fres = New dhash_res (DHASH_OK);
+    fres->resok->res = res->compl_res->res;
+    fres->resok->offset = res->compl_res->offset;
+    fres->resok->attr = res->compl_res->attr;
+    fres->resok->hops = 1;
+    sbp->reply (fres);
+  } else if (res->status == DHASH_CONTINUE) {
+    chordID next = res->cont_res->next.x;
+    clntnode->locations->cacheloc (next, res->cont_res->next.r, prev);
+    dhash_fetchiter_res *nres = New dhash_fetchiter_res;
+    dhash_fetch_arg *arg = sbp->template getarg<dhash_fetch_arg> ();
+    //must refcount arg
+    ptr<dhash_fetch_arg> rarg = New refcounted<dhash_fetch_arg>(*arg);
+    clntnode->doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, 
+		     rarg, nres,
+		     wrap(this, &dhashclient::lookup_iter_cb, 
+			  sbp, nres, next));
+  } else 
+    sbp->replyref (DHASH_NOENT);
+
+  delete res;
+}
+				  
+
 void
-dhashclient::lookup_findsucc_cb(svccb *sbp, 
+dhashclient::lookup_findsucc_cb (svccb *sbp, 
 				chordID succ, route path,
 				chordstat err)
 {
@@ -139,7 +189,6 @@ dhashclient::lookup_findsucc_cb(svccb *sbp,
     warnt("DHASH: lookup_after_dofindsucc");
 
     dhash_fetch_arg *arg = sbp->template getarg<dhash_fetch_arg>();
-    //doRPC might buffer up request: we must conv. to refcount<arg>
     ptr<dhash_fetch_arg> a = New refcounted<dhash_fetch_arg> (*arg);
     dhash_res *res = New dhash_res(DHASH_OK);
     retry_state *st = New retry_state (arg->key, sbp, succ, path);

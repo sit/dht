@@ -76,6 +76,12 @@ class dhashclient {
   void lookup_findsucc_cb (svccb *sbp,
 			   chordID succ, route path, chordstat err);
   void lookup_fetch_cb (dhash_res *res, retry_state *st,  clnt_stat err);
+
+  void lookup_iter_cb (svccb *sbp, 
+		       dhash_fetchiter_res *res,
+		       chordID prev,
+		       clnt_stat err);
+
   void retry (retry_state *st, chordID p, net_address r, chordstat stat);
   
   void insert_findsucc_cb (svccb *sbp, ptr<dhash_insertarg> item, chordID succ, 

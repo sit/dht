@@ -261,6 +261,10 @@ int
 main (int argc, char **argv)
 {
 
+
+  dhash_fetchiter_res *res = New dhash_fetchiter_res ();
+  res = NULL;
+
   sfsconst_init ();
 
   if (argc < 7) {

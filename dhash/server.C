@@ -9,7 +9,6 @@
 #include <dmalloc.h>
 #endif
 
-#define REP_DEGREE 0
 
 dhash::dhash(str dbname, vnode *node, int k, int ss, int cs) :
   host_node (node), key_store(ss), key_cache(cs) {
@@ -47,9 +46,9 @@ dhash::dhash(str dbname, vnode *node, int k, int ss, int cs) :
 }
 
 void
-dhash::dispatch(unsigned long procno, 
-		chord_RPC_arg *arg,
-		unsigned long rpc_id) 
+dhash::dispatch (unsigned long procno, 
+		 chord_RPC_arg *arg,
+		 unsigned long rpc_id) 
 {
 
   char *marshalled_arg = arg->marshalled_args.base ();
@@ -86,6 +85,8 @@ dhash::dispatch(unsigned long procno,
 	//fetch the key and return it, end of story
 	fetch (farg->key, wrap (this, &dhash::fetchiter_svc_cb,
 				rpc_id, farg));
+	delete res;
+	return;
       } else if (responsible (farg->key))  {
 	//no where else to go, return NOENT or RETRY?
 	res->set_status (DHASH_NOENT);
@@ -204,14 +205,14 @@ dhash::fetchiter_svc_cb (long xid, dhash_fetch_arg *arg,
   dhash_fetchiter_res *res = New dhash_fetchiter_res ();
   res->set_status (DHASH_COMPLETE);
   
-  res->compl_res->set_status (DHASH_OK);
-  int n = (arg->len + arg->start < val->len) ? arg->len : val->len - arg->start;
+  int n = (arg->len + arg->start < val->len) ? 
+    arg->len : val->len - arg->start;
 
-  res->compl_res->resok->res.setsize (n);
-  res->compl_res->resok->attr.size = val->len;
-  res->compl_res->resok->offset = arg->start;
+  res->compl_res->res.setsize (n);
+  res->compl_res->attr.size = val->len;
+  res->compl_res->offset = arg->start;
 
-  memcpy (res->compl_res->resok->res.base (), 
+  memcpy (res->compl_res->res.base (), 
 	  (char *)val->value + arg->start, 
 	  n);
 

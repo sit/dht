@@ -251,6 +251,9 @@ class chord : public virtual refcount {
 	 int max_connections);
   ptr<vnode> newvnode (cbjoin_t cb);
   ptr<vnode> newvnode (chordID &x, cbjoin_t cb);
+  chordID lookup_closestpred (chordID k) { 
+    return vnodes.first()->lookup_closestpred (k); 
+  };
   void deletefingers (chordID &x);
   int countrefs (chordID &x);
   void stats (void);
