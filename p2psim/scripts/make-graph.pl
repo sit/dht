@@ -144,6 +144,8 @@ for( my $i = 0; $i <= ($#ystat+1); $i++ ) {
 	$ylabel[$i] = $ystat[$i];
     }
 }
+my $xmin;
+my $xmax;
 if( defined $options{"xrange"} ) {
     $xrange = $options{"xrange"};
     if( !($xrange =~ /^([\.\d]+)\:([\.\d]+)$/ ) ) {
@@ -152,8 +154,12 @@ if( defined $options{"xrange"} ) {
 	if( $2 <= $1 ) {
 	    die( "max in xrange is bigger than min: $xrange" );
 	}
+	$xmin = $1;
+	$xmax = $2;
     }
 }
+my $ymin;
+my $ymax;
 if( defined $options{"yrange"} ) {
     $yrange = $options{"yrange"};
     if( !($yrange =~ /^([\.\d]+)\:([\.\d]+)$/ ) ) {
@@ -162,6 +168,8 @@ if( defined $options{"yrange"} ) {
 	if( $2 <= $1 ) {
 	    die( "max in yrange is bigger than min: $yrange" );
 	}
+	$ymin = $1;
+	$ymax = $2;
     }
 }
 if( defined $options{"epsfile"} ) {
@@ -787,8 +795,16 @@ if( defined $options{"convex"} ) {
 					       $v[$hullposes{$datfile}-1] . 
 					       "$hulleval");
 
+			    # make sure this point will be inside the range
+			    # before labelling the point
+			    if( (defined $xrange and 
+				 ($xval < $xmin or $xval > $xmax)) or
+				(defined $yrange and
+				 ($yval < $ymin or $yval > $ymax)) ) {
+				next;
+			    }
 			    push( @hulllabelcmds,
-				  "set label \"$hullval\" at $xval, $yval " . 
+				  "set label \"$hullval\" at $xval,$yval " . 
 				  "font \"Times-Roman,16\"" );
 
 			} else {
