@@ -223,8 +223,8 @@ merkle_syncer::getblocklist_cb (ref<getblocklist_res> res, clnt_stat err)
     error (strbuf () << "GETBLOCKLIST: protocol error " << err2str (res->status));
     return;
   } else {
-    assert (tcb == 0);
-    tcb = delaycb (BLOCKTIMEOUT, wrap (this, &merkle_syncer::error, str ("GETBLOCKLIST: timeout")));
+    assert (tcb == NULL);
+    tcb = delaycb (BLOCKTIMEOUT, wrap (this, &merkle_syncer::timeout, str ("GETBLOCKLIST: timeout")));
     next ();
   }
 }
@@ -432,8 +432,8 @@ merkle_syncer::getblockrange_cb (ref<getblockrange_arg> arg, ref<getblockrange_r
 	assert (receiving_blocks >= 0);
     }
     if (receiving_blocks > 0) {
-      assert (tcb == 0);
-      tcb = delaycb (BLOCKTIMEOUT, wrap (this, &merkle_syncer::error, str ("GETBLOCKRANGE: timeout")));
+      assert (tcb == NULL);
+      tcb = delaycb (BLOCKTIMEOUT, wrap (this, &merkle_syncer::timeout, str ("GETBLOCKRANGE: timeout")));
     }
     next ();
   }
@@ -467,7 +467,8 @@ merkle_syncer::recvblk (bigint key, bool last)
     receiving_blocks = 0; 
     next ();
   } else {
-    tcb = delaycb (BLOCKTIMEOUT, wrap (this, &merkle_syncer::error, str ("timeout")));
+    assert (tcb == NULL);
+    tcb = delaycb (BLOCKTIMEOUT, wrap (this, &merkle_syncer::timeout, str ("timeout")));
   }
 }
 
@@ -485,6 +486,15 @@ merkle_syncer::error (str err)
   if (synccb)
     (*synccb) ();
 }
+
+void
+merkle_syncer::timeout (str err)
+{
+  tcb = NULL;
+  error (err);
+}
+
+
 
 merkle_syncer::~merkle_syncer()
 {
