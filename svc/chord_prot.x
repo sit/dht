@@ -115,6 +115,11 @@ struct chord_gettoes_arg {
   int32_t level;
 };
 
+struct chord_findtoes_arg {
+  int32_t level;
+  chord_node n;
+};
+
 
 struct chord_debruijnarg {
   chordID n;
@@ -189,5 +194,8 @@ program CHORD_PROGRAM {
 
 		chord_nodelistres
 		CHORDPROC_FINDROUTE (chord_findarg) = 15;
+
+		chord_nodelistres
+		CHORDPROC_FINDTOES (chord_findtoes_arg) = 16;
 	} = 1;
 } = 344447;

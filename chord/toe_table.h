@@ -19,7 +19,7 @@ class toe_table : public fingerlike {
   short last_level;
 
   void add_toe_ping_cb (chordID id, int level, chordstat err);
-  void get_toes_rmt_cb (chord_nodelistextres *res, int level, clnt_stat err);
+  void get_toes_rmt_cb (chord_nodelistres *res, int level, clnt_stat err);
 
   bool stable_toes;
 
@@ -51,6 +51,7 @@ class toe_table : public fingerlike {
   void set_last_level (int l) { last_level = l; };
   void bump_target (int l) { target_size[l] *= 2; };
   void prune_toes (int level);
+  short get_target_size (int level) { return target_size[level]; }
 
   // Stabilizable methods
   bool backoff_stabilizing () { return false; /*in_progress > 0; */}

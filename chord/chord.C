@@ -28,6 +28,7 @@
 #include <assert.h>
 #include <qhash.h>
 #include "chord_impl.h"
+#include <coord.h>
 
 const int chord::max_vnodes = 1024;
 
@@ -121,6 +122,7 @@ vnode_impl::vnode_impl (ptr<locationtable> _locations, ptr<fingerlike> stab,
   ndogetpred_ext = 0;
   ndochallenge = 0;
   ndogettoes = 0;
+  ndofindtoes = 0;
   ndodebruijn = 0;
 }
 
@@ -217,6 +219,12 @@ vnode_impl::dispatch (user_args *a)
       chord_findarg *fa = a->template getarg<chord_findarg> ();
       dofindroute (a, fa);
     }
+    break;
+  case CHORDPROC_FINDTOES:
+    {
+      chord_findtoes_arg *ta = a->template getarg<chord_findtoes_arg> ();
+      dofindtoes (a, ta);
+    }    
     break;
   default:
     a->reject (PROC_UNAVAIL);
@@ -677,13 +685,64 @@ vnode_impl::secchord_upcall_done (chord_nodelistres *res, user_args *sbp,
   delete res;
 }
 
+//find toes approprate for n's table
+void
+vnode_impl::dofindtoes (user_args *sbp, chord_findtoes_arg *ta)
+{
+  chord_nodelistres res (CHORD_OK);
+  vec<chordID> r;
+  vec<float> coords;
+  chord_node n;
+  unsigned int maxret;
+
+  if(toes){
+    float maxd = toes->level_to_delay(ta->level);
+    n = ta->n;
+    maxret = toes->get_target_size(0);
+    for(unsigned int i = 0; i < n.coords.size (); i++)
+      coords.push_back((float)n.coords[i]);
+
+    //iterate through toe table and return at most distance away from n
+    for(unsigned int l = 0; l < MAX_LEVELS; l++){
+      vec<chordID> t = toes->get_toes(l);      
+      for(unsigned int i = 0; i < t.size(); i++){
+	if(in_vector(r, t[i]))
+	   continue;
+	if(Coord::distance_f(coords, locations->get_coords(t[i])) < maxd){ 
+	  r.push_back(t[i]);
+	  if(r.size() >= maxret)
+	    break;
+	}
+      }
+      if(r.size() >= maxret)
+	break;
+    }
+
+    //warn << "find toes found " << r.size() << "\n";
+    
+    ndofindtoes++;
+    res.resok->nlist.setsize (r.size ());
+    for (unsigned int i = 0; i < r.size (); i++)
+      locations->get_node(r[i], &res.resok->nlist[i]);
+    
+  } 
+  
+  //for(unsigned int i = 0 ; i < res.resok->nlist.size() ; i++){
+  //  warn << "node " << res.resok->nlist[i].x << "\n";
+  //}
+
+  sbp->reply (&res);
+  
+}
+
+//return my table
 void
 vnode_impl::dogettoes (user_args *sbp, chord_gettoes_arg *ta)
 {
 
   chord_nodelistextres res (CHORD_OK);
   if(toes){
-    vec<chordID> t = toes->get_toes (ta->level);
+    vec<chordID> t = toes->get_toes (ta->level);      
     
     ndogettoes++;
     res.resok->nlist.setsize (t.size ());

@@ -58,12 +58,13 @@ toe_table::get_toes_rmt (int level)
 
   vec<chordID> donors = get_toes (max(level - 1, 0));
   for (unsigned int i = 0; i < donors.size (); i++) {
-    ptr<chord_gettoes_arg> arg = New refcounted<chord_gettoes_arg> ();
-    arg->level = max(level - 2, 0);
-    
-    chord_nodelistextres *res = New chord_nodelistextres ();
+    ptr<chord_findtoes_arg> arg = New refcounted<chord_findtoes_arg> ();
+    arg->level = level;
+    locations->get_node (myID, &arg->n);
+
+    chord_nodelistres *res = New chord_nodelistres ();
     myvnode->doRPC (donors[i], chord_program_1,
-		      CHORDPROC_GETTOES,
+		      CHORDPROC_FINDTOES,
 		      arg, res, 
 		      wrap (this, &toe_table::get_toes_rmt_cb, res, level));
   }
@@ -71,7 +72,7 @@ toe_table::get_toes_rmt (int level)
 }
 
 void
-toe_table::get_toes_rmt_cb (chord_nodelistextres *res, int level, clnt_stat err)
+toe_table::get_toes_rmt_cb (chord_nodelistres *res, int level, clnt_stat err)
 {
   if (!(err || res->status)){
     for (unsigned int i=0; i < res->resok->nlist.size (); i++) 

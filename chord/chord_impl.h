@@ -107,6 +107,7 @@ class vnode_impl : public vnode {
   u_long ndogetpred_ext;
   u_long ndochallenge;
   u_long ndogettoes;
+  u_long ndofindtoes;
   u_long ndodebruijn;
 
   void dispatch (user_args *a);
@@ -224,6 +225,7 @@ class vnode_impl : public vnode {
   void dogettoes (user_args *sbp, chord_gettoes_arg *ta);
   void dodebruijn (user_args *sbp, chord_debruijnarg *da);
   void dofindroute (user_args *sbp, chord_findarg *fa);
+  void dofindtoes (user_args *sbp, chord_findtoes_arg *ta);
 
   //RPC demux
   void addHandler (const rpc_program &prog, cbdispatch_t cb);
