@@ -980,6 +980,13 @@ vnode_impl::dodebruijn (user_args *sbp, chord_debruijnarg *da)
   if (betweenrightincl (myID, succ->id (), da->x)) {
     res->set_status(CHORD_INRANGE);
     succ->fill_node (res->inres->node);
+    ref<fingerlike_iter> iter = successors->get_iter ();
+    res->inres->succs.setsize (iter->size ());
+    size_t i = 0;
+    while (!iter->done ()) {
+      ptr<location> n = iter->next ();
+      n->fill_node (res->inres->succs[i++]);
+    }
   } else {
     res->set_status (CHORD_NOTINRANGE);
     if (betweenrightincl (myID, succ->id (), da->i)) {
@@ -997,6 +1004,13 @@ vnode_impl::dodebruijn (user_args *sbp, chord_debruijnarg *da)
       res->noderes->i = da->i;
       res->noderes->k = da->k;
     }
+    ref<fingerlike_iter> iter = successors->get_iter ();
+    res->noderes->succs.setsize (iter->size ());
+    size_t i = 0;
+    while (!iter->done ()) {
+      ptr<location> n = iter->next ();
+      n->fill_node (res->noderes->succs[i++]);
+    }
   }
 
   if (da->upcall_prog)  {
@@ -1005,7 +1019,7 @@ vnode_impl::dodebruijn (user_args *sbp, chord_debruijnarg *da)
 	       wrap (this, &vnode_impl::debruijn_upcall_done, da, res, sbp));
     
   } else {
-    sbp->reply (&res);
+    sbp->reply (res);
     delete res;
   }
 }

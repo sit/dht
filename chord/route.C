@@ -444,10 +444,7 @@ route_debruijn::make_hop_cb (ptr<bool> del, chord_debruijnres *res,
     warnx << "make_hop_cb: failure " << err << "\n";
     
     delete res;
-  } else if (res->status == CHORD_STOP) {
-    r = CHORD_OK;
-    cb (done = true);
-  } else if (last_hop) {
+  } else if (res->status == CHORD_STOP || last_hop) {
     r = CHORD_OK;
     cb (done = true);
   } else if (res->status == CHORD_INRANGE) { 
@@ -463,11 +460,16 @@ route_debruijn::make_hop_cb (ptr<bool> del, chord_debruijnres *res,
     search_path.push_back (n0);
     virtual_path.push_back (x);   // push some virtual path node on
     k_path.push_back (0);  // k is shifted
-    if (stop) done = true;
+
+    successors_.clear ();
+    for (size_t i = 0; i < res->inres->succs.size (); i++)
+      successors_.push_back (make_chord_node (res->inres->succs[i]));
+
+    if (stop) done = true;  // XXX necessary?
     last_hop = true;
-    warnx << "make_hop_cb: x " << x << " path " << search_path.size() - 1
-	  << " ipath " << uniquepathsize (virtual_path) - 1 << " :\n";
-    print ();
+    //    warnx << "make_hop_cb: x " << x << " path " << search_path.size() - 1
+    //  << " ipath " << uniquepathsize (virtual_path) - 1 << " :\n";
+    //    print ();
     cb (done);
   } else if (res->status == CHORD_NOTINRANGE) {
     // haven't found the successor yet
@@ -485,6 +487,10 @@ route_debruijn::make_hop_cb (ptr<bool> del, chord_debruijnres *res,
     search_path.push_back (n0);
     virtual_path.push_back (i);
     k_path.push_back (k);
+      
+    successors_.clear ();
+    for (size_t i = 0; i < res->noderes->succs.size (); i++)
+      successors_.push_back (make_chord_node (res->noderes->succs[i]));
     
     if ((hops > NBIT) || (search_path.size() > 400) ) {
       warnx << "make_hop_cb: too long a search path: " << v->my_ID() 

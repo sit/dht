@@ -112,6 +112,7 @@ struct chord_debruijnarg {
 
 struct chord_debruijnnoderes {
   chord_node_wire node;
+  chord_node_wire succs<>;
   chordID i;
   chordID k;
 };
