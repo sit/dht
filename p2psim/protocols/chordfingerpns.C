@@ -437,7 +437,8 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
     lap = lap/_base;
     for (uint j = (_base-1); j >= 1; j--) {
       finger = lap * j + me.id;
-      if ((ConsistentHash::betweenrightincl(finger,finger+lap,scs[scs.size()-1].id)) || (!alive()))
+      if ((ConsistentHash::betweenrightincl(me.id,finger+lap,scs[scs.size()-1].id)) 
+	  || (!lap) || (!alive()))
 	goto PNS_DONE;
       currf = loctable->succ(finger);
       if (currf.ip == me.ip) 
