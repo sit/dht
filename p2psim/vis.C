@@ -77,7 +77,7 @@ static bool displaysearch = false;
 
 static ulong begin = 0;
 static ulong endofsim = 1000;
-static ulong time;
+static ulong curtime;
 
 struct color_pair {
   GdkColor c;
@@ -433,10 +433,10 @@ bool
 doevent (ulong t)
 {
   string line;
-  ulong ts = time;
+  ulong ts = curtime;
   bool step = false;
 
-  if ((ts >= t) || (time >= endofsim)) {
+  if ((ts >= t) || (curtime >= endofsim)) {
     return (step);
   }
 
@@ -519,20 +519,20 @@ doevent (ulong t)
     if ((ts >= t) || step) break;
   }
 
-  time = ts;
+  curtime = ts;
 
-  if (!step && (time < t))  { // reached end of file?
+  if (!step && (curtime < t))  { // reached end of file?
     printf ("end of file\n");
-    endofsim = time;
+    endofsim = curtime;
   } else {
-    endofsim = time + interval;
+    endofsim = curtime + interval;
   }
 
   while (endofsim >= bar->upper) {
     bar->upper = 2 * bar->upper;
   }
-  bar->value = time;
-  gtk_adjustment_set_value (bar, time);
+  bar->value = curtime;
+  gtk_adjustment_set_value (bar, curtime);
 
   draw_ring ();
 
@@ -876,7 +876,7 @@ key_release_event (GtkWidget *widget, GdkEventKey *event, gpointer data)
   switch (event->keyval) {
   case 'n':
     {
-      doevent (time + interval);
+      doevent (curtime + interval);
       break;
     }
   case 'q':
@@ -958,8 +958,8 @@ button_down_event (GtkWidget *widget, GdkEventButton *event, gpointer data)
 void
 run_cb (GtkWidget *widget, gpointer data)
 {
-  while (time < endofsim) {
-    if (doevent (time + interval))
+  while (curtime < endofsim) {
+    if (doevent (curtime + interval))
       return;
   }
 }
@@ -967,7 +967,7 @@ run_cb (GtkWidget *widget, gpointer data)
 void
 step_cb (GtkWidget *widget, gpointer data)
 {
-  (void) doevent (time + interval);
+  (void) doevent (curtime + interval);
 }
 
 void
@@ -975,10 +975,10 @@ scroll_cb (GtkAdjustment *adj, gpointer data)
 {
   ulong t;
 
-  if (adj->value < time) {
+  if (adj->value < curtime) {
     draw_nothing_cb ((GtkWidget *) adj, data);
     in.seekg (0);
-    time = 0;
+    curtime = 0;
   }
   t = (ulong) (adj->value);
   (void) doevent (t);
