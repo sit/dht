@@ -944,9 +944,9 @@ dhash_impl::printkeys_walk (const chordID &k)
   // DHASH_BLOCK is ignored on the line below
   dhash_stat status = key_status (blockID (k, DHASH_CONTENTHASH, DHASH_BLOCK));
   if (status == DHASH_STORED)
-    warn << k << " STORED\n";
+    warn << k << " STORED @ " << host_node->my_ID () << "\n";
   else if (status == DHASH_REPLICATED)
-    warn << k << " REPLICATED\n";
+    warn << k << " REPLICATED @ " << host_node->my_ID () << "\n";
   else
     warn << k << " UNKNOWN\n";
 }

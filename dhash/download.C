@@ -153,8 +153,8 @@ dhash_download::check_finish ()
 void
 dhash_download::fail (str errstr)
 {
-  warn << "dhash_download failed: " << blckID << ": "
-       << errstr << " at " << source.x << "\n";
+  //  warn << "dhash_download failed: " << blckID << ": "
+  //       << errstr << " at " << source.x << "\n";
   error = true;
 }
 
