@@ -46,7 +46,7 @@ private:
   u_int max_cache_entries;
   flushcb_t fcb;
 public:
-  vs_cache (u_int max_entries = 250) : num_cache_entries (0), 
+  vs_cache (u_int max_entries = 1000) : num_cache_entries (0), 
     max_cache_entries (max_entries), 
     fcb (NULL) { };
 
@@ -78,6 +78,7 @@ public:
   
    void traverse (callback<void, KEY>::ref cb ) 
      {
+       warn << "Will traverse " << num_cache_entries << "\n";
        cache_entry *e = entries.first ();
        while (e) 
 	 {
@@ -92,9 +93,16 @@ public:
       return &ad->v;
     }
     return NULL;
-  }
+   }
   
-  void set_flushcb (flushcb_t cb ) {
+   void set_flushcb (flushcb_t cb ) {
     fcb = cb;
   }
+
+  u_int 
+  size () 
+  {
+    return num_cache_entries;
+  }
 };
+

@@ -26,6 +26,9 @@ struct store_cbstate;
 typedef callback<void, ptr<dbrec>, dhash_stat>::ptr cbvalue;
 typedef callback<void, struct store_cbstate *,dhash_stat>::ptr cbstat;
 typedef callback<void,dhash_stat>::ptr cbstore;
+typedef callback<void,dhash_stat>::ptr cbstat_t;
+
+#define MTU 8192
 
 struct store_cbstate {
   svccb *sbp;
@@ -93,6 +96,9 @@ class dhashclient {
 class dhash {
 
   int nreplica;
+  int kc_delay;
+  int rc_delay;
+
   dbfe *db;
   ptr<vnode> host_node;
 
@@ -112,19 +118,30 @@ class dhash {
   void store_repl_cb (cbstore cb, dhash_stat err);
   bool store_complete (dhash_insertarg *arg);
 
-  void replicate_key (chordID key, int degree, 
-		      callback<void, dhash_stat>::ref cb);
-  void replicate_key_succ_cb (chordID key, int degree_remaining, 
-			      callback<void, dhash_stat>::ref cb,
-			      vec<chordID> repls, chordID succ, chordstat err);
-  void replicate_key_transfer_cb (chordID key, int degree_remaining, 
-				  callback<void, dhash_stat>::ref cb,
-				  chordID succ, 
-				  vec<chordID> repls, dhash_stat err);
+  void get_keys_traverse_cb (ptr<vec<chordID> > vKeys,
+			     chordID predid,
+			     chordID key);
 
-  void cache_store_cb(dhash_res *res, clnt_stat err);
-  
+
+  void transfer_initial_keys ();
+  void transfer_init_getkeys_cb (dhash_getkeys_res *res, clnt_stat err);
+  void transfer_init_gotk_cb (dhash_stat err);
+
+  void update_replica_list ();
+  bool isReplica(chordID id);
+
+  void install_keycheck_timer ();
+  void check_keys_timer_cb ();
+  void check_keys_traverse_cb (chordID key);
+
+  void install_replica_timer ();
+  void check_replicas_cb ();
+  void check_replicas_traverse_cb (chordID to, chordID key);
+  void fix_replicas_txerd (dhash_stat err);
+
   dhash_stat key_status(chordID n);
+  void change_status (chordID key, dhash_stat newstatus);
+
   void transfer_key (chordID to, chordID key, store_status stat, 
 		     callback<void, dhash_stat>::ref cb);
   void transfer_fetch_cb (chordID to, chordID key, store_status stat, 
@@ -133,19 +150,20 @@ class dhash {
   void transfer_store_cb (callback<void, dhash_stat>::ref cb, 
 			  dhash_storeres *res, clnt_stat err);
 
+  void get_key (chordID source, chordID key, cbstat_t cb);
+  void get_key_initread_cb (cbstat_t cb, dhash_res *res, chordID source, 
+			    chordID key, clnt_stat err);
+  void get_key_read_cb (chordID key, char *buf, unsigned int *read, 
+			dhash_res *res, cbstat_t cb, clnt_stat err);
+  void get_key_finish (char *buf, unsigned int size, chordID key, cbstat_t cb);
+  void get_key_finish_store (cbstat_t cb, int err);
+
   void store_flush (chordID key, dhash_stat value);
   void store_flush_cb (int err);
   void cache_flush (chordID key, dhash_stat value);
   void cache_flush_cb (int err);
 
-  void act_cb(chordID id, char action);
-  void walk_cb(chordID succ, chordID id, chordID key);
-
   void transfer_key_cb (chordID key, dhash_stat err);
-  void fix_replicas_cb (chordID id, chordID k);
-  void fix_replicas_transfer_cb (dhash_stat err);
-  void rereplicate_cb (chordID k);
-  void rereplicate_replicate_cb (dhash_stat err);
 
   char responsible(chordID& n);
 
@@ -160,6 +178,8 @@ class dhash {
   
   chordID pred;
   vec<chordID> replicas;
+  timecb_t *check_replica_tcb;
+  timecb_t *check_key_tcb;
 
  public:
   dhash (str dbname, ptr<vnode> node, 

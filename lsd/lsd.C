@@ -123,7 +123,9 @@ newvnode_cb (int n, vnode *my)
 
   if (n > 0) {
     str db_name_prime = strbuf () << db_name << "-" << n;
-    vNew dhash (db_name_prime, chordnode->newvnode (wrap (newvnode_cb, n-1)));
+    vNew dhash (db_name_prime, 
+		chordnode->newvnode (wrap (newvnode_cb, n-1)), 
+		5);
   }
 }
 

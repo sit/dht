@@ -16,6 +16,8 @@ dhash::dhash(str dbname, ptr<vnode> node, int k, int ss, int cs) :
 
   db = New dbfe();
   nreplica = k;
+  rc_delay = 7;
+  kc_delay = 11;
 
   //set up the options we want
   dbOptions opts;
@@ -30,13 +32,15 @@ dhash::dhash(str dbname, ptr<vnode> node, int k, int ss, int cs) :
   }
   
   assert(host_node);
-  //  defp2p->registerActionCallback(wrap(this, &dhash::act_cb));
 
   key_store.set_flushcb(wrap(this, &dhash::store_flush));
   key_cache.set_flushcb(wrap(this, &dhash::cache_flush));
 
-  pred = host_node->my_pred ();
+  update_replica_list ();
+  install_replica_timer ();
+  install_keycheck_timer ();
 
+  delaycb (5, 0, wrap(this, &dhash::transfer_initial_keys));
   // RPC demux
   host_node->addHandler (DHASH_PROGRAM, wrap(this, &dhash::dispatch));
 }
@@ -90,21 +94,41 @@ dhash::dispatch(unsigned long procno,
       
     }
     break;
-#if 0
-  case DHASHPROC_CHECK:
+  case DHASHPROC_GETKEYS:
     {
+      warn << "GET_KEYS request\n";
+      dhash_getkeys_arg *gkarg = New dhash_getkeys_arg ();
+      if (!proc (x.xdrp (), gkarg)) {
+	warn << "DHASH: error unmarshalling arguments (getkey)\n";
+	return;
+      }
+      
+      dhash_getkeys_res *res = New dhash_getkeys_res (DHASH_OK);
+      ref<vec<chordID> > keys = New refcounted<vec<chordID> >;
+      key_store.traverse (wrap (this, &dhash::get_keys_traverse_cb, keys, 
+				gkarg->pred_id));
 
-      warnt("DHASH: CHECK_request");
-	    
-      chordID *n = sbp->template getarg<chordID> ();
-      dhash_stat status = key_status (*n);
-      sbp->replyref ( status );
-      
-      warnt("DHASH: CHECK_done");
-      
+      warn << "GETKEYS: replying with " << keys->size () << " keys\n";
+      res->resok->keys.set (keys->base (), keys->size (), freemode::NOFREE);
+      dhash_reply (rpc_id, DHASHPROC_GETKEYS, res);
+      delete res;
+      delete gkarg;
     }
     break;
-#endif
+  case DHASHPROC_KEYSTATUS:
+    {
+      chordID *arg = New chordID;
+      if (!proc (x.xdrp (), arg)) {
+	warn << "DHASH: error unmarshalling arguments (keystatus)\n";
+	return;
+      }
+
+      //return the status of this key (needed?)
+      dhash_stat stat = key_status (*arg);
+      dhash_reply (rpc_id, DHASHPROC_KEYSTATUS, &stat);
+      delete arg;
+    }
+    break;
   default:
     break;
   }
@@ -148,6 +172,7 @@ dhash::fetchsvc_cb (long xid,
   delete res;  
   delete arg;
 }
+
 void
 dhash::storesvc_cb(long xid,
 		   dhash_insertarg *arg,
@@ -170,101 +195,144 @@ dhash::storesvc_cb(long xid,
   delete arg;
 }
 
-
-// ----------   chord triggered callbacks -------- 
 void
-dhash::act_cb(chordID id, char action) {
-
-  warn << "node " << id << " just " << action << "ed the network\n";
-  chordID m = host_node->my_ID ();
-
-  if (action == ACT_NODE_LEAVE) {
-#if 0 
-   //lost a replica?
-    if (replicas.size () > 0) {
-      chordID final_replica = replicas.back ();
-      if (between (m, final_replica, id)) 
-	key_store.traverse (wrap (this, &dhash::rereplicate_cb));
-    }
-#endif
-    //lost a master? (handle in fetch)
-  } else if (action == ACT_NODE_JOIN) {
-    //new node should store some of this node's keys?
-    //    warn << "Is " << id << " between " << pred << " and " << m << "\n";
-    if (between (pred, m, id)) {
-      // warn << "YES\n";
-      key_store.traverse (wrap (this, &dhash::walk_cb, pred, id));
-    }
-#if 0
-    //new node should be a replica?
-    if (replicas.size () > 0) {
-      chordID final_replica = replicas.back ();
-      if (between (m, final_replica, id)) 
-	key_store.traverse (wrap (this, &dhash::fix_replicas_cb, id));
-    }
-#endif
-
-    pred = host_node->my_pred ();
-  } else {
-    fatal << "update action not supported\n";
-  }
-  
-}
-
-void
-dhash::walk_cb(chordID pred, chordID id, chordID k) 
+dhash::get_keys_traverse_cb (ptr<vec<chordID> > vKeys,
+			     chordID predid,
+			     chordID key)
 {
-  if ((key_status (k) == DHASH_STORED) && (between (pred, id, k))) {
-    transfer_key (id, k, DHASH_STORE, wrap(this, &dhash::transfer_key_cb, k));
+  if (key < predid) {
+    warn << "will include " << key << "\n";
+    vKeys->push_back (key);
   }
 }
 
-void
-dhash::transfer_key_cb (chordID key, dhash_stat err)
-{
-
-  if (err == DHASH_OK) {
-    dhash_stat status = key_status (key);
-    key_store.remove (key);
-    key_cache.enter (key, &status);
-  } else {
-    exit(1);
-  }
-}
-
-void
-dhash::fix_replicas_cb (chordID id, chordID k) 
-{
-  if (key_status (k) == DHASH_REPLICATED) 
-    transfer_key (id, k, DHASH_REPLICA, wrap (this, &dhash::fix_replicas_transfer_cb));
-  
-}
-
-void
-dhash::fix_replicas_transfer_cb (dhash_stat err) 
-{
-  if (err) warn << "error transferring replicated key\n";
-}
-
-void
-dhash::rereplicate_cb (chordID k) 
-{
-  if (key_status (k) == DHASH_STORED)
-    replicate_key (k, REP_DEGREE, wrap (this, &dhash::rereplicate_replicate_cb));
-}
-
-void
-dhash::rereplicate_replicate_cb (dhash_stat err) 
-{
-  if (err) warn << "replication error\n";
-}
 //---------------- no sbp's below this line --------------
+ 
+// -------- reliability stuff
 
+void
+dhash::transfer_initial_keys ()
+{
+  chordID succ = host_node->my_succ ();
+  if (host_node->my_ID () == succ) {
+    warn << "Waiting to initialize\n";
+    delaycb (5, 0, wrap(this, &dhash::transfer_initial_keys));
+    return;
+  }
+  ptr<dhash_getkeys_arg> arg = New refcounted<dhash_getkeys_arg>;
+  arg->pred_id = host_node->my_ID ();
+  
+  dhash_getkeys_res *res = New dhash_getkeys_res ();
+  host_node->chordnode->doRPC(succ, dhash_program_1, DHASHPROC_GETKEYS, 
+			      arg, res,
+			      wrap(this, 
+				   &dhash::transfer_init_getkeys_cb, res));
+}
+
+void
+dhash::transfer_init_getkeys_cb (dhash_getkeys_res *res, clnt_stat err)
+{
+  
+  if ((err) || (res->status != DHASH_OK)) 
+    fatal << "Couldn't transfer keys from my successor\n";
+
+  warn << "Got " << res->resok->keys.size () << "keys\n";
+  chordID succ = host_node->my_succ ();
+  for (unsigned int i = 0; i < res->resok->keys.size (); i++) {
+    get_key (succ, res->resok->keys[i], 
+	     wrap (this, &dhash::transfer_init_gotk_cb));
+    warn << res->resok->keys[i] << "\n";
+  }
+  delete res;
+}
+
+void
+dhash::transfer_init_gotk_cb (dhash_stat err) 
+{
+  if (err) fatal << "Error fetching key\n";
+}
+
+void
+dhash::update_replica_list () 
+{
+  replicas.clear ();
+  for (int i = 0; i < nreplica; i++)
+    replicas.push_back(host_node->nth_successorID (i));
+}
+
+void
+dhash::install_replica_timer () 
+{
+  check_replica_tcb = delaycb (rc_delay, 0, 
+			       wrap (this, &dhash::check_replicas_cb));
+};
+
+void 
+dhash::install_keycheck_timer () 
+{
+  check_key_tcb = delaycb (kc_delay, 0, 
+			   wrap (this, &dhash::check_keys_timer_cb));
+};
+
+/* O( (number of replicas)^2 (but doesn't assume anything about
+ordering of chord::succlist*/
+bool 
+dhash::isReplica(chordID id) { 
+  for (unsigned int i=0; i < replicas.size(); i++)
+    if (replicas[i] == id) return true;
+  return false;
+}
+
+void
+dhash::check_replicas_cb () 
+{
+  for (int i=0; i < nreplica; i++) {
+    chordID nth = host_node->nth_successorID (i);
+    if (!isReplica(nth)) 
+      key_store.traverse (wrap (this, &dhash::check_replicas_traverse_cb, 
+				nth));
+  }
+  install_replica_timer ();
+  update_replica_list ();
+  
+}
+
+void
+dhash::check_replicas_traverse_cb (chordID to, chordID key)
+{
+  if (key_status (key) == DHASH_STORED)
+    transfer_key (to, key, DHASH_REPLICA, wrap (this, 
+						&dhash::fix_replicas_txerd));
+}
+
+void
+dhash::fix_replicas_txerd (dhash_stat err) 
+{
+  if (err) warn << "error replicating key\n";
+}
+
+void
+dhash::check_keys_timer_cb () 
+{
+  key_store.traverse(wrap(this, &dhash::check_keys_traverse_cb));
+  key_cache.traverse(wrap(this, &dhash::check_keys_traverse_cb));
+  install_keycheck_timer ();
+}
+
+void
+dhash::check_keys_traverse_cb (chordID key) 
+{
+  if ( (responsible (key)) && (key_status(key) != DHASH_STORED)) {
+    change_status (key, DHASH_STORED);
+  } else if ( (!responsible (key) && (key_status (key) == DHASH_STORED))) {
+    change_status (key, DHASH_REPLICATED);
+  }
+
+}
+// --- node to node transfers ---
 void
 dhash::transfer_key (chordID to, chordID key, store_status stat, callback<void, dhash_stat>::ref cb) 
 {
-  return;
-
   fetch(key, wrap(this, &dhash::transfer_fetch_cb, to, key, stat, cb));
 }
 
@@ -288,14 +356,11 @@ dhash::transfer_fetch_cb (chordID to, chordID key, store_status stat, callback<v
       i_arg->attr.size = data->len;
       i_arg->type = stat;
       memcpy(i_arg->data.base () + off, (char *)data->value + off, remain);
-
-      if (stat == DHASH_STORE)
-	warn << "going to transfer (STORE) " << key << "(" << off << "/" << data->len << " to " << to << "\n";
-      else 
-	warn << "going to transfer (REPLICA) " << key << " to " << to << "\n";
  
-      host_node->chordnode->doRPC(to, dhash_program_1, DHASHPROC_STORE, i_arg, res,
-			     wrap(this, &dhash::transfer_store_cb, cb, res));
+      host_node->chordnode->doRPC(to, dhash_program_1, DHASHPROC_STORE, 
+				  i_arg, res,
+				  wrap(this, 
+				       &dhash::transfer_store_cb, cb, res));
 
       off += remain;
      } while (off < static_cast<unsigned long>(data->len));
@@ -314,6 +379,98 @@ dhash::transfer_store_cb (callback<void, dhash_stat>::ref cb,
 
   delete res;
 }
+
+void
+dhash::get_key (chordID source, chordID key, cbstat_t cb) 
+{
+  dhash_res *res = New dhash_res ();
+  ptr<dhash_fetch_arg> arg = New refcounted<dhash_fetch_arg>;
+  arg->key = key; 
+  arg->len = MTU;  
+  arg->start = 0;
+
+  host_node->chordnode->doRPC(source, dhash_program_1, DHASHPROC_FETCH, 
+			      arg, res,
+			      wrap(this, 
+				   &dhash::get_key_initread_cb, 
+				   cb, res, source, key));
+}
+
+void
+dhash::get_key_initread_cb (cbstat_t cb, dhash_res *res, chordID source, 
+			    chordID key, clnt_stat err) 
+{
+  if ((err) || (res->status != DHASH_OK)) {
+    (cb)(DHASH_RPCERR);
+  } else if (res->resok->attr.size == res->resok->res.size ()) {
+    get_key_finish (res->resok->res.base (), res->resok->res.size (), 
+		    key, cb);
+  } else {
+    char *buf = New char[res->resok->attr.size];
+    assert (buf);
+    memcpy (buf, res->resok->res.base (), res->resok->res.size ());
+    unsigned int *read = New unsigned int(res->resok->res.size ());
+    unsigned int offset = *read;
+    do {
+      ptr<dhash_fetch_arg> arg = New refcounted<dhash_fetch_arg>;
+      arg->key = key;
+      arg->len = (offset + MTU < res->resok->attr.size) ? 
+	MTU : res->resok->attr.size - offset;
+      arg->start = offset;
+      dhash_res *new_res = New dhash_res();
+      host_node->chordnode->doRPC(source, dhash_program_1, DHASHPROC_FETCH, 
+				  arg, new_res,
+				  wrap(this, 
+				       &dhash::get_key_read_cb, key, 
+				       buf, read, new_res, cb));
+      offset += arg->len;
+    } while (offset  < res->resok->attr.size);
+  }
+  
+  delete res;
+}
+
+void
+dhash::get_key_read_cb (chordID key, char *buf, unsigned int *read, 
+			dhash_res *res, cbstat_t cb, clnt_stat err) 
+{
+  if ( (err) || (res->status != DHASH_OK)) {
+    delete buf;
+    (*cb)(DHASH_RPCERR);
+  } else {
+    *read += res->resok->res.size ();
+    memcpy (buf + res->resok->offset, res->resok->res.base (), 
+	    res->resok->res.size ());
+    if (*read == res->resok->attr.size) {
+      get_key_finish (buf, res->resok->res.size (), key, cb);
+      delete buf;
+      delete res;
+    }
+  }
+  delete res;
+}
+
+void
+dhash::get_key_finish (char *buf, unsigned int size, chordID key, cbstat_t cb) 
+{
+  ptr<dbrec> k = id2dbrec (key);
+  ptr<dbrec> d = New refcounted<dbrec> (buf, size);
+  dhash_stat stat = DHASH_STORED;
+  key_store.enter (key, &stat);
+  db->insert (k, d, wrap(this, &dhash::get_key_finish_store, cb));
+}
+
+void
+dhash::get_key_finish_store (cbstat_t cb, int err)
+{
+  if (err)
+    (cb)(DHASH_STOREERR);
+  else
+    (cb)(DHASH_OK);
+}
+
+
+// --- node to database transfers --- 
 
 void
 dhash::fetch(chordID id, cbvalue cb) 
@@ -420,56 +577,6 @@ dhash::store_repl_cb (cbstore cb, dhash_stat err)
     cb (DHASH_OK);
 }
 
-void 
-dhash::replicate_key (chordID key, int degree, callback<void, dhash_stat>::ref cb) 
-{
-  return;
-  warnt ("DHASH: replicate_key");
-  if (degree > 0) {
-    chordID succ = host_node->my_succ ();
-    vec<chordID> repls;
-    transfer_key (succ, key, DHASH_REPLICA, wrap (this, &dhash::replicate_key_transfer_cb,
-						  key, degree, cb, succ, repls));
-  } else
-    cb (DHASH_OK);
-}
-
-void
-dhash::replicate_key_succ_cb (chordID key, int degree_remaining, 
-			      callback<void, dhash_stat>::ref cb,
-			      vec<chordID> repls,
-			      chordID succ, chordstat err) 
-{
-  warnt ("DHASH: replicate_key_succ_cb");
-  if (err) {
-    cb (DHASH_CHORDERR);
-  } else {
-    repls.push_back (succ);
-    transfer_key (succ, key, DHASH_REPLICA, wrap (this, &dhash::replicate_key_transfer_cb,
-						  key, degree_remaining, cb, succ, repls));
-  }
-}
-
-void
-dhash::replicate_key_transfer_cb (chordID key, int degree_remaining, callback<void, dhash_stat>::ref cb,
-				  chordID succ, vec<chordID> repls,
-				  dhash_stat err)
-{
-
-  warnt ("DHASH: replicate_key_transfer_cb");
-  if (err) {
-    cb (err);
-  } else if (degree_remaining == 1) {
-    //update the list of replica servers
-    replicas = repls;
-    cb (DHASH_OK);
-  } else {
-    host_node->get_succ (succ, wrap (this, &dhash::replicate_key_succ_cb, 
-				key, 
-				degree_remaining - 1,
-				cb, repls));
-  }
-}
 
 // --------- utility
 
@@ -484,8 +591,28 @@ dhash::id2dbrec(chordID id)
   return q;
 }
 
+void
+dhash::change_status (chordID key, dhash_stat newstat) 
+{
+  dhash_stat r = DHASH_REPLICATED;
+  dhash_stat c = DHASH_CACHED;
+
+  if ((key_status (key) == DHASH_STORED) || 
+      (key_status (key) == DHASH_REPLICATED)) {
+    key_store.remove (key);
+    if (newstat == DHASH_REPLICATED)
+      key_store.enter (key, &r);
+    else if (newstat == DHASH_CACHED)
+      key_store.enter (key, &c);
+  } else if (newstat != DHASH_CACHED) {
+    key_cache.remove (key);
+    key_store.enter (key, &newstat);
+  }
+}
+
 dhash_stat
-dhash::key_status(chordID n) {
+dhash::key_status(chordID n) 
+{
   dhash_stat * s_stat = key_store.peek (n);
   if (s_stat != NULL)
     return *s_stat;

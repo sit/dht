@@ -150,7 +150,7 @@ make_xy (FILE *input, FILE *output, int bin_width)
     int x_val;
     char filename[32];
     parsed = fscanf(input, "%d %s\n", &x_val, filename);
-    printf("opening %s\n", filename);
+    fprintf(stderr, "opening %s\n", filename);
     FILE *data_in = fopen(filename, "r");
     assert(data_in);
     get_data(data_in);

@@ -53,6 +53,19 @@ struct dhash_resok {
   int32 hops;
 };
 
+struct dhash_getkeys_ok {
+  chordID keys<>;
+};
+
+union dhash_getkeys_res switch (dhash_stat status) {
+ case DHASH_OK:
+   dhash_getkeys_ok resok;
+default:
+   void; 
+};
+struct dhash_getkeys_arg {
+  chordID pred_id;
+};
 
 union dhash_res switch (dhash_stat status) {
  case DHASH_OK:
@@ -98,8 +111,11 @@ program DHASH_PROGRAM {
     dhash_res
     DHASHPROC_FETCH (dhash_fetch_arg) = 2;
 
+    dhash_getkeys_res
+    DHASHPROC_GETKEYS (dhash_getkeys_arg) = 3;
+
     dhash_stat
-    DHASHPROC_CHECK (chordID) = 3;
+    DHASHPROC_KEYSTATUS (chordID) = 4;
 
   } = 1;
 } = 344449;
