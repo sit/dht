@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.27 2003/10/14 22:47:08 athicha Exp $
+# $Id: Makefile.am,v 1.28 2003/10/23 21:43:05 fdabek Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -10,6 +10,8 @@ endif
 noinst_PROGRAMS = dbm typetest $(VIS) walk builddb dbdump findroute \
 		  coords nodeq filestore \
 		  dhc_test
+
+noinst_HEADERS = rpclib.h
 
 MYLDADD =  ../dhash/libdhash.a ../dhc/libdhc.a ../merkle/libmerkle.a ../svc/libsvc.la
 
