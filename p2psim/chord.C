@@ -176,7 +176,8 @@ Chord::join(Args *args)
   find_successors_ret fr;
   fa.key = me.id + 1;
   fa.m = 1;
-  doRPC(wkn.ip, &Chord::find_successors_handler, &fa, &fr);
+  bool ok = doRPC(wkn.ip, &Chord::find_successors_handler, &fa, &fr);
+  assert (ok);
   assert(fr.v.size() > 0);
   Time after = now();
   printf("%s join2 %16qx, elapsed %ld\n",
@@ -258,7 +259,8 @@ Chord::fix_successor()
 
   get_predecessor_args gpa;
   get_predecessor_ret gpr;
-  doRPC(succ1.ip, &Chord::get_predecessor_handler, &gpa, &gpr);
+  bool ok = doRPC(succ1.ip, &Chord::get_predecessor_handler, &gpa, &gpr);
+  assert (ok);
 
 #ifdef CHORD_DEBUG
   printf("%s fix_successor old successor (%u,%qx)'s predecessor is (%u, %qx)\n", ts(), succ1.ip, succ1.id, gpr.n.ip, gpr.n.id);
@@ -280,7 +282,8 @@ Chord::fix_successor_list()
   IDMap succ = loctable->succ(me.id+1);
   get_successor_list_args gsa;
   get_successor_list_ret gsr;
-  doRPC(succ.ip, &Chord::get_successor_list_handler, &gsa, &gsr);
+  bool ok = doRPC(succ.ip, &Chord::get_successor_list_handler, &gsa, &gsr);
+  assert (ok);
   for (unsigned int i = 0; i < (gsr.v).size(); i++) {
     loctable->add_node(gsr.v[i]);
   }
@@ -312,7 +315,7 @@ Chord::fix_successor_list()
 void
 Chord::notify_handler(notify_args *args, notify_ret *ret)
 {
-  printf ("notify_handler %16qx: %16qx\n", me.id, args->me.id);
+  //  printf ("notify_handler %16qx: %16qx\n", me.id, args->me.id);
   IDMap p1 = loctable->pred();
   loctable->add_node(args->me);
 }
@@ -445,27 +448,29 @@ LocTable::add_sortednodes(vector<Chord::IDMap> l)
   Chord::IDMap tmppin;
   tmppin.ip = 0;
   uint pos;
-  uint ptr;
+  int ptr;
+  Chord::IDMap n;
+  pin_entry p;
 
   for (uint i = 0; i < sz; i++) {
+    p = pinlist[i];
     tmppin.id = pinlist[i].id;
     pos = upper_bound(l.begin(), l.end(), tmppin, Chord::IDMap::cmp) - l.begin();
-    if (pos > 1) {
-      assert(l[pos-1].id < tmppin.id);
-    }else if (pos < lsz) {
-      assert(l[pos].id >= tmppin.id);
-    }
-    if (pos < lsz && l[pos].id == tmppin.id) {
+    if (pos >= lsz) pos = 0;
+    ptr = pos;
+    if (pos < lsz && l[pos].id > tmppin.id) {
       ptr--;
     }
     for (uint k = 0; k < pinlist[i].pin_pred; k++) {
       if (ptr< 0) ptr= (lsz-1);
+      n = l[ptr];
       add_node(l[ptr]);
       ptr--;
     }
     ptr = pos; 
     for (uint k = 0; k < pinlist[i].pin_succ; k++) {
       if (ptr >= lsz) ptr= 0;
+      n = l[ptr];
       add_node(l[ptr]);
       ptr++;
     }
