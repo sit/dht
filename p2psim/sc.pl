@@ -13,7 +13,7 @@ use strict;
 #    <placement> ::= linear | random <number> <number>
 #
 # event: <node id>,<event-type>,<args>
-# events: <number of events>,<interval>,<event-type>,<args>
+# events: <number of events>,<start>,<interval>,<event-type>,<args>
 
 open TOP, ">$ARGV[0]" || die "Could not open $ARGV[0]: $!\n";
 open EV, ">$ARGV[1]" || die "Could not open $ARGV[1]: $!\n";
@@ -21,6 +21,9 @@ open EV, ">$ARGV[1]" || die "Could not open $ARGV[1]: $!\n";
 my $line;
 my $nnodes;
 my $time = 1;
+my $protocol;
+my @keys;
+my $nk = 0;
 
 while ($line = <STDIN>) {
     chomp($line);
@@ -41,6 +44,7 @@ close EV || die "Could not close $ARGV[1]: $!\n";
 sub donet {
     my ($n, $top, $place,$node,$pro) = @_;
     print "donet: $n $top $place $node $pro\n";
+    $protocol = $pro;
     $nnodes = $n;
     print TOP "topology $top\n\n";
     for (my $i = 1; $i <= $n; $i++) {
@@ -60,17 +64,38 @@ sub donet {
 sub doevent {
     my ($n,$type,@args) = @_;
     print "doevent: $n $type @args\n";
-    print EV "node $time $n $type @args\n";
+    print EV "node $time $n $protocol:$type @args\n";
 }
 
 sub doevents {
-    my ($n,$interval,$type,@args) = @_;
+    my ($n,$start,$interval,$distr,$type,@args) = @_;
     my $node = 1;
-    print "doevents: $n $interval $type @args\n";
+    $time = $start;
+    print "doevents: $n $start $interval $distr $type @args\n";
     for (my $i = 1; $i <= $n; $i++) {
-	$node = ($node % $nnodes) + 1;
+	if ($distr =~ /linear/) {
+	    $node = ($node % $nnodes) + 1;
+	}
+	if ($type == 0) {
+	    print EV "node $time $node $protocol:$type @args\n";
+	} elsif ($type == 4) {
+	    $keys[$nk] = makekey();
+	    print EV "node $time $node $protocol:$type key=$keys[$nk]\n";
+	    $nk++;
+	}
 	$time = $time + $interval;
-	print EV "node $time $node $type @args\n";
     }
 }
+
+sub makekey ()
+{    
+    my $id = "0x";
+    for(my $i = 0; $i < 16; $i++) {
+	my $h = int(rand 16);
+	my $c = sprintf "%x", $h;
+	$id = $id . $c;
+    }
+    return $id;
+}
+
 

@@ -54,12 +54,13 @@ ChordObserver::execute()
     }
 
     sort(lid.begin(), lid.end());
-  }
 
-  //  list<ConsistentHash::CHID>::iterator i;
-  // for (i = lid.begin(); i != lid.end(); ++i) {
-  // printf ("id %qx\n", *i); 
-  // }
+    vector<ConsistentHash::CHID>::iterator i;
+    printf ("sorted nodes\n");
+    for (i = lid.begin (); i != lid.end() ; ++i) {
+      printf ("%qx\n", *i);
+    }
+  }
 
   for (pos = l.begin(); pos != l.end(); ++pos) {
     c = (Chord *)(*pos);

@@ -10,7 +10,7 @@ class Args : public map<string,string> {
 public:
   template<class T>
   T nget(string s) {
-    return (T) atoi((*this)[s].c_str());
+    return (T) strtoull((*this)[s].c_str(), NULL,16);
   }
 };
 

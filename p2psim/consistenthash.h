@@ -48,7 +48,6 @@ public:
     return r;
   };
 
-
   static CHID successorID(CHID n, int p) {
     CHID one = 1;
     return (n + (one << p));
@@ -66,6 +65,12 @@ public:
     memcpy (&r, buf, 8);
     return r;
   }
+
+  static uint topbit (CHID n) {
+    uint r = n >> (NBCHID - 1);
+    return r;
+  }
+
 };
 
 #endif // __CONSISTENTHASH_H

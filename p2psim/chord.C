@@ -37,9 +37,10 @@ void
 Chord::lookup(Args *args) 
 {
   CHID k = args->nget<CHID>("key");
+  printf("%s lookup key %qx\n", ts (), k);
   vector<IDMap> v = find_successors(k, 1);
   IPAddress ans = (v.size() > 0) ? v[0].ip:0;
-  printf("%s lookup results %u\n", ts(), ans);
+  printf("%s lookup results (%u,%qx)\n", ts(), ans, (ans != 0) ? v[0].id : 0);
 }
 
 // Returns at least m successors of key.
@@ -274,7 +275,7 @@ Chord::crash()
 ConsistentHash::CHID
 LocTable::succID(ConsistentHash::CHID id)
 {
-  for (int i = 1; i < ring.size(); i++) {
+  for (uint i = 1; i < ring.size(); i++) {
     if (ConsistentHash::between(ring[0].id, ring[i].id, id)) 
       return ring[i].id;
   }
