@@ -30,8 +30,10 @@
 #include <iostream>
 using namespace std;
 
-Euclidean::Euclidean(vector<string>*)
+Euclidean::Euclidean(vector<string>*v)
 {
+  _num = atoi((*v)[0].c_str());
+  assert(_num > 0);
 }
 
 Euclidean::~Euclidean()
