@@ -81,40 +81,27 @@ dhash::dhash(str dbname, vnode *node, int k, int ss, int cs, int _ss_mode) :
   transfer_initial_keys ();
 
   // RPC demux
-  host_node->addHandler (DHASH_PROGRAM, wrap(this, &dhash::dispatch));
+  host_node->addHandler (dhash_program_1, wrap(this, &dhash::dispatch));
 }
 
 void
-dhash::dispatch (unsigned long procno, 
-		 chord_RPC_arg *arg,
-		 unsigned long rpc_id) 
+dhash::dispatch (svccb *sbp) 
 {
 
-  char *marshalled_arg = arg->marshalled_args.base ();
-  int arg_len = arg->marshalled_args.size ();
-
-  xdrmem x (marshalled_arg, arg_len, XDR_DECODE);
-  xdrproc_t proc = dhash_program_1.tbl[procno].xdr_arg;
-
   rpc_answered++;
-  switch (procno) {
+  switch (sbp->proc ()) {
 
   case DHASHPROC_FETCHITER:
     {
       warnt ("DHASH: fetchiter_request");
-
-      dhash_fetch_arg *farg = New dhash_fetch_arg ();
-      if (!proc (x.xdrp (), farg)) {
-	warn << "DHASH: (fetch) error unmarshalling arguments\n";
-	return;
-      }
-
+      
+      s_dhash_fetch_arg *farg = sbp->template getarg<s_dhash_fetch_arg> ();
+      
       dhash_fetchiter_res *res = New dhash_fetchiter_res (DHASH_CONTINUE);
-
       if (key_status (farg->key) != DHASH_NOTPRESENT) {
 	//fetch the key and return it, end of story
 	fetch (farg->key, wrap (this, &dhash::fetchiter_svc_cb,
-				rpc_id, farg));
+				sbp, farg));
 	delete res;
 	return;
       } else if (responsible (farg->key))  {
@@ -175,150 +162,18 @@ dhash::dispatch (unsigned long procno,
 	  host_node->chordnode->locations->getaddress (best_succ);
       }
       
-      dhash_reply (rpc_id, DHASHPROC_FETCHITER, res);
+      sbp->reply (res);
       delete res;
-      delete farg;
-      
     }
     break;
     
-  case DHASHPROC_FETCHRECURS:
-    {
 
-      dhash_recurs_arg *rarg = New dhash_recurs_arg ();
-      if (!proc (x.xdrp (), rarg)) {
-	warn << "DHASH: (fetchrecurs) error unmarshalling arguments\n";
-	return;
-      }
-
-      // if this is a new query, make us the return address and hold on to sbp
-      int nonce = rarg->nonce;
-      chord_node return_address = rarg->return_address;
-      if (nonce == 0) {
-	nonce = qnonce++;
-	rqc.insert (nonce, rpc_id);
-	return_address.x = host_node->my_ID ();
-	return_address.r = 
-	  host_node->chordnode->locations->getaddress (return_address.x);
-      }
-
-      if (key_status (rarg->key) != DHASH_NOTPRESENT) {
-	// if we have the data, send an RPC to the return address
-	fetch (rarg->key, wrap (this, &dhash::fetchrecurs_havedata_cb,
-				rpc_id, rarg, nonce, return_address));
-
-	return;
-      } else if (responsible (rarg->key))  {
-	//we should have the key, send an error RPC to the return address
-	
-	ptr<dhash_finish_recurs_arg> arg = 
-	  New refcounted<dhash_finish_recurs_arg>;
-	
-	arg->nonce = nonce;
-	arg->status = DHASH_NOENT;
-	arg->source.x = host_node->my_ID ();
-	arg->source.r = 
-	  host_node->chordnode->locations->getaddress (arg->source.x);
-	
-	dhash_stat *err_res = New dhash_stat; 
-	host_node->chordnode->locations->cacheloc (return_address.x, 
-						   return_address.r);
-	doRPC (return_address.x, dhash_program_1, DHASHPROC_FINISHRECURS, 
-	       arg, err_res,
-	       wrap (this, &dhash::fetchrecurs_sent_data, err_res));
-      } else {
-	// if we don't, are we the predecessor?
-	chordID nid;
-	chordID myID = host_node->my_ID ();
-	chordID my_succ = host_node->my_succ ();
-	if (betweenrightincl(myID, my_succ, rarg->key))
-	  nid = my_succ;
-	else 	// nope, look up the next best pred
-	  nid = host_node->lookup_closestpred (rarg->key);
-	
-	ptr<dhash_recurs_arg> arg = New refcounted<dhash_recurs_arg> ();
-	arg->key = rarg->key;
-	arg->start = rarg->start;
-	arg->len = rarg->len;
-	arg->hops = rarg->hops + 1;
-	arg->return_address = return_address;
-	arg->nonce = nonce;
-
-	chordID best = nid;
-	if ( (ss_mode > 0) && (nid == my_succ)) {
-	  location *b = host_node->chordnode->locations->getlocation (nid);
-	  chordID last = nid;
-	  for (int i = 0; i < nreplica; i++) {
-	    chordID next = host_node->lookup_closestsucc (last);
-	    location *n = host_node->chordnode->locations->getlocation (last);
-	    if (n->nrpc == 0) continue;
-	    if (b->nrpc == 0) continue;
-	    double n_lat = (double)n->rpcdelay / n->nrpc;
-	    double b_lat = (double)b->rpcdelay / b->nrpc;
-	    if (n_lat + 50000 < b_lat) {
-	      b = n;
-	      best = next;
-	    }
-	    last = next;
-	  }
-	}
-	dhash_fetchrecurs_res *c_res = New dhash_fetchrecurs_res ();
-	doRPC (best, dhash_program_1, DHASHPROC_FETCHRECURS, arg, c_res,
-	       wrap (this, &dhash::fetchrecurs_continue, c_res));
-      }
-
-      dhash_stat rres = DHASH_OK;
-      if (rarg->nonce)
-	dhash_reply (rpc_id, DHASHPROC_FETCHRECURS, &rres);
-      delete rarg;
-    }
-    break;
-  case DHASHPROC_FINISHRECURS:
-    {
-      dhash_finish_recurs_arg *farg = New dhash_finish_recurs_arg ();
-      if (!proc (x.xdrp (), farg)) {
-	warn << "DHASH: (fetchrecurs) error unmarshalling arguments\n";
-	return;
-      }
-      
-      dhash_fetchrecurs_res *res = New dhash_fetchrecurs_res ();
-      unsigned long *srpc_id = rqc[farg->nonce];
-      assert (srpc_id != NULL);
-      if (farg->status != DHASH_RFETCHDONE) res->set_status (farg->status);
-      else {
-
-	//cache loc since we will probably do a TRANSFER to it next
-	host_node->chordnode->locations->cacheloc (farg->source.x, 
-						   farg->source.r);
-
-	res->set_status (DHASH_RFETCHDONE);
-	res->compl_res->res.setsize (farg->data.res.size());
-	memcpy (res->compl_res->res.base (), farg->data.res.base (), 
-		res->compl_res->res.size ());
-	res->compl_res->offset = farg->data.offset;
-	res->compl_res->attr.size = farg->data.attr.size;
-	res->compl_res->hops = farg->hops;
-	res->compl_res->source = farg->data.source;
-	
-      }
-      dhash_reply (*srpc_id, DHASHPROC_FETCHRECURS, res);
-      delete res;
-
-      dhash_stat stat = DHASH_OK;
-      dhash_reply (rpc_id, DHASHPROC_FINISHRECURS, &stat);
-      delete farg;
-    }
-    break;
   case DHASHPROC_STORE:
     {
       update_replica_list ();
       warnt("DHASH: STORE_request");
 
-      dhash_insertarg *sarg = New dhash_insertarg ();
-      if (!proc (x.xdrp (), sarg)) {
-	warn << "DHASH: (store) error unmarshalling arguments\n";
-	return;
-      }
+      s_dhash_insertarg *sarg = sbp->template getarg<s_dhash_insertarg> ();
      
       if ((sarg->type == DHASH_STORE) && 
 	  (!responsible (sarg->key)) && 
@@ -328,21 +183,19 @@ dhash::dispatch (unsigned long procno,
 	chordID pred = host_node->my_pred ();
 	res->pred->p.x = pred;
 	res->pred->p.r = host_node->chordnode->locations->getaddress (pred);
-	dhash_reply (rpc_id, DHASHPROC_STORE, res);
+	sbp->reply (res);
+	delete res;
       } else {
 	warnt ("DHASH: will store");
-	store (sarg, wrap(this, &dhash::storesvc_cb, rpc_id, sarg));	
+	store (sarg, wrap(this, &dhash::storesvc_cb, sbp, sarg));	
       }
       
     }
     break;
   case DHASHPROC_GETKEYS:
     {
-      dhash_getkeys_arg *gkarg = New dhash_getkeys_arg ();
-      if (!proc (x.xdrp (), gkarg)) {
-	warn << "DHASH: (getkeys) error unmarshalling arguments (getkey)\n";
-	return;
-      }
+      s_dhash_getkeys_arg *gkarg = 
+	sbp->template getarg<s_dhash_getkeys_arg> ();
       
       dhash_getkeys_res *res = New dhash_getkeys_res (DHASH_OK);
       ref<vec<chordID> > keys = New refcounted<vec<chordID> >;
@@ -351,99 +204,31 @@ dhash::dispatch (unsigned long procno,
 				mypred, gkarg->pred_id));
 
       res->resok->keys.set (keys->base (), keys->size (), freemode::NOFREE);
-      dhash_reply (rpc_id, DHASHPROC_GETKEYS, res);
+      sbp->reply (res);
       delete res;
-      delete gkarg;
     }
     break;
   case DHASHPROC_KEYSTATUS:
     {
-      chordID *arg = New chordID;
-      if (!proc (x.xdrp (), arg)) {
-	warn << "DHASH: (keystatus) error unmarshalling arguments (keystatus)\n";
-	return;
-      }
+      s_dhash_keystatus_arg *arg = 
+	sbp->template getarg<s_dhash_keystatus_arg> ();
 
       //return the status of this key (needed?)
-      dhash_stat stat = key_status (*arg);
-      dhash_reply (rpc_id, DHASHPROC_KEYSTATUS, &stat);
-      delete arg;
+      dhash_stat stat = key_status (arg->key);
+      sbp->reply (&stat);
     }
     break;
   default:
-
+    sbp->replyref (PROC_UNAVAIL);
     break;
   }
-  pred = host_node->my_pred ();
 
+  pred = host_node->my_pred ();
   return;
 }
 
 void
-dhash::fetchrecurs_continue (dhash_fetchrecurs_res *res, clnt_stat err) 
-{
-  if (err) warn << "frecurs_continue: err\n";
-  else 
-    assert (res->status != DHASH_RFETCHFORWARDED) ;
-  delete res;
-      
-}
-void
-dhash::fetchrecurs_havedata_cb (unsigned long rpc_id,
-				dhash_recurs_arg *rarg,
-				unsigned int nonce,
-				chord_node return_address,
-				ptr<dbrec> val, dhash_stat err)
-{
-  
-  ptr<dhash_finish_recurs_arg> res_arg = 
-    New refcounted<dhash_finish_recurs_arg> ();
-  
-  res_arg->nonce = nonce;
-  res_arg->status = DHASH_RFETCHDONE;
-  chordID myID = host_node->my_ID ();
-  res_arg->source.r = host_node->chordnode->locations->getaddress (myID);
-  res_arg->source.x = host_node->my_ID ();
-  res_arg->hops = rarg->hops + 1;
-  host_node->chordnode->locations->cacheloc (return_address.x, 
-					     return_address.r);
-  
-  int n = (rarg->len + rarg->start < val->len) ? 
-    rarg->len : val->len - rarg->start;
-  
-  res_arg->data.res.setsize (n);
-  res_arg->data.attr.size = val->len;
-  res_arg->data.offset = rarg->start;
-  res_arg->data.source = host_node->my_ID ();
-  
-  memcpy (res_arg->data.res.base (), 
-	  (char *)val->value + rarg->start, 
-	  n);
-
-  /* statistics */
-  keys_served++;
-  bytes_served += n;
-  
-  dhash_stat *done_res = New dhash_stat;
-  doRPC (return_address.x, dhash_program_1, DHASHPROC_FINISHRECURS, 
-	 res_arg, done_res,
-	 wrap (this, &dhash::fetchrecurs_sent_data, done_res));
-
-  dhash_stat rres = DHASH_OK;
-  if (rarg->nonce)
-    dhash_reply (rpc_id, DHASHPROC_FETCHRECURS, &rres);
-  delete rarg;
-}
-
-void
-dhash::fetchrecurs_sent_data (dhash_stat *done_res, clnt_stat err)
-{
-  if (err || (*done_res != DHASH_OK)) warn << "fr_sent_data: error\n";
-  delete done_res;
-}
-
-void
-dhash::fetchiter_svc_cb (long xid, dhash_fetch_arg *arg,
+dhash::fetchiter_svc_cb (svccb *sbp, s_dhash_fetch_arg *arg,
 			 ptr<dbrec> val, dhash_stat err) 
 {
   dhash_fetchiter_res *res = New dhash_fetchiter_res (DHASH_CONTINUE);
@@ -468,14 +253,13 @@ dhash::fetchiter_svc_cb (long xid, dhash_fetch_arg *arg,
     bytes_served += n;
   }
   
-  dhash_reply (xid, DHASHPROC_FETCHITER, res);
+  sbp->reply (res);
   delete res;
-  delete arg;
 }
 
 void
-dhash::storesvc_cb(long xid,
-		   dhash_insertarg *arg,
+dhash::storesvc_cb(svccb *sbp,
+		   s_dhash_insertarg *arg,
 		   dhash_stat err) {
   
   warnt("DHASH: STORE_replying");
@@ -488,9 +272,7 @@ dhash::storesvc_cb(long xid,
     res->resok->done = (err == DHASH_OK);
   }
 
-  dhash_reply (xid, DHASHPROC_STORE, res);
-  delete res;
-  delete arg;
+  sbp->reply (res);
 }
 
 void
@@ -533,9 +315,10 @@ dhash::transfer_initial_keys ()
   chordID succ = host_node->my_succ ();
   if (succ ==  host_node->my_ID ()) return;
 
-  ptr<dhash_getkeys_arg> arg = New refcounted<dhash_getkeys_arg>;
+  ptr<s_dhash_getkeys_arg> arg = New refcounted<s_dhash_getkeys_arg>;
   arg->pred_id = host_node->my_ID ();
-  
+  arg->v.n = succ;
+
   dhash_getkeys_res *res = New dhash_getkeys_res (DHASH_OK);
   doRPC(succ, dhash_program_1, DHASHPROC_GETKEYS, 
 			      arg, res,
@@ -708,7 +491,8 @@ dhash::transfer_fetch_cb (chordID to, chordID key, store_status stat,
     unsigned int off = 0;
     do {
       dhash_storeres *res = New dhash_storeres (DHASH_OK);
-      ptr<dhash_insertarg> i_arg = New refcounted<dhash_insertarg> ();
+      ptr<s_dhash_insertarg> i_arg = New refcounted<s_dhash_insertarg> ();
+      i_arg->v.n = to;
       i_arg->key = key;
       i_arg->offset = off;
       int remain = (off + mtu <= static_cast<unsigned long>(data->len)) ? 
@@ -732,7 +516,7 @@ dhash::transfer_fetch_cb (chordID to, chordID key, store_status stat,
 
 void
 dhash::transfer_store_cb (callback<void, dhash_stat>::ref cb, 
-			  dhash_storeres *res, ptr<dhash_insertarg> i_arg,
+			  dhash_storeres *res, ptr<s_dhash_insertarg> i_arg,
 			  chordID to, clnt_stat err) 
 {
   if (err) 
@@ -743,12 +527,12 @@ dhash::transfer_store_cb (callback<void, dhash_stat>::ref cb,
 					       res->pred->p.r);
 					       
     doRPC(res->pred->p.x, 
-				dhash_program_1, DHASHPROC_STORE, 
-				i_arg, nres,
-				wrap(this, 
-				     &dhash::transfer_store_cb, 
-				     cb, nres, i_arg,
-				     res->pred->p.x));
+	  dhash_program_1, DHASHPROC_STORE, 
+	  i_arg, nres,
+	  wrap(this, 
+	       &dhash::transfer_store_cb, 
+	       cb, nres, i_arg,
+	       res->pred->p.x));
   } else if (res->resok->done)
     cb (res->status);
 
@@ -759,10 +543,11 @@ void
 dhash::get_key (chordID source, chordID key, cbstat_t cb) 
 {
   dhash_fetchiter_res *res = New dhash_fetchiter_res (DHASH_OK);
-  ptr<dhash_fetch_arg> arg = New refcounted<dhash_fetch_arg>;
+  ptr<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg>;
   arg->key = key; 
   arg->len = MTU;  
   arg->start = 0;
+  arg->v.n = source;
 
   doRPC(source, dhash_program_1, DHASHPROC_FETCHITER, 
 			      arg, res,
@@ -788,7 +573,8 @@ dhash::get_key_initread_cb (cbstat_t cb, dhash_fetchiter_res *res,
     unsigned int *read = New unsigned int(res->compl_res->res.size ());
     unsigned int offset = *read;
     do {
-      ptr<dhash_fetch_arg> arg = New refcounted<dhash_fetch_arg>;
+      ptr<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg>;
+      arg->v.n = source;
       arg->key = key;
       arg->len = (offset + MTU < res->compl_res->attr.size) ? 
 	MTU : res->compl_res->attr.size - offset;
@@ -873,7 +659,7 @@ dhash::fetch_cb (cbvalue cb, ptr<dbrec> ret)
 
 
 void 
-dhash::store (dhash_insertarg *arg, cbstore cb)
+dhash::store (s_dhash_insertarg *arg, cbstore cb)
 {
   store_state *ss = pst[arg->key];
 
@@ -1059,33 +845,12 @@ dhash::cache_flush_cb (int err) {
   if (err) warn << "err flushing from cache\n";
 }
 
-// - RPC 
-
-void
-dhash::dhash_reply (long xid, unsigned long procno, void *res) 
-{
-  xdrproc_t proc = dhash_program_1.tbl[procno].xdr_res;
-  assert (proc);
-
-  xdrsuio x (XDR_ENCODE);
-  if (!proc (x.xdrp (), static_cast<void *> (res)))
-    fatal << "failed to marshall result\n";
-
-  size_t marshalled_len = x.uio ()->resid ();
-  char *marshalled_data = suio_flatten (x.uio ());
-
-  host_node->chordnode->locations->reply(xid, marshalled_data, 
-					 marshalled_len);
-  delete marshalled_data;
-}
 
 void
 dhash::doRPC (chordID ID, rpc_program prog, int procno,
 	      ptr<void> in, void *out, aclnt_cb cb) 
 {
-  chordID from = host_node->my_ID ();
-  host_node->chordnode->doRPC(from,
-			      ID, prog, procno,
+  host_node->chordnode->doRPC(ID, prog, procno,
 			      in, out, cb);
 }
 

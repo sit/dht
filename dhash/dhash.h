@@ -129,7 +129,6 @@ class dhashgateway {
   bool straddled (route path, chordID &k);
   void dispatch (svccb *sbp);
 
-  void lookup_res_cb (svccb *sbp, dhash_fetchrecurs_res *res, clnt_stat err);
   void lookup_iter_cb (svccb *sbp, 
 		       dhash_fetchiter_res *res,
 		       route path,
@@ -150,13 +149,13 @@ class dhashgateway {
   void insert_findsucc_cb (svccb *sbp, ptr<dhash_insertarg> item, chordID succ,
 			   route path, chordstat err);
   void insert_store_cb(svccb *sbp,  dhash_storeres *res,
-		       ptr<dhash_insertarg> item,
+		       ptr<s_dhash_insertarg> item,
 		       chordID source,
 		       clnt_stat err);
 
   void transfer_cb (chordID key, svccb *sbp, dhash_fetchiter_res *res, clnt_stat err);
   void send_cb (svccb *sbp, dhash_storeres *res, 
-		      chordID source, clnt_stat err);
+		      ptr<s_dhash_insertarg> iarg, clnt_stat err);
 
   void cache_on_path (chordID key, route path);
   void send_block (chordID key, chordID to, store_status stat);
@@ -193,26 +192,15 @@ class dhash {
   void doRPC (chordID ID, rpc_program prog, int procno,
 	      ptr<void> in, void *out, aclnt_cb cb);
 
-  void dhash_reply (long xid, unsigned long procno, void *res);
+  void dispatch (svccb *sbp);
 
-  void dispatch (unsigned long, chord_RPC_arg *, unsigned long);
-  void fetchsvc_cb (long xid, dhash_fetch_arg *arg, ptr<dbrec> val, dhash_stat err);
-  void storesvc_cb (long xid, dhash_insertarg *arg, dhash_stat err);
-  
+  void storesvc_cb (svccb *sbp, s_dhash_insertarg *arg, dhash_stat err);
   void fetch_cb (cbvalue cb,  ptr<dbrec> ret);
-
-  void fetchiter_svc_cb (long xid, dhash_fetch_arg *farg,
+  void fetchiter_svc_cb (svccb *sbp, s_dhash_fetch_arg *farg,
 			 ptr<dbrec> val, dhash_stat stat);
 
-  void fetchrecurs_havedata_cb (unsigned long rpc_id,
-				dhash_recurs_arg *rarg,
-				unsigned int nonce,
-				chord_node return_address,
-				ptr<dbrec> val, dhash_stat err);
-  void fetchrecurs_sent_data (dhash_stat *done_res, clnt_stat err);
-  void fetchrecurs_continue (dhash_fetchrecurs_res *res, clnt_stat err);
 
-  void store (dhash_insertarg *arg, cbstore cb);
+  void store (s_dhash_insertarg *arg, cbstore cb);
   void store_cb(store_status type, chordID id, cbstore cb, int stat);
   void store_repl_cb (cbstore cb, dhash_stat err);
 
@@ -250,7 +238,7 @@ class dhash {
 			  callback<void, dhash_stat>::ref cb,
 			  ptr<dbrec> data, dhash_stat err);
   void transfer_store_cb (callback<void, dhash_stat>::ref cb, 
-			  dhash_storeres *res, ptr<dhash_insertarg> i_arg,
+			  dhash_storeres *res, ptr<s_dhash_insertarg> i_arg,
 			  chordID to, clnt_stat err);
 
   void get_key (chordID source, chordID key, cbstat_t cb);

@@ -68,47 +68,31 @@ dhashgateway::dispatch (svccb *sbp)
       
       dhash_fetch_arg *farg = sbp->template getarg<dhash_fetch_arg> ();
       
-      ptr<dhash_fetch_arg> arg = New refcounted<dhash_fetch_arg> (*farg);
+      ptr<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg> ();
+      arg->key = farg->key;
+      arg->start = farg->start;
+      arg->len = farg->len;
+      arg->v.n = clntnode->clnt_ID ();
 
       dhash_fetchiter_res *i_res = New dhash_fetchiter_res (DHASH_CONTINUE);
       route path;
       path.push_back (clntnode->clnt_ID ());
-      doRPC (path[0], dhash_program_1, DHASHPROC_FETCHITER, arg,i_res,
+      doRPC (path[0], dhash_program_1, DHASHPROC_FETCHITER, arg, i_res,
 		       wrap(this, &dhashgateway::lookup_iter_cb, 
 			    sbp, i_res, path, 0));
     } 
     break;
-  case DHASHPROC_LOOKUP_R:
-    {
-      warnt ("DHASH: recursive lookup");
 
-      dhash_fetch_arg *rfarg = sbp->template getarg<dhash_fetch_arg> ();
-      ptr<dhash_recurs_arg> arg = New refcounted<dhash_recurs_arg>;
-      arg->key = rfarg->key;
-      arg->start = rfarg->start;
-      arg->len = rfarg->len;
-      arg->hops = 0;
-      arg->return_address.x = bigint (0);
-      arg->return_address.r.hostname = "";
-      arg->return_address.r.port = 0;
-      arg->nonce = 0;
-
-      chordID next = clntnode->lookup_closestpred (arg->key);
-
-      dhash_fetchrecurs_res *res = New dhash_fetchrecurs_res ();
-      doRPC (next, dhash_program_1, DHASHPROC_FETCHRECURS, arg, res,
-	     wrap (this, &dhashgateway::lookup_res_cb,
-		   sbp, res));
-
-      
-    }
-    break;
   case DHASHPROC_TRANSFER:
     {
       warnt ("DHASH: transfer_request");
       dhash_transfer_arg *targ = sbp->template getarg<dhash_transfer_arg>();
-      ptr<dhash_fetch_arg> farg = 
-	New refcounted<dhash_fetch_arg>(targ->farg);
+      ptr<s_dhash_fetch_arg> farg = New refcounted<s_dhash_fetch_arg> ();
+      farg->key = targ->farg.key;
+      farg->start = targ->farg.start;
+      farg->len = targ->farg.len;
+      farg->v.n = targ->source;
+
       dhash_fetchiter_res *res = New dhash_fetchiter_res (DHASH_OK);
       doRPC (targ->source, dhash_program_1, DHASHPROC_FETCHITER, 
 		       farg, res, 
@@ -120,13 +104,20 @@ dhashgateway::dispatch (svccb *sbp)
     {
       warnt ("DHASH: send_request");
       dhash_send_arg *sarg = sbp->template getarg<dhash_send_arg>();
-      ptr<dhash_insertarg> iarg = 
-	New refcounted<dhash_insertarg> (sarg->iarg);
+      ptr<s_dhash_insertarg> iarg = 
+	New refcounted<s_dhash_insertarg> ();
+      iarg->v.n = sarg->dest;
+      iarg->key = sarg->iarg.key;
+      iarg->data = sarg->iarg.data;
+      iarg->offset = sarg->iarg.offset;
+      iarg->type = sarg->iarg.type;
+      iarg->attr = sarg->iarg.attr;
+
       dhash_storeres *res = New dhash_storeres (DHASH_OK);
       doRPC (sarg->dest, dhash_program_1, DHASHPROC_STORE,
 		       iarg, res,
 		       wrap (this, &dhashgateway::send_cb,
-			     sbp, res, sarg->dest));
+			     sbp, res, iarg));
     }
     break;
   case DHASHPROC_INSERT:
@@ -135,8 +126,9 @@ dhashgateway::dispatch (svccb *sbp)
       dhash_insertarg *item = sbp->template getarg<dhash_insertarg> ();
       ptr<dhash_insertarg> p_item = New refcounted<dhash_insertarg> (*item);
       chordID n = item->key;
-      clntnode->find_successor (n, wrap(this, &dhashgateway::insert_findsucc_cb,
-				    sbp, p_item));
+      clntnode->find_successor (n, 
+				wrap(this, &dhashgateway::insert_findsucc_cb,
+				     sbp, p_item));
     }
     break;
   case DHASHPROC_ACTIVE:
@@ -154,25 +146,6 @@ dhashgateway::dispatch (svccb *sbp)
 }
 
 void
-dhashgateway::lookup_res_cb (svccb *sbp, dhash_fetchrecurs_res *res, clnt_stat err) {
-
-  dhash_res *fres = New dhash_res (DHASH_OK);
-  if (res->status == DHASH_RFETCHDONE) {
-    fres->resok->res = res->compl_res->res;
-    fres->resok->offset = res->compl_res->offset;
-    fres->resok->attr = res->compl_res->attr;
-    fres->resok->hops = res->compl_res->hops;
-    fres->resok->source = res->compl_res->source;
-  } else
-    *fres->hops = res->compl_res->hops;
-
-  sbp->reply (fres);
-  
-  delete fres;
-  delete res;
-}
-
-void
 dhashgateway::insert_findsucc_cb(svccb *sbp, ptr<dhash_insertarg> item,
 				chordID succ, route path,
 				chordstat err) {
@@ -183,19 +156,28 @@ dhashgateway::insert_findsucc_cb(svccb *sbp, ptr<dhash_insertarg> item,
     *res.hops = path.size()-1;
     sbp->reply(&res);
   } else {
+    
+    ptr<s_dhash_insertarg> s_item = 
+      New refcounted<s_dhash_insertarg> ();
+    s_item->v.n = succ;
+    s_item->key = item->key;
+    s_item->data = item->data;
+    s_item->offset = item->offset;
+    s_item->type = item->type;
+    s_item->attr = item->attr;
 
     warnt("DHASH: insert_after_dofindsucc|issue_STORE");
 
     dhash_storeres *res = New dhash_storeres(DHASH_OK);
-    doRPC(succ, dhash_program_1, DHASHPROC_STORE, item, res,
-		wrap(this, &dhashgateway::insert_store_cb, sbp, res, item, succ));
+    doRPC(succ, dhash_program_1, DHASHPROC_STORE, s_item, res,
+		wrap(this, &dhashgateway::insert_store_cb, sbp, res, s_item, succ));
     
   }
 }
 
 void
 dhashgateway::insert_store_cb(svccb *sbp, dhash_storeres *res, 
-			     ptr<dhash_insertarg> item,
+			     ptr<s_dhash_insertarg> item,
 			     chordID source,
 			     clnt_stat err )
 {
@@ -273,7 +255,10 @@ dhashgateway::lookup_iter_cb (svccb *sbp,
 			     clnt_stat err) 
 {
   dhash_fetch_arg *arg = sbp->template getarg<dhash_fetch_arg> ();
-  ptr<dhash_fetch_arg> rarg = New refcounted<dhash_fetch_arg>(*arg);
+  ptr<s_dhash_fetch_arg> rarg = New refcounted<s_dhash_fetch_arg>();
+  rarg->key = arg->key;
+  rarg->start = arg->start;
+  rarg->len = arg->len;
 
   if (err) {
     /* CASE I */
@@ -295,6 +280,7 @@ dhashgateway::lookup_iter_cb (svccb *sbp,
       dhash_fetchiter_res *nres = New dhash_fetchiter_res (DHASH_CONTINUE);
       /* assumes an in-order RPC transport, otherwise retry
 	 might reach prev before alert can update tables*/
+      rarg->v.n = plast;
       doRPC (plast, dhash_program_1, DHASHPROC_FETCHITER, 
 		       rarg, nres,
 		       wrap(this, &dhashgateway::lookup_iter_cb, 
@@ -323,7 +309,7 @@ dhashgateway::lookup_iter_cb (svccb *sbp,
       path.push_back (next);
       assert (path.size () < 1000);
 
-      //      warn << clntnode->clnt_ID () << " " << arg->key  << " " << next << "\n";
+      rarg->v.n = next;
       doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, 
 	     rarg, nres,
 	     wrap(this, &dhashgateway::lookup_iter_cb, 
@@ -368,18 +354,15 @@ dhashgateway::transfer_cb (chordID key, svccb *sbp,
 
 void
 dhashgateway::send_cb (svccb *sbp, dhash_storeres *res, 
-		      chordID source, clnt_stat err)
+		      ptr<s_dhash_insertarg> iarg, clnt_stat err)
 {
   if (err) res->set_status (DHASH_RPCERR);
   else if (res->status == DHASH_RETRY) {
-    dhash_send_arg *sarg = sbp->template getarg<dhash_send_arg>();
-    ptr<dhash_insertarg> iarg = 
-      New refcounted<dhash_insertarg> (sarg->iarg);
     dhash_storeres *nres = New dhash_storeres (DHASH_OK);
     clntnode->locations->cacheloc (nres->pred->p.x, nres->pred->p.r);
     doRPC (nres->pred->p.x, dhash_program_1, DHASHPROC_STORE,
 		     iarg, nres, wrap (this, &dhashgateway::send_cb,
-				       sbp, nres, sarg->dest));
+				       sbp, nres, iarg));
   } else if (res->status == DHASH_OK) {
     sbp->reply (res);
   }
@@ -531,7 +514,8 @@ dhashgateway::send_block (chordID key, chordID to, store_status stat)
   unsigned int off = 0;
   do {
     dhash_storeres *res = New dhash_storeres (DHASH_OK);
-    ptr<dhash_insertarg> i_arg = New refcounted<dhash_insertarg> ();
+    ptr<s_dhash_insertarg> i_arg = New refcounted<s_dhash_insertarg> ();
+    i_arg->v.n = to;
     i_arg->key = key;
     i_arg->offset = off;
     int remain = (off + mtu <= static_cast<unsigned long>(ss->size)) ? 
@@ -541,7 +525,6 @@ dhashgateway::send_block (chordID key, chordID to, store_status stat)
     i_arg->type = stat;
     memcpy(i_arg->data.base (), ss->buf + off, remain);
     
-    warn << "DHASH STORE " << key << " " << off << "+" << remain << " on " << to << "\n";
     doRPC(to, dhash_program_1, DHASHPROC_STORE, 
 		    i_arg, res,
 		    wrap(this, &dhashgateway::send_store_cb, res));
@@ -561,8 +544,7 @@ void
 dhashgateway::doRPC (chordID ID, rpc_program prog, int procno,
 		    ptr<void> in, void *out, aclnt_cb cb) 
 {
-  chordID from = clntnode->clnt_ID ();
-  clntnode->doRPC (from, ID, prog, procno,
+  clntnode->doRPC (ID, prog, procno,
 		   in, out, cb);
 }
 
