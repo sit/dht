@@ -299,8 +299,10 @@ locationtable::insert (const chordID &n,
 {
     
   ptr<location> loc = lookup (n);
-  if (loc != NULL)
+  if (loc != NULL) {
+    loc->alive = true;
     return true;
+  }
     
   net_address r;
   r.hostname = s;
