@@ -18,10 +18,11 @@ public:
   virtual ~Node();
 
   IPAddress ip() { return _ip; }
-  Channel *pktchan() { return _pktchan; }
-  Channel *protchan() { return _protchan; }
   Protocol *getproto(string p) { return _protmap[p]; }
   virtual bool sendPacket(IPAddress, Packet*);
+
+  Channel *pktchan() { return _pktchan; }
+  Channel *protchan() { return _protchan; }
 
 private:
   virtual void run();

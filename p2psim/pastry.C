@@ -1,9 +1,8 @@
 #include "pastry.h"
 #include "packet.h"
 #include <iostream>
+#include <algorithm>
 #include "p2psim.h"
-#include <stdlib.h>
-#include <stdio.h>
 using namespace std;
 
 Pastry::Pastry(Node *n) : Protocol(n),
@@ -22,6 +21,7 @@ Pastry::Pastry(Node *n) : Protocol(n),
 Pastry::~Pastry()
 {
 }
+
 
 void
 Pastry::join(Args *a)
@@ -89,22 +89,33 @@ Pastry::get_digit(NodeID n, unsigned d)
 void
 Pastry::route(NodeID *D, void*)
 {
-  IPAddress nexthop;
+  IPAddress nexthop = 0;
 
-  // if in leaf set
-  //   forward to the node that is closes
-  //   return;
-  //
-
-  // if it's in our routing table, forward it.
-  unsigned l = shared_prefix_len(*D, _id);
-  if((nexthop = _rtable[get_digit(*D, l)][l].second)) {
-    doRPC(nexthop, &Pastry::route, D, (void*)0);
-    return;
+  // in leaf set?
+  LS::iterator pos;
+  if((*(pos = min_element(_lleafset.begin(), _lleafset.end()))) <= *D &&
+     (*(pos = max_element(_hleafset.begin(), _lleafset.end()))) > *D)
+  {
+    RTEntrySmallestDiff lsd = for_each(_lleafset.begin(), _lleafset.end(), RTEntrySmallestDiff(*D));
+    RTEntrySmallestDiff usd = for_each(_hleafset.begin(), _hleafset.end(), RTEntrySmallestDiff(*D));
+    nexthop = lsd.ip < usd.ip ? lsd.ip : usd.ip;
+  }
+  
+  // not in leaf set?  try the routing table.
+  if(!nexthop) {
+    unsigned l = shared_prefix_len(*D, _id);
+    IPAddress ip;
+    if((ip = _rtable[get_digit(*D, l)][l].second))
+      nexthop = ip;
   }
 
-  // handle the so-called rare case.
-  // forward to T \in L u R u M such that
-  // shared_prefix_len(T, D) >= l
-  // |T - D| < |A - D|
+
+  // not in routing table either?
+  if(!nexthop) {
+    // handle the so-called rare case.
+    // forward to T \in L u R u M such that
+    // shared_prefix_len(T, D) >= l
+    // |T - D| < |A - D|
+  }
+  doRPC(nexthop, &Pastry::route, D, (void*)0);
 }

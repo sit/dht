@@ -4,6 +4,7 @@
 #include "protocol.h"
 #include "node.h"
 #include <vector>
+#include <set>
 using namespace std;
 
 class Pastry : public Protocol {
@@ -35,7 +36,12 @@ private:
   // ROUTING TABLE
   //
   // routing table entry
-  typedef pair<NodeID, IPAddress> RTEntry;
+  class RTEntry : public pair<NodeID, IPAddress>  { public:
+    bool operator<= (const NodeID n) const { return first <= n; }
+    bool operator< (const NodeID n) const { return first < n; }
+    bool operator>= (const NodeID n) const { return first >= n; }
+    bool operator> (const NodeID n) const { return first > n; }
+  };
 
   // single row in a routing table
   typedef vector<RTEntry> RTRow;
@@ -51,6 +57,25 @@ private:
   //
   // LEAF SET
   //
+  typedef set<RTEntry> LS;
+  LS _lleafset; // lower half of leaf set
+  LS _hleafset; // higher half of leaf set
+
+  // finds IP address such that (D - RTEntry) is minimal
+  class RTEntrySmallestDiff { public:
+    RTEntrySmallestDiff(NodeID D) : _D(D), _smallestdiff(-1) {}
+    public:
+      void operator()(const Pastry::RTEntry &rt) {
+        if((_D - rt.first) < _smallestdiff) {
+          _smallestdiff = (_D - rt.first);
+          ip = rt.second;
+        }
+      }
+      IPAddress ip;
+    private:
+      NodeID _D;
+      NodeID _smallestdiff;
+  };
 };
 
 #endif // __PASTRY_H
