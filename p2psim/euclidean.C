@@ -43,7 +43,7 @@ Euclidean::parse(ifstream &ifs)
 
     // nodeid, coordinates, nodetype, and at least one protocol
     if(words.size() < 4) {
-      cerr << "provide nodeid, coordinates, nodeid, and at least one protocol per line" << endl;
+      cerr << "provide nodeid, coordinates, Node, and at least one protocol per line" << endl;
       continue;
     }
 

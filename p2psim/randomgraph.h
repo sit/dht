@@ -17,39 +17,18 @@ using namespace std;
 
 #include "topology.h"
 #include "node.h"
+#include "dvgraph.h"
 
-class RandomGraph : public Topology {
+class RandomGraph : public DVGraph {
 public:
   RandomGraph();
   ~RandomGraph();
   
   virtual void parse(ifstream&);
-  virtual latency_t latency(Node*, Node*);
 
 private:
   static const int degree = 5;       // links per node
   static const int maxlatency = 200; // link latency 0..maxlatency
-  int _initialized;
-  int _n; // number of nodes
-  
-  // we index nodes starting at zero.
-  map<IPAddress, int> _ip2i;
-  vector<Node*> _i2node;
-
-  // 2-d matrix of link delays, -1 for none
-  short *_links;
-  short& links(int i, int j) { return _links[i*_n + j]; }
-  
-  // per-node forwarding tables
-  struct Entry {
-    int _next;
-    int _metric;
-    int _hops;
-  };
-  Entry *_routes;
-  Entry& routes(int i, int j) { return _routes[i*_n + j]; }
-
-  void initialize();
 };
 
 #endif //  __RANDOMGRAPH_H
