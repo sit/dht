@@ -1,14 +1,23 @@
 \section{Evaluation}
 
-We plan to run real DNS traces on a simulated network to
-measure load balancing.  
-We cannot perform a fair simulation of latency so we will do an
-analysis based on counting round-trips and combining that
-with real latency to current root DNS servers.
+\subsection{Experimental Setup}
+
+We ran real DNS traces on a simulated DDNS network
+of servers to measure load balancing. We set up a
+Chord ring of 1000 nodes and seeded the ring with 
+real DNS data. Then performed lookup requests.
+
+\subsection{Load Balance}
 
 Do a measure of how long it takes to converge to good load 
 balancing when there is a burst of lookups for 1 (or more)
 popular names. Compare that to the slashdot effects now.
+
+\subsection{Latency}
+
+We cannot perform a fair measurement of latency so we will do an
+analysis based on counting number of hops between servers
+and combining that with real latency to current root DNS servers.
 
 DDNS is not going to disappear without an answer for a lookup,
 unlike current DNS. So we can't really compare this, but should

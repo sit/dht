@@ -67,26 +67,30 @@ algorithms, thus avoiding such hot spots.
 DDNS acts as a replacement to name servers, so there is no need 
 to manage such servers, thereby eliminating all of 
 the configuration problems and incorrect name server mapping 
-({\tt NS}-records) mentioned above. 
+({\tt NS}-records) mentioned above. It seems we will no longer need
+{\tt NS}-records because all information is stored and replicated
+on DDNS.
 The Chord protocol is robust against server failures 
 (host down or lost connection),
 hence DDNS can reduce errors due to poor network connectivity as well.
 
-Every DNS lookup is fed directly to a group of servers that form
-the Chord ring. Treat each lookup as flat.
+Every DNS lookup is fed directly to a server that is part of 
+the Chord ring. Each key is treated as a flat name. DDNS
+will store/lookup a key independent of its administrative 
+affiliation. It will always return an answer 
+(positive or negative) to a lookup. 
  
-Even-handed discussion.\\
 Distributing DNS data in a peer-to-peer network does have some
-disadvantages.In particular, we cannot easily dynamically 
-generate DNS responses. We discuss various solutions to 
-this problem in the implementation section.
-Separating the mechanism to lookup DNS information from the one 
-in which to verify it can increase performance and flexibility 
+disadvantages. Separating enforcement of name-space control 
+policy from the mechanism to lookup DNS information 
+can increase performance and flexibility 
 in designing the name resolution system. Although it can open up 
-security holes. More cons...
-
-
+security holes. 
+In addition, we cannot easily dynamically 
+generate DNS responses. We further discuss these issues 
+in Section~\ref{sec:discuss}.
 %**How to control caching on others name servers...** --obsolete b/c we're 
 %replacing name servers.
 
+%The next section describes related work.
 

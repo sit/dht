@@ -32,54 +32,97 @@ becomes apparent.
 
 All RRs for a domain name and record type pair are stored 
 as a single record (RRSet)
-indexed by {\tt <domain name, type>}.
+indexed by {\tt <domain~name, type>}.
 All transactions are done on the granularity
 of RRSets. The reason for grouping RRs is because it 1)
-guarantees that all RRs for a {\tt <domain name, type>} will reside on
+guarantees that all RRs for a {\tt <domain~name, type>} will reside on
 the same server, 2) complements the verification scheme
 of DNSSEC, and 3) results in a simple
 and functional design altogether. Most lookups will specify
 a name accompanied by a type, so a typical DNS lookup will only need
 to retrieve data from one server.
 
-\subsection{Stores}
-
-To store a DDNS record, the owner of that record 
-assembles all the RRs associated with the domain name and type,
-and sends a {\tt ddns-store(name, type, RRSet)} message to DDNS. 
-DDNS calculates the hash of the {\tt <domain name, type>} and sends
-a {\tt dhash-store(hash, data)} RPC to DHash, using the
-RRSet as the data.
-
-\subsection{Lookups}
-
-To perform a DNS lookup, a client will send a 
-{\tt ddns-lookup(name, type)} message to {DDNS}.
-DDNS 
-calculates the hash of the {\tt <domain name, type>} sends a
-{\tt dhash-lookup(hash)} RPC to DHash. Upon receiving
-the response, DDNS returns the corresponding RRSet to the 
-client or report an error of the {\tt <domain name, type>} does 
-not exist. Once a lookup request is sent to DDNS, it will 
-always return an answer, whether it be positive or not. 
-This is because DDNS does not depend on the information 
-in the {\tt NS}-record to track down the information for a key.
-If a {\tt <domain name, type>} does not exist in the DDNS database,
-then its RRSet does not exist in DNS.
-
 \subsection{DDNS Record Verification}
 
 Since records are being served from arbitrary hosts rather
 than the hosts responsible for the domain, 
-we use authentication scheme in 
+we use the authentication and key distribution schemes in 
 DNS Security Extensions (DNSSEC)~\cite{dnssec:rfc} to
 verify all records before returning them. DNSSEC stores the 
-signature of the owner of an RRSet in a SIG RR. Every RRSet
-includes a SIG RR corresponding to it. Keys for a domain can 
-be retrieved via a lookup for the KEY RR, which is treated 
+signature of the owner of an RRSet in a {\tt SIG} RR. Every RRSet
+includes a {\tt SIG} RR corresponding to it. Keys for a domain can 
+be retrieved via a lookup for the {\tt KEY} RR, which is treated 
 like any other RR type, except that it is signed with the 
 key of the higher-level domain.
- 
-% We use one {\tt SIG RR} to carry the owner's signature
-% of the entire DDNS record, since we always transmit data on
-% the granularity of DDNS records.
+
+\subsection{Stores}
+
+To store a DDNS record, the owner of that record 
+assembles all the RRs associated with the domain name and type, 
+signs the RRSet with its private key, append the signature to 
+the RRSet (as a {\tt SIG} RR),
+and sends a {\tt ddns-store(dname, type, RRSet)} message to a 
+DDNS server.
+The DDNS daemon running on the server verifies that 
+the signatures checks with the data in the 
+rest of the RRSet using the public key of the owner of {\tt dname},
+calculates the hash of the {\tt <dname, type>} and sends
+a {\tt dhash-store(hash, data)} RPC to DHash, using the
+RRSet as the data. 
+
+\subsection{Lookups}
+
+To perform a DNS lookup, a client will send a 
+DNS lookup message to a DDNS server, which will 
+translate it into a
+{\tt ddns-lookup(dname, type)} message and pass it 
+to the DDNS daemon.
+The daemon 
+calculates the hash of the {\tt <dname, type>} sends a
+{\tt dhash-lookup(hash)} RPC to DHash. Upon receiving
+the response, DDNS verifies that the information in the RRSet 
+checks out with the signature in the SIG RR using the 
+the public key of {\tt dname}'s owner, and
+returns the corresponding RRSet to the 
+client or report an error of the {\tt <dname, type>} does 
+not exist. Once a lookup request is sent to DDNS, it will 
+always return an answer, whether it be positive or not. 
+This is because DDNS does not depend on the information 
+in the {\tt NS}-record to track down the information for a key.
+If a {\tt <dname, type>} does not exist in the DDNS database,
+then its RRSet does not exist in DNS. 
+
+\subsection{Discussion}
+\label{sec:discuss}
+
+XXXX Even-handed discussion. XXXX\\
+
+Distributing DNS data in a peer-to-peer network 
+increases performance and flexibility 
+in designing the name resolution system. 
+
+-storing RRSets now take more time than in the current
+DNS. b/c not local update anymore.\\
+-updating RRSets may be a pain, esp when there is 
+caching in the ring. Have to purge every old copy.\\
+-what if the root private key is compromised?\\
+
+We have been assuming that DNS queries can be predicted in advance,
+and responses stored in the network.
+On the Internet, DNS data is sometimes dynamically generated in response
+to the particular query.  
+For example, some firewalls will respond with mail exchanger ({\tt MX}) records
+for nonexistant host names, to avoid publishing internal host names.
+For example, looking up {\tt 1234abcd.cs.bell-labs.com}'s {\tt MX}-record
+succeeds even though {\tt 1234abcd.cs.bell-labs.com} does not exist.
+As another more insidious example, content distribution services like 
+Akamai~\cite{akamai}
+route web requests to nearby servers by modifying DNS responses in response
+to the location of the client in the network.
+
+The {\tt MX}-record problem can be solved by walking up the hierarchy.
+The Akamai problem is harder, but Akamai is breaking one of the 
+central tenets of DNS --- the same answers to everyone --- as a
+result we do not feel responsible to solve this problem. 
+XXX Hari disagree with the 'central tenets' claim. XXX
+

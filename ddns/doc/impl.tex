@@ -1,17 +1,32 @@
 \section{Implementation}
 
-\subsection{DDNS Daemon}
-The DDNS daemon 
-performs look-ups and stores of DDNS records
-by interacting with a Dhash server.
+\section{Clients to DDNS}
+
+DDNS is designed to work with existing DNS resolvers. 
+An application wishing to lookup a domain name calls
+the usual utility function (eg. {\tt gethostbyname()}). 
+The file which contains name servers to contact 
+(eg. {\tt /etc/resolv.conf}) is different, however.
+It will initially have one (or a few) IP address of
+a server participating in the DDNS system. The stub 
+resolver program sends requests to those servers,
+which translate requests into DDNS lookups,
+and pass them to the DDNS daemon.
+To prevent the case where the few servers on the 
+{\tt /etc/resolv.conf} list are down, separate process 
+running on the client machine will fill the list with
+more DDNS servers (through communication with the initial
+servers on the list). The probability of all servers
+on the list going down is very small.
 
 \subsection{DDNS Server}
 
+XXX Revise XXXX\\
 We plan to set up a DDNS server, running DDNS daemons,
 to serve some information for personal domains.
 The only difficult part about this is starting the signature
 verification tree, since the root servers don't store public
-key information. (For the purposes of our simulations,
+key information. (For the purposes of our experiments,
 we will invent a ``well-known'' public key for the DNS root.)
 To bootstrap ourselves,
 the NS record for a given domain to be served
@@ -26,22 +41,3 @@ it queries the root server to find the public key hash,
 performs a DHash lookup to find the DDNS record for {\tt host.dom.uvxyz.org},
 and then verifies it starting with the {\tt uvxyz.org} root.
 
-\subsection{Unresolved Issues}
-
-We have been assuming that DNS queries can be predicted in advance,
-and responses stored in the network.
-On the real internet, DNS data is sometimes dynamically generated in response
-to the particular query.  
-For example, some firewalls will respond with mail exchanger (MX) records
-for nonexistant host names, to avoid publishing internal host names.
-For example, looking up {\tt 1234abcd.cs.bell-labs.com}'s MX record
-succeeds even though {\tt 1234abcd.cs.bell-labs.com} does not exist.
-As another more insidious example, content distribution services like 
-Akamai~\cite{akamai}
-route web requests to nearby servers by modifying DNS responses in response
-to the location of the client in the network.
-
-The MX record problem can be solved by walking up the hierarchy.
-The Akamai problem is harder, but Akamai is breaking one of the 
-central tenets of DNS --- the same answers to everyone --- as a
-result we do not feel responsible to solve this problem.
