@@ -14,6 +14,7 @@ class vnode;
 class dhash;
 class route_factory;
 class dhash_block;
+class route_iterator;
 
 class dhashcli {
   ptr<vnode> clntnode;
@@ -95,7 +96,8 @@ private:
 			 clnt_stat err);
 
   void fetch_frag (rcv_state *rs);
-  
+
+  void retrieve2_hop_cb (chordID blockID, route_iterator *ci, bool done);
   void retrieve2_lookup_cb (chordID blockID,
 			    dhash_stat status, vec<chord_node> succs, route r);
   void retrieve2_fetch_cb (chordID blockID, u_int i,
@@ -105,7 +107,7 @@ private:
 
  public:
   dhashcli (ptr<vnode> node, dhash *dh, ptr<route_factory> r_factory, 
-	    bool do_cache, int ss_mode = 0);
+	    bool do_cache, int ss_mode = 1);
   void retrieve (chordID blockID, int options, cb_ret cb);
 
   void retrieve2 (chordID blockID, int options, cb_ret cb);

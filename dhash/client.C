@@ -35,6 +35,7 @@
 
 #include <chord_prot.h>
 #include <chord.h>
+#include <route.h>
 #include <location.h>
 
 #include "dhash_common.h"
@@ -304,9 +305,51 @@ dhashcli::retrieve2 (chordID blockID, int options, cb_ret cb)
     rs = New rcv_state (blockID);
     rs->callbacks.push_back (cb);
     rcvs.insert (rs);
+
+    route_iterator *ci = r_factory->produce_iterator_ptr (blockID);
+    ci->first_hop (wrap (this, &dhashcli::retrieve2_hop_cb, blockID, ci));
+#if 0    
     lookup (blockID, options,
 	    wrap (this, &dhashcli::retrieve2_lookup_cb, blockID));
+#endif /* 0 */    
   }
+}
+
+void
+dhashcli::retrieve2_hop_cb (chordID blockID, route_iterator *ci, bool done)
+{
+  vec<chord_node> cs = ci->successors ();
+  if (done) {
+    route r = ci->path ();
+    dhash_stat stat = ci->status () ? DHASH_CHORDERR : DHASH_OK;
+    delete ci;
+    retrieve2_lookup_cb (blockID, stat, cs, r);
+    return;
+  }
+  // Check to see if we already have enough in our successors.
+  if (server_selection_mode & 4) {
+    size_t left = 0;
+    // XXX + 2? geez.
+    if (cs.size () < dhash::NUM_DFRAGS + 2)
+      left = cs.size ();
+    else
+      left = cs.size () - (dhash::NUM_DFRAGS + 2);
+    for (size_t i = 1; i < left; i++) {
+      if (betweenleftincl (cs[i-1].x, cs[i].x, blockID)) {
+	cs.popn_front (i);
+	route r = ci->path ();
+	delete ci;
+	
+	chordID myID = clntnode->my_ID ();
+	trace << myID << ": retrieve (" << blockID << "): skipping " << i
+	      << " nodes.\n";
+	retrieve2_lookup_cb (blockID, DHASH_OK, cs, r);
+	return;
+      }
+    }
+  }
+  
+  ci->next_hop ();
 }
 
 void
@@ -426,7 +469,7 @@ dhashcli::retrieve2_lookup_cb (chordID blockID,
     return;
   }
 
-  if (server_selection_mode) {
+  if (server_selection_mode & 1) {
     // Store list of successors ordered by expected distance.
     // fetch_frag will pull from this list in order.
     modlogger ("orderer") << "ordering for block " << blockID << "\n";

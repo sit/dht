@@ -96,15 +96,20 @@ struct chord_testandfindarg {
   chordID failed_nodes<>;
 };
 
-struct chord_testandfindres_resok {
+struct chord_testandfindres_inrange {
   chord_node n<>;
+};
+
+struct chord_testandfindres_notinrange {
+  chord_node n;
+  chord_node succs<>;
 };
 
 union chord_testandfindres switch (chordstat status) {
  case CHORD_INRANGE:
-   chord_testandfindres_resok inrange;
+   chord_testandfindres_inrange inrange;
  case CHORD_NOTINRANGE:
-   chord_testandfindres_resok notinrange;
+   chord_testandfindres_notinrange notinrange;
  case CHORD_STOP:
    void;
  default:

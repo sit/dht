@@ -624,7 +624,7 @@ vnode_impl::dotestrange_findclosestpred (user_args *sbp, chord_testandfindarg *f
     for (unsigned int i=0; i < fa->failed_nodes.size (); i++)
       f.push_back (fa->failed_nodes[i]);
     chordID p;
-    if (server_selection_mode > 1) {
+    if (server_selection_mode & 2) {
       p = closestcoordpred (fa->x, convert_coords (sbp->transport_header ()),
 			    f);
     } else if (lookup_mode == CHORD_LOOKUP_PROXIMITY) {
@@ -635,9 +635,17 @@ vnode_impl::dotestrange_findclosestpred (user_args *sbp, chord_testandfindarg *f
     } else {
       p = lookup_closestpred (fa->x, f);
     }
-    res->notinrange->n.setsize (1);
-    bool ok = locations->get_node (p, &res->notinrange->n[0]);
+    bool ok = locations->get_node (p, &res->notinrange->n);
     assert (ok);
+    
+    ref<fingerlike_iter> iter = successors->get_iter ();
+    res->notinrange->succs.setsize (iter->size ());
+    size_t i = 0;
+    while (!iter->done ()) {
+      chordID n = iter->next ();
+      bool ok = locations->get_node (n, &res->notinrange->succs[i++]);
+      assert (ok);
+    }
   }
 
   if (fa->upcall_prog)  {
