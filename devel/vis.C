@@ -264,12 +264,7 @@ doRPCcb (chordID ID, int procno, dorpc_res *res, void *out, aclnt_cb cb, clnt_st
   
   nu->coords.clear ();
   for (unsigned int i = 0; i < res->resok->src_coords.size (); i++)
-    nu->coords.push_back (((float)res->resok->src_coords[i])/1000.0);
-
-
-  nu->coords.clear ();
-  for (unsigned int i = 0; i < res->resok->src_coords.size (); i++)
-    nu->coords.push_back (((float)res->resok->src_coords[i])/1000.0);
+    nu->coords.push_back (((float)res->resok->src_coords[i]));
 
   xdrmem x ((char *)res->resok->results.base (), 
 	    res->resok->results.size (), XDR_DECODE);

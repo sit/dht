@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.18 2003/03/13 23:38:37 jastr Exp $
+# $Id: Makefile.am,v 1.19 2003/03/19 03:05:10 fdabek Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -7,12 +7,15 @@ if GTK_AVAILABLE
 VIS = vis
 endif
 
-noinst_PROGRAMS = dbm typetest $(VIS) walk builddb dbdump findroute
+noinst_PROGRAMS = dbm typetest $(VIS) walk builddb dbdump findroute coords
 
 MYLDADD =  ../dhash/libdhash.a ../merkle/libmerkle.a ../svc/libsvc.la
 
 walk_SOURCES = walk.C
 walk_LDADD = $(MYLDADD) ../chord/libchord.a ../utils/libutil.a ../svc/libsvc.la  $(LDADD) 
+
+coords_SOURCES = walk_coords.C
+coords_LDADD = $(MYLDADD) ../chord/libchord.a ../utils/libutil.a ../svc/libsvc.la  $(LDADD) 
 
 builddb_SOURCES = builddb.C
 builddb_LDADD = ../sfsrodb/libsfsrodb.a ../chord/libchord.a ../utils/libutil.a $(DBLIB) $(MYLDADD) $(LDADD)
