@@ -408,6 +408,7 @@ dhash_impl::sync_cb ()
 {
   // warn << "** SYNC\n";
   db->sync ();
+  db->checkpoint ();
   keyhash_db->sync ();
   delaycb (synctm (), wrap (this, &dhash_impl::sync_cb));
 }
@@ -473,11 +474,24 @@ dhash_impl::dispatch (user_args *sbp)
       dhash_offer_arg *arg = sbp->template getarg<dhash_offer_arg> ();
       dhash_offer_res res (DHASH_OK);
       res.resok->accepted.setsize (arg->keys.size ());
+
+      //we'll use the predecessor list to determine if we 
+      // should accept the key (when we fix pred lists that is)
+      vec<ptr<location> > preds = host_node->preds ();
+      
       for (u_int i = 0; i < arg->keys.size (); i++) {
 	ref<dbrec> kkk = id2dbrec (arg->keys[i]);
-	res.resok->accepted[i] = !db->lookup (kkk);
+	bool present = db->lookup (kkk);
+	if (present) 
+	  res.resok->accepted[i] = DHASH_PRESENT;
+	else if (!present) 
+	  res.resok->accepted[i] = DHASH_ACCEPT;
+	else 
+	  res.resok->accepted[i] = DHASH_ACCEPT;
+
 	info << host_node->my_ID () << ": " << arg->keys[i]
-	     << (res.resok->accepted[i] ? " not" : "") << " present\n";
+	     << (res.resok->accepted[i] == DHASH_ACCEPT ? " " : " not ") 
+	     << "accepted\n";
       }
 
       sbp->reply (&res);
