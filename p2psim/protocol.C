@@ -52,10 +52,13 @@ Protocol::rcvRPC(RPCSet *hset)
 }
 
 
-// returns true if we can call rcvRPC without blocking
+#if 0
+// WE CAN'T MAKE THIS WORK WITHOUT ALTERING THE CHANNELS!
 bool
 Protocol::select(RPCSet *hset)
 {
+  assert(false);
+
   // no outstanding RPCs: we would block
   if(!hset->size())
     return false;
@@ -87,7 +90,7 @@ Protocol::select(RPCSet *hset)
   free(a);
   return i != noblkindex;
 }
-
+#endif
 
 
 void

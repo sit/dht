@@ -92,6 +92,7 @@ Kademlia::join(Args *args)
   assert(b);
 
   // put well known node in k-buckets and all results.
+  KDEBUG(1) << "join: lr.rid = " << lr.rid << endl;
   _tree->insert(lr.rid, wkn);
   _tree->insert(&(lr.results));
 
@@ -123,7 +124,7 @@ Kademlia::join(Args *args)
   // done
   _joined++;
 
-  DEBUG(1) << _joined << ": " << Kademlia::printbits(_id) << " joined" << endl;
+  KDEBUG(1) << _joined << ": " << Kademlia::printbits(_id) << " joined" << endl;
   delaycb(STABLE_TIMER, &Kademlia::reschedule_stabilizer, (void *) 0);
 }
 
@@ -205,7 +206,7 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
   NodeID callerID = largs->id;
   IPAddress callerIP = largs->ip;
 
-  KDEBUG(2) << "Node " << printbits(callerID) << " does lookup for " << printID(largs->key) << endl;
+  KDEBUG(2) << "Node " << printbits(callerID) << " does lookup for " << printID(largs->key) << ", thread = " << threadid() << endl;
 
   // fill it with the best that i know of
   vector<peer_t*> *results = New vector<peer_t*>;
@@ -227,6 +228,10 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
     tasks.push_back(*i);
   }
 
+  // keep a map of which nodes we already asked
+  for(deque<peer_t*>::const_iterator i=tasks.begin(); i != tasks.end(); ++i)
+    KDEBUG(2) << "do_lookup: tasks entry id = " << printbits((*i)->id) << ", ip = " << (*i)->ip << endl;
+
   // issue new RPCs
   while(true) {
     // find the first that we haven't asked yet.
@@ -235,6 +240,14 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
       toask = tasks.front();
       tasks.pop_front();
     }
+
+    // printf("do_lookup: toask after pop = %p", toask);
+    // if(toask) {
+    //   string s = printbits(toask->id);
+    //   printf("  toask id = %s, ip = %d", s.c_str(), toask->ip);
+    // }
+    // printf("\n");
+
     /*
     assert(toask == 0);
     for(vector<peer_t*>::const_iterator i=results->begin(); i != results->end(); ++i) {
@@ -256,20 +269,24 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
       break;
     }
 
+
     // there's a guy we didn't ask yet, and there's less than alpha outstanding
     // RPCs: send out another one.
     if(toask && outstanding < _alpha) {
+      KDEBUG(2) << "do_lookup: front task id = " << printbits(toask->id) << ", ip = " << toask->ip << endl;
       la = New lookup_args(_id, ip(), largs->id);
       lr = New lookup_result;
       assert(la && lr);
       assert(toask);
       assert(toask->ip <= 512 && toask->ip > 0);
-      KDEBUG(2) << "do_lookup: thread " << threadid() << " doing find_node asyncRPC to " << Kademlia::printbits(toask->id) << endl;
+      KDEBUG(2) << "do_lookup: thread " << threadid() << " doing find_node asyncRPC to ip=" << toask->ip << ", " << Kademlia::printbits(toask->id) << endl;
       rpc = asyncRPC(toask->ip, &Kademlia::find_node, la, lr);
-      KDEBUG(2) << "do_lookup: thread " << threadid() << " came back from find_node asyncRPC to " << Kademlia::printbits(toask->id) << endl;
+      KDEBUG(2) << "do_lookup: thread " << threadid() << " came back from find_node asyncRPC to " << toask->ip << ", " << Kademlia::printbits(toask->id) << endl;
       assert(rpc);
       rpcset.insert(rpc);
-      resultmap[rpc] = New callinfo(toask->ip, la, lr);
+      callinfo *ci = New callinfo(toask->ip, la, lr);
+      assert(ci);
+      resultmap[rpc] = ci;
       asked[toask->id] = true;
 
       // don't block yet if there's more RPCs we can send
@@ -281,31 +298,60 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
     // at this point we have the full number of outstanding RPCs, so block on
     // rcvRPC, but receive as many as we can while we're at it.  Use select() to
     // not block beyond the first rcvRPC.
-    do {
+    while(outstanding) {
       KDEBUG(2) << "do_lookup: thread " << threadid() << " going into rcvRPC, outstanding = " << outstanding << endl;
+      KDEBUG(2) << "do_lookup: OUTSTANDING" << endl;
+      for(hash_map<unsigned, callinfo*>::const_iterator i = resultmap.begin(); i != resultmap.end(); ++i) {
+        KDEBUG(2) << "outstanding ip = " << i->second->ip << endl;
+      }
+
       unsigned donerpc = rcvRPC(&rpcset);
       outstanding--;
       assert(donerpc);
       callinfo *ci = resultmap[donerpc];
+      KDEBUG(2) << "do_lookup: still working for " << Kademlia::printbits(largs->id) << ", looking for " << Kademlia::printbits(largs->key) << ", thread = " << threadid() << endl;
+      KDEBUG(2) << "do_lookup: after rcvRPC " << threadid() << " ci->ip = " << ci->ip << ", ci->rid = " << Kademlia::printbits(ci->lr->rid) << " outstanding = " << outstanding << endl;
       resultmap.erase(donerpc);
-      KDEBUG(2) << "do_lookup: thread " << threadid() << " rcvRPC returned, " << Kademlia::printbits(ci->lr->rid) << " replied" << endl;
+
+      for(vector<peer_t*>::const_iterator i=ci->lr->results.begin(); i != ci->lr->results.end(); ++i) {
+        KDEBUG(2) << "do_lookup: RETURNED RESULT for rcvRPC entry id = " << printbits((*i)->id) << ", ip = " << (*i)->ip << endl;
+      }
+
+      for(vector<peer_t*>::const_iterator i=results->begin(); i != results->end(); ++i) {
+        KDEBUG(2) << "do_lookup: STORED RESULT for rcvRPC entry id = " << printbits((*i)->id) << ", ip = " << (*i)->ip << endl;
+      }
 
       // update our own k-buckets
       _tree->insert(ci->lr->rid, ci->ip);
 
       // merge both tables and cut out everything after the first k.
       SortNodes sn(largs->key);
+      EqualNodes en(largs->key);
       vector<peer_t*> *newresults = New vector<peer_t*>(results->size() + ci->lr->results.size());
+
       assert(newresults);
-      merge(results->begin(), results->end(), 
+      vector<peer_t*>::iterator theend = merge(results->begin(), results->end(), 
             ci->lr->results.begin(), ci->lr->results.end(),
             newresults->begin(), sn);
+
+      // XXX: WHY?!, merge() doesn't do this.
+      sort(newresults->begin(), newresults->end(), sn);
+      // KDEBUG(2) << "do_lookup: newresults->size() after sort = " << newresults->size() << endl;
+      // for(vector<peer_t*>::const_iterator i=newresults->begin(); i != newresults->end(); ++i) {
+        // KDEBUG(2) << "do_lookup: MERGED RESULT for rcvRPC entry id = " << printbits((*i)->id) << ", ip = " << (*i)->ip << endl;
+      // }
+      newresults->erase(unique(newresults->begin(), newresults->end(), en), newresults->end());
+      // KDEBUG(2) << "do_lookup: newresults->size() after unique = " << newresults->size() << endl;
 
       // cut off all entries larger than the first _k
       if(_k < newresults->size())
         newresults->resize(_k);
       delete results;
       results = newresults;
+
+      for(vector<peer_t*>::const_iterator i=results->begin(); i != results->end(); ++i) {
+        KDEBUG(2) << "do_lookup: AFTER MERGE RESULT for rcvRPC entry id = " << printbits((*i)->id) << ", ip = " << (*i)->ip << endl;
+      }
 
       // mark new nodes as not yet asked
       for(vector<peer_t*>::const_iterator i=results->begin(); i != results->end(); ++i)
@@ -314,13 +360,13 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
           tasks.push_front(*i);
         }
       delete ci;
-    } while(select(&rpcset));
+    }
   }
 
 done:
   assert(!resultmap.size());
 
-  KDEBUG(2) << "do_lookup: done" << endl;
+  KDEBUG(2) << "do_lookup, thread " << threadid() << ": done, was working for " << Kademlia::printbits(largs->id) << ", looking for " << Kademlia::printbits(largs->key) << endl;
   // this is the answer
   lresult->results = *results;
   unsigned k = 0;
@@ -329,6 +375,9 @@ done:
   delete results;
 
   KDEBUG(2) << "do_lookup: replying to " << Kademlia::printbits(callerID) << endl;
+
+  // put ourselves as replier
+  lresult->rid = _id;
 
   // put the caller in the tree
   _tree->insert(callerID, callerIP);
@@ -359,7 +408,7 @@ Kademlia::do_lookup_wrapper(peer_t *p, Kademlia::NodeID key,
 void
 Kademlia::find_node(lookup_args *largs, lookup_result *lresult)
 {
-  KDEBUG(2) << "find_node" << endl;
+  KDEBUG(2) << "find_node invoked by " << Kademlia::printbits(largs->id) << ", thread = " << threadid() << endl;
 
   // deal with the empty case
   if(_tree->empty()) {

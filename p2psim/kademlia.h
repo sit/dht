@@ -171,12 +171,27 @@ public:
 class SortNodes { public:
   SortNodes(Kademlia::NodeID key) : _key(key) {}
   bool operator()(const peer_t* n1, const peer_t* n2) const {
-    // cout << "compare " << Kademlia::printbits(_key) << " ^ " << Kademlia::printbits(n1.first) << " = " << Kademlia::printbits(_key ^ n1.first) << " with " << Kademlia::printbits(_key) << " ^ " << Kademlia::printbits(n2.first) << " = " << Kademlia::printbits(_key ^ n2.first) << endl;
-    return (_key ^ n1->id) < (_key ^ n2->id);
+    Kademlia::NodeID dist1 = _key ^ n1->id;
+    Kademlia::NodeID dist2 = _key ^ n2->id;
+    return dist1 < dist2;
   }
 private:
   Kademlia::NodeID _key;
 };
+
+
+class EqualNodes { public:
+  EqualNodes(Kademlia::NodeID key) : _key(key) {}
+  bool operator()(const peer_t* n1, const peer_t* n2) const {
+    Kademlia::NodeID dist1 = _key ^ n1->id;
+    Kademlia::NodeID dist2 = _key ^ n2->id;
+    return dist1 == dist2;
+  }
+private:
+  Kademlia::NodeID _key;
+};
+
+
 
 // }}}
 // {{{ k-bucket
@@ -244,23 +259,12 @@ private:
     sklist_entry<best_entry> _sortlink;
   };
 
+  // must return same results as SortNodes
   struct DistCompare {
     int operator()(const NodeID &n1, const NodeID &n2) const {
-      // cout << "DistCompare uses key " << Kademlia::printbits(_key) << endl;
-      // cout << "DistCompare compares " << Kademlia::printbits(n1) << " and " << Kademlia::printbits(n2) << endl;
       NodeID dist1 = Kademlia::distance(n1, _key);
       NodeID dist2 = Kademlia::distance(n2, _key);
-      // cout << "DistCompare compares (with key) " << Kademlia::printbits(dist1) << " and " << Kademlia::printbits(dist2) << endl;
-      if(dist1 < dist2) {
-        // cout << "DistCompare dist1 less than dist2\n";
-        return 1;
-      } else if(dist1 > dist2) {
-        // cout << "DistCompare dist2 less than dist1\n";
-        return -1;
-      } else {
-        // cout << "DistCompare dist2 equal to dist1\n";
-        return 0;
-      }
+      return dist1 < dist2;
     }
     static NodeID _key;
   };

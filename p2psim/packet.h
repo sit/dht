@@ -17,6 +17,7 @@ public:
   IPAddress dst() { return _dst; }
   Channel *channel() { return _c; }
   bool reply() { return _fn == 0; }
+  unsigned id() { return _id; }
 
 private:
   // RPC function and arguments.
@@ -30,6 +31,8 @@ private:
   IPAddress _src;
   IPAddress _dst;
   bool _ok; // was the target node available?
+  unsigned _id;
+  static unsigned _unique;
 };
 
 #endif // __PACKET_H

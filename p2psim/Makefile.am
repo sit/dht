@@ -25,4 +25,4 @@ vis_SOURCES = vis.C
 GTKINCLUDES = $(GSTUFF_CFLAGS) 
 vis_LDADD = $(GSTUFF_LIBS)
 endif
-INCLUDES = -I/usr/local/include/sfs-0.7.2/ -I/usr/local/include $(GTKINCLUDES)
+INCLUDES = -I/usr/local/include/sfs-0.7.2/ -I/usr/local/include $(EXTRA_INCLUDES) $(GTKINCLUDES)
