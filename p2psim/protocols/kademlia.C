@@ -582,11 +582,12 @@ Kademlia::do_ping(ping_args *args, ping_result *result)
 
 // }}}
 // {{{ Kademlia::util for find_value and do_lookup
-#define SEND_RPC(x, ARGS, RESULT, HOPS) {                                               \
+#define SEND_RPC(x, ARGS, RESULT, HOPS, WHICH_ALPHA) {                                  \
     find_node_args *fa = New find_node_args(_id, ip(), ARGS->key);                      \
     fa->stattype = ARGS->stattype;                                                      \
     find_node_result *fr = New find_node_result;                                        \
     fr->hops = HOPS;                                                                    \
+    fr->which_alpha = WHICH_ALPHA;                                                      \
     record_stat(ARGS->stattype, 1, 0);                                                  \
     unsigned rpc = asyncRPC(x.ip, &Kademlia::find_node, fa, fr, Kademlia::_default_timeout); \
     callinfo *ci = New callinfo(x, fa, fr);                                             \
@@ -618,8 +619,7 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
   // assert(alive());
   HashMap<NodeID, bool> asked;
   HashMap<NodeID, unsigned> hops;
-  bool deadtime = false;
-  Time deadtimestart = 0;
+  HashMap<unsigned, unsigned> timeouts;
   update_k_bucket(fargs->id, fargs->ip);
   fresult->rid = _id;
   fresult->hops = 0;
@@ -634,12 +634,6 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
     successors.insert((*tmp[i]));
     hops.insert(tmp[i]->id, 0);
   }
-
-  // unsigned haha = 0;
-  // NODES_ITER(&successors) {
-  //   KDEBUG(0) << "dist between " << printID(fargs->key) << " and successors[ " << haha++ << "], " << printID(i->id) << " = " <<
-  //     printID(distance(fargs->key, i->id)) << ", cp = " << common_prefix(fargs->key, i->id) << ", RTT = " << i->RTT << endl;
-  // }
 
   // we can't do anything but return ourselves
   if(!successors.size()) {
@@ -657,43 +651,33 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
   RPCSet *rpcset = New RPCSet;
   {
     unsigned a = 0;
-    bool all_dead = true;
     for(set<k_nodeinfo, closer>::const_iterator i=successors.begin(); i != successors.end() && a < Kademlia::alpha; ++i, ++a) {
       k_nodeinfo ki = *i;
-      SEND_RPC(ki, fargs, fresult, hops[ki.id]);
-      if(Network::Instance()->getnode(ki.ip)->alive())
-        all_dead = false;
+      SEND_RPC(ki, fargs, fresult, hops[ki.id], a);
       fresult->rpcs++;
       asked.insert(ki.id, true);
       successors.erase(ki);
-    }
-
-    if(all_dead) {
-      deadtime = true;
-      deadtimestart = now();
-      fresult->timeouts++;
+      timeouts.insert(a, 0);
     }
   }
 
   // now send out a new RPC for every single RPC that comes back
   unsigned useless_replies = 0;
   NodeID last_before_merge = ~fargs->key;
+  unsigned last_returned_alpha;
   while(true) {
     bool ok;
     unsigned donerpc = rcvRPC(rpcset, ok);
     callinfo *ci = (*outstanding_rpcs)[donerpc];
     outstanding_rpcs->remove(donerpc);
     bool improved = false;
-
-    if(deadtime) {
-      deadtime = false;
-      fresult->spent_in_timeout += (now() - deadtimestart);
-    }
+    last_returned_alpha = ci->fr->which_alpha;
 
     k_nodeinfo ki;
     if(!alive()) {
+      stat_type st = ci->fa->stattype;
       delete ci;
-      CREATE_REAPER(ci->fa->stattype); // returns
+      CREATE_REAPER(st); // returns
     }
 
     // node was dead
@@ -702,6 +686,7 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
     if(!ok) {
       if(flyweight[ci->ki.id] && !Kademlia::learn_stabilize_only)
         erase(ci->ki.id);
+      timeouts.insert(last_returned_alpha, timeouts[last_returned_alpha]+1);
       delete ci;
       if(!successors.size()) {
         CREATE_REAPER(ci->fa->stattype); // returns
@@ -737,6 +722,7 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
     if(ki.id == fargs->key) {
       fresult->hops = hops[ki.id];
       fresult->succ = ki;
+      fresult->timeouts = timeouts[last_returned_alpha];
       stat_type st = ci->fa->stattype;
       delete ci;
       CREATE_REAPER(st); // returns
@@ -753,40 +739,23 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
     // XXX: Thomer completely pulled this out of his ass.
     if(!successors.size() || useless_replies > Kademlia::alpha) {
       stat_type st = ci->fa->stattype;
+      delete ci;
       CREATE_REAPER(st); // returns
     }
     delete ci;
 
 next_candidate:
-    while((outstanding_rpcs->size() < (int) Kademlia::alpha) && successors.size()) {
+    assert(outstanding_rpcs->size() == Kademlia::alpha - 1);
+    // while((outstanding_rpcs->size() < (int) Kademlia::alpha) && successors.size()) {
       k_nodeinfo front = *successors.begin();
       if(Kademlia::distance(front.id, fargs->key) < Kademlia::distance(fresult->succ.id, fargs->key))
         fresult->succ = front;
-      SEND_RPC(front, fargs, fresult, hops[front.id]);
+      SEND_RPC(front, fargs, fresult, hops[front.id], timeouts[front.id]);
 
       fresult->rpcs++;
       asked.insert(front.id, true);
       successors.erase(front);
-
-      // for sake of statistics, keep track of time spent waiting for nodes that
-      // are all dead. (if we're not already in deadtime.)
-      if(!deadtime && !Network::Instance()->getnode(front.ip)->alive()) {
-        bool all_dead = true;
-        for(HashMap<unsigned, callinfo*>::iterator i = outstanding_rpcs->begin(); i; i++) {
-          if(Network::Instance()->getnode((i.value())->ki.ip)->alive()) {
-            all_dead = false;
-            break;
-          }
-        }
-
-        // all outstanding RPCs to dead nodes, but we're not in deadtime yet.
-        if(all_dead) {
-          deadtime = true;
-          deadtimestart = now();
-          fresult->timeouts++;
-        }
-      }
-    }
+    // }
   }
 }
 
@@ -834,7 +803,7 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
     unsigned a = 0;
     for(set<k_nodeinfo, closer>::const_iterator i=successors.begin(); i != successors.end() && a < Kademlia::alpha; ++i, ++a) {
       k_nodeinfo ki = *i;
-      SEND_RPC(ki, largs, lresult, 0);
+      SEND_RPC(ki, largs, lresult, 0, 0);
       // KDEBUG(0) << "SEND_RPC (initial) to " << printID(ki.id) << endl;
       successors.erase(ki);
     }
@@ -958,7 +927,7 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
       // KDEBUG(0) << "nothing changed. flushing" << endl;
       NODES_ITER(&successors) {
         k_nodeinfo ki = *i;
-        SEND_RPC(ki, largs, lresult, 0);
+        SEND_RPC(ki, largs, lresult, 0, 0);
         successors.erase(ki);
       }
       continue;
@@ -990,7 +959,7 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
 
 next_candidate:
     k_nodeinfo front = *successors.begin();
-    SEND_RPC(front, largs, lresult, 0);
+    SEND_RPC(front, largs, lresult, 0, 0);
     successors.erase(front);
     // j = 0;
     // NODES_ITER(&successors) {
@@ -1771,9 +1740,13 @@ k_stabilizer::execute(k_bucket *k, string prefix, unsigned depth, unsigned leftr
 
   // Oh.  stuff in this k-bucket is old, or we don't know anything. Lookup a
   // random key in this range.
-  Kademlia::NodeID mask = 0;
-  for(unsigned i=0; i<depth; i++)
-    mask |= (((Kademlia::NodeID) 1) << (Kademlia::idsize-depth-i));
+  Kademlia::NodeID mask = 0L;
+  for(unsigned i=0; i<Kademlia::idsize; i++) {
+    unsigned bit = 1;
+    if(i > depth)
+      bit = (unsigned) random() & 0x1;
+    mask |= (((Kademlia::NodeID) bit) << (Kademlia::idsize-i));
+  }
 
   Kademlia::NodeID random_key = _id & mask;
   KDEBUG(2) << "k_stabilizer: prefix = " << prefix << ", mask = " << Kademlia::printbits(mask) << ", random_key = " << Kademlia::printbits(random_key) << endl;

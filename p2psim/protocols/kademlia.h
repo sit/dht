@@ -267,6 +267,7 @@ public:
     find_node_result() {}
     vector<k_nodeinfo> results;
     unsigned hops;
+    unsigned which_alpha;
     NodeID rid;
   };
   // }}}
@@ -575,5 +576,5 @@ private:
 };
 // }}}
 
-#define KDEBUG(x) if(p2psim_verbose >= (x)) cout << Kademlia::debugcounter++ << "(" << now() << "). " << Kademlia::printID(_id) << "(" << threadid() << ") "
+#define KDEBUG(x) if(p2psim_verbose >= (x)) cout << Kademlia::debugcounter++ << "(" << now() << "). " << Kademlia::printbits(_id) << "(" << threadid() << ") "
 #endif // __KADEMLIA_H
