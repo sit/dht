@@ -39,6 +39,7 @@
 #define TYPE_BASIC_UP 3
 #define TYPE_FINGER_UP 4
 #define TYPE_PNS_UP 5
+#define MAX_LOOKUP_TIME 4000
 
 class LocTable;
 
@@ -98,9 +99,6 @@ public:
   struct alert_args {
     IDMap n;
   };
-  struct alert_ret {
-    int dummy;
-  };
 
   struct hop_info {
     IDMap from;
@@ -117,6 +115,7 @@ public:
   struct next_ret {
     bool done;
     vector<IDMap> v;
+    vector<IDMap> next;
   };
 
   struct nextretinfo{
@@ -152,6 +151,11 @@ public:
     vector<IDMap> v;
   };
 
+  struct lookup_args{
+    CHID key;
+    Time start;
+    uint retry;
+  };
   // RPC handlers.
   void null_handler (void *args, void *ret);
   void get_predecessor_handler(get_predecessor_args *, 
@@ -159,17 +163,18 @@ public:
   void get_successor_list_handler(get_successor_list_args *, 
                                   get_successor_list_ret *);
   void notify_handler(notify_args *, notify_ret *);
-  void alert_handler(alert_args *, alert_ret *);
+  void alert_handler(alert_args *, void *);
   void next_handler(next_args *, next_ret *);
   void find_successors_handler(find_successors_args *, 
                                find_successors_ret *);
   virtual void my_next_recurs_handler(next_recurs_args *, next_recurs_ret *);
   void next_recurs_handler(next_recurs_args *, next_recurs_ret *);
+  void lookup_internal(lookup_args *a);
 
   CHID id () { return me.id; }
   virtual void init_state(vector<IDMap> ids);
   virtual bool stabilized(vector<CHID>);
-  void print_stat_check_correctness(CHID k, vector<IDMap> v, uint lookup_lat);
+  bool check_correctness(CHID k, vector<IDMap> v);
 
   virtual void dump();
   char *ts();
@@ -187,6 +192,7 @@ protected:
   uint _timeout;
   bool _stab_basic_running;
   uint _stab_basic_timer;
+  uint _stab_succlist_timer;
   uint _stab_basic_outstanding;
   uint _frag;
   uint _alpha;
@@ -196,6 +202,7 @@ protected:
   IDMap _wkn;
   uint _join_scheduled;
   uint _parallel;
+  uint _last_succlist_stabilized;
 
   LocTable *loctable;
   IDMap me; 
@@ -210,7 +217,7 @@ protected:
   virtual vector<IDMap> find_successors_recurs(CHID key, uint m, uint all,
       uint type, uint *recurs_int = NULL);
   virtual vector<IDMap> find_successors(CHID key, uint m, uint all,
-      uint type, IDMap *last = NULL);
+      uint type, Time start, IDMap *last = NULL);
 
   void fix_successor();
   void fix_predecessor();
@@ -283,6 +290,7 @@ class LocTable {
     void set_timeout(uint to) {_timeout = to;}
 
     //pick the next hop for lookup;
+    virtual vector<Chord::IDMap> next_hops(Chord::CHID key, uint nsz = 1);
     virtual Chord::IDMap next_hop(Chord::CHID key, uint m = 1, uint nsucc=1); 
 
     vector<Chord::IDMap> get_all();

@@ -65,13 +65,14 @@ ChordObserver::ChordObserver(Args *a)
   Chord::IDMap n;
   for(set<Protocol*>::iterator pos = l.begin(); pos != l.end(); ++pos) {
     Chord *t = dynamic_cast<Chord*>(*pos);
-    t->registerObserver(this);
+    //t->registerObserver(this);
     n.ip = t->node()->ip();
     n.id = t->id();
     n.choices = 1;
     ids.push_back(n);
   }
   sort(ids.begin(),ids.end(),Chord::IDMap::cmp);
+  init_state();
 }
 
 vector<Chord::IDMap>
@@ -97,6 +98,7 @@ ChordObserver::init_state()
 void
 ChordObserver::kick(Observed *ob, ObserverInfo *oi)
 {
+  Time t = now();
   if(_initnodes){
     _initnodes = false;
     init_state();

@@ -209,7 +209,6 @@ Koorde::find_successors(CHID key, uint m, bool is_lookup, IDMap *last)
       if (path.size () > 0) {
 
 	alert_args aa;
-	alert_ret ar;
 	assert(r.next.ip != me.ip);
 	aa.n = r.next;
 
@@ -219,7 +218,7 @@ Koorde::find_successors(CHID key, uint m, bool is_lookup, IDMap *last)
 
 	if (!ok) {
 	  //record_stat(is_lookup?1:0);
-	  doRPC (r.next.ip, &Chord::alert_handler, &aa, &ar);
+	  doRPC (r.next.ip, &Chord::alert_handler, &aa, (void *)NULL);
 	}
 	path.pop_back ();
 	ipath.pop_back ();

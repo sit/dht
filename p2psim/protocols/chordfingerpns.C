@@ -236,7 +236,7 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
       if (_recurs)
 	v = find_successors_recurs(finger, _samples, _samples, TYPE_FINGER_LOOKUP);
       else
-	v = find_successors(finger, _samples, _samples, TYPE_FINGER_LOOKUP);
+	v = find_successors(finger, _samples, _samples, TYPE_FINGER_LOOKUP, now());
 
       if (!node()->alive()) return;
 

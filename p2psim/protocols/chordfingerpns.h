@@ -52,6 +52,7 @@ class LocTablePNS : public LocTable {
       //implement SOSP'03's case 1
       //if my successor list includes less than m successors for key, 
       //then pick the physically closest successor to be the next_hop
+      assert(nsucc == 1); //XXX i have not implemented multiple next hops for this case
       if (nsucc > 1) {
 	uint num = 0;
 	Time min_lat = 100000000;
