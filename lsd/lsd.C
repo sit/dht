@@ -225,7 +225,8 @@ parseconfigfile (str cf, int index, int set_rpcdelay)
   else vNew dhash (db_name, chordnode->newvnode ());
 
   for (int i = 1; i < nvnode; i++) {
-    vNew dhash (db_name, chordnode->newvnode ());
+    str db_name_prime = strbuf () << db_name << "-" << i;
+    vNew dhash (db_name_prime, chordnode->newvnode ());
   }
   sigcb(SIGUSR1, wrap (chordnode, &chord::stats));
 
