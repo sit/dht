@@ -95,6 +95,7 @@ dhashcli::retrieve (blockID blockID, cb_ret cb, int options,
     vec<ptr<location> > sl = clntnode->succs ();
     if ((options & DHASHCLIENT_SUCCLIST_OPT) && 
 	use_succlist (sl, clntnode->my_pred ())) {
+      rs->succopt = true;
       sl.push_back (clntnode->my_location ());
       vec<chord_node> s = get_succs_from_list (sl, blockID.ID);
       route r;
@@ -226,7 +227,6 @@ struct orderer {
   }
 };
 
-
 static void
 order_succs (const vec<float> &me, const vec<chord_node> &succs,
 	     vec<chord_node> &out)
@@ -255,23 +255,21 @@ order_succs (const vec<float> &me, const vec<chord_node> &succs,
 }
 
 static void
-patch_succ_list (vec<chord_node> &succs,
+merge_succ_list (vec<chord_node> &succs,
                  const vec<ptr<location> > &from, unsigned needed)
 {
   for (unsigned i=0; i<from.size () && succs.size ()<needed; i++) {
-    chord_node x;
-    from [i]->fill_node (x);
-    bool found = false;
-    for (unsigned j=0; j<succs.size () && !found; j++)
-      if (succs [j].x == x.x)
-	found = true;
-    if (!found)
-      succs.push_back (x);
+    if (from [i]->alive ()) {
+      chord_node x;
+      from [i]->fill_node (x);
+      bool found = false;
+      for (unsigned j=0; j<succs.size () && !found; j++)
+        if (succs [j].x == x.x)
+	  found = true;
+      if (!found)
+        succs.push_back (x);
+    }
   }
-#if 0
-  for (unsigned i=0; i<succs.size (); i++)
-    warn << "succ " << i << ": " << succs [i].x << "\n";
-#endif
 }
 
 
@@ -306,7 +304,7 @@ dhashcli::retrieve_lookup_cb (ptr<rcv_state> rs, vec<chord_node> succs,
       // patch up the succ list so it includes all the node we know
       // of... mostly, this step will add the predecessor of the block
       vec<ptr<location> > sl = clntnode->succs ();
-      patch_succ_list (succs, sl, dhash::num_efrags ());
+      merge_succ_list (succs, sl, dhash::num_efrags ());
     }
     else
       // clntnode is not in succ list, but there aren't enough
@@ -327,14 +325,28 @@ dhashcli::retrieve_lookup_cb (ptr<rcv_state> rs, vec<chord_node> succs,
   }
 
   if (server_selection_mode & 1) {
-    // Store list of successors ordered by expected distance.
-    // fetch_frag will pull from this list in order.
+    if (rs->succopt) {
+      // Have actual measured latencies, so might as well use them
+      vec<float> lt;
+      for (unsigned i=0; i<succs.size (); i++) {
+	ptr<location> l = clntnode->locations->lookup (succs [i].x);
+	if (l)
+	  lt.push_back (l->distance ());
+	else
+	  lt.push_back (100000000);
+      }
+      order_succs_by_latency (lt, succs, rs->succs);
+    }
+    else {
+      // Store list of successors ordered by expected distance.
+      // fetch_frag will pull from this list in order.
 #ifdef VERBOSE_LOG
-    modlogger ("orderer", modlogger::TRACE) << "ordering for block "
-					    << rs->key << "\n";
+      modlogger ("orderer", modlogger::TRACE) << "ordering for block "
+					      << rs->key << "\n";
 #endif /* VERBOSE_LOG */    
-    order_succs (clntnode->my_location ()->coords (),
-		 succs, rs->succs);
+      order_succs (clntnode->my_location ()->coords (),
+		   succs, rs->succs);
+    }
   } else {
     rs->succs = succs;
   }
@@ -509,7 +521,7 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
       // patch up the succ list so it includes all the node we know
       // of... mostly, this step will add the predecessor of the block
       vec<ptr<location> > sl = clntnode->succs ();
-      patch_succ_list (succs, sl, dhash::num_efrags ());
+      merge_succ_list (succs, sl, dhash::num_efrags ());
     }
     else
       // clntnode is not in succ list, but there aren't enough

@@ -120,7 +120,7 @@ rpc_state::rpc_state (ptr<location> from, ref<location> l, aclnt_cb c, long s, i
 // -----------------------------------------------------
 hostinfo::hostinfo (const net_address &r)
   : host (r.hostname), nrpc (0), maxdelay (0),
-    a_lat (0.0), a_var (0.0), fd (-2)
+    a_lat (0.0), a_var (0.0), fd (-2), orpc (0)
 {
 }
 
@@ -297,6 +297,7 @@ tcp_manager::send_RPC (RPC_delay_args *args)
     delaycb (0, 0, wrap (this, &tcp_manager::send_RPC_ateofcb, args));
   }
   else {
+    hi->orpc++;
     args->now = getusec ();
     ptr<aclnt> c = aclnt::alloc (hi->xp, args->prog);
     c->call (args->procno, args->in, args->out, 
@@ -351,6 +352,7 @@ void
 tcp_manager::doRPC_tcp_cleanup (ptr<aclnt> c, RPC_delay_args *args,
                                 clnt_stat err)
 {
+  hostinfo *hi = lookup_host (args->l->address ());
   u_int64_t diff;
   if (args->from && 
       args->from->address ().hostname == args->l->address ().hostname)
@@ -360,8 +362,9 @@ tcp_manager::doRPC_tcp_cleanup (ptr<aclnt> c, RPC_delay_args *args,
     diff = now - args->now;
     if (diff > 5000000)
       warn << "long tcp latency to " << args->l->address ().hostname
-           << ": " << diff << "\n";
+           << ": " << diff << ", orpc " << hi->orpc << "\n";
   }
+  hi->orpc--;
   update_latency (NULL, args->l, diff);
   (*args->cb)(err);
   delete args;

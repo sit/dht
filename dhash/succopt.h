@@ -2,7 +2,7 @@
 #ifndef __DHASH_SUCCLIST_OPT_H__
 #define __DHASH_SUCCLIST_OPT_H__
 
-bool
+static inline bool
 use_succlist (vec<ptr<location> > succs, ptr<location> pred)
 {
   if (succs.size () == 0)
@@ -10,7 +10,7 @@ use_succlist (vec<ptr<location> > succs, ptr<location> pred)
   return (succs [succs.size ()-1]->id () == pred->id ());
 }
 
-ptr<location>
+static inline ptr<location>
 find_succ_from_list (vec<ptr<location> > nodes, chordID x)
 {
   bool first = true;
@@ -29,7 +29,7 @@ find_succ_from_list (vec<ptr<location> > nodes, chordID x)
   return xl;
 }
 
-ptr<location>
+static inline ptr<location>
 find_pred_from_list (vec<ptr<location> > nodes, chordID x)
 {
   bool first = true;
@@ -48,7 +48,7 @@ find_pred_from_list (vec<ptr<location> > nodes, chordID x)
   return xl;
 }
 
-vec<chord_node>
+static inline vec<chord_node>
 get_succs_from_list (vec<ptr<location> > nodes, chordID x)
 {
   // basically convert succ list into chord_node, removing x's
@@ -71,6 +71,32 @@ get_succs_from_list (vec<ptr<location> > nodes, chordID x)
   }
 
   return r;
+}
+
+struct lod {
+  float l;
+  int i;
+  static int cmp (const void *a_, const void *b_) {
+    const lod *a = (lod *) a_, *b = (lod *) b_;
+    return (int) (a->l - b->l);
+  }
+};
+
+static void
+order_succs_by_latency (const vec<float> &l,
+                        const vec<chord_node> &succs,
+	                vec<chord_node> &out)
+{
+  lod *od = New lod[succs.size()];
+  for (size_t i = 0; i < succs.size (); i++) {
+    od[i].l = l [i];
+    od[i].i = i;
+  }
+  qsort (od, succs.size (), sizeof (*od), &lod::cmp);
+  out.clear ();
+  for (size_t i = 0; i < succs.size (); i++) {
+    out.push_back (succs[od[i].i]);
+  }
 }
 
 #endif

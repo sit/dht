@@ -35,6 +35,7 @@ class dhashcli {
     vec<timespec> times;
     int errors;
     
+    bool succopt;
     int incoming_rpcs;
     
     vec<chord_node> succs;
@@ -56,10 +57,11 @@ class dhashcli {
       for (u_int i = 0; i < callbacks.size (); i++)
 	(callbacks[i]) (s, b, r);
     }
-      
+
     rcv_state (blockID key) :
       key (key),
       errors (0),
+      succopt (false),
       incoming_rpcs (0),
       nextsucc (0),
       completed (false)

@@ -82,6 +82,7 @@ struct hostinfo {
   int fd;
   ptr<axprt_stream> xp;
   vec<RPC_delay_args *> connect_waiters;
+  unsigned orpc; // tcp debugging (benjie)
 
   ihash_entry<hostinfo> hlink_;
   tailq_entry<hostinfo> lrulink_;
