@@ -14,6 +14,7 @@ my $params =
      [ "contact_ration", 1, 2, 4, 8 ],
      [ "n_contacts", 2, 4, 8 ],
      [ "item_rounds", 0, 1, 2, 4 ],
+     [ "timeout", 5000, 10000, 20000, 40000 ]
      ];
 
 my $nnodes = 100;

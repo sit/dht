@@ -56,6 +56,7 @@ Kelips::Kelips(Node *n, Args a)
   _contact_ration = a.nget<u_int>("contact_ration", 2, 10);
   _n_contacts = a.nget<u_int>("n_contacts", 2, 10);
   _item_rounds = a.nget<u_int>("item_rounds", 1, 10);
+  _timeout = a.nget<u_int>("timeout", 25000, 10);
 }
 
 string
@@ -687,9 +688,11 @@ Kelips::purge(void *junk)
   for(u_int i = 0; i < l.size(); i++){
     Info *in = _info[l[i]];
     int to =
-      (ip2group(in->_ip) == group() ? _group_timeout : _contact_timeout);
+      (ip2group(in->_ip) == group() ? _timeout : 2*_timeout);
     if(in->_heartbeat + to < now()){
-      cout << now() << " " << ip() << " timed out " << in->_ip << "\n";
+      printf("%qd %d timed out %d %s\n",
+             now(), ip(), in->_ip,
+             node_key_alive(ip2id(in->_ip)) ? "oops" : "ok");
       _info.erase(l[i]);
       delete in;
     }

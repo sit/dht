@@ -22,10 +22,11 @@
 // Are lookups iterative or recursive? Who controls various retries?
 
 // To do:
-// fix churn generator to not lookup dead nodes?
+// vary timeout as a parameter, maybe it's key to eliminate dead contacts
+// vary k also, jinyang wants one-hop
 // hmm, we get a LOT of lookup failures in kx.pl runs, like 1/2 of lookups
+//   any way to make it more persistent?
 // init_state initialize _rtt
-// Indranil says joining nodes fetch huge state from wkn.
 
 // Does it stabilize after the expected number of rounds?
 // Gossip w/o favoring new nodes (nnodes: avg median):
@@ -75,6 +76,8 @@ public:
   int _n_contacts;        // (2) contacts to remember per foreign group.
 
   int _item_rounds;       // (1???) how many times to gossip a new item.
+
+  int _timeout;           // (25000???) milliseconds to group item timeout.
 
   // hearbeat timeouts. XXX not specified in paper.
   static const int _group_timeout = 25000;
