@@ -146,6 +146,24 @@ locationtable::locwrap::good ()
 	  loc_->challenged);
 }
 
+size_t
+locationtable::size ()
+{
+  return locs.size ();
+}
+
+size_t
+locationtable::usablenodes ()
+{
+  return good;
+}
+
+u_long
+locationtable::estimate_nodes ()
+{
+  return (good > nnodes) ? good : nnodes;
+}
+
 void
 locationtable::replace_estimate (u_long o, u_long n)
 {
@@ -621,10 +639,22 @@ locationtable::stats ()
   hosts->stats ();
 }
 
+bool
+locationtable::continuous_stabilizing ()
+{
+  return nout_continuous > 0;
+}
+
 void
 locationtable::do_continuous ()
 {
   check_dead ();
+}
+
+bool
+locationtable::isstable ()
+{
+  return true;
 }
 
 void

@@ -161,10 +161,7 @@ class succ_list : public stabilizable {
   
   u_long nnodes; // estimate of the number of chord nodes
   
-  int nsucc; // estimate of how many successors we should have
-  int s;     // next succ to stabilize
   chordID oldsucc;  // last known successor to myID
-  chordID nextsucc; // actual successor we are working on (cf s)
   bool stable_succlist;
   bool stable_succlist2;
   u_int nout_backoff;

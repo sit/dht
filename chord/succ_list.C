@@ -11,15 +11,13 @@ succ_list::succ_list (ptr<vnode> v,
 		      chordID ID)
   : myID (ID), myvnode (v), locations (locs)
 {
-  nsucc = 0;
   nnodes = 0;
 
-  s = 0;
   oldsucc = myID - 1;
-  nout_backoff = 0;
-  nout_continuous = 0;
   stable_succlist = false;
   stable_succlist2 = false;
+  nout_backoff = 0;
+  nout_continuous = 0;
 }
    
 chordID 
@@ -51,6 +49,7 @@ succ_list::estimate_nnodes ()
 {
   u_long n;
   chordID lastsucc = myID;
+  int nsucc = num_succ ();
   for (int i = 0; i < nsucc; i++)
     lastsucc = locations->closestsuccloc (lastsucc);
   chordID d = diff (myID, lastsucc);
@@ -84,6 +83,14 @@ succ_list::stabilize_succlist ()
   
   stable_succlist2 = stable_succlist;
   stable_succlist = true;
+  
+  u_long n = estimate_nnodes ();
+  locations->replace_estimate (nnodes, n);
+  if (nnodes != n) {
+    warnx << myID << ": estimating total number of nodes as "
+	  << locations->estimate_nodes () << "\n";
+  }
+  nnodes = n;
 
   nout_backoff++;
   chordID s = succ ();

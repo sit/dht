@@ -127,9 +127,9 @@ class locationtable : public virtual refcount, public stabilizable {
   locationtable (ptr<chord> _chordnode, int _max_connections);
   locationtable (const locationtable &src);
 
-  size_t size () { return locs.size (); }
-  size_t usablenodes () { return good; }
-  u_long estimate_nodes () { return nnodes; }
+  size_t size ();
+  size_t usablenodes ();
+  u_long estimate_nodes ();
   void replace_estimate (u_long o, u_long n);
 
 #ifdef PNODE
@@ -167,9 +167,9 @@ class locationtable : public virtual refcount, public stabilizable {
 
   // stabilization --- check to see if dead nodes are still dead; does
   // not really affect the true stabilization of anything.
-  bool continuous_stabilizing () { return nout_continuous > 0; }
+  bool continuous_stabilizing ();
   void do_continuous ();
-  bool isstable () { return true; }
+  bool isstable ();
 };
 
 extern bool nochallenges;
