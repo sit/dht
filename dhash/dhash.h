@@ -160,6 +160,7 @@ class dhash {
 
   void install_replica_timer ();
   void check_replicas_cb ();
+  void check_replicas ();
   void check_replicas_traverse_cb (chordID to, chordID key);
   void fix_replicas_txerd (dhash_stat err);
 
@@ -207,10 +208,19 @@ class dhash {
   timecb_t *check_replica_tcb;
   timecb_t *check_key_tcb;
 
+  /* statistics */
+  long bytes_stored;
+  long keys_stored;
+  long keys_replicated;
+  long keys_cached;
+  long bytes_served;
+
  public:
   dhash (str dbname, vnode *node, 
 	 int nreplica = 0, int ss = 10000, int cs = 1000);
   void accept(ptr<axprt_stream> x);
+
+  void print_stats ();
 };
 
 

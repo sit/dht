@@ -68,13 +68,6 @@ struct findpredecessor_cbstate {
     x (xi), nprime (npi), search_path (spi), cb (cbi) {};
 };
 
-struct searchcb_entry {
-  cbsearch_t cb;
-  list_entry<searchcb_entry> link;
-  searchcb_entry (cbsearch_t scb) : cb (scb) {  };
-};
-
-
 struct finger {
   chordID start;
   node first; // first ID after start
@@ -117,7 +110,6 @@ class vnode : public virtual refcount  {
 
   timecb_t *stabilize_tmo;
   vec<cbaction_t> actionCallbacks;
-  list<searchcb_entry, &searchcb_entry::link> searchCallbacks;
 
   void updatefingers (chordID &x, net_address &r);
   void replacefinger (node *n);
@@ -205,15 +197,6 @@ class vnode : public virtual refcount  {
   void stats (void);
   void print (void);
   chordID lookup_closestpred (chordID &x);
-
-  searchcb_entry * registerSearchCallback(cbsearch_t cb);
-  void removeSearchCallback(searchcb_entry *scb);
-  void testSearchCallbacks(chordID id, chordID target, cbtest_t cb);
-  void tscb (chordID id, chordID x, searchcb_entry *scb, cbtest_t cb);
-  void tscb_cb (chordID id, chordID x, searchcb_entry *scb, cbtest_t cb, 
-		int result);
-  void registerActionCallback(cbaction_t cb);
-  void doActionCallbacks(chordID id, char action);
 
   //RPC demux
   void addHandler (unsigned long prog, cbdispatch_t cb) {

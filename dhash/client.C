@@ -161,6 +161,7 @@ dhashclient::lookup_iter_cb (svccb *sbp,
     sbp->reply (fres);
   } else if (res->status == DHASH_CONTINUE) {
     chordID next = res->cont_res->next.x;
+    //add test for next == prev
     clntnode->locations->cacheloc (next, res->cont_res->next.r, prev);
     dhash_fetchiter_res *nres = New dhash_fetchiter_res;
     path.push_back (next);

@@ -62,6 +62,21 @@ struct doRPC_cbstate {
   
 };
 
+
+struct frpc_state {
+  chord_RPC_res *res;
+  void *out;
+  rpc_program prog;
+  int procno;
+  aclnt_cb cb;
+  location *l;
+  u_int64_t s;
+
+  frpc_state (chord_RPC_res *r, void *o, rpc_program p, int pr, aclnt_cb c,
+		location *L, u_int64_t S) : res (r), out (o), prog (p), 
+    procno (pr), cb (c), l (L), s (S) {};
+};
+
 struct location {
   int refcnt;	// locs w. refcnt == 0 are in the cache; refcnt > 0 are fingers
   chordID n;
@@ -175,12 +190,7 @@ class locationtable : public virtual refcount {
 		     void *out,
 		     chordID ID,
 		     aclnt_cb cb);
-  void doForeignRPC_cb (chord_RPC_res *res,
-			void *out,
-			rpc_program prog,
-			int procno,
-			aclnt_cb cb,
-			clnt_stat err);
+  void doForeignRPC_cb (frpc_state *C, clnt_stat err);
 };
 
 #endif _LOCATION_H_

@@ -36,6 +36,13 @@ dhash::dhash(str dbname, vnode *node, int k, int ss, int cs) :
   key_replicate.set_flushcb (wrap (this, &dhash::store_flush));  
   key_cache.set_flushcb (wrap (this, &dhash::cache_flush));
 
+  /* statistics */
+  keys_stored = 0;
+  bytes_stored = 0;
+  bytes_served = 0;
+  keys_replicated = 0;
+  keys_cached = 0;
+
   update_replica_list ();
   install_replica_timer ();
   install_keycheck_timer ();
@@ -200,6 +207,8 @@ dhash::fetchiter_svc_cb (long xid, dhash_fetch_arg *arg,
     memcpy (res->compl_res->res.base (), 
 	    (char *)val->value + arg->start, 
 	    n);
+    /* statistics */
+    bytes_served += n;
   }
   
   dhash_reply (xid, DHASHPROC_FETCHITER, res);
@@ -345,20 +354,21 @@ dhash::isReplica(chordID id) {
 }
 
 void
-dhash::check_replicas_cb () 
-{
+dhash::check_replicas_cb () {
+  check_replicas ();
+  install_replica_timer ();
+}
 
+void
+dhash::check_replicas () 
+{
   for (int i=0; i < nreplica; i++) {
     chordID nth = host_node->nth_successorID (i);
     if (!isReplica(nth)) 
       key_store.traverse (wrap (this, &dhash::check_replicas_traverse_cb, 
 				nth));
   }
-
-
-  install_replica_timer ();
   update_replica_list ();
-  
 }
 
 void
@@ -399,9 +409,16 @@ dhash::check_keys_traverse_cb (chordID key)
 void
 dhash::replicate_key (chordID key, cbstat_t cb)
 {
-  if (replicas.size () > 0)
+  if (replicas.size () > 0) {
+    location *l = host_node->chordnode->locations->getlocation (replicas[0]);
+    if (!l) {
+      check_replicas_cb ();
+      replicate_key (key, cb);
+      return;
+    }
     transfer_key (replicas[0], key, DHASH_REPLICA, 
 		  wrap (this, &dhash::replicate_key_cb, 1, cb, key));
+  }
   else
     (cb)(DHASH_OK);
 }
@@ -412,9 +429,17 @@ dhash::replicate_key_cb (unsigned int replicas_done, cbstat_t cb, chordID key,
 {
   if (err) (*cb)(DHASH_ERR);
   else if (replicas_done >= replicas.size ()) (*cb)(DHASH_OK);
-  else transfer_key (replicas[replicas_done], key, DHASH_REPLICA,
-		     wrap (this, &dhash::replicate_key_cb, 
-			   replicas_done + 1, cb, key));
+  else {
+    location *l = host_node->chordnode->locations->getlocation (replicas[replicas_done]);
+    if (!l) {
+      check_replicas_cb ();
+      replicate_key (key, cb);
+      return;
+    }
+    transfer_key (replicas[replicas_done], key, DHASH_REPLICA,
+		  wrap (this, &dhash::replicate_key_cb, 
+			replicas_done + 1, cb, key));
+  }
 						
 }
 void
@@ -626,18 +651,25 @@ dhash::store (dhash_insertarg *arg, cbstore cb)
     dhash_stat stat;
     chordID id = arg->key;
     if (arg->type == DHASH_STORE) {
+      keys_stored++;
       stat = DHASH_STORED;
       key_store.enter (id, &stat);
     } else if (arg->type == DHASH_REPLICA) {
+      keys_replicated++;
       stat = DHASH_REPLICATED;
       key_replicate.enter (id, &stat);
     } else {
+      keys_cached++;
       stat = DHASH_CACHED;
       key_cache.enter (id, &stat);
     }
     
     db->insert (k, d, wrap(this, &dhash::store_cb, arg->type, id, cb));
 
+    /* statistics */
+    if (ss) bytes_stored += ss->size;
+    else bytes_stored += arg->data.size ();
+    
   } else
     cb (DHASH_STORE_PARTIAL);
 
@@ -662,7 +694,7 @@ dhash::store_cb(store_status type, chordID id, cbstore cb, int stat)
   if (stat != 0) 
     (*cb)(DHASH_STOREERR);
   else if (type == DHASH_STORE)
-     replicate_key (id,  wrap (this, &dhash::store_repl_cb, cb));
+    replicate_key (id,  wrap (this, &dhash::store_repl_cb, cb));
   else	   
     (*cb)(DHASH_OK);
   
@@ -758,6 +790,7 @@ dhash::store_flush_cb (int err) {
 
 void
 dhash::cache_flush (chordID key, dhash_stat value) {
+  return;
   warn << "flushing element " << key << " from cache\n";
   ptr<dbrec> k = id2dbrec(key);
   db->del (k, wrap(this, &dhash::cache_flush_cb));
@@ -795,11 +828,8 @@ dhash::dhash_reply (long xid, unsigned long procno, void *res)
 void
 dhash::printkeys () 
 {
-  warn << "ID: " << host_node->my_ID () << "\n";
   key_store.traverse (wrap (this, &dhash::printkeys_walk));
-  warn << "repliated:\n";
   key_replicate.traverse (wrap (this, &dhash::printkeys_walk));
-  warn << "Cached:\n";
   key_cache.traverse (wrap (this, &dhash::printcached_walk));
 }
 
@@ -820,3 +850,18 @@ dhash::printcached_walk (chordID k)
 {
   warn << k << " CACHED\n";
 }
+
+void
+dhash::print_stats () 
+{
+  warn << "ID: " << host_node->my_ID () << "\n";
+  warn << "Stats";
+  warn << "  " << keys_stored << " stored for " << bytes_stored << " bytes\n";
+  warn << "  " << bytes_stored << " bytes stored\n";
+  warn << "  " << keys_cached << " keys cached\n";
+  warn << "  " << keys_replicated << " keys replicated\n";
+  warn << "\nKeys: \n";
+  printkeys ();
+}
+
+

@@ -53,9 +53,10 @@ locationtable::doForeignRPC (rpc_program prog,
   ptr<aclnt> c = aclnt::alloc (l->x, chord_program_1);
   if (c) {
     chord_RPC_res *res = New chord_RPC_res ();
+    frpc_state *C = New frpc_state (res, out, prog, procno, cb,
+				   l, getnsec ());
     c->call (CHORDPROC_HOSTRPC, &farg, res, 
-	   wrap (this, &locationtable::doForeignRPC_cb, res, out, 
-		 prog, procno, cb)); 
+	   wrap (this, &locationtable::doForeignRPC_cb, C)); 
   } else {
     (*cb) (RPC_CANTSEND);
     delete_connections (l);
@@ -64,28 +65,32 @@ locationtable::doForeignRPC (rpc_program prog,
 }
 
 void
-locationtable::doForeignRPC_cb (chord_RPC_res *res,
-				void *out,
-				rpc_program prog,
-				int procno,
-				aclnt_cb cb,
-				clnt_stat err)
+locationtable::doForeignRPC_cb (frpc_state *C,  clnt_stat err)
 {
-  if ((err) || (res->status)) {
-    //    if (err) chordnode->deletefingers ();
-    (*cb)(err);
+  if ((err) || (C->res->status)) {
+    nrpcfailed++;
+    chordnode->deletefingers (C->l->n);
+    (C->cb)(err);
   } else {
-    char *mRes = res->resok->marshalled_res.base ();
-    size_t reslen = res->resok->marshalled_res.size ();
+    u_int64_t lat = getnsec () - C->s;
+    C->l->rpcdelay += lat;
+    C->l->nrpc++;
+    rpcdelay += lat;
+    nrpc++;
+    C->l->maxdelay = (lat > C->l->maxdelay) ? lat : C->l->maxdelay;
+
+    char *mRes = C->res->resok->marshalled_res.base ();
+    size_t reslen = C->res->resok->marshalled_res.size ();
     xdrmem x (mRes, reslen, XDR_DECODE);
-    xdrproc_t outproc = prog.tbl[procno].xdr_res;
-    if (! outproc (x.xdrp (), out) ) {
-      cb (RPC_CANTDECODERES);
+    xdrproc_t outproc = C->prog.tbl[C->procno].xdr_res;
+    if (! outproc (x.xdrp (), C->out) ) {
+      C->cb (RPC_CANTDECODERES);
     } else {
-      cb (RPC_SUCCESS);
+      C->cb (RPC_SUCCESS);
     }
   }
-  delete res;
+  delete C->res;
+  delete C;
 }
 
 long
