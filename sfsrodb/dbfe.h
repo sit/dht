@@ -102,17 +102,17 @@
 #endif /* !SLEEPYCAT */
 
 struct dbrec {
-  void *value;
+  char *value;
   long len;
   
   dbrec(void *v, long l) {
-    value = (void *)New char[l];
+    value = New char[l];
     memcpy(value, v, l);
     len = l;
   };
 
   ~dbrec() {
-    free(value);
+    delete [] value;
   };
 
 };

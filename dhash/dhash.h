@@ -182,7 +182,6 @@ class dhash {
 
   dbfe *db;
   vnode *host_node;
-  net_address t_source;
 
   ihash<chordID, store_state, &store_state::key, &store_state::link, hashID> pst;
 

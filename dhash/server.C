@@ -38,16 +38,14 @@
 #endif
 
 dhash::dhash(str dbname, vnode *node, int k, int ss, int cs, int _ss_mode) :
-  ss_mode (_ss_mode / 10), host_node (node), key_store(ss), key_cache(cs) {
+  key_store(ss), key_cache(cs) {
 
-  db = New dbfe();
   nreplica = k;
-  rc_delay = 7;
   kc_delay = 11;
+  rc_delay = 7;
+  ss_mode = _ss_mode / 10;
   
-  //recursive state
-  qnonce = 1;
-
+  db = New dbfe();
   //set up the options we want
   dbOptions opts;
   opts.addOption("opt_async", 1);
@@ -58,12 +56,21 @@ dhash::dhash(str dbname, vnode *node, int k, int ss, int cs, int _ss_mode) :
     warn << "open returned: " << strerror(err) << err << "\n";
     exit (-1);
   }
-  
-  assert(host_node);
+
+
+  host_node = node;
+  assert (host_node);
+
+  //recursive state
+  qnonce = 1;
 
   key_store.set_flushcb (wrap (this, &dhash::store_flush));
   key_replicate.set_flushcb (wrap (this, &dhash::store_flush));  
   key_cache.set_flushcb (wrap (this, &dhash::cache_flush));
+
+  // pred = 0; // XXX initialize to what?
+  check_replica_tcb = NULL;
+  check_key_tcb = NULL;
 
   /* statistics */
   keys_stored = 0;
@@ -97,18 +104,17 @@ dhash::dispatch (svccb *sbp)
       
       s_dhash_fetch_arg *farg = sbp->template getarg<s_dhash_fetch_arg> ();
       
-      dhash_fetchiter_res *res = New dhash_fetchiter_res (DHASH_CONTINUE);
+      dhash_fetchiter_res res (DHASH_CONTINUE);
       if (key_status (farg->key) != DHASH_NOTPRESENT) {
 	//fetch the key and return it, end of story
 	fetch (farg->key, wrap (this, &dhash::fetchiter_svc_cb,
 				sbp, farg));
-	delete res;
 	return;
       } else if (responsible (farg->key))  {
 	//no where else to go, return NOENT or RETRY?
-	res->set_status (DHASH_NOENT);
+	res.set_status (DHASH_NOENT);
       } else {
-	res->set_status (DHASH_CONTINUE);
+	res.set_status (DHASH_CONTINUE);
 	chordID nid;
 	chordID myID = host_node->my_ID ();
 	chordID my_succ = host_node->my_succ ();
@@ -132,11 +138,11 @@ dhash::dispatch (svccb *sbp)
 	  last = nsucc.x;
 	}
 	
-	res->cont_res->succ_list.setsize (s_list.size ());
+	res.cont_res->succ_list.setsize (s_list.size ());
 	for (unsigned int i = 0; i < s_list.size (); i++)
-	  res->cont_res->succ_list[i] = s_list[i];
+	  res.cont_res->succ_list[i] = s_list[i];
 
-	chordID best_succ = res->cont_res->succ_list[0].x;
+	chordID best_succ = res.cont_res->succ_list[0].x;
 	
 	if ((ss_mode > 0) && (nid == my_succ)) {
 	  //returning a node which will hold the key, pick the fastest
@@ -147,23 +153,22 @@ dhash::dispatch (svccb *sbp)
 	    s_list.size ():
 	    nreplica;
 	  for (int i = 1; i < lim; i++) {
-	    n = locations->getlocation(res->cont_res->succ_list[i].x);
+	    n = locations->getlocation(res.cont_res->succ_list[i].x);
 	    if (n->nrpc == 0) continue;
 	    if ((c->nrpc == 0) || 
 		(n->rpcdelay/n->nrpc) < (c->rpcdelay/c->nrpc)) {
 	      c = n;
-	      best_succ = res->cont_res->succ_list[i].x;
+	      best_succ = res.cont_res->succ_list[i].x;
 	    }
 	  }
 	}
 
-	res->cont_res->next.x = best_succ;
-	res->cont_res->next.r = 
+	res.cont_res->next.x = best_succ;
+	res.cont_res->next.r = 
 	  host_node->chordnode->locations->getaddress (best_succ);
       }
       
-      sbp->reply (res);
-      delete res;
+      sbp->reply (&res);
     }
     break;
     
@@ -179,12 +184,11 @@ dhash::dispatch (svccb *sbp)
 	  (!responsible (sarg->key)) && 
 	  (!pst[sarg->key])) {
 	warnt("DHASH: retry");
-	dhash_storeres *res = New dhash_storeres (DHASH_RETRY);
+	dhash_storeres res (DHASH_RETRY);
 	chordID pred = host_node->my_pred ();
-	res->pred->p.x = pred;
-	res->pred->p.r = host_node->chordnode->locations->getaddress (pred);
-	sbp->reply (res);
-	delete res;
+	res.pred->p.x = pred;
+	res.pred->p.r = host_node->chordnode->locations->getaddress (pred);
+	sbp->reply (&res);
       } else {
 	warnt ("DHASH: will store");
 	store (sarg, wrap(this, &dhash::storesvc_cb, sbp, sarg));	
@@ -197,15 +201,14 @@ dhash::dispatch (svccb *sbp)
       s_dhash_getkeys_arg *gkarg = 
 	sbp->template getarg<s_dhash_getkeys_arg> ();
       
-      dhash_getkeys_res *res = New dhash_getkeys_res (DHASH_OK);
+      dhash_getkeys_res res (DHASH_OK);
       ref<vec<chordID> > keys = New refcounted<vec<chordID> >;
       chordID mypred = host_node->my_pred ();
       key_store.traverse (wrap (this, &dhash::get_keys_traverse_cb, keys, 
 				mypred, gkarg->pred_id));
 
-      res->resok->keys.set (keys->base (), keys->size (), freemode::NOFREE);
-      sbp->reply (res);
-      delete res;
+      res.resok->keys.set (keys->base (), keys->size (), freemode::NOFREE);
+      sbp->reply (&res);
     }
     break;
   case DHASHPROC_KEYSTATUS:
@@ -231,21 +234,21 @@ void
 dhash::fetchiter_svc_cb (svccb *sbp, s_dhash_fetch_arg *arg,
 			 ptr<dbrec> val, dhash_stat err) 
 {
-  dhash_fetchiter_res *res = New dhash_fetchiter_res (DHASH_CONTINUE);
+  dhash_fetchiter_res res (DHASH_CONTINUE);
   if (err) 
-    res->set_status (DHASH_NOENT);
+    res.set_status (DHASH_NOENT);
   else {
-    res->set_status (DHASH_COMPLETE);
+    res.set_status (DHASH_COMPLETE);
     
     int n = (arg->len + arg->start < val->len) ? 
       arg->len : val->len - arg->start;
 
-    res->compl_res->res.setsize (n);
-    res->compl_res->attr.size = val->len;
-    res->compl_res->offset = arg->start;
-    res->compl_res->source = host_node->my_ID ();
+    res.compl_res->res.setsize (n);
+    res.compl_res->attr.size = val->len;
+    res.compl_res->offset = arg->start;
+    res.compl_res->source = host_node->my_ID ();
 
-    memcpy (res->compl_res->res.base (), 
+    memcpy (res.compl_res->res.base (), 
 	    (char *)val->value + arg->start, 
 	    n);
     /* statistics */
@@ -253,8 +256,7 @@ dhash::fetchiter_svc_cb (svccb *sbp, s_dhash_fetch_arg *arg,
     bytes_served += n;
   }
   
-  sbp->reply (res);
-  delete res;
+  sbp->reply (&res);
 }
 
 void
@@ -264,15 +266,15 @@ dhash::storesvc_cb(svccb *sbp,
   
   warnt("DHASH: STORE_replying");
 
-  dhash_storeres *res = New dhash_storeres (DHASH_OK);
+  dhash_storeres res (DHASH_OK);
   if ((err != DHASH_OK) && (err != DHASH_STORE_PARTIAL)) 
-    res->set_status (err);
+    res.set_status (err);
   else {
-    res->resok->source = host_node->my_ID ();
-    res->resok->done = (err == DHASH_OK);
+    res.resok->source = host_node->my_ID ();
+    res.resok->done = (err == DHASH_OK);
   }
 
-  sbp->reply (res);
+  sbp->reply (&res);
 }
 
 void
@@ -428,9 +430,8 @@ dhash::check_keys_traverse_cb (chordID key)
   if ( (responsible (key)) && (key_status(key) != DHASH_STORED)) {
     change_status (key, DHASH_STORED);
   } else if ( (!responsible (key) && (key_status (key) == DHASH_STORED))) {
-    change_status (key, DHASH_REPLICATED);
+    change_status (key, DHASH_REPLICATED); 
   }
-
 }
 // --- node to node transfers ---
 void
@@ -568,7 +569,6 @@ dhash::get_key_initread_cb (cbstat_t cb, dhash_fetchiter_res *res,
 		    key, cb);
   } else {
     char *buf = New char[res->compl_res->attr.size];
-    assert (buf);
     memcpy (buf, res->compl_res->res.base (), res->compl_res->res.size ());
     unsigned int *read = New unsigned int(res->compl_res->res.size ());
     unsigned int offset = *read;
@@ -597,16 +597,16 @@ dhash::get_key_read_cb (chordID key, char *buf, unsigned int *read,
 			dhash_fetchiter_res *res, cbstat_t cb, clnt_stat err) 
 {
   if ( (err) || (res->status != DHASH_COMPLETE)) {
-    delete buf;
-    (*cb)(DHASH_RPCERR);
+    // XXX caller of get_key can get one error cb for each chunk!!!
+    (*cb) (DHASH_RPCERR);
   } else {
     *read += res->compl_res->res.size ();
     memcpy (buf + res->compl_res->offset, res->compl_res->res.base (), 
 	    res->compl_res->res.size ());
     if (*read == res->compl_res->attr.size) {
       get_key_finish (buf, res->compl_res->res.size (), key, cb);
-      delete buf;
-      delete res;
+      delete read;
+      delete [] buf;
     }
   }
   delete res;
@@ -772,13 +772,14 @@ dhash::dbrec2id (ptr<dbrec> r) {
 void
 dhash::change_status (chordID key, dhash_stat newstat) 
 {
-
   if (key_status (key) == DHASH_STORED) 
     key_store.remove (key);
   else if (key_status (key) == DHASH_REPLICATED)
     key_replicate.remove (key);
-  else
+  else if (key_status (key) == DHASH_CACHED)
     key_cache.remove (key);
+  else
+    assert (0);
 
   if (newstat == DHASH_STORED)
     key_store.enter (key, &newstat);
@@ -786,8 +787,8 @@ dhash::change_status (chordID key, dhash_stat newstat)
     key_replicate.enter (key, &newstat);
   else if (newstat == DHASH_CACHED)
     key_cache.enter (key, &newstat);
-
 }
+
 
 dhash_stat
 dhash::key_status(chordID n) 

@@ -30,7 +30,7 @@ template<class KEY, class VALUE>
 class vs_cache {
   struct cache_entry {
     vs_cache    *c;
-     KEY    k;
+    KEY          k;
     VALUE        v;
 
     ihash_entry<cache_entry> fhlink;
@@ -38,15 +38,17 @@ class vs_cache {
 
     cache_entry (vs_cache<KEY, VALUE> *cc,
 	        KEY &kk,  VALUE *vv)
-      : c (cc), k (kk)
-    {      v = *vv;
-    c->lrulist.insert_tail (this);
-    c->entries.insert (this);
-    c->num_cache_entries++;
-    while (c->num_cache_entries > implicit_cast<u_int> (c->max_cache_entries)) {
-      if (c->fcb) (c->fcb) (c->lrulist.first->k, c->lrulist.first->v);
-      delete c->lrulist.first;
-    }
+      : c (cc), k (kk), v (*vv)
+    {
+      c->lrulist.insert_tail (this);
+      c->entries.insert (this);
+      c->num_cache_entries++;
+      if (c->num_cache_entries > c->max_cache_entries) {
+	cache_entry *ad = c->lrulist.first;
+	if (c->fcb)
+	  (c->fcb) (ad->k, ad->v);
+	delete ad;
+      }
     }
 
     ~cache_entry ()
@@ -86,6 +88,8 @@ public:
 	vNew cache_entry (this, kk, vv);
         return 1;
       } else {
+	// XXX what if a new value under an old key.  Is
+	// touch() really the expected behavior?  --josh
 	ad->touch ();
         return 0;
       }
@@ -93,8 +97,9 @@ public:
   
   void remove (KEY& k) 
     {      
-      lrulist.remove (entries[k]);
-      entries.remove(entries[k]);
+      cache_entry *ad = entries[k];
+      assert (ad);
+      delete ad;
       num_cache_entries--;
     }
 
@@ -113,8 +118,9 @@ public:
        cache_entry *e = entries.first ();
        while (e) 
 	 {
+	   cache_entry *next = entries.next (e); // in case cb deletes e
 	   cb (e->k);
-	   e = entries.next (e);
+	   e = next;
 	 }
      }
 
