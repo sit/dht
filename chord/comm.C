@@ -49,12 +49,9 @@ ihash<str, rpcstats, &rpcstats::key, &rpcstats::h_link> rpc_stats_tab;
 u_int64_t rpc_stats_lastclear (getusec ());
 
 static inline rpcstats *
-getstats (const rpc_program &prog, int procno)
+getstats (int progno, int procno)
 {
-  const rpcgen_table *rtp;
-  rtp = &prog.tbl[procno];
-  assert (rtp);
-  str key = strbuf ("%s:%s", prog.name, rtp->name);
+  str key = strbuf ("%d:%d", progno, procno);
   rpcstats *stats = rpc_stats_tab[key];
   if (!stats) {
     stats = New rpcstats (key);
@@ -66,21 +63,28 @@ getstats (const rpc_program &prog, int procno)
 void
 track_call (const rpc_program &prog, int procno, size_t b)
 {
-  rpcstats *stats = getstats (prog, procno);
+  rpcstats *stats = getstats (prog.progno, procno);
   stats->call (b);
 }
 
 void
 track_rexmit (const rpc_program &prog, int procno, size_t b)
 {
-  rpcstats *stats = getstats (prog, procno);
+  rpcstats *stats = getstats (prog.progno, procno);
+  stats->rexmit (b);
+}
+
+void
+track_rexmit (int progno, int procno, size_t b)
+{
+  rpcstats *stats = getstats (progno, procno);
   stats->rexmit (b);
 }
 
 void
 track_reply (const rpc_program &prog, int procno, size_t b)
 {
-  rpcstats *stats = getstats (prog, procno);
+  rpcstats *stats = getstats (prog.progno, procno);
   stats->reply (b);
 }
 

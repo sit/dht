@@ -144,6 +144,9 @@ class vnode_impl : public vnode {
   void update_coords (Coord uc, float ud);
   void check_dead_node_cb (ptr<location> l, time_t backoff, chordstat s);
   void check_dead_nodes ();
+
+  void tmo (cbtmo_t cb_tmo, int progno,
+	    int procno, int args_len, chord_node n, int r);
   
   // The RPCs
   void doget_successor (user_args *sbp);

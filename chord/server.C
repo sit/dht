@@ -604,13 +604,21 @@ vnode_impl::doRPC (ref<location> l, const rpc_program &prog, int procno,
     }
   
 
-
     return rpcm->doRPC (me_, l, transport_program_1, TRANSPORTPROC_DORPC, 
-			arg, res, cbw, cb_tmo);
+			arg, res, cbw, 
+			wrap(this, &vnode_impl::tmo, cb_tmo, 
+			     prog.progno, procno, args_len));
 			
   }
 }
 
+void
+vnode_impl::tmo (cbtmo_t cb_tmo, int progno, 
+		 int procno, int args_len, chord_node n, int r)
+{
+  track_rexmit (progno, procno, args_len);
+  if (cb_tmo) cb_tmo (n, r);
+}
 
 void
 vnode_impl::doRPC_cb (ptr<location> l, xdrproc_t proc, 
