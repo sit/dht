@@ -15,7 +15,9 @@ enum dhash_stat {
   DHASH_STORED = 4,
   DHASH_CACHED = 5,
   DHASH_REPLICATED = 6,
-  DHASH_STORE_PARTIAL = 11
+  DHASH_STORE_PARTIAL = 11,
+  DHASH_COMPLETE = 12,
+  DHASH_CONTINUE = 13
 };
 
 enum store_status {
@@ -87,6 +89,24 @@ union dhash_storeres switch (dhash_stat status) {
    dhash_storeresok resok;
 };
 
+struct dhash_fetchiter_continue_res {
+  chord_node next;
+};
+
+union dhash_fetchiter_res switch (dhash_stat status) {
+ case DHASH_COMPLETE:
+   dhash_res compl_res;
+ case DHASH_CONTINUE:
+   dhash_fetchiter_continue_res cont_res;
+ default:
+   void;
+};
+
+struct dhash_distkey_arg {
+  chordID key;
+  chordID dest_hosts<>;
+};
+
 program DHASHCLNT_PROGRAM {
 	version DHASHCLNT_VERSION {
 
@@ -117,6 +137,11 @@ program DHASH_PROGRAM {
     dhash_stat
     DHASHPROC_KEYSTATUS (chordID) = 4;
 
+    dhash_fetchiter_res
+    DHASHPROC_FETCHITER (dhash_fetch_arg) = 5;
+
+    dhash_stat
+    DHASHPROC_DISTRIBUTEKEY (dhash_distkey_arg) = 6;
   } = 1;
 } = 344449;
 

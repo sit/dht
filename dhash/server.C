@@ -11,7 +11,7 @@
 
 #define REP_DEGREE 0
 
-dhash::dhash(str dbname, ptr<vnode> node, int k, int ss, int cs) :
+dhash::dhash(str dbname, vnode *node, int k, int ss, int cs) :
   host_node (node), key_store(ss), key_cache(cs) {
 
   db = New dbfe();
@@ -40,8 +40,7 @@ dhash::dhash(str dbname, ptr<vnode> node, int k, int ss, int cs) :
   update_replica_list ();
   install_replica_timer ();
   install_keycheck_timer ();
-
-  delaycb (5, 0, wrap(this, &dhash::transfer_initial_keys));
+  transfer_initial_keys ();
 
   // RPC demux
   host_node->addHandler (DHASH_PROGRAM, wrap(this, &dhash::dispatch));
@@ -73,6 +72,45 @@ dhash::dispatch(unsigned long procno,
     }
     break;
 
+  case DHASHPROC_FETCHITER:
+    {
+      dhash_fetch_arg *farg = New dhash_fetch_arg ();
+      if (!proc (x.xdrp (), farg)) {
+	warn << "DHASH: error unmarshalling arguments\n";
+	return;
+      }
+
+      dhash_fetchiter_res *res = New dhash_fetchiter_res;
+
+      if (key_status (farg->key) != DHASH_NOTPRESENT) {
+	//fetch the key and return it, end of story
+	fetch (farg->key, wrap (this, &dhash::fetchiter_svc_cb,
+				rpc_id, farg));
+      } else if (responsible (farg->key))  {
+	//no where else to go, return NOENT or RETRY?
+	res->set_status (DHASH_NOENT);
+      } else {
+	res->set_status (DHASH_CONTINUE);
+	chordID succ = host_node->my_succ ();
+	chordID mID = host_node->my_ID ();
+	chordID nid;
+	if (betweenrightincl (mID,
+			      succ,
+			      farg->key)) 
+	  nid = succ;
+	else 
+	  nid = host_node->lookup_closestpred (farg->key);
+	
+	res->cont_res->next.x = nid;
+	res->cont_res->next.r = 
+	  host_node->chordnode->locations->getaddress (nid);
+	
+      }
+
+      dhash_reply (rpc_id, DHASHPROC_FETCHITER, res);
+      delete res;
+    }
+    break;
   case DHASHPROC_STORE:
     {
 
@@ -131,14 +169,55 @@ dhash::dispatch(unsigned long procno,
       delete arg;
     }
     break;
+  case DHASHPROC_DISTRIBUTEKEY:
+    {
+      dhash_distkey_arg *arg = New dhash_distkey_arg;
+      if (!proc (x.xdrp (), arg)) {
+	warn << "DHASH: error unmarshalling arguments (distkey)\n";
+	return;
+      }
+
+      dhash_stat stat = key_status (arg->key);
+      if (stat == DHASH_NOTPRESENT) {
+	dhash_reply (rpc_id, DHASHPROC_DISTRIBUTEKEY, &stat);
+      } else {
+	for (unsigned int i = 0; i < arg->dest_hosts.size (); i++)
+	  transfer_key (arg->dest_hosts[i], arg->key, DHASH_CACHE,
+			wrap (this, &dhash::distkeys_cb));
+	dhash_stat ok = DHASH_OK;
+	dhash_reply (rpc_id, DHASHPROC_DISTRIBUTEKEY, &ok);
+      }
+    }
+    break;
   default:
     break;
   }
   pred = host_node->my_pred ();
-  //  delete arg;
+
   return;
 }
 
+void
+dhash::fetchiter_svc_cb (long xid, dhash_fetch_arg *arg,
+			 ptr<dbrec> val, dhash_stat err) 
+{
+  dhash_fetchiter_res *res = New dhash_fetchiter_res ();
+  res->set_status (DHASH_COMPLETE);
+  
+  res->compl_res->set_status (DHASH_OK);
+  int n = (arg->len + arg->start < val->len) ? arg->len : val->len - arg->start;
+
+  res->compl_res->resok->res.setsize (n);
+  res->compl_res->resok->attr.size = val->len;
+  res->compl_res->resok->offset = arg->start;
+
+  memcpy (res->compl_res->resok->res.base (), 
+	  (char *)val->value + arg->start, 
+	  n);
+
+  dhash_reply (xid, DHASHPROC_FETCHITER, res);
+  delete res;
+}
 void
 dhash::fetchsvc_cb (long xid,
 		    dhash_fetch_arg *arg, 
@@ -208,6 +287,12 @@ dhash::get_keys_traverse_cb (ptr<vec<chordID> > vKeys,
   }
 }
 
+void
+dhash::distkeys_cb (dhash_stat stat)
+{
+  if (stat != DHASH_OK) 
+    warn << "couldn't transfer key, bummer.\n";
+}
 //---------------- no sbp's below this line --------------
  
 // -------- reliability stuff
@@ -216,11 +301,7 @@ void
 dhash::transfer_initial_keys ()
 {
   chordID succ = host_node->my_succ ();
-  if (host_node->my_ID () == succ) {
-    warn << "Waiting to initialize\n";
-    delaycb (5, 0, wrap(this, &dhash::transfer_initial_keys));
-    return;
-  }
+
   ptr<dhash_getkeys_arg> arg = New refcounted<dhash_getkeys_arg>;
   arg->pred_id = host_node->my_ID ();
   
@@ -335,13 +416,15 @@ dhash::check_keys_traverse_cb (chordID key)
 }
 // --- node to node transfers ---
 void
-dhash::transfer_key (chordID to, chordID key, store_status stat, callback<void, dhash_stat>::ref cb) 
+dhash::transfer_key (chordID to, chordID key, store_status stat, 
+		     callback<void, dhash_stat>::ref cb) 
 {
   fetch(key, wrap(this, &dhash::transfer_fetch_cb, to, key, stat, cb));
 }
 
 void
-dhash::transfer_fetch_cb (chordID to, chordID key, store_status stat, callback<void, dhash_stat>::ref cb,
+dhash::transfer_fetch_cb (chordID to, chordID key, store_status stat, 
+			  callback<void, dhash_stat>::ref cb,
 			  ptr<dbrec> data, dhash_stat err) 
 {
   

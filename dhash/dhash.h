@@ -71,7 +71,7 @@ class dhashclient {
   int num_replicas;
 
   void dispatch (svccb *sbp);
-  void cache_on_path(ptr<dhash_insertarg> item, route path);
+  void cache_on_path(chordID key, chordID owner, route path);
 
   void lookup_findsucc_cb (svccb *sbp,
 			   chordID succ, route path, chordstat err);
@@ -100,7 +100,7 @@ class dhash {
   int rc_delay;
 
   dbfe *db;
-  ptr<vnode> host_node;
+  vnode *host_node;
 
   qhash<chordID, store_state, hashID> pst;
 
@@ -113,6 +113,9 @@ class dhash {
   void fetch (chordID id, cbvalue cb);
   void fetch_cb (cbvalue cb,  ptr<dbrec> ret);
 
+  void fetchiter_svc_cb (long xid, dhash_fetch_arg *farg,
+			 ptr<dbrec> val, dhash_stat stat);
+  
   void store (dhash_insertarg *arg, cbstore cb);
   void store_cb(store_status type, chordID id, cbstore cb, int stat);
   void store_repl_cb (cbstore cb, dhash_stat err);
@@ -121,6 +124,8 @@ class dhash {
   void get_keys_traverse_cb (ptr<vec<chordID> > vKeys,
 			     chordID predid,
 			     chordID key);
+
+  void distkeys_cb (dhash_stat stat);
 
 
   void transfer_initial_keys ();
@@ -183,7 +188,7 @@ class dhash {
   timecb_t *check_key_tcb;
 
  public:
-  dhash (str dbname, ptr<vnode> node, 
+  dhash (str dbname, vnode *node, 
 	 int nreplica = 0, int ss = 10000, int cs = 1000);
   void accept(ptr<axprt_stream> x);
 };

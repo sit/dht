@@ -99,16 +99,15 @@ dhashclient::insert_store_cb(svccb *sbp,  dhash_storeres *res,
 }
    
 void
-dhashclient::cache_on_path(ptr<dhash_insertarg> item, route path) 
+dhashclient::cache_on_path(chordID key, chordID owner, route path) 
 {
-
-  for (unsigned int i = 0; i < path.size (); i++) {
-    warn << "caching " << i << " out of " << path.size () << " on " << path[i] << "\n";
-    warn << "item is " << item->key << "\n";
-    dhash_stat *res = New dhash_stat();
-    clntnode->doRPC(path[i], dhash_program_1, DHASHPROC_STORE, item, res,
-		wrap(this, &dhashclient::cache_store_cb, res));
-  }
+  dhash_stat *res = New dhash_stat();
+  ptr<dhash_distkey_arg> arg = New refcounted<dhash_distkey_arg>;
+  arg->key = key;
+  arg->dest_hosts.set (path.base (), path.size ());
+  clntnode->doRPC(owner, dhash_program_1, DHASHPROC_DISTRIBUTEKEY, 
+		  arg, res,
+		  wrap(this, &dhashclient::cache_store_cb, res));
 }
 
 void
@@ -140,6 +139,7 @@ dhashclient::lookup_findsucc_cb(svccb *sbp,
     warnt("DHASH: lookup_after_dofindsucc");
 
     dhash_fetch_arg *arg = sbp->template getarg<dhash_fetch_arg>();
+    //doRPC might buffer up request: we must conv. to refcount<arg>
     ptr<dhash_fetch_arg> a = New refcounted<dhash_fetch_arg> (*arg);
     dhash_res *res = New dhash_res(DHASH_OK);
     retry_state *st = New retry_state (arg->key, sbp, succ, path);
@@ -156,10 +156,6 @@ dhashclient::lookup_fetch_cb(dhash_res *res, retry_state *st, clnt_stat err)
     warnx << "lookup_fetch_cb failed " << err << "\n";
     chordID l = st->path.back ();
     warnx << "lookup_fetch_cb: last " << l << " failed " << st->succ << "\n";
-#if 0
-    defp2p->deleteloc (st->succ);
-    defp2p->alert (l, st->succ);
-#endif
     clntnode->find_successor (st->n, 
 			      wrap(this, &dhashclient::lookup_findsucc_cb, 
 				   st->sbp));
@@ -168,11 +164,9 @@ dhashclient::lookup_fetch_cb(dhash_res *res, retry_state *st, clnt_stat err)
 	  << st->succ << "\n";
     clntnode->get_predecessor (st->succ, wrap (this, &dhashclient::retry, st));
   } else if (res->status == DHASH_OK) {
-
     warnt("DHASH: lookup_after_FETCH");
     res->resok->hops = st->hops;
     st->sbp->reply (res);
-    
   } else {
     warn << "error on lookup " << res->status << "\n";
     st->sbp->reply (res);

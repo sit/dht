@@ -156,6 +156,7 @@ locationtable::cacheloc (chordID &x, net_address &r, chordID &source)
     location *loc = New location (x, r, source);
     locs.insert (loc);
     addlru (loc);
+
   }
 }
 

@@ -118,8 +118,6 @@ class vnode : public virtual refcount  {
   list<searchcb_entry, &searchcb_entry::link> searchCallbacks;
 
   void updatefingers (chordID &x, net_address &r);
-  chordID findpredfinger (chordID &x);
-  chordID findsuccfinger (chordID &x);
   void replacefinger (node *n);
   void print ();
 
@@ -198,6 +196,8 @@ class vnode : public virtual refcount  {
 
   // For other modules
   int countrefs (chordID &x);
+  chordID findpredfinger (chordID &x);
+  chordID findsuccfinger (chordID &x);
   void deletefingers (chordID &x);
   void stats (void);
   chordID lookup_closestpred (chordID &x);
