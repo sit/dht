@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-## $Id: Makefile.am,v 1.7 2003/05/06 17:39:14 fdabek Exp $
+## $Id: Makefile.am,v 1.8 2004/04/28 18:28:21 sit Exp $
 
 noinst_LIBRARIES = libutil.a
 
@@ -30,11 +30,14 @@ libutil_a_SOURCES = \
 # will run ida-genfield.py to update ida-field.C if ida-genfield.py changes.
 
 
-TESTS = test_ida test_skiplist
+TESTS = test_ida test_skiplist test_locationtable
 check_PROGRAMS = $(TESTS)
 
 test_ida_SOURCES = test_ida.C
 test_ida_LDADD = ./libutil.a $(LIBSFSCRYPT) $(LIBARPC) $(LIBASYNC) $(LIBGMP)
+
+test_locationtable_SOURCES = test_locationtable.C
+test_locationtable_LDADD = ./libutil.a $(LIBSFSCRYPT) $(LIBARPC) $(LIBASYNC) $(LIBGMP)
 
 test_skiplist_SOURCES = test_skiplist.C
 

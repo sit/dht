@@ -320,10 +320,14 @@ make_chordID (const chord_node_wire &n)
 bool
 is_authenticID (const chordID &x, chord_hostname n, int p, int vnode)
 {  
-  int max_vnodes = 0;
+  static int max_vnodes = 0;
   if (max_vnodes == 0) {
     bool ok = Configurator::only ().get_int ("chord.max_vnodes", max_vnodes);
-    assert (ok);
+    if (!ok) {
+      // This should only be needed when libutil is not linked with libchord.
+      warnx << "Using default number of max_vnodes: 1024\n";
+      max_vnodes = 1024;
+    }
   }
 
   // xxx presumably there's really a smaller actual range

@@ -161,7 +161,6 @@ locationtable::realinsert (ref<location> l)
     }
     return loc;
   } else {
-
     loctrace << "insert " << l->id () << " " << l->address ()
 	     << " " << l->vnode () << "\n";
     locwrap *lw = locs[l->id ()];
@@ -216,8 +215,7 @@ locationtable::insert (const chordID &n,
 void
 locationtable::figure_pins (void)
 {
-  warnx << "locationtable::figure_pins\n";
-  bool done = false;
+  loctrace << "locationtable::figure_pins\n";
   
   // Set this up front.
   pins_updated_ = true;
@@ -225,86 +223,63 @@ locationtable::figure_pins (void)
   pininfo *cpin = pinlist.first ();
   locwrap *cur = loclist.first ();
 
+  if (cur == NULL || cpin == NULL)
+    return;
+
   // Clear everything initially.  Then turn stuff on later.
   while (cur) {
     cur->pinned_ = false;
     cur = loclist.next (cur);
   }
-  
-  if (cpin == NULL)
-    return;
 
-  // Pin the predecessors.
-  // XXX I am too lame to figure out how to merge this in with
-  //     the scan below, though of course, it should be possible.
+  // Pin the predecessors and selves.
+  // There's some oddity here b/c strictly speaking succ(x) := x.
+  // However the n elements of the pinned successors of x does not
+  // include x.  Thus if you want to pin the node itself, you have
+  // to call pin(x) so that pinself is set and it is special cased here.
   while (cpin) {
     if (cpin->pinpred_ > 0) {
       locwrap *p = loclist.closestpred (cpin->n_);
       p->pinned_ = true;
-      warnx << "pinning pred " << p->n_ << "\n";
+      loctrace << "pinning pred " << p->n_ << "\n";
+    }
+    if (cpin->pinself_) {
+      locwrap *p = locs[cpin->n_];
+      if (!p) fatal << "expected locwrap for " << cpin->n_ << " for pinself.\n";
+      p->pinned_ = true;
+      loctrace << "pinning self " << p->n_ << "\n";
     }
     cpin = pinlist.next (cpin);
   }
   
   cpin = pinlist.first ();
-  cur = loclist.first ();  
-  unsigned short to_pin = 0;
   
-  // Walk through both the pinlist and the loclist.
-  // We always want the pin's ID to be ahead of the loclist ID
-  // so that we know how far forward we'll have to go.
-  
-  // warnx << "cur pin = " << cpin->n_ << ", " << cpin->pinsucc_ << "\n";
-  while (!done) {
-    while (cpin && cpin->n_ < cur->n_) {
-      // All consecutive pins [between two nodes] are effectively collapsed;
-      // select the "max" pin amount from among these two locwraps.
-      if (cpin->pinsucc_ > to_pin)
-	to_pin = cpin->pinsucc_;
-      
-      cpin = pinlist.next (cpin);
-      if (!cpin) break;
-      // warnx << "<>step pin = " << cpin->n_ << " " << cpin->pinsucc_ << "\n";
-    }
-    // cpin->n_ >= cur->n_
-    if (!cpin) {
-      // Last pin.  Scan until its influence expires...
-      while (cur && to_pin > 0) {
-  	warnx << "pinning cur " << cur->n_ << "\n";
-	cur->pinned_ = true;
-	to_pin--;
-	cur  = next (cur);
-//  	warnx << "<>step cur = " << cur->n_ << "\n";
-      }
-      done = true;
-      // ...done.
-    } else {
-      // Scan until the appearance of the next pin.
-      while (cur && cur->n_ < cpin->n_) {
-//  	warnx << "<>step cur = " << cur->n_ << "\n";
-	if (to_pin > 0) {
-	  warnx << "pinning cur " << cur->n_ << "\n";
+  // Process each pin.  This is likely to be highly redundant and thus
+  // inefficient but pinning is idempotent and hopefully we don't need
+  // to do it too often.  A more clever technique might be to try and
+  // collapse pins that appear between nodes and select the maximum
+  // pinsucc_ from among those pins. 
+  size_t sz = size ();
+  while (cpin) {
+    if (cpin->pinsucc_ > 0) {
+      unsigned short to_pin = cpin->pinsucc_;
+      size_t cursz = sz;
+      cur = loclist.closestsucc (cpin->n_);
+      do {
+	if (cur->good ()) {
+	  loctrace << "pinning cur " << cur->n_ << "\n";
 	  cur->pinned_ = true;
 	  to_pin--;
 	}
-	cur  = loclist.next (cur);
-      }
-      // cpin->n_ <= cur->n_
-      // There's some oddity here b/c strictly speaking succ(x) := x.
-      // However the n elements of the pinned successors of x does not
-      // include x.  Thus if you want to pin the node itself, you have
-      // to call pin(x) so that pinself is set.
-      if (cur->n_ == cpin->n_) {
-	if (cpin->pinself_) {
-	  cur->pinned_ = true;
-	  if (to_pin > 0)
-	    to_pin--;
-	  warnx << "pinning self " << cur->n_ << "\n";
-	}
-	cur  = loclist.next (cur);
-      }
-      // cpin->n_ <= cur->n_
+	cursz--;
+	cur = next (cur);
+	// Only iterate through all locations once.
+	// And only as far as needed.
+      } while (to_pin > 0 && cursz > 0);
     }
+    cpin = pinlist.next (cpin);
+    if (cpin) 
+      loctrace << "step pin = " << cpin->n_ << " " << cpin->pinsucc_ << "\n";
   }
 }
 
@@ -312,10 +287,9 @@ locationtable::figure_pins (void)
 void
 locationtable::evict (size_t n)
 {
-  if (!pins_updated_)
-    figure_pins ();
+  // Ensure that pins are up to date, even if nodes may have died.
+  figure_pins ();
 
-  pins_updated_ = false;
   bool done = false;
   
   bool all = (n == 0);
@@ -356,6 +330,8 @@ locationtable::evict (size_t n)
   if (n > 0 && !all) 
     loctrace << "evict: failed to evict all requested; "
 	     << n << " more requested.\n";
+
+  pins_updated_ = false;
 }
 
 void
@@ -392,6 +368,17 @@ locationtable::unpin (const chordID &x)
     pinlist.remove (x);
     delete p;
   }
+}
+
+bool
+locationtable::pinned (const chordID &x)
+{
+  locwrap *l = locs[x];
+  if (!l)
+    return false;
+  if (!pins_updated_)
+    figure_pins ();
+  return l->pinned_;
 }
 
 void
@@ -566,7 +553,7 @@ locationtable::first_loc ()
 }
 
 ptr<location>
-locationtable::next_loc (chordID n)
+locationtable::next_loc (const chordID &n)
 {
   locwrap *f = locs[n];
   assert (f);

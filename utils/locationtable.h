@@ -1,3 +1,5 @@
+#ifndef _LOCATIONTABLE_H_
+#define _LOCATIONTABLE_H_
 
 #include <skiplist.h>
 #include <chord_types.h>
@@ -97,11 +99,13 @@ class locationtable {
   // cached, return the existing object.
   ptr<location> lookup_or_create (const chord_node &n);
   ptr<location> lookup (const chordID &x);
+
   bool cached (const chordID &x);
+  bool pinned (const chordID &x); // is an actual ptr<location> that is pinned.
 
   //iterating over locations
   ptr<location> first_loc ();
-  ptr<location> next_loc (chordID n);
+  ptr<location> next_loc (const chordID &n);
   
 #if 0    
   //average stats
@@ -111,3 +115,5 @@ class locationtable {
   void stats ();
 #endif /* 0 */
 };
+
+#endif /* !_LOCATIONTABLE_H_ */
