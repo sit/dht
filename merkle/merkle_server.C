@@ -159,7 +159,6 @@ merkle_server::dispatch (svccb *sbp)
   case MERKLESYNC_GETBLOCKRANGE:
     // request all blocks in a given range, excluding a list of blocks (xkeys)
     {
-      
       //warn << (u_int) this << " dis..GETBLOCKRANGE\n";	
       getblockrange_arg *arg = sbp->template getarg<getblockrange_arg> ();
       getblockrange_res res (MERKLE_OK);
@@ -177,9 +176,11 @@ merkle_server::dispatch (svccb *sbp)
 				     make_set (arg->xkeys), arg->rngmin,
 				     arg->rngmax);
       res.resok->will_send_blocks = iter->more ();
-      sbp->reply (&res);
+      bigint srcID = arg->srcID;
+      sbp->reply (&res);  // DONT REF arg AFTER THIS POINT!!!!
+
       // XXX DEADLOCK: if the blocks arrive before 'res'...remote gets stuck
-      vNew merkle_send_range (iter, sndblkfnc, arg->srcID);
+      vNew merkle_send_range (iter, sndblkfnc, srcID);
       break;
     }
     
