@@ -82,6 +82,8 @@ make-graph.pl [options]
                                  parameters but --param constant to values of
 				 points on the convex hull, and shows the
 				 effect of varying that parameter.
+    --extend                  Extend convex hulls horizontally to the right
+				 (only works with --convex and --xrange)
 EOUsage
     
     exit(1);
@@ -105,7 +107,7 @@ my %options;
 	     "param=s", "paramname=s", "datfile=s@", "label=s@", 
 	     "xrange=s", "yrange=s", "xlabel=s", "ylabel=s@", "title=s", 
 	     "convex:s", "plottype=s", "grid", "rtmgraph", "hulllabel:s",
-	     "overallconvex:s", "fontsize=s" )
+	     "overallconvex:s", "fontsize=s", "extend" )
     or &usage;
 
 if( $options{"help"} ) {
@@ -714,6 +716,8 @@ if( defined $options{"convex"} ) {
 	    my %headerhash = ();
 	    my %valshash = ();
 	    my $h;
+	    my $max_x;
+	    my $min_y;
 	    while( <DAT> ) {
 		if( /^\#/ ) {
 		    $h = $_;
@@ -797,8 +801,18 @@ if( defined $options{"convex"} ) {
 			$headerhash{"$conx $cony"} = $h;
 		    }
 
+		    # restrain number of y digits
+		    my $tmpcony = int ($cony*10000000);
+		    $cony = ($tmpcony*1.0)/10000000.0;
 		    print CON "$conx $cony\n";
-		    
+
+		    if( !defined $max_x or $conx > $max_x ) {
+			$max_x = $conx;
+		    }
+		    if( !defined $min_y or $cony < $min_y ) {
+			$min_y = $cony;
+		    }
+
 		    if( defined $options{"hulllabel"} ) {
 			$valshash{"$conx $cony"} = $v;
 		    }
@@ -814,7 +828,7 @@ if( defined $options{"convex"} ) {
 	    system( "$con_cmd $datfile.con > $datfile$j.convex" ) and
 		die( "Couldn't run ./find_convexhull.py $datfile.con" );
 	    unlink( "$datfile.con" );
-	    
+
 	    push @convexfiles, "$datfile$j.convex";
 	    $xposes{"$datfile$j.convex"} = $xposes{$datfile};
 	    for( my $k = 0; $k <= $#ystat; $k++ ) {
@@ -987,6 +1001,14 @@ if( defined $options{"convex"} ) {
 		    }
 		}
 		
+	    }
+
+	    # extend the hull
+	    if( defined $options{"extend"} and defined $min_y and 
+		defined $max_x ) {
+		system( "echo \"$max_x $min_y\" >> $datfile$j.convex" );
+		system( "sort -n $datfile$j.convex > $datfile$j.convex.tmp; " .
+			"mv $datfile$j.convex.tmp $datfile$j.convex" );
 	    }
 
 	}
