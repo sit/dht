@@ -5,7 +5,7 @@ use FileHandle;
 my $diameter = 100;
 my $params = {
   NODES => {
-    MIN => 32,
+    MIN => 1024,
     MAX => 1024,
     INC => "*=2",
   },
@@ -17,7 +17,7 @@ my $params = {
   },
 
   K => {
-    MIN => 4,
+    MIN => 8,
     MAX => 32,
     INC => "*=2",
   },
@@ -28,6 +28,12 @@ my $params = {
     INC => "+=1",
   },
 };
+
+# for ChurnEventGenerator
+my $lifemean = 100000;
+my $deathmean = $lifemean;
+my $lookupmean = 10000; # 10000 for churn, 100 for lookup
+my $exittime = 200000;
 
 
 sub generate_topology
@@ -51,17 +57,18 @@ sub generate_events
   my ($nnodes) = @_;
 
   my $ef = new FileHandle(">kademlia-events.txt") or die "$!";
-  print $ef "generator ChurnEventGenerator proto=Kademlia seed=1\n";
+  print $ef "generator ChurnEventGenerator proto=Kademlia lifemean=$lifemean deathmean=$deathmean lookupmean=$lookupmean exittime=$exittime\n";
   $ef->close();
 }
 
 sub run_kademlia
 {
-  open(P, "p2psim/p2psim kademlia-prot.txt kademlia-top.txt kademlia-events.txt |");
+  system "p2psim/p2psim -e 1 kademlia-prot.txt oldking1024-t kademlia-events.txt > /tmp/sim-$$";
   my $totlatency = 0;
   my $nlatencies = 0;
   my $bytes = 0;
-  while(<P>){
+  my $fh = new FileHandle("</tmp/sim-$$") or die "$!";
+  while(<$fh>){
       if(/^latency ([0-9]+)/){
           $totlatency += $1;
           $nlatencies++;
@@ -73,10 +80,11 @@ sub run_kademlia
           print "Seed = $1\n";
       }
   }
-  close(P);
+  $fh->close();
+  # unlink "/tmp/sim-$$";
 
   if(!$bytes || !$totlatency){
-      print STDERR "kadx.pl: p2psim no output\n";
+      print STDERR "kadx.pl: p2psim $$ no output\n";
   }
 
   print sprintf("%.2f ", $totlatency/$nlatencies), $bytes, "\n";
