@@ -2,14 +2,13 @@
 #include <thread.h>
 #include <iostream>
 #include <typeinfo>
+#include <stdlib.h>
 
 #include "chord.h"
 #include "network.h"
 #include "event.h"
 #include "eventqueue.h"
 #include "topology.h"
-
-#include "dmalloc.h"
 
 char *topology_file;
 char *event_file;
@@ -21,6 +20,8 @@ void
 threadmain(int argc, char *argv[])
 {
   extern int anyready();
+
+  srandom(time(0) ^ (getpid() + (getpid() << 15)));
   parse_args(argc, argv);
   
   // Creates a network with the appropriate underlying topology.
