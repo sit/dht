@@ -23,6 +23,7 @@
  */
 
 #include "observers/chordobserver.h"
+#include "chordadapt.h"
 #include <iostream>
 #include <stdio.h>
 #include <assert.h>
@@ -2457,11 +2458,13 @@ LocTable::stat()
 }
 
 void
-LocTable::rand_sample(Chord::IDMap &start, Chord::IDMap &end)
+LocTable::rand_sample(Chord::IDMap &askwhom, Chord::IDMap &start, Chord::IDMap &end)
 {
-  double x = random()/(double)((1<<31)-1);
+  double x = random()/(double)(RAND_MAX);
   ConsistentHash::CHID samp = (ConsistentHash::CHID) (x * (ConsistentHash::CHID)(-1));
   idmapwrap *elm = ring.closestsucc(samp);
+  idmapwrap *elmtmp = elm;
+
   while (elm->status > LOC_HEALTHY) {
     elm = ring.next(elm);
     if (!elm) elm = ring.first();
@@ -2472,61 +2475,85 @@ LocTable::rand_sample(Chord::IDMap &start, Chord::IDMap &end)
     if (!elm) elm = ring.first();
   } while (elm->status > LOC_HEALTHY);
   end = elm->n;
+
+  askwhom = start;
+  uint prev_budget = ((ChordAdapt *)Network::Instance()->getnode(askwhom.ip))->budget();
+  ConsistentHash::CHID gap = ConsistentHash::distance(start.id,end.id);
+  uint i = 0;
+  while (i < 10) {
+    elmtmp = ring.prev(elmtmp);
+    if (!elmtmp) elmtmp = ring.last();
+    if (elmtmp->n.ip == me.ip)
+      break;
+    if (elmtmp->status <= LOC_HEALTHY) {
+      double r1 = 1.0 + (double)ConsistentHash::distance(askwhom.id,elmtmp->n.id)/(double)gap; 
+      double r2 = (double)prev_budget/(double)((ChordAdapt *)Network::Instance()->getnode(elmtmp->n.ip))->budget();
+      if (r1 < r2) {
+	askwhom = elmtmp->n;
+	prev_budget = ((ChordAdapt *)Network::Instance()->getnode(elmtmp->n.ip))->budget();
+      }
+      i++;
+    }
+  }
+  uint my_budget = ((ChordAdapt *)Network::Instance()->getnode(me.ip))->budget();
+  if (my_budget > prev_budget) {
+    double rr = (double)random()/(double)RAND_MAX;
+    if (rr > ((double)prev_budget/(double)my_budget)) 
+      askwhom = me; //don't send this exploration packet
+  }
 }
 
 uint
-LocTable::sample_smallworld(uint est_n,Chord::IDMap &start, Chord::IDMap &end, double tt, ConsistentHash::CHID mingap)
+LocTable::sample_smallworld(uint est_n, Chord::IDMap &askwhom, Chord::IDMap &start, Chord::IDMap &end, double tt, ConsistentHash::CHID mingap)
 {
   //use LOC_REPLACEMENT 
   //to denote that the finger's succeeding gap is full
   uint op = 0;
   if (lastfull && (now()-lastfull) < 2*MINTIMEOUT) {
-    rand_sample(start,end);
+    rand_sample(askwhom,start,end);
   }else{
-      //get a good sample
-    double x = random()/(double)((1<<31)-1);
+    //get a good sample
+    double x = random()/(double)(RAND_MAX);
     ConsistentHash::CHID samp = me.id+((ConsistentHash::CHID)(-1)/(ConsistentHash::CHID)pow(est_n,1-x));
-/*
-    bool recordfull = false;
-    if (!lastfull 
-	&& (now()-lastfull)<2*MINTIMEOUT
-	&&  ConsistentHash::between(me.id,full,samp)) 
-    {
-      recordfull = true;
-      samp = full;
-    }
-    */
-
     idmapwrap *elm = ring.closestsucc(samp);
     if (elm->n.ip == me.ip) {
       elm = ring.next(elm);
       if (!elm) elm = ring.first();
     }
-/*
-    if (elm->is_succ) {
-      lastfull = now();
-      recordfull = true;
-    }
-    */
 
     uint lsz = 0;
     double ti;
     ConsistentHash::CHID gap = 0;
     start = end = me;
     op = 1;
+    askwhom = elm->n;
+    uint prev_budget = ((ChordAdapt *)Network::Instance()->getnode(elm->n.ip))->budget();
+
     while ((gap <= mingap) && (elm->n.ip!=me.ip)) {
-      while (elm->is_succ || 
-	  (elm->status==LOC_REPLACEMENT)
-	  || (elm->status >= LOC_DEAD)) {
+      do {
 	ti = (double)elm->n.alivetime/(double)(now()-elm->n.timestamp + elm->n.alivetime);
-	if (elm->n.ip == me.ip)
+	if (elm->n.ip == me.ip) {
+	  askwhom = me;
+	  lastfull = now();
 	  return op;
+	}
 	elm = ring.next(elm);
 	if (!elm) elm = ring.first();
+
+	if (elm->status <= LOC_HEALTHY) {
+	  double r1 = 1.0+(double)ConsistentHash::distance(askwhom.id,elm->n.id)/(double)mingap; 
+	  double r2 = (double)prev_budget/(double)((ChordAdapt *)Network::Instance()->getnode(elm->n.ip))->budget();
+	  if ((r1 >= r2) || (askwhom.alivetime < elm->n.alivetime && elm->n.alivetime > 3*MINTIMEOUT)){
+	    askwhom = elm->n;
+	    prev_budget = ((ChordAdapt *)Network::Instance()->getnode(elm->n.ip))->budget();
+	  }
+	}
+
 	if ((elm->status <=LOC_HEALTHY) && (ti > tt || (now()-elm->n.timestamp < MINTIMEOUT)))
 	  lsz++;
 	op++;
-      }
+      }while (elm->is_succ || (elm->status==LOC_REPLACEMENT) || (elm->status >= LOC_DEAD));
+
       start = elm->n;
       while (elm->n.ip!=me.ip) {
 	if ((elm->status <=LOC_HEALTHY) && (ti > tt || (now()-elm->n.timestamp < MINTIMEOUT)))
@@ -2544,14 +2571,6 @@ LocTable::sample_smallworld(uint est_n,Chord::IDMap &start, Chord::IDMap &end, d
       end = elm->n;
       gap = ConsistentHash::distance(start.id,end.id);
     }
-    /*
-    if (recordfull) {
-      if (elm->n.ip == me.ip) 
-	full = me.id;
-      else
-	full = end.id;
-    }
-    */
     if (op >= 0.5 * size() && lsz >= 0.2*est_n)
       lastfull = now();
     else
@@ -2658,13 +2677,13 @@ LocTable::pred_biggest_gap(Chord::IDMap &start, Chord::IDMap &end, Time stabtime
 }
 
 vector<Chord::IDMap>
-LocTable::get_closest_in_gap(uint m, ConsistentHash::CHID end, Chord::IDMap src, Time stabtime, double to)
+LocTable::get_closest_in_gap(uint m, ConsistentHash::CHID start, ConsistentHash::CHID end, Chord::IDMap src, Time stabtime, double to)
 {
   vector<Chord::IDMap> v;
   vector<Chord::IDMap>::iterator i;
   vector<Time> lv;
   vector<Time>::iterator j;
-  idmapwrap *elm = ring.closestsucc(me.id+1);
+  idmapwrap *elm = ring.closestsucc(start+1);
   assert(elm);
   double ti;
   Time lat;
@@ -2717,11 +2736,14 @@ LocTable::next_close_hops(ConsistentHash::CHID key, uint n, Chord::IDMap src, do
   double latest = 0.0;
   Chord::IDMap latest_n = me;
   vector<Chord::IDMap> l;
+  vector<Chord::IDMap>::iterator il;
+  vector<double> dl;
+  vector<double>::iterator idl;
   double ti;
-  vector<Chord::IDMap>::iterator iter;
   uint i = 0;
   l.clear();
-  ConsistentHash::CHID dist;
+  ConsistentHash::CHID dist,mindist;
+  double ndist;
   vector<Chord::IDMap> all;
   Chord::IDMap predpred;
 
@@ -2749,29 +2771,41 @@ LocTable::next_close_hops(ConsistentHash::CHID key, uint n, Chord::IDMap src, do
 	 || (!elm->n.alivetime && now()-elm->n.timestamp < 800000))) { 
       all.push_back(elm->n);
       i++;
+      if (i == 1) {
+	mindist = dist;
+	ndist = 1.0;
+      }else
+	ndist = (double)dist/(double)mindist;
 
       if ((n==1) && (i == n) && topo->latency(src.ip,elm->n.ip) < 0.8*topo->median_lat()) {
 	l.push_back(elm->n);
 	return l;
       }
 
+      double delay = ndist * topo->latency(src.ip,elm->n.ip) /(double)((ChordAdapt *)Network::Instance()->getnode(elm->n.ip))->budget();
       if (dist > dist2) {
 	l.push_back(elm->n);
-      }else {
-	for (iter = l.begin(); iter != l.end(); ++iter) {
-	  if (topo->latency(src.ip,elm->n.ip)
-	      >= (0.5*topo->latency(src.ip,(*iter).ip)))
+	dl.push_back(delay);
+      } else {
+	for (il = l.begin(),idl=dl.begin(); il != l.end(); ++il,++idl) {
+	  if (delay > (*idl))
+	  //if (topo->latency(src.ip,elm->n.ip)
+	   //   >= (0.5*topo->latency(src.ip,(*iter).ip)))
 	    break;
 	}
 	if (n > 1 && l.size() == 1) { //if parallelism >1, always choose one as the closest to key
 	  l.insert(l.begin(),elm->n);
+	  dl.insert(dl.begin(),delay);
 	}else {
-	  if (iter!=l.begin() || l.size() < n)  {
-	    l.insert(iter,elm->n);
+	  if (il!=l.begin() || l.size() < n)  {
+	    l.insert(il,elm->n);
+	    dl.insert(idl,delay);
 	  }
 	}
-	if (l.size() > n)
+	if (l.size() > n) {
 	  l.erase(l.begin());
+	  dl.erase(dl.begin());
+	}
       }
     }
     elm = ring.prev(elm);

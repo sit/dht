@@ -928,9 +928,9 @@ ChordAdapt::next_recurs(lookup_args *la, lookup_ret *lr)
     if (_rate_queue->very_critical() || _rate_queue->critical())
       la->learnsz = 1;
     if (!_fixed_stab_int)
-      lr->v = loctable->get_closest_in_gap(la->learnsz, la->overshoot, la->from, 20*80*1000/_bw_overhead,la->timeout?la->timeout:est_timeout(0.1));
+      lr->v = loctable->get_closest_in_gap(la->learnsz, _me.id, la->overshoot, la->from, 20*80*1000/_bw_overhead,la->timeout?la->timeout:est_timeout(0.1));
     else
-      lr->v = loctable->get_closest_in_gap(la->learnsz, la->overshoot, la->from, 20*_fixed_stab_int,_fixed_stab_to);
+      lr->v = loctable->get_closest_in_gap(la->learnsz, _me.id,la->overshoot, la->from, 20*_fixed_stab_int,_fixed_stab_to);
 
     if (!lr->v.size()) {
       if (!_rate_queue->critical())
@@ -1408,8 +1408,8 @@ ChordAdapt::empty_queue(void *a)
     adjust_parallelism();
   _empty_times++;
 
-  IDMap pred, next;
-  pred.ip = _me.ip;
+  IDMap askwhom,pred, next;
+  askwhom.ip = _me.ip;
 
   double oldest = 0.0;
   uint op = 0;
@@ -1417,19 +1417,22 @@ ChordAdapt::empty_queue(void *a)
   while ((pred.ip == _me.ip) || (!pred.ip)){
     if (_fixed_stab_int) 
       //oldest = loctable->pred_biggest_gap(pred, next, 20*_fixed_stab_int, _tt);
-      op = loctable->sample_smallworld(_est_n, pred, next, tt, _max_succ_gap);
+      op = loctable->sample_smallworld(_est_n, askwhom, pred, next, tt, _max_succ_gap);
     else 
       //oldest = loctable->pred_biggest_gap(pred, next, 20*80*1000/_bw_overhead, _tt);
-      op  = loctable->sample_smallworld(_est_n, pred,next, tt, _max_succ_gap);
+      op  = loctable->sample_smallworld(_est_n, askwhom, pred,next, tt, _max_succ_gap);
     tt = 1-((1-tt)/2.0);
     if (tt > 0.9) 
       break;
   }
 
-  if (pred.ip == _me.ip || !pred.ip) {
+  if (askwhom.ip == _me.ip || !askwhom.ip) {
     NDEBUG(4) << "nothing to learn oldest " << oldest << " locsz " << loctable->size() << endl;
     return;
   }
+
+  if ((askwhom.ip != pred.ip) && (!ConsistentHash::between(askwhom.id,next.id,pred.id) || askwhom.ip == next.ip)) 
+    fprintf(stderr,"%llu %u %u %u %u %u fuck!\n", now(), _me.ip, askwhom.ip, pred.ip, next.ip, ((ChordAdapt *)Network::Instance()->getnode(askwhom.ip))->budget());
 
   learn_args *la = new learn_args;
   learn_ret *lr = new learn_ret;
@@ -1438,9 +1441,10 @@ ChordAdapt::empty_queue(void *a)
 
   la->m = _learn_num;
   la->timeout = (Time) _tt;
-  la->n = pred;
+  la->n = askwhom;
   la->src = _me;
   la->src.alivetime = now()-_last_joined_time;
+  la->start = pred;
   la->end = next;
 
   NDEBUG(2) << "empty_queue quota " << _rate_queue->quota() << " succsz " << loctable->succ_size() 
@@ -1448,12 +1452,12 @@ ChordAdapt::empty_queue(void *a)
     << loctable->live_size() << " locsz_used " 
     << loctable->size(LOC_HEALTHY,_tt) << " livesz_used " << loctable->live_size(_tt)
     << " learn from " << la->n.ip << "," 
-    << printID(la->n.id) << " old " << (now()-la->n.timestamp) 
+    << printID(la->n.id) << " start " << la->start.ip << "," << printID(la->start.id) << " end " <<
+    la->end.ip << "," << printID(la->end.id) << " old " << (now()-la->n.timestamp) 
     << " para " << _parallelism << " est_tt " << _tt << " op " << op 
-    << " statsz " << _stat.size() 
-    << " end " << la->end.ip << " est_n " << _est_n << endl;
+    << " statsz " << _stat.size() << " est_n " << _est_n << endl;
 
-  _rate_queue->do_rpc(pred.ip, &ChordAdapt::learn_handler, 
+  _rate_queue->do_rpc(askwhom.ip, &ChordAdapt::learn_handler, 
       &ChordAdapt::learn_cb, la, lr, 3, TYPE_FINGER_UP, 
       PKT_SZ(0,1), PKT_SZ(2*la->m,0),TIMEOUT(_me.ip,pred.ip));
 }
@@ -1464,6 +1468,7 @@ ChordAdapt::learn_handler(learn_args *la, learn_ret *lr)
   la->src.timestamp = now();
   loctable->add_node(la->src);
   IDMap pred = loctable->pred(_me.id-1);
+  lr->is_succ = false;
 
   if (la->n.ip == _me.ip) 
     la->n.alivetime = now()-_last_joined_time;
@@ -1477,22 +1482,18 @@ ChordAdapt::learn_handler(learn_args *la, learn_ret *lr)
       lr->v.push_back(succ);
     lr->is_succ = true;
   }else {
-    /*
-    if (_rate_queue->critical())
-      la->m = 1;
-      */
-    vector<IDMap> scs = loctable->succs(_me.id+1,_nsucc);
-    if (scs.size() && ConsistentHash::between(_me.id,scs[scs.size()-1].id,la->end.id)) {
-      lr->v = loctable->succs(_me.id+1,la->m);
-      lr->is_succ = true;
-    }else {
-      lr->v = loctable->get_closest_in_gap(la->m, la->end.id, la->src, 20*80*1000/_bw_overhead, la->timeout);
-      if (lr->v.size() < la->m) {
-	lr->v = loctable->get_closest_in_gap(la->m, la->end.id, la->src, 20*80*1000/_bw_overhead, la->timeout);
+    if (la->n.ip == _me.ip) {
+      vector<IDMap> scs = loctable->succs(_me.id+1,_nsucc);
+      if (scs.size() && ConsistentHash::between(_me.id,scs[scs.size()-1].id,la->end.id)) {
 	lr->v = loctable->succs(_me.id+1,la->m);
 	lr->is_succ = true;
-      }else{
-	lr->is_succ = false;
+      }
+    }
+
+    if (!lr->is_succ || la->n.ip!=_me.ip) {
+      lr->v = loctable->get_closest_in_gap(la->m, la->start.id,la->end.id, la->src, 20*80*1000/_bw_overhead, la->timeout);
+      if (lr->v.size() < la->m) {
+	lr->v = loctable->succs(la->start.id+1,la->m);
       }
     }
   }
@@ -1533,13 +1534,18 @@ ChordAdapt::learn_cb(bool b, learn_args *la, learn_ret *lr)
 	  }
 	}
       } else {
-	neighborsucc = lr->v[0];
-	loctable->update_ifexists(la->n);
-	for (uint i = 0; i < lr->v.size(); i++)  {
-	  IDMap xx = loctable->succ(lr->v[i].id,LOC_HEALTHY);
-	  if (xx.ip == lr->v[i].ip && xx.timestamp < lr->v[i].timestamp)
-	    add_stat((double)xx.alivetime/(double)(lr->v[i].timestamp - xx.timestamp+xx.alivetime), true);
-	  loctable->add_node(lr->v[i]);
+	if (!lr->v.size()) {
+	  fprintf(stderr,"%llu me %u from %u,%qx,%llu %qx:%qx\n",
+	      now(),_me.ip,la->n.ip,la->n.id,la->n.alivetime,la->start.id,la->end.id);
+	}else {
+	  neighborsucc = lr->v[0];
+	  loctable->update_ifexists(la->n);
+	  for (uint i = 0; i < lr->v.size(); i++)  {
+	    IDMap xx = loctable->succ(lr->v[i].id,LOC_HEALTHY);
+	    if (xx.ip == lr->v[i].ip && xx.timestamp < lr->v[i].timestamp)
+	      add_stat((double)xx.alivetime/(double)(lr->v[i].timestamp - xx.timestamp+xx.alivetime), true);
+	    loctable->add_node(lr->v[i]);
+	  }
 	}
       }
       NDEBUG(4) << "learn_cb quota " << _rate_queue->quota() << " locsz " 

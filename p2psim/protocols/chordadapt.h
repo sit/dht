@@ -146,6 +146,8 @@ class ChordAdapt: public P2Protocol {
     static string printID(ConsistentHash::CHID id);
     static string print_succs(vector<IDMap> v);
 
+    uint budget() { return _bw_overhead;}
+
     static vector<IDMap> ids;
     static bool sorted;
     static vector<double> sort_live;
