@@ -10,6 +10,9 @@
 #define PI 3.14159
 #define TIMEOUT 10
 
+#define NELEM(x)	(sizeof (x)/ sizeof ((x)[0]))
+
+// Interesting things to draw and their handlers.
 static const unsigned int DRAW_IMMED_SUCC = 1 << 0;
 static const unsigned int DRAW_SUCC_LIST  = 1 << 1;
 static const unsigned int DRAW_IMMED_PRED = 1 << 2;
@@ -17,18 +20,37 @@ static const unsigned int DRAW_PRED_LIST  = 1 << 3; // unused
 static const unsigned int DRAW_FINGERS    = 1 << 4;
 static const unsigned int DRAW_TOES       = 1 << 5;
 
+struct handler_info {
+  unsigned int flag;
+  char *name;
+  GtkWidget *widget;
+  GtkSignalFunc handler;
+};
+void draw_toggle_cb (GtkWidget *widget, gpointer data);
+// widgets will be initialized later, by initgraf.
+static handler_info handlers[] = {
+  { DRAW_IMMED_SUCC, "immed. succ", NULL, GTK_SIGNAL_FUNC (draw_toggle_cb) },
+  { DRAW_SUCC_LIST,  "succ. list",  NULL, GTK_SIGNAL_FUNC (draw_toggle_cb) },
+  { DRAW_IMMED_PRED, "immed. pred", NULL, GTK_SIGNAL_FUNC (draw_toggle_cb) },
+  { DRAW_FINGERS,    "fingers",     NULL, GTK_SIGNAL_FUNC (draw_toggle_cb) },
+  { DRAW_TOES,       "neighbors",   NULL, GTK_SIGNAL_FUNC (draw_toggle_cb) }
+};
+
+unsigned int check_get_state (void);
+void check_set_state (unsigned int newstate);
+
 /* GTK stuff */
 static GdkPixmap *pixmap = NULL;
 static GtkWidget *window = NULL;
 static GtkWidget *drawing_area = NULL;
 static GdkGC *draw_gc = NULL;
 static GdkColormap *cmap = NULL;
+static GdkFont *courier10 = NULL;
+
+static GtkWidget *lookup;
+static GtkWidget *last_clicked;
+
 static short interval = -1;
-static GtkWidget *check_fingers;
-static GtkWidget *check_pred;
-static GtkWidget *check_immed_succ;
-static GtkWidget *check_succ_list;
-static GtkWidget *check_neighbors;
 static int glevel = 1;
 static char *color_file;
 static bool drawids = false;
@@ -36,6 +58,7 @@ static bool simulated_input = false;
 
 static GdkColor highlight_color;
 static char *highlight = "cyan4"; // consistent with old presentations
+
 
 struct get_fingers_args {
   str hostname;
@@ -67,7 +90,8 @@ struct f_node {
   bool highlight;
 
   f_node (chordID i, str h, unsigned short p) :
-    ID (i), host (h), port (p), draw (0), selected (true), highlight (false) { 
+    ID (i), host (h), port (p), selected (true), highlight (false) { 
+    draw = check_get_state ();
     res = NULL; 
     ressucc = NULL; 
     restoes = NULL;
@@ -78,6 +102,12 @@ struct f_node {
     if (restoes) delete restoes;
   };
 };
+
+// Highlighting lookups
+static size_t search_step;
+static chordID search_key; // 0 means no search in progress
+static vec<f_node *> search_path;
+static GdkColor search_color;
 
 void setup ();
 ptr<aclnt> get_aclnt (str host, unsigned short port);
@@ -108,18 +138,23 @@ void initgraf ();
 void init_color_list (char *filename);
 void draw_arrow (int fromx, int fromy, 
 		 int tox, int toy, GdkGC *draw_gc);
+void draw_arc (chordID from, chordID to, GdkGC *draw_gc);
 
 static gint configure_event (GtkWidget *widget, GdkEventConfigure *event);
 static gint expose_event (GtkWidget *widget, GdkEventExpose *event);
-static gint delete_event(GtkWidget *widget, GdkEvent *event, gpointer data);
+static gint delete_event (GtkWidget *widget, GdkEvent *event, gpointer data);
+static gint key_release_event (GtkWidget *widget,
+			       GdkEventKey *event,
+			       gpointer data);
 static gint button_down_event (GtkWidget *widget,
 			       GdkEventButton *event,
 			       gpointer data);
 
-void draw_toggle_cb (GtkWidget *widget, gpointer data);
-
 void select_all_cb (GtkWidget *widget, gpointer data);
 void select_none_cb (GtkWidget *widget, gpointer data);
+void draw_nothing_cb (GtkWidget *widget, gpointer data);
+
+void lookup_cb (GtkWidget *widget, gpointer data);
 void quit_cb (GtkWidget *widget, gpointer data);
 void redraw_cb (GtkWidget *widget, gpointer data);
 void update_cb (GtkWidget *widget, gpointer data);
@@ -445,9 +480,12 @@ update_toes_got_toes (chordID ID, str host, unsigned short port,
   draw_ring ();
 }
 
+// ------- graphics and UI handlers -------------------------------------
 void
 initgraf ()
 {
+  courier10 = gdk_font_load ("-*-courier-*-r-*-*-10-*-*-*-*-*-*-*");
+
   window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
   drawing_area = gtk_drawing_area_new();
   gtk_drawing_area_size ((GtkDrawingArea *)drawing_area, WINX, WINY);
@@ -455,13 +493,13 @@ initgraf ()
   GtkWidget *select_all = gtk_button_new_with_label ("Select All");
   GtkWidget *select_none = gtk_button_new_with_label ("Select None");
   GtkWidget *hsep1 = gtk_hseparator_new ();
-  check_fingers = gtk_check_button_new_with_label ("fingers");
-  check_pred = gtk_check_button_new_with_label ("predecessor");
-  check_immed_succ = 
-    gtk_check_button_new_with_label ("immed. succ.");
-  check_succ_list = gtk_check_button_new_with_label ("succ. list");
-  check_neighbors = gtk_check_button_new_with_label ("neighbors");
+  GtkWidget *draw_nothing = gtk_button_new_with_label ("Reset");
   GtkWidget *hsep2 = gtk_hseparator_new ();
+  last_clicked = gtk_label_new ("                    ");
+  for (size_t i = 0; i < NELEM (handlers); i++)
+    handlers[i].widget = gtk_check_button_new_with_label (handlers[i].name);
+  GtkWidget *hsep3 = gtk_hseparator_new ();
+  lookup = gtk_button_new_with_label ("Visualize Lookup");
   GtkWidget *refresh = gtk_button_new_with_label ("Refresh All");
   GtkWidget *quit = gtk_button_new_with_label ("Quit");
   GtkWidget *sep = gtk_vseparator_new ();
@@ -470,15 +508,17 @@ initgraf ()
   GtkWidget *vbox = gtk_vbox_new (FALSE, 0);
   gtk_box_pack_start (GTK_BOX (vbox), select_all, FALSE, FALSE, 0);
   gtk_box_pack_start (GTK_BOX (vbox), select_none, FALSE, FALSE, 0);
-  gtk_box_pack_start (GTK_BOX (vbox), hsep1, FALSE, TRUE, 5);
-  gtk_box_pack_start (GTK_BOX (vbox), check_fingers, FALSE, FALSE, 0);
-  gtk_box_pack_start (GTK_BOX (vbox), check_pred, FALSE, FALSE, 0);
-  gtk_box_pack_start (GTK_BOX (vbox), check_immed_succ, FALSE, FALSE, 0);
-  gtk_box_pack_start (GTK_BOX (vbox), check_succ_list, FALSE, FALSE, 0);
-  gtk_box_pack_start (GTK_BOX (vbox), check_neighbors, FALSE, FALSE, 0);
-  gtk_box_pack_start (GTK_BOX (vbox), hsep2, FALSE, TRUE, 5);
-  gtk_box_pack_start (GTK_BOX (vbox), refresh, FALSE, FALSE, 0);
-  gtk_box_pack_start (GTK_BOX (vbox), quit, TRUE, FALSE, 0);
+  gtk_box_pack_start (GTK_BOX (vbox), hsep1, FALSE, TRUE, 0);
+  gtk_box_pack_start (GTK_BOX (vbox), draw_nothing, FALSE, FALSE, 0);
+  gtk_box_pack_start (GTK_BOX (vbox), hsep2, FALSE, TRUE, 0);
+  gtk_box_pack_start (GTK_BOX (vbox), last_clicked, FALSE, TRUE, 0);
+  for (size_t i = 0; i < NELEM (handlers); i++)
+    gtk_box_pack_start (GTK_BOX (vbox), handlers[i].widget, FALSE, FALSE, 0);
+  gtk_box_pack_start (GTK_BOX (vbox), hsep3, FALSE, TRUE, 0);
+  gtk_box_pack_start (GTK_BOX (vbox), lookup, FALSE, TRUE, 0);
+
+  gtk_box_pack_end (GTK_BOX (vbox), quit, FALSE, FALSE, 0);
+  gtk_box_pack_end (GTK_BOX (vbox), refresh, FALSE, FALSE, 0);
 
   GtkWidget *hbox = gtk_hbox_new (FALSE, 0);
   gtk_box_pack_start (GTK_BOX (hbox), drawing_area, TRUE, FALSE, 0);
@@ -493,32 +533,30 @@ initgraf ()
   gtk_signal_connect_object (GTK_OBJECT (select_none), "clicked",
 			       GTK_SIGNAL_FUNC (select_none_cb),
 			       NULL);
+  gtk_signal_connect_object (GTK_OBJECT (draw_nothing), "clicked",
+			     GTK_SIGNAL_FUNC (draw_nothing_cb),
+			     NULL);
   gtk_signal_connect_object (GTK_OBJECT (refresh), "clicked",
 			       GTK_SIGNAL_FUNC (update_cb),
 			       NULL);
   gtk_signal_connect_object (GTK_OBJECT (quit), "clicked",
 			       GTK_SIGNAL_FUNC (quit_cb),
 			       NULL);
-
-  gtk_signal_connect_object (GTK_OBJECT (check_fingers), "toggled",
-			     GTK_SIGNAL_FUNC (draw_toggle_cb),
-			     NULL);
-  gtk_signal_connect_object (GTK_OBJECT (check_pred), "toggled",
-			     GTK_SIGNAL_FUNC (draw_toggle_cb),
-			     NULL);
-  gtk_signal_connect_object (GTK_OBJECT (check_immed_succ), "toggled",
-			     GTK_SIGNAL_FUNC (draw_toggle_cb),
-			     NULL);
-  gtk_signal_connect_object (GTK_OBJECT (check_succ_list), "toggled",
-			     GTK_SIGNAL_FUNC (draw_toggle_cb),
-			     NULL);
-  gtk_signal_connect_object (GTK_OBJECT (check_neighbors), "toggled",
-			     GTK_SIGNAL_FUNC (draw_toggle_cb),
+  gtk_signal_connect_object (GTK_OBJECT (lookup), "clicked",
+			     GTK_SIGNAL_FUNC (lookup_cb),
 			     NULL);
 
+  for (size_t i = 0; i < NELEM (handlers); i++) 
+    gtk_signal_connect_object (GTK_OBJECT (handlers[i].widget), "toggled",
+			       GTK_SIGNAL_FUNC (handlers[i].handler),
+			       NULL);
 
   gtk_signal_connect (GTK_OBJECT (window), "delete_event",
 		      GTK_SIGNAL_FUNC (delete_event), NULL);  
+  gtk_signal_connect (GTK_OBJECT (window), "key_release_event",
+		      GTK_SIGNAL_FUNC (key_release_event), NULL);
+  gtk_widget_set_events (window, GDK_KEY_RELEASE_MASK);
+  
   gtk_signal_connect (GTK_OBJECT (drawing_area), "expose_event",
 		      (GtkSignalFunc) expose_event, NULL);
   gtk_signal_connect (GTK_OBJECT(drawing_area),"configure_event",
@@ -536,17 +574,18 @@ initgraf ()
 
   gtk_widget_show (drawing_area);
   gtk_widget_show (select_all);
-  gtk_widget_show (check_fingers);
-  gtk_widget_show (check_pred);
-  gtk_widget_show (check_succ_list);
-  gtk_widget_show (check_neighbors);
-  gtk_widget_show (check_immed_succ);
   gtk_widget_show (select_none);
+  gtk_widget_show (draw_nothing);
+  for (size_t i = 0; i < NELEM (handlers); i++)
+    gtk_widget_show (handlers[i].widget);
+  gtk_widget_show (last_clicked);
+  gtk_widget_show (lookup);
   gtk_widget_show (refresh);
   gtk_widget_show (quit);
   gtk_widget_show (sep);
   gtk_widget_show (hsep1);
   gtk_widget_show (hsep2);
+  gtk_widget_show (hsep3);
   gtk_widget_show (hbox);
   gtk_widget_show (vbox);
   gtk_widget_show (window);
@@ -556,6 +595,9 @@ initgraf ()
   if (!gdk_color_parse (highlight, &highlight_color) ||
       !gdk_colormap_alloc_color (cmap, &highlight_color, FALSE, TRUE))
     fatal << "Couldn't allocate highlight color " << highlight << "\n";
+  if (!gdk_color_parse ("green", &search_color) ||
+      !gdk_colormap_alloc_color (cmap, &search_color, FALSE, TRUE))
+    fatal << "Couldn't allocate search color maroon\n";
 }
 
 void
@@ -569,33 +611,148 @@ quit_cb (GtkWidget *widget,
   gtk_exit (0);
 }
 
+unsigned int
+check_get_state (void)
+{
+  unsigned int state = 0;
+  for (size_t i = 0; i < NELEM (handlers); i++)
+    if (gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (handlers[i].widget)))
+      state |= handlers[i].flag;
+  return state;
+}
+
+void
+check_set_state (unsigned int newstate)
+{
+  // ONLY set the state of the buttons, do NOT actually toggle anything.
+  for (size_t i = 0; i < NELEM (handlers); i++) {
+    gtk_signal_handler_block_by_func (GTK_OBJECT (handlers[i].widget),
+				      GTK_SIGNAL_FUNC (handlers[i].handler),
+				      NULL);
+    gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (handlers[i].widget),
+				  (newstate & handlers[i].flag));
+    gtk_signal_handler_unblock_by_func (GTK_OBJECT (handlers[i].widget),
+					GTK_SIGNAL_FUNC (handlers[i].handler),
+					NULL);
+  }
+}
+
 void
 draw_toggle_cb (GtkWidget *widget, gpointer data)
 {
+  // Set the state of all the selected nodes to match what the button says.
+  bool active = false;
   unsigned int flag = 0;
   // xxx Shouldn't we be comparing "widget" to "check_immed_succ"?
   //     Empircally, no, this is what works. Weird.
-  if (data == check_immed_succ)
-    flag = DRAW_IMMED_SUCC;
-  else if (data == check_succ_list)
-    flag = DRAW_SUCC_LIST;
-  else if (data == check_pred)
-    flag = DRAW_IMMED_PRED;
-  else if (data == check_fingers)
-    flag = DRAW_FINGERS;
-  else if (data == check_neighbors)
-    flag = DRAW_TOES;
-  else
-    panic << "Invalid widget!\n";
+  for (size_t i = 0; i < NELEM (handlers); i++)
+    if (data == handlers[i].widget) {
+      active = gtk_toggle_button_get_active
+	(GTK_TOGGLE_BUTTON (handlers[i].widget));
+      flag = handlers[i].flag;
+      break;
+    }
   
   f_node *n = nodes.first ();
   while (n) {
-    if (n->selected)
-      n->draw ^= flag;
+    if (n->selected) {
+      if (active)
+	n->draw |= flag; 
+      else
+	n->draw &= ~flag;
+    }
     n = nodes.next (n);
   }
   draw_ring ();
 }
+
+chordID 
+closestpredfinger (f_node *n, chordID &x)
+{
+  chordID p = n->ID;
+  for (int i = n->res->resok->fingers.size () - 1; i >= 1; i--) {
+    if (between (n->ID, x, n->res->resok->fingers[i].x)) {
+      p = n->res->resok->fingers[i].x;
+      return p;
+    }
+  }
+
+  return p;
+}
+
+void
+lookup_cb (GtkWidget *widget, gpointer data)
+{
+  // Find a random selected node, or just a random one if necessary.
+  f_node *current_node = nodes.first ();
+  while (current_node) {
+    if (current_node->selected)
+      break;
+    current_node = nodes.next (current_node);
+  }
+  if (current_node == NULL)
+    current_node = nodes.first ();
+  
+  // Clear selections and old search keys, etc.
+  draw_nothing_cb (widget, data); // widget and data are ignored
+
+  char block[8192]; 
+  char id[sha1::hashsize];
+  sha1_hash (id, block, 8192);
+  mpz_set_rawmag_be (&search_key, id, sizeof (id));  // For big endian
+  warnx << "Searching for " << search_key << " from "
+	<< current_node->ID << "\n";
+
+  search_path.setsize (0);
+  search_step = 0;
+
+  // XXX one day this should make some sort of RPC into a chord node
+  //     and call its find_route method.
+  f_node *old_node = NULL;
+  while (old_node != current_node) {
+    old_node = current_node;
+    search_path.push_back (current_node);
+    chordID bestfinger = closestpredfinger (current_node, search_key);
+    current_node = nodes[bestfinger];
+  }
+  current_node = nodes[current_node->ressucc->resok->succ[1].x];
+  search_path.push_back (current_node);
+
+  warnx << "Found a path of length " << search_path.size () << "\n";
+  for (size_t i = 0; i < search_path.size (); i++)
+    warnx << "  " << search_path[i]->ID << "\n";
+  draw_ring ();
+}
+
+void
+draw_search_progress ()
+{
+  GdkColor black;
+  gdk_color_parse ("black", &black);
+  gdk_gc_set_line_attributes (draw_gc, 3,
+			      GDK_LINE_SOLID,
+			      GDK_CAP_NOT_LAST,
+			      GDK_JOIN_MITER);
+  gdk_gc_set_foreground (draw_gc, &black);
+  for (size_t i = 0; i < search_step; i++) {
+    search_path[i]->selected = false;
+    search_path[i]->highlight = true;
+    search_path[i]->draw = 0;
+  }
+
+  for (size_t i = 1; i < search_step; i++)
+    draw_arc (search_path[0]->ID, search_path[i]->ID, draw_gc);
+
+  search_path[0]->selected = true;
+  if (search_step != search_path.size ())
+    search_path[search_step - 1]->draw = DRAW_FINGERS;
+
+  gdk_gc_set_line_attributes (draw_gc, 1,
+			      GDK_LINE_SOLID,
+			      GDK_CAP_NOT_LAST,
+			      GDK_JOIN_MITER);
+}
+
 
 void 
 select_all_cb (GtkWidget *widget,
@@ -628,6 +785,53 @@ update_cb (GtkWidget *widget,
   update ();
 }
 
+void
+draw_nothing_cb (GtkWidget *widget, gpointer data)
+{
+  f_node *n = nodes.first ();
+  while (n) {
+    n->selected = false;
+    n->highlight = false;
+    n->draw = 0;
+    n = nodes.next (n);
+  }
+  check_set_state (0);
+  search_key = 0;
+
+  draw_ring ();
+}
+
+gint
+key_release_event (GtkWidget *widget,
+		   GdkEventKey *event,
+		   gpointer data)
+{
+  // warnx << "key pressed " << event->keyval << "\n";
+  switch (event->keyval) {
+  case 'n':
+    {
+      if (search_key == 0)
+	break;
+
+      search_step++;
+      if (search_step > search_path.size ()) {
+	search_key = 0;
+	draw_nothing_cb (NULL, NULL);
+	break;
+      }
+      draw_ring ();
+      break;
+    }
+  case 'q':
+  case 'Q':
+    gtk_exit (0);
+    break;
+  default:
+    break;
+  }
+
+  return (TRUE);
+}
 
 gint 
 delete_event(GtkWidget *widget,
@@ -685,18 +889,13 @@ static gint button_down_event (GtkWidget *widget,
     n->highlight = !n->highlight;
   else {
     n->selected = !n->selected;
-    // xxx maybe make this loopable.
-    if (gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (check_immed_succ)))
-      n->draw ^= DRAW_IMMED_SUCC;
-    if (gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (check_succ_list)))
-      n->draw ^= DRAW_SUCC_LIST;
-    if (gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (check_pred)))
-      n->draw ^= DRAW_IMMED_PRED;
-    if (gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (check_fingers)))
-      n->draw ^= DRAW_FINGERS;
-    if (gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (check_neighbors)))
-      n->draw ^= DRAW_TOES;
+    if (n->selected)
+      check_set_state (n->draw);
   }
+  char IDs[48];
+  strncpy (IDs, ID.cstr (), 12);
+  IDs[12] = 0;
+  gtk_label_set_text (GTK_LABEL (last_clicked), IDs);
   draw_ring ();
   return TRUE;
 }
@@ -835,7 +1034,7 @@ set_foreground_lat (unsigned long lat)
   while (i < lat_map.size () &&
 	 lat > lat_map[i].lat) i++;
   
-    gdk_gc_set_foreground (draw_gc, &lat_map[i].c);
+  gdk_gc_set_foreground (draw_gc, &lat_map[i].c);
 }
 
 void
@@ -871,9 +1070,11 @@ draw_arrow (int fromx, int fromy,
 		    head,
 		    3);
 }
+
 void
 draw_ring ()
 {
+  int x, y;
   GtkWidget *widget = drawing_area;
 
   gdk_draw_rectangle (pixmap,
@@ -887,9 +1088,20 @@ draw_ring ()
 		      0,0,
 		      WINX - 1, WINY - 1);
 
+  if (search_key != 0) {
+    // Draw what we are looking for.
+    ID_to_xy (search_key, &x, &y);
+    gdk_gc_set_foreground (draw_gc, &search_color);
+    gdk_draw_arc (pixmap, draw_gc, TRUE,
+		  x - 6, y - 6,
+		  12, 12,
+		  (gint16) 0, (gint16) 64*360);
+    if (search_step > 0)
+      draw_search_progress (); // updates state for below and draws some arrows
+  }
+
   f_node *n = nodes.first ();
   while (n) {
-    int x, y;
     int radius = 4;
     ID_to_xy (n->ID, &x, &y);
     GdkGC *thisgc = widget->style->black_gc;
@@ -917,13 +1129,12 @@ draw_ring ()
     }
     
     if (drawids) {
-      GdkFont *f= gdk_font_load ("-*-courier-*-r-*-*-10-*-*-*-*-*-*-*");
-      char IDs[128];
+      char IDs[48];
       ID_to_string (n->ID, IDs);
       int fudge = -10;
       if (x < WINX/2) fudge = 0;
       gdk_draw_string (pixmap,
-		       f,
+		       courier10,
 		       widget->style->black_gc,
 		       x + fudge,y,
 		       IDs);
@@ -968,7 +1179,6 @@ draw_ring ()
 	draw_arrow (x,y,a,b,draw_gc);
       }
     }
-
     n = nodes.next (n);
   }
   redraw ();
@@ -978,8 +1188,8 @@ void
 ID_to_string (chordID ID, char *str) 
 {
   bigint little = (ID >> 144);
-  int z = little.getsi ();
-  sprintf(str, "%x", z);
+  unsigned long z = little.getui ();
+  sprintf(str, "%lx", z);
 }
 
 double 
