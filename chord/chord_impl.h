@@ -186,7 +186,7 @@ class vnode_impl : public vnode {
   void get_predecessor (ptr<location> n, cbchordID_t cb);
   void get_succlist (ptr<location> n, cbchordIDlist_t cb);
   void notify (ptr<location> n, chordID &x);
-  void alert (ptr<location> n, chordID &x);
+  void alert (ptr<location> n, ptr<location> x);
   void ping (ptr<location> n, cbping_t cb);
   void find_successor (const chordID &x, cbroute_t cb);
   void find_succlist (const chordID &x, u_long m, cbroute_t cb,
@@ -239,7 +239,7 @@ class route_chord : public route_iterator {
 
   void next_hop ();
 
-  void on_failure (chordID f);
+  void on_failure (ptr<location> f);
   ptr<location> pop_back ();
 };
 

@@ -138,7 +138,7 @@ class vnode : public virtual refcount {
   virtual void get_predecessor (ptr<location> n, cbchordID_t cb) = 0;
   virtual void get_succlist (ptr<location> n, cbchordIDlist_t cb) = 0;
   virtual void notify (ptr<location> n, chordID &x) = 0;
-  virtual void alert (ptr<location> n, chordID &x) = 0;
+  virtual void alert (ptr<location> n, ptr<location> x) = 0;
   virtual void ping (ptr<location> n, cbping_t cb) = 0;
   virtual void find_successor (const chordID &x, cbroute_t cb) = 0;
   virtual void find_succlist (const chordID &x, u_long m, cbroute_t cb,
@@ -245,7 +245,7 @@ class chord : public virtual refcount {
 	      ptr<void> in, void *out, aclnt_cb cb) {
     return active->doRPC (n, progno, procno, in, out, cb);
   };
-  void alert (ptr<location> n, chordID &x) {
+  void alert (ptr<location> n, ptr<location> x) {
     active->alert (n, x);
   };
   chordID clnt_ID () {

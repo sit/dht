@@ -247,13 +247,13 @@ vnode_impl::notify_cb (chordID n, chordstat *res, clnt_stat err)
 }
 
 void
-vnode_impl::alert (ptr<location> n, chordID &x)
+vnode_impl::alert (ptr<location> n, ptr<location> x)
 {
   ptr<chord_nodearg> na = New refcounted<chord_nodearg>;
   chordstat *res = New chordstat;
   nalert++;
-  warnx << "alert: " << x << " died; notify " << n->id () << "\n";
-  locations->lookup (x)->fill_node (na->n);
+  warnx << "alert: " << x->id() << " died; notify " << n->id () << "\n";
+  x->fill_node (na->n);
 
   doRPC (n, chord_program_1, CHORDPROC_ALERT, na, res, 
 	 wrap (mkref (this), &vnode_impl::alert_cb, res));

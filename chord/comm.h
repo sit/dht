@@ -7,6 +7,8 @@
 #include <misc_utils.h>
 #include "aclnt_chord.h"
 
+#define max_host_cache 1000
+
 class location;
 
 struct rpcstats {
@@ -91,9 +93,9 @@ class rpc_manager {
   // statistics
   float a_lat;
   float a_var;
-  float avg_lat;
   vec<float> lat_history;
   float c_err;
+  float c_err_rel;
   float c_var;
 
   // counters
@@ -122,8 +124,6 @@ class rpc_manager {
   // the following may not necessarily make sense for all implementations.
   virtual float get_a_lat (ptr<location> l);
   virtual float get_a_var (ptr<location> l); 
-  virtual float get_avg_lat ();
-  virtual float get_avg_var ();
   rpc_manager (ptr<u_int32_t> _nrcv);
   virtual ~rpc_manager () {};
 };

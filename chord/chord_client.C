@@ -300,23 +300,7 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
   }
   (*nrcv)++;
   
-  //autocache nodes
   dorpc_arg *arg = sbp->template getarg<dorpc_arg> ();
-
-  /*
-  if (arg && !locations->cached (arg->src_id)) {
-    const sockaddr *sa = sbp->getsa ();
-    if (sa) {
-      net_address netaddr;
-      netaddr.port = arg->src_port;
-      str addrstr (inet_ntoa (((sockaddr_in *)sa)->sin_addr));
-      netaddr.hostname = addrstr;
-      warnx << gettime () << ": autocaching " << addrstr << ":" << netaddr.port << " in ::dispatch\n";
-      vec<float> coords = convert_coords (arg);
-      locations->insert (arg->src_id, netaddr.hostname, netaddr.port, coords);
-    }
-  }
-  */
 
   switch (sbp->proc ()) {
   case TRANSPORTPROC_DORPC:

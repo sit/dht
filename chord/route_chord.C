@@ -97,11 +97,11 @@ route_chord::pop_back ()
 
 
 void
-route_chord::on_failure (chordID f)
+route_chord::on_failure (ptr<location> f)
 {
-  failed_nodes.push_back (f);
+  failed_nodes.push_back (f->id ());
   v->alert (search_path.back (), f);
-  warn << v->my_ID () << ": " << f << " is down.  Now trying "
+  warn << v->my_ID () << ": " << f->id () << " is down.  Now trying "
        << search_path.back ()->id () << "\n";
   last_hop = false;
   next_hop ();
@@ -121,7 +121,7 @@ route_chord::make_hop_cb (ptr<bool> del,
     if (search_path.size () == 0)
       search_path.push_back (v->my_location ());
 
-    on_failure (last_node_tried->id ());
+    on_failure (last_node_tried);
   } 
 
   else if (res->status == CHORD_STOP || last_hop) {
