@@ -37,15 +37,17 @@ vector<VivaldiTest*> VivaldiTest::_all;
 VivaldiTest::VivaldiTest(IPAddress i, Args &args)
   : VivaldiNode(i), _next_neighbor(0), _neighbors(0)
 {
+  //grid configuration will give each node 4 neighbors 
+  //in a square grid-like configuration so the network is 
+  //guaranteed to be connected. Only works with 
+  //consecutive IP addresses.
+  _grid_config = args.nget<int>("grid_config",0,10);
+
   _neighbors = args.nget<int>("neighbors", 16, 10);
-  _total_nodes = args.nget<int>("totalnodes", -1, 10);
+  _total_nodes = args.nget<uint>("totalnodes", 0, 10);
   _vis = args.nget<int>("vis", 0, 10);
 
-  if (_total_nodes < 0) {
-    cerr << "totalnodes parameter not optional\n";
-    exit (-1);
-  }
-  _ticks = 0;
+    _ticks = 0;
 }
 
 VivaldiTest::~VivaldiTest()
@@ -56,10 +58,46 @@ VivaldiTest::~VivaldiTest()
 void
 VivaldiTest::join(Args *args)
 {
-  if ((int)_all.size () > _total_nodes && _total_nodes > 0) 
+  if (_total_nodes == 0) {
+    const set<Node*> *l= Network::Instance()->getallnodes();
+    _total_nodes = l->size();
+  }
+
+  if (_all.size () > _total_nodes && _total_nodes > 0) 
       return;
   _all.push_back(this);
-  addNeighbors ();
+
+  if (_grid_config) {
+    int row = (int) sqrt(_total_nodes);
+    printf("my ip is %u\n", _ip);
+    int nbr_ip;
+    
+    nbr_ip = (int) ip() - 1 ;
+    if (nbr_ip > 0) 
+      _nip.push_back(nbr_ip);
+
+    nbr_ip = (int) ip() + 1;
+    if (nbr_ip <= (int)_total_nodes) 
+      _nip.push_back(nbr_ip);
+
+    nbr_ip = (int) ip() - row;
+    if (nbr_ip > 0) 
+      _nip.push_back(nbr_ip);
+
+    nbr_ip = (int) ip() + row;
+    if (nbr_ip <= (int)_total_nodes)
+      _nip.push_back(ip() + row);
+
+    _neighbors = _nip.size();
+    printf("%u joined with %d neighbors: ",ip(), _nip.size());
+    for (uint i = 0; i < _nip.size(); i++) {
+      assert(_nip[i] > 0 && _nip[i] <= _total_nodes);
+      printf("%u ", _nip[i]);
+    }
+    printf("\n");
+  }else{
+    addRandNeighbors ();
+  }
   if (_vis && !init_state ()) cerr << "vis " << now () << " node " << ip () << " " << _c << "\n";
   delaycb(1000, &VivaldiTest::tick, (void *) 0);
 }
@@ -82,6 +120,7 @@ VivaldiTest::tick(void *)
 {
   _ticks++;
   IPAddress dst;
+
   if(_neighbors > 0){
     if (random () % 2 == 0 && _nip_best.size () > 0 && false)
       dst = _nip_best[random () % _nip_best.size ()];
@@ -131,16 +170,14 @@ VivaldiTest::handler(void *args, void *ret)
 
 
 void
-VivaldiTest::addNeighbors ()
+VivaldiTest::addRandNeighbors ()
 {
   _nip.clear ();
   
   cerr << "neighbors for " << this->ip() << " ";
   while ((int)_nip.size () < _neighbors) {
-    int cand = -1;
-    while (cand < 0 || cand > _total_nodes)
-      cand = (random () % (_total_nodes)) + 1;
-
+    uint cand = (random () % (_total_nodes)) + 1;
+    assert(cand <= _total_nodes);
     _nip.push_back(cand);
     //_nip.push_back(_all[random () % _all.size ()]->ip());
     cerr << cand << " ";

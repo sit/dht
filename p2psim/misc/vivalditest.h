@@ -51,19 +51,20 @@ public:
 
  private:
   int _ticks;
+  int _grid_config;
   Vivaldi *_vivaldi;
   static vector<VivaldiTest*> _all;
 
   int _next_neighbor;
   int _neighbors; // if > 0, fix the number of neighbors
-  int _total_nodes;
+  uint _total_nodes;
   int _vis;
 
   uint _old_all_size;
 
   void handler(void *, void *);
 
-  void addNeighbors ();
+  void addRandNeighbors ();
   void print_all_loc();
 };
 
