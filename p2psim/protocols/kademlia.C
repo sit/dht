@@ -25,6 +25,7 @@
 
 #include "kademlia.h"
 #include <deque>
+#include "p2psim/network.h" // XXX: remove
 using namespace std;
 
 unsigned Kademlia::k = 0;
@@ -373,6 +374,7 @@ Kademlia::do_lookup_wrapper(k_nodeinfo *ki, NodeID key, set<k_nodeinfo*> *v)
   assert(ki->ip);
   controlmsg++;
   if(!doRPC(ki->ip, &Kademlia::do_lookup, &la, &lr) && node()->alive()) {
+    KDEBUG(2) << "do_lookup_wrapper: RPC to " << Kademlia::printbits(ki->id) << " failed " << endl;
     erase(ki->id);
     return;
   }
@@ -437,6 +439,9 @@ Kademlia::stabilize()
   assert(node()->alive());
 
   KDEBUG(1) << "stabilize" << endl;
+
+  k_check check;
+  _root->traverse(&check, this);
 
   k_stabilizer stab;
   _root->traverse(&stab, this);
@@ -529,6 +534,7 @@ void
 Kademlia::erase(NodeID id)
 {
   assert(flyweight.find(id) != flyweight.end());
+  KDEBUG(1) << "Kademlia::erase " << Kademlia::printbits(id) << endl;
   _root->erase(id);
   delete flyweight[id];
   flyweight.erase(id);
@@ -778,6 +784,8 @@ k_nodeinfo::checkrep() const
 {
   assert(id);
   assert(ip);
+  if(firstts > lastts)
+    cout << "id = " << Kademlia::printbits(id) << " firstts = " << firstts << " lastts = " << lastts << endl;
   assert(firstts <= lastts);
 }
 // }}}
@@ -891,7 +899,7 @@ k_bucket_leaf::divide(unsigned depth)
 // }}}
 // {{{ k_bucket_leaf::checkrep
 void
-k_bucket_leaf::checkrep() const
+k_bucket_leaf::checkrep()
 {
   assert(leaf);
   assert(nodes);
@@ -913,6 +921,18 @@ k_bucket_leaf::checkrep() const
     assert(!nodes->contains((*cur)->id));
     assert(haveseen.find((*cur)->id) == haveseen.end());
     prev = cur++;
+  }
+
+  // make sure every node in replacement_cache is referring to a data structure
+  // in OUR flyweight
+  for(set<k_nodeinfo*, Kademlia::younger>::const_iterator i = replacement_cache->begin(); i != replacement_cache->end(); ++i) {
+    bool found = false;
+    for(hash_map<Kademlia::NodeID, k_nodeinfo*>::const_iterator j = kademlia()->flyweight.begin(); j != kademlia()->flyweight.end(); ++j)
+      if(j->second == *i) {
+        found = true;
+        break;
+      }
+    assert(found);
   }
 
   k_bucket::checkrep();
@@ -1019,6 +1039,9 @@ k_bucket::insert(Kademlia::NodeID id, bool init_state, string prefix, unsigned d
   }
 
   // we're full already, just put in replacement cache.
+  // XXX: this is wrong.  we haven't heard from this guy yet.
+  // do we need a ping?
+  kinfo->lastts = now();
   ((k_bucket_leaf*)this)->replacement_cache->insert(kinfo);
 
   checkrep();
@@ -1258,6 +1281,37 @@ k_delete::execute(k_bucket_leaf *k, string prefix, unsigned depth)
     delete (k_bucket_leaf*) k;
   else
     delete (k_bucket_node*) k;
+}
+// }}}
+
+// {{{ k_check::execute
+void
+k_check::execute(k_bucket_leaf *k, string prefix, unsigned depth)
+{
+  k->checkrep();
+
+  list<Protocol*> l = Network::Instance()->getallprotocols("Kademlia");
+
+  // go through all pointers in node
+  for(Kademlia::nodeinfo_set::const_iterator i = k->nodes->nodes.begin(); i != k->nodes->nodes.end(); ++i) {
+    for(list<Protocol*>::iterator pos = l.begin(); pos != l.end(); ++pos) {
+      Kademlia *kad = (Kademlia*) *pos;
+      if(kad->id() == k->kademlia()->id())
+        continue;
+      for(hash_map<Kademlia::NodeID, k_nodeinfo*>::const_iterator j = kad->flyweight.begin(); j != kad->flyweight.end(); ++j)
+        assert(j->second != *i);
+    }
+  }
+
+  for(set<k_nodeinfo*, Kademlia::younger>::const_iterator i = k->replacement_cache->begin(); i != k->replacement_cache->end(); ++i) {
+    for(list<Protocol*>::iterator pos = l.begin(); pos != l.end(); ++pos) {
+      Kademlia *kad = (Kademlia*) *pos;
+      if(kad->id() == k->kademlia()->id())
+        continue;
+      for(hash_map<Kademlia::NodeID, k_nodeinfo*>::const_iterator j = kad->flyweight.begin(); j != kad->flyweight.end(); ++j)
+        assert(j->second != *i);
+    }
+  }
 }
 // }}}
 

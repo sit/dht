@@ -243,7 +243,7 @@ public:
   k_bucket_leaf(k_bucket *);
   virtual ~k_bucket_leaf();
   k_bucket_node* divide(unsigned);
-  virtual void checkrep() const;
+  virtual void checkrep();
 
   k_nodes *nodes;
   set<k_nodeinfo*, Kademlia::younger> *replacement_cache;
@@ -350,6 +350,15 @@ private:
 class k_delete : public k_traverser { public:
   k_delete() : k_traverser("k_delete") {}
   virtual ~k_delete() {}
+  virtual void execute(k_bucket_leaf*, string, unsigned);
+
+private:
+};
+// }}}
+// {{{ class k_check
+class k_check : public k_traverser { public:
+  k_check() : k_traverser("k_check") {}
+  virtual ~k_check() {}
   virtual void execute(k_bucket_leaf*, string, unsigned);
 
 private:
