@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 [NAMES_GO_HERE]
+ * Copyright (c) 2003 Jeremy Stribling (strib@mit.edu)
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -21,7 +21,7 @@
  * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
  */
 
-/* $Id: condvar.h,v 1.2 2003/10/08 07:10:39 thomer Exp $ */
+/* $Id: condvar.h,v 1.3 2003/10/08 12:19:44 thomer Exp $ */
 
 #ifndef __CONDVAR_H
 #define __CONDVAR_H

@@ -1,5 +1,8 @@
 /*
- * Copyright (c) 2003 [NAMES_GO_HERE]
+ * Copyright (c) 2003 Thomer M. Gil (thomer@csail.mit.edu),
+ *                    Robert Morris (rtm@csail.mit.edu),
+ *                    Jinyang Li (jinyang@csail.mit.edu)
+ *                    Frans Kaashoek (kaashoek@csail.mit.edu).
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -104,5 +107,11 @@ parse_args(int argc, char *argv[])
 void
 usage()
 {
-  cout << "Usage: p2psim [-v] [-b <degree>] [-f <fingers>] [-r <resilience>] [-s <succ>] PROTOCOL TOPOLOGY EVENTS" << endl;
+  cout << "Usage: p2psim [-v] [-f] [-e SEED] PROTOCOL TOPOLOGY EVENTS" << endl;
+  cout << "-v       : with vis" << endl;
+  cout << "-f       : disable support for failure models" << endl;
+  cout << "-e SEED  : set random seed SEED" << endl;
+  cout << "PROTOCOL : name of a protocol file" << endl;
+  cout << "TOPOLOGY : name of a topology file" << endl;
+  cout << "EVENTS   : name of an events file" << endl;
 }
