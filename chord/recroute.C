@@ -1,5 +1,6 @@
 #include "recroute.h"
 #include "fingerroutepns.h"
+#include <coord.h>
 #include <location.h>
 #include <locationtable.h>
 #include <misc_utils.h>
@@ -122,106 +123,194 @@ template<class T>
 void
 recroute<T>::dorecroute (user_args *sbp, recroute_route_arg *ra)
 {
-
   recroute_route_stat rstat (RECROUTE_ACCEPTED);
-  bool complete = false;
 
-  rtrace << my_ID () << ": dorecroute (" << ra->routeid << ", "
+  chordID myID = my_ID ();
+
+  rtrace << myID << ": dorecroute (" << ra->routeid << ", "
 	 << ra->x << "): starting\n";
-  // XXX check to see if I am actually the successor?
-  //     an optimization that may be wrong because of lagging
-  //     predecessor updates...
   
   vec<ptr<location> > cs = succs ();
   u_long m = ra->succs_desired;
-  // duplicate some code from chord.C's vnode_impl::doroute
-  // as well as some of server.C's find_succlist_hop_cb.
-  if (betweenrightincl (my_ID (), cs[0]->id (), ra->x)) {
-    complete = true;
-  } else {
-    // XXX should we check chord.find_succlist_shaving?
-    size_t left = 0;
-    size_t i = 1;
-    if (cs.size () < m)
-      left = cs.size ();
-    else
-      left = cs.size () - m;
-    for (i = 1; i < left; i++) {
-      if (betweenrightincl (cs[i-1]->id (), cs[i]->id (), ra->x)) {
-	rtrace << my_ID () << ": dorecroute (" << ra->routeid << ", "
-	       << ra->x << "): skipping " << i << " nodes.\n";
-	cs.popn_front (i);
-	complete = true;
+  
+  vec<chordID> failed;
+  ptr<location> p = closestpred (ra->x, failed); // the next best guess
+
+  // Update best guess or complete, depending, if successor is in our
+  // successor list.
+  if (betweenrightincl (myID, cs.back ()->id (), ra->x)) {
+    // Calculate the amount of overlap available in the successor list
+    size_t overlap = 0;
+    size_t succind = 0;
+    for (size_t i = 0; i < cs.size (); i++) {
+      if (betweenrightincl (myID, cs[i]->id (), ra->x)) {
+	// The i+1st successor is the key's successor!
+	overlap = cs.size () - i;
+	succind = i;
 	break;
       }
     }
+    // Try to decide who to talk to next.
+    if (overlap >= m) {
+      // Enough overlap to finish. XXX check succ_list_shaving?
+      cs.popn_front (succind); // leave succind+1st succ at front
+      if (succind > 0)
+	rtrace << myID << ": dorecroute (" << ra->routeid << ", "
+	       << ra->x << "): skipping " << succind << " nodes.\n";
+      
+      dorecroute_sendcomplete (ra, cs);
+      sbp->replyref (rstat);
+      sbp = NULL;
+      return;
+    } else {
+      // Override the absolute best we could've done, which probably
+      // is the predecessor since our succlist spans the key, and
+      // select someone nice and fast to get more successors from.
+      float mindist = -1.0;
+      size_t minind = 0;
+      assert (succind > (cs.size () - m));
+      size_t start = succind - (cs.size () - m);
+      for (size_t i = start; i < cs.size (); i++) {
+	float dist = Coord::distance_f (my_location ()->coords (),
+					cs[i]->coords ());
+	if (mindist < 0 || dist < mindist) {
+	  mindist = dist;
+	  minind  = i;
+	}
+      }
+      if (minind < succind) {
+	p = cs[minind];
+      } else {
+	// Hrm. If this is someone that is "past" the key, we need to
+	// actually just get successors from him, not just forward the
+	// request on.
+	ptr<location> nexthop = cs[minind];
+	rtrace << myID << ": dorecroute (" << ra->routeid << ", "
+	       << ra->x << "): going for succlist from " << nexthop->id () << "\n";
 
+	cs.popn_front (succind); // just the overlap please
+	get_succlist (nexthop,
+		      wrap (this, &recroute<T>::dorecroute_succlist,
+			    sbp, ra, p, nexthop, cs));
+	return;
+	// Do not reply here. We need the sbp so that we can
+	// keep the ra around. Hmmm. Maybe it is worth coming up
+	// with a special RECROUTE RPC that you forward to people
+	// in this case that just says "return home with your complete
+	// successor list."
+      }
+    }
   }
+  
+  dorecroute_sendroute (ra, p);
+  sbp->replyref (rstat);
+  sbp = NULL;
+  return;
+}
+
+template<class T>
+void
+recroute<T>::dorecroute_succlist (user_args *sbp, recroute_route_arg *ra,
+				  ptr<location> p, ptr<location> f,
+				  vec<ptr<location> > cs,
+				  vec<chord_node> sl, chordstat stat)
+{
+  recroute_route_stat rstat (RECROUTE_ACCEPTED);
+  if (stat != CHORD_OK) {
+    rwarning << my_ID () << ": dorecroute (" << ra->routeid << ", " << ra->x
+	     << "): special case succlist request to "
+	     << f->id () << " failed: " << stat << "\n";
+    // Go back to wherever we were going to go in the first place.
+    ra->retries++;
+    dorecroute_sendroute (ra, p);
+    sbp->replyref (rstat);
+    sbp = NULL;
+    return;
+  }
+
+  u_long m = ra->succs_desired;
+  for (size_t i = 0; i < (m - cs.size ()) && (i < sl.size ()); i++) {
+    ptr<location> l = locations->lookup_or_create (sl[i]);
+    cs.push_back (l);
+  }
+  dorecroute_sendcomplete (ra, cs);
+  sbp->replyref (rstat);
+  sbp = NULL;
+  return;
+}
+
+template<class T>
+void
+recroute<T>::dorecroute_sendcomplete (recroute_route_arg *ra,
+				      const vec<ptr<location> > cs)
+{
   chord_node_wire me;
   my_location ()->fill_node (me);
+  
+  // If complete (i.e. we have enough here to satisfy request),
+  // send off a complete RPC.
+  rtrace << my_ID () << ": dorecroute (" << ra->routeid << ", " << ra->x
+	 << "): complete.\n";
+  ptr<recroute_complete_arg> ca = New refcounted<recroute_complete_arg> ();
+  ca->body.set_status (RECROUTE_ROUTE_OK);
+  ca->routeid = ra->routeid;
+  
+  ca->path.setsize (ra->path.size () + 1);
+  for (size_t i = 0; i < ra->path.size (); i++) {
+    ca->path[i] = ra->path[i];
+  }
+  ca->path[ra->path.size ()] = me;
 
-  if (complete) {
-    // If complete (i.e. we have enough here to satisfy request),
-    // send off a complete RPC.
-    rtrace << my_ID () << ": dorecroute (" << ra->routeid << ", " << ra->x
-	   << "): complete.\n";
-    ptr<recroute_complete_arg> ca = New refcounted<recroute_complete_arg> ();
-    ca->body.set_status (RECROUTE_ROUTE_OK);
-    ca->routeid = ra->routeid;
+  u_long m = ra->succs_desired;
+  u_long tofill = (cs.size () < m) ? cs.size () : m;
+  ca->body.robody->successors.setsize (tofill);
+  for (size_t i = 0; i < tofill; i++)
+    cs[i]->fill_node (ca->body.robody->successors[i]);
+  
+  ca->retries = ra->retries;
+  
+  ptr<location> l = locations->lookup_or_create (make_chord_node (ra->origin));
+  doRPC (l, recroute_program_1, RECROUTEPROC_COMPLETE,
+	 ca, NULL,
+	 wrap (this, &recroute<T>::recroute_sent_complete_cb));
+  // We don't really care if this is lost beyond the RPC system's
+  // retransmits.
+}
+
+template<class T>
+void
+recroute<T>::dorecroute_sendroute (recroute_route_arg *ra, ptr<location> p)
+{
+  // Construct a new recroute_route_arg.
+  chord_node_wire me;
+  my_location ()->fill_node (me);
+  
+  ptr<recroute_route_arg> nra = New refcounted<recroute_route_arg> ();
+  *nra = *ra;
+  nra->path.setsize (ra->path.size () + 1);
+  for (size_t i = 0; i < ra->path.size (); i++) {
+    nra->path[i] = ra->path[i];
+  }
+  nra->path[ra->path.size ()] = me;
+  
+  if (p->id () != my_ID ()) {
+    recroute_route_stat *res = New recroute_route_stat (RECROUTE_ACCEPTED);
     
-    ca->path.setsize (ra->path.size () + 1);
-    for (size_t i = 0; i < ra->path.size (); i++) {
-      ca->path[i] = ra->path[i];
-    }
-    ca->path[ra->path.size ()] = me;
-
-    u_long tofill = (cs.size () < m) ? cs.size () : m;
-    ca->body.robody->successors.setsize (tofill);
-    for (size_t i = 0; i < tofill; i++)
-      cs[i]->fill_node (ca->body.robody->successors[i]);
-
-    ca->retries = ra->retries;
-
-    
-    ptr<location> l = locations->lookup_or_create (make_chord_node (ra->origin));
-    doRPC (l, recroute_program_1, RECROUTEPROC_COMPLETE,
-	   ca, NULL,
-	   wrap (this, &recroute<T>::recroute_sent_complete_cb));
-    // We don't really care if this is lost beyond the RPC system's
-    // retransmits.
-  } else {
-    // Otherwise... construct a new recroute_route_arg.
-    // - Fill out new path
-    ptr<recroute_route_arg> nra = New refcounted<recroute_route_arg> ();
-    *nra = *ra;
-    nra->path.setsize (ra->path.size () + 1);
-    for (size_t i = 0; i < ra->path.size (); i++) {
-      nra->path[i] = ra->path[i];
-    }
-    nra->path[ra->path.size ()] = me;
+    rtrace << my_ID () << ": dorecroute (" << ra->routeid << ", "
+	   << ra->x << "): forwarding to " << p->id () << "\n";
 
     vec<chordID> failed;
-    ptr<location> p = closestpred (ra->x, failed);
-    if (p->id () != my_ID ()) {
-      recroute_route_stat *res = New recroute_route_stat (RECROUTE_ACCEPTED);
-
-      rtrace << my_ID () << ": dorecroute (" << ra->routeid << ", "
-	     << ra->x << "): forwarding to " << p->id () << "\n";
-      
-      doRPC (p, recroute_program_1, RECROUTEPROC_ROUTE,
-	     nra, res,
-	     wrap (this, &recroute<T>::recroute_hop_cb, nra, p, failed, res),
-	     wrap (this, &recroute<T>::recroute_hop_timeout_cb, nra, p, failed));
-    } else {
-      //XXX we're dropping this (instead of sending a failure message)
-      //    since I'm sending a bunch of crazy parallel lookups and we're
-      //    guessing that maybe another one will succeed.
-      //    worst case: the lookup fails when the sweeper goes off.
-      rtrace << my_ID () << " next hop is me. dropping\n";
-    }
+    doRPC (p, recroute_program_1, RECROUTEPROC_ROUTE,
+	   nra, res,
+	   wrap (this, &recroute<T>::recroute_hop_cb, nra, p, failed, res),
+	   wrap (this, &recroute<T>::recroute_hop_timeout_cb, nra, p, failed));
+  } else {
+    //XXX we're dropping this (instead of sending a failure message)
+    //    since I'm sending a bunch of crazy parallel lookups and we're
+    //    guessing that maybe another one will succeed.
+    //    worst case: the lookup fails when the sweeper goes off.
+    rtrace << my_ID () << " next hop is me. dropping\n";
   }
-
-  sbp->replyref (rstat);
 }
 
 template<class T>

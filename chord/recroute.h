@@ -30,6 +30,14 @@ class recroute : public T {
   void find_succlist_cb (cbroute_t cb, route_recchord *ri, bool done);
 
   void sweeper ();
+
+  void dorecroute_succlist (user_args *sbp, recroute_route_arg *ra,
+			    ptr<location> p, ptr<location> f,
+			    vec<ptr<location> > cs,
+			    vec<chord_node> sl, chordstat stat);
+  void dorecroute_sendcomplete (recroute_route_arg *ra,
+				const vec<ptr<location> > cs);
+  void dorecroute_sendroute (recroute_route_arg *ra, ptr<location> p);
   
   void recroute_hop_timeout_cb (ptr<recroute_route_arg> nra,
 				ptr<location> p,
