@@ -25,10 +25,18 @@
 
 EXITFN (cleanup);
 
+#define MAX_VNODES 1024
+
 ptr<chord> chordnode;
 static str p2psocket;
 int do_cache;
 str db_name;
+dhash *dh[MAX_VNODES + 1];
+int ndhash = 0;
+int nreplica = 0;
+
+void stats ();
+void print ();
 
 void
 client_accept (int fd)
@@ -36,7 +44,9 @@ client_accept (int fd)
   if (fd < 0)
     fatal ("EOF\n");
   ref<axprt_stream> x = axprt_stream::alloc (fd);
-  vNew dhashclient (x, chordnode);
+  dhashclient *c = New dhashclient (x, chordnode);
+  if (do_cache) c->set_caching (1);
+  else c->set_caching (0);
 }
 
 static void
@@ -120,7 +130,8 @@ static void
 newvnode_cb (int n, vnode *my)
 {
   str db_name_prime = strbuf () << db_name << "-" << n;
-  vNew dhash (db_name_prime, my, 5);
+  if (ndhash == MAX_VNODES) fatal << "Too many virtual nodes (1024)\n";
+  dh[ndhash++] = New dhash (db_name_prime, my, nreplica);
   if (n > 0) chordnode->newvnode (wrap (newvnode_cb, n-1));
 }
 
@@ -148,7 +159,6 @@ parseconfigfile (str cf, int nvnode, int set_rpcdelay)
   bool myid = false;
   chordID myID;
   chordID wellknownID;
-  int nreplica = 0;
   int ss = 10000;
   int cs = 1000;
   myport = 0;
@@ -238,10 +248,23 @@ parseconfigfile (str cf, int nvnode, int set_rpcdelay)
 				     max_loccache, max_connections);
   if (myid) chordnode->newvnode (myID, wrap (newvnode_cb, nvnode-1));
   else chordnode->newvnode (wrap (newvnode_cb, nvnode-1));
-  sigcb(SIGUSR1, wrap (chordnode, &chord::stats));
-  sigcb(SIGUSR2, wrap (chordnode, &chord::print));
+  sigcb(SIGUSR1, wrap (&stats));
+  sigcb(SIGUSR2, wrap (&print));
 }
 
+void
+stats () 
+{
+  chordnode->stats ();
+  for (int i = 0 ; i < ndhash; i++)
+    dh[i]->print_stats ();
+}
+
+void
+print ()
+{
+  chordnode->print ();
+}
 static void
 usage ()
 {
@@ -262,7 +285,7 @@ main (int argc, char **argv)
   int set_name = 0;
   int set_rpcdelay = 0;
 
-  while ((ch = getopt (argc, argv, "d:S:v:f:c:")) != -1)
+  while ((ch = getopt (argc, argv, "d:S:v:f:c")) != -1)
     switch (ch) {
     case 'S':
       p2psocket = optarg;

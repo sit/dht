@@ -154,7 +154,8 @@ vnode::stats ()
   warnx << "# hops for findsuccessor " << nhops << "\n";
   {
     char buf[100];
-    sprintf (buf, "   Average # hops: %f\n", ((float)(nhops/nfindsuccessor)));
+    if (nfindsuccessor)
+      sprintf (buf, "   Average # hops: %f\n", ((float)(nhops/nfindsuccessor)));
     warnx << buf;
   }
   warnx << "   # max hops for findsuccessor " << nmaxhops << "\n";

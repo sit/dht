@@ -144,6 +144,7 @@ class dhash {
 			     chordID predid,
 			     chordID key);
 
+  void init_key_status ();
   void transfer_initial_keys ();
   void transfer_init_getkeys_cb (dhash_getkeys_res *res, clnt_stat err);
   void transfer_init_gotk_cb (dhash_stat err);
@@ -198,6 +199,7 @@ class dhash {
   void printcached_walk (chordID k);
 
   ptr<dbrec> id2dbrec(chordID id);
+  chordID dbrec2id (ptr<dbrec> r);
 
   vs_cache<chordID, dhash_stat> key_store;
   vs_cache<chordID, dhash_stat> key_replicate;

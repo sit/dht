@@ -23,7 +23,6 @@ dhash::dhash(str dbname, vnode *node, int k, int ss, int cs) :
   opts.addOption("opt_async", 1);
   opts.addOption("opt_cachesize", 80000);
   opts.addOption("opt_nodesize", 4096);
-  opts.addOption("opt_create", 1);
 
   if (int err = db->opendb(const_cast < char *>(dbname.cstr()), opts)) {
     warn << "open returned: " << strerror(err) << err << "\n";
@@ -43,6 +42,7 @@ dhash::dhash(str dbname, vnode *node, int k, int ss, int cs) :
   keys_replicated = 0;
   keys_cached = 0;
 
+  //  init_key_status ();
   update_replica_list ();
   install_replica_timer ();
   install_keycheck_timer ();
@@ -284,6 +284,27 @@ dhash::get_keys_traverse_cb (ptr<vec<chordID> > vKeys,
 //---------------- no sbp's below this line --------------
  
 // -------- reliability stuff
+
+void
+dhash::init_key_status () 
+{
+  warn << "EXAMINING DATABASE\n";
+  dhash_stat c = DHASH_CACHED;
+  dhash_stat s = DHASH_STORED;
+  /* probably not safe if I ever fix ADB */
+  ptr<dbEnumeration> it = db->enumerate();
+  ptr<dbPair> d = it->nextElement();
+  while (d) {
+    chordID k = dbrec2id (d->key);
+    if (responsible (k)) 
+      key_store.enter (k, &s);
+    else
+      key_store.enter (k, &c);
+
+    warn << "found " << k << " in database\n";
+    d = it->nextElement();
+  } 
+}
 
 void
 dhash::transfer_initial_keys ()
@@ -726,6 +747,13 @@ dhash::id2dbrec(chordID id)
   return q;
 }
 
+chordID
+dhash::dbrec2id (ptr<dbrec> r) {
+  str raw = str ( (char *)r->value, r->len);
+  chordID ret;
+  ret.setraw (raw);
+  return ret;
+}
 void
 dhash::change_status (chordID key, dhash_stat newstat) 
 {
@@ -790,7 +818,8 @@ dhash::store_flush_cb (int err) {
 
 void
 dhash::cache_flush (chordID key, dhash_stat value) {
-  return;
+
+  if (key_status (key) != DHASH_CACHED) return;
   warn << "flushing element " << key << " from cache\n";
   ptr<dbrec> k = id2dbrec(key);
   db->del (k, wrap(this, &dhash::cache_flush_cb));
@@ -854,14 +883,13 @@ dhash::printcached_walk (chordID k)
 void
 dhash::print_stats () 
 {
-  warn << "ID: " << host_node->my_ID () << "\n";
-  warn << "Stats";
-  warn << "  " << keys_stored << " stored for " << bytes_stored << " bytes\n";
-  warn << "  " << bytes_stored << " bytes stored\n";
-  warn << "  " << keys_cached << " keys cached\n";
-  warn << "  " << keys_replicated << " keys replicated\n";
-  warn << "\nKeys: \n";
-  printkeys ();
+  warnx << "ID: " << host_node->my_ID () << "\n";
+  warnx << "Stats:\n";
+  warnx << "  " << keys_stored << " stored\n";
+  warnx << "  " << keys_cached << " keys cached\n";
+  warnx << "  " << keys_replicated << " keys replicated\n";
+  warnx << "  " << bytes_stored << " total bytes held\n";
+    
 }
 
 

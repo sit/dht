@@ -253,6 +253,7 @@ dhashclient::forget_block (chordID key)
 void
 dhashclient::cache_on_path (chordID key, route path)
 {
+  if (!do_caching) return;
   if (!block_memorized (key)) return;
   for (unsigned int i=0; i < path.size (); i++)
     send_block (key, path[i], DHASH_CACHE);
