@@ -302,7 +302,6 @@ dhashcli::retrieve_block_hop_cb (blockID blockID, route_iterator *ci,
 				 int options, int retries, ptr<chordID> guess,
 				 bool done)
 {
-  vec<chord_node> cs = ci->successors ();
   if (!done) {
     ci->next_hop ();
     return;
@@ -572,9 +571,7 @@ dhashcli::retrieve_fetch_cb (blockID blockID, u_int i,
 	<< " with hash " << h << " " << res->compl_res->res.size () << "\n";
 #endif /* VERBOSE_LOG */
   
-  // strip off the 4 bytes header to get the fragment
-  assert (block->len >= 4);
-  str frag (block->data + 4, block->len - 4);
+  str frag (block->data, block->len);
   rs->frags.push_back (frag);
 
   if (rs->frags.size () >= dhash::NUM_DFRAGS) {
@@ -686,9 +683,8 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
     assert (i < succs.size ());
     str frag = Ida::gen_frag (dhash::NUM_DFRAGS, blk);
     
-    ref<dhash_block> blk = New refcounted<dhash_block> ((char *)NULL, frag.len () + 4, DHASH_CONTENTHASH);
-    bcopy (block->data, blk->data, 4); // XXX remove!
-    bcopy (frag.cstr (), blk->data + 4, frag.len ());
+    ref<dhash_block> blk = New refcounted<dhash_block> ((char *)NULL, frag.len (), DHASH_CONTENTHASH);
+    bcopy (frag.cstr (), blk->data, frag.len ());
     
     bigint h = compute_hash (blk->data, blk->len);
     warnx << "Put frag: " << i << " " << h << " " << blk->len << " to " << succs[i].x << "\n";

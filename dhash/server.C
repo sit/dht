@@ -248,8 +248,7 @@ dhash_impl::missing_retrieve_cb (bigint key, dhash_stat err,
     // Oh, the memory copies.
     str blk (b->data, b->len);
     str frag = Ida::gen_frag (dhash::NUM_DFRAGS, blk);
-    str f = strbuf () << str (b->data, 4) << frag;
-    ref<dbrec> d = New refcounted<dbrec> (f.cstr (), f.len ());
+    ref<dbrec> d = New refcounted<dbrec> (frag.cstr (), frag.len ());
     ref<dbrec> k = id2dbrec (key);
     dbwrite (k, d, DHASH_CONTENTHASH);
   }
