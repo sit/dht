@@ -68,6 +68,7 @@ int vnodes = 1;
 u_int initialized_dhash = 0;
 
 static char *logfname;
+static char *tracefname;
 
 ptr<chord> chordnode;
 static str p2psocket;
@@ -391,6 +392,34 @@ halt ()
   chordnode = NULL;
   exit (0);
 }
+
+void
+start_logs ()
+{
+  static int tracefd (-1);
+  static int logfd (-1);
+  // XXX please don't call setlogfd or change errfd anywhere else...
+
+  if (tracefname) {
+    if (tracefd >= 0)
+      close (tracefd);
+    tracefd = open (tracefname, O_WRONLY|O_APPEND|O_CREAT, 0666);
+    if (tracefd < 0)
+      fatal << "Couldn't open trace file " << optarg << " for append.\n";
+    modlogger::setlogfd (tracefd);
+  }
+
+  if (logfname) {
+    if (logfd >= 0)
+      close (logfd);
+    logfd = open (logfname, O_RDWR | O_CREAT, 0666);
+    if (logfd < 0)
+      fatal << "Could not open log file " << optarg << " for appending.\n";
+    lseek (logfd, 0, SEEK_END);
+    errfd = logfd;
+  }
+}
+
 static void
 usage ()
 {
@@ -422,7 +451,7 @@ main (int argc, char **argv)
   random_init ();
   sigcb(SIGUSR1, wrap (&stats));
   sigcb(SIGUSR2, wrap (&stop));
-  sigcb(SIGHUP, wrap (&halt));
+  sigcb(SIGHUP, wrap (&start_logs));
   sigcb(SIGINT, wrap (&halt));
 
   int nmodes = sizeof (modes)/sizeof(modes[0]);
@@ -444,7 +473,6 @@ main (int argc, char **argv)
   str db_name = "/var/tmp/db";
   p2psocket = "/tmp/chord-sock";
   ctlsocket = "/tmp/lsdctl-sock";
-  logfname = "lsd-trace.log";
   str myname = my_addr ();
   mode = MODE_CHORD;
 
@@ -491,14 +519,8 @@ main (int argc, char **argv)
 	break;
       }
     case 'L':
-      {
-	int logfd = open (optarg, O_RDWR | O_CREAT, 0666);
-	if (logfd <= 0)
-	  fatal << "Could not open logfile " << optarg << " for appending\n";
-	lseek (logfd, 0, SEEK_END);
-	errfd = logfd;
-	break;
-      }
+      logfname = optarg;
+      break;
     case 'l':
       if (inet_addr (optarg) == INADDR_NONE)
 	fatal << "must specify bind address in dotted decimal form\n";
@@ -549,7 +571,7 @@ main (int argc, char **argv)
       modlogger::setmaxprio (modlogger::TRACE);
       break;
     case 'T':
-      logfname = optarg;
+      tracefname = optarg;
       break;
     case 'v':
       vnodes = atoi (optarg);
@@ -562,13 +584,8 @@ main (int argc, char **argv)
   if (wellknownport == 0)
     usage ();
 
-  {
-    int logfd = open (logfname, O_WRONLY|O_APPEND|O_CREAT, 0666);
-    if (logfd < 0)
-      fatal << "Couldn't open " << optarg << " for append.\n";
-    modlogger::setlogfd (logfd);
-  }
-
+  start_logs ();
+  
   if (cffile) {
     bool ok = Configurator::only ().parse (cffile);
     assert (ok);
