@@ -31,22 +31,43 @@ is no unified framework for evaluating the performance of these protocols.
 Deploying in real-world network can be complex and depending on the comparison
 you wish to do, not even useful.
 
+We're trying to encourage P2P research community to all use the same
+simulator base, to save work, to make it easier to reproduce each
+other's results, to make it easier to compare different ideas.
+
 Framework for comparing P2P protocols.  Should allow for easy coding of
 protocols and simple models for underlying topologies.  Preferably, allow for
 pseudo code to be written, abstracting away all the intricacies of network
 protocols, etc.
 
-Why another simulator?  Why not NS?
+Key goal: direct use of pseudo-code. Ha ha. Realistically, be able to
+get off the ground with straight pseudo-code, evolve gradually. Key
+consequence: we need threads.
+
+Want the simulator to make it easy to trying out new ideas.
+
+Need to be able to claim that the simulation needs of P2P protocols
+are different from those of lower-level protocols.
+
+Make it easy to compare different P2P algorithms.
 
 Challenges: scaling.
 
 Why is this a reasonable thing to do?  Not oversimplified?  Results correspond
 with real life!
 
+Want to draw contrast to only doing real implementations (hard to
+evaluate different choices or uncommon situations or large scale), and
+contrast to everyone writing their own incompatible simulation.
+
 % 1}}}
 % Related work {{{1
 \section{Related work}
 \label{Section:Related}
+
+Why not NS? 1) It doesn't have threads. 2) We believed we could make a
+much simpler framework given what we were simulating. Latency only,
+simple RPCs, don't need complex topology, don't need TCP.
 
 Other simulators suck.
 
@@ -55,8 +76,25 @@ Other simulators suck.
 \section{Design considerations}
 \label{Section:Design}
 
-Maybe this section is useless.  In fact, maybe this entire paper is useless.
+Key design ideas. Want to be able to combine any combination of
+algorithm, workload (events file), and topology. And we want these
+three ideas to be orthogonal.
 
+What's an algorithm? What do you have to define? What's the interface
+to the rest of the system?
+
+What's a workload? Interface? Typical examples? (It would be nice if
+there were an Application class, orthogonal to Protocol, that allowed
+any Application to run with any Protocol. So you could run DHash on
+top of Pastry.)
+
+What's a topology? Interface? Typical examples?
+
+Open issues: maybe it's impossible to define a useful
+Application/Protocol interface that would let any App run with any
+Protocol. A full ``workload'' includes crashes/joins, which it's not
+clear it makes send to mix in with the Application operations like
+lookup. Where does e.g. Vivaldi fit in.
 
 % }}}1
 % Implementation {{{1
