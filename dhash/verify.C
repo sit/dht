@@ -125,7 +125,7 @@ get_block_contents (char *data, unsigned int len, dhash_ctype t)
   case DHASH_NOAUTH:
   case DHASH_APPEND:
     {
-      if (!(content = (char *)XDR_INLINE (&x1, contentlen)))
+      if (len && !(content = (char *)XDR_INLINE (&x1, contentlen)))
 	return NULL;
     }
     break;
