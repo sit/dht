@@ -33,17 +33,17 @@ public:
   OneHopObserver(Args*);
   ~OneHopObserver();
   static OneHopObserver* Instance(Args*);
-  vector<Chord::IDMap> get_sorted_nodes();
-  Chord::IDMap get_rand_alive_node();
-  void addnode(Chord::IDMap n) { 
-    vector<Chord::IDMap>::iterator p =
-      upper_bound(ids.begin(),ids.end(),n,Chord::IDMap::cmp);
+  vector<OneHop::IDMap> get_sorted_nodes();
+  OneHop::IDMap get_rand_alive_node();
+  void addnode(OneHop::IDMap n) { 
+    vector<OneHop::IDMap>::iterator p =
+      upper_bound(ids.begin(),ids.end(),n,OneHop::IDMap::cmp);
     if (p->id!=n.id) {
       ids.insert(p,1,n);
     }
   }
-  void delnode(Chord::IDMap n) { 
-    vector<Chord::IDMap>::iterator p =
+  void delnode(OneHop::IDMap n) { 
+    vector<OneHop::IDMap>::iterator p =
       find(ids.begin(),ids.end(),n);
     ids.erase(p);
   }
@@ -54,7 +54,7 @@ private:
   string _type;
 
   void init_state();
-  vector<Chord::IDMap> ids;
+  vector<OneHop::IDMap> ids;
 };
 
 #endif // __CHORD_OBSERVER_H

@@ -57,20 +57,19 @@ OneHopObserver::OneHopObserver(Args *a) : _type("OneHop")
     OneHop *t = dynamic_cast<OneHop*>(*pos);
     ids.push_back(t->idmap());
   }
-  sort(ids.begin(),ids.end(),Chord::IDMap::cmp);
+  sort(ids.begin(),ids.end(),OneHop::IDMap::cmp);
 }
 
-vector<Chord::IDMap>
+vector<OneHop::IDMap>
 OneHopObserver::get_sorted_nodes()
 {
   assert(ids.size()>0);
   return ids;
 }
 
-Chord::IDMap
+OneHop::IDMap
 OneHopObserver::get_rand_alive_node()
 {
-  // Chord::IDMap n;
   uint r;
   while (1) {
     r = (random() % 10);
