@@ -59,15 +59,13 @@ E2EGraph::latency(IPAddress ip1x, IPAddress ip2x, bool reply)
   int t;
   if (ip1 < ip2)  {
     t =  _pairwise[ip1-1][ip2-1];
-    assert(t <= 1000000);
   } else if (ip1 > ip2) {
     t = _pairwise[ip2-1][ip1-1];
-    assert(t <= 1000000);
   } else{
     t = 0;
   }
   if (t < 0) {
-    t = 100000;
+    t = _med_lat; //a missing measurement, subsitute with median latency
   }
   return (Time)t;
 }
