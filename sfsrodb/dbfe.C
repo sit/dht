@@ -389,7 +389,7 @@ dbfe::IMPL_create_sleepycat(char *filename, dbOptions opts)
 
 int dbfe::IMPL_insert_sync_sleepycat(ref<dbrec> key, ref<dbrec> data) { 
   DB_TXN *t = NULL;
-  int r = 0;
+  int r = 0, tr = 0;
   DBT skey, content;
   bzero(&skey, sizeof(skey));
   bzero(&content, sizeof(content));
@@ -404,10 +404,10 @@ int dbfe::IMPL_insert_sync_sleepycat(ref<dbrec> key, ref<dbrec> data) {
   }
 
   r = db->put(db, t, &skey, &content, 0);
-  if (r) return r;
 
   if(t) {
-    r = txn_commit(t, 0);
+    tr = txn_commit(t, 0);
+    if (!r) r = tr;
     t = NULL;
   }
 
@@ -436,7 +436,7 @@ dbfe::IMPL_lookup_sync_sleepycat(ref<dbrec> key)
 int 
 dbfe::IMPL_delete_sync_sleepycat(ptr<dbrec> key) {
   DB_TXN *t = NULL;
-  int err;
+  int err, terr;
   DBT dkey;
   bzero(&dkey, sizeof(dkey));
   dkey.size = key->len;
@@ -448,10 +448,10 @@ dbfe::IMPL_delete_sync_sleepycat(ptr<dbrec> key) {
   }
 
   err = db->del (db, t, &dkey, 0);
-  if (err) return err;
 
   if(t) {
-    err = txn_commit(t, 0);
+    terr = txn_commit(t, 0);
+    if (!err) err = terr;
     t = NULL;
   }
 
