@@ -96,8 +96,8 @@ protected:
 
 
   // Send an RPC from a Node on one Node to a method
-  // of the same Node sub-class with a different ip.
-  template<class BT, class AT, class RT>
+  // of the same Node sub-class with a different ip
+  template<class BT, class AT, class RT> 
   bool doRPC(IPAddress dst, void (BT::* fn)(AT *, RT *), AT *args, RT *ret)
   {
     assert(dst > 0);
@@ -132,7 +132,6 @@ protected:
   // returns one of the RPCHandle's for which a reply has arrived. BLOCKING.
   unsigned rcvRPC(RPCSet*, bool&);
 
-private:
   IPAddress _ip;
   bool _alive;
 
