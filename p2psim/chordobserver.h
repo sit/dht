@@ -4,6 +4,8 @@
 #include "observer.h"
 #include "args.h"
 #include <string>
+#include "consistenthash.h"
+#include <vector>
 
 class ChordObserver : public Observer {
 public:
@@ -16,6 +18,9 @@ private:
   ~ChordObserver();
   unsigned int _reschedule;
   string _type;
+  unsigned int _num_nodes;
+
+  vector<ConsistentHash::CHID> lid;
 };
 
 #endif // __CHORD_OBSERVER_H

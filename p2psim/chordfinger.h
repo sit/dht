@@ -13,6 +13,7 @@ class ChordFinger: public Chord {
   protected:
     void fix_fingers();
     void stabilize();
+    bool stabilized(vector<CHID> lid);
     void reschedule_stabilizer(void *x);
 };
 

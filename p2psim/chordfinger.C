@@ -1,6 +1,7 @@
 #include  "chordfinger.h"
 #include <stdio.h>
 #include <iostream>
+#include <algorithm>
 using namespace std;
 
 ChordFinger::ChordFinger(Node *n) : Chord(n) 
@@ -44,4 +45,35 @@ ChordFinger::stabilize()
 {
   Chord::stabilize();
   fix_fingers();
+}
+
+bool
+ChordFinger::stabilized(vector<CHID> lid)
+{
+  bool ret = Chord::stabilized(lid);
+  if (!ret) return ret;
+
+  int i0 = 0;
+  IDMap succ = loctable->succ(1);
+  CHID gap = succ.id - me.id;
+  while (gap > 0) {
+    i0++;
+    gap = gap >> 1;
+  }
+
+  vector<CHID>::iterator it;
+  CHID finger;
+  unsigned int pos;
+  for (unsigned int i = i0; i < NBCHID; i++) {
+    finger = ConsistentHash::successorID(me.id,i);
+    it = upper_bound(lid.begin(), lid.end(), finger);
+    pos = it - lid.begin();
+    if (pos >= lid.size()) {
+      pos = 0;
+    }
+    if (lid[pos] != loctable->succID(finger))
+      return false;
+  }
+
+  return true;
 }

@@ -16,22 +16,27 @@ public:
   };
 
   struct koorde_lookup_ret {
-    IDMap r;
+    IDMap next;
+    CHID k;
+    CHID kshift;
+    CHID i;
+    bool done;
   };
 
   // RPC handlers
-  void koorde_lookup (koorde_lookup_arg *, koorde_lookup_ret *);
+  void koorde_next (koorde_lookup_arg *, koorde_lookup_ret *);
 
-  bool stabilized();
+  bool stabilized(vector<ConsistentHash::CHID>);
   void dump();
 
 protected:
   Chord::CHID debruijn;
+  IDMap d;
+  IDMap last;
 
   Chord::CHID nextimagin (CHID i, CHID kshift);
 
   vector<Chord::IDMap> Koorde::find_successors(CHID key, int m);
-
   void fix_debruijn();
   void stabilize();
   void reschedule_stabilizer(void *x);

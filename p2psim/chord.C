@@ -3,6 +3,7 @@
 #include "packet.h"
 #include <stdio.h>
 #include <iostream>
+#include <algorithm>
 
 #define PID(x) (x >> (NBCHID - 32))
 
@@ -144,7 +145,6 @@ Chord::reschedule_stabilizer(void *x)
 void
 Chord::stabilize()
 {
-  loctable->checkpoint();
   IDMap succ1 = loctable->succ(1);
 
   if (succ1.ip && (succ1.ip != me.ip)) {
@@ -155,9 +155,11 @@ Chord::stabilize()
 
     IDMap succ2 = loctable->succ(1);
 
+    /*
     if(succ1.id != succ2.id)
       printf("%s changed succ from %qu to %qu\n",
              ts(), PID(succ1.id), PID(succ2.id));
+	     */
 
     notify_args na;
     notify_ret nr;
@@ -167,16 +169,23 @@ Chord::stabilize()
     fix_predecessor();
     fix_successor();
     if (CHORD_SUCC_NUM > 1) fix_successor_list();
-  }else{
-    printf("%s stabilize nothing succ (%u,%qu)\n",
-           ts(), succ1.ip,PID(succ1.id));
   }
 }
 
 bool
-Chord::stabilized()
+Chord::stabilized(vector<CHID> lid)
 {
-  return loctable->stabilized();
+  vector<CHID>::iterator iter;
+  iter = find(lid.begin(), lid.end(), me.id);
+  assert(iter != lid.end());
+  IDMap succ;
+  for (unsigned int i=1; i <= CHORD_SUCC_NUM; i++) {
+    iter++;
+    if (iter == lid.end()) iter = lid.begin();
+    succ = loctable->succ(i);
+    if (succ.id != *iter) return false;
+  }
+  return true;
 }
 
 void
@@ -261,11 +270,20 @@ Chord::crash()
 
 #endif
 
+//get the succ node after this id 
+ConsistentHash::CHID
+LocTable::succID(ConsistentHash::CHID id)
+{
+  for (int i = 1; i < ring.size(); i++) {
+    if (ConsistentHash::between(ring[0].id, ring[i].id, id)) 
+      return ring[i].id;
+  }
+  return ring[0].id;
+}
+
 Chord::IDMap
 LocTable::succ(unsigned int which)
 {
-  assert(which == 1);
-  assert(which <= CHORD_SUCC_NUM && which >= 1);
   if (which < (ring.size() -1)) {
     return ring[which];
   }else{
@@ -348,22 +366,9 @@ LocTable::add_node(Chord::IDMap n)
       return;
     } else if (ring[i].ip == 0) {
       ring[i] = n;
-      _changed = true;
       return;
     } else if (ConsistentHash::between(ring[i-1].id, ring[i].id, n.id)) {
       ring.insert(ring.begin() + i, n);
-      if (i <= CHORD_SUCC_NUM) {
-	_changed = true;
-      }else if (pinlist.size() > 0) {
-	//is it a better finger candidate than one of my existing fingers?
-	for (unsigned int j = 0; j < pinlist.size(); j++) {
-	  if (ConsistentHash::betweenleftincl(pinlist[j], pinlist[(j+1)%(pinlist.size())],ring[i].id)) {
-	    if (ConsistentHash::betweenrightincl(ring[i-1].id, ring[i].id, pinlist[j])) {
-	      _changed = true;
-	    }
-	  }
-	}
-      }
       if (ring.size() > _max) {
 	evict();
 	assert(ring.size() == _max);
@@ -383,10 +388,8 @@ LocTable::notify(Chord::IDMap n)
   if ((ring.back().ip == 0) || (ConsistentHash::between(ring.back().id, ring.front().id, n.id))) {
     ring.pop_back();
     ring.push_back(n);
-    if (!_changed) _changed = true;
   }
   if ((ring[1].ip == 0) || (ring[1].ip == ring[0].ip)){
-    if (!_changed) _changed = true;
     ring[1] = n;
   }
 }
@@ -441,20 +444,6 @@ LocTable::evict() //evict one node
   }
   assert(0);
   return 0;
-}
-
-void
-LocTable::checkpoint()
-{
-  Time tm = now();
-  assert(!_prev_chkp || tm >= (_prev_chkp + STABLE_TIMER));
-  if (!_changed) {
-    _stabilized = true;
-  } else {
-    _stabilized = false;
-  }
-  _prev_chkp = tm;
-  _changed = false;
 }
 
 void

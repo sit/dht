@@ -70,7 +70,8 @@ public:
   void notify_handler(notify_args *, notify_ret *);
   void next_handler(next_args *, next_ret *);
 
-  bool stabilized();
+  CHID id () { return me.id; }
+  virtual bool stabilized(vector<CHID>);
   virtual void dump();
   char *ts();
 
@@ -104,10 +105,6 @@ class LocTable {
       ring[1].ip = 0; // ring[1] is always successor, currently null
       ring[2].ip = 0; //ring.back() is always predecessor, currently null
       pinlist.clear();
-
-      _prev_chkp = 0;
-      _stabilized = false;
-      _changed = false;
     }; 
 
     ~LocTable() {
@@ -119,13 +116,13 @@ class LocTable {
     };
 
     Chord::IDMap succ(unsigned int which);
+    ConsistentHash::CHID succID(ConsistentHash::CHID id);
     vector<Chord::IDMap> succs(unsigned int m);
     Chord::IDMap pred(Chord::CHID n);
     Chord::IDMap pred();
     Chord::IDMap next(Chord::CHID n);
     vector<Chord::IDMap> succ_for_key(Chord::CHID key);
     void checkpoint();
-    bool stabilized() {return _stabilized;};
 
     void add_node(Chord::IDMap n);
     void del_node(Chord::IDMap n);
@@ -150,10 +147,6 @@ class LocTable {
     vector<Chord::CHID> pinlist;
     unsigned int _succ_num;
     unsigned int _max;
-
-    Time _prev_chkp;
-    bool _stabilized;
-    bool _changed;
 
     unsigned int evict(); //evict one node to make sure ring contains <= _max elements
 };
