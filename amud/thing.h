@@ -24,7 +24,7 @@ class thing: public mud_obj {
 
     bcopy (bytes, &ctag.ver, USZ);
     offst += USZ;
-    bcopy (bytes + offst, &ctag.writer, ID_SIZE);
+    mud_ID_get (&ctag.writer, bytes + offst);
     offst += ID_SIZE;
 
     bcopy (bytes + offst, &slen, USZ);
@@ -49,7 +49,7 @@ class thing: public mud_obj {
 
     bcopy (&ctag.ver, buf + offst, USZ);
     offst += USZ;
-    bcopy (&ctag.writer, buf + offst, ID_SIZE);
+    mud_ID_put (buf + offst, chordID(ctag.writer));
     offst += ID_SIZE;
     
     slen = get_name ().len ();
