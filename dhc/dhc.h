@@ -122,6 +122,7 @@ struct keyhash_meta {
     bcopy (config.bytes (), buf + offst, config.size ());
     offst += config.size ();
     bcopy (&cvalid, buf + offst, sizeof (bool));
+    offst += sizeof (bool);
     bcopy (&accepted.seqnum, buf + offst, sizeof (u_int64_t));
     offst += sizeof (u_int64_t);
     ID_put (buf + offst, accepted.proposer);
@@ -247,8 +248,11 @@ struct paxos_state_t {
   str to_str ()
   {
     strbuf ret;
-    ret << "\n promise msgs received: " << promise_recvd 
+    ret << "\n proposed: " << proposed
+	<< "\n sent_newconfig: " << sent_newconfig
+	<< "\n promise msgs received: " << promise_recvd 
 	<< "\n accept msgs received: " << accept_recvd
+	<< "\n newconfig acks received: " << newconfig_ack_recvd
 	<< "\n accepted config: ";
     for (uint i=0; i<acc_conf.size (); i++)
       ret << acc_conf[i] << " ";
@@ -299,7 +303,9 @@ struct dhc_soft {
   {
     strbuf ret;
     ret << "\n************ dhc_soft stat *************\n";
-    ret << "Block ID:" << id << "\n config seqnum:" << config_seqnum 
+    ret << "Block ID:" << id
+	<< "\n status: " << status
+	<< "\n config seqnum: " << config_seqnum 
 	<< "\n config IDs: ";
     for (uint i=0; i<config.size (); i++) 
       ret << config[i]->id () << " ";

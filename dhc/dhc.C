@@ -35,6 +35,7 @@ dhc::recon (chordID bID, dhc_cb_t cb)
 
   if (rec) {    
     ptr<dhc_block> kb = to_dhc_block (rec);
+    warn << "dhc_block: " << kb->to_str ();
     if (!kb->meta->cvalid) {
       (*cb) (DHC_NOT_A_REPLICA);
       return;
@@ -45,12 +46,9 @@ dhc::recon (chordID bID, dhc_cb_t cb)
     
     if (b->status == IDLE) {
       b->status = RECON_INPROG;
-      //b->pstat->sent_newconfig = false;
       b->proposal.seqnum = (b->promised.seqnum > b->proposal.seqnum) ?
 	b->promised.seqnum + 1 : b->proposal.seqnum + 1;
       b->proposal.proposer = myNode->my_ID ();
-      //b->pstat->promise_recvd = 0;
-      //b->pstat->accept_recvd = 0;
       dhcs.insert (b);
 
 #if DHC_DEBUG
@@ -188,8 +186,6 @@ dhc::recv_accept (chordID bID, dhc_cb_t cb,
       //End of recon protocol !!!
       warn << "\n\n" << "dhc::recv_accept End of recon for block " << b->id << "\n";
 #endif
-      //b->pstat->recon_inprogress = false;
-      //b->pstat->proposed = false;
       dhcs.insert (b);
 
       ptr<dhc_newconfig_res> res; 
@@ -216,10 +212,12 @@ dhc::recv_newconfig_ack (chordID bID, dhc_cb_t cb, ref<dhc_newconfig_res> ack,
 
     dhc_soft *b = dhcs[bID];
     if (!b) {
-      warn << "dhc::recv_accept " << bID << " not found in hash table.\n";
+      warn << "dhc::recv_newconfig_ack " << bID << " not found in hash table.\n";
       exit (-1);
     }
-    
+#if DHC_DEBUG    
+    warn << "dhc::recv_newconfig_ack: " << b->to_str ();
+#endif
     if (b->status == RECON_INPROG)
       b->pstat->newconfig_ack_recvd++;
     
@@ -337,7 +335,8 @@ dhc::recv_propose (user_args *sbp)
     sbp->reply (&res);
   } else {
     if (set_ac (&b->pstat->acc_conf, *propose)) {
-      b->status = IDLE;
+      //b->status = IDLE;
+      kb->meta->cvalid = false;
       kb->meta->accepted.seqnum = propose->round.seqnum;
       kb->meta->accepted.proposer = propose->round.proposer;
       db->insert (id2dbrec (kb->id), to_dbrec (kb));
@@ -349,7 +348,7 @@ dhc::recv_propose (user_args *sbp)
       sbp->reply (&res);
     }
   }
-  dhcs.insert (b);
+  //dhcs.insert (b);
       
 }
 
@@ -360,6 +359,13 @@ dhc::recv_newconfig (user_args *sbp)
   ptr<dbrec> key = id2dbrec (newconfig->bID);
   ptr<dbrec> rec = db->lookup (key);
   ptr<dhc_block> kb;
+
+  dhc_soft *b = dhcs[newconfig->bID];
+  if (b && b->status == RW_INPROG) {
+    dhc_newconfig_res res (DHC_RW_INPROG);
+    sbp->reply (&res);
+    return;
+  }
 
   if (!rec)
     kb = New refcounted<dhc_block> (newconfig->bID);
@@ -375,7 +381,8 @@ dhc::recv_newconfig (user_args *sbp)
 #if DHC_DEBUG
     warn << "\n\n dhc::recv_newconfig. " << kb->to_str ();
 #endif  
-    if (kb->meta->config.seqnum != newconfig->old_conf_seqnum) {
+    if (kb->meta->config.seqnum != 0 &&
+	kb->meta->config.seqnum != newconfig->old_conf_seqnum) {
       dhc_newconfig_res res (DHC_CONF_MISMATCH);
       sbp->reply (&res);
       return;      
@@ -397,18 +404,20 @@ dhc::recv_newconfig (user_args *sbp)
   for (uint i=0; i<kb->meta->config.nodes.size (); i++)
     warnx << kb->meta->config.nodes[i] << " ";
   warnx << "\n";
-  warn << "dhc::recv_newconfig Insert block " << kb->id << "\n";
+  warn << "dhc::recv_newconfig Inserted block " << kb->id << "\n";
 #endif
 
   db->insert (key, to_dbrec (kb));
   db->sync (); 
 
+#if 0
   // Remove b if it exists in hash table
   dhc_soft *b = dhcs[newconfig->bID];
   if (b) {
     dhcs.remove (b);
     delete b;
   }
+#endif
 
   dhc_newconfig_res res (DHC_OK);
   sbp->reply (&res);
@@ -576,6 +585,18 @@ dhc::recv_getblock (user_args *sbp)
     sbp->reply (&res);
     return;
   }
+
+  //check if sender is primary!!
+  chord_node *from = New chord_node;
+  sbp->fill_from (from);
+  if (!is_primary (from->x, kb->meta->config.nodes)) {
+    dhc_get_res res (DHC_NOT_PRIMARY);
+    sbp->reply (&res);
+    delete from;
+    return;
+  }
+  delete from;
+  
   dhc_get_res res (DHC_OK);
   (*res.resok).data.tag.ver = kb->data->tag.ver;
   (*res.resok).data.tag.writer = kb->data->tag.writer;
