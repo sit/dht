@@ -42,7 +42,7 @@ ignore_challengeresp (chordID x, bool b, chordstat s)
 cbchallengeID_t cbchall_null (wrap (ignore_challengeresp));
 
 location::location (chordID &_n, net_address &_r) 
-  : n (_n), addr (_r), challenged (false)
+  : n (_n), addr (_r), alive (true), challenged (false)
 {
   refcnt = 0;
   rpcdelay = 0;
@@ -75,6 +75,8 @@ locationtable::start_network ()
 
 locationtable::locationtable (ptr<chord> _chordnode, int _max_cache)
   : chordnode (_chordnode),
+    good (0),
+    size_cachedlocs (0),
     max_cachedlocs (_max_cache), 
     rpcdelay (0),
     nrpc (0),
@@ -110,6 +112,7 @@ locationtable::locationtable (const locationtable &src)
   max_cachedlocs = src.max_cachedlocs;
 
   // State parameters will be zeroed in the copy
+  good = 0;
   size_cachedlocs = 0; 
   nrpc = 0;
   nrpcfailed = 0;
@@ -137,10 +140,12 @@ locationtable::locationtable (const locationtable &src)
 
   // Deep copy the list of locations, rezeroing all the refcnts.
   for (location *l = src.locs.first (); l; l = src.locs.next (l)) {
+    if (!l->alive) continue;
     location *loc = New location (l->n, l->addr);
     loc->challenged = l->challenged;
     locs.insert (loc);
     add_cachedlocs (loc);
+    if (loc->challenged) good++;
   }
   
   start_network ();
@@ -180,6 +185,7 @@ locationtable::insertgood (chordID &n, sfs_hostname s, int p)
   loc->challenged = true; // force goodness
   locs.insert (loc);
   add_cachedlocs (loc);
+  good++;
   // warnx << "INSERT (good): " << n << "\n";
 }
 
@@ -201,14 +207,16 @@ locationtable::getlocation (chordID &x)
   return l;
 }
 
+#if 0
 void
 locationtable::changenode (node *n, chordID &x, net_address &r)
 {
   updateloc (x, r, cbchall_null); // XXX
-  if (n->alive) deleteloc (n->n);
+  if (n->alive) decrefcnt (n->n);
   n->n = x;
   n->alive = true;
 }
+#endif /* 0 */
 
 net_address &
 locationtable::getaddress (chordID &n)
@@ -222,6 +230,7 @@ bool
 locationtable::lookup_anyloc (chordID &n, chordID *r)
 {
   for (location *l = locs.first (); l != NULL; l = locs.next (l)) {
+    if (!l->alive) continue;
     if (!l->challenged) continue;
     if (l->n != n) {
       *r = l->n;
@@ -248,8 +257,8 @@ chordID
 locationtable::closestsuccloc (chordID x) {
   chordID n = x;
   for (location *l = locs.first (); l; l = locs.next (l)) {
+    if (!l->alive) continue;
     if (!l->challenged) continue;
-    if (l->refcnt == 0) continue;
     if ((x == n) || between (x, n, l->n)) n = l->n;
   }
   // warnx << "closestsuccloc of " << x << " is " << n << "\n";
@@ -267,8 +276,8 @@ locationtable::closestpredloc (chordID x)
 {
   chordID n = x;
   for (location *l = locs.first (); l; l = locs.next (l)) {
+    if (!l->alive) continue;
     if (!l->challenged) continue;
-    if (l->refcnt == 0) continue;
     if ((x == n) || betterpred1 (n, x, l->n)) n = l->n;
   }
   // warnx << "findpredloc of " << x << " is " << n << "\n";
@@ -285,7 +294,7 @@ locationtable::cacheloc (chordID &x, net_address &r, cbchallengeID_t cb)
     locs.insert (loc);
     add_cachedlocs (loc);
     challenge (x, cb);
-  } else if (locs[x]->challenged == false) {
+  } else if (locs[x]->alive == false || locs[x]->challenged == false) {
     // state = "pending";
     challenge (x, cb); // queue up for additional callback
   } else {
@@ -325,10 +334,11 @@ locationtable::updateloc (chordID &x, net_address &r, cbchallengeID_t cb)
 }
 
 void
-locationtable::deleteloc (chordID &n)
+locationtable::decrefcnt (chordID &n)
 {
   location *l = locs[n];
-  assert (l);
+  if (!l)
+    panic << "locationtable::decrefcnt: no location for " << n << "\n";
   decrefcnt (l);
 }
 
@@ -344,7 +354,8 @@ void
 locationtable::increfcnt (chordID &n)
 {
   location *l = locs[n];
-  assert (l);
+  if (!l)
+    panic << "locationtable::increfcnt: no location for " << n << "\n";
   l->refcnt++;
   if (l->refcnt == 1) {
     remove_cachedlocs (l);
@@ -357,7 +368,14 @@ locationtable::checkrefcnt (int i)
   int n;
   int m;
   chordID x;
+  size_t realgood = 0;
 
+#ifdef PNODE
+  if (!myvnode) return;
+#else
+  if (!chordnode) return;
+#endif /* PNODE */
+  
   for (location *l = locs.first (); l != NULL; l = locs.next (l)) {
     x = l->n;
 #ifdef PNODE
@@ -367,10 +385,14 @@ locationtable::checkrefcnt (int i)
 #endif /* PNODE */    
     m = l->refcnt;
     if (n != m) {
-      warnx << "checkrefcnt " << i << " for " << x << " : refcnt " 
-            << l->refcnt << " appearances " << n << "\n";
-      assert (0);
+      panic << "checkrefcnt " << i << " for " << x << " : refcnt " 
+            << m << " appearances " << n << "\n";
     }
+    if (l->alive && l->challenged) realgood++;
+  }
+  if (good != realgood) {
+    panic << "checkrefcnt " << i << " for " << x << " : good "
+	  << good << " realgood " << realgood << "\n";
   }
 }
 
@@ -401,6 +423,7 @@ locationtable::delete_cachedlocs (void)
   assert (l->refcnt == 0);
   // warnx << "DELETE: " << l->n << "\n";
   locs.remove (l);
+  if (l->alive && l->challenged) good--;
   cachedlocs.remove (l);
   size_cachedlocs--;
   delete l;
@@ -415,7 +438,7 @@ locationtable::remove_cachedlocs (location *l)
 }
 
 void
-locationtable::ping (chordID id, cbv cb) 
+locationtable::ping (chordID id, cbping_t cb) 
 {
   ptr<chord_vnode> v = New refcounted<chord_vnode> ();
   v->n = id;
@@ -425,18 +448,33 @@ locationtable::ping (chordID id, cbv cb)
 }
 
 void
-locationtable::ping_cb (cbv cb, clnt_stat err) 
+locationtable::ping_cb (cbping_t cb, clnt_stat err) 
 {
-  if (err) warn << "error pinging\n";
-  (*cb)();
+  if (err) {
+    warn << "error pinging: " << err << "\n";   
+    if (cb)
+      (*cb) (CHORD_RPCFAILURE);
+  } else {
+    if (cb)
+      (*cb) (CHORD_OK);
+  }
 };
 
+bool
+locationtable::alive (chordID &x)
+{
+  location *l = locs[x];
+  if (l == NULL)
+    return false;
+  return l->alive;
+}
 
 void
 locationtable::challenge (chordID &x, cbchallengeID_t cb)
 {
   if (nochallenges) {
     locs[x]->challenged = true;
+    good++;
     cb (x, true, chordstat (CHORD_OK));
     return;
   }
@@ -478,7 +516,12 @@ locationtable::challenge_cb (int challenge, chordID x,
 
   location *l = locs[x];
   assert (l);
+
+  if (chalok && !l->challenged) // if not alive, chalok is false
+    good++;
   l->challenged = chalok;
+  if (chalok && !l->alive)
+    l->alive = true;
   
   cbchallengeID_t::ptr cb = NULL;;
   while (!l->outstanding_cbs.empty ()) {

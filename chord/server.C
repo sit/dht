@@ -265,7 +265,6 @@ vnode::notify_cb (chordID n, chordstat *res, clnt_stat err)
       warnx << "notify_cb: RPC failure " << n << " " << err << "\n";
     else
       warnx << "notify_cb: RPC error" << n << " " << *res << "\n";
-    deletefingers (n);
   }
   delete res;
 }

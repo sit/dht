@@ -69,8 +69,9 @@ toe_table::add_toe (chordID id, net_address r, int level)
 }
 
 void
-toe_table::add_toe_ping_cb (chordID id, int level)
+toe_table::add_toe_ping_cb (chordID id, int level, chordstat err)
 {
+  // xxx should check err?
   location *l = locations->getlocation (id);
   if (l->a_lat < level_to_delay (level)) {
     warn << "added " << id << " to level " << level << "\n";

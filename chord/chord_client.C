@@ -156,7 +156,7 @@ chord::newvnode (cbjoin_t cb)
   vnodes.insert (newID, vnodep);
 
   // Must block until at least one good node in table...
-  while (!locations->challenged (wellknownID)) {
+  while (!nlocations->challenged (wellknownID)) {
     warnx << newID << ": Waiting for challenge of wellknown ID\n";
     acheck ();
   }
@@ -171,15 +171,15 @@ chord::newvnode (cbjoin_t cb)
 }
 
 void
-chord::deletefingers_cb (chordID x, const chordID &k, ptr<vnode> v) {
-  v->deletefingers (x);
+chord::handle_death_cb (chordID x, const chordID &k, ptr<vnode> v) {
+  v->handle_death (x);
 }
 
 void
-chord::deletefingers (chordID x)
+chord::handle_death (chordID x)
 {
-  warnx << "deletefingers: " << x << "\n";
-  vnodes.traverse (wrap (this, &chord::deletefingers_cb, x));
+  warnx << "chord::handle_death: " << x << "\n";
+  vnodes.traverse (wrap (this, &chord::handle_death_cb, x));
 }
 
 int

@@ -100,6 +100,7 @@ stabilize_manager::isstable (void)
   for (unsigned int i = 0; i < clients.size (); i++) {
     ref<stabilizable> c = clients[i];
     ok = ok && c->isstable ();
+    // warnx << myID << ": isstable " << i << " is " << ok << "\n";
     if (!ok)
       return false;
   }

@@ -47,8 +47,33 @@ locationtable::doRPC (chordID &ID,
   ref<aclnt> c = aclnt::alloc (dgram_xprt, prog, 
 			       (sockaddr *)&(l->saddr));
   
-  c->call (procno, in, out, cb);
+  c->call (procno, in, out, wrap (this, &locationtable::doRPCreg_cb, ID, cb));
 }
+
+void
+locationtable::doRPCreg_cb (chordID ID, aclnt_cb realcb, clnt_stat err)
+{
+  location *l = locs[ID];
+  assert (l);
+  if (err) {
+    nrpcfailed++;
+    if (l->alive) {
+      good--;
+      l->alive = false;
+    }
+    // xxx we won't clean out a node while there's an outstanding RPC,
+    //     will we???
+  } else {
+    if (!l->alive) {
+      l->alive = true;
+      if (l->alive && l->challenged)
+	good++;
+    }
+  }
+
+  (realcb) (err);
+}
+
 
 void
 locationtable::stats ()
@@ -197,10 +222,9 @@ locationtable::timeout (rpc_state *C)
 void
 locationtable::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
 {
-
   if (err) {
     nrpcfailed++;
-
+    
 #ifdef __J__
     warnx << gettime() << " FAILED " << 1 + C->seqno << " err " << err << "\n";
 #endif
@@ -213,30 +237,40 @@ locationtable::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
     warnx << "\tprogno " << C->progno << "\n";
     warnx << "\tseqno " << C->seqno << "\n";
     warnx << "\trexmits " << C->rexmits << "\n";
-    chordnode->deletefingers (C->ID);
-  } else if (C->s > 0) {
-    u_int64_t now = getusec ();
-    // prevent overflow, caused by time reversal
-    if (now >= C->s) {
-      u_int64_t lat = now - C->s;
-      update_latency (C->ID, lat, (C->progno == DHASH_PROGRAM));
-    } else {
-      warn << "*** Ignoring timewarp: C->s " << C->s << " > now " << now << "\n";
-      warnx << " " << now       << "\n";
-      warnx << " " << getusec() << "\n";
-      warnx << " " << getusec() << "\n";
-      warnx << " " << getusec() << "\n";
-      warnx << " " << getusec() << "\n";
-      warnx << " " << getusec() << "\n";
-      warnx << " " << getusec() << "\n";
-      warnx << " " << getusec() << "\n";
-      warnx << " " << getusec() << "\n";
-      warnx << " " << getusec() << "\n";
+
+    if (locs[C->ID]->alive) {
+      good--;
+      locs[C->ID]->alive = false;
+    }
+    // xxx we won't clean out a node while there's an outstanding RPC,
+    //     will we???
+  } else {
+    if (!locs[C->ID]->alive) {
+      locs[C->ID]->alive = true;
+      if (locs[C->ID]->alive && locs[C->ID]->challenged)
+	good++;
+    }
+    if (C->s > 0) {
+      u_int64_t now = getusec ();
+      // prevent overflow, caused by time reversal
+      if (now >= C->s) {
+	u_int64_t lat = now - C->s;
+	update_latency (C->ID, lat, (C->progno == DHASH_PROGRAM));
+      } else {
+	warn << "*** Ignoring timewarp: C->s " << C->s << " > now " << now << "\n";
+	warnx << " " << now       << "\n";
+	warnx << " " << getusec() << "\n";
+	warnx << " " << getusec() << "\n";
+	warnx << " " << getusec() << "\n";
+	warnx << " " << getusec() << "\n";
+	warnx << " " << getusec() << "\n";
+	warnx << " " << getusec() << "\n";
+	warnx << " " << getusec() << "\n";
+	warnx << " " << getusec() << "\n";
+	warnx << " " << getusec() << "\n";
+      }
     }
   }
-
-  // 1019165504735614 C->s
-  // 1019161909872991 now 
 
   (C->cb) (err);
 

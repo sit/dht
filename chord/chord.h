@@ -79,7 +79,7 @@ class toe_table : public stabilizable {
   int in_progress;
   short last_level;
 
-  void add_toe_ping_cb (chordID id, int level);
+  void add_toe_ping_cb (chordID id, int level, chordstat err);
   void get_toes_rmt_cb (chord_gettoes_res *res, int level, clnt_stat err);
 
  public:
@@ -104,15 +104,13 @@ class toe_table : public stabilizable {
   bool isstable () { return true; } // XXX
 };
 
-struct finger {
-  chordID start;
-  node first; // first ID after start
-};
-
 class finger_table : public stabilizable {
   ptr<vnode> myvnode;
   ptr<locationtable> locations;
-  finger fingers[NBIT+1];
+  
+  chordID starts[NBIT+1];
+  chordID fingers[NBIT+1];
+
   chordID myID;
 
   int f; // next finger to stabilize
@@ -120,7 +118,6 @@ class finger_table : public stabilizable {
   bool stable_fingers2;
   
   u_int nout_backoff;
-  u_int nout_continuous;
   
   u_long nslowfinger;
   u_long nfastfinger;
@@ -138,19 +135,16 @@ class finger_table : public stabilizable {
   finger_table (ptr<vnode> v, ptr<locationtable> locs, chordID myID);
 
   void updatefinger (chordID &x); //stick x(r) wherever it fits
-  void updatefinger (chordID &x, net_address& r); //stick x(r) wherever it fits
   void replacefinger (int i); //find a better finger for the ith finger (no RPCs)
   void deletefinger (chordID &x);
 
   chordID closestpredfinger (chordID &x);
   chordID closestsuccfinger (chordID &x);
 
-  bool succ_alive ();
-  chordID succ ();
-
-  bool alive (int i) { return fingers[i].first.alive; }
+  bool alive (int i);
+  chordID finger (int i);
   chordID operator[] (int i);
-  chordID start (int i) { return fingers[i].start; }
+  chordID start (int i) { return starts[i]; }
 
   int countrefs (chordID &x);
   void print ();
@@ -160,19 +154,12 @@ class finger_table : public stabilizable {
   void fill_getfingersresext (chord_getfingers_ext_res *res);
 
   void stabilize_finger ();
-  void stabilize_succ ();
-  void stabilize_getpred_cb (chordID s, chordID p,
-			     net_address r, chordstat status);
-  void stabilize_getpred_cb_ok (chordID sd, 
-				chordID p, bool ok, chordstat status);
 
   void stats ();
 
   // Stabilize methods
   bool backoff_stabilizing () { return nout_backoff > 0; }
-  bool continuous_stabilizing () { return nout_continuous > 0; }
   void do_backoff () { stabilize_finger (); }
-  void do_continuous () { stabilize_succ (); }
   bool isstable () { return stable_fingers && stable_fingers2; }
 };
 
@@ -180,7 +167,7 @@ class succ_list : public stabilizable {
   chordID myID;
   ptr<vnode> myvnode;
   ptr<locationtable> locations;
-  node succlist[NSUCC+1];  
+  chordID succlist[NSUCC+1];  
   int nsucc;
   
   u_long nnodes;	  // estimate of the number of chord nodes
@@ -189,25 +176,36 @@ class succ_list : public stabilizable {
   bool stable_succlist;
   bool stable_succlist2;
   u_int nout_backoff;
+  u_int nout_continuous;
+
+  // Helpers for stabilize_succ
+  void stabilize_getpred_cb (chordID s, chordID p,
+			     net_address r, chordstat status);
+  void stabilize_getpred_cb_ok (chordID sd, 
+				chordID p, bool ok, chordstat status);
+
+  // Helpers for stabilize_succlist
+  void stabilize_getsucc_cb (chordID jid, int j, chordID s, net_address r, 
+			     chordstat status);
+  void stabilize_getsucc_checkold_cb (int j, chordID succ, net_address r,
+				      chordstat status);
+  void stabilize_getsucc_ok (int j, chordID s, bool ok, chordstat status);
 
  public:  
   succ_list (ptr<vnode> v, ptr<locationtable> locs, chordID myID);
-
-  void stabilize_succlist ();
-  void stabilize_getsucclist_cb (chordID jid, int i, chordID s, net_address r, 
-				 chordstat status);
-  void stabilize_getsucclist_ok (int i, chordID s, bool ok, chordstat status);
   
-  chordID first_succ ();
+  void stabilize_succ ();
+  void stabilize_succlist ();
+  
+  chordID succ ();
   int countrefs (chordID &x);
   void print ();
   void replace_succ (int j);
-  void new_succ (int i, chordID s);
   chordID operator[] (int n);
-  bool nth_alive (int n) { return succlist[n].alive; };
+  bool nth_alive (int n);
   void remove_succ (int j);
-  chordID closest_succ (chordID &x);
-  chordID closest_pred (chordID &x);
+  // chordID closest_succ (chordID &x);
+  // chordID closest_pred (chordID &x);
   u_long estimate_nnodes ();
   void fill_getsuccres (chord_getsucc_ext_res *res);
   int num_succ () { return nsucc; };
@@ -215,6 +213,8 @@ class succ_list : public stabilizable {
 
   // Stabilizable methods
   bool backoff_stabilizing () { return nout_backoff > 0; }
+  bool continuous_stabilizing () { return nout_continuous > 0; }
+  void do_continuous () { stabilize_succ (); }
   void do_backoff () { stabilize_succlist (); }
   bool isstable () { return stable_succlist && stable_succlist2; } // XXX
 };
@@ -226,7 +226,7 @@ class vnode : public virtual refcount, public stabilizable {
   ptr<toe_table> toes;
   ptr<stabilize_manager> stabilizer;
 
-  node predecessor;
+  chordID predecessor;
   int myindex;
 
   qhash<unsigned long, cbdispatch_t> dispatch_table;
@@ -296,7 +296,7 @@ class vnode : public virtual refcount, public stabilizable {
 	 int _vnode, int server_sel_mode);
   ~vnode (void);
   chordID my_ID () { return myID; };
-  chordID my_pred () { return predecessor.n; };
+  chordID my_pred () { return predecessor; };
   chordID my_succ ();
 
   // The API
@@ -314,7 +314,7 @@ class vnode : public virtual refcount, public stabilizable {
 	      ptr<void> in, void *out, aclnt_cb cb);
   int countrefs (chordID &x);
   chordID closestsuccfinger (chordID &x);
-  void deletefingers (chordID &x);
+  void handle_death (chordID &x);
   void stats (void);
   void print (void);
   void stop (void);
@@ -366,7 +366,7 @@ class chord : public virtual refcount {
   void tcpclient_cb (int srvfd);
   int startchord (int myp);
   int startchord (int myp, int type);
-  void deletefingers_cb (chordID x, const chordID &k, ptr<vnode> v);
+  void handle_death_cb (chordID x, const chordID &k, ptr<vnode> v);
   void stats_cb (const chordID &k, ptr<vnode> v);
   void print_cb (const chordID &k, ptr<vnode> v);
   void stop_cb (const chordID &k, ptr<vnode> v);
@@ -383,7 +383,7 @@ class chord : public virtual refcount {
   chord (str _wellknownhost, int _wellknownport,
 	 str _myname, int port, int max_cache, int server_selection_mode);
   ptr<vnode> newvnode (cbjoin_t cb);
-  void deletefingers (chordID x);
+  void handle_death (chordID x);
   int countrefs (chordID &x);
   void stats (void);
   void print (void);

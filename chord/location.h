@@ -30,6 +30,7 @@
 
 #include "aclnt_chord.h"
 
+typedef callback<void,chordstat>::ptr cbping_t;
 typedef callback<void,chordID,bool,chordstat>::ref cbchallengeID_t;
 extern cbchallengeID_t cbchall_null;
 
@@ -98,16 +99,12 @@ struct location {
   u_int64_t maxdelay;
   float a_lat;
   float a_var;
+  bool alive; // whether this node responded to its last RPC
   bool challenged; // whether this node has been succesfully challenged
   vec<cbchallengeID_t> outstanding_cbs;
 
   location (chordID &_n, net_address &_r);
   ~location ();
-};
-
-struct node {
-  chordID n;
-  bool alive;
 };
 
 class locationtable : public virtual refcount {
@@ -119,6 +116,8 @@ class locationtable : public virtual refcount {
   ihash<chordID,location,&location::n,&location::fhlink,hashID> locs;
   tailq<location, &location::cachelink> cachedlocs;  // the cached location
 
+  size_t good;
+  
   int size_cachedlocs;
   int max_cachedlocs;
 
@@ -144,7 +143,7 @@ class locationtable : public virtual refcount {
   u_long nnodessum;
   u_long nnodes;
   unsigned nvnodes;
-
+  
   int seqno;
   float cwind;
   float ssthresh;
@@ -170,6 +169,7 @@ class locationtable : public virtual refcount {
   void connect_cb (location *l, callback<void, ptr<axprt_stream> >::ref cb, 
 		   int fd);
   void doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err);
+  void doRPCreg_cb (chordID ID, aclnt_cb realcb, clnt_stat err);
 
   void dorpc_connect_cb(location *l, ptr<axprt_stream> x);
   void chord_connect(chordID ID, callback<void, ptr<axprt_stream> >::ref cb);
@@ -191,7 +191,7 @@ class locationtable : public virtual refcount {
   void setup_rexmit_timer (chordID ID, long *sec, long *nsec);
   void timeout_cb (rpc_state *C);
 
-  void ping_cb (cbv cb, clnt_stat err);
+  void ping_cb (cbping_t cb, clnt_stat err);
   void challenge_cb (int challenge, chordID x,
 		     chord_challengeres *res, clnt_stat err);
 
@@ -202,6 +202,9 @@ class locationtable : public virtual refcount {
   
   bool betterpred1 (chordID current, chordID target, chordID newpred);
 
+  size_t size () { return locs.size (); }
+  size_t usablenodes () { return good; }
+  
 #ifdef PNODE
   void setvnode (ptr<vnode> v) { myvnode = v; }
 #endif /* PNODE */  
@@ -212,18 +215,18 @@ class locationtable : public virtual refcount {
   void insert (chordID &_n, sfs_hostname _s, int _p,
 	       cbchallengeID_t cb);
   location *getlocation (chordID &x);
-  void deleteloc (chordID &n);
   void cacheloc (chordID &x, net_address &r,
 		 cbchallengeID_t cb);
   void updateloc (chordID &x, net_address &r,
 		  cbchallengeID_t cb);
   void increfcnt (chordID &n);
+  void decrefcnt (chordID &n);
   bool lookup_anyloc (chordID &n, chordID *r);
   chordID closestsuccloc (chordID x);
   chordID closestpredloc (chordID x);
   net_address & getaddress (chordID &x);
   chordID query_location_table (chordID x);
-  void changenode (node *n, chordID &n, net_address &r);
+  //  void changenode (node *n, chordID &n, net_address &r);
   void checkrefcnt (int i);
   void doRPC (chordID &n, rpc_program progno, 
 	      int procno, ptr<void> in, 
@@ -245,7 +248,8 @@ class locationtable : public virtual refcount {
 		    ptr<void> in, void *out, aclnt_cb cb,
 		    ref<aclnt> c);
 
-  void ping (chordID ID, cbv cb);
+  void ping (chordID ID, cbping_t cb);
+  bool alive (chordID &x);
   void challenge (chordID &x, cbchallengeID_t cb);
   bool challenged (chordID &x);
   void stats ();

@@ -9,74 +9,68 @@ finger_table::finger_table (ptr<vnode> v,
 			    chordID ID)
   : myvnode (v), locations (locs), myID (ID) 
 {
-  fingers[0].start = fingers[0].first.n = myID;
-  fingers[0].first.alive = true;
+  starts[0] = myID;
+  fingers[0] = myID;
   locations->increfcnt (myID);
 
   for (int i = 1; i <= NBIT; i++) {
+    starts[i] = successorID (myID, i-1);
+    fingers[i] = myID;
     locations->increfcnt (myID);
-    fingers[i].start = successorID(myID, i-1);
-    fingers[i].first.n = myID;
-    fingers[i].first.alive = true;
   }
 
   f = 0;
   stable_fingers = false;
   stable_fingers2 = false;
-  nout_continuous = 0;
   nout_backoff = 0;
 
   nslowfinger = 0;
   nfastfinger = 0;
 }
 
+bool
+finger_table::alive (int i)
+{
+  return locations->alive (fingers[i]);
+}
+
+chordID
+finger_table::finger (int i)
+{
+  // adjusts in "real time"
+  return locations->closestsuccloc (starts[i]);
+}
+
 chordID
 finger_table::operator[] (int i)
 {
-  return fingers[i].first.n;
+  return finger (i);
 }
 
 bool
 finger_table::better_ith_finger (int i, chordID s)
 {
-  // ASSUMES: s is alive
-
-  if (!alive(i))
+  if (!alive (i))
     return true;
   else
-    return betweenleftincl (fingers[i].start, fingers[i].first.n, s);
-}
-
-bool
-finger_table::succ_alive () {
-  return fingers[1].first.alive;
-}
-
-chordID 
-finger_table::succ ()
-{
-  return fingers[1].first.n;
+    return betweenleftincl (starts[i], fingers[i], s);
 }
 
 void
 finger_table::updatefinger (chordID &x)
 {
-  net_address r = locations->getaddress (x);
-  updatefinger (x, r);
-}
-
-void 
-finger_table::updatefinger (chordID &x, net_address &r)
-{
   check ();
   for (int i = 1; i <= NBIT; i++) {
     if (better_ith_finger (i, x)) {
-      // warnx << myID << ": updatefinger " << i << "\n";
-      locations->changenode (&fingers[i].first, x, r);
+      locations->decrefcnt (fingers[i]);
+      fingers[i] = x;
+      locations->increfcnt (fingers[i]);
+
+      // xxx This check should be in succ_list
       if (1 == i)
 	myvnode->notify (x, myID);
-
-      stable_fingers = false;
+      else
+	stable_fingers = false;
     }
   }
   check ();
@@ -89,39 +83,35 @@ finger_table::replacefinger (int i)
   warnx << myID << ": replace finger " << i << "\n" ;
   if (i > 1)
     stable_fingers = false;
-  fingers[i].first.n = locations->closestsuccloc (fingers[i].start);
-  fingers[i].first.alive = true;
-  locations->increfcnt (fingers[i].first.n);
+  // xxx should we decrement refcnt for old one?
+  locations->decrefcnt (fingers[i]);
+  fingers[i] = finger (i);
+  locations->increfcnt (fingers[i]);
   check ();
 }
 
 void 
 finger_table::deletefinger (chordID &x)
 {
-  // XXX should deleted fingers be replaced immediatedly???
-  //     Seems yes if is a large pool of locations recorded
-  //     just for cases like these...
-
   if (x == myID) return;
+  
   check ();
-  for (int i = 1; i <= NBIT; i++) {
-    if (fingers[i].first.alive && (x == fingers[i].first.n)) {
-      locations->deleteloc (fingers[i].first.n);
-      fingers[i].first.alive = false;
-    }
+  for (int i = 0; i <= NBIT; i++) {
+    if (x == fingers[i])
+      replacefinger (i);
   }
   check ();
 }
-
 
 chordID
 finger_table::closestsuccfinger (chordID &x)
 {
   chordID s = x;
+  chordID f;
   for (int i = 0; i <= NBIT; i++) {
-    if (!fingers[i].first.alive) continue;
-    if ((s == x) || between (x, s, fingers[i].first.n)) {
-      s = fingers[i].first.n;
+    f = finger (i);
+    if ((s == x) || between (x, s, f)) {
+      s = f;
     }
   }
 
@@ -132,10 +122,11 @@ chordID
 finger_table::closestpredfinger (chordID &x)
 {
   chordID p = myID;
+  chordID f;
   for (int i = NBIT; i >= 1; i--) {
-    if ((fingers[i].first.alive) && 
-	between (myID, x, fingers[i].first.n)) {
-      p = fingers[i].first.n;
+    f = finger (i);
+    if (between (myID, x, f)) {
+      p = f;
       return p;
     }
   }
@@ -148,11 +139,12 @@ finger_table::countrefs (chordID &x)
 {
   int n = 0;
   for (int i = 0; i <= NBIT; i++) 
-    if (fingers[i].first.alive && (x == fingers[i].first.n))
+    if (x == fingers[i])
       n++;
-
+  
   return n;
 }
+
 void
 finger_table::check ()
 {
@@ -163,37 +155,35 @@ finger_table::check ()
 
   int j;
   int i;
-  // Starting from successor, find first finger who is not me.
-  // XXX why? if successor is me, there better not be anyone else around.
+
+  // Check to see if I'm the only one around.
   for (i = 1; i <= NBIT; i++) {
-    if (fingers[i].first.n == myID) continue;
+    if (fingers[i] == myID) continue;
     else break;
   }
   if (i > NBIT) return;
 
+  // Make sure that fingers are in order and non-overlapping.
   for (i = 1; i <= NBIT; i++) {
-    // For each living finger...
-    if (!fingers[i].first.alive) continue;
     // Find the next living finger and...
     j = i+1;
-    while ((j <= NBIT) && !fingers[j].first.alive) j++;
+    while ((j <= NBIT) && !alive (j)) j++;
     if (j > NBIT) {
       // if none exists, make sure that it is not after me
-      if (!betweenrightincl (fingers[i].start, myID, 
-                             fingers[i].first.n)) {
+      if (!betweenrightincl (starts[i], myID, 
+                             fingers[i])) {
 	warnx << myID << ": finger_table " << i << " bad\n";
-	warnx << myID << ": start " << fingers[i].start << "\n";
-	warnx << myID << ": first " << fingers[i].first.n << "\n";
+	warnx << myID << ": start " << starts[i] << "\n";
+	warnx << myID << ": first " << fingers[i] << "\n";
 
         print ();
         assert (0);
       }
     } else {
-      if (fingers[j].first.n == myID) {
+      if (fingers[j] == myID) {
         return;
       }
-      if (!betweenrightincl (fingers[i].start, fingers[j].first.n,
-                 fingers[i].first.n)) {
+      if (!betweenrightincl (starts[i], fingers[j], fingers[i])) {
 	warnx << myID << ": finger_table " << i << ", " << j << " bad\n";
         print ();
         assert (0);
@@ -206,32 +196,31 @@ void
 finger_table::print ()
 {
   for (int i = 1; i <= NBIT; i++) {
-    if (!fingers[i].first.alive) continue;
-      warnx << myID << ": finger: " << i << " : " << fingers[i].start
-	    << " : succ " << fingers[i].first.n << "\n";
+    if (!alive (i)) continue;
+    warnx << myID << ": finger: " << i << " : " << starts[i]
+	  << " : succ " << fingers[i] << "\n";
   }
 }
 
 void
 finger_table::fill_getfingersres (chord_getfingersres *res)
 {
-
   int n = 1;
   for (int i = 1; i <= NBIT; i++) {
-    if (!fingers[i].first.alive) continue;
-    if (fingers[i].first.n != fingers[i-1].first.n) {
+    if (!alive (i)) continue;
+    if (fingers[i] != fingers[i-1]) {
       n++;
     }
   }
   res->resok->fingers.setsize (n);
-  res->resok->fingers[0].x = fingers[0].first.n;
-  res->resok->fingers[0].r = locations->getaddress (fingers[0].first.n);
+  res->resok->fingers[0].x = fingers[0];
+  res->resok->fingers[0].r = locations->getaddress (fingers[0]);
   n = 1;
   for (int i = 1; i <= NBIT; i++) {
-    if (!fingers[i].first.alive) continue;
-    if (fingers[i].first.n != fingers[i-1].first.n) {
-      res->resok->fingers[n].x = fingers[i].first.n;
-      res->resok->fingers[n].r = locations->getaddress (fingers[i].first.n);
+    if (!alive (i)) continue;
+    if (fingers[i] != fingers[i-1]) {
+      res->resok->fingers[n].x = fingers[i];
+      res->resok->fingers[n].r = locations->getaddress (fingers[i]);
       n++;
     }
   }
@@ -243,26 +232,26 @@ finger_table::fill_getfingersresext (chord_getfingers_ext_res *res)
 
   int n = 1;
   for (int i = 1; i <= NBIT; i++) {
-    if (!fingers[i].first.alive) continue;
-    if (fingers[i].first.n != fingers[i-1].first.n) {
+    if (!alive (i)) continue;
+    if (fingers[i] != fingers[i-1]) {
       n++;
     }
   }
   res->resok->fingers.setsize (n);
-  res->resok->fingers[0].x = fingers[0].first.n;
-  location *l = locations->getlocation (fingers[0].first.n);
-  res->resok->fingers[0].r = locations->getaddress (fingers[0].first.n);
+  location *l = locations->getlocation (fingers[0]);
+  res->resok->fingers[0].x = fingers[0];
+  res->resok->fingers[0].r = locations->getaddress (fingers[0]);
   res->resok->fingers[0].a_lat = (long)(l->a_lat * 100);
   res->resok->fingers[0].a_var = (long)(l->a_var * 100);
   res->resok->fingers[0].nrpc = l->nrpc;
   res->resok->fingers[0].alive = true;
   n = 1;
   for (int i = 1; i <= NBIT; i++) {
-    if (!fingers[i].first.alive) continue;
-    if (fingers[i].first.n != fingers[i-1].first.n) {
-      l = locations->getlocation (fingers[i].first.n);
-      res->resok->fingers[n].x = fingers[i].first.n;
-      res->resok->fingers[n].r = locations->getaddress (fingers[i].first.n);
+    if (!alive (i)) continue;
+    if (fingers[i] != fingers[i-1]) {
+      l = locations->getlocation (fingers[i]);
+      res->resok->fingers[n].x = fingers[i];
+      res->resok->fingers[n].r = locations->getaddress (fingers[i]);
       res->resok->fingers[n].a_lat = (long)(l->a_lat * 100);
       res->resok->fingers[n].a_var = (long)(l->a_var * 100);
       res->resok->fingers[n].nrpc = l->nrpc;
@@ -285,73 +274,10 @@ finger_table::runlength (int i)
 {
   int runlen = 1;
   while ((i + runlen < NBIT + 1) &&
-	 fingers[i + runlen].first.n == fingers[i].first.n)
+	 fingers[i + runlen] == fingers[i])
     runlen++;
   return runlen;
 }
-
-void
-finger_table::stabilize_succ ()
-{
-  if (!succ_alive ()) {   // notify() may result in failure
-    replacefinger (1);
-    chordID s = succ ();
-    warnx << myID << ": stabilize_succ dead... new succ is " << s << "\n";
-    myvnode->notify (s, myID);
-  }
-  nout_continuous++;
-  myvnode->get_predecessor
-    (succ (), wrap (this,
-		    &finger_table::stabilize_getpred_cb, succ ()));
-}
-
-void
-finger_table::stabilize_getpred_cb (chordID sd,
-				    chordID p, net_address r, chordstat status)
-{
-  // receive predecessor from my successor; in stable case it is me
-  if (status) {
-    warnx << myID << ": stabilize_getpred_cb " << sd
-	  << " failure status " << status << "\n";
-    if (status == CHORD_ERRNOENT) {
-      warnx << myID << ": stabilize_getpred_cb " << sd
-	    << " doesn't know about his predecessor?? notifying...\n";
-      myvnode->notify (sd, myID);
-    } else {
-      stable_fingers = false;
-      if (status == CHORD_RPCFAILURE)
-	myvnode->deletefingers (sd);
-    }
-    nout_continuous--;
-  } else {
-    if (better_ith_finger (1, p)) {
-      locations->cacheloc
-	(p, r, wrap (this, &finger_table::stabilize_getpred_cb_ok, sd));
-    } else {
-      nout_continuous--;
-
-      // Shouldn't it be the case that if we ask our successor a
-      // question (in this case, for its predecessor), then it already
-      // knowns about us -- ie. there's no need to notify it??
-      // --josh
-      myvnode->notify (sd, myID);
-    }
-  }
-}
-
-void
-finger_table::stabilize_getpred_cb_ok (chordID sd,
-				       chordID p, bool ok, chordstat status)
-{
-  nout_continuous--;
-  if ((status == CHORD_OK) && ok) {
-    if (better_ith_finger (1, p)) {
-      updatefinger (p);
-      // myvnode->notify (sd, myID);
-    }
-  }
-}
-
 
 //
 // This routine tries to keep as finger table entries pointing at the
@@ -399,7 +325,7 @@ finger_table::stabilize_finger ()
   if (!alive (i)) {
     // Find some sort of temporary replacement.
     replacefinger (i);
-    updatefinger (fingers[i].first.n);
+    updatefinger (fingers[i]);
 
     // Now go forth and find the real finger
     warnx << myID << ": stabilize_finger: findsucc of finger " << i << "\n";
@@ -409,7 +335,7 @@ finger_table::stabilize_finger ()
   		n, i));
   } else {
     // warnx << myID << ": stabilize_finger: check finger " << i << "\n";    
-    chordID n = fingers[i].first.n;
+    chordID n = fingers[i];
     myvnode->get_predecessor
       (n, wrap (this, &finger_table::stabilize_finger_getpred_cb, 
 		n, i));
@@ -428,10 +354,10 @@ finger_table::stabilize_finger_getpred_cb (chordID dn, int i, chordID p,
 	  << dn << " failure status " << status << "\n";
     stable_fingers = false;
     if (status == CHORD_RPCFAILURE)
-      myvnode->deletefingers (dn);
+      deletefinger (dn);
     // Do not update f; next round we'll fix this finger correctly.
   } else {
-    chordID n = fingers[i].first.n;
+    chordID n = fingers[i];
     chordID s = start (i);
     if (betweenrightincl (p, n, s)) {
       // warnx << myID << ": stabilize_finger_getpred_cb: success at " 
@@ -464,7 +390,7 @@ finger_table::stabilize_findsucc_cb (chordID dn, int i, chordID s,
 	  << dn << " failure status " << status << "\n";
     stable_fingers = false;
     if (status == CHORD_RPCFAILURE)
-      myvnode->deletefingers (dn);
+      deletefinger (dn);
   } else {
     updatefinger (s);
     f += runlength (i);
