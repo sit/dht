@@ -117,7 +117,7 @@ startclntd()
 }
 
 static void
-newvnode_cb (int n, chordID s, route r, chordstat status)
+newvnode_cb (int n, vnode *my)
 {
   warnx << "joincb: succeeded\n";
 

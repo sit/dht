@@ -42,7 +42,10 @@
 
 typedef int cb_ID;
 
+class vnode;
+
 typedef vec<chordID> route;
+typedef callback<void,vnode*>::ref cbjoin_t;
 typedef callback<void,chordID,net_address,chordstat>::ref cbsfsID_t;
 typedef callback<void,chordID,route,chordstat>::ref cbroute_t;
 typedef callback<void,chordID,char>::ref cbaction_t;
@@ -86,6 +89,7 @@ class vnode : public virtual refcount  {
   node succlist[NBIT+1];
   int nsucc;
   node predecessor;
+  int stable;
 
   qhash<unsigned long, cbdispatch_t> dispatch_table;
 
@@ -122,7 +126,7 @@ class vnode : public virtual refcount  {
   void stabilize_getsucc_cb (chordID s, net_address r, chordstat status);
   void stabilize_getsucclist_cb (int i, chordID s, net_address r, 
 				 chordstat status);
-  void join_getsucc_cb (cbroute_t cb, chordID s, route r, chordstat status);
+  void join_getsucc_cb (cbjoin_t cb, chordID s, route r, chordstat status);
   void find_closestpred (chordID &n, chordID &x, findpredecessor_cbstate *st);
   void find_closestpred_cb (chordID n, findpredecessor_cbstate *st,
 			    chord_noderes *res, clnt_stat err);
@@ -160,8 +164,8 @@ class vnode : public virtual refcount  {
   chordID my_succ () { return finger_table[1].first.n; };
 
   // The API
-  void stabilize (int i);
-  void join (cbroute_t cb);
+  void stabilize (int f, int s);
+  void join (cbjoin_t cb);
   void find_predecessor (chordID &n, chordID &x, cbroute_t cb);
   void find_predecessor_restart (chordID &n, chordID &x, route search_path,
 				 cbroute_t cb);
@@ -237,8 +241,8 @@ class chord : public virtual refcount {
   ptr<locationtable> locations; 
   chord (str _wellknownhost, int _wellknownport, const chordID &_wellknownID,
 	 int port, str myhost, int set_rpcdelay);
-  ptr<vnode> newvnode (cbroute_t cb);
-  ptr<vnode> newvnode (chordID &x, cbroute_t cb);
+  ptr<vnode> newvnode (cbjoin_t cb);
+  ptr<vnode> newvnode (chordID &x, cbjoin_t cb);
   void deletefingers (chordID &x);
   int countrefs (chordID &x);
   void stats (void);

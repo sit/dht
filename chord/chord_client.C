@@ -129,7 +129,7 @@ chord::initID (int index)
 
 
 ptr<vnode>
-chord::newvnode (cbroute_t cb)
+chord::newvnode (cbjoin_t cb)
 {
   chordID newID = initID (nvnode);
   locations->insert (newID, myaddress.hostname, myaddress.port, newID);
@@ -142,7 +142,7 @@ chord::newvnode (cbroute_t cb)
 }
 
 ptr<vnode>
-chord::newvnode (chordID &x, cbroute_t cb)
+chord::newvnode (chordID &x, cbjoin_t cb)
 {
   if (x != wellknownID) 
     locations->insert (x, myaddress.hostname, myaddress.port, x);
@@ -154,8 +154,8 @@ chord::newvnode (chordID &x, cbroute_t cb)
     vnodep->join (cb);
   } else {
     route r;
-    vnodep->stabilize (0);
-    (*cb) (wellknownID, r, CHORD_OK);
+    vnodep->stabilize (0, 0);
+    (*cb) (vnodep);
   }
   return vnodep;
 }
