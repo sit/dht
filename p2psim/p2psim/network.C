@@ -63,8 +63,8 @@ Network::Network(Topology *top, FailureModel *fm) : _top(0),
 
 Network::~Network()
 {
-  for(hash_map<IPAddress, Node*>::const_iterator p = _nodes.begin(); p != _nodes.end(); ++p)
-    delete p->second;
+  for(HashMap<IPAddress, Node*>::const_iterator p = _nodes.begin(); p != _nodes.end(); ++p)
+    delete p.value();
   chanfree(_nodechan);
   delete _top;
   delete _failure_model;
@@ -77,8 +77,8 @@ const set<Node*> *
 Network::getallnodes()
 {
   if(!_all_nodes->size())
-    for(hash_map<IPAddress, Node*>::const_iterator p = _nodes.begin(); p != _nodes.end(); ++p)
-      _all_nodes->insert(p->second);
+    for(HashMap<IPAddress, Node*>::const_iterator p = _nodes.begin(); p != _nodes.end(); ++p)
+      _all_nodes->insert(p.value());
   return _all_nodes;
 }
 
@@ -86,9 +86,32 @@ const set<IPAddress> *
 Network::getallips()
 {
   if(!_all_ips->size())
-    for(hash_map<IPAddress, Node*>::const_iterator p = _nodes.begin(); p != _nodes.end(); ++p)
-      _all_ips->insert(p->first);
+    for(HashMap<IPAddress, Node*>::const_iterator p = _nodes.begin(); p != _nodes.end(); ++p)
+      _all_ips->insert(p.key());
   return _all_ips;
+}
+
+Time
+Network::avglatency()
+{
+  static Time answer = 0;
+  Time total_latency = 0;
+  unsigned n = 0;
+
+  if(answer)
+    return answer;
+
+  for(HashMap<IPAddress, Node*>::const_iterator p = _nodes.begin(); p != _nodes.end(); ++p) {
+    for(HashMap<IPAddress, Node*>::const_iterator q = _nodes.begin(); q != _nodes.end(); ++q) {
+      if(p.key() == q.key())
+        continue;
+      total_latency += _top->latency(p.key(), q.key(), true);
+      total_latency += _top->latency(p.key(), q.key(), false);
+      n += 2;
+    }
+  }
+
+  return (answer = (total_latency / n));
 }
 
 // Protocols should call send() to send a packet into the network.
@@ -142,7 +165,7 @@ Network::run()
       case 0:
         if(_nodes[node->ip()])
           cerr << "warning: " << node->ip() << " already in network" << endl;
-        _nodes[node->ip()] = node;
+        _nodes.insert(node->ip(), node);
         break;
 
       default:
@@ -150,3 +173,5 @@ Network::run()
     }
   }
 }
+
+#include "bighashmap.cc"

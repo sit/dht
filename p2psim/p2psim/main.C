@@ -62,6 +62,8 @@ threadmain(int argc, char *argv[])
   while(anyready())
     yield();
 
+  DEBUG(0) << "average RTT = " << Network::Instance()->avglatency()*2 << "ms" << endl;
+
   // Initialize all protocols
   if (Node::init_state()) {
     const set<Node*> *all = Network::Instance()->getallnodes();

@@ -29,6 +29,7 @@
 #include "topology.h"
 #include "node.h"
 #include "failuremodel.h"
+#include "bighashmap.hh"
 #include <list>
 using namespace std;
 
@@ -45,6 +46,7 @@ public:
   const set<Node*> *getallnodes();
   const set<IPAddress> *getallips();
   unsigned size() { return _nodes.size(); }
+  Time avglatency();
 
   ~Network();
 
@@ -55,7 +57,7 @@ private:
 
   static Network *_instance;
 
-  hash_map<IPAddress, Node*> _nodes;
+  HashMap<IPAddress, Node*> _nodes;
   Topology *_top;
   FailureModel *_failure_model;
 

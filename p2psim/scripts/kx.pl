@@ -4,7 +4,7 @@
 my $lifemean = 100000;
 my $deathmean = $lifemean;
 my $lookupmean = 10000; # 10000 for churn, 100 for lookup
-my $exittime = 200000;
+my $exittime = 1000;
 my $protocol = "Kelips";
 my $nnodes = 1837; # Jinyang uses mostly 1024, also 1837
 my $diameter = 100; # diameter of Euclidean universe
@@ -51,8 +51,8 @@ my $param_lists = {
   "Kademlia" =>
     [
      [ "initstate", 1 ],
-     [ "alpha", 1, 2, 3, 4, 5 ],
-     [ "k", 8, 16, 32 ],
+     [ "alpha", 1 ],
+     [ "k", 8 ],
      [ "stabilize_timer", 32000 ],
      [ "refresh_rate", 32000 ],
      # [ "stabilize_timer", 2000, 4000, 8000, 16000, 32000 ],
@@ -144,7 +144,7 @@ for($iters = 0; $iters < 500; $iters++){
         print STDERR "kx.pl: p2psim no output\n";
     }
 
-    printf("%f $lat $hops ", $bytes / ($nnodes * $exittime));
+    printf("%f %f %f ", $bytes / ($nnodes * $exittime), $lat, $hops);
     for($pi = 0; $pi <= $#$params; $pi++){
         my $name = $params->[$pi][0];
         printf("%s ", $pv{$name});

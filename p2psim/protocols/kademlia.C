@@ -395,6 +395,7 @@ Kademlia::lookup(Args *args)
                           (*_nodeid2kademlia)[key]->_joined;
 
   // XXX: this shouldn't happen :(
+  /*
   if(!fr.succ.id) {
     if(alive_and_joined)
       _bad_failures++;
@@ -402,18 +403,14 @@ Kademlia::lookup(Args *args)
       _ok_failures++;
     return;
   }
-
-  // get best match
-  fr.succ.checkrep();
+  */
 
   // now ping that nod.
   ping_args pa(fr.succ.id, fr.succ.ip);
   ping_result pr;
-  if(!doRPC(fr.succ.ip, &Kademlia::do_ping, &pa, &pr) && alive()) {
-    // KDEBUG(2) << "Kademlia::lookup: ping RPC to " << Kademlia::printID(fr.succ->id) << " failed " << endl;
+  if(!doRPC(fr.succ.ip, &Kademlia::do_ping, &pa, &pr) && alive())
     if(flyweight[fr.succ.id])
       erase(fr.succ.id);
-  }
   Time after = now();
 
   KDEBUG(0) << "lookup completed in " << after - before << "ms, using " << fr.hops << " hop(s)" << endl;
@@ -491,8 +488,12 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
     return;
   }
 
-  // keep track of best answer so far
+  // return if we're done already
   fresult->succ = *successors.begin();
+  if(fresult->succ.id == fargs->key) {
+    fresult->hops = 0;
+    return;
+  }
 
   // send out the first alpha RPCs
   HashMap<unsigned, callinfo*> *outstanding_rpcs = New HashMap<unsigned, callinfo*>;
