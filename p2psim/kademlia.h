@@ -64,6 +64,7 @@ public:
     vector<peer_t*> results;
     NodeID rid;     // the guy who's replying
   };
+  void find_node(lookup_args*, lookup_result*);
 
   //
   // ping
@@ -163,6 +164,18 @@ public:
 };
 
 // }}}
+// {{{ SortNodes
+class SortNodes { public:
+  SortNodes(Kademlia::NodeID key) : _key(key) {}
+  bool operator()(const peer_t* n1, const peer_t* n2) const {
+    // cout << "compare " << Kademlia::printbits(_key) << " ^ " << Kademlia::printbits(n1.first) << " = " << Kademlia::printbits(_key ^ n1.first) << " with " << Kademlia::printbits(_key) << " ^ " << Kademlia::printbits(n2.first) << " = " << Kademlia::printbits(_key ^ n2.first) << endl;
+    return (_key ^ n1->id) < (_key ^ n2->id);
+  }
+private:
+  Kademlia::NodeID _key;
+};
+
+// }}}
 // {{{ k-bucket
 class k_bucket {
 public:
@@ -215,16 +228,6 @@ public:
 
 
 private:
-  class SortNodes { public:
-    SortNodes(NodeID key) : _key(key) {}
-    bool operator()(const peer_t* n1, const peer_t* n2) const {
-      // cout << "compare " << Kademlia::printbits(_key) << " ^ " << Kademlia::printbits(n1.first) << " = " << Kademlia::printbits(_key ^ n1.first) << " with " << Kademlia::printbits(_key) << " ^ " << Kademlia::printbits(n2.first) << " = " << Kademlia::printbits(_key ^ n2.first) << endl;
-      return (_key ^ n1->id) < (_key ^ n2->id);
-    }
-  private:
-    NodeID _key;
-  };
-
   k_bucket *_root;
   map<NodeID, peer_t*> _nodes;
 

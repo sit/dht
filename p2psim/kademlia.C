@@ -11,8 +11,8 @@ using namespace std;
 #define KADEMLIA_REFRESH 1000
 
 unsigned kdebugcounter = 1;
-unsigned Kademlia::_k = 20;
-unsigned Kademlia::_alpha = 1;
+unsigned Kademlia::_k = 0;
+unsigned Kademlia::_alpha = 0;
 Kademlia::NodeID Kademlia::_rightmasks[8*sizeof(Kademlia::NodeID)];
 
 unsigned k_bucket::_k = Kademlia::k();
@@ -23,10 +23,16 @@ IPAddress kademlia_wkn_ip = 0;
 // }}}
 // {{{ Kademlia::Kademlia
 Kademlia::Kademlia(Node *n, Args a)
-  : DHTProtocol(n), _id(ConsistentHash::ip2chid(n->ip()) & 0x0000ffff), _joined(false)
+  : DHTProtocol(n), _id(ConsistentHash::ip2chid(n->ip()) & 0x0000ffff),
+    _joined(false)
 {
   KDEBUG(1) << "ip: " << ip() << endl;
   _values.clear();
+
+  if(!_k)
+    _k = a.nget<unsigned>("k");
+  if(!_alpha)
+    _alpha = a.nget<unsigned>("alpha");
 
   // precompute masks
   if(!_rightmasks[0]) {
@@ -166,62 +172,75 @@ Kademlia::lookup(Args *args)
 void
 Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
 {
-  // stare caller id and ip
+  // store caller id and ip
   NodeID callerID = largs->id;
   IPAddress callerIP = largs->ip;
 
   // fill it with the best that i know of
-  vector<peer_t*> results;
-  _tree->get(largs->key, &results);
+  vector<peer_t*> *results = new vector<peer_t*>;
+  assert(results);
+  _tree->get(largs->key, results);
 
-  // unsigned outstanding = 0;
-  // while(outstanding < _alpha) {
-  //   for
-  // }
+  // keep a map of which nodes we already asked
+  map<NodeID, bool> asked;
+  for(vector<peer_t*>::const_iterator i=results->begin(); i != results->end(); ++i)
+    asked[(*i)->id] = false;
 
-  //
-  // XXX: do_lookup not correct yet.
-  //
-  vector<peer_t*> *bestset = 0;
-  peer_t *p = 0;
+  unsigned outstanding = 0;
+  RPCSet rpcset;
+  map<unsigned, pair<IPAddress, lookup_result*> > resultmap;
 
-  // deal with the empty case
-  if(_tree->empty()) {
-    KDEBUG(3) << "do_lookup: tree is empty. returning myself, ip = " << ip() << endl;
-    lresult->results.push_back(new peer_t(_id, ip()));
-    goto done;
+  // issue new RPCs
+  while(outstanding < _alpha) {
+    // find the first that we haven't asked yet.
+    peer_t *toask = 0;
+    for(vector<peer_t*>::const_iterator i=results->begin(); i != results->end(); ++i)
+      if(!asked[(*i)->id]) {
+        toask = *i;
+        break;
+      }
+
+    // we're done.
+    if(!toask)
+      break;
+
+    // send an asyncRPC to that guy
+    lookup_args la(_id, ip(), largs->id);
+    lookup_result *lr = new lookup_result;
+    assert(lr);
+    unsigned rpc = asyncRPC(toask->ip, &Kademlia::find_node, &la, lr);
+    assert(rpc);
+    resultmap[rpc] = make_pair(toask->ip, lr);
+    asked[toask->id] = true;
+
+    // issue more RPCs when we can
+    if(++outstanding < _alpha)
+      continue;
+
+    // wait for reply, and handle the incoming results
+    unsigned donerpc = select(&rpcset);
+    assert(donerpc);
+    lr = resultmap[donerpc].second;
+    
+    // update our own k-buckets
+    _tree->insert(lr->rid, resultmap[donerpc].first);
+
+    // merge both tables and cut out everything after the first k.
+    SortNodes sn(largs->key);
+    vector<peer_t*> *newresults = new vector<peer_t*>;
+    merge(results->begin(), results->end(), 
+          lr->results.begin(), lr->results.end(),
+          newresults->begin(), sn);
+    newresults->resize(_k);
+    delete results;
+    results = newresults;
   }
 
-  // get the best fitting entry in the tree
-  bestset = new vector<peer_t*>;
-  assert(bestset);
+  // this is the answer
+  lresult->results = *results;
 
-  _tree->get(largs->key, bestset);
-  assert(bestset->size());
-
-  p = (*bestset)[0];
-  assert(p);
-
-  // if we are closer than the closest one, then we are the best match.
-  KDEBUG(3) << "do_lookup: closest node = " << printbits(p->id) << endl;
-  if(!p->ip || distance(_id, largs->key) < distance(p->id, largs->key)) {
-    KDEBUG(3) << "do_lookup: i am the best match" << endl;
-    lresult->results.push_back(new peer_t(_id, ip()));
-    goto done;
-  }
-
-  // recursive lookup
-  KDEBUG(3) << "do_lookup: recursive lookup to " << printbits(p->id) << " at ip = " << p->ip << endl;
-  largs->id = _id;
-  largs->ip = ip();
-  if(!doRPC(p->ip, &Kademlia::do_lookup, largs, lresult))
-    _tree->erase(p->id);
-
-done:
-  // set correct return data and insert caller into our tree
-  lresult->rid = _id;
+  // 
   _tree->insert(callerID, callerIP);
-  delete bestset;
 }
 
 // }}}
@@ -241,6 +260,27 @@ Kademlia::do_lookup_wrapper(peer_t *p, Kademlia::NodeID key,
 
   if(v)
     copy(lr.results.begin(), lr.results.end(), v->begin());
+}
+
+// }}}
+// {{{ Kademlia::find_node
+// Kademlia's FIND_NODE.  Returns the best k from its own k-buckets
+void
+Kademlia::find_node(lookup_args *largs, lookup_result *lresult)
+{
+  // deal with the empty case
+  if(_tree->empty()) {
+    KDEBUG(3) << "do_lookup: tree is empty. returning myself, ip = " << ip() << endl;
+    lresult->results.push_back(new peer_t(_id, ip()));
+    goto done;
+  }
+
+  // fill result vector
+  _tree->get(largs->key, &lresult->results);
+
+done:
+  _tree->insert(largs->id, largs->ip);
+  lresult->rid = _id;
 }
 
 // }}}
@@ -290,7 +330,7 @@ void
 Kademlia::reschedule_stabilizer(void *x)
 {
   // if stabilize blah.
-  KDEBUG(3) << "reschedule_stabilizer" << endl;
+  KDEBUG(0) << "reschedule_stabilizer" << endl;
   stabilize();
   delaycb(STABLE_TIMER, &Kademlia::reschedule_stabilizer, (void *) 0);
 }
@@ -886,6 +926,44 @@ Kademlia::get_closest(vector<peer_t*> *v, NodeID id)
   return closestP;
 }
 
+// }}}
+// {{{ Kademlia::do_lookup remainders
+//   //
+//   // XXX: do_lookup not correct yet.
+//   //
+//   vector<peer_t*> *bestset = 0;
+//   peer_t *p = 0;
+// 
+//   // get the best fitting entry in the tree
+//   bestset = new vector<peer_t*>;
+//   assert(bestset);
+// 
+//   _tree->get(largs->key, bestset);
+//   assert(bestset->size());
+// 
+//   p = (*bestset)[0];
+//   assert(p);
+// 
+//   // if we are closer than the closest one, then we are the best match.
+//   KDEBUG(3) << "do_lookup: closest node = " << printbits(p->id) << endl;
+//   if(!p->ip || distance(_id, largs->key) < distance(p->id, largs->key)) {
+//     KDEBUG(3) << "do_lookup: i am the best match" << endl;
+//     lresult->results.push_back(new peer_t(_id, ip()));
+//     goto done;
+//   }
+// 
+//   // recursive lookup
+//   KDEBUG(3) << "do_lookup: recursive lookup to " << printbits(p->id) << " at ip = " << p->ip << endl;
+//   largs->id = _id;
+//   largs->ip = ip();
+//   if(!doRPC(p->ip, &Kademlia::do_lookup, largs, lresult))
+//     _tree->erase(p->id);
+// 
+// done:
+//   // set correct return data and insert caller into our tree
+//   lresult->rid = _id;
+//   _tree->insert(callerID, callerIP);
+//   delete bestset;
 // }}}
 #endif
 /// }}}
