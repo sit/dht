@@ -1451,7 +1451,7 @@ ChordAdapt::empty_queue(void *a)
     << printID(la->n.id) << " old " << (now()-la->n.timestamp) 
     << " para " << _parallelism << " est_tt " << _tt << " op " << op 
     << " statsz " << _stat.size() 
-    << " end " << la->end.ip << endl;
+    << " end " << la->end.ip << " est_n " << _est_n << endl;
 
   _rate_queue->do_rpc(pred.ip, &ChordAdapt::learn_handler, 
       &ChordAdapt::learn_cb, la, lr, 3, TYPE_FINGER_UP, 

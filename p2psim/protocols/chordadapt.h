@@ -98,6 +98,7 @@ class ChordAdapt: public P2Protocol {
       IDMap src;
       IDMap n;
       int m;
+      IDMap start;
       IDMap end;
       double timeout;
     };

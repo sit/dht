@@ -356,6 +356,7 @@ class LocTable {
     void stat();
     double pred_biggest_gap(Chord::IDMap &start, Chord::IDMap &end, Time stabtimer, double to = 0.0); //these two functions are too specialized
     uint sample_smallworld(uint est_n, Chord::IDMap &start, Chord::IDMap &end, double tt = 0.9, ConsistentHash::CHID maxgap = 0);
+    void rand_sample(Chord::IDMap &start, Chord::IDMap &end);
     vector<Chord::IDMap> get_closest_in_gap(uint m, ConsistentHash::CHID end, Chord::IDMap src, Time stabtime, double to);
     vector<Chord::IDMap> next_close_hops(ConsistentHash::CHID key, uint n, Chord::IDMap src, double to = 0.0);
 
