@@ -1426,16 +1426,15 @@ dhash::dbwrite (ref<dbrec> key, ref<dbrec> data)
 {
   if (MERKLE_ENABLED) {
     block blk (to_merkle_hash (key), data);
-    // new mutable blocks overwrite their current entry in the database
     bool exists = !!database_lookup (mtree->db, blk.key);
     bool Mutable = (block_type(data) != DHASH_CONTENTHASH);
-    if (exists && Mutable) {
-      mtree->remove (&blk);
-      exists = false;
-    }
-    
     if (!exists)
       mtree->insert (&blk);
+    else if (exists && Mutable) {
+      // update an existing mutable block
+      mtree->remove (&blk);
+      mtree->insert (&blk);
+    }
   } else {
     db->insert (key, data);
   }
