@@ -169,7 +169,7 @@ static bool get_done;
 static ptr<sfsro_data> get_result;
 
 static void
-sfsrodb_get_cb (ptr<dhash_block> blk)
+sfsrodb_get_cb (dhash_stat stat, ptr<dhash_block> blk, route path)
 {
   ///warn << "---------------------- get_cb\n";
 
