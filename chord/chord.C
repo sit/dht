@@ -131,7 +131,11 @@ vnode::stats ()
   warnx << "# getpredecessor calls " << ngetpredecessor << "\n";
   warnx << "# findsuccessor calls " << nfindsuccessor << "\n";
   warnx << "# hops for findsuccessor " << nhops << "\n";
-  fprintf(stderr, "   Average # hops: %f\n", ((float)(nhops/nfindsuccessor)));
+  {
+    char buf[1024];
+    sprintf (buf, "   Average # hops: %f\n", ((float)(nhops/nfindsuccessor)));
+    warnx << buf;
+  }
   warnx << "# findpredecessor calls " << nfindpredecessor << "\n";
   warnx << "# findsuccessorrestart calls " << nfindsuccessorrestart << "\n";
   warnx << "# findpredecessorrestart calls " << nfindpredecessorrestart << "\n";

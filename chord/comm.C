@@ -244,14 +244,18 @@ locationtable::connect_cb (callback<void, ptr<axprt_stream> >::ref cb, int fd)
 void
 locationtable::stats () 
 {
+  char buf[1024];
+
   warnx << "LOCATION TABLE STATS\n";
   warnx << "total # of RPCs: good " << nrpc << " failed " << nrpcfailed << "\n";
-    fprintf(stderr, "       Average latency: %fn\n", ((float) (rpcdelay/nrpc)));
+    fprintf(stderr, "       Average latency: %f\n", ((float) (rpcdelay/nrpc)));
   warnx << "  Per link avg. RPC latencies\n";
   for (location *l = locs.first (); l ; l = locs.next (l)) {
-    warnx << "    link " << l->n << "\n";
-    fprintf(stderr, "       Average latency: %f\n", 
-	    ((float)(l->rpcdelay))/l->nrpc);
-    fprintf (stderr, "       Max latency: %qd\n", l->maxdelay);
+    warnx << "    link " << l->n << " : # RPCs: " << l->nrpc << "\n";
+    sprintf (buf, "       Average latency: %f\n", 
+	     ((float)(l->rpcdelay))/l->nrpc);
+    warnx << buf;
+    sprintf (buf, "       Max latency: %qd\n", l->maxdelay);
+    warnx << buf;
   }
 }
