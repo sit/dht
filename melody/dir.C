@@ -47,7 +47,7 @@ dir::dir(ptr<melody_file>acc, callback<void, const char *, int, int>::ptr afileo
 void
 dir::root_test()
 {
-  cc->dhash->retrieve (vhash, wrap (this, &dir::root_test_got_rb));
+  cc->dhash->retrieve (vhash, DHASH_APPEND, wrap (this, &dir::root_test_got_rb));
 }
 
 void
@@ -121,11 +121,11 @@ dir::opendir(bigint dir)
 {
   vhash = dir;
   if(pathelm.size() > 0)
-    cc->dhash->retrieve (dir, wrap (this, &dir::opendir_got_venti, wrap(this, &dir::find_entry)));
+    cc->dhash->retrieve (dir, DHASH_APPEND, wrap (this, &dir::opendir_got_venti, wrap(this, &dir::find_entry)));
   else if(noread)
-    cc->dhash->retrieve (dir, wrap (this, &dir::opendir_got_venti_noread));
+    cc->dhash->retrieve (dir, DHASH_APPEND, wrap (this, &dir::opendir_got_venti_noread));
   else
-    cc->dhash->retrieve (dir, wrap (this, &dir::opendir_got_venti, wrap(this, &dir::found_entry)));
+    cc->dhash->retrieve (dir, DHASH_APPEND, wrap (this, &dir::opendir_got_venti, wrap(this, &dir::found_entry)));
 }
 
 void
@@ -199,7 +199,7 @@ dir::next_dirblk(cb_cret cbr) {
   cbuf.rembytes(sha1::hashsize);
   mpz_set_rawmag_be(&dirhash, tmp, sha1::hashsize);
   warn << "opened " << dirhash << ", " << vhash << "\n";
-  cc->dhash->retrieve (dirhash, cbr);
+  cc->dhash->retrieve (dirhash, DHASH_APPEND, cbr);
 }
 
 static rxx namechashrx ("(.+);([\\dabcdef]+)", "i");

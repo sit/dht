@@ -191,12 +191,12 @@ sfsrodb_get_cb (dhash_stat stat, ptr<dhash_block> blk, vec<chordID> path)
 
 
 ptr<sfsro_data>
-sfsrodb_get (bigint key)
+sfsrodb_get (bigint key, dhash_ctype ct)
 {
   get_done = false; // reset
 
   //warn << "---------------------- get: " << key << "\n";
-  dhash_cli->retrieve (key, wrap (&sfsrodb_get_cb));
+  dhash_cli->retrieve (key, ct, wrap (&sfsrodb_get_cb));
 
   while (!get_done)
     acheck ();

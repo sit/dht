@@ -37,7 +37,7 @@ retrieve_manager::retrieve (bigint id, callback<void, ptr<dhash_block> >::ptr cb
   blocks.insert_tail(tmp);
   b_count++;
 
-  dhash->retrieve(id, wrap(mkref(this), &retrieve_manager::got_block, tmp));
+  dhash->retrieve(id, DHASH_CONTENTHASH, wrap(mkref(this), &retrieve_manager::got_block, tmp));
 }
 
 void

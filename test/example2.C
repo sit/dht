@@ -59,7 +59,7 @@ void
 isolate_cb(testmaster *tm, ptr<insert_info> i, int ok)
 {
   warn << "ok = " << ok << "\n";
-  (*tm)[1]->retrieve(i->key, wrap(retrieve_cb, i));
+  (*tm)[1]->retrieve(i->key, DHASH_CONTENTHASH, wrap(retrieve_cb, i));
 }
 
 

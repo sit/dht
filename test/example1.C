@@ -52,7 +52,7 @@ insert_cb(testmaster *tm, dhash_stat status, ptr<insert_info> i)
     fatal << "test failed\n";
 
   warn << "insert_cb\n";
-  (*tm)[1]->retrieve(i->key, wrap(retrieve_cb, i));
+  (*tm)[1]->retrieve(i->key, DHASH_CONTENTHASH, wrap(retrieve_cb, i));
 }
 
 

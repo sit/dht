@@ -1,4 +1,4 @@
-/* $Id: sfsrodb.C,v 1.29 2003/03/12 16:33:25 sit Exp $ */
+/* $Id: sfsrodb.C,v 1.30 2003/04/17 19:21:53 jsr Exp $ */
 
 /*
  * Copyright (C) 1999 Kevin Fu (fubob@mit.edu)
@@ -745,7 +745,7 @@ get_root_inode_and_dir (bigint rootkey, sfsro_inode *rootino, sfsro_data *rootdi
 {
   // fetch the filesystem root.
   //  
-  ptr<sfsro_data> root_dat = sfsrodb_get (rootkey);
+  ptr<sfsro_data> root_dat = sfsrodb_get (rootkey, DHASH_KEYHASH);
   if (!root_dat) {
     warn << "root block was null\n";
     return false;
@@ -757,7 +757,7 @@ get_root_inode_and_dir (bigint rootkey, sfsro_inode *rootino, sfsro_data *rootdi
 
   // fetch the root inode
   //
-  ptr<sfsro_data> rootino_dat = sfsrodb_get (root_dat->fsinfo->rootfh);
+  ptr<sfsro_data> rootino_dat = sfsrodb_get (root_dat->fsinfo->rootfh, DHASH_CONTENTHASH);
 
   if (!rootino_dat) {
     warn << "root inode block was null\n";
@@ -780,7 +780,7 @@ get_root_inode_and_dir (bigint rootkey, sfsro_inode *rootino, sfsro_data *rootdi
   bigint d0;
   sfs_hash *tmp = &rootino_dat->inode->reg->direct[0];
   mpz_set_rawmag_be(&d0, tmp->base (), tmp->size ());  // For big endian
-  ptr<sfsro_data> rootdir_dat = sfsrodb_get (d0);
+  ptr<sfsro_data> rootdir_dat = sfsrodb_get (d0, DHASH_CONTENTHASH);
   if (!rootdir_dat) {
     warn << "root directory was null\n";
     return false;

@@ -63,7 +63,7 @@ store_cb_ch (dhashclient dhash, dhash_stat status, ptr<insert_info> i)
   else
     warn << "contenthash store success\n";
 
-  dhash.retrieve (i->key, wrap (&fetch_cb));
+  dhash.retrieve (i->key, DHASH_CONTENTHASH, wrap (&fetch_cb));
 }
 
 void
@@ -74,7 +74,7 @@ store_cb_pk (dhashclient dhash, dhash_stat status, ptr<insert_info> i)
   else
     warn << "pk store successful\n";
 
-  dhash.retrieve (i->key, wrap (&fetch_cb));
+  dhash.retrieve (i->key, DHASH_KEYHASH, wrap (&fetch_cb));
 }
 
 void
@@ -85,7 +85,7 @@ store_cb_noauth (dhashclient dhash, dhash_stat status, ptr<insert_info> i)
   else
     warn << "noauth store successful " << i->key << "\n";
 
-  dhash.retrieve (i->key, wrap (&fetch_cb));
+  dhash.retrieve (i->key, DHASH_NOAUTH, wrap (&fetch_cb));
 }
 
 void
@@ -96,7 +96,7 @@ store_cb_append (dhashclient dhash, dhash_stat status, ptr<insert_info> i)
   else
     warn << "store db successful " << i->key << "\n";
   
-  dhash.retrieve (i->key, wrap (&fetch_cb_append, dhash));
+  dhash.retrieve (i->key, DHASH_APPEND, wrap (&fetch_cb_append, dhash));
 }
 
 void
@@ -116,7 +116,7 @@ store_cb_append_second (dhashclient dhash, dhash_stat status,
   if (status != DHASH_OK)
     warn << "append error " << i->key << "\n";
 
-  dhash.retrieve (i->key, wrap (&fetch_cb_append_second, dhash));
+  dhash.retrieve (i->key, DHASH_APPEND, wrap (&fetch_cb_append_second, dhash));
 }
 
 void
