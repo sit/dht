@@ -59,20 +59,22 @@ VivaldiNode::VivaldiNode(IPAddress ip) : P2Protocol (ip)
   if (_algorithm == "simplex") {
     _algorithm_type = ALG_SIMPLEX;
     if(_window_size < _dim+1){
-      cerr << "not enough dimensions for simplex\n";
+      cerr << "not enough window slots for simplex\n";
       abort();
     }
   }else
     _algorithm_type = ALG_VIVALDI;
 
+  // start at a random location
+  for (uint i = 0; i < _dim; i++)
+    _c._v.push_back (random ());
   if (_model_type == MODEL_EUCLIDEAN || _model_type == MODEL_TORUS) {
+    _c._v.clear();
     // Start out at the origin 
     for (uint i = 0; i < _dim; i++)
       _c._v.push_back (0.0);
   } else if (_model_type == MODEL_SPHERE) {
-    for (uint i = 0; i < _dim; i++)
-      _c._v.push_back (random ());
-    //now unitize it
+    //unitize it
     _c = _c / length (_c);
     // now make it as long as the radius of the circle
     _c = _c * _radius;
@@ -582,7 +584,7 @@ simplex_error(double *x, int dim, void *v)
   node = (VivaldiNode*)v;
   if(usinght)
     dim--;
-  VivaldiNode::Coord c(dim);
+  VivaldiNode::Coord c(0);
   for(int i=0; i<dim; i++){
     c._v.push_back(x[i]);
   }
@@ -603,10 +605,14 @@ run_simplex(VivaldiNode *node)
 {
   int dim = node->_samples[0]._c._v.size();
   int dimh = dim + (usinght!=0);
-  Simplex *plex = allocsimplex(dimh, simplex_error, (void*)node);
+
+  Simplex *plex = allocsimplex(dimh, simplex_error, (void*)node, .01);
   double *best = 0;
-  stepsimplex(plex, &best);
-  VivaldiNode::Coord c(dim);
+  double ans;
+  for(int i=0; i<1000; i++)
+    if(!stepsimplex(plex, &ans, &best))
+      break;
+  VivaldiNode::Coord c(0);
   for(int i=0; i<dim; i++){
     c._v.push_back(best[i]);
   }
