@@ -225,7 +225,7 @@ nntp::cmd_group (str c) {
     out << syntax;
 }
 
-static rxx artrx ("^ARTICLE ?(<.+?>)?(\\d+?)?", "i");
+static rxx artrx ("^ARTICLE ?(<[^>]+>)?(\\d+)?", "i");
 
 void
 nntp::cmd_article (str c) {
@@ -350,7 +350,7 @@ warn << " resid " << in.resid () << " rem " << postrx.len (0) << "\n";
 void
 nntp::cmd_quit (str c)
 {
-  warn << "quit\n";
+  warn << "quit " << s << "\n";
   delete this;
 }
 

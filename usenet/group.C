@@ -100,7 +100,6 @@ group::getid (unsigned long index)
 
   for (; listrx.search (str (c, len))
        ; c += listrx.len (0), len -= listrx.len (0) ) {
-    warn << "xv " << str (c, len) << "\n";
     if (index == strtoul (listrx[1], NULL, 10))
       return listrx[2];
     else if (index < strtoul (listrx[1], NULL, 10))
