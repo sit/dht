@@ -1,0 +1,8 @@
+#!/bin/sh
+# Wrapper script to integrate hopcount with automake.
+
+ROUTING_MODE=chord
+NUMLSDS=10
+NUMVNODES=10
+
+. $srcdir/hopcount-runner.sh

@@ -22,6 +22,7 @@ sub usage {
 
 my $r      = shift || usage ("no output dir");
 my $build  = shift || usage ("no build dir");
+$build = abs_path ($build);
 
 my $n      = shift || usage ("how many nodes?");
 my $v      = shift || usage ("how many vnodes/node?");
