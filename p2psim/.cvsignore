@@ -9,3 +9,11 @@ install-sh
 missing
 mkinstalldirs
 stamp-h.in
+autom4te.cache
+config.h
+config.status
+depcomp
+stamp-h
+stamp-h1
+utils
+Makefile
