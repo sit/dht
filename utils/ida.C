@@ -222,7 +222,7 @@ Ida::reconstruct (const vec<str> &frags, strbuf &out)
   u_long len = unpackone (frags[0], inp);
   u_long rawlen = unpackone (frags[0], inp);
   u_long m = unpackone (frags[0], inp);
-  if (len < m + 3) {
+  if (len < m + 4) {
     idatrace << "fragment 0 too short.\n";
     return false;
   }
@@ -242,9 +242,9 @@ Ida::reconstruct (const vec<str> &frags, strbuf &out)
     int inp = 0;
     str in = frags[i];
     len = unpackone (in, inp);
-    if (len < m + 3) {
+    if (len < m + 4) {
       idatrace << "fragment " << i << " length " << len
-	       << "too short; want at least " << m + 3 << "\n";
+	       << "too short; want at least " << m + 4 << "\n";
       return false;
     }
     u_long myrawlen = unpackone (in, inp);
@@ -275,7 +275,8 @@ Ida::reconstruct (const vec<str> &frags, strbuf &out)
       idatrace << hexdump (in.cstr (), in.len ()) << "\n";
       return false;
     }
-    len -= m + 3;
+    len -= m + 4;
+    assert (len == blocksize);
 
     // Extract encoded block
     vec<u_long> drow;
