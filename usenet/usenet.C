@@ -90,7 +90,7 @@ main (int argc, char *argv[])
   char *sock = "/tmp/chord-sock";
   char *dirbase = NULL;
   char *cffile  = NULL;
-  bool create_groups = false;
+  bool create_groups = opt->create_unknown_groups;
 
   int ch;
 
@@ -119,6 +119,9 @@ main (int argc, char *argv[])
   if (cffile && !parseconfig (opt, cffile))
     fatal << "errors parsing configuration file\n";
 
+  // Override any configuration file settings from command line.
+  opt->create_unknown_groups = create_groups;
+
   dhash = New dhashclient (sock);
 
   dbOptions opts;
@@ -131,10 +134,6 @@ main (int argc, char *argv[])
   if (int err = header_db->opendb ("headers", opts)) {
     warn << "open returned: " << strerror (err) << "\n";
     exit (-1);
-  }
-
-  if (create_groups) {
-    /* XXX */
   }
 
   sigcb (SIGINT,  wrap (&stop));

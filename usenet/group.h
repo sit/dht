@@ -6,7 +6,8 @@ struct dbEnumeration;
 #include <chord_types.h>
 #include "usenetdht_storage.h"
 
-bool create_group (char *group);
+bool valid_group_name (str g);
+bool create_group (const char *group);
 
 struct grouplist {
   ptr<dbEnumeration> it;

@@ -1,4 +1,4 @@
-/* $Id: config.C,v 1.2 2004/08/30 19:46:17 sit Exp $ */
+/* $Id: config.C,v 1.3 2005/02/20 20:50:49 sit Exp $ */
 
 /*
  *
@@ -36,6 +36,7 @@ options::options ()
     listen_port (11999),
     peer_max_queue (1024),
     peer_timeout (300),
+    create_unknown_groups (false),
     sync_interval (5)
 {
 }
@@ -90,6 +91,7 @@ parseconfig (options *op, str cf)
     .add ("ListenPort", &op->listen_port, 0, 65536)
     .add ("PeerMaxQueue", &op->peer_max_queue, 0, 1000000)
     .add ("PeerTimeout", &op->peer_timeout, 0, 60 * 60)
+    .add ("CreateUnknownGroups", &op->create_unknown_groups)
     .add ("SyncInterval", &op->sync_interval, 0, 5)
     ;
 #endif /* 0 */
@@ -131,6 +133,17 @@ parseconfig (options *op, str cf)
 	  op->client_timeout < 0) {
 	errors = true;
 	WARN << "usage: ClientTimeout seconds\n";
+      }
+    } else if (!strcasecmp("CreateUnknownGroups", av[0])) {
+      if (!strcasecmp("true", av[1]) ||
+	  !strcasecmp("1", av[1])) {
+	op->create_unknown_groups = true;
+      } else if (!strcasecmp("false", av[1]) ||
+	  !strcasecmp("0", av[1])) {
+	op->create_unknown_groups = false;
+      } else {
+	errors = true;
+	WARN << "usage: CreateUnknownGroups true|false\n";
       }
     } else if (!strcasecmp("SyncInterval", av[0])) {
       if (!convertint (av[1], &op->sync_interval) ||

@@ -5,15 +5,65 @@
 #include <usenet.h>
 
 bool
-create_group (char *group)
+valid_group_name (str g)
 {
-  // xxx sanity check group name
+  static rxx dot ("\\.");
+  strbuf vgnlog;
+  vgnlog << "valid_group_name (" << g << "): ";
+  // XXX this check could probably be done entirely using a regex
+
+  // http://www.eyrie.org/~eagle/faqs/big-eight.html
+  // A group name is made up of name components separated by '.' (period or
+  // dot). Each component must consist solely of lowercase ASCII letters,
+  // digits, '+' (plus), or '-' (dash), must contain at least one letter (a-z),
+  // and must be no more than twenty characters long.
+  vec<str> components;
+  int n = split (&components, dot, g, (size_t) -1, true);
+
+  if (n == 1) {
+    warnx << vgnlog << "too few components!\n";
+    return false;
+  }
+  for (size_t i = 0; i < components.size (); i++) {
+    if (components[i].len () > 20) {
+      vgnlog << "component " << i << " too long.\n";
+      return false;
+    }
+    if (components[i].len () == 0) {
+      vgnlog << "component " << i << " too short.\n";
+      return false;
+    }
+    bool onechar (false);
+    for (size_t j = 0; j < components[i].len (); j++) {
+      register int c = components[i][j];
+      if (islower (c))
+	onechar = true;
+      if (! (islower (c) || isdigit (c) || (c == '-') || (c == '+'))) {
+	warnx << vgnlog << "bad char " << i << "," << j << ": "
+	      << components[i][j] << ".\n";
+	return false;
+      }
+    }
+    if (!onechar) {
+      warnx << vgnlog << "no characters in component " << i << ".\n";
+      return false;
+    }
+  }
+  return true;
+}
+
+bool
+create_group (const char *group)
+{
   static ptr<dbrec> d (NULL);
   if (!d) {
     group_entry g;
     str m = xdr2str (g);
     d = New refcounted<dbrec> (m, m.len ());
   }
+
+  if (!valid_group_name (group))
+    return false;
 
   ref<dbrec> k = New refcounted<dbrec> (group, strlen (group));
   group_db->insert (k, d);
@@ -148,15 +198,6 @@ newsgroup::addid (str msgid, chordID ID)
   nart.blkid = ID;
   group->articles.push_back (nart);
 
-#if 0
-  // Dump the complete list of articles for this group
-  for (size_t i = 0; i < group->articles.size (); i++)
-    warn << i << " " 
-         << group->articles[i].artno << " "
-         << group->articles[i].msgid << " "
-         << group->articles[i].blkid << "\n";
-#endif /* 0 */  
-
   // Marshal listing
   xdrsuio x (XDR_ENCODE);
   if (!xdr_group_entry (x.xdrp (), group)) {
@@ -258,7 +299,7 @@ newsgroup::next (void)
 
     art = header_db->lookup (k);
     if (art == NULL)
-      warn << "missing article " << start << "\n";
+      warn << "newsgroup::next: missing article " << start << "\n";
     start++;
   }
     
@@ -267,6 +308,7 @@ newsgroup::next (void)
   
   str msg (art->value, art->len);
   
+  // XXX should parse this once only.
   if (oversub.search (msg) &&
       overfrom.search (msg) &&
       overdate.search (msg)) {

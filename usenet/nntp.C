@@ -414,16 +414,23 @@ nntp::read_post (str resp, str bad, bool takedht)
   while (postgrx.search (ng)) {
     groups.push_back (postgrx[1]);
     strbuf postlog;
-    if (nntp_trace >= 2)
-      postlog << prefix << "group " << postgrx[1] << ": ";
+    postlog << prefix << "group " << postgrx[1] << ": ";
     if (g->open (postgrx[1]) < 0) {
-      if (nntp_trace >= 2)
+      // Initial open failure, try to create group if allowed by opts.
+      if (opt->create_unknown_groups) {
+	if (create_group (postgrx[1]) && 
+	    g->open (postgrx[1]) >= 0)
+	  postlog << "created, ";
+	else
+	  postlog << "creation failed!\n";
+      } else {
 	postlog << "unknown, so ignoring.\n";
-    } else {
+      }
+    } 
+    if (g->loaded ()) {
       g->addid (msgid, ID);
       posted = true;
-      if (nntp_trace >= 2)
-	postlog << msgid << " (" << ID << ") posted.\n";
+      postlog << msgid << " (" << ID << ") posted.\n";
     }
     if (nntp_trace >= 2)
       warn << postlog;
