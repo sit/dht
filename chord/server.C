@@ -317,10 +317,32 @@ user_args::fill_from (chord_node *from)
     from->r.hostname = inet_ntoa (sa->sin_addr);
     from->r.port = t_arg->src_port;
     from->vnode_num = myindex;
-  } else { //connected sockets don't have the addr field set in the sbp
-    warn << "XXX fill_from not supported on stream sockets\n";
+  } else {
+    // connected sockets don't have the addr field set in the sbp, so
+    // we have to dig harder
+
+    bool hasname = false;
+    const ptr<asrv> srv = sbp->getsrv ();
+    const ref<axprt> x = srv->xprt ();
+    axprt_stream *xs = 0;
+
+    // make a guess that this is a stream
+    if (x->reliable && x->connected && 
+	(xs = static_cast<axprt_stream *>(sbp->getsrv ()->xprt ().get ()))) {
+      int fd = xs->getfd ();
+      sockaddr_in sin;
+      bzero (&sin, sizeof (sin));
+      socklen_t sinlen = sizeof (sin);
+      if (getpeername (fd, (sockaddr *) &sin, &sinlen) == 0) {
+        from->r.hostname = inet_ntoa (sin.sin_addr);
+        from->r.port = t_arg->src_port;
+        from->vnode_num = myindex;
+	hasname = true;
+      }
+    }
+    if (!hasname)
+      warn << "XXX cannot run fill_from on stream (?) connection\n";
   }
-  
   from->x = t_arg->src_id;
 }
 
