@@ -50,10 +50,10 @@ Coord::set (const chord_node &n)
 void 
 Coord::fill_node (chord_node &data) const 
 {
-  data.coords.setsize (coords.size ());
-  for (unsigned int i = 0; i < coords.size (); i++)
+  data.coords.setsize (NCOORD + USING_HT);
+  for (unsigned int i = 0; i < NCOORD; i++)
     data.coords[i] = static_cast<int> (coords[i]);
-  if (USING_HT) data.coords.push_back ( static_cast<int> (ht));
+  if (USING_HT) data.coords[NCOORD] = ( static_cast<int> (ht));
   data.e = pred_err;
   
 }
