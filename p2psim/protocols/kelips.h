@@ -39,6 +39,7 @@
 #include "p2psim/condvar.h"
 #include <map>
 #include <vector>
+#include <list>
 
 class Kelips : public P2Protocol {
 public:
@@ -126,6 +127,10 @@ public:
   bool lookup_loop(ID key, vector<IPAddress> &);
   void handle_lookup2(ID *kp, IPAddress *res);
   IPAddress find_by_id(ID key);
+  void init_state(list<Protocol*>);
+  bool stabilized(vector<ID> lid);
+
+  friend class KelipsObserver;
 };
 
 #endif

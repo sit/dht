@@ -371,7 +371,7 @@ Kelips::gotinfo(Info i)
   if(i._ip == ip())
     return;
 
-  assert(_live); // node.C should not send us any RPCs if we're dead!
+  assert(i._ip);
 
   if(_info.find(i._ip) == _info.end()){
     int g = ip2group(i._ip);
@@ -570,4 +570,47 @@ Kelips::purge(void *junk)
   }
 
   delaycb(1000, &Kelips::purge, (void *) 0);
+}
+
+// Called by KelipsObserver::init_state() with the complete list
+// of nodes to help us initialize our routing tables faster.
+// This is really cheating.
+void
+Kelips::init_state(list<Protocol*> lid)
+{
+  printf("%qd %d init_state _live=%d\n",
+         now(), ip(), _live);
+  for(list<Protocol*>::const_iterator i = lid.begin(); i != lid.end(); ++i) {
+    Kelips *k = (Kelips *) *i;
+    if(k->ip() == ip())
+      continue;
+    gotinfo(Info(k->ip(), now()));
+  }
+}
+
+// KelipsObserver wants to know if we've stabilized.
+// lid is a list of all live nodes.
+bool
+Kelips::stabilized(vector<ID> lid)
+{
+  // Do we know about all nodes in our own group?
+  for(u_int i = 0; i < lid.size(); i++)
+    if(id2group(lid[i]) == group() && find_by_id(lid[i]))
+      return false;
+
+  // Do we know of two contacts from each other group?
+  int *cc = (int *) malloc(_k * sizeof(int));
+  memset(cc, '\0', _k * sizeof(int));
+  for(u_int i = 0; i < lid.size(); i++)
+    if(find_by_id(lid[i]))
+      cc[id2group(lid[i])] += 1;
+  for(int i = 0; i < _k; i++){
+    if(cc[i] < _n_contacts){
+      delete cc;
+      return false;
+    }
+  }
+
+  delete cc;
+  return true;
 }
