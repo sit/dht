@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.15 2003/07/24 18:04:20 sit Exp $
+# $Id: Makefile.am,v 1.16 2004/10/02 03:02:52 sit Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -24,19 +24,20 @@ bin_PROGRAMS = block testslave
 noinst_PROGRAMS = example1 example2 #stats_merkle_tree
 noinst_LIBRARIES = libdtest.a
 
-libdtest_a_SOURCES = testmaster.C test.C dhashclient_test.C
+libdtest_a_SOURCES = testmaster.C test.C dhashclient_test.C \
+	testmaster.h test.h dhashclient_test.h
 example1_SOURCES = example1.C
 example1_LDADD = ./libdtest.a ../dhash/libdhashclient.a ../svc/libsvc.la $(LDADD)
 
 example2_SOURCES = example2.C
 example2_LDADD = ./libdtest.a ../dhash/libdhashclient.a ../svc/libsvc.la $(LDADD)
 
-testslave_SOURCES = testslave.C
+testslave_SOURCES = testslave.C testslave.h
 testslave_LDADD = ./libdtest.a ../dhash/libdhashclient.a ../svc/libsvc.la $(LDADD)
 
 block_SOURCES = block.C
 block_LDADD = ./libdtest.a ../dhash/libdhashclient.a ../svc/libsvc.la $(LDADD)
 
-EXTRA_DIST = .cvsignore
+EXTRA_DIST = .cvsignore tesla-0.4a-dhash.tar.gz testwrapper.pl config.txt.sample
 CLEANFILES = core *.core *~ *.rpo
 MAINTAINERCLEANFILES = Makefile.in
