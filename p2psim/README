@@ -1,0 +1,47 @@
+Compiling p2psim
+----------------
+
+We compiled p2psim successfully with GCC 2.95.3 and GCC 3.3.2.  We recommend
+using GCC 2.95.3.
+
+You'll need a user-level threads package that is available via
+
+http://pdos.lcs.mit.edu/~rsc/software/
+
+Download and install:
+
+- libthread
+- lib9
+- libutf
+- libfmt
+
+We recommand installing these packages in /usr/local, because our Makefiles
+expect that.
+
+Now, the steps to compile p2psim are:
+
+./setup
+./configure
+make
+
+You may have to edit all the Makefile.am files and/or Makefile.incl to make
+sure it finds the libraries mentioned above.
+
+The binary will be in the p2psim/p2psim directory.
+
+Running p2psim
+--------------
+
+You'll need to create 3 files first.  A topology file, a protocol file, and an
+events file.
+
+Look at example/topology.txt for the syntax and an example of a topology file.
+Look at example/protocol.txt for the syntax and an example of a protocol file.
+Look at example/events.txt for the syntax and an example of an events file.
+
+p2psim/p2psim [protocolfile] [topologyfile] [eventsfile]
+
+
+Questions?
+----------
+Please direct your questions at p2psim-dev@pdos.lcs.mit.edu .

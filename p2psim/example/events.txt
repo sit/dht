@@ -1,4 +1,4 @@
 # enumerates all the event generators
 # format:
 # generator {GENERATOR} [KEY=VAL [KEY=VAL [...]]]
-generator FileEventGenerator name=events-for-generator.txt
+generator ChurnEventGenerator proto=Kademlia
