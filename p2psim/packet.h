@@ -3,32 +3,29 @@
 
 #include <lib9.h>
 #include <thread.h>
-#include "protocol.h"
 #include "p2psim.h"
 
 class Packet {
 public:
-  Packet();
+  Packet(Channel *c, void (*fn)(void*), void *args,
+         IPAddress src, IPAddress dst) {
+    _c = c; _fn = fn; _args = args; _src = src; _dst = dst;
+  }
   ~Packet();
 
-  unsigned size;
+  //  unsigned size;
+  void (*(fn()))(void*) { return _fn; }
+  void *args() { return _args; }
   IPAddress src() { return _src; }
-  string protocol() { return _protocol; }
+  IPAddress dst() { return _dst; }
   Channel *channel() { return _c; }
   bool reply() { return _fn == 0; }
 
 private:
-  friend class Protocol;
-  friend class Network;
+  Channel *_c;            // where to send the reply
+  void (*_fn)(void*);     // function to invoke
+  void *_args;            // caller-supplied argument
 
-  // the following fields can only be set by the Protocol layer
-  Channel *_c;
-  string _protocol;
-  Protocol::member_f _fn; // method to invoke
-  void *_args;            // caller-supplied arguments
-  void *_ret;             // caller-supplied place to put return value
-
-  // the following fields can only be set by the Network layer
   IPAddress _src;
   IPAddress _dst;
 };

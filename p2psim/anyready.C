@@ -63,6 +63,14 @@ struct Proc
 	Tqueue	ready;		/* Runnable threads */
 };
 
+struct Thread
+{
+	Lock		lock;			/* protects thread data structure */
+	Label	sched;		/* for context switches */
+	int		id;			/* thread id */
+  /* and other stuff... */
+};
+
 extern Proc *_threadgetproc(void);
 
 }
@@ -77,5 +85,14 @@ anyready()
 
 	/* this is only safe because we're not using procs yet */
 	return p->ready.head != nil;
+}
+
+int
+rtm_thread_id()
+{
+  Proc *p = _threadgetproc();
+  if(p == 0 || p->thread == 0)
+    return -1;
+  return p->thread->id;
 }
 

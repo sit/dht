@@ -6,6 +6,9 @@ using namespace std;
 #include "protocolfactory.h"
 #include "node.h"
 #include "packet.h"
+#include "network.h"
+
+map<int,Node*> Node::_threads; // map thread ID to Node
 
 Node::Node(IPAddress ip) : _ip(ip), _pktchan(0)
 {
@@ -63,16 +66,13 @@ Node::run()
     switch(i) {
       case 0:
         // if this is a reply, send it back on the channel where the thread is
-        // waiting a reply.  otherwise send it to the protocol's channel
-        if(p->reply())
+        // waiting a reply.  otherwise call the function.
+        if(p->reply()){
           send(p->channel(), &p);
-        else {
-          prot = _protmap[p->protocol()];
-          if(!prot) {
-            cerr << "WARNING: protocol " << p->protocol() << " is not running on " << ip() << endl;
-            break;
-          }
-          send(prot->netchan(), &p);
+        } else {
+          //int tid = threadcreate(p->fn(), p->args(), mainstacksize);
+          int tid = threadcreate(Node::Receive, p, mainstacksize);
+          _threads[tid] = this;
         }
         break;
 
@@ -100,4 +100,54 @@ Node::run()
         break;
     }
   }
+}
+
+// Send an RPC packet and wait for the reply.
+// It takes an ordinary function to maximize generality.
+// If you want a return value, put it in args.
+// See rpc.h/doRPC for a nice interface.
+// The return value indicates whether the RPC succeeded
+// (i.e. did not time out).
+//
+// XXX the intent is that the caller put the args and ret
+// on the stack, e.g.
+//   foo_args fa;
+//   foo_ret fr;
+//   fa.xxx = yyy;
+//   doRPC(dst, fn, &fa, &fr);
+// BUT if the RPC times out, the calling function returns,
+// and then the RPC actually completes, we are in trouble.
+// It's not even enough to allocate on the heap. We need
+// garbage collection, or doRPC needs to know the sizes of
+// args/ret and copy them. Even then, naive callers might put
+// pointers into the args/ret structures.
+bool
+Node::_doRPC(IPAddress srca, IPAddress dsta,
+                      void (*fn)(void*), void *args)
+{
+  Channel *c = chancreate(sizeof(Packet*), 0);
+  Packet *p = new Packet(c, fn, args, srca, dsta);
+
+  send(Network::Instance()->pktchan(), &p);
+  Packet *reply = (Packet *) recvp(c);
+
+  chanfree(c);
+  delete reply;
+  delete p;
+
+  return true;
+}
+
+void
+Node::Receive(Packet *p)
+{
+  (p->fn())(p->args());
+
+  // send reply
+  Packet *reply = new Packet(p->channel(),
+                             0, 0, p->dst(), p->src());
+
+  send(Network::Instance()->pktchan(), &reply);
+
+  threadexits(0);
 }

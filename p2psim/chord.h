@@ -3,7 +3,7 @@
 
 #include "protocol.h"
 #include "consistenthash.h"
-//#include "../utils/skiplist.h"
+#include "vivaldi.h"
 
 #include <vector>
 
@@ -70,12 +70,13 @@ public:
   void next_handler(next_args *, next_ret *);
   bool stabilized();
 
-  string s();
+  char *ts();
 
   virtual void stabilize(void *);
 protected:
   LocTable *loctable;
   IDMap me;
+  Vivaldi _vivaldi;
 
   virtual vector<IDMap> find_successors(CHID key, int m);
   void dump();
@@ -153,6 +154,7 @@ class LocTable {
     Chord::IDMap _prev_succ;
     Time _prev_chkp;
     bool _stablized;
+
     void evict(); //evict one node to make sure ring contains <= _max elements
 };
 

@@ -2,6 +2,7 @@
 #include "packet.h"
 #include <iostream>
 #include "p2psim.h"
+#include "rpc.h"
 using namespace std;
 
 Kademlia::Kademlia(Node *n) : Protocol(n)

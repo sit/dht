@@ -1,6 +1,7 @@
 #include "chord.h"
 #include "node.h"
 #include "packet.h"
+#include "rpc.h"
 #include <stdio.h>
 #include <iostream>
 
@@ -9,7 +10,7 @@
 
 using namespace std;
 
-Chord::Chord(Node *n) : Protocol(n)
+Chord::Chord(Node *n) : Protocol(n), _vivaldi(n->ip())
 {
   me.ip = n->ip();
   me.id = ConsistentHash::ip2chid(me.ip); 
@@ -23,21 +24,21 @@ Chord::~Chord()
   delete loctable;
 }
 
-string
-Chord::s()
+char *
+Chord::ts()
 {
-  char buf[50];
-  sprintf(buf, "Chord(%u,%qu)", me.ip, me.id);
-  return string(buf);
+  static char buf[50];
+  sprintf(buf, "%lu Chord(%u,%qu)", now(), me.ip, PID(me.id));
+  return buf;
 }
 
 void
 Chord::lookup(Args *args) 
 {
   CHID k = args->nget<CHID>("key");
-  vector<Chord::IDMap> v = find_successors(k, 1);
+  vector<IDMap> v = find_successors(k, 1);
   IPAddress ans = (v.size() > 0) ? v[0].ip:0;
-  printf("Chord(%u, %qu) lookup results %u\n", ans);
+  printf("%s lookup results %u\n", ts(), ans);
 }
 
 // Returns at least m successors of key.
@@ -51,7 +52,7 @@ Chord::find_successors(CHID key, int m)
 
   IDMap nprime = me;
   int count = 0;
-  printf("Chord(%u,%qu) find_successors key %qu\n", me.ip, PID(me.id), PID(key));
+  printf("%s find_successors key %qu\n", ts(), PID(key));
   while(1){
     assert(count++ < 100);
     next_args na;
@@ -63,7 +64,8 @@ Chord::find_successors(CHID key, int m)
     if(nr.done){
       return nr.v;
     } else {
-      printf("!!!Chord (%u,%qu) node %u refers to next %qu for key %qu\n", me.ip, PID(me.id), PID(nprime.id), PID(nr.next.id));
+      printf("%s !!! node %u refers to next %qu for key %qu\n",
+             ts(), PID(nprime.id), PID(nr.next.id));
       nprime = nr.next;
     }
   }
@@ -78,7 +80,8 @@ Chord::next_handler(next_args *args, next_ret *ret)
   /*
   vector<IDMap> v = loctable->succ_for_key(args->key);
   if (v.size() >= args->m) {
-    printf("Chord(%u)::next_handler key=%u, %u succs, %u\n", me.id, args->key, v.size(), v[0].id);
+    printf("%s next_handler key=%u, %u succs, %u\n",
+           ts(), args->key, v.size(), v[0].id);
     */
   IDMap succ = loctable->succ(args->m);
   if(ConsistentHash::betweenrightincl(me.id, succ.id, args->key) ||
@@ -86,13 +89,15 @@ Chord::next_handler(next_args *args, next_ret *ret)
     ret->done = true;
     ret->v.clear();
     ret->v.push_back(succ);
-    printf("Chord(%u,%qu)::next_handler done key=%qu succ=%qu\n", me.ip, PID(me.id), PID(args->key), PID(succ.id));
+    printf("%s next_handler done key=%qu succ=%qu\n",
+           ts(), PID(args->key), PID(succ.id));
  }else {
     ret->done = false;
     //ret->next = loctable->next(args->key);
     ret->next = succ;
     assert(ret->next.ip != me.ip);
-    printf("Chord(%u,%qu)::next_handler NOT done key=%qu, goto next %qu\n", me.ip, PID(me.id), PID(args->key), PID(ret->next.id));
+    printf("%s next_handler NOT done key=%qu, goto next %qu\n",
+           ts(), PID(args->key), PID(ret->next.id));
   }
 }
 
@@ -107,45 +112,49 @@ Chord::join(Args *args)
   wkn.id = ConsistentHash::ip2chid(wkn.ip);
   loctable->add_node (wkn);
 
-  cout << s() + "::join wellknown " << PID(wkn.id) << endl;
+  printf("%s join wellknown %qu\n", ts(), PID(wkn.id));
   Time before = now();
   vector<IDMap> succs = find_successors (me.id + 1, 1);
   assert (succs.size () > 0);
   Time after = now();
-  printf("Chord(%u,%qu)::join2 %qu, elapsed %ld\n",
-         me.ip, PID(me.id), PID(succs[0].id),
+  printf("%s join2 %qu, elapsed %ld\n",
+         ts(), PID(succs[0].id),
          after - before);
   loctable->add_node(succs[0]);
 
   delaycb(STABLE_TIMER, Chord::stabilize, NULL);
-  //stabilize(NULL);
 }
 
+// Which paper is this code from?
 void
 Chord::stabilize(void *x)
 {
   loctable->checkpoint();
-  Chord::IDMap succ = loctable->succ(1);
-  Time before = now();
-  if (succ.ip && (succ.ip != me.ip)) {
+  IDMap succ1 = loctable->succ(1);
+
+  if (succ1.ip && (succ1.ip != me.ip)) {
     get_predecessor_args gpa;
     get_predecessor_ret gpr;
-    doRPC(succ.ip, &Chord::get_predecessor_handler, &gpa, &gpr);
+    doRPC(succ1.ip, &Chord::get_predecessor_handler, &gpa, &gpr);
     if (gpr.n.ip) loctable->add_node(gpr.n);
 
-    succ = loctable->succ(1);
+    IDMap succ2 = loctable->succ(1);
+
+    if(succ1.id != succ2.id)
+      printf("%s changed succ from %u to %u\n",
+             ts(), succ1.id, succ2.id);
+
     notify_args na;
     notify_ret nr;
     na.me = me;
-    doRPC(succ.ip, &Chord::notify_handler, &na, &nr);
+    doRPC(succ2.ip, &Chord::notify_handler, &na, &nr);
 
-    Time after = now();
-    printf("Chord(%u,%qu)::stabilize(%d) succ %qu pred %qu elapsed %u\n", me.ip, PID(me.id), before, PID(succ.id), PID(loctable->pred().id), after-before);
     fix_predecessor();
     //fix_successor();
     if (CHORD_SUCC_NUM > 1) fix_successor_list();
   }else{
-    printf("Chord(%u,%qu)::stabilize(%d) nothing succ (%u,%qu)\n", me.ip, PID(me.id), before, succ.ip,PID(succ.id));
+    printf("%s stabilize nothing succ (%u,%qu)\n",
+           ts(), succ1.ip,PID(succ1.id));
   }
   if (now() > 100000) { //XXX nasty way to stop
     dump();
@@ -164,7 +173,7 @@ void
 Chord::fix_predecessor()
 {
   /*
-  Chord::IDMap pred = loctable->pred();
+  IDMap pred = loctable->pred();
   if (pred.ip && Failed(pred.ip)) {
       loctable->del_node(pred);
   }
@@ -175,7 +184,7 @@ void
 Chord::fix_successor()
 {
   /*
-  Chord::IDMap succ = loctable->succ(1);
+  IDMap succ = loctable->succ(1);
   if (succ.ip && Failed(succ.ip)) {
     loctable->del_node(succ);
   }
@@ -210,8 +219,12 @@ Chord::fix_successor_list()
 void
 Chord::notify_handler(notify_args *args, notify_ret *ret)
 {
+  IDMap p1 = loctable->pred();
   loctable->notify(args->me);
-  printf("Chord(%u,%qu) notified of %qu succ (xx,%qu) pred %qu\n", me.ip,PID(me.id), PID(args->me.id), PID(loctable->succ(1).id), PID(loctable->pred().id));
+  IDMap p2 = loctable->pred();
+  if(p1.id != p2.id)
+    printf("%s notify changed pred from %qu to %qu\n",
+         ts(), PID(p1.id), PID(p2.id));
 }
 
 void
@@ -353,7 +366,7 @@ LocTable::del_node(Chord::IDMap n)
 void
 LocTable::pin(Chord::CHID x)
 {
-  for (int i = 1; i <= pinlist.size(); i++) {
+  for (unsigned int i = 1; i <= pinlist.size(); i++) {
     if (pinlist[i] == x) {
       return;
     } else if (ConsistentHash::between(pinlist[i-1], pinlist[i], x)) {
@@ -374,8 +387,8 @@ LocTable::evict() //evict one node
     return;
   }
   assert(0);
-  int j = 0;
-  for (int i = _succ_num + 1; i < ring.size(); i++)  {
+  unsigned int j = 0;
+  for (unsigned int i = _succ_num + 1; i < ring.size(); i++)  {
     while (j < pinlist.size() && ConsistentHash::between(ring[0].id, pinlist[j],ring[i].id)) {
       j++;
     }

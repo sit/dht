@@ -2,6 +2,7 @@
 #define __PROT_FACTORY_H
 
 #include "node.h"
+#include <typeinfo>
 // #include <map>
 
 using namespace std;
@@ -12,6 +13,7 @@ public:
   static void DeleteInstance();
   Protocol *create(string, Node*);
   string name(Protocol*);
+  string name(const type_info &);
 
 private:
   static ProtocolFactory *_instance;

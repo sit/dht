@@ -96,7 +96,6 @@ EventQueue::advance()
   // XXX: time is not running smoothly. does that matter?
   Event *e = _queue.front();
   _time = e->ts;
-  cout << "*** TIME IS NOW " << _time << " *** " << endl;
 
   // now process all events with this timestamp
   Queue::iterator pos;

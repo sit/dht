@@ -24,7 +24,7 @@ threadmain(int argc, char *argv[])
 
   srandom(time(0) ^ (getpid() + (getpid() << 15)));
   parse_args(argc, argv);
-  
+
   // Creates a network with the appropriate underlying topology.
   Topology::parse(topology_file);
 

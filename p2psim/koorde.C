@@ -1,4 +1,5 @@
 #include "koorde.h"
+#include "rpc.h"
 #include <stdio.h>
 #include <iostream>
 using namespace std;

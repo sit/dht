@@ -88,8 +88,8 @@ Network::run()
     switch(i) {
       // get packet from network and schedule delivery
       case 0:
-        dstnode = _nodes[p->_dst];
-        latency = _top->latency(_nodes[p->_src], dstnode);
+        dstnode = _nodes[p->dst()];
+        latency = _top->latency(_nodes[p->src()], dstnode);
         ne = new NetEvent();
         ne->ts = latency;
         ne->node = dstnode;

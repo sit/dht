@@ -22,51 +22,12 @@ Protocol::Protocol(Node *n) : _node(n)
   _appchan = chancreate(sizeof(P2PEvent*), 0);
   assert(_appchan);
   thread();
+  Node::SetThread(_thread, n);
 }
 
 Protocol::~Protocol()
 {
 }
-
-// Send an RPC packet and wait for the reply.
-// in should point to the arguments.
-// out should point to a place to put the results.
-// The return value indicates whether the RPC succeeded
-// (i.e. did not time out).
-//
-// XXX the intent is that the caller put the args and ret
-// on the stack, e.g.
-//   foo_args fa;
-//   foo_ret fr;
-//   fa.xxx = yyy;
-//   doRPC(dst, fn, &fa, &fr);
-// BUT if the RPC times out, the calling function returns,
-// and then the RPC actually completes, we are in trouble.
-// It's not even enough to allocate on the heap. We need
-// garbage collection, or doRPC needs to know the sizes of
-// args/ret and copy them. Even then, naive callers might put
-// pointers into the args/ret structures.
-bool
-Protocol::_doRPC(IPAddress dst, member_f fn, void *args, void *ret)
-{
-  Packet *p = new Packet();
-  p->_dst = dst;
-  p->_src = _node->ip();
-  p->_protocol = ProtocolFactory::Instance()->name(this);
-  p->_fn = fn;
-  p->_args = args;
-  p->_ret = ret;
-
-  send(Network::Instance()->pktchan(), &p);
-
-  // wait for reply. blocking.
-  Packet *reply = (Packet *) recvp(p->_c);
-  assert(reply->_ret == p->_ret);
-
-  delete p;
-  return true;
-}
-
 
 void
 Protocol::_delaycb(Time t, member_f fn, void *args)
@@ -96,7 +57,6 @@ Protocol::run()
   Packet *packet;
   P2PEvent *event;
   unsigned *exit;
-  pair<Protocol*, Packet*> *np;
   pair<Protocol*, Event*> *ap;
 
   a[0].c = _netchan;
@@ -114,7 +74,7 @@ Protocol::run()
   a[3].op = CHANEND;
   
   while(1) {
-    int i;
+    int i, tid;
     if((i = alt(a)) < 0) {
       cerr << "interrupted" << endl;
       continue;
@@ -122,11 +82,9 @@ Protocol::run()
 
     switch(i) {
       case 0:
-        // packet from network
-        np = new pair<Protocol*, Packet*>();
-        np->first = this;
-        np->second = packet;
-        threadcreate(Protocol::Receive, (void*)np, mainstacksize);
+        // packet from network.
+        // no longer happens: packets are sent to Nodes.
+        assert(0);
         break;
 
       case 1:
@@ -134,7 +92,8 @@ Protocol::run()
         ap = new pair<Protocol*, Event*>();
         ap->first = this;
         ap->second = event;
-        threadcreate(Protocol::Dispatch, (void*)ap, mainstacksize);
+        tid = threadcreate(Protocol::Dispatch, (void*)ap, mainstacksize);
+        Node::SetThread(tid, _node);
         break;
 
       case 2:
@@ -148,36 +107,6 @@ Protocol::run()
   }
 }
 
-
-
-void
-Protocol::Receive(void *p)
-{
-  pair<Protocol*, Packet*> *np = (pair<Protocol*, Packet*> *) p;
-  Protocol *prot = (Protocol*) np->first;
-  Packet *packet = (Packet*) np->second;
-
-  // do upcall using the function pointer in the packet. yuck.
-  (prot->*packet->_fn)(packet->_args, packet->_ret);
-
-  // send reply
-  Packet *reply = new Packet();
-  IPAddress origsrc = packet->_src;
-  reply->_src = prot->ip();
-  reply->_dst = origsrc;
-  reply->_c = packet->_c;
-  reply->_protocol = packet->_protocol;
-  reply->_args = 0;
-  reply->_ret = packet->_ret;
-  reply->_fn = 0;               // indicates that this is a RPC reply
-
-  // now that the packet has been received and processed, we can delet it.
-  send(Network::Instance()->pktchan(), &reply);
-
-  // this is somewhat scary
-  delete np;
-  threadexits(0);
-}
 
 
 void
