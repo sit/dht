@@ -84,6 +84,7 @@ public:
   k_bucket_tree *_tree;         // the root of our k-bucket tree
   hash_map<NodeID, Value> _values;   // key/value pairs
   IPAddress _wkn;               // well-known IP address
+  peer_t *_me;
 
   void reschedule_stabilizer(void*);
   void stabilize();
@@ -203,7 +204,9 @@ private:
   // the following are mutually exclusive, they could go into a union.
   class SortedByLastTime { public:
     bool operator()(const peer_t* p1, const peer_t* p2) {
-      return p1->lastts < p2->lastts;
+      return p1->lastts != p2->lastts ?
+             p1->lastts < p2->lastts :
+             p1 < p2;
     }
   };
   set<peer_t*, SortedByLastTime> *_nodes;      // for a leaf

@@ -58,6 +58,7 @@ Kademlia::Kademlia(Node *n, Args a)
   //   }
   // }
   _tree = New k_bucket_tree(this);
+  _me = New peer_t(_id, ip());
   assert(_tree);
 }
 
@@ -65,6 +66,7 @@ Kademlia::Kademlia(Node *n, Args a)
 // {{{ Kademlia::~Kademlia
 Kademlia::~Kademlia()
 {
+  delete _me;
   delete _tree;
 }
 
@@ -208,8 +210,7 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
   // we can't do anything but return ourselves
   if(!results->size()) {
     KDEBUG(2) << "do_lookup: my tree is empty; returning myself." << endl;
-    peer_t *p = New peer_t(_id, ip());
-    lresult->results.push_back(p);
+    lresult->results.push_back(_me);
     goto done;
   }
 
@@ -639,7 +640,8 @@ k_bucket_tree::random_node()
 // }}}
 
 // {{{ k_bucket::k_bucket
-k_bucket::k_bucket(Kademlia *k, k_bucket_tree *root) : _leaf(false), _self(k), _root(root)
+k_bucket::k_bucket(Kademlia *k, k_bucket_tree *root) : _leaf(false),
+  _self(k), _root(root)
 {
   _child[0] = _child[1] = 0;
   _id = _self->id(); // for KDEBUG purposes only
@@ -722,7 +724,8 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned de
     KDEBUG(4) <<  "insert: added on level " << depth << endl;
     peer_t *p = New peer_t(node, ip, now());
     assert(p);
-    _nodes->insert(p);
+    pair<set<peer_t*>::iterator, bool> b = _nodes->insert(p);
+    assert(b.second);
     return p;
   }
 
