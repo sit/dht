@@ -348,7 +348,7 @@ void
 Kademlia::lookup(Args *args)
 {
   IPAddress key_ip = args->nget<NodeID>("key");
-  // find node with this
+  // find node with this IP
   Kademlia *k = (Kademlia*) Network::Instance()->getnode(key_ip)->getproto(proto_name());
   NodeID key = k->id();
 
@@ -356,7 +356,8 @@ Kademlia::lookup(Args *args)
   assert(node()->alive());
   assert(_nodeid2kademlia->find(key) != _nodeid2kademlia->end());
 
-  lookup_args la(_id, ip(), key);
+  // return_immediately = true because we're doing actually FIND_VALUE
+  lookup_args la(_id, ip(), key, true);
   lookup_result lr;
 
   Time before = now();
@@ -410,7 +411,7 @@ Kademlia::do_ping(ping_args *args, ping_result *result)
 }
 
 // }}}
-// {{{ Kademlia::do_lookup
+// {{{ Kademlia::do_lookup/find_value
 void
 Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
 {
@@ -484,8 +485,11 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
     bool asked_all = true;
 
     for(set<k_nodeinfo*, closer>::const_iterator i = lresult->results.begin(); i != lresult->results.end(); ++i) {
-      // did we find an exact match?  bail out.
-      if((*i)->id == largs->id) {
+      // Did we find the key?
+      //
+      // If we bail out here, we're actually implementing Kademlia's FIND_VALUE,
+      // not LOOKUP, which is indicated by largs->return_immediately.
+      if((*i)->id == largs->id && largs->return_immediately) {
         we_are_done = true;
         break;
       }
@@ -565,7 +569,6 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
     //
     // send an RPC to all selected alpha nodes
     //
-    last_in_set = (*lresult->results.rbegin())->id;
     for(unsigned i=0; i<effective_alpha; i++) {
       if(toask[i] == 0)
         break;
@@ -600,6 +603,7 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
     //
     // wait for all alpha RPCs to get back
     //
+    last_in_set = (*lresult->results.rbegin())->id;
     while(outstanding_rpcs->size()) {
       KDEBUG(2) << "do_lookup: thread " << threadid() << " going into rcvRPC, outstanding = " << outstanding_rpcs->size() << endl;
 
@@ -651,15 +655,21 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
       char ptr[32]; sprintf(ptr, "%p", ci);
       KDEBUG(2) << "do_lookup: bottom of loop, ci = " << ptr << endl;
       delete ci;
-    }
 
-    // destroy all entries in results that are not part of the best k
-    while(lresult->results.size() > Kademlia::k) {
-      k_nodeinfo *i = *lresult->results.rbegin();
-      char ptr[32]; sprintf(ptr, "%p", i);
-      lresult->results.erase(lresult->results.find(i));
-      KDEBUG(2) << "do_lookup: deleting in truncate id = " << printID(i->id) << ", ip = " << i->ip << ", ptr = " << ptr << endl;
-      delete i;
+      // destroy all entries in results that are not part of the best k
+      while(lresult->results.size() > Kademlia::k) {
+        k_nodeinfo *i = *lresult->results.rbegin();
+        char ptr[32]; sprintf(ptr, "%p", i);
+        lresult->results.erase(lresult->results.find(i));
+        KDEBUG(2) << "do_lookup: deleting in truncate id = " << printID(i->id) << ", ip = " << i->ip << ", ptr = " << ptr << endl;
+        delete i;
+      }
+
+      // little improvement on Kademlia!  we don't have to wait for the
+      // remaining RPCs if the resultset already changed.  we can break out
+      // immediately
+      if((*lresult->results.rbegin())->id != last_in_set)
+        break;
     }
   }
 

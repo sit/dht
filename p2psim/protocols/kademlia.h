@@ -149,11 +149,13 @@ public:
   // 
   // {{{ lookup_args and lookup_result
   struct lookup_args {
-    lookup_args(NodeID xid, IPAddress xip, NodeID k = 0) :
-      id(xid), ip(xip), key(k) { this->tid = threadid(); };
+    lookup_args(NodeID xid, IPAddress xip, NodeID k = 0, bool ri = false) :
+      id(xid), ip(xip), key(k), return_immediately(ri), tid(threadid()) {}
     NodeID id;
     IPAddress ip;
     NodeID key;
+
+    bool return_immediately;
     
     // for debugging
     unsigned tid;
