@@ -18,6 +18,7 @@ foreach my $log (@logs) {
     }
 
     open( LOG, "<$log" ) or die( "Couldn't open $log" );
+    print STDERR "$log\n";
 
     my $base = 0; 
     my $redun = 0;
@@ -30,6 +31,7 @@ foreach my $log (@logs) {
 	$stabtimer = $4;
     }
 
+    my $total_time = 0;
     my $total_hops = 0;
     my $num_lookups = 0;
     my $total_msgs = 0;
@@ -42,7 +44,8 @@ foreach my $log (@logs) {
 	    my $hops = $4;
 	    my $failures = $5;
 
-	    $total_hops += $time;
+	    $total_time += $time;
+	    $total_hops += $hops;
 	    $num_lookups++;
 	    if( !($complete eq "1" and $correct eq "1") ) {
  		$num_incorrect++;
@@ -58,18 +61,20 @@ foreach my $log (@logs) {
 	    }
 
 	} else {
-	    die( "unrecognized line: $_" );
+#	    die( "unrecognized line: $_" );
+	    next;
 	}
 
     }
 
-#    print STDERR "$log\n";
     my $av_hop = $total_hops/$num_lookups;
+    my $av_time = $total_time/$num_lookups;
     # only print it if this is an acceptable incorrectness rate
     if( ($num_incorrect*100/$num_lookups) > $perinc_low and
 	($num_incorrect*100/$num_lookups) <= $perinc_high ) {
 	print "\# $base $redun $rln $stabtimer:\n";
-	print "$total_msgs $av_hop\n";
+	print "$total_msgs $av_time $av_hop " . 
+	    (1-$num_incorrect/$num_lookups) . "\n";
     }
 
     close( LOG );
