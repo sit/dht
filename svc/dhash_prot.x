@@ -56,7 +56,7 @@ struct s_dhash_insertarg {
   int offset;
   store_status type;
   dhash_valueattr attr;
-  bool last; // used by the merkle code only
+  bool last; /* used by the merkle code only */
 };
 
 struct s_dhash_fetch_arg {
@@ -163,17 +163,17 @@ program DHASH_PROGRAM {
 
 
 
-//  --------------------------------------------------------------------------
-//  The DHASHGATEWAY_PROGRAM is the very narrow interface between clients of 
-//  dhash (such as chordcd, sfsrodb, dbm) and the lsd process.  Since this RPC 
-//  interface is intended to be transported over a unix domain socket, blocks 
-//  are retrieved/inserted in their entirety, ie. are not broken into chunks. 
-
+/*  -------------------------------------------------------------------------- 
+ *  The DHASHGATEWAY_PROGRAM is the very narrow interface between clients of 
+ *  dhash (such as chordcd, sfsrodb, dbm) and the lsd process.  Since this RPC 
+ *  interface is intended to be transported over a unix domain socket, blocks 
+ *  are retrieved/inserted in their entirety, ie. are not broken into chunks. 
+ */
 
 struct dhash_insert_arg {
-  chordID     blockID;    // the key
-  dhash_value block;  // the data block
-  dhash_ctype ctype;  // and type of the data block
+  chordID     blockID;    /* the key */
+  dhash_value block;      /* the data block */
+  dhash_ctype ctype;      /* and type of the data block */
   bool usecachedsucc;
 };
 

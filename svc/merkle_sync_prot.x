@@ -6,8 +6,8 @@ enum merkle_stat {
   MERKLE_ERR = 1
 };
 
-////////////////////////////////////////////////////////////
-// GETNODE
+/***********************************************************/
+/* GETNODE */
 
 struct getnode_arg {
   chordID dstID;
@@ -25,7 +25,7 @@ struct merkle_rpc_node {
   merkle_hash hash;
 
   merkle_hash child_hash<64>;
-  // only valid when isleaf == true
+  /* only valid when isleaf == true */
   bool child_isleaf<64>; 
 };
 
@@ -40,8 +40,8 @@ union getnode_res switch (merkle_stat status) {
    void;
 };
 
-////////////////////////////////////////////////////////////
-// GETBLOCKLIST
+/*************************************************************/
+/* GETBLOCKLIST */
 
 struct getblocklist_arg {
   chordID dstID;
@@ -60,10 +60,8 @@ union getblocklist_res switch (merkle_stat status) {
    void;
 };
 
-////////////////////////////////////////////////////////////
-// GETBLOCKRANGE
-
-
+/*************************************************************/
+/* GETBLOCKRANGE */
 
 struct getblockrange_arg {
   chordID dstID;
@@ -72,8 +70,8 @@ struct getblockrange_arg {
   bigint rngmax;
   bool bidirectional;
 
-  merkle_hash prefix;  // XXX kill these??
-  int depth;           // ???
+  merkle_hash prefix;  /* XXX kill these?? */
+  int depth;           /* ??? */
 
   merkle_hash xkeys<64>;
 };
