@@ -20,15 +20,31 @@ struct replica_t {
   uint size;
   u_char *buf;
   
-  replica_t () : seqnum (0) { };
+  replica_t () : seqnum (0), size (0), buf (NULL) { };
+
+  replica_t (char *bytes, uint sz) : buf (NULL)
+  {
+    size = sizeof (size) + sizeof (seqnum);
+    bcopy (bytes + sizeof (size), &seqnum, sizeof (seqnum));
+    if (sz-size < 0) {
+      warn << "Fatal replica_t: Negative size\n";
+      exit (-1);
+    }
+    //No idea if this is right.
+    nodes.setsize (sz-size);
+    bcopy (bytes + sizeof (size) + sizeof (seqnum), nodes.base (), sz-size);
+  }
+
   ~replica_t () { if (buf) free (buf); nodes.clear (); }
+
   u_char *bytes ()
   {
     if (buf) free (buf);
-    size = sizeof (seqnum) + nodes.size ();
+    size = sizeof (uint) + sizeof (seqnum) + nodes.size ();
     buf = (u_char *) malloc (size);
-    bcopy (&seqnum, buf, sizeof (seqnum));
-    bcopy (nodes.base (), buf + sizeof (seqnum), nodes.size ());
+    bcopy (&size, buf, sizeof (uint));
+    bcopy (&seqnum, buf + sizeof (uint), sizeof (seqnum));
+    bcopy (nodes.base (), buf + sizeof (uint) + sizeof (seqnum), nodes.size ());
     return buf;
   }
 };
@@ -39,22 +55,35 @@ struct keyhash_meta {
   uint size;
   u_char *buf;
   
-  keyhash_meta () 
+  keyhash_meta () : size (0), buf (NULL)
   {
     accepted.seqnum = 0;
     bzero (&accepted.proposer, sizeof (chordID));        
   }
+
+  keyhash_meta (char *bytes, uint sz) : size (sz), buf (NULL)
+  {
+    uint csize;
+    bcopy (bytes + sizeof (uint), &csize, sizeof (uint));
+    config = replica_t (bytes + sizeof (uint), csize);
+    bcopy (bytes + sizeof (uint) + csize, &accepted.seqnum, sizeof (u_int64_t));
+    bcopy (bytes + sizeof (uint) + csize + sizeof (u_int64_t),
+	   &accepted.proposer, sizeof (chordID));
+  }
+
   ~keyhash_meta () { if (buf) free (buf); }
+
   u_char *bytes ()
   {
     if (buf) free (buf);
     u_char *cbuf = config.bytes ();
-    size = config.size + sizeof (u_int64_t) + sizeof (chordID);
+    size = sizeof (uint) + config.size + sizeof (u_int64_t) + sizeof (chordID);
     buf = (u_char *) malloc (size);
-    bcopy (cbuf, buf, config.size);
-    bcopy (&accepted.seqnum, buf + config.size, sizeof (u_int64_t));
-    bcopy (&accepted.proposer, buf + config.size + sizeof (u_int64_t),
-	   sizeof (chordID));
+    bcopy (&size, buf, sizeof (uint));
+    bcopy (cbuf, buf + sizeof (uint), config.size);
+    bcopy (&accepted.seqnum, buf + sizeof (uint) + config.size, sizeof (u_int64_t));
+    bcopy (&accepted.proposer, buf + sizeof (uint) + config.size + 
+	   sizeof (u_int64_t), sizeof (chordID));
     return buf;
   }
 
@@ -67,10 +96,33 @@ struct dhc_block {
   uint size;
   u_char *buf;
 
-  dhc_block ()
+  dhc_block () : size (0), buf (NULL)
   {
     meta = New refcounted<keyhash_meta>;
     data = New refcounted<keyhash_data>;
+  }
+
+  dhc_block (char *bytes, int sz)
+  {
+    uint msize;
+    size = sizeof (chordID);
+    bcopy (bytes, &id, sizeof (chordID));
+    bcopy (bytes + sizeof (chordID), &msize, sizeof (uint));
+    size += msize;
+    meta = New refcounted<keyhash_meta> (bytes + sizeof (chordID), msize);
+    size += sizeof (u_int64_t) + sizeof (chordID);
+    data = New refcounted<keyhash_data>;
+    bcopy (bytes + sizeof (chordID) + msize, &data->tag.ver, sizeof (u_int64_t));
+    bcopy (bytes + sizeof (chordID) + msize + sizeof (u_int64_t),
+	   &data->tag.writer, sizeof (chordID));
+    int data_size = sz - size;
+    if (data_size >= 0)
+      data->data.set (bytes + sizeof (chordID) + msize + sizeof (u_int64_t) + 
+		      sizeof (chordID), data_size);
+    else {
+      warn << "dhc_block: Fatal exceeded end of pointer!!!\n";
+      exit (-1);
+    }
   }
 
   ~dhc_block () 
@@ -84,18 +136,20 @@ struct dhc_block {
   {
     if (buf) free (buf);
     u_char *mbuf = meta->bytes ();
-    size = sizeof (chordID) + meta->size + sizeof (u_int64_t) + sizeof (chordID) +
-      data->data.size ();
+    size = sizeof (chordID) + meta->size + sizeof (u_int64_t) + 
+      sizeof (chordID) + data->data.size ();
     buf = (u_char *) malloc (size);
     bcopy (&id, buf, sizeof (chordID));
     bcopy (mbuf, buf + sizeof (chordID), meta->size);
-    bcopy (&data->tag.ver, buf + sizeof (chordID) + meta->size, sizeof (u_int64_t));
-    bcopy (&data->tag.writer, buf + sizeof (chordID) + meta->size + sizeof (u_int64_t),
-	   sizeof (chordID));
+    bcopy (&data->tag.ver, buf + sizeof (chordID) + meta->size, 
+	   sizeof (u_int64_t));
+    bcopy (&data->tag.writer, buf + sizeof (chordID) + meta->size + 
+	   sizeof (u_int64_t), sizeof (chordID));
     bcopy (data->data.base (), buf + sizeof (chordID) + meta->size + 
 	   sizeof (u_int64_t) + sizeof (chordID), data->data.size ());
     return buf;
   }
+  
 };
 
 struct paxos_state_t {
