@@ -145,7 +145,6 @@ class dhash {
   void fetchsvc_cb (long xid, dhash_fetch_arg *arg, ptr<dbrec> val, dhash_stat err);
   void storesvc_cb (long xid, dhash_insertarg *arg, dhash_stat err);
   
-  void fetch (chordID id, cbvalue cb);
   void fetch_cb (cbvalue cb,  ptr<dbrec> ret);
 
   void fetchiter_svc_cb (long xid, dhash_fetch_arg *farg,
@@ -181,7 +180,6 @@ class dhash {
   void check_replicas_traverse_cb (chordID to, chordID key);
   void fix_replicas_txerd (dhash_stat err);
 
-  dhash_stat key_status(chordID n);
   void change_status (chordID key, dhash_stat newstatus);
 
   void transfer_key (chordID to, chordID key, store_status stat, 
@@ -246,6 +244,9 @@ class dhash {
   void accept(ptr<axprt_stream> x);
 
   void print_stats ();
+  void fetch (chordID id, cbvalue cb);
+  dhash_stat key_status(chordID n);
+    
 };
 
 

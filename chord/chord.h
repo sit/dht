@@ -297,7 +297,8 @@ class chord : public virtual refcount {
   };
   chordID clnt_ID () {
     return active->my_ID ();
-  }
+  };
+  
 };
 
 extern ptr<chord> chordnode;

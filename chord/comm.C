@@ -25,6 +25,7 @@
 
 void
 locationtable::doForeignRPC_cb (frpc_state *C, rpc_program prog,
+				ptr<aclnt> c, 
 				clnt_stat err)
 {
   if ((err) || (C->res->status)) {
@@ -87,37 +88,25 @@ locationtable::doRPC (chordID &ID, rpc_program prog, int procno,
   assert (l->refcnt >= 0);
   touch_cachedlocs (l);
 
-  doRPC_cbstate *st = New doRPC_cbstate (prog, procno, in, out, cb, ID);
-  aclntudp_create (l->inetaddr,
-		   l->addr.port,
-		   chord_program_1,
-		   wrap (this, &locationtable::doRPC_gotaxprt, st, prog));
-};
-
-void
-locationtable::doRPC_gotaxprt (doRPC_cbstate *st, 
-			       rpc_program prog,
-			       ptr<aclnt> c,
-			       clnt_stat err)
-{
-  
-  if ( (err) || (c == NULL)) {
-    chordnode->deletefingers (st->ID);
-    (st->cb) (RPC_CANTSEND);
+  ptr<aclnt> c = aclnt::alloc (dgram_xprt, chord_program_1, 
+			       (sockaddr *)&(l->saddr));
+  if (c == NULL) {
+    chordnode->deletefingers (ID);
+    (cb) (RPC_CANTSEND);
     return;
   }
   
   if (prog.progno == CHORD_PROGRAM) {
     u_int64_t s = getusec ();
-    c->timedcall (TIMEOUT, st->procno, st->in, st->out, 
+    c->timedcall (TIMEOUT, procno, in, out, 
 	     wrap (mkref (this), &locationtable::doRPCcb,
-		   st, s));
+		   ID, cb, s, c));
   } else { 
-    xdrproc_t inproc = prog.tbl[st->procno].xdr_arg;
+    xdrproc_t inproc = prog.tbl[procno].xdr_arg;
     if (!inproc) return;
     
     xdrsuio x (XDR_ENCODE);
-    if (!inproc (x.xdrp (), st->in)) {
+    if (!inproc (x.xdrp (), in)) {
       return;
     }
     
@@ -125,22 +114,18 @@ locationtable::doRPC_gotaxprt (doRPC_cbstate *st,
     char *marshalled_data = suio_flatten (x.uio ());
     
     chord_RPC_arg farg;
-    farg.v.n = st->ID;
+    farg.v.n = ID;
     farg.host_prog = prog.progno;
-    farg.host_proc = st->procno;
+    farg.host_proc = procno;
     farg.marshalled_args.setsize (marshalled_len);
     memcpy (farg.marshalled_args.base (), marshalled_data, marshalled_len);
     delete marshalled_data;
     
-    location *l = getlocation (st->ID);
-    assert (l);
-    
     chord_RPC_res *res = New chord_RPC_res ();
-    frpc_state *C = New frpc_state (res, st->out, st->procno, st->cb,
+    frpc_state *C = New frpc_state (res, out, procno, cb,
 				    l, getusec ());
     c->timedcall (TIMEOUT, CHORDPROC_HOSTRPC, &farg, res, 
-	     wrap (mkref(this), &locationtable::doForeignRPC_cb, C, prog)); 
-    delete st;
+	     wrap (mkref(this), &locationtable::doForeignRPC_cb, C, prog, c)); 
   }
 
 
@@ -148,14 +133,15 @@ locationtable::doRPC_gotaxprt (doRPC_cbstate *st,
 
 
 void
-locationtable::doRPCcb (doRPC_cbstate *st, u_int64_t s, clnt_stat err)
+locationtable::doRPCcb (chordID ID, aclnt_cb cb,  u_int64_t s, 
+			ptr<aclnt> c, clnt_stat err)
 {
   
   if (err) {
     nrpcfailed++;
-    chordnode->deletefingers (st->ID);
+    chordnode->deletefingers (ID);
   } else {
-    location *l = getlocation (st->ID);
+    location *l = getlocation (ID);
     assert (l);
     u_int64_t lat = getusec () - s;
     l->rpcdelay += lat;
@@ -164,8 +150,7 @@ locationtable::doRPCcb (doRPC_cbstate *st, u_int64_t s, clnt_stat err)
     nrpc++;
     if (lat > l->maxdelay) l->maxdelay = lat;
   }
-  (st->cb) (err);
-  delete st;
+  (cb) (err);
 }
 
 void

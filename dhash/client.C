@@ -37,23 +37,19 @@ dhashclient::dispatch (svccb *sbp)
     {
       warnt("DHASH: lookup_request");
       
-      /* OLD SCHOOL lookup
-      clntnode->find_successor (arg->key, 
-				wrap (this, &dhashclient::lookup_findsucc_cb, 
-				      sbp));
-      */
       dhash_fetch_arg *farg = sbp->template getarg<dhash_fetch_arg> ();
-
-      ptr<dhash_fetch_arg> arg = New refcounted<dhash_fetch_arg> (*farg);
       
+      ptr<dhash_fetch_arg> arg = New refcounted<dhash_fetch_arg> (*farg);
+
       chordID next = clntnode->lookup_closestpred (arg->key);
       dhash_fetchiter_res *i_res = New dhash_fetchiter_res (DHASH_CONTINUE);
       
       route path;
       path.push_back (next);
-      clntnode->doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, arg, i_res,
+      clntnode->doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, arg,i_res,
 		       wrap(this, &dhashclient::lookup_iter_cb, 
 			    sbp, i_res, path, 0));
+      
 
     } 
     break;
@@ -277,6 +273,7 @@ dhashclient::lookup_iter_cb (svccb *sbp,
 	dhash_fetchiter_res *nres = New dhash_fetchiter_res (DHASH_CONTINUE);
 	path.push_back (next);
 	assert (path.size () < 1000);
+
 	clntnode->doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, 
 			 rarg, nres,
 			 wrap(this, &dhashclient::lookup_iter_cb, 

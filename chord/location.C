@@ -25,20 +25,23 @@
 locationtable::locationtable (ptr<chord> _chordnode, int set_rpcdelay, 
 			      int _max_cache, int _max_connections)
   : chordnode (_chordnode), max_cachedlocs (_max_cache), 
-    max_connections (_max_connections), rpcdelay (set_rpcdelay)
+     rpcdelay (set_rpcdelay)
 {
   nrpc = 0;
   nrpcfailed = 0;
   rpcdelay = 0;
-  nconnections = 0;
-  ndelayedconnections = 0;
   size_cachedlocs = 0;
-  size_connections = 0;
   nvnodes = 0;
   nnodes = 0;
   nnodessum = 0;
-
+  last_xid = 0;
+  
+  int dgram_fd = inetsocket (SOCK_DGRAM);
+  if (dgram_fd < 0) fatal << "Failed to allocate dgram socket\n";
+  dgram_xprt = axprt_dgram::alloc (dgram_fd, sizeof(sockaddr), 246000);
+  if (!dgram_xprt) fatal << "Failed to allocate dgram xprt\n";
 }
+
 
 void
 locationtable::replace_estimate (u_long o, u_long n)

@@ -63,7 +63,7 @@ chord::startchord (int myp)
     myp = ntohs (addr.sin_port);
   }
 
-  ptr<axprt_dgram> x = axprt_dgram::alloc (srvfd);
+  ptr<axprt_dgram> x = axprt_dgram::alloc (srvfd, sizeof(sockaddr), 246000);
   ptr<asrv> s = asrv::alloc (x, chord_program_1);
   s->setcb (wrap (mkref(this), &chord::dispatch, s, x));
   return myp;
@@ -101,11 +101,12 @@ chord::newvnode (cbjoin_t cb)
   chordID newID = initID (nvnode);
   locations->insert (newID, myaddress.hostname, myaddress.port);
   ptr<vnode> vnodep = New refcounted<vnode> (locations, mkref (this), newID);
+  if (!active) active = vnodep;
   nvnode++;
   warn << "insert: " << newID << "\n";
   vnodes.insert (newID, vnodep);
   vnodep->join (cb);
-  if (!active) active = vnodep;
+
   return vnodep;
 }
 
@@ -115,6 +116,8 @@ chord::newvnode (chordID &x, cbjoin_t cb)
   if (x != wellknownID) 
     locations->insert (x, myaddress.hostname, myaddress.port);
   ptr<vnode> vnodep = New refcounted<vnode> (locations, mkref (this), x);
+  if (!active) active = vnodep;
+
   nvnode++;
   warn << "insert: " << x << "@" << myaddress.hostname << "(" 
        << myaddress.port << ")\n";
@@ -126,7 +129,6 @@ chord::newvnode (chordID &x, cbjoin_t cb)
     vnodep->stabilize ();
     (*cb) (vnodep);
   }
-  if (!active) active = vnodep;
   return vnodep;
 }
 

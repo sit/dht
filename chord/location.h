@@ -67,7 +67,8 @@ struct location {
   int refcnt;	// locs w. refcnt == 0 are in the cache; refcnt > 0 are fingers
   chordID n;
   net_address addr;
-  in_addr inetaddr;
+
+  sockaddr_in saddr;
 
   tailq<doRPC_cbstate, &doRPC_cbstate::connectlink> connectlist;
   ihash_entry<location> fhlink;
@@ -85,7 +86,10 @@ struct location {
     nrpc = 0;
     maxdelay = 0;
     struct hostent *h = gethostbyname (_r.hostname.cstr ());
-    inetaddr.s_addr = *(u_int32_t *)(h->h_addr);
+    bzero(&saddr, sizeof(sockaddr_in));
+    saddr.sin_family = AF_INET;
+    saddr.sin_addr.s_addr = *(u_int32_t *)(h->h_addr);
+    saddr.sin_port = htons (addr.port);
   };
 
   location (chordID &_n, sfs_hostname _s, int _p) : n (_n) {
@@ -96,8 +100,10 @@ struct location {
     nrpc = 0;
     maxdelay = 0;
     struct hostent *h = gethostbyname (_s.cstr ());
-    inetaddr.s_addr = *(u_int32_t *)(h->h_addr);
-
+    bzero(&saddr, sizeof(sockaddr_in));
+    saddr.sin_family = AF_INET;
+    saddr.sin_addr.s_addr = *(u_int32_t *)(h->h_addr);
+    saddr.sin_port = htons (addr.port);
   };
   ~location () {
     warnx << "~location: delete " << n << "\n";
@@ -115,35 +121,32 @@ class locationtable : public virtual refcount {
   ptr<chord> chordnode;
   ihash<chordID,location,&location::n,&location::fhlink,hashID> locs;
   tailq<location, &location::cachelink> cachedlocs;  // the cached location
-  tailq<location, &location::connlink> connections;  // active connections
-  tailq<location, &location::delaylink> delayedconnections;
+
   timecb_t *delayed_tmo;
   int size_cachedlocs;
   int max_cachedlocs;
-  int size_connections;
-  int max_connections;
+
   u_int64_t rpcdelay;
   u_int64_t nrpc;
   u_int64_t nrpcfailed;
-  unsigned nconnections;
-  unsigned ndelayedconnections;
 
   u_long nnodessum;
   u_long nnodes;
   unsigned nvnodes;
 
+  ptr<axprt_dgram> dgram_xprt;
+  ptr<aclnt> dgram_clnt;
+
   qhash<long, svccb *> octbl;
   unsigned long last_xid;
   
-  locationtable () : last_xid (0) {};
+  locationtable ();
 
   void connect_cb (location *l, callback<void, ptr<axprt_stream> >::ref cb, 
 		   int fd);
-  void doRPCcb (doRPC_cbstate *st, u_int64_t s, clnt_stat err);
-  void doRPC_gotaxprt (doRPC_cbstate *st,
-		       rpc_program prog,
-		       ptr<aclnt> c,
-		       clnt_stat err);
+  void doRPCcb (chordID ID, aclnt_cb cb, u_int64_t s, 
+		ptr<aclnt> c, clnt_stat err);
+
   void dorpc_connect_cb(location *l, ptr<axprt_stream> x);
   void chord_connect(chordID ID, callback<void, ptr<axprt_stream> >::ref cb);
   void decrefcnt (location *l);
@@ -193,6 +196,7 @@ class locationtable : public virtual refcount {
 		     aclnt_cb cb);
 
   void doForeignRPC_cb (frpc_state *C, rpc_program prog,
+			ptr<aclnt> c,
 			clnt_stat err);
 };
 
