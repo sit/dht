@@ -1,4 +1,4 @@
-/* $Id: tapestry.C,v 1.8 2003/09/29 23:08:28 strib Exp $ */
+/* $Id: tapestry.C,v 1.9 2003/09/30 19:01:31 strib Exp $ */
 #include "tapestry.h"
 #include <stdio.h>
 #include <math.h>
@@ -52,7 +52,7 @@ Tapestry::join(Args *args)
   // if we're the well known node, we're done
   if( ip() == wellknown_ip ) {
     joined = true;
-    _waiting_for_join->notify();
+    _waiting_for_join->notifyAll();
     return;
   }
 
@@ -176,7 +176,7 @@ Tapestry::join(Args *args)
   }
 
   joined = true;
-  _waiting_for_join->notify();
+  _waiting_for_join->notifyAll();
   TapDEBUG(2) << "join done" << endl;
   TapDEBUG(2) << *_rt << endl;
 

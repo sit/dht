@@ -1,4 +1,4 @@
-/* $Id: condvar.C,v 1.1 2003/09/29 23:08:28 strib Exp $ */
+/* $Id: condvar.C,v 1.2 2003/09/30 19:01:31 strib Exp $ */
 
 #include "condvar.h"
 using namespace std;
@@ -28,7 +28,7 @@ ConditionVar::wait()
 }
 
 void
-ConditionVar::notify()
+ConditionVar::notifyAll()
 {
 
   // wake all the sleeping guys
@@ -37,5 +37,18 @@ ConditionVar::notify()
     send(c, 0);
   }
   _waiters->clear();
+
+}
+
+void
+ConditionVar::notify()
+{
+
+  // wake the first guys
+  if( _waiters->size() > 0 ) {
+    Channel *c = _waiters->front();
+    send(c, 0);
+    _waiters->erase(&(_waiters->front()));
+  }
 
 }

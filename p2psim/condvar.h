@@ -1,4 +1,4 @@
-/* $Id: condvar.h,v 1.1 2003/09/29 23:08:28 strib Exp $ */
+/* $Id: condvar.h,v 1.2 2003/09/30 19:01:31 strib Exp $ */
 
 #ifndef __CONDVAR_H
 #define __CONDVAR_H
@@ -14,6 +14,7 @@ public:
 
   void wait();
   void notify();
+  void notifyAll();
 
 private:
   vector<Channel *> *_waiters;
