@@ -2,7 +2,7 @@
 #include "dhc_misc.h"
 #include "merkle_misc.h"
 
-dhc::dhc (ptr<vnode> node, str dbname, uint k, str sockname) : 
+dhc::dhc (ptr<vnode> node, str dbname, uint k) : 
   myNode (node), n_replica (k)
 {
 
@@ -248,19 +248,43 @@ dhc::recv_newconfig (user_args *sbp)
 {
   dhc_newconfig_arg *newconfig = sbp->template getarg<dhc_newconfig_arg> ();
   ptr<dbrec> rec = db->lookup (id2dbrec (newconfig->bID));
-  
-  if (!rec)
-    ptr<dhc_block> kb = New refcounted<dhc_block>;
-  else
-    ptr<dhc_block> kb = to_dhc_block (rec);
+  ptr<dhc_block> kb;
 
-  // Check whether b exists in hash table
+  if (!rec)
+    kb = New refcounted<dhc_block> (newconfig->bID);
+  else {
+    kb = to_dhc_block (rec);
+    if (tag_cmp (kb->data->tag, 
+		 newconfig->data.tag) > 0) {
+      warn << "dhc::recv_newconfig Block received is an older version.\n";
+      dhc_newconfig_res res (DHC_OLD_VER);
+      sbp->reply (&res);
+      return;
+    }    
+    if (kb->meta->config.seqnum != newconfig->old_conf_seqnum) {
+      dhc_newconfig_res res (DHC_CONF_MISMATCH);
+      sbp->reply (&res);
+      return;      
+    }
+  }
+
+  kb->data->tag = newconfig->data.tag;
+  kb->data->data.set (newconfig->data.data.base (), newconfig->data.data.size ());
+  kb->meta->config.seqnum = newconfig->old_conf_seqnum + 1;
+  kb->meta->config.nodes.setsize (newconfig->new_config.size ());
+  bcopy (newconfig->new_config.base(), kb->meta->config.nodes.base (), 
+	 kb->meta->config.nodes.size ());
+  db->insert (id2dbrec (kb->id), to_dbrec (kb));
+  
+  // Remove b if it exists in hash table
   dhc_soft *b = dhcs[newconfig->bID];
   if (b) {
+    dhcs.remove (b);
     delete b;
   }
-  // XXX lots more
-  
+
+  dhc_newconfig_res res (DHC_OK);
+  sbp->reply (&res);
 }
 
 void 

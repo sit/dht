@@ -1,9 +1,9 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.12 2003/07/28 02:24:21 fdabek Exp $
+# $Id: Makefile.am,v 1.13 2003/08/21 20:46:45 athicha Exp $
 
 $(PROGRAMS): $(LDEPS)
 
-noinst_LIBRARIES = libdhash.a libdhashclient.a
+noinst_LIBRARIES = libdhash.a libdhashclient.a 
 
 libdhashclient_a_SOURCES = dhashclient.C verify.C
 

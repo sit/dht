@@ -6,8 +6,6 @@
 #include <chord.h>
 #include <chord_types.h>
 #include <dhash_types.h>
-#include <location.h>
-#include <locationtable.h>
 #include <dhc_prot.h>
 
 extern void set_locations (vec<ptr<location> >, ptr<vnode>, vec<chordID>);
@@ -96,7 +94,7 @@ struct dhc_block {
   uint size;
   u_char *buf;
 
-  dhc_block () : size (0), buf (NULL)
+  dhc_block (chordID ID) : id(ID), size (0), buf (NULL)
   {
     meta = New refcounted<keyhash_meta>;
     data = New refcounted<keyhash_data>;
@@ -212,11 +210,14 @@ class dhc {
   
  public:
 
-  dhc (ptr<vnode>, str, uint, str);
+  dhc (ptr<vnode>, str, uint);
   ~dhc () {};
   
   void recon (chordID);
   void dispatch (user_args *);
+  
+  //just for testing...
+  ref<dbfe> getdb () { return db; }
   
 };
 

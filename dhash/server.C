@@ -64,6 +64,8 @@ int JOSH = getenv("JOSH") ? atoi(getenv("JOSH")) : 0;
 
 #include <configurator.h>
 
+int DHC = getenv("DHC") ? atoi(getenv("DHC")) : 0;
+
 struct dhash_config_init {
   dhash_config_init ();
 } dci;
@@ -140,7 +142,7 @@ open_worker (ptr<dbfe> mydb, str name, dbOptions opts, str desc)
   }
 }
 
-dhash_impl::dhash_impl (str dbname, u_int k) 
+dhash_impl::dhash_impl (str dbname, u_int k) //: dhcs (dbname)
 {
 
   missing_outstanding = 0;
@@ -225,6 +227,12 @@ dhash_impl::init_after_chord (ptr<vnode> node)
     delaycb (keyhashtm (), wrap (this, &dhash_impl::keyhash_mgr_timer));
   pmaint_obj = New pmaint (cli, host_node, db, 
 			   wrap (this, &dhash_impl::db_delete_immutable));
+
+#if 0  
+  // dhash pk block consistency  
+  if (DHC) 
+    dhc_mgr = New refcounted<dhc> (host_node, dhcs, nreplica);
+#endif    
 }
 
 

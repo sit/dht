@@ -1,4 +1,4 @@
-dnl $Id: configure.in,v 1.43 2003/08/13 15:31:57 jsr Exp $
+dnl $Id: configure.in,v 1.44 2003/08/21 20:46:44 athicha Exp $
 dnl
 dnl Process this file with autoconf to produce a configure script.
 dnl
@@ -68,7 +68,7 @@ AC_EGREP_HEADER(sfspriv,
 )
 
 dnl let directories share header files
-for lib in utils merkle chord dhash sfsrodb svc lsd proxy; do
+for lib in utils merkle chord dhc dhash sfsrodb svc lsd proxy; do
     CPPFLAGS="-I"'$(top_srcdir)'"/$lib $CPPFLAGS"
 done
     CPPFLAGS="-I"'$(top_builddir)'"/svc $CPPFLAGS"
@@ -81,4 +81,4 @@ AC_OUTPUT(Makefile svc/Makefile utils/Makefile
 	merkle/Makefile chord/Makefile chordcd/Makefile 
 	proxy/Makefile devel/Makefile
 	test/Makefile tst/Makefile
-	melody/Makefile usenet/Makefile)
+	melody/Makefile dhc/Makefile usenet/Makefile)

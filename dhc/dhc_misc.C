@@ -1,3 +1,6 @@
+#include <id_utils.h>
+#include <location.h>
+#include <locationtable.h>
 #include "dhc_misc.h"
 
 void
@@ -79,3 +82,16 @@ paxos_cmp (paxos_seqnum_t a, paxos_seqnum_t b)
   return 0;
 }
 
+int 
+tag_cmp (tag_t a, tag_t b)
+{
+  if (a.ver > b.ver)
+    return 1;
+  if (a.ver < b.ver)
+    return -1;
+  if (a.writer > b.writer)
+    return 1;
+  if (a.writer < b.writer)
+    return -1;
+  return 0;
+}

@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.24 2003/07/14 18:47:57 sit Exp $
+# $Id: Makefile.am,v 1.25 2003/08/21 20:46:44 athicha Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -7,7 +7,8 @@ if GTK_AVAILABLE
 VIS = vis
 endif
 
-noinst_PROGRAMS = dbm typetest $(VIS) walk builddb dbdump findroute coords filestore
+noinst_PROGRAMS = dbm typetest $(VIS) walk builddb dbdump findroute coords filestore \
+		  dhc_test
 
 MYLDADD =  ../dhash/libdhash.a ../merkle/libmerkle.a ../svc/libsvc.la
 
@@ -34,6 +35,11 @@ dbdump_LDADD = ../sfsrodb/libsfsrodb.a ../merkle/libmerkle.a $(DBLIB) $(LDADD)
 
 findroute_SOURCES = findroute.C
 findroute_LDADD = ../chord/libchord.a ../svc/libsvc.la ../utils/libutil.a $(LDADD)
+
+dhc_test_SOURCES = dhc_test.C
+dhc_test_LDADD = ../dhash/libdhash.a ../dhc/libdhc.a ../merkle/libmerkle.a \
+		 ../chord/libchord.a ../utils/libutil.a ../svc/libsvc.la \
+                 $(DBLIB) $(LDADD)
 
 if GTK_AVAILABLE
 vis_SOURCES = vis.C

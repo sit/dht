@@ -8,7 +8,8 @@ enum dhc_stat {
    DHC_PROP_MISMATCH = 3,
    DHC_NOT_A_REPLICA = 4,
    DHC_ACCEPTED_PROP = 5,
-   DHC_RECON_INPROG = 6
+   DHC_RECON_INPROG = 6,
+   DHC_OLD_VER = 7
 };
 
 struct paxos_seqnum_t {
@@ -26,7 +27,6 @@ struct dhc_prepare_arg {
 struct dhc_prepare_resok {
    chordID new_config<>;	/* accepted new config for config_seqnum, if any */
 				/* otherwise, set resok to NULL */
-   /* replica_t new_config; */ 	
 };
 
 /* promise message */
@@ -42,7 +42,6 @@ struct dhc_propose_arg {
    chordID bID;
    paxos_seqnum_t round;
    chordID new_config<>;
-   /*replica_t new_config; 	 new configuration of nodes  */
 };
 
 /* accept message, previously called accept ack */
@@ -66,7 +65,6 @@ struct dhc_newconfig_arg {
    keyhash_data data;
    u_int64_t old_conf_seqnum;
    chordID new_config<>;
-   //replica_t new_config; 
 };
 
 union dhc_newconfig_res switch (dhc_stat status) {
