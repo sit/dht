@@ -58,7 +58,8 @@ my @args = ("-f",
 	    "-l", $ip,
 	    "-v", $v,
 	    "-m", $routeprot,
-	    "-b", $logbase);
+	    "-b", $logbase,
+	    "-t");
 
 # always start a well-known node running on a particular port.
 $harness->spawnlsd ($conf, @args, "-p", $wkport);
