@@ -44,7 +44,7 @@ dhashclient::dispatch (svccb *sbp)
       */
       ptr<dhash_fetch_arg> arg = New refcounted<dhash_fetch_arg> ();
       chordID next = clntnode->lookup_closestpred (arg->key);
-      dhash_fetchiter_res *i_res = New dhash_fetchiter_res (DHASH_COMPLETE);
+      dhash_fetchiter_res *i_res = New dhash_fetchiter_res (DHASH_CONTINUE);
       
       route path;
       path.push_back (next);
@@ -227,10 +227,11 @@ dhashclient::lookup_iter_cb (svccb *sbp,
 	warn << "Case III.b\n";
 	/* CASE III.b */
 	vec<chord_node> succ;
-	for (unsigned int i = 0; i < res->cont_res->succ_list.size (); i++)
+	for (unsigned int i = 0; i < res->cont_res->succ_list.size (); i++) {
+	  warn << "will query  " << res->cont_res->succ_list[i].x << "\n";
 	  succ.push_back (res->cont_res->succ_list[i]);
+	}
 	query_successors (succ, sbp, rarg);
-	return;
       }
     } else {
       warn << "Case IV\n";
@@ -273,25 +274,33 @@ dhashclient::query_successors_fetch_cb (vec<chord_node> succ,
 					dhash_res *fres, 
 					clnt_stat err) 
 {
-  if (fres->status == DHASH_OK) {
-    warnx << "qs: found it " << fres->resok->attr.size << " \n";
-    fres->resok->hops = succ.size ();
-    sbp->reply (fres);
-  } else if (succ.size () == 0) {
-    warn << "qs: no more succs\n";
-    sbp->replyref (DHASH_NOENT);
-  } else {
+  if ((err) || (fres->status != DHASH_OK)) {
     warnx << "qs: loop\n";
+
+    if (succ.size () == 0) {
+      warn << "qs: no more succs\n";
+      sbp->replyref (DHASH_NOENT);
+      return;
+    }
+
     chord_node next_succ = succ.pop_front ();
     clntnode->locations->cacheloc (next_succ.x,
 				   next_succ.r);
-
+    
     dhash_res *nfres = New dhash_res (DHASH_OK);
     clntnode->doRPC (next_succ.x, dhash_program_1, DHASHPROC_FETCH,
 		     rarg, nfres,
 		     wrap (this, &dhashclient::query_successors_fetch_cb,
 			   succ, sbp, rarg, nfres));
+    
+  } else if (fres->status == DHASH_OK) {
+    warnx << "qs: found it " << fres->resok->attr.size << " \n";
+    fres->resok->hops = succ.size ();
+    sbp->reply (fres);
+  } else {
+    fatal << "WTF\n";
   }
+
   delete fres;
 }
 

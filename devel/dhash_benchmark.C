@@ -131,7 +131,7 @@ fetch_block(int i, chordID key, int datasize)
 int
 fetch_block_async(int i, chordID key, int datasize) 
 {
-  dhash_res *res = New dhash_res ();
+  dhash_res *res = New dhash_res (DHASH_OK);
   char *buf = New char[datasize];
   struct timeval start;
   gettimeofday (&start, NULL);
@@ -198,7 +198,7 @@ afetch_cb (dhash_res *res, chordID key, char *buf, int i, struct timeval start, 
       res->resok->attr.size - off;
     arg->farg.start = off;
     arg->source = res->resok->source;
-    dhash_res *nres = New dhash_res();
+    dhash_res *nres = New dhash_res(DHASH_OK);
     out_op++;
     cp2p ()->call(DHASHPROC_TRANSFER, arg, nres, 
 		  wrap(&afetch_cb2, nres, buf, read, i, start));
@@ -290,7 +290,7 @@ main (int argc, char **argv)
 {
 
 
-  dhash_fetchiter_res *res = New dhash_fetchiter_res ();
+  dhash_fetchiter_res *res = New dhash_fetchiter_res (DHASH_CONTINUE);
   res = NULL;
 
   sfsconst_init ();

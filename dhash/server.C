@@ -88,7 +88,7 @@ dhash::dispatch (unsigned long procno,
 	return;
       }
 
-      dhash_fetchiter_res *res = New dhash_fetchiter_res;
+      dhash_fetchiter_res *res = New dhash_fetchiter_res (DHASH_CONTINUE);
 
       if (key_status (farg->key) != DHASH_NOTPRESENT) {
 	//fetch the key and return it, end of story
@@ -122,6 +122,7 @@ dhash::dispatch (unsigned long procno,
 	  nsucc.x = host_node->lookup_closestsucc (last);
 	  nsucc.r = host_node->chordnode->locations->getaddress (nsucc.x);
 	  succ_list.push_back (nsucc);
+	  last = nsucc.x;
 	}
 	res->cont_res->succ_list.set (succ_list.base (), succ_list.size ());
 
@@ -201,7 +202,7 @@ void
 dhash::fetchiter_svc_cb (long xid, dhash_fetch_arg *arg,
 			 ptr<dbrec> val, dhash_stat err) 
 {
-  dhash_fetchiter_res *res = New dhash_fetchiter_res ();
+  dhash_fetchiter_res *res = New dhash_fetchiter_res (DHASH_CONTINUE);
   if (err) res->set_status (DHASH_NOENT);
   else {
     res->set_status (DHASH_COMPLETE);
@@ -319,7 +320,7 @@ dhash::transfer_initial_keys ()
   ptr<dhash_getkeys_arg> arg = New refcounted<dhash_getkeys_arg>;
   arg->pred_id = host_node->my_ID ();
   
-  dhash_getkeys_res *res = New dhash_getkeys_res ();
+  dhash_getkeys_res *res = New dhash_getkeys_res (DHASH_OK);
   host_node->chordnode->doRPC(succ, dhash_program_1, DHASHPROC_GETKEYS, 
 			      arg, res,
 			      wrap(this, 
@@ -487,7 +488,7 @@ dhash::transfer_fetch_cb (chordID to, chordID key, store_status stat,
     unsigned int mtu = 1024;
     unsigned int off = 0;
     do {
-      dhash_storeres *res = New dhash_storeres ();
+      dhash_storeres *res = New dhash_storeres (DHASH_OK);
       ptr<dhash_insertarg> i_arg = New refcounted<dhash_insertarg> ();
       i_arg->key = key;
       i_arg->offset = off;
@@ -518,7 +519,7 @@ dhash::transfer_store_cb (callback<void, dhash_stat>::ref cb,
   if (err) 
     cb (DHASH_RPCERR);
   else if (res->status == DHASH_RETRY) {
-    dhash_storeres *nres = New dhash_storeres ();
+    dhash_storeres *nres = New dhash_storeres (DHASH_OK);
     host_node->chordnode->locations->cacheloc (res->pred->p.x, 
 					       res->pred->p.r);
 					       
