@@ -1,10 +1,12 @@
+#include <chord_util.h>
 #include <chord.h>
 
 /*
  *
  * Server.C
  *
- * This file implements methods of the p2p object which operate necessarily on a number of nodes
+ * This file implements methods of the p2p object which operate necessarily on 
+ * a number of nodes
  * 
  */
 
@@ -71,24 +73,26 @@ p2p::find_successor (sfs_ID &n, sfs_ID &x, cbroute_t cb)
   fap->x = x;
 
   route search_path;
-  doRPC (n, SFSP2PPROC_FINDCLOSESTSUCC, fap, res,
-	 wrap (mkref (this), &p2p::find_successor_cb, n, cb, res, search_path));
+  doRPC (n, SFSP2PPROC_FINDCLOSESTPRED, fap, res,
+	 wrap (mkref (this), &p2p::find_closestpred_cb, n, cb, res, 
+	       search_path));
 }
 
 void
-p2p::find_successor_cb (sfs_ID n, cbroute_t cb, 
+p2p::find_closestpred_cb (sfs_ID n, cbroute_t cb, 
 		       sfsp2p_findres *res, 
 		       route search_path,
 		       clnt_stat err)
 {
   if (err) {
-    warnx << "find_closestsucc_cb: RPC failure " << err << "\n";
+    warnx << "find_closestpred_cb: RPC failure " << err << "\n";
     deleteloc (n);
     cb (n, search_path, SFSP2P_RPCFAILURE);
   } else if (res->status) {
-    warnx << "find_closestsucc_cb: RPC error" << res->status << "\n";
+    warnx << "find_closestpred_cb: RPC error" << res->status << "\n";
     cb (n, search_path, res->status);
-  } else if (n != res->resok->node) {
+  } else if (!(between (res->resok->node, n, res->resok->x) ||
+	       res->resok->node == n)) {
     updateloc (res->resok->node, res->resok->r, n);
     search_path.push_back(res->resok->r);
     find_successor (res->resok->node, res->resok->x, cb);
@@ -103,35 +107,25 @@ p2p::find_successor_cb (sfs_ID n, cbroute_t cb,
 void
 p2p::find_predecessor (sfs_ID &n, sfs_ID &x, cbroute_t cb)
 {
-  sfsp2p_findarg *fap = New sfsp2p_findarg;
-  sfsp2p_findres *res = New sfsp2p_findres (SFSP2P_OK);
-  fap->x = x;
-  
-  route search_path;
-  doRPC (n, SFSP2PPROC_FINDCLOSESTPRED, fap, res,
-	 wrap (mkref (this), &p2p::find_predecessor_cb, n, cb, res, search_path));
+  find_successor (n, x, 
+		  wrap (mkref (this), &p2p::find_successor_cb, cb));
 }
 
 void
-p2p::find_predecessor_cb (sfs_ID n, cbroute_t cb, 
-			 sfsp2p_findres *res, 
-			 route search_path,
-			 clnt_stat err)
+p2p::find_successor_cb (cbroute_t cb, sfs_ID s, route search_path, 
+			sfsp2pstat status)
 {
-  if (err) {
-    warnx << "find_closestpred_cb: RPC failure " << err << "\n";
-    deleteloc (n);
-    cb (n, search_path, SFSP2P_RPCFAILURE);
-  } else if (res->status) {
-    warnx << "find_closestpred_cb: RPC error" << res->status << "\n";
-    cb (n, search_path, res->status);
-  } else if (n != res->resok->node) {
-    updateloc (res->resok->node, res->resok->r, n);
-    search_path.push_back(res->resok->r);
-    find_predecessor (res->resok->node, res->resok->x, cb);
+  if (status != SFSP2P_OK) {
+    cb (s, search_path, status);
   } else {
-    updateloc (res->resok->node, res->resok->r, n);
-    search_path.push_back(res->resok->r);
-    cb (res->resok->node, search_path, SFSP2P_OK);
+    get_predecessor (s, wrap (mkref(this), &p2p::find_predecessor_cb, 
+				   cb, search_path));
   }
+}
+
+void
+p2p::find_predecessor_cb (cbroute_t cb, route search_path, sfs_ID p, 
+			  net_address r, sfsp2pstat status)
+{
+  cb (p, search_path, status);
 }

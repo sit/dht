@@ -159,8 +159,8 @@ class p2p : public virtual refcount  {
   sfs_ID myID;
   ptr<aclnt> wellknownclnt;
 
-  wedge successor[NBIT+1];
-  wedge predecessor[NBIT+1];
+  wedge finger_table[NBIT+1];
+  wedge predecessor;
 
   ihash<sfs_ID,location,&location::n,&location::fhlink,hashID> locations;
   cache<sfs_ID, sfs_ID, 4096> succ_cache;
@@ -187,11 +187,15 @@ class p2p : public virtual refcount  {
   void set_closeloc (wedge &w);
   bool updatesucc (wedge &w, sfs_ID &x, net_address &r);
   bool updatepred (wedge &w, sfs_ID &x, net_address &r);
+#if 0
   bool noticepred (int k, sfs_ID &x, net_address &r);
+#endif
   bool noticesucc (int k, sfs_ID &x, net_address &r);
   bool notice (int k, sfs_ID &x, net_address &r);
   int successor_wedge (sfs_ID &n);
+#if 0
   int predecessor_wedge (sfs_ID &n);
+#endif
   void print ();
 
   void timeout(location *l);
@@ -203,20 +207,26 @@ class p2p : public virtual refcount  {
   void stabilize_getsucc_cb (sfs_ID s, net_address r, sfsp2pstat status);
   void stabilize_getpred_cb (sfs_ID s, net_address r, sfsp2pstat status);
   void stabilize_findsucc_cb (int i, sfs_ID s, route path, sfsp2pstat status);
-  void stabilize_findpred_cb (int i, sfs_ID p, route r, sfsp2pstat status);
+  void stabilize_findpred_cb (sfs_ID p, route r, sfsp2pstat status);
 
   void join ();
   void join_findpred_cb (sfs_ID pred, route r, sfsp2pstat status);
   void join_getsucc_cb (sfs_ID p, sfs_ID s, net_address r, sfsp2pstat status);
 
   void find_predecessor (sfs_ID &n, sfs_ID &x, cbroute_t cb);
-  void find_predecessor_cb (sfs_ID n, cbroute_t cb, 
-			    sfsp2p_findres *res, 
-			    route sp, clnt_stat err);
+  void find_successor_cb (cbroute_t cb, sfs_ID s, route search_path, 
+			  sfsp2pstat status);
+  void find_predecessor_cb (cbroute_t cb, route sp, sfs_ID p, net_address r,
+			    sfsp2pstat status);
+
   void find_successor (sfs_ID &n, sfs_ID &x, cbroute_t cb);
+  void find_closestpred_cb (sfs_ID n, cbroute_t cb, sfsp2p_findres *res, 
+			    route search_path, clnt_stat err);
+#if 0
   void find_successor_cb (sfs_ID n, cbroute_t cb, 
 			  sfsp2p_findres *res, 
 			  route sp, clnt_stat err);
+#endif
 
   void get_successor (sfs_ID n, cbsfsID_t cb);
   void get_successor_cb (sfs_ID n, cbsfsID_t cb, sfsp2p_findres *res, 
@@ -234,8 +244,7 @@ class p2p : public virtual refcount  {
   void bootstrap_done ();
   void bootstrap_succ_cb (int i, sfs_ID n, sfs_ID s, route path, 
 			  sfsp2pstat status);
-  void bootstrap_pred_cb (int i, sfs_ID n, sfs_ID s, route r, 
-			  sfsp2pstat status);
+  void bootstrap_pred_cb (sfs_ID n, sfs_ID s, route r, sfsp2pstat status);
 
   void doget_successor (svccb *sbp);
   void doget_predecessor (svccb *sbp);

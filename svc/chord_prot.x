@@ -61,20 +61,17 @@ program SFSP2P_PROGRAM {
 
 		SFSP2PPROC_GETPREDECESSOR (void) = 2;
 
-		sfsp2p_findres
-		SFSP2PPROC_FINDCLOSESTSUCC (sfsp2p_findarg) = 3;
-
 	  	sfsp2p_findres
-		SFSP2PPROC_FINDCLOSESTPRED (sfsp2p_findarg) = 4;
+		SFSP2PPROC_FINDCLOSESTPRED (sfsp2p_findarg) = 3;
 
 		sfsp2pstat
-		SFSP2PPROC_NOTIFY (sfsp2p_notifyarg) = 5;
+		SFSP2PPROC_NOTIFY (sfsp2p_notifyarg) = 4;
 
 		sfsp2pstat
-		SFSP2PPROC_ALERT (sfsp2p_notifyarg) = 6;
+		SFSP2PPROC_ALERT (sfsp2p_notifyarg) = 5;
 
 		sfsp2pstat
-        	SFSP2PPROC_CACHE (sfsp2p_cachearg) = 7;
+        	SFSP2PPROC_CACHE (sfsp2p_cachearg) = 6;
 	} = 1;
 } = 344447;
 

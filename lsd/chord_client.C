@@ -26,12 +26,6 @@ client::dispatch (svccb *sbp)
   case SFSP2PPROC_GETPREDECESSOR:
     defp2p->doget_predecessor (sbp);
     break;
-  case SFSP2PPROC_FINDCLOSESTSUCC:
-    {
-      sfsp2p_findarg *fa = sbp->template getarg<sfsp2p_findarg> ();
-      defp2p->dofindclosestsucc (sbp, fa);
-    }
-   break;
   case SFSP2PPROC_FINDCLOSESTPRED:
     {
       sfsp2p_findarg *fa = sbp->template getarg<sfsp2p_findarg> ();

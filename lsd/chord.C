@@ -57,18 +57,7 @@ p2p::noticesucc (int k, sfs_ID &x, net_address &r)
 {
   bool t = false;
   for (int i = k; i <= NBIT; i++) {
-    if (updatesucc (successor[i], x, r))
-      t = true;
-  }
-  return t;
-}
-
-bool
-p2p::noticepred (int k, sfs_ID &x, net_address &r)
-{
-  bool t = false;
-  for (int i = k; i <= NBIT; i++) {
-    if (updatepred (predecessor[i], x, r))
+    if (updatesucc (finger_table[i], x, r))
       t = true;
   }
   return t;
@@ -80,7 +69,7 @@ p2p::notice (int k, sfs_ID &x, net_address &r)
   bool t = false;
   if (noticesucc (k, x, r))
     t = true;
-  if (noticepred (k, x, r))
+  if (updatepred (predecessor, x, r))
     t = true;
   return t;
 }
@@ -90,18 +79,7 @@ int
 p2p::successor_wedge (sfs_ID &n)
 {
   for (int i = 0; i <= NBIT; i++) {
-    if (between (successor[i].start, successor[i].end, n))
-      return i;
-  }
-  assert (0);
-  return -1;
-}
-
-int
-p2p::predecessor_wedge (sfs_ID &n)
-{
-  for (int i = 0; i <= NBIT; i++) {
-    if (between (predecessor[i].start, predecessor[i].end, n))
+    if (between (finger_table[i].start, finger_table[i].end, n))
       return i;
   }
   assert (0);
@@ -175,10 +153,10 @@ p2p::deleteloc (sfs_ID &n)
   // warnx << "deleteloc: " << n << "\n";
   assert (n != myID);
   for (int i = 0; i <= NBIT; i++) {
-    if (predecessor[i].first == n)
-      predecessor[i].alive = false;
-    if (successor[i].first == n)
-      successor[i].alive = false;
+    if (predecessor.first == n)
+      predecessor.alive = false;
+    if (finger_table[i].first == n)
+      finger_table[i].alive = false;
   }
   location *l = locations[n];
   if (l) {
@@ -274,26 +252,24 @@ p2p::doRPC (sfs_ID &ID, int procno, const void *in, void *out,
 static void
 wedge_print (wedge &w)
 {
-  // warnx << w.start << " " << w.end << " first: " << w.first << " alive? " 
-  //	<< w.alive << "\n";
+  warnx << w.start << " " << w.end << " first: " << w.first << " alive? " 
+	<< w.alive << "\n";
 }
 
 void
 p2p::print ()
 {
   for (int i = 0; i <= NBIT; i++) {
-    // warnx << "succ " << i << ": ";
-    wedge_print (successor[i]);
+    warnx << "succ " << i << ": ";
+    wedge_print (finger_table[i]);
   }
-  for (int i = 0; i <= NBIT; i++) {
-    //warnx << "pred " << i << ": ";
-    wedge_print (predecessor[i]);
-  }
+  wedge_print (predecessor);
 }
+
 p2p::~p2p()
 {
-
 }
+
 p2p::p2p (str host, int hostport, const sfs_ID &hostID,
 	  int port, const sfs_ID &ID) :
   wellknownID (hostID),
@@ -309,31 +285,23 @@ p2p::p2p (str host, int hostport, const sfs_ID &hostID,
   myaddress.port = port;
   myaddress.hostname = myname ();
 
-  successor[0].start = successor[0].end = successor[0].first = myID;
-  successor[0].alive = true;
+  finger_table[0].start = finger_table[0].end = finger_table[0].first = myID;
+  finger_table[0].alive = true;
   warnx << "namemyID " << myaddress.hostname << "\n";
   warnx << "myID is " << myID << "\n";
   warnx << "myport is " << myaddress.port << "\n";
   for (int i = 1; i <= NBIT; i++) {
-    successor[i].start = successorID(myID, i-1);
-    successor[i].end = successorID(myID, i);
-    successor[i].end = decID (successor[i].end);
-    successor[i].first = myID;
-    successor[i].alive = true;
+    finger_table[i].start = successorID(myID, i-1);
+    finger_table[i].end = successorID(myID, i);
+    finger_table[i].end = decID (finger_table[i].end);
+    finger_table[i].first = myID;
+    finger_table[i].alive = true;
     warnx << "succ " << i << ": ";
-    wedge_print (successor[i]);
+    wedge_print (finger_table[i]);
   }
-  predecessor[0].start = predecessor[0].end = predecessor[0].first = myID;
-  predecessor[0].alive = true;
-  for (int i = 1; i <= NBIT; i++) {
-    predecessor[i].end = predecessorID (myID, i-1);
-    predecessor[i].start = predecessorID (myID, i);
-    predecessor[i].start = incID (predecessor[i].start);
-    predecessor[i].first = myID;
-    predecessor[i].alive = true;
-    warnx << "pred " << i << ": ";
-    wedge_print (predecessor[i]);
-  }
+  predecessor.start = predecessor.end = predecessor.first = myID;
+  predecessor.alive = true;
+
   location *l = New location (wellknownID, wellknownhost.hostname, wellknownhost.port,
 			      myID);
   locations.insert (l);
@@ -357,21 +325,16 @@ p2p::stabilize (int c)
 
   // warnx << "stabilize " << i << "\n";
 
-  if (!predecessor[1].alive) stable = false;
-  else get_predecessor (predecessor[1].first, 
+  if (!predecessor.alive) stable = false;
+  else get_successor (predecessor.first,
 		   wrap (mkref (this), &p2p::stabilize_getsucc_cb));
-  if (!successor[1].alive) stable = false;
-  else get_predecessor (successor[1].first,
+  if (!finger_table[1].alive) stable = false;
+  else get_predecessor (finger_table[1].first,
 		     wrap (mkref (this), &p2p::stabilize_getpred_cb));
-
   if (i > 1) {
-    if (!successor[i].alive) stable = false;
-    else find_successor (successor[i].first, successor[i].start,
+    if (!finger_table[i].alive) stable = false;
+    else find_successor (finger_table[i].first, finger_table[i].start,
 			  wrap (mkref (this), &p2p::stabilize_findsucc_cb, i));
-
-    if (!predecessor[i].alive) stable = false;
-    else find_predecessor (predecessor[i].first, predecessor[i].end,
-			  wrap (mkref (this), &p2p::stabilize_findpred_cb, i));
   }
   int time = uniform_random (0.5 * stabilize_timer, 1.5 * stabilize_timer);
   //warnx << "stabilize in " << time << " seconds\n";
@@ -386,11 +349,11 @@ p2p::stabilize_getsucc_cb (sfs_ID s, net_address r, sfsp2pstat status)
 {
   // receive first successor from my predecessor; in stable case it is me
   if (status) {
-    warnx << "stabilize_getsucc_cb: " << predecessor[1].first << " failure " 
+    warnx << "stabilize_getsucc_cb: " << predecessor.first << " failure " 
     	  << status << "\n";
     bootstrap ();
   } else {
-    if (updatepred (predecessor[1], s, r)) {
+    if (updatepred (predecessor, s, r)) {
       // print ();
       bootstrap ();
     }
@@ -402,11 +365,11 @@ p2p::stabilize_getpred_cb (sfs_ID p, net_address r, sfsp2pstat status)
 {
   // receive first predecessor from my successor; in stable case it is me
   if (status) {
-    warnx << "stabilize_getpred_cb: " << successor[1].first << " failure " 
+    warnx << "stabilize_getpred_cb: " << finger_table[1].first << " failure " 
 	  << status << "\n";
     bootstrap ();
   } else {
-    if (updatesucc (successor[1], p, r)) {
+    if (updatesucc (finger_table[1], p, r)) {
       // print ();
       bootstrap ();
     }
@@ -418,26 +381,12 @@ p2p::stabilize_findsucc_cb (int i, sfs_ID s, route search_path,
 			    sfsp2pstat status)
 {
   if (status) {
-    warnx << "stabilize_findsucc_cb: " << successor[i].first << " failure " 
+    warnx << "stabilize_findsucc_cb: " << finger_table[i].first << " failure " 
 	  << status << "\n";
     bootstrap ();
   } else {
     net_address r = search_path.pop_back();
-    if (updatesucc (successor[i], s, r)) {
-      bootstrap ();
-    }
-  }
-}
-
-void
-p2p::stabilize_findpred_cb (int i, sfs_ID p, route search_path, sfsp2pstat status)
-{
-  if (status) {
-    warnx << "stabilize_findpred_cb: " << status << "\n";
-    bootstrap ();
-  } else {
-    net_address r = search_path.pop_back();
-    if (updatepred (predecessor[i], p, r)) {
+    if (updatesucc (finger_table[i], s, r)) {
       bootstrap ();
     }
   }
@@ -463,7 +412,8 @@ p2p::join_findpred_cb (sfs_ID p, route search_path, sfsp2pstat status)
     join ();  // try again
   } else {
     net_address r = search_path.pop_back();
-    notice (1, p, r);
+    updatepred (predecessor, p, r);
+    warnx << "join_findpred_cb: pred is " << p << "\n";
     get_successor (p, wrap (mkref (this), &p2p::join_getsucc_cb, p));
   }
 }
@@ -472,18 +422,18 @@ void
 p2p::join_getsucc_cb (sfs_ID p, sfs_ID s, net_address r, sfsp2pstat status)
 {
   if (status) {
-    //    warnx << "join_getsucc_cb: " << status << "\n";
+    warnx << "join_getsucc_cb: " << status << "\n";
     join ();  // try again
   } else {
-    // warnx << "join_getsucc_cb: " << p << " " << s << "\n";
+    warnx << "join_getsucc_cb: " << p << " " << s << "\n";
     if (between (p, s, myID) || (p == s)) {
       // we found the first successor of myID: s. if p == s, then there is 
       // only one other node in the system; that node is my successor and 
       // predecessor.
-      //warnx << "join_getsucc_cb: succ is " << s << "\n";
+      warnx << "join_getsucc_cb: succ is " << s << "\n";
       notice (1, s, r);
-      if (successor[1].alive) notify (successor[1].first, myID);
-      if (predecessor[1].alive) notify (predecessor[1].first, myID);
+      if (finger_table[1].alive) notify (finger_table[1].first, myID);
+      if (predecessor.alive) notify (predecessor.first, myID);
       bootstrap ();
     } else {
       get_successor (s, wrap (mkref (this), &p2p::join_getsucc_cb, s));
@@ -494,7 +444,7 @@ p2p::join_getsucc_cb (sfs_ID p, sfs_ID s, net_address r, sfsp2pstat status)
 void
 p2p::bootstrap ()
 {
-  //warnx << "bootstrap\n";
+  warnx << "bootstrap\n";
   if (nbootstrap > 0) {
     //warnx << "bootstrap: we are busy bootstrapping\n";
     return;
@@ -504,32 +454,31 @@ p2p::bootstrap ()
   bootstrap_failure = false;
   stable = true;
   for (int i = 1; i <= NBIT; i++) {
-    if (!successor[i].alive) {
-      set_closeloc (successor[i]);
+    if (!finger_table[i].alive) {
+      set_closeloc (finger_table[i]);
     }
-    find_successor (successor[i].first, successor[i].start, 
+    find_successor (finger_table[i].first, finger_table[i].start, 
 		    wrap (mkref (this), &p2p::bootstrap_succ_cb, i, 
-			  successor[i].first));
-    if (!predecessor[i].alive) {
-      set_closeloc (predecessor[i]);
-    }
-    find_predecessor (predecessor[i].first, predecessor[i].end, 
-		      wrap (mkref (this), &p2p::bootstrap_pred_cb, i,
-			    predecessor[i].first));
+			  finger_table[i].first));
   }
+  if (!predecessor.alive) {
+    set_closeloc (predecessor);
+  }
+  find_predecessor (predecessor.first, predecessor.end, 
+    wrap (mkref (this), &p2p::bootstrap_pred_cb, predecessor.first));
 }
 
 void
 p2p::bootstrap_done ()
 {
-  // warnx << "bootstrap_done: stable? " << stable << " at " << gettime ()
-  //	<< " failures? " << 
-  // bootstrap_failure << "\n";
+  warnx << "bootstrap_done: stable? " << stable << " at " << gettime ()
+  	<< " failures? " << 
+  bootstrap_failure << "\n";
 
-  if (!successor[1].alive) stable = false;
-  else notify (successor[1].first, myID);
-  if (!predecessor[1].alive) stable = false;
-  else notify (predecessor[1].first, myID);
+  if (!finger_table[1].alive) stable = false;
+  else notify (finger_table[1].first, myID);
+  if (!predecessor.alive) stable = false;
+  else notify (predecessor.first, myID);
 
   if (!stable) 
     bootstrap ();
@@ -547,7 +496,7 @@ p2p::bootstrap_succ_cb (int i, sfs_ID n, sfs_ID s,
     bootstrap_failure = true;
   } else {
     net_address r = path.pop_back();
-    if (updatesucc (successor[i], s, r)) {
+    if (updatesucc (finger_table[i], s, r)) {
       // warnx << "bootstrap_succ_cb: updated\n";
       stable = false;
     }
@@ -557,7 +506,7 @@ p2p::bootstrap_succ_cb (int i, sfs_ID n, sfs_ID s,
 }
 
 void
-p2p::bootstrap_pred_cb (int i, sfs_ID n, sfs_ID p, route search_path, sfsp2pstat status)
+p2p::bootstrap_pred_cb (sfs_ID n, sfs_ID p, route search_path, sfsp2pstat status)
 {
   nbootstrap--;
   if (status) {
@@ -565,7 +514,7 @@ p2p::bootstrap_pred_cb (int i, sfs_ID n, sfs_ID p, route search_path, sfsp2pstat
     bootstrap_failure = true;
   } else {
     net_address r = search_path.pop_back();
-    if (updatepred (predecessor[i], p, r)) {
+    if (updatepred (predecessor, p, r)) {
       // warnx << "bootstrap_pred_cb: updated\n";
       stable = false;
     }
@@ -626,8 +575,8 @@ p2p::alert_cb (sfsp2pstat *res, clnt_stat err)
 void
 p2p::doget_successor (svccb *sbp)
 {
-  if (successor[1].alive) {
-    sfs_ID s = successor[1].first;
+  if (finger_table[1].alive) {
+    sfs_ID s = finger_table[1].first;
     sfsp2p_findres res(SFSP2P_OK);
     location *l = locations[s];
     assert (l);
@@ -642,8 +591,8 @@ p2p::doget_successor (svccb *sbp)
 void
 p2p::doget_predecessor (svccb *sbp)
 {
-  if (predecessor[1].alive) {
-    sfs_ID p = predecessor[1].first;
+  if (predecessor.alive) {
+    sfs_ID p = predecessor.first;
     sfsp2p_findres res(SFSP2P_OK);
     location *l = locations[p];
     assert (l);
@@ -656,37 +605,17 @@ p2p::doget_predecessor (svccb *sbp)
 }
 
 void
-p2p::dofindclosestsucc (svccb *sbp, sfsp2p_findarg *fa)
-{
-  sfsp2p_findres res(SFSP2P_OK);
-  sfs_ID s = myID;
-
-  for (int i = 0; i <= NBIT; i++) {
-    if ((predecessor[i].alive) && between (fa->x, s, predecessor[i].first)) {
-      s = predecessor[i].first;
-    }
-  }
-  // warnx << "dofindclosestsucc of " << fa->x << " is " << s << "\n";
-  location *l = locations[s];
-  assert (l);
-  res.resok->x = fa->x;
-  res.resok->node = s;
-  res.resok->r = l->addr;
-  sbp->reply (&res);
-}
-
-void
 p2p::dofindclosestpred (svccb *sbp, sfsp2p_findarg *fa)
 {
   sfsp2p_findres res(SFSP2P_OK);
   sfs_ID p = myID;
 
   for (int i = 0; i <= NBIT; i++) {
-    if ((successor[i].alive) && between (p, fa->x, successor[i].first)) {
-      p = successor[i].first;
+    if ((finger_table[i].alive) && between (p, fa->x, finger_table[i].first)) {
+      p = finger_table[i].first;
     }
   }
-  // warnx << "dofindclosestpred of " << fa->x << " is " << p << "\n";
+  warnx << "dofindclosestpred of " << fa->x << " is " << p << "\n";
   location *l = locations[p];
   assert (l);
   res.resok->x = fa->x;
@@ -721,11 +650,11 @@ p2p::dofindsucc (svccb *sbp, sfs_ID &n)
 {
 
   int i = successor_wedge (n);
-  if (!predecessor[i].alive) {
-    set_closeloc (predecessor[i]);
+  if (!predecessor.alive) {
+    set_closeloc (predecessor);
   }
 
-  find_successor (predecessor[i].first, n,
+  find_successor (predecessor.first, n,
 		  wrap (mkref (this), &p2p::dofindsucc_cb, sbp, n));
 }
 
