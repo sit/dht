@@ -38,7 +38,10 @@ main (int argc, char *argv[])
     r = dbe->set_tmp_dir (dbe, cpath);
     assert (!r);
     
+    // dbe->set_verbose (dbe, DB_VERB_DEADLOCK, 1);
+    // dbe->set_verbose (dbe, DB_VERB_WAITSFOR, 1);
     dbe->set_errfile (dbe, stdout);
+
     r = dbe->open (dbe, NULL, 
 		   DB_JOINENV,
 		   //		   DB_CREATE| DB_INIT_MPOOL | DB_INIT_LOCK | 
@@ -50,7 +53,7 @@ main (int argc, char *argv[])
   
   r = db_create(&db, dbe, 0);
   if (r) 
-    fatal << "couldn't open db: " << db_strerror(r) << "\n";
+    fatal << "couldn't create db: " << db_strerror(r) << "\n";
   
   if (mode == MODE_OLD) {
 #if ((DB_VERSION_MAJOR < 4) || ((DB_VERSION_MAJOR == 4) && (DB_VERSION_MINOR < 1)))
