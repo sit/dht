@@ -32,6 +32,7 @@ using namespace std;
 Topology::Topology()
 {
   _med_lat = 0;
+  _lossrate = 0;
 }
 
 Topology::~Topology()
@@ -64,12 +65,23 @@ Topology::parse(char *filename)
     if(words[0][0] == '#')
       continue;
 
-    // read topology string
+    // topology
     if(words[0] == "topology") {
       words.erase(words.begin());
       string topology = words[0];
       words.erase(words.begin());
       top = TopologyFactory::create(topology, &words);
+
+    // loss_rate
+    } else if(words[0] == "loss_rate") {
+      if(!top) {
+        cerr << "topology keyword must appear before loss_rate keyword" << filename << endl;
+	continue;
+      }
+      top->_lossrate = atoi(words[1].c_str());
+      assert(top->lossrate() >= 0 && top->lossrate() <= 100);
+
+    // failure_model
     } else if(words[0] == "failure_model") {
       if(!with_failure_model) {
         cerr << "warning: -f flag but found failure_model keyword. ignoring failure_model!" << filename << endl;
@@ -89,6 +101,7 @@ Topology::parse(char *filename)
     cerr << "the topology you specified is unknown" << endl;
     exit(-1);
   }
+
   if(!failure_model) {
     if (!with_failure_model) {
       vector<string> words;

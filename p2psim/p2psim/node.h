@@ -143,17 +143,14 @@ protected:
   // Same as doRPC, but this one is asynchronous
   template<class BT, class AT, class RT>
   unsigned asyncRPC(IPAddress dst,
-      void (BT::* fn)(AT *, RT *), AT *args, RT *ret, unsigned token = 0)
+      void (BT::* fn)(AT *, RT *), AT *args, RT *ret, Time timeout = 0, unsigned token = 0)
   {
     assert(dst);
-    if(token)
-      assert(!_rpcmap[token]);
-    else
-      while(!token || _rpcmap[token])
-        token = _token++;
+    while(!token || _rpcmap[token])
+      token = _token++;
 
     Thunk<BT, AT, RT> *t = _makeThunk(dst, dynamic_cast<BT*>(getpeer(dst)), fn, args, ret);
-    RPCHandle *rpch = _doRPC_send(dst, Thunk<BT, AT, RT>::thunk, Thunk<BT, AT, RT>::killme, (void *) t);
+    RPCHandle *rpch = _doRPC_send(dst, Thunk<BT, AT, RT>::thunk, Thunk<BT, AT, RT>::killme, (void *) t, timeout);
 
     if(!rpch)
       return 0;

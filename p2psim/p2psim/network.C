@@ -129,15 +129,24 @@ Network::send(Packet *p)
   if (src->ip () != dst->ip ())
     latency += p->_queue_delay;
 
-  // if the node was dead, we have to delay the packet a bit. (p->ok is set on
-  // the receiving side, so if it's false, this must be a reply. punish the
-  // packet by delaying it according to the failure model.)
+  //
+  // if the packet was still ok, see if it accidentally disappears due to
+  // lossrate.
+  //
+  // if the node was dead or the packet got lost, we have to delay the packet a
+  // bit. (p->ok is set on the receiving side, so if it's false, this must be a
+  // reply. punish the packet by delaying it according to the failure model.)
   //
   // if timeout value was passed to doRPC(), then doRPC has to return
   // [timeout]ms after it was started.  make sure we return by then.
   //
   // if timeout == 0, then let the failure model ADD some punishment.
   //
+  if(p->ok()) {
+    unsigned random_number = (unsigned) ((random() % 100) + 1);
+    p->_ok = _top->lossrate() <= random_number ? true : false;
+  }
+
   if(!p->ok()) {
     if(p->timeout()) {
       int tmplat = p->timeout() - _top->latency(dst->ip(), src->ip(), false);
