@@ -64,16 +64,19 @@ program CHORD_PROGRAM {
 
 		chord_nodelistres
         	CHORDPROC_GETSUCCLIST (chordID) = 6;
-		
+
                 chord_testandfindres
                 CHORDPROC_TESTRANGE_FINDCLOSESTPRED (chord_testandfindarg) = 7;
 
-		chord_nodeextres
+		chord_nodelistextres
 		CHORDPROC_GETPRED_EXT (chordID) = 10;
 
 		chord_nodelistextres
 		CHORDPROC_GETSUCC_EXT (chordID) = 12;
 
+		chord_nodelistres
+        	CHORDPROC_GETPREDLIST (chordID) = 13;
+		
 		chord_nodelistres
 		CHORDPROC_FINDROUTE (chord_findarg) = 15;
 	} = 1;
