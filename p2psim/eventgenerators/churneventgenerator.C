@@ -170,6 +170,7 @@ ChurnEventGenerator::kick(Observed *o, ObserverInfo *oi)
     // pick a time for the next lookup
     Time tolookup = next_exponential( _lookupmean );
     (*a)["key"] = get_lookup_key();
+    string tmptmp = (*a)["key"];
     if( now() + tolookup < _exittime ) {
       P2PEvent *e = New P2PEvent(now() + tolookup, ip, "lookup", a);
       add_event(e);
