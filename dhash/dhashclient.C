@@ -150,18 +150,14 @@ dhashclient::insert (bigint hash, sfs_pubkey2 key, sfs_sig2 sig,
   
   if (!xdr_sfs_pubkey2 (&x, &key) ||
       !xdr_sfs_sig2 (&x, &sig) ||
-      !XDR_PUTLONG (&x, &plen)) {
+      !XDR_PUTLONG (&x, &plen) || 
+      p.encode(x)) {
     vec<chordID> r;
     ptr<insert_info> i = New refcounted<insert_info>(hash, r);
     cb (DHASH_ERR, i); // marshalling failed.
     return;
   }
-  if (p.encode (x)) {
-    vec<chordID> r;
-    ptr<insert_info> i = New refcounted<insert_info>(hash, r);
-    cb (DHASH_ERR, i); // marshalling failed.
-    return;
-  }
+
   int m_len = x.uio ()->resid ();
   char *m_dat = suio_flatten (x.uio ());
   insert (hash, m_dat, m_len, cb, DHASH_KEYHASH, x.uio()->resid(), options);
