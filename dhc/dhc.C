@@ -6,8 +6,10 @@
 #include <locationtable.h>
 #include <dhash.h>
 
-int RECON_TM = getenv("DHC_RECON_TM") ? atoi(getenv("DHC_RECON_TM")) : 10;
+int RECON_TM = getenv("DHC_RECON_TM") ? atoi(getenv("DHC_RECON_TM")) : 15;
 int dhc_debug = getenv("DHC_DEBUG") ? atoi(getenv("DHC_DEBUG")) : 0;
+char out[200];
+int fd = open ("etna", O_WRONLY | O_APPEND | O_CREAT, 0777);
 
 dhc::dhc (ptr<vnode> node, str dbname, uint k) : 
   myNode (node), n_replica (k), recon_tm_rpcs (0)
@@ -24,8 +26,8 @@ dhc::dhc (ptr<vnode> node, str dbname, uint k) :
 
   db = New refcounted<dbfe> ();
   str dbs = strbuf () << dbname << ".dhc";
-  open_db (db, dbs, opts, "dhc: keyhash rep db file");
-  
+  open_db (db, dbs, opts, "dhc: keyhash rep db file");  
+
 }
 
 
@@ -105,6 +107,8 @@ dhc::recon_tm_lookup (ref<dhc_block> kb, bool guilty, vec<chord_node> succs,
 	gettimeofday (&tp, NULL);
 	start_recon = tp.tv_sec * (u_int64_t)1000000 + tp.tv_usec;
 	warn << myNode->my_ID () << " Start RECON at " << start_recon << "\n";
+	sprintf (out, "%llu RECON_START 1 0\n", start_recon);
+	write (fd, out, strlen (out) + 1);
 	recon (kb->id, wrap (this, &dhc::recon_tm_done));
       } else { // Case 2
 	if (dhc_debug)
@@ -116,10 +120,10 @@ dhc::recon_tm_lookup (ref<dhc_block> kb, bool guilty, vec<chord_node> succs,
 	arg->data.tag.writer = kb->data->tag.writer;
 	arg->data.data.setsize (kb->data->data.size ()); 
 	memmove (arg->data.data.base (), kb->data->data.base (), arg->data.data.size ());
-	warn << "kb->data->size = " << kb->data->data.size () << "\n";
-	//warn << "kb->data->data = " << str (kb->data->data.base (), kb->data->data.size ()) << "\n";
-	warn << "arg->data->size = " << arg->data.data.size () << "\n";
-	//warn << "arg->data->data = " << str (arg->data.data.base (), arg->data.data.size ()) << "\n";	
+	if (dhc_debug) {
+	  warn << "kb->data->size = " << kb->data->data.size () << "\n";
+	  warn << "arg->data->size = " << arg->data.data.size () << "\n";
+	}
 	arg->old_conf_seqnum = kb->meta->config.seqnum - 1; //set it to last config
 	arg->new_config.setsize (kb->meta->config.nodes.size ());
 	for (uint i=0; i<arg->new_config.size (); i++)
@@ -390,7 +394,8 @@ dhc::recv_newconfig_ack (chordID bID, dhc_cb_t cb, ref<dhc_newconfig_res> ack,
       end_recon = tp.tv_sec * (u_int64_t)1000000 + tp.tv_usec;
       warn << myNode->my_ID () << " End RECON at " << end_recon << "\n";
       warn << "             time elapse: " << end_recon-start_recon << " usecs\n";
-      //exit (0);
+      sprintf (out, "%llu RECON_END 1 %llu usecs\n ", end_recon, end_recon-start_recon);
+      write (fd, out, strlen (out));
       (*cb) (DHC_OK, clnt_stat (0));
     }    
   } else {
@@ -749,7 +754,7 @@ dhc::getblock_cb (user_args *sbp, ptr<location> dest, ptr<read_state> rs,
 	  memmove (gres.resok->data.data.base (), rs->blocks[i].data.base (), 
 		   rs->blocks[i].data.size ());
 	  if (dhc_debug)
-	    warn << "dhc::getblock_cb: size = " << gres.resok->data.data.size () << "\n"; 
+	    warn << "dhc::getblock_cb ******** Retrieve success!!!  size = " << gres.resok->data.data.size () << "\n"; 
 	  //<< " value = " << gres.resok->data.data.base () << "\n";
 
 	  sbp->reply (&gres);

@@ -206,11 +206,12 @@ dhashcli::retrieve (blockID blockID, cb_ret cb, int options,
   ptr<rcv_state> rs = New refcounted<rcv_state> (blockID, cb);
   
   if (blockID.ctype == DHASH_KEYHASH) {
-    if (!DHC) {
+    //    if (!DHC) {
       route_iterator *ci = clntnode->produce_iterator_ptr (blockID.ID);
       ci->first_hop (wrap (this, &dhashcli::retrieve_block_hop_cb, rs, ci,
 			   options, 5, guess),
 		     guess);
+#if 0
     } else {
       rs->ds.status = DHASH_OK;
       rs->ds.options = options;
@@ -220,6 +221,7 @@ dhashcli::retrieve (blockID blockID, cb_ret cb, int options,
 						  &dhashcli::retrieve_dhc_lookup_cb,
 						  rs));
     }
+#endif
   } else {
     vec<ptr<location> > sl = clntnode->succs ();
     if ((options & DHASHCLIENT_SUCCLIST_OPT) && 
@@ -272,12 +274,20 @@ dhashcli::retrieve_block_hop_cb (ptr<rcv_state> rs, route_iterator *ci,
   }
 
   chord_node s = rs->succs.pop_front ();
-  //  if (DHC && rs->key.ctype == DHASH_KEYHASH) {
-#if 0
-    dhc_mgr->get (l, rs->key.ID, wrap (this, &dhashcli::retrieve_dl_or_walk_cb,
-				       rs, status, options, retries, guess));
-#endif
-    // } else 
+  if (DHC && rs->key.ctype == DHASH_KEYHASH) {
+    ptr<dhc_get_arg> arg = New refcounted<dhc_get_arg>;
+    arg->bID = rs->key.ID;
+    rs->ds.status = status;
+    rs->ds.options = options;
+    rs->ds.retries = retries;
+    rs->ds.guess = guess;    
+    rs->ds.res = New refcounted<dhc_get_res> (DHC_OK);
+
+    ptr<location> l = clntnode->locations->lookup_or_create (s);
+
+    clntnode->doRPC (l, dhc_program_1, DHCPROC_GET, arg, rs->ds.res,
+		     wrap (this, &dhashcli::retrieve_dhc_cb, rs));
+  } else 
     dhash_download::execute (clntnode, s, rs->key, NULL, 0, 0, 0,
 			     wrap (this, &dhashcli::retrieve_dl_or_walk_cb,
 				   rs, status, options, retries, guess));
@@ -303,7 +313,7 @@ void
 dhashcli::retrieve_dhc_cb (ptr<rcv_state> rs, clnt_stat err)
 {
   if (rs->ds.res->status == DHC_OK) {
-    warn << "\n\n Retrieve success\n\n";
+    //warn << "\n\n Retrieve success\n\n";
     ptr<dhash_block> blk = 
       New refcounted<dhash_block> (rs->ds.res->resok->data.data.base (), 
 				   rs->ds.res->resok->data.data.size (),
@@ -803,11 +813,6 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb, int opti
       else 
 	clntnode->doRPC (dest, dhc_program_1, DHCPROC_PUT, arg, res,
 			 wrap (this, &dhashcli::insert_dhc_cb, dest, r, ss->cb));	
-#if 0
-      dhc_mgr->put (dest, block->ID, clntnode->my_ID (), value, 
-		    wrap (this, &dhashcli::insert_dhc_cb, dest, r, ss->cb),
-		    options & DHASHCLIENT_NEWBLOCK);
-#endif
     }
     return;
   }

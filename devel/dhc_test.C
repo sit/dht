@@ -18,6 +18,8 @@ int insert_count, read_count, count;
 u_int64_t start_massive_insert, end_massive_insert;
 u_int64_t start_massive_read, end_massive_read;
 u_int64_t total_massive_time;
+char out[100];
+int fd = 0;
 
 void readonly_cb (chordID key, dhashclient dhash, dhash_stat stat, 
 		  ptr<dhash_block> blk, vec<chordID> path);
@@ -52,43 +54,12 @@ write_cb (dhashclient dhash, dhash_stat stat, ptr<insert_info> i)
     warn << "DHC_TEST: Massive Insert Successful \n";
     warn << "           elapse time " << total_massive_time
 	 << " usecs\n";
+    sprintf (out, "%llu WRITE %d %llu usecs\n", end_massive_insert, count,
+	     total_massive_time);
+    write (fd, out, strlen (out));
     exit (1);
   }
 }
-
-#if 0
-void 
-read_cb (chordID key, dhashclient dhash, dhash_stat stat, 
-	 ptr<dhash_block> blk, vec<chordID> path)
-{
-  if (!blk) {
-    warn << "DHC READ error dhash_stat: " << stat << "\n";
-    exit (-1);
-  }
-
-  ptr<keyhash_payload> p = keyhash_payload::decode (blk);
-  if (!p ||
-      DATASIZE != p->buf ().len () ||
-      memcmp (data, p->buf ().cstr (), DATASIZE) != 0) {
-    fatal << "verification failed";
-    exit (-1);
-  } else {
-    warn << "retrieve success\n path: ";
-    for (uint i = 0; i < path.size (); i++)
-      warnx << path[i] << " ";
-    warnx << "\n";
-    timeval tp;
-    read_count = 0;
-    gettimeofday (&tp, NULL);
-    start_massive_read = tp.tv_sec * (u_int64_t) 1000000 + tp.tv_usec;
-    for (int i=0; i<1; i++) {
-      read_count++;
-      dhash.retrieve (key, DHASH_KEYHASH, wrap (&readonly_cb, key, dhash));
-    }
-  }
-
-}
-#endif
 
 void 
 newblock_cb (dhashclient dhash, dhash_stat stat, ptr<insert_info> i)
@@ -105,6 +76,9 @@ newblock_cb (dhashclient dhash, dhash_stat stat, ptr<insert_info> i)
     warn << "DHC NEWBLOCK insert successful\n";
     warn << "DHC End Insert at " << end_insert << "\n";
     warn << "      elapse time " << end_insert - start_insert << " usecs\n";
+    sprintf (out, "%llu INSERT_NEW 1 %llu usecs\n", end_insert, 
+	     end_insert - start_insert);
+    write (fd, out, strlen (out));
     exit (1);
   }
 }
@@ -126,6 +100,9 @@ readonly_cb (chordID key, dhashclient dhash, dhash_stat stat,
 	   << end_massive_read - start_massive_read 
 	   << " for " << read_count 
 	   << " reads\n";
+      sprintf (out, "%llu READ %d %llu usecs\n", end_massive_read, read_count,
+	       end_massive_read - start_massive_read);
+      write (fd, out, strlen (out));
       exit (1);
     } else 
       dhash.retrieve (key, DHASH_KEYHASH, wrap (&readonly_cb, key, dhash));
@@ -164,6 +141,11 @@ main (int argc, char **argv)
   p.sign (sk, pk, s);
 
   total_massive_time = 0;
+
+  timeval tp;
+  gettimeofday (&tp, NULL);
+  sprintf (out, "etna-test");
+  fd = open (out, O_WRONLY | O_APPEND | O_CREAT, 0777);
 
   switch (atoi (argv[3])) {
   case NEWBLOCK: {
@@ -205,6 +187,7 @@ main (int argc, char **argv)
   }
 
   amain ();
+  close (fd);
 }
 
 
