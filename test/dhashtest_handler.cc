@@ -25,10 +25,16 @@ dhashtest_handler::dhashtest_handler(init_context& ctxt, bool plumb) :
     flow_handler(ctxt, plumb)
 {
   string port;
+  string id;
   get_arg("port", port, TESLA_CONTROL_PORT);
+  get_arg("id", id, "");
+  srand(time(0) ^ (getpid() + (getpid() << 15)));
 
-  _rblock.clear();
-  _wblock.clear();
+  if("id" == "")
+    ts_debug_1("warning: id not set");
+
+  _rdrop.clear();
+  _wdrop.clear();
 
   _srvfh = ctxt.plumb(*this, AF_INET, SOCK_STREAM);
 
@@ -70,9 +76,30 @@ dhashtest_handler::accept_ready(flow_handler *from)
 int
 dhashtest_handler::write(data d)
 {
-  if(_wisolated ||
-      (_wblock.find( ((struct sockaddr_in*)d.addr())->sin_addr.s_addr) != _wblock.end())) {
+  // destination host
+  unsigned host = ((struct sockaddr_in*)d.addr())->sin_addr.s_addr;
+
+  // isolated
+  if(_wisolated) {
     ts_debug_1("write isolated: write was blocked.");
+    return 0;
+  }
+
+  // drop
+  unsigned dropchance = 0;
+  map<unsigned, unsigned>::iterator pos;
+
+  if(_wdropall)
+    dropchance = _wdropall;
+  else if((pos = _wdrop.find(host)) != _wdrop.end())
+    dropchance = pos->second;
+
+  // don't bother to throw a coin if it's 100
+  unsigned coin;
+  if((coin = dropchance) == 100 ||
+     (coin = (1+(int) (100.0*rand()/(RAND_MAX+1.0)))) <= dropchance)
+  {
+    ts_debug_1("dropped because of %d", coin);
     return 0;
   }
 
@@ -86,14 +113,14 @@ dhashtest_handler::handle_instruct(data d)
 {
   // handle
   instruct_t ins;
-  memcpy(ins.b, d.bits(), 12);        // XXX: hack
+  memcpy(ins.b, d.bits(), 16);        // XXX: hack
 
   // ISOLATE
-  if(ins.i.cmd & ISOLATE) {
-    if(ins.i.cmd & READ) {
+  if(CMD_ARG(ins) & ISOLATE) {
+    if(ISOLATE_ARG(ins, flags) & READ) {
       ts_debug_1("read isolated!");
       _risolated = true;
-    } else if (ins.i.cmd & WRITE) {
+    } else if (ISOLATE_ARG(ins, flags) & WRITE) {
       ts_debug_1("write isolated!");
       _wisolated = true;
     } else {
@@ -104,11 +131,11 @@ dhashtest_handler::handle_instruct(data d)
   }
   
   // UNISOLATE
-  if(ins.i.cmd & UNISOLATE) {
-    if(ins.i.cmd & READ) {
+  if(CMD_ARG(ins) & UNISOLATE) {
+    if(ISOLATE_ARG(ins, flags) & READ) {
       ts_debug_1("read unisolated!");
       _risolated = false;
-    } else if (ins.i.cmd & WRITE) {
+    } else if (ISOLATE_ARG(ins, flags) & WRITE) {
       ts_debug_1("write unisolated!");
       _wisolated = false;
     } else {
@@ -118,28 +145,42 @@ dhashtest_handler::handle_instruct(data d)
     return true;
   }
 
+  // DROP
+  if(CMD_ARG(ins) & DROP) {
+    // from specific host
+    if(DROP_ARG(ins, host)) {
+      map<unsigned, unsigned> *dropmap = (map<unsigned, unsigned>*) 0;
+      if(DROP_ARG(ins, flags) & READ)
+        dropmap = &_rdrop;
+      else if(DROP_ARG(ins, flags) & WRITE)
+        dropmap = &_wdrop;
+      else {
+        ts_debug_1("warning: DROP without READ/WRITE. assuming both");
+        return false;
+      }
 
-  // READ or WRITE?
-  set<int> *blockset = (set<int>*) 0;
-  if(ins.i.cmd & READ)
-    blockset = &_rblock;
-  else if(ins.i.cmd & WRITE)
-    blockset = &_wblock;
-  else {
-    ts_debug_1("BLOCK/UNBLOCK without READ/WRITE. doing nothing");
-    return false;
+      ts_debug_1("setting drops to %d\n", DROP_ARG(ins, perc));
+      if(!DROP_ARG(ins, perc)) {
+        dropmap->erase(DROP_ARG(ins, host));
+      } else {
+        ts_debug_1("inserting host %d", DROP_ARG(ins, host));
+        (*dropmap)[DROP_ARG(ins, host)] = DROP_ARG(ins, perc);
+      }
+      return true;
+
+    // from all
+    } else {
+      ts_debug_1("dropping %d from all", DROP_ARG(ins, perc));
+      if(DROP_ARG(ins, flags) & READ)
+        _rdropall = DROP_ARG(ins, perc);
+      if(DROP_ARG(ins, flags) & WRITE)
+        _wdropall = DROP_ARG(ins, perc);
+      return true;
+    }
   }
 
-  if(ins.i.cmd & BLOCK) {
-    blockset->insert(ins.i.host);
-  } else if(ins.i.cmd & UNBLOCK) {
-    blockset->erase(ins.i.host);
-  } else {
-    ts_debug_1("no command!");
-    return false;
-  }
-
-  return true;
+  ts_debug_1("this should have not happened. ignoring command");
+  return false;
 }
 
 bool
@@ -161,10 +202,31 @@ dhashtest_handler::avail(flow_handler *h, data d)
   //
   int host = ((sockaddr_in*) d.addr())->sin_addr.s_addr;
   int port = ((sockaddr_in*) d.addr())->sin_port;
+
   ts_debug_2("host that sent = %x, port = %d", host, port);
-  if(_risolated || (_rblock.find(host) != _rblock.end())) {
+
+  // block
+  if(_risolated) {
     ts_debug_1("blocked data from %x", host);
     return true;
+  }
+
+  // drop
+  unsigned dropchance = 0;
+  map<unsigned, unsigned>::iterator pos;
+
+  if(_rdropall)
+    dropchance = _rdropall;
+  else if((pos = _rdrop.find(host)) != _rdrop.end())
+    dropchance = pos->second;
+
+  if(dropchance) {
+    unsigned coinflip = 1+(int) (100.0*rand()/(RAND_MAX+1.0));
+    ts_debug_1("coinflip %d vs %d", coinflip, dropchance);
+    if(coinflip < dropchance) {
+      ts_debug_1("dropped");
+      return true;
+    }
   }
 
   ts_debug_2("allowed data from %x", host);

@@ -10,7 +10,7 @@
  * version. For more information, see the `COPYING' file in the source
  * distribution.
  *
- * $Id: dhashtest_handler.hh,v 1.2 2002/11/22 07:46:41 thomer Exp $
+ * $Id: dhashtest_handler.hh,v 1.3 2002/11/26 07:26:16 thomer Exp $
  *
  */
 
@@ -33,8 +33,10 @@ class dhashtest_handler : public flow_handler { public:
   void accept_ready(flow_handler *);
 
 private:
-  static set<int> _rblock;
-  static set<int> _wblock;
+  static map<unsigned, unsigned> _rdrop;
+  static map<unsigned, unsigned> _wdrop;
+  static unsigned _rdropall;
+  static unsigned _wdropall;
   static bool _risolated;
   static bool _wisolated;
   static bool _initialized;
@@ -43,27 +45,49 @@ private:
   flow_handler *_srvfh;
   bool handle_instruct(data);
 
-#define READ       0x001
-#define WRITE      0x002
-#define BLOCK      0x010
-#define UNBLOCK    0x020
-#define ISOLATE    0x100
-#define UNISOLATE  0x200
+  enum rw_t {
+    READ = 0,
+    WRITE,
+    READ_WRITE
+  };
+
+  enum cmd_t {
+    ISOLATE = 0x1,
+    UNISOLATE = 0x2,
+    DROP = 0x4
+  };
+
+#define CMD_ARG(x)        ((x).oargs.cmd)
+#define ISOLATE_ARG(x,y)  ((x).oargs.iargs.isolate.y)
+#define DROP_ARG(x,y)     ((x).oargs.iargs.drop.y)
 
   typedef union {
     struct {
       unsigned cmd;
-      int host;
-      int port; // ignored for now
-    } i;
-    char b[12];
+      union {
+        struct {
+          unsigned flags;
+        } isolate;
+
+        struct {
+          unsigned flags;
+          unsigned host;
+          unsigned perc;
+        } drop;
+      } iargs;
+    } oargs;
+    char b[16];
   } instruct_t;
+
+
 
   DECLARE_HANDLER;
 };
 
-set<int> dhashtest_handler::_rblock;
-set<int> dhashtest_handler::_wblock;
+map<unsigned, unsigned> dhashtest_handler::_rdrop;
+map<unsigned, unsigned> dhashtest_handler::_wdrop;
+unsigned dhashtest_handler::_rdropall = 0;
+unsigned dhashtest_handler::_wdropall = 0;
 bool dhashtest_handler::_risolated = false;
 bool dhashtest_handler::_wisolated = false;
 bool dhashtest_handler::_initialized = false;
