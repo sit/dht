@@ -12,14 +12,14 @@ class LocTablePNS : public LocTable {
     };
     ~LocTablePNS() {};
 
-    Chord::IDMap next_hop(Chord::CHID key) {
+    Chord::IDMap next_hop(Chord::CHID key, Chord::IDMap me) {
       //check if one of my finger is directly responsible for it
       for (uint i = 0; i < fingers.size(); i++){
 	if (ConsistentHash::betweenrightincl(fingers[i].first.id, fingers[i].second.id, key)){
 	  return fingers[i].first;
 	}
       }
-      return LocTable::next_hop(key);
+      return LocTable::next_hop(key, me);
     };
 
     void add_finger(pair<Chord::IDMap, Chord::IDMap> finger) {

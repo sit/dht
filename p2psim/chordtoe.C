@@ -7,13 +7,38 @@
 
 using namespace std;
 
-Chord::IDMap LocTableToe::next_hop(Chord::CHID key)
+Chord::IDMap 
+LocTableToe::next_hop(Chord::CHID key, Chord::IDMap me)
 {
-  return pred (key);
+  idmapwrap *e = ring.first ();
+  Topology *t = Network::Instance()->gettopology ();
+  idmapwrap *b = NULL;
+  int best = RAND_MAX;
+
+  while (e) {
+    //    cerr << "trying: " << e->n.id << " for [" << me.id << ", " << key << "]\n";
+    if (ConsistentHash::betweenrightincl(me.id, key, e->n.id)) {
+      int lat = t->latency (e->n.ip, me.ip);
+      if (lat < best) {
+	best = lat;
+	b = e;
+	//	cerr << key << " --- new best: " << b->n.ip << " w lat " << lat << "\n";
+      } 
+    }
+    e = ring.next (e);
+    //if (e) cerr << "next_hop for " << me.ip << " / " << key << " looking at " << e->n.ip << "\n";
+  }
+
+  assert (b);
+  Chord::IDMap ret = b->n;
+  
+  assert (ret.ip != me.ip);
+  assert (ConsistentHash::betweenrightincl(me.id, key, ret.id));
+  return ret;
 }
 
 ChordToe::ChordToe (Node *n, uint base, uint successors, uint maxf) : 
-  Chord (n, successors, new LocTableToe ()),  _numtoes (16)
+  ChordFinger (n, base, successors, maxf, new LocTableToe ()),  _numtoes (16)
 {
 };
 
@@ -66,8 +91,8 @@ ChordToe::init_state (vector<IDMap> ids)
   for (uint i = 0; i < _toes.size (); i++)
     loctable->add_node (_toes[i]);
 
-  Chord::init_state (ids);
-  //ChordFinger::init_state (ids);
+  //  Chord::init_state (ids);
+  ChordFinger::init_state (ids);
 }
 
 

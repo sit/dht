@@ -7,7 +7,7 @@
 
 class ChordFinger: public Chord {
   public:
-    ChordFinger(Node *n, uint base, uint successors, uint maxf);
+    ChordFinger(Node *n, uint base, uint successors, uint maxf, LocTable *l = NULL);
     ~ChordFinger() {};
     string proto_name() { return "ChordFinger"; }
 

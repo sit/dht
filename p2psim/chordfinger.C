@@ -5,7 +5,12 @@
 using namespace std;
 extern bool static_sim;
 
-ChordFinger::ChordFinger(Node *n, uint base, uint successors, uint maxf) : Chord(n, successors), _base(base),_maxf(maxf)
+ChordFinger::ChordFinger(Node *n, 
+			 uint base, 
+			 uint successors, 
+			 uint maxf,
+			 LocTable *l) : Chord(n, successors, l), 
+  _base(base),_maxf(maxf)
 {
   CHID finger;
   CHID lap = (CHID) -1;

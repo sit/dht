@@ -243,7 +243,7 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
     nargs.v = args->v;
 
     while (!r) {
-      IDMap next = loctable->next_hop(args->key);
+      IDMap next = loctable->next_hop(args->key, me);
       nargs.v.push_back(next);
 
       if (_vivaldi) {
@@ -285,7 +285,8 @@ Chord::next_handler(next_args *args, next_ret *ret)
     ret->v.push_back(succ);
  } else {
     ret->done = false;
-    ret->next = loctable->next_hop(args->key);
+    // XXX for iterative, me should really be the requesting node
+    ret->next = loctable->next_hop(args->key, me);
     assert(ret->next.ip != me.ip);
  }
 }
@@ -844,7 +845,7 @@ LocTable::evict() // all unnecessary(unpinned) nodes
 }
 
 Chord::IDMap
-LocTable::next_hop(Chord::CHID key)
+LocTable::next_hop(Chord::CHID key, Chord::IDMap requestor)
 {
   return pred(key);
 }

@@ -11,10 +11,10 @@ public:
   LocTableToe () : LocTable () {};
   virtual ~LocTableToe () {};
 
-  Chord::IDMap next_hop(Chord::CHID key); 
+  Chord::IDMap next_hop(Chord::CHID key, Chord::IDMap me); 
 };
 
-class ChordToe : public Chord {
+class ChordToe : public ChordFinger {
 public:
   ChordToe(Node *n, uint base, uint successors, uint maxf);
   ChordToe ();

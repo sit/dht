@@ -193,9 +193,9 @@ class LocTable {
     unsigned int psize() { return pinlist.size();}
     void set_evict(bool v) { _evict = v; }
 
-  virtual Chord::IDMap next_hop(Chord::CHID key); //pick the next hop for lookup;
+  virtual Chord::IDMap next_hop(Chord::CHID key, Chord::IDMap req); //pick the next hop for lookup;
 
-  private:
+  protected:
     bool _evict;
     skiplist<idmapwrap, ConsistentHash::CHID, &idmapwrap::id, &idmapwrap::sortlink_> ring;
     ConsistentHash::CHID myid;
