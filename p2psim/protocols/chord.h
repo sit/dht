@@ -30,9 +30,11 @@
 
 #define TIMEOUT_RETRY 5
 
-//#define CHORD_DEBUG
+#define CHORD_DEBUG
 #define DNODE 853
 //#define RECORD_FETCH_LATENCY
+
+#define TIMEOUT(src,dst) (Network::Instance()->gettopology()->latency(src,dst)<100000)?_to_multiplier*2*Network::Instance()->gettopology()->latency(src,dst):1000
 
 #define PKT_OVERHEAD 20
 
@@ -90,6 +92,7 @@ public:
   
   struct get_successor_list_ret {
     vector<IDMap> v;
+    IDMap dst;
   };
 
   struct notify_args {
@@ -125,6 +128,7 @@ public:
     vector<IDMap> v;
     vector<IDMap> next;
     bool correct;
+    IDMap dst;
     IDMap lastnode;
   };
 
@@ -157,6 +161,7 @@ public:
     vector<lookup_path> path;
     uint m;
     uint all;
+    IDMap dst;
   };
 
   struct next_recurs_ret {

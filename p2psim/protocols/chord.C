@@ -35,6 +35,7 @@ unsigned int joins = 0;
 vector<uint> Chord::_fetch_lat;
 #endif
 
+
 Chord::Chord(IPAddress i, Args& a, LocTable *l) : P2Protocol(i), _isstable (false)
 {
 
@@ -62,7 +63,7 @@ Chord::Chord(IPAddress i, Args& a, LocTable *l) : P2Protocol(i), _isstable (fals
 
   //recursive routing?
   _recurs = a.nget<uint>("recurs",0,10);
-  _recurs_direct = a.nget<uint>("recurs_direct",1,10);
+  _recurs_direct = a.nget<uint>("recurs_direct",0,10);
   _stopearly_overshoot = a.nget<uint>("stopearlyovershoot",0,10);
 
   //parallel lookup? parallelism only works in iterative lookup now
@@ -235,10 +236,10 @@ bool Chord::failure_detect(IDMap dst, void (BT::* fn)(AT *, RT *), AT *args, RT 
 {
   bool r;
   Topology *t = Network::Instance()->gettopology();
-  Time retry_to = _to_multiplier * 2 * t->latency(me.ip, dst.ip);
+  Time retry_to = TIMEOUT(me.ip,dst.ip);
   int checks;
   //checks = loctable->add_check(dst,0);
-  checks = 0;
+  checks = 2;
   //if (checks == -1) return false;
   //int tmp;
   while (checks < num_retry) {
@@ -488,7 +489,7 @@ Chord::find_successors(CHID key, uint m, uint type, IDMap *lasthop, lookup_args 
 #endif
       record_stat(type,1+na.deadnodes.size(),0);
       assert((h.to.ip == me.ip) || (h.to.ip!=h.from.ip));
-      rpc = asyncRPC(h.to.ip, &Chord::next_handler, &na, &(p->ret), _to_multiplier*2*t->latency(me.ip,h.to.ip));
+      rpc = asyncRPC(h.to.ip, &Chord::next_handler, &na, &(p->ret), TIMEOUT(me.ip,h.to.ip));
       rpcset.insert(rpc);
       resultmap[rpc] = p;
       outstanding++;
@@ -521,7 +522,8 @@ Chord::find_successors(CHID key, uint m, uint type, IDMap *lasthop, lookup_args 
     if (ok) {
       record_stat(type,resultmap[donerpc]->ret.done?resultmap[donerpc]->ret.next.size():resultmap[donerpc]->ret.v.size()); //counting for heartbeat timer
       if (resultmap[donerpc]->link.from.ip == me.ip) {
-	loctable->add_node(resultmap[donerpc]->link.to); //update the timestamp if node contacted exists in my own routing table
+	assert(resultmap[donerpc]->ret.dst.ip == resultmap[donerpc]->link.to.ip);
+	loctable->add_node(resultmap[donerpc]->ret.dst); //update the timestamp if node contacted exists in my own routing table as well as heartbeat timer
       }
 #ifdef CHORD_DEBUG
       printf("%s debug key %qx, outstanding %d deadsz %d from (%u,%qx,%u) done? %d nextsz %d savefinishedsz %u\n", ts(), key, outstanding, na.deadnodes.size(),
@@ -614,9 +616,9 @@ Chord::find_successors(CHID key, uint m, uint type, IDMap *lasthop, lookup_args 
 
       if (a) {
 	a->num_to++;
-	a->total_to += (_to_multiplier * 2 * t->latency(me.ip, resultmap[donerpc]->link.to.ip));
+	a->total_to += TIMEOUT(me.ip,resultmap[donerpc]->link.to.ip);
       }
-      /*notify
+      //notify
       alert_args *aa = New alert_args;
       aa->n = resultmap[donerpc]->link.to;
       record_stat(type,1);
@@ -625,14 +627,15 @@ Chord::find_successors(CHID key, uint m, uint type, IDMap *lasthop, lookup_args 
       alertset.insert(rpc);
       alertmap[rpc] = aa;
       alertoutstanding++;
-      */
       if (ConsistentHash::betweenleftincl(lastfinished.to.id, key, resultmap[donerpc]->link.to.id)) {
 	na.deadnodes.push_back(resultmap[donerpc]->link.to);
       }
       if (lastfinished.to.ip ==  resultmap[donerpc]->link.to.ip) {
 	assert(savefinished.size()>0);
 	savefinished.pop_back();
+#ifdef CHORD_DEBUG
 	printf("%s lastfinished %u dead new last finished %u\n",ts(),lastfinished.to.ip, savefinished.back().to.ip);
+#endif
 	lastfinished = savefinished.back();
       }
     }
@@ -647,10 +650,10 @@ DONE:
   if ((type == TYPE_USER_LOOKUP) && (alive())) {
 
     if (a) 
-      a->hops += totalrpc;
+      a->hops += (totalrpc-1); //not counting the rpc i sent to myself
 
 #ifdef CHORD_DEBUG
-    printf("%s lookup key %qx, hops %d timeout %d wasted %d totalrpc %d\n", ts(), key, lastfinished.hop, a->num_to, wasted, totalrpc);
+    printf("%s lookup key %qx, hops %d myhop %u timeout %d wasted %d totalrpc %d\n", ts(), key, lastfinished.hop, a->hops, a->num_to, wasted, totalrpc);
     printf("%s key %qx route: ", ts(), key);
     IDMap last;
     last = lastfinished.to;
@@ -685,7 +688,6 @@ DONE:
     delete resultmap[donerpc];
   }
   for (uint i = 0;i < alertoutstanding; i++) {
-    assert(0);
     donerpc = rcvRPC(&alertset, ok);
     if (ok)
       record_stat(type,0);
@@ -750,23 +752,19 @@ Chord::find_successors_recurs(CHID key, uint m, uint type, IDMap *lasthop, looku
   assert(psz > 0 && (!fa.path[0].tout) && fa.path[0].n.ip == me.ip);
 
   uint total_to = 0;
-  uint total_lat = 0;
   uint wasted = 0;
   IDMap nn, np;
   np = fa.path[0].n;
   for (uint i = 1; i < psz; i++) {
     nn = fa.path[i].n;
     if (fa.path[i].tout) {
-      wasted += (_to_multiplier*t->latency(np.ip, nn.ip));
+      wasted += TIMEOUT(np.ip, nn.ip);
       total_to++;
     }
 #ifdef CHORD_DEBUG
     printf("(%u,%qx,%u,%u,%u) ", 
 	nn.ip, nn.id, (unsigned) t->latency(np.ip, nn.ip), nn.heartbeat, fa.path[i].tout);
 #endif
-    if (i > 0) 
-      total_lat += t->latency(np.ip, nn.ip);
-
     if (!fa.path[i].tout) 
       np = nn;
   }
@@ -776,7 +774,10 @@ Chord::find_successors_recurs(CHID key, uint m, uint type, IDMap *lasthop, looku
 
   //XXX recursive lookup has a different way of calculating lookup latency
   if (a) {
-    a->latency += (fr.finish_time - before);
+    if (_recurs_direct)
+      a->latency += (fr.finish_time - before);
+    else
+      a->latency += now()-before;
     a->hops += (psz - total_to - 1);
     a->total_to += wasted;
     a->num_to += total_to;
@@ -820,21 +821,23 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
   Topology *t = Network::Instance()->gettopology();
 
   while (1) {
-    succs = loctable->succs(me.id+1,_nsucc);
+    succs = loctable->succs(me.id+1,_nsucc,LOC_HEALTHY);
 
     if (succs.size() == 0) {
       //lookup failed
       //XXX do i need to backtrack?
-#ifdef CHORD_DEBUG
-      printf("%s incorrect key %qx coz of new join last join time %llu join scheduled? %d\n", ts(), args->key, now()-_last_join_time, _join_scheduled);
-#endif
      ret->v.clear();
 
-      //rejoin baby
-      if (!_join_scheduled) {
+     vector<IDMap> tmp = loctable->succs(me.id+1,_nsucc,LOC_ONCHECK);
+      //rejoin baby 
+      if ((!_join_scheduled) && (tmp.size()==0)) {
 	_join_scheduled++;
+#ifdef CHORD_DEBUG
+      printf("%s joincrash rejoin incorrect key %qx schedule rejoin\n", ts(), args->key); 
+#endif
 	delaycb(0, &Chord::join, (Args *)0);
       }
+      args->dst = me;
       return;
     }
     succ = succs[0];
@@ -865,6 +868,7 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
 	if (r) 
 	  record_stat(args->type,0);
       }
+      args->dst = me;
       return;
     }else if (_stopearly_overshoot && ConsistentHash::betweenrightincl(me.id, succs[succs.size()-1].id, args->key)) {
       assert(static_sim);
@@ -884,6 +888,7 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
 	  if (r) 
 	    record_stat(args->type,0);
 	}
+	args->dst = me;
 	return;
       }
       uint stop;
@@ -917,6 +922,7 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
 	    if (r)
 	      record_stat(args->type,0);
 	  }
+	  args->dst = me;
 	  return;
 	}
       }
@@ -938,13 +944,15 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
     args->path.push_back(tmp);
 
     record_stat(args->type,1);
-    r = doRPC(next.ip, &Chord::next_recurs_handler, args, ret, _to_multiplier*2*t->latency(me.ip,next.ip));
+    args->dst = next;
+    r = doRPC(next.ip, &Chord::next_recurs_handler, args, ret, TIMEOUT(me.ip,next.ip));
 
     if (!alive()) {
 #ifdef CHORD_DEBUG
       printf("%s lost lookup request %qx\n", ts(), args->key);
 #endif
       ret->v.clear();
+      args->dst = me;
       return;
     }
 
@@ -954,7 +962,9 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
       }else{
 	record_stat(args->type,0);
       }
-      if (!static_sim) loctable->add_node(next); //update timestamp
+      assert(next.ip == args->dst.ip);
+      if (!static_sim) loctable->add_node(args->dst); //update timestamp
+      args->dst = me;
       return;
     }else{
 #ifdef CHORD_DEBUG
@@ -990,7 +1000,7 @@ Chord::alert_delete(alert_args *aa)
   Topology *t = Network::Instance()->gettopology();
   if (aa->dst != me.ip) 
     record_stat(TYPE_MISC,1);
-  doRPC(aa->dst, &Chord::alert_handler, aa, (void *)NULL, _to_multiplier*2*t->latency(me.ip,aa->dst));
+  doRPC(aa->dst, &Chord::alert_handler, aa, (void *)NULL, TIMEOUT(me.ip,aa->dst));
   delete aa;
 }
 
@@ -998,6 +1008,7 @@ Chord::alert_delete(alert_args *aa)
 void
 Chord::next_handler(next_args *args, next_ret *ret)
 {
+  ret->dst = me;
   check_static_init();
 
   /* don't trust other people's information about my dead neighbors coz of non-transitivity
@@ -1048,13 +1059,21 @@ Chord::next_handler(next_args *args, next_ret *ret)
   if (s < 0) {
     ret->lastnode = me;
     ret->done = true;
+    vector<IDMap> tmp = loctable->succs(me.id+1,_nsucc,LOC_ONCHECK);
 #ifdef CHORD_DEBUG
-    printf("%s incorrect key %qx coz of new join succsz %d deadsz %d last join time %llu join scheduled %d\n", 
-	ts(), args->key, succs.size(), args->deadnodes.size(), now()-_last_join_time, _join_scheduled);
+    printf("%s incorrect key %qx coz of new join succsz %d oncheck succsz %d deadsz %d last join time %llu join scheduled %d\n", 
+	ts(), args->key, succs.size(), tmp.size(), args->deadnodes.size(), now()-_last_join_time, _join_scheduled);
 #endif
     ret->correct = false;
     //rejoin baby
-    if (!_join_scheduled) {
+    if ((!_join_scheduled) && (tmp.size()==0)){
+#ifdef CHORD_DEBUG
+      printf("%s during lookup key %qx rejoin (succ on check): ",ts(),args->key);
+      for (uint i = 0; i < tmp.size(); i++) {
+	printf("<%u,%qx,%u> ",tmp[i].ip,tmp[i].id,tmp[i].heartbeat);
+      }
+      printf("\n");
+#endif
       _join_scheduled++;
       delaycb(0, &Chord::join, (Args *)0);
     }
@@ -1179,7 +1198,7 @@ Chord::join(Args *args)
 
   if (!ok || fr.v.size() < 1) {
 #ifdef CHORD_DEBUG
-    printf("%s joincrash join failed key %qx\n", ts(),fa.key);
+    printf("%s joincrash join failed key %qx another rejoin rescheduled? %u\n", ts(),fa.key, _join_scheduled);
 #endif
     _join_scheduled--;
     if (!_join_scheduled) {
@@ -1227,7 +1246,7 @@ Chord::join(Args *args)
 
   if ((loctable->size() < 2)  && (alive())) {
 #ifdef CHORD_DEBUG
-    printf("%s after stabilize join failed! return %u\n", ts(), fr.v.size());
+    printf("%s after stabilize join failed! return %u another rejoin scheduled? %u\n", ts(), fr.v.size(), _join_scheduled);
     fprintf(stderr,"%s after stabilize join failed! return %u\n", ts(), fr.v.size());
 #endif
     _join_scheduled--;
@@ -1284,7 +1303,8 @@ Chord::stabilize()
   if (!succ1.ip) return;
 
 #ifdef CHORD_DEBUG
-  printf("%s Chord stabilize BEFORE pred (%u,%qx,%u) succ (%u,%qx,%u) succsz %u _inited %u\n", ts(), pred1.ip, pred1.id, pred1.heartbeat, succ1.ip, succ1.id, succ1.heartbeat,succs.size(), _inited?1:0);
+  Time before = now();
+  printf("%s Chord stabilize BEFORE pred <%u,%qx,%u> succ <%u,%qx,%u> succsz %u _inited %u\n", ts(), pred1.ip, pred1.id, pred1.heartbeat, succ1.ip, succ1.id, succ1.heartbeat,succs.size(), _inited?1:0);
 #endif
 
   fix_successor();
@@ -1294,7 +1314,7 @@ Chord::stabilize()
   succs = loctable->succs(me.id+1, _nsucc, LOC_HEALTHY);
 
   assert(_nsucc >= 3);
-  if ((_nsucc > 1) && ((succs.size() <= 3) || (now()-_last_succlist_stabilized > _stab_succlist_timer))) {
+  if ((_nsucc > 1) && ((succs.size() < 0.5*_nsucc) || (now()-_last_succlist_stabilized > _stab_succlist_timer))) {
     _last_succlist_stabilized = now();
     fix_successor_list();
   }
@@ -1308,14 +1328,21 @@ Chord::stabilize()
 #ifdef CHORD_DEBUG
   IDMap pred = loctable->pred(me.id-1, LOC_ONCHECK);
   succs = loctable->succs(me.id+1, _nsucc, LOC_ONCHECK);
+  vector<IDMap> tmp= loctable->succs(me.id+1, _nsucc, LOC_HEALTHY);
+  Time after = now();
   if (succs.size() > 0) {
-    printf("%s Chord stabilize AFTER pred (%u,%qx,%u) succ (%u,%qx,%u)  _inited %u succsz %u: ", ts(), pred.ip, pred.id, pred.heartbeat, succs[0].ip, succs[0].id, succs[0].heartbeat,  _inited, succs.size());
+    assert(before < 86400000);
+    printf("%s Chord stabilize AFTER elapsed %u (started %llu) pred <%u,%qx,%u> succ <%u,%qx,%u>  _inited %u succsz %u healthy %u: ", ts(), (uint)(after-before), before, pred.ip, pred.id, pred.heartbeat, succs[0].ip, succs[0].id, succs[0].heartbeat,  _inited, succs.size(), tmp.size());
     for (uint i = 0; i < succs.size(); i++) {
-      printf("%u ",succs[i].ip);
+      printf("<%u %u> ",succs[i].ip,succs[i].heartbeat);
+    }
+    printf("|||");
+    for (uint i = 0; i < tmp.size(); i++) {
+      printf("<%u %u> ",tmp[i].ip,tmp[i].heartbeat);
     }
     printf("\n");
   } else
-    printf("%s Chord stabilize AFTER pred %u,%qx LOST SUCC!!!", ts(), pred.ip, pred.id);
+    printf("%s Chord stabilize AFTER elapsed %u (started %llu) pred %u,%qx LOST SUCC!!!", ts(), now()-before, before, pred.ip, pred.id);
 #endif
 }
 
@@ -1459,7 +1486,7 @@ Chord::fix_predecessor()
 
   if (!alive()) return;
   if (ok) {
-    loctable->add_node(pred); //refresh timestamp
+    loctable->add_node(gsr.dst); //refresh timestamp
     if (gsr.v.size() > 0) {
       IDMap tmp = gsr.v[0];
       loctable->add_node(gsr.v[0]);
@@ -1498,10 +1525,15 @@ Chord::fix_successor(void *x)
       //sth. wrong, i lost my succ, join again
       if (!_join_scheduled) {
 	_join_scheduled++;
+#ifdef CHORD_DEBUG
+	printf("%s joincrash fix_successor rejoin aftering losing succ\n",ts());
+#endif
 	delaycb(0, &Chord::join, (Args *)0);
       }
       return;
     }
+
+    Time before = now();
 
     ok = failure_detect(succ1,&Chord::get_predecessor_handler, &gpa, &gpr, TYPE_FIXSUCC_UP,0);
     if (ok) record_stat(TYPE_FIXSUCC_UP,2);
@@ -1510,8 +1542,8 @@ Chord::fix_successor(void *x)
 
     if (!ok) {
 #ifdef CHORD_DEBUG
-      printf("%s fix_successor old succcessor (%u,%qx) died\n", 
-	  ts(), succ1.ip, succ1.id);
+      printf("%s detect fix_successor old succcessor (%u,%qx) died in %u msec\n", 
+	  ts(), succ1.ip, succ1.id, now()-before);
 #endif
       loctable->del_node(succ1, true); //successor dead, force delete
       aa.n = succ1;
@@ -1523,9 +1555,11 @@ Chord::fix_successor(void *x)
 	ts(), succ1.ip, succ1.id, gpr.dst.heartbeat, gpr.n.ip, gpr.n.id,gpr.n.heartbeat);
 #endif
 
-      if (gpr.n.ip && gpr.n.ip == me.ip && gpr.n.heartbeat >= me.heartbeat) {
+      if (!gpr.n.ip) {
+	//sigh, that person is clueless about his pred
+      }else if (gpr.n.ip && gpr.n.ip == me.ip) {
 	return;
-      }else if ((gpr.n.ip && gpr.n.ip!= me.ip) || (gpr.n.ip && gpr.n.ip == me.ip && gpr.n.heartbeat < me.heartbeat)) {
+      }else if ((gpr.n.ip && gpr.n.ip!= me.ip)) {
 	if (ConsistentHash::between(me.id, succ1.id, gpr.n.id)) {
 	  loctable->add_node(gpr.n,true); //successor has changed, i should stabilize it immeidately
 	} else {
@@ -1555,18 +1589,19 @@ Chord::fix_successor(void *x)
       }
     }
 
-    /* notify my new successor of this node's death*/
+    //notify my new successor of this node's death 
     if (aa.n.ip) {
       succ2 = loctable->succ(me.id+1, LOC_ONCHECK); 
       aa.n = succ1;
       if (succ2.ip) {
 	ok = failure_detect(succ2, &Chord::alert_handler, &aa, (void*)NULL, TYPE_FIXSUCC_UP,1,0);
-	if (ok) 
+	if (ok) {
+	  //i should not immediately stabilize new successor,  
+	  //i should wait for this new successor to discover the failure himself
 	  record_stat(TYPE_FIXSUCC_UP,0);
-	else
+	} else {
 	  loctable->del_node(succ2,true);
-	//i should not immediately stabilize new successor,  
-	//i should wait for this new successor to discover the failure himself
+	}
 	return;
       }
     }
@@ -1578,6 +1613,7 @@ Chord::get_successor_list_handler(get_successor_list_args *args,
 				  get_successor_list_ret *ret)
 {
   check_static_init();
+  ret->dst = me;
   ret->v = loctable->succs(me.id+1,args->m,LOC_HEALTHY);
 }
 
@@ -1604,7 +1640,7 @@ Chord::fix_successor_list()
     loctable->del_node(succ,true);
   }else{
 
-    loctable->add_node(succ,true);//update timestamp
+    loctable->add_node(gsr.dst,true);//update timestamp
 
     //scs[0] might not be succ anymore
     vector<IDMap> scs = loctable->succs(me.id + 1, _nsucc, LOC_DEAD);
@@ -2007,6 +2043,10 @@ LocTable::add_check(Chord::IDMap n, int add)
     return -1;
 
   if ((elm->status == LOC_HEALTHY) && (n.heartbeat >= elm->n.heartbeat)){
+#ifdef CHORD_DEBUG
+    if (elm->is_succ)
+      printf("%llu ChordFingerPNS(%u,%qx,%u) PUTTING SUCC <%u,%qx,%u> ON CHECK\n", now(),me.ip,me.id,me.heartbeat,elm->n.ip,elm->n.id,elm->n.heartbeat);
+#endif
     elm->status = LOC_ONCHECK;
     return LOC_ONCHECK;
   }else{

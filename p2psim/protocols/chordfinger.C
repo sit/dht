@@ -145,44 +145,59 @@ ChordFinger::fix_fingers(bool restart)
 
   vector<IDMap> v;
   CHID finger;
-  Chord::IDMap currf, prevf;
+  Chord::IDMap currf, prevf, prevfpred;
   bool ok;
+  Time currf_ts;
 
   CHID lap = (CHID) -1;
-  CHID min_lap = scs[scs.size()-1].id - me.id;
 
   prevf.ip = 0;
-
+  prevfpred.ip = 0;
+  
   while (1) {
+
     lap = lap/_base;
     for (uint j = (_base-1); j >= 1; j--) {
-      if (lap * j < min_lap) goto FINGER_DONE;
+
       finger = lap * j + me.id;
-      currf = loctable->succ(finger);
-      if (currf.ip == me.ip) continue;
+      if (ConsistentHash::between(me.id,scs[scs.size()-1].id, finger))
+	break;
 
-      if ((!restart) && (currf.ip == prevf.ip)) {
-	//this finger is the same as the last one, skip it
-	continue;
-      }else if ((!restart) && (currf.ip)) { 
-	prevf = currf;
-	//just ping this finger to see if it is alive
-	get_predecessor_args gpa;
-	get_predecessor_ret gpr;
-	record_stat(TYPE_FINGER_UP,0);
-	ok = doRPC(currf.ip, &Chord::get_predecessor_handler,
-		   &gpa, &gpr);
-	if(ok) record_stat(TYPE_FINGER_UP,1);
-
-	if (!ok) {
-	  loctable->del_node(currf);
-	} else {
-	  if (ConsistentHash::between(finger,finger+lap,gpr.n.id)) 
-	    //the predecessor lies in the range, sth. fishy is going on, re-lookup finger
-	    loctable->add_node(gpr.n);
-	  else {
-	    loctable->add_node(currf);//update timestamp
+      currf = loctable->succ(finger, LOC_HEALTHY, &currf_ts);
+      if (currf.ip == me.ip) currf.ip = 0;
+      
+      if ((!restart) && (currf.ip)) { 
+	if (ConsistentHash::between(finger,finger+lap,currf.id)) {
+	  if ((now()-currf_ts) < _stab_finger_timer) {
 	    continue;
+	  }else{
+	    assert(currf.ip!=prevf.ip);
+	    //just ping this finger to see if it is alive
+	    prevf = currf;
+	    prevfpred.ip = 0;
+
+	    get_predecessor_args gpa;
+	    get_predecessor_ret gpr;
+	    ok = failure_detect(currf, &Chord::get_predecessor_handler, &gpa, &gpr, TYPE_FINGER_UP,0,0);
+	    if(ok) {
+	      record_stat(TYPE_FINGER_UP,1);
+	      assert(gpr.dst.ip == currf.ip);
+	      loctable->add_node(gpr.dst);
+	      prevfpred = gpr.n;
+	      continue;
+	    }else{
+	      loctable->del_node(currf);
+	    }
+	  }
+	} else {
+	  if ((prevf.ip == currf.ip) && (prevfpred.ip)) {
+	    if (ConsistentHash::between(finger,finger+lap,prevfpred.id)) {
+	      loctable->add_node(prevfpred);
+	      continue;
+	    } else if (prevfpred.ip && ConsistentHash::between(prevfpred.id,prevf.id,finger)) {
+	      //skip;
+	      continue;
+	    }
 	  }
 	}
       }
@@ -199,21 +214,22 @@ ChordFinger::fix_fingers(bool restart)
       if (v.size() > 0) loctable->add_node(v[0]);
     }
   }
-FINGER_DONE:
+#ifdef CHORD_DEBUG
   printf("%s ChordFinger stabilize AFTER ring sz %u\n", ts(), loctable->size());
+#endif
 }
 
 void
 ChordFinger::join(Args *args)
 {
-  if (static_sim) return;
 
   Chord::join(args);
+  if ((static_sim) || !alive()) return;
   //schedule finger stabilizer
   if (!_stab_finger_running) {
     _stab_finger_running = true;
     reschedule_finger_stabilizer((void *)1); //a hack, no null means restart fixing fingres
-  }else{
+  }else if (_join_scheduled == 0) {
     ChordFinger::fix_fingers();
   }
 }
