@@ -39,9 +39,12 @@ struct hashID {
 };
 
 bool in_vector (vec<chordID> vec, chordID N);
+
 str gettime ();
 u_int64_t getusec ();
+
 u_int32_t uniform_random(double a, double b);
+
 chordID incID (const chordID &n);
 chordID decID (const chordID &n);
 chordID successorID (const chordID &n, int p);
@@ -60,6 +63,7 @@ chordID createbits (chordID n, int b0, chordID x);
 int bitindexzeros (chordID p, int bm, int b0);
 int bitindexmismatch (chordID n, chordID p);
 u_long log2 (u_long n);
+
 sfs_hostname my_addr ();
 chordID init_chordID (int index, str name, int p);
 chordID make_chordID (str hostname, int port, int index = 0);
@@ -67,6 +71,19 @@ bool is_authenticID (const chordID &x, sfs_hostname n, int p, int vnode);
 int is_authenticID (const chordID &x, sfs_hostname n, int p);
 bool str2chordID (str c, chordID &newID);
 
-void warnt(char *msg);
+inline const strbuf &
+strbuf_cat (const strbuf &sb, const net_address &r)
+{
+  sb << r.hostname << ":" << r.port;
+  return sb;
+}
+
+inline const strbuf &
+strbuf_cat (const strbuf &sb, const chord_node &n)
+{
+  sb << n.x << "@" << n.r;
+  return sb;
+}
+
 
 #endif /* _CHORD_UTIL_H */
