@@ -414,11 +414,14 @@ dhc::recv_get (user_args *sbp)
   ptr<dbrec> rec = db->lookup (key);
 
   if (!rec) {
-    //wait and retry
+    dhc_get_res res (DHC_BLOCK_NEXIST);
+    sbp->reply (&res);
   } else {
     dhc_soft *b = dhcs[get->bID];
-    if (b && b->pstat->recon_inprogress) 
-      ; //wait and retry
+    if (b && b->pstat->recon_inprogress) {
+      dhc_get_res res (DHC_RECON_INPROG);
+      sbp->reply (&res);
+    }
 
     ptr<dhc_block> kb = to_dhc_block (rec);
     if (!b) {
@@ -427,17 +430,75 @@ dhc::recv_get (user_args *sbp)
     }
     ptr<dhc_get_arg> arg = New refcounted<dhc_get_arg>;
     arg->bID = get->bID;
+    ptr<read_state> rs = New refcounted<read_state>;
     ptr<dhc_get_res> res = New refcounted<dhc_get_res>;
     for (uint i=0; i<b->config.size (); i++)
       myNode->doRPC (b->config[i], dhc_program_1, DHCPROC_GETBLOCK, arg, res,
-		     wrap (this, &dhc::getblock_cb, get->bID, b, res));
+		     wrap (this, &dhc::getblock_cb, sbp, rs, res));
   }
 }
 
 void 
-dhc::getblock_cb (chordID bID, dhc_soft *b, ref<dhc_get_res> res, clnt_stat err)
+dhc::getblock_cb (user_args *sbp, ptr<read_state> rs, ref<dhc_get_res> res, clnt_stat err)
 {
+  if (!rs->done && !err && res->status == DHC_OK) {
+    rs->add (res->resok->data);
+    if (!rs->done && rs->blocks_rcvd >= n_replica/2) {
+      uint i;
+      for (i=0; i<rs->blocks.size (); i++)
+	if (rs->bcount[i] >= n_replica/2)
+	  break;
+      if (rs->bcount[i] >= n_replica/2) {
+	rs->done = true;
+	dhc_get_res res (DHC_OK);
+	(*res.resok).data.tag.ver = rs->blocks[i].tag.ver;
+	(*res.resok).data.tag.writer = rs->blocks[i].tag.writer;
+	(*res.resok).data.data.set (rs->blocks[i].data.base (), rs->blocks[i].data.size ());
+	sbp->reply (&res);
+      }
+    }
+  } else 
+    if (err) {
+      dhc_get_res res (DHC_CHORDERR);
+      sbp->reply (&res);
+      rs->done = true;
+    }
+    else {
+      if (res->status == DHC_RECON_INPROG ||
+	  res->status == DHC_BLOCK_NEXIST)
+	; // wait and retry
+      else {
+	sbp->reply (res);
+	rs->done = true;
+      }
+    }
+}
 
+void
+dhc::recv_getblock (user_args *sbp)
+{
+  dhc_get_arg *getblock = sbp->template getarg<dhc_get_arg> ();
+  ptr<dbrec> rec = db->lookup (id2dbrec (getblock->bID));
+  if (!rec) {
+    dhc_get_res res (DHC_BLOCK_NEXIST);
+    sbp->reply (&res);
+    return;
+  } 
+  
+  dhc_soft *b = dhcs[getblock->bID];
+  if (b && b->pstat->recon_inprogress) {
+    dhc_get_res res (DHC_RECON_INPROG);
+    sbp->reply (&res);
+    return;
+  }
+
+  ptr<dhc_block> kb = to_dhc_block (rec);
+  dhc_get_res res (DHC_OK);
+  (*res.resok).data.tag.ver = kb->data->tag.ver;
+  (*res.resok).data.tag.writer = kb->data->tag.writer;
+  (*res.resok).data.data.set (kb->data->data.base (), kb->data->data.size ());
+  sbp->reply (&res);
+  
 }
 
 void 
@@ -455,6 +516,9 @@ dhc::dispatch (user_args *sbp)
     break;
   case DHCPROC_GET:
     recv_get (sbp);
+    break;
+  case DHCPROC_GETBLOCK:
+    recv_getblock (sbp);
     break;
   default:
     warn << "dhc:dispatch Unimplemented RPC " << sbp->procno << "\n"; 

@@ -15,6 +15,7 @@
 extern void set_locations (vec<ptr<location> > *, ptr<vnode>, vec<chordID>);
 extern void ID_put (char *, chordID);
 extern void ID_get (chordID *, char *);
+extern int tag_cmp (tag_t, tag_t);
 
 // PK blocks data structure for maintaining consistency.
 
@@ -299,6 +300,30 @@ struct dhc_soft {
   }
 };
 
+struct read_state {
+  bool done;
+  uint blocks_rcvd;
+  vec<keyhash_data> blocks;
+  vec<uint> bcount;
+
+  read_state () : done (false), blocks_rcvd (0) {}
+
+  void add (keyhash_data kd) 
+  {
+    blocks_rcvd++;
+    bool found = false;
+    for (uint i=0; i<blocks.size (); i++) {
+      if (tag_cmp (blocks[i].tag, kd.tag) == 0 &&
+	  bcmp (blocks[i].data.base (), kd.data.base (), kd.data.size ()) == 0)
+	bcount[i]++;
+    }
+    if (!found) {
+      blocks.push_back (kd);
+      bcount.push_back (1);
+    }
+  }
+};
+
 typedef callback<void, dhc_stat, ptr<keyhash_data> >::ref dhc_getcb_t;
 
 class dhc {
@@ -316,7 +341,8 @@ class dhc {
   void recv_newconfig (user_args *);
   void recv_newconfig_ack (chordID, ref<dhc_newconfig_res>, clnt_stat);
   void recv_get (user_args *);
-  void getblock_cb (chordID, dhc_soft *, ref<dhc_get_res>, clnt_stat);
+  void getblock_cb (user_args *, ptr<read_state>, ref<dhc_get_res>, clnt_stat);
+  void recv_getblock (user_args *);
 
   void get_lookup_cb (chordID, dhc_getcb_t, vec<chord_node>, route, chordstat);
   void get_result_cb (chordID, dhc_getcb_t, ptr<dhc_get_res>, clnt_stat);

@@ -9,7 +9,8 @@ enum dhc_stat {
    DHC_NOT_A_REPLICA = 4,
    DHC_CHORDERR = 5,
    DHC_RECON_INPROG = 6,
-   DHC_OLD_VER = 7
+   DHC_OLD_VER = 7,
+   DHC_BLOCK_NEXIST = 8
 };
 
 struct paxos_seqnum_t {
