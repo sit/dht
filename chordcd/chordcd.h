@@ -24,6 +24,7 @@ typedef callback<void, ptr<sfsro_inode> >::ref cbfetch_inode_t;
 
 struct namei_state;
 struct lookup_state;
+struct getdata_state;
 
 struct fetch_wait_state {
   cbgetdata_t cb;
@@ -106,6 +107,22 @@ class chord_server  {
 			    clnt_stat err);
   void finish_getdata (char *buf, unsigned int size, 
 		       cbgetdata_t cb, chordID ID);
+
+
+
+
+  void fetch_data2 (chordID ID, cbfetch_block_t cb);
+  void getdata2 (chordID ID, cbgetdata_t cb);
+  void getdata2_initial_cb(ptr<getdata_state> st,
+			    ptr<dhash_res> res, 
+			    clnt_stat err);
+  void getdata2_fragment_cb(ptr<getdata_state> st,
+			    ptr<dhash_res> res,
+			    clnt_stat err);
+
+  void getdata2_finish (ptr<getdata_state> st);
+
+
 
 
 

@@ -926,12 +926,16 @@ chord_server::read_file_data_bmap_cb (cbgetdata_t cb, bool pfonly, chordID ID, b
 }
 
 
-
 // ------------------------ raw data fetch ------------------
 
 void
 chord_server::fetch_data (chordID ID, cbfetch_block_t cb)
 {
+#if 0
+  fetch_data2 (ID, cb);
+  return;
+#endif
+
   get_data (ID, cb, false);
 }
 
@@ -939,6 +943,10 @@ chord_server::fetch_data (chordID ID, cbfetch_block_t cb)
 void
 chord_server::get_data (chordID ID, cbgetdata_t cb, bool pf_only) 
 {
+#if 0
+  getdata2 (ID, cb);
+  return;
+#endif
 
   //check for pending request for the same data
   wait_list *l;
@@ -962,6 +970,7 @@ chord_server::get_data (chordID ID, cbgetdata_t cb, bool pf_only)
   arg.key = ID;
   arg.len = CMTU;
   arg.start = 0;
+  
   
   dhash_res *res = New dhash_res (DHASH_OK);
 
@@ -990,6 +999,7 @@ chord_server::get_data_initial_cb (dhash_res *res, cbgetdata_t cb, chordID ID,
     unsigned int offset = res->resok->res.size ();
     unsigned int *read = New unsigned int (offset);
     while (offset < res->resok->attr.size) {
+      // XXX arg can just be stack allocated right?
       ptr<dhash_transfer_arg> arg = New refcounted<dhash_transfer_arg> ();
       arg->farg.key = ID;
       arg->farg.len = (offset + CMTU < res->resok->attr.size) ? CMTU :
@@ -1009,6 +1019,8 @@ chord_server::get_data_initial_cb (dhash_res *res, cbgetdata_t cb, chordID ID,
       offset += arg->farg.len;
     }
   }
+
+  // XXX make res refcounted so we dont need delete
   delete res;
 }
 
@@ -1022,8 +1034,9 @@ chord_server::get_data_partial_cb (dhash_res *res, char *buf,
   if (err)
     fatal << "EOF from chord daemon. Shutting down\n";
   else if (res->status != DHASH_OK) {
-    delete buf;
-    delete read;
+    delete buf;   // XXX make refcounted so we dont need delete
+    delete read;  // XXX make refcounted so we dont need delete
+
     // 
     // XXX the call to get_data() is expecting its callback to be
     //     called back exactly once.  This code could callback once
@@ -1081,6 +1094,134 @@ chord_server::finish_getdata (char *buf, unsigned int size, cbgetdata_t cb,
       }
       
       delete buf;
+    }
+  }
+}
+
+
+
+// ------------------------ raw data fetch 2 ------------------
+
+void
+chord_server::fetch_data2 (chordID ID, cbfetch_block_t cb)
+{
+  getdata2 (ID, cb);
+}
+
+struct getdata_state {
+  // interface variables
+  chordID ID;
+  cbgetdata_t cb;
+
+  // state variables
+  char *buf;       // block is accumulated here   
+  uint32 bufsize;  // size of buffer
+  uint32 nread;    // bytes copied into buf so far (not necessarily contigous) 
+  uint32 npending; // pending RPCs
+
+  getdata_state(chordID ID, cbgetdata_t cb) :
+    ID (ID), cb (cb), buf (NULL), bufsize (0), nread (0), npending (0) {}
+  ~getdata_state() { delete [] buf; }
+};
+
+
+void
+chord_server::getdata2 (chordID ID, cbgetdata_t cb)
+{
+  if (wait_list *l = pf_waiters[ID]) {
+    fetch_wait_state *w = New fetch_wait_state (cb);
+    l->insert_head (w);
+  }
+  else if (ptr<sfsro_data> dat = data_cache [ID]) {
+    (*cb) (dat);
+  }
+  else {
+    ptr<getdata_state> st = New refcounted<getdata_state>(ID, cb);
+    ptr<dhash_res> res = New refcounted<dhash_res> (DHASH_OK);
+    dhash_fetch_arg arg; // = { .key = ID, .len = CMTU, .start = 0 };
+    arg.key = ID;
+    arg.len = CMTU;
+    arg.start = 0; // XXX perhaps, lookup should be pointed at the last fragment, 
+                   // otherwise both the first and last frags are not maximally sized.
+    cclnt->call (DHASHPROC_LOOKUP, &arg, res, 
+		 wrap (this, &chord_server::getdata2_initial_cb, st, res));
+  }
+}
+
+
+void
+chord_server::getdata2_initial_cb(ptr<getdata_state> st,
+				  ptr<dhash_res> res, 
+				  clnt_stat err)
+{
+  if (err) 
+    fatal << "EOF from chord daemon. Shutting down\n";
+  else if (res->status != DHASH_OK) {
+    fatal << "error fetching " << st->ID << "\n";
+  } else {
+    st->bufsize = res->resok->attr.size;
+    // XXX sanity check..
+    st->buf = New char[st->bufsize];
+    st->npending = 1; // fake a fragment callback
+    getdata2_fragment_cb (st, res, RPC_SUCCESS);
+
+    uint32 offset = res->resok->res.size ();
+    while (offset < res->resok->attr.size) {
+      st->npending++;
+      ptr<dhash_res> new_res = New refcounted<dhash_res> (DHASH_OK);
+      dhash_transfer_arg arg;
+      arg.source = res->resok->source;
+      arg.farg.key = st->ID;
+      arg.farg.start = offset;
+      arg.farg.len = MIN (CMTU, res->resok->attr.size - offset);
+      cclnt->call (DHASHPROC_TRANSFER, &arg, new_res,
+		   wrap (this, &chord_server::getdata2_fragment_cb, st, new_res));
+      
+      offset += arg.farg.len;
+    }
+  }
+}
+
+
+void
+chord_server::getdata2_fragment_cb(ptr<getdata_state> st,
+				   ptr<dhash_res> res,
+				   clnt_stat err)
+{
+  if (err)
+    fatal << "get_data_fragment_cb err: " << strerror(err) << "\n";
+  else if (res->status != DHASH_OK) 
+    fatal << "get_data_fragment_cb bad status: " << strerror(res->status) << "\n";
+  else {
+    st->npending--;
+    st->nread += res->resok->res.size ();
+    // XXX bounds check
+    memcpy (&st->buf[res->resok->offset], res->resok->res.base (), res->resok->res.size ());
+
+    if (st->npending == 0 && st->nread == st->bufsize)
+      getdata2_finish(st);
+  }
+}
+
+
+void
+chord_server::getdata2_finish (ptr<getdata_state> st)
+{
+  ptr<sfsro_data> data = New refcounted<sfsro_data>;
+  xdrmem x (st->buf, st->bufsize, XDR_DECODE);
+  if (!xdr_sfsro_data (x.xdrp (), data)) {
+    warn << "Couldn't unmarshall data\n";
+    (*st->cb) (NULL);
+  } else {
+    (*st->cb) (data);
+
+    data_cache.insert (st->ID, data);
+
+    if (wait_list *l = pf_waiters[st->ID]) {
+      while (fetch_wait_state *w = l->first) {
+	(*w->cb) (data);
+	l->remove (l->first);
+      }
     }
   }
 }
