@@ -1,7 +1,7 @@
 #ifndef NNTP_H
 #define NNTP_H
 
-#include <group.h>
+#include "group.h"
 
 struct nntp;
 
@@ -19,7 +19,7 @@ struct nntp {
   int s;
   suio in;
   strbuf out;
-  group cur_group;
+  newsgroup cur_group;
   cbv process_input;
   bool posting;
   timecb_t *timeout;

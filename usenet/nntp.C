@@ -329,7 +329,7 @@ void
 nntp::read_post (str resp, str bad)
 {
   ptr<dbrec> k, d;
-  ptr<group> g;
+  ptr<newsgroup> g;
   str ng, msgid;
   bool posted = false;
   chordID ID;
@@ -370,7 +370,7 @@ warn << " resid " << in.resid () << " rem " << postrx.len (0) << "\n";
     d = New refcounted<dbrec> (header, header.len ());
     header_db->insert(k, d);
 
-    g = New refcounted<group> ();
+    g = New refcounted<newsgroup> ();
     if (postngrx.search (postrx[2])) {
       ng = postngrx[1];
 

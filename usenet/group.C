@@ -28,9 +28,18 @@ grouplist::next (str *f, unsigned long *i)
 }
 
 
+newsgroup::newsgroup () :
+  rec (NULL),
+  cur_art (0),
+  start (0),
+  stop (0),
+  c (NULL),
+  len (0)
+{
+}
 
 int
-group::open (str g)
+newsgroup::open (str g)
 {
   rec = group_db->lookup(New refcounted<dbrec> (g, g.len ()));
   if (rec == NULL)
@@ -45,7 +54,7 @@ group::open (str g)
 }
 
 int
-group::open (str g, volatile unsigned long *count,
+newsgroup::open (str g, volatile unsigned long *count,
 	     unsigned long *first, unsigned long *last)
 {
   if (open (g) < 0)
@@ -72,7 +81,7 @@ group::open (str g, volatile unsigned long *count,
 static rxx listrxend ("(\\d+)(<[^>]+>)([^:]+):$");
 
 void
-group::addid (str msgid, chordID ID)
+newsgroup::addid (str msgid, chordID ID)
 {
   assert (rec);
   str old (rec->value, rec->len), updated;
@@ -91,7 +100,7 @@ group::addid (str msgid, chordID ID)
 
 // now returns the chordid
 chordID
-group::getid (unsigned long index)
+newsgroup::getid (unsigned long index)
 {
   if (rec == NULL)
     return 0;
@@ -112,7 +121,7 @@ group::getid (unsigned long index)
 
 static rxx getchordid ("ChordID: (.+)\\r");
 chordID
-group::getid (str msgid)
+newsgroup::getid (str msgid)
 {
   ptr<dbrec> key, d;
 
@@ -126,7 +135,7 @@ group::getid (str msgid)
 }
 
 void
-group::xover (unsigned long a, unsigned long b)
+newsgroup::xover (unsigned long a, unsigned long b)
 {
   start = a;
   stop = b;
@@ -163,7 +172,7 @@ tabfilter (str f)
 
 // format: "subject\tauthor\tdate\t<msgid>\treferences\tsize\tlines"
 strbuf
-group::next (void)
+newsgroup::next (void)
 {
   ptr<dbrec> art;
   strbuf resp;

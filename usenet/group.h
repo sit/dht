@@ -13,14 +13,14 @@ struct grouplist {
   bool more (void) { return d; };
 };
 
-struct group {
+struct newsgroup {
   ptr<dbrec> rec;
   unsigned long cur_art, start, stop;
   char *c;
   int len;
   str group_name;
 
-  group () : rec (0), cur_art (0) {};
+  newsgroup ();
   int open (str);
   int open (str, volatile unsigned long *, unsigned long *, unsigned long *);
   str name (void) { return group_name; };
