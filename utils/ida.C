@@ -109,7 +109,9 @@ Ida::gen_frag_ (int m, const str &in, vec<u_long> &out)
   vec<u_long> v;
   v.setsize (m);
   for (int k = 0; k < m; k++) {
-    u_long vi = random_getword () % field;
+    u_long vi = 0;
+    while (vi == 0)
+      vi = random_getword () % field;
     out[outp++] = vi;
     v[k] = vi;
   }
