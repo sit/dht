@@ -1,7 +1,7 @@
 noinst_PROGRAMS = misc.o
-misc_o_SOURCES = vivaldinode.C vivalditest.C
+misc_o_SOURCES = vivaldinode.C vivalditest.C simplex.c
 
-EXTRA_DIST = vivaldinode.h vivalditest.h
+EXTRA_DIST = vivaldinode.h vivalditest.h simplex.h
 
 LIBS =
 misc_o_LINK = $(LD) -r -o $@

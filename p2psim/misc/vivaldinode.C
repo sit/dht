@@ -3,11 +3,14 @@
 #include "topologies/euclidean.h"
 #include "math.h"
 #include <iostream>
+#include "simplex.h"
 
 static int usinght = -1;
 #define PI 3.1415927
 #define A_REL_REL 2
 #define A_PRED_ERR 3
+
+static VivaldiNode::Coord run_simplex(VivaldiNode*);
 
 double spherical_dist_arc (VivaldiNode::Coord a, VivaldiNode::Coord b);
 VivaldiNode::Coord  cross (VivaldiNode::Coord a, VivaldiNode::Coord b);
@@ -25,12 +28,13 @@ VivaldiNode::VivaldiNode(IPAddress ip) : P2Protocol (ip)
   long timestep_scaled = args().nget<uint>("timestep", 5000, 10);
   _timestep = ((double)timestep_scaled)/1000000;
   _pred_err  = -1;
-  _window_size = args().nget<uint>("window-size", (uint) -1, 10);
+  _window_size = args().nget<uint>("window-size", 1, 10);
   _model = args()["model"];
   _radius = args().nget<uint>("radius", (uint) 20000, 10);
   _tsize = args().nget<uint>("tsize", (uint) 20000, 10);
   _initial_triangulation = args().nget<uint>("triangulate", (uint) 0, 10);
   _num_init_samples = args().nget<uint>("num_init_samples", (uint) 0, 10);
+  _algorithm = args()["algorithm"];
 
   string _adaptive_in = args()["adaptive"];
 
@@ -52,17 +56,21 @@ VivaldiNode::VivaldiNode(IPAddress ip) : P2Protocol (ip)
   else
     _model_type = MODEL_EUCLIDEAN;
 
-  // Start out at a random point
-  // for (int i = 0; i < _dim; i++) 
-  //   _c._v.push_back (random() % 200000 - 1000000);
-  // _c._ht = random() % 200000 - 1000000);
+  if (_algorithm == "simplex") {
+    _algorithm_type = ALG_SIMPLEX;
+    if(_window_size < _dim+1){
+      cerr << "not enough dimensions for simplex\n";
+      abort();
+    }
+  }else
+    _algorithm_type = ALG_VIVALDI;
 
   if (_model_type == MODEL_EUCLIDEAN || _model_type == MODEL_TORUS) {
     // Start out at the origin 
-    for (int i = 0; i < _dim; i++)
+    for (uint i = 0; i < _dim; i++)
       _c._v.push_back (0.0);
   } else if (_model_type == MODEL_SPHERE) {
-    for (int i = 0; i < _dim; i++)
+    for (uint i = 0; i < _dim; i++)
       _c._v.push_back (random ());
     //now unitize it
     _c = _c / length (_c);
@@ -120,8 +128,6 @@ VivaldiNode::get_weights (vector<Sample> v)
 void
 VivaldiNode::update_error (vector<Sample> samples)
 {
-
-
   double expect = dist (_c, samples[0]._c);
   double actual = samples[0]._latency;
   double rel_error = fabs(expect - actual)/actual;
@@ -137,25 +143,6 @@ VivaldiNode::update_error (vector<Sample> samples)
     _pred_err = (19*_pred_err + new_pred_err)/20.0;
     if (_pred_err > 1.0) _pred_err = 1.0;
   }
-
-#if 0
-
-  vector<double> weights = get_weights(samples);
-
-  double sum = 0.0;
-  //  cerr << ip () << " error = ";
-  for (unsigned int i = 0; i < samples.size (); i++) {
-    double expect = dist (_c, samples[i]._c);
-    double actual = samples[i]._latency;
-    double rel_error = fabs(expect - actual)/actual;
-    //    cerr << rel_error << "(" << fabs(expect - actual) 
-    //	 << "/" << actual << " + ";
-    sum += weights[i]*rel_error;
-  }
-  //  _pred_err = (_pred_err*19 + sum/samples.size ())/20.0;
-  _pred_err = sum/samples.size ();
-  //  cerr << " = " << _pred_err << "\n";
-#endif
 }
 
 VivaldiNode::Coord
@@ -264,9 +251,16 @@ VivaldiNode::algorithm(Sample s)
       return;
     }
 
+  if(_samples.size() == _window_size)
+    _samples.erase(_samples.begin());
   _samples.push_back(s);
+  
+  if(_algorithm_type == ALG_SIMPLEX){
+    _c = run_simplex(this);
+    return;
+  }
+  
   update_error (_samples);
-  _samples.clear ();
 
   _curts = _curts - 0.025;
   double t;
@@ -312,9 +306,7 @@ VivaldiNode::algorithm(Sample s)
       cerr << "rejecting invalid measurement\n";
     }
   } else if (_model_type == MODEL_EUCLIDEAN) {
-    vector<Sample> S;
-    S.push_back(s);
-    Coord f = net_force(_c, S);
+    Coord f = net_force(_c, _samples);
     _c = _c + (f * t);
   } else if (_model_type == MODEL_TORUS) {
     Coord f = net_force_toroidal (_c, _samples);
@@ -366,6 +358,10 @@ VivaldiNode::real_coords ()
   }
   return ret;
 }
+
+/*
+ * Coordinate manipulation code.
+ */
 
 ostream&
 operator<< (ostream &s, VivaldiNode::Coord &c) 
@@ -567,3 +563,56 @@ VivaldiNode::dist(VivaldiNode::Coord a, VivaldiNode::Coord b)
     return toroidal_dist (a,b);
     
 }
+
+/*
+ * Use generic simplex code to determine the best placement.
+ */
+
+static inline double
+square(double x)
+{
+  return x*x;
+}
+
+static double
+simplex_error(double *x, int dim, void *v)
+{
+  VivaldiNode *node;
+  
+  node = (VivaldiNode*)v;
+  if(usinght)
+    dim--;
+  VivaldiNode::Coord c(dim);
+  for(int i=0; i<dim; i++){
+    c._v.push_back(x[i]);
+  }
+  if(usinght)
+    c._ht = x[dim];
+    
+  double tot=0;
+  for(uint i=0; i<node->_samples.size(); i++){
+    double estimate = node->dist(c, node->_samples[i]._c);
+    double actual = node->_samples[i]._latency;
+    tot += square((actual-estimate)/actual);
+  }
+  return tot;
+}
+
+static VivaldiNode::Coord
+run_simplex(VivaldiNode *node)
+{
+  int dim = node->_samples[0]._c._v.size();
+  int dimh = dim + (usinght!=0);
+  Simplex *plex = allocsimplex(dimh, simplex_error, (void*)node);
+  double *best = 0;
+  stepsimplex(plex, &best);
+  VivaldiNode::Coord c(dim);
+  for(int i=0; i<dim; i++){
+    c._v.push_back(best[i]);
+  }
+  if(usinght)
+    c._ht = best[dim];
+  free(plex);
+  return c;
+}
+

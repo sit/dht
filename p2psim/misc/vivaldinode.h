@@ -36,6 +36,9 @@
 #define MODEL_EUCLIDEAN 3
 #define MODEL_TORUS 4
 
+#define ALG_VIVALDI 1
+#define ALG_SIMPLEX 2
+
 class VivaldiNode : public P2Protocol {
 public:
   VivaldiNode(IPAddress);
@@ -71,22 +74,22 @@ public:
   Coord real_coords ();
   //end vivaldi.h
 
-protected:
-
   //from vivaldi.h
   int _nsamples; // how many times sample() has been called
-  int _dim; //dimensionality of the fit space
+  uint _dim; //dimensionality of the fit space
   int _adaptive; //use adaptive timestep?
   double _timestep; //minimum timestep
   double _curts;
   double _pred_err; // running average of prediction error
-  int _window_size;
+  uint _window_size;
   string _model;
   int _model_type;
   double _radius;
   int _initial_triangulation;
   unsigned int _num_init_samples;
   double _tsize;
+  string _algorithm;
+  int _algorithm_type;
 
   Coord _c; // current estimated coordinates
   vector<Sample> _samples;
