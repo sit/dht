@@ -87,9 +87,9 @@ dhc::recon_tm_lookup (ref<dhc_block> kb, bool guilty, vec<chord_node> succs,
 
 	ptr<dhc_newconfig_arg> arg = New refcounted<dhc_newconfig_arg>;
 	arg->bID = kb->id;
-	arg->data.tag.ver = 0;
-	arg->data.tag.writer = 0;
-	arg->data.data.setsize (0); // Send a NULL block
+	arg->data.tag.ver = kb->data->tag.ver;
+	arg->data.tag.writer = kb->data->tag.writer;
+	arg->data.data.set (kb->data->data.base (), kb->data->data.size ()); // Send a NULL block
 	arg->old_conf_seqnum = kb->meta->config.seqnum - 1; //set it to last config
 	arg->new_config.setsize (kb->meta->config.nodes.size ());
 	for (uint i=0; i<arg->new_config.size (); i++)
@@ -289,8 +289,7 @@ dhc::recv_accept (chordID bID, dhc_cb_t cb,
       set_new_config (arg, b->pstat->acc_conf);
 
 #if DHC_DEBUG
-      //End of recon protocol !!!
-      warn << "\n\n" << "dhc::recv_accept End of recon for block " << b->id << "\n";
+      warn << "\n\n" << "dhc::recv_accept Config accepted for block " << b->id << "\n";
 #endif
       dhcs.insert (b);
 
@@ -302,7 +301,7 @@ dhc::recv_accept (chordID bID, dhc_cb_t cb,
 		       wrap (this, &dhc::recv_newconfig_ack, b->id, cb, res));
       }
       db->insert (id2dbrec (kb->id), to_dbrec (kb));
-      //db->sync ();
+      db->sync ();
     }
   } else {
     if (err == RPC_CANTSEND) {
@@ -346,6 +345,7 @@ dhc::recv_newconfig_ack (chordID bID, dhc_cb_t cb, ref<dhc_newconfig_res> ack,
       end_recon = tp.tv_sec * (u_int64_t)1000000 + tp.tv_usec;
       warn << myNode->my_ID () << " End RECON at " << end_recon << "\n";
       warn << "             time elapse: " << end_recon-start_recon << " usecs\n";
+      exit (0); //So that I can read the time.
       (*cb) (DHC_OK, clnt_stat (0));
     }    
   } else {
@@ -461,7 +461,7 @@ dhc::recv_propose (user_args *sbp)
       db->insert (id2dbrec (kb->id), to_dbrec (kb));
       dhc_propose_res res (DHC_OK);
       sbp->reply (&res);
-      //db->sync ();
+      db->sync ();
     } else {
       dhc_propose_res res (DHC_CONF_MISMATCH);
       sbp->reply (&res);

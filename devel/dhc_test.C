@@ -17,6 +17,7 @@ ptr<sfspriv> sk;
 int insert_count, read_count;
 u_int64_t start_massive_insert, end_massive_insert;
 u_int64_t start_massive_read, end_massive_read;
+u_int64_t total_massive_insert;
 
 void readonly_cb (chordID key, dhashclient dhash, dhash_stat stat, 
 		  ptr<dhash_block> blk, vec<chordID> path);
@@ -28,26 +29,28 @@ sfs_sig2 ms;
 void 
 write_cb (dhashclient dhash, dhash_stat stat, ptr<insert_info> i)
 {
-  if (stat == DHASH_OK)
+  timeval tp;
+  if (stat == DHASH_OK) {
+    gettimeofday (&tp, NULL);
+    end_massive_insert = tp.tv_sec * (u_int64_t) 1000000 + tp.tv_usec;
+    total_massive_insert += (end_massive_insert - start_massive_insert);
     insert_count++;
-    else {
-      warn << "write_cb err dhash_stat: " << stat << "\n";
-      exit (-1);
-    }
+  } else {
+    warn << "write_cb err dhash_stat: " << stat << "\n";
+    exit (-1);
+  }
 
   if (insert_count < 100) {
     mp = keyhash_payload (insert_count+1, str (data, DATASIZE));
     mp.sign (sk, mpk, ms);
+    gettimeofday (&tp, NULL);
+    start_massive_insert = tp.tv_sec * (u_int64_t) 1000000 + tp.tv_usec;
     dhash.insert (mp.id (mpk), mpk, ms, mp, wrap (&write_cb, dhash), NULL);
   }
 
   if (insert_count == 100) {
-    timeval tp;
-    gettimeofday (&tp, NULL);
-    end_massive_insert = tp.tv_sec * (u_int64_t) 1000000 + tp.tv_usec;
     warn << "DHC_TEST: Massive Insert Successful \n";
-    warn << "DHC_TEST End massive Insert at " << end_massive_insert << "\n";
-    warn << "           elapse time " << end_massive_insert - start_massive_insert 
+    warn << "           elapse time " << total_massive_insert
 	 << " usecs\n";
     read_count = 0;
     gettimeofday (&tp, NULL);
@@ -103,11 +106,12 @@ newblock_cb (dhashclient dhash, dhash_stat stat, ptr<insert_info> i)
     warn << "DHC NEWBLOCK insert successful\n";
     warn << "DHC End Insert at " << end_insert << "\n";
     warn << "      elapse time " << end_insert - start_insert << " usecs\n";
-    gettimeofday (&tp, NULL);
-    start_massive_insert = tp.tv_sec * (u_int64_t) 1000000 + tp.tv_usec;
     insert_count = 0;
+    total_massive_insert = 0;
     mp = keyhash_payload (1, str (data, DATASIZE));
     mp.sign (sk, mpk, ms);
+    gettimeofday (&tp, NULL);
+    start_massive_insert = tp.tv_sec * (u_int64_t) 1000000 + tp.tv_usec;
     dhash.insert (mp.id (mpk), mpk, ms, mp, wrap (&write_cb, dhash), NULL); 
   }
 }
