@@ -10,22 +10,13 @@
 #include <dhash.h>
 #include <dhash_common.h>
 #include <dhashclient.h>
+#include <verify.h>
 
 dhashclient *dhash;
 int inflight = 0;
 FILE *outfile;
 
-// utility functions ----------------------------------
-
-chordID compute_hash(char *buf, int len) {
-  char hashbytes[sha1::hashsize];
-  chordID ID;
-
-  sha1_hash (hashbytes, buf, len);
-  mpz_set_rawmag_be (&ID, hashbytes, sizeof (hashbytes));  // For big endian
-
-  return ID;
-}
+// write block functions ----------------------------------
 
 void insert_cb(dhash_stat s, ptr<insert_info>) {
   if(s != DHASH_OK)
@@ -110,16 +101,30 @@ struct indirect {
 
 
 // inode block -------------------------------------
+// this is similar to an indirect block, but prepends
+// a file name and length to it.
 
 struct inode : indirect {
   char filename[256];
   int filelen;
-  int extralen;
+  unsigned int extralen, blen;
+  char *buf;
 
-  inode(char *aname, int alen) : indirect(NULL) {
-    strncpy(filename, aname, sizeof(filename));
-    filelen = alen;
+  inode(char *_name, int _len) : indirect(NULL) {
     extralen = sizeof(filename) + sizeof(filelen);
+    strncpy(filename, _name, sizeof(filename));
+    filelen = _len;
+  }
+
+  inode(ptr<dhash_block> blk) : indirect(NULL) {
+    extralen = sizeof(filename) + sizeof(filelen);
+    if(blk->len < extralen)
+      fatal("incorrect format of inode block\n");
+
+    strncpy(filename, blk->data, sizeof(filename));
+    memcpy(&filelen, blk->data + sizeof(filename), sizeof(filelen));
+    buf = blk->data + extralen;
+    blen = blk->len - extralen;
   }
 
   int len(void) {
@@ -152,13 +157,9 @@ void list_cb(dhash_stat st, ptr<dhash_block> bl, vec<chordID> vc) {
   if(st != DHASH_OK)
     fatal("lost inode\n");
 
-  str fns(bl->data, 256);
-  char filename[256];
-  strcpy(filename, fns);
-  int filelen;
-  memcpy(&filelen, bl->data+256, sizeof(filelen));
+  inode i(bl);
+  warnx << i.filename << ": " << i.filelen << " bytes\n";
 
-  warnx << filename << ": " << filelen << " bytes\n";
   exit(0);
 }
 
@@ -192,9 +193,9 @@ void gotindirect_cb(int len, dhash_stat st, ptr<dhash_block> bl,
 
   char *buf = bl->data;
   chordID ID;
-  for(unsigned int i=0; i<bl->len; i+=20) {
+  for(unsigned int i=0; i<bl->len; i+=sha1::hashsize) {
     mpz_set_rawmag_be (&ID, buf+i, sha1::hashsize);  // For big endian
-    dhash->retrieve(ID, wrap(&gotblock_cb, len+BLOCKSIZE*i/20));
+    dhash->retrieve(ID, wrap(&gotblock_cb, len+(i*BLOCKSIZE/sha1::hashsize)));
     warnx << "retrieve " << ID << "\n";
     inflight++;
   }
@@ -204,21 +205,16 @@ void gotinode_cb(dhash_stat st, ptr<dhash_block> bl, vec<chordID> vc) {
   if(st != DHASH_OK)
     fatal("lost inode\n");
 
-  str fns(bl->data, 256);
-  char filename[256];
-  strcpy(filename, fns);
-  int filelen;
-  memcpy(&filelen, bl->data+256, sizeof(filelen));
+  inode in(bl);
 
-  outfile = fopen(filename, "w");
+  outfile = fopen(in.filename, "w");
   if(outfile == NULL)
     fatal("can't open file for writing\n");
 
-  char *buf = bl->data+260;
   chordID ID;
-  for(unsigned int i=0; i<(bl->len-260); i+=20) {
-    mpz_set_rawmag_be(&ID, buf+i, sha1::hashsize);  // For big endian
-    dhash->retrieve(ID, wrap(&gotindirect_cb, (BLOCKSIZE/20)*BLOCKSIZE*i/20));
+  for(unsigned int i=0; i<(in.blen); i+=sha1::hashsize) {
+    mpz_set_rawmag_be(&ID, in.buf+i, sha1::hashsize);  // For big endian
+    dhash->retrieve(ID, wrap(&gotindirect_cb, (BLOCKSIZE/sha1::hashsize)*(i*BLOCKSIZE/20)));
     warnx << "retrieve " << ID << "\n";
   }
 }
