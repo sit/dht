@@ -46,8 +46,6 @@ threadmain(int argc, char *argv[])
 void
 parse_args(int argc, char *argv[])
 {
-//  setprogname (argv[0]);
-
   int ch;
   while ((ch = getopt (argc, argv, "v")) != -1) {
     switch (ch) {

@@ -18,6 +18,10 @@ Chord::Chord(Node *n, uint numsucc) : Protocol(n)
   loctable->pin(me.id + 1, nsucc, 0);
   //pin down 1 predecessor
   loctable->pin(me.id - 1, 0, 1);
+
+  if (vis) {
+    printf ("vis %lu node %16qx\n", now (), me.id);
+  }
 }
 
 Chord::~Chord()
