@@ -34,14 +34,18 @@ finger_table_pns::finger (int i)
 
   if (pnsf && pnsf->alive ())
     return pnsf;
-  
-  pnsfingers[i] = NULL;
-  // XXX try to find some other PNS finger that is good enough.
-#if 0  
-  warning << myvnode->my_ID () << ": falling through to real finger "
-	  << i << "\n";
-#endif /* 0 */  
 
+  // XXX try to find some other PNS finger that is good enough.
+#if 0
+  if (pnsf) 
+    trace << myvnode->my_ID () << ": falling through to real finger "
+	  << i << " because the PNS finger was dead\n";
+  else
+    trace << myvnode->my_ID () << ": falling through to real finger "
+	  << i << " because the PNS finger was missing\n";
+#endif
+
+  pnsfingers[i] = NULL;
   return finger_table::finger (i);
 }
 
@@ -55,7 +59,12 @@ finger_table_pns::operator[] (int i)
 void
 finger_table_pns::stats ()
 {
-  warnx << "PNS finger table\n";
+  for (int i = 0; i < NBIT; i++)
+    {
+      trace << myvnode->my_ID () << " " << i << "th PNS finger :" 
+	    << pnsfingers[i]->id() << " vs. " << finger(i)->id () 
+	    << "\n";
+    }
 }
 
 void
@@ -114,9 +123,12 @@ finger_table_pns::getsucclist_cb (int l, int r, vec<chord_node> succs,
 	break;
       }
       
-      // this is a recursive closeness measure
       Coord candidate_coords (succs[i]);
       float curdist = Coord::distance_f (my_coords, candidate_coords);
+      trace << myvnode->my_ID () << "candidate " << i << ": "
+	    << succs[i].r.hostname << " at distance " << (int)curdist << "\n";
+
+      // this is a recursive closeness measure
       if (mindist < 0 || curdist < mindist) {
 	if (mindist < 0) real_lat = (int) curdist;
 	best_succ = i;
@@ -125,12 +137,16 @@ finger_table_pns::getsucclist_cb (int l, int r, vec<chord_node> succs,
     }
 
     if (best_succ > 0) {
-      trace << "new PNS finger " << l << " is successor "
+      trace << myvnode->my_ID () << ": new PNS finger " 
+	    << l << " is successor "
 	    << best_succ << "; latency: " << (int)mindist
 	    << " is better than " << real_lat << "\n";
       ptr<location> nl = locations->insert (succs[best_succ]);
-      for (int i = l; i < r; i++)
+      int i = l;
+      do {
 	pnsfingers[i] = nl;
+	i++;
+      } while (i < r);
     }
   }
 }
