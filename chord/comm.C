@@ -489,7 +489,10 @@ void
 stp_manager::rexmit (long seqno)
 {
   rpc_state *C = user_rexmit_table[seqno];
-  assert (C);
+  if (!C) {
+    warn << seqno << "retransmit ID  not present for retransmission\n";
+    return;
+  }
   C->b->user_rexmit ();
 }
 void
