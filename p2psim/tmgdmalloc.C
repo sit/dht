@@ -8,6 +8,7 @@ hash_map<string, __tmg_dmalloc_entry*> __tmg_dmalloc_map;
 // maps pointers to class names
 hash_map<void*, string> __tmg_dmalloc_typemap;
 
+
 void
 __tmg_dmalloc_del(void *p)
 {
@@ -25,11 +26,11 @@ __tmg_dmalloc_del(void *p)
   // lower number of references and remove file/line entry
   __tmg_dmalloc_entry *ne = 0;
   ne = __tmg_dmalloc_map[name];
-  if(!(--ne->nobj)) {
-    delete __tmg_dmalloc_map[name];
-    __tmg_dmalloc_map.erase(name);
-  }
   ne->where.erase(p);
+  if(!(--ne->nobj)) {
+    __tmg_dmalloc_map.erase(name);
+    delete ne;
+  }
 };
 
 
@@ -56,13 +57,13 @@ __tmg_dmalloc_large_dump()
       i != __tmg_dmalloc_map.end();
       ++i)
   {
+    printf("Total of class %s: %d\n", i->first.c_str(), i->second->nobj);
     for(hash_map<void*, pair<string, unsigned> >::const_iterator j = i->second->where.begin();
       j != i->second->where.end();
       ++j)
     {
-      cout << "Class: " << i->first << endl;
-      cout << "instances: " << i->second->nobj << endl;
-      cout << j->second.first << ":" << j->second.second << endl;
+      printf("Class %s -> %p ", i->first.c_str(), j->first);
+      printf("alloc in %s:%d\n", j->second.first.c_str(), j->second.second);
     }
   }
 }

@@ -676,10 +676,11 @@ k_bucket::k_bucket(Kademlia *k, k_bucket_tree *root) : _leaf(false), _self(k), _
 // depth-first delete
 k_bucket::~k_bucket()
 {
-  if(_child[0])
+  if(_child[0]) {
     Delete(_child[0]);
-  if(_child[1])
+  } if(_child[1]) {
     Delete(_child[1]);
+  }
 
   if(_nodes) {
     for(set<peer_t*>::const_iterator it = _nodes->begin(); it != _nodes->end(); ++it) {
