@@ -6,6 +6,8 @@ import sys
 from utils import str2chordID, size_rounder
 import dhash
 
+do_spread = 0
+
 def get_node_id (args):
     try:
 	return long(args)
@@ -98,6 +100,31 @@ def file_evgen (fname):
         except Exception, e:
             sys.stderr.write ("Bad event at line %d: %s\n" % (lineno, e))
 
+def calc_spread (dh, stats):
+    """Helper function for _monitor to calculate how far apart blocks get.
+       Adds spread_min, spread_max, and spread_avg keys to stats table.
+    """
+    ssum = 0
+    min = 64
+    max = -1
+    for b in dh.blocks:
+        succs = dh.succ (b, 2*dh.look_ahead())
+        found = 0
+        examined = 0
+        for s in succs:
+            examined = examined + 1
+            if b in s.blocks:
+                found = found + 1
+                if (found == dh.read_pieces()):
+                    break
+        ssum += examined
+        if examined < min: min = examined
+        if examined > max: max = examined
+    stats['spread_min'] = min
+    if (len(dh.blocks) > 0): stats['spread_avg'] = ssum/len(dh.blocks)
+    else: stats['spread_avg'] = 0
+    stats['spread_max'] = max
+    
 sbkeys = ['insert', 'join_repair_write', 'join_repair_read',
 	  'failure_repair_write', 'failure_repair_read', 'pm']
 def _monitor (t, dh):
@@ -133,28 +160,8 @@ def _monitor (t, dh):
     stats['extant_min'] = minimum
     stats['extant_max'] = maximum                      
 
-
-    ssum = 0
-    min = 64
-    max = -1
-    for b in dh.blocks:
-        succs = dh.succ (b, 2*dh.insert_pieces ())
-        found = 0
-        examined = 0
-        for s in succs:
-            examined = examined + 1
-            if b in s.blocks:
-                found = found + 1
-                if (found == dh.read_pieces()):
-                    break
-        ssum += examined
-        if examined < min: min = examined
-        if examined > max: max = examined
-    stats['spread_min'] = min
-    if (len(dh.blocks) > 0): stats['spread_avg'] = ssum/len(dh.blocks)
-    else: stats['spread_avg'] = 0
-    stats['spread_max'] = max
-    
+    if do_spread:
+	calc_spread (dh, stats)
     return stats
 
 def print_monitor (t, dh):
@@ -167,7 +174,10 @@ def print_monitor (t, dh):
     print "%sB stored;" % size_rounder (s['disk_bytes']),
     print "%d/%5.2f/%d extant;" % (s['extant_min'], s['extant_avg'], s['extant_max']),
     print "%d/%d blocks avail" % (dh.available_blocks (), len (dh.blocks))
-    print "%d/%d avg %5.2f block spread" % (s['spread_min'], s['spread_max'], s['spread_avg'])
+    if do_spread:
+	print "%d/%d avg %5.2f block spread" % (s['spread_min'],
+						s['spread_max'],
+						s['spread_avg'])
     for k in sbkeys:
 	print "%sB sent[%s];" % (size_rounder(s['sent_bytes::%s' % k]), k)
 
@@ -193,15 +203,17 @@ if __name__ == '__main__':
     monitor = print_monitor
     monint  = 60
     try:
-	opts, cmdv = getopt.getopt (sys.argv[1:], "ms:")
+	opts, cmdv = getopt.getopt (sys.argv[1:], "ims:")
     except getopt.GetoptError:
         usage ()
         sys.exit (1)
     for o, a in opts:
-        if o == '-m':
+	if o == '-i':
+	    monint = int (a)
+        elif o == '-m':
             monitor = parsable_monitor
 	elif o == '-s':
-	    monint = int (a)
+	    do_spread = 1
             
     if len(cmdv) < 2:
         usage ()
