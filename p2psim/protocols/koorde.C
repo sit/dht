@@ -133,7 +133,7 @@ Koorde::join(Args *args)
 
 // Iterative version of the figure 2 algo in IPTPS'03 paper.
 vector<Chord::IDMap>
-Koorde::find_successors(CHID key, uint m, bool is_lookup, IDMap *last)
+Koorde::find_successors(CHID key, uint m, uint all, uint type, uint *lookup_int, IDMap *last)
 {
   int count = 0;
   int timeout = 0;
@@ -154,7 +154,7 @@ Koorde::find_successors(CHID key, uint m, bool is_lookup, IDMap *last)
   // printf ("find_successor(ip %u,id %qx, key %qx, i=%qx)\n", me.ip, me.id, 
   //  a.k,  r.i);
 
-  if (vis && is_lookup) 
+  if (vis && type == TYPE_USER_LOOKUP) 
     printf ("vis %llu search %16qx %16qx %16qx\n", now(), me.id, key, r.i);
 
   while (1) {
@@ -231,7 +231,7 @@ Koorde::find_successors(CHID key, uint m, bool is_lookup, IDMap *last)
 
     }
 
-    if (vis && is_lookup) 
+    if (vis && type == TYPE_USER_LOOKUP) 
       printf ("vis %llu step %16qx %16qx %16qx\n", now (), me.id, last->id,
 	      r.i);
     
@@ -245,7 +245,7 @@ Koorde::find_successors(CHID key, uint m, bool is_lookup, IDMap *last)
     kpath.push_back (r.kshift);
   }
 
-  if (is_lookup) {
+  if (type == TYPE_USER_LOOKUP) {
     printf ("find_successor for (id %qx, key %qx):",  me.id, key);
     if (r.v.size () > 0) {
       uint cor = 0;
@@ -374,7 +374,7 @@ Koorde::fix_debruijn ()
       loctable->add_node(gsr.v[i]);
   }else {
     if (!ok) loctable->del_node(dpred);
-    vector<IDMap> scs = find_successors(debruijnpred, resilience-1, false, &last);
+    vector<IDMap> scs = find_successors(debruijnpred, resilience-1, resilience-1, TYPE_FINGER_LOOKUP, NULL, &last);
     if (scs.size() > 0) {
       loctable->add_node(last);
       for (uint i = 0; i < scs.size(); i++) {
@@ -399,7 +399,7 @@ NEXT:
 //	ts(), debruijn, gsr.v[0].ip, gsr.v[0].id, dpred.ip, dpred.id);
   } else {
     if (!ok) loctable->del_node(dpred);
-    vector<IDMap> scs = find_successors (debruijn, fingers - 1, false, &last);
+    vector<IDMap> scs = find_successors (debruijn, fingers - 1, fingers-1, TYPE_FINGER_LOOKUP, NULL, &last);
     if (scs.size() > 0) {
  //     printf("%s stabilize fix_debruijn finished debruijn %qx, its succ %d,%qx its last(pred) %d,%qx\n", 
 //	  ts(), debruijn, scs[0].ip, scs[0].id, last.ip, last.id);

@@ -221,9 +221,9 @@ protected:
   vector<uint> stat;
 
   virtual vector<IDMap> find_successors_recurs(CHID key, uint m, uint all,
-      uint type, uint *recurs_int = NULL);
+      uint type, uint *lookup_int = NULL);
   virtual vector<IDMap> find_successors(CHID key, uint m, uint all,
-      uint type, Time start, IDMap *last = NULL);
+      uint type, uint *lookup_int = NULL, IDMap *last = NULL);
 
   void fix_successor(void *x=NULL);
   void fix_predecessor();

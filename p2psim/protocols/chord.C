@@ -28,7 +28,7 @@
 extern bool vis;
 bool static_sim;
 
-#define DNODE 1
+#define DNODE 33
 
 Chord::Chord(Node *n, Args& a, LocTable *l)
   : P2Protocol(n), _isstable (false)
@@ -61,7 +61,7 @@ Chord::Chord(Node *n, Args& a, LocTable *l)
   _recurs = a.nget<uint>("recurs",0,10);
 
   //parallel lookup? parallelism only works in iterative lookup now
-  _parallel = a.nget<uint>("parallel",1,10);
+  _parallel = a.nget<uint>("parallelism",1,10);
   _alpha = a.nget<uint>("alpha",1,10);
 
   _asap = a.nget<uint>("asap",_frag,10);
@@ -200,13 +200,17 @@ void
 Chord::lookup_internal(lookup_args *a)
 {
   vector<IDMap> v;
-  uint recurs_int = 0; //XXX: recurs has a different way of calculating lookup interval
-  if (_recurs) {
-    v = find_successors_recurs(a->key, _frag, _allfrag, TYPE_USER_LOOKUP, &recurs_int);
-  } else {
-    v = find_successors(a->key, _frag, _allfrag, TYPE_USER_LOOKUP, a->start); 
-  }
+  uint lookup_int = 0; 
+  Time before = now();
 
+  if (_recurs) {
+    v = find_successors_recurs(a->key, _frag, _allfrag, TYPE_USER_LOOKUP);
+  } else {
+    v = find_successors(a->key, _frag, _allfrag, TYPE_USER_LOOKUP, &lookup_int);
+  }
+  if (lookup_int == 0) {
+    lookup_int = now() - before;
+  }
   if (!node()->alive()) {
     delete a;
     return;
@@ -219,7 +223,7 @@ Chord::lookup_internal(lookup_args *a)
     delaycb(100, &Chord::lookup_internal, a);
     return;
   }
-  a->retrytimes.push_back((uint)(now()-a->start));
+  a->retrytimes.push_back((uint)lookup_int);
   for (uint i = 0; i < a->retrytimes.size(); i++) 
     printf("%u ", a->retrytimes[i]);
   printf("\n");
@@ -234,7 +238,7 @@ Chord::find_successors_handler(find_successors_args *args,
   if (_recurs)
     ret->v = find_successors_recurs(args->key, args->m, args->all, TYPE_JOIN_LOOKUP);
   else
-    ret->v = find_successors(args->key, args->m, args->all, TYPE_JOIN_LOOKUP, now(), &(ret->last));
+    ret->v = find_successors(args->key, args->m, args->all, TYPE_JOIN_LOOKUP, NULL, &(ret->last));
 
 #ifdef CHORD_DEBUG
   if (ret->v.size() > 0) 
@@ -243,7 +247,7 @@ Chord::find_successors_handler(find_successors_args *args,
 }
 
 vector<Chord::IDMap>
-Chord::find_successors(CHID key, uint m, uint all, uint type, Time start, IDMap *last)
+Chord::find_successors(CHID key, uint m, uint all, uint type, uint *lookup_int, IDMap *last)
 {
   //parallelism controls how many queries are inflight
   next_args na;
@@ -264,6 +268,7 @@ Chord::find_successors(CHID key, uint m, uint all, uint type, Time start, IDMap 
   hop_info h;
   vector<IDMap> results;
   uint outstanding, alertoutstanding;
+  Time before = now();
 
   h.from = me;
   h.to = me;
@@ -285,17 +290,18 @@ Chord::find_successors(CHID key, uint m, uint all, uint type, Time start, IDMap 
 
   results.clear();
   outstanding = alertoutstanding = 0;
-  uint tsz;
 #ifdef CHORD_DEBUG
   vector<hop_info> recorded;
   recorded.clear();
 #endif
   uint to = 0;
+  Time lastwasted;
+  uint wasted = 0;
 
   while (1) {
 
 #ifdef CHORD_DEBUG
-    if (totalrpc >= 20) {
+    if (totalrpc >= 100) {
       fprintf(stderr,"%s route: key %qx\n",ts(),key);
       for (uint i = 0; i < recorded.size(); i++) 
 	fprintf(stderr,"(%u,%qx,%u) ", recorded[i].to.ip, recorded[i].to.id, recorded[i].hop);
@@ -303,17 +309,17 @@ Chord::find_successors(CHID key, uint m, uint all, uint type, Time start, IDMap 
       assert(0);
     }
 #endif
-    assert(totalrpc < 20);
+    assert(totalrpc < 100);
 
-    while (outstanding < _parallel) {
-      tsz = tasks.size();
-      if (tasks.size() == 0) {
-	h = lastfinished; //resend to the last guy
-	to++;
-      } else {
-	h = tasks.front();
-	tasks.pop_front();
-      }
+    lastwasted = 0;
+    if ((!outstanding) && (tasks.size() == 0)) {
+      tasks.push_back(lastfinished);
+      to++;
+      lastwasted = now();
+    }
+    while ((outstanding < _parallel) && (tasks.size() > 0)){
+      h = tasks.front();
+      tasks.pop_front();
       if (reuse) {
 	p = reuse;
 	reuse = NULL;
@@ -332,9 +338,8 @@ Chord::find_successors(CHID key, uint m, uint all, uint type, Time start, IDMap 
       rpcset.insert(rpc);
       resultmap[rpc] = p;
       outstanding++;
-      if (tasks.size() == 0) break;
     }
-
+    
     if (reuse) {
       delete reuse;
       reuse = NULL;
@@ -343,28 +348,44 @@ Chord::find_successors(CHID key, uint m, uint all, uint type, Time start, IDMap 
 
     //fill out all my allowed parallel connections, wait for response
     donerpc = rcvRPC(&rpcset, ok);
+
+    if (me.ip == DNODE) {
+      fprintf(stderr,"%s find_successor key %qx outstanding RPC %d\n", ts(), key, outstanding);
+    }
+
     outstanding--;
     reuse = resultmap[donerpc];
+    if (lastwasted > 0) {
+      if (me.ip == DNODE) {
+	fprintf(stderr,"add now %llu last %llu\n",now(), lastwasted);
+      }
+      wasted += (now() - lastwasted);
+      assert(wasted > 0 || reuse->link.to.ip == me.ip);
+      lastwasted = 0;
+    }
     if (!node()->alive()) goto DONE;
     if (ok) {
       record_stat(resultmap[donerpc]->ret.done?resultmap[donerpc]->ret.next.size()*4:resultmap[donerpc]->ret.v.size()*4,type);
 
       if (resultmap[donerpc]->ret.done) {
 	results = resultmap[donerpc]->ret.v;
+	lastfinished = resultmap[donerpc]->link;
 	goto DONE;//success
       }
 
-      if (resultmap[donerpc]->ret.next.size() == 0 )
+      if (resultmap[donerpc]->ret.next.size() == 0 ) {
 //	  && resultmap[donerpc]->link.to.ip == lastfinished.to.ip)  //this will fail coz i cannot mark this node as dead
+	lastfinished = resultmap[donerpc]->link;
 	goto DONE;//failed
+      }
       
       list<hop_info>::iterator iter = tasks.begin();
       IDMap tmptmp;
       for (uint i = 0; i < resultmap[donerpc]->ret.next.size(); i++) {
 	tmptmp = resultmap[donerpc]->ret.next[i];
-	if (asked.find(resultmap[donerpc]->ret.next[i].ip) != asked.end()) 
+	if (asked.find(resultmap[donerpc]->ret.next[i].ip) != asked.end()) {
 	  continue;
-
+	}
 	h.from = resultmap[donerpc]->link.to;
 	h.to = resultmap[donerpc]->ret.next[i];
 	h.hop = resultmap[donerpc]->link.hop + 1;
@@ -377,7 +398,6 @@ Chord::find_successors(CHID key, uint m, uint all, uint type, Time start, IDMap 
 	tasks.insert(iter, h);
 	asked[h.to.ip] = true;
       }
-
       //insert into the history of finished rpcs
       iter = savefinished.begin();
       while (iter != savefinished.end()) {
@@ -414,13 +434,25 @@ DONE:
   //jesus christ i'm done, however, i need to clean up my shit
   assert(reuse);
   if ((type == TYPE_USER_LOOKUP) && (node()->alive())) {
-    printf("%s lookup key %qx, hops %d timeout %d totalrpc %d\n", ts(), key, lastfinished.hop, totalto, totalrpc);
-    /*
-    if ((reuse->ret.done) && (reuse->ret.correct)) 
-      printf("%s key %qx lookup correct interval %d pred %u,%qx\n", ts(), key, (uint)(now()-start), ret->v[0].ip, ret->v[0].id); 
-    else 
-      printf("%s key %qx lookup incorrect interval %d\n", ts(), key, (uint)(now()-start));
-      */
+    if (lookup_int) 
+      *lookup_int = now()-before;
+    printf("%s lookup key %qx, hops %d timeout %d wasted %d totalrpc %d\n", ts(), key, lastfinished.hop, totalto, wasted, totalrpc);
+#ifdef CHORD_DEBUG
+    Topology *t = Network::Instance()->gettopology();
+    printf("%s key %qx route: ", ts(), key);
+    IDMap last;
+    last = lastfinished.to;
+    assert(last.ip <= 1024 && last.ip > 0);
+    for (uint i = recorded.size()-1; i >= 0; i--) {
+      if (last.ip == me.ip) break;
+      if (recorded[i].to.ip == last.ip) {
+	printf("(%u,%qx %u) ", recorded[i].to.ip, recorded[i].to.id, (uint)2*t->latency(me.ip, last.ip));
+	last = recorded[i].from;
+	assert(last.ip <= 1024 && last.ip > 0);
+      }
+    }
+    printf("\n");
+#endif
   }
 
   if (reuse->ret.done)
@@ -434,7 +466,7 @@ DONE:
   }
   for (uint i = 0;i < alertoutstanding; i++) {
     donerpc = rcvRPC(&alertset, ok);
-    delete alertmap[rpc];
+    delete alertmap[donerpc];
   }
   return results;
 }
@@ -772,6 +804,7 @@ Chord::next_handler(next_args *args, next_ret *ret)
   } else {
     ret->done = false;
     ret->next = loctable->next_hops(args->key,_alpha);
+    uint nextsz = ret->next.size();
     assert(ret->next.size()>0);
     assert(ret->next[0].ip != me.ip);
  }
@@ -1498,8 +1531,8 @@ LocTable::preds(Chord::CHID id, uint m)
       bzero(elm, sizeof(*elm));
       delete elm;
       deleted++;
-      elm = elmprev;
     }
+    elm = elmprev;
     assert((rsz - deleted >= 1));
   }
   return v;
