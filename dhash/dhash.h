@@ -209,8 +209,9 @@ class dhash {
 
   void doRPC (chordID ID, const rpc_program &prog, int procno,
 	      ptr<void> in, void *out, aclnt_cb cb);
-
-  void dispatch (svccb *sbp);
+  void doRPC_reply (svccb *sbp, void *res, 
+		    const rpc_program &prog, int procno);
+  void dispatch (svccb *sbp, void *args, int procno);
   void sync_cb ();
 
   void storesvc_cb (svccb *sbp, s_dhash_insertarg *arg, dhash_stat err);
@@ -419,6 +420,7 @@ class dhashcli {
   bool do_cache;
   dhash *dh;
   ptr<route_factory> r_factory;
+  u_int64_t start;
 
   struct rcv_state {
     ihash_entry <rcv_state> link;

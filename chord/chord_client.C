@@ -29,9 +29,9 @@
 #include "chord_util.h"
 #include "location.h"
 #include "route.h"
+#include "transport_prot.h"
 
 int logbase;  // base = 2 ^ logbase
-vec<ptr<axprt> > persistent_xprts;
 
 chord::chord (str _wellknownhost, int _wellknownport, 
 	      str _myname, int port, int max_cache,
@@ -74,17 +74,9 @@ chord::tcpclient_cb (int srvfd)
     warn << "chord: accept failed " << strerror (errno) << "\n";
   else {
     ptr<axprt> x = axprt_stream::alloc (fd, 230000);
-    persistent_xprts.push_back (x);
 
-    ptr<asrv> s = asrv::alloc (x, chord_program_1);
+    ptr<asrv> s = asrv::alloc (x, transport_program_1);
     s->setcb (wrap (mkref(this), &chord::dispatch, s));
-
-    //handle any registered programs
-    for (unsigned int i = 0; i < handledProgs.size (); i++) {
-      ptr<asrv> s2 = asrv::alloc (x, handledProgs[i]);
-      s2->setcb (wrap (mkref(this), &chord::dispatch, s2));
-    }
-    
   }
 }
 
@@ -97,7 +89,7 @@ chord::startchord (int myp, int type)
   if (srvfd < 0)
     fatal ("binding %s port %d: %m\n",
 	   (type == SOCK_DGRAM ? "UDP" : "TCP"), myp);
-
+  
   if (myp == 0) {
     struct sockaddr_in addr;
     socklen_t len = sizeof (addr);
@@ -110,7 +102,7 @@ chord::startchord (int myp, int type)
   
   if (type == SOCK_DGRAM) {
     x_dgram = axprt_dgram::alloc (srvfd, sizeof(sockaddr), 230000);
-    ptr<asrv> s = asrv::alloc (x_dgram, chord_program_1);
+    ptr<asrv> s = asrv::alloc (x_dgram, transport_program_1);
     s->setcb (wrap (mkref(this), &chord::dispatch, s));
   }
   else {
@@ -118,7 +110,7 @@ chord::startchord (int myp, int type)
     assert (ret == 0);
     fdcb (srvfd, selread, wrap (this, &chord::tcpclient_cb, srvfd));
   }
-
+  
   return myp;
 }
 
@@ -157,7 +149,7 @@ chord::newvnode (cbjoin_t cb, ptr<fingerlike> fingers, ptr<route_factory> f)
 					    nvnode, ss_mode,
 					    lookup_mode);
   f->setvnode (vnodep);
-
+  
   if (!active) active = vnodep;
   nvnode++;
   vnodes.insert (newID, vnodep);
@@ -228,135 +220,86 @@ chord::handleProgram (const rpc_program &prog) {
   if (isHandled (prog.progno)) return;
   else {
     handledProgs.push_back (prog);
-    ptr<asrv> s = asrv::alloc (x_dgram, prog);
-    s->setcb (wrap (mkref(this), &chord::dispatch, s));
 
-    //handle this program on current connections
-    for (unsigned int i = 0; i < persistent_xprts.size (); i++) {
-      warn << "handling on a persistent xprt\n";
-      ptr<asrv> s2 = asrv::alloc (persistent_xprts[i], prog);
-      s2->setcb (wrap (mkref(this), &chord::dispatch, s2));
-    }
+    /*    ptr<asrv> s = asrv::alloc (x_dgram, prog);
+	  s->setcb (wrap (mkref(this), &chord::dispatch, s));
+
+	  //handle this program on current connections
+	  for (unsigned int i = 0; i < persistent_xprts.size (); i++) {
+	  warn << "handling on a persistent xprt\n";
+	  ptr<asrv> s2 = asrv::alloc (persistent_xprts[i], prog);
+	  s2->setcb (wrap (mkref(this), &chord::dispatch, s2));
+    */
   }
-  
 }
+
 void
 chord::dispatch (ptr<asrv> s, svccb *sbp)
 {
-  if (!sbp) {
+if (!sbp) {
     s->setcb (NULL);
     return;
-  }
+}
   (*nrcv)++;
-  chordID *v = sbp->template getarg<chordID> ();
-  vnode *vnodep = vnodes[*v];
-  if (!vnodep) {
-    warnx << "CHORD: unknown node processing procedure " << sbp->proc ()
-	  << " request " << *v << "\n";
-    sbp->replyref (chordstat (CHORD_UNKNOWNNODE));
-    return;
-  }
 
-  if (sbp->prog () == CHORD_PROGRAM) {
-    switch (sbp->proc ()) {
-    case CHORDPROC_NULL: 
-      {
-	sbp->reply (NULL);
-      }
+  //autocache here?
+
+  switch (sbp->proc ()) {
+  case TRANSPORTPROC_NULL:
+    {
+      sbp->reply (NULL);
       break;
-    case CHORDPROC_GETSUCCESSOR:
-      {
-	vnodep->doget_successor (sbp);
-      }
-      break;
-    case CHORDPROC_GETPREDECESSOR:
-      {
-	vnodep->doget_predecessor (sbp);
-      }
-      break;
-    case CHORDPROC_NOTIFY:
-      {
-	chord_nodearg *na = sbp->template getarg<chord_nodearg> ();
-	vnodep->donotify (sbp, na);
-      }
-      break;
-    case CHORDPROC_ALERT:
-      {
-	chord_nodearg *na = sbp->template getarg<chord_nodearg> ();
-	vnodep->doalert (sbp, na);
-      }
-      break;
-    case CHORDPROC_GETSUCCLIST:
-      {
-	vnodep->dogetsucclist (sbp);
-      }
-      break;
-    case CHORDPROC_TESTRANGE_FINDCLOSESTPRED:
-      {
-	chord_testandfindarg *fa = 
-	  sbp->template getarg<chord_testandfindarg> ();
-	vnodep->dotestrange_findclosestpred (sbp, fa);
-      }
-      break;
-    case CHORDPROC_GETFINGERS: 
-      {
-	vnodep->dogetfingers (sbp);
-      }
-      break;
-    case CHORDPROC_GETFINGERS_EXT: 
-      {
-	vnodep->dogetfingers_ext (sbp);
-      }
-      break;
-    case CHORDPROC_GETPRED_EXT:
-      {
-	vnodep->dogetpred_ext (sbp);
-      }
-      break;
-    case CHORDPROC_GETSUCC_EXT:
-      {
-	vnodep->dogetsucc_ext (sbp);
-      }
-      break;
-    case CHORDPROC_SECFINDSUCC:
-      {
-	chord_testandfindarg *fa = 
-	  sbp->template getarg<chord_testandfindarg> ();
-	vnodep->dosecfindsucc (sbp, fa);
-      }
-      break;
-    case CHORDPROC_GETTOES:
-      {
-	vnodep->dogettoes (sbp);
-      }
-      break;
-    case CHORDPROC_DEBRUIJN:
-      {
-	chord_debruijnarg *da = 
-	  sbp->template getarg<chord_debruijnarg> ();
-	vnodep->dodebruijn (sbp, da);
-      }
-      break;
-    case CHORDPROC_FINDROUTE:
-      {
-	chord_findarg *fa = sbp->template getarg<chord_findarg> ();
-	vnodep->dofindroute (sbp, fa);
-      }
-      break;
-    default:
-      sbp->reject (PROC_UNAVAIL);
-      break;
-    }  /* switch sbp->proc () */
-  } else { /* not a CHORDPROG RPC */
-    if (!vnodep->progHandled (sbp->prog())) {
-      chordstat res = CHORD_NOHANDLER;
-      sbp->replyref (res);
-    } else {
-      cbdispatch_t dispatch = vnodep->getHandler(sbp->prog ());
-      (dispatch)(sbp);
     }
+  case TRANSPORTPROC_DORPC:
+    {
+      //v (the destination chordID) is at the top of the header
+      chordID *v = sbp->template getarg<chordID> ();
+      vnode *vnodep = vnodes[*v];
+      if (!vnodep) {
+	warnx << "CHORD: unknown node processing procedure " << sbp->proc ()
+	      << " request " << *v << "\n";
+	sbp->replyref (chordstat (CHORD_UNKNOWNNODE));
+	return;
+      }
+      
+      dorpc_arg *arg = sbp->template getarg<dorpc_arg> ();
+      
+      //find the program
+      rpc_program *prog;
+      get_program (arg->progno, &prog);
+      
+      //unmarshall the args
+      char *arg_base = (char *)(arg->args.base ());
+      int arg_len = arg->args.size ();
+      
+      xdrmem x (arg_base, arg_len, XDR_DECODE);
+      xdrproc_t proc = prog->tbl[arg->procno].xdr_arg;
+      assert (proc);
+      
+      char *unmarshalled_args = New char[arg_len];
+      bzero (unmarshalled_args, arg_len);
+      if (!proc (x.xdrp (), unmarshalled_args)) {
+	warn << "dispatch: error unmarshalling arguments\n";
+	sbp->replyref (chordstat (CHORD_RPCFAILURE));
+	return;
+      }
+      
+      //call the handler
+      if (!vnodep->progHandled (arg->progno)) {
+	warn << "program not handled!\n";
+	chordstat res = CHORD_NOHANDLER;
+	sbp->replyref (res);
+      } else {
+	cbdispatch_t dispatch = vnodep->getHandler(arg->progno);
+	(dispatch)(sbp, unmarshalled_args, arg->procno);
+      }  
+      
+    }
+    break;
+  default:
+    fatal << "PROC not handled\n";
   }
-  
+		
 }
 
 

@@ -397,7 +397,6 @@ stp_manager::doRPC_dead (ptr<location> l,
 			 long fake_seqno /* = 0 */)
 {
   modlogger ("stp_manager") << "dead_rpc " << l->n << " " << l->addr << "\n";
-    
   ref<aclnt> c = aclnt::alloc (dgram_xprt, prog, 
 			       (sockaddr *)&(l->saddr));
   
@@ -441,16 +440,15 @@ stp_manager::doRPC (ptr<location> l,
     hostinfo *h = lookup_host (l->addr);
     setup_rexmit_timer (h, &sec, &nsec);
 
-    //    warn << getusec () << " sent an RPC destined for " << inet_ntoa (l->saddr.sin_addr) << "\n";
     C->b->send (sec, nsec);
     seqno++;
     nsent++;
-
-    if (_fake_seqno) {
+    
+    if (_fake_seqno) 
       C->rexmit_ID = _fake_seqno;
-    } else {
+    else 
       C->rexmit_ID = C->seqno;
-    }
+    
 
     user_rexmit_table.insert (C);
     return seqno;
@@ -476,6 +474,10 @@ stp_manager::timeout (rpc_state *C)
 
   C->s = 0;
   C->rexmits++;
+  warn << getusec () << " resent an RPC (" 
+       << C->progno << "." << C->procno << ") destined for " 
+       << inet_ntoa (C->loc->saddr.sin_addr) << " seqno: " 
+       << C->seqno << " retransmits: " << C->rexmits << "\n";
 
   //  remove_from_sentq (C->seqno);
   update_cwind (-1);
@@ -487,7 +489,7 @@ stp_manager::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
 {
   if (err) {
     nrpcfailed++;
-    warn << "RPC failure: " << err << " destined for " << C->ID << "\n";
+    warn << getusec () << " RPC failure: " << err << " destined for " << C->ID << " seqno " << C->seqno << "\n";
   } else {
     if (C->s > 0) {
       u_int64_t now = getusec ();
@@ -549,14 +551,19 @@ stp_manager::rpc_done (long acked_seqno)
 
   
   while (Q.first && (left + cwind >= seqno) ) {
-    RPC_delay_args *args = Q.first;
-
-#ifdef RANDOMIZE_STP_Q
     int qsize = (num_qed > 100) ? 100 :  num_qed;
     int next = (int)(qsize*((float)random()/(float)RAND_MAX));
-    for (int i = 0; (args) && (i < next); i++)
+    RPC_delay_args *next_arg = Q.first;
+    for (int i = 0; (next_arg) && (i < next); i++)
+      next_arg = Q.next (next_arg);
+
+    //if there is an earlier RPC bound for the same destination, send that
+    //this preserves our use of data-driven retransmissions
+    RPC_delay_args *args = Q.first;
+    while ((args != next_arg) && (args->l->n != next_arg->l->n))
       args = Q.next (args);
-#endif
+
+    warn << "first RPC in the queue is to " << Q.first->l->n << " we are sending to " << args->l->n << "\n";
 
     //stats
     long now = getusec ();
@@ -930,9 +937,7 @@ rpccb_chord::send (long _sec, long _nsec)
     panic ("[send to cates@mit.edu]: sec %ld, nsec %ld\n", sec, nsec);
 
   tmo = delaycb (sec, nsec, wrap (this, &rpccb_chord::timeout_cb, deleted));
-#if 0
-  warn ("%s xmited %d:%06d\n", gettime().cstr(), int (sec), int (nsec/1000));
-#endif
+  //warn ("%s xmited %d:%06d\n", gettime().cstr(), int (sec), int (nsec/1000));
   xmit (0);
 }
 

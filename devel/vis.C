@@ -4,6 +4,8 @@
 #include "math.h"
 #include "rxx.h"
 #include "async.h"
+#include "chord_prot.h"
+#include "transport_prot.h"
 
 #define WINX 700
 #define WINY 700
@@ -204,7 +206,7 @@ get_aclnt (str host, unsigned short port)
   inet_aton (host.cstr (), &saddr.sin_addr);
   saddr.sin_port = htons (port);
 
-  ptr<aclnt> c = aclnt::alloc (dgram_xprt, chord_program_1, 
+  ptr<aclnt> c = aclnt::alloc (dgram_xprt, transport_program_1, 
 			       (sockaddr *)&(saddr));
 
   return c;
@@ -233,7 +235,7 @@ add_node (str host, unsigned short port)
 }
 
 void
-doRPCcb (chordID ID, aclnt_cb cb, clnt_stat err)
+doRPCcb (chordID ID, int procno, dorpc_res *res, void *out, aclnt_cb cb, clnt_stat err)
 {
   f_node *nu = nodes[ID];
   if (!nu) return;
@@ -244,8 +246,20 @@ doRPCcb (chordID ID, aclnt_cb cb, clnt_stat err)
     warn << "deleting " << ID << ":" << nu->host << "\n";
     nodes.remove (nu);
     delete nu;
+    return;
   }
-  cb (err);
+
+  xdrmem x ((char *)res->resok->results.base (), 
+	    res->resok->results.size (), XDR_DECODE);
+  xdrproc_t proc = chord_program_1.tbl[procno].xdr_res;
+  assert (proc);
+  if (!proc (x.xdrp (), out)) {
+    fatal << "failed to unmarshall result: " << procno << "\n";
+    cb (RPC_CANTSEND);
+  } else 
+    cb (err);
+
+
 }
 
 void
@@ -254,7 +268,35 @@ doRPC (f_node *nu, int procno, const void *in, void *out, aclnt_cb cb)
   ptr<aclnt> c = get_aclnt (nu->host, nu->port);
   if (c == NULL) 
     fatal << "update_succlist: couldn't aclnt::alloc\n";
-  c->timedcall (TIMEOUT, procno, in, out, wrap (&doRPCcb, nu->ID, cb));
+
+  //form the transport RPC
+  ptr<dorpc_arg> arg = New refcounted<dorpc_arg> ();
+
+  //header
+  arg->dest_id = nu->ID;
+  arg->src_id = bigint (0);
+  arg->src_vnode_num = 0;
+  arg->progno = chord_program_1.progno;
+  arg->procno = procno;
+  
+  //marshall the args ourself
+  xdrproc_t inproc = chord_program_1.tbl[procno].xdr_arg;
+  xdrsuio x (XDR_ENCODE);
+  if ((!inproc) || (!inproc (x.xdrp (), (void *)in))) {
+    fatal << "failed to marshall args\n";
+  } else {
+    int args_len = x.uio ()->resid ();
+    arg->args.setsize (args_len);
+    void *marshalled_args = suio_flatten (x.uio ());
+    memcpy (arg->args.base (), marshalled_args, args_len);
+    free (marshalled_args);
+
+    dorpc_res *res = New dorpc_res (DORPC_OK);
+
+    c->timedcall (TIMEOUT, TRANSPORTPROC_DORPC, 
+		  arg, res, wrap (&doRPCcb, nu->ID, procno, res, out, cb));
+    
+  }
 }  
 
 //----- update successors -----------------------------------------------------

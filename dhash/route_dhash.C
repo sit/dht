@@ -39,6 +39,8 @@ private:
   vec<long> seqnos;  //   parameters
   bool didrexmit;
 
+  u_int64_t start;
+
   dhash_download (ptr<vnode> clntnode, chordID sourceID, chordID blockID,
 		  char *data, u_int len, u_int totsz, int cookie,
 		  cbretrieve_t cb)
@@ -46,6 +48,7 @@ private:
       blockID (blockID), cb (cb), nextchunk (0), numchunks (0),
       didrexmit (false)
   {
+    start = getusec ();
     // the first chunk of data may be passed in
     if (data) {
       process_first_chunk (data, len, totsz, cookie);
@@ -66,6 +69,8 @@ private:
 
     npending++;
     ptr<dhash_fetchiter_res> res = New refcounted<dhash_fetchiter_res> ();
+    //    warn << "SENT RPC for chunk " << numchunks << " at " << (getusec () - start) << "\n";
+
     return clntnode->doRPC 
       (sourceID, dhash_program_1, DHASHPROC_FETCHITER, arg, res, 
        wrap (this, &dhash_download::gotchunk, cb, res, numchunks++));
@@ -110,6 +115,7 @@ private:
     size_t nread = datalen;
     while (nread < totsz) {
       int length = MIN (MTU, totsz - nread);
+      //      warn << "SENT RPC for [" << nread << ", " << nread + length << "]  at " << (getusec () - start) << "\n";
       long seqno = getchunk (nread, length, cookie, wrap (this, &dhash_download::later_chunk_cb));
       seqnos.push_back (seqno);
       nread += length;
@@ -124,6 +130,8 @@ private:
     if (err || (res && res->status != DHASH_COMPLETE))
       fail (dhasherr2str (res->status));
     else {
+      //      warn << "GOT RPC for chunk " << chunknum << " at " << (getusec () - start) << "\n";
+
       if (!didrexmit && (chunknum > nextchunk)) {
 	warn << "FAST retransmit: " << blockID << " chunk " << nextchunk << " being retransmitted\n";
 	clntnode->resendRPC(seqnos[nextchunk]);
@@ -321,7 +329,6 @@ route_dhash::block_cb (s_dhash_block_arg *arg)
   timecb_remove (dcb);
   dcb = NULL;
   if (arg->offset == -1) {
-    //    (*cb) (DHASH_NOENT, NULL, path ());
     warn << "Responsible node did not have block.  Walking\n";
     vec<chord_node> succs;
     for (u_int i = 0; i < arg->nodelist.size (); i++)

@@ -166,6 +166,7 @@ route_chord::on_failure (chordID f)
   last_hop = false;
   next_hop ();
 }
+
 void
 route_chord::make_hop_cb (ptr<bool> del,
 			  chord_testandfindres *res, clnt_stat err)
@@ -237,7 +238,7 @@ route_chord::make_hop_cb (ptr<bool> del,
       cb (done);
     }
   } else {
-    warn("WTF");
+    fatal << "status was unreasonable: " << res->status << "\n";
   }
   delete res;
 }

@@ -56,7 +56,7 @@ typedef callback<void,ptr<vnode>,chordstat>::ref cbjoin_t;
 typedef callback<void,chordID,net_address,chordstat>::ref cbchordID_t;
 typedef callback<void,vec<chord_node>,chordstat>::ref cbchordIDlist_t;
 typedef callback<void,chordID,route,chordstat>::ref cbroute_t;
-typedef callback<void,svccb *>::ref cbdispatch_t;
+typedef callback<void,svccb *, void *, int>::ref cbdispatch_t;
 
 typedef callback<void, bool>::ref cbupcalldone_t;
 typedef callback<void, int, void *, cbupcalldone_t>::ref cbupcall_t; 
@@ -104,6 +104,8 @@ class vnode : public virtual refcount {
   virtual void print (void) const = 0;
   virtual void stop (void) = 0;
   virtual vec<chordID> succs () = 0;
+  virtual void doRPC_reply (svccb *sbp, void *res, 
+			    const rpc_program &prog, int procno) = 0;
 
   virtual chordID lookup_closestpred (const chordID &x, vec<chordID> f) = 0;
   virtual chordID lookup_closestpred (const chordID &x) = 0;
@@ -122,7 +124,7 @@ class vnode : public virtual refcount {
   virtual void dogetsucc_ext (svccb *sbp) = 0;
   virtual void dogetpred_ext (svccb *sbp) = 0;
   virtual void dosecfindsucc (svccb *sbp, chord_testandfindarg *fa) = 0;
-  virtual void dogettoes (svccb *sbp) = 0;
+  virtual void dogettoes (svccb *sbp, chord_gettoes_arg *ta) = 0;
   virtual void dodebruijn (svccb *sbp, chord_debruijnarg *da) = 0;
   virtual void dofindroute (svccb *sbp, chord_findarg *fa) = 0;
 

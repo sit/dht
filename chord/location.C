@@ -32,6 +32,7 @@
 #include "comm.h"
 #include "location.h"
 #include "modlogger.h"
+#include "transport_prot.h"
 
 #define loctrace modlogger ("loctable")
 
@@ -179,6 +180,7 @@ locationtable::doRPC (const chord_node &n, const rpc_program &prog,
 		      int procno, ptr<void> in,
 		      void *out, aclnt_cb cb)
 {
+  assert (0);
   ptr<location> l = lookup (n.x);
   if (!l) {
     insert (n.x, n.r.hostname, n.r.port);
@@ -197,6 +199,7 @@ locationtable::doRPC (const chordID &n, const rpc_program &prog,
     panic << "location (" << n << ") is null.\n";
   }
   l->nrpc++;
+
   if (l->alive)
     return hosts->doRPC (l, prog, procno, in, out, 
 			 wrap (this, &locationtable::doRPCcb, l, cb));
@@ -552,7 +555,7 @@ void
 locationtable::ping (const chordID &x, cbping_t cb) 
 {
   ptr<chordID> v = New refcounted<chordID> (x);
-  doRPC (x, chord_program_1, CHORDPROC_NULL,
+  doRPC (x, transport_program_1, TRANSPORTPROC_NULL,
 	 v, NULL,
 	 wrap (this, &locationtable::ping_cb, cb));
 }

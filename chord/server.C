@@ -28,6 +28,7 @@
 #include "chord_util.h"
 #include "chord_impl.h"
 #include "route.h"
+#include "transport_prot.h"
 
 void 
 vnode_impl::get_successor (const chordID &n, cbchordID_t cb)
@@ -260,19 +261,110 @@ vnode_impl::register_upcall (int progno, cbupcall_t cb)
 {
   upcall_record *uc = New upcall_record (progno, cb);
   upcall_table.insert (uc);
+
+}
+
+void
+vnode_impl::doRPC_reply (svccb *sbp, void *res, const rpc_program &prog, 
+			 int procno)
+{
+  //marshall result
+  xdrproc_t inproc = prog.tbl[procno].xdr_res;
+  xdrsuio x (XDR_ENCODE);
+  if ((!inproc) || (!inproc (x.xdrp (), res))) 
+    fatal << "couldn't marshall result\n";
+  int res_len = x.uio ()->resid ();
+  void *marshalled_res = suio_flatten (x.uio ());
+
+
+  //stuff into a transport wrapper
+  dorpc_res *rpc_res = New dorpc_res (DORPC_OK);
+  rpc_res->resok->src_id = myID;
+  rpc_res->resok->src_vnode_num = myindex;
+  //  res->resok->src_coords<>; uh, like yeah
+  rpc_res->resok->progno = prog.progno;
+  rpc_res->resok->procno = procno;
+  rpc_res->resok->results.setsize (res_len);
+  memcpy (rpc_res->resok->results.base (), marshalled_res, res_len);
+  free (marshalled_res);
+
+  assert (rpc_res->status == DORPC_OK);
+
+  //reply
+  sbp->reply (rpc_res);
+  delete rpc_res;
+
 }
 
 long
 vnode_impl::doRPC (const chordID &ID, const rpc_program &prog, int procno, 
 	      ptr<void> in, void *out, aclnt_cb cb) {
-  return locations->doRPC (ID, prog, procno, in, out, cb);
+
+  //form the transport RPC
+  ptr<dorpc_arg> arg = New refcounted<dorpc_arg> ();
+
+  //header
+  arg->dest_id = ID;
+  arg->src_id = myID;
+  arg->src_vnode_num = myindex;
+  arg->progno = prog.progno;
+  arg->procno = procno;
+  
+  //marshall the args ourself
+  xdrproc_t inproc = prog.tbl[procno].xdr_arg;
+  xdrsuio x (XDR_ENCODE);
+  if ((!inproc) || (!inproc (x.xdrp (), in))) {
+    fatal << "failed to marshall args\n";
+    cb (RPC_CANTSEND);
+    return 0;
+  } else {
+    int args_len = x.uio ()->resid ();
+    arg->args.setsize (args_len);
+    void *marshalled_args = suio_flatten (x.uio ());
+    memcpy (arg->args.base (), marshalled_args, args_len);
+    free (marshalled_args);
+
+    dorpc_res *res = New dorpc_res (DORPC_OK);
+    return locations->doRPC (ID, transport_program_1, TRANSPORTPROC_DORPC, 
+			     arg, res, 
+			     wrap (this, &vnode_impl::doRPC_cb, 
+				   prog, procno, out, cb, res));
+  }
 }
 
+void
+vnode_impl::doRPC_cb (const rpc_program prog, int procno,
+		      void *out, aclnt_cb cb, 
+		      dorpc_res *res, clnt_stat err) 
+{
+  if (err) {
+    cb (err);
+  } else if (res->status != DORPC_OK) {
+    cb (RPC_CANTRECV);
+  } else {
+    //process the response header
+
+    //locations->update_coords (res->resok.src_id ...)
+    
+    //unmarshall the result and copy to out
+    xdrmem x ((char *)res->resok->results.base (), 
+	      res->resok->results.size (), XDR_DECODE);
+    xdrproc_t proc = prog.tbl[procno].xdr_res;
+    assert (proc);
+    if (!proc (x.xdrp (), out)) {
+      fatal << "failed to unmarshall result\n";
+      cb (RPC_CANTSEND);
+    } else 
+      cb (err);
+  }
+}
 
 long
 vnode_impl::doRPC (const chord_node &n, const rpc_program &prog, int procno, 
 	      ptr<void> in, void *out, aclnt_cb cb) {
-  return locations->doRPC (n, prog, procno, in, out, cb);
+
+  locations->insert (n.x, n.r.hostname, n.r.port);
+  return doRPC (n.x, prog, procno, in, out, cb);
 }
 
 void

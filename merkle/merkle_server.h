@@ -29,8 +29,8 @@ typedef callback<void, const rpc_program &, cbdispatch_t>::ref addHandler_t;
 class merkle_server {
 public:
   merkle_tree *ltree; // local tree
-  vnode *host_node;
   sndblkfnc2_t sndblkfnc;
+  vnode *host_node;
 
   // maps sync session id -> a syncer
   // (to dispatch incoming blocks to the target syncer)
@@ -39,8 +39,11 @@ public:
   // called when dhash receives a new block
   // void handle_block (...);
 
-  merkle_server (merkle_tree *ltree, addHandler_t addHandler, sndblkfnc2_t sndblkfnc);
-  void dispatch (svccb *sbp);
+  merkle_server (merkle_tree *ltree, 
+		 addHandler_t addHandler, 
+		 sndblkfnc2_t sndblkfnc,
+		 vnode *host_node);
+  void dispatch (svccb *sbp, void *args, int procno);
 };
 
 

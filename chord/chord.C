@@ -92,6 +92,8 @@ vnode_impl::vnode_impl (ptr<locationtable> _locations, ptr<fingerlike> stab,
     
   locations->incvnodes ();
 
+  addHandler (chord_program_1, wrap(this, &vnode_impl::dispatch));
+
   ngetsuccessor = 0;
   ngetpredecessor = 0;
   ngetsucclist = 0;
@@ -126,6 +128,106 @@ vnode_impl::~vnode_impl ()
 {
   warnx << myID << ": vnode_impl: destroyed\n";
   exit (0);
+}
+
+void
+vnode_impl::dispatch (svccb *sbp, void *args, int procno)
+{
+  switch (procno) {
+  case CHORDPROC_NULL: 
+    {
+      sbp->reply (NULL);//XXX
+    }
+    break;
+  case CHORDPROC_GETSUCCESSOR:
+    {
+      doget_successor (sbp);
+    }
+    break;
+  case CHORDPROC_GETPREDECESSOR:
+    {
+      doget_predecessor (sbp);
+    }
+    break;
+  case CHORDPROC_NOTIFY:
+    {
+      //chord_nodearg *na = sbp->template getarg<chord_nodearg> ();
+      chord_nodearg *na = (static_cast<chord_nodearg *> (args));
+      donotify (sbp, na);
+    }
+    break;
+  case CHORDPROC_ALERT:
+    {
+      //      chord_nodearg *na = sbp->template getarg<chord_nodearg> ();
+      chord_nodearg *na = (static_cast<chord_nodearg *> (args));
+      doalert (sbp, na);
+    }
+    break;
+  case CHORDPROC_GETSUCCLIST:
+    {
+      dogetsucclist (sbp);
+    }
+    break;
+  case CHORDPROC_TESTRANGE_FINDCLOSESTPRED:
+    {
+      //      chord_testandfindarg *fa = sbp->template getarg<chord_testandfindarg> ();
+      chord_testandfindarg *fa = (static_cast<chord_testandfindarg *> (args));
+      dotestrange_findclosestpred (sbp, fa);
+    }
+    break;
+  case CHORDPROC_GETFINGERS: 
+    {
+      dogetfingers (sbp);
+    }
+    break;
+  case CHORDPROC_GETFINGERS_EXT: 
+    {
+      dogetfingers_ext (sbp);
+    }
+    break;
+  case CHORDPROC_GETPRED_EXT:
+    {
+      dogetpred_ext (sbp);
+    }
+    break;
+  case CHORDPROC_GETSUCC_EXT:
+    {
+      dogetsucc_ext (sbp);
+    }
+    break;
+  case CHORDPROC_SECFINDSUCC:
+    {
+      //chord_testandfindarg *fa = 
+	//	sbp->template getarg<chord_testandfindarg> ();
+      chord_testandfindarg *fa = (static_cast<chord_testandfindarg *> (args));
+      dosecfindsucc (sbp, fa);
+    }
+    break;
+  case CHORDPROC_GETTOES:
+    {
+      chord_gettoes_arg *ta = (static_cast<chord_gettoes_arg *> (args));
+      dogettoes (sbp, ta);
+    }
+    break;
+  case CHORDPROC_DEBRUIJN:
+    {
+      //      chord_debruijnarg *da = 
+      //sbp->template getarg<chord_debruijnarg> ();
+      chord_debruijnarg *da = (static_cast<chord_debruijnarg *> (args));
+      dodebruijn (sbp, da);
+    }
+    break;
+  case CHORDPROC_FINDROUTE:
+    {
+      //      chord_findarg *fa = sbp->template getarg<chord_findarg> ();
+      chord_findarg *fa = (static_cast<chord_findarg *> (args));
+      dofindroute (sbp, fa);
+    }
+    break;
+  default:
+    sbp->reject (PROC_UNAVAIL);
+    break;
+  }
 }
 
 chordID
@@ -352,7 +454,7 @@ vnode_impl::doget_successor (svccb *sbp)
   chord_noderes res(CHORD_OK);
   res.resok->x = s;
   res.resok->r = locations->getaddress (s);
-  sbp->reply (&res);
+  doRPC_reply (sbp, &res, chord_program_1, CHORDPROC_GETSUCCESSOR);
 }
 
 void
@@ -363,7 +465,7 @@ vnode_impl::doget_predecessor (svccb *sbp)
   chord_noderes res(CHORD_OK);
   res.resok->x = p;
   res.resok->r = locations->getaddress (p);
-  sbp->reply (&res);
+  doRPC_reply (sbp, &res, chord_program_1, CHORDPROC_GETPREDECESSOR);
 }
 
 void
@@ -434,7 +536,8 @@ vnode_impl::dotestrange_findclosestpred (svccb *sbp, chord_testandfindarg *fa)
 	       wrap (this, &vnode_impl::chord_upcall_done, fa, res, sbp));
 
   } else {
-    sbp->reply(res);
+    doRPC_reply (sbp, res, chord_program_1, 
+		 CHORDPROC_TESTRANGE_FINDCLOSESTPRED);
     delete res;
   }
 }
@@ -447,7 +550,8 @@ vnode_impl::chord_upcall_done (chord_testandfindarg *fa,
 {
   
   if (stop) res->set_status (CHORD_STOP);
-  sbp->reply (res);
+  doRPC_reply (sbp, res, chord_program_1, 
+	       CHORDPROC_TESTRANGE_FINDCLOSESTPRED);
   delete res;
 }
 
@@ -459,7 +563,8 @@ vnode_impl::dofindclosestpred (svccb *sbp, chord_findarg *fa)
   ndofindclosestpred++;
   res.resok->x = p;
   res.resok->r = locations->getaddress (p);
-  sbp->reply (&res);
+  assert (0);
+  //  sbp->reply (&res);
 }
 
 void
@@ -467,7 +572,8 @@ vnode_impl::donotify (svccb *sbp, chord_nodearg *na)
 {
   ndonotify++;
   predecessors->update_pred (na->n.x, na->n.r);
-  sbp->replyref (chordstat (CHORD_OK));
+  chordstat res = CHORD_OK;
+  doRPC_reply (sbp, &res, chord_program_1, CHORDPROC_NOTIFY);
 }
 
 void
@@ -481,7 +587,8 @@ vnode_impl::doalert (svccb *sbp, chord_nodearg *na)
     doRPC (na->n.x, chord_program_1, CHORDPROC_GETSUCCESSOR, v, res,
 	   wrap (mkref (this), &vnode_impl::doalert_cb, res, na->n.x));
   }
-  sbp->replyref (chordstat (CHORD_OK));
+  chordstat res = CHORD_OK;
+  doRPC_reply (sbp, &res, chord_program_1, CHORDPROC_ALERT);
 }
 
 void
@@ -501,7 +608,7 @@ vnode_impl::dogetfingers (svccb *sbp)
   chord_nodelistres res(CHORD_OK);
   ndogetfingers++;
   fingers->fill_nodelistres (&res);
-  sbp->reply (&res);
+  doRPC_reply (sbp, &res, chord_program_1, CHORDPROC_GETFINGERS);
 }
 
 
@@ -513,7 +620,7 @@ vnode_impl::dogetfingers_ext (svccb *sbp)
 
   fingers->fill_nodelistresext (&res);
 
-  sbp->reply (&res);
+  doRPC_reply (sbp, &res, chord_program_1, CHORDPROC_GETFINGERS_EXT);
 }
 
 void
@@ -522,7 +629,7 @@ vnode_impl::dogetsucc_ext (svccb *sbp)
   chord_nodelistextres res(CHORD_OK);
   ndogetsucc_ext++;
   successors->fill_nodelistresext (&res);
-  sbp->reply (&res);
+  doRPC_reply (sbp, &res, chord_program_1, CHORDPROC_GETSUCC_EXT);
 }
 
 void
@@ -532,7 +639,7 @@ vnode_impl::dogetpred_ext (svccb *sbp)
   chord_nodeextres res(CHORD_OK);
   res.resok->alive = true;
   locations->fill_getnodeext (*res.resok, my_pred ());
-  sbp->reply (&res);
+  doRPC_reply (sbp, &res, chord_program_1, CHORDPROC_GETPRED_EXT);
 }
 
 void
@@ -563,7 +670,7 @@ vnode_impl::dosecfindsucc (svccb *sbp, chord_testandfindarg *fa)
 	       fa->upcall_args.base (), fa->upcall_args.size (),
 	       wrap (this, &vnode_impl::secchord_upcall_done, res, sbp));
   } else {
-    sbp->reply(res);
+    doRPC_reply (sbp, &res, chord_program_1, CHORDPROC_SECFINDSUCC);
     delete res;
   }
 }
@@ -572,18 +679,17 @@ void
 vnode_impl::secchord_upcall_done (chord_nodelistres *res, svccb *sbp,
 				  bool stop)
 {
-  if (stop) {
+  if (stop) 
     warnx << "secchord_upcall_done would've told someone to stop searching...\n";
-  }
-  sbp->reply (res);
+  
+  doRPC_reply (sbp, &res, chord_program_1, CHORDPROC_SECFINDSUCC);
   delete res;
 }
 
 void
-vnode_impl::dogettoes (svccb *sbp)
+vnode_impl::dogettoes (svccb *sbp, chord_gettoes_arg *ta)
 {
-  chord_gettoes_arg *ta = 
-    sbp->template getarg<chord_gettoes_arg> ();
+
   chord_nodelistextres res (CHORD_OK);
   vec<chordID> t = toes->get_toes (ta->level);
   
@@ -593,7 +699,7 @@ vnode_impl::dogettoes (svccb *sbp)
     locations->fill_getnodeext (res.resok->nlist[i], t[i]);
   }
   
-  sbp->reply (&res);
+  doRPC_reply (sbp, &res, chord_program_1, CHORDPROC_GETTOES);
 }
 
 void
@@ -610,7 +716,7 @@ vnode_impl::dogetsucclist (svccb *sbp)
     res.resok->nlist[i].r = locations->getaddress (cursucc);
     cursucc = locations->closestsuccloc (cursucc + 1);
   }
-  sbp->reply (&res);
+  doRPC_reply (sbp, &res, chord_program_1, CHORDPROC_GETSUCCLIST);
 }
 
 void
@@ -656,7 +762,7 @@ vnode_impl::dodebruijn (svccb *sbp, chord_debruijnarg *da)
 	       wrap (this, &vnode_impl::debruijn_upcall_done, da, res, sbp));
     
   } else {
-    sbp->reply (res);
+    doRPC_reply (sbp, &res, chord_program_1, CHORDPROC_DEBRUIJN);
     delete res;
   }
 }
@@ -669,22 +775,23 @@ vnode_impl::debruijn_upcall_done (chord_debruijnarg *da,
 {
   
   if (stop) res->set_status (CHORD_STOP);
-  sbp->reply (res);
+  doRPC_reply (sbp, &res, chord_program_1, CHORDPROC_DEBRUIJN);
   delete res;
 }
 
 void
 vnode_impl::dofindroute (svccb *sbp, chord_findarg *fa)
 {
-  find_route (fa->x, wrap (this, &vnode_impl::dofindroute_cb, sbp));
+  find_route (fa->x, wrap (this, &vnode_impl::dofindroute_cb, sbp, fa));
 }
 
 void
-vnode_impl::dofindroute_cb (svccb *sbp, chordID s, route r, chordstat err)
+vnode_impl::dofindroute_cb (svccb *sbp, chord_findarg *fa, 
+			    chordID s, route r, chordstat err)
 {
   if (err) {
     chord_nodelistres res (CHORD_RPCFAILURE);
-    sbp->reply (&res);
+    doRPC_reply (sbp, &res, chord_program_1, CHORDPROC_FINDROUTE);
   } else {
     chord_nodelistres res (CHORD_OK);
     res.resok->nlist.setsize (r.size ());
@@ -692,7 +799,7 @@ vnode_impl::dofindroute_cb (svccb *sbp, chordID s, route r, chordstat err)
       res.resok->nlist[i].x = r[i];
       res.resok->nlist[i].r = locations->getaddress (r[i]);
     }
-    sbp->reply (&res);
+    doRPC_reply (sbp, &res, chord_program_1, CHORDPROC_FINDROUTE);
   }
 }
 

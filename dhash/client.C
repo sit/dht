@@ -75,6 +75,7 @@ protected:
   bool got_storecb;
   timecb_t *dcb;
   bool returned;
+  u_int64_t startt;
 
   void done ()
   {
@@ -88,7 +89,7 @@ protected:
   {
     got_storecb = true;
 
-    // warn << "STORECB_CB " << nonce << "\n";
+    //    warn << blockID << "(store timing) got store callback for at " << (getusec () - startt) << "\n";
     if (arg->status) {
       if (!error)
 	status = arg->status;
@@ -105,6 +106,7 @@ protected:
       ctype (block_type(_block)), store_type (store_type),
       clntnode (clntnode), num_retries (0), last (last)
   {
+    startt = getusec ();
     returned = false;
     dcb = NULL;
     if (store_type == DHASH_STORE) {
@@ -189,6 +191,7 @@ protected:
       got_storecb = true;
     }
     else { 
+      //      warn << blockID << "(store timing) got store reply for " << num << " at " << (getusec () - startt) << "\n";
       if ((num > nextblock) && (numblocks - num > 1)) {
 	warn << "(store) FAST retransmit: " << blockID << " got " 
 	     << num << " chunk " << nextblock << " of " << numblocks 
@@ -231,7 +234,7 @@ protected:
     arg->attr.size     = totsz;
     arg->last    = last;
     
-    
+    //    warn << blockID << "(store timing) store RPC for " << num << " at " << (getusec () - startt) << "\n";
     long rexmitid = clntnode->doRPC
       (destID, dhash_program_1, DHASHPROC_STORE, arg, res,
        wrap (mkref(this), &dhash_store::finish, res, num));
@@ -568,6 +571,7 @@ void
 dhashcli::insert (chordID blockID, ref<dhash_block> block, 
                   int options, cbinsert_t cb)
 {
+  start = getusec ();
   lookup (blockID, options,
           wrap (this, &dhashcli::insert_lookup_cb, blockID, block, cb, 0));
 }
@@ -577,6 +581,7 @@ dhashcli::insert_lookup_cb (chordID blockID, ref<dhash_block> block,
 			    cbinsert_t cb, int trial,
 			    dhash_stat status, chordID destID, route r)
 {
+  //  warn << "(insert timing) " << blockID << " finished lookup " << (getusec () - start) << " after start\n";
   if (status != DHASH_OK) {
     warn << "insert_lookup_cb: failure\n";
     // XXX call dhashcli::insert_stored_cb() to retry
@@ -592,6 +597,7 @@ dhashcli::insert_stored_cb (chordID blockID, ref<dhash_block> block,
 			    cbinsert_t cb, int trial,
 			    dhash_stat stat, chordID retID)
 {
+  //  warn << "(insert timing) " << blockID << " finished store " << (getusec () - start) << " after start\n";
   if (stat && stat != DHASH_WAIT && (trial <= 2)) {
     //try the lookup again if we got a RETRY
     warn << "got a RETRY failure (" << trial << "). Trying the lookup again\n";

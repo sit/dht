@@ -41,6 +41,7 @@
 #include "debruijn.h"
 #include "fingerlike.h"
 #include "route.h"
+#include "transport_prot.h"
 
 extern long outbytes;
 
@@ -108,6 +109,7 @@ class vnode_impl : public vnode {
   u_long ndogettoes;
   u_long ndodebruijn;
 
+  void dispatch (svccb *sbp, void *args, int procno);
   void stabilize_pred (void);
   void stabilize_getsucc_cb (chordID pred,
 			     chordID s, net_address r, chordstat status);
@@ -124,7 +126,8 @@ class vnode_impl : public vnode {
 
   void find_route_hop_cb (cbroute_t cb, route_iterator *ri, bool done);
   void find_route (const chordID &x, cbroute_t cb);
-  void dofindroute_cb (svccb *sbp, chordID s, route r, chordstat err);
+  void dofindroute_cb (svccb *sbp, chord_findarg *fa, 
+		       chordID s, route r, chordstat err);
   
   void notify_cb (chordID n, chordstat *res, clnt_stat err);
   void alert_cb (chordstat *res, clnt_stat err);
@@ -150,6 +153,9 @@ class vnode_impl : public vnode {
 		  cbupcalldone_t app_cb);
   void do_upcall_cb (char*, cbupcalldone_t, bool v);
 
+  void doRPC_cb (const rpc_program prog, int procno,
+		 void *out, aclnt_cb cb, 
+		 dorpc_res *res, clnt_stat err);
  public:
   chordID myID;
   ptr<chord> chordnode;
@@ -190,6 +196,7 @@ class vnode_impl : public vnode {
   void print (void) const;
   void stop (void);
   vec<chordID> succs () { return successors->succs (); };
+  void doRPC_reply (svccb *sbp, void *res, const rpc_program &prog, int procno);
 
   chordID lookup_closestpred (const chordID &x, vec<chordID> f);
   chordID lookup_closestpred (const chordID &x);
@@ -208,7 +215,7 @@ class vnode_impl : public vnode {
   void dogetsucc_ext (svccb *sbp);
   void dogetpred_ext (svccb *sbp);
   void dosecfindsucc (svccb *sbp, chord_testandfindarg *fa);
-  void dogettoes (svccb *sbp);
+  void dogettoes (svccb *sbp, chord_gettoes_arg *ta);
   void dodebruijn (svccb *sbp, chord_debruijnarg *da);
   void dofindroute (svccb *sbp, chord_findarg *fa);
 

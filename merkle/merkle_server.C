@@ -72,8 +72,11 @@ ignorecb ()
 // ---------------------------------------------------------------------------
 // merkle_server
 
-merkle_server::merkle_server (merkle_tree *ltree, addHandler_t addHandler, sndblkfnc2_t sndblkfnc)
-  : ltree (ltree), sndblkfnc (sndblkfnc)
+merkle_server::merkle_server (merkle_tree *ltree, 
+			      addHandler_t addHandler, 
+			      sndblkfnc2_t sndblkfnc,
+			      vnode *host_node)
+  : ltree (ltree), sndblkfnc (sndblkfnc), host_node (host_node)
 {
   (*addHandler) (merklesync_program_1, wrap(this, &merkle_server::dispatch));
 }
@@ -115,17 +118,18 @@ format_rpcnode (merkle_tree *ltree, u_int depth, const merkle_hash &prefix,
 
 
 void
-merkle_server::dispatch (svccb *sbp)
+merkle_server::dispatch (svccb *sbp, void *args, int procno)
 {
 
   if (!sbp)
     return;
 
-  switch (sbp->proc ()) {
+  switch (procno) {
   case MERKLESYNC_GETNODE:
     // request a node of the merkle tree
     {
-      getnode_arg *arg = sbp->template getarg<getnode_arg> ();
+      //      getnode_arg *arg = sbp->template getarg<getnode_arg> ();
+      getnode_arg *arg = (static_cast<getnode_arg *> (args));
       merkle_node *lnode;
       u_int lnode_depth;
       merkle_hash lnode_prefix;
@@ -135,7 +139,8 @@ merkle_server::dispatch (svccb *sbp)
       
       getnode_res res (MERKLE_OK);
       format_rpcnode (ltree, lnode_depth, lnode_prefix, lnode, &res.resok->node);
-      sbp->reply (&res);
+      host_node->doRPC_reply (sbp, &res, merklesync_program_1, 
+			      MERKLESYNC_GETNODE);
       break;
     }
     
@@ -144,11 +149,14 @@ merkle_server::dispatch (svccb *sbp)
     // request a list of blocks
     {
       //warn << (u_int) this << " dis..GETBLOCKLIST\n";	
-      getblocklist_arg *arg = sbp->template getarg<getblocklist_arg> ();
+      //      getblocklist_arg *arg = sbp->template getarg<getblocklist_arg> ();
+      getblocklist_arg *arg = (static_cast<getblocklist_arg *> (args));
       ref<getblocklist_arg> arg_copy = New refcounted <getblocklist_arg> (*arg);
       getblocklist_res res (MERKLE_OK);
       chord_node src = arg->src;  // MUST be before sbp->reply
-      sbp->reply (&res);
+      host_node->doRPC_reply (sbp, &res, merklesync_program_1, 
+			      MERKLESYNC_GETBLOCKLIST);
+
       
       // XXX DEADLOCK: if the blocks arrive before res, the remote side gets stuck.
       for (u_int i = 0; i < arg_copy->keys.size (); i++) {
@@ -165,7 +173,8 @@ merkle_server::dispatch (svccb *sbp)
     // request all blocks in a given range, excluding a list of blocks (xkeys)
     {
       //warn << (u_int) this << " dis..GETBLOCKRANGE\n";	
-      getblockrange_arg *arg = sbp->template getarg<getblockrange_arg> ();
+      //      getblockrange_arg *arg = sbp->template getarg<getblockrange_arg> ();
+      getblockrange_arg *arg = (static_cast<getblockrange_arg *> (args));
       getblockrange_res res (MERKLE_OK);
       
       if (arg->bidirectional) {
@@ -182,7 +191,9 @@ merkle_server::dispatch (svccb *sbp)
 				     arg->rngmax);
       res.resok->will_send_blocks = iter->more ();
       chord_node src = arg->src;
-      sbp->reply (&res);  // DONT REF arg AFTER THIS POINT!!!!
+      host_node->doRPC_reply (sbp, &res, merklesync_program_1, 
+			      MERKLESYNC_GETBLOCKRANGE);
+
 
       // XXX DEADLOCK: if the blocks arrive before 'res'...remote gets stuck
       vNew merkle_send_range (iter, sndblkfnc, src);
@@ -190,6 +201,7 @@ merkle_server::dispatch (svccb *sbp)
     }
     
   default:
+    warn << "uknown program in merkle " << procno << "\n";
     assert (0);
     sbp->reject (PROC_UNAVAIL);
     break;
