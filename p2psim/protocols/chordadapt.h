@@ -150,6 +150,11 @@ class ChordAdapt: public P2Protocol {
     uint _stab_basic_timer;
     Time _last_joined_time;
     bool _stab_basic_running;
+
+    double _fixed_stab_to;
+    double _fixed_lookup_to;
+    Time _fixed_stab_int;
+
     Time _last_stab;
     int _parallelism;
     int _max_p;

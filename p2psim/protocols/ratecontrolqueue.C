@@ -4,7 +4,7 @@
 
 bool operator< (const q_elm& a, const q_elm& b) { return (b._priority < a._priority); }
 
-RateControlQueue::RateControlQueue(Node *n, double rate, int burst, void (*fn)(void *))
+RateControlQueue::RateControlQueue(Node *n, double rate, int burst, Time fixed_stab, void (*fn)(void *))
 {
   _node = n;
   _rate = rate/1000.0;
@@ -17,6 +17,7 @@ RateControlQueue::RateControlQueue(Node *n, double rate, int burst, void (*fn)(v
   _running = false;
   _total_bytes = 0;
   _start_time = 0;
+  _fixed_stab = fixed_stab;
 }
 
 void
@@ -40,12 +41,14 @@ RateControlQueue::detect_empty(void *x)
   _last_update = now();
   QDEBUG(5) << " adding " << more << " to " << oldq << endl;
 
-  if (empty()) {
+  if (empty() || (_fixed_stab)) {
     QDEBUG(5) << " detect_empty detect empty queue " << endl;
     _empty_cb(_node);
   }
 
-  if (_quota < -40) {
+  if (_fixed_stab) {
+    _node->delaycb(_fixed_stab, &RateControlQueue::detect_empty, (void *)0, this);
+  }else if (_quota < -40) {
     Time ttt = (Time)((-0.5*_quota)/_rate);
     QDEBUG(5) << " reschedule detect_empty ttt " << ttt << endl;
     _node->delaycb(ttt, &RateControlQueue::detect_empty, (void *)0, this);

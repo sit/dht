@@ -2442,8 +2442,18 @@ LocTable::pred_biggest_gap(Chord::IDMap &start, Chord::IDMap &end, Time stabtime
   myprecious.ip = 0;
   double oldti = 1;
   double ti;
+  idmapwrap *elmdel;
   while (1) {
-    ti = ((double)elm->n.alivetime/(double)(elm->n.alivetime+t-elm->n.timestamp));
+    while (elm->status > LOC_HEALTHY) {
+      ti = ((double)elm->n.alivetime/(double)(elm->n.alivetime+t-elm->n.timestamp));
+      if (ti >= 0.5)
+	break; //safe to evict this node
+      elmdel = elm;
+      elm = ring.next(elm);
+      if (!elm) elm = ring.first();
+      ring.remove(elmdel->id);
+      delete elmdel;
+    }
     if (elm->n.ip!=me.ip && elm->status <= LOC_HEALTHY) {
       if (!oldn.ip ||  (elm->n.alivetime && ti < to && ti > oldti))
       oldti = ti;

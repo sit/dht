@@ -50,7 +50,7 @@ class RateControlQueue {
 
   public:
 
-    RateControlQueue(Node *, double, int, void (*fn)(void *));
+    RateControlQueue(Node *, double, int, Time, void (*fn)(void *));
 
     template<class BT, class AT, class RT>
     bool do_rpc(IPAddress dst, void (BT::* fn)(AT *, RT *), int (BT::* cb)(bool b, AT *, RT *), 
@@ -58,7 +58,10 @@ class RateControlQueue {
 
       if (!_running) {
 	_running = true;
-	_node->delaycb(_delay_interval, &RateControlQueue::detect_empty, (void*)0, this);
+	if (_fixed_stab)
+	  _node->delaycb(_fixed_stab, &RateControlQueue::detect_empty, (void*)0, this);
+	else
+	  _node->delaycb(_delay_interval, &RateControlQueue::detect_empty, (void*)0, this);
       }
       if (!_start_time) 
 	_start_time = now();
@@ -89,7 +92,7 @@ class RateControlQueue {
       _quota += more;
       _last_update = now();
 
-      if (_node->ip()!=dst && (_quota - sz - rsz < (_burst/2)) && p >= DROPABLE_PRIORITY) {
+      if ((!_fixed_stab) && _node->ip()!=dst && (_quota - sz - rsz < (_burst/2)) && p >= DROPABLE_PRIORITY) {
 	QDEBUG(4) << " drop to dst " << qe->_dst << " priority " << p << endl;
 	if (args)
 	  delete args;
@@ -132,6 +135,7 @@ class RateControlQueue {
     Time _last_update;
     Time _start_time;
     unsigned long long _total_bytes;
+    Time _fixed_stab;
     
 };
 
