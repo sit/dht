@@ -887,18 +887,22 @@ chord_server::bmap (bool pfonly, size_t block, sfsro_inode_reg *inode, cbbmap_t 
     unsigned int slotno1 = block - SFSRO_NDIR;
     bmap_recurse (pfonly, cb, slotno1, ID, true);
   }
-  else if (block < SFSRO_NDIR + nfh * nfh) {
-    unsigned int slotno1 = (block - SFSRO_NDIR) / nfh;
-    unsigned int slotno2 = (block - SFSRO_NDIR) % nfh;
+  else if (block < SFSRO_NDIR + nfh * nfh + nfh) {
+   // dindirect starts SFSRO_NDIR + nfh
+    unsigned int index_in_dindirect = block - (SFSRO_NDIR + nfh);
+    unsigned int slotno1 = index_in_dindirect / nfh;
+    unsigned int slotno2 = index_in_dindirect % nfh;
 
     ID = sfshash_to_chordid (&(inode->double_indirect));
     bmap_recurse (pfonly, wrap (this, &chord_server::bmap_recurse, pfonly, cb, slotno2),
 		  slotno1, ID, true);
   }
-  else if (block < SFSRO_NDIR + nfh * nfh * nfh) {
-    unsigned int slotno1 = (block - SFSRO_NDIR) / (nfh * nfh);
-    unsigned int slotno2 = ((block - SFSRO_NDIR) % (nfh * nfh)) / nfh;
-    unsigned int slotno3 = (block - SFSRO_NDIR) % nfh;
+  else if (block < SFSRO_NDIR + nfh * nfh * nfh + nfh * nfh + nfh) {
+    // tindirect starts SFSRO_NDIR + nfh * nfh + nfh
+    unsigned int index_in_tindirect = block - (SFSRO_NDIR + nfh * nfh + nfh);
+    unsigned int slotno1 = index_in_tindirect / (nfh * nfh);
+    unsigned int slotno2 = (index_in_tindirect % (nfh * nfh)) / nfh;
+    unsigned int slotno3 = index_in_tindirect % nfh;
 
     ID = sfshash_to_chordid (&(inode->triple_indirect));
     bmap_recurse (pfonly, wrap (this, &chord_server::bmap_recurse, pfonly,
