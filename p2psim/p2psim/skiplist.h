@@ -218,6 +218,7 @@ class skiplist {
       if (next == NULL) {
 	head = NULL;
 	tail = NULL;
+	lvl = 1;
 	return oldhead;
       } else {
 	unsigned int i;
