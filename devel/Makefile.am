@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.33 2004/05/21 00:59:39 sit Exp $
+# $Id: Makefile.am,v 1.34 2004/07/27 22:42:40 fdabek Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -7,8 +7,8 @@ if GTK_AVAILABLE
 VIS = vis
 endif
 
-bin_PROGRAMS = dbm walk findroute filestore nodeq
-noinst_PROGRAMS = test_types $(VIS) builddb dbdump coords dhc_test 
+bin_PROGRAMS = dbm walk findroute filestore nodeq dbdump
+noinst_PROGRAMS = test_types $(VIS) builddb coords dhc_test 
 
 noinst_HEADERS = rpclib.h
 

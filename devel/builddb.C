@@ -32,6 +32,7 @@ opendb()
   opts.addOption("opt_async", 1);
   opts.addOption("opt_cachesize", 1000);
   opts.addOption("opt_nodesize", 4096);
+  opts.addOption("opt_dbenv", 1);
 
   ptr<dbfe> db = New refcounted<dbfe>();
   if (int err = db->opendb(dbname, opts)) {
