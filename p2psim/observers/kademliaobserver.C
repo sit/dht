@@ -32,11 +32,9 @@ KademliaObserver::KademliaObserver(Args *a) : _type("Kademlia")
   _nnodes = atoi((*a)["nodes"].c_str());
   assert(_nnodes > 0);
 
-  _initstate = atoi((*a)["initstate"].c_str()) ? true : false;
-
   // register as an observer of all Kadmelia instances
-  list<Protocol*> l = Network::Instance()->getallprotocols(_type);
-  for(list<Protocol*>::iterator pos = l.begin(); pos != l.end(); ++pos) {
+  set<Protocol*> l = Network::Instance()->getallprotocols(_type);
+  for(set<Protocol*>::iterator pos = l.begin(); pos != l.end(); ++pos) {
     Kademlia *k = (Kademlia*) *pos;
     k->registerObserver(this);
     DEBUG(1) << "KademliaObserver registered with " << k->id() << endl;
@@ -50,45 +48,28 @@ KademliaObserver::~KademliaObserver()
 
 
 void
-KademliaObserver::init_state()
-{
-  list<Protocol*> l = Network::Instance()->getallprotocols(_type);
-  for(list<Protocol*>::iterator pos = l.begin(); pos != l.end(); ++pos) {
-    Kademlia *k = (Kademlia*) *pos;
-    DEBUG(1) << "KademliaObserver::init_state " << now() << endl;
-    k->init_state(l);
-  }
-}
-
-
-void
 KademliaObserver::kick(Observed *, ObserverInfo *)
 {
-  if(_initstate) {
-    init_state();
-    _initstate = false;
-  }
-
   stabilized();
 }
 
 bool
 KademliaObserver::stabilized()
 {
-  list<Protocol*> allprotos = Network::Instance()->getallprotocols(_type);
-  list<Protocol*> liveprotos;
+  set<Protocol*> allprotos = Network::Instance()->getallprotocols(_type);
+  set<Protocol*> liveprotos;
   vector<Kademlia::NodeID> liveIDs;
 
-  for(list<Protocol*>::const_iterator i = allprotos.begin(); i != allprotos.end(); ++i) {
+  for(set<Protocol*>::const_iterator i = allprotos.begin(); i != allprotos.end(); ++i) {
     Kademlia *k = (Kademlia *)(*i);
     if(k->node()->alive()) {
-      liveprotos.push_back(*i);
+      liveprotos.insert(*i);
       liveIDs.push_back(k->id());
     }
   }
 
 
-  for(list<Protocol*>::const_iterator i = liveprotos.begin(); i != liveprotos.end(); ++i) {
+  for(set<Protocol*>::const_iterator i = liveprotos.begin(); i != liveprotos.end(); ++i) {
     Kademlia *k = (Kademlia *)(*i);
     if (!k->stabilized(&liveIDs)) {
       DEBUG(1) << now() << " NOT STABILIZED" << endl;

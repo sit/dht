@@ -54,9 +54,9 @@ TapestryObserver::TapestryObserver(Args *a) : _type( "Tapestry" )
   _init_num = atoi((*a)["initnodes"].c_str());
   lid.clear();
 
-  list<Protocol*> l = Network::Instance()->getallprotocols(_type);
+  set<Protocol*> l = Network::Instance()->getallprotocols(_type);
   DEBUG(1) << "TapestryObserver::init_state " << now() << endl;
-  for(list<Protocol*>::iterator pos = l.begin(); pos != l.end(); ++pos) {
+  for(set<Protocol*>::iterator pos = l.begin(); pos != l.end(); ++pos) {
     Tapestry *t = (Tapestry*) *pos;
     t->registerObserver(this);
   }
@@ -71,9 +71,9 @@ TapestryObserver::~TapestryObserver()
 void
 TapestryObserver::init_state()
 {
-  list<Protocol*> l = Network::Instance()->getallprotocols(_type);
+  set<Protocol*> l = Network::Instance()->getallprotocols(_type);
   DEBUG(1) << "TapestryObserver::init_state " << now() << endl;
-  for(list<Protocol*>::iterator pos = l.begin(); pos != l.end(); ++pos) {
+  for(set<Protocol*>::iterator pos = l.begin(); pos != l.end(); ++pos) {
     Tapestry *t = (Tapestry*) *pos;
     t->init_state(l);
   }
@@ -93,8 +93,8 @@ TapestryObserver::kick(Observed *, ObserverInfo *)
   }
 
   DEBUG(1) << "TapestryObserver executing" << endl;
-  list<Protocol*> l = Network::Instance()->getallprotocols(_type);
-  list<Protocol*>::iterator pos;
+  set<Protocol*> l = Network::Instance()->getallprotocols(_type);
+  set<Protocol*>::iterator pos;
 
   //i only want to sort it once after all nodes have joined! 
   Tapestry *c = 0;

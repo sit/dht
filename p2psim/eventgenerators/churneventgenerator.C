@@ -83,7 +83,11 @@ ChurnEventGenerator::run()
 
   // start all nodes at a random time between 1 and n (except the wkn, who
   // starts at 1)
-  _ips = Network::Instance()->getallips();
+  set<IPAddress> tmpips = Network::Instance()->getallips();
+  for(set<IPAddress>::const_iterator i = tmpips.begin(); i != tmpips.end(); ++i)
+    _ips.push_back(*i);
+
+
   IPAddress ip = 0;
   for(u_int xxx = 0; xxx < _ips.size(); xxx++){
     ip = _ips[xxx];

@@ -65,27 +65,27 @@ Network::~Network()
 }
 
 
-list<Protocol*>
+set<Protocol*>
 Network::getallprotocols(string proto)
 {
-  list<Protocol*> pl; // XXX: should we just New this?  return may be expensive
+  set<Protocol*> pl; // XXX: should we just New this?  return may be expensive
 
   for(NMCI p = _nodes.begin(); p != _nodes.end(); ++p)
-    pl.push_back(p->second->getproto(proto));
+    pl.insert(p->second->getproto(proto));
   return pl;
 }
 
-vector<IPAddress>
+set<IPAddress>
 Network::getallips()
 {
-  vector<IPAddress> il; // XXX: should we just New this? return may be expensive
+  set<IPAddress> il; // XXX: should we just New this? return may be expensive
 
   for(NMCI p = _nodes.begin(); p != _nodes.end(); ++p)
-    il.push_back(p->first);
+    il.insert(p->first);
   return il;
 }
 
-// Protocols should call here() to send a packet into the network.
+// Protocols should call send() to send a packet into the network.
 void
 Network::send(Packet *p)
 {

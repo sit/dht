@@ -64,6 +64,26 @@ Kademlia::Kademlia(Node *n, Args a)
 Kademlia::NodeID Kademlia::closer::n = 0;
 Kademlia::NodeID Kademlia::IDcloser::n = 0;
 // }}}
+// {{{ Kademlia::initstate
+void 
+Kademlia::initstate(set<Protocol*> *l)
+{
+  KDEBUG(1) << "Kademlia::initstate" << endl;
+  // just bloody call insert on everyone
+  for(set<Protocol*>::const_iterator i = l->begin(); i != l->end(); ++i) {
+    if((*i)->proto_name() != proto_name())
+      continue;
+
+    Kademlia *k = (Kademlia *) *i;
+    if(k->id() == _id)
+      continue;
+
+    insert(k->id(), k->node()->ip(), true);
+    touch(k->id());
+  }
+}
+
+// }}}
 // {{{ Kademlia::join
 void
 Kademlia::join(Args *args)
@@ -509,20 +529,6 @@ Kademlia::stabilized(vector<NodeID> *lid)
   k_stabilized stab(&copylid);
   _root->traverse(&stab, this);
   return stab.stabilized();
-}
-
-// }}}
-// {{{ Kademlia::init_state
-// NASTY HACK to stabilize faster
-void 
-Kademlia::init_state(list<Protocol*> l)
-{
-  // just bloody call insert on everyone
-  for(list<Protocol*>::const_iterator i = l.begin(); i != l.end(); ++i) {
-    Kademlia *k = (Kademlia *) *i;
-    insert(k->id(), k->node()->ip(), true);
-    touch(k->id());
-  }
 }
 
 // }}}
@@ -1117,10 +1123,10 @@ k_bucket::insert(Kademlia::NodeID id, bool touch, bool init_state, string prefix
 
   // when we're initializing, we're trying to insert every id in everyone's
   // k-buckets, so no need to put it in the replacement cache
-  if(init_state) {
-    checkrep();
-    return;
-  }
+  // if(init_state) {
+  //   checkrep();
+  //   return;
+  // }
 
   // we're full already, just put in replacement cache, and truncate to
   // Kademlia::k
@@ -1407,11 +1413,11 @@ k_check::execute(k_bucket_leaf *k, string prefix, unsigned depth)
 {
   k->checkrep();
 
-  list<Protocol*> l = Network::Instance()->getallprotocols("Kademlia");
+  set<Protocol*> l = Network::Instance()->getallprotocols("Kademlia");
 
   // go through all pointers in node
   for(Kademlia::nodeinfo_set::const_iterator i = k->nodes->nodes.begin(); i != k->nodes->nodes.end(); ++i) {
-    for(list<Protocol*>::iterator pos = l.begin(); pos != l.end(); ++pos) {
+    for(set<Protocol*>::iterator pos = l.begin(); pos != l.end(); ++pos) {
       Kademlia *kad = (Kademlia*) *pos;
       if(kad->id() == k->kademlia()->id())
         continue;
@@ -1421,7 +1427,7 @@ k_check::execute(k_bucket_leaf *k, string prefix, unsigned depth)
   }
 
   for(set<k_nodeinfo*, Kademlia::younger>::const_iterator i = k->replacement_cache->begin(); i != k->replacement_cache->end(); ++i) {
-    for(list<Protocol*>::iterator pos = l.begin(); pos != l.end(); ++pos) {
+    for(set<Protocol*>::iterator pos = l.begin(); pos != l.end(); ++pos) {
       Kademlia *kad = (Kademlia*) *pos;
       if(kad->id() == k->kademlia()->id())
         continue;

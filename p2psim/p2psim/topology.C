@@ -92,7 +92,7 @@ Topology::parse(char *filename)
     exit(-1);
   }
 
-  // create the network
+  // create the network.
   Network::Instance(top, failure_model);
 
   // leave the rest of the file to the specific topology

@@ -37,10 +37,7 @@ public:
 
 private:
   unsigned int _nnodes;
-  bool _initstate;
   string _type;
-
-  void init_state();
 };
 
 #endif // __KADEMLIA_OBSERVER_H

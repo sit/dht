@@ -88,6 +88,7 @@ ProtocolFactory::create(string s, Node *n)
   if (s == "VivaldiTest")
     p = New VivaldiTest(n,a);
   
+  _allprotocols.insert(p);
   assert(p);
 
   return p;
@@ -100,8 +101,14 @@ ProtocolFactory::setprotargs(string p, Args a)
   _protocols.insert(p);
 }
 
-set<string>
+const set<string>
 ProtocolFactory::getnodeprotocols()
 {
   return _protocols;
+}
+
+const set<Protocol*>
+ProtocolFactory::getallprotocols()
+{
+  return _allprotocols;
 }

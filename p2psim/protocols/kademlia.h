@@ -61,6 +61,7 @@ public:
   virtual void join(Args*);
   virtual void crash(Args*);
   virtual void lookup(Args*);
+  virtual void initstate(set<Protocol*>*);
 
   //
   // functors

@@ -212,10 +212,10 @@ Kelips::crash(Args *a)
 bool
 Kelips::node_key_alive(ID key)
 {
-  vector<IPAddress> ips = Network::Instance()->getallips();
-  for(u_int i = 0; i < ips.size(); i++){
-    if(ip2id(ips[i]) == key){
-      return Network::Instance()->getnode(ips[i])->alive();
+  set<IPAddress> ips = Network::Instance()->getallips();
+  for(set<IPAddress>::const_iterator i = ips.begin(); i != ips.end(); ++i){
+    if(ip2id(*i) == key){
+      return Network::Instance()->getnode(*i)->alive();
     }
   }
   assert(0);
@@ -712,9 +712,9 @@ Kelips::purge(void *junk)
 // of nodes to help us initialize our routing tables faster (i.e. cheat).
 // So in most nodes it's called before join().
 void
-Kelips::init_state(list<Protocol*> lid)
+Kelips::init_state(set<Protocol*> lid)
 {
-  for(list<Protocol*>::const_iterator i = lid.begin(); i != lid.end(); ++i) {
+  for(set<Protocol*>::const_iterator i = lid.begin(); i != lid.end(); ++i) {
     Kelips *k = dynamic_cast<Kelips*>(*i);
     assert(k);
     if(k->ip() == ip())

@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.13 2003/11/02 02:48:19 strib Exp $ */
+/* $Id: tapestry.h,v 1.14 2003/11/02 19:57:28 thomer Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -182,7 +182,7 @@ public:
 
   void handle_repair(repair_args *args, repair_return *ret);
 
-  void init_state( list<Protocol*> );
+  void init_state( set<Protocol*> );
 
 private:
 

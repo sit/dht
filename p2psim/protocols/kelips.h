@@ -46,7 +46,7 @@
 #include "p2psim/condvar.h"
 #include <map>
 #include <vector>
-#include <list>
+#include <set>
 
 class Kelips : public P2Protocol {
 public:
@@ -143,7 +143,7 @@ public:
   bool lookup_loop(ID key, vector<IPAddress> &);
   void handle_lookup2(ID *kp, IPAddress *res);
   IPAddress find_by_id(ID key);
-  void init_state(list<Protocol*>);
+  void init_state(set<Protocol*>);
   bool stabilized(vector<ID> lid);
   void rpcstat(bool ok, IPAddress dst, int latency, int nitems);
   IPAddress victim(int g);

@@ -25,6 +25,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+#include "protocols/protocolfactory.h"
 #include "protocol.h"
 #include "topology.h"
 #include "eventgenerator.h"
@@ -56,6 +57,11 @@ threadmain(int argc, char *argv[])
 
   // Creates a network with the appropriate underlying topology.
   Topology::parse(topology_file);
+
+  // Initialize all protocols
+  set<Protocol*> all = ProtocolFactory::Instance()->getallprotocols();
+  for(set<Protocol*>::const_iterator i = all.begin(); i != all.end(); ++i)
+    (*i)->initstate(&all);
 
   // make sure the network ate all the nodes
   while(anyready())

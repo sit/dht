@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.19 2003/11/02 02:48:19 strib Exp $ */
+/* $Id: tapestry.C,v 1.20 2003/11/02 19:57:28 thomer Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -1009,7 +1009,7 @@ Tapestry::check_rt(void *x)
 }
 
 void
-Tapestry::init_state(list<Protocol *> lid)
+Tapestry::init_state(set<Protocol *> lid)
 {
 
   // TODO: we shouldn't need locking in here, right?
@@ -1017,7 +1017,7 @@ Tapestry::init_state(list<Protocol *> lid)
   TapDEBUG(2) << "init_state: about to add everyone" << endl;
   // for every node but this own, add them all to your routing table
   vector<NodeInfo *> nodes;
-  for(list<Protocol*>::const_iterator i = lid.begin(); i != lid.end(); ++i) {
+  for(set<Protocol*>::const_iterator i = lid.begin(); i != lid.end(); ++i) {
 
     Tapestry *currnode = (Tapestry*) *i;
     if( currnode->ip() == ip() ) {
@@ -1033,7 +1033,7 @@ Tapestry::init_state(list<Protocol *> lid)
 
   // now that everyone's been added, place backpointers on everyone 
   // who is still in the table
-  for(list<Protocol*>::const_iterator i = lid.begin(); i != lid.end(); ++i) {
+  for(set<Protocol*>::const_iterator i = lid.begin(); i != lid.end(); ++i) {
 
     Tapestry *currnode = (Tapestry*) *i;
     if( currnode->ip() == ip() ) {
@@ -1512,8 +1512,8 @@ Tapestry::lookup_cheat( GUID key )
 
   // using global knowledge, figure out who the owner of this key should
   // be, given the set of live nodes
-  list<Protocol*> l = Network::Instance()->getallprotocols("Tapestry");
-  list<Protocol*>::iterator pos;
+  set<Protocol*> l = Network::Instance()->getallprotocols("Tapestry");
+  set<Protocol*>::iterator pos;
   vector<Tapestry::GUID> lid;
 
   //i only want to sort it once after all nodes have joined! 

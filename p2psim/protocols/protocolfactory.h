@@ -35,13 +35,15 @@ public:
   static ProtocolFactory* Instance();
   Protocol *create(string, Node*);
   void setprotargs(string, Args);
-  set<string> getnodeprotocols();
+  const set<string> getnodeprotocols();
+  const set<Protocol*> getallprotocols();
   ~ProtocolFactory();
 
 private:
   static ProtocolFactory *_instance;
   hash_map<string, Args> _protargs;
   set<string> _protocols;
+  set<Protocol*> _allprotocols;
 
   ProtocolFactory();
 };

@@ -43,6 +43,7 @@ public:
   Node *node() { return _node; }
   virtual string proto_name() = 0;
   static void Protocol::parse(char*);
+  virtual void initstate(set<Protocol*>*) {};
 
 protected:
   typedef set<unsigned> RPCSet;

@@ -39,11 +39,11 @@ public:
   Channel* nodechan() { return _nodechan; }
   void send(Packet *);
 
-  // information
+  // observers
   Node* getnode(IPAddress id) { return _nodes[id]; }
   Topology *gettopology() { return _top; }
-  list<Protocol*> getallprotocols(string);
-  vector<IPAddress> getallips();
+  set<Protocol*> getallprotocols(string = "");
+  set<IPAddress> getallips();
 
   ~Network();
 

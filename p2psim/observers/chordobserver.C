@@ -77,8 +77,8 @@ ChordObserver::get_sorted_nodes(unsigned int max)
     return _allsorted;
   }
 
-  list<Protocol*> l = Network::Instance()->getallprotocols(_type);
-  list<Protocol*>::iterator pos;
+  set<Protocol*> l = Network::Instance()->getallprotocols(_type);
+  set<Protocol*>::iterator pos;
 
   vector<Chord::IDMap> ids;
   ids.clear();
@@ -112,8 +112,8 @@ ChordObserver::init_nodes(unsigned int num)
 {
   vector<Chord::IDMap> ids;
 
-  list<Protocol*> l = Network::Instance()->getallprotocols(_type);
-  list<Protocol*>::iterator pos;
+  set<Protocol*> l = Network::Instance()->getallprotocols(_type);
+  set<Protocol*>::iterator pos;
   Chord *c;
   
   ids = get_sorted_nodes(num);
@@ -136,8 +136,8 @@ ChordObserver::execute()
 
   if (!_reschedule) return;
 
-  list<Protocol*> l = Network::Instance()->getallprotocols(_type);
-  list<Protocol*>::iterator pos;
+  set<Protocol*> l = Network::Instance()->getallprotocols(_type);
+  set<Protocol*>::iterator pos;
 
   vivaldi_error ();
   //i only want to sort it once after all nodes have joined! 
@@ -184,8 +184,8 @@ ChordObserver::vivaldi_error()
   assert (t);
   vector<double> avg_errs;
 
-  list<Protocol*> l = Network::Instance()->getallprotocols(_type);
-  list<Protocol*>::iterator outer, inner; 
+  set<Protocol*> l = Network::Instance()->getallprotocols(_type);
+  set<Protocol*>::iterator outer, inner; 
   for (outer = l.begin(); outer != l.end(); ++outer) {
     double sum = 0;
     uint sum_sz = 0;
