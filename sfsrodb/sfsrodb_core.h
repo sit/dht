@@ -1,4 +1,4 @@
-/* $Id: sfsrodb_core.h,v 1.12 2002/10/16 19:16:58 benjie Exp $ */
+/* $Id: sfsrodb_core.h,v 1.13 2002/12/08 16:30:46 fdabek Exp $ */
 
 /*
  *
@@ -27,6 +27,7 @@
 #include "sysconf.h"
 #include "sfs_prot.h"
 #include "crypt.h"
+#include "sfscrypt.h"
 #include "str.h"
 #include "sha1.h"
 #include "xdrmisc.h"

@@ -33,12 +33,14 @@ const int chord::max_vnodes = 1024;
 //#define TOES 1
 
 vnode::vnode (ptr<locationtable> _locations, ptr<fingerlike> stab,
+	      ptr<route_factory> f,
 	      ptr<chord> _chordnode,
 	      chordID _myID, int _vnode, int server_sel_mode) :
   myindex (_vnode),
   myID (_myID), 
   chordnode (_chordnode),
   locations (_locations),
+  factory (f),
   server_selection_mode (server_sel_mode)
 {
   warnx << gettime () << " myID is " << myID << "\n";
@@ -214,6 +216,7 @@ vnode::join (cbjoin_t cb)
 {
   chordID n;
 
+  warn << "in join\n";
   if (!locations->lookup_anyloc (myID, &n)) {
     warnx << myID << ": couldn't lookup anyloc for join\n";
     locations->stats ();

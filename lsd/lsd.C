@@ -130,31 +130,45 @@ startclntd()
 
 }
 
-static void
-newvnode_cb (int nreplica, str db_name, int ss_mode, int n, ptr<vnode> my,
-	     chordstat stat)
-{
-  ptr<route_factory> f;
-  ptr<fingerlike> fl;
 
-  if (mode == MODE_DEBRUIJN) {
-    f = New refcounted<debruijn_route_factory> (my);
-    fl = New refcounted<debruijn> ();
-  } else {
-    f = New refcounted<chord_route_factory> (my);
-    fl = New refcounted<finger_table> ();
-  }
+ptr<route_factory> 
+get_factory (int mode) 
+{
+  if (mode == MODE_DEBRUIJN) 
+    return New refcounted<debruijn_route_factory> ();
+  else 
+    return new refcounted<chord_route_factory> ();
+}
+
+ptr<fingerlike> 
+get_fingerlike (int mode) 
+{
+  if (mode == MODE_DEBRUIJN) 
+    return New refcounted<debruijn> ();
+  else 
+    return new refcounted<finger_table> ();
+}
+
+static void
+newvnode_cb (int nreplica, str db_name, int ss_mode, 
+	     int n, ptr<route_factory> f_old,
+	     ptr<vnode> my, chordstat stat)
+{
   
   if (stat != CHORD_OK) {
     warnx << "newvnode_cb: status " << stat << "\n";
     fatal ("unable to join\n");
   }
   str db_name_prime = strbuf () << db_name << "-" << n;
-  dh.push_back( New dhash (db_name_prime, my, f, nreplica, 
+  dh.push_back( New dhash (db_name_prime, my, f_old, nreplica, 
 			   ss_mode));
 
-  if (n > 0) chordnode->newvnode (wrap (newvnode_cb, nreplica, db_name, 
-					ss_mode, n-1), fl);
+  if (n > 0) {
+    ptr<route_factory> f = get_factory (mode);
+    ptr<fingerlike> fl = get_fingerlike (mode);
+    chordnode->newvnode (wrap (newvnode_cb, nreplica, db_name, 
+			       ss_mode, n-1, f), fl, f);
+  }
 }
 
 
@@ -342,9 +356,11 @@ main (int argc, char **argv)
 				     myport,
 				     max_loccache,
 				     ss_mode);
-  ptr<debruijn> deb = New refcounted<debruijn> ();
+
+  ptr<route_factory> f = get_factory (mode);
+  ptr<fingerlike> fl = get_fingerlike (mode);
   chordnode->newvnode (wrap (newvnode_cb, nreplica, db_name, ss_mode, 
-			     vnode-1), deb);
+			     vnode-1, f), fl, f);
 
   sigcb(SIGUSR1, wrap (&stats));
   sigcb(SIGUSR2, wrap (&stop));
@@ -354,6 +370,4 @@ main (int argc, char **argv)
     startclntd();
   amain ();
 }
-
-
 

@@ -138,11 +138,7 @@ vnode::find_successor_cb (chordID x, cbroute_t cb, chordID s,
 void
 vnode::find_route (chordID &x, cbroute_t cb) 
 {
-#ifdef FINGERS
-  route_chord *ri = New route_chord (mkref(this), x);
-#else
-  route_debruijn *ri = New route_debruijn (mkref(this), x);
-#endif
+  route_iterator *ri = factory->produce_iterator_ptr (x);
   ri->first_hop(wrap (this, &vnode::find_route_hop_cb, cb, ri));
 }
 

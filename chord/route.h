@@ -2,11 +2,10 @@
 #define _ROUTE_ITERATOR_H_
 
 #include "sfsmisc.h"
-#include "arpc.h"
 #include "crypt.h"
-#include "chord.h"
 #include "refcnt.h"
 
+class vnode;
 typedef callback<void, bool>::ptr cbhop_t;
 
 class route_iterator {
@@ -46,7 +45,8 @@ class route_iterator {
   chordstat status () { return r; };
 
   virtual void print ();
-  virtual void first_hop (cbhop_t cb) {};
+  virtual void first_hop (cbhop_t cb, bool ucs = false) = 0;
+  virtual void first_hop (cbhop_t cb, chordID guess) = 0;
   virtual void next_hop () {};
   virtual void send (chordID guess) = 0;
   virtual void send (bool ucs) = 0;
@@ -78,8 +78,8 @@ class route_chord : public route_iterator {
 	       int uc_procno,
 	       ptr<void> uc_args);
 
-  void first_hop (cbhop_t cb, bool ucs = false);
-  void first_hop (cbhop_t cb, chordID guess);
+  virtual void first_hop (cbhop_t cb, bool ucs = false);
+  virtual void first_hop (cbhop_t cb, chordID guess);
   void send (chordID guess);
   void send (bool ucs = false);
 
@@ -104,8 +104,8 @@ class route_debruijn : public route_iterator {
 
   void send (chordID guess);
   void send (bool ucs);
-  void first_hop (cbhop_t cb, bool ucs = false);
-  void first_hop (cbhop_t cb, chordID guess);
+  virtual void first_hop (cbhop_t cb, bool ucs = false);
+  virtual void first_hop (cbhop_t cb, chordID guess);
   void print ();
   void next_hop ();
 };
@@ -115,23 +115,35 @@ protected:
   ptr<vnode> vi;
 public:
   route_factory (ptr<vnode> vi) : vi (vi) {};
+  route_factory () {};
+  
+  void setvnode (ptr<vnode> v) { vi = v; };
   virtual ~route_factory () {};
   virtual ptr<route_iterator> produce_iterator (chordID xi) = 0;
   virtual ptr<route_iterator> produce_iterator (chordID xi,
 						rpc_program uc_prog,
 						int uc_procno,
 						ptr<void> uc_args) = 0;
+  virtual route_iterator* produce_iterator_ptr (chordID xi) = 0;
+  virtual route_iterator* produce_iterator_ptr (chordID xi,
+						rpc_program uc_prog,
+						int uc_procno,
+						ptr<void> uc_args) = 0;
   ptr<vnode> get_vnode () {return vi;};
-  void get_node (chord_node *n) {vi->locations->get_node (vi->my_ID (),
-							  n); };
+  void get_node (chord_node *n);
 };
 
 class debruijn_route_factory : public route_factory {
 public:
   debruijn_route_factory (ptr<vnode> vi) : route_factory (vi) {};
-  
+  debruijn_route_factory () {};
   ptr<route_iterator> produce_iterator (chordID xi);
   ptr<route_iterator> produce_iterator (chordID xi,
+					rpc_program uc_prog,
+					int uc_procno,
+					ptr<void> uc_args);
+  virtual route_iterator* produce_iterator_ptr (chordID xi);
+  virtual route_iterator* produce_iterator_ptr (chordID xi,
 					rpc_program uc_prog,
 					int uc_procno,
 					ptr<void> uc_args);
@@ -140,9 +152,14 @@ public:
 class chord_route_factory : public route_factory {
 public:
   chord_route_factory (ptr<vnode> vi) : route_factory (vi) {};
-  
+  chord_route_factory () {};
   ptr<route_iterator> produce_iterator (chordID xi);
   ptr<route_iterator> produce_iterator (chordID xi,
+					rpc_program uc_prog,
+					int uc_procno,
+					ptr<void> uc_args);
+  virtual route_iterator* produce_iterator_ptr (chordID xi);
+  virtual route_iterator* produce_iterator_ptr (chordID xi,
 					rpc_program uc_prog,
 					int uc_procno,
 					ptr<void> uc_args);

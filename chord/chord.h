@@ -44,7 +44,6 @@
 #include "stabilize.h"
 
 typedef int cb_ID;
-
 typedef vec<chordID> route;
 
 typedef callback<void,ptr<vnode>,chordstat>::ref cbjoin_t;
@@ -56,13 +55,13 @@ typedef callback<void, svccb *>::ref cbdispatch_t;
 typedef callback<void, bool>::ref cbupcalldone_t;
 typedef callback<void, int, void *, cbupcalldone_t>::ref cbupcall_t; 
 
-class route_iterator;
 
 #include "toe_table.h"
 #include "finger_table.h"
 #include "succ_list.h"
 #include "debruijn.h"
 #include "fingerlike.h"
+#include "route.h"
 
 // ================ VIRTUAL NODE ================
 
@@ -155,10 +154,12 @@ class vnode : public virtual refcount, public stabilizable {
   chordID myID;
   ptr<chord> chordnode;
   ptr<locationtable> locations;
+  ptr<route_factory> factory;
   int server_selection_mode;
 
-  vnode (ptr<locationtable> _locations, ptr<fingerlike> stab,
-	 ptr<chord> _chordnode, chordID _myID, int _vnode, int server_sel_mode);
+  vnode (ptr<locationtable> _locations, ptr<fingerlike> stab, 
+	 ptr<route_factory> f, ptr<chord> _chordnode, 
+	 chordID _myID, int _vnode, int server_sel_mode);
   ~vnode (void);
   chordID my_ID () { return myID; };
   chordID my_pred ();
@@ -250,7 +251,8 @@ class chord : public virtual refcount {
     
   chord (str _wellknownhost, int _wellknownport,
 	 str _myname, int port, int max_cache, int server_selection_mode);
-  ptr<vnode> newvnode (cbjoin_t cb, ptr<fingerlike> fingers);
+  ptr<vnode> newvnode (cbjoin_t cb, ptr<fingerlike> fingers,
+		       ptr<route_factory> f);
   void stats (void);
   void print (void);
   void stop (void);

@@ -1,3 +1,5 @@
+#include "arpc.h"
+#include "chord.h"
 #include "route.h"
 
 void
@@ -244,6 +246,22 @@ chord_route_factory::produce_iterator (chordID xi,
   return New refcounted<route_chord> (vi, xi, uc_prog, uc_procno, uc_args);
 }
 
+
+route_iterator *
+chord_route_factory::produce_iterator_ptr (chordID xi)
+{
+  return New route_chord (vi, xi);
+}
+
+route_iterator *
+chord_route_factory::produce_iterator_ptr (chordID xi,
+					   rpc_program uc_prog,
+					   int uc_procno,
+					   ptr<void> uc_args)
+{
+  return New route_chord (vi, xi, uc_prog, uc_procno, uc_args);
+}
+
 //
 // de Bruijn routing 
 //
@@ -322,7 +340,6 @@ route_debruijn::first_hop (cbhop_t cbi, bool ucs = false)
   cb = cbi;
   chordID myID = v->my_ID ();
 
-  warn << "first hop\n";
   if (v->lookup_closestsucc (myID + 1) 
       == myID) {  // is myID the only node?
     done = true;
@@ -491,3 +508,24 @@ debruijn_route_factory::produce_iterator (chordID xi,
 {
   return New refcounted<route_debruijn> (vi, xi, uc_prog, uc_procno, uc_args);
 }
+
+route_iterator *
+debruijn_route_factory::produce_iterator_ptr (chordID xi)
+{
+  return New route_debruijn (vi, xi);
+}
+
+
+route_iterator *
+debruijn_route_factory::produce_iterator_ptr (chordID xi,
+					      rpc_program uc_prog,
+					      int uc_procno,
+					      ptr<void> uc_args)
+{
+  return New route_debruijn (vi, xi, uc_prog, uc_procno, uc_args);
+}
+
+void 
+route_factory::get_node (chord_node *n) {
+  vi->locations->get_node (vi->my_ID (), n); 
+};
