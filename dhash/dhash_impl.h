@@ -1,4 +1,5 @@
 #include "dhash.h"
+#include <dbfe.h>
 
 // Forward declarations.
 class RPC_delay_args;
@@ -85,6 +86,7 @@ class dhash_impl : public dhash {
   chordID partition_right;
   ptr<merkle_syncer> partition_syncer;
   
+  ptr<dbEnumeration> partition_enumeration;
   chordID partition_current;
 
   ihash<chordID, store_state, &store_state::key, 
@@ -163,6 +165,8 @@ class dhash_impl : public dhash {
 			 chordID ID, bool ok, chordstat stat);
 
   void dbwrite (ref<dbrec> key, ref<dbrec> data);
+  void dbdelete (ref<dbrec> key);
+
 
 
   chordID pred;

@@ -54,10 +54,15 @@ merkle_server::dispatch (svccb *sbp, void *args, int procno)
       from.r.port = ntohs (sa->sin_port);
       from.x = t_arg->src_id;
 
+      vec<chord_node> preds = host_node->preds ();
+      assert (preds.size () > 0);
+      bigint rngmin = preds.back ().x;
+      bigint rngmax = host_node->my_ID ();
+
+#if 0
       bigint rngmin = 0; //host_node->my_pred ();
       bigint rngmax = bigint (1) << 160; //host_node->my_ID ();
-      //bigint rngmin = host_node->my_pred ();
-      //bigint rngmax = host_node->my_ID ();
+#endif
 
       compare_nodes (ltree, rngmin, rngmax, lnode, rnode,
 		     wrap (this, &merkle_server::missing, from),
@@ -70,6 +75,42 @@ merkle_server::dispatch (svccb *sbp, void *args, int procno)
       break;
     }
      
+  case MERKLESYNC_GETKEYS:
+    {
+      getkeys_arg *arg = (static_cast<getkeys_arg *> (args));
+
+      ptr<dbPair> d;
+      vec<ptr<dbrec> > keys;
+      ptr<dbEnumeration> enumer = ltree->db->enumerate ();
+      for (u_int i = 0; i < 64; i++) {
+	if (i == 0)
+	  d = enumer->nextElement (id2dbrec(arg->rngmin)); // off-by-one??? 
+	else
+	  d = enumer->nextElement ();
+
+	if (!d || dbrec2id(d->key) > arg->rngmax)
+	  break;
+	keys.push_back (d->key);
+      }
+      
+      bool more = false;
+      if (keys.size () == 64) {
+	d = enumer->nextElement ();
+	if (d && dbrec2id(d->key) <= arg->rngmax)
+	  more = true;
+      }
+
+      getkeys_res res (MERKLE_OK);
+      res.resok->morekeys = more;
+      res.resok->keys.setsize (keys.size ());
+      for (u_int i = 0; i < keys.size (); i++)
+	res.resok->keys[i] = to_merkle_hash (keys[i]);
+
+      host_node->doRPC_reply (sbp, &res, merklesync_program_1, 
+			      MERKLESYNC_GETKEYS);
+      break;
+    }
+
   default:
     fatal << "unknown proc in merkle " << procno << "\n";
     sbp->reject (PROC_UNAVAIL);

@@ -134,8 +134,6 @@ dhash_impl::init_after_chord(ptr<vnode> node, ptr<route_factory> _r_factory)
   partition_left = 0;
   partition_right = 0;
   partition_syncer = NULL;
-  //XXX fix this...partition_enumeration = NULL;
-
   partition_current = 0;
 
 
@@ -229,14 +227,9 @@ dhash_impl::sendblock (chord_node dst, bigint blockID, bool last, callback<void>
 void
 dhash_impl::sendblock_cb (callback<void>::ref cb, dhash_stat err, chordID blockID)
 {
-  // XXX don't assert, how propogate the error??
-#if 0
+  // XXX don't assert => propogate the error
   if (err)
-    fatal << "Error sending block: " << blockID << ", err " << err << "\n";
-#else
-  if (err)
-    warn << "error sending block: " << blockID << ", err " << err << "\n";
-#endif
+    warn << "Error sending block: " << blockID << ", err " << err << "\n";
 
   (*cb) ();
 }
@@ -313,20 +306,20 @@ dhash_impl::replica_maintenance_timer (u_int index)
   merkle_rep_tcb = NULL;
   return;
 
-  update_replica_list ();
+  vec<chord_node> succs = host_node->succs ();
 
 #if 1
   warn << "dhash_impl::replica_maintenance_timer index " << index
-       << ", #replicas " << replicas.size() << "\n";
+       << ", #succs " << succs.size() << "\n";
 #endif
   
   if (!replica_syncer || replica_syncer->done()) {
     // watch out for growing/shrinking replica list
-    if (index >= replicas.size())
+    if (index >= succs.size())
       index = 0;
     
-    if (replicas.size() > 0) {
-      chord_node replica = replicas[index];
+    if (succs.size() > 0) {
+      chord_node succ = succs[index];
 
       if (replica_syncer) {
 #if 1
@@ -338,31 +331,32 @@ dhash_impl::replica_maintenance_timer (u_int index)
 	replica_syncer = NULL;
       }
 
-      if (active_syncers[replica.x]) {
+      if (active_syncers[succ.x]) {
 	warnx << "replica_maint: already syncing with "
-	      << replica.x << ", skip\n";
+	      << succ.x << ", skip\n";
 	replica_syncer = NULL;
       }
       else {
-        replica_syncer_dstID = replica.x;
+        replica_syncer_dstID = succ.x;
         replica_syncer = New refcounted<merkle_syncer> 
 	  (mtree, 
-	   wrap (this, &dhash_impl::doRPC_unbundler, replica),
-	   wrap (this, &dhash_impl::missing, replica));
-        active_syncers.insert (replica.x, replica_syncer);
+	   wrap (this, &dhash_impl::doRPC_unbundler, succ),
+	   wrap (this, &dhash_impl::missing, succ));
+        active_syncers.insert (succ.x, replica_syncer);
         
-        bigint rngmin = 0; //host_node->my_pred ();
-        bigint rngmax = bigint (1) << 160; //host_node->my_ID ();
-
+	vec<chord_node> preds = host_node->preds ();
+	assert (preds.size () > 0);
+	chordID rngmin = preds.back ().x;
+	chordID rngmax = host_node->my_ID ();
     
 #if 1
-        warn << "biSYNC with " << replicas[index]
+        warn << "SYNC with " << succs[index]
 	     << " range [" << rngmin << ", " << rngmax << "]\n";
 #endif
         replica_syncer->sync (rngmin, rngmax);
       }
 
-      index = (index + 1) % nreplica;
+      index = (index + 1) % NUM_EFRAGS;
     }
   }
 
@@ -446,25 +440,34 @@ dhash_impl::partition_maintenance_timer ()
 {
   merkle_part_tcb = NULL;
   return;
-  fatal << "XXX fix the delaycb values\n"; 
 
-  fatal <<  " XXX fix partition_enumeration\n";
-#if 0
-  ptr<dbPair> d = partition_enumeration->nextElement ();
-  if (!d)
-    d = partition_enumeration->firstElement ();
-  if (!d)
-    assert (mtree->root.count == 0);
-  else {
-    fatal << "we might legitimately hold d\n";
+  // XXX fix the delaycb values ????
+
+  // calculate key range that we should be storing
+  vec<chord_node> preds = host_node->preds ();
+  assert (preds.size () > 0);
+  chordID p = preds.back ().x;
+  chordID m = host_node->my_ID ();
+
+  ptr<dbEnumeration> enumer = db->enumerate ();
+  // XXX this 10 is hacky..
+  for (u_int i = 0; i < 10; i++) {
+    ptr<dbPair> d = enumer->nextElement (id2dbrec(partition_current));
+    if (!d) 
+      d = enumer->firstElement ();
+    if (!d)
+      break;
 
     bigint key = dbrec2id(d->key);
-    cli->lookup (key, 0, wrap (this, &dhash_impl::partition_maintenance_lookup_cb2, key));
-    return;
+    if (between (p, m, key))
+      partition_current = m; // skip range we should be storing
+    else {
+      cli->lookup (key, 0, wrap (this, &dhash_impl::partition_maintenance_lookup_cb2, key));
+      return;
+    }
   }
 
   merkle_part_tcb = delaycb (PRTTM, wrap (this, &dhash_impl::partition_maintenance_timer));
-#endif
 }
 
 
@@ -506,7 +509,7 @@ dhash_impl::partition_maintenance_store2 (bigint key, vec<chord_node> succs, u_i
 {
   if (succs.size () == 0) {
     if (already_count == NUM_EFRAGS)
-      fatal << "DELETE " << key << "\n";
+      dbdelete (id2dbrec(key));
 
     merkle_part_tcb = delaycb (0, wrap (this, &dhash_impl::partition_maintenance_timer));
     return;
@@ -550,7 +553,7 @@ dhash_impl::partition_maintenance_store_cb2 (bigint key, vec<chord_node> succs,
   if (res->resok->already_present) 
     partition_maintenance_store2 (key, succs, already_count + 1);
   else {
-    fatal << "DELETE " << key << "\n";
+    dbdelete (id2dbrec(key));
     merkle_part_tcb = delaycb (0, wrap (this, &dhash_impl::partition_maintenance_timer));
   }
 }
@@ -1020,7 +1023,8 @@ dhash_impl::fetch(chordID id, int cookie, cbvalue cb)
     //if done, free
   } else {
     ptr<dbrec> q = id2dbrec(id);
-    db->lookup(q, wrap(this, &dhash_impl::fetch_cb, cookie, cb));
+    ptr<dbrec> ret = db->lookup(q);
+    fetch_cb (cookie, cb, ret);
   }
 }
 
@@ -1386,6 +1390,19 @@ dhash_impl::dbwrite (ref<dbrec> key, ref<dbrec> data)
   dhashtrace << "dbwrite: " << host_node->my_ID ()
 	     << " " << action << " " << dbrec2id(key) << "\n";
 }
+
+void
+dhash_impl::dbdelete (ref<dbrec> key)
+{
+  merkle_hash hkey = to_merkle_hash (key);
+  bool exists = !!database_lookup (mtree->db, hkey);
+  assert (exists);
+  block blk (hkey, NULL);
+  mtree->remove (&blk);
+  dhashtrace << "dbdelete: " << host_node->my_ID ()
+	     << " " << dbrec2id(key) << "\n";
+}
+
 
 // ----------------------------------------------------------------------------
 // store state 
