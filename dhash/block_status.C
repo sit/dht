@@ -3,6 +3,7 @@
 #include <id_utils.h>
 #include "block_status.h"
 #include "misc_utils.h"
+#include "dhash.h"
 
 void
 block_status::missing_on (ptr<location> l)
@@ -27,6 +28,17 @@ block_status::found_on (ptr<location> l)
       return;
     }
   }
+}
+
+void
+block_status::print ()
+{
+  warn << "status of " << id << ": missing on ";
+  for (u_int i = 0; i < missing.size (); i++)
+    {
+      warn << missing[i]->id() << " ";
+    }
+  warn << "\n";
 }
 
 block_status_manager::block_status_manager (chordID me) : my_id (me)
@@ -130,12 +142,15 @@ block_status_manager::pcount (const chordID &b, vec<ptr<location> > succs)
 {
   int present = 0;
   //for every successor, assume present if not in missing list
+  // and if succ # < dhash::efrags
   block_status *bs = blocks[b];
-  if (!bs) return succs.size ();
+  if (!bs) return dhash::num_efrags ();
   vec<ptr<location> > missing = bs->missing;
 
   char is_missing;
-  for (u_int s = 0; s < succs.size (); s++) 
+  for (u_int s = 0; 
+       s < succs.size () && s < dhash::num_efrags ();
+       s++) 
     {      
       is_missing = 0;
       for (u_int m=0; m < missing.size (); m++)
@@ -156,4 +171,15 @@ block_status_manager::mcount (const chordID &b)
     return 0;
   else
     return bs->missing.size ();
+}
+
+void
+block_status_manager::print ()
+{
+  block_status *bs = blocks.first ();
+  while (bs) 
+    {
+      bs->print ();
+      bs = blocks.next (bs);
+    }
 }

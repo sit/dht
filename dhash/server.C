@@ -91,7 +91,7 @@ dhash_config_init::dhash_config_init ()
   ok = ok && set_int ("dhash.missing_outstanding_max", 15);
   
   ok = ok && set_int ("merkle.keyhash_timer", 10);
-  ok = ok && set_int ("merkle.replica_timer", 10);
+  ok = ok && set_int ("merkle.replica_timer", 5);
   ok = ok && set_int ("merkle.prt_timer", 5);
 
   //plab hacks
@@ -296,8 +296,9 @@ dhash_impl::flush_outgoing_q ()
       cli->retrieve (blockID(m->key, DHASH_CONTENTHASH, DHASH_FRAG),
 		     wrap (this, &dhash_impl::outgoing_retrieve_cb, m));
     }
-    m = missing_outgoing_q.next (m);
-    
+    missing_state *next = missing_outgoing_q.next (m);
+    missing_outgoing_q.remove (m);
+    m = next;
   }
 }
 
@@ -311,7 +312,6 @@ dhash_impl::outgoing_retrieve_cb (missing_state *ms, dhash_stat err,
     trace << "retrieve missing out block " 
 	  << ms->key << " failed: " << err << "\n";
     missing_outstanding_o--;
-    missing_outgoing_q.remove (ms);
     delete ms;
   } else {
     trace << " fetched key " << ms->key 
@@ -356,15 +356,14 @@ dhash_impl::outgoing_send_cb (missing_state *m, dhash_stat err,
 
   missing_outstanding_o--;
 
-  if (!err && !present) {
+  if (!err) {
     //mark it as being present
     bsm->unmissing (m->from, m->key);
-    warn << "sent " << m->key << " sucessfully\n"; 
+    warn << "sent p" << m->key << " sucessfully\n"; 
   } else
     warn << "error sending " << m->key << "\n";
 
   //success
-  missing_outgoing_q.remove (m); 
   delete m;
 }
 
@@ -490,24 +489,23 @@ dhash_impl::keyhash_mgr_lookup (chordID key, dhash_stat err,
 void
 dhash_impl::replica_maintenance_timer (u_int i)
 {
+
   merkle_rep_tcb = NULL;
   bigint rngmin = host_node->my_pred ()->id ();
   bigint rngmax = host_node->my_ID ();
   vec<ptr<location> > succs = host_node->succs ();
 
-  if (missing_q.size () > 0 || missing_outgoing_q.size () > 0) 
-    goto out; // don't find more missing keys, yet!
-
-  {
+  if (missing_outgoing_q.size () == 0) {
     //check to see if any blocks are near critical replication levels
     chordID first = bsm->first_block ();
     chordID b = first;
     do {
-      //missing on this many means at most num_efrags are left
-      u_int count = bsm->pcount (b, succs);
+      // + 1 for me
+      u_int count = bsm->pcount (b, succs) + 1;
       if (count < num_efrags ())
 	{
-	  trace << "adding " << b << " to outgoing queue\n";
+	  trace << "adding " << b << " to outgoing queue "
+		<< "count= " << count << "\n";
 	  //decide where to send it
 	  ptr<location> to = bsm->best_missing (b, succs);
 	  
@@ -517,19 +515,15 @@ dhash_impl::replica_maintenance_timer (u_int i)
 	} 
       b = bsm->next_block (b);
     } while (b != first && b != 0);
-  }
-
-  if (missing_outgoing_q.size () > 0) {
-    //if the queue is not empty, kick off some sends.
+  } else 
     flush_outgoing_q ();
-    //and don't bother adding any more blocks
-    goto out;
-  }
+
 
   if (succs.size() == 0)
     goto out; // can't do anything
-  if (replica_syncer && !replica_syncer->done())
+  if (replica_syncer && !replica_syncer->done()) 
     goto out; // replica syncer is still running.
+
   if (i >= succs.size())
     i = 0;
     
@@ -627,19 +621,32 @@ dhash_impl::dispatch (user_args *sbp)
       dhash_offer_arg *arg = sbp->template getarg<dhash_offer_arg> ();
       dhash_offer_res res (DHASH_OK);
       res.resok->accepted.setsize (arg->keys.size ());
+      res.resok->dest.setsize (arg->keys.size ());
 
       for (u_int i = 0; i < arg->keys.size (); i++) {
 	chordID key = arg->keys[i];
-	u_int count = bsm->pcount (key, host_node->succs ());
-	if (count > dhash::num_efrags ()) {
-	  trace << "holding " << key << ": count=" << count << "\n";
+	u_int count = bsm->pcount (key, host_node->succs ()) + 1;
+	chordID pred = host_node->my_pred ()->id ();
+	bool mine = between (pred, host_node->my_ID (), key);
+	ref<dbrec> kkk = id2dbrec (key);
+	ptr<dbrec> hit = db->lookup (kkk);
+
+	if (mine && !hit) {
+	  //if I should have it, get it
+	  res.resok->accepted[i] = DHASH_SENDTO;
+	  ptr<location> l = host_node->my_location ();
+	  trace << "server: sending " << key << ": count=" << count << " to=" << l->id () << " (me) \n";
+	  l->fill_node (res.resok->dest[i]);
+	} else if (count >= dhash::num_efrags ()) {
+	  trace << "server: holding " << key << ": count=" << count << "\n";
 	  res.resok->accepted[i] = DHASH_HOLD;
 	} 
 	else {
 	  res.resok->accepted[i] = DHASH_SENDTO;
 	  ptr<location> l = bsm->best_missing (key, host_node->succs ());
-	  trace << "sending " << key << ": count=" << count << " to=" << l->id () << "\n";
+	  trace << "server: sending " << key << ": count=" << count << " to=" << l->id () << "\n";
 	  l->fill_node (res.resok->dest[i]);
+	  bsm->unmissing (l, key);
 	}
       }
       sbp->reply (&res);
@@ -1113,6 +1120,8 @@ dhash_impl::key_info ()
     out << printkeys_walk (k) << " missing on " << bsm->mcount (k) << "\n";;
     d = it->nextElement();
   }
+
+  bsm->print ();
   return out;
 }
 

@@ -201,7 +201,7 @@ pmaint::pmaint_offer_cb (chord_node dst, bigint key,
 void
 pmaint::handed_off_cb (bigint key, int status)
 {
-  if (status) {
+  if (status == PMAINT_HANDOFF_ERROR) {
     warning << host_node->my_ID () << " error handing off key " << key << "\n";    
     pmaint_next_key = decID (key);
   }  else

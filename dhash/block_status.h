@@ -6,7 +6,7 @@ struct location;
 class block_status_manager;
 
 class block_status {
-  friend block_status_manager;
+  friend class block_status_manager;
   ihash_entry<block_status> hlink;
   sklist_entry<block_status> sklink;
   chordID id;
@@ -16,6 +16,7 @@ public:
   block_status (chordID b) : id (b) {};
   void missing_on (ptr<location> l);
   void found_on (ptr<location> l);
+  void print ();
 };
 
 class block_status_manager {
@@ -37,4 +38,6 @@ public:
   const vec<ptr<location> > where_missing (const chordID &b);
   u_int mcount (const chordID &b);
   u_int pcount (const chordID &b, vec<ptr<location> > succs);
+  void status ();
+  void print ();
 };
