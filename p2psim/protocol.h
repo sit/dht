@@ -11,12 +11,12 @@ class P2PEvent;
 class Node;
 
 
-#define MEMBER_FUNC(X) (void(Protocol::*)(void*))(&X)
+#define MEMBER_FUNC(X) (member_f)(&X)
 
+class Protocol;
 class Protocol : public Threaded {
 public:
-  typedef unsigned msg_t;
-  typedef void*    data_t;
+  typedef void (Protocol::*member_f)(void*);
   typedef enum {
     JOIN = 0,
     LEAVE,

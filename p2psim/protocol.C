@@ -118,6 +118,8 @@ Protocol::Receive(void *p)
   reply->_dst = origsrc;
   reply->_c = packet->_c;
   reply->_protocol = packet->_protocol;
+  reply->_args = packet->_args;
+  reply->_fn = 0;
   send(Network::Instance()->pktchan(), &reply);
 
   // this is somewhat scary

@@ -3,8 +3,8 @@
 #include <thread.h>
 
 
-Packet::Packet() : size(0), type(0), data(0), _protocol(""),
-  _src(0), _dst(0), _reply(false)
+Packet::Packet() : size(0), _c(0), _protocol(""), _fn(0), _args(0), 
+                  _src(0), _dst(0)
 {
 }
 

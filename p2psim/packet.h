@@ -12,13 +12,10 @@ public:
   ~Packet();
 
   unsigned size;
-  Protocol::msg_t type;
-  Protocol::data_t data;
-
   IPAddress src() { return _src; }
   string protocol() { return _protocol; }
   Channel *channel() { return _c; }
-  bool reply() { return _reply; }
+  bool reply() { return _fn == 0; }
 
 private:
   friend class Protocol;
@@ -27,14 +24,12 @@ private:
   // the following fields can only be set by the Protocol layer
   Channel *_c;
   string _protocol;
-  void (Protocol::*_fn)(void*);  // method to invoke
-  void *_args;                   // arguments to pass
+  Protocol::member_f _fn; // method to invoke
+  void *_args;  // arguments to pass
 
   // the following fields can only be set by the Network layer
   IPAddress _src;
   IPAddress _dst;
-
-  bool _reply;
 };
 
 #endif // __PACKET_H
