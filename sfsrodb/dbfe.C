@@ -19,7 +19,6 @@
  */
 
 #include "dbfe.h"
-#include "chord_util.h"
 
 #ifdef DMALLOC
 #include "dmalloc.h"
