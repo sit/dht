@@ -14,7 +14,7 @@ ptr<axprt_dgram> dgram_xprt;
 bool verify = false;
 vec<chord_node> sequential;
 
-void getsucc_cb (chord_nodelistextres *res, clnt_stat err);
+void getsucc_cb (chordID n, chord_nodelistextres *res, clnt_stat err);
 void doRPCcb (chordID ID, int procno, dorpc_res *res, void *out, aclnt_cb cb, 
 	      clnt_stat err);
 void
@@ -83,12 +83,17 @@ void
 doRPCcb (chordID ID, int procno, dorpc_res *res, void *out, aclnt_cb cb, 
 	 clnt_stat err)
 {
+  if (err) {
+    cb (err);
+    return;
+  }
+  
   xdrmem x ((char *)res->resok->results.base (), 
 	    res->resok->results.size (), XDR_DECODE);
   xdrproc_t proc = chord_program_1.tbl[procno].xdr_res;
   assert (proc);
   if (!proc (x.xdrp (), out)) {
-    fatal << "failed to unmarshall result\n";
+    warnx << "failed to unmarshall result\n";
     cb (RPC_CANTSEND);
   } else 
     cb (err);
@@ -155,15 +160,27 @@ getsucc (chordID n, str host, u_short port)
 {
   chord_nodelistextres *res = New chord_nodelistextres ();
   doRPC (n, host, port, CHORDPROC_GETSUCC_EXT, &n, res,
-	 wrap (&getsucc_cb, res));
+	 wrap (&getsucc_cb, n, res));
 }
 
 void
-getsucc_cb (chord_nodelistextres *res, clnt_stat err)
+getsucc_cb (chordID id, chord_nodelistextres *res, clnt_stat err)
 {
-  assert (err == 0 && res->status == CHORD_OK);
-  assert (res->resok->nlist.size () >= 2);
+  chord_node next;
+    
+  if (err != 0 || res->status != CHORD_OK) {
+    warnx << "failed to get a reading from " << id << "; skipping.\n";
+    sequential.pop_front ();
+    if (sequential.size () == 0) {
+      fatal << "too many consecutive failures.\n";
+    }
+    next = sequential[0];
+    getsucc (next.x, next.r.hostname, next.r.port);
+    return;
+  }
 
+  assert (res->resok->nlist.size () >= 2);
+  
   size_t sz = res->resok->nlist.size ();
   vec<chord_node> zs;
   for (size_t i = 0; i < sz; i++) {
@@ -172,12 +189,13 @@ getsucc_cb (chord_nodelistextres *res, clnt_stat err)
   }
   delete res;
 
-  chord_node next;
   if (verify) {
     verify_succlist (zs);
     next = sequential[0];
   } else {
     next = zs[1];
+    sequential = zs;
+    sequential.pop_front ();
   }
 
   // Print the "next" node we are going to contact.
