@@ -198,6 +198,7 @@ OneHop::lookup_internal(lookup_internal_args *la)
   lookup_ret r;
   a.key = la->k;
   a.sender = me;
+  a.dead_nodes.clear();
 
   IDMap succ_node = me;
   while ((now()-la->start_time) < MAX_LOOKUP_TIME) {
@@ -213,6 +214,14 @@ OneHop::lookup_internal(lookup_internal_args *la)
       la->hops++;
 
     if (!alive()) break;
+    DEBUG(1) << now() << ":" << me.ip << "," << printID(me.id) 
+	     << " lookup done from " << succ_node.ip << "/" 
+	     << printID(succ_node.id) << " for key " << printID(a.key) 
+	     << ", ok: " << ok << ", is_owner: " << r.is_owner;
+    if( !r.is_owner ) {
+      DEBUG(1) << ", correct_owner=" << printID(r.correct_owner.id);
+    }
+    DEBUG(1) << endl;
     if (ok) {
       if (r.is_owner) {
 	break;
@@ -230,31 +239,29 @@ OneHop::lookup_internal(lookup_internal_args *la)
       aa->justdelete = true;
       delaycb(0,&OneHop::test_dead_inform,aa);
       //return;
+
+      // please don't tell us about this guy anymore, he sucks
+      a.dead_nodes.push_back(succ_node.id);
+
     }
   }
 
+  
   if (!alive()) {
+    delete la;
+  } else if ((now()-la->start_time) > MAX_LOOKUP_TIME) {
     record_lookup_stat(me.ip, me.ip, now()-la->start_time, false, false,
-	la->hops,la->timeouts,la->timeout_lat);
+		       la->hops,la->timeouts,la->timeout_lat);
     delete la;
-    return;
-  }else if (check_correctness(la->k,succ_node)) {
-    if (la->attempts == 1)
-      record_lookup_stat(me.ip, succ_node.ip, now()-la->start_time, true, true,
-	la->hops,la->timeouts,la->timeout_lat);
-    else
-      record_lookup_stat(me.ip, succ_node.ip, now()-la->start_time, false, false,
-	la->hops,la->timeouts,la->timeout_lat);
+  } else if (check_correctness(la->k,succ_node)) {
+    record_lookup_stat(me.ip, succ_node.ip, now()-la->start_time, true, true,
+		       la->hops,la->timeouts,la->timeout_lat);
     delete la;
-    return;
   }else{
-    /*
     record_lookup_stat(me.ip, succ_node.ip, now()-la->start_time, true, false,
 	la->hops,la->timeouts,la->timeout_lat);
     delete la;
-    return;
-    */
-    delaycb(1000,&OneHop::lookup_internal, la);
+    //delaycb(100,&OneHop::lookup_internal, la);
   }
 }
 
@@ -370,6 +377,11 @@ LOOKUP_DONE:
 
 void 
 OneHop::lookup_handler(lookup_args *a, lookup_ret *r) {
+
+  for( int i = 0; i < a->dead_nodes.size(); i++ ) {
+    loctable->del_node(a->dead_nodes[i]);
+  }
+
   IDMap succ_node = loctable->succ(a->sender.id);
   if (succ_node.id != a->sender.id) {
       if (!alive()) return;

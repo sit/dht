@@ -157,6 +157,7 @@ public:
   struct lookup_args {
     CHID key;
     IDMap sender;
+    vector<CHID> dead_nodes;
   };
 
   struct lookup_ret {
