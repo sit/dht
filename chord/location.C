@@ -53,15 +53,6 @@ locationtable::changenode(node *n, chordID &x, net_address &r)
   n->alive = true;
 }
 
-void
-locationtable::replacenode (node *n)
-{
-  warnx << "replace " << n->n << " with " << findsuccloc (n->n) << "\n";
-  n->n = findsuccloc (n->n);
-  n->alive = true;
-  increfcnt (n->n);
-}
-
 net_address &
 locationtable::getaddress (chordID &n)
 {

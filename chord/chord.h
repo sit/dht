@@ -119,8 +119,14 @@ class vnode : public virtual refcount  {
 
   void updatefingers (chordID &x, net_address &r);
   chordID findpredfinger (chordID &x);
+  chordID findsuccfinger (chordID &x);
+  void replacefinger (node *n);
   void print ();
 
+  int stabilize_succlist (int s);
+  int stabilize_finger (int f);
+  void stabilize_succ (void);
+  void stabilize_pred (void);
   void stabilize_getpred_cb (chordID s, net_address r, chordstat status);
   void stabilize_findsucc_cb (int i, chordID s, route path, chordstat status);
   void stabilize_getsucc_cb (chordID s, net_address r, chordstat status);

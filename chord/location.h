@@ -148,7 +148,6 @@ class locationtable : public virtual refcount {
   net_address & getaddress (chordID &x);
   chordID query_location_table (chordID x);
   void changenode (node *n, chordID &n, net_address &r);
-  void replacenode (node *n);
   void checkrefcnt (int i);
   void doRPC (chordID &n, rpc_program progno, int procno, ptr<void> in, 
 	      void *out, aclnt_cb cb);
