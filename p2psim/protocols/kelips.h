@@ -70,6 +70,7 @@ public:
   virtual void crash(Args*);
   virtual void lookup(Args*);
   virtual void insert(Args*);
+  virtual void nodeevent (Args *) {};
 
  private:
   // typedef ConsistentHash::CHID ID;

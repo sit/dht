@@ -37,6 +37,7 @@ public:
   virtual void join(Args*);
   virtual void lookup(Args*);
   virtual void initstate();
+  virtual void nodeevent (Args *) {};
 
   struct silly_args {
   };

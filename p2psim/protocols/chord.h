@@ -68,7 +68,7 @@ public:
   virtual void crash(Args*);
   virtual void lookup(Args*);
   virtual void insert(Args*) {};
-
+  virtual void nodeevent (Args *) {};
 
   struct get_predecessor_args {
     int dummy;

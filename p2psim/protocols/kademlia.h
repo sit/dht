@@ -161,7 +161,7 @@ public:
   virtual void crash(Args*);
   virtual void lookup(Args*);
   virtual void initstate();
-
+  virtual void nodeevent (Args *) {};
   //
   // functors
   //
