@@ -906,7 +906,7 @@ dhash_impl::print_stats ()
   warnx << "  " << bytes_served << " bytes served\n";
   warnx << "  " << rpc_answered << " rpc answered\n";
 
-  //  printkeys ();
+  printkeys ();
 }
 
 void
