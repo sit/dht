@@ -366,8 +366,12 @@ user_args::reply (void *res)
   xdrsuio x (XDR_ENCODE);
   if ((!inproc) || (!inproc (x.xdrp (), res))) 
     fatal << "couldn't marshall result\n";
+
   int res_len = x.uio ()->resid ();
-  void *marshalled_res = suio_flatten (x.uio ());
+  void *marshalled_res = NULL;
+  if (res_len > 0)
+    marshalled_res = suio_flatten (x.uio ());
+
 
 #ifdef RPC_PROGRAM_STATS
   prog->outreply_num[procno] += 1;
@@ -384,12 +388,13 @@ user_args::reply (void *res)
   for (unsigned int i = 0; i < coords.size (); i++)
     rpc_res->resok->src_coords[i] = (int)(coords[i]);
 
-
   rpc_res->resok->progno = prog->progno;
   rpc_res->resok->procno = procno;
   rpc_res->resok->results.setsize (res_len);
-  memcpy (rpc_res->resok->results.base (), marshalled_res, res_len);
-  xfree (marshalled_res);
+  if (res_len > 0) {
+    memcpy (rpc_res->resok->results.base (), marshalled_res, res_len);
+    xfree (marshalled_res);
+  }
 
   assert (rpc_res->status == DORPC_OK);
 
