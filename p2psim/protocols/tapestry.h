@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.3 2003/10/08 21:32:05 strib Exp $ */
+/* $Id: tapestry.h,v 1.4 2003/10/09 04:52:06 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -323,12 +323,12 @@ class RoutingTable {
 
   void add_backpointer( IPAddress ip, GUID id, uint level );
   void remove_backpointer( IPAddress ip, GUID id, uint level );
-  vector<NodeInfo> *get_backpointers( uint level );
+  vector<NodeInfo *> *get_backpointers( uint level );
 
   void set_lock( IPAddress ip, GUID id );
   void remove_lock( IPAddress ip, GUID id );
   // get the locked nodes that are associated with this node's id
-  vector<NodeInfo> *get_locks( GUID id );
+  vector<NodeInfo *> *get_locks( GUID id );
 
  private:
 
@@ -338,8 +338,8 @@ class RoutingTable {
 
   RouteEntry ***_table;
   Tapestry *_node;
-  vector<NodeInfo> **_backpointers;
-  vector<NodeInfo> ***_locks;
+  vector<NodeInfo *> **_backpointers;
+  vector<NodeInfo *> ***_locks;
 
 };
 

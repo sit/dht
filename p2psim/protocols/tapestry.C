@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 [NAMES_GO_HERE]
+ * Copyright (c) 2003 Jeremy Stribling
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -21,7 +21,7 @@
  * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
  */
 
-/* $Id: tapestry.C,v 1.3 2003/10/08 21:32:05 strib Exp $ */
+/* $Id: tapestry.C,v 1.4 2003/10/09 04:52:06 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -84,12 +84,12 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
   // find the next hop for the key.  if it's me, i'm done
   IPAddress *ips = new IPAddress[_redundant_lookup_num];
   for( uint i = 0; i < _redundant_lookup_num; i++ ) {
-    ips[i] = NULL;
+    ips[i] = 0;
   }
   next_hop( args->key, &ips, _redundant_lookup_num );
   for( uint i = 0; i < _redundant_lookup_num; i++ ) {
     IPAddress next = ips[i];
-    if( next == NULL ) {
+    if( next == 0 ) {
       continue;
     }
     if( next == ip() ) {
@@ -323,6 +323,10 @@ Tapestry::handle_join(join_args *args, join_return *ret)
   // person's join.
   while( !joined ) {
     _waiting_for_join->wait();
+    // hmmm. if we're now dead, indicate some kind of failure probably
+    if( !node()->alive() ) {
+      return; //????
+    }
   }
 
   // route toward the root
@@ -504,10 +508,10 @@ Tapestry::handle_mc(mc_args *args, mc_return *ret)
   }
 
   // also, multicast to any locks that might need it
-  vector <NodeInfo> * locks = _rt->get_locks( args->new_id );
+  vector <NodeInfo *> * locks = _rt->get_locks( args->new_id );
   for( uint i = 0; i < locks->size(); i++ ) {
-    NodeInfo ni = (*locks)[i];
-    if( ni._addr != args->new_ip ) {
+    NodeInfo *ni = (*locks)[i];
+    if( ni->_addr != args->new_ip ) {
 	mc_args *mca = New mc_args();
 	mc_return *mcr = New mc_return();
 	mca->new_ip = args->new_ip;
@@ -516,10 +520,10 @@ Tapestry::handle_mc(mc_args *args, mc_return *ret)
 	mca->from_lock = true;
 	mca->watchlist = args->watchlist;
 	TapDEBUG(2) << "multicasting info for " << args->new_ip << " to " << 
-	  ni._addr << "/" << print_guid( ni._id ) << " as a lock " << endl;
-	unsigned rpc = asyncRPC( ni._addr, &Tapestry::handle_mc, mca, mcr );
+	  ni->_addr << "/" << print_guid( ni->_id ) << " as a lock " << endl;
+	unsigned rpc = asyncRPC( ni->_addr, &Tapestry::handle_mc, mca, mcr );
 	assert(rpc);
-	resultmap[rpc] = New mc_callinfo(ni._addr, mca, mcr);
+	resultmap[rpc] = New mc_callinfo(ni->_addr, mca, mcr);
 	rpcset.insert(rpc);
 	numcalls++;
     }
@@ -556,9 +560,9 @@ Tapestry::handle_nn(nn_args *args, nn_return *ret)
   // send back all backward pointers
   vector<NodeInfo> nns;
 
-  vector<NodeInfo> *bps = _rt->get_backpointers( args->alpha );
+  vector<NodeInfo *> *bps = _rt->get_backpointers( args->alpha );
   for( uint i = 0; i < bps->size(); i++ ) {
-    nns.push_back( (*bps)[i] );
+    nns.push_back( *((*bps)[i]) );
   }
 
   // do we really need to send the forward pointers?  The theory paper says to,
@@ -912,7 +916,7 @@ IPAddress
 Tapestry::next_hop( GUID key )
 {
   IPAddress *ip = New IPAddress[1];
-  ip[0] = NULL;
+  ip[0] = 0;
   next_hop( key, &ip, 1 );
   IPAddress rt = ip[0];
   delete ip;
@@ -1018,10 +1022,11 @@ Tapestry::crash(Args *args)
 
   // clear out routing table, and any other state that might be lying around
   delete _rt;
-  delete _waiting_for_join;
   joined = false;
+  // TODO: should be killing these waiting RPCs instead of allowing them
+  // to finish normally.  bah.
+  _waiting_for_join->notifyAll();
   _rt = New RoutingTable(this);
-  _waiting_for_join = New ConditionVar();
 
 }
 
@@ -1229,15 +1234,18 @@ RoutingTable::RoutingTable( Tapestry *node )
   // now we add ourselves to the table
   add( _node->ip(), _node->id(), 0 );
 
-  _backpointers = New vector<NodeInfo> *[_node->_digits_per_id];
+  _backpointers = New vector<NodeInfo *> *[_node->_digits_per_id];
   for( uint i = 0; i < _node->_digits_per_id; i++ ) {
-    _backpointers[i] = 0;
+    _backpointers[i] = NULL;
   }
 
   // init the locks
-  _locks = New vector<NodeInfo> **[_node->_digits_per_id];
+  _locks = New vector<NodeInfo *> **[_node->_digits_per_id];
   for( uint i = 0; i < _node->_digits_per_id; i++ ) {
-    _locks[i] = New vector<NodeInfo> *[_node->_base];
+    _locks[i] = New vector<NodeInfo *> *[_node->_base];
+    for( uint j = 0; j < _node->_base; j++ ) {
+      _locks[i][j] = NULL;
+    }
   }
 
 }
@@ -1442,8 +1450,8 @@ RoutingTable::get_time( GUID id )
 void 
 RoutingTable::add_backpointer( IPAddress ip, GUID id, uint level )
 {
-  vector<NodeInfo> * this_level = get_backpointers(level);
-  NodeInfo new_node( ip, id );
+  vector<NodeInfo *> * this_level = get_backpointers(level);
+  NodeInfo *new_node = New NodeInfo( ip, id );
   this_level->push_back( new_node );
 }
 
@@ -1451,11 +1459,11 @@ void
 RoutingTable::remove_backpointer( IPAddress ip, GUID id, uint level )
 {
   
-  vector<NodeInfo> * this_level = get_backpointers(level);
+  vector<NodeInfo *> * this_level = get_backpointers(level);
   NodeInfo new_node( ip, id );
-  for( vector<NodeInfo>::iterator i = this_level->begin(); 
+  for( vector<NodeInfo *>::iterator i = this_level->begin(); 
        i != this_level->end(); i++ ) {
-    NodeInfo curr_node = *i;
+    NodeInfo curr_node = **i;
     if( curr_node == new_node ) {
       this_level->erase(i);
       // only erase the first occurance
@@ -1464,12 +1472,12 @@ RoutingTable::remove_backpointer( IPAddress ip, GUID id, uint level )
   }
 }
 
-vector<NodeInfo> *
+vector<NodeInfo *> *
 RoutingTable::get_backpointers( uint level )
 {
-  vector<NodeInfo> * this_level = _backpointers[level];
+  vector<NodeInfo *> * this_level = _backpointers[level];
   if( this_level == NULL ) {
-    this_level = New vector<NodeInfo>;
+    this_level = New vector<NodeInfo *>;
     _backpointers[level] = this_level;
   }
   return this_level;
@@ -1478,41 +1486,43 @@ RoutingTable::get_backpointers( uint level )
 void 
 RoutingTable::set_lock( IPAddress ip, GUID id )
 {
-  vector<NodeInfo> * this_level = get_locks(id);
+  vector<NodeInfo *> * this_level = get_locks(id);
   if( this_level == NULL ) {
     // can't lock yourself
     return;
   }
-  NodeInfo new_node( ip, id );
+  NodeInfo *new_node = New NodeInfo( ip, id );
   bool add = true;
-  for(vector<NodeInfo>::iterator i=this_level->begin(); 
+  for(vector<NodeInfo *>::iterator i=this_level->begin(); 
       i != this_level->end(); ++i) {
-    if( *i == new_node ) {
+    if( **i == *new_node ) {
       add = false;
     }
   }
   if( add ) {
     this_level->push_back( new_node );
+    TapRTDEBUG(3) << "locks-adding " << ip << " to " << this_level << endl;
   }
 }
 
 void 
 RoutingTable::remove_lock( IPAddress ip, GUID id )
 {
-  vector<NodeInfo> * this_level = get_locks(id);
+  vector<NodeInfo *> * this_level = get_locks(id);
   NodeInfo new_node( ip, id );
-  for(vector<NodeInfo>::iterator i=this_level->begin(); 
+  for(vector<NodeInfo *>::iterator i=this_level->begin(); 
       i != this_level->end(); ++i) {
-    if( *i == new_node ) {
+    if( **i == new_node ) {
       this_level->erase(i);
       // only erase the first occurance
+      TapRTDEBUG(3) << "locks-removing " << ip << " to " << this_level << endl;
       return;
     }
   }
 
 }
 
-vector<NodeInfo> *
+vector<NodeInfo *> *
 RoutingTable::get_locks( GUID id )
 {
   int match = _node->guid_compare( _node->id(), id );
@@ -1524,9 +1534,9 @@ RoutingTable::get_locks( GUID id )
   if( match > 0 ) {
       lastsame = _node->get_digit(id, match-1);
   }
-  vector<NodeInfo> * this_level = _locks[match][lastsame];
+  vector<NodeInfo *> * this_level = _locks[match][lastsame];
   if( this_level == NULL ) {
-    this_level = New vector<NodeInfo>;
+    this_level = New vector<NodeInfo *>;
     _locks[match][lastsame] = this_level;
   }
   return this_level;
