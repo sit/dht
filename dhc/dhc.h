@@ -108,7 +108,7 @@ struct keyhash_meta {
   uint size ()
   {
     return (sizeof (uint) + config.size () /*+ sizeof (bool)*/ 
-	    + sizeof (u_int64_t) + sizeof (chordID));
+	    + sizeof (u_int64_t) + ID_size);
   }
 
   char *bytes ()
@@ -371,8 +371,9 @@ struct read_state {
 struct write_state {
   bool done;
   uint bcount;
+  user_args *sbp;
   
-  write_state () : done (false), bcount (0) {}
+  write_state (user_args *s) : done (false), bcount (0), sbp (s) {}
 };
 
 typedef callback<void, dhc_stat, clnt_stat>::ref dhc_cb_t;
@@ -427,9 +428,9 @@ class dhc : public virtual refcount {
   void put_lookup_cb (put_args *, dhc_cb_t, bool,
   		      vec<chord_node>, route, chordstat);
   void put_result_cb (chordID, dhc_cb_t, ptr<dhc_put_res>, clnt_stat);
-  void putblock_cb (user_args *, ptr<dhc_block>, ptr<location>, ptr<write_state>, 
+  void putblock_cb (/*user_args *,*/ ptr<dhc_block>, ptr<location>, ptr<write_state>, 
 		    ref<dhc_put_res>, clnt_stat);
-  void putblock_retry_cb (user_args *, ptr<dhc_block>, ptr<location>, ptr<write_state>);
+  void putblock_retry_cb (/*user_args *,*/ ptr<dhc_block>, ptr<location>, ptr<write_state>);
 
   void recv_newblock (user_args *);
   void recv_newblock_ack (user_args *, ptr<uint>, 
