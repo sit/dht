@@ -75,9 +75,9 @@ vnode_impl::vnode_impl (ptr<locationtable> _locations, ptr<fingerlike> stab,
   warn << gettime () << " coords are: ";
   for (int i = 0; i < NCOORDS; i++) {
     coords.push_back (uniform_random_f (1000.0));
-    warn << (int)coords.back ();
+    warnx << (int)coords.back () << " " ;
   }
-  warn << "\n";
+  warnx << "\n";
   locations->set_coords (myID, coords);
 
   fingers = stab;

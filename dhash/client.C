@@ -27,6 +27,7 @@
  */
 
 #include <sys/time.h>
+#include <stdlib.h>
 
 #include <sfsmisc.h>
 #include <arpc.h>
@@ -35,16 +36,17 @@
 #include <chord_prot.h>
 #include <chord.h>
 #include <location.h>
+
 #include "dhash_common.h"
 #include "dhash.h"
 #include "dhashcli.h"
 #include "verify.h"
 #include "route_dhash.h"
 
+#include <coord.h>
 #include <modlogger.h>
 #define trace modlogger ("dhashcli")
 
-#include <chord_util.h>
 #ifdef DMALLOC
 #include <dmalloc.h>
 #endif
@@ -369,6 +371,40 @@ dhashcli::fetch_frag (rcv_state *rs)
   rs->nextsucc += 1;
 }
 
+struct orderer {
+  float d_;
+  size_t i_;
+  static int cmp (const void *a_, const void *b_) {
+    const orderer *a = (orderer *) a_, *b = (orderer *) b_;
+    return (int) (a->d_ - b->d_);
+  }
+};
+
+static void
+order_succs (const vec<float> &me, const vec<chord_node> &succs,
+	     vec<chord_node> &out)
+{
+  orderer *d2me = New orderer[succs.size()];
+  vec<float> cursucc;
+  for (size_t i = 0; i < succs.size (); i++) {
+    cursucc.setsize (succs[i].coords.size ());
+    for (size_t j = 0; j < succs[i].coords.size (); j++) 
+      cursucc[j] = (float) succs[i].coords[j] / 1000.0;
+    d2me[i].d_ = Coord::distance_f (me, cursucc);
+    d2me[i].i_ = i;
+  }
+  qsort (d2me, succs.size (), sizeof (*d2me), &orderer::cmp);
+  out.clear ();
+  for (size_t i = 0; i < succs.size (); i++) {
+    char buf[10]; // argh. please shoot me.
+    sprintf (buf, "%5.2f", d2me[i].d_);
+    modlogger ("orderer") << d2me[i].i_ << " "
+			  << succs[d2me[i].i_] << " "
+			  << buf << "\n";
+    out.push_back (succs[d2me[i].i_]);
+  }
+}
+
 void
 dhashcli::retrieve2_succs_cb (chordID blockID, vec<chord_node> succs, chordstat err)
 {
@@ -390,12 +426,11 @@ dhashcli::retrieve2_succs_cb (chordID blockID, vec<chord_node> succs, chordstat 
     rs = NULL;
     return;
   }
-  
-  // Copy for future reference in case we need to make more RPCs later.
-  // We will extract out of this list in order until we reach the end.
-  // Later, this list should be filtered/reordered by server selection
-  // code to cause the fetch to proceed in order of best proximity.
-  rs->succs = succs;
+
+  // Store list of successors ordered by expected distance.
+  // fetch_frag will pull from this list in order.
+  order_succs (clntnode->locations->get_coords (clntnode->my_ID ()),
+	       succs, rs->succs);
 
   for (u_int i = 0; i < NUM_DFRAGS; i++)
     fetch_frag (rs);

@@ -1,14 +1,16 @@
 ## Process this file with automake to produce Makefile.in
-## $Id: Makefile.am,v 1.3 2003/03/12 15:58:57 sit Exp $
+## $Id: Makefile.am,v 1.4 2003/03/15 23:07:43 sit Exp $
 
 noinst_LIBRARIES = libutil.a
 
 noinst_HEADERS = \
+	coord.h \
 	ida.h \
 	modlogger.h \
 	skiplist.h
 
 libutil_a_SOURCES = \
+	coord.C \
 	ida.C \
 	modlogger.C
 

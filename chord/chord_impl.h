@@ -158,12 +158,6 @@ class vnode_impl : public vnode {
 		 void *out, aclnt_cb cb, 
 		 ref<dorpc_res> res, clnt_stat err);
 
-  float distance_f (vec<float> a, vec<float> b);
-  vec<float> vector_add (vec<float> a, vec<float> b);
-  vec<float> vector_sub (vec<float> a, vec<float> b);
-  float norm (vec<float> a);
-  vec<float> scalar_mult (vec<float> v, float s);
-
   void update_coords (chordID u, vec<float> uc, float ud);
 
  public:

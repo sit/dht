@@ -28,8 +28,9 @@
 #include "chord_util.h"
 #include "chord_impl.h"
 #include "route.h"
-#include "transport_prot.h"
-#include "math.h"
+#include <transport_prot.h>
+#include <coord.h>
+#include <math.h>
 
 void 
 vnode_impl::get_successor (const chordID &n, cbchordID_t cb)
@@ -354,15 +355,6 @@ vnode_impl::doRPC (const chordID &ID, const rpc_program &prog, int procno,
 
 
 void
-print_vector (str a, vec<float> v)
-{
-  warn << a << ": ";
-  for (unsigned int i = 0; i < v.size (); i++)
-    warnx << (int)(v[i]*1000.0) << " ";
-  warnx << "\n";
-}
-
-void
 vnode_impl::doRPC_cb (const rpc_program prog, int procno,
 		      void *out, aclnt_cb cb, 
 		      ref<dorpc_res> res, clnt_stat err) 
@@ -397,52 +389,6 @@ vnode_impl::doRPC_cb (const rpc_program prog, int procno,
   }
 }
 
-float
-vnode_impl::distance_f (vec<float> a, vec<float> b)
-{
-  float f = 0.0;
-  for (unsigned int i = 0; i < a.size (); i++)
-    f += (a[i] - b[i])*(a[i] - b[i]);
-
-  return sqrtf (f);
-}
-
-vec<float>
-vnode_impl::vector_add (vec<float> a, vec<float> b)
-{
-  vec<float> ret;
-  for (unsigned int i = 0; i < a.size (); i++)
-    ret.push_back (a[i] +  b[i]);
-  return ret;
-}
-
-vec<float>
-vnode_impl::vector_sub (vec<float> a, vec<float> b)
-{
-  vec<float> ret;
-  for (unsigned int i = 0; i < a.size (); i++)
-    ret.push_back (a[i] - b[i]);
-  return ret;
-}
-
-float
-vnode_impl::norm (vec<float> a)
-{
-  float ret = 0.0;
-  for (unsigned int i = 0; i < a.size (); i++)
-    ret += a[i]*a[i];
-  return ret;
-}
-
-vec<float>
-vnode_impl::scalar_mult (vec<float> v, float s)
-{
-  vec<float> ret;
-  for (unsigned int i = 0; i < v.size (); i++)
-    ret.push_back (v[i]*s);
-  return ret;
-}
-
 #define MAXDIM 10
 #define DT 0.01
 void
@@ -465,39 +411,39 @@ vnode_impl::update_coords (chordID u, vec<float> uc, float ud)
   f.push_back (0.0);
   f.push_back (0.0);
 
-  //  print_vector ("current coords ", coords);
+  //  Coord::print_vector ("current coords ", coords);
 
   while (l) {
     if ((l->coords.size () > 0) && (l->n != myID)) {
       //  warn << myID << " setting a spring to " << l->n << "\n";
-      // print_vector ("l->coords", l->coords);
+      // Coord::print_vector ("l->coords", l->coords);
 
       float actual = l->distance;
-      float expect = distance_f (coords, l->coords);
+      float expect = Coord::distance_f (coords, l->coords);
       //force magnitude: < 0 --> stretched
       float grad = expect - actual;
 
       //printf("actual %f, expect %f\n", actual, expect);
-      vec<float> v = vector_sub (l->coords, coords);
-      //print_vector ("v", v);
+      vec<float> v = Coord::vector_sub (l->coords, coords);
+      //Coord::print_vector ("v", v);
 
-      float len = norm (v);
+      float len = Coord::norm (v);
       float unit = 1.0/sqrtf(len);
       
       //scalar_mult(v, unit) is unit force vector
       //f_p is scaled force vector for this spring
-      vec<float> f_p = scalar_mult(scalar_mult (v, unit), grad);
-      //print_vector ("f_p", f_p);
+      vec<float> f_p = Coord::scalar_mult(Coord::scalar_mult (v, unit), grad);
+      //Coord::print_vector ("f_p", f_p);
 
       //add f_p into the true force vector
-      f = vector_add (f, f_p);
+      f = Coord::vector_add (f, f_p);
 
       found_meas = true;
     }
     l = locations->next_loc(l->n);
   }
 
-  //print_vector ("f", f);
+  //Coord::print_vector ("f", f);
   if (!found_meas) {
     warn << "no springs!\n";
     return;
@@ -510,12 +456,11 @@ vnode_impl::update_coords (chordID u, vec<float> uc, float ud)
   
   float t = DT;
   while (ftot*t > 5.0) t /= 2.0;
-  vec<float> new_coords = vector_add (coords,scalar_mult(f, t));
+  vec<float> new_coords = Coord::vector_add (coords, Coord::scalar_mult(f, t));
   
-  //print_vector("old", coords);
-  //print_vector("new", new_coords);
+  //Coord::print_vector("old", coords);
+  //Coord::print_vector("new", new_coords);
 
-  coords = new_coords;
   locations->set_coords (myID, new_coords);
 
   //warn << myID << " --- finished  update -----\n";
