@@ -176,6 +176,8 @@ class stp_manager : public rpc_manager {
   int num_cwind_samples;
   int num_qed;
   
+  int inflight;
+
   long fake_seqno;
 
   u_int64_t st;
@@ -199,6 +201,7 @@ class stp_manager : public rpc_manager {
   void idle ();
   void setup_rexmit_timer (ptr<location> from, ptr<location> l, long *sec, long *nsec);
   void timeout_cb (rpc_state *C);
+  bool room_in_window ();
  public:
   void stats ();
 		   
@@ -213,3 +216,6 @@ class stp_manager : public rpc_manager {
 };
 
 #endif /* _SFSNET_COMM_H_ */
+
+
+

@@ -49,7 +49,7 @@ long outbytes;
 ihash<str, rpcstats, &rpcstats::key, &rpcstats::h_link> rpc_stats_tab;
 
 #define max_host_cache 1000
-#define CWIND_MULT 5
+#define CWIND_MULT 10
 
 // UTILITY FUNCTIONS
 
@@ -352,6 +352,7 @@ stp_manager::stp_manager (ptr<u_int32_t> _nrcv)
     cwind_cum (0.0),
     num_cwind_samples (0),
     num_qed (0),
+    inflight (0),
     idle_timer (NULL)
 {
   delaycb (1, 0, wrap (this, &stp_manager::ratecb));
@@ -420,6 +421,13 @@ stp_manager::doRPC_dead (ptr<location> l,
   return 0;
 }
 
+bool
+stp_manager::room_in_window () 
+{
+  //  return (left + cwind*CWIND_MULT >= seqno);
+  return inflight < cwind*5;
+}
+
 long
 stp_manager::doRPC (ptr<location> from, ptr<location> l,
 		    const rpc_program &prog, int procno, 
@@ -427,7 +435,7 @@ stp_manager::doRPC (ptr<location> from, ptr<location> l,
 		    long _fake_seqno /* = 0 */)
 {
   reset_idle_timer ();
-  if (left + cwind*CWIND_MULT < seqno) {
+  if (!room_in_window ()) {
     RPC_delay_args *args = New RPC_delay_args (from, l, prog, procno,
 					       in, out, cb);
     args->fake_seqno = fake_seqno;
@@ -456,6 +464,8 @@ stp_manager::doRPC (ptr<location> from, ptr<location> l,
     
     long sec, nsec;
     setup_rexmit_timer (from, l, &sec, &nsec);
+
+    inflight++;
 
     C->b->send (sec, nsec);
     seqno++;
@@ -530,6 +540,7 @@ stp_manager::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
 
   user_rexmit_table.remove (C);
   (C->cb) (err);
+  inflight--;
   remove_from_sentq (C->seqno);
   update_cwind (C->seqno);
   rpc_done (C->seqno);
@@ -559,7 +570,7 @@ void
 stp_manager::rpc_done (long acked_seqno)
 {
 
-  if (Q.first && (left + cwind*CWIND_MULT >= seqno) ) {
+  if (Q.first && room_in_window ()) {
     int qsize = (num_qed > 100) ? 100 :  num_qed;
     int next = (int)(qsize*((float)random()/(float)RAND_MAX));
     RPC_delay_args *next_arg = Q.first;
@@ -591,7 +602,7 @@ stp_manager::rpc_done (long acked_seqno)
     num_qed--;
   }
 
-  if (Q.first && (left + cwind*CWIND_MULT >= seqno) ) {
+  if (Q.first && room_in_window () ) {
     delaycb (0, 1000000, wrap (this, &stp_manager::rpc_done, acked_seqno));
   }
 }
@@ -695,7 +706,6 @@ stp_manager::setup_rexmit_timer (ptr<location> from, ptr<location> l, long *sec,
   if (timers.size () > 1000) timers.pop_front ();
   
   *sec = (long)(alat / 1000000);
-  if (*sec > 1) *sec = 1;
   *nsec = ((long)alat % 1000000) * 1000;
   
   if (*nsec < 0 || *sec < 0) {
