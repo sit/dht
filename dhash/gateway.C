@@ -293,6 +293,7 @@ dhashclient::insertcb (cbinsert_t cb, bigint key, dhash_stat *res, clnt_stat err
     errstr = dhasherr2str (*res);
   else {
     (*cb) (false, key); // success
+    delete res; // XXX make refcounted..
     return;
   }
 

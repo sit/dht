@@ -684,7 +684,8 @@ dhash::append_after_db_fetch (ptr<dbrec> key, ptr<dbrec> new_data,
     xdrsuio x;
     int size = buflen + 3 & ~3;
     char *m_buf;
-    if (XDR_PUTLONG (&x, (long int *)&type) &&
+    if ((size <= 64000) &&
+	XDR_PUTLONG (&x, (long int *)&type) &&
 	XDR_PUTLONG (&x, (long int *)&buflen) &&
 	(m_buf = (char *)XDR_INLINE (&x, size)))
       {
