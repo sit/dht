@@ -166,15 +166,20 @@ finish (char *buf, unsigned int *read,
 void
 afetch_cb (dhash_res *res, chordID key, char *buf, int i, struct timeval start, clnt_stat err) 
 {
-  
   if (err) {
-    fprintf(outfile, "RPC error: %d\n", err);
+    strbuf sb;
+    rpc_print (sb, key, 5, NULL, " ");
+    str s = sb;
+    fprintf(outfile, "RPC error: %d %s", err, s.cstr());
     out--;
     return;
   }
 
   if (res->status != DHASH_OK) {
-    fprintf(outfile, "Error: %d\n", res->status);
+    strbuf sb;
+    rpc_print (sb, key, 5, NULL, " ");
+    str s = sb;
+    fprintf(outfile, "Error: %d %s", res->status, s.cstr());
     out--;
     return;
   }
