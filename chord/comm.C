@@ -333,7 +333,8 @@ tcp_manager::doRPC_tcp_cleanup (ptr<aclnt> c, RPC_delay_args *args,
            << ": " << diff << ", orpc " << hi->orpc << "\n";
   }
   hi->orpc--;
-  update_latency (NULL, args->l, diff);
+  if (diff < 5000000)
+    update_latency (NULL, args->l, diff);
   (*args->cb)(err);
   delete args;
 }
@@ -344,7 +345,8 @@ tcp_manager::stats ()
   char buf[1024];
   rpc_manager::stats ();
   for (hostinfo *h = hosts.first (); h ; h = hosts.next (h)) {
-    warnx << "  host " << h->host << ": rpcs " << h->nrpc;
+    warnx << "  host " << h->host << ": rpcs " << h->nrpc
+          << ", orpcs " << h->orpc;
     sprintf (buf, ", lat %.1f, var %.1f\n", h->a_lat/1000, h->a_var/1000);
     warnx << buf;
   }

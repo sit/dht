@@ -8,7 +8,7 @@
 #include <misc_utils.h>
 #include "aclnt_chord.h"
 
-#define max_host_cache 10
+#define max_host_cache 64
 
 class location;
 
