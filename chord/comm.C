@@ -138,7 +138,7 @@ long
 rpc_manager::doRPC (ptr<location> l,
 		    rpc_program prog, int procno, 
 		    ptr<void> in, void *out, aclnt_cb cb,
-		    long fake_seqno = 0)
+		    long fake_seqno /* = 0 */)
 {
   ref<aclnt> c = aclnt::alloc (dgram_xprt, prog, 
 			       (sockaddr *)&(l->saddr));
@@ -163,7 +163,7 @@ long
 tcp_manager::doRPC (ptr<location> l,
 		    rpc_program prog, int procno, 
 		    ptr<void> in, void *out, aclnt_cb cb,
-		    long fake_seqno = 0)
+		    long fake_seqno /* = 0 */)
 {
   // hack to avoid limit on wrap()'s number of arguments
   RPC_delay_args *args = New RPC_delay_args (l, prog, procno,
@@ -303,7 +303,7 @@ long
 stp_manager::doRPC (ptr<location> l,
 		    rpc_program prog, int procno, 
 		    ptr<void> in, void *out, aclnt_cb cb,
-		    long _fake_seqno = 0)
+		    long _fake_seqno /* = 0 */)
 {
   reset_idle_timer ();
   if (left + cwind < seqno) {
