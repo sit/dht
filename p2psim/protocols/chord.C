@@ -154,9 +154,9 @@ Chord::~Chord()
     uint sz = _lookup_lat_v.size();
 
     printf("%.3f ", _lookup_interval/_lookup_num); //average lookup latency
-    printf("%.3f ", _lookup_lat_v[(int)sz*0.1]);
-    printf("%.3f ", _lookup_lat_v[(int)sz*0.5]);
-    printf("%.3f ", _lookup_lat_v[(int)sz*0.9]);
+    printf("%.3f ", _lookup_lat_v[(int)(sz*0.1)]);
+    printf("%.3f ", _lookup_lat_v[(int)(sz*0.5)]);
+    printf("%.3f ", _lookup_lat_v[(int)(sz*0.9)]);
     printf("%.3f ", _lookup_success/_lookup_num); //average success rate
     printf("%.3f ", _lookup_raw_success/_lookup_raw_num); //average success rate
     printf("%.3f ", _lookup_retries/_lookup_num); //average lookup retry
@@ -190,7 +190,7 @@ Chord::check_static_init()
 bool 
 Chord::check_correctness(CHID k, vector<IDMap> v)
 {
-  uint vsz = v.size();
+  // uint vsz = (uint) v.size();
 
   vector<IDMap> ids = ChordObserver::Instance(NULL)->get_sorted_nodes();
   IDMap tmp;
