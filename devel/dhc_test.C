@@ -9,7 +9,7 @@ vec<ref<dhc> > dhc_mgr;
 int vnodes;
 vec<ref<vnode> > vn;
 int nreplica;
-str db_name = "/scratch/athicha/tmp/db";
+str db_name = "/usr/athicha/tmp/db";
 
 /*
   { MODE_CHORD, "chord", "use fingers and successors",
@@ -20,6 +20,21 @@ vnode_producer_t producer = wrap (fingerroute::produce_vnode);
 str idstr("23");
 chordID ID1;
 int blocks_inserted = 0;
+int n_writes = 0;
+
+void getcb (chordID, dhc_stat, ptr<keyhash_data>);
+
+void 
+putcb (chordID bID, chordID writer, dhc_stat err)
+{
+  warn << "In putcb bID: " << bID << " writer: " << writer << "\n";
+  if (!err) {
+    warn << "            succeeded\n";
+    if (n_writes++ < 1) 
+      dhc_mgr[0]->get (ID1, wrap (getcb, ID1));
+  } else 
+    warn << "            error status: " << err << "\n"; 
+}
 
 void 
 getcb (chordID bID, dhc_stat err, ptr<keyhash_data> b) 
@@ -27,6 +42,16 @@ getcb (chordID bID, dhc_stat err, ptr<keyhash_data> b)
   warn << "In getcb bID " << bID << "\n";
   if (!err) {
     warn << "           data size: " << b->data.size () << "\n";
+    str idstr2("2003"), idstr3("617"), bstr("athicha");
+    chordID ID2, ID3;
+    if (!str2chordID (idstr2, ID2)) { 
+      warnx << "Cannot convert string to chordID !!!\n";
+      exit (-1);
+    }
+    ref<dhash_value> block = New refcounted<dhash_value>;
+    block->setsize (bstr.len ());
+    memcpy (block->base (), bstr.cstr (), block->size ());
+    dhc_mgr[0]->put (ID1, ID2, block, wrap (putcb, ID1, ID2));
   } else 
     warn << "           error status: " << err << "\n"; 
 }
