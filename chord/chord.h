@@ -240,7 +240,7 @@ class vnode : public virtual refcount {
   void dogettoes (svccb *sbp);
 
   //RPC demux
-  void addHandler (rpc_program prog, cbdispatch_t cb);
+  void addHandler (const rpc_program &prog, cbdispatch_t cb);
 
   cbdispatch_t getHandler (unsigned long prog) {
     return dispatch_table [prog];
@@ -290,7 +290,7 @@ class chord : public virtual refcount {
   int get_port () { return myport; }
 
   //RPC demux
-  void handleProgram (rpc_program prog);
+  void handleProgram (const rpc_program &prog);
   bool isHandled (int progno);
 
   //'wrappers' for vnode functions (to be called from higher layers)

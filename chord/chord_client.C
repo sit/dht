@@ -202,7 +202,7 @@ chord::isHandled (int progno) {
   return false;
 }
 void
-chord::handleProgram (rpc_program prog) {
+chord::handleProgram (const rpc_program &prog) {
   if (isHandled (prog.progno)) return;
   else {
     handledProgs.push_back (prog.progno);

@@ -319,7 +319,7 @@ vnode::challenge_cb (int challenge, chordID x, cbchallengeID_t cb,
 }
 
 void
-vnode::addHandler (rpc_program prog, cbdispatch_t cb) 
+vnode::addHandler (const rpc_program &prog, cbdispatch_t cb) 
 {
   dispatch_table.insert (prog.progno, cb);
   chordnode->handleProgram (prog);
