@@ -214,7 +214,6 @@ merkle_syncer::sendnode_cb (ref<sendnode_arg> arg, ref<sendnode_res> res,
     return;
   }
 
-
   merkle_rpc_node *rnode = &res->resok->node;
 
   merkle_node *lnode = ltree->lookup_exact (rnode->depth, rnode->prefix);
@@ -329,6 +328,9 @@ compare_keylists (vec<merkle_hash> lkeys,
   // do I have something he doesn't have?
   for (unsigned int i = 0; i < lkeys.size (); i++) {
     if (!rkeys[lkeys[i]]) {
+#ifdef MERKLE_SYNC_DETAILED_TRACE
+    warn << "remote missing [" << rngmin << ", " << rngmax << "] key=" << lkeys[i] << "\n";
+#endif 
       (*missingfnc) (tobigint(lkeys[i]), false);
     } else {
       rkeys.remove (lkeys[i]);
@@ -338,7 +340,9 @@ compare_keylists (vec<merkle_hash> lkeys,
   //anything left: he has and I don't
   qhash_slot<merkle_hash, int> *slot = rkeys.first ();
   while (slot) {
+#ifdef MERKLE_SYNC_DETAILED_TRACE
     warn << "local missing [" << rngmin << ", " << rngmax << "] key=" << slot->key << "\n";
+#endif 
     (*missingfnc) (tobigint(slot->key), true);
     slot = rkeys.next (slot);
   }
@@ -362,8 +366,8 @@ compare_nodes (merkle_tree *ltree, bigint rngmin, bigint rngmax,
 
     vec<merkle_hash> rkeys;
     for (u_int i = 0; i < rnode->child_hash.size (); i++) {
-      assert (betweenbothincl (rngmin, rngmax, tobigint (rnode->child_hash[i])));
-      rkeys.push_back (rnode->child_hash[i]);
+      if (betweenbothincl (rngmin, rngmax, tobigint (rnode->child_hash[i])))
+	rkeys.push_back (rnode->child_hash[i]);
     }
 
     compare_keylists (lkeys, rkeys, rngmin, rngmax, missingfnc);    
