@@ -61,6 +61,7 @@ merkle_syncer::merkle_syncer (merkle_tree *ltree, rpcfnc_t rpcfnc, sndblkfnc_t s
   : ltree (ltree), rpcfnc (rpcfnc), sndblkfnc (sndblkfnc)
 {
   idle = true; // initial value 
+  deleted = New refcounted<bool>(false);
   fatal_err = NULL;
   sync_done = false;
 
@@ -208,13 +209,16 @@ merkle_syncer::getblocklist (vec<merkle_hash> keys)
   
   ref<getblocklist_res> res = New refcounted<getblocklist_res> ();
   doRPC (MERKLESYNC_GETBLOCKLIST, arg, res, 
-	 wrap (this, &merkle_syncer::getblocklist_cb, res));
+	 wrap (this, &merkle_syncer::getblocklist_cb, res, deleted));
 }
 
 
 void
-merkle_syncer::getblocklist_cb (ref<getblocklist_res> res, clnt_stat err)
+merkle_syncer::getblocklist_cb (ref<getblocklist_res> res, ptr<bool> del,
+				clnt_stat err)
 {
+  if (*del) return;
+
   idle = false;
 
 #ifdef MERKLE_SYNCE_TRACE
@@ -263,7 +267,7 @@ merkle_syncer::getnode (u_int depth, const merkle_hash &prefix)
   
   ref<getnode_res> res = New refcounted<getnode_res> ();
   doRPC (MERKLESYNC_GETNODE, arg, res,
-	      wrap (this, &merkle_syncer::getnode_cb, arg, res));
+	      wrap (this, &merkle_syncer::getnode_cb, arg, res, deleted));
 }
 
 
@@ -285,8 +289,11 @@ merkle_syncer::inrange (const merkle_hash &key)
 
 
 void
-merkle_syncer::getnode_cb (ref<getnode_arg> arg, ref<getnode_res> res, clnt_stat err)
+merkle_syncer::getnode_cb (ref<getnode_arg> arg, ref<getnode_res> res, 
+			   ptr<bool> del,
+			   clnt_stat err)
 {
+  if (*del) return;
   idle = false;
 
 #ifdef MERKLE_SYNCE_TRACE
@@ -422,7 +429,7 @@ merkle_syncer::getblockrange (merkle_rpc_node *rnode)
 #endif
   arg->xkeys =  xkeys;
   doRPC (MERKLESYNC_GETBLOCKRANGE, arg, res,
-	 wrap (this, &merkle_syncer::getblockrange_cb, arg, res));
+	 wrap (this, &merkle_syncer::getblockrange_cb, arg, res, deleted));
 #ifdef MERKLE_SYNCE_TRACE
   warn << (u_int)this << " getblockrange <<<<<<<<<<<<<<<<<<<<<<\n";
 #endif
@@ -430,8 +437,12 @@ merkle_syncer::getblockrange (merkle_rpc_node *rnode)
 
 
 void
-merkle_syncer::getblockrange_cb (ref<getblockrange_arg> arg, ref<getblockrange_res> res, clnt_stat err)
+merkle_syncer::getblockrange_cb (ref<getblockrange_arg> arg, 
+				 ref<getblockrange_res> res, 
+				 ptr<bool> del,
+				 clnt_stat err)
 {
+  if (*del) return;
   idle = false;
 
 #ifdef MERKLE_SYNCE_TRACE
@@ -523,4 +534,5 @@ merkle_syncer::timeout ()
 merkle_syncer::~merkle_syncer()
 {
   setdone ();
+  *deleted = true;
 }

@@ -24,6 +24,7 @@ class merkle_syncer {
 
   enum { IDLETIMEOUT = 30 };
   bool idle;
+  ptr<bool> deleted;
 
  public:
   typedef enum {
@@ -62,14 +63,19 @@ class merkle_syncer {
   void sendblock (merkle_hash key, bool last);
   void sendblock_cb ();
   void getblocklist (vec<merkle_hash> keys);
-  void getblocklist_cb (ref<getblocklist_res> res, clnt_stat err);
+  void getblocklist_cb (ref<getblocklist_res> res, ptr<bool> del, 
+			clnt_stat err);
 
   bool done () { return sync_done; }
   void sync (bigint _rngmin, bigint _rngmax, mode_t m);
   void getnode (u_int depth, const merkle_hash &prefix);
-  void getnode_cb (ref<getnode_arg> arg, ref<getnode_res> res, clnt_stat err);
+  void getnode_cb (ref<getnode_arg> arg, ref<getnode_res> res, 
+		   ptr<bool> del, clnt_stat err);
   void getblockrange (merkle_rpc_node *rnode);
-  void getblockrange_cb (ref<getblockrange_arg> arg, ref<getblockrange_res> res, clnt_stat err);
+  void getblockrange_cb (ref<getblockrange_arg> arg, 
+			 ref<getblockrange_res> res, 
+			 ptr<bool> del,
+			 clnt_stat err);
 
   bool inrange (const merkle_hash &key);
 
