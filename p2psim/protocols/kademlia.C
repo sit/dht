@@ -122,9 +122,17 @@ void
 Kademlia::crash(Args *args)
 {
   // destroy k-buckets
+  KDEBUG(1) << "crash begin" << endl;
   node()->crash();
   delete _me;
   delete _root;
+  flyweight.clear();
+  joined--;
+
+  // prepare for coming back up
+  _me = New k_nodeinfo(_id, ip());
+  _root = New k_bucket_leaf(this);
+  KDEBUG(1) << "crash done" << endl;
 }
 
 // }}}
@@ -142,7 +150,7 @@ Kademlia::lookup(Args *args)
   do_lookup(&la, &lr);
   Time after = now();
   KDEBUG(1) << "lookup: " << printID(key) << " is on " << Kademlia::printbits(lr.rid) << endl;
-  cout << "latency = " << after - before << endl;
+  KDEBUG(1) << "lookup latency = " << after - before << endl;
 }
 
 // }}}
@@ -398,6 +406,9 @@ void
 Kademlia::reschedule_stabilizer(void *x)
 {
   KDEBUG(1) << "reschedule_stabilizer" << endl;
+  if(!node()->alive())
+    return;
+
   stabilize();
   delaycb(stabilize_timer, &Kademlia::reschedule_stabilizer, (void *) 0);
 }
@@ -771,7 +782,6 @@ k_bucket_node::k_bucket_node(Kademlia *k) : k_bucket(0, false, k)
 // {{{ k_bucket_node::~k_bucket_node
 k_bucket_node::~k_bucket_node()
 {
-  cout << "~k_bucket_leaf" << endl;
   delete child[0];
   delete child[1];
 }
@@ -808,7 +818,6 @@ k_bucket_leaf::k_bucket_leaf(Kademlia *k) : k_bucket(0, true, k)
 // {{{ k_bucket_leaf::~k_bucket_leaf
 k_bucket_leaf::~k_bucket_leaf()
 {
-  cout << "~k_bucket_leaf" << endl;
 }
 // }}}
 // {{{ k_bucket_leaf::divide
@@ -904,10 +913,6 @@ k_bucket::k_bucket(k_bucket *parent, bool leaf, Kademlia *k) : leaf(leaf), paren
 // {{{ k_bucket::~k_bucket
 k_bucket::~k_bucket()
 {
-  if(leaf)
-    delete (k_bucket_leaf*) this;
-  else
-    delete (k_bucket_node*) this;
 }
 // }}}
 // {{{ k_bucket::traverse
@@ -1212,6 +1217,17 @@ k_dumper::execute(k_bucket_leaf *k, string prefix, unsigned depth)
   cout << spaces << "prefix: " << prefix << endl;
   for(Kademlia::nodeinfo_set::const_iterator i = k->nodes->nodes.begin(); i != k->nodes->nodes.end(); ++i)
     cout << spaces << "  " << Kademlia::printbits((*i)->id) << ", lastts = " << (*i)->lastts << endl;
+}
+// }}}
+
+// {{{ k_delete::execute
+void
+k_delete::execute(k_bucket_leaf *k, string prefix, unsigned depth)
+{
+  if(k->leaf)
+    delete (k_bucket_leaf*) k;
+  else
+    delete (k_bucket_node*) k;
 }
 // }}}
 

@@ -345,6 +345,15 @@ class k_dumper : public k_traverser { public:
 private:
 };
 // }}}
+// {{{ class k_delete
+class k_delete : public k_traverser { public:
+  k_delete() : k_traverser("k_delete") {}
+  virtual ~k_delete() {}
+  virtual void execute(k_bucket_leaf*, string, unsigned);
+
+private:
+};
+// }}}
 
 #define KDEBUG(x) DEBUG(x) << Kademlia::debugcounter++ << "(" << now() << "). " << Kademlia::printbits(_id) << " "
 #endif // __KADEMLIA_H
