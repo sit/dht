@@ -5,6 +5,7 @@
 #include "args.h"
 #include <string>
 #include <map>
+#include <typeinfo>
 #include "p2psim.h"
 using namespace std;
 
@@ -40,6 +41,13 @@ protected:
 #define delaycb(X, Y, Z) this->_delaycb(X, ((member_f)(&Y)), ((void*) (Z)))
   void _delaycb(Time, member_f, void*);
   IPAddress ip();
+
+  // Look in rpc.h.
+  template<class BT, class AT, class RT>
+    bool doRPC(IPAddress dsta,
+               void (BT::* fn)(AT *, RT *),
+               AT *args,
+               RT *ret);
 
 private:
   Node *_node;

@@ -2,6 +2,7 @@
 using namespace std;
 
 #include <assert.h>
+#include <stdio.h>
 
 #include "protocolfactory.h"
 #include "threadmanager.h"

@@ -3,6 +3,7 @@
 #include "kademlia.h"
 #include "pastry.h"
 #include "koorde.h"
+#include "vivalditest.h"
 #include <typeinfo>
 #include <iostream>
 #include "p2psim.h"
@@ -51,6 +52,9 @@ ProtocolFactory::create(string s, Node *n)
     _protnames[typeid(Pastry).name()] = s;
   } else if (s == "Koorde") {
     p = new Koorde(n);
+    _protnames[typeid(Koorde).name()] = s;
+  } else if (s == "VivaldiTest") {
+    p = new VivaldiTest(n);
     _protnames[typeid(Koorde).name()] = s;
   } 
   return p;

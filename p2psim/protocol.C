@@ -74,7 +74,7 @@ Protocol::run()
   a[3].op = CHANEND;
   
   while(1) {
-    int i, tid;
+    int i;
     if((i = alt(a)) < 0) {
       cerr << "interrupted" << endl;
       continue;
