@@ -70,7 +70,7 @@ class lrucache {
   }
 
   void insert (const K &k, typename NCREF (V) v) {
-    if (max_size && size() == max_size)
+    if (maxsize && size() == maxsize)
       remove_oldest();
     lrucache_entry *e = New lrucache_entry(k, v);
     entries.insert (e);
