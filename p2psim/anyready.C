@@ -6,10 +6,7 @@
  *
  * I apologize for this crappy code.  -rsc
  */
-
-#include <assert.h>
 #include <lib9.h>
-#include <thread.h>
 
 extern "C" {
 

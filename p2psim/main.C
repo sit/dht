@@ -1,17 +1,7 @@
-#include <lib9.h>
-#include <thread.h>
-#include <iostream>
-#include <typeinfo>
-#include <stdlib.h>
-#include <stdio.h>
-#include <time.h>
-using namespace std;
-
-#include "chord.h"
-#include "network.h"
-#include "event.h"
-#include "eventqueue.h"
+#include "protocol.h"
 #include "topology.h"
+#include <iostream>
+using namespace std;
 
 char *topology_file;
 char *event_file;

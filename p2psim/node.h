@@ -4,9 +4,7 @@
 #include "threaded.h"
 #include "rpchandle.h"
 #include "p2psim_hashmap.h"
-#include "tmgdmalloc.h"
-
-using namespace std;
+#include "p2psim.h"
 
 class Protocol;
 

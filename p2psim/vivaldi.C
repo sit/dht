@@ -1,8 +1,4 @@
 #include "vivaldi.h"
-#include "euclidean.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <math.h>
 
 Vivaldi::Vivaldi(Node *n, int d)
   : Protocol(n)

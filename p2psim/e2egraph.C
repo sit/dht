@@ -1,16 +1,7 @@
 #include "topology.h"
-#include "protocol.h"
-#include "protocolfactory.h"
 #include "e2egraph.h"
 #include "network.h"
 #include "parse.h"
-#include <cmath>
-#include <iostream>
-#include <fstream>
-#include <vector>
-#include "p2psim.h"
-
-using namespace std;
 
 E2EGraph::E2EGraph(vector<string> *v)
 {

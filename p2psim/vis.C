@@ -1,12 +1,8 @@
 #include "chord.h"
 #include "gtk/gtk.h"
-#include "gdk/gdk.h"
 #include "math.h"
-#include <ctype.h>
-#include <string.h>
 #include <stdio.h>
 #include <iostream>
-#include <fstream>
 using namespace std;
 
 #define WINX 700

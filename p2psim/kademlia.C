@@ -1,11 +1,7 @@
 // {{{ headers
 #include "kademlia.h"
-#include "packet.h"
 #include <stdio.h>
-#include <algorithm>
 #include <iostream>
-#include "../utils/skiplist.h"
-#include "p2psim.h"
 using namespace std;
 
 #define STABLE_TIMER 500 //use a["stabtimer"] to set stabilization timer

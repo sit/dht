@@ -1,11 +1,5 @@
 #include  "chordfingerpns.h"
 #include <stdio.h>
-#include <iostream>
-#include <algorithm>
-#include "network.h"
-#include "topology.h"
-
-using namespace std;
 
 /* Gummadi's Chord PNS algorithm  (static) */
 ChordFingerPNS::ChordFingerPNS(Node *n, Args& a) : Chord(n, a, New LocTable()) 

@@ -4,7 +4,6 @@
 #include "g2graph.h"
 #include "randomgraph.h"
 #include "euclideangraph.h"
-#include "p2psim.h"
 
 Topology *
 TopologyFactory::create(string s, vector<string>* v)

@@ -1,11 +1,4 @@
 #include "chordtoe.h"
-#include <stdio.h>
-#include <iostream>
-#include <algorithm>
-#include "network.h"
-#include "topology.h"
-
-using namespace std;
 
 Chord::IDMap 
 LocTableToe::next_hop(Chord::CHID key, bool *done) 

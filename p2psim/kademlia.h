@@ -1,10 +1,8 @@
 #ifndef __KADEMLIA_H
 #define __KADEMLIA_H
 
-#define TMG_DMALLOC
-#include "tmgdmalloc.h"
 #include "chord.h"
-using namespace std;
+#include "p2psim.h"
 
 extern unsigned kdebugcounter;
 class k_bucket_tree;

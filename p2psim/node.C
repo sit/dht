@@ -1,18 +1,7 @@
-#include <iostream>
-#include <set>
-#include <string>
-using namespace std;
-
-#include <assert.h>
-#include <stdio.h>
-
-#include "protocolfactory.h"
 #include "threadmanager.h"
-#include "node.h"
-#include "packet.h"
 #include "network.h"
-#include "protocol.h"
-#include "rpchandle.h"
+#include <iostream>
+using namespace std;
 
 Node::Node(IPAddress ip) : _ip(ip), _alive (true), _pktchan(0)
 {

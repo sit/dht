@@ -1,13 +1,7 @@
-#include "topology.h"
-#include "protocol.h"
-#include "protocolfactory.h"
 #include "randomgraph.h"
 #include "network.h"
 #include "parse.h"
 #include <iostream>
-#include <fstream>
-#include "p2psim.h"
-#include <stdio.h>
 using namespace std;
 
 RandomGraph::RandomGraph(vector<string>*)

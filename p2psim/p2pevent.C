@@ -1,14 +1,7 @@
 #include "p2pevent.h"
-#include "node.h"
-#include "dhtprotocol.h"
 #include "network.h"
 #include "parse.h"
-#include <lib9.h>
-#include <thread.h>
 #include <iostream>
-#include <vector>
-#include <string>
-#include <stdio.h>
 using namespace std;
 
 P2PEvent::P2PEvent()

@@ -1,8 +1,5 @@
 #include  "chordfinger.h"
-#include <stdio.h>
-#include <iostream>
-#include <algorithm>
-using namespace std;
+
 extern bool static_sim;
 
 ChordFinger::ChordFinger(Node *n, Args &a,
@@ -78,7 +75,7 @@ ChordFinger::fix_fingers()
     finger = ConsistentHash::successorID(me.id,i);
     v = find_successors(finger, 1, false);
 #ifdef CHORD_DEBUG
-    printf("%s fix_fingers %d finger (%qx) get (%u,%qx)\n", ts(), i, finger, v[0].ip, v[0].id);
+    // printf("%s fix_fingers %d finger (%qx) get (%u,%qx)\n", ts(), i, finger, v[0].ip, v[0].id);
 #endif
     if (v.size() > 0) loctable->add_node(v[0]);
   }
@@ -87,7 +84,7 @@ ChordFinger::fix_fingers()
 void
 ChordFinger::reschedule_stabilizer(void *x)
 {
-  printf("%s start stabilizing\n",ts());
+  // printf("%s start stabilizing\n",ts());
   if (!node()->alive()) {
     _stab_running = false;
     return;
@@ -95,7 +92,7 @@ ChordFinger::reschedule_stabilizer(void *x)
 
   Time t = now();
   ChordFinger::stabilize();
-  printf("%s end stabilizing\n",ts());
+  // printf("%s end stabilizing\n",ts());
 
   t = now() - t - _stabtimer;
   if (t < 0) t = 0;
@@ -140,7 +137,7 @@ ChordFinger::stabilized(vector<CHID> lid)
       }
       succ = loctable->succ(finger);
       if (lid[pos] != succ.id) {
-	printf("%s not stabilized, %qx,%d finger (%qx) should be %qx instead of (%u,%qx)\n", ts(), lap, j, finger, lid[pos], succ.ip, succ.id); 
+	// printf("%s not stabilized, %qx,%d finger (%qx) should be %qx instead of (%u,%qx)\n", ts(), lap, j, finger, lid[pos], succ.ip, succ.id); 
 	return false;
       }
       numf++;
@@ -164,8 +161,9 @@ ChordFinger::dump()
       if ((lap * j) < min_lap) continue;
       finger = lap * j + me.id;
       succ = loctable->succ(finger);
-      if (succ.ip > 0) 
-        printf("%qx: finger: %qx,%d : %qx : succ %qx\n", me.id, lap, j, finger, succ.id);
+      if (succ.ip > 0)  {
+        // printf("%qx: finger: %qx,%d : %qx : succ %qx\n", me.id, lap, j, finger, succ.id);
+      }
     }
   }
 }

@@ -12,6 +12,7 @@
 // Euclidean.
 
 #include "dvgraph.h"
+#include <string>
 using namespace std;
 
 class RandomGraph : public DVGraph {

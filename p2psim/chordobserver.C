@@ -1,13 +1,5 @@
 #include "chordobserver.h"
-#include "protocol.h"
-#include "args.h"
-#include "network.h"
 #include <iostream>
-#include <list>
-#include <algorithm>
-#include <stdio.h>
-
-
 using namespace std;
 
 ChordObserver* ChordObserver::_instance = 0;
@@ -34,9 +26,9 @@ ChordObserver::ChordObserver(Args *a)
   assert(_num_nodes > 0);
 
   _allsorted = get_sorted_nodes(_num_nodes);
-  printf("ChordObserver created %d nodes\n", _num_nodes);
+  // printf("ChordObserver created %d nodes\n", _num_nodes);
   for (uint i = 0; i < _allsorted.size(); i++) {
-    printf("%qx %u\n", _allsorted[i].id, _allsorted[i].ip);
+    // printf("%qx %u\n", _allsorted[i].id, _allsorted[i].ip);
   }
 
   _init_num = atoi((*a)["initnodes"].c_str());
@@ -134,7 +126,7 @@ ChordObserver::execute()
     sort(lid.begin(), lid.end());
 
     // vector<ConsistentHash::CHID>::iterator i;
-    printf ("sorted nodes %d %d\n", lid.size (), _num_nodes);
+    // printf ("sorted nodes %d %d\n", lid.size (), _num_nodes);
   }
 
   for (pos = l.begin(); pos != l.end(); ++pos) {

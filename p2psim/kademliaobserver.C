@@ -1,14 +1,5 @@
 #include "kademliaobserver.h"
-#include "protocol.h"
-#include "args.h"
-#include "network.h"
 #include <iostream>
-#include <list>
-#include <algorithm>
-#include <stdio.h>
-
-#include "kademlia.h"
-
 using namespace std;
 
 KademliaObserver* KademliaObserver::_instance = 0;

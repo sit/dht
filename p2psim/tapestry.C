@@ -1,14 +1,9 @@
-/* $Id: tapestry.C,v 1.4 2003/08/07 21:39:14 thomer Exp $ */
+/* $Id: tapestry.C,v 1.5 2003/08/08 07:30:11 thomer Exp $ */
 
 #include "tapestry.h"
-#include "node.h"
-#include "packet.h"
 #include <stdio.h>
-#include <iostream>
-#include <algorithm>
 #include <math.h>
-#include <vector>
-
+#include <iostream>
 using namespace std;
 
 Tapestry::Tapestry(Node *n)

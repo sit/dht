@@ -1,4 +1,3 @@
-#include <lib9.h>
 #include "rpchandle.h"
 
 RPCHandle::RPCHandle(Channel *c, Packet *p)

@@ -1,15 +1,8 @@
 #include "topology.h"
-#include "protocol.h"
-#include "protocolfactory.h"
 #include "g2graph.h"
 #include "network.h"
 #include "parse.h"
-#include <cmath>
 #include <iostream>
-#include <fstream>
-#include <vector>
-#include "p2psim.h"
-
 using namespace std;
 
 /* the Gummadi brother's graph */

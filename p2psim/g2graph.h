@@ -2,6 +2,7 @@
 #define __G2GRAPH_H
 
 #include <map>
+#include <string>
 using namespace std;
 
 class G2Graph : public Topology {

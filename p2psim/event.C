@@ -1,9 +1,5 @@
 #include "event.h"
 #include "threadmanager.h"
-#include <vector>
-#include <string>
-
-using namespace std;
 
 unsigned Event::_uniqueid = 0;
 

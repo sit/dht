@@ -1,11 +1,6 @@
 #include "network.h"
-#include "event.h"
-#include "packet.h"
 #include "netevent.h"
-#include "eventqueue.h"
-#include <assert.h>
 #include <iostream>
-#include "p2psim.h"
 using namespace std;
 
 Network *Network::_instance = 0;

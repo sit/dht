@@ -1,14 +1,9 @@
 #include "topology.h"
-#include "protocol.h"
-#include "protocolfactory.h"
 #include "euclidean.h"
 #include "network.h"
 #include "parse.h"
 #include <cmath>
 #include <iostream>
-#include <fstream>
-#include <vector>
-#include "p2psim.h"
 using namespace std;
 
 Euclidean::Euclidean(vector<string>*)

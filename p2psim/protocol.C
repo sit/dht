@@ -1,23 +1,7 @@
-#include <assert.h>
-#include <lib9.h>
-#include <thread.h>
-#include <iostream>
-#include <stdio.h>
-using namespace std;
-
-#include "protocol.h"
-#include "protocolfactory.h"
-#include "threadmanager.h"
-#include "packet.h"
-#include "network.h"
-#include "p2pevent.h"
-#include "node.h"
-#include "args.h"
 #include "parse.h"
-#include "eventqueue.h"
-#include "rpchandle.h"
-#include "p2psim_hashmap.h"
-#include "p2psim.h"
+#include "network.h"
+#include <iostream>
+using namespace std;
 
 Protocol::Protocol(Node *n) : _node(n), _token(1)
 {

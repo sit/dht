@@ -1,9 +1,5 @@
-#include <lib9.h>
-#include <thread.h>
 #include "observeevent.h"
-#include "observer.h"
 #include "eventqueue.h"
-#include "p2psim.h"
 
 Observer::Observer()
 {

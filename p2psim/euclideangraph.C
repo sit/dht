@@ -1,15 +1,9 @@
-#include "topology.h"
-#include "protocol.h"
-#include "protocolfactory.h"
 #include "euclideangraph.h"
 #include "network.h"
 #include "parse.h"
-#include <iostream>
-#include <fstream>
-#include "p2psim.h"
 #include <stdio.h>
-#include <stdlib.h>
 #include <math.h>
+#include <iostream>
 using namespace std;
 
 EuclideanGraph::EuclideanGraph(vector<string>*)

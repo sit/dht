@@ -1,9 +1,6 @@
 #include "pastry.h"
-#include "packet.h"
-#include <iostream>
-#include <algorithm>
 #include <stdio.h>
-#include "p2psim.h"
+#include <iostream>
 using namespace std;
 
 Pastry::Pastry(Node *n) : DHTProtocol(n),

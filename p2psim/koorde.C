@@ -1,7 +1,5 @@
 #include "koorde.h"
 #include <stdio.h>
-#include <iostream>
-using namespace std;
 
 extern bool vis;
 

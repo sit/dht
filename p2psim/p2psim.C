@@ -1,12 +1,7 @@
-#include "eventqueue.h"
 #include "network.h"
-#include "protocolfactory.h"
 #include "observerfactory.h"
 #include "eventfactory.h"
 #include "threadmanager.h"
-
-#include "p2psim.h"
-using namespace std;
 
 unsigned verbose = 0;
 

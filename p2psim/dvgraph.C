@@ -1,12 +1,6 @@
-#include "topology.h"
-#include "protocol.h"
-#include "protocolfactory.h"
 #include "dvgraph.h"
-#include "network.h"
-#include <iostream>
-#include <fstream>
-#include "p2psim.h"
 #include <stdio.h>
+#include <iostream>
 using namespace std;
 
 DVGraph::DVGraph()

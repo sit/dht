@@ -1,8 +1,6 @@
 #include "observerfactory.h"
 #include "chordobserver.h"
 #include "kademliaobserver.h"
-#include "args.h"
-#include "p2psim.h"
 #include <iostream>
 using namespace std;
 

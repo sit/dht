@@ -1,9 +1,6 @@
 #include "observeevent.h"
 #include "observerfactory.h"
 #include "parse.h"
-#include <iostream>
-#include "p2psim.h"
-using namespace std;
 
 ObserveEvent::ObserveEvent()
 {

@@ -1,11 +1,8 @@
 #include <typeinfo>
 #include "vivalditest.h"
-#include "packet.h"
-#include "p2psim.h"
 #include "euclidean.h"
 #include "euclideangraph.h"
 #include <stdio.h>
-#include <algorithm>
 #include <iostream>
 using namespace std;
 

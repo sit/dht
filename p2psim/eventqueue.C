@@ -1,13 +1,9 @@
 #include "eventqueue.h"
-#include "network.h"
-#include "p2pevent.h"
+#include <fstream>
 #include "parse.h"
 #include "eventfactory.h"
+#include "protocolfactory.h"
 #include <iostream>
-#include <fstream>
-#include <list>
-#include <stdio.h>
-#include "p2psim.h"
 using namespace std;
 
 EventQueue *EventQueue::_instance = 0;

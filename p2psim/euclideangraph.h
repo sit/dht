@@ -8,6 +8,8 @@
 // mimic the Internet more closely than either Euclidean or RandomGraph.
 
 #include "dvgraph.h"
+#include <string>
+using namespace std;
 
 class EuclideanGraph : public DVGraph {
 public:

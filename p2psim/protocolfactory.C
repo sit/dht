@@ -1,19 +1,9 @@
-#include "protocolfactory.h"
-#include "chord.h"
 #include "kademlia.h"
 #include "pastry.h"
 #include "koorde.h"
-#include "chordfinger.h"
 #include "chordfingerpns.h"
 #include "vivalditest.h"
-#include "p2psim.h"
 #include "chordtoe.h"
-
-#include <typeinfo>
-#include <iostream>
-#include <set>
-
-using namespace std;
 
 extern uint base;
 extern uint resilience;

@@ -1,17 +1,8 @@
-#include "chord.h"
-#include "node.h"
-#include "packet.h"
-#include "topology.h"
-#include "network.h"
-#include "vivaldi.h"
 #include "chordobserver.h"
 #include <stdio.h>
-#include <iostream>
-#include <algorithm>
-
-using namespace std;
 extern bool vis;
 extern bool static_sim;
+
 
 #define CHORD_DEBUG
 Chord::Chord(Node *n, Args& a, LocTable *l)

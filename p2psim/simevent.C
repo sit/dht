@@ -1,9 +1,6 @@
 #include "eventqueue.h"
 #include "simevent.h"
-#include "p2psim.h"
 #include "threadmanager.h"
-#include <lib9.h>
-#include <thread.h>
 #include <iostream>
 using namespace std;
 
