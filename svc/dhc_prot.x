@@ -55,7 +55,6 @@ union dhc_prepare_res switch (dhc_stat status) {
 /* proposal message, previously called accept message */
 struct dhc_propose_arg {
    chordID bID;
-//   chordID mID;
    paxos_seqnum_t round;
    u_int64_t config_seqnum;
    chordID new_config<>;
@@ -81,10 +80,6 @@ union dhc_propose_res switch (dhc_stat status) {
 
 struct dhc_newconfig_arg {
    chordID bID;
-/*
-   chordID mID;
-   dhc_type type;
-*/
    bool newblock;
    keyhash_data data;
    u_int64_t old_conf_seqnum;
@@ -129,7 +124,6 @@ struct dhc_put_res {
 
 struct dhc_newblock_arg {
    chordID bID;
-//   chordID mID;
    chordID writer;
    dhash_value value;
 };

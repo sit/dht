@@ -239,12 +239,18 @@ dhc::recv_put (user_args *sbp)
   }
     
   ptr<dhc_block> kb = to_dhc_block (rec);
+#if 0 //XXXXXX CHANGE BACK TO CHECK FOR PRIM!!!
   if (!is_primary (put->bID, myNode->my_ID (), kb->meta->config.nodes)) {
+    warn << "not primary \n";
+    warn << "bID " << put->bID << "\n"
+	 << "mID " << myNode->my_ID () << "\n";
+    for (uint i=0; i<kb->meta->config.nodes.size (); i++)
+      warn << "c " << i << " " << kb->meta->config.nodes[i] << "\n";
     dhc_put_res res; res.status = DHC_NOT_PRIMARY;
     sbp->reply (&res);
     return;    
   }
-
+#endif
   if (put->rmw) {
     if (tag_cmp (kb->data->tag, put->ctag) != 0) {
       dhc_put_res res; res.status = DHC_OLD_VER;
@@ -375,7 +381,7 @@ dhc::recv_putblock (user_args *sbp)
     return;    
   }
   
-  //check if sender is primary!!
+#if 0  //XXXXXXXX CHANGE BACK check if sender is primary!!
   chord_node *from = New chord_node;
   sbp->fill_from (from);
   if (!is_primary (putblock->bID, from->x, kb->meta->config.nodes)) {
@@ -385,7 +391,7 @@ dhc::recv_putblock (user_args *sbp)
     return;
   }
   delete from;
-
+#endif
   dhc_put_res res;
   int tc = tag_cmp (putblock->new_data.tag, kb->data->tag);
   if (dhc_debug)

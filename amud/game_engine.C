@@ -69,7 +69,7 @@ void
 game_engine::insert (ref<avatar> a, mud_cb_t cb, bool newa)
 {
   ptr<option_block> opt = New refcounted <option_block>;
-  if (newa) 
+  if (newa)
     opt->flags = DHASHCLIENT_NEWBLOCK;
   warn << "game_engine::insert" << a->to_str ();
 
@@ -93,9 +93,12 @@ game_engine::insert (ref<thing> t, mud_cb_t cb, bool newt)
 void
 game_engine::insert (ref<room> r, mud_cb_t cb, bool newroom)
 {
-  ptr<option_block> opt = New refcounted <option_block>;
-  if (newroom)
+  ptr<option_block> opt; 
+  if (newroom) {
+    opt = New refcounted <option_block>;
     opt->flags = DHASHCLIENT_NEWBLOCK; // + DHASHCLIENT_RMW;
+  } else 
+    opt = NULL;
 
   warn << newroom << " game_engine::insert" << r->to_str ();
 

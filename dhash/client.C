@@ -765,8 +765,11 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb, int opti
       arg->value.set (block->data, block->len);
       arg->rmw = (options & DHASHCLIENT_RMW) ? 1 : 0;
       if (arg->rmw) { 
-	arg->ctag.ver = 0;
-	arg->ctag.writer = 0;
+	bcopy (block->data, &arg->ctag.ver, sizeof (uint64));
+	bzero (block->data + sizeof (uint64), sizeof (chordID));
+	mpz_get_rawmag_be (block->data + sizeof (uint64), 
+			   sizeof (chordID), &arg->ctag.writer);
+	warn << "RMW: ver " << arg->ctag.ver << " writer " << arg->ctag.writer << "\n";
       }
       ptr<dhc_put_res> res = New refcounted<dhc_put_res>;
 
@@ -866,8 +869,8 @@ dhashcli::insert_dhc_cb (ptr<location> dest, route r, cbinsert_path_t cb,
 
     (*cb) (DHASH_OK, path);
   } else {
-    warning << clntnode->my_ID () << "dhash err: " << cerr 
-	    << " or dhc err: " << res->status << "\n";
+    warn << clntnode->my_ID () << "dhash err: " << cerr 
+	 << " or dhc err: " << res->status << "\n";
     path.push_back (dest->id ());
     (*cb) (DHC_ERR, path);
   }
