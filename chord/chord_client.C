@@ -161,6 +161,7 @@ chord::dispatch (ptr<asrv> s, ptr<axprt_dgram> x, svccb *sbp)
   chord_vnode *v = sbp->template getarg<chord_vnode> ();
   vnode *vnodep = vnodes[v->n];
   if (!vnodep) {
+    warnx << "CHORD: unknown node in " << sbp->proc() << "request " << v->n << "\n";
     sbp->replyref (chordstat (CHORD_UNKNOWNNODE));
     return;
   }

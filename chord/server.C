@@ -22,6 +22,8 @@
  *
  */
 
+bool nochallenges;
+
 void 
 vnode::get_successor (chordID n, cbchordID_t cb)
 {
@@ -274,6 +276,10 @@ vnode::get_fingers_cb (chordID x, chord_getfingersres *res,  clnt_stat err)
 void
 vnode::challenge (chordID &x, cbchallengeID_t cb)
 {
+  if(nochallenges){
+    cb (x, true, chordstat (CHORD_OK));
+    return;
+  }
   int c = random ();
   ptr<chord_challengearg> ca = New refcounted<chord_challengearg>;
   chord_challengeres *res = New chord_challengeres (CHORD_OK);

@@ -295,6 +295,7 @@ class chord : public virtual refcount {
 };
 
 extern ptr<chord> chordnode;
+extern bool nochallenges;
 
 #endif _CHORD_H_
 
