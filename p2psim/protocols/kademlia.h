@@ -30,6 +30,7 @@
 #include "consistenthash.h"
 #include <list>
 #include <iostream>
+#include <sstream>
 using namespace std;
 
 // }}}
@@ -252,6 +253,7 @@ public:
     IPAddress ip;
     NodeID key;
 
+    // if true, then do FIND_VALUE rather than LOOKUP
     bool return_immediately;
     
     // for debugging
@@ -267,6 +269,7 @@ public:
     set<k_nodeinfo*, closer> results;
     NodeID rid;     // the guy who's replying
     unsigned hops;
+    ostringstream log;
   };
   // }}}
   // {{{ ping_args and ping_result
