@@ -149,11 +149,13 @@ struct keyhash_meta {
 struct dhc_block {
   chordID id;
   chordID masterID;   //ID of object that decides which node is the recon leader.
+  dhc_type type;
   keyhash_meta *meta;
   keyhash_data *data;
   char *buf;
 
-  dhc_block (chordID ID, chordID mID) : id (ID), masterID (mID), buf (NULL)
+  dhc_block (chordID ID, chordID mID = 0, dhc_type t = DHC_DHC) : 
+    id (ID), masterID (mID), type (t), buf (NULL)
   {
     meta = New keyhash_meta;
     data = New keyhash_data;
@@ -166,8 +168,10 @@ struct dhc_block {
     ID_get (&id, bytes);
     offst += ID_size;
     ID_get (&masterID, bytes + offst);
-
     offst += ID_size;
+    bcopy (bytes + offst, &type, sizeof (dhc_type));
+    offst += sizeof (dhc_type);
+
     bcopy (bytes + offst, &msize, sizeof (uint));
     //warnx << "dhc_block: msize " << msize << "\n";
     //warnx << "dhc_block: create meta at offst: " << offst << "\n";
@@ -178,12 +182,16 @@ struct dhc_block {
     offst += sizeof (u_int64_t);
     ID_get (&data->tag.writer, bytes + offst);
     offst += ID_size;
-    int data_size = sz - offst;
-    if (data_size >= 0)
-      data->data.set (bytes + offst, data_size);
-    else {
-      warn << "dhc_block: Fatal exceeded end of pointer!!!\n";
-      exit (-1);
+    if (type == DHC_DHC) {
+      int data_size = sz - offst;
+      if (data_size >= 0)
+	data->data.set (bytes + offst, data_size);
+      else {
+	warn << "dhc_block: Fatal exceeded end of pointer!!!\n";
+	exit (-1);
+      }
+    } else {
+      //
     }
   }
 
@@ -197,8 +205,8 @@ struct dhc_block {
 
   uint size ()
   {
-    return (ID_size + ID_size + meta->size () + sizeof (u_int64_t) + 
-	    ID_size + data->data.size ());
+    return (ID_size + ID_size + sizeof (dhc_type) +  meta->size () + 
+	    sizeof (u_int64_t) + ID_size + data->data.size ());
   }
   
   char *bytes ()
@@ -212,6 +220,8 @@ struct dhc_block {
     offst += ID_size;
     ID_put (buf + offst, masterID);
     offst += ID_size;
+    bcopy (&type, buf + offst, sizeof (dhc_type));
+    offst += sizeof (dhc_type);
 
     bcopy (meta->bytes (), buf + offst, meta->size ());
     offst += meta->size ();
@@ -219,9 +229,23 @@ struct dhc_block {
     offst += sizeof (u_int64_t);
     ID_put (buf + offst, data->tag.writer);
     offst += ID_size;
-    bcopy (data->data.base (), buf + offst, data->data.size ());
+    if (type == DHC_DHC)
+      bcopy (data->data.base (), buf + offst, data->data.size ());
+    else {
+
+    }
 
     return buf;
+  }
+
+  ptr<dhc_block> lookup (chordID bID) 
+  {
+    return NULL;
+  }
+
+  void insert (ptr<dhc_block> kb)
+  {
+
   }
 
   str to_str ()
@@ -429,13 +453,15 @@ class dhc /*: public virtual refcount*/ {
   void recv_propose (user_args *);
   void recv_accept (chordID, dhc_cb_t, ref<dhc_propose_res>, clnt_stat);
   void recv_newconfig (user_args *);
+  void newconfig_normal (user_args *);
+  void newconfig_master (user_args *);
   void recv_newconfig_ack (chordID, dhc_cb_t, ref<dhc_newconfig_res>, clnt_stat);
-  void send_config_to_succs (dhc_newconfig_arg *);
+  void send_config_to_succs (ptr<dhc_block>, dhc_newconfig_arg *);
 
   void recv_ask (user_args *);
   void recv_permission (chordID, dhc_cb_t, ref<dhc_prepare_res>, clnt_stat);
   void recv_cmp (user_args *);
-  void recv_cmp_ack (ptr<dhc_block>, user_args *, 
+  void recv_cmp_ack (chordID, chordID, user_args *, 
 		     ref<dhc_prepare_res>, clnt_stat);
   void recv_m_newconf_ack (chordID, ptr<dhc_newconfig_res>, clnt_stat);
 

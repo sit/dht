@@ -15,13 +15,13 @@ enum dhc_stat {
    DHC_NOT_PRIMARY = 10,
    DHC_BLOCK_EXIST = 11,
    DHC_DHASHERR = 12,
-   DHC_NOT_MASTER = 13
+   DHC_NOT_MASTER = 13,
+   DHC_RETRY = 14
 };
 
 enum dhc_type {
    DHC_DHC = 0,
-   DHC_MASTER = 1,
-   DHC_MASTER_REP = 2 
+   DHC_MASTER = 1
 };
 
 struct paxos_seqnum_t {
@@ -31,7 +31,8 @@ struct paxos_seqnum_t {
 
 /* prepare message */
 struct dhc_prepare_arg {
-   chordID bID; 		/* ID of Public Key block */
+   chordID bID; 		/* ID of mutable block */
+   chordID mID;                 /* ID of master block */
    paxos_seqnum_t round; 	/* new Paxos number same as proposal number*/ 
    u_int64_t config_seqnum; 	/* sequence number of current replica config */ 
 };
@@ -54,6 +55,7 @@ union dhc_prepare_res switch (dhc_stat status) {
 /* proposal message, previously called accept message */
 struct dhc_propose_arg {
    chordID bID;
+   chordID mID;
    paxos_seqnum_t round;
    u_int64_t config_seqnum;
    chordID new_config<>;
@@ -81,6 +83,7 @@ struct dhc_newconfig_arg {
    chordID bID;
    chordID mID;
    dhc_type type;
+   bool newblock;
    keyhash_data data;
    u_int64_t old_conf_seqnum;
    chordID new_config<>;
@@ -120,6 +123,13 @@ struct dhc_put_res {
    dhc_stat status;
 };
 
+struct dhc_newblock_arg {
+   chordID bID;
+   chordID mID;
+   chordID writer;
+   dhash_value value;
+};
+
 program DHC_PROGRAM {
   version DHC_VERSION {
 
@@ -145,7 +155,7 @@ program DHC_PROGRAM {
     DHCPROC_PUTBLOCK (dhc_putblock_arg) = 7;
     
     dhc_put_res
-    DHCPROC_NEWBLOCK (dhc_put_arg) = 8; 
+    DHCPROC_NEWBLOCK (dhc_newblock_arg) = 8; 
 
     dhc_prepare_res 
     DHCPROC_ASK (dhc_propose_arg) = 9;

@@ -154,6 +154,17 @@ dhc::recv_newconfig (user_args *sbp)
     warn << "\n\n" << myNode->my_ID () << " received newconfig msg.\n ";
 
   dhc_newconfig_arg *newconfig = sbp->template getarg<dhc_newconfig_arg> ();
+  if (newconfig->type == DHC_DHC)
+    newconfig_normal (sbp);
+  else 
+    newconfig_master (sbp);
+
+}
+
+void
+dhc::newconfig_normal (user_args *sbp)
+{
+  dhc_newconfig_arg *newconfig = sbp->template getarg<dhc_newconfig_arg> ();
   ptr<dbrec> key = id2dbrec (newconfig->bID);
   ptr<dbrec> rec = db->lookup (key);
   ptr<dhc_block> kb;
@@ -172,7 +183,7 @@ dhc::recv_newconfig (user_args *sbp)
       return;
     }    
     if (kb->meta->config.seqnum >= newconfig->old_conf_seqnum + 1) {
-      warn << "dhc::recv_newconfig Older config received.\n";
+      warn << "dhc::recv_newconfig Older or current config received.\n";
       dhc_newconfig_res res; res.status = DHC_CONF_MISMATCH;
       sbp->reply (&res);
       return;      
@@ -183,7 +194,7 @@ dhc::recv_newconfig (user_args *sbp)
     warn << "\n\n dhc::recv_newconfig. kb before insert \n" 
 	 << kb->to_str () << "\n";
 
-  if (newer > 0) {
+  if (newer) {
     if (dhc_debug)
       warn << "\n\n dhc::recv_newconfig. updating kb data \n";
     kb->data->tag.ver = newconfig->data.tag.ver;
@@ -207,9 +218,6 @@ dhc::recv_newconfig (user_args *sbp)
   db->insert (key, to_dbrec (kb));
   //db->sync (); 
 
-  if (newconfig->type == DHC_MASTER)
-    send_config_to_succs (newconfig);     //send block to k-1 succs of me
-
   str buf;
   if (is_primary (newconfig->bID, myNode->my_ID (), kb->meta->config.nodes)) 
     dhc_trace << "bID " << newconfig->bID << " conf " 
@@ -231,25 +239,71 @@ dhc::recv_newconfig (user_args *sbp)
   sbp->reply (&res);
 }
 
+void
+dhc::newconfig_master (user_args *sbp)
+{
+  dhc_newconfig_arg *newconfig = sbp->template getarg<dhc_newconfig_arg> ();
+  ptr<dbrec> key = id2dbrec (newconfig->mID);
+  ptr<dbrec> rec = db->lookup (key);
+
+  if (!rec) {
+    dhc_newconfig_res res; res.status = DHC_NOT_MASTER;
+    sbp->reply (&res);
+  } else {
+    ptr<dhc_block> mb = to_dhc_block (rec);
+    ptr<dhc_block> kb = mb->lookup (newconfig->bID);
+    int newer = 1;
+    
+    //This function is called when a leaf node inserts a new leaf object.
+    //Or, when a the leaf node reconfigures and the master node sends the 
+    //decision to the master replicas.
+    if (!kb)
+      kb = New refcounted<dhc_block> (newconfig->bID, newconfig->mID);
+    else
+      newer = (newconfig->old_conf_seqnum >= kb->meta->config.seqnum);
+    
+    if (!newer) {
+      dhc_newconfig_res res; res.status = DHC_CONF_MISMATCH;
+      sbp->reply (&res);
+    } else {
+      if (newconfig->newblock)
+	send_config_to_succs (mb, newconfig);     //send block to k-1 succs of mID
+      kb->meta->config.seqnum = newconfig->old_conf_seqnum + 1;
+      kb->meta->config.nodes.setsize (newconfig->new_config.size ());
+      for (uint i=0; i<kb->meta->config.nodes.size (); i++)
+	kb->meta->config.nodes[i] = newconfig->new_config[i];
+      mb->insert (kb);
+      db->del (key);
+      db->insert (key, to_dbrec (mb));
+
+      dhc_newconfig_res res; res.status = DHC_OK;
+      sbp->reply (&res);
+    }
+  }
+}
+
 void 
-dhc::send_config_to_succs (dhc_newconfig_arg *newconfig)
+dhc::send_config_to_succs (ptr<dhc_block> mb, dhc_newconfig_arg *newconfig)
 {
   ref<dhc_newconfig_arg> arg = New refcounted<dhc_newconfig_arg> ();
   arg->bID = newconfig->bID;
   arg->mID = newconfig->mID;
-  arg->type = DHC_MASTER_REP;
+  arg->type = DHC_MASTER;
   //arg->data = ignore this value
   arg->old_conf_seqnum = newconfig->old_conf_seqnum;
   arg->new_config.setsize (newconfig->new_config.size ());
   for (uint i=0; i<arg->new_config.size (); i++) 
     arg->new_config[i] = newconfig->new_config[i];
 
-  uint k = (myNode->succs ().size () < n_replica) ? 
-    myNode->succs ().size () : n_replica;
-  for (uint i=0; i<k-1; i++) {
-    ref<dhc_newconfig_res> res = New refcounted<dhc_newconfig_res> ();
-    myNode->doRPC (myNode->succs ()[i], dhc_program_1, DHCPROC_NEWCONFIG,
-		   arg, res, wrap (this, &dhc::recv_m_newconf_ack, 
-				   arg->bID, res));
+  dhc_soft *mbs = dhcs[newconfig->mID];
+  if (!mbs) {
+    mbs = New dhc_soft (myNode, mb);
+    dhcs.insert (mbs);
+  }
+
+  for (uint i=0; i<mbs->config.size (); i++) {
+    ptr<dhc_newconfig_res> res = New refcounted<dhc_newconfig_res>;
+    myNode->doRPC (mbs->config[i], dhc_program_1, DHCPROC_NEWCONFIG, arg, res,
+		   wrap (this, &dhc::recv_m_newconf_ack, arg->bID, res));
   }
 }

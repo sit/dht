@@ -408,8 +408,8 @@ dhc::recv_newblock (user_args *sbp)
   if (dhc_debug)
     warn << "\n\n" << myNode->my_ID () << " recv_newblock\n";
 
-  dhc_put_arg *put = sbp->template getarg<dhc_put_arg> ();
-  ptr<dbrec> key = id2dbrec (put->bID);
+  dhc_newblock_arg *nb = sbp->template getarg<dhc_newblock_arg> ();
+  ptr<dbrec> key = id2dbrec (nb->bID);
   ptr<dbrec> rec = db->lookup (key);
   
   if (rec) {
@@ -419,15 +419,16 @@ dhc::recv_newblock (user_args *sbp)
   }
 
   //TO DO: check if I am the successor of this block!!!
+  //       Not necessary. Assume dhash already looks it up.
   
   ptr<dhc_newconfig_arg> arg = New refcounted<dhc_newconfig_arg>;
-  arg->bID = put->bID;
-  arg->mID = put->writer; //CHANGE THIS! The initial write ID is the master node's ID.
+  arg->bID = nb->bID;
+  arg->mID = nb->mID;
   arg->type = DHC_DHC;
   arg->data.tag.ver = 0;
-  arg->data.tag.writer = put->writer;
-  arg->data.data.setsize (put->value.size ());
-  memmove (arg->data.data.base (), put->value.base (), put->value.size ());
+  arg->data.tag.writer = nb->writer;
+  arg->data.data.setsize (nb->value.size ());
+  memmove (arg->data.data.base (), nb->value.base (), nb->value.size ());
   arg->old_conf_seqnum = 0;
   vec<ptr<location> > l;
   set_new_config (arg, &l, myNode, n_replica);
@@ -436,7 +437,6 @@ dhc::recv_newblock (user_args *sbp)
   ptr<uint> ack_rcvd = New refcounted<uint>;
   *ack_rcvd = 0;
   for (uint i=0; i<arg->new_config.size (); i++) {
-    arg->type = DHC_DHC;
     res = New refcounted<dhc_newconfig_res>;
     if (dhc_debug)
       warn << "\n\nsending newconfig to " << l[i]->id () << "\n";
@@ -448,18 +448,23 @@ dhc::recv_newblock (user_args *sbp)
 
   l.clear ();
 
-  if (dhc_debug) 
-    warn << "\n\nsend newconfig to master node\n";
-  ptr<location> master = myNode->locations->lookup (arg->mID);
-  if (master) {
-    arg->type = DHC_MASTER;
-    arg->data.data.clear (); 
-    res = New refcounted<dhc_newconfig_res>;
-    ptr<uint> tmp = NULL;
-    myNode->doRPC (master, dhc_program_1, DHCPROC_NEWCONFIG, arg, res,
-		   wrap (this, &dhc::recv_newblock_ack, sbp, tmp, res));    
+  if (arg->mID != 0) {
+    if (dhc_debug) 
+      warn << "\n\nsend newconfig to master node\n";
+    ptr<location> master = myNode->locations->lookup (arg->mID);
+    if (master) {
+      arg->type = DHC_MASTER;
+      arg->newblock = true;
+      arg->data.data.clear (); 
+      res = New refcounted<dhc_newconfig_res>;
+      ptr<uint> tmp = NULL;
+      myNode->doRPC (master, dhc_program_1, DHCPROC_NEWCONFIG, arg, res,
+		     wrap (this, &dhc::recv_newblock_ack, sbp, tmp, res));    
+    } else {
+      warn << "\n\nCannot find master node!!";
+      exit (-1);
+    }
   }
-
 }
 
 void
