@@ -183,7 +183,7 @@ class skiplist {
       unsigned int i;
       if (newlvl > lvl) {
 	for (i = lvl; i < newlvl; i++)
-	  update[i] = head;
+	  update[i] = elm;
 	lvl = newlvl;
       }
       for (i = 0; i < lvl; i++) {
