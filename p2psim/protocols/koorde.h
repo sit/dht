@@ -56,7 +56,7 @@ public:
 
   bool stabilized(vector<ConsistentHash::CHID>);
   void join(Args*);
-  vector<Chord::IDMap> Koorde::find_successors(CHID key, uint m, uint all, uint type, IDMap *lasthop = NULL, uint *lookup_lat = NULL);
+  vector<Chord::IDMap> Koorde::find_successors(CHID key, uint m, uint all, uint type, IDMap *lasthop = NULL, uint *lookup_lat = NULL, IPAddress ipkey=0);
   void initstate();
   void dump();
 

@@ -39,6 +39,7 @@
 #define TYPE_FIXPRED_UP 5
 #define TYPE_FINGER_UP 6
 #define TYPE_PNS_UP 7
+#define TYPE_MISC 8
 
 #define MIN_BASIC_TIMER 100
 
@@ -93,6 +94,7 @@ public:
   };
 
   struct alert_args {
+    IPAddress dst;
     IDMap n;
   };
 
@@ -145,6 +147,7 @@ public:
     IPAddress src;
     uint type;
     CHID key;
+    IPAddress ipkey;
     vector<lookup_path> path;
     uint m;
     uint all;
@@ -159,6 +162,7 @@ public:
 
   struct lookup_args{
     CHID key;
+    IPAddress ipkey;
     Time start;
     vector<uint> retrytimes;
   };
@@ -178,7 +182,7 @@ public:
   virtual void my_next_recurs_handler(next_recurs_args *, next_recurs_ret *);
   void next_recurs_handler(next_recurs_args *, next_recurs_ret *);
   void lookup_internal(lookup_args *a);
-  void ping_delete(alert_args *aa);
+  void alert_delete(alert_args *aa);
 
   CHID id () { return me.id; }
   IDMap idmap() { return me;}
@@ -201,6 +205,8 @@ protected:
   uint _nsucc;
   uint _allfrag;
   uint _timeout;
+  uint _to_multiplier;
+  uint _failure_retry;
   bool _stab_basic_running;
   uint _stab_basic_timer;
   uint _stab_succlist_timer;
@@ -215,6 +221,7 @@ protected:
   IDMap _wkn;
   uint _join_scheduled;
   uint _parallel;
+  uint _ipkey;
   uint _last_succlist_stabilized;
 
   LocTable *loctable;
@@ -241,9 +248,13 @@ protected:
 
 
   virtual vector<IDMap> find_successors_recurs(CHID key, uint m, uint all,
-      uint type, IDMap *lasthop = NULL, uint *lookup_int = NULL);
+      uint type, IDMap *lasthop = NULL, uint *lookup_int = NULL, IPAddress ipkey=0);
   virtual vector<IDMap> find_successors(CHID key, uint m, uint all,
-      uint type, IDMap *lasthop = NULL, uint *lookup_int = NULL);
+      uint type, IDMap *lasthop = NULL, uint *lookup_int = NULL, IPAddress ipkey=0);
+
+  template<class BT, class AT, class RT>
+    bool Chord::failure_detect(IPAddress dst, void (BT::* fn)(AT *, RT *), AT *args, RT *ret, 
+	uint type, uint num_args_id = 0, uint num_args_else = 0);
 
   void fix_successor(void *x=NULL);
   void fix_predecessor();
@@ -273,6 +284,7 @@ class LocTable {
       sklist_entry<idmapwrap> sortlink_;
       bool is_succ;
       bool pinned;
+      bool on_check;
       idmapwrap(Chord::IDMap x, Time t = 0) {
 	n.ip = x.ip;
 	n.id = x.id;
@@ -280,6 +292,7 @@ class LocTable {
 	id = x.id;
 	pinned = false;
 	timestamp = t;
+	on_check = false;
       }
     };
 
@@ -302,12 +315,13 @@ class LocTable {
 
     Chord::IDMap succ(ConsistentHash::CHID id, Time *ts = NULL);
     vector<Chord::IDMap> succs(ConsistentHash::CHID id, unsigned int m, Time *ts = NULL);
-    vector<Chord::IDMap> preds(Chord::CHID id, uint m);
+    vector<Chord::IDMap> preds(Chord::CHID id, uint m, bool ignore_oncheck=true);
     Chord::IDMap pred(Chord::CHID id);
     void checkpoint();
     void print();
 
     void add_node(Chord::IDMap n, bool is_succ=false);
+    bool on_check(Chord::IDMap n);
     void add_sortednodes(vector<Chord::IDMap> l);
     void del_node(Chord::IDMap n);
     virtual void del_all();

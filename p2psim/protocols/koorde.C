@@ -136,7 +136,7 @@ Koorde::join(Args *args)
 
 // Iterative version of the figure 2 algo in IPTPS'03 paper.
 vector<Chord::IDMap>
-Koorde::find_successors(CHID key, uint m, uint all, uint type, IDMap *lasthop, uint *lookup_int)
+Koorde::find_successors(CHID key, uint m, uint all, uint type, IDMap *lasthop, uint *lookup_int, IPAddress ipkey)
 {
   int count = 0;
   int timeout = 0;

@@ -39,9 +39,6 @@ ChordFingerPNS::ChordFingerPNS(IPAddress i, Args& a, LocTable *l)
   _stab_pns_outstanding = 0;
 
   _stab_pns_timer = a.nget<uint>("pnstimer",_stab_succlist_timer,10);
-
-  if (!static_sim)
-    loctable->set_timeout( 5*_stab_pns_timer );
 }
 
 void
