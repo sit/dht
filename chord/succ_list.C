@@ -58,7 +58,7 @@ unsigned int
 succ_list::num_succ ()
 {
   int goodnodes = locations->usablenodes () - 1;
-  int newnsucc = (NSUCC > goodnodes) ? goodnodes : NSUCC;
+  int newnsucc = (nsucc_ > goodnodes) ? goodnodes : nsucc_;
   
   if (newnsucc < 0) {
     warn << "succ_list::num_succ () n:" << newnsucc << " g:" << goodnodes << "\n";

@@ -1,8 +1,6 @@
 #ifndef _SUCC_LIST_H_
 #define _SUCC_LIST_H_
 
-#define NSUCC    16
-
 class succ_list : public fingerlike {
   chordID myID;
   ptr<vnode> myvnode;
