@@ -16,7 +16,10 @@ int paxos_cmp (paxos_seqnum_t, paxos_seqnum_t);
 static inline ptr<dhc_block> 
 to_dhc_block (ptr<dbrec> rec)
 {
-  return NULL;
+  ptr<dhc_block> b = New refcounted<dhc_block>;
+  //bcopy (rec->value, b->get_bytes, rec->size);
+  //reverse as in merkle_misc.h??
+  return b;
 };
 
 static inline ptr<dbrec> 

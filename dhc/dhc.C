@@ -28,12 +28,12 @@ dhc::recon (chordID bID)
 
     ptr<dhc_block> b = to_dhc_block (rec);
 
-    if (!b->meta->pstat.recon_inprogress) {
-      b->meta->pstat.recon_inprogress = true;
+    if (!b->meta->pstat->recon_inprogress) {
+      b->meta->pstat->recon_inprogress = true;
       b->meta->proposal.seqnum += 1;
       b->meta->proposal.proposer = myNode->my_ID ();
-      b->meta->pstat.promise_recvd = 0;
-      b->meta->pstat.accept_recvd = 0;
+      b->meta->pstat->promise_recvd = 0;
+      b->meta->pstat->accept_recvd = 0;
       db->insert (id2dbrec (bID), to_dbrec (b));
       
       ptr<dhc_prepare_arg> arg = New refcounted<dhc_prepare_arg> ();
@@ -66,21 +66,21 @@ dhc::recv_promise (ptr<dhc_block> b, ref<dhc_prepare_res> promise,
   if (!err && (promise->status == DHC_OK || 
 	       promise->status == DHC_ACCEPTED_PROP)) {
 
-    b->meta->pstat.promise_recvd++;
+    b->meta->pstat->promise_recvd++;
 
     if (promise->status == DHC_ACCEPTED_PROP) 
-      if (!set_ac (b->meta->pstat.acc_conf, *promise->resok)) {
+      if (!set_ac (b->meta->pstat->acc_conf, *promise->resok)) {
 	warn << "dhc:recv_promise Different conf accepted. Something's wrong!!\n";
 	exit (-1);
       }
     
-    if (b->meta->pstat.promise_recvd > n_replica/2) {
+    if (b->meta->pstat->promise_recvd > n_replica/2) {
       ptr<dhc_propose_arg> arg = New refcounted<dhc_propose_arg>;
       arg->bID = b->id;
       arg->round = b->meta->proposal;
-      if (b->meta->pstat.acc_conf.size () > 0) {
+      if (b->meta->pstat->acc_conf.size () > 0) {
 	ref<vec<chordID> > nodes = 
-	  New refcounted<vec<chordID> > (b->meta->pstat.acc_conf);
+	  New refcounted<vec<chordID> > (b->meta->pstat->acc_conf);
 	arg->new_config.set (nodes->base (), nodes->size ());
       } else 
 	set_new_config (arg, myNode, n_replica);
@@ -102,13 +102,19 @@ dhc::recv_accept (ptr<dhc_block> b, ref<dhc_propose_res> proposal,
 		  clnt_stat err)
 {
   if (!err && proposal->status == DHC_OK) {
-    b->meta->pstat.accept_recvd++;
-    if (b->meta->pstat.accept_recvd > n_replica/2) {
+    b->meta->pstat->accept_recvd++;
+    if (b->meta->pstat->accept_recvd > n_replica/2) {
       ptr<dhc_newconfig_arg> arg = New refcounted<dhc_newconfig_arg>;
       arg->bID = b->id;
       arg->data = *b->data; //Good enough?
       arg->old_conf_seqnum = b->meta->config->seqnum;
+      b->meta->set_new_config ();
       set_new_config (arg, b->meta->new_config->nodes);
+
+      //End of recon protocol !!!
+      warn << "dhc::recv_accept End of recon for block " << b->id << "\n";
+      b->meta->pstat->recon_inprogress = false;
+      db->insert (id2dbrec (b->id), to_dbrec (b));
 
       ptr<dhc_newconfig_res> res; 
       for (uint i=0; i<b->meta->new_config->nodes.size (); i++) {
@@ -117,11 +123,6 @@ dhc::recv_accept (ptr<dhc_block> b, ref<dhc_propose_res> proposal,
 	myNode->doRPC (dest, dhc_program_1, DHCPROC_NEWCONFIG, arg, res,
 		       wrap (this, &dhc::recv_newconfig_ack, b, res));
       }
-
-      //End of recon protocol !!!
-      warn << "dhc::recv_accept End of recon for block " << b->id << "\n";
-      b->meta->pstat.recon_inprogress = false;
-      db->insert (id2dbrec (b->id), to_dbrec (b));
     }
   } else
     print_error ("dhc:recv_propose", errno, proposal->status);
@@ -153,8 +154,8 @@ dhc::recv_prepare (user_args *sbp)
       b->meta->promised = prepare->round;
       dhc_prepare_res res (DHC_OK);
       ptr<vec<chordID> > nodes;
-      if (b->meta->pstat.acc_conf.size () > 0) {
-	nodes =  New refcounted<vec<chordID> > (b->meta->pstat.acc_conf);
+      if (b->meta->pstat->acc_conf.size () > 0) {
+	nodes =  New refcounted<vec<chordID> > (b->meta->pstat->acc_conf);
       } else 
 	nodes = New refcounted<vec<chordID> >;
       res.resok->new_config.set (nodes->base (), nodes->size());
@@ -179,7 +180,7 @@ dhc::recv_propose (user_args *sbp)
       dhc_propose_res res (DHC_PROP_MISMATCH);
       sbp->reply (&res);
     } else {
-      if (set_ac (b->meta->pstat.acc_conf, *propose)) {
+      if (set_ac (b->meta->pstat->acc_conf, *propose)) {
 	b->meta->accepted = propose->round;
 	db->insert (id2dbrec (b->id), to_dbrec (b));
 	dhc_propose_res res (DHC_OK);
@@ -194,6 +195,19 @@ dhc::recv_propose (user_args *sbp)
 	 << propose->bID << "\n";
     exit (-1);
   }
+}
+
+void 
+dhc::recv_newconfig (user_args *sbp)
+{
+  dhc_newconfig_arg *newconfig = sbp->template getarg<dhc_newconfig_arg> ();
+  ptr<dbrec> rec = db->lookup (id2dbrec (newconfig->bID));
+  
+  if (!rec)
+    ptr<dhc_block> b = New refcounted<dhc_block>;
+  else 
+    ptr<dhc_block> b = to_dhc_block (rec);
+  
 }
 
 void 
