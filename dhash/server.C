@@ -403,11 +403,9 @@ void
 dhash_impl::sync_cb () 
 {
   // warn << "** SYNC\n";
-#if 0 /* ATHICHA */
   db->sync ();
   keyhash_db->sync ();
   delaycb (synctm (), wrap (this, &dhash_impl::sync_cb));
-#endif
 }
 
 

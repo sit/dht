@@ -317,7 +317,7 @@ int dbfe::IMPL_open_sleepycat(char *filename, dbOptions opts) {
   if (flags == -1) flags = DB_CREATE;
   long create = opts.getOption(CREATE_OPT);
   if (create == 0) flags |= DB_EXCL;
-  long cacheSize = opts.getOption(CACHE_OPT);
+  //  long cacheSize = opts.getOption(CACHE_OPT);
 
   if(do_dbenv) {
     fd = open(".", O_RDONLY);
@@ -329,10 +329,6 @@ int dbfe::IMPL_open_sleepycat(char *filename, dbOptions opts) {
     r = db_env_create(&dbe, 0);
     if (r) return r;
 
-    if (cacheSize > -1) {
-      r = dbe->set_cachesize(dbe, 0, cacheSize*1024, 0);
-      if (r) return r;
-    }
 
     // uncomment the below for slightly better performance
     //    r = dbe->set_flags(dbe, DB_TXN_NOSYNC, 1);
@@ -351,31 +347,39 @@ int dbfe::IMPL_open_sleepycat(char *filename, dbOptions opts) {
       warn << "dbe->open returned " << r << " which is " << db_strerror(r) << "\n";
       return r;
     }
+
+    dbe->set_errfile (dbe, stderr);
   }
 
   r = db_create(&db, dbe, 0);
   if (r) return r;
 
-  db->set_pagesize(db, 20 * 1024);
+  db->set_pagesize(db, 16 * 1024);
   // the below seems to cause the db to grow much larger.
   //  db->set_bt_minkey(db, 60);
 
+  
   if(!do_dbenv) {
-    if (cacheSize > -1) {
-      r = db->set_cachesize(db, 0, cacheSize*1024, 0);
-      if (r) return r;
-    }
 #if ((DB_VERSION_MAJOR < 4) || ((DB_VERSION_MAJOR == 4) && (DB_VERSION_MINOR < 1)))
     r = db->open(db, (const char *)filename, NULL, DB_BTREE, flags, mode);
 #else
-    r = db->open(db, NULL, (const char *)filename, NULL, DB_BTREE, flags, mode);
+    r = db->open(db, NULL, (const char*)filename, NULL, DB_BTREE, flags, mode);
 #endif
 
   } else {
 #if ((DB_VERSION_MAJOR < 4) || ((DB_VERSION_MAJOR == 4) && (DB_VERSION_MINOR < 1)))
     r = db->open(db, "db", NULL, DB_BTREE, flags, mode);
 #else
-    r = db->open(db, NULL, "db", NULL, DB_BTREE, flags, mode);
+    //Sleepycat 4.1 and greater force us to open the DB inside a transaction
+    // the open suceeds in either case, but if the open isn't surrounded by
+    // a transaction, later calls that use a transaction will fail
+    DB_TXN *t = NULL;
+    r = dbe->txn_begin(dbe, NULL, &t, 0);
+    if (r || !t) return r;
+    r = db->open(db, t, "db", NULL, DB_BTREE, flags, mode);
+    r = t->commit(t, 0);
+    if (r) return r;
+
 #endif
 
     fchdir(fd);
@@ -397,6 +401,7 @@ int dbfe::IMPL_insert_sync_sleepycat(ref<dbrec> key, ref<dbrec> data) {
   DB_TXN *t = NULL;
   int r = 0, tr = 0;
   DBT skey, content;
+
   bzero(&skey, sizeof(skey));
   bzero(&content, sizeof(content));
   content.size = data->len;
@@ -405,18 +410,33 @@ int dbfe::IMPL_insert_sync_sleepycat(ref<dbrec> key, ref<dbrec> data) {
   skey.data = key->value;
 
   if(dbe) {
+#if DB_VERSION_MAJOR >= 4
+    r = dbe->txn_begin(dbe, NULL, &t, 0);
+#else
     r = txn_begin(dbe, NULL, &t, 0);
+#endif
     if (r) return r;
   }
 
   r = db->put(db, t, &skey, &content, 0);
 
+  if (r) {
+    warn << "insert (put): db3 error: " << db_strerror(r) << "\n";
+    return r;
+  }
+
   if(t) {
+#if DB_VERSION_MAJOR >= 4
+    tr = t->commit(t, 0);
+#else
     tr = txn_commit(t, 0);
+#endif
     if (!r) r = tr;
     t = NULL;
   }
 
+  if (r) warn << "insert: db3 error: " << db_strerror(r) << "\n";
+  
   return r;
 } 
 
@@ -449,14 +469,22 @@ dbfe::IMPL_delete_sync_sleepycat(ptr<dbrec> key) {
   dkey.data = key->value;
 
   if(dbe) {
+#if DB_VERSION_MAJOR >= 4
+    err = dbe->txn_begin(dbe, NULL, &t, 0);
+#else
     err = txn_begin(dbe, NULL, &t, 0);
+#endif
     if (err) return err;
   }
 
   err = db->del (db, t, &dkey, 0);
 
   if(t) {
-    terr = txn_commit(t, 0);
+#if DB_VERSION_MAJOR >= 4
+    terr = t->commit(t, 0);
+#else
+    terr = txn_commit (t, 0);
+#endif
     if (!err) err = terr;
     t = NULL;
   }

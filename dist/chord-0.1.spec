@@ -30,7 +30,7 @@ SFS-enabled tools.
 %setup -q
 
 %build
-./configure --prefix=/usr
+./configure --prefix=/usr --with-db3=/home/yipal/db42-install
 make 
 
 %install
@@ -49,6 +49,13 @@ rm -rf $RPM_BUILD_ROOT
 %doc  README
 /usr/bin/lsd
 /usr/bin/sfsrodb
+/usr/bin/dbm
+/usr/bin/filestore
+/usr/bin/findroute
+/usr/bin/lsdctl
+/usr/bin/nodeq
+/usr/bin/walk
+/usr/bin/dbdump
 
 %changelog
 * Fri Jan 07 2004 Frank Dabek <fdabek@mit.edu>
