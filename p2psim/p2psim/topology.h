@@ -44,12 +44,14 @@ public:
   virtual ~Topology();
   unsigned lossrate() { return _lossrate; }
   unsigned noise_variance() { return _noise; }
+  unsigned num() { return _num; }
 
 protected:
   Topology();
   Time _med_lat;
   unsigned _lossrate;
   unsigned _noise;
+  unsigned int _num;
 };
 
 #endif //  __TOPOLOGY_H

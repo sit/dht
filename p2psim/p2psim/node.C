@@ -58,6 +58,8 @@ vector<double> Node::_per_node_in;
 vector<double> Node::_per_node_out;
 uint Node::totalin = 0;
 uint Node::totalout = 0;
+vector<double> Node::_special_node_in;
+vector<double> Node::_special_node_out;
 
 Node::Node(IPAddress i) : _queue_len(0), _ip(i), _alive(true), _token(1) 
 {
@@ -320,6 +322,10 @@ Node::record_crash()
       //_per_node_avg.push_back((double)1000.0*node_live_bytes/(double)duration);
       _per_node_out.push_back((double)1000.0*node_live_outbytes/(double)duration);
       _per_node_in.push_back((double)1000.0*node_live_inbytes/(double)duration);
+      if (_special) {
+	_special_node_out.push_back((double)1000.0*node_live_outbytes/(double)duration);
+	_special_node_in.push_back((double)1000.0*node_live_inbytes/(double)duration);
+      }
     }
   }
   check_num_joins_pos();
@@ -327,6 +333,23 @@ Node::record_crash()
   Time session = now() - _last_joins[_num_joins_pos];
   _last_joins[_num_joins_pos] = 0;
   _time_sessions.push_back( session );
+}
+
+void
+Node::print_dist_stats(vector<double> v)
+{
+  sort(v.begin(),v.end());
+  uint sz = v.size();
+  double allavg = 0.0;
+  for (uint i = 0; i < sz; i++)
+    allavg += v[i];
+  if (sz > 0) {
+    printf("1p:%.3f 5p:%.3f 10p:%.3f 50p:%.3f 90p:%.3f 95p:%.3f 99p:%.3f 100p:%.3f avg:%.3f\n", 
+      v[(uint)sz*0.01], v[(uint)(sz*0.05)],v[(uint)(sz*0.1)],
+      v[sz/2], v[(uint)(sz*0.9)], 
+      v[(uint)(sz*0.95)], v[(uint)(sz*0.99)], 
+      v[sz-1], allavg/sz);
+  }
 }
 
 void
@@ -393,33 +416,17 @@ Node::print_stats()
   */
 
   //print out b/w distribution of out b/w
-  sort(_per_node_in.begin(),_per_node_in.end());
-  uint sz = _per_node_in.size();
-  double allavg = 0.0;
-  for (uint i = 0; i < sz; i++)
-    allavg += _per_node_in[i];
-  if (sz > 0) {
-    printf("BW_PERNODE_IN:: 1p:%.3f 5p:%.3f 10p:%.3f 50p:%.3f 90p:%.3f 95p:%.3f 99p:%.3f 100p:%.3f avg:%.3f\n", 
-      _per_node_in[(uint)sz*0.01], _per_node_in[(uint)(sz*0.05)],_per_node_in[(uint)(sz*0.1)],
-      _per_node_in[sz/2], _per_node_in[(uint)(sz*0.9)], 
-      _per_node_in[(uint)(sz*0.95)], _per_node_in[(uint)(sz*0.99)], 
-      _per_node_in[sz-1], allavg/sz);
-  }else{
-    printf("FUCK!!!!!\n");
-  }
+  cout <<  "BW_PERNODE_IN:: ";
+  print_dist_stats(_per_node_in);
 
-  sort(_per_node_out.begin(),_per_node_out.end());
-  sz = _per_node_out.size();
-  allavg = 0.0;
-  for (uint i = 0; i < sz; i++)
-    allavg += _per_node_out[i];
-  if (sz > 0) {
-    printf("BW_PERNODE:: 1p:%.3f 5p:%.3f 10p:%.3f 50p:%.3f 90p:%.3f 95p:%.3f 99p:%.3f 100p:%.3f avg:%.3f\n", 
-      _per_node_out[(uint)sz*0.01], _per_node_out[(uint)(sz*0.05)],_per_node_out[(uint)(sz*0.1)],
-      _per_node_out[sz/2], _per_node_out[(uint)(sz*0.9)], 
-      _per_node_out[(uint)(sz*0.95)], _per_node_out[(uint)(sz*0.99)], 
-      _per_node_out[sz-1], allavg/sz);
-  }
+  cout << "BW_PERNODE:: ";
+  print_dist_stats(_per_node_out);
+
+  cout << "BW_SPENODE_IN:: ";
+  print_dist_stats(_special_node_in);
+
+  cout << "BW_SPENODE:: ";
+  print_dist_stats(_special_node_out);
 
   // then do lookup stats
   double total_lookups = _correct_lookups.size() + _incorrect_lookups.size() +

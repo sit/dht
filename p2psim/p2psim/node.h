@@ -78,6 +78,7 @@ public:
   void record_join();
   void record_crash();
   static void print_stats();
+  static void print_dist_stats(vector<double> v);
 
   void calculate_conncomp(void *);
   virtual void add_edge(int *matrix, int sz);
@@ -114,6 +115,9 @@ public:
   static vector<double> _per_node_avg;
   static vector<double> _per_node_in;
   static vector<double> _per_node_out;
+  static vector<double> _special_node_out;
+  static vector<double> _special_node_in;
+  uint _special;
   static uint totalin;
   static uint totalout;
   int _num_joins_pos;
