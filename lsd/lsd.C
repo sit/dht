@@ -28,6 +28,7 @@ EXITFN (cleanup);
 ptr<p2p> defp2p;
 static sfs_ID myID;
 static int myport;
+static str myhost;
 static str wellknownhost;
 static int wellknownport;
 static sfs_ID wellknownID;
@@ -188,9 +189,9 @@ initID (str s, sfs_ID *ID)
 static void
 initID (sfs_ID *ID, int index)
 {
-#if 0
+#if 1
   *ID = random_bigint (NBIT);
-#endif
+#else
   vec<in_addr> addrs;
   if (!myipaddrs (&addrs))
     fatal ("cannot find my IP address.\n");
@@ -211,6 +212,7 @@ initID (sfs_ID *ID, int index)
   b = b << NBIT;
   b = b - 1;
   *ID = *ID & b;
+#endif
   warnx << "myid: " << *ID << "\n";
 }
 
@@ -233,6 +235,12 @@ parseconfigfile (str cf, int index, int set_rpcdelay)
         errors = true;
         warn << cf << ":" << line << ": usage: myport <number>\n";
       }
+    } else if (!strcasecmp (av[0], "myname")) {
+      if (av.size () != 2) {
+        errors = true;
+        warn << cf << ":" << line << ": usage: myname <string>\n";
+      }
+      myhost = av[1];
     } else if (!strcasecmp (av[0], "wellknownport")) {
       if (av.size () != 2 || !convertint (av[1], &wellknownport)) {
         errors = true;
@@ -286,12 +294,17 @@ parseconfigfile (str cf, int index, int set_rpcdelay)
   if (!myid) {
     initID (&myID, index);
   }
+
+  if (!myhost) {
+    myhost = myname ();
+  }
+
   if (errors) {
     fatal ("errors in config file\n");
   }
   myport = startp2pd(myport);
   defp2p = New refcounted<p2p> (wellknownhost, wellknownport, wellknownID, 
-				myport, myID);
+				myport, myhost, myID);
   defp2p->rpcdelay = set_rpcdelay;
     //instantiate single dhash object
   dhs = New dhash(db_name, nreplica, ss, cs);
@@ -331,7 +344,7 @@ main (int argc, char **argv)
       break;
     case 'f':
       if (!set_name) fatal("must specify db name\n");
-      if (!set_index) fatal ("must specify virtual index");
+      if (!set_index) fatal ("must specify virtual index\n");
       parseconfigfile (optarg, index, set_rpcdelay);
       break;
     case 'c':

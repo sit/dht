@@ -100,7 +100,9 @@ p2p::chord_connect(sfs_ID ID, callback<void, ptr<axprt_stream> >::ref cb) {
     l->timeout_cb = delaycb(360,0,wrap(this, &p2p::timeout, l));
     (*cb)(l->x);
   } else {
-    tcpconnect (l->addr.hostname, l->addr.port, wrap (mkref (this), &p2p::connect_cb, cb));
+    warnx << "tcpconnect: " << l->addr.hostname << " " << l->addr.port << "\n";
+    tcpconnect (l->addr.hostname, l->addr.port, 
+		wrap (mkref (this), &p2p::connect_cb, cb));
   }
 }
 
@@ -110,6 +112,7 @@ p2p::connect_cb (callback<void, ptr<axprt_stream> >::ref cb, int fd)
 {
 
   if (fd < 0) {
+    warn ("connect failed: %m\n");
     (*cb)(NULL);
   } else {
     tcp_nodelay(fd);

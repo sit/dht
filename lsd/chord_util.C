@@ -102,71 +102,47 @@ predecessorID (sfs_ID &n, int p)
   return s;
 }
 
-// XXX use operator overloading?
-bool
-gt_or_eq (sfs_ID &n, sfs_ID &n1)
-{
-  sfs_ID b (1);
-  b = (b << NBIT);
-  if (((n - n1) >= 0) && ((n - n1) < b))
-    return true;
-  if (((n - n1) <= 0) && ((n1 - n) > b))
-    return true;
-  return false;
-}
-
-bool
-gt (sfs_ID &n, sfs_ID &n1)
-{
-  sfs_ID b (1);
-  b = (b << NBIT);
-  if (((n - n1) > 0) && ((n - n1) < b))
-    return true;
-  if (((n - n1) < 0) && ((n1 - n) > b))
-    return true;
-  return false;
-}
-
-#if 0
-// Check whether n in (a,b) on the circle.
-bool
-between (sfs_ID &a, sfs_ID &b, sfs_ID &n)
-{
-  bool r;
-  bool f = gt_or_eq (b, a);
-  if ((!f && (gt_or_eq (b, n) || gt_or_eq (n, a)))
-      || (f && gt_or_eq (b, n) && gt_or_eq (n, a)))
-    r = true;
-  else
-    r = false;
-  // warnx << n << " between( " << a << ", " <<  b << "): " <<  r << "\n";
-  return r;
-}
-#endif
-
 // Check whether n in (a,b) on the circle.
 bool
 between (sfs_ID &a, sfs_ID &b, sfs_ID &n)
 {
 
-  if (b == a)  return n == a;
   bool f = (b - a) > 0;  
   bool r;
   if (f) {
-    r = (n >= a) && (n <= b);
+    r = (n > a) && (n < b);
   } else {
-    r = (n >= a) || (n <= b);
+    r = (n > a) || (n < b);
   }
   // warnx << n << " between( " << a << ", " <<  b << "): " <<  r << "\n";
   return r;
 }
 
-// Check whether n is (a, b) absolutely.
 bool
-betweenabs (sfs_ID &a, sfs_ID &b, sfs_ID &n)
+betweenlefincl (sfs_ID &a, sfs_ID &b, sfs_ID &n)
 {
-  bool r = n >= a && b >= n;
-  //  warnx << n << " between( " << a << ", " <<  b << "): " <<  r << "\n";
+  bool f = (b - a) > 0;  
+  bool r;
+  if (f) {
+    r = (n >= a) && (n < b);
+  } else {
+    r = (n >= a) || (n < b);
+  }
+  // warnx << n << " between( " << a << ", " <<  b << "): " <<  r << "\n";
+  return r;
+}
+
+bool
+betweenrightincl (sfs_ID &a, sfs_ID &b, sfs_ID &n)
+{
+  bool f = (b - a) > 0;  
+  bool r;
+  if (f) {
+    r = (n > a) && (n <= b);
+  } else {
+    r = (n > a) || (n <= b);
+  }
+  // warnx << n << " between( " << a << ", " <<  b << "): " <<  r << "\n";
   return r;
 }
 

@@ -9,10 +9,9 @@
  sfs_ID decID (sfs_ID &n);
  sfs_ID successorID (sfs_ID &n, int p);
  sfs_ID predecessorID (sfs_ID &n, int p);
- bool gt_or_eq (sfs_ID &n, sfs_ID &n1);
- bool gt (sfs_ID &n, sfs_ID &n1);
  bool between (sfs_ID &a, sfs_ID &b, sfs_ID &n);
- bool betweenabs (sfs_ID &a, sfs_ID &b, sfs_ID &n);
+ bool betweenleftincl (sfs_ID &a, sfs_ID &b, sfs_ID &n);
+ bool betweenrightincl (sfs_ID &a, sfs_ID &b, sfs_ID &n);
  sfs_ID diff(sfs_ID a, sfs_ID b);
  void warnt(char *msg);
 #endif /* _CHORD_UTIL_H */

@@ -136,7 +136,7 @@ p2p::find_predecessor(sfs_ID &n, sfs_ID &x, cbroute_t cb)
 {
   warnt("CHORD: find_predecessor_enter");
 
-  if (n == finger_table[1].first[0]) {
+  if (n == finger_table[1].first) {
     //n is only node
     warnt("CHORD: find_pred_early_exit");
     route search_path;
@@ -289,7 +289,7 @@ p2p::find_closestpred_succ_cb (findpredecessor_cbstate *st,
     if (st->nprime == s) {
       //      warnx << "find_closestpred_succ_cb: " << s << " is the only Chord node\n";
       st->cb (st->nprime, st->search_path, SFSP2P_OK);
-    } else if (!between (st->nprime, s, st->x)) {
+    } else if (!betweenrightincl (st->nprime, s, st->x)) {
       //      warnx << "find_closestpred_succ_cb: " << st->x << " is not between " 
       //    << st->nprime << " and " << s << "\n";
       ptr<sfsp2p_findarg> fap = New refcounted<sfsp2p_findarg>;
@@ -307,15 +307,3 @@ p2p::find_closestpred_succ_cb (findpredecessor_cbstate *st,
   }
 }
 
-sfs_ID
-p2p::query_location_table (sfs_ID x) {
-  location *l = locations.first ();
-  sfs_ID min = bigint(1) << 160;
-  sfs_ID ret = -1;
-  while (l) {
-    sfs_ID d = diff(l->n, x);
-    if (d < min) { min = d; ret = l->n; }
-    l = locations.next (l);
-  }
-  return ret;
-}

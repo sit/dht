@@ -9,8 +9,8 @@
 #include "vec.h"
 #include "qhash.h"
 
-#define NBIT 160
-#define NENTRY 3
+#define NBIT     160
+#define NIMM     NBIT
 
 typedef int cb_ID;
 
@@ -230,19 +230,17 @@ struct location {
 };
 
 
-// For successor wedge: first is lowest node in the wedge
-// For predecessor wedge: first is the highest node in the wedge
-struct wedge {
+// For successor finger: first is lowest node in the interval
+// For predecessor finger: first is the highest node in the interval
+struct finger {
   sfs_ID start;
   sfs_ID end;
-  sfs_ID first[NENTRY];
-  int nentry;
-  int replica;
+  sfs_ID first;
   bool alive;
 };
 
 class p2p : public virtual refcount  {
-  static const int stabilize_timer = 30;      // seconds
+  static const int stabilize_timer = 10;      // seconds
   static const int max_retry = 5;
 
   bool lsd_location_lookup;
@@ -253,14 +251,12 @@ class p2p : public virtual refcount  {
   sfs_ID myID;
   ptr<aclnt> wellknownclnt;
 
-  wedge finger_table[NBIT+1];
-  wedge predecessor;
+  finger finger_table[NBIT+1];
+  sfs_ID immediate[NIMM];
+  sfs_ID predecessor;
 
   ihash<sfs_ID,location,&location::n,&location::fhlink,hashID> locations;
  
-  int nbootstrap;
-  bool bootstrap_failure;
-  bool stable;
   timecb_t *stabilize_tmo;
   
   int lookup_ops;
@@ -274,26 +270,21 @@ class p2p : public virtual refcount  {
   bool insert_or_lookup;
   int rpcdelay;
 
-  p2p (str host, int hostport, const sfs_ID &hostID, int myport, 
+  p2p (str host, int hostport, const sfs_ID &hostID, int myport, str myname,
        const sfs_ID &ID);
 
   ~p2p(); // added to help do RPCs/lookup & simulate
   
 
   sfs_ID my_ID () { return myID; };
-  sfs_ID my_pred () { return predecessor.first[0]; };
-  sfs_ID my_succ () { return finger_table[1].first[0]; };
+  sfs_ID my_pred () { return predecessor; };
+  sfs_ID my_succ () { return finger_table[1].first; };
 
   void deleteloc (sfs_ID &n);
   void updateloc (sfs_ID &x, net_address &r, sfs_ID &source);
   bool lookup_anyloc (sfs_ID &n, sfs_ID *r);
   bool lookup_closeloc (sfs_ID &n, sfs_ID *r);
-  void set_closeloc (wedge &w);
-  bool updatesucc (wedge &w, sfs_ID &x);
-  bool updatepred (wedge &w, sfs_ID &x);
-  bool noticesucc (int k, sfs_ID &x, net_address &r);
-  bool notice (int k, sfs_ID &x, net_address &r);
-  int successor_wedge (sfs_ID &n);
+  void set_closeloc (finger &w);
   void print ();
 
   void timeout(location *l);
@@ -305,14 +296,12 @@ class p2p : public virtual refcount  {
   void chord_connect(sfs_ID ID, callback<void, ptr<axprt_stream> >::ref cb);
 
   void stabilize (int i);
-  void stabilize_getsucc_cb (sfs_ID s, net_address r, sfsp2pstat status);
   void stabilize_getpred_cb (sfs_ID s, net_address r, sfsp2pstat status);
   void stabilize_findsucc_cb (int i, sfs_ID s, route path, sfsp2pstat status);
   void stabilize_findpred_cb (sfs_ID p, route r, sfsp2pstat status);
 
   void join ();
-  void join_findpred_cb (sfs_ID pred, route r, sfsp2pstat status);
-  void join_getsucc_cb (sfs_ID p, sfs_ID s, net_address r, sfsp2pstat status);
+  void join_getsucc_cb (sfs_ID s, route r, sfsp2pstat status);
 
   void find_predecessor (sfs_ID &n, sfs_ID &x, cbroute_t cb);
   void find_predecessor_restart (sfs_ID &n, sfs_ID &x, route search_path,
@@ -320,7 +309,8 @@ class p2p : public virtual refcount  {
   void find_pred_test_cache_cb (sfs_ID n, sfs_ID x, cbroute_t cb, int found);
   void find_closestpred_cb (sfs_ID n, cbroute_t cb, sfsp2p_findres *res, 
 			    route search_path, clnt_stat err);
-  void test_and_find_cb (sfsp2p_testandfindres *res, findpredecessor_cbstate *st, clnt_stat err);
+  void test_and_find_cb (sfsp2p_testandfindres *res, 
+			 findpredecessor_cbstate *st, clnt_stat err);
   void find_successor (sfs_ID &n, sfs_ID &x, cbroute_t cb);
   void find_successor_restart (sfs_ID &n, sfs_ID &x, route search_path, 
 			       cbroute_t cb);
@@ -350,14 +340,6 @@ class p2p : public virtual refcount  {
   void notify_cb (sfsp2pstat *res, clnt_stat err);
   void alert (sfs_ID &n, sfs_ID &x);
   void alert_cb (sfsp2pstat *res, clnt_stat err);
-
-  void bootstrap ();
-  void bootstrap_done (int r);
-  void bootstrap_succ_cb (int i, sfs_ID n, sfs_ID s, route path, 
-			  sfsp2pstat status);
-  void bootstrap_pred_cb (sfs_ID n, sfs_ID s, route r, sfsp2pstat status);
-  void bootstrap_getsucc_cb (int r, int i, sfs_ID s, net_address a, 
-			     sfsp2pstat status);
 
   void doget_successor (svccb *sbp);
   void doget_predecessor (svccb *sbp);

@@ -43,7 +43,6 @@ store_block(sfs_ID key, void *data, int datasize)
   if (res != DHASH_OK) return res;
 
   return DHASH_OK;
-  
 }
 
 
@@ -146,7 +145,7 @@ fetch(int num, int size) {
 void
 usage(char *progname) 
 {
-  printf("%s: control_socket num_trials data_size\n", progname);
+  printf("%s: control_socket num_trials data_size file\n", progname);
   exit(0);
 }
 

@@ -157,9 +157,9 @@ dhash::act_cb(sfs_ID id, char action) {
     //lost a master? (handle in fetch)
   } else if (action == ACT_NODE_JOIN) {
     //new node should store some of this node's keys?
-    warn << "Is " << id << " between " << pred << " and " << m << "\n";
+    //    warn << "Is " << id << " between " << pred << " and " << m << "\n";
     if (between (pred, m, id)) {
-      warn << "YES\n";
+      // warn << "YES\n";
       key_store.traverse (wrap (this, &dhash::walk_cb, pred, id));
     }
 #if 0
