@@ -1,0 +1,7 @@
+topology Euclidian
+
+node 0 0 0 Kademlia
+node 1 5 5 Kademlia
+node 2 8 8 Kademlia
+node 3 12 6 Kademlia
+node 4 13 8 Kademlia
