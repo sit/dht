@@ -726,6 +726,16 @@ dhash_impl::append_after_db_store (cbstore cb, chordID k, int stat)
   //replicate?
 }
 
+static bool
+is_keyhash_stale (ref<dbrec> prev, ref<dbrec> d)
+{
+  long v0 = keyhash_version (prev);
+  long v1 = keyhash_version (d);
+  if (v0 >= v1)
+    return true;
+  return false;
+}
+
 void 
 dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
 {
@@ -769,42 +779,29 @@ dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
 	  break;
 	}
 
-        if (arg->type == DHASH_CACHE) {
-	  ptr<dbrec> prev = cache_db->lookup (k);
-	  if (prev) {
-	    long v0 = keyhash_version (prev);
-	    long v1 = keyhash_version (d);
-	    if (v0 >= v1)
-	      break;
-	    else {
-	      warnx << "caching new copy of " << arg->key << "\n";
-	      cache_db->del (k);
-	    }
-	  }
-	  cache_db->insert (k, d);
+	ptr<dbfe> mydb = 0;
+	if (arg->type == DHASH_CACHE)
+	  mydb = cache_db;
+	else if (arg->ctype == DHASH_KEYHASH)
+	  mydb = keyhash_db;
+	else
+	  assert (0);
 
-	  info << "dbwrite: " << host_node->my_ID ()
-	       << " u " << arg->key << " " << ss->size << "\n";
-	}
-	else {
-	  ptr<dbrec> prev = keyhash_db->lookup (k);
-	  if (prev) {
-	    long v0 = keyhash_version (prev);
-	    long v1 = keyhash_version (d);
-	    if (v0 >= v1) {
-	      if (arg->type == DHASH_STORE)
-	        stat = DHASH_STALE;
-	      break;
-	    } else {
-	      warnx << "receiving new copy of " << arg->key << "\n";
-	      keyhash_db->del (k);
-	    }
+	ptr<dbrec> prev = mydb->lookup (k);
+	if (prev) {
+	  if (is_keyhash_stale (prev, d)) {
+	    if (arg->type == DHASH_STORE)
+	      stat = DHASH_STALE;
+	    break;
 	  }
-	  keyhash_db->insert (k, d);
-  
-	  info << "dbwrite: " << host_node->my_ID ()
-	       << " U " << arg->key << "\n";
+	  else {
+	    warnx << "receiving/caching new copy of " << arg->key << "\n";
+	    mydb->del (k);
+	  }
 	}
+	mydb->insert (k, d);
+	info << "dbwrite: " << host_node->my_ID ()
+	     << " U " << arg->key << " " << ss->size << "\n";
 	break;
       }
     case DHASH_APPEND:
