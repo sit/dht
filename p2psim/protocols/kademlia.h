@@ -358,6 +358,7 @@ public:
 // {{{ private
 private:
   Time timeout(IPAddress dst);      //how to calculate timeout for RPC
+  void init_k_bucket_tree();       //jy: init k bucket tree root
   void insert(NodeID, IPAddress, Time = 0, char = 0, bool = false);
   void touch(NodeID);
   void erase(NodeID);
@@ -582,5 +583,5 @@ private:
 };
 // }}}
 
-#define KDEBUG(x) if(p2psim_verbose >= (x)) cout << Kademlia::debugcounter++ << "(" << now() << "). " << Kademlia::printID(_id) << "(" << taskid() << ") "
+#define KDEBUG(x) if(p2psim_verbose >= (x)) cout << Kademlia::debugcounter++ << "(" << now() << ")"<<ip() << " . " << Kademlia::printID(_id) << "(" << taskid() << ") "
 #endif // __KADEMLIA_H

@@ -115,7 +115,7 @@ Kademlia::Kademlia(IPAddress i, Args a)
   }
 
   if(!erase_count) {
-    erase_count = a.nget<unsigned>("erase_count", 5, 10);
+    erase_count = a.nget<unsigned>("erase_count", 1, 10);
   }
 
   if(!_default_timeout) {
@@ -132,33 +132,7 @@ Kademlia::Kademlia(IPAddress i, Args a)
   _me = k_nodeinfo(_id, ip());
   _joined = false;
 
-  _root = New k_bucket(0, this);
-  _root->leaf = false;
-
-  // build the entire k-bucket tree
-  k_bucket *b = _root;
-  unsigned bit;
-  for(unsigned i=0; ; i++) {
-    bit = Kademlia::getbit(_id, i);
-
-    // leafside
-    b->child[bit^1] = New k_bucket(b, this);
-    b->child[bit^1]->nodes = New k_nodes(b->child[bit^1]);
-    b->child[bit^1]->replacement_cache = New k_nodes(b->child[bit^1]);
-    b->child[bit^1]->leaf = true;
-
-    // nodeside
-    b->child[bit] = New k_bucket(b, this);
-    b = b->child[bit];
-    b->leaf = false;
-
-    if(i == Kademlia::idsize-2)
-      break;
-  }
-  b->nodes = New k_nodes(b);
-  b->replacement_cache = New k_nodes(b);
-  b->leaf = true;
-
+  init_k_bucket_tree();
   _nkademlias++;
 }
 
@@ -267,6 +241,37 @@ Kademlia::~Kademlia()
   }
 }
 
+void
+Kademlia::init_k_bucket_tree()
+{
+  _root = New k_bucket(0, this);
+  _root->leaf = false;
+
+// build the entire k-bucket tree
+  k_bucket *b = _root;
+  unsigned bit;
+  for(unsigned i=0; ; i++) {
+    bit = Kademlia::getbit(_id, i);
+
+    // leafside
+    b->child[bit^1] = New k_bucket(b, this);
+    b->child[bit^1]->nodes = New k_nodes(b->child[bit^1]);
+    b->child[bit^1]->replacement_cache = New k_nodes(b->child[bit^1]);
+    b->child[bit^1]->leaf = true;
+
+    // nodeside
+    b->child[bit] = New k_bucket(b, this);
+    b = b->child[bit];
+    b->leaf = false;
+
+    if(i == Kademlia::idsize-2)
+      break;
+  }
+  b->nodes = New k_nodes(b);
+  b->replacement_cache = New k_nodes(b);
+  b->leaf = true;
+}
+
 // jy
 Time
 Kademlia::timeout(IPAddress dst)
@@ -371,11 +376,15 @@ Kademlia::join(Args *args)
   IPAddress wkn = args->nget<IPAddress>("wellknown");
 
   // pick a new ID
+  //KDEBUG(1) << "Kademlia::join ip " << ip() << " id " << printID(_id) << " now " << now() << endl;
+  assert(!_root);
   _nodeid2kademlia->remove(_id);
   _id = ConsistentHash::ip2chid(ip());
+  _me = k_nodeinfo(_id, ip());
   assert(!_nodeid2kademlia->find_pair(_id));
   _nodeid2kademlia->insert(_id, this);
-  //KDEBUG(1) << "Kademlia::join ip " << ip() << " now " << now() << endl;
+  assert(!_root);
+  init_k_bucket_tree();
 
   // I am the well-known node
   if(wkn == ip()) {
@@ -423,7 +432,7 @@ join_restart:
   sort(successors.begin(), successors.end(), closer());
   NodeID succ_id = successors[0]->id;
 
-  // KDEBUG(2) << "join: succ_id is " << printID(succ_id) << endl;
+  //KDEBUG(2) << "join: succ ip is " << successors[0]->ip << " id is " << printID(succ_id) << endl;
   unsigned cpl = common_prefix(_id, succ_id);
 
   // all entries further away than him need to be refreshed.  this is similar to
@@ -470,7 +479,10 @@ Kademlia::crash(Args *args)
   // destroy k-buckets
   //KDEBUG(1) << "Kademlia::crash ip " << ip() << endl;
   // assert(alive());
-  _root->collapse();
+  //_root->collapse();
+  //jy
+  delete _root;
+  _root = NULL;
   for(HashMap<NodeID, k_nodeinfo*>::iterator i = flyweight.begin(); i; i++)
     Kademlia::pool->push(i.value());
   flyweight.clear();
@@ -507,7 +519,7 @@ Kademlia::lookup(Args *args)
   // find node with this IP
   Kademlia *k = (Kademlia*) Network::Instance()->getnode(key_ip);
   NodeID key = k->id();
-  // KDEBUG(0) << "Kademlia::lookup: " << printID(key) << endl;
+  //KDEBUG(0) << "Kademlia::lookup: ip " << key_ip << " id " << printID(key) << endl;
 
   lookup_wrapper_args *lwa = new lookup_wrapper_args();
   lwa->ipkey = key_ip;
@@ -657,8 +669,8 @@ Kademlia::do_ping(ping_args *args, ping_result *result)
 void
 Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
 {
-  // KDEBUG(0) << "Kademlia::find_value: node " << printID(fargs->id) << " does find_value for " << printID(fargs->key) << endl;
-  // assert(alive());
+  //KDEBUG(0) << "Kademlia::find_value: node ip " << fargs->ip << " id " << printID(fargs->id) << " does find_value for " << printID(fargs->key) << endl;
+    // assert(alive());
   HashMap<NodeID, bool> asked;
   HashMap<NodeID, unsigned> hops;
   HashMap<unsigned, unsigned> timeouts;
@@ -703,6 +715,7 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
     }
   }
 
+  
   // now send out a new RPC for every single RPC that comes back
   unsigned useless_replies = 0;
   NodeID last_before_merge = ~fargs->key;
@@ -730,7 +743,7 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
         erase(ci->ki.id);
       timeouts.insert(last_returned_alpha, timeouts[last_returned_alpha]+1);
       delete ci;
-      if(!successors.size()) {
+      if(!successors.size() && outstanding_rpcs->size()==0) {
         CREATE_REAPER(ci->fa->stattype); // returns
       }
       goto next_candidate;
@@ -794,6 +807,7 @@ next_candidate:
       k_nodeinfo front = *successors.begin();
       if(Kademlia::distance(front.id, fargs->key) < Kademlia::distance(fresult->succ.id, fargs->key))
         fresult->succ = front;
+
       SEND_RPC(front, fargs, fresult, hops[front.id], timeouts[last_returned_alpha]);
 
       fresult->rpcs++;
@@ -810,7 +824,7 @@ next_candidate:
 void
 Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
 {
-  KDEBUG(1) << "Kademlia::do_lookup: node " << printID(largs->id) << " does lookup for " << printID(largs->key) << ", flyweight.size() = " << endl;
+  //KDEBUG(1) << "Kademlia::do_lookup: node " << printID(largs->id) << " does lookup for " << printID(largs->key) << ", flyweight.size() = " << endl;
   // assert(alive());
   lresult->rid = _id;
 
@@ -1027,14 +1041,14 @@ Kademlia::find_node(find_node_args *largs, find_node_result *lresult)
   // deal with the empty case
   if(!flyweight.size()) {
     // assert(p);
-    // KDEBUG(2) << "find_node: tree is empty. returning myself, ip = " << ip() << endl;
+    KDEBUG(2) << "find_node: key " << printID(largs->key) << " tree is empty. returning myself" << endl;
     lresult->results.push_back(_me);
     return;
   }
 
   vector<k_nodeinfo*> tmpset;
   _root->find_node(largs->key, &tmpset);
-  // KDEBUG(2) << "find_node: returning:" << endl;
+  //KDEBUG(2) << "find_node: key "<< printID(largs->key) << " from ip " << largs->ip << " returning: ip " <<tmpset[0]->ip << " id " << printID(tmpset[0]->id) << endl;
   for(unsigned i=0; i<tmpset.size(); i++)
     lresult->results.push_back(tmpset[i]);
 }

@@ -402,6 +402,7 @@ ChordFingerPNS::num_live_samples(vector<IDMap> ss)
 void
 ChordFingerPNS::fix_pns_fingers(bool restart)
 {
+  if (!alive()) return;
   vector<IDMap> scs = loctable->succs(me.id + 1, _nsucc);
 #ifdef CHORD_DEBUG
   printf("%s ChordFingerPNS stabilize BEFORE ring sz %u succ %d restart %u _inited? %d\n", ts(), loctable->size(), scs.size(), restart?1:0, _inited?1:0);
@@ -454,7 +455,7 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
       if (currf.ip) {
 	LocTable::idmapwrap *naked = loctable->get_naked_node(currf.id);
 	if (naked->status == LOC_REPLACEMENT) {
-	  printf("%s re-install replaced crap %u,%qx\n",ts(),currf.ip,currf.id);
+	  //printf("%s re-install replaced crap %u,%qx\n",ts(),currf.ip,currf.id);
 	  loctable->del_node(currf);
 	  currf.ip = 0;
 	}

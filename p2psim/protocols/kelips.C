@@ -63,6 +63,7 @@ Kelips::Kelips(IPAddress i, Args a) : P2Protocol(i)
   _track_conncomp_timer = a.nget<uint>("track_conncomp_timer",0,10);
   _to_multiplier = a.nget<uint>("timeout_multiplier",3,10);
   _to_cheat = a.nget<uint>("timeout_cheat",0,10);
+  printf("node %u first_ip %u\n",i,_first_ip);
 }
 
 void

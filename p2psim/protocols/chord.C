@@ -191,7 +191,6 @@ Chord::next_hop(ConsistentHash::CHID k)
 {
   return loctable->next_hop(k-1);
 }
-
 bool 
 Chord::check_correctness(CHID k, vector<IDMap> v)
 {
@@ -219,6 +218,7 @@ Chord::check_correctness(CHID k, vector<IDMap> v)
 	  instead of (%u, %qx) inited? %u\n", ts(), k, ids[pos].ip, 
 	  ids[pos].id, v[0].ip, v[0].id, ((Chord *)getpeer(ids[pos].ip))->inited()?1:0);
 #endif
+      return false; 
     } else {
 #ifdef CHORD_DEBUG
       printf("%s lookup incorrect key %16qx succ should be (%u,%qx) \
@@ -230,6 +230,7 @@ Chord::check_correctness(CHID k, vector<IDMap> v)
   }
   return true;
 }
+
 //XXX Currently, it does not handle losses
 //Recursive lookup canot deal with duplicate packets
 //also, add_node() does not reset status flag yet
@@ -1055,7 +1056,6 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
       ret->lasthop = me;
       if (args->type==TYPE_USER_LOOKUP && _recurs_direct) {
 	record_stat(args->type,ret->v.size(),0);
-	assert(0);
 	r = doRPC(args->src.ip, &Chord::final_recurs_hop, args, ret);
 	if (r) 
 	  record_stat(args->type,0);
@@ -1792,7 +1792,7 @@ Chord::fix_successor(void *x)
 
   assert(alive());
 
-  while (1) {
+  //while (1) {
 
     aa.n.ip = 0;
 
@@ -1883,7 +1883,7 @@ Chord::fix_successor(void *x)
 	return;
       }
     }
-  }
+  //}
 }
 
 
