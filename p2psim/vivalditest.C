@@ -81,9 +81,8 @@ VivaldiTest::real()
   return c;
 }
 
-// Calculate this node's error: sqrt of avg of squares
-// of differences between synthetic and real distances to
-// all other nodes.
+// Calculate this node's error: average error in distance
+// to each other node.
 double
 VivaldiTest::error()
 {
@@ -95,11 +94,8 @@ VivaldiTest::error()
     Vivaldi::Coord vc1 = _all[i]->_vivaldi->my_location();
     double vd = dist(vc, vc1);
     double rd = t->latency(node(), _all[i]->node());
-    if (rd > 0.0) {
-      double rerr = (fabs(vd - rd)/rd);
-      sum += rerr;
-      sum_sz++;
-    }
+    sum += fabs(vd - rd);
+    sum_sz++;
   }
   return (sum / sum_sz);
 }
@@ -108,13 +104,11 @@ VivaldiTest::error()
 void
 VivaldiTest::total_error(double &e05, double &e50, double &e95)
 {
-  cerr << "-------------\n";
   unsigned n = _all.size();
   vector<double> a;
   for(unsigned i = 0; i < n; i++){
     double e = _all[i]->error();
     a.push_back(e);
-    cerr << "err " << i << " : " << e << "\n";
   }
   sort(a.begin(), a.end());
   if(n > 5){
@@ -126,7 +120,6 @@ VivaldiTest::total_error(double &e05, double &e50, double &e95)
     e50 = a[n / 2];
     e95 = a[n-1];
   }
-  cerr << "------------\n";
 }
 
 void

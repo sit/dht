@@ -34,7 +34,7 @@ Node *ip2node(IPAddress);
 void graceful_exit();
 
 // FreeBSD libc doesn't have atoll.
-inline unsigned long long atoll(const char *p) {
+inline long long atoll(const char *p) {
   return strtoull(p, NULL, 10);
 }
 
