@@ -1,0 +1,17 @@
+This software was developed at the MIT Laboratory for Computer Science
+in the Parallel and Distributed Operating Systems Group.
+
+The following people contributed to this implementation:
+
+Frans Kaashoek (Chord, DHash)
+Frank Dabek (Chord, DHash, chordcd)
+Josh Cates (chordcd)
+Ion Stoica (sim)
+
+In addition, much of the initial chordcd implementation is based on
+the SFSRO file system which was implemented by Kevin Fu, David
+Mazieries and Frans Kaashoek.
+
+The authors may be contacted at chord@pdos.lcs.mit.edu.
+
+

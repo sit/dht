@@ -1,0 +1,52 @@
+This repository is an experimental implementation of the Chord lookup
+service and the cooperative file system (CFS). The software is
+organized as follows:
+
+chord/ 
+
+   - This directory implements the core of the chord lookup
+service. libchord.a implements the API defined in chord.h to maintain
+routing tables, add/remove nodes from the network, route simple
+queries. libchord also provides a node-to-node RPC service based on
+SFS asynchronous RPC.
+
+dhash/
+
+   - DHash depends on chord and builds a replicated block store on the
+basic Chord primitive.
+
+lsd/
+
+   - lsd is the Location Service Daemon. It instantiates the Chord and
+DHash layers and accepts requests from clients over a UNIX domain
+socket.
+
+chordcd/
+
+   - chordcd is the SFS client daemon for CFS. It is run as a slave
+process of sfscd and acts as an NFS server to provide a loopback file
+system interface to clients. chordcd and sfsrodb are based on similiar
+tools in the SFSRO distribution.
+
+sfsrodb/
+
+   - sfsrodb publishes a filesystem into the CFS network. Because
+sfsrodb is so closely related to a similiar tool in the SFS
+distribution, it is distributed under the GPL rather than the MIT
+license (as the remainder of this project is).
+
+devel/
+
+   - testing and performance tools
+
+sim/
+
+   - a Chord simulator
+
+svc/
+
+   - protocol files for the above programs
+
+
+This software is experimental and under active development. Please
+send bug reports/fixes to chorddev@pdos.lcs.mit.edu.
