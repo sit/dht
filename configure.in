@@ -1,9 +1,9 @@
-dnl $Id: configure.in,v 1.18 2002/06/13 07:03:01 thomer Exp $
+dnl $Id: configure.in,v 1.19 2002/09/06 21:01:00 fdabek Exp $
 dnl
 dnl Process this file with autoconf to produce a configure script.
 dnl
 
-AC_INIT(config.h.in)
+AC_INIT(acinclude.m4)
 AM_INIT_AUTOMAKE(ufs, 0.0)
 AM_CONFIG_HEADER(config.h)
 
@@ -40,6 +40,7 @@ AC_PROG_LN_S
 dnl AC_PROG_RANLIB
 
 AM_DISABLE_SHARED
+test -z "$target" && target=NONE
 AM_PROG_LIBTOOL
 
 SFS_SFS
