@@ -35,12 +35,14 @@ to_dbrec (ptr<dhc_block> block)
 static inline bool
 set_ac (vec<chordID> *ap, dhc_prepare_resok res)
 {
-  if (ap->size () == 0 && res.new_config.size () != 0) {
+  if (res.new_config.size () == 0) 
+    return true;
+  if (ap->size () == 0) {
     for (uint i=0; i<res.new_config.size (); i++) 
       ap->push_back (res.new_config[i]);
     return true;
   }
-  if (res.new_config.size () != 0 && ap->size () != res.new_config.size ())
+  if (ap->size () != res.new_config.size ())
     return false;
   for (uint i=0; i<ap->size (); i++) {
     if ((*ap)[i] != res.new_config[i])

@@ -38,6 +38,8 @@ struct dhc_prepare_resok {
 union dhc_prepare_res switch (dhc_stat status) {	
    case DHC_OK:
 	dhc_prepare_resok resok;
+   case DHC_LOW_PROPOSAL:
+	paxos_seqnum_t promised;
    default:	
 	void;
 };

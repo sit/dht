@@ -85,7 +85,7 @@ dhc::recon_tm_lookup (ref<dhc_block> kb, bool guilty, vec<chord_node> succs,
 {
   recon_tm_rpcs--;
   if (!err) {
-
+#if 0
     if (dhc_debug) {
       warn << " current config: \n";
       for (uint i=0; i < kb->meta->config.nodes.size (); i++)
@@ -96,7 +96,7 @@ dhc::recon_tm_lookup (ref<dhc_block> kb, bool guilty, vec<chord_node> succs,
 	warnx << succs[i].x << "\n";
       warnx << "\n";
     }
-
+#endif
     if (!up_to_date (n_replica, kb->meta->config.nodes, succs)) {
       if (guilty) {// Case 1 
 	if (dhc_debug)
@@ -110,15 +110,16 @@ dhc::recon_tm_lookup (ref<dhc_block> kb, bool guilty, vec<chord_node> succs,
 	if (dhc_debug)
 	  warn << myNode->my_ID () << ": I am NOT guilty.\n";
 
-	ref<location> l = myNode->locations->lookup_or_create (succs[0]);
-
 	ptr<dhc_newconfig_arg> arg = New refcounted<dhc_newconfig_arg>;
 	arg->bID = kb->id;
 	arg->data.tag.ver = kb->data->tag.ver;
 	arg->data.tag.writer = kb->data->tag.writer;
-	arg->data.data.setsize (0); // Send a NULL block
+	arg->data.data.setsize (kb->data->data.size ()); 
+	memmove (arg->data.data.base (), kb->data->data.base (), arg->data.data.size ());
 	warn << "kb->data->size = " << kb->data->data.size () << "\n";
-	//kb->data->data.base (), kb->data->data.size ()); 
+	//warn << "kb->data->data = " << str (kb->data->data.base (), kb->data->data.size ()) << "\n";
+	warn << "arg->data->size = " << arg->data.data.size () << "\n";
+	//warn << "arg->data->data = " << str (arg->data.data.base (), arg->data.data.size ()) << "\n";	
 	arg->old_conf_seqnum = kb->meta->config.seqnum - 1; //set it to last config
 	arg->new_config.setsize (kb->meta->config.nodes.size ());
 	for (uint i=0; i<arg->new_config.size (); i++)
@@ -127,6 +128,8 @@ dhc::recon_tm_lookup (ref<dhc_block> kb, bool guilty, vec<chord_node> succs,
 	ptr<dhc_newconfig_res> res = New refcounted<dhc_newconfig_res>;
 
 	recon_tm_rpcs++;
+
+	ref<location> l = myNode->locations->lookup_or_create (succs[0]);
 	myNode->doRPC (l, dhc_program_1, DHCPROC_NEWCONFIG, arg, res,
 		       wrap (this, &dhc::recon_tm_done, DHC_OK));
       }
@@ -137,7 +140,7 @@ dhc::recon_tm_lookup (ref<dhc_block> kb, bool guilty, vec<chord_node> succs,
 void 
 dhc::recon_tm_done (dhc_stat derr, clnt_stat err)
 {
-  recon_tm_rpcs--;
+   recon_tm_rpcs--;
 }
 
 void 
@@ -228,6 +231,10 @@ dhc::recv_promise (chordID bID, dhc_cb_t cb,
       
     if (!set_ac (&b->pstat->acc_conf, *promise->resok)) {
       warn << "dhc:recv_promise Different conf accepted. Something's wrong!!\n";
+      for (uint i=0; i<b->pstat->acc_conf.size (); i++)
+	warnx << "acc_conf[" << i << "] = " << b->pstat->acc_conf[i] << "\n";
+      for (uint i=0; i<promise->resok->new_config.size (); i++)
+	warnx << "new_config[" << i << "] = " << promise->resok->new_config[i] << "\n";      
       exit (-1);
     }
     
@@ -267,10 +274,19 @@ dhc::recv_promise (chordID bID, dhc_cb_t cb,
       //      Frank says make sure l is a pointer from a locationtable,
       //      i.e. from lookup() not lookup_or_create()
       warn << "dhc:recv_promise: cannot send RPC. retry???\n";
-    } else {
-      print_error ("dhc:recv_promise", err, promise->status);
-      (*cb) (promise->status, err);
-    }
+    } else 
+      if (promise->status == DHC_LOW_PROPOSAL) {
+	dhc_soft *b = dhcs[bID];
+	if (!b) {
+	  warn << "dhc::recv_promise " << bID << " not found.\n";
+	  exit (-1);
+	}
+	b->promised.seqnum = promise->promised->seqnum;
+	b->promised.proposer = promise->promised->proposer;
+	dhcs.insert (b);
+      } else 
+	print_error ("dhc:recv_promise", err, promise->status);
+    (*cb) (promise->status, err);
   }
 }
 
@@ -295,7 +311,10 @@ dhc::recv_accept (chordID bID, dhc_cb_t cb,
     if (tag_cmp (kb->data->tag, proposal->data->tag) < 0) {
       kb->data->tag.ver = proposal->data->tag.ver;
       kb->data->tag.writer = proposal->data->tag.writer;
-      kb->data->data.set (proposal->data->data.base (), proposal->data->data.size ());
+      kb->data->data.clear ();
+      kb->data->data.setsize (proposal->data->data.size ());
+      memmove (kb->data->data.base (), proposal->data->data.base (), 
+	       kb->data->data.size ());
       db->insert (id2dbrec (kb->id), to_dbrec (kb));
       if (dhc_debug)
 	warn << "dhc::recv_accept update to size " << kb->data->data.size () << "\n"; 
@@ -308,7 +327,8 @@ dhc::recv_accept (chordID bID, dhc_cb_t cb,
       arg->bID = kb->id;
       arg->data.tag.ver = kb->data->tag.ver;
       arg->data.tag.writer = kb->data->tag.writer;
-      arg->data.data.set (kb->data->data.base (), kb->data->data.size ());
+      arg->data.data.setsize (kb->data->data.size ());
+      memmove (arg->data.data.base (), kb->data->data.base (), kb->data->data.size ());
       arg->old_conf_seqnum = kb->meta->config.seqnum;
 #if 0
       if (!set_ac (&kb->meta->new_config.nodes, b->pstat->acc_conf)) {
@@ -448,6 +468,8 @@ dhc::recv_prepare (user_args *sbp)
       sbp->reply (&res);
     } else {
       dhc_prepare_res res (DHC_LOW_PROPOSAL);
+      res.promised->seqnum = b->promised.seqnum;
+      res.promised->proposer = b->promised.proposer;
       sbp->reply (&res);
     }
     dhcs.insert (b);
@@ -493,7 +515,8 @@ dhc::recv_propose (user_args *sbp)
       dhc_propose_res res (DHC_OK);
       res.data->tag.ver = kb->data->tag.ver;
       res.data->tag.writer = kb->data->tag.writer;
-      res.data->data.set (kb->data->data.base (), kb->data->data.size ());
+      res.data->data.setsize (kb->data->data.size ());
+      memmove (res.data->data.base (), kb->data->data.base (), kb->data->data.size ());
       sbp->reply (&res);
       //db->sync ();
     } else {
@@ -545,7 +568,10 @@ dhc::recv_newconfig (user_args *sbp)
 
   kb->data->tag.ver = newconfig->data.tag.ver;
   kb->data->tag.writer = newconfig->data.tag.writer;
-  kb->data->data.set (newconfig->data.data.base (), newconfig->data.data.size ());
+  kb->data->data.clear ();
+  kb->data->data.setsize (newconfig->data.data.size ());
+  memmove (kb->data->data.base (), newconfig->data.data.base (), 
+	   newconfig->data.data.size ());
   kb->meta->config.seqnum = newconfig->old_conf_seqnum + 1;
   
   kb->meta->config.nodes.setsize (newconfig->new_config.size ());
@@ -723,11 +749,12 @@ dhc::getblock_cb (user_args *sbp, ptr<location> dest, ptr<read_state> rs,
 	  dhc_get_res gres (DHC_OK);
 	  gres.resok->data.tag.ver = rs->blocks[i].tag.ver;
 	  gres.resok->data.tag.writer = rs->blocks[i].tag.writer;
-	  gres.resok->data.data.set (rs->blocks[i].data.base (), 
-				     rs->blocks[i].data.size ());
+	  gres.resok->data.data.setsize (rs->blocks[i].data.size ());
+	  memmove (gres.resok->data.data.base (), rs->blocks[i].data.base (), 
+		   rs->blocks[i].data.size ());
 	  if (dhc_debug)
-	    warn << "dhc::getblock_cb: size = " << gres.resok->data.data.size () 
-		 << " value = " << gres.resok->data.data.base () << "\n";
+	    warn << "dhc::getblock_cb: size = " << gres.resok->data.data.size () << "\n"; 
+	  //<< " value = " << gres.resok->data.data.base () << "\n";
 
 	  sbp->reply (&gres);
 	}
@@ -802,9 +829,10 @@ dhc::recv_getblock (user_args *sbp)
   dhc_get_res res (DHC_OK);
   res.resok->data.tag.ver = kb->data->tag.ver;
   res.resok->data.tag.writer = kb->data->tag.writer;
-  res.resok->data.data.set (kb->data->data.base (), kb->data->data.size ());
+  res.resok->data.data.setsize (kb->data->data.size ());
+  memmove (res.resok->data.data.base (), kb->data->data.base (), kb->data->data.size ());
   if (dhc_debug)
-    warn << "dhc::recv_getblock: size = " << res.resok->data.data.size ()
+    warn << myNode->my_ID () << " dhc::recv_getblock: size = " << res.resok->data.data.size ()
 	 << "\n";
       //<< " value = " << res.resok->data.data.base () << "\n";
 
@@ -822,7 +850,8 @@ dhc::put (ptr<location> dest, chordID bID, chordID writer, ref<dhash_value> valu
     ptr<dhc_put_arg> arg = New refcounted<dhc_put_arg>;
     arg->bID = bID;
     arg->writer = writer;
-    arg->value.set (value->base (), value->size ());
+    arg->value.setsize (value->size ());
+    memmove (arg->value.base (), value->base (), value->size ());
     ptr<dhc_put_res> res = New refcounted<dhc_put_res>;
     if (!newblock)
       myNode->doRPC (dest, dhc_program_1, DHCPROC_PUT, arg, res,
@@ -930,7 +959,9 @@ dhc::recv_put (user_args *sbp)
   if (tag_cmp (newtag, kb->data->tag) == 1) {
     kb->data->tag.ver = newtag.ver;
     kb->data->tag.writer = newtag.writer;
-    kb->data->data.set (put->value.base (), put->value.size ());
+    kb->data->data.clear ();
+    kb->data->data.setsize (put->value.size ());
+    memmove (kb->data->data.base (), put->value.base (), put->value.size ());
     db->del (key);
     db->insert (key, to_dbrec (kb));
     //db->sync ();
@@ -939,7 +970,8 @@ dhc::recv_put (user_args *sbp)
     arg->bID = put->bID;
     arg->new_data.tag.ver = newtag.ver;
     arg->new_data.tag.writer = newtag.writer;
-    arg->new_data.data.set (put->value.base (), put->value.size ());
+    arg->new_data.data.setsize (put->value.size ());
+    memmove (arg->new_data.data.base (), put->value.base (), put->value.size ());
     ptr<write_state> ws = New refcounted<write_state> (sbp);
     for (uint i=0; i<b->config.size (); i++) {
       ptr<dhc_put_res> res = New refcounted<dhc_put_res>;
@@ -1013,7 +1045,8 @@ dhc::putblock_retry_cb (ptr<dhc_block> kb, ptr<location> dest, ptr<write_state> 
   arg->bID = kb->id;
   arg->new_data.tag.ver = kb->data->tag.ver;
   arg->new_data.tag.writer = kb->data->tag.writer;
-  arg->new_data.data.set (kb->data->data.base (), kb->data->data.size ());
+  arg->new_data.data.setsize (kb->data->data.size ());
+  memmove (arg->new_data.data.base (), kb->data->data.base (), kb->data->data.size ());
   ptr<dhc_put_res> res = New refcounted<dhc_put_res>;
   myNode->doRPC (dest, dhc_program_1, DHCPROC_PUTBLOCK, arg, res,
 		 wrap (this, &dhc::putblock_cb, kb, dest, ws, res));
@@ -1072,8 +1105,10 @@ dhc::recv_putblock (user_args *sbp)
 
     kb->data->tag.ver = putblock->new_data.tag.ver;
     kb->data->tag.writer = putblock->new_data.tag.writer;
-    kb->data->data.set (putblock->new_data.data.base (), 
-			putblock->new_data.data.size ());
+    kb->data->data.clear ();
+    kb->data->data.setsize (putblock->new_data.data.size ());
+    memmove (kb->data->data.base (), putblock->new_data.data.base (), 
+	     putblock->new_data.data.size ());
     db->del (key);
     db->insert (key, to_dbrec (kb));
     //db->sync ();
@@ -1107,7 +1142,8 @@ dhc::recv_newblock (user_args *sbp)
   arg->bID = put->bID;
   arg->data.tag.ver = 0;
   arg->data.tag.writer = put->writer;
-  arg->data.data.set (put->value.base (), put->value.size ());
+  arg->data.data.setsize (put->value.size ());
+  memmove (arg->data.data.base (), put->value.base (), put->value.size ());
   arg->old_conf_seqnum = 0;
   vec<ptr<location> > l;
   set_new_config (arg, &l, myNode, n_replica);
