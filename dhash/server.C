@@ -205,7 +205,6 @@ dhash_impl::init_after_chord(ptr<vnode> node, ptr<route_factory> _r_factory)
   //don't cache here: only cache on user generated requests
   cli = New dhashcli (node, r_factory, 1); // XXX pick real server selection mode?
 
-  // pred = 0; // XXX initialize to what?
   check_replica_tcb = NULL;
 
   /* statistics */
@@ -574,8 +573,6 @@ dhash_impl::dispatch (user_args *sbp)
     sbp->replyref (PROC_UNAVAIL);
     break;
   }
-
-  pred = host_node->my_pred ()->id ();
 }
 
 void

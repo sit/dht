@@ -177,7 +177,6 @@ class dhash_impl : public dhash {
   int dbwrite (ref<dbrec> key, ref<dbrec> data, dhash_ctype ctype);
   void dbdelete (ref<dbrec> key);
 
-  chordID pred;
   vec<ptr<location> > replicas;
   timecb_t *check_replica_tcb;
   timecb_t *merkle_rep_tcb;
