@@ -164,7 +164,6 @@ class vnode : public virtual refcount {
   // The RPCs
   virtual void doget_successor (user_args *sbp) = 0;
   virtual void doget_predecessor (user_args *sbp) = 0;
-  virtual void dofindclosestpred (user_args *sbp, chord_findarg *fa) = 0;
   virtual void dotestrange_findclosestpred (user_args *sbp, chord_testandfindarg *fa) = 0;
   virtual void donotify (user_args *sbp, chord_nodearg *na) = 0;
   virtual void doalert (user_args *sbp, chord_nodearg *na) = 0;

@@ -88,8 +88,6 @@ class vnode_impl : public vnode {
   u_long nhops;
   u_long nmaxhops;
   u_long nfindpredecessor;
-  u_long nfindsuccessorrestart;
-  u_long nfindpredecessorrestart;
   u_long ntestrange;
   u_long nnotify;
   u_long nalert;
@@ -97,7 +95,6 @@ class vnode_impl : public vnode {
 
   u_long ndogetsuccessor;
   u_long ndogetpredecessor;
-  u_long ndofindclosestpred;
   u_long ndonotify;
   u_long ndoalert;
   u_long ndogetsucclist;
@@ -106,7 +103,6 @@ class vnode_impl : public vnode {
   u_long ndogetfingers_ext;
   u_long ndogetsucc_ext;
   u_long ndogetpred_ext;
-  u_long ndochallenge;
   u_long ndogettoes;
   u_long ndofindtoes;
   u_long ndodebruijn;
@@ -236,7 +232,6 @@ class vnode_impl : public vnode {
   // The RPCs
   void doget_successor (user_args *sbp);
   void doget_predecessor (user_args *sbp);
-  void dofindclosestpred (user_args *sbp, chord_findarg *fa);
   void dotestrange_findclosestpred (user_args *sbp, chord_testandfindarg *fa);
   void donotify (user_args *sbp, chord_nodearg *na);
   void doalert (user_args *sbp, chord_nodearg *na);

@@ -124,8 +124,6 @@ vnode_impl::vnode_impl (ptr<locationtable> _locations,
   nhops = 0;
   nmaxhops = 0;
   nfindpredecessor = 0;
-  nfindsuccessorrestart = 0;
-  nfindpredecessorrestart = 0;
   nnotify = 0;
   nalert = 0;
   ntestrange = 0;
@@ -133,7 +131,6 @@ vnode_impl::vnode_impl (ptr<locationtable> _locations,
   
   ndogetsuccessor = 0;
   ndogetpredecessor = 0;
-  ndofindclosestpred = 0;
   ndonotify = 0;
   ndoalert = 0;
   ndogetsucclist = 0;
@@ -142,7 +139,6 @@ vnode_impl::vnode_impl (ptr<locationtable> _locations,
   ndogetfingers_ext = 0;
   ndogetsucc_ext = 0;
   ndogetpred_ext = 0;
-  ndochallenge = 0;
   ndogettoes = 0;
   ndofindtoes = 0;
   ndodebruijn = 0;
@@ -280,13 +276,11 @@ vnode_impl::stats () const
   
   warnx << "# getsuccesor requests " << ndogetsuccessor << "\n";
   warnx << "# getpredecessor requests " << ndogetpredecessor << "\n";
-  warnx << "# findclosestpred requests " << ndofindclosestpred << "\n";
   warnx << "# getsucclist requests " << ndogetsucclist << "\n";
   warnx << "# notify requests " << ndonotify << "\n";  
   warnx << "# alert requests " << ndoalert << "\n";  
   warnx << "# testrange requests " << ndotestrange << "\n";  
   warnx << "# getfingers requests " << ndogetfingers << "\n";
-  warnx << "# dochallenge requests " << ndochallenge << "\n";
   warnx << "# dodebruijn requests " << ndodebruijn << "\n";
 
   warnx << "# getsuccesor calls " << ngetsuccessor << "\n";
@@ -304,8 +298,6 @@ vnode_impl::stats () const
   warnx << "   # max hops for findsuccessor " << nmaxhops << "\n";
   fingers->stats ();
   warnx << "# findpredecessor calls " << nfindpredecessor << "\n";
-  warnx << "# findsuccessorrestart calls " << nfindsuccessorrestart << "\n";
-  warnx << "# findpredecessorrestart calls " << nfindpredecessorrestart << "\n";
   warnx << "# rangandtest calls " << ntestrange << "\n";
   warnx << "# notify calls " << nnotify << "\n";  
   warnx << "# alert calls " << nalert << "\n";  
@@ -752,17 +744,6 @@ vnode_impl::chord_upcall_done (chord_testandfindarg *fa,
   if (stop) res->set_status (CHORD_STOP);
   sbp->reply (res);
   delete res;
-}
-
-void
-vnode_impl::dofindclosestpred (user_args *sbp, chord_findarg *fa)
-{
-  chord_noderes res(CHORD_OK);
-  ptr<location> p = lookup_closestpred (fa->x);
-  ndofindclosestpred++;
-  p->fill_node (*res.resok);
-  assert (0);
-  //  sbp->reply (&res);
 }
 
 void
