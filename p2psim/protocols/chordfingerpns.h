@@ -36,7 +36,7 @@ using namespace std;
 
 class ChordFingerPNS: public Chord {
   public:
-    ChordFingerPNS(IPAddress i, Args& a, LocTable *l = NULL);
+    ChordFingerPNS(IPAddress i, Args& a, LocTable *l = NULL, const char *name=NULL);
     ~ChordFingerPNS() {};
     string proto_name() { return "ChordFingerPNS"; }
 

@@ -27,6 +27,7 @@
 
 // abstract super class of a topology
 #include <fstream>
+#include "p2psim/parse.h"
 #include "p2psim.h"
 using namespace std;
 
@@ -37,6 +38,7 @@ public:
   virtual void parse(ifstream&) = 0;
 
   virtual Time latency(IPAddress, IPAddress, bool = false) = 0;
+  virtual string get_node_name(IPAddress);
   virtual Time median_lat() { return _med_lat; } 
   virtual ~Topology();
   unsigned lossrate() { return _lossrate; }

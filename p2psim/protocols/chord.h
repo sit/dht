@@ -31,11 +31,11 @@
 
 #define TIMEOUT_RETRY 5
 
-//#define CHORD_DEBUG
+#define CHORD_DEBUG
 #define DNODE 853
 //#define RECORD_FETCH_LATENCY
 
-#define TIMEOUT(src,dst) (Network::Instance()->gettopology()->latency(src,dst)<100000)?_to_multiplier*2*Network::Instance()->gettopology()->latency(src,dst):1000
+#define TIMEOUT(src,dst) (Network::Instance()->gettopology()->latency(src,dst)<=1000)?_to_multiplier*2*Network::Instance()->gettopology()->latency(src,dst):1000
 
 #define PKT_OVERHEAD 20
 
@@ -67,7 +67,7 @@ public:
     bool operator==(const IDMap a) { return (a.id == id); }
   };
 
-  Chord(IPAddress i, Args& a, LocTable *l = NULL); 
+  Chord(IPAddress i,  Args& a, LocTable *l = NULL, const char *name=NULL); 
   virtual ~Chord();
   virtual string proto_name() { return "Chord"; }
 

@@ -62,7 +62,7 @@ ProtocolFactory::~ProtocolFactory()
 
 
 Node *
-ProtocolFactory::create(IPAddress i)
+ProtocolFactory::create(IPAddress i, const char *name)
 {
   Node *p = 0;
   string s = Node::protocol();
@@ -73,7 +73,7 @@ ProtocolFactory::create(IPAddress i)
   if (s == "ChordFinger")
     p = New ChordFinger(i, a);
   if (s == "ChordFingerPNS")
-    p = New ChordFingerPNS(i, a);
+    p = New ChordFingerPNS(i, a, NULL, name); 
   if (s == "ChordToe")
     p = New ChordToe(i, a);
   if (s == "ChordOneHop") 

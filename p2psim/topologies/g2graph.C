@@ -26,7 +26,6 @@
 #include "p2psim/topology.h"
 #include "p2psim/network.h"
 #include "protocols/protocolfactory.h"
-#include "p2psim/parse.h"
 #include <iostream>
 using namespace std;
 

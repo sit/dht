@@ -27,6 +27,7 @@
 #include "network.h"
 #include "parse.h"
 #include <iostream>
+
 using namespace std;
 
 Topology::Topology()
@@ -40,6 +41,13 @@ Topology::~Topology()
 {
 }
 
+string
+Topology::get_node_name(IPAddress ip)
+{
+  char buf[10];
+  sprintf(buf,"%u",ip);
+  return string(buf);
+}
 
 Topology*
 Topology::parse(char *filename)

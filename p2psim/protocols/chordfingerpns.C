@@ -28,8 +28,8 @@
 #include <stdio.h>
 extern bool static_sim;
 
-ChordFingerPNS::ChordFingerPNS(IPAddress i, Args& a, LocTable *l) 
-  : Chord(i, a, New LocTable()) 
+ChordFingerPNS::ChordFingerPNS(IPAddress i, Args& a, LocTable *l, const char *name) 
+  : Chord(i, a, New LocTable(), name) 
 { 
   _base = a.nget<uint>("base",2,10);
   _samples = a.nget<int>("samples",_nsucc,10);
@@ -350,7 +350,7 @@ ChordFingerPNS::join(Args *args)
   if (me.ip!=_wkn.ip) {
     CHID fs,fe;
     which_finger(_base, _wkn.id, me.id, fs, fe);
-    loctable->add_node(_wkn,false,true,fs,fe);
+    learntable->add_node(_wkn,false,true,fs,fe);
   }
 
 #ifdef CHORD_DEBUG
@@ -439,6 +439,8 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
   prevfpred.ip = 0;
 
   IDMap pred = loctable->pred(me.id-1);
+  IDMap haha = scs[scs.size()-1];
+
   while (1) {
     lap = lap/_base;
     for (uint j = (_base-1); j >= 1; j--) {

@@ -33,7 +33,7 @@ using namespace std;
 class ProtocolFactory {
 public:
   static ProtocolFactory* Instance();
-  Node *create(IPAddress);
+  Node *create(IPAddress, const char *name=NULL);
   ~ProtocolFactory();
 
 private:

@@ -23,7 +23,6 @@
  */
 
 #include "p2psim/network.h"
-#include "p2psim/parse.h"
 #include "p2psim/topology.h"
 #include "protocols/protocolfactory.h"
 #include "euclidean.h"

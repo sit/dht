@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 [NAMES_GO_HERE]
+ * Copyright (c) 2003 [Jinyang Li]
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -36,7 +36,7 @@ public:
   
   typedef pair<unsigned, unsigned> Coord;
   virtual void parse(ifstream&);
-  virtual Time latency(IPAddress, IPAddress, bool = false);
+  Time latency(IPAddress, IPAddress, bool = false);
 
 private:
   unsigned int _num;

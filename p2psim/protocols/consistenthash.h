@@ -29,6 +29,7 @@
 
 #include <openssl/sha.h>
 #include <assert.h>
+#include "../p2psim/parse.h"
 
 class ConsistentHash {
 public:
@@ -90,7 +91,14 @@ public:
     memcpy (&r, buf, 8);
     return r;
   }
- 
+
+  static CHID ipname2chid(const char *name) {
+    unsigned char *buf = SHA1 ((const unsigned char *)name, strlen(name)+1, NULL);
+    CHID r;
+    memcpy(&r, buf, 8);
+    return r;
+  }
+
   // return last bit pos in which n and m match.  if n==m, then pos is 0.
   // if n != m, then pos is NBCHID.
   static uint bitposmatch (CHID n, CHID m) {

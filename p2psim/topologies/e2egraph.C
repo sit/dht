@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 [NAMES_GO_HERE]
+ * Copyright (c) 2003 [Jinyang Li]
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -24,7 +24,6 @@
 
 #include "p2psim/topology.h"
 #include "p2psim/network.h"
-#include "p2psim/parse.h"
 #include "protocols/protocolfactory.h"
 #include "e2egraph.h"
 
@@ -49,11 +48,13 @@ E2EGraph::latency(IPAddress ip1, IPAddress ip2, bool reply)
   assert(ip1 > 0 && ip1 <= _num);
   assert(ip2 > 0 && ip2 <= _num);
   if (ip1 < ip2)  {
-    assert(_pairwise[ip1-1][ip2-1] > 0 && _pairwise[ip1-1][ip2-1] <= 1000000);
-    return (Time) _pairwise[ip1-1][ip2-1];
+    Time t =  (Time) _pairwise[ip1-1][ip2-1];
+    assert(t <= 1000000);
+    return t;
   } else if (ip1 > ip2) {
-    assert(_pairwise[ip2-1][ip1-1] > 0 && _pairwise[ip2-1][ip1-1] <= 1000000);
-    return (Time) _pairwise[ip2-1][ip1-1];
+    Time t = (Time) _pairwise[ip2-1][ip1-1];
+    assert(t <= 1000000);
+    return t;
   } else{
     return 0;
   }
@@ -79,11 +80,17 @@ E2EGraph::parse(ifstream &ifs)
       assert(ipaddr > 0 && ipaddr <= _num);
 
       // what kind of node?
-      Node *p = ProtocolFactory::Instance()->create(ipaddr);
+      Node *p;
+      if (words.size()<=2) {
+	p = ProtocolFactory::Instance()->create(ipaddr);
+      }else{
+	p = ProtocolFactory::Instance()->create(ipaddr,words[2].c_str());
+      }
       assert(!Network::Instance()->getnode(ipaddr));
 
       // add the node to the network
       send(Network::Instance()->nodechan(), &p);
+
 
     } else {
 
@@ -104,4 +111,5 @@ E2EGraph::parse(ifstream &ifs)
   }
   sort(tmp.begin(),tmp.end());
   _med_lat = tmp[tmp.size()/2];
+
 }

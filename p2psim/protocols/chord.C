@@ -37,7 +37,7 @@ unsigned int _allfetchnum = 0;
 #endif
 
 
-Chord::Chord(IPAddress i, Args& a, LocTable *l) : P2Protocol(i), _isstable (false)
+Chord::Chord(IPAddress i, Args& a, LocTable *l, const char *name) : P2Protocol(i), _isstable (false)
 {
 
   if(a.find("static_sim") != a.end())
@@ -91,8 +91,13 @@ Chord::Chord(IPAddress i, Args& a, LocTable *l) : P2Protocol(i), _isstable (fals
   me.ip = ip();
   if (_random_id)
     me.id = ConsistentHash::getRandID();
-  else
-    me.id = ConsistentHash::ip2chid(me.ip); 
+  else {
+    if (name) 
+      me.id = ConsistentHash::ipname2chid(name);
+    else
+      me.id = ConsistentHash::ip2chid(me.ip);
+    printf("ipname %s id %qx\n",name,me.id);
+  }
 
   me.heartbeat = now();
 
@@ -321,8 +326,6 @@ Chord::lookup_internal(lookup_args *a)
   } else {
     v = find_successors(a->key, _frag, TYPE_USER_LOOKUP, &lasthop,a);
   }
-
-  assert(a->latency > oldlat || (me.ip == lasthop.ip));
 
   if (!alive()) {
     delete a;
@@ -689,8 +692,9 @@ Chord::find_successors(CHID key, uint m, uint type, IDMap *lasthop, lookup_args 
       }
     }
 
-    if (a && a->latency >= _max_lookup_time)
+    if (a && a->latency >= _max_lookup_time) {
       goto DONE;
+    }
   }
 DONE:
 
@@ -1951,9 +1955,10 @@ Chord::fix_successor_list()
       }
 
       if (scs_i >= scs.size()) {
-	while (gpr_i < gpr.v.size()) {
+	while (scs_i < _nsucc && gpr_i < gpr.v.size()) {
 	  loctable->add_node(gpr.v[gpr_i],true);
 	  gpr_i++;
+	  scs_i++;
 	}
 	break;
       }
@@ -2368,6 +2373,9 @@ LocTable::add_node(Chord::IDMap n, bool is_succ, bool assertadd, Chord::CHID fs,
 {
   Chord::IDMap succ1; 
   Chord::IDMap pred1; 
+
+  if (me.ip == 404 && n.ip == 280) 
+    printf("wuwu\n");
 
   assert(n.ip > 0 && n.ip < 32000 && n.heartbeat < 86400000);
   if (vis) {
