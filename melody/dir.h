@@ -59,12 +59,15 @@ class dir {
   // FIXME initialize all?
 
   void opendir(bigint tmp);
-  void opendir_got_venti(cbretrieve_t cbr, ptr<dhash_block> blk);
-  void opendir_got_venti_noread(ptr<dhash_block> blk);
-  void next_dirblk(cbretrieve_t cbr);
-  void find_entry(ptr<dhash_block> blk);
-  void found_entry(ptr<dhash_block> blk);
-  void root_test_got_rb(ptr<dhash_block> blk);
+  void opendir_got_venti(cb_ret cbr, 
+			 dhash_stat stat,
+			 ptr<dhash_block> blk,
+			 route p);
+  void opendir_got_venti_noread(dhash_stat s, ptr<dhash_block> blk, route p);
+  void next_dirblk(cb_ret cbr);
+  void find_entry(dhash_stat stat, ptr<dhash_block> blk, route p);
+  void found_entry(dhash_stat stat, ptr<dhash_block> blk, route p);
+  void root_test_got_rb(dhash_stat stat, ptr<dhash_block> blk, route p);
   void create_venti(cbs redir, str parent, dhash_stat status,
                     ptr<insert_info> i);
   void create_venti_done(cbs redir, str parent, dhash_stat status, 

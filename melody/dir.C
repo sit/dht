@@ -50,7 +50,9 @@ dir::root_test()
 }
 
 void
-dir::root_test_got_rb(ptr<dhash_block> blk)
+dir::root_test_got_rb(dhash_stat stat, 
+		      ptr<dhash_block> blk,
+		      route p)
 {
   if(!blk) {
     warn << "couldn't find root block\n";
@@ -126,7 +128,10 @@ dir::opendir(bigint dir)
 }
 
 void
-dir::opendir_got_venti(cbretrieve_t cbr, ptr<dhash_block> blk)
+dir::opendir_got_venti(cb_ret cbr, 
+		       dhash_stat stat,
+		       ptr<dhash_block> blk,
+		       route p)
 {
   if(!blk) {
     warn << (int)cs << " no such path found:";
@@ -154,7 +159,7 @@ dir::opendir_got_venti(cbretrieve_t cbr, ptr<dhash_block> blk)
 }
 
 void
-dir::opendir_got_venti_noread(ptr<dhash_block> blk)
+dir::opendir_got_venti_noread(dhash_stat stat, ptr<dhash_block> blk, route p)
 {
   if(!blk) {
     warn << (int)cs << " no such path found\n";
@@ -187,7 +192,7 @@ dir::opendir_got_venti_noread(ptr<dhash_block> blk)
 }
 
 void
-dir::next_dirblk(cbretrieve_t cbr) {
+dir::next_dirblk(cb_ret cbr) {
   char tmp[sha1::hashsize];
   cbuf.copyout(tmp, sha1::hashsize);
   cbuf.rembytes(sha1::hashsize);
@@ -198,7 +203,7 @@ dir::next_dirblk(cbretrieve_t cbr) {
 
 static rxx namechashrx ("(.+);([\\dabcdef]+)", "i");
 void
-dir::find_entry(ptr<dhash_block> blk)
+dir::find_entry(dhash_stat stat, ptr<dhash_block> blk, route p)
 {
   unsigned int name_index = 0;
   warn << "find_entry\n";
@@ -257,7 +262,7 @@ return; }
 }
 
 void
-dir::found_entry(ptr<dhash_block> blk)
+dir::found_entry(dhash_stat stat, ptr<dhash_block> blk, route p)
 {
   if(!blk) {
     warn << (int)cs << " block gone\n"; // FIXME add mroe error recovery

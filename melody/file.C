@@ -149,7 +149,10 @@ melody_file::next_venti_cb(int index, callback<void, int, str>::ref ready_cb, st
 }
 
 void
-melody_file::venti_cb(callback<void, int, str>::ref ready_cb, str filename, ptr<dhash_block> blk)
+melody_file::venti_cb(callback<void, int, str>::ref ready_cb, str filename, 
+		      dhash_stat stat,
+		      ptr<dhash_block> blk,
+		      route p)
 {
 #ifdef DEBUG
   warn << "venti_cb\n";

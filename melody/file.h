@@ -75,7 +75,8 @@ class melody_file : public virtual refcount {
   bool dead;
 
   void find_venti_depth(int asize);
-  void venti_cb(callback<void, int, str>::ref ready_cb, str filename, ptr<dhash_block> blk);
+  void venti_cb(callback<void, int, str>::ref ready_cb, str filename, 
+		dhash_stat stat, ptr<dhash_block> blk, route p);
   void next_venti_cb(int index, callback<void, int, str>::ref ready_cb, str filename);
   void write_cb (dhash_stat status, ptr<insert_info> i);
   void next_cb(int offset);

@@ -39,7 +39,7 @@ retrieve_manager::retrieve (bigint id, callback<void, ptr<dhash_block> >::ptr cb
 }
 
 void
-retrieve_manager::got_block (retrieve_block *tmp, ptr<dhash_block> blk)
+retrieve_manager::got_block (retrieve_block *tmp, dhash_stat stat, ptr<dhash_block> blk, route p)
 {
   //  warn << "retrieve_manager::retrieved\n";
   if(!blk) {
