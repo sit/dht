@@ -342,19 +342,17 @@ class dhash_cates (dhash):
         return int (1.02 * (size / 7))
 
     def _pmaint_join (my, n):
-	succs = my.succ (n, 17)
-	preds = my.pred (n, 17)
-	slice = preds + succs
-	succs.pop (0)
+	succs = my.succ (n, 18)
+	preds = my.pred (n, 16)
 	nid = n.id
 	# Perhaps this new guy has returned with some new blocks
 	# that he now should give away to someone else...
 	pid = preds[0].id
 	lostblocks = filter (lambda x: not between (x, pid, nid), n.blocks)
+	# if len(lostblocks): print "# LOST", len(lostblocks), "blocks"
 	for b in lostblocks:
-	    # print "# LOST", b
-	    succs = my.succ (b, 14)
-	    for s in succs:
+	    lsuccs = my.succ (b, 14)
+	    for s in lsuccs:
 		if b not in s.blocks:
 		    assert n != s
 		    isz = my.insert_piece_size (my.blocks[b])
@@ -363,31 +361,24 @@ class dhash_cates (dhash):
 		    n.sent_bytes_breakdown['pm'] += isz
 		    break
 	    # Either someone wanted it and they took it, or no one wanted it.
-	    # Safe to delete either way.
+	    # Safe to delete either way 
+	    # XXX of course no one wants this... the moment n failed,
+	    #     dhash's aggressive repair fixed the low availability.
 	    n.unstore (b)
 
 	# Next, fix blocks that are in the wrong place now because
 	# this guy appeared; give them to this new guy.
-	for s in succs:
+	for s in succs[1:]:
 	    lostblocks = filter (lambda x: between (x, pid, nid), s.blocks)
-	    # if len(lostblocks): print "# LoST", len(lostblocks), "blocks"
+	    if len(lostblocks): print "# LoST", len(lostblocks), "blocks"
 	    for b in lostblocks:
-		s.unstore (b)
 		if b not in n.blocks:
+		    print "# MOVING", b, "from", s, "to", n
 		    isz = my.insert_piece_size (my.blocks[b])
 		    n.store (b, isz)
 		    s.sent_bytes += isz
 		    s.sent_bytes_breakdown['pm'] += isz
-
-
-    def _partition_maintenance (my):
-	extranodes = my.nodes[-17:] + my.nodes
-	assert (len (extranodes) >= 32)
-	for i in range(17, len(extranodes)):
-	    n = extranodes[i]
-	    pid = extranodes[i - 17].id
-	    nid = n.id
-	    lostblocks = filter (lambda x: between (x, pid, nid), n.blocks)
+		s.unstore (b)
 
     def time_changed (my, last_time, new_time):
 	# Do "partition maintenance"
