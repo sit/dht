@@ -223,7 +223,8 @@ public:
     STAT_LOOKUP = 0,
     STAT_STABILIZE,
     STAT_JOIN,
-    STAT_PING
+    STAT_PING,
+    STAT_ERASE
   };
 
   //
@@ -305,6 +306,15 @@ public:
   struct ping_result {
   };
   // }}}
+  // {{{ erase_args and erase_result
+  struct erase_args {
+    erase_args(NodeID id) : id(id) {}
+    NodeID id;
+  };
+
+  struct erase_result {
+  };
+  // }}}
 
   //
   // RPCable methods
@@ -313,6 +323,7 @@ public:
   void find_value(find_value_args*, find_value_result*);
   void do_ping(ping_args*, ping_result*);
   void find_node(find_node_args*, find_node_result*);
+  void do_erase(erase_args*, erase_result*);
 
 
   //
@@ -347,6 +358,8 @@ public:
   static unsigned erase_count;          // after how many timeouts to remove
   static bool learn_stabilize_only;     // do we learn from RPCs?
   static bool force_stabilization;      // stabilize all buckets, not only old ones
+  static bool death_notification;       // if your neighbor told you about a 
+                                        // dead node, tell them about it.
   static Time max_lookup_time;          // how long do we keep retrying
   static Time _default_timeout;         // default timeout
   static unsigned _to_cheat;            // whether to use roundtrip estimates as timeout
@@ -426,11 +439,18 @@ private:
 
   struct reap_info {
     reap_info() {}
-    ~reap_info() { delete rpcset; delete outstanding_rpcs; }
+    ~reap_info() { 
+      delete rpcset; 
+      delete outstanding_rpcs; 
+      delete deathrpcset; 
+      delete deathmap; 
+    }
 
     Kademlia *k;
     RPCSet *rpcset;
     HashMap<unsigned, callinfo*>* outstanding_rpcs;
+    RPCSet *deathrpcset;
+    HashMap<unsigned, erase_args*>* deathmap;
     stat_type stat;
   };
 
