@@ -139,6 +139,7 @@ VivaldiNode::update_error (vector<Sample> samples)
 {
   double expect = dist (_c, samples[0]._c);
   double actual = samples[0]._latency;
+  if (actual < 0) return;
   double rel_error = fabs(expect - actual)/actual;
   if (_pred_err < 0) 
     _pred_err = rel_error;
@@ -248,7 +249,7 @@ VivaldiNode::algorithm(Sample s)
 
   //reject timeouts and self pings
   //  if (s._latency > 1000 ||
-  if   (s._latency == 0) return;
+  if   (s._latency <= 0) return;
 
   if (_initial_triangulation && _init_samples.size () < _num_init_samples)
     {

@@ -123,9 +123,11 @@ public:
     bool ok = _doRPC(dst, &Thunk<BT, AT, RT>::thunk, (void *) t);
     if (ok) {
       VivaldiNode * t = dynamic_cast<VivaldiNode *>(getpeer(dst));
+      Topology *topo = Network::Instance ()->gettopology ();
       assert (t);
       //      cerr << ip() << " " << dst << " " << now () - before << endl;
-      sample (dst, t->my_location(), t->my_error (), (now () - before));
+      if (topo->valid_latency (ip (), dst))
+	sample (dst, t->my_location(), t->my_error (), (now () - before));
     }
     delete t;
     return ok;

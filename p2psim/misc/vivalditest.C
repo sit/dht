@@ -383,6 +383,7 @@ VivaldiTest::error()
     VivaldiNode::Coord vc1 = _all[i]->my_location();
     double vd = dist(vc, vc1);
     double rd = 2*t->latency(this->ip(), _all[i]->ip());
+    if (rd < 0) continue;
     double e = fabs(vd - rd);
     // double e = fabs(vd - rd)/(rd);
     a.push_back (e);
@@ -433,6 +434,7 @@ VivaldiTest::total_error(double &e05, double &e50, double &e95)
 	//vivaldi predicts ROUND-TRIP distances
 	double vd = dist(vc, vc1);
 	double rd = 2*t->latency(_all[i]->ip(), _all[j]->ip());
+	if (rd < 0) continue;
 	double e = fabs(vd - rd);
 	//	cerr << "error "  << vd << " " << rd << " " << e << "\n";
 	a.push_back(e);

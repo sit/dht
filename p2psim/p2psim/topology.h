@@ -40,6 +40,7 @@ public:
   virtual Time latency(IPAddress, IPAddress, bool = false) = 0;
   virtual string get_node_name(IPAddress);
   virtual Time median_lat() { return _med_lat; } 
+  virtual bool valid_latency (IPAddress ip1x, IPAddress ip2x) { return true;};
   virtual ~Topology();
   unsigned lossrate() { return _lossrate; }
   unsigned noise_variance() { return _noise; }

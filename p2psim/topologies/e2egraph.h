@@ -37,11 +37,12 @@ public:
   
   typedef pair<unsigned, unsigned> Coord;
   virtual void parse(ifstream&);
+  bool valid_latency (IPAddress ip1x, IPAddress ip2x);
   Time latency(IPAddress, IPAddress, bool = false);
 
 private:
   unsigned int _num;
-  vector<vector<Time> > _pairwise;
+  vector<vector<int> > _pairwise;
 };
 
 #endif //  __E2EGRAPH_H
