@@ -70,9 +70,7 @@ client_accept (int fd)
 
   // XXX these dhashgateway objects are leaked
   //
-
-
-   vNew dhashgateway (x, chordnode, do_cache);
+  vNew dhashgateway (x, chordnode, dh[0], do_cache);
 }
 
 static void
