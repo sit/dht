@@ -24,7 +24,7 @@
 #include <qhash.h>
 
 #define PNODE
-#define STOPSTABILIZE
+#define STOPSTABILIZE		// for testing purposes
 
 vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
 	      chordID _myID) :
@@ -329,10 +329,9 @@ vnode::stabilize_continuous (void)
   u_int32_t t1 = uniform_random (0.5 * stabilize_timer, 1.5 * stabilize_timer);
   u_int32_t sec = t1 / 1000;
   u_int32_t nsec =  (t1 % 1000) * 1000000;
-  warnx << "stabilize_backoff: sec " << sec << " nsec " << nsec << "\n";
+  //  warnx << "stabilize_continuous: sec " << sec << " nsec " << nsec << "\n";
   stabilize_continuous_tmo = delaycb (sec, nsec, wrap (mkref (this), 
-					       &vnode::stabilize_continuous,
-					       f, s));
+					       &vnode::stabilize_continuous));
 #endif
 }
 
