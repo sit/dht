@@ -7,6 +7,7 @@
 #include <typeinfo>
 #include <iostream>
 #include "p2psim.h"
+using namespace std;
 
 
 ProtocolFactory *ProtocolFactory::_instance = 0;
@@ -41,22 +42,20 @@ Protocol *
 ProtocolFactory::create(string s, Node *n)
 {
   Protocol *p = 0;
-  if(s == "Chord") {
+
+  if(s == "Chord")
     p = new Chord(n);
-    _protnames[typeid(Chord).name()] = s;
-  } else if (s == "Kademlia") {
+  if (s == "Kademlia")
     p = new Kademlia(n);
-    _protnames[typeid(Kademlia).name()] = s;
-  } else if (s == "Pastry") {
+  if (s == "Pastry")
     p = new Pastry(n);
-    _protnames[typeid(Pastry).name()] = s;
-  } else if (s == "Koorde") {
+  if (s == "Koorde")
     p = new Koorde(n);
-    _protnames[typeid(Koorde).name()] = s;
-  } else if (s == "VivaldiTest") {
+  if (s == "VivaldiTest")
     p = new VivaldiTest(n);
-    _protnames[typeid(Koorde).name()] = s;
-  } 
+
+  cout << "_protnames " << typeid(*p).name() << " = " << s << endl;
+  _protnames[typeid(*p).name()] = s;
   return p;
 }
 
