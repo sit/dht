@@ -8,7 +8,7 @@
 #include "usenet.h"
 #include "usenetdht_storage.h"
 
-dbfe *group_db, *header_db;
+ptr<dbfe> group_db, header_db;
 // in group_db, each key is a group name. each record contains artnum,messageID,chordID
 // in header_db, each key is a messageID. each record is a header (plus lines and other info)
 dhashclient *dhash;
@@ -36,22 +36,6 @@ stop ()
   // XXX shutdown open connections cleanly....
   warn << "Shutting down on signal.\n";
   exit (1);
-}
-
-bool
-create_group (char *group)
-{
-  // xxx sanity check group name
-  static ptr<dbrec> d (NULL);
-  if (!d) {
-    group_entry g;
-    str m = xdr2str (g);
-    d = New refcounted<dbrec> (m, m.len ());
-  }
-
-  ref<dbrec> k = New refcounted<dbrec> (group, strlen (group));
-  group_db->insert (k, d);
-  return true;
 }
 
 // boring network accept code
@@ -138,23 +122,19 @@ main (int argc, char *argv[])
   dhash = New dhashclient (sock);
 
   dbOptions opts;
-  group_db = New dbfe ();
+  group_db = New refcounted<dbfe> ();
   if (int err = group_db->opendb ("groups", opts)) {
     warn << "open returned: " << strerror (err) << "\n";
     exit (-1);
   }
-  header_db = New dbfe ();
+  header_db = New refcounted<dbfe> ();
   if (int err = header_db->opendb ("headers", opts)) {
     warn << "open returned: " << strerror (err) << "\n";
     exit (-1);
   }
 
   if (create_groups) {
-    create_group ("foo");
-    create_group ("usenetdht.test");
-    
-    create_group ("rec.bicycles.misc");
-    create_group ("alt.binaries.pictures.rail");
+    /* XXX */
   }
 
   sigcb (SIGINT,  wrap (&stop));

@@ -1,5 +1,5 @@
 // -*-c++-*-
-/* $Id: usenet.h,v 1.6 2004/10/01 17:39:33 sit Exp $ */
+/* $Id: usenet.h,v 1.7 2005/02/18 21:34:34 sit Exp $ */
 
 /*
  *
@@ -29,7 +29,7 @@
 /* usenet.C */
 struct dbfe;
 struct dhashclient;
-extern dbfe *group_db, *header_db;
+extern ptr<dbfe> group_db, header_db;
 extern dhashclient *dhash;
 
 str collect_stats ();

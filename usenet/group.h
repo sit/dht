@@ -1,9 +1,12 @@
 #ifndef GROUP_H
 #define GROUP_H
 
-#include <dbfe.h>
+struct dbrec;
+struct dbEnumeration;
 #include <chord_types.h>
 #include "usenetdht_storage.h"
+
+bool create_group (char *group);
 
 struct grouplist {
   ptr<dbEnumeration> it;

@@ -4,6 +4,7 @@
 #include <dhash_common.h>
 #include <dhashclient.h>
 #include <verify.h>
+#include <dbfe.h>
 
 #include "usenet.h"
 #include "group.h"
