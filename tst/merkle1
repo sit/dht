@@ -14,7 +14,7 @@ if ($> == 0) {
 my $SRC = abs_path (dirname ($0));
 
 sub usage {
-  print STDERR "Usage: $0 outputroot buildroot numnodes numvnodes [routeprot logbase IP [wkp]]\n";
+  print STDERR "Usage: $0 outputroot buildroot\n";
   print STDERR @_, "\n" if @_;
   exit (1);
 }
@@ -81,32 +81,4 @@ foreach my $conf (@CONFS) {
     my $s = "============= NODE $conf ============";
     system ("echo $s >> $r/dump-$n-$v");
     system ("cat $r/lsd-$conf/log >> $r/dump-$n-$v");
-}
-
-
-
-sub wait_for_stable {
-    my @pids = $harness->pids ();
-    my $n = scalar (@pids);
-
-    print "## wait_for_stable n=$n\n";
-
-    # wait stable
-    print "Waiting for nodes to go stable...\n";
-    my $waitcount = 0;
-    while (1) {
-	sleep 20;
-	my $hit = kill SIGUSR1, $harness->pids (); # what stat.pl does
-	die "Only signalled $hit of $n processes!\n" if ($hit != $n);
-	
-	sleep 10;
-	my $t = $n * $v; # total expected vnodes
-	my $s = system ("$SRC/stable.pl $t $r/lsd-*/log"); # yeah, shell globbing.
-	if ((($s >> 8) & 0xFF) == 17) {
-	    last;
-	}
-	$waitcount++;
-	die "Took too long to stabilize.\n" if $waitcount > 15;
-	# xxx dynamically compute waitcount based on $n??
-    }
 }
