@@ -173,13 +173,15 @@ afetch_cb (dhash_res *res, chordID key, char *buf, int i, struct timeval start, 
 {
   
   if (err) {
-    warn << "RPC error: " << err << "\n";
-    exit(0);
+    fprintf(outfile, "RPC error: %d", err);
+    out--;
+    return;
   }
 
   if (res->status != DHASH_OK) {
-    warn << "error: " << res->status << "\n";
-    exit(0);
+    fprintf(outfile, "Error: %d\n", res->status);
+    out--;
+    return;
   }
 
   memcpy(buf, res->resok->res.base (), res->resok->res.size ());
@@ -206,7 +208,11 @@ afetch_cb (dhash_res *res, chordID key, char *buf, int i, struct timeval start, 
 void
 afetch_cb2 (dhash_res *res, char *buf, unsigned int *read, int i, struct timeval start, clnt_stat err) 
 {
-  if (err) warn << "err: " << err << "\n";
+  if (err) {
+    out_op--;
+    warn << "err: " << err << "\n";
+    return;
+  }
   assert(err == 0);
   assert(res->status == DHASH_OK);
   memcpy(buf + res->resok->offset, res->resok->res.base (), res->resok->res.size ());

@@ -33,7 +33,6 @@ int do_cache;
 str db_name;
 dhash *dh[MAX_VNODES + 1];
 int ndhash = 0;
-int nreplica = 0;
 
 void stats ();
 void print ();
@@ -127,12 +126,12 @@ startclntd()
 }
 
 static void
-newvnode_cb (int n, vnode *my)
+newvnode_cb (int nreplica, int n, vnode *my)
 {
   str db_name_prime = strbuf () << db_name << "-" << n;
   if (ndhash == MAX_VNODES) fatal << "Too many virtual nodes (1024)\n";
   dh[ndhash++] = New dhash (db_name_prime, my, nreplica);
-  if (n > 0) chordnode->newvnode (wrap (newvnode_cb, n-1));
+  if (n > 0) chordnode->newvnode (wrap (newvnode_cb, nreplica, n-1));
 }
 
 static void
@@ -164,6 +163,7 @@ parseconfigfile (str cf, int nvnode, int set_rpcdelay)
   myport = 0;
   int max_connections = 100;
   int max_loccache = 250;
+  int nreplica = 0;
 
   while (pa.getline (&av, &line)) {
     if (!strcasecmp (av[0], "#")) {
@@ -246,8 +246,8 @@ parseconfigfile (str cf, int nvnode, int set_rpcdelay)
   chordnode = New refcounted<chord> (wellknownhost, wellknownport, 
 				     wellknownID, myport, myhost, set_rpcdelay,
 				     max_loccache, max_connections);
-  if (myid) chordnode->newvnode (myID, wrap (newvnode_cb, nvnode-1));
-  else chordnode->newvnode (wrap (newvnode_cb, nvnode-1));
+  if (myid) chordnode->newvnode (myID, wrap (newvnode_cb, nreplica, nvnode-1));
+  else chordnode->newvnode (wrap (newvnode_cb, nreplica, nvnode-1));
   sigcb(SIGUSR1, wrap (&stats));
   sigcb(SIGUSR2, wrap (&print));
 }

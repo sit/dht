@@ -221,12 +221,25 @@ vnode::find_closestpred_cb (chordID n, findpredecessor_cbstate *st,
     warnx << "find_closestpred_cb: RPC error" << res->status << "\n";
     st->cb (n, st->search_path, res->status);
     delete st;
+  } else if (res->resok->node == n) {
+    warnx << "find_closestpred_cb: next hops returns itself\n";
+    st->cb (n, st->search_path, CHORD_ERRNOENT);
+    delete st;
+    //    delete res;
   } else {
     // warnx << "find_closestpred_cb: pred of " << st->x << " is " 
     //  << res->resok->node << "\n";
     locations->cacheloc (res->resok->node, res->resok->r, n);
     st->search_path.push_back(res->resok->node);
-    assert (st->search_path.size () < 1000);
+    if (st->search_path.size () >= 1000) {
+      warnx << "PROBLEM: too long a search path: " << myID << " looking for "
+	    << st->x << "\n";
+      if (res->resok->node == n) warnx << "next hop returns itself\n";
+      for (unsigned i = 0; i < st->search_path.size (); i++) {
+	warnx << st->search_path[i] << "\n";
+      }
+      assert (0);
+    }
 #ifdef UNOPT
     get_successor (res->resok->node, 
 		   wrap (mkref (this), &vnode::find_closestpred_succ_cb, st));
@@ -244,6 +257,7 @@ vnode::testrange_findclosestpred (chordID n, chordID x,
   ptr<chord_testandfindarg> arg = New refcounted<chord_testandfindarg> ();
   arg->v.n = n;
   arg->x = x;
+  st->nprime = n;
   chord_testandfindres *nres = New chord_testandfindres (CHORD_OK);
   warnt("CHORD: issued_testandfind");
   ntestrange++;

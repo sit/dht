@@ -161,15 +161,19 @@ dhashclient::lookup_iter_cb (svccb *sbp,
     sbp->reply (fres);
   } else if (res->status == DHASH_CONTINUE) {
     chordID next = res->cont_res->next.x;
-    //add test for next == prev
-    clntnode->locations->cacheloc (next, res->cont_res->next.r, prev);
-    dhash_fetchiter_res *nres = New dhash_fetchiter_res;
-    path.push_back (next);
-    ptr<dhash_fetch_arg> rarg = New refcounted<dhash_fetch_arg>(*arg);
-    clntnode->doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, 
-		     rarg, nres,
-		     wrap(this, &dhashclient::lookup_iter_cb, 
-			  sbp, nres, next, path));
+    if (next == prev) {
+      sbp->replyref (DHASH_NOENT);
+    } else {
+      clntnode->locations->cacheloc (next, res->cont_res->next.r, prev);
+      dhash_fetchiter_res *nres = New dhash_fetchiter_res;
+      path.push_back (next);
+      assert (path.size () < 1000);
+      ptr<dhash_fetch_arg> rarg = New refcounted<dhash_fetch_arg>(*arg);
+      clntnode->doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, 
+		       rarg, nres,
+		       wrap(this, &dhashclient::lookup_iter_cb, 
+			    sbp, nres, next, path));
+    }
   } else 
     sbp->replyref (DHASH_NOENT);
 

@@ -73,8 +73,9 @@ struct finger {
   node first; // first ID after start
 };
 
-class vnode : public virtual refcount  {
+class vnode : public virtual refcount {
   static const int stabilize_timer = 1000;      // milliseconds
+  static const int stabilize_timer_max = 500000;      // milliseconds
   static const int max_retry = 5;
   
   ptr<locationtable> locations;
@@ -82,7 +83,11 @@ class vnode : public virtual refcount  {
   node succlist[NSUCC+1];
   int nsucc;
   node predecessor;
-  int stable;
+  bool stable;
+  bool stable_fingers;
+  bool stable_fingers2;
+  bool stable_succlist;
+  bool stable_succlist2;
 
   qhash<unsigned long, cbdispatch_t> dispatch_table;
 
@@ -117,6 +122,8 @@ class vnode : public virtual refcount  {
   chordID findpredfinger (chordID &x);
   chordID findpredfinger2 (chordID &x);
 
+  void stabilize_backoff (int f, int s, int t);
+  void stabilize_continuous ();
   int stabilize_succlist (int s);
   int stabilize_finger (int f);
   void stabilize_succ (void);
@@ -155,16 +162,17 @@ class vnode : public virtual refcount  {
 		      route search_path, chordstat status);
  public:
   chordID myID;
-  ihash_entry<vnode> fhlink;
+  //  ihash_entry<ref<vnode> > fhlink;
   ptr<chord> chordnode;
 
   vnode (ptr<locationtable> _locations, ptr<chord> _chordnode, chordID _myID);
+  ~vnode (void);
   chordID my_ID () { return myID; };
   chordID my_pred () { return predecessor.n; };
   chordID my_succ () { return finger_table[1].first.n; };
 
   // The API
-  void stabilize (int f, int s);
+  void stabilize (void);
   void join (cbjoin_t cb);
   void find_predecessor (chordID &n, chordID &x, cbroute_t cb);
   void find_predecessor_restart (chordID &n, chordID &x, route search_path,
@@ -196,6 +204,7 @@ class vnode : public virtual refcount  {
   void deletefingers (chordID &x);
   void stats (void);
   void print (void);
+  bool isstable (void);
   chordID lookup_closestpred (chordID &x);
 
   //RPC demux
@@ -212,7 +221,8 @@ class chord : public virtual refcount {
   net_address wellknownhost;
   net_address myaddress;
   chordID wellknownID;
-  ihash<chordID,vnode,&vnode::myID,&vnode::fhlink,hashID> vnodes;
+  qhash<chordID, ref<vnode>, hashID> vnodes;
+  //  ihash<chordID,ref<vnode >,&vnode::myID,&vnode::fhlink,hashID> vnodes;
 
   int ngetsuccessor;
   int ngetpredecessor;
@@ -227,6 +237,9 @@ class chord : public virtual refcount {
   void accept_standalone (int lfd);
   int startchord (int myp);
   chordID initID (int index);
+  void deletefingers_cb (chordID x, const chordID &k, ptr<vnode> v);
+  void stats_cb (const chordID &k, ptr<vnode> v);
+  void print_cb (const chordID &k, ptr<vnode> v);
  
  public:
   // locations contains all nodes that appear as fingers in vnodes plus
@@ -238,9 +251,10 @@ class chord : public virtual refcount {
   ptr<vnode> newvnode (cbjoin_t cb);
   ptr<vnode> newvnode (chordID &x, cbjoin_t cb);
   chordID lookup_closestpred (chordID k) { 
-    return vnodes.first()->lookup_closestpred (k); 
+     ptr<vnode> v = vnodes.first()->value;
+     return v->lookup_closestpred (k); 
   };
-  void deletefingers (chordID &x);
+  void deletefingers (chordID x);
   int countrefs (chordID &x);
   void stats (void);
   void print (void);
@@ -250,10 +264,12 @@ class chord : public virtual refcount {
 
   //'wrappers' for vnode functions (to be called from higher layers)
   void find_successor (chordID n, cbroute_t cb) {
-    vnodes.first()->dofindsucc (n, cb);
+    ptr<vnode> v = vnodes.first()->value;
+    return v->dofindsucc (n, cb);
   };
   void get_predecessor (chordID n, cbsfsID_t cb) {
-    vnodes.first()->get_predecessor (n, cb);
+    ptr<vnode> v = vnodes.first ()->value;
+    return v->get_predecessor (n, cb);
   };
   void doRPC (chordID &n, rpc_program progno, int procno, ptr<void> in, 
 	      void *out, aclnt_cb cb) {

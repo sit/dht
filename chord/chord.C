@@ -38,7 +38,11 @@ vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
   succlist[0].n = myID;
   succlist[0].alive = true;
   nsucc = 0;
-  stable = 0;
+  stable_fingers = false;
+  stable_fingers2 = false;
+  stable_succlist = false;
+  stable_succlist2 = false;
+  stable = false;
   locations->incvnodes ();
   locations->increfcnt (myID);
   for (int i = 1; i <= NSUCC; i++) {
@@ -73,6 +77,12 @@ vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
   ndoalert = 0;
   ndotestrange = 0;
   ndogetfingers = 0;
+}
+
+vnode::~vnode ()
+{
+  warnx << "vnode: destroyed\n";
+  exit (0);
 }
 
 int
@@ -138,7 +148,7 @@ vnode::deletefingers (chordID &x)
 void
 vnode::stats ()
 {
-  warnx << "VIRTUAL NODE STATS " << myID << "\n";
+  warnx << "VIRTUAL NODE STATS " << myID << " stable? " << isstable () << "\n";
   warnx << "# estimated node in ring " << nnodes << "\n";
   warnx << "# getsuccesor requests " << ndogetsuccessor << "\n";
   warnx << "# getpredecessor requests " << ndogetpredecessor << "\n";
@@ -225,7 +235,10 @@ vnode::findpredfinger (chordID &x)
       p = succlist[i].n;
     }
   }
-  //  warnx << "findpredfinger: " << myID << " of " << x << " is " << p << "\n";
+  if (p == myID) {
+    warnx << "findpredfinger: " << myID << " of " << x << " is " << p << "\n";
+    print ();
+  }
   return p;
 }
 
@@ -268,17 +281,52 @@ vnode::lookup_closestpred (chordID &x)
   return p;
 }
 
-void
-vnode::stabilize (int f, int s)
+bool
+vnode::isstable (void) 
 {
-  warnt("CHORD: stabilize");
-  stabilize_succ ();
-  f = stabilize_finger (f);
-  stabilize_pred ();
-  s = stabilize_succlist (s);
+  return stable_fingers && stable_fingers2 && stable_succlist && 
+    stable_succlist2;
+}
+
+void
+vnode::stabilize (void)
+{
+  stabilize_continuous ();
+  stabilize_backoff (0, 0, stabilize_timer);
+}
+
+void
+vnode::stabilize_continuous (void)
+{
   int time = uniform_random (0.5 * stabilize_timer, 1.5 * stabilize_timer);
   stabilize_tmo = delaycb (time / 1000, time * 1000, 
-			   wrap (mkref (this), &vnode::stabilize, f, s));
+			   wrap (this, &vnode::stabilize_continuous));
+}
+
+void
+vnode::stabilize_backoff (int f, int s, int t)
+{
+  if (!stable && isstable ()) {
+    stable = true;
+    warnx << gettime () << " stabilize: " << myID 
+	  << " stable! with estimate # nodes " << nnodes << "\n";
+    print ();
+  } else if (!isstable ()) {
+    t = stabilize_timer;
+    stable = false;
+  }
+  stabilize_succ ();
+  stabilize_pred ();
+  f = stabilize_finger (f);
+  s = stabilize_succlist (s);
+  if (isstable () && (t <= stabilize_timer_max)) {
+    warnx << myID << ": backoff\n";
+    t = 2 * t;
+  }
+  int time = uniform_random (0.5 * t, 1.5 * t);
+  stabilize_tmo = delaycb (time / 1000, time * 1000, 
+			   wrap (mkref (this), &vnode::stabilize_backoff, 
+				 f, s, t));
 }
 
 void
@@ -298,8 +346,9 @@ vnode::stabilize_getpred_cb (chordID p, net_address r, chordstat status)
 {
   // receive predecessor from my successor; in stable case it is me
   if (status) {
-        warnx << "stabilize_getpred_cb: " << myID << " " 
+    warnx << "stabilize_getpred_cb: " << myID << " " 
 	  << finger_table[1].first.n << " failure " << status << "\n";
+    // stable_fingers = false;
   } else {
     if (!finger_table[1].first.alive || (finger_table[1].first.n == myID) ||
 	between (myID, finger_table[1].first.n, p)) {
@@ -307,7 +356,7 @@ vnode::stabilize_getpred_cb (chordID p, net_address r, chordstat status)
       //   << p << "\n";
       locations->changenode (&finger_table[1].first, p, r);
       updatefingers (p, r);
-      stable = 0;
+      stable_fingers = false;
     }
     notify (finger_table[1].first.n, myID);
   }
@@ -319,12 +368,9 @@ vnode::stabilize_finger (int f)
   int i = f % (NBIT+1);
 
   if (i == 0) {
-    if (stable == 1) {
-      warnx << gettime () << " stabilize: " << myID 
-	    << " stable! with estimate # nodes " << nnodes << "\n";
-      print ();
-    } 
-    stable++;
+    if (stable_fingers) stable_fingers2 = true;
+    else stable_fingers2 = false;
+    stable_fingers = true;
   }
 
   if (i <= 1) i = 2;		// skip myself and immediate successor
@@ -332,6 +378,7 @@ vnode::stabilize_finger (int f)
   if (!finger_table[i].first.alive) {
     //  warnx << "stabilize: replace finger " << i << "\n" ;
     replacefinger (&finger_table[i].first);
+    stable_fingers = false;
   }
   if (i > 1) {
     for (; i <= NBIT; i++) {
@@ -343,7 +390,7 @@ vnode::stabilize_finger (int f)
 	  locations->changenode (&finger_table[i].first, s, 
 				 locations->getaddress(s));
 	  updatefingers (s, locations->getaddress(s));
-	  stable = 0;
+	  stable_fingers = false;
 	}
       } else break;
     }
@@ -365,6 +412,7 @@ vnode::stabilize_findsucc_cb (int i, chordID s, route search_path,
   if (status) {
     warnx << "stabilize_findsucc_cb: " << myID << " " 
 	  << finger_table[i].first.n << " failure " << status << "\n";
+    // stable_fingers = false;
   } else {
     if (!finger_table[i].first.alive || (finger_table[i].first.n != s)) {
       // warnx << "stabilize_findsucc_cb: " << myID << " " 
@@ -373,7 +421,7 @@ vnode::stabilize_findsucc_cb (int i, chordID s, route search_path,
       locations->changenode (&finger_table[i].first, s, 
 			     locations->getaddress(s));
       updatefingers (s, locations->getaddress(s));
-      stable = 0;
+      stable_fingers = false;
     }
   }
 }
@@ -384,7 +432,8 @@ vnode::stabilize_pred ()
   if (predecessor.alive) {
     get_successor (predecessor.n,
 		   wrap (mkref (this), &vnode::stabilize_getsucc_cb));
-  }
+  } else 
+    stable_fingers = false;
 }
 
 void
@@ -394,10 +443,11 @@ vnode::stabilize_getsucc_cb (chordID s, net_address r, chordstat status)
   if (status) {
     warnx << "stabilize_getpred_cb: " << myID << " " << predecessor.n 
 	  << " failure " << status << "\n";
+    // stable_fingers = false;
   } else {
     if (s != myID) {
-      stable = 0;
-      // warnx << "stabilize_succ_cb: " << myID << " WEIRD my pred " 
+      stable_fingers = false;
+      // warnx << "stabilize_succ_cb: " << myID << " my pred " 
       //   << predecessor.n << " has " << s << " as succ\n";
     }
   }
@@ -408,8 +458,14 @@ vnode::stabilize_succlist (int s)
 {
   int j = s % (nsucc+1);
 
+  if (j == 0) {
+    if (stable_succlist) stable_succlist2 = true;
+    else stable_succlist2 = false;
+    stable_succlist = true;
+  }
   if (!succlist[j].alive) {
     //  warnx << "stabilize: replace succ " << j << "\n";
+    stable_succlist = false;
     replacefinger (&succlist[j]);
   }
   get_successor (succlist[j].n,
@@ -425,13 +481,14 @@ vnode::stabilize_getsucclist_cb (int i, chordID s, net_address r,
   if (status) {
     warnx << "stabilize_getsucclist_cb: " << myID << " " << i << " : " 
 	  << succlist[i].n << " failure " << status << "\n";
+    // stable_succlist = false;
   } else {
     //    warnx << "stabilize_getsucclist_cb: " << myID << " " << i 
     //	  << " : successor of " 
     //	  << succlist[i].n << " is " << s << "\n";
-    // locations->checkrefcnt (3);
     if (s == myID) {  // did we go full circle?
       if (nsucc > i) {  // remove old entries?
+	stable_succlist = false;
 	for (int j = nsucc+1; j <= NSUCC; j++) {
 	  if (succlist[j].alive) {
 	    locations->deleteloc (succlist[j].n);
@@ -440,11 +497,15 @@ vnode::stabilize_getsucclist_cb (int i, chordID s, net_address r,
 	}
       }
       nsucc = i;
-      //      locations->checkrefcnt (4);
     } else if (i < NSUCC) {
-      locations->changenode (&succlist[i+1], s, r);
-      if ((i+1) > nsucc) nsucc = i+1;
-      //      locations->checkrefcnt (5);
+      if (succlist[i+1].n != s) {
+	stable_succlist = false;
+	locations->changenode (&succlist[i+1], s, r);
+      }
+      if ((i+1) > nsucc) {
+	stable_succlist = false;
+	nsucc = i+1;
+      }
     }
     u_long n = estimate_nnodes ();
     locations->replace_estimate (nnodes, n);
@@ -473,7 +534,7 @@ vnode::join_getsucc_cb (cbjoin_t cb, chordID s, route r, chordstat status)
     //    warnx << "join_getsucc_cb: " << myID << " " << s << "\n";
     locations->changenode (&finger_table[1].first, s, locations->getaddress(s));
     updatefingers (s, locations->getaddress(s));
-    stabilize (0, 0);
+    stabilize ();
     (*cb) (this);
   }
 }

@@ -137,7 +137,7 @@ chord::newvnode (cbjoin_t cb)
   ptr<vnode> vnodep = New refcounted<vnode> (locations, mkref (this), newID);
   nvnode++;
   warn << "insert: " << newID << "\n";
-  vnodes.insert (vnodep);
+  vnodes.insert (newID, vnodep);
   vnodep->join (cb);
   return vnodep;
 }
@@ -150,34 +150,43 @@ chord::newvnode (chordID &x, cbjoin_t cb)
   ptr<vnode> vnodep = New refcounted<vnode> (locations, mkref (this), x);
   nvnode++;
   warn << "insert: " << x << "\n";
-  vnodes.insert (vnodep);
+  vnodes.insert (x, vnodep);
   if (x != wellknownID) {
     vnodep->join (cb);
   } else {
     route r;
-    vnodep->stabilize (0, 0);
+    vnodep->stabilize ();
     (*cb) (vnodep);
   }
   return vnodep;
 }
 
 void
-chord::deletefingers (chordID &x)
+chord::deletefingers_cb (chordID x, const chordID &k, ptr<vnode> v) {
+  v->deletefingers (x);
+}
+
+void
+chord::deletefingers (chordID x)
 {
-  //  warnx << "deletefingers: " << x << "\n";
-  for (vnode *v = vnodes.first (); v != NULL; v = vnodes.next (v)) {
-    v->deletefingers (x);
-  }
+  warnx << "deletefingers: " << x << "\n";
+  vnodes.traverse (wrap (this, &chord::deletefingers_cb, x));
 }
 
 int
 chord::countrefs (chordID &x)
 {
   int n = 0;
-  for (vnode *v = vnodes.first (); v != NULL; v = vnodes.next (v)) {
-    n += v->countrefs (x);
+  for (qhash_slot <chordID, ref<vnode> > *s = vnodes.first(); s != NULL; 
+       s = vnodes.next (s)) {
+    n += s->value->countrefs (x);
   }
   return n;
+}
+
+void
+chord::stats_cb (const chordID &k, ptr<vnode> v) { 
+  v->stats();
 }
 
 void
@@ -192,18 +201,18 @@ chord::stats ()
   warnx << "# alert requests " << nalert << "\n";  
   warnx << "# testrange requests " << ntestrange << "\n";  
   warnx << "# getfingers requests " << ngetfingers << "\n";
-  for (vnode *v = vnodes.first (); v != NULL; v = vnodes.next (v)) {
-    v->stats ();
-  }
+  vnodes.traverse (wrap (this, &chord::stats_cb));
   locations->stats ();
 }
 
 void
-chord::print ()
-{
-  for (vnode *v = vnodes.first (); v != NULL; v = vnodes.next (v)) {
-    v->print ();
-  }
+chord::print_cb (const chordID &k, ptr<vnode> v) {
+  v->print ();
+}
+
+void
+chord::print () {
+  vnodes.traverse (wrap (this, &chord::print_cb));
 }
 
 void 
