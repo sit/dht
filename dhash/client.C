@@ -158,8 +158,10 @@ protected:
     numblocks = 0;
     int blockno = 0;
     got_storecb = true;
+#if 0
     if (store_type == DHASH_STORE)
       got_storecb = false;
+#endif
   
     if (dcb)
       timecb_remove (dcb);
@@ -314,10 +316,14 @@ dhashcli::retrieve2 (blockID blockID, cb_ret cb, int options,
     rs->callbacks.push_back (cb);
     rcvs.insert (rs);
 
-
-    route_iterator *ci = r_factory->produce_iterator_ptr (blockID.ID);
-    ci->first_hop (wrap (this, &dhashcli::retrieve2_hop_cb, blockID, ci), guess);
-
+    if(blockID.ctype == DHASH_KEYHASH) {
+      ref<route_dhash> iterator =  
+	New refcounted<route_dhash> (r_factory, blockID.ID, dh, clntnode, options);  
+      iterator->execute (wrap (this, &dhashcli::retrieve_hop_cb, cb, blockID.ID));  
+    } else {
+      route_iterator *ci = r_factory->produce_iterator_ptr (blockID.ID);
+      ci->first_hop (wrap (this, &dhashcli::retrieve2_hop_cb, blockID, ci), guess);
+    }
   }
 }
 
@@ -570,6 +576,20 @@ dhashcli::retrieve2_fetch_cb (blockID blockID, u_int i,
   }
 }
 
+void  
+dhashcli::retrieve_hop_cb (cb_ret cb, chordID key,  
+			   dhash_stat status,  
+			   ptr<dhash_block> blk,  
+			   route path)  
+{  
+  if (status) {  
+    warn << "iterator exiting w/ status\n";  
+    (*cb) (status, NULL, path);  
+  } else {  
+    cb (status, blk, path);  
+    cache_block (blk, path, key);  
+  }  
+}
 
 
 void
@@ -626,6 +646,24 @@ dhashcli::insert2 (ref<dhash_block> block, cbinsert_path_t cb,
   }
 }
 
+void  
+dhashcli::insert_stored_cb (chordID blockID, ref<dhash_block> block,  
+			    cbinsert_path_t cb, int trial,  
+			    dhash_stat stat, chordID retID)  
+{  
+  if (stat && stat != DHASH_WAIT && stat != DHASH_STALE && (trial <= 2)) {  
+    //try the lookup again if we got a RETRY  
+    warn << "got a RETRY failure (" << trial << "). Trying the lookup again. stat=" << stat << "\n";  
+    lookup (blockID,
+	    wrap (this, &dhashcli::insert2_lookup_cb,  
+		  block, cb));  
+  } else {  
+    vec<chordID> r_ret;
+    r_ret.push_back(retID);
+    cb (stat, r_ret);
+  }  
+}
+
 void
 dhashcli::insert2_succlist_cb (ref<dhash_block> block, cbinsert_path_t cb, chordID guess,
 			       vec<chord_node> succs, chordstat status)
@@ -649,6 +687,14 @@ dhashcli::insert2_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
   vec<chordID> mt;
   if (status) {
     (*cb) (DHASH_CHORDERR, mt);
+    return;
+  }
+
+  if(block->ctype == DHASH_KEYHASH) {
+    ref<location> dest = New refcounted<location>(succs[0]);
+    dhash_store::execute (clntnode, dest, block->ID, dh, block, false,  
+			  wrap (this, &dhashcli::insert_stored_cb,  
+				block->ID, block, cb, 0));  
     return;
   }
 

@@ -1,6 +1,6 @@
 class route_dhash : public virtual refcount {
 public:
-  route_dhash (ptr<route_factory> f, chordID key, dhash *dh, int options = 0);
+  route_dhash (ptr<route_factory> f, chordID key, dhash *dh, ptr<vnode> host_node, int options = 0);
   ~route_dhash ();
 
   void execute (cb_ret cbi, chordID first_hop_guess, u_int retries = 10);
@@ -11,6 +11,7 @@ public:
   
  private:
   dhash *dh;
+  ptr<vnode> host_node;
   u_int retries;
   route_iterator *chord_iterator;
   int options;

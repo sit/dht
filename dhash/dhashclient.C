@@ -291,7 +291,7 @@ dhashclient::retrievecb (cb_cret cb, bigint key,
   else {
     if (!verify (key, res->resok->ctype, res->resok->block.base (), 
 		      res->resok->len)) {
-      errstr = strbuf () << "data did not verify. len: " << res->resok->len;
+      errstr = strbuf () << "data did not verify. len: " << res->resok->len << " ctype " << res->resok->ctype;
     } else {
       // success
       ptr<dhash_block> blk = get_block_contents (res->resok->block.base(), 

@@ -92,7 +92,7 @@ class dhash {
   virtual void register_storecb_cb (int nonce, cbstorecbuc_t cb) = 0;
   virtual void unregister_storecb_cb (int nonce) = 0;
 
-  virtual dhash_stat key_status(const chordID &n) = 0;
+  virtual dhash_stat key_status(const blockID &n) = 0;
 };
 
 // see dhash/server.C

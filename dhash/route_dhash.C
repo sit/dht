@@ -3,6 +3,7 @@
 #include <chord_types.h>
 #include <route.h>
 #include "route_dhash.h"
+#include <location.h>
 #include <locationtable.h>
 #include <chord.h>
 #include <sfsmisc.h>
@@ -33,7 +34,7 @@ private:
   ptr<vnode> clntnode;
   uint npending;
   bool error;
-  chordID sourceID;
+  chord_node sourceID;
   chordID blockID;
   cbretrieve_t cb;
 
@@ -45,7 +46,7 @@ private:
 
   u_int64_t start;
 
-  dhash_download (ptr<vnode> clntnode, chordID sourceID, chordID blockID,
+  dhash_download (ptr<vnode> clntnode, chord_node sourceID, chordID blockID,
 		  char *data, u_int len, u_int totsz, int cookie,
 		  cbretrieve_t cb)
     : clntnode (clntnode),  npending (0), error (false), sourceID (sourceID), 
@@ -66,6 +67,7 @@ private:
   {
     ptr<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg>;
     arg->key   = blockID;
+    arg->ctype = DHASH_KEYHASH;
     arg->dbtype = DHASH_BLOCK;
     arg->start = start;
     arg->len   = len;
@@ -108,8 +110,8 @@ private:
   void
   process_first_chunk (char *data, size_t datalen, size_t totsz, int cookie)
   {
-    block            = New refcounted<dhash_block> ((char *)NULL, totsz, DHASH_CONTENTHASH);
-    block->source    = sourceID;
+    block            = New refcounted<dhash_block> ((char *)NULL, totsz, DHASH_KEYHASH);
+    block->source    = sourceID.x;
     block->hops      = 0;
     block->errors    = 0;
 
@@ -174,12 +176,12 @@ private:
   void
   fail (str errstr)
   {
-    warn << "dhash_download failed: " << blockID << ": " << errstr << "\n";
+    warn << "dhash_download failed: " << blockID << ": " << errstr << " at " << sourceID.x << "\n";
     error = true;
   }
 
 public:
-  static void execute (ptr<vnode> clntnode, chordID sourceID, chordID blockID,
+  static void execute (ptr<vnode> clntnode, chord_node sourceID, chordID blockID,
 		       char *data, u_int len, u_int totsz, int cookie, cbretrieve_t cb)
   {
     vNew dhash_download (clntnode, sourceID, blockID, data, len, totsz, cookie, cb);
@@ -193,12 +195,13 @@ public:
 // route_dhash -- lookups and downloads a block.
 
 route_dhash::route_dhash (ptr<route_factory> f, chordID blockID, dhash *dh,
-                          int options)
-  : dh (dh), options (options), blockID (blockID), f (f), dcb (NULL),
-    retries_done (0)
+                          ptr<vnode> host_node, int options)
+  : dh (dh), host_node (host_node), options (options), blockID (blockID), 
+    f (f), dcb (NULL), retries_done (0)
 {
   ptr<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg> ();
   arg->key = blockID;
+  arg->ctype = DHASH_KEYHASH;
   arg->dbtype = DHASH_BLOCK;
   f->get_node (&arg->from);
   arg->start = 0;
@@ -294,7 +297,7 @@ route_dhash::walk (vec<chord_node> succs)
     }
     if (ok) {
       dhash_download::execute
-	(f->get_vnode (), s.x, blockID, NULL, 0, 0, 0,
+	(f->get_vnode (), s, blockID, NULL, 0, 0, 0,
 	 wrap (mkref(this), &route_dhash::walk_gotblock, succs));
     } else {
       warn << "walk: No luck walking successors, retrying..\n";
@@ -333,7 +336,10 @@ route_dhash::block_cb (s_dhash_block_arg *arg)
       succs.push_back (make_chord_node (arg->nodelist[i]));
     walk (succs);
   } else {
-    dhash_download::execute (f->get_vnode (), arg->source, blockID,
+    chord_node n;
+    host_node->locations->lookup (arg->source)->fill_node (n);
+
+    dhash_download::execute (f->get_vnode (), n, blockID,
 			     arg->res.base (), arg->res.size (), 
 			     arg->attr.size, arg->cookie,
 			     wrap (mkref(this), &route_dhash::gotblock));

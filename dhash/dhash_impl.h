@@ -118,7 +118,7 @@ class dhash_impl : public dhash {
   void missing_retrieve_cb (bigint key, dhash_stat err, ptr<dhash_block> b,
 			    route r);
   
-  void sendblock (ptr<location> dst, bigint blockID, dhash_ctype ct, bool last, callback<void>::ref cb);
+  void sendblock (ptr<location> dst, blockID blockID, bool last, callback<void>::ref cb);
   void sendblock_cb (callback<void>::ref cb, dhash_stat err, chordID blockID);
 
   void keyhash_mgr_timer ();
@@ -200,7 +200,8 @@ class dhash_impl : public dhash {
   void printkeys_walk (const chordID &k);
   void printcached_walk (const chordID &k);
 
-  void dbwrite (ref<dbrec> key, ref<dbrec> data);
+  ptr<dbrec> dblookup(const blockID &i);
+  void dbwrite (ref<dbrec> key, ref<dbrec> data, dhash_ctype ctype);
   void dbdelete (ref<dbrec> key);
 
   chordID pred;
@@ -236,5 +237,5 @@ class dhash_impl : public dhash {
   void register_storecb_cb (int nonce, cbstorecbuc_t cb);
   void unregister_storecb_cb (int nonce);
 
-  dhash_stat key_status (const chordID &n);
+  dhash_stat key_status (const blockID &n);
 };

@@ -77,6 +77,8 @@ private:
 
   void lookup_findsucc_cb (chordID blockID, dhashcli_lookupcb_t cb,
 			   vec<chord_node> s, route path, chordstat err);
+  void retrieve_hop_cb (cb_ret cb, chordID key, dhash_stat status,  
+			ptr<dhash_block> block, route path);
   void cache_block (ptr<dhash_block> block, route search_path, chordID key);
   void finish_cache (dhash_stat status, chordID dest);
   void retrieve_with_source_cb (cb_ret cb, dhash_stat status, 
@@ -86,6 +88,9 @@ private:
 			  dhash_stat status, vec<chord_node> succs, route r);
   void insert2_store_cb (ref<sto_state> ss, route r, u_int i, 
 			 ref<dhash_storeres> res, clnt_stat err);
+  void insert_stored_cb (chordID blockID, ref<dhash_block> block,  
+			 cbinsert_path_t cb, int trial,  
+			 dhash_stat stat, chordID retID);
 
   void fetch_frag (rcv_state *rs);
 
