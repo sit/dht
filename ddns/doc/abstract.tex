@@ -1,0 +1,12 @@
+\begin{abstract}
+The traditional Domain Name Service (DNS) is sensitive to 
+server availability and does a poor job of load balancing. 
+We propose DDNS, a distributed DNS using
+Chord~\cite{chord:sigcomm}, a peer-to-peer lookup service.
+Due to Chord's fault tolerant properties, our system is more resilient to 
+failures and does better load balancing than traditional DNS.
+We plan to verify that DDNS gives reasonable lookup latency.
+We also discuss some interesting complications that arise
+when divorcing DNS data from the hosts that are responsible for it.
+\end{abstract}
+

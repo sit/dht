@@ -1,0 +1,37 @@
+\section{Introduction}
+
+The current DNS relies heavily on its
+thirteen root servers, which are responsbile for providing
+information about the root of the hierarchy and many top-level domains.
+The Internet Software Consortium, which runs one of the root servers,
+reported a load of 272 million queries per day in 2001~\cite{isc-root}.
+Chord balances load as a side effect of its lookup and storage 
+algorithms, thus avoiding such hot spots.
+
+We propose a distributed domain name service, DDNS,
+using a robust peer-to-peer lookup service like Chord.
+Such a system avoids some of the most significant
+problems with the current DNS implementation.
+ 
+Leslie Lamport's supposed characterization of a
+distributed system (as one in which you can't get work
+done because of a machine you have never heard of is down)
+is all too true in the current implementation of {DNS}.
+Jung {\it et al.}~\cite{dnscache:sigcommimw01} found that approximately
+35\% of DNS queries never receive an answer or receive
+an incorrect negative answer.
+Many of these failures are due to improperly configured
+root DNS entries (name server, or NS records).
+Such failures can go undetected because of the hierarchical
+nature of DNS: lookups within an administrative domain might
+succeed but that domain is unknowningly cut off from the rest
+of the hierarchy, so that lookups from outside will fail.
+Using Chord avoids this problem: since there is no hierarchical
+caching, lookups behave identically regardless of source.
+
+Distributing DNS data in a peer-to-peer network does have some
+disadvantages.In particular, we cannot easily dynamically 
+generate DNS responses. We discuss various solutions to 
+this problem in the implementation section.
+
+

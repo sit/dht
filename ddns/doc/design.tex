@@ -1,0 +1,72 @@
+\section{Design}
+
+DDNS makes use of
+DHash~\cite{cfs:sosp01}, a distributed hash table
+built on top of Chord~\cite{chord:sigcomm}, to store
+and retrieve resource records (RRs).
+Dhash has the following two nice properties:
+
+\begin{list}{$\bullet$}{}
+\item {\em Load balance}.
+If a particular record is looked up $n$ times
+in succession by different hosts (where $n$ can be very large),
+then with high probability each server sends
+the record to another server only $\log{m}$ times, 
+where $m$ is the number of servers. Notice that
+the number of times a record is transferred is 
+{\it independent} of the how popular it is.
+
+\item {\em Robustness}.
+As servers are disconnected from and reconnected to the network,
+DHash automatically moves data so that it is always on a fixed
+number of available replicas (typically six).
+Further, a very large number of servers have to
+all be disconnected simultaneously before data loss
+becomes apparent.
+\end{list}
+
+\subsection{Resource Records}
+
+All RRs for a domain name are stored 
+as a single record (hereafter referred to as a DDNS~record) 
+indexed by the domain name.
+All transactions are done on the granularity
+of DDNS records. The reason for grouping RRs is because it 1)
+guarantees that all RRs for a domain name will reside on
+the same server, 2) complements the verification scheme
+of DNSSEC (explained below), and 3) results in a simple
+and functional design altogether. We feel that this decision 
+will not degrade performance, since RRs are typically 
+very small, a DDNS~record should only take one RPC to transmit.
+
+\subsection{Stores}
+
+To store a DDNS record, the owner of that record 
+assembles all the RRs associated with the domain name,
+and sends a {\tt ddns-store(name, DDNS~record)} message to DDNS. 
+DDNS calculates the hash of the domain name, and sends
+a {\tt dhash-store(hash, data)} RPC to DHash, using the
+DDNS record as the data.
+
+\subsection{Look-ups}
+
+To perform a DNS look-up, a client will send a 
+{\tt ddns-lookup(name)} message to {DDNS}.
+DDNS 
+calculates the hash of the domain name, sends a
+{\tt dhash-lookup(hash)} RPC to DHash. Upon receiving
+the response, DDNS returns the corresponding DDNS record to the 
+client or report an error of the domain name does 
+not exist.
+
+\subsection{DDNS Record Verification}
+
+Since records are being served from arbitrary hosts rather
+than the hosts responsible for the domain, 
+we use the DNS Security Extensions (DNSSEC)~\cite{dnssec-rfc} to
+verify all records before returning them. DNSSEC stores the 
+signature of the owner of the RRSet~\cite{dnscla-rfc} in a 
+SIG RR.
+% We use one {\tt SIG RR} to carry the owner's signature
+% of the entire DDNS record, since we always transmit data on
+% the granularity of DDNS records.
