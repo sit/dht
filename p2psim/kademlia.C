@@ -1,5 +1,6 @@
 #include "kademlia.h"
 #include "packet.h"
+#include "nodefactory.h"
 #include <iostream>
 #include "p2psim.h"
 using namespace std;
@@ -36,6 +37,7 @@ void
 Kademlia::join(Args *a)
 {
   cout << "Node " << ip() << " doing a 10ms wait" << endl;
+  cout << "I'm running on a " << NodeFactory::Instance()->name(node()) << "." << endl;
   delaycb(10, Kademlia::join_kademlia, a);
 }
 

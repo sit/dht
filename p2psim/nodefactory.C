@@ -36,10 +36,18 @@ NodeFactory::~NodeFactory()
 Node *
 NodeFactory::create(string type, IPAddress ip)
 {
-  Node *e = 0;
+  Node *n = 0;
   if(type == "Node")
-    e = new Node(ip);
-  else if(type == "VivaldiNode")
-    e = new VivaldiNode(ip);
-  return e;
+    n = new Node(ip);
+  if(type == "VivaldiNode")
+    n = new VivaldiNode(ip);
+  _nodenames[typeid(*n).name()] = type;
+  return n;
+}
+
+
+string
+NodeFactory::name(Node *n)
+{
+  return _nodenames[typeid(*n).name()];
 }
