@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.14 2003/10/16 18:32:24 strib Exp $ */
+/* $Id: tapestry.C,v 1.15 2003/10/17 18:19:41 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -48,6 +48,7 @@ Tapestry::Tapestry(Node *n, Args a)
 
   //stabilization timer
   _stabtimer = a.nget<uint>("stabtimer", 10000, 10);
+  _join_num = 0;
 
   // init stats
   while (stat.size() < (uint) STAT_SIZE) {
@@ -109,28 +110,45 @@ Tapestry::lookup(Args *args)
 
   TapDEBUG(0) << "Tapestry Lookup for key " << print_guid(key) << endl;
 
+  // we'll be trying this X times, to simulate application-level retries
+  uint num_tries = 1;
+
   lookup_args la;
   la.key = key;
   la.looker = ip();
 
   lookup_return lr;
-  lr.hopcount = 0;
-  lr.failed = false;
+  while( num_tries <= 5 ) {
+    
+    lr.hopcount = 0;
+    lr.failed = false;
+    
+    handle_lookup( &la, &lr );
 
-  handle_lookup( &la, &lr );
-
-  if( !lr.failed ) {
-    if( lr.owner_id == lr.real_owner_id ) {
-      TapDEBUG(0) << "Lookup complete for key " << print_guid(key) << ": ip " 
-		  << lr.owner_ip << ", id " << print_guid(lr.owner_id) 
-		  << ", hops " << lr.hopcount << endl;
+    if( !lr.failed ) {
+      if( lr.owner_id == lr.real_owner_id ) {
+	TapDEBUG(0) << "Lookup complete for key " << print_guid(key) 
+		    << ": ip " << lr.owner_ip << ", id " 
+		    << print_guid(lr.owner_id) << ", hops " << lr.hopcount
+		    << ", numtries " << num_tries << endl;
+      } else {
+	TapDEBUG(0) << "Lookup incorrect for key " << print_guid(key) 
+		    << ": ip " << lr.owner_ip << ", id " 
+		    << print_guid(lr.owner_id) << ", real root " 
+		    << print_guid(lr.real_owner_id) << " hops " 
+		    << lr.hopcount << ", numtries " << num_tries << endl;
+      }
+      break;
     } else {
-      TapDEBUG(0) << "Lookup incorrect for key " << print_guid(key) << ": ip " 
-		  << lr.owner_ip << ", id " << print_guid(lr.owner_id) 
-		  << ", real root " << print_guid(lr.real_owner_id) 
-		  << " hops " << lr.hopcount << endl;
+      TapDEBUG(0) << "one lookup failed for key " << print_guid(key) 
+		  << ", numtries " << num_tries << endl;
     }
-  } else {
+
+    num_tries++;
+
+  }
+
+  if( lr.failed ) {
     TapDEBUG(0) << "Lookup failed for key " << print_guid(key) << endl;
   }
 
@@ -213,7 +231,6 @@ Tapestry::have_joined()
 void
 Tapestry::join(Args *args)
 {
-  TapDEBUG(0) << "Tapestry join" << endl;
 
   if( _joining ) {
     TapDEBUG(0) << "Tried to join while joining -- ignoring" << endl;
@@ -228,13 +245,16 @@ Tapestry::join(Args *args)
     return;
   }
 
+  _joining = true;
+  uint curr_join = ++_join_num;
+
+  TapDEBUG(0) << "Tapestry join " << curr_join << endl;
+
   // if we're the well known node, we're done
   if( ip() == wellknown_ip ) {
     have_joined();
     return;
   }
-
-  _joining = true;
 
   // contact the well known machine, and have it start routing to the surrogate
   join_args ja;
@@ -249,6 +269,12 @@ Tapestry::join(Args *args)
     jr.failed = false;
     record_stat(STAT_JOIN, 1, 0);
     bool succ = doRPC( wellknown_ip, &Tapestry::handle_join, &ja, &jr );
+
+    // make sure we haven't crashed and/or started another join
+    if( !node()->alive() || _join_num != curr_join ) {
+      TapDEBUG(0) << "Old join " << curr_join << " aborting" << endl;
+      return;
+    }
     
     if( !succ ) {
       TapDEBUG(0) << "Well known ip died!  BAD!\n";
@@ -351,6 +377,17 @@ Tapestry::join(Args *args)
       delete ncall;
     }
 
+    // make sure we haven't crashed and/or started another join
+    if( !node()->alive() || _join_num != curr_join ) {
+      TapDEBUG(0) << "Old join " << curr_join << " aborting" << endl;
+      // need to delete all the seeds
+      for( uint j = 0; j < seeds.size(); j++ ) {
+	NodeInfo *currseed = seeds[j];
+	delete currseed;
+      }
+      return;
+    }
+
     // now that we have all the seeds we want from this one, 
     // see if they are in the closest k
     NodeInfo * closestk[_k];
@@ -362,6 +399,17 @@ Tapestry::join(Args *args)
 
     // add these guys to routing table
     multi_add_to_rt( &seeds );
+
+    // make sure we haven't crashed and/or started another join
+    if( !node()->alive() || _join_num != curr_join ) {
+      TapDEBUG(0) << "Old join " << curr_join << " aborting" << endl;
+      // need to delete all the seeds
+      for( uint j = 0; j < seeds.size(); j++ ) {
+	NodeInfo *currseed = seeds[j];
+	delete currseed;
+      }
+      return;
+    }
 
     for( uint j = 0; j < seeds.size(); j++ ) {
       NodeInfo *currseed = seeds[j];
@@ -398,6 +446,17 @@ Tapestry::join(Args *args)
 
     }
 
+    // make sure we haven't crashed and/or started another join
+    if( !node()->alive() || _join_num != curr_join ) {
+      TapDEBUG(0) << "Old join " << curr_join << " aborting" << endl;
+      // need to delete all the currclose now
+      for( uint j = 0; j < _k; j++ ) {
+	NodeInfo *currseed = closestk[j];
+	delete currseed;
+      }
+      return;
+    }
+
     TapDEBUG(2) << "gathered closest for level " << i << endl;
 
     // these k are the next initlist
@@ -431,6 +490,12 @@ Tapestry::handle_join(join_args *args, join_return *ret)
 {
   TapDEBUG(2) << "got a join message from " << args->ip << "/" << 
     print_guid(args->id) << endl;
+
+  // not allowed to participate in your own join!
+  if( args->ip == ip() ) {
+    ret->failed = true;
+    return;
+  }
 
   // if our join has not yet finished, we must delay the handling of this
   // person's join.
@@ -573,6 +638,11 @@ Tapestry::handle_mc(mc_args *args, mc_return *ret)
 {
 
   TapDEBUG(2) << "got multicast message for " << args->new_ip << endl;
+
+  // not allowed to participate in your own join!
+  if( args->new_ip == ip() ) {
+    return;
+  }
 
   // lock this node
   _rt->set_lock( args->new_ip, args->new_id );
@@ -1325,11 +1395,6 @@ void
 Tapestry::crash(Args *args)
 {
   TapDEBUG(0) << "Tapestry crash" << endl;
-
-  if( _joining ) {
-    TapDEBUG(0) << "Tried to crash while joining -- ignoring" << endl;
-    return;
-  }
   
   node()->crash();
 
@@ -1337,6 +1402,14 @@ Tapestry::crash(Args *args)
   uint r = _rt->redundancy();
   delete _rt;
   joined = false;
+
+  // clear join state also
+  _joining = false;
+  for( uint l = 0; l < initlist.size(); l++ ) {
+    delete initlist[l];
+  }
+  initlist.clear();
+
   // TODO: should be killing these waiting RPCs instead of allowing them
   // to finish normally.  bah.
   _waiting_for_join->notifyAll();

@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.10 2003/10/16 18:32:24 strib Exp $ */
+/* $Id: tapestry.h,v 1.11 2003/10/17 18:19:41 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -201,6 +201,9 @@ private:
 
   // have we finished our join yet?
   bool joined;
+
+  // how many times have we tried to join?
+  uint _join_num;
 
   // how else are we gonna route?
   RoutingTable *_rt;
