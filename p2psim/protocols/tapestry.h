@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.28 2003/12/16 06:18:26 strib Exp $ */
+/* $Id: tapestry.h,v 1.29 2003/12/17 00:40:58 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -241,6 +241,10 @@ private:
 
   // when's the last time I heard from this person?
   map<IPAddress, Time> _last_heard_map;
+
+  // guids to find replacements for in the next stabilization round
+  vector<GUID> _recently_dead;
+  bool _lookup_learn;
 
   // statistics per message
   vector<uint> stat;

@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.37 2003/12/16 06:18:26 strib Exp $ */
+/* $Id: tapestry.C,v 1.38 2003/12/17 00:40:58 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -62,6 +62,7 @@ Tapestry::Tapestry(IPAddress i, Args a) : P2Protocol(i),
 
   _repair_backups = a.nget<uint>("repair_backups", 0, 10);
   _verbose = a.nget<bool>("verbose", 0, 10);
+  _lookup_learn = a.nget<bool>("lookuplearn", 1, 10);
 
   // init stats
   while (stat.size() < (uint) STAT_SIZE) {
@@ -74,6 +75,8 @@ Tapestry::Tapestry(IPAddress i, Args a) : P2Protocol(i),
   for( uint i = 0; i < _digits_per_id; i++ ) {
     _my_id_digits[i] = get_digit( id(), i );
   }
+
+  _recently_dead.clear();
 
 }
 
@@ -274,12 +277,22 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
       if( succ ) {
 	_last_heard_map[next] = now();
 	record_stat( STAT_LOOKUP, 1, 2 );
+      } else {
+	// remove it from our routing table
+	if( _lookup_learn ) {
+	  GUID deadid = ((Tapestry *)Network::Instance()->getnode(next))->id();
+	  _rt->remove( deadid, false );
+	  _rt->remove_backpointer( next, deadid );
+	  _recently_dead.push_back(deadid);
+	}
+
       }
       if( succ && !ret->failed ) {
 	// don't need to try the next one
 	ret->hopcount++;
 	break;
       } else {
+ 
 	// since we're using recursive routing, we only do this check in the
 	// case of non-success.
 	// make sure we haven't crashed and/or started another join
@@ -289,6 +302,7 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
 	  delete ips;
 	  return;
 	}
+
 	// print out that a failure happened
 	if( _verbose ) {
 	  TapDEBUG(1) << "Failure happened during the lookup of key " << 
@@ -1365,6 +1379,13 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
   // (possibly sending synchronous backpointers around) without messing
   // up the measurements
   set<GUID> removed;
+  // put recently dead nodes on there too
+  for( uint i = 0; i < _recently_dead.size(); i++ ) {
+    if( !_rt->contains(_recently_dead[i]) ) {
+      removed.insert( _recently_dead[i] );
+    }
+  }
+  _recently_dead.clear();
   for(HashMap<unsigned, ping_callinfo*>::iterator j=ping_resultmap->begin(); 
       j != ping_resultmap->end(); ++j) {
     ping_callinfo *pi = j.value();
@@ -1756,7 +1777,7 @@ Tapestry::crash(Args *args)
     delete initlist[l];
   }
   initlist.clear();
-
+  _recently_dead.clear();
   _rt = New RoutingTable(this, r);
   // TODO: should be killing these waiting RPCs instead of allowing them
   // to finish normally.  bah.
