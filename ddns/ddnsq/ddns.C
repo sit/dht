@@ -80,7 +80,9 @@ copy2block (char *data, void *field,
     assert(data);
   }
   memmove (data + datalen, (const char *) field, fieldlen);
-  warn << "data + " << datalen << " = " << data+datalen << "\n";
+//  warn << "data + " << datalen << " (" << fieldlen << ") = ";
+//  write(2, data+datalen, fieldlen);
+//  warn << "\n";
   datalen += fieldlen;
 }
 
@@ -105,7 +107,7 @@ ddns::ddnsRR2block (ptr<ddnsRR> rr, char *data, int datasize)
 
     switch (rr->type) {
     case A:
-      copy2block (data, (void *) &rr->rdata.address, 
+      copy2block (data, rr->rdata.address, 
 		  rr->rdlength, datalen, datasize);
       break;
     case NS:
@@ -139,9 +141,9 @@ ddns::ddnsRR2block (ptr<ddnsRR> rr, char *data, int datasize)
       delete rr->rdata.soa.rname;
       break;
     case WKS:
-      copy2block (data, (void *) &rr->rdata.wks.address,
+      copy2block (data, rr->rdata.wks.address,
 		  IP32ADDR_SIZE, datalen, datasize);	
-      copy2block (data, (void *) &rr->rdata.wks.protocol,
+      copy2block (data, (void *) &rr->rdata.wks.protocol,	// BUG byte order
 		  sizeof (uint32), datalen, datasize);		  
       copy2block (data, (void *) rr->rdata.wks.bitmap,
 		  rr->rdlength - IP32ADDR_SIZE - sizeof (uint32), 
@@ -221,7 +223,7 @@ ddns::store (domain_name dname, ref<ddnsRR> rr)
   
   dhash_clnt -> call (DHASHPROC_INSERT, i_arg, res, wrap (this, &ddns::store_cb, 
 							 dname, i_arg->key, res));
-  delete data;
+  free(data);
   while (nstore > 0)
     acheck ();
 }
@@ -233,9 +235,10 @@ ddns::store_cb (domain_name dname, chordID key,
   if (err || res->status) {
     warn << "store_cb: Err: " << strerror (err) 
 	 << " dhash_insert status: " << strerror (res->status) << "\n";
-  } else 
-    warn << "Successfully stored <" << dname << ", type" << ">\n"; 
-  delete dname;
+  }
+//   else 
+//    warn << "Successfully stored <" << dname << ", type" << ">\n"; 
+  free(dname);
   nstore--;
 }
 
@@ -339,7 +342,7 @@ ddns::lookup_cb (domain_name dname, chordID key,
     } else warn << "Not done: do more \n";
   }
 
-  delete dname;
+  free(dname);
   nlookup--;
 }
 

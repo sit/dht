@@ -59,7 +59,7 @@ struct soa_data {
 };
 
 struct wks_data {
-  ip32addr address;
+  unsigned char address[4];
   uint32 protocol; /* Actually, char */
   string bitmap;
 };
@@ -81,7 +81,7 @@ struct mx_data {
  
 typedef union {
 //case A:
-  ip32addr address;
+  unsigned char address[4];
 //case NS:
 //case CNAME:
 //case MD:

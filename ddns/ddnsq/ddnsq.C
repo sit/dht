@@ -1,133 +1,215 @@
 #include "dhash.h"
 #include "ddns.h"
+#include <iostream>
+
+#define nelem(a) (sizeof(a)/sizeof((a)[0]))
+#define nil 0
 
 ptr<ddns> ddns_clnt;
 
-static void 
-usage ()
+static int
+splitfields(char *s, char **f, int mf, int sep)
 {
-  warnx << "usage: " << progname << " <s|r> hostname rr_type[=A] [rr_data]\n";
-  exit (1);
+  char *p;
+  int infield, nf;
+  
+  infield = 0;
+  nf = 0;
+  for(p=s; *p; p++){
+    if(*p == sep){
+      *p = '\0';
+      infield = 0;
+    }else if(!infield){
+      f[nf++] = p;
+      if(nf >= mf)
+        return nf;
+      infield = 1;
+    }
+  }
+  return nf;
 }
 
-static void 
-fill_RR (domain_name dname, dns_type dt, dns_class cl, 
-	 ttl_t ttl, string rr_data, ref<ddnsRR> rr)
+static int
+mkaddress(unsigned char *a, char *s)
 {
-  /* convert into DDNS RR */
-  rr->dname = strdup (dname);
-  rr->type = dt;
-  rr->cls = cl;
-  rr->ttl = ttl;
+  char *f[5];
+  int i, nf;
+	
+  nf = splitfields(s, f, nelem(f), '.');
+  if(nf != 4){
+    cerr << "bad ip address format";
+    return -1;
+  }
+  for(i=0; i<4; i++)
+    a[i] = atoi(f[i]);
+  return 0;
+}
+	
+static ptr<ddnsRR>
+mkrr(char *name, dns_type t, int nval, char **val)
+{
+  char *f[10];
+  int nf, i;
+  ptr<ddnsRR> *last, rr, rrlist;
 
-  string sth = "Can you read this?";
-  string sth2 = "The is the default data.";
+  rrlist = nil;
+  last = &rrlist;
+	
+  for(i=0; i<nval; i++){
+	rr = New refcounted<ddnsRR>;
+	rr->dname = strdup(name);
+	rr->type = t;
+	switch(t){
+	case A:
+	  rr->rdlength = 4;
+	  if(mkaddress(rr->rdata.address, val[i]) < 0)
+	    return nil;
+	  break;
+	case NS:
+	case CNAME:
+	case MD:
+	case MF:
+	case MG:
+	case MR:
+	case PTR:
+	default:
+	  rr->rdata.hostname = strdup(val[i]);
+	  rr->rdlength = strlen(val[i])+1;
+	  break;
+	case SOA:
+	  nf = splitfields(val[i], f, nelem(f), ';');
+	  if(nf != 7){
+	    cerr << "soa format: mname;rname;serial;refresh;retry;expire;minttl";
+	    return nil;
+	  }
+	  rr->rdata.soa.mname = strdup(f[0]);
+	  rr->rdata.soa.rname = strdup(f[1]);
+	  rr->rdata.soa.serial = atoi(f[2]);
+	  rr->rdata.soa.refresh = atoi(f[3]);
+	  rr->rdata.soa.retry = atoi(f[4]);
+	  rr->rdata.soa.expire = atoi(f[5]);
+	  rr->rdata.soa.minttl = atoi(f[6]);
+      rr->rdlength = strlen(f[0])+1 + strlen(f[1])+1 + 5*4;
+      break;
+    case WKS:
+	  nf = splitfields(val[i], f, nelem(f), ';');
+	  if(nf != 3){
+	    cerr << "wks format: ipaddress;protocol";
+	    return nil;
+	  }
+      if(mkaddress(rr->rdata.wks.address, f[0]) < 0)
+        return nil;
+      rr->rdata.wks.protocol = atoi(f[1]);
+      rr->rdata.wks.bitmap = (char*)malloc(8);
+      strcpy(rr->rdata.wks.bitmap, "Athicha!");
+      rr->rdlength = 4+4+9;
+      break;
+    case HINFO:
+	  nf = splitfields(val[i], f, nelem(f), ';');
+	  if(nf != 2){
+	    cerr << "hinfo format: cpu;os";
+	    return nil;
+	  }
+	  rr->rdata.hinfo.cpu = strdup(f[0]);
+	  rr->rdata.hinfo.os = strdup(f[1]);
+	  rr->rdlength = strlen(f[0])+1 + strlen(f[1])+1;
+	  break;
+	case MINFO:
+	  nf = splitfields(val[i], f, nelem(f), ';');
+	  if(nf != 2){
+	    cerr << "minfo format: rmailbx;emailbx";
+	    return nil;
+	  }
+	  rr->rdata.minfo.rmailbx = strdup(f[0]);
+	  rr->rdata.minfo.emailbx = strdup(f[1]);
+	  rr->rdlength = strlen(f[0])+1 + strlen(f[1])+1;
+	  break;
+    case MX:
+	  nf = splitfields(val[i], f, nelem(f), ';');
+	  if(nf != 2){
+	    cerr << "mx format: pref;exchange";
+	    return nil;
+	  }
+	  rr->rdata.mx.pref = atoi(f[0]);
+	  rr->rdata.mx.exchange = strdup(f[1]);
+	  rr->rdlength = 4 + strlen(f[1])+1;
+	  break;
+	case TXT:
+	  rr->rdata.txt_data = strdup(val[i]);
+	  rr->rdlength = strlen(val[i])+1;
+	  break;
+    case DNULL:
+      break;
+	}
+	*last = rr;
+	last = &rr->next;
+  }
+  return rrlist;
+}
 
-  switch (dt) {
+static char*
+cmdinsert(int argc, char **argv)
+{
+  if(argc < 3)
+    return "usage: insert name type val...";
+
+  ptr<ddnsRR> rr = mkrr(strdup(argv[0]), get_dtype(argv[1]), argc-2, &argv[2]);
+  if(rr == nil)
+    return "parse error";
+  ddns_clnt->store(strdup(argv[0]), rr);
+  return nil;
+}
+
+static char*
+cmddelete(int, char**)
+{
+  return "delete not implemented";
+}
+
+static char*
+typestr(dns_type t)
+{
+  static char buf[20];
+  
+  switch(t){
   case A:
-    rr->rdlength = sizeof (rr->rdata.address);
-    rr->rdata.address = 18;
-    rr->rdata.address = (rr->rdata.address << 8) + 26;
-    rr->rdata.address = (rr->rdata.address << 8) + 4;
-    rr->rdata.address = (rr->rdata.address << 8) + 53;
-    break;
+    return "a";
   case NS:
+    return "ns";
   case CNAME:
+    return "cname";
   case MD:
+    return "md";
   case MF:
+    return "mf";
   case MB:
+    return "mb";
   case MG:
+    return "mg";
   case MR:
+    return "mr";
   case PTR:
-    rr->rdlength = strlen (rr_data) + 1;
-    rr->rdata.hostname = (string) malloc (rr->rdlength);
-    memmove (rr->rdata.hostname, rr_data, rr->rdlength);
-    break;
+    return "ptr";
   case SOA:
-    rr->rdata.soa.mname = (string) malloc (6);
-    memmove (rr->rdata.soa.mname, "hello\0", 6);
-    rr->rdata.soa.rname = (string) malloc (6);
-    memmove (rr->rdata.soa.rname, "there\0", 6);
-    rr->rdata.soa.serial = 1;
-    rr->rdata.soa.refresh = 22;
-    rr->rdata.soa.retry = 333;
-    rr->rdata.soa.expire = 4444;
-    rr->rdata.soa.minttl = 55555;
-    rr->rdlength = 6 + 6 + 5*sizeof (uint32);
-    break;
-  case WKS:
-    rr->rdata.wks.address = 18;
-    rr->rdata.wks.address = (rr->rdata.address << 8) + 26;
-    rr->rdata.wks.address = (rr->rdata.address << 8) + 4;
-    rr->rdata.wks.address = (rr->rdata.address << 8) + 88;
-    rr->rdata.wks.protocol = 10;
-    rr->rdata.wks.bitmap = (string) malloc (8);
-    rr->rdata.wks.bitmap = "Athicha!";
-    rr->rdlength = sizeof (rr->rdata.wks.address) + sizeof (uint32) + 8;
-    break;
-  case HINFO:
-    rr->rdata.hinfo.cpu = (string) malloc (8);
-    rr->rdata.hinfo.cpu = "Pentium\0";
-    rr->rdata.hinfo.os  = (string) malloc (8);
-    rr->rdata.hinfo.os  = "FreeBSD\0";
-    rr->rdlength = 8 + 8;
-    break;
-  case MINFO:
-    rr->rdata.minfo.rmailbx = (domain_name) malloc (9);
-    rr->rdata.minfo.rmailbx = "new-york\0";
-    rr->rdata.minfo.emailbx = (domain_name) malloc (10);
-    rr->rdata.minfo.emailbx = "amsterdam\0";
-    rr->rdlength = 9 + 10;
-    break;
-  case MX:
-    rr->rdata.mx.pref = 3;
-    rr->rdata.mx.exchange = (domain_name) malloc (4);
-    rr->rdata.mx.exchange = "not\0";
-    rr->rdlength = sizeof (uint32) + 4;
-    break;
-  case TXT:
-    rr->rdata.txt_data = strdup (sth);
-    rr->rdlength = strlen (sth);
-    break;
-  case DNULL:
+    return "soa";
   default:
-    rr->rdata.rdata = strdup (sth2);
-    rr->rdlength = strlen (sth2);
-    break;
-  }    
+    snprintf(buf, sizeof buf, "dnstype%d", t);
+    return buf;
+  }
 }
 
-static void 
-store_it (domain_name dname, dns_type dt) 
+static void
+printrr(ptr<ddnsRR> rr)
 {
-  ref<ddnsRR> rr = New refcounted<ddnsRR>;
-  //fill_RR (dname, dt, IN, 23234, "18.26.4.33", rr);
-  fill_RR (dname, dt, IN, 23234, "sth.sth.com\0", rr);
-  rr->next = New refcounted<ddnsRR>;
-  //fill_RR (dname, dt, IN, 54344, "34.5.3.2", rr->next);
-  fill_RR (dname, dt, IN, 34242, "hello.org\0", rr->next);
-  rr->next->next = NULL;
+  unsigned char *a;
 
-  ddns_clnt->store (dname, rr);
-}
-
-void 
-got_it (ptr<ddnsRR> rr)
-{
-  while (rr) {
-    warn << "dname = " << rr->dname << " len = " << strlen(rr->dname) << "\n";
-    warn << "type = " << rr->type << "\n";
-    warn << "class = " << rr->cls << "\n";
-    warn << "ttl = " << rr->ttl << "\n";
-    warn << "rdlength " << rr->rdlength << "\n";
-    switch (rr->type) {
+  cout << rr->dname << " " << typestr(rr->type);
+  for(; rr; rr=rr->next){
+    cout << " ";
+    switch(rr->type){
     case A:
-      warn << "rdata.address = " 
-	   << (rr->rdata.address >> 24) 
-	   << "." << ((rr->rdata.address << 8)  >> 24) 
-	   << "." << ((rr->rdata.address << 16) >> 24)
-	   << "." << ((rr->rdata.address << 24) >> 24) 
-	   << "\n";
+      a = rr->rdata.address;
+      cout << (int)a[0] << "." << (int)a[1] << "." << (int)a[2] << "." << (int)a[3];
       break;
     case NS:
     case CNAME:
@@ -137,90 +219,100 @@ got_it (ptr<ddnsRR> rr)
     case MG:
     case MR:
     case PTR:
-      warn << "rdata.hostname = " << rr->rdata.hostname << "\n";
+      cout << rr->rdata.hostname;
       break;
     case SOA:
-      warn << "rdata.soa.mname = " << rr->rdata.soa.mname << "\n";
-      warn << "rdata.soa.rname = " << rr->rdata.soa.rname << "\n";
-      warn << "rdata.soa.serial = " << rr->rdata.soa.serial << "\n";
-      warn << "rdata.soa.refresh = " << rr->rdata.soa.refresh << "\n";
-      warn << "rdata.soa.retry = " << rr->rdata.soa.retry << "\n";
-      warn << "rdata.soa.expire = " << rr->rdata.soa.expire << "\n";
-      warn << "rdata.soa.minttl = " << rr->rdata.soa.minttl << "\n";
+      cout << rr->rdata.soa.mname << ";";
+      cout << rr->rdata.soa.rname << ";";
+      cout << rr->rdata.soa.serial << ";";
+      cout << rr->rdata.soa.refresh << ";";
+      cout << rr->rdata.soa.retry << ";";
+      cout << rr->rdata.soa.expire << ";";
+      cout << rr->rdata.soa.minttl;
       break;
     case WKS:
-      warn << "rdata.wks.address = " << rr->rdata.wks.address << "\n";
-      warn << "rdata.wks.protocol = " << rr->rdata.wks.protocol << "\n";
-      warn << "rdata.wks.bitmap = ";
-      write (2, rr->rdata.wks.bitmap, rr->rdlength - IP32ADDR_SIZE - sizeof (uint32));
-      warnx << "\n";
+      a = rr->rdata.wks.address;
+      cout << (int)a[0] << "." << (int)a[1] << "." << (int)a[2] << "." << (int)a[3] << ";";
+      cout << rr->rdata.wks.protocol << ";";
+      cout << rr->rdata.wks.bitmap;
       break;
     case HINFO:
-      warn << "rdata.hinfo.cpu = " << rr->rdata.hinfo.cpu << "\n";
-      warn << "rdata.hinfo.os = " << rr->rdata.hinfo.os << "\n";      
+      cout << rr->rdata.hinfo.cpu << ";" << rr->rdata.hinfo.os;
       break;
     case MINFO:
-      warn << "rdata.minfo.rmailbx = " << rr->rdata.minfo.rmailbx << "\n";
-      warn << "rdata.minfo.emailbx = " << rr->rdata.minfo.emailbx << "\n";
+      cout << rr->rdata.minfo.rmailbx << ";" << rr->rdata.minfo.emailbx;
       break;
     case MX:
-      warn << "rdata.mx.pref = " << rr->rdata.mx.pref << "\n";
-      warn << "rdata.mx.exchange = " << rr->rdata.mx.exchange << "\n";     
+      cout << rr->rdata.mx.pref << ";" << rr->rdata.mx.exchange;
       break;
     case TXT:
-      warn << "rdata.txt_data = " << rr->rdata.txt_data << "\n";
+      cout << rr->rdata.txt_data;
       break;
     case DNULL:
+      break;
     default:
-      warn << "rdata.rdata = " << rr->rdata.rdata << "\n";
+      cout << "\tunknown type\n";
       break;
     }
-    rr = rr->next;
   }
+  cout << "\n";
 }
 
-int 
+static char*
+cmdlookup(int argc, char **argv)
+{
+  if(argc != 2)
+    return "usage: lookup name type";
+  ddns_clnt->lookup(strdup(argv[0]), get_dtype(argv[1]), wrap(printrr));
+  return nil;
+}
+  
+static struct {
+  char *cmd;
+  char *(*fn)(int, char**);
+} tab[] = {
+  {"insert", cmdinsert},
+  {"delete", cmddelete},
+  {"lookup", cmdlookup},
+};
+
+static void 
+usage ()
+{
+  warnx << "usage: ddnscmd\n";
+  exit (1);
+}
+
+int
 main (int argc, char **argv)
 {
-
-  setprogname (argv[0]);
-  domain_name hostname;
-  dns_type rr_type = A;
-  string rr_data = NULL;
-  bool store = false;
-
-  sfsconst_init ();
-  warn << "argc : " << argc << "\n";
-  if (argc < 4) 
-    usage ();
-  else {
-    hostname = (string) malloc (sizeof (argv[2])+1);
-    strcpy (hostname,argv[2]);
-    rr_type = get_dtype (argv[3]);
-    if (strlen (hostname) > DOMAIN_LEN) 
-      fatal ("domain name longer than %d\n", DOMAIN_LEN);
-    if (!strcasecmp(argv[1], "s")) {
-      store = true;
-      if (argc < 5) 
-	usage ();
-      else {
-	warn << "argv[4] = " << argv[4] << "\n";
-	rr_data = (string) malloc (sizeof (argv[4]));
-	strcpy (rr_data,argv[4]);
-      }
-    }
-  }
+  char line[256], *err, *f[20];
+  int i, nf;
   
+  if(argc != 1)
+    usage ();
+		
+  sfsconst_init ();
   const char *control_socket = "/tmp/chord-sock";
   ddns_clnt = New refcounted<ddns> (control_socket, 0);
-  
-  if (store) {
-    store_it (hostname, rr_type);
-  } else {
-    warn << "hostname = " << hostname << "size = " << strlen (hostname) << "\n";
-    ddns_clnt->lookup (hostname, rr_type, wrap (got_it));
+  for(;;){
+    cerr << ">>> ";
+    cin.getline(line, sizeof line);
+    if(cin.eof())
+      break;
+    nf = splitfields(line, f, nelem(f), ' ');
+    if(nf == 0)
+      continue;
+    for(i=0; i<(int)nelem(tab); i++)
+      if(strcmp(tab[i].cmd, f[0]) == 0)
+        break;
+    if(i==nelem(tab)){
+      cerr << "?unknown command\n";
+      continue;
+    }
+    if((err = tab[i].fn(nf-1, f+1)) != nil)
+      cerr << "?" << err << "\n";
   }
-
   return 0;
 }
 
