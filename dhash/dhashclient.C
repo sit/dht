@@ -254,9 +254,11 @@ dhashclient::retrievecb (cb_cret cb, bigint key,
 			 clnt_stat err)
 {
   str errstr;
-  bool verify_failed = false;
-  if (err)
+  dhash_stat ret (res->status);
+  if (err) {
     errstr = strbuf () << "rpc error " << err;
+    ret    = DHASH_RPCERR;
+  }
   else if (res->status != DHASH_OK)
     errstr = dhasherr2str (res->status);
   else {
@@ -264,7 +266,7 @@ dhashclient::retrievecb (cb_cret cb, bigint key,
 		      res->resok->len)) {
       errstr = strbuf () << "data did not verify. len: " << res->resok->len
 	                 << " ctype " << res->resok->ctype;
-      verify_failed = true;
+      ret = DHASH_RETRIEVE_NOVERIFY;
     } else {
       // success
       ptr<dhash_block> blk = get_block_contents (res->resok->block.base(), 
@@ -292,7 +294,6 @@ dhashclient::retrievecb (cb_cret cb, bigint key,
 
   warn << "dhashclient::retrieve failed: " << key << ": " << errstr << "\n";
   vec<chordID> e_path;
-  // failure
-  (*cb) (verify_failed ? DHASH_RETRIEVE_NOVERIFY : res->status, NULL, e_path); 
+  (*cb) (ret, NULL, e_path); 
 }
 
