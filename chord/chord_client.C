@@ -149,7 +149,8 @@ chord::newvnode (cbjoin_t cb, ptr<fingerlike> fingers, ptr<route_factory> f)
   }
   warnx << "\n";
   locations->insert (newID, myname, myport, coords);
-
+  // force an update of the coords in the locationtable
+  locations->set_coords (newID, coords);
 
 #if 0  
   if (newID != wellknown_node.x) {
