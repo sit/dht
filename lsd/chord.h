@@ -187,15 +187,9 @@ class p2p : public virtual refcount  {
   void set_closeloc (wedge &w);
   bool updatesucc (wedge &w, sfs_ID &x, net_address &r);
   bool updatepred (wedge &w, sfs_ID &x, net_address &r);
-#if 0
-  bool noticepred (int k, sfs_ID &x, net_address &r);
-#endif
   bool noticesucc (int k, sfs_ID &x, net_address &r);
   bool notice (int k, sfs_ID &x, net_address &r);
   int successor_wedge (sfs_ID &n);
-#if 0
-  int predecessor_wedge (sfs_ID &n);
-#endif
   void print ();
 
   void timeout(location *l);
@@ -222,11 +216,6 @@ class p2p : public virtual refcount  {
   void find_successor (sfs_ID &n, sfs_ID &x, cbroute_t cb);
   void find_closestpred_cb (sfs_ID n, cbroute_t cb, sfsp2p_findres *res, 
 			    route search_path, clnt_stat err);
-#if 0
-  void find_successor_cb (sfs_ID n, cbroute_t cb, 
-			  sfsp2p_findres *res, 
-			  route sp, clnt_stat err);
-#endif
 
   void get_successor (sfs_ID n, cbsfsID_t cb);
   void get_successor_cb (sfs_ID n, cbsfsID_t cb, sfsp2p_findres *res, 
