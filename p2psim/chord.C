@@ -81,7 +81,7 @@ Chord::find_successors(CHID key, uint m, bool intern)
 
 
   while(1){
-    assert(count++ < 100);
+    assert(count++ < 5000);
     if (vis && !intern) 
       printf ("vis %lu step %16qx %16qx\n", now(), me.id, nprime.id);
 
@@ -249,6 +249,7 @@ void
 Chord::init_state(vector<IDMap> ids)
 {
   loctable->add_sortednodes(ids);
+  printf("Chord: %s inited %d %d\n", ts(), ids.size(), loctable->size());
 }
 
 void

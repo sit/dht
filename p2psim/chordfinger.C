@@ -46,17 +46,17 @@ ChordFinger::init_state(vector<IDMap> ids)
   for (uint i = 0; i < level; i++) {
     for (uint j = 1; j <= (_base - 1); j++) {
       if (lap < min_lap) continue;
-      finger = lap * j + me.id;
-      loctable->pin(finger, 1, 0);
+      if (numf < _maxf) {
+	finger = lap * j + me.id;
+	loctable->pin(finger, 1, 0);
+      }
       numf++;
-      if (numf >= _maxf) goto NEXT;
     }
     lap = (lap * _base);
   }
 
-NEXT:
   Chord::init_state(ids);
-  printf("%s inited %d %d %d %d %d %d\n", ts(), ids.size(), loctable->size(), _maxf, numf, _numf, loctable->psize());
+  printf("ChordFinger: %s inited %d %d %d %d %d %d\n", ts(), ids.size(), loctable->size(), _maxf, numf, _numf, loctable->psize());
 }
 
 void
