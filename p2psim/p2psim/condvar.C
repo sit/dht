@@ -21,7 +21,7 @@
  * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
  */
 
-/* $Id: condvar.C,v 1.3 2003/10/08 12:19:44 thomer Exp $ */
+/* $Id: condvar.C,v 1.4 2003/10/09 04:53:13 strib Exp $ */
 
 #include "condvar.h"
 using namespace std;
@@ -35,7 +35,7 @@ ConditionVar::~ConditionVar()
 {
   // TODO: what happens if this gets deleted while there are threads waiting?
   // may have to do something smarter in the future
-  assert( _waiters->size() == 0 );
+  //assert( _waiters->size() == 0 );
   delete _waiters;
 }
 
