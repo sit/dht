@@ -33,7 +33,8 @@ def ring_combinations (l, n, seed = 0):
     """Generate all possible overlapping setes of n nodes in a ring from l"""
     import random
     # Simulate a "ring" by randomly permuting all nodes 
-    random.seed (seed)
+    if seed > 0:
+	random.seed (seed)
     random.shuffle (l) 
     total = len (l)
     if n > total: n = total
