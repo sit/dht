@@ -4,12 +4,12 @@
 #include "p2psim.h"
 #include "protocol.h"
 
-typedef unsigned HashedID;
+typedef unsigned NodeID;
 
 typedef struct{
-  HashedID hid; //hashed ID
-  IPAddress id; //node ID, like an IP address
-}IDMap;
+  IPAddress ip;
+  NodeID id;
+} IDMap;
 
 class Chord : public Protocol {
 public:

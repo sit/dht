@@ -11,7 +11,7 @@ using namespace std;
 // Is n between a and b?
 // a < n <= b
 static bool
-between(HashedID a, HashedID b, HashedID n)
+between(NodeID a, NodeID b, NodeID n)
 {
   bool r;
   if (a == b) {
@@ -27,8 +27,8 @@ between(HashedID a, HashedID b, HashedID n)
 Chord::Chord(Node *n)
   : Protocol(n)
 {
-  me.hid = rand(); //for now, a rand() ID is as good as hashe(IP)
-  me.id = n->id();
+  me.id = rand(); //for now, a rand() ID is as good as hashe(IP)
+  me.ip = n->id();
 
   predecessor.id = 0;
   successor = me;
@@ -42,7 +42,7 @@ string
 Chord::s()
 {
   char buf[50];
-  sprintf(buf, "Chord(%u,%u)", me.id, me.hid);
+  sprintf(buf, "Chord(%u,%u)", me.ip, me.id);
   return string(buf);
 }
 
@@ -50,7 +50,7 @@ void *
 Chord::find_successor_x(void *x)
 {
   printf("Chord(%u,%u)::find_successor_x(%u)\n",
-         me.id, me.hid, (int) x);
+         me.ip, me.id, (int) x);
   return (void *) 99;
 }
 
@@ -62,15 +62,15 @@ Chord::join(Args *args)
   IPAddress wkn = (IPAddress) atoi(((*args)["wellknown"]).c_str());
 
   cout << s() + "::join" << endl;
-  void *ret = doRPC((IPAddress) wkn, Chord::find_successor_x, me.hid);
+  void *ret = doRPC(wkn, Chord::find_successor_x, me.id);
   printf("Chord(%u,%u)::join2 %u\n",
-         me.id, me.hid, (int) ret);
+         me.ip, me.id, (int) ret);
   // stabilize();
 }
 
 #if 0
 IDMap
-Chord::find_successor(HashedID n, bool recursive)
+Chord::find_successor(NodeID n, bool recursive)
 {
   //how to do recursive queries with RPC? 
   IDMap nn;
@@ -129,7 +129,7 @@ Chord::get_predecessor()
 }
 
 IDMap
-Chord::next(HashedID n)
+Chord::next(NodeID n)
 {
   if (between(predecessor.hid, me.hid, n)) { 
     return me;
@@ -150,7 +150,7 @@ Chord::crash()
 }
 
 void
-Chord::insert_doc(HashedID docID) 
+Chord::insert_doc(NodeID docID) 
 {
   IDMap n = find_successor(docID);
   doRPC(n.id, store_doc, docID);
@@ -164,7 +164,7 @@ Chord::store_doc(docID)
 }
 
 void
-Chord::lookup_doc(HashedID docID) 
+Chord::lookup_doc(NodeID docID) 
 {
 }
 #endif
