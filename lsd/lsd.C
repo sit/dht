@@ -19,7 +19,8 @@
  *
  */
 
-#include "sfsp2p.h"
+#include "chord.h"
+#include "chord_client.h"
 #include "parseopt.h"
 
 EXITFN (cleanup);
