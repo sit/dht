@@ -264,8 +264,6 @@ vnode::doget_successor (svccb *sbp)
   res.resok->x = s;
   res.resok->r = locations->getaddress (s);
   sbp->reply (&res);
-
-  warnt("CHORD: doget_successor_reply");
 }
 
 void
@@ -292,9 +290,13 @@ vnode::do_upcall (int upcall_prog, int upcall_proc,
 		  cbupcalldone_t done_cb)
 
 {
-  cbupcall_t cb = upcall_table[upcall_prog];
-  assert (cb);
-  
+  upcall_record *uc = upcall_table[upcall_prog];
+  if (!uc) { 
+    warn << "upcall not registered\n";
+    done_cb (false);
+    return;
+  }
+
   rpc_program *prog;
   chordnode->get_program (upcall_prog, &prog);
   assert (prog);
@@ -309,6 +311,7 @@ vnode::do_upcall (int upcall_prog, int upcall_proc,
     fatal << "upcall: error unmarshalling arguments\n";
   
   //run the upcall. It returns a pointer to its result and a length in the cb
+  cbupcall_t cb = uc->cb;
   (*cb)(upcall_proc, (void *)unmarshalled_args,
 	wrap (this, &vnode::do_upcall_cb, unmarshalled_args, done_cb));
 
@@ -323,7 +326,6 @@ vnode::dotestrange_findclosestpred (svccb *sbp, chord_testandfindarg *fa)
 
   chord_testandfindres *res = New chord_testandfindres ();  
   if (betweenrightincl(myID, succ, x) ) {
-    warnt("CHORD: testandfind_inrangereply");
     res->set_status (CHORD_INRANGE);
     res->inrange->n.x = succ;
     res->inrange->n.r = locations->getaddress (succ);
@@ -332,7 +334,6 @@ vnode::dotestrange_findclosestpred (svccb *sbp, chord_testandfindarg *fa)
     chordID p = lookup_closestpred (fa->x);
     res->notinrange->n.x = p;
     res->notinrange->n.r = locations->getaddress (p);
-    warnt("CHORD: testandfind_notinrangereply");
   }
 
   if (fa->upcall_prog)  {
@@ -367,7 +368,6 @@ vnode::dofindclosestpred (svccb *sbp, chord_findarg *fa)
   ndofindclosestpred++;
   res.resok->x = p;
   res.resok->r = locations->getaddress (p);
-  warnt("CHORD: dofindclosestpred_reply");
   sbp->reply (&res);
 }
 
@@ -401,7 +401,6 @@ void
 vnode::doalert (svccb *sbp, chord_nodearg *na)
 {
   ndoalert++;
-  warnt("CHORD: doalert");
   if (locations->cached (na->n.x)) {
     // check whether we cannot reach x either
     get_successor (na->n.x, wrap (mkref (this), &vnode::doalert_cb, sbp, 
@@ -443,7 +442,6 @@ vnode::dogetfingers_ext (svccb *sbp)
 
   fingers->fill_nodelistresext (&res);
 
-  warnt("CHORD: dogetfingers_reply");
   sbp->reply (&res);
 }
 
@@ -453,7 +451,6 @@ vnode::dogetsucc_ext (svccb *sbp)
   chord_nodelistextres res(CHORD_OK);
   ndogetsucc_ext++;
   successors->fill_nodelistresext (&res);
-  warnt("CHORD: dogetsucc_reply");
   sbp->reply (&res);
 }
 
@@ -491,7 +488,6 @@ vnode::dogettoes (svccb *sbp)
     locations->fill_getnodeext (res.resok->nlist[i], t[i]);
   }
   
-  warnt ("CHORD: dogettoes_reply");
   sbp->reply (&res);
 }
 
@@ -525,7 +521,6 @@ vnode::dodebruijn (svccb *sbp, chord_debruijnarg *da)
   res = New chord_debruijnres ();
   if (betweenrightincl (myID, succ, da->x)) {
     res->set_status(CHORD_INRANGE);
-    warnt("CHORD: debruijn_inrangereply");
     res->inres->node.x = succ;
     res->inres->node.r = locations->getaddress (succ);
   } else {

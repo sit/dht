@@ -64,19 +64,39 @@ typedef callback<void, int, void *, cbupcalldone_t>::ref cbupcall_t;
 
 // ================ VIRTUAL NODE ================
 
+struct dispatch_record {
+  unsigned long progno;
+  cbdispatch_t cb;
+  ihash_entry<dispatch_record> hlink;
+  dispatch_record (int p, cbdispatch_t c) : progno (p), cb (c) {};
+};
+
+struct upcall_record {
+  int progno;
+  cbupcall_t cb;
+  ihash_entry<upcall_record> hlink;
+  upcall_record (int p, cbupcall_t c) : progno (p), cb (c) {};
+};
+
 class vnode : public virtual refcount, public stabilizable {
-
+  
   ptr<fingerlike> fingers;
-
+  
   ptr<succ_list> successors;
   ptr<toe_table> toes;
   ptr<stabilize_manager> stabilizer;
-
+  
   int myindex;
   chordID last_pred;		// for stabilize
-
-  qhash<unsigned long, cbdispatch_t> dispatch_table;
-  qhash<int, cbupcall_t> upcall_table;
+  
+  ihash<unsigned long, 
+    dispatch_record, 
+    &dispatch_record::progno, 
+    &dispatch_record::hlink > dispatch_table;
+  ihash<int, 
+    upcall_record, 
+    &upcall_record::progno, 
+    &upcall_record::hlink> upcall_table;
 
   u_long ngetsuccessor;
   u_long ngetpredecessor;
@@ -216,10 +236,8 @@ class vnode : public virtual refcount, public stabilizable {
 
   //RPC demux
   void addHandler (const rpc_program &prog, cbdispatch_t cb);
-
-  cbdispatch_t getHandler (unsigned long prog) {
-    return dispatch_table [prog];
-  };
+  bool progHandled (int progno);
+  cbdispatch_t getHandler (unsigned long prog); 
 };
 
 

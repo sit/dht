@@ -275,13 +275,11 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
       break;
     case CHORDPROC_GETSUCCESSOR:
       {
-	warnt("CHORD: getsuccessor_request");
 	vnodep->doget_successor (sbp);
       }
       break;
     case CHORDPROC_GETPREDECESSOR:
       {
-	warnt("CHORD: getpredecessor_request");
 	vnodep->doget_predecessor (sbp);
       }
       break;
@@ -297,26 +295,22 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
     case CHORDPROC_NOTIFY:
       {
 	chord_nodearg *na = sbp->template getarg<chord_nodearg> ();
-	warnt("CHORD: donotify");
 	vnodep->donotify (sbp, na);
       }
       break;
     case CHORDPROC_ALERT:
       {
 	chord_nodearg *na = sbp->template getarg<chord_nodearg> ();
-	warnt("CHORD: alert");
 	vnodep->doalert (sbp, na);
       }
       break;
     case CHORDPROC_GETSUCCLIST:
       {
-	warnt("CHORD: getsucclist request");
 	vnodep->dogetsucclist (sbp);
       }
       break;
     case CHORDPROC_TESTRANGE_FINDCLOSESTPRED:
       {
-	warnt("CHORD: testandfindrequest");
 	chord_testandfindarg *fa = 
 	  sbp->template getarg<chord_testandfindarg> ();
 	vnodep->dotestrange_findclosestpred (sbp, fa);
@@ -324,31 +318,26 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
       break;
     case CHORDPROC_GETFINGERS: 
       {
-	warnt("CHORD: getfingers_request");
 	vnodep->dogetfingers (sbp);
       }
       break;
     case CHORDPROC_GETFINGERS_EXT: 
       {
-	warnt("CHORD: getfingers_ext_request");
 	vnodep->dogetfingers_ext (sbp);
       }
       break;
     case CHORDPROC_GETPRED_EXT:
       {
-	warnt("CHORD: getpred_ext_request");
 	vnodep->dogetpred_ext (sbp);
       }
       break;
     case CHORDPROC_GETSUCC_EXT:
       {
-	warnt("CHORD: getfingers_ext_request");
 	vnodep->dogetsucc_ext (sbp);
       }
       break;
     case CHORDPROC_CHALLENGE:
       {
-	warnt("CHORD: challenge");
 	chord_challengearg *ca = 
 	  sbp->template getarg<chord_challengearg> ();
 	vnodep->dochallenge (sbp, ca);
@@ -356,13 +345,11 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
       break;
     case CHORDPROC_GETTOES:
       {
-	warnt("CHORD: get toes");
 	vnodep->dogettoes (sbp);
       }
       break;
     case CHORDPROC_DEBRUIJN:
       {
-	warnt("CHORD: debruijn");
 	chord_debruijnarg *da = 
 	  sbp->template getarg<chord_debruijnarg> ();
 	vnodep->dodebruijn (sbp, da);
@@ -370,7 +357,6 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
       break;
     case CHORDPROC_FINDROUTE:
       {
-	warnt("CHORD: findroute");
 	chord_findarg *fa = sbp->template getarg<chord_findarg> ();
 	vnodep->dofindroute (sbp, fa);
       }
@@ -380,15 +366,16 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
       break;
     }  /* switch sbp->proc () */
   } else { /* not a CHORDPROG RPC */
-    cbdispatch_t dispatch = vnodep->getHandler(sbp->prog ());
-    if (dispatch) {
-      (dispatch)(sbp);
-    } else {
+    if (!vnodep->progHandled (sbp->prog())) {
       chordstat res = CHORD_NOHANDLER;
       sbp->replyref (res);
+    } else {
+      cbdispatch_t dispatch = vnodep->getHandler(sbp->prog ());
+      (dispatch)(sbp);
     }
   }
   
 }
+
 
 

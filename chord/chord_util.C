@@ -32,24 +32,6 @@
 
 #define MAX_INT 0x7fffffff
 
-static FILE *LOG = NULL;
-
-void
-warnt(char *msg) {
-
-  char *filename = getenv("LOG_FILE");
-  if ( (!LOG) && (filename != NULL) )
-    if (filename[0] == '-')
-      LOG = stdout;
-    else
-      LOG = fopen(filename, "a");
-  
-  if (LOG) {
-    str time = gettime(); 
-    fprintf(LOG, "%s %s\n", time.cstr(), msg);
-    fflush (LOG);
-  }
-}
 
 str 
 gettime()

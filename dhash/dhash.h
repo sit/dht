@@ -355,6 +355,7 @@ public:
   chordID xi;
   cb_ret cb;
   ptr<route_factory> f;
+  timecb_t *dcb;
 
   void check_finish ();
   void block_cb (s_dhash_block_arg *arg);
@@ -369,6 +370,7 @@ public:
   void add_data (char *data, int len, int off);
   void finish_block_fetch (ptr<dhash_fetchiter_res> res, clnt_stat err);
   void fail (str errstr);
+  void timed_out ();
 };
 
 class dhashcli {

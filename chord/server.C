@@ -36,7 +36,6 @@ vnode::get_successor (chordID n, cbchordID_t cb)
   ngetsuccessor++;
   chord_noderes *res = New chord_noderes (CHORD_OK);
   ptr<chordID> v = New refcounted<chordID> (n);
-  warnt("CHORD: issued_GET_SUCCESSOR");
   doRPC (n, chord_program_1, CHORDPROC_GETSUCCESSOR, v, res,
 	 wrap (mkref (this), &vnode::get_successor_cb, n, cb, res));
 }
@@ -252,14 +251,29 @@ vnode::get_fingers_chal_cb (chordID o, chordID x, bool ok, chordstat s)
 void
 vnode::addHandler (const rpc_program &prog, cbdispatch_t cb) 
 {
-  dispatch_table.insert (prog.progno, cb);
+  dispatch_record *rec = New dispatch_record (prog.progno, cb);
+  dispatch_table.insert (rec);
   chordnode->handleProgram (prog);
 };
+
+bool
+vnode::progHandled (int progno) 
+{
+  return (dispatch_table[progno] != NULL);
+}
+
+cbdispatch_t 
+vnode::getHandler (unsigned long prog) {
+  dispatch_record *rec = dispatch_table[prog];
+  assert (rec);
+  return rec->cb;
+}
 
 void
 vnode::register_upcall (int progno, cbupcall_t cb)
 {
-  upcall_table.insert (progno, cb);
+  upcall_record *uc = New upcall_record (progno, cb);
+  upcall_table.insert (uc);
 }
 
 void

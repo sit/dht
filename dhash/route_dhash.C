@@ -17,6 +17,7 @@ unsigned int MTU = (getenv ("DHASH_MTU") ?
 
 int gnonce;
 
+#define LOOKUP_TIMEOUT 30
 
 route_dhash::route_dhash (ptr<route_factory> f,
 			  chordID xi,
@@ -53,6 +54,7 @@ void
 route_dhash::execute (cb_ret cbi, chordID first_hop)
 {
   cb = cbi;
+  dcb = delaycb (LOOKUP_TIMEOUT, wrap (this, &route_dhash::timed_out));
   chord_iterator->send (first_hop);
 }
 
@@ -60,13 +62,24 @@ void
 route_dhash::execute (cb_ret cbi)
 {
   cb = cbi;
+  dcb = delaycb (LOOKUP_TIMEOUT, wrap (this, &route_dhash::timed_out));
   chord_iterator->send (use_cached_succ);
+}
+
+void
+route_dhash::timed_out ()
+{
+  warn << "lookup TIMED OUT\n";
+  (*cb)(DHASH_TIMEDOUT, NULL, path ());
+  //XXX what happens if the request comes back
+  //    after we've given up on it?
 }
 
 void
 route_dhash::block_cb (s_dhash_block_arg *arg)
 {
 
+  timecb_remove (dcb);
   if (arg->offset == -1) {
     (*cb)(DHASH_NOENT, NULL, path ());
     return;

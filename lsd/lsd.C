@@ -161,6 +161,7 @@ newvnode_cb (int nreplica, str db_name, int ss_mode,
     fatal ("unable to join\n");
   }
   str db_name_prime = strbuf () << db_name << "-" << n;
+  warn << "lsd: created new dhash\n";
   dh.push_back( New dhash (db_name_prime, my, f_old, nreplica, 
 			   ss_mode));
 

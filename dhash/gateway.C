@@ -84,7 +84,6 @@ dhashgateway::dispatch (svccb *sbp)
 
   case DHASHPROC_INSERT:
     {
-      warnt ("DHASHGW: insert_request");
       dhash_insert_arg *arg = sbp->template getarg<dhash_insert_arg> ();
 
       ref<dhash_block> block =
@@ -97,7 +96,6 @@ dhashgateway::dispatch (svccb *sbp)
     
   case DHASHPROC_RETRIEVE:
     {
-      warnt ("DHASHGW: retrieve_request");
       dhash_retrieve_arg *arg = sbp->template getarg<dhash_retrieve_arg> ();
       dhcli->retrieve (arg->blockID,
 	               arg->askforlease,

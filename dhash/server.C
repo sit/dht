@@ -57,6 +57,7 @@ dhash::dhash(str dbname, vnode *node,
 	     ptr<route_factory> _r_factory,
 	     int k, int _ss_mode) 
 {
+  warn << "in dhash constructor " << node->my_ID () << "\n";
   this->r_factory = _r_factory;
   nreplica = k;
   kc_delay = 11;
@@ -83,6 +84,12 @@ dhash::dhash(str dbname, vnode *node,
 
   host_node = node;
   assert (host_node);
+
+  // RPC demux
+  warn << host_node->my_ID () << " registered dhash_program_1\n";
+  host_node->addHandler (dhash_program_1, wrap(this, &dhash::dispatch));
+  host_node->register_upcall (dhash_program_1.progno,
+			      wrap (this, &dhash::route_upcall));
   
   //the client helper class (will use for get_key etc)
   //don't cache here: only cache on user generated requests
@@ -103,11 +110,6 @@ dhash::dhash(str dbname, vnode *node,
   update_replica_list ();
   install_replica_timer ();
   transfer_initial_keys ();
-
-  // RPC demux
-  host_node->addHandler (dhash_program_1, wrap(this, &dhash::dispatch));
-  host_node->register_upcall (dhash_program_1.progno,
-			      wrap (this, &dhash::route_upcall));
 
   delaycb (30, wrap (this, &dhash::sync_cb));
 }
@@ -138,8 +140,6 @@ dhash::sync_cb ()
 void 
 dhash::route_upcall (int procno,void *args, cbupcalldone_t cb)
 {
-  warnt ("DHASH: fetchiter_request");
-
   s_dhash_fetch_arg *farg = static_cast<s_dhash_fetch_arg *>(args);
 
   if (key_status (farg->key) != DHASH_NOTPRESENT) {
@@ -321,21 +321,18 @@ dhash::dispatch (svccb *sbp)
   case DHASHPROC_STORE:
     {
       update_replica_list ();
-      warnt("DHASH: STORE_request");
 
       s_dhash_insertarg *sarg = sbp->template getarg<s_dhash_insertarg> ();
      
       if ((sarg->type == DHASH_STORE) && 
 	  (!responsible (sarg->key)) && 
 	  (!pst[sarg->key])) {
-	warnt("DHASH: retry");
 	dhash_storeres res (DHASH_RETRY);
 	chordID pred = host_node->my_pred ();
 	res.pred->p.x = pred;
 	res.pred->p.r = host_node->locations->getaddress (pred);
 	sbp->reply (&res);
       } else {
-	warnt ("DHASH: will store");
 	store (sarg, wrap(this, &dhash::storesvc_cb, sbp, sarg));	
       }
       
@@ -405,8 +402,6 @@ dhash::storesvc_cb(svccb *sbp,
 		   s_dhash_insertarg *arg,
 		   dhash_stat err) {
   
-  warnt("DHASH: STORE_replying");
-
   dhash_storeres res (DHASH_OK);
   if ((err != DHASH_OK) && (err != DHASH_STORE_PARTIAL)) 
     res.set_status (err);
@@ -652,8 +647,6 @@ dhash::get_key_stored_block (cbstat_t cb, int err)
 void
 dhash::fetch(chordID id, int cookie, cbvalue cb) 
 {
-  warnt("DHASH: FETCH_before_db");
-
   //if the cookie is in the hash, return that value
   pk_partial *part = pk_cache[cookie];
   if (part) {
@@ -669,8 +662,6 @@ dhash::fetch(chordID id, int cookie, cbvalue cb)
 void
 dhash::fetch_cb (int cookie, cbvalue cb, ptr<dbrec> ret) 
 {
-
-  warnt("DHASH: FETCH_after_db");
 
   if (!ret) {
     (*cb)(cookie, NULL, DHASH_NOENT);
@@ -887,7 +878,6 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
 
     }
 
-    warnt("DHASH: STORE_before_db");
     dhash_stat stat;
     chordID id = arg->key;
     if (arg->type == DHASH_STORE) {
@@ -917,8 +907,6 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
 void
 dhash::store_cb(store_status type, chordID id, cbstore cb, int stat) 
 {
-  warnt("DHASH: STORE_after_db");
-
   if (stat != 0)
     (*cb)(DHASH_STOREERR);
   else	   
