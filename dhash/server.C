@@ -428,15 +428,6 @@ void
 dhash::transfer_initial_keys ()
 {
   chordID succ = host_node->my_succ ();
-
-  ptr<dbEnumeration> it = db->enumerate();
-  ptr<dbPair> d = it->nextElement();    
-  while (d) {
-    chordID k = dbrec2id (d->key);
-    warn << "db " << k.getstr_zp(sha1::hashsize*2) << "\n";
-    d = it->nextElement();
-  }
-
   if (succ ==  host_node->my_ID ()) return;
 
   transfer_initial_keys_range (host_node->my_ID(), succ);
