@@ -1,6 +1,8 @@
 +fix line counts
-add/remove certain headers when accepting or sending news articles
-filter out (potential) tabs in XOVER responses
+check for headers: from, subject, newsgroups
+add certain headers when accepting or sending news articles
+ Date, Message-ID, Path, NNTP-Posting-host
++filter out (potential) tabs in XOVER responses
 add timeouts to nntp connections
 handle control messages
 +recheck fdcb output
@@ -9,10 +11,10 @@ store in DHash. plan:
 +  split into header and body.
 +  store both in dhash
 +  feed header to indexing code
-   send header to other nodes?
+   send header to other nodes
   receive header
    feed header to indexing code
-   send header to other nodes?
+   send header to other nodes
 + msg overview
 +  fetch header info from header_db
 + read article by num
@@ -21,3 +23,12 @@ store in DHash. plan:
 +  read article by msgid
 +   fetch header from header_db??
 +   use chordID to fetch article from dhash
+
+garbage:
+ send article plan:
+  broadcast server public key once per day
+  use public key for log of article headers
+
+ get header plan:
+  receive server keys and cache them
+  check other logs several times per day??

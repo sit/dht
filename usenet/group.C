@@ -33,10 +33,9 @@ int
 group::open (str g)
 {
   rec = group_db->lookup(New refcounted<dbrec> (g, g.len ()));
-  if (rec == NULL) {
-    warn << "can't find group " << g << " " << g.len () << "\n";
+  if (rec == NULL)
     return -1;
-  }
+
   warn << "rec len " << rec->len << "\n";
 
   group_name = g;
@@ -147,6 +146,21 @@ static rxx overmsgid ("Message-ID: (.+)\\r");
 static rxx overref ("References: (.+)\\r");
 static rxx overlines ("Lines: (.+)\\r");
 
+str
+tabfilter (str f)
+{
+  unsigned int i;
+  strbuf out;
+
+  for (i=0; i<f.len (); i++)
+    if (f[i] == '\t')
+      out << " ";
+    else
+      out.tosuio ()->copy (f.cstr() + i, 1); // xxx bleh
+
+  return str (out);
+}
+
 // format: "subject\tauthor\tdate\t<msgid>\treferences\tsize\tlines"
 strbuf
 group::next (void)
@@ -170,21 +184,21 @@ group::next (void)
       if (oversub.search (msg) &&
 	  overfrom.search (msg) &&
 	  overdate.search (msg)) {
-	resp << oversub[1] << "\t" << overfrom[1] << "\t";
-	resp << overdate[1] << "\t";
+	resp << tabfilter (oversub[1]) << "\t" 
+	     << tabfilter (overfrom[1]) << "\t";
+	resp << tabfilter (overdate[1]) << "\t";
 
 	if (overmsgid.search (msg))
-	  resp << overmsgid[1] << "\t";
+	  resp << tabfilter (overmsgid[1]) << "\t";
 	else
-	  resp << listrx[2] << "\t";
+	  resp << tabfilter (listrx[2]) << "\t";
 	if (overref.search (msg))
-	  resp << overref[1];
+	  resp << tabfilter (overref[1]);
 	resp << "\t" << art->len << "\t";
 	if (overlines.search (msg))
-	  resp << overlines[1];
+	  resp << tabfilter (overlines[1]);
 	else
 	  resp << "0";
-	// xxx filter out tabs
       } else
 	warn << "msg parse error\n";
     }

@@ -340,12 +340,13 @@ warn << " resid " << in.resid () << " rem " << postrx.len (0) << "\n";
       ng = postngrx[1];
 
       while (postgrx.search (ng)) {
-	warn << "n " << postgrx[1] << "\n";
 	if (g->open (postgrx[1]) < 0)
-	  warn << "tried to post unknown group " << postgrx[1] << "\n";
+	  warn << "tried to post unknown group " << postgrx[1] 
+	       << ", ignoring.\n";
 	else {
 	  g->addid (msgid, ID);
 	  posted = true;
+	  warn << "posted to " << postgrx[1] << "\n";
 	}
 
 	ng = ng + postgrx[0].len ();
