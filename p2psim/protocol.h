@@ -3,7 +3,6 @@
 
 #include "threaded.h"
 #include "p2psim.h"
-#include "args.h"
 #include <string>
 #include <map>
 using namespace std;
@@ -28,11 +27,21 @@ public:
   Channel *appchan() { return _appchan; }
   Channel *netchan() { return _netchan; }
 
+  // arguments
+  class Args : public map<string,string> {
+  public:
+    template<class T>
+    T nget(string s) {
+      return (T) atoi((*this)[s].c_str());
+    }
+  };
+
   virtual void join(Args*) = 0;
   virtual void leave(Args*) = 0;
   virtual void crash(Args*) = 0;
   virtual void insert(Args*) = 0;
   virtual void lookup(Args*) = 0;
+
 
 protected:
 

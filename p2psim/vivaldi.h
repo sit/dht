@@ -2,7 +2,8 @@
 #define __VIVALDI_H
 
 #include "p2psim.h"
-#include <pair.h>
+#include <map> // huh? what's the correct header file for pair?
+using namespace std;
 
 // Compute Vivaldi synthetic coordinates.
 // Protocol-independent: doesn't care where the measurements

@@ -1,6 +1,5 @@
 #include "p2pevent.h"
 #include "node.h"
-#include "args.h"
 #include "protocol.h"
 #include "network.h"
 #include "parse.h"
@@ -38,7 +37,7 @@ P2PEvent::P2PEvent(vector<string> *v) : Event(v)
   this->event = (Protocol::EventID) atoi(proto_action[1].c_str());
 
   // create a map for the arguments
-  this->args = new Args;
+  this->args = new Protocol::Args;
   assert(this->args);
   for(unsigned int i=2; i<v->size(); i++) {
     vector<string> arg = split((*v)[i], "=");

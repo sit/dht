@@ -3,7 +3,6 @@
 
 #include <vector>
 #include <string>
-#include "args.h"
 #include "event.h"
 #include "protocol.h"
 
@@ -18,7 +17,7 @@ public:
   Node *node;
   string protocol;
   Protocol::EventID event;
-  Args *args;
+  Protocol::Args *args;
 };
 
 #endif // __P2PEVENT_H

@@ -108,4 +108,7 @@ Pastry::route(NodeID D, void*)
   }
 
   // handle the so-called rare case.
+  // forward to T \in L u R u M such that
+  // shared_prefix_len(T, D) >= l
+  // |T - D| < |A - D|
 }
