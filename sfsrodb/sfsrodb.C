@@ -1,4 +1,4 @@
-/* $Id: sfsrodb.C,v 1.12 2001/09/10 01:21:59 fdabek Exp $ */
+/* $Id: sfsrodb.C,v 1.13 2001/10/06 23:42:45 cates Exp $ */
 
 /*
  * Copyright (C) 1999 Kevin Fu (fubob@mit.edu)
@@ -55,7 +55,7 @@ bool initialize;
 bool verbose_mode;
 
 extern int errno;
-int relpathlen;
+uint32 relpathlen;
 extern ptr < rabin_priv > sfsrokey;
 
 qhash<chordID, bool, hashID> dup_cache;
@@ -576,6 +576,8 @@ twiddle_sort_dir (vec < char *>&file_list)
    Given: Path to file (any kind), an allocated fh, the inode
    number of the path's parent
 
+   Path is like '/','/a','/a/b' (ie only the root ends in slash)
+
    Return: The hash and IV in the fh.
 
    Effects: Recursively hash everything beneath a directory
@@ -620,7 +622,10 @@ recurse_path (const str path, sfs_hash * fh)
     sfsro_data directory (SFSRO_DIRBLK);
 
     // XXXXX need to take of the prefix of path
-    directory.dir->path = substr (path, relpathlen);
+    if (path.len() ==  relpathlen)
+      directory.dir->path = str ("/");
+    else
+      directory.dir->path = substr (path, relpathlen);
 
     directory.dir->eof = true;
     rpc_ptr < sfsro_dirent > *direntp = &directory.dir->entries;
@@ -688,6 +693,7 @@ sfsrodb_main (const str root, const str keyfile)
 
   // store file system in db
   sfs_hash root_fh;
+
   relpathlen = root.len ();
   recurse_path (root, &root_fh);
 
