@@ -30,7 +30,7 @@
 
 #define TIMEOUT_RETRY 5
 
-//#define CHORD_DEBUG
+#define CHORD_DEBUG
 #define DNODE 853
 //#define RECORD_FETCH_LATENCY
 

@@ -341,14 +341,12 @@ Chord::lookup_internal(lookup_args *a)
 #ifdef CHORD_DEBUG
     printf("%s key %qx lookup incorrect interval ipkey %u lastnode %u,%qx\n", ts(), a->key, _ipkey?a->ipkey:0, lasthop.ip, lasthop.id); 
 #endif
-    if (_ipkey && (!getpeer(a->ipkey)->alive())) {
-      if (a->retrytimes >= 2) {
-	record_lookup_stat(me.ip, lasthop.ip, a->latency, false, false, a->hops, a->num_to, a->total_to);
-      }else{
-	int delay = (a->start + a->latency + 100) - now();
-	delaycb(delay>0?delay:0, &Chord::lookup_internal, a);
-	return;
-      }
+    if (_ipkey && (!getpeer(a->ipkey)->alive()) && a->retrytimes>=2) {
+      record_lookup_stat(me.ip, lasthop.ip, a->latency, false, false, a->hops, a->num_to, a->total_to);
+    }else{
+      int delay = (a->start + a->latency + 100) - now();
+      delaycb(delay>0?delay:0, &Chord::lookup_internal, a);
+      return;
     }
   }
   delete a;
@@ -651,6 +649,7 @@ DONE:
       a->hops += (totalrpc-1); //not counting the rpc i sent to myself
 
 #ifdef CHORD_DEBUG
+    Topology *t = Network::Instance()->gettopology();
     printf("%s lookup key %qx, hops %d myhop %u timeout %d wasted %d totalrpc %d\n", ts(), key, lastfinished.hop, a->hops, a->num_to, wasted, totalrpc);
     printf("%s key %qx route: ", ts(), key);
     IDMap last;
@@ -743,6 +742,7 @@ Chord::find_successors_recurs(CHID key, uint m, uint type, IDMap *lasthop, looku
   if (!alive()) return fr.v;
 
 #ifdef CHORD_DEBUG
+  Topology *t = Network::Instance()->gettopology();
   printf("%s find_successors_recurs %qx result %d,%d route: ",ts(), key, m,fr.v.size());
 #endif
   uint psz = fa.path.size();
