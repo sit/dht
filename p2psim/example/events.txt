@@ -15,6 +15,6 @@ node 1 2 Chord:0 wellknown=1
 node 2 3 Chord:0 wellknown=1
 node 3 4 Chord:0 wellknown=1
 
-observe 100 ChordObserver reschedule=500 type=Chord
+# observe 100 ChordObserver reschedule=500 type=Chord
 
 simulator 5000 exit

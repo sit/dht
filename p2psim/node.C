@@ -65,8 +65,7 @@ Node::run()
         if(p->reply()){
           send(p->channel(), &p);
         } else {
-          pair<Node*, Packet*> px = make_pair(this, p);
-          ThreadManager::Instance()->create(this, Node::Receive, &px);
+          ThreadManager::Instance()->create(this, Node::Receive, p);
         }
         break;
 
@@ -130,11 +129,11 @@ Node::sendPacket(IPAddress dst, Packet *p)
 void
 Node::Receive(void *px)
 {
-  pair<Node*, Packet*> *pr = (pair<Node*, Packet*>*) px;
-  Packet *p = pr->second;
+  Packet *p = (Packet *) px;
+  Node *n = Network::Instance()->getnode(p->dst());
 
   // get pointer to protocol
-  Protocol *proto = pr->first->getproto(p->_proto);
+  Protocol *proto = n->getproto(p->_proto);
 
   // invoke function call
   // send it up to the protocol

@@ -5,10 +5,12 @@
 #include "protocolfactory.h"
 #include "args.h"
 #include "network.h"
+#include "eventqueue.h"
 #include <string>
 #include <map>
 #include <typeinfo>
 #include "p2psim.h"
+#include "event.h"
 using namespace std;
 
 class Node;
@@ -38,6 +40,7 @@ public:
   virtual void insert(Args*) = 0;
   virtual void lookup(Args*) = 0;
 
+  void dispatch(P2PEvent*);
 
 protected:
 
@@ -51,9 +54,26 @@ protected:
     Protocol *dummy = (BT *) 0; dummy = dummy;
     // Is BT the same as the calling class?
     assert(typeid(BT) == typeid(*this));
-    _delaycb(d, (member_f) fn, args);
+
+    class XEvent : public Event {
+    public:
+      BT *_target;
+      void (BT::*_fn)(AT);
+      AT _args;
+    private:
+      void execute() {
+        (_target->*_fn)(_args);
+      };
+    };
+
+    XEvent *e = new XEvent;
+    e->_target = dynamic_cast<BT*>(this);
+    e->_fn = fn;
+    e->_args = args;
+
+    send(EventQueue::Instance()->eventchan(), &e);
   }
-  void _delaycb(Time, member_f, void*);
+
   IPAddress ip();
 
 #define doRPC(DST, FN, ARGS, RET) this->_doRPC(DST, ((member_f)(FN)), \
@@ -65,8 +85,6 @@ private:
   Channel *_appchan; // to receive calls from applications
   Channel *_netchan; // to receive packets from network
 
-  static void Dispatch(void*);
-  void dispatch(P2PEvent*);
   void run();
 };
 

@@ -60,10 +60,5 @@ P2PEvent::execute()
     cerr << "ERROR: protocol " << protocol << " not running on node " << node->ip() << endl;
     threadexitsall(0);
   }
-  Channel *c = proto->appchan();
-  assert(c);
-
-  // XXX: uhm. pointer on stack? yikes. but it's blocking, so probably ok.
-  P2PEvent *me = this;
-  send(c, &me);
+  proto->dispatch(this);
 }

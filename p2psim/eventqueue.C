@@ -117,19 +117,15 @@ EventQueue::advance()
   Event *e = _queue.front();
   _time = e->ts;
 
-  // now process all events with this timestamp
-  Queue::iterator pos;
-  for(pos = _queue.begin(); pos != _queue.end(); ++pos) {
-    if((*pos)->ts > _time)
+  while(_queue.size() > 0){
+    Event *first = _queue.front();
+    if(first->ts > _time)
       break;
-    (*pos)->execute();
+    _queue.pop_front();
+    Event::Execute(first); // new thread, execute(), delete Event
+    // Cannot free(first) here because P2PEvent::execute() send()s
+    // the event to some channel, i.e. it's still in use at this point.
   }
-
-  // XXX: we need to delete the Event objects themselves, but we don't know when
-  // the threads that use them are done with them.
-
-  // remove processed events from queue
-  _queue.erase(_queue.begin(), pos);
 }
 
 

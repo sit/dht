@@ -31,7 +31,7 @@ ThreadManager::create(Threaded *t, void (*fn)(void*), void *args, int ss)
 
 
 Threaded*
-ThreadManager::get(int t)
+ThreadManager::deleteme_get(int t)
 {
   return _threadmap[t];
 }

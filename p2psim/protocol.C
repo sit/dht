@@ -12,7 +12,6 @@ using namespace std;
 #include "network.h"
 #include "p2pevent.h"
 #include "node.h"
-#include "cbevent.h"
 #include "eventqueue.h"
 #include "p2psim.h"
 
@@ -28,18 +27,6 @@ Protocol::Protocol(Node *n) : _node(n)
 Protocol::~Protocol()
 {
 }
-
-void
-Protocol::_delaycb(Time t, member_f fn, void *args)
-{
-  CBEvent *e = new CBEvent();
-  e->ts = t;
-  e->prot = this;
-  e->fn = fn;
-  e->args = args;
-  send(EventQueue::Instance()->eventchan(), (Event**) &e);
-}
-
 
 // Create an RPC packet, send it, and wait for the reply.
 // It takes an ordinary function to maximize generality.
@@ -87,7 +74,6 @@ Protocol::run()
   Packet *packet;
   P2PEvent *event;
   unsigned *exit;
-  pair<Protocol*, Event*> *ap;
 
   a[0].c = _netchan;
   a[0].v = &packet;
@@ -119,10 +105,12 @@ Protocol::run()
 
       case 1:
         // application call
-        ap = new pair<Protocol*, Event*>();
-        ap->first = this;
-        ap->second = event;
+        // no longer happens, handled in EventQueue and Event
+        assert(0);
+#if 0
+        ap = new pair<Protocol*, Event*>(this, event);
         ThreadManager::Instance()->create(this->_node, Protocol::Dispatch, ap);
+#endif
         break;
 
       case 2:
@@ -135,21 +123,6 @@ Protocol::run()
     }
   }
 }
-
-
-
-
-void
-Protocol::Dispatch(void *p)
-{
-  pair<Protocol*, Event*> *ap = (pair<Protocol*, Event*>*) p;
-  Protocol *prot = (Protocol*) ap->first;
-  prot->dispatch((P2PEvent*) ap->second);
-  delete ap;
-  threadexits(0);
-}
-
-
 
 void
 Protocol::dispatch(P2PEvent *e)
@@ -176,9 +149,8 @@ Protocol::dispatch(P2PEvent *e)
       break;
 
     default:
-      cerr << "uknown event type " << e->event << endl;
+      cerr << "unknown event type " << e->event << endl;
+      assert(0);
       break;
   }
-
-  delete e;
 }

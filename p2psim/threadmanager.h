@@ -10,7 +10,7 @@ using namespace std;
 class ThreadManager {
 public:
   static ThreadManager* Instance();
-  Threaded *get(int);
+  Threaded *deleteme_get(int);
 
   int create(Threaded*, void (*)(void*), void*, int ss = mainstacksize);
 

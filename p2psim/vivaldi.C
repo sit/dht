@@ -7,6 +7,7 @@
 Vivaldi::Vivaldi(Node *n)
 {
   _n = n;
+  _nsamples = 0;
 
   // Start out at a random point.
   // Units are the same as Euclidean::Coords, presumably
@@ -22,34 +23,18 @@ Vivaldi::Vivaldi(Node *n)
   _c._x = (random() % 200) - 100;
   _c._y = (random() % 200) - 100;
 #endif
+
+  // algo2()
   _damp = 0.1;
-  _nsamples = 0;
 }
 
 Vivaldi::~Vivaldi()
 {
 }
 
-// latency should be one-way, i.e. RTT / 2
-void
-Vivaldi::sample(IPAddress who, Coord c, double latency)
+Vivaldi::Coord
+Vivaldi::net_force(vector<Sample> v)
 {
-  if(_samples.size() >= 10){
-    updatecoords();
-    _samples.clear();
-  }
-  Sample s;
-  s._c = c;
-  s._latency = latency;
-  _samples.push_back(s);
-  _nsamples += 1;
-}
-
-// Figure 1 from SOSP 2003 submission.
-void
-Vivaldi::updatecoords()
-{
-  // loop over samples to find net force on this node
   Coord f;
   f._x = 0;
   f._y = 0;
@@ -61,6 +46,35 @@ Vivaldi::updatecoords()
       f = f + (direction * (d - _samples[i]._latency));
     }
   }
+  return f;
+}
+
+// Figure 1 from SOSP 2003 submission.
+void
+Vivaldi::algo1(Sample s)
+{
+  _samples.push_back(s);
+  if(_samples.size() < 10)
+    return;
+
+  Coord f = net_force(_samples);
+
+  // apply the force to our coordinates
+  _c = _c + (f * 0.001);
+
+  _samples.clear();
+}
+
+// algo1(), but starts without much damping, and gradually
+// damps more and more.
+void
+Vivaldi::algo2(Sample s)
+{
+  _samples.push_back(s);
+  if(_samples.size() < 10)
+    return;
+
+  Coord f = net_force(_samples);
 
   // apply the force to our coordinates
   _c = _c + (f * _damp);
@@ -68,7 +82,23 @@ Vivaldi::updatecoords()
   _damp *= 0.99;
   if(_damp < 0.001)
     _damp = 0.001;
+
+  _samples.clear();
 }
+
+// latency should be one-way, i.e. RTT / 2
+void
+Vivaldi::sample(IPAddress who, Coord c, double latency)
+{
+  algo1(Sample(c, latency));
+  _nsamples += 1;
+}
+
+// variants:
+// more dimensions
+// every sample by itself, not every 10
+// slowly increase damping
+// random jump at exponentially increasing intervals
 
 // spring relaxation doesn't seem to work any better than the
 // much stupider scheme of moving to eliminate 1/100th of the

@@ -37,14 +37,21 @@ class Vivaldi {
 
  private:
   Node *_n; // this node
-  Coord _c;
-  struct Sample { Coord _c; double _latency; };
+  int _nsamples; // how many times samples() has been called
+  Coord _c; // current estimated coordinates
+  struct Sample {
+    Coord _c;
+    double _latency;
+    Sample(Coord c, double l) { _c = c; _latency = l; }
+  };
   vector<Sample> _samples;
+
+  // algo2()
   double _damp;
 
-  int _nsamples; // how many times samples() has been called
-
-  void updatecoords();
+  Coord net_force(vector<Sample> v);
+  void algo1(Sample);
+  void algo2(Sample);
 };
 
 inline double

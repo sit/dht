@@ -11,14 +11,17 @@ class P2PEvent : public Event {
 public:
   P2PEvent();
   P2PEvent(vector<string>*);
-  ~P2PEvent();
-
-  virtual void execute();
 
   Node *node;
   string protocol;
   Protocol::EventID event;
   Args *args;
+
+ protected:
+  ~P2PEvent();
+
+ private:
+  virtual void execute();
 };
 
 #endif // __P2PEVENT_H

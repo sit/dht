@@ -7,10 +7,14 @@
 class NetEvent : public Event {
 public:
   NetEvent();
-  ~NetEvent();
 
   Node *node;
   Packet *p;
+
+ protected:
+  ~NetEvent();
+
+ private:
   virtual void execute();
 };
 
