@@ -35,14 +35,16 @@
 //#include <observers/onehopobserver.h>
 #include <p2psim/network.h>
 
+#define FAILURE_DETECT_RETRY 5
+
 #define ALIVE 1
 #define DEAD 0
 
-#define ONEHOP_USER_LOOKUP 0
 #define ONEHOP_PING 1
 #define ONEHOP_LEADER_STAB 2
 #define ONEHOP_NOTIFY 3
 #define ONEHOP_INFORMDEAD 4
+#define ONEHOP_JOIN_LOOKUP 5
 
 typedef unsigned long long bw;
 
@@ -205,6 +207,8 @@ public:
   //period_keepalive which comes first
   void stabilize (void *x);
   void leader_stabilize (void *x);
+  void test_dead(IDMap *x); //jy
+  void test_dead_handler(void *, void *);
   int num_nbrs;
   int* nbr_log_ptrs;
   vector<EventLog> log;  
@@ -222,6 +226,27 @@ public:
 
   bool inform_dead (IDMap dead, IDMap recv);
   void inform_dead_handler (inform_dead_args *ia, void *ir);
+
+  //jy: failure_detection to cope with networks that lose packets
+  //failure_detection is a longer process than sending one packet.
+  template<class AT, class RT>
+    bool fd_xRPC(IPAddress dst, void (OneHop::* fn)(AT *, RT *),
+	AT *args, RT *ret, uint type, uint num_args_id, uint num_args_else = 0)
+  {
+    bool r;
+    Time retry_to = TIMEOUT(me.ip,dst);
+    uint checks = 1;
+    while (checks < FAILURE_DETECT_RETRY) {
+      record_stat(type,num_args_id,num_args_else);
+      r = doRPC(dst, fn, args, ret, retry_to);
+      if (r) {
+	return true;
+      }
+      checks++;
+      retry_to = retry_to * 2;
+    }
+    return false;
+  };
 
   template<class AT, class RT>
     bool xRPC(IPAddress dst, bw data, void (OneHop::* fn)(AT *, RT *),
