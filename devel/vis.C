@@ -70,6 +70,9 @@ static bool simulated_input = false;
 static GdkColor highlight_color;
 static char *highlight = "cyan4"; // consistent with old presentations
 
+static int xindex = 0;
+static int yindex = 1;
+
 static float  zoomx = 1.0;
 static float  zoomy = 1.0;
 static float centerx = 0.0;
@@ -214,6 +217,7 @@ void redraw();
 void draw_ring ();
 void ID_to_xy (chordID ID, int *x, int *y);
 chordID xy_to_ID (int sx, int sy);
+void xy_to_coord (int x, int y, float *cx, float *cy);
 void ID_to_string (chordID ID, char *str);
 double ID_to_angle (chordID ID);
 void set_foreground_lat (unsigned long lat);
@@ -234,19 +238,36 @@ setup ()
 }
 
 void
+update (f_node *n)
+{
+  update_fingers (n);
+  update_pred (n);
+  update_debruijn (n);
+  update_succlist (n);
+  update_toes (n);
+}
+
+void
 update () 
 {
   if (simulated_input) return;
   f_node *n = nodes.first ();
   while (n) {
-    update_fingers (n);
-    update_pred (n);
-    update_debruijn (n);
-    update_succlist (n);
-    update_toes (n);
+    update (n);
     n = nodes.next (n);
   }  
+}
 
+void
+update_highlighted ()
+{
+  if (simulated_input) return;
+  f_node *n = nodes.first ();
+  while (n) {
+    if (n->highlight)
+      update (n);
+    n = nodes.next (n);
+  }
 }
 
 ptr<aclnt>
@@ -572,23 +593,14 @@ get_cb (chordID next)
   if (get_queue.size ()) {
     chordID n = get_queue.pop_front ();
     f_node *nu = nodes[n];
-    if (nu) {
-      update_fingers (nu);
-      update_pred (nu);
-      update_succlist (nu);
-      update_toes (nu);
-      update_debruijn (nu);
-    }
+    if (nu)
+      update (nu);
   } else {
     f_node *node_next = nodes[next];
     if (node_next == NULL)
       node_next = nodes.first ();
     if (node_next) {
-      update_fingers (node_next);
-      update_pred (node_next);
-      update_succlist (node_next);
-      update_toes (node_next);
-      update_debruijn (node_next);
+      update (node_next);
       node_next = nodes.next (node_next);
       if (node_next == NULL) 
 	node_next = nodes.first ();
@@ -1088,6 +1100,21 @@ key_release_event (GtkWidget *widget,
 {
   // warnx << "key pressed " << event->keyval << "\n";
   switch (event->keyval) {
+  case '1':
+    xindex = 0;
+    yindex = 1;
+    break;
+  case '2':
+    xindex = 1;
+    yindex = 2;
+    break;
+  case '3':
+    xindex = 0;
+    yindex = 2;
+    break;
+  case 'g':
+    update_highlighted ();
+    break;
   case 'n':
     {
       if (search_key == 0)
@@ -1106,6 +1133,14 @@ key_release_event (GtkWidget *widget,
   case 'q':
   case 'Q':
     quit_cb (NULL, NULL);
+    break;
+  case 'z':
+    zoomx = zoomx * 1.2;
+    zoomy = zoomy * 1.2;
+    break;
+  case 'Z':
+    zoomx = zoomx / 1.2;
+    zoomy = zoomy / 1.2;
     break;
   default:
     break;
@@ -1166,19 +1201,30 @@ static gint button_down_event (GtkWidget *widget,
   chordID ID = xy_to_ID ((int)event->x,(int)event->y);
   f_node *n = nodes[ID];
   assert (n);
-  if (event->button == 2) // middle button
+  bool update_name = true;
+  switch (event->button) {
+  case 2:
     n->highlight = !n->highlight;
-  else {
+    break;
+  case 3:
+    if (ggeo)
+      xy_to_coord ((int)event->x, (int)event->y, &centerx, &centery);
+    update_name = false;
+    break;
+  default:
     n->selected = !n->selected;
     if (n->selected)
       check_set_state (n->draw);
+    break;
   }
 
-  char hosts[1024];
-  strcpy (hosts, n->hostname);
-  strcat (hosts, ":");
-  strcat (hosts, ID.cstr ());
-  strncpy (last_clicked, hosts, sizeof (last_clicked));
+  if (update_name) {
+    char hosts[512];
+    strcpy (hosts, n->hostname);
+    strcat (hosts, ":");
+    strcat (hosts, ID.cstr ());
+    strncpy (last_clicked, hosts, sizeof (last_clicked));
+  }
 
   draw_ring ();
   return TRUE;
@@ -1541,8 +1587,8 @@ recenter ()
 
   while (n) {
     if (n->coords.size () > 0) {
-      float x = n->coords[0];
-      float y = n->coords[1];
+      float x = n->coords[xindex];
+      float y = n->coords[yindex];
       minx = (x < minx) ? x : minx;
       miny = (y < miny) ? y : miny;
       maxx = (x > maxx) ? x : maxx;
@@ -1565,6 +1611,13 @@ recenter ()
 }
 
 void
+xy_to_coord (int x, int y, float *cx, float *cy)
+{
+  *cx = (x - WINX/2)*zoomx/WINX + centerx;
+  *cy = (y - WINY/2)*zoomy/WINY + centery;
+}
+
+void
 ID_to_xy (chordID ID, int *x, int *y)
 {
  
@@ -1574,8 +1627,8 @@ ID_to_xy (chordID ID, int *x, int *y)
     if (!f && search_path.size () > 0) // assume it is a lookup target
       f = nodes[search_path[search_path.size () - 1]->ID];
     if (f && f->coords.size () > 0) {
-      *x = (int)(WINX/2 + ((f->coords[0] - centerx)/zoomx)*WINX);
-      *y = (int)(WINY/2 + ((f->coords[1] - centery)/zoomy)*WINY);
+      *x = (int)(WINX/2 + ((f->coords[xindex] - centerx)/zoomx)*WINX);
+      *y = (int)(WINY/2 + ((f->coords[yindex] - centery)/zoomy)*WINY);
     } else {
       if (f) warn << f->ID << " no coords? what gives\n";
       *x = WINX/2; 
