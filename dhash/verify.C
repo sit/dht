@@ -249,7 +249,7 @@ keyhash_payload::id (sfs_pubkey2 pk) const
 //    dhash), and then we verify this new string with the public key (also 
 //    stored inside the xdr structure)
 void
-keyhash_payload::sign (ptr<sfspriv> key, sfs_pubkey2 pk, sfs_sig2 sig) const
+keyhash_payload::sign (ptr<sfspriv> key, sfs_pubkey2& pk, sfs_sig2& sig) const
 {
   long version_nbo = htonl(_version);
 

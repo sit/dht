@@ -108,7 +108,7 @@ public:
 
   chordID id (sfs_pubkey2 pk) const;
   bool verify (sfs_pubkey2 pk, sfs_sig2 sig) const;
-  void sign (ptr<sfspriv> key, sfs_pubkey2 pk, sfs_sig2 sig) const;
+  void sign (ptr<sfspriv> key, sfs_pubkey2& pk, sfs_sig2& sig) const;
   int encode (xdrsuio &x) const;
   static ptr<keyhash_payload> decode (xdrmem &x, long payloadlen);
   static ptr<keyhash_payload> decode (ptr<dhash_block> b);
