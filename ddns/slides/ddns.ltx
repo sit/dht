@@ -1,5 +1,5 @@
 %% -*- LaTeX -*-
-%% $Id: ddns.ltx,v 1.2 2001/12/06 20:09:20 athicha Exp $
+%% $Id: ddns.ltx,v 1.3 2001/12/06 21:19:18 athicha Exp $
 
 \documentclass{seminar}
 \special{papersize=11in,8.5in}
@@ -85,15 +85,44 @@ Russ Cox\\ Athicha Muthitacharoen \\(MIT LCS)}
 \end{slide}
 
 \begin{slide}
-\slname{Storage balance}
+\slname{Storage Load Balance}
 \epsfig{file=../doc/figures/ok.store.eps}
 \end{slide}
 
 \begin{slide}
-\slname{
+\slname{Server Load Balance}
+\epsfig{file=../doc/figures/both.fetch.eps}
+\end{slide}
+
+\begin{slide}
+\slname{Client Load}
+\epsfig{file=../doc/figures/hops.eps}
+\end{slide}
+
+\begin{slide}
+\slname{Conclusions}
+\itms{
+\item Separating authority from service can increase flexibility
+in desiging name resolution systems. 
+\item DDNS uses a peer-to-peer lookup 
+service to serve DNS data.
+\item Inherits good load balancing and 
+fault-tolerance from DHash and Chord.
+\item Eliminates painful name server management.
+}
+\end{slide}
+
+\begin{slide}
+\slname{Future Work}
+\itms {
+\item Implement record authentication.
+%\item Set up DDNS server rings to serve live DNS lookups.
+\item Dynamically-generated records.
+}
 \end{slide}
 
 \end{document}
+
 
 % Local Variables:
 % tex-dvi-view-command: "xdvi -paper usr -s 9 *"
