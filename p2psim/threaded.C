@@ -18,14 +18,7 @@ Threaded::~Threaded()
 void
 Threaded::thread()
 {
-  thread(this);
-}
-
-
-void
-Threaded::thread(Threaded *t)
-{
-  _thread = ThreadManager::Instance()->create(t, Threaded::Run, this);
+  _thread = ThreadManager::Instance()->create(this, Threaded::Run, this);
 }
 
 
@@ -34,4 +27,3 @@ Threaded::Run(void *t)
 {
   ((Threaded *) t)->run();
 }
-

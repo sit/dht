@@ -87,7 +87,7 @@ Pastry::get_digit(NodeID n, unsigned d)
 // Routing algorithm from Table 1 in Pastry paper.
 //
 void
-Pastry::route(NodeID *D, void*)
+Pastry::route(NodeID *D, void *msg)
 {
   IPAddress nexthop = 0;
 
@@ -105,17 +105,44 @@ Pastry::route(NodeID *D, void*)
   if(!nexthop) {
     unsigned l = shared_prefix_len(*D, _id);
     IPAddress ip;
-    if((ip = _rtable[get_digit(*D, l)][l].second))
+    if((ip = _rtable[get_digit(*D, l)][l].second)) {
       nexthop = ip;
-  }
 
 
-  // not in routing table either?
-  if(!nexthop) {
-    // handle the so-called rare case.
-    // forward to T \in L u R u M such that
+    // not in routing table either?
+    // find any D that
     // shared_prefix_len(T, D) >= l
-    // |T - D| < |A - D|
+    // |T - *D| < |A - *D|
+    } else {
+      // search in lleafset
+      for(ES::const_iterator pos = _lleafset.begin(); pos != _lleafset.end(); ++pos) {
+        NodeID T = (*pos).first;
+        if((shared_prefix_len((*pos).first, *D) >= l) && (abs(T - *D) < abs(_id - *D))) {
+          nexthop = (*pos).second;
+          goto done;
+        }
+      }
+
+      // search in uleafset
+      for(ES::const_iterator pos = _uleafset.begin(); pos != _uleafset.end(); ++pos) {
+        NodeID T = (*pos).first;
+        if((shared_prefix_len((*pos).first, *D) >= l) && (abs(T - *D) < abs(_id - *D))) {
+          nexthop = (*pos).second;
+          goto done;
+        }
+      }
+
+      // search in routing table
+      for(ES::const_iterator pos = _uleafset.begin(); pos != _uleafset.end(); ++pos) {
+        NodeID T = (*pos).first;
+        if((shared_prefix_len((*pos).first, *D) >= l) && (abs(T - *D) < abs(_id - *D))) {
+          nexthop = (*pos).second;
+          goto done;
+        }
+      }
+    }
   }
+
+done:
   doRPC(nexthop, &Pastry::route, D, (void*)0);
 }

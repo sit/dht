@@ -3,7 +3,7 @@
 #include "p2psim.h"
 #include "euclidean.h"
 #include <stdio.h>
-#include <algo.h>
+#include <algorithm>
 using namespace std;
 
 vector<VivaldiTest*> VivaldiTest::_all;

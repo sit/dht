@@ -52,22 +52,23 @@ private:
   //
   // NEIGHBORHOOD SET
   //
-  
+  typedef set<RTEntry> ES;
+  ES _neighborhood;
 
   //
   // LEAF SET
   //
-  typedef set<RTEntry> LS;
-  LS _lleafset; // lower half of leaf set
-  LS _hleafset; // higher half of leaf set
+  ES _lleafset; // lower half of leaf set
+  ES _hleafset; // higher half of leaf set
 
   // finds IP address such that (D - RTEntry) is minimal
   class RTEntrySmallestDiff { public:
     RTEntrySmallestDiff(NodeID D) : diff(-1), _D(D) {}
     public:
       void operator()(const Pastry::RTEntry &rt) {
-        if((_D - rt.first) < diff) {
-          diff = (_D - rt.first);
+        NodeID newdiff;
+        if((newdiff = (_D - rt.first)) < diff) {
+          diff = newdiff;
           ip = rt.second;
         }
       }
@@ -75,6 +76,23 @@ private:
       NodeID diff;
     private:
       NodeID _D;
+  };
+
+  // finds node such that shl(RTEntry, D) >= l
+  // and |T - D| < |A - D|
+  class RTEntrySmallestDiff { public:
+    RTEntrySmallestDiff(NodeID D, NodeID A) : _D(D), _A(A) {}
+    public:
+      void operator()(const Pastry::RTEntry &rt) {
+        if(
+          diff = newdiff;
+          ip = rt.second;
+        }
+      }
+      IPAddress ip;
+    private:
+      NodeID _D;
+      NodeID _A;
   };
 };
 
