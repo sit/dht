@@ -8,7 +8,7 @@ p2psim_LDADD = p2psim_core.o \
 	       ../observers/observers.o \
 	       ../protocols/protocols.o \
 	       ../topologies/topologies.o \
-	       ../libtask/libtask.a \
+	       ../libtask/libtask.o \
                -lcrypto $(GBLIBS)
 
 EXTRA_DIST = args.h condvar.h event.h eventgenerator.h eventqueue.h \

@@ -5,6 +5,7 @@ AM_CONFIG_HEADER(config.h)
 AC_CANONICAL_HOST
 
 AC_PROG_CC
+AM_PROG_AS
 AC_PROG_CPP
 AC_PROG_CXX
 AC_PROG_RANLIB
@@ -89,15 +90,6 @@ AC_LANG_RESTORE
 dnl Check for openssl/sha.h
 AC_CHECK_HEADER(openssl/sha.h,,AC_MSG_ERROR([openssl/sha.h header file required.]))
 
-dnl Russ' threads package
-CPFSAVE=$CPPFLAGS
-CPPFLAGS="-I/usr/local/include -L/usr/local/lib $CPPFLAGS"
-AC_CHECK_HEADER(fmt.h,,AC_MSG_ERROR([fmt.h header not found.  please see the INSTALL file.]))
-AC_CHECK_HEADER(lib9.h,,AC_MSG_ERROR([lib9.h header not found.  please see the INSTALL file.]))
-AC_CHECK_HEADER(utf.h,,AC_MSG_ERROR([utf.h header not found.  please see the INSTALL file.]))
-AC_CHECK_HEADER(thread.h,,AC_MSG_ERROR([thread.h header not found.  please see the INSTALL file.]), [#include "lib9.h"])
-CPPFLAGS=$CPFSAVE
-
 AC_OUTPUT(Makefile
             eventgenerators/Makefile
             p2psim/Makefile
@@ -106,4 +98,5 @@ AC_OUTPUT(Makefile
             failuremodels/Makefile
             topologies/Makefile
             events/Makefile
+            libtask/Makefile
             misc/Makefile)
