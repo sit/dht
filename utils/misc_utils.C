@@ -1,5 +1,7 @@
 #include "misc_utils.h"
 #include "id_utils.h"
+#include "chord.h"
+
 #include <amisc.h>
 
 #define MAX_INT 0x7fffffff
@@ -87,4 +89,13 @@ make_chord_node (const chord_node_wire &nl)
   n.x = make_chordID (n.r.hostname, n.r.port, n.vnode_num);
   n.coords = nl.coords;
   return n;
+}
+
+vec<float> 
+get_coords (const chord_node &n)
+{
+  vec<float> c;
+  for (int i = 0; i < chord::NCOORDS; i++)
+    c.push_back (n.coords[i]);
+  return c;
 }

@@ -6,6 +6,7 @@
 #include <vec.h>
 
 bool in_vector (const vec<chordID> &v, chordID N);
+vec<float> get_coords (const chord_node &n);
 
 str gettime ();
 u_int64_t getusec ();
