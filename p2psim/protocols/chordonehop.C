@@ -124,7 +124,7 @@ ChordOneHop::add_handler(deladd_args *args, void *ret)
 }
 
 void
-ChordOneHop::getloctable_handler(void *args, get_successor_list_ret *ret)
+ChordOneHop::getloctable_handler(void *args, get_predsucc_ret *ret)
 {
   ret->v = loctable->get_all();
   assert(ret->v.size() < 2000);
@@ -141,7 +141,7 @@ ChordOneHop::join(Args *args)
   wkn.id = ConsistentHash::ip2chid(wkn.ip);
   loctable->add_node(wkn);
 
-  get_successor_list_ret gr;
+  get_predsucc_ret gr;
   //record_stat();
 
   bool ok = doRPC(wkn.ip, &ChordOneHop::getloctable_handler, (void *)NULL, &gr);

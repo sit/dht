@@ -328,10 +328,12 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
 	    prevf = currf;
 	    prevfpred.ip = 0;
 	    //get predecessor, coz new finger within the candidate range might show up
-	    get_predecessor_args gpa;
-	    get_predecessor_ret gpr;
+	    get_predsucc_args gpa;
+	    gpa.pred = true;
+	    gpa.m=0;
+	    get_predsucc_ret gpr;
 	    record_stat(TYPE_PNS_UP,0);
-	    ok = doRPC(currf.ip, &Chord::get_predecessor_handler, &gpa, &gpr, TIMEOUT(me.ip,currf.ip));
+	    ok = doRPC(currf.ip, &Chord::get_predsucc_handler, &gpa, &gpr, TIMEOUT(me.ip,currf.ip));
 	    if(ok) {
 	      record_stat(TYPE_PNS_UP,1);
 	      loctable->add_node(currf);//update timestamp

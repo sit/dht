@@ -45,7 +45,7 @@ class ChordOneHop: public Chord {
 
     void del_handler(deladd_args *, void *);
     void add_handler(deladd_args *, void *);
-    void getloctable_handler(void *, get_successor_list_ret *);
+    void getloctable_handler(void *, get_predsucc_ret *);
 
     virtual vector<IDMap> find_successors(CHID key, uint m, uint all, bool is_lookup);
 };

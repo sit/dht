@@ -30,6 +30,7 @@ extern bool static_sim;
 ChordFinger::ChordFinger(IPAddress i, Args &a, LocTable *l) : Chord(i, a, l)  
 {
   _base = a.nget<uint>("base",2,10);
+  _fingerlets = a.nget<uint>("fingerlets",1,10);
 
   CHID finger;
   CHID lap = (CHID) -1;
@@ -48,6 +49,7 @@ ChordFinger::ChordFinger(IPAddress i, Args &a, LocTable *l) : Chord(i, a, l)
   _stab_finger_timer = a.nget<uint>("fingertimer",10000,10);
 }
 
+//XXX oracle out of date
 void
 ChordFinger::oracle_node_died(IDMap n)
 {
@@ -138,8 +140,11 @@ ChordFinger::fix_fingers(bool restart)
 {
 
   vector<IDMap> scs = loctable->succs(me.id + 1, _nsucc);
-
+#ifdef CHORD_DEBUG
   printf("%s ChordFinger stabilize BEFORE ring sz %u succ %d\n", ts(), loctable->size(), scs.size());
+#endif
+  uint new_fingers,valid_fingers, skipped_fingers, dead_fingers, check_fingers,missing_finger;
+  missing_finger = dead_fingers = new_fingers = valid_fingers = skipped_fingers = dead_fingers = check_fingers = 0;
 
   if (scs.size() == 0) return;
 
@@ -161,14 +166,16 @@ ChordFinger::fix_fingers(bool restart)
 
       finger = lap * j + me.id;
       if (ConsistentHash::between(me.id,scs[scs.size()-1].id, finger))
-	break;
+	goto FINGER_DONE;
 
+      check_fingers++;
       currf = loctable->succ(finger, LOC_HEALTHY, &currf_ts);
       if (currf.ip == me.ip) currf.ip = 0;
       
       if ((!restart) && (currf.ip)) { 
 	if (ConsistentHash::between(finger,finger+lap,currf.id)) {
 	  if ((now()-currf_ts) < _stab_finger_timer) {
+	    skipped_fingers++;
 	    continue;
 	  }else{
 	    assert(currf.ip!=prevf.ip);
@@ -176,20 +183,29 @@ ChordFinger::fix_fingers(bool restart)
 	    prevf = currf;
 	    prevfpred.ip = 0;
 
-	    get_predecessor_args gpa;
-	    get_predecessor_ret gpr;
-	    ok = failure_detect(currf, &Chord::get_predecessor_handler, &gpa, &gpr, TYPE_FINGER_UP,0,0);
+	    get_predsucc_args gpa;
+	    get_predsucc_ret gpr;
+	    gpa.pred = true;
+	    gpa.m = _fingerlets;
+	    ok = failure_detect(currf, &Chord::get_predsucc_handler, &gpa, &gpr, TYPE_FINGER_UP,0,0);
 	    if(ok) {
+	      valid_fingers++;
 	      record_stat(TYPE_FINGER_UP,1);
 	      assert(gpr.dst.ip == currf.ip);
 	      loctable->add_node(gpr.dst);
 	      prevfpred = gpr.n;
+	      if (ConsistentHash::between(finger,finger+lap,prevfpred.id)) 
+		loctable->add_node(prevfpred);
+	      for(uint k = 0; k < gpr.v.size(); k++) 
+		loctable->add_node(gpr.v[k]); //XXX: i am not careful about who to add, might add dead nodes again
 	      continue;
-	    }else{
+	    } else {
+	      dead_fingers++;
 	      loctable->del_node(currf);
 	    }
 	  }
 	} else {
+	  missing_finger++;
 	  if ((prevf.ip == currf.ip) && (prevfpred.ip)) {
 	    if (ConsistentHash::between(finger,finger+lap,prevfpred.id)) {
 	      loctable->add_node(prevfpred);
@@ -202,21 +218,26 @@ ChordFinger::fix_fingers(bool restart)
 	}
       }
       if (_recurs)
-	v = find_successors_recurs(finger, 1, TYPE_FINGER_LOOKUP, NULL);
+	v = find_successors_recurs(finger, _fingerlets, TYPE_FINGER_LOOKUP, NULL);
       else
-	v = find_successors(finger, 1, TYPE_FINGER_LOOKUP, 0);
+	v = find_successors(finger, _fingerlets, TYPE_FINGER_LOOKUP, 0);
 
 #ifdef CHORD_DEBUG
       if (v.size() > 0)
 	printf("%s fix_fingers %d finger (%qx) get (%u,%qx)\n", ts(), j, finger, 
 	    v[0].ip, v[0].id);
 #endif
-      if (v.size() > 0) loctable->add_node(v[0]);
+      new_fingers++;
+      for(uint k = 0; k <v.size();k++) 
+	loctable->add_node(v[k]); //XXX: might add dead nodes again and again
     }
   }
+FINGER_DONE:
 #ifdef CHORD_DEBUG
-  printf("%s ChordFinger stabilize AFTER ring sz %u\n", ts(), loctable->size());
+  printf("%s ChordFinger stabilize AFTER ring sz %u restart? %d fingers %u skipped %u valid %u dead %u missing %u new %u\n", ts(), 
+      loctable->size(), restart?1:0, check_fingers, skipped_fingers, valid_fingers, dead_fingers, missing_finger, new_fingers);
 #endif
+  return;
 }
 
 void
@@ -230,7 +251,7 @@ ChordFinger::join(Args *args)
     _stab_finger_running = true;
     reschedule_finger_stabilizer((void *)1); //a hack, no null means restart fixing fingres
   }else if (_join_scheduled == 0) {
-    ChordFinger::fix_fingers();
+    //ChordFinger::fix_fingers();
   }
 }
 

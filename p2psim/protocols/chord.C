@@ -304,7 +304,7 @@ Chord::lookup_internal(lookup_args *a)
   lasthop.ip = 0;
 
   a->retrytimes++;
-  Time oldlat = 0;
+  Time oldlat = a->latency;
 
   if (_recurs) {
     v = find_successors_recurs(a->key, _frag, TYPE_USER_LOOKUP, &lasthop,a);
@@ -312,7 +312,7 @@ Chord::lookup_internal(lookup_args *a)
     v = find_successors(a->key, _frag, TYPE_USER_LOOKUP, &lasthop,a);
   }
 
-  assert(a->latency > oldlat || ((me.ip == lasthop.ip) && (a->retrytimes==1)));
+  assert(a->latency > oldlat || (me.ip == lasthop.ip));
 
   if (!alive()) {
     delete a;
@@ -345,12 +345,11 @@ Chord::lookup_internal(lookup_args *a)
     if (_ipkey && (!getpeer(a->ipkey)->alive()) && a->retrytimes>=2) {
       record_lookup_stat(me.ip, lasthop.ip, a->latency, false, false, a->hops, a->num_to, a->total_to);
     }else{
-      int delay = (a->start + a->latency + 100) - now();
 #ifdef CHORD_DEBUG
-      printf("%s key %qx lookup incorrect interval ipkey %u lastnode %u,%qx reschedule in %d latency %u\n", ts(), a->key, _ipkey?a->ipkey:0, lasthop.ip, lasthop.id, delay,a->latency); 
+      printf("%s key %qx lookup incorrect interval ipkey %u lastnode %u,%qx a->latency %u a->start %u\n", ts(), a->key, _ipkey?a->ipkey:0, lasthop.ip, lasthop.id, a->latency,a->start); 
 #endif
-      if (delay>0) a->latency += delay;
-      delaycb(delay>0?delay:0, &Chord::lookup_internal, a);
+      a->latency += 100;
+      delaycb(100, &Chord::lookup_internal, a);
       return;
     }
   }
@@ -655,7 +654,7 @@ DONE:
 
 #ifdef CHORD_DEBUG
     Topology *t = Network::Instance()->gettopology();
-    printf("%s lookup key %qx, hops %d myhop %u timeout %d wasted %d totalrpc %d\n", ts(), key, lastfinished.hop, a->hops, a->num_to, wasted, totalrpc);
+    printf("%s lookup key %qx, hops %d wasted %d totalrpc %d (lookup info hop %u, num_to %u, retry %u)\n", ts(), key, lastfinished.hop, wasted, totalrpc,a->hops,a->num_to,a->retrytimes);
     printf("%s key %qx route: ", ts(), key);
     IDMap last;
     last = lastfinished.to;
@@ -1479,20 +1478,21 @@ Chord::fix_predecessor()
   if ((!pred.ip) || (pred.ip == me.ip)) return;
 
   bool ok;
-  get_successor_list_args gsa;
-  get_successor_list_ret gsr;
+  get_predsucc_args gpa;
+  get_predsucc_ret gpr;
 
-  gsa.m = 1;
-  ok = failure_detect(pred, &Chord::get_successor_list_handler, &gsa, &gsr, TYPE_FIXPRED_UP);
-  if (ok) record_stat(TYPE_FIXPRED_UP,gsr.v.size());
+  gpa.pred = false;
+  gpa.m = 1;
+  ok = failure_detect(pred, &Chord::get_predsucc_handler, &gpa, &gpr, TYPE_FIXPRED_UP);
+  if (ok) record_stat(TYPE_FIXPRED_UP,gpr.v.size());
 
   if (!alive()) return;
   if (ok) {
-    loctable->add_node(gsr.dst); //refresh timestamp
-    if (gsr.v.size() > 0) {
-      IDMap tmp = gsr.v[0];
-      loctable->add_node(gsr.v[0]);
-      if (gsr.v[0].ip == me.ip) {
+    loctable->add_node(gpr.dst); //refresh timestamp
+    if (gpr.v.size() > 0) {
+      IDMap tmp = gpr.v[0];
+      loctable->add_node(gpr.v[0]);
+      if (gpr.v[0].ip == me.ip) {
 #ifdef CHORD_DEBUG
 	if (!_inited)
 	  printf("%s() fix_predecessor %u,%qx _inited changed from %u to 1\n",ts(),pred.ip, pred.id, _inited?1:0);
@@ -1510,9 +1510,12 @@ void
 Chord::fix_successor(void *x)
 {
   IDMap succ1, succ2,pred;
-  get_predecessor_args gpa;
-  get_predecessor_ret gpr;
+  get_predsucc_args gpa;
+  get_predsucc_ret gpr;
   bool ok;
+
+  gpa.m = 0;
+  gpa.pred = true;
   alert_args aa;
 
   assert(alive());
@@ -1538,7 +1541,7 @@ Chord::fix_successor(void *x)
     Time before = now();
 #endif
 
-    ok = failure_detect(succ1,&Chord::get_predecessor_handler, &gpa, &gpr, TYPE_FIXSUCC_UP,0);
+    ok = failure_detect(succ1,&Chord::get_predsucc_handler, &gpa, &gpr, TYPE_FIXSUCC_UP,0);
     if (ok) record_stat(TYPE_FIXSUCC_UP,2);
 
     if (!alive()) return;
@@ -1611,15 +1614,6 @@ Chord::fix_successor(void *x)
   }
 }
 
-void
-Chord::get_successor_list_handler(get_successor_list_args *args, 
-				  get_successor_list_ret *ret)
-{
-  check_static_init();
-  ret->dst = me;
-  ret->v = loctable->succs(me.id+1,args->m,LOC_HEALTHY);
-}
-
 
 void
 Chord::fix_successor_list()
@@ -1627,15 +1621,16 @@ Chord::fix_successor_list()
   IDMap succ = loctable->succ(me.id+1);
   if (!succ.ip) return;
 
-  get_successor_list_args gsa;
-  get_successor_list_ret gsr;
-  gsr.v.clear();
+  get_predsucc_args gpa;
+  get_predsucc_ret gpr;
   bool ok;
 
-  gsa.m = _nsucc;
+  gpa.m = _nsucc;
+  gpa.pred = false;
+  gpr.v.clear();
 
-  ok = failure_detect(succ, &Chord::get_successor_list_handler, &gsa, &gsr,TYPE_FIXSUCCLIST_UP);
-  if (ok) record_stat(TYPE_FIXSUCCLIST_UP, gsr.v.size());
+  ok = failure_detect(succ, &Chord::get_predsucc_handler, &gpa, &gpr,TYPE_FIXSUCCLIST_UP);
+  if (ok) record_stat(TYPE_FIXSUCCLIST_UP, gpr.v.size());
 
   if (!alive()) return;
 
@@ -1643,7 +1638,7 @@ Chord::fix_successor_list()
     loctable->del_node(succ,true);
   }else{
 
-    loctable->add_node(gsr.dst,true);//update timestamp
+    loctable->add_node(gpr.dst,true);//update timestamp
 
     //scs[0] might not be succ anymore
     vector<IDMap> scs = loctable->succs(me.id + 1, _nsucc, LOC_DEAD);
@@ -1651,8 +1646,8 @@ Chord::fix_successor_list()
 
 #ifdef CHORD_DEBUG
   printf("%s fix_successor_list (succ %u,%qx): ",ts(), succ.ip,succ.id);
-  for (uint i = 0; i < gsr.v.size(); i++) 
-    printf("%u ", gsr.v[i].ip);
+  for (uint i = 0; i < gpr.v.size(); i++) 
+    printf("%u ", gpr.v[i].ip);
   printf("\n");
   printf("%s fix_successor_list succ list sz %u: ", ts(), scs.size());
   for (uint i = 0; i < scs.size(); i++) 
@@ -1660,8 +1655,8 @@ Chord::fix_successor_list()
   printf("\n");
 #endif
 
-    uint scs_i, gsr_i;
-    gsr_i = scs_i = 0;
+    uint scs_i, gpr_i;
+    gpr_i = scs_i = 0;
     while (scs_i < scs.size()) {
       if (scs[scs_i].ip == succ.ip) 
 	break;
@@ -1670,32 +1665,32 @@ Chord::fix_successor_list()
     scs_i++;
 
     while (1) {
-      if (gsr_i >= gsr.v.size()) {
+      if (gpr_i >= gpr.v.size()) {
 	break;
       }
 
       if (scs_i >= scs.size()) {
-	while (gsr_i < gsr.v.size()) {
-	  loctable->add_node(gsr.v[gsr_i],true);
-	  gsr_i++;
+	while (gpr_i < gpr.v.size()) {
+	  loctable->add_node(gpr.v[gpr_i],true);
+	  gpr_i++;
 	}
 	break;
       }
       assert(scs_i < scs.size() && scs_i < _nsucc);
-      if (scs[scs_i].ip == gsr.v[gsr_i].ip) {
+      if (scs[scs_i].ip == gpr.v[gpr_i].ip) {
 	loctable->add_node(scs[scs_i],true);
-	gsr_i++;
+	gpr_i++;
 	scs_i++;
-      } else if (ConsistentHash::between(me.id,gsr.v[gsr_i].id,scs[scs_i].id)) {
+      } else if (ConsistentHash::between(me.id,gpr.v[gpr_i].id,scs[scs_i].id)) {
 	//delete the successors that my successor failed to pass to me
 #ifdef CHORD_DEBUG
-	printf("%s del %u %u node %u,%qx (%u,%qx) from successor list\n",ts(), scs_i, gsr_i, scs[scs_i].ip, scs[scs_i].id, gsr.v[gsr_i].ip,gsr.v[gsr_i].id);
+	printf("%s del %u %u node %u,%qx (%u,%qx) from successor list\n",ts(), scs_i, gpr_i, scs[scs_i].ip, scs[scs_i].id, gpr.v[gpr_i].ip,gpr.v[gpr_i].id);
 #endif
 	loctable->del_node(scs[scs_i],true); //force delete
 	scs_i++;
       } else {
-	loctable->add_node(gsr.v[gsr_i], true);
-	gsr_i++;
+	loctable->add_node(gpr.v[gpr_i], true);
+	gpr_i++;
       }
     }
 
@@ -1756,12 +1751,19 @@ Chord::alert_handler(alert_args *args, void *ret)
 }
 
 void
-Chord::get_predecessor_handler(get_predecessor_args *args,
-                               get_predecessor_ret *ret)
+Chord::get_predsucc_handler(get_predsucc_args *args, get_predsucc_ret *ret)
 {
   assert(!static_sim);
   ret->dst = me;
-  ret->n = loctable->pred(me.id-1);
+
+  if (args->pred)
+    ret->n = loctable->pred(me.id-1);
+  else
+    ret->n.ip = 0;
+
+  if (args->m > 0)
+    ret->v = loctable->succs(me.id+1,args->m,LOC_HEALTHY);
+
 }
 
 void
@@ -1868,7 +1870,8 @@ LocTable::succ(ConsistentHash::CHID id, int status, Time *ts)
 
   if (id == (me.id + 1)) {
     idmapwrap *ptr = ring.closestsucc(id);
-    fprintf(stderr,"%llu: ring sz %u before %u me %d %qx ptr %u,%qx is_succ %d timestamp %llu\n", now(),size(), before, me.ip,me.id,ptr->n.ip,ptr->n.id,ptr->is_succ?1:0, ptr->timestamp);
+    fprintf(stderr,"%llu: ring sz %u before %u me %d %qx ptr %u,%qx is_succ %d asked %d status %d timestamp %llu\n", 
+	now(),size(), before, me.ip,me.id,ptr->n.ip,ptr->n.id,ptr->is_succ?1:0, status, ptr->status, ptr->timestamp);
   }
 #endif
   Chord::IDMap tmp;

@@ -78,21 +78,14 @@ public:
   virtual void insert(Args*) {};
   virtual void nodeevent (Args *) {};
 
-  struct get_predecessor_args {
-    int dummy;
+  struct get_predsucc_args {
+    bool pred; //need to get predecessor?
+    int m; //number of successors wanted 0
   };
-  struct get_predecessor_ret {
-    IDMap dst; //for obtaining the new heartbeat timer of the node executing get_predecessor_handler
-    IDMap n;
-  };
-
-  struct get_successor_list_args {
-    uint m; //number of successors wanted
-  };
-  
-  struct get_successor_list_ret {
+  struct get_predsucc_ret {
     vector<IDMap> v;
-    IDMap dst;
+    IDMap dst; //for obtaining the new heartbeat timer of the node executing get_predsucc_handler
+    IDMap n;
   };
 
   struct notify_args {
@@ -183,10 +176,7 @@ public:
   };
   // RPC handlers.
   void null_handler (void *args, IDMap *ret);
-  void get_predecessor_handler(get_predecessor_args *, 
-                               get_predecessor_ret *);
-  void get_successor_list_handler(get_successor_list_args *, 
-                                  get_successor_list_ret *);
+  void get_predsucc_handler(get_predsucc_args *, get_predsucc_ret *);
   void notify_handler(notify_args *, notify_ret *);
   void alert_handler(alert_args *, void *);
   void next_handler(next_args *, next_ret *);

@@ -356,8 +356,8 @@ void
 Koorde::fix_debruijn () 
 {
 
-  get_successor_list_args gsa;
-  get_successor_list_ret gsr;
+  get_predsucc_args gsa;
+  get_predsucc_ret gsr;
   bool ok;
   IDMap last;
 
@@ -369,7 +369,7 @@ Koorde::fix_debruijn ()
     
   gsa.m = _nsucc;
   //record_stat();
-  ok = doRPC(dpred.ip, &Chord::get_successor_list_handler, &gsa,&gsr);
+  ok = doRPC(dpred.ip, &Chord::get_predsucc_handler, &gsa,&gsr);
   if (!alive()) return;
   if ( ok && gsr.v.size() > 0 && ConsistentHash::between(dpred.id, gsr.v[0].id, debruijnpred)) {
     loctable->add_node(dpred);
@@ -391,7 +391,7 @@ NEXT:
   gsa.m = fingers;
   assert(fingers <= _nsucc);
   //record_stat();
-  ok = doRPC(dpred.ip, &Chord::get_successor_list_handler, &gsa, &gsr);
+  ok = doRPC(dpred.ip, &Chord::get_predsucc_handler, &gsa, &gsr);
   if (!alive()) return;
   if (ok && gsr.v.size() > 0 && ConsistentHash::betweenrightincl(dpred.id, gsr.v[0].id, debruijn)) {
     loctable->add_node(dpred);
