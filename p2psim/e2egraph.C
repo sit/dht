@@ -34,12 +34,7 @@ E2EGraph::latency(Node *n1, Node *n2)
   IPAddress ip2 = n2->ip();
   assert(ip1 > 0 && ip1 <= _num);
   assert(ip2 > 0 && ip2 <= _num);
-
-  if (ip1 < ip2) 
-    return (latency_t) _pairwise[ip1-1][ip2-1];
-  else
-    return (latency_t) _pairwise[ip2-1][ip1-1];
-
+  return (latency_t) _pairwise[ip1-1][ip2-1];
 }
 
 
@@ -79,12 +74,12 @@ E2EGraph::parse(ifstream &ifs)
       assert(ip1>0 && ip1 <= _num);
       assert(ip2>0 && ip2 <= _num);
 
+      int lat = atoi(words[1].c_str());
+      if (lat < 0) {
+	lat = 0;
+      }
       // latency between node1 and node2
-      if (ip1 < ip2 )
-	_pairwise[ip1 -1][ip2 -1] = (latency_t) atoi(words[1].c_str());
-      else
-	_pairwise[ip2 -1][ip1 -1] = (latency_t) atoi(words[1].c_str());
-
+      _pairwise[ip1 -1][ip2 -1] = (latency_t) lat;
     }
   }
 }

@@ -74,15 +74,17 @@ Chord::find_successors(CHID key, uint m, bool intern)
   if (vis && !intern) 
     printf ("vis %lu search %16qx %16qx\n", now(), me.id, key);
 
+  next_args na;
+  next_ret nr;
+
+  na.key = key;
+  na.m = m;
+
+
   while(1){
     assert(count++ < 100);
-    next_args na;
-    next_ret nr;
-    na.key = key;
-    na.m = m;
-
     if (vis && !intern) 
-       printf ("vis %lu step %16qx %16qx\n", now(), me.id, nprime.id);
+      printf ("vis %lu step %16qx %16qx\n", now(), me.id, nprime.id);
 
     doRPC(nprime.ip, &Chord::next_handler, &na, &nr);
     if(nr.done){
@@ -95,10 +97,10 @@ Chord::find_successors(CHID key, uint m, bool intern)
       printf("\n");
 #endif
 
-    if (vis && !intern) 
-       printf ("vis %lu step %16qx %16qx\n", now(), me.id, nr.v[0].id);
+      if (vis && !intern) 
+	printf ("vis %lu step %16qx %16qx\n", now(), me.id, nr.v[0].id);
 
-      return nr.v;
+      break;
     } else {
 #ifdef CHORD_DEBUG
       route.push_back(nr.next);
@@ -106,6 +108,12 @@ Chord::find_successors(CHID key, uint m, bool intern)
       nprime = nr.next;
     }
   }
+
+  if (!intern) {
+    printf ("find_successor for (id %qx, key %qx) is (%u, %qx) hops %d\n", 
+	me.id, key, nr.v[0].ip, nr.v[0].id, count);
+  }
+  return nr.v;
 }
 
 // From Figure 3 of SOSP03 submission.
