@@ -30,6 +30,10 @@
 #include <map>
 using namespace std;
 
+// Record stabilization times.
+int sta[1000];
+int nsta;
+
 Kelips::Kelips(Node *n, Args a)
   : P2Protocol(n)
 {
@@ -50,18 +54,26 @@ i2s(unsigned long long x)
 Kelips::~Kelips()
 {
   check(true);
+  if(ip() == 1 && nsta > 0){
+    float sum = 0;
+    for(int i = 0; i < nsta; i++)
+      sum += sta[i];
+    printf("avg stabilization rounds %.1f %d\n",
+           sum / nsta, sta[nsta / 2]);
+  }
 }
 
 // Do we know the nodes we are supposed to know?
 void
 Kelips::check(bool doprint)
 {
-  int gc[_k]; // how many do we know of from each group?
+  short gc[100]; // how many do we know of from each group?
+  assert(_k < 100);
   for(int i = 0; i < _k; i++)
     gc[i] = 0;
 
   vector<IPAddress> l = all();
-  for(unsigned int i = 0; i < l.size(); i++){
+  for(u_int i = 0; i < l.size(); i++){
     Info *in = _info[l[i]];
     int g = ip2group(in->_ip);
     gc[g] += 1;
@@ -75,11 +87,12 @@ Kelips::check(bool doprint)
       stable = false;
 
   if(_stable == false && stable){
+    sta[nsta++] = _rounds;
     _stable = true;
     cout << now() << " " << ip() << " stable after " << _rounds << " rounds\n";
   }
 
-  if(doprint){
+  if(doprint && stable == false){
     string s;
     s = i2s(ip());
     s += (_stable ? " s" : " u");
@@ -108,7 +121,7 @@ Kelips::join(Args *a)
     IPAddress myip = ip();
     vector<Info> ret;
     doRPC(wkn, &Kelips::handle_join, &myip, &ret);
-    for(unsigned int i = 0; i < ret.size(); i++)
+    for(u_int i = 0; i < ret.size(); i++)
       gotinfo(ret[i]);
   }
 
@@ -158,45 +171,17 @@ Kelips::gotinfo(Info i)
   if(i._ip == ip())
     return;
 
-  bool create = false;
-
   if(_info.find(i._ip) == _info.end()){
-    if(ip2group(i._ip) == group()){
-      create = true;
-    } else {
-      vector<IPAddress> l = grouplist(ip2group(i._ip));
-      if(l.size() < 2){
-        create = true;
-      }
+    int g = ip2group(i._ip);
+    if(g == group() || grouplist(g).size() < 2){
+      _info[i._ip] = new Info(i);
+      _info[i._ip]->_rounds = _item_rounds;
     }
   } else if (i._heartbeat > _info[i._ip]->_heartbeat){
     _info[i._ip]->_heartbeat = i._heartbeat;
   }
 
-  if(create){
-    _info[i._ip] = new Info(i);
-    _info[i._ip]->_rounds = _item_rounds;
-  }
-
   check(false);
-}
-
-// Return the IP address of a random peer chosen
-// from our group members or contacts, depending on mygroup.
-// Might return 0.
-IPAddress
-Kelips::random_peer(bool mygroup)
-{
-  vector<IPAddress> l;
-
-  if(mygroup)
-    l = grouplist(group());
-  else
-    l = contactlist();
-  if(l.size() > 0)
-    return l[random() % l.size()];
-  else
-    return 0;
 }
 
 // Return a list of all the IP addresses in _info.
@@ -228,23 +213,74 @@ Kelips::grouplist(int g)
 
 // Return the list of the IP addresses *not* in our group.
 vector<IPAddress>
-Kelips::contactlist()
+Kelips::contactlist(int g)
 {
   vector<IPAddress> l;
   for(map<IPAddress, Info *>::const_iterator ii = _info.begin();
       ii != _info.end();
       ++ii){
-    if(ip2group(ii->second->_ip) != group())
+    if(ip2group(ii->second->_ip) != g)
       l.push_back(ii->first);
   }
   return l;
+}
+
+// Given a list of nodes, limit it to ones that are new (or old).
+// "new" means _rounds > 0.
+vector<IPAddress>
+Kelips::newold(vector<IPAddress> a, bool xnew)
+{
+  vector<IPAddress> b;
+  for(u_int i = 0; i < a.size(); i++)
+    if((_info[a[i]]->_rounds > 0) == xnew)
+      b.push_back(a[i]);
+  return b;
+}
+
+// Randomize the order of a list of nodes.
+vector<IPAddress>
+Kelips::randomize(vector<IPAddress> a)
+{
+  if(a.size() < 1)
+    return a;
+  for(u_int i = 0; i < a.size(); i++){
+    int j = random() % a.size();
+    IPAddress tmp = a[i];
+    a[i] = a[j];
+    a[j] = tmp;
+  }
+  return a;
+}
+
+// Given a list of nodes in l, add a ration of them to msg,
+// half new and the rest old.
+void
+Kelips::newold_msg(vector<Info> &msg, vector<IPAddress> l, u_int ration)
+{
+  u_int n = 0;
+  {
+    // Half the ration for newly learned nodes.
+    vector<IPAddress> nl = randomize(newold(l, true));
+    for(u_int i = 0; n < ration / 2 && i < nl.size(); i++, n++){
+      Info *ip = _info[nl[i]];
+      ip->_rounds -= 1;
+      msg.push_back(*ip);
+    }
+  }
+  {
+    // The remainder of the ration for existing nodes.
+    vector<IPAddress> ol = randomize(newold(l, false));
+    for(u_int i = 0; n < ration && i < ol.size(); i++, n++){
+      Info *ip = _info[ol[i]];
+      msg.push_back(*ip);
+    }
+  }
 }
 
 // Create a gossip message.
 // Always include an entry for ourselves.
 // g allows targeted "pull" gossip during join, critical
 // to avoid disconnection!
-// XXX ought to send half new items, half old items.
 // XXX ought to send newer heartbeats preferentially????
 vector<Kelips::Info>
 Kelips::gossip_msg(int g)
@@ -254,23 +290,13 @@ Kelips::gossip_msg(int g)
   // Include this node w/ new heartbeat in every gossip.
   msg.push_back(Info(ip(), now()));
 
-  // Include some nodes from our group.
-  vector<IPAddress> gl = grouplist(g);
-  if(gl.size() > 0){
-    for(int i = 0; i < _group_ration; i++){
-      IPAddress ip = gl[random() % gl.size()];
-      msg.push_back(*_info[ip]);
-    }
-  }
+  // Add some nodes from our group.
+  newold_msg(msg, grouplist(g), _group_ration);
 
-  // Include some contacts.
-  vector<IPAddress> cl = contactlist();
-  if(cl.size() > 0){
-    for(int i = 0; i < _contact_ration; i++){
-      IPAddress ip = cl[random() % cl.size()];
-      msg.push_back(*_info[ip]);
-    }
-  }
+  // Add some contact nodes.
+  newold_msg(msg, contactlist(g), _contact_ration);
+
+  assert(msg.size() <= 1 + _group_ration + _contact_ration);
 
   return msg;
 }
@@ -283,16 +309,18 @@ Kelips::gossip(void *junk)
 {
   vector<Info> msg = gossip_msg(group());
 
-  for(int i = 0; i < _group_targets; i++){
-    IPAddress target = random_peer(true);
-    if(target != 0)
-      doRPC(target, &Kelips::handle_gossip, &msg, (void *) 0);
+  {
+    vector<IPAddress> gl = randomize(grouplist(group()));
+    for(u_int i = 0; i < _group_targets && i < gl.size(); i++){
+      doRPC(gl[i], &Kelips::handle_gossip, &msg, (void *) 0);
+    }
   }
 
-  for(int i = 0; i < _contact_targets; i++){
-    IPAddress target = random_peer(false);
-    if(target != 0)
-      doRPC(target, &Kelips::handle_gossip, &msg, (void *) 0);
+  {
+    vector<IPAddress> cl = randomize(contactlist(group()));
+    for(u_int i = 0; i < _contact_targets && i < cl.size(); i++){
+      doRPC(cl[i], &Kelips::handle_gossip, &msg, (void *) 0);
+    }
   }
 
   _rounds++;
@@ -303,7 +331,7 @@ Kelips::gossip(void *junk)
 void
 Kelips::handle_gossip(vector<Info> *msg, void *ret)
 {
-  unsigned int i;
+  u_int i;
 
   for(i = 0; i < msg->size(); i++){
     gotinfo((*msg)[i]);
