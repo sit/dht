@@ -5,7 +5,9 @@
 #include <dbfe.h>
 #include <arpc.h>
 
-dhash::dhash(str dbname, int k) {
+
+dhash::dhash(str dbname, int k, int ss, int cs) :
+  key_store(1000), key_cache(100) {
 
   db = new dbfe();
   nreplica = k;
@@ -23,10 +25,12 @@ dhash::dhash(str dbname, int k) {
     warn << "open returned: " << strerror(err) << err << "\n";
     exit (-1);
   }
-
+  
   assert(defp2p);
   //  defp2p->registerActionCallback(wrap(this, &dhash::act_cb));
 
+  key_store.set_flushcb(wrap(this, &dhash::store_flush));
+  key_cache.set_flushcb(wrap(this, &dhash::cache_flush));
 
 }
 
@@ -74,11 +78,8 @@ dhash::dispatch(ptr<asrv> dhashsrv, svccb *sbp)
   case DHASHPROC_CHECK:
     {
       sfs_ID *n = sbp->template getarg<sfs_ID> ();
-      int *status = key_status[*n];
-      if (NULL == status) 
-	sbp->replyref (dhash_stat (DHASH_NOTPRESENT));
-      else
-	sbp->replyref (dhash_stat (DHASH_PRESENT));
+      dhash_stat status = key_status (*n);
+      sbp->replyref ( status );
     }
     break;
   default:
@@ -148,7 +149,19 @@ dhash::store(sfs_ID id, dhash_value data, store_status type, cbstore cb)
   ptr<dbrec> d = New refcounted<dbrec> (data.base (), data.size ());
 
   db->insert(k, d, wrap(this, &dhash::store_cb, cb));
-  key_status.insert (id, type);
+  dhash_stat stat;
+  if (type == DHASH_STORE) {
+    stat = DHASH_STORED;
+    key_store.enter (id, &stat);
+  } else {
+    stat = DHASH_CACHED;
+    key_cache.enter (id, &stat);
+  }
+  
+#if 0
+  defp2p->getsuccessor (myID, wrap (this, &dhash::find_replica_cb, nreplica, data));
+#endif
+
 }
 
 void
@@ -209,4 +222,40 @@ dhash::act_cb(sfs_ID id, char action) {
 
   //  warn << "node " << id << " just " << action << "ed the network\n";
 
+}
+
+dhash_stat
+dhash::key_status(sfs_ID n) {
+  const dhash_stat * s_stat = key_store.lookup (n);
+  if (s_stat != NULL)
+    return *s_stat;
+  
+  const dhash_stat * c_stat = key_cache.lookup (n);
+  if (c_stat != NULL)
+    return *c_stat;
+
+  return DHASH_NOTPRESENT;
+}
+
+void
+dhash::store_flush (sfs_ID key, dhash_stat value) {
+  ptr<dbrec> k = id2dbrec(key);
+  key_cache.enter (key, &value);
+  db->del (k, wrap(this, &dhash::store_flush_cb));
+}
+ 
+void
+dhash::store_flush_cb (int err) {
+  if (err) warn << "Error removing element\n";
+}
+
+void
+dhash::cache_flush (sfs_ID key, dhash_stat value) {
+  ptr<dbrec> k = id2dbrec(key);
+  db->del (k, wrap(this, &dhash::cache_flush_cb));
+}
+
+void
+dhash::cache_flush_cb (int err) {
+  if (err) warn << "err flushing from cache\n";
 }

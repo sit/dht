@@ -222,8 +222,8 @@ class dbfe {
   void IMPL_insert_async_sleepycat(ref<dbrec> key, ref<dbrec> data, errReturn_cb cb);
   void IMPL_lookup_async_sleepycat(ref<dbrec> key, itemReturn_cb cb);
   ptr<dbEnumeration> IMPL_make_enumeration_sleepycat();
-  void IMPL_delete_async_sleepycat(ref<dbrec> key, errReturn_cb cb);
-  int IMPL_delete_sync_sleepycat(ref<dbrec> key);
+  void IMPL_delete_async_sleepycat(ptr<dbrec> key, errReturn_cb cb);
+  int IMPL_delete_sync_sleepycat(ptr<dbrec> key);
 #else
   btreeSync *gADB_sync;
   btreeDispatch *gADB_async;
@@ -259,7 +259,8 @@ class dbfe {
     { return (*insert_impl_async)(key, data, cb); };
   void lookup(ref<dbrec> key, callback<void, ptr<dbrec> >::ref cb)
     { return (*lookup_impl_async)(key, cb); };
-  void del(ref<dbrec> key, errReturn_cb cb) { return (*delete_impl_async) (key, cb); };
+  void del(ref<dbrec> key, errReturn_cb cb) 
+    { return (*delete_impl_async) (key, cb); };
 
   ptr<dbEnumeration> enumerate() { return (*make_enumeration)(); };
 

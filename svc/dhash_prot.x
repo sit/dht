@@ -5,8 +5,10 @@ typedef opaque dhash_value<>;
 enum dhash_stat {
   DHASH_OK = 0,
   DHASH_NOENT = 1,
-  DHASH_PRESENT = 2,
-  DHASH_NOTPRESENT =3
+  DHASH_NOTPRESENT = 2,
+  DHASH_STORED = 3,
+  DHASH_CACHED = 4,
+  DHASH_REPLICATED = 5
 };
 
 enum store_status {

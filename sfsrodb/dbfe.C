@@ -226,6 +226,9 @@ dbfe::dbfe() {
     insert_impl = wrap(this, &dbfe::IMPL_insert_sync_sleepycat);
     lookup_impl = wrap(this, &dbfe::IMPL_lookup_sync_sleepycat);
     
+    delete_impl = wrap(this, &dbfe::IMPL_delete_sync_sleepycat);
+    delete_impl_async = wrap(this, &dbfe::IMPL_delete_async_sleepycat);
+
     insert_impl_async = wrap(this, &dbfe::IMPL_insert_async_sleepycat);
     lookup_impl_async = wrap(this, &dbfe::IMPL_lookup_async_sleepycat);
     make_enumeration = wrap(this, &dbfe::IMPL_make_enumeration_sleepycat);
@@ -296,6 +299,17 @@ dbfe::IMPL_lookup_sync_sleepycat(ref<dbrec> key)
   return ret;
 } 
 
+int 
+dbfe::IMPL_delete_sync_sleepycat(ptr<dbrec> key) {
+  DBT dkey;
+  bzero(&dkey, sizeof(dkey));
+  dkey.size = key->len;
+  dkey.data = key->value;
+  int err = db->del (db, NULL, &dkey, 0);
+  return err;
+}
+
+
 void dbfe::IMPL_insert_async_sleepycat(ref<dbrec> key, ref<dbrec> data, errReturn_cb cb)  { 
   int err = IMPL_insert_sync_sleepycat(key, data);
   (*cb)(err);
@@ -306,19 +320,18 @@ void dbfe::IMPL_lookup_async_sleepycat(ref<dbrec> key, itemReturn_cb cb)  {
   (*cb)(ret);
   return;
 }
-int dbfe::IMPL_close_sleepycat() { return db->close(db, 0); };
+
+int 
+dbfe::IMPL_close_sleepycat() { return db->close(db, 0); };
 
 ptr<dbEnumeration> dbfe::IMPL_make_enumeration_sleepycat() {
   return new refcounted<dbEnumeration>(db);
 }
 
-void dbfe::IMPL_delete_async_sleepycat(ref<dbrec> key, errReturn_cb cb) {
+void 
+dbfe::IMPL_delete_async_sleepycat(ptr<dbrec> key, errReturn_cb cb) {
   int err = IMPL_delete_sync_sleepycat(key);
   (*cb)(err);
-}
-
-int dbfe::IMPL_delete_sync_sleepycat(ref<dbrec> key) {
-  
 }
 
 #else 

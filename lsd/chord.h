@@ -35,25 +35,27 @@ struct hashID {
 };
 
 
-template<class KEY, class VALUE, u_int max_cache_entries>
-class cache {
+template<class KEY, class VALUE>
+class vs_cache {
   struct cache_entry {
-    cache *const c;
+    vs_cache *const c;
     const KEY    k;
     VALUE        v;
 
     ihash_entry<cache_entry> fhlink;
     tailq_entry<cache_entry> lrulink;
 
-    cache_entry (cache<KEY, VALUE, max_cache_entries> *cc,
+    cache_entry (vs_cache<KEY, VALUE> *cc,
 	       const KEY &kk, const VALUE *vv)
       : c (cc), k (kk)
     {      v = *vv;
-      c->lrulist.insert_tail (this);
-      c->entries.insert (this);
-      c->num_cache_entries++;
-      while (c->num_cache_entries > implicit_cast<u_int> (max_cache_entries))
-	delete c->lrulist.first;
+    c->lrulist.insert_tail (this);
+    c->entries.insert (this);
+    c->num_cache_entries++;
+    while (c->num_cache_entries > implicit_cast<u_int> (c->max_cache_entries)) {
+      if (c->fcb) (c->fcb) (c->lrulist.first->k, c->lrulist.first->v);
+      delete c->lrulist.first;
+    }
     }
 
     ~cache_entry ()
@@ -70,25 +72,31 @@ class cache {
     }
   };
 
+  typedef callback<void, KEY, VALUE>::ptr flushcb_t;
+  
 private:
   friend class cache_entry;   //XXX hashid is a hack that ruins the generic nature of the cache
   ihash<const KEY, cache_entry, &cache_entry::k, &cache_entry::fhlink, hashID> entries;
   u_int num_cache_entries;
   tailq<cache_entry, &cache_entry::lrulink> lrulist;
-
+  u_int max_cache_entries;
+  flushcb_t fcb;
 public:
-  cache () { num_cache_entries = 0; }
-  ~cache () { entries.deleteall (); }
+  vs_cache (u_int max_entries = 250) : num_cache_entries (0), 
+    max_cache_entries (max_entries), 
+    fcb (NULL) { };
+
+  ~vs_cache () { entries.deleteall (); }
   void flush () { entries.deleteall (); }
   void enter (const KEY& kk, const VALUE *vv)
-  {
+    {
     cache_entry *ad = entries[kk];
     if (!ad)
       vNew cache_entry (this, kk, vv);
     else 
       ad->touch ();
   }
-
+  
   const VALUE *lookup (const KEY& kk)
   {
     cache_entry *ad = entries[kk];
@@ -97,6 +105,10 @@ public:
       return &ad->v;
     }
     return NULL;
+  }
+  
+  void set_flushcb (flushcb_t cb ) {
+    fcb = cb;
   }
 };
 

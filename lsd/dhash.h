@@ -78,6 +78,13 @@ class dhash {
   void store_cb (cbstore cb, int stat);
   void cache_store_cb(dhash_res *res, clnt_stat err);
   
+  dhash_stat key_status(sfs_ID n);
+
+  void store_flush (sfs_ID key, dhash_stat value);
+  void store_flush_cb (int err);
+  void cache_flush (sfs_ID key, dhash_stat value);
+  void cache_flush_cb (int err);
+
   void find_replica_cb (store_cbstate *st, sfs_ID s, net_address r, 
 			sfsp2pstat status);
   void store_replica_cb(store_cbstate *st, dhash_stat *res, clnt_stat err);
@@ -86,10 +93,12 @@ class dhash {
 
   ptr<dbrec> id2dbrec(sfs_ID id);
 
-  qhash<sfs_ID, int, hashID> key_status;
+  vs_cache<sfs_ID, dhash_stat> key_store;
+  vs_cache<sfs_ID, dhash_stat> key_cache;
+
 
  public:
-  dhash (str dbname, int nreplica);
+  dhash (str dbname, int nreplica, int ss = 10000, int cs = 1000);
   void accept(ptr<axprt_stream> x);
 };
 
