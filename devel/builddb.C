@@ -115,17 +115,14 @@ main (int argc, char** argv)
     // start of block contains 'i', the rest is all zeroed
     ((u_int *)block)[0] = i; 
 
-    char hash[sha1::hashsize];
-    sha1_hash (hash, block, block_size);
-    chordID ID;
-    mpz_set_rawmag_be (&ID, hash, sizeof (hash));
-
+    chordID ID = compute_hash (block, block_size);
     if (between (minID, maxID, ID)) {
       n++;
-      ref<dbrec> key = New refcounted<dbrec> (&hash[0], sha1::hashsize);
+      ref<dbrec> key = id2dbrec(ID, DHASH_FRAG);
       ptr<dbrec> data = marshal_dhashblock (&block[0], block_size);
       ptr<dbrec> frag = gen_frag (data);
       db->insert (key, frag);
+      assert (db->lookup (key));
       bigint h = compute_hash (frag->value, frag->len);
       warn << dbrec2id (key) << " frag: hash " << h << ", len " << frag->len << "\n";
     }

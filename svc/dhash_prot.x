@@ -1,4 +1,5 @@
 %#include <chord_types.h>
+%#include <merkle_hash.h>
 
 typedef opaque dhash_value<>;
 typedef int32_t dhash_hopcount;
@@ -157,6 +158,22 @@ struct s_dhash_storecb_arg {
 };
 
 
+struct dhash_offer_arg {
+  bigint keys<64>;
+};
+
+struct dhash_offer_resok {
+   bool accepted<64>;
+};
+
+union dhash_offer_res switch (dhash_stat status) {
+ case DHASH_OK:
+   dhash_offer_resok resok;
+default:
+   void; 
+};
+
+
 program DHASH_PROGRAM {
   version DHASH_VERSION {
 
@@ -174,6 +191,10 @@ program DHASH_PROGRAM {
 
     dhash_stat
     DHASHPROC_BLOCK (s_dhash_block_arg) = 5;
+
+    dhash_offer_res
+    DHASHPROC_OFFER (dhash_offer_arg) = 6;
+
   } = 1;
 } = 344449;
 
@@ -264,7 +285,7 @@ program DHASHGATEWAY_PROGRAM {
                 
 		dhash_stat
          	DHASHPROC_ACTIVE (int32_t) = 5;
-		
+
 	} = 1;
 } = 344448;
 

@@ -125,6 +125,26 @@ class dhash_impl : public dhash {
   void keyhash_mgr_lookup (chordID key, dhash_stat err,
 			   vec<chord_node> hostsl, route r);
   void keyhash_sync_done ();
+
+
+  void pmaint_next ();
+  void pmaint_lookup (bigint key, dhash_stat err, vec<chord_node> sl, route r);
+  void pmaint_offer ();
+  void pmaint_offer_cb (chord_node dst, vec<bigint> keys, ref<dhash_offer_res> res, 
+			clnt_stat err);
+  void pmaint_handoff (chord_node dst, bigint key);
+  void pmaint_handoff_cb (chord_node dst, bigint key, ref<dhash_storeres> res, clnt_stat err);
+
+  bigint pmaint_a;
+  bigint pmaint_b;
+  vec<chord_node> pmaint_succs;
+  qhash<chordID, bool, hashID> pmaint_handoff_tbl;
+  u_int pmaint_offers_pending;
+  u_int pmaint_offers_erred;
+
+
+  void partition_maintenance_timer2 (chordID curID);
+
   void partition_maintenance_lookup_cb (dhash_stat err, vec<chord_node> hostsl, route r);
   void partition_maintenance_pred_cb (chordID predID, net_address addr, chordstat stat);
 
