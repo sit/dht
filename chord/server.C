@@ -229,7 +229,7 @@ vnode::find_closestpred_cb (chordID n, findpredecessor_cbstate *st,
   } else {
     // warnx << "find_closestpred_cb: pred of " << st->x << " is " 
     //  << res->resok->node << "\n";
-    locations->cacheloc (res->resok->node, res->resok->r, n);
+    locations->cacheloc (res->resok->node, res->resok->r);
     st->search_path.push_back(res->resok->node);
     if (st->search_path.size () >= 1000) {
       warnx << "PROBLEM: too long a search path: " << myID << " looking for "
@@ -281,7 +281,7 @@ vnode::testrange_findclosestpred_cb (chord_testandfindres *res,
   } else if (res->status == CHORD_INRANGE) { 
     st->search_path.push_back(res->inres->x);
     assert (st->search_path.size () < 1000);
-    locations->cacheloc (res->inres->x, res->inres->r, st->nprime);
+    locations->cacheloc (res->inres->x, res->inres->r);
     //    warn << "testrange_findclosestpred_cb: " << myID << " succ of " 
     // << st->nprime << " is " << res->inres->x << "\n";
     st->cb (st->nprime, st->search_path, CHORD_OK);

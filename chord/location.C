@@ -47,9 +47,9 @@ locationtable::replace_estimate (u_long o, u_long n)
 }
 
 void
-locationtable::insert (chordID &n, sfs_hostname s, int p, chordID &source)
+locationtable::insert (chordID &n, sfs_hostname s, int p)
 {
-  location *l = New location (n, s, p, source);
+  location *l = New location (n, s, p);
   locs.insert (l);
   add_cachedlocs (l);
 }
@@ -64,7 +64,7 @@ locationtable::getlocation (chordID &x)
 void
 locationtable::changenode(node *n, chordID &x, net_address &r)
 {
-  updateloc (x, r, x);
+  updateloc (x, r);
   if (n->alive) deleteloc (n->n);
   n->n = x;
   n->alive = true;
@@ -178,24 +178,22 @@ locationtable::findpredloc (chordID x)
 }
 
 void
-locationtable::cacheloc (chordID &x, net_address &r, chordID &source)
+locationtable::cacheloc (chordID &x, net_address &r)
 {
   if (locs[x] == NULL) {
-    // warnx << "cacheloc: " << x << " at port " << r.port << " source: " 
-    //  << source << "\n";
-    location *loc = New location (x, r, source);
+    // warnx << "cacheloc: " << x << " at port " << r.port << "\n";
+    location *loc = New location (x, r);
     locs.insert (loc);
     add_cachedlocs (loc);
   }
 }
 
 void
-locationtable::updateloc (chordID &x, net_address &r, chordID &source)
+locationtable::updateloc (chordID &x, net_address &r)
 {
   if (locs[x] == NULL) {
-    // warnx << "updateloc: ADD " << x << " at port " << r.port << " source: " 
-    //  << source << "\n";
-    location *loc = New location (x, r, source);
+    // warnx << "updateloc: ADD " << x << " at port " << r.port << "\n";
+    location *loc = New location (x, r);
     loc->refcnt++;
     locs.insert (loc);
   } else {

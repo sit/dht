@@ -82,8 +82,7 @@ chord::chord (str _wellknownhost, int _wellknownport,
   warnx << "chord: myname is " << myaddress.hostname << "\n";
   locations = New refcounted<locationtable> (mkref (this), set_rpcdelay, 
 					     max_cache, max_connections);
-  locations->insert (wellknownID, wellknownhost.hostname, wellknownhost.port, 
-		     wellknownID);
+  locations->insert (wellknownID, wellknownhost.hostname, wellknownhost.port);
   nvnode = 0;
   ngetsuccessor = 0;
   ngetpredecessor = 0;
@@ -133,7 +132,7 @@ ptr<vnode>
 chord::newvnode (cbjoin_t cb)
 {
   chordID newID = initID (nvnode);
-  locations->insert (newID, myaddress.hostname, myaddress.port, newID);
+  locations->insert (newID, myaddress.hostname, myaddress.port);
   ptr<vnode> vnodep = New refcounted<vnode> (locations, mkref (this), newID);
   nvnode++;
   warn << "insert: " << newID << "\n";
@@ -146,7 +145,7 @@ ptr<vnode>
 chord::newvnode (chordID &x, cbjoin_t cb)
 {
   if (x != wellknownID) 
-    locations->insert (x, myaddress.hostname, myaddress.port, x);
+    locations->insert (x, myaddress.hostname, myaddress.port);
   ptr<vnode> vnodep = New refcounted<vnode> (locations, mkref (this), x);
   nvnode++;
   warn << "insert: " << x << "\n";

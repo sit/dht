@@ -81,7 +81,6 @@ struct location {
   int refcnt;	// locs w. refcnt == 0 are in the cache; refcnt > 0 are fingers
   chordID n;
   net_address addr;
-  chordID source;
   ptr<axprt_stream> x;
   bool connecting;
   tailq<doRPC_cbstate, &doRPC_cbstate::connectlink> connectlist;
@@ -92,8 +91,7 @@ struct location {
   u_int64_t nrpc;
   u_int64_t maxdelay;
 
-  location (chordID &_n, net_address &_r, chordID _source) : 
-    n (_n), addr (_r), source (_source) {
+  location (chordID &_n, net_address &_r) : n (_n), addr (_r) {
     connecting = false; 
     x = NULL;
     refcnt = 0;
@@ -101,10 +99,9 @@ struct location {
     nrpc = 0;
     maxdelay = 0;
   };
-  location (chordID &_n, sfs_hostname _s, int _p, chordID &_source) : n (_n) {
+  location (chordID &_n, sfs_hostname _s, int _p) : n (_n) {
     addr.hostname = _s;
     addr.port = _p;
-    source = _source;
     connecting = false;
     x = NULL;
     refcnt = 0;
@@ -165,11 +162,11 @@ class locationtable : public virtual refcount {
 		    chordID newpred);
   void incvnodes () { nvnodes++; };
   void replace_estimate (u_long o, u_long n);
-  void insert (chordID &_n, sfs_hostname _s, int _p, chordID &_source);
+  void insert (chordID &_n, sfs_hostname _s, int _p);
   location *getlocation (chordID &x);
   void deleteloc (chordID &n);
-  void cacheloc (chordID &x, net_address &r, chordID &source);
-  void updateloc (chordID &x, net_address &r, chordID &source);
+  void cacheloc (chordID &x, net_address &r);
+  void updateloc (chordID &x, net_address &r);
   void increfcnt (chordID &n);
   bool lookup_anyloc (chordID &n, chordID *r);
   chordID findsuccloc (chordID x);
