@@ -356,6 +356,7 @@ public:
   cb_ret cb;
   ptr<route_factory> f;
   timecb_t *dcb;
+  bool ignore_block;
 
   void check_finish ();
   void block_cb (s_dhash_block_arg *arg);

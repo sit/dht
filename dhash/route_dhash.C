@@ -29,7 +29,8 @@ route_dhash::route_dhash (ptr<route_factory> f,
     use_cached_succ (ucs), 
     npending (0), fetch_error (false),
     xi (xi),
-    f (f)
+    f (f),
+    ignore_block (false)
 {
 
   last_hop = false;
@@ -73,12 +74,17 @@ route_dhash::timed_out ()
   (*cb)(DHASH_TIMEDOUT, NULL, path ());
   //XXX what happens if the request comes back
   //    after we've given up on it?
+  // gotta do something, the timecb_remove below is causing a panic
+  // once the block comes in after the timer has timed_out. ignore it?
+  ignore_block = true;
 }
 
 void
 route_dhash::block_cb (s_dhash_block_arg *arg)
 {
 
+  if (ignore_block)
+    return;
   timecb_remove (dcb);
   if (arg->offset == -1) {
     (*cb)(DHASH_NOENT, NULL, path ());
