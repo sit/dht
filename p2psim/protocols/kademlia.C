@@ -553,16 +553,17 @@ Kademlia::lookup_wrapper(lookup_wrapper_args *args)
       record_lookup_stat(ip(), target_ip, after - args->starttime, true, false, fr.hops, fr.timeouts, fr.spent_in_timeout);
     }
     _bad_attempts += args->attempts;
+    _bad_lookup_latency += (after - args->starttime);
+    _bad_hops += fr.hops;
+    _bad_timeouts += fr.timeouts;
+    _bad_rpcs += fr.rpcs;
+    _bad_hop_latency += fr.latency;
+
     delete args;
     return;
   }
 
   // try again in a bit.
-  _bad_lookup_latency += (after - args->starttime);
-  _bad_hops += fr.hops;
-  _bad_timeouts += fr.timeouts;
-  _bad_rpcs += fr.rpcs;
-  _bad_hop_latency += fr.latency;
   delaycb(100, &Kademlia::lookup_wrapper, args);
 }
 
