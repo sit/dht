@@ -99,8 +99,16 @@ vnode_impl::get_succlist_cb (cbchordIDlist_t cb, chord_nodelistres *res,
     cb (nlist, res->status);
   } else {
     // xxx there must be something more intelligent to do here
-    for (unsigned int i = 0; i < res->resok->nlist.size (); i++)
-      nlist.push_back (make_chord_node (res->resok->nlist[i]));
+    for (unsigned int i = 0; i < res->resok->nlist.size (); i++) {
+      chord_node n = make_chord_node (res->resok->nlist[i]);
+      nlist.push_back (n);
+      //update the coordinates if this node is in the location table
+      ptr<location> l = locations->lookup (n.x);
+      if (l) {
+	vec<float> c = get_coords (n);
+	l->set_coords (c);
+      }
+    }
     cb (nlist, CHORD_OK);
   }
   delete res;

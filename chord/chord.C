@@ -400,6 +400,7 @@ vnode_impl::doroute (user_args *sbp, chord_testandfindarg *fa)
     vec<chordID> f;
     for (unsigned int i=0; i < fa->failed_nodes.size (); i++)
       f.push_back (fa->failed_nodes[i]);
+
     ptr<location> p = closestpred (fa->x, f);
     p->fill_node (res->notinrange->n);
     
