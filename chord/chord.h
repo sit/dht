@@ -46,6 +46,9 @@
 typedef int cb_ID;
 typedef vec<chordID> route;
 
+class chord;
+class vnode;
+
 typedef callback<void,ptr<vnode>,chordstat>::ref cbjoin_t;
 typedef callback<void,chordID,net_address,chordstat>::ref cbchordID_t;
 typedef callback<void,vec<chord_node>,chordstat>::ref cbchordIDlist_t;

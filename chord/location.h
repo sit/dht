@@ -38,9 +38,6 @@ typedef callback<void,chordstat>::ptr cbping_t;
 typedef callback<void,chordID,bool,chordstat>::ref cbchallengeID_t;
 extern cbchallengeID_t cbchall_null;
 
-class chord;
-class vnode;
-
 // the identifier for the ihash class
 struct hashID {
   hashID () {}
