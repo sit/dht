@@ -6,7 +6,8 @@
 #define MAX_INT 0x7fffffff
 
 
-str gettime()
+str 
+gettime()
 {
   str buf ("");
   timespec ts;
@@ -15,7 +16,7 @@ str gettime()
   return buf;
 }
 
- int 
+int 
 uniform_random(double a, double b)
 {
   double f;
@@ -27,7 +28,7 @@ uniform_random(double a, double b)
   return (int)(a + f);
 }
 
- sfs_ID
+sfs_ID
 incID (sfs_ID &n)
 {
   sfs_ID s = n + 1;
@@ -39,7 +40,7 @@ incID (sfs_ID &n)
     return s;
 }
 
- sfs_ID
+sfs_ID
 decID (sfs_ID &n)
 {
   sfs_ID p = n - 1;
@@ -51,7 +52,7 @@ decID (sfs_ID &n)
     return p;
 }
 
- sfs_ID
+sfs_ID
 successorID (sfs_ID &n, int p)
 {
   sfs_ID s;
@@ -67,7 +68,7 @@ successorID (sfs_ID &n, int p)
   return s;
 }
 
- sfs_ID
+sfs_ID
 predecessorID (sfs_ID &n, int p)
 {
   sfs_ID s;
@@ -149,5 +150,13 @@ betweenabs (sfs_ID &a, sfs_ID &b, sfs_ID &n)
   bool r = n >= a && b >= n;
   //  warnx << n << " between( " << a << ", " <<  b << "): " <<  r << "\n";
   return r;
+}
+
+sfs_ID
+diff(sfs_ID a, sfs_ID b) 
+{
+  sfs_ID diff = (b - a);
+  if (diff > 0) return diff;
+  else return (bigint(1) << 160) - diff;
 }
 

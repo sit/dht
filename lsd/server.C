@@ -68,6 +68,15 @@ void
 p2p::find_successor (sfs_ID &n, sfs_ID &x, cbroute_t cb)
 {
   //  warn << "FS: " << n << " " << x << "\n";
+  
+  sfs_ID start;
+  if (lsd_location_lookup) {
+    start = query_location_table (x);
+    if (start < 0) start = n;
+    warn << "starting search for " << x << " at " << start << "rather than at " << n << "\n";
+  } else 
+    start = n;
+ 
   find_predecessor (n, x,
 		    wrap (mkref (this), &p2p::find_predecessor_cb, cb));
 }
@@ -198,4 +207,17 @@ p2p::find_closestpred_succ_cb (findpredecessor_cbstate *st,
       st->cb (st->nprime, st->search_path, SFSP2P_OK);
     }
   }
+}
+
+sfs_ID
+p2p::query_location_table (sfs_ID x) {
+  location *l = locations.first ();
+  sfs_ID min = bigint(1) << 160;
+  sfs_ID ret = -1;
+  while (l) {
+    sfs_ID d = diff(l->n , x);
+    if (d < min) { min = d; ret = l->n; }
+    l = locations.next (l);
+  }
+  return ret;
 }

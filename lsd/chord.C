@@ -212,6 +212,8 @@ p2p::p2p (str host, int hostport, const sfs_ID &hostID,
   lookups_outstanding = 0;
   lookup_RPCs = 0;
 
+  lsd_location_lookup = (getenv("LSD_LOCATION_LOOKUP"));
+
 #ifdef _SIM_
   // used to help simulate
   initialize_graph();

@@ -10,7 +10,6 @@
 
 #define NBIT 160
 
-
 #ifdef STATS
 struct chord_stats {
   long insert_path_len;
@@ -196,6 +195,8 @@ class p2p : public virtual refcount  {
   static const int stabilize_timer = 30;      // seconds
   static const int max_retry = 5;
 
+  bool lsd_location_lookup;
+  
   net_address wellknownhost;
   sfs_ID wellknownID;
   net_address myaddress;
@@ -318,6 +319,9 @@ class p2p : public virtual refcount  {
   void doActionCallbacks(sfs_ID id, char action);
 
   void stats_cb ();
+
+  sfs_ID query_location_table (sfs_ID x);
+  
 };
 
 extern ptr<p2p> defp2p;
