@@ -11,9 +11,7 @@ vector<VivaldiTest*> VivaldiTest::_all;
 VivaldiTest::VivaldiTest(Node *n) : Protocol(n)
 {
   _vivaldi = new Vivaldi6(n);
-  _all.push_back(this);
 
-  delaycb(1000, &VivaldiTest::tick, (void *) 0);
 }
 
 VivaldiTest::~VivaldiTest()
@@ -39,6 +37,8 @@ VivaldiTest::join(Args *args)
             (*args)["vivaldi-algorithm"].c_str());
     exit(1);
   }
+  _all.push_back(this);
+  delaycb(1000, &VivaldiTest::tick, (void *) 0);
 }
 
 char *
@@ -135,6 +135,12 @@ VivaldiTest::status()
          vc._x,
          vc._y);
   fflush(stdout);
+
+  unsigned int n = _all.size();
+  for (uint i = 0; i < n; i++) {
+    vc = _all[i]->_vivaldi->my_location();
+    printf("COORD %u: %.1f %.1f\n", (unsigned) now(), vc._x, vc._y);
+  }
 }
 
 void
@@ -144,7 +150,8 @@ VivaldiTest::tick(void *)
   Vivaldi::Coord c;
   Time before = now();
   doRPC(dst, &VivaldiTest::handler, (void*) 0, &c);
-  _vivaldi->sample(dst, c, (now() - before) / 2.0);
+  if ((now() - before) > 0)
+    _vivaldi->sample(dst, c, (now() - before) / 2.0);
 
   if((random() % (10 * _all.size())) == 0)
     status();
