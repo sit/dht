@@ -20,7 +20,8 @@ Protocol::getpeer(IPAddress a)
 unsigned
 Protocol::rcvRPC(RPCSet *hset)
 {
-  Alt a[hset->size()+1];
+  int na = hset->size() + 1;
+  Alt *a = (Alt *) malloc(sizeof(Alt) * na); // might be big, take off stack!
   Packet *p;
   hash_map<unsigned, unsigned> index2token;
 
@@ -39,13 +40,14 @@ Protocol::rcvRPC(RPCSet *hset)
     cerr << "interrupted" << endl;
     assert(false);
   }
-  assert(i <= (int) hset->size());
+  assert(i < (int) hset->size());
 
   unsigned token = index2token[i];
   assert(token);
   hset->erase(token);
   cancelRPC(token);
   delete p;
+  free(a);
   return token;
 }
 
