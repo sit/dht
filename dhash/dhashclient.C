@@ -182,12 +182,13 @@ dhashclient::insert (bigint hash, sfs_pubkey2 key, sfs_sig2 sig,
   if (xdr_sfs_pubkey2 (&x, &key) &&
       xdr_sfs_sig2 (&x, &sig) &&
       XDR_PUTLONG (&x, &ver) &&
+      XDR_PUTLONG (&x, (long int *)&buflen) &&
       (m_buf = (char *)XDR_INLINE (&x, size)))
     {
       memcpy (m_buf, buf, buflen);
       int m_len = x.uio ()->resid ();
       char *m_dat = suio_flatten (x.uio ());
-      insert (hash, m_dat, m_len, cb, DHASH_KEYHASH, options, buflen);
+      insert (hash, m_dat, m_len, cb, DHASH_KEYHASH, options, x.uio()->resid());
       xfree (m_dat);
     } else {
       ptr<insert_info> i = New refcounted<insert_info>(hash, bigint(0));

@@ -48,15 +48,17 @@ verify_key_hash (chordID key, char *buf, int len)
   sfs_pubkey2 pubkey;
   sfs_sig2 sig;
 
+  long contentlen;
   long v;
   xdrmem x1 (buf, (unsigned)len, XDR_DECODE);
 
   if (!xdr_sfs_pubkey2 (&x1, &pubkey)) return false;
   if (!xdr_sfs_sig2 (&x1, &sig)) return false;
   if (!XDR_GETLONG (&x1, &v)) return false;
+  if (!XDR_GETLONG (&x1, &contentlen)) return false;
 
   char *content;
-  if (!(content = (char *)XDR_INLINE (&x1, len)))
+  if (!(content = (char *)XDR_INLINE (&x1, contentlen)))
       return false;
 
   ptr<sfspub> pk = sfscrypt.alloc (pubkey, SFS_VERIFY);
@@ -69,7 +71,7 @@ verify_key_hash (chordID key, char *buf, int len)
   if (hash != key) return false;
 
   // verify signature
-  str msg (content, len);
+  str msg (content, contentlen);
   bool ok = pk->verify (sig, msg);
 
   return ok;
