@@ -492,12 +492,18 @@ dhc::dispatch (user_args *sbp)
   case DHCPROC_NEWBLOCK:
     recv_newblock (sbp);
     break;
-  default: {
+  case DHCPROC_ASK:
+    recv_ask (sbp);
+    break;
+  case DHCPROC_CMP:
+    recv_cmp (sbp);
+    break;
+  default:
     warn << "dhc:dispatch Unimplemented RPC " << sbp->procno << "\n"; 
     sbp->reject (PROC_UNAVAIL);
-    }
     break;
   }
 
 }
+
 

@@ -175,3 +175,24 @@ up_to_date (uint k, vec<chordID> config, vec<chord_node> succs)
       return false;
   return true;
 }
+
+bool 
+valid_proposal (ptr<dhc_block> kb, dhc_prepare_arg *arg, user_args *sbp)
+{
+
+  if (kb->meta->config.seqnum > arg->config_seqnum) {
+    dhc_prepare_res res (DHC_CONF_MISMATCH);
+    sbp->reply (&res);
+    return false;
+  }
+
+  if (paxos_cmp (kb->meta->accepted, arg->round) > 0) {
+    dhc_prepare_res res (DHC_LOW_PROPOSAL);
+    res.promised->seqnum = kb->meta->accepted.seqnum;
+    res.promised->proposer = kb->meta->accepted.proposer;
+    sbp->reply (&res);
+    return false;
+  }
+
+  return true;
+}

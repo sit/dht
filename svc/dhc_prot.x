@@ -14,7 +14,8 @@ enum dhc_stat {
    DHC_W_INPROG = 9,
    DHC_NOT_PRIMARY = 10,
    DHC_BLOCK_EXIST = 11,
-   DHC_DHASHERR = 12
+   DHC_DHASHERR = 12,
+   DHC_NOT_MASTER = 13
 };
 
 struct paxos_seqnum_t {
@@ -140,6 +141,9 @@ program DHC_PROGRAM {
 
     dhc_prepare_res 
     DHCPROC_ASK (dhc_prepare_arg) = 9;
+
+    dhc_prepare_res
+    DHCPROC_CMP (dhc_prepare_arg) = 10;
 
   } = 1;	
 } = 344452;

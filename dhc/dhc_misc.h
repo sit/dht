@@ -11,12 +11,14 @@ void set_new_config (ptr<dhc_newconfig_arg>, vec<chordID>);
 void set_new_config (ptr<dhc_newconfig_arg>, vec<ptr<location> >);
 void set_new_config (ptr<dhc_newconfig_arg>, vec<ptr<location> > *, 
 		     ptr<vnode>, uint);
-//void set_locations (vec<ptr<location> > *, ptr<vnode>, vec<chordID>);
+
 int paxos_cmp (paxos_seqnum_t, paxos_seqnum_t);
 int tag_cmp (tag_t, tag_t);
 void ID_put (char *, chordID);
 void ID_get (chordID, char *);
 bool up_to_date (uint, vec<chordID>, vec<chord_node>);
+bool valid_proposal (ptr<dhc_block>, dhc_prepare_arg *, user_args *);
+
 
 static inline ptr<dhc_block> 
 to_dhc_block (ptr<dbrec> rec)

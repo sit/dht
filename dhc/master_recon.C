@@ -59,14 +59,14 @@ dhc::recv_promise (chordID bID, dhc_cb_t cb,
   if (dhc_debug)
     warn << "\n\n" << myNode->my_ID () << " received promise msg. bID: " << bID << "\n";
 
+  dhc_soft *b = dhcs[bID];
+  if (!b) {
+    warn << "dhc::recv_promise " << bID << " not found.\n";
+    exit (-1);
+  }
+      
   if (!err && (promise->status == DHC_OK)) {
 
-    dhc_soft *b = dhcs[bID];
-    if (!b) {
-      warn << "dhc::recv_promise " << bID << " not found.\n";
-      exit (-1);
-    }
-      
     if (!set_ac (&b->pstat->acc_conf, *promise->resok)) {
       warn << "dhc:recv_promise Different conf accepted. Something's wrong!!\n";
       for (uint i=0; i<b->pstat->acc_conf.size (); i++)
@@ -114,14 +114,18 @@ dhc::recv_promise (chordID bID, dhc_cb_t cb,
       warn << "dhc:recv_promise: cannot send RPC. retry???\n";
     } else 
       if (promise->status == DHC_LOW_PROPOSAL) {
-	dhc_soft *b = dhcs[bID];
-	if (!b) {
-	  warn << "dhc::recv_promise " << bID << " not found.\n";
-	  exit (-1);
+	ptr<dbrec> key = id2dbrec (bID);
+	ptr<dbrec> rec = db->lookup (key);
+	ptr<dhc_block> kb = to_dhc_block (rec);
+
+	if ((kb->meta->config.seqnum == b->config_seqnum) &&
+	    (paxos_cmp (kb->meta->accepted, *promise->promised) < 0)) {
+	  kb->meta->accepted.seqnum = promise->promised->seqnum;
+	  kb->meta->accepted.proposer = promise->promised->proposer;
+	  db->del (key);
+	  db->insert (key, to_dbrec (kb));
 	}
-	b->promised.seqnum = promise->promised->seqnum;
-	b->promised.proposer = promise->promised->proposer;
-	dhcs.insert (b);
+	
       } else 
 	print_error ("dhc:recv_promise", err, promise->status);
     (*cb) (promise->status, err);
@@ -166,6 +170,7 @@ dhc::recv_accept (chordID bID, dhc_cb_t cb,
       b->pstat->sent_newconfig = true;
       ptr<dhc_newconfig_arg> arg = New refcounted<dhc_newconfig_arg>;
       arg->bID = kb->id;
+      arg->mID = kb->masterID;
       arg->data.tag.ver = kb->data->tag.ver;
       arg->data.tag.writer = kb->data->tag.writer;
       arg->data.data.setsize (kb->data->data.size ());
@@ -176,8 +181,6 @@ dhc::recv_accept (chordID bID, dhc_cb_t cb,
       if (dhc_debug)
 	warn << "\n\n" << "dhc::recv_accept Config accepted for block " << b->id << "\n";
 
-      dhcs.insert (b);
-
       ptr<dhc_newconfig_res> res; 
       for (uint i=0; i<b->new_config.size (); i++) {
 	ptr<location> dest = b->new_config[i];
@@ -185,6 +188,9 @@ dhc::recv_accept (chordID bID, dhc_cb_t cb,
 	myNode->doRPC (dest, dhc_program_1, DHCPROC_NEWCONFIG, arg, res,
 		       wrap (this, &dhc::recv_newconfig_ack, b->id, cb, res));
       }
+
+      dhcs.insert (b);
+
     }
   } else {
     if (err == RPC_CANTSEND) {
@@ -275,7 +281,6 @@ dhc::recv_prepare (user_args *sbp)
 
     if (b->status == IDLE)
       b->status = RECON_INPROG;
-#if 1 //Allow multiple recons per config
     else 
       if (myNode->my_ID () != prepare->round.proposer) {
 	//Be more precise on what the status really is.
@@ -283,7 +288,6 @@ dhc::recv_prepare (user_args *sbp)
 	sbp->reply (&res);
 	return;
       }
-#endif
     
     if (paxos_cmp (prepare->round, b->promised) == 1) {
       b->promised.seqnum = prepare->round.seqnum;

@@ -432,7 +432,10 @@ class dhc /*: public virtual refcount*/ {
   void recv_newconfig (user_args *);
   void recv_newconfig_ack (chordID, dhc_cb_t, ref<dhc_newconfig_res>, clnt_stat);
 
+  void recv_ask (user_args *);
   void recv_permission (chordID, dhc_cb_t, ref<dhc_prepare_res>, clnt_stat);
+  void recv_cmp (user_args *);
+  void recv_cmp_ack (chordID, user_args *, ref<dhc_prepare_res>, clnt_stat);
 
   void recv_get (user_args *);
   void getblock_cb (user_args *, ptr<location>, ptr<read_state>, 
