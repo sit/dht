@@ -28,14 +28,15 @@ SFS-enabled tools.
 
 %prep
 %setup -q
+./configure --prefix=/usr --with-db=/home/yipal/db42-install
 
 %build
-./configure --prefix=/usr --with-db3=/home/yipal/db42-install
-make 
+make SUBDIRS="\${BASEDIRS} usenet"
+
 
 %install
 rm -rf $RPM_BUILD_ROOT
-make install-strip DESTDIR=$RPM_BUILD_ROOT
+make install-strip SUBDIRS="\${BASEDIRS} usenet" DESTDIR=$RPM_BUILD_ROOT
 
 %clean
 rm -rf $RPM_BUILD_ROOT
@@ -56,7 +57,11 @@ rm -rf $RPM_BUILD_ROOT
 /usr/bin/nodeq
 /usr/bin/walk
 /usr/bin/dbdump
+/usr/bin/usenet
 
 %changelog
+* Fri Oct 01 2004 Emil Sit <sit@mit.edu>
+- Add usenet
+
 * Fri Jan 07 2004 Frank Dabek <fdabek@mit.edu>
 - Initial SPEC
