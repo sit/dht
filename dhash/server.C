@@ -1382,8 +1382,16 @@ dhash_impl::dbwrite (ref<dbrec> key, ref<dbrec> data)
   } else {
     action = "repeat-store";
   }
+
+  // The utility of this is highly dependent on the encoding used by
+  // Ida::gen_frag.  Should ideally have a DHASH_FRAGMENT type too.
+  // Won't deal well if there's a magic expansion in the encoding
+  // vector either.
+  str x ("");
+  if (data->len > 9 + 2*NUM_DFRAGS)
+    x = strbuf () << " " << hexdump (data->value + 8, 2*(NUM_DFRAGS + 1));
   dhashtrace << "dbwrite: " << host_node->my_ID ()
-	     << " " << action << " " << dbrec2id(key) << "\n";
+	     << " " << action << " " << dbrec2id(key) << x << "\n";
 }
 
 void
