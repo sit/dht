@@ -21,6 +21,7 @@ struct nntp {
   strbuf out;
   group cur_group;
   cbv process_input;
+  bool posting;
 
   nntp (int _s);
   ~nntp ();
@@ -34,7 +35,7 @@ struct nntp {
   void cmd_over (str);
   void cmd_article (str);
   void cmd_post (str);
-  void read_post (const char *, const char *);
+  void read_post (str, str);
   void cmd_quit (str);
   void cmd_help (str);
   void cmd_ihave (str);

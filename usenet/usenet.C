@@ -88,6 +88,8 @@ main (int argc, char *argv[])
     group_db->insert(k, d);
     k = New refcounted<dbrec> ("baz", 3);
     group_db->insert(k, d);
+    k = New refcounted<dbrec> ("rec.bicycles.misc", 17);
+    group_db->insert(k, d);
   }
 
   startlisten ();

@@ -36,12 +36,13 @@ char *takethisoke = " article transferred ok\r\n";
 char *takethisbadb = "439 ";
 char *takethisbade = " article transfer failed\r\n";
 
-nntp::nntp (int _s) : s (_s), process_input (wrap (this, &nntp::command))
+nntp::nntp (int _s) : s (_s), process_input (wrap (this, &nntp::command)),
+		      posting (false)
 {
   warn << "connect " << s << "\n";
   fdcb (s, selread, wrap (this, &nntp::input));
 
-  cmd_hello("MODE READER");
+  cmd_hello("MODE READER\r\n");
   fdcb (s, selwrite, wrap (this, &nntp::output));
 
   add_cmd ("CHECK", wrap (this, &nntp::cmd_check));
@@ -75,13 +76,14 @@ nntp::add_cmd (const char *cmd, cbs fn)
 void
 nntp::output (void)
 {
-  warn << out;
+  warn << "out: " << out << "\n";
 
   int left = out.tosuio ()->output (s);
 
-  if (left < 0)
+  if (left < 0) {
+    warn << "bye bye love " << s << "\n";
     delete this;
-  else if (!left)
+  } else if (!left)
     fdcb (s, selwrite, NULL);
 }
 
@@ -92,6 +94,7 @@ nntp::input (void)
 
   res = in.input (s);
   if (res <= 0) {
+    warn << "bye bye happiness " << s << "\n";
     delete this;
     return;
   }
@@ -117,6 +120,9 @@ nntp::command (void)
 	break;
       }
     }
+
+    if (posting)
+      return;
 
     if (i == cmd_table.size ()) {
       warn << "unknown command: " << cmdrx[1];
@@ -268,6 +274,7 @@ nntp::cmd_post (str c)
 {
   warn << "post\n";
   out << postgo;
+  posting = true;
   process_input = wrap (this, &nntp::read_post, postok, postbad);
 }
 
@@ -277,7 +284,7 @@ static rxx postngrx ("Newsgroups: (.+)\\r");
 static rxx postgrx (",?([^,]+)");
 
 void
-nntp::read_post (const char *resp, const char *bad)
+nntp::read_post (str resp, str bad)
 {
   ptr<dbrec> k, d;
   ptr<group> g;
@@ -323,15 +330,20 @@ warn << " resid " << in.resid () << " rem " << postrx.len (0) << "\n";
       }
     }
     in.rembytes (postrx.len (0));
-    warn << "ok\n";
+    warn << "ok ";
 
-    if (posted)
+    if (posted) {
+      warnx << resp << "\n";
       out << resp;
-    else
+    } else {
+      warnx << bad << "\n";
       out << bad;
+    }
 
     fdcb (s, selwrite, wrap (this, &nntp::output));
+    posting = false;
     process_input = wrap (this, &nntp::command);
+    process_input ();
   }
 }
 
@@ -369,6 +381,7 @@ nntp::cmd_ihave (str c)
     d = article_db->lookup (key);
     if (!d) {
       out << ihavesend;
+      posting = true;
       process_input = wrap (this, &nntp::read_post, ihaveok, ihavebad);
     } else
       out << ihaveno;
@@ -406,7 +419,9 @@ nntp::cmd_takethis (str c)
   if (takethisrx.search (c)) {
     resp = strbuf () << takethisokb << takethisrx[1] << takethisoke;
     bad = strbuf () << takethisbadb << takethisrx[1] << takethisbade;
-    read_post (resp, bad);
+    posting = true;
+    process_input = wrap (this, &nntp::read_post, resp, bad);
+    process_input ();
   } else
     out << syntax;
 }
