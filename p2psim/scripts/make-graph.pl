@@ -9,6 +9,7 @@ my @ylabel;
 my $hulllabel = "LOOKUP_RATES:success"; 
 my $param;
 my $paramname = "param";
+my %paramvals;
 my $epsfile;
 my @indats = ();
 my $xrange;
@@ -51,7 +52,9 @@ make-graph.pl [options]
 			        Can specify more than one ylabel (if more than
 				one is given, the last is the axis label)
     --epsfile <filename>      Save the postscript, instead of using gv
-    --param <param_num>       Color the dots by this parameter
+    --param <param_num>       Color the dots by this parameter.  Can be the
+			        parameter name or a number.  To plot only
+				certain values, use "--param base=2,8,32".
     --paramname <param_name>  The name corresponding to the above param
     --datfile <filename>      Where the (merged) stats are
 				 May be specified more than once
@@ -66,6 +69,9 @@ make-graph.pl [options]
     --convex [both]           Generate convex hull graphs, not scatterplots
 				 If "both" is specified, both points and
 				   convex hull are shown
+    --overallconvex [<label>]    If plotting parameter values, this forces the
+				 overall hull to be plotted as well.  
+				 Optionally specify a label for the overall.
     --hulllabel [<stat>]      Only valid with --convex.  Labels each point
 				 on the hull with the value of a specific
 				 statistic or parameter.  Defaults to
@@ -96,7 +102,8 @@ my %options;
 &GetOptions( \%options, "help|?", "x=s", "y=s@", "epsfile=s", 
 	     "param=s", "paramname=s", "datfile=s@", "label=s@", 
 	     "xrange=s", "yrange=s", "xlabel=s", "ylabel=s@", "title=s", 
-	     "convex:s", "plottype=s", "grid", "rtmgraph", "hulllabel:s" )
+	     "convex:s", "plottype=s", "grid", "rtmgraph", "hulllabel:s",
+	     "overallconvex:s" )
     or &usage;
 
 if( $options{"help"} ) {
@@ -176,19 +183,36 @@ if( defined $options{"epsfile"} ) {
     $epsfile = $options{"epsfile"};
 }
 if( defined $options{"param"} ) {
+    my @paramsplit = split( /=/, $options{"param"} );
+
+    if( $#paramsplit > 1 ) {
+	die( "Bad param specification: " . $options{"param"} );
+    }
+
+    my $paramval = $paramsplit[0];
+
     # could be numeric or a string
-    if( $options{"param"} =~ /^\d+$/ ) {
-	$param = $options{"param"} - 1;
+    if( $paramval =~ /^\d+$/ ) {
+	$param = $paramval - 1;
 	if( $param < 0 ) {
 	    die( "Bad param value: " . ($param+1) );
 	}
     } else {
-	$param = $options{"param"};
-	$paramname= $options{"param"};
+	$param = $paramval;
+	$paramname = $paramval;
     }
     if( defined $options{"paramname"} ) {
 	$paramname = $options{"paramname"};
     }
+
+    if( defined $paramsplit[1] ) {
+	my @vals = split(/\,/, $paramsplit[1]);
+	%paramvals = ();
+	foreach my $v (@vals) {
+	    $paramvals{$v} = 1;
+	}
+    }
+
 }
 {;}
 if( defined $options{"datfile"} ) {
@@ -531,7 +555,8 @@ foreach my $datfile (@indats) {
 		    die( "Wrong param number $param for \"@params\"" );
 		}
 		$last_val = $params[$parampos];
-	    } elsif( $line =~ /^([^\#]*)$/ ) {
+	    } elsif( $line =~ /^([^\#]*)$/ and 
+		     (!%paramvals || defined $paramvals{$last_val} ) ) {
 		$vals_used{$last_val} = "true";
 		open( DAT, ">>$newfile" ) or 
 		    die("Couldn't open tmp: $newfile");
@@ -564,6 +589,20 @@ foreach my $datfile (@indats) {
 		$yposes{"$j-$newfile"} = $ypos[$j];
 	    }
 	    $hullposes{$newfile} = $hullpos;
+	}
+
+	# do we also want the overall hull?
+	if( defined $options{"overallconvex"} ) {
+	    push @datfiles, "$datfile";
+	    my $l = "";
+	    if( $options{"overallconvex"} ne "" ) {
+		$l = "";
+		if( $labelhash{$indats[$index]} ne "" ) {
+		    $l = ":";
+		}
+		$l = $l . $options{"overallconvex"};
+	    }
+	    $labelhash{"$datfile.overall"} = $labelhash{$indats[$index]} . $l;
 	}
 	
     } else {
@@ -738,7 +777,7 @@ if( defined $options{"convex"} ) {
 			$headerhash{"$conx $cony"} = $h;
 		    }else{
 		      my $oldheader = $headerhash{"$conx $cony"};
-		      print STDERR "warning: same value $conx $cony, different parameter!\n$h\n$oldheader\n";
+		      #print STDERR "warning: same value $conx $cony, different parameter!\n$h\n$oldheader\n";
 		      $conx += 0.00001;
 		      $headerhash{"$conx $cony"} = $h;
 		    }
@@ -766,6 +805,11 @@ if( defined $options{"convex"} ) {
 		$yposes{"$k-$datfile$j.convex"} = $yposes{"$k-$datfile"};
 	    }
 	    $hullposes{"$datfile$j.convex"} = $hullposes{$datfile};
+	    if( defined $options{"overallconvex"} and 
+		!($datfile =~ /paramplot/) ) {
+		$labelhash{"$datfile$j.convex.overall"} = 
+		    $labelhash{"$datfile.overall"};
+	    }
 
 	    # now figure out the hull labels
 	    if( defined $options{"hulllabel"} ) {
@@ -1046,8 +1090,14 @@ foreach my $file (@iterfiles) {
 	if( defined $options{"convex"} && $options{"convex"} eq "both" ) {
 	    # don't label the lines, label the points later on
 	} elsif( $file =~ /paramplot.*\.(\d+)\.(\d+)\.dat/ ) {
-	    $t = "t \"" . $labelhash{$indats[$1]} . 
-		"$y:$paramname=$2\"";
+	    my $prefix = "";
+	    if( $labelhash{$indats[$1]} ne "" ) {
+		$prefix = $labelhash{$indats[$1]} . "$y:";
+	    }
+	    $t = "t \"" . $prefix . "$paramname=$2\"";
+	} elsif( defined $options{"overallconvex"} and 
+		 defined $labelhash{"$file.overall"} ) {
+	    $t = "t \"" . $labelhash{"$file.overall"} . "$y\"";
 	} else {
 	    $t = "t \"" . $labelhash{$indats[$i]} . "$y\"";
 	}
@@ -1115,8 +1165,14 @@ foreach my $file (@iterfiles) {
 		if( defined $param and $rtmgraph and @convexfiles ) {
 		    $t = "notitle";
 		} elsif( $datfile =~ /paramplot.*\.(\d+)\.(\d+)\.dat/ ) {
-		    $t = "t \"" . $labelhash{$indats[$1]} . 
-			"$y:$paramname=$2\"";
+		    my $prefix = "";
+		    if( $labelhash{$indats[$1]} ne "" ) {
+			$prefix = $labelhash{$indats[$1]} . "$y:";
+		    }
+		    $t = "t \"" . $prefix . "$paramname=$2\"";
+		} elsif( defined $options{"overallconvex"} and 
+			 defined $labelhash{"$file.overall"} ) {
+		    $t = "t \"" . $labelhash{"$file.overall"} . "$y\"";
 		} else {
 		    $t = "t \"" . $labelhash{$indats[$j-1]} . "$y\"";
 		}
@@ -1174,7 +1230,9 @@ if( (defined $param and !$rtmgraph) or
     (defined $plottype and 
      ($plottype eq "lines" or $plottype eq "linespoints" ) ) ) {
     foreach my $file (@datfiles) {
-	unlink( $file );
+	if( $file =~ /paramplot/ ) {
+	    unlink( $file );
+	}
     }
 }
 foreach my $file (@convexfiles) {
