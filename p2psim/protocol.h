@@ -3,10 +3,12 @@
 
 #include "threaded.h"
 #include "args.h"
+#include "network.h"
 #include <string>
 #include <map>
 #include <typeinfo>
 #include "p2psim.h"
+#include "rpc.h"
 using namespace std;
 
 class Node;
@@ -42,12 +44,24 @@ protected:
   void _delaycb(Time, member_f, void*);
   IPAddress ip();
 
-  // Look in rpc.h.
   template<class BT, class AT, class RT>
-    bool doRPC(IPAddress dsta,
-               void (BT::* fn)(AT *, RT *),
-               AT *args,
-               RT *ret);
+  bool doRPC(IPAddress dsta,
+              void (BT::* fn)(AT *, RT *),
+              AT *args,
+              RT *ret)
+  {
+    // find target node from IP address.
+    Node *dstnode = Network::Instance()->getnode(dsta);
+    assert(dstnode && dstnode->ip() == dsta);
+
+    // find target protocol from class name.
+    Protocol *dstproto = dstnode->getproto(typeid(*this));
+    BT *target = dynamic_cast<BT*>(dstproto);
+    assert(target);
+
+    return ::doRPC(dsta, target, fn, args, ret);
+  }
+
 
 private:
   Node *_node;

@@ -1,7 +1,6 @@
 #include "chord.h"
 #include "node.h"
 #include "packet.h"
-#include "rpc.h"
 #include <stdio.h>
 #include <iostream>
 

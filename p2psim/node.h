@@ -2,7 +2,6 @@
 #define __NODE_H
 
 #include "threaded.h"
-#include "protocol.h"
 #include <lib9.h>
 #include <thread.h>
 #include <map>
@@ -10,6 +9,8 @@
 #include "p2psim.h"
 #include "packet.h"
 using namespace std;
+
+class Protocol;
 
 class Node : public Threaded {
 public:

@@ -50,24 +50,4 @@ bool doRPC(IPAddress dsta,
   return ok;
 }
 
-// This is here because circular .h file dependencies
-// prevent me from putting it in protocol.h.
-  template<class BT, class AT, class RT>
-    bool Protocol::doRPC(IPAddress dsta,
-               void (BT::* fn)(AT *, RT *),
-               AT *args,
-               RT *ret)
-  {
-    // find target node from IP address.
-    Node *dstnode = Network::Instance()->getnode(dsta);
-    assert(dstnode && dstnode->ip() == dsta);
-
-    // find target protocol from class name.
-    Protocol *dstproto = dstnode->getproto(typeid(*this));
-    BT *target = dynamic_cast<BT*>(dstproto);
-    assert(target);
-
-    return ::doRPC(dsta, target, fn, args, ret);
-  }
-
 #endif // __RPC_H

@@ -2,6 +2,7 @@
 #define __CBEVENT_H
 
 #include "event.h"
+#include "protocol.h"
 
 class CBEvent : public Event {
 public:

@@ -9,6 +9,7 @@ using namespace std;
 #include "node.h"
 #include "packet.h"
 #include "network.h"
+#include "protocol.h"
 
 Node::Node(IPAddress ip) : _ip(ip), _pktchan(0)
 {

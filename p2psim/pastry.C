@@ -2,7 +2,6 @@
 #include "packet.h"
 #include <iostream>
 #include "p2psim.h"
-#include "rpc.h"
 #include <stdlib.h>
 #include <stdio.h>
 using namespace std;
