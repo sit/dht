@@ -25,8 +25,11 @@ gotrootfh (chord_server *server, ref<nfsserv> ns, sfsserver::fhcb cb,
   if (fh) warn << "fetched the root block\n";
   else warn << "error finding root block\n";
   if (fh) {
-    (*cb) (fh);
-    ns->setcb (wrap (server, &chord_server::dispatch, ns));
+    if (!ns->encodefh (*fh)) (*cb) (NULL);
+    else {
+      (*cb) (fh);
+      ns->setcb (wrap (server, &chord_server::dispatch, ns));
+    }
   }
 	
 }

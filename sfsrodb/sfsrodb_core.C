@@ -1,4 +1,4 @@
-/* $Id: sfsrodb_core.C,v 1.13 2001/08/30 14:16:52 fdabek Exp $ */
+/* $Id: sfsrodb_core.C,v 1.14 2001/09/01 17:31:14 fdabek Exp $ */
 
 /*
  *
@@ -90,9 +90,9 @@ sfsrodb_put_cb (dhash_storeres *res,
     sarg->iarg.type = DHASH_STORE;
     sarg->iarg.attr.size = contentlen;
     sarg->iarg.offset = written;
-    dhash_storeres *res = New dhash_storeres;
+    dhash_storeres *nres = New dhash_storeres;
     out++;
-    cclnt->call (DHASHPROC_SEND, sarg, res, wrap (&sfsrodb_put_finish_cb, res));
+    cclnt->call (DHASHPROC_SEND, sarg, nres, wrap (&sfsrodb_put_finish_cb, nres));
     written += s;
     delete sarg;
   }

@@ -317,6 +317,7 @@ chord_server::read_fetch_inode (nfscall *sbp, chordID ID,sfsro_inode *f_ip)
     //XXX if a read straddles two blocks we will do a short read 
     ///   i.e. only read the first block
     size_t block = ra->offset / fsinfo.info.blocksize;
+    warn << "reading from " << ra->offset << " thats block " << block << "\n";
     read_file_block (block, f_ip, false, wrap (this, 
 					     &chord_server::read_fetch_block,
 					     sbp, f_ip, ID));
@@ -337,11 +338,14 @@ chord_server::read_fetch_block (nfscall *sbp, sfsro_inode *f_ip, chordID ID,
   ro2nfsattr(f_ip, &fa, ID);
 
   unsigned int blocksize = (unsigned int)fsinfo.info.blocksize;
+  warn << "ended up with " << size << " bytes, block size was " << blocksize << "\n";
+
   size_t start = ra->offset % blocksize;
-  size_t n = MIN (MIN (ra->count, blocksize), size - start);
+  size_t n = MIN (MIN (ra->count, size), size - start);
   nfsres.resok->count = n;
   nfsres.resok->eof = (fa.size >= ra->offset + n) ? 1 : 0;
   nfsres.resok->data.setsize(n);
+  memset (nfsres.resok->data.base (), 'a', nfsres.resok->data.size ());
   memcpy (nfsres.resok->data.base(), data + start, 
 	  nfsres.resok->data.size ()); 
   nfsres.resok->file_attributes.set_present(1);
@@ -735,14 +739,15 @@ chord_server::get_data_initial_cb (dhash_res *res, cbgetdata_t cb, chordID ID,
 		    cb, ID);
   } else {
     char *buf = New char[res->resok->attr.size];
+    memset (buf, 'a', res->resok->attr.size);
     memcpy (buf, res->resok->res.base (), res->resok->res.size ());
     unsigned int offset = res->resok->res.size ();
     unsigned int *read = New unsigned int (offset);
     while (offset < res->resok->attr.size) {
       ptr<dhash_transfer_arg> arg = New refcounted<dhash_transfer_arg> ();
       arg->farg.key = ID;
-      arg->farg.len = (offset + MTU < res->resok->attr.size) ? MTU:
-	res->resok->attr.size;
+      arg->farg.len = (offset + MTU < res->resok->attr.size) ? MTU :
+	res->resok->attr.size - offset;
       arg->source = res->resok->source;
       arg->farg.start = offset;
 
@@ -772,6 +777,7 @@ chord_server::get_data_partial_cb (dhash_res *res, char *buf,
     delete read;
     (*cb) (NULL);
   } else {
+    warn << "client: copying " << res->resok->res.size () << " at " << res->resok->offset << " of " << res->resok->attr.size << "\n";
     memcpy (buf + res->resok->offset, res->resok->res.base (),
 	    res->resok->res.size ());
     *read += res->resok->res.size ();
@@ -779,7 +785,7 @@ chord_server::get_data_partial_cb (dhash_res *res, char *buf,
 
   if (*read == res->resok->attr.size) {
     finish_getdata (buf, res->resok->attr.size, cb, ID);
-    delete buf;
+    delete read;
   }
 
   delete res;

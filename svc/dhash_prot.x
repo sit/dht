@@ -18,7 +18,9 @@ enum dhash_stat {
   DHASH_STORE_PARTIAL = 11,
   DHASH_COMPLETE = 12,
   DHASH_CONTINUE = 13,
-  DHASH_INVALIDVNODE = 14
+  DHASH_INVALIDVNODE = 14,
+  DHASH_RFETCHDONE = 15,
+  DHASH_RFETCHFORWARDED = 16
 };
 
 enum store_status {
@@ -43,6 +45,14 @@ struct dhash_fetch_arg {
   chordID key;
   int32 start;
   int32 len;
+};
+
+struct dhash_recurs_arg {
+  chordID key;
+  chord_node return_address;
+  int32 start;
+  int32 len;
+  int nonce;
 };
 
 struct dhash_transfer_arg {
@@ -119,6 +129,22 @@ union dhash_fetchiter_res switch (dhash_stat status) {
    void;
 };
 
+union dhash_fetchrecurs_res switch (dhash_stat status) {
+ case DHASH_RFETCHDONE:
+   dhash_fetchiter_complete_res compl_res;
+ case DHASH_RFETCHFORWARDED:
+   chordID next;
+ default:
+   void;
+};
+
+struct dhash_finish_recurs_arg {
+  int32 nonce;
+  dhash_stat status;
+  chord_node source;
+  dhash_fetchiter_complete_res data;
+};
+
 struct dhash_send_arg {
   dhash_insertarg iarg;
   chordID dest;
@@ -132,6 +158,9 @@ program DHASHCLNT_PROGRAM {
 
 		dhash_res
 		DHASHPROC_LOOKUP (dhash_fetch_arg) = 2;
+
+		dhash_res
+		DHASHPROC_LOOKUP_R (dhash_fetch_arg) = 7;
 
 		dhash_res
 		DHASHPROC_TRANSFER (dhash_transfer_arg) = 3;
@@ -162,6 +191,12 @@ program DHASH_PROGRAM {
 
     dhash_fetchiter_res
     DHASHPROC_FETCHITER (dhash_fetch_arg) = 5;
+
+    dhash_fetchrecurs_res
+    DHASHPROC_FETCHRECURS (dhash_recurs_arg) = 6;
+
+    dhash_stat
+    DHASHPROC_FINISHRECURS (dhash_finish_recurs_arg) = 7;
 
   } = 1;
 } = 344449;

@@ -158,7 +158,7 @@ locationtable::doRPC (chordID &from, chordID &ID,
     
     xdrsuio x (XDR_ENCODE);
     if (!inproc (x.xdrp (), in)) {
-      return;
+      (*cb)(RPC_CANTSEND);
     }
     
     size_t marshalled_len = x.uio ()->resid ();

@@ -301,35 +301,41 @@ locationtable::betterpred_distest (chordID myID, chordID current,
       double cur_delay = (double)c->rpcdelay / c->nrpc;
       double new_delay = (double)n->rpcdelay / n->nrpc;
       double log2 = log(2);
+      int N = nnodes;
 
-      bigint dist_c = distance (current, target)*nnodes;
+      bigint dist_c = distance (current, target)*N;
       assert (NBIT > 32);
       int dist_size = dist_c.nbits ();
-      bigint high_bits = dist_c >> (dist_size - 32);
+      int shift = (dist_size - 32 > 0) ? dist_size - 32 : 0;
+      bigint high_bits = dist_c >> shift;
       double dist_c_exp = (double)high_bits.getui ();
-      double fdist_c = ldexp (dist_c_exp, dist_size - 32);
+      double fdist_c = ldexp (dist_c_exp, shift);
       double logdist_c = log (fdist_c)/log2;
       if (logdist_c < 0.0) logdist_c = 0.0;
       double d_current = (logdist_c - 160.0)*D + cur_delay;
       
-      bigint dist_p = distance (newpred, target)*nnodes;
+      bigint dist_p = distance (newpred, target)*N;
       assert (NBIT > 32);
       dist_size = dist_p.nbits ();
-      high_bits = dist_p >> (dist_size - 32);
+      shift = (dist_size - 32 > 0) ? dist_size - 32 : 0;
+      high_bits = dist_p >> shift;
       double dist_p_exp = (double)high_bits.getui ();
-      double fdist_p = ldexp (dist_p_exp, dist_size - 32);
+      double fdist_p = ldexp (dist_p_exp, shift);
       double logdist_p = log (fdist_p)/log2;
       if (logdist_p < 0.0) logdist_p = 0.0;
       double d_proposed = (logdist_p - 160.0)*D + new_delay;
 
-      if (d_proposed < d_current) 
+      if (d_proposed + 50000 < d_current) 
 	r = 3;
-      if (0) {
+      if (1) {
 	char b[1024];
 	sprintf (b, "d_cur = %f = %f*%f + %f; d_proposed = %f = %f*%f + %f", 
 		 d_current, logdist_c - 160.0, D, cur_delay,
 		 d_proposed, logdist_p - 160.0, D, new_delay);
-	warn << "choosing " << newpred << " over " << current << " since " << b << "\n";
+	if (r) 
+	  warn << "choosing " << newpred << " over " << current << " since " << b << "\n";
+	else
+	  warn << "choosing " << current << " over " << newpred << " since " << b << "\n";
       }
     }
   }

@@ -76,6 +76,8 @@ class dhashclient {
 
   bool straddled (route path, chordID &k);
   void dispatch (svccb *sbp);
+
+  void lookup_res_cb (svccb *sbp, dhash_fetchrecurs_res *res, clnt_stat err);
   void lookup_iter_cb (svccb *sbp, 
 		       dhash_fetchiter_res *res,
 		       route path,
@@ -133,6 +135,9 @@ class dhash {
 
   qhash<chordID, store_state, hashID> pst;
 
+  int qnonce;
+  qhash<int, unsigned long> rqc;
+
   void doRPC (chordID ID, rpc_program prog, int procno,
 	      ptr<void> in, void *out, aclnt_cb cb);
 
@@ -146,6 +151,14 @@ class dhash {
 
   void fetchiter_svc_cb (long xid, dhash_fetch_arg *farg,
 			 ptr<dbrec> val, dhash_stat stat);
+
+  void fetchrecurs_havedata_cb (unsigned long rpc_id,
+				dhash_recurs_arg *rarg,
+				unsigned int nonce,
+				chord_node return_address,
+				ptr<dbrec> val, dhash_stat err);
+  void fetchrecurs_sent_data (dhash_stat *done_res, clnt_stat err);
+  void fetchrecurs_continue (dhash_fetchrecurs_res *res, clnt_stat err);
 
   void store (dhash_insertarg *arg, cbstore cb);
   void store_cb(store_status type, chordID id, cbstore cb, int stat);

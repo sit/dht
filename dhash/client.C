@@ -43,8 +43,8 @@ dhashclient::dispatch (svccb *sbp)
       
       ptr<dhash_fetch_arg> arg = New refcounted<dhash_fetch_arg> (*farg);
 
-      //     chordID next = clntnode->lookup_closestpred (arg->key);
-      chordID next = clntnode->clnt_ID ();
+      chordID next = clntnode->lookup_closestpred (arg->key);
+      //chordID next = clntnode->clnt_ID ();
       warn << clntnode->clnt_ID () << " " << arg->key  << " " << next << "\n";
       dhash_fetchiter_res *i_res = New dhash_fetchiter_res (DHASH_CONTINUE);
       route path;
@@ -54,7 +54,31 @@ dhashclient::dispatch (svccb *sbp)
 			    sbp, i_res, path, 0));
     } 
     break;
+  case DHASHPROC_LOOKUP_R:
+    {
+      warnt ("DHASH: recursive lookup");
 
+      dhash_fetch_arg *rfarg = sbp->template getarg<dhash_fetch_arg> ();
+      ptr<dhash_recurs_arg> arg = New refcounted<dhash_recurs_arg>;
+      arg->key = rfarg->key;
+      arg->start = rfarg->start;
+      arg->len = rfarg->len;
+      arg->return_address.x = bigint (0);
+      arg->return_address.r.hostname = "";
+      arg->return_address.r.port = 0;
+      arg->nonce = 0;
+
+      chordID next = clntnode->lookup_closestpred (arg->key);
+      warn << "RF for " << arg->key << " to " << next << "\n";
+
+      dhash_fetchrecurs_res *res = New dhash_fetchrecurs_res ();
+      doRPC (next, dhash_program_1, DHASHPROC_FETCHRECURS, arg, res,
+	     wrap (this, &dhashclient::lookup_res_cb,
+		   sbp, res));
+
+      
+    }
+    break;
   case DHASHPROC_TRANSFER:
     {
       warnt ("DHASH: transfer_request");
@@ -62,6 +86,7 @@ dhashclient::dispatch (svccb *sbp)
       ptr<dhash_fetch_arg> farg = 
 	New refcounted<dhash_fetch_arg>(targ->farg);
       dhash_fetchiter_res *res = New dhash_fetchiter_res (DHASH_OK);
+      warn << "transfer from " << targ->source << "\n";
       doRPC (targ->source, dhash_program_1, DHASHPROC_FETCHITER, 
 		       farg, res, 
 		       wrap (this, &dhashclient::transfer_cb,
@@ -104,6 +129,27 @@ dhashclient::dispatch (svccb *sbp)
     sbp->reject (PROC_UNAVAIL);
     break;
   }
+}
+
+void
+dhashclient::lookup_res_cb (svccb *sbp, dhash_fetchrecurs_res *res, clnt_stat err) {
+  warn << "got response to my recursive fetch request\n";
+
+  //  memorize_block (arg->key, res);
+  dhash_res *fres = New dhash_res (DHASH_OK);
+  if (res->status == DHASH_RFETCHDONE) {
+    fres->resok->res = res->compl_res->res;
+    fres->resok->offset = res->compl_res->offset;
+    fres->resok->attr = res->compl_res->attr;
+    fres->resok->hops = 0;//path.size () + nerror * 100;
+    fres->resok->source = res->compl_res->source;
+  } else
+    fres->set_status (DHASH_NOENT);
+
+  sbp->reply (fres);
+  
+  delete fres;
+  delete res;
 }
 
 void

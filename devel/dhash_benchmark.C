@@ -136,7 +136,7 @@ fetch_block_async(int i, chordID key, int datasize)
   arg.len = MTU;
   arg.start = 0;
   out++;
-  cp2p ()->call(DHASHPROC_LOOKUP, &arg, res, wrap(&afetch_cb, res, key, buf, i, start));
+  cp2p ()->call(DHASHPROC_LOOKUP_R, &arg, res, wrap(&afetch_cb, res, key, buf, i, start));
   return 0;
 }
 
