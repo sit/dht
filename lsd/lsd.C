@@ -209,8 +209,8 @@ lsdctl_dispatch (ptr<asrv> s, svccb *sbp)
       bool *clear = sbp->template getarg<bool> ();
       
       ptr<lsdctl_rpcstatlist> sl = New refcounted<lsdctl_rpcstatlist> ();
+      
       sl->stats.setsize (rpc_stats_tab.size ());
-
       rpcstats *s = rpc_stats_tab.first ();
       int i = 0;
       while (s) {
@@ -224,6 +224,9 @@ lsdctl_dispatch (ptr<asrv> s, svccb *sbp)
 	s = rpc_stats_tab.next (s);
 	i++;
       }
+      
+      u_int64_t now = getusec ();
+      sl->interval = now - rpc_stats_lastclear;
       if (*clear) {
 	s = rpc_stats_tab.first ();
 	while (s) {
@@ -233,6 +236,7 @@ lsdctl_dispatch (ptr<asrv> s, svccb *sbp)
 	  s = t;
 	}
 	rpc_stats_tab.clear ();
+	rpc_stats_lastclear = now;
       }
 	
       sbp->reply (sl);

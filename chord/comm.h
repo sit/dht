@@ -39,6 +39,7 @@ void track_rexmit (const rpc_program &prog, int procno, size_t b);
 void track_reply (const rpc_program &prog, int procno, size_t b);
 
 extern ihash<str, rpcstats, &rpcstats::key, &rpcstats::h_link> rpc_stats_tab;
+extern u_int64_t rpc_stats_lastclear;
 
 
 struct RPC_delay_args {

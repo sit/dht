@@ -237,6 +237,8 @@ lsdctl_getrpcstats (int argc, char *argv[])
   if (err)
     fatal << "lsdctl_rpcstats: " << err << "\n";
   strbuf out;
+  out.fmt ("Interval %llu.%llu s\n",
+	   nl->interval / 1000000, nl->interval % 1000000);
   if (formatted)
     out.fmt ("%54s | %-15s | %-15s | %-15s\n",
 	     "Proc", "Calls (bytes/#)", "Rexmits", "Replies");

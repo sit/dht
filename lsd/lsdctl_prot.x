@@ -34,6 +34,7 @@ struct lsdctl_rpcstat {
 };
 
 struct lsdctl_rpcstatlist {
+  u_int64_t interval; /* usec since last clear */
   lsdctl_rpcstat stats<>;
 };
 

@@ -46,6 +46,7 @@
 #include "coord.h"
 
 ihash<str, rpcstats, &rpcstats::key, &rpcstats::h_link> rpc_stats_tab;
+u_int64_t rpc_stats_lastclear (getusec ());
 
 static inline rpcstats *
 getstats (const rpc_program &prog, int procno)
