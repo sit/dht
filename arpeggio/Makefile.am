@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.2 2004/08/20 22:51:50 amdragon Exp $
+# $Id: Makefile.am,v 1.3 2004/09/14 21:44:58 sit Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -13,7 +13,8 @@ SUFFIXES = .x .C .h .py
 $(RPCC):
 	@:
 
-bin_PROGRAMS = cd testcd
+bin_PROGRAMS = cd
+bin_SCRIPTS = testcd
 
 cd_prot.h: cd_prot.x
 cd_prot.C: cd_prot.x
@@ -31,7 +32,6 @@ cd_LDADD = ../chord/libchord.a ../utils/libutil.a ../svc/libsvc.la \
 testcd: testcd.py cd_prot.py ${top_srcdir}/svc/chord_types.py
 	cp $< $@
 
-EXTRA_DIST = .cvsignore
 CLEANFILES = core *.core *~ *.rpo
 MAINTAINERCLEANFILES = Makefile.in
 
