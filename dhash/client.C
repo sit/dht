@@ -196,14 +196,14 @@ dhashcli::retrieve (blockID blockID, cb_ret cb, int options,
 
   trace << myID << ": retrieve (" << blockID << "): new retrieve.\n";
   
-  ptr<rcv_state> rs = New refcounted<rcv_state> (blockID, cb);
-
   // First check to see if we're using TCP.  In that case, we should
   // ship the data over the wire.
   if (dhash_tcp_transfers) {
-    dofetchrec_execute (blockID, cb); // XXX
+    dofetchrec_execute (blockID, cb);
     return;
   }
+  
+  ptr<rcv_state> rs = New refcounted<rcv_state> (blockID, cb);
   
   if (blockID.ctype == DHASH_KEYHASH) {
     if (!DHC) {
@@ -421,16 +421,25 @@ struct orderer {
 };
 
 static void
-order_succs (const vec<float> &me, const vec<chord_node> &succs,
+order_succs (ptr<locationtable> locations,
+	     const vec<float> &me, const vec<chord_node> &succs,
 	     vec<chord_node> &out)
 {
   orderer *d2me = New orderer [succs.size()];
   vec<float> cursucc;
   for (size_t i = 0; i < succs.size (); i++) {
-    cursucc.setsize (succs[i].coords.size ());
-    for (size_t j = 0; j < succs[i].coords.size (); j++) 
-      cursucc[j] = (float) succs[i].coords[j];
-    d2me[i].d_ = Coord::distance_f (me, cursucc);
+    ptr<location> l = NULL;
+    if (locations) 
+      l = locations->lookup (succs[i].x);
+    if (l) {
+      // Have actual measured latencies, so might as well use them.
+      d2me[i].d_ = l->distance ();
+    } else {
+      cursucc.setsize (succs[i].coords.size ());
+      for (size_t j = 0; j < succs[i].coords.size (); j++) 
+	cursucc[j] = (float) succs[i].coords[j];
+      d2me[i].d_ = Coord::distance_f (me, cursucc);
+    }
     d2me[i].i_ = i;
   }
   qsort (d2me, succs.size (), sizeof (*d2me), &orderer::cmp);
@@ -577,6 +586,8 @@ dhashcli::assemble (blockID blockID, cb_ret cb, vec<chord_node> succs, route r)
 {
   ptr<rcv_state> rs = New refcounted<rcv_state> (blockID, cb);
   rs->r = r;
+  if (dhash_tcp_transfers)
+    rs->succopt = true;
   doassemble (rs, succs);
 }
 
@@ -623,28 +634,18 @@ dhashcli::doassemble (ptr<rcv_state> rs, vec<chord_node> succs)
   }
 
   if (ordersucc_) {
-    if (rs->succopt) {
-      // Have actual measured latencies, so might as well use them
-      vec<float> lt;
-      for (unsigned i=0; i<succs.size (); i++) {
-	ptr<location> l = clntnode->locations->lookup (succs [i].x);
-	if (l)
-	  lt.push_back (l->distance ());
-	else
-	  lt.push_back (100000000);
-      }
-      order_succs_by_latency (lt, succs, rs->succs);
-    }
-    else {
-      // Store list of successors ordered by expected distance.
-      // fetch_frag will pull from this list in order.
+    ptr<locationtable> lt = NULL;
+    if (rs->succopt)
+      lt = clntnode->locations;
+    
+    // Store list of successors ordered by expected distance.
+    // fetch_frag will pull from this list in order.
 #ifdef VERBOSE_LOG
-      modlogger ("orderer", modlogger::TRACE) << "ordering for block "
-					      << rs->key << "\n";
+    modlogger ("orderer", modlogger::TRACE) << "ordering for block "
+					    << rs->key << "\n";
 #endif /* VERBOSE_LOG */    
-      order_succs (clntnode->my_location ()->coords (),
-		   succs, rs->succs);
-    }
+    order_succs (lt, clntnode->my_location ()->coords (),
+		 succs, rs->succs);
   } else {
     rs->succs = succs;
   }

@@ -73,38 +73,5 @@ get_succs_from_list (vec<ptr<location> > nodes, chordID x)
   return r;
 }
 
-struct lod {
-  float l;
-  int i;
-  static int cmp (const void *a_, const void *b_) {
-    const lod *a = (lod *) a_, *b = (lod *) b_;
-    return (int) (a->l - b->l);
-  }
-};
-
-static void
-order_succs_by_latency (const vec<float> &l,
-                        const vec<chord_node> &succs,
-	                vec<chord_node> &out)
-{
-  lod *od = New lod [succs.size()];
-  for (size_t i = 0; i < succs.size (); i++) {
-    od[i].l = l [i];
-    od[i].i = i;
-  }
-  qsort (od, succs.size (), sizeof (*od), &lod::cmp);
-  out.clear ();
-  for (size_t i = 0; i < succs.size (); i++) {
-    out.push_back (succs[od[i].i]);
-#if 0
-    char buf[16];
-    sprintf (buf, "%5.2f", l [od[i].i]);
-    warn << "order " << succs [od[i].i].r.hostname
-         << ", " << buf << "\n";
-#endif
-  }
-  delete[] od;
-}
-
 #endif
 
