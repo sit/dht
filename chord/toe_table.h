@@ -53,7 +53,7 @@ class toe_table : public fingerlike {
   void prune_toes (int level);
 
   // Stabilizable methods
-  bool backoff_stabilizing () { return in_progress > 0; }
+  bool backoff_stabilizing () { return false; /*in_progress > 0; */}
   void do_backoff () { stabilize_toes (); }
   bool isstable () { return stable_toes; }
 

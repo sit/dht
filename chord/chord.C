@@ -689,14 +689,16 @@ vnode_impl::dogettoes (user_args *sbp, chord_gettoes_arg *ta)
 {
 
   chord_nodelistextres res (CHORD_OK);
-  vec<chordID> t = toes->get_toes (ta->level);
-  
-  ndogettoes++;
-  res.resok->nlist.setsize (t.size ());
-  for (unsigned int i = 0; i < t.size (); i++) {
-    locations->fill_getnodeext (res.resok->nlist[i], t[i]);
-  }
-  
+  if(toes){
+    vec<chordID> t = toes->get_toes (ta->level);
+    
+    ndogettoes++;
+    res.resok->nlist.setsize (t.size ());
+    for (unsigned int i = 0; i < t.size (); i++) {
+      locations->fill_getnodeext (res.resok->nlist[i], t[i]);
+    }
+  } 
+
   sbp->reply (&res);
 }
 
