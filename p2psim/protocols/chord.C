@@ -319,7 +319,7 @@ Chord::lookup_internal(lookup_args *a)
   lasthop.ip = 0;
 
   a->retrytimes++;
-  Time oldlat = a->latency;
+  //Time oldlat = a->latency;
 
   if (_recurs) {
     v = find_successors_recurs(a->key, _frag, TYPE_USER_LOOKUP, &lasthop,a);
