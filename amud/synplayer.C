@@ -8,8 +8,10 @@
 ptr<dhashclient> dhash;
 game_engine *mud;
 
-void done_insert (ptr<avatar> a, chordID rID, mud_stat stat);
-void really_done (mud_stat);
+void done_insert (ptr<avatar> a, int, mud_stat stat);
+void really_done (ref<avatar> a, int, mud_stat);
+void play (ref<avatar> a);
+void done_look (mud_stat, ptr<room>);
 
 void 
 new_player (str name, int i)
@@ -20,20 +22,47 @@ new_player (str name, int i)
 }
 
 void 
-done_insert (ptr<avatar> a, chordID rID, mud_stat stat)
+done_insert (ptr<avatar> a, int i, mud_stat stat)
 {
   if (stat == MUD_OK) {
     cout << "\nAvatar " << a->get_name () << " creation successful!\n";
-    mud->enter_player (a, 0, wrap (&really_done));
+    mud->enter_player (a, i, wrap (&really_done, a, i));
   } else
     cout << "Avatar creation error: stat = " << stat << "\n";
 }
 
 void 
-really_done (mud_stat stat)
+really_done (ref<avatar> a, int i, mud_stat stat)
 {
-  if (stat == MUD_OK) 
-    cout << "Insert success!!"; 
+  if (stat == MUD_OK) {
+    cout << "Insert success!!\\n";
+    char rname[50];
+    sprintf (rname, "%s%d", "r", i);
+    ref<room> l = New refcounted<room> (str (rname), dhash);
+    a->enter (l);
+    play (a);
+  } 
+}
+
+void 
+play (ref<avatar> a) 
+{
+  //pick from move (dest), look, and touch (sth)
+
+  //look
+  mud->lookup (a->loc (), wrap (&done_look));
+
+  //touch 
+  
+}
+
+void 
+done_look (mud_stat stat, ptr<room> r)
+{
+  if (stat == MUD_OK)
+    cout << "done_look at current room Received " << r->size () << " bytes\n";
+  else 
+    cout << "done_look err mud_stat: " << stat << "\n";
 }
 
 static void
@@ -55,7 +84,7 @@ main (int argc, char **argv)
   dhash = New refcounted<dhashclient> (control_socket);
 
   mud = New game_engine (dhash);
-  str name ("a1");
+  str name ("a0");
   new_player (name, 0);
 
   amain ();

@@ -17,7 +17,7 @@ class avatar: public mud_obj {
   ptr<room> location;
   
   uint inv_size ();
-  void look (dhash_stat, ptr<dhash_block>, vec<chordID>);
+  void look_cb (dhash_stat, ptr<dhash_block>, vec<chordID>);
   void get (str);
   void move (str);
   void done_move_lookup (ref<room>, dhash_stat, ptr<dhash_block>, 
@@ -36,8 +36,11 @@ class avatar: public mud_obj {
   uint size ();
 
   str pw () { return passwd; };
-  //void enter (ref<room>); unnecessary, already have move()
+  ref<room> loc () { return location; };
+  void enter (ref<room>); 
   void play ();
+  //void look ();
+  //void touch (ref<thing>);
   str read_input ();
   str to_str ();
 };

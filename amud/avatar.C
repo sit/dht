@@ -138,13 +138,11 @@ avatar::to_str ()
   return str (ret);
 }
 
-#if 0 
 void
 avatar::enter (ref<room> r)
 {
   location = r;
 }
-#endif 
 
 void 
 avatar::play ()
@@ -155,7 +153,7 @@ avatar::play ()
   str command = read_input ();
   if (!strncasecmp (command.cstr (), "LOOK", 4))
     dhash->retrieve (location->ID (), DHASH_NOAUTH, 
-		     wrap (this, &avatar::look));
+		     wrap (this, &avatar::look_cb));
   else 
     if (!strncasecmp (command.cstr (), "GET", 3))
       get (command);
@@ -172,7 +170,7 @@ avatar::play ()
 }
 
 void
-avatar::look (dhash_stat stat, ptr<dhash_block> blk, vec<chordID> path)
+avatar::look_cb (dhash_stat stat, ptr<dhash_block> blk, vec<chordID> path)
 {
   //Later should change so that gets location info from cache,
   //and cache is refreshed often.
