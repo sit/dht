@@ -301,14 +301,18 @@ Chord::lookup_internal(lookup_args *a)
 {
   vector<IDMap> v;
   IDMap lasthop;
+  lasthop.ip = 0;
 
   a->retrytimes++;
+  Time oldlat = 0;
 
   if (_recurs) {
     v = find_successors_recurs(a->key, _frag, TYPE_USER_LOOKUP, &lasthop,a);
   } else {
     v = find_successors(a->key, _frag, TYPE_USER_LOOKUP, &lasthop,a);
   }
+
+  assert(a->latency > oldlat || ((me.ip == lasthop.ip) && (a->retrytimes==1)));
 
   if (!alive()) {
     delete a;
@@ -338,13 +342,14 @@ Chord::lookup_internal(lookup_args *a)
 #endif
 
   }else{
-#ifdef CHORD_DEBUG
-    printf("%s key %qx lookup incorrect interval ipkey %u lastnode %u,%qx\n", ts(), a->key, _ipkey?a->ipkey:0, lasthop.ip, lasthop.id); 
-#endif
     if (_ipkey && (!getpeer(a->ipkey)->alive()) && a->retrytimes>=2) {
       record_lookup_stat(me.ip, lasthop.ip, a->latency, false, false, a->hops, a->num_to, a->total_to);
     }else{
       int delay = (a->start + a->latency + 100) - now();
+#ifdef CHORD_DEBUG
+      printf("%s key %qx lookup incorrect interval ipkey %u lastnode %u,%qx reschedule in %d latency %u\n", ts(), a->key, _ipkey?a->ipkey:0, lasthop.ip, lasthop.id, delay,a->latency); 
+#endif
+      if (delay>0) a->latency += delay;
       delaycb(delay>0?delay:0, &Chord::lookup_internal, a);
       return;
     }
@@ -643,10 +648,10 @@ DONE:
 
   //jesus christ i'm done, however, i need to clean up my shit
   assert(reuse);
+  if (a) a->hops += (totalrpc-1); //not counting the rpc i sent to myself
+
   if ((type == TYPE_USER_LOOKUP) && (alive())) {
 
-    if (a) 
-      a->hops += (totalrpc-1); //not counting the rpc i sent to myself
 
 #ifdef CHORD_DEBUG
     Topology *t = Network::Instance()->gettopology();
@@ -728,6 +733,7 @@ Chord::find_successors_recurs(CHID key, uint m, uint type, IDMap *lasthop, looku
   fa.src = me.ip;
   fa.m = m;
   fa.type = type;
+  fr.lasthop = me;
   fr.v.clear();
   fr.correct = false;
 
@@ -739,7 +745,6 @@ Chord::find_successors_recurs(CHID key, uint m, uint type, IDMap *lasthop, looku
   //no overhead for sending to myself
   my_next_recurs_handler(&fa,&fr);
 
-  if (!alive()) return fr.v;
 
 #ifdef CHORD_DEBUG
   Topology *t = Network::Instance()->gettopology();
@@ -948,6 +953,7 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
 #ifdef CHORD_DEBUG
       printf("%s lost lookup request %qx\n", ts(), args->key);
 #endif
+      ret->lasthop.ip = 0;
       ret->v.clear();
       args->dst = me;
       return;
