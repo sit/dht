@@ -103,10 +103,10 @@ public:
   class LogEntry {
     public:
     IDMap _node;
-    int _state; //dead or alive?
-    Time _tstamp; //loose synchronization
-    LogEntry (IDMap node, int state, Time tstamp) {
-      _node = node; _state = state; _tstamp = tstamp;
+    bool _state; //dead or alive?
+    //Time _tstamp; //loose synchronization
+    LogEntry (IDMap node, bool state, Time tstamp) {
+      _node = node; _state = state;// _tstamp = tstamp;
     }
   };
   

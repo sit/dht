@@ -158,7 +158,7 @@ OneHop::lookup(Args *args)
 {
   if (!alive()) return;
 
-  lookup_internal_args *la = new lookup_internal_args;
+  lookup_internal_args *la = New lookup_internal_args;
   la->k = args->nget<CHID>("key");
   la->start_time = now();
   la->hops = 0;
@@ -224,12 +224,12 @@ OneHop::lookup_internal(lookup_internal_args *la)
       la->timeouts++;
       la->timeout_lat += TIMEOUT(me.ip, succ_node.ip);
       loctable->del_node(succ_node.id);
-      test_inform_dead_args *aa = new test_inform_dead_args;
+      test_inform_dead_args *aa = New test_inform_dead_args;
       aa->suspect= succ_node;
       aa->informed = me;
       aa->justdelete = true;
       delaycb(0,&OneHop::test_dead_inform,aa);
-      return;
+      //return;
     }
   }
 
@@ -300,7 +300,7 @@ OneHop::lookup(Args *args) {
     two_failed++;
     if (same) same_failed++;
     DEBUG(5) << ip() << ":Lookup failed due to dead node "<< succ_node.ip << endl;
-    IDMap *n = new IDMap();
+    IDMap *n = New IDMap();
     *n = succ_node;
     assert(n->ip>0);
     delaycb(0, &OneHop::test_dead, n);
@@ -313,7 +313,7 @@ OneHop::lookup(Args *args) {
     
     lookup_bandwidth += 24;
     if (!ok) {
-      IDMap *nn = new IDMap;
+      IDMap *nn = New IDMap;
       *nn = succ_node;
       assert(nn->ip>0);
       delaycb(0,&OneHop::test_dead,nn);
@@ -344,7 +344,7 @@ OneHop::lookup(Args *args) {
       if (ok && r.is_owner) {
         two_failed--;
         loctable->add_node(corr_owner);
-        LogEntry *e = new LogEntry(corr_owner, ALIVE, now());
+        LogEntry *e = New LogEntry(corr_owner, ALIVE, now());
         leader_log.push_back(*e);
         delete e;
 	if (check_correctness(k,corr_owner))
@@ -377,7 +377,7 @@ OneHop::lookup_handler(lookup_args *a, lookup_ret *r) {
 	<< ":Found new node " << a->sender.ip << " via lookup\n";
       DEBUG_MSG(a->sender,"lookup_handler",a->sender);
       loctable->add_node(a->sender);
-      LogEntry *e = new LogEntry(a->sender, ALIVE, now());
+      LogEntry *e = New LogEntry(a->sender, ALIVE, now());
       leader_log.push_back(*e);
       delete e;
   }
@@ -532,7 +532,7 @@ OneHop::join_leader(IDMap la, IDMap sender, Args *args) {
   DEBUG(1) << now() << ":" << ip() << "," << printID(id()) << " joining " << leader_ip << " in slice " << slice(id()) << endl;
   assert(leader_ip);
   join_leader_args ja;
-  join_leader_ret* jr = new join_leader_ret (_k, _u);
+  join_leader_ret* jr = New join_leader_ret (_k, _u);
   ja.key = id();
   ja.ip = ip();
 
@@ -566,7 +566,7 @@ OneHop::join_leader(IDMap la, IDMap sender, Args *args) {
       _join_complete = true;
       num_nodes++;
       joins++;
-      LogEntry *e = new LogEntry(me, ALIVE, now());
+      LogEntry *e = New LogEntry(me, ALIVE, now());
       leader_log.push_back(*e);
       delete e;
       
@@ -593,7 +593,7 @@ OneHop::join_leader(IDMap la, IDMap sender, Args *args) {
 	<< " that " << leader_ip << " has failed " << endl;
 
       //dead_ok = inform_dead (la, sender);
-      test_inform_dead_args *aa = new test_inform_dead_args;
+      test_inform_dead_args *aa = New test_inform_dead_args;
       aa->justdelete = false;
       aa->suspect = la;
       aa->informed = sender;
@@ -627,7 +627,7 @@ OneHop::join_handler(join_leader_args *args, join_leader_ret *ret)
     newnode.ip = args->ip;
     DEBUG_MSG(newnode,"join_handler",newnode);
     loctable->add_node(newnode);
-    LogEntry *e = new LogEntry(newnode, ALIVE, now());
+    LogEntry *e = New LogEntry(newnode, ALIVE, now());
     leader_log.push_back(*e);
     delete e;
     DEBUG(3) << now() << ":" << ip() << "," <<  printID(id()) << ":accepting " << newnode.ip << " for join\n";
@@ -759,7 +759,7 @@ OneHop::stabilize(void* x)
       loctable->del_node(succ.id);
       DEBUG(5) << now() << ":" << ip() << "," <<  printID(id())
 	<<":PING! Informing " << slice_leader(me.id).ip <<" that successor "<< succ.ip << " is dead\n";
-      LogEntry *e = new LogEntry(succ, DEAD, now());    
+      LogEntry *e = New LogEntry(succ, DEAD, now());    
       na.log.push_back(*e);
       piggyback.log.push_back(*e);
       delete e;
@@ -813,7 +813,7 @@ OneHop::stabilize(void* x)
       loctable->del_node(pred.id);
       DEBUG(5) << now() << ":" << ip() << "," <<  printID(id())
 	<<":PING! Informing " << slice_leader(me.id).ip << " that predecessor "<< pred.ip << " is dead\n";
-      LogEntry *e = new LogEntry(pred, DEAD, now());
+      LogEntry *e = New LogEntry(pred, DEAD, now());
       na.log.push_back(*e);
       piggyback.log.push_back(*e);
       delete e;
@@ -845,7 +845,7 @@ OneHop::stabilize(void* x)
       if (!alive()) return;
 
       if (!ok) {
-        LogEntry *e = new LogEntry(sliceleader, DEAD, now());
+        LogEntry *e = New LogEntry(sliceleader, DEAD, now());
         na.log.push_back(*e);
         if (me.id != sliceleader.id)
         loctable->del_node(sliceleader.id);
@@ -924,7 +924,7 @@ OneHop::leader_stabilize(void *x)
         }
       }
       if (!ok) {
-        LogEntry *e = new LogEntry(succ, DEAD, now());
+        LogEntry *e = New LogEntry(succ, DEAD, now());
         leader_log.push_back(*e);
         send_unit.log.push_back(*e);
         delete e;
@@ -964,7 +964,7 @@ OneHop::leader_stabilize(void *x)
         }
       }
       if (!ok) {
-        LogEntry *e = new LogEntry(pred, DEAD, now());
+        LogEntry *e = New LogEntry(pred, DEAD, now());
         leader_log.push_back(*e);
         send_unit.log.push_back(*e);
         delete e;
@@ -1059,7 +1059,7 @@ OneHop::leader_stabilize(void *x)
             }
           }
           else {
-            LogEntry *e = new LogEntry(all_nodes[i], DEAD, now());
+            LogEntry *e = New LogEntry(all_nodes[i], DEAD, now());
             leader_log.push_back(*e);
             send_in.log.push_back(*e);
             send_out.log.push_back(*e);
@@ -1089,7 +1089,7 @@ OneHop::leader_stabilize(void *x)
                 }
               }
               if (!ok) {
-                LogEntry *e = new LogEntry(all_nodes[i], DEAD, now());
+                LogEntry *e = New LogEntry(all_nodes[i], DEAD, now());
                 outer_log.push_back(*e);
                 send_in.log.push_back(*e);
                 delete e;
@@ -1128,7 +1128,7 @@ OneHop::ping_handler(notifyevent_args *args, general_ret *ret)
       << ":Found new node " << args->sender.ip << " via ping\n";
       DEBUG_MSG(args->sender,"ping_handler directly add sender",args->sender);
       loctable->add_node(args->sender);
-      LogEntry *e = new LogEntry(args->sender, ALIVE, now());
+      LogEntry *e = New LogEntry(args->sender, ALIVE, now());
       leader_log.push_back(*e);
       delete e;
   }
@@ -1150,7 +1150,7 @@ OneHop::ping_handler(notifyevent_args *args, general_ret *ret)
 	  DEBUG(3) << now() << ":" << ip() << "," << printID(id())
 	  << ":Panic! People think I am dead, but I'm not\n";
 	  //exit(-1);
-	  LogEntry *e = new LogEntry(me, ALIVE, now());
+	  LogEntry *e = New LogEntry(me, ALIVE, now());
 	  leader_log.push_back(*e);
 	  delete e;
 
@@ -1230,7 +1230,7 @@ OneHop::notifyevent_handler(notifyevent_args *args, general_ret *ret)
 
       if (!alive()) return;
       if (!ok) {
-        LogEntry *e = new LogEntry(sliceleader, DEAD, now());
+        LogEntry *e = New LogEntry(sliceleader, DEAD, now());
         leader_log.push_back(*e);
         args->log.push_back(*e);
         if (me.id != sliceleader.id)
@@ -1246,7 +1246,7 @@ OneHop::notifyevent_handler(notifyevent_args *args, general_ret *ret)
       ok = ok && gr.has_joined;
       if (ok) { 
         ret->act_sliceleader = sliceleader;
-        LogEntry *e = new LogEntry(sliceleader, ALIVE, now());
+        LogEntry *e = New LogEntry(sliceleader, ALIVE, now());
         leader_log.push_back(*e);
         delete e;
       }
@@ -1258,7 +1258,7 @@ OneHop::notifyevent_handler(notifyevent_args *args, general_ret *ret)
       if (args->log[i]._node.ip == ip()) {
 	DEBUG(5) << now() << ":" << ip() << "," << printID(id())
         << ":Panic! People think I am dead, but I'm not\n";
-        LogEntry *e = new LogEntry(me, ALIVE, now());
+        LogEntry *e = New LogEntry(me, ALIVE, now());
         leader_log.push_back(*e);
         delete e;
       }
@@ -1266,7 +1266,7 @@ OneHop::notifyevent_handler(notifyevent_args *args, general_ret *ret)
         if (!alive()) return;
         loctable->del_node(args->log[i]._node.id);
         if (me_leader || (is_slice_leader(me.id, me.id))) {
-          LogEntry *e = new LogEntry(args->log[i]._node, DEAD, now());
+          LogEntry *e = New LogEntry(args->log[i]._node, DEAD, now());
           leader_log.push_back(*e);
           delete e;
         }
@@ -1277,7 +1277,7 @@ OneHop::notifyevent_handler(notifyevent_args *args, general_ret *ret)
       DEBUG_MSG(args->log[i]._node,"notifyevent_handler",args->sender);
       loctable->add_node(args->log[i]._node);
       if ((me_leader) || is_slice_leader(me.id, me.id)) {
-        LogEntry *e = new LogEntry(args->log[i]._node, ALIVE, now());
+        LogEntry *e = New LogEntry(args->log[i]._node, ALIVE, now());
         leader_log.push_back(*e);
         delete e;
       }
@@ -1288,10 +1288,10 @@ OneHop::notifyevent_handler(notifyevent_args *args, general_ret *ret)
   if (succ_node.id != args->sender.id) {
       if (!alive()) return;
       DEBUG(5) << now() << ":" << ip() << "," << printID(id())
-      << ":Found new node " << args->sender.ip << " via notify event\n";
+      << ":Found New node " << args->sender.ip << " via notify event\n";
       DEBUG_MSG(args->sender,"notifyevent_handler directly add sender", args->sender);
       loctable->add_node(args->sender);
-      LogEntry *e = new LogEntry(args->sender, ALIVE, now());
+      LogEntry *e = New LogEntry(args->sender, ALIVE, now());
       leader_log.push_back(*e);
       delete e;
   }
@@ -1330,7 +1330,7 @@ OneHop::notify_rec_handler(notifyevent_args *args, general_ret *ret)
 	DEBUG(5) << now() << ":" << ip() << "," << printID(id())
         << ":Panic! People think I am dead, but I'm not\n";
         //exit(-1);
-        LogEntry *e = new LogEntry(me, ALIVE, now());
+        LogEntry *e = New LogEntry(me, ALIVE, now());
         leader_log.push_back(*e);
         delete e;
       if (args->sender.id >= me.id)
@@ -1364,7 +1364,7 @@ OneHop::notify_other_leaders(notifyevent_args *args, general_ret *ret)
     << ":Found new node " << args->sender.ip << " via slice leader ping\n";
     DEBUG_MSG(args->sender,"notify_other_leaders directly add sender", args->sender);
     loctable->add_node(args->sender);
-    LogEntry *e = new LogEntry(args->sender, ALIVE, now());
+    LogEntry *e = New LogEntry(args->sender, ALIVE, now());
     outer_log.push_back(*e);
     delete e;
   }
@@ -1399,7 +1399,7 @@ OneHop::notify_unit_leaders(notifyevent_args *args, general_ret *ret)
     << ":Found new node " << args->sender.ip << " via same slice leader/unit leader ping\n";
     DEBUG_MSG(args->sender,"notify_unit_leader",args->sender);
     loctable->add_node(args->sender);
-    LogEntry *e = new LogEntry(args->sender, ALIVE, now());
+    LogEntry *e = New LogEntry(args->sender, ALIVE, now());
     leader_log.push_back(*e);
     args->log.push_back(*e);
     delete e;
@@ -1414,7 +1414,7 @@ OneHop::notify_unit_leaders(notifyevent_args *args, general_ret *ret)
       if (args->log[i]._node.ip == ip()) {
 	DEBUG(5) << now() << ":" << ip() << "," << printID(id())
         << ":Panic! People think I am dead, but I'm not\n";
-        LogEntry *e = new LogEntry(me, ALIVE, now());
+        LogEntry *e = New LogEntry(me, ALIVE, now());
         leader_log.push_back(*e);
         inner_log.push_back(*e);
         delete e;
@@ -1458,8 +1458,8 @@ OneHop::test_dead_inform(test_inform_dead_args *a)
     ok = fd_xRPC(a->informed.ip,&OneHop::inform_dead_handler,
 	&ia, (void *)NULL, ONEHOP_INFORMDEAD,1);
     if ((ok)&&(a->informed.ip!=me.ip)) record_stat(a->informed.ip,me.ip,ONEHOP_INFORMDEAD);
-    delete a;
   }
+  delete a;
 }
 
 void
@@ -1487,7 +1487,7 @@ OneHop::inform_dead_handler (inform_dead_args *ia, void *ir)
   IDMap dead;
   dead.id = ia->key;
   dead.ip = ia->ip;
-  LogEntry *e = new LogEntry(dead, DEAD, now());
+  LogEntry *e = New LogEntry(dead, DEAD, now());
   leader_log.push_back(*e);
   delete e;
   if (me.id != dead.id)
