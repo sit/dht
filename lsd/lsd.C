@@ -265,22 +265,30 @@ main (int argc, char **argv)
   str db_name = "/var/tmp/db";
   p2psocket = "/tmp/chord-sock";
   str myname = my_addr ();
+  bool setmode = false;
   mode = MODE_CHORD;
   lookup_mode = CHORD_LOOKUP_LOCTABLE;
 
-  while ((ch = getopt (argc, argv, "B:cd:j:l:M:n:p:S:s:v:m:")) != -1)
+  while ((ch = getopt (argc, argv, "PfB:cd:j:l:M:n:p:S:s:v:m:")) != -1)
     switch (ch) {
     case 'm':
       if (strcmp (optarg, "debruijn") == 0)
 	mode = MODE_DEBRUIJN;
-      else if (strcmp (optarg, "proximity") == 0){
-	lookup_mode = CHORD_LOOKUP_PROXIMITY;
-	mode = MODE_CHORD;
-      }
       else if (strcmp (optarg, "chord") == 0)
 	mode = MODE_CHORD;
       else
 	fatal << "allowed modes are chord and debruijn\n";
+      setmode = true;
+      break;
+    case 'P':
+      if ((!setmode) || (mode != MODE_CHORD))
+	fatal << "proximity only supported in mode chord\n";
+      lookup_mode = CHORD_LOOKUP_PROXIMITY;
+      break;
+    case 'f':
+      if ((!setmode) || (mode != MODE_CHORD))
+	fatal << "fingers only is only supported in mode chord\n";
+      lookup_mode = CHORD_LOOKUP_FINGERLIKE;
       break;
     case 'B':
       cache_size = atoi (optarg);
