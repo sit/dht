@@ -5,13 +5,14 @@
 #include "toe_table.h"
 #include "succ_list.h" // XXX only depends on NSUCC
 
-bool present (vec<chordID> toes, chordID id);
-
 toe_table::toe_table ()
   : in_progress (0)
 {
-  for (int i=0; i < MAX_LEVELS; i++) 
-    target_size[i] = 2; //must be less than nsucc to bootstrap
+  for (int i=0; i < MAX_LEVELS; i++) {
+    target_size[i] = 3; //must be less than nsucc to bootstrap
+    toes[i] = new vec<chordID>;
+  }
+  
   
   last_level = -2;
   //warnx << "toe table created\n";
@@ -28,16 +29,17 @@ void toe_table::init (ptr<vnode> v, ptr<locationtable> locs, chordID ID)
   
 }
 
+//get toes to fill level level
 void
 toe_table::get_toes_rmt (int level) 
 {
   in_progress++;
 
-  vec<chordID> donors = get_toes (level - 1);
+  vec<chordID> donors = get_toes (max(level - 1, 0));
   for (unsigned int i = 0; i < donors.size (); i++) {
     ptr<chord_gettoes_arg> arg = New refcounted<chord_gettoes_arg> ();
     arg->v = donors[i];
-    arg->level = level - 1;
+    arg->level = max(level - 2, 0);
     
     chord_nodelistextres *res = New chord_nodelistextres ();
     locations->doRPC (donors[i], chord_program_1,
@@ -67,34 +69,120 @@ toe_table::level_to_delay (int level)
 
 
 bool
-present (vec<chordID> toes, chordID id) 
+toe_table::present (chordID id) 
 {
-  for (unsigned int i = 0; i < toes.size (); i++) 
-    if (toes[i] == id) return true;
+  for (unsigned int level = 0; level < MAX_LEVELS; level++)
+    for (unsigned int i = 0; i < toes[level]->size (); i++) 
+      if ((*toes[level])[i] == id) return true;
   return false;
 }
+
+bool
+toe_table::present (chordID id, int level) 
+{
+  for (unsigned int i = 0; i < toes[level]->size (); i++) 
+    if ((*toes[level])[i] == id) return true;
+  return false;
+}
+
 
 void
 toe_table::add_toe (chordID id, net_address r, int level) 
 {
-  if (present (toes, id)) return;
-  
+
+  if(id == myID) return;
+  if (present (id, level)) return;
+    
   in_progress++;
+  
+  //does this do anything?????
   locations->cacheloc (id, r, cbchall_null); // XXX
+
   locations->ping (id, wrap (this, &toe_table::add_toe_ping_cb, id, level));
 }
 
 void
 toe_table::add_toe_ping_cb (chordID id, int level, chordstat err)
 {
-
+  
   if (!err && locations->get_a_lat (id) < level_to_delay (level)) {
-    warn << "added " << id << " to level " << level << "\n";
-    net_address r = locations->getaddress (id);
-    // what was this supposed to do??
-    // locations->updateloc (id, r, cbchall_null); // XXX
-    toes.push_back (id);
+
+  
+    //can have more than one outstanding
+    if (present (id, level)) return;
+    
+    //bubble through the list looking for out of date and where to place
+    //the new id.  alternative would be to use a llist instead
+  
+    unsigned int newindex=0;
+    bool newset = false;
+    unsigned int i=0;
+
+    //stick at beginning?
+    if(toes[level]->size () == 0){
+      newindex = 0;
+      newset = true;
+      toes[level]->push_back (id);
+      //warn << "stuck to empty front\n";
+    }
+    
+    //stick in middle?
+    while(!newset && i < toes[level]->size ()){
+      if(between(myID, (*toes[level])[i], id)){
+	newindex = i;
+	newset = true;
+	//warn << "stick in middle\n";
+      }
+      i++;
+    }
+
+    //stick at end?
+    if(!newset && (int)toes[level]->size () < target_size[level]){
+      newindex = toes[level]->size ();
+      newset = true;
+      //warn << "adding to end\n";
+    }
+
+    if(newset && id != toes[level]->front()){
+      //need to expand?
+      if((int) toes[level]->size() < target_size[level]){
+	//warn << "expanding level " << level << "\n";
+	toes[level]->push_back(toes[level]->back());
+	//warn << "done expanding " << level << "\n";
+      }
+      else {
+	//warn << "going to eject "
+	//     << toes[level]->back()
+	//     << " from level " << level << "\n";
+      }
+      for(i = toes[level]->size() - 1; i > newindex ; i--)
+	(*toes[level])[i] = (*toes[level])[i-1];
+      //warn << "done shifting\n";
+      
+      (*toes[level])[newindex] = id;
+    }
+
+	  
+    if(newset){
+      warn << "added " << id << " to level " << level
+	   << " now " << toes[level]->size () << " index "
+	   << newindex << "\n";
+      dump();
+
+      //try to promote the new one right away
+      if(level+1 < MAX_LEVELS){
+	add_toe(id, locations->getaddress(id), level+1);
+      }
+      
+    }
+
   }
+
+  //look for stale entries and remove one if it's no good no more
+  for(unsigned int i = 0 ; i < toes[level]->size() ; i++){
+
+  }
+
   in_progress--;
 }
 
@@ -103,21 +191,32 @@ toe_table::get_toes (int level)
 {
   int up = level_to_delay (level);
   vec<chordID> res;
-  for (unsigned int i = 0; i < toes.size (); i++) {
-    if (locations->get_a_lat (toes[i]) < up)
-      res.push_back (toes[i]);
+  for (unsigned int i = 0; i < toes[level]->size (); i++) {
+    //warn << "get toes " << level << " " << toes[level]->size () << "\n";
+    if (locations->get_a_lat ((*toes[level])[i]) < up)
+      res.push_back ((*toes[level])[i]);
   }
   return res;
 }
 
+//returns the first non-filled level, not first filled level
 int
 toe_table::filled_level () 
 {
+  //only warn if level 0 is filled and others are not
+  bool empty=false;
+
   for (int level = 0; level < MAX_LEVELS; level++) {
     vec<chordID> res = get_toes (level);
+
+    if(level == 0){
+      empty = res.size() == 0;
+    }
+
     if (res.size () < (unsigned short)target_size[level]) {
-      warn << res.size () << " of " << target_size[level] << " at " 
-	   << level << "\n";
+      //if(!empty) warn << res.size () << " of "
+      //	      << target_size[level] << " at " 
+      //	      << level << "\n";
       return level - 1;
     }
   }
@@ -132,7 +231,8 @@ toe_table::dump ()
     warn << "Toes at level " << level << ":\n";
     for (unsigned int i=0; i < vl.size (); i++) {
       warn << "     " << vl[i] << " latency: "
-	   << (int)locations->get_a_lat (vl[i]) << "\n";
+	   << (int)locations->get_a_lat (vl[i])
+	   << " max " << level_to_delay(level) << "\n";
 	
     }
   }
@@ -145,15 +245,21 @@ toe_table::stabilize_toes ()
 {
   stable_toes = true;
 
-  int level = filled_level ();
   //warn << "stabilizing toes at level " << level << "\n";
   if (backoff_stabilizing () || continuous_stabilizing ()) return;
+
+  int level = get_last_level () + 1;
+  if(level >= MAX_LEVELS - 1)
+    level = -1;
+
   
   if ((level < MAX_LEVELS) 
       && (level == get_last_level ())
-      && (level > 0)) {
+      && (level > 0)
+      && 0 ) {
     //we failed to find enough nodes to fill the last level we tried
     //go back and get more donors and try again
+    
     bump_target (level - 1);
     warn << "bumped " << level - 1 << " and retrying\n";
     level = filled_level ();
@@ -173,7 +279,7 @@ toe_table::stabilize_toes ()
       //warnx << "add_toe called with " << ith_succ << "\n";
       stable_toes = false;
     }
-  } else if (level < MAX_LEVELS) { //building table
+  } else if (level < MAX_LEVELS - 1) { //building table
     //contact level (level) nodes and get their level (level) toes
     get_toes_rmt (level + 1);
     stable_toes = false;
@@ -181,6 +287,13 @@ toe_table::stabilize_toes ()
   } else { //steady state
     
   }
+  
+  if(filled_level() == MAX_LEVELS){
+    //warn << "STABLE!\n";
+    stable_toes = true;
+  }
+
+
   //warnx << "stabilize done\n";
   return;
 }

@@ -1,14 +1,14 @@
 #ifndef _TOE_TABLE_H_
 #define _TOE_TABLE_H_
 
-#define MAX_LEVELS 5
+#define MAX_LEVELS 6
 
 #include "fingerlike.h"
 
 class toe_table : public fingerlike {
   static const int max_delay = 800; // ms
 
-  vec<chordID> toes;
+  vec<vec<chordID>*, MAX_LEVELS> toes;
   ptr<locationtable> locations;
   chordID myID;
   ptr<vnode> myvnode;
@@ -38,11 +38,11 @@ class toe_table : public fingerlike {
 			   chordID target, 
 			   chordID newpred);
 
-
+  bool present (chordID id);
+  bool present (chordID id, int level);
   vec<chordID> get_toes (int level);
   void add_toe (chordID id, net_address r, int level);
   int filled_level ();
-  int level_to_delay ();
   void get_toes_rmt (int level);
   void stabilize_toes ();
   int level_to_delay (int level);
