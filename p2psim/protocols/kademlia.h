@@ -134,7 +134,7 @@ public:
   //
   // non-static utility methods
   //
-  void do_lookup_wrapper(k_nodeinfo*, NodeID, set<k_nodeinfo*> * = 0);
+  void do_lookup_wrapper(k_nodeinfo*, NodeID);
 
   //
   // observer methods
@@ -160,6 +160,13 @@ public:
 
   struct lookup_result {
     lookup_result() { results.clear(); }
+    ~lookup_result() {
+      for(set<k_nodeinfo*, closer>::const_iterator i = results.begin(); i != results.end(); ++i) {
+        char ptr[32]; sprintf(ptr, "%p", *i);
+        DEBUG(2) << "~lookup_result deleting " << ptr << endl;
+        delete *i;
+      }
+    }
     set<k_nodeinfo*, closer> results;
     NodeID rid;     // the guy who's replying
   };

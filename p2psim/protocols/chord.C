@@ -189,7 +189,7 @@ Chord::lookup(Args *args)
   check_static_init();
   CHID k = args->nget<CHID>("key");
   assert(k);
-  lookup_args *a = new lookup_args;
+  lookup_args *a = New lookup_args;
   a->key = k;
   a->start = now();
   a->retrytimes.clear();
@@ -318,7 +318,7 @@ Chord::find_successors(CHID key, uint m, uint all, uint type, Time start, IDMap 
 	p = reuse;
 	reuse = NULL;
       }else
-	p = new nextretinfo;
+	p = New nextretinfo;
       p->link = h;
       totalrpc++;
       record_stat(4+1, type);
@@ -376,7 +376,7 @@ Chord::find_successors(CHID key, uint m, uint all, uint type, Time start, IDMap 
     } else {
       totalto++;
       //notify
-      alert_args *aa = new alert_args;
+      alert_args *aa = New alert_args;
       aa->n = resultmap[donerpc]->link.to;
       record_stat(4,type);
       assert(resultmap[donerpc]->link.from.ip > 0 && resultmap[donerpc]->link.from.ip < 3000);
