@@ -26,7 +26,7 @@ class node:
         my.sent_bytes = 0
 	my.sent_bytes_breakdown = {}
 	sbkeys = ['insert', 'join_repair_write', 'join_repair_read',
-		  'failure_repair_write', 'failure_repair_read']
+		  'failure_repair_write', 'failure_repair_read', 'pm']
 	for k in sbkeys:
 	    my.sent_bytes_breakdown[k] = 0
 
@@ -45,7 +45,12 @@ class node:
         if block not in my.blocks:
             my.blocks[block] = size
             my.bytes += size
-        
+
+    def unstore (my, block):
+	# print "# DELETE", block, "from", my.id 
+	my.bytes -= my.blocks[block]
+	del my.blocks[block]
+
     def __cmp__ (my, other):
         return cmp (my.id, other.id)
     def __repr__ (my):
@@ -295,6 +300,8 @@ class dhash_replica_norepair (dhash):
         return my.replicas
     def insert_piece_size (my, size):
         return size
+    def look_ahead (my):
+	return 1
 
 class dhash_replica (dhash_replica_norepair):
     def min_pieces (my):
@@ -320,7 +327,77 @@ class dhash_fragments (dhash):
     def insert_piece_size (my, size):
         # A vague estimate of overhead from encoding... 2%-ish
         return int (1.02 * (size / my.dfrags))
-                        
+
+class dhash_cates (dhash):
+    def min_pieces (my):
+        return 14
+    def read_pieces (my):
+        return 7
+    def insert_pieces (my):
+        return 14
+    def look_ahead (my):
+	return 16
+    def insert_piece_size (my, size):
+        # A vague estimate of overhead from encoding... 2%-ish
+        return int (1.02 * (size / 7))
+
+    def _pmaint_join (my, n):
+	succs = my.succ (n, 17)
+	preds = my.pred (n, 17)
+	slice = preds + succs
+	succs.pop (0)
+	nid = n.id
+	# Perhaps this new guy has returned with some new blocks
+	# that he now should give away to someone else...
+	pid = preds[0].id
+	lostblocks = filter (lambda x: not between (x, pid, nid), n.blocks)
+	for b in lostblocks:
+	    # print "# LOST", b
+	    succs = my.succ (b, 14)
+	    for s in succs:
+		if b not in s.blocks:
+		    assert n != s
+		    isz = my.insert_piece_size (my.blocks[b])
+		    s.store (b, isz)
+		    n.sent_bytes += isz
+		    n.sent_bytes_breakdown['pm'] += isz
+		    break
+	    # Either someone wanted it and they took it, or no one wanted it.
+	    # Safe to delete either way.
+	    n.unstore (b)
+
+	# Next, fix blocks that are in the wrong place now because
+	# this guy appeared; give them to this new guy.
+	for s in succs:
+	    lostblocks = filter (lambda x: between (x, pid, nid), s.blocks)
+	    # if len(lostblocks): print "# LoST", len(lostblocks), "blocks"
+	    for b in lostblocks:
+		s.unstore (b)
+		if b not in n.blocks:
+		    isz = my.insert_piece_size (my.blocks[b])
+		    n.store (b, isz)
+		    s.sent_bytes += isz
+		    s.sent_bytes_breakdown['pm'] += isz
+
+
+    def _partition_maintenance (my):
+	extranodes = my.nodes[-17:] + my.nodes
+	assert (len (extranodes) >= 32)
+	for i in range(17, len(extranodes)):
+	    n = extranodes[i]
+	    pid = extranodes[i - 17].id
+	    nid = n.id
+	    lostblocks = filter (lambda x: between (x, pid, nid), n.blocks)
+
+    def time_changed (my, last_time, new_time):
+	# Do "partition maintenance"
+	if len (my.nodes) >= 16 and my.now_nodes:
+	    for n in my.now_nodes:
+		# joins are the only thing that cause pmaint
+		if n.alive: my._pmaint_join (n)
+	dhash.time_changed (my, last_time, new_time)
+	chord.time_changed (my, last_time, new_time)
+
 if __name__ == '__main__':
     gdh = dhash_replica_norepair()
     gdh.add_node (55)

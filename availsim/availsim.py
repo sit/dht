@@ -99,7 +99,7 @@ def file_evgen (fname):
             sys.stderr.write ("Bad event at line %d: %s\n" % (lineno, e))
 
 sbkeys = ['insert', 'join_repair_write', 'join_repair_read',
-	  'failure_repair_write', 'failure_repair_read']
+	  'failure_repair_write', 'failure_repair_read', 'pm']
 def _monitor (t, dh):
     stats = {}
     allnodes = dh.allnodes.values ()
@@ -108,6 +108,11 @@ def _monitor (t, dh):
     stats['sent_bytes']   = sum ([n.sent_bytes for n in allnodes])
     stats['disk_bytes']   = sum ([n.bytes      for n in allnodes])
     stats['avail_bytes']  = sum ([n.bytes      for n in dh.nodes])
+
+    #bdist = [len(n.blocks) for n in dh.nodes]
+    #bdist.sort ()
+    #ab = sum(bdist) / float (len(dh.nodes))
+    #sys.stderr.write ("%5.2f blocks/node on avg; max = %d, med = %d, min = %d (%d)\n" % (ab, max(bdist), bdist[len(bdist)/2], min(bdist), bdist.count(min(bdist))))
 
     for k in sbkeys:
 	stats['sent_bytes::%s' % k] = \
@@ -204,6 +209,8 @@ if __name__ == '__main__':
 	except:
 	    replicas = 3
 	gdh = dhash.dhash_replica_norepair (replicas)
+    elif (dtype == "cates"):
+	gdh = dhash.dhash_cates ()
     else:
 	sys.stderr.write ("invalid dhash type\n")
         usage ()
