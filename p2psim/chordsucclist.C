@@ -19,7 +19,8 @@ ChordSuccList::fix_successor_list()
 
   get_successor_list_args gsa;
   get_successor_list_ret gsr;
-  doRPC(succ.ip, &ChordSuccList::get_successor_list_handler, &gsa, &gsr);
+  _vivaldi->RPC(succ.ip, &ChordSuccList::get_successor_list_handler,
+                &gsa, &gsr);
 
   for (unsigned int i = 0; i < (gsr.v).size(); i++) {
     loctable->add_node(gsr.v[i]);

@@ -129,6 +129,17 @@ Node::_doRPC(IPAddress srca, IPAddress dsta,
   return true;
 }
 
+bool
+Node::_doRPC(IPAddress dsta, void (*fn)(void*), void *args)
+{
+  // find source IP address.
+  Node *srcnode = (Node*) ThreadManager::Instance()->get(threadid());
+  assert(srcnode);
+  IPAddress srca = srcnode->ip();
+
+  return _doRPC(srca, dsta, fn, args);
+}
+
 void
 Node::Receive(void *px)
 {
@@ -143,4 +154,11 @@ Node::Receive(void *px)
   send(Network::Instance()->pktchan(), &reply);
 
   threadexits(0);
+}
+
+Protocol *
+Node::getproto(const type_info &ti)
+{
+  string dstprotname = ProtocolFactory::Instance()->name(ti);
+  return getproto(dstprotname);
 }

@@ -4,6 +4,8 @@
 #include <map>
 #include "p2psim.h"
 #include "protocol.h"
+#include "network.h"
+#include "protocolfactory.h"
 using namespace std;
 
 // Compute Vivaldi synthetic coordinates.
@@ -16,15 +18,22 @@ using namespace std;
 
 class Vivaldi {
  public:
-  Vivaldi(IPAddress me);
-  virtual ~Vivaldi();
+  static Vivaldi *make(IPAddress ip) {
+    if(_nodes.find(ip) != _nodes.end()){
+      return _nodes[ip];
+    } else {
+      return new Vivaldi(ip);
+    }
+  }
+  static Vivaldi *find(IPAddress ip) { return _nodes[ip]; }
 
-  // Same as Euclidean::Coord
-  // But unsigned may be bad for us...
-  typedef pair<unsigned,unsigned> Coord;
+  struct Coord {
+    double _x;
+    double _y;
+  };
 
   void sample(IPAddress who, Coord c, unsigned latency);
-  Coord my_location();
+  Coord my_location() { return _c; }
 
   // Anyone can use this to make an RPC and have Vivaldi time it.
   template<class BT, class AT, class RT>
@@ -33,20 +42,11 @@ class Vivaldi {
 
  private:
   IPAddress _me;
-  double _x;
-  double _y;
+  Coord _c;
+  static map<IPAddress, Vivaldi *> _nodes;
 
-  typedef void (Threaded::* member_f)(void *, void *);
-
-  struct rpc_args {
-    member_f fn;
-    void *args;
-    void *ret;
-  };
-  struct rpc_ret {
-    Vivaldi::Coord c;
-  };
-  void rpc_handler(rpc_args *, rpc_ret *);
+  Vivaldi(IPAddress me);
+  virtual ~Vivaldi();
 
   void run() { };
 };
@@ -56,24 +56,55 @@ class Vivaldi {
 // Use this only for simple RPCs: don't use it for
 // recursive RPCs.
 template<class BT, class AT, class RT>
-bool Vivaldi::RPC(IPAddress a,
+bool Vivaldi::RPC(IPAddress dsta,
                   void (BT::* fn)(AT *, RT *),
                   AT *args,
                   RT *ret)
 {
-  rpc_args ta;
-  rpc_ret tr;
-  ta.fn = (member_f) fn;
-  ta.args = (void *) args;
-  ta.ret = (void *) ret;
-  //  Time before = now();
-  bool ok = doRPC(a, &Vivaldi::rpc_handler, &ta, &tr);
+  Vivaldi *vtarget = find(dsta);
+  assert(vtarget);
+
+  // find target node from IP address.
+  Node *dstnode = Network::Instance()->getnode(dsta);
+  assert(dstnode && dstnode->ip() == dsta);
+
+  // find target protocol from class name.
+  Protocol *dstproto = dstnode->getproto(typeid(BT));
+  BT *target = dynamic_cast<BT*>(dstproto);
+  assert(target);
+
+  struct rpc_glop {
+    BT *_target;
+    Vivaldi *_vtarget;
+    void (BT::* _fn)(AT *, RT *);
+    AT *_args;
+    RT *_ret;
+    Coord _c;
+    static void thunk(void *xg){
+      rpc_glop *g = (rpc_glop*) xg;
+      (g->_target->*(g->_fn))(g->_args, g->_ret);
+      g->_c = g->_vtarget->my_location();
+    }
+  };
+
+  rpc_glop *gp = new rpc_glop;
+  gp->_target = target;
+  gp->_vtarget = vtarget;
+  gp->_fn = fn;
+  gp->_args = args;
+  gp->_ret = ret;
+
+  Time before = now();
+
+  bool ok = Node::_doRPC(dsta, rpc_glop::thunk, (void*) gp);
+
   if(ok){
-    //Time after = now();
-    //sample(a, tr.c, (after - before) / 2);
-    // Coord c = my_location();
-    //    printf("%d vivaldi %d %d\n", ts(), _me, c.first, c.second);
+    Time after = now();
+    sample(dsta, gp->_c, after - before);
   }
+
+  delete gp;
+
   return ok;
 }
 

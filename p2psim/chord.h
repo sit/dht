@@ -77,7 +77,7 @@ public:
 protected:
   LocTable *loctable;
   IDMap me;
-  Vivaldi _vivaldi;
+  Vivaldi *_vivaldi;
 
   virtual vector<IDMap> find_successors(CHID key, int m);
   void fix_predecessor();

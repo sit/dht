@@ -10,11 +10,12 @@
 
 using namespace std;
 
-Chord::Chord(Node *n) : Protocol(n), _vivaldi(n->ip())
+Chord::Chord(Node *n) : Protocol(n)
 {
   me.ip = n->ip();
   me.id = ConsistentHash::ip2chid(me.ip); 
   loctable = new LocTable(me);
+  _vivaldi = Vivaldi::make(n->ip());
 }
 
 Chord::~Chord()
@@ -60,7 +61,7 @@ Chord::find_successors(CHID key, int m)
     na.key = key;
     na.m = m;
     na.who = me;
-    doRPC(nprime.ip, &Chord::next_handler, &na, &nr);
+    _vivaldi->RPC(nprime.ip, &Chord::next_handler, &na, &nr);
     if(nr.done){
       return nr.v;
     } else {
@@ -135,7 +136,7 @@ Chord::stabilize(void *x)
   if (succ1.ip && (succ1.ip != me.ip)) {
     get_predecessor_args gpa;
     get_predecessor_ret gpr;
-    doRPC(succ1.ip, &Chord::get_predecessor_handler, &gpa, &gpr);
+    _vivaldi->RPC(succ1.ip, &Chord::get_predecessor_handler, &gpa, &gpr);
     if (gpr.n.ip) loctable->add_node(gpr.n);
 
     IDMap succ2 = loctable->succ(1);
@@ -147,7 +148,7 @@ Chord::stabilize(void *x)
     notify_args na;
     notify_ret nr;
     na.me = me;
-    doRPC(succ2.ip, &Chord::notify_handler, &na, &nr);
+    _vivaldi->RPC(succ2.ip, &Chord::notify_handler, &na, &nr);
 
     fix_predecessor();
     //fix_successor();
@@ -208,7 +209,7 @@ Chord::fix_successor_list()
 
   get_successor_list_args gsa;
   get_successor_list_ret gsr;
-  doRPC(succ.ip, &Chord::get_successor_list_handler, &gsa, &gsr);
+  _vivaldi->RPC(succ.ip, &Chord::get_successor_list_handler, &gsa, &gsr);
 
   for (unsigned int i = 0; i < (gsr.v).size(); i++) {
     loctable->add_node(gsr.v[i]);

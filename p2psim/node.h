@@ -20,7 +20,11 @@ public:
   Channel *pktchan() { return _pktchan; }
   Channel *protchan() { return _protchan; }
   Protocol *getproto(string p) { return _protmap[p]; }
+  Protocol *getproto(const type_info &);
+
   static bool _doRPC(IPAddress srca, IPAddress dsta,
+                     void (*)(void*), void*);
+  static bool _doRPC(IPAddress dsta,
                      void (*)(void*), void*);
 
 private:
