@@ -31,7 +31,7 @@ void findDocument(Node *n, ID *docId)
     printf("findDocument: n=%d was deleted in the meantime\n");
     return;
   }
-  r = newRequest(*docId, REQ_TYPE_FINDDOC, REQ_STYLE_RECURSIVE, n->id);
+  r = newRequest(*docId, REQ_TYPE_FINDDOC, REQ_STYLE_ITERATIVE, n->id);
 
   insertRequest(n, r);
 }
@@ -71,7 +71,7 @@ void insertDocument(Node *n, ID *docId)
     printf("insertDocument: n=%d was deleted in the meantime\n");
     return;
   }
-  r = newRequest(*docId, REQ_TYPE_INSERTDOC, REQ_STYLE_RECURSIVE, n->id);
+  r = newRequest(*docId, REQ_TYPE_INSERTDOC, REQ_STYLE_ITERATIVE, n->id);
 
   insertRequest(n, r);
 

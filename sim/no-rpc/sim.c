@@ -12,7 +12,6 @@ int main(int argc, char **argv)
   Node  *n;
   int   i = 0;
 
-
   if (argc != 3) {
     printf("usage: %s input_file seed\n", argv[0]);
     exit (-1);
@@ -22,10 +21,7 @@ int main(int argc, char **argv)
   EventQueue.size = MAX_NUM_ENTRIES;
 
   initRand(atoi(argv[2]));
-  
-
   readInputFile(argv[1]);
-
 
   while (Clock < MAX_TIME) {
     ev = getEvent(&EventQueue, Clock);

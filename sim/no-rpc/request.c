@@ -4,6 +4,10 @@
 #include "incl.h"
 int processRequest1(Node *n, Request *r);
 
+void insertRequest_wait(Node *n, Request *r);
+
+// #define PREFIX_MATCH
+
 Request *newRequest(ID x, int type, int style, ID initiator)
 {
   Request *r;
@@ -16,6 +20,7 @@ Request *newRequest(ID x, int type, int style, ID initiator)
   r->style = style;
   r->initiator = r->succ = r->pred = r->sender = initiator;
 
+  r->del = -1;
   return r;
 
 }
@@ -72,6 +77,12 @@ void processRequest(Node *n)
 
   while (r  = getRequest(n)) {
 
+    if (r->del != -1) {
+      Finger *f = getFinger(n->fingerList, r->del);
+      if (f) removeFinger(n->fingerList, f);
+      r->del = -1;
+    }
+
     // update/refresh finger table
     insertFinger(n, r->initiator);
     if (r->initiator != r->sender)
@@ -123,7 +134,14 @@ void processRequest(Node *n)
           // forward the request to the node responsible
           // for the document r->x; the processing of this request
           // takes place in processRequest1 
+#ifdef PREFIX_MATCH
+	  if (prefixLen(r->x, r->succ) > prefixLen(r->x, r->pred))
+	    dst = r->succ;
+	  else 
+	    dst = r->pred;
+#else
 	  dst = r->succ;  
+#endif
 	  break;
 	default:
 	  continue;
@@ -144,7 +162,13 @@ void processRequest(Node *n)
     }
     
     // send message to dst
-    genEvent(dst, insertRequest, (void *)r, Clock + intExp(AVG_PKT_DELAY));
+    if (n->id == r->initiator) {
+      r->dst = dst;
+      genEvent(n->id, insertRequest_wait, (void *)r, 
+	       Clock + intExp(AVG_PKT_DELAY));
+    } else {
+      genEvent(dst, insertRequest, (void *)r, Clock + intExp(AVG_PKT_DELAY));
+    }
   }
 }  
 
@@ -170,7 +194,7 @@ int processRequest1(Node *n, Request *r)
   }
 #endif // OPTIMIZATION
 
-  if (between(r->x, getPredecessor(n), n->id, NUM_BITS) || (r->x == n->id)) {
+  if  (between(r->x, getPredecessor(n), n->id, NUM_BITS) || (r->x == n->id)) {
     switch (r->type) {
     case REQ_TYPE_INSERTDOC:
       insertDocumentLocal(n, &r->x);
@@ -183,6 +207,27 @@ int processRequest1(Node *n, Request *r)
   return FALSE;
 }
 
+
+// add request at the tail of the pending request list
+void insertRequest_wait(Node *n, Request *r)
+{
+  // send message to dst
+  if (getNode(r->dst)->status != PRESENT) {
+    // printf("NOT_PRESENT=%d, %f\n", r->dst, Clock);
+    r->done = FALSE;
+    r->succ = r->pred = r->initiator;
+    r->del = r->dst; // delete node
+    if ((r->dst = popNode(r)) == -1)
+      genEvent(r->initiator, insertRequest, (void *)r, Clock + TIME_OUT);
+    else 
+      genEvent(r->dst, insertRequest, (void *)r, Clock + TIME_OUT);
+  }
+  else {
+    pushNode(r, r->dst);
+    genEvent(r->dst, insertRequest, (void *)r, Clock);
+    // printf("PRESENT\n");
+  }
+}
 
 void printReqList(Node *n)
 {

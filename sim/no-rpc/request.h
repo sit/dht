@@ -1,6 +1,6 @@
 #ifndef  INCL_REQUEST
 #define INCL_REQUEST
-
+ 
 
 // Request data structure
 //  
@@ -28,6 +28,14 @@ typedef struct request_ {
   ID  succ;      // best known successor of x
   int done;      // TRUE after message has arrived at node n
                  // where n < r.x <= n.successor   
+  // the following fields are used for retries
+  ID  dst;
+  ID  del;
+  struct {
+#define STACKNODE_SIZE 20
+    ID nodes[STACKNODE_SIZE];
+    int num;  // number of nodes in the stack
+  } stack;
 
   struct request_ *next; 
 } Request;
@@ -38,3 +46,10 @@ typedef struct requestList_ {
 } RequestList;
 
 #endif // INCL_REQUEST
+
+
+
+
+
+
+

@@ -20,6 +20,8 @@ Finger *newFinger(ID id)
   finger->id     = id;
   finger->last   = Clock;
   finger->expire = MAX_TIME;
+
+  return finger;
 }
 
 ID getSuccessor(Node *n)
@@ -58,7 +60,7 @@ void insertFinger(Node *n, ID id)
     Request *r;
     ID       pred = getPredecessor(n);
 
-    r = newRequest(id, REQ_TYPE_SETSUCC, REQ_STYLE_RECURSIVE, n->id);
+    r = newRequest(id, REQ_TYPE_SETSUCC, REQ_STYLE_ITERATIVE, n->id);
     genEvent(pred, insertRequest, (void *)r, Clock + intExp(AVG_PKT_DELAY));
   }    
 #endif // OPTIMIZATION
@@ -117,7 +119,7 @@ Finger *getFinger(FingerList *fList, ID id)
 
   for (f = fList->head; f; f = f->next)
     if (f->id == id)
-      return;
+      return f;
   
   return NULL;
 }

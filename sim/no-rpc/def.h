@@ -20,6 +20,7 @@ typedef int ID;
 #define PROC_REQ_PERIOD  500
 #define STABILIZE_PERIOD 30000
 #define LEAVE_WAIT       (STABILIZE_PERIOD << 1)
+#define TIME_OUT        500
 
 /* maximum simulation time */
 #define MAX_TIME     5e+07 /* in ms */   

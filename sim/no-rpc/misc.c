@@ -1,11 +1,23 @@
 #include "incl.h"
 
 
-int fingerStart(Node *n, int i)
+int prefixLen(int a, int b)
 {
-  return successorId(n->id, i);
-}
+  int i, t;
 
+  if (a == b)
+    return NUM_BITS;
+
+  t = 1 << NUM_BITS;
+  for (i = 0; i < NUM_BITS; i++) {
+    if ((a & t) != (b & t)) {
+      return i;
+    }
+    t = t >> 1;
+  }
+
+  return NUM_BITS;
+}
 
 /* compute (id + i) mod 2^NUM_BITS */
 int successorId(int id, int i)
@@ -14,7 +26,7 @@ int successorId(int id, int i)
   id = id + i;
 
   if (id >= (1 << NUM_BITS))
-      id -= (1 << NUM_BITS);
+    id -= (1 << NUM_BITS);
 
   return id;
 }
@@ -26,7 +38,7 @@ int predecessorId(int id, int i)
   id = id - i;
 
   if (id < 0)
-      id += (1 << NUM_BITS);
+    id += (1 << NUM_BITS);
 
   return id;
 }

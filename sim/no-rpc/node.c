@@ -141,6 +141,27 @@ int getRandomNodeId()
 }
 
 
+ID popNode(Request *r)
+{
+  if (r->stack.num == 0)
+    return -1;
+  else {
+    r->stack.num--;
+    return r->stack.nodes[r->stack.num];
+  }
+}
+
+
+void pushNode(Request *r, ID nid)
+{
+  if ((r->stack.num >= STACKNODE_SIZE) || 
+      (r->stack.nodes[r->stack.num - 1] == nid))
+    return;
+  r->stack.nodes[r->stack.num] = nid;
+  r->stack.num++;
+}
+
+
 /*******************************************************/
 /*      update node state
 /*******************************************************/

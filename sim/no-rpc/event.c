@@ -83,11 +83,6 @@ void insertEvent(CalQueue *evCal, Event *ev, double time)
     for (p; p->next; p = p->next);
     p->next = ev;
   }
-  /*
-  ev->next = p;
-  ev->time = time;
-  evCal->q[idx] = ev;
-  */
 }
 
 
