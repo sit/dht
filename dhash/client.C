@@ -136,7 +136,7 @@ dhashcli::retrieve_dl_or_walk_cb (ptr<rcv_state> rs, dhash_stat status,
   chordID myID = clntnode->my_ID ();
 
   if(!blk) {
-    if (options & DHASHCLIENT_NO_RETRY_ON_LOOKUP) {
+    if (retries == 0 || (options & DHASHCLIENT_NO_RETRY_ON_LOOKUP)) {
       rs->complete (DHASH_NOENT, NULL);
       rs = NULL;
     }
@@ -435,39 +435,6 @@ dhashcli::retrieve_fetch_cb (ptr<rcv_state> rs, u_int i,
 }
 
 void
-dhashcli::retrieve_from_cache (blockID n, cb_ret cb,
-                               int options, ptr<chordID> guess)
-{
-  chord_node s;
-  clntnode->my_location ()->fill_node (s);
-  dhash_download::execute 
-    (clntnode, s, n, NULL, 0, 0, 0,
-     wrap (this, &dhashcli::retrieve_from_cache_cb, n, cb, options, guess));
-}
-
-void
-dhashcli::retrieve_and_cache_cb (dhash_stat err, chordID id, bool present)
-{
-  if (err)
-    warn << "caching retrieved block failed\n";
-}
-
-void
-dhashcli::retrieve_and_cache (cb_ret cb, int options, dhash_stat stat, 
-                              ptr<dhash_block> block, route path)
-{
-  if (block && (options & DHASHCLIENT_CACHE)) {
-    cb (DHASH_OK, block, path);
-    dhash_store::execute (clntnode, clntnode->my_location (),
-                          blockID (block->ID, block->ctype, DHASH_BLOCK),
-		          block, wrap (this, &dhashcli::retrieve_and_cache_cb),
-			  DHASH_CACHE);
-  }
-  else
-    cb (stat, block, path);
-}
-
-void
 dhashcli::retrieve_from_cache_cb (blockID n, cb_ret cb,
                                   int options, ptr<chordID> guess,
 				  ptr<dhash_block> block)
@@ -476,8 +443,18 @@ dhashcli::retrieve_from_cache_cb (blockID n, cb_ret cb,
   if (block)
     cb (DHASH_OK, block, ret);
   else
-    retrieve (n, wrap (this, &dhashcli::retrieve_and_cache, cb, options),
-	      options, guess);
+    retrieve (n, cb, options, guess);
+}
+
+void
+dhashcli::retrieve_from_cache (blockID n, cb_ret cb,
+                               int options, ptr<chordID> guess)
+{
+  chord_node s;
+  clntnode->my_location ()->fill_node (s);
+  dhash_download::execute 
+    (clntnode, s, n, NULL, 0, 0, 0,
+     wrap (this, &dhashcli::retrieve_from_cache_cb, n, cb, options, guess));
 }
 
 void

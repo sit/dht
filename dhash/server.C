@@ -520,7 +520,8 @@ dhash_impl::dispatch (user_args *sbp)
 	sbp->reply (&res);
       } 
       else if (sarg->type == DHASH_CACHE && 
-	       (sarg->ctype != DHASH_CONTENTHASH ||
+	       ((sarg->ctype != DHASH_CONTENTHASH &&
+		 sarg->ctype != DHASH_KEYHASH) ||
 		sarg->dbtype != DHASH_BLOCK)) {
 	dhash_storeres res (DHASH_ERR);
 	ptr<location> pred = host_node->my_pred ();
@@ -681,9 +682,10 @@ dhash_impl::append_after_db_fetch (ref<dbrec> key, ptr<dbrec> new_data,
 			      s_dhash_insertarg *arg, cbstore cb,
 			      int cookie, ptr<dbrec> data, dhash_stat err)
 {
-  if (arg->ctype != DHASH_APPEND) {
+  if (arg->ctype != DHASH_APPEND)
     cb (DHASH_STORE_NOVERIFY);
-  } else {
+  
+  else {
     ptr<dhash_block> b = get_block_contents (data, DHASH_APPEND);
     xdrsuio x;
     char *m_buf;
@@ -762,27 +764,47 @@ dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
       //XXX ATHICHA: Add Paxos+Primary prot for writes
       {
 	if (!verify_key_hash (arg->key, ss->buf, ss->size)) {
+	  warning << "keyhash: cannot verify " << ss->size << " bytes\n";
 	  stat = DHASH_STORE_NOVERIFY;
 	  break;
 	}
 
-	ptr<dbrec> prev = keyhash_db->lookup (k);
-	if (prev) {
-	  long v0 = keyhash_version (prev);
-	  long v1 = keyhash_version (d);
-	  if (v0 >= v1) {
-	    if (arg->type == DHASH_STORE)
-	      stat = DHASH_STALE;
-	    break;
-	  } else {
-	    warnx << "receiving new copy of " << arg->key << "\n";
-	    keyhash_db->del (k);
+        if (arg->type == DHASH_CACHE) {
+	  ptr<dbrec> prev = cache_db->lookup (k);
+	  if (prev) {
+	    long v0 = keyhash_version (prev);
+	    long v1 = keyhash_version (d);
+	    if (v0 >= v1)
+	      break;
+	    else {
+	      warnx << "caching new copy of " << arg->key << "\n";
+	      cache_db->del (k);
+	    }
 	  }
+	  cache_db->insert (k, d);
+
+	  info << "dbwrite: " << host_node->my_ID ()
+	       << " u " << arg->key << " " << ss->size << "\n";
 	}
-	keyhash_db->insert (k, d);
+	else {
+	  ptr<dbrec> prev = keyhash_db->lookup (k);
+	  if (prev) {
+	    long v0 = keyhash_version (prev);
+	    long v1 = keyhash_version (d);
+	    if (v0 >= v1) {
+	      if (arg->type == DHASH_STORE)
+	        stat = DHASH_STALE;
+	      break;
+	    } else {
+	      warnx << "receiving new copy of " << arg->key << "\n";
+	      keyhash_db->del (k);
+	    }
+	  }
+	  keyhash_db->insert (k, d);
   
-	info << "dbwrite: " << host_node->my_ID ()
-	     << " U " << arg->key << "\n";
+	  info << "dbwrite: " << host_node->my_ID ()
+	       << " U " << arg->key << "\n";
+	}
 	break;
       }
     case DHASH_APPEND:

@@ -159,9 +159,9 @@ dhashgateway::insert_cb (svccb *sbp, dhash_stat status, vec<chordID> path)
       (block, wrap (this, &dhashgateway::insert_cache_cb));
 }
 
-
 void
-dhashgateway::retrieve_cb (svccb *sbp, dhash_stat stat, ptr<dhash_block> block, route path)
+dhashgateway::retrieve_cb (svccb *sbp, dhash_stat stat,
+                           ptr<dhash_block> block, route path)
 {
   dhash_retrieve_res res (DHASH_OK);
 
@@ -183,8 +183,21 @@ dhashgateway::retrieve_cb (svccb *sbp, dhash_stat stat, ptr<dhash_block> block, 
 
     memcpy (res.resok->block.base (), block->data, block->len);
   }
+
+  // this must be before sbp->reply, otherwise sbp object is not
+  // guaranteed to be around
+  dhash_retrieve_arg *arg = sbp->template getarg<dhash_retrieve_arg> ();
+  ptr<dhash_block> nb = 0;
+  if (block && (arg->options & DHASHCLIENT_CACHE)) {
+    nb = New refcounted<dhash_block>
+      (block->data, block->len, block->ctype);
+    nb->ID = arg->blockID;
+  }
+
   sbp->reply (&res);
+
+  if (nb)
+    dhcli->insert_to_cache
+      (nb, wrap (this, &dhashgateway::insert_cache_cb));
 }
-
-
 
