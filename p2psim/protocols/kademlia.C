@@ -706,6 +706,7 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
     }
 
     // node was ok
+    assert(ci->fr->results.size() <= Kademlia::k_tell);
     record_stat(ci->fa->stattype, ci->fr->results.size(), 0);
     if(!Kademlia::learn_stabilize_only)
       update_k_bucket(ci->ki.id, ci->ki.ip, now() - ci->before);
