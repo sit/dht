@@ -91,7 +91,7 @@ Kademlia::Kademlia(IPAddress i, Args a)
 
   use_replacement_cache = a.nget<use_replacement_cache_t>("rcache", ENABLED, 10);
   max_lookup_time = a.nget<Time>("maxlookuptime", 4000, 10);
-  learn_stabilize_only = a.nget<unsigned>("stablearn_only", 1, 10) == 1 ? true : false;
+  learn_stabilize_only = a.nget<unsigned>("stablearn_only", 0, 10) == 1 ? true : false;
   force_stabilization = a.nget<unsigned>("force_stab", 0, 10) == 1 ? true : false;
 
   if(!k) {
@@ -111,7 +111,7 @@ Kademlia::Kademlia(IPAddress i, Args a)
   }
 
   if(!_default_timeout) {
-    _default_timeout = a.nget<Time>("default_timeout", 5000, 10);
+    _default_timeout = a.nget<Time>("default_timeout", 1000, 10);
   }
 
   if(!Kademlia::pool)
