@@ -106,7 +106,7 @@ prefix_match (int nslots, const merkle_hash &a, const merkle_hash &b)
   return true;
 }
 
-
+template <>
 struct hashfn<merkle_hash> {
   hashfn () {}
   hash_t operator() (const merkle_hash &a) const

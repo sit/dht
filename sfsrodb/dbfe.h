@@ -102,6 +102,7 @@
 #include "btreeDispatch.h"
 #endif /* !SLEEPYCAT */
 
+template <>
 struct hashfn<DB *> {
   hashfn () {}
   hash_t operator() (const DB *a) const
