@@ -23,14 +23,15 @@ get_aclnt (str host, unsigned short port)
   inet_aton (host.cstr (), &saddr.sin_addr);
   saddr.sin_port = htons (port);
 
-  ptr<aclnt> c = aclnt::alloc (dgram_xprt, chord_program_1, 
+  ptr<aclnt> c = aclnt::alloc (dgram_xprt, transport_program_1, 
 			       (sockaddr *)&(saddr));
 
   return c;
 }
 
 ptr<aclnt> c;
-
+void
+doRPCcb (int procno, dorpc_res *res, void *out, aclnt_cb cb, clnt_stat err);
 void
 doRPC (const chord_node &n, int procno, const void *in, void *out, aclnt_cb cb)
 {
@@ -38,7 +39,51 @@ doRPC (const chord_node &n, int procno, const void *in, void *out, aclnt_cb cb)
     c = get_aclnt (n.r.hostname, n.r.port);
   if (c == NULL)
     fatal << "Couldn't get aclnt for " << n.r.hostname << "\n";
-  c->timedcall (TIMEOUT, procno, in, out, cb);
+  
+ //form the transport RPC
+  ptr<dorpc_arg> arg = New refcounted<dorpc_arg> ();
+
+  //header
+  arg->dest_id = n.x;
+  arg->src_id = bigint (0);
+  arg->src_vnode_num = 0;
+  arg->progno = chord_program_1.progno;
+  arg->procno = procno;
+  
+  //marshall the args ourself
+  xdrproc_t inproc = chord_program_1.tbl[procno].xdr_arg;
+  xdrsuio x (XDR_ENCODE);
+  if ((!inproc) || (!inproc (x.xdrp (), (void *)in))) {
+    fatal << "failed to marshall args\n";
+  } else {
+    int args_len = x.uio ()->resid ();
+    arg->args.setsize (args_len);
+    void *marshalled_args = suio_flatten (x.uio ());
+    memcpy (arg->args.base (), marshalled_args, args_len);
+    free (marshalled_args);
+
+    dorpc_res *res = New dorpc_res (DORPC_OK);
+    c->timedcall (TIMEOUT, TRANSPORTPROC_DORPC, arg, res,
+		  wrap (&doRPCcb, procno, res, out, cb));
+  }
+}
+
+void
+doRPCcb (int procno, dorpc_res *res, void *out, aclnt_cb cb, clnt_stat err)
+{
+  xdrmem x ((char *)res->resok->results.base (), 
+	    res->resok->results.size (), XDR_DECODE);
+  xdrproc_t proc = chord_program_1.tbl[procno].xdr_res;
+  assert (proc);
+  if (err) {
+    warnx << "doRPC: err = " << err << "\n";
+    return;
+  }
+  if (!proc (x.xdrp (), out))
+    fatal << "failed to unmarshall result\n";
+
+  cb (err);
+  delete res;
 }
 
 void
@@ -55,8 +100,14 @@ findroute_cb (chord_node n,
     warnx << "Searching for " << fa->x << " from "
 	 << n.x << "@" << n.r.hostname << ":" << n.r.port << "\n";
     for (size_t i = 0; i < route->resok->nlist.size (); i++) {
-      chord_node_wire &hop = route->resok->nlist[i];
-      warnx << i << ": " << hop << "\n";
+      chord_node z = make_chord_node (route->resok->nlist[i]);
+      chordID n    = z.x;
+      str host     = z.r.hostname;
+      u_short port = z.r.port;
+      int index    = z.vnode_num;
+      assert (index >= 0);
+      warnx << i << ": "
+	    << n << " " << host << " " << port << " " << index << "\n";
     }
   }      
   delete route;
