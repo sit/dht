@@ -721,21 +721,31 @@ if( defined $options{"convex"} ) {
 		    if( !defined $conx ) {
 			$conx = 0;
 		    }
-		    print CON "$conx ";
+
 		    my $cony = eval("$yparen[$j]" . 
 				    $vals[$yposes{"$j-$datfile"}-1] . 
 				    "$conyop");
 		    if( !defined $cony ) {
 			$cony = 0;
 		    }
-		    print CON "$cony ";
-		    print CON "\n";
-
-		    # we might need to figure out what this line was later
-		    if( defined $param and $rtmgraph ) {
-			$headerhash{"$conx $cony"} = $h;
+		    if ($cony=~/\./) {
+		    }else{
+		      $cony .=".0"; #jy: find-convex.py always spits out dicimal points
 		    }
 
+		    # we might need to figure out what this line was later
+		    if (!defined($headerhash{"$conx $cony"})) {
+			$headerhash{"$conx $cony"} = $h;
+		    }else{
+		      my $oldheader = $headerhash{"$conx $cony"};
+		      print STDERR "warning: same value $conx $cony, different parameter!\n$h\n$oldheader\n";
+		      $conx += 0.00001;
+		      $headerhash{"$conx $cony"} = $h;
+		    }
+		    print CON "$conx $cony ";
+		    print CON "\n";
+
+		    
 		    if( defined $options{"hulllabel"} ) {
 			$valshash{"$conx $cony"} = $v;
 		    }
@@ -808,7 +818,7 @@ if( defined $options{"convex"} ) {
 				  "font \"Times-Roman,16\"" );
 
 			} else {
-			    die( "val not defined: $1 $2" );
+			    die( "val not defined: $1 $2 $datfile$j.convex" );
 			}
 		    } else {
 			die( "Weird line in $datfile$j.convex: $_" );
