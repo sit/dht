@@ -28,6 +28,7 @@ int main (int argc, char *argv[])
   assert (t == s);
 
   assert (test.last () == s);
+  assert (test.size () == 1);
  
   // now there are two.
   t = New item (0, "first");
@@ -51,13 +52,15 @@ int main (int argc, char *argv[])
   u = test.closestsucc (1);
   assert (u == s);
 
+  assert (test.size () == 2);
   
   // insert at end and before beginning
   item *v = New item (2, "third");
   test.insert (v);
+  assert (test.size () == 3);
   item *w = New item (-1, "zeroeth");
   test.insert (w);
-  
+  assert (test.size () == 4);  
   assert (test.last () == v);
   
   warnx << "All added...\n";
@@ -69,6 +72,7 @@ int main (int argc, char *argv[])
     bool b = test.insert (z);
     assert (!b);
     assert (test.repok ());
+    assert (test.size () == 4);
   }
 
   // walking the list manually
@@ -169,9 +173,10 @@ int main (int argc, char *argv[])
   test.traverse (wrap (print_item));
   warnx << "Testing interlaced inserts with order checking (1).\n";
 
-  for (int i = 0; i < 1031; i++) {
+  for (unsigned int i = 0; i < 1031; i++) {
     unsigned int z = (i * 5) % 1031;
     test.insert (New item (z, "blah"));
+    assert (test.size () == i + 1);
     assert (test.repok ());
   }
   
@@ -192,12 +197,13 @@ int main (int argc, char *argv[])
     b = test.next (a);
   }
   
-  for (int i = 0; i < 1031; i++) {
+  for (unsigned int i = 0; i < 1031; i++) {
     unsigned int z = (i * 11) % 1031;
     item *c = test.remove (z);
     assert (c->key == (int) z);
     delete c;
     assert (test.repok ());
+    assert (test.size () == 1031 - i - 1);
   }
     
   assert (test.first () == NULL);

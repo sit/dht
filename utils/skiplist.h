@@ -31,6 +31,7 @@ class skiplist {
   const C cmp;
   T *head;
   T *tail;
+  unsigned int sz;
 
   // Number of distinct levels. Highest valid lvl in any of the forward
   // pts is forward[lvl - 1].
@@ -49,12 +50,6 @@ class skiplist {
   }
   
  protected:
-  void init () {
-    head = NULL;
-    tail = NULL;
-    lvl = 1;
-  }
-
   void insert_head (T *elm) {
     // requires: T not be in list already.
     unsigned int newlvl = rndlvl (); // new level for old head
@@ -93,7 +88,7 @@ class skiplist {
   }
 
  public:
-  skiplist () { init (); }
+  skiplist () : head (NULL), tail (NULL), sz (0), lvl (1) {}
 
   // If list is empty, return NULL.
   // If list has more than one:
@@ -156,14 +151,15 @@ class skiplist {
     return x;
   }
 
-  
   bool insert (T *elm) {
     if (head == NULL) {
+      sz++;
       insert_head (elm);
       return true;
     } else {
       int headcmp = cmp (elm->*key, head->*key);
       if (headcmp < 0) {
+	sz++;
 	insert_head (elm);
 	return true;
       } else if (headcmp == 0) {
@@ -190,10 +186,13 @@ class skiplist {
 	  update[i] = head;
 	lvl = newlvl;
       }
-      for (i = 0; i < lvl; i++) {
+      for (i = 0; i < newlvl; i++) {
 	(elm->*field).forward[i] = (update[i]->*field).forward[i];
 	(update[i]->*field).forward[i] = elm;
       }
+      for (i = newlvl; i < SKLIST_MAX_LEVS; i++)
+	(elm->*field).forward[i] = NULL;
+      
       if (x == NULL)
 	tail = elm;
       else
@@ -202,6 +201,7 @@ class skiplist {
     } else {
       return false; // no dupes
     }
+    sz++;
     return true;
   }
 
@@ -212,6 +212,7 @@ class skiplist {
     }
     if (cmp (head->*key, k) == 0) {
       T *next = (head->*field).forward[0];
+      sz--;
       if (next == NULL) {
 	head = NULL;
 	tail = NULL;
@@ -258,6 +259,7 @@ class skiplist {
 	(next->*field).previous = prev;
       else
 	tail = prev;
+      sz--;
       return x;
     } else {
       return NULL;
@@ -270,6 +272,10 @@ class skiplist {
 
   T *last () const {
     return tail;
+  }
+
+  unsigned int size () const {
+    return sz;
   }
   
   static T *next (T *elm) {
@@ -304,7 +310,7 @@ class skiplist {
       return true;
     }
 
-    T *p, *np, *cp;
+    T *p, *np;
 
     p = head;
     assert ((p->*field).previous == NULL);
