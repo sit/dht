@@ -38,7 +38,7 @@ convert_coords (dorpc_arg *arg)
 {
   vec<float> coords;
   for (unsigned int i = 0; i < arg->src_coords.size (); i++)
-    coords.push_back ((float)arg->src_coords[i]/1000.0);
+    coords.push_back ((float)arg->src_coords[i]);
   return coords;
 }
 
@@ -48,7 +48,7 @@ convert_coords (dorpc_res *res, vec<float> out)
 
   for (unsigned int i = 0; i < res->resok->src_coords.size (); i++) {
     warn << "converting: " << res->resok->src_coords[i] << "\n";
-    float c = ((float)res->resok->src_coords[i])/1000.0;
+    float c = ((float)res->resok->src_coords[i]);
     printf ("c:  %f\n", c);
     out.push_back (c);
   }

@@ -563,8 +563,6 @@ stp_manager::rpc_done (long acked_seqno)
     while ((args != next_arg) && (args->l->n != next_arg->l->n))
       args = Q.next (args);
 
-    warn << "first RPC in the queue is to " << Q.first->l->n << " we are sending to " << args->l->n << "\n";
-
     //stats
     long now = getusec ();
     long diff = now - args->now;

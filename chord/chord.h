@@ -203,7 +203,7 @@ class chord : public virtual refcount {
   ptr<u_int32_t> nrcv;
 
  public:
-  enum { NCOORDS = 2 };
+  enum { NCOORDS = 3 };
 
   // system wide default on the maximum number of vnodes/node.
   static const int max_vnodes;

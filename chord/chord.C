@@ -73,6 +73,7 @@ vnode_impl::vnode_impl (ptr<locationtable> _locations, ptr<fingerlike> stab,
 
   vec<float> coords;
   warn << gettime () << " coords are: ";
+
   for (int i = 0; i < chord::NCOORDS; i++) {
     coords.push_back (uniform_random_f (1000.0));
     warnx << (int)coords.back () << " " ;

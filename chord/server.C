@@ -296,7 +296,7 @@ user_args::reply (void *res)
   rpc_res->resok->src_vnode_num = myindex;
   rpc_res->resok->src_coords.setsize (coords.size ());
   for (unsigned int i = 0; i < coords.size (); i++)
-    rpc_res->resok->src_coords[i] = (int)(1000.0*coords[i]);
+    rpc_res->resok->src_coords[i] = (int)(coords[i]);
 
 
   rpc_res->resok->progno = prog->progno;
@@ -369,7 +369,7 @@ vnode_impl::doRPC_cb (const rpc_program prog, int procno,
     float distance = locations->get_a_lat (res->resok->src_id);
     vec<float> u_coords;
     for (unsigned int i = 0; i < res->resok->src_coords.size (); i++) {
-      float c = ((float)res->resok->src_coords[i])/1000.0;
+      float c = ((float)res->resok->src_coords[i]);
       u_coords.push_back (c);
     }
 
@@ -396,74 +396,100 @@ void
 vnode_impl::update_coords (chordID u, vec<float> uc, float ud)
 {
 
+
   //  warn << myID << " --- starting update -----\n";
   //update the node's coords in the locatoin table
   locations->set_coords (u, uc);
-  vec<float> coords = locations->get_coords (myID);
-
-  //figure out the force on us by looking at all of the springs
-  //in the location table
-  vec<float> f;
-  ptr<location> l = locations->first_loc ();
-  bool found_meas = false;
-
-  //init f
-  f.push_back (0.0);
-  f.push_back (0.0);
-
-  //  Coord::print_vector ("current coords ", coords);
-
-  while (l) {
-    if ((l->coords.size () > 0) && (l->n != myID)) {
-      //  warn << myID << " setting a spring to " << l->n << "\n";
-      // Coord::print_vector ("l->coords", l->coords);
-
-      float actual = l->distance;
-      float expect = Coord::distance_f (coords, l->coords);
-      //force magnitude: < 0 --> stretched
-      float grad = expect - actual;
-
-      //printf("actual %f, expect %f\n", actual, expect);
-      vec<float> v = Coord::vector_sub (l->coords, coords);
-      //Coord::print_vector ("v", v);
-
-      float len = Coord::norm (v);
-      float unit = 1.0/sqrtf(len);
-      
-      //scalar_mult(v, unit) is unit force vector
-      //f_p is scaled force vector for this spring
-      vec<float> f_p = Coord::scalar_mult(Coord::scalar_mult (v, unit), grad);
-      //Coord::print_vector ("f_p", f_p);
-
-      //add f_p into the true force vector
-      f = Coord::vector_add (f, f_p);
-
-      found_meas = true;
-    }
-    l = locations->next_loc(l->n);
-  }
-
-  //Coord::print_vector ("f", f);
-  if (!found_meas) {
-    warn << "no springs!\n";
-    return;
-  }
-
-  //run the simulation for a bit
+  int iterations = 0;
   float ftot = 0.0;
-  for (unsigned int k = 0; k < f.size (); k++)
-    ftot += fabs (f[k]);
-  
-  float t = DT;
-  while (ftot*t > 5.0) t /= 2.0;
-  vec<float> new_coords = Coord::vector_add (coords, Coord::scalar_mult(f, t));
-  
-  //Coord::print_vector("old", coords);
-  //Coord::print_vector("new", new_coords);
+  vec<float> coords = locations->get_coords (myID);
+  vec<float> f;
 
-  locations->set_coords (myID, new_coords);
+  do {
+    //figure out the force on us by looking at all of the springs
+    //in the location table
 
-  //warn << myID << " --- finished  update -----\n";
+    //init f
+    f.clear ();
+    for (int i = 0; i < chord::NCOORDS; i++)
+      f.push_back (0.0);
+
+    ptr<location> l = locations->first_loc ();
+    bool found_meas = false;
+    int cit = 0;
+
+    while (l) {
+      if ((l->coords.size () > 0) && (l->n != myID)) {
+
+	//  warn << myID << " setting a spring to " << l->n << "\n";
+	// print_vector ("l->coords", l->coords);
+
+	float actual = l->distance;
+	float expect = Coord::distance_f (coords, l->coords);
+
+
+	if (((expect > -1000000) && (expect < 1000000)) &&
+	      ((actual > -1000000) && (actual < 1000000)))
+	  {
+
+	    //force magnitude: > 0 --> stretched
+	    float grad = expect - actual;
+	    
+	    vec<float> v = l->coords;
+	    Coord::vector_sub (v, coords);
+	
+	    float len = Coord::norm (v);
+	    float unit = 1.0/sqrtf(len);
+	    
+	    //scalar_mult(v, unit) is unit force vector
+	    // times grad gives the scaled force vector
+	    Coord::scalar_mult (v, unit*grad);
+	    
+	    //add v into the overall force vector
+	    Coord::vector_add (f, v);
+	    
+	    //	Coord::print_vector ("f ", f);
+	    found_meas = true;
+	    cit++;
+	  } else {
+	    char b[1024];
+	    sprintf(b, "actual %f, expect %f\n", actual, expect);	  
+	    Coord::print_vector ("coords", coords);
+	    Coord::print_vector ("l->coords", l->coords);
+	    
+	    warn << "wierd alat or expect -----\n";
+	    warn << "spring from " << myID << " to " << l->n << " " << b; 
+	    
+	    warn << "wierd alat or expect ---- email stuff between these statements to fdabek@mit.edu\n";
+	  }
+      } 
+      l = locations->next_loc(l->n);
+    }
+    
+    //print_vector ("f", f);
+    if (!found_meas) {
+      warn << "no springs!\n";
+      return;
+    } 
+      
+    //run the simulation for a bit
+    ftot = 0.0;
+    for (unsigned int k = 0; k < f.size (); k++)
+      ftot += fabs (f[k]);
+
+    float t = DT;
+    while (ftot*t > 1000.0) t /= 2.0;
+
+    Coord::scalar_mult(f, t);
+    Coord::vector_add (coords, f);
+
+    //    Coord::print_vector ("f ", f);
+    //    Coord::print_vector("coords ", coords);
+    
+    iterations++;
+  } while (false);
+
+  locations->set_coords (myID, coords);
 }
 
 long

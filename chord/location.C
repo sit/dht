@@ -116,8 +116,8 @@ location::location (const chord_node &node)
   vnode = is_authenticID (n, addr.hostname, addr.port);
   if (vnode < 0) 
     loctrace << "badnode " << n << " " << addr << "\n";
-  //XXXXXX 
-  for (int i = 0; i < 3; i++)
+
+  for (unsigned int i = 0; i < node.coords.size (); i++)
     coords.push_back (node.coords[i]);
 }
 
@@ -303,7 +303,7 @@ locationtable::insert (const chord_node &n)
 {
   vec<float> coords;
   for (unsigned int i = 0; i < n.coords.size (); i++)
-    coords.push_back (((float)n.coords[i]) / 1000.0);
+    coords.push_back ((float)n.coords[i]);
   return insert (n.x, n.r.hostname, n.r.port, coords);
 }
 
@@ -479,7 +479,7 @@ locationtable::get_node (const chordID &x, chord_node *n)
 
   n->coords.setsize (l->coords.size ());
   for (unsigned int i = 0; i < l->coords.size (); i++)
-    n->coords[i] = (int)(l->coords[i]*1000.0);
+    n->coords[i] = (int)(l->coords[i]);
 
   return true;
 }
@@ -846,8 +846,11 @@ locationtable::remove (locwrap *lw)
 ptr<location>
 locationtable::first_loc ()
 {
-  locwrap *f = loclist.first ();
-  while (f && !f->loc_) f = loclist.next (f);
+  locwrap *f = cachedlocs.first;
+  while (f && !f->loc_) {
+    warn << "spinning in first_loc\n";
+    f = cachedlocs.next (f);
+  }
   if (!f) return NULL;
   return f->loc_;
 }
@@ -856,8 +859,12 @@ ptr<location>
 locationtable::next_loc (chordID n)
 {
   locwrap *f = locs[n];
-  locwrap *nn = loclist.next (f);
-  while (nn && !nn->loc_) nn = loclist.next (nn);
+  assert (f);
+  locwrap *nn = cachedlocs.next (f);
+  while (nn && !nn->loc_) {
+    warn << "spinning in next_loc\n";
+    nn = cachedlocs.next (nn);
+  }
   if (nn)
     return nn->loc_;
   else
