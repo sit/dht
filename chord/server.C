@@ -428,8 +428,8 @@ vnode_impl::update_coords (chordID u, vec<float> uc, float ud)
 	float expect = Coord::distance_f (coords, l->coords);
 
 
-	if (((expect > -1000000) && (expect < 1000000)) &&
-	      ((actual > -1000000) && (actual < 1000000)))
+	if (((expect >= 0) && (expect < 1000000)) &&
+	      ((actual >= 0) && (actual < 1000000)))
 	  {
 
 	    //force magnitude: > 0 --> stretched
@@ -451,6 +451,8 @@ vnode_impl::update_coords (chordID u, vec<float> uc, float ud)
 	    //	Coord::print_vector ("f ", f);
 	    found_meas = true;
 	    cit++;
+	  } else if(actual < 0) {
+	    // skip this node, we don't have latency information yet
 	  } else {
 	    char b[1024];
 	    sprintf(b, "actual %f, expect %f\n", actual, expect);	  

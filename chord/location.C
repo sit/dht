@@ -96,6 +96,7 @@ location::location (const chordID &_n,
     loctrace << "badnode " << n << " " << addr << "\n";
   for (unsigned int i = 0; i < i_coords.size (); i++)
     coords.push_back (i_coords[i]);
+  distance = -1;
 }
 
 location::location (const chord_node &node) 
