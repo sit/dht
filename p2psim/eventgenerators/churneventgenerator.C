@@ -197,16 +197,16 @@ ChurnEventGenerator::get_lookup_key()
       }
     }
     assert(0);
-  } else {
-    // look up random 64-bit keys
-    char buffer[20];
-    // random() returns only 31 random bits.
-    // so we need three to ensure all 64 bits are random.
-    unsigned long long a = random();
-    unsigned long long b = random();
-    unsigned long long c = random();
-    unsigned long long x = (a << 48) ^ (b << 24) ^ (c >> 4);
-    sprintf(buffer, "%llX", x);
-    return string(buffer);
   }
+  
+  // look up random 64-bit keys
+  char buffer[20];
+  // random() returns only 31 random bits.
+  // so we need three to ensure all 64 bits are random.
+  unsigned long long a = random();
+  unsigned long long b = random();
+  unsigned long long c = random();
+  unsigned long long x = (a << 48) ^ (b << 24) ^ (c >> 4);
+  sprintf(buffer, "%llX", x);
+  return string(buffer);
 }

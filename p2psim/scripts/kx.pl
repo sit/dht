@@ -10,6 +10,7 @@ my $nnodes = 1837; # Jinyang uses mostly 1024, also 1837
 my $diameter = 100; # diameter of Euclidean universe
 my $prefix = ""; # prefix to executable
 
+
 &process_args(@ARGV);
 @ARGV = ();
 
@@ -18,6 +19,8 @@ my $prefix = ""; # prefix to executable
 # Each line of output is x=bytes y=latency.
 
 # name, min, max
+
+my $kelips_k = int(sqrt($nnodes));
 my $param_lists = {
   "Kelips" =>
     [
@@ -28,20 +31,20 @@ my $param_lists = {
      [ "contact_ration", 1, 4, 16 ],
      [ "n_contacts", 2, 4, 8 ],
      [ "item_rounds", 0, 1, 4 ],
-     [ "timeout", 5000, 10000, 20000, 40000 ]
+     [ "timeout", 5000, 10000, 20000, 40000 ],
+     [ "k", $kelips_k ],
     ],
 
   "Kademlia" =>
     [
      [ "alpha", 1, 2, 3, 4, 5 ],
      [ "k", 8, 16, 32 ],
-     [ "stabtimer", 2000, 4000, 8000, 16000, 32000 ],
+     [ "stabilize_timer", 2000, 4000, 8000, 16000, 32000 ],
+     [ "refresh_rate",   2000, 4000, 8000, 16000, 32000 ],
     ],
 };
 
 my $params = $param_lists->{$protocol};
-
-my $k = int(sqrt($nnodes));
 
 # if defined, use this rather than random euclidean.
 my $king;
@@ -78,7 +81,7 @@ my $iters;
 for($iters = 0; $iters < 500; $iters++){
     print "# ";
     open(PF, ">$pf");
-    print PF "$protocol k=$k ";
+    print PF "$protocol ";
     my $pi;
     my %pv;
     for($pi = 0; $pi <= $#$params; $pi++){

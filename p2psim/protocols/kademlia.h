@@ -135,7 +135,7 @@ public:
   //
   // non-static utility methods
   //
-  void do_lookup_wrapper(k_nodeinfo*, NodeID);
+  // void do_lookup_wrapper(k_nodeinfo*, NodeID);
 
   //
   // observer methods
@@ -236,6 +236,7 @@ private:
   // vector<unsigned> stat;
   // vector<unsigned> num_msgs;
   void record_stat(stat_type, unsigned, unsigned);
+  friend class k_stabilizer;
   void update_k_bucket(NodeID, IPAddress);
   void clear();
 
