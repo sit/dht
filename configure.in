@@ -1,4 +1,4 @@
-dnl $Id: configure.in,v 1.17 2002/05/01 20:34:56 jsr Exp $
+dnl $Id: configure.in,v 1.18 2002/06/13 07:03:01 thomer Exp $
 dnl
 dnl Process this file with autoconf to produce a configure script.
 dnl
@@ -80,4 +80,5 @@ AC_SUBST(ETAGS_ARGS)
 AC_OUTPUT(Makefile svc/Makefile  
 	sfsrodb/Makefile dhash/Makefile lsd/Makefile
 	chord/Makefile chordcd/Makefile melody/Makefile
-	 devel/Makefile ddns/Makefile ddns/ddnsq/Makefile)
+	 devel/Makefile ddns/Makefile ddns/ddnsq/Makefile
+         test/Makefile)
