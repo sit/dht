@@ -12,7 +12,6 @@ using namespace std;
 #define WINX 700
 #define WINY 700
 #define PI 3.14159
-#define TIMEOUT 10
 
 #define NELEM(x)	(sizeof (x)/ sizeof ((x)[0]))
 
@@ -51,6 +50,10 @@ static GtkWidget *drawing_area_r = NULL;
 static GdkGC *draw_gc = NULL;
 static GdkColormap *cmap = NULL;
 static GdkFont *courier10 = NULL;
+static GtkAdjustment *bar = NULL;
+static GtkWidget *scroll;
+static GdkColor red;
+static GdkColor search_color;
 
 static GtkWidget *last_clicked;
 static GtkWidget *total_nodes;
@@ -67,9 +70,14 @@ static float zoomx = 1.0;
 static float zoomy = 1.0;
 static float centerx = 0.0;
 static float centery = 0.0;
+static int radius = 5;
 
 static bool ggeo = false;
 static bool displaysearch = false;
+
+static ulong begin = 0;
+static ulong endofsim = 1000;
+static ulong time;
 
 struct color_pair {
   GdkColor c;
@@ -123,6 +131,7 @@ void draw_nothing_cb (GtkWidget *widget, gpointer data);
 
 void run_cb (GtkWidget *widget, gpointer data);
 void step_cb (GtkWidget *widget, gpointer data);
+void scroll_cb (GtkAdjustment *adj, gpointer data);
 
 void quit_cb (GtkWidget *widget, gpointer data);
 void redraw_cb (GtkWidget *widget, gpointer data);
@@ -213,7 +222,8 @@ redraw()
   update_rect.width = WINX;
   update_rect.height = WINY;
 
-  gtk_widget_draw( drawing_area, &update_rect);
+  gtk_widget_draw(drawing_area, &update_rect);
+  gtk_widget_show(scroll);
 }
 
 void
@@ -243,12 +253,100 @@ draw_arrow (int fromx, int fromy,
   head[2].x = (gint)p2x;
   head[2].y = (gint)p2y;
 
-  gdk_draw_polygon (pixmap,
-		    draw_gc,
-		    true,
-		    head,
-		    3);
+  gdk_draw_polygon (pixmap, draw_gc, true, head, 3);
 }
+
+void
+draw_fingers (f_node *iter, bool all)
+{
+  int x, y;
+
+  ID_to_xy (iter->id, &x, &y);
+
+  if (all || ((iter->draw & DRAW_IMMED_PRED) == DRAW_IMMED_PRED)) {
+    int a,b;
+    ID_to_xy (iter->pred, &a, &b);
+    draw_arrow (x, y, a, b, draw_gc);
+  }
+
+  if (all || ((iter->draw & DRAW_IMMED_SUCC) == DRAW_IMMED_SUCC)) {
+    int a,b;
+    ID_to_xy (iter->succ, &a, &b);
+    draw_arrow (x, y, a, b, draw_gc);
+  }
+
+  if (all || ((iter->draw & DRAW_SUCC_LIST) == DRAW_SUCC_LIST)) {
+    for (uint j = 0; j < iter->succlist.size (); j++) {
+      int a,b;
+      ID_to_xy (iter->succlist[j], &a, &b);
+      draw_arrow (x, y, a, b, draw_gc);
+    }
+  }
+
+  if (all || ((iter->draw & DRAW_DEBRUIJN) == DRAW_DEBRUIJN)) {
+    int a, b;
+    ID_to_xy (iter->debruijn, &a, &b);
+
+    gdk_gc_set_foreground (draw_gc, &red);
+    draw_arrow (x, y, a, b,  draw_gc);
+    gdk_gc_set_foreground (draw_gc, &GCValues.foreground);
+
+    for (uint j = 0; j < iter->dfingers.size (); j++) {
+      int a, b;
+      ID_to_xy (iter->dfingers[j], &a, &b);
+      draw_arrow (x, y, a, b, draw_gc);
+    }
+  }
+}
+
+void
+draw_node (f_node *iter)
+{
+  int x, y;
+  int rad = radius + 2;
+
+  ID_to_xy (iter->id, &x, &y);
+
+  gdk_draw_arc (pixmap, draw_gc, FALSE, x - rad, y - rad, 2*rad, 
+		2*rad, (gint16)0, (gint16)64*360);
+
+  if (drawids) {
+    char ids[128];
+    sprintf (ids, "%16qx", iter->id);
+    int fudge = -10;
+    if (x < WINX/2) fudge = 0;
+    gdk_draw_string (pixmap, courier10, drawing_area->style->black_gc, 
+		     x + fudge, y, ids);
+  }
+
+  draw_fingers (iter, false);
+
+  if (iter->search.size () > 0) {
+    int k, l;
+    ID_to_xy (iter->key, &k, &l);
+
+    gdk_gc_set_foreground (draw_gc, &red);
+
+    gdk_draw_arc (pixmap, draw_gc, FALSE, k - radius, l - radius,
+		  2*radius, 2*radius, (gint16)0, (gint16)64*360);
+
+    gdk_gc_set_foreground (draw_gc, &search_color);
+
+    for (uint j = 0; j < iter->search.size (); j++) {
+      int a, b;
+      ID_to_xy (iter->search[j], &a, &b);
+      draw_arrow (x, y, a, b, draw_gc);
+      x = a;
+      y = b;
+    }
+
+    gdk_gc_set_foreground (draw_gc, &GCValues.foreground);
+
+    uint i = find(iter->search.back ());
+    draw_fingers (&(nodes[i]), true);
+  }
+}
+
 
 void
 draw_ring ()
@@ -256,112 +354,20 @@ draw_ring ()
   int x, y;
   GtkWidget *widget = drawing_area;
 
-  GdkColor red;
-  gdk_color_parse ("red", &red);
-
-  gdk_draw_rectangle (pixmap,
-		      widget->style->white_gc,
-		      TRUE,
-		      0,0,
-		      WINX, WINY);
-  gdk_draw_rectangle (pixmap,
-		      widget->style->black_gc,
-		      FALSE,
-		      0,0,
+  gdk_draw_rectangle (pixmap, widget->style->white_gc, TRUE, 0, 0, WINX, WINY);
+  gdk_draw_rectangle (pixmap, widget->style->black_gc, FALSE, 0, 0, 
 		      WINX - 1, WINY - 1);
 
   for (vector<f_node>::iterator iter = nodes.begin (); iter != nodes.end (); 
        ++iter) {
-    int radius = 5;
+
     ID_to_xy (iter->id, &x, &y);
 
-    gdk_draw_arc (pixmap,
-		  draw_gc,
-		  TRUE,
-		  x - radius, y - radius,
-		  2*radius, 2*radius,
-		  (gint16)0, (gint16)64*360);
+    gdk_draw_arc (pixmap, draw_gc, TRUE, x - radius, y - radius,
+		  2*radius, 2*radius, (gint16)0, (gint16)64*360);
 
     if (iter->selected) {
-      radius += 2;
-      gdk_draw_arc (pixmap,
-		    draw_gc,
-		    FALSE,
-		    x - radius, y - radius,
-		    2*radius, 2*radius,
-		    (gint16)0, (gint16)64*360);
-
-      if (drawids) {
-	char ids[128];
-	sprintf (ids, "%16qx", iter->id);
-	int fudge = -10;
-	if (x < WINX/2) fudge = 0;
-	gdk_draw_string (pixmap,
-			 courier10,
-			 widget->style->black_gc,
-			 x + fudge,y,
-			 ids);
-
-      }
-
-      if ((iter->draw & DRAW_IMMED_PRED) == DRAW_IMMED_PRED) {
-	int a,b;
-	ID_to_xy (iter->pred, &a, &b);
-	draw_arrow (x,y, a, b, draw_gc);
-      }
-
-      if ((iter->draw & DRAW_IMMED_SUCC) == DRAW_IMMED_SUCC) {
-	int a,b;
-	ID_to_xy (iter->succ, &a, &b);
-	draw_arrow (x,y, a, b, draw_gc);
-      }
-
-      if ((iter->draw & DRAW_SUCC_LIST) == DRAW_SUCC_LIST) {
-	for (uint j = 0; j < iter->succlist.size (); j++) {
-	  int a,b;
-	  ID_to_xy (iter->succlist[j], &a, &b);
-	  draw_arrow (x, y, a, b, draw_gc);
-	}
-      }
-
-      if ((iter->draw & DRAW_DEBRUIJN) == DRAW_DEBRUIJN) {
-	int a, b;
-	ID_to_xy (iter->debruijn, &a, &b);
-
-	gdk_gc_set_foreground (draw_gc, &red);
-	draw_arrow (x, y, a, b,  draw_gc);
-	gdk_gc_set_foreground (draw_gc, &GCValues.foreground);
-
-	for (uint j = 0; j < iter->dfingers.size (); j++) {
-	  int a, b;
-	  ID_to_xy (iter->dfingers[j], &a, &b);
-	  draw_arrow (x, y, a, b, draw_gc);
-	}
-      }
-
-      if (iter->search.size () > 0) {
-	int k, l;
-	ID_to_xy (iter->key, &k, &l);
-
-	gdk_gc_set_foreground (draw_gc, &red);
-
-        gdk_draw_arc (pixmap,
-		      draw_gc,
-		      FALSE,
-		      k - radius, l - radius,
-		      2*radius, 2*radius,
-		      (gint16)0, (gint16)64*360);
-
-	gdk_gc_set_foreground (draw_gc, &GCValues.foreground);
-
-	for (uint j = 0; j < iter->search.size (); j++) {
-	  int a, b;
-	  ID_to_xy (iter->search[j], &a, &b);
-	  draw_arrow (x, y, a, b, draw_gc);
-	  x = a;
-	  y = b;
-	}
-      }
+      draw_node (iter);
     }
   }
   
@@ -423,17 +429,27 @@ split(string line, string delims = " \t")
   return words;
 }
 
-void
-doevent (bool single)
+bool
+doevent (ulong t)
 {
   string line;
-  int a = interval;
+  ulong ts = time;
+  bool step = false;
+
+  if ((ts >= t) || (time >= endofsim)) {
+    return (step);
+  }
 
   while (getline (in, line)) {
     vector <string> words = split (line);
 
     if (words.empty () || (words[0] != "vis")) 
       continue;
+
+    ulong ts1 = atoi(words[1].c_str ());
+
+    assert (ts1 >= ts);
+    ts = ts1;
 
     if (words[2] == "node") {
       ConsistentHash::CHID id = strtoull (words[3].c_str (), NULL, 16);
@@ -487,7 +503,8 @@ doevent (bool single)
       uint i = find (id);
       nodes[i].key = strtoull (words[4].c_str (), NULL, 16);
       nodes[i].search.clear ();
-      if (displaysearch) single = true;
+
+      if (displaysearch) step = true;
     }
 
     if (words[2] == "step") {
@@ -495,19 +512,31 @@ doevent (bool single)
       uint i = find (id);
       ConsistentHash::CHID n = strtoull (words[4].c_str (), NULL, 16);
       nodes[i].search.push_back(n);
+
+      if (displaysearch) step = true;
     }
 
-    a--;
-    if (a <= 0) {
-      draw_ring ();
-      a = interval;
-      if (single) return;
-    }
+    if ((ts >= t) || step) break;
   }
+
+  time = ts;
+
+  if (!step && (time < t))  { // reached end of file?
+    printf ("end of file\n");
+    endofsim = time;
+  } else {
+    endofsim = time + interval;
+  }
+
+  while (endofsim >= bar->upper) {
+    bar->upper = 2 * bar->upper;
+  }
+  bar->value = time;
+  gtk_adjustment_set_value (bar, time);
 
   draw_ring ();
 
-  printf ("no events\n");
+  return (step);
 }
     
 
@@ -604,13 +633,17 @@ initgraf ()
   GtkWidget *hsep4 = gtk_hseparator_new ();
 
   GtkWidget *in = gtk_button_new_with_label ("Recenter");
-  GtkWidget *search = gtk_button_new_with_label ("Search");
-  GtkWidget *run = gtk_button_new_with_label ("Continue");
+  GtkWidget *search = gtk_button_new_with_label ("Step search");
+  GtkWidget *run = gtk_button_new_with_label ("Run");
   GtkWidget *step = gtk_button_new_with_label ("Step");
   GtkWidget *quit = gtk_button_new_with_label ("Quit");
   GtkWidget *sep = gtk_vseparator_new ();
   GtkWidget *geo = gtk_button_new_with_label ("Geo. View");
   GtkWidget *dump_to_file = gtk_button_new_with_label ("Save...");
+  bar = (GtkAdjustment *) gtk_adjustment_new (0, begin, endofsim, interval, 
+					  interval, 100);
+  scroll = gtk_hscrollbar_new ((GtkAdjustment *)bar);
+  gtk_range_set_update_policy (GTK_RANGE (scroll), GTK_UPDATE_CONTINUOUS);
 
   //organize things into boxes
   GtkWidget *vbox = gtk_vbox_new (FALSE, 0);
@@ -629,6 +662,7 @@ initgraf ()
   gtk_box_pack_end (GTK_BOX (vbox), quit, FALSE, FALSE, 0);
   gtk_box_pack_end (GTK_BOX (vbox), run, FALSE, FALSE, 0);
   gtk_box_pack_end (GTK_BOX (vbox), step, FALSE, FALSE, 0);
+  gtk_box_pack_end (GTK_BOX (vbox), scroll, FALSE, FALSE, 0);
   gtk_box_pack_end (GTK_BOX (vbox), search, FALSE, FALSE, 0);
   gtk_box_pack_end (GTK_BOX (vbox), dump_to_file, FALSE, FALSE, 0);
   gtk_box_pack_end (GTK_BOX (vbox), geo, FALSE, FALSE, 0);
@@ -659,7 +693,6 @@ initgraf ()
   gtk_signal_connect_object (GTK_OBJECT (in), "clicked",
 			       GTK_SIGNAL_FUNC (zoom_in_cb),
 			       NULL);
-
   gtk_signal_connect_object (GTK_OBJECT (quit), "clicked",
 			       GTK_SIGNAL_FUNC (quit_cb),
 			       NULL);
@@ -668,6 +701,9 @@ initgraf ()
 			       NULL);
   gtk_signal_connect_object (GTK_OBJECT (step), "clicked",
 			       GTK_SIGNAL_FUNC (step_cb),
+			       NULL);
+  gtk_signal_connect (GTK_OBJECT (bar), "value_changed",
+			       GTK_SIGNAL_FUNC (scroll_cb),
 			       NULL);
   gtk_signal_connect_object (GTK_OBJECT (geo), "clicked",
 			     GTK_SIGNAL_FUNC (geo_cb),
@@ -721,10 +757,19 @@ initgraf ()
   gtk_widget_show (hsep4);
   gtk_widget_show (hbox);
   gtk_widget_show (vbox);
+  gtk_widget_show (scroll);
 
   gtk_widget_show (window);
 
   init_color_list (color_file);
+
+  if (!gdk_color_parse ("red", &red) ||
+      !gdk_colormap_alloc_color (cmap, &red, FALSE, TRUE))
+    cerr << "Couldn't allocate search color red\n";
+
+  if (!gdk_color_parse ("green", &search_color) ||
+      !gdk_colormap_alloc_color (cmap, &search_color, FALSE, TRUE))
+    cerr << "Couldn't allocate search color maroon\n";
 }
 
 
@@ -791,11 +836,11 @@ draw_nothing_cb (GtkWidget *widget, gpointer data)
     nodes[i].selected = false;
     nodes[i].highlight = false;
     nodes[i].draw = 0;
+    nodes[i].search.clear ();
   }
   check_set_state (0);
   draw_ring ();
 }
-
 
 void
 dump_cb (GtkWidget *widget, gpointer data)
@@ -831,7 +876,7 @@ key_release_event (GtkWidget *widget, GdkEventKey *event, gpointer data)
   switch (event->keyval) {
   case 'n':
     {
-      doevent (true);
+      doevent (time + interval);
       break;
     }
   case 'q':
@@ -910,18 +955,33 @@ button_down_event (GtkWidget *widget, GdkEventButton *event, gpointer data)
   return TRUE;
 }
 
-
 void
 run_cb (GtkWidget *widget, gpointer data)
 {
-  doevent (false);
+  while (time < endofsim) {
+    if (doevent (time + interval))
+      return;
+  }
 }
-
 
 void
 step_cb (GtkWidget *widget, gpointer data)
 {
-  doevent (true);
+  (void) doevent (time + interval);
+}
+
+void
+scroll_cb (GtkAdjustment *adj, gpointer data)
+{
+  ulong t;
+
+  if (adj->value < time) {
+    draw_nothing_cb ((GtkWidget *) adj, data);
+    in.seekg (0);
+    time = 0;
+  }
+  t = (ulong) (adj->value);
+  (void) doevent (t);
 }
 
 void 
