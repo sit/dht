@@ -5,6 +5,9 @@
 #include <location.h>
 #include <locationtable.h>
 #include <modlogger.h>
+#ifdef DMALLOC
+#include <dmalloc.h>
+#endif
 
 #define warning modlogger ("recroute", modlogger::WARNING)
 #define info    modlogger ("recroute", modlogger::INFO)

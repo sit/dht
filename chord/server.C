@@ -682,7 +682,7 @@ vnode_impl::update_error (float actual, float expect, float rmt_err)
   if (pred_err < 0)
     npe = rel_error;
   else if (rmt_err < 0)
-    ;
+    npe = pred_err;
   else {
     // ce is our pred error, he is the remote pred error
     // squaring them punishes high error nodes relatively more.
