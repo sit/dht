@@ -7,7 +7,7 @@
 #include <map>
 using namespace std;
 
-// just like a node, but can does guesses as to its own location
+// just like a node, but does Vivaldi stuff
 class VivaldiNode : public Node {
 public:
   typedef pair<double, double> Coord;

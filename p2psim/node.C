@@ -98,7 +98,7 @@ Node::run()
 
 
 //
-//
+// sendPacket should only be used by
 //
 bool
 Node::sendPacket(IPAddress dst, Packet *p)
@@ -123,6 +123,10 @@ Node::sendPacket(IPAddress dst, Packet *p)
 }
 
 
+//
+// Receive is only invoked for the first half of the RPC.  The reply goes
+// directly to the appropriate channel.
+//
 void
 Node::Receive(void *px)
 {
@@ -136,12 +140,12 @@ Node::Receive(void *px)
   // send it up to the protocol
   (proto->*(p->_fn))(p->_args, p->_ret);
 
-  // send reply
+  // make reply
   Packet *reply = new Packet();
   reply->_c = p->_c;
   reply->_src = p->_dst;
   reply->_dst = p->_src;
-  reply->_ret = p->_ret; // contains the reply
+  reply->_ret = p->_ret; // the reply for the layer above
 
   // send it back
   send(Network::Instance()->pktchan(), &reply);

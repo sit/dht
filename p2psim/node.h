@@ -21,17 +21,13 @@ public:
   Channel *pktchan() { return _pktchan; }
   Channel *protchan() { return _protchan; }
   Protocol *getproto(string p) { return _protmap[p]; }
-  Protocol *getproto(const type_info &);
-
-  // Sends whatever data to the specified protocol on the node with the
-  // specified IPAddress.
   virtual bool sendPacket(IPAddress, Packet*);
 
 private:
   virtual void run();
   static void Receive(void*);
 
-  IPAddress _ip;
+  IPAddress _ip;        // my ip address
   Channel *_pktchan;    // for packets
   Channel *_protchan;   // to register protocols
 

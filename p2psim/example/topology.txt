@@ -1,7 +1,7 @@
 # topology file must start with keyword topology
 #
 # topology Euclidean
-#   node-id x,y prot [prot [prot [...]]]
+#   node-id x,y nodetype prot [prot [prot [...]]]
 
 topology Euclidean
 
