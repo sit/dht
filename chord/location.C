@@ -90,9 +90,6 @@ locationtable::initialize_rpcs ()
 
 locationtable::locationtable (ptr<chord> _chordnode, int _max_cache)
   : chordnode (_chordnode),
-#ifdef PNODE
-    myvnode (NULL),
-#endif /* PNODE */
     good (0),
     size_cachedlocs (0),
     max_cachedlocs (_max_cache), 
@@ -108,9 +105,6 @@ locationtable::locationtable (ptr<chord> _chordnode, int _max_cache)
 locationtable::locationtable (const locationtable &src)
 {
   chordnode = src.chordnode;
-#ifdef PNODE  
-  myvnode = NULL;
-#endif /* PNODE */  
   max_cachedlocs = src.max_cachedlocs;
 
   initialize_rpcs ();
@@ -252,10 +246,6 @@ locationtable::cacheloc (const chordID &x, net_address &r, cbchallengeID_t cb)
     if (cb != cbchall_null)
       cb (x, lx->loc_->challenged, CHORD_OK);
   }
-#ifdef PNODE
-  // if (myvnode)
-  //   warnx << myvnode->myID << " ";
-#endif /* PNODE */
   // warnx << "CACHELOC (" << state << "): " << x << " at port " << r.port << "\n";
 }
 
@@ -715,10 +705,6 @@ locationtable::check_dead ()
 {
   for (locwrap *l = cachedlocs.first; l != NULL; l = cachedlocs.next (l)) {
     if ((l->type_ & LOC_REGULAR) && !l->loc_->alive) {
-#ifdef PNODE
-      if (myvnode)
-	warnx << myvnode->myID << " ";
-#endif /* PNODE */
       warnx << "check_dead: " << l->loc_->n << "\n";
       nout_continuous++;
       // make sure we actually go out on the network and check if the node

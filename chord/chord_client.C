@@ -151,20 +151,10 @@ chord::newvnode (cbjoin_t cb, ptr<fingerlike> fingers, ptr<route_factory> f)
   if (newID != wellknownID)
     locations->insertgood (newID, myname, myport);
 
-  ptr<locationtable> nlocations = locations;
-#ifdef PNODE
-  // First vnode gets the regular table, other ones get a fresh copy.
-  if (nvnode > 0)
-    nlocations = New refcounted<locationtable> (*locations);
-#endif /* PNODE */  
-  
-  ptr<vnode> vnodep = New refcounted<vnode> (nlocations, fingers, f,
+  ptr<vnode> vnodep = New refcounted<vnode> (locations, fingers, f,
 					     mkref (this), newID, 
 					     nvnode, ss_mode,
 					     lookup_mode);
-#ifdef PNODE
-  nlocations->setvnode (vnodep);
-#endif /* PNODE */
   f->setvnode (vnodep);
 
   if (!active) active = vnodep;
@@ -173,7 +163,7 @@ chord::newvnode (cbjoin_t cb, ptr<fingerlike> fingers, ptr<route_factory> f)
   vnodes.insert (newID, vnodep);
 
   // Must block until at least one good node in table...
-  while (!nlocations->challenged (wellknownID)) {
+  while (!locations->challenged (wellknownID)) {
     warnx << newID << ": Waiting for challenge of wellknown ID: " 
 	  << wellknownID << "\n";
     acheck ();
@@ -199,9 +189,7 @@ chord::stats ()
   warnx << "CHORD NODE STATS\n";
   warnx << "# vnodes: " << nvnode << "\n";
   vnodes.traverse (wrap (this, &chord::stats_cb));
-#ifndef PNODE  
   locations->stats ();
-#endif /* PNODE */ 
 }
 
 void

@@ -83,9 +83,6 @@ class locationtable : public virtual refcount, public stabilizable {
   };
   
   ptr<chord> chordnode;
-#ifdef PNODE
-  ptr<vnode> myvnode;
-#endif /* PNODE */
   ptr<rpc_manager> hosts;
 
   // Indices into our locations... for O(1) access, for expiring,
@@ -132,9 +129,6 @@ class locationtable : public virtual refcount, public stabilizable {
   u_long estimate_nodes ();
   void replace_estimate (u_long o, u_long n);
 
-#ifdef PNODE
-  void setvnode (ptr<vnode> v) { myvnode = v; }
-#endif /* PNODE */  
   void incvnodes () { nvnodes++; };
   
   void insertgood (const chordID &n, sfs_hostname s, int p);

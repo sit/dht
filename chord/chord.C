@@ -66,13 +66,6 @@ vnode::vnode (ptr<locationtable> _locations, ptr<fingerlike> stab,
     toes->init (mkref(this), locations, myID);
     stabilizer->register_client (toes);
   }
-
-#ifndef PNODE
-  // If vnode's share a locationtable, then we don't need to register this
-  // more than once.
-  if (myindex == 0)
-#endif /* PNODE */    
-    stabilizer->register_client (locations);
     
   locations->incvnodes ();
 
@@ -170,10 +163,6 @@ vnode::stats ()
   warnx << "# notify calls " << nnotify << "\n";  
   warnx << "# alert calls " << nalert << "\n";  
   warnx << "# getfingers calls " << ngetfingers << "\n";
-#ifdef PNODE
-  // Each node has its own location table in this case.
-  locations->stats ();
-#endif /* PNODE */  
 }
 
 void

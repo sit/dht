@@ -372,11 +372,7 @@ main (int argc, char **argv)
     usage ();
   }
   
-#ifdef PNODE  
-  warn << "Chord nodes will emulate physical nodes.\n";
-#else /* PNODE */  
   max_loccache = max_loccache * (vnode + 1);
-#endif /* PNODE */  
 
   chordnode = New refcounted<chord> (wellknownhost, wellknownport,
 				     myname,
