@@ -436,6 +436,7 @@ main (int argc, char **argv)
   str wellknownhost;
   int wellknownport = 0;
   int nreplica = 0;
+  bool replicate = true;
   str db_name = "/var/tmp/db";
   p2psocket = "/tmp/chord-sock";
   ctlsocket = "/tmp/lsdctl-sock";
@@ -445,7 +446,7 @@ main (int argc, char **argv)
 
   char *cffile = NULL;
 
-  while ((ch = getopt (argc, argv, "b:C:d:fFj:l:L:M:m:n:O:Pp:S:s:T:tv:"))!=-1)
+  while ((ch = getopt (argc, argv, "b:C:d:fFj:l:L:M:m:n:O:Pp:rS:s:T:tv:"))!=-1)
     switch (ch) {
     case 'b':
       lbase = atoi (optarg);
@@ -531,6 +532,9 @@ main (int argc, char **argv)
     case 'p':
       myport = atoi (optarg);
       break;
+    case 'r':
+      replicate = false;
+      break;
     case 'S':
       p2psocket = optarg;
       break;
@@ -599,6 +603,9 @@ main (int argc, char **argv)
       warnx << "logbase " << lbase << " only supported in debruijn\n";
     Configurator::only ().set_int ("debruijn.logbase", lbase);
   }
+
+  if (!replicate)
+    Configurator::only ().set_int ("dhash.start_maintenance", 0);
 
   Configurator::only ().dump ();
   

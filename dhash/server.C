@@ -83,6 +83,8 @@ dhash_config_init::dhash_config_init ()
   ok = ok && set_int ("dhash.replica", 5);
   /** How frequently to sync database to disk */
   ok = ok && set_int ("dhash.sync_timer", 30);
+  /** Should replication run initially? */
+  ok = ok && set_int ("dhash.start_maintenance", 1);
 
   // Josh magic....
   ok = ok && set_int ("dhash.missing_outstanding_max", 15);
@@ -236,7 +238,11 @@ dhash_impl::init_after_chord (ptr<vnode> node)
   delaycb (synctm (), wrap (this, &dhash_impl::sync_cb));
   pmaint_obj = New pmaint (cli, host_node, db, 
 			   wrap (this, &dhash_impl::db_delete_immutable));
-  start ();
+
+  int v;
+  bool ok = Configurator::only ().get_int ("dhash.start_maintenance", v);
+  if (!ok || v)
+    start ();
 }
 
 
