@@ -192,19 +192,19 @@ dhashcli::retrieve (chordID blockID, bool askforlease,
 {
   ///warn << "dhashcli::retrieve\n";
 
-  route_dhash *iterator = New route_dhash(r_factory, 
-					  blockID,
-					  dh,
-					  askforlease,
-					  usecachedsucc);
+  ref<route_dhash> iterator = New refcounted<route_dhash>(r_factory, 
+							  blockID,
+							  dh,
+							  askforlease,
+							  usecachedsucc);
   
 
   iterator->execute (wrap (this, &dhashcli::retrieve_hop_cb, 
-			   iterator, cb, blockID));
+			   cb, blockID));
 }
 
 void
-dhashcli::retrieve_hop_cb (route_dhash *iterator, cbretrieve_t cb, chordID key,
+dhashcli::retrieve_hop_cb (cbretrieve_t cb, chordID key,
 			   dhash_stat status, 
 			   ptr<dhash_block> blk, 
 			   route path) 
@@ -216,7 +216,6 @@ dhashcli::retrieve_hop_cb (route_dhash *iterator, cbretrieve_t cb, chordID key,
     cb (blk); 
     cache_block (blk, path, key);
   }
-  delete iterator;
 }
 
 void
@@ -248,24 +247,21 @@ dhashcli::finish_cache (dhash_stat status, chordID dest)
 void
 dhashcli::retrieve (chordID source, chordID blockID, cbretrieve_t cb)
 {
-  route_dhash *iterator = New route_dhash(r_factory, 
-					  blockID, dh);
+  ref<route_dhash> iterator = New refcounted<route_dhash>(r_factory, 
+							 blockID, dh);
 
-  iterator->execute (wrap (this, &dhashcli::retrieve_with_source_cb, 
-			   iterator, cb), 
+  iterator->execute (wrap (this, &dhashcli::retrieve_with_source_cb, cb), 
 		     source);  
 }
 
 void
-dhashcli::retrieve_with_source_cb (route_dhash *iterator, cbretrieve_t cb, 
-				   dhash_stat status, 
+dhashcli::retrieve_with_source_cb (cbretrieve_t cb, dhash_stat status, 
 				   ptr<dhash_block> block, route path)
 {
   if (status) 
     (*cb) (NULL);
   else 
     cb (block); 
-  delete iterator;
 }
 
 void

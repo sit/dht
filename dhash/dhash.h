@@ -363,7 +363,7 @@ typedef callback<void, dhash_stat, chordID>::ref dhashcli_lookupcb_t;
 typedef callback<void, dhash_stat, chordID, route>::ref dhashcli_routecb_t;
 
 
-class route_dhash {
+class route_dhash : public virtual refcount {
   
 public:
   route_dhash (ptr<route_factory> f,
@@ -423,12 +423,11 @@ private:
 
   void lookup_findsucc_cb (chordID blockID, dhashcli_lookupcb_t cb,
 			   chordID succID, route path, chordstat err);
-  void retrieve_hop_cb (route_dhash *iterator, 
-			cbretrieve_t cb, chordID key, dhash_stat status,
+  void retrieve_hop_cb (cbretrieve_t cb, chordID key, dhash_stat status,
 			ptr<dhash_block> block, route path);
   void cache_block (ptr<dhash_block> block, route search_path, chordID key);
   void finish_cache (dhash_stat status, chordID dest);
-  void retrieve_with_source_cb (route_dhash *iterator, cbretrieve_t cb, dhash_stat status, 
+  void retrieve_with_source_cb (cbretrieve_t cb, dhash_stat status, 
 				ptr<dhash_block> block, route path);
   void insert_lookup_cb (chordID blockID, ref<dhash_block> block,
 			 cbinsert_t cb, dhash_stat status, chordID destID);

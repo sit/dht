@@ -43,7 +43,8 @@ route_dhash::route_dhash (ptr<route_factory> f,
   arg->nonce = gnonce++;
   arg->lease = ask_for_lease;
 
-  dh->register_block_cb (arg->nonce, wrap (this, &route_dhash::block_cb));
+  dh->register_block_cb (arg->nonce, wrap (mkref(this), 
+					   &route_dhash::block_cb));
   chord_iterator = f->produce_iterator_ptr (xi, dhash_program_1, DHASHPROC_FETCHITER, arg);
 };
 
@@ -55,7 +56,7 @@ void
 route_dhash::execute (cb_ret cbi, chordID first_hop)
 {
   cb = cbi;
-  dcb = delaycb (LOOKUP_TIMEOUT, wrap (this, &route_dhash::timed_out));
+  dcb = delaycb (LOOKUP_TIMEOUT, wrap (mkref(this), &route_dhash::timed_out));
   chord_iterator->send (first_hop);
 }
 
@@ -63,7 +64,7 @@ void
 route_dhash::execute (cb_ret cbi)
 {
   cb = cbi;
-  dcb = delaycb (LOOKUP_TIMEOUT, wrap (this, &route_dhash::timed_out));
+  dcb = delaycb (LOOKUP_TIMEOUT, wrap (mkref(this), &route_dhash::timed_out));
   chord_iterator->send (use_cached_succ);
 }
 
@@ -124,7 +125,8 @@ route_dhash::block_cb (s_dhash_block_arg *arg)
       ptr<dhash_fetchiter_res> res = New refcounted<dhash_fetchiter_res> ();
       f->get_vnode ()->doRPC (sourceID, dhash_program_1, DHASHPROC_FETCHITER, 
 			   arg, res,
-			   wrap (this, &route_dhash::finish_block_fetch, res));
+			   wrap (mkref(this), 
+				 &route_dhash::finish_block_fetch, res));
       nread += length;
     }
   //process the first block
