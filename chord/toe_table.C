@@ -56,7 +56,7 @@ toe_table::prune_toes (int level)
 void
 toe_table::get_toes_rmt (int level) 
 {
-  vec<chordID> donors = get_toes (max(level - 2, 0));
+  vec<chordID> donors = get_toes (max(level - 1, 0));
   for (unsigned int i = 0; i < donors.size (); i++) {
     in_progress++;
     ptr<chord_findtoes_arg> arg = New refcounted<chord_findtoes_arg> ();
