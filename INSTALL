@@ -1,0 +1,58 @@
+SFSNET Install Instructions
+------ ------- ------------
+
+1) Requirements
+
+	+ gcc 2.95
+ 	+ automake/autoconf/autoheader/aclocal
+	+ ~ 500M of free disk space 
+	
+
+2) Preparation
+
+	2.1) Build and install SFS
+	
+	Get the sfs source from redlab via cvs (cvs -d
+	you@redlab:/disk/ex0/sfscvs/ co sfs1) and build it. Install the sfs
+	source in the default location. Note that if you are using a PDOS
+	OpenBSD machine you will need to edit your /usr/sup/local/refuse file
+	to prevent the SFS headers and libraries from being "supped
+	out."
+	
+	2.2) Get the sfsnet source
+
+	The sfsnet source is available via CVS. Get it as follows:
+
+	cvs -d /sfs/new-york.lcs.mit.edu/pub/shome/am1/sfsnetcvs/ co sfsnet
+
+3) Configuration
+
+	3.1) Configure your source tree
+
+	Run ./setup to configure your source tree. If you change build
+	platforms you may have to repeat this step.
+
+	3.2) Configure your build directory
+
+	At this time, only out of tree build are supported. To build
+	out of tree, create a build directory (say,
+	/disk/sl0/fdabek/sfsnet-build) and cd to that directory.
+
+	In the build directory, run the configure script from the
+	source directory: 
+
+	~/wherever-you-put-the-source/configure --with-db3 		
+		--with-dmalloc --with-whatever...
+
+	At this time the --with-db3 option is mandatory.
+
+4) Build
+
+	Type:
+
+		gmake
+
+	in this build directory and you are off to the races. 
+
+
+--Frank
