@@ -289,6 +289,8 @@ str2chordID (str c, chordID &newID)
       newID = (newID << 4) | (c[i] - '0');
     } else if (c[i] >= 'a' && c[i] <= 'f') {
       newID = (newID << 4) | (c[i] - 'a' + 10);
+    } else if (c[i] >= 'A' && c[i] <= 'F') {
+      newID = (newID << 4) | (c[i] - 'A' + 10);
     } else {
       return false;
     }
