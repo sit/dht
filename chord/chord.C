@@ -305,11 +305,10 @@ vnode::dotestrange_findclosestpred (svccb *sbp, chord_testandfindarg *fa)
 {
   ndotestrange++;
   chordID x = fa->x;
-  chordID succ = successors->succ ();
+  chordID succ = my_succ ();
 
   chord_testandfindres *res = New chord_testandfindres ();  
-  if (locations->alive (succ) && 
-      betweenrightincl(myID, succ, x) ) {
+  if (betweenrightincl(myID, succ, x) ) {
     warnt("CHORD: testandfind_inrangereply");
     res->set_status (CHORD_INRANGE);
     res->inrange->n.x = succ;
