@@ -1,4 +1,4 @@
-/* $Id: http.C,v 1.4 2003/01/02 22:04:28 jastr Exp $ */
+/* $Id: http.C,v 1.5 2003/01/02 22:07:05 jastr Exp $ */
 
 /*
  *
@@ -22,7 +22,7 @@
  */
 
 /*cause strptime to be defined on planetlab*/
-#if defined(__linux) and !defined(_GNU_SOURCE) 
+#if defined(__linux) && !defined(_GNU_SOURCE) 
 #  define _GNU_SOURCE
 #endif
 
