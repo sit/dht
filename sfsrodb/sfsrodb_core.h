@@ -1,4 +1,4 @@
-/* $Id: sfsrodb_core.h,v 1.8 2002/02/04 19:47:34 cates Exp $ */
+/* $Id: sfsrodb_core.h,v 1.9 2002/02/14 22:14:30 cates Exp $ */
 
 /*
  *
@@ -32,6 +32,8 @@
 #include "xdrmisc.h"
 #include "dbfe.h"
 #include "dhash_prot.h"
+#include "sfsro_prot_cfs.h"
+
 #ifdef DMALLOC
 #include "dmalloc.h"
 #endif
@@ -41,6 +43,7 @@
 bigint fh2mpz(const void *keydata, size_t keylen);
 sfs_hash sfsrodb_put (void *data, size_t len);
 void sfsrodb_put (ptr <rabin_priv> sk, void *data, size_t len);
+ptr<sfsro_data> sfsrodb_get (bigint key, dhash_ctype t = DHASH_CONTENTHASH);
 
 
 #endif /* _SFSRODB_CORE_H_ */

@@ -597,7 +597,10 @@ protected:
     : gwclnt (gwclnt), npending_rpcs (0), error (false), key (key),
       block (buf, buflen), cb (cb), auth_type (t)
   {
-    check_exists ();
+    if (auth_type == DHASH_CONTENTHASH)
+      check_exists ();  // elide the insert if that hash already exists
+    else
+      step1 ();
   }
 
   void check_exists ()
@@ -614,12 +617,12 @@ protected:
   void check_exists_cb (ptr<dhash_res> res, clnt_stat err)
   {
     if (!err && res->status == DHASH_OK) {
-      warn << "exists: " << key << "\n";
+      ///warn << "exists: " << key << "\n";
       // if the data is already inserted, report back success
       (*cb) (false, key);
       delete this;
     } else {
-      warn << "NOT exists: " << key << "\n";
+      ///warn << "NOT exists: " << key << "\n";
       // otherwise, we need to insert the data
       step1 ();
     }
@@ -687,7 +690,7 @@ protected:
       fail (dhasherr2str (res->status));
 
     if (npending_rpcs == 0) {
-      warn << "finished insert: " << key << "\n";
+      ///warn << "finished insert: " << key << "\n";
       (*cb) (error, key);
       delete this;
     }

@@ -268,6 +268,10 @@ locationtable::setup_rexmit_timer (chordID ID, long *sec, long *nsec)
 
   *sec = (long)(alat/1000000);
   *nsec = ((long)alat % 1000000) * 1000;
+
+  if (*nsec < 0 || *sec < 0)
+    panic ("[send to cates@mit.edu] setup: sec %ld, nsec %ld, alat %f, avg_lat %f, bf_lat %f, bf_var %f\n",
+	   *sec, *nsec, alat, avg_lat, bf_lat, bf_var);
 }
 
 
@@ -487,6 +491,10 @@ rpccb_chord::send (long _sec, long _nsec)
   rexmits = 0;
   sec = _sec;
   nsec = _nsec;
+
+  if (nsec < 0 || sec < 0)
+    panic ("[send to cates@mit.edu]: sec %ld, nsec %ld\n", sec, nsec);
+
   tmo = delaycb (sec, nsec, wrap (this, &rpccb_chord::timeout_cb, deleted));
   // alloc has the side effect of sending the RPC so we don't send it here
   //  xmit (0);
@@ -509,6 +517,9 @@ rpccb_chord::timeout_cb (ptr<bool> del)
     sec = 30;
     nsec = 0;
   } else  {
+    if (nsec < 0 || sec < 0)
+      panic ("1 timeout_cb: sec %ld, nsec %ld\n", sec, nsec);
+
     xmit (rexmits++);
     sec *= 2;
     nsec *= 2;
@@ -517,6 +528,10 @@ rpccb_chord::timeout_cb (ptr<bool> del)
       sec += 1;
     }
   }
+
+  if (nsec < 0 || sec < 0)
+    panic ("timeout_cb: sec %ld, nsec %ld\n", sec, nsec);
+
   tmo = delaycb (sec, nsec, wrap (this, &rpccb_chord::timeout_cb, deleted));
 }
 

@@ -1,4 +1,4 @@
-/* $Id: sfsrodb.C,v 1.19 2002/02/04 19:47:34 cates Exp $ */
+/* $Id: sfsrodb.C,v 1.20 2002/02/14 22:14:30 cates Exp $ */
 
 /*
  * Copyright (C) 1999 Kevin Fu (fubob@mit.edu)
@@ -43,11 +43,16 @@
 #include "dhash_prot.h"
 #include "sha1.h"
 #include "rxx.h"
+#include "sfsro_prot_cfs.h"
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define LSD_SOCKET "/tmp/chord-sock"
 
 ptr<dhashclient> dhash;
+
+// backup options
+bool x_flag = false;
+bool wipe_flag = false;
 
 u_int32_t blocksize;
 u_int32_t nfh;
@@ -647,19 +652,15 @@ parentpath (const str fullpath)
    given path, inserts the mapping from the fh to its data
 
  */
+
+str timestamp = "";
+
 int
 recurse_path (const str path, sfs_hash * fh)
 {
+  str fspath = strbuf () << "/" << timestamp << substr (path, relpathlen);
+
   struct stat st;
-  str fspath; 
-
-  // Remove reference to local file system
-  if (path.len() ==  relpathlen)
-    fspath = str ("/");
-  else
-    fspath = substr (path, relpathlen);
-
-
   if (lstat (path, &st) < 0)
     fatal << path << ": " << strerror(errno) << "\n";
   
@@ -725,9 +726,75 @@ recurse_path (const str path, sfs_hash * fh)
 }
 
 
+
+bool
+get_root_inode_and_dir (bigint rootkey, sfsro_inode *rootino, sfsro_data *rootdir)
+{
+  // fetch the filesystem root.
+  //  
+  ptr<sfsro_data> root_dat = sfsrodb_get (rootkey, DHASH_KEYHASH);
+  if (!root_dat) {
+    warn << "root block was null\n";
+    return false;
+  } else if (root_dat->type != CFS_FSINFO) {
+    warn << "root block has wrong type: " << root_dat->type << "\n";
+    return false;
+  } 
+
+
+  // fetch the root inode
+  //
+  ptr<sfsro_data> rootino_dat = sfsrodb_get (root_dat->fsinfo->rootfh);
+
+  if (!rootino_dat) {
+    warn << "root inode block was null\n";
+    return false;
+  } else if (rootino_dat->type != SFSRO_INODE) {
+    warn << "(1) bad type on inode block: " << rootino_dat->type << "\n";
+    return false;
+  } else if (rootino_dat->inode->type != SFSRODIR) {
+    warn << "(2) bad type on inode block: " << rootino_dat->inode->type << "\n";
+    return false;
+  } else if (rootino_dat->inode->reg->direct.size () != 1) {
+    warn << "root inode, expected only one direct block: " <<
+      rootino_dat->inode->reg->direct.size () << "\n";
+    return false;
+  }
+
+
+  // fetch the root directory
+  //
+  bigint d0;
+  sfs_hash *tmp = &rootino_dat->inode->reg->direct[0];
+  mpz_set_rawmag_be(&d0, tmp->base (), tmp->size ());  // For big endian
+  ptr<sfsro_data> rootdir_dat = sfsrodb_get (d0);
+  if (!rootdir_dat) {
+    warn << "root directory was null\n";
+    return false;
+  } else if (rootdir_dat->type != SFSRO_DIRBLK) {
+    warn << "root directory bad type: " << rootdir_dat->type << "\n";
+    return false;
+  } 
+
+
+  *rootino = *rootino_dat->inode;
+  *rootdir = *rootdir_dat;
+
+  return true;
+}
+
+
+
+
 int
 sfsrodb_main (const str root, const str keyfile)
 {
+  time_t start = time (NULL);
+  str stime (ctime (&start));
+  if (x_flag) {
+    timestamp = substr (stime, 0, stime.len () - 1); // trim newline
+    //timestamp = "SHIT";
+  }
 
   dhash = New refcounted <dhashclient> (LSD_SOCKET);
 
@@ -749,14 +816,76 @@ sfsrodb_main (const str root, const str keyfile)
     }
   }
 
+  str pk_raw = sk->n.getraw ();
+  char pk_hash[sha1::hashsize];
+  sha1_hash (pk_hash, pk_raw.cstr (), pk_raw.len ());
+  str pk_name = armor64A(pk_hash, sha1::hashsize);
+  bigint pk_hash_bi = compute_hash (pk_raw.cstr (), pk_raw.len ());
+
+
   // store file system in db
   sfs_hash root_fh;
 
   relpathlen = root.len ();
   recurse_path (root, &root_fh);
 
+  // for the sake of debugging output, wait for all puts to finish...
+  while (out) acheck (); 
+
+  if (x_flag) {
+    // -------------------------------------------------
+    sfsro_inode inode (SFSRODIR);
+    sfsro_data directory (SFSRO_DIRBLK);
+    
+    rpc_ptr < sfsro_dirent > *direntp = &directory.dir->entries;
+
+    bool found = false;
+    if (!wipe_flag)
+      found = get_root_inode_and_dir (pk_hash_bi, &inode, &directory);
+
+    if (wipe_flag || !found) {
+      // fake up an empty directory
+      directory.dir->eof = true;
+      
+      (*direntp).alloc ();
+      (*direntp)->name = ".";
+      (*direntp)->fileid = path2fileid ("/");
+      direntp = &(*direntp)->nextentry;
+      
+      (*direntp).alloc ();
+      (*direntp)->name = "..";
+      (*direntp)->fileid = path2fileid ("/");
+      direntp = &(*direntp)->nextentry;
+    }
+    
+    // skip to the end
+    while (*direntp)
+      direntp = &(*direntp)->nextentry;
+    
+    // append new entry
+    (*direntp).alloc ();
+    (*direntp)->name = timestamp;
+    (*direntp)->fileid = path2fileid (strbuf() << "/" << timestamp);
+    (*direntp)->fh = root_fh;
+    direntp = &(*direntp)->nextentry;
+
+    sfs_hash junk;
+    store_directory (&inode, &junk, &directory);
+    store_inode (&inode, &root_fh);
+
+#if 0
+    rpc_ptr < sfsro_dirent > *dp = &directory.dir->entries;
+    while (*dp) {
+      warn << ">>> " << (*dp)->name << "\n";
+      dp = &(*dp)->nextentry;
+    }
+#endif
+  }
+
+
+  // -------------------------------------------------
+
   sfsro_data dat (CFS_FSINFO);
-  time_t start = time (NULL);
   dat.fsinfo->start = start;
   dat.fsinfo->duration = sfsro_duration;
   dat.fsinfo->rootfh = fh2mpz (root_fh.base (), root_fh.size ());
@@ -764,14 +893,8 @@ sfsrodb_main (const str root, const str keyfile)
   time_t end = dat.fsinfo->start + dat.fsinfo->duration;
 
   // XX Should make sure timezone is correct
-  str stime (ctime (&start));
   str etime (ctime (&end));
   warn << "Database good from: \n " << stime << "until:\n " << etime;
-
-  str pk_raw = sk->n.getraw ();
-  char pk_hash[sha1::hashsize];
-  sha1_hash (pk_hash, pk_raw.cstr (), pk_raw.len ());
-  str pk_name = armor64A(pk_hash, sha1::hashsize);
   warn << "exporting file system under " << pk_name << "\n";
 
   xdrsuio x (XDR_ENCODE);
@@ -820,8 +943,10 @@ usage ()
   warnx << "Optional directives:\n";
   warnx << "-v                    : Verbose debugging output\n";
   warnx << "-b <blocksize>        : Page size of underlying database\n";
-
-  exit (1);
+  warnx << "Backup directives:\n";
+  warnx << "-x                    : do backup\n";
+  warnx << "-w                    : wipe the root directory clean\n";
+   exit (1);
 }
 
 
@@ -836,9 +961,9 @@ main (int argc, char **argv)
   verbose_mode = false;
   initialize = false;
   blocksize = 8192;
-  
+
   int ch;
-  while ((ch = getopt (argc, argv, "b:d:s:v")) != -1)
+  while ((ch = getopt (argc, argv, "b:d:s:vwx")) != -1)
     switch (ch) {
     case 'b':
       if (!convertint (optarg, &blocksize)
@@ -854,6 +979,12 @@ main (int argc, char **argv)
     case 'v':
       verbose_mode = true;
       break;
+    case 'w':
+      wipe_flag = true;
+      break;
+    case 'x':
+      x_flag = true;
+      break;
     case '?':
     default:
       usage ();
@@ -864,6 +995,11 @@ main (int argc, char **argv)
 
   if ( (argc > 0) || !exp_dir || !sk_file )
     usage ();
+
+  if (wipe_flag && !x_flag) {
+    warn << "-w but not -x??\n";
+    usage ();
+  }
 
   if (verbose_mode) {
     warnx << "export directory : " << exp_dir << "\n";
