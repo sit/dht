@@ -30,6 +30,7 @@
 #include "p2psim/network.h"
 #include <stdio.h>
 #include <iostream>
+#include <cmath>
 using namespace std;
 
 vector<VivaldiTest*> VivaldiTest::_all;
