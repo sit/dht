@@ -129,6 +129,7 @@ public:
   static NodeID distance(const NodeID, const NodeID);
   static unsigned common_prefix(NodeID, NodeID);
   static unsigned getbit(NodeID, unsigned);
+  static void reap(void*);
 
   //
   // non-static utility methods
@@ -148,10 +149,13 @@ public:
   // {{{ lookup_args and lookup_result
   struct lookup_args {
     lookup_args(NodeID xid, IPAddress xip, NodeID k = 0, bool b = false) :
-      id(xid), ip(xip), key(k) {};
+      id(xid), ip(xip), key(k) { this->tid = threadid(); };
     NodeID id;
     IPAddress ip;
     NodeID key;
+    
+    // for debugging
+    unsigned tid;
   };
 
   struct lookup_result {
@@ -237,6 +241,15 @@ private:
     k_nodeinfo *ki;
     lookup_args *la;
     lookup_result *lr;
+  };
+
+  struct reap_info {
+    reap_info() {}
+    ~reap_info() { delete rpcset; delete outstanding_rpcs; }
+
+    Kademlia *k;
+    RPCSet *rpcset;
+    hash_map<unsigned, callinfo*>* outstanding_rpcs;
   };
 
 // }}}

@@ -122,16 +122,11 @@ protected:
   // returns one of the RPCHandle's for which a reply has arrived. BLOCKING.
   unsigned rcvRPC(RPCSet*, bool&);
 
-  // returns whether rcvRPC can be called without blocking.
-  bool select(RPCSet*);
-
-  void cancelRPC(unsigned);
-
-
 private:
   Node *_node;
   hash_map<unsigned, RPCHandle*> _rpcmap;
   unsigned _token;
+  void _deleteRPC(unsigned);
 };
 
 #endif // __PROTOCOL_H

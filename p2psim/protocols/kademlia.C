@@ -25,6 +25,7 @@
 
 #include "kademlia.h"
 #include "p2psim/network.h"
+#include "p2psim/threadmanager.h"
 #include <deque>
 #include <iostream>
 using namespace std;
@@ -314,15 +315,20 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
   // rpcset: set of outstanding rpcs
   hash_map<NodeID, bool> asked;
   hash_map<NodeID, bool> replied;
-  hash_map<unsigned, callinfo*> outstanding_rpcs;
-  RPCSet rpcset;
+  hash_map<unsigned, callinfo*> *outstanding_rpcs = New hash_map<unsigned, callinfo*>;
+  assert(outstanding_rpcs);
+  RPCSet *rpcset = New RPCSet;
+  assert(rpcset);
 
   //
-  // stop if we've had an answer from the best k nodes we know of.
-  // find alpha unqueried nodes in result set
+  // - stop if we've had an answer from the best k nodes in the result set
+  // - find best alpha unqueried nodes in result set
+  // - send an RPC to those alpha nodes
+  // - wait for an RPC to come back
+  // - update results set
   //
   while(true) {
-    KDEBUG(2) << "top of the loop. outstaning rpcs = " << outstanding_rpcs.size() << endl;
+    KDEBUG(2) << "top of the loop. outstaning rpcs = " << outstanding_rpcs->size() << endl;
 
     // stop if we've had an answer from the best k nodes we know of.
     // remember the first guy we haven't asked yet.
@@ -342,8 +348,14 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
       }
     }
 
-    if(we_are_done)
+    if(we_are_done) {
+      reap_info *ri = New reap_info();
+      ri->k = this;
+      ri->rpcset = rpcset;
+      ri->outstanding_rpcs = outstanding_rpcs;
+      ThreadManager::Instance()->create(Kademlia::reap, (void*) ri);
       break;
+    }
 
     //
     // pick alpha nodes from the k best guys in the resultset, provided we
@@ -388,27 +400,27 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
       callinfo *ci = New callinfo(toask[i], la, lr);
       assert(ci);
       assert(rpc);
-      rpcset.insert(rpc);
+      rpcset->insert(rpc);
       asked[toask[i]->id] = true;
 
       // record this outstanding RPC
       assert(ci);
-      outstanding_rpcs[rpc] = ci;
+      (*outstanding_rpcs)[rpc] = ci;
     }
 
     //
     // now block on outstanding_rpcs
     //
 receive_rpc:
-    if(outstanding_rpcs.size()) {
-      KDEBUG(2) << "do_lookup: thread " << threadid() << " going into rcvRPC, outstanding = " << outstanding_rpcs.size() << endl;
+    if(outstanding_rpcs->size()) {
+      KDEBUG(2) << "do_lookup: thread " << threadid() << " going into rcvRPC, outstanding = " << outstanding_rpcs->size() << endl;
 
       bool ok;
-      unsigned donerpc = rcvRPC(&rpcset, ok);
-      callinfo *ci = outstanding_rpcs[donerpc];
+      unsigned donerpc = rcvRPC(rpcset, ok);
+      callinfo *ci = (*outstanding_rpcs)[donerpc];
       assert(ci);
       replied[ci->ki->id] = true;
-      outstanding_rpcs.erase(donerpc);
+      outstanding_rpcs->erase(donerpc);
 
       // if the node is dead, then remove this guy from our flyweight and, if he
       // was in our results, from the results.  but since we didn't make any
@@ -440,16 +452,6 @@ receive_rpc:
     }
   }
 
-
-  // at this point we claim to have the best results.
-  // cancel any outstanding RPCs
-  for(hash_map<unsigned, callinfo*>::const_iterator i = outstanding_rpcs.begin(); i != outstanding_rpcs.end(); i++) {
-    cancelRPC(i->first);
-    char ptr[32]; sprintf(ptr, "%p", i->second);
-    KDEBUG(2) << "do_lookup: deleting still-outstanding" << ptr << endl;
-    delete i->second;
-  }
-  outstanding_rpcs.clear();
 
   KDEBUG(2) << "do_lookup, thread " << threadid() << ": done, was working for " << Kademlia::printbits(largs->id) << ", looking for " << Kademlia::printbits(largs->key) << endl;
   KDEBUG(2) << "do_lookup, thread results->size = " << lresult->results.size() << endl;
@@ -506,9 +508,12 @@ Kademlia::do_lookup_wrapper(k_nodeinfo *ki, NodeID key, set<k_nodeinfo*> *v)
 void
 Kademlia::find_node(lookup_args *largs, lookup_result *lresult)
 {
-  KDEBUG(2) << "find_node invoked by " << Kademlia::printbits(largs->id) << ", thread = " << threadid() << endl;
-
+  KDEBUG(2) << "find_node invoked by " << Kademlia::printbits(largs->id) << ", calling thread = " << largs->tid << endl;
   assert(node()->alive());
+
+  update_k_bucket(largs->id, largs->ip);
+  lresult->rid = _id;
+  closer::n = largs->key;
 
   // deal with the empty case
   if(!flyweight.size()) {
@@ -517,21 +522,19 @@ Kademlia::find_node(lookup_args *largs, lookup_result *lresult)
     char ptr[32]; sprintf(ptr, "%p", p);
     KDEBUG(2) << "find_node: tree is empty. returning myself, ip = " << ip() << ", ptr = " << ptr << endl;
     lresult->results.insert(p);
-  } else {
-    // fill result vector
-    k_collect_closest successors(largs->key);
-    _root->traverse(&successors, this);
-    for(set<NodeID, Kademlia::closer>::const_iterator i = successors.results.begin(); i != successors.results.end(); ++i) {
-      k_nodeinfo *p = New k_nodeinfo(flyweight[*i]);
-      assert(p);
-      char ptr[32]; sprintf(ptr, "%p", p);
-      KDEBUG(2) << "find_node: adding, id = " << Kademlia::printbits(*i) << ", ptr = " << ptr << " to reply" << endl;
-      lresult->results.insert(p);
-    }
+    return;
   }
 
-  update_k_bucket(largs->id, largs->ip);
-  lresult->rid = _id;
+  // fill result vector
+  k_collect_closest successors(largs->key);
+  _root->traverse(&successors, this);
+  for(set<NodeID, Kademlia::closer>::const_iterator i = successors.results.begin(); i != successors.results.end(); ++i) {
+    k_nodeinfo *p = New k_nodeinfo(flyweight[*i]);
+    assert(p);
+    char ptr[32]; sprintf(ptr, "%p", p);
+    KDEBUG(2) << "find_node: adding, id = " << Kademlia::printbits(*i) << ", p->id = " << Kademlia::printbits(p->id) << " ip = " << p->ip << ", lastts = " << p->lastts << ", ptr = " << ptr << " to reply" << endl;
+    lresult->results.insert(p);
+  }
 }
 
 // }}}
@@ -722,6 +725,37 @@ Kademlia::printID(NodeID id)
   return string(buf);
 }
 
+// }}}
+// {{{ Kademlia::reap
+// reaps outstanding RPCs, but snatches out the info that's contained in it.
+// I.e., we update k-buckets.
+void
+Kademlia::reap(void *r)
+{
+  reap_info *ri = (reap_info *) r;
+  NodeID _id = ri->k->id();
+
+  KDEBUG(1) << "Kademlia::reap" << endl;
+  assert(ri->rpcset->size() == ri->outstanding_rpcs->size());
+
+  while(ri->outstanding_rpcs->size()) {
+    bool ok;
+    unsigned donerpc = ri->k->rcvRPC(ri->rpcset, ok);
+    callinfo *ci = (*ri->outstanding_rpcs)[donerpc];
+    assert(ci);
+
+    if(ok)
+      ri->k->update_k_bucket(ci->lr->rid, ci->ki->ip);
+    else if(ri->k->flyweight.find(ci->ki->id) != ri->k->flyweight.end())
+      ri->k->erase(ci->ki->id);
+
+    ri->outstanding_rpcs->erase(donerpc);
+    delete ci;
+  }
+
+  delete ri;
+  threadexits(0);
+}
 // }}}
 
 // {{{ k_nodes::k_nodes

@@ -72,7 +72,7 @@ Protocol::rcvRPC(RPCSet *hset, bool &ok)
   unsigned token = index2token[i];
   assert(token);
   hset->erase(token);
-  cancelRPC(token);
+  _deleteRPC(token);
   ok = p->ok();
   delete p;
   free(a);
@@ -80,49 +80,8 @@ Protocol::rcvRPC(RPCSet *hset, bool &ok)
 }
 
 
-#if 0
-// WE CAN'T MAKE THIS WORK WITHOUT ALTERING THE CHANNELS!
-bool
-Protocol::select(RPCSet *hset)
-{
-  assert(false);
-
-  // no outstanding RPCs: we would block
-  if(!hset->size())
-    return false;
-
-  int na = hset->size() + 1;
-  Alt *a = (Alt *) malloc(sizeof(Alt) * na); // might be big, take off stack!
-  Packet *p;
-
-  int i = 0;
-  for(RPCSet::const_iterator j = hset->begin(); j != hset->end(); j++) {
-    assert(_rpcmap[*j]);
-    a[i].c = _rpcmap[*j]->channel();
-    a[i].v = &p;
-    a[i].op = CHANRCV;
-    i++;
-  }
-  a[i].op = CHANNOBLK;
-
-  int noblkindex = i;
-
-  if((i = alt(a)) < 0) {
-    cerr << "interrupted" << endl;
-    assert(false);
-  }
-  assert(i <= (int) hset->size());
-  // i == noblkindex means that none of the channels can be read which means
-  // we're going to block were we to do that. so i != noblkindex means we can do
-  // it without blocking.
-  free(a);
-  return i != noblkindex;
-}
-#endif
-
-
 void
-Protocol::cancelRPC(unsigned token)
+Protocol::_deleteRPC(unsigned token)
 {
   assert(_rpcmap.find(token) != _rpcmap.end());
   delete _rpcmap[token];
@@ -153,9 +112,8 @@ Protocol::parse(char *filename)
     words.erase(words.begin());
 
     // if it has no arguments, you still need to register the prototype
-    if( !words.size() ) {
+    if(!words.size())
       xmap[protocol];
-    }
 
     // this is a variable assignment
     while(words.size()) {
