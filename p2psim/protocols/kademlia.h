@@ -89,7 +89,7 @@ public:
 
   class IDcloser { public:
     bool operator()(const NodeID &n1, const NodeID &n2) const {
-      if(n1 == n2);
+      if(n1 == n2)
         return false;
       Kademlia::NodeID dist1 = Kademlia::distance(n1, n);
       Kademlia::NodeID dist2 = Kademlia::distance(n2, n);
@@ -156,8 +156,7 @@ public:
 
   struct lookup_result {
     lookup_result() { results.clear(); }
-
-    nodeinfo_set results;
+    set<k_nodeinfo*, closer> results;
     NodeID rid;     // the guy who's replying
   };
   // }}}
@@ -169,7 +168,6 @@ public:
   };
 
   struct ping_result {
-    NodeID rid;     // the guy who's replying
   };
   // }}}
 
@@ -217,20 +215,26 @@ private:
   // statistics
   enum stat_type {
     STAT_LOOKUP = 0,
+    STAT_PING,
     STAT_SIZE
   };
   vector<unsigned> stat;
   vector<unsigned> num_msgs;
   void record_stat(stat_type, unsigned, unsigned);
+  void update_k_bucket(NodeID, IPAddress);
 
   //
   // utility 
   //
   class callinfo { public:
-    callinfo(IPAddress xip, lookup_args *xla, lookup_result *xlr)
-      : ip(xip), la(xla), lr(xlr) {}
-    ~callinfo() { delete la; delete lr; }
-    IPAddress ip;
+    callinfo(k_nodeinfo *ki, lookup_args *la, lookup_result *lr)
+      : ki(ki), la(la), lr(lr) {}
+    ~callinfo() {
+      char ptr[32]; sprintf(ptr, "%p", ki);
+      delete la;
+      delete lr;
+    }
+    k_nodeinfo *ki;
     lookup_args *la;
     lookup_result *lr;
   };
@@ -325,17 +329,14 @@ private:
 // }}}
 // {{{ class k_collect_closest
 class k_collect_closest : public k_traverser { public:
-  k_collect_closest(Kademlia::NodeID, unsigned best = Kademlia::k);
+  k_collect_closest(Kademlia::NodeID);
   virtual ~k_collect_closest() {}
   virtual void execute(k_bucket_leaf *, string, unsigned, unsigned);
 
   set<Kademlia::NodeID, Kademlia::IDcloser> results;
 
 private:
-  inline void checkrep();
   Kademlia::NodeID _node;
-  Kademlia::NodeID _lowest;
-  unsigned _best;
 };
 // }}}
 // {{{ class k_stabilizer

@@ -1287,15 +1287,15 @@ LocTable::succ(ConsistentHash::CHID id, Time *ts)
   uint vsz = v.size();
   if (vsz > 0) {
     return v[0];
-  }else{
-    if (id == (me.id + 1)) {
-      idmapwrap *ptr = ring.closestsucc(id);
-      fprintf(stderr,"ring sz %u before %u me %d %qx ptr %u,%qx is_succ %d timestamp %llu\n", size(), before, me.ip,me.id,ptr->n.ip,ptr->n.id,ptr->is_succ?1:0, ptr->timestamp);
-    }
-    Chord::IDMap tmp;
-    tmp.ip = 0;
-    return tmp;
   }
+  
+  if (id == (me.id + 1)) {
+    idmapwrap *ptr = ring.closestsucc(id);
+    fprintf(stderr,"ring sz %u before %u me %d %qx ptr %u,%qx is_succ %d timestamp %llu\n", size(), before, me.ip,me.id,ptr->n.ip,ptr->n.id,ptr->is_succ?1:0, ptr->timestamp);
+  }
+  Chord::IDMap tmp;
+  tmp.ip = 0;
+  return tmp;
 }
 
 /* returns m successors including or after the number id
@@ -1359,11 +1359,11 @@ LocTable::pred(Chord::CHID id)
   vector<Chord::IDMap> v = preds(id, 1);
   if (v.size() > 0) {
     return v[0];
-  }else{
-    Chord::IDMap tmp;
-    tmp.ip = 0;
-    return tmp;
   }
+
+  Chord::IDMap tmp;
+  tmp.ip = 0;
+  return tmp;
 }
 
 vector<Chord::IDMap>
