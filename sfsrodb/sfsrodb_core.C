@@ -27,8 +27,7 @@
 #include "arpc.h"
 #include "sys/time.h"
 
-#ifndef timespecsub
-#define timespecsub(vvp, uvp)						\
+#define mytimespecsub(vvp, uvp)						\
 	do {								\
 		(vvp)->tv_sec -= (uvp)->tv_sec;				\
 		(vvp)->tv_nsec -= (uvp)->tv_nsec;			\
@@ -37,7 +36,6 @@
 			(vvp)->tv_nsec += 1000000000;			\
 		}							\
 	} while (0)
-#endif
 
 long out=0;
 long blkcnt = 0;
@@ -102,7 +100,7 @@ sfsrodb_put_cb (timespec ts, dhash_stat status, ptr<insert_info> i)
   if (blkcnt % 1000 == 0) {
     static timespec diff;
     clock_gettime (CLOCK_REALTIME, &diff);
-    timespecsub(&diff, &periodic);
+    mytimespecsub(&diff, &periodic);
     warn << blkcnt << ", sec/1k " << diff.tv_sec << "\n";
     clock_gettime (CLOCK_REALTIME, &periodic);
   }
@@ -113,7 +111,7 @@ sfsrodb_put_cb (timespec ts, dhash_stat status, ptr<insert_info> i)
     timespec ts2;
     clock_gettime (CLOCK_REALTIME, &ts2);
     timespec diff = ts2;
-    timespecsub(&diff, &ts);
+    mytimespecsub(&diff, &ts);
     
     uint32 ms = 1000 * diff.tv_sec  + diff.tv_nsec / 1000000;
     //warn ("ts2  %ld:%09ld\n", ts2.tv_sec, ts2.tv_nsec);
