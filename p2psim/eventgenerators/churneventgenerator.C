@@ -50,9 +50,12 @@ ChurnEventGenerator::ChurnEventGenerator(Args *args)
     _wkn = args->nget<IPAddress>("wkn", 1, 10);
   }
 
-  _lifemean = args->nget( "lifemean", 100000, 10 ); //0 means no failure
+  _lifemean = args->nget( "lifemean", 3600000, 10 ); //0 means no failure
   _deathmean = args->nget( "deathmean", _lifemean, 10 ); //0 means no failure
-  _lookupmean = args->nget( "lookupmean", 10000, 10 );
+  _lookupmean = args->nget( "lookupmean", 3600000, 10 );
+  _alpha = args->nget("alpha",1,10);
+  _beta = args->nget("beta",1800000,10);
+  _pareto = args->nget("pareto",0,10);
 
   if( (*args)["exittime"] == "" ) {
     _exittime_string = "200000";
@@ -152,7 +155,10 @@ ChurnEventGenerator::kick(Observed *o, ObserverInfo *oi)
       // pick a time for this node to die
       Time todie = 0;
       while (!todie) {
-	todie = next_exponential( _lifemean );
+	if (!_pareto)
+	  todie = next_exponential( _lifemean );
+	else
+	  todie = next_pareto(_alpha,_beta);
       }
       if( now() + todie < _exittime ) {
 	P2PEvent *e = New P2PEvent(now() + todie, ip, "crash", a);
@@ -168,7 +174,10 @@ ChurnEventGenerator::kick(Observed *o, ObserverInfo *oi)
     // pick a time for the node to rejoin
     Time tojoin = 0;
     while (!tojoin) {
-      tojoin = next_exponential( _deathmean );
+      if (!_pareto)
+	tojoin = next_exponential( _deathmean );
+      else
+	tojoin = next_pareto(_alpha,_beta);
     }
     (*a)["wellknown"] = _wkn_string;
     //cout << now() << ": joining " << ip << " in " << tojoin << " ms" << endl;
@@ -197,6 +206,14 @@ ChurnEventGenerator::kick(Observed *o, ObserverInfo *oi)
     delete a;
   }
 
+}
+
+Time
+ChurnEventGenerator::next_pareto(u_int a, u_int b)
+{
+  double x = ( (double)random() / (double)(RAND_MAX) );
+  u_int rt = (u_int) ((double)b/exp(log(1 - x)/(double)a));
+  return (Time) rt;
 }
 
 Time

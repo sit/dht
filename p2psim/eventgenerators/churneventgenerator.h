@@ -69,11 +69,15 @@ private:
   unsigned _lookupmean;
   string _exittime_string;
   Time _exittime;
+  unsigned _alpha;
+  unsigned _beta;
+  unsigned _pareto;
   bool _ipkeys;
   bool _datakeys;
   vector<IPAddress> *_ips;
 
   Time next_exponential(u_int mean);
+  Time next_pareto(u_int a, u_int b);
   string get_lookup_key();
 
 };
