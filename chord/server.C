@@ -35,6 +35,12 @@
 #include <math.h>
 #include <configurator.h>
 
+#include <modlogger.h>
+
+#define warning modlogger ("vnode", modlogger::WARNING)
+#define info  modlogger ("vnode", modlogger::INFO)
+#define trace modlogger ("vnode", modlogger::TRACE)
+
 float gforce = 1000000;
 
 void 
@@ -118,6 +124,46 @@ vnode_impl::get_predecessor_cb (chordID n, cbchordID_t cb, chord_noderes *res,
     cb (make_chord_node (*res->resok), CHORD_OK);
   }
   delete res;
+}
+
+
+void
+vnode_impl::find_succlist (const chordID &x, u_long m, cbroute_t cb,
+			   ptr<chordID> guess)
+{
+  route_iterator *ri = factory->produce_iterator_ptr (x);
+  ri->first_hop (wrap (this, &vnode_impl::find_succlist_hop_cb, cb, ri, m),
+		 guess);
+}
+
+void
+vnode_impl::find_succlist_hop_cb (cbroute_t cb, route_iterator *ri, u_long m,
+				  bool done)
+{
+  vec<chord_node> cs = ri->successors ();
+  if (done) {
+    cb (cs, ri->path (), ri->status ());
+    delete ri;
+    return;
+  }
+  if (server_selection_mode & 4) {
+    size_t left = 0;
+    if (cs.size () < m)
+      left = cs.size ();
+    else
+      left = cs.size () - m;
+    for (size_t i = 1; i < left; i++) {
+      if (betweenrightincl (cs[i-1].x, cs[i].x, ri->key ())) {
+	trace << myID << ": find_succlist (" << ri->key () << "): skipping " << i << " nodes.\n";
+	cs.popn_front (i);
+	cb (cs, ri->path (), ri->status ());
+	delete ri;
+	return;
+      }
+    }
+  }
+
+  ri->next_hop ();
 }
 
 void

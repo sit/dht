@@ -91,8 +91,9 @@ dhashcli::retrieve (blockID blockID, cb_ret cb, int options,
 			 options, 5, guess),
 		   guess);
   } else {
-    ci->first_hop (wrap (this, &dhashcli::retrieve_frag_hop_cb, rs, ci),
-		   guess);
+    clntnode->find_succlist (blockID.ID, dhash::num_dfrags () + 2,
+			     wrap (this, &dhashcli::retrieve_lookup_cb, rs),
+			     guess);
   }
 }
 
@@ -170,43 +171,6 @@ dhashcli::retrieve_dl_or_walk_cb (ptr<rcv_state> rs, dhash_stat status,
 }
 
 void
-dhashcli::retrieve_frag_hop_cb (ptr<rcv_state> rs, route_iterator *ci, bool done)
-{
-  vec<chord_node> cs = ci->successors ();
-  if (done) {
-    route r = ci->path ();
-    dhash_stat stat = ci->status () ? DHASH_CHORDERR : DHASH_OK;
-    delete ci;
-    retrieve_lookup_cb (rs, stat, cs, r);
-    return;
-  }
-  // Check to see if we already have enough in our successors.
-  if (server_selection_mode & 4) {
-    size_t left = 0;
-    // XXX + 2? geez.
-    if (cs.size () < dhash::num_dfrags () + 2)
-      left = cs.size ();
-    else
-      left = cs.size () - (dhash::num_dfrags () + 2);
-    for (size_t i = 1; i < left; i++) {
-      if (betweenrightincl (cs[i-1].x, cs[i].x, rs->key.ID)) {
-	cs.popn_front (i);
-	route r = ci->path ();
-	delete ci;
-	
-	chordID myID = clntnode->my_ID ();
-	trace << myID << ": retrieve (" << rs->key << "): skipping " << i
-	      << " nodes.\n";
-	retrieve_lookup_cb (rs, DHASH_OK, cs, r);
-	return;
-      }
-    }
-  } 
-  
-  ci->next_hop ();
-}
-
-void
 dhashcli::fetch_frag (ptr<rcv_state> rs)
 {
   register size_t i = rs->nextsucc;
@@ -279,7 +243,6 @@ order_succs (const vec<float> &me, const vec<chord_node> &succs,
   }
 }
 
-
 static void
 patch_succ_list (vec<chord_node> &succs,
                  const vec<ptr<location> > &from, unsigned needed)
@@ -302,19 +265,17 @@ patch_succ_list (vec<chord_node> &succs,
 
 
 void
-dhashcli::retrieve_lookup_cb (ptr<rcv_state> rs,
-			      dhash_stat status,
-			      vec<chord_node> succs,
-			      route r)
+dhashcli::retrieve_lookup_cb (ptr<rcv_state> rs, vec<chord_node> succs,
+			      route r, chordstat status)
 {
   chordID myID = clntnode->my_ID ();
   rs->timemark ();
   rs->r = r;
   
-  if (status != DHASH_OK) {
+  if (status) {
     trace << myID << ": retrieve (" << rs->key 
           << "): lookup failure: " << status << "\n";
-    rs->complete (status, NULL); // failure
+    rs->complete (DHASH_CHORDERR, NULL); // failure
     rs = NULL;
     return;
   }
@@ -345,8 +306,8 @@ dhashcli::retrieve_lookup_cb (ptr<rcv_state> rs,
     succs.pop_back ();
 
   if (succs.size () < dhash::num_dfrags ()) {
-    trace << myID << ": retrieve (" << rs->key << "): "
-	  << "insufficient number of successors returned!\n";
+    warning << myID << ": retrieve (" << rs->key << "): "
+	    << "insufficient number of successors returned!\n";
     rs->complete (DHASH_CHORDERR, NULL); // failure
     rs = NULL;
     return;
@@ -376,7 +337,7 @@ dhashcli::retrieve_fetch_cb (ptr<rcv_state> rs, u_int i,
 			     ptr<dhash_block> block)
 {
   chordID myID = clntnode->my_ID ();
-  // XXX collect fragments and decode block
+
   rs->incoming_rpcs -= 1;
   if (rs->completed) {
     // Here it might just be that we got a fragment back after we'd

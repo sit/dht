@@ -133,6 +133,8 @@ class vnode : public virtual refcount {
   virtual void alert (ptr<location> n, chordID &x) = 0;
   virtual void ping (ptr<location> n, cbping_t cb) = 0;
   virtual void find_successor (const chordID &x, cbroute_t cb) = 0;
+  virtual void find_succlist (const chordID &x, u_long m, cbroute_t cb,
+			      ptr<chordID> guess = NULL) = 0;
 
   //upcall
   virtual void register_upcall (int progno, cbupcall_t cb) = 0;
@@ -256,6 +258,9 @@ class chord : public virtual refcount {
   ptr<location> lookup_closestsucc (chordID k) { 
     return active->lookup_closestsucc (k); 
   };
+  void find_succlist (chordID n, u_long m, cbroute_t cb, ptr<chordID> guess) {
+    active->find_succlist (n, m, cb, guess);
+  }
   void find_successor (chordID n, cbroute_t cb) {
     active->find_successor (n, cb);
   };

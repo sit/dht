@@ -127,6 +127,7 @@ class vnode_impl : public vnode {
 			  vec<chord_node> s, route sp, chordstat status);
   void get_succlist_cb (cbchordIDlist_t cb, chord_nodelistres *res,
 			clnt_stat err);
+  void find_succlist_hop_cb (cbroute_t cb, route_iterator *ri, u_long m, bool done);
 
   void find_route_hop_cb (cbroute_t cb, route_iterator *ri, bool done);
   void find_route (const chordID &x, cbroute_t cb);
@@ -203,6 +204,8 @@ class vnode_impl : public vnode {
   void alert (ptr<location> n, chordID &x);
   void ping (ptr<location> n, cbping_t cb);
   void find_successor (const chordID &x, cbroute_t cb);
+  void find_succlist (const chordID &x, u_long m, cbroute_t cb,
+		      ptr<chordID> guess = NULL);
 
   //upcall
   void register_upcall (int progno, cbupcall_t cb);

@@ -83,9 +83,6 @@ class dhashcli {
 
 
 private:
-  void doRPC (chordID ID, const rpc_program &prog, int procno, ptr<void> in, 
-	      void *out, aclnt_cb cb);
-
   void lookup_findsucc_cb (chordID blockID, dhashcli_lookupcb_t cb,
 			   vec<chord_node> s, route path, chordstat err);
     
@@ -99,9 +96,8 @@ private:
   
   void fetch_frag (ptr<rcv_state> rs);
 
-  void retrieve_frag_hop_cb (ptr<rcv_state> rs, route_iterator *ci, bool done);
-  void retrieve_lookup_cb (ptr<rcv_state> rs, dhash_stat status,
-			   vec<chord_node> succs, route r);
+  void retrieve_lookup_cb (ptr<rcv_state> rs, vec<chord_node> succs, route r,
+			   chordstat status);
   void retrieve_fetch_cb (ptr<rcv_state> rs, u_int i,
 			  ptr<dhash_block> block);
 
