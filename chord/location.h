@@ -158,7 +158,7 @@ class locationtable : public virtual refcount {
 
   void connect_cb (location *l, callback<void, ptr<axprt_stream> >::ref cb, 
 		   int fd);
-  void doRPCcb (ptr<aclnt> c, rpc_state *C, clnt_stat err);
+  void doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err);
 
   void dorpc_connect_cb(location *l, ptr<axprt_stream> x);
   void chord_connect(chordID ID, callback<void, ptr<axprt_stream> >::ref cb);

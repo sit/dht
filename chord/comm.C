@@ -129,7 +129,7 @@ locationtable::timeout (rpc_state *C)
 }
 
 void
-locationtable::doRPCcb (ptr<aclnt> c, rpc_state *C, clnt_stat err)
+locationtable::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
 {
 
   if (err) {
@@ -520,19 +520,21 @@ rpccb_chord::timeout_cb (ptr<bool> del)
     tmo = NULL;
     timeout ();
     return;
-  } else if (rexmits == MAX_REXMIT) {
-    sec = 30;
-    nsec = 0;
-  } else  {
+  }  else  {
     if (nsec < 0 || sec < 0)
       panic ("1 timeout_cb: sec %ld, nsec %ld\n", sec, nsec);
 
-    xmit (rexmits++);
-    sec *= 2;
-    nsec *= 2;
-    if (nsec > 1000000000) {
-      nsec -= 1000000000;
-      sec += 1;
+    xmit (rexmits);
+    if (rexmits == MAX_REXMIT) {
+      sec = 30;
+      nsec = 0;
+    } else {
+      sec *= 2;
+      nsec *= 2;
+      if (nsec > 1000000000) {
+	nsec -= 1000000000;
+	sec += 1;
+      }
     }
   }
 
@@ -540,6 +542,7 @@ rpccb_chord::timeout_cb (ptr<bool> del)
     panic ("timeout_cb: sec %ld, nsec %ld\n", sec, nsec);
 
   tmo = delaycb (sec, nsec, wrap (this, &rpccb_chord::timeout_cb, deleted));
+  rexmits++;
 }
 
 
