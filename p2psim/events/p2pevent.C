@@ -51,6 +51,10 @@ P2PEvent::name2fn(string name)
     type = "lookup";
     return &P2Protocol::lookup;
   }
+  if(name == "nodeevent" || name == "5") {
+    type = "nodeevent";
+    return &P2Protocol::nodeevent;
+  }
   assert(0);
 }
 
