@@ -32,7 +32,7 @@ struct nntp {
   void cmd_over (str);
   void cmd_article (str);
   void cmd_post (str);
-  void read_post (const char *, const char *);
+  void read_post (const char *, const char *, str);
   void cmd_quit (str);
   void cmd_help (str);
   void cmd_ihave (str);

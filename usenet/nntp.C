@@ -27,8 +27,10 @@ char *ihaveok = "235 article transferred ok\r\n";
 char *ihaveno = "435 article not wanted - do not send it\r\n";
 char *ihavebad = "436 transfer failed - try again later\r\n";
 char *stream = "203 Streaming is OK\r\n";
-char *checksend = "238 no such article found, please send it to me ";
-char *checkno = "438 already have it, please don't send it to me ";
+char *checksendb = "238 ";
+char *checksende = " no such article found, please send it to me\r\n";
+char *checknob = "438 ";
+char *checknoe = " already have it, please don't send it to me\r\n";
 char *takethisok = "239 article transferred ok ";
 char *takethisbad = "439 article transfer failed ";
 
@@ -249,7 +251,7 @@ nntp::cmd_post (str c)
 {
   warn << "post\n";
   out << postgo;
-  fdcb (s, selread, wrap (this, &nntp::read_post, postok, postbad));
+  fdcb (s, selread, wrap (this, &nntp::read_post, postok, postbad, ""));
 }
 
 static rxx postrx ("(.+\n)\\.\r\n", "ms");
@@ -258,15 +260,18 @@ static rxx postngrx ("Newsgroups: (.+)\r");
 static rxx postgrx (",?([^,]+)");
 
 void
-nntp::read_post (const char *resp, const char *bad)
+nntp::read_post (const char *resp, const char *bad, str msg)
 {
-  int res;
+  int res = 1;
   ptr<dbrec> k, d;
   ptr<group> g;
   str ng, msgid;
   bool posted = false;
 
-  res = post.input (s);
+  if (msg)
+    post.copy (msg, msg.len ());
+  else
+    res = post.input (s);
   if (res <= 0) {
     delete this;
     return;
@@ -344,7 +349,7 @@ static rxx ihaverx ("^IHAVE (<.+?>)", "i");
 void
 nntp::cmd_ihave (str c)
 {
-  warn << "ihave\n";
+  warn << "ihave " << c;
   ptr<dbrec> key, d;
 
   if (ihaverx.search (c)) {
@@ -352,7 +357,7 @@ nntp::cmd_ihave (str c)
     d = article_db->lookup (key);
     if (!d) {
       out << ihavesend;
-      fdcb (s, selread, wrap (this, &nntp::read_post, ihaveok, ihavebad));
+      fdcb (s, selread, wrap (this, &nntp::read_post, ihaveok, ihavebad, ""));
     } else
       out << ihaveno;
   } else
@@ -364,16 +369,16 @@ static rxx checkrx ("^CHECK (<.+?>)", "i");
 void
 nntp::cmd_check (str c)
 {
-  warn << "check\n";
+  warn << "check " << c;
   ptr<dbrec> key, d;
 
   if (checkrx.search (c)) {
     key = New refcounted<dbrec> (checkrx[1], checkrx[1].len ());
     d = article_db->lookup (key);
     if (!d)
-      out << checksend << checkrx[1] << "\r\n";
+      out << checksendb << checkrx[1] << checksende;
     else
-      out << checkno << checkrx[1] << "\r\n";
+      out << checknob << checkrx[1] << checknoe;
   } else
     out << syntax;
 }
@@ -383,13 +388,14 @@ static rxx takethisrx ("^TAKETHIS (<.+?>)", "i");
 void
 nntp::cmd_takethis (str c)
 {
-  warn << "takethis\n";
-  str resp, bad;
+  warn << "takethis " << c;
+  str resp, bad, msg;
 
   if (takethisrx.search (c)) {
     resp = strbuf () << takethisok << takethisrx[1] << "\r\n";
     bad = strbuf () << takethisbad << takethisrx[1] << "\r\n";
-    fdcb (s, selread, wrap (this, &nntp::read_post, resp, bad));
+    msg = c + takethisrx.end(1);
+    read_post (resp, bad, msg);
   } else
     out << syntax;
 }
