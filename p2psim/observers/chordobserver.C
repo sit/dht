@@ -66,7 +66,7 @@ ChordObserver::ChordObserver(Args *a) : _type("Chord")
     Chord *t = dynamic_cast<Chord*>(*pos);
     n.ip = t->ip();
     n.id = t->id();
-    n.choices = 1;
+    n.heartbeat = t->heartbeat();
     ids.push_back(n);
     if (_oracle_num)
       t->registerObserver(this);
