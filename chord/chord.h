@@ -41,6 +41,7 @@
 #include "chord_prot.h"
 #include "chord_util.h"
 #include "location.h"
+#include "stabilize.h"
 
 #define NBIT     160     // size of Chord identifiers in bits
 #define NSUCC    2*10     // 2 * log of # vnodes
@@ -64,63 +65,6 @@ struct findpredecessor_cbstate {
 };
 
 // ============================= Stabilizer ====================================
-typedef callback<bool>::ref cbb;
-
-// Parent class for things that need stabilization.
-class stabilizable {
- public:
-  virtual ~stabilizable () { }
-  // called to initiate next round of continuous stabilization
-  virtual void do_continuous () { return; }
-  // called to initiate next round of backoff stabilization
-  virtual void do_backoff () { return; }
-  // indicator of whether or not still in progress. however,
-  // do_continuous and do_backoff should not break if called
-  // when stabilizing returns true.
-  virtual bool continuous_stabilizing () { return false; }
-  virtual bool backoff_stabilizing () { return false; }
-  // indicator that we believe that we are stable.
-  // You must implement this function!
-  virtual bool isstable () = 0;
-};
-
-// Class to manage stabilization timers, etc.
-class stabilize_manager {
-  static const u_int32_t stabilize_timer = 1000;  // milliseconds
-  static const u_int32_t stabilize_decrease_timer = 100; // milliseconds
-  static const float stabilize_slowdown_factor = 1.2;
-  static const u_int32_t stabilize_timer_max = 2; // seconds
-
-  chordID myID;
-  
-  bool stable;
-
-  vec<ref<stabilizable> > clients;
-
-  timecb_t *stabilize_continuous_tmo;
-  timecb_t *stabilize_backoff_tmo;
-  u_int32_t continuous_timer;
-  u_int32_t backoff_timer;
-
- public:
-  stabilize_manager (chordID _myID);
-  ~stabilize_manager ();
-
-  bool isstable (void);
-
-  u_int32_t cts_timer (void) { return continuous_timer; }
-  u_int32_t bo_timer (void) { return backoff_timer; }
-  void start (void);
-  void stop (void);
-
-  void register_client (ref<stabilizable> c) { clients.push_back (c); }
-  void stabilize_backoff (u_int32_t t);
-  void stabilize_continuous (u_int32_t t);
-
-  // operations in progress? ask our clients please.
-  bool continuous_stabilizing ();
-  bool backoff_stabilizing ();
-};
 
 class succ_list;
 

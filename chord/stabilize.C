@@ -29,8 +29,9 @@
  */
 
 #include <assert.h>
-#include "chord.h"
-#include <qhash.h>
+#include <async.h>
+#include "chord_util.h"
+#include "stabilize.h"
 
 // The code in this file deals with stabilization: a continuous
 // "process" that updates the various structures (finger table,
