@@ -400,10 +400,9 @@ stp_manager::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
     }
   }
 
-  (C->cb) (err);
-
-  rpc_done (C->seqno);
   user_rexmit_table.remove (C);
+  (C->cb) (err);
+  rpc_done (C->seqno);
   delete C;
 
 }
