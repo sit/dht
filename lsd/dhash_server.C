@@ -131,11 +131,9 @@ dhash::store(sfs_ID id, dhash_value data, store_status type, cbstat cb)
 
   db->insert(k, d, wrap(this, &dhash::store_cb, cb));
   key_status.insert (id, type);
-
-
+  
 #if 0
-  defp2p->getsuccessor (id, wrap (this, &dhash::find_replica_cb, nreplica, 
-				  data, cb));
+  defp2p->getsuccessor (myID, wrap (this, &dhash::find_replica_cb, nreplica, data));
 #endif
 
 }
@@ -150,26 +148,26 @@ dhash::store_cb(cbstat cb, int stat) {
 
 #if 0
 void
-dhash::find_replica_cb (int k, dhash_value data, cbstat cb, sfs_ID s)
+dhash::find_replica_cb (int k, dhash_value data, sfs_ID s)
 {
   dhash_stat *stat = New dhash_stat ();
-  defp2p->doRPC(succ, dhash_program_1, DHASHPROC_STORE, item, stat, 
-		wrap(this, &dhashclient::store_replica_cb, stat));
+  defp2p->doRPC(s, dhash_program_1, DHASHPROC_STORE, item, stat, 
+		wrap(this, &dhashclient::store_replica_cb, k, s, data, stat));
 
-  k--;
-  if (k > 0) {
-    defp2p->getsuccessor (id, wrap (this, &dhash::find_replica_cb, k, data, 
-				    cb));
-  }
 }
 
 
 void
-dhash::store_replica_cb(dhash_stat *res, clnt_stat err) 
+dhash::store_replica_cb(int k, sfs_ID s, dhash_value data, dhash_stat *res, clnt_stat err) 
 {
   if (err) {
-    sbp->replyref(dhash_stat (DHASH_NOENT));
-  }
+    
+  } else {
+    k--;
+    if (k > 0) 
+      defp2p->getsuccessor (id, wrap (this, &dhash::find_replica_cb, k, data, 
+				      cb));
+  }   
 }
 #endif
 

@@ -1,4 +1,4 @@
-/* $Id: server.C,v 1.10 2001/03/21 16:10:01 fdabek Exp $ */
+/* $Id: server.C,v 1.11 2001/03/23 05:40:27 fdabek Exp $ */
 
 /*
  *
@@ -179,7 +179,15 @@ server::read_block (const sfs_hash *fh, nfscall *sbp, cbblock_t cb)
   else {
     
     cstat.bc_miss++;
-  
+    
+    list<pfpstate, &pfpstate::link> *pfcbs = pfpc[*fh];
+    if (pfcbs != NULL) {
+      pfpstate *next = New pfpstate (cb);
+      pfcbs->insert_head(next);
+      return;
+    }
+
+    warn << "non pre-fectched read\n";
     ref<const sfs_hash> fh_ref = New refcounted<const sfs_hash> (*fh);
     get_data(fh_ref, wrap (mkref (this), &server::block_reply,
 			   timenow, sbp, fh_ref, cb));
@@ -190,8 +198,7 @@ void
 server::get_data (const sfs_hash *fh, 
 		  callback<void, sfsro_datares *, clnt_stat>::ref cb) 
 {
-
- 
+  
   sfsro_datares *res = New sfsro_datares (SFSRO_OK);
   sfsroc->call (SFSROPROC_GETDATA, fh, res, wrap(this, &server::get_data_cb, cb, res));
 
@@ -199,10 +206,12 @@ server::get_data (const sfs_hash *fh,
 
 void
 server::get_data_cb( callback<void, sfsro_datares *, clnt_stat>::ref cb,
-		     sfsro_datares *res, clnt_stat err) {
-  (*cb)(res, err);
-  
+		     sfsro_datares *res, clnt_stat err) 
+{
+  (*cb)(res, err);  
 }
+
+
 void 
 server::read_indir (const sfs_hash *fh, nfscall *sbp, cbindir_t cb)
 {
@@ -219,14 +228,8 @@ server::read_indir (const sfs_hash *fh, nfscall *sbp, cbindir_t cb)
   else {
     //    warn << "noncache indirect\n";
     cstat.ibc_miss++;
-    //    sfsro_datares *res = New sfsro_datares (SFSRO_OK);
 
     ref<const sfs_hash> fh_ref = New refcounted<const sfs_hash> (*fh);
-    
-    //    sfsroc->call (SFSROPROC_GETDATA, fh, res,
-    //		wrap (mkref (this), &server::indir_reply,
-    //		      timenow, sbp, fh_ref, cb, res));
-  
     get_data (fh, wrap (mkref (this), &server::indir_reply,
 			timenow, sbp, fh_ref, cb));
   }
@@ -298,8 +301,8 @@ server::fh_lookup (size_t b, const sfsro_inode *ip, nfscall *sbp,
 
      if (i < SFSRO_NFH) {
        read_indir(&(ip->reg->indirect), sbp,
-	       wrap ( mkref (this),
-		      &server::read_indirectres, b, fa_ref, sbp));
+		  wrap ( mkref (this),
+			 &server::read_indirectres, b, fa_ref, sbp));
      }
      else {
        i -= SFSRO_NFH;
@@ -334,11 +337,16 @@ server::read_file (const sfsro_inode *ip, nfscall *sbp,
 
   size_t first_blknr = ra->offset / SFSRO_BLKSIZE;
   size_t last_blknr = (ra->offset + (ra->count - 1) ) / SFSRO_BLKSIZE;
+  size_t prefetch_limit_blknr = last_blknr + data_prefetch_blocks;
 
   //  nblk = (nblk == 0) ? 1 : nblk;
   for (size_t i = first_blknr; i <= last_blknr; i++) {
     fh_lookup (i, ip, sbp, fh);
   }
+
+  if (prefetch_limit_blknr*SFSRO_BLKSIZE < ip->reg->size) 
+    for (size_t i = last_blknr; i < prefetch_limit_blknr; i++) 
+      fh_prefetch(i, ip, fh);
 }
 
 void 
@@ -1226,3 +1234,225 @@ server::lookup_parent_rofh_lookupres2 (nfscall *sbp,
 } else
     lookup_parent_rofh (sbp, &dirent->fh, pathvec, cb);
 }
+
+//-----------------------------------------------------------
+
+/* b is the block number */
+// fh is the inode "number"
+void
+server::fh_prefetch (size_t b, const sfsro_inode *ip, 
+		     const sfs_hash *fh)
+{
+
+  if (b < SFSRO_NDIR) {
+    prefetch_block(&(ip->reg->direct[b]),
+		   wrap ( mkref (this),
+			  &server::prefetch_blockres, fh, b));
+  }
+
+  else {
+    size_t i = (b - SFSRO_NDIR);
+    
+    if (i < SFSRO_NFH) {
+      prefetch_indir(&(ip->reg->indirect),
+		     wrap ( mkref (this),
+			    &server::prefetch_indirectres, b));
+    }
+    else {
+      i -= SFSRO_NFH;
+      
+      if (i < SFSRO_NFH * SFSRO_NFH)
+	prefetch_indir(&(ip->reg->double_indirect),
+	       wrap ( mkref (this),
+		      &server::prefetch_doubleres, b));
+      else {
+	i -= SFSRO_NFH * SFSRO_NFH;
+	
+	if (i < SFSRO_NFH * SFSRO_NFH * SFSRO_NFH)
+	  prefetch_indir(&(ip->reg->triple_indirect),
+		     wrap ( mkref (this), 
+			    &server::prefetch_tripleres, b));
+	else
+	  assert(0);  // too big
+      }
+    }
+  }
+
+}
+
+
+void
+server::prefetch_blockres (const sfs_hash *fh, size_t b, const char *d, size_t len)
+{
+  //save b, d, len under fh (which is the hash of the inode)
+  //data is in the cache waiting for the request
+
+  warn << "fetched and cached " << hexdump(fh, 20) << "\n";
+}
+
+
+void 
+server::prefetch_block (const sfs_hash *fh, cbblock_t cb)
+{
+  const rpc_bytes<RPC_INFINITY> *data;
+  
+  if (pfpc[*fh] != NULL) {
+    warn << hexdump(fh, 20) << "already in flight\n";
+    return;
+  }
+  warn << "prefetch block " << hexdump (fh, 20) << "\n";
+  cstat.bc_tot++;
+  if (!sfsrocd_nocache &&
+      (data = bc.lookup (*fh))) {
+    //    warn << "cached block\n";
+    cb (data->base (), data->size ());
+    cstat.bc_hit++;
+  }
+  else {
+    cstat.bc_miss++;
+    
+    ref<const sfs_hash> fh_ref = New refcounted<const sfs_hash> (*fh);
+    
+    pfpstate *head = New pfpstate (cb);
+    list<pfpstate, &pfpstate::link> cblist;
+    cblist.insert_head (head);
+    pfpc.insert (*fh, cblist);
+    
+    get_data(fh_ref, wrap (mkref (this), &server::prefetch_block_reply,
+			   timenow, fh_ref));
+  }
+}
+
+void
+server::prefetch_block_reply (time_t rqtime, ref<const sfs_hash> fh, 
+			      sfsro_datares *rores, clnt_stat err) 
+{
+  sfsro_data data;
+  
+  if (pfreply(rores, err, &data, fh)) {
+    assert(data.type == SFSRO_FILEBLK);
+    
+    if (!sfsrocd_nocache)
+      bc.enter (*fh, &(*data.data));
+
+    list<pfpstate, &pfpstate::link> *cb_list = pfpc[*fh];
+    pfpstate *p = cb_list->first;
+    while (p) {
+      warn << hexdump(fh, 20) << "serviced from pre-fetched data\n";
+      (p->cb) (data.data->base (), data.data->size ());
+      p = cb_list->next (p);
+    }
+
+  }
+}
+
+
+void 
+server::prefetch_indir (const sfs_hash *fh, cbindir_t cb)
+{
+
+  const sfsro_indirect *indir;
+
+  cstat.ibc_tot++;
+  if (!sfsrocd_nocache &&
+      (indir = ibc.lookup (*fh))) {
+    cb (indir);
+    cstat.ibc_hit++;
+  }
+  else {
+
+    cstat.ibc_miss++;
+
+    ref<const sfs_hash> fh_ref = New refcounted<const sfs_hash> (*fh);
+    get_data (fh, wrap (mkref (this), &server::prefetch_indir_reply,
+			timenow, fh_ref, cb));
+  }
+}
+
+
+void
+server::prefetch_indir_reply (time_t rqtime, ref<const sfs_hash> fh, 
+			      cbindir_t cb, sfsro_datares *rores, clnt_stat err) 
+{
+  sfsro_data data; 
+
+  if (pfreply (rores, err, &data, fh)) {
+    assert(data.type == SFSRO_INDIR);
+    
+    if (!sfsrocd_nocache)
+      ibc.enter (*fh, &(*data.indir));
+    
+    cb (&(*data.indir));
+    
+  }
+}
+
+void
+server::prefetch_indirectres (size_t b, const sfsro_indirect *indirect)
+{
+  size_t i = (b - SFSRO_NDIR);
+
+  /* the following could happen only by a call from
+     read_doubleres or read_tripleres */
+  i = i % SFSRO_NFH;
+
+  ref<const sfs_hash> block_fh =
+    New refcounted<const sfs_hash> (indirect->handles[i]);
+  
+  prefetch_block(block_fh, wrap ( mkref (this),
+				  &server::prefetch_blockres, block_fh, b));
+
+}
+
+void
+server::prefetch_doubleres (size_t b, const sfsro_indirect *indirect)
+{
+  size_t i = (b - SFSRO_NDIR) - SFSRO_NFH;
+
+  /* the following could happen only by a call from read_tripleres */
+  i = i % (SFSRO_NFH * SFSRO_NFH);
+  i = i / SFSRO_NFH;
+  
+  prefetch_indir(&indirect->handles[i],
+		 wrap (mkref (this), &server::prefetch_indirectres, b));
+}
+
+
+void
+server::prefetch_tripleres (size_t b, const sfsro_indirect *indirect)
+{
+  size_t i = (b - SFSRO_NDIR) - SFSRO_NFH - (SFSRO_NFH * SFSRO_NFH);
+
+  i = i / (SFSRO_NFH * SFSRO_NFH);
+
+  prefetch_indir (&indirect->handles[i],
+		  wrap (mkref (this), &server::prefetch_doubleres, b));
+}
+
+/* hacked version of getreply */
+int
+server::pfreply (sfsro_datares *rores, clnt_stat err,
+		 sfsro_data *data, const sfs_hash *fh)
+{
+  auto_xdr_delete axd (sfsro_program_1.tbl[SFSROPROC_GETDATA].xdr_res, rores);
+
+  if ((err) || (rores->status))
+    return 0;
+
+  char *resbuf = rores->resok->data.base();
+  size_t reslen = rores->resok->data.size();
+
+  /* check hash of unmarshalled data */
+  if (!sfsrocd_noverify &&
+      !verify_sfsrofh (IV, SFSRO_IVSIZE, fh, resbuf, reslen)) 
+    return 0;
+
+  xdrmem x (resbuf, reslen, XDR_DECODE);
+  bool ok = xdr_sfsro_data (x.xdrp (), data);
+  if (!ok) {
+    warn << "pfreply: couldn't unmarshall data\n";
+    return 0;
+  }
+  return 1;
+}
+

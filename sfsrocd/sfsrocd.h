@@ -1,5 +1,5 @@
 // -*-c++-*-
-/* $Id: sfsrocd.h,v 1.4 2001/03/09 04:23:50 fdabek Exp $ */
+/* $Id: sfsrocd.h,v 1.5 2001/03/23 05:40:28 fdabek Exp $ */
 
 /*
  *
@@ -137,13 +137,23 @@ public:
 
 };
 
+typedef callback<void, const sfsro_inode * >::ref cbinode_t;
+typedef callback<void, const sfsro_directory *>::ref cbdirent_t;
+typedef callback<void, const sfsro_indirect *>::ref cbindir_t;
+typedef callback<void, const char *, size_t>::ref cbblock_t;
+typedef callback<void, const nfspath3 *>::ref cblnk_t;
+typedef callback<void, const sfs_hash *>::ref cbparent_t;
+
+struct pfpstate {
+  cbblock_t cb;
+  list_entry<pfpstate> link;
+  pfpstate (cbblock_t CB) : cb (CB) {};
+};
+
+#define data_prefetch_blocks 5
+
 struct server : sfsserver {
-  typedef callback<void, const sfsro_inode * >::ref cbinode_t;
-  typedef callback<void, const sfsro_directory *>::ref cbdirent_t;
-  typedef callback<void, const sfsro_indirect *>::ref cbindir_t;
-  typedef callback<void, const char *, size_t>::ref cbblock_t;
-  typedef callback<void, const nfspath3 *>::ref cblnk_t;
-  typedef callback<void, const sfs_hash *>::ref cbparent_t;
+ 
 private:
   cache<sfs_hash, sfsro_inode, 512> ic;             // inode cache
   cache<sfs_hash, sfsro_indirect, 512> ibc;         // Indirect block cache
@@ -153,6 +163,8 @@ private:
   // we want "compression"
   cache<sfs_hash, rpc_bytes<RPC_INFINITY>, 64> bc;  // file data buffer cache
   equals<sfs_hash> eq;
+
+  qhash<sfs_hash, list<pfpstate, &pfpstate::link> > pfpc;
 
   void ro2nfsattr (const sfsro_inode *si, fattr3 *ni, const sfs_hash *fh);
 
@@ -230,6 +242,22 @@ private:
 	       sfsro_datares *res, clnt_stat err);
 
   void lookup_mount(nfscall *sbp, sfsro_datares *res, clnt_stat err);
+
+  void fh_prefetch (size_t b, const sfsro_inode *ip, const sfs_hash *fh);
+  void prefetch_blockres (const sfs_hash *fh, size_t b, const char *d, size_t len);
+  void prefetch_block (const sfs_hash *fh, cbblock_t cb);
+  void prefetch_block_reply (time_t rqtime,  ref<const sfs_hash> fh, 
+			     sfsro_datares *rores, clnt_stat err);
+  int pfreply (sfsro_datares *rores, clnt_stat err,
+	       sfsro_data *data, const sfs_hash *fh);
+
+  void prefetch_indir (const sfs_hash *fh, cbindir_t cb);
+  void prefetch_indir_reply (time_t rqtime, ref<const sfs_hash> fh, 
+			     cbindir_t cb, sfsro_datares *rores, clnt_stat err);
+  void prefetch_indirectres (size_t b, const sfsro_indirect *indirect);
+  void prefetch_doubleres (size_t b, const sfsro_indirect *indirect);
+  void prefetch_tripleres (size_t b, const sfsro_indirect *indirect);
+
 protected:
   server (const sfsserverargs &a)
     : sfsserver (a) {}
