@@ -38,7 +38,7 @@ P2PEvent::name2fn(string name)
 P2PEvent::P2PEvent(vector<string> *v) : Event(v)
 {
   // node-id
-  IPAddress ip = (IPAddress) atoi((*v)[0].c_str());
+  IPAddress ip = (IPAddress) atoll((*v)[0].c_str());
   this->node = ip2node(ip);
   if(!this->node) {
     cerr << "can't execute event on non-exiting node with id " << ip << endl;
