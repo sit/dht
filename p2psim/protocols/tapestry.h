@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.7 2003/10/12 03:04:36 strib Exp $ */
+/* $Id: tapestry.h,v 1.8 2003/10/12 22:16:16 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -215,6 +215,7 @@ private:
   vector<uint> stat;
 
   bool _joining;
+  bool _stab_scheduled;
 
   /**
    * Convert a given IP address to an id in the Tapestry namespace
