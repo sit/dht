@@ -1,2 +1,2 @@
-CXXFLAGS = -Wall -fno-exceptions -ftemplate-depth-32 -g
+CXXFLAGS = -Wall -fno-exceptions -ftemplate-depth-32 -O2
 INCLUDES = -I$(top_srcdir) -I/usr/local/include $(EXTRA_INCLUDES) $(GTKINCLUDES)
