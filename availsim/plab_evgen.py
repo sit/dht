@@ -42,6 +42,8 @@ def random_blockid ():
 firsttime = None
 lasttime  = 0
 fh = open (sys.argv[1])
+count = 0
+onode = 0
 for line in fh.readlines ():
     (t, e, ip) = line.strip ().split ()
 
@@ -53,8 +55,12 @@ for line in fh.readlines ():
     t = t - firsttime
     t /= 60
 
+    if e == 'join':
+	count += 1
+	onode = make_chordID (ip, 11977, 0)
+
     if t != lasttime:
-	if maxblocks > 0 and t > 200:
+	if maxblocks > 0 and count > 1000:
 	    for nt in xrange(lasttime+1,t-1):
 		ni = random_interval (mu_i, sd_i)
 		while ni > 0 and maxblocks > 0:
@@ -63,3 +69,5 @@ for line in fh.readlines ():
 		    maxblocks -= 1
 	lasttime = t
     print t, e, make_chordID (ip, 11977, 0)
+    nnode = onode
+
