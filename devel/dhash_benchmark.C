@@ -25,6 +25,7 @@
  *
  */
 
+#include <async.h>
 #include <sfsmisc.h>
 #include <dhash_common.h>
 #include <dhash_prot.h>
@@ -38,11 +39,26 @@ static bigint *IDs;
 static void **data;
 str control_socket;
 static FILE *outfile;
+static FILE *bwfile;
 unsigned int datasize;
 
 int out = 0;
 int MAX_OPS_OUT = 1024;
 
+int bps = 0;
+int sec = 0;
+timecb_t *measurer = NULL;
+
+void
+measure_bw (void)
+{
+  float bw = datasize * bps; // we get called every second
+  bw /= 1024; // convert to K.
+  sec++;
+  fprintf (bwfile, "%d\t%6.2f KB/s\n", sec, bw);
+  bps = 0;
+  measurer = delaycb (1, wrap (&measure_bw));
+}
 
 
 chordID
@@ -81,6 +97,7 @@ store_cb (dhash_stat status, ptr<insert_info> i)
     warn << "store_cb: " << i->key << " " << dhasherr2str(status) << "\n";
     fprintf (outfile, "store error\n");
   } else {
+    bps++;
     str buf = strbuf () << "stored " << i->key << " at " << i->destID << "\n";
     fprintf (outfile, "%s", buf.cstr ());
   }
@@ -125,6 +142,7 @@ fetch_cb (int i, struct timeval start, dhash_stat stat, ptr<dhash_block> blk, ro
     char estr[128];
     sprintf (estr, "%f", elapsed);
 
+    bps++;
     buf << IDs[i] << " " << estr;
     buf << " /";
     for (u_int i = 0; i < blk->times.size (); i++)
@@ -165,7 +183,7 @@ fetch (dhashclient &dhash, int num)
 void
 usage (char *progname) 
 {
-  warn << "vnode_num control_socket num_trials data_size file <f or s> nops seed\n";
+  warn << "vnode_num control_socket num_trials data_size file <f or s> nops seed [bw-file]\n";
   exit(0);
 }
 
@@ -192,6 +210,17 @@ main (int argc, char **argv)
     outfile = stdout;
   else
     outfile = fopen(output, "w");
+
+  char *bwoutput;
+  if (argc > 9) {
+    bwoutput = argv[9];
+    if (strcmp (bwoutput, "-") == 0)
+      bwfile = stderr;
+    else
+      bwfile = fopen (bwoutput, "w");
+
+    measurer = delaycb (1, wrap (&measure_bw));
+  }
 
   if (!outfile) {
     printf ("could not open %s\n", output);
@@ -220,4 +249,13 @@ main (int argc, char **argv)
   gettimeofday (&end, NULL);
   float elapsed = (end.tv_sec - start.tv_sec)*1000.0 + (end.tv_usec - start.tv_usec)/1000.0;
   fprintf(outfile, "Total Elapsed: %f\n", elapsed);
+  
+  if (bwfile && measurer) {
+    timecb_remove (measurer);
+    measurer = NULL;
+    measure_bw ();
+    fclose (bwfile);
+  }
+
+  fclose (outfile);
 }
