@@ -40,7 +40,7 @@
 
 extern unsigned p2psim_verbose;
 
-#define DEBUG(x) if(p2psim_verbose >= (x)) cout
+#define DEBUG(x) if(p2psim_verbose >= (x)) cout << "# "
 
 class Node;
 
