@@ -67,7 +67,7 @@ finger_table::closestpred (const chordID &x, vec<chordID> failed)
     if (between (myID, x, n) && (!in_vector (failed, n)))
       return n;
   }
-  warn << "no good fingers, returning myID = " << myID << "\n";
+  // warn << "no good fingers, returning myID = " << myID << "\n";
   return myID;
 }
 

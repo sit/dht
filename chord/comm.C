@@ -413,7 +413,9 @@ stp_manager::doRPC_dead (ptr<location> l,
 			 ptr<void> in, void *out, aclnt_cb cb,
 			 long fake_seqno /* = 0 */)
 {
+#ifdef VERBOSE_LOG  
   modlogger ("stp_manager") << "dead_rpc " << l->n << " " << l->addr << "\n";
+#endif /* VERBOSE_LOG */  
   ref<aclnt> c = aclnt::alloc (dgram_xprt, prog, 
 			       (sockaddr *)&(l->saddr));
   
@@ -499,10 +501,12 @@ stp_manager::timeout (rpc_state *C)
 #endif
 
   C->rexmits++;
-  warn << getusec () << " resent an RPC (" 
-       << C->progno << "." << C->procno << ") destined for " 
-       << inet_ntoa (C->loc->saddr.sin_addr) << " seqno: " 
-       << C->seqno << " retransmits: " << C->rexmits << "\n";
+#if 0  
+  warnx << gettime () << " resent an RPC (" 
+	<< C->progno << "." << C->procno << ") destined for " 
+	<< inet_ntoa (C->loc->saddr.sin_addr) << " seqno: " 
+	<< C->seqno << " retransmits: " << C->rexmits << "\n";
+#endif /* 0 */  
 
   update_cwind (-1);
 }

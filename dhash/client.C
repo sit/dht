@@ -298,20 +298,20 @@ dhashcli::retrieve2 (chordID blockID, int options, cb_ret cb)
   chordID myID = clntnode->my_ID ();
   rcv_state *rs = rcvs[blockID];
   if (rs) {
+#ifdef VERBOSE_LOG    
     trace << myID << ": retrieve (" << blockID << "): simultaneous retrieve!\n";
+#endif /* VERBOSE_LOG */    
     rs->callbacks.push_back (cb);
   } else {
+#ifdef VERBOSE_LOG    
     trace << myID << ": retrieve (" << blockID << "): new retrieve.\n";
+#endif /* VERBOSE_LOG */    
     rs = New rcv_state (blockID);
     rs->callbacks.push_back (cb);
     rcvs.insert (rs);
 
     route_iterator *ci = r_factory->produce_iterator_ptr (blockID);
     ci->first_hop (wrap (this, &dhashcli::retrieve2_hop_cb, blockID, ci));
-#if 0    
-    lookup (blockID, options,
-	    wrap (this, &dhashcli::retrieve2_lookup_cb, blockID));
-#endif /* 0 */    
   }
 }
 
@@ -423,11 +423,13 @@ order_succs (const vec<float> &me, const vec<chord_node> &succs,
   qsort (d2me, succs.size (), sizeof (*d2me), &orderer::cmp);
   out.clear ();
   for (size_t i = 0; i < succs.size (); i++) {
+#ifdef VERBOSE_LOG
     char buf[10]; // argh. please shoot me.
     sprintf (buf, "%5.2f", d2me[i].d_);
     modlogger ("orderer") << d2me[i].i_ << " "
 			  << succs[d2me[i].i_] << " "
 			  << buf << "\n";
+#endif /* VERBOSE_LOG */    
     out.push_back (succs[d2me[i].i_]);
   }
 }
@@ -450,7 +452,7 @@ dhashcli::retrieve2_lookup_cb (chordID blockID,
   rs->r = r;
   
   if (status != DHASH_OK) {
-    trace << myID << ": retrieve (" << blockID << "): lookup failure:" << status << "\n";
+    trace << myID << ": retrieve (" << blockID << "): lookup failure: " << status << "\n";
     rcvs.remove (rs);
     rs->complete (status, NULL); // failure
     rs = NULL;    
@@ -472,7 +474,9 @@ dhashcli::retrieve2_lookup_cb (chordID blockID,
   if (server_selection_mode & 1) {
     // Store list of successors ordered by expected distance.
     // fetch_frag will pull from this list in order.
+#ifdef VERBOSE_LOG    
     modlogger ("orderer") << "ordering for block " << blockID << "\n";
+#endif /* VERBOSE_LOG */    
     order_succs (clntnode->locations->get_coords (clntnode->my_ID ()),
 		 succs, rs->succs);
   } else {
@@ -513,14 +517,16 @@ dhashcli::retrieve2_fetch_cb (chordID blockID, u_int i,
     fetch_frag (rs);
     return;
   } else if (res->compl_res->attr.size > res->compl_res->res.size()) {
-    warnx << "we requested too short of a block!\n";
+    trace << "we requested too short of a block!\n";
     assert (0);
   }
   
   bigint h = compute_hash (res->compl_res->res.base (), res->compl_res->res.size ());
-  warnx << "fetch (" << blockID << ") got frag " << i
+#ifdef VERBOSE_LOG  
+  trace << myID << ": retrieve (" << blockID << ") got frag " << i
 	<< " with hash " << h << " " << res->compl_res->res.size () << "\n";
-
+#endif /* VERBOSE_LOG */
+  
   // strip off the 4 bytes header to get the fragment
   assert (res->compl_res->res.size () >= 4);
   str frag (res->compl_res->res.base () + 4, res->compl_res->res.size () - 4);

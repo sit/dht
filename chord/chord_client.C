@@ -31,6 +31,9 @@
 #include "route.h"
 #include "transport_prot.h"
 
+#include "modlogger.h"
+#define trace modlogger ("chord")
+
 int logbase;  // base = 2 ^ logbase
 
 chord::chord (str _wellknownhost, int _wellknownport, 
@@ -276,8 +279,9 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
       chordID *v = sbp->template getarg<chordID> ();
       vnode *vnodep = vnodes[*v];
       if (!vnodep) {
-	warnx << "CHORD: unknown node processing procedure " << sbp->proc ()
-	      << " request " << *v << "\n";
+	trace << "unknown vnode " << *v << " for procedure "
+	      << sbp->proc ()
+	      << " (" << arg->progno << "." << arg->procno << ").\n";
 	sbp->replyref (chordstat (CHORD_UNKNOWNNODE));
 	return;
       }
@@ -286,7 +290,6 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
       const rpc_program *prog = get_program (arg->progno);
       if (!prog) 
 	fatal << "bad prog: " << arg->progno << "\n";
-
       
       //unmarshall the args
       char *arg_base = (char *)(arg->args.base ());
@@ -305,7 +308,8 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
 
       //call the handler
       if (!vnodep->progHandled (arg->progno)) {
-	warn << "program not handled!\n";
+	trace << "dispatch to vnode " << *v << " doesn't handle "
+	      << arg->progno << "." << arg->procno << "\n";
 	chordstat res = CHORD_NOHANDLER;
 	sbp->replyref (res);
       } else {	      
@@ -319,7 +323,7 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
     }
     break;
   default:
-    fatal << "PROC not handled\n";
+    fatal << "Transport procedure " << sbp->proc () << " not handled\n";
   }
 		
 }

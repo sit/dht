@@ -203,7 +203,7 @@ vnode_impl::alert_cb (chordstat *res, clnt_stat err)
 {
   if (err) {
     warnx << "alert_cb: RPC failure " << err << "\n";
-  } else if (*res != CHORD_UNKNOWNNODE) {
+  } else if (*res != CHORD_OK && *res != CHORD_UNKNOWNNODE) {
     warnx << "alert_cb: returns " << *res << "\n";
   }
   delete res;

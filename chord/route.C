@@ -159,9 +159,9 @@ void
 route_chord::on_failure (chordID f)
 {
   failed_nodes.push_back (f);
-  warn << v->my_ID () << ": " << f << " is down. ";
   v->alert (search_path.back (), f);
-  warn << " Now trying " << search_path.back () << "\n";
+  warn << v->my_ID () << ": " << f << " is down.  Now trying "
+       << search_path.back () << "\n";
   last_hop = false;
   next_hop ();
 }

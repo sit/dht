@@ -138,11 +138,10 @@ pred_list::stabilize_predlist_gotpred (vec<chord_node> sl,
     if (locations->cached (sl[i].x))
       continue;
     stable_predlist = false;
-    warnx << myID << ": stabilize_predlist adding " << sl[i].x << "\n";
-    // XXX should ping these nodes?
+    // XXX should ping this nodes to ensure they are up?
     bool ok = locations->insert (sl[i]);
-    const char *stat = ok ? " bad " : " new ";
-    warnx << myID << ": stabilize_predlist: received " << stat << "predecessor "
+    const char *stat = ok ? "new" : "bad";
+    warnx << myID << ": stabilize_predlist: received " << stat << " predecessor "
 	  << sl[i] << ".\n";
 
   }
