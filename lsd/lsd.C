@@ -98,9 +98,10 @@ startclntd()
     fatal << "Error creating client socket (UNIX)" << strerror (errno) << "\n";
   client_listening_cb (clntfd, 0);
   
-  int tcp_clntfd = inetsocket (SOCK_STREAM, myport);
+  int port = (myport == 0) ? 0 : myport + 1; 
+  int tcp_clntfd = inetsocket (SOCK_STREAM, port);
   if (tcp_clntfd < 0)
-    fatal << "Error creating client socket (TCP)\n";
+    fatal << "Error creating client socket (TCP) " << strerror(errno) << "\n";
   client_listening_cb (tcp_clntfd, 0);
 
 }
