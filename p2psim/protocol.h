@@ -96,8 +96,12 @@ protected:
     return token;
   }
 
-  // returns one of the RPCHandle's for which a reply has arrived
-  unsigned select(RPCSet*);
+  // returns one of the RPCHandle's for which a reply has arrived. BLOCKING.
+  unsigned rcvRPC(RPCSet*);
+
+  // returns whether rcvRPC can be called without blocking.
+  bool select(RPCSet*);
+
   void cancelRPC(unsigned);
 
 

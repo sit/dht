@@ -87,9 +87,6 @@ public:
   k_bucket_tree *_tree;         // the root of our k-bucket tree
   map<NodeID, Value> _values;   // key/value pairs
   IPAddress _wkn;               // well-known IP address
-  bool _joined;                 // have I joined yet?  REMOVE ME.
-
-  static NodeID _rightmasks[]; // for bitfucking
 
   void reschedule_stabilizer(void*);
   void stabilize();

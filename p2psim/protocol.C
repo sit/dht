@@ -34,7 +34,7 @@ Protocol::getpeer(IPAddress a)
 }
 
 unsigned
-Protocol::select(RPCSet *hset)
+Protocol::rcvRPC(RPCSet *hset)
 {
   Alt a[hset->size()+1];
   Packet *p;
@@ -53,7 +53,7 @@ Protocol::select(RPCSet *hset)
 
   if((i = alt(a)) < 0) {
     cerr << "interrupted" << endl;
-    return 0;
+    assert(false);
   }
   assert(i <= (int) hset->size());
 
@@ -63,6 +63,34 @@ Protocol::select(RPCSet *hset)
   cancelRPC(token);
   return token;
 }
+
+
+bool
+Protocol::select(RPCSet *hset)
+{
+  Alt a[hset->size()+1];
+  Packet *p;
+
+  int i = 0;
+  for(RPCSet::const_iterator j = hset->begin(); j != hset->end(); j++) {
+    assert(_rpcmap[*j]);
+    a[i].c = _rpcmap[*j]->channel();
+    a[i].v = &p;
+    a[i].op = CHANRCV;
+    i++;
+  }
+  a[i].op = CHANNOBLK;
+
+  int noblkindex = i;
+
+  if((i = alt(a)) < 0) {
+    cerr << "interrupted" << endl;
+    assert(false);
+  }
+  assert(i <= (int) hset->size());
+  return i != noblkindex;
+}
+
 
 
 void

@@ -13,18 +13,30 @@ using namespace std;
 unsigned kdebugcounter = 1;
 unsigned Kademlia::_k = 0;
 unsigned Kademlia::_alpha = 0;
-Kademlia::NodeID Kademlia::_rightmasks[8*sizeof(Kademlia::NodeID)];
 
 unsigned k_bucket::_k = 0;
 unsigned k_bucket_tree::_k = 0;
 
-// XXX: hack for now.
-IPAddress kademlia_wkn_ip = 0;
+//
+// Notes
+//
+// FIND_VALUE, STORE
+// Augmenting k-buckets with round trip times so as to choose the best alpha.
+// Paper isn't clear about second step in lookup.  Can we send another alpha for
+//    EACH reply?  In other words: can we ever have more than alpha outstanding
+//    RPCs?
+// Expire keys after 24 hours.  Republish if necessary.
+// FIND_VALUE should immediately return when value comes in.
+// Initiator should store key on closest node that did not return the key/value
+//     pair.
+// Over-caching avoidance policy
+// Refreshing buckets???
+// Efficient key republishing
+//
 // }}}
 // {{{ Kademlia::Kademlia
 Kademlia::Kademlia(Node *n, Args a)
-  : DHTProtocol(n), _id(ConsistentHash::ip2chid(n->ip()) & 0x0000ffff),
-    _joined(false)
+  : DHTProtocol(n), _id(ConsistentHash::ip2chid(n->ip()) & 0x0000ffff)
 {
   KDEBUG(1) << "ip: " << ip() << endl;
   _values.clear();
@@ -35,14 +47,14 @@ Kademlia::Kademlia(Node *n, Args a)
     _alpha = a.nget<unsigned>("alpha", 10);
 
   // precompute masks
-  if(!_rightmasks[0]) {
-    NodeID mask = 0;
-    _rightmasks[0] = (NodeID) -1;
-    for(unsigned i=1; i<idsize; i++) {
-      mask |= (1<<(i-1));
-      _rightmasks[i] = ~mask;
-    }
-  }
+  // if(!_rightmasks[0]) {
+  //   NodeID mask = 0;
+  //   _rightmasks[0] = (NodeID) -1;
+  //   for(unsigned i=1; i<idsize; i++) {
+  //     mask |= (1<<(i-1));
+  //     _rightmasks[i] = ~mask;
+  //   }
+  // }
   _tree = new k_bucket_tree(this);
   assert(_tree);
 }
@@ -64,7 +76,6 @@ Kademlia::join(Args *args)
 
   if(wkn == ip()) {
     KDEBUG(1) << "Node " << printID(_id) << " is wellknown." << endl;
-    _joined = true;
     return;
   }
 
@@ -105,7 +116,6 @@ Kademlia::join(Args *args)
     _tree->erase(p->id);
 
   delaycb(STABLE_TIMER, &Kademlia::reschedule_stabilizer, (void *) 0);
-  _joined = true;
 }
 
 // }}}
@@ -206,7 +216,7 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
   }
 
   // issue new RPCs
-  while(outstanding < _alpha) {
+  while(true) {
     // find the first that we haven't asked yet.
     peer_t *toask = 0;
     assert(toask == 0);
@@ -221,69 +231,70 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
     }
 
     // we're done.
-    if(!toask) {
-      if(outstanding) {
-        goto wait;
-      } else {
-        KDEBUG(2) << "do_lookup: toask has no value. we're done." << endl;
-        break;
-      }
+    if(!toask && !outstanding)
+      break;
+
+    // there's a guy we didn't ask yet, and there's less than alpha outstanding
+    // RPCs: send out another one.
+    if(toask && outstanding < _alpha) {
+      la = new lookup_args(_id, ip(), largs->id);
+      lr = new lookup_result;
+      assert(la && lr);
+      KDEBUG(2) << "do_lookup: going into asyncRPC" << endl;
+      assert(toask);
+      assert(toask->ip <= 512 && toask->ip > 0);
+      rpc = asyncRPC(toask->ip, &Kademlia::find_node, la, lr);
+      KDEBUG(2) << "do_lookup: returning from asyncRPC" << endl;
+      assert(rpc);
+      rpcset.insert(rpc);
+      resultmap[rpc] = new callinfo(toask->ip, la, lr);
+      asked[toask->id] = true;
+
+      // don't block yet if there's more RPCs we can send
+      if(++outstanding < _alpha)
+        continue;
     }
 
-    // send an asyncRPC to that guy
-    la = new lookup_args(_id, ip(), largs->id);
-    lr = new lookup_result;
-    assert(la && lr);
-    KDEBUG(2) << "do_lookup: going into asyncRPC" << endl;
-    assert(toask);
-    assert(toask->ip <= 512 && toask->ip > 0);
-    rpc = asyncRPC(toask->ip, &Kademlia::find_node, la, lr);
-    KDEBUG(2) << "do_lookup: returning from asyncRPC" << endl;
-    assert(rpc);
-    rpcset.insert(rpc);
-    resultmap[rpc] = new callinfo(toask->ip, la, lr);
-    asked[toask->id] = true;
 
-    // issue more RPCs when we can
-    if(++outstanding < _alpha) {
-      KDEBUG(2) << "do_lookup: outstanding = " << outstanding << " is less than " << _alpha << endl;
-      continue;
-    }
+    // at this point we have the full number of outstanding RPCs, so block on
+    // rcvRPC, but receive as many as we can while we're at it.  Use select() to
+    // not block beyond the first rcvRPC.
+    do {
+      KDEBUG(2) << "do_lookup: going into rcvRPC" << endl;
+      unsigned donerpc = rcvRPC(&rpcset);
+      KDEBUG(2) << "do_lookup: rcvRPC returned" << endl;
+      outstanding--;
+      assert(donerpc);
+      callinfo *ci = resultmap[donerpc];
+      resultmap.erase(donerpc);
 
-wait:
-    // XXX: this is not helping a bit.
-    // wait for reply, and handle the incoming results
-    KDEBUG(2) << "do_lookup: going into select" << endl;
-    unsigned donerpc = select(&rpcset);
-    KDEBUG(2) << "do_lookup: select returned" << endl;
-    outstanding--;
-    assert(donerpc);
-    callinfo *ci = resultmap[donerpc];
+      // update our own k-buckets
+      _tree->insert(ci->lr->rid, ci->ip);
 
-    // update our own k-buckets
-    _tree->insert(ci->lr->rid, ci->ip);
+      // merge both tables and cut out everything after the first k.
+      SortNodes sn(largs->key);
+      vector<peer_t*> *newresults = new vector<peer_t*>(results->size() + ci->lr->results.size());
+      assert(newresults);
+      merge(results->begin(), results->end(), 
+            ci->lr->results.begin(), ci->lr->results.end(),
+            newresults->begin(), sn);
 
-    // merge both tables and cut out everything after the first k.
-    SortNodes sn(largs->key);
-    vector<peer_t*> *newresults = new vector<peer_t*>(results->size() + ci->lr->results.size());
-    assert(newresults);
-    merge(results->begin(), results->end(), 
-          ci->lr->results.begin(), ci->lr->results.end(),
-          newresults->begin(), sn);
+      // cut off all entries larger than the first _k
+      if(_k < newresults->size())
+        newresults->resize(_k);
+      delete results;
+      results = newresults;
 
-    // cut off all entries larger than the first _k
-    if(_k < newresults->size())
-      newresults->resize(_k);
-    delete results;
-    results = newresults;
-
-    // mark new nodes as not yet asked
-    for(vector<peer_t*>::const_iterator i=results->begin(); i != results->end(); ++i)
-      if(asked.find((*i)->id) == asked.end())
-        asked[(*i)->id] = false;
-    delete ci;
+      // mark new nodes as not yet asked
+      for(vector<peer_t*>::const_iterator i=results->begin(); i != results->end(); ++i)
+        if(asked.find((*i)->id) == asked.end())
+          asked[(*i)->id] = false;
+      delete ci;
+    } while(select(&rpcset));
   }
+
 done:
+  assert(!resultmap.size());
 
   KDEBUG(2) << "do_lookup: done" << endl;
   // this is the answer
@@ -485,7 +496,7 @@ Kademlia::dump()
   if(!verbose)
     return;
 
-  cout << "*** DUMP FOR " << printbits(_id) << " (" << _joined << ")" << endl;
+  cout << "*** DUMP FOR " << printbits(_id) << endl;
   cout << "   *** -------------------------- ***" << endl;
   _tree->dump();
   cout << "   *** -------------------------- ***" << endl;
@@ -862,6 +873,7 @@ k_bucket::stabilized(vector<NodeID> lid, string prefix, unsigned depth)
     return false;
   }
 
+  threadexitsall(0);
   return true;
 }
 
