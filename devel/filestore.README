@@ -1,0 +1,19 @@
+This is a Chord app that demonstrates how to store and retrieve from
+DHash. It stores files in a simple format.
+
+Examples of use:
+storing a file:
+> ./filestore ../lsd/csock -s some_file
+e34cb4fa86a073f390b224f637b90db88f82db06
+
+listing inode info:
+> ./filestore ../lsd/csock -l e34cb4fa86a073f390b224f637b90db88f82db06
+some_file: 19463682 bytes
+
+fetching a file:
+> ./filestore ../lsd/csock -f e34cb4fa86a073f390b224f637b90db88f82db06
+
+
+
+todo:
+bette documentation
