@@ -27,7 +27,7 @@ make SUBDIRS="\${BASEDIRS} usenet"
 
 %install
 rm -rf $RPM_BUILD_ROOT
-make install-strip SUBDIRS="\${BASEDIRS} usenet" DESTDIR=$RPM_BUILD_ROOT
+make install SUBDIRS="\${BASEDIRS} usenet" DESTDIR=$RPM_BUILD_ROOT
 
 %clean
 rm -rf $RPM_BUILD_ROOT
