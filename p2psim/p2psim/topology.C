@@ -70,12 +70,14 @@ Topology::parse(char *filename)
       words.erase(words.begin());
       top = TopologyFactory::create(topology, &words);
     } else if(words[0] == "failure_model") {
+      if(!with_failure_model) {
+        cerr << "warning: -f flag but found failure_model keyword. ignoring failure_model!" << filename << endl;
+	continue;
+      }
       words.erase(words.begin());
       string fm = words[0];
       words.erase(words.begin());
       failure_model = FailureModelFactory::create(fm, &words);
-      if(!with_failure_model)
-        cerr << "warning: -f flag but found failure_model keyword. ignoring failure_model!" << filename << endl;
     } else {
       cerr << "header lines in topology file should be ``topology [T]'' or ``failure_model [F]" << endl;
       exit(-1);
@@ -86,10 +88,15 @@ Topology::parse(char *filename)
     cerr << "the topology you specified is unknown" << endl;
     exit(-1);
   }
-
   if(!failure_model) {
-    cerr << "the failure_model you specified is unknown" << endl;
-    exit(-1);
+    if (!with_failure_model) {
+      vector<string> words;
+      failure_model = FailureModelFactory::create("NullFailureModel", &words);
+      assert (failure_model);
+    } else {
+      cerr << "the failure_model you specified is unknown" << endl;
+      exit(-1);
+    }
   }
 
   // create the network.
