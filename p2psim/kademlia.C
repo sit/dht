@@ -81,12 +81,12 @@ Kademlia::stabilized(vector<NodeID> lid)
     // qualify for this entry in the finger table, so the node that says there
     // is no such is WRONG.
     if(it != lid.end() && *it <= upper) {
-      KDEBUG(5) << "not stabilized because node with ID " << printbits(_id) << ", entry " << i << " is invalid." << endl;
-      KDEBUG(5) << "lowermask = " << printbits(lower_mask) << endl;
-      KDEBUG(5) << "~lowermask = " << printbits(~lower_mask) << endl;
-      KDEBUG(5) << "lower = " << printbits(lower) << endl;
-      KDEBUG(5) << "upper = " << printbits(upper) << endl;
-      KDEBUG(5) << "existing = " << printbits(*it) << endl;
+      KDEBUG(4) << "not stabilized because node with ID " << printbits(_id) << ", entry " << i << " is invalid." << endl;
+      KDEBUG(4) << "lowermask = " << printbits(lower_mask) << endl;
+      KDEBUG(4) << "~lowermask = " << printbits(~lower_mask) << endl;
+      KDEBUG(4) << "lower = " << printbits(lower) << endl;
+      KDEBUG(4) << "upper = " << printbits(upper) << endl;
+      KDEBUG(4) << "existing = " << printbits(*it) << endl;
       return false;
     }
   }
@@ -144,7 +144,39 @@ Kademlia::join(Args *args)
   // merge that data in our _values table
   for(map<NodeID, Value>::const_iterator pos = tr.values.begin(); pos != tr.values.end(); ++pos)
     _values[pos->first] = pos->second;
+
+  delaycb(STABLE_TIMER, &Kademlia::reschedule_stabilizer, (void *) 0);
 }
+
+
+void
+Kademlia::reschedule_stabilizer(void *x)
+{
+  // if stabilize blah.
+  stabilize();
+  delaycb(STABLE_TIMER, &Kademlia::reschedule_stabilizer, (void *) 0);
+}
+
+
+void 
+Kademlia::stabilize(void)
+{
+  // go through table and look up all keys
+  lookup_args la;
+  lookup_result lr;
+  la.id = _id;
+  la.ip = ip();
+
+  for(unsigned i=0; i<idsize; i++) {
+    la.key = (_id ^ (1<<i));
+    KDEBUG(3) << "stabilize: looking up entry " << i << ": " << printbits(la.key) << endl;
+    do_lookup(&la, &lr);
+    KDEBUG(3) << "stabilize: looking result for entry " << i << ": " << printbits(lr.id) << endl;
+    if(lr.id != _id)
+      merge_into_ftable(la.key, lr.ip);
+  }
+}
+
 
 void
 Kademlia::do_join(void *args, void *result)
@@ -229,7 +261,8 @@ Kademlia::do_lookup(void *args, void *result)
 
 done:
   // only merge _after_ the lookup to avoid returning a node's own id.
-  merge_into_ftable(origID, origIP);
+  if(origID != _id)
+    merge_into_ftable(origID, origIP);
 
   // put my own id in reply
   lresult->rid = _id;
@@ -319,13 +352,7 @@ Kademlia::printID(NodeID id)
 Kademlia::NodeID
 Kademlia::distance(Kademlia::NodeID from, Kademlia::NodeID to)
 {
-  // KDEBUG(5) << "distance between " << printbits(from) << " and " << printbits(to) << " = ";
-  NodeID ret;
-
-  ret = from ^ to;
-
-  DEBUG(5) << printbits(ret) << "\n";
-  return ret;
+  return from ^ to;
 }
 
 

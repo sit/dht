@@ -145,6 +145,9 @@ private:
   // this is what we're here for: being a NodeID -> value hashtable
   map<NodeID, Value> _values;
 
+  void reschedule_stabilizer(void*);
+  void stabilize(void);
+
 
   static NodeID _rightmasks[];
 };
