@@ -333,8 +333,9 @@ Node::print_stats()
   uint num_nodes = Network::Instance()->size();
   double overall_bw = ((double) total)/(total_time*((double) num_nodes));
   double live_bw = ((double) total)/live_time_s; 
-  printf( "BW_TOTALS:: time(s):%.3f nodes:%d overall_bw(bytes/node/s):%.3f live_bw(bytes/node/s):%.3f\n", 
-	  total_time, num_nodes, overall_bw, live_bw );
+  printf( "BW_TOTALS:: time(s):%.3f live_time(s/node):%.3f nodes:%d overall_bw(bytes/node/s):%.3f live_bw(bytes/node/s):%.3f\n", 
+	  total_time, live_time_s/((double) num_nodes), num_nodes, 
+	  overall_bw, live_bw );
 
   // then do lookup stats
   double total_lookups = _correct_lookups.size() + _incorrect_lookups.size() +
@@ -617,7 +618,7 @@ Node::Receive(void *px)
   Node *s = Network::Instance()->getnode(reply->src());
   reply->_queue_delay = s->queue_delay ();
 
-  if (proto->alive ()) {
+  if (proto->alive () && Network::Instance()->gettopology()->latency(p->_src, p->_dst, p->reply()) != 100000 ) {
     (p->_fn)(p->_args);
     reply->_ok = true;
   } else {
