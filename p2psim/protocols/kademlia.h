@@ -218,9 +218,8 @@ public:
   // statistics
   enum stat_type {
     STAT_LOOKUP = 0,
-    STAT_FIND_VALUE,
-    STAT_PING,
-    STAT_STABILIZE
+    STAT_STABILIZE,
+    STAT_PING
   };
 
   //
@@ -229,13 +228,11 @@ public:
   // {{{ find_value_args and find_value_args
   struct find_value_args {
     find_value_args(NodeID xid, IPAddress xip, NodeID k = 0) :
-      id(xid), ip(xip), key(k), tid(threadid()) {}
+      id(xid), ip(xip), key(k), stattype(STAT_LOOKUP) {}
     NodeID id;
     IPAddress ip;
     NodeID key;
-
-    // for debugging
-    unsigned tid;
+    stat_type stattype; // for stats
   };
 
   class find_value_result { public:
@@ -255,13 +252,11 @@ public:
   // {{{ find_node_args and find_node_result
   struct find_node_args {
     find_node_args(NodeID xid, IPAddress xip, NodeID k) :
-      id(xid), ip(xip), key(k), tid(threadid()) {}
+      id(xid), ip(xip), key(k), stattype(STAT_LOOKUP) {}
     NodeID id;
     IPAddress ip;
     NodeID key;
-
-    // for debugging
-    unsigned tid;
+    stat_type stattype;
   };
 
   class find_node_result { public:
@@ -274,14 +269,11 @@ public:
   // {{{ lookup_args and lookup_result
   struct lookup_args {
     lookup_args(NodeID xid, IPAddress xip, NodeID k = 0, bool ri = false) :
-      stattype(STAT_LOOKUP), id(xid), ip(xip), key(k), tid(threadid()) {}
-    stat_type stattype;
+      id(xid), ip(xip), key(k), stattype(STAT_LOOKUP) {}
     NodeID id;
     IPAddress ip;
     NodeID key;
-
-    // for debugging
-    unsigned tid;
+    stat_type stattype;
   };
 
   class lookup_result { public:
@@ -346,7 +338,7 @@ public:
   static unsigned debugcounter;         // 
   static unsigned stabilize_timer;      // how often to stabilize
   static unsigned refresh_rate;         // how often to refresh info
-  static bool learn_from_rpc;           // do we learn from RPCs?
+  static bool learn_stabilize_only;           // do we learn from RPCs?
   static Time max_lookup_time;          // how long do we keep retrying
   static Time _default_timeout;         // default timeout
   static k_nodeinfo_pool *pool;         // pool of k_nodeinfo_pool

@@ -43,7 +43,7 @@ unsigned Kademlia::alpha = 0;
 unsigned Kademlia::stabilize_timer = 0;
 unsigned Kademlia::refresh_rate = 0;
 Time Kademlia::max_lookup_time = 0;
-bool Kademlia::learn_from_rpc = true;
+bool Kademlia::learn_stabilize_only = false;
 
 long long unsigned Kademlia::_rpc_bytes = 0;
 long unsigned Kademlia::_good_rpcs = 0;
@@ -91,7 +91,7 @@ Kademlia::Kademlia(IPAddress i, Args a)
 
   use_replacement_cache = a.nget<use_replacement_cache_t>("rcache", ENABLED, 10);
   max_lookup_time = a.nget<Time>("maxlookuptime", 4000, 10);
-  learn_from_rpc = a.nget<unsigned>("learn", 1, 10) == 1 ? true : false;
+  learn_stabilize_only = a.nget<unsigned>("stablearn_only", 1, 10) == 1 ? true : false;
 
   if(!k) {
     k = a.nget<unsigned>("k", 20, 10);
@@ -201,7 +201,7 @@ Kademlia::~Kademlia()
         Kademlia::alpha,
         Kademlia::stabilize_timer,
         Kademlia::refresh_rate,
-        Kademlia::learn_from_rpc ? 1 : 0,
+        Kademlia::learn_stabilize_only ? 1 : 0,
         Kademlia::use_replacement_cache,
 
         _rpc_bytes,
@@ -511,7 +511,7 @@ Kademlia::lookup_wrapper(lookup_wrapper_args *args)
     // assert(_nodeid2kademlia[fr.succ.id]->ip() == fr.succ.ip);
     if(!doRPC(fr.succ.ip, &Kademlia::do_ping, &pa, &pr, Kademlia::_default_timeout) && alive()) {
       _lookup_dead_node++;
-      if(flyweight[fr.succ.id])
+      if(flyweight[fr.succ.id] && !Kademlia::learn_stabilize_only)
         erase(fr.succ.id);
     }
     after = now();
@@ -574,7 +574,7 @@ Kademlia::do_ping(ping_args *args, ping_result *result)
 {
   // put the caller in the tree, but never ourselves
   // KDEBUG(1) << "Kademlia::do_ping from " << printID(args->id) << endl;
-  if(Kademlia::learn_from_rpc)
+  if(!Kademlia::learn_stabilize_only)
     update_k_bucket(args->id, args->ip);
 }
 
@@ -582,9 +582,10 @@ Kademlia::do_ping(ping_args *args, ping_result *result)
 // {{{ Kademlia::util for find_value and do_lookup
 #define SEND_RPC(x, ARGS, RESULT, HOPS) {                                               \
     find_node_args *fa = New find_node_args(_id, ip(), ARGS->key);                      \
+    fa->stattype = ARGS->stattype;                                                      \
     find_node_result *fr = New find_node_result;                                        \
     fr->hops = HOPS;                                                                    \
-    record_stat(STAT_FIND_VALUE, 1, 0);                                                 \
+    record_stat(ARGS->stattype, 1, 0);                                                  \
     unsigned rpc = asyncRPC(x.ip, &Kademlia::find_node, fa, fr, Kademlia::_default_timeout); \
     callinfo *ci = New callinfo(x, fa, fr);                                             \
     rpcset->insert(rpc);                                                                \
@@ -616,8 +617,7 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
   HashMap<NodeID, unsigned> hops;
   bool deadtime = false;
   Time deadtimestart = 0;
-  if(Kademlia::learn_from_rpc)
-    update_k_bucket(fargs->id, fargs->ip);
+  update_k_bucket(fargs->id, fargs->ip);
   fresult->rid = _id;
   fresult->hops = 0;
 
@@ -683,24 +683,25 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
     k_nodeinfo ki;
     if(!alive()) {
       delete ci;
-      CREATE_REAPER(STAT_FIND_VALUE); // returns
+      CREATE_REAPER(ci->fa->stattype); // returns
     }
 
     // node was dead
     closer::n = fargs->key;
     if(!ok) {
-      if(flyweight[ci->ki.id])
+      if(flyweight[ci->ki.id] && !Kademlia::learn_stabilize_only)
         erase(ci->ki.id);
       delete ci;
       if(!successors.size()) {
-        CREATE_REAPER(STAT_FIND_VALUE); // returns
+        CREATE_REAPER(ci->fa->stattype); // returns
       }
       goto next_candidate;
     }
 
     // node was ok
-    record_stat(STAT_FIND_VALUE, ci->fr->results.size(), 0);
-    update_k_bucket(ci->ki.id, ci->ki.ip);
+    record_stat(ci->fa->stattype, ci->fr->results.size(), 0);
+    if(!Kademlia::learn_stabilize_only)
+      update_k_bucket(ci->ki.id, ci->ki.ip);
 
     // put all the ones better than what we knew so far in successors, provided
     // we haven't asked them already.
@@ -715,7 +716,6 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
       if(!hops.find_pair(ki.id))
         hops.insert(ki.id, ci->fr->hops+1);
     }
-    delete ci;
 
     // cut out elements beyond index k
     while(successors.size() > Kademlia::k)
@@ -726,7 +726,9 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
     if(ki.id == fargs->key) {
       fresult->hops = hops[ki.id];
       fresult->succ = ki;
-      CREATE_REAPER(STAT_FIND_VALUE); // returns
+      stat_type st = ci->fa->stattype;
+      delete ci;
+      CREATE_REAPER(st); // returns
     }
 
     // if our standing hasn't improved,
@@ -739,8 +741,10 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
     //
     // XXX: Thomer completely pulled this out of his ass.
     if(!successors.size() || useless_replies > Kademlia::alpha) {
-      CREATE_REAPER(STAT_FIND_VALUE); // returns
+      stat_type st = ci->fa->stattype;
+      CREATE_REAPER(st); // returns
     }
+    delete ci;
 
 next_candidate:
     while(outstanding_rpcs->size() < (int) Kademlia::alpha) {
@@ -778,13 +782,13 @@ next_candidate:
 
 // }}}
 // {{{ Kademlia::do_lookup
+//
+// only called for stabilization, so always learn
 void
 Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
 {
   // KDEBUG(1) << "Kademlia::do_lookup: node " << printID(largs->id) << " does lookup for " << printID(largs->key) << ", flyweight.size() = " << endl;
   // assert(alive());
-  if(Kademlia::learn_from_rpc)
-    update_k_bucket(largs->id, largs->ip);
   lresult->rid = _id;
 
   // find successors of this key
@@ -846,7 +850,8 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
 
     // node was ok
     record_stat(largs->stattype, ci->fr->results.size(), 0);
-    update_k_bucket(ci->ki.id, ci->ki.ip);
+    if(!Kademlia::learn_stabilize_only)
+      update_k_bucket(ci->ki.id, ci->ki.ip);
 
     // put in successors list if:
     //   - it's better than the worst-of-best we have so far AND
@@ -913,11 +918,10 @@ next_candidate:
 void
 Kademlia::find_node(find_node_args *largs, find_node_result *lresult)
 {
-  // KDEBUG(2) << "find_node invoked by " << printID(largs->id) << ", looking for " << printID(largs->key) << ", calling thread = " << largs->tid << endl;
   // assert(alive());
-
-  if(Kademlia::learn_from_rpc)
+  if(!Kademlia::learn_stabilize_only || largs->stattype == STAT_STABILIZE)
     update_k_bucket(largs->id, largs->ip);
+
   lresult->rid = _id;
 
   // deal with the empty case
@@ -1149,12 +1153,13 @@ Kademlia::reap(void *r)
     // cout << "Kademlia::reap ok = " << ok << ", ki = " << endl;
     if(ok) {
       _ok_by_reaper++;
-      if(ri->k->alive())
+      if(ri->k->alive() && (!Kademlia::learn_stabilize_only || ci->fa->stattype == STAT_STABILIZE))
         ri->k->update_k_bucket(ci->ki.id, ci->ki.ip);
       ri->k->record_stat(ri->stat, ci->fr->results.size(), 0);
+
     } else if(ri->k->flyweight[ci->ki.id]) {
       _timeouts_by_reaper++;
-      if(ri->k->alive())
+      if(ri->k->alive() && (!Kademlia::learn_stabilize_only || ci->fa->stattype == STAT_STABILIZE))
         ri->k->erase(ci->ki.id);
     }
 
@@ -1680,7 +1685,7 @@ k_stabilizer::execute(k_bucket *k, string prefix, unsigned depth, unsigned leftr
     mask |= (((Kademlia::NodeID) 1) << (Kademlia::idsize-depth-i));
 
   Kademlia::NodeID random_key = _id & mask;
-  // KDEBUG(2) << "k_stabilizer: prefix = " << prefix << ", mask = " << Kademlia::printbits(mask) << ", random_key = " << Kademlia::printbits(random_key) << endl;
+  KDEBUG(2) << "k_stabilizer: prefix = " << prefix << ", mask = " << Kademlia::printbits(mask) << ", random_key = " << Kademlia::printbits(random_key) << endl;
 
   // find first successor that we believe is alive.
   vector<k_nodeinfo*> successors;
