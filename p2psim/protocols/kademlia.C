@@ -31,27 +31,39 @@
 using namespace std;
 
 bool Kademlia::docheckrep = false;
-unsigned Kademlia::k = 0;
-unsigned Kademlia::alpha = 0;
 unsigned Kademlia::debugcounter = 1;
-unsigned Kademlia::stabilize_timer = 0;
-unsigned Kademlia::refresh_rate = 0;
 unsigned Kademlia::_nkademlias = 0;
 Kademlia::k_nodeinfo_pool *Kademlia::pool = 0;
 
-double Kademlia::_rpc_bytes = 0;
-Time Kademlia::_good_latency = 0;
-Time Kademlia::_ping_latency = 0;
-Time Kademlia::_lookup_latency = 0;
-Time Kademlia::_hop_latency = 0;
+unsigned Kademlia::k = 0;
+unsigned Kademlia::alpha = 0;
+unsigned Kademlia::stabilize_timer = 0;
+unsigned Kademlia::refresh_rate = 0;
+
+unsigned Kademlia::_rpc_bytes = 0;
+unsigned Kademlia::_good_rpcs = 0;
+unsigned Kademlia::_bad_rpcs = 0;
+unsigned Kademlia::_ok_by_reaper = 0;
+unsigned Kademlia::_timeouts_by_reaper = 0;
+
+unsigned Kademlia::_good_lookups = 0;
+unsigned Kademlia::_lookup_dead_node = 0;
+unsigned Kademlia::_ok_failures = 0;
+unsigned Kademlia::_bad_failures = 0;
+
+Time Kademlia::_good_total_latency = 0;
+Time Kademlia::_good_lookup_latency = 0;
+Time Kademlia::_good_ping_latency = 0;
+unsigned Kademlia::_good_timeouts = 0;
+
 unsigned Kademlia::_good_hops = 0;
-unsigned Kademlia::_rpcs = 0;         // rpcs sent in lookup
-unsigned Kademlia::_good_lookups = 0; // successful lookups
-unsigned Kademlia::_ok_failures = 0;  // # legitimate lookup failures
-unsigned Kademlia::_bad_failures = 0; // lookup failed, but node was live
-unsigned Kademlia::_timeouts = 0;     // timeouts suffered during lookup
-unsigned Kademlia::_timeouts_by_reaper = 0; // timed out RPCs reaped
-unsigned Kademlia::_ok_by_reaper = 0; // normal RPCs reaped
+Time Kademlia::_good_hop_latency = 0;
+
+Time Kademlia::_bad_lookup_latency = 0;
+unsigned Kademlia::_bad_timeouts = 0;
+unsigned Kademlia::_bad_hops = 0;
+Time Kademlia::_bad_hop_latency = 0;
+
 
 Kademlia::NodeID *Kademlia::_all_kademlias = 0;
 HashMap<Kademlia::NodeID, Kademlia*> *Kademlia::_nodeid2kademlia = 0;
@@ -135,20 +147,66 @@ Kademlia::~Kademlia()
 
   delete _root;
 
-  if(ip() == 1){
-    printf("rpc_bytes %.0f\n", _rpc_bytes);
-    printf("%d good, %d ok failures, %d bad failures, %d timeouts\n",
-           _good_lookups, _ok_failures, _bad_failures, _timeouts);
-    printf("%d rpcs, %d ok (reaper) %d timeouts (reaper)\n",
-           _rpcs, _ok_by_reaper, _timeouts_by_reaper);
-    if(_good_lookups > 0) {
-      printf("avglat %.1f lookuplat %.1f pinglat %.1f avghops %.2f hoplat %.1f\n",
-             (double) _good_latency / _good_lookups,
-             (double) _lookup_latency / _good_lookups,
-             (double) _ping_latency / _good_lookups,
-             (double) _good_hops / _good_lookups,
-             (double) _hop_latency / _good_hops);
-    }
+  if(ip() == 1) {
+    printf("\
+#  1: k\n\
+#  2: alpha\n\
+#  3: stabilize_timer\n\
+#  4: refresh_timer\n\
+#\n\
+#  5: total number of bytes for RPCs\n\
+#  6: number of RPCs sent in lookup (good)\n\
+#  7: number of RPCs sent in lookup (bad)\n\
+#  8: number of good      RPCs reaped by reaper\n\
+#  9: number of timed out RPCs reaped by reaper\n\
+#\n\
+# 10: number of good lookups\n\
+# 11: number of good lookups, but node was dead\n\
+# 12: number of bad lookups, node was dead\n\
+# 13: number of bad lookups, node was alive\n\
+#\n\
+# 14: avg total lookup latency (good)\n\
+# 15: avg pure lookup latency (good)\n\
+# 16: avg pure ping latency (good)\n\
+# 17: number of timeouts suffered during lookup (good)\n\
+#\n\
+# 18: avg number of hops (good)\n\
+# 19: avg latency per hop (good)\n\
+#\n\
+# 20: avg pure lookup latency (bad)\n\
+# 21: number of timeouts suffered during lookup (bad)\n\
+# 22: avg number of hops (bad)\n\
+# 23: avg latency per hop (bad)\n\
+#\n\
+%d %d %d %d    %d %d %d %d %d    %d %d %d %d    %.2f %.2f %.2f %d    %.2f %.2f   %.2f %d %.2f %.2f\n",
+        Kademlia::k,
+        Kademlia::alpha,
+        Kademlia::stabilize_timer,
+        Kademlia::refresh_rate,
+
+        _rpc_bytes,
+        _good_rpcs,
+        _bad_rpcs,
+        _ok_by_reaper,
+        _timeouts_by_reaper,
+
+        _good_lookups,
+        _lookup_dead_node,
+        _ok_failures,
+        _bad_failures,
+
+        (double) _good_total_latency / _good_lookups,
+        (double) _good_lookup_latency / _good_lookups,
+        (double) _good_ping_latency / _good_lookups,
+        _good_timeouts,
+
+        (double) _good_hops / _good_lookups,
+        (double) _good_hop_latency / _good_hops,
+
+        (double) _bad_lookup_latency / (_ok_failures + _bad_failures),
+        _bad_timeouts,
+        (double) _bad_hops / (_ok_failures + _bad_failures),
+        (double) _bad_hop_latency / (_ok_failures + _bad_failures));
   }
 
   if(_all_kademlias) {
@@ -398,36 +456,54 @@ Kademlia::lookup(Args *args)
                           (*_nodeid2kademlia)[key]->_joined;
 
   // now ping that nod.
-  ping_args pa(fr.succ.id, fr.succ.ip);
-  ping_result pr;
-  Time pingbegin = now();
-  if(!doRPC(fr.succ.ip, &Kademlia::do_ping, &pa, &pr) && alive())
-    if(flyweight[fr.succ.id])
-      erase(fr.succ.id);
   Time after = now();
+  Time pingbegin = now();
 
-  // blah only once in a while
+
+  // if we found the node, ping it.
+  if(key == fr.succ.id) {
+    ping_args pa(fr.succ.id, fr.succ.ip);
+    ping_result pr;
+    pingbegin = now();
+    if(!doRPC(fr.succ.ip, &Kademlia::do_ping, &pa, &pr) && alive()) {
+      _lookup_dead_node++;
+      if(flyweight[fr.succ.id])
+        erase(fr.succ.id);
+    }
+    after = now();
+  }
+
+  // failure case
+  if(key != fr.succ.id) {
+    _bad_lookup_latency += (after - before);
+    _bad_hops += fr.hops;
+    _bad_timeouts += fr.timeouts;
+    _bad_rpcs += fr.rpcs;
+    _bad_hop_latency += fr.latency;
+
+    if(alive_and_joined) {
+      _bad_failures++;
+    } else {
+      _ok_failures++;
+    }
+    return;
+  }
+
+  // good case
   if(outcounter++ >= 1000) {
-    KDEBUG(0) << pingbegin - before << "ms lookup (" << fr.hops << "h, " << fr.rpcs << "r, " << fr.timeouts << "t), " << after - pingbegin << "ms ping, " << after - before << "ms total." << endl;
+    KDEBUG(0) <<  pingbegin - before << "ms lookup (" << fr.hops << "h, " << fr.rpcs << "r, " << fr.timeouts << "t), " << after - pingbegin << "ms ping, " << after - before << "ms total." << endl;
     outcounter = 0;
   }
 
-  // did we find that node?
-  if(key == fr.succ.id){
-    _good_lookups += 1;
-    _good_latency += (after - before);
-    _good_hops += fr.hops;
-    _lookup_latency += (pingbegin - before);
-    _ping_latency += (after - pingbegin);
-    _timeouts += fr.timeouts;
-    _rpcs += fr.rpcs;
-    _hop_latency += fr.latency;
-  } else if(alive_and_joined) {
-    _bad_failures += 1;
-  } else {
-    _ok_failures += 1;
-  }
+  _good_lookups++;
+  _good_total_latency += (after - before);
+  _good_lookup_latency += (pingbegin - before);
+  _good_ping_latency += (after - pingbegin);
 
+  _good_hops += fr.hops;
+  _good_timeouts += fr.timeouts;
+  _good_rpcs += fr.rpcs;
+  _good_hop_latency += fr.latency;
 }
 
 // }}}
@@ -582,15 +658,16 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
       CREATE_REAPER(STAT_FIND_VALUE); // returns
     }
 
-    // if our standing hasn't improved, 
+    // if our standing hasn't improved,
     if(was_in_last_rpc)
       useless_replies = improved ? 0 : useless_replies++;
 
     // if the last alpha RPCs didn't yield anything better, give up.  I don't
     // think this should ever happen.  It means we went down a dead end alpha
     // times.
-    if(!successors.size() || useless_replies >= Kademlia::alpha) {
-      cout << "dead end" << endl;
+    //
+    // XXX: Thomer completely pulled this out of his ass.
+    if(!successors.size() || useless_replies > Kademlia::alpha) {
       CREATE_REAPER(STAT_FIND_VALUE); // returns
     }
 

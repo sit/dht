@@ -341,21 +341,34 @@ private:
   void update_k_bucket(NodeID, IPAddress);
   void clear();
 
+  // number of instantiated kademlias.
+  static unsigned _nkademlias;
+
   // global statistics
-  static double _rpc_bytes; // total traffic
-  static Time _good_latency; // successful lookups, total time
-  static Time _ping_latency; // successful lookups, time spent in ping
-  static Time _lookup_latency; // successful lookups, time spent in lookup
-  static Time _hop_latency; // latency from nodes that improve our hopcount
-  static unsigned _good_hops;
-  static unsigned _rpcs;
-  static unsigned _timeouts;
+  static unsigned _rpc_bytes;
+  static unsigned _good_rpcs;
+  static unsigned _bad_rpcs;
   static unsigned _ok_by_reaper;
   static unsigned _timeouts_by_reaper;
+
   static unsigned _good_lookups;
+  static unsigned _lookup_dead_node;
   static unsigned _ok_failures;
   static unsigned _bad_failures;
-  static unsigned _nkademlias;
+
+  static Time _good_total_latency;
+  static Time _good_lookup_latency;
+  static Time _good_ping_latency;
+  static unsigned _good_timeouts;
+
+  static unsigned _good_hops;
+  static Time _good_hop_latency;
+
+  static Time _bad_lookup_latency;
+  static unsigned _bad_timeouts;
+  static unsigned _bad_hops;
+  static Time _bad_hop_latency;
+
 
 
   //
