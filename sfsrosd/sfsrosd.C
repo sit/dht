@@ -3,9 +3,6 @@
 #include "rxx.h"
 #ifdef __linux__
 #include <sysconf.h>
-#include <unistd.h>       
-#define __USE_BSD
-#include <grp.h>
 #endif /* __linux__ */
 
 static str sfsrodbfile;
@@ -49,8 +46,12 @@ start_server ()
   setgroups (0, NULL);
 
   warn ("version %s, pid %d\n", VERSION, getpid ());
+  str sc_path = sfs_hostinfo2path (cres.reply->servinfo.host);
+  if (!sc_path) 
+    fatal << "couldn't form path\n";
+
   warn << "serving " << sfsroot << "/" 
-       << sfs_hostinfo2path (cres.reply->servinfo.host) << "\n";
+       << sc_path << "\n";
   /*
   sfs_hash hostid;
   if (!sfs_mkhostid (&hostid, cres.reply->servinfo.host))

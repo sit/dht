@@ -5,14 +5,14 @@
 
 #define MAX_INT 0x7fffffff
 
-//note that a search callback only "fires" once
-cb_ID
+searchcb_entry *
 p2p::registerSearchCallback(cbsearch_t cb) 
 {
   warn << "registered a search callback\n";
   searchcb_entry *scb = New searchcb_entry (cb);
   scb->cb = cb;
   searchCallbacks.insert_head(scb);
+  return scb;
 }
 
 void
@@ -35,7 +35,6 @@ p2p::tscb_cb (sfs_ID id, sfs_ID x,
 	      searchcb_entry *scb, cbtest_t cb, int result) {
 
   searchcb_entry *next = searchCallbacks.next (scb);
-  searchCallbacks.remove (scb);
   if (result) 
     cb (1);
   else 
@@ -54,4 +53,9 @@ p2p::doActionCallbacks(sfs_ID id, char action)
   //  warn << "\n\n\n\n ACTION CALLBACKS " << actionCallbacks.size() << "\n";
   for (unsigned int i=0; i < actionCallbacks.size (); i++)
     actionCallbacks[i] (id, action);
+}
+
+void
+p2p::removeSearchCallback(searchcb_entry *scb) {
+  searchCallbacks.remove (scb);
 }

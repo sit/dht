@@ -173,7 +173,7 @@ p2p::find_closestpred_test_cache_cb (sfs_ID node, findpredecessor_cbstate *st, i
     }
   else 
     {
-      //      warn << "CACHE HIT\n";
+      warn << "CACHE HIT\n";
       st->cb (st->nprime, st->search_path, SFSP2P_CACHEHIT);
     }
 }

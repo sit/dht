@@ -280,8 +280,9 @@ int dbfe::IMPL_insert_sync_sleepycat(ref<dbrec> key, ref<dbrec> data) {
   skey.data = key->value;
 
   int r = 0;
+  warn << "about to insert data under " << hexdump(key->value, key->len) << "\n";
   if ((r = db->put(db, NULL, &skey, &content, 0)) != 0) return r;
-  db->sync(db, 0);
+  //  db->sync(db, 0);
   return 0;
 } 
 
@@ -294,6 +295,9 @@ dbfe::IMPL_lookup_sync_sleepycat(ref<dbrec> key)
   skey.data = key->value;
   bzero(&content, sizeof(content));
   int r=0;
+
+  warn << "about to fetch data under " << hexdump(key->value, key->len) << "\n";
+  
   if ((r = db->get(db, NULL, &skey, &content, 0)) != 0) return NULL;
   ptr<dbrec> ret = new refcounted<dbrec>(content.data, content.size);
   return ret;

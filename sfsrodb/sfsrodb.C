@@ -1,4 +1,4 @@
-/* $Id: sfsrodb.C,v 1.7 2001/03/21 16:10:01 fdabek Exp $ */
+/* $Id: sfsrodb.C,v 1.8 2001/03/26 08:37:10 fdabek Exp $ */
 
 /*
  * Copyright (C) 1999 Kevin Fu (fubob@mit.edu)
@@ -922,7 +922,11 @@ main (int argc, char **argv)
 {
   setprogname (argv[0]);
 
-  hostname = myname ();
+  char h[1024];
+  strcpy(h, myname ().cstr());
+  for (unsigned int i = 0; i < strlen(h); i++) h[i] = tolower(h[i]);
+  
+  hostname = str (h);
 
   char *exp_dir = NULL;
   char *sk_file = NULL;

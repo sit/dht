@@ -31,14 +31,15 @@ dhashclient::dispatch (svccb *sbp)
     {
       sfs_ID *n = sbp->template getarg<sfs_ID> ();
 
+      searchcb_entry *scb = NULL;
       if (do_caching)
-	defp2p->registerSearchCallback(wrap(this, &dhashclient::search_cb, *n));
+	scb = defp2p->registerSearchCallback(wrap(this, &dhashclient::search_cb, *n));
 
       struct timeval *tp = New struct timeval();
       gettimeofday(tp, NULL);
       defp2p->insert_or_lookup = true;
       defp2p->dofindsucc (*n, wrap(this, &dhashclient::lookup_findsucc_cb, 
-				   sbp, n, tp));
+				   sbp, *n, tp, scb));
     } 
     break;
   case DHASHPROC_INSERT:
@@ -130,10 +131,14 @@ dhashclient::cache_store_cb(dhash_stat *res, clnt_stat err)
 }
 
 void
-dhashclient::lookup_findsucc_cb(svccb *sbp, sfs_ID *n, struct timeval *start,
+dhashclient::lookup_findsucc_cb(svccb *sbp, sfs_ID n, 
+				struct timeval *start,
+				searchcb_entry *scb,
 				sfs_ID succ, route path,
 				sfsp2pstat err) 
 {
+  if (scb)
+    defp2p->removeSearchCallback(scb);
   dhash_res *res = New dhash_res();
   if (err) {
     res->set_status (DHASH_NOENT);
@@ -143,7 +148,7 @@ dhashclient::lookup_findsucc_cb(svccb *sbp, sfs_ID *n, struct timeval *start,
     stats.lookup_path_len += path.size ();
 
     dhash_res *res = New dhash_res();
-    defp2p->doRPC(succ, dhash_program_1, DHASHPROC_FETCH, n, res, 
+    defp2p->doRPC(succ, dhash_program_1, DHASHPROC_FETCH, &n, res, 
 		  wrap(this, &dhashclient::lookup_fetch_cb, sbp, 
 		       res, start, path, n));
   }
@@ -151,7 +156,7 @@ dhashclient::lookup_findsucc_cb(svccb *sbp, sfs_ID *n, struct timeval *start,
 
 void
 dhashclient::lookup_fetch_cb(svccb *sbp, dhash_res *res, 
-			     struct timeval *start, route path, sfs_ID *n,
+			     struct timeval *start, route path, sfs_ID n,
 			     clnt_stat err) 
 {
 
@@ -166,9 +171,10 @@ dhashclient::lookup_fetch_cb(svccb *sbp, dhash_res *res,
 
     if (do_caching) {
       dhash_insertarg *di = New dhash_insertarg ();
-      di->key = *n;
+      di->key = n;
       di->data = res->resok->res;
       di->type = DHASH_CACHE;
+      cache_on_path(di, path);
     }
 
     if (err) 
@@ -205,9 +211,10 @@ dhashclient::search_cb_cb (dhash_stat *res, cbi cb, clnt_stat err) {
   } 
   
   //  warn << "res was " << *res << "\n";
-  if (*res != DHASH_NOTPRESENT)
+  if (*res != DHASH_NOTPRESENT) {
+    warn << "CACHE HIT\n";
     cb (1);
-  else
+ } else
     cb (0);
 }
 

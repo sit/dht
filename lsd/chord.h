@@ -341,7 +341,9 @@ class p2p : public virtual refcount  {
 
   void timing_cb(aclnt_cb cb, location *l, ptr<struct timeval> start, clnt_stat err);
 
-  cb_ID registerSearchCallback(cbsearch_t cb);
+
+  searchcb_entry * registerSearchCallback(cbsearch_t cb);
+  void removeSearchCallback(searchcb_entry *scb);
   void testSearchCallbacks(sfs_ID id, sfs_ID target, cbtest_t cb);
   void tscb (sfs_ID id, sfs_ID x, searchcb_entry *scb, cbtest_t cb);
   void tscb_cb (sfs_ID id, sfs_ID x, searchcb_entry *scb, cbtest_t cb, int result);
@@ -365,3 +367,4 @@ class client {
 };
 
 #endif _CHORD_H_
+

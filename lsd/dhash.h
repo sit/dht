@@ -11,7 +11,7 @@
 #include <chord.h>
 #include <qhash.h>
 #include <sys/time.h>
-
+#include <chord.h>
 /*
  *
  * dhash.h
@@ -47,8 +47,12 @@ class dhashclient {
   void dispatch (svccb *sbp);
   void cache_on_path(dhash_insertarg *item, route path);
 
-  void lookup_findsucc_cb (svccb *sbp, sfs_ID *n, struct timeval *tp,  sfs_ID succ, route path, sfsp2pstat err);
-  void lookup_fetch_cb (svccb *sbp, dhash_res *res, struct timeval *tp, route p, sfs_ID *n,clnt_stat err);
+  void lookup_findsucc_cb (svccb *sbp, 
+			   sfs_ID n, 
+			   struct timeval *tp,
+			   searchcb_entry *scb,
+			   sfs_ID succ, route path, sfsp2pstat err);
+  void lookup_fetch_cb (svccb *sbp, dhash_res *res, struct timeval *tp, route p, sfs_ID n, clnt_stat err);
 
   void insert_findsucc_cb (svccb *sbp, dhash_insertarg *item, sfs_ID succ, route path, sfsp2pstat err);
   void insert_store_cb (svccb *sbp, dhash_stat *res,clnt_stat err);

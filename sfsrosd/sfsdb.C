@@ -55,7 +55,11 @@ sfsrodb::getconnectres (sfs_connectres *conres)
   conres->set_status (SFS_OK);
   conres->reply->servinfo.release = SFS_RELEASE;
   conres->reply->servinfo.host.type = SFS_HOSTINFO;
-  conres->reply->servinfo.host.hostname = myname ();
+  char hostname[1024];
+  strcpy(hostname, myname ().cstr());
+  for (unsigned int i = 0; i < strlen(hostname); i++) hostname[i] = tolower(hostname[i]);
+  conres->reply->servinfo.host.hostname = str (hostname);
+  warn << conres->reply->servinfo.host.hostname << "\n";
 
   conres->reply->servinfo.host.pubkey = sk->n;
   conres->reply->servinfo.prog = SFSRO_PROGRAM;
