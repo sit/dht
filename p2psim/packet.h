@@ -3,7 +3,6 @@
 
 #include <lib9.h>
 #include <thread.h>
-#include <string>
 #include "p2psim.h"
 using namespace std;
 

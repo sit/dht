@@ -1,7 +1,9 @@
 #ifndef __EUCLIDEAN_H
 #define __EUCLIDEAN_H
 
-#include "topology.h"
+#include <thread.h>
+#include "p2psim_hashmap.h"
+
 class Euclidean : public Topology {
 public:
   Euclidean(vector<string>*);

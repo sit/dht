@@ -1,8 +1,8 @@
 #ifndef __CHORD_OBSERVER_H
 #define __CHORD_OBSERVER_H
 
-#include "observer.h"
 #include "chord.h"
+#include "observer.h"
 
 class ChordObserver : public Observer {
 public:

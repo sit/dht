@@ -4,8 +4,6 @@
 
 #include "event.h"
 #include "observer.h"
-#include <vector>
-#include <string>
 using namespace std;
 
 class ObserveEvent : public Event {

@@ -1,12 +1,7 @@
 #ifndef __KADEMLIA_H
 #define __KADEMLIA_H
 
-#include "dhtprotocol.h"
-#include "node.h"
 #include "chord.h"
-#include <set>
-#include <iostream>
-#include "p2psim_hashmap.h"
 using namespace std;
 
 extern unsigned kdebugcounter;

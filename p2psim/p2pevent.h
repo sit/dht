@@ -1,12 +1,7 @@
 #ifndef __P2PEVENT_H
 #define __P2PEVENT_H
 
-#include <vector>
-#include <string>
-#include "args.h"
-#include "event.h"
 #include "dhtprotocol.h"
-
 class P2PEvent : public Event {
 public:
   P2PEvent();

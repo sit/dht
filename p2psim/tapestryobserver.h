@@ -2,11 +2,6 @@
 #define __TAPESTRY_OBSERVER_H
 
 #include "observer.h"
-#include "tapestry.h"
-#include "args.h"
-#include <string>
-#include "consistenthash.h"
-#include <vector>
 
 class TapestryObserver : public Observer {
 public:

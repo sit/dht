@@ -2,10 +2,6 @@
 #define __PASTRY_H
 
 #include "dhtprotocol.h"
-#include "node.h"
-#include <vector>
-#include <set>
-using namespace std;
 
 class Pastry : public DHTProtocol {
 public:

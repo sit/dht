@@ -1,8 +1,6 @@
 #ifndef __RPCHANDLE_H
 #define __RPCHANDLE_H
 
-#include <lib9.h>
-#include <thread.h>
 #include "packet.h"
 #include "thing.h"
 

@@ -1,9 +1,10 @@
 #ifndef __CHORDFINGERPNS_H
 #define __CHORDFINGERPNS_H
 
-#include "chord.h"
 
 /* ChordFingerPNS does Gummadi^2's PNS proximity routing, it's completely static now*/
+
+#include "chord.h"
 
 class LocTablePNS : public LocTable {
   public:

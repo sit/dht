@@ -2,13 +2,9 @@
 #define __NODE_H
 
 #include "threaded.h"
-#include <lib9.h>
-#include <thread.h>
-#include <string>
-#include "p2psim.h"
-#include "packet.h"
 #include "rpchandle.h"
 #include "p2psim_hashmap.h"
+
 using namespace std;
 
 class Protocol;

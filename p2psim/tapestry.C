@@ -1,4 +1,4 @@
-/* $Id: tapestry.C,v 1.2 2003/07/27 05:05:47 strib Exp $ */
+/* $Id: tapestry.C,v 1.3 2003/08/05 21:42:14 thomer Exp $ */
 
 #include "tapestry.h"
 #include "node.h"
@@ -7,15 +7,15 @@
 #include <iostream>
 #include <algorithm>
 #include <math.h>
-#include <vector.h>
+#include <vector>
 
 using namespace std;
 
 Tapestry::Tapestry(Node *n)
   : DHTProtocol(n),
     _base(16),
-    _bits_per_digit(log10(_base)/log10(2)),
-    _digits_per_id((uint)8*sizeof(GUID)/_bits_per_digit)
+    _bits_per_digit((uint) (log10(((double) _base))/log10((double) 2))),
+    _digits_per_id((uint) 8*sizeof(GUID)/_bits_per_digit)
 {
   joined = false;
   _my_id = get_id_from_ip(ip());

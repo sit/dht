@@ -11,13 +11,8 @@
 // test out Vivaldi &c in a situation far removed from
 // Euclidean.
 
-#include <vector>
-#include <string>
-using namespace std;
-
-#include "topology.h"
-#include "node.h"
 #include "dvgraph.h"
+using namespace std;
 
 class RandomGraph : public DVGraph {
 public:

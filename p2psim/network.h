@@ -1,17 +1,9 @@
 #ifndef __NETWORK_H
 #define __NETWORK_H
 
-#include <list>
-using namespace std;
-
-#include <lib9.h>
-#include <thread.h>
-
-#include "packet.h"
 #include "topology.h"
-#include "threaded.h"
-#include "p2psim_hashmap.h"
-
+#include "protocol.h"
+#include <list>
 class Network : public Threaded {
 
 public:

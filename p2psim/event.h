@@ -2,9 +2,6 @@
 #define __EVENT_H
 
 #include "node.h"
-#include "p2psim.h"
-#include <vector>
-#include <string>
 using namespace std;
 
 class Event {

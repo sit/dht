@@ -2,16 +2,7 @@
 #define __PROTOCOL_H
 
 #include "protocolfactory.h"
-#include <string>
-#include <set>
-#include "event.h"
 #include "eventqueue.h"
-#include "rpchandle.h"
-#include "args.h"
-#include "p2psim_hashmap.h"
-#include "p2psim.h"
-using namespace std;
-
 class Node;
 
 // A Protocol is just a named object attached to a Node.

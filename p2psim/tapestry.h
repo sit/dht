@@ -1,15 +1,9 @@
-/* $Id: tapestry.h,v 1.2 2003/07/27 05:05:47 strib Exp $ */
+/* $Id: tapestry.h,v 1.3 2003/08/05 21:42:14 thomer Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
 
-#include "dhtprotocol.h"
-#include "consistenthash.h"
-#include "p2psim.h"
-#include <math.h>
-#include <stdio.h>
-#include <vector>
-#include <set>
+#include "chord.h"
 
 class NodeInfo;
 class RouteEntry;

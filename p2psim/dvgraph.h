@@ -8,7 +8,6 @@
 // the paths between all nodes and the path latencies.
 // So DVGraph implements latency() for you.
 
-#include "topology.h"
 using namespace std;
 
 class DVGraph : public Topology {

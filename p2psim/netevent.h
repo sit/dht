@@ -2,7 +2,6 @@
 #define __NETEVENT_H
 
 #include "event.h"
-#include "packet.h"
 
 class NetEvent : public Event {
 public:

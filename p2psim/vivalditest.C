@@ -1,3 +1,4 @@
+#include <typeinfo>
 #include "vivalditest.h"
 #include "packet.h"
 #include "p2psim.h"
@@ -5,6 +6,7 @@
 #include "euclideangraph.h"
 #include <stdio.h>
 #include <algorithm>
+#include <iostream>
 using namespace std;
 
 vector<VivaldiTest*> VivaldiTest::_all;

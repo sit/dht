@@ -1,13 +1,11 @@
 #ifndef __TOPOLOGY_H
 #define __TOPOLOGY_H
 
-#include "node.h"
-#include "args.h"
+// abstract super class of a topology
 #include <fstream>
 #include "p2psim.h"
 using namespace std;
 
-// abstract super class of a topology
 class Topology {
 public:
   // will create the appropriate topology object

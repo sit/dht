@@ -1,9 +1,9 @@
 #ifndef __CHORDSUCCLISTFINGER_H
 #define __CHORDSUCCLISTFINGER_H
 
-#include "chord.h"
 
 /* ChordFinger implements finger table in addition to Chord with succ list*/
+#include "chord.h"
 
 class ChordFinger: public Chord {
   public:

@@ -2,9 +2,6 @@
 #define __KADEMLIA_OBSERVER_H
 
 #include "observer.h"
-#include "args.h"
-#include <string>
-#include <vector>
 #include "kademlia.h"
 
 class KademliaObserver : public Observer {

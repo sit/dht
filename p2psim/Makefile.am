@@ -13,7 +13,8 @@ p2psim_SOURCES = main.C node.C network.C chord.C packet.C topology.C \
 		 kademliaobserver.C chordtoe.C \
                  threadmanager.C vivalditest.C \
                  vivaldi.C randomgraph.C dvgraph.C euclideangraph.C \
-                 e2egraph.C g2graph.C threadspeedup.C dhtprotocol.C rpchandle.C
+		 e2egraph.C g2graph.C threadspeedup.C dhtprotocol.C \
+		 rpchandle.C tapestry.C
 p2psim_LDADD = -L/usr/local/lib -lthread -l9 -lfmt -lutf -lgmp -lcrypto
 # CXXFLAGS = -g -Wall -fno-exceptions -fno-default-inline -fno-inline -O2
 CXXFLAGS = -g -Wall -fno-exceptions -O2

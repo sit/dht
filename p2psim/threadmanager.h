@@ -2,9 +2,6 @@
 #define __THREADMANAGER_H
 
 #include "threaded.h"
-#include <lib9.h>
-#include <thread.h>
-using namespace std;
 
 class ThreadManager {
 public:

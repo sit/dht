@@ -3,11 +3,7 @@
 
 #include "node.h"
 #include "args.h"
-#include <typeinfo>
 #include <set>
-#include <string>
-#include "p2psim_hashmap.h"
-
 using namespace std;
 
 class ProtocolFactory {

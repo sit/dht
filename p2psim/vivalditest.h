@@ -2,9 +2,7 @@
 #define __VIVALDITEST_H
 
 #include "dhtprotocol.h"
-#include "node.h"
 #include "vivaldi.h"
-#include <vector>
 
 class VivaldiTest : public DHTProtocol {
 public:

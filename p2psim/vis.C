@@ -345,7 +345,8 @@ draw_ring ()
 		  2*radius, 2*radius, (gint16)0, (gint16)64*360);
 
     if (iter->selected) {
-      draw_node (iter);
+      f_node fx = *iter;
+      draw_node(&fx);
     }
 
     if (iter->search.size () > 0) {

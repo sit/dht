@@ -1,13 +1,8 @@
 #ifndef __G2GRAPH_H
 #define __G2GRAPH_H
-#include <vector>
-#include <string>
-#include <fstream>
+
 #include <map>
 using namespace std;
-
-#include "topology.h"
-#include "node.h"
 
 class G2Graph : public Topology {
 public:

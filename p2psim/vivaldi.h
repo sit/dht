@@ -1,14 +1,7 @@
 #ifndef __VIVALDI_H
 #define __VIVALDI_H
 
-#include <vector>
-#include "p2psim.h"
-#include "protocol.h"
 #include "network.h"
-#include "protocolfactory.h"
-#include <iostream>
-
-using namespace std;
 
 // Compute Vivaldi synthetic coordinates.
 // Protocol-independent: doesn't care where the measurements
@@ -42,16 +35,17 @@ class Vivaldi : Protocol {
     bool doRPC(IPAddress dst, BT *target, void (BT::*fn)(AT*, RT*),
                AT *args, RT *ret);
 
- protected:
-  int _nsamples; // how many times sample() has been called
-  int _dim; //dimensionality of the fit space
-  Coord _c; // current estimated coordinates
   struct Sample {
     Coord _c;
     double _latency;
     IPAddress _who;
     Sample(Coord c, double l, IPAddress w) { _c = c; _latency = l; _who = w;}
   };
+
+ protected:
+  int _nsamples; // how many times sample() has been called
+  int _dim; //dimensionality of the fit space
+  Coord _c; // current estimated coordinates
   vector<Sample> _samples;
 
   double randf() { return (random()%1000000000) / 1000000000.0; }

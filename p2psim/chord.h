@@ -1,9 +1,9 @@
 #ifndef __CHORD_H
 #define __CHORD_H
 
+#include "vivaldi.h"
 #include "dhtprotocol.h"
 #include "consistenthash.h"
-#include "vivaldi.h"
 
 #define CHORD_SUCC_NUM 3  // default number of successors maintained
 #define PAD "000000000000000000000000"
