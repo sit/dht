@@ -142,6 +142,16 @@ public:
   void do_transfer(transfer_args *targs, transfer_result *tresult);
 
   void _tree_insert(peer_t&);
+
+  class callinfo { public:
+    callinfo(IPAddress xip, lookup_args *xla, lookup_result *xlr)
+      : ip(xip), la(xla), lr(xlr) {}
+    ~callinfo() { delete la; delete lr; }
+    IPAddress ip;
+    lookup_args *la;
+    lookup_result *lr;
+  };
+
   // }}}
 // }}}
 };

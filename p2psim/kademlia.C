@@ -15,8 +15,8 @@ unsigned Kademlia::_k = 0;
 unsigned Kademlia::_alpha = 0;
 Kademlia::NodeID Kademlia::_rightmasks[8*sizeof(Kademlia::NodeID)];
 
-unsigned k_bucket::_k = Kademlia::k();
-unsigned k_bucket_tree::_k = Kademlia::k();
+unsigned k_bucket::_k = 0;
+unsigned k_bucket_tree::_k = 0;
 
 // XXX: hack for now.
 IPAddress kademlia_wkn_ip = 0;
@@ -30,9 +30,9 @@ Kademlia::Kademlia(Node *n, Args a)
   _values.clear();
 
   if(!_k)
-    _k = a.nget<unsigned>("k");
+    _k = a.nget<unsigned>("k", 10);
   if(!_alpha)
-    _alpha = a.nget<unsigned>("alpha");
+    _alpha = a.nget<unsigned>("alpha", 10);
 
   // precompute masks
   if(!_rightmasks[0]) {
@@ -172,23 +172,34 @@ Kademlia::lookup(Args *args)
 void
 Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
 {
+  unsigned outstanding = 0;
+  RPCSet rpcset;
+  map<unsigned, callinfo*> resultmap;
+  map<NodeID, bool> asked;
+
+
   // store caller id and ip
   NodeID callerID = largs->id;
   IPAddress callerIP = largs->ip;
+
+  KDEBUG(2) << "Node " << printbits(callerID) << " does lookup for " << printID(largs->key) << endl;
 
   // fill it with the best that i know of
   vector<peer_t*> *results = new vector<peer_t*>;
   assert(results);
   _tree->get(largs->key, results);
 
+  // we can't do anything but return ourselves
+  if(!results->size()) {
+    KDEBUG(2) << "My tree is empty.  Returning myself." << endl;
+    lresult->results.push_back(new peer_t(_id, ip()));
+    goto done;
+  }
+
   // keep a map of which nodes we already asked
-  map<NodeID, bool> asked;
   for(vector<peer_t*>::const_iterator i=results->begin(); i != results->end(); ++i)
     asked[(*i)->id] = false;
 
-  unsigned outstanding = 0;
-  RPCSet rpcset;
-  map<unsigned, pair<IPAddress, lookup_result*> > resultmap;
 
   // issue new RPCs
   while(outstanding < _alpha) {
@@ -205,41 +216,46 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
       break;
 
     // send an asyncRPC to that guy
-    lookup_args la(_id, ip(), largs->id);
+    lookup_args *la = new lookup_args(_id, ip(), largs->id);
     lookup_result *lr = new lookup_result;
     assert(lr);
-    unsigned rpc = asyncRPC(toask->ip, &Kademlia::find_node, &la, lr);
+    unsigned rpc = asyncRPC(toask->ip, &Kademlia::find_node, la, lr);
     assert(rpc);
-    resultmap[rpc] = make_pair(toask->ip, lr);
+    resultmap[rpc] = new callinfo(toask->ip, la, lr);
     asked[toask->id] = true;
 
     // issue more RPCs when we can
     if(++outstanding < _alpha)
       continue;
 
+    // XXX: this is not helping a bit.
     // wait for reply, and handle the incoming results
     unsigned donerpc = select(&rpcset);
+    outstanding--;
     assert(donerpc);
-    lr = resultmap[donerpc].second;
+    callinfo *ci = resultmap[donerpc];
     
     // update our own k-buckets
-    _tree->insert(lr->rid, resultmap[donerpc].first);
+    _tree->insert(ci->lr->rid, ci->ip);
 
     // merge both tables and cut out everything after the first k.
     SortNodes sn(largs->key);
     vector<peer_t*> *newresults = new vector<peer_t*>;
     merge(results->begin(), results->end(), 
-          lr->results.begin(), lr->results.end(),
+          ci->lr->results.begin(), ci->lr->results.end(),
           newresults->begin(), sn);
     newresults->resize(_k);
-    delete results;
     results = newresults;
+
+    delete ci;
+    delete results;
   }
+done:
 
   // this is the answer
   lresult->results = *results;
 
-  // 
+  // put the caller in the tree
   _tree->insert(callerID, callerIP);
 }
 
@@ -450,6 +466,8 @@ k_bucket_tree::k_bucket_tree(Kademlia *k) : _self(k)
   _root = new k_bucket(_self, this);
 
   _id = _self->id(); // for KDEBUG purposes only
+  if(!_k)
+    _k = Kademlia::k();
 }
 
 // }}}
@@ -563,6 +581,8 @@ k_bucket::k_bucket(Kademlia *k, k_bucket_tree *root) : _leaf(false), _self(k), _
   _id = _self->id(); // for KDEBUG purposes only
   _nodes = new set<peer_t*, SortedByLastTime>;
   _nodes->clear();
+  if(!_k)
+    _k = Kademlia::k();
   assert(_nodes);
 }
 
