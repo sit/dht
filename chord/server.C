@@ -276,6 +276,32 @@ vnode_impl::fill_user_args (user_args *a)
   a->coords = locations->get_coords (myID);
 }
 
+void 
+user_args::fill_from (chord_node *from)
+{ 
+  dorpc_arg *t_arg = transport_header ();
+  const struct sockaddr_in *sa = (struct sockaddr_in *)sbp->getsa ();
+  if (sa) {
+    from->r.hostname = inet_ntoa (sa->sin_addr);
+    from->r.port = ntohs (sa->sin_port);
+  } else { //connected sockets don't have the addr field set in the sbp
+    /*    ref<axprt> x = (sbp->getsrv ())->xprt ();
+    axprt *xs = x->get ();
+    int fd = xs->getfd ();
+    
+    int len = size (addr);
+    sockaddr_in addr;
+    if (getpeername(fd,  (struct sockaddr *)&addr, &len)) {
+      from->r.hostname = inet_ntoa (addr.sin_addr);
+      from->r.port = ntohs (addr.sin_port);
+      warn << "connected socket " << from->r.hostname << " " << from->r.port << "\n";
+    }
+    */
+  }
+  
+  from->x = t_arg->src_id;
+}
+
 void
 user_args::reply (void *res)
 {

@@ -49,7 +49,7 @@ long outbytes;
 ihash<str, rpcstats, &rpcstats::key, &rpcstats::h_link> rpc_stats_tab;
 
 #define max_host_cache 1000
-#define CWIND_MULT 4
+#define CWIND_MULT 5
 
 // UTILITY FUNCTIONS
 
@@ -225,17 +225,22 @@ tcp_manager::doRPC (ptr<location> from, ptr<location> l,
   // hack to avoid limit on wrap()'s number of arguments
   RPC_delay_args *args = New RPC_delay_args (from, l, prog, procno,
 					     in, out, cb);
-
-  hostinfo *hi = lookup_host (l->addr);
-  if (hi->fd == -2) { //no connect initiated
-    // wierd: tcpconnect wants the address in NBO, and port in HBO
-    hi->fd = -1; // signal pending connect
+  if (chord_rpc_style == CHORD_RPC_SFSBT) {
     tcpconnect (l->saddr.sin_addr, ntohs (l->saddr.sin_port),
 		wrap (this, &tcp_manager::doRPC_tcp_connect_cb, args));
-  } else if (hi->fd == -1) { //connect pending, add to waiters
-    hi->connect_waiters.push_back (args);
-  } else if (hi->fd > 0) { //already connected
-    send_RPC (args);
+  } else {
+    hostinfo *hi = lookup_host (l->addr);
+    if (hi->fd == -2) { //no connect initiated
+      // wierd: tcpconnect wants the address in NBO, and port in HBO
+      hi->fd = -1; // signal pending connect
+      tcpconnect (l->saddr.sin_addr, ntohs (l->saddr.sin_port),
+		  wrap (this, &tcp_manager::doRPC_tcp_connect_cb, args));
+    } else if (hi->fd == -1) { //connect pending, add to waiters
+      hi->connect_waiters.push_back (args);
+    } else if (hi->fd > 0) { //already connected
+      send_RPC (args);
+    }
+
   }
   return 0;
 }
@@ -289,28 +294,43 @@ tcp_manager::doRPC_tcp_connect_cb (RPC_delay_args *args, int fd)
 {
   hostinfo *hi = lookup_host (args->l->addr);
   if (fd < 0) {
-    hi->fd = -2; // signal no connect initiated
     warn << "locationtable: connect failed: " << strerror (errno) << "\n";
     (args->cb) (RPC_CANTSEND);
     delete args;
-    while (hi->connect_waiters.size ()) {
-      RPC_delay_args *a =  hi->connect_waiters.pop_front ();
-      a->cb (RPC_CANTSEND);
-      delete a;
+
+    if (chord_rpc_style == CHORD_RPC_SFST) {
+      hi->fd = -2; // signal no connect initiated
+      while (hi->connect_waiters.size ()) {
+	RPC_delay_args *a =  hi->connect_waiters.pop_front ();
+	a->cb (RPC_CANTSEND);
+	delete a;
+      }
     }
+
   } else {
-    hi->fd = fd;
+
     struct linger li;
     li.l_onoff = 1;
     li.l_linger = 0;
     setsockopt (fd, SOL_SOCKET, SO_LINGER, (char *) &li, sizeof (li));
     tcp_nodelay (fd);
     make_async(fd);
-    hi->xp = axprt_stream::alloc (fd);
-    assert (hi->xp);
-    send_RPC (args);
-    while (hi->connect_waiters.size ())
-      send_RPC (hi->connect_waiters.pop_front ());
+
+    if (chord_rpc_style == CHORD_RPC_SFST) {
+      send_RPC (args);
+      hi->fd = fd;
+      hi->xp = axprt_stream::alloc (fd);
+      assert (hi->xp);
+      while (hi->connect_waiters.size ())
+	send_RPC (hi->connect_waiters.pop_front ());
+    } else {
+      ptr<axprt_stream> xp = axprt_stream::alloc (fd);
+      assert (xp);
+      ptr<aclnt> c = aclnt::alloc (xp, args->prog);
+      assert (c);
+      c->call (args->procno, args->in, args->out, 
+	       wrap (this, &tcp_manager::doRPC_tcp_cleanup, c, args));
+    }
   }
 }
 
@@ -666,7 +686,8 @@ stp_manager::setup_rexmit_timer (ptr<location> from, ptr<location> l, long *sec,
 
   if ((gforce < 50000.0) && l && from && (l->coords.size () > 0) && (from->coords.size () > 0)) {
     float dist = Coord::distance_f (from->coords, l->coords);
-    alat = dist + 5.0*c_err + 5000; //scale it to be safe
+    alat = dist + 8.0*c_err + 5000; //scale it to be safe. the 8 comes from an analysis for log files
+    // I also tried using the variance but average works better. With 8 we'll do about 1 percent spurious retransmits
   }
 
   //statistics
@@ -678,8 +699,9 @@ stp_manager::setup_rexmit_timer (ptr<location> from, ptr<location> l, long *sec,
   *nsec = ((long)alat % 1000000) * 1000;
   
   if (*nsec < 0 || *sec < 0) {
-    stats ();
-    panic ("[send to cates@mit.edu] setup: sec %ld, nsec %ld, alat %f, avg_lat %f\n", *sec, *nsec, alat, avg_lat);
+    warn << "bad timer: " << (int)alat << " " << *sec << " " << *nsec << "\n";
+    *sec = 1;
+    *nsec = 0;
   }
 }
 
@@ -725,7 +747,7 @@ rpc_manager::update_latency (ptr<location> from, ptr<location> l, u_int64_t lat)
     float predicted = Coord::distance_f (from->coords, l->coords);
     float sample_err = (lat - predicted);
     //    warn << "To " << l->n << " " << (int)sample_err << " " << (int)lat << " " << (int)predicted << " " 
-    //	 << (int)c_err << " " << (int)c_var << "\n";
+    //    	 << (int)c_err << " " << (int)c_var << "\n";
 
     if (sample_err < 0) sample_err = -sample_err;
     c_err = (c_err*49 + sample_err)/50;

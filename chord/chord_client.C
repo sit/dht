@@ -125,7 +125,7 @@ int
 chord::startchord (int myp)
 {
   // see also locationtable constructor.
-  if (chord_rpc_style == CHORD_RPC_SFST) {
+  if ((chord_rpc_style == CHORD_RPC_SFST) || (chord_rpc_style == CHORD_RPC_SFSBT))  {
     // Ensure the DGRAM and STREAM sockets are on same port #,
     // since it is included in the Chord ID's hash.
     myp = startchord (myp, SOCK_STREAM);
@@ -255,13 +255,15 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
   dorpc_arg *arg = sbp->template getarg<dorpc_arg> ();
   if (arg && !locations->cached (arg->src_id)) {
     const sockaddr *sa = sbp->getsa ();
-    net_address netaddr;
-    netaddr.port = ((sockaddr_in *)sa)->sin_port;
-    str addrstr (inet_ntoa (((sockaddr_in *)sa)->sin_addr));
-    netaddr.hostname = addrstr;
-    warnx << gettime () << ": autocaching " << addrstr << ":" << netaddr.port << " in ::dispatch\n";
-    vec<float> coords = convert_coords (arg);
-    locations->insert (arg->src_id, netaddr.hostname, netaddr.port, coords);
+    if (sa) {
+      net_address netaddr;
+      netaddr.port = ((sockaddr_in *)sa)->sin_port;
+      str addrstr (inet_ntoa (((sockaddr_in *)sa)->sin_addr));
+      netaddr.hostname = addrstr;
+      warnx << gettime () << ": autocaching " << addrstr << ":" << netaddr.port << " in ::dispatch\n";
+      vec<float> coords = convert_coords (arg);
+      locations->insert (arg->src_id, netaddr.hostname, netaddr.port, coords);
+    }
   }
 
   switch (sbp->proc ()) {

@@ -183,5 +183,6 @@ extern int chord_rpc_style;
 extern const int CHORD_RPC_STP;  // our own rpc style
 extern const int CHORD_RPC_SFSU; // libarpc over UDP
 extern const int CHORD_RPC_SFST; // libarpc over TCP
+extern const int CHORD_RPC_SFSBT; // libarpc over TCP, no caching
 
 #endif /* _LOCATION_H_ */

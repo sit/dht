@@ -94,15 +94,8 @@ struct user_args {
   dorpc_arg * transport_header () 
     { return sbp->template getarg<dorpc_arg> (); };
 
-  void fill_from (chord_node *from)
-  { 
-    dorpc_arg *t_arg = transport_header ();
-    const struct sockaddr_in *sa = (struct sockaddr_in *)sbp->getsa ();
-    from->r.hostname = inet_ntoa (sa->sin_addr);
-    from->r.port = ntohs (sa->sin_port);
-    from->x = t_arg->src_id;
-  }
-
+  void fill_from (chord_node *from);
+  
   ~user_args () { free(args); };
 };
 

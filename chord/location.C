@@ -42,6 +42,7 @@
 const int CHORD_RPC_STP (0);
 const int CHORD_RPC_SFSU (1);
 const int CHORD_RPC_SFST (2);
+const int CHORD_RPC_SFSBT (3);
 const int CHORD_RPC_DEFAULT (CHORD_RPC_STP);
 
 int chord_rpc_style (getenv ("CHORD_RPC_STYLE") ?
@@ -126,10 +127,12 @@ locationtable::initialize_rpcs ()
 {
   if (chord_rpc_style == CHORD_RPC_SFSU)
     hosts = New refcounted<rpc_manager> (nrcv);
-  else if (chord_rpc_style == CHORD_RPC_SFST)
+  else if ((chord_rpc_style == CHORD_RPC_SFST) || (chord_rpc_style == CHORD_RPC_SFSBT))
     hosts = New refcounted<tcp_manager> (nrcv);
-  else
+  else if (chord_rpc_style == CHORD_RPC_DEFAULT)
     hosts = New refcounted<stp_manager> (nrcv);
+  else
+    fatal << "bad chord_rpc_style value: " << chord_rpc_style << "\n";
 
   // see also chord::startchord
 }
