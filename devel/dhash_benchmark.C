@@ -43,14 +43,16 @@ int MAX_OPS_OUT = 1024;
 
 
 chordID
-make_block (void *data) 
+make_block (void *data, int g) 
 {
   // size must be word sized
-  assert (datasize % sizeof (long) == 0);
+  //  assert (datasize % sizeof (long) == 0);
   
-  long *rd = (long *)data;
-  for (unsigned int i = 0; i < datasize/sizeof(long); i++) 
-    rd[i] = random();
+  char *rd = (char *)data;
+  for (unsigned int i = 0; i < datasize; i++) 
+    //    rd[i] = random();
+    rd[i] = (char)('a' + g);
+  rd[datasize - 1] = 0;
 
   return compute_hash (rd, datasize);
 }
@@ -62,7 +64,7 @@ prepare_test_data (int num)
   data = (void **)malloc(sizeof(void *)*num);
   for (int i = 0; i < num; i++) {
     data[i] = malloc(datasize);
-    IDs[i] = make_block(data[i]);
+    IDs[i] = make_block(data[i], i);
   }
 }
 

@@ -205,7 +205,6 @@ class chord : public virtual refcount {
   vec<rpc_program> handledProgs;
 
   qhash<chordID, ref<vnode>, hashID> vnodes;
-  ptr<vnode> active;
 
   void dispatch (ptr<asrv> s, svccb *sbp);
   void tcpclient_cb (int srvfd);
@@ -219,7 +218,7 @@ class chord : public virtual refcount {
  public:
   // system wide default on the maximum number of vnodes/node.
   static const int max_vnodes;
-
+  ptr<vnode> active;
   ptr<locationtable> locations; 
     
   chord (str _wellknownhost, int _wellknownport,
