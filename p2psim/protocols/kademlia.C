@@ -269,20 +269,14 @@ join_restart:
     lookup_args la(_id, ip(), (_id ^ (((Kademlia::NodeID) 1)<<i)));
     lookup_result lr;
 
-    // if we believe our successor died, then start all over again
-    if(flyweight.find(succ_id) == flyweight.end()) {
-succ_died:
-      if(!node()->alive())
-        return;
+    // are we dead?  bye.
+    if(!node()->alive())
+      return;
 
+    // if we believe our successor died, then start again
+    if(flyweight.find(succ_id) == flyweight.end()) {
       KDEBUG(2) << " restarting join" << endl;
-      for(hash_map<NodeID, k_nodeinfo*>::iterator i = flyweight.begin(); i != flyweight.end(); ++i) {
-        char ptr[32]; sprintf(ptr, "%p", (*i).second);
-        KDEBUG(2) << "Kademlia::join restart, deleting " << ptr << endl;
-        delete (*i).second;
-      }
-      flyweight.clear();
-      _root->collapse();
+      clear();
       goto join_restart;
     }
     
@@ -291,9 +285,14 @@ succ_died:
     char ptr[32]; sprintf(ptr, "%p", ki);
     KDEBUG(2) << "join: iteration " << i << ", ki = " << ptr << ", ki->id is " << printID(ki->id) << ", ip = " << ki->ip << ", cpl = " << cpl << ", ptr = " << ptr << endl;
     record_stat(STAT_LOOKUP, 1, 0);
-    if(!doRPC(ki->ip, &Kademlia::do_lookup, &la, &lr) || !node()->alive())
-      goto succ_died;
+    if(!doRPC(ki->ip, &Kademlia::do_lookup, &la, &lr)) {
+      clear();
+      goto join_restart;
+    }
     record_stat(STAT_LOOKUP, lr.results.size(), 0);
+
+    if(!node()->alive())
+      return;
 
     for(nodeinfo_set::const_iterator i = lr.results.begin(); i != lr.results.end(); ++i)
       if(flyweight.find((*i)->id) == flyweight.end() && (*i)->id != _id)
@@ -320,6 +319,23 @@ Kademlia::crash(Args *args)
   }
 
   // prepare for coming back up
+  flyweight.clear();
+  _root->collapse();
+}
+
+// }}}
+// {{{ Kademlia::clear
+void
+Kademlia::clear()
+{
+  // destroy k-buckets
+  KDEBUG(1) << "Kademlia::clear" << endl;
+  for(hash_map<NodeID, k_nodeinfo*>::iterator i = flyweight.begin(); i != flyweight.end(); ++i) {
+    char ptr[32]; sprintf(ptr, "%p", (*i).second);
+    KDEBUG(2) << "Kademlia::clear deleting " << ptr << endl;
+    delete (*i).second;
+  }
+
   flyweight.clear();
   _root->collapse();
 }

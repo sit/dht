@@ -235,6 +235,7 @@ private:
   // vector<unsigned> num_msgs;
   void record_stat(stat_type, unsigned, unsigned);
   void update_k_bucket(NodeID, IPAddress);
+  void clear();
 
   // global statistics
   static double _rpc_bytes; // total traffic
