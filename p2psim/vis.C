@@ -285,7 +285,7 @@ draw_fingers (f_node *iter, bool all)
   }
 
   if (all || ((iter->draw & DRAW_DEBRUIJN) == DRAW_DEBRUIJN)) {
-    int a, b;
+    // int a, b;
     //    ID_to_xy (iter->debruijn, &a, &b);
 
     gdk_gc_set_foreground (draw_gc, &red);

@@ -7,7 +7,7 @@
 #include "p2psim.h"
 using namespace std;
 
-#define STABLE_TIMER 1000 //use a["stabtimer"] to set stabilization timer
+#define STABLE_TIMER 500 //use a["stabtimer"] to set stabilization timer
 #define KADEMLIA_REFRESH 1000
 
 unsigned kdebugcounter = 1;
@@ -164,7 +164,7 @@ Kademlia::do_insert(insert_args *iargs, insert_result *iresult)
 void
 Kademlia::lookup(Args *args)
 {
-  cout << "Kademlia lookup" << endl;
+  KDEBUG(1) << "Kademlia lookup" << endl;
 }
 
 // }}}
@@ -176,6 +176,9 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
   RPCSet rpcset;
   map<unsigned, callinfo*> resultmap;
   map<NodeID, bool> asked;
+  lookup_args *la = 0;
+  lookup_result *lr = 0;
+  unsigned rpc = 0;
 
 
   // store caller id and ip
@@ -191,67 +194,98 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
 
   // we can't do anything but return ourselves
   if(!results->size()) {
-    KDEBUG(2) << "My tree is empty.  Returning myself." << endl;
+    KDEBUG(2) << "do_lookup: my tree is empty; returning myself." << endl;
     lresult->results.push_back(new peer_t(_id, ip()));
     goto done;
   }
 
   // keep a map of which nodes we already asked
-  for(vector<peer_t*>::const_iterator i=results->begin(); i != results->end(); ++i)
+  for(vector<peer_t*>::const_iterator i=results->begin(); i != results->end(); ++i) {
+    KDEBUG(2) << "do_lookup: results entry id = " << printbits((*i)->id) << ", ip = " << (*i)->ip << endl;
     asked[(*i)->id] = false;
-
+  }
 
   // issue new RPCs
   while(outstanding < _alpha) {
     // find the first that we haven't asked yet.
     peer_t *toask = 0;
-    for(vector<peer_t*>::const_iterator i=results->begin(); i != results->end(); ++i)
+    assert(toask == 0);
+    for(vector<peer_t*>::const_iterator i=results->begin(); i != results->end(); ++i) {
+      KDEBUG(2) << "do_lookup: considering for asyncRPC id = " << printbits((*i)->id) << ", ip = " << (*i)->ip << endl;
       if(!asked[(*i)->id]) {
         toask = *i;
+        KDEBUG(2) << "do_lookup: taken" << endl;
         break;
       }
+      KDEBUG(2) << "do_lookup: already considered" << endl;
+    }
 
     // we're done.
-    if(!toask)
-      break;
+    if(!toask) {
+      if(outstanding) {
+        goto wait;
+      } else {
+        KDEBUG(2) << "do_lookup: toask has no value. we're done." << endl;
+        break;
+      }
+    }
 
     // send an asyncRPC to that guy
-    lookup_args *la = new lookup_args(_id, ip(), largs->id);
-    lookup_result *lr = new lookup_result;
-    assert(lr);
-    unsigned rpc = asyncRPC(toask->ip, &Kademlia::find_node, la, lr);
+    la = new lookup_args(_id, ip(), largs->id);
+    lr = new lookup_result;
+    assert(la && lr);
+    KDEBUG(2) << "do_lookup: going into asyncRPC" << endl;
+    assert(toask);
+    assert(toask->ip <= 512 && toask->ip > 0);
+    rpc = asyncRPC(toask->ip, &Kademlia::find_node, la, lr);
+    KDEBUG(2) << "do_lookup: returning from asyncRPC" << endl;
     assert(rpc);
+    rpcset.insert(rpc);
     resultmap[rpc] = new callinfo(toask->ip, la, lr);
     asked[toask->id] = true;
 
     // issue more RPCs when we can
-    if(++outstanding < _alpha)
+    if(++outstanding < _alpha) {
+      KDEBUG(2) << "do_lookup: outstanding = " << outstanding << " is less than " << _alpha << endl;
       continue;
+    }
 
+wait:
     // XXX: this is not helping a bit.
     // wait for reply, and handle the incoming results
+    KDEBUG(2) << "do_lookup: going into select" << endl;
     unsigned donerpc = select(&rpcset);
+    KDEBUG(2) << "do_lookup: select returned" << endl;
     outstanding--;
     assert(donerpc);
     callinfo *ci = resultmap[donerpc];
-    
+
     // update our own k-buckets
     _tree->insert(ci->lr->rid, ci->ip);
 
     // merge both tables and cut out everything after the first k.
     SortNodes sn(largs->key);
-    vector<peer_t*> *newresults = new vector<peer_t*>;
+    vector<peer_t*> *newresults = new vector<peer_t*>(results->size() + ci->lr->results.size());
+    assert(newresults);
     merge(results->begin(), results->end(), 
           ci->lr->results.begin(), ci->lr->results.end(),
           newresults->begin(), sn);
-    newresults->resize(_k);
+
+    // cut off all entries larger than the first _k
+    if(_k < newresults->size())
+      newresults->resize(_k);
+    delete results;
     results = newresults;
 
+    // mark new nodes as not yet asked
+    for(vector<peer_t*>::const_iterator i=results->begin(); i != results->end(); ++i)
+      if(asked.find((*i)->id) == asked.end())
+        asked[(*i)->id] = false;
     delete ci;
-    delete results;
   }
 done:
 
+  KDEBUG(2) << "do_lookup: done" << endl;
   // this is the answer
   lresult->results = *results;
 
@@ -346,7 +380,7 @@ void
 Kademlia::reschedule_stabilizer(void *x)
 {
   // if stabilize blah.
-  KDEBUG(0) << "reschedule_stabilizer" << endl;
+  KDEBUG(1) << "reschedule_stabilizer" << endl;
   stabilize();
   delaycb(STABLE_TIMER, &Kademlia::reschedule_stabilizer, (void *) 0);
 }

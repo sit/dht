@@ -39,6 +39,9 @@ sub main {
   while ($line = <STDIN>) {
     chomp($line);
 
+    # skip empty lines
+    next if $line =~ /\s*#/;
+
     #this is an ugly hack
     if ($line =~ /wellknown\s*=\s*(\d+)/) {
       die if $#allnodes < 0;
