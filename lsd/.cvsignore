@@ -19,3 +19,4 @@ stamp-h
 stamp-h.in
 .deps
 .libs
+lsd
