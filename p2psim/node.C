@@ -33,7 +33,7 @@ Node::~Node()
 void
 Node::run()
 {
-  Alt a[3];
+  Alt a[4];
   Packet *p;
   string protname;
   Protocol *prot;

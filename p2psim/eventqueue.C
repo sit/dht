@@ -42,7 +42,7 @@ EventQueue::run()
     // let others run
     while(anyready())
       yield();
-                                                                                  
+
     // process any waiting events-to-be-scheduled
     if((e = (Event*)nbrecvp(_eventchan)) != 0){
       add_event(e);

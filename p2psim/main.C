@@ -18,6 +18,7 @@ void usage(char *);
 void
 threadmain(int argc, char *argv[])
 {
+  extern int anyready();
   parse_args(argc, argv);
 
   Packet *p = (Packet*) malloc(sizeof(Packet));
@@ -27,7 +28,8 @@ threadmain(int argc, char *argv[])
 
   // XXX: ugh.
   // make sure the network ate all the nodes
-  yield();
+  while(anyready())
+    yield();
 
   // Creates an event queue, parses the file, etc.
   EventQueue::Instance()->parse(event_file);

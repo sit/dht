@@ -93,7 +93,7 @@ Protocol::ip()
 void
 Protocol::run()
 {
-  Alt a[3];
+  Alt a[4];
   Packet *packet;
   P2PEvent *event;
   unsigned *exit;
