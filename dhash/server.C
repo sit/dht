@@ -372,11 +372,13 @@ dhash_impl::outgoing_send_cb (missing_state *m, dhash_stat err,
   if (!err) {
     //mark it as being present
     bsm->unmissing (m->from, m->key);
-    warn << "sent p" << m->key << " sucessfully\n"; 
+    info << "repair: " << host_node->my_ID ()
+	 << " sent " << m->key << " to " << m->from <<  ".\n";
   } else
-    warn << "error sending " << m->key << "\n";
+    info << "repair: " << host_node->my_ID ()
+	 << " error sending " << m->key << " to " << m->from
+	 << " (" << err << ").\n";
 
-  //success
   delete m;
 }
 
