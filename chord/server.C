@@ -426,15 +426,17 @@ vnode_impl::ping_cb (cbping_t cb, clnt_stat status)
 }
 
 void
-vnode_impl::check_dead_node_cb (ptr<location> l, chordstat s)
+vnode_impl::check_dead_node_cb (ptr<location> l, time_t backoff, chordstat s)
 {
   if (s != CHORD_OK) {
     unsigned i=0;
     for (i=0; i<dead_nodes.size (); i++)
-    if (dead_nodes[i]->id () == l->id ())
+      if (dead_nodes[i]->id () == l->id ())
         break;
-    if (i == dead_nodes.size ())
+    if (i == dead_nodes.size ()) {
       dead_nodes.push_back (l);
+      check_dead_backoffs.push_back (backoff);
+    }
   }
   else {
     warn << l->id () << " back to life\n";
@@ -458,8 +460,15 @@ vnode_impl::check_dead_nodes ()
   int nsucc;
   bool ok = Configurator::only ().get_int ("chord.nsucc", nsucc);
   assert (ok);
+  int t;
+  assert (Configurator::only ().get_int ("chord.checkdead_interval", t));
+  assert (t > 0);
+  int cap;
+  assert (Configurator::only ().get_int ("chord.checkdead_max", cap));
+  assert (cap > t);
 
   while (!dead_nodes.empty ()) {
+    time_t backoff = check_dead_backoffs.pop_front ();
     ptr<location> l = dead_nodes.pop_front ();
     timespec ts;
     clock_gettime (CLOCK_REALTIME, &ts);
@@ -469,11 +478,18 @@ vnode_impl::check_dead_nodes ()
 	  between (sl[0]->id (), sl[sz-1]->id (), l->id ())))) {
       // not enough successors, or if the dead node could be a
       // successor
-      ping (l, wrap (this, &vnode_impl::check_dead_node_cb, l));
+      if (ts.tv_sec >= (l->dead_time () + backoff)) {
+	backoff *= 2;
+	if (backoff > cap)
+	  backoff = cap;
+        ping (l, wrap (this, &vnode_impl::check_dead_node_cb, l, backoff));
+      }
+      else
+	check_dead_node_cb (l, backoff, CHORD_ERRNOENT);
     }
   }
 
-  delaycb (60, 0, wrap (this, &vnode_impl::check_dead_nodes));
+  delaycb (t, 0, wrap (this, &vnode_impl::check_dead_nodes));
 }
 
 
@@ -616,8 +632,13 @@ vnode_impl::doRPC_cb (ptr<location> l, xdrproc_t proc,
       for (i=0; i<dead_nodes.size (); i++)
 	if (dead_nodes[i]->id () == l->id ())
           break;
-      if (i == dead_nodes.size ())
+      if (i == dead_nodes.size ()) {
+        int t;
+        assert (Configurator::only ().get_int ("chord.checkdead_interval", t));
+        assert (t > 0);
         dead_nodes.push_back (l);
+	check_dead_backoffs.push_back (t);
+      }
     }
     cb (err);
   }

@@ -108,6 +108,7 @@ class vnode_impl : public vnode {
   u_long ndogetpred_ext;
 
   vec<ptr<location> > dead_nodes;
+  vec<time_t> check_dead_backoffs;
 
   void join_getsucc_cb (ptr<location> n, cbjoin_t cb, chord_nodelistres *r, 
 			clnt_stat err);
@@ -141,7 +142,7 @@ class vnode_impl : public vnode {
 
 
   void update_coords (vec<float> uc, float ud);
-  void check_dead_node_cb (ptr<location> l, chordstat s);
+  void check_dead_node_cb (ptr<location> l, time_t backoff, chordstat s);
   void check_dead_nodes ();
   
   // The RPCs

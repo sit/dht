@@ -65,6 +65,9 @@ chord_config_init::chord_config_init ()
    *  returned a "sufficient" number of successors.  */
   ok = ok && set_int ("chord.find_succlist_shaving", 1);
 
+  ok = ok && set_int ("chord.checkdead_interval", 60);
+  ok = ok && set_int ("chord.checkdead_max", 960);
+
   assert (ok);
 #undef set_int
 #undef set_str
