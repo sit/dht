@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 Thomer M. Gil
+ * Copyright (c) 2003 Frank Dabek
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -22,54 +22,59 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "observerfactory.h"
-#include "kademliaobserver.h"
-#include "tapestryobserver.h"
-#include "kelipsobserver.h"
-#include "chordobserver.h"
+#include "p2psim/node.h"
+#include "p2psim/args.h"
+#include "p2psim/network.h"
+#include "protocols/protocolfactory.h"
 #include "datastoreobserver.h"
 
 #include <iostream>
-using namespace std;
+#include <set>
+#include <algorithm>
+#include <stdio.h>
 
-ObserverFactory* ObserverFactory::_instance = 0;
 
-ObserverFactory *
-ObserverFactory::Instance()
+DataStoreObserver* DataStoreObserver::_instance = 0;
+
+DataStoreObserver*
+DataStoreObserver::Instance(Args *a)
 {
   if(!_instance)
-    _instance = New ObserverFactory();
+    _instance = New DataStoreObserver(a);
   return _instance;
 }
 
-ObserverFactory::ObserverFactory()
+
+DataStoreObserver::DataStoreObserver(Args *a)
 {
+  _instance = this;
+
+  //pick data items / sizes
+  // XXX get number of items from args
+  for (int i = 0; i < 1000; i++) 
+    {
+      Chord::CHID id = ConsistentHash::getRandID ();
+      int size = 8192;
+      data_items.push_back (DataItem (id, size));
+    }
+
+  // XXX sort it?
 }
 
-ObserverFactory::~ObserverFactory()
+DataItem
+DataStoreObserver::get_random_item ()
+{    
+  int r = random () % data_items.size ();
+  return data_items[r];
+}
+
+vector<DataItem>
+DataStoreObserver::get_data()
 {
-  for(set<Observer*>::const_iterator i = _observers.begin(); i != _observers.end(); ++i)
-    delete *i;
+
+  assert(data_items.size()>0);
+  return data_items;
 }
 
 
-Observer *
-ObserverFactory::create(string s, Args *a)
-{
-  Observer *t = 0;
 
-  assert(a);
-  if(s == "KademliaObserver") {
-    t = New KademliaObserver(a);
-  } else if(s == "TapestryObserver") {
-    t = New TapestryObserver(a);
-  } else if(s == "KelipsObserver") {
-    t = New KelipsObserver(a);
-  } else if (s == "ChordObserver") {
-    t = New ChordObserver(a);
-  } else if (s == "DataStoreObserver") {
-    t = New DataStoreObserver (a);
-  }
-  _observers.insert(t);
-  return t;
-}

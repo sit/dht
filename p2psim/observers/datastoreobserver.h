@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 Thomer M. Gil
+ * Copyright (c) 2003 Frank Dabek
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -22,54 +22,36 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "observerfactory.h"
-#include "kademliaobserver.h"
-#include "tapestryobserver.h"
-#include "kelipsobserver.h"
-#include "chordobserver.h"
-#include "datastoreobserver.h"
+#ifndef DATAOBS_H
+#define DATAOBS_H
 
-#include <iostream>
-using namespace std;
+#include "p2psim/observer.h"
+#include "protocols/consistenthash.h"
+#include "protocols/chord.h"
 
-ObserverFactory* ObserverFactory::_instance = 0;
+struct DataItem {
+  Chord::CHID key;
+  int size;
+  DataItem (Chord::CHID k, int s) : key (k), size (s) {};
+  DataItem () {};
+};
 
-ObserverFactory *
-ObserverFactory::Instance()
-{
-  if(!_instance)
-    _instance = New ObserverFactory();
-  return _instance;
-}
+class DataStoreObserver : public Observer {
+public:
+  DataStoreObserver(Args *a);
 
-ObserverFactory::ObserverFactory()
-{
-}
+  virtual ~DataStoreObserver() {};
+  virtual void kick(Observed *, ObserverInfo* = 0)  {};
+  static DataStoreObserver* Instance(Args*);
 
-ObserverFactory::~ObserverFactory()
-{
-  for(set<Observer*>::const_iterator i = _observers.begin(); i != _observers.end(); ++i)
-    delete *i;
-}
+  vector<DataItem> get_data();
+  DataItem get_random_item ();
 
+private:
+  static DataStoreObserver *_instance;
 
-Observer *
-ObserverFactory::create(string s, Args *a)
-{
-  Observer *t = 0;
+  vector<DataItem> data_items;
 
-  assert(a);
-  if(s == "KademliaObserver") {
-    t = New KademliaObserver(a);
-  } else if(s == "TapestryObserver") {
-    t = New TapestryObserver(a);
-  } else if(s == "KelipsObserver") {
-    t = New KelipsObserver(a);
-  } else if (s == "ChordObserver") {
-    t = New ChordObserver(a);
-  } else if (s == "DataStoreObserver") {
-    t = New DataStoreObserver (a);
-  }
-  _observers.insert(t);
-  return t;
-}
+};
+
+#endif
