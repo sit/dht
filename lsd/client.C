@@ -234,7 +234,7 @@ p2p::lookup_anyloc (sfs_ID &n, sfs_ID *r)
 bool
 p2p::lookup_closeloc (sfs_ID &n, sfs_ID *r)
 {
-  warnx << "lookup_closeloc:\n";
+  // warnx << "lookup_closeloc:\n";
 
   if (locations.first () == NULL) {
     warnx << "no nodes left\n";
@@ -246,7 +246,7 @@ p2p::lookup_closeloc (sfs_ID &n, sfs_ID *r)
     if ((n - l->n) < (n - x))
       x = l->n;
   }
-  warnx << "lookup_closeloc: return " << x << "\n";
+  // warnx << "lookup_closeloc: return " << x << "\n";
   *r = x;
   return true;
 }
@@ -256,10 +256,9 @@ p2p::set_closeloc (wedge &w)
 {
   sfs_ID n;
   if (!lookup_closeloc (w.first, &n)) {
-    warnx << "set_closeloc: no nodes anymore\n";
     fatal ("No nodes left; cannot recover");
   }
-  warnx << "set_closeloc: replace " << w.first << " with " << n << "\n";
+  // warnx << "set_closeloc: replace " << w.first << " with " << n << "\n";
   w.first = n;
   w.alive = true;
 }
@@ -269,13 +268,13 @@ void
 p2p::updateloc (sfs_ID &x, route &r, sfs_ID &source)
 {
   if (locations[x] == NULL) {
-    warnx << "add: " << x << " at port " << r.port << " source: " 
-	  << source << "\n";
+    // warnx << "add: " << x << " at port " << r.port << " source: " 
+    //	  << source << "\n";
     location *loc = New location (x, r, source);
     locations.insert (loc);
   } else {
-    warnx << "update: " << x << " at port " << r.port << " source " 
-	  << source << "\n";
+    // warnx << "update: " << x << " at port " << r.port << " source "
+    //	  << source << "\n";
     locations[x]->r = r;
     locations[x]->source = source;
   }
@@ -284,7 +283,7 @@ p2p::updateloc (sfs_ID &x, route &r, sfs_ID &source)
 void
 p2p::deleteloc (sfs_ID &n)
 {
-  warnx << "deleteloc: " << n << "\n";
+  // warnx << "deleteloc: " << n << "\n";
   assert (n != myID);
   for (int i = 0; i <= NBIT; i++) {
     if (predecessor[i].first == n)
@@ -315,7 +314,7 @@ p2p::connect_cb (location *l, int fd)
     }
     l->connecting = false;
   } else {
-    warnx << "connect_cb: succeeded\n";
+    // warnx << "connect_cb: succeeded\n";
     assert (l->alive);
     ptr<aclnt> c = aclnt::alloc (axprt_stream::alloc (fd), sfsp2p_program_1);
     l->c = c;
@@ -344,7 +343,7 @@ p2p::doRPC (sfs_ID &ID, int procno, const void *in, void *out,
     l->connectlist.insert_tail (st);
     if (!l->connecting) {
       l->connecting = true;
-      warnx << "connect to " << l->r.server << " port " << l->r.port << "\n";
+      // warnx << "connect to " << l->r.server << " port " << l->r.port << "\n";
       tcpconnect (l->r.server, l->r.port, wrap (mkref (this), &p2p::connect_cb,
 						l));
     }
@@ -458,10 +457,10 @@ p2p::stabilize_getsucc_cb (sfs_ID s, route r, sfsp2pstat status)
 	  << status << "\n";
     bootstrap ();
   } else {
-    warnx << "stabilize_getsucc_cb from " << predecessor[1].first 
-	  << " : " << s << "\n";
+    // warnx << "stabilize_getsucc_cb from " << predecessor[1].first 
+    //  << " : " << s << "\n";
     if (updatepred (predecessor[1], s, r)) {
-      print ();
+      // print ();
       bootstrap ();
     }
   }
@@ -476,10 +475,10 @@ p2p::stabilize_getpred_cb (sfs_ID p, route r, sfsp2pstat status)
 	  << status << "\n";
     bootstrap ();
   } else {
-    warnx << "stabilize_getpred_cb from " << successor[1].first << " : " 
-	  << p << "\n";
+    // warnx << "stabilize_getpred_cb from " << successor[1].first << " : " 
+    //  << p << "\n";
     if (updatesucc (successor[1], p, r)) {
-      print ();
+      // print ();
       bootstrap ();
     }
   }
@@ -493,10 +492,10 @@ p2p::stabilize_findsucc_cb (int i, sfs_ID s, route r, sfsp2pstat status)
 	  << status << "\n";
     bootstrap ();
   } else {
-    warnx << "stabilize_findsucc_cb from " << successor[i].first 
-	  << " : " << s << "\n";
+    // warnx << "stabilize_findsucc_cb from " << successor[i].first 
+    //  << " : " << s << "\n";
     if (updatesucc (successor[i], s, r)) {
-      print ();
+      // print ();
       bootstrap ();
     }
   }
@@ -509,10 +508,10 @@ p2p::stabilize_findpred_cb (int i, sfs_ID p, route r, sfsp2pstat status)
     warnx << "stabilize_findpred_cb: " << status << "\n";
     bootstrap ();
   } else {
-    warnx << "stabilize_findpred_cb from " << predecessor[i].first 
-	  << " : " << p << "\n";
+    // warnx << "stabilize_findpred_cb from " << predecessor[i].first 
+    //  << " : " << p << "\n";
     if (updatepred (predecessor[i], p, r)) {
-      print ();
+      // print ();
       bootstrap ();
     }
   }
@@ -552,11 +551,12 @@ p2p::join_getsucc_cb (sfs_ID p, sfs_ID s, route r, sfsp2pstat status)
     warnx << "join_getsucc_cb: " << status << "\n";
     join ();  // try again
   } else {
-    warnx << "join_getsucc_cb: " << p << " " << s << "\n";
+    // warnx << "join_getsucc_cb: " << p << " " << s << "\n";
     if (between (p, s, myID) || (p == s)) {
       // we found the first successor of myID: s. if p == s, then there is 
       // only one other node in the system; that node is my successor and 
       // predecessor.
+      warnx << "join_getsucc_cb: succ is " << s << "\n";
       notice (1, s, r);
       move ();
       if (successor[1].alive) notify (successor[1].first, myID);
@@ -604,7 +604,7 @@ p2p::bootstrap ()
     warnx << "bootstrap: we are busy bootstrapping\n";
     return;
   }
-  print ();
+  // print ();
   nbootstrap = NBIT * 2;
   bootstrap_failure = false;
   stable = true;
@@ -650,10 +650,10 @@ p2p::bootstrap_succ_cb (int i, sfs_ID n, sfs_ID s, route r, sfsp2pstat status)
     warnx << "bootstrap_succ_cb: " << status << ": dead : " << n << "\n";
     bootstrap_failure = true;
   } else {
-    warnx << "bootstrap_succ_cb: " << i << " is " << n 
-	  << " propose: " << s << "\n";
+    // warnx << "bootstrap_succ_cb: " << i << " is " << n 
+    //  << " propose: " << s << "\n";
     if (updatesucc (successor[i], s, r)) {
-      warnx << "bootstrap_succ_cb: updated\n";
+      // warnx << "bootstrap_succ_cb: updated\n";
       stable = false;
     }
     if (nbootstrap <= 0)
@@ -669,8 +669,8 @@ p2p::bootstrap_pred_cb (int i, sfs_ID n, sfs_ID p, route r, sfsp2pstat status)
     warnx << "bootstrap_pred_cb: " << status << ": dead " << n << "\n";
     bootstrap_failure = true;
   } else {
-    warnx << "bootstrap_pred_cb: " << i << " is " << n << " propose: " 
-	  << p << "\n";
+    //warnx << "bootstrap_pred_cb: " << i << " is " << n << " propose: " 
+    //	  << p << "\n";
     if (updatepred (predecessor[i], p, r)) {
       warnx << "bootstrap_pred_cb: updated\n";
       stable = false;
@@ -732,7 +732,7 @@ void
 p2p::insert (svccb *sbp,  sfsp2p_insertarg *ia)
 {
   int i = successor_wedge (ia->d);
-  find_successor (predecessor[i].first, ia->d,
+  find_successor (successor[i].first, ia->d,
 		  wrap (mkref (this), &p2p::insert_findsucc_cb, sbp, ia));
 }
 
@@ -748,8 +748,8 @@ p2p::insert_findsucc_cb (svccb *sbp, sfsp2p_insertarg *ia, sfs_ID x, route r,
     else 
       sbp->replyref (sfsp2pstat (status));
   } else {
-    warnx << "insert_findsucc_cb: do insert of " << ia->d << " at " << x 
-	  << "\n";
+    // warnx << "insert_findsucc_cb: do insert of " << ia->d << " at " << x 
+    //  << "\n";
     sfsp2pstat *res = New sfsp2pstat;
     doRPC (x, SFSP2PPROC_INSERT, ia, res, wrap (mkref (this), 
 					      &p2p::insert_cb, sbp, res));
@@ -775,7 +775,7 @@ p2p::lookup (svccb *sbp, sfs_ID &n)
   if (!predecessor[i].alive) {
     set_closeloc (predecessor[i]);
   }
-  find_successor (predecessor[i].first, n,
+  find_successor (successor[i].first, n,
 		  wrap (mkref (this), &p2p::lookup_findsucc_cb, sbp, n));
 }
 
@@ -791,7 +791,7 @@ p2p::lookup_findsucc_cb (svccb *sbp, sfs_ID n, sfs_ID x, route r,
     else 
       sbp->replyref (sfsp2pstat (status));
   } else {
-    warnx << "lookup_findsucc_cb: do lookup at " << x << "\n";
+    // warnx << "lookup_findsucc_cb: do lookup at " << x << "\n";
     sfsp2p_lookupres *res = New sfsp2p_lookupres (SFSP2P_OK);
     doRPC (x, SFSP2PPROC_LOOKUP, &n, res, wrap (mkref (this), 
 					      &p2p::lookup_cb, sbp, res));
@@ -895,13 +895,13 @@ p2p::lookup_closestsucc_cb (sfs_ID n, cbsfsID_t cb,
     warnx << "find_closestsucc_cb: RPC error" << res->status << "\n";
     cb (n, dr, res->status);
   } else if (n != res->resok->node) {
-    warnx << "find_closestsucc_cb of " << res->resok->x
-	  << " from " << n << " returns " << res->resok->node << "\n";
+    //warnx << "find_closestsucc_cb of " << res->resok->x
+    //  << " from " << n << " returns " << res->resok->node << "\n";
     updateloc (res->resok->node, res->resok->r, n);
     lookup_closestsucc (res->resok->node, res->resok->x, cb);
   } else {
-    warnx << "find_closestsucc_cb of " << res->resok->x 
-	  << " from " << n << " returns " << res->resok->node << "\n";
+    //warnx << "find_closestsucc_cb of " << res->resok->x 
+    //  << " from " << n << " returns " << res->resok->node << "\n";
     updateloc (res->resok->node, res->resok->r, n);
     cb (res->resok->node, res->resok->r, SFSP2P_OK);
   }
@@ -937,13 +937,13 @@ p2p::lookup_closestpred_cb (sfs_ID n, cbsfsID_t cb,
     warnx << "find_closestpred_cb: RPC error" << res->status << "\n";
     cb (n, dr, res->status);
   } else if (n != res->resok->node) {
-    warnx << "find_closestpred_cb of " << res->resok->x 
-	  << " from " << n << " returns " << res->resok->node << "\n";
+    // warnx << "find_closestpred_cb of " << res->resok->x 
+    //  << " from " << n << " returns " << res->resok->node << "\n";
     updateloc (res->resok->node, res->resok->r, n);
     lookup_closestpred (res->resok->node, res->resok->x, cb);
   } else {
-    warnx << "find_closestpred_cb of " << res->resok->x 
-	  << " from " << n << " returns " << res->resok->node << "\n";
+    // warnx << "find_closestpred_cb of " << res->resok->x 
+    //  << " from " << n << " returns " << res->resok->node << "\n";
     updateloc (res->resok->node, res->resok->r, n);
     cb (res->resok->node, res->resok->r, SFSP2P_OK);
   }
@@ -992,7 +992,7 @@ p2p::dofindclosestsucc (svccb *sbp, sfsp2p_findarg *fa)
       s = predecessor[i].first;
     }
   }
-  warnx << "dofindclosestsucc of " << fa->x << " is " << s << "\n";
+  // warnx << "dofindclosestsucc of " << fa->x << " is " << s << "\n";
   location *l = locations[s];
   assert (l);
   res.resok->x = fa->x;
@@ -1012,7 +1012,7 @@ p2p::dofindclosestpred (svccb *sbp, sfsp2p_findarg *fa)
       p = successor[i].first;
     }
   }
-  warnx << "dofindclosestpred of " << fa->x << " is " << p << "\n";
+  // warnx << "dofindclosestpred of " << fa->x << " is " << p << "\n";
   location *l = locations[p];
   assert (l);
   res.resok->x = fa->x;
@@ -1024,7 +1024,7 @@ p2p::dofindclosestpred (svccb *sbp, sfsp2p_findarg *fa)
 void
 p2p::donotify (svccb *sbp, sfsp2p_notifyarg *na)
 {
-  warnx << "donotify: " << na->x << "\n";
+  // warnx << "donotify: " << na->x << "\n";
   updateloc (na->x, na->r, na->x);
   if (notice (1, na->x, na->r)) {
     bootstrap ();
@@ -1035,7 +1035,7 @@ p2p::donotify (svccb *sbp, sfsp2p_notifyarg *na)
 void
 p2p::doalert (svccb *sbp, sfsp2p_notifyarg *na)
 {
-  warnx << "doalert: " << na->x << "\n";
+  // warnx << "doalert: " << na->x << "\n";
   // perhaps less aggressive and check status of x first
   deleteloc (na->x);
   bootstrap ();
@@ -1047,18 +1047,23 @@ p2p::domove (svccb *sbp, sfsp2p_movearg *ma)
 {
   sfsp2p_moveres res (SFSP2P_OK);
 
-  int n = attributes.size ();
+  int n = 0;
+  for (attribute *a = attributes.first (); a != NULL; a = attributes.next (a)) {
+    if (between (myID, ma->x, a->n)) {
+      n++;
+    }
+  }
   res.resok->mappings.setsize (n);
   int i = 0;
   for (attribute *a = attributes.first (); a != NULL; a = attributes.next (a)) {
     if (between (myID, ma->x, a->n)) {
-      warnx << "moving " << a->n << " to " << ma->x << "\n";
       res.resok->mappings[i].x = a->n;
       res.resok->mappings[i].r = a->r;
       i++;
       attributes.remove (a);
     }
   }
+  warnx << "moving " << n << " key/values to " << ma->x << "\n";
   sbp->reply (&res);
 }
 
@@ -1080,10 +1085,10 @@ p2p::doinsert (svccb *sbp, sfsp2p_insertarg *ia)
 void
 p2p::dolookup (svccb *sbp, sfs_ID *n)
 {
-  warnx << "dolookup for " << *n << ": ";
+  // warnx << "dolookup for " << *n << ": ";
   attribute *a = attributes[*n];
   if (a) {
-    warnx << a->r.server << "\n";
+    // warnx << a->r.server << "\n";
     sfsp2p_lookupres res = (SFSP2P_OK);
     res.resok->r = a->r;
     sbp->reply (&res);
