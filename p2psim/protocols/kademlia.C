@@ -104,13 +104,8 @@ Kademlia::Kademlia(IPAddress i, Args a)
   }
 
   if(!stabilize_timer) {
-    stabilize_timer = a.nget<unsigned>("stabilize_timer", 10000, 10);
+    refresh_rate = stabilize_timer = a.nget<unsigned>("stabilize_timer", 10000, 10);
     // KDEBUG(1) << "stabilize_timer = " << stabilize_timer << endl;
-  }
-
-  if(!refresh_rate) {
-    refresh_rate = a.nget<unsigned>("refresh_rate", 1000, 10);
-    // KDEBUG(1) << "refresh_rate = " << refresh_rate << endl;
   }
 
   if(!_default_timeout) {
