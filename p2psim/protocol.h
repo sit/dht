@@ -35,7 +35,7 @@ public:
   virtual void lookup_doc(Args*) = 0;
 
 protected:
-#define doRPC(X, Y, A, R) (this->_doRPC((X), ((member_f)&(Y)), \
+#define doRPC(X, Y, A, R) (this->_doRPC((X), ((member_f)(&Y)), \
                                         ((void*) (A)), ((void*) R)))
   bool _doRPC(IPAddress, member_f, void*, void*);
 
