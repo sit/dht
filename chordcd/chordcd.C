@@ -1,6 +1,8 @@
 #include "chordcd.h"
 #include "sfscd_prot.h"
 
+void gotrootfh (chord_server *server, ref<nfsserv> ns, sfsserver::fhcb cb, 
+		nfs_fh3 *fh);
 void
 chord_server_alloc (sfsprog *prog, ref<nfsserv> ns, int tcpfd,
 		 sfscd_mountarg *ma, sfsserver::fhcb cb)
@@ -8,12 +10,25 @@ chord_server_alloc (sfsprog *prog, ref<nfsserv> ns, int tcpfd,
   if (!ma->cres || (ma->carg.civers == 5
 		    && !sfs_parsepath (ma->carg.ci5->sname))) {
 
-    ptr<chord_server> server = New refcounted<chord_server>();
-    server->setrootfh (ma->carg.ci5->sname);
-    ns->setcb (wrap (server, &chord_server::dispatch));
+    chord_server *server = New chord_server ();
+    warn << "request to mount " << ma->carg.ci5->sname << "\n";
+    server->setrootfh (ma->carg.ci5->sname, wrap (&gotrootfh, server, ns, cb));
     return;
   }
   fatal << "CFS must run in a connectinfo version 5 SFS environment\n";
+}
+
+void
+gotrootfh (chord_server *server, ref<nfsserv> ns, sfsserver::fhcb cb, 
+	   nfs_fh3 *fh)
+{
+  if (fh) warn << "fetched the root block\n";
+  else warn << "error finding root block\n";
+  if (fh) {
+    (*cb) (fh);
+    ns->setcb (wrap (server, &chord_server::dispatch, ns));
+  }
+	
 }
 
 int

@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.1 2001/08/27 03:02:47 fdabek Exp $
+# $Id: Makefile.am,v 1.2 2001/08/30 14:16:47 fdabek Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -12,7 +12,7 @@ chordcd_SOURCES = \
 server.C chordcd.C
 
 # XXX - this should not be required!
-#chordcd_LDADD = $(DBLIB) $(LDADD)
+chordcd_LDADD = ../svc/libsvc.la $(LDADD)
 
 EXTRA_DIST = .cvsignore
 CLEANFILES = core *.core *~ *.rpo

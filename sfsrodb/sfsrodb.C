@@ -1,4 +1,4 @@
-/* $Id: sfsrodb.C,v 1.10 2001/07/05 14:11:37 fdabek Exp $ */
+/* $Id: sfsrodb.C,v 1.11 2001/08/30 14:16:52 fdabek Exp $ */
 
 /*
  * Copyright (C) 1999 Kevin Fu (fubob@mit.edu)
@@ -41,12 +41,12 @@
 #include "arpc.h"
 #include "dhash.h"
 #include "dhash_prot.h"
+#include "sha1.h"
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
+#define LSD_SOCKET "/tmp/chord-sock"
 
-ptr<aclnt> sfsrodb;
-
-str root2;
+ptr<aclnt> cclnt;
 
 u_int32_t blocksize;
 u_int32_t nfh;
@@ -55,11 +55,10 @@ bool initialize;
 bool verbose_mode;
 
 extern int errno;
-char IV[SFSRO_IVSIZE];
 int relpathlen;
 extern ptr < rabin_priv > sfsrokey;
-str hostname;
 
+qhash<chordID, bool, hashID> dup_cache;
 
 /* Statistics */
 u_int32_t reginode_cnt = 0;
@@ -69,7 +68,6 @@ u_int32_t sindir_cnt = 0;
 u_int32_t dindir_cnt = 0;
 u_int32_t tindir_cnt = 0;
 u_int32_t directory_cnt = 0;
-//int32_t fhdb_cnt = 0;
 u_int32_t fh_cnt = 0;
 
 u_int32_t identical_block = 0;
@@ -195,10 +193,10 @@ store_inode (sfsro_inode *inode, sfs_hash *fh)
     callbuf = suio_flatten (x.uio ());
   }
 
-  create_sfsrofh (IV, SFSRO_IVSIZE, fh, callbuf, calllen);
+  create_sfsrofh (fh, callbuf, calllen);
 
   // Store the inode of this path in the database
-  sfsrodb_put (sfsrodb, fh->base (), fh->size (), callbuf, calllen);
+  sfsrodb_put (fh->base (), fh->size (), callbuf, calllen);
   fh_cnt++;
   if (inode->type == SFSROLNK)
     lnkinode_cnt++;
@@ -228,9 +226,9 @@ store_file_block (sfs_hash *fh, const char *block, size_t size)
     callbuf = suio_flatten (x.uio ());
   }
 
-  create_sfsrofh (IV, SFSRO_IVSIZE, fh, callbuf, calllen);
+  create_sfsrofh (fh, callbuf, calllen);
 
-  sfsrodb_put (sfsrodb, fh->base (), fh->size (), callbuf, calllen);
+  sfsrodb_put (fh->base (), fh->size (), callbuf, calllen);
 
   filedatablk_cnt++;
   fh_cnt++;
@@ -245,7 +243,6 @@ process_sindirect (int &fd, bool &wrote_stuff, sfsro_inode *inode,
 
   size_t size = 0;
 
-  //  warnx << "Adding sindirect pointers\n"; 
   uint32 blocknum = 0;
   sfsro_data sindir (SFSRO_INDIR);
   sindir.indir->handles.setsize (nfh);
@@ -285,10 +282,9 @@ process_sindirect (int &fd, bool &wrote_stuff, sfsro_inode *inode,
       callbuf = suio_flatten (x.uio ());
     }
     
-    create_sfsrofh (IV, SFSRO_IVSIZE, fh, 
-		    callbuf, calllen);
+    create_sfsrofh (fh, callbuf, calllen);
 
-    sfsrodb_put (sfsrodb, fh->base(), fh->size(),
+    sfsrodb_put (fh->base(), fh->size(),
 		 callbuf, calllen);
     
     sindir_cnt++;
@@ -340,10 +336,9 @@ process_dindirect (int &fd, bool &wrote_stuff, sfsro_inode *inode,
       callbuf = suio_flatten (x.uio ());
     }
     
-    create_sfsrofh (IV, SFSRO_IVSIZE, fh, 
-		    callbuf, calllen);
+    create_sfsrofh (fh, callbuf, calllen);
 
-    sfsrodb_put (sfsrodb, fh->base(), fh->size(),
+    sfsrodb_put (fh->base(), fh->size(),
 		 callbuf, calllen);
   
     dindir_cnt++;
@@ -393,10 +388,9 @@ process_tindirect (int &fd, bool &wrote_stuff, sfsro_inode *inode,
       callbuf = suio_flatten (x.uio ());
     }
     
-    create_sfsrofh (IV, SFSRO_IVSIZE, fh, 
-		    callbuf, calllen);
+    create_sfsrofh (fh, callbuf, calllen);
 
-    sfsrodb_put (sfsrodb, fh->base(),
+    sfsrodb_put (fh->base(),
 		 fh->size(),
 		 callbuf, calllen);
     tindir_cnt++;
@@ -449,8 +443,6 @@ store_file (sfsro_inode *inode, str path)
     /* Check for identical blocks */
     if (store_file_block (&block_fh, block, size)) {
       inode->reg->used += size;
-      warnx << "Added direct, size " << size << ", blocknum " 
-	    << blocknum << "\n";
     }
 
     inode->reg->direct[blocknum] = block_fh;
@@ -469,7 +461,6 @@ store_file (sfsro_inode *inode, str path)
 			      block, block_fh,
 			      &inode->reg->indirect);
 
-    warn << " stored indirecto block at " << hexdump(&inode->reg->indirect, 20) << "\n";
 
     // Deal with dindirect pointers
     if (!done) {
@@ -517,9 +508,9 @@ store_directory (sfsro_inode *inode, sfs_hash *fh,
     callbuf = suio_flatten (x.uio ());
   }
 
-  create_sfsrofh (IV, SFSRO_IVSIZE, fh, callbuf, calllen);
+  create_sfsrofh (fh, callbuf, calllen);
 
-  sfsrodb_put (sfsrodb, fh->base (), fh->size (), callbuf, calllen);
+  sfsrodb_put (fh->base (), fh->size (), callbuf, calllen);
 
   directory_cnt++;
   fh_cnt++;
@@ -567,24 +558,9 @@ sort_dir (const str path, vec < char *>&file_list)
     file_list.push_back (filename);
   }
 
-  /*
-  warnx << "Before:\n";
-
-  for (unsigned int i = 0; i < file_list.size (); i++) {
-       warnx << file_list[i] << "\n";
-  }
-  */
-
   qsort (file_list.base (), file_list.size (),
 	 sizeof (char *), compare_name);
 
-  /*
-  warnx << "After:\n";
-
-  for (unsigned int i = 0; i < file_list.size (); i++) {
-    warnx << file_list[i] << "\n";
-  }
-  */
 }
 
 /* pseudo-destructor */
@@ -612,8 +588,6 @@ recurse_path (const str path, sfs_hash * fh)
 {
   struct stat st;
 
-  //  warn << "recurse_path (" << path << ", " << "fh)\n";
-
   if (lstat (path, &st) < 0)
     return -1;
 
@@ -630,50 +604,23 @@ recurse_path (const str path, sfs_hash * fh)
       return -1;
     }
 
-    //    buf[nchars] = 0;
-
-    //    warn << "recurse_path: Link\n";
-
     sfsrodb_setinode (&st, &inode);
     inode.lnk->dest = nfspath3 (buf, nchars);
 
     delete[] buf;
 
-
   } else if (S_ISREG (st.st_mode)) {
-    //    warn << "recurse_path: Regular file\n";
-
     sfsrodb_setinode (&st, &inode);
-
     store_file (&inode, path);
-
-    /*    strbuf sb;
-       rpc_print (sb, inode, 5, NULL, " ");
-       warn << "inode " << sb << "\n";
-     */
   }
   else if (S_ISDIR (st.st_mode)) {
-    //    warn << "recurse_path: Directory\n";
-
     sfsrodb_setinode (&st, &inode);
-
-    /*    strbuf sb;
-       rpc_print (sb, inode, 5, NULL, " ");
-       warn << "inode " << sb << "\n";
-     */
-
-    //    sorted_dir dir (path);
-
     vec < char *>file_list;
-
     sort_dir (path, file_list);
-
     sfsro_data directory (SFSRO_DIRBLK);
 
     // XXXXX need to take of the prefix of path
     directory.dir->path = substr (path, relpathlen);
-
-        warn << "Dir path" << directory.dir->path << "\n";
 
     directory.dir->eof = true;
     rpc_ptr < sfsro_dirent > *direntp = &directory.dir->entries;
@@ -681,29 +628,20 @@ recurse_path (const str path, sfs_hash * fh)
     for (unsigned int i = 0; i < file_list.size (); i++) {
       (*direntp).alloc ();
       (*direntp)->name = file_list[i];
-      //      (*direntp)->fh.setsize (0);
 
-      /* The client manages . and .. */
       if (((*direntp)->name.cmp (".") == 0) ||
 	  ((*direntp)->name.cmp ("..") == 0)) {
 	continue;
-	/*      (*direntp)->fh.setsize (sizeof (uint64));
-	   memcpy (static_cast<void *>((*direntp)->fh.base ()),
-	   static_cast<void *>(&st.st_ino),
-	   sizeof (uint64)); */
       }
       else {
-	//	warn << "File: " << (*direntp)->name << "\n";
-
 	recurse_path (path << "/" << (*direntp)->name,
 		      &(*direntp)->fh);
 
-	//	warn << "adding dirent: " << (*direntp)->name << "\n";
       }
 
       direntp = &(*direntp)->nextentry;
     }
-
+ 
     twiddle_sort_dir (file_list);
 
     store_directory (&inode, fh, &directory);
@@ -721,23 +659,16 @@ recurse_path (const str path, sfs_hash * fh)
 
 
 int
-sfsrodb_main (const str root, const str keyfile, const char *dbfile)
+sfsrodb_main (const str root, const str keyfile)
 {
 
-  int fd = unixsocket_connect(dbfile);
+  int fd = unixsocket_connect(LSD_SOCKET);
   if (fd < 0)
-    fatal << "error on " << dbfile << "\n";
+    fatal << "error connecting to " << LSD_SOCKET << "\n";
   
-  sfsrodb = aclnt::alloc (axprt_unix::alloc (fd), dhashclnt_program_1);
+  cclnt = aclnt::alloc (axprt_unix::alloc (fd), dhashclnt_program_1);
   
-  /* Set the sfs_connectres structure (with pub key) to db */
-  sfs_connectres cres (SFS_OK);
-  cres.reply->servinfo.release = SFS_RELEASE;
-  cres.reply->servinfo.host.type = SFS_HOSTINFO;
-  cres.reply->servinfo.host.hostname = hostname;
-
   ptr < rabin_priv > sk;
-
   if (!keyfile) {
     warn << "cannot locate default file sfs_host_key\n";
     fatal ("errors!\n");
@@ -756,34 +687,19 @@ sfsrodb_main (const str root, const str keyfile, const char *dbfile)
     }
   }
 
-  cres.reply->servinfo.host.pubkey = sk->n;
-  cres.reply->servinfo.prog = SFSRO_PROGRAM;
-  cres.reply->servinfo.vers = SFSRO_VERSION;
-  bzero (&cres.reply->charge, sizeof (sfs_hashcharge));
-
-  // Set IV
-  sfs_hash id;
-  sfs_mkhostid (&id, cres.reply->servinfo.host);
-  memcpy (&IV[0], "squeamish_ossifrage_", SFSRO_IVSIZE);
-
   // store file system in db
   sfs_hash root_fh;
   relpathlen = root.len ();
   recurse_path (root, &root_fh);
 
-  sfs_fsinfo res (SFSRO_PROGRAM);
-  res.sfsro->set_vers (SFSRO_VERSION);
+  sfsro_data dat (CFS_FSINFO);
 
-  memcpy (res.sfsro->v1->info.iv.base (), &IV[0], SFSRO_IVSIZE);
-  res.sfsro->v1->info.rootfh = root_fh;
-
+  dat.fsinfo->pubkey = sk->n;
+  dat.fsinfo->info.rootfh = fh2mpz(root_fh.base (), root_fh.size ());
   time_t start, end;
-
-  res.sfsro->v1->info.type = SFS_ROFSINFO;
-  res.sfsro->v1->info.start = start = time (NULL);
-  res.sfsro->v1->info.duration = sfsro_duration;
-  res.sfsro->v1->info.blocksize = blocksize;
-  
+  dat.fsinfo->info.start = start = time (NULL);
+  dat.fsinfo->info.duration = sfsro_duration;
+  dat.fsinfo->info.blocksize = blocksize;
   end = start + sfsro_duration;
 
   // XX Should make sure timezone is correct
@@ -792,43 +708,20 @@ sfsrodb_main (const str root, const str keyfile, const char *dbfile)
   warn << "Database good from: \n " << stime
        << "until:\n " << etime;
 
-  create_sfsrosig (&(res.sfsro->v1->sig), &(res.sfsro->v1->info),
-		   keyfile);
-
-  str fsinfo_name;
-  if  (initialize) 
-    fsinfo_name = str("fsinfo");
-  else {
-    const char *pk_raw = sk->n.cstr ();
-    char hashed_pk[21];
-    sha1_hash(hashed_pk, pk_raw, strlen(pk_raw));
-    fsinfo_name = armor32(hashed_pk, 20);
-  }
-  warn << "inserting fsinfo under " << fsinfo_name << "\n";
- 
+  dat.fsinfo->sig = sk->sign (xdr2str (dat));
+  dat.fsinfo->pubkey = sk->n;
+  
+  char rootfh_hash[20];
+  str raw = sk->n.getraw ();
+  sha1_hash (rootfh_hash, raw.cstr (), raw.len ());
+  str rootfh_name = armor64A(rootfh_hash, 20);
+  warn << "exporting file system under " << rootfh_name << "\n";
 
   xdrsuio x (XDR_ENCODE);
-  if (xdr_sfs_fsinfo (x.xdrp (), &res)) {
+  if (xdr_sfsro_data (x.xdrp (), &dat)) {
     void *v = suio_flatten (x.uio ());
     int l =  x.uio ()->resid ();
-    if (initialize)  sfsrodb_put (sfsrodb, "fsinfo", 6, v, l);
-    else  sfsrodb_put (sfsrodb, fsinfo_name.cstr (), 20, v, l);
-
-    warn << "Added fsinfo\n";
-  }
-
-  if (initialize) {
-    warn << "adding cres, do not use this option with chord\n";
-    xdrsuio x2 (XDR_ENCODE);
-    if (xdr_sfs_connectres (x2.xdrp (), &cres)) {
-      int l = x2.uio ()->resid ();
-      void *v = suio_flatten (x2.uio ());
-      warn << "put conres in db\n";
-      if (!sfsrodb_put (sfsrodb, "conres", 6, v, l)) {
-	warn << "Found identical conres. You found a collision!\n";
-	exit (-1);
-      }
-    }
+    sfsrodb_put (rootfh_hash, 20, v, l);
   }
 
   if (verbose_mode) {
@@ -839,7 +732,6 @@ sfsrodb_main (const str root, const str keyfile, const char *dbfile)
     warn << "identical dirs:     " << identical_dir << "\n";
     warn << "identical inodes:   " << identical_inode << "\n";
     warn << "identical symlinks: " << identical_sym << "\n";
-    //    warn << "identical fhdb:     " << identical_fhdb << "\n\n\n";
 
     warn << "Database contents:\n";
     warn << "Regular inodes:      " << reginode_cnt << "\n";
@@ -849,23 +741,12 @@ sfsrodb_main (const str root, const str keyfile, const char *dbfile)
     warn << "Single indir blocks: " << sindir_cnt << "\n";
     warn << "Double indir blocks: " << dindir_cnt << "\n";
     warn << "Triple indir blocks: " << tindir_cnt << "\n";
-    //    warn << "Fhdb blocks:         " << fhdb_cnt << "\n\n\n";
 
     warn << "identical fh's overall : " << identical_fh << "\n";
     warn << "unique fh's overall    : " << fh_cnt << "\n\n\n";
   }
-
-  warn << "close db\n";
-
-  //  sfsrodb->closedb ();
-
-  //  delete sfsrodb;
-
-  // XXX here we should verify for debugging that the number of entries
-  // in fhdb is the same as the number of database entries (minus
-  // the conres and root)
-
-  amain();
+  
+  while (out) acheck ();
   return 0;
 }
 
@@ -878,17 +759,10 @@ usage ()
   warnx << "              [-i] [-h <hostname for db>] [-v] [-b <blocksize>]\n";
   warnx << "-d <export directory> : The directory hierarchy to export\n";
   warnx << "-s <SK keyfile>       : Path to the secret key file\n";
-  warnx << "-o <dbfile>           : Filename to output database\n";
   warnx << "Optional directives:\n";
-  warnx << "-i                    : Initialize local DB (for testing only)\n";
-  warnx << "-h <hostname for db>  : Hostname of replication, if not this machine\n";
   warnx << "-v                    : Verbose debugging output\n";
   warnx << "-b <blocksize>        : Page size of underlying database\n";
 
-
-  //  warnx << "usage: " << progname << " [command] [options]\n\n";
-  //warnx << "\tinit directory [-d sdb file] [-followsymlinks] [-maxdepth max] [-key keyfile]\n";
-  //  warnx << "\tupdate directory \n";
   exit (1);
 }
 
@@ -898,22 +772,15 @@ main (int argc, char **argv)
 {
   setprogname (argv[0]);
 
-  char h[1024];
-  strcpy(h, myname ().cstr());
-  for (unsigned int i = 0; i < strlen(h); i++) h[i] = tolower(h[i]);
-  
-  hostname = str (h);
-
   char *exp_dir = NULL;
   char *sk_file = NULL;
-  char *output_file = NULL;
 
   verbose_mode = false;
   initialize = false;
   blocksize = 8192;
   
   int ch;
-  while ((ch = getopt (argc, argv, "b:d:e:s:o:h:vi")) != -1)
+  while ((ch = getopt (argc, argv, "b:d:s:v")) != -1)
     switch (ch) {
     case 'b':
       if (!convertint (optarg, &blocksize)
@@ -923,20 +790,8 @@ main (int argc, char **argv)
     case 'd':
       exp_dir = optarg;
       break;
-    case 'e':
-      root2 = optarg;
-      break;
     case 's':
       sk_file = optarg;
-      break;
-    case 'o':
-      output_file = optarg;
-      break;
-    case 'h':
-      hostname = optarg;
-      break;
-    case 'i':
-      initialize = true;
       break;
     case 'v':
       verbose_mode = true;
@@ -947,25 +802,15 @@ main (int argc, char **argv)
     }
   argc -= optind;
   argv += optind;
+  nfh = (blocksize - 100) / (20*2);
 
-  nfh = blocksize / (20*2);
-  if (nfh > SFSRO_NFH) nfh = SFSRO_NFH;
-
-  if ( (argc > 0) || !exp_dir || !sk_file || !output_file )
+  if ( (argc > 0) || !exp_dir || !sk_file )
     usage ();
 
   if (verbose_mode) {
     warnx << "export directory : " << exp_dir << "\n";
     warnx << "SK keyfile       : " << sk_file << "\n";
-    warnx << "dbfile           : " << output_file << "\n";
-    warnx << "Initialize mode : ";
-    if (initialize) 
-      warnx << "On\n";
-    else
-      warnx << "Off\n";
-
-    warnx << "hostname for db  : " << hostname << "\n";
   }
 
-  return (sfsrodb_main (exp_dir, sk_file, output_file));
+  return (sfsrodb_main (exp_dir, sk_file));
 }

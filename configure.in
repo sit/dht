@@ -1,4 +1,4 @@
-dnl $Id: configure.in,v 1.8 2001/08/27 03:02:45 fdabek Exp $
+dnl $Id: configure.in,v 1.9 2001/08/30 14:16:38 fdabek Exp $
 dnl
 dnl Process this file with autoconf to produce a configure script.
 dnl
@@ -48,7 +48,7 @@ done
 ETAGS_ARGS='-C /dev/null'
 AC_SUBST(ETAGS_ARGS)
 
-AC_OUTPUT(Makefile svc/Makefile sfsrocd/Makefile 
-	sfsrodb/Makefile sfsrosd/Makefile dhash/Makefile lsd/Makefile
+AC_OUTPUT(Makefile svc/Makefile  
+	sfsrodb/Makefile dhash/Makefile lsd/Makefile
 	chord/Makefile chordcd/Makefile
-	 playtrace_single/Makefile devel/Makefile)
+	 devel/Makefile)

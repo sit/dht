@@ -1,4 +1,4 @@
-/* $Id: sfsrodb_core.C,v 1.12 2001/07/05 14:11:38 fdabek Exp $ */
+/* $Id: sfsrodb_core.C,v 1.13 2001/08/30 14:16:52 fdabek Exp $ */
 
 /*
  *
@@ -23,12 +23,14 @@
  */
 
 #include "sfsrodb_core.h"
+#include "sfsrodb.h"
 #include "dhash.h"
 #include "dhash_prot.h"
 #include "arpc.h"
 
 long out=0;
-#define mtu 8192
+
+void check_cbs ();
 
 bigint
 fh2mpz(const void *keydata, size_t keylen) 
@@ -40,94 +42,99 @@ fh2mpz(const void *keydata, size_t keylen)
 
 /* always returns true (regardless of whether key is duplicated) */
 bool
-sfsrodb_put (ptr<aclnt> db, const void *keydata, size_t keylen, 
+sfsrodb_put (const void *keydata, size_t keylen, 
 	     void *contentdata, size_t contentlen)
 {
-
-  unsigned int offset = 0;
+  assert (keylen == 20);
   bigint n = fh2mpz(keydata, keylen);
-  do {
-    ptr<dhash_insertarg> arg = New refcounted<dhash_insertarg> ();
+  
+  ptr<dhash_insertarg> arg = New refcounted<dhash_insertarg> ();
+  int remain = (MTU <= contentlen) ? MTU : contentlen;
+  arg->key = n;
+  arg->data.setsize (remain);
+  arg->offset = 0;
+  arg->attr.size = contentlen;
+  memcpy(arg->data.base (), (char *)contentdata, remain);
+  arg->type = DHASH_STORE;
 
-    int remain = (offset + mtu <= contentlen) ? mtu : contentlen - offset;
-    arg->key = n;
-    arg->data.setsize (remain);
-    arg->offset = offset;
-    arg->attr.size = contentlen;
-    memcpy(arg->data.base (), (char *)contentdata + offset, remain);
-    arg->type = DHASH_STORE;
+  dhash_storeres *res = New dhash_storeres();
+  cclnt->call (DHASHPROC_INSERT, arg, res, wrap(&sfsrodb_put_cb, res,
+						contentdata, contentlen, n, remain));
+  out++;
 
-    dhash_stat *res = New dhash_stat();
-    db->call (DHASHPROC_INSERT, arg, res, wrap(&sfsrodb_put_cb, res));
-    out++;
-    offset += mtu;
-  } while (offset < contentlen);
-
+  check_cbs ();
   return true;
+}
+
+void
+sfsrodb_put_cb (dhash_storeres *res, 
+		void *contentdata, size_t contentlen, bigint n, int offset,
+		clnt_stat err)
+{
+  out--;
+  if ((err) || (res->status != DHASH_OK)) { 
+     warn << "insert failed: " << err << strerror(err) << "\n";
+    warn << "Aborting\n";
+    exit(1);
+  }
+
+  unsigned int written = offset;  
+
+  while (written < contentlen) {
+    dhash_send_arg *sarg = New dhash_send_arg ();
+    sarg->dest = res->resok->source;
+    sarg->iarg.key = n;
+    unsigned int s = (written + MTU < contentlen) ? MTU : contentlen - written;
+    sarg->iarg.data.setsize (s);
+    memcpy (sarg->iarg.data.base (), (char *)contentdata + written, s);
+    sarg->iarg.type = DHASH_STORE;
+    sarg->iarg.attr.size = contentlen;
+    sarg->iarg.offset = written;
+    dhash_storeres *res = New dhash_storeres;
+    out++;
+    cclnt->call (DHASHPROC_SEND, sarg, res, wrap (&sfsrodb_put_finish_cb, res));
+    written += s;
+    delete sarg;
+  }
+  delete res;
+  //  check_cbs ();
+}
+
+
+void
+sfsrodb_put_finish_cb (dhash_storeres *res, clnt_stat err) 
+{
+  if (err) 
+    fatal << "RPC error; aborting\n";
+
+  out--;
+  delete res;
 }
 
 void
 check_cbs () 
 {
-  while (out > CONCUR_OPS) acheck();
-  if (out <= 0) exit(0);
+  while (out > 16) acheck();
 }
 
-void
-sfsrodb_put_cb(dhash_stat *res, clnt_stat err)
-{
-
-  if ((err) || (*res != DHASH_OK)) { 
-    warn << "insert failed: " << err << strerror(err) << "\n";
-    warn << "Aborting\n";
-    exit(1);
-  }
-
-  delete res;
-  check_cbs ();
-}
 
 /* Library SFRODB routines used by the database creation,
    server, and client.  */
 
 void
-create_sfsrofh (char *iv, uint iv_len,
-		sfs_hash *fh, 
-		char *buf, size_t buflen)
+create_sfsrofh (sfs_hash *fh, char *buf, size_t buflen)
 {
-
-  assert (iv_len == SFSRO_IVSIZE);
-
   bzero(fh->base (), fh->size ());
-
-  struct iovec iov[2];
-  iov[0].iov_base = static_cast<char *>(iv);
-  iov[0].iov_len = SFSRO_IVSIZE;  
-  iov[1].iov_base = buf;
-  iov[1].iov_len = buflen;
-
-  sha1_hashv (fh->base (), iov, 2);
+  sha1_hash (fh->base (), buf, buflen);
 }
 
 bool
-verify_sfsrofh (char *iv, uint iv_len,
-		const sfs_hash *fh,
+verify_sfsrofh (const sfs_hash *fh,
 		char *buf, size_t buflen)
 {
-  assert (iv_len == SFSRO_IVSIZE);
-
-  return 1;
-
   char tempbuf[fh->size ()];
-  struct iovec iov[2];
 
-  iov[0].iov_base = static_cast<char *>(iv);
-  iov[0].iov_len = SFSRO_IVSIZE;
-  
-  iov[1].iov_base = buf;
-  iov[1].iov_len = buflen;
-
-  sha1_hashv (tempbuf, iov, 2);
+  sha1_hash (tempbuf, buf, buflen);
 
   if (memcmp (tempbuf, fh->base (), fh->size ()) == 0) {
     return true;
@@ -140,38 +147,3 @@ verify_sfsrofh (char *iv, uint iv_len,
   return false;
 }
 
-void
-create_sfsrosig (sfs_sig *sig, sfsro1_signed_fsinfo *info,
-		 const char *seckeyfile)
-{
-  ptr<rabin_priv> sk;
-  
-  if (!seckeyfile) {
-    warn << "cannot locate default file sfs_host_key\n";
-    fatal ("errors!\n");
-  }
-  else {
-    str key = file2wstr (seckeyfile);
-    if (!key) {
-      warn << seckeyfile << ": " << strerror (errno) << "\n";
-      fatal ("errors!\n");
-    }
-    else if (!(sk = import_rabin_priv (key, NULL))) {
-      warn << "could not decode " << seckeyfile << "\n";
-      warn << key << "\n";
-      fatal ("errors!\n");
-    }
-  }
-
-  *sig = sk->sign (xdr2str (*info));
-}
-
-
-bool
-verify_sfsrosig (const sfs_sig *sig, const sfsro1_signed_fsinfo *info,
-		 const sfs_pubkey *key)
-{
-  rabin_pub rpk (*key);
-  
-  return rpk.verify (xdr2str (*info), *sig);
-}

@@ -1,4 +1,4 @@
-/* $Id: sfsrodb_core.h,v 1.5 2001/07/11 04:00:06 fdabek Exp $ */
+/* $Id: sfsrodb_core.h,v 1.6 2001/08/30 14:16:52 fdabek Exp $ */
 
 /*
  *
@@ -36,23 +36,23 @@
 #include "dmalloc.h"
 #endif
 
-#define CONCUR_OPS 512
+#define CONCUR_OPS 8
 
 bigint fh2mpz(const void *keydata, size_t keylen);
 
-bool sfsrodb_put (ptr<aclnt> db, const void *keydata, size_t keylen, 
+bool sfsrodb_put (const void *keydata, size_t keylen, 
 		  void *contentdata, size_t contentlen);
+void sfsrodb_put_cb(dhash_storeres *res, void *contentdata, size_t contentlen, 
+		    bigint n, int offset, clnt_stat err);
+void sfsrodb_put_finish_cb (dhash_storeres *res, clnt_stat err);
 
-void
-sfsrodb_put_cb(dhash_stat *res, clnt_stat err);
 /*
   Requires: You have at some point called random_init();
   Given: A filled buffer and allocated fh
   Return: A file handle in fh.  Generate random bytes for the first
   SFSRO_IVSIZE bytes in the opaque fh.  Add fh to fh_list
 */
-void create_sfsrofh (char *iv, uint iv_len,
-		     sfs_hash *fh, 
+void create_sfsrofh (sfs_hash *fh, 
 		     char *buf, size_t buflen);
 
 
@@ -60,8 +60,7 @@ void create_sfsrofh (char *iv, uint iv_len,
   Given: A filled buffer and allocated fh
   Return: True if the file handle verifies as cryptographically secure
 */
-bool verify_sfsrofh (char *iv, uint iv_len,
-		     const sfs_hash *fh, 
+bool verify_sfsrofh (const sfs_hash *fh, 
 		     char *buf, size_t buflen);
 
 void create_sfsrosig (sfs_sig *sig,  sfsro1_signed_fsinfo *info,

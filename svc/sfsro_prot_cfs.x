@@ -8,42 +8,10 @@
 
 %#include "bigint.h"
 %#include "sfs_prot.h"
+%#include "chord.h"
 
 const SFSRO_FHSIZE = 20;
-const SFSRO_BLKSIZE = 8192;
-const SFSRO_NFH = 256;	       /* Blocks are approx 2KB each */
-const SFSRO_NDIR = 7;
-const SFSRO_FHDB_KEYS     = 255;  
-const SFSRO_FHDB_CHILDREN = 256; /* must be  KEYS+1 */
-const SFSRO_FHDB_NFH      = 256; /* FHDB blocks are approx 5KB each */
-
-enum sfsrostat {
-  SFSRO_OK = 0,
-  SFSRO_ERRNOENT = 1
-};
-
-struct sfsro_blockattr {
-  unsigned size;
-};
-
-struct sfsro_dataresok {
-  unsigned offset;
-  sfsro_blockattr attr; 
-  opaque data<>;
-};
-
-union sfsro_datares switch (sfsrostat status) {
- case SFSRO_OK:
-   sfsro_dataresok resok;
- default: 
-   void;
-};
-
-struct sfsro_getarg {
-  sfs_hash fh;
-  unsigned offset;
-  unsigned len;
-};
+const SFSRO_NDIR = 128;
 
 enum ftypero {
   SFSROREG      = 1,
@@ -54,11 +22,23 @@ enum ftypero {
 };
 
 
+struct cfs_signed_fsinfo {
+  unsigned start;       /* In seconds since UNIX epoch */
+  unsigned duration;	/* seconds */
+  chordID rootfh;
+  int blocksize;
+};
+
+struct cfs_fsinfo {
+  cfs_signed_fsinfo info;
+  sfs_pubkey pubkey;
+  sfs_sig sig;
+};
+
 struct sfsro_inode_lnk {
   uint32 nlink;
   nfstime3 mtime;
   nfstime3 ctime;
-
   nfspath3 dest;
 };
 
@@ -83,7 +63,6 @@ union sfsro_inode switch (ftypero type) {
    sfsro_inode_reg reg;
 };
 
-
 struct sfsro_indirect {
   sfs_hash handles<>;
 };
@@ -92,41 +71,20 @@ struct sfsro_dirent {
   sfs_hash fh;
   string name<>;
   sfsro_dirent *nextentry;
-  /*  uint64 fileid; */
 };
 
 struct sfsro_directory {
   nfspath3 path;
-/*  uint64 fileid; */
   sfsro_dirent *entries;
   bool eof;
 };
-
-
-struct sfsro_fhdb_indir {
-  /*
-     Invariant:
-                key[i] < key [j] for all i<j
-
-                keys in GETDATA(child[i]) are 
-                   <= key[i+1] <
-                keys in GETDATA(child[i+1])
-  */
-  sfs_hash key<SFSRO_FHDB_KEYS>;     
-  sfs_hash child<SFSRO_FHDB_CHILDREN>;
-};
-
-/* Handles to direct blocks */
-typedef sfs_hash sfsro_fhdb_dir<SFSRO_FHDB_NFH>;
-
 
 enum dtype {
    SFSRO_INODE      = 0,
    SFSRO_FILEBLK    = 1, /* File data */
    SFSRO_DIRBLK     = 2, /* Directory data */
    SFSRO_INDIR      = 3, /* Indirect data pointer block */
-   SFSRO_FHDB_DIR   = 4, /* Direct data pointer block for FH database */
-   SFSRO_FHDB_INDIR = 5  /* Indirect data pointer block for FH database */
+   CFS_FSINFO       = 4  /* root of Meta-data for file system */
 };
 
 union sfsro_data switch (dtype type) {
@@ -138,22 +96,10 @@ union sfsro_data switch (dtype type) {
    sfsro_directory dir;
  case SFSRO_INDIR:
    sfsro_indirect indir;
- case SFSRO_FHDB_DIR:
-   sfsro_fhdb_dir fhdb_dir;
- case SFSRO_FHDB_INDIR:
-   sfsro_fhdb_indir fhdb_indir;
+ case CFS_FSINFO:
+   cfs_fsinfo fsinfo;
  default:
    void;
 };
 
 
-program SFSRO_PROGRAM {
-	version SFSRO_VERSION {
-		void 
-		SFSROPROC_NULL (void) = 0;
-
-		sfsro_datares
-		SFSROPROC_GETDATA (sfsro_getarg) = 1;
-
-	} = 1;
-} = 344446;

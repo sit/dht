@@ -1,4 +1,4 @@
-/* $Id: sfsrodb.h,v 1.3 2001/06/30 02:30:31 fdabek Exp $ */
+/* $Id: sfsrodb.h,v 1.4 2001/08/30 14:16:52 fdabek Exp $ */
 
 /*
  *
@@ -33,7 +33,8 @@
 #define SFSROSD_DB_FILE "/etc/sfsro.sdb"
 
 #include "dbfe.h"
-extern ptr<aclnt> sfsrodb;
+extern ptr<aclnt> cclnt;
+extern long out;
 
 /* Statistics */
 extern u_int32_t reginode_cnt;
@@ -59,9 +60,6 @@ extern u_int32_t identical_fh;
 /* sfsrodb.C prototypes */
 int recurse_directory (const str path, sfs_hash *fh);
 
-
-/* fhdb.C prototypes */
-int create_fhdb (sfs_hash *fhdb, const char *dbfile, char *iv);
 
 
 #endif /* _SFSRODB_H_ */
