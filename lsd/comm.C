@@ -88,6 +88,7 @@ p2p::doRPC (sfs_ID &ID, rpc_program progno, int procno,
 	    const void *in, void *out,
 	    aclnt_cb cb)
 {
+  
   rpc_args *a = new rpc_args(ID,progno,procno,in,out,cb);
   if (insert_or_lookup && (rpcdelay > 0)) {
     warn << "DELAYED \n";
@@ -116,7 +117,9 @@ p2p::doRealRPC (rpc_args *a)
   //  warnx << "doRealRPC\n";
   
   if (lookups_outstanding > 0) lookup_RPCs++;
-  
+
+  if ((insert_or_lookup > 0) && (myID != ID)) stats.total_rpcs++;
+
   location *l = locations[ID];
   if (!l) { 
     warn << "about to trip on " << ID << "\n";

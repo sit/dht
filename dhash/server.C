@@ -20,8 +20,6 @@ dhash::dhash(str dbname, int k, int ss, int cs) :
   opts.addOption("opt_nodesize", 4096);
   opts.addOption("opt_create", 1);
 
-  warn << dbname << "\n";
-  warn << "init dhash\n";
   if (int err = db->opendb(const_cast < char *>(dbname.cstr()), opts)) {
     warn << "open returned: " << strerror(err) << err << "\n";
     exit (-1);
@@ -65,28 +63,20 @@ dhash::dispatch(ptr<asrv> dhashsrv, svccb *sbp)
 
       dhash_insertarg *arg = sbp->template getarg<dhash_insertarg> ();
       if (arg->type == DHASH_STORE) {
-	sfs_ID p = defp2p->my_pred ();
-	sfs_ID m = defp2p->my_ID ();
-	if (between (p, m, arg->key)) {
-	  store_cbstate *st = 
-	    New store_cbstate (sbp, nreplica, arg, wrap (this, 
-							 &dhash::storesvc_cb));
+	if (responsible (arg->key)) {
+	  warnt("DHASH: will store");
 	  store(arg->key, arg->data, arg->type, 
-		wrap(this, &dhash::storesvc_cb, st));
-	  if (st->nreplica > 0)
-	    defp2p->get_successor (defp2p->my_ID(), 
-				   wrap (this, &dhash::find_replica_cb, st));
+		wrap(this, &dhash::storesvc_cb, sbp));
 	} else {
-	  warnx << "dispatch: store retry\n";
+	  warnt("DHASH: retry");
 	  dhash_storeres *res = New dhash_storeres();
 	  res->set_status (DHASH_RETRY);
-	  res->pred->n = p;
-	}
+	  res->pred->n = defp2p->my_pred ();
+	} 
       } else {
-	store_cbstate *st = 
-	  New store_cbstate (sbp, 0, NULL, wrap (this, &dhash::storesvc_cb));
+	warnt("DHASH: will store");
 	store(arg->key, arg->data, arg->type, 
-	      wrap(this, &dhash::storesvc_cb, st));
+	      wrap(this, &dhash::storesvc_cb, sbp));
       }
     }
     break;
@@ -137,16 +127,13 @@ dhash::fetchsvc_cb(svccb *sbp, sfs_ID n, ptr<dbrec> val, dhash_stat err)
 }
 
 void
-dhash::storesvc_cb(store_cbstate *st, dhash_stat err) {
-  //  warnx << "storesvc_cb: " << st->r << " " << err << "\n";
-
+dhash::storesvc_cb(svccb *sbp, dhash_stat err) {
+  
   warnt("DHASH: STORE_replying");
-  st->r--;
-  if (st->r <= 0) {
-    dhash_storeres *res = New dhash_storeres();
-    res->set_status (err);
-    st->sbp->reply(res);
-  }
+
+  dhash_storeres *res = New dhash_storeres();
+  res->set_status (err);
+  sbp->reply(res); 
 }
 
 //---------------- no sbp's below this line --------------
@@ -154,36 +141,29 @@ dhash::storesvc_cb(store_cbstate *st, dhash_stat err) {
 void
 dhash::fetch(sfs_ID id, cbvalue cb) 
 {
-  //  warn << "FETCHING " << id << "\n";
   ptr<dbrec> q = id2dbrec(id);
-  struct timeval *tp = New struct timeval();
-  gettimeofday (tp, NULL);
+
   warnt("DHASH: FETCH_before_db");
-  db->lookup(q, wrap(this, &dhash::fetch_cb, cb, tp));
+
+  db->lookup(q, wrap(this, &dhash::fetch_cb, cb));
 }
 
 void
-dhash::fetch_cb(cbvalue cb, struct timeval *tp, ptr<dbrec> ret) 
+dhash::fetch_cb(cbvalue cb, ptr<dbrec> ret) 
 {
 
   warnt("DHASH: FETCH_after_db");
 
-  delete tp;
   if (ret == NULL) {
     (*cb)(NULL, DHASH_NOENT);
     warn << "key not found in DB\n";
-  }  else
+  } else
     (*cb)(ret, DHASH_OK);
 }
 
 void 
 dhash::store(sfs_ID id, dhash_value data, store_status type, cbstore cb)
 {
-
-  //  if (type == DHASH_STORE) warn << "STORING " << id << "\n";
-  //else if (type == DHASH_CACHE) warn << "CACHING " << id << "\n";
-  //else if (type == DHASH_REPLICA) warn << "REPLICA " << id << "\n";
-
 
   ptr<dbrec> k = id2dbrec(id);
   ptr<dbrec> d = New refcounted<dbrec> (data.base (), data.size ());
@@ -210,37 +190,6 @@ dhash::store_cb(cbstore cb, int stat)
     (*cb)(DHASH_NOENT);
   else 
     (*cb)(DHASH_OK);
-}
-
-void
-dhash::find_replica_cb (store_cbstate *st, sfs_ID s, 
-			net_address r, sfsp2pstat status)
-{
-  if (status) {
-    warnx << "find_replica_cb: failure " << status << "\n";
-    st->cb (st, DHASH_NOTPRESENT);
-  } else {
-    //    warnx << "find_replica_cb: replica " << st->nreplica 
-    //	  << " store at node " << s << "\n";
-    st->nreplica--;
-    dhash_storeres *res = New dhash_storeres ();
-    st->item->type = DHASH_REPLICA;
-    defp2p->doRPC(s, dhash_program_1, DHASHPROC_STORE, st->item, res, 
-		  wrap(this, &dhash::store_replica_cb, st, res));
-    if (st->nreplica > 0) 
-      defp2p->get_successor (s, wrap (this, &dhash::find_replica_cb, st));
-  }
-}
-
-void
-dhash::store_replica_cb(store_cbstate *st, dhash_storeres *res, clnt_stat err) 
-{
-  if (res->status) {
-    warnx << "store_replica_cb: error " << res->status << "\n";
-  } else {
-    //    warnx << "store_replica_cb: succeeded\n";
-  }
-  st->cb (st, res->status);
 }
 
 // --------- utility
@@ -277,6 +226,14 @@ dhash::key_status(sfs_ID n) {
   return DHASH_NOTPRESENT;
 }
 
+char
+dhash::responsible(sfs_ID n) 
+{
+    sfs_ID p = defp2p->my_pred ();
+    sfs_ID m = defp2p->my_ID ();
+    return (between (p, m, n));
+}
+
 void
 dhash::store_flush (sfs_ID key, dhash_stat value) {
   warn << "flushing element " << key << " from store\n";
@@ -301,3 +258,5 @@ void
 dhash::cache_flush_cb (int err) {
   if (err) warn << "err flushing from cache\n";
 }
+
+

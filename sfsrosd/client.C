@@ -1,4 +1,4 @@
-//Last modified by $Author: fdabek $ on $Date: 2001/03/22 16:41:19 $
+//Last modified by $Author: fdabek $ on $Date: 2001/06/21 19:04:13 $
 #include <sfsrosd.h>
 #include "sfsdb.h"
 #include "rxx.h"
@@ -95,7 +95,7 @@ sfsroclient::dispatch (ref<bool> d, svccb *sbp)
 	sfs_hash *fh = sbp->template getarg<sfs_hash> ();
 
 
-	if (1) {
+	if (0) {
 	  u_char *cp = reinterpret_cast<u_char *> (fh->base ());
 	  u_char *lim = cp + fh->size ();
 	  printf ("  { 0x%02x", *cp);

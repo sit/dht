@@ -1,6 +1,7 @@
 %#include <chord_prot.h>
 
 typedef opaque dhash_value<>;
+typedef int32 dhash_hopcount;
 
 enum dhash_stat {
   DHASH_OK = 0,

@@ -39,20 +39,20 @@ struct store_cbstate {
 
 struct retry_state {
   sfs_ID n;
-  struct timeval t;
   svccb *sbp;
   sfs_ID succ;
   route path;
   searchcb_entry *scb;
-  retry_state (sfs_ID ni, struct timeval *tpi, svccb *sbpi, sfs_ID si,
+  retry_state (sfs_ID ni, svccb *sbpi, sfs_ID si,
 	       route pi, searchcb_entry *scbi) :
-    n (ni), t (*tpi), sbp (sbpi), succ (si), path (pi), scb (scbi) {};
+    n (ni), sbp (sbpi), succ (si), path (pi), scb (scbi) {};
 };
 
 class dhashclient {
 
   ptr<axprt_stream> x;
   int do_caching;
+  int num_replicas;
 
   ptr<asrv> p2pclntsrv;
 
@@ -60,14 +60,21 @@ class dhashclient {
   void dispatch (svccb *sbp);
   void cache_on_path(dhash_insertarg *item, route path);
 
-  void lookup_findsucc_cb (svccb *sbp, sfs_ID n, struct timeval *tp,
+  void lookup_findsucc_cb (svccb *sbp, sfs_ID n,
 			   searchcb_entry *scb,
 			   sfs_ID succ, route path, sfsp2pstat err);
-  void lookup_fetch_cb (dhash_res *res, retry_state *st, clnt_stat err);
+  void lookup_fetch_cb (dhash_res *res, retry_state *st,  clnt_stat err);
   void retry (retry_state *st, sfs_ID p, net_address r, sfsp2pstat stat);
+  
   void insert_findsucc_cb (svccb *sbp, dhash_insertarg *item, sfs_ID succ, 
 			   route path, sfsp2pstat err);
-  void insert_store_cb (svccb *sbp, dhash_storeres *res, clnt_stat err);
+  void insert_replicate_cb(svccb *sbp,  dhash_storeres *res, 
+			   sfs_ID succ, dhash_insertarg *item,
+			   int n,
+			   clnt_stat err);
+  void insert_repl_succ_cb (svccb *sbp, dhash_insertarg *item, int n,
+			    sfs_ID succ, net_address r,
+			    sfsp2pstat err);
 
   void cache_store_cb(dhash_stat *res, clnt_stat err);
 
@@ -76,6 +83,8 @@ class dhashclient {
  public:
   
   void set_caching(char c) { do_caching = c;};
+  void set_num_replicas(int num) { num_replicas = num; };
+
   dhashclient (ptr<axprt_stream> x);
 };
 
@@ -87,10 +96,10 @@ class dhash {
 
   void dispatch (ptr<asrv> dhs, svccb *sbp);
   void fetchsvc_cb (svccb *sbp, sfs_ID n, ptr<dbrec> val, dhash_stat err);
-  void storesvc_cb (store_cbstate *st, dhash_stat err);
+  void storesvc_cb (svccb *sbp, dhash_stat err);
   
   void fetch (sfs_ID id, cbvalue cb);
-  void fetch_cb (cbvalue cb, struct timeval *tp, ptr<dbrec> ret);
+  void fetch_cb (cbvalue cb,  ptr<dbrec> ret);
   void store (sfs_ID id, dhash_value data, store_status type, cbstore cb);
   void store_cb (cbstore cb, int stat);
   void cache_store_cb(dhash_res *res, clnt_stat err);
@@ -102,11 +111,9 @@ class dhash {
   void cache_flush (sfs_ID key, dhash_stat value);
   void cache_flush_cb (int err);
 
-  void find_replica_cb (store_cbstate *st, sfs_ID s, net_address r, 
-			sfsp2pstat status);
-  void store_replica_cb(store_cbstate *st, dhash_storeres *res, clnt_stat err);
-
   void act_cb(sfs_ID id, char action);
+
+  char responsible(sfs_ID n);
 
   ptr<dbrec> id2dbrec(sfs_ID id);
 

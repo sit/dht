@@ -29,6 +29,7 @@ struct chord_stats {
   long lookup_lat;
   long lookup_max_lat;
   long lookup_bytes_fetched;
+  long total_rpcs;
   qhash<sfs_ID, int, hashID> *balance;
 };
 

@@ -1,4 +1,4 @@
-/* $Id: server.C,v 1.13 2001/03/26 16:53:06 fdabek Exp $ */
+/* $Id: server.C,v 1.14 2001/06/21 19:04:13 fdabek Exp $ */
 
 /*
  *
@@ -345,8 +345,8 @@ server::read_file (const sfsro_inode *ip, nfscall *sbp,
   }
 
   if (sfsrocd_prefetch)
-    if (prefetch_limit_blknr*SFSRO_BLKSIZE < ip->reg->size) 
-      for (size_t i = last_blknr; i < prefetch_limit_blknr; i++) 
+    for (size_t i = last_blknr; i < prefetch_limit_blknr; i++) 
+      if (i*SFSRO_BLKSIZE < ip->reg->size) 
 	fh_prefetch(i, ip, fh);
 }
 

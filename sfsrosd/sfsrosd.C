@@ -5,6 +5,7 @@
 #include <sysconf.h>
 #endif /* __linux__ */
 
+
 static str sfsrodbfile;
 static sfs_hostname hostname;
 int sfssfd;
