@@ -55,6 +55,7 @@ class totalrecall_base (chord):
     We would like perhaps to inherit from DHash but really we only
     care about the interface."""
     def __init__ (my, args):
+	my.placement = my._random_placement
 	# short and long term redundancy factors
 	try:
 	    my.shortt = int (args.pop (0))
@@ -64,6 +65,13 @@ class totalrecall_base (chord):
 	    my.longt = int (args.pop (0))
 	except:
 	    my.longt = 4
+
+	try:
+	    if args[0] == 'succplace':
+		my.placement = my._successor_placement
+		args.pop (0)
+	except IndexError:
+	    pass
 	my.available = {}
 	# block -> (time of last unavailability) mapping 
 	my.unavailable_time = {}
@@ -111,6 +119,26 @@ class totalrecall_base (chord):
 	extant = [x for x in counts if x >= needed]
 	return len (extant), counts
 
+    def _random_placement (my, b, n):
+	"""chooses n random nodes to hold block b"""
+	options = my.nodes
+	try:
+	    excl = my.inodes[b]
+	    options = [o for o in options if o not in excl]
+	except KeyError:
+	    pass
+	return sample (options, n)
+
+    def _successor_placement (my, b, n):
+	"""chooses n successor nodes to hold block b"""
+	options = my.succ (b, 2*my.longt)
+	try:
+	    excl = my.inodes[b]
+	    options = [o for o in options if o not in excl]
+	except KeyError:
+	    pass
+	return options[:n]
+
     def insert_block (my, id, block, size):
 	# 1. Figure out desired redundancy of block
 	# 2. Figure out how many things to write and how big they are.
@@ -121,7 +149,7 @@ class totalrecall_base (chord):
         if block not in my.blocks:
             my.blocks[block] = size
 	(ninsert, isz) = my.insert_pieces (size) 
-	insnodes = sample (my.nodes, ninsert)
+	insnodes = my.placement (block, ninsert)
 	# insnodes will be ninsert unique nodes
 	for i in insnodes:
 	    i.store (block, isz)
@@ -187,8 +215,7 @@ class totalrecall_base (chord):
 	    if rfactor < my.shortt:
 		(ninsert, isz) = my.insert_pieces (my.blocks[b])
 		ninsert -= len (livenodes)
-		othernodes = [n for n in my.nodes if n not in hosts]
-		newnodes = sample (othernodes, ninsert)
+		newnodes = my.placement (b, ninsert)
 		# Who fixes?  Someone with a copy, preferably.
 		fixer = livenodes[0]
 		for i in livenodes:
