@@ -15,7 +15,7 @@ class k_bucket_tree;
 class Kademlia : public DHTProtocol {
 // {{{ public
 public:
-  typedef short NodeID;
+  typedef unsigned short NodeID;
   typedef unsigned Value;
   static const unsigned idsize = 8*sizeof(NodeID);
 

@@ -186,10 +186,11 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
   // get the best fitting entry in the tree
   pp = _tree->get(largs->key);
 
+  // if we don't know how to forward this key or if we are closer
   // are we closer? 
   // XXX: try for all in vector
   KDEBUG(3) << "do_lookup: closest node = " << printbits(pp.first) << endl;
-  if(distance(_id, largs->key) < distance(pp.first, largs->key)) {
+  if(!pp.second || distance(_id, largs->key) < distance(pp.first, largs->key)) {
     // i am the best
     KDEBUG(3) << "do_lookup: i am the best match" << endl;
     lresult->id = _id;
@@ -429,7 +430,11 @@ pair<k_bucket_tree::NodeID, IPAddress>
 k_bucket_tree::get(NodeID key)
 {
   peer_t *p = _root->get(key);
-  return make_pair(p->id, p->ip);
+  if(p)
+    return make_pair(p->id, p->ip);
+  else
+    return make_pair(0, 0);
+
 }
 
 // }}}
@@ -485,12 +490,14 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned de
 
   unsigned leftmostbit = Kademlia::getbit(node, depth);
   unsigned myleftmostbit = Kademlia::getbit(_self->id(), depth);
+  KDEBUG(4) << "insert: leftmostbit = " << leftmostbit << ", depth = " << depth << endl;
 
   //
   // NON-ENDLEAF NODE WITH CHILD
   //
   if(_child[leftmostbit]) {
     assert(!_leaf);
+    KDEBUG(4) << "insert: _child[" << leftmostbit << "] exists, descending" << endl;
     return _child[leftmostbit]->insert(node, ip, prefix + (leftmostbit ? "1" : "0"), depth+1, root);
   }
 
@@ -529,24 +536,29 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned de
   // split if this is not a final leaf
   if(!_leaf) {
     // create both children
+    KDEBUG(4) <<  "insert: not a leaf.  creating subchildren" << endl;
     _child[0] = new k_bucket(_self);
     _child[1] = new k_bucket(_self);
     _child[myleftmostbit ^ 1]->_leaf = true;
+    KDEBUG(4) <<  "insert: subchild " << (myleftmostbit ^ 1) << " is a leaf on depth " << depth << endl;
 
     // now divide contents into separate buckets
     for(unsigned i=0; i<_nodes->size(); i++) {
       unsigned bit = Kademlia::getbit((*_nodes)[i]->id, depth);
+      KDEBUG(4) <<  "insert: pushed entry " << i << " (" << Kademlia::printbits((*_nodes)[i]->id) << ") to side " << bit << endl;
       _child[bit]->_nodes->push_back((*_nodes)[i]);
     }
     delete _nodes;
     _nodes = 0;
 
     // now insert at the right child
+    KDEBUG(4) <<  "insert: after split, calling insert for prefix " << (prefix + (leftmostbit ? "1" : "0")) << " to depth " << (depth+1) << endl;
     return _child[leftmostbit]->insert(node, ip, prefix + (leftmostbit ? "1" : "0"), depth+1, root);
   }
 
   // this is a leaf and it's full.
   // XXX: evict one. oh wait, we're leaving the more trustworthy ones in.
+  KDEBUG(4) <<  "insert: last make_pair on depth " << depth << endl;
   return make_pair((peer_t*)0, depth);
 }
 
@@ -672,17 +684,32 @@ k_bucket::get(NodeID key, unsigned depth)
   // descend into the tree
   unsigned b = Kademlia::getbit(key, depth);
   KDEBUG(3) << "do_lookup: bit " << depth << " of key is " << b << endl;
+  peer_t *p = 0;
   if(_child[b]) {
     KDEBUG(3) << "do_lookup: descending further down" << endl;
-    return _child[b]->get(key, depth+1);
+    if((p = _child[b]->get(key, depth+1)))
+      return p;
   }
 
-  KDEBUG(3) << "do_lookup: found deepest level" << endl;
+  KDEBUG(3) << "do_lookup: found deepest level on depth = " << depth << endl;
 
-  assert(_nodes->size());
+  if(!_nodes || !_nodes->size()) {
+    KDEBUG(3) << "do_lookup: returning 0 from depth = " << depth << endl;
+    return 0;
+  }
 
   // XXX: use alpha
-  return (*_nodes)[0];
+  NodeID bestdist = (NodeID) -1;
+  for(unsigned i=0; i<_nodes->size(); i++) {
+    NodeID dist = Kademlia::distance(key, (*_nodes)[i]->id);
+    if(dist < bestdist) {
+      bestdist = dist;
+      p = (*_nodes)[i];
+    }
+  }
+  assert(p);
+  KDEBUG(3) << "do_lookup: returning best = " << Kademlia::printbits(p->id) << " from depth = " << depth << endl;
+  return p;
 }
 
 // }}}
