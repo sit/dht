@@ -35,8 +35,8 @@
 extern ptr<aclnt> local;
 extern ptr<dbfe> disconnect_log;
 extern ptr<dbfe> cache_db;
-extern str proxyhost;
-extern int proxyport;
+extern vec<str> proxyhosts;
+extern vec<int> proxyports;
 
 void proxy_sync ();
 static void sync_next (bigint n, ptr<aclnt> proxyclnt);
@@ -148,6 +148,6 @@ sync_connected (int fd)
 void
 proxy_sync ()
 {
-  tcpconnect (proxyhost, proxyport, wrap (sync_connected));
+  multiconnect(proxyhosts, proxyports, 3, wrap (sync_connected));
 }
 

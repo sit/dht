@@ -57,25 +57,71 @@ is_keyhash_stale (ref<dbrec> prev, ref<dbrec> d)
 }
 
 
+void
+multiconnect_cb(ptr<multiconn_args> args, unsigned int n, int fd) {
+  args->saw_response(n);
+
+  if (fd < 0) {
+    warn << "connect to: " << args->hosts[n] << ":" << args->ports[n] << " failed.\n";
+    if (args->all_responded()) {
+      (args->cb)(-1);
+    }
+
+  }  else if (args->connected != "") {
+    // redundant connection established. Kill it.
+    close(fd);
+    return;
+
+  } else {
+    warn << "connect to: " << args->hosts[n] << ":" << args->ports[n] << " succeeded.\n";
+    args->connected = strbuf() <<  args->hosts[n] << ":" << args->ports[n];
+    (args->cb)(fd);
+  }
+}
+
+void 
+multiconnect_real(ptr<multiconn_args> args, unsigned int n) {
+  if (args->connected == "" && (n < args->hosts.size()-1) ) {
+    delaycb(args->timeout, 0, wrap(&multiconnect_real, args, n+1) );
+  } else if (args->connected != "") {
+    return;
+  }
+
+  tcpconnect(args->hosts[n], args->ports[n], 
+	     wrap(&multiconnect_cb, args, n));
+}
+
+void
+multiconnect(vec<str> hosts, vec<int> ports, int timeout, cbi::ptr cb) {
+  // tries hosts/ports in sequence until one connects.  calls <cb>
+  // once the first connects, and closes all other successful
+  // connections. Connections are started <timeout> seconds apart.
+
+  ptr<multiconn_args> args = New refcounted<multiconn_args> (hosts, ports, timeout, cb);
+  multiconnect_real(args, 0);
+}
+
+
+
+
 proxygateway::proxygateway (ptr<axprt_stream> x, ptr<dbfe> cache,
-                            ptr<dbfe> dl, str host, int port)
+                            ptr<dbfe> dl, vec<str> hosts, vec<int> ports)
 {
   cache_db = cache;
   disconnect_log = dl;
 
   proxyclnt = 0;
-  proxyhost = host;
-  proxyport = port;
-  tcpconnect (proxyhost, proxyport,
-              wrap (mkref (this), &proxygateway::proxy_connected, x));
+  proxyhosts = hosts;
+  proxyports = ports;
+
+  multiconnect(proxyhosts, proxyports, 3, wrap (mkref (this), &proxygateway::proxy_connected, x));
 }
 
 void
 proxygateway::proxy_connected (ptr<axprt_stream> x, int fd)
 {
   if (fd < 0) {
-    warn << "cannot connect to proxy "
-         << proxyhost << ":" << proxyport << ", skip proxying\n";
+    warn << "cannot connect to proxys, skip proxying\n";
     proxyclnt = 0;
   }
   else {

@@ -17,14 +17,45 @@ struct dhash_insert_arg;
 struct dhash_insert_res;
 struct dhash_retrieve_res;
 
+struct multiconn_args {
+  vec<str> hosts;
+  vec<int> ports;
+  vec<int> responses;
+  int timeout;
+  cbi::ptr cb;
+  str connected;
+  timecb_t* delayed_connect;
+
+  multiconn_args(vec<str> h, vec<int> p, int t, cbi::ptr c) {
+    unsigned int i;
+    hosts = h;
+    ports = p;
+    timeout = t;
+    cb = c;
+    connected = "";
+    for(i=0; i<h.size(); i++) 
+      responses.push_back(0);
+  }
+  void saw_response(int i) {
+    responses[i] = 1;
+  }
+  bool all_responded() {
+    for(unsigned int i=0; i<responses.size(); i++) {
+      if (responses[i] == 0) return 0;
+    } 
+    return 1;
+  }
+};
+
+
 class proxygateway : public virtual refcount
 {
   ptr<asrv> clntsrv;
   ptr<dbfe> cache_db;
   ptr<dbfe> disconnect_log;
 
-  str proxyhost;
-  int proxyport;
+  vec<str> proxyhosts;
+  vec<int> proxyports;
   ptr<aclnt> proxyclnt;
   
   void proxy_connected (ptr<axprt_stream> x, int fd);
@@ -42,12 +73,13 @@ class proxygateway : public virtual refcount
   void local_insert_done (bool disconnected, svccb *sbp);
 
 public:
-  proxygateway (ptr<axprt_stream> x, ptr<dbfe> cache, ptr<dbfe> il,
-                str proxyhost, int proxyport);
+  proxygateway (ptr<axprt_stream> x, ptr<dbfe> cache, ptr<dbfe> dl,
+                vec<str> proxyhosts, vec<int> proxyports);
   ~proxygateway ();
 };
 
 ptr<dhash_retrieve_res> block_to_res (ptr<dbrec> val, dhash_ctype ctype);
+void multiconnect(vec<str> hosts, vec<int> ports, int timeout, cbi::ptr cb);
 
 static inline ref<dbrec>
 my_id2dbrec (bigint id)

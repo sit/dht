@@ -33,7 +33,9 @@
 static str proxy_socket;
 
 ptr<aclnt> local = 0;
-str proxyhost = "";
+ptr<dbfe> ilog = 0;
+vec<str> proxyhosts;
+vec<int> proxyports;
 int proxyport = 0;
 extern void proxy_sync ();
 
@@ -46,6 +48,7 @@ sync_diskcache_cb(ptr<dbfe> db) {
   delaycb(SYNC_TIME, wrap(&sync_diskcache_cb, db));
 }
 
+
 static void
 client_accept (int fd)
 {
@@ -54,8 +57,8 @@ client_accept (int fd)
   assert (cache_db);
   assert (disconnect_log);
   ref<axprt_stream> x = axprt_stream::alloc (fd, 1024*1025);
-  vNew refcounted<proxygateway>
-    (x, cache_db, disconnect_log, proxyhost, proxyport);
+  vNew refcounted<proxygateway> 
+    (x, cache_db, disconnect_log, proxyhosts, proxyports);
 }
 
 static void
@@ -138,8 +141,36 @@ usage ()
 {
   warnx << "Usage: " << progname
         << " [-d <insert log>] "
-	<< "[-S <socket>] [-x <proxy hostname:port>]\n";
+	<< "[-S <socket>] [-x <proxy_hostname:port>,<proxy_hostname:port>...]\n";
   exit (1);
+}
+
+static void
+parse_add_host(char* s) {
+  char *bs_port = strchr (s, ':');
+  if (!bs_port) usage ();
+  char *sep = bs_port;
+  
+  *bs_port = 0;
+  bs_port++;
+  if (inet_addr (s) == INADDR_NONE) {
+    struct hostent *h;
+    
+    //yep, this blocks
+    h = gethostbyname (s);
+    
+    if (!h) {
+      warn << "Invalid address or hostname: " << s << "\n";
+      usage ();
+    }
+    struct in_addr *ptr = (struct in_addr *)h->h_addr;
+    proxyhosts.push_back(inet_ntoa (*ptr));
+  }
+  else
+    proxyhosts.push_back(s);
+  
+  proxyports.push_back(atoi (bs_port));
+  *sep = ':'; // restore s for argv printing later.
 }
 
 int
@@ -158,41 +189,27 @@ main (int argc, char **argv)
       break;
     case 'x':
       {
-	char *bs_port = strchr (optarg, ':');
-	if (!bs_port) usage ();
-	char *sep = bs_port;
-	*bs_port = 0;
-	bs_port++;
-	if (inet_addr (optarg) == INADDR_NONE) {
-	  struct hostent *h;
-
-	  //yep, this blocks
-	  h = gethostbyname (optarg);
-
-	  if (!h) {
-	    warn << "Invalid address or hostname: " << optarg << "\n";
-	    usage ();
-	  }
-	  struct in_addr *ptr = (struct in_addr *)h->h_addr;
-	  proxyhost = inet_ntoa (*ptr);
+	char *head=optarg;
+	char *comma=NULL;
+	
+	while( (comma = strchr(head, ',')) ) {
+	  *comma = NULL;
+	  parse_add_host(head);
+	  head = comma+1;
 	}
-	else
-	  proxyhost = optarg;
+	if (*head) {
+	  parse_add_host(head);
+	}
 
-	proxyport = atoi (bs_port);
-	*sep = ':'; // restore optarg for argv printing later.
 	break;
       }
     default:
       usage ();
       break;
     }
-  
-  if (proxyhost == "") {
-    usage();
-  }
 
-  initialize_db ();
+  initialize_db();
   amain ();
 }
+
 
