@@ -189,7 +189,6 @@ p2p::connect_cb (callback<void, ptr<axprt_stream> >::ref cb, int fd)
   if (fd < 0) {
     (*cb)(NULL);
   } else {
-    // warnx << "connect_cb: connect to " << l->n << "succeeded (" << fd << ")\n";
     ptr<axprt_stream> x = axprt_stream::alloc(fd);
     (*cb)(x);
   }

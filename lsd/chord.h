@@ -122,6 +122,11 @@ struct findpredecessor_cbstate {
     x (xi), nprime (npi), search_path (spi), cb (cbi) {};
 };
 
+struct searchcb_entry {
+  cbsearch_t cb;
+  list_entry<searchcb_entry> link;
+  searchcb_entry (cbsearch_t scb) : cb (scb) {  };
+};
 
 struct location {
   sfs_ID n;
@@ -194,7 +199,7 @@ class p2p : public virtual refcount  {
   int lookup_RPCs;
 
   vec<cbaction_t> actionCallbacks;
-  vec<cbsearch_t> searchCallbacks;
+  list<searchcb_entry, &searchcb_entry::link> searchCallbacks;
 
  public:
   p2p (str host, int hostport, const sfs_ID &hostID, int myport, 
@@ -288,9 +293,9 @@ class p2p : public virtual refcount  {
 
   cb_ID registerSearchCallback(cbsearch_t cb);
   void testSearchCallbacks(sfs_ID id, sfs_ID target, cbtest_t cb);
-  void tscb (sfs_ID id, sfs_ID x, int i, cbtest_t cb);
-  void tscb_cb (sfs_ID id, sfs_ID x, int i, cbtest_t cb, int result);
-  //  void tscb_cb (sfs_ID id, sfs_ID x, int ret, int i, cbtest_t cb, int result);
+  void tscb (sfs_ID id, sfs_ID x, searchcb_entry *scb, cbtest_t cb);
+  void tscb_cb (sfs_ID id, sfs_ID x, searchcb_entry *scb, cbtest_t cb, int result);
+
   void registerActionCallback(cbaction_t cb);
   void doActionCallbacks(sfs_ID id, char action);
 };
