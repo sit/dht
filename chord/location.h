@@ -22,6 +22,8 @@
  *
  */
 
+//#define FAKE_DELAY
+
 class chord;
 
 // the identifier for the ihash class
@@ -34,20 +36,23 @@ struct hashID {
 
 struct location;
 
-struct doRPC_cbstate {
+#ifdef FAKE_DELAY
+struct RPC_delay_args {
+  chordID ID;
   rpc_program prog;
   int procno;
   ptr<void> in;
   void *out;
   aclnt_cb cb;
-  chordID ID;
-  tailq_entry<doRPC_cbstate> connectlink;
+  u_int64_t s;
 
-  doRPC_cbstate (rpc_program pr, int pi, ptr<void> ini, 
-		 void *outi,  aclnt_cb cbi, chordID id) : prog (pr), 
-		    procno (pi), in (ini), out (outi), cb (cbi), ID (id) {};
+  RPC_delay_args (chordID _ID, rpc_program _prog, int _procno,
+		 ptr<void> _in, void *_out, aclnt_cb _cb, u_int64_t _s) :
+    ID (_ID), prog (_prog), procno (_procno), 
+		   in (_in), out (_out), cb (_cb), s (_s) {};
+    
 };
-
+#endif /* FAKE_DELAY */
 
 struct frpc_state {
   chord_RPC_res *res;
@@ -70,11 +75,8 @@ struct location {
 
   sockaddr_in saddr;
 
-  tailq<doRPC_cbstate, &doRPC_cbstate::connectlink> connectlist;
   ihash_entry<location> fhlink;
   tailq_entry<location> cachelink;
-  tailq_entry<location> connlink;
-  tailq_entry<location> delaylink;
 
   u_int64_t rpcdelay;
   u_int64_t nrpc;
@@ -129,6 +131,8 @@ class locationtable : public virtual refcount {
   u_int64_t rpcdelay;
   u_int64_t nrpc;
   u_int64_t nrpcfailed;
+  u_int64_t nsent;
+  u_int64_t npending;
 
   u_long nnodessum;
   u_long nnodes;
@@ -154,18 +158,20 @@ class locationtable : public virtual refcount {
   void add_cachedlocs (location *l);
   void delete_cachedlocs (void);
   void remove_cachedlocs (location *l);
-  void touch_connections (location *l);
-  void delete_connections (location *l);
-  void add_connections (location *l);
-  void delay_connections (location *l);
-  void cleanup_connections ();
-  void remove_connections (location *l);
-  bool present_connections(location *l);
+
+  void ratecb ();
+
+#ifdef FAKE_DELAY
+  void doRPC_delayed (RPC_delay_args *args);
+#endif / *FAKE_DELAY */
+
  public:
   locationtable (ptr<chord> _chordnode, int set_rpcdelay, int _max_cache,
 		 int _max_connections);
   bool betterpred1 (chordID current, chordID target, chordID newpred);
   bool betterpred2 (chordID myID, chordID current, chordID target, 
+		    chordID newpred);
+  bool betterpred3 (chordID myID, chordID current, chordID target, 
 		    chordID newpred);
   void incvnodes () { nvnodes++; };
   void replace_estimate (u_long o, u_long n);
@@ -182,8 +188,9 @@ class locationtable : public virtual refcount {
   chordID query_location_table (chordID x);
   void changenode (node *n, chordID &n, net_address &r);
   void checkrefcnt (int i);
-  void doRPC (chordID &n, rpc_program progno, int procno, ptr<void> in, 
-	      void *out, aclnt_cb cb);
+  void doRPC (chordID &from, chordID &n, rpc_program progno, 
+	      int procno, ptr<void> in, 
+	      void *out, aclnt_cb cb, u_int64_t s);
   void stats ();
 
   long new_xid (svccb *sbp);

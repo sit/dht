@@ -20,14 +20,43 @@
  */
 
 #include "chord.h"
+#include "math.h"
 
 #define TIMEOUT 60
 
+#ifdef FAKE_DELAY
+long geo_distance (chordID x, chordID y) 
+{
+  u_long xl = x.getui ();
+  u_long yl = y.getui ();
+
+#if 0
+  unsigned int x_lat = (xl & 0xFF00) >> 8;
+  unsigned int x_long = (xl & 0x00FF);
+  unsigned int y_lat = (yl & 0xFF00) >> 8;
+  unsigned int y_long = (yl & 0x00FF);
+
+  long dist = (long)::sqrt((x_lat - y_lat)*(x_lat - y_lat) + 
+		     (y_long - x_long)*(y_long - x_long));
+  if (dist > 150) return 300;
+  else if (dist > 0) return 20;
+  else return 0;
+#endif
+
+  if (x == y) return 0;
+  if ((xl & 0x1) && (yl & 0x1)) return 20;
+  else return 300;
+}
+#endif /* FAKE_DELAY */
+
+const int fclnttrace (getenv ("FCLNT_TRACE")
+		      ? atoi (getenv ("FCLNT_TRACE")) : 0);
 void
 locationtable::doForeignRPC_cb (frpc_state *C, rpc_program prog,
 				ptr<aclnt> c, 
 				clnt_stat err)
 {
+  npending--;
   if ((err) || (C->res->status)) {
     nrpcfailed++;
     chordnode->deletefingers (C->l->n);
@@ -78,11 +107,42 @@ locationtable::reply (long xid,
   octbl.remove (xid);
 }
 
+#ifdef FAKE_DELAY
 void
-locationtable::doRPC (chordID &ID, rpc_program prog, int procno, 
-		      ptr<void> in, void *out, aclnt_cb cb)
+locationtable::doRPC_delayed (RPC_delay_args *args) 
+{
+  chordID ID = args->ID;
+  doRPC (ID, ID, args->prog,
+	 args->procno, 
+	 args->in,
+	 args->out,
+	 args->cb,
+	 args->s);
+  delete args;
+}
+#endif /* FAKE_DELAY */
+
+void
+locationtable::doRPC (chordID &from, chordID &ID, 
+		      rpc_program prog, int procno, 
+		      ptr<void> in, void *out, aclnt_cb cb,
+		      u_int64_t sp)
 
 {
+
+#ifdef FAKE_DELAY
+  long dist = geo_distance (from, ID);
+  if (dist) {
+    RPC_delay_args *args = New RPC_delay_args (ID, prog, procno,
+					       in, out, cb, getusec ());
+    delaycb (0, dist*1000000, 
+	     wrap (this, &locationtable::doRPC_delayed, args));
+    return;
+  }
+#else
+  sp = getusec ();
+#endif /* FAKE_DELAY */
+
   location *l = getlocation (ID);
   assert (l);
   assert (l->refcnt >= 0);
@@ -95,12 +155,15 @@ locationtable::doRPC (chordID &ID, rpc_program prog, int procno,
     (cb) (RPC_CANTSEND);
     return;
   }
-  
+
+  /* statistics */
+  nsent++;
+  npending++;
+
   if (prog.progno == CHORD_PROGRAM) {
-    u_int64_t s = getusec ();
     c->timedcall (TIMEOUT, procno, in, out, 
 	     wrap (mkref (this), &locationtable::doRPCcb,
-		   ID, cb, s, c));
+		   ID, cb, sp, c));
   } else { 
     xdrproc_t inproc = prog.tbl[procno].xdr_arg;
     if (!inproc) return;
@@ -123,11 +186,16 @@ locationtable::doRPC (chordID &ID, rpc_program prog, int procno,
     
     chord_RPC_res *res = New chord_RPC_res ();
     frpc_state *C = New frpc_state (res, out, procno, cb,
-				    l, getusec ());
+				    l, sp);
+    if (fclnttrace > 1) {
+      //      str name = strbuf ("prog %d proc %d",prog.progno,  procno);
+      const rpcgen_table *rtp = &prog.tbl[procno];
+      str name = strbuf ("%s:%s", prog.name, rtp->name);
+      warn << "call " << name << "\n";
+    }
     c->timedcall (TIMEOUT, CHORDPROC_HOSTRPC, &farg, res, 
 	     wrap (mkref(this), &locationtable::doForeignRPC_cb, C, prog, c)); 
   }
-
 
 }
 
@@ -136,7 +204,8 @@ void
 locationtable::doRPCcb (chordID ID, aclnt_cb cb,  u_int64_t s, 
 			ptr<aclnt> c, clnt_stat err)
 {
-  
+
+  npending--;
   if (err) {
     nrpcfailed++;
     chordnode->deletefingers (ID);
@@ -160,7 +229,12 @@ locationtable::stats ()
 
   warnx << "LOCATION TABLE STATS: estimate # nodes " << nnodes << "\n";
   warnx << "total # of RPCs: good " << nrpc << " failed " << nrpcfailed << "\n";
-    fprintf(stderr, "       Average latency: %f\n", ((float) (rpcdelay/nrpc)));
+  warnx << "       RPCs in last second (send/recv): (" << nsent << "/" 
+	<< chordnode->nrcv << "\n";
+  warnx << buf;
+  warnx <<  "       RPCs outstanding: " <<  npending << "\n";
+  warnx << buf;
+  fprintf(stderr, "       Average latency: %f\n", ((float) (rpcdelay/nrpc)));
   warnx << "  Per link avg. RPC latencies\n";
   for (location *l = locs.first (); l ; l = locs.next (l)) {
     warnx << "    link " << l->n << " : # RPCs: " << l->nrpc << "\n";

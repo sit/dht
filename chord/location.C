@@ -30,6 +30,7 @@ locationtable::locationtable (ptr<chord> _chordnode, int set_rpcdelay,
   nrpc = 0;
   nrpcfailed = 0;
   rpcdelay = 0;
+  nsent = 0;
   size_cachedlocs = 0;
   nvnodes = 0;
   nnodes = 0;
@@ -38,11 +39,24 @@ locationtable::locationtable (ptr<chord> _chordnode, int set_rpcdelay,
   
   int dgram_fd = inetsocket (SOCK_DGRAM);
   if (dgram_fd < 0) fatal << "Failed to allocate dgram socket\n";
-  dgram_xprt = axprt_dgram::alloc (dgram_fd, sizeof(sockaddr), 246000);
+  dgram_xprt = axprt_dgram::alloc (dgram_fd, sizeof(sockaddr), 230000);
   if (!dgram_xprt) fatal << "Failed to allocate dgram xprt\n";
+
+  delaycb (1, 0, wrap (this, &locationtable::ratecb));
 }
 
+void
+locationtable::ratecb () {
+#if 0
+  warnx << "sent " << nsent << " RPCs in the last second\n";
+  warnx << "received " << chordnode->nrcv << " RPCs in the last second\n";
+  warnx << npending << " RPCs are outstanding\n";
+#endif
 
+  delaycb (1, 0, wrap (this, &locationtable::ratecb));
+  nsent = 0;
+  chordnode->nrcv = 0;
+}
 void
 locationtable::replace_estimate (u_long o, u_long n)
 {
@@ -141,32 +155,93 @@ locationtable::betterpred2 (chordID myID, chordID current, chordID target,
     } else if ((c->nrpc == 0) || (n->nrpc == 0)) {
       r = between (current, target, newpred);
     } else {
-      // char buf1 [1024];
-      // char buf2 [1024];
-      u_long nbit;
-      if (nnodes <= 1) nbit = 0;
-      else nbit = log2 (nnodes / log2 (nnodes));
+      u_long nbit = 2;
+      //      if (nnodes <= 1) nbit = 0;
+      // else nbit = log2 (nnodes / log2 (nnodes));
       u_long t1 = topbits (nbit, target);
       u_long t2 = topbits (nbit, current);
       u_long t3 = topbits (nbit, newpred);
       u_long h1 = (t1 > t2) ? t1 - t2 : t2 - t1;
       u_long h2 = (t1 > t3) ? t1 - t3 : t3 - t1;
-      //      sprintf (buf1, "\nnbit %lu t1 0x%lx t2 0x%lx t3 0x%lx h1 0x%lx h2 0x%lx h1 %lu h2 %lu\n",
-      //       nbit, t1, t2, t3, h1, h2, n1bits(h1), n1bits(h2));
-      if (n1bits (h2) > n1bits (h1)) {  // newpred corrects more bits
+
+      if (n1bits (h2) < n1bits (h1)) {  // newpred corrects more bits
 	r = true;
       } else if (n1bits (h2) == n1bits (h1)) {
 	float cdelay = c->rpcdelay / c->nrpc;
 	float ndelay = n->rpcdelay / n->nrpc;
-	//	sprintf (buf2, " cdelay %f ndelay %f\n", cdelay, ndelay);
 	r = ndelay < cdelay;
+
+#if 0
 	if (r) {
-	  // warnx << "betterpred2 is " << r << " c " << current << " t " << target 
-	  // << " n " << newpred << buf1 << buf2;
+	  char b[1024];
+	  sprintf (b, "cdelay=%f > ndelay=%f\n", cdelay, ndelay);
+	  warn << "chose " << newpred << " since " << b;
 	}
+#endif
       }
     }
   }
+  
+
+  return r;
+}
+
+
+// assumes some of form of the triangle equality!
+bool
+locationtable::betterpred3 (chordID myID, chordID current, chordID target, 
+			    chordID newpred)
+{ 
+  // #avg hop latency
+  // #estimate the number of nodes to figure how many bits to compare
+  bool r = false;
+  if (between (myID, target, newpred)) { // is newpred a possible pred?
+    location *c = getlocation (current);
+    location *n = getlocation (newpred);
+    if ((current == myID) && (newpred != myID)) {
+      r = true;
+    } else if ((c->nrpc == 0) || (n->nrpc == 0)) {
+      r = between (current, target, newpred);
+    } else {
+      u_long nbit = 2;
+      //      if (nnodes <= 1) nbit = 0;
+      // else nbit = log2 (nnodes / log2 (nnodes));
+      u_long target_bits = topbits (nbit, target);
+      u_long current_bits = topbits (nbit, current);
+      u_long new_bits = topbits (nbit, newpred);
+      u_long cur_diff = (target_bits > current_bits) ? 
+	target_bits - current_bits :
+	current_bits - target_bits;
+      u_long new_diff = (target_bits > new_bits) ? 
+	target_bits - new_bits : 
+	new_bits - target_bits;
+
+      float avg_delay = (float)rpcdelay/nrpc;
+      float cur_delay = c->rpcdelay / c->nrpc;
+      float new_delay = n->rpcdelay / n->nrpc;
+
+      float cur_est = n1bits (cur_diff)*avg_delay + cur_delay;
+      float new_est = n1bits (new_diff)*avg_delay + new_delay;
+
+      float diff = cur_est - new_est;
+      if (::fabs(diff) < 10000) 
+	return between (current, target, newpred);
+
+      r = (cur_est > new_est);
+#if 0
+      if (r) {
+	char b[1024];
+	sprintf (b, "cur_est=%f*%ld + %f=%f > new_est=%f*%ld + %f=%f\n", 
+		 avg_delay, n1bits(cur_diff), cur_delay, cur_est,
+		 avg_delay, n1bits(new_diff), new_delay, new_est);
+	warn << "chose " << newpred << " since " << b;
+      }
+#endif      
+     
+    }
+  }
+  
+  
   return r;
 }
 

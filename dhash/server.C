@@ -73,7 +73,7 @@ dhash::dispatch (unsigned long procno,
 
       dhash_fetch_arg *farg = New dhash_fetch_arg ();
       if (!proc (x.xdrp (), farg)) {
-	warn << "DHASH: error unmarshalling arguments\n";
+	warn << "DHASH: (fetch) error unmarshalling arguments\n";
 	return;
       }
 
@@ -98,14 +98,14 @@ dhash::dispatch (unsigned long procno,
 	else
 	  nid = host_node->lookup_closestpred (farg->key);
 	
-	res->cont_res->next.x = nid;
-	res->cont_res->next.r = 
-	  host_node->chordnode->locations->getaddress (nid);
-
-	res->cont_res->succ_list.setsize (NSUCC);
+	res->cont_res->succ_list.setsize (NSUCC + 1);
 
 	chordID last = nid;
-	for (int i = 0; i < NSUCC; i++) {
+	chord_node nsucc;
+	nsucc.x = nid;
+	nsucc.r = host_node->chordnode->locations->getaddress (nsucc.x);
+	res->cont_res->succ_list[0] = nsucc;
+	for (int i = 1; i < NSUCC + 1; i++) {
 	  chord_node nsucc;
 	  nsucc.x = host_node->lookup_closestsucc (last);
 	  nsucc.r = host_node->chordnode->locations->getaddress (nsucc.x);
@@ -113,6 +113,24 @@ dhash::dispatch (unsigned long procno,
 	  last = nsucc.x;
 	}
 
+	chordID best_succ = res->cont_res->succ_list[0].x;
+
+	locationtable *locations = host_node->chordnode->locations;
+	location *c = locations->getlocation (best_succ);
+	location *n;
+	for (int i = 0; i < nreplica; i++) {
+	  n = locations->getlocation(res->cont_res->succ_list[i+1].x);
+	  if (n->nrpc == 0) break;
+	  if ((n->rpcdelay/n->nrpc) < (c->rpcdelay/c->nrpc)) {
+	    c = n;
+	    best_succ = res->cont_res->succ_list[i + 1].x;
+	  }
+	}
+	res->cont_res->next.x = best_succ;
+	res->cont_res->next.r = 
+	  host_node->chordnode->locations->getaddress (best_succ);
+	
+	
       }
 
       dhash_reply (rpc_id, DHASHPROC_FETCHITER, res);
@@ -127,7 +145,7 @@ dhash::dispatch (unsigned long procno,
 
       dhash_insertarg *sarg = New dhash_insertarg ();
       if (!proc (x.xdrp (), sarg)) {
-	warn << "DHASH: error unmarshalling arguments\n";
+	warn << "DHASH: (store) error unmarshalling arguments\n";
 	return;
       }
      
@@ -149,7 +167,7 @@ dhash::dispatch (unsigned long procno,
     {
       dhash_getkeys_arg *gkarg = New dhash_getkeys_arg ();
       if (!proc (x.xdrp (), gkarg)) {
-	warn << "DHASH: error unmarshalling arguments (getkey)\n";
+	warn << "DHASH: (getkeys) error unmarshalling arguments (getkey)\n";
 	return;
       }
       
@@ -168,7 +186,7 @@ dhash::dispatch (unsigned long procno,
     {
       chordID *arg = New chordID;
       if (!proc (x.xdrp (), arg)) {
-	warn << "DHASH: error unmarshalling arguments (keystatus)\n";
+	warn << "DHASH: (keystatus) error unmarshalling arguments (keystatus)\n";
 	return;
       }
 
@@ -279,7 +297,7 @@ dhash::transfer_initial_keys ()
   arg->pred_id = host_node->my_ID ();
   
   dhash_getkeys_res *res = New dhash_getkeys_res (DHASH_OK);
-  host_node->chordnode->doRPC(succ, dhash_program_1, DHASHPROC_GETKEYS, 
+  doRPC(succ, dhash_program_1, DHASHPROC_GETKEYS, 
 			      arg, res,
 			      wrap(this, 
 				   &dhash::transfer_init_getkeys_cb, res));
@@ -458,7 +476,7 @@ dhash::transfer_fetch_cb (chordID to, chordID key, store_status stat,
       i_arg->type = stat;
       memcpy(i_arg->data.base (), (char *)data->value + off, remain);
  
-      host_node->chordnode->doRPC(to, dhash_program_1, DHASHPROC_STORE, 
+      doRPC(to, dhash_program_1, DHASHPROC_STORE, 
 				  i_arg, res,
 				  wrap(this, 
 				       &dhash::transfer_store_cb, cb, 
@@ -482,7 +500,7 @@ dhash::transfer_store_cb (callback<void, dhash_stat>::ref cb,
     host_node->chordnode->locations->cacheloc (res->pred->p.x, 
 					       res->pred->p.r);
 					       
-    host_node->chordnode->doRPC(res->pred->p.x, 
+    doRPC(res->pred->p.x, 
 				dhash_program_1, DHASHPROC_STORE, 
 				i_arg, nres,
 				wrap(this, 
@@ -504,7 +522,7 @@ dhash::get_key (chordID source, chordID key, cbstat_t cb)
   arg->len = MTU;  
   arg->start = 0;
 
-  host_node->chordnode->doRPC(source, dhash_program_1, DHASHPROC_FETCHITER, 
+  doRPC(source, dhash_program_1, DHASHPROC_FETCHITER, 
 			      arg, res,
 			      wrap(this, 
 				   &dhash::get_key_initread_cb, 
@@ -534,7 +552,7 @@ dhash::get_key_initread_cb (cbstat_t cb, dhash_fetchiter_res *res,
 	MTU : res->compl_res->attr.size - offset;
       arg->start = offset;
       dhash_fetchiter_res *new_res = New dhash_fetchiter_res(DHASH_OK);
-      host_node->chordnode->doRPC(source, dhash_program_1, DHASHPROC_FETCHITER,
+      doRPC(source, dhash_program_1, DHASHPROC_FETCHITER,
 				  arg, new_res,
 				  wrap(this, 
 				       &dhash::get_key_read_cb, key, 
@@ -816,6 +834,16 @@ dhash::dhash_reply (long xid, unsigned long procno, void *res)
   host_node->chordnode->locations->reply(xid, marshalled_data, 
 					 marshalled_len);
   delete marshalled_data;
+}
+
+void
+dhash::doRPC (chordID ID, rpc_program prog, int procno,
+	      ptr<void> in, void *out, aclnt_cb cb) 
+{
+  chordID from = host_node->my_ID ();
+  host_node->chordnode->doRPC(from,
+			      ID, prog, procno,
+			      in, out, cb);
 }
 
 // ---------- debug ----

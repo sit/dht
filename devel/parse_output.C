@@ -29,20 +29,19 @@ get_data (FILE *in)
 {
   num_elements = 0;
   int parsed;
-  float dummy1, dummy2;
+  float dummy1;
   do {
     if (col == 0) 
-      parsed = fscanf(in, "%f %f %f\n", 
-		      &(data[num_elements++]), &dummy1, &dummy2);
+      parsed = fscanf(in, "%f\n", 
+		      &(data[num_elements++]), &dummy1);
     else if (col == 1)
-      parsed = fscanf(in, "%f %f %f\n", 
-		      &dummy1, &(data[num_elements++]), &dummy2);
-    else
-      parsed = fscanf(in, "%f %f %f\n", 
-		      &dummy1, &dummy2, &(data[num_elements++]));
-  } while (parsed == 3);
+      parsed = fscanf(in, "%f\n", 
+		      &dummy1, &(data[num_elements++]));
+
+    printf ("parsed: %d\n", parsed);
+  } while (parsed == 1);
   num_elements--;
-  
+  fprintf (stderr, "read %d elements\n", num_elements);
   qsort(data, num_elements, sizeof(float), compar);
 }
 
@@ -91,10 +90,13 @@ void
 make_epts (int *pdf, float *cdf, int num_bins, int bin_width,
 	   float *median, float *low_con, float *high_con) 
 {
-#define LOW_CON 0.05
-#define HIGH_CON 0.95
+#define LOW_CON 0.1
+#define HIGH_CON 0.9
   
-  *median = data[num_elements/2];
+  if (num_elements % 2)
+    *median = data[num_elements/2];
+  else 
+    *median = ( data[num_elements/2] + data[num_elements/2 - 1] ) /2;
 #if 0
   int i=0;
   while (cdf[i] < LOW_CON) i++;
@@ -104,8 +106,8 @@ make_epts (int *pdf, float *cdf, int num_bins, int bin_width,
   *high_con = i*bin_width;
 #endif
   *low_con = data[(long)(num_elements*LOW_CON)];
-  *high_con = data[(long)(num_elements*HIGH_CON)];
-}
+  *high_con = data[(long)(num_elements*HIGH_CON) - 1];
+} 
 
 
 void

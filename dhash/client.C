@@ -14,6 +14,8 @@
  * Implementation of the distributed hash service.
  */
 
+int n = 0;
+
 dhashclient::dhashclient (ptr<axprt_stream> _x, int n, ptr<chord> node)
   : x (_x), clntnode(node), do_caching (0), nreplica (n)
 {
@@ -42,11 +44,13 @@ dhashclient::dispatch (svccb *sbp)
       ptr<dhash_fetch_arg> arg = New refcounted<dhash_fetch_arg> (*farg);
 
       chordID next = clntnode->lookup_closestpred (arg->key);
+      warn << "looking for " << arg->key << "; hop is " << next << "\n";
+
       dhash_fetchiter_res *i_res = New dhash_fetchiter_res (DHASH_CONTINUE);
       
       route path;
       path.push_back (next);
-      clntnode->doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, arg,i_res,
+      doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, arg,i_res,
 		       wrap(this, &dhashclient::lookup_iter_cb, 
 			    sbp, i_res, path, 0));
       
@@ -61,7 +65,7 @@ dhashclient::dispatch (svccb *sbp)
       ptr<dhash_fetch_arg> farg = 
 	New refcounted<dhash_fetch_arg>(targ->farg);
       dhash_fetchiter_res *res = New dhash_fetchiter_res (DHASH_OK);
-      clntnode->doRPC (targ->source, dhash_program_1, DHASHPROC_FETCHITER, 
+      doRPC (targ->source, dhash_program_1, DHASHPROC_FETCHITER, 
 		       farg, res, 
 		       wrap (this, &dhashclient::transfer_cb,
 			     sbp, res));
@@ -74,7 +78,7 @@ dhashclient::dispatch (svccb *sbp)
       ptr<dhash_insertarg> iarg = 
 	New refcounted<dhash_insertarg> (sarg->iarg);
       dhash_storeres *res = New dhash_storeres (DHASH_OK);
-      clntnode->doRPC (sarg->dest, dhash_program_1, DHASHPROC_STORE,
+      doRPC (sarg->dest, dhash_program_1, DHASHPROC_STORE,
 		       iarg, res,
 		       wrap (this, &dhashclient::send_cb,
 			     sbp, res, sarg->dest));
@@ -119,7 +123,7 @@ dhashclient::insert_findsucc_cb(svccb *sbp, ptr<dhash_insertarg> item,
     warnt("DHASH: insert_after_dofindsucc|issue_STORE");
 
     dhash_storeres *res = New dhash_storeres(DHASH_OK);
-    clntnode->doRPC(succ, dhash_program_1, DHASHPROC_STORE, item, res,
+    doRPC(succ, dhash_program_1, DHASHPROC_STORE, item, res,
 		wrap(this, &dhashclient::insert_store_cb, sbp, res, item, succ));
     
     cache_on_path (item->key, path);
@@ -136,7 +140,7 @@ dhashclient::insert_store_cb(svccb *sbp, dhash_storeres *res,
   if (res->status == DHASH_RETRY) {
     dhash_storeres *nres = New dhash_storeres(DHASH_OK);
     clntnode->locations->cacheloc (res->pred->p.x, res->pred->p.r);
-    clntnode->doRPC(res->pred->p.x, dhash_program_1, 
+    doRPC(res->pred->p.x, dhash_program_1, 
 		    DHASHPROC_STORE, item, nres,
 		    wrap(this, &dhashclient::insert_store_cb, sbp, nres, item, source));
 
@@ -227,7 +231,7 @@ dhashclient::lookup_iter_cb (svccb *sbp,
       dhash_fetchiter_res *nres = New dhash_fetchiter_res (DHASH_CONTINUE);
       /* assumes an in-order RPC transport, otherwise retry
 	 might reach prev before alert can update tables*/
-      clntnode->doRPC (plast, dhash_program_1, DHASHPROC_FETCHITER, 
+      doRPC (plast, dhash_program_1, DHASHPROC_FETCHITER, 
 		       rarg, nres,
 		       wrap(this, &dhashclient::lookup_iter_cb, 
 			    sbp, nres, path, nerror));
@@ -249,10 +253,10 @@ dhashclient::lookup_iter_cb (svccb *sbp,
     chordID prev = path.back ();
     //    warn << "node " << prev << " returned " << next << "\n";
     if (next == prev) {
-      if (res->cont_res->succ_list.size () == 0) 
+      if (res->cont_res->succ_list.size () == 0) {
 	/*CASE III.a */
 	sbp->replyref (DHASH_NOENT);
-      else {
+      } else {
 	/* CASE III.b */
 	vec<chord_node> succ;
 	for (unsigned int i = 0; i < res->cont_res->succ_list.size (); i++) 
@@ -270,8 +274,7 @@ dhashclient::lookup_iter_cb (svccb *sbp,
 	dhash_fetchiter_res *nres = New dhash_fetchiter_res (DHASH_CONTINUE);
 	path.push_back (next);
 	assert (path.size () < 1000);
-
-	clntnode->doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, 
+	doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, 
 			 rarg, nres,
 			 wrap(this, &dhashclient::lookup_iter_cb, 
 			      sbp, nres, path, nerror));
@@ -297,7 +300,7 @@ dhashclient::query_successors (vec<chord_node> succ,
 				 first_node.r);
   dhash_fetchiter_res *fres = New dhash_fetchiter_res (DHASH_COMPLETE);
   query_succ_state *st = New query_succ_state (succ, pathlen, sbp, rarg, source);
-  clntnode->doRPC (first_node.x, dhash_program_1, DHASHPROC_FETCHITER,
+  doRPC (first_node.x, dhash_program_1, DHASHPROC_FETCHITER,
 		   rarg, fres,
 		   wrap (this, &dhashclient::query_successors_fetch_cb,
 			 st, first_node.x, fres));
@@ -337,12 +340,12 @@ dhashclient::query_successors_fetch_cb (query_succ_state *st,
 				   next_succ.r);
     
     dhash_fetchiter_res *nfres = New dhash_fetchiter_res (DHASH_OK);
-    clntnode->doRPC (next_succ.x, dhash_program_1, DHASHPROC_FETCHITER,
+    doRPC (next_succ.x, dhash_program_1, DHASHPROC_FETCHITER,
 		     st->rarg, nfres,
 		     wrap (this, &dhashclient::query_successors_fetch_cb,
 			   st, next_succ.x, nfres));
     
-  } else if (fres->status == DHASH_OK) {
+  } else if (fres->status == DHASH_COMPLETE) {
     fres->compl_res->hops =  st->pathlen;
     dhash_res *res = New dhash_res (DHASH_OK);
     iterres2res (fres, res);
@@ -350,6 +353,7 @@ dhashclient::query_successors_fetch_cb (query_succ_state *st,
     delete res;
     delete st;
   } else {
+    warn << "status was " << fres->status << "\n";
     fatal << "WTF\n";
   }
 
@@ -381,7 +385,7 @@ dhashclient::send_cb (svccb *sbp, dhash_storeres *res,
       New refcounted<dhash_insertarg> (sarg->iarg);
     dhash_storeres *nres = New dhash_storeres (DHASH_OK);
     clntnode->locations->cacheloc (nres->pred->p.x, nres->pred->p.r);
-    clntnode->doRPC (nres->pred->p.x, dhash_program_1, DHASHPROC_STORE,
+    doRPC (nres->pred->p.x, dhash_program_1, DHASHPROC_STORE,
 		     iarg, nres, wrap (this, &dhashclient::send_cb,
 				       sbp, nres, sarg->dest));
   } else if (res->status == DHASH_OK) {
@@ -467,7 +471,7 @@ dhashclient::send_block (chordID key, chordID to, store_status stat)
     i_arg->type = stat;
     memcpy(i_arg->data.base (), ss->buf + off, remain);
     
-    clntnode->doRPC(to, dhash_program_1, DHASHPROC_STORE, 
+    doRPC(to, dhash_program_1, DHASHPROC_STORE, 
 		    i_arg, res,
 		    wrap(this, &dhashclient::send_store_cb, res));
     off += remain;
@@ -480,3 +484,14 @@ dhashclient::send_store_cb (dhash_storeres *res, clnt_stat err)
   if ((err) || (res->status))  warn << "Error caching block\n";
   delete res;
 }
+
+/* ------- wrappers ------ */
+void
+dhashclient::doRPC (chordID ID, rpc_program prog, int procno,
+		    ptr<void> in, void *out, aclnt_cb cb) 
+{
+  chordID from = clntnode->clnt_ID ();
+  clntnode->doRPC (from, ID, prog, procno,
+		   in, out, cb);
+}
+

@@ -31,7 +31,7 @@ vnode::get_successor (chordID n, cbsfsID_t cb)
   ptr<chord_vnode> v = New refcounted<chord_vnode>;
   v->n = n;
   warnt("CHORD: issued_GET_SUCCESSOR");
-  locations->doRPC (n, chord_program_1, CHORDPROC_GETSUCCESSOR, v, res,
+  doRPC (n, chord_program_1, CHORDPROC_GETSUCCESSOR, v, res,
 	 wrap (mkref (this), &vnode::get_successor_cb, n, cb, res));
 }
 
@@ -75,7 +75,7 @@ vnode::get_predecessor (chordID n, cbsfsID_t cb)
   v->n = n;
   ngetpredecessor++;
   chord_noderes *res = New chord_noderes (CHORD_OK);
-  locations->doRPC (n, chord_program_1, CHORDPROC_GETPREDECESSOR, v, res,
+  doRPC (n, chord_program_1, CHORDPROC_GETPREDECESSOR, v, res,
 	 wrap (mkref (this), &vnode::get_predecessor_cb, n, cb, res));
 }
 
@@ -202,7 +202,8 @@ vnode::find_closestpred (chordID &n, chordID &x, findpredecessor_cbstate *st)
   fap->x = x;
   warnt("CHORD: issued_FINDCLOSESTPRED_RPC");
   //  warn << "issuing rpc w/ n=" << n << "\n";
-  locations->doRPC (n, chord_program_1, CHORDPROC_FINDCLOSESTPRED, fap, res,
+  doRPC (n, chord_program_1, CHORDPROC_FINDCLOSESTPRED, fap, 
+		    res,
 		    wrap (mkref (this), &vnode::find_closestpred_cb, n, st, 
 			  res));
 }
@@ -261,10 +262,11 @@ vnode::testrange_findclosestpred (chordID n, chordID x,
   chord_testandfindres *nres = New chord_testandfindres (CHORD_OK);
   warnt("CHORD: issued_testandfind");
   ntestrange++;
-  locations->doRPC (n, chord_program_1, CHORDPROC_TESTRANGE_FINDCLOSESTPRED, 
-		    arg, nres, 
-		    wrap (this, &vnode::testrange_findclosestpred_cb, 
-			  nres, st));
+  doRPC (n, chord_program_1, 
+	 CHORDPROC_TESTRANGE_FINDCLOSESTPRED, 
+	 arg, nres, 
+	 wrap (this, &vnode::testrange_findclosestpred_cb, 
+	       nres, st));
 }
 
 void
@@ -307,45 +309,6 @@ vnode::testrange_findclosestpred_cb (chord_testandfindres *res,
   delete res;
 }
 
-// XXX out of date
-void
-vnode::find_closestpred_succ_cb (findpredecessor_cbstate *st,
-			       chordID s, net_address r, chordstat status)
-{
-  warnt("CHORD: find_closestpred_succ_cb");
-  if (status) {
-    warnx << "find_closestpred_succ_cb: failure " << status << "\n";
-    st->cb (st->x, st->search_path, status);
-    delete st;
-  } else {
-    //    warnx << "find_closestpred_succ_cb: " << myID << " succ of " 
-    //  << st->nprime << " is " << s << "\n";
-    if (st->nprime == s) {
-      warnx << "find_closestpred_succ_cb: " << s << " is the only Chord node\n";
-      st->cb (st->nprime, st->search_path, CHORD_OK);
-      delete st;
-    } else if (!betweenrightincl (st->nprime, s, st->x)) {
-      // XXX should we add something to the search path ???
-      //      warnx << "find_closestpred_succ_cb: " << st->x << " is not between " 
-      //    << st->nprime << " and " << s << "\n";
-      ptr<chord_findarg> fap = New refcounted<chord_findarg>;
-      chord_noderes *res = New chord_noderes (CHORD_OK);
-      fap->v.n = st->nprime;
-      fap->x = st->x;
-      warnt("CHORD: issued_FINDCLOSESTPRED_RPC");
-      locations->doRPC (st->nprime, chord_program_1, 
-			CHORDPROC_FINDCLOSESTPRED, fap, res,
-			wrap (mkref (this), &vnode::find_closestpred_cb, 
-			      st->nprime, st, res));
-    } else {
-      //      warnx << "find_closestpred_succ_cb: " << st->x << " is between " 
-      //    << st->nprime << " and " << s << "\n";
-      st->cb (st->nprime, st->search_path, CHORD_OK);
-      delete st;
-    }
-  }
-}
-
 void
 vnode::notify (chordID &n, chordID &x)
 {
@@ -356,7 +319,7 @@ vnode::notify (chordID &n, chordID &x)
   na->v.n = n;
   na->n.x = x;
   na->n.r = locations->getaddress (x);
-  locations->doRPC (n, chord_program_1, CHORDPROC_NOTIFY, na, res, 
+  doRPC (n, chord_program_1, CHORDPROC_NOTIFY, na, res, 
 	 wrap (mkref (this), &vnode::notify_cb, n, res));
 }
 
@@ -381,7 +344,7 @@ vnode::alert (chordID &n, chordID &x)
   na->v.n = n;
   na->n.x = x;
   na->n.r = locations->getaddress (x);
-  locations->doRPC (n, chord_program_1, CHORDPROC_ALERT, na, res, 
+  doRPC ( n, chord_program_1, CHORDPROC_ALERT, na, res, 
 		    wrap (mkref (this), &vnode::alert_cb, res));
 }
 
@@ -403,7 +366,7 @@ vnode::get_fingers (chordID &x)
   ptr<chord_vnode> v = New refcounted<chord_vnode>;
   ngetfingers++;
   v->n = x;
-  locations->doRPC (x, chord_program_1, CHORDPROC_GETFINGERS, v, res,
+  doRPC (x, chord_program_1, CHORDPROC_GETFINGERS, v, res,
 	 wrap (mkref (this), &vnode::get_fingers_cb, x, res));
 }
 
@@ -427,5 +390,10 @@ vnode::get_fingers_cb (chordID x, chord_getfingersres *res,  clnt_stat err)
   delete res;
 }
 
+void
+vnode::doRPC (chordID &ID, rpc_program prog, int procno, 
+	      ptr<void> in, void *out, aclnt_cb cb) {
+  locations->doRPC (myID, ID, prog, procno, in, out, cb, getusec ());
+}
 
 

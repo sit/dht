@@ -24,7 +24,7 @@
 #include <qhash.h>
 
 #define PNODE
-// #define STOPSTABILIZE		// for testing purposes
+#define STOPSTABILIZE		// for testing purposes
 
 vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
 	      chordID _myID) :
@@ -248,11 +248,20 @@ vnode::findpredfinger2 (chordID &x)
   chordID p = myID;
   for (int i = 1; i <= NBIT; i++) {
     if ((finger_table[i].first.alive) && 
-	locations->betterpred2 (myID, p, x, finger_table[i].first.n)) {
+	locations->betterpred3 (myID, p, x, finger_table[i].first.n)) {
       p = finger_table[i].first.n;
     }
   }
-  // warnx << "findpredfinger2: " << myID << " of " << x << " is " << p << "\n";
+
+  if (p != myID) return p;
+
+  for (int i = nsucc; i >= 1; i--) {
+    if ((succlist[i].alive) && 
+	locations->betterpred3 (myID, p, x, succlist[i].n)) {
+      p = succlist[i].n;
+      break;
+    }
+  }
   return p;
 }
 
@@ -285,7 +294,7 @@ chordID
 vnode::lookup_closestpred (chordID &x)
 {
 #ifdef PNODE
-  chordID p = findpredfinger (x);
+  chordID p = findpredfinger2 (x);
 #else
   chordID p = locations->findpredloc (x);
 #endif

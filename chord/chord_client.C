@@ -44,7 +44,7 @@ chord::chord (str _wellknownhost, int _wellknownport,
   nalert = 0;
   ntestrange = 0;
   ngetfingers = 0;
-
+  nrcv = 0;
 }
 
 int
@@ -63,7 +63,7 @@ chord::startchord (int myp)
     myp = ntohs (addr.sin_port);
   }
 
-  ptr<axprt_dgram> x = axprt_dgram::alloc (srvfd, sizeof(sockaddr), 246000);
+  ptr<axprt_dgram> x = axprt_dgram::alloc (srvfd, sizeof(sockaddr), 230000);
   ptr<asrv> s = asrv::alloc (x, chord_program_1);
   s->setcb (wrap (mkref(this), &chord::dispatch, s, x));
   return myp;
@@ -201,6 +201,7 @@ chord::dispatch (ptr<asrv> s, ptr<axprt_dgram> x, svccb *sbp)
     s->setcb (NULL);
     return;
   }
+  nrcv++;
   chord_vnode *v = sbp->template getarg<chord_vnode> ();
   vnode *vnodep = vnodes[v->n];
   if (!vnodep) {

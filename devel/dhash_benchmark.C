@@ -33,7 +33,7 @@ cp2p ()
   return p2pclnt;
 }
 
-#define MTU 8192
+#define MTU 1024
 
 int
 store_block(chordID key, void *data, unsigned int datasize) 
@@ -148,7 +148,6 @@ finish (char *buf, unsigned int *read,
 {
   out--;
       
-
 #ifdef VERIFY
     int diff = memcmp(data[i], buf, *read);
     assert (!diff);

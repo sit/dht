@@ -165,6 +165,9 @@ class vnode : public virtual refcount {
 
   void dofindsucc_cb (cbroute_t cb, chordID n, chordID x,
 		      route search_path, chordstat status);
+  
+  void doRPC (chordID &ID, rpc_program prog, int procno, 
+	      ptr<void> in, void *out, aclnt_cb cb);
  public:
   chordID myID;
   //  ihash_entry<ref<vnode> > fhlink;
@@ -285,9 +288,9 @@ class chord : public virtual refcount {
   void get_predecessor (chordID n, cbsfsID_t cb) {
     active->get_predecessor (n, cb);
   };
-  void doRPC (chordID &n, rpc_program progno, int procno, ptr<void> in, 
+  void doRPC (chordID &from, chordID &n, rpc_program progno, int procno, ptr<void> in, 
 	      void *out, aclnt_cb cb) {
-    locations->doRPC (n, progno, procno, in, out, cb);
+    locations->doRPC (from,  n , progno, procno, in, out, cb, getusec ());
   };
   void alert (chordID &n, chordID &x) {
     active->alert (n, x);
@@ -298,7 +301,10 @@ class chord : public virtual refcount {
   chordID clnt_ID () {
     return active->my_ID ();
   };
-  
+
+  //public stats
+  u_int64_t nrcv;
+    
 };
 
 extern ptr<chord> chordnode;

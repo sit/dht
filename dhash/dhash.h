@@ -28,7 +28,7 @@ typedef callback<void, struct store_cbstate *,dhash_stat>::ptr cbstat;
 typedef callback<void,dhash_stat>::ptr cbstore;
 typedef callback<void,dhash_stat>::ptr cbstat_t;
 
-#define MTU 8192
+#define MTU 1024
 
 struct store_cbstate {
   svccb *sbp;
@@ -71,6 +71,9 @@ class dhashclient {
 
   qhash<chordID, store_state, hashID> pst;
 
+  void doRPC (chordID ID, rpc_program prog, int procno,
+	      ptr<void> in, void *out, aclnt_cb cb);
+
   bool straddled (route path, chordID &k);
   void dispatch (svccb *sbp);
   void lookup_iter_cb (svccb *sbp, 
@@ -112,7 +115,6 @@ class dhashclient {
   bool block_memorized (chordID key);
   void forget_block (chordID key);
 
-
  public:  
   void set_caching(char c) { do_caching = c;};
   dhashclient (ptr<axprt_stream> x, int nreplica, ptr<chord> clnt);
@@ -129,6 +131,9 @@ class dhash {
   net_address t_source;
 
   qhash<chordID, store_state, hashID> pst;
+
+  void doRPC (chordID ID, rpc_program prog, int procno,
+	      ptr<void> in, void *out, aclnt_cb cb);
 
   void dhash_reply (long xid, unsigned long procno, void *res);
 
@@ -203,6 +208,7 @@ class dhash {
   void printkeys ();
   void printkeys_walk (chordID k);
   void printcached_walk (chordID k);
+
 
   ptr<dbrec> id2dbrec(chordID id);
   chordID dbrec2id (ptr<dbrec> r);
