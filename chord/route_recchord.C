@@ -97,6 +97,7 @@ route_recchord::handle_complete (user_args *sbp, recroute_complete_arg *ca)
     search_path.push_back (n0);
     
     successors_.clear ();
+
     for (size_t i = 0; i < ca->body.robody->successors.size (); i++) {
       chord_node s = make_chord_node (ca->body.robody->successors[i]);
       successors_.push_back (s);
@@ -130,8 +131,6 @@ route_recchord::first_hop (cbhop_t cbi, ptr<chordID> guess)
 {
   cb = cbi;
 
-  trace << "in first hop for " << x << "\n";
-
   ptr<recroute_route_arg> ra = New refcounted<recroute_route_arg> ();
 
   ra->routeid = routeid_;
@@ -140,24 +139,10 @@ route_recchord::first_hop (cbhop_t cbi, ptr<chordID> guess)
   ra->retries = 0;
   ra->succs_desired = desired_;
 
-  if (do_upcall) {
-    int arglen;
-    char *marshalled_args = route_iterator::marshall_upcall_args (&prog,
-								  uc_procno,
-								  uc_args,
-								  &arglen);
-								  
-    ra->upcall_prog = prog.progno;
-    ra->upcall_proc = uc_procno;
-    ra->upcall_args.setsize (arglen);
-    memcpy (ra->upcall_args.base (), marshalled_args, arglen);
-    xfree (marshalled_args);
-  } else {
-    ra->upcall_prog = 0;
-  }
 
   ptr<location> p = v->closestpred (x, failed_nodes);
   recroute_route_stat *res = New recroute_route_stat (RECROUTE_ACCEPTED);
+
   v->doRPC (p, recroute_program_1, RECROUTEPROC_ROUTE,
 	    ra, res,
 	    wrap (this, &route_recchord::first_hop_cb, deleted, ra, res, p),
@@ -174,17 +159,16 @@ route_recchord::timeout_cb (ptr<bool> del,
 			    int retries)
 {
   if (*del) return;
-  
-  if (retries == 1) {
-    trace << "timeout: sending another copy\n";
+
+  if (retries == 0) {
     failed_nodes.push_back (p->id ());
-    p = v->closestpred (x, failed_nodes);
+    ptr<location> np = v->closestpred (x, failed_nodes);
     recroute_route_stat *res = New recroute_route_stat (RECROUTE_ACCEPTED);
-    v->doRPC (p, recroute_program_1, RECROUTEPROC_ROUTE,
+    v->doRPC (np, recroute_program_1, RECROUTEPROC_ROUTE,
 	      ra, res,
-	      wrap (this, &route_recchord::first_hop_cb, deleted, ra, res, p),
-	      wrap (this, &route_recchord::timeout_cb, deleted, ra, p));  
-  }
+	      wrap (this, &route_recchord::first_hop_cb, deleted, ra, res, np),
+	      wrap (this, &route_recchord::timeout_cb, deleted, ra, np));  
+  } 
 }
 
 void

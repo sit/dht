@@ -212,6 +212,7 @@ chord::newvnode (vnode_producer_t p, cbjoin_t cb)
   }
   warnx << "\n";
   ptr<location> l = locations->insert (newID, myname, myport, nvnode, coords);
+  assert (l);
   if (wellknown_node == NULL)
     wellknown_node = l;
   locations->pin (newID);

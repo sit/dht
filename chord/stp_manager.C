@@ -87,6 +87,8 @@ stp_manager::doRPC (ptr<location> from, ptr<location> l,
     RPC_delay_args *args = New RPC_delay_args (from, l, prog, procno,
 					       in, out, cb, cb_tmo);
     args->fake_seqno = fake_seqno;
+
+    //    warn << "RPCTIMING: " << getusec () << " fake sequo " << args->fake_seqno << " placed in queue pending window\n";
     enqueue_rpc (args);
     fake_seqno--;
     
@@ -98,6 +100,9 @@ stp_manager::doRPC (ptr<location> from, ptr<location> l,
 				 (sockaddr *)&(l->saddr ()));
     rpc_state *C = New rpc_state (from, l, cb, cb_tmo, seqno, 
 				  prog.progno, out);
+
+    //    warn << "RPCTIMING: " << getusec () << " fake sequo " << _fake_seqno << " becomes " << (u_int)out << "\n";
+
     C->procno = procno;
    
     C->b = rpccb_chord::alloc (c, 
@@ -114,7 +119,6 @@ stp_manager::doRPC (ptr<location> from, ptr<location> l,
     //insert into the Q of RPCs in flight
     pending.insert_tail (C);
     inflight++;
-
     C->sendtime = getusec ();
     C->b->send (sec, nsec);
     seqno++;
@@ -140,9 +144,8 @@ stp_manager::timeout (rpc_state *C)
   // bound for the same destination.
 
   warn << "timeout for RPC pending on " << C->loc->id ()
-       << " " << inet_ntoa (C->loc->saddr().sin_addr) << "\n";
+       << " " << inet_ntoa (C->loc->saddr().sin_addr) << (u_int)C->out << "\n";
 
-  warn << "window: " << (int)cwind << " ssthresh " << (int)ssthresh << "\n";
 #if 0
   rpc_state *O = pending.first;
   while (O) {
@@ -176,7 +179,7 @@ stp_manager::timeout (rpc_state *C)
   }
 
   C->rexmits++;
-  if (C->from->id () != C->loc->id ())
+  if (C->from->id () != C->loc->id () && C->rexmits == 1)
     update_cwind (-1);
 }
 
@@ -184,6 +187,9 @@ void
 stp_manager::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
 {
   dorpc_res *res = (dorpc_res *)C->out;
+
+  //  warn << "RPCTIMING: " << getusec () << " out = " << (u_int)C->out << " returned\n";
+
   if (err) {
     nrpcfailed++;
     C->loc->set_alive (false);
@@ -222,7 +228,9 @@ stp_manager::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
   pending.remove (C);
   user_rexmit_table.remove (C);
   (C->cb) (err);
-  if (C->in_window) inflight--;
+  if (C->in_window) {
+    inflight--;
+  }
   update_cwind (C->seqno);
   rpc_done (C->seqno);
   delete C;
@@ -246,6 +254,7 @@ stp_manager::rpc_done (long acked_seqno)
     while ((args != next_arg) && (args->l->id () != next_arg->l->id ()))
       args = Q.next (args);
 
+    //    warn << "RPCTIMING: " << getusec () << " fake sequo " << args->fake_seqno << " removed from queue for transmission\n";
     //stats
     u_int64_t now = getusec ();
     u_int64_t diff = now - args->now;
@@ -309,7 +318,9 @@ stp_manager::update_cwind (int seq)
   } else {
     ssthresh = cwind_ewma/2; // MD
     if (ssthresh < 1.0) ssthresh = 1.0;
-    cwind = 1.0;
+    //    cwind = 1.0;
+    cwind = cwind / 2.0;
+    if (cwind < 1.0) cwind = 1.0;
   }
 
   cwind_ewma = (cwind_ewma*49 + cwind)/50;
@@ -322,6 +333,9 @@ stp_manager::update_cwind (int seq)
   if (cwind_cwind.size () > 1000) cwind_cwind.pop_front ();
   if (cwind_time.size () > 1000) cwind_time.pop_front ();
   
+  /*
+  warn << "window " << getusec ()/1000 << " " << (int)(cwind*1000) << " " << (int)(ssthresh*1000) << "\n";
+  */
 }
 
 void
@@ -341,10 +355,10 @@ stp_manager::setup_rexmit_timer (ptr<location> from, ptr<location> l,
 #define MIN_SAMPLES 10
 
   float alat;
-  
-  //talking to ourself, don't bother; load tends to make for hefty delays. 
-  // don't retransmit these as they certainly won't be lost
-  if (false && l &&   //if we've got a measurement, use it
+
+  if (nrpc < 50) {
+    alat = 1000000;
+  } else if (false && l &&   //if we've got a measurement, use it
       l->nrpc () > 50) {
     //      warn << l->id () << ": using " << l->nrpc () << "measurments: " << (int)l->distance () << " + 4*" << (int)l->a_var () << "\n";
     alat = 1.5*(l->distance() + 6*l->a_var () + 5000);
@@ -353,7 +367,7 @@ stp_manager::setup_rexmit_timer (ptr<location> from, ptr<location> l,
 	     && (l->coords ().size () > 0)
 	     && (from->coords ().size () > 0)) {
     float dist = Coord::distance_f (from->coords (), l->coords ());
-    alat = dist + 10.0*c_err + 5000; 
+    alat = dist + 6.0*c_err + 10*c_var + 15000; 
     //scale it to be safe. the 8 comes from an analysis for log files
     // I also tried usssing the variance but average works better. 
     // With 8 we'll do about 1 percent spurious retransmits
@@ -410,13 +424,14 @@ rpc_manager::update_latency (ptr<location> from, ptr<location> l, u_int64_t lat)
     float predicted = Coord::distance_f (from->coords (), l->coords ());
     float sample_err = (lat - predicted);
     
-    /*
-      warn << "To " << l->id () << " " << (int)sample_err << " " << (int)lat 
-      << " " << (int)predicted << " " 
-      << (int)c_err << " " << (int)c_var << " " 
-      << (int)(c_err_rel*1000) << "\n";
-    */
 
+    /*    
+    warn << "To " << l->id () << " " << (int)sample_err << " " << (int)lat 
+	 << " " << (int)predicted << " " 
+	 << (int)c_err << " " << (int)c_var << " " 
+	 << (int)(c_err_rel*1000) << "\n";
+    */
+    
     if (sample_err < 0) sample_err = -sample_err;
     float rel_err = sample_err/lat;
 
@@ -600,6 +615,9 @@ rpccb_chord::send (long _sec, long _nsec)
 
   tmo = delaycb (sec, nsec, wrap (this, &rpccb_chord::timeout_cb, deleted));
   //  warn ("%s xmited %d:%06d\n", gettime().cstr(), int (sec), int (nsec/1000));
+
+  //  warn << "RPCTIMING: " << getusec () << " sent " << (u_int)outmem << "\n";
+
   xmit (0);
 }
 
@@ -616,8 +634,9 @@ rpccb_chord::reset_tmo ()
     nsec -= 1000000000;
     sec += 1;
   }
-  if (sec > 1) sec = 1;
-  
+
+  if (sec > 2) sec = 2;
+
   warn << inet_ntoa (((sockaddr_in *)&s)->sin_addr) << ": timer was " << oldsec << "." << oldnsec << " now is " << sec << "." << nsec << "; rexmits is " << rexmits << "\n";
   if (tmo) timecb_remove (tmo);
   tmo = delaycb (sec, nsec, wrap (this, &rpccb_chord::timeout_cb, deleted));
@@ -657,7 +676,7 @@ rpccb_chord::timeout_cb (ptr<bool> del)
 	  << " " << args->progno << ":" << args->procno << 
 	  " rexmits " << rexmits << ", timeout " 
 	  << sec*1000 + nsec/(1000*1000) << " ms, destined for " 
-	  << inet_ntoa (s->sin_addr) << "\n";
+	  << inet_ntoa (s->sin_addr) << " out is " << (u_int)outmem << "\n";
 
     //re-write the timestamp
     args->send_time = getusec ();

@@ -162,14 +162,14 @@ recroute<T>::dorecroute (user_args *sbp, recroute_route_arg *ra)
       sbp->replyref (rstat);
       sbp = NULL;
       return;
-    } else {
+    } else if ((int)m - (int)overlap < (int)cs.size ()) {
       // Override the absolute best we could've done, which probably
       // is the predecessor since our succlist spans the key, and
       // select someone nice and fast to get more successors from.
       float mindist = -1.0;
       size_t minind = 0;
-      assert (succind > (cs.size () - m));
-      size_t start = succind - (cs.size () - m);
+
+      size_t start = m - overlap;
       for (size_t i = start; i < cs.size (); i++) {
 	float dist = Coord::distance_f (my_location ()->coords (),
 					cs[i]->coords ());
@@ -229,10 +229,16 @@ recroute<T>::dorecroute_succlist (user_args *sbp, recroute_route_arg *ra,
   }
 
   u_long m = ra->succs_desired;
-  for (size_t i = 0; i < (m - cs.size ()) && (i < sl.size ()); i++) {
+
+  while (cs.back ()->id () != sl[0].x) cs.pop_back ();
+  cs.pop_back ();
+
+  u_long cs_size = cs.size ();
+  for (size_t i = 0; i < (m - cs_size) && (i < sl.size ()); i++) {
     ptr<location> l = locations->lookup_or_create (sl[i]);
     cs.push_back (l);
   }
+  
   dorecroute_sendcomplete (ra, cs);
   sbp->replyref (rstat);
   sbp = NULL;
@@ -251,6 +257,7 @@ recroute<T>::dorecroute_sendcomplete (recroute_route_arg *ra,
   // send off a complete RPC.
   rtrace << my_ID () << ": dorecroute (" << ra->routeid << ", " << ra->x
 	 << "): complete.\n";
+
   ptr<recroute_complete_arg> ca = New refcounted<recroute_complete_arg> ();
   ca->body.set_status (RECROUTE_ROUTE_OK);
   ca->routeid = ra->routeid;
@@ -267,6 +274,7 @@ recroute<T>::dorecroute_sendcomplete (recroute_route_arg *ra,
   for (size_t i = 0; i < tofill; i++)
     cs[i]->fill_node (ca->body.robody->successors[i]);
   
+
   ca->retries = ra->retries;
   
   ptr<location> l = locations->lookup_or_create (make_chord_node (ra->origin));
