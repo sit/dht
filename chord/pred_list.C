@@ -191,7 +191,7 @@ pred_list::num_pred ()
   int newnpred = (npred_ > goodnodes) ? goodnodes : npred_;
   
   if (newnpred < 0) {
-    warn << "succ_list::num_succ () n:" << newnpred 
+    warn << "pred_list::num_pred () n:" << newnpred 
 	 << " g:" << goodnodes << "\n";
     newnpred = 0;
   }
