@@ -22,7 +22,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-# $Id: run-simulations.pl,v 1.24 2004/06/15 18:58:31 jinyang Exp $
+# $Id: run-simulations.pl,v 1.25 2004/07/05 04:29:49 strib Exp $
 
 use strict;
 use Getopt::Long;
@@ -402,7 +402,12 @@ sub run_command {
     my %labelhash = ();
     foreach my $a (@splitargs) {
 	my @val = split( /=/, $a );
-	$label .= $val[1];
+	if( $val[0] eq "topology" ) {
+	    $label .= $val[1];
+	    $topology =~ s/(\d+)([^\d]*)$/$val[1]$2/;
+	} else {
+	    $label .= $val[1];
+	}
 	$labelhash{$val[0]} = $val[1];
 	if( $i != $#splitargs ) {
 	    $label .= "-";
@@ -410,13 +415,14 @@ sub run_command {
 	$i++;
     }
 
-    # if no command line arguments are specified for event stuff, se
+    # if no command line arguments are specified for event stuff, see
     # if the protocol file had these params
     my $lomean = $lookupmean;
     my $limean = $lifemean;
     my $dmean = $deathmean;
     my $etime = $exittime;
     my $stime = $stattime;
+    my $randseed = $seed;
 
     if( !defined $options{"lookupmean"} && defined $labelhash{"lookupmean"}) {
 	$lomean = $labelhash{"lookupmean"};
@@ -433,6 +439,11 @@ sub run_command {
     if( !defined $options{"stattime"} && defined $labelhash{"stattime"}) {
 	$stime = $labelhash{"stattime"};
     }
+    if( !defined $options{"seed"} && defined $labelhash{"seed"}) {
+	$randseed = $labelhash{"seed"};
+    } elsif( !defined $options{"seed"} ) {
+	$randseed = int 1000000 * rand();
+    }
     &write_events_file( $lomean, $limean, $dmean, $etime, $stime );
 
     my $protfile = "$logdir/run-simulations-tmp-prot$$";
@@ -446,11 +457,7 @@ sub run_command {
     if( -f $logfile ) { 
 	return 0;
     }
-  
-    my $randseed = int 1000000 * rand();
-    if( defined $options{"seed"} ) {
-	$randseed = $options{"seed"};
-    }
+
     open( LOG, ">$logfile" ) or die( "Couldn't open $logfile" );
     print LOG "# lookupmean=$lomean lifemean=$limean " . 
 	"deathmean=$dmean file=$churnfile exit=$etime stat=$stime\n";
@@ -461,8 +468,8 @@ sub run_command {
     my $before = time();
     my $failexit = 0;
     print "# $arg_string randseed $randseed > $logfile \n";
-    $failexit = system( "$p2psim_cmd -e $randseed $protfile $topology $eventfile >> $logfile " .
-	"2>> $logfile" );
+    $failexit = system( "$p2psim_cmd -e $randseed $protfile $topology " . 
+			"$eventfile >> $logfile 2>> $logfile" );
     if (($failexit) && (!$dontdie)) {
       die( "$p2psim_cmd $protfile $topology $eventfile failed" );
     }
@@ -508,7 +515,7 @@ sub write_events_file {
     
     print EF "\n";
     if( $withobserver ) {
-	print EF "observer $observer initnodes=1\n";
+	print EF "observer $observer initnodes=1 oracle=1\n";
     }
     close( EF );
 
