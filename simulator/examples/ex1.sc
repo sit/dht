@@ -20,7 +20,7 @@ wait 60000
 # - a document insertion is generated with prob 1/7
 # - a document query is generated with prob 5/7
 # Note: constants are choosen such that a node joins (leaves) 
-# every second on average
+# every 10 seconds on average
 events 10000 714 10 10 0 20 100
 
 # ... wait for all pending requests to finish ...
