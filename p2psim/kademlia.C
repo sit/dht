@@ -249,8 +249,10 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
     */
 
     // we're done.
-    if(!toask && !outstanding)
+    if(!toask && !outstanding) {
+      KDEBUG(2) << "do_lookup: nobody to ask, none outstanding. goodbye." << endl;
       break;
+    }
 
     // there's a guy we didn't ask yet, and there's less than alpha outstanding
     // RPCs: send out another one.
@@ -260,6 +262,7 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
       assert(la && lr);
       assert(toask);
       assert(toask->ip <= 512 && toask->ip > 0);
+      KDEBUG(2) << "do_lookup: doing find_node asyncRPC to " << Kademlia::printbits(toask->id) << endl;
       rpc = asyncRPC(toask->ip, &Kademlia::find_node, la, lr);
       assert(rpc);
       rpcset.insert(rpc);
@@ -321,6 +324,8 @@ done:
   for(vector<peer_t*>::const_iterator i = lresult->results.begin(); i != lresult->results.end(); ++i)
     KDEBUG(2) << "do_lookup reply [" << k++ << "] : " << printbits((*i)->id) << endl;
   delete results;
+
+  KDEBUG(2) << "do_lookup: replying to " << Kademlia::printbits(callerID) << endl;
 
   // put the caller in the tree
   _tree->insert(callerID, callerIP);

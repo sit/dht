@@ -226,6 +226,10 @@ operator new[](size_t size, const char* file, unsigned line)
   return p;
 }
 
+
+// protects delete and delete[] from being overloaded when
+// WITH_TMGDMALLOC is not defined
+#ifdef WITH_TMGDMALLOC
 void
 operator delete(void *p)
 {
@@ -239,3 +243,4 @@ operator delete[](void *p)
   __tmg_dmalloc_del(p);
   free(p);
 }
+#endif
