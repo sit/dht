@@ -4,6 +4,8 @@
 #include <location.h>
 #include <locationtable.h>
 
+int RECON_TM = getenv("DHC_RECON_TM") ? atoi(getenv("DHC_RECON_TM")) : 0;
+
 dhc::dhc (ptr<vnode> node, str dbname, uint k) : 
   myNode (node), n_replica (k), recon_tm_rpcs (0)
 {
@@ -43,11 +45,16 @@ dhc::recon_timer ()
     ptr<dbPair> entry = iter->nextElement (id2dbrec (0));
     while (entry) {
       chordID key = dbrec2id (entry->key);
-      ref<dhc_block> kb = to_dhc_block (entry->data);
-      if ((guilty = responsible (myNode, key)) || kb->meta->cvalid) {
-	recon_tm_rpcs++;
-	myNode->find_successor (key, wrap (this, &dhc::recon_tm_lookup, kb, guilty));	
-      }
+      warn << "lookup up key = " << key << "\n";
+      ptr<dbrec> rec = db->lookup (entry->key);
+      if (rec) {
+	ref<dhc_block> kb = to_dhc_block (rec);
+	if ((guilty = responsible (myNode, key)) || kb->meta->cvalid) {
+	  recon_tm_rpcs++;
+	  myNode->find_successor (key, wrap (this, &dhc::recon_tm_lookup, kb, guilty));	
+	}
+      } else 
+	warn << "did not find key = " << key << "\n";
       entry = iter->nextElement ();
     }
   }
@@ -74,7 +81,7 @@ dhc::recon_tm_lookup (ref<dhc_block> kb, bool guilty, vec<chord_node> succs,
 	arg->data.data.setsize (0); // Send a NULL block
 	arg->old_conf_seqnum = kb->meta->config.seqnum - 1; //set it to last config
 	arg->new_config.setsize (kb->meta->config.nodes.size ());
-	for (uint i=0; arg->new_config.size (); i++) 
+	for (uint i=0; i<arg->new_config.size (); i++)
 	  arg->new_config[i] = kb->meta->config.nodes[i];
 
 	ptr<dhc_newconfig_res> res = New refcounted<dhc_newconfig_res>;
@@ -136,14 +143,13 @@ dhc::recon (chordID bID, dhc_cb_t cb)
       warn << "\n\n" << myNode->my_ID () << " sending proposal <" << arg->round.seqnum
 	   << "," << arg->round.proposer << ">\n";
 #endif
-      ptr<dhc_prepare_res> res; 
 
       for (uint i=0; i<b->config.size (); i++) {
 	ptr<location> dest = b->config[i];
 #if DHC_DEBUG
 	warn << "to node " << dest->id () << "\n";
 #endif
-	res = New refcounted<dhc_prepare_res> ();
+	ptr<dhc_prepare_res> res = New refcounted<dhc_prepare_res> (DHC_OK);
 	myNode->doRPC (dest, dhc_program_1, DHCPROC_PREPARE, arg, res, 
 		       wrap (this, &dhc::recv_promise, b->id, cb, res)); 
       }
@@ -222,8 +228,12 @@ dhc::recv_promise (chordID bID, dhc_cb_t cb,
      }
     }
   } else {
-    print_error ("dhc:recv_promise", err, promise->status);
-    (*cb) (promise->status, clnt_stat (0));
+    if (err == RPC_CANTSEND) {
+      warn << "dhc:recv_promise: cannot send RPC. retry???\n";
+    } else {
+      print_error ("dhc:recv_promise", err, promise->status);
+      (*cb) (promise->status, err);
+    }
   }
 }
 
@@ -283,8 +293,12 @@ dhc::recv_accept (chordID bID, dhc_cb_t cb,
       db->sync ();
     }
   } else {
-    print_error ("dhc:recv_propose", err, proposal->status);
-    (*cb) (proposal->status, clnt_stat (0));
+    if (err == RPC_CANTSEND) {
+      warn << "dhc:recv_propose: cannot send RPC. retry???\n";
+    } else {
+      print_error ("dhc:recv_propose", err, proposal->status);
+      (*cb) (proposal->status, clnt_stat (0));
+    }
   }
 }
 
@@ -300,7 +314,7 @@ dhc::recv_newconfig_ack (chordID bID, dhc_cb_t cb, ref<dhc_newconfig_res> ack,
       exit (-1);
     }
 #if DHC_DEBUG    
-    warn << "dhc::recv_newconfig_ack: " << b->to_str ();
+    warn << "dhc::recv_newconfig_ack: " << b->to_str () << "\n";
 #endif
 
     b->pstat->newconfig_ack_recvd++;
@@ -311,11 +325,17 @@ dhc::recv_newconfig_ack (chordID bID, dhc_cb_t cb, ref<dhc_newconfig_res> ack,
       b->status = IDLE;
       b->pstat->sent_reply = true;
       dhcs.insert (b);
+      warn << "\n\n" << myNode->my_ID () << " :Recon block " << bID 
+	   << " succeeded !!!!!!\n\n";
       (*cb) (DHC_OK, clnt_stat (0));
     }    
   } else {
-    print_error ("dhc:recv_newconfig_ack", err, ack->status);
-    (*cb) (ack->status, clnt_stat (0));
+    if (err == RPC_CANTSEND) {
+      warn << "dhc:recv_newconfig_ack: cannot send RPC. retry???\n";
+    } else {
+      print_error ("dhc:recv_newconfig_ack", err, ack->status);
+      (*cb) (ack->status, clnt_stat (0));
+    }
   }
 }
 
@@ -566,7 +586,7 @@ dhc::get_result_cb (chordID bID, dhc_getcb_t cb, ptr<dhc_get_res> res,
     (*cb) (blk);
   } else 
     if (err) {
-      warn << "dhc::get_result_cb: CHORDERR " << err << "\n";
+      warn << "dhc::get_result_cb: clnt_stat " << err << "\n";
       (*cb) (0);
     } else {
       warn << "dhc::get_result_cb: DHC err stat " << res->status << "\n";
@@ -802,8 +822,8 @@ void
 dhc::put_result_cb (chordID bID, dhc_cb_t cb, ptr<dhc_put_res> res, clnt_stat err)
 {
   if (err)
-    (*cb) (DHC_CHORDERR, clnt_stat (0));
-  else (*cb) (res->status, clnt_stat (0));
+    (*cb) (DHC_CHORDERR, clnt_stat (err));
+  else (*cb) (res->status, clnt_stat (err));
 }
 
 void
@@ -892,6 +912,7 @@ dhc::putblock_cb (user_args *sbp, ptr<dhc_block> kb, ptr<location> dest, ptr<wri
     } else 
       if (err) {
 	ws->done = true;
+	print_error ("dhc::putblock_cb", err, 0);
 	dhc_put_res pres; pres.status = DHC_CHORDERR;
 	sbp->reply (&pres);
       } else 

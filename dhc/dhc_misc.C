@@ -28,11 +28,10 @@ open_db (ptr<dbfe> mydb, str name, dbOptions opts, str desc)
 void 
 print_error (str where, int err, int dhc_err)
 {
-  if (err) 
-    warn << where << ": " << strerror (errno) << "\n";
-  else
-    warn << where << ": " << dhc_err << "\n";
-  exit (-1);
+  warn << where << ": clnt_stat " << err << "\n";
+  warn << where << ": dhc_stat " << dhc_err << "\n";
+  if (dhc_err)
+    exit (-1);
 }
 
 void
@@ -45,16 +44,21 @@ set_new_config (dhc_soft *b, ptr<dhc_propose_arg> arg, ptr<vnode> myNode,
   
   vec<ptr<location> > replicas = myNode->succs ();
 
-  if (replicas.size () < k) {
+  if (replicas.size () < k-1) {
     warn << "dhc_misc: succ list smaller than" << k << "replicas\n";
     k = replicas.size ();
   }
 
   arg->new_config.setsize (k);
+  if (k > 0) {
+    //Set myself as the first replica
+    arg->new_config[0] = myNode->my_ID ();
+    b->new_config.push_back (myNode->my_location ());  
+  }
   
-  for (uint i=0; i<k; i++) {
-    arg->new_config[i] = replicas[i]->id ();
-    b->new_config.push_back (replicas[i]);
+  for (uint i=1; i<k; i++) {
+    arg->new_config[i] = replicas[i-1]->id ();
+    b->new_config.push_back (replicas[i-1]);
   }
 }
 void
@@ -78,8 +82,11 @@ set_new_config (ptr<dhc_newconfig_arg> arg, vec<ptr<location> > *l,
   }
 
   arg->new_config.setsize (k);
-  arg->new_config[0] = myNode->my_ID ();
-  l->push_back (myNode->my_location ());
+
+  if (k > 0) {
+    arg->new_config[0] = myNode->my_ID ();
+    l->push_back (myNode->my_location ());
+  }
   for (uint i=0; i<k-1; i++) {
     arg->new_config[i+1] = replicas[i]->id ();  
     l->push_back (replicas[i]);

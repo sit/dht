@@ -11,7 +11,6 @@
 
 #define ID_size sha1::hashsize
 #define DHC_DEBUG 1
-#define RECON_TM 10
 
 struct dhash_block;
 
