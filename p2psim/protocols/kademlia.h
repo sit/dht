@@ -63,7 +63,6 @@ private:
     }
 
     ~k_nodeinfo_buffer() {
-      delete ki;
     }
 
     k_nodeinfo *ki;
@@ -81,6 +80,9 @@ private:
     }
 
     ~k_nodeinfo_pool() {
+      if(_head != _tail)
+        delete _tail;
+
       k_nodeinfo_buffer *i = _head;
       while(i) {
         k_nodeinfo_buffer *next = i->next;

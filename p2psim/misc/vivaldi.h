@@ -26,6 +26,7 @@
 #define __VIVALDI_H
 
 #include "p2psim/network.h"
+#include <math.h>
 #include <cassert>
 
 // Compute Vivaldi synthetic coordinates.

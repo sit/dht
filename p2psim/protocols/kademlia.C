@@ -120,12 +120,11 @@ Kademlia::NodeID Kademlia::IDcloser::n = 0;
 Kademlia::~Kademlia()
 {
   KDEBUG(1) << "Kademlia::~Kademlia" << endl;
-  /*
   for(hash_map<NodeID, k_nodeinfo*>::iterator i = flyweight.begin(); i != flyweight.end(); ++i)
     delete (*i).second;
   delete _root;
   delete _me;
-  */
+
   if(ip() == 1){
     printf("rpc_bytes %.0f\n", _rpc_bytes);
     printf("%d good, %d ok failures, %d bad failures\n",
@@ -135,6 +134,11 @@ Kademlia::~Kademlia()
              _good_latency / _good_lookups,
              _good_hops / _good_lookups);
     }
+  }
+
+  if(pool) {
+    delete pool;
+    pool = 0;
   }
 }
 // }}}
@@ -173,8 +177,8 @@ Kademlia::initstate(set<Protocol*> *l)
         upper |= (((Kademlia::NodeID) 1) << Kademlia::idsize-i-1);
     }
 
-    KDEBUG(2) << " initstate lower = " << Kademlia::printbits(lower) << endl;
-    KDEBUG(2) << " initstate upper = " << Kademlia::printbits(upper) << endl;
+    // KDEBUG(2) << " initstate lower = " << Kademlia::printbits(lower) << endl;
+    // KDEBUG(2) << " initstate upper = " << Kademlia::printbits(upper) << endl;
 
     // create a set of canditates
     vector<NodeID> candidates;
@@ -571,6 +575,9 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
           KDEBUG(2) << "do_lookup: callinfo->ki->id = " << endl;
         }
         ThreadManager::Instance()->create(Kademlia::reap, (void*) ri);
+      } else {
+        delete rpcset;
+        delete outstanding_rpcs;
       }
       break;
     }
@@ -591,7 +598,7 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
       // this has to be true. otherwise it means that we're doing a FIND_VALUE
       // but we didn't find the value even though the best alpha guys said they
       // didn't know about.
-      assert(!largs->return_immediately);
+      // assert(!largs->return_immediately);
       effective_alpha = lresult->results.size();
     }
 
@@ -744,6 +751,7 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
   NODES_ITER(&lresult->results) {
     KDEBUG(2) << "do_lookup: result: id = " << printbits((*i)->id) << ", lastts = " << (*i)->lastts << ", ip = " << endl;
   }
+
 
   // put ourselves as replier
   lresult->rid = _id;
@@ -1284,13 +1292,12 @@ k_bucket::find_node(Kademlia::NodeID key, set<k_nodeinfo*, Kademlia::closer> *v,
 {
   checkrep();
 
-  Kademlia::NodeID _id = kademlia()->id();
+  // Kademlia::NodeID _id = kademlia()->id();
   Kademlia::closer::n = key;
 
   // recurse deeper in the right direction if we can
   if(!leaf) {
     unsigned leftmostbit = Kademlia::getbit(key, depth);
-    KDEBUG(1) << "k_bucket::insert heading towards " << leftmostbit << endl;
     if(v->size() < Kademlia::k)
       child[leftmostbit]->find_node(key, v, depth+1);
     if(v->size() < Kademlia::k)

@@ -25,6 +25,7 @@
 
 #include "network.h"
 #include "observers/observerfactory.h"
+#include "eventgenerators/eventgeneratorfactory.h"
 #include "threadmanager.h"
 
 unsigned verbose = 0;
@@ -43,6 +44,7 @@ graceful_exit(void*)
   delete ObserverFactory::Instance();
   delete Network::Instance(); // deletes nodes, protocols
   delete ThreadManager::Instance();
+  delete EventGeneratorFactory::Instance();
   __tmg_dmalloc_stats();
 
   threadexitsall(0);
