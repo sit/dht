@@ -25,13 +25,28 @@ void tourl(str in, strbuf *out) {
   unsigned int i;
   char b[3];
   for(i=0; i<in.len(); i++) {
-    if(((in[i] >= 47) && (in[i] <= 57)) || /* / and numbers */
+    if(in[i] == 0)
+      return;
+    else if(((in[i] >= 47) && (in[i] <= 57)) || /* / and numbers */
        ((in[i] >= 65) && (in[i] <= 90)) || /* A-Z */
        ((in[i] >= 97) && (in[i] <= 122))) /* a-z */
       *out << str(in+i, 1);
     else {
       sprintf(b, "%%%02x", in[i]);
       *out << b;
+    }
+  }
+}
+
+void fixsemicolon(str in, strbuf *out) {
+  unsigned int i;
+  char b[3];
+  for(i=0; i<in.len(); i++) {
+    if(in[i] == ';') {
+      sprintf(b, "%%%02x", in[i]);
+      *out << b;
+    } else {
+      *out << str(in+i, 1);
     }
   }
 }
@@ -45,73 +60,15 @@ void tr(str in, strbuf out) {
   }
 }
 
-struct id3 {
-  char tag[3];
-  char title[30];
-  char artist[30];
-  char album[30];
-  char year[4];
-  char comment[30];
-  char genre;
-};
-
-class dirstack;
-class song {
-  str filename;
-  strbuf spaced;
-  struct id3 id3;
-
-public:
-  song(str fn, const char *path);
-
-  str artistf, albumf, titlef;
-  str artistd, albumd, titled;
-  str artist, album, title;
-  dirstack *ds_webpage;
-  vec<str> genre;
-};
-
-int min(size_t a, unsigned int b) {
-  if(a<b) return a;
-  return b;
-} // FIXME this is crap
-
-int splen(char *st, int len) {
-  while((len > 0) && (*(st+len-1) == ' '))
-    len--;
-  return len;
-}
-
-static rxx s0("(.+)\\.(mp3|MP3)");
-static rxx s1("(.+) *-+ *(.+)\\.(mp3|MP3)");
-static rxx s2("[\\[\\{\\(](.+)[\\]\\}\\)] *(.+)\\.(mp3|MP3)");
-static rxx s3("[0-9+] *-+ *(.+) *-+ *(.+)\\.(mp3|MP3)");
-
-song::song(str fn, const char *path) : filename(fn), artistf(""), albumf(""), titlef(""), artistd(""), albumd(""), titled(""), artist(""), album(""), title("") {
-  FILE *id3tmp = fopen(path, "r");
-  if(id3tmp == NULL) { perror("can't open file"); exit(1); }
-  if(fseek(id3tmp, -128, SEEK_END)) { perror("fseek"); exit(1); }
-  if(fread(&id3, 128, 1, id3tmp) != 1) { warnx << path; perror("fread"); return; }
-  if(fclose(id3tmp) != 0) { perror("fclose"); exit(1); }
-
-  if(!strncmp(id3.tag, "TAG", 3)) {
-    artistf = str(id3.artist, splen(id3.artist, 30));
-    titlef = str(id3.title, splen(id3.title, 30));
-    //    warn << id3.title << " " << id3.artist << " " << id3.album << " " << id3.year << " " << id3.comment << "\n";
-  } else {
-    tr(fn, spaced);
-
-    if(s3.search(spaced)) {
-      artistf = s3[1];
-      titlef = s3[2];
-    } else if(s2.search(spaced)) {
-      artistf = s2[1];
-      titlef = s2[2];
-    } else if(s1.search(spaced)) {
-      artistf = s1[1];
-      titlef = s1[2];
-    } else if(s0.search(spaced)) {
-      titlef = s0[1];
+void sanitize(str in, strbuf *out) {
+  unsigned int i;
+  for(i=0; i<in.len(); i++) {
+    if(((in[i] >= 47) && (in[i] <= 57)) || /* / and numbers */
+       ((in[i] >= 65) && (in[i] <= 90)) || /* A-Z */
+       ((in[i] >= 97) && (in[i] <= 122))) /* a-z */
+      *out << str(in+i, 1);
+    else {
+      *out << " ";
     }
   }
 }
@@ -127,6 +84,7 @@ class weblookup {
   str host;
   short port;
   bool post;
+  int retries;
 
   void connected(int fd);
   void recvreply();
@@ -160,13 +118,14 @@ class inserter : public data_sender {
   void addfile_connected(int s);
 public:
   inserter(str h, int p) : host(h), port(p), sleeping(true) {};
-  void add(str localpath, vec<str> *webpath);
+  void add(FILE *af, str localpath, vec<str> *webpath); // only use once
   void wakeup();
   void stop();
 };
 
 void
-inserter::add(str localpath, vec<str> *webpath) { // FIXME finish
+inserter::add(FILE *af, str localpath, vec<str> *webpath) {
+  f = af;
   for(unsigned int i=0; i<webpath->size(); i++)
     printf("/%s", (*webpath)[i].cstr());
   //    cout << "/" << (*webpath)[i];
@@ -197,7 +156,10 @@ inserter::dirloop() {
     return;
   }
   if(todo.front()->size() != 0) {
-    tmp << "\"(" << todo.front()->front() << ";[\\dabcdef]+)/\"";
+    tmp << "\"(";
+    tourl(todo.front()->front(), &tmp);
+    tmp << ";[\\dabcdef]+)/\"";
+    warn << "looking for " << todo.front()->front() << " with " << tmp << "\n";
     filt = New rxx(str(tmp));
     for(i=0; i<loc.size(); i++)
       tmp2 << "/" << loc[i];
@@ -219,13 +181,17 @@ inserter::dirloop_gotdir() {
 
   warn << "dirloop_gotdir\n";
   delete filt;
+  warn << "got ";
   if(out.size() > 0) {
+    warnx << out.front() << "\n";
     todo.front()->pop_front();
-    tourl(out.front(), &tmp);
-    loc.push_back(str(tmp));
+    fixsemicolon(out.front(), &tmp);
+    loc.push_back(tmp);
     dirloop();
-  } else
+  } else {
+    warnx << " nothing!\n";
     adddir(todo.front()->pop_front());
+  }
 }
 
 void
@@ -240,15 +206,17 @@ inserter::adddir(str dir) {
     tmp2 << "/" << loc[i];
   }    
   tmp2 << "/";
-  tmp << "/(.+)\r\n";
+  tmp << "/(.+)\r";
   tmp2 << "\r\n\r\nadd_dir=" << dir;
 
+  
   filt = New rxx(str(tmp));
   webpage.tosuio()->clear();
   out.clear();
   foo = New weblookup(host, port, tmp2, filt, &out, &webpage, 
 		      wrap(this, &inserter::adddir_made), true);
   warn << (int)foo << "filter: " << tmp << "\n";
+  warn << tmp2 << "\n";
 }
 
 void
@@ -288,7 +256,7 @@ inserter::addfile_connected(int as) {
     return;
   }
 
-  f = fopen(todo_file.front(), "r");
+  //  f = fopen(todo_file.front(), "r");
   if(f == NULL) { perror("addfile_connected"); exit(1); }
   if(fseek(f, 0, SEEK_END)) { perror("fseek"); exit(1); }
   length += ftell(f);
@@ -354,269 +322,16 @@ inserter::stop() {
   close(s);
   todo.pop_front();
   todo_file.pop_front();
+
+  // FIXME
+  if(todo.size() == 0)
+    exit(0);
   send();
-}
-
-class dirstack {
-public:
-  str name;
-  dirstack *parent;
-  vec<str> bandv;
-  strbuf webpage;
-  str album;
-  bool albume;
-  bool ready;
-  vec<callback<void>::ptr> flophouse;
-
-  void mkready();
-  void sleep(callback<void>::ptr cb);
-  dirstack(str dir, dirstack *p) : name(dir), parent(p), albume(false), ready(false) {};
-  void getpath(strbuf tmp) { 
-    if(parent) parent->getpath(tmp);
-    tmp << name << "/";
-  };
-};
-
-void
-dirstack::mkready() {
-  ready = true;
-  while(flophouse.size() > 0) {
-    (*flophouse.front())();
-    flophouse.pop_front();
-  }
-}
-
-void
-dirstack::sleep(callback<void>::ptr cb) {
-  flophouse.push_back(cb);
-}
-
-class walker {
-  str path;
-  inserter *ins;
-  dirstack *dirs;
-  strbuf garbage;
-
-  void pathdispatch(DIR *dirp);
-  void dirvisit(str dir);
-  void guess(str foo, str path, dirstack *cur);
-  void guess_gotband(song *a, dirstack *cur, str path, bool found);
-  void guess_gotalbum(song *a, dirstack *cur, str path, bool found);
-  void find_band(song *s, dirstack *cur, str path);
-  void find_album(song *s, dirstack *cur, str path);
-  void find_genre(song *s, cbv done);
-  void insert(str path, song *a);
-  void got_band(dirstack *d);
-  void fetchbandweb(song *a, dirstack *fd, cbv done);
-  void guess_final(str path, song *s);
-public:
-  walker(str ld, inserter *in);
-};
-
-walker::walker(str ld, inserter *in) : path(ld), ins(in), dirs(NULL) {
-  DIR *dirp = opendir(path);
-  if(dirp == NULL) { perror("walker::walker()"); exit(1); }
-
-  pathdispatch(dirp);
-  closedir(dirp);
-}
-
-void
-walker::pathdispatch(DIR *dirp) {
-  struct dirent *de;
-  struct stat sb;
-  strbuf pathtmp, pathtmp2;
-  pathtmp << path << "/";
-  if(dirs) dirs->getpath(pathtmp);
-
-  while((de = readdir(dirp)) != NULL) {
-    pathtmp2.tosuio()->clear();
-    pathtmp2 << pathtmp << de->d_name;
-    if(stat(str(pathtmp2).cstr(), &sb) != 0) { perror("walker::pthdspatch() stat"); continue; }
-    switch(sb.st_mode & S_IFMT) {
-    case S_IFREG:
-      //      fprintf(stderr, "found file: %s %s\n", str(pathtmp).cstr(), de->d_name);
-      guess(de->d_name, pathtmp2, dirs);
-      break;
-    case S_IFDIR:
-      if(strcmp(de->d_name, ".") &&
-	 strcmp(de->d_name, "..")) {
-	//	fprintf(stderr, "found dir: %s %s\n", str(pathtmp).cstr(), de->d_name);
-	dirvisit(de->d_name);
-      }
-      break;
-    default:
-      fprintf(stderr, "eh? %d %d %d %s\n", 
-	      DT_REG, DT_DIR, de->d_type, de->d_name);
-    }
-  }
-}
-
-static rxx gband("Arts/Music/Bands_and_Artists/./(.+)\\?tc=1");
-
-void
-walker::dirvisit(str dir) {
-  dirstack *tmp;
-  strbuf pathtmp;
-  pathtmp << path << "/";
-  if(dirs) dirs->getpath(pathtmp);
-  pathtmp << dir << "/";
-
-  DIR *dirp = opendir(str(pathtmp).cstr());
-  if(dirp == NULL) { perror("walker::dirvisit()"); return; }
-
-  tmp = New dirstack(dir, dirs); // FIXME memleak
-  dirs = tmp;
-
-  strbuf google, g;
-  tourl(dir, &google);
-  g << "/search?btnG=Google+Search&hl=en&cat=gwd%2FTop&q=" << google;
-  vNew weblookup("www.google.com", 80, g, &gband, &(dirs->bandv), &(dirs->webpage), 
-		 wrap(this, &walker::got_band, dirs));
-
-  pathdispatch(dirp);
-  closedir(dirp);
-
-  dirs = tmp->parent;
-}
-
-void
-walker::guess(str foo, str path, dirstack *cur) {
-  // search order:
-  // 1 id3
-  // 2 filename
-  // 3 dirs + filename
-  song *a = New song(foo, path);
-
-  find_band(a, cur, path);
-
-#if 0
-  if(!a->songe) {
-    // screwed. we can't even find a title???
-    insert(path, a);
-  } else if(!a->bande) {
-    // only sorta found a title. check dirs
-    find_band(a, cur, path);
-  } else {
-    strbuf google;
-    google << "http://www.google.com/search?hl=en&lr=&ie=UTF-8&oe=UTF8&cat=gwd%2FTop&q=" << a->artistf;
-    vNew weblookup(google, 80, &gband, &(dirs->bandv), &(dirs->webpage), 
-		   wrap(this, &walker::got_band, dirs));
-    find_genre(a, wrap(this, &walker::insert, path, a));
-  }
-#endif
-}
-
-void
-walker::find_band(song *s, dirstack *cur, str path) {
-  if(!cur) { guess_gotband(s, cur, path, false); return; }
-  if(!cur->ready) { cur->sleep(wrap(this, &walker::find_band, s, cur, path)); return; }
-  if(cur->bandv.size() == 0) { find_band(s, cur->parent, path); return; }
-  s->artistd = cur->bandv[0]; // FIXME what about other names/???
-  s->ds_webpage = cur;
-  guess_gotband(s, cur, path, true);
-}
-
-void
-walker::guess_gotband(song *a, dirstack *cur, str path, bool found) {
-  if(found)
-    find_album(a, cur, path);
-  //    find_genre(a, wrap(this, &walker::find_album, a, cur, path));
-  else if(a->artistf.len() > 0) {
-    dirstack *fake = New dirstack("none", NULL); // FIXME memleak
-    fetchbandweb(a, fake, wrap(this, &walker::find_album, a, cur, path));
-  } else
-    // screwed again
-    guess_final(path, a);
-}
-
-void
-walker::fetchbandweb(song *a, dirstack *fd, cbv done) {
-  strbuf google, g;
-  tourl(a->artistf, &google);
-  g << "/search?btnG=Google+Search&hl=en&cat=gwd%2FTop&q=" << google;
-  a->ds_webpage = fd;
-  vNew weblookup("www.google.com", 80, g, &gband, &(fd->bandv), &(fd->webpage), done);
-//  		 wrap(this, walker::find_genre, a, done));
-}
-
-void
-walker::find_album(song *s, dirstack *cur, str path) { // FIXME look on web??
-  if(!cur) { guess_gotalbum(s, cur, path, false); return; }
-  if(!cur->ready) { cur->sleep(wrap(this, &walker::find_album, s, cur, path)); return; }
-  if(!cur->albume) { find_album(s, cur->parent, path); return; }
-  s->albumd = cur->album;
-  guess_gotalbum(s, cur, path, true);
-}
-
-void
-walker::guess_gotalbum(song *a, dirstack *cur, str path, bool found) {
-  //  if(!found)
-  //    a->album = "misc";
-  // do we care about "found"?
-  find_genre(a, wrap(this, &walker::guess_final, path, a));
-}
-
-static rxx gbandlink("href=\"?http://(.+)(?::80)?(/Top/Arts/Music/Bands_and_Artists/./.+)\"?\\>Arts");
-static rxx ggenre("Arts/Music/Styles/.+/(.+)/\"?>");
-
-void
-walker::find_genre(song *s, cbv done) {
-  if(s->ds_webpage && gbandlink.search(str(s->ds_webpage->webpage))) {
-    vNew weblookup(gbandlink[1], 80, gbandlink[2], &ggenre, &(s->genre), &garbage, done); // FIXME host will be bad mem reference?
-  } else {
-    warn << "can't find band link in:" << s->ds_webpage->webpage << "\n";
-    exit(1);
-    done();
-  }
-}
-
-void
-walker::guess_final(str path, song *s) { // FIXME what path is this?
-  // FIXME compare strings
-  if(s->artistf.len() > 0)
-    s->artist = s->artistf;
-  else if(s->artistd.len() > 0)
-    s->artist = s->artistd;
-  else
-    s->artist = "unknown";
-
-  if(s->albumf.len() > 0)
-    s->album = s->albumf;
-  else if(s->albumd.len() > 0)
-    s->album = s->albumd;
-  else
-    s->album = "misc";
-
-  if(s->titlef.len() > 0)
-    s->title = s->titlef;
-  else if(s->titled.len() > 0)
-    s->title = s->titled;
-
-  if(s->genre.size() == 0)
-    s->genre.push_back(str("misc"));
-
-#if 0
-}
-
-void
-walker::insert(str path, song *s) {
-#endif
-  vec<str> *wp = New vec<str>();
-  wp->push_back(s->genre[s->genre.size()-1]);
-  wp->push_back(s->artist);
-  //  wp->push_back(s->album);
-  ins->add(path, wp);
-}
-
-void
-walker::got_band(dirstack *d) {
-  d->mkready();
 }
 
 weblookup::weblookup(str h, short p, strbuf q, rxx *f, vec<str> *o, strbuf *wb, callback<void>::ptr d, bool pt) {
   query << q;
-  //  warn << "q: " << q << " " << (int)this << "\n";
+  warn << "host: " << h << "q: " << q << " " << (int)this << "\n";
   host = h;
   port = p;
   filter = f;
@@ -626,7 +341,7 @@ weblookup::weblookup(str h, short p, strbuf q, rxx *f, vec<str> *o, strbuf *wb, 
   done = d;
   post = pt;
   tcpconnect (host, port, wrap(this, &weblookup::connected));
-  // FIXME retries?
+  retries = 0;
 }
 
 void
@@ -634,6 +349,9 @@ weblookup::connected(int f) {
   //  warn << "f: " << f << " " << (int)this << "\n";
   fd = f;
   if(f < 0) {
+    retries++;
+    if(retries > 5)
+      exit(1);
     warn << "weblookup failed connect " << host << ":" << port << query << ". retrying\n";
     tcpconnect(host, port, wrap(this, &weblookup::connected));
     return;
@@ -686,15 +404,37 @@ weblookup::~weblookup() {
 }
 
 void usage(void) {
-  fprintf(stderr, "%s: localdir host port\n", progname.cstr());
+  fprintf(stderr, "%s: localfile destdir host port\n", progname.cstr());
   exit(1);
 }
 
+static rxx getfile("([^/]+)$");
+static rxx getpath("^/([^/]*)");
+
 int main(int argc, char **argv) {
+  FILE *f;
+  vec<str> path;
+
   setprogname (argv[0]);
-  if(argc < 4)
+  if(argc < 5)
     usage();
 
-  vNew walker(argv[1], New inserter(argv[2], atoi(argv[3])));
+  if(!getfile.search(argv[1]))
+    usage();
+
+  if(!(f = fopen(argv[1], "r"))) {
+    perror(argv[1]);
+    usage();
+  }
+
+  while(getpath.search(argv[2])) {
+    if(getpath[1].len() > 0)
+      path.push_back(getpath[1]);
+    argv[2] += getpath.end(1);
+  }
+
+  inserter *ins = New inserter(argv[3], atoi(argv[4]));
+  ins->add(f, getfile[1], &path);
+
   amain();
 }

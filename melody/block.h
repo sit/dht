@@ -43,6 +43,14 @@ struct melody_block {
   char data[BLOCKPAYLOAD];
 };
 
+class pending_getblock {
+ public:
+  melody_block *bl;
+  cbi cb;
+
+  pending_getblock(melody_block *b, cbi c) : bl(b), cb(c) {};
+};
+
 /* venti_block is used to keep track of content hashes of other
    blocks. it is meant to be used in a "stack" of venti_blocks, where
    each parent keeps track of the content hashes of the child
@@ -62,6 +70,7 @@ class venti_block {
   callback<void, int, bigint>::ptr done_cb;
   callback<void, bigint, callback<void, ptr<dhash_block> >::ptr >::ptr retrieve;
   callback<void, str>::ptr statuscb;
+  bool pending;
 
   bool full();
   void reset(cbv after);
@@ -77,6 +86,8 @@ class venti_block {
   void get_block2 (melody_block *bl, cbi cb, int of);
 
  public:
+  vec<pending_getblock *> pends;
+
   void add_hash(bigint *hash, cbv after);
   void add_hash_s(bigint *hash);
   bool empty();

@@ -86,6 +86,7 @@ venti_block::more_init(venti_block *ap, int dummy)
   parent = ap;
   offset = 0;
   done = false;
+  pending = false;
 }
 
 void
@@ -120,13 +121,18 @@ venti_block::get_block (melody_block *bl, cbi cb)
 #ifdef DEBUG
   warn << "get_block bl\n";
 #endif
+  warn << "off " << offset << " hi " << (int)hashindex << " dd " << (int)data.data << " empty " << empty() << "\n";
   if(empty()) {
     if(parent == NULL) { // no more data
       strbuf foo;
       foo << "retrieved";
       statuscb(foo);
+    } else if(parent->pending) {
+      warn << "qing\n";
+      pends.push_back(New pending_getblock(bl, cb));
     } else {
-      parent->get_block(&data, wrap(this, &venti_block::get_block_rc, bl, cb, offset)); // need sync... what does this mean? FIXME
+      parent->pending = true;
+      parent->get_block(&data, wrap(this, &venti_block::get_block_rc, bl, cb, offset)); // need sync... what does this mean? must have ment someone may call get_block again before this is done
       offset += BLOCKPAYLOAD; // FIXME fixed?
     }
   } else {
@@ -144,6 +150,15 @@ venti_block::get_block_rc(melody_block *bl, cbi cb, int of, int dummy)
   hashindex = data.data;
 
   get_block2(bl, cb, of);
+
+  parent->pending = false;
+  while(!pends.empty()) {
+    assert(!parent->pending);
+    warn << "rh\n";
+    pending_getblock *pgb = pends.pop_front();
+    get_block(pgb->bl, pgb->cb);
+    delete pgb;
+  }
 }
 
 // real get_block code... now we know where the block is

@@ -30,7 +30,7 @@
 void
 retrieve_manager::retrieve (bigint id, callback<void, ptr<dhash_block> >::ptr cb)
 {
-  warn << "retrieve_manager::requested\n";
+  //  warn << "retrieve_manager::requested\n";
   retrieve_block *tmp = New retrieve_block(cb);
   blocks.insert_tail(tmp);
   b_count++;
@@ -41,7 +41,7 @@ retrieve_manager::retrieve (bigint id, callback<void, ptr<dhash_block> >::ptr cb
 void
 retrieve_manager::got_block (retrieve_block *tmp, ptr<dhash_block> blk)
 {
-  warn << "retrieve_manager::retrieved\n";
+  //  warn << "retrieve_manager::retrieved\n";
   if(!blk) {
     warn << "retrieve_manager::got_block no blk\n";
     tmp->cb(blk);

@@ -186,7 +186,7 @@ void
 melody_file::next()
 {
   while(((int)(sent_bytes + (rm->b_count * BLOCKPAYLOAD)) < size) && 
-	(rm->b_count < READAHEAD) &&
+	((rm->b_count + vstack->pends.size()) < READAHEAD) && // horrible
 	!dead)
     vstack->get_block(&cbuf, wrap(mkref(this), &melody_file::next_cb));
 }

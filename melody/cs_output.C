@@ -27,6 +27,8 @@
 
 #include "cs_output.h"
 
+#define BUFFER_SIZE 16*1024
+
 cs_output::cs_output(int as, callback<void>::ptr foo, data_sender *acs, callback<void>::ptr adpcb)
 {
   s = as;
@@ -42,7 +44,7 @@ bool
 cs_output::take(const char *buf, int len, data_sender *c)
 {
   take(buf, len);
-  if(out.resid() >= 256*1024) {
+  if(out.resid() >= BUFFER_SIZE) {
     warn << "tosleep\n";
     sleeping.insert_tail(c);
     return false;
@@ -73,7 +75,7 @@ cs_output::cb(void)
   timecb_remove(timeout);
   timeout = NULL;
 
-  warn << "go\n";
+  //  warn << "go\n";
   int res = out.output(s);
   if(res == 0)
     warn << (int)cs << " sEAGAIN\n";
@@ -86,7 +88,7 @@ cs_output::cb(void)
   } else
     bytes_out += tmp - out.resid();
 
-  if((out.resid() < 256*1024) && sleeping.first) { //FIXME tune?
+  if((out.resid() < BUFFER_SIZE) && sleeping.first) { //FIXME tune?
     warn << "wakup\n";
     sleeping.first->wakeup();
     sleeping.remove(sleeping.first);
@@ -106,7 +108,7 @@ warn << (int)cs << " wrote " << bytes_out << " bytes\n";
 
   if(!timeout)
     timeout = delaycb(10, 0, wrap(this, &cs_output::died));
-  warn << "e2\n";
+  //  warn << "e2\n";
 }
 
 void
