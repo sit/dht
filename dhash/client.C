@@ -205,18 +205,7 @@ dhashcli::retrieve (blockID blockID, cb_ret cb, int options,
 			   options, 5, guess),
 		     guess);
   } else {
-    vec<ptr<location> > sl = clntnode->succs ();
-    if ((options & DHASHCLIENT_SUCCLIST_OPT) && 
-	use_succlist (sl, clntnode->my_pred ())) {
-      rs->succopt = true;
-      sl.push_back (clntnode->my_location ());
-      vec<chord_node> s = get_succs_from_list (sl, blockID.ID);
-      rs->r.push_back (clntnode->my_location ());
-      doassemble (rs, s);
-      return;
-    } else if (options & DHASHCLIENT_SUCCLIST_OPT)
-      warn << "cannot use succlist to find succs on retrieve\n";
-
+    
     // Optimal number of successors to fetch is the number of
     // extant fragments.  This ensures the maximal amount of choice
     // for the expensive fetch phase.  As long as proximity routing
@@ -418,10 +407,16 @@ struct orderer {
 static void
 order_succs (ptr<locationtable> locations,
 	     const Coord &me, const vec<chord_node> &succs,
-	     vec<chord_node> &out)
+	     vec<chord_node> &out, u_long max = 0)
 {
+
+  //max is the number of successors we should order: the first max in the list
+  u_long lim = max;
+  // 0 means order them all
+  if (max == 0 || max > succs.size ()) lim = succs.size ();
+
   orderer *d2me = New orderer [succs.size()];
-  for (size_t i = 0; i < succs.size (); i++) {
+  for (size_t i = 0; i < lim; i++) {
     ptr<location> l = NULL;
     if (locations) 
       l = locations->lookup (succs[i].x);
@@ -434,9 +429,9 @@ order_succs (ptr<locationtable> locations,
     }
     d2me[i].i_ = i;
   }
-  qsort (d2me, succs.size (), sizeof (*d2me), &orderer::cmp);
+  qsort (d2me, lim, sizeof (*d2me), &orderer::cmp);
   out.clear ();
-  for (size_t i = 0; i < succs.size (); i++) {
+  for (size_t i = 0; i < lim; i++) {
 #ifdef VERBOSE_LOG
     char buf[10]; // argh. please shoot me.
     sprintf (buf, "%5.2f", d2me[i].d_);
@@ -447,6 +442,14 @@ order_succs (ptr<locationtable> locations,
     out.push_back (succs[d2me[i].i_]);
   }
   delete[] d2me;
+
+  //copy any of the ones we didn't consider verbatim
+  if (max == 0) return;
+  long remaining = succs.size () - lim;
+  if (remaining > 0) 
+    for (int i = 0; i < remaining; i++)
+      out.push_back (succs[lim+i]);
+
 }
 
 static void
@@ -587,35 +590,10 @@ void
 dhashcli::doassemble (ptr<rcv_state> rs, vec<chord_node> succs)
 {
   chordID myID = clntnode->my_ID ();
-#if 0
-  // benjie: if number of successors is smaller than num_efrags,
-  // that's likely an indication that the ring is small.
-  if (succs.size () < dhash::num_efrags ()) {
-    chord_node s;
-    clntnode->my_location ()->fill_node (s);
 
-    bool in_succ_list = false;
-    for (unsigned i=0; i<succs.size () && !in_succ_list; i++)
-      if (succs [i].x == s.x)
-	in_succ_list = true;
-
-    if (in_succ_list) {
-      // patch up the succ list so it includes all the node we know
-      // of... mostly, this step will add the predecessor of the block
-      vec<ptr<location> > sl = clntnode->succs ();
-      merge_succ_list (succs, sl, dhash::num_efrags ());
-    }
-    else
-      // clntnode is not in succ list, but there aren't enough
-      // successors. this is probably an indication that the lookup is
-      // done on clntnode itself.
-      succs.push_back (s);
-  }
-#endif
-
-  while (succs.size () > dhash::num_efrags ()) {
-    succs.pop_back ();
-  }
+  //  while (succs.size () > dhash::num_efrags ()) {
+  //  succs.pop_back ();
+  // }
 
   if (succs.size () < dhash::num_dfrags ()) {
     warning << myID << ": retrieve (" << rs->key << "): "
@@ -637,7 +615,7 @@ dhashcli::doassemble (ptr<rcv_state> rs, vec<chord_node> succs)
 					    << rs->key << "\n";
 #endif /* VERBOSE_LOG */    
     order_succs (lt, clntnode->my_location ()->coords (),
-		 succs, rs->succs);
+		 succs, rs->succs, dhash::num_efrags ());
   } else {
     rs->succs = succs;
   }
@@ -654,24 +632,9 @@ void
 dhashcli::insert (ref<dhash_block> block, cbinsert_path_t cb, 
 		  int options, ptr<chordID> guess)
 {
-  if (!guess) {
-    if (block->ctype == DHASH_CONTENTHASH) {
-      vec<ptr<location> > sl = clntnode->succs ();
-      if ((options & DHASHCLIENT_SUCCLIST_OPT) && 
-	  use_succlist (sl, clntnode->my_pred ())) {
-        sl.push_back (clntnode->my_location ());
-        vec<chord_node> s = get_succs_from_list (sl, block->ID);
-        route r;
-	r.push_back (clntnode->my_location ());
-        insert_lookup_cb (block, cb, 0, DHASH_OK, s, r);
-        return;
-      }
-      else if (options & DHASHCLIENT_SUCCLIST_OPT)
-	warn << "cannot use succlist to find succs on insert\n";
-    }
+  if (!guess) 
     lookup (block->ID, wrap (this, &dhashcli::insert_lookup_cb, block, cb, 
 			     options));
-  }
   else { 
     ptr<location> l =  clntnode->locations->lookup (*guess);
     if (!l) {

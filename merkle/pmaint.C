@@ -53,8 +53,6 @@ pmaint::pmaint_next ()
     bigint key = db_next (db, pmaint_next_key);
     if (key != -1) {
       pmaint_next_key = key;
-#define PRED_LIST
-#ifdef PRED_LIST
       vec<ptr<location> > preds = host_node->preds ();
       if (preds.size () >= dhash::num_efrags () &&
 	  betweenrightincl (preds[dhash::num_efrags () - 1]->id(), 
@@ -63,7 +61,6 @@ pmaint::pmaint_next ()
 	active_cb = delaycb (PRTTMTINY, wrap (this, &pmaint::pmaint_next));
 	return;
       }
-#endif
       cli->lookup (key, wrap (this, &pmaint::pmaint_lookup, pmaint_next_key));
       active_cb = NULL;
     } else { 
@@ -104,7 +101,7 @@ pmaint::pmaint_lookup (bigint key, dhash_stat err, vec<chord_node> sl, route r)
 
   if ((sl.size () > dhash::num_efrags() &&
       dhash::num_efrags () > 1 &&
-      betweenbothincl (sl[0].x, sl[dhash::num_efrags () - 1].x, 
+      betweenbothincl (sl[0].x, sl[sl.size () - 1].x, 
 		       host_node->my_ID ()))
       ||
       (dhash::num_efrags () == 1 && sl[0].x == host_node->my_ID ()) 
@@ -123,16 +120,11 @@ pmaint::pmaint_lookup (bigint key, dhash_stat err, vec<chord_node> sl, route r)
   } else {
     //case II: this key doesn't belong to us. Offer it to another node
     
-    pmaint_offer_left = pred;
-    pmaint_offer_next_succ = 0;
-    pmaint_offer_right = succ;
     pmaint_searching = false;
-    pmaint_succs = sl;
     
-    trace << host_node->my_ID () << " " << key << " : PMAINT pmaint_offer: left "
-	 << pmaint_offer_left << ", right " << pmaint_offer_right << "\n";
+    trace << host_node->my_ID () << " " << key << "\n";
 
-    pmaint_offer ();
+    pmaint_offer (key, sl[0]);
   }
 }
 
@@ -141,215 +133,82 @@ pmaint::pmaint_lookup (bigint key, dhash_stat err, vec<chord_node> sl, route r)
 // successors are tried in order and sequentially
 //
 void
-pmaint::pmaint_offer ()
+pmaint::pmaint_offer (bigint key, chord_node succ)
 {
 
-  // XXX first: don't send bigint over wire. then: change 46 to 64
-
-  //these are the keys that (we have that) belong to succ. 
-  //All successors (of succ) should have them
-
-  if (pmaint_offer_next_succ == 0)  { //next set of keys
-    trace << host_node->my_ID () << "PMAINT adding work\n";
-    work.clear (); //XXX needed in current implementation or keys get re-added.
-    // and sent twice (assertion failure)
-    // alternatively, we could add the work before pmaint_offer is called for
-    // the first time instead of re-adding it each time through the loop
-    work.add_work (pmaint_offer_left, pmaint_offer_right, db);
-  }
-
-  // XXX should I update the successor list periodically?
-  // not totally necessary. worst case a key get pmainted twice
-  // which could happen if someone joins in the successor list
-  // while we are pmainting.
-
-  // worse case: nodes get stuck in the pmaint cycle they started out in
-  // this seems to be a combination of nodes accepting a key even if it
-  // doesn't belong to them and pmaint not updating the successor list.
+  
+  //foreach k in keys
+  // send a chunk of 48 keys to the succ
+  //   copy them or delete them as needed
+  
+  //form an OFFER RPC
+  ref<dhash_offer_arg> arg = New refcounted<dhash_offer_arg> ();
+  arg->keys.setsize (1);
+  arg->keys[0] = key;
+  
+  ref<dhash_offer_res> res = New refcounted<dhash_offer_res> (DHASH_OK);
+  
+  host_node->doRPC (succ, 
+		    dhash_program_1, 
+		    DHASHPROC_OFFER, arg, res, 
+		    wrap (this, &pmaint::pmaint_offer_cb, 
+			  succ, 
+			  key, res));    
 
 
-  if (work.keys_outstanding () == 0) {
-    trace << host_node->my_ID () << "PMAINT: no more keys, searching\n";
-    pmaint_searching = true;
-    //we're done with the offer phase
-    //signal that we should start scanning again.
-
-    active_cb = delaycb (PRTTMSHORT, wrap (this, &pmaint::pmaint_next));
-    return;
-  } 
-
-  //there are keys left to send
-  // the structure of the offer phase is a nested loop with keys on the outside
-  // foreach k in (keys)
-  //   foreach n in (succs)
-  //     offer k to n
-  // but we actually do MTU-sized chunks of keys for efficiency
-
-
-  if (pmaint_offer_next_succ < pmaint_succs.size () 
-      && pmaint_offer_next_succ < dhash::num_efrags ()) {
-
-
-    //form an OFFER RPC
-    ref<dhash_offer_arg> arg = New refcounted<dhash_offer_arg> ();
-    vec<bigint> k = work.outstanding_keys (46);
-
-    u_int ksize = k.size ();
-    u_int oksize = (u_int)work.keys_outstanding ();
-    if (ksize < 46) assert (ksize = oksize);
-    arg->keys.setsize (k.size());
-
-    for (u_int i = 0; i < k.size (); i++) {
-      work.inc_offered (k[i]);
-      arg->keys[i] = k[i];
-    }
-
-    ref<dhash_offer_res> res = New refcounted<dhash_offer_res> (DHASH_OK);
-
-    host_node->doRPC (pmaint_succs[pmaint_offer_next_succ], 
-		      dhash_program_1, 
-		      DHASHPROC_OFFER, arg, res, 
-		      wrap (this, &pmaint::pmaint_offer_cb, 
-			    pmaint_succs[pmaint_offer_next_succ], 
-			    k, res));
-
-  } else {
-    //we may never get here if we manage to give all the keys away
-    // the check for keys_outstanding () == 0 above will trigger
-    // that's ok, since it means we were done anyways
-
-    //if any key was already present on all nodes
-    // then we can delete it
-    vec<bigint> rk = work.rejected_keys ();
-    for (u_int j = 0; j < rk.size (); j++) {
-      trace << host_node->my_ID () << " deleting " << rk[j] << " because no one wanted it\n";
-      delete_helper (id2dbrec (rk[j]));
-      work.mark_deleted (rk[j]);
-    }
-
-    //no more nodes to offer the keys to
-    // go back to the lookup phase
-    // and get a fresh successor list
-    pmaint_next_key = incID (work.left_key ());
-    pmaint_searching = true;
-    active_cb = delaycb (PRTTMSHORT, wrap (this, &pmaint::pmaint_next));
-  }
 }
 
 
 
 void
-pmaint::pmaint_offer_cb (chord_node dst, vec<bigint> keys, 
-			     ref<dhash_offer_res> res, 
-			     clnt_stat err)
+pmaint::pmaint_offer_cb (chord_node dst, bigint key, 
+			 ref<dhash_offer_res> res, 
+			 clnt_stat err)
 {
-  //  warn << host_node->my_ID () << " : pmaint_offer_cb\n";
 
   if (err) {
-    //error on the offer, skip this successor on this round
-    warning << host_node->my_ID () << " error offerring, back to lookup " << pmaint_offer_next_succ << "\n";
-
-
-    pmaint_next_key = incID (work.left_key ());
-    pmaint_searching = true;
-    active_cb = delaycb (PRTTMSHORT, wrap (this, &pmaint::pmaint_next));
-    return;
-  }
-
-  //got an offer response from one successor
-  //try to send him each key he doesn't have 
-  // in lock-step
-  handed_off_cb (dst, keys, res, -1, PMAINT_HANDOFF_NOTPRESENT);
-}
-			  
-void
-pmaint::handed_off_cb (chord_node dst,
-		       vec<bigint> keys,
-		       ref<dhash_offer_res> res,
-		       int key_number,
-		       int status)
-{
-
-  if (status == PMAINT_HANDOFF_ERROR) 
-    {
-      //an error doesn't necessarily mean that the node didn't
-      // get this fragment. It might be that 4 acks were dropped
-      // or that some monster queue prevented a reply. In this
-      // case we've just created a duplicate block. Which is
-      // bad since it causes reconstruction failure and permanently
-      // reduces the replication level of the block
-
-      warning << host_node->my_ID () << " error handing off block " <<
-	key_number << " " << pmaint_offer_next_succ << "\n";
-      //don't try to send him any more keys
-
-      pmaint_next_key = incID (work.left_key ());
-      pmaint_searching = true;
-      active_cb = delaycb (PRTTMSHORT, wrap (this, &pmaint::pmaint_next));
-      return;
+    warning << host_node->my_ID () << " error offerring key " << key << "\n";    
+  } else {
+    
+    switch (res->resok->accepted[0]) {
+    case DHASH_DELETE:
+    case DHASH_HOLD:
+      {
+	//do nothing for now. delete if disk space is a problem
+      }
+      break;
+    case DHASH_SENDTO:
+      {
+	chord_node dst = make_chord_node (res->resok->dest[0]);
+	pmaint_handoff (dst, key, wrap (this, &pmaint::handed_off_cb, key));
+	return;
+      }
+      break;
+    default:
+      fatal << "unkown dhash_offer type\n";
     }
-
-  if (status == PMAINT_HANDOFF_PRESENT) 
-    //already had it but we found
-    //out the hard way
-    work.inc_rejected (keys[key_number]);
+  }
   
 
-
-  unsigned int k = key_number + 1;
-  if (k == keys.size ()) 
-    {
-      //successor are the inner loop. We'll try any remaining
-      // keys with the next successor.
-      // if there are more keys (beyond the 48 we just offered him) 
-      // that this successor wants, he'll
-      // get a chance at them when we grab the next batch of keys
-      trace << host_node->my_ID () << " out of keys, going to next succ. " 
-	    << pmaint_offer_next_succ << " "
-	    << pmaint_succs.size () <<  " " << pmaint_offer_left << "\n";
-      pmaint_offer_next_succ++;
-      pmaint_offer ();
-    } else {
-      //find the next accepted key
-      while (k < keys.size ()) {
-	if (res->resok->accepted[k] == DHASH_ACCEPT) { 
-	  if (work.handed_off (keys[k])) {
-	    fatal << host_node->my_ID () << " " << 
-	      keys[k] << " is handed off already?\n";
-	    
-	  }
-	  // the current succ wants this key, send it to him
-	  pmaint_handoff (dst, keys[k], 
-			  wrap(this, &pmaint::handed_off_cb, dst, keys, res, 
-			       k));  
-	  return;
-	} else if (res->resok->accepted[k] == DHASH_PRESENT) {
-	  // not wanted, proceed to next key
-	  work.inc_rejected (keys[k]);
-	} else { //DHASH_REJECT
-	  //treat this as an error
-	  warning << host_node->my_ID () << " block refused " <<
-	    key_number << " " << pmaint_offer_next_succ << "\n";
-	  
-	  pmaint_next_key = incID (work.left_key ());
-	  pmaint_searching = true;
-	  active_cb = delaycb (PRTTMSHORT, wrap (this, &pmaint::pmaint_next));
-	  return;
-	}
-	k++;
-      }
-
-      if (k == keys.size ()) {
-	// no more accepted keys to send. copy code from above
-	trace << host_node->my_ID () << " going to next  succ. (II)" 
-	      << pmaint_offer_next_succ << " "
-	      << pmaint_succs.size () <<  " " << pmaint_offer_left << "\n";
-	pmaint_offer_next_succ++;
-	pmaint_offer ();
-      }
-    }
-
+  pmaint_next_key = incID (key);
+  pmaint_searching = true;
+  active_cb = delaycb (PRTTMSHORT, wrap (this, &pmaint::pmaint_next));
+  return;
 }
+
+void
+pmaint::handed_off_cb (bigint key, int status)
+{
+  if (status) {
+    warning << host_node->my_ID () << " error handing off key " << key << "\n";    
+    pmaint_next_key = decID (key);
+  }  else
+    pmaint_next_key = incID (key); //use next key only if no error on this one
+
+  pmaint_searching = true; 
+  active_cb = delaycb (PRTTMSHORT, wrap (this, &pmaint::pmaint_next));
+}
+
 
 // handoff 'key' to 'dst'
 //
@@ -360,7 +219,6 @@ pmaint::pmaint_handoff (chord_node dst, bigint key, cbi cb)
   assert (dstloc);
   blockID bid (key, DHASH_CONTENTHASH, DHASH_FRAG);
 
-  assert (!work.handed_off (key));
   trace << host_node->my_ID () << " sending " << key << " to " << dst.x << "\n";
   cli->sendblock (dstloc, bid, db, 
 		  wrap (this, &pmaint::pmaint_handoff_cb, key, cb));
@@ -379,7 +237,6 @@ pmaint::pmaint_handoff_cb (bigint key,
   } else if (!present) {
     trace << host_node->my_ID () << " deleting " << key << " after handoff\n";
     delete_helper (id2dbrec(key));
-    work.mark_deleted (key);
     assert (!db->lookup (id2dbrec (key)));
     cb (PMAINT_HANDOFF_NOTPRESENT); //ok, not present
   } else { 
@@ -423,111 +280,3 @@ pmaint::get_keys (ptr<dbfe> db, bigint a, bigint b, u_int maxcount)
 }
 
 
-// --------------- offer_state: helper for pmaint_offer ---
-void 
-offer_state::clear () 
-{
-  //Free all of the keys first
-  offer_state_item *i = keys.first ();
-  while (i) {
-    offer_state_item *tbd = i;
-    i = keys.next (i);
-    delete tbd;
-  }
-  keys.clear ();
-  outstanding = 0;
-}
-
-void
-offer_state::add_work (bigint left, bigint right, ptr<dbfe> db) 
-{
-  vec<bigint> dbkeys = pmaint::get_keys(db, left, right, RAND_MAX);
-  
-    //keep track of the keys we have to send
-    for (uint i = 0; i < dbkeys.size(); i++) {
-      offer_state_item *item = New offer_state_item (dbkeys[i]);
-      keys.insert (item);
-      outstanding++;
-   }
-}
-
-int
-offer_state::keys_outstanding ()
-{
-  return outstanding;
-}
-
-vec<bigint>
-offer_state::outstanding_keys (int max)
-{
-  offer_state_item *i = keys.first ();
-  int added = 0;
-  vec<bigint> ret;
-  while (i && added < max) {
-    if (i->handed_off == false) {
-      added++;
-      ret.push_back (i->key);
-    }
-    i = keys.next (i);
-  }
-  return ret;
-}
-
-void
-offer_state::mark_deleted (bigint key)
-{
-  offer_state_item *i = keys[key];
-  assert (i);
-  i->handed_off = true;
-  outstanding--;
-}
-
-void
-offer_state::inc_rejected (bigint key)
-{
-  offer_state_item *i = keys[key];
-  assert (i);
-  i->refused_by++;
-}
-
-void
-offer_state::inc_offered (bigint key)
-{
-  offer_state_item *i = keys[key];
-  assert (i);
-  i->offered_to++;
-}
-
-vec<bigint> 
-offer_state::rejected_keys ()
-{
-  offer_state_item *i = keys.first ();
-  vec<bigint> ret;
-  while (i) {
-    if (!i->handed_off && i->offered_to == i->refused_by 
-	&& i->offered_to >= (int)dhash::num_efrags ()) 
-      {
-	trace << "rejected " << i->key << " offered to " << i->offered_to 
-	     << " and refused by " 
-	     << i->refused_by << " nodes\n";
-	ret.push_back (i->key);
-      }
-    i = keys.next (i);
-  }
-  return ret;
-}
-
-// return the left-most key that wasn't handed off
-// used to initialized pmaint_next_key when we switch
-// back to searching
-bigint 
-offer_state::left_key () 
-{ 
-  offer_state_item *i = keys.first ();
-  bigint min = i->key;
-  while (i) {
-    if (min > i->key && !i->handed_off) min = i->key;
-    i = keys.next (i);
-  }
-  return min;
-};

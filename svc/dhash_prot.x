@@ -20,9 +20,9 @@ struct dhash_valueattr {
 };
 
 enum dhash_offer_status {
-  DHASH_PRESENT = 1,
-  DHASH_ACCEPT = 2,
-  DHASH_REJECT = 3
+  DHASH_HOLD = 1,
+  DHASH_DELETE = 2,
+  DHASH_SENDTO = 3
 };
 
 struct s_dhash_insertarg {
@@ -102,7 +102,8 @@ struct dhash_offer_arg {
 };
 
 struct dhash_offer_resok {
-   dhash_offer_status accepted<64>;
+  chord_node_wire dest<64>;
+  dhash_offer_status accepted<64>;
 };
 
 union dhash_offer_res switch (dhash_stat status) {

@@ -92,7 +92,7 @@ dhash_config_init::dhash_config_init ()
   
   ok = ok && set_int ("merkle.keyhash_timer", 10);
   ok = ok && set_int ("merkle.replica_timer", 10);
-  ok = ok && set_int ("merkle.prt_timer", 5000);
+  ok = ok && set_int ("merkle.prt_timer", 5);
 
   //plab hacks
   ok = ok && set_int ("dhash.disable_db_env", 0);
@@ -633,28 +633,18 @@ dhash_impl::dispatch (user_args *sbp)
       vec<ptr<location> > preds = host_node->preds ();
       
       for (u_int i = 0; i < arg->keys.size (); i++) {
-	ref<dbrec> kkk = id2dbrec (arg->keys[i]);
-	bool present = db->lookup (kkk);
-	if (present) 
-	  res.resok->accepted[i] = DHASH_PRESENT;
-	else if (!present) {
-	  if (preds.size () > 1 &&
-	      !betweenrightincl (preds[dhash::num_efrags () - 1]->id(), 
-				host_node->my_ID (),
-				arg->keys[i])) { 
-	    res.resok->accepted[i] = DHASH_REJECT;
-	  } else {
-	    res.resok->accepted[i] = DHASH_ACCEPT;
-	  }
+	chordID key = arg->keys[i];
+	u_int count = bsm->mcount (key);
+	if (count == 0 || 
+	    count > dhash::num_dfrags ()) {
+	  res.resok->accepted[i] = DHASH_HOLD;
+	} 
+	else {
+	  res.resok->accepted[i] = DHASH_SENDTO;
+	  ptr<location> l = bsm->best_missing (key);
+	  l->fill_node (res.resok->dest[i]);
 	}
-
-	info << host_node->my_ID () << ": " << arg->keys[i]
-	     << (res.resok->accepted[i] == DHASH_ACCEPT ? " " : " not ") 
-	     << "accepted; range is ("
-	     << preds[dhash::num_efrags () - 1]->id () << " , " 
-	     << host_node->my_ID () << "]\n";
       }
-
       sbp->reply (&res);
     }
     break;
