@@ -26,9 +26,9 @@
 #define __VIVALDITEST_H
 
 #include "p2psim/p2protocol.h"
-#include "vivaldi.h"
+#include "vivaldinode.h"
 
-class VivaldiTest : public P2Protocol {
+class VivaldiTest : public VivaldiNode {
 public:
   VivaldiTest(IPAddress i, Args &args);
   ~VivaldiTest();
@@ -42,26 +42,20 @@ public:
 
   void tick(void *);
   void status();
-  Vivaldi::Coord real();
   double error();
   void total_error(double &x05, double &x50, double &x95);
-  int samples () { return _vivaldi->nsamples ();};
  private:
+  int _ticks;
   Vivaldi *_vivaldi;
   static vector<VivaldiTest*> _all;
 
   int _next_neighbor;
   int _neighbors; // if > 0, fix the number of neighbors
-  int _adaptive;
-  double _timestep;
-  int _vo;
-  int _dim;
 
   uint _old_all_size;
   vector<IPAddress> _nip; // our fixed neigbhors
 
-  char *ts();
-  void handler(void *, Vivaldi::Coord *);
+  void handler(void *, void *);
 
   void addNeighbors ();
   void print_all_loc();
