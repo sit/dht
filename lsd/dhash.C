@@ -71,6 +71,14 @@ dhashclient::insert_findsucc_cb(svccb *sbp, dhash_insertarg *item,
     //    for (unsigned int i = 0; i < path.size (); i++) warnx << path[i] << " ";
     // warnx << "were touched to insert " << item->key << "\n";
 
+    int *num_entries = (*stats.balance)[succ];
+    if (NULL == num_entries) {
+      int init = 0;
+      stats.balance->insert(succ, init);
+    } else {
+      *num_entries += 1;
+    }
+    
     stats.insert_path_len += path.size ();
     stats.insert_ops++;
 

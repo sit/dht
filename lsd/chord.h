@@ -7,21 +7,11 @@
 #include "crypt.h"
 #include "sys/time.h"
 #include "vec.h"
+#include "qhash.h"
 
 #define NBIT 160
 
 
-struct chord_stats {
-  long insert_path_len;
-  long insert_ops;
-  long lookup_path_len;
-  long lookup_ops;
-  long lookup_lat;
-  long lookup_max_lat;
-  long lookup_bytes_fetched;
-};
-
-extern chord_stats stats;
 
 typedef int cb_ID;
 
@@ -31,6 +21,20 @@ struct hashID {
     return ID.getui ();
   }
 };
+
+struct chord_stats {
+  long insert_path_len;
+  long insert_ops;
+  long lookup_path_len;
+  long lookup_ops;
+  long lookup_lat;
+  long lookup_max_lat;
+  long lookup_bytes_fetched;
+  qhash<sfs_ID, int, hashID> *balance;
+};
+
+extern chord_stats stats;
+
 
 
 template<class KEY, class VALUE>

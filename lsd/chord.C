@@ -223,6 +223,8 @@ p2p::p2p (str host, int hostport, const sfs_ID &hostID,
 
 
   bzero(&stats, sizeof(chord_stats));
+  stats.balance = New qhash<sfs_ID, int, hashID> ();
+
   sigcb(SIGUSR1, wrap (this, &p2p::stats_cb));
 
   

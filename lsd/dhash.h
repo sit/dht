@@ -43,6 +43,7 @@ class dhashclient {
 
   ptr<asrv> p2pclntsrv;
 
+
   void dispatch (svccb *sbp);
   void cache_on_path(dhash_insertarg *item, route path);
 
