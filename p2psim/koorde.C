@@ -92,7 +92,7 @@ Koorde::find_successors(CHID key, uint m, bool intern)
   koorde_lookup_arg a;
   koorde_lookup_ret r;
   vector<ConsistentHash::CHID> path;
-  IDMap mysucc = loctable->succ(1);
+  IDMap mysucc = loctable->succ(me.id + 1);
 
   a.nsucc = m;
   a.k = key;
@@ -132,7 +132,7 @@ Koorde::find_successors(CHID key, uint m, bool intern)
 void
 Koorde::koorde_next(koorde_lookup_arg *a, koorde_lookup_ret *r)
 {
-  IDMap succ = loctable->succ(1);
+  IDMap succ = loctable->succ(me.id + 1);
   printf ("Koorde_next (id=%qx, key=%qx, kshift=%qx, i=%qx) succ=(%u,%qx)\n", 
 	  me.id, a->k, a->kshift, a->i, succ.ip, succ.id);
   if (ConsistentHash::betweenrightincl (me.id, succ.id, a->k) ||
@@ -144,7 +144,7 @@ Koorde::koorde_next(koorde_lookup_arg *a, koorde_lookup_ret *r)
     r->done = true;
     r->v.clear ();
     assert (a->nsucc <= CHORD_SUCC_NUM);
-    r->v = loctable->succs(a->nsucc);
+    r->v = loctable->succs(me.id + 1, a->nsucc);
     assert (r->v.size () > 0);
     printf ("Koorde_next: done succ key = %qx: (%u,%qx)\n", 
 	    a->k, succ.ip, succ.id);

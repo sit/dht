@@ -10,11 +10,13 @@ class ChordFinger: public Chord {
     ChordFinger(Node *n);
     ~ChordFinger() {};
 
-  protected:
-    void fix_fingers();
     void stabilize();
     bool stabilized(vector<CHID> lid);
     void reschedule_stabilizer(void *x);
+    void dump();
+
+  protected:
+    void fix_fingers();
 };
 
 #endif

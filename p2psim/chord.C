@@ -7,7 +7,6 @@
 
 #define PID(x) (x >> (NBCHID - 32))
 
-#define PAD "000000000000000000000000"
 
 using namespace std;
 
@@ -17,7 +16,10 @@ Chord::Chord(Node *n, uint numsucc) : Protocol(n)
   me.ip = n->ip();
   me.id = ConsistentHash::ip2chid(me.ip); 
   loctable = new LocTable(me);
-  loctable->resize(2+nsucc, nsucc);
+  //pin down nsucc for successor list
+  loctable->pin(me.id + 1, true, nsucc);
+  //pin down 1 predecessor
+  loctable->pin(me.id - 1, false, 1);
 }
 
 Chord::~Chord()
@@ -89,7 +91,7 @@ Chord::next_handler(next_args *args, next_ret *ret)
            ts(), args->key, v.size(), v[0].id);
     */
   //IDMap succ = loctable->succ(args->m);
-  IDMap succ = loctable->succ(1);
+  IDMap succ = loctable->succ(me.id+1);
   if(ConsistentHash::betweenrightincl(me.id, succ.id, args->key) ||
      succ.id == me.id){
     ret->done = true;
@@ -101,7 +103,7 @@ Chord::next_handler(next_args *args, next_ret *ret)
 	   */
  }else {
     ret->done = false;
-    ret->next = loctable->next(args->key);
+    ret->next = loctable->pred(args->key);
     //ret->next = succ;
     assert(ret->next.ip != me.ip);
     /*
@@ -147,7 +149,8 @@ Chord::reschedule_stabilizer(void *x)
 void
 Chord::stabilize()
 {
-  IDMap succ1 = loctable->succ(1);
+ 
+  IDMap succ1 = loctable->succ(me.id+1);
 
   if (succ1.ip && (succ1.ip != me.ip)) {
     get_predecessor_args gpa;
@@ -155,7 +158,7 @@ Chord::stabilize()
     doRPC(succ1.ip, &Chord::get_predecessor_handler, &gpa, &gpr);
     if (gpr.n.ip) loctable->add_node(gpr.n);
 
-    IDMap succ2 = loctable->succ(1);
+    IDMap succ2 = loctable->succ(me.id+1);
 
     /*
     if(succ1.id != succ2.id)
@@ -180,12 +183,15 @@ Chord::stabilized(vector<CHID> lid)
   vector<CHID>::iterator iter;
   iter = find(lid.begin(), lid.end(), me.id);
   assert(iter != lid.end());
-  IDMap succ;
-  for (unsigned int i=1; i <= nsucc; i++) {
+
+  vector<IDMap> succs = loctable->succs(me.id+1, nsucc);
+  if (succs.size() != nsucc) 
+    return false;
+
+  for (unsigned int i = 1; i <= nsucc; i++) {
     iter++;
     if (iter == lid.end()) iter = lid.begin();
-    succ = loctable->succ(i);
-    if (succ.id != *iter) return false;
+    if (succs[i-1].id != *iter) return false;
   }
   return true;
 }
@@ -205,7 +211,7 @@ void
 Chord::fix_successor()
 {
   /*
-  IDMap succ = loctable->succ(1);
+  IDMap succ = loctable->succ(me.id+1);
   if (succ.ip && Failed(succ.ip)) {
     loctable->del_node(succ);
   }
@@ -215,14 +221,14 @@ Chord::fix_successor()
 void
 Chord::get_successor_list_handler(get_successor_list_args *args, get_successor_list_ret *ret)
 {
-  ret->v = loctable->succs(nsucc);
+  ret->v = loctable->succs(me.id+1, nsucc);
 }
 
 
 void
 Chord::fix_successor_list()
 {
-  IDMap succ = loctable->succ(1);
+  IDMap succ = loctable->succ(me.id+1);
   if ((succ.ip == 0) || (succ.ip == me.ip)) return;
   get_successor_list_args gsa;
   get_successor_list_ret gsr;
@@ -255,7 +261,13 @@ Chord::get_predecessor_handler(get_predecessor_args *args,
 void
 Chord::dump()
 {
-  loctable->dump();
+  printf("myID is %qx%s %u\n", me.id, PAD, me.ip);
+  printf("===== %qx%s =====\n", me.id, PAD);
+
+  vector<IDMap> v = loctable->succs(me.id+1, nsucc);
+  for (unsigned int i = 0; i < v.size(); i++) {
+    printf("%qx%s: succ %d : %qx%s\n", me.id, PAD, i,v[i].id, PAD);
+  }
 }
 
 #if 0
@@ -269,47 +281,51 @@ Chord::crash()
 {
   //suspend the currently running thread?
 }
-
 #endif
 
-//get the succ node after this id 
-ConsistentHash::CHID
-LocTable::succID(ConsistentHash::CHID id)
-{
-  for (uint i = 1; i < ring.size(); i++) {
-    if (ConsistentHash::between(ring[0].id, ring[i].id, id)) 
-      return ring[i].id;
-  }
-  return ring[0].id;
-}
 
+
+
+/*************** LocTable ***********************/
+
+LocTable::LocTable(Chord::IDMap me) {
+  // XXX: shouldn't the just be a new?
+  ring.clear();
+  ring.push_back(me);//ring[0] is always me
+  
+  _max = 0;
+  pinlist.clear();
+  pin(me.id, true, 1);
+
+} 
+
+//get the succ node including or after this id 
 Chord::IDMap
-LocTable::succ(unsigned int which)
+LocTable::succ(ConsistentHash::CHID id)
 {
-  if (which < (ring.size() -1)) {
-    return ring[which];
-  }else{
-    Chord::IDMap nr;
-    nr.ip = 0;
-    nr.id = 0;
-    return nr;
+  for (unsigned i = 0; i < ring.size(); i++) {
+    if (ConsistentHash::betweenrightincl(ring[0].id, ring[i].id, id)) 
+      return ring[i];
   }
+  Chord::IDMap nr;
+  nr.ip = 0;
+  nr.id = 0;
+  return nr;
 }
 
+/* returns m successors including or after the number id*/
 vector<Chord::IDMap>
-LocTable::succs(unsigned int m)
+LocTable::succs(ConsistentHash::CHID id, unsigned int m)
 {
-  assert(m <= CHORD_SUCC_NUM);
-  int end = (CHORD_SUCC_NUM> (ring.size()-2))? (ring.size() - 2) : CHORD_SUCC_NUM;
+  unsigned int num = m;
   vector<Chord::IDMap> v;
   v.clear();
-  for (int i = 1; i <= end; i++) {
-    if (ring[i].ip) {
+  for (unsigned int i = 0; i < ring.size(); i++) {
+    if (ConsistentHash::betweenrightincl(ring[0].id, ring[i].id, id)) {
       v.push_back(ring[i]);
+      num--;
+      if (num <= 0) return v;
     }
-  }
-  if (v.size () == 0) {
-    v.push_back(ring[0]);
   }
   return v;
 }
@@ -319,20 +335,25 @@ LocTable::succ_for_key(Chord::CHID key)
 {
   vector<Chord::IDMap> v;
   v.clear();
+  /*
   int end = (ring.size()-1) > _succ_num ? ring.size() - 2 : _succ_num;
   if (ConsistentHash::between(ring[0].id, ring[end].id, key)) {
     for (int i = 0; i <= end; i++) {
       if (ring[i].ip && ConsistentHash::between(ring[i].id, ring[end].id, key)) 
 	v.push_back(ring[i]);
     }
-  }
+    }*/
   return v;
 }
 
 Chord::IDMap
 LocTable::pred()
 {
-  return ring.back(); //the last element
+  Chord::IDMap pred = ring.back();
+  if (pred.ip == ring[0].ip) {
+    pred.ip = 0;
+  }
+  return pred;
 }
 
 Chord::IDMap
@@ -344,19 +365,7 @@ LocTable::pred(Chord::CHID n) {
       return ring[i];
     } 
   }
-  return ring[ring.size () - 1];  // n must be between (last, first]
-}
-
-Chord::IDMap
-LocTable::next(Chord::CHID n)
-{
-  //no locality consideration
-  for (unsigned int i = 0; i < (ring.size()-1); i++) {
-    if ((ring[i+1].ip == 0) || ConsistentHash::between(ring[i].id, ring[i+1].id, n)) {
-      return ring[i];
-    } 
-  }
-  return ring.back();
+  return ring.back();  // n must be between (last, first]
 }
 
 void
@@ -375,7 +384,7 @@ LocTable::add_node(Chord::IDMap n)
       ring.insert(ring.begin() + i, n);
       if (ring.size() > _max) {
 	evict();
-	assert(ring.size() == _max);
+	assert(ring.size() <= _max);
       }
       return;
     }
@@ -388,14 +397,18 @@ void
 LocTable::notify(Chord::IDMap n)
 {
   assert(n.ip);
-  assert(ring.size() >= 3);
+  //  assert(ring.size() >= 3);
   if ((ring.back().ip == 0) || (ConsistentHash::between(ring.back().id, ring.front().id, n.id))) {
-    ring.pop_back();
+    //ring.pop_back();
     ring.push_back(n);
+    if (ring.size() > _max) {
+      evict();
+    }
   }
+  /*
   if ((ring[1].ip == 0) || (ring[1].ip == ring[0].ip)){
     ring[1] = n;
-  }
+    }*/
 }
 
 void
@@ -415,76 +428,89 @@ LocTable::del_node(Chord::IDMap n)
 }
 
 void
-LocTable::pin(Chord::CHID x)
+LocTable::pin(Chord::CHID x, bool pin_succ, unsigned int pin_num)
 {
-  for (unsigned int i = 1; i < pinlist.size(); i++) {
-    if (pinlist[i] == x) {
+  pin_entry pe;
+
+  pe.id = x;
+  pe.pin_succ = pin_succ;
+  pe.pin_num = pin_num;
+
+  _max += pin_num;
+  for (unsigned int i = 0; i < pinlist.size(); i++) {
+    if (pinlist[i].id == x) {
+      if (pin_succ == pinlist[i].pin_succ) {
+	pinlist[i].pin_num = pin_num;
+      }else if (!pin_succ) { //pin the predecessor
+	pinlist.insert(pinlist.begin() + i, pe);
+      }else {
+	pinlist.insert(pinlist.begin() + i + 1, pe);
+      }
       return;
-    } else if (ConsistentHash::between(pinlist[i-1], pinlist[i], x)) {
-      pinlist.insert(pinlist.begin() + i, x);
+    } else if (i > 0 && ConsistentHash::between(pinlist[i-1].id, pinlist[i].id, x)) {
+      pinlist.insert(pinlist.begin() + i, pe);
       return;
     }
   }
-  pinlist.push_back(x);
+  pinlist.push_back(pe);
 }
 
+//in its full generality, evict has to loop around the list of nodes 3 times whic is 
+// expensive
 unsigned int 
-LocTable::evict() //evict one node
+LocTable::evict() //all unnecessary(unpinned) nodes 
 {
-  assert(pinlist.size() < _max);
-  if (!pinlist.size()) {
-    ring.erase(ring.begin() + _succ_num + 1);
-    return (_succ_num + 1);
+  assert(pinlist.size() < _max && pinlist.size() > 0);
+  assert(pinlist[0].id == ring[0].id);
+
+  vector<bool> pinned; 
+
+  unsigned int sz = ring.size();
+
+  for (unsigned int i = 0; i < sz; i++) {
+    pinned.push_back(false);
   }
-  unsigned int j = 0;
-  for (unsigned int i = _succ_num + 1; i < ring.size() - 1 ; i++)  {
-    while (j < pinlist.size() && (ConsistentHash::between(pinlist[j], ring[i].id, pinlist[(j+1)%pinlist.size()]))) {
+
+  int extra;
+  bool end = false;
+  int j = 0;
+  int tmp;
+  for (unsigned int i = 0; i < pinlist.size(); i++) {
+    while ((!end) && j < ring.size()) {
+      if (ConsistentHash::betweenrightincl(ring[0].id, ring[j].id, pinlist[i].id))
+        break;
       j++;
     }
-    if (ConsistentHash::between(pinlist[j], pinlist[(j+1)%pinlist.size()], ring[i+1].id)) {
-	ring.erase(ring.begin() + i + 1);
-	return i + 1;
+    if (j >= sz) {
+      j = 0;
+      end = true;
+    }
+    if (pinlist[i].pin_succ) {
+      for (unsigned int k = 0; k < pinlist[i].pin_num; k++) {
+	if ((j + k) < sz)
+	  pinned[j + k] = true;
+      }
+    } else {
+      //since ring[j].id is always equal or after pinlist[i].id
+      extra = (pinlist[i].id == ring[j].id)? 0:-1;
+
+      //since i walk around the pinlist and ring in closewise fashion, i allow wrapping around (i.e. the % operation) for pinning predecessors
+      for (unsigned int k = 0; k < pinlist[i].pin_num; k++) {
+        tmp = (j - k + extra + sz) % sz;
+        pinned[tmp] = true;
+      }
+    } 
+  }
+
+  unsigned int i = 0;
+  while (i < pinned.size()) {
+    if (!pinned[i]) {
+      pinned.erase(pinned.begin() + i);
+      ring.erase(ring.begin() + i);
+    }else{
+      i++;
     }
   }
-  assert(0);
-  return 0;
-}
-
-void
-LocTable::dump()
-{
-  assert(ring.size() >= 3);
-
-  printf("myID is %qx%s %u\n", ring[0].id, PAD, ring[0].ip);
-
-  printf("===== %qx%s =====\n", ring[0].id, PAD);
-
-  for (int i=1; i <= CHORD_SUCC_NUM; i++) {
-    printf("%qx%s: succ %d : %qx%s\n",ring[0].id, PAD, i-1,ring[i].id, PAD);
-  }
-
-  Chord::CHID prev_finger = 0;
-  Chord::CHID pin, tmpr;
-  unsigned int i, j;
-  bool booltmp;
-  j = 0;
-  for (i= 0; i < pinlist.size(); i++) {
-    pin  = pinlist[i];
-    while (1) {
-      booltmp = ConsistentHash::betweenrightincl(ring[0].id, ring[j].id, pinlist[i]);
-      if (booltmp) break;
-      tmpr = ring[j].id;
-      //printf(" %qu %qu\n", pin, tmpr);
-      j++;
-      if (j >= ring.size()) goto END;
-    }
-    if (ring[j].id != prev_finger) {
-      printf("%qx: finger: %d : %qx%s : succ %qx%s\n", ring[0].id, i, pinlist[i], PAD,ring[j].id, PAD);
-    }
-    prev_finger = ring[j].id;
-  }
-END:
-  int end = ring.size()-1;
-  printf("pred : %qx%s\n", ring[end].id, PAD);
+  assert(ring.size() <= _max);
 }
 
