@@ -54,10 +54,6 @@ merkle_server::dispatch (user_args *sbp)
       // XXX isn't this a NOP, given the previous assertion about equal depths 
       lnode_prefix.clear_suffix (lnode_depth);
 
-      // Get remote sides ip:port and chordID
-      chord_node from;
-      sbp->fill_from (&from);
-      ptr<location> l = host_node->locations->lookup_or_create (from);
       sendnode_res res (MERKLE_OK);
       format_rpcnode (ltree, lnode_depth, lnode_prefix, 
 		      lnode, &res.resok->node);
@@ -72,6 +68,10 @@ merkle_server::dispatch (user_args *sbp)
       // he needs without my help and I don't know what to do
       // even if I do find that I'm missing data
       /*
+      // Get remote sides ip:port and chordID
+      chord_node from;
+      sbp->fill_from (&from);
+      ptr<location> l = host_node->locations->lookup_or_create (from);
       compare_nodes (ltree, arg->rngmin, arg->rngmax, lnode, rnode,
 		     wrap (this, &merkle_server::missing, l),
 		     wrap (this, &merkle_server::doRPC, l));
