@@ -72,6 +72,7 @@ long unsigned Kademlia::_bad_timeouts = 0;
 long unsigned Kademlia::_bad_hops = 0;
 Time Kademlia::_bad_hop_latency = 0;
 Time Kademlia::_default_timeout = 0;
+unsigned Kademlia::_joincounter = 0;
 
 
 Kademlia::NodeID *Kademlia::_all_kademlias = 0;
@@ -83,7 +84,7 @@ HashMap<Kademlia::NodeID, Kademlia*> *Kademlia::_nodeid2kademlia = 0;
 // }}}
 // {{{ Kademlia::Kademlia
 Kademlia::Kademlia(IPAddress i, Args a)
-  : P2Protocol(i), _id(ConsistentHash::ip2chid(ip()))
+  : P2Protocol(i), _id(ConsistentHash::ip2chid(_joincounter++))
 {
   // KDEBUG(1) << "id: " << printID(_id) << ", ip: " << ip() << endl;
   if(getenv("P2PSIM_CHECKREP"))
@@ -345,6 +346,11 @@ Kademlia::join(Args *args)
 
   IPAddress wkn = args->nget<IPAddress>("wellknown");
 
+  // pick a new ID
+  _nodeid2kademlia->remove(_id);
+  _id = ConsistentHash::ip2chid(_joincounter++);
+  _nodeid2kademlia->insert(_id, this);
+
   // I am the well-known node
   if(wkn == ip()) {
     delaycb(stabilize_timer, &Kademlia::reschedule_stabilizer, (void *) 0);
@@ -392,11 +398,10 @@ join_restart:
 
   // KDEBUG(2) << "join: succ_id is " << printID(succ_id) << endl;
   unsigned cpl = common_prefix(_id, succ_id);
-  KDEBUG(0) << "_id = " << printbits(_id) << ", succ_id = " << printbits(succ_id) << ", cpl = " << cpl << endl;
 
   // all entries further away than him need to be refreshed.  this is similar to
-  // stabilization.
-  for(int i=idsize-cpl+1; i<idsize; i++) {
+  // stabilization.  flip a bit and set the rest of the ID to something random.
+  for(unsigned i=idsize-cpl+1; i<idsize; i++) {
     NodeID random_key = _id ^ (((Kademlia::NodeID) 1) << i);
     for(int j=i-1; j>=0; j--)
       random_key ^= (((NodeID) random() & 0x1) << j);
