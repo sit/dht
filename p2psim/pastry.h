@@ -32,11 +32,23 @@ private:
   unsigned get_digit(NodeID, unsigned);
 
 
+  struct join_msg_args {
+    NodeID id;    // id of the guy who's joining
+    IPAddress ip; // ip address of the guy who's joining
+  };
+  struct join_msg_ret {
+    NodeID id;
+    IPAddress ip;
+  };
+  void do_join(join_msg_args*, join_msg_ret*);
+
+
   //
   // ROUTING TABLE
   //
   // routing table entry
   class RTEntry : public pair<NodeID, IPAddress>  { public:
+    RTEntry(pair<NodeID, IPAddress> p) { first = p.first; second = p.second; }
     bool operator<= (const NodeID n) const { return first <= n; }
     bool operator< (const NodeID n) const { return first < n; }
     bool operator>= (const NodeID n) const { return first >= n; }

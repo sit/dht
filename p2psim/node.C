@@ -65,7 +65,7 @@ Node::run()
         if(p->reply()){
           send(p->channel(), &p);
         } else {
-          ThreadManager::Instance()->create(this, Node::Receive, p);
+          ThreadManager::Instance()->create(Node::Receive, p);
         }
         break;
 

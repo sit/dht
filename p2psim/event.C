@@ -1,4 +1,5 @@
 #include "event.h"
+#include "threadmanager.h"
 #include <vector>
 #include <string>
 
@@ -29,12 +30,13 @@ Event::Event(vector<string> *v)
 void
 Event::Execute(Event *e)
 {
-  threadcreate(Event::Execute1, e, mainstacksize);
+  ThreadManager::Instance()->create(Event::Execute1, e);
 }
 
 void
-Event::Execute1(Event *e)
+Event::Execute1(void *ex)
 {
+  Event *e = (Event*) ex;
   e->execute();
   delete e;
   threadexits(0);

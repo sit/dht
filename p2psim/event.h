@@ -27,8 +27,7 @@ public:
   // finished. This is to simplify the decision of when to free.
   // Also you're guaranteed that execute() runs in its own thread.
   virtual void execute() = 0;
-
-  static void Execute1(Event *e);
+  static void Execute1(void *e);
 };
 
 #endif // __EVENT_H

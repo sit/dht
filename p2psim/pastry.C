@@ -12,9 +12,9 @@ Pastry::Pastry(Node *n) : Protocol(n),
   _L(2 << _b),
   _M(2 << _b)
 {
-  _id = random();
-  _id <<= 32;   // XXX: not very portable
-  _id |= random();
+  assert(!(idlength % _b));
+  _id = (((NodeID) random()) << 32) | random();
+  printf("%d = %llX\n", ip(), _id);
 }
 
 
@@ -24,9 +24,35 @@ Pastry::~Pastry()
 
 
 void
-Pastry::join(Args *a)
+Pastry::join(Args *args)
 {
-  cout << "Pastry join" << endl;
+  IPAddress wkn = args->nget<IPAddress>("wellknown");
+  if(wkn == ip())
+    return;
+
+
+  join_msg_args ja;
+  ja.id = _id;
+  ja.ip = ip();
+
+  join_msg_ret jr;
+  doRPC(wkn, &Pastry::do_join, &ja, &jr);
+  printf("%llX got reply from %llX\n", _id, jr.id);
+
+  // now merge his stuff into my routing table
+  unsigned row = shared_prefix_len(_id, jr.id);
+  unsigned column = get_digit(jr.id, row);
+  if(!(_rtable[row][column].second)) {
+    _rtable[row][column] = make_pair(jr.id, jr.ip);
+  }
+}
+
+
+void
+Pastry::do_join(join_msg_args *ja, join_msg_ret *jr)
+{
+  jr->id = _id;
+  jr->ip = ip();
 }
 
 void
@@ -59,16 +85,14 @@ Pastry::lookup(Args *args)
 unsigned
 Pastry::shared_prefix_len(NodeID n, NodeID m)
 {
-  NodeID mask = 0;
-  for(unsigned i=0; i<idlength; i++) {
-    mask = ((NodeID) 1) << (idlength-i-1);
-    if((n & mask) != (m & mask))
+  for(unsigned i=0; i<idlength/_b; i++)
+    if(get_digit(n, i) != get_digit(m, i))
       return i;
-  }
-  return idlength;
+  return idlength/_b;
 }
 
-// returns the value of digit d in n, given base 2^_b
+// returns the value of digit d in n, given base 2^_b.  b == 0 is the most
+// significant digit.
 //
 // The part before the & considers the number to be divided in chunks of _b
 // bits.  Since we want the d'th chunk (counted from the left) we shift to the
@@ -79,7 +103,7 @@ Pastry::shared_prefix_len(NodeID n, NodeID m)
 unsigned
 Pastry::get_digit(NodeID n, unsigned d)
 {
-  return (n >> (idlength-_b*d)) & ((((NodeID) 1) << _b) - 1);
+  return (n >> (idlength-_b*(d+1))) & ((((NodeID) 1) << _b) - 1);
 }
 
 

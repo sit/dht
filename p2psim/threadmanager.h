@@ -11,7 +11,7 @@ class ThreadManager {
 public:
   static ThreadManager* Instance();
 
-  int create(Threaded*, void (*)(void*), void*, int ss = mainstacksize);
+  int create(void (*)(void*), void*, int ss = mainstacksize);
 
 private:
   ThreadManager();

@@ -5,6 +5,8 @@
 # include <config.h>
 #endif
 
+extern unsigned verbose;
+
 class Node;
 
 typedef unsigned IPAddress;

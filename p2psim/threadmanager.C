@@ -22,7 +22,7 @@ ThreadManager::~ThreadManager()
 }
 
 int
-ThreadManager::create(Threaded *t, void (*fn)(void*), void *args, int ss)
+ThreadManager::create(void (*fn)(void*), void *args, int ss)
 {
   int tid = ::threadcreate(fn, args, ss);
   return tid;

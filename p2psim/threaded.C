@@ -18,7 +18,7 @@ Threaded::~Threaded()
 void
 Threaded::thread()
 {
-  _thread = ThreadManager::Instance()->create(this, Threaded::Run, this);
+  _thread = ThreadManager::Instance()->create(Threaded::Run, this);
 }
 
 

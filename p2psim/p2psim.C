@@ -7,6 +7,8 @@
 #include "p2psim.h"
 using namespace std;
 
+unsigned verbose = 0;
+
 Time
 now() {
   return EventQueue::Instance()->time();
