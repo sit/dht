@@ -222,15 +222,16 @@ route_secchord::next_hop_cb (ptr<bool> deleted,
     if (nexthops_.first () == NULL) {
       warnx << "+++++ route search " << x << " got no answers.\n";
       r = CHORD_ERRNOENT;
-      cb (done = true);
+      cb (true);
       return;
     }
     if (lasthop_) {
       warnx << "+++++ route search " << x << " done (after upcall)!\n";
       print ();
-      cb (done = true);
+      cb (true);
       return;
     }
+    bool done = false;
     bool soondone = sufficient_successors ();
     node *s = NULL;
     if (soondone) {

@@ -71,15 +71,13 @@ route_recchord::handle_timeout ()
 {
   chordID myID = v->my_ID ();
   trace << myID << ": handle_timeout (" << routeid_ << ", " << x << ")\n";
-  done = true;
   r = CHORD_RPCFAILURE;
-  cb (done);
+  cb (true);
 }
 
 void
 route_recchord::handle_complete (user_args *sbp, recroute_complete_arg *ca)
 {
-  assert (!done);
   // fill router with successor list and path from ca.
   search_path.clear ();
   for (size_t i = 0; i < ca->path.size (); i++) {
@@ -89,7 +87,6 @@ route_recchord::handle_complete (user_args *sbp, recroute_complete_arg *ca)
     search_path.push_back (l);
   }
 
-  done = true;
   if (ca->body.status == RECROUTE_ROUTE_OK) {
     // Last path member should be successor, according to route_chord.
     ptr<location> n0 =
@@ -110,7 +107,7 @@ route_recchord::handle_complete (user_args *sbp, recroute_complete_arg *ca)
   }
     
   sbp->reply (NULL);
-  cb (done);
+  cb (true);
 }
 
 void

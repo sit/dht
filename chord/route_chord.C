@@ -100,7 +100,6 @@ route_chord::on_failure (ptr<location> f)
   v->alert (search_path.back (), f);
   warn << v->my_ID () << ": " << f->id () << " is down.  Now trying "
        << search_path.back ()->id () << "\n";
-  last_hop = false;
   next_hop ();
 }
 
@@ -121,9 +120,9 @@ route_chord::make_hop_cb (ptr<bool> del,
     on_failure (last_node_tried);
   } 
 
-  else if (res->status == CHORD_STOP || last_hop) {
+  else if (res->status == CHORD_STOP) {
     r = CHORD_OK;
-    cb (done = true);
+    cb (true);
   } 
 
   else if (res->status == CHORD_INRANGE) { 
@@ -140,9 +139,7 @@ route_chord::make_hop_cb (ptr<bool> del,
     for (size_t i = 0; i < res->inrange->n.size (); i++)
       successors_.push_back (make_chord_node (res->inrange->n[i]));
     
-    last_hop = true;
-    if (stop) done = true; // XXX still needed??
-    cb (done);
+    cb (true);
   } 
 
   else if (res->status == CHORD_NOTINRANGE) {
@@ -154,7 +151,7 @@ route_chord::make_hop_cb (ptr<bool> del,
 	   << "returned itself as best pred, looking for "
 	   << x << "\n";
       r = CHORD_ERRNOENT;
-      cb (done = true);
+      cb (true);
     } else {
       // make sure that the new node sends us in the right direction,
       chordID olddist = distance (search_path.back ()->id (), x);
@@ -184,7 +181,7 @@ route_chord::make_hop_cb (ptr<bool> del,
 	successors_.push_back (make_chord_node (res->notinrange->succs[i]));
 
       assert (search_path.size () <= 1000);
-      cb (done);
+      cb (false);
     }
   } else {
     fatal << "status was unreasonable: " << res->status << "\n";

@@ -46,7 +46,6 @@ class route_iterator {
   vec<chord_node> successors_;
   route search_path;
   chordstat r;
-  bool done;
   cbhop_t cb;
   ptr<bool> deleted;
 
@@ -55,25 +54,22 @@ class route_iterator {
   ptr<void> uc_args;
   rpc_program prog;
 
-  bool stop;
-  bool last_hop;
-
   vec<chordID> failed_nodes;
 
  public:
   route_iterator (ptr<vnode> vi, chordID xi) :
-    v (vi), x (xi), r (CHORD_OK), done (false), 
+    v (vi), x (xi), r (CHORD_OK),
     deleted (New refcounted<bool> (false)),
-    do_upcall (false), stop (false), last_hop (false) {};
+    do_upcall (false) {};
   route_iterator (ptr<vnode> vi, chordID xi,
 		  rpc_program uc_prog,
 		  int uc_procno,
 		  ptr<void> uc_args) :
-    v (vi), x (xi), r (CHORD_OK), done (false), 
+    v (vi), x (xi), r (CHORD_OK),
     deleted (New refcounted<bool> (false)),
     do_upcall (true),
-    uc_procno (uc_procno), uc_args (uc_args), prog (prog),
-    stop (false), last_hop (false) {};
+    uc_procno (uc_procno), uc_args (uc_args), prog (prog)
+    {};
 
   virtual ~route_iterator () { *deleted = true; };
 

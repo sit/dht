@@ -76,7 +76,6 @@ route_debruijn::first_hop (cbhop_t cbi, ptr<chordID> guess)
 
   chordID myID = v->my_ID ();
   if (v->my_succ ()->id() == myID) {  // is myID the only node?
-    done = true;
     search_path.push_back (v->my_location ());
     virtual_path.push_back (x);
     k_path.push_back (x);
@@ -167,9 +166,9 @@ route_debruijn::make_hop_cb (ptr<bool> del, debruijn_res *res,
     warnx << "make_hop_cb: failure " << err << "\n";
     
     delete res;
-  } else if (res->status == CHORD_STOP || last_hop) {
+  } else if (res->status == CHORD_STOP) {
     r = CHORD_OK;
-    cb (done = true);
+    cb (true);
   } else if (res->status == CHORD_INRANGE) { 
     // found the successor
     //BAD LOC (ok)
@@ -187,12 +186,10 @@ route_debruijn::make_hop_cb (ptr<bool> del, debruijn_res *res,
     for (size_t i = 0; i < res->inres->succs.size (); i++)
       successors_.push_back (make_chord_node (res->inres->succs[i]));
 
-    if (stop) done = true;  // XXX necessary?
-    last_hop = true;
     //    warnx << "make_hop_cb: x " << x << " path " << search_path.size() - 1
     //  << " ipath " << uniquepathsize (virtual_path) - 1 << " :\n";
     //    print ();
-    cb (done);
+    cb (true);
   } else if (res->status == CHORD_NOTINRANGE) {
     // haven't found the successor yet
     ptr<location> n0 = v->locations->insert (make_chord_node (res->noderes->node));
@@ -219,8 +216,7 @@ route_debruijn::make_hop_cb (ptr<bool> del, debruijn_res *res,
       print ();
       assert (0);
     }
-    if (stop) done = true;
-    cb (done);
+    cb (false);
   } else {
     warnx << "Unexpected status: " << res->status << "\n";
     assert (0);
