@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.39 2005/01/22 21:41:07 sit Exp $
+# $Id: Makefile.am,v 1.40 2005/01/26 04:47:08 sit Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -8,7 +8,7 @@ VIS = vis
 endif
 
 bin_PROGRAMS = dbm walk findroute filestore nodeq dbdump $(VIS) 
-bin_SCRIPTS = dbm.py usenetlsdmon.py
+bin_SCRIPTS = dbm.py usenetlsdmon.py nodeq-filter
 chorddata_DATA =  RPC.py RPCProto.py vischat.py
 
 noinst_PROGRAMS = test_types coords dhc_test pkc builddb
@@ -39,7 +39,7 @@ findroute_SOURCES = findroute.C rpclib.C
 findroute_LDADD = ../chord/libchord.a ../svc/libsvc.la ../utils/libutil.a $(LDADD)
 
 nodeq_SOURCES = nodeq.C rpclib.C
-nodeq_LDADD = ../svc/libsvc.la ../utils/libutil.a $(LDADD)
+nodeq_LDADD = ../svc/libsvc.la ../utils/libutil.a ../merkle/libmerkle.a $(LDADD)
 
 dhc_test_SOURCES = dhc_test.C
 dhc_test_LDADD = ../dhash/libdhashclient.a ../svc/libsvc.la $(LDADD)

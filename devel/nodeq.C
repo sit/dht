@@ -1,17 +1,23 @@
+#include <async.h>
+#include <dns.h>
 #include <arpc.h>
+#include <aios.h>
+
 #include <chord_types.h>
 #include <chord_prot.h>
 #include <fingers_prot.h>
+#include <merkle_sync_prot.h>
 #include <misc_utils.h>
 #include <id_utils.h>
-#include "rpclib.h"
-#include <async.h>
-#include <dns.h>
+#include <merkle_misc.h>
 
-char *usage = "Usage: nodeq [-r] host port vnode\n";
+#include "rpclib.h"
+
+char *usage = "Usage: nodeq [-l] [-r] host port vnode\n";
 
 int outstanding = 0;
 bool do_reverse_lookup = false;
+bool do_listkeys = false;
 
 struct node {
   int i;
@@ -31,9 +37,7 @@ printlist (str desc, vec<ptr<node> > &lst)
   if (lst.size () == 0)
     return;
 
-  strbuf out;
-
-  out << "=== " << desc << "\n";
+  aout << "=== " << desc << "\n";
   for (size_t i = 0; i < lst.size (); i++) {
     chord_node z = make_chord_node (lst[i]->y.n);
     str h;
@@ -41,21 +45,19 @@ printlist (str desc, vec<ptr<node> > &lst)
       h = lst[i]->hostname;
     else
       h = z.r.hostname;
-    out << i << ".\t"
-	<< z.x << " "
-	<< h << " "
-	<< z.r.port << " "
-	<< z.vnode_num << " "
-	<< lst[i]->y.a_lat << " "
-	<< lst[i]->y.a_var << " "
-	<< lst[i]->y.nrpc << " "
-	<< z.coords[0] << " "
-	<< z.coords[1] << " "
-	<< z.coords[2] << " "
-	<< "\n";
+    aout << i << ".\t"
+	 << z.x << " "
+	 << h << " "
+	 << z.r.port << " "
+	 << z.vnode_num << " "
+	 << lst[i]->y.a_lat << " "
+	 << lst[i]->y.a_var << " "
+	 << lst[i]->y.nrpc << " "
+	 << z.coords[0] << " "
+	 << z.coords[1] << " "
+	 << z.coords[2] << " "
+	 << "\n";
   }
-  
-  out.tosuio ()->output (1);
 }
 
 void
@@ -142,14 +144,64 @@ print_predecessors (const chord_node &dst)
   outstanding++;
 }
 
+void
+getkeys_cb (const chord_node dst, ref<getkeys_arg> arg, ref<getkeys_res> res,
+	    clnt_stat err)
+{
+  outstanding--;
+  if (err) {
+    warnx << "no keys: " << err << "\n";
+    if (outstanding == 0)
+      finish ();
+    return;
+  } else if (res->status != MERKLE_OK) {
+    warnx << "protocol error " << res->status << "\n";
+    if (outstanding == 0)
+      finish ();
+    return;
+  }
+
+  for (u_int i = 0; i < res->resok->keys.size (); i++) {
+    const merkle_hash &key = res->resok->keys[i];
+    bigint key2  = tobigint (key);
+    aout << key2 << "\n";
+    arg->rngmin = incID (key2);
+  }
+  
+  if (res->resok->morekeys) {
+    doRPC (dst, merklesync_program_1, MERKLESYNC_GETKEYS,
+	   arg, res,
+	   wrap (getkeys_cb, dst, arg, res));
+    outstanding++;
+  } else {
+    finish ();
+  }
+}
+
+void
+print_keys (const chord_node &dst)
+{
+  ref<getkeys_arg> arg = New refcounted<getkeys_arg> ();
+  arg->rngmin = 0;
+  arg->rngmax = decID (arg->rngmin);
+  ref<getkeys_res> res = New refcounted<getkeys_res> ();
+  doRPC (dst, merklesync_program_1, MERKLESYNC_GETKEYS,
+	 arg, res,
+	 wrap (getkeys_cb, dst, arg, res));
+  outstanding++;
+}
+
 int
 main (int argc, char *argv[])
 {
   int ch;
-  while ((ch = getopt (argc, argv, "r")) != -1)
+  while ((ch = getopt (argc, argv, "rl")) != -1)
     switch (ch) {
     case 'r':
       do_reverse_lookup = true;
+      break;
+    case 'l':
+      do_listkeys = true;
       break;
     default:
       fatal << usage;
@@ -178,13 +230,14 @@ main (int argc, char *argv[])
   dst.r.port = atoi (argv[1]);
   dst.vnode_num = atoi (argv[2]);
   dst.x = make_chordID (dst.r.hostname, dst.r.port, dst.vnode_num);
-  
-  make_sync (1);
-  
-  print_predecessors (dst);
-  print_successors (dst);
-  print_fingers (dst);
 
+  if (do_listkeys) {
+    print_keys (dst);
+  } else {
+    print_predecessors (dst);
+    print_successors (dst);
+    print_fingers (dst);
+  }
   amain ();
 }
   
