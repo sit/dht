@@ -487,7 +487,7 @@ main (int argc, char **argv)
   int nmodes = sizeof (modes)/sizeof(modes[0]);
     
   int ch;
-  int ss_mode = 0;
+  int ss_mode = -1;
   int lbase = 1;
 
   myport = 0;
@@ -648,12 +648,14 @@ main (int argc, char **argv)
   // Override cf file stuff
   max_loccache = max_loccache * (vnodes + 1);
 
-  if (ss_mode & 1) 
-    Configurator::only ().set_int ("dhash.order_successors", 1);
-  if (ss_mode & 2)
-    Configurator::only ().set_int ("chord.greedy_lookup", 1);
-  if (ss_mode & 4)
-    Configurator::only ().set_int ("chord.find_succlist_shaving", 1);
+  if (ss_mode >= 0) {
+    Configurator::only ().set_int ("dhashcli.order_successors",
+				   ((ss_mode & 1) ? 1 : 0));
+    Configurator::only ().set_int ("chord.greedy_lookup",
+				   ((ss_mode & 2) ? 1 : 0));
+    Configurator::only ().set_int ("chord.find_succlist_shaving",
+				   ((ss_mode & 4) ? 1 : 0));
+  }
 
   if (lbase != 1) {
     if (mode != MODE_DEBRUIJN)
