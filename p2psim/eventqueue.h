@@ -17,6 +17,7 @@ public:
   void parse(char*);
   Time time() { return _time; }
   Channel* eventchan() { return _eventchan; }
+  void go();
 
 private:
   typedef list<Event*> Queue;
@@ -25,6 +26,7 @@ private:
   Time _time;
   Queue _queue;
   Channel *_eventchan;
+  Channel *_gochan;
 
   virtual void run();
   void add_event(Event*);

@@ -7,8 +7,8 @@ p2psim_SOURCES = main.C node.C network.C chord.C packet.C topology.C \
                  koorde.C anyready.C observeevent.C \
                  observerfactory.C chordobserver.C observer.C \
                  threadmanager.C vivalditest.C nodefactory.C \
-                 vivaldinode.C
+                 vivaldi.C
 p2psim_LDADD = -L/usr/local/lib -lthread -l9 -lfmt -lutf -lgmp -lcrypto
 INCLUDES = -I/usr/local/include
-CXXFLAGS = -g -fno-exceptions 
+CXXFLAGS = -g -Wall -fno-exceptions 
 

@@ -4,11 +4,9 @@
 #include <stdlib.h>
 #include <math.h>
 
-map<IPAddress, Vivaldi *> Vivaldi::_nodes;
-
-Vivaldi::Vivaldi(IPAddress me)
+Vivaldi::Vivaldi(Node *n)
 {
-  _me = me;
+  _n = n;
 
   // To avoid over or underflowing a 32-bit unsigned,
   // start us out at a random point near the middle.
@@ -16,8 +14,6 @@ Vivaldi::Vivaldi(IPAddress me)
   // milliseconds.
   _c._x = 10000 + (random() % 200);
   _c._y = 10000 + (random() % 200);
-
-  _nodes[me] = this;
 }
 
 Vivaldi::~Vivaldi()

@@ -18,14 +18,8 @@ using namespace std;
 
 class Vivaldi {
  public:
-  static Vivaldi *make(IPAddress ip) {
-    if(_nodes.find(ip) != _nodes.end()){
-      return _nodes[ip];
-    } else {
-      return new Vivaldi(ip);
-    }
-  }
-  static Vivaldi *find(IPAddress ip) { return _nodes[ip]; }
+  Vivaldi(Node *n);
+  virtual ~Vivaldi();
 
   struct Coord {
     double _x;
@@ -41,12 +35,8 @@ class Vivaldi {
              AT *args, RT *ret);
 
  private:
-  IPAddress _me;
+  Node *_n; // this node
   Coord _c;
-  static map<IPAddress, Vivaldi *> _nodes;
-
-  Vivaldi(IPAddress me);
-  virtual ~Vivaldi();
 };
 
 // Make an RPC call, but time it and tell Vivaldi.

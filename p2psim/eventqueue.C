@@ -6,6 +6,7 @@
 #include <iostream>
 #include <fstream>
 #include <list>
+#include <stdio.h>
 #include "p2psim.h"
 using namespace std;
 
@@ -24,6 +25,8 @@ EventQueue::EventQueue() : _time(0)
 {
   _eventchan = chancreate(sizeof(Event*), 0);
   assert(_eventchan);
+  _gochan = chancreate(sizeof(Event*), 0);
+  assert(_gochan);
   thread();
 }
 
@@ -32,7 +35,16 @@ EventQueue::~EventQueue()
 {
   // delete me
   chanfree(_eventchan);
+  chanfree(_gochan);
   threadexitsall(0);
+}
+
+// Signal to start processing events, main calls
+// this just once.
+void
+EventQueue::go()
+{
+  send(_gochan, 0);
 }
 
 void
@@ -40,6 +52,14 @@ EventQueue::run()
 {
   Event *e = 0;
   extern int anyready();
+  Alt a[2];
+
+  // Wait for threadmain() to call go().
+  a[0].c = _gochan;
+  a[0].v = 0;
+  a[0].op = CHANRCV;
+  a[1].op = CHANEND;
+  alt(a);
 
   while(1){
     // let others run

@@ -63,7 +63,7 @@ private:
 
   // finds IP address such that (D - RTEntry) is minimal
   class RTEntrySmallestDiff { public:
-    RTEntrySmallestDiff(NodeID D) : _D(D), diff(-1) {}
+    RTEntrySmallestDiff(NodeID D) : diff(-1), _D(D) {}
     public:
       void operator()(const Pastry::RTEntry &rt) {
         if((_D - rt.first) < diff) {

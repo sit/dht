@@ -1,43 +1,31 @@
 #include "vivalditest.h"
 #include "packet.h"
-#include <iostream>
 #include "p2psim.h"
+#include <stdio.h>
 using namespace std;
 
 VivaldiTest::VivaldiTest(Node *n) : Protocol(n)
 {
+  _vivaldi = new Vivaldi(n);
+
+  delaycb(1000, VivaldiTest::tick, NULL);
 }
 
 VivaldiTest::~VivaldiTest()
 {
 }
 
-void
-VivaldiTest::join(Args *a)
+char *
+VivaldiTest::ts()
 {
-  cout << "VivaldiTest join" << endl;
+  static char buf[50];
+  sprintf(buf, "%lu Vivaldi(%u)", now(), node()->ip());
+  return buf;
 }
 
 void
-VivaldiTest::leave(Args*)
+VivaldiTest::tick(void *)
 {
-  cout << "VivaldiTest leave" << endl;
-}
-
-void
-VivaldiTest::crash(Args*)
-{
-  cout << "VivaldiTest crash" << endl;
-}
-
-void
-VivaldiTest::insert(Args*)
-{
-  cout << "VivaldiTest insert" << endl;
-}
-
-void
-VivaldiTest::lookup(Args *args)
-{
-  cout << "VivaldiTest lookup" << endl;
+  printf("%s tick\n", ts());
+  delaycb(1000, VivaldiTest::tick, NULL);
 }

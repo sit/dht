@@ -3,7 +3,6 @@
 
 #include "protocol.h"
 #include "consistenthash.h"
-#include "vivaldi.h"
 
 #include <vector>
 
@@ -79,7 +78,6 @@ public:
 protected:
   LocTable *loctable;
   IDMap me;
-  Vivaldi *_vivaldi;
 
   virtual vector<IDMap> find_successors(CHID key, int m);
   void fix_predecessor();

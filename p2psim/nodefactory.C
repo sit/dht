@@ -1,5 +1,4 @@
 #include "nodefactory.h"
-#include "vivaldinode.h"
 #include "node.h"
 #include <string>
 #include <iostream>
@@ -40,8 +39,6 @@ NodeFactory::create(string type, IPAddress ip)
   Node *n = 0;
   if(type == "Node")
     n = new Node(ip);
-  if(type == "VivaldiNode")
-    n = new VivaldiNode(ip);
   _nodenames[typeid(*n).name()] = type;
   return n;
 }

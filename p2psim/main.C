@@ -3,6 +3,7 @@
 #include <iostream>
 #include <typeinfo>
 #include <stdlib.h>
+#include <stdio.h>
 #include <time.h>
 
 #include "chord.h"
@@ -34,6 +35,9 @@ threadmain(int argc, char *argv[])
 
   // Creates an event queue, parses the file, etc.
   EventQueue::Instance()->parse(event_file);
+
+  // Tell the eventqueue to start processing events.
+  EventQueue::Instance()->go();
 }
 
 void
