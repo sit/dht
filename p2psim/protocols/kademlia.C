@@ -37,6 +37,9 @@ unsigned Kademlia::debugcounter = 1;
 unsigned Kademlia::stabilize_timer = 0;
 unsigned Kademlia::refresh_rate = 0;
 
+set<Kademlia::NodeID> *Kademlia::_all_kademlias = 0;
+hash_map<Kademlia::NodeID, Kademlia*> *Kademlia::_nodeid2kademlia = 0;
+
 
 // }}}
 // {{{ Kademlia::Kademlia
@@ -87,18 +90,32 @@ void
 Kademlia::initstate(set<Protocol*> *l)
 {
   KDEBUG(1) << "Kademlia::initstate" << endl;
-  // just bloody call insert on everyone
-  for(set<Protocol*>::const_iterator i = l->begin(); i != l->end(); ++i) {
-    if((*i)->proto_name() != proto_name())
-      continue;
 
-    Kademlia *k = (Kademlia *) *i;
-    if(k->id() == _id)
-      continue;
+  if(!_all_kademlias) {
+    _all_kademlias = New set<NodeID>;
+    _nodeid2kademlia = New hash_map<NodeID, Kademlia*>;
+    for(set<Protocol*>::const_iterator i = l->begin(); i != l->end(); ++i) {
+      if((*i)->proto_name() != proto_name())
+        continue;
 
-    insert(k->id(), k->node()->ip(), true);
-    touch(k->id());
+      Kademlia *k = (Kademlia *) *i;
+      _all_kademlias->insert(k->id());
+      (*_nodeid2kademlia)[k->id()] = k;
+    }
   }
+
+  // // just bloody call insert on everyone
+  // for(set<Protocol*>::const_iterator i = l->begin(); i != l->end(); ++i) {
+  //   if((*i)->proto_name() != proto_name())
+  //     continue;
+
+  //   Kademlia *k = (Kademlia *) *i;
+  //   if(k->id() == _id)
+  //     continue;
+
+  //   insert(k->id(), k->node()->ip(), true);
+  //   touch(k->id());
+  // }
 
 
   // KDEBUG(2) << "Kademlia::initstate DUMP for " << printID(id()) << endl;
@@ -121,6 +138,44 @@ Kademlia::initstate(set<Protocol*> *l)
   //   _root->traverse(&find, this);
   //   assert(find.found() == 1);
   // }
+  //
+  // Node claims there is no node to satisfy this entry in the finger table.
+  // Check whether that is true.
+  //
+  Kademlia::NodeID upper = 0, lower = 0;
+  for(unsigned depth=0; depth<Kademlia::idsize; depth++) {
+    upper = lower = 0;
+    for(unsigned i=0; i<Kademlia::idsize; i++) {
+      unsigned bit = Kademlia::getbit(_id, i);
+      if(i < depth) {
+        lower |= (((Kademlia::NodeID) bit) << Kademlia::idsize-i-1);
+        upper |= (((Kademlia::NodeID) bit) << Kademlia::idsize-i-1);
+      } else if(i == depth) {
+        lower |= (((Kademlia::NodeID) bit^((Kademlia::NodeID)1)) << Kademlia::idsize-i-1);
+        upper |= (((Kademlia::NodeID) bit^((Kademlia::NodeID)1)) << Kademlia::idsize-i-1);
+      } else if(i > depth)
+        upper |= (((Kademlia::NodeID) 1) << Kademlia::idsize-i-1);
+    }
+
+    KDEBUG(2) << "id = " << printbits(_id) << " initstate: lower = " << Kademlia::printbits(lower) << endl;
+    KDEBUG(2) << "id = " << printbits(_id) << " initstate: upper = " << Kademlia::printbits(upper) << endl;
+
+    // yields the node with smallest id greater than lower
+    set<NodeID>::const_iterator it = upper_bound(_all_kademlias->begin(), _all_kademlias->end(), lower);
+
+    // check that this is smaller than upper.  if so, then this node would
+    // qualify for this entry in the finger table, so the node that says there
+    // is no such is WRONG.
+    if(it != _all_kademlias->end() && *it <= upper) {
+      Kademlia *k = (*_nodeid2kademlia)[*it];
+      KDEBUG(2) << "id = " << printbits(_id) << " initstate: inserting = " << Kademlia::printbits(k->id()) << endl;
+      assert(k);
+
+      insert(k->id(), k->node()->ip(), true);
+      touch(k->id());
+    }
+  }
+  // assert(false);
 }
 
 // }}}
@@ -569,7 +624,9 @@ Kademlia::find_node(lookup_args *largs, lookup_result *lresult)
     assert(p);
     char ptr[32]; sprintf(ptr, "%p", p);
     KDEBUG(2) << "find_node: tree is empty. returning myself, ip = " << ip() << ", ptr = " << ptr << endl;
-    lresult->results.insert(p);
+    pair<set<k_nodeinfo*, closer>::iterator, bool> rv = lresult->results.insert(p);
+    if(!rv.second)
+      delete p;
     return;
   }
 
@@ -581,7 +638,9 @@ Kademlia::find_node(lookup_args *largs, lookup_result *lresult)
     assert(p);
     char ptr[32]; sprintf(ptr, "%p", p);
     KDEBUG(2) << "find_node: adding, id = " << Kademlia::printID(*i) << ", p->id = " << Kademlia::printID(p->id) << " ip = " << p->ip << ", lastts = " << p->lastts << ", ptr = " << ptr << " to reply" << endl;
-    lresult->results.insert(p);
+    pair<set<k_nodeinfo*, closer>::iterator, bool> rv = lresult->results.insert(p);
+    if(!rv.second)
+      delete p;
   }
 }
 
@@ -869,8 +928,14 @@ k_nodes::insert(Kademlia::NodeID n, bool touch)
     KDEBUG(2) << "k_nodes::insert truncating " << Kademlia::printID(ninfo->id) << endl;
     nodes.erase(nodes.find(ninfo));
     _nodes_by_id.erase(_nodes_by_id.find(ninfo));
-    // dump it in the replacement cache, rather than completely throwing it away
-    _parent->replacement_cache->insert(ninfo);
+    // dump it in the replacement cache, rather than completely throwing it
+    // away. but don't let replacement_cache get too large.
+    if(_parent->replacement_cache->size() < Kademlia::k)
+      _parent->replacement_cache->insert(ninfo);
+    else {
+      _parent->kademlia()->flyweight.erase(_parent->kademlia()->flyweight.find(ninfo->id));
+      delete ninfo;
+    }
   }
 
   checkrep(false);
@@ -1292,10 +1357,10 @@ k_bucket::insert(Kademlia::NodeID id, bool touch, bool init_state, string prefix
 
   // when we're initializing, we're trying to insert every id in everyone's
   // k-buckets, so no need to put it in the replacement cache
-  // if(init_state) {
-  //   checkrep();
-  //   return;
-  // }
+  if(init_state) {
+    checkrep();
+    return;
+  }
 
   // we're full already, just put in replacement cache, and truncate to
   // Kademlia::k

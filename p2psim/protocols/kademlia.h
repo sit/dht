@@ -261,6 +261,9 @@ private:
     hash_map<unsigned, callinfo*>* outstanding_rpcs;
   };
 
+  // hack for initstate
+  static set<NodeID> *_all_kademlias;
+  static hash_map<NodeID, Kademlia*> *_nodeid2kademlia;
 // }}}
 };
 
