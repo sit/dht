@@ -232,10 +232,8 @@ dhash_impl::init_after_chord (ptr<vnode> node)
 
   update_replica_list ();
   delaycb (synctm (), wrap (this, &dhash_impl::sync_cb));
-#if 0  
   pmaint_obj = New pmaint (cli, host_node, db, 
 			   wrap (this, &dhash_impl::db_delete_immutable));
-#endif /* 0 */
   start ();
 }
 
@@ -389,7 +387,11 @@ dhash_impl::replica_maintenance_timer (u_int i)
 
 
   replica_syncer->sync (rngmin, rngmax);
-  i = (i + 1) % (num_efrags () - 1);
+
+  if (num_efrags () > 1)
+    i = (i + 1) % (num_efrags () - 1);
+  else 
+    i = 0;
 
  out:
   merkle_rep_tcb =
@@ -946,10 +948,8 @@ dhash_impl::start (bool randomize)
       delaycb (reptm () + delay,
 	       wrap (this, &dhash_impl::replica_maintenance_timer, index));
   }
-#if 0
   if (pmaint_obj)
     pmaint_obj->start ();
-#endif /* 0 */  
 }
 
 ptr<dbrec>
