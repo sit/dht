@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.38 2003/12/17 00:40:58 strib Exp $ */
+/* $Id: tapestry.C,v 1.39 2003/12/17 22:02:44 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -63,6 +63,7 @@ Tapestry::Tapestry(IPAddress i, Args a) : P2Protocol(i),
   _repair_backups = a.nget<uint>("repair_backups", 0, 10);
   _verbose = a.nget<bool>("verbose", 0, 10);
   _lookup_learn = a.nget<bool>("lookuplearn", 1, 10);
+  _direct_reply = a.nget<bool>("direct_reply", 1, 10);
 
   // init stats
   while (stat.size() < (uint) STAT_SIZE) {
@@ -180,7 +181,8 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
     
   lr.hopcount = 0;
   lr.failed = false;
-  
+  lr.time_done = 0;
+
   uint curr_join = _join_num;
   handle_lookup( &la, &lr );
   if( !alive() || _join_num != curr_join ) {
@@ -190,6 +192,12 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
   }
 
   if( !lr.failed && lr.owner_id == lr.real_owner_id ) {
+
+    if( _direct_reply && lr.time_done == 0 ) {
+      // I was dead when this recursive query got to me.  Ignore;
+      return;
+    }
+
     if( _verbose ) {
       TapDEBUG(0) << "Lookup complete for key " << print_guid(args->key) 
 		  << ": ip " << lr.owner_ip << ", id " 
@@ -199,7 +207,11 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
     _num_lookups++;
     _num_succ_lookups++;
     _num_hops += lr.hopcount;
-    _total_latency += ( now() - args->starttime );
+    if( _direct_reply ) {
+      _total_latency += ( lr.time_done - args->starttime );
+    } else {
+      _total_latency += ( now() - args->starttime );
+    }
     delete args;
   } else {
     if( now() - args->starttime < 4000 ) {
@@ -219,6 +231,12 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
 	}
 	_num_fail_lookups++;
       } else if( lr.owner_id != lr.real_owner_id ) {
+
+	if( _direct_reply && lr.time_done == 0 ) {
+	  // I was dead when this recursive query got to me.  Ignore;
+	  return;
+	}
+
 	if( _verbose ) {
 	  TapDEBUG(0) << "Lookup incorrect for key " << print_guid(args->key) 
 		      << ": ip " << lr.owner_ip << ", id " 
@@ -228,15 +246,28 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
 		      << endl;
 	}
 	_num_inc_lookups++;
+      } else {
+	assert(0); // this can't be!
       }
+
       _num_lookups++;
       _num_hops += lr.hopcount;
+      // since this is the failure case (both incorrect and failed)
+      // we calculate latency with now() no matter what because 
+      // we incurred timeouts anyway
       _total_latency += ( now() - args->starttime );
+
       delete args;
       
     }
   }
 
+}
+
+void 
+Tapestry::handle_lookup_done(lookup_args *args, lookup_return *ret)
+{
+  ret->time_done = now();
 }
 
 void 
@@ -269,6 +300,16 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
       ret->hopcount = 0;
       ret->real_owner_id = lookup_cheat( args->key );
       ret->failed = false;
+      if( _direct_reply ) {
+	record_stat(STAT_LOOKUP, 1, 0);
+	bool succ = doRPC( args->looker, 
+			   &Tapestry::handle_lookup_done, args, ret );
+	// no need to count return bytes, since it's recursive
+	if( !succ ) {
+	  // the originator is no longer alive, so ignore
+	  ret->time_done = 0;
+	}
+      }
       break;
     } else {
       // it's not me, so forward the query
@@ -276,7 +317,13 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
       bool succ = doRPC( next, &Tapestry::handle_lookup, args, ret );
       if( succ ) {
 	_last_heard_map[next] = now();
-	record_stat( STAT_LOOKUP, 1, 2 );
+	if( !_direct_reply || (ret->failed && args->looker == ip()) ) {
+	  // only record in the non-direct reply case OR
+	  // if it's a direct reply and a failure, we should include 
+	  // those bytes exactly once at the source (to simulate a direct 
+	  // reply)
+	  record_stat( STAT_LOOKUP, 1, 2 );
+	}
       } else {
 	// remove it from our routing table
 	if( _lookup_learn ) {

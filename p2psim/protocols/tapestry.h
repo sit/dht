@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.29 2003/12/17 00:40:58 strib Exp $ */
+/* $Id: tapestry.h,v 1.30 2003/12/17 22:02:44 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -100,9 +100,11 @@ public:
     bool failed;
     int hopcount;
     GUID real_owner_id;
+    Time time_done;
   };
 
   void handle_lookup(lookup_args *args, lookup_return *ret);
+  void handle_lookup_done(lookup_args *args, lookup_return *ret);
 
   struct wrap_lookup_args {
     GUID key;
@@ -245,6 +247,9 @@ private:
   // guids to find replacements for in the next stabilization round
   vector<GUID> _recently_dead;
   bool _lookup_learn;
+
+  // with recursive routing, we probably want to reply directly to the source
+  bool _direct_reply;
 
   // statistics per message
   vector<uint> stat;
