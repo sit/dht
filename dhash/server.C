@@ -115,16 +115,16 @@ dhash::dispatch (unsigned long procno,
 	res->cont_res->next.r = 
 	  host_node->chordnode->locations->getaddress (nid);
 
-	vec<chord_node> succ_list;
+	res->cont_res->succ_list.setsize (nreplica);
+
 	chordID last = nid;
 	for (int i = 0; i < nreplica; i++) {
 	  chord_node nsucc;
 	  nsucc.x = host_node->lookup_closestsucc (last);
 	  nsucc.r = host_node->chordnode->locations->getaddress (nsucc.x);
-	  succ_list.push_back (nsucc);
+	  res->cont_res->succ_list[i] = nsucc;
 	  last = nsucc.x;
 	}
-	res->cont_res->succ_list.set (succ_list.base (), succ_list.size ());
 
       }
 
