@@ -171,11 +171,12 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
   IPAddress callerIP = largs->ip;
 
   // fill it with the best that i know of
-  // vector<peer_t*> results;
-  // _tree->get(largs->key, &results);
+  vector<peer_t*> results;
+  _tree->get(largs->key, &results);
 
   // unsigned outstanding = 0;
   // while(outstanding < _alpha) {
+  //   for
   // }
 
   //

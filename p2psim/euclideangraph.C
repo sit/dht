@@ -52,7 +52,7 @@ EuclideanGraph::parse(ifstream &ifs)
     Node *n = new Node(ipaddr);
 
     // all the rest are protocols on this node
-    for(unsigned int i=3; i<words.size(); i++)
+    for(unsigned int i=2; i<words.size(); i++)
       send(n->protchan(), &(words[i]));
 
     // add the node to the network

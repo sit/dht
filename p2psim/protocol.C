@@ -103,8 +103,10 @@ Protocol::parse(char *filename)
     // this is a variable assignment
     vector<string> xargs = split(words[0], "=");
 
-    if(protocol == "")
+    if(protocol == "") {
       cerr << "protocol line missing in " << filename << endl;
+      threadexitsall(0);
+    }
 
     xmap[protocol].insert(make_pair(xargs[0], xargs[1]));
   }
