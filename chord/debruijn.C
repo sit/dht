@@ -153,6 +153,8 @@ ref<fingerlike_iter>
 debruijn::get_iter ()
 {
   ref<dbiter> iter = New refcounted<dbiter> ();
-  // XXX do something useful here.
+  ptr<location> id = locations->closestpredloc (mydoubleID);
+  iter->nodes.push_back (id);  
+
   return iter;
 }
