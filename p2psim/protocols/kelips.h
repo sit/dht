@@ -90,8 +90,7 @@ public:
 
   bool _started; // are our timers ticking?
   bool _live;    // are we joined but not crashed?
-  int _rounds;  // how many?
-  bool _stable;
+  int _rounds;   // how many gossip rounds have we run?
 
   // global statistics
   static double _rpc_bytes; // total traffic

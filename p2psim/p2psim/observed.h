@@ -38,10 +38,12 @@ public:
 
 protected:
   Observed();
+  virtual ~Observed() { }
 
 private:
   set<Observer*> _observers;
   bool _hasObservers;
+  virtual void dummy() { } // make dynamic_cast<Kelips*>(Observed*) work
 };
 
 

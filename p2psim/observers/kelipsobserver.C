@@ -49,19 +49,13 @@ KelipsObserver::Instance(Args *a)
 KelipsObserver::KelipsObserver(Args *a)
   : _type("Kelips")
 {
-  _num_nodes = atoi((*a)["numnodes"].c_str());
-  assert(_num_nodes > 0);
-
-  _init_num = atoi((*a)["initnodes"].c_str());
-  lid.clear();
+  _initnodes = atoi((*a)["initnodes"].c_str());
 
   list<Protocol*> l = Network::Instance()->getallprotocols(_type);
-  DEBUG(1) << "TapestryObserver::init_state " << now() << endl;
   for(list<Protocol*>::iterator pos = l.begin(); pos != l.end(); ++pos) {
     Kelips *t = (Kelips*) *pos;
     t->registerObserver(this);
   }
-  _stabilized = false;
 }
 
 KelipsObserver::~KelipsObserver()
@@ -72,54 +66,17 @@ void
 KelipsObserver::init_state()
 {
   list<Protocol*> l = Network::Instance()->getallprotocols(_type);
-  DEBUG(1) << "KelipsObserver::init_state " << now() << endl;
   for(list<Protocol*>::iterator pos = l.begin(); pos != l.end(); ++pos) {
-    Kelips *t = (Kelips*) *pos;
-    t->init_state(l);
+    Kelips *k = dynamic_cast<Kelips*>(*pos);
+    k->init_state(l);
   }
 }
 
 void
-KelipsObserver::kick(Observed *, ObserverInfo *)
+KelipsObserver::kick(Observed *ob, ObserverInfo *oi)
 {
-
-  if(_init_num) {
+  if(_initnodes){
+    _initnodes = false;
     init_state();
-    _init_num = 0;
   }
-
-  if( _stabilized ) {
-    return;
-  }
-
-  DEBUG(1) << "KelipsObserver executing" << endl;
-  list<Protocol*> l = Network::Instance()->getallprotocols(_type);
-  list<Protocol*>::iterator pos;
-
-  //i only want to sort it once after all nodes have joined! 
-  if (lid.size() != _num_nodes) {
-    lid.clear();
-    for (pos = l.begin(); pos != l.end(); ++pos) {
-      Kelips *c = (Kelips *)(*pos);
-      assert(c);
-      // only care about live nodes
-      if( c->node()->alive() ) {
-	lid.push_back(c->id ());
-      }
-    }
-
-    sort(lid.begin(), lid.end());
-  }
-
-  for (pos = l.begin(); pos != l.end(); ++pos) {
-    Kelips *c = (Kelips *)(*pos);
-    assert(c);
-    if (c->node()->alive() && !c->stabilized(lid)) {
-      DEBUG(1) << now() << " NOT STABILIZED" << endl;
-      return;
-    }
-  }
-
-  _stabilized = true;
-  DEBUG(0) << now() << " STABILIZED" << endl;
 }

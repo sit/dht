@@ -46,6 +46,8 @@ private:
   string _exittime_string;
   Time _exittime;
   unsigned long _seed;
+  bool _ipkeys;
+  vector<IPAddress> _ips;
 
   Time next_exponential( uint mean );
   string get_lookup_key();

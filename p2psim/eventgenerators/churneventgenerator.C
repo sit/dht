@@ -66,6 +66,8 @@ ChurnEventGenerator::ChurnEventGenerator(Args *args)
     srand( time(NULL) );
   }
 
+  _ipkeys = args->nget("ipkeys", 0, 10);
+
   EventQueue::Instance()->registerObserver(this);
 }
 
@@ -81,11 +83,10 @@ ChurnEventGenerator::run()
 
   // start all nodes at a random time between 1 and n (except the wkn, who
   // starts at 1)
-  list<IPAddress> l = Network::Instance()->getallips();
-  list<IPAddress>::iterator pos;
+  _ips = Network::Instance()->getallips();
   IPAddress ip = 0;
-  for( pos = l.begin(); pos != l.end(); ++pos ) {
-    ip = (IPAddress)(*pos);
+  for(u_int xxx = 0; xxx < _ips.size(); xxx++){
+    ip = _ips[xxx];
 
     Args *a = New Args();
     (*a)["wellknown"] = _wkn_string;
@@ -95,7 +96,7 @@ ChurnEventGenerator::run()
     } else {
       // add one to the mod factor because typical 2^n network sizes
       // make really bad mod factors
-      jointime = (rand()%(l.size()+1)) + 1;
+      jointime = (rand()%(_ips.size()+1)) + 1;
     }
     if( now() + jointime < _exittime ) {
       P2PEvent *e = New P2PEvent(now() + jointime, _proto, ip, "join", a);
@@ -186,9 +187,27 @@ ChurnEventGenerator::next_exponential( uint mean )
 string
 ChurnEventGenerator::get_lookup_key()
 {
-  char buffer[ sizeof(int)*4+1 ];  // two longs concatted
-  assert( buffer );
-  sprintf( buffer, "%.8X", rand() );
-  sprintf( buffer + sizeof(int)*2, "%.8X", rand() );
-  return buffer;
+  if(_ipkeys){
+    // for Kelips, use only keys equal to live IP addresses.
+    for(int iters = 0; iters < 50; iters++){
+      IPAddress ip = _ips[random() % _ips.size()];
+      if(Network::Instance()->getnode(ip)->alive()){
+        char buf[10];
+        sprintf(buf, "%x", ip);
+        return string(buf);
+      }
+    }
+    assert(0);
+  } else {
+    // look up random 64-bit keys
+    char buffer[20];
+    // random() returns only 31 random bits.
+    // so we need three to ensure all 64 bits are random.
+    unsigned long long a = random();
+    unsigned long long b = random();
+    unsigned long long c = random();
+    unsigned long long x = (a << 48) ^ (b << 24) ^ (c >> 4);
+    sprintf(buffer, "%llX", x);
+    return string(buffer);
+  }
 }

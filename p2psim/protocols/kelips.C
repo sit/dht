@@ -44,7 +44,6 @@ Kelips::Kelips(Node *n, Args a)
   _k = a.nget<unsigned>("k", 20, 10);
   assert(_k > 0);
   _rounds = 0;
-  _stable = false;
   _started = false;
   _live = false;
 }
@@ -65,58 +64,12 @@ Kelips::~Kelips()
       printf("avglat %.1f\n", _total_latency / _lookups);
     }
   }
-  check(true);
   if(ip() == 1 && nsta > 0){
     float sum = 0;
     for(int i = 0; i < nsta; i++)
       sum += sta[i];
     printf("avg stabilization rounds %.1f %d\n",
            sum / nsta, sta[nsta / 2]);
-  }
-}
-
-// Do we know the nodes we are supposed to know?
-void
-Kelips::check(bool doprint)
-{
-  return;
-
-  short gc[100]; // how many do we know of from each group?
-  assert(_k < 100);
-  for(int i = 0; i < _k; i++)
-    gc[i] = 0;
-
-  vector<IPAddress> l = all();
-  for(u_int i = 0; i < l.size(); i++){
-    Info *in = _info[l[i]];
-    int g = ip2group(in->_ip);
-    gc[g] += 1;
-  }
-
-  bool stable = true;
-  if(gc[group()] != _k - 1)
-    stable = false;
-  for(int i = 0; i < _k; i++)
-    if(i != group() && gc[i] != _n_contacts)
-      stable = false;
-
-  if(_stable == false && stable){
-    sta[nsta++] = _rounds;
-    _stable = true;
-    cout << now() << " " << ip() << " stable after " << _rounds << " rounds\n";
-  }
-
-  if(doprint && stable == false){
-    string s;
-    s = i2s(ip());
-    s += (_stable ? " s" : " u");
-    s += ": ";
-    for(int i = 0; i < _k; i++){
-      s += i2s(gc[i]);
-      s += " ";
-    }
-    s += "\n";
-    cout << s;
   }
 }
 
@@ -151,6 +104,8 @@ Kelips::victim(int g)
 void
 Kelips::join(Args *a)
 {
+  notifyObservers(); // kick KelipsObserver so it calls all the init_state()s
+
   assert(_live == false);
   _live = true;
 
@@ -451,8 +406,6 @@ Kelips::gotinfo(Info i)
   } else if (i._heartbeat > _info[i._ip]->_heartbeat){
     _info[i._ip]->_heartbeat = i._heartbeat;
   }
-
-  check(false);
 }
 
 // Return a list of all the IP addresses in _info.
@@ -634,15 +587,16 @@ Kelips::purge(void *junk)
 }
 
 // Called by KelipsObserver::init_state() with the complete list
-// of nodes to help us initialize our routing tables faster.
-// This is really cheating.
+// of nodes to help us initialize our routing tables faster (i.e. cheat).
+// So in most nodes it's called before join().
 void
 Kelips::init_state(list<Protocol*> lid)
 {
   printf("%qd %d init_state _live=%d\n",
          now(), ip(), _live);
   for(list<Protocol*>::const_iterator i = lid.begin(); i != lid.end(); ++i) {
-    Kelips *k = (Kelips *) *i;
+    Kelips *k = dynamic_cast<Kelips*>(*i);
+    assert(k);
     if(k->ip() == ip())
       continue;
     gotinfo(Info(k->ip(), now()));

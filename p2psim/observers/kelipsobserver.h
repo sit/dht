@@ -37,14 +37,10 @@ public:
 
 private:
   static KelipsObserver *_instance;
-  unsigned int _num_nodes;
-  unsigned int _init_num;
-  bool _stabilized;
+  bool _initnodes;
   string _type;
 
   void init_state();
-
-  vector<Kelips::ID> lid;
 };
 
 #endif // __KELIPS_OBSERVER_H
