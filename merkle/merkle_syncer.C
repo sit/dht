@@ -276,21 +276,20 @@ merkle_getkeyrange::getkeys_cb (ref<getkeys_arg> arg, ref<getkeys_res> res,
     return;
   }
 
-  vec<chordID> rkeys;
+  vec<merkle_hash> rkeys;
   chordID round_max = current;
   chordID next_cur = current;
   for (u_int i = 0; i < res->resok->keys.size (); i++) {
     const merkle_hash &key = res->resok->keys[i];
+    rkeys.push_back (key);
+
     bigint bkey = tobigint(key);
-    rkeys.push_back (bkey);
     if (round_max < bkey) round_max = bkey;
     if (betweenbothincl (next_cur, incID (bkey), bkey))
       next_cur = incID (bkey);
   }
 
-  vec<chordID> lkeys = database_get_keyrange (db, current, round_max);
   compare_keylists (lkeys, rkeys, current, round_max, missing);
-
 
   current = next_cur;
   
@@ -315,32 +314,32 @@ merkle_getkeyrange::doRPC (int procno, ptr<void> in, void *out, aclnt_cb cb)
 // ---------------------------------------------------------------------------
 
 void
-compare_keylists (vec<chordID> lkeys,
-		  vec<chordID> vrkeys,
+compare_keylists (vec<merkle_hash> lkeys,
+		  vec<merkle_hash> vrkeys,
 		  chordID rngmin, chordID rngmax,
 		  missingfnc_t missingfnc)
 {
   // populate a hash table with the remote keys
-  qhash<chordID, int, hashID> rkeys;
+  qhash<merkle_hash, int> rkeys;
   for (u_int i = 0; i < vrkeys.size (); i++) {
-    if (betweenbothincl (rngmin, rngmax, vrkeys[i])) 
+    if (betweenbothincl (rngmin, rngmax, tobigint(vrkeys[i]))) 
       rkeys.insert (vrkeys[i], 1);
   }
     
   // do I have something he doesn't have?
   for (unsigned int i = 0; i < lkeys.size (); i++) {
     if (!rkeys[lkeys[i]]) {
-      (*missingfnc) (lkeys[i], false);
+      (*missingfnc) (tobigint(lkeys[i]), false);
     } else {
       rkeys.remove (lkeys[i]);
     }
   }
 
   //anything left: he has and I don't
-  qhash_slot<chordID, int> *slot = rkeys.first ();
+  qhash_slot<merkle_hash, int> *slot = rkeys.first ();
   while (slot) {
     warn << "local missing [" << rngmin << ", " << rngmax << "] key=" << slot->key << "\n";
-    (*missingfnc) (slot->key, true);
+    (*missingfnc) (tobigint(slot->key), true);
     slot = rkeys.next (slot);
   }
    
@@ -359,14 +358,12 @@ compare_nodes (merkle_tree *ltree, bigint rngmin, bigint rngmax,
 #endif
 
   if (rnode->isleaf) {
+    vec<merkle_hash> lkeys = database_get_keys (ltree->db, rnode->depth, rnode->prefix);
 
-    vec<chordID> lkeys = database_get_keyrange (ltree->db, rngmin,rngmax);
-    //massage the rnode into a list of chordIDs
-    vec<chordID> rkeys;
+    vec<merkle_hash> rkeys;
     for (u_int i = 0; i < rnode->child_hash.size (); i++) {
-      merkle_hash key = rnode->child_hash[i];
-      if (betweenbothincl (rngmin, rngmax, tobigint (key))) 
-	rkeys.push_back (tobigint(key));
+      assert (betweenbothincl (rngmin, rngmax, tobigint (rnode->child_hash[i])));
+      rkeys.push_back (rnode->child_hash[i]);
     }
 
     compare_keylists (lkeys, rkeys, rngmin, rngmax, missingfnc);    
@@ -376,12 +373,15 @@ compare_nodes (merkle_tree *ltree, bigint rngmin, bigint rngmax,
     bigint node_width = bigint (1) << (160 - rnode->depth);
     bigint tmpmax = tmpmin + node_width - 1;
 
+
     // further constrain to be within the host's range of interest
     if (between (tmpmin, tmpmax, rngmin))
       tmpmin = rngmin;
     if (between (tmpmin, tmpmax, rngmax))
       tmpmax = rngmax;
-    vNew merkle_getkeyrange (ltree->db, tmpmin, tmpmax, missingfnc, rpcfnc);
+
+    vec<merkle_hash> lkeys = database_get_keys (ltree->db, rnode->depth, rnode->prefix);
+    vNew merkle_getkeyrange (ltree->db, tmpmin, tmpmax, lkeys, missingfnc, rpcfnc);
   }
 }
 

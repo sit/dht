@@ -62,6 +62,7 @@ private:
   bigint current;
   missingfnc_t missing;
   rpcfnc_t rpcfnc;
+  vec<merkle_hash> lkeys;
 
   void go ();
   void getkeys_cb (ref<getkeys_arg> arg, ref<getkeys_res> res, clnt_stat err);
@@ -70,9 +71,10 @@ private:
 public:
   ~merkle_getkeyrange () {}
   merkle_getkeyrange (dbfe *db, bigint rngmin, bigint rngmax, 
+		      vec<merkle_hash> plkeys,
 		      missingfnc_t missing, rpcfnc_t rpcfnc)
     : db (db), rngmin (rngmin), rngmax (rngmax), current (rngmin), 
-    missing (missing), rpcfnc (rpcfnc)
+      missing (missing), rpcfnc (rpcfnc), lkeys (plkeys)
     { go (); }
 };
 
@@ -89,7 +91,7 @@ compare_nodes (merkle_tree *ltree, bigint rngmin, bigint rngmax,
 	       missingfnc_t missingfnc, rpcfnc_t rpcfnc);
 
 void
-compare_keylists (vec<chordID> lkeys, vec<chordID> rkeys,
+compare_keylists (vec<merkle_hash> lkeys, vec<merkle_hash> rkeys,
 		  chordID rngmin, chordID rngmax,
 		  missingfnc_t missingfnc);
 
