@@ -239,51 +239,54 @@ dhashclient::insert (const char *buf, size_t buflen, cbinsertgw_t cb,
  * Public Key convention:
  * 
  * long type;
- * bigint pub_key
- * bigint sig
+ * sfs_pubkey2 pub_key
+ * sfs_sig2 sig
  * long datalen
  * char block_data[datalen]
  *
  */
 void
-dhashclient::insert (const char *buf, size_t buflen, 
-		     rabin_priv key, cbinsertgw_t cb, bool usecachedsucc)
+dhashclient::insert (ptr<sfspriv> key, const char *buf, size_t buflen,
+                     cbinsertgw_t cb, bool usecachedsucc)
 {
   str msg (buf, buflen);
-  bigint sig = key.sign (msg);
-  insert(buf, buflen, sig, key, cb, usecachedsucc);
+  sfs_sig2 s;
+  key->sign (&s, msg);
+  sfs_pubkey2 pk;
+  key->export_pubkey (&pk);
+  insert(pk, s, buf, buflen, cb, usecachedsucc);
 }
 
 void
-dhashclient::insert (const char *buf, size_t buflen, 
-		     bigint sig, rabin_pub key, cbinsertgw_t cb,
-		     bool usecachedsucc)
+dhashclient::insert (sfs_pubkey2 key, sfs_sig2 sig,
+                     const char *buf, size_t buflen, 
+		     cbinsertgw_t cb, bool usecachedsucc)
 {
-  bigint pubkey = key.n;
-  str pk_raw = pubkey.getraw ();
-  chordID pkID = compute_hash (pk_raw.cstr (), pk_raw.len ());
-  insert (pkID, buf, buflen, sig, key, cb, usecachedsucc);
+  strbuf b;
+  ptr<sfspub> pk = sfscrypt.alloc (key);
+  pk->export_pubkey (b, false);
+  str pk_raw = b;
+  chordID hash = compute_hash (pk_raw.cstr (), pk_raw.len ());
+  insert (hash, key, sig, buf, buflen, cb, usecachedsucc);
 }
 
 void
-dhashclient::insert (bigint hash, const char *buf, size_t buflen, 
-		     bigint sig, rabin_pub key, cbinsertgw_t cb,
-		     bool usecachedsucc)
+dhashclient::insert (bigint hash, sfs_pubkey2 key, sfs_sig2 sig,
+                     const char *buf, size_t buflen, 
+		     cbinsertgw_t cb, bool usecachedsucc)
 {
   long type = DHASH_KEYHASH;
-  bigint pubkey = key.n;
 
   xdrsuio x;
   int size = buflen + 3 & ~3;
   char *m_buf;
   if (XDR_PUTLONG (&x, (long int *)&type) &&
-      xdr_putbigint (&x, pubkey) &&
-      xdr_putbigint (&x, sig) &&
+      xdr_sfs_pubkey2 (&x, &key) &&
+      xdr_sfs_sig2 (&x, &sig) &&
       XDR_PUTLONG (&x, (long int *)&buflen) &&
       (m_buf = (char *)XDR_INLINE (&x, size)))
     {
       memcpy (m_buf, buf, buflen);
-      
       int m_len = x.uio ()->resid ();
       char *m_dat = suio_flatten (x.uio ());
       insert (hash, m_dat, m_len, cb, DHASH_KEYHASH, usecachedsucc);
@@ -294,7 +297,7 @@ dhashclient::insert (bigint hash, const char *buf, size_t buflen,
     }
 }
 
-//generic insert (called by above methods)
+// generic insert (called by above methods)
 void
 dhashclient::insert (bigint key, const char *buf, 
 		     size_t buflen, cbinsertgw_t cb,

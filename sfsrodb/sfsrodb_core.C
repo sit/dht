@@ -150,7 +150,7 @@ sfsrodb_put (void *data, size_t len)
 
 
 void
-sfsrodb_put (ptr <rabin_priv> sk, void *data, size_t len)
+sfsrodb_put (ptr<sfspriv> sk, void *data, size_t len)
 {
   if (blkcnt == 0) clock_gettime (CLOCK_REALTIME, &periodic);
 
@@ -160,7 +160,7 @@ sfsrodb_put (ptr <rabin_priv> sk, void *data, size_t len)
   //warn << t() << " -- INSERT\n";
   timespec ts;
   clock_gettime (CLOCK_REALTIME, &ts);
-  dhash->insert ((char *)data, len, *sk, wrap (sfsrodb_put_cb, ts));
+  dhash->insert (sk, (char *)data, len, wrap (sfsrodb_put_cb, ts));
 }
 
 

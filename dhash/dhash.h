@@ -30,6 +30,7 @@
 
 #include <arpc.h>
 #include <async.h>
+#include <nfs3_prot.h>
 #include <dhash_prot.h>
 #include <chord_prot.h>
 #include <dbfe.h>
@@ -40,6 +41,8 @@
 #include <sys/time.h>
 #include <chord.h>
 #include <route.h>
+#include <sfscrypt.h>
+
 /*
  *
  * dhash.h
@@ -310,8 +313,8 @@ class dhashcli {
   void storeblock (chordID dest, chordID blockID, ref<dhash_block> block,
 		   cbstore_t cb, store_status stat = DHASH_STORE);
   void store (chordID destID, chordID blockID, char *data, size_t len,
-              size_t off, size_t totsz, dhash_ctype ctype, store_status store_type,
-	      dhashcli_storecb_t cb);
+              size_t off, size_t totsz, dhash_ctype ctype,
+	      store_status store_type, dhashcli_storecb_t cb);
   void lookup (chordID blockID, bool usecachedsucc, dhashcli_lookupcb_t cb);
   void lookup_route (chordID blockID, bool usedcachedsucc, dhashcli_routecb_t cb); 
   //same as above ::lookup but returns the whole route in callback
@@ -346,13 +349,14 @@ public:
   void insert (bigint key, const char *buf, size_t buflen, cbinsertgw_t cb,
                bool usecachedsucc = false);
 
-  //insert under hash of public key
-  void insert (const char *buf, size_t buflen, rabin_priv key, cbinsertgw_t cb,
-               bool usecachedsucc = false);
-  void insert (const char *buf, size_t buflen, bigint sig, rabin_pub key,
+  // insert under hash of public key
+  void insert (ptr<sfspriv> key, const char *buf, size_t buflen,
                cbinsertgw_t cb, bool usecachedsucc = false);
-  void insert (bigint hash, const char *buf, size_t buflen, bigint sig,
-               rabin_pub key, cbinsertgw_t cb, bool usecachedsucc = false);
+  void insert (sfs_pubkey2 pk, sfs_sig2 sig, const char *buf, size_t buflen, 
+	       cbinsertgw_t cb, bool usecachedsucc = false);
+  void insert (bigint hash, sfs_pubkey2 pk, sfs_sig2 sig,
+               const char *buf, size_t buflen,
+	       cbinsertgw_t cb, bool usecachedsucc = false);
 
   // retrieve block and verify
   void retrieve (bigint key, cbretrieve_t cb,

@@ -51,35 +51,35 @@ dhash::verify_content_hash (chordID key, char *buf, int len)
 bool
 dhash::verify_key_hash (chordID key, char *buf, int len)
 {
-  //extract the public key from the message
-  sfs_pubkey pubkey;
-  sfs_sig sig;
+  // extract the public key from the message
+  sfs_pubkey2 pubkey;
+  sfs_sig2 sig;
 
   long contentlen, type;
   xdrmem x1 (buf, (unsigned)len, XDR_DECODE);
 
   if (!XDR_GETLONG (&x1, &type)) return false;
   if (type != DHASH_KEYHASH) return false;
-  if (!xdr_getbigint (&x1, pubkey)) return false;
-  if (!xdr_getbigint (&x1, sig)) return false;
+  if (!xdr_sfs_pubkey2 (&x1, &pubkey)) return false;
+  if (!xdr_sfs_sig2 (&x1, &sig)) return false;
   if (!XDR_GETLONG (&x1, &contentlen)) return false;
 
   char *content;
   if (!(content = (char *)XDR_INLINE (&x1, contentlen)))
       return false;
 
-  //verify that public key hashes to ID
-  str pk_raw = pubkey.getraw ();
-  char hashbytes[sha1::hashsize];
-  sha1_hash (hashbytes, pk_raw.cstr (), pk_raw.len ());
-  chordID ID;
-  mpz_set_rawmag_be (&ID, hashbytes, sizeof (hashbytes));  // For big endian
-  if (ID != key) return false;
+  ptr<sfspub> pk = sfscrypt.alloc (pubkey, SFS_VERIFY);
 
-  //verify signature
-  rabin_pub pk (pubkey);
+  // verify that public key hashes to ID
+  strbuf b;
+  pk->export_pubkey (b, false);
+  str pk_raw = b;
+  chordID hash = compute_hash (pk_raw.cstr (), pk_raw.len ());
+  if (hash != key) return false;
+
+  // verify signature
   str msg (content, contentlen);
-  bool ok = pk.verify (msg, sig);
+  bool ok = pk->verify (sig, msg);
 
   return ok;
 }
@@ -120,8 +120,9 @@ dhash::get_block_contents (char *data, unsigned int len, dhash_ctype t)
   switch (t) {
   case DHASH_KEYHASH:
     {
-      bigint a,b;
-      if (!xdr_getbigint (&x1, a) || !xdr_getbigint (&x1, b))
+      sfs_pubkey2 k;
+      sfs_sig2 s;
+      if (!xdr_sfs_pubkey2 (&x1, &k) || !xdr_sfs_sig2 (&x1, &s))
 	return NULL;
     }
     /* FALL THROUGH */

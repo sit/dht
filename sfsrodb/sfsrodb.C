@@ -1,4 +1,4 @@
-/* $Id: sfsrodb.C,v 1.24 2002/09/18 19:19:43 fdabek Exp $ */
+/* $Id: sfsrodb.C,v 1.25 2002/10/16 19:16:58 benjie Exp $ */
 
 /*
  * Copyright (C) 1999 Kevin Fu (fubob@mit.edu)
@@ -44,6 +44,7 @@
 #include "sha1.h"
 #include "rxx.h"
 #include "sfsro_prot_cfs.h"
+#include "sfscrypt.h"
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define LSD_SOCKET "/tmp/chord-sock"
@@ -61,7 +62,6 @@ bool initialize;
 bool verbose_mode;
 
 uint32 relpathlen;
-extern ptr < rabin_priv > sfsrokey;
 
 qhash<chordID, bool, hashID> dup_cache;
 
@@ -806,7 +806,7 @@ sfsrodb_main (const str root, const str keyfile)
 
   dhash = New refcounted <dhashclient> (LSD_SOCKET);
 
-  ptr < rabin_priv > sk;
+  ptr <sfspriv> sk;
   if (!keyfile) {
     warn << "cannot locate default file sfs_host_key\n";
     fatal ("errors!\n");
@@ -817,14 +817,19 @@ sfsrodb_main (const str root, const str keyfile)
       warn << keyfile << ": " << strerror (errno) << "\n";
       fatal ("errors!\n");
     }
-    else if (!(sk = import_rabin_priv (key, NULL))) {
+    else if (!(sk = sfscrypt.alloc_priv (key, SFS_DECRYPT))) {
       warn << "could not decode " << keyfile << "\n";
-      //warn << key << "\n";
+      warn << key << "\n";
       fatal ("errors!\n");
     }
   }
 
-  str pk_raw = sk->n.getraw ();
+  strbuf b;
+  if (!sk->export_pubkey (b, false)) {
+    warn << "could not set public key: " << keyfile << "\n";
+    fatal ("errors!\n");
+  }
+  str pk_raw = b;
   char pk_hash[sha1::hashsize];
   sha1_hash (pk_hash, pk_raw.cstr (), pk_raw.len ());
   str pk_name = armor64A(pk_hash, sha1::hashsize);

@@ -176,9 +176,10 @@ main (int argc, char **argv)
   case PUB_KEY:
     {
     assert (argc == 5 && "last argument is pubkey file");
+
     str key = file2wstr (argv[4]);
-    ptr<rabin_priv> sk =  import_rabin_priv (key, NULL);
-    dhash.insert (data, datasize, *sk, wrap (&store_cb_pk, dhash));
+    ptr<sfspriv> sk = sfscrypt.alloc_priv (key, SFS_SIGN);
+    dhash.insert (sk, data, datasize, wrap (&store_cb_pk, dhash));
     break;
     }
   case NOAUTH:
