@@ -27,7 +27,6 @@
 
 #include <chord.h>
 #include <chord_util.h>
-#include <dhash.h>
 
 chord::chord (str _wellknownhost, int _wellknownport, 
 	      str _myname, int port, int max_cache, 
