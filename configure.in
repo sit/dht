@@ -1,4 +1,4 @@
-dnl $Id: configure.in,v 1.10 2001/11/16 00:28:08 athicha Exp $
+dnl $Id: configure.in,v 1.11 2002/01/26 00:03:28 fdabek Exp $
 dnl
 dnl Process this file with autoconf to produce a configure script.
 dnl
@@ -13,6 +13,20 @@ dnl Checks for programs.
 AC_PROG_CC
 AC_PROG_CPP
 AC_PROG_CXX
+
+dnl gtk for the visualization tool
+AC_ARG_ENABLE(vis,
+--enable-vis             Build the visualization tool (needs gtk),,
+enable_vis=no)
+if test "$enable_vis" = yes; then
+	AM_PATH_GTK(1.2.0,,AC_MSG_ERROR(devel/vis needs GTK))
+fi
+
+AM_CONDITIONAL(BUILDVIS, test "$enable_vis" = yes)
+
+
+
+dnl more checks that fuck up the gtk test
 SFS_WFLAGS
 AC_PROG_INSTALL
 AC_PROG_LN_S
