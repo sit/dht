@@ -14,6 +14,7 @@ static FILE *outfile;
 
 int out = 0;
 int out_op = 0;
+int OPS_OUT = 1024;
 
 void afetch_cb (dhash_res *res, chordID key, char *buf, int i, struct timeval start, clnt_stat err);
 void afetch_cb2 (dhash_res *res, char *buf, unsigned int *read, int i, struct timeval start, clnt_stat err);
@@ -109,7 +110,6 @@ fetch_block(int i, chordID key, int datasize)
   
 }
 
-
 int
 fetch_block_async(int i, chordID key, int datasize) 
 {
@@ -128,7 +128,10 @@ fetch_block_async(int i, chordID key, int datasize)
 }
 
 void
-finish (char *buf, unsigned int *read, struct timeval start, int i) 
+finish (char *buf, unsigned int *read, 
+	struct timeval start, 
+	int i,
+	dhash_res *res) 
 {
   out--;
       
@@ -136,15 +139,17 @@ finish (char *buf, unsigned int *read, struct timeval start, int i)
 #ifdef VERIFY
     int diff = memcmp(data[i], buf, *read);
     assert (!diff);
-    warn << "verify " << *read << " bytes: OK\n";
+#endif
+
     struct timeval end;
     gettimeofday(&end, NULL);
     float elapsed = (end.tv_sec - start.tv_sec)*1000.0 + (end.tv_usec - start.tv_usec)/1000.0;
-    fprintf(outfile, "%f\n", elapsed);
-#endif
+    fprintf(outfile, "%f %d\n", elapsed, res->resok->hops);
+    
     delete read;
     delete buf;
 }
+
 void
 afetch_cb (dhash_res *res, chordID key, char *buf, int i, struct timeval start, clnt_stat err) 
 {
@@ -162,7 +167,7 @@ afetch_cb (dhash_res *res, chordID key, char *buf, int i, struct timeval start, 
   memcpy(buf, res->resok->res.base (), res->resok->res.size ());
   unsigned int *read = New unsigned int(res->resok->res.size ());
   unsigned int off = res->resok->res.size ();
-  if (off == res->resok->attr.size) finish (buf, read, start, i);
+  if (off == res->resok->attr.size) finish (buf, read, start, i, res);
   while (off < res->resok->attr.size) {
     ptr<dhash_fetch_arg> arg = New refcounted<dhash_fetch_arg> ();
 
@@ -174,7 +179,6 @@ afetch_cb (dhash_res *res, chordID key, char *buf, int i, struct timeval start, 
     out_op++;
     cp2p ()->call(DHASHPROC_LOOKUP, arg, nres, wrap(&afetch_cb2, nres, buf, read, i, start));
     off += arg->len;
-    //    while (out_op > 10) acheck ();
   };
   delete res;
 }
@@ -189,7 +193,7 @@ afetch_cb2 (dhash_res *res, char *buf, unsigned int *read, int i, struct timeval
   *read += res->resok->res.size ();
   out_op--;
   warn << "read " << *read << " of " << res->resok->attr.size << "\n";
-  if (*read == res->resok->attr.size) finish (buf, read, start, i);
+  if (*read == res->resok->attr.size) finish (buf, read, start, i, res);
   
   delete res;
 }
@@ -226,14 +230,8 @@ int
 store(int num, int size) {
   
   for (int i = 0; i < num; i++) {
-    //    struct timeval end;
-    // struct timeval start;
-    //gettimeofday(&start, NULL);
     int err = store_block(IDs[i], data[i], size);
     if (err) warn << "ERROR: " << err << "\n";
-    //gettimeofday(&end, NULL);
-    //float elapsed = (end.tv_sec - start.tv_sec)*1000.0 + (end.tv_usec - start.tv_usec)/1000.0;
-    //fprintf(outfile, "%f\n", elapsed);
   }
 
   return 0;
@@ -241,10 +239,10 @@ store(int num, int size) {
 
 int
 fetch(int num, int size) {
-  
+
   for (int i = 0; i < num; i++) {
     fetch_block_async(i, IDs[i],  size);
-    while (out > 10) acheck ();
+    while (out > OPS_OUT) acheck ();
   }
 
   while (out > 0) acheck();
@@ -254,7 +252,8 @@ fetch(int num, int size) {
 void
 usage(char *progname) 
 {
-  printf("%s: control_socket num_trials data_size file\n", progname);
+  printf("%s: control_socket num_trials data_size file <f or s> nops\n", 
+	 progname);
   exit(0);
 }
 
@@ -264,7 +263,7 @@ main (int argc, char **argv)
 
   sfsconst_init ();
 
-  if (argc < 5) {
+  if (argc < 7) {
     usage (argv[0]);
     exit (1);
   }
@@ -279,11 +278,25 @@ main (int argc, char **argv)
   else
     outfile = fopen(output, "w");
 
+  if (!outfile) {
+    printf ("could not open %s\n", output);
+    exit(1);
+  }
+
   prepare_test_data (num, datasize);
-    
+
+  OPS_OUT = atoi(argv[6]);
+
+  struct timeval start;
+  gettimeofday (&start, NULL);
+
   if (argv[5][0] == 's')
     store(num, datasize);
   else
     fetch(num, datasize);
-
+  
+  struct timeval end;
+  gettimeofday (&end, NULL);
+  float elapsed = (end.tv_sec - start.tv_sec)*1000.0 + (end.tv_usec - start.tv_usec)/1000.0;
+  fprintf(outfile, "Total Elapsed: %f\n", elapsed);
 }

@@ -50,6 +50,7 @@ struct dhash_resok {
   dhash_value res;
   int32 offset;
   dhash_blockattr attr;
+  int32 hops;
 };
 
 

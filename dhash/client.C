@@ -143,7 +143,7 @@ dhashclient::lookup_findsucc_cb(svccb *sbp,
     ptr<dhash_fetch_arg> a = New refcounted<dhash_fetch_arg> (*arg);
     dhash_res *res = New dhash_res(DHASH_OK);
     retry_state *st = New retry_state (arg->key, sbp, succ, path);
-    
+    st->hops = path.size ();
     clntnode->doRPC(succ, dhash_program_1, DHASHPROC_FETCH, a, res, 
 		wrap(this, &dhashclient::lookup_fetch_cb, res, st));
   }
@@ -170,7 +170,7 @@ dhashclient::lookup_fetch_cb(dhash_res *res, retry_state *st, clnt_stat err)
   } else if (res->status == DHASH_OK) {
 
     warnt("DHASH: lookup_after_FETCH");
-
+    res->resok->hops = st->hops;
     st->sbp->reply (res);
     
   } else {

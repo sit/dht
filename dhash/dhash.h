@@ -51,6 +51,7 @@ struct retry_state {
   svccb *sbp;
   chordID succ;
   route path;
+  int hops;
 
   retry_state (chordID ni, svccb *sbpi, chordID si,
 	       route pi) :
