@@ -56,13 +56,15 @@ class route_chord : public route_iterator {
 };
 
 class route_debruijn: public route_iterator {
+  int hops;
   route virtual_path;
   void make_hop (chordID &n, chordID &x, chordID &d);
   void make_hop_cb (chord_debruijnres *res, clnt_stat err);
   void make_route_done_cb (chordID s, bool ok, chordstat status);
   void make_hop_done_cb (chordID d, chordID s, bool ok, chordstat status);
  public:
-  route_debruijn (ptr<vnode> vi, chordID xi) : route_iterator (vi, xi) {};
+  route_debruijn (ptr<vnode> vi, chordID xi) : 
+    route_iterator (vi, xi), hops (0) {};
   void print ();
   void first_hop (cbhop_t cb);
   void next_hop ();

@@ -188,11 +188,12 @@ vnode::print ()
 
 }
 
+#define LOCLOOKUP 1
 
 chordID
 vnode::lookup_closestsucc (const chordID &x)
 {
-#if 1
+#ifdef LOCLOOKUP
   chordID s = locations->closestsuccloc (x);
 #else
 #ifdef FINGERS
@@ -207,7 +208,7 @@ vnode::lookup_closestsucc (const chordID &x)
 chordID
 vnode::lookup_closestpred (const chordID &x)
 {
-#if 1
+#if LOCLOOKUP
   chordID s = locations->closestpredloc (x);
 #else
 #ifdef FINGERS
@@ -542,8 +543,8 @@ vnode::dodebruijn (svccb *sbp, chord_debruijnarg *da)
   chord_debruijnres *res;
   chordID pred = my_pred ();
 
-  // warnx << myID << " dodebruijn: pred " << pred << " x " << da->x << " d " 
-  //<< da->d << " between " << betweenrightincl (pred, myID, da->d) << "\n";
+  //  warnx << myID << " dodebruijn: pred " << pred << " x " << da->x << " d " 
+  // << da->d << " between " << betweenrightincl (pred, myID, da->d) << "\n";
 
   if (betweenrightincl (pred, myID, da->x)) {
     res = New chord_debruijnres (CHORD_INRANGE);

@@ -230,6 +230,51 @@ n1bits (u_long n)
   return t;
 }
 
+int 
+bitindexmismatch (chordID n, chordID p)
+{
+  int bm;
+
+  if (n.nbits () != p.nbits ()) {
+    bm = p.nbits() - 1;
+  } else {
+    for (bm = p.nbits () - 1; bm >= 0; bm--) {
+      if (n.getbit (bm) != p.getbit (bm))
+	break;
+    }
+  }
+  return bm;
+}
+
+int
+bitindexzeros (chordID p, int i, int nzero)
+{
+  int c = 0;
+  int b0;
+
+  for (b0 = i; b0 >= 0; b0--) {
+    if (p.getbit (b0) == 0) {
+      c++;
+      if (c >= nzero) break;
+    } else {
+      c = 0;
+    }
+  }
+  return b0;
+}
+
+chordID
+createbits (chordID n, int b0, chordID x)
+{
+  chordID r = n + 1;
+  chordID mask = 1;
+  mask = (mask << ((r.nbits () - b0) + 1)) - 1;
+  mask = mask << b0;
+  r = r & mask;
+  r = r | (x >> (x.nbits () - b0));
+  return r;
+}
+
 u_long
 log2 (u_long n)
 {

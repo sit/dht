@@ -128,12 +128,7 @@ vnode::find_successor_cb (chordID x, cbroute_t cb, chordID s,
     warnx << "find_successor_cb: find successor of " 
 	  << x << " failed: " << status << "\n";
   } else {
-    //warnx << "find_successor_cb: succ of " << x << " is " << s << " pathlen "
-    //  << search_path.size () << "\n";
-    //    for (unsigned i = 0; i < search_path.size (); i++) {
-    //warnx << search_path[i] << "\n";
-    //}
-    //nhops += search_path.size ();
+    nhops += search_path.size ();
     if (search_path.size () > nmaxhops)
       nmaxhops = search_path.size ();
   }
@@ -156,13 +151,14 @@ void
 vnode::find_route_hop_cb (cbroute_t cb, ptr<route_iterator> ri, bool done)
 {
   if (done) {
-    //warnx << "find_route_hop_cb " << ri->key () << " path: " 
-    //  << ri->path().size() << " at node " << ri->last_node () << "\n";
+    // warnx << "find_route_hop_cb " << ri->key () << " path: " 
+    //  << ri->path().size() << " at node " 
+    //  << ri->last_node () << "\n";
     // ri->print ();
     cb (ri->last_node (), ri->path (), ri->status ());
   } else {
-    warnx << "find_route_hop_cb " << ri->key () << " hop " << ri->last_node () 
-	  << "\n";
+    // warnx << "find_route_hop_cb " << ri->key () << " hop "<<ri->last_node () 
+    //  << "\n";
     // ri->print ();
     ri->next_hop ();
   }

@@ -17,11 +17,11 @@ chordID
 debruijn::closestsucc (const chordID &x)
 {
   chordID s = myID;
+  chordID pred = locations->closestpredloc (myID);
   chordID n;
-  chordID pred = myvnode->my_pred ();
 
-  if (betweenrightincl (myID, pred, x)) s = pred;
-  else s = myID;
+  if (betweenrightincl (pred, myID, x)) s = myID;
+  else s = pred;
 
   for (int i = 0; i < LOGBASE; i++) {
     n = locations->closestsuccloc (mydoubleID[i]);
@@ -35,11 +35,11 @@ debruijn::closestsucc (const chordID &x)
 chordID
 debruijn::closestpred (const chordID &x)
 {
+  chordID pred = locations->closestpredloc (myID);
   chordID p;
   chordID n;
-  chordID pred = myvnode->my_pred ();
 
-  if (between (myID, x, pred)) p = pred;
+  if (betweenrightincl (pred, myID, x)) p = pred;
   else p = myID;
 
   for (int i = 0; i < LOGBASE; i++) {

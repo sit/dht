@@ -28,9 +28,7 @@ class finger_table : public stabilizable {
  public:
   finger_table (ptr<vnode> v, ptr<locationtable> locs, chordID myID);
 
-  chordID closestpredfinger (chordID &x);
   chordID closestpred (const chordID &x);
-  chordID closestsuccfinger (chordID &x);
   chordID closestsucc (const chordID &x);
 
   chordID finger (int i);

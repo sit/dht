@@ -30,26 +30,30 @@
 #ifndef _CHORD_UTIL_H
 #define _CHORD_UTIL_H
 
- str gettime ();
- u_int64_t getusec ();
- u_int32_t uniform_random(double a, double b);
- chordID incID (const chordID &n);
- chordID decID (const chordID &n);
- chordID successorID (const chordID &n, int p);
- chordID predecessorID (const chordID &n, int p);
- chordID doubleID (const chordID &n, int LOGBASE);
- bool between          (const chordID &a, const chordID &b, const chordID &n);
- bool betweenleftincl  (const chordID &a, const chordID &b, const chordID &n);
- bool betweenrightincl (const chordID &a, const chordID &b, const chordID &n);
- chordID diff(const chordID &a, const chordID &b);
- chordID distance(const chordID &a, const chordID &b);
- u_long topbits (int n, const chordID &a);
- u_long n1bits (u_long n);
- u_long log2 (u_long n);
- sfs_hostname my_addr ();
- chordID init_chordID (int index, str name, int p);
- chordID make_chordID (str hostname, int port, int index = 0);
- bool is_authenticID (const chordID &x, sfs_hostname n, int p, int vnode);
+str gettime ();
+u_int64_t getusec ();
+u_int32_t uniform_random(double a, double b);
+chordID incID (const chordID &n);
+chordID decID (const chordID &n);
+chordID successorID (const chordID &n, int p);
+chordID predecessorID (const chordID &n, int p);
+chordID doubleID (const chordID &n, int LOGBASE);
+bool between          (const chordID &a, const chordID &b, const chordID &n);
+bool betweenleftincl  (const chordID &a, const chordID &b, const chordID &n);
+bool betweenrightincl (const chordID &a, const chordID &b, const chordID &n);
+chordID diff(const chordID &a, const chordID &b);
+chordID distance(const chordID &a, const chordID &b);
+u_long topbits (int n, const chordID &a);
+u_long n1bits (u_long n);
+chordID createbits (chordID n, int b0, chordID x);
+int bitindexzeros (chordID p, int bm, int b0);
+int bitindexmismatch (chordID n, chordID p);
+u_long log2 (u_long n);
+sfs_hostname my_addr ();
+chordID init_chordID (int index, str name, int p);
+chordID make_chordID (str hostname, int port, int index = 0);
+bool is_authenticID (const chordID &x, sfs_hostname n, int p, int vnode);
 
- void warnt(char *msg);
+void warnt(char *msg);
+
 #endif /* _CHORD_UTIL_H */

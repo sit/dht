@@ -33,9 +33,9 @@ void
 route_chord::first_hop (cbhop_t cbi)
 {
   cb = cbi;
-  search_path.push_back (v->my_ID ());
   if (v->lookup_closestsucc (v->my_ID () + 1) 
       == v->my_ID ()) {  // is myID the only node?
+    search_path.push_back (v->my_ID ());
     next_hop (); //do it anyways
   } else {
     chordID n = v->lookup_closestpred (x);
@@ -204,20 +204,57 @@ route_debruijn::print ()
   }
 }
 
+static chordID
+createdebruijnkey (chordID p, chordID n, chordID &x)
+{
+  // to reduce lookup time from O(b)---where b is 160---to O(N)---where
+  // is the number of nodes. create r with as many top bits from x as possible,
+  // but while p <= r <= n:
+  // 1. walk down n and p while they match
+  // 2. skip 0
+  // 3. walk until b0x+1 0s
+  // 4. slap in top i bits of x
+
+  // compute bm, the bit in which p and n mismatch
+  int bm = bitindexmismatch (n, p);
+
+  // skip the first 0 bit in p; result will be smaller than n
+  for ( ; bm >= 0; bm--) {
+    if (p.getbit (bm) == 0)
+      break;
+  }
+  bm--;
+
+  // compute b0x, the number of leading 0s in x
+  int b0x = NBIT - x.nbits ();
+
+  // find a b0x + 1 zero bits in p starting from bm
+  int b0 = bitindexzeros (p, bm, b0x + 1);
+  b0 = b0 + 1;
+  //  warnx << "b0 = " << b0 << "\n";
+
+  // slap top bits from x at b0 in p
+  chordID r = createbits (p+1, b0, x);
+  //  warnx << "r = " << r << "\nn = " << n
+  // << "\np = " << p << "\nx = " << x << "\n";
+  assert (betweenrightincl (p, n, r));
+  return r;
+}
 
 void
 route_debruijn::first_hop (cbhop_t cbi)
 {
   cb = cbi;
-  search_path.push_back (v->my_ID ());
   if (v->lookup_closestsucc (v->my_ID () + 1) 
       == v->my_ID ()) {  // is myID the only node?
     done = true;
+    search_path.push_back (v->my_ID ());
+    virtual_path.push_back (x);
     cb (done);
   } else {
-    chordID n = v->lookup_closestsucc (x);
-    search_path.push_back (n);
-    virtual_path.push_back (x);
+    chordID r = createdebruijnkey (v->my_pred (), v->my_ID (), x);
+    search_path.push_back (v->my_ID ());
+    virtual_path.push_back (r);
     next_hop ();
   }
 }
@@ -291,9 +328,10 @@ route_debruijn::make_hop_done_cb (chordID d, chordID s, bool ok,
 				  chordstat status)
 {
   if (ok && status == CHORD_OK) {
+    if (d != virtual_path.back ()) hops++;
     search_path.push_back (s);
     virtual_path.push_back (d);
-    if (search_path.size () >= 100) {
+    if (hops > 160) {
       warnx << "make_hop_done_cb: too long a search path: " << v->my_ID() 
 	    << " looking for " << x << "\n";
       print ();
