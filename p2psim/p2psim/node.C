@@ -52,6 +52,11 @@ vector<Time> Node::_time_timeouts;
 
 Node::Node(IPAddress i) : _queue_len(0), _ip(i), _alive(true), _token(1) 
 {
+  _track_conncomp_timer = _args.nget<uint>("track_conncomp_timer",0,10);
+  if ((ip() == 1) && (_track_conncomp_timer > 0)) {
+    delaycb(_track_conncomp_timer, &Node::calculate_conncomp, (void*)NULL);
+  }
+
 }
 
 Node::~Node()
@@ -149,6 +154,7 @@ Node::parse(char *filename)
   }
 
   in.close();
+
 }
 
 bool
@@ -383,6 +389,82 @@ Node::print_lookup_stat_helper( vector<Time> times, vector<double> stretch,
 
 }
 
+//void function
+void
+Node::add_edge(int *matrix, int sz)
+{
+  return;
+}
+//network health monitor
+void
+Node::calculate_conncomp(void *)
+{
+  if (Node::collect_stat()) {
+    const set<Node*> *l = Network::Instance()->getallnodes();
+    uint sz = l->size();
+    int *curr, *old, *tmp;
+
+    curr = (int *)malloc(sizeof(int) * sz * sz);
+    old = (int *)malloc(sizeof(int) * sz * sz);
+
+    assert(old && curr);
+    for (uint i = 0; i < sz * sz; i++) {
+      curr[i] = 99999;
+      old[i] = 99999;
+    }
+    int alive = 0;
+    for(uint i = 1; i <= sz; i++) {
+      Node *t = dynamic_cast<Node*>(Network::Instance()->getnode(i));
+      if (t->alive()) {
+	old[(i-1)*sz + (i-1)] = 0;
+	t->add_edge(old, sz);
+	alive++;
+      }
+    }
+    for (uint k = 0; k < sz; k++) {
+      for (uint i = 0; i < sz; i++) {
+	for (uint j = 0; j < sz; j++) {
+	  if (old[i * sz + j] <= old[i * sz + k] + old[k * sz + j]) 
+	    curr[i * sz + j] = old[i * sz + j];
+	  else
+	    curr[i * sz + j] = old[i * sz + k] + old[k * sz + j];
+	}
+      }
+      tmp = old;
+      old = curr;
+      curr = tmp;
+    }
+
+    vector<uint> *path = new vector<uint>;
+    u_int allp = 0;
+    u_int failed = 0;
+    path->clear();
+    for (uint i = 0; i < sz; i++) {
+      for (uint j = 0; j < sz; j++) {
+	if (old[i*sz + i] == 0 && old[j*sz + j] == 0) {
+	  if (old[i*sz + j] < 99999) {
+	    path->push_back(old[i*sz + j]);
+	    allp += old[i*sz + j];
+	  }else{
+	    failed++;
+	  }
+	}
+      }
+    }
+    sort(path->begin(),path->end());
+    assert(path->size()>0);
+    printf("%llu alive %d avg %.2f 10-p %u 50-p %u 90-p %u longest %u failed %.3f\n", now(), alive, 
+	(double)allp/(double)path->size(),(*path)[(u_int)(0.1*path->size())], 
+	(*path)[(u_int)(0.5*path->size())], 
+	(*path)[(u_int)(0.9*path->size())], 
+	(*path)[path->size()-1], failed/(failed+path->size()));
+
+    delete path;
+    free(old);
+    free(curr);
+  }
+  delaycb(_track_conncomp_timer, &Node::calculate_conncomp, (void*)NULL);
+}
 // Called by NetEvent::execute() to deliver a packet to a Node,
 // after Network processing (i.e. delays and failures).
 void

@@ -72,6 +72,9 @@ public:
 				 Time time_timeouts = 0);
   static void print_stats();
 
+  void calculate_conncomp(void *);
+  virtual void add_edge(int *matrix, int sz);
+
   int queue_delay () { return _queue_len; };
   void queue_delay (int q) { _queue_len = q; };
 
@@ -79,6 +82,7 @@ protected:
   typedef set<unsigned> RPCSet;
 
   // stats
+  uint _track_conncomp_timer;
   static vector<uint> _bw_stats;
   static vector<uint> _bw_counts;
   static vector<Time> _correct_lookups;
