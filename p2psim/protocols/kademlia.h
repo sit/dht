@@ -219,6 +219,7 @@ public:
   enum stat_type {
     STAT_LOOKUP = 0,
     STAT_STABILIZE,
+    STAT_JOIN,
     STAT_PING
   };
 

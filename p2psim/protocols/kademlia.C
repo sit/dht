@@ -357,13 +357,14 @@ Kademlia::join(Args *args)
 join_restart:
   // lookup my own key with well known node.
   lookup_args la(_id, ip(), _id);
+  la.stattype = Kademlia::STAT_JOIN;
   lookup_result lr;
-  record_stat(STAT_LOOKUP, 1, 0);
+  record_stat(STAT_JOIN, 1, 0);
   bool b = false;
   do {
     b = doRPC(wkn, &Kademlia::do_lookup, &la, &lr, Kademlia::_default_timeout);
   } while(!b);
-  record_stat(STAT_LOOKUP, lr.results.size(), 0);
+  record_stat(STAT_JOIN, lr.results.size(), 0);
 
   if(!alive())
     return;
@@ -406,12 +407,13 @@ join_restart:
 
     // if the RPC failed, or the node is now dead, start over
     k_nodeinfo *ki = flyweight[succ_id];
-    record_stat(STAT_LOOKUP, 1, 0);
+    la.stattype = Kademlia::STAT_JOIN;
+    record_stat(STAT_JOIN, 1, 0);
     if(!doRPC(ki->ip, &Kademlia::do_lookup, &la, &lr, Kademlia::_default_timeout)) {
       clear();
       goto join_restart;
     }
-    record_stat(STAT_LOOKUP, lr.results.size(), 0);
+    record_stat(STAT_JOIN, lr.results.size(), 0);
 
     if(!alive())
       return;
