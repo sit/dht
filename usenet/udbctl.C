@@ -60,10 +60,16 @@ udbctl_help (int argc, char *argv[])
 void
 udbctl_addgroup (int argc, char *argv[])
 {
-  if (optind + 1 != argc)
+  if (optind >= argc)
     usage ();
-  char *group = argv[optind];
-  bool ok = create_group (group);
+  char *group (NULL);
+  bool ok (true);
+  for (int i = optind; i < argc; i++) {
+    group = argv[i];
+    bool thisok = create_group (group);
+    aout << group << (thisok ? " " : " not ") << "ok\n";
+    ok = ok && thisok;
+  }
   group_db->checkpoint ();
   exit (!ok); // shell is backwards 
 }
