@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.28 2003/11/17 23:20:36 strib Exp $ */
+/* $Id: tapestry.C,v 1.29 2003/11/18 23:31:27 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -38,6 +38,9 @@ Tapestry::Tapestry(Node *n, Args a)
     _digits_per_id((uint) 8*sizeof(GUID)/_bits_per_digit),
     _redundant_lookup_num(a.nget<uint>("redundant_lookup_num", 3, 10))
 {
+
+  assert( _base <= 256 ); // for printing reasons
+
   joined = false;
   _joining = false;
   _stab_scheduled = false;
@@ -1669,13 +1672,34 @@ string
 Tapestry::print_guid( GUID id )
 {
 
-  char buf[_digits_per_id+1];
+  // NOTE: for now only handle up to base 256 (should be plenty)
+
+  uint multiplier = 1;
+  uint extra = 1;
+  if( _base > 16 ) {
+    multiplier++;
+    extra += _digits_per_id;
+  }
+
+  uint size = _digits_per_id*multiplier+extra;
+  char buf[size];
 
   //printf( "initial guid: %16qx\n", id );
   // print it out, digit by digit
   // (in order to get leading zeros)
-  for( uint i = 0; i < _digits_per_id; i++ ) {
-    sprintf( &(buf[i]), "%x", get_digit(id, i) );
+  uint j = 0;
+  for( uint i = 0; i < size-1; i++ ) {
+    uint digit = get_digit( id, j );
+    if( _base > 16 ) {
+      sprintf( &(buf[i]), "%.2x", digit );
+      i += 2;
+    } else {
+      sprintf( &(buf[i]), "%x", digit );
+    }
+    j++;
+    if( _base > 16 && j != _digits_per_id ) {
+      sprintf( &(buf[i]), "-" );
+    }
   }
 
   return string(buf);
@@ -1703,7 +1727,7 @@ Tapestry::get_digit( GUID id, uint digit )
   // shift left to get rid of leading zeros
   GUID shifted_id = id << (digit*_bits_per_digit);
   // shift right to get rid of the others
-  shifted_id = shifted_id >> ((_digits_per_id-1)*_bits_per_digit);
+  shifted_id = shifted_id >> (sizeof(GUID)*8-_bits_per_digit);
 
   return shifted_id;
 }
