@@ -85,7 +85,8 @@ checks out with the signature in the SIG RR using the
 the public key of {\tt dname}'s owner, and
 returns the corresponding RRSet to the 
 client or report an error of the {\tt <dname, type>} does 
-not exist. Once a lookup request is sent to DDNS, it will 
+not exist. XXX What about stale TTLs? XXX
+Once a lookup request is sent to DDNS, it will 
 always return an answer, whether it be positive or not. 
 This is because DDNS does not depend on the information 
 in the {\tt NS}-record to track down the information for a key.
@@ -97,14 +98,26 @@ then its RRSet does not exist in DNS.
 
 XXXX Even-handed discussion. XXXX\\
 
-Distributing DNS data in a peer-to-peer network 
-increases performance and flexibility 
-in designing the name resolution system. 
+Distributing DNS data away from authorized hosts can expose
+a number of problems. Storing and updating DNS records now
+involves transferring data to random and possibly remote servers.
+This can result in long latency, especially if resource records
+have low TTLs. However, we anticipate that most RRs have 
+high TTLs although we have not performed experiments in this case.
 
--storing RRSets now take more time than in the current
-DNS. b/c not local update anymore.\\
--updating RRSets may be a pain, esp when there is 
-caching in the ring. Have to purge every old copy.\\
+Updating DNS records is further complicated due to caching 
+in DDNS. A node responsible for storing a particular record 
+only keeps track of the replicas of that record, not the nodes
+that cache the data. Thus, an update will only involve change 
+at the primary node and its replicas. DNS records at the caching 
+nodes remain stale. This resembles the current DNS implementation
+where name servers caches DNS records until their TTL expires.
+We can extend DDNS to purge stale cached RRs whenever there is an
+update, how much this operation will degrade performance remains
+to be seen.
+
+-storing initial DNS data (bootstrapping) \\
+
 -what if the root private key is compromised?\\
 
 We have been assuming that DNS queries can be predicted in advance,
