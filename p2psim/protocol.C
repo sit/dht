@@ -25,28 +25,29 @@ Protocol::~Protocol()
 {
 }
 
-
-Packet*
-Protocol::doRPC(NodeID dst, Packet *p)
+void*
+Protocol::doRPC(IPAddress dst, void* (Protocol::*fn)(void*))
 {
+  Packet *p = new Packet();
   p->_dst = dst;
   p->_src = _node->id();
   p->_c = chancreate(sizeof(Packet*), 0);
   p->_protocol = ProtocolFactory::Instance()->name(this);
-  assert(p->_c);
+  p->_fn = fn;
 
-  // send it off
   send(Network::Instance()->pktchan(), &p);
 
   // wait for reply. blocking.
-  return (Packet*) recvp(p->_c);
+  return (void*) recvp(p->_c);
 }
 
-NodeID
+
+IPAddress
 Protocol::id()
 {
   return _node->id();
 }
+
 
 
 void
@@ -108,11 +109,11 @@ Protocol::Receive(void *p)
   Packet *packet = (Packet*) np->packet;
 
   // do upcall
-  Packet *reply = prot->receive((Packet*) np->packet);
+  void *ret = (prot->*packet->_fn)(packet->_args);
 
   // send reply
-  assert(reply);
-  NodeID origsrc = packet->_src;
+  Packet *reply = new Packet();
+  IPAddress origsrc = packet->_src;
   reply->_src = prot->id();
   reply->_dst = origsrc;
   reply->_c = packet->_c;
@@ -143,27 +144,23 @@ Protocol::dispatch(P2PEvent *e)
 {
   switch(e->event) {
     case JOIN:
-      join();
+      join(0);
       break;
 
     case LEAVE:
-      leave();
+      leave(0);
       break;
 
     case CRASH:
-      crash();
+      crash(0);
       break;
 
     case INSERT:
-      insert_doc();
+      insert_doc(0);
       break;
 
     case LOOKUP:
-      lookup_doc();
-      break;
-
-    case STABILIZE:
-      stabilize();
+      lookup_doc(0);
       break;
 
     default:

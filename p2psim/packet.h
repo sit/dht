@@ -4,8 +4,6 @@
 #include "p2psim.h"
 #include <lib9.h>
 #include <thread.h>
-
-class Packet;
 #include "protocol.h"
 
 class Packet {
@@ -17,7 +15,7 @@ public:
   Protocol::msg_t type;
   Protocol::data_t data;
 
-  NodeID src() { return _src; }
+  IPAddress src() { return _src; }
   string protocol() { return _protocol; }
   Channel *channel() { return _c; }
   bool reply() { return _reply; }
@@ -29,10 +27,12 @@ private:
   // the following fields can only be set by the Protocol layer
   Channel *_c;
   string _protocol;
+  void* (Protocol::*_fn)(void*);
+  void *_args;
 
   // the following fields can only be set by the Network layer
-  NodeID _src;
-  NodeID _dst;
+  IPAddress _src;
+  IPAddress _dst;
 
   bool _reply;
 };

@@ -12,10 +12,10 @@ using namespace std;
 
 class Node : public Threaded {
 public:
-  Node(NodeID);
+  Node(IPAddress);
   ~Node();
 
-  NodeID id() { return _id; }
+  IPAddress id() { return _id; }
   Channel *pktchan() { return _pktchan; }
   Channel *protchan() { return _protchan; }
   Protocol *getproto(string p) { return _protmap[p]; }
@@ -23,7 +23,7 @@ public:
 private:
   virtual void run();
 
-  NodeID _id;
+  IPAddress _id;
   Channel *_pktchan;    // for packets
   Channel *_protchan;   // to register protocols
   map<string, Protocol*> _protmap;

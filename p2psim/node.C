@@ -7,7 +7,7 @@ using namespace std;
 #include "node.h"
 #include "packet.h"
 
-Node::Node(NodeID id) : _id(id), _pktchan(0)
+Node::Node(IPAddress id) : _id(id), _pktchan(0)
 {
   _pktchan = chancreate(sizeof(Packet*), 0);
   assert(_pktchan);

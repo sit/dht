@@ -11,6 +11,8 @@ class P2PEvent;
 class Node;
 
 
+#define MEMBER_FUNC(X) (void*(Protocol::*)(void*))(&X)
+
 class Protocol : public Threaded {
 public:
   typedef unsigned msg_t;
@@ -21,7 +23,6 @@ public:
     CRASH,
     INSERT,
     LOOKUP,
-    STABILIZE
   } EventID;
 
   Protocol(Node*);
@@ -29,17 +30,16 @@ public:
   Channel *appchan() { return _appchan; }
   Channel *netchan() { return _netchan; }
 
-  virtual void join() = 0;
-  virtual void leave() = 0;
-  virtual void crash() = 0;
-  virtual void insert_doc() = 0;
-  virtual void lookup_doc() = 0;
-  virtual void stabilize() = 0;
-  virtual Packet* receive(Packet*) = 0;
+  virtual void* join(void*) = 0;
+  virtual void* leave(void*) = 0;
+  virtual void* crash(void*) = 0;
+  virtual void* insert_doc(void*) = 0;
+  virtual void* lookup_doc(void*) = 0;
 
 protected:
-  Packet* doRPC(NodeID, Packet*);
-  NodeID id();
+  void* doRPC(IPAddress, void* (Protocol::*)(void*));
+
+  IPAddress id();
 
 private:
   Channel *_appchan; // to receive calls from applications
@@ -58,6 +58,7 @@ private:
     Protocol *p;
     Packet *packet;
   };
+
   static void Receive(void*);
 
 

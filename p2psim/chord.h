@@ -8,7 +8,7 @@ typedef unsigned HashedID;
 
 typedef struct{
   HashedID hid; //hashed ID
-  NodeID id; //node ID, like an IP address
+  IPAddress id; //node ID, like an IP address
 }IDMap;
 
 class Chord : public Protocol {
@@ -16,14 +16,12 @@ public:
   Chord(Node *n) : Protocol(n) {};
   ~Chord();
 
-  virtual void join() {};
-  virtual void leave() {};
-  virtual void crash() {};
-  virtual void lookup() {};
-  virtual void insert_doc() {};
-  virtual void lookup_doc() {};
-  virtual void stabilize() {};
-  virtual Packet* receive(Packet*) {};
+  virtual void* join(void*) {};
+  virtual void* leave(void*) {};
+  virtual void* crash(void*) {};
+  virtual void* lookup(void*) {};
+  virtual void* insert_doc(void*) {};
+  virtual void* lookup_doc(void*) {};
 
 protected:
   IDMap me;

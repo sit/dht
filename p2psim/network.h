@@ -19,7 +19,7 @@ public:
   static Network* Instance(Topology*);
   Channel* pktchan() { return _pktchan; }
   Channel* nodechan() { return _nodechan; }
-  Node* getnode(NodeID id) { return _nodes[id]; }
+  Node* getnode(IPAddress id) { return _nodes[id]; }
   Topology *gettopology() { return _top; }
 
 private:
@@ -29,7 +29,7 @@ private:
 
   static Network *_instance;
 
-  map<NodeID, Node*> _nodes;
+  map<IPAddress, Node*> _nodes;
   Topology *_top;
 
   Channel *_pktchan;

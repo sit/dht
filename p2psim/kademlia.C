@@ -11,50 +11,40 @@ Kademlia::~Kademlia()
 {
 }
 
-void
-Kademlia::join()
+void*
+Kademlia::do_join(void*)
 {
-  // send my id to next node in ring
-  Packet *p = new Packet();
-  p->data = 0;
-  p->type = 0;
-  Packet *ret = doRPC((NodeID) ((id()+1) % 5), p);
-  cout << id() << " got its reply from " << ret->src() << endl;
+  cout << "do_join!" << endl;
+  return 0;
 }
 
-void
-Kademlia::leave()
+void*
+Kademlia::join(void*)
+{
+  // send my id to next node in ring
+  doRPC((IPAddress) ((id()+1) % 5), MEMBER_FUNC(Kademlia::do_join));
+}
+
+void*
+Kademlia::leave(void*)
 {
   cout << "Kademlia leave" << endl;
 }
 
-void
-Kademlia::crash()
+void*
+Kademlia::crash(void*)
 {
   cout << "Kademlia crash" << endl;
 }
 
-void
-Kademlia::insert_doc()
+void*
+Kademlia::insert_doc(void*)
 {
   cout << "Kademlia insert_doc" << endl;
 }
 
-void
-Kademlia::lookup_doc()
+void*
+Kademlia::lookup_doc(void*)
 {
   cout << "Kademlia lookup_doc" << endl;
-}
-
-void
-Kademlia::stabilize()
-{
-  cout << "Kademlia stabilize" << endl;
-}
-
-Packet *
-Kademlia::receive(Packet *p)
-{
-  cout << id() << " got a join message from " << p->src() << endl;
-  return p;
 }

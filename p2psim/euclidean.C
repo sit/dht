@@ -49,7 +49,7 @@ Euclidean::parse(ifstream &ifs)
     ifs >> prot;
 
     // create the node
-    Node *n = new Node((NodeID) id);
+    Node *n = new Node((IPAddress) id);
 
     // run the specified protocol on the node
     // TODO: should be possible to run many

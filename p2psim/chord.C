@@ -22,7 +22,7 @@ between(HashedID me, HashedID x, HashedID succ)
 Chord::Chord()
 {
   me.hID = rand(); //for now, a rand() ID is as good as hashe(IP)
-  me.ID = getNodeID();
+  me.ID = getIPAddress();
 
 }
 
@@ -44,10 +44,10 @@ Chord::create()
 }
 
 void
-Chord::join(NodeID bnode)
+Chord::join(IPAddress bnode)
 {
   predecessor.id = 0; //0 means null
-  successor = doRPC(bnode, find_successor, myNodeID); //equivalent to bnode->lookup(myNodeID, SUCC_NUM);
+  successor = doRPC(bnode, find_successor, myIPAddress); //equivalent to bnode->lookup(myIPAddress, SUCC_NUM);
   stabilize();
 }
 

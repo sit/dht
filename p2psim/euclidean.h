@@ -16,10 +16,10 @@ public:
   typedef pair<unsigned, unsigned> Coord;
   virtual void parse(ifstream&);
   virtual latency_t latency(Node*, Node*);
-  Coord getcoords(NodeID n) { return _nodes[n]; }
+  Coord getcoords(IPAddress n) { return _nodes[n]; }
 
 private:
-  map<NodeID, Coord> _nodes;
+  map<IPAddress, Coord> _nodes;
   Channel *_distchan;   // to request distances
 };
 
