@@ -202,18 +202,22 @@ No DNS-server-side proximity routing (Akamai).
 ...
 .Sl "Evaluation: Ease of Administration
 .LP
-O'Reilly BIND book lists thirteen common problems.
+O'Reilly BIND+DNS book lists 13 common problems.
 .LP
-XXX are software interface deficiencies (needing
+9 are arguably software deficiencies (needing
 to restart the server after config changes, ...).
 .LP
-XXX are actually protocol-derived problems; we just stir them around.
+4 are actually protocol-specific problems; we just stir them around.
 .IP
 Missing subdomain server delegation → missing public key delegation
 .IP
 Bad subdomain delegation → bad public key delegation
 .IP
 Network outage → different network outage
+.LP
+1 is gone:
+.IP
+Slave server can't load zone → caching is transparent
 .LP
 But why trust random servers rather than run my own?
 .IP
