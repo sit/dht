@@ -500,7 +500,11 @@ toe_table::betterpred_greedy (chordID myID, chordID current,
 
 void toe_table::fill_nodelistresext (chord_nodelistextres *res)
 {
-  fatal << "toe_table::fill_nodelistresext not implemented.\n";
+  vec<ptr<location> > t = get_toes (last_level);      
+  res->resok->nlist.setsize (t.size ());
+  for (unsigned int i = 0; i < t.size (); i++) {
+    t[i]->fill_node_ext (res->resok->nlist[i]);
+  }
 }
 
 void 
