@@ -237,8 +237,11 @@ vnode_impl::notify_cb (chordID n, chordstat *res, clnt_stat err)
   if (err || *res) {
     if (err)
       warnx << "notify_cb: RPC failure " << n << " " << err << "\n";
-    else
-      warnx << "notify_cb: RPC error" << n << " " << *res << "\n";
+    else {
+      warnx << "notify_cb: RPC error " << n << " " << *res << "\n";
+      ptr<location> nl = locations->lookup (n);
+      nl->set_alive (false);
+    }
   }
   delete res;
 }

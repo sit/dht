@@ -56,12 +56,21 @@ dhashgateway::dhashgateway (ptr<axprt_stream> x, ptr<chord> node)
 dhashgateway::dhashgateway (ptr<axprt_stream> x, ptr<chord> node,
                             str host, int port)
 {
-  useproxy = true;
-  proxyhost = host;
-  proxyport = port;
-
-  tcpconnect (proxyhost, proxyport,
-              wrap (mkref (this), &dhashgateway::proxy_connected, x, node));
+  if (node->active->my_succ ()->id () == node->active->my_ID ()) {
+    // there is only one node, try proxy mode
+    useproxy = true;
+    proxyhost = host;
+    proxyport = port;
+    tcpconnect (proxyhost, proxyport,
+                wrap (mkref (this), &dhashgateway::proxy_connected, x, node));
+  }
+  else {
+    // there are more than one node in the system, don't use proxy.
+    useproxy = false;
+    clntsrv = asrv::alloc (x, dhashgateway_program_1,
+	                   wrap (mkref (this), &dhashgateway::dispatch));
+    dhcli = New refcounted<dhashcli> (node->active);
+  }
 }
 
 void
