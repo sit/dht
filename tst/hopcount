@@ -100,17 +100,43 @@ while (1) {
 }
 
 print "Storing.\n";
-$harness->store ("a", 0, "store.log");
+$harness->store ("a", 0, 100, "store.log");
+if ($?) {
+    my $signalno = $? & 127;
+    my $coredumped = $? & 128;
+
+    die "Store returned ", $? >> 8, 
+      ($signalno   ? ", signal $signalno" : ""),
+      ($coredumped ? ", dumped core" : ""), ".\n";
+}
 sleep 5;
+
 print "Fetching.\n";
-$harness->fetch ("a", 0, "fetch.log");
+$harness->fetch ("a", 0, 100, "fetch.log");
+if ($?) {
+    my $signalno = $? & 127;
+    my $coredumped = $? & 128;
+
+    die "Fetch returned ", $? >> 8, 
+      ($signalno   ? ", signal $signalno" : ""),
+      ($coredumped ? ", dumped core" : ""), ".\n";
+}
+
 {
     my $randconf = $CONFS[rand @CONFS];
     while ($randconf eq "a" && scalar @CONFS > 1) {
 	$randconf = $CONFS[rand @CONFS];
     }
     print "Fetching again from node $randconf.\n";
-    $harness->fetch ($randconf, 0, "fetch2.log");
+    $harness->fetch ($randconf, 0, 100, "fetch2.log");
+    if ($?) {
+	my $signalno = $? & 127;
+	my $coredumped = $? & 128;
+
+	die "Fetch returned ", $? >> 8, 
+	  ($signalno   ? ", signal $signalno" : ""),
+	  ($coredumped ? ", dumped core" : ""), ".\n";
+    }
 }
 sleep 10;
 
