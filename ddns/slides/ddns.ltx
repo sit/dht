@@ -1,5 +1,5 @@
 %% -*- LaTeX -*-
-%% $Id: ddns.ltx,v 1.5 2001/12/06 23:06:26 rsc Exp $
+%% $Id: ddns.ltx,v 1.6 2001/12/07 00:31:00 athicha Exp $
 
 \documentclass{seminar}
 \special{papersize=11in,8.5in}
@@ -85,7 +85,7 @@ Russ Cox\\ Athicha Muthitacharoen \\(MIT LCS)}
   \item Assume that public key cryptography can be trusted.
   \item Clients start by trusting some public keys for some parts of the hierarchy.
   \ittms{ \item Ex.: Trust well-known root server keys for {\tt *} }
-  \item Trusted servers delegate authority to other IP addresses.
+  \item Trusted servers delegate authority to other public keys.
   \ittms { \item Ex.: Trust $\mathit{Pub}_{\mathrm{MIT}}$ for {\tt *.mit.edu} }
   \item (Hopefully) much more secure.
 }
@@ -128,14 +128,15 @@ Russ Cox\\ Athicha Muthitacharoen \\(MIT LCS)}
 \begin{slide}
 \slname{Experimental Setup}
 \itms{
-  \item Simulated Chord network with 1000 DDNS nodes.
+  \item Simulated Chord network with 1000 nodes.
   \item No replication.
   \item Real DNS traces from Jung {\it et al.}
   \ittms {
   \item Unsuccessful queries
   \item Successful queries    
   }
-  \item Slash-dot queries
+  \item Fake DNS loads
+  \itms {\item Slashdot queries }
 }
 \end{slide}
 
@@ -159,11 +160,13 @@ Russ Cox\\ Athicha Muthitacharoen \\(MIT LCS)}
 \itms{
 \item Separating authority from service can increase flexibility
 in designing name resolution systems. 
-\item DDNS uses a peer-to-peer lookup 
-service to serve DNS data.
-\item Inherits good load balancing and 
-fault-tolerance from DHash and Chord.
-\item Eliminates painful name server management.
+\item Serving DNS data over a peer-to-peer system
+has important advantages.
+ \ittms {
+    \item Inherits good load balancing and 
+    fault-tolerance from DHash and Chord.
+    \item Eliminates painful name server management.
+ }
 }
 \end{slide}
 
