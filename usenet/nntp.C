@@ -10,6 +10,16 @@
 #include "group.h"
 #include "nntp.h"
 
+/**
+ * Setting nntp_trace causes more debugging information to be emitted.
+ *   0  None
+ *   1  Connection open/close
+ *   2  Command dispatch
+ *   3  Article posting
+ *   5  Header parsing
+ *   8  Command parsing
+ *   9  Complete client I/O
+ */
 static int nntp_trace (getenv ("NNTP_TRACE") ? atoi (getenv ("NNTP_TRACE")) : 0);
 u_int64_t nntp::nconn_ (0);
 u_int64_t nntp::fedinbytes_ (0);
@@ -59,6 +69,8 @@ nntp::nntp (int _s) :
 nntp::~nntp (void)
 {
   *deleted = true;
+  if (nntp_trace >= 1)
+    warn << s << ": closed\n";
   // s is closed by aio destructor
 }
 
@@ -110,14 +122,14 @@ nntp::command (void)
   
   for (i = 0; i < cmd_table.size (); i++) {
     if (!strcasecmp (cmdargs[0], cmd_table[i].cmd)) {
-      if (nntp_trace >= 1)
+      if (nntp_trace >= 2)
 	warn << s << ": dispatching " << cmdargs[0] << "\n";
       cmd_table[i].fn ((n > 1) ? cmdargs[1] : str(""));
       return;
     }
   }
 
-  if (nntp_trace >= 1)
+  if (nntp_trace >= 2)
     warn << s << ": unknown command: " << cmdargs[0] << "\n";
   aio << unknown;
 }
@@ -277,7 +289,7 @@ nntp::cmd_article (str c) {
       msgkey = cur_group->getid (c);
     }
 
-    if (nntp_trace >= 4)
+    if (nntp_trace >= 8)
       warn << s << ": msgkey " << msgkey << "\n";
 
     if (msgkey != 0)
@@ -350,7 +362,7 @@ nntp::read_post (str resp, str bad, bool takedht)
   for (size_t i = 0; i < lines.size (); i++) {
     // warnx << "Checking... ||" << lines[i] << "||\n";
     if (!headerend && postheadend.search (lines[i])) {
-      if (nntp_trace >= 4)
+      if (nntp_trace >= 8)
 	warn << prefix << "headerend = " << i << "\n";
       headerend = i;
       break;
@@ -361,15 +373,15 @@ nntp::read_post (str resp, str bad, bool takedht)
       aio << resp;
       return;
     } else if (postmrx.search (lines[i])) {
-      if (nntp_trace >= 4)
+      if (nntp_trace >= 8)
 	warn << prefix << "found msgid " << postmrx[1] << "\n";
       msgid = postmrx[1];
     } else if (postngrx.search (lines[i])) {
-      if (nntp_trace >= 4)
+      if (nntp_trace >= 8)
 	warn << prefix << "found newsgroup list " << postngrx[1] << "\n";
       ng = postngrx[1];
     } else if (postchordid.search (lines[i])) {
-      if (nntp_trace >= 4) {
+      if (nntp_trace >= 8) {
 	warn << prefix << "found "
 	     << (takedht ? "" : "un") << "expected chordID "
 	     << postchordid[1] << "\n";
@@ -432,7 +444,7 @@ nntp::read_post (str resp, str bad, bool takedht)
       posted = true;
       postlog << msgid << " (" << ID << ") posted.\n";
     }
-    if (nntp_trace >= 2)
+    if (nntp_trace >= 3)
       warn << postlog;
     
     ng = ng + postgrx[0].len ();
