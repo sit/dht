@@ -54,7 +54,7 @@ parse_args(int argc, char *argv[])
   int ch;
   uint seed;
 
-  while ((ch = getopt (argc, argv, "e:v:x")) != -1) {
+  while ((ch = getopt (argc, argv, "e:vx")) != -1) {
     switch (ch) {
     case 'e':
       seed = atoi(optarg);

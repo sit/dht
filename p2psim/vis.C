@@ -70,7 +70,7 @@ static float zoomx = 1.0;
 static float zoomy = 1.0;
 static float centerx = 0.0;
 static float centery = 0.0;
-static int radius = 5;
+static int radius = 2;
 
 static bool ggeo = false;
 static bool displaysearch = false;
@@ -286,18 +286,20 @@ draw_fingers (f_node *iter, bool all)
 
   if (all || ((iter->draw & DRAW_DEBRUIJN) == DRAW_DEBRUIJN)) {
     int a, b;
-    ID_to_xy (iter->debruijn, &a, &b);
+    //    ID_to_xy (iter->debruijn, &a, &b);
 
     gdk_gc_set_foreground (draw_gc, &red);
-    draw_arrow (x, y, a, b,  draw_gc);
-    gdk_gc_set_foreground (draw_gc, &GCValues.foreground);
+    //    draw_arrow (x, y, a, b,  draw_gc);
 
     for (uint j = 0; j < iter->dfingers.size (); j++) {
       int a, b;
       ID_to_xy (iter->dfingers[j], &a, &b);
       draw_arrow (x, y, a, b, draw_gc);
     }
+    gdk_gc_set_foreground (draw_gc, &GCValues.foreground);
+
   }
+
 }
 
 void
