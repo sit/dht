@@ -30,6 +30,7 @@ my $grid = 0;
 my $rtmgraph = 0;
 my $fontsize = 26;
 my $linewidth = 1;
+my $keypos = "top";
 
 sub usage {
     select(STDERR);
@@ -71,6 +72,7 @@ make-graph.pl [options]
     --plottype <type>         Type of plot.  Defaults to "points" (or "lines" 
 				for --convex), also accepts "lines" and 
                                 "linespoints"
+    --keypos <key position>   left,right,top,bottom
     --grid                    Set grid lines on the graph
     --convex [both]           Generate convex hull graphs, not scatterplots
 				 If "both" is specified, both points and
@@ -112,7 +114,7 @@ my %options;
 &GetOptions( \%options, "help|?", "x=s", "y=s@", "epsfile=s", "colorepsfile=s","pngfile=s",
 	     "param=s", "paramname=s", "datfile=s@", "label=s@", 
 	     "xrange=s", "yrange=s", "xlabel=s", "ylabel=s@", "title=s", 
-	     "convex:s", "plottype=s", "grid", "rtmgraph", "hulllabel:s",
+	     "convex:s", "plottype=s", "keypos=s","grid", "rtmgraph", "hulllabel:s",
 	     "overallconvex:s", "fontsize=s", "linewidth=s", "extend" )
     or &usage;
 
@@ -260,6 +262,10 @@ if( defined $options{"plottype"} ) {
 	die( "Not a valid pointtype: $plottype" );
     }
 }
+if ( defined $options{"keypos"}) {
+  $keypos = $options{"keypos"};
+}
+
 if( defined $options{"grid"} ) {
     $grid = 1;
 }
@@ -1058,6 +1064,10 @@ if( defined $xrange ) {
 }
 if( defined $yrange ) {
     print GP "set yrange [$yrange]\n";
+}
+
+if (defined $keypos) {
+  print GP "set key $keypos\n";
 }
 
 if( defined $epsfile ) {
