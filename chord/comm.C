@@ -503,8 +503,7 @@ rpccb_chord::send (long _sec, long _nsec)
     panic ("[send to cates@mit.edu]: sec %ld, nsec %ld\n", sec, nsec);
 
   tmo = delaycb (sec, nsec, wrap (this, &rpccb_chord::timeout_cb, deleted));
-  // alloc has the side effect of sending the RPC so we don't send it here
-  //  xmit (0);
+  xmit (0);
 }
 
 
