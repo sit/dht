@@ -249,7 +249,7 @@ if __name__ == "__main__":
         opts, cmdv = getopt.getopt(sys.argv[1:], "h:n:f:s:o:")
     except getopt.GetoptError:
         # print help information and exit:
-        print "filestore -h host:port -[f|s] -n nops -F file [-K key:level]"
+        print "filestore -h host:port -[f|s] -n nops -F file [-f key:level]"
         sys.exit(2)
 
     nops = 1
