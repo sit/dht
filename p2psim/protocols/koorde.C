@@ -33,16 +33,14 @@ extern bool static_sim;
 
 Koorde::Koorde(IPAddress i, Args &a) : Chord(i, a) 
 {
-  logbase = a.nget<uint>("base",2,10);
+  logbase = a.nget<uint>("base",1,10);
   resilience = a.nget<uint>("successors", 1, 10);
-  fingers = a.nget<uint>("successors", 1, 10);
+  fingers = a.nget<uint>("fingers", 2, 10);
   _stab_debruijn_timer = a.nget<uint>("debruijntimer",10000,10); 
 
   k = 1 << logbase; 
   debruijn = me.id << logbase;
-  printf ("Koorde(%u,%qx):debruijn=%qx base %u k %u nsucc %u res %u fing %u\n", 
-	  me.ip, me.id, debruijn, k, logbase, _nsucc, resilience, fingers);
-  loctable->pin (debruijn, fingers-1, 1);
+  _max_lookup_time = a.nget<uint>("maxlookuptime",20000,10);
   isstable = true;
 }
 
@@ -136,16 +134,19 @@ Koorde::join(Args *args)
 
 // Iterative version of the figure 2 algo in IPTPS'03 paper.
 vector<Chord::IDMap>
-Koorde::find_successors(CHID key, uint m, uint all, uint type, IDMap *lasthop, uint *lookup_int, IPAddress ipkey)
+Koorde::find_successors(CHID key, uint m, uint type, IDMap *lasthop, lookup_args *args)
 {
   int count = 0;
   int timeout = 0;
+  int hops = 0;
+  Time time_timeout = 0;
   koorde_lookup_arg a;
   koorde_lookup_ret r;
   vector<IDMap> path;
   vector<ConsistentHash::CHID> ipath;
   vector<ConsistentHash::CHID> kpath;
   IDMap mysucc = loctable->succ(me.id + 1);
+  Time before = now();
 
   a.badnodes.clear();
   a.nsucc = m;
@@ -153,16 +154,16 @@ Koorde::find_successors(CHID key, uint m, uint all, uint type, IDMap *lasthop, u
   r.next = me;
   r.k = key;
   r.i = firstimagin (me.id, mysucc.id, a.k, &r.kshift);
-
-  // printf ("find_successor(ip %u,id %qx, key %qx, i=%qx)\n", me.ip, me.id, 
-  //  a.k,  r.i);
+#ifdef CHORD_DEBUG
+  printf ("%s find_successor key %qx, i=%qx\n", ts(), a.k,  r.i);
+#endif
 
   if (vis && type == TYPE_USER_LOOKUP) 
     printf ("vis %llu search %16qx %16qx %16qx\n", now(), me.id, key, r.i);
 
   while (1) {
     if ((r.i == 0) || (count++ >= 1000)) {
-      printf ("find_successor: key = %16qx\n", key);
+      printf ("%s find_successor: key = %16qx\n", ts(),key);
       for (uint i = 0; i < path.size (); i++) {
 	printf ("  %16qx i %16qx k %16qx\n", path[i].id, ipath[i], kpath[i]);
       }
@@ -180,28 +181,30 @@ Koorde::find_successors(CHID key, uint m, uint all, uint type, IDMap *lasthop, u
     ipath.push_back (a.i);
     kpath.push_back (a.kshift);
 
-    if (me.ip == 130) {
-      printf("%s key %qx next hop %u,%qx   i %qx,   k %qx\n", ts(), key, r.next.ip,r.next.id,a.i, a.kshift);
-    }
-    //record_stat(is_lookup?1:0);
-    bool ok = doRPC(r.next.ip, &Koorde::koorde_next, &a, &r);
+   //record_stat(is_lookup?1:0);
+    Time t_out = TIMEOUT(me.ip,r.next.ip);
+    if (r.next.ip!=me.ip) 
+      hops++;
+#ifdef CHORD_DEBUG
+    printf("%s key %qx contacting next %u,%qx\n",ts(),a.k,r.next.ip,r.next.id);
+#endif
+    bool ok = doRPC(r.next.ip, &Koorde::koorde_next, &a, &r, t_out);
+
+    if (args && args->latency >= _max_lookup_time) 
+      break;
+
 
     if ((!ok) || (r.next.ip == 0)) {
       if (!alive()) {
 	r.v.clear();
 	break;
       }
+      time_timeout += t_out;
       timeout++;
       assert(r.next.ip != me.ip);
       if (!ok) {
-	if (me.ip == 130) {
-	  printf("%s key %qx next hop %u,%qx   i %qx,   k %qx FAILED\n", ts(), key, r.next.ip,r.next.id,a.i, a.kshift);
-	}
 	loctable->del_node (path.back ());
       }else{
-	if (me.ip == 130) {
-	  printf("%s key %qx next hop %u,%qx   i %qx,   k %qx UNINITIALIZED\n", ts(), key, r.next.ip,r.next.id,a.i, a.kshift);
-	}
 	(a.badnodes).push_back(path.back());
 	assert(a.badnodes.size() < 20);
       }
@@ -249,6 +252,17 @@ Koorde::find_successors(CHID key, uint m, uint all, uint type, IDMap *lasthop, u
   }
 
   if (type == TYPE_USER_LOOKUP) {
+
+    if (!check_correctness(key,r.v)) {
+      r.v.clear();
+    }
+    if (args) {
+      args->latency += (now()-before);
+      args->num_to += timeout;
+      args->total_to += time_timeout;
+      args->hops += hops;
+    }
+#ifdef CHORD_DEBUG
     printf ("find_successor for (id %qx, key %qx):",  me.id, key);
     if (r.v.size () > 0) {
       uint cor = 0;
@@ -266,13 +280,10 @@ Koorde::find_successors(CHID key, uint m, uint all, uint type, IDMap *lasthop, u
       for (uint i = 0; i < path.size (); i++) {
        printf ("  %16qx i %16qx k %16qx\n", path[i].id, ipath[i], kpath[i]);
       }
-
-      // CHID s = r.v[0].id;
-  //    assert ((me.id == mysucc.id) || (me.id == s) ||
-//	      ConsistentHash::betweenrightincl (me.id, s, key));
     } else {
       printf (" failed\n");
     }
+#endif
   }
 
   return r.v;
@@ -292,7 +303,7 @@ Koorde::koorde_next(koorde_lookup_arg *a, koorde_lookup_ret *r)
     return;
   }
 
-  //printf ("Koorde_next (id=%qx, key=%qx, kshift=%qx, i=%qx) succ=(%u,%qx)\n", 
+  //printf ("koorde_next (id=%qx, key=%qx, kshift=%qx, i=%qx) succ=(%u,%qx)\n", 
   //me.id, a->k, a->kshift, a->i, succ.ip, succ.id);
   if (ConsistentHash::betweenrightincl (me.id, succ.id, a->k) ||
       (me.id == succ.id)) {
@@ -304,8 +315,9 @@ Koorde::koorde_next(koorde_lookup_arg *a, koorde_lookup_ret *r)
     r->v.clear ();
     r->v = loctable->succs(me.id + 1, a->nsucc);
     assert (r->v.size () > 0);
-    printf ("%s Koorde_next: done succ key = %qx: (%u,%qx) \n", 
-       ts(), a->k, succ.ip, succ.id);
+#ifdef CHORD_DEBUG
+    printf ("%s koorde_next: done succ key = %qx: (%u,%qx) \n", ts(), a->k, succ.ip, succ.id);
+#endif
   } else if (a->i == me.id || ConsistentHash::betweenrightincl (me.id, succ.id, a->i)) {
     r->k = a->k;
     r->kshift = a->kshift;
@@ -326,8 +338,10 @@ Koorde::koorde_next(koorde_lookup_arg *a, koorde_lookup_ret *r)
       }
     } while (kk < a->badnodes.size());
     r->done = false;
-    printf ("%s Koorde_next: contact de bruijn (%u,%qx) i=%qx kshift=%qx debruijn pointer %qx \n", ts(),
+#ifdef CHORD_DEBUG
+    printf ("%s koorde_next key %qx: contact de bruijn (%u,%qx) i=%qx kshift=%qx debruijn pointer %qx \n", ts(), a->k,
       r->next.ip, r->next.id, r->i, r->kshift, debruijn);
+#endif
   } else {
     r->k = a->k;
     r->i = a->i;
@@ -346,8 +360,10 @@ Koorde::koorde_next(koorde_lookup_arg *a, koorde_lookup_ret *r)
     r->kshift = a->kshift;
     r->done = false;
  //   assert (ConsistentHash::betweenrightincl (me.id, r->i, r->next.id));
-    printf ("%s Koorde_next: follow succ (%u,%qx) pointer to (%u,%qx) i=%qx kshift=%qx debruijn pointer %qx \n", ts(),
+#ifdef CHORD_DEBUG
+    printf ("%s koorde_next key %qx: follow succ (%u,%qx) pointer to (%u,%qx) i=%qx kshift=%qx debruijn pointer %qx \n", ts(), a->k,
       succ.ip, succ.id, r->next.ip, r->next.id, r->i, r->kshift, debruijn);
+#endif
 
   }
 }
@@ -377,7 +393,7 @@ Koorde::fix_debruijn ()
       loctable->add_node(gsr.v[i]);
   }else {
     if (!ok) loctable->del_node(dpred);
-    vector<IDMap> scs = find_successors(debruijnpred, resilience-1, resilience-1, TYPE_FINGER_LOOKUP, &last, NULL);
+    vector<IDMap> scs = find_successors(debruijnpred, resilience-1, TYPE_FINGER_LOOKUP, &last, NULL);
     if (scs.size() > 0) {
       loctable->add_node(last);
       for (uint i = 0; i < scs.size(); i++) {
@@ -402,7 +418,7 @@ NEXT:
 //	ts(), debruijn, gsr.v[0].ip, gsr.v[0].id, dpred.ip, dpred.id);
   } else {
     if (!ok) loctable->del_node(dpred);
-    vector<IDMap> scs = find_successors (debruijn, fingers - 1, fingers-1, TYPE_FINGER_LOOKUP, &last, NULL);
+    vector<IDMap> scs = find_successors (debruijn, fingers - 1, TYPE_FINGER_LOOKUP, &last, NULL);
     if (scs.size() > 0) {
  //     printf("%s stabilize fix_debruijn finished debruijn %qx, its succ %d,%qx its last(pred) %d,%qx\n", 
 //	  ts(), debruijn, scs[0].ip, scs[0].id, last.ip, last.id);
@@ -551,10 +567,18 @@ Koorde::initstate()
   x = (x / nnodes);
   x = x * y;
   debruijnpred = debruijn - x;
+  IDMap tmp;
+  tmp.id = debruijnpred;
+  uint pos = upper_bound(ids.begin(), ids.end(), tmp, Chord::IDMap::cmp) - ids.begin();
+  for (uint i = 0; i < resilience; i++) 
+    loctable->add_node(ids[(i+pos)%nnodes],false,true);
 
-  if (resilience > 0) {
-    loctable->pin (debruijnpred, resilience, 1);
-  }
+  tmp.id = debruijn;
+  pos = upper_bound(ids.begin(), ids.end(), tmp, Chord::IDMap::cmp) - ids.begin();
+  printf("%s initstate debrujin %qx is %u %u,%qx\n", ts(), debruijn, pos, ids[pos%nnodes].ip, ids[pos%nnodes].id);
+  for (uint i = 0; i < fingers; i++) 
+    loctable->add_node(ids[(i+pos)%nnodes],false,true);
+
   Chord::initstate();
 }
 

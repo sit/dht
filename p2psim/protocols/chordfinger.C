@@ -187,7 +187,7 @@ ChordFinger::fix_fingers(bool restart)
 	    get_predsucc_args gpa;
 	    get_predsucc_ret gpr;
 	    gpa.pred = true;
-	    gpa.m = _fingerlets;
+	    gpa.m = (_fingerlets - 1);
 	    ok = failure_detect(currf, &Chord::get_predsucc_handler, &gpa, &gpr, TYPE_FINGER_UP,0,0);
 	    if(ok) {
 	      valid_fingers++;
@@ -252,7 +252,7 @@ ChordFinger::join(Args *args)
     _stab_finger_running = true;
     reschedule_finger_stabilizer((void *)1); //a hack, no null means restart fixing fingres
   }else if (_join_scheduled == 0) {
-    //ChordFinger::fix_fingers();
+    ChordFinger::fix_fingers();
   }
 }
 

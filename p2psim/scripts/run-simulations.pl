@@ -22,7 +22,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-# $Id: run-simulations.pl,v 1.22 2004/02/03 23:32:09 jinyang Exp $
+# $Id: run-simulations.pl,v 1.23 2004/03/11 02:21:57 jinyang Exp $
 
 use strict;
 use Getopt::Long;
@@ -69,6 +69,7 @@ run-simulations [options]
     --observer                Use an observer
     --nice <n>                run p2psim nice
     --command <cmd>           p2psim or some other binary?
+    --ipkey <n>		      ipkey 1 or 0?
     --dontdie<n>              dont die after seg faults
 
 EOUsage
@@ -85,7 +86,7 @@ my %options;
 &GetOptions( \%options, "help|?", "topology=s", "lookupmean=s", "protocol=s", 
 	     "lifemean=s", "deathmean=s", "exittime=s", "churnfile=s", 
 	     "argsfile=s", "logdir=s", "seed=s", "nice=i", "randomize=i",
-             "observer", "stattime=s", "command=s","dontdie=i") 
+             "observer", "stattime=s", "command=s","ipkey=i","dontdie=i") 
     or &usage;
 
 if( $options{"help"} ) {
@@ -199,6 +200,7 @@ if (defined $options{"command"}) {
 if (defined $options{"dontdie"}) {
   $dontdie = $options{"dontdie"};
 }
+
 
 #if( $seed ne "" ) {
 #    $p2psim_cmd .= " -e $seed";
@@ -452,11 +454,12 @@ sub run_command {
     print LOG "# topology=$topology seed=$randseed\n";
     close( LOG );
     
-    print "# $arg_string randseed $randseed > $logfile \n";
     #print "$p2psim_cmd $protfile $topology $eventfile >> $logfile";
     my $before = time();
-    my $failexit = system( "$p2psim_cmd -e $randseed $protfile $topology $eventfile >> $logfile " .
-	    "2>> $logfile" );
+    my $failexit = 0;
+    print "# $arg_string randseed $randseed > $logfile \n";
+    $failexit = system( "$p2psim_cmd -e $randseed $protfile $topology $eventfile >> $logfile " .
+	"2>> $logfile" );
     if (($failexit) && (!$dontdie)) {
       die( "$p2psim_cmd $protfile $topology $eventfile failed" );
     }
@@ -486,7 +489,9 @@ sub write_events_file {
     }
     
     my $ipkeys = 0;
-    if( $protocol eq "Kademlia" or $protocol eq "Kelips" or $protocol 
+    if (defined $options{"ipkey"}) {
+      $ipkeys = $options{"ipkey"};
+    }elsif( $protocol eq "Kademlia" or $protocol eq "Kelips" or $protocol 
 	eq "ChordFingerPNS" or $protocol eq "ChordFinger") {
 	$ipkeys = 1;
     }

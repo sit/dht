@@ -52,9 +52,11 @@ class ChordFingerPNS: public Chord {
 
     void learn_info(IDMap n);
     bool replace_node(IDMap n, IDMap &replacement);
+    uint num_live_samples(vector<IDMap> ss);
 
   protected:
     uint _base;
+    uint _fingerlets;
     int _samples;
     uint _stab_pns_outstanding;
     uint _stab_pns_timer;

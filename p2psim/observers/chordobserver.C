@@ -84,6 +84,65 @@ ChordObserver::get_sorted_nodes()
   assert(ids.size()>0);
   return ids;
 }
+/*
+//calculate how much time it takes to fetch the closest m out of r*m fragments
+void
+ChordObserver::static_simulation()
+{
+  Topology *t = Network::Instance()->gettopology();
+  unsigned rate = 2;
+  double all = 0.0;
+  unsigned query = 0;
+  unsigned max = 16;
+  vector<unsigned> lat;
+  for (unsigned m = 1; m <= max/rate; m++) {
+    unsigned l = m * rate;
+    query = 0;
+    all = 0.0;
+    for (unsigned id = 0; id < ids.size(); id++) {
+      for (unsigned i = 0; i < 10; i++) {
+	unsigned dstid = random() % (ids.size()+1);
+	lat.clear();
+	for (unsigned x = 0; x < l; x++) 
+	  lat.push_back(2*t->latency(ids[id].ip,ids[dstid+x].ip));
+	sort(lat.begin(),lat.end());
+//	alllat.push_back(lat[m-1]);
+	all+=lat[m-1];
+	query++;
+      }
+    }
+    printf("%u %.3f\n",m,all/(double)query);
+  }
+
+}
+*/
+void
+ChordObserver::static_simulation()
+{
+  const set<Node*> *l = Network::Instance()->getallnodes();
+  Topology *t = Network::Instance()->gettopology();
+  uint query = 0;
+  double all = 0.0;
+
+  for(set<Node*>::iterator pos = l->begin(); pos != l->end(); ++pos) {
+    Chord *start = dynamic_cast<Chord*>(*pos);
+    for (uint i = 0; i < 10; i++) {
+      unsigned lat = 0;
+      Chord *curr = start;
+      Chord::CHID key = ConsistentHash::getRandID();
+      Chord::IDMap next = curr->next_hop(key);
+      while (next.ip!=curr->ip()) {
+	lat += t->latency(curr->ip(),next.ip);
+	curr = dynamic_cast<Chord*>(Network::Instance()->getnode(next.ip));
+	next = curr->next_hop(key);
+      }
+      lat += t->latency(next.ip,start->ip());
+      all += (double)lat;
+      query++;
+    }
+  }
+  printf("%.3f %u\n",all/query,query);
+}
 
 ChordObserver::~ChordObserver()
 {

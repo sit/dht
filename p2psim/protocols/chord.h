@@ -27,6 +27,7 @@
 
 #include "p2psim/p2protocol.h"
 #include "consistenthash.h"
+#include "p2psim/network.h"
 
 #define TIMEOUT_RETRY 5
 
@@ -203,6 +204,9 @@ public:
   void add_edge(int *matrix, int sz);
 
   virtual void dump();
+
+  IDMap next_hop(CHID k);
+
   char *ts();
 
   void stabilize();
@@ -275,9 +279,11 @@ typedef struct {
   uint pin_pred;
 } pin_entry;
 
-#define LOC_HEALTHY 0
-#define LOC_ONCHECK 1
-#define LOC_DEAD 2
+#define LOC_REPLACEMENT 0
+#define LOC_HEALTHY 1
+#define LOC_ONCHECK 2
+#define LOC_DEAD 3
+
 struct idmapwrap {
     Chord::IDMap n;
     Chord::CHID id;
@@ -328,7 +334,7 @@ class LocTable {
     void print();
 
     bool update_ifexists(Chord::IDMap n);
-    void add_node(Chord::IDMap n, bool is_succ=false, bool assertadd=false,Chord::CHID fs=0,Chord::CHID fe=0);
+    void add_node(Chord::IDMap n, bool is_succ=false, bool assertadd=false,Chord::CHID fs=0,Chord::CHID fe=0, bool replacement=false);
     int add_check(Chord::IDMap n);
     void add_sortednodes(vector<Chord::IDMap> l);
     void del_node(Chord::IDMap n, bool force=false);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 [NAMES_GO_HERE]
+ * Copyright (c) 2003 [Jinyang Li]
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -48,6 +48,7 @@ void
 G2Graph::parse(ifstream &ifs)
 {
   string line;
+  string distfile;
   while (getline(ifs,line)) {
     vector<string> words = split(line);
     // skip empty lines and commented lines
@@ -55,29 +56,34 @@ G2Graph::parse(ifstream &ifs)
       continue;
 
     if (words.size() == 2) {
-
-      if (words[0] != "node") {
+      if (words[0] != "latencydistribution") {
 	cerr << "wrong G2Graph format" << endl;
       }
-
-      IPAddress ipaddr = atoi(words[1].c_str());
-      assert(ipaddr > 0 && ipaddr <= _num);
-
-      // what kind of node?
-      Node *p = ProtocolFactory::Instance()->create(ipaddr);
-
-      // add the node to the network
-      send(Network::Instance()->nodechan(), &p);
-
-    } else { 
-      int lat = atoi(words[0].c_str());
-      assert(lat > 0);
-      _samples.push_back(lat);
+      distfile = words[1];
+      break;
     }
+  }
+
+  //get sample distribution
+  ifstream in(distfile.c_str());
+  while (getline(in,line)) {
+    int lat = atoi(line.c_str());
+    assert(lat > 0);
+    _samples.push_back(lat);
   }
   sort(_samples.begin(), _samples.end());
   _med_lat = _samples[_samples.size()/2];
-}
+
+  //create nodes
+  for (uint ipaddr = 1; ipaddr <= _num; ipaddr++) {
+
+    // what kind of node?
+    Node *p = ProtocolFactory::Instance()->create(ipaddr);
+
+    // add the node to the network
+    send(Network::Instance()->nodechan(), &p);
+  }
+} 
 
 Time
 G2Graph::latency(IPAddress ip1, IPAddress ip2, bool reply)
