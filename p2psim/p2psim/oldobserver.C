@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "oldobserveevent.h"
+#include "p2psim/oldobserveevent.h"
 #include "eventqueue.h"
 
 Oldobserver::Oldobserver(Args *a)

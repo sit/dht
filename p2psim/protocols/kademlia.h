@@ -35,8 +35,7 @@ using namespace std;
 // {{{ class k_nodeinfo
 class k_nodeinfo {
 public:
-  // typedef ConsistentHash::CHID NodeID;
-  typedef unsigned NodeID;
+  typedef ConsistentHash::CHID NodeID;
   k_nodeinfo(NodeID, IPAddress);
   NodeID id;
   IPAddress ip;
@@ -52,8 +51,7 @@ class Kademlia : public P2Protocol {
 // {{{ public
 public:
   class older;
-  // typedef ConsistentHash::CHID NodeID;
-  typedef unsigned NodeID;
+  typedef ConsistentHash::CHID NodeID;
   typedef set<k_nodeinfo*, older> nodeinfo_set;
   Kademlia(Node*, Args);
   ~Kademlia() {}
@@ -61,7 +59,7 @@ public:
   string proto_name() { return "Kademlia"; }
   virtual void join(Args*);
   virtual void crash(Args*) {}
-  virtual void lookup(Args*) {}
+  virtual void lookup(Args*);
 
   //
   // functors
@@ -116,7 +114,7 @@ public:
   //
   // observer methods
   //
-  NodeID id()      { return _id; }
+  NodeID id() const { return _id; }
   k_bucket *root() { return _root; }
   bool stabilized(vector<NodeID>*);
 
@@ -153,6 +151,8 @@ public:
   // hack to pre-initialize k-buckets
   void init_state(list<Protocol*>);
   void reschedule_stabilizer(void*);
+  friend class k_bucket;
+  void setroot(k_bucket *k) { _root = k; }
 
   //
   // member variables
@@ -205,20 +205,23 @@ public:
   Kademlia *kademlia()  { return _kademlia; }
   void traverse(k_traverser*, string = "", unsigned = 0);
   void insert(Kademlia::NodeID, bool = false, string = "", unsigned = 0);
-  void erase(Kademlia::NodeID);
+  void erase(Kademlia::NodeID, string = "", unsigned = 0);
   virtual void checkrep() const;
 
   bool leaf;
 
+protected:
+  k_bucket *parent;
+
 private:
-  k_bucket *_parent;
   Kademlia *_kademlia;
 };
 // }}}
 // {{{ class k_bucket_node
 class k_bucket_node : public k_bucket {
 public:
-  k_bucket_node(k_bucket *parent);
+  k_bucket_node(k_bucket *);
+  k_bucket_node(Kademlia *);
   k_bucket *child[2];
   virtual void checkrep() const;
 };
@@ -229,6 +232,7 @@ class k_bucket_leaf : public k_bucket {
 public:
   k_bucket_leaf(Kademlia *);
   k_bucket_leaf(k_bucket *);
+  k_bucket_node* divide(unsigned);
   virtual void checkrep() const;
 
   k_nodes *nodes;
@@ -244,13 +248,14 @@ class k_bucket_leaf;
 class k_nodes {
 public:
   typedef set<k_nodeinfo*, Kademlia::older> nodeset_t;
-  k_nodes(k_bucket_leaf *_parent);
-  void insert(Kademlia::NodeID n);
-  void erase(Kademlia::NodeID n);
-  bool contains(Kademlia::NodeID n);
-  bool full() { return nodes.size() >= Kademlia::k; }
-  bool empty() { return !nodes.size(); }
-  void checkrep() const;
+  k_nodes(k_bucket_leaf *parent);
+  void insert(Kademlia::NodeID);
+  void erase(Kademlia::NodeID);
+  bool contains(Kademlia::NodeID) const;
+  bool inrange(Kademlia::NodeID) const;
+  bool full() const { return nodes.size() >= Kademlia::k; }
+  bool empty() const { return !nodes.size(); }
+  void checkrep(bool = true) const;
 
   nodeset_t nodes;
 

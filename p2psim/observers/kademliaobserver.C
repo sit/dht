@@ -107,7 +107,7 @@ KademliaObserver::stabilized()
     }
   }
 
-  DEBUG(1) << now() << " STABILIZED" << endl;
+  cout << now() << " STABILIZED" << endl;
   DEBUG(1) << now() << " Kademlia finger tables" << endl;
   for (pos = l.begin(); pos != l.end(); ++pos) {
     assert(k);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 Thomer M. Gil (thomer@csail.mit.edu)
+ * Copyright (c) 2003 [NAMES_GO_HERE]
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -25,8 +25,8 @@
 #ifndef __OBSERVEEVENT_H
 #define __OBSERVEEVENT_H
 
-#include "event.h"
-#include "oldobserver.h"
+#include "p2psim/event.h"
+#include "p2psim/oldobserver.h"
 using namespace std;
 
 class OldobserveEvent : public Event {

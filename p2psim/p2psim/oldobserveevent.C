@@ -23,8 +23,8 @@
  */
 
 #include "oldobserveevent.h"
-#include "oldobserverfactory.h"
-#include "parse.h"
+#include "observers/oldobserverfactory.h"
+#include "p2psim/parse.h"
 
 OldobserveEvent::OldobserveEvent()
 {

@@ -28,6 +28,7 @@
 #define NBCHID (sizeof(ConsistentHash::CHID)*8)
 
 #include <openssl/sha.h>
+#include <assert.h>
 
 class ConsistentHash {
 public:

@@ -19,7 +19,7 @@ p2psim_core_o_SOURCES = anyready.C condvar.C p2protocol.C event.C \
 		        p2psim.C packet.C parse.C protocol.C \
 		        rpchandle.C threaded.C threadmanager.C \
 		        threadspeedup.C tmgdmalloc.C topology.C \
-		        oldobserver.C
+		        oldobserver.C oldobserveevent.C
 p2psim_core_o_LIBS =
 p2psim_core_o_LINK = $(LD) -r -o $@
 
