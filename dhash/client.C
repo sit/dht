@@ -52,7 +52,6 @@
 #endif
 #include <ida.h>
 
-
 // ---------------------------------------------------------------------------
 // DHASH_STORE
 //     - store a give block of data on a give nodeID.
@@ -594,77 +593,89 @@ void
 dhashcli::insert2_succs_cb (ref<dhash_block> block, cbinsert_t cb,
 			    vec<chord_node> succs, chordstat err)
 {
-  if (err) 
+  if (err) {
     (*cb) (DHASH_CHORDERR, 0);
-  else {
-    ref<u_int> out = New refcounted<u_int> (0);
-    str blk (block->data, block->len);
+    return;
+  }
 
-    if (NUM_EFRAGS > succs.size ()) {
-      warn << "Not enough successors: |succs| " << succs.size ()
-	   << ", EFRAGS " << NUM_EFRAGS << "\n";
-      (*cb) (DHASH_STOREERR, 0); // XXX Not the right error code...
-      return;
-    }
-
-    for (u_int i = 0; i < NUM_EFRAGS; i++) {
-      assert (i < succs.size ());
-      str frag = Ida::gen_frag (NUM_DFRAGS, blk);
-
-      ref<s_dhash_insertarg> arg = New refcounted<s_dhash_insertarg> ();
-
-      arg->key = block->ID;  // frag stored under hash(block)
-      arg->srcID = clntnode->my_ID ();
-      clntnode->locations->get_node (arg->srcID, &arg->from);
+  ref<sto_state> ss = New refcounted<sto_state> (block, cb);
+  ss->succs = succs;
+  
+  if (NUM_EFRAGS > succs.size ()) {
+    warn << "Not enough successors: |succs| " << succs.size ()
+	 << ", EFRAGS " << NUM_EFRAGS << "\n";
+    (*cb) (DHASH_STOREERR, 0); // XXX Not the right error code...
+    return;
+  }
+  
+  str blk (block->data, block->len);
+  
+  for (u_int i = 0; i < NUM_EFRAGS; i++) {
+    assert (i < succs.size ());
+    str frag = Ida::gen_frag (NUM_DFRAGS, blk);
+    
+    ref<s_dhash_insertarg> arg = New refcounted<s_dhash_insertarg> ();
+    
+    arg->key = block->ID;  // frag stored under hash(block)
+    arg->srcID = clntnode->my_ID ();
+    clntnode->locations->get_node (arg->srcID, &arg->from);
+    
+    // prepend type of block onto fragment and copy into arg.
+    int realfraglen = frag.len () + 4;
+    arg->data.setsize (realfraglen);
+    bcopy (block->data, arg->data.base (), 4);
+    bcopy (frag.cstr (), arg->data.base () + 4, frag.len());
+    
+    arg->offset  = 0;
+    arg->type    = DHASH_CACHE; // XXX bit of a hack..see server.C::dispatch()
+    arg->nonce   = 0;
+    arg->attr.size  = realfraglen;
+    arg->last    = false;
+    
+    warn << "Frag " << i << " to " << succs[i].x << "\n";
+    bigint h = compute_hash (arg->data.base (), arg->data.size ());
+    warn << "Put frag: " << i << " " << h << " " << arg->data.size () << "\n";
       
-      // prepend type of block onto fragment and copy into arg.
-      int realfraglen = frag.len () + 4;
-      arg->data.setsize (realfraglen);
-      bcopy (block->data, arg->data.base (), 4);
-      bcopy (frag.cstr (), arg->data.base () + 4, frag.len());
-      
-      arg->offset  = 0;
-      arg->type    = DHASH_CACHE; // XXX bit of a hack..see server.C::dispatch()
-      arg->nonce   = 0;
-      arg->attr.size  = realfraglen;
-      arg->last    = false;
-
-      warn << "Frag " << i << " to " << succs[i].x << "\n";
-      bigint h = compute_hash (arg->data.base (), arg->data.size ());
-      warn << "Put frag: " << i << " " << h << " " << arg->data.size () << "\n";
-
-
-      ref<dhash_storeres> res = New refcounted<dhash_storeres> (DHASH_OK);
-      // Count up for each RPC that will be dispatched
-      *out += 1;
-      clntnode->doRPC (succs[i], dhash_program_1, DHASHPROC_STORE, 
-		       arg, res,
-		       wrap (this, &dhashcli::insert2_store_cb, block, cb, out, i, res));
-    }
+    
+    ref<dhash_storeres> res = New refcounted<dhash_storeres> (DHASH_OK);
+    // Count up for each RPC that will be dispatched
+    ss->out += 1;
+    clntnode->doRPC (succs[i], dhash_program_1, DHASHPROC_STORE, 
+		     arg, res,
+		     wrap (this, &dhashcli::insert2_store_cb, ss, i, res));
   }
 }
 
 void
-dhashcli::insert2_store_cb (ref<dhash_block> block, cbinsert_t cb, 
-			    ref<u_int> out, u_int i, ref<dhash_storeres> res,
+dhashcli::insert2_store_cb (ref<sto_state> ss, u_int i, ref<dhash_storeres> res,
 			    clnt_stat err)
 {
+  ss->out -= 1;
   if (err) {
-    // We should do something here to try and store this fragment
-    // somewhere else.
-    fatal << "store failed: " << block->ID
+    warnx << "fragment store failed: " << ss->block->ID
 	  << " fragment " << i << "/" << NUM_EFRAGS
-	  << ": RPC error" << "\n";
+	  << ": " << err << "\n";
+  } else {
+    ss->good += 1;
   }
 
   // Count down until all outstanding RPCs have returned
-  *out -= 1;
-  if (*out == 0)
-    (*cb) (DHASH_OK, block->ID);
+  if (ss->out == 0) {
+    if (ss->good < NUM_EFRAGS) {
+      trace << "store (" << ss->block->ID << "): only stored " << ss->good
+	    << " of " << NUM_EFRAGS << " encoded.\n";
+      if (ss->good < NUM_DFRAGS) {
+	trace << "store (" << ss->block->ID << "): failed;"
+	  " insufficient frags stored.\n";
+	(*ss->cb) (DHASH_STOREERR, ss->succs[0].x);
+	// We should do something here to try and store this fragment
+	// somewhere else.
+	return;
+      }
+    }
+    (*ss->cb) (DHASH_OK, ss->succs[0].x);
+  }
 }
-
-
-
 
 void
 dhashcli::insert (chordID blockID, ref<dhash_block> block, 

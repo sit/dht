@@ -14,7 +14,7 @@ typedef callback<void, dhash_stat, chordID, route>::ref dhashcli_routecb_t;
 class vnode;
 class dhash;
 class route_factory;
-
+class dhash_block;
 
 class dhashcli {
   ptr<vnode> clntnode;
@@ -47,6 +47,20 @@ class dhashcli {
 
   ihash<chordID, rcv_state, &rcv_state::key, &rcv_state::link, hashID> rcvs;
 
+  // State for a fragment store
+  struct sto_state {
+    ref<dhash_block> block;
+    route r;
+    vec<chord_node> succs;
+    cbinsert_t cb;
+    
+    u_int out;
+    u_int good;
+    
+    sto_state (ref<dhash_block> b, cbinsert_t x) :
+      block (b), cb (x), out (0), good (0) {}
+  };
+
 
 private:
   void doRPC (chordID ID, const rpc_program &prog, int procno, ptr<void> in, 
@@ -71,8 +85,7 @@ private:
 			  dhash_stat status, chordID destID, route r);
   void insert2_succs_cb (ref<dhash_block> block, cbinsert_t cb,
 			 vec<chord_node> succs, chordstat err);
-  void insert2_store_cb (ref<dhash_block> block, cbinsert_t cb, 
-			 ref<u_int> out, u_int i, ref<dhash_storeres> res,
+  void insert2_store_cb (ref<sto_state> ss, u_int i, ref<dhash_storeres> res,
 			 clnt_stat err);
 
   void fetch_frag (rcv_state *rs);
