@@ -37,7 +37,7 @@ P2PEvent::P2PEvent(vector<string> *v) : Event(v)
   this->event = (Protocol::EventID) atoi(proto_action[1].c_str());
 
   // create a map for the arguments
-  this->args = new Protocol::Args;
+  this->args = new Args;
   assert(this->args);
   for(unsigned int i=2; i<v->size(); i++) {
     vector<string> arg = split((*v)[i], "=");
@@ -63,7 +63,7 @@ P2PEvent::execute()
   Channel *c = proto->appchan();
   assert(c);
 
-  // XXX: this seems to be non-blocking.  is that correct?
+  // XXX: uhm. pointer on stack? yikes. but it's blocking, so probably ok.
   P2PEvent *me = this;
   send(c, &me);
 }

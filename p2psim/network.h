@@ -22,6 +22,7 @@ public:
   Channel* nodechan() { return _nodechan; }
   Node* getnode(IPAddress id) { return _nodes[id]; }
   Topology *gettopology() { return _top; }
+  list<Protocol*> getallprotocols(string);
 
 private:
   Network(Topology*);

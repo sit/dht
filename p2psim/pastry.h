@@ -8,8 +8,8 @@ using namespace std;
 
 class Pastry : public Protocol {
 public:
-  typedef long long NodeID;
   const unsigned idlength;
+  typedef long long NodeID;
 
   Pastry(Node*);
   ~Pastry();

@@ -2,9 +2,10 @@
 #define __PROTOCOL_H
 
 #include "threaded.h"
-#include "p2psim.h"
+#include "args.h"
 #include <string>
 #include <map>
+#include "p2psim.h"
 using namespace std;
 
 class Node;
@@ -26,15 +27,6 @@ public:
   virtual ~Protocol();
   Channel *appchan() { return _appchan; }
   Channel *netchan() { return _netchan; }
-
-  // arguments
-  class Args : public map<string,string> {
-  public:
-    template<class T>
-    T nget(string s) {
-      return (T) atoi((*this)[s].c_str());
-    }
-  };
 
   virtual void join(Args*) = 0;
   virtual void leave(Args*) = 0;

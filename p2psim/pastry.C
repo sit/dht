@@ -2,19 +2,20 @@
 #include "packet.h"
 #include <iostream>
 #include "p2psim.h"
+#include <stdlib.h>
 using namespace std;
 
 Pastry::Pastry(Node *n) : Protocol(n),
   // suggested values in paper
-  idlength(64),
+  idlength(8*sizeof(NodeID)),
   _b(4),
   _L(2 << _b),
   _M(2 << _b)
 {
-  // create a random 128-bit ID
-  // _id = random;
-  _id = 5;
-  cout << "Pastry id = " << _id << endl;
+  _id = random();
+  _id <<= 32;   // XXX: not very portable
+  _id |= random();
+  printf("id = %llX\n", _id);
 }
 
 
@@ -58,11 +59,12 @@ Pastry::lookup(Args *args)
 unsigned
 Pastry::shared_prefix_len(NodeID n, NodeID m)
 {
-  /*
-  for(int i=0; i<idlength; i++)
-    if(BN_is_bit_set(n, i) != BN_is_bit_set(m, i))
+  NodeID mask;
+  for(int i=0; i<idlength; i++) {
+    mask = 1 << (idlength - i);
+    if(n | mask != m | mask)
       return i;
-  */
+  }
   return idlength;
 }
 
@@ -74,19 +76,7 @@ Pastry::shared_prefix_len(NodeID n, NodeID m)
 unsigned
 Pastry::get_digit(NodeID nx, unsigned d)
 {
-  /*
-  NodeID n = BN_new();
-  BN_rshift(n, nx, (idlength - _b*d)); // n = n << (idlength-b*d)
-  BN_mask_bits(n, _b);                 // n |= b
-
-  unsigned r = 0;
-  for(int i=0; i<_b; i++)
-    if(BN_is_bit_set(n, i))
-      r |= 1<<i;
-  BN_free(n);
-  return r;
-  */
-  return 5;
+  return (nx >> (idlength-_b*d)) | _b;
 }
 
 

@@ -79,6 +79,7 @@ EventQueue::graceful_exit()
     yield();
 
   ::graceful_exit();
+
   delete this;
 }
 

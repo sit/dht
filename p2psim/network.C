@@ -41,6 +41,18 @@ Network::~Network()
 }
 
 
+list<Protocol*>
+Network::getallprotocols(string proto)
+{
+  list<Protocol*> pl; // XXX: should we just new this?  return may be expensive
+
+  for(NMCI p = _nodes.begin(); p != _nodes.end(); ++p)
+    pl.push_back(p->second->getproto(proto));
+  return pl;
+}
+
+
+
 void
 Network::run()
 {

@@ -7,12 +7,15 @@
 # event type "simulator"
 #   simulator timestamp exit
 #
-node 0 1 Chord:0 wellknown=1 
-node 1 2 Chord:0 wellknown=1
-node 2 3 Chord:0 wellknown=1
-node 3 4 Chord:0 wellknown=1
+# event type "observe"
+#   observe timestamp observer [arguments]
+#
+node 0 1 Kademlia:0 wellknown=1 
+node 1 2 Kademlia:0 wellknown=1
+node 2 3 Kademlia:0 wellknown=1
+node 3 4 Kademlia:0 wellknown=1
 
-node 2 1 Kademlia:0 wellknown=1
+observe 100 ChordObserver jinyang=happy
 
 #this doesn't work yet.
 #simulator 100 exit

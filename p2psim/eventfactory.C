@@ -1,6 +1,7 @@
 #include "eventfactory.h"
 #include "p2pevent.h"
 #include "simevent.h"
+#include "observeevent.h"
 #include <iostream>
 using namespace std;
 
@@ -40,5 +41,7 @@ EventFactory::create(string type, vector<string> *v)
     e = new P2PEvent(v);
   else if(type == "simulator")
     e = new SimEvent(v);
+  else if(type == "observe")
+    e = new ObserveEvent(v);
   return e;
 }
