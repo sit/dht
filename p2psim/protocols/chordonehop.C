@@ -76,13 +76,7 @@ ChordOneHop::stabilize()
   assert(succ.ip);
   //record_stat(); 
   bool ok;
-  if (_vivaldi) {
-    Chord *target = dynamic_cast<Chord*>(getpeer(succ.ip));
-    ok = _vivaldi->doRPC(succ.ip, target, &Chord::null_handler, 
-	(void *)NULL, (void *)NULL);
-  }else{
-    ok = doRPC(succ.ip, &Chord::null_handler, (void *)NULL, (void *)NULL);
-  }
+  ok = doRPC(succ.ip, &Chord::null_handler, (void *)NULL, (void *)NULL);
 
   if (!ok) { //notify the whole world
     loctable->del_node(succ);
@@ -139,9 +133,6 @@ ChordOneHop::getloctable_handler(void *args, get_successor_list_ret *ret)
 void
 ChordOneHop::join(Args *args)
 {
-  if (_vivaldi_dim > 0) {
-    _vivaldi = New Vivaldi10(this, _vivaldi_dim, 0.05, 1); 
-  }
 
   _inited = true;
   IDMap wkn;

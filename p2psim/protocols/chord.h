@@ -26,7 +26,6 @@
 #define __CHORD_H
 
 #include "p2psim/p2protocol.h"
-#include "misc/vivaldi.h"
 #include "consistenthash.h"
 
 //#define CHORD_DEBUG
@@ -47,7 +46,6 @@ class LocTable;
 
 class Chord : public P2Protocol {
 public:
-  Vivaldi *_vivaldi;
   
   typedef ConsistentHash::CHID CHID;
 
@@ -71,10 +69,6 @@ public:
   virtual void lookup(Args*);
   virtual void insert(Args*) {};
 
-
-  Vivaldi::Coord get_coords () {
-    return _vivaldi->my_location ();
-  }
 
   struct get_predecessor_args {
     int dummy;
@@ -195,7 +189,6 @@ protected:
   //chord parameters
   uint _nsucc;
   uint _allfrag;
-  uint _vivaldi_dim;
   uint _timeout;
   bool _stab_basic_running;
   uint _stab_basic_timer;

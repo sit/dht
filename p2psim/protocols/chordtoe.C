@@ -26,6 +26,7 @@
 
 #include "chordtoe.h"
 #include "observers/chordobserver.h"
+#include "p2psim/network.h"
 
 #define TOE_GREEDY_LAT 0
 #define TOE_GREEDY_ID 1

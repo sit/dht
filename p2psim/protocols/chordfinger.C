@@ -107,13 +107,8 @@ ChordFinger::fix_fingers(bool restart)
 	get_predecessor_args gpa;
 	get_predecessor_ret gpr;
 	record_stat(0, TYPE_FINGER_UP);
-	if (_vivaldi) {
-	  Chord *target = dynamic_cast<Chord*>(getpeer(currf.ip));
-	  ok = _vivaldi->doRPC(currf.ip, target, &Chord::get_predecessor_handler, 
-	      &gpa, &gpr);
-	}else 
-	  ok = doRPC(currf.ip, &Chord::get_predecessor_handler,
-	      &gpa, &gpr);
+	ok = doRPC(currf.ip, &Chord::get_predecessor_handler,
+		   &gpa, &gpr);
 	if(ok) record_stat(4, TYPE_FINGER_UP);
 
 	if (!ok) {

@@ -24,6 +24,7 @@
 
 #include  "chordfingerpns.h"
 #include "observers/chordobserver.h"
+#include "p2psim/network.h"
 #include <stdio.h>
 extern bool static_sim;
 
@@ -190,11 +191,7 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
 	  prevfpred.ip = 0;
 	  //just ping this finger to see if it is alive
 	  record_stat(0, TYPE_PNS_UP);
-	  if (_vivaldi) {
-	    Chord *target = dynamic_cast<Chord*>(getpeer(currf.ip));
-	    ok = _vivaldi->doRPC(currf.ip, target, &Chord::null_handler, (void *)NULL, (void *)NULL);
-	  }else 
-	    ok = doRPC(currf.ip, &Chord::null_handler, (void *)NULL, (void *)NULL);
+	  ok = doRPC(currf.ip, &Chord::null_handler, (void *)NULL, (void *)NULL);
 	  if(ok) {
 	    record_stat(0, TYPE_PNS_UP);
 	    loctable->add_node(currf);//update timestamp
@@ -217,12 +214,7 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
 	    get_predecessor_args gpa;
 	    get_predecessor_ret gpr;
 	    record_stat(0, TYPE_PNS_UP);
-	    if (_vivaldi) {
-	      Chord *target = dynamic_cast<Chord*>(getpeer(currf.ip));
-	      ok = _vivaldi->doRPC(currf.ip, target, &Chord::get_predecessor_handler, 
-		&gpa, &gpr);
-	    }else 
-	      ok = doRPC(currf.ip, &Chord::get_predecessor_handler, &gpa, &gpr);
+	    ok = doRPC(currf.ip, &Chord::get_predecessor_handler, &gpa, &gpr);
 	    if(ok) {
 	      record_stat(4, TYPE_PNS_UP);
 	      loctable->add_node(currf);//update timestamp

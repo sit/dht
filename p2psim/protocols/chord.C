@@ -23,8 +23,10 @@
  */
 
 #include "observers/chordobserver.h"
+#include "p2psim/network.h"
 #include <stdio.h>
 #include <assert.h>
+
 extern bool vis;
 bool static_sim;
 
@@ -49,9 +51,6 @@ Chord::Chord(IPAddress i, Args& a, LocTable *l) : P2Protocol(i), _isstable (fals
     static_sim = true;
   else
     static_sim = false;
-
-  //whether Chord uses vivaldi
-  _vivaldi_dim = a.nget<uint>("vivaldidim", 0, 10);
 
   //stabilization timer
   _stab_basic_timer = a.nget<uint>("basictimer", 10000, 10);
@@ -84,7 +83,6 @@ Chord::Chord(IPAddress i, Args& a, LocTable *l) : P2Protocol(i), _isstable (fals
 
   _max_lookup_time = a.nget<uint>("maxlookuptime",4000,10);
 
-  _vivaldi = NULL;
   _wkn.ip = 0;
 
   assert(_frag <= _nsucc);
@@ -779,7 +777,6 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
   lookup_path tmp;
   IDMap next;
   uint sz, i;
-  Chord* target;
 
   check_static_init();
   assert(alive());
@@ -877,11 +874,7 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
     args->path.push_back(tmp);
 
     record_stat(4,args->type);
-    if (_vivaldi) {
-      target = dynamic_cast<Chord *>(getpeer(next.ip));
-      r = _vivaldi->doRPC(next.ip, target, &Chord::next_recurs_handler, args, ret);
-    } else
-      r = doRPC(next.ip, &Chord::next_recurs_handler, args, ret);
+    r = doRPC(next.ip, &Chord::next_recurs_handler, args, ret);
 
     if (!alive()) {
 #ifdef CHORD_DEBUG
@@ -1008,10 +1001,6 @@ Chord::join(Args *args)
 
   if (vis) {
     printf("vis %llu join %16qx\n", now (), me.id);
-  }
-
-  if (_vivaldi_dim > 0) {
-    _vivaldi = New Vivaldi10(this, _vivaldi_dim, 0.05, 1); 
   }
 
   if (!_wkn.ip) {
@@ -1232,12 +1221,7 @@ Chord::fix_predecessor()
 
   gsa.m = 1;
   record_stat(0, TYPE_FIXPRED_UP);
-  if (_vivaldi) {
-      Chord *target = dynamic_cast<Chord *>(getpeer(pred.ip));
-      ok = _vivaldi->doRPC(pred.ip, target, 
-	  &Chord::get_successor_list_handler, &gsa, &gsr);
-  } else 
-      ok = doRPC(pred.ip, &Chord::get_successor_list_handler, &gsa, &gsr);
+  ok = doRPC(pred.ip, &Chord::get_successor_list_handler, &gsa, &gsr);
 
   if (ok) record_stat(4, TYPE_FIXPRED_UP);
 
@@ -1268,7 +1252,6 @@ Chord::fix_successor(void *x)
   get_predecessor_args gpa;
   get_predecessor_ret gpr;
   bool ok;
-  Chord *target;
   alert_args aa;
 
   assert(alive());
@@ -1288,11 +1271,7 @@ Chord::fix_successor(void *x)
     }
 
     record_stat(0, TYPE_FIXSUCC_UP);
-    if (_vivaldi) {
-      target = dynamic_cast<Chord *>(getpeer(succ1.ip));
-      ok = _vivaldi->doRPC(succ1.ip, target, &Chord::get_predecessor_handler, &gpa, &gpr);
-    } else
-      ok = doRPC(succ1.ip, &Chord::get_predecessor_handler, &gpa, &gpr);
+    ok = doRPC(succ1.ip, &Chord::get_predecessor_handler, &gpa, &gpr);
   
     if (ok) record_stat(4, TYPE_FIXSUCC_UP);
 
@@ -1330,11 +1309,7 @@ Chord::fix_successor(void *x)
 
 	  //XXX what if the alert message is lost
 	  record_stat(4, TYPE_FIXSUCC_UP);
-	  if (_vivaldi) {
-	    Chord *target = dynamic_cast<Chord *>(getpeer(succ1.ip));
-	    ok = _vivaldi->doRPC(succ1.ip, target, &Chord::notify_handler, &na, &nr);
-	  } else
-	    ok = doRPC(succ1.ip, &Chord::notify_handler, &na, &nr);
+	  ok = doRPC(succ1.ip, &Chord::notify_handler, &na, &nr);
 	  if (ok) record_stat(0, TYPE_FIXSUCC_UP);
 
 	  if(!alive()) return;
@@ -1387,12 +1362,7 @@ Chord::fix_successor_list()
   gsa.m = _nsucc;
 
   record_stat(0, TYPE_FIXSUCCLIST_UP);
-  if (_vivaldi) {
-    Chord *target = dynamic_cast<Chord *>(getpeer(succ.ip));
-    ok = _vivaldi->doRPC(succ.ip, target, &Chord::get_successor_list_handler, 
-	&gsa, &gsr);
-  } else
-    ok = doRPC(succ.ip, &Chord::get_successor_list_handler, &gsa, &gsr);
+  ok = doRPC(succ.ip, &Chord::get_successor_list_handler, &gsa, &gsr);
   if (ok) record_stat(gsr.v.size()*4, TYPE_FIXSUCCLIST_UP);
 
   if (!alive()) return;
