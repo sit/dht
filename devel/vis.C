@@ -62,7 +62,11 @@ static bool simulated_input = false;
 static GdkColor highlight_color;
 static char *highlight = "cyan4"; // consistent with old presentations
 
-static int zoom = 50;
+static float  zoomx = 1.0;
+static float  zoomy = 1.0;
+static float centerx = 0.0;
+static float centery = 0.0;
+
 static bool ggeo = false;
 
 struct color_pair {
@@ -112,6 +116,7 @@ static chordID search_key; // 0 means no search in progress
 static vec<f_node *> search_path;
 static GdkColor search_color;
 
+void recenter ();
 void setup ();
 ptr<aclnt> get_aclnt (str host, unsigned short port);
 
@@ -164,7 +169,6 @@ void quit_cb (GtkWidget *widget, gpointer data);
 void redraw_cb (GtkWidget *widget, gpointer data);
 void update_cb (GtkWidget *widget, gpointer data);
 void zoom_in_cb (GtkWidget *widget, gpointer data);
-void zoom_out_cb (GtkWidget *widget, gpointer data);
 void geo_cb (GtkWidget *widget, gpointer data);
 void redraw();
 void draw_ring ();
@@ -262,6 +266,10 @@ doRPCcb (chordID ID, int procno, dorpc_res *res, void *out, aclnt_cb cb, clnt_st
   for (unsigned int i = 0; i < res->resok->src_coords.size (); i++)
     nu->coords.push_back (((float)res->resok->src_coords[i])/1000.0);
 
+
+  nu->coords.clear ();
+  for (unsigned int i = 0; i < res->resok->src_coords.size (); i++)
+    nu->coords.push_back (((float)res->resok->src_coords[i])/1000.0);
 
   xdrmem x ((char *)res->resok->results.base (), 
 	    res->resok->results.size (), XDR_DECODE);
@@ -598,8 +606,7 @@ initgraf ()
   GtkWidget *hsep3 = gtk_hseparator_new ();
   lookup = gtk_button_new_with_label ("Visualize Lookup");
 
-  GtkWidget *in = gtk_button_new_with_label ("Zoom In");
-  GtkWidget *out = gtk_button_new_with_label ("Zoom Out");
+  GtkWidget *in = gtk_button_new_with_label ("Recenter");
   GtkWidget *refresh = gtk_button_new_with_label ("Refresh All");
   GtkWidget *quit = gtk_button_new_with_label ("Quit");
   GtkWidget *sep = gtk_vseparator_new ();
@@ -622,7 +629,6 @@ initgraf ()
   gtk_box_pack_end (GTK_BOX (vbox), refresh, FALSE, FALSE, 0);
   gtk_box_pack_end (GTK_BOX (vbox), geo, FALSE, FALSE, 0);
   gtk_box_pack_end (GTK_BOX (vbox), in, FALSE, FALSE, 0);
-  gtk_box_pack_end (GTK_BOX (vbox), out, FALSE, FALSE, 0);
 
   GtkWidget *hbox = gtk_hbox_new (FALSE, 0);
   gtk_box_pack_start (GTK_BOX (hbox), drawing_area, TRUE, FALSE, 0);
@@ -646,9 +652,7 @@ initgraf ()
   gtk_signal_connect_object (GTK_OBJECT (in), "clicked",
 			       GTK_SIGNAL_FUNC (zoom_in_cb),
 			       NULL);
-  gtk_signal_connect_object (GTK_OBJECT (out), "clicked",
-			       GTK_SIGNAL_FUNC (zoom_out_cb),
-			       NULL);
+
   gtk_signal_connect_object (GTK_OBJECT (quit), "clicked",
 			       GTK_SIGNAL_FUNC (quit_cb),
 			       NULL);
@@ -694,7 +698,6 @@ initgraf ()
   gtk_widget_show (last_clicked);
   gtk_widget_show (lookup);
   gtk_widget_show (in);
-  gtk_widget_show (out);
   gtk_widget_show (geo);
   gtk_widget_show (refresh);
   gtk_widget_show (quit);
@@ -726,14 +729,7 @@ geo_cb (GtkWidget *widget, gpointer data)
 void
 zoom_in_cb (GtkWidget *widget, gpointer data)
 {
-  zoom /= 2;
-  redraw ();
-}
-
-void
-zoom_out_cb (GtkWidget *widget, gpointer data)
-{
-  zoom *= 2;
+  recenter ();
   redraw ();
 }
 
@@ -756,6 +752,8 @@ quit_cb (GtkWidget *widget,
   }
   gtk_exit (0);
 }
+
+
 
 unsigned int
 check_get_state (void)
@@ -1412,17 +1410,55 @@ ID_to_angle (chordID ID)
 }
 
 void
+recenter ()
+{
+  f_node *n = nodes.first ();
+
+  float minx=RAND_MAX, miny=RAND_MAX;
+  float maxx=-RAND_MAX, maxy=-RAND_MAX;
+
+  char f[1024];
+
+  while (n) {
+    if (n->coords.size () > 0) {
+      float x = n->coords[0];
+      float y = n->coords[1];
+      float z = n->coords[2];
+      sprintf (f, " %f %f %f", x, y, z);
+      warn << n->ID << ":" << n->host.cstr () << f << "\n";
+      minx = (x < minx) ? x : minx;
+      miny = (y < miny) ? y : miny;
+      maxx = (x > maxx) ? x : maxx;
+      maxy = (y > maxy) ? y : maxy;
+    }
+    n = nodes.next (n);
+  }
+
+  centerx = (maxx + minx)/2.0;
+  centery = (maxy + miny)/2.0;
+  
+  zoomx = maxx - minx;
+  zoomy = maxy - miny;
+
+  sprintf (f, "(%f, %f) (%f, %f)", centerx, centery, zoomx, zoomy);
+  warn << "recenter: " << f << "\n";
+  zoomx *= 1.3;
+  zoomy *= 1.3;
+}
+
+void
 ID_to_xy (chordID ID, int *x, int *y)
 {
  
   f_node *f = nodes[ID];
   
   if (ggeo) {
-    if (f->coords.size () > 0) {
-      *x = (int)(WINX/2 + f->coords[0]*WINX/zoom);
-      *y = (int)(WINY/2 + f->coords[1]*WINY/zoom);
+    if (f && f->coords.size () > 0) {
+      *x = (int)(WINX/2 + ((f->coords[0] - centerx)/zoomx)*WINX);
+      *y = (int)(WINY/2 + ((f->coords[1] - centery)/zoomy)*WINY);
     } else {
-      *x = WINX/2;
+      if (f) warn << f->ID << " no coords? what gives\n";
+      *x = WINX/2; 
       *y = WINY/2;
     }
   } else {
