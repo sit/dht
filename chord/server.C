@@ -346,7 +346,7 @@ vnode_impl::doRPC (const chordID &ID, const rpc_program &prog, int procno,
   assert (me.size ());
   arg->src_coords.setsize (me.size());
   for (size_t i = 0; i < me.size (); i++)
-    arg->src_coords[i] = (u_int32_t) me[i];
+    arg->src_coords[i] = (int32_t) me[i];
   
   arg->progno = prog.progno;
   arg->procno = procno;
