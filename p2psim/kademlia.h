@@ -11,7 +11,7 @@ class peer_t;
 class Kademlia : public DHTProtocol {
 // {{{ public
 public:
-  typedef unsigned short NodeID;
+  typedef ConsistentHash::CHID NodeID;
   typedef unsigned Value;
   static const unsigned idsize = 8*sizeof(NodeID);
 

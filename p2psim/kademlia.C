@@ -5,7 +5,7 @@
 #include <deque>
 using namespace std;
 
-#define STABLE_TIMER 500 //use a["stabtimer"] to set stabilization timer
+#define STABLE_TIMER 10000 //use a["stabtimer"] to set stabilization timer
 #define KADEMLIA_REFRESH 1000
 
 unsigned kdebugcounter = 1;
@@ -36,7 +36,7 @@ k_bucket_tree::NodeID k_bucket_tree::DistCompare::_key;
 // }}}
 // {{{ Kademlia::Kademlia
 Kademlia::Kademlia(Node *n, Args a)
-  : DHTProtocol(n), _id(ConsistentHash::ip2chid(n->ip()) & 0x0000ffff)
+  : DHTProtocol(n), _id(ConsistentHash::ip2chid(n->ip()))
 {
   KDEBUG(1) << "ip: " << ip() << endl;
   _values.clear();
@@ -124,7 +124,7 @@ Kademlia::join(Args *args)
   // done
   _joined++;
 
-  KDEBUG(1) << _joined << ": " << Kademlia::printbits(_id) << " joined" << endl;
+  cout << _joined << ": " << Kademlia::printbits(_id) << " joined" << endl;
   delaycb(STABLE_TIMER, &Kademlia::reschedule_stabilizer, (void *) 0);
 }
 
@@ -324,22 +324,22 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
       // update our own k-buckets
       _tree->insert(ci->lr->rid, ci->ip);
 
-      // merge both tables and cut out everything after the first k.
-      SortNodes sn(largs->key);
-      EqualNodes en(largs->key);
       vector<peer_t*> *newresults = New vector<peer_t*>(results->size() + ci->lr->results.size());
-
       assert(newresults);
-      vector<peer_t*>::iterator theend = merge(results->begin(), results->end(), 
-            ci->lr->results.begin(), ci->lr->results.end(),
-            newresults->begin(), sn);
+
+      // merge both tables and cut out everything after the first k.
+      merge(results->begin(), results->end(), ci->lr->results.begin(),
+          ci->lr->results.end(), newresults->begin());
 
       // XXX: WHY?!, merge() doesn't do this.
+      SortNodes sn(largs->key);
       sort(newresults->begin(), newresults->end(), sn);
+
       // KDEBUG(2) << "do_lookup: newresults->size() after sort = " << newresults->size() << endl;
       // for(vector<peer_t*>::const_iterator i=newresults->begin(); i != newresults->end(); ++i) {
         // KDEBUG(2) << "do_lookup: MERGED RESULT for rcvRPC entry id = " << printbits((*i)->id) << ", ip = " << (*i)->ip << endl;
       // }
+      EqualNodes en(largs->key);
       newresults->erase(unique(newresults->begin(), newresults->end(), en), newresults->end());
       // KDEBUG(2) << "do_lookup: newresults->size() after unique = " << newresults->size() << endl;
 
@@ -523,9 +523,9 @@ Kademlia::printbits(NodeID id)
 
   unsigned j=0;
   for(int i=idsize-1; i>=0; i--)
-    sprintf(&(buf[j++]), "%u", (id >> i) & 0x1);
+    sprintf(&(buf[j++]), "%llu", (id >> i) & 0x1);
   // sprintf(&(buf[j]), ":%llx", id);
-  sprintf(&(buf[j]), ":%hx", id);
+  sprintf(&(buf[j]), ":%llx", id);
 
   return string(buf);
 }
@@ -536,7 +536,7 @@ string
 Kademlia::printID(NodeID id)
 {
   char buf[128];
-  sprintf(buf, "%x", id);
+  sprintf(buf, "%llx", id);
   return string(buf);
 }
 
