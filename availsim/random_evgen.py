@@ -7,16 +7,13 @@ from utils import random_id, random_interval
 
 initial_nodes = 200
 
-mttr   = 60.0 # time steps to repair
-mttf   = 60.0 # time steps to failure
-sd     = mttr/2  # stddev of above times
+mttr   = 172218  # time steps to repair
+mttf   = 891887  # time steps to failure
+sd     = mttf/2
 
-pc     = 0.10  # chance of a failure being a complete crash
+pc     = 0.00
 
-mu_i   = 10    # number of blocks inserted per timestep
-sd_i   = 10
-
-stop_time = 1000
+stop_time = 86400 * 7 * 26
 if len (sys.argv) > 1:
     stop_time = int (sys.argv[1])
 
@@ -41,17 +38,14 @@ for i in xrange(0,initial_nodes):
     while nnode in nodes:
         nnode = random_id ()
     nodes[nnode] = 1
-    add_event (random_interval (mttr/2, sd/2), "join", nnode)
+    add_event (random_interval (86400, sd/2), "join", nnode)
 nnode = long(events[0].args)
 
-for t in xrange(0,stop_time):
-    # After joins happen, insert a bunch of blocks.
-    # Repair happens at the end of each tick anyway.
-    if t > mttr:
-        ni = random_interval (mu_i, sd_i)
-        while ni > 0:
-            add_event (t, "insert", nnode, random_id ())
-            ni -= 1
+for t in xrange(86400,2*86400,300):
+    ni = random_interval (10, 5)
+    while ni > 0:
+	add_event (t, "insert", nnode, random_id (), 256*1024)
+	ni -= 1
             
 ev = events.pop (0)
 for t in xrange(0,stop_time):

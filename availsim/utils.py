@@ -13,7 +13,8 @@ def random_id (nbits = 20):
     return random.randrange (0, 2**nbits)
 
 def random_interval (mean, sd):
-    return max (0, int (random.gauss (mean, sd)))
+    #return max (0, int (random.gauss (mean, sd)))
+    return max (0, int (random.expovariate (1.0/mean)))
 
 def str2chordID (s):
     newID = 0L
