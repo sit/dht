@@ -50,13 +50,10 @@ TapestryObserver::Instance(Args *a)
 TapestryObserver::TapestryObserver(Args *a) : _type( "Tapestry" )
 {
 
-  _init_num = atoi((*a)["initnodes"].c_str());
-
   _oracle_num = a->nget( "oracle", 0, 10 );
   lid.clear();
 
   const set<Node*> *l = Network::Instance()->getallnodes();
-  DEBUG(1) << "TapestryObserver::init_state " << now() << endl;
   for(set<Node*>::iterator pos = l->begin(); pos != l->end(); ++pos) {
     Tapestry *t = (Tapestry*) *pos;
     t->registerObserver(this);
@@ -70,24 +67,9 @@ TapestryObserver::~TapestryObserver()
 }
 
 void
-TapestryObserver::init_state()
-{
-  const set<Node*> *l = Network::Instance()->getallnodes();
-  DEBUG(1) << "TapestryObserver::init_state " << now() << endl;
-  for(set<Node*>::iterator pos = l->begin(); pos != l->end(); ++pos) {
-    Tapestry *t = (Tapestry*) *pos;
-    t->init_state(l);
-  }
-}
-
-void
 TapestryObserver::kick(Observed *o, ObserverInfo *oi )
 {
 
-  if(_init_num) {
-    init_state();
-    _init_num = 0;
-  }
 
   if( !_stabilized ) {
 
@@ -141,7 +123,7 @@ TapestryObserver::kick(Observed *o, ObserverInfo *oi )
     set<Node*>::iterator pos;
     Tapestry *c = 0;
     if( event_s == "join" ) {
-      n->init_state(l);
+      n->initstate(l);
     }
     for (pos = l->begin(); pos != l->end(); ++pos) {
       c = (Tapestry *)(*pos);

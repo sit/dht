@@ -37,12 +37,9 @@ public:
 
 private:
   static TapestryObserver *_instance;
-  unsigned int _init_num;
   unsigned int _oracle_num;
   bool _stabilized;
   string _type;
-
-  void init_state();
 
   vector<Tapestry::GUID> lid;
 };

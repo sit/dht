@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.32 2003/12/06 16:32:35 thomer Exp $ */
+/* $Id: tapestry.C,v 1.33 2003/12/07 02:26:34 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -35,6 +35,7 @@ Tapestry::Tapestry(IPAddress i, Args a) : P2Protocol(i),
     _base(a.nget<uint>("base", 16, 10)),
     _bits_per_digit((uint) (log10(((double) _base))/log10((double) 2))),
     _digits_per_id((uint) 8*sizeof(GUID)/_bits_per_digit),
+    _init_state(a.nget<uint>("init_state", 1, 10)),
     _redundant_lookup_num(a.nget<uint>("redundant_lookup_num", 3, 10))
 {
 
@@ -1145,8 +1146,12 @@ Tapestry::check_rt(void *x)
 }
 
 void
-Tapestry::init_state(const set<Node *> *lid)
+Tapestry::initstate(const set<Node *> *lid)
 {
+
+  if( !_init_state ) {
+    return;
+  }
 
   // TODO: we shouldn't need locking in here, right?
 
@@ -1156,7 +1161,7 @@ Tapestry::init_state(const set<Node *> *lid)
     return;
   }
 
-  TapDEBUG(2) << "init_state: about to add everyone" << endl;
+  TapDEBUG(1) << "initstate: about to add everyone" << endl;
   // for every node but this own, add them all to your routing table
   vector<NodeInfo *> nodes;
   for(set<Node*>::const_iterator i = lid->begin(); i != lid->end(); ++i) {
@@ -1167,9 +1172,13 @@ Tapestry::init_state(const set<Node *> *lid)
     }
     
     // cheat and get the latency straight from the topology
-    Time rtt = 2*Network::Instance()->gettopology()->latency( ip(), 
-							      currnode->ip() );
-
+    Time rtt = Network::Instance()->gettopology()->latency( ip(), 
+							    currnode->ip() ) +
+      Network::Instance()->gettopology()->latency( currnode->ip(), ip() );
+      
+    if( rtt >= 50000 ) {
+      continue;
+    }
     _rt->add( currnode->ip(), currnode->id(), rtt, false );
   }
 
@@ -1717,11 +1726,8 @@ Tapestry::print_guid( GUID id )
 void
 Tapestry::print_guid( GUID id, ostream &s )
 {
-  for( uint i = 0; i < _digits_per_id; i++ ) {
-    char digit_string[2];
-    sprintf( digit_string, "%x", get_digit(id, i) );
-    s << digit_string;
-  }
+  
+  s << print_guid( id );
 }
 
 uint
@@ -2340,6 +2346,7 @@ RoutingTable::insertor( ostream &s ) const
 	NodeInfo *ni = re->get_first();
 	s << ni->_addr << "/";
 	_node->print_guid( ni->_id, s );
+	s << "/" << ni->_distance;
 	s << " ";
 	count++;
       }

@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.23 2003/12/06 16:32:35 thomer Exp $ */
+/* $Id: tapestry.h,v 1.24 2003/12/07 02:26:34 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -25,6 +25,7 @@ public:
   const unsigned _bits_per_digit;
   // how many digits of base _b are in each id?
   const unsigned _digits_per_id;
+  const bool _init_state;
 
   // types of statistics we can record
   enum stat_type
@@ -51,6 +52,7 @@ public:
   virtual void crash(Args*);
   virtual void lookup(Args*);
   virtual void insert(Args*);
+  virtual void initstate(const set<Node*>*);
 
   // print it to stdout
   string print_guid( GUID id );
