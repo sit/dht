@@ -13,6 +13,8 @@ using namespace std;
 #include "network.h"
 #include "p2pevent.h"
 #include "node.h"
+#include "args.h"
+#include "parse.h"
 #include "eventqueue.h"
 #include "rpchandle.h"
 #include "p2psim.h"
@@ -69,4 +71,46 @@ Protocol::cancelRPC(unsigned token)
   assert(_rpcmap.find(token) != _rpcmap.end());
   delete _rpcmap[token];
   _rpcmap.erase(token);
+}
+
+
+void
+Protocol::parse(char *filename)
+{
+  ifstream in(filename);
+  if(!in) {
+    cerr << "no such file " << filename << endl;
+    threadexitsall(0);
+  }
+
+  string line;
+  string protocol = "";
+  map<string, Args> xmap;
+  while(getline(in,line)) {
+    vector<string> words = split(line);
+
+    // skip empty lines and commented lines
+    if(words.empty() || words[0][0] == '#')
+      continue;
+
+    // read protocol string
+    if(words[0] == "protocol") {
+      words.erase(words.begin());
+      protocol = words[0];
+      continue;
+    }
+
+    // this is a variable assignment
+    vector<string> xargs = split(words[0], "=");
+
+    if(protocol == "")
+      cerr << "protocol line missing in " << filename << endl;
+
+    xmap[protocol].insert(make_pair(xargs[0], xargs[1]));
+  }
+
+  for(map<string, Args>::const_iterator i = xmap.begin(); i != xmap.end(); ++i)
+    ProtocolFactory::Instance()->setprotargs(i->first, i->second);
+
+  in.close();
 }

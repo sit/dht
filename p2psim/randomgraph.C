@@ -1,7 +1,6 @@
 #include "topology.h"
 #include "protocol.h"
 #include "protocolfactory.h"
-#include "nodefactory.h"
 #include "randomgraph.h"
 #include "network.h"
 #include "parse.h"
@@ -44,7 +43,7 @@ RandomGraph::parse(ifstream &ifs)
     }
 
     // what kind of node?
-    Node *n = NodeFactory::Instance()->create(words[1], ipaddr);
+    Node *n = new Node(ipaddr);
 
     // all the rest are protocols on this node
     for(unsigned int i=2; i<words.size(); i++)

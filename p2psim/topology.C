@@ -2,6 +2,7 @@
 #include "topologyfactory.h"
 #include "network.h"
 #include "parse.h"
+#include "args.h"
 #include <iostream>
 #include <fstream>
 using namespace std;

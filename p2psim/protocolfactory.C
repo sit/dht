@@ -50,17 +50,20 @@ Protocol *
 ProtocolFactory::create(string s, Node *n)
 {
   Protocol *p = 0;
+  Args a;
+  if(_protargs.find(s) != _protargs.end())
+    a = _protargs[s];
 
   if(s == "Chord")
     p = new Chord(n, successors);
   if (s == "ChordFinger")
-    p = new ChordFinger(n,base,(successors>resilience? successors:resilience), fingers);
+    p = new ChordFinger(n, base, (successors>resilience? successors:resilience), fingers);
   if (s == "ChordFingerPNS")
     p = new ChordFingerPNS(n,base,successors);
   if (s == "ChordToe")
     p = new ChordToe(n, base, successors, fingers);
   if (s == "Kademlia")
-    p = new Kademlia(n);
+    p = new Kademlia(n, a);
   if (s == "Pastry")
     p = new Pastry(n);
   if (s == "Koorde")
@@ -71,4 +74,10 @@ ProtocolFactory::create(string s, Node *n)
   assert(p);
 
   return p;
+}
+
+void
+ProtocolFactory::setprotargs(string p, Args a)
+{
+  _protargs[p] = a;
 }

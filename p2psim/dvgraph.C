@@ -1,7 +1,6 @@
 #include "topology.h"
 #include "protocol.h"
 #include "protocolfactory.h"
-#include "nodefactory.h"
 #include "dvgraph.h"
 #include "network.h"
 #include <iostream>

@@ -7,6 +7,7 @@
 #include "event.h"
 #include "eventqueue.h"
 #include "rpchandle.h"
+#include "args.h"
 #include "p2psim.h"
 using namespace std;
 
@@ -23,6 +24,7 @@ public:
   virtual ~Protocol();
   Node *node() { return _node; }
   virtual string proto_name() = 0;
+  static void Protocol::parse(char*);
 
 protected:
   typedef set<unsigned> RPCSet;

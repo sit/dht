@@ -2,7 +2,6 @@
 #include "kademlia.h"
 #include "chord.h"
 #include "packet.h"
-#include "nodefactory.h"
 #include <stdio.h>
 #include <algorithm>
 #include <iostream>
@@ -13,6 +12,7 @@ using namespace std;
 
 unsigned kdebugcounter = 1;
 unsigned Kademlia::_k = 20;
+unsigned Kademlia::_alpha = 1;
 Kademlia::NodeID Kademlia::_rightmasks[8*sizeof(Kademlia::NodeID)];
 
 unsigned k_bucket::_k = Kademlia::k();
@@ -22,7 +22,7 @@ unsigned k_bucket_tree::_k = Kademlia::k();
 IPAddress kademlia_wkn_ip = 0;
 // }}}
 // {{{ Kademlia::Kademlia
-Kademlia::Kademlia(Node *n)
+Kademlia::Kademlia(Node *n, Args a)
   : DHTProtocol(n), _id(ConsistentHash::ip2chid(n->ip()) & 0x0000ffff), _joined(false)
 {
   KDEBUG(1) << "ip: " << ip() << endl;
@@ -166,15 +166,23 @@ Kademlia::lookup(Args *args)
 void
 Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
 {
+  // stare caller id and ip
+  NodeID callerID = largs->id;
+  IPAddress callerIP = largs->ip;
+
+  // fill it with the best that i know of
+  // vector<peer_t*> results;
+  // _tree->get(largs->key, &results);
+
+  // unsigned outstanding = 0;
+  // while(outstanding < _alpha) {
+  // }
+
   //
   // XXX: do_lookup not correct yet.
   //
   vector<peer_t*> *bestset = 0;
   peer_t *p = 0;
-
-  // stare caller id and ip
-  NodeID callerID = largs->id;
-  IPAddress callerIP = largs->ip;
 
   // deal with the empty case
   if(_tree->empty()) {

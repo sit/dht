@@ -2,6 +2,7 @@
 #define __TOPOLOGY_H
 
 #include "node.h"
+#include "args.h"
 #include <fstream>
 #include "p2psim.h"
 using namespace std;

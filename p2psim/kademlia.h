@@ -20,7 +20,7 @@ public:
   typedef unsigned Value;
   static const unsigned idsize = 8*sizeof(NodeID);
 
-  Kademlia(Node*);
+  Kademlia(Node*, Args);
   ~Kademlia();
   string proto_name() { return "Kademlia"; }
 
@@ -80,6 +80,7 @@ public:
 // {{{ private
  private:
   static unsigned _k;           // k from kademlia paper
+  static unsigned _alpha;       // alpha from kademlia paper
   NodeID _id;                   // my id
   k_bucket_tree *_tree;         // the root of our k-bucket tree
   map<NodeID, Value> _values;   // key/value pairs

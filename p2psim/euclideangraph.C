@@ -1,7 +1,6 @@
 #include "topology.h"
 #include "protocol.h"
 #include "protocolfactory.h"
-#include "nodefactory.h"
 #include "euclideangraph.h"
 #include "network.h"
 #include "parse.h"
@@ -50,7 +49,7 @@ EuclideanGraph::parse(ifstream &ifs)
     c._y = atof(coords[1].c_str());
 
     // what kind of node?
-    Node *n = NodeFactory::Instance()->create(words[2], ipaddr);
+    Node *n = new Node(ipaddr);
 
     // all the rest are protocols on this node
     for(unsigned int i=3; i<words.size(); i++)

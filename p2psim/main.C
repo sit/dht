@@ -14,8 +14,10 @@
 
 char *topology_file;
 char *event_file;
+char *protocol_file;
 bool static_sim = false;
 bool vis = false;
+
 uint base = 2;  // XXX probably need something like a configuration file
 uint resilience = 1;
 uint successors = 3;
@@ -33,6 +35,9 @@ threadmain(int argc, char *argv[])
 
   srandom(time(0) ^ (getpid() + (getpid() << 15)));
   parse_args(argc, argv);
+
+  // Put a protocol on all these nodes.
+  Protocol::parse(protocol_file);
 
   // Creates a network with the appropriate underlying topology.
   Topology::parse(topology_file);
@@ -85,18 +90,19 @@ parse_args(int argc, char *argv[])
   argc -= optind;
   argv += optind;
 
-  if(argc != 2) {
+  if(argc != 3) {
     usage();
     exit(1);
   }
 
   topology_file = argv[0];
   event_file = argv[1];
+  protocol_file = argv[2];
 }
 
 
 void
 usage()
 {
-  cout << "Usage: p2psim [-v] [-b <degree>] [-f <fingers>] [-r <resilience>] [-s <succ>] TOPOLOGY EVENTS" << endl;
+  cout << "Usage: p2psim [-v] [-b <degree>] [-f <fingers>] [-r <resilience>] [-s <succ>] TOPOLOGY EVENTS PROTOCOL_FILE" << endl;
 }

@@ -1,7 +1,6 @@
 #include "topology.h"
 #include "protocol.h"
 #include "protocolfactory.h"
-#include "nodefactory.h"
 #include "euclidean.h"
 #include "network.h"
 #include "parse.h"
@@ -59,7 +58,7 @@ Euclidean::parse(ifstream &ifs)
     c.second = atoi(coords[1].c_str());
 
     // what kind of node?
-    Node *n = NodeFactory::Instance()->create(words[2], ipaddr);
+    Node *n = new Node(ipaddr);
 
     // add the new node it to the topology
     if(_nodes.find(n->ip()) != _nodes.end())
