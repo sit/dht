@@ -7,7 +7,8 @@ enum dhc_stat {
    DHC_LOW_PROPOSAL = 2, 
    DHC_PROP_MISMATCH = 3,
    DHC_NOT_A_REPLICA = 4,
-   DHC_ACCEPTED_PROP = 5
+   DHC_ACCEPTED_PROP = 5,
+   DHC_RECON_INPROG = 6
 };
 
 struct paxos_seqnum_t {
