@@ -50,6 +50,7 @@ rm -rf $RPM_BUILD_ROOT
 %{_bindir}/sfsrodb
 %{_bindir}/usenet
 %{_bindir}/usenetlsdmon.py
+%{_bindir}/udbctl
 %{_bindir}/walk
 %{_bindir}/vis
 %{_includedir}/chord-%{version}/chord_types.x
@@ -65,6 +66,9 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Sun Feb 20 2005 Emil Sit <sit@mit.edu>
+- Add udbctl for usenet control
+
 * Sat Jan 22 2005 Emil Sit <sit@mit.edu>
 - Add some python stuff
 
