@@ -95,25 +95,13 @@ dbEnumeration::dbEnumeration(DB *db, DB_ENV *dbe) {
   int r = 0;
   db_sync = db;
 
-  t = NULL;
-  if(dbe) {
-    r = txn_begin(dbe, NULL, &t, 0);
-    if (r) { dbe->err(dbe, r, "txn_begin"); fatal << "wah\n"; }
-  }
-
-  r = db->cursor(db, t, &cursor, 0);
-  if (r) { dbe->err(dbe, r, "db->cursor"); fatal << "wah\n"; }
+  r = db->cursor(db, NULL, &cursor, 0);
+  assert (!r);
   cursor_init = 0;
 }
 
 dbEnumeration::~dbEnumeration() {
   cursor->c_close (cursor);
-
-  if(t) {
-    int r = txn_commit(t, 0);
-    if (r) warn << "cursor: bad txn_commit\n";
-    t = NULL;
-  }
 }
 
 #else
@@ -167,18 +155,27 @@ dbEnumeration::getElement(u_int32_t flags, ptr<dbrec> startkey)
   // nextElement doesn't return any data, just keys.
   // use the lookup routine if you want the data. 
   // Perhaps, change nextElement to only return a ptr<dbrec>!
-  DBT key, data;
+  unsigned char keydata[40];
+  DBT key;
   bzero(&key, sizeof(key));
+  key.data = keydata;
+  key.ulen = 20;
+  key.flags = DB_DBT_USERMEM;
   if (startkey) {
     key.size = startkey->len;
     key.data = startkey->value;
   }
+
+  DBT data;
   bzero(&data, sizeof(data));
   data.flags = DB_DBT_PARTIAL;
+
   int err = cursor->c_get(cursor, &key, &data, flags);
   cursor_init = 1;
-  if (err) 
+  if (err) {
+    //    warn << "db3 error: " << db_strerror(err) << "\n";
     return NULL;
+  }
   ref<dbrec> keyrec = New refcounted<dbrec>(key.data, key.size);
   ptr<dbrec> valrec = NULL;
   return New refcounted<dbPair>(keyrec, valrec);

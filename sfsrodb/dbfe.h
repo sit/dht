@@ -180,7 +180,6 @@ struct dbEnumeration {
   DB* db_sync;
   DBC *cursor;
   char cursor_init;
-  DB_TXN *t;
 #else
   bIteration *it;
   btreeSync *ADB_sync;
