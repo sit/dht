@@ -74,9 +74,6 @@ chordID
 chord::initID (int index)
 {
   chordID ID;
-#if 1
-  ID = random_bigint (NBIT);
-#else
   vec<in_addr> addrs;
   if (!myipaddrs (&addrs))
     fatal ("cannot find my IP address.\n");
@@ -88,16 +85,11 @@ chord::initID (int index)
     fatal ("cannot find my IP address.\n");
 
   str ids = inet_ntoa (*addr);
-  ids = ids << "." << index;
+  ids = ids << "." << myaddress.port << "." << index;
   warnx << "my address: " << ids << "\n";
   char id[sha1::hashsize];
   sha1_hash (id, ids, ids.len());
-  mpz_set_rawmag_be (ID, id, sizeof (id));  // For big endian
-  chordID b (1);
-  b = b << NBIT;
-  b = b - 1;c
-  *ID = *ID & b;
-#endif
+  mpz_set_rawmag_be (&ID, id, sizeof (id));  // For big endian
   //  warnx << "myid: " << ID << "\n";
   return ID;
 }

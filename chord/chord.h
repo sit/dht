@@ -39,7 +39,7 @@
 #include "location.h"
 
 #define NBIT     160     // size of Chord identifiers in bits
-#define NSUCC     5      // log of # vnodes
+#define NSUCC    2*7     // 2 * log of # vnodes
 
 typedef int cb_ID;
 
