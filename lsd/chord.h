@@ -236,6 +236,7 @@ class p2p : public virtual refcount  {
 		  aclnt_cb cb);  
   // end added to help simulate
 
+  sfs_ID my_ID () { return myID; };
   void deleteloc (sfs_ID &n);
   void updateloc (sfs_ID &x, net_address &r, sfs_ID &source);
   bool lookup_anyloc (sfs_ID &n, sfs_ID *r);

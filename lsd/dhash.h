@@ -19,9 +19,22 @@
  * Include file for the distributed hash service
  */
 
-typedef callback<void, ptr<dbrec>, dhash_stat>::ptr cbvalue;
-typedef callback<void, dhash_stat>::ptr cbstat;
+struct store_cbstate;
 
+typedef callback<void, ptr<dbrec>, dhash_stat>::ptr cbvalue;
+typedef callback<void, struct store_cbstate *,dhash_stat>::ptr cbstat;
+typedef callback<void,dhash_stat>::ptr cbstore;
+
+struct store_cbstate {
+  svccb *sbp;
+  int nreplica;
+  int r;
+  dhash_insertarg *item;
+  cbstat cb;
+  store_cbstate (svccb *sbpi, int ni, dhash_insertarg *ii, cbstat cbi) :
+    sbp (sbpi), nreplica (ni), item (ii), cb (cbi) 
+  { r = nreplica + 1; };
+};
 
 class dhashclient {
 
@@ -51,20 +64,24 @@ class dhashclient {
 
 class dhash {
 
-  static const int nreplica = 5;
+  int nreplica;
 
   dbfe *db;
 
   void dispatch (ptr<asrv> dhs, svccb *sbp);
   void fetchsvc_cb (svccb *sbp, ptr<dbrec> val, dhash_stat err);
-  void storesvc_cb (svccb *sbp, dhash_stat err);
+  void storesvc_cb (store_cbstate *st, dhash_stat err);
   
   void fetch (sfs_ID id, cbvalue cb);
   void fetch_cb (cbvalue cb, ptr<dbrec> ret);
-  void store (sfs_ID id, dhash_value data, store_status type, cbstat cb);
-  void store_cb (cbstat cb, int stat);
+  void store (sfs_ID id, dhash_value data, store_status type, cbstore cb);
+  void store_cb (cbstore cb, int stat);
   void cache_store_cb(dhash_res *res, clnt_stat err);
   
+  void find_replica_cb (store_cbstate *st, sfs_ID s, net_address r, 
+			sfsp2pstat status);
+  void store_replica_cb(store_cbstate *st, dhash_stat *res, clnt_stat err);
+
   void act_cb(sfs_ID id, char action);
 
   ptr<dbrec> id2dbrec(sfs_ID id);
@@ -72,7 +89,7 @@ class dhash {
   qhash<sfs_ID, int, hashID> key_status;
 
  public:
-  dhash (str dbname);
+  dhash (str dbname, int nreplica);
   void accept(ptr<axprt_stream> x);
 };
 

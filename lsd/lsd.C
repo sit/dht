@@ -222,6 +222,7 @@ parseconfigfile (str cf, int index)
   int line;
   vec<str> av;
   bool myid = false;
+  int nreplica = 0;
   
   myport = 0;
   while (pa.getline (&av, &line)) {
@@ -256,7 +257,12 @@ parseconfigfile (str cf, int index)
         errors = true;
         warn << cf << ":" << line << ": usage: wellknownport <number>\n";
       }
-    } else if (!strcasecmp (av[0], "wellknownhost")) {
+    } else if (!strcasecmp (av[0], "nreplica")) {
+      if (av.size () != 2 || !convertint (av[1], &nreplica)) {
+        errors = true;
+        warn << cf << ":" << line << ": usage: nreplica <number>\n";
+      }
+   } else if (!strcasecmp (av[0], "wellknownhost")) {
       if (av.size () != 2) {
         errors = true;
         warn << cf << ":" << line << ": usage: wellknownhost <hostname>\n";
@@ -275,7 +281,7 @@ parseconfigfile (str cf, int index)
   defp2p = New refcounted<p2p> (wellknownhost, wellknownport, wellknownID, 
 				myport, myID);
     //instantiate single dhash object
-  dhs = New dhash(db_name);
+  dhs = New dhash(db_name, nreplica);
 }
 
 static void
@@ -295,6 +301,7 @@ main (int argc, char **argv)
   int ch;
   do_cache = 0;
   int set_name = 0;
+  int set_index = 0;
   
   while ((ch = getopt (argc, argv, "d:S:i:f:c")) != -1)
     switch (ch) {
@@ -302,9 +309,12 @@ main (int argc, char **argv)
       p2psocket = optarg;
       break;
     case 'i':
+      set_index = 1;
       index = atoi (optarg);
       break;
     case 'f':
+      if (!set_name) fatal("must specify db name\n");
+      if (!set_index) fatal ("must specify virtual index");
       parseconfigfile (optarg, index);
       break;
     case 'c':
@@ -319,7 +329,6 @@ main (int argc, char **argv)
       break;
     }
 
-  if (!set_name) fatal("must specify db name\n");
   if (!defp2p) 
     fatal ("Specify config file\n");
   if (p2psocket) 

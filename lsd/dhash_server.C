@@ -5,9 +5,10 @@
 #include <dbfe.h>
 #include <arpc.h>
 
-dhash::dhash(str dbname) {
+dhash::dhash(str dbname, int k) {
 
   db = new dbfe();
+  nreplica = k;
 
   //set up the options we want
   dbOptions opts;
@@ -53,7 +54,21 @@ dhash::dispatch(ptr<asrv> dhashsrv, svccb *sbp)
   case DHASHPROC_STORE:
     {
       dhash_insertarg *arg = sbp->template getarg<dhash_insertarg> ();
-      store(arg->key, arg->data, arg->type, wrap(this, &dhash::storesvc_cb, sbp));
+      if (arg->type == DHASH_STORE) {
+	store_cbstate *st = 
+	  New store_cbstate (sbp, nreplica, arg, wrap (this, 
+						     &dhash::storesvc_cb));
+	store(arg->key, arg->data, arg->type, 
+	      wrap(this, &dhash::storesvc_cb, st));
+	if (st->nreplica > 0)
+	  defp2p->get_successor (defp2p->my_ID(), 
+				 wrap (this, &dhash::find_replica_cb, st));
+      } else {
+	store_cbstate *st = 
+	  New store_cbstate (sbp, 0, NULL, wrap (this, &dhash::storesvc_cb));
+	store(arg->key, arg->data, arg->type, 
+	      wrap(this, &dhash::storesvc_cb, st));
+      }
     }
     break;
   case DHASHPROC_CHECK:
@@ -92,8 +107,12 @@ dhash::fetchsvc_cb(svccb *sbp, ptr<dbrec> val, dhash_stat err)
 }
 
 void
-dhash::storesvc_cb(svccb *sbp, dhash_stat err) {
-  sbp->reply(&err);
+dhash::storesvc_cb(store_cbstate *st, dhash_stat err) {
+  warnx << "storesvc_cb: " << st->r << "\n";
+  st->r--;
+  if (st->r <= 0) {
+    st->sbp->reply(&err);
+  }
 }
 
 //---------------- no sbp's below this line --------------
@@ -117,9 +136,8 @@ dhash::fetch_cb(cbvalue cb, ptr<dbrec> ret)
 }
 
 void 
-dhash::store(sfs_ID id, dhash_value data, store_status type, cbstat cb) 
+dhash::store(sfs_ID id, dhash_value data, store_status type, cbstore cb)
 {
-
 #if 0
   if (type == DHASH_STORE) warn << "STORING " << id << "\n";
   else if (type == DHASH_CACHE) warn << "CACHING " << id << "\n";
@@ -131,45 +149,47 @@ dhash::store(sfs_ID id, dhash_value data, store_status type, cbstat cb)
 
   db->insert(k, d, wrap(this, &dhash::store_cb, cb));
   key_status.insert (id, type);
-  
-#if 0
-  defp2p->getsuccessor (myID, wrap (this, &dhash::find_replica_cb, nreplica, data));
-#endif
-
 }
 
 void
-dhash::store_cb(cbstat cb, int stat) {
+dhash::store_cb(cbstore cb, int stat) 
+{
   if (stat != 0) 
     (*cb)(DHASH_NOENT);
   else 
     (*cb)(DHASH_OK);
 }
 
-#if 0
 void
-dhash::find_replica_cb (int k, dhash_value data, sfs_ID s)
+dhash::find_replica_cb (store_cbstate *st, sfs_ID s, 
+			net_address r, sfsp2pstat status)
 {
-  dhash_stat *stat = New dhash_stat ();
-  defp2p->doRPC(s, dhash_program_1, DHASHPROC_STORE, item, stat, 
-		wrap(this, &dhashclient::store_replica_cb, k, s, data, stat));
-
+  if (status) {
+    warnx << "find_replica_cb: failure " << status << "\n";
+    st->cb (st, DHASH_NOTPRESENT);
+  } else {
+    warnx << "find_replica_cb: replica " << st->nreplica 
+	  << " store at node " << s << "\n";
+    st->nreplica--;
+    dhash_stat *stat = New dhash_stat ();
+    st->item->type = DHASH_REPLICA;
+    defp2p->doRPC(s, dhash_program_1, DHASHPROC_STORE, st->item, stat, 
+		  wrap(this, &dhash::store_replica_cb, st, stat));
+    if (st->nreplica > 0) 
+      defp2p->get_successor (s, wrap (this, &dhash::find_replica_cb, st));
+  }
 }
 
-
 void
-dhash::store_replica_cb(int k, sfs_ID s, dhash_value data, dhash_stat *res, clnt_stat err) 
+dhash::store_replica_cb(store_cbstate *st, dhash_stat *res, clnt_stat err) 
 {
   if (err) {
-    
+    warnx << "store_replica_cb: error " << *res << "\n";
   } else {
-    k--;
-    if (k > 0) 
-      defp2p->getsuccessor (id, wrap (this, &dhash::find_replica_cb, k, data, 
-				      cb));
-  }   
+    warnx << "store_replica_cb: succeeded\n";
+  }
+  st->cb (st, *res);
 }
-#endif
 
 // --------- utility
 

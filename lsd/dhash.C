@@ -34,7 +34,7 @@ dhashclient::dispatch (svccb *sbp)
       if (do_caching)
 	defp2p->registerSearchCallback(wrap(this, &dhashclient::search_cb, *n));
 
-      timeval *tp = New struct timeval;
+      struct timeval *tp = New struct timeval();
       gettimeofday(tp, NULL);
 
       defp2p->dofindsucc (*n, wrap(this, &dhashclient::lookup_findsucc_cb, 
