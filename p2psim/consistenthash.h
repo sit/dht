@@ -26,6 +26,10 @@ public:
   static CHID getRandID() {
     return (CHID) ((random() << 16) ^ random());
   }
+
+  static CHID ip2chid(IPAddress ip) {
+    return (CHID) ip;  // XXXX fix to use sha1
+  }
 };
 
 #endif // __CONSISTENTHASH_H

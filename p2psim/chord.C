@@ -82,9 +82,9 @@ void
 Chord::join(Args *args)
 {
   IDMap wkn;
-  wkn.id = args->nget<CHID>("wellknown");
   wkn.ip = args->nget<IPAddress>("wellknown");
   assert (wkn.ip);
+  wkn.id = ConsistentHash::ip2chid(wkn.ip);
   loctable->add_node (wkn);
 
   cout << s() + "::join wellknown " << wkn.id << endl;
