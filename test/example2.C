@@ -70,7 +70,7 @@ insert_cb(testmaster *tm, dhash_stat status, ptr<insert_info> i)
   if(status != DHASH_OK || !i)
     fatal << "test failed\n";
 
-  tm->instruct(1, ISOLATE, wrap(isolate_cb, tm, i));
+  (*tm)[1]->isolate(dhashclient_test::RW, wrap(isolate_cb, tm, i));
 }
 
 

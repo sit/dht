@@ -83,6 +83,13 @@ accept_connection(str socket)
 }
 
 
+void
+do_kill()
+{
+  system("ps -ax | egrep \"lsd|testslave\" | awk '{print $1}' | xargs kill -9");
+}
+
+
 
 void
 usage()
@@ -90,10 +97,10 @@ usage()
   warnx << "usage: " << progname << " [-s socket] [-p port]\n";
   warnx << "\twaits for commands from a test program and <more help>\n";
   warnx << "\noptions:\n";
+  warnx << "\t-k          : kill running lsd's and testslaves. DANGEROUS: WILL KILL ALL RUNNING LSD'S!.\n";
   warnx << "\t-s <socket> : connect to lsd behind unix domain socket <socket>\n";
   warnx << "\t-p <port>   : listen to master on port <port>; default is " << DEFAULT_PORT << "\n";
   warnx << "\nenvironment variables:\n";
-  warnx << "\tLSD_SOCKET : default value for -s option\n";
   warnx << "\tTEST_DEBUG : verbosity\n";
   exit(1);
 }
@@ -105,13 +112,20 @@ main(int argc, char *argv[])
   setprogname(argv[0]);
   test_init();
 
-  str opt_socket = getenv("LSD_SOCKET") ? getenv("LSD_SOCKET") : "";
+  str opt_socket = "";
   int opt_port = DEFAULT_PORT;
   int ch;
-  while((ch = getopt(argc, argv, "hs:p:")) != -1)
+  while((ch = getopt(argc, argv, "hks:p:")) != -1)
     switch(ch) {
     case 'h':
       usage();
+      break;
+    case 'k':
+      char savename[128];
+      strcpy(savename, argv[0]);
+      strcpy(argv[0], "");
+      do_kill();
+      strcpy(argv[0], savename);
       break;
     case 's':
       opt_socket = optarg;
@@ -127,7 +141,7 @@ main(int argc, char *argv[])
   argv += optind;
 
   if(opt_socket == "")
-    fatal << "socket unknown. use -s <socket> option or set LSD_SOCKET\n";
+    fatal << "socket unknown. use -s <socket> option\n";
 
   // listen for master
   server = inetsocket(SOCK_STREAM, opt_port);

@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.9 2002/11/25 20:37:34 thomer Exp $
+# $Id: Makefile.am,v 1.10 2002/11/26 07:21:07 thomer Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -7,7 +7,7 @@ bin_PROGRAMS = block testslave
 noinst_PROGRAMS = example1 example2
 noinst_LIBRARIES = libdtest.a
 
-libdtest_a_SOURCES = testmaster.C test.C
+libdtest_a_SOURCES = testmaster.C test.C dhashclient_test.C
 example1_SOURCES = example1.C
 example1_LDADD = ./libdtest.a ../dhash/libdhash.a ../chord/libchord.a ../svc/libsvc.la ../sfsrodb/libsfsrodb.a $(DBLIB) $(LDADD)
 

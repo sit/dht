@@ -29,27 +29,14 @@
 #include "rxx.h"
 #include "testmaster.h"
 
-testmaster::testmaster(const testslave slaves[]) : _nhosts(0), _slaves(slaves)
-{
-  test_init();
-}
-
-testmaster::testmaster(char *filename) : _nhosts(0), _slaves(0)
+testmaster::testmaster(char *filename) : _nhosts(0)
 {
   test_init();
   FILE *f = fopen(filename, "r");
   if(f <= 0)
     fatal << "couldn't open " << filename << ": " << strerror(errno) << "\n";
 
-  int n = 0;
-  testslave *slaves = 0;
   while(!feof(f)) {
-    // XXX: very stupid
-    testslave *newslaves = New testslave[n+1];
-    memcpy(newslaves, slaves, n*sizeof(testslave));
-    free(slaves);
-    slaves = newslaves;
-
     char l[1024];
     if(!fgets(l, sizeof(l), f))
       break;
@@ -65,19 +52,24 @@ testmaster::testmaster(char *filename) : _nhosts(0), _slaves(0)
     if(!linerxx.search(line))
       break;
 
-    slaves[n].name = linerxx[1];
-    slaves[n].dhash_port = atoi(linerxx[2]) ? atoi(linerxx[2]) : DEFAULT_PORT;
-    slaves[n].control_port = atoi(linerxx[3]) ? atoi(linerxx[3]) : TESLA_CONTROL_PORT;
-    n++;
+    _slaves.push_back(New testslave(linerxx[1],
+        atoi(linerxx[2]) ? atoi(linerxx[2]) : DEFAULT_PORT,
+        atoi(linerxx[3]) ? atoi(linerxx[3]) : TESLA_CONTROL_PORT));
   }
   fclose(f);
-
-  // append an empty entry
-  slaves[n].name = str("");
-
-  _slaves = slaves;
 }
 
+
+testmaster::testmaster(vec<str> *names, vec<int> *dhp, vec<int> *tcp) : _nhosts(0)
+{
+  test_init();
+  assert(names->size() == dhp->size() && dhp->size() == tcp->size());
+  for(unsigned i=0; i<names->size(); i++) {
+    _slaves.push_back(New testslave((*names)[i],
+        (*dhp)[i] ? (*dhp)[i] : DEFAULT_PORT,
+        (*tcp)[i] ? (*tcp)[i] : TESLA_CONTROL_PORT));
+  }
+}
 
 
 testmaster::~testmaster()
@@ -86,24 +78,69 @@ testmaster::~testmaster()
 
 
 void
+testmaster::unixdomainsock(int i, str &p2psocket, int &fd)
+{
+  p2psocket = strbuf() << "/tmp/" << _slaves[i]->name << ":" << _slaves[i]->dhash_port;
+  unlink(p2psocket);
+  fd = unixsocket(p2psocket);
+  if(!fd)
+    fatal << "couldn't open unix socket " << p2psocket << "\n";
+  make_async(fd);
+  if(listen(fd, 5))
+    fatal << "listen\n";
+}
+
+
+void
+testmaster::dry_setup(callback<void>::ref cb)
+{
+  DEBUG(1) << "dry_setup\n";
+  _nhosts = _slaves.size();
+
+  for(unsigned i = 0; i < _slaves.size(); i++) {
+    str p2psocket;
+    int fd;
+    unixdomainsock(i, p2psocket, fd); // by reference
+    fdcb(fd, selread, wrap(this, &testmaster::accept_connection, fd, 0, true));
+    dns_hostbyname(_slaves[i]->name, wrap(this, &testmaster::dry_setup_cb, i, p2psocket, cb));
+  }
+}
+
+
+void
+testmaster::dry_setup_cb(int i, str p2psocket, callback<void>::ref cb,
+    ptr<hostent> h, int err)
+{
+  DEBUG(1) << "dry_setup_cb\n";
+
+  if(!h)
+    fatal << "dns_hostbyname " << strerror(err) << "\n";
+
+  ptr<dhashclient_test> dhc = New refcounted<dhashclient_test>(p2psocket,
+      _slaves[i]->name, (*(in_addr*)h->h_addr).s_addr,
+      _slaves[i]->dhash_port, _slaves[i]->control_port);
+  client *c = New client(i, 0, "", dhc);
+  _clients.insert(c);
+
+  if(!(--_nhosts))
+    cb();
+}
+
+
+void
 testmaster::setup(callback<void>::ref cb)
 {
-  assert(_slaves);
-  _busy = true;
-  for(unsigned i = 0; _slaves[i].name != ""; i++) {
-    // create a unix socket
-    str p2psocket = strbuf() << "/tmp/" << _slaves[i].name << ":" << _slaves[i].dhash_port;
-    unlink(p2psocket);
-    int fd = unixsocket(p2psocket);
-    if(!fd)
-      fatal << "couldn't open unix socket " << p2psocket << "\n";
-    make_async(fd);
+  for(unsigned i = 0; i < _slaves.size(); i++) {
+    // bogus unix domain socket
+    str p2psocket;
+    int fd;
+    unixdomainsock(i, p2psocket, fd); // by reference
 
     // create a connection to the other side for this unix socket
-    addnode(i, p2psocket, &(_slaves[i]), fd, cb);
+    conthunk tx = { i, p2psocket, _slaves[i], fd, cb };
+    addnode(tx);
     _nhosts++;
   }
-  _busy = false;
 }
 
 // pipes from fake domain socket to remote lsd and back
@@ -123,18 +160,15 @@ testmaster::pipe(const int from, const int to)
 }
 
 void
-testmaster::addnode(const unsigned id, const str p2psocket,
-  const testslave *s, const int unixsocket_fd, callback<void>::ref cb)
+testmaster::addnode(conthunk tx)
 {
-  DEBUG(2) << "setting up " << s->name << ":" << s->dhash_port << "\n";
+  DEBUG(2) << "setting up " << tx.s->name << ":" << tx.s->dhash_port << "\n";
 
   // remove old entry
-  client *c = _clients[id];
+  client *c = _clients[tx.id];
   if(c)
     _clients.remove(c);
-
-  conthunk tx = { id, p2psocket, s, unixsocket_fd, cb };
-  tcpconnect(s->name, s->dhash_port, wrap(this, &testmaster::addnode_cb, tx));
+  tcpconnect(tx.s->name, tx.s->dhash_port, wrap(this, &testmaster::addnode_cb, tx));
 }
 
 
@@ -142,7 +176,7 @@ testmaster::addnode(const unsigned id, const str p2psocket,
 
 // accepts connection from dhashclient that we just created and sets up pipe
 void
-testmaster::accept_connection(const int unixsocket_fd, const int there_fd)
+testmaster::accept_connection(const int unixsocket_fd, const int there_fd, bool bogus = false)
 {
   struct sockaddr_in sin;
   unsigned sinlen = sizeof(sin);
@@ -150,6 +184,9 @@ testmaster::accept_connection(const int unixsocket_fd, const int there_fd)
   DEBUG(2) << "accept_connection from dhashclient\n";
 
   int here_fd = accept(unixsocket_fd, (struct sockaddr *) &sin, &sinlen);
+  if(bogus)
+    return;
+
   if(here_fd >= 0) {
     // setup pipe between dhashclient and remote slave
     fdcb(here_fd, selread, wrap(this, &testmaster::pipe, here_fd, there_fd));
@@ -170,18 +207,34 @@ testmaster::addnode_cb(conthunk tx, const int there_fd)
     return;
   }
 
+  // resolve the remote hostname
+  dns_hostbyname(tx.s->name, wrap(this, &testmaster::addnode_cb2, tx, there_fd));
+}
+
+
+void
+testmaster::addnode_cb2(conthunk tx, const int there_fd, ptr<hostent> h, int err)
+{
+  if(!h) {
+    fatal << "dns_hostbyname failed\n";
+  }
+
   // listen for incoming connection from dhashclient that we are about to
   // create
+  /*
   DEBUG(2) << "spawning server behind " << tx.p2psocket << "\n";
   if(listen(tx.unixsocket_fd, 5))
     fatal << "listen\n";
-  fdcb(tx.unixsocket_fd, selread, wrap(this, &testmaster::accept_connection, tx.unixsocket_fd, there_fd));
+  */
+  fdcb(tx.unixsocket_fd, selread, wrap(this, &testmaster::accept_connection, tx.unixsocket_fd, there_fd, false));
 
 
   // create DHash object
   DEBUG(2) << "creating dhashclient on " << tx.p2psocket << "\n";
   make_async(there_fd);
-  ptr<dhashclient> dhc = New refcounted<dhashclient>(tx.p2psocket);
+  ptr<dhashclient_test> dhc = New refcounted<dhashclient_test>(tx.p2psocket, 
+      tx.s->name, (*(in_addr*)h->h_addr).s_addr, tx.s->dhash_port, tx.s->control_port);
+
   if(!dhc)
     fatal << "couldn't create dhashclient on " << tx.p2psocket << "\n";
 
@@ -190,74 +243,6 @@ testmaster::addnode_cb(conthunk tx, const int there_fd)
   _clients.insert(c);
 
   // call callback once all slaves are connected
-  if(!(--_nhosts) && !_busy)
+  if(!(--_nhosts))
     tx.cb();
-}
-
-
-// cmd is a bunch of OR-ed flags.  see below.
-void
-testmaster::instruct(int blocker, int cmd, callback<void, int>::ref cb, int blockee)
-{
-  instruct_thunk *tx = New instruct_thunk(cb);
-  if(!tx)
-    fatal << "malloc!\n";
-  
-  tx->cmd = cmd;
-  tx->blocker = blocker;
-  tx->blockee = blockee == -1 ? blocker : blockee;
-
-  warn << _slaves[tx->blockee].name << "\n";
-  dns_hostbyname(_slaves[tx->blockee].name,
-      wrap(this, &testmaster::instruct_cb, tx));
-}
-
-void
-testmaster::instruct_cb(instruct_thunk *tx, ptr<hostent> h, int err)
-{
-
-  if(!h) {
-    warn << "dns_hostbyname failed\n";
-    tx->cb(0);
-    return;
-  }
-
-  tx->h = h;
-  DEBUG(1) << "tcppconnect to " << _slaves[tx->blocker].name << ":" << TESLA_CONTROL_PORT << "\n";
-
-  int port = _slaves[tx->blocker].control_port ?
-      _slaves[tx->blocker].control_port : TESLA_CONTROL_PORT;
-  tcpconnect(_slaves[tx->blocker].name, port,
-      wrap(this, &testmaster::instruct_cb2, tx));
-}
-
-void
-testmaster::instruct_cb2(instruct_thunk *tx, int fd)
-{
-  if(fd < 0) {
-    warn << "tcpconnect failed\n";
-    tx->cb(0);
-    return;
-  }
-
-  tx->fd = fd;
-  fdcb(fd, selwrite, wrap(this, &testmaster::instruct_cb3, tx));
-}
-
-void
-testmaster::instruct_cb3(instruct_thunk *tx) 
-{
-  instruct_t ins;
-
-  ins.i.cmd = tx->cmd;
-  ins.i.host = (*(in_addr*)tx->h->h_addr).s_addr;
-  ins.i.port = htons(_slaves[tx->blockee].control_port);
-
-  // XXX
-  if(write(tx->fd, ins.b, 12) < 0) 
-    fatal << "write\n";
-
-  fdcb(tx->fd, selwrite, 0);
-  close(tx->fd);
-  tx->cb(1);
 }

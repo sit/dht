@@ -34,7 +34,7 @@ my %values = ();
 my @hosts = ();
 my @tests = ();
 my $CF = "config.txt";
-my $killall = 1;
+my $killall = 0;
 my $dryrun = 0;
 my $suppress = 1;
 my $quiet = 1;
@@ -51,7 +51,7 @@ Usage: testwrapper.pl [-c ] [-d] [-h] [-k] [-q] [-s] [-v] CONFIG_FILE
 -c,--confsave / +c  :  don't delete generated conf file, default off
 -d,--dryrun   / +d  :  don't really do anything
 -h,--help           :  show this help
--k,--killall  / +k  :  killall testslaves first, default on
+-k,--killall  / +k  :  killall testslaves first, default off. DANGEROUS.
 -q,--quiet    / +q  :  suppress stdout/stderr of tests, default on
 -s,--suppress / +s  :  suppress stdout/stderr of running processes, default on
 -v,--verbose  / +v  :  blah blah blah blah blah blah blah
@@ -151,16 +151,6 @@ sub main {
   $verbose >= 2 and print "master is $master\n";
 
   #
-  # killall testslaves
-  #
-  if($killall) {
-    foreach my $h (@hosts) {
-      my $cmd =  "kill -9 \`ps -ax | egrep \"testslave|lsd\" | awk '{print \$1}'\`";
-      &do_execute($h->{NAME}, $cmd);
-    }
-  }
-
-  #
   # Start the lsd nodes
   #
   foreach my $h (@hosts) {
@@ -173,7 +163,8 @@ sub main {
   #
   foreach my $h (@hosts) {
     $h->{SOCKETFILE} = "/tmp/lsd_socket-$$-$h->{LSDPORT}";
-    my $cmd = "$h->{SLAVE} -p $h->{SLAVEPORT} -s $h->{SOCKETFILE}";
+    my $k = $killall ? "-k" : "";
+    my $cmd = "$h->{SLAVE} $k -p $h->{SLAVEPORT} -s $h->{SOCKETFILE}";
     &do_execute($h->{NAME}, $cmd);
   }
 
