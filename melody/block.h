@@ -34,6 +34,7 @@
 #define BLOCKPAYLOAD (BLOCKSIZE - (3*sizeof(int)))
 
 class dhashclient;
+class insert_info;
 
 /* this is the format of the blocks stored in dhash. this could
    probably be simplified. size is a bit redundant

@@ -28,7 +28,7 @@
  */
 
 #include "sfsmisc.h"
-#include "dhash.h"
+#include "dhash_common.h"
 #include "list.h"
 #include "cs_client.h"
 #include "block.h"
@@ -39,6 +39,7 @@
 the venti_blocks to keep track of the data.  */
 
 class venti_block;
+class insert_info;
 
 class melody_file : public virtual refcount {
  public:

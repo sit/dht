@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.14 2003/01/10 03:54:22 sit Exp $
+# $Id: Makefile.am,v 1.15 2003/07/24 18:04:20 sit Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -26,16 +26,16 @@ noinst_LIBRARIES = libdtest.a
 
 libdtest_a_SOURCES = testmaster.C test.C dhashclient_test.C
 example1_SOURCES = example1.C
-example1_LDADD = ./libdtest.a $(MYLDADD)
+example1_LDADD = ./libdtest.a ../dhash/libdhashclient.a ../svc/libsvc.la $(LDADD)
 
 example2_SOURCES = example2.C
-example2_LDADD = ./libdtest.a $(MYLDADD)
+example2_LDADD = ./libdtest.a ../dhash/libdhashclient.a ../svc/libsvc.la $(LDADD)
 
 testslave_SOURCES = testslave.C
-testslave_LDADD  = ./libdtest.a $(MYLDADD)
+testslave_LDADD = ./libdtest.a ../dhash/libdhashclient.a ../svc/libsvc.la $(LDADD)
 
 block_SOURCES = block.C
-block_LDADD  = ./libdtest.a $(MYLDADD)
+block_LDADD = ./libdtest.a ../dhash/libdhashclient.a ../svc/libsvc.la $(LDADD)
 
 EXTRA_DIST = .cvsignore
 CLEANFILES = core *.core *~ *.rpo
