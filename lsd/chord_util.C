@@ -108,6 +108,8 @@ gt (sfs_ID &n, sfs_ID &n1)
   return false;
 }
 
+#if 0
+// Check whether n in (a,b) on the circle.
 bool
 between (sfs_ID &a, sfs_ID &b, sfs_ID &n)
 {
@@ -119,5 +121,32 @@ between (sfs_ID &a, sfs_ID &b, sfs_ID &n)
   else
     r = false;
   // warnx << n << " between( " << a << ", " <<  b << "): " <<  r << "\n";
+  return r;
+}
+#endif
+
+// Check whether n in (a,b) on the circle.
+bool
+between (sfs_ID &a, sfs_ID &b, sfs_ID &n)
+{
+
+  if (b == a)  return n == a;
+  bool f = (b - a) > 0;  
+  bool r;
+  if (f) {
+    r = (n >= a) && (n <= b);
+  } else {
+    r = (n >= a) || (n <= b);
+  }
+  warnx << n << " between( " << a << ", " <<  b << "): " <<  r << "\n";
+  return r;
+}
+
+// Check whether n is (a, b) absolutely.
+bool
+betweenabs (sfs_ID &a, sfs_ID &b, sfs_ID &n)
+{
+  bool r = n >= a && b >= n;
+  //  warnx << n << " between( " << a << ", " <<  b << "): " <<  r << "\n";
   return r;
 }

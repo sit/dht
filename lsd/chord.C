@@ -541,10 +541,14 @@ p2p::dofindclosestpred (svccb *sbp, sfsp2p_findarg *fa)
 {
   sfsp2p_findres res(SFSP2P_OK);
   sfs_ID p = myID;
+  sfs_ID s = myID + 1;
 
-  for (int i = 0; i <= NBIT; i++) {
-    if ((finger_table[i].alive) && between (p, fa->x, finger_table[i].first)) {
+  print ();
+  for (int i = NBIT; i > 1; i--) {
+    if ((finger_table[i].alive) && 
+	between (s, fa->x, finger_table[i].first)) {
       p = finger_table[i].first;
+      break;
     }
   }
   warnx << "dofindclosestpred of " << fa->x << " is " << p << "\n";

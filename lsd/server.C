@@ -183,7 +183,7 @@ p2p::find_closestpred_succ_cb (findpredecessor_cbstate *st,
     if (st->nprime == s) {
       warnx << "find_closestpred_succ_cb: " << s << " is the only Chord node\n";
       st->cb (st->nprime, st->search_path, SFSP2P_OK);
-    } if (!between (st->nprime, s, st->x)) {
+    } else if (!between (st->nprime, s, st->x)) {
       warnx << "find_closestpred_succ_cb: " << st->x << " is not between " 
 	    << st->nprime << " and " << s << "\n";
       sfsp2p_findarg *fap = New sfsp2p_findarg;

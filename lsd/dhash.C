@@ -125,7 +125,9 @@ dhashclient::lookup_findsucc_cb(svccb *sbp, sfs_ID *n, cb_ID scbid,
     sbp->reply (res);
   } else {
     dhash_res *res = New dhash_res();
-    defp2p->doRPC (succ, dhash_program_1, DHASHPROC_FETCH, n, res, 
+    warnx << "lookup_findsucc_cb: successor of doc " << *n << " is " 
+	  << succ << "\n";
+    defp2p->doRPC(succ, dhash_program_1, DHASHPROC_FETCH, n, res, 
 		  wrap(this, &dhashclient::lookup_fetch_cb, sbp, res));
   }
 }
