@@ -1,3 +1,8 @@
+RFCs:
+http://www.eyrie.org/~eagle/nntp/rfcs/rfc977.txt
+http://www.ietf.org/rfc/rfc2980.txt
+http://www.faqs.org/rfcs/rfc1036.html
+
 rfc1036:
  check for headers: from, subject, newsgroups
  add certain headers when accepting or sending news articles
