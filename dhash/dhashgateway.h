@@ -24,11 +24,12 @@ class dhashgateway : public virtual refcount
 
   void dispatch (svccb *sbp);
   void insert_cache_cb (dhash_stat status, vec<chordID> path);
-  void insert_cb (svccb *sbp, dhash_stat status, vec<chordID> path);
-  void insert_cb_common (svccb *sbp, dhash_insert_res *res);
+  void insert_cb (svccb *sbp, bool tocache, dhash_stat status,
+                  vec<chordID> path);
+  void insert_cb_common (svccb *sbp, bool tocache, dhash_insert_res *res);
   void retrieve_cache_cb (svccb *sbp, ptr<dhash_block> block);
-  void retrieve_cb (svccb *sbp, dhash_stat status, ptr<dhash_block> block,
-                    route path);
+  void retrieve_cb (svccb *sbp, dhash_stat status,
+                    ptr<dhash_block> block, route path);
   void retrieve_cb_common (svccb *sbp, dhash_retrieve_res *res);
 
   void proxy_connected (ptr<axprt_stream> x, ptr<chord> node, int fd);

@@ -57,6 +57,7 @@ dhashgateway::dhashgateway (ptr<axprt_stream> x, ptr<chord> node,
                             str host, int port)
 {
   useproxy = true;
+  proxyclnt = 0;
   proxyhost = host;
   proxyport = port;
   tcpconnect (proxyhost, proxyport,
@@ -69,7 +70,6 @@ dhashgateway::proxy_connected (ptr<axprt_stream> x, ptr<chord> node, int fd)
   if (fd < 0) {
     warn << "cannot connect to proxy "
          << proxyhost << ":" << proxyport << ", skip proxying\n";
-    useproxy = false;
     proxyclnt = 0;
   }
   else {
@@ -109,9 +109,10 @@ dhashgateway::dispatch (svccb *sbp)
 	New refcounted<dhash_block> (arg->block.base (), arg->len, arg->ctype);
       block->ID = arg->blockID;
 
-      if (arg->options & DHASHCLIENT_USE_CACHE)
-        dhcli->insert_to_cache 
-	  (block, wrap (mkref (this), &dhashgateway::insert_cb, sbp));
+      if ((arg->options & DHASHCLIENT_USE_CACHE) ||
+	  (useproxy && proxyclnt == 0))
+        dhcli->insert_to_cache
+	  (block, wrap (mkref (this), &dhashgateway::insert_cb, sbp, true));
       
       else if (useproxy) {
 	int options = arg->options;
@@ -130,10 +131,9 @@ dhashgateway::dispatch (svccb *sbp)
         if (arg->options & DHASHCLIENT_GUESS_SUPPLIED) 
 	  guess = New refcounted<chordID> (arg->guess);
 	 
-        dhcli->insert (block, 
-		       wrap (mkref (this), &dhashgateway::insert_cb, sbp),
-		       arg->options,
-		       guess);
+        dhcli->insert
+	  (block, wrap (mkref (this), &dhashgateway::insert_cb, sbp, false),
+	   arg->options, guess);
       }
     }
     break;
@@ -147,7 +147,8 @@ dhashgateway::dispatch (svccb *sbp)
       if (arg->options & DHASHCLIENT_GUESS_SUPPLIED)
 	guess = New refcounted<chordID> (arg->guess);
 
-      if (arg->options & DHASHCLIENT_USE_CACHE)
+      if ((arg->options & DHASHCLIENT_USE_CACHE) ||
+	  (useproxy && proxyclnt == 0))
         dhcli->retrieve_from_cache
 	  (blockID (arg->blockID, arg->ctype, DHASH_BLOCK),
 	   wrap (mkref (this), &dhashgateway::retrieve_cache_cb, sbp));
@@ -193,17 +194,18 @@ dhashgateway::proxy_insert_cb (int options, svccb *sbp,
 {
   if (err) {
     dhash_insert_res r (DHASH_RPCERR);
-    insert_cb_common (sbp, &r);
+    insert_cb_common (sbp, false, &r);
   }
   else {
     dhash_insert_arg *arg = sbp->template getarg<dhash_insert_arg> ();
     arg->options = options;
-    insert_cb_common (sbp, res);
+    insert_cb_common (sbp, false, res);
   }
 }
 
 void
-dhashgateway::insert_cb (svccb *sbp, dhash_stat status, vec<chordID> path)
+dhashgateway::insert_cb (svccb *sbp, bool tocache,
+                         dhash_stat status, vec<chordID> path)
 {
   dhash_insert_res res (status);
   if (status == DHASH_OK) {
@@ -211,17 +213,18 @@ dhashgateway::insert_cb (svccb *sbp, dhash_stat status, vec<chordID> path)
     for (unsigned int i = 0; i < path.size (); i++)
       res.resok->path[i] = path[i];
   }
-  insert_cb_common (sbp, &res);
+  insert_cb_common (sbp, tocache, &res);
 }
 
 void
-dhashgateway::insert_cb_common (svccb *sbp, dhash_insert_res *res)
+dhashgateway::insert_cb_common (svccb *sbp, bool tocache,
+                                dhash_insert_res *res)
 {
   // this must be before sbp->reply, otherwise sbp object is not
   // guaranteed to be around
   ptr<dhash_block> block = 0;
   dhash_insert_arg *arg = sbp->template getarg<dhash_insert_arg> ();
-  if (arg->options & DHASHCLIENT_CACHE) {
+  if (!tocache && (arg->options & DHASHCLIENT_CACHE)) {
     block = New refcounted<dhash_block>
       (arg->block.base (), arg->len, arg->ctype);
     block->ID = arg->blockID;
@@ -309,16 +312,25 @@ dhashgateway::retrieve_cache_cb (svccb *sbp, ptr<dhash_block> block)
   }
 
   else if (useproxy) {
-    dhash_retrieve_arg *arg = sbp->template getarg<dhash_retrieve_arg> ();
-    int options = arg->options;
-    arg->options =
-      (arg->options & (~(DHASHCLIENT_USE_CACHE | DHASHCLIENT_CACHE)));
+    if (proxyclnt == 0) {
+      dhash_retrieve_res res (DHASH_NOENT);
+      route path;
+      dhash_stat stat = DHASH_NOENT;
+      SET_RETRIEVE_REPLY;
+      sbp->reply (&res);
+    }
+    else {
+      dhash_retrieve_arg *arg = sbp->template getarg<dhash_retrieve_arg> ();
+      int options = arg->options;
+      arg->options =
+        (arg->options & (~(DHASHCLIENT_USE_CACHE | DHASHCLIENT_CACHE)));
   
-    ptr<dhash_retrieve_res> res = New refcounted<dhash_retrieve_res> ();
-    proxyclnt->call
-      (DHASHPROC_RETRIEVE, arg, res,
-       wrap (mkref (this), &dhashgateway::proxy_retrieve_cb,
-	     options, sbp, res));
+      ptr<dhash_retrieve_res> res = New refcounted<dhash_retrieve_res> ();
+      proxyclnt->call
+        (DHASHPROC_RETRIEVE, arg, res,
+         wrap (mkref (this), &dhashgateway::proxy_retrieve_cb,
+	       options, sbp, res));
+    }
   }
 
   else {
