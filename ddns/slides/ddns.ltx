@@ -1,0 +1,81 @@
+%% -*- LaTeX -*-
+%% $Id: ddns.ltx,v 1.1 2001/12/06 18:56:21 athicha Exp $
+
+\documentclass{seminar}
+\special{papersize=11in,8.5in}
+
+\usepackage{epsf}
+\usepackage{color}
+\usepackage{epsfig}
+\usepackage{palatino}
+\usepackage{alltt}
+\renewcommand{\ttdefault}{cmtt}
+\newcommand{\sha}{{\mathrm{SHA{\mathchar"002D}1}}}
+\newcommand{\rc}{{\mathrm{RC4}}}
+
+\newcommand{\Red}[1]{{\color[rgb]{1,0,0}#1}}
+\newcommand{\Black}[1]{{\color[rgb]{0,0,0}#1}}
+
+\newcommand{\implies}{\;\Longrightarrow\;}
+
+\slideframe{none}
+\def\theslide{}
+
+\newcommand{\slname}[1]{
+\begin{center}
+   \Large\bf
+   #1
+\end{center}
+\vspace{1ex minus 1ex}}
+
+\newcommand{\itms}[1]{
+\begin{list}{\Black{$\bullet$}}
+   \bfseries\large
+   #1
+\end{list}}
+
+\newcommand{\ittms}[1]{
+\begin{list}{\Black{-}}
+   \mdseries\normalsize
+   #1
+\end{list}}
+
+\begin{document}
+
+\begin{slide}
+\begin{center}
+{\bf\Large
+Serving DNS Using a Peer-to-Peer Lookup Service} \\
+\vspace*{.33in}
+{\large
+Russ Cox, Athicha Muthitacharoen (MIT LCS)} \\ 
+\end{center}
+\end{slide}
+
+\begin{slide}
+\slname{Motivation}
+\itms{
+  \item DNS Name Server Config
+  \item DoS
+  \item Ineffiency (Unresponsive..)
+}
+\end{slide}
+
+\begin{slide}
+\slname{DNSSEC Helps Separate Authority from Service}
+\itms{
+  \item 
+}
+\end{slide}
+
+\begin{slide}
+\slname{}
+\end{slide}
+
+\end{document}
+
+% Local Variables:
+% tex-dvi-view-command: "xdvi -paper usr -s 9 *"
+% tex-command: ": && latex * && dvips -Ppdfr -t letterl !#:3:r.dvi && ps2pdf !#:3:r.ps ;:"
+% End:
+
