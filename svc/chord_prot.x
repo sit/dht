@@ -9,6 +9,8 @@
 %#include "bigint.h"
 %#include <sfs_prot.h>
 
+%#define NBIT 160
+
 typedef bigint chordID;
 
 enum chordstat {

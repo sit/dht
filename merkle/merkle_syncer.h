@@ -9,6 +9,7 @@
 #include <chord.h>
 
 // see comment in merkle_syncer::doRPC for this work around.
+#include "location.h"
 typedef callback<void, RPC_delay_args *>::ref rpcfnc_t;
 //typedef callback<void, rpc_program, int, ptr<void>, void *, aclnt_cb>::ref rpcfnc_t;
 

@@ -36,15 +36,8 @@
 
 typedef callback<void,chordstat>::ptr cbping_t;
 typedef callback<void,chordID,bool,chordstat>::ref cbchallengeID_t;
-extern cbchallengeID_t cbchall_null;
 
-// the identifier for the ihash class
-struct hashID {
-  hashID () {}
-  hash_t operator() (const chordID &ID) const {
-    return ID.getui ();
-  }
-};
+extern cbchallengeID_t cbchall_null;
 
 struct location {
   chordID n;
@@ -158,7 +151,7 @@ class locationtable : public virtual refcount {
   bool alive (const chordID &x);
   bool challenged (const chordID &x);
   bool cached (const chordID &x);
-  net_address & getaddress (const chordID &x);
+  const net_address & getaddress (const chordID &x);
   float get_a_lat (const chordID &x);
   void fill_getnodeext (chord_node_ext &data, const chordID &x);
   unsigned int get_nrpc(const chordID &x);

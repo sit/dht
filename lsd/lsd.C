@@ -30,6 +30,11 @@
 #include "route.h"
 #include "crypt.h"
 
+#include "fingerlike.h"
+#include "debruijn.h"
+#include "finger_table.h"
+#include "succ_list.h" // XXX only for NSUCC!
+
 //#define PROFILING 
 
 // When a process starts up profiling is not happening.  But by

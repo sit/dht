@@ -26,8 +26,8 @@
  */
 
 #include <assert.h>
-#include <chord.h>
 #include <qhash.h>
+#include "chord_impl.h"
 
 const int chord::max_vnodes = 1024;
 
@@ -36,19 +36,39 @@ const int CHORD_LOOKUP_LOCTABLE (1);
 const int CHORD_LOOKUP_PROXIMITY (2);
 const int CHORD_LOOKUP_FINGERSANDSUCCS (3);
 
-vnode::vnode (ptr<locationtable> _locations, ptr<fingerlike> stab,
-	      ptr<route_factory> f,
-	      ptr<chord> _chordnode,
-	      chordID _myID, int _vnode, int server_sel_mode,
-	      int l_mode) :
+ref<vnode>
+vnode::produce_vnode (ptr<locationtable> _locations, ptr<fingerlike> stab,
+			ptr<route_factory> f,
+			ptr<chord> _chordnode,
+			chordID _myID, int _vnode, int server_sel_mode,
+			int l_mode)
+{
+  return New refcounted<vnode_impl> (_locations, stab, f, _chordnode, _myID,
+				     _vnode, server_sel_mode, l_mode);
+}
+
+// Pure virtual destructors still need definitions
+vnode::~vnode () {}
+
+chordID
+vnode_impl::my_ID () const
+{
+  return myID;
+}
+
+vnode_impl::vnode_impl (ptr<locationtable> _locations, ptr<fingerlike> stab,
+			ptr<route_factory> f,
+			ptr<chord> _chordnode,
+			chordID _myID, int _vnode, int server_sel_mode,
+			int l_mode) :
   myindex (_vnode),
   myID (_myID), 
   chordnode (_chordnode),
-  locations (_locations),
   factory (f),
   server_selection_mode (server_sel_mode),
   lookup_mode (l_mode)
 {
+  locations = _locations;
   warnx << gettime () << " myID is " << myID << "\n";
 
   fingers = stab;
@@ -65,6 +85,8 @@ vnode::vnode (ptr<locationtable> _locations, ptr<fingerlike> stab,
     toes = New refcounted<toe_table> ();
     toes->init (mkref(this), locations, myID);
     stabilizer->register_client (toes);
+  } else {
+    toes = NULL;
   }
     
   locations->incvnodes ();
@@ -103,26 +125,26 @@ vnode::vnode (ptr<locationtable> _locations, ptr<fingerlike> stab,
   nout_continuous = 0;
 }
 
-vnode::~vnode ()
+vnode_impl::~vnode_impl ()
 {
-  warnx << myID << ": vnode: destroyed\n";
+  warnx << myID << ": vnode_impl: destroyed\n";
   exit (0);
 }
 
 chordID
-vnode::my_pred() 
+vnode_impl::my_pred() const
 {
   return locations->closestpredloc (myID);
 }
 
 chordID
-vnode::my_succ () 
+vnode_impl::my_succ () const
 {
   return successors->succ ();
 }
 
 void
-vnode::stats ()
+vnode_impl::stats () const
 {
   warnx << "VIRTUAL NODE STATS " << myID
 	<< " stable? " << stabilizer->isstable () << "\n";
@@ -166,14 +188,14 @@ vnode::stats ()
 }
 
 void
-vnode::print ()
+vnode_impl::print () const
 {
   warnx << "======== " << myID << "====\n";
   fingers->print ();
   successors->print ();
 
   warnx << "pred : " << my_pred () << "\n";
-  if (lookup_mode == CHORD_LOOKUP_PROXIMITY) {
+  if (toes) {
     warnx << "------------- toes ----------------------------------\n";
     toes->dump ();
   }
@@ -182,73 +204,100 @@ vnode::print ()
 }
 
 chordID
-vnode::lookup_closestsucc (const chordID &x)
+vnode_impl::lookup_closestsucc (const chordID &x)
 {
   chordID s;
 
-  if (lookup_mode == CHORD_LOOKUP_PROXIMITY)
+  switch (lookup_mode) {
+  case CHORD_LOOKUP_PROXIMITY:
     s = toes->closestsucc (x);
-  else if (lookup_mode == CHORD_LOOKUP_FINGERLIKE) {
+    break;
+  case CHORD_LOOKUP_FINGERLIKE:
     s = fingers->closestsucc (x);
-  } else
+    break;
+  case CHORD_LOOKUP_FINGERSANDSUCCS:
+  case CHORD_LOOKUP_LOCTABLE:
     s = locations->closestsuccloc (x);
-
+    break;
+  default:
+    assert (0 == "invalid lookup_mode");
+  }
   return s;
 }
 
 chordID
-vnode::lookup_closestpred (const chordID &x, vec<chordID> failed_nodes)
+vnode_impl::lookup_closestpred (const chordID &x, vec<chordID> failed_nodes)
 {
   chordID s;
-
-  if (lookup_mode == CHORD_LOOKUP_PROXIMITY)
+  
+  switch (lookup_mode) {
+  case CHORD_LOOKUP_PROXIMITY:
     s = toes->closestpred (x, failed_nodes);
-  else if (lookup_mode == CHORD_LOOKUP_FINGERLIKE) {
+    break;
+  case CHORD_LOOKUP_FINGERLIKE:
     s = fingers->closestpred (x, failed_nodes);
-  } else if (lookup_mode == CHORD_LOOKUP_FINGERSANDSUCCS) {
-    chordID f = fingers->closestpred (x, failed_nodes);
-    chordID u = successors->closestpred (x, failed_nodes);
-    if (between (myID, f, u)) 
-      s = f;
-    else
-      s = u;
-  } else 
+    break;
+  case CHORD_LOOKUP_FINGERSANDSUCCS:
+    {
+      chordID f = fingers->closestpred (x, failed_nodes);
+      chordID u = successors->closestpred (x, failed_nodes);
+      if (between (myID, f, u)) 
+	s = f;
+      else
+	s = u;
+      break;
+    }
+  case CHORD_LOOKUP_LOCTABLE:
     s = locations->closestpredloc (x, failed_nodes);
+    break;
+  default:
+    assert (0 == "invalid lookup_mode");
+  }
 
   return s;
 }
 
 
 chordID
-vnode::lookup_closestpred (const chordID &x)
+vnode_impl::lookup_closestpred (const chordID &x)
 {
   chordID s;
-
-  if (lookup_mode == CHORD_LOOKUP_PROXIMITY)
+  
+  switch (lookup_mode) {
+  case CHORD_LOOKUP_PROXIMITY:
     s = toes->closestpred (x);
-  else if (lookup_mode == CHORD_LOOKUP_FINGERLIKE) {
+    break;
+  case CHORD_LOOKUP_FINGERLIKE:
     s = fingers->closestpred (x);
-  } else if (lookup_mode == CHORD_LOOKUP_FINGERSANDSUCCS) {
-    chordID f = fingers->closestpred (x);
-    chordID u = successors->closestpred (x);
-    if (between (myID, f, u)) 
-      s = f;
-    else
-      s = u;
-  }  else 
+    break;
+  case CHORD_LOOKUP_FINGERSANDSUCCS:
+    {
+      chordID f = fingers->closestpred (x);
+      chordID u = successors->closestpred (x);
+      if (between (myID, f, u)) 
+	s = f;
+      else
+	s = u;
+      break;
+    }
+  case CHORD_LOOKUP_LOCTABLE:
     s = locations->closestpredloc (x);
+    break;
+  default:
+    assert (0 == "invalid lookup_mode");
+  }
 
   return s;
 }
 
 void
-vnode::stabilize (void)
+vnode_impl::stabilize (void)
 {
   stabilizer->start ();
 }
 
 void
-vnode::join (cbjoin_t cb)
+vnode_impl::join (cbjoin_t cb)
 {
   chordID n;
 
@@ -258,12 +307,12 @@ vnode::join (cbjoin_t cb)
     (*cb) (NULL, CHORD_ERRNOENT);
   } else {
     chordID s = myID + 1;
-    find_successor (s, wrap (mkref (this), &vnode::join_getsucc_cb, cb));
+    find_successor (s, wrap (mkref (this), &vnode_impl::join_getsucc_cb, cb));
   }
 }
 
 void 
-vnode::join_getsucc_cb (cbjoin_t cb, chordID s, route r, chordstat status)
+vnode_impl::join_getsucc_cb (cbjoin_t cb, chordID s, route r, chordstat status)
 {
   if (status) {
     warnx << myID << ": join_getsucc_cb: " << status << "\n";
@@ -276,7 +325,7 @@ vnode::join_getsucc_cb (cbjoin_t cb, chordID s, route r, chordstat status)
 }
 
 void
-vnode::doget_successor (svccb *sbp)
+vnode_impl::doget_successor (svccb *sbp)
 {
   ndogetsuccessor++;
   
@@ -288,7 +337,7 @@ vnode::doget_successor (svccb *sbp)
 }
 
 void
-vnode::doget_predecessor (svccb *sbp)
+vnode_impl::doget_predecessor (svccb *sbp)
 {
   ndogetpredecessor++;
   chordID p = my_pred ();
@@ -299,14 +348,14 @@ vnode::doget_predecessor (svccb *sbp)
 }
 
 void
-vnode::do_upcall_cb (char *a, cbupcalldone_t done_cb, bool v)
+vnode_impl::do_upcall_cb (char *a, cbupcalldone_t done_cb, bool v)
 {
   delete[] a;
   done_cb (v);
 }
 
 void
-vnode::do_upcall (int upcall_prog, int upcall_proc,
+vnode_impl::do_upcall (int upcall_prog, int upcall_proc,
 		  void *uc_args, int uc_args_len,
 		  cbupcalldone_t done_cb)
 
@@ -334,12 +383,12 @@ vnode::do_upcall (int upcall_prog, int upcall_proc,
   //run the upcall. It returns a pointer to its result and a length in the cb
   cbupcall_t cb = uc->cb;
   (*cb)(upcall_proc, (void *)unmarshalled_args,
-	wrap (this, &vnode::do_upcall_cb, unmarshalled_args, done_cb));
+	wrap (this, &vnode_impl::do_upcall_cb, unmarshalled_args, done_cb));
 
 }
 
 void
-vnode::dotestrange_findclosestpred (svccb *sbp, chord_testandfindarg *fa) 
+vnode_impl::dotestrange_findclosestpred (svccb *sbp, chord_testandfindarg *fa) 
 {
   ndotestrange++;
   chordID x = fa->x;
@@ -363,7 +412,7 @@ vnode::dotestrange_findclosestpred (svccb *sbp, chord_testandfindarg *fa)
   if (fa->upcall_prog)  {
     do_upcall (fa->upcall_prog, fa->upcall_proc,
 	       fa->upcall_args.base (), fa->upcall_args.size (),
-	       wrap (this, &vnode::chord_upcall_done, fa, res, sbp));
+	       wrap (this, &vnode_impl::chord_upcall_done, fa, res, sbp));
 
   } else {
     sbp->reply(res);
@@ -372,7 +421,7 @@ vnode::dotestrange_findclosestpred (svccb *sbp, chord_testandfindarg *fa)
 }
 
 void
-vnode::chord_upcall_done (chord_testandfindarg *fa,
+vnode_impl::chord_upcall_done (chord_testandfindarg *fa,
 			  chord_testandfindres *res,
 			  svccb *sbp,
 			  bool stop)
@@ -384,7 +433,7 @@ vnode::chord_upcall_done (chord_testandfindarg *fa,
 }
 
 void
-vnode::dofindclosestpred (svccb *sbp, chord_findarg *fa)
+vnode_impl::dofindclosestpred (svccb *sbp, chord_findarg *fa)
 {
   chord_noderes res(CHORD_OK);
   chordID p = lookup_closestpred (fa->x);
@@ -395,7 +444,7 @@ vnode::dofindclosestpred (svccb *sbp, chord_findarg *fa)
 }
 
 void
-vnode::updatepred_cb (chordID p, bool ok, chordstat status)
+vnode_impl::updatepred_cb (chordID p, bool ok, chordstat status)
 {
   if (status == CHORD_RPCFAILURE) {
     warnx << myID << ": updatepred_cb: couldn't authenticate " << p << "\n";
@@ -410,23 +459,23 @@ vnode::updatepred_cb (chordID p, bool ok, chordstat status)
 }
 
 void
-vnode::donotify (svccb *sbp, chord_nodearg *na)
+vnode_impl::donotify (svccb *sbp, chord_nodearg *na)
 {
   ndonotify++;
   if (my_pred () == myID || between (my_pred (), myID, na->n.x)) {
     locations->cacheloc (na->n.x, na->n.r,
-			 wrap (mkref (this), &vnode::updatepred_cb));
+			 wrap (mkref (this), &vnode_impl::updatepred_cb));
   }
   sbp->replyref (chordstat (CHORD_OK));
 }
 
 void
-vnode::doalert (svccb *sbp, chord_nodearg *na)
+vnode_impl::doalert (svccb *sbp, chord_nodearg *na)
 {
   ndoalert++;
   if (locations->cached (na->n.x)) {
     // check whether we cannot reach x either
-    get_successor (na->n.x, wrap (mkref (this), &vnode::doalert_cb, sbp, 
+    get_successor (na->n.x, wrap (mkref (this), &vnode_impl::doalert_cb, sbp, 
 				  na->n.x));
   } else {
     sbp->replyref (chordstat (CHORD_UNKNOWNNODE));
@@ -434,7 +483,7 @@ vnode::doalert (svccb *sbp, chord_nodearg *na)
 }
 
 void
-vnode::doalert_cb (svccb *sbp, chordID x, chordID s, net_address r, 
+vnode_impl::doalert_cb (svccb *sbp, chordID x, chordID s, net_address r, 
 		   chordstat stat)
 {
   if ((stat == CHORD_OK) || (stat == CHORD_ERRNOENT)) {
@@ -448,7 +497,7 @@ vnode::doalert_cb (svccb *sbp, chordID x, chordID s, net_address r,
 }
 
 void
-vnode::dogetfingers (svccb *sbp)
+vnode_impl::dogetfingers (svccb *sbp)
 {
   chord_nodelistres res(CHORD_OK);
   ndogetfingers++;
@@ -458,7 +507,7 @@ vnode::dogetfingers (svccb *sbp)
 
 
 void
-vnode::dogetfingers_ext (svccb *sbp)
+vnode_impl::dogetfingers_ext (svccb *sbp)
 {
   chord_nodelistextres res(CHORD_OK);
   ndogetfingers_ext++;
@@ -469,7 +518,7 @@ vnode::dogetfingers_ext (svccb *sbp)
 }
 
 void
-vnode::dogetsucc_ext (svccb *sbp)
+vnode_impl::dogetsucc_ext (svccb *sbp)
 {
   chord_nodelistextres res(CHORD_OK);
   ndogetsucc_ext++;
@@ -478,7 +527,7 @@ vnode::dogetsucc_ext (svccb *sbp)
 }
 
 void
-vnode::dogetpred_ext (svccb *sbp)
+vnode_impl::dogetpred_ext (svccb *sbp)
 {
   ndogetpred_ext++;
   chord_nodeextres res(CHORD_OK);
@@ -488,7 +537,7 @@ vnode::dogetpred_ext (svccb *sbp)
 }
 
 void
-vnode::dochallenge (svccb *sbp, chord_challengearg *ca)
+vnode_impl::dochallenge (svccb *sbp, chord_challengearg *ca)
 {
   chord_challengeres res(CHORD_OK);
   ndochallenge++;
@@ -498,7 +547,7 @@ vnode::dochallenge (svccb *sbp, chord_challengearg *ca)
 }
 
 void
-vnode::dogettoes (svccb *sbp)
+vnode_impl::dogettoes (svccb *sbp)
 {
   chord_gettoes_arg *ta = 
     sbp->template getarg<chord_gettoes_arg> ();
@@ -515,7 +564,7 @@ vnode::dogettoes (svccb *sbp)
 }
 
 void
-vnode::dogetsucclist (svccb *sbp)
+vnode_impl::dogetsucclist (svccb *sbp)
 {
   chord_nodelistres res (CHORD_OK);
   ndogetsucclist++;
@@ -532,7 +581,7 @@ vnode::dogetsucclist (svccb *sbp)
 }
 
 void
-vnode::dodebruijn (svccb *sbp, chord_debruijnarg *da)
+vnode_impl::dodebruijn (svccb *sbp, chord_debruijnarg *da)
 {
   ndodebruijn++;
   chord_debruijnres *res;
@@ -571,7 +620,7 @@ vnode::dodebruijn (svccb *sbp, chord_debruijnarg *da)
   if (da->upcall_prog)  {
     do_upcall (da->upcall_prog, da->upcall_proc,
 	       da->upcall_args.base (), da->upcall_args.size (),
-	       wrap (this, &vnode::debruijn_upcall_done, da, res, sbp));
+	       wrap (this, &vnode_impl::debruijn_upcall_done, da, res, sbp));
     
   } else {
     sbp->reply (res);
@@ -580,7 +629,7 @@ vnode::dodebruijn (svccb *sbp, chord_debruijnarg *da)
 }
 
 void
-vnode::debruijn_upcall_done (chord_debruijnarg *da,
+vnode_impl::debruijn_upcall_done (chord_debruijnarg *da,
 			     chord_debruijnres *res,
 			     svccb *sbp,
 			     bool stop)
@@ -592,13 +641,13 @@ vnode::debruijn_upcall_done (chord_debruijnarg *da,
 }
 
 void
-vnode::dofindroute (svccb *sbp, chord_findarg *fa)
+vnode_impl::dofindroute (svccb *sbp, chord_findarg *fa)
 {
-  find_route (fa->x, wrap (this, &vnode::dofindroute_cb, sbp));
+  find_route (fa->x, wrap (this, &vnode_impl::dofindroute_cb, sbp));
 }
 
 void
-vnode::dofindroute_cb (svccb *sbp, chordID s, route r, chordstat err)
+vnode_impl::dofindroute_cb (svccb *sbp, chordID s, route r, chordstat err)
 {
   if (err) {
     chord_nodelistres res (CHORD_RPCFAILURE);
@@ -615,25 +664,25 @@ vnode::dofindroute_cb (svccb *sbp, chordID s, route r, chordstat err)
 }
 
 void
-vnode::stop (void)
+vnode_impl::stop (void)
 {
   stabilizer->stop ();
 }
   
 
 void
-vnode::stabilize_pred ()
+vnode_impl::stabilize_pred ()
 {
   chordID p = my_pred ();
 
   assert (nout_continuous == 0);
 
   nout_continuous++;
-  get_successor (p, wrap (this, &vnode::stabilize_getsucc_cb, p));
+  get_successor (p, wrap (this, &vnode_impl::stabilize_getsucc_cb, p));
 }
 
 void
-vnode::stabilize_getsucc_cb (chordID pred, 
+vnode_impl::stabilize_getsucc_cb (chordID pred, 
 			     chordID s, net_address r, chordstat status)
 {
   // receive successor from my predecessor; in stable case it is me
@@ -646,7 +695,7 @@ vnode::stabilize_getsucc_cb (chordID pred,
     // location table; maybe he is our predecessor.
     if (s != myID) { 
       locations->cacheloc (s, r,
-			   wrap (this, &vnode::updatepred_cb));
+			   wrap (this, &vnode_impl::updatepred_cb));
     } else {
       last_pred = pred;
     }
@@ -655,14 +704,13 @@ vnode::stabilize_getsucc_cb (chordID pred,
 
 
 void 
-vnode::fill_nodelistresext (chord_nodelistextres *res)
+vnode_impl::fill_nodelistresext (chord_nodelistextres *res)
 {
 }
 
 void 
-vnode::fill_nodelistres (chord_nodelistres *res)
+vnode_impl::fill_nodelistres (chord_nodelistres *res)
 {
-  
 }
 
 

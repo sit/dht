@@ -1,4 +1,7 @@
 #include "chord.h"
+#include "fingerlike.h"
+#include "succ_list.h"
+#include "location.h"
 
 /*
  * The idea of the succ_list class is to maintain a list of

@@ -25,24 +25,24 @@
  *
  */
 
-#include <chord_util.h>
-#include <chord.h>
-#include <route.h>
+#include "chord_util.h"
+#include "chord_impl.h"
+#include "route.h"
 
 void 
-vnode::get_successor (chordID n, cbchordID_t cb)
+vnode_impl::get_successor (const chordID &n, cbchordID_t cb)
 {
   //  warn << "get successor of " << n << "\n";
   ngetsuccessor++;
   chord_noderes *res = New chord_noderes (CHORD_OK);
   ptr<chordID> v = New refcounted<chordID> (n);
   doRPC (n, chord_program_1, CHORDPROC_GETSUCCESSOR, v, res,
-	 wrap (mkref (this), &vnode::get_successor_cb, n, cb, res));
+	 wrap (mkref (this), &vnode_impl::get_successor_cb, n, cb, res));
 }
 
 void
-vnode::get_successor_cb (chordID n, cbchordID_t cb, chord_noderes *res, 
-		       clnt_stat err) 
+vnode_impl::get_successor_cb (chordID n, cbchordID_t cb, chord_noderes *res, 
+			      clnt_stat err) 
 {
   if (err) {
     net_address dr;
@@ -59,17 +59,17 @@ vnode::get_successor_cb (chordID n, cbchordID_t cb, chord_noderes *res,
 }
 
 void
-vnode::get_succlist (const chordID &n, cbchordIDlist_t cb)
+vnode_impl::get_succlist (const chordID &n, cbchordIDlist_t cb)
 {
   ngetsucclist++;
   chord_nodelistres *res = New chord_nodelistres (CHORD_OK);
   ptr<chordID> v = New refcounted<chordID> (n);
   doRPC (n, chord_program_1, CHORDPROC_GETSUCCLIST, v, res,
-	 wrap (mkref (this), &vnode::get_succlist_cb, cb, res));
+	 wrap (mkref (this), &vnode_impl::get_succlist_cb, cb, res));
 }
 
 void
-vnode::get_succlist_cb (cbchordIDlist_t cb, chord_nodelistres *res,
+vnode_impl::get_succlist_cb (cbchordIDlist_t cb, chord_nodelistres *res,
 			clnt_stat err)
 {
   vec<chord_node> nlist;
@@ -87,17 +87,17 @@ vnode::get_succlist_cb (cbchordIDlist_t cb, chord_nodelistres *res,
 }
 
 void 
-vnode::get_predecessor (chordID n, cbchordID_t cb)
+vnode_impl::get_predecessor (const chordID &n, cbchordID_t cb)
 {
   ptr<chordID> v = New refcounted<chordID> (n);
   ngetpredecessor++;
   chord_noderes *res = New chord_noderes (CHORD_OK);
   doRPC (n, chord_program_1, CHORDPROC_GETPREDECESSOR, v, res,
-	 wrap (mkref (this), &vnode::get_predecessor_cb, n, cb, res));
+	 wrap (mkref (this), &vnode_impl::get_predecessor_cb, n, cb, res));
 }
 
 void
-vnode::get_predecessor_cb (chordID n, cbchordID_t cb, chord_noderes *res, 
+vnode_impl::get_predecessor_cb (chordID n, cbchordID_t cb, chord_noderes *res, 
 		       clnt_stat err) 
 {
   if (err) {
@@ -113,14 +113,14 @@ vnode::get_predecessor_cb (chordID n, cbchordID_t cb, chord_noderes *res,
 }
 
 void
-vnode::find_successor (chordID &x, cbroute_t cb)
+vnode_impl::find_successor (const chordID &x, cbroute_t cb)
 {
   nfindsuccessor++;
-  find_route (x, wrap (mkref (this), &vnode::find_successor_cb, x, cb));
+  find_route (x, wrap (mkref (this), &vnode_impl::find_successor_cb, x, cb));
 }
 
 void
-vnode::find_successor_cb (chordID x, cbroute_t cb, chordID s, 
+vnode_impl::find_successor_cb (chordID x, cbroute_t cb, chordID s, 
 			  route search_path, chordstat status)
 {
   if (status != CHORD_OK) {
@@ -135,15 +135,15 @@ vnode::find_successor_cb (chordID x, cbroute_t cb, chordID s,
 }
 
 void
-vnode::find_route (chordID &x, cbroute_t cb) 
+vnode_impl::find_route (const chordID &x, cbroute_t cb) 
 {
   route_iterator *ri = factory->produce_iterator_ptr (x);
-  ri->first_hop(wrap (this, &vnode::find_route_hop_cb, cb, ri));
+  ri->first_hop(wrap (this, &vnode_impl::find_route_hop_cb, cb, ri));
 }
 
 
 void
-vnode::find_route_hop_cb (cbroute_t cb, route_iterator *ri, bool done)
+vnode_impl::find_route_hop_cb (cbroute_t cb, route_iterator *ri, bool done)
 {
   if (done) {
     cb (ri->last_node (), ri->path (), ri->status ());
@@ -154,7 +154,7 @@ vnode::find_route_hop_cb (cbroute_t cb, route_iterator *ri, bool done)
 }
 
 void
-vnode::notify (chordID &n, chordID &x)
+vnode_impl::notify (const chordID &n, chordID &x)
 {
   ptr<chord_nodearg> na = New refcounted<chord_nodearg>;
   chordstat *res = New chordstat;
@@ -164,11 +164,11 @@ vnode::notify (chordID &n, chordID &x)
   na->n.x = x;
   na->n.r = locations->getaddress (x);
   doRPC (n, chord_program_1, CHORDPROC_NOTIFY, na, res, 
-	 wrap (mkref (this), &vnode::notify_cb, n, res));
+	 wrap (mkref (this), &vnode_impl::notify_cb, n, res));
 }
 
 void
-vnode::notify_cb (chordID n, chordstat *res, clnt_stat err)
+vnode_impl::notify_cb (chordID n, chordstat *res, clnt_stat err)
 {
   if (err || *res) {
     if (err)
@@ -180,7 +180,7 @@ vnode::notify_cb (chordID n, chordstat *res, clnt_stat err)
 }
 
 void
-vnode::alert (chordID &n, chordID &x)
+vnode_impl::alert (const chordID &n, chordID &x)
 {
   ptr<chord_nodearg> na = New refcounted<chord_nodearg>;
   chordstat *res = New chordstat;
@@ -190,11 +190,11 @@ vnode::alert (chordID &n, chordID &x)
   na->n.x = x;
   na->n.r = locations->getaddress (x);
   doRPC (n, chord_program_1, CHORDPROC_ALERT, na, res, 
-		    wrap (mkref (this), &vnode::alert_cb, res));
+		    wrap (mkref (this), &vnode_impl::alert_cb, res));
 }
 
 void
-vnode::alert_cb (chordstat *res, clnt_stat err)
+vnode_impl::alert_cb (chordstat *res, clnt_stat err)
 {
   if (err) {
     warnx << "alert_cb: RPC failure " << err << "\n";
@@ -205,17 +205,17 @@ vnode::alert_cb (chordstat *res, clnt_stat err)
 }
 
 void 
-vnode::get_fingers (chordID &x)
+vnode_impl::get_fingers (chordID &x)
 {
   chord_nodelistres *res = New chord_nodelistres (CHORD_OK);
   ptr<chordID> v = New refcounted<chordID> (x);
   ngetfingers++;
   doRPC (x, chord_program_1, CHORDPROC_GETFINGERS, v, res,
-	 wrap (mkref (this), &vnode::get_fingers_cb, x, res));
+	 wrap (mkref (this), &vnode_impl::get_fingers_cb, x, res));
 }
 
 void
-vnode::get_fingers_cb (chordID x, chord_nodelistres *res,  clnt_stat err) 
+vnode_impl::get_fingers_cb (chordID x, chord_nodelistres *res,  clnt_stat err) 
 {
   if (err) {
     warnx << "get_fingers_cb: RPC failure " << err << "\n";
@@ -225,13 +225,13 @@ vnode::get_fingers_cb (chordID x, chord_nodelistres *res,  clnt_stat err)
     for (unsigned i = 0; i < res->resok->nlist.size (); i++)
       locations->cacheloc (res->resok->nlist[i].x, 
 			   res->resok->nlist[i].r,
-			   wrap (this, &vnode::get_fingers_chal_cb, x));
+			   wrap (this, &vnode_impl::get_fingers_chal_cb, x));
   }
   delete res;
 }
 
 void
-vnode::get_fingers_chal_cb (chordID o, chordID x, bool ok, chordstat s)
+vnode_impl::get_fingers_chal_cb (chordID o, chordID x, bool ok, chordstat s)
 {
   // Our successors and fingers are updated automatically.
   if (s == CHORD_RPCFAILURE) {
@@ -242,7 +242,7 @@ vnode::get_fingers_chal_cb (chordID o, chordID x, bool ok, chordstat s)
 }
 
 void
-vnode::addHandler (const rpc_program &prog, cbdispatch_t cb) 
+vnode_impl::addHandler (const rpc_program &prog, cbdispatch_t cb) 
 {
   dispatch_record *rec = New dispatch_record (prog.progno, cb);
   dispatch_table.insert (rec);
@@ -250,33 +250,33 @@ vnode::addHandler (const rpc_program &prog, cbdispatch_t cb)
 };
 
 bool
-vnode::progHandled (int progno) 
+vnode_impl::progHandled (int progno) 
 {
   return (dispatch_table[progno] != NULL);
 }
 
 cbdispatch_t 
-vnode::getHandler (unsigned long prog) {
+vnode_impl::getHandler (unsigned long prog) {
   dispatch_record *rec = dispatch_table[prog];
   assert (rec);
   return rec->cb;
 }
 
 void
-vnode::register_upcall (int progno, cbupcall_t cb)
+vnode_impl::register_upcall (int progno, cbupcall_t cb)
 {
   upcall_record *uc = New upcall_record (progno, cb);
   upcall_table.insert (uc);
 }
 
 long
-vnode::doRPC (const chordID &ID, rpc_program prog, int procno, 
+vnode_impl::doRPC (const chordID &ID, rpc_program prog, int procno, 
 	      ptr<void> in, void *out, aclnt_cb cb) {
   return locations->doRPC (ID, prog, procno, in, out, cb);
 }
 
 void
-vnode::resendRPC (long seqno)
+vnode_impl::resendRPC (long seqno)
 {
   locations->resendRPC (seqno);
 }

@@ -30,6 +30,14 @@
 
 #include "chord_prot.h"
 
+// the identifier for the ihash class
+struct hashID {
+  hashID () {}
+  hash_t operator() (const chordID &ID) const {
+    return ID.getui ();
+  }
+};
+
 bool in_vector (vec<chordID> vec, chordID N);
 str gettime ();
 u_int64_t getusec ();

@@ -31,6 +31,7 @@
 #include <chord.h>
 #include <chord_prot.h>
 #include <chord_util.h>
+#include <location.h>
 #include <dbfe.h>
 #include <arpc.h>
 #ifdef DMALLOC
@@ -513,7 +514,7 @@ dhash::dispatch (svccb *sbp)
 	dhash_storeres res (DHASH_RETRY);
 	chordID pred = host_node->my_pred ();
 	res.pred->p.x = pred;
-	res.pred->p.r = host_node->locations->getaddress (pred);
+        res.pred->p.r = host_node->locations->getaddress (pred);
 	sbp->reply (&res);
       } else {
 	store (sarg, wrap(this, &dhash::storesvc_cb, sbp, sarg));	

@@ -1,4 +1,6 @@
 #include "chord.h"
+#include "finger_table.h"
+#include "location.h"
 
 // fingers are now zero-indexed!
 finger_table::finger_table ()  

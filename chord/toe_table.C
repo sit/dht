@@ -1,6 +1,10 @@
 #include <math.h>
 #include "chord.h"
 
+#include "location.h"
+#include "toe_table.h"
+#include "succ_list.h" // XXX only depends on NSUCC
+
 bool present (vec<chordID> toes, chordID id);
 
 toe_table::toe_table ()

@@ -627,7 +627,7 @@ locationtable::cached (const chordID &x)
   return (l && l->type_ & LOC_REGULAR);
 }
 
-net_address &
+const net_address &
 locationtable::getaddress (const chordID &n)
 {
   locwrap *l = locs[n];

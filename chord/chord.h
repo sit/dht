@@ -40,8 +40,6 @@
 
 #include "chord_prot.h"
 #include "chord_util.h"
-#include "location.h"
-#include "stabilize.h"
 
 typedef int cb_ID;
 typedef vec<chordID> route;
@@ -49,205 +47,85 @@ typedef vec<chordID> route;
 class chord;
 class vnode;
 
+class fingerlike;
+class route_factory;
+class chord;
+class locationtable;
+
 typedef callback<void,ptr<vnode>,chordstat>::ref cbjoin_t;
 typedef callback<void,chordID,net_address,chordstat>::ref cbchordID_t;
 typedef callback<void,vec<chord_node>,chordstat>::ref cbchordIDlist_t;
 typedef callback<void,chordID,route,chordstat>::ref cbroute_t;
-typedef callback<void, svccb *>::ref cbdispatch_t;
+typedef callback<void,svccb *>::ref cbdispatch_t;
 
 typedef callback<void, bool>::ref cbupcalldone_t;
 typedef callback<void, int, void *, cbupcalldone_t>::ref cbupcall_t; 
 
-#include "toe_table.h"
-#include "finger_table.h"
-#include "succ_list.h"
-#include "debruijn.h"
-#include "fingerlike.h"
-#include "route.h"
-
 extern int logbase;
-extern long outbytes;
 
 // ================ VIRTUAL NODE ================
-
-struct dispatch_record {
-  unsigned long progno;
-  cbdispatch_t cb;
-  ihash_entry<dispatch_record> hlink;
-  dispatch_record (int p, cbdispatch_t c) : progno (p), cb (c) {};
-};
-
-struct upcall_record {
-  int progno;
-  cbupcall_t cb;
-  ihash_entry<upcall_record> hlink;
-  upcall_record (int p, cbupcall_t c) : progno (p), cb (c) {};
-};
-
-class vnode : public virtual refcount, public stabilizable {
-  
-  ptr<fingerlike> fingers;
-  
-  ptr<succ_list> successors;
-  ptr<toe_table> toes;
-  ptr<stabilize_manager> stabilizer;
-  
-  int myindex;
-  chordID last_pred;		// for stabilize
-  
-  ihash<unsigned long, 
-    dispatch_record, 
-    &dispatch_record::progno, 
-    &dispatch_record::hlink > dispatch_table;
-  ihash<int, 
-    upcall_record, 
-    &upcall_record::progno, 
-    &upcall_record::hlink> upcall_table;
-
-  u_long ngetsuccessor;
-  u_long ngetpredecessor;
-  u_long ngetsucclist;
-  u_long nfindsuccessor;
-  u_long nhops;
-  u_long nmaxhops;
-  u_long nfindpredecessor;
-  u_long nfindsuccessorrestart;
-  u_long nfindpredecessorrestart;
-  u_long ntestrange;
-  u_long nnotify;
-  u_long nalert;
-  u_long ngetfingers;
-
-  u_long ndogetsuccessor;
-  u_long ndogetpredecessor;
-  u_long ndofindclosestpred;
-  u_long ndonotify;
-  u_long ndoalert;
-  u_long ndogetsucclist;
-  u_long ndotestrange;
-  u_long ndogetfingers;
-  u_long ndogetfingers_ext;
-  u_long ndogetsucc_ext;
-  u_long ndogetpred_ext;
-  u_long ndochallenge;
-  u_long ndogettoes;
-  u_long ndodebruijn;
-
-  u_long nout_continuous;
-  void stabilize_pred (void);
-  void stabilize_getsucc_cb (chordID pred,
-			     chordID s, net_address r, chordstat status);
-  void updatepred_cb (chordID p, bool ok, chordstat status);
-  
-  void join_getsucc_cb (cbjoin_t cb, chordID s, route r, chordstat status);
-  void get_successor_cb (chordID n, cbchordID_t cb, chord_noderes *res, 
-			 clnt_stat err);
-  void get_predecessor_cb (chordID n, cbchordID_t cb, chord_noderes *res, 
-			   clnt_stat err);
-  void find_successor_cb (chordID x, 
-			  cbroute_t cb, chordID s, route sp, chordstat status);
-  void get_succlist_cb (cbchordIDlist_t cb, chord_nodelistres *res,
-			clnt_stat err);
-
-  void find_route_hop_cb (cbroute_t cb, route_iterator *ri, bool done);
-  void find_route (chordID &x, cbroute_t cb);
-  void dofindroute_cb (svccb *sbp, chordID s, route r, chordstat err);
-  
-  void notify_cb (chordID n, chordstat *res, clnt_stat err);
-  void alert_cb (chordstat *res, clnt_stat err);
-  void get_fingers (chordID &x);
-  void get_fingers_cb (chordID x, chord_nodelistres *res, clnt_stat err);
-  void get_fingers_chal_cb (chordID o, chordID x, bool ok, chordstat s);
-
-  void doalert_cb (svccb *sbp, chordID x, chordID s, net_address r, 
-		   chordstat stat);
-
-  void chord_upcall_done (chord_testandfindarg *fa,
-			  chord_testandfindres *res,
-			  svccb *sbp,
-			  bool stop);
-  void debruijn_upcall_done (chord_debruijnarg *da,
-			     chord_debruijnres *res,
-			     svccb *sbp,
-			     bool stop);
-  void do_upcall (int upcall_prog, int upcall_proc,
-		  void *uc_args, int uc_args_len,
-		  cbupcalldone_t app_cb);
-  void do_upcall_cb (char*, cbupcalldone_t, bool v);
-
+class vnode : public virtual refcount {  
  public:
-  chordID myID;
-  ptr<chord> chordnode;
   ptr<locationtable> locations;
-  ptr<route_factory> factory;
-  int server_selection_mode;
-  int lookup_mode;
 
-  vnode (ptr<locationtable> _locations, ptr<fingerlike> stab, 
-	 ptr<route_factory> f, ptr<chord> _chordnode, 
-	 chordID _myID, int _vnode, int server_sel_mode,
-	 int lookup_mode);
-  ~vnode (void);
-  chordID my_ID () { return myID; };
-  chordID my_pred ();
-  chordID my_succ ();
+  static ref<vnode> produce_vnode
+    (ptr<locationtable> _locations, ptr<fingerlike> stab, 
+     ptr<route_factory> f, ptr<chord> _chordnode, 
+     chordID _myID, int _vnode, int server_sel_mode,
+     int lookup_mode);
+
+  virtual ~vnode (void) = 0;
+  virtual chordID my_ID () const = 0;
+  virtual chordID my_pred () const = 0;
+  virtual chordID my_succ () const = 0;
 
   // The API
-  void stabilize (void);
-  void join (cbjoin_t cb);
-  void get_successor (chordID n, cbchordID_t cb);
-  void get_predecessor (chordID n, cbchordID_t cb);
-  void get_succlist (const chordID &n, cbchordIDlist_t cb);
-  void find_successor (chordID &x, cbroute_t cb);
-  void notify (chordID &n, chordID &x);
-  void alert (chordID &n, chordID &x);
-
+  virtual void stabilize (void) = 0;
+  virtual void join (cbjoin_t cb) = 0;
+  virtual void get_successor (const chordID &n, cbchordID_t cb) = 0;
+  virtual void get_predecessor (const chordID &n, cbchordID_t cb) = 0;
+  virtual void get_succlist (const chordID &n, cbchordIDlist_t cb) = 0;
+  virtual void find_successor (const chordID &x, cbroute_t cb) = 0;
+  virtual void notify (const chordID &n, chordID &x) = 0;
+  virtual void alert (const chordID &n, chordID &x) = 0;
+  
   //upcall
-  void register_upcall (int progno, cbupcall_t cb);
+  virtual void register_upcall (int progno, cbupcall_t cb) = 0;
 
   // For other modules
-  long doRPC (const chordID &ID, rpc_program prog, int procno, 
-	      ptr<void> in, void *out, aclnt_cb cb);
-  void resendRPC (long seqno);
-  void stats (void);
-  void print (void);
-  void stop (void);
-  vec<chordID> succs () { return successors->succs (); };
+  virtual long doRPC (const chordID &ID, rpc_program prog, int procno, 
+		      ptr<void> in, void *out, aclnt_cb cb) = 0;
+  virtual void resendRPC (long seqno) = 0;
+  virtual void stats (void) const = 0;
+  virtual void print (void) const = 0;
+  virtual void stop (void) = 0;
+  virtual vec<chordID> succs () = 0;
 
-  chordID lookup_closestpred (const chordID &x, vec<chordID> f);
-  chordID lookup_closestpred (const chordID &x);
-  chordID lookup_closestsucc (const chordID &x);
-
-  // For stabilization of the predecessor
-  bool continuous_stabilizing () { return nout_continuous > 0; }
-  void do_continuous () { stabilize_pred (); }
-  bool isstable () { return last_pred == my_pred(); };
+  virtual chordID lookup_closestpred (const chordID &x, vec<chordID> f) = 0;
+  virtual chordID lookup_closestpred (const chordID &x) = 0;
+  virtual chordID lookup_closestsucc (const chordID &x) = 0;
   
   // The RPCs
-  void doget_successor (svccb *sbp);
-  void doget_predecessor (svccb *sbp);
-  void dofindclosestpred (svccb *sbp, chord_findarg *fa);
-  void dotestrange_findclosestpred (svccb *sbp, chord_testandfindarg *fa);
-  void donotify (svccb *sbp, chord_nodearg *na);
-  void doalert (svccb *sbp, chord_nodearg *na);
-  void dogetsucclist (svccb *sbp);
-  void dogetfingers (svccb *sbp);
-  void dogetfingers_ext (svccb *sbp);
-  void dogetsucc_ext (svccb *sbp);
-  void dogetpred_ext (svccb *sbp);
-  void dochallenge (svccb *sbp, chord_challengearg *ca);
-  void dogettoes (svccb *sbp);
-  void dodebruijn (svccb *sbp, chord_debruijnarg *da);
-  void dofindroute (svccb *sbp, chord_findarg *fa);
-
-  //bogus
-  void fill_nodelistresext (chord_nodelistextres *res);
-  void fill_nodelistres (chord_nodelistres *res);
+  virtual void doget_successor (svccb *sbp) = 0;
+  virtual void doget_predecessor (svccb *sbp) = 0;
+  virtual void dofindclosestpred (svccb *sbp, chord_findarg *fa) = 0;
+  virtual void dotestrange_findclosestpred (svccb *sbp, chord_testandfindarg *fa) = 0;
+  virtual void donotify (svccb *sbp, chord_nodearg *na) = 0;
+  virtual void doalert (svccb *sbp, chord_nodearg *na) = 0;
+  virtual void dogetsucclist (svccb *sbp) = 0;
+  virtual void dogetfingers (svccb *sbp) = 0;
+  virtual void dogetfingers_ext (svccb *sbp) = 0;
+  virtual void dogetsucc_ext (svccb *sbp) = 0;
+  virtual void dogetpred_ext (svccb *sbp) = 0;
+  virtual void dochallenge (svccb *sbp, chord_challengearg *ca) = 0;
+  virtual void dogettoes (svccb *sbp) = 0;
+  virtual void dodebruijn (svccb *sbp, chord_debruijnarg *da) = 0;
+  virtual void dofindroute (svccb *sbp, chord_findarg *fa) = 0;
 
   //RPC demux
-  void addHandler (const rpc_program &prog, cbdispatch_t cb);
-  bool progHandled (int progno);
-  cbdispatch_t getHandler (unsigned long prog); 
+  virtual void addHandler (const rpc_program &prog, cbdispatch_t cb) = 0;
+  virtual bool progHandled (int progno) = 0;
+  virtual cbdispatch_t getHandler (unsigned long prog) = 0; 
 };
 
 
@@ -283,7 +161,8 @@ class chord : public virtual refcount {
   ptr<locationtable> locations; 
     
   chord (str _wellknownhost, int _wellknownport,
-	 str _myname, int port, int max_cache, int server_selection_mode,
+	 str _myname, int port, int max_cache,
+	 int server_selection_mode,
 	 int lookup_mode, int _logbase);
   ptr<vnode> newvnode (cbjoin_t cb, ptr<fingerlike> fingers,
 		       ptr<route_factory> f);
@@ -327,12 +206,9 @@ class chord : public virtual refcount {
   void get_predecessor (chordID n, cbchordID_t cb) {
     active->get_predecessor (n, cb);
   };
-  void cacheloc (chordID &x, net_address &r, cbchallengeID_t cb) {
-    active->locations->cacheloc (x, r, cb);
-  }
   long doRPC (chordID &n, rpc_program progno, int procno, ptr<void> in, 
 	      void *out, aclnt_cb cb) {
-    return active->locations->doRPC (n, progno, procno, in, out, cb);
+    return active->doRPC (n, progno, procno, in, out, cb);
   };
   void alert (chordID &n, chordID &x) {
     active->alert (n, x);

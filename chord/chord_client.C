@@ -25,16 +25,18 @@
  *
  */
 
-#include <chord.h>
-#include <chord_util.h>
+#include "chord.h"
+#include "chord_util.h"
+#include "location.h"
+#include "route.h"
 
 int logbase;  // base = 2 ^ logbase
 
 chord::chord (str _wellknownhost, int _wellknownport, 
-	      str _myname, int port, int max_cache, 
+	      str _myname, int port, int max_cache,
 	      int server_selection_mode,
 	      int l_mode, int _logbase) :
-  myname (_myname), 
+  myname (_myname),
   ss_mode (server_selection_mode % 10),
   lookup_mode (l_mode),
   active (NULL)
@@ -154,10 +156,10 @@ chord::newvnode (cbjoin_t cb, ptr<fingerlike> fingers, ptr<route_factory> f)
   if (newID != wellknownID)
     locations->insertgood (newID, myname, myport);
 
-  ptr<vnode> vnodep = New refcounted<vnode> (locations, fingers, f,
-					     mkref (this), newID, 
-					     nvnode, ss_mode,
-					     lookup_mode);
+  ptr<vnode> vnodep = vnode::produce_vnode (locations, fingers, f,
+					    mkref (this), newID, 
+					    nvnode, ss_mode,
+					    lookup_mode);
   f->setvnode (vnodep);
 
   if (!active) active = vnodep;

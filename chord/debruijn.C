@@ -1,5 +1,9 @@
 #include "chord.h"
 
+#include "fingerlike.h"
+#include "debruijn.h"
+#include "location.h"
+
 debruijn::debruijn () {}
 
 void 

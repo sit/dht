@@ -1,6 +1,7 @@
 #include "arpc.h"
 #include "chord.h"
 #include "route.h"
+#include "location.h"
 
 void
 route_iterator::print ()
@@ -182,7 +183,7 @@ route_chord::make_hop_cb (ptr<bool> del,
   } else if (res->status == CHORD_INRANGE) { 
     // found the successor
     v->locations->cacheloc (res->inrange->n.x, res->inrange->n.r,
-			 wrap (this, &route_chord::make_route_done_cb));
+			    wrap (this, &route_chord::make_route_done_cb));
   } else if (res->status == CHORD_NOTINRANGE) {
     // haven't found the successor yet
     chordID last = search_path.back ();
@@ -207,7 +208,7 @@ route_chord::make_hop_cb (ptr<bool> del,
       
       // ask the new node for its best predecessor
       v->locations->cacheloc (res->notinrange->n.x, res->notinrange->n.r,
-			   wrap (this, &route_chord::make_hop_done_cb));
+			      wrap (this, &route_chord::make_hop_done_cb));
     }
   } else {
     warn("WTF");

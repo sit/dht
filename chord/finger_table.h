@@ -1,9 +1,8 @@
-#include "fingerlike.h"
-
 #ifndef _FINGER_TABLE_H_
 #define _FINGER_TABLE_H_
 
-#define NBIT     160     // size of Chord identifiers in bits
+#include "fingerlike.h"
+
 class finger_table : public fingerlike {
   ptr<vnode> myvnode;
   ptr<locationtable> locations;
