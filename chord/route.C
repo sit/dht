@@ -426,6 +426,7 @@ route_debruijn::make_hop (ptr<location> n, chordID &x, chordID &k, chordID &i)
 	 wrap (this, &route_debruijn::make_hop_cb, deleted, nres));
 }
 
+#if 0
 static int 
 uniquepathsize (vec<chordID> path) {
   int n = 1;
@@ -434,6 +435,7 @@ uniquepathsize (vec<chordID> path) {
   }
   return n;
 }
+#endif /* 0 */
 
 void
 route_debruijn::make_hop_cb (ptr<bool> del, chord_debruijnres *res, 
