@@ -51,7 +51,7 @@ sub generate_events
   my ($nnodes) = @_;
 
   my $ef = new FileHandle(">kademlia-events.txt") or die "$!";
-  print $ef "generator ChurnEventGenerator proto=Kademlia seed=0\n";
+  print $ef "generator ChurnEventGenerator proto=Kademlia seed=1\n";
   $ef->close();
 }
 
@@ -92,7 +92,7 @@ sub generate_prot
     while($k <= $params->{K}->{MAX}) {
       my $alpha = $params->{ALPHA}->{MIN};
       while($alpha <= $params->{ALPHA}->{MAX}) {
-      print "nnodes=$nnodes, stabtimer=$stabtimer, k=$k, alpha=$alpha\n";
+      print "nnodes=$nnodes, stabtimer=$stabtimer, k=$k, alpha=$alpha: ";
         my $pf = new FileHandle(">kademlia-prot.txt") or die "$!";
         print $pf "Kademlia k=$k alpha=$alpha stabilize_timer=$stabtimer\n";
         $pf->close();

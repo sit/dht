@@ -235,6 +235,8 @@ private:
       : ki(ki), la(la), lr(lr) {}
     ~callinfo() {
       char ptr[32]; sprintf(ptr, "%p", ki);
+      DEBUG(2) << "~callinfo deleting " << ptr << endl;
+      delete ki;
       delete la;
       delete lr;
     }
@@ -414,5 +416,5 @@ private:
 };
 // }}}
 
-#define KDEBUG(x) DEBUG(x) << Kademlia::debugcounter++ << "(" << now() << "). " << Kademlia::printbits(_id) << "(" << threadid() << ") "
+#define KDEBUG(x) DEBUG(x) << Kademlia::debugcounter++ << "(" << now() << "). " << Kademlia::printID(_id) << "(" << threadid() << ") "
 #endif // __KADEMLIA_H
