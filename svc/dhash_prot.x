@@ -18,7 +18,7 @@ enum dhash_stat {
   DHASH_STORE_PARTIAL = 11,
   DHASH_COMPLETE = 12,
   DHASH_CONTINUE = 13,
-  DHASH_INVALIDVNODE = 14,
+  DHASH_INVALIDVNODE = 14
 };
 
 enum store_status {
@@ -86,7 +86,6 @@ default:
 struct dhash_storeresok {
   bool done;
   chordID source;
-  int32 pad<16>;
 };
 
 union dhash_storeres switch (dhash_stat status) {
@@ -101,7 +100,6 @@ union dhash_storeres switch (dhash_stat status) {
 struct dhash_fetchiter_continue_res {
   chord_node next;
   chord_node succ_list<>;
-  int32      pad<256>;
 };
 
 struct dhash_fetchiter_complete_res {

@@ -319,7 +319,49 @@ chordID
 vnode::findpredfinger_ss (chordID &x)
 {
   chordID p = myID;
+  char better = 0;
+  char best = 0;
   for (int i = 1; i <= NBIT; i++) {
+    if (finger_table[i].first.alive && (p != finger_table[i].first.n)) {
+      if (server_selection_mode == 1)
+	better = locations->betterpred2 (myID, p, x, finger_table[i].first.n);
+      else if (server_selection_mode == 2)
+	better = locations->betterpred3 (myID, p, x, finger_table[i].first.n);
+      else if (server_selection_mode == 3)
+	better = locations->betterpred_distest (myID, p, x, 
+						finger_table[i].first.n);
+      else
+	better = locations->betterpred_greedy (myID, p, x, 
+					       finger_table[i].first.n);
+    }
+    if ((finger_table[i].first.alive) && better) {
+      p = finger_table[i].first.n;
+      best = better;
+    }
+  }
+  
+#if 0
+  if (best) {
+    warn << "chose " << p << " because ";
+    switch (best) {
+    case 1:
+      warn << "it was my first pred.\n";
+      break;
+    case 2:
+      warn << "I had no latency info\n";
+      break;
+    case 3:
+      warn << "the estimate was lower\n";
+      break;
+    default:
+      warn << "there was a bug in my code\n";
+    }
+  }
+#endif
+
+  if (p != myID) return p;
+
+  for (int i = nsucc; i >= 1; i--) {
     bool better;
     if (server_selection_mode == 1)
       better = locations->betterpred2 (myID, p, x, finger_table[i].first.n);
@@ -328,16 +370,7 @@ vnode::findpredfinger_ss (chordID &x)
     else 
       better = locations->betterpred_greedy (myID, p, x, 
 					     finger_table[i].first.n);
-    if ((finger_table[i].first.alive) && better)
-      p = finger_table[i].first.n;
-  }
-  
-  
-  if (p != myID) return p;
-
-  for (int i = nsucc; i >= 1; i--) {
-    if ((succlist[i].alive) && 
-	locations->betterpred3 (myID, p, x, succlist[i].n)) {
+    if ((succlist[i].alive) && better) {
       p = succlist[i].n;
       break;
     }

@@ -22,7 +22,7 @@
 #include "chord.h"
 #include "math.h"
 
-#define TIMEOUT 5
+#define TIMEOUT 60
 
 #ifdef FAKE_DELAY
 long geo_distance (chordID x, chordID y) 
@@ -31,8 +31,8 @@ long geo_distance (chordID x, chordID y)
   u_long yl = y.getui ();
 
   if (x == y) return 0;
-  if ((xl & 0x1) && (yl & 0x1)) return 20;
-  else return 300;
+  if ((xl & 0x1) == (yl & 0x1)) return 20;
+  else return 180;
 }
 #endif /* FAKE_DELAY */
 

@@ -42,7 +42,7 @@ dhash::dhash(str dbname, vnode *node, int k, int ss, int cs, int _ss_mode) :
   keys_replicated = 0;
   keys_cached = 0;
 
-  init_key_status ();
+  //  init_key_status ();
   update_replica_list ();
   install_replica_timer ();
   install_keycheck_timer ();
@@ -880,7 +880,7 @@ dhash::printkeys_walk (chordID k)
 void
 dhash::printcached_walk (chordID k) 
 {
-  warn << k << " CACHED\n";
+  warn << host_node->my_ID () << " " << k << " CACHED\n";
 }
 
 void

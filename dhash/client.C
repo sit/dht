@@ -43,8 +43,9 @@ dhashclient::dispatch (svccb *sbp)
       
       ptr<dhash_fetch_arg> arg = New refcounted<dhash_fetch_arg> (*farg);
 
-      chordID next = clntnode->lookup_closestpred (arg->key);
-
+      //     chordID next = clntnode->lookup_closestpred (arg->key);
+      chordID next = clntnode->clnt_ID ();
+      warn << clntnode->clnt_ID () << " " << arg->key  << " " << next << "\n";
       dhash_fetchiter_res *i_res = New dhash_fetchiter_res (DHASH_CONTINUE);
       route path;
       path.push_back (next);
@@ -122,7 +123,7 @@ dhashclient::insert_findsucc_cb(svccb *sbp, ptr<dhash_insertarg> item,
     doRPC(succ, dhash_program_1, DHASHPROC_STORE, item, res,
 		wrap(this, &dhashclient::insert_store_cb, sbp, res, item, succ));
     
-    cache_on_path (item->key, path);
+    //    cache_on_path (item->key, path);
   }
 }
 
@@ -247,6 +248,7 @@ dhashclient::lookup_iter_cb (svccb *sbp,
       path.push_back (next);
       assert (path.size () < 1000);
 
+      warn << clntnode->clnt_ID () << " " << arg->key  << " " << next << "\n";
       doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, 
 	     rarg, nres,
 	     wrap(this, &dhashclient::lookup_iter_cb, 
@@ -357,8 +359,10 @@ dhashclient::cache_on_path (chordID key, route path)
     return;
   }
   if (!block_memorized (key)) return;
-  for (unsigned int i=0; i < path.size (); i++)
-    send_block (key, path[i], DHASH_CACHE);
+  //  for (unsigned int i=0; i < path.size (); i++)
+  if (path.size () < 2) return;
+
+  send_block (key, path[path.size () - 2], DHASH_CACHE);
   forget_block (key);
 }
 

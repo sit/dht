@@ -162,26 +162,33 @@ locationtable::betterpred1 (chordID current, chordID target, chordID candidate)
 }
 
 // assumes some of form of the triangle equality!
-bool
+char
 locationtable::betterpred2 (chordID myID, chordID current, chordID target, 
 			    chordID newpred)
 { 
+  #define HIST 0
   // #avg hop latency
   // #estimate the number of nodes to figure how many bits to compare
-  bool r = false;
+  char r = 0;
   if (between (myID, target, newpred)) { // is newpred a possible pred?
 
     location *cur_loc = getlocation (current);
     location *proposed_loc = getlocation (newpred);
 
     if ((current == myID) && (newpred != myID)) {
-      r = true;
+      r = 1;
     } else if ((cur_loc->nrpc == 0) || (proposed_loc->nrpc == 0)) {
-      r = between (current, target, newpred);
+      if (between (current, target, newpred)) r = 2;
     } else {
-      u_long nbit = 2;
-      //      if (nnodes <= 1) nbit = 0;
-      // else nbit = log2 (nnodes / log2 (nnodes));
+      int nbit;
+      if (nnodes <= 1) nbit = 0;
+      //else nbit = log2 (nnodes / log2 (nnodes));
+      else {
+	float n = nnodes;
+	float log2_nnodes = logf(n)/logf(2.0);
+	float div = n / log2_nnodes;
+	nbit = (int)ceilf ( logf(div)/logf(2.0));
+      };
 
       u_long target_bits = topbits (nbit, target);
       u_long current_bits = topbits (nbit, current);
@@ -194,18 +201,12 @@ locationtable::betterpred2 (chordID myID, chordID current, chordID target,
 	target_bits - prop_bits : 
 	prop_bits - target_bits;
       if (n1bits (cur_diff) > n1bits (prop_diff)) { 
-	r = true;
+	r = 3;
       } else if (n1bits (cur_diff) == n1bits (prop_diff)) {
 	float cur_delay = cur_loc->rpcdelay / cur_loc->nrpc;
 	float proposed_delay = proposed_loc->rpcdelay / proposed_loc->nrpc;
-	r = proposed_delay < cur_delay;
-#if 0
-	if (r) {
-	  char b[1024];
-	  sprintf (b, "cdelay=%f > ndelay=%f\n", cdelay, ndelay);
-	  warn << "chose " << newpred << " since " << b;
-	}
-#endif
+	if ((proposed_delay + HIST) < cur_delay) r = 4;
+
       }
     }
   }
@@ -231,9 +232,14 @@ locationtable::betterpred3 (chordID myID, chordID current, chordID target,
     } else if ((c->nrpc == 0) || (n->nrpc == 0)) {
       r = between (current, target, newpred);
     } else {
-      u_long nbit = 2;
-      //      if (nnodes <= 1) nbit = 0;
-      // else nbit = log2 (nnodes / log2 (nnodes));
+      int nbit;
+      if (nnodes <= 1) nbit = 0;
+      else {
+	float n = nnodes;
+	float log2_nnodes = logf(n)/logf(2.0);
+	float div = n / log2_nnodes;
+	nbit = (int)ceilf ( logf(div)/logf(2.0));
+      };
       u_long target_bits = topbits (nbit, target);
       u_long current_bits = topbits (nbit, current);
       u_long new_bits = topbits (nbit, newpred);
@@ -273,15 +279,77 @@ locationtable::betterpred3 (chordID myID, chordID current, chordID target,
   return r;
 }
 
+
+// assumes some of form of the triangle equality!
+char
+locationtable::betterpred_distest (chordID myID, chordID current, 
+				   chordID target, 
+				   chordID newpred)
+{ 
+  // #avg hop latency
+  // #estimate the number of nodes to figure how many bits to compare
+  char r = false;
+  if (between (myID, target, newpred)) { // is newpred a possible pred?
+    location *c = getlocation (current);
+    location *n = getlocation (newpred);
+    if ((current == myID) && (newpred != myID)) {
+      r = 1;
+    } else if ((c->nrpc == 0) || (n->nrpc == 0)) {
+      if (between (current, target, newpred)) r = 2;
+    } else {
+      double D = (double)rpcdelay/nrpc;
+      double cur_delay = (double)c->rpcdelay / c->nrpc;
+      double new_delay = (double)n->rpcdelay / n->nrpc;
+      double log2 = log(2);
+
+      bigint dist_c = distance (current, target)*nnodes;
+      assert (NBIT > 32);
+      int dist_size = dist_c.nbits ();
+      bigint high_bits = dist_c >> (dist_size - 32);
+      double dist_c_exp = (double)high_bits.getui ();
+      double fdist_c = ldexp (dist_c_exp, dist_size - 32);
+      double logdist_c = log (fdist_c)/log2;
+      if (logdist_c < 0.0) logdist_c = 0.0;
+      double d_current = (logdist_c - 160.0)*D + cur_delay;
+      
+      bigint dist_p = distance (newpred, target)*nnodes;
+      assert (NBIT > 32);
+      dist_size = dist_p.nbits ();
+      high_bits = dist_p >> (dist_size - 32);
+      double dist_p_exp = (double)high_bits.getui ();
+      double fdist_p = ldexp (dist_p_exp, dist_size - 32);
+      double logdist_p = log (fdist_p)/log2;
+      if (logdist_p < 0.0) logdist_p = 0.0;
+      double d_proposed = (logdist_p - 160.0)*D + new_delay;
+
+      if (d_proposed < d_current) 
+	r = 3;
+      if (0) {
+	char b[1024];
+	sprintf (b, "d_cur = %f = %f*%f + %f; d_proposed = %f = %f*%f + %f", 
+		 d_current, logdist_c - 160.0, D, cur_delay,
+		 d_proposed, logdist_p - 160.0, D, new_delay);
+	warn << "choosing " << newpred << " over " << current << " since " << b << "\n";
+      }
+    }
+  }
+  
+  
+  return r;
+}
+
 bool
 locationtable::betterpred_greedy (chordID myID, chordID current, 
 				  chordID target, chordID newpred) 
 {
   bool r = false;
+  if ((current == myID) && (newpred != myID)) return true;
   if (between (myID, target, newpred)) { 
     location *c = getlocation (current);
     location *n = getlocation (newpred);
+    if (c->nrpc == 0) return true;
     float cur_delay = c->rpcdelay / c->nrpc;
+    if (n->nrpc == 0) return false;
     float new_delay = n->rpcdelay / n->nrpc;
     r = (new_delay < cur_delay);
   }
