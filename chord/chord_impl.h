@@ -153,7 +153,8 @@ class vnode_impl : public vnode {
   void do_upcall (int upcall_prog, int upcall_proc,
 		  void *uc_args, int uc_args_len,
 		  cbupcalldone_t app_cb);
-  void do_upcall_cb (char*, cbupcalldone_t, bool v);
+  void do_upcall_cb (char *a, int upcall_prog, int upcall_proc,
+		     cbupcalldone_t, bool v);
 
   void doRPC_cb (const rpc_program prog, int procno,
 		 void *out, aclnt_cb cb, 

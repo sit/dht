@@ -276,6 +276,10 @@ vnode_impl::fill_user_args (user_args *a)
   a->coords = locations->get_coords (myID);
 }
 
+user_args::~user_args () { 
+  if (args) xdr_delete (prog->tbl[procno].xdr_arg, args);
+};
+
 void 
 user_args::fill_from (chord_node *from)
 { 

@@ -586,9 +586,12 @@ vnode_impl::doget_predecessor (user_args *sbp)
 }
 
 void
-vnode_impl::do_upcall_cb (char *a, cbupcalldone_t done_cb, bool v)
+vnode_impl::do_upcall_cb (char *a, int upcall_prog, int upcall_proc,
+			  cbupcalldone_t done_cb, bool v)
 {
-  delete[] a;
+  const rpc_program *prog = chordnode->get_program (upcall_prog);
+  assert (prog);
+  xdr_delete (prog->tbl[upcall_proc].xdr_arg, a);
   done_cb (v);
 }
 
@@ -621,7 +624,9 @@ vnode_impl::do_upcall (int upcall_prog, int upcall_proc,
   //run the upcall. It returns a pointer to its result and a length in the cb
   cbupcall_t cb = uc->cb;
   (*cb)(upcall_proc, (void *)unmarshalled_args,
-	wrap (this, &vnode_impl::do_upcall_cb, unmarshalled_args, done_cb));
+	wrap (this, &vnode_impl::do_upcall_cb, 
+	      unmarshalled_args, upcall_prog, upcall_proc,
+	      done_cb));
 
 }
 

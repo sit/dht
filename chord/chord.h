@@ -96,7 +96,7 @@ struct user_args {
 
   void fill_from (chord_node *from);
   
-  ~user_args () { free(args); };
+  ~user_args ();
 };
 
 // ================ VIRTUAL NODE ================
