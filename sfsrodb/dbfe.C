@@ -38,10 +38,9 @@
 #define FLAG_OPT   "opt_flag"
 
 ///////////////// static /////////////////////
+
 ref<dbImplInfo>
 dbGetImplInfo() {
-
-  
   ref<dbImplInfo> info = New refcounted<dbImplInfo>();
 #ifndef SLEEPYCAT
   info->supportedOptions.push_back(CACHE_OPT);
@@ -49,12 +48,12 @@ dbGetImplInfo() {
   info->supportedOptions.push_back(ASYNC_OPT);
   info->supportedOptions.push_back(CREATE_OPT);
 #else
+  info->supportedOptions.push_back(CACHE_OPT);
   info->supportedOptions.push_back(PERM_OPT);
   info->supportedOptions.push_back(TYPE_OPT);
   info->supportedOptions.push_back(CREATE_OPT);
   info->supportedOptions.push_back(FLAG_OPT);
 #endif
-
   return info;
 }
 
@@ -244,7 +243,7 @@ dbfe::dbfe() {
 }
 
 dbfe::~dbfe() {
-
+    closedb ();
 }
 
 #ifdef SLEEPYCAT
@@ -260,7 +259,7 @@ int dbfe::IMPL_open_sleepycat(char *filename, dbOptions opts) {
  if (flags == -1) flags = DB_CREATE;
  long create = opts.getOption(CREATE_OPT);
  if (create == 0) flags |= DB_EXCL;
-
+ long cacheSize = opts.getOption(CACHE_OPT);
  
 #if 0
  if (compare) {
@@ -269,6 +268,11 @@ int dbfe::IMPL_open_sleepycat(char *filename, dbOptions opts) {
    if (r != 0) return r;
  }
 #endif
+
+ if (cacheSize > -1) {
+   r = db->set_cachesize(db, 0, cacheSize, 0);
+   if (r != 0) return r;
+ }
 
  r = db->open(db, (const char *)filename, NULL, DB_BTREE, flags, mode);
  return r;
@@ -327,29 +331,42 @@ dbfe::IMPL_delete_sync_sleepycat(ptr<dbrec> key) {
   return err;
 }
 
+void dbfe::itemReturn_dummy_cb (itemReturn_cb cb, ptr<dbrec> ret)
+{ 
+  cb (ret); 
+} 
 
-void dbfe::IMPL_insert_async_sleepycat(ref<dbrec> key, ref<dbrec> data, errReturn_cb cb)  { 
-  int err = IMPL_insert_sync_sleepycat(key, data);
-  (*cb)(err);
+void dbfe::errReturn_dummy_cb (errReturn_cb cb, int err)
+{
+  cb (err);
 }
 
-void dbfe::IMPL_lookup_async_sleepycat(ref<dbrec> key, itemReturn_cb cb)  { 
+void dbfe::IMPL_insert_async_sleepycat
+(ref<dbrec> key, ref<dbrec> data, errReturn_cb cb)
+{
+  int err = IMPL_insert_sync_sleepycat(key, data);
+  timecb (tsnow, wrap(&dbfe::errReturn_dummy_cb, cb, err));
+}
+
+void dbfe::IMPL_lookup_async_sleepycat(ref<dbrec> key, itemReturn_cb cb)
+{ 
   ptr<dbrec> ret = IMPL_lookup_sync_sleepycat(key);
-  (*cb)(ret);
-  return;
+  timecb (tsnow, wrap(&dbfe::itemReturn_dummy_cb, cb, ret));
 }
 
 int 
 dbfe::IMPL_close_sleepycat() { return db->close(db, 0); };
 
-ptr<dbEnumeration> dbfe::IMPL_make_enumeration_sleepycat() {
+ptr<dbEnumeration> dbfe::IMPL_make_enumeration_sleepycat()
+{
   return New refcounted<dbEnumeration>(db);
 }
 
 void 
-dbfe::IMPL_delete_async_sleepycat(ptr<dbrec> key, errReturn_cb cb) {
+dbfe::IMPL_delete_async_sleepycat(ptr<dbrec> key, errReturn_cb cb)
+{
   int err = IMPL_delete_sync_sleepycat(key);
-  (*cb)(err);
+  timecb (tsnow, wrap(&dbfe::errReturn_dummy_cb, cb, err));
 }
 
 void

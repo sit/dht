@@ -196,6 +196,9 @@ class dbfe {
   typedef callback<void, ref<dbrec>, ref<dbrec>, errReturn_cb >::ptr insert_cb_async;
   typedef callback<void, ref<dbrec>, itemReturn_cb >::ptr lookup_cb_async;
 
+  static void itemReturn_dummy_cb (itemReturn_cb cb, ptr<dbrec> ret);
+  static void errReturn_dummy_cb (errReturn_cb cb, int err);
+
 
   open_cb create_impl;
   open_cb  open_impl;
