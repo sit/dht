@@ -2,6 +2,7 @@
 #include "p2psim/network.h"
 #include "topologies/euclidean.h"
 #include "math.h"
+#include <iostream>
 
 static int usinght = -1;
 #define PI 3.1415927
