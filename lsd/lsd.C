@@ -317,9 +317,6 @@ main (int argc, char **argv)
   sigcb(SIGUSR2, wrap (&stop));
   sigcb(SIGHUP, wrap (&halt));
 
-  assert (setlinebuf (stdout) == 0);
-  assert (setlinebuf (stderr) == 0);
-
   if (p2psocket) 
     startclntd();
   amain ();
