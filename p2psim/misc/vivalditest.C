@@ -49,6 +49,7 @@ VivaldiTest::VivaldiTest(IPAddress i, Args &args)
   _vis = args.nget<int>("vis", 0, 10);
 
   _ticks = 0;
+  _joined = false;
 }
 
 VivaldiTest::~VivaldiTest()
@@ -74,7 +75,12 @@ VivaldiTest::join(Args *args)
 
   if (_all.size () > _total_nodes && _total_nodes > 0) 
       return;
-  _all.push_back(this);
+
+  if (_initial_triangulation && _init_samples.size () >= _num_init_samples
+      || _all.size () < _num_init_samples) {
+    _all.push_back(this);
+    _joined = true;
+  }
 
   int _queue = args->nget<int> ("queue", 0, 10);
   if (_queue > 0) 
@@ -153,6 +159,12 @@ VivaldiTest::tick(void *)
   _ticks++;
   IPAddress dst;
 
+  if (_initial_triangulation && _init_samples.size () >= _num_init_samples
+      && !_joined) {
+    _all.push_back(this);
+    _joined = true;
+  }
+
   if(_neighbors > 0){
     if (random () % 2 == 0 && _nip_best.size () > 0 && false)
       dst = _nip_best[random () % _nip_best.size ()];
@@ -169,11 +181,11 @@ VivaldiTest::tick(void *)
       {
 	status();
 	//update neighbors
-	if (_neighbors > 0) {
-	  vector<IPAddress> best = best_n (_neighbors);
-	  for(unsigned i = 0; i < _all.size(); i++) 
-	    _all[i]->_nip_best = best;
-	}
+	//	if (_neighbors > 0) {
+	///	  vector<IPAddress> best = best_n (_neighbors);
+	//  for(unsigned i = 0; i < _all.size(); i++) 
+	//    _all[i]->_nip_best = best;
+	//	}
       }
 
     if (_ticks % 100 == 0 || _vis) print_all_loc();

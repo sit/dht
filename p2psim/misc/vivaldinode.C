@@ -26,6 +26,8 @@ VivaldiNode::VivaldiNode(IPAddress ip) : P2Protocol (ip)
   _window_size = args().nget<uint>("window-size", (uint) -1, 10);
   _model = args()["model"];
   _radius = args().nget<uint>("radius", (uint) 20000, 10);
+  _initial_triangulation = args().nget<uint>("triangulate", (uint) 0, 10);
+  _num_init_samples = args().nget<uint>("num_init_samples", (uint) 0, 10);
 
   if (_model == "sphere")
     _model_type = MODEL_SPHERE;
@@ -156,6 +158,12 @@ VivaldiNode::net_force(Coord c, vector<Sample> v)
   return f;
 }
 
+VivaldiNode::Coord
+VivaldiNode::my_location () 
+{
+  return _c; 
+}
+
 // the current implementation
 void
 VivaldiNode::algorithm(Sample s)
@@ -164,6 +172,16 @@ VivaldiNode::algorithm(Sample s)
   //reject timeouts and self pings
   if (s._latency > 1000000 ||
       s._latency < 1000) return;
+
+  if (_initial_triangulation && _init_samples.size () < _num_init_samples)
+    {
+      if (ip () > 200 && s._who > 200) return;
+      cerr << ip () << " initing with " << s._who << "\n";
+      _init_samples.push_back (s);
+      if (_init_samples.size () == _num_init_samples)
+	initial_triangulation (_init_samples);
+      return;
+    }
 
   _samples.push_back(s);
   if ((int)_samples.size () < _window_size) return;
@@ -216,6 +234,24 @@ VivaldiNode::algorithm(Sample s)
   // cout << " to " << _c << "\n";
   _samples.clear ();
 
+}
+
+void
+VivaldiNode::initial_triangulation (vector<Sample> isamps)
+{
+  double prev_f = RAND_MAX;
+  double cur_f = 0;
+  long iterations = 0;
+  while (fabs(cur_f - prev_f) > 0.001
+	 && iterations++ < 1000) {
+    Coord f = net_force (_c, isamps);
+    _c = _c + f * 0.05; // XXX what timestep?
+    prev_f = cur_f;
+    cur_f = length (f);
+    if (ip () == 300) cerr << ip () << " " << cur_f << " " << prev_f << "\n";
+  }
+  cerr << ip () << ": " << cur_f << "\n";
+  return;
 }
 
 VivaldiNode::Coord

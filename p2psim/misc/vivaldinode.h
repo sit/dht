@@ -65,7 +65,7 @@ public:
   
   int nsamples() { return _nsamples; }
   void sample(IPAddress who, Coord c, double e, double latency);
-  Coord my_location() { return _c; }
+  Coord my_location();
   double my_error () { return _pred_err; }
   Coord real_coords ();
   //end vivaldi.h
@@ -83,9 +83,13 @@ protected:
   string _model;
   int _model_type;
   double _radius;
+  int _initial_triangulation;
+  unsigned int _num_init_samples;
+
 
   Coord _c; // current estimated coordinates
   vector<Sample> _samples;
+  vector<Sample> _init_samples;
 
   double randf() { return (random()%1000000000) / 1000000000.0; }
   Sample wrongest(vector<Sample> v);
@@ -98,6 +102,7 @@ protected:
   double spherical_dist (VivaldiNode::Coord a, VivaldiNode::Coord b);
   double spherical_dist_arc (VivaldiNode::Coord a, VivaldiNode::Coord b);
   virtual void algorithm(Sample); // override this
+  void initial_triangulation (vector<Sample> isamps);
   //end vivaldi.h
 
 

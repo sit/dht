@@ -63,6 +63,7 @@ public:
   uint _total_nodes;
   int _vis;
   double _last_error;
+  bool _joined;
 
   uint _old_all_size;
 
