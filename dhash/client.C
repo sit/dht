@@ -49,19 +49,21 @@ class dhash_store {
 protected:
   uint npending;
   bool error;
+  dhash_stat status;
 
   dhashcli *dhcli;
   chordID destID;
   chordID blockID;
   ptr<dhash_block> block;
-  cbstore_t cb;
+  cbinsert_t cb;
   dhash_ctype ctype;
   store_status store_type;
 
   dhash_store (dhashcli *dhcli, chordID destID, chordID blockID, 
-	       ptr<dhash_block> _block, store_status store_type, cbstore_t cb)
-    : npending (0), error (false), dhcli (dhcli), destID (destID), 
-		 blockID (blockID), cb (cb), store_type (store_type)
+	       ptr<dhash_block> _block, store_status store_type, cbinsert_t cb)
+    : npending (0), error (false), status(DHASH_OK),
+      dhcli (dhcli), destID (destID), blockID (blockID),
+      cb (cb), store_type (store_type)
   {
     ctype = dhash::block_type (_block);
     block = _block;
@@ -85,28 +87,28 @@ protected:
     ///warn << "dhash_store....finish: " << npending << "\n";
     npending--;
 
-    if (res->status != DHASH_OK) 
-      fail (dhasherr2str (res->status));
+    if (res->status != DHASH_OK) {
+      if (res->status != DHASH_WAIT)
+        warn << "dhash_store failed: " << blockID << ": "
+	     << dhasherr2str(res->status) << "\n";
+      if (!error)
+	status = res->status;
+      error = true;
+    }
 
     if (npending == 0) {
       //in the gateway, the second arg is the blockID
       //here the block ID was already known to the caller
       //so return something useful: the destID
-      (*cb) (error, destID);
+      (*cb) (status, destID);
       delete this;
     }
-  }
-
-  void fail (str errstr)
-  {
-    warn << "dhash_store failed: " << blockID << ": " << errstr << "\n";
-    error = true;
   }
 
 public:
 
   static void execute (dhashcli *dhcli, chordID destID, chordID blockID,
-                       ref<dhash_block> block, cbstore_t cb, 
+                       ref<dhash_block> block, cbinsert_t cb, 
 		       store_status store_type = DHASH_STORE)
   {
     vNew dhash_store (dhcli, destID, blockID, block, store_type, cb);
@@ -182,9 +184,9 @@ dhashcli::cache_block (ptr<dhash_block> block, route search_path, chordID key)
 }
 
 void
-dhashcli::finish_cache (bool error, chordID dest)
+dhashcli::finish_cache (dhash_stat status, chordID dest)
 {
-  if (error)
+  if (status != DHASH_OK)
     warn << "error caching block\n";
 }
 
@@ -225,14 +227,15 @@ dhashcli::insert_lookup_cb (chordID blockID, ref<dhash_block> block,
 			    cbinsert_t cb, dhash_stat status, chordID destID)
 {
   if (status != DHASH_OK)
-    (*cb) (true, bigint(0)); // failure
+    (*cb) (status, bigint(0)); // failure
   else 
-    dhash_store::execute (this, destID, blockID, block,  cb);
+    dhash_store::execute (this, destID, blockID, block, cb);
 }
 
 //like insert, but doesn't do lookup. used by transfer_key
 void
-dhashcli::storeblock (chordID dest, chordID ID, ref<dhash_block> block, cbstore_t cb, store_status stat)
+dhashcli::storeblock (chordID dest, chordID ID,
+                      ref<dhash_block> block, cbinsert_t cb, store_status stat)
 {
   dhash_store::execute (this, dest, ID, block, cb, stat);
 }
@@ -262,12 +265,13 @@ void
 dhashcli::store_cb (dhashcli_storecb_t cb, ref<dhash_storeres> res,
 		    clnt_stat err)
 {
+#if 0
   // XXX is this ok?
   if (err) {
     warn << "dhashcli::store_cb: err " << err << "\n";
     res->set_status (DHASH_RPCERR);
   }
-
+#endif
   (*cb) (res);    
 }
 

@@ -38,7 +38,7 @@ testslave slaves[] = {
 
 char buf[10] = "xxxxxxxxx";
 void starttest();
-void insert_cb(bool, ptr<insert_info> i);
+void insert_cb(dhash_stat, ptr<insert_info> i);
 void retrieve_cb(ptr<dhash_block>);
 
 testmaster tm;
@@ -63,9 +63,9 @@ starttest()
 
 // callback immediately retrieves stored block through other node
 void
-insert_cb(bool failed, ptr<insert_info> i)
+insert_cb(dhash_stat status, ptr<insert_info> i)
 {
-  if(failed)
+  if(status != DHASH_OK)
     fatal << "test failed\n";
   tm[1]->retrieve(i->key, wrap(retrieve_cb));
 }

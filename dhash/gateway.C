@@ -85,8 +85,10 @@ dhashgateway::dispatch (svccb *sbp)
     {
       warnt ("DHASHGW: insert_request");
       dhash_insert_arg *arg = sbp->template getarg<dhash_insert_arg> ();
-      ref<dhash_block> block = New refcounted<dhash_block> (arg->block.base (), arg->block.size ());
-      dhcli->insert (arg->blockID, block, arg->usecachedsucc, wrap (this, &dhashgateway::insert_cb, sbp));
+      ref<dhash_block> block =
+	New refcounted<dhash_block> (arg->block.base (), arg->block.size ());
+      dhcli->insert (arg->blockID, block, arg->usecachedsucc,
+	             wrap (this, &dhashgateway::insert_cb, sbp));
     }
     break;
 
@@ -110,16 +112,12 @@ dhashgateway::dispatch (svccb *sbp)
 }
 
 void
-dhashgateway::insert_cb (svccb *sbp, bool err, chordID destID)
+dhashgateway::insert_cb (svccb *sbp, dhash_stat status, chordID destID)
 {
-  if (err) {
-    dhash_insert_res res (DHASH_CHORDERR);
-    sbp->reply (&res);
-  } else {
-    dhash_insert_res res (DHASH_OK);
+  dhash_insert_res res (status);
+  if (status == DHASH_OK)
     res.resok->destID = destID;
-    sbp->reply (&res);
-  }
+  sbp->reply (&res);
 }
 
 
@@ -187,7 +185,7 @@ dhashclient::append (chordID to, const char *buf, size_t buflen,
       insert (to, m_dat, m_len, cb, DHASH_APPEND, false);
       xfree (m_dat);
     } else {
-      (*cb) (true, NULL); // marshalling failed.
+      (*cb) (DHASH_ERR, NULL); // marshalling failed.
     }
 
 }
@@ -221,7 +219,7 @@ dhashclient::insert (bigint key, const char *buf,
       insert (key, m_dat, m_len, cb, DHASH_CONTENTHASH, usecachedsucc);
       xfree (m_dat);
     } else {
-      (*cb) (true, NULL); // marshalling failed.
+      (*cb) (DHASH_ERR, NULL); // marshalling failed.
     }
 }
 
@@ -293,7 +291,7 @@ dhashclient::insert (bigint hash, sfs_pubkey2 key, sfs_sig2 sig,
       xfree (m_dat);
     } else {
       ptr<insert_info> i = New refcounted<insert_info>(hash, bigint(0));
-      cb (true, i); // marshalling failed.
+      cb (DHASH_ERR, i); // marshalling failed.
     }
 }
 
@@ -322,20 +320,23 @@ dhashclient::insertcb (cbinsertgw_t cb, bigint key,
 {
   str errstr;
   ptr<insert_info> i = New refcounted<insert_info>(key, bigint(0));
-  if (err)
+  if (err) {
     errstr = strbuf () << "rpc error " << err;
-  else if (res->status != DHASH_OK) 
+    warn << "dhashclient::insert failed: " << key << ": " << errstr << "\n";
+  }
+  else if (res->status != DHASH_OK) {
     errstr = dhasherr2str (res->status);
+    if (res->status != DHASH_WAIT)
+      warn << "dhashclient::insert failed: " << key << ": " << errstr << "\n";
+  }
   else {
     //if I wanted to pass back the destID do this:
     // (*cb) (false, key, res->resok->destID);
     i->destID = res->resok->destID;
-    (*cb) (false, i); // success
+    (*cb) (DHASH_OK, i); // success
     return;
   }
-
-  warn << "dhashclient::insert failed: " << key << ": " << errstr << "\n";
-  (*cb) (true, i); // failure
+  (*cb) (res->status, i); // failure
 }
 
 void

@@ -70,12 +70,12 @@ prepare_test_data (int num)
 
 
 void
-store_cb (bool error, ptr<insert_info> i)
+store_cb (dhash_stat status, ptr<insert_info> i)
 {
   out--;
 
-  if (error) {
-    warn << "store_cb: " << i->key << " " << error << "\n";
+  if (status != DHASH_OK) {
+    warn << "store_cb: " << i->key << " " << dhasherr2str(status) << "\n";
     fprintf (outfile, "store error\n");
   } else {
     str buf = strbuf () << "stored " << i->key << " at " << i->destID << "\n";

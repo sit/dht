@@ -219,7 +219,7 @@ class dhash {
 			  callback<void, dhash_stat>::ref cb,
 			  int cookie, ptr<dbrec> data, dhash_stat err);
   void transfer_store_cb (callback<void, dhash_stat>::ref cb, 
-			  bool err, chordID blockID);
+			  dhash_stat status, chordID blockID);
 
   void get_key (chordID source, chordID key, cbstat_t cb);
   void get_key_got_block (chordID key, cbstat_t cb, ptr<dhash_block> block);
@@ -291,9 +291,8 @@ struct insert_info {
     key (k), destID (d) {};
 };
 
-typedef callback<void, bool, chordID>::ref cbinsert_t;
-typedef callback<void, bool, ptr<insert_info> >::ref cbinsertgw_t;
-typedef cbinsert_t cbstore_t;
+typedef callback<void, dhash_stat, chordID>::ref cbinsert_t;
+typedef callback<void, dhash_stat, ptr<insert_info> >::ref cbinsertgw_t;
 typedef callback<void, ptr<dhash_block> >::ref cbretrieve_t;
 typedef callback<void, ptr<dhash_storeres> >::ref dhashcli_storecb_t;
 typedef callback<void, dhash_stat, chordID>::ref dhashcli_lookupcb_t;
@@ -356,7 +355,7 @@ class dhashcli {
 			   chordID succID, route path, chordstat err);
   void retrieve_hop_cb (ptr<route_dhash> iterator, cbretrieve_t cb, bool done);
   void cache_block (ptr<dhash_block> block, route search_path, chordID key);
-  void finish_cache (bool error, chordID dest);
+  void finish_cache (dhash_stat status, chordID dest);
   void retrieve_with_source_cb (ptr<route_dhash> iterator,
 				cbretrieve_t cb, bool done);
   void insert_lookup_cb (chordID blockID, ref<dhash_block> block,
@@ -370,7 +369,7 @@ class dhashcli {
   void insert (chordID blockID, ref<dhash_block> block, 
                bool usecachedsucc, cbinsert_t cb);
   void storeblock (chordID dest, chordID blockID, ref<dhash_block> block,
-		   cbstore_t cb, store_status stat = DHASH_STORE);
+		   cbinsert_t cb, store_status stat = DHASH_STORE);
   void store (chordID destID, chordID blockID, char *data, size_t len,
               size_t off, size_t totsz, dhash_ctype ctype,
 	      store_status store_type, dhashcli_storecb_t cb);
@@ -433,7 +432,7 @@ class dhashgateway {
   dhash *dh;
 
   void dispatch (svccb *sbp);
-  void insert_cb (svccb *sbp, bool err, chordID blockID);
+  void insert_cb (svccb *sbp, dhash_stat status, chordID blockID);
   void retrieve_cb (svccb *sbp, ptr<dhash_block> block);
 
 public:

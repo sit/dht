@@ -186,7 +186,7 @@ route_dhash::finish_block_fetch (ptr<dhash_fetchiter_res> res,
 void
 route_dhash::fail (str errstr)
 {
-  warn << "dhash_store failed: " << x << ": " << errstr << "\n";
+  warn << "dhash_fetch failed: " << x << ": " << errstr << "\n";
   fetch_error = true;
 }
 

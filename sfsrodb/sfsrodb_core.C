@@ -97,7 +97,7 @@ static timespec periodic;
 
 
 static void
-sfsrodb_put_cb (timespec ts, bool failed, ptr<insert_info> i)
+sfsrodb_put_cb (timespec ts, dhash_stat status, ptr<insert_info> i)
 {
   if (blkcnt % 1000 == 0) {
     static timespec diff;
@@ -124,7 +124,7 @@ sfsrodb_put_cb (timespec ts, bool failed, ptr<insert_info> i)
   }
 
   out--;
-  if (failed)
+  if (status != DHASH_OK)
     fatal << "Could not store block " << i->key << "\n";
 }
 

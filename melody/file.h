@@ -70,7 +70,7 @@ class melody_file : public virtual refcount {
   void find_venti_depth(int asize);
   void venti_cb(callback<void, int, str>::ref ready_cb, str filename, ptr<dhash_block> blk);
   void next_venti_cb(int index, callback<void, int, str>::ref ready_cb, str filename);
-  void write_cb (bool error, ptr<insert_info> i);
+  void write_cb (dhash_stat status, ptr<insert_info> i);
   void next_cb(int offset);
   void flush();
 };

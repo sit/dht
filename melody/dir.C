@@ -290,9 +290,9 @@ dir::add2(bigint tmphash, int size, cbs redir, str parent) {
 
 // only creating one layer venti, so dirs are limited to ~700000 entries
 void
-dir::create_venti(cbs redir, str parent, bool error, ptr<insert_info> i)
+dir::create_venti(cbs redir, str parent, dhash_stat status, ptr<insert_info> i)
 {
-  if(error) {
+  if(status != DHASH_OK) {
     warn << "can't add dir block\n";
     exit(1);
   }
@@ -309,8 +309,8 @@ dir::create_venti(cbs redir, str parent, bool error, ptr<insert_info> i)
 }
 
 void
-dir::create_venti_done(cbs redir, str parent, bool error, ptr<insert_info> i) {
-  if(error) {
+dir::create_venti_done(cbs redir, str parent, dhash_stat status, ptr<insert_info> i) {
+  if(status != DHASH_OK) {
     warn << "can't add venti block\n";
     exit(1);
   }
@@ -318,10 +318,10 @@ dir::create_venti_done(cbs redir, str parent, bool error, ptr<insert_info> i) {
 }
 
 void
-dir::flush_cb(cbs redir, str parent, bool error, ptr<insert_info> i)
+dir::flush_cb(cbs redir, str parent, dhash_stat status, ptr<insert_info> i)
 {
   warn << (int)cs << " flush_cb " << (int)this << "\n";
-  if (error) {
+  if (status != DHASH_OK) {
     //    warn << (int)cs << " dir store error\n";
     // existing dir block is probably full
     // Ok, let's add another dir block
@@ -336,8 +336,8 @@ dir::flush_cb(cbs redir, str parent, bool error, ptr<insert_info> i)
 
 void
 dir::after_new_dir_block(cbs redir, str parent, 
-			 bool error, ptr<insert_info> i) {
-  if(error) {
+			 dhash_stat status, ptr<insert_info> i) {
+  if(status != DHASH_OK) {
     warn << (int)cs << " can't add new dir block.\n";
     exit(1);
   }
@@ -348,8 +348,8 @@ dir::after_new_dir_block(cbs redir, str parent,
 
 void
 dir::after_appended_new_dirhash(cbs redir, str parent, 
-				bool error, ptr<insert_info> i) {
-  if(error) {
+				dhash_stat status, ptr<insert_info> i) {
+  if(status != DHASH_OK) {
     warn << (int)cs << " can't append new dirhash.\n";
     exit(1);
   }

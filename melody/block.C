@@ -170,14 +170,14 @@ venti_block::get_block_cb(melody_block *bl, cbi cb, int of, ptr<dhash_block> blk
 }
 
 void
-venti_block::reset_cb (cbv after, bool error, ptr<insert_info> i)
+venti_block::reset_cb (cbv after, dhash_stat status, ptr<insert_info> i)
 {
 #ifdef DEBUG
   warn << "reset_cb\n";
 #endif
   warn << (int)this << " reset_cb\n";
 
-  if (error)
+  if (status != DHASH_OK)
     warn << "venti_block store error\n";
   if(done) {
     //    strbuf foo;
@@ -207,9 +207,9 @@ venti_block::reset(cbv after)
 }
 
 void
-venti_block::reset_cb_s (bool error, ptr<insert_info> i)
+venti_block::reset_cb_s (dhash_stat status, ptr<insert_info> i)
 {
-  if (error)
+  if (status != DHASH_OK)
     warn << "venti_block reset_cb_s store error\n";
 }
 
@@ -234,14 +234,14 @@ venti_block::reset_s()
 //#define DEBUG
 
 void
-venti_block::close_cb (bool error, ptr<insert_info> i)
+venti_block::close_cb (dhash_stat status, ptr<insert_info> i)
 {
 #ifdef DEBUG
   warn << "close_cb\n";
 #endif
   warn << (int)this << " close_cb\n";
 
-  if (error)
+  if (status != DHASH_OK)
     warn << "venti_block store error\n";
   if(done) {
     //    strbuf foo;

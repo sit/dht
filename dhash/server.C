@@ -214,9 +214,9 @@ dhash::block_to_res (dhash_stat err, s_dhash_fetch_arg *arg,
         leases.insert(l);
       }
       if (timenow-l->touch > LEASE_INACTIVE) {
-        warn << "FETCH: block inactive, can return lease\n";
         if (l->lease < timenow+LEASE_TIME)
 	  l->lease = timenow+LEASE_TIME;
+        warn << "FETCH: block inactive, lease set to " << l->lease << "\n";
         res->compl_res->lease = LEASE_TIME;
       }
     }
@@ -261,9 +261,9 @@ dhash::fetchiter_gotdata_cb (cbupcalldone_t cb, s_dhash_fetch_arg *a,
       leases.insert(l);
     }
     if (timenow-l->touch > LEASE_INACTIVE) {
-      warn << "BLOCK: block inactive, can return lease\n";
       if (l->lease < timenow+LEASE_TIME)
         l->lease = timenow+LEASE_TIME;
+      warn << "BLOCK: block inactive, lease set to " << l->lease << "\n";
       arg->lease = LEASE_TIME;
     }
   }
@@ -589,13 +589,10 @@ dhash::transfer_fetch_cb (chordID to, chordID key, store_status stat,
 
 void
 dhash::transfer_store_cb (callback<void, dhash_stat>::ref cb, 
-			  bool err,
+			  dhash_stat status,
 			  chordID blockID) 
 {
-  if (err) 
-    cb (DHASH_RPCERR);
-  else 
-    cb (DHASH_OK);
+  cb (status);
 }
 
 void
@@ -774,7 +771,7 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
   // leases.
   dhash_lease *l = leases[arg->key];
   if (l) {
-    warn << "STORE: found lease; check if it's recent\n";
+    warn << "STORE: found lease " << l->lease << " now " << timenow << "\n";
     l->touch = timenow;
     if (l->lease > timenow) {
       warn << "STORE: lease is active, cannot store\n";

@@ -31,12 +31,12 @@
 #include "crypt.h"
 #include <sys/time.h>
 
-void store_cb_pk (dhashclient dhash, bool error, ptr<insert_info> i);
-void store_cb_ch (dhashclient dhash, bool error, ptr<insert_info> i);
-void store_cb_noauth (dhashclient dhash, bool error, ptr<insert_info> i);
-void store_cb_append (dhashclient dhash, bool error, ptr<insert_info> i);
+void store_cb_pk (dhashclient dhash, dhash_stat status, ptr<insert_info> i);
+void store_cb_ch (dhashclient dhash, dhash_stat status, ptr<insert_info> i);
+void store_cb_noauth (dhashclient dhash, dhash_stat status, ptr<insert_info> i);
+void store_cb_append (dhashclient dhash, dhash_stat status, ptr<insert_info> i);
 void fetch_cb_append (dhashclient dhash, ptr<dhash_block> blk);
-void store_cb_append_second (dhashclient dhash, bool error, 
+void store_cb_append_second (dhashclient dhash, dhash_stat status, 
 			     ptr<insert_info> i);
 void fetch_cb_append_second (dhashclient dhash, ptr<dhash_block> blk);
 
@@ -55,9 +55,9 @@ unsigned int datasize;
 #define NOAUTH 4
 
 void 
-store_cb_ch (dhashclient dhash, bool error, ptr<insert_info> i)
+store_cb_ch (dhashclient dhash, dhash_stat status, ptr<insert_info> i)
 {
-  if (error)
+  if (status != DHASH_OK)
     warn << "contenthash store error\n";
   else
     warn << "contenthash store success\n";
@@ -66,9 +66,9 @@ store_cb_ch (dhashclient dhash, bool error, ptr<insert_info> i)
 }
 
 void
-store_cb_pk (dhashclient dhash, bool error, ptr<insert_info> i)
+store_cb_pk (dhashclient dhash, dhash_stat status, ptr<insert_info> i)
 {
-  if (error)
+  if (status != DHASH_OK)
     warn << "pk store error\n";
   else
     warn << "pk store successful\n";
@@ -77,9 +77,9 @@ store_cb_pk (dhashclient dhash, bool error, ptr<insert_info> i)
 }
 
 void
-store_cb_noauth (dhashclient dhash, bool error, ptr<insert_info> i)
+store_cb_noauth (dhashclient dhash, dhash_stat status, ptr<insert_info> i)
 {
-  if (error)
+  if (status != DHASH_OK)
     warn << "noauth store error " << i->key << "\n";
   else
     warn << "noauth store successful " << i->key << "\n";
@@ -88,9 +88,9 @@ store_cb_noauth (dhashclient dhash, bool error, ptr<insert_info> i)
 }
 
 void
-store_cb_append (dhashclient dhash, bool error, ptr<insert_info> i)
+store_cb_append (dhashclient dhash, dhash_stat status, ptr<insert_info> i)
 {
-  if (error)
+  if (status != DHASH_OK)
     warn << "store db error " << i->key << "\n";
   else
     warn << "store db successful " << i->key << "\n";
@@ -109,9 +109,10 @@ fetch_cb_append (dhashclient dhash, ptr<dhash_block> blk)
 }
 
 void
-store_cb_append_second (dhashclient dhash, bool error, ptr<insert_info> i)
+store_cb_append_second (dhashclient dhash, dhash_stat status,
+                        ptr<insert_info> i)
 {
-  if (error)
+  if (status != DHASH_OK)
     warn << "append error " << i->key << "\n";
 
   dhash.retrieve (i->key, wrap (&fetch_cb_append_second, dhash));

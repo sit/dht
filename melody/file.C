@@ -29,12 +29,12 @@
 #include "file.h"
 
 void
-melody_file::write_cb (bool error, ptr<insert_info> i)
+melody_file::write_cb (dhash_stat status, ptr<insert_info> i)
 {
 #ifdef DEBUG
   warn << (int)this << " write_cb " << i->key << "\n";
 #endif
-  if (error) {
+  if (status != DHASH_OK) {
     warn << "melody_file store error\n";
     (*error_cb)(); //FIXME more/better error reporting?
   }
