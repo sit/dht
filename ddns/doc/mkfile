@@ -1,9 +1,6 @@
-default:V: ddns.page
+default:V: thread.page
 
 </usr/rsc/harvard/mkfile
 
-ddns.dvi:D: ddns.ltx intro.tex design.tex discuss.tex eval.tex conclusions.tex style.tex
-	latex ddns.ltx
-	bibtex ddns
-	latex ddns.ltx
-	latex ddns.ltx
+thread.ps: chordmap.pic sieve.pic sieve2.pic rio.pic unix.pic
+
