@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.52 2004/06/17 23:58:23 strib Exp $ */
+/* $Id: tapestry.C,v 1.53 2004/06/18 18:41:27 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -674,6 +674,13 @@ Tapestry::join(Args *args)
   TapDEBUG(5) << "j enter" << endl;
 
   _my_id = get_id_from_ip(ip());
+
+  // initialize an array of guid digits
+  delete [] _my_id_digits;
+  _my_id_digits = New uint[_digits_per_id];
+  for( uint i = 0; i < _digits_per_id; i++ ) {
+    _my_id_digits[i] = get_digit( id(), i );
+  }
 
   IPAddress wellknown_ip = args->nget<IPAddress>("wellknown");
   TapDEBUG(3) << ip() << " Wellknown: " << wellknown_ip << endl;
@@ -1766,7 +1773,7 @@ Tapestry::multi_add_to_rt_start( RPCSet *ping_rpcset,
       record_stat(STAT_PING, 0, 0);
       ping_callinfo *pi = New ping_callinfo(ni->_addr, ni->_id, now());
       if( _rt->contains( ni->_id ) ) {
-	TapDEBUG(2) << "GetTime()-ing for " << ni->_addr << "/" 
+	TapDEBUG(4) << "GetTime()-ing for " << ni->_addr << "/" 
 		    << print_guid(ni->_id) << endl;
 	pi->last_timeout = _rtt_timeout_factor*_rt->get_time( ni->_id );
       } else {
@@ -2653,7 +2660,7 @@ RoutingTable::add( IPAddress ip, GUID id, Time distance, bool sendbp )
   for( uint i = 0; i < _node->_digits_per_id; i++ ) {
     uint j = _node->get_digit( id, i );
     if( distance == 0 ) {
-      TapRTDEBUG(2) << "Adding node " << ip << "/" << _node->print_guid(id) 
+      TapRTDEBUG(3) << "Adding node " << ip << "/" << _node->print_guid(id) 
 		    << " with a distance of " << distance << endl;
     }
     NodeInfo *new_node = New NodeInfo( ip, id, distance );
