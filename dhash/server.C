@@ -191,7 +191,7 @@ dhash_impl::dhash_impl (str dbname, u_int k) :
   open_worker (db, dbname, opts, "db file");
   open_worker (keyhash_db, kdbs, opts, "keyhash db file");
 
-  dhcs = strbuf () << dbname << ".dhc";
+  dhcs = strbuf () << dbname;
 
   // merkle state
   mtree = New merkle_tree (db);

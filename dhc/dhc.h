@@ -12,6 +12,8 @@
 #define ID_size sha1::hashsize
 #define DHC_DEBUG 1
 
+struct dhash_block;
+
 extern void set_locations (vec<ptr<location> > *, ptr<vnode>, vec<chordID>);
 extern void ID_put (char *, chordID);
 extern void ID_get (chordID *, char *);
@@ -222,9 +224,13 @@ struct dhc_block {
   str to_str ()
   {
     strbuf ret;
-    ret << "\n DHC block " << id 
+    ret << "\n*************** DHC block *****************\n" 
+	<< "\n id: " << id 
 	<< "\n meta data: " << meta->to_str ()
+	<< "\n data tag ver " << data->tag.ver 
+	<< "\n data tag writer " << data->tag.writer
 	<< "\n data size: " << data->data.size ()
+	<< "\n data data: " << str (data->data.base (), data->data.size ())
 	<< "\n";
     return str(ret);
   }
@@ -372,21 +378,22 @@ struct write_state {
 };
 
 typedef callback<void, dhc_stat>::ref dhc_cb_t;
-typedef callback<void, dhc_stat, ptr<keyhash_data> >::ref dhc_getcb_t;
+typedef callback<void, ptr<dhash_block> >::ref dhc_getcb_t;
 
 struct put_args {
   chordID bID;
   chordID writer;
-  ref<dhash_value> value;
-  
-  put_args (chordID b, chordID w, ref<dhash_value> v) : value(v)
+  ptr<dhash_value> value;
+   
+  put_args (chordID b, chordID w, ref<dhash_value> v) : 
+    bID (b), writer (w)
   {
-    bID = b;
-    writer = w;
+    value = New refcounted<dhash_value>;
+    value->set (v->base (), v->size ());
   }
 };
 
-class dhc {
+class dhc : public virtual refcount {
   
   ptr<vnode> myNode;
   ptr<dbfe> db;
@@ -412,8 +419,8 @@ class dhc {
   void recv_put (user_args *);
   void recv_putblock (user_args *);
 
-  //void put_lookup_cb (put_args *, dhc_cb_t, bool,
-  //		      vec<chord_node>, route, chordstat);
+  void put_lookup_cb (put_args *, dhc_cb_t, bool,
+  		      vec<chord_node>, route, chordstat);
   void put_result_cb (chordID, dhc_cb_t, ptr<dhc_put_res>, clnt_stat);
   void putblock_cb (user_args *, ptr<dhc_block>, ptr<location>, ptr<write_state>, 
 		    ref<dhc_put_res>, clnt_stat);
@@ -428,7 +435,7 @@ class dhc {
   ~dhc () {};
   
   void recon (chordID, dhc_cb_t);
-  void get (chordID, dhc_getcb_t);
+  void get (ptr<location>, chordID, dhc_getcb_t);
   void put (ptr<location>, chordID, chordID, ref<dhash_value>, dhc_cb_t, 
 	    bool newblock=false);
   void dispatch (user_args *);

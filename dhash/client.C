@@ -166,15 +166,20 @@ dhashcli::retrieve_block_hop_cb (ptr<rcv_state> rs, route_iterator *ci,
   }
 
   chord_node s = rs->succs.pop_front ();
-  dhash_download::execute (clntnode, s, rs->key, NULL, 0, 0, 0,
-			   wrap (this, &dhashcli::retrieve_dl_or_walk_cb,
-				 rs, status, options, retries, guess));
+  if (DHC && rs->key.ctype == DHASH_KEYHASH) {
+    ptr<location> l = New refcounted<location> (s);
+    dhc_mgr->get (l, rs->key.ID, wrap (this, &dhashcli::retrieve_dl_or_walk_cb,
+				       rs, status, options, retries, guess));
+  } else 
+    dhash_download::execute (clntnode, s, rs->key, NULL, 0, 0, 0,
+			     wrap (this, &dhashcli::retrieve_dl_or_walk_cb,
+				   rs, status, options, retries, guess));
 }
 
 void
 dhashcli::retrieve_dl_or_walk_cb (ptr<rcv_state> rs, dhash_stat status,
-				  int options, int retries, ptr<chordID> guess,
-				  ptr<dhash_block> blk)
+				  int options, int retries, 
+				  ptr<chordID> guess, ptr<dhash_block> blk)
 {
   chordID myID = clntnode->my_ID ();
 
@@ -613,12 +618,14 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb, int opti
 			      i == 0 ? DHASH_STORE : DHASH_REPLICA);
       }
     else {
-      warning << "dhashcli: Inserting keyhash block " << block->ID 
-	      << " through DHC\n";
+      warn << "dhashcli: Inserting keyhash block " << block->ID 
+	   << " through DHC\n";
+      warn << "          len: " << block->len << " data: " 
+	   << str (block->data, block->len) << "\n";
       ptr<location> dest = clntnode->locations->lookup_or_create (succs[0]);
       ref<dhash_value> value = New refcounted<dhash_value>;
       value->set (block->data, block->len);
-      dhc_mgr->put (dest, block->ID, block->source, value, 
+      dhc_mgr->put (dest, block->ID, clntnode->my_ID (), value, 
 		    wrap (this, &dhashcli::insert_dhc_cb, dest, r, ss->cb),
 		    options & DHASHCLIENT_NEWBLOCK);
     }

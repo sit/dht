@@ -93,9 +93,10 @@ set_new_config (ptr<dhc_newconfig_arg> arg, vec<ptr<location> > *l,
   }
 
   arg->new_config.setsize (k);
-  
-  for (uint i=0; i<k; i++) {
-    arg->new_config[i] = replicas[i]->id ();  
+  arg->new_config[0] = myNode->my_ID ();
+  l->push_back (myNode->my_location ());
+  for (uint i=0; i<k-1; i++) {
+    arg->new_config[i+1] = replicas[i]->id ();  
     l->push_back (replicas[i]);
   }
 }

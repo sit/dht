@@ -118,11 +118,11 @@ store_cb_pk (dhashclient dhash, dhash_stat status, ptr<insert_info> i)
 {
   if (status != DHASH_OK)
     warn << "pk store error\n";
-  else
+  else {
     warn << "pk store successful\n";
-
-  dhash.retrieve (i->key, DHASH_KEYHASH, 
-		  wrap (&fetch_cb, dhash, PUB_KEY));
+    dhash.retrieve (i->key, DHASH_KEYHASH, 
+		    wrap (&fetch_cb, dhash, PUB_KEY));
+  }
 }
 
 void
@@ -185,6 +185,7 @@ fetch_cb (dhashclient dhash, int btype, dhash_stat stat,
 
   if (!blk) {
     warn << "Error\n";
+    return;
   }
   ptr<keyhash_payload> p = keyhash_payload::decode (blk);
   if (!p ||
@@ -193,7 +194,7 @@ fetch_cb (dhashclient dhash, int btype, dhash_stat stat,
     fatal << "verification failed";
   }
   else {
-    warn << "success\n path: ";
+    warn << "retrieve success\n path: ";
     for (unsigned int i = 0; i < path.size (); i++)
       warnx << path[i] << " ";
     warnx << "\n";
@@ -274,7 +275,9 @@ main (int argc, char **argv)
     sfs_pubkey2 pk;
     sfs_sig2 s;
     p.sign (sk, pk, s);
-    dhash.insert (p.id (pk), pk, s, p, wrap (&store_cb_pk, dhash));
+    ptr<option_block> opt = New refcounted<option_block>;
+    opt->flags = DHASHCLIENT_NEWBLOCK;
+    dhash.insert (p.id (pk), pk, s, p, wrap (&store_cb_pk, dhash), opt);
     break;
     }
   case NOAUTH:
