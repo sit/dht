@@ -25,13 +25,5 @@ int
 ThreadManager::create(Threaded *t, void (*fn)(void*), void *args, int ss)
 {
   int tid = ::threadcreate(fn, args, ss);
-  _threadmap[tid] = t;
   return tid;
-}
-
-
-Threaded*
-ThreadManager::deleteme_get(int t)
-{
-  return _threadmap[t];
 }

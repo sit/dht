@@ -10,7 +10,6 @@ using namespace std;
 class ThreadManager {
 public:
   static ThreadManager* Instance();
-  Threaded *deleteme_get(int);
 
   int create(Threaded*, void (*)(void*), void*, int ss = mainstacksize);
 
@@ -19,7 +18,6 @@ private:
   ~ThreadManager();
 
   static ThreadManager* _instance;
-  map<int, Threaded*> _threadmap;
 };
 
 

@@ -12,7 +12,7 @@ public:
   Event();
   Event(vector<string>*);
 
-  Time ts;
+  Time ts;  // absolute time
   unsigned id() { return _id; }
   static void Execute(Event *e);
 

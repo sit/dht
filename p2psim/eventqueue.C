@@ -131,6 +131,8 @@ EventQueue::advance()
 void
 EventQueue::add_event(Event *e)
 {
+  assert(e->ts >= _time);
+
   // empty queue
   if(_queue.empty()) {
     _queue.push_back(e);
