@@ -39,25 +39,44 @@
 // milliseconds two different functions are run:
 // 1. stabilize_continuous 2. stabilize_backoff
 //
-// Stabilize_continuous should be used for datastructures that need to
+// Stabilize_continuous should be used for data structures that need to
 // be checked frequently (e.g., successor) so that they can be
-// repaired quickly.  Stabilize_continous runs every stabilize_timer
+// repaired quickly.  Stabilize_continous runs every cts_timer_base
 // milliseconds.  However, it will slows down exponentially if it
-// doesn't receive a response within stabilize_timer milliseconds
+// doesn't receive a response within cts_timer_base milliseconds
 // (i.e., before the next iteration starts).  Every iteration it will
 // try to speed up additively with stabilize_decrease_timer milliseconds.
+// It will never be slower than cts_timer_max.
 //
-// Stabilize_backoff is used to check datastructures for which it is
+// Stabilize_backoff is used to check data structures for which it is
 // OK that they are out of date somewhat.  Stabilize_backoff runs
-// every stabilize_timer milliseconds until the ring is stable.  Then,
+// every bo_timer_init milliseconds until the ring is stable.  Then,
 // it slows than by a factor stabilize_slowdown_factor each iteration,
-// but never slower than stabilize_timer_max seconds; we want to make
+// but never slower than bo_timer_max seconds; we want to make
 // sure that tables are checked with some minimum frequency.  When the
 // ring comes unstable, stabilize_backoff speeds up each iteration
 // with stabilize_decrease_timer until the ring is stable again; we
 // want to make sure that repairs happen with some urgency.  Like
 // stabilize_continuous, stabilize_backoff will slow down if it
 // doesn't receive a response before the next iteration starts.
+
+// All time values in milliseconds
+const u_int32_t stabilize_manager::stabilize_decrease_timer = 1000;
+const float     stabilize_manager::stabilize_slowdown_factor = 1.2;
+
+// Base is target value; will slow down from init to base value.
+const u_int32_t stabilize_manager::cts_timer_init = 1 * 1000;
+const u_int32_t stabilize_manager::cts_timer_base = 20 * 1000;
+const u_int32_t stabilize_manager::cts_timer_max  = 2 * cts_timer_base;
+
+// Note, finger_table stabilization is implemented one-finger per
+// backoff call.  We really want to stabilize all fingers every
+// bo_timer_base ms but to do that we have to guess how many fingers
+// there are.  8 seconds should be approximately right for 400 nodes
+// stabilizing l(400)/l(2) fingers in one minute.
+const u_int32_t stabilize_manager::bo_timer_init  = 1 * 1000;
+const u_int32_t stabilize_manager::bo_timer_base  = 8 * 1000;
+const u_int32_t stabilize_manager::bo_timer_max   = 2 * bo_timer_base;
 
 stabilize_manager::stabilize_manager (chordID _myID) :
   myID (_myID),
@@ -76,9 +95,9 @@ void
 stabilize_manager::start (void)
 {
   if (!stabilize_continuous_tmo)
-    stabilize_continuous (stabilize_timer);
+    stabilize_continuous (cts_timer_init);
   if (!stabilize_backoff_tmo)
-    stabilize_backoff (stabilize_timer);
+    stabilize_backoff (bo_timer_init);
 }
 
 void
@@ -120,14 +139,16 @@ stabilize_manager::stabilize_continuous (u_int32_t t)
     warnx << gettime () << " " << myID
 	  <<" stabilize_continuous: slow down " << t << "\n";
   } else {
-    if (t >= stabilize_timer) t -= stabilize_decrease_timer;
+    // Try to keep t around cts_timer_base
+    if (t >= cts_timer_base)   t -= stabilize_decrease_timer;
+    if (t <  cts_timer_base/2) t  = (int)(stabilize_slowdown_factor * t);
 
     for (unsigned int i = 0; i < clients.size (); i++)
       clients[i]->do_continuous ();
   }
 
-  if (t > stabilize_timer_max * 1000)
-    t = stabilize_timer_max * 1000;
+  if (t > cts_timer_max)
+    t = cts_timer_max;
 
   u_int32_t t1 = uniform_random (0.5 * t, 1.5 * t);
   u_int32_t sec = t1 / 1000;
@@ -158,14 +179,14 @@ stabilize_manager::stabilize_backoff (u_int32_t t)
     for (unsigned int i = 0; i < clients.size (); i++)
       clients[i]->do_backoff ();
 
-    if (stablenow && (t <= stabilize_timer_max * 1000))
+    if (stablenow && (t <= bo_timer_max))
       t = (int)(stabilize_slowdown_factor * t);
-    else if (t > stabilize_timer)  // ring is unstable; speed up stabilization
+    else if (t > bo_timer_base)  // ring is unstable; speed up stabilization
       t -= stabilize_decrease_timer;
   }
   
-  if (t > stabilize_timer_max * 1000)
-    t = stabilize_timer_max * 1000;
+  if (t > bo_timer_max)
+    t = bo_timer_max;
 
   u_int32_t t1 = uniform_random (0.5 * t, 1.5 * t);
   u_int32_t sec = t1 / 1000;

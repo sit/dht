@@ -54,10 +54,17 @@ class stabilizable {
 
 // Class to manage stabilization timers, etc.
 class stabilize_manager {
-  static const u_int32_t stabilize_timer = 1000;  // milliseconds
-  static const u_int32_t stabilize_decrease_timer = 100; // milliseconds
-  static const float stabilize_slowdown_factor = 1.2;
-  static const u_int32_t stabilize_timer_max = 2; // seconds
+  // All time values in milliseconds
+  static const u_int32_t stabilize_decrease_timer;
+  static const float stabilize_slowdown_factor;
+
+  static const u_int32_t cts_timer_init;
+  static const u_int32_t cts_timer_base;
+  static const u_int32_t cts_timer_max;
+
+  static const u_int32_t bo_timer_init;
+  static const u_int32_t bo_timer_base;
+  static const u_int32_t bo_timer_max;
 
   chordID myID;
   
