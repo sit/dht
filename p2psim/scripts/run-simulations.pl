@@ -22,7 +22,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-# $Id: run-simulations.pl,v 1.15 2004/01/21 06:54:51 jinyang Exp $
+# $Id: run-simulations.pl,v 1.16 2004/01/23 05:59:52 jinyang Exp $
 
 use strict;
 use Getopt::Long;
@@ -65,6 +65,7 @@ run-simulations [options]
     --randomize <num>         Randomizes the order of param combos.  The number
 	                        supplied specifies how many times to iterate.
     --observer                Use an observer
+    --command                 p2psim or some other binary?
 
 EOUsage
     
@@ -80,7 +81,7 @@ my %options;
 &GetOptions( \%options, "help|?", "topology=s", "lookupmean=s", "protocol=s", 
 	     "lifemean=s", "deathmean=s", "exittime=s", "churnfile=s", 
 	     "argsfile=s", "logdir=s", "seed=s", "randomize=i", "observer",
-	     "stattime=s" ) 
+	     "stattime=s", "command=s") 
     or &usage;
 
 if( $options{"help"} ) {
@@ -175,7 +176,12 @@ if( $script_dir !~ m%^/% ) {	# relative pathname
     $script_dir = $ENV{"PWD"} . "/$script_dir";
 } 
 $script_dir =~ s%/(./)?[^/]*$%%;	# strip off script name
-my $p2psim_cmd = "$script_dir/../p2psim/p2psim";
+my $p2psim_cmd;
+if (defined $options{"command"}) {
+  $p2psim_cmd = "$script_dir/../p2psim/$options{\"command\"}";
+}else{
+  $p2psim_cmd = "$script_dir/../p2psim/p2psim";
+}
 
 #if( $seed ne "" ) {
 #    $p2psim_cmd .= " -e $seed";
