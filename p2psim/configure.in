@@ -88,7 +88,12 @@ AC_LANG_RESTORE
 
 
 dnl Check for openssl/sha.h
-AC_CHECK_HEADER(openssl/sha.h,,AC_MSG_ERROR([openssl/sha.h header file required.]))
+dnl AC_CHECK_HEADER(openssl/sha.h,,AC_MSG_ERROR([openssl/sha.h header file required.]))
+
+LIBSSAVE=$LIBS
+CHECK_SSL
+SSLLIBS=$LIBS
+LIBS=$LIBSSAVE
 
 AC_OUTPUT(Makefile
             eventgenerators/Makefile

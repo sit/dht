@@ -57,6 +57,14 @@ public:
   int _ticks;
   int _grid_config;
   int _ring_config;
+  int _landmark_config;
+  int _near_config;
+
+  bool _aux_added; 
+  //some neighbor adding strategies
+  // need to run after _all is filled
+  // in. This flag lets us run them once
+
   Vivaldi *_vivaldi;
   static vector<VivaldiTest*> _all;
 
@@ -72,7 +80,11 @@ public:
 
   void handler(void *, void *);
 
+  void addRingNeighbors ();
+  void addGridNeighbors ();
   void addRandNeighbors ();
+  void addLandmarkNeighbors ();
+  void addNearNeighbors ();
   void print_all_loc();
 };
 

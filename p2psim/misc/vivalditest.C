@@ -43,7 +43,11 @@ VivaldiTest::VivaldiTest(IPAddress i, Args &args)
   //guaranteed to be connected. Only works with 
   //consecutive IP addresses.
   _grid_config = args.nget<int>("grid_config",0,10);
+
   _ring_config = args.nget<int>("ring_config",0,10);
+  _landmark_config = args.nget<int>("landmark_config",0,10);
+
+  _near_config = args.nget<int>("near_config",0,10);
 
   _neighbors = args.nget<int>("neighbors", 16, 10);
   _total_nodes = args.nget<uint>("totalnodes", 0, 10);
@@ -51,6 +55,7 @@ VivaldiTest::VivaldiTest(IPAddress i, Args &args)
   _far_percent = args.nget<int>("far-percent", 90, 10);
   _ticks = 0;
   _joined = false;
+  _aux_added = false;
 }
 
 VivaldiTest::~VivaldiTest()
@@ -88,65 +93,18 @@ VivaldiTest::join(Args *args)
     queue_delay (_queue);
 
   if (_grid_config) {
-    int row = (int) sqrt((double) _total_nodes);
-    printf("my ip is %u\n", _ip);
-    int nbr_ip;
-    
-    nbr_ip = (int) ip() - 1 ;
-    if (nbr_ip > 0) 
-      _nip.push_back(nbr_ip);
-
-    nbr_ip = (int) ip() + 1;
-    if (nbr_ip <= (int)_total_nodes) 
-      _nip.push_back(nbr_ip);
-
-    nbr_ip = (int) ip() - row;
-    if (nbr_ip > 0) 
-      _nip.push_back(nbr_ip);
-
-    nbr_ip = (int) ip() + row;
-    if (nbr_ip <= (int)_total_nodes)
-      _nip.push_back(nbr_ip);
-
-
-    //add some "distant" nodes to use at some probability
-    for (int i = 1; i < 10; i++) {
-      uint cand = (random () % (_total_nodes)) + 1;
-      assert(cand <= _total_nodes);
-      _nip_far.push_back(cand);
-      //_nip.push_back(_all[random () % _all.size ()]->ip());
-    }
-    _neighbors_far = _nip_far.size ();
-
-    _neighbors = _nip.size();
-    printf("%u joined with %d neighbors: ",ip(), _nip.size());
-    for (uint i = 0; i < _nip.size(); i++) {
-      assert(_nip[i] > 0 && _nip[i] <= _total_nodes);
-      printf("%u ", _nip[i]);
-    }
-    printf("\n");
-  }else if (_ring_config) {
-    //add "successor"
-    uint cand = ip () + 1;
-    if (cand > _total_nodes) cand = 1;
-    _nip.push_back (cand);
-
-    for (int i = 1; i < _neighbors; i++) {
-      int dist = 1 << i;
-      double r = ((double)random () / (double)RAND_MAX);
-      cand = ((int)(ip () + (1+r)*_total_nodes/dist ) % _total_nodes) + 1;
-      _nip.push_back (cand);
-    }
-    
-    printf("RC %u joined with %d neighbors: ",ip(), _nip.size());
-    for (uint i = 0; i < _nip.size(); i++) {
-      printf("%u ", _nip[i]);
-      assert(_nip[i] > 0 && _nip[i] <= _total_nodes);
-    }
-    printf("\n");
+    addGridNeighbors ();
+  } else if (_ring_config) {
+    addRingNeighbors ();
+  } else if (_landmark_config) {
+    addLandmarkNeighbors ();
+  } else if (_near_config) {
+    addNearNeighbors ();
   } else {
     addRandNeighbors ();
   }
+  assert (_grid_config + _ring_config + _landmark_config + _near_config <= 1);
+
   if (_vis && !init_state ()) cerr << "vis " << now () << " node " << ip () << " " << _c << "\n";
   delaycb(1000, &VivaldiTest::tick, (void *) 0);
 }
@@ -178,8 +136,18 @@ VivaldiTest::tick(void *)
   }
 
   if(_neighbors > 0){
+    
+    //landmark and near need to run here, once
+    if (!_aux_added) {
+      if (_landmark_config) addLandmarkNeighbors();
+      else if (_near_config) addNearNeighbors ();
+    }
+
+    //"best" strategy
     if (random () % 2 == 0 && _nip_best.size () > 0 && false)
       dst = _nip_best[random () % _nip_best.size ()];
+
+    //grid strategy: pick a near or far neighbor with some prob.
     else if (_grid_config) {
       double p = (double)random()/(double)RAND_MAX;
       if (p*100 > _far_percent)
@@ -187,26 +155,22 @@ VivaldiTest::tick(void *)
       else
 	dst = _nip[random() % _neighbors];
     } else {
+      //default: pick one of our neighbors
       dst = _nip[random() % _neighbors];
     }
+    //pick any node, neighbor set == all nodes
   } else {
     dst = _all[random() % _all.size()]->ip();
   }
 
-  if(this->ip() == 2) {
+  if(this->ip() == 20) {
 
     if (_ticks % 5 == 0) 
       {
 	status();
-	//update neighbors
-	//	if (_neighbors > 0) {
-	///	  vector<IPAddress> best = best_n (_neighbors);
-	//  for(unsigned i = 0; i < _all.size(); i++) 
-	//    _all[i]->_nip_best = best;
-	//	}
       }
 
-    if (_ticks % 5 == 0 || _vis) print_all_loc();
+    if (_ticks % 50 == 0 || _vis) print_all_loc();
   } else if (false && this->ip () >= 1000)
     {
       cout << this->ip () << " " << error () << "\n";
@@ -214,7 +178,10 @@ VivaldiTest::tick(void *)
 
   //see if our dest has joined
   Node *n = getpeer (dst);
-  if (!n) return;
+  if (!n) {
+    cerr << dst << " not joined yet\n";
+    return;
+  }
 
   doRPC(dst, &VivaldiTest::handler, (void *) 0, (void *)0);
   if (_vis) {
@@ -234,6 +201,134 @@ VivaldiTest::handler(void *args, void *ret)
 }
 
 
+bool
+comp (pair<double, IPAddress> a, pair<double, IPAddress> b) 
+{
+  if (a.first < b.first) return true;
+  if (a.first > b.first) return false;
+  return false;
+} 
+
+void
+VivaldiTest::addRingNeighbors ()
+{
+  //add "successor"
+  uint cand = ip () + 1;
+  if (cand > _total_nodes) cand = 1;
+  _nip.push_back (cand);
+  
+  for (int i = 1; i < _neighbors; i++) {
+    int dist = 1 << i;
+    double r = ((double)random () / (double)RAND_MAX);
+    cand = ((int)(ip () + (1+r)*_total_nodes/dist ) % _total_nodes) + 1;
+    _nip.push_back (cand);
+  }
+  
+  printf("RC %u joined with %d neighbors: ",ip(), _nip.size());
+  for (uint i = 0; i < _nip.size(); i++) {
+    printf("%u ", _nip[i]);
+    assert(_nip[i] > 0 && _nip[i] <= _total_nodes);
+  }
+  printf("\n");
+}
+
+void
+VivaldiTest::addGridNeighbors ()
+{
+    int row = (int) sqrt((double) _total_nodes);
+    printf("my ip is %u\n", _ip);
+    int nbr_ip;
+    
+    nbr_ip = (int) ip() - 1 ;
+    if (nbr_ip > 0) 
+      _nip.push_back(nbr_ip);
+
+    nbr_ip = (int) ip() + 1;
+    if (nbr_ip <= (int)_total_nodes) 
+      _nip.push_back(nbr_ip);
+
+    nbr_ip = (int) ip() - row;
+    if (nbr_ip > 0) 
+      _nip.push_back(nbr_ip);
+
+    nbr_ip = (int) ip() + row;
+    if (nbr_ip <= (int)_total_nodes)
+      _nip.push_back(nbr_ip);
+
+
+    //add some "distant" nodes to use at some probability
+    for (int i = 1; i < 10; i++) {
+      uint cand = (random () % (_total_nodes)) + 1;
+      assert(cand <= _total_nodes);
+      _nip_far.push_back(cand);
+    }
+    _neighbors_far = _nip_far.size ();
+
+    _neighbors = _nip.size();
+    printf("%u joined with %d neighbors: ",ip(), _nip.size());
+    for (uint i = 0; i < _nip.size(); i++) {
+      assert(_nip[i] > 0 && _nip[i] <= _total_nodes);
+      printf("%u ", _nip[i]);
+    }
+    printf("\n");
+}
+
+void
+VivaldiTest::addNearNeighbors ()
+{
+  _nip.clear ();
+  IPAddress my_ip = this->ip ();
+  Topology *t = (Network::Instance()->gettopology());
+  vector<pair<double, IPAddress> > d;
+
+
+  for (unsigned int i = 0; i < _all.size(); i++) {
+    double dist = t->latency(my_ip, _all[i]->ip());
+    d.push_back( pair<double, IPAddress>(dist, _all[i]->ip()) );
+  }
+
+  sort (d.begin(), d.end(), comp);
+
+  cerr << _all.size () << " " << d.size () << "\n";
+
+  int unsigned i = 0;
+  while ((int)_nip.size () < _neighbors/2 && i < d.size()) 
+    _nip.push_back (d[i++].second);
+  while ((int)_nip.size () < _neighbors && i < d.size()) {
+    uint cand = (random () % (_total_nodes)) + 1;
+    _nip.push_back (cand);
+  }
+
+
+  cerr << "close neighbors for " << my_ip << " ";
+  for (unsigned int i = 0; i < _nip.size (); i++)
+    cerr << d[i].second << " ";
+
+  cerr << "\n";
+  if (_nip.size () == (unsigned)_neighbors)_aux_added = true;
+}
+
+void
+VivaldiTest::addLandmarkNeighbors ()
+{
+  _nip.clear ();
+
+  if (ip() == 1) {
+    addRandNeighbors();
+    _aux_added = true;
+  } else if (_all.size () > 0) {
+    int i = 0;
+    while ((int)_nip.size () < _neighbors) {
+      _nip.push_back (_all[0]->_nip[i++]);
+    }
+  
+    cerr << "landmark neighbors for " << ip () << " ";
+    for (unsigned int i = 0; i < _nip.size (); i++)
+      cerr << _nip[i] << " ";
+    cerr << "\n";
+    _aux_added = true;
+  }
+}
 void
 VivaldiTest::addRandNeighbors ()
 {
@@ -250,14 +345,6 @@ VivaldiTest::addRandNeighbors ()
   cerr << "\n";
 }
 
-
-bool
-comp (pair<double, IPAddress> a, pair<double, IPAddress> b) 
-{
-  if (a.first < b.first) return true;
-  if (a.first > b.first) return false;
-  return false;
-} 
 
 vector<IPAddress>
 VivaldiTest::best_n(unsigned int n)
