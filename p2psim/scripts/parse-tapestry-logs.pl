@@ -27,7 +27,7 @@ foreach my $log (@logs) {
     my @stat_vals = ();
     my @stat_nums = ();
     while(<LOG>) {
-	if( /(\d+): \((\d+)\/\w+\).*Lookup for key (\w+)$/ ) {
+	if( /(\d+): \((\d+)\/[\w\-]+\).*Lookup for key ([\w\-]+)$/ ) {
 	    my $t = $1;
 	    my $ip = $2;
 	    my $key = $3;
@@ -35,7 +35,7 @@ foreach my $log (@logs) {
 	    $lookups{"$ip-$key"} = $hash;
 	    $hash->{"starttime"} = $t;
 	    $hash->{"failures"} = 0;
-	} elsif( /\d+: \(\d+\/\w+\).*Failure happened .* key (\w+), .* for node (\d+)$/ ) {
+	} elsif( /\d+: \(\d+\/[\w\-]+\).*Failure happened .* key ([\w\-]+), .* for node (\d+)$/ ) {
 	    my $key = $1;
 	    my $ip = $2;
 	    my $ht = $lookups{"$ip-$key"};
@@ -43,7 +43,7 @@ foreach my $log (@logs) {
 		die( "no lookup found for $ip, $key" );
 	    }
 	    $ht->{"failures"}++;
-	} elsif( /(\d+): \((\d+)\/\w+\).*Lookup failed for key (\w+)$/ ) {
+	} elsif( /(\d+): \((\d+)\/[\w\-]+\).*Lookup failed for key ([\w\-]+)$/ ) {
 	    my $t = $1;
 	    my $ip = $2;
 	    my $key = $3;
@@ -55,7 +55,7 @@ foreach my $log (@logs) {
 			 $ht->{"failures"}, "NONE", "NONE", "NONE", 
 			 $ht->{"starttime"} );
 	    delete $lookups{"$ip-$key"};
-	} elsif( /(\d+): \((\d+)\/\w+\).*Lookup complete for key (\w+): ip (\d+), id (\w+), hops (\d+)/ ) {
+	} elsif( /(\d+): \((\d+)\/[\w\-]+\).*Lookup complete for key ([\w\-]+): ip (\d+), id ([\w\-]+), hops (\d+)/ ) {
 	    my $t = $1;
 	    my $ip = $2;
 	    my $key = $3;
@@ -70,7 +70,7 @@ foreach my $log (@logs) {
 			 $ht->{"failures"}, $oip, $owner, "NONE",
 			 $ht->{"starttime"});
 	    delete $lookups{"$ip-$key"};
-	} elsif( /(\d+): \((\d+)\/\w+\).*Lookup incorrect for key (\w+): ip (\d+), id (\w+), real root (\d+) hops (\w+)/ ) {
+	} elsif( /(\d+): \((\d+)\/[\w\-]+\).*Lookup incorrect for key ([\w\-]+): ip (\d+), id ([\w\-]+), real root (\d+) hops (\d+)/ ) {
 	    my $t = $1;
 	    my $ip = $2;
 	    my $key = $3;
@@ -86,12 +86,12 @@ foreach my $log (@logs) {
 			 $ht->{"failures"}, $oip, $owner, $realroot,
 			 $ht->{"starttime"});
 	    delete $lookups{"$ip-$key"};
-	} elsif( /(\d+): \((\d+)\/\w+\).*Tapestry join/ ) {
+	} elsif( /(\d+): \((\d+)\/[\w\-]+\).*Tapestry join/ ) {
 	    my $t = $1;
 	    my $ip = $2;
 	    $joins{$ip} = $t;
 	    print "joinstart $ip $t\n";
-	} elsif( /(\d+): \((\d+)\/\w+\).*Finishing joining/ ) {
+	} elsif( /(\d+): \((\d+)\/[\w\-]+\).*Finishing joining/ ) {
 	    my $t = $1;
 	    my $ip = $2;
 	    my $time = 0;
@@ -100,7 +100,7 @@ foreach my $log (@logs) {
 		$time = $t - $joins{$ip};
 	    }
 	    print "join $ip $t $time\n";
-	} elsif( /(\d+): \((\d+)\/\w+\).*Tapestry crash/ ) {
+	} elsif( /(\d+): \((\d+)\/[\w\-]+\).*Tapestry crash/ ) {
 	    my $t = $1;
 	    my $ip = $2;
 	    my $was_joined = 0;

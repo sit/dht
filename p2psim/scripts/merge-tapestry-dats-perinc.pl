@@ -8,7 +8,7 @@ my $perinc_high = shift(@ARGV);
 my @logs = @ARGV;
 
 #my @stats = qw( ping repair );
-my @stats = qw( join nodelist mc ping backpointer mcnotify nn repair );
+my @stats = qw( join nodelist mc ping backpointer mcnotify nn repair lookup );
 
 foreach my $log (@logs) {
 
@@ -35,7 +35,7 @@ foreach my $log (@logs) {
     my $total_msgs = 0;
     my $num_incorrect = 0;
     while(<LOG>) {
-	if( /(\d+) \d+ \w+ (\d) (\d) -?(\d+) (\d+) .+ .+ .+/ ) {
+	if( /(\d+) \d+ [\w\-]+ (\d) (\d) -?(\d+) (\d+) .+ .+ .+/ ) {
 	    my $time = $1;
 	    my $complete = $2;
 	    my $correct = $3;
