@@ -29,7 +29,7 @@ enum dhash_stat {
 enum dhash_ctype {
   DHASH_CONTENTHASH = 0,
   DHASH_KEYHASH = 1,
-  // ctype 2 not assigned
+  /* ctype 2 not assigned */
   DHASH_NOAUTH = 3,
   DHASH_APPEND = 4,
   DHASH_UNKNOWN = 5
