@@ -42,6 +42,7 @@ chordID doubleID (const chordID &n, int LOGBASE);
 bool between          (const chordID &a, const chordID &b, const chordID &n);
 bool betweenleftincl  (const chordID &a, const chordID &b, const chordID &n);
 bool betweenrightincl (const chordID &a, const chordID &b, const chordID &n);
+bool betweenbothincl (const chordID &a, const chordID &b, const chordID &n);
 chordID diff(const chordID &a, const chordID &b);
 chordID distance(const chordID &a, const chordID &b);
 u_long topbits (u_long n, const chordID &a);
