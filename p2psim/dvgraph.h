@@ -10,8 +10,8 @@
 
 #include "topology.h"
 #include "node.h"
-#include <map>
 #include <vector>
+#include "p2psim_hashmap.h"
 using namespace std;
 
 class DVGraph : public Topology {
@@ -25,7 +25,7 @@ public:
   // subclass must fill in these values by calling add_node()
   int _n; // # of nodes
   vector<IPAddress> _i2ip;
-  map<IPAddress, int> _ip2i;
+  hash_map<IPAddress, int> _ip2i;
   short *_links;   // 2-d matrix of link delays, -1 for none.
 
   void add_node(IPAddress a);

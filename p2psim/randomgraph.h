@@ -11,7 +11,6 @@
 // test out Vivaldi &c in a situation far removed from
 // Euclidean.
 
-#include <map>
 #include <vector>
 #include <string>
 using namespace std;

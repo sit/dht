@@ -4,11 +4,11 @@
 #include "threaded.h"
 #include <lib9.h>
 #include <thread.h>
-#include <map>
 #include <string>
 #include "p2psim.h"
 #include "packet.h"
 #include "rpchandle.h"
+#include "p2psim_hashmap.h"
 using namespace std;
 
 class Protocol;
@@ -109,7 +109,7 @@ private:
   bool _alive;
   Channel *_pktchan;    // for packets
 
-  typedef map<string, Protocol*> PM;
+  typedef hash_map<string, Protocol*> PM;
   typedef PM::const_iterator PMCI;
   PM _protmap;
 };

@@ -1,12 +1,12 @@
 #ifndef __ARGS_H
 #define __ARGS_H
 
-#include <map>
 #include <string>
+#include "p2psim_hashmap.h"
 using namespace std;
 
 // arguments
-class Args : public map<string,string> {
+class Args : public hash_map<string,string> {
 public:
   template<class T>
   T nget(string s, T defaultv = (T)0, unsigned base = 16) {

@@ -184,8 +184,8 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
 {
   unsigned outstanding = 0;
   RPCSet rpcset;
-  map<unsigned, callinfo*> resultmap;
-  map<NodeID, bool> asked;
+  hash_map<unsigned, callinfo*> resultmap;
+  hash_map<NodeID, bool> asked;
   lookup_args *la = 0;
   lookup_result *lr = 0;
   unsigned rpc = 0;
@@ -412,7 +412,7 @@ Kademlia::do_transfer(transfer_args *targs, transfer_result *tresult)
     return;
 
   // copy all key/value pairs that targs->id is supposed to have
-  for(map<NodeID, Value>::const_iterator pos = _values.begin(); pos != _values.end(); ++pos) {
+  for(hash_map<NodeID, Value>::const_iterator pos = _values.begin(); pos != _values.end(); ++pos) {
     if(distance(pos->first, _id) < distance(pos->first, targs->id))
       continue;
     tresult->values->insert(*pos);
@@ -580,7 +580,7 @@ k_bucket_tree::get(NodeID key, vector<peer_t*> *v)
   /*
   NodeID dist_lb = (NodeID) -1;
 
-  for(map<NodeID, peer_t*>::const_iterator i = _nodes.begin(); i != _nodes.end(); i++) {
+  for(hash_map<NodeID, peer_t*>::const_iterator i = _nodes.begin(); i != _nodes.end(); i++) {
     if(v->size() < _k) {
       v->push_back(*i);
       if(distance((*i)->id, key) < dist_lb)
@@ -597,7 +597,7 @@ k_bucket_tree::get(NodeID key, vector<peer_t*> *v)
   // XXX heinously inefficient, but who cares for now.
   vector<peer_t*> tmp;
   KDEBUG(2) << "k_bucket_tree::get putting crap in tmp" << endl;
-  for(map<NodeID, peer_t*>::const_iterator i = _nodes.begin(); i != _nodes.end(); i++) {
+  for(hash_map<NodeID, peer_t*>::const_iterator i = _nodes.begin(); i != _nodes.end(); i++) {
     KDEBUG(2) << "k_bucket_tree::get calling assert for id = " << Kademlia::printbits(i->first) << endl;
     assert(i->second);
     tmp.push_back(i->second);

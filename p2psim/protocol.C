@@ -2,7 +2,6 @@
 #include <lib9.h>
 #include <thread.h>
 #include <iostream>
-#include <map>
 #include <stdio.h>
 using namespace std;
 
@@ -17,6 +16,7 @@ using namespace std;
 #include "parse.h"
 #include "eventqueue.h"
 #include "rpchandle.h"
+#include "p2psim_hashmap.h"
 #include "p2psim.h"
 
 Protocol::Protocol(Node *n) : _node(n), _token(1)
@@ -38,7 +38,7 @@ Protocol::rcvRPC(RPCSet *hset)
 {
   Alt a[hset->size()+1];
   Packet *p;
-  map<unsigned, unsigned> index2token;
+  hash_map<unsigned, unsigned> index2token;
 
   int i = 0;
   for(RPCSet::const_iterator j = hset->begin(); j != hset->end(); j++) {
@@ -112,7 +112,7 @@ Protocol::parse(char *filename)
   }
 
   string line;
-  map<string, Args> xmap;
+  hash_map<string, Args> xmap;
   while(getline(in,line)) {
     vector<string> words = split(line);
 
@@ -132,7 +132,7 @@ Protocol::parse(char *filename)
     }
   }
 
-  for(map<string, Args>::const_iterator i = xmap.begin(); i != xmap.end(); ++i)
+  for(hash_map<string, Args>::const_iterator i = xmap.begin(); i != xmap.end(); ++i)
     ProtocolFactory::Instance()->setprotargs(i->first, i->second);
 
   in.close();

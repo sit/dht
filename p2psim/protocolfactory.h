@@ -5,8 +5,8 @@
 #include "args.h"
 #include <typeinfo>
 #include <set>
-#include <map>
 #include <string>
+#include "p2psim_hashmap.h"
 
 using namespace std;
 
@@ -20,7 +20,7 @@ public:
 
 private:
   static ProtocolFactory *_instance;
-  map<string, Args> _protargs;
+  hash_map<string, Args> _protargs;
   set<string> _protocols;
 
   ProtocolFactory();

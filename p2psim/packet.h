@@ -3,8 +3,8 @@
 
 #include <lib9.h>
 #include <thread.h>
-#include "p2psim.h"
 #include <string>
+#include "p2psim.h"
 using namespace std;
 
 // The only thing Packet is useful for is to send RPCs,

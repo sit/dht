@@ -1,7 +1,6 @@
 #ifndef __NETWORK_H
 #define __NETWORK_H
 
-#include <map>
 #include <list>
 using namespace std;
 
@@ -12,6 +11,7 @@ using namespace std;
 #include "packet.h"
 #include "topology.h"
 #include "threaded.h"
+#include "p2psim_hashmap.h"
 
 class Network : public Threaded {
 
@@ -30,8 +30,7 @@ private:
   virtual void run();
 
   static Network *_instance;
-
-  typedef map<IPAddress,Node*> NM;
+  typedef hash_map<IPAddress, Node*> NM;
   typedef NM::const_iterator NMCI;
   NM _nodes;
   Topology *_top;

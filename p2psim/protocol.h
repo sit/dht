@@ -8,6 +8,7 @@
 #include "eventqueue.h"
 #include "rpchandle.h"
 #include "args.h"
+#include "p2psim_hashmap.h"
 #include "p2psim.h"
 using namespace std;
 
@@ -107,7 +108,7 @@ protected:
 
 private:
   Node *_node;
-  map<unsigned, RPCHandle*> _rpcmap;
+  hash_map<unsigned, RPCHandle*> _rpcmap;
   unsigned _token;
 };
 

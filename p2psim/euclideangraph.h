@@ -7,7 +7,6 @@
 // the Euclidean distance between the nodes. The intent is to
 // mimic the Internet more closely than either Euclidean or RandomGraph.
 
-#include <map>
 #include <vector>
 #include <string>
 using namespace std;

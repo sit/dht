@@ -8,8 +8,6 @@
 extern unsigned verbose;
 #define DEBUG(x) if(verbose >= (x)) cout
 
-
-
 class Node;
 
 typedef unsigned IPAddress;
@@ -32,11 +30,6 @@ Node *ip2node(IPAddress);
 
 // tries to clean things up cleanly
 void graceful_exit();
-
-// FreeBSD libc doesn't have atoll.
-// inline long long atoll(const char *p) {
-//   return strtoull(p, NULL, 10);
-// }
 
 #ifdef WITH_DMALLOC
 # include "dmalloc.h"

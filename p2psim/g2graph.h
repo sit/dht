@@ -1,9 +1,9 @@
 #ifndef __G2GRAPH_H
 #define __G2GRAPH_H
 #include <vector>
-#include <map>
 #include <string>
 #include <fstream>
+#include <map>
 using namespace std;
 
 #include "topology.h"

@@ -4,9 +4,9 @@
 #include "dhtprotocol.h"
 #include "node.h"
 #include "chord.h"
-#include <map>
 #include <set>
 #include <iostream>
+#include "p2psim_hashmap.h"
 using namespace std;
 
 extern unsigned kdebugcounter;
@@ -85,7 +85,7 @@ public:
   static unsigned _alpha;       // alpha from kademlia paper
   NodeID _id;                   // my id
   k_bucket_tree *_tree;         // the root of our k-bucket tree
-  map<NodeID, Value> _values;   // key/value pairs
+  hash_map<NodeID, Value> _values;   // key/value pairs
   IPAddress _wkn;               // well-known IP address
 
   void reschedule_stabilizer(void*);
@@ -134,7 +134,7 @@ public:
     IPAddress ip;
   };
   struct transfer_result {
-    map<NodeID, Value> *values;
+    hash_map<NodeID, Value> *values;
   };
   void do_transfer(transfer_args *targs, transfer_result *tresult);
 
@@ -236,7 +236,7 @@ public:
 
 private:
   k_bucket *_root;
-  map<NodeID, peer_t*> _nodes;
+  hash_map<NodeID, peer_t*> _nodes;
 
   Kademlia *_self;
   NodeID _id; // so that KDEBUG() does work

@@ -123,7 +123,6 @@ EventQueue::advance()
 void
 EventQueue::add_event(Event *e)
 {
-//  assert(e->ts);
   assert(e->ts >= _time);
 
   eq_entry *ee = 0;
