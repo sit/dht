@@ -73,12 +73,12 @@ set_locations (vec<ptr<location> > *locs, ptr<vnode> myNode, vec<chordID> ids)
 }
 
 void
-set_new_config (ptr<dhc_newconfig_arg> arg, vec<ptr<location> > new_config)
+set_new_config (ptr<dhc_newconfig_arg> arg, vec<chordID> new_config)
 {
   arg->new_config.setsize (new_config.size ());
 
   for (uint i=0; i<new_config.size (); i++)
-    arg->new_config[i] = new_config[i]->id ();
+    arg->new_config[i] = new_config[i];
 }
 
 int

@@ -128,7 +128,7 @@ dhc::recv_promise (chordID bID, ref<dhc_prepare_res> promise, clnt_stat err)
 	res = New refcounted<dhc_propose_res> ();
 	myNode->doRPC (dest, dhc_program_1, DHCPROC_PROPOSE, arg, res,
 		       wrap (this, &dhc::recv_accept, b->id, res));
-      }
+     }
     }
   } else
       print_error ("dhc:recv_promise", err, promise->status);
@@ -142,13 +142,13 @@ dhc::recv_accept (chordID bID, ref<dhc_propose_res> proposal,
 
     dhc_soft *b = dhcs[bID];
     if (!b) {
-      warn << "dhc::recv_promise " << bID << " not found in hash table.\n";
+      warn << "dhc::recv_accept " << bID << " not found in hash table.\n";
       exit (-1);
     }
     
     ptr<dbrec> rec = db->lookup (id2dbrec (bID));
     if (!rec) {
-      warn << "dhc::recv_promise " << bID << " not found in database.\n";
+      warn << "dhc::recv_accept " << bID << " not found in database.\n";
       exit (-1);
     }
     ptr<dhc_block> kb = to_dhc_block (rec);
@@ -158,14 +158,20 @@ dhc::recv_accept (chordID bID, ref<dhc_propose_res> proposal,
       b->pstat->sent_newconfig = true;
       ptr<dhc_newconfig_arg> arg = New refcounted<dhc_newconfig_arg>;
       arg->bID = kb->id;
-      arg->data = *kb->data; //XXX Need assignment function!!!
+      arg->data.tag.ver = kb->data->tag.ver;
+      arg->data.tag.writer = kb->data->tag.writer;
+      arg->data.data.set (kb->data->data.base (), kb->data->data.size ());
       arg->old_conf_seqnum = kb->meta->config.seqnum;
-      //NEED Change to reflect persistent data!!
-      //b->set_new_config ();
-      set_new_config (arg, b->new_config);
+      if (!set_ac (&kb->meta->new_config.nodes, b->pstat->acc_conf)) {
+	warn << "dhc::recv_accept Different accepted configs!!\n";
+	exit (-1);
+      }
+      set_new_config (arg, kb->meta->new_config.nodes);
 
+#if DHC_DEBUG
       //End of recon protocol !!!
       warn << "\n\n" << "dhc::recv_accept End of recon for block " << b->id << "\n";
+#endif
       b->pstat->recon_inprogress = false;
       b->pstat->proposed = false;
       dhcs.insert (b);
@@ -177,6 +183,8 @@ dhc::recv_accept (chordID bID, ref<dhc_propose_res> proposal,
 	myNode->doRPC (dest, dhc_program_1, DHCPROC_NEWCONFIG, arg, res,
 		       wrap (this, &dhc::recv_newconfig_ack, b->id, res));
       }
+      db->insert (id2dbrec (kb->id), to_dbrec (kb));
+      db->sync ();
     }
   } else
     print_error ("dhc:recv_propose", err, proposal->status);

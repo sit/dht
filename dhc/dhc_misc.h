@@ -6,7 +6,7 @@
 void open_db (ptr<dbfe>, str, dbOptions, str);
 void print_error (str, int, int);
 void set_new_config (dhc_soft *, ptr<dhc_propose_arg>, ptr<vnode>, uint);
-void set_new_config (ptr<dhc_newconfig_arg>, vec<ptr<location> >);
+void set_new_config (ptr<dhc_newconfig_arg>, vec<chordID>);
 void set_locations (vec<ptr<location> > *, ptr<vnode>, vec<chordID>);
 int paxos_cmp (paxos_seqnum_t, paxos_seqnum_t);
 int tag_cmp (tag_t, tag_t);
@@ -61,6 +61,22 @@ set_ac (vec<chordID> *ap, dhc_propose_arg arg)
   return true;
 };
 
+static inline bool
+set_ac (vec<chordID> *ap, vec<chordID> src)
+{
+  if (ap->size () == 0) {
+    for (uint i=0; i<src.size (); i++) 
+      ap->push_back (src[i]);
+    return true;
+  }
+  if (ap->size () != src.size ())
+    return false;
+  for (uint i=0; i<ap->size (); i++) {
+    if ((*ap)[i] != src[i])
+      return false;
+  }
+  return true;  
+}
 #endif /* _DHC_MISC_H */
 
 

@@ -76,6 +76,7 @@ struct replica_t {
 struct keyhash_meta {
   replica_t config;
   paxos_seqnum_t accepted;
+  replica_t new_config;
   char *buf;
   
   keyhash_meta () : buf (NULL)
