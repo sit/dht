@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 [NAMES_GO_HERE]
+ * Copyright (c) 2003 Thomer M. Gil (thomer@csail.mit.edu)
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -22,26 +22,17 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "failuremodelfactory.h"
-#include "nullfailuremodel.h"
 #include "constantfailuremodel.h"
-#include "roundtripsfailuremodel.h"
-#include "p2psim/args.h"
+#include "p2psim/network.h"
 
-FailureModel *
-FailureModelFactory::create(string s, vector<string>* v)
+ConstantFailureModel::ConstantFailureModel(Args *a) : _delay(30)
 {
-  Args *a = New Args(v);
-  FailureModel *f = 0;
+  _delay = a->nget<unsigned>("delay", 30, 10);
+  _delay *= 1000;
+}
 
-  if(s == "NullFailureModel")
-    f = New NullFailureModel();
-
-  if(s == "ConstantFailureModel")
-    f = New ConstantFailureModel(a);
-
-  if(s == "RoundtripsFailureModel")
-    f = New RoundtripsFailureModel(a);
-
-  return f;
+Time
+ConstantFailureModel::failure_latency(Packet *p)
+{
+  return _delay;
 }

@@ -22,26 +22,20 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "failuremodelfactory.h"
-#include "nullfailuremodel.h"
-#include "constantfailuremodel.h"
-#include "roundtripsfailuremodel.h"
+#ifndef __CONSTANT_FAILURE_MODEL_H
+#define __CONSTANT_FAILURE_MODEL_H
+
+#include "p2psim/failuremodel.h"
 #include "p2psim/args.h"
 
-FailureModel *
-FailureModelFactory::create(string s, vector<string>* v)
-{
-  Args *a = New Args(v);
-  FailureModel *f = 0;
+// this class punishes failed packets by delaying them with some constant time.
+class ConstantFailureModel : public FailureModel {
+public:
+  ConstantFailureModel(Args *a);
+  virtual Time failure_latency(Packet*);
 
-  if(s == "NullFailureModel")
-    f = New NullFailureModel();
+private:
+  unsigned _delay;
+};
 
-  if(s == "ConstantFailureModel")
-    f = New ConstantFailureModel(a);
-
-  if(s == "RoundtripsFailureModel")
-    f = New RoundtripsFailureModel(a);
-
-  return f;
-}
+#endif // __ROUNDTRIPS_FAILURE_MODEL_H

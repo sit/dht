@@ -30,10 +30,13 @@
 #include <iostream>
 using namespace std;
 
-bool Kademlia::docheckrep = false;
+
+Kademlia::use_replacement_cache_t Kademlia::use_replacement_cache = FULL;
 unsigned Kademlia::debugcounter = 1;
 unsigned Kademlia::_nkademlias = 0;
 Kademlia::k_nodeinfo_pool *Kademlia::pool = 0;
+
+bool Kademlia::docheckrep = false;
 
 unsigned Kademlia::k = 0;
 unsigned Kademlia::alpha = 0;
@@ -79,6 +82,8 @@ Kademlia::Kademlia(IPAddress i, Args a)
   // KDEBUG(1) << "id: " << printID(_id) << ", ip: " << ip() << endl;
   if(getenv("P2PSIM_CHECKREP"))
     docheckrep = strcmp(getenv("P2PSIM_CHECKREP"), "0") ? true : false;
+
+  use_replacement_cache = a.nget<use_replacement_cache_t>("rcache", ENABLED, 10);
 
   if(!k) {
     k = a.nget<unsigned>("k", 20, 10);
@@ -1226,7 +1231,7 @@ k_nodes::rebuild()
   for(unsigned i=Kademlia::k; i<oldsize; i++) {
     k_nodeinfo *ki = _nodes[i];
     _map.remove(ki);
-    if(i_am_replacement_cache) {
+    if(i_am_replacement_cache || Kademlia::use_replacement_cache == Kademlia::DISABLED) {
       _parent->kademlia()->flyweight.remove(ki->id);
       Kademlia::pool->push(ki);
     } else
@@ -1413,6 +1418,11 @@ k_bucket::find_node(Kademlia::NodeID key, vector<k_nodeinfo*> *v,
     }
   }
 
+  if(Kademlia::use_replacement_cache != Kademlia::FULL) {
+    checkrep();
+    return;
+  }
+
   // NB: optimization.
   // collect stuff from replacement cache.
   for(int i = replacement_cache->size()-1; i >= 0; i--) {
@@ -1457,6 +1467,11 @@ k_bucket::insert(Kademlia::NodeID id, bool touch, bool init_state, string prefix
     return;
   }
 
+  if(Kademlia::use_replacement_cache == Kademlia::DISABLED) {
+    checkrep();
+    return;
+  }
+
   // we're full.  put in replacement_cache.
   replacement_cache->insert(id, touch);
   replacement_cache->checkrep();
@@ -1492,7 +1507,7 @@ k_bucket::erase(Kademlia::NodeID id, string prefix, unsigned depth)
   nodes->erase(id);
 
   // get latest from replacement_cache to nodes
-  if(!replacement_cache->size()) {
+  if(Kademlia::use_replacement_cache == Kademlia::DISABLED || !replacement_cache->size()) {
     checkrep();
     return;
   }

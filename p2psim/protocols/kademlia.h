@@ -305,10 +305,21 @@ public:
   void reschedule_stabilizer(void*);
   friend class k_bucket;
 
+  // use_replacement_cache values:
+  // DISABLED: no
+  // ENABLED: yes, but not as aide in find_node
+  // FULL: yes
+  enum use_replacement_cache_t {
+    DISABLED = 0,
+    ENABLED,
+    FULL
+  };
+
   //
   // member variables
   //
   static bool docheckrep;
+  static use_replacement_cache_t use_replacement_cache;
   static unsigned k;                    // number of nodes per k-bucket
   static unsigned alpha;                // alpha from kademlia paper; no of simultaneous RPCs
   static unsigned debugcounter;         // 
