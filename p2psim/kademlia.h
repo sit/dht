@@ -67,12 +67,13 @@ public:
   // ping
   //
   struct ping_args {
+    ping_args(NodeID xid, IPAddress xip) : id(xid), ip(xip) {}
     NodeID id;
     IPAddress ip;
   };
   struct ping_result {};
   void do_ping(ping_args*, ping_result*);
-  bool do_ping_wrapper(IPAddress, ping_args*, ping_result*);
+  bool do_ping_wrapper(IPAddress);
 
 // }}}
 // {{{ private
@@ -209,6 +210,7 @@ private:
   class SortNodes { public:
     SortNodes(NodeID key) : _key(key) {}
     bool operator()(const pair<NodeID, IPAddress> &n1, const pair<NodeID, IPAddress> &n2) const {
+      // cout << "compare " << Kademlia::printbits(_key) << " ^ " << Kademlia::printbits(n1.first) << " = " << Kademlia::printbits(_key ^ n1.first) << " with " << Kademlia::printbits(_key) << " ^ " << Kademlia::printbits(n2.first) << " = " << Kademlia::printbits(_key ^ n2.first) << endl;
       return (_key ^ n1.first) < (_key ^ n2.first);
     }
   private:
