@@ -345,28 +345,28 @@ private:
   static unsigned _nkademlias;
 
   // global statistics
-  static double _rpc_bytes;
-  static double _good_rpcs;
-  static double _bad_rpcs;
-  static double _ok_by_reaper;
-  static double _timeouts_by_reaper;
+  static long unsigned _rpc_bytes;
+  static long unsigned _good_rpcs;
+  static long unsigned _bad_rpcs;
+  static long unsigned _ok_by_reaper;
+  static long unsigned _timeouts_by_reaper;
 
-  static double _good_lookups;
-  static double _lookup_dead_node;
-  static double _ok_failures;
-  static double _bad_failures;
+  static long unsigned _good_lookups;
+  static long unsigned _lookup_dead_node;
+  static long unsigned _ok_failures;
+  static long unsigned _bad_failures;
 
   static Time _good_total_latency;
   static Time _good_lookup_latency;
   static Time _good_ping_latency;
-  static double _good_timeouts;
+  static long unsigned _good_timeouts;
 
-  static double _good_hops;
+  static long unsigned _good_hops;
   static Time _good_hop_latency;
 
   static Time _bad_lookup_latency;
-  static double _bad_timeouts;
-  static double _bad_hops;
+  static long unsigned _bad_timeouts;
+  static long unsigned _bad_hops;
   static Time _bad_hop_latency;
 
 
