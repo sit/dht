@@ -1,6 +1,5 @@
 // {{{ headers
 #include "kademlia.h"
-#include "chord.h"
 #include "packet.h"
 #include <stdio.h>
 #include <algorithm>
@@ -8,6 +7,7 @@
 #include "p2psim.h"
 using namespace std;
 
+#define STABLE_TIMER 1000 //use a["stabtimer"] to set stabilization timer
 #define KADEMLIA_REFRESH 1000
 
 unsigned kdebugcounter = 1;

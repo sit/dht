@@ -57,19 +57,19 @@ ProtocolFactory::create(string s, Node *n)
     a = _protargs[s];
 
   if(s == "Chord")
-    p = new Chord(n, successors);
+    p = new Chord(n, a);
   if (s == "ChordFinger")
-    p = new ChordFinger(n, base, (successors>resilience? successors:resilience), fingers);
+    p = new ChordFinger(n, a);
   if (s == "ChordFingerPNS")
-    p = new ChordFingerPNS(n,base,successors);
+    p = new ChordFingerPNS(n, a);
   if (s == "ChordToe")
-    p = new ChordToe(n, base, successors, fingers);
+    p = new ChordToe(n, a);
   if (s == "Kademlia")
     p = new Kademlia(n, a);
   if (s == "Pastry")
     p = new Pastry(n);
   if (s == "Koorde")
-    p = new Koorde(n, base, successors, resilience, fingers);
+    p = new Koorde(n, a);
   if (s == "VivaldiTest")
     p = new VivaldiTest(n);
   

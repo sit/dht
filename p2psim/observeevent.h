@@ -11,7 +11,7 @@ using namespace std;
 class ObserveEvent : public Event {
 public:
   ObserveEvent();
-  ObserveEvent(vector<string>*);
+  ObserveEvent(string, vector<string>*);
   ObserveEvent(Observer*);
   ~ObserveEvent();
 

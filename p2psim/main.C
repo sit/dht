@@ -18,11 +18,6 @@ char *protocol_file;
 bool static_sim = false;
 bool vis = false;
 
-uint base = 2;  // XXX probably need something like a configuration file
-uint resilience = 1;
-uint successors = 3;
-uint fingers = 1000;
-  
 void parse_args(int argc, char *argv[]);
 void usage();
 
@@ -59,23 +54,11 @@ parse_args(int argc, char *argv[])
   int ch;
   uint seed;
 
-  while ((ch = getopt (argc, argv, "b:e:f:r:s:v:x")) != -1) {
+  while ((ch = getopt (argc, argv, "e:v:x")) != -1) {
     switch (ch) {
-    case 'b':
-      base = atoi(optarg);
-      break;
     case 'e':
       seed = atoi(optarg);
       srandom(seed);
-      break;
-    case 'f':
-      fingers = atoi(optarg);
-      break;
-    case 'r':
-      resilience = atoi(optarg);
-      break;
-    case 's':
-      successors = atoi(optarg);
       break;
     case 'v':
       vis = true;
@@ -95,14 +78,14 @@ parse_args(int argc, char *argv[])
     exit(1);
   }
 
-  topology_file = argv[0];
-  event_file = argv[1];
-  protocol_file = argv[2];
+  protocol_file = argv[0];
+  topology_file = argv[1];
+  event_file = argv[2];
 }
 
 
 void
 usage()
 {
-  cout << "Usage: p2psim [-v] [-b <degree>] [-f <fingers>] [-r <resilience>] [-s <succ>] TOPOLOGY EVENTS PROTOCOL_FILE" << endl;
+  cout << "Usage: p2psim [-v] [-b <degree>] [-f <fingers>] [-r <resilience>] [-s <succ>] PROTOCOL TOPOLOGY EVENTS" << endl;
 }

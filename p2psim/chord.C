@@ -14,22 +14,52 @@ extern bool vis;
 extern bool static_sim;
 
 #define CHORD_DEBUG
-Chord::Chord(Node *n, uint numsucc, LocTable *l)
+Chord::Chord(Node *n, Args a, LocTable *l)
   : DHTProtocol(n), _isstable (false)
 {
+
+  //if Chord uses vivaldi
+  if (a.find("vivaldidim") != a.end()) {
+    _vivaldi_dim = atoi(a["vivaldidim"].c_str());
+  }else{
+    _vivaldi_dim = 0;
+  }
+
+  //location table timeout values
+  if (a.find("timeout") != a.end()) {
+    _timeout = atoi(a["timeout"].c_str());
+  }else{
+    _timeout = 0;
+  }
+
+  //stabilization timer
+  if (a.find("stabtimer") != a.end()) {
+    _stabtimer = atoi(a["stabtimer"].c_str());
+  }else{
+    _stabtimer = 10000;
+  }
+
+  //successors
+  if (a.find("successors") != a.end()) {
+    _nsucc = atoi(a["successors"].c_str());
+  }else{
+    _nsucc = 3;
+  }
+
   _vivaldi = NULL;
-  nsucc = numsucc;
+
   me.ip = n->ip();
   me.id = ConsistentHash::ip2chid(me.ip); 
+
   if (l) 
     loctable = l;
   else
-    loctable = new LocTable();
+    loctable = new LocTable(_timeout);
 
   loctable->init (me);
 
   //pin down nsucc for successor list
-  loctable->pin(me.id + 1, nsucc, 0);
+  loctable->pin(me.id + 1, _nsucc, 0);
   //pin down 1 predecessor
   loctable->pin(me.id - 1, 0, 1);
 
@@ -37,12 +67,28 @@ Chord::Chord(Node *n, uint numsucc, LocTable *l)
     printf ("vis %llu node %16qx\n", now (), me.id);
   }
   _inited = false;
+
+  stat.clear();
+}
+
+void
+Chord::record_stat(uint type)
+{
+  while (stat.size() <= type) {
+    stat.push_back(0);
+  }
+  stat[type]++;
 }
 
 Chord::~Chord()
 {
-  cout << "done " << me.ip << " " << me.id << endl;
+  cout << proto_name() << " done " << me.ip << " " << me.id << endl;
   delete loctable;
+
+  for (uint i = 0; i < stat.size(); i++) {
+    printf(" %d", stat[i]);
+  }
+  printf("\n");
 }
 
 char *
@@ -74,10 +120,10 @@ Chord::lookup(Args *args)
   Topology *t = Network::Instance()->gettopology();
   IDMap result;
   if (recurs) {
-    result = find_successors_recurs(k, false);
+    result = find_successors_recurs(k, false, true);
     //    uint lat = t->latency(me.ip, v.ip);
   } else {
-    vector<IDMap> v = find_successors(k, 1, false); 
+    vector<IDMap> v = find_successors(k, 1, false, true); 
     assert(v.size() > 0);
     result = v[0];
     uint lat = t->latency(me.ip, v[0].ip);
@@ -105,9 +151,9 @@ Chord::find_successors_handler(find_successors_args *args, find_successors_ret *
 // A local call, use find_successors_handler for an RPC.
 // Not recursive.
 vector<Chord::IDMap>
-Chord::find_successors(CHID key, uint m, bool intern)
+Chord::find_successors(CHID key, uint m, bool intern, bool is_lookup)
 {
-  assert(m <= nsucc);
+  assert(m <= _nsucc);
 
   int count = 0;
 
@@ -137,6 +183,8 @@ Chord::find_successors(CHID key, uint m, bool intern)
 
     
     bool r;
+
+    record_stat(is_lookup?1:0);
     if (_vivaldi) {
       Chord *target = dynamic_cast<Chord *>(getpeer(nprime.ip));
       r = _vivaldi->doRPC(nprime.ip, target, &Chord::next_handler, &na, &nr);
@@ -155,6 +203,7 @@ Chord::find_successors(CHID key, uint m, bool intern)
 #endif
 
       //actually talk to the successor
+      record_stat(is_lookup?1:0);
       if (_vivaldi) {
 	Chord *target = dynamic_cast<Chord *>(getpeer(nr.v[0].ip));
 	r = _vivaldi->doRPC(nr.v[0].ip, target, &Chord::null_handler, (void *)NULL, (void *)NULL);
@@ -181,6 +230,7 @@ Chord::find_successors(CHID key, uint m, bool intern)
 	alert_ret ar;
 	aa.n = nprime;
 	nprime = route.back ();
+	record_stat(is_lookup?1:0);
 	doRPC(nprime.ip, &Chord::alert_handler, &aa, &ar);
       } else {
 	nr.v.clear ();
@@ -201,20 +251,23 @@ Chord::find_successors(CHID key, uint m, bool intern)
 }
 
 Chord::IDMap 
-Chord::find_successors_recurs(CHID key, bool intern)
+Chord::find_successors_recurs(CHID key, bool intern, bool is_lookup)
 {
   next_recurs_args fa;
   next_recurs_ret fr;
   fa.v.clear();
   fa.v.push_back(me);
   fa.key = key;
+  fa.is_lookup = is_lookup;
 
   Time before = now();
   if (!intern) {
     printf("%s find_successors_recurs for key %qx\n", ts(), key);
   }
 
+  record_stat(fa.is_lookup?1:0);
   doRPC(me.ip, &Chord::next_recurs_handler, &fa, &fr);
+
   IDMap succ = fr.v.back();
 
 #ifdef CHORD_DEBUG
@@ -254,12 +307,6 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
   }else{
 
     bool r = false;
-    next_recurs_args nargs;
-    next_recurs_ret nret;
-
-    nargs.key = args->key;
-    nargs.v = args->v;
-
 #ifdef CHORD_DEBUG
     uint x = find(args->v.begin(), args->v.end(), me) - args->v.begin();
     if (x != (args->v.size() - 1)) {
@@ -271,35 +318,34 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
     }
 #endif
 
-    assert(nargs.v.size() < 100);
+    assert(args->v.size() < 100);
 
     //XXX i never check if succ is dead or not
     while (!r) {
       bool done;
       IDMap next = loctable->next_hop(args->key, &done);
       if (done) {
-	ret->v = nargs.v;
+	ret->v = args->v;
 	ret->v.push_back(next);
 	return;
       }
-      nargs.v.push_back(next);
+      args->v.push_back(next);
 
+      record_stat(args->is_lookup?1:0);
       if (_vivaldi) {
 	Chord *target = dynamic_cast<Chord *>(getpeer(next.ip));
-	r = _vivaldi->doRPC(next.ip, target, &Chord::next_recurs_handler, &nargs, &nret);
+	r = _vivaldi->doRPC(next.ip, target, &Chord::next_recurs_handler, args, ret);
       } else
-	r = doRPC(next.ip, &Chord::next_recurs_handler, &nargs, &nret);
+	r = doRPC(next.ip, &Chord::next_recurs_handler, args, ret);
 
       assert(r);
       if (!r) {
 	printf ("%16qx rpc to %16qx failed %llu\n", me.id, next.id, now ());
 	printf ("vis %llu delete %16qx %16qx\n", now (), me.id, next.id);
-	nargs.v.pop_back();
+	args->v.pop_back();
 	loctable->del_node(next);
       }
     }
-
-    ret->v = nret.v;
   }
 
 }
@@ -351,13 +397,9 @@ Chord::join(Args *args)
 
   _inited = true;
 
-  int dim = args->nget<int>("model-dimension", 10);
-  if (dim <= 0) {
-    cerr << "dimension must be specified (and positive)\n";
-    exit (0);
+  if (_vivaldi_dim > 0) {
+    _vivaldi = new Vivaldi10(node(), _vivaldi_dim, 0.05, 1); 
   }
-
-  _vivaldi = new Vivaldi10(node(), 3, 0.05, 1); 
 
   IDMap wkn;
   wkn.ip = args->nget<IPAddress>("wellknown");
@@ -370,7 +412,10 @@ Chord::join(Args *args)
   find_successors_ret fr;
   fa.key = me.id + 1;
   fa.m = 1;
+
+  record_stat();
   bool ok = doRPC(wkn.ip, &Chord::find_successors_handler, &fa, &fr);
+
   assert (ok);
   assert(fr.v.size() > 0);
   Time after = now();
@@ -388,7 +433,7 @@ Chord::reschedule_stabilizer(void *x)
 {
   //  if (!_isstable) {
     stabilize();
-    delaycb(STABLE_TIMER, &Chord::reschedule_stabilizer, (void *) 0);
+    delaycb(_stabtimer, &Chord::reschedule_stabilizer, (void *) 0);
     //  }
 }
 
@@ -404,6 +449,8 @@ Chord::stabilize()
   notify_args na;
   notify_ret nr;
   na.me = me;
+
+  record_stat();
   if (_vivaldi) {
     Chord *target = dynamic_cast<Chord *>(getpeer(succ1.ip));
     _vivaldi->doRPC(succ1.ip, target, &Chord::notify_handler, &na, &nr);
@@ -411,7 +458,7 @@ Chord::stabilize()
     doRPC(succ1.ip, &Chord::notify_handler, &na, &nr);
 
 
-  if (nsucc > 1) fix_successor_list();
+  if (_nsucc > 1) fix_successor_list();
 
   //vivaldi random lookups
 #ifdef RANDOM_LOOKUPS
@@ -428,7 +475,7 @@ Chord::stabilized(vector<CHID> lid)
   iter = find(lid.begin(), lid.end(), me.id);
   assert(iter != lid.end());
 
-  vector<IDMap> succs = loctable->succs(me.id+1, nsucc);
+  vector<IDMap> succs = loctable->succs(me.id+1, _nsucc);
 
 #if 0
   printf ("stable? successor list %u,%16qx at %lu\n", me.ip, me.id, now ());
@@ -437,10 +484,10 @@ Chord::stabilized(vector<CHID> lid)
   }
 #endif
 
-  if (succs.size() != nsucc) 
+  if (succs.size() != _nsucc) 
     return false;
 
-  for (unsigned int i = 1; i <= nsucc; i++) {
+  for (unsigned int i = 1; i <= _nsucc; i++) {
     iter++;
     if (iter == lid.end()) iter = lid.begin();
     if (succs[i-1].id != *iter) {
@@ -468,6 +515,8 @@ Chord::fix_successor()
   get_predecessor_args gpa;
   get_predecessor_ret gpr;
   bool ok;
+
+  record_stat();
   if (_vivaldi) {
     Chord *target = dynamic_cast<Chord *>(getpeer(succ1.ip));
     ok = _vivaldi->doRPC(succ1.ip, target, &Chord::get_predecessor_handler, &gpa, &gpr);
@@ -487,7 +536,7 @@ void
 Chord::get_successor_list_handler(get_successor_list_args *args, get_successor_list_ret *ret)
 {
   assert(!static_sim);
-  ret->v = loctable->succs(me.id+1, nsucc);
+  ret->v = loctable->succs(me.id+1, _nsucc);
 }
 
 
@@ -498,6 +547,8 @@ Chord::fix_successor_list()
   get_successor_list_args gsa;
   get_successor_list_ret gsr;
   bool ok;
+
+  record_stat();
   if (_vivaldi) {
     Chord *target = dynamic_cast<Chord *>(getpeer(succ.ip));
     ok = _vivaldi->doRPC(succ.ip, target, &Chord::get_successor_list_handler, &gsa, &gsr);
@@ -515,7 +566,7 @@ Chord::fix_successor_list()
   if (vis) {
     bool change = false;
 
-    vector<IDMap> scs = loctable->succs(me.id + 1, nsucc);
+    vector<IDMap> scs = loctable->succs(me.id + 1, _nsucc);
     for (uint i = 0; i < scs.size (); i++) {
       if ((i >= lastscs.size ()) || lastscs[i].id != scs[i].id) {
 	change = true;
@@ -567,7 +618,7 @@ Chord::dump()
   printf("===== %16qx =====\n", me.id);
   printf ("ring size %d\n", loctable->size ());
 
-  vector<IDMap> v = loctable->succs(me.id+1, nsucc);
+  vector<IDMap> v = loctable->succs(me.id+1, _nsucc);
   for (unsigned int i = 0; i < v.size(); i++) {
     printf("%16qx: succ %5d : %16qx\n", me.id, i, v[i].id);
   }
@@ -593,20 +644,21 @@ Chord::crash(Args *args)
 
 /*************** LocTable ***********************/
 
-LocTable::LocTable() 
+LocTable::LocTable(uint timeout) 
 {
-  rsz = 0;
+  _timeout = timeout;
+  _evict = false;
 } 
 
 void LocTable::init (Chord::IDMap m)
 {
   me = m;
   pin(me.id, 1, 0);
-  idmapwrap *elm = new idmapwrap(me);
+  idmapwrap *elm = new idmapwrap(me, now());
 
   ring.insert(elm);
-  rsz = 1;
 }
+
 LocTable::~LocTable()
 {
   idmapwrap *next;
@@ -620,10 +672,30 @@ LocTable::~LocTable()
 Chord::IDMap
 LocTable::succ(ConsistentHash::CHID id)
 {
-  idmapwrap *elm;
+  Time t = now();
+  idmapwrap *elm, *elmnext;
   elm = ring.closestsucc(id);
   assert(elm);
-  return elm->n;
+
+  uint rsz = ring.size();
+  uint deleted = 0;
+  while (1) {
+
+    elmnext = ring.next(elm);
+    if (!elmnext) elmnext = ring.first();
+
+    if ((!_timeout) || (t - elm->timestamp < _timeout)) {
+      return elm->n;
+    }else {
+      fprintf(stderr,"%llu me %u,%qx removing %llu %u,%qx\n", t, me.ip,me.id,elm->timestamp,elm->n.ip,elm->n.id);
+      ring.remove(elm->id);
+      delete elm;
+      deleted++;
+      elm = elmnext;
+      assert(elm->id != me.id);
+    }
+    assert(rsz - deleted > 1);
+  }
 }
 
 /* returns m successors including or after the number id*/
@@ -633,16 +705,29 @@ LocTable::succs(ConsistentHash::CHID id, unsigned int m)
   vector<Chord::IDMap> v;
   v.clear();
 
+  Time t = now();
+
   if (m <= 0) return v;
-  idmapwrap *elm = ring.closestsucc(id);
-  idmapwrap *ptr = elm;
-  for (uint j = 0; j < m; j++) {
-    v.push_back(ptr->n);
-    ptr = ring.next(ptr);
-    if (ptr == elm) break; //if the ring does not have m elements
-    if (!ptr) {
-      ptr = ring.first(); //wrap around
+  idmapwrap *ptr = ring.closestsucc(id);
+  idmapwrap *ptrnext;
+
+  uint rsz = size();
+  uint deleted = 0;
+  for (uint j = 0; j < m;) {
+
+    ptrnext = ring.next(ptr);
+    if (!ptrnext) ptrnext = ring.first();
+
+    if ((!_timeout)||(t - ptr->timestamp) < _timeout) {
+      v.push_back(ptr->n);
+      j++;
+    }else{
+      ring.remove(ptr->id);
+      delete ptr;
+      ptr = ptrnext;
+      deleted++;
     }
+    if ((rsz - deleted) < (m +1)) break;
   }
   return v;
 }
@@ -657,7 +742,27 @@ Chord::IDMap
 LocTable::pred(Chord::CHID id) 
 {
   idmapwrap *elm = ring.closestpred(id);
+  idmapwrap *elmprev;
   assert(elm);
+
+  uint rsz = size();
+  uint deleted = 0;
+  Time t = now();
+  while (1) {
+
+    elmprev = ring.prev(elm);
+    if (!elmprev) elmprev = ring.last();
+
+    if ((!_timeout) || (t - elm->timestamp < _timeout)) {
+      break;
+    }else {
+      ring.remove(elm->id);
+      delete elm;
+      deleted++;
+      elm = elmprev;
+    }
+    assert(rsz - deleted > 1);
+  }
   assert(elm->n.id == me.id || ConsistentHash::betweenrightincl(me.id, id, elm->n.id));
   return elm->n;
 }
@@ -728,11 +833,17 @@ LocTable::add_node(Chord::IDMap n)
     pred1 = pred();
   }
 
-  idmapwrap *elm = new idmapwrap(n);
-  if (ring.insert(elm)) {
-  }else{
-    delete elm;
+  idmapwrap *elm = ring.search(n.id);
+  if (elm) {
+    elm->timestamp = now();
     return;
+  } else {
+    elm = new idmapwrap(n,now());
+    assert(elm);
+    if (ring.insert(elm)) {
+    }else{
+      assert(0);
+    }
   }
 
   assert (ring.repok ());
@@ -830,12 +941,11 @@ LocTable::evict() // all unnecessary(unpinned) nodes
 
   idmapwrap *ptr;
   idmapwrap *elm = ring.first();
-  for (uint i = 0; i < rsz; i++) {
+  while (elm) {
     elm->pinned = false;
     elm = ring.next(elm);
   }
-  assert(elm == NULL);
-
+  
   uint i = 0; // index into pinlist
 
   elm = ring.first();
@@ -870,7 +980,6 @@ LocTable::evict() // all unnecessary(unpinned) nodes
     i++;
   }
   // evict entries that are not pinned
-  assert(rsz == size());
   elm = ring.first();
   idmapwrap *next; 
   while (elm) {
@@ -881,13 +990,10 @@ LocTable::evict() // all unnecessary(unpinned) nodes
       ring.remove(elm->id);
       delete elm;
       assert (ring.repok ());
-      rsz--;
     } 
     elm = next;
   }
 
-  uint tmpsz = size();
-  assert(tmpsz == rsz);
   assert(elm == NULL);
 }
 

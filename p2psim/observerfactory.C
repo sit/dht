@@ -10,10 +10,12 @@ ObserverFactory::create(string s, Args *a)
 {
   Observer *t = 0;
 
-  if(s == "ChordObserver") {
+  if ((s == "Chord") || (s == "ChordFinger") 
+      || (s == "ChordFingerPNS") || (s == "ChordToe") 
+      || (s == "Koorde")) {
     t = ChordObserver::Instance(a);
   }
-  if(s == "KademliaObserver") {
+  if(s == "Kademlia") {
     t = KademliaObserver::Instance(a);
   }
 

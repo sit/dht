@@ -8,9 +8,19 @@
 using namespace std;
 
 /* Gummadi's Chord PNS algorithm  (static) */
+ChordFingerPNS::ChordFingerPNS(Node *n, Args a) : Chord(n, a, new LocTablePNS()) 
+{ 
+  if (a.find("base") != a.end()) {
+    _base = atoi(a["base"].c_str());
+  }else{
+    _base = 2;
+  }
 
-ChordFingerPNS::ChordFingerPNS(Node *n, uint base, uint successors, int samples) : Chord(n, successors, new LocTablePNS()), _base(base), _samples(samples)
-{
+  if (a.find("samples") != a.end()) {
+    _samples = atoi(a["samples"].c_str());
+  }else{
+    _samples = 16;
+  }
 }
 
 void
@@ -77,9 +87,8 @@ ChordFingerPNS::init_state(vector<IDMap> ids)
   }
 
   _inited = true;
-  nsucc = 1;
   //add successors and (each of the successor's predecessor)
-  for (uint i = 1; i <= nsucc; i++) {
+  for (uint i = 1; i <= _nsucc; i++) {
     loctable->add_node(ids[(my_pos + i) % sz]);
   }
  // ((LocTablePNS *)loctable)->add_finger(make_pair(ids[my_pos %sz],ids[(my_pos+1)%sz]));

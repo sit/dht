@@ -35,7 +35,7 @@ P2PEvent::name2fn(string name)
 //
 // see Protocol::dispatch() for the mapping from operation-id to operation
 //
-P2PEvent::P2PEvent(vector<string> *v) : Event(v)
+P2PEvent::P2PEvent(string proto, vector<string> *v) : Event(v)
 {
   // node-id
   IPAddress ip = (IPAddress) strtoull((*v)[0].c_str(), NULL, 10);
@@ -46,11 +46,11 @@ P2PEvent::P2PEvent(vector<string> *v) : Event(v)
   }
 
   // protocol
-  vector<string> proto_action = split((*v)[1], ":");
-  this->protocol = proto_action[0];
+  this->protocol = proto;
 
   // operation-id
-  this->fn = name2fn(proto_action[1]);
+  //this->fn = name2fn(proto_action[1]);
+  this->fn = name2fn((*v)[1]);
 
   // create a map for the arguments
   this->args = new Args;

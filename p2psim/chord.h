@@ -10,7 +10,6 @@
 #include <vector>
 
 #define CHORD_SUCC_NUM 3  // default number of successors maintained
-#define STABLE_TIMER 500
 #define PAD "000000000000000000000000"
 
 #include "p2psim.h"
@@ -31,7 +30,7 @@ public:
     bool operator==(const IDMap a) { return (a.id == id); }
   };
 
-  Chord(Node *n, uint numsucc = CHORD_SUCC_NUM, LocTable *l = NULL);
+  Chord(Node *n, Args a, LocTable *l = NULL); 
   virtual ~Chord();
   string proto_name() { return "Chord"; }
 
@@ -96,6 +95,7 @@ public:
   };
 
   struct next_recurs_args {
+    bool is_lookup;
     CHID key;
     vector<IDMap> v;
   };
@@ -125,21 +125,29 @@ public:
   virtual void reschedule_stabilizer(void *);
 
 protected:
+  //chord parameters
+  uint _nsucc;
+  bool _vivaldi_dim;
+  uint _timeout;
+  uint _stabtimer;
+
   LocTable *loctable;
   IDMap me;
-  uint nsucc;
   CHID _prev_succ;
   uint i0;
   vector<IDMap> lastscs;
   bool _isstable;
   bool _inited;
 
-  IDMap find_successors_recurs(CHID key, bool intern);
-  virtual vector<IDMap> find_successors(CHID key, uint m, bool intern);
+  vector<uint> stat;
+
+  IDMap find_successors_recurs(CHID key, bool intern, bool is_lookup = false);
+  virtual vector<IDMap> find_successors(CHID key, uint m, bool intern, bool is_lookup = false);
 
   void fix_successor();
   void fix_successor_list();
   void check_static_init();
+  void record_stat(uint type = 0);
 };
 
 typedef struct {
@@ -155,13 +163,15 @@ class LocTable {
     struct idmapwrap {
       Chord::IDMap n;
       ConsistentHash::CHID id;
+      Time timestamp;
       sklist_entry<idmapwrap> sortlink_;
       bool pinned;
-      idmapwrap(Chord::IDMap x) {
+      idmapwrap(Chord::IDMap x, Time t = 0) {
 	n.ip = x.ip;
 	n.id = x.id;
 	id = x.id;
 	pinned = false;
+	timestamp = t;
       }
     };
 
@@ -172,7 +182,7 @@ class LocTable {
     };
 
 
-    LocTable();
+  LocTable(uint timeout = 0);
   void init (Chord::IDMap me);
   virtual ~LocTable();
 
@@ -190,7 +200,7 @@ class LocTable {
     void pin(Chord::CHID x, uint pin_succ, uint pin_pred);
     void clear_pins();
     uint size();
-    unsigned int psize() { return pinlist.size();}
+    uint psize() { return pinlist.size();}
     void set_evict(bool v) { _evict = v; }
 
     virtual Chord::IDMap next_hop(Chord::CHID key, bool *done); //pick the next hop for lookup;
@@ -200,8 +210,8 @@ class LocTable {
     skiplist<idmapwrap, ConsistentHash::CHID, &idmapwrap::id, &idmapwrap::sortlink_> ring;
     Chord::IDMap me;
     vector<pin_entry> pinlist;
-    unsigned int _max;
-    unsigned int rsz;
+    uint _max;
+    uint _timeout;
 
     void evict(); //evict one node to make sure ring contains <= _max elements
 };

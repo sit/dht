@@ -7,17 +7,29 @@ extern bool vis;
 
 #define INIT 1
 
-Koorde::Koorde(Node *n, uint base, uint ns, uint r, uint f) : 
-  Chord(n, ns)
+Koorde::Koorde(Node *n, Args a) : Chord(n, a) 
 {
-  logbase = base;
+  if (a.find("base") != a.end()) {
+    logbase = atoi(a["base"].c_str());
+  }else{
+    logbase = 2;
+  }
+  if (a.find("resilience") != a.end()) {
+    resilience = atoi(a["resilience"].c_str());
+  }else{
+    resilience = 1;
+  }
+
+  if (a.find("fingers") != a.end()) {
+    fingers = atoi(a["fingers"].c_str());
+  }else{
+    fingers = 16;
+  }
+
   k = 1 << logbase; 
-  resilience = r;
-  nsucc = ns;
-  fingers = f;
   debruijn = me.id << logbase;
   printf ("Koorde(%u,%qx):debruijn=%qx base %u k %u nsucc %u res %u fing %u\n", 
-	  me.ip, me.id, debruijn, k, base, nsucc, resilience, fingers);
+	  me.ip, me.id, debruijn, k, logbase, _nsucc, resilience, fingers);
   loctable->pin (debruijn, fingers-1, 1);
   isstable = true;
 }
@@ -140,7 +152,7 @@ Koorde::nextimagin (CHID i, CHID kshift)
 
 // Iterative version of the figure 2 algo in IPTPS'03 paper.
 vector<Chord::IDMap>
-Koorde::find_successors(CHID key, uint m, bool intern)
+Koorde::find_successors(CHID key, uint m, bool intern, bool is_lookup)
 {
   int count = 0;
   int timeout = 0;
@@ -184,6 +196,7 @@ Koorde::find_successors(CHID key, uint m, bool intern)
     ipath.push_back (a.i);
     kpath.push_back (a.kshift);
 
+    record_stat(is_lookup?1:0);
     if (!doRPC (r.next.ip, &Koorde::koorde_next, &a, &r)) {
       timeout++;
       printf ("rpc failure %16qx to %16qx at %llu\n", me.id, r.next.id,
@@ -198,6 +211,7 @@ Koorde::find_successors(CHID key, uint m, bool intern)
 	r.next = path.back ();
 	r.kshift = kpath.back ();
 	r.i = ipath.back ();
+	record_stat(is_lookup?1:0);
         doRPC (r.next.ip, &Chord::alert_handler, &aa, &ar);
 	path.pop_back ();
 	kpath.pop_back ();
@@ -342,7 +356,7 @@ Koorde::reschedule_stabilizer(void *x)
 {
   if (!isstable) {
     Koorde::stabilize();
-    delaycb(STABLE_TIMER, &Koorde::reschedule_stabilizer, (void *)0);
+    delaycb(_stabtimer, &Koorde::reschedule_stabilizer, (void *)0);
   }
 }
 

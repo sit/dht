@@ -39,8 +39,8 @@ LocTableToe::next_hop(Chord::CHID key, bool *done)
   return ret;
 }
 
-ChordToe::ChordToe (Node *n, uint base, uint successors, uint maxf) : 
-  ChordFinger (n, base, successors, maxf, new LocTableToe ()),  _numtoes (16)
+ChordToe::ChordToe (Node *n, Args a) : 
+  ChordFinger (n, a, new LocTableToe ()),  _numtoes (16)
 {
 };
 

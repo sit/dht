@@ -5,13 +5,16 @@
 using namespace std;
 extern bool static_sim;
 
-ChordFinger::ChordFinger(Node *n, 
-			 uint base, 
-			 uint successors, 
-			 uint maxf,
-			 LocTable *l) : Chord(n, successors, l), 
-  _base(base),_maxf(maxf)
+ChordFinger::ChordFinger(Node *n, Args a,
+			 LocTable *l) : Chord(n,a,l)  
 {
+  //get base
+  if (a.find("base") != a.end()) {
+    _base = atoi(a["base"].c_str());
+  }else{
+    _base = 2;
+  }
+
   CHID finger;
   CHID lap = (CHID) -1;
   _numf = 0;
@@ -24,7 +27,7 @@ ChordFinger::ChordFinger(Node *n,
     }
   }
 }
-
+/*
 void
 ChordFinger::init_state(vector<IDMap> ids)
 {
@@ -34,7 +37,7 @@ ChordFinger::init_state(vector<IDMap> ids)
   loctable->pin(me.id+1,nsucc,0);
   loctable->pin(me.id-1,0,1);
 
-  /* estimates the size of the network by looking at how far away my successor is from me */
+  //estimates the size of the network by looking at how far away my successor is from me 
   uint sz = ids.size();
   uint my_pos = find(ids.begin(), ids.end(), me) - ids.begin();
   assert(ids[my_pos].id == me.id);
@@ -49,17 +52,16 @@ ChordFinger::init_state(vector<IDMap> ids)
     lap = lap/_base;
     for (uint j = 1; j <= (_base - 1); j++) {
       if (lap * j < min_lap) continue;
-      if (numf < _maxf) {
-	finger = lap * j + me.id;
-	loctable->pin(finger, 1, 0);
-      }
+      finger = lap * j + me.id;
+      loctable->pin(finger, 1, 0);
       numf++;
     }
   }
   _inited = true;
   Chord::init_state(ids);
-  printf("ChordFinger: %s inited %d %d %d %d %d %d\n", ts(), ids.size(), loctable->size(), _maxf, numf, _numf, loctable->psize());
+  printf("ChordFinger: %s inited %d %d %d %d %d\n", ts(), ids.size(), loctable->size(), numf, _numf, loctable->psize());
 }
+*/
 
 void
 ChordFinger::fix_fingers()
@@ -87,7 +89,7 @@ ChordFinger::reschedule_stabilizer(void *x)
 {
   assert(!static_sim);
   ChordFinger::stabilize();
-  delaycb(STABLE_TIMER, &ChordFinger::reschedule_stabilizer, (void *)0);
+  delaycb(_stabtimer, &ChordFinger::reschedule_stabilizer, (void *)0);
 }
 
 void
@@ -120,7 +122,6 @@ ChordFinger::stabilized(vector<CHID> lid)
     lap = lap / _base;
     for (uint j = 1; j <= (_base - 1); j++) {
       if ((lap * j) < min_lap) continue;
-      if (numf >= _maxf) return true;
       finger = lap * j + me.id;
       it = upper_bound(lid.begin(), lid.end(), finger);
       pos = it - lid.begin();

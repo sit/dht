@@ -3,6 +3,7 @@
 
 #include "dhtprotocol.h"
 #include "node.h"
+#include "chord.h"
 #include <map>
 #include <set>
 #include <iostream>

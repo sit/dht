@@ -7,7 +7,7 @@
 
 class ChordFinger: public Chord {
   public:
-    ChordFinger(Node *n, uint base, uint successors, uint maxf, LocTable *l = NULL);
+    ChordFinger(Node *n, Args a, LocTable *l = NULL);
     ~ChordFinger() {};
     string proto_name() { return "ChordFinger"; }
 
@@ -15,7 +15,7 @@ class ChordFinger: public Chord {
     bool stabilized(vector<CHID> lid);
     void reschedule_stabilizer(void *x);
     void dump();
-    void init_state(vector<IDMap> ids);
+    //void init_state(vector<IDMap> ids);
 
   protected:
     void fix_fingers();

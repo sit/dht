@@ -6,7 +6,7 @@
 // Koorde extends base Chord with k-degree debruijn routing
 class Koorde : public Chord {
 public:
-  Koorde(Node *n, uint degree, uint nsucc, uint resilience, uint fingers);
+  Koorde(Node *n, Args a);
   ~Koorde() {};
   string proto_name() { return "Koorde"; }
 
@@ -30,7 +30,7 @@ public:
   void koorde_next (koorde_lookup_arg *, koorde_lookup_ret *);
 
   bool stabilized(vector<ConsistentHash::CHID>);
-  vector<Chord::IDMap> Koorde::find_successors(CHID key, uint m, bool intern);
+  vector<Chord::IDMap> Koorde::find_successors(CHID key, uint m, bool intern, bool is_lookup = false);
   void init_state(vector<IDMap> ids);
   void dump();
 

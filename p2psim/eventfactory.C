@@ -34,14 +34,16 @@ EventFactory::~EventFactory()
 
 
 Event *
-EventFactory::create(string type, vector<string> *v)
+EventFactory::create(string type, vector<string> *v, string proto)
 {
   Event *e = 0;
-  if(type == "node")
-    e = new P2PEvent(v);
-  else if(type == "simulator")
+  if (type == "node") {
+    e = new P2PEvent(proto,v);
+  }else if(type == "simulator")
     e = new SimEvent(v);
   else if(type == "observe")
-    e = new ObserveEvent(v);
+    e = new ObserveEvent(proto,v);
+  else
+    cerr << "unknown event type" << endl;
   return e;
 }

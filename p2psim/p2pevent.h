@@ -10,7 +10,7 @@
 class P2PEvent : public Event {
 public:
   P2PEvent();
-  P2PEvent(vector<string>*);
+  P2PEvent(string, vector<string>*);
 
   Node *node;
   string protocol;

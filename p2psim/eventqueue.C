@@ -166,6 +166,12 @@ EventQueue::parse(char *file)
   }
 
   string line;
+
+  set<string> allprotos = ProtocolFactory::Instance()->getnodeprotocols();
+  if (allprotos.size() > 1) {
+    cerr << "warning: running two diffferent protocols on the same node" << endl;
+  }
+
   while(getline(in,line)) {
     vector<string> words = split(line);
 
@@ -177,8 +183,16 @@ EventQueue::parse(char *file)
     // and let that event parse the rest of the line
     string event_type = words[0];
     words.erase(words.begin());
-    Event *e = EventFactory::Instance()->create(event_type, &words);
-    assert(e);
-    add_event(e);
+    if ((event_type == "node") || (event_type == "observe")) {
+      for (set<string>::const_iterator i = allprotos.begin(); i != allprotos.end(); ++i) {
+	Event *e = EventFactory::Instance()->create(event_type, &words, *i);
+	assert(e);
+	add_event(e);
+      }
+    } else {
+      Event *e = EventFactory::Instance()->create(event_type, &words);
+      assert(e);
+      add_event(e);
+    }
   }
 }

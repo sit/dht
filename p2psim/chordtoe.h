@@ -16,7 +16,7 @@ public:
 
 class ChordToe : public ChordFinger {
 public:
-  ChordToe(Node *n, uint base, uint successors, uint maxf);
+  ChordToe(Node *n, Args a);
   ChordToe ();
   ~ChordToe() {};
   string proto_name() { return "ChordToe"; }
