@@ -31,7 +31,6 @@ verify (chordID key, dhash_ctype t, char *buf, int len)
   case DHASH_KEYHASH:
     return verify_keyhash (key, buf, len);
     break;
-  case DHASH_DNSSEC: // XXX should be punted.
   case DHASH_NOAUTH:
   case DHASH_APPEND:
     return true;

@@ -829,7 +829,6 @@ dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
       }
 
       // not a cache block, falls thru
-    case DHASH_DNSSEC:
     case DHASH_NOAUTH:
     case DHASH_UNKNOWN:
       {
