@@ -63,7 +63,9 @@ ChurnEventGenerator::ChurnEventGenerator(Args *args)
   if( _seed ) {
     srand( _seed );
   } else {
-    srand( time(NULL) );
+    time_t now = time(NULL);
+    cout << "using seed " << now << endl;
+    srand( now );
   }
 
   _ipkeys = args->nget("ipkeys", 0, 10);

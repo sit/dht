@@ -60,19 +60,23 @@ sub run_kademlia
   open(P, "p2psim/p2psim kademlia-prot.txt kademlia-top.txt kademlia-events.txt |");
   while(<P>){
       if(/^latency ([0-9]+)/){
-          $bytes = $1;
+          $totlatency += $1;
+          $nlatencies++;
       }
       if(/^lookup ([0-9.]+)/){
-          $lat = $1;
+          $bytes = $1;
+      }
+      if(/^using seed ([0-9.]+)/){
+          print "Seed = $1\n";
       }
   }
   close(P);
 
-  if(!defined($bytes) || !defined($lat)){
+  if(!defined($bytes) || !defined($totlatency)){
       print STDERR "kadx.pl: p2psim no output\n";
   }
 
-  print "$bytes $lat\n";
+  print sprintf("%.2f", $totlatency/$nlatencies), $bytes, "\n";
 }
 
 sub generate_prot
@@ -80,11 +84,11 @@ sub generate_prot
   my ($nnodes) = @_;
 
   my $stabtimer = $params->{STAB_TIMER}->{MIN};
-  while($stabtimer < $params->{STAB_TIMER}->{MAX}) {
+  while($stabtimer <= $params->{STAB_TIMER}->{MAX}) {
     my $k = $params->{K}->{MIN};
-    while($k < $params->{K}->{MAX}) {
+    while($k <= $params->{K}->{MAX}) {
       my $alpha = $params->{ALPHA}->{MIN};
-      while($alpha < $params->{ALPHA}->{MAX}) {
+      while($alpha <= $params->{ALPHA}->{MAX}) {
       print "nnodes=$nnodes, stabtimer=$stabtimer, k=$k, alpha=$alpha\n";
         my $pf = new FileHandle(">kademlia-prot.txt") or die "$!";
         print $pf "Kademlia k=$k alpha=$alpha stabilize_timer=$stabtimer\n";
@@ -101,7 +105,7 @@ sub generate_prot
 
 
 $nnodes = $params->{NODES}->{MIN};
-while($nnodes < $params->{NODES}->{MAX}) {
+while($nnodes <= $params->{NODES}->{MAX}) {
   &generate_topology($nnodes);
   &generate_events($nnodes);
   &generate_prot($nnodes);

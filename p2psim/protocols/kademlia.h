@@ -155,6 +155,8 @@ public:
   };
 
   struct lookup_result {
+    lookup_result() { results.clear(); }
+
     nodeinfo_set results;
     NodeID rid;     // the guy who's replying
   };

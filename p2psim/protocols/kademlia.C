@@ -146,17 +146,23 @@ Kademlia::join(Args *args)
   if(!node()->alive())
     return;
 
-  // put well known node in k-buckets and all results.
-  KDEBUG(2) << "join: lr.rid = " << lr.rid << endl;
+  // put well known node
+  KDEBUG(2) << "join: lr.rid = " << printbits(lr.rid) << endl;
   if(flyweight.find(lr.rid) == flyweight.end())
     insert(lr.rid, wkn);
   touch(lr.rid);
-  for(nodeinfo_set::const_iterator i = lr.results.begin(); i != lr.results.end(); ++i)
+
+  // put all nodes that wkn told us in k-buckets
+  KDEBUG(2) << "join: lr.results.size() = " << lr.results.size() << endl;
+  for(nodeinfo_set::const_iterator i = lr.results.begin(); i != lr.results.end(); ++i) {
+    char ptr[32]; sprintf(ptr, "%p", (*i));
+    KDEBUG(2) << "join: lr.results iterator *i = " << ptr << endl;
     if(flyweight.find((*i)->id) == flyweight.end() && (*i)->id != _id) {
       // XXX: the touch is WRONG.  For all we know, the node is dead.
       insert((*i)->id, (*i)->ip);
       touch((*i)->id);
     }
+  }
 
   // get our ``successor'' and compute length
   // of prefix we have in common
@@ -221,7 +227,7 @@ void
 Kademlia::lookup(Args *args)
 {
   NodeID key = args->nget<long long>("key", 0, 16);
-  KDEBUG(1) << "Kademlia::lookup: " << printID(key) << endl;
+  KDEBUG(1) << "Kademlia::lookup: " << printbits(key) << endl;
   assert(node()->alive());
 
   lookup_args la(_id, ip(), key, true);
@@ -261,7 +267,7 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
   IPAddress callerIP = largs->ip;
 
 
-  KDEBUG(2) << "do_lookup: node " << printbits(callerID) << " does lookup for " << printID(largs->key) << ", flyweight.size() = " << flyweight.size() << endl;
+  KDEBUG(2) << "do_lookup: node " << printbits(callerID) << " does lookup for " << printbits(largs->key) << ", flyweight.size() = " << flyweight.size() << endl;
 
 
   // put the caller in the tree, but never ourselves
@@ -317,7 +323,8 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
     // there's a guy we didn't ask yet, and there's less than alpha outstanding
     // RPCs: send out another one.
     if(toask && outstanding < Kademlia::alpha) {
-      KDEBUG(2) << "do_lookup: front task id = " << printbits(toask->id) << ", ip = " << toask->ip << endl;
+      char ptr[32]; sprintf(ptr, "%p", toask);
+      KDEBUG(2) << "do_lookup: front task ptr = " << ptr << ", id = " << printbits(toask->id) << ", ip = " << toask->ip << endl;
       la = New lookup_args(_id, ip(), largs->id);
       lr = New lookup_result;
       assert(la && lr);
@@ -404,7 +411,7 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
       // mark new nodes as not yet asked.  only look at first Kademlia::,
       // though.
       unsigned k_counter = 0;
-      for(set<k_nodeinfo*, closer>::const_iterator i=results->begin(); k < 20 && i != results->end(); ++i, ++k_counter) {
+      for(set<k_nodeinfo*, closer>::const_iterator i=results->begin(); k < Kademlia::k && i != results->end(); ++i, ++k_counter) {
         if(asked.find((*i)->id) != asked.end())
           continue;
 
@@ -426,11 +433,13 @@ done:
 
   // this is the final answer
   // no longer sorting on close, but on OUR timestamp.
-  for(unsigned i=0; results->size() && i<Kademlia::k; i++) {
-    k_nodeinfo *ki = *results->begin();
-    ki->checkrep();
-    lresult->results.insert(ki);
-    results->erase(ki);
+  unsigned k_counter = 0;
+  for(set<k_nodeinfo*, closer>::const_iterator i=results->begin(); k < Kademlia::k && i != results->end(); ++i, ++k_counter) {
+    (*i)->checkrep();
+    char ptr[32]; sprintf(ptr, "%p", (*i));
+    KDEBUG(2) << "do_lookup: inserting " << ptr << " in final resultset" << endl;
+    lresult->results.insert(*i);
+    results->erase(*i);
   }
 
   // destroy the remainder of results
@@ -548,10 +557,11 @@ Kademlia::stabilize()
     _root->traverse(&check, this);
   }
 
+  // stabilize
   k_stabilizer stab;
   _root->traverse(&stab, this);
 
-  KDEBUG(2) << "notifyObservers" << endl;
+  // tell the observers.  maybe they're happy now.
   notifyObservers();
 }
 
@@ -615,7 +625,7 @@ Kademlia::touch(NodeID id)
 void
 Kademlia::insert(NodeID id, IPAddress ip, bool init_state)
 {
-  KDEBUG(1) << "Kademlia::insert " << Kademlia::printbits(id) << ":" << ip << endl;
+  KDEBUG(1) << "Kademlia::insert " << Kademlia::printbits(id) << ", ip = " << ip << endl;
 
   assert(id && ip);
   assert(flyweight.find(id) == flyweight.end());
