@@ -45,22 +45,119 @@ ChordFingerPNS::ChordFingerPNS(IPAddress i, Args& a, LocTable *l)
 }
 
 void
+ChordFingerPNS::oracle_node_died(IDMap n)
+{
+  Chord::oracle_node_died(n);
+
+  IDMap tmp = loctable->succ(n.id);
+  if (tmp.ip != n.ip) return;
+
+  //lost one my of finger?
+  vector<IDMap> ids = ChordObserver::Instance(NULL)->get_sorted_nodes();
+  uint sz = ids.size();
+  CHID lap = (CHID) -1;
+  while (lap > 1) {
+    lap = lap / _base;
+    for (uint j = 1; j <= (_base-1); j++) {
+      if (ConsistentHash::between(me.id+lap*j, me.id+lap*(j+1), n.id)) {
+	loctable->del_node(n);
+	//find a replacement for this finger
+	IDMap tmpf;
+	tmpf.id = lap * j + me.id;
+	uint s_pos = upper_bound(ids.begin(), ids.end(), tmpf, Chord::IDMap::cmp) - ids.begin();
+	s_pos = s_pos % sz;
+	tmpf.id = lap * (j+1) + me.id;
+	uint e_pos = upper_bound(ids.begin(), ids.end(), tmpf, Chord::IDMap::cmp) - ids.begin();
+	e_pos = e_pos % sz;
+	if (s_pos == e_pos) return;
+
+	IDMap min_f = ids[s_pos];
+	Topology *t = Network::Instance()->gettopology();
+	uint min_l = t->latency(me.ip,min_f.ip);
+	int k = 0;
+	for (uint i = s_pos; i!= e_pos; i = (i+1)%sz) {
+	  if (t->latency(me.ip,ids[i].ip) < min_l) {
+	    min_f = ids[i];
+	    min_l = t->latency(me.ip, ids[i].ip);
+	    k++;
+	    if (_samples > 0 && k>= _samples) break;
+	  }
+	}
+	loctable->add_node(min_f);//add replacement pns finger
+#ifdef CHORD_DEBUG
+	printf("%s oracle_node_died finger del %u,%qx add %u,%qx\n",ts(),n.ip,n.id,min_f.ip,min_f.id);
+#endif
+	return;
+      }
+    }
+  }
+  assert(0);
+}
+
+void
+ChordFingerPNS::oracle_node_joined(IDMap n)
+{
+  Chord::oracle_node_joined(n);
+
+  IDMap tmp = loctable->succ(n.id);
+  if (tmp.ip == n.ip) return;
+
+  //is the new node one of my finger?
+  vector<IDMap> ids = ChordObserver::Instance(NULL)->get_sorted_nodes();
+  uint sz = ids.size();
+  CHID lap = (CHID) -1;
+  while (lap > 1) {
+    lap = lap / _base;
+    for (uint j = 1; j <= (_base-1); j++) {
+      if (ConsistentHash::between(me.id+lap*j, me.id+lap*(j+1), n.id)) {
+	IDMap s = loctable->succ(me.id + lap * j);
+	if (!ConsistentHash::between(me.id+lap*j, me.id+lap*(j+1), n.id)) {
+	  loctable->add_node(n);
+#ifdef CHORD_DEBUG
+	  printf("%s oracle_node_joined finger add %u,%qx\n",ts(),n.ip,n.id);
+#endif
+	  return;
+	}
+	IDMap tmpf;
+	tmpf.id = lap * j + me.id;
+	uint s_pos = upper_bound(ids.begin(), ids.end(), tmpf, Chord::IDMap::cmp) - ids.begin();
+	uint n_pos = find(ids.begin(),ids.end(),n) - ids.begin();
+	n_pos = n_pos + sz;
+	if (n_pos - s_pos <= _samples) {
+	  //choose the closer one
+	  Topology *t = Network::Instance()->gettopology();
+	  if (t->latency(me.ip, n.ip) < t->latency(me.ip, s.ip)) {
+	    loctable->del_node(s);
+	    loctable->add_node(n);
+#ifdef CHORD_DEBUG
+	    printf("%s oracle_node_joined finger del %u,%qx add %u,%qx\n",ts(), s.ip,s.id,n.ip,n.id);
+#endif
+	  }
+	} 
+	return;
+      }
+    }
+  }
+  assert(0);
+}
+
+void
 ChordFingerPNS::initstate()
 {
   vector<IDMap> ids = ChordObserver::Instance(NULL)->get_sorted_nodes();
   uint sz = ids.size();
   uint my_pos = find(ids.begin(), ids.end(), me) - ids.begin();
-  assert(ids[my_pos].id == me.id);
-  CHID min_lap = ids[(my_pos+1) % sz].id - me.id;
+  assert(my_pos < sz && ids[my_pos].id == me.id);
+  CHID min_lap = ids[(my_pos+_nsucc) % sz].id - me.id;
 
   CHID lap = (CHID) -1;
 
   Topology *t = Network::Instance()->gettopology();
-  IDMap tmpf;
   while (lap > min_lap) {
     lap = lap / _base;
     for (uint j = 1; j <= (_base -1); j++) {
       if (lap * j < min_lap) continue;
+      IDMap tmpf;
       tmpf.id = lap * j + me.id;
       uint s_pos = upper_bound(ids.begin(), ids.end(), tmpf, Chord::IDMap::cmp) - ids.begin();
 
@@ -68,6 +165,7 @@ ChordFingerPNS::initstate()
       tmpf.id = lap * (j+1) + me.id;
       uint e_pos = upper_bound(ids.begin(), ids.end(), tmpf, Chord::IDMap::cmp) - ids.begin();
       e_pos = e_pos % sz;
+      if (s_pos == e_pos) continue;
 
       IDMap min_f = ids[s_pos];
       IDMap min_f_pred = ids[(s_pos-1)%sz];
@@ -100,9 +198,10 @@ ChordFingerPNS::stabilized(vector<CHID> lid)
 void
 ChordFingerPNS::join(Args *args)
 {
-  if (static_sim) return;
 
   Chord::join(args);
+  if (static_sim) return;
+
   //schedule pns stabilizer, no finger stabilizer
   if (!_stab_pns_running) {
     _stab_pns_running = true;

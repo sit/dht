@@ -49,6 +49,68 @@ ChordFinger::ChordFinger(IPAddress i, Args &a, LocTable *l) : Chord(i, a, l)
 }
 
 void
+ChordFinger::oracle_node_died(IDMap n)
+{
+  Chord::oracle_node_died(n);
+  IDMap tmp = loctable->succ(n.id);
+  if (tmp.ip != n.ip) return;
+
+  //lost one of my finger?
+  vector<IDMap> ids = ChordObserver::Instance(NULL)->get_sorted_nodes();
+  uint sz = ids.size();
+  CHID lap = (CHID) -1;
+  while (lap > 1) {
+    lap = lap / _base;
+    for (uint j = 1; j <= (_base-1); j++) {
+      if (ConsistentHash::between(me.id+lap*j, me.id+lap*(j+1), n.id)) {
+	loctable->del_node(n);
+	//get a replacement
+	IDMap tmpf;
+	tmpf.id = me.id + j * lap;
+	uint s_pos = upper_bound(ids.begin(),ids.end(),tmpf, Chord::IDMap::cmp) - ids.begin();
+	s_pos = s_pos % sz;
+	if (ConsistentHash::between(tmpf.id, tmpf.id + lap, ids[s_pos].id)) 
+	  loctable->add_node(ids[s_pos]);
+	return;
+      }
+    }
+  }
+  assert(0);
+}
+
+void
+ChordFinger::oracle_node_joined(IDMap n)
+{
+  Chord::oracle_node_joined(n);
+
+  IDMap tmp = loctable->succ(n.id);
+  if (tmp.ip == n.ip) return;
+
+  //is the new node one of my finger?
+  CHID lap = (CHID) -1;
+  while (lap > 1) {
+    lap = lap / _base;
+    for (uint j = 1; j <= (_base-1); j++) {
+      if (ConsistentHash::between(me.id+lap*j, me.id+lap*(j+1), n.id)) {
+	IDMap s = loctable->succ(me.id + lap * j);
+	if (ConsistentHash::between(me.id+lap*j, me.id+lap*(j+1), s.id)) {
+	  //choose the closer one in IDspace
+	  if (ConsistentHash::between(me.id,s.id,n.id)) {
+	    loctable->del_node(s);
+	    loctable->add_node(n);
+	  }
+	} else {
+	  loctable->add_node(n);
+	} 
+	return;
+      }
+    }
+  }
+  assert(0);
+}
+
+
+void
 ChordFinger::initstate()
 {
   vector<IDMap> ids = ChordObserver::Instance(NULL)->get_sorted_nodes();
@@ -64,7 +126,8 @@ ChordFinger::initstate()
       if (lap * j < min_lap) continue;
       tmpf.id = lap * j + me.id;
       uint s_pos = upper_bound(ids.begin(), ids.end(), tmpf, Chord::IDMap::cmp) - ids.begin();
-      loctable->add_node(ids[s_pos]);
+      if (ConsistentHash::between(tmpf.id, tmpf.id + lap, ids[s_pos].id))
+	  loctable->add_node(ids[s_pos]);
     }
   }
   Chord::initstate();

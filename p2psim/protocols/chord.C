@@ -44,7 +44,7 @@ double Chord::_lookup_raw_num = 0;
 double Chord::_lookup_raw_success= 0;
 double Chord::_lookup_retries = 0;
 
-#define DNODE 116
+#define DNODE 41
 
 Chord::Chord(IPAddress i, Args& a, LocTable *l) : P2Protocol(i), _isstable (false)
 {
@@ -180,7 +180,7 @@ Chord::ts()
 void
 Chord::check_static_init()
 {
-  if (!static_sim) return;
+  if ((!static_sim) || (!alive())) return;
   if (!_inited) {
     _inited = true;
     this->initstate();
@@ -190,8 +190,6 @@ Chord::check_static_init()
 bool 
 Chord::check_correctness(CHID k, vector<IDMap> v)
 {
-  // uint vsz = (uint) v.size();
-
   vector<IDMap> ids = ChordObserver::Instance(NULL)->get_sorted_nodes();
   IDMap tmp;
   tmp.id = k;
@@ -284,7 +282,6 @@ Chord::lookup_internal(lookup_args *a)
     printf("%s key %qx lookup incorrect interval ", ts(), a->key); 
 #endif
   }else{
-    assert(!static_sim);
     a->retrytimes.push_back((uint)(now() - a->start - extra_time));
     delaycb((100-extra_time)>0?100-extra_time:0, &Chord::lookup_internal, a);
     return;
@@ -473,7 +470,7 @@ Chord::find_successors(CHID key, uint m, uint all, uint type, uint *lookup_int, 
 	  resultmap[donerpc]->ret.done? 1:0, resultmap[donerpc]->ret.next.size());
 #endif
 
-      if (resultmap[donerpc]->link.from.ip == me.ip) 
+      if ((resultmap[donerpc]->link.from.ip == me.ip) && (!static_sim))
 	loctable->add_node(resultmap[donerpc]->link.to); //update timestamp of MY neighbors
 
       if (resultmap[donerpc]->ret.done) {
@@ -812,7 +809,6 @@ Chord::find_successors_recurs(CHID key, uint m, uint all, uint type, uint *recur
     *recurs_int = fr.finish_time - before;
 
   if (type == TYPE_USER_LOOKUP) {
-    assert(!static_sim || !total_to);
 #ifdef CHORD_DEBUG
     printf("%s lookup key %qx,%d, hops %d timeout %d wasted %d\n", ts(), key, m, psz-total_to, total_to, wasted);
 #endif
@@ -974,7 +970,7 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
     if (r) {
       if ((ret->v.size() > 0) || (!_recurs_direct)) 
 	record_stat(ret->v.size()*4,args->type);
-      loctable->add_node(next); //update timestamp
+      if (!static_sim) loctable->add_node(next); //update timestamp
       return;
     }else{
 #ifdef CHORD_DEBUG
@@ -1094,7 +1090,15 @@ Chord::next_handler(next_args *args, next_ret *ret)
 void
 Chord::join(Args *args)
 {
-  if (static_sim) return;
+  if (static_sim) {
+    if ((args) && (!_inited))
+      notifyObservers((ObserverInfo *)"join");
+#ifdef CHORD_DEBUG
+    printf("%s joined\n",ts());
+#endif
+    _inited = true;
+    return;
+  }
 
 #ifdef CHORD_DEBUG
   Time before = now();
@@ -1305,6 +1309,79 @@ Chord::stabilized(vector<CHID> lid)
   }
 
   return true;
+}
+
+void
+Chord::oracle_node_died(IDMap n)
+{
+  //assume a dead node will affect routing tables of those that contain it
+  IDMap tmp = loctable->succ(n.id);
+  if (tmp.ip != n.ip) return;
+
+  vector<IDMap> ids = ChordObserver::Instance(NULL)->get_sorted_nodes();
+  uint sz = ids.size();
+  int my_pos = find(ids.begin(), ids.end(), me) - ids.begin();
+
+  //lost my predecessor
+  IDMap pred = loctable->pred(me.id-1);
+  if (tmp.ip == pred.ip) {
+    loctable->del_node(n);
+    loctable->add_node(ids[(my_pos-1)%sz]);
+#ifdef CHORD_DEBUG
+    printf("%s oracle_node_died predecessor del %u,%qx add %u,%qx\n",ts(),n.ip,n.id,ids[(my_pos-1)%sz].ip, ids[(my_pos-1)%sz].id);
+#endif
+    return;
+  }
+
+  //lost one of my successors
+  vector<IDMap> succs = loctable->succs(me.id+1,_nsucc);
+  uint ssz = succs.size();
+  assert(ssz==_nsucc);
+  IDMap last = succs[succs.size()-1];
+  if (ConsistentHash::betweenrightincl(me.id, succs[succs.size()-1].id, n.id)) {
+    loctable->del_node(n);
+    loctable->add_node(ids[(my_pos+_nsucc)%sz],true);
+    vector<IDMap> newsucc = loctable->succs(me.id+1,_nsucc);
+    uint nssz = newsucc.size();
+    assert(nssz == _nsucc);
+#ifdef CHORD_DEBUG
+    printf("%s oracle_node_died successors del %u,%qx add %u,%qx succsz %d\n",ts(),n.ip,n.id,
+    ids[(my_pos+_nsucc)%sz].ip, ids[(my_pos+_nsucc)%sz].id, succs.size());
+#endif
+  }
+}
+
+void
+Chord::oracle_node_joined(IDMap n)
+{
+  IDMap tmp = loctable->succ(n.id);
+  if (tmp.ip == n.ip) return;
+
+  //is the new node my predecessor?
+  IDMap pred = loctable->pred(me.id-1);
+  if (ConsistentHash::between(pred.id,me.id, n.id)) {
+    loctable->del_node(pred);
+    loctable->add_node(n);
+#ifdef CHORD_DEBUG
+    printf("%s oracle_node_joined predecessor del %u,%qx, add %u,%qx\n",ts(),pred.ip,pred.id,n.ip,n.id);
+#endif
+    return;
+  }
+ 
+  //is the new node one of my successor?
+  vector<IDMap> succs = loctable->succs(me.id+1,_nsucc);
+  uint ssz = succs.size();
+  assert(ssz==_nsucc);
+  if (ConsistentHash::between(me.id,succs[succs.size()-1].id,n.id)) {
+    loctable->del_node(succs[succs.size()-1]);
+    loctable->add_node(n,true);
+    vector<IDMap> newsucc = loctable->succs(me.id+1,_nsucc);
+    uint nssz = newsucc.size();
+    assert(nssz == _nsucc);
+#ifdef CHORD_DEBUG
+    printf("%s oracle_node_joined successors del %u,%qx add %u,%qx succsz %d\n",ts(),succs[succs.size()-1].ip, succs[succs.size()-1].id,n.ip,n.id, succs.size());
+#endif
+  }
 }
 
 void
@@ -1620,7 +1697,6 @@ void
 Chord::crash(Args *args)
 {
   ChordObserver::Instance(NULL)->delnode();
-  assert(!static_sim);
   if (vis)
     printf ("vis %llu crash %16qx\n", now (), me.id);
 
@@ -1634,6 +1710,7 @@ Chord::crash(Args *args)
     fprintf(stderr,"%s crashed\n", ts());
   printf("%s crashed! loctable sz %d\n",ts(), loctable->size());
 #endif
+  notifyObservers((ObserverInfo *)"crash");
 
 }
 

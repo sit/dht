@@ -39,6 +39,8 @@ class ChordFinger: public Chord {
     void reschedule_finger_stabilizer(void *x);
     void dump();
     void initstate();
+    void oracle_node_joined(IDMap n);
+    void oracle_node_died(IDMap n);
     virtual void join(Args *);
 
   protected:

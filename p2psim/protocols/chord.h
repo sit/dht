@@ -28,7 +28,7 @@
 #include "p2psim/p2protocol.h"
 #include "consistenthash.h"
 
-//#define CHORD_DEBUG
+#define CHORD_DEBUG
 #define PKT_OVERHEAD 20
 
 #define TYPE_USER_LOOKUP 0
@@ -180,9 +180,12 @@ public:
   void ping_delete(alert_args *aa);
 
   CHID id () { return me.id; }
+  IDMap idmap() { return me;}
   virtual void initstate();
   virtual bool stabilized(vector<CHID>);
   bool check_correctness(CHID k, vector<IDMap> v);
+  virtual void oracle_node_died(IDMap n);
+  virtual void oracle_node_joined(IDMap n);
 
   virtual void dump();
   char *ts();

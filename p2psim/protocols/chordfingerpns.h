@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 [NAMES_GO_HERE]
+ * Copyright (c) 2003 [Jinyang Li]
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -43,6 +43,8 @@ class ChordFingerPNS: public Chord {
     bool stabilized(vector<CHID> lid);
     void dump();
     void initstate();
+    void oracle_node_joined(IDMap n);
+    void oracle_node_died(IDMap n);
 
     void reschedule_pns_stabilizer(void *x);
     void fix_pns_fingers(bool restart);
