@@ -10,7 +10,7 @@
 
 #define NBIT 160
 
-#ifdef STATS
+
 struct chord_stats {
   long insert_path_len;
   long insert_ops;
@@ -22,7 +22,7 @@ struct chord_stats {
 };
 
 extern chord_stats stats;
-#endif /* STATS */
+
 
 
 typedef int cb_ID;

@@ -25,8 +25,9 @@ typedef callback<void, dhash_stat>::ptr cbstat;
 
 class dhashclient {
 
-  int do_caching;
   ptr<axprt_stream> x;
+  int do_caching;
+
   ptr<asrv> p2pclntsrv;
 
   void dispatch (svccb *sbp);

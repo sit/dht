@@ -311,6 +311,16 @@ int dbfe::IMPL_close_sleepycat() { return db->close(db, 0); };
 ptr<dbEnumeration> dbfe::IMPL_make_enumeration_sleepycat() {
   return new refcounted<dbEnumeration>(db);
 }
+
+void dbfe::IMPL_delete_async_sleepycat(ref<dbrec> key, errReturn_cb cb) {
+  int err = IMPL_delete_sync_sleepycat(key);
+  (*cb)(err);
+}
+
+int dbfe::IMPL_delete_sync_sleepycat(ref<dbrec> key) {
+  
+}
+
 #else 
 
 ptr<dbEnumeration> dbfe::IMPL_make_enumeration_adb() {

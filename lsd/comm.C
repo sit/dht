@@ -8,9 +8,8 @@
  *
  */
 
-#ifdef STATS
 chord_stats stats;
-#endif /* STATS */
+
 
 // creates an array of edges of a fake network
 // stores in int* edges
@@ -90,9 +89,9 @@ p2p::doRPC (sfs_ID &ID, rpc_program progno, int procno,
   // something diff then this may give weird results)
 
   // get "distance" between self and destination
-  int time = 0;
 
 #ifdef _SIM_ 
+  int time = 0;
   int dist = *(edges+(int)myID.getsi()*numnodes+(int)ID.getsi());
   time = dist*10; // Not sure how to scale time delay
   // should not be delayed if not simulating
@@ -204,7 +203,7 @@ p2p::connect_cb (callback<void, ptr<axprt_stream> >::ref cb, int fd)
 void
 p2p::stats_cb () {
 
-#ifdef STATS
+
   warnx << "Chord Node " << myID << " status\n";
 
   warnx << "Core layer stats\n";
@@ -213,7 +212,7 @@ p2p::stats_cb () {
   while (l) {
     warnx << "    link " << l->n << "\n";
     printf("       Average latency: %f\n", ((float)(l->total_latency))/l->num_latencies);
-    printf("       Max latency: %d\n", l->max_latency);
+    printf("       Max latency: %ld\n", l->max_latency);
     l = locations.next(l);
   }
 
@@ -230,8 +229,8 @@ p2p::stats_cb () {
   warnx << "   " << stats.lookup_ops << " lookups\n";
   printf( "      %f average hops per lookup\n", ((float)(stats.lookup_path_len))/stats.lookup_ops);
   printf( "      %f ms average latency per lookup operation\n", ((float)(stats.lookup_lat))/stats.lookup_ops);
-  printf( "      %d ms greatest latency for a lookup\n", stats.lookup_max_lat);
+  printf( "      %ld ms greatest latency for a lookup\n", stats.lookup_max_lat);
   printf( "      %f KB/sec avg. total bandwidth\n", ((float)(stats.lookup_bytes_fetched))/(stats.lookup_lat));
-#endif /* STATS */
+
 
 }

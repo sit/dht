@@ -191,9 +191,11 @@ class dbfe {
   typedef callback<int, ref<dbrec>, ref<dbrec> >::ptr insert_cb;
   typedef callback<ptr<dbrec>, ref<dbrec> >::ptr lookup_cb;
   
+  typedef callback<int, ptr<dbrec> >::ptr  delete_cb;
+  typedef callback<void, ptr<dbrec>, errReturn_cb>::ptr delete_cb_async;
+
   typedef callback<void, ref<dbrec>, ref<dbrec>, errReturn_cb >::ptr insert_cb_async;
   typedef callback<void, ref<dbrec>, itemReturn_cb >::ptr lookup_cb_async;
-  
 
   open_cb create_impl;
   open_cb  open_impl;
@@ -201,6 +203,9 @@ class dbfe {
 
   insert_cb insert_impl;
   lookup_cb lookup_impl;
+
+  delete_cb delete_impl;
+  delete_cb_async delete_impl_async;
 
   insert_cb_async  insert_impl_async;
   lookup_cb_async lookup_impl_async;
@@ -217,6 +222,8 @@ class dbfe {
   void IMPL_insert_async_sleepycat(ref<dbrec> key, ref<dbrec> data, errReturn_cb cb);
   void IMPL_lookup_async_sleepycat(ref<dbrec> key, itemReturn_cb cb);
   ptr<dbEnumeration> IMPL_make_enumeration_sleepycat();
+  void IMPL_delete_async_sleepycat(ref<dbrec> key, errReturn_cb cb);
+  int IMPL_delete_sync_sleepycat(ref<dbrec> key);
 #else
   btreeSync *gADB_sync;
   btreeDispatch *gADB_async;
@@ -246,11 +253,14 @@ class dbfe {
   
   int insert(ref<dbrec> key, ref<dbrec> data)  { return (*insert_impl)(key, data); };
   ptr<dbrec> lookup(ref<dbrec> key) { return (*lookup_impl)(key); };
-  
+  int del(ref<dbrec> key) { return (*delete_impl) (key); };
+
   void insert(ref<dbrec> key, ref<dbrec> data, callback<void, int>::ref cb)  
     { return (*insert_impl_async)(key, data, cb); };
   void lookup(ref<dbrec> key, callback<void, ptr<dbrec> >::ref cb)
     { return (*lookup_impl_async)(key, cb); };
+  void del(ref<dbrec> key, errReturn_cb cb) { return (*delete_impl_async) (key, cb); };
+
   ptr<dbEnumeration> enumerate() { return (*make_enumeration)(); };
 
 };

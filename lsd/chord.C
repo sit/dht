@@ -219,10 +219,10 @@ p2p::p2p (str host, int hostport, const sfs_ID &hostID,
   initialize_graph();
 #endif
 
-#ifdef STATS
+
   bzero(&stats, sizeof(chord_stats));
   sigcb(SIGUSR1, wrap (this, &p2p::stats_cb));
-#endif /* STATS */
+
   
   wellknownhost.hostname = host;
   wellknownhost.port = hostport;
@@ -598,7 +598,7 @@ p2p::dofindsucc (sfs_ID &n, cbroute_t cb)
 {
   
   //  warn << "do find succ " << n << "\n";
-  int i = successor_wedge (n);
+  //int i = successor_wedge (n);
   if (!predecessor.alive) {
     set_closeloc (predecessor);
   }
@@ -625,4 +625,3 @@ p2p::dofindsucc_cb (cbroute_t cb, sfs_ID n, sfs_ID x,
     cb (x, search_path, SFSP2P_OK);
   }
 }
-

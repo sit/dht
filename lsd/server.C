@@ -215,7 +215,7 @@ p2p::query_location_table (sfs_ID x) {
   sfs_ID min = bigint(1) << 160;
   sfs_ID ret = -1;
   while (l) {
-    sfs_ID d = diff(l->n , x);
+    sfs_ID d = diff(x, l->n);
     if (d < min) { min = d; ret = l->n; }
     l = locations.next (l);
   }

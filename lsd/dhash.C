@@ -34,10 +34,8 @@ dhashclient::dispatch (svccb *sbp)
       if (do_caching)
 	defp2p->registerSearchCallback(wrap(this, &dhashclient::search_cb, *n));
 
-#ifdef STATS
       timeval *tp = New struct timeval;
       gettimeofday(tp, NULL);
-#endif /* STATS */
 
       defp2p->dofindsucc (*n, wrap(this, &dhashclient::lookup_findsucc_cb, 
 				   sbp, n, tp));
@@ -73,10 +71,8 @@ dhashclient::insert_findsucc_cb(svccb *sbp, dhash_insertarg *item,
     //    for (unsigned int i = 0; i < path.size (); i++) warnx << path[i] << " ";
     // warnx << "were touched to insert " << item->key << "\n";
 
-#ifdef STATS
     stats.insert_path_len += path.size ();
     stats.insert_ops++;
-#endif /* STATS */
 
     dhash_stat *stat = New dhash_stat ();
     defp2p->doRPC(succ, dhash_program_1, DHASHPROC_STORE, item, stat, 
@@ -136,9 +132,8 @@ dhashclient::lookup_findsucc_cb(svccb *sbp, sfs_ID *n, struct timeval *start,
     sbp->reply (res);
   } else {
 
-#ifdef STATS
     stats.lookup_path_len += path.size ();
-#endif /* STATS */
+
     dhash_res *res = New dhash_res();
     defp2p->doRPC(succ, dhash_program_1, DHASHPROC_FETCH, n, res, 
 		  wrap(this, &dhashclient::lookup_fetch_cb, sbp, res, start));
@@ -149,7 +144,7 @@ void
 dhashclient::lookup_fetch_cb(svccb *sbp, dhash_res *res, struct timeval *start, clnt_stat err) 
 {
 
-#ifdef STATS
+
     struct timeval now;
     gettimeofday(&now, NULL);
     long lat = ((now.tv_sec - start->tv_sec)*1000000 + (now.tv_usec - start->tv_usec))/1000;
@@ -157,11 +152,10 @@ dhashclient::lookup_fetch_cb(svccb *sbp, dhash_res *res, struct timeval *start, 
     stats.lookup_lat += lat;
     if (lat > stats.lookup_max_lat) stats.lookup_max_lat = lat;
     if (!err) stats.lookup_bytes_fetched += res->resok->res.size();
-#endif /* STATS */
 
-  if (err) 
-    sbp->reject (SYSTEM_ERR);
-  else
+    if (err) 
+      sbp->reject (SYSTEM_ERR);
+    else
     sbp->replyref (*res);
 }
 
