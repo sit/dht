@@ -40,7 +40,11 @@ struct f_node {
   bool draw;
 
   f_node (chordID i, str h, short p) :
-    ID (i), host (h), port (p), draw (true) { res = NULL; ressucc = NULL; restoes = NULL;};
+    ID (i), host (h), port (p), draw (true) { 
+    res = NULL; 
+    ressucc = NULL; 
+    restoes = NULL;
+  };
   ~f_node () { 
     if (res) delete res; 
     if (ressucc) delete ressucc; 
@@ -79,7 +83,7 @@ void update ();
 void initgraf ();
 void init_color_list (char *filename);
 void draw_arrow (int fromx, int fromy, 
-		 int tox, int toy);
+		 int tox, int toy, GdkGC *draw_gc);
 
 static gint configure_event (GtkWidget *widget, GdkEventConfigure *event);
 static gint expose_event (GtkWidget *widget, GdkEventExpose *event);
@@ -270,7 +274,7 @@ update_fingers_got_fingers (chordID ID, str host, short port,
   }
 
   f_node *nu = nodes[ID];
-  delete nu->res;
+  if (nu->res) delete nu->res;
   nu->res = res;
 
   update_toes (nu);
@@ -647,10 +651,8 @@ draw_arc (chordID from, chordID to, GdkGC *draw_gc)
   ID_to_xy (to, &tox, &toy);
 
   if (theta < 0.1) {
-    gdk_draw_line (pixmap, 
-		   drawing_area->style->black_gc, 
-		   (gint)fromx, (gint)fromy,
-		   (gint)tox,  (gint)toy);
+    draw_arrow( (gint)fromx, (gint)fromy,
+		(gint)tox,  (gint)toy, draw_gc);
     return;
   }
 
@@ -677,11 +679,10 @@ draw_arc (chordID from, chordID to, GdkGC *draw_gc)
 		4,4,
 		(gint16)0, (gint16)64*360);
 #endif
-  GtkWidget *widget = drawing_area;
 
   int oldx = fromx;
   int oldy = fromy;
-  for (float t=0.0; t < 1.0; t += 0.01) {
+  for (float t=0.0; t < 0.99; t += 0.01) {
     float a = t;
     float b = 1 - t;
       
@@ -691,12 +692,13 @@ draw_arc (chordID from, chordID to, GdkGC *draw_gc)
       + toy*a*a*a;
     
     gdk_draw_line (pixmap, 
-		   widget->style->black_gc, 
+		   draw_gc, 
 		   (gint)oldx, (gint)oldy,
 		   (gint)px,  (gint)py);
     oldx = (int)px;
     oldy = (int)py;
   }
+  draw_arrow (oldx, oldy, tox, toy, draw_gc);
     /*
       int m1, m2;
       int w, h;
@@ -735,20 +737,36 @@ set_foreground_lat (unsigned long lat)
 
 void
 draw_arrow (int fromx, int fromy, 
-	    int tox, int toy)
+	    int tox, int toy, GdkGC *draw_gc)
 {
   gdk_draw_line (pixmap,
 		 draw_gc,
 		 fromx,fromy,
 		 tox,toy);
-  gdk_draw_rectangle (pixmap,
-		      draw_gc,
-		      true,
-		      tox,
-		      toy,
-		      6,
-		      6);
-  
+
+  float t = atan2 ((tox - fromx), (toy - fromy));
+  float phi = PI/4 - t;
+  float theta = PI/4 + t;
+  float l = 10.0;
+
+  float px = l*sin (phi) + tox;
+  float py = -l*cos (phi) + toy;
+  float p2y = toy - l*cos (theta);
+  float p2x = tox - l*sin (theta);  
+
+  GdkPoint head[4];
+  head[0].x = (gint)px;
+  head[0].y = (gint)py;
+  head[1].x = (gint)tox;
+  head[1].y = (gint)toy;
+  head[2].x = (gint)p2x;
+  head[2].y = (gint)p2y;
+
+  gdk_draw_polygon (pixmap,
+		    draw_gc,
+		    true,
+		    head,
+		    3);
 }
 void
 draw_ring ()
@@ -773,7 +791,7 @@ draw_ring ()
     gdk_draw_arc (pixmap,
 		  widget->style->black_gc,
 		  TRUE,
-		  x,y,
+		  x - 4,y - 4,
 		  8,8,
 		  (gint16)0, (gint16)64*360);
     
@@ -794,24 +812,25 @@ draw_ring ()
 	  gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (check_immed_succ)))
 	{
 	  int a,b;
+	  set_foreground_lat (n->res->resok->fingers[1].a_lat); 
 	  ID_to_xy (n->res->resok->fingers[1].x, &a, &b);
-	  draw_arrow (x,y,a,b);
+	  draw_arrow (x,y,a,b, draw_gc);
 	}
 
       if (n->res && 
 	  gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (check_fingers))) {
-	for (unsigned int i=0; i < n->res->resok->fingers.size (); i++) {
+	for (unsigned int i=1; i < n->res->resok->fingers.size (); i++) {
 	  int a,b;
 	  set_foreground_lat (n->res->resok->fingers[i].a_lat); 
 	  ID_to_xy (n->res->resok->fingers[i].x, &a, &b);
-	  draw_arrow (x,y,a,b);
+	  draw_arrow (x,y,a,b, draw_gc);
 	}
       }
 
       if (n->ressucc && 
 	  gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (check_succ_list))) {
 	for (unsigned int i=1; i < n->ressucc->resok->succ.size (); i++) {
-	  draw_arc (n->ID, n->ressucc->resok->succ[i].x, draw_gc);
+	  draw_arc (n->ID, n->ressucc->resok->succ[i].x, drawing_area->style->black_gc);
 	}
       }
 
@@ -821,7 +840,7 @@ draw_ring ()
 	  int a,b;
 	  ID_to_xy (n->restoes->resok->toes[i].x, &a, &b);
 	  set_foreground_lat (n->restoes->resok->toes[i].a_lat); 
-	  draw_arrow (x,y,a,b);
+	  draw_arrow (x,y,a,b,draw_gc);
 	}
       }
     }
@@ -852,10 +871,10 @@ ID_to_xy (chordID ID, int *x, int *y)
 {
  
   double angle = ID_to_angle (ID);
-  double radius = (WINX)/2 - 10;
+  double radius = (WINX - 20)/2;
 
-  *x = 5 + (int)((WINX - 5)/2 + sin (angle)*radius);
-  *y = 5 + (int)((WINY - 5)/2 - cos (angle)*radius);
+  *x = (int)(WINX/2 + sin (angle)*radius);
+  *y = (int)(WINY/2 - cos (angle)*radius);
 }
 
 void
