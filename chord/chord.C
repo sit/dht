@@ -408,12 +408,15 @@ vnode::dogetsucc_ext (svccb *sbp)
 void
 vnode::dogetpred_ext (svccb *sbp)
 {
-  chord_nodeextres res(CHORD_OK);
   ndogetpred_ext++;
-  res.resok->alive = locations->alive (predecessor);
-  if (locations->alive (predecessor))
+  if (locations->alive (predecessor)) {
+    chord_nodeextres res(CHORD_OK);
+    res.resok->alive = true;
     locations->fill_getnodeext (*res.resok, predecessor);
-  sbp->reply (&res);
+    sbp->reply (&res);
+  } else {
+    sbp->replyref (chordstat (CHORD_ERRNOENT));
+  }
 }
 
 void
@@ -521,7 +524,7 @@ vnode::stabilize_getsucc_cb (chordID pred,
   // receive successor from my predecessor; in stable case it is me
   nout_continuous--;
   if (status) {
-    warnx << myID << ": stabilize_getpred_cb: " << pred 
+    warnx << myID << ": stabilize_pred: " << pred 
 	  << " failure " << status << "\n";
   } else {
     // maybe we're not stable. try this guy's successor as our new pred
