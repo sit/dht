@@ -54,21 +54,31 @@ class simulator:
     def __init__ (my, dht):
         my.dh = dht
         
-    def run (my, evgen, monitor):
+    def run (my, evgen, monitor, monint):
         last_time = 0
+	do_monitor = 0
+	next_monitor_time = monint
         for ev in evgen:
             assert last_time <= ev.time, "Woah! Time can't go backwards %d > %d." % (last_time, ev.time)
-            # Call the monitor before the time changes.
             if last_time != ev.time:
+		# Notify DHash of time change
                 my.dh.time_changed (last_time, ev.time)
-                monitor (last_time, my.dh)
+		# And call monitor periodically
+		if last_time > next_monitor_time or do_monitor:
+		    monitor (last_time, my.dh)
+		    next_monitor_time += monint
+		    # We expect a lot to happen in an hour...
+		do_monitor = 0
 
             if ev.type == "join":
                 my.dh.add_node (ev.id)
+		do_monitor = 1
             if ev.type == "fail":
                 my.dh.fail_node (ev.id)
+		do_monitor = 1
             if ev.type == "crash":
                 my.dh.crash_node (ev.id)
+		do_monitor = 1
             if ev.type == "insert":
                 my.dh.insert_block (ev.id, ev.block, ev.size)
             last_time = ev.time
@@ -131,14 +141,17 @@ if __name__ == '__main__':
 
     # default monitor
     monitor = print_monitor
+    monint  = 60
     try:
-        opts, cmdv = getopt.getopt (sys.argv[1:], "m")
+	opts, cmdv = getopt.getopt (sys.argv[1:], "ms:")
     except getopt.GetoptError:
         usage ()
         sys.exit (1)
     for o, a in opts:
         if o == '-m':
             monitor = parsable_monitor
+	elif o == '-s':
+	    monint = int (a)
             
     if len(cmdv) < 2:
         usage ()
@@ -176,5 +189,5 @@ if __name__ == '__main__':
 
     sim = simulator (gdh)
     eg = file_evgen (evfile)
-    sim.run (eg, monitor)
+    sim.run (eg, monitor, monint)
     
