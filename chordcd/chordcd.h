@@ -27,14 +27,6 @@ struct namei_state;
 struct lookup_state;
 struct getdata_state;
 
-struct fetch_wait_state {
-  cbdata_t cb;
-  list_entry<fetch_wait_state> link;
-  fetch_wait_state (cbdata_t CB) : cb (CB) {};
-};
-
-typedef list<fetch_wait_state, &fetch_wait_state::link> wait_list;
-
 class chord_server {
   dhashclient dh;
 
@@ -43,7 +35,7 @@ class chord_server {
   chordID rootdirID;
 
   lrucache<chordID, ref<sfsro_data>, hashID> data_cache;
-  qhash<chordID, wait_list, hashID> pf_waiters;
+  qhash<chordID, vec<cbdata_t>, hashID> pf_waiters;
 
   chordID nfsfh_to_chordid (nfs_fh3 *nfh);
   void chordid_to_nfsfh (chordID *n, nfs_fh3 *nfh);

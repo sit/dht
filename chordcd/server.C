@@ -986,17 +986,15 @@ chord_server::fetch_data (bool pfonly, chordID ID, dhash_ctype ct, cbdata_t cb)
   if (ptr<sfsro_data> dat = data_cache [ID]) {
     (*cb) (dat);
   }
-  else if (wait_list *l = pf_waiters[ID]) {
+  else if (vec<cbdata_t> *l = pf_waiters[ID]) {
     if (!pfonly) {
-      fetch_wait_state *w = New fetch_wait_state (cb);
-      l->insert_head (w);
+      l->push_back (cb);
     }
   }
   else {
     pf_waiters.insert (ID);
-    wait_list *l = pf_waiters[ID];
-    fetch_wait_state *w = New fetch_wait_state (cb);
-    l->insert_head (w);
+    vec<cbdata_t> *l = pf_waiters[ID];
+    l->push_back (cb);
     dh.retrieve (ID, ct, wrap (this, &chord_server::fetch_data_cb, ID, ct, cb));
   }
 }
@@ -1040,13 +1038,12 @@ chord_server::fetch_data_cb (chordID ID, dhash_ctype ct, cbdata_t cb,
     }
   }
 
-  wait_list *l = pf_waiters[ID];
+  vec<cbdata_t> *l = pf_waiters[ID];
   assert (l); 
   
-  while (fetch_wait_state *w = l->first) {
-    (*w->cb) (data);
-    l->remove (w);
-    delete w;
+  while (l->size ()) {
+    cbdata_t cb = l->pop_back (); 
+    (*cb) (data);
   }
   
   pf_waiters.remove (ID);
