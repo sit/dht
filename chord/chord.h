@@ -122,7 +122,7 @@ class vnode : public virtual refcount  {
   void stabilize_getsucc_cb (chordID s, net_address r, chordstat status);
   void stabilize_getsucclist_cb (int i, chordID s, net_address r, 
 				 chordstat status);
-  void join_getsucc_cb (chordID s, route r, chordstat status);
+  void join_getsucc_cb (cbroute_t cb, chordID s, route r, chordstat status);
   void find_closestpred (chordID &n, chordID &x, findpredecessor_cbstate *st);
   void find_closestpred_cb (chordID n, findpredecessor_cbstate *st,
 			    chord_noderes *res, clnt_stat err);
@@ -161,7 +161,7 @@ class vnode : public virtual refcount  {
 
   // The API
   void stabilize (int i);
-  void join ();
+  void join (cbroute_t cb);
   void find_predecessor (chordID &n, chordID &x, cbroute_t cb);
   void find_predecessor_restart (chordID &n, chordID &x, route search_path,
 				 cbroute_t cb);
@@ -237,8 +237,8 @@ class chord : public virtual refcount {
   ptr<locationtable> locations; 
   chord (str _wellknownhost, int _wellknownport, const chordID &_wellknownID,
 	 int port, str myhost, int set_rpcdelay);
-  ptr<vnode> newvnode (void);
-  ptr<vnode> newvnode (chordID &x);
+  ptr<vnode> newvnode (cbroute_t cb);
+  ptr<vnode> newvnode (chordID &x, cbroute_t cb);
   void deletefingers (chordID &x);
   int countrefs (chordID &x);
   void stats (void);

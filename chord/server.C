@@ -109,7 +109,7 @@ vnode::nth_successorID (int n)
 void
 vnode::find_successor (chordID &n, chordID &x, cbroute_t cb)
 {
-  //  warn << "find_successor: " << n << " " << x << "\n";
+  // warn << "find_successor: " << n << " " << x << "\n";
   nfindsuccessor++;
   find_predecessor (n, x,
 		    wrap (mkref (this), &vnode::find_predecessor_cb, cb, x));
@@ -143,10 +143,8 @@ vnode::find_predecessor_cb (cbroute_t cb, chordID x, chordID p,
       get_successor (p, wrap (mkref(this), &vnode::find_successor_cb, 
 			      cb, search_path));
     } else {
-      //      warnx << "find_predecessor_cb: " << myID << " find succ of " << x << "\n";
-      for (unsigned i = 0; i < search_path.size (); i++) {
-	//warnx << search_path[i] << "\n";
-      }
+      // warnx << "find_predecessor_cb: " << myID << " found succ of " 
+      //   << x << "\n";
       chordID s = search_path.pop_back ();
       cb(s, search_path, status);
     }
@@ -157,7 +155,7 @@ void
 vnode::find_successor_cb (cbroute_t cb, route search_path, chordID s, 
 			net_address r, chordstat status)
 {
-  // warnx << "find_successor_cb: " << s << " status " << status << "\n";
+  //  warnx << "find_successor_cb: " << s << " status " << status << "\n";
   cb (s, search_path, status);
 }
 
@@ -226,7 +224,7 @@ vnode::find_closestpred_cb (chordID n, findpredecessor_cbstate *st,
     st->cb (n, st->search_path, res->status);
     delete st;
   } else {
-    //    warnx << "find_closestpred_cb: pred of " << st->x << " is " 
+    // warnx << "find_closestpred_cb: pred of " << st->x << " is " 
     //  << res->resok->node << "\n";
     locations->cacheloc (res->resok->node, res->resok->r, n);
     st->search_path.push_back(res->resok->node);
@@ -411,7 +409,7 @@ vnode::get_fingers_cb (chordID x, chord_getfingersres *res,  clnt_stat err)
       // warnx << "get_fingers_cb: " << res->resok->fingers[i].x << "\n";
       updatefingers (res->resok->fingers[i].x, res->resok->fingers[i].r);
     }
-    print ();
+    //    print ();
   }
   delete res;
 }

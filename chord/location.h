@@ -134,6 +134,8 @@ class locationtable : public virtual refcount {
   void timeout(location *l);
   void decrefcnt (location *l);
  public:
+  bool betterpred1 (chordID current, chordID target, chordID newpred);
+  bool betterpred2 (chordID current, chordID target, chordID newpred);
   locationtable (ptr<chord> _chordnode, int set_rpcdelay);
   void insert (chordID &_n, sfs_hostname _s, int _p, chordID &_source);
   location *getlocation (chordID &x);

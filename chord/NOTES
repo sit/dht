@@ -2,5 +2,9 @@
 - test lookups during joins
 - size of location table (clean out entries with refcnt == 0)
 - smart implementation of location table
-- dmalloc
 - recursive lookup
+
+
+- bad: multiple vnodes start all at the same time
+- does dhash move files?
+- why does lsd consume so much cycles?

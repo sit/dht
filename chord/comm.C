@@ -22,7 +22,8 @@
 #include "chord.h"
 
 void
-locationtable::timeout(location *l) {
+locationtable::timeout(location *l) 
+{
   assert(l);
   warn << "timeout on " << l->n << " closing socket\n";
   if (l->nout == 0) l->x = NULL;
@@ -217,7 +218,7 @@ locationtable::chord_connect(chordID ID, callback<void,
   gettimeofday(start, NULL);
   if (l->x) {    
     timecb_remove(l->timeout_cb);
-    l->timeout_cb = delaycb(360, 0, wrap(mkref(this), 
+    l->timeout_cb = delaycb (360, 0, wrap(mkref(this), 
     					 &locationtable::timeout, l));
     (*cb)(l->x);
   } else {
@@ -230,7 +231,6 @@ locationtable::chord_connect(chordID ID, callback<void,
 void
 locationtable::connect_cb (callback<void, ptr<axprt_stream> >::ref cb, int fd)
 {
-  
   if (fd < 0) {
     warn ("connect failed: %m\n");
     (*cb)(NULL);

@@ -117,6 +117,17 @@ startclntd()
 }
 
 static void
+newvnode_cb (int n, chordID s, route r, chordstat status)
+{
+  warnx << "joincb: succeeded\n";
+
+  if (n > 0) {
+    str db_name_prime = strbuf () << db_name << "-" << n;
+    vNew dhash (db_name_prime, chordnode->newvnode (wrap (newvnode_cb, n-1)));
+  }
+}
+
+static void
 initID (str s, chordID *ID)
 {
   chordID n (s);
@@ -221,15 +232,12 @@ parseconfigfile (str cf, int index, int set_rpcdelay)
   chordnode = New refcounted<chord> (wellknownhost, wellknownport, 
 				     wellknownID, myport, myhost, set_rpcdelay);
 
-  if (myid) vNew dhash (db_name, chordnode->newvnode (myID));
-  else vNew dhash (db_name, chordnode->newvnode ());
+  if (myid) vNew dhash (db_name, chordnode->newvnode (myID, 
+						      wrap (newvnode_cb, 
+							    nvnode-1)));
+  else vNew dhash (db_name, chordnode->newvnode (wrap (newvnode_cb, nvnode-1)));
 
-  for (int i = 1; i < nvnode; i++) {
-    str db_name_prime = strbuf () << db_name << "-" << i;
-    vNew dhash (db_name_prime, chordnode->newvnode ());
-  }
   sigcb(SIGUSR1, wrap (chordnode, &chord::stats));
-
 }
 
 static void

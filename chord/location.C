@@ -19,6 +19,7 @@
  *
  */
 
+#include <math.h>
 #include "chord.h"
 
 locationtable::locationtable (ptr<chord> _chordnode, int set_rpcdelay)
@@ -105,12 +106,48 @@ locationtable::findsuccloc (chordID x) {
   return n;
 }
 
+bool
+locationtable::betterpred1 (chordID current, chordID target, chordID candidate)
+{
+  return between (current, target, candidate);
+}
+
+bool
+locationtable::betterpred2 (chordID current, chordID target, chordID newpred)
+{ 
+  location *c = getlocation (current);
+  location *n = getlocation (newpred);
+  if ((c->nrpc == 0) || (n->nrpc == 0)) {
+    return between (current, target, newpred);
+  } else {
+    float cdelay = c->rpcdelay / c->nrpc;
+    float ndelay = n->rpcdelay / n->nrpc;
+    float delayratio = cdelay/ndelay;
+    // fprintf (stderr, "cdelay %f ndelay %f delayratio %f\n", cdelay, ndelay, 
+    //     delayratio);
+    chordID cdiff = distance (c->n, target);
+    chordID ndiff = distance (n->n, target);
+    double cd = 1; // cdiff.getdouble ();  XXX requires changes to bigint.h
+    double nd = 1; // ndiff.getdouble ();  XXX
+    double diffratio = cd / nd;
+    // fprintf (stderr, "cdiff: %f ndiff %f diffratio %f\n", cd, nd, 
+    //     diffratio);
+    if ((delayratio <= 1) && (diffratio <= 1)) 
+      return 0; // c is closer in chord space and time
+    else if ((delayratio > 1) && (diffratio > 1))
+      return 1; // n is closer in chord space and time
+    else   // true, if n is closer in time than in space
+      return (delayratio > diffratio);
+  }
+}
+
 chordID
-locationtable::findpredloc (chordID x) {
+locationtable::findpredloc (chordID x) 
+{
   chordID n = x;
   for (location *l = locs.first (); l; l = locs.next (l)) {
     if (l->refcnt == 0) continue;
-    if ((x == n) || between (n, x, l->n)) n = l->n;
+    if ((x == n) || betterpred1 (n, x, l->n)) n = l->n;
   }
   // warnx << "findpredloc of " << x << " is " << n << "\n";
   return n;
@@ -120,8 +157,8 @@ void
 locationtable::cacheloc (chordID &x, net_address &r, chordID &source)
 {
   if (locs[x] == NULL) {
-     warnx << "cacheloc: " << x << " at port " << r.port << " source: " 
-    	  << source << "\n";
+    // warnx << "cacheloc: " << x << " at port " << r.port << " source: " 
+    //  << source << "\n";
     location *loc = New location (x, r, source);
     locs.insert (loc);
     // doActionCallbacks(x, ACT_NODE_JOIN);

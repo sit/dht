@@ -35,5 +35,6 @@
  bool betweenleftincl (chordID &a, chordID &b, chordID &n);
  bool betweenrightincl (chordID &a, chordID &b, chordID &n);
  chordID diff(chordID a, chordID b);
+ chordID distance(chordID a, chordID b);
  void warnt(char *msg);
 #endif /* _CHORD_UTIL_H */

@@ -30,7 +30,8 @@ static FILE *LOG = NULL;
 
 void
 warnt(char *msg) {
-  
+  return;
+
   char *filename = getenv("LOG_FILE");
   if (filename != NULL) 
     if (filename[0] == '-')
@@ -180,7 +181,17 @@ betweenrightincl (chordID &a, chordID &b, chordID &n)
 }
 
 chordID
-diff(chordID a, chordID b) 
+distance(chordID a, chordID b) 
+{
+  if (a < b) return (b - a);
+  else {
+    bigint t = bigint(1) << 160;
+    return (t - a) + b;
+  }
+}
+
+chordID
+diff (chordID a, chordID b)
 {
   chordID diff = (b - a);
   if (diff > 0) return diff;
