@@ -125,9 +125,11 @@ dhash::dispatch (unsigned long procno,
      
       if ((sarg->type == DHASH_STORE) && (!responsible (sarg->key))) {
 	warnt("DHASH: retry");
-	dhash_storeres *res = New dhash_storeres();
-	res->set_status (DHASH_RETRY);
-	res->pred->n = host_node->my_pred ();
+	dhash_storeres *res = New dhash_storeres(DHASH_RETRY);
+	chordID pred = host_node->my_pred ();
+	res->pred->p.x = pred;
+	res->pred->p.r = host_node->chordnode->locations->getaddress (pred);
+	dhash_reply (rpc_id, DHASHPROC_STORE, res);
       } else {
 	warnt("DHASH: will store");
 	store(sarg, wrap(this, &dhash::storesvc_cb, rpc_id, sarg));	
@@ -137,7 +139,6 @@ dhash::dispatch (unsigned long procno,
     break;
   case DHASHPROC_GETKEYS:
     {
-      warn << "GET_KEYS request\n";
       dhash_getkeys_arg *gkarg = New dhash_getkeys_arg ();
       if (!proc (x.xdrp (), gkarg)) {
 	warn << "DHASH: error unmarshalling arguments (getkey)\n";
@@ -149,7 +150,6 @@ dhash::dispatch (unsigned long procno,
       key_store.traverse (wrap (this, &dhash::get_keys_traverse_cb, keys, 
 				gkarg->pred_id));
 
-      warn << "GETKEYS: replying with " << keys->size () << " keys\n";
       res->resok->keys.set (keys->base (), keys->size (), freemode::NOFREE);
       dhash_reply (rpc_id, DHASHPROC_GETKEYS, res);
       delete res;
@@ -168,26 +168,6 @@ dhash::dispatch (unsigned long procno,
       dhash_stat stat = key_status (*arg);
       dhash_reply (rpc_id, DHASHPROC_KEYSTATUS, &stat);
       delete arg;
-    }
-    break;
-  case DHASHPROC_DISTRIBUTEKEY:
-    {
-      dhash_distkey_arg *arg = New dhash_distkey_arg;
-      if (!proc (x.xdrp (), arg)) {
-	warn << "DHASH: error unmarshalling arguments (distkey)\n";
-	return;
-      }
-
-      dhash_stat stat = key_status (arg->key);
-      if (stat == DHASH_NOTPRESENT) {
-	dhash_reply (rpc_id, DHASHPROC_DISTRIBUTEKEY, &stat);
-      } else {
-	for (unsigned int i = 0; i < arg->dest_hosts.size (); i++)
-	  transfer_key (arg->dest_hosts[i], arg->key, DHASH_CACHE,
-			wrap (this, &dhash::distkeys_cb));
-	dhash_stat ok = DHASH_OK;
-	dhash_reply (rpc_id, DHASHPROC_DISTRIBUTEKEY, &ok);
-      }
     }
     break;
   default:
@@ -245,7 +225,9 @@ dhash::fetchsvc_cb (long xid,
   } else {
     warnx << "partial_fetch: retry\n";
     res->set_status (DHASH_RETRY);
-    res->pred->n = host_node->my_pred ();
+    chordID p = host_node->my_pred ();
+    res->pred->p.x = p;
+    res->pred->p.r = host_node->chordnode->locations->getaddress (p);
   }
 
   warnt("DHASH: FETCH_replying");
@@ -282,18 +264,10 @@ dhash::get_keys_traverse_cb (ptr<vec<chordID> > vKeys,
 			     chordID predid,
 			     chordID key)
 {
-  if (key < predid) {
-    warn << "will include " << key << "\n";
+  if (key < predid) 
     vKeys->push_back (key);
-  }
 }
 
-void
-dhash::distkeys_cb (dhash_stat stat)
-{
-  if (stat != DHASH_OK) 
-    warn << "couldn't transfer key, bummer.\n";
-}
 //---------------- no sbp's below this line --------------
  
 // -------- reliability stuff
@@ -320,7 +294,6 @@ dhash::transfer_init_getkeys_cb (dhash_getkeys_res *res, clnt_stat err)
   if ((err) || (res->status != DHASH_OK)) 
     fatal << "Couldn't transfer keys from my successor\n";
 
-  warn << "Got " << res->resok->keys.size () << "keys\n";
   chordID succ = host_node->my_succ ();
   for (unsigned int i = 0; i < res->resok->keys.size (); i++) {
     get_key (succ, res->resok->keys[i], 
@@ -358,7 +331,7 @@ dhash::install_keycheck_timer ()
 			   wrap (this, &dhash::check_keys_timer_cb));
 };
 
-/* O( (number of replicas)^2 (but doesn't assume anything about
+/* O( (number of replicas)^2 ) (but doesn't assume anything about
 ordering of chord::succlist*/
 bool 
 dhash::isReplica(chordID id) { 
@@ -370,12 +343,15 @@ dhash::isReplica(chordID id) {
 void
 dhash::check_replicas_cb () 
 {
+
   for (int i=0; i < nreplica; i++) {
     chordID nth = host_node->nth_successorID (i);
     if (!isReplica(nth)) 
       key_store.traverse (wrap (this, &dhash::check_replicas_traverse_cb, 
 				nth));
   }
+
+
   install_replica_timer ();
   update_replica_list ();
   
@@ -398,7 +374,7 @@ dhash::fix_replicas_txerd (dhash_stat err)
 void
 dhash::check_keys_timer_cb () 
 {
-  printkeys ();
+  // printkeys ();
   key_store.traverse (wrap (this, &dhash::check_keys_traverse_cb));
   key_replicate.traverse (wrap (this, &dhash::check_keys_traverse_cb));
   key_cache.traverse (wrap (this, &dhash::check_keys_traverse_cb));
@@ -417,6 +393,27 @@ dhash::check_keys_traverse_cb (chordID key)
 }
 // --- node to node transfers ---
 void
+dhash::replicate_key (chordID key, cbstat_t cb)
+{
+  if (replicas.size () > 0)
+    transfer_key (replicas[0], key, DHASH_REPLICA, 
+		  wrap (this, &dhash::replicate_key_cb, 1, cb, key));
+  else
+    (cb)(DHASH_OK);
+}
+
+void
+dhash::replicate_key_cb (unsigned int replicas_done, cbstat_t cb, chordID key,
+			 dhash_stat err) 
+{
+  if (err) (*cb)(DHASH_ERR);
+  else if (replicas_done >= replicas.size ()) (*cb)(DHASH_OK);
+  else transfer_key (replicas[replicas_done], key, DHASH_REPLICA,
+		     wrap (this, &dhash::replicate_key_cb, 
+			   replicas_done + 1, cb, key));
+						
+}
+void
 dhash::transfer_key (chordID to, chordID key, store_status stat, 
 		     callback<void, dhash_stat>::ref cb) 
 {
@@ -433,22 +430,24 @@ dhash::transfer_fetch_cb (chordID to, chordID key, store_status stat,
     cb (err);
   } else {
     unsigned int mtu = 1024;
-    dhash_storeres *res = New dhash_storeres ();
     unsigned int off = 0;
     do {
+      dhash_storeres *res = New dhash_storeres ();
       ptr<dhash_insertarg> i_arg = New refcounted<dhash_insertarg> ();
       i_arg->key = key;
       i_arg->offset = off;
-      int remain = (off + mtu <= static_cast<unsigned long>(data->len)) ? mtu : data->len - off;
+      int remain = (off + mtu <= static_cast<unsigned long>(data->len)) ? 
+	mtu : data->len - off;
       i_arg->data.setsize (remain);
       i_arg->attr.size = data->len;
       i_arg->type = stat;
-      memcpy(i_arg->data.base () + off, (char *)data->value + off, remain);
+      memcpy(i_arg->data.base (), (char *)data->value + off, remain);
  
       host_node->chordnode->doRPC(to, dhash_program_1, DHASHPROC_STORE, 
 				  i_arg, res,
 				  wrap(this, 
-				       &dhash::transfer_store_cb, cb, res));
+				       &dhash::transfer_store_cb, cb, 
+				       res, i_arg, to));
 
       off += remain;
      } while (off < static_cast<unsigned long>(data->len));
@@ -458,11 +457,25 @@ dhash::transfer_fetch_cb (chordID to, chordID key, store_status stat,
 
 void
 dhash::transfer_store_cb (callback<void, dhash_stat>::ref cb, 
-			  dhash_storeres *res, clnt_stat err) 
+			  dhash_storeres *res, ptr<dhash_insertarg> i_arg,
+			  chordID to, clnt_stat err) 
 {
   if (err) 
     cb (DHASH_RPCERR);
-  else if (res->resok->done)
+  else if (res->status == DHASH_RETRY) {
+    dhash_storeres *nres = New dhash_storeres ();
+    host_node->chordnode->locations->cacheloc (res->pred->p.x, 
+					       res->pred->p.r,
+					       to);
+					       
+    host_node->chordnode->doRPC(res->pred->p.x, 
+				dhash_program_1, DHASHPROC_STORE, 
+				i_arg, nres,
+				wrap(this, 
+				     &dhash::transfer_store_cb, 
+				     cb, nres, i_arg,
+				     res->pred->p.x));
+  } else if (res->resok->done)
     cb (res->status);
 
   delete res;
@@ -645,7 +658,7 @@ dhash::store_cb(store_status type, chordID id, cbstore cb, int stat)
   if (stat != 0) 
     (*cb)(DHASH_STOREERR);
   //  else if (type == DHASH_STORE)
-  // replicate_key (id, REP_DEGREE, wrap (this, &dhash::store_repl_cb, cb));
+  //  replicate_key (id,  wrap (this, &dhash::store_repl_cb, cb));
   else	   
     (*cb)(DHASH_OK);
   
@@ -659,10 +672,8 @@ dhash::store_cb(store_status type, chordID id, cbstore cb, int stat)
 void
 dhash::store_repl_cb (cbstore cb, dhash_stat err) 
 {
-  if (err) 
-    cb (err);
-  else
-    cb (DHASH_OK);
+  if (err) cb (err);
+  else cb (DHASH_OK);
 }
 
 
@@ -720,6 +731,8 @@ dhash::key_status(chordID n)
 char
 dhash::responsible(chordID& n) 
 {
+  store_state *ss = pst[n];
+  if (ss) return true; //finish any store we start
   chordID p = host_node->my_pred ();
   chordID m = host_node->my_ID ();
   return (between (p, m, n));

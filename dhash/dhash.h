@@ -68,34 +68,42 @@ class dhashclient {
   ptr<chord> clntnode;
 
   int do_caching;
-  int num_replicas;
+
+  qhash<chordID, store_state, hashID> pst;
 
   void dispatch (svccb *sbp);
-  void cache_on_path(chordID key, chordID owner, route path);
-
-  void lookup_findsucc_cb (svccb *sbp,
-			   chordID succ, route path, chordstat err);
-  void lookup_fetch_cb (dhash_res *res, retry_state *st,  clnt_stat err);
-
   void lookup_iter_cb (svccb *sbp, 
 		       dhash_fetchiter_res *res,
 		       chordID prev,
+		       route path,
 		       clnt_stat err);
 
-  void retry (retry_state *st, chordID p, net_address r, chordstat stat);
-  
-  void insert_findsucc_cb (svccb *sbp, ptr<dhash_insertarg> item, chordID succ, 
+  void insert_findsucc_cb (svccb *sbp, ptr<dhash_insertarg> item, chordID succ,
 			   route path, chordstat err);
-  void insert_store_cb(svccb *sbp,  dhash_storeres *res, 
+  void insert_store_cb(svccb *sbp,  dhash_storeres *res,
+		       ptr<dhash_insertarg> item,
 		       clnt_stat err);
 
-  void cache_store_cb(dhash_stat *res, clnt_stat err);
+  void cache_on_path (chordID key, route path);
+  void send_block (chordID key, chordID to, store_status stat);
+  void send_store_cb (dhash_storeres *res, clnt_stat err);
 
- public:
-  
+  void memorize_block (dhash_insertarg *item);
+  void memorize_block (chordID key, dhash_fetchiter_res *res);
+  void memorize_block (chordID key, int tsize, 
+		       int offset, void *base, int dsize);
+  bool block_memorized (chordID key);
+  void forget_block (chordID key);
+
+#if 0
+  void lookup_findsucc_cb (svccb *sbp,
+			   chordID succ, route path, chordstat err);
+  void lookup_fetch_cb (dhash_res *res, retry_state *st,  clnt_stat err);
+  void retry (retry_state *st, chordID p, net_address r, chordstat stat);
+#endif
+
+ public:  
   void set_caching(char c) { do_caching = c;};
-  void set_num_replicas(int num) { num_replicas = num; };
-
   dhashclient (ptr<axprt_stream> x, ptr<chord> clnt);
 };
 
@@ -131,15 +139,15 @@ class dhash {
 			     chordID predid,
 			     chordID key);
 
-  void distkeys_cb (dhash_stat stat);
-
-
   void transfer_initial_keys ();
   void transfer_init_getkeys_cb (dhash_getkeys_res *res, clnt_stat err);
   void transfer_init_gotk_cb (dhash_stat err);
 
   void update_replica_list ();
   bool isReplica(chordID id);
+  void replicate_key (chordID key, cbstat_t cb);
+  void replicate_key_cb (unsigned int replicas_done, cbstat_t cb, chordID key,
+			 dhash_stat err);
 
   void install_keycheck_timer ();
   void check_keys_timer_cb ();
@@ -159,7 +167,8 @@ class dhash {
 			  callback<void, dhash_stat>::ref cb,
 			  ptr<dbrec> data, dhash_stat err);
   void transfer_store_cb (callback<void, dhash_stat>::ref cb, 
-			  dhash_storeres *res, clnt_stat err);
+			  dhash_storeres *res, ptr<dhash_insertarg> i_arg,
+			  chordID to, clnt_stat err);
 
   void get_key (chordID source, chordID key, cbstat_t cb);
   void get_key_initread_cb (cbstat_t cb, dhash_res *res, chordID source, 

@@ -15,7 +15,7 @@
  */
 
 dhashclient::dhashclient (ptr<axprt_stream> _x, ptr<chord> node)
-  : x (_x), clntnode(node), do_caching (0), num_replicas(0)
+  : x (_x), clntnode(node), do_caching (0)
 {
   clntsrv = asrv::alloc (x, dhashclnt_program_1,
 			 wrap (this, &dhashclient::dispatch));
@@ -38,7 +38,7 @@ dhashclient::dispatch (svccb *sbp)
     {
       warnt("DHASH: lookup_request");
       
-      /*
+      /* OLD SCHOOL lookup
       clntnode->find_successor (arg->key, 
 				wrap (this, &dhashclient::lookup_findsucc_cb, 
 				      sbp));
@@ -51,13 +51,13 @@ dhashclient::dispatch (svccb *sbp)
       arg->len = farg->len;
 
       chordID next = clntnode->lookup_closestpred (arg->key);
-      warn << "next was " << next << "\n";
-      warn << "about to allocate i_res\n";
       dhash_fetchiter_res *i_res = New dhash_fetchiter_res ();
-
+      
+      route path;
+      path.push_back (next);
       clntnode->doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, arg, i_res,
 		       wrap(this, &dhashclient::lookup_iter_cb, 
-			    sbp, i_res, next));
+			    sbp, i_res, next, path));
 
     } 
     break;
@@ -65,9 +65,10 @@ dhashclient::dispatch (svccb *sbp)
     {
       warnt("DHASH: insert_request");
       dhash_insertarg *item = sbp->template getarg<dhash_insertarg> ();
+      memorize_block (item);
       ptr<dhash_insertarg> p_item = New refcounted<dhash_insertarg> (*item);
       chordID n = item->key;
-      clntnode->find_successor (n, wrap(this, &dhashclient::insert_findsucc_cb, 
+      clntnode->find_successor (n, wrap(this, &dhashclient::insert_findsucc_cb,
 				    sbp, p_item));
     }
     break;
@@ -92,87 +93,151 @@ dhashclient::insert_findsucc_cb(svccb *sbp, ptr<dhash_insertarg> item,
 
     dhash_storeres *res = New dhash_storeres();
     clntnode->doRPC(succ, dhash_program_1, DHASHPROC_STORE, item, res,
-		wrap(this, &dhashclient::insert_store_cb, sbp, res));
+		wrap(this, &dhashclient::insert_store_cb, sbp, res, item));
     
+    cache_on_path (item->key, path);
   }
 }
 
 void
-dhashclient::insert_store_cb(svccb *sbp,  dhash_storeres *res, 
+dhashclient::insert_store_cb(svccb *sbp, dhash_storeres *res, 
+			     ptr<dhash_insertarg> item,
 			     clnt_stat err )
 {
-
   warnt("DHASH: insert_after_STORE");
-#if 0 
-  if (res->status) {
-    // error in insertion/replication: return to caller
-    warnx << "insert_store_cb: failed " << res->status << "\n";
-    sbp->replyref(dhash_stat (DHASH_STOREERR));
-  } else 
-    sbp->replyref(dhash_stat (DHASH_OK));
-#endif
-  sbp->reply (res);
+  if (res->status == DHASH_RETRY) {
+    dhash_storeres *nres = New dhash_storeres();
+    clntnode->doRPC(res->pred->p.x, dhash_program_1, 
+		    DHASHPROC_STORE, item, nres,
+		    wrap(this, &dhashclient::insert_store_cb, sbp, nres,item));
+
+  } else
+    sbp->reply (res);
+
   delete res;
-}
-   
-void
-dhashclient::cache_on_path(chordID key, chordID owner, route path) 
-{
-  dhash_stat *res = New dhash_stat();
-  ptr<dhash_distkey_arg> arg = New refcounted<dhash_distkey_arg>;
-  arg->key = key;
-  arg->dest_hosts.set (path.base (), path.size ());
-  clntnode->doRPC(owner, dhash_program_1, DHASHPROC_DISTRIBUTEKEY, 
-		  arg, res,
-		  wrap(this, &dhashclient::cache_store_cb, res));
-}
-
-void
-dhashclient::cache_store_cb(dhash_stat *res, clnt_stat err) 
-{
-
-  if (err) {
-    warnt("DHASH: cache failed");
-  } else {
-    warnt("DHASH: propogated item");
-  }
-  delete res;
-
 }
 
 void 
 dhashclient::lookup_iter_cb (svccb *sbp, 
 			     dhash_fetchiter_res *res,
 			     chordID prev,
+			     route path,
 			     clnt_stat err) 
 {
+  dhash_fetch_arg *arg = sbp->template getarg<dhash_fetch_arg> ();
   if (err) {
     sbp->replyref (DHASH_RPCERR);
   } else if (res->status == DHASH_COMPLETE) {
+    memorize_block (arg->key, res);
     dhash_res *fres = New dhash_res (DHASH_OK);
     fres->resok->res = res->compl_res->res;
     fres->resok->offset = res->compl_res->offset;
     fres->resok->attr = res->compl_res->attr;
-    fres->resok->hops = 1;
+    fres->resok->hops = path.size ();
     sbp->reply (fres);
+    cache_on_path (arg->key, path);
   } else if (res->status == DHASH_CONTINUE) {
     chordID next = res->cont_res->next.x;
     clntnode->locations->cacheloc (next, res->cont_res->next.r, prev);
     dhash_fetchiter_res *nres = New dhash_fetchiter_res;
-    dhash_fetch_arg *arg = sbp->template getarg<dhash_fetch_arg> ();
-    //must refcount arg
+    path.push_back (next);
     ptr<dhash_fetch_arg> rarg = New refcounted<dhash_fetch_arg>(*arg);
     clntnode->doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, 
 		     rarg, nres,
 		     wrap(this, &dhashclient::lookup_iter_cb, 
-			  sbp, nres, next));
+			  sbp, nres, next, path));
   } else 
     sbp->replyref (DHASH_NOENT);
 
   delete res;
 }
 				  
+void
+dhashclient::memorize_block (dhash_insertarg *item) 
+{
+  memorize_block (item->key, item->attr.size, item->offset, 
+		  item->data.base(), item->data.size ());
+}
+void
+dhashclient::memorize_block (chordID key, dhash_fetchiter_res *res) 
+{
+  if (res->status != DHASH_COMPLETE) return;
+  memorize_block (key, res->compl_res->attr.size,
+		  res->compl_res->offset,
+		  res->compl_res->res.base (),
+		  res->compl_res->res.size ());
+}
+void
+dhashclient::memorize_block (chordID key, int tsize, 
+			     int offset, void *base, int dsize)
+{
+  store_state *ss = pst[key];
+  if (!ss) {
+    store_state nss (tsize);
+    pst.insert(key, nss);
+    ss = pst[key];
+  } 
+  ss->read += dsize;
+  memcpy (ss->buf + offset, base, dsize);
+}
 
+bool
+dhashclient::block_memorized (chordID key) 
+{
+  store_state *ss = pst[key];
+  return (ss->read == ss->size);
+}
+
+void 
+dhashclient::forget_block (chordID key)
+{
+  store_state *ss = pst[key];
+  delete ss->buf;
+  pst.remove (key);
+}
+
+void
+dhashclient::cache_on_path (chordID key, route path)
+{
+  if (!block_memorized (key)) return;
+  for (unsigned int i=0; i < path.size (); i++)
+    send_block (key, path[i], DHASH_CACHE);
+}
+
+void
+dhashclient::send_block (chordID key, chordID to, store_status stat)
+{
+  store_state *ss = pst[key];
+  
+  unsigned int mtu = 8192;
+  dhash_storeres *res = New dhash_storeres ();
+  unsigned int off = 0;
+  do {
+    ptr<dhash_insertarg> i_arg = New refcounted<dhash_insertarg> ();
+    i_arg->key = key;
+    i_arg->offset = off;
+    int remain = (off + mtu <= static_cast<unsigned long>(ss->size)) ? 
+      mtu : ss->size - off;
+    i_arg->data.setsize (remain);
+    i_arg->attr.size = ss->size;
+    i_arg->type = stat;
+    memcpy(i_arg->data.base (), ss->buf + off, remain);
+    
+    clntnode->doRPC(to, dhash_program_1, DHASHPROC_STORE, 
+		    i_arg, res,
+		    wrap(this, &dhashclient::send_store_cb, res));
+    off += remain;
+  } while (off < static_cast<unsigned long>(ss->size));
+}
+  
+void
+dhashclient::send_store_cb (dhash_storeres *res, clnt_stat err) 
+{
+  if ((err) || (res->status))  warn << "Error caching block\n";
+  delete res;
+}
+
+#if 0
 void
 dhashclient::lookup_findsucc_cb (svccb *sbp, 
 				chordID succ, route path,
@@ -242,3 +307,30 @@ dhashclient::retry (retry_state *st, chordID p, net_address a, chordstat stat)
   }
 }
 
+   
+void
+dhashclient::cache_on_path(chordID key, chordID owner, route path) 
+{
+  dhash_stat *res = New dhash_stat();
+  ptr<dhash_distkey_arg> arg = New refcounted<dhash_distkey_arg>;
+  arg->key = key;
+  arg->dest_hosts.set (path.base (), path.size ());
+  clntnode->doRPC(owner, dhash_program_1, DHASHPROC_DISTRIBUTEKEY, 
+		  arg, res,
+		  wrap(this, &dhashclient::cache_store_cb, res));
+}
+
+void
+dhashclient::cache_store_cb(dhash_stat *res, clnt_stat err) 
+{
+
+  if (err) {
+    warnt("DHASH: cache failed");
+  } else {
+    warnt("DHASH: propogated item");
+  }
+  delete res;
+
+}
+
+#endif

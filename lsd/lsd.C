@@ -122,7 +122,7 @@ newvnode_cb (int n, vnode *my)
   warnx << "joincb: succeeded\n";
 
   str db_name_prime = strbuf () << db_name << "-" << n;
-  vNew dhash (db_name_prime, my);
+  vNew dhash (db_name_prime, my, 5);
   if (n > 0) chordnode->newvnode (wrap (newvnode_cb, n-1));
 }
 

@@ -45,7 +45,7 @@ struct dhash_fetch_arg {
 };
 
 struct dhash_pred {
-  chordID n;
+  chord_node p;
 };
 
 struct dhash_resok {
@@ -147,8 +147,6 @@ program DHASH_PROGRAM {
     dhash_fetchiter_res
     DHASHPROC_FETCHITER (dhash_fetch_arg) = 5;
 
-    dhash_stat
-    DHASHPROC_DISTRIBUTEKEY (dhash_distkey_arg) = 6;
   } = 1;
 } = 344449;
 
