@@ -347,7 +347,6 @@ Kademlia::join(Args *args)
   IPAddress wkn = args->nget<IPAddress>("wellknown");
 
   // pick a new ID
-  _nodeid2kademlia->remove(_id);
   _id = ConsistentHash::ip2chid(_joincounter++);
   _nodeid2kademlia->insert(_id, this);
 
