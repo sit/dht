@@ -1,5 +1,7 @@
+#include "dhash_common.h"
 #include <dhash.h>
 #include <route.h>
+#include "route_dhash.h"
 #include <location.h>
 #include <chord.h>
 #include <chord_prot.h>
@@ -15,6 +17,8 @@
 u_int MTU = (getenv ("DHASH_MTU") ? atoi (getenv ("DHASH_MTU")) : 1024);
 #define LOOKUP_TIMEOUT 60
 static int gnonce;
+
+typedef callback<void, ptr<dhash_block> >::ref cbretrieve_t;
 
 
 // ---------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-/* $Id: sfsrodb.C,v 1.28 2002/12/20 22:16:27 fdabek Exp $ */
+/* $Id: sfsrodb.C,v 1.29 2003/03/12 16:33:25 sit Exp $ */
 
 /*
  * Copyright (C) 1999 Kevin Fu (fubob@mit.edu)
@@ -45,6 +45,11 @@
 #include "rxx.h"
 #include "sfsro_prot_cfs.h"
 #include "sfscrypt.h"
+
+#include <dhash_common.h>
+#include <dhashclient.h>
+#include <verify.h>
+#include "dbfe.h"
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
 str lsd_socket;

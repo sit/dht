@@ -22,8 +22,9 @@
 
 #include "sfsrodb_core.h"
 #include "sfsrodb.h"
-#include "dhash.h"
 #include "dhash_prot.h"
+#include "dhash_common.h"
+#include "dhashclient.h"
 #include "arpc.h"
 #include "sys/time.h"
 

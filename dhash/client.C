@@ -26,19 +26,26 @@
  *
  */
 
+#include <sys/time.h>
+
+#include <sfsmisc.h>
+#include <arpc.h>
+#include <crypt.h>
+
 #include <chord_prot.h>
 #include <chord.h>
-#include <dhash.h>
-#include "location.h"
-#include "sfsmisc.h"
-#include "arpc.h"
-#include "crypt.h"
-#include <sys/time.h>
-#include "chord_util.h"
+#include <location.h>
+#include "dhash_common.h"
+#include "dhash.h"
+#include "dhashcli.h"
+#include "verify.h"
+#include "route_dhash.h"
+
+#include <chord_util.h>
 #ifdef DMALLOC
-#include "dmalloc.h"
+#include <dmalloc.h>
 #endif
-#include "ida.h"
+#include <ida.h>
 
 
 // ---------------------------------------------------------------------------

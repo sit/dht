@@ -25,10 +25,13 @@
  *
  */
 
-#include "sfsmisc.h"
-#include "dhash_prot.h"
-#include "dhash.h"
-#include "crypt.h"
+#include <sfsmisc.h>
+#include <dhash_common.h>
+#include <dhash_prot.h>
+#include <dhashclient.h>
+#include <verify.h>
+#include <dbfe.h>
+#include <crypt.h>
 #include <sys/time.h>
 
 static bigint *IDs;

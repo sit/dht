@@ -25,15 +25,23 @@
  *  WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
  */
+#include <arpc.h>
 
-#include "dhash.h"
+#include "dhash_common.h"
+#include "dhash_impl.h"
+#include "dhashcli.h"
+#include "verify.h"
+
+#include <merkle.h>
+#include <merkle_server.h>
+#include <merkle_misc.h>
 #include <dhash_prot.h>
 #include <chord.h>
 #include <chord_prot.h>
 #include <chord_util.h>
 #include <location.h>
 #include <dbfe.h>
-#include <arpc.h>
+
 #ifdef DMALLOC
 #include <dmalloc.h>
 #endif
@@ -63,8 +71,21 @@ close_databases ()
   }
 }
 
+// Pure virtual destructors still need definitions
+dhash::~dhash () {}
 
-dhash::dhash(str dbname, u_int k, int _ss_mode) 
+ref<dhash>
+dhash::produce_dhash (str dbname, u_int nrepl, int ss_mode)
+{
+  return New refcounted<dhash_impl> (dbname, nrepl, ss_mode);
+}
+
+dhash_impl::~dhash_impl ()
+{
+  // XXX Do we need to free stuff?
+}
+
+dhash_impl::dhash_impl (str dbname, u_int k, int _ss_mode) 
 {
   nreplica = k;
   kc_delay = 11;
@@ -111,7 +132,7 @@ dhash::dhash(str dbname, u_int k, int _ss_mode)
 }
 
 void
-dhash::init_after_chord(ptr<vnode> node, ptr<route_factory> _r_factory)
+dhash_impl::init_after_chord(ptr<vnode> node, ptr<route_factory> _r_factory)
 {
   this->r_factory = _r_factory;
 
@@ -121,7 +142,7 @@ dhash::init_after_chord(ptr<vnode> node, ptr<route_factory> _r_factory)
   // merkle state
   msrv = New merkle_server (mtree, 
 			    wrap (node, &vnode::addHandler),
-			    wrap (this, &dhash::missing),
+			    wrap (this, &dhash_impl::missing),
 			    host_node);
 
   replica_syncer_dstID = 0;
@@ -140,9 +161,9 @@ dhash::init_after_chord(ptr<vnode> node, ptr<route_factory> _r_factory)
 
   // RPC demux
   warn << host_node->my_ID () << " registered dhash_program_1\n";
-  host_node->addHandler (dhash_program_1, wrap(this, &dhash::dispatch));
+  host_node->addHandler (dhash_program_1, wrap(this, &dhash_impl::dispatch));
   host_node->register_upcall (dhash_program_1.progno,
-			      wrap (this, &dhash::route_upcall));
+			      wrap (this, &dhash_impl::route_upcall));
   
   //the client helper class (will use for get_key etc)
   //don't cache here: only cache on user generated requests
@@ -162,30 +183,24 @@ dhash::init_after_chord(ptr<vnode> node, ptr<route_factory> _r_factory)
 
 
   update_replica_list ();
-  delaycb (SYNCTM, wrap (this, &dhash::sync_cb));
+  delaycb (SYNCTM, wrap (this, &dhash_impl::sync_cb));
 
   if (!JOSH) {
     merkle_rep_tcb = 
-      delaycb (REPTM, wrap (this, &dhash::replica_maintenance_timer, 0));
+      delaycb (REPTM, wrap (this, &dhash_impl::replica_maintenance_timer, 0));
     merkle_part_tcb =
-      delaycb (PRTTM, wrap (this, &dhash::partition_maintenance_timer));
+      delaycb (PRTTM, wrap (this, &dhash_impl::partition_maintenance_timer));
   }
 
   if (KEYHASHDB) {
     keyhash_mgr_rpcs = 0;
     keyhash_mgr_tcb =
-      delaycb (KEYHASHTM, wrap (this, &dhash::keyhash_mgr_timer));
+      delaycb (KEYHASHTM, wrap (this, &dhash_impl::keyhash_mgr_timer));
   }
 }
 
 void
-dhash::sendblock_XXX (XXX_SENDBLOCK_ARGS *a)
-{
-  sendblock (a->dest, a->blockID, a->last, a->cb);
-}
-
-void
-dhash::sendblock (chord_node dst, bigint blockID, bool last, callback<void>::ref cb)
+dhash_impl::sendblock (chord_node dst, bigint blockID, bool last, callback<void>::ref cb)
 {
   // warnx << "sendblock: to " << dst.x << ", id " << blockID << ", from " << host_node->my_ID () << "\n";
 
@@ -199,20 +214,20 @@ dhash::sendblock (chord_node dst, bigint blockID, bool last, callback<void>::ref
   // XXX pass 'dst' not 'dst.x' to storeblock so that the store
   // works even if dst.x is evicted from the location table
   cli->storeblock (dst.x, blockID, dhblk, last,
-		   wrap (this, &dhash::sendblock_cb, cb), 
+		   wrap (this, &dhash_impl::sendblock_cb, cb), 
 		   DHASH_REPLICA);
 }
 
 
 void
-dhash::missing (chord_node from, bigint key)
+dhash_impl::missing (chord_node from, bigint key)
 {
   warn << host_node->my_ID () << ": missing key " << key << ", from " << from.x << "\n"; // 
-  cli->retrieve2 (key, 0, wrap (this, &dhash::missing_retrieve_cb, key));
+  cli->retrieve2 (key, 0, wrap (this, &dhash_impl::missing_retrieve_cb, key));
 }
 
 void
-dhash::missing_retrieve_cb (bigint key, dhash_stat err, ptr<dhash_block> b, route r)
+dhash_impl::missing_retrieve_cb (bigint key, dhash_stat err, ptr<dhash_block> b, route r)
 {
   if (err) {
     warn << "Could not retrieve key " << key << "\n";
@@ -228,7 +243,7 @@ dhash::missing_retrieve_cb (bigint key, dhash_stat err, ptr<dhash_block> b, rout
 
 
 void
-dhash::sendblock_cb (callback<void>::ref cb, dhash_stat err, chordID blockID)
+dhash_impl::sendblock_cb (callback<void>::ref cb, dhash_stat err, chordID blockID)
 {
   // XXX don't assert, how propogate the error??
 #if 0
@@ -243,13 +258,13 @@ dhash::sendblock_cb (callback<void>::ref cb, dhash_stat err, chordID blockID)
 }
 
 void
-dhash::keyhash_sync_done ()
+dhash_impl::keyhash_sync_done ()
 {
   keyhash_mgr_rpcs --;
 }
 
 void
-dhash::keyhash_mgr_timer ()
+dhash_impl::keyhash_mgr_timer ()
 {
   keyhash_mgr_tcb = NULL;
   update_replica_list ();
@@ -272,25 +287,25 @@ dhash::keyhash_mgr_timer ()
 	  // warnx << "for " << n << ", replicate to " << replicas[j] << "\n";
           keyhash_mgr_rpcs ++;
           sendblock (replicas[j], n, false,
-	             wrap (this, &dhash::keyhash_sync_done));
+	             wrap (this, &dhash_impl::keyhash_sync_done));
 	}
       }
       else {
         keyhash_mgr_rpcs ++;
         // otherwise, try to sync with the master node
         cli->lookup
-	  (n, 0, wrap (this, &dhash::keyhash_mgr_lookup, n));
+	  (n, 0, wrap (this, &dhash_impl::keyhash_mgr_lookup, n));
         // XXX if we are not a replica, should mark the block so we dont
         // serve it again
       }
     }
   }
   keyhash_mgr_tcb =
-    delaycb (KEYHASHTM, wrap (this, &dhash::keyhash_mgr_timer));
+    delaycb (KEYHASHTM, wrap (this, &dhash_impl::keyhash_mgr_timer));
 }
 
 void
-dhash::keyhash_mgr_lookup (chordID key, dhash_stat err, chordID host, route r)
+dhash_impl::keyhash_mgr_lookup (chordID key, dhash_stat err, chordID host, route r)
 {
   keyhash_mgr_rpcs --;
   if (!err) {
@@ -301,7 +316,7 @@ dhash::keyhash_mgr_lookup (chordID key, dhash_stat err, chordID host, route r)
 
     keyhash_mgr_rpcs ++;
     // warnx << "for " << key << ", sending to " << host << "\n";
-    sendblock (n, key, false, wrap (this, &dhash::keyhash_sync_done));
+    sendblock (n, key, false, wrap (this, &dhash_impl::keyhash_sync_done));
   }
 }
 
@@ -309,7 +324,7 @@ dhash::keyhash_mgr_lookup (chordID key, dhash_stat err, chordID host, route r)
 // replica maintenance
 
 void
-dhash::replica_maintenance_timer (u_int index)
+dhash_impl::replica_maintenance_timer (u_int index)
 {
   return;
 
@@ -318,7 +333,7 @@ dhash::replica_maintenance_timer (u_int index)
   update_replica_list ();
 
 #if 1
-  warn << "dhash::replica_maintenance_timer index " << index
+  warn << "dhash_impl::replica_maintenance_timer index " << index
        << ", #replicas " << replicas.size() << "\n";
 #endif
   
@@ -349,8 +364,8 @@ dhash::replica_maintenance_timer (u_int index)
         replica_syncer_dstID = replica.x;
         replica_syncer = New refcounted<merkle_syncer> 
 	  (mtree, 
-	   wrap (this, &dhash::doRPC_unbundler, replica),
-	   wrap (this, &dhash::missing, replica));
+	   wrap (this, &dhash_impl::doRPC_unbundler, replica),
+	   wrap (this, &dhash_impl::missing, replica));
         active_syncers.insert (replica.x, replica_syncer);
         
         bigint rngmin = 0; //host_node->my_pred ();
@@ -369,20 +384,20 @@ dhash::replica_maintenance_timer (u_int index)
   }
 
   merkle_rep_tcb =
-    delaycb (REPTM, wrap (this, &dhash::replica_maintenance_timer, index));
+    delaycb (REPTM, wrap (this, &dhash_impl::replica_maintenance_timer, index));
 }
 
 
 
 #if 0
 void
-dhash::replica_maintenance_timer (u_int index)
+dhash_impl::replica_maintenance_timer (u_int index)
 {
   merkle_rep_tcb = NULL;
   update_replica_list ();
 
 #if 0
-  warn << "dhash::replica_maintenance_timer index " << index
+  warn << "dhash_impl::replica_maintenance_timer index " << index
        << ", #replicas " << replicas.size() << "\n";
 #endif
   
@@ -413,8 +428,8 @@ dhash::replica_maintenance_timer (u_int index)
         replica_syncer_dstID = replica.x;
         replica_syncer = New refcounted<merkle_syncer> 
 	  (mtree, 
-	   wrap (this, &dhash::doRPC_unbundler, replica),
-	   wrap (this, &dhash::sendblock, replica));
+	   wrap (this, &dhash_impl::doRPC_unbundler, replica),
+	   wrap (this, &dhash_impl::sendblock, replica));
         active_syncers.insert (replica.x, replica_syncer);
         
         bigint rngmin = host_node->my_pred ();
@@ -432,7 +447,7 @@ dhash::replica_maintenance_timer (u_int index)
   }
 
   merkle_rep_tcb =
-    delaycb (REPTM, wrap (this, &dhash::replica_maintenance_timer, index));
+    delaycb (REPTM, wrap (this, &dhash_impl::replica_maintenance_timer, index));
 }
 #endif
 
@@ -444,7 +459,7 @@ dhash::replica_maintenance_timer (u_int index)
 
 
 void
-dhash::partition_maintenance_timer ()
+dhash_impl::partition_maintenance_timer ()
 {
   return;
   fatal << "XXX fix the delaycb values\n"; 
@@ -460,37 +475,37 @@ dhash::partition_maintenance_timer ()
     fatal << "we might legitimately hold d\n";
 
     bigint key = dbrec2id(d->key);
-    cli->lookup (key, 0, wrap (this, &dhash::partition_maintenance_lookup_cb2, key));
+    cli->lookup (key, 0, wrap (this, &dhash_impl::partition_maintenance_lookup_cb2, key));
     return;
   }
 
-  merkle_part_tcb = delaycb (PRTTM, wrap (this, &dhash::partition_maintenance_timer));
+  merkle_part_tcb = delaycb (PRTTM, wrap (this, &dhash_impl::partition_maintenance_timer));
 #endif
 }
 
 
 void
-dhash::partition_maintenance_lookup_cb2 (bigint key, 
+dhash_impl::partition_maintenance_lookup_cb2 (bigint key, 
 					dhash_stat err, chordID hostID, route r)
 {
   if (err) {
-    warn << "dhash::partition_maintenance_lookup_cb err " << err << "\n";
-    merkle_part_tcb = delaycb (0, wrap (this, &dhash::partition_maintenance_timer));
+    warn << "dhash_impl::partition_maintenance_lookup_cb err " << err << "\n";
+    merkle_part_tcb = delaycb (0, wrap (this, &dhash_impl::partition_maintenance_timer));
     return;
   } 
 
   host_node->get_succlist (r.back (), 
-			   wrap (this, &dhash::partition_maintenance_succs_cb2, key));
+			   wrap (this, &dhash_impl::partition_maintenance_succs_cb2, key));
 }
 
 
 void
-dhash::partition_maintenance_succs_cb2 (bigint key,
+dhash_impl::partition_maintenance_succs_cb2 (bigint key,
 					vec<chord_node> succs, chordstat err)
 {
   if (err) {
-    warn << "dhash::partition_maintenance_lookup_cb err " << err << "\n";
-    merkle_part_tcb = delaycb (0, wrap (this, &dhash::partition_maintenance_timer));
+    warn << "dhash_impl::partition_maintenance_lookup_cb err " << err << "\n";
+    merkle_part_tcb = delaycb (0, wrap (this, &dhash_impl::partition_maintenance_timer));
     return;
   }
 
@@ -503,13 +518,13 @@ dhash::partition_maintenance_succs_cb2 (bigint key,
 }
 
 void
-dhash::partition_maintenance_store2 (bigint key, vec<chord_node> succs, u_int already_count)
+dhash_impl::partition_maintenance_store2 (bigint key, vec<chord_node> succs, u_int already_count)
 {
   if (succs.size () == 0) {
     if (already_count == NUM_EFRAGS)
       fatal << "DELETE " << key << "\n";
 
-    merkle_part_tcb = delaycb (0, wrap (this, &dhash::partition_maintenance_timer));
+    merkle_part_tcb = delaycb (0, wrap (this, &dhash_impl::partition_maintenance_timer));
     return;
   }
 
@@ -533,26 +548,26 @@ dhash::partition_maintenance_store2 (bigint key, vec<chord_node> succs, u_int al
 
   // XXX use dst not dst.x
   doRPC (dst.x, dhash_program_1, DHASHPROC_STORE,
-	 arg, res, wrap (this, &dhash::partition_maintenance_store_cb2, 
+	 arg, res, wrap (this, &dhash_impl::partition_maintenance_store_cb2, 
 			 key, succs, already_count, res));
 }
 
 
 void
-dhash::partition_maintenance_store_cb2 (bigint key, vec<chord_node> succs, 
+dhash_impl::partition_maintenance_store_cb2 (bigint key, vec<chord_node> succs, 
 				       u_int already_count, ref<dhash_storeres> res,
 				       clnt_stat err)
 {
   if (err)
-    fatal << "dhash::pms_cb: store failed: " << err << "\n";
+    fatal << "dhash_impl::pms_cb: store failed: " << err << "\n";
   else if (res->status != DHASH_OK)
-    fatal << "dhash::pms_cb: store failed: " << res->status << "\n";
+    fatal << "dhash_impl::pms_cb: store failed: " << res->status << "\n";
 
   if (res->resok->already_present) 
     partition_maintenance_store2 (key, succs, already_count + 1);
   else {
     fatal << "DELETE " << key << "\n";
-    merkle_part_tcb = delaycb (0, wrap (this, &dhash::partition_maintenance_timer));
+    merkle_part_tcb = delaycb (0, wrap (this, &dhash_impl::partition_maintenance_timer));
   }
 }
 
@@ -577,13 +592,13 @@ dhash::partition_maintenance_store_cb2 (bigint key, vec<chord_node> succs,
 
 #if 0
 void
-dhash::partition_maintenance_timer ()
+dhash_impl::partition_maintenance_timer ()
 {
 #if 0
   merkle_part_tcb = NULL;
 
 #if 0
-  warn << "** dhash::partition_maintenance_timer ()\n";
+  warn << "** dhash_impl::partition_maintenance_timer ()\n";
 #endif
 
   update_replica_list ();
@@ -612,7 +627,7 @@ dhash::partition_maintenance_timer ()
       partition_left = dbrec2id(d->key);
       partition_right = -1;
       cli->lookup
-	(partition_left, 0, wrap (this, &dhash::partition_maintenance_lookup_cb));
+	(partition_left, 0, wrap (this, &dhash_impl::partition_maintenance_lookup_cb));
       return;
     } else {
       // database must be empty 
@@ -620,7 +635,7 @@ dhash::partition_maintenance_timer ()
     }
   }
 
-  merkle_part_tcb = delaycb (PRTTM, wrap (this, &dhash::partition_maintenance_timer));
+  merkle_part_tcb = delaycb (PRTTM, wrap (this, &dhash_impl::partition_maintenance_timer));
 #endif
 }
   
@@ -628,28 +643,28 @@ dhash::partition_maintenance_timer ()
 
 
 void
-dhash::partition_maintenance_lookup_cb (dhash_stat err, chordID hostID, route r)
+dhash_impl::partition_maintenance_lookup_cb (dhash_stat err, chordID hostID, route r)
 {
 #if 0
   if (err) {
-    warn << "dhash::partition_maintenance_lookup_cb err " << err << "\n";
-    delaycb (PRTTM, wrap (this, &dhash::partition_maintenance_timer));
+    warn << "dhash_impl::partition_maintenance_lookup_cb err " << err << "\n";
+    delaycb (PRTTM, wrap (this, &dhash_impl::partition_maintenance_timer));
   } else {
     partition_right = hostID;
     host_node->get_predecessor
-      (hostID, wrap (this, &dhash::partition_maintenance_pred_cb));
+      (hostID, wrap (this, &dhash_impl::partition_maintenance_pred_cb));
   }
 #endif
 }
 
 
 void
-dhash::partition_maintenance_pred_cb (chordID predID, net_address addr,
+dhash_impl::partition_maintenance_pred_cb (chordID predID, net_address addr,
                                       chordstat status)
 {
 #if 0
   if (status) {
-    warn << "dhash::partition_maintenance_pred_cb status " << status << "\n";
+    warn << "dhash_impl::partition_maintenance_pred_cb status " << status << "\n";
   }
   else {
     // incID because
@@ -669,8 +684,8 @@ dhash::partition_maintenance_pred_cb (chordID predID, net_address addr,
 
       partition_syncer = New refcounted<merkle_syncer> 
 	(mtree, 
-	 wrap (this, &dhash::doRPC_unbundler, n),
-	 wrap (this, &dhash::sendblock, n));
+	 wrap (this, &dhash_impl::doRPC_unbundler, n),
+	 wrap (this, &dhash_impl::sendblock, n));
       active_syncers.insert (partition_right, partition_syncer);
       
 #if 0
@@ -682,22 +697,22 @@ dhash::partition_maintenance_pred_cb (chordID predID, net_address addr,
     }
   }
 
-  delaycb (PRTTM, wrap (this, &dhash::partition_maintenance_timer));
+  delaycb (PRTTM, wrap (this, &dhash_impl::partition_maintenance_timer));
 #endif
 }
 #endif
 
 
 void 
-dhash::sync_cb () 
+dhash_impl::sync_cb () 
 {
   // warn << "** SYNC\n";
   db->sync ();
-  delaycb (SYNCTM, wrap (this, &dhash::sync_cb));
+  delaycb (SYNCTM, wrap (this, &dhash_impl::sync_cb));
 }
 
 void 
-dhash::route_upcall (int procno,void *args, cbupcalldone_t cb)
+dhash_impl::route_upcall (int procno,void *args, cbupcalldone_t cb)
 {
   s_dhash_fetch_arg *farg = static_cast<s_dhash_fetch_arg *>(args);
 
@@ -706,7 +721,7 @@ dhash::route_upcall (int procno,void *args, cbupcalldone_t cb)
       //fetch the key and return it, end of story
       fetch (farg->key, 
 	     farg->cookie,
-	     wrap (this, &dhash::fetchiter_gotdata_cb, cb, farg));
+	     wrap (this, &dhash_impl::fetchiter_gotdata_cb, cb, farg));
     } else {
       // on zero length request, we just return
       // whether we store the block or not
@@ -719,7 +734,7 @@ dhash::route_upcall (int procno,void *args, cbupcalldone_t cb)
       arg->nonce = farg->nonce;
       //could need caching...
       host_node->locations->cacheloc (farg->from.x, farg->from.r,
-				      wrap (this, &dhash::block_cached_loc, arg));
+				      wrap (this, &dhash_impl::block_cached_loc, arg));
       (*cb)(true);
     } 
   } else if (responsible (farg->key)) {
@@ -741,7 +756,7 @@ dhash::route_upcall (int procno,void *args, cbupcalldone_t cb)
     }
 
     host_node->locations->cacheloc (farg->from.x, farg->from.r,
-				    wrap (this, &dhash::block_cached_loc, arg));
+				    wrap (this, &dhash_impl::block_cached_loc, arg));
     (*cb)(true);
   } else {
     (*cb)(false);
@@ -749,7 +764,7 @@ dhash::route_upcall (int procno,void *args, cbupcalldone_t cb)
 }
 
 void 
-dhash::sent_block_cb (dhash_stat *s, clnt_stat err) 
+dhash_impl::sent_block_cb (dhash_stat *s, clnt_stat err) 
 {
   if (err || !s || (s && *s))
     warn << "error sending block\n";
@@ -757,7 +772,7 @@ dhash::sent_block_cb (dhash_stat *s, clnt_stat err)
 }
 
 dhash_fetchiter_res *
-dhash::block_to_res (dhash_stat err, s_dhash_fetch_arg *arg,
+dhash_impl::block_to_res (dhash_stat err, s_dhash_fetch_arg *arg,
 		     int cookie, ptr<dbrec> val)
 {
   dhash_fetchiter_res *res;
@@ -791,7 +806,7 @@ dhash::block_to_res (dhash_stat err, s_dhash_fetch_arg *arg,
 }
 		     
 void
-dhash::fetchiter_gotdata_cb (cbupcalldone_t cb, s_dhash_fetch_arg *a,
+dhash_impl::fetchiter_gotdata_cb (cbupcalldone_t cb, s_dhash_fetch_arg *a,
 			     int cookie, ptr<dbrec> val, dhash_stat err) 
 {
   ptr<s_dhash_block_arg> arg = New refcounted<s_dhash_block_arg> ();
@@ -807,12 +822,12 @@ dhash::fetchiter_gotdata_cb (cbupcalldone_t cb, s_dhash_fetch_arg *a,
   arg->cookie = cookie;
   //could need caching...
   host_node->locations->cacheloc (a->from.x, a->from.r,
-				  wrap (this, &dhash::block_cached_loc,	arg));
+				  wrap (this, &dhash_impl::block_cached_loc,	arg));
   (*cb) (true);
 }
 
 void
-dhash::block_cached_loc (ptr<s_dhash_block_arg> arg, 
+dhash_impl::block_cached_loc (ptr<s_dhash_block_arg> arg, 
 			 chordID ID, bool ok, chordstat stat)
 {
   if (!ok || stat) {
@@ -821,12 +836,12 @@ dhash::block_cached_loc (ptr<s_dhash_block_arg> arg,
   } else {
     dhash_stat *res = New dhash_stat ();
     doRPC (ID, dhash_program_1, DHASHPROC_BLOCK,
-	   arg, res, wrap (this, &dhash::sent_block_cb, res));  
+	   arg, res, wrap (this, &dhash_impl::sent_block_cb, res));  
   }
 }
 
 void
-dhash::fetchiter_sbp_gotdata_cb (svccb *sbp, s_dhash_fetch_arg *arg,
+dhash_impl::fetchiter_sbp_gotdata_cb (svccb *sbp, s_dhash_fetch_arg *arg,
 				 int cookie, ptr<dbrec> val, dhash_stat err)
 {
   dhash_fetchiter_res *res = block_to_res (err, arg, cookie, val);
@@ -835,7 +850,7 @@ dhash::fetchiter_sbp_gotdata_cb (svccb *sbp, s_dhash_fetch_arg *arg,
 }
 
 void
-dhash::dispatch (svccb *sbp, void *args, int procno) 
+dhash_impl::dispatch (svccb *sbp, void *args, int procno) 
 {
   rpc_answered++;
   switch (procno) {
@@ -848,7 +863,7 @@ dhash::dispatch (svccb *sbp, void *args, int procno)
 	//fetch the key and return it, end of story
 	fetch (farg->key, 
 	       farg->cookie,
-	       wrap (this, &dhash::fetchiter_sbp_gotdata_cb, sbp, farg));
+	       wrap (this, &dhash_impl::fetchiter_sbp_gotdata_cb, sbp, farg));
       } else {
         dhash_fetchiter_res *res = New dhash_fetchiter_res (DHASH_NOENT);
 	doRPC_reply (sbp, res, dhash_program_1, DHASHPROC_FETCHITER);
@@ -870,7 +885,7 @@ dhash::dispatch (svccb *sbp, void *args, int procno)
 	doRPC_reply (sbp, &res, dhash_program_1, DHASHPROC_STORE);
       } else {
 	bool already_present = !!db->lookup (id2dbrec (sarg->key));
-	store (sarg, wrap(this, &dhash::storesvc_cb, sbp, sarg, already_present));	
+	store (sarg, wrap(this, &dhash_impl::storesvc_cb, sbp, sarg, already_present));	
       }
 
     }
@@ -944,33 +959,33 @@ dhash::dispatch (svccb *sbp, void *args, int procno)
 }
 
 void
-dhash::register_storecb_cb (int nonce, cbstorecbuc_t cb)
+dhash_impl::register_storecb_cb (int nonce, cbstorecbuc_t cb)
 {
   scpt.insert (nonce, cb);
 }
 
 void
-dhash::unregister_storecb_cb (int nonce)
+dhash_impl::unregister_storecb_cb (int nonce)
 {
   if (scpt[nonce])
     scpt.remove (nonce);
 }
 
 void
-dhash::register_block_cb (int nonce, cbblockuc_t cb)
+dhash_impl::register_block_cb (int nonce, cbblockuc_t cb)
 {
   bcpt.insert (nonce, cb);
 }
 
 void
-dhash::unregister_block_cb (int nonce)
+dhash_impl::unregister_block_cb (int nonce)
 {
   if (bcpt[nonce])
     bcpt.remove (nonce);
 }
 
 void
-dhash::storesvc_cb(svccb *sbp,
+dhash_impl::storesvc_cb(svccb *sbp,
 		   s_dhash_insertarg *arg,
 		   bool already_present,
 		   dhash_stat err) {
@@ -992,7 +1007,7 @@ dhash::storesvc_cb(svccb *sbp,
 // -------- reliability stuff
 
 void
-dhash::transfer_initial_keys ()
+dhash_impl::transfer_initial_keys ()
 {
   chordID succ = host_node->my_succ ();
   if (succ ==  host_node->my_ID ()) return;
@@ -1001,7 +1016,7 @@ dhash::transfer_initial_keys ()
 }
 
 void
-dhash::transfer_initial_keys_range (chordID start, chordID succ)
+dhash_impl::transfer_initial_keys_range (chordID start, chordID succ)
 {
   ptr<s_dhash_getkeys_arg> arg = New refcounted<s_dhash_getkeys_arg>;
   arg->pred_id = host_node->my_ID ();
@@ -1011,12 +1026,12 @@ dhash::transfer_initial_keys_range (chordID start, chordID succ)
   dhash_getkeys_res *res = New dhash_getkeys_res (DHASH_OK);
   doRPC(succ, dhash_program_1, DHASHPROC_GETKEYS, 
 			      arg, res,
-			      wrap(this, &dhash::transfer_init_getkeys_cb, 
+			      wrap(this, &dhash_impl::transfer_init_getkeys_cb, 
 				   succ, res));
 }
 
 void
-dhash::transfer_init_getkeys_cb (chordID succ,
+dhash_impl::transfer_init_getkeys_cb (chordID succ,
 				 dhash_getkeys_res *res, 
 				 clnt_stat err)
 {
@@ -1026,7 +1041,7 @@ dhash::transfer_init_getkeys_cb (chordID succ,
   for (unsigned int i = 0; i < res->resok->keys.size (); i++) {
     chordID k = res->resok->keys[i];
     if (key_status (k) == DHASH_NOTPRESENT)
-      get_key (succ, k, wrap (this, &dhash::transfer_init_gotk_cb));
+      get_key (succ, k, wrap (this, &dhash_impl::transfer_init_gotk_cb));
   }
 
   if(res->resok->keys.size () > 0)
@@ -1036,13 +1051,13 @@ dhash::transfer_init_getkeys_cb (chordID succ,
 }
 
 void
-dhash::transfer_init_gotk_cb (dhash_stat err) 
+dhash_impl::transfer_init_gotk_cb (dhash_stat err) 
 {
   if (err) warn << "Error fetching key: " << err << "\n";
 }
 
 void
-dhash::update_replica_list () 
+dhash_impl::update_replica_list () 
 {
 #if 1
   // derive the replicas from the successor list 
@@ -1064,10 +1079,10 @@ dhash::update_replica_list ()
 }
 
 void
-dhash::install_replica_timer () 
+dhash_impl::install_replica_timer () 
 {
   check_replica_tcb = delaycb (rc_delay, 0, 
-			       wrap (this, &dhash::check_replicas_cb));
+			       wrap (this, &dhash_impl::check_replicas_cb));
 }
 
 
@@ -1075,34 +1090,34 @@ dhash::install_replica_timer ()
 /* O( (number of replicas)^2 ) (but doesn't assume anything about
 ordering of chord::succlist*/
 bool 
-dhash::isReplica(chordID id) { 
+dhash_impl::isReplica(chordID id) { 
   for (unsigned int i=0; i < replicas.size(); i++)
     if (replicas[i].x == id) return true;
   return false;
 }
 
 void
-dhash::check_replicas_cb () {
+dhash_impl::check_replicas_cb () {
   check_replicas ();
   install_replica_timer ();
 }
 
 void
-dhash::check_replicas () 
+dhash_impl::check_replicas () 
 {
   //XXX removed by fdabek: replace with something smart
   // using merkle
 }
 
 void
-dhash::fix_replicas_txerd (dhash_stat err) 
+dhash_impl::fix_replicas_txerd (dhash_stat err) 
 {
   if (err) warn << "error replicating key\n";
 }
 
 // --- node to node transfers ---
 void
-dhash::replicate_key (chordID key, cbstat_t cb)
+dhash_impl::replicate_key (chordID key, cbstat_t cb)
 {
   update_replica_list ();
   
@@ -1118,14 +1133,14 @@ dhash::replicate_key (chordID key, cbstat_t cb)
   
   for (unsigned i=0; i<replicas.size (); i++) {
     transfer_key (replicas[i].x, key, DHASH_REPLICA, 
-		  wrap (this, &dhash::replicate_key_cb,
+		  wrap (this, &dhash_impl::replicate_key_cb,
 			replica_cnt, replica_err, cb, key));
   }
 }
 
 
 void
-dhash::replicate_key_cb (int* replica_cnt, int *replica_err,
+dhash_impl::replicate_key_cb (int* replica_cnt, int *replica_err,
                          cbstat_t cb, chordID key, dhash_stat err) 
 {
   *replica_cnt = *replica_cnt -1;
@@ -1144,14 +1159,14 @@ dhash::replicate_key_cb (int* replica_cnt, int *replica_err,
 }
 
 void
-dhash::transfer_key (chordID to, chordID key, store_status stat, 
+dhash_impl::transfer_key (chordID to, chordID key, store_status stat, 
 		     callback<void, dhash_stat>::ref cb) 
 {
-  fetch (key, -1, wrap(this, &dhash::transfer_fetch_cb, to, key, stat, cb));
+  fetch (key, -1, wrap(this, &dhash_impl::transfer_fetch_cb, to, key, stat, cb));
 }
 
 void
-dhash::transfer_fetch_cb (chordID to, chordID key, store_status stat, 
+dhash_impl::transfer_fetch_cb (chordID to, chordID key, store_status stat, 
 			  callback<void, dhash_stat>::ref cb,
 			  int cookie, ptr<dbrec> data, dhash_stat err) 
 {
@@ -1164,13 +1179,13 @@ dhash::transfer_fetch_cb (chordID to, chordID key, store_status stat,
   } else {
     ref<dhash_block> blk = New refcounted<dhash_block> (data->value,data->len);
     cli->storeblock (to, key, blk, false,
-		     wrap (this, &dhash::transfer_store_cb, cb),
+		     wrap (this, &dhash_impl::transfer_store_cb, cb),
 		     stat);
   }
 }
 
 void
-dhash::transfer_store_cb (callback<void, dhash_stat>::ref cb, 
+dhash_impl::transfer_store_cb (callback<void, dhash_stat>::ref cb, 
 			  dhash_stat status,
 			  chordID blockID) 
 {
@@ -1178,14 +1193,14 @@ dhash::transfer_store_cb (callback<void, dhash_stat>::ref cb,
 }
 
 void
-dhash::get_key (chordID source, chordID key, cbstat_t cb) 
+dhash_impl::get_key (chordID source, chordID key, cbstat_t cb) 
 {
-  cli->retrieve(source, key, wrap (this, &dhash::get_key_got_block, key, cb));
+  cli->retrieve(source, key, wrap (this, &dhash_impl::get_key_got_block, key, cb));
 }
 
 
 void
-dhash::get_key_got_block (chordID key, cbstat_t cb, dhash_stat err, ptr<dhash_block> b, route path) 
+dhash_impl::get_key_got_block (chordID key, cbstat_t cb, dhash_stat err, ptr<dhash_block> b, route path) 
 {
 
   if (err)
@@ -1200,7 +1215,7 @@ dhash::get_key_got_block (chordID key, cbstat_t cb, dhash_stat err, ptr<dhash_bl
 }
 
 void
-dhash::get_key_stored_block (cbstat_t cb, int err)
+dhash_impl::get_key_stored_block (cbstat_t cb, int err)
 {
   if (err)
     (cb)(DHASH_STOREERR);
@@ -1212,7 +1227,7 @@ dhash::get_key_stored_block (cbstat_t cb, int err)
 // --- node to database transfers --- 
 
 void
-dhash::fetch(chordID id, int cookie, cbvalue cb) 
+dhash_impl::fetch(chordID id, int cookie, cbvalue cb) 
 {
   //if the cookie is in the hash, return that value
   pk_partial *part = pk_cache[cookie];
@@ -1222,12 +1237,12 @@ dhash::fetch(chordID id, int cookie, cbvalue cb)
     //if done, free
   } else {
     ptr<dbrec> q = id2dbrec(id);
-    db->lookup(q, wrap(this, &dhash::fetch_cb, cookie, cb));
+    db->lookup(q, wrap(this, &dhash_impl::fetch_cb, cookie, cb));
   }
 }
 
 void
-dhash::fetch_cb (int cookie, cbvalue cb, ptr<dbrec> ret) 
+dhash_impl::fetch_cb (int cookie, cbvalue cb, ptr<dbrec> ret) 
 {
 
   if (!ret) {
@@ -1250,7 +1265,7 @@ dhash::fetch_cb (int cookie, cbvalue cb, ptr<dbrec> ret)
 }
 
 void
-dhash::append (ref<dbrec> key, ptr<dbrec> data,
+dhash_impl::append (ref<dbrec> key, ptr<dbrec> data,
 	       s_dhash_insertarg *arg,
 	       cbstore cb)
 {
@@ -1283,13 +1298,13 @@ dhash::append (ref<dbrec> key, ptr<dbrec> data,
 	cb (DHASH_STOREERR);
       }
   } else {
-    fetch (arg->key, -1, wrap (this, &dhash::append_after_db_fetch,
+    fetch (arg->key, -1, wrap (this, &dhash_impl::append_after_db_fetch,
 			   key, data, arg, cb));
   }
 }
 
 void
-dhash::append_after_db_fetch (ref<dbrec> key, ptr<dbrec> new_data,
+dhash_impl::append_after_db_fetch (ref<dbrec> key, ptr<dbrec> new_data,
 			      s_dhash_insertarg *arg, cbstore cb,
 			      int cookie, ptr<dbrec> data, dhash_stat err)
 {
@@ -1325,7 +1340,7 @@ dhash::append_after_db_fetch (ref<dbrec> key, ptr<dbrec> new_data,
 }
 
 void
-dhash::append_after_db_store (cbstore cb, chordID k, int stat)
+dhash_impl::append_after_db_store (cbstore cb, chordID k, int stat)
 {
   if (stat)
     cb (DHASH_STOREERR);
@@ -1341,7 +1356,7 @@ dhash::append_after_db_store (cbstore cb, chordID k, int stat)
 }
 
 void 
-dhash::store (s_dhash_insertarg *arg, cbstore cb)
+dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
 {
   store_state *ss = pst[arg->key];
 
@@ -1443,13 +1458,17 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
       stat = DHASH_STALE;
 
     cb (stat);
+    if (ss) {
+      pst.remove (ss);
+      delete ss;
+    }
   }
   else
     cb (DHASH_STORE_PARTIAL);
 }
 
 void
-dhash::sent_storecb_cb (dhash_stat *s, clnt_stat err) 
+dhash_impl::sent_storecb_cb (dhash_stat *s, clnt_stat err) 
 {
   if (err || !s || (s && *s))
     warn << "error sending storecb\n";
@@ -1457,7 +1476,7 @@ dhash::sent_storecb_cb (dhash_stat *s, clnt_stat err)
 }
 
 void
-dhash::send_storecb_cacheloc (chordID srcID, uint32 nonce, dhash_stat status,
+dhash_impl::send_storecb_cacheloc (chordID srcID, uint32 nonce, dhash_stat status,
                               chordID ID, bool ok, chordstat stat)
 {
   if (!ok || stat) {
@@ -1471,20 +1490,20 @@ dhash::send_storecb_cacheloc (chordID srcID, uint32 nonce, dhash_stat status,
     arg->status = status;
     dhash_stat *res = New dhash_stat ();
     doRPC (ID, dhash_program_1, DHASHPROC_STORECB,
-	   arg, res, wrap (this, &dhash::sent_storecb_cb, res));
+	   arg, res, wrap (this, &dhash_impl::sent_storecb_cb, res));
   }
 }
 
 void
-dhash::send_storecb (chord_node sender, chordID srcID, uint32 nonce, dhash_stat stat)
+dhash_impl::send_storecb (chord_node sender, chordID srcID, uint32 nonce, dhash_stat stat)
 {
   host_node->locations->cacheloc (sender.x, sender.r,
-				  wrap (this, &dhash::send_storecb_cacheloc,
+				  wrap (this, &dhash_impl::send_storecb_cacheloc,
 				        srcID, nonce, stat));
 }
 
 void
-dhash::store_repl_cb (cbstore cb, chord_node sender, chordID srcID, int32 nonce,
+dhash_impl::store_repl_cb (cbstore cb, chord_node sender, chordID srcID, int32 nonce,
                       dhash_stat err) 
 {
   if (err)
@@ -1497,7 +1516,7 @@ dhash::store_repl_cb (cbstore cb, chord_node sender, chordID srcID, int32 nonce,
 // --------- utility
 
 dhash_stat
-dhash::key_status(const chordID &n) 
+dhash_impl::key_status(const chordID &n) 
 {
   ptr<dbrec> val = db->lookup (id2dbrec (n));
   if (!val)
@@ -1511,7 +1530,7 @@ dhash::key_status(const chordID &n)
 }
 
 char
-dhash::responsible(const chordID& n) 
+dhash_impl::responsible(const chordID& n) 
 {
   store_state *ss = pst[n];
   if (ss) return true; //finish any store we start
@@ -1521,20 +1540,20 @@ dhash::responsible(const chordID& n)
 }
 
 void
-dhash::doRPC_unbundler (chord_node dst, RPC_delay_args *args)
+dhash_impl::doRPC_unbundler (chord_node dst, RPC_delay_args *args)
 {
   host_node->doRPC (dst, args->prog, args->procno, args->in, args->out, args->cb);
 }
 
 void
-dhash::doRPC (chordID ID, const rpc_program &prog, int procno,
+dhash_impl::doRPC (chordID ID, const rpc_program &prog, int procno,
 	      ptr<void> in,void *out, aclnt_cb cb) 
 {
   host_node->doRPC (ID, prog, procno, in, out, cb);
 }
 
 void
-dhash::doRPC_reply (svccb *sbp, void *res, 
+dhash_impl::doRPC_reply (svccb *sbp, void *res, 
 		    const rpc_program &prog, int procno) 
 {
   host_node->doRPC_reply (sbp, res, prog, procno);
@@ -1542,7 +1561,7 @@ dhash::doRPC_reply (svccb *sbp, void *res,
 
 // ---------- debug ----
 void
-dhash::printkeys () 
+dhash_impl::printkeys () 
 {
   
   ptr<dbEnumeration> it = db->enumerate();
@@ -1555,7 +1574,7 @@ dhash::printkeys ()
 }
 
 void
-dhash::printkeys_walk (const chordID &k) 
+dhash_impl::printkeys_walk (const chordID &k) 
 {
   dhash_stat status = key_status (k);
   if (status == DHASH_STORED)
@@ -1567,13 +1586,13 @@ dhash::printkeys_walk (const chordID &k)
 }
 
 void
-dhash::printcached_walk (const chordID &k) 
+dhash_impl::printcached_walk (const chordID &k) 
 {
   warn << host_node->my_ID () << " " << k << " CACHED\n";
 }
 
 void
-dhash::print_stats () 
+dhash_impl::print_stats () 
 {
   warnx << "ID: " << host_node->my_ID () << "\n";
   warnx << "Stats:\n";
@@ -1589,7 +1608,7 @@ dhash::print_stats ()
 }
 
 void
-dhash::stop ()
+dhash_impl::stop ()
 {
   if (check_replica_tcb) {
     warnx << "stop replica timer\n";
@@ -1609,7 +1628,7 @@ dhash::stop ()
 }
 
 void
-dhash::dbwrite (ref<dbrec> key, ref<dbrec> data)
+dhash_impl::dbwrite (ref<dbrec> key, ref<dbrec> data)
 {
   char *action;
   block blk (to_merkle_hash (key), data);

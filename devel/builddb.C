@@ -1,6 +1,7 @@
 #include "async.h"
 #include "chord.h"
-#include "dhash.h"
+#include "dhash_prot.h"
+#include "merkle_misc.h"
 #include "dbfe.h"
 
 #include "rxx.h"

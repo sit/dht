@@ -1,4 +1,8 @@
-#include <dhash.h>
+#include "dhash_common.h"
+#include "dhash.h"
+#include "verify.h"
+#include <dbfe.h>
+#include <sfscrypt.h>
 #include <dhash_prot.h>
 #include <chord.h>
 #include <chord_prot.h>
@@ -15,9 +19,7 @@ verify (chordID key, dhash_ctype t, char *buf, int len)
     case DHASH_KEYHASH:
       return verify_key_hash (key, buf, len);
       break;
-    case DHASH_DNSSEC:
-      return verify_dnssec ();
-      break;
+    case DHASH_DNSSEC: // XXX should be punted.
     case DHASH_NOAUTH:
     case DHASH_APPEND:
       return true;
@@ -26,6 +28,7 @@ verify (chordID key, dhash_ctype t, char *buf, int len)
       warn << "bad type " << t << "\n";
       return false;
     }
+  return false;
 }
 
 bool
@@ -84,12 +87,6 @@ verify_key_hash (chordID key, char *buf, int len)
   bool ok = pk->verify (sig, msg);
 
   return ok;
-}
-
-bool
-verify_dnssec () 
-{
-  return true;
 }
 
 ptr<dhash_block>

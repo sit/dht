@@ -26,9 +26,10 @@
  */
 
 #include "sfsmisc.h"
-#include "dhash_prot.h"
+#include "dhash_common.h"
 #include "dhash.h"
-#include "crypt.h"
+#include "dhashclient.h"
+#include <sfscrypt.h>
 #include <sys/time.h>
 
 void store_cb_pk (dhashclient dhash, dhash_stat status, ptr<insert_info> i);

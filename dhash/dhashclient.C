@@ -26,11 +26,14 @@
  *
  */
 
-#include <dhash.h>
+#include "dhash_common.h"
+#include "dhash.h"
+#include "dhashclient.h"
+#include "verify.h"
 #include <chord_prot.h>
 #include "sfsmisc.h"
 #include "arpc.h"
-#include "crypt.h"
+#include <sfscrypt.h>
 #ifdef DMALLOC
 #include "dmalloc.h"
 #endif

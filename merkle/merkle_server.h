@@ -9,7 +9,8 @@
 #include "bigint.h"
 #include "qhash.h"
 #include "chord.h"
-#include "dhash.h"
+
+class RPC_delay_args;
 
 typedef callback<void, const rpc_program &, cbdispatch_t>::ref addHandler_t;
 typedef callback<void, chord_node, bigint>::ref missingfnc2_t;

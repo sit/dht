@@ -25,6 +25,7 @@
 
 #include "chord.h"
 #include "dhash.h"
+#include "dhashgateway.h"
 #include "parseopt.h"
 #include <sys/types.h>
 #include "route.h"
@@ -67,7 +68,7 @@ static str p2psocket;
 bool do_cache;
 int lbase;
 int cache_size;
-vec<dhash* > dh;
+vec<ref<dhash> > dh;
 int myport;
 
 #define MODE_DEBRUIJN 1
@@ -599,7 +600,7 @@ main (int argc, char **argv)
   for (int i = 0; i < vnodes; i++) {
     str db_name_prime = strbuf () << db_name << "-" << i;
     warn << "lsd: created new dhash\n";
-    dh.push_back( New dhash (db_name_prime, nreplica, ss_mode));
+    dh.push_back( dhash::produce_dhash (db_name_prime, nreplica, ss_mode));
   }
 
   ptr<route_factory> f = get_factory (mode);

@@ -27,8 +27,13 @@
  */
 
 #include <chord.h>
-#include <dhash.h>
 #include <chord_prot.h>
+
+#include "dhash_common.h"
+#include "dhash.h"
+#include "dhashcli.h"
+#include "dhashgateway.h"
+
 #include "arpc.h"
 #ifdef DMALLOC
 #include "dmalloc.h"

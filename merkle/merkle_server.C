@@ -1,4 +1,5 @@
 #include "merkle_server.h"
+#include <comm.h>
 #include "transport_prot.h"
 
 // ---------------------------------------------------------------------------
