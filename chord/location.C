@@ -80,7 +80,7 @@ locationtable::initialize_rpcs ()
 {
   if (chord_rpc_style == CHORD_RPC_SFSU)
     hosts = New refcounted<rpc_manager> (chordnode);
-  if (chord_rpc_style == CHORD_RPC_SFST)
+  else if (chord_rpc_style == CHORD_RPC_SFST)
     hosts = New refcounted<tcp_manager> (chordnode);
   else
     hosts = New refcounted<stp_manager> (chordnode);
