@@ -18,9 +18,10 @@ public:
   Topology *gettopology() { return _top; }
   list<Protocol*> getallprotocols(string);
 
+  ~Network();
+
 private:
   Network(Topology*);
-  ~Network();
 
   virtual void run();
 

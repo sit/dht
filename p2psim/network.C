@@ -32,7 +32,7 @@ Network::Network(Topology *top) : _top(0), _pktchan(0), _nodechan(0)
 Network::~Network()
 {
   for(NMCI p = _nodes.begin(); p != _nodes.end(); ++p)
-    send(p->second->exitchan(), 0);
+    delete p->second;
   chanfree(_pktchan);
   chanfree(_nodechan);
   delete _top;
@@ -54,12 +54,11 @@ Network::getallprotocols(string proto)
 void
 Network::run()
 {
-  Alt a[4];
+  Alt a[3];
   Packet *p;
   Node *node;
   NetEvent *ne;
   Time latency;
-  unsigned exit;
 
   a[0].c = _pktchan;
   a[0].v = &p;
@@ -69,11 +68,7 @@ Network::run()
   a[1].v = &node;
   a[1].op = CHANRCV;
 
-  a[2].c = _exitchan;
-  a[2].v = &exit;
-  a[2].op = CHANRCV;
-
-  a[3].op = CHANEND;
+  a[2].op = CHANEND;
   
   while(1) {
     int i;
@@ -97,6 +92,7 @@ Network::run()
         ne->ts = now() + latency;
         ne->node = dstnode;
         ne->p = p;
+        assert(ne->ts >= now());
         send(EventQueue::Instance()->eventchan(), (Event**) &ne);
         break;
     
@@ -105,11 +101,6 @@ Network::run()
         if(_nodes[node->ip()])
           cerr << "warning: " << node->ip() << " already in network" << endl;
         _nodes[node->ip()] = node;
-        break;
-
-      // exit
-      case 2:
-        delete this;
         break;
 
       default:

@@ -14,9 +14,6 @@ bool vis = false;
 void parse_args(int argc, char *argv[]);
 void usage();
 
-
-Channel *exitchan = 0;
-
 void
 threadmain(int argc, char *argv[])
 {

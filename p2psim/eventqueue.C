@@ -67,17 +67,11 @@ EventQueue::run()
     notifyObservers((ObserverInfo*) _queue.size());
 
     // process any waiting events-to-be-scheduled
-#if 0
-    cout << "eventqueue going into block on _eventchan" << endl;
-#endif
     if((e = (Event*) nbrecvp(_eventchan)) != 0) {
       assert(e->ts);
       add_event(e);
       continue;
     }
-#if 0
-    cout << "eventqueue going into block on _eventchan" << endl;
-#endif
 
     // everyone else is quiet.
     // must be time for the next event.
@@ -91,13 +85,6 @@ EventQueue::run()
 bool
 EventQueue::advance()
 {
-  // don't advance if we should be exiting
-  // if(nbrecvp(_exitchan) != 0) {
-  unsigned *x;
-  if((x = (unsigned *) nbrecvp(_exitchan)) != 0) {
-    delete this;
-    return false;
-  }
 
   if(!_queue.size())
     return false;

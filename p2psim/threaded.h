@@ -10,11 +10,9 @@ public:
   Threaded();
   virtual ~Threaded();
   static void Run(void*);
-  Channel *exitchan() { return _exitchan; }
 
 protected:
   void thread();
-  Channel *_exitchan;
   int _thread;
 
 private:

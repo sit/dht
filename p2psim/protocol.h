@@ -54,6 +54,7 @@ protected:
     assert(e->_target);
     e->_fn = fn;
     e->_args = args;
+    assert(e->ts >= now());
 
     send(EventQueue::Instance()->eventchan(), &e);
   }

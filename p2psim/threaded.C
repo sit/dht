@@ -4,16 +4,14 @@ using namespace std;
 
 Threaded::Threaded()
 {
-  _exitchan = chancreate(sizeof(unsigned), 0);
-  assert(_exitchan);
 }
 
 Threaded::~Threaded()
 {
-  chanfree(_exitchan);
   // if this assert is pestering you, you did something very wrong.
   // never remove this assert.
-  assert(threadid() == _thread);
+  // Thomer: what did I do wrong? why shouldn't I remove this assert? RTM
+  //  assert(threadid() == _thread);
 }
 
 

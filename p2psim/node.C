@@ -57,7 +57,7 @@ Node::got_packet(Packet *p)
 void
 Node::run()
 {
-  Alt a[3];
+  Alt a[2];
   Packet *p;
   unsigned exit;
 
@@ -65,11 +65,7 @@ Node::run()
   a[0].v = &p;
   a[0].op = CHANRCV;
 
-  a[1].c = _exitchan;
-  a[1].v = &exit;
-  a[1].op = CHANRCV;
-
-  a[2].op = CHANEND;
+  a[1].op = CHANEND;
 
   while(1) {
     int i;
@@ -82,13 +78,6 @@ Node::run()
       case 0:
         got_packet(p);
         break;
-
-      //exit
-      case 1:
-        // cout << "Node exit" << endl;
-        delete this;
-        break;
-
 
       default:
         break;
