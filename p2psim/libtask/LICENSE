@@ -2,8 +2,8 @@ This software is derived from the Plan 9 thread library, which is
 distributed under the Lucent Public License Version 1.02, reproduced
 below. 
 
-The new code portions, written by Russ Cox, are distributed under
-the following license:
+The new code portions, written by Russ Cox and Geoff Collyer,
+are distributed under the following license:
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the

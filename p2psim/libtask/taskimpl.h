@@ -66,7 +66,35 @@ enum {
 
 struct Label
 {
+#if defined(__i386__)
 	ulong r[8];
+#elif defined(__APPLE__)
+	ulong	pc;		/* lr */
+	ulong	cr;		/* mfcr */
+	ulong	ctr;		/* mfcr */
+	ulong	xer;		/* mfcr */
+	ulong	sp;		/* callee saved: r1 */
+	ulong	toc;		/* callee saved: r2 */
+	ulong	gpr[19];	/* callee saved: r13-r31 */
+// XXX: currently do not save vector registers or floating-point state
+//	ulong	pad;
+//	uvlong	fpr[18];	/* callee saved: f14-f31 */
+//	ulong	vr[4*12];	/* callee saved: v20-v31, 256-bits each */
+#elif defined(__alpha__)
+	ulong	pc;		/* ra */
+	ulong	sp;
+	ulong	pv;
+	ulong	fpcr;		/* FP control register */
+	ulong	s[7];
+	ulong	fs[8];
+#elif defined(__sun_)
+	ulong	input[8];	/* %i registers */
+	ulong	local[8];	/* %l registers */
+	ulong 	sp;		/* %o6 */
+	ulong	link;		/* %o7 */
+#else
+#error	"Unknown or unsupported architecture"
+#endif
 };
 
 typedef enum
