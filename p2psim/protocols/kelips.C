@@ -248,6 +248,9 @@ Kelips::node_key_alive(ID key)
     return Network::Instance()->alive((IPAddress) key);
   } 
   assert(0);
+
+  // shut up compiler.
+  return 0;
 }
 
 void
