@@ -1,4 +1,4 @@
-/* $Id: tapestry.C,v 1.13 2003/10/05 01:36:02 strib Exp $ */
+/* $Id: tapestry.C,v 1.14 2003/10/07 18:03:55 thomer Exp $ */
 #include "tapestry.h"
 #include "network.h"
 #include <stdio.h>
@@ -146,7 +146,8 @@ Tapestry::join(Args *args)
 
     for( uint j = 0; j < num_nncalls; j++ ) {
 
-      unsigned donerpc = rcvRPC( &nn_rpcset );
+      bool ok;
+      unsigned donerpc = rcvRPC( &nn_rpcset, ok );
       nn_callinfo *ncall = nn_resultmap[donerpc];
       nn_return nnr = *(ncall->nr);
       TapDEBUG(2) << ip() << " done with nn with " << ncall->ip << endl;
@@ -470,7 +471,8 @@ Tapestry::handle_mc(mc_args *args, mc_return *ret)
 
   // wait for them all to return
   for( unsigned int i = 0; i < numcalls; i++ ) {
-    unsigned donerpc = rcvRPC( &rpcset );
+    bool ok;
+    unsigned donerpc = rcvRPC( &rpcset, ok );
     mc_callinfo *ci = resultmap[donerpc];
     TapDEBUG(2) << "mc to " << ci->ip << " about " << args->new_ip << 
       " is done" << endl;
@@ -698,7 +700,8 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
   assert( ping_rpcset->size() == ping_resultmap->size() );
   uint setsize = ping_rpcset->size();
   for( unsigned int j = 0; j < setsize; j++ ) {
-    unsigned donerpc = rcvRPC( ping_rpcset );
+    bool ok;
+    unsigned donerpc = rcvRPC( ping_rpcset, ok );
     Time ping_time = now() - before_ping;
     ping_callinfo *pi = (*ping_resultmap)[donerpc];
     TapDEBUG(4) << "donerpc: " << donerpc << " ip: " << pi->ip << endl;
@@ -750,7 +753,8 @@ Tapestry::place_backpointer_end( RPCSet *bp_rpcset,
   // wait for each to finish
   uint setsize = bp_rpcset->size();
   for( unsigned int j = 0; j < setsize; j++ ) {
-    unsigned donerpc = rcvRPC( bp_rpcset );
+    bool ok;
+    unsigned donerpc = rcvRPC( bp_rpcset, ok );
     backpointer_args *bpa = (*bp_resultmap)[donerpc];
     delete bpa;
   }

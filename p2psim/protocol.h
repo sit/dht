@@ -93,7 +93,7 @@ protected:
   }
 
   // returns one of the RPCHandle's for which a reply has arrived. BLOCKING.
-  unsigned rcvRPC(RPCSet*);
+  unsigned rcvRPC(RPCSet*, bool&);
 
   // returns whether rcvRPC can be called without blocking.
   bool select(RPCSet*);

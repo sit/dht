@@ -18,7 +18,7 @@ Protocol::getpeer(IPAddress a)
 }
 
 unsigned
-Protocol::rcvRPC(RPCSet *hset)
+Protocol::rcvRPC(RPCSet *hset, bool &ok)
 {
   int na = hset->size() + 1;
   Alt *a = (Alt *) malloc(sizeof(Alt) * na); // might be big, take off stack!
@@ -46,6 +46,7 @@ Protocol::rcvRPC(RPCSet *hset)
   assert(token);
   hset->erase(token);
   cancelRPC(token);
+  ok = p->ok();
   delete p;
   free(a);
   return token;
