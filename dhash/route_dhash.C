@@ -402,6 +402,8 @@ void
 route_dhash::gotblock (ptr<dhash_block> block)
 {
   // XXX fix the path, we might have got the block off a replica
+  block->hops = path ().size ();
+
   if (block) 
     cb (DHASH_OK, block, path ());
   else
