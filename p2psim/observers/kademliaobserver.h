@@ -36,7 +36,6 @@ public:
   virtual bool stabilized();
 
 private:
-  unsigned int _nnodes;
   string _type;
 };
 

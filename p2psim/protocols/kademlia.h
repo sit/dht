@@ -146,13 +146,14 @@ public:
   // RPC arguments
   // 
   // {{{ lookup_args and lookup_result
+#define MSG_OVERHEAD
+#define LOOKUP_ARGS_SIZE (4+4+4+MSG_OVERHEAD)
   struct lookup_args {
     lookup_args(NodeID xid, IPAddress xip, NodeID k = 0, bool b = false) :
-      id(xid), ip(xip), key(k), controlmsg(b) {};
+      id(xid), ip(xip), key(k) {};
     NodeID id;
     IPAddress ip;
     NodeID key;
-    bool controlmsg; // whether or not to count this as control overhead
   };
 
   struct lookup_result {
@@ -185,7 +186,6 @@ public:
   static unsigned k;                    // number of nodes per k-bucket
   static unsigned alpha;                // alpha from kademlia paper; no of simultaneous RPCs
   static unsigned debugcounter;         // 
-  static unsigned joined;               // how many have joined so far
   static unsigned stabilize_timer;      // how often to stabilize
   static unsigned refresh_rate;         // how often to refresh info
   static const unsigned idsize = 8*sizeof(Kademlia::NodeID);
@@ -203,7 +203,14 @@ private:
   k_bucket *_root;
 
   // statistics
-  static unsigned controlmsg;
+  enum stat_type {
+    STAT_JOIN = 0,
+    STAT_LOOKUP,
+    STAT_SIZE
+  };
+  vector<unsigned> stat;
+  vector<unsigned> num_msgs;
+  void record_stat(stat_type, unsigned, unsigned);
 
   //
   // utility 

@@ -29,9 +29,6 @@ using namespace std;
 
 KademliaObserver::KademliaObserver(Args *a) : _type("Kademlia")
 {
-  _nnodes = atoi((*a)["nodes"].c_str());
-  assert(_nnodes > 0);
-
   // register as an observer of all Kadmelia instances
   set<Protocol*> l = Network::Instance()->getallprotocols(_type);
   for(set<Protocol*>::iterator pos = l.begin(); pos != l.end(); ++pos) {
@@ -77,6 +74,6 @@ KademliaObserver::stabilized()
     }
   }
 
-  cout << now() << " STABILIZED" << endl;
+  DEBUG(1) << now() << " STABILIZED" << endl;
   return true;
 }
