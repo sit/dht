@@ -133,7 +133,7 @@ dhashclient::insert (const char *buf, size_t buflen, cbinsertgw_t cb,
  * keyhash block convention:
  * 
  * sfs_pubkey2 pub_key
- * sfs_sig2 sig
+ * sfs_sig2 sig (taken over salt, version (in NBO), payload)
  * long payload_len
  * signed payload (see struct keyhash_payload)
  *   long version
@@ -146,10 +146,21 @@ dhashclient::insert (bigint hash, sfs_pubkey2 key, sfs_sig2 sig,
 		     cbinsertgw_t cb, ptr<option_block> options)
 {
   xdrsuio x;
-  if (p.encode (x, key, sig)) {
+  long plen = p.payload_len ();
+  
+  if (!xdr_sfs_pubkey2 (&x, &key) ||
+      !xdr_sfs_sig2 (&x, &sig) ||
+      !XDR_PUTLONG (&x, &plen)) {
     vec<chordID> r;
     ptr<insert_info> i = New refcounted<insert_info>(hash, r);
     cb (DHASH_ERR, i); // marshalling failed.
+    return;
+  }
+  if (p.encode (x)) {
+    vec<chordID> r;
+    ptr<insert_info> i = New refcounted<insert_info>(hash, r);
+    cb (DHASH_ERR, i); // marshalling failed.
+    return;
   }
   int m_len = x.uio ()->resid ();
   char *m_dat = suio_flatten (x.uio ());

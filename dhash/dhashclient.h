@@ -26,34 +26,6 @@ struct option_block
 };
 
 
-typedef char salt_t [20];
-
-class keyhash_payload
-{
-private:
-  salt_t _salt;
-  long _version;
-  str _buf;
-
-public:
-  keyhash_payload ();
-  keyhash_payload (salt_t s);
-  keyhash_payload (long version, str buf);
-  keyhash_payload (salt_t s, long version, str buf);
-  ~keyhash_payload () {}
-  
-  const char* salt () const { return _salt; }
-  long version () const { return _version; }
-  const str& buf () const { return _buf; }
-
-  chordID id (sfs_pubkey2 pk) const;
-  bool verify (sfs_pubkey2 pk, sfs_sig2 sig) const;
-  void sign (ptr<sfspriv> key, sfs_pubkey2& pk, sfs_sig2& sig) const;
-  int encode (xdrsuio &x, sfs_pubkey2 pk, sfs_sig2 sig) const;
-  static ptr<keyhash_payload> decode (xdrmem &x, long payloadlen);
-  static ptr<keyhash_payload> decode (ptr<dhash_block> b);
-};
-
 class dhashclient
 {
 private:

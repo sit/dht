@@ -1,8 +1,7 @@
 
-#include "dhash_common.h"
+#include "dhash_common.h" // keyhash_payload
 #include "dhash.h"
 #include "verify.h"
-#include "dhashclient.h" // keyhash_payload
 #include <dbfe.h>
 #include <sfscrypt.h>
 #include <dhash_prot.h>
@@ -119,7 +118,7 @@ get_block_contents (char *data, unsigned int len, dhash_ctype t)
       sfs_sig2 s;
       if (!xdr_sfs_pubkey2 (&x, &k) ||
 	  !xdr_sfs_sig2 (&x, &s) ||
-          !XDR_GETLONG (&x, &contentlen))
+	  !XDR_GETLONG (&x, &contentlen))
 	return NULL;
     }
     /* FALL THROUGH */
@@ -128,7 +127,7 @@ get_block_contents (char *data, unsigned int len, dhash_ctype t)
   case DHASH_NOAUTH:
   case DHASH_APPEND:
     {
-      if (len && !(content = (char *)XDR_INLINE (&x, contentlen)))
+      if (contentlen >= 0 && !(content = (char *)XDR_INLINE (&x, contentlen)))
 	return NULL;
     }
     break;
@@ -173,6 +172,7 @@ keyhash_version (char *value, unsigned int len)
   sfs_pubkey2 k;
   sfs_sig2 s;
   long plen;
+
   if (!xdr_sfs_pubkey2 (&x, &k) ||
       !xdr_sfs_sig2 (&x, &s) ||
       !XDR_GETLONG (&x, &plen))
@@ -237,13 +237,26 @@ keyhash_payload::id (sfs_pubkey2 pk) const
   return chordid;
 }
 
+// the signature is taken over:
+//    salt_t   (20 opaque bytes)
+//    version  (4 bytes, in network byte order)
+//    user_payload
+//
+//    To sign, we use a string constructed with an iovector to concatenate 
+//    these elements and then we sign the string. On the verify side, we
+//    again form a string out of what we think the three elements should be
+//    (we get them from the flattened xdr struct that is stored inside
+//    dhash), and then we verify this new string with the public key (also 
+//    stored inside the xdr structure)
 void
-keyhash_payload::sign (ptr<sfspriv> key, sfs_pubkey2& pk, sfs_sig2& sig) const
+keyhash_payload::sign (ptr<sfspriv> key, sfs_pubkey2 pk, sfs_sig2 sig) const
 {
+  long version_nbo = htonl(_version);
+
   iovec iovs [3];
   iovs [0].iov_base = const_cast<char *> (_salt);
   iovs [0].iov_len = sizeof (salt_t);
-  iovs [1].iov_base = (char *) &_version;
+  iovs [1].iov_base = reinterpret_cast<char *> (&version_nbo);
   iovs [1].iov_len = sizeof (long);
   iovs [2].iov_base = const_cast<char *> (_buf.cstr ());
   iovs [2].iov_len = _buf.len ();
@@ -255,11 +268,13 @@ keyhash_payload::sign (ptr<sfspriv> key, sfs_pubkey2& pk, sfs_sig2& sig) const
 bool
 keyhash_payload::verify (sfs_pubkey2 pubkey, sfs_sig2 sig) const
 {
+  long version_nbo = htonl(_version);
+
   ptr<sfspub> pk = sfscrypt.alloc (pubkey, SFS_VERIFY);
   iovec iovs [3];
   iovs [0].iov_base = const_cast<char *> (_salt);
   iovs [0].iov_len = sizeof (salt_t);
-  iovs [1].iov_base = (char *) &_version;
+  iovs [1].iov_base = reinterpret_cast<char*> (&version_nbo);
   iovs [1].iov_len = sizeof (long);
   iovs [2].iov_base = const_cast<char *> (_buf.cstr ());
   iovs [2].iov_len = _buf.len ();
@@ -268,15 +283,11 @@ keyhash_payload::verify (sfs_pubkey2 pubkey, sfs_sig2 sig) const
 }
 
 int
-keyhash_payload::encode (xdrsuio &x, sfs_pubkey2 pk, sfs_sig2 sig) const
+keyhash_payload::encode (xdrsuio &x) const
 {
-  long plen = _buf.len () + sizeof (long) + sizeof (salt_t);
   long v = _version;
 
-  if (!xdr_sfs_pubkey2 (&x, &pk) ||
-      !xdr_sfs_sig2 (&x, &sig) ||
-      !XDR_PUTLONG (&x, &plen) ||
-      !XDR_PUTLONG (&x, &v))
+  if (!XDR_PUTLONG (&x, &v))
     return -1;
 
   // stuff the salt into the xdr structure
@@ -300,14 +311,16 @@ keyhash_payload::decode (xdrmem &x, long plen)
   long version;
   char *salt;
   char *buf;
-  long buflen = plen - sizeof (long) - sizeof (salt_t);
 
   if (plen < (long)((sizeof (long))+sizeof (salt_t)))
     return p;
+
   if (!XDR_GETLONG (&x, &version))
     return p;
   if (!(salt = (char *)XDR_INLINE (&x, sizeof (salt_t))))
     return p;
+  
+  long buflen = plen - sizeof (long) - sizeof (salt_t);
   if (!(buf = (char *)XDR_INLINE (&x, buflen)))
     return p;
   p = New refcounted<keyhash_payload> (salt, version, str (buf, buflen));
