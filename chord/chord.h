@@ -173,6 +173,8 @@ class vnode : public virtual refcount {
 		     chord_challengeres *res, clnt_stat err);
   void dofindsucc_cb (cbroute_t cb, chordID n, chordID x,
 		      route search_path, chordstat status);
+  void doalert_cb (svccb *sbp, chordID x, chordID s, net_address r, 
+		   chordstat stat);
   void doRPC (chordID &ID, rpc_program prog, int procno, 
 	      ptr<void> in, void *out, aclnt_cb cb);
  public:

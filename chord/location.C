@@ -22,6 +22,23 @@
 #include <math.h>
 #include "chord.h"
 
+location::location (chordID &_n, net_address &_r) 
+  : n (_n), addr (_r) 
+{
+  refcnt = 0;
+  rpcdelay = 0;
+  nrpc = 0;
+  maxdelay = 0;
+  bzero(&saddr, sizeof(sockaddr_in));
+  saddr.sin_family = AF_INET;
+  inet_aton (_r.hostname.cstr (), &saddr.sin_addr);
+  saddr.sin_port = htons (addr.port);
+};
+
+location::~location () {
+  warnx << "~location: delete " << n << "\n";
+}
+
 locationtable::locationtable (ptr<chord> _chordnode, int set_rpcdelay, 
 			      int _max_cache, int _max_connections)
   : chordnode (_chordnode), max_cachedlocs (_max_cache), 
@@ -31,6 +48,7 @@ locationtable::locationtable (ptr<chord> _chordnode, int set_rpcdelay,
   nrpcfailed = 0;
   rpcdelay = 0;
   nsent = 0;
+  npending = 0;
   size_cachedlocs = 0;
   nvnodes = 0;
   nnodes = 0;
@@ -68,7 +86,10 @@ locationtable::replace_estimate (u_long o, u_long n)
 void
 locationtable::insert (chordID &n, sfs_hostname s, int p)
 {
-  location *l = New location (n, s, p);
+  net_address r;
+  r.hostname = s;
+  r.port = p;
+  location *l = New location (n, r);
   assert (!locs[n]);
   locs.insert (l);
   add_cachedlocs (l);

@@ -1,11 +1,11 @@
 - test lookups during joins
 - test inserts during joins
+- remove hard constants
 
-- determine when to run stabilize at runtime
 - server selection
 - smart implementation of location table
 - recursive lookup
 - use refcnted locations.
-
-- fix assert when nodeID is not there (dispatch)
-- replacefinger shouldn't replace first by finding succ of start (ipv first)
+- cache whether a location is authenticated
+- grep for XXX
+- fix alert

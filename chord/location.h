@@ -72,44 +72,15 @@ struct location {
   int refcnt;	// locs w. refcnt == 0 are in the cache; refcnt > 0 are fingers
   chordID n;
   net_address addr;
-
   sockaddr_in saddr;
-
   ihash_entry<location> fhlink;
   tailq_entry<location> cachelink;
-
   u_int64_t rpcdelay;
   u_int64_t nrpc;
   u_int64_t maxdelay;
 
-  location (chordID &_n, net_address &_r) : n (_n), addr (_r) {
-    refcnt = 0;
-    rpcdelay = 0;
-    nrpc = 0;
-    maxdelay = 0;
-    bzero(&saddr, sizeof(sockaddr_in));
-    saddr.sin_family = AF_INET;
-    inet_aton (_r.hostname.cstr (), &saddr.sin_addr);
-    saddr.sin_port = htons (addr.port);
-    // struct hostent *h = gethostbyname (_r.hostname.cstr ());
-    // saddr.sin_addr.s_addr = *(u_int32_t *)(h->h_addr);
-  };
-
-  location (chordID &_n, sfs_hostname _s, int _p) : n (_n) {
-    addr.hostname = _s;
-    addr.port = _p;
-    refcnt = 0;
-    rpcdelay = 0;
-    nrpc = 0;
-    maxdelay = 0;
-    bzero(&saddr, sizeof(sockaddr_in));
-    saddr.sin_family = AF_INET;
-    inet_aton (_s.cstr (), &saddr.sin_addr);
-    saddr.sin_port = htons (addr.port);
-  };
-  ~location () {
-    warnx << "~location: delete " << n << "\n";
-  }
+  location (chordID &_n, net_address &_r);
+  ~location ();
 };
 
 struct node {

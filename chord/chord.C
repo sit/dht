@@ -24,7 +24,6 @@
 #include <qhash.h>
 
 #define PNODE
-// #define FASTSTABILIZE		// for testing purposes
 
 const int chord_server_select = (getenv ("CHORD_SERVER_SELECTION")
 			   ? atoi (getenv ("CHORD_SERVER_SELECTION")) : 0);
@@ -246,8 +245,13 @@ vnode::stats ()
 void
 vnode::stop ()
 {
+  if (stabilize_continuous_tmo) {
+    warnx << "stop " << myID << " switch off cont stabilize timer\n";
+    timecb_remove (stabilize_continuous_tmo);
+    stabilize_continuous_tmo = NULL;
+  }
   if (stabilize_backoff_tmo) {
-    warnx << "stop " << myID << " switch off stabilize timer\n";
+    warnx << "stop " << myID << " switch off backoff stabilize timer\n";
     timecb_remove (stabilize_backoff_tmo);
     stabilize_backoff_tmo = NULL;
   }
@@ -396,7 +400,7 @@ vnode::stabilize (void)
 void
 vnode::stabilize_continuous (u_int32_t t)
 {
-#ifndef FASTSTABILIZE
+  stabilize_continuous_tmo = NULL;
   if (nout_continuous > 0) {
     // stabilizing too fast
     t = 2 * t;
@@ -421,7 +425,6 @@ vnode::stabilize_continuous (u_int32_t t)
   stabilize_continuous_tmo = delaycb (sec, nsec, 
 				      wrap (mkref (this), 
 					    &vnode::stabilize_continuous, t));
-#endif
 }
 
 void
@@ -521,10 +524,6 @@ vnode::stabilize_backoff (int f, int s, u_int32_t t)
   } else if (!isstable ()) {
     stable = false;
   }
-#ifdef FASTSTABILIZE
-  stabilize_succ ();
-  stabilize_pred ();
-#endif
   if (nout_backoff > 0) {
     t = 2 * t;
     // warnx << "stabilize_backoff: " << myID << " " << nout_backoff 
@@ -532,11 +531,9 @@ vnode::stabilize_backoff (int f, int s, u_int32_t t)
   } else {
     f = stabilize_finger (f);
     s = stabilize_succlist (s);
-#ifndef FASTSTABILIZE
     if (isstable () && (t <= stabilize_timer_max * 1000)) {
       t = 2 * t;
     }
-#endif
   }
   u_int32_t t1 = uniform_random (0.5 * t, 1.5 * t);
   u_int32_t sec = t1 / 1000;
@@ -847,9 +844,25 @@ vnode::doalert (svccb *sbp, chord_nodearg *na)
 {
   ndoalert++;
   warnt("CHORD: doalert");
-  // XXX perhaps less aggressive and check status of x first
-  chordnode->deletefingers (na->n.x);
-  sbp->replyref (chordstat (CHORD_OK));
+  if (locations->getlocation (na->n.x) != NULL) {
+    // check whether we cannot reach x either
+    get_successor (na->n.x, wrap (mkref (this), &vnode::doalert_cb, sbp, 
+				  na->n.x));
+  } else {
+    sbp->replyref (chordstat (CHORD_UNKNOWNNODE));
+  }
+}
+
+void
+vnode::doalert_cb (svccb *sbp, chordID x, chordID s, net_address r, 
+		   chordstat stat)
+{
+  if ((stat == CHORD_OK) || (stat == CHORD_ERRNOENT)) {
+    sbp->replyref (chordstat (CHORD_OK));
+  } else {
+    chordnode->deletefingers (x);
+    sbp->replyref (chordstat (CHORD_UNKNOWNNODE));
+  }
 }
 
 void
