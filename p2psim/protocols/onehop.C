@@ -116,12 +116,15 @@ void
 OneHop::record_stat(uint type, uint num_ids, uint num_else)
 {
   assert(type <= 5);
-  if (num_ids > 300) 
-    OneHop::num_violations++;
-   // printf("now %llu warning: %u sending too much %u\n", now(), me.ip, num_ids);
+  // printf("now %llu warning: %u sending too much %u\n", now(), me.ip, num_ids);
   //assert(num_ids < 300);
   if (Node::collect_stat()) {
-    Node::record_bw_stat(type,num_ids,num_else);
+    if (num_ids > 300) {
+      OneHop::num_violations += (num_ids/300);
+      Node::record_bw_stat(type,num_ids,40 * (num_ids/300));
+    }else{
+      Node::record_bw_stat(type,num_ids,num_else);
+    }
   }
 }
 

@@ -776,7 +776,10 @@ if( defined $options{"convex"} ) {
 		    }else{
 		      $cony .=".0"; #jy: find-convex.py always spits out dicimal points
 		    }
-
+		    if ($conx=~/\./) {
+		    }else{
+		      $conx .=".0";
+		    }
 		    # we might need to figure out what this line was later
 		    if (!defined($headerhash{"$conx $cony"})) {
 			$headerhash{"$conx $cony"} = $h;
@@ -786,8 +789,7 @@ if( defined $options{"convex"} ) {
 		      $conx += 0.00001;
 		      $headerhash{"$conx $cony"} = $h;
 		    }
-		    print CON "$conx $cony ";
-		    print CON "\n";
+		    print CON "$conx $cony\n";
 
 		    
 		    if( defined $options{"hulllabel"} ) {
@@ -802,7 +804,7 @@ if( defined $options{"convex"} ) {
 	    # now run it through the convexinator
 	    system( "$con_cmd $datfile.con > $datfile$j.convex" ) and
 		die( "Couldn't run ./find_convexhull.py $datfile.con" );
-	    unlink( "$datfile.con" );
+#unlink( "$datfile.con" );
 	    
 	    push @convexfiles, "$datfile$j.convex";
 	    $xposes{"$datfile$j.convex"} = $xposes{$datfile};
