@@ -1,4 +1,4 @@
-/* $Id: http.C,v 1.3 2003/01/02 21:59:19 jastr Exp $ */
+/* $Id: http.C,v 1.4 2003/01/02 22:04:28 jastr Exp $ */
 
 /*
  *
@@ -21,7 +21,8 @@
  *
  */
 
-#ifdef __linux /*kludge for strptime on planetlab*/
+/*cause strptime to be defined on planetlab*/
+#if defined(__linux) and !defined(_GNU_SOURCE) 
 #  define _GNU_SOURCE
 #endif
 
@@ -29,7 +30,6 @@
 #include "rxx.h"
 #include "sha1.h"
 #include <pwd.h>
-
 #include <time.h>
 
 static rxx hdrnameval ("^([^\\s:]+):\\s*(.*)\r?\n\\z", "s");
