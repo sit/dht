@@ -1,9 +1,13 @@
+lifemean 3600000
+deathmean =lifemean 1
+lookupmean 600000
+exittime *lifemean 6
+stattime *exittime .5
 # Chord args file, for input into scripts/run-simulations.pl
-base 2 4 8 16 32 64
-successors 16
-pnstimer 2000 4000 8000 16000 32000
-basictimer <=pnstimer 2000 4000 8000 16000 32000
+base 2 4 8 16 32 64 128
+successors 16 
+pnstimer 9000 18000 36000 72000 144000 288000 576000 1152000
+basictimer <=pnstimer 9000 18000 36000 72000 144000 288000 576000 1152000
 succlisttimer =pnstimer 1
-m 1 
-allfrag 1 
+recurs_direct 1
 recurs 1
