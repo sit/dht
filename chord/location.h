@@ -233,5 +233,5 @@ class locationtable : public virtual refcount {
   
 };
 
-#endif _LOCATION_H_
+#endif /* _LOCATION_H_ */
 
