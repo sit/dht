@@ -430,7 +430,6 @@ vnode_impl::donotify (user_args *sbp, chord_nodearg *na)
   sbp->fill_from (&s);
   s.x = make_chordID (s.r.hostname, s.r.port, s.vnode_num);
   dorpc_arg *t = sbp->transport_header ();
-
   if (s.x != t->src_id) {
     // predecessor not who it says it is
     warn << t->src_id << " is really " << s.x << ", reject!\n";
