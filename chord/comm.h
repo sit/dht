@@ -30,6 +30,7 @@ struct sent_elm {
 
 struct RPC_delay_args {
   ptr<location> l;
+  ptr<location> from;
   const rpc_program &prog;
   int procno;
   ptr<void> in;
@@ -40,9 +41,14 @@ struct RPC_delay_args {
 
   tailq_entry<RPC_delay_args> q_link;
 
-  RPC_delay_args (ptr<location> _l, const rpc_program &_prog, int _procno,
+  RPC_delay_args (ptr<location> _from, ptr<location> _l, const rpc_program &_prog, int _procno,
 		  ptr<void> _in, void *_out, aclnt_cb _cb) :
-    l (_l), prog (_prog), procno (_procno), in (_in), 
+    l (_l), from (_from), prog (_prog), procno (_procno), in (_in), 
+    out (_out), cb (_cb), now (getusec ()) {};
+
+  RPC_delay_args (const rpc_program &_prog, int _procno,
+		  ptr<void> _in, void *_out, aclnt_cb _cb) :
+    l (NULL), from (NULL), prog (_prog), procno (_procno), in (_in), 
     out (_out), cb (_cb), now (getusec ()) {};
 };
 
@@ -113,7 +119,7 @@ class rpc_manager {
  public:
   virtual void rexmit (long seqno) {};
   virtual void stats ();
-  virtual long doRPC (ptr<location> l, const rpc_program &prog, int procno,
+  virtual long doRPC (ptr<location> from, ptr<location> l, const rpc_program &prog, int procno,
 		 ptr<void> in, void *out, aclnt_cb cb, long fake_seqno = 0);
   virtual long doRPC_dead (ptr<location> l, const rpc_program &prog, int procno,
 			   ptr<void> in, void *out, aclnt_cb cb, long fake_seqno = 0);
@@ -136,7 +142,7 @@ class tcp_manager : public rpc_manager {
 
  public:
   void rexmit (long seqno) {};
-  long doRPC (ptr<location> l, const rpc_program &prog, int procno,
+  long doRPC (ptr<location> from, ptr<location> l, const rpc_program &prog, int procno,
 	      ptr<void> in, void *out, aclnt_cb cb, long fake_seqno = 0);
   long doRPC_dead (ptr<location> l, const rpc_program &prog, int procno,
 		   ptr<void> in, void *out, aclnt_cb cb, long fake_seqno = 0);
@@ -187,13 +193,13 @@ class stp_manager : public rpc_manager {
   void rpc_done (long seqno);
   void reset_idle_timer ();
   void idle ();
-  void setup_rexmit_timer (hostinfo *h, long *sec, long *nsec);
+  void setup_rexmit_timer (ptr<location> from, ptr<location> l, long *sec, long *nsec);
   void timeout_cb (rpc_state *C);
  public:
   void stats ();
 		   
   void rexmit (long seqno);
-  long doRPC (ptr<location> l, const rpc_program &prog, int procno,
+  long doRPC (ptr<location> from, ptr<location> l, const rpc_program &prog, int procno,
 	      ptr<void> in, void *out, aclnt_cb cb, long fake_seqno = 0);
   long doRPC_dead (ptr<location> l, const rpc_program &prog, int procno,
 		   ptr<void> in, void *out, aclnt_cb cb, long fake_seqno = 0);

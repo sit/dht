@@ -43,6 +43,7 @@
 #include "comm.h"
 #include "location.h"
 #include "modlogger.h"
+#include "coord.h"
 
 long outbytes;
 ihash<str, rpcstats, &rpcstats::key, &rpcstats::h_link> rpc_stats_tab;
@@ -162,7 +163,7 @@ rpc_manager::lookup_host (const net_address &r)
 }
 
 long
-rpc_manager::doRPC (ptr<location> l,
+rpc_manager::doRPC (ptr<location> from, ptr<location> l,
 		    const rpc_program &prog, int procno, 
 		    ptr<void> in, void *out, aclnt_cb cb,
 		    long fake_seqno /* = 0 */)
@@ -185,7 +186,7 @@ rpc_manager::doRPC_dead (ptr<location> l,
 			 ptr<void> in, void *out, aclnt_cb cb,
 			 long fake_seqno /* = 0 */)
 {
-  return doRPC (l, prog, procno, in, out, cb, fake_seqno);
+  return doRPC (NULL, l, prog, procno, in, out, cb, fake_seqno);
 }
 
 void
@@ -213,13 +214,13 @@ rpc_manager::doRPCcb (aclnt_cb realcb, ptr<location> l, u_int64_t sent,
 
 // -----------------------------------------------------
 long
-tcp_manager::doRPC (ptr<location> l,
+tcp_manager::doRPC (ptr<location> from, ptr<location> l,
 		    const rpc_program &prog, int procno, 
 		    ptr<void> in, void *out, aclnt_cb cb,
 		    long fake_seqno /* = 0 */)
 {
   // hack to avoid limit on wrap()'s number of arguments
-  RPC_delay_args *args = New RPC_delay_args (l, prog, procno,
+  RPC_delay_args *args = New RPC_delay_args (from, l, prog, procno,
 					     in, out, cb);
 
   hostinfo *hi = lookup_host (l->addr);
@@ -242,7 +243,7 @@ tcp_manager::doRPC_dead (ptr<location> l,
 			 ptr<void> in, void *out, aclnt_cb cb,
 			 long fake_seqno /* = 0 */)
 {
-  return doRPC (l, prog, procno, in, out, cb, fake_seqno);
+  return doRPC (NULL, l, prog, procno, in, out, cb, fake_seqno);
 }
 
 void
@@ -397,19 +398,21 @@ stp_manager::doRPC_dead (ptr<location> l,
 }
 
 long
-stp_manager::doRPC (ptr<location> l,
+stp_manager::doRPC (ptr<location> from, ptr<location> l,
 		    const rpc_program &prog, int procno, 
 		    ptr<void> in, void *out, aclnt_cb cb,
 		    long _fake_seqno /* = 0 */)
 {
   reset_idle_timer ();
-  if (left + cwind < seqno) {
-    RPC_delay_args *args = New RPC_delay_args (l, prog, procno,
+  if (left + cwind*10 < seqno) {
+    RPC_delay_args *args = New RPC_delay_args (from, l, prog, procno,
 					       in, out, cb);
     args->fake_seqno = fake_seqno;
     enqueue_rpc (args);
     fake_seqno--;
+    
     return args->fake_seqno;
+    
   } else {
 
     ref<aclnt> c = aclnt::alloc (dgram_xprt, prog, 
@@ -429,8 +432,7 @@ stp_manager::doRPC (ptr<location> l,
     sent_Q.insert_tail (s);
     
     long sec, nsec;
-    hostinfo *h = lookup_host (l->addr);
-    setup_rexmit_timer (h, &sec, &nsec);
+    setup_rexmit_timer (from, l, &sec, &nsec);
 
     C->b->send (sec, nsec);
     seqno++;
@@ -471,9 +473,7 @@ stp_manager::timeout (rpc_state *C)
        << inet_ntoa (C->loc->saddr.sin_addr) << " seqno: " 
        << C->seqno << " retransmits: " << C->rexmits << "\n";
 
-  //  remove_from_sentq (C->seqno);
   update_cwind (-1);
-  //  rpc_done (C->seqno);
 }
 
 void
@@ -564,7 +564,7 @@ stp_manager::rpc_done (long acked_seqno)
     assert (args);
     Q.remove (args);
 
-    doRPC (args->l, args->prog,
+    doRPC (args->from, args->l, args->prog,
 	   args->procno, 
 	   args->in,
 	   args->out,
@@ -602,6 +602,7 @@ stp_manager::rexmit (long seqno)
   }
   C->b->user_rexmit ();
 }
+
 void
 stp_manager::update_cwind (int seq) 
 {
@@ -654,7 +655,7 @@ stp_manager::enqueue_rpc (RPC_delay_args *args)
 
 
 void
-stp_manager::setup_rexmit_timer (hostinfo *h, long *sec, long *nsec)
+stp_manager::setup_rexmit_timer (ptr<location> from, ptr<location> l, long *sec, long *nsec)
 {
 #define MIN_SAMPLES 10
 
@@ -666,12 +667,10 @@ stp_manager::setup_rexmit_timer (hostinfo *h, long *sec, long *nsec)
   else 
     alat = 1000000;
 
-#ifdef PERHOST
-  if (h && h->nrpc > MIN_SAMPLES) {
-    alat = h->a_lat + 4*h->a_var;
-    alat *= 1.5;
+  if ((gforce < 50000.0) && l && from && (l->coords.size () > 0) && (from->coords.size () > 0)) {
+    float dist = Coord::distance_f (from->coords, l->coords);
+    alat = dist*2.0 + 5000; //scale it to be safe
   }
-#endif
 
   //statistics
   timers.push_back (alat);
@@ -698,21 +697,6 @@ rpc_manager::update_latency (ptr<location> l, u_int64_t lat)
   if (err < 0) err = -err;
   a_var = a_var + GAIN*(err - a_var);
 
-  //update the 9xth percentile latencies from the recent per-host averages
-#define PERCENTILE 0.98
-  hostinfo *cur = hosts.first ();
-  float host_lats [max_host_cache];
-  size_t i;
-  for (i = 0; i < max_host_cache && cur; i++) {
-    host_lats[i] = cur->a_lat + 4*cur->a_var;
-    cur = hosts.next (cur);
-  }
-  int which = (int)(PERCENTILE*i);
-  avg_lat = myselect (host_lats, 0, i - 1, which + 1);
-
-  lat_history.push_back (avg_lat);
-  if (lat_history.size () > 1000) lat_history.pop_front ();
-  
   //update per-host latency
   hostinfo *h = lookup_host (l->addr);
   if (h) {
@@ -724,6 +708,22 @@ rpc_manager::update_latency (ptr<location> l, u_int64_t lat)
     if (lat > h->maxdelay) h->maxdelay = lat;
   }
 
+  //update the 9xth percentile latencies from the recent per-host averages
+#define PERCENTILE 0.98
+  hostinfo *cur = hosts.first ();
+  float host_lats [max_host_cache];
+  size_t i;
+  for (i = 0; i < max_host_cache && cur; i++) {
+    host_lats[i] = cur->a_lat + 4*cur->a_var;
+    cur = hosts.next (cur);
+  }
+  int which = (int)(PERCENTILE*i);
+  
+  avg_lat = myselect (host_lats, 0, i - 1, which + 1);
+
+  lat_history.push_back (avg_lat);
+  if (lat_history.size () > 1000) lat_history.pop_front ();
+  
 }
 
 void
@@ -895,6 +895,7 @@ rpccb_chord::alloc (ptr<aclnt> c,
   }
   
   ptr<bool> deleted  = New refcounted<bool> (false);
+
   rpccb_chord *ret = New rpccb_chord (c,
 				      x,
 				      cb,
@@ -914,18 +915,11 @@ rpccb_chord::send (long _sec, long _nsec)
   sec = _sec;
   nsec = _nsec;
 
-#ifdef TIMEOUT_FUDGING
-  if (sec < 2) {
-    sec = 1;
-    nsec = 0;
-  }
-#endif
-
   if (nsec < 0 || sec < 0)
     panic ("[send to cates@mit.edu]: sec %ld, nsec %ld\n", sec, nsec);
 
   tmo = delaycb (sec, nsec, wrap (this, &rpccb_chord::timeout_cb, deleted));
-  //warn ("%s xmited %d:%06d\n", gettime().cstr(), int (sec), int (nsec/1000));
+  //  warn ("%s xmited %d:%06d\n", gettime().cstr(), int (sec), int (nsec/1000));
   xmit (0);
 }
 
@@ -967,7 +961,7 @@ rpccb_chord::timeout_cb (ptr<bool> del)
     sockaddr_in *s = (sockaddr_in *)dest;
 
     warnx << gettime() << " REXMIT " << xid
-	  << " rexmits " << rexmits << ", timeout "<< sec << ":" << nsec << " destined for " << inet_ntoa (s->sin_addr) << "\n";
+	  << " rexmits " << rexmits << ", timeout "<< sec*1000 + nsec/(1000*1000) << " ms, destined for " << inet_ntoa (s->sin_addr) << "\n";
 
     xmit (rexmits);
     if (rexmits == MAX_REXMIT) {

@@ -138,8 +138,10 @@ getsucc_cb (chordID dest, str desthost,
   u_short port = res->resok->nlist[1].r.port;
 
   // wrapped around ring. done.
-  if (n == wellknown_ID)
+  if (n == wellknown_ID) {
+    warnx << getusec () << "--------------------------\n";
     exit (0);
+  }
 
   getsucc (n, host, port);
 }
@@ -177,13 +179,13 @@ int
 main (int argc, char** argv) 
 {
   setprogname (argv[0]);
-  sfsconst_init ();
   random_init ();
   setup ();
 
   str host = "not set";
   unsigned short port = 0;
 
+  errfd = 1;
   int ch;
   while ((ch = getopt (argc, argv, "h:j:a:l:f:is:")) != -1) {
     switch (ch) {

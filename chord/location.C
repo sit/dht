@@ -188,21 +188,8 @@ locationtable::resendRPC (long seqno)
 }
 
 long
-locationtable::doRPC (const chord_node &n, const rpc_program &prog,
-		      int procno, ptr<void> in,
-		      void *out, aclnt_cb cb)
-{
-  assert (0);
-  ptr<location> l = lookup (n.x);
-  if (!l) {
-    //BAD LOC
-    insert (n);
-  }
-  return doRPC (n.x, prog, procno, in, out, cb);
-}
-
-long
-locationtable::doRPC (const chordID &n, const rpc_program &prog, 
+locationtable::doRPC (const chordID &from, const chordID &n, 
+		      const rpc_program &prog, 
 		      int procno, ptr<void> in, 
 		      void *out, aclnt_cb cb)
 {
@@ -213,10 +200,11 @@ locationtable::doRPC (const chordID &n, const rpc_program &prog,
   }
   l->nrpc++;
 
-  if (l->alive)
-    return hosts->doRPC (l, prog, procno, in, out, 
+  if (l->alive) {
+    ptr<location> froml = lookup (from);
+    return hosts->doRPC (froml, l, prog, procno, in, out, 
 			 wrap (this, &locationtable::doRPCcb, l, cb));
-  else
+  }  else
     return hosts->doRPC_dead (l, prog, procno, in, out, 
 			      wrap (this, &locationtable::doRPCcb, l, cb));
 
@@ -558,7 +546,7 @@ void
 locationtable::ping (const chordID &x, cbping_t cb) 
 {
   ptr<chordID> v = New refcounted<chordID> (x);
-  doRPC (x, transport_program_1, TRANSPORTPROC_NULL,
+  doRPC (NULL, x, transport_program_1, TRANSPORTPROC_NULL,
 	 v, NULL,
 	 wrap (this, &locationtable::ping_cb, cb));
 }

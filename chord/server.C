@@ -32,6 +32,8 @@
 #include <coord.h>
 #include <math.h>
 
+float gforce = 1000000;
+
 void 
 vnode_impl::get_successor (const chordID &n, cbchordID_t cb)
 {
@@ -347,7 +349,7 @@ vnode_impl::doRPC (const chordID &ID, const rpc_program &prog, int procno,
 #endif
 
     ref<dorpc_res> res = New refcounted<dorpc_res> (DORPC_OK);
-    return locations->doRPC (ID, transport_program_1, TRANSPORTPROC_DORPC, 
+    return locations->doRPC (myID, ID, transport_program_1, TRANSPORTPROC_DORPC, 
 			     arg, res, 
 			     wrap (this, &vnode_impl::doRPC_cb, 
 				   prog, procno, out, cb, res));
@@ -467,6 +469,8 @@ vnode_impl::update_coords (chordID u, vec<float> uc, float ud)
 
     float t = DT;
     while (ftot*t > 1000.0) t /= 2.0;
+
+    gforce = ftot;
 
     Coord::scalar_mult(f, t);
     Coord::vector_add (coords, f);

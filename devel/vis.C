@@ -1412,15 +1412,10 @@ recenter ()
   float minx=RAND_MAX, miny=RAND_MAX;
   float maxx=-RAND_MAX, maxy=-RAND_MAX;
 
-  char f[1024];
-
   while (n) {
     if (n->coords.size () > 0) {
       float x = n->coords[0];
       float y = n->coords[1];
-      float z = n->coords[2];
-      sprintf (f, " %f %f %f", x, y, z);
-      warn << n->ID << ":" << n->host.cstr () << f << "\n";
       minx = (x < minx) ? x : minx;
       miny = (y < miny) ? y : miny;
       maxx = (x > maxx) ? x : maxx;
@@ -1435,10 +1430,11 @@ recenter ()
   zoomx = maxx - minx;
   zoomy = maxy - miny;
 
-  sprintf (f, "(%f, %f) (%f, %f)", centerx, centery, zoomx, zoomy);
-  warn << "recenter: " << f << "\n";
   zoomx *= 1.3;
   zoomy *= 1.3;
+
+  if (zoomx > zoomy) zoomy = zoomx;
+  if (zoomy > zoomx) zoomx = zoomy;
 }
 
 void

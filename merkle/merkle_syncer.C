@@ -60,7 +60,7 @@ merkle_syncer::doRPC (int procno, ptr<void> in, void *out, aclnt_cb cb)
 {
   // Must resort to bundling all values into one argument since
   // async/callback.h is configured with too few parameters.
-  struct RPC_delay_args args (NULL, merklesync_program_1, procno, in, out, cb);
+  struct RPC_delay_args args (merklesync_program_1, procno, in, out, cb);
   (*rpcfnc) (&args);
 }
 
@@ -298,7 +298,7 @@ merkle_getkeyrange::doRPC (int procno, ptr<void> in, void *out, aclnt_cb cb)
 {
   // Must resort to bundling all values into one argument since
   // async/callback.h is configured with too few parameters.
-  struct RPC_delay_args args (NULL, merklesync_program_1, procno, in, out, cb);
+  struct RPC_delay_args args (merklesync_program_1, procno, in, out, cb);
   (*rpcfnc) (&args);
 }
 
