@@ -336,6 +336,12 @@ class dhashclient {
 private:
   ptr<aclnt> gwclnt;
 
+  // inserts under the specified key
+  // (buf need not remain involatile after the call returns)
+  //
+  void insert (bigint key, const char *buf, size_t buflen, 
+	       cbinsert_t cb, dhash_ctype t);
+
 public:
   //
   // sockname is the unix path (ex. /tmp/chord-sock) used
@@ -353,11 +359,6 @@ public:
   void insert (const char *buf, size_t buflen, 
 		 rabin_priv key, cbinsert_t cb);
 
-  // inserts under the specified key
-  // (buf need not remain involatile after the call returns)
-  //
-  void insert (bigint key, const char *buf, size_t buflen, 
-	       cbinsert_t cb, dhash_ctype t = DHASH_CONTENTHASH);
 
   // retrieve block and verify
   //
