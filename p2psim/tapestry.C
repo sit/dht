@@ -1,4 +1,4 @@
-/* $Id: tapestry.C,v 1.7 2003/09/29 21:50:41 strib Exp $ */
+/* $Id: tapestry.C,v 1.8 2003/09/29 23:08:28 strib Exp $ */
 #include "tapestry.h"
 #include <stdio.h>
 #include <math.h>
@@ -16,12 +16,14 @@ Tapestry::Tapestry(Node *n)
   _my_id = get_id_from_ip(ip());
   TapDEBUG(2) << "Constructing" << endl;
   _rt = New RoutingTable(this);
+  _waiting_for_join = New ConditionVar();
 }
 
 Tapestry::~Tapestry()
 {
   TapDEBUG(2) << "Destructing" << endl;
   delete _rt;
+  delete _waiting_for_join;
 }
 
 void
@@ -50,6 +52,7 @@ Tapestry::join(Args *args)
   // if we're the well known node, we're done
   if( ip() == wellknown_ip ) {
     joined = true;
+    _waiting_for_join->notify();
     return;
   }
 
@@ -173,6 +176,7 @@ Tapestry::join(Args *args)
   }
 
   joined = true;
+  _waiting_for_join->notify();
   TapDEBUG(2) << "join done" << endl;
   TapDEBUG(2) << *_rt << endl;
 
@@ -187,15 +191,7 @@ Tapestry::handle_join(join_args *args, join_return *ret)
   // if our join has not yet finished, we must delay the handling of this
   // person's join.
   while( !joined ) {
-    TapDEBUG(3) << "delaying join of " << args->ip << endl;
-    ping_args pa;
-    ping_return pr;
-    Time before = now();
-    // TODO: these are unforgivable hacks
-    doRPC( args->ip, &Tapestry::handle_ping, &pa, &pr );
-    if( now() == before ) {
-      doRPC( 1, &Tapestry::handle_ping, &pa, &pr );
-    }
+    _waiting_for_join->wait();
   }
 
   // route toward the root
@@ -475,6 +471,13 @@ Tapestry::add_to_rt( IPAddress new_ip, GUID new_id )
 bool
 Tapestry::stabilized(vector<GUID> lid)
 {
+  
+  // if we don't think we've joined, we can't possibly be stable
+  if( !joined ) {
+    TapDEBUG(1) << "Haven't even joined yet." << endl;
+    return false;
+  }
+
   // for every GUID, make sure it either exists in your routing table,
   // or someone else does
 

@@ -1,10 +1,11 @@
-/* $Id: tapestry.h,v 1.5 2003/09/29 21:50:41 strib Exp $ */
+/* $Id: tapestry.h,v 1.6 2003/09/29 23:08:28 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
 
 #include "chord.h"
 #include "p2psim.h"
+#include "condvar.h"
 
 class NodeInfo;
 class RouteEntry;
@@ -135,6 +136,9 @@ private:
 #define TapDEBUG(x) DEBUG(x) << now() << ": (" << ip() << "/" << print_guid(id()) << ") "
 
   GUID _my_id;
+
+  // threads waiting for join to finish
+  ConditionVar *_waiting_for_join;
 
   // have we finished our join yet?
   bool joined;
