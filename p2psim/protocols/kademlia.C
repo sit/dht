@@ -740,6 +740,7 @@ k_bucket_tree::get(NodeID key, vector<peer_t*> *v, unsigned nbest)
 
 
 // }}}
+
 // {{{ k_bucket::k_bucket
 k_bucket::k_bucket(Kademlia *k, k_bucket_tree *root) : _leaf(false),
   _self(k), _root(root)
@@ -911,7 +912,6 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, bool init_state, string pr
 void
 k_bucket::erase(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned depth)
 {
-#if 0
   assert(_root);
 
   if(depth == 0)
@@ -948,12 +948,21 @@ k_bucket::erase(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned dep
   _nodes->erase(p);
 
   //
+  // get front guy from replacement cache
+  //
+  if(_replacement_cache->size()) {
+    peer_t *p = *_replacement_cache->begin();
+    _nodes->insert(p);
+    _replacement_cache->erase(p);
+  }
+
+  //
   // Now if the range in this k-bucket includes the node own ID, then split it,
   // otherwise just return the peer_t we just inserted.
   //
   if(!(node >= (*_nodes->begin())->id && node <= (*_nodes->end())->id &&
         (*_nodes->begin())->id != (*_nodes->end())->id))
-    return p;
+    return;
 
   assert(!_leaf);
   // create both children
@@ -973,11 +982,6 @@ k_bucket::erase(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned dep
   }
   delete _nodes;
   _nodes = 0;
-
-  // now insert at the right child
-  // KDEBUG(4) <<  "erase: after split, calling insert for prefix " << (prefix + (leftmostbit ? "1" : "0")) << " to depth " << (depth+1) << endl;
-  // return _child[leftmostbit]->erase(node, ip, init_state, prefix + (leftmostbit ? "1" : "0"), depth+1, root);
-#endif
 }
 
 // }}}
