@@ -1,141 +1,70 @@
-\section{Design}
+\section{Design and Implementation}
 
-DDNS makes use of
-DHash~\cite{cfs:sosp01}, a distributed hash table
-built on top of Chord, to store
-and retrieve resource records (RRs).
-Dhash has the following two nice properties:
+Our system handles lookups at the granularity of resource record sets (RRSets),
+as in conventional DNS.
+An RRSet is a list of all the records matching a
+given domain name and resource type.
+For example, at the time of writing, {\em www.nytimes.com}
+has three address (A) records: 208.48.26.245, 64.94.185.200,
+and 208.48.26.200.  These three answers compose the RRSet
+for ({\em www.nytimes.com}, A).
 
-\begin{list}{$\bullet$}{}
-\item {\em Load balance}.
-For normal records, DHash uses consistent hashing 
-(through Chord) to allocate keys to nodes evenly.
-For popular records, DHash employs caching to even out
-the load. If a particular record is looked up $n$ times
-in succession by different hosts (where $n$ can be very large),
-then with high probability each server serves a given record 
-only $\log{m}$ times in total, 
-where $m$ is the number of servers. Notice that
-the number of times a record is transferred is 
-{\it independent} of how popular it is. 
+DNSSEC uses public key cryptography to sign resource record
+sets.  When we retrieve an RRSet from an arbitrary
+DHash server, we need to verify the signature (included as a 
+signature (SIG) record).
+To find the public key that should have signed the RRSet,
+we need to execute another DNS lookup, 
+this time for a public key (KEY) RRSet.
+This RRSet is in turn signed with the public key for the
+enclosing domain.
+For example, the ({\em www.nytimes.com}, A) RRSet should
+be signed with a key listed in the ({\em www.nytimes.com}, KEY) RRSet.
+The latter RRSet should be signed with a key
+listed in the ({\em nytimes.com}, KEY)
+RRSet, and so on to the hierarchy root,
+which has a well-known public key.
 
-\item {\em Robustness}.
-As servers are disconnected from and reconnected to the network,
-DHash automatically moves data so that it is always on a fixed
-number of available replicas (typically six).
-Further, a very large number of servers have to
-all be disconnected simultaneously before data loss
-becomes apparent.
-\end{list}
+Our system stores and retrieves resource record sets using
+DHash~\cite{sfs:sosp01}, a Chord-based distributed hash table.
+DHash has two properties useful for this
+discussion: load balance and robustness.
 
-\subsection{Resource Records}
+DHash uses consistent hashing to allocate keys to nodes evenly.
+Further, as each blocks is retrieved, it is cached along
+the lookup path.
+If a particular record is looked up $n$ times in succession
+starting at random locations in a chord ring of size $m$, then with high probability
+each server transfers a given record only $\log{m}$ times total
+before every server has the record cached.
 
-All RRs for a domain name and record type pair are stored 
-as a single record (RRSet)
-indexed by {\tt <domain~name, type>}.
-All transactions are done on the granularity
-of RRSets. The reason for grouping RRs is because it 1)
-guarantees that all RRs for a {\tt <domain~name, type>} will reside on
-the same server, 2) complements the verification scheme
-of DNSSEC, and 3) results in a simple
-and functional design altogether. Most lookups will specify
-a name accompanied by a type, so a typical DNS lookup will only need
-to retrieve data from one server.
+DHash is also robust: as servers come and go, DHash automatically
+moves data so that it is always stored on a fixed number of replicas
+(typically six).  Because the replicas that store a block are chosen
+in a pseudo-random fashion, a very large number of servers all have to
+fail simultaneously before data loss occurs.
 
-\subsection{DDNS Record Verification}
+To create or update a DDNS RRSet, the owner of that set prepares
+the RRSet, signs it, and inserts it into DHash marked with type DNS RRSet.
+The key for the RRSet is the SHA1 hash of the domain name and the RRSet query type
+({\em e.g.}, SHA1({\em www.nytimes.com}, A)).
+DHash verifies the signature before accepting the data.
+When a client retrieves the RRSet, they also check the signature before using the data.
 
-Since records are being served from arbitrary hosts rather
-than the hosts responsible for the domain, 
-we use the authentication and key distribution schemes in 
-DNS Security Extensions (DNSSEC)~\cite{dnssec:rfc} to
-verify all records before returning them. DNSSEC stores the 
-signature of the owner of an RRSet in a {\tt SIG} RR. Every RRSet
-includes a {\tt SIG} RR corresponding to it. Keys for a domain can 
-be retrieved via a lookup for the {\tt KEY} RR, which is treated 
-like any other RR type, except that it is signed with the 
-key of the higher-level domain.
+In the scheme described so far, verifying a DNS RRSet for a name with $n$ 
+path elements requires $n$ public key lookups.
+To avoid some of this cost, we can optionally
+include extra public key RRSets so that all the data needed to verify a record
+is attached to the record itself.
+This would inflate the size of records somewhat, although
+common public keys ({\em e.g.}, the key for {\em .com}) could
+be omitted on the assumption that they would be 
+widely cached anyway.
 
-\subsection{Stores}
-
-To store a DDNS record, the owner of that record 
-assembles all the RRs associated with the domain name and type, 
-signs the RRSet with its private key, append the signature to 
-the RRSet (as a {\tt SIG} RR),
-and sends a {\tt ddns-store(dname, type, RRSet)} message to a 
-DDNS server.
-The DDNS daemon running on the server verifies that 
-the signatures checks with the data in the 
-rest of the RRSet using the public key of the owner of {\tt dname},
-calculates the hash of the {\tt <dname, type>} and sends
-a {\tt dhash-store(hash, data)} RPC to DHash, using the
-RRSet as the data. 
-
-\subsection{Lookups}
-
-To perform a DNS lookup, a client will send a 
-DNS lookup message to a DDNS server, which will 
-translate it into a
-{\tt ddns-lookup(dname, type)} message and pass it 
-to the DDNS daemon.
-The daemon 
-calculates the hash of the {\tt <dname, type>} sends a
-{\tt dhash-lookup(hash)} RPC to DHash. Upon receiving
-the response, DDNS verifies that the information in the RRSet 
-checks out with the signature in the SIG RR using the 
-the public key of {\tt dname}'s owner, and
-returns the corresponding RRSet to the 
-client or report an error of the {\tt <dname, type>} does 
-not exist. XXX What about stale TTLs? XXX
-Once a lookup request is sent to DDNS, it will 
-always return an answer, whether it be positive or not. 
-This is because DDNS does not depend on the information 
-in the {\tt NS}-record to track down the information for a key.
-If a {\tt <dname, type>} does not exist in the DDNS database,
-then its RRSet does not exist in DNS. 
-
-\subsection{Discussion}
-\label{sec:discuss}
-
-XXXX Even-handed discussion. XXXX\\
-
-Distributing DNS data away from authorized hosts can expose
-a number of problems. Storing and updating DNS records now
-involves transferring data to random and possibly remote servers.
-This can result in long latency, especially if resource records
-have low TTLs. However, we anticipate that most RRs have 
-high TTLs although we have not performed experiments in this case.
-
-Updating DNS records is further complicated due to caching 
-in DDNS. A node responsible for storing a particular record 
-only keeps track of the replicas of that record, not the nodes
-that cache the data. Thus, an update will only involve change 
-at the primary node and its replicas. DNS records at the caching 
-nodes remain stale. This resembles the current DNS implementation
-where name servers caches DNS records until their TTL expires.
-We can extend DDNS to purge stale cached RRs whenever there is an
-update, how much this operation will degrade performance remains
-to be seen.
-
--storing initial DNS data (bootstrapping) \\
-
--what if the root private key is compromised?\\
-
-We have been assuming that DNS queries can be predicted in advance,
-and responses stored in the network.
-On the Internet, DNS data is sometimes dynamically generated in response
-to the particular query.  
-For example, some firewalls will respond with mail exchanger ({\tt MX}) records
-for nonexistant host names, to avoid publishing internal host names.
-For example, looking up {\tt 1234abcd.cs.bell-labs.com}'s {\tt MX}-record
-succeeds even though {\tt 1234abcd.cs.bell-labs.com} does not exist.
-As another more insidious example, content distribution services like 
-Akamai~\cite{akamai}
-route web requests to nearby servers by modifying DNS responses in response
-to the location of the client in the network.
-
-The {\tt MX}-record problem can be solved by walking up the hierarchy.
-The Akamai problem is harder, but Akamai is breaking one of the 
-central tenets of DNS --- the same answers to everyone --- as a
-result we do not feel responsible to solve this problem. 
-XXX Hari disagree with the 'central tenets' claim. XXX
+To ease transition from conventional DNS to our system,
+a simple loopback server listening on 127.1 could accept
+conventional DNS queries, perform the appropriate chord lookup,
+and then send a conventional response.
+Then systems could simply be configured to 
+point at 127.1 as their name server.
 

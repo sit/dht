@@ -1,0 +1,10 @@
+default:V: ddns.page
+
+</usr/rsc/harvard/mkfile
+
+ddns.dvi: ddns.ltx intro.tex design.tex 
+# progress.tex conclusions.tex chord.bib future.tex abstract.tex eval.tex relwk.tex design.tex impl.tex
+	latex ddns.ltx
+	bibtex ddns
+	latex ddns.ltx
+	latex ddns.ltx
