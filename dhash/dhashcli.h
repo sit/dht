@@ -25,7 +25,7 @@ class dhashcli {
 
   struct rcv_state {
     ihash_entry <rcv_state> link;
-    chordID key;
+    blockID key;
     route r;
     vec<timespec> times;
     
@@ -49,12 +49,12 @@ class dhashcli {
       delete this;
     }
       
-    rcv_state (chordID key) : key (key), incoming_rpcs (0), nextsucc (0) {
+    rcv_state (blockID key) : key (key), incoming_rpcs (0), nextsucc (0) {
       timemark ();
     }
   };
 
-  ihash<chordID, rcv_state, &rcv_state::key, &rcv_state::link, hashID> rcvs;
+  ihash<blockID, rcv_state, &rcv_state::key, &rcv_state::link, bhashID> rcvs;
 
   // State for a fragment store
   struct sto_state {
@@ -97,10 +97,10 @@ private:
 
   void fetch_frag (rcv_state *rs);
 
-  void retrieve2_hop_cb (chordID blockID, route_iterator *ci, bool done);
-  void retrieve2_lookup_cb (chordID blockID,
+  void retrieve2_hop_cb (blockID blockID, route_iterator *ci, bool done);
+  void retrieve2_lookup_cb (blockID blockID,
 			    dhash_stat status, vec<chord_node> succs, route r);
-  void retrieve2_fetch_cb (chordID blockID, u_int i,
+  void retrieve2_fetch_cb (blockID blockID, u_int i,
 			   ref<dhash_fetchiter_res> res,
 			   clnt_stat err);
 
@@ -110,7 +110,7 @@ private:
 	    bool do_cache, int ss_mode = 1);
   void retrieve (chordID blockID, int options, cb_ret cb);
 
-  void retrieve2 (chordID blockID, int options, cb_ret cb);
+  void retrieve2 (blockID blockID, int options, cb_ret cb);
   void retrieve (chordID source, chordID blockID, cb_ret cb);
   void insert (chordID blockID, ref<dhash_block> block, 
                int options, cbinsert_t cb);

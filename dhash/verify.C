@@ -34,18 +34,8 @@ verify (chordID key, dhash_ctype t, char *buf, int len)
 bool
 verify_content_hash (chordID key, char *buf, int len) 
 {
-  long contentlen, type;
-  xdrmem x1 (buf, (unsigned)len, XDR_DECODE);
-  if (!XDR_GETLONG (&x1, &type)) return false;
-  if (type != DHASH_CONTENTHASH) return false;
-  if (!XDR_GETLONG (&x1, &contentlen)) return false;
-
-  char *content;
-  if (!(content = (char *)XDR_INLINE (&x1, contentlen)))
-    return false;
-
   char hashbytes[sha1::hashsize];
-  sha1_hash (hashbytes, content, contentlen);
+  sha1_hash (hashbytes, buf, len);
   chordID ID;
   mpz_set_rawmag_be (&ID, hashbytes, sizeof (hashbytes));  // For big endian
   return (ID == key);
@@ -58,19 +48,15 @@ verify_key_hash (chordID key, char *buf, int len)
   sfs_pubkey2 pubkey;
   sfs_sig2 sig;
 
-  long contentlen, type;
   long v;
   xdrmem x1 (buf, (unsigned)len, XDR_DECODE);
 
-  if (!XDR_GETLONG (&x1, &type)) return false;
-  if (type != DHASH_KEYHASH) return false;
   if (!xdr_sfs_pubkey2 (&x1, &pubkey)) return false;
   if (!xdr_sfs_sig2 (&x1, &sig)) return false;
   if (!XDR_GETLONG (&x1, &v)) return false;
-  if (!XDR_GETLONG (&x1, &contentlen)) return false;
 
   char *content;
-  if (!(content = (char *)XDR_INLINE (&x1, contentlen)))
+  if (!(content = (char *)XDR_INLINE (&x1, len)))
       return false;
 
   ptr<sfspub> pk = sfscrypt.alloc (pubkey, SFS_VERIFY);
@@ -83,7 +69,7 @@ verify_key_hash (chordID key, char *buf, int len)
   if (hash != key) return false;
 
   // verify signature
-  str msg (content, contentlen);
+  str msg (content, len);
   bool ok = pk->verify (sig, msg);
 
   return ok;
@@ -113,14 +99,10 @@ ptr<dhash_block>
 get_block_contents (char *data, unsigned int len, dhash_ctype t) 
 {
   // XXX make this function shorter...
-  long type;
   long version = 0;
-  long contentlen;
   char *content;
 
   xdrmem x1 (data, len, XDR_DECODE);
-  if (!XDR_GETLONG (&x1, &type) || type != t)
-    return NULL;
   
   switch (t) {
   case DHASH_KEYHASH:
@@ -138,9 +120,7 @@ get_block_contents (char *data, unsigned int len, dhash_ctype t)
   case DHASH_NOAUTH:
   case DHASH_APPEND:
     {
-      if (!XDR_GETLONG (&x1, &contentlen))
-	return NULL;
-      if (!(content = (char *)XDR_INLINE (&x1, contentlen)))
+      if (!(content = (char *)XDR_INLINE (&x1, len)))
 	return NULL;
     }
     break;
@@ -149,44 +129,11 @@ get_block_contents (char *data, unsigned int len, dhash_ctype t)
     return NULL;
   }
 
-  ptr<dhash_block> d = New refcounted<dhash_block> (content, contentlen);
+  ptr<dhash_block> d = New refcounted<dhash_block> (content, len, t);
   d->version = version;
   return d;
 }
 
-
-dhash_ctype
-block_type (ptr<dbrec> data)
-{
-  return block_type (data->value, data->len);
-}
-
-dhash_ctype
-block_type (ref<dbrec> data)
-{
-  return block_type (data->value, data->len);
-}
-
-dhash_ctype
-block_type (ref<dhash_block> data)
-{
-  return block_type (data->data, data->len);
-}
-
-dhash_ctype
-block_type (ptr<dhash_block> data)
-{
-  return block_type (data->data, data->len);
-}
-
-dhash_ctype
-block_type (char *value, unsigned int len)
-{
-  long type;
-  xdrmem x1 (value, len, XDR_DECODE);
-  if (!XDR_GETLONG (&x1, &type)) return DHASH_UNKNOWN;
-  else return (dhash_ctype)type;
-}
 
 long
 keyhash_version (ptr<dhash_block> data)
@@ -215,10 +162,7 @@ keyhash_version (ptr<dbrec> data)
 long
 keyhash_version (char *value, unsigned int len)
 {
-  long type;
   xdrmem x1 (value, len, XDR_DECODE);
-  if (!XDR_GETLONG (&x1, &type))
-    return -1;
   sfs_pubkey2 k;
   sfs_sig2 s;
   if (!xdr_sfs_pubkey2 (&x1, &k) || !xdr_sfs_sig2 (&x1, &s))

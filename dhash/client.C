@@ -116,7 +116,7 @@ protected:
                dhash *dh, ptr<dhash_block> _block, store_status store_type, 
 	       bool last, cbinsert_t cb)
     : dest (dest), blockID (blockID), dh (dh), block (_block), cb (cb),
-      ctype (block_type(_block)), store_type (store_type),
+      ctype (_block->ctype), store_type (store_type),
       clntnode (clntnode), num_retries (0), last (last)
   {
     startt = getusec ();
@@ -250,6 +250,7 @@ protected:
     ref<dhash_storeres> res = New refcounted<dhash_storeres> (DHASH_OK);
     ref<s_dhash_insertarg> arg = New refcounted<s_dhash_insertarg> ();
     arg->key     = blockID;
+    arg->ctype   = ctype;
     arg->dbtype  = DHASH_BLOCK;
     arg->srcID   = clntnode->my_ID ();
     clntnode->my_location ()->fill_node (arg->from);
@@ -294,7 +295,7 @@ dhashcli::dhashcli (ptr<vnode> node, dhash *dh, ptr<route_factory> r_factory,
 }
 
 void
-dhashcli::retrieve2 (chordID blockID, int options, cb_ret cb)
+dhashcli::retrieve2 (blockID blockID, int options, cb_ret cb)
 {
   // Only one lookup for a block should be in progress from a node
   // at any given time.
@@ -313,13 +314,13 @@ dhashcli::retrieve2 (chordID blockID, int options, cb_ret cb)
     rs->callbacks.push_back (cb);
     rcvs.insert (rs);
 
-    route_iterator *ci = r_factory->produce_iterator_ptr (blockID);
+    route_iterator *ci = r_factory->produce_iterator_ptr (blockID.ID);
     ci->first_hop (wrap (this, &dhashcli::retrieve2_hop_cb, blockID, ci));
   }
 }
 
 void
-dhashcli::retrieve2_hop_cb (chordID blockID, route_iterator *ci, bool done)
+dhashcli::retrieve2_hop_cb (blockID blockID, route_iterator *ci, bool done)
 {
   vec<chord_node> cs = ci->successors ();
   if (done) {
@@ -338,7 +339,7 @@ dhashcli::retrieve2_hop_cb (chordID blockID, route_iterator *ci, bool done)
     else
       left = cs.size () - (dhash::NUM_DFRAGS + 2);
     for (size_t i = 1; i < left; i++) {
-      if (betweenrightincl (cs[i-1].x, cs[i].x, blockID)) {
+      if (betweenrightincl (cs[i-1].x, cs[i].x, blockID.ID)) {
 	cs.popn_front (i);
 	route r = ci->path ();
 	delete ci;
@@ -387,7 +388,8 @@ dhashcli::fetch_frag (rcv_state *rs)
   ref<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg> ();
   
   clntnode->my_location ()->fill_node (arg->from);
-  arg->key    = rs->key;
+  arg->key    = rs->key.ID;
+  arg->ctype  = rs->key.ctype;
   arg->dbtype = DHASH_FRAG;
   arg->start  = 0;
   arg->len    = 65536; // 64K is about as big as an IP packet will go...
@@ -441,7 +443,7 @@ order_succs (const vec<float> &me, const vec<chord_node> &succs,
 
 
 void
-dhashcli::retrieve2_lookup_cb (chordID blockID,
+dhashcli::retrieve2_lookup_cb (blockID blockID,
 			       dhash_stat status,
 			       vec<chord_node> succs,
 			       route r)
@@ -492,7 +494,7 @@ dhashcli::retrieve2_lookup_cb (chordID blockID,
 }
 
 void
-dhashcli::retrieve2_fetch_cb (chordID blockID, u_int i,
+dhashcli::retrieve2_fetch_cb (blockID blockID, u_int i,
 			      ref<dhash_fetchiter_res> res,
 			      clnt_stat err)
 {
@@ -548,8 +550,8 @@ dhashcli::retrieve2_fetch_cb (chordID blockID, u_int i,
 
     str tmp (block);
     ptr<dhash_block> blk = 
-      New refcounted<dhash_block> (tmp.cstr (), tmp.len ());
-    blk->ID = rs->key;
+      New refcounted<dhash_block> (tmp.cstr (), tmp.len (), rs->key.ctype);
+    blk->ID = rs->key.ID;
     blk->hops = rs->r.size ();
     blk->errors = rs->nextsucc - dhash::NUM_DFRAGS;
     blk->retries = blk->errors;
@@ -601,7 +603,7 @@ dhashcli::cache_block (ptr<dhash_block> block, route search_path, chordID key)
 {
 
   if (block && do_cache && 
-      (block_type (block) == DHASH_CONTENTHASH)) {
+      (block->ctype == DHASH_CONTENTHASH)) {
     unsigned int path_size = search_path.size ();
     if (path_size > 1) {
       ptr<location> cache_dest = search_path[path_size - 2];
@@ -682,6 +684,7 @@ dhashcli::insert2_lookup_cb (ref<dhash_block> block, cbinsert_t cb,
     ref<s_dhash_insertarg> arg = New refcounted<s_dhash_insertarg> ();
     
     arg->key = block->ID;  // frag stored under hash(block)
+    arg->ctype = block->ctype;
     arg->dbtype = DHASH_FRAG;
     arg->srcID = clntnode->my_ID ();
     clntnode->my_location ()->fill_node (arg->from);

@@ -18,7 +18,7 @@ class dhashclient {
   // inserts under the specified key
   // (buf need not remain involatile after the call returns)
   void insert (bigint key, const char *buf, size_t buflen, 
-	       cbinsertgw_t cb,  dhash_ctype t, int options);
+	       cbinsertgw_t cb,  dhash_ctype t, int options, size_t realsize);
   void insertcb (cbinsertgw_t cb, bigint key, 
 		 ptr<dhash_insert_res>, clnt_stat err);
   void retrievecb (cb_cret cb, bigint key,  

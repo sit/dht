@@ -270,13 +270,13 @@ merkle_getkeyrange::getkeys_cb (ref<getkeys_arg> arg, ref<getkeys_res> res,
 
   for (u_int i = 0; i < res->resok->keys.size (); i++) {
     const merkle_hash &key = res->resok->keys[i];
-    bigint key2  = tobigint (key);
+    blockID key2  = toblockID (key);
     if (!database_lookup (db, key)) {
       warn << "2 [" << rngmin << "," << rngmax << "] => missing key "  << key << "\n";
       (*missing) (key2);
     }
-    if (key2 >= current)
-      current = key2 + 1;
+    if (key2.ID >= current)
+      current = key2.ID + 1;
   }
 
   if (!res->resok->morekeys)
@@ -316,7 +316,7 @@ compare_nodes (merkle_tree *ltree, bigint rngmin, bigint rngmax,
       if (betweenbothincl (rngmin, rngmax, tobigint (key)))
 	if (database_lookup (ltree->db, key) == NULL) {
 	  warn << "1 [" << rngmin << "," << rngmax << "] => missing key "  << key << "\n";
-	  (*missingfnc) (tobigint (key));
+	  (*missingfnc) (toblockID (key));
 	}
     }
   } else if (lnode->isleaf () && !rnode->isleaf) {

@@ -165,6 +165,7 @@ ddns::store (domain_name dname, ref<ddnsRR> rr)
   ref<dhash_storeres> res = New refcounted<dhash_storeres> (); 
   ref<dhash_insertarg> i_arg = New refcounted<dhash_insertarg> ();
   i_arg->key = getcID (dname, rr->type);
+  i_arg->ctype = DHASH_DNSSEC;
   i_arg->dbtype = DHASH_BLOCK;
   char *data = (char *) malloc(DMTU);
   int datasize = ddnsRR2block (rr, data, DMTU);
@@ -211,6 +212,8 @@ ddns::lookup (domain_name dname, dns_type dt, ddns::lcb_t lcb)
     
     dhash_fetch_arg arg;
     arg.key = getcID (dname, dt);
+    arg.ctype = DHASH_DNSSEC;
+    arg.dbtype = DHASH_BLOCK;
     arg.len = DMTU;
     arg.start = 0;
     dhash_clnt->call (DHASHPROC_LOOKUP, &arg, res, wrap(this, &ddns::lookup_cb, 

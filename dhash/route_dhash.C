@@ -108,7 +108,7 @@ private:
   void
   process_first_chunk (char *data, size_t datalen, size_t totsz, int cookie)
   {
-    block            = New refcounted<dhash_block> ((char *)NULL, totsz);
+    block            = New refcounted<dhash_block> ((char *)NULL, totsz, DHASH_CONTENTHASH);
     block->source    = sourceID;
     block->hops      = 0;
     block->errors    = 0;

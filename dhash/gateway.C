@@ -77,27 +77,18 @@ dhashgateway::dispatch (svccb *sbp)
       dhash_insert_arg *arg = sbp->template getarg<dhash_insert_arg> ();
 
       ref<dhash_block> block =
-	New refcounted<dhash_block> (arg->block.base (), arg->block.size ());
+	New refcounted<dhash_block> (arg->block.base (), arg->len, arg->ctype);
       block->ID = arg->blockID;
       dhcli->insert2 (block, arg->options,
 		      wrap (this, &dhashgateway::insert_cb, sbp));
     }
     break;
     
-#if 0
-  case DHASHPROC_INSERT2:
-    {
-      dhash_insert2_arg *arg = sbp->template getarg<dhash_insert2_arg> ();
-
-      panic ("ouch: %s:%d, %p\n", __FILE__, __LINE__, arg);
-    }
-    break;
-#endif
-
   case DHASHPROC_RETRIEVE:
     {
       dhash_retrieve_arg *arg = sbp->template getarg<dhash_retrieve_arg> ();
-      dhcli->retrieve2 (arg->blockID, arg->options,
+      dhcli->retrieve2 (blockID(arg->blockID, DHASH_CONTENTHASH, DHASH_BLOCK),
+			arg->options, 
 			wrap (this, &dhashgateway::retrieve_cb, sbp));
     }
     break;
@@ -131,6 +122,8 @@ dhashgateway::retrieve_cb (svccb *sbp, dhash_stat stat, ptr<dhash_block> block, 
     res.set_status (stat);
   else {
     res.resok->block.setsize (block->len);
+    res.resok->ctype = block->ctype;
+    res.resok->len = block->len;
     res.resok->hops = block->hops;
     res.resok->errors = block->errors;
     res.resok->retries = block->retries;

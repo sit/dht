@@ -79,81 +79,22 @@ dhashclient::append (chordID to, const char *buf, size_t buflen,
 		     cbinsertgw_t cb)
 {
   //stick on the [type,contentlen] the server will have to strip it off before appending
-  long type = DHASH_APPEND;
   xdrsuio x;
   int size = buflen + 3 & ~3;
   char *m_buf;
-  if (XDR_PUTLONG (&x, (long int *)&type) &&
-      XDR_PUTLONG (&x, (long int *)&buflen) &&
-      (m_buf = (char *)XDR_INLINE (&x, size)))
+  if ((m_buf = (char *)XDR_INLINE (&x, size)))
     {
       memcpy (m_buf, buf, buflen);
       
       int m_len = x.uio ()->resid ();
       char *m_dat = suio_flatten (x.uio ());
-      insert (to, m_dat, m_len, cb, DHASH_APPEND, false);
+      insert (to, m_dat, m_len, cb, DHASH_APPEND, false, buflen);
       xfree (m_dat);
     } else {
       (*cb) (DHASH_ERR, NULL); // marshalling failed.
     }
 
 }
-
-
-// content hash
-
-#if 0
-void
-dhashclient::insert2 (bigint key, const char *buf,
-		      size_t buflen, cbinsertgw_t cb, int options)
-{
-  dhash_insert2_arg arg;
-  arg.block.set_ctype (DHASH_CONTENTHASH);
-  arg.block.chash->key = key;
-  arg.block.chash->block.setsize (buflen);
-  memcpy (arg.block.chash->block.base (), buf, buflen);
-
-
-
-  ptr<dhash_insert_res> res = New refcounted<dhash_insert_res> ();
-  gwclnt->call (DHASHPROC_INSERT2, &arg, res, 
-		wrap (this, &dhashclient::insertcb, cb, key, res));
-}
-
-// public key
-
-void
-dhashclient::insert2 (ptr<sfspriv> key, const char *buf, size_t buflen, long ver,
-		      cbinsertgw_t cb, int options)
-{
-  str msg (buf, buflen);
-  sfs_sig2 s;
-  key->sign (&s, msg);
-  sfs_pubkey2 pk;
-  key->export_pubkey (&pk);
-
-  // format RPC request 
-  dhash_insert2_arg arg;
-  arg.block.set_ctype (DHASH_KEYHASH);
-  arg.block.pkhash->pub_key = pk;
-  arg.block.pkhash->sig = s;
-  arg.block.pkhash->block.setsize (buflen);
-  memcpy (arg.block.pkhash->block.base (), buf, buflen);
-
-  // hash the public key    
-  strbuf b;
-  ptr<sfspub> pk2 = sfscrypt.alloc (pk);
-  pk2->export_pubkey (b, false);
-  str pk_raw = b;
-  chordID hash = compute_hash (pk_raw.cstr (), pk_raw.len ());
-
-  ptr<dhash_insert_res> res = New refcounted<dhash_insert_res> ();
-  gwclnt->call (DHASHPROC_INSERT2, &arg, res, 
-		wrap (this, &dhashclient::insertcb, cb, hash, res));
-}
-#endif
-
-
 
 //content-hash insert
 /* content hash convention
@@ -169,19 +110,16 @@ void
 dhashclient::insert (bigint key, const char *buf,
                      size_t buflen, cbinsertgw_t cb, int options)
 {
-  long type = DHASH_CONTENTHASH;
   xdrsuio x;
   int size = buflen + 3 & ~3;
   char *m_buf;
-  if (XDR_PUTLONG (&x, (long int *)&type) &&
-      XDR_PUTLONG (&x, (long int *)&buflen) &&
-      (m_buf = (char *)XDR_INLINE (&x, size)))
+  if ((m_buf = (char *)XDR_INLINE (&x, size)))
     {
       memcpy (m_buf, buf, buflen);
       
       int m_len = x.uio ()->resid ();
       char *m_dat = suio_flatten (x.uio ());
-      insert (key, m_dat, m_len, cb, DHASH_CONTENTHASH, options);
+      insert (key, m_dat, m_len, cb, DHASH_CONTENTHASH, options, buflen);
       xfree (m_dat);
     } else {
       (*cb) (DHASH_ERR, NULL); // marshalling failed.
@@ -238,22 +176,18 @@ dhashclient::insert (bigint hash, sfs_pubkey2 key, sfs_sig2 sig,
                      const char *buf, size_t buflen, long ver,
 		     cbinsertgw_t cb, int options)
 {
-  long type = DHASH_KEYHASH;
-
   xdrsuio x;
   int size = buflen + 3 & ~3;
   char *m_buf;
-  if (XDR_PUTLONG (&x, (long int *)&type) &&
-      xdr_sfs_pubkey2 (&x, &key) &&
+  if (xdr_sfs_pubkey2 (&x, &key) &&
       xdr_sfs_sig2 (&x, &sig) &&
       XDR_PUTLONG (&x, &ver) &&
-      XDR_PUTLONG (&x, (long int *)&buflen) &&
       (m_buf = (char *)XDR_INLINE (&x, size)))
     {
       memcpy (m_buf, buf, buflen);
       int m_len = x.uio ()->resid ();
       char *m_dat = suio_flatten (x.uio ());
-      insert (hash, m_dat, m_len, cb, DHASH_KEYHASH, options);
+      insert (hash, m_dat, m_len, cb, DHASH_KEYHASH, options, buflen);
       xfree (m_dat);
     } else {
       ptr<insert_info> i = New refcounted<insert_info>(hash, bigint(0));
@@ -265,11 +199,12 @@ dhashclient::insert (bigint hash, sfs_pubkey2 key, sfs_sig2 sig,
 void
 dhashclient::insert (bigint key, const char *buf, 
 		     size_t buflen, cbinsertgw_t cb,
-		     dhash_ctype t, int options)
-  /* XXX delete t --  it isn't used */
+		     dhash_ctype t, int options, size_t realsize)
 {
   dhash_insert_arg arg;
   arg.blockID = key;
+  arg.ctype = t;
+  arg.len = realsize;
   arg.block.setsize (buflen);
   memcpy (arg.block.base (), buf, buflen);
   arg.options = options;
@@ -328,16 +263,14 @@ dhashclient::retrievecb (cb_cret cb, bigint key,
   else if (res->status != DHASH_OK)
     errstr = dhasherr2str (res->status);
   else {
-    dhash_ctype ctype = block_type (res->resok->block.base (), 
-					   res->resok->block.size ());
-    if (!verify (key, ctype, res->resok->block.base (), 
-		      res->resok->block.size ())) {
-      errstr = strbuf () << "data did not verify";
+    if (!verify (key, res->resok->ctype, res->resok->block.base (), 
+		      res->resok->len)) {
+      errstr = strbuf () << "data did not verify. len: " << res->resok->len;
     } else {
       // success
       ptr<dhash_block> blk = get_block_contents (res->resok->block.base(), 
 						 res->resok->block.size(), 
-						 ctype);
+						 res->resok->ctype);
       blk->hops = res->resok->hops;
       blk->errors = res->resok->errors;
       blk->retries = res->resok->retries;

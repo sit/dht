@@ -3,12 +3,48 @@
 
 #include <chord_types.h>
 #include <dhash_prot.h>
+#include <crypt.h>
 
 #define DHASHCLIENT_USE_CACHED_SUCCESSOR 0x1
 #define DHASHCLIENT_NO_RETRY_ON_LOOKUP   0x2
 
+struct blockID {
+  enum { size = sha1::hashsize+2 };
+
+  chordID ID;
+  dhash_ctype ctype;
+  dhash_dbtype dbtype;
+  char key[size];
+
+  blockID (chordID k, dhash_ctype c, dhash_dbtype d)
+    : ID(k), ctype(c), dbtype(d)
+  { 
+    mpz_get_rawmag_be (key, sha1::hashsize, &k);
+    key[sha1::hashsize] = (char)c;
+    key[sha1::hashsize+1] = (char)d;
+  }
+
+  bool operator== (const blockID b) const {
+    return !memcmp (key, b.key, size);
+  }
+};
+
+inline const strbuf &
+strbuf_cat (const strbuf &sb, const blockID &b)
+{
+  return sb << b.ID << ":" << (int)b.ctype << ":" << (int)b.dbtype;
+}
+
+struct bhashID {
+  bhashID () {}
+  hash_t operator() (const blockID &ID) const {
+    return ID.ID.getui ();
+  }
+};
+
 struct dhash_block {
   chordID ID;
+  dhash_ctype ctype;
   char *data;
   size_t len;
   long version;
@@ -20,8 +56,8 @@ struct dhash_block {
 
   ~dhash_block () {  delete [] data; }
 
-  dhash_block (const char *buf, size_t buflen)
-    : data (New char[buflen]), len (buflen)
+  dhash_block (const char *buf, size_t buflen, dhash_ctype ct)
+    : ctype(ct), data (New char[buflen]), len (buflen)
   {
     if (buf)
       memcpy (data, buf, len);

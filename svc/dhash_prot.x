@@ -56,6 +56,7 @@ struct dhash_valueattr {
 
 struct s_dhash_insertarg {
   chordID key;
+  dhash_ctype ctype;
   dhash_dbtype dbtype;
   chord_node from;
   chordID srcID;  /* == from.x => redundant */
@@ -69,6 +70,7 @@ struct s_dhash_insertarg {
 
 struct s_dhash_fetch_arg {
   chordID key;
+  dhash_ctype ctype;
   dhash_dbtype dbtype;
   chord_node from;
   int32_t start;
@@ -235,6 +237,8 @@ program DHASH_PROGRAM {
 
 struct dhash_insert_arg {
   chordID   blockID;      /* the key */
+  dhash_ctype ctype;
+  int32_t len;
   dhash_value block;      /* the data block */
   int options;
 };
@@ -246,6 +250,8 @@ struct dhash_retrieve_arg {
 
 struct dhash_retrieve_resok {
   dhash_value block;
+  dhash_ctype ctype;
+  int32_t len;
   int hops;
   int errors;
   int retries;

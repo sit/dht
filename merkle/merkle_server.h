@@ -13,7 +13,7 @@
 class RPC_delay_args;
 
 typedef callback<void, const rpc_program &, cbdispatch_t>::ref addHandler_t;
-typedef callback<void, ptr<location>, bigint>::ref missingfnc2_t;
+typedef callback<void, ptr<location>, blockID>::ref missingfnc2_t;
 
 // One merkle_server runs for each node of the Chord ring.
 //  - i.e., one merkle_server per virtual node
@@ -25,7 +25,7 @@ class merkle_server {
   vnode *host_node;  // XXX bad -- don't directly rely on dhash!
   missingfnc2_t missingfnc;
 
-  void missing (ptr<location> n, bigint key);
+  void missing (ptr<location> n, blockID key);
   void doRPC (ptr<location> n, RPC_delay_args *args);
   void dispatch (user_args *a);
   merkle_server (merkle_tree *ltree, addHandler_t addHandler, 

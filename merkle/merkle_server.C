@@ -15,7 +15,7 @@ merkle_server::merkle_server (merkle_tree *ltree, addHandler_t addHandler,
 
 
 void
-merkle_server::missing (ptr<location> n, bigint key)
+merkle_server::missing (ptr<location> n, blockID key)
 {
   (*missingfnc) (n, key);
 }

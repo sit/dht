@@ -66,14 +66,14 @@ struct keyhash_meta {
 
 struct missing_state {
   ihash_entry <missing_state> link;
-  bigint key;
+  blockID key;
   ptr<location> from;
-  missing_state (bigint key, ptr<location> from) : key (key), from (from) {}
+  missing_state (blockID key, ptr<location> from) : key (key), from (from) {}
 };
 
 class dhash_impl : public dhash {
-  ihash<bigint, missing_state,
-    &missing_state::key, &missing_state::link, hashID> missing_q;
+  ihash<blockID, missing_state,
+    &missing_state::key, &missing_state::link, bhashID> missing_q;
   enum { MISSING_OUTSTANDING_MAX = 15 };
   u_int missing_outstanding;
 
@@ -114,11 +114,11 @@ class dhash_impl : public dhash {
 
   unsigned keyhash_mgr_rpcs;
 
-  void missing (ptr<location> from, bigint key);
-  void missing_retrieve_cb (bigint key, dhash_stat err, ptr<dhash_block> b,
+  void missing (ptr<location> from, blockID key);
+  void missing_retrieve_cb (blockID key, dhash_stat err, ptr<dhash_block> b,
 			    route r);
   
-  void sendblock (ptr<location> dst, bigint blockID, bool last, callback<void>::ref cb);
+  void sendblock (ptr<location> dst, bigint blockID, dhash_ctype ct, bool last, callback<void>::ref cb);
   void sendblock_cb (callback<void>::ref cb, dhash_stat err, chordID blockID);
 
   void keyhash_mgr_timer ();
@@ -148,10 +148,10 @@ class dhash_impl : public dhash {
   void partition_maintenance_lookup_cb (dhash_stat err, vec<chord_node> hostsl, route r);
   void partition_maintenance_pred_cb (chordID predID, net_address addr, chordstat stat);
 
-  void partition_maintenance_lookup_cb2 (bigint key, dhash_stat err, vec<chord_node> hostsl, route r);
-  void partition_maintenance_succs_cb2 (bigint key, vec<chord_node> succs, chordstat err);
-  void partition_maintenance_store2 (bigint key, vec<chord_node> succs, u_int already_count);
-  void partition_maintenance_store_cb2 (bigint key, vec<chord_node> succs,
+  void partition_maintenance_lookup_cb2 (blockID key, dhash_stat err, vec<chord_node> hostsl, route r);
+  void partition_maintenance_succs_cb2 (blockID key, vec<chord_node> succs, chordstat err);
+  void partition_maintenance_store2 (blockID key, vec<chord_node> succs, u_int already_count);
+  void partition_maintenance_store_cb2 (blockID key, vec<chord_node> succs,
 					u_int already_count, ref<dhash_storeres> res,
 					clnt_stat err);
   
@@ -170,7 +170,6 @@ class dhash_impl : public dhash {
   void sync_cb ();
 
   void storesvc_cb (user_args *sbp, s_dhash_insertarg *arg, bool already_present, dhash_stat err);
-  void fetch_cb (int cookie, cbvalue cb,  ptr<dbrec> ret);
   dhash_fetchiter_res * block_to_res (dhash_stat err, s_dhash_fetch_arg *arg,
 				      int cookie, ptr<dbrec> val);
   void fetchiter_gotdata_cb (cbupcalldone_t cb, s_dhash_fetch_arg *farg,
@@ -196,13 +195,11 @@ class dhash_impl : public dhash {
   char responsible(const chordID& n);
 
   void printkeys ();
-  void printkeys_walk (const chordID &k);
+  void printkeys_walk (const blockID &k);
   void printcached_walk (const chordID &k);
 
   void dbwrite (ref<dbrec> key, ref<dbrec> data);
   void dbdelete (ref<dbrec> key);
-
-  dhash_stat key_status(const chordID &n, dhash_dbtype dbtype);
 
   chordID pred;
   vec<ptr<location> > replicas;
@@ -231,11 +228,11 @@ class dhash_impl : public dhash {
 
   void print_stats ();
   void stop ();
-  void fetch (chordID id, dhash_dbtype dbtype, int cookie, cbvalue cb);
+  void fetch (blockID id, int cookie, cbvalue cb);
   void register_block_cb (int nonce, cbblockuc_t cb);
   void unregister_block_cb (int nonce);
   void register_storecb_cb (int nonce, cbstorecbuc_t cb);
   void unregister_storecb_cb (int nonce);
 
-  dhash_stat key_status (const chordID &n);
+  dhash_stat key_status (const blockID &n);
 };
