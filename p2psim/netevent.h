@@ -9,6 +9,7 @@ public:
   NetEvent();
   ~NetEvent();
 
+  Node *node;
   Packet *p;
   virtual void execute();
 };

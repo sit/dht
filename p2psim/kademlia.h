@@ -15,6 +15,7 @@ public:
   virtual void insert_doc(void*);
   virtual void lookup_doc(void*);
 
+  void delayedcb(void*);
   void do_join(void*);
 };
 

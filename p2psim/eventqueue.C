@@ -100,6 +100,9 @@ EventQueue::advance()
 void
 EventQueue::add_event(Event *e)
 {
+  // time in event is offset always.  set to absolute time.
+  e->ts += _time;
+
   // empty queue
   if(_queue.empty()) {
     _queue.push_back(e);

@@ -11,7 +11,8 @@ class P2PEvent;
 class Node;
 
 
-#define MEMBER_FUNC(X) (member_f)(&X)
+#define doRPC(X, Y, Z) _doRPC((X), ((member_f)(&Y)), ((void*) (Z)))
+#define delaycb(X, Y, Z) _delaycb(X, ((member_f)(&Y)), ((void*) (Z)))
 
 class Protocol;
 class Protocol : public Threaded {
@@ -37,8 +38,8 @@ public:
   virtual void lookup_doc(void*) = 0;
 
 protected:
-  void doRPC(IPAddress, void (Protocol::*)(void*));
-
+  void _doRPC(IPAddress, member_f, void*);
+  void _delaycb(Time, member_f, void*);
   IPAddress id();
 
 private:

@@ -1,3 +1,4 @@
+#include "p2psim.h"
 #include "kademlia.h"
 #include "packet.h"
 #include <iostream>
@@ -12,16 +13,23 @@ Kademlia::~Kademlia()
 }
 
 void
+Kademlia::delayedcb(void*)
+{
+  cout << "Invoked at: " << now() << endl;
+}
+
+void
 Kademlia::do_join(void*)
 {
-  cout << "do_join!" << endl;
+  cout << "do_join at " << now() << endl;
+  delaycb(10, Kademlia::delayedcb, 0);
 }
 
 void
 Kademlia::join(void*)
 {
   // send my id to next node in ring
-  doRPC((IPAddress) ((id()+1) % 5), MEMBER_FUNC(Kademlia::do_join));
+  doRPC((IPAddress) ((id()+1) % 5), Kademlia::do_join, 0);
 }
 
 void

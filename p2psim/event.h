@@ -10,7 +10,6 @@ public:
   ~Event();
 
   Time ts;
-  Node *node;
   unsigned id() { return _id; }
   virtual void execute() = 0;
 

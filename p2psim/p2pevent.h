@@ -10,6 +10,7 @@ public:
 
   virtual void execute();
 
+  Node *node;
   string protocol;
   Protocol::EventID event;
   void *args; // ???

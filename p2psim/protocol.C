@@ -11,6 +11,8 @@ using namespace std;
 #include "network.h"
 #include "p2pevent.h"
 #include "node.h"
+#include "cbevent.h"
+#include "eventqueue.h"
 
 Protocol::Protocol(Node *n) : _node(n)
 {
@@ -25,8 +27,9 @@ Protocol::~Protocol()
 {
 }
 
+
 void
-Protocol::doRPC(IPAddress dst, void (Protocol::*fn)(void*))
+Protocol::_doRPC(IPAddress dst, member_f fn, void *args)
 {
   Packet *p = new Packet();
   p->_dst = dst;
@@ -34,12 +37,26 @@ Protocol::doRPC(IPAddress dst, void (Protocol::*fn)(void*))
   p->_c = chancreate(sizeof(Packet*), 0);
   p->_protocol = ProtocolFactory::Instance()->name(this);
   p->_fn = fn;
+  p->_args = args;
 
   send(Network::Instance()->pktchan(), &p);
 
   // wait for reply. blocking.
   (void) recvp(p->_c);
 }
+
+
+void
+Protocol::_delaycb(Time t, member_f fn, void *args)
+{
+  CBEvent *e = new CBEvent();
+  e->ts = t;
+  e->prot = this;
+  e->fn = fn;
+  e->args = args;
+  send(EventQueue::Instance()->eventchan(), (Event**) &e);
+}
+
 
 
 IPAddress

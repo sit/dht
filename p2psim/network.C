@@ -72,7 +72,7 @@ Network::run()
         dstnode = _nodes[p->_dst];
         latency = _top->latency(_nodes[p->_src], dstnode);
         ne = new NetEvent();
-        ne->ts = EventQueue::Instance()->time() + latency;
+        ne->ts = latency;
         ne->node = dstnode;
         ne->p = p;
         send(EventQueue::Instance()->eventchan(), (Event**) &ne);
