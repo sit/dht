@@ -85,9 +85,10 @@ G2Graph::parse(ifstream &ifs)
 } 
 
 Time
-G2Graph::latency(IPAddress ip1, IPAddress ip2, bool reply)
+G2Graph::latency(IPAddress ip1x, IPAddress ip2x, bool reply)
 {
-
+  IPAddress ip1 = Network::Instance()->first_ip(ip1x);
+  IPAddress ip2 = Network::Instance()->first_ip(ip2x);
   if (ip1 == ip2) return 0;
 
   //samples a random latency from samples

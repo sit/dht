@@ -39,12 +39,22 @@ Euclidean::~Euclidean()
 }
 
 Time
-Euclidean::latency(IPAddress ip1, IPAddress ip2, bool reply)
+Euclidean::latency(IPAddress ip1x, IPAddress ip2x, bool reply)
 {
+  IPAddress ip1 = Network::Instance()->first_ip(ip1x);
+  IPAddress ip2 = Network::Instance()->first_ip(ip2x);
+  assert(ip1 > 0 && ip2 > 0);
   Coord c1 = _nodes[ip1];
   Coord c2 = _nodes[ip2];
 
-  return (Time) hypot(labs(c2.first - c1.first), labs(c2.second - c1.second));
+  if (ip1==ip2)
+    return 0;
+  else {
+    Time t= (Time) hypot(labs(c2.first - c1.first), labs(c2.second - c1.second));
+    if (t > 1000) 
+      fprintf(stderr,"warning! %u,%u -> %u,%u\n",c1.first,c1.second,c2.first,c2.second);
+    return t;
+  }
 }
 
 
