@@ -160,8 +160,6 @@ main (int argc, char **argv)
 {
   setprogname (argv[0]);
 
-  sfsconst_init ();
-
   if (argc < 9) {
     usage (argv[0]);
     exit (1);
