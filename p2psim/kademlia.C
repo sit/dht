@@ -25,6 +25,56 @@ Kademlia::join(Args *args)
   IPAddress wkn = args->nget<IPAddress>("wellknown");
   if(wkn == ip())
     return;
+
+  // add myself in finger table
+  for(unsigned i=0; i<idsize; i++)
+    _fingers.set(i, _id, ip());
+
+  // lookup my own key with well known node
+  lookup_args la;
+  la.key = _id;
+  lookup_result lr;
+  doRPC(wkn, &Kademlia::do_lookup, &la, &lr);
+
+  //
+}
+
+
+void
+Kademlia::do_lookup(void *args, void *result)
+{
+  lookup_args *largs = (lookup_args*) args;
+  lookup_result *lresult = (lookup_result*) result;
+
+  NodeID bestID = _id;
+  NodeID bestdist = distance(_id, largs->key);
+  DEBUG(3) << "do_lookup, bestID = " << bestID << ", bestdist =  " << bestdist << "\n";
+
+  // XXX: very inefficient
+  for(unsigned i=0; i<idsize; i++) {
+    DEBUG(3) << "handle_lookup, considering _fingers[" << i << "], key: " << _fingers.get_id(i) << "\n";
+    if(!_fingers.valid(i)) {
+      DEBUG(3) << "entry " << i << " is invalid\n";
+      continue;
+    }
+
+    NodeID dist;
+    if((dist = distance(_fingers.get_id(i), largs->key)) < bestdist) {
+      bestdist = dist;
+      bestID = _fingers.get_id(i);
+    }
+  }
+  DEBUG(2) << "handle_lookup, result is key: " << printbits(bestID) << ", distance = " << printbits(bestdist) << "\n";
+
+  // if this is us, then reply
+  if(bestID == _id) {
+    lresult->id = bestID;
+    lresult->ip = ip();
+    return;
+  }
+
+  // otherwise do the lookup call to whomever we think is best
+  doRPC(_fingers.get_ipbyid(bestID), &Kademlia::do_lookup, args, result);
 }
 
 

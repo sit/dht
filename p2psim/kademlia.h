@@ -21,16 +21,14 @@ public:
   virtual void insert(Args*);
   virtual void lookup(Args*);
 
-  void handle_join(void *args, void *result);
-  void handle_join(NodeID id, IPAddress ip);
   static string printbits(NodeID);
-
-private:
   static NodeID distance(NodeID, NodeID);
 
+private:
   NodeID _id;
 
 
+  // join
   struct join_args {
     NodeID id;
     IPAddress ip;
@@ -38,6 +36,19 @@ private:
   struct join_result {
     int ok;
   };
+  void handle_join(NodeID id, IPAddress ip);
+  void handle_join(void *args, void *result);
+
+
+  // lookup
+  struct lookup_args {
+    NodeID key;
+  };
+  struct lookup_result {
+    NodeID id;
+    IPAddress ip;
+  };
+  void do_lookup(void *args, void *result);
                                                                                   
 
   // finger table
