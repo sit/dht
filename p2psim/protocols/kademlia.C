@@ -379,10 +379,16 @@ Kademlia::lookup(Args *args)
   Time before = now();
   do_lookup(&la, &lr);
 
+  bool alive_and_joined = (*_nodeid2kademlia)[key]->node()->alive() &&
+                          (*_nodeid2kademlia)[key]->_joined;
+
   // XXX: this shouldn't happen :(
   if(!lr.results.size()) {
-    cout << lr.log.str() << endl;
-    assert(false);
+    if(alive_and_joined)
+      _bad_failures++;
+    else
+      _ok_failures++;
+    return;
   }
 
   // get best match
@@ -390,9 +396,6 @@ Kademlia::lookup(Args *args)
   assert(lr.results.size());
   assert(ki);
   ki->checkrep();
-
-  bool alive_and_joined = (*_nodeid2kademlia)[key]->node()->alive() &&
-                          (*_nodeid2kademlia)[key]->_joined;
 
   // now ping that node
   ping_args pa(ki->id, ki->ip);
