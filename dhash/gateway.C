@@ -48,7 +48,7 @@
 dhashgateway::dhashgateway (ptr<axprt_stream> x, ptr<chord> node)
 {
   clntsrv = asrv::alloc (x, dhashgateway_program_1, 
-			 wrap (this, &dhashgateway::dispatch));
+			 wrap (mkref (this), &dhashgateway::dispatch));
   dhcli = New refcounted<dhashcli> (node->active);
 }
 
@@ -74,14 +74,14 @@ dhashgateway::dispatch (svccb *sbp)
 
       if (arg->options & DHASHCLIENT_USE_CACHE)
         dhcli->insert_to_cache 
-	  (block, wrap (this, &dhashgateway::insert_cb, sbp));
+	  (block, wrap (mkref (this), &dhashgateway::insert_cb, sbp));
       else {
         ptr<chordID> guess = NULL;
         if (arg->options & DHASHCLIENT_GUESS_SUPPLIED) 
 	  guess = New refcounted<chordID> (arg->guess);
 	 
         dhcli->insert (block, 
-		       wrap (this, &dhashgateway::insert_cb, sbp),
+		       wrap (mkref (this), &dhashgateway::insert_cb, sbp),
 		       arg->options,
 		       guess);
       }
@@ -99,12 +99,12 @@ dhashgateway::dispatch (svccb *sbp)
       if (arg->options & DHASHCLIENT_USE_CACHE)
         dhcli->retrieve_from_cache
 	  (blockID (arg->blockID, arg->ctype, DHASH_BLOCK),
-	   wrap (this, &dhashgateway::retrieve_cache_cb, sbp));
+	   wrap (mkref (this), &dhashgateway::retrieve_cache_cb, sbp));
 
       else
         dhcli->retrieve
 	  (blockID (arg->blockID, arg->ctype, DHASH_BLOCK),
-	   wrap (this, &dhashgateway::retrieve_cb, sbp),
+	   wrap (mkref (this), &dhashgateway::retrieve_cb, sbp),
 	   arg->options, guess);
     }
     break;
@@ -147,7 +147,7 @@ dhashgateway::insert_cb (svccb *sbp, dhash_stat status, vec<chordID> path)
 
   if (block)
     dhcli->insert_to_cache
-      (block, wrap (this, &dhashgateway::insert_cache_cb));
+      (block, wrap (mkref (this), &dhashgateway::insert_cache_cb));
 }
 
 #define SET_RETRIEVE_REPLY \
@@ -191,7 +191,7 @@ dhashgateway::retrieve_cb (svccb *sbp, dhash_stat stat,
 
   if (nb)
     dhcli->insert_to_cache
-      (nb, wrap (this, &dhashgateway::insert_cache_cb));
+      (nb, wrap (mkref (this), &dhashgateway::insert_cache_cb));
 }
 
 void
@@ -211,7 +211,7 @@ dhashgateway::retrieve_cache_cb (svccb *sbp, ptr<dhash_block> block)
       guess = New refcounted<chordID> (arg->guess);
     dhcli->retrieve
       (blockID (arg->blockID, arg->ctype, DHASH_BLOCK),
-       wrap (this, &dhashgateway::retrieve_cb, sbp),
+       wrap (mkref (this), &dhashgateway::retrieve_cb, sbp),
        arg->options, guess);
   }
 }

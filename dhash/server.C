@@ -225,7 +225,7 @@ dhash_impl::init_after_chord (ptr<vnode> node)
   keyhash_mgr_tcb =
     delaycb (keyhashtm (), wrap (this, &dhash_impl::keyhash_mgr_timer));
   pmaint_obj = New pmaint (cli, host_node, db, 
-			   wrap (this, &dhash_impl::dbdelete));
+			   wrap (this, &dhash_impl::db_delete_immutable));
 }
 
 
@@ -274,9 +274,10 @@ dhash_impl::missing_retrieve_cb (bigint key, dhash_stat err,
     str frag = Ida::gen_frag (m, blk);
     ref<dbrec> d = New refcounted<dbrec> (frag.cstr (), frag.len ());
     ref<dbrec> k = id2dbrec (key);
-    int ret = dbwrite (k, d, DHASH_CONTENTHASH);
+    int ret = db_insert_immutable (k, d, DHASH_CONTENTHASH);
     if (ret != 0)
-      warning << "merkle dbwrite failure: " << db_strerror (ret) << "\n";
+      warning << "merkle db_insert_immutable failure: "
+	      << db_strerror (ret) << "\n";
   }
 
   while ((missing_outstanding <= MISSING_OUTSTANDING_MAX)
@@ -349,7 +350,7 @@ dhash_impl::keyhash_mgr_lookup (chordID key, dhash_stat err,
   }
 }
 
-// --------------------------------------------------------------------------------
+// ----------------------------------------------------------------------
 // replica maintenance
 
 
@@ -570,11 +571,11 @@ dhash_impl::dispatch (user_args *sbp)
 }
 
 void
-dhash_impl::storesvc_cb(user_args *sbp,
-		   s_dhash_insertarg *arg,
-		   bool already_present,
-		   dhash_stat err) {
-  
+dhash_impl::storesvc_cb (user_args *sbp,
+		         s_dhash_insertarg *arg,
+		         bool already_present,
+		         dhash_stat err)
+{
   dhash_storeres res (DHASH_OK);
   if ((err != DHASH_OK) && (err != DHASH_STORE_PARTIAL)) 
     res.set_status (err);
@@ -583,14 +584,13 @@ dhash_impl::storesvc_cb(user_args *sbp,
     res.resok->source = host_node->my_ID ();
     res.resok->done = (err == DHASH_OK);
   }
-
   sbp->reply (&res);
 }
+
 
 //---------------- no sbp's below this line --------------
  
 // -------- reliability stuff
-
 
 void
 dhash_impl::update_replica_list () 
@@ -645,35 +645,34 @@ dhash_impl::append (ref<dbrec> key, ptr<dbrec> data,
   blockID id(arg->key, arg->ctype, arg->dbtype);
 
   if (key_status (id) == DHASH_NOTPRESENT) {
-    //create a new record in the database
+    // create a new record in the database
     xdrsuio x;
     char *m_buf;
-    if ((m_buf = (char *)XDR_INLINE (&x, data->len + 3 & ~3)))
-      {
-	memcpy (m_buf, data->value, data->len);
-	int m_len = x.uio ()->resid ();
-	char *m_dat = suio_flatten (x.uio ());
-	ref<dbrec> marshalled_data = New refcounted<dbrec> (m_dat, m_len);
+    if ((m_buf = (char *)XDR_INLINE (&x, data->len + 3 & ~3))) {
+      memcpy (m_buf, data->value, data->len);
+      int m_len = x.uio ()->resid ();
+      char *m_dat = suio_flatten (x.uio ());
+      ref<dbrec> marshalled_data = New refcounted<dbrec> (m_dat, m_len);
 
-	keys_others += 1;
+      keys_others += 1;
 
-	int ret = dbwrite (key, marshalled_data, DHASH_APPEND);
-	assert (!ret);
-	append_after_db_store (cb, arg->key, 0);
-	xfree (m_dat);
-      } else {
-	cb (DHASH_STOREERR);
-      }
-  } else {
+      int ret = db_insert_immutable (key, marshalled_data, DHASH_APPEND);
+      assert (!ret);
+      append_after_db_store (cb, arg->key, 0);
+      xfree (m_dat);
+    }
+    else
+      cb (DHASH_STOREERR);
+  }
+  else
     fetch (id, -1, wrap (this, &dhash_impl::append_after_db_fetch,
 			 key, data, arg, cb));
-  }
 }
 
 void
 dhash_impl::append_after_db_fetch (ref<dbrec> key, ptr<dbrec> new_data,
-			      s_dhash_insertarg *arg, cbstore cb,
-			      int cookie, ptr<dbrec> data, dhash_stat err)
+			           s_dhash_insertarg *arg, cbstore cb,
+			           int cookie, ptr<dbrec> data, dhash_stat err)
 {
   if (arg->ctype != DHASH_APPEND)
     cb (DHASH_STORE_NOVERIFY);
@@ -683,22 +682,21 @@ dhash_impl::append_after_db_fetch (ref<dbrec> key, ptr<dbrec> new_data,
     xdrsuio x;
     char *m_buf;
     if ((data->len+b->len <= 64000) &&
-	(m_buf = (char *)XDR_INLINE (&x, data->len+b->len)))
-      {
-	memcpy (m_buf, b->data, b->len);
-	memcpy (m_buf + b->len, new_data->value, new_data->len);
-	int m_len = x.uio ()->resid ();
-	char *m_dat = suio_flatten (x.uio ());
-	ptr<dbrec> marshalled_data =
-	  New refcounted<dbrec> (m_dat, m_len);
+	(m_buf = (char *)XDR_INLINE (&x, data->len+b->len))) {
+      memcpy (m_buf, b->data, b->len);
+      memcpy (m_buf + b->len, new_data->value, new_data->len);
+      int m_len = x.uio ()->resid ();
+      char *m_dat = suio_flatten (x.uio ());
+      ptr<dbrec> marshalled_data =
+        New refcounted<dbrec> (m_dat, m_len);
 
-	int ret = dbwrite (key, marshalled_data, DHASH_APPEND);
-	assert (!ret);
-	append_after_db_store (cb, arg->key, 0);
-	xfree (m_dat);
-      } else {
-	cb (DHASH_STOREERR);
-      }
+      int ret = db_insert_immutable (key, marshalled_data, DHASH_APPEND);
+      assert (!ret);
+      append_after_db_store (cb, arg->key, 0);
+      xfree (m_dat);
+    }
+    else
+      cb (DHASH_STOREERR);
   }
 
 }
@@ -743,7 +741,7 @@ dhash_impl::store (s_dhash_insertarg *arg, bool exists, cbstore cb)
     ss = pst_cache[arg->key];
   else
     ss = pst[arg->key];
-	
+
   if (ss == NULL) {
     ss = New store_state (arg->key, arg->attr.size);
     if (arg->type == DHASH_CACHE)
@@ -797,7 +795,7 @@ dhash_impl::store (s_dhash_insertarg *arg, bool exists, cbstore cb)
 	  }
 	}
 	mydb->insert (k, d);
-	info << "dbwrite: " << host_node->my_ID ()
+	info << "db write: " << host_node->my_ID ()
 	     << " U " << arg->key << " " << ss->size << "\n";
 	break;
       }
@@ -818,7 +816,7 @@ dhash_impl::store (s_dhash_insertarg *arg, bool exists, cbstore cb)
 	}
         if (!cache_db->lookup (k)) {
           cache_db->insert (k, d);
-	  info << "dbwrite: " << host_node->my_ID ()
+	  info << "db write: " << host_node->my_ID ()
 	       << " C " << arg->key << " " << ss->size << "\n";
 	}
 	break;
@@ -828,9 +826,9 @@ dhash_impl::store (s_dhash_insertarg *arg, bool exists, cbstore cb)
     case DHASH_NOAUTH:
     case DHASH_UNKNOWN:
       {
-	int ret = dbwrite (k, d, arg->ctype);
+	int ret = db_insert_immutable (k, d, arg->ctype);
 	if (ret != 0) {
-	  warning << "dbwrite failure: " << db_strerror (ret) << "\n";
+	  warning << "db write failure: " << db_strerror (ret) << "\n";
 	  stat = DHASH_STOREERR;
 	}
       }
@@ -903,21 +901,21 @@ dhash_impl::doRPC_unbundler (ptr<location> dst, RPC_delay_args *args)
 
 void
 dhash_impl::doRPC (const chord_node &n, const rpc_program &prog, int procno,
-	      ptr<void> in,void *out, aclnt_cb cb) 
+	           ptr<void> in,void *out, aclnt_cb cb) 
 {
   host_node->doRPC (n, prog, procno, in, out, cb);
 }
 
 void
-dhash_impl::doRPC (const chord_node_wire &n, const rpc_program &prog, int procno,
-	      ptr<void> in,void *out, aclnt_cb cb) 
+dhash_impl::doRPC (const chord_node_wire &n, const rpc_program &prog,
+                   int procno, ptr<void> in,void *out, aclnt_cb cb) 
 {
   host_node->doRPC (make_chord_node (n), prog, procno, in, out, cb);
 }
 
 void
 dhash_impl::doRPC (ptr<location> ID, const rpc_program &prog, int procno,
-	      ptr<void> in,void *out, aclnt_cb cb) 
+	           ptr<void> in,void *out, aclnt_cb cb) 
 {
   host_node->doRPC (ID, prog, procno, in, out, cb);
 }
@@ -998,28 +996,19 @@ dhash_impl::dblookup (const blockID &i) {
 }
 
 int
-dhash_impl::dbwrite (ref<dbrec> key, ref<dbrec> data, dhash_ctype ctype)
+dhash_impl::db_insert_immutable (ref<dbrec> key, ref<dbrec> data,
+                                 dhash_ctype ctype)
 {
   char *action;
   block blk (to_merkle_hash (key), data);
-  chordID bid = dbrec2id(key);
   bool exists = (database_lookup (mtree->db, blk.key) != 0L);
-  bool ismutable = (ctype != DHASH_CONTENTHASH);
   int ret = 0;
   if (!exists) {
     action = "N"; // New
     ret = mtree->insert (&blk);
   }
-  // this code path is no longer used, because we add keyhash keys to
-  // its own database
-  else if (exists && ismutable) {
-    action = "U"; // update an existing mutable block
-    mtree->remove (&blk);
-    ret = mtree->insert (&blk);
-  }
-  else {
+  else
     action = "R"; // Re-write
-  }
 
   // Won't deal well if there's a magic expansion in the encoding
   // vector.  Should really know how big the full block is so that
@@ -1028,21 +1017,20 @@ dhash_impl::dbwrite (ref<dbrec> key, ref<dbrec> data, dhash_ctype ctype)
   if (key->isFrag() &&
       (u_long) data->len > 9 + 2 * num_dfrags ())
     x = strbuf () << " " << hexdump (data->value + 8, 2*(num_dfrags () + 1));
-  info << "dbwrite: " << host_node->my_ID ()
+  info << "db write: " << host_node->my_ID ()
        << " " << action << " " << dbrec2id(key) << x << "\n";
-
   return ret;
 }
 
 void
-dhash_impl::dbdelete (ref<dbrec> key)
+dhash_impl::db_delete_immutable (ref<dbrec> key)
 {
   merkle_hash hkey = to_merkle_hash (key);
   bool exists = database_lookup (mtree->db, hkey);
   assert (exists);
   block blk (hkey, NULL);
   mtree->remove (&blk);
-  info << "dbdelete: " << host_node->my_ID ()
+  info << "db delete: " << host_node->my_ID ()
        << " " << dbrec2id(key) << "\n";
 }
 
@@ -1051,7 +1039,7 @@ dhash_impl::dbdelete (ref<dbrec> key)
 // store state 
 
 static void
-join(store_chunk *c)
+join (store_chunk *c)
 {
   store_chunk *cnext;
 
@@ -1088,13 +1076,13 @@ store_state::gap ()
 }
 
 bool
-store_state::iscomplete()
+store_state::iscomplete ()
 {
   return have && have->start == 0 && have->end == (unsigned)size && !gap ();
 }
 
 bool
-store_state::addchunk(unsigned int start, unsigned int end, void *base)
+store_state::addchunk (unsigned int start, unsigned int end, void *base)
 {
   store_chunk **l, *c;
 

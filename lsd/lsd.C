@@ -93,8 +93,10 @@ client_accept (int fd)
 
   ref<axprt_stream> x = axprt_stream::alloc (fd, 1024*1025);
 
-  // XXX these dhashgateway objects are leaked
-  vNew dhashgateway (x, chordnode);
+  // vNew a refcounted dhashgateway structure, whose constructor calls
+  // mkref to maintain a reference to itself until the program is
+  // gone.
+  vNew refcounted<dhashgateway> (x, chordnode);
 }
 
 static void

@@ -173,8 +173,8 @@ class dhash_impl : public dhash {
   void printcached_walk (const chordID &k);
 
   ptr<dbrec> dblookup(const blockID &i);
-  int dbwrite (ref<dbrec> key, ref<dbrec> data, dhash_ctype ctype);
-  void dbdelete (ref<dbrec> key);
+  int db_insert_immutable (ref<dbrec> key, ref<dbrec> data, dhash_ctype ctype);
+  void db_delete_immutable (ref<dbrec> key);
 
   vec<ptr<location> > replicas;
   timecb_t *merkle_rep_tcb;

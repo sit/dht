@@ -9,7 +9,8 @@ class chord;
 class dhashcli;
 class dhash_block;
 
-class dhashgateway {
+class dhashgateway : public virtual refcount
+{
   ptr<asrv> clntsrv;
   ptr<dhashcli> dhcli;
 
