@@ -1971,8 +1971,7 @@ LocTable::next_hop(Chord::CHID key, uint m, uint nsucc)
   vector<Chord::IDMap> v = next_hops(key, 1);
   if (v.size() == 0) 
     return me;
-  else
-    return v[0];
+  return v[0];
 }
 
 vector<Chord::IDMap>

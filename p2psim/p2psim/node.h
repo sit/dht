@@ -30,6 +30,7 @@
 #include "rpchandle.h"
 #include "observed.h"
 #include "p2psim/args.h"
+#include "bighashmap.hh"
 #include <assert.h>
 #include <stdio.h>
 
@@ -113,9 +114,9 @@ protected:
   {
     assert(dst);
     if(token)
-      assert(_rpcmap.find(token) == _rpcmap.end());
+      assert(!_rpcmap[token]);
     else
-      while(!token || _rpcmap.find(token) != _rpcmap.end())
+      while(!token || _rpcmap[token])
         token = _token++;
 
     Thunk<BT, AT, RT> *t = _makeThunk(dst, dynamic_cast<BT*>(getpeer(dst)), fn, args, ret);
@@ -124,7 +125,7 @@ protected:
     if(!rpch)
       return 0;
 
-    _rpcmap[token] = rpch;
+    _rpcmap.insert(token, rpch);
     return token;
   }
 
@@ -135,7 +136,7 @@ private:
   IPAddress _ip;
   bool _alive;
 
-  hash_map<unsigned, RPCHandle*> _rpcmap;
+  HashMap<unsigned, RPCHandle*> _rpcmap;
   unsigned _token;
   void _deleteRPC(unsigned);
 

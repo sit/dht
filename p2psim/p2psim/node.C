@@ -88,9 +88,9 @@ Node::rcvRPC(RPCSet *hset, bool &ok)
 void
 Node::_deleteRPC(unsigned token)
 {
-  assert(_rpcmap.find(token) != _rpcmap.end());
+  assert(_rpcmap[token]);
   delete _rpcmap[token];
-  _rpcmap.erase(token);
+  _rpcmap.remove(token);
 }
 
 
@@ -223,3 +223,5 @@ Node::Receive(void *px)
   // ...and we're done
   threadexits(0);
 }
+
+#include "bighashmap.cc"
