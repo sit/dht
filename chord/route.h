@@ -1,9 +1,8 @@
 #ifndef _ROUTE_ITERATOR_H_
 #define _ROUTE_ITERATOR_H_
 
-#include "sfsmisc.h"
-#include "crypt.h"
-#include "refcnt.h"
+#include <refcnt.h>
+#include "chord.h"
 
 class vnode;
 typedef callback<void, bool>::ptr cbhop_t;
