@@ -303,17 +303,18 @@ dhash::transfer_initial_keys ()
   doRPC(succ, dhash_program_1, DHASHPROC_GETKEYS, 
 			      arg, res,
 			      wrap(this, 
-				   &dhash::transfer_init_getkeys_cb, res));
+				   &dhash::transfer_init_getkeys_cb, succ, res));
 }
 
 void
-dhash::transfer_init_getkeys_cb (dhash_getkeys_res *res, clnt_stat err)
+dhash::transfer_init_getkeys_cb (chordID succ,
+				 dhash_getkeys_res *res, 
+				 clnt_stat err)
 {
   
   if ((err) || (res->status != DHASH_OK)) 
     fatal << "Couldn't transfer keys from my successor\n";
 
-  chordID succ = host_node->my_succ ();
   for (unsigned int i = 0; i < res->resok->keys.size (); i++) {
     chordID k = res->resok->keys[i];
     if (key_status (k) == DHASH_NOTPRESENT)
@@ -325,7 +326,7 @@ dhash::transfer_init_getkeys_cb (dhash_getkeys_res *res, clnt_stat err)
 void
 dhash::transfer_init_gotk_cb (dhash_stat err) 
 {
-  if (err) warn << "Error fetching key\n";
+  if (err) warn << "Error fetching key: " << err << "\n";
 }
 
 void
@@ -479,7 +480,6 @@ void
 dhash::get_key (chordID source, chordID key, cbstat_t cb) 
 {
   warn << "fetching a block (" << key << " from " << source << "\n";
-  warn << host_node->my_ID () << " my succ is " << host_node->my_succ () << "\n";
   cli->retrieve(source, key, wrap (this, &dhash::get_key_got_block, key, cb));
 }
 
@@ -682,7 +682,6 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
       stat = DHASH_REPLICATED;
       keys_replicated += 1;
     } else {
-      warn << "got a cache store\n";
       stat = DHASH_CACHED;
       keys_cached += 1;
     }

@@ -42,126 +42,6 @@ unsigned int MTU = (getenv ("DHASH_MTU") ?
 		   atoi (getenv ("DHASH_MTU")) :
 		   1024);
 
-// ---------------------------------------------------------------------------
-// DHASH_RETRIEVE
-//    - retrieves a given blockID
-//    - Handles the lookup of the chord node holding the block
-//      and various RACE/FAILURE conditions, by way of dhcli->lookup_iter.
-//    - XXX these failure conditions need to be code reviewed.  
-//          Can a simpler algorithm like this work:
-//          while (nodeID = lookup (blockID))
-//             <err, path, block> = retrieve (nodeID, blockID)
-//             if     (err == NO_SUCH_BLOCK) 
-//                  return NO_SUCH_BLOCK
-//             elseif (err == RETRY)
-//                  notify (path.penultimate, path.back); // and try around..
-//             else
-//                   return DHASH_CHORDERR;
-//
-//    - XXX err....the above isn't really correct..
-
-
-class dhash_retrieve {
-protected:
-  dhashcli *dhcli;
-  uint npending;
-  bool error;
-  bigint key;
-  cbretrieve_t cb;  
-  ptr<dhash_block> block;
-  bool usecachedsucc;
-  route first_path;
-
-  dhash_retrieve (dhashcli *dhcli, bigint key, bool usecachedsucc,
-                  cbretrieve_t cb)
-    : dhcli (dhcli), npending (0), error (false), key (key), cb (cb),
-      block (NULL), usecachedsucc (usecachedsucc)
-  {
-    npending++;
-    dhcli->lookup_iter (key, 0, MTU, usecachedsucc,
-	                wrap (this, &dhash_retrieve::first_chunk_cb));
-  }
-
-  dhash_retrieve (dhashcli *dhcli, chordID source, bigint key, cbretrieve_t cb)
-    : dhcli (dhcli), npending (0), error (false), key (key), cb (cb),
-      block (NULL), usecachedsucc (usecachedsucc)
-  {
-    npending++;
-    dhcli->lookup_iter (source, key, 0, MTU, false, 
-			wrap (this, &dhash_retrieve::first_chunk_cb));
-  }
-
-
-  void first_chunk_cb (dhash_stat status, route path, ptr<dhash_block_chunk> chunk)
-  {
-    ///warn << "dhash_retrieve::first_chunk_cb\n";
-
-    if (status == DHASH_OK) {
-      size_t totsz     = chunk->total_len;
-      size_t nread     = chunk->chunk_len;
-      chordID sourceID = chunk->source;
-      block            = New refcounted<dhash_block> ((char *)NULL, totsz);
-      while (nread < totsz) {
-	uint32 offset = nread;
-	uint32 length = MIN (MTU, totsz - nread);
-	npending++;
-	dhcli->lookup_iter (sourceID, key, offset, length, usecachedsucc,
-			    wrap (this, &dhash_retrieve::finish));
-	nread += length;
-      }
-      first_path = path;
-
-    }
-    
-    finish (status, path, chunk);
-  }
-    
-
-  void finish (dhash_stat status, route path, ptr<dhash_block_chunk> chunk)
-  {
-    ///warn << "dhash_retrieve::finish(), npending=" << npending << "\n";
-    npending--;
-
-    if (status != DHASH_OK) 
-      fail (dhasherr2str (status));
-    else {
-      uint32 off = chunk->chunk_offset;
-      uint32 len = chunk->chunk_len;
-      if (off + len > block->len)
-	fail (strbuf ("bad fragment: off %d, len %d, block %d", off, len, block->len));
-      else
-	memcpy (&block->data[off], chunk->chunk_data, len);
-    }
-
-    if (npending == 0) {
-      if (error)
-	block = NULL;
-      (*cb) (block);
-      delete this;
-    }
-  }
-
-  void fail (str errstr)
-  {
-    ///warn << "dhash_retrieve failed: " << key << ": " << errstr << "\n";
-    error = true;
-  }
-
-
-public:
-  static void execute (dhashcli *dhcli, bigint key, bool usecachedsucc,
-                       cbretrieve_t cb)
-  {
-    vNew dhash_retrieve (dhcli, key, usecachedsucc, cb);
-  }
-  static void execute (dhashcli *dhcli, chordID source, bigint key,
-                       cbretrieve_t cb)
-  {
-    vNew dhash_retrieve (dhcli, source, key, cb);
-  }
-};
-
-
 
 // ---------------------------------------------------------------------------
 // DHASH_STORE
@@ -233,6 +113,149 @@ public:
     vNew dhash_store (dhcli, destID, blockID, block, store_type, cb);
   }
 };
+
+
+// ---------------------------------------------------------------------------
+// DHASH_RETRIEVE
+//    - retrieves a given blockID
+//    - Handles the lookup of the chord node holding the block
+//      and various RACE/FAILURE conditions, by way of dhcli->lookup_iter.
+//    - XXX these failure conditions need to be code reviewed.  
+//          Can a simpler algorithm like this work:
+//          while (nodeID = lookup (blockID))
+//             <err, path, block> = retrieve (nodeID, blockID)
+//             if     (err == NO_SUCH_BLOCK) 
+//                  return NO_SUCH_BLOCK
+//             elseif (err == RETRY)
+//                  notify (path.penultimate, path.back); // and try around..
+//             else
+//                   return DHASH_CHORDERR;
+//
+//    - XXX err....the above isn't really correct..
+
+
+class dhash_retrieve {
+protected:
+  dhashcli *dhcli;
+  uint npending;
+  bool error;
+  bigint key;
+  cbretrieve_t cb;  
+  ptr<dhash_block> block;
+  bool usecachedsucc;
+  bool do_cache;
+
+  route first_path;
+  
+  dhash_retrieve (dhashcli *dhcli, bigint key, bool usecachedsucc,
+                  bool do_cache, cbretrieve_t cb)
+    : dhcli (dhcli), npending (0), error (false), key (key), cb (cb),
+      block (NULL), usecachedsucc (usecachedsucc), do_cache (do_cache)
+  {
+    npending++;
+    dhcli->lookup_iter (key, 0, MTU, usecachedsucc,
+	                wrap (this, &dhash_retrieve::first_chunk_cb));
+  }
+
+  dhash_retrieve (dhashcli *dhcli, chordID source, bigint key, cbretrieve_t cb)
+    : dhcli (dhcli), npending (0), error (false), key (key), cb (cb),
+      block (NULL), usecachedsucc (usecachedsucc), do_cache (false)
+  {
+    npending++;
+    dhcli->lookup_iter (source, key, 0, MTU, false, 
+			wrap (this, &dhash_retrieve::first_chunk_cb));
+  }
+
+
+  void first_chunk_cb (dhash_stat status, route path, ptr<dhash_block_chunk> chunk)
+  {
+    ///warn << "dhash_retrieve::first_chunk_cb\n";
+
+    if (status == DHASH_OK) {
+      size_t totsz     = chunk->total_len;
+      size_t nread     = chunk->chunk_len;
+      chordID sourceID = chunk->source;
+      block            = New refcounted<dhash_block> ((char *)NULL, totsz);
+      while (nread < totsz) {
+	uint32 offset = nread;
+	uint32 length = MIN (MTU, totsz - nread);
+	npending++;
+	dhcli->lookup_iter (sourceID, key, offset, length, usecachedsucc,
+			    wrap (this, &dhash_retrieve::finish));
+	nread += length;
+      }
+      first_path = path;
+
+    }
+    
+    finish (status, path, chunk);
+  }
+    
+
+  void finish (dhash_stat status, route path, ptr<dhash_block_chunk> chunk)
+  {
+    ///warn << "dhash_retrieve::finish(), npending=" << npending << "\n";
+    npending--;
+
+    if (status != DHASH_OK) 
+      fail (dhasherr2str (status));
+    else {
+      uint32 off = chunk->chunk_offset;
+      uint32 len = chunk->chunk_len;
+      if (off + len > block->len)
+	fail (strbuf ("bad fragment: off %d, len %d, block %d", off, len, block->len));
+      else
+	memcpy (&block->data[off], chunk->chunk_data, len);
+    }
+
+    if (npending == 0) {
+      if (error)
+	block = NULL;
+      (*cb) (block);
+      if (block && 
+	  do_cache && 
+	  (dhash::block_type (block) == DHASH_CONTENTHASH)) {
+	unsigned int path_size = first_path.size ();
+	if (path_size > 1) {
+	  chordID cache_dest = first_path[path_size - 2];
+	  dhash_store::execute (dhcli, cache_dest, key, block, 
+				wrap (this, &dhash_retrieve::finish_cached),
+				DHASH_CACHE);
+	}
+
+      }
+      else
+	delete this;
+    }
+  }
+
+  void finish_cached (bool error, chordID ID)
+  {
+    if (error)
+      warn << "error caching " << ID << "\n";
+  }
+
+  void fail (str errstr)
+  {
+    warn << "dhash_retrieve failed: " << key << ": " << errstr << "\n";
+    error = true;
+  }
+
+
+public:
+  static void execute (dhashcli *dhcli, bigint key, bool usecachedsucc,
+		       bool do_cache,
+                       cbretrieve_t cb)
+  {
+    vNew dhash_retrieve (dhcli, key, usecachedsucc, do_cache, cb);
+  }
+  static void execute (dhashcli *dhcli, chordID source, bigint key,
+                       cbretrieve_t cb)
+  {
+    vNew dhash_retrieve (dhcli, source, key, cb);
+  }
+};
+
 
 
 
@@ -328,7 +351,7 @@ void
 dhashcli::retrieve (chordID blockID, bool usecachedsucc, cbretrieve_t cb)
 {
   ///warn << "dhashcli::retrieve\n";
-  dhash_retrieve::execute (this, blockID, usecachedsucc, cb);
+  dhash_retrieve::execute (this, blockID, usecachedsucc, do_cache, cb);
 }
 
 //use this version if you already know where the block is (and guessing
@@ -377,6 +400,7 @@ dhashcli::lookup_iter_with_source_cb (ptr<dhash_fetchiter_res> fres,
   route path;
 
   if (err || fres->status != DHASH_COMPLETE) {
+    warn << "fetch w/ source: " << err << " " << fres->status << "\n";
     cb (DHASH_RPCERR, path, New refcounted<dhash_block_chunk>());
   } else { 
     path.push_back (fres->compl_res->source);

@@ -173,7 +173,9 @@ class dhash {
 
   void init_key_status ();
   void transfer_initial_keys ();
-  void transfer_init_getkeys_cb (dhash_getkeys_res *res, clnt_stat err);
+  void transfer_init_getkeys_cb (chordID succ,
+				 dhash_getkeys_res *res, 
+				 clnt_stat err);
   void transfer_init_gotk_cb (dhash_stat err);
 
   void update_replica_list ();
