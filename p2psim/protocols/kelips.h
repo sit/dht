@@ -58,8 +58,19 @@
 #include <vector>
 #include <set>
 
+extern "C" {
+  #include "gb_graph.h" 
+}
+
 class Kelips : public P2Protocol {
 public:
+
+  typedef u_int ID;
+  struct lookup_args{
+    ID key;
+    Time start;
+  };
+
   Kelips(IPAddress i, Args a);
   virtual ~Kelips();
   string proto_name() { return "Kelips"; }
@@ -72,9 +83,12 @@ public:
   virtual void insert(Args*);
   virtual void nodeevent (Args *) {};
 
+  void lookup_internal(lookup_args *a);
+  void calculate_conncomp(void *);
+  void add_gb_edge(Graph *g);
+
  private:
   // typedef ConsistentHash::CHID ID;
-  typedef u_int ID;
 
   // Parameters, with defaults from Kelips paper.
 
@@ -88,12 +102,18 @@ public:
   int _n_contacts;        // (2) contacts to remember per foreign group.
 
   int _item_rounds;       // (1???) how many times to gossip a new item.
+  Time _max_lookup_time;
+  u_int _purge_time;      // period the purge timer is run
+  u_int _track_conncomp_timer; 
+  
 
   int _timeout;           // (25000???) milliseconds to group item timeout.
 
   // hearbeat timeouts. XXX not specified in paper.
+  /*
   static const int _group_timeout = 25000;
   static const int _contact_timeout = 50000;
+  */
 
   int _k; // number of affinity groups, should be sqrt(n)
 
@@ -107,6 +127,8 @@ public:
   static int _good_lookups;
   static int _ok_failures;
   static int _bad_failures;
+  static int _connected_sample;
+  static float _connected_sz;
 
   // Information about one other node.
   class Info {

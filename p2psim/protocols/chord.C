@@ -250,8 +250,6 @@ bool Chord::failure_detect(IPAddress dst, void (BT::* fn)(AT *, RT *), AT *args,
     retry_to = retry_to * 2;
     retry++;
   }
-  if (me.ip == 958) 
-    printf("%s failure_detect %u\n",ts(),dst);
   return false;
 }
 
@@ -696,11 +694,11 @@ Chord::find_successors_recurs(CHID key, uint m, uint all, uint type, IDMap *last
 {
   next_recurs_args fa;
   next_recurs_ret fr;
-  fa.path.clear();
 
   lookup_path tmp;
   tmp.n = me;
   tmp.tout = 0;
+  fa.path.clear();
   fa.path.push_back(tmp);
 
   fa.key = key;
@@ -905,9 +903,10 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
 	  printf("(%u,%qx %u) ", args->path[i].n.ip, args->path[i].n.id, args->path[i].tout);
 	}
 	assert(0);
-      }
-      assert(ConsistentHash::between(me.id, args->key, next.id));
+      } 
     }
+
+    assert(next.ip != me.ip && ConsistentHash::between(me.id, args->key, next.id));
 
     tmp.n = next;
     tmp.tout = 0;
@@ -925,8 +924,11 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
     }
 
     if (r) {
-      if ((ret->v.size() > 0) || (!_recurs_direct)) 
+      if (!_recurs_direct) {
 	record_stat(args->type,ret->v.size());
+      }else{
+	record_stat(args->type,0);
+      }
       if (!static_sim) loctable->add_node(next); //update timestamp
       return;
     }else{
@@ -938,13 +940,13 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
       args->path[args->path.size()-1].tout = 1;
 
       //do a long check to see if next hop is really dead
-      alert_args *tmp = New alert_args;
-      tmp->n = next;
-      tmp->dst = me.ip;
-      if (loctable->on_check(next)) 
-	delete tmp;
-      else
+      if (loctable->on_check(next)) {
+      } else {
+	alert_args *tmp = New alert_args;
+	tmp->n = next;
+	tmp->dst = me.ip;
 	delaycb(1, &Chord::alert_delete, tmp);
+      }
     }
   }
 }
@@ -1565,9 +1567,6 @@ Chord::fix_successor_list()
     }
     scs_i++;
 
-    if ((scs.size() == 10 && gsr.v.size() == 11)&& (me.ip == 572)) {
-      fprintf(stderr,"fuck! %llu \n",now());
-    }
     while (1) {
       if (gsr_i >= gsr.v.size()) {
 	break;
