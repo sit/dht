@@ -45,7 +45,7 @@ public:
   void mark_deleted (bigint k);
   void inc_offered (bigint k);
   void inc_rejected (bigint k);
-  bigint last_key (); 
+  bigint left_key (); 
   bool handed_off (bigint k) { return keys[k]->handed_off; };
 };
 
@@ -58,7 +58,7 @@ public:
   void start ();
   void stop ();
 
-  enum { PRTTMSHORT = 1, PRTTMLONG = 60, MAX_PENDING = 20};
+  enum { PRTTMTINY = 1, PRTTMSHORT = 10, PRTTMLONG = 60, MAX_PENDING = 20};
   enum { PMAINT_HANDOFF_ERROR = 0, PMAINT_HANDOFF_NOTPRESENT = 1, 
 	 PMAINT_HANDOFF_PRESENT = -1};
 
