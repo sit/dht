@@ -21,6 +21,7 @@ static GtkWidget *check_succ_list;
 static GtkWidget *check_neighbors;
 static int glevel = 1;
 static char *color_file;
+static bool drawids = false;
 
 struct color_pair {
   GdkColor c;
@@ -795,16 +796,18 @@ draw_ring ()
 		  8,8,
 		  (gint16)0, (gint16)64*360);
     
-#ifdef DRAWIDS
-    GdkFont *f= gdk_font_load ("-*-courier-*-r-*-*-*-*-*-*-*-*-*-*");
-    char IDs[128];
-    ID_to_string (n->ID, IDs);
-    gdk_draw_string (pixmap,
-		     f,
-		     widget->style->black_gc,
-		     x,y,
-		     IDs);
-#endif
+    if (drawids) {
+      GdkFont *f= gdk_font_load ("-*-courier-*-r-*-*-*-*-*-*-*-*-*-*");
+      char IDs[128];
+      ID_to_string (n->ID, IDs);
+      int fudge = -10;
+      if (x < WINX/2) fudge = 0;
+      gdk_draw_string (pixmap,
+		       f,
+		       widget->style->black_gc,
+		       x + fudge,y,
+		       IDs);
+    }
 
     if (n->draw) {
       
@@ -913,7 +916,7 @@ main (int argc, char** argv)
   color_file = ".viscolors";
 
   int ch;
-  while ((ch = getopt (argc, argv, "j:a:l:f:")) != -1) {
+  while ((ch = getopt (argc, argv, "j:a:l:f:i")) != -1) {
     switch (ch) {
     case 'j': 
       {
@@ -950,6 +953,11 @@ main (int argc, char** argv)
     case 'f':
       {
 	color_file = optarg;
+      }
+      break;
+    case 'i':
+      {
+	drawids = true;
       }
       break;
   default:
