@@ -367,6 +367,9 @@ Chord::find_successors(CHID key, uint m, uint all, uint type, uint *lookup_int, 
     if (ok) {
       record_stat(resultmap[donerpc]->ret.done?resultmap[donerpc]->ret.next.size()*4:resultmap[donerpc]->ret.v.size()*4,type);
 
+      if (resultmap[donerpc]->link.from.ip == me.ip) 
+	loctable->add_node(resultmap[donerpc]->link.to); //update timestamp of MY neighbors
+
       if (resultmap[donerpc]->ret.done) {
 	results = resultmap[donerpc]->ret.v;
 	lastfinished = resultmap[donerpc]->link;
@@ -462,10 +465,14 @@ DONE:
 
   for (uint i = 0; i < outstanding; i++) {
     donerpc = rcvRPC(&rpcset, ok);
+    if (ok)
+      record_stat(resultmap[donerpc]->ret.done?resultmap[donerpc]->ret.next.size()*4:resultmap[donerpc]->ret.v.size()*4,type);
     delete resultmap[donerpc];
   }
   for (uint i = 0;i < alertoutstanding; i++) {
     donerpc = rcvRPC(&alertset, ok);
+    if (ok)
+      record_stat(0,type);
     delete alertmap[donerpc];
   }
   return results;
