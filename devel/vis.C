@@ -233,14 +233,17 @@ void
 update_succ_got_succ (chordID ID, str host, unsigned short port, 
 			    chord_getsucc_ext_res *res, clnt_stat err)
 {
+  f_node *nu = nodes[ID];
+  if (!nu) return;
   if (err || res->status) {
     warn << "(update succ) deleting " << ID << "\n";
-    if (nodes[ID])
-      nodes.remove (nodes[ID]);
+    if (nu) {
+      nodes.remove (nu);
+      delete nu;
+    }
     return;
   }
 
-  f_node *nu = nodes[ID];
   if (nu->ressucc) delete nu->ressucc;
   nu->ressucc = res;
   
@@ -268,18 +271,20 @@ void
 update_fingers_got_fingers (chordID ID, str host, unsigned short port, 
 			    chord_getfingers_ext_res *res, clnt_stat err)
 {
+  f_node *nu = nodes[ID];
+  if (!nu) return;
   if (err || res->status) {
     warn << "(update) deleting " << ID << "\n";
-    if (nodes[ID])
-      nodes.remove (nodes[ID]);
+    if (nu) {
+      nodes.remove (nu);
+      delete nu;
+    }
     return;
   }
 
-  f_node *nu = nodes[ID];
   if (nu->res) delete nu->res;
   nu->res = res;
 
-  update_toes (nu);
   for (unsigned int i=0; i < res->resok->fingers.size (); i++) {
     if ( nodes[res->resok->fingers[i].x] == NULL) 
       queue_node (res->resok->fingers[i].x, res->resok->fingers[i].r.hostname,
@@ -385,8 +390,11 @@ get_fingers_got_fingers (chordID ID, str host, unsigned short port,
 {
   if (err || res->status) {
     warn << "get fingers failed, deleting: " << ID << "\n";
-    if (nodes[ID])
+    f_node *nu = nodes[ID];
+    if (nu) {
       nodes.remove (nodes[ID]);
+      delete nu;
+    }
     draw_ring ();
   } else
     add_fingers (ID, host, port, res);
@@ -437,7 +445,8 @@ get_cb (f_node *node_next)
     if (node_next) {
       update_fingers (node_next);
       update_succlist (node_next);
-      
+      update_toes (node_next);
+
       node_next = nodes.next (node_next);
     }
   }
@@ -466,15 +475,17 @@ void
 update_toes_got_toes (chordID ID, str host, unsigned short port, 
 		      chord_gettoes_res *res, clnt_stat err)
 {
+  f_node *nu = nodes[ID];
+  if (!nu) return;
   if (err || res->status) {
     warn << "(update toes) deleting " << ID << "\n";
-    if (nodes[ID])
-      nodes.remove (nodes[ID]);
+    if (nu) {
+      nodes.remove (nu);
+      delete nu;
+    }
     return;
   }
 
-  f_node *nu = nodes[ID];
-  if (!nu) return;
   if (nu->restoes) delete nu->restoes;
   nu->restoes = res;
   draw_ring ();
