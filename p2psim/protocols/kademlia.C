@@ -392,12 +392,16 @@ join_restart:
 
   // KDEBUG(2) << "join: succ_id is " << printID(succ_id) << endl;
   unsigned cpl = common_prefix(_id, succ_id);
+  KDEBUG(0) << "_id = " << printbits(_id) << ", succ_id = " << printbits(succ_id) << ", cpl = " << cpl << endl;
 
   // all entries further away than him need to be refreshed.  this is similar to
   // stabilization.
-  for(int i=cpl-1; i>=0; i--) {
-    // XXX: should be random
-    lookup_args la(_id, ip(), (_id ^ (((Kademlia::NodeID) 1)<<i)));
+  for(int i=idsize-cpl+1; i<idsize; i++) {
+    NodeID random_key = _id ^ (((Kademlia::NodeID) 1) << i);
+    for(int j=i-1; j>=0; j--)
+      random_key ^= (((NodeID) random() & 0x1) << j);
+
+    lookup_args la(_id, ip(), random_key);
     la.stattype = Kademlia::STAT_JOIN;
     lookup_result lr;
 
