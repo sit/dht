@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.10 2003/10/12 21:24:15 strib Exp $ */
+/* $Id: tapestry.C,v 1.11 2003/10/12 22:15:53 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -40,6 +40,7 @@ Tapestry::Tapestry(Node *n, Args a)
 {
   joined = false;
   _joining = false;
+  _stab_scheduled = false;
   _my_id = get_id_from_ip(ip());
   TapDEBUG(2) << "Constructing" << endl;
   _rt = New RoutingTable(this, a.nget<uint>("redundancy", 3, 10));
@@ -193,7 +194,10 @@ Tapestry::have_joined()
    _joining = false;
    _waiting_for_join->notifyAll();
    TapDEBUG(0) << "Finishing joining." << endl;
-   delaycb( _stabtimer, &Tapestry::check_rt, (void *) 0 );
+   if( !_stab_scheduled ) {
+     delaycb( _stabtimer, &Tapestry::check_rt, (void *) 0 );
+     _stab_scheduled = true;
+   }
 }
 
 // External event that tells a node to contact the well-known node
@@ -825,6 +829,7 @@ Tapestry::check_rt(void *x)
 
   // do nothing if we should be dead or not fully alive
   if( !joined ) {
+    _stab_scheduled = false;
     return;
   }
 
