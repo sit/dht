@@ -310,10 +310,9 @@ dhash_impl::keyhash_mgr_lookup (chordID key, dhash_stat err, chordID host, route
 void
 dhash_impl::replica_maintenance_timer (u_int index)
 {
+  merkle_rep_tcb = NULL;
   return;
 
-
-  merkle_rep_tcb = NULL;
   update_replica_list ();
 
 #if 1
@@ -445,6 +444,7 @@ dhash_impl::replica_maintenance_timer (u_int index)
 void
 dhash_impl::partition_maintenance_timer ()
 {
+  merkle_part_tcb = NULL;
   return;
   fatal << "XXX fix the delaycb values\n"; 
 
@@ -764,6 +764,11 @@ dhash_impl::block_to_res (dhash_stat err, s_dhash_fetch_arg *arg,
     res = New dhash_fetchiter_res  (DHASH_NOENT);
   else {
     res = New dhash_fetchiter_res  (DHASH_COMPLETE);
+
+    if (arg->start < 0)
+      arg->start = 0;
+    if (arg->start > val->len)
+      arg->start = val->len;
     
     int n = (arg->len + arg->start < val->len) ? 
       arg->len : val->len - arg->start;
