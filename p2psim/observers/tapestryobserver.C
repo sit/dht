@@ -91,7 +91,10 @@ TapestryObserver::execute()
     for (pos = l.begin(); pos != l.end(); ++pos) {
       c = (Tapestry *)(*pos);
       assert(c);
-      lid.push_back(c->id ());
+      // only care about live nodes
+      if( c->node()->alive() ) {
+	lid.push_back(c->id ());
+      }
     }
 
     sort(lid.begin(), lid.end());
@@ -100,7 +103,7 @@ TapestryObserver::execute()
   for (pos = l.begin(); pos != l.end(); ++pos) {
     c = (Tapestry *)(*pos);
     assert(c);
-    if (!c->stabilized(lid)) {
+    if (c->node()->alive() && !c->stabilized(lid)) {
       DEBUG(1) << now() << " NOT STABILIZED" << endl;
       if (_reschedule > 0) reschedule(_reschedule);
       return;

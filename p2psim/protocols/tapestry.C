@@ -21,7 +21,7 @@
  * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
  */
 
-/* $Id: tapestry.C,v 1.4 2003/10/09 04:52:06 strib Exp $ */
+/* $Id: tapestry.C,v 1.5 2003/10/09 23:49:08 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -68,12 +68,25 @@ Tapestry::lookup(Args *args)
   
   lookup_return lr;
   lr.hopcount = 0;
+  lr.failed = false;
 
   handle_lookup( &la, &lr );
 
-  TapDEBUG(1) << "Lookup complete for key " << print_guid(key) << ": ip " <<
-    lr.owner_ip << ", id " << print_guid(lr.owner_id) << ", hops " <<
-    lr.hopcount << endl;
+  if( !lr.failed ) {
+    GUID realroot = lookup_cheat( key );
+    if( lr.owner_id == realroot ) {
+      TapDEBUG(1) << "Lookup complete for key " << print_guid(key) << ": ip " 
+		  << lr.owner_ip << ", id " << print_guid(lr.owner_id) 
+		  << ", hops " << lr.hopcount << endl;
+    } else {
+      TapDEBUG(1) << "Lookup incorrect for key " << print_guid(key) << ": ip " 
+		  << lr.owner_ip << ", id " << print_guid(lr.owner_id) 
+		  << ", real root " << print_guid(realroot) << " hops " 
+		  << lr.hopcount << endl;
+    }
+  } else {
+    TapDEBUG(1) << "Lookup failed for key " << print_guid(key) << endl;
+  }
 
 }
 
@@ -87,7 +100,8 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
     ips[i] = 0;
   }
   next_hop( args->key, &ips, _redundant_lookup_num );
-  for( uint i = 0; i < _redundant_lookup_num; i++ ) {
+  uint i = 0;
+  for( ; i < _redundant_lookup_num; i++ ) {
     IPAddress next = ips[i];
     if( next == 0 ) {
       continue;
@@ -101,7 +115,7 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
     } else {
       // it's not me, so forward the query
       bool succ = doRPC( next, &Tapestry::handle_lookup, args, ret );
-      if (succ) {
+      if( succ && !ret->failed ) {
 	// don't need to try the next one
 	ret->hopcount++;
 	break;
@@ -109,8 +123,14 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
 	// print out that a failure happened
 	TapDEBUG(1) << "Failure happened during the lookup of key " << 
 	  args->key << ", trying to reach node " << next << endl;
+	ret->failed = false;
       }
     }
+  }
+
+  // if we were never successful, set the failed flag
+  if( i == _redundant_lookup_num ) {
+    ret->failed = true;
   }
 
   delete ips;
@@ -157,8 +177,24 @@ Tapestry::join(Args *args)
   ja.ip = ip();
   ja.id = id();
   join_return jr;
+  uint attempts = 30;
 
-  doRPC( wellknown_ip, &Tapestry::handle_join, &ja, &jr );
+  // keep attempting to join until you can't attempt no mo'
+  do {
+    attempts--;
+    jr.failed = false;
+    bool succ = doRPC( wellknown_ip, &Tapestry::handle_join, &ja, &jr );
+    
+    if( !succ ) {
+      TapDEBUG(0) << "Well known ip died!  BAD!\n";
+      return;
+    }
+  } while( jr.failed && attempts >= 0 );
+
+  if( jr.failed ) {
+      TapDEBUG(0) << "All my joins failed!  BAD!\n";
+      return;
+  }
 
   // now that the multicast is over, it's time for nearest neighbor
   // ping everyone on the initlist
@@ -209,30 +245,32 @@ Tapestry::join(Args *args)
       nn_return nnr = *(ncall->nr);
       TapDEBUG(2) << ip() << " done with nn with " << ncall->ip << endl;
 
-      for( uint k = 0; k < nnr.nodelist.size(); k++ ) {
-	// make sure this one isn't on there yet
-	// TODO: make this more efficient.  Maybe use a hash set or something
-	NodeInfo *currseed = &(nnr.nodelist[k]);
-
-	// don't add ourselves, duh
-	if( currseed->_id == id() ) {
+      if( ok ) {
+	for( uint k = 0; k < nnr.nodelist.size(); k++ ) {
+	  // make sure this one isn't on there yet
+	  // TODO: make this more efficient.  Maybe use a hash set or something
+	  NodeInfo *currseed = &(nnr.nodelist[k]);
+	  
+	  // don't add ourselves, duh
+	  if( currseed->_id == id() ) {
 	  continue;
-	}
-	bool add = true;
-	for( uint l = 0; l < seeds.size(); l++ ) {
-	  if( *currseed == *(seeds[l]) ) {
-	    add = false;
-	    break;
+	  }
+	  bool add = true;
+	  for( uint l = 0; l < seeds.size(); l++ ) {
+	    if( *currseed == *(seeds[l]) ) {
+	      add = false;
+	      break;
+	    }
+	  }
+	  if( add ) {
+	    NodeInfo *newseed = New NodeInfo( currseed->_addr, currseed->_id );
+	    seeds.push_back( newseed );
+	    TapDEBUG(3) << " has a seed of " << newseed->_addr << " and " << 
+	      print_guid( newseed->_id ) << endl;
 	  }
 	}
-	if( add ) {
-	  NodeInfo *newseed = New NodeInfo( currseed->_addr, currseed->_id );
-	  seeds.push_back( newseed );
-	  TapDEBUG(3) << " has a seed of " << newseed->_addr << " and " << 
-	    print_guid( newseed->_id ) << endl;
-	}
+	TapDEBUG(3) << "done with adding seeds with " << ncall->ip << endl;
       }
-      TapDEBUG(3) << "done with adding seeds with " << ncall->ip << endl;
       // TODO: for some reason the compiler gets mad if I try to delete nr
       // in the destructor
       delete ncall->nr;
@@ -258,7 +296,8 @@ Tapestry::join(Args *args)
       TapDEBUG(3) << "about to get distance for " << currseed->_addr << endl;
       //add_to_rt( currseed->_addr, currseed->_id );
       TapDEBUG(3) << "added to rt for " << currseed->_addr << endl;
-      currseed->_distance = ping( currseed->_addr, currseed->_id );
+      bool ok = false;;
+      currseed->_distance = ping( currseed->_addr, currseed->_id, ok );
       TapDEBUG(3) << "got distance for " << currseed->_addr << endl;
 
       // is there anyone on the list farther than you?  if so, replace
@@ -323,86 +362,109 @@ Tapestry::handle_join(join_args *args, join_return *ret)
   // person's join.
   while( !joined ) {
     _waiting_for_join->wait();
-    // hmmm. if we're now dead, indicate some kind of failure probably
+    // hmmm. if we're now dead, indicate some kind of timeout probably
     if( !node()->alive() ) {
+      ret->failed = true;
       return; //????
     }
   }
 
   // route toward the root
-  IPAddress next = next_hop( args->id );
-  if( next == ip() ) {
-    // we are the surrogate root for this node, start the integration
+  IPAddress *ips = new IPAddress[_redundant_lookup_num];
+  for( uint i = 0; i < _redundant_lookup_num; i++ ) {
+    ips[i] = 0;
+  }
+  next_hop( args->id, &ips, _redundant_lookup_num );
+  uint i = 0;
+  for( ; i < _redundant_lookup_num; i++ ) {
+    IPAddress next = ips[i];
+    if( next == 0 ) {
+      continue;
+    }
+    if( next == ip() ) {
+      // we are the surrogate root for this node, start the integration
     
-    TapDEBUG(2) << "is the surrogate root for " << args->ip << endl;
-
-    // start by sending the new node all of the nodes in your table
-    // up to the digit you share
-    int alpha = guid_compare( id(), args->id );
-    vector<NodeInfo *> thisrow;
-
-    bool stop = true;
-    for( int i = 0; i <= alpha; i++ ) {
-
-      for( uint j = 0; j < _base; j++ ) {
-	NodeInfo *ni = _rt->read( i, j );
-	if( ni != NULL ) {
-	  // keep going if there is someone else on this level
-	  if( ni->_addr != ip() ) {
-	    stop = false;
+      TapDEBUG(2) << "is the surrogate root for " << args->ip << endl;
+      
+      // start by sending the new node all of the nodes in your table
+      // up to the digit you share
+      int alpha = guid_compare( id(), args->id );
+      vector<NodeInfo *> thisrow;
+      
+      bool stop = true;
+      for( int i = 0; i <= alpha; i++ ) {
+	
+	for( uint j = 0; j < _base; j++ ) {
+	  NodeInfo *ni = _rt->read( i, j );
+	  if( ni != NULL ) {
+	    // keep going if there is someone else on this level
+	    if( ni->_addr != ip() ) {
+	      stop = false;
+	    }
+	    thisrow.push_back( ni );
 	  }
-	  thisrow.push_back( ni );
+	}
+	
+	if( stop ) break;
+	stop = true;
+	
+      }
+      
+      nodelist_args na;
+      na.nodelist = thisrow;
+      nodelist_return nr;
+      doRPC( args->ip, &Tapestry::handle_nodelist, &na, &nr );
+      
+      // free the nodelist
+      for( uint i = 0; i < na.nodelist.size(); i++ ) {
+	delete na.nodelist[i];
+      }
+      
+      // start the multicast
+      mc_args mca;
+      mca.new_ip = args->ip;
+      mca.new_id = args->id;
+      mca.alpha = alpha;
+      mca.from_lock = false;
+      mc_return mcr;
+      
+      // make the watchlist
+      vector<bool *> wl;
+      for( int i = 0; i < alpha+1; i++ ) {
+	bool *level = new bool[_base];
+	wl.push_back(level);
+	for( uint j = 0; j < _base; j++ ) {
+	  wl[i][j] = false;
 	}
       }
-
-      if( stop ) break;
-      stop = true;
-
-    }
-
-    nodelist_args na;
-    na.nodelist = thisrow;
-    nodelist_return nr;
-    doRPC( args->ip, &Tapestry::handle_nodelist, &na, &nr );
-
-    // free the nodelist
-    for( uint i = 0; i < na.nodelist.size(); i++ ) {
-      delete na.nodelist[i];
-    }
-
-    // start the multicast
-    mc_args mca;
-    mca.new_ip = args->ip;
-    mca.new_id = args->id;
-    mca.alpha = alpha;
-    mca.from_lock = false;
-    mc_return mcr;
-
-    // make the watchlist
-    vector<bool *> wl;
-    for( int i = 0; i < alpha+1; i++ ) {
-      bool *level = new bool[_base];
-      wl.push_back(level);
-      for( uint j = 0; j < _base; j++ ) {
-	wl[i][j] = false;
-      }
-    }
-    mca.watchlist = wl;
-
-    handle_mc( &mca, &mcr );
-
-    // free the bools!
-    for( int i = 0; i < alpha+1; i++ ) {
+      mca.watchlist = wl;
+      
+      handle_mc( &mca, &mcr );
+      
+      // free the bools!
+      for( int i = 0; i < alpha+1; i++ ) {
 	bool *level = wl[i];
 	delete level;
+      }
+      
+      ret->surr_id = id();
+      break;
+    } else {
+      // not the surrogate
+      // recursive routing yo
+      bool succ = doRPC( next, &Tapestry::handle_join, args, ret );
+      if( succ && !ret->failed ) {
+	// success!
+	break;
+      } else {
+	ret->failed = false;
+      }
     }
+  }
 
-    ret->surr_id = id();
-    
-  } else {
-    // not the surrogate
-    // recursive routing yo
-    doRPC( next, &Tapestry::handle_join, args, ret );
+  // if we were never successful, set the failed flag
+  if( i == _redundant_lookup_num ) {
+    ret->failed = true;
   }
 
 }
@@ -459,11 +521,16 @@ Tapestry::handle_mc(mc_args *args, mc_return *ret)
   }
   mca.nodelist = nodelist;
 
-  doRPC( args->new_ip, &Tapestry::handle_mcnotify, &mca, &mcr );
+  bool succ = doRPC( args->new_ip, &Tapestry::handle_mcnotify, &mca, &mcr );
 
   // free the nodelist
   for( uint i = 0; i < nodelist.size(); i++ ) {
     delete nodelist[i];
+  }
+
+  if( !succ ) {
+    TapDEBUG(3) << "Notify to new node failed, abandoning mc!" << endl;
+    return;
   }
 
   // don't go on if this is from a lock
@@ -535,7 +602,7 @@ Tapestry::handle_mc(mc_args *args, mc_return *ret)
     unsigned donerpc = rcvRPC( &rpcset, ok );
     mc_callinfo *ci = resultmap[donerpc];
     TapDEBUG(2) << "mc to " << ci->ip << " about " << args->new_ip << 
-      " is done" << endl;
+      " is done.  ok = " << ok << endl;
     delete ci;
   }
 
@@ -609,10 +676,14 @@ Tapestry::add_to_rt( IPAddress new_ip, GUID new_id )
   // first get the distance to this node
   // TODO: asynchronous pings would be nice
   // TODO: also, maybe a ping cache of some kind
-  Time distance = ping( new_ip, new_id );
+  bool ok = true;
+  Time distance = ping( new_ip, new_id, ok );
 
-  // the RoutingTable takes care of placing (and removing) backpointers for us
-  _rt->add( new_ip, new_id, distance );
+  if( ok ) {
+    // the RoutingTable takes care of placing (and removing) backpointers 
+    // for us
+    _rt->add( new_ip, new_id, distance );
+  }
 
   return;
 
@@ -758,7 +829,7 @@ Tapestry::init_state(list<Protocol *> lid)
 }
 
 Time
-Tapestry::ping( IPAddress other_node, GUID other_id )
+Tapestry::ping( IPAddress other_node, GUID other_id, bool &ok )
 {
   // if it's already in the table, don't worry about it
   if( _rt->contains( other_id ) ) {
@@ -769,7 +840,7 @@ Tapestry::ping( IPAddress other_node, GUID other_id )
   ping_args pa;
   ping_return pr;
   TapDEBUG(4) << "about to ping " << other_node << endl;
-  doRPC( other_node, &Tapestry::handle_ping, &pa, &pr );
+  ok = doRPC( other_node, &Tapestry::handle_ping, &pa, &pr );
   TapDEBUG(4) << "done with ping " << other_node << endl;
   return now() - before;
 }
@@ -1017,7 +1088,7 @@ Tapestry::leave(Args *args)
 void
 Tapestry::crash(Args *args)
 {
-  TapDEBUG(2) << "Tapestry crash" << endl;
+  TapDEBUG(1) << "Tapestry crash" << endl;
   node()->crash();
 
   // clear out routing table, and any other state that might be lying around
@@ -1071,6 +1142,73 @@ Tapestry::get_digit( GUID id, uint digit )
   shifted_id = shifted_id >> ((_digits_per_id-1)*_bits_per_digit);
 
   return shifted_id;
+}
+
+Tapestry::GUID
+Tapestry::lookup_cheat( GUID key ) 
+{
+
+  // using global knowledge, figure out who the owner of this key should
+  // be, given the set of live nodes
+  list<Protocol*> l = Network::Instance()->getallprotocols("Tapestry");
+  list<Protocol*>::iterator pos;
+  vector<Tapestry::GUID> lid;
+
+  //i only want to sort it once after all nodes have joined! 
+  Tapestry *c = 0;
+  int maxmatch = -2;
+  for (pos = l.begin(); pos != l.end(); ++pos) {
+    c = (Tapestry *)(*pos);
+    assert(c);
+    // only care about live nodes
+    if( c->node()->alive() ) {
+      int match = guid_compare( c->id(), key );
+      if( match == -1 ) {
+	return c->id();
+      } else if( match > maxmatch ) {
+	maxmatch = match;
+	lid.clear();
+      }
+      if( match == maxmatch ) {
+	lid.push_back(c->id ());
+      }
+    }
+  }
+
+  // now we have a list of all the nodes that match a maximum number of digits
+  // find the closest one in terms of surrogate routing.
+  GUID bestmatch = lid[0];
+  for( uint i = 1; i < lid.size(); i++ ) {
+    GUID next = lid[i];
+
+    // surrogate routing sucks.  must find the one who has a maxmatch digit
+    // closest but greater than the keys.  If not, the one with the lowest
+    // maxmatch digit.  For ties, go up a level and repeat
+    for( uint j = 0; j < _digits_per_id - maxmatch; j++ ) {
+      uint next_digit = get_digit( next, maxmatch+j );
+      uint best_digit = get_digit( bestmatch, maxmatch+j );
+      uint key_digit = get_digit( key, maxmatch+j );
+      if( (next_digit >= key_digit && best_digit >= key_digit && 
+	   next_digit < best_digit ) ||
+	  (next_digit < key_digit && best_digit < key_digit &&
+	   next_digit < key_digit) ||
+	  (next_digit >= key_digit && best_digit < key_digit) ) {
+
+	bestmatch = next;
+	best_digit = get_digit( bestmatch, maxmatch );
+	break;
+
+      } else if( next_digit != best_digit ) {
+	// it's not a tie, so no need to go on
+	break;
+      }
+
+    }
+
+  }
+
+  return bestmatch;
+
 }
 
 //////////  RouteEntry  ///////////
@@ -1276,6 +1414,9 @@ RoutingTable::~RoutingTable()
   delete [] _locks;
   for( uint i = 0; i < _node->_digits_per_id; i++ ) {
     if( _backpointers[i] != NULL ) {
+      for( uint j = 0; j < _backpointers[i]->size(); j++ ) {
+	delete (*_backpointers[i])[j];
+      }
       delete _backpointers[i];
     }
   }

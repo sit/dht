@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.4 2003/10/09 04:52:06 strib Exp $ */
+/* $Id: tapestry.h,v 1.5 2003/10/09 23:49:08 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -58,6 +58,7 @@ public:
 
   struct join_return {
     GUID surr_id;
+    bool failed;
   };
 
   void handle_join(join_args *args, join_return *ret);
@@ -69,6 +70,7 @@ public:
   struct lookup_return {
     IPAddress owner_ip;
     GUID owner_id;
+    bool failed;
     int hopcount;
   };
 
@@ -194,7 +196,8 @@ private:
   // returns ip() if we are the root
   IPAddress next_hop( GUID key );
   void next_hop( GUID key, IPAddress** ips, uint size );
-  Time ping( IPAddress other_node, GUID other_id );
+  Time ping( IPAddress other_node, GUID other_id, bool &ok );
+  GUID lookup_cheat( GUID key );
 
   class mc_callinfo { public:
     mc_callinfo(IPAddress xip, mc_args *mca, mc_return *mcr)
