@@ -112,7 +112,8 @@ struct location {
   long total_latency;
   long num_latencies;
   int nout;
-
+  timecb_t *timeout_cb;
+  
   location (sfs_ID &_n, route &_r, sfs_ID _source) : 
     n (_n), r (_r), source (_source) {
     connecting = false; 
@@ -121,6 +122,7 @@ struct location {
     total_latency = 0;
     num_latencies = 0;
     nout = 0;
+    timeout_cb = NULL;
   };
   location (sfs_ID &_n, sfs_hostname _s, int _p, sfs_ID &_source) : n (_n) {
     r.server = _s;
@@ -130,6 +132,7 @@ struct location {
     alive = true;
     c = NULL;
     nout = 0;
+    timeout_cb = NULL;
   }
 };
 
@@ -211,6 +214,7 @@ class p2p : public virtual refcount  {
   int predecessor_wedge (sfs_ID &n);
   void print ();
 
+  void timeout(location *l);
   void connect_cb (location *l, int fd);
   void doRPC (sfs_ID &n, int procno, const void *in, void *out,
        aclnt_cb cb);

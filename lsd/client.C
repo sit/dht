@@ -304,6 +304,12 @@ p2p::deleteloc (sfs_ID &n)
 }
 
 void
+p2p::timeout(location *l) {
+  warn << "timeout on " << l->n << " closing socket\n";
+  if (l->nout == 0) l->c = NULL;
+}
+
+void
 p2p::connect_cb (location *l, int fd)
 {
   if (fd < 0) {
@@ -313,7 +319,6 @@ p2p::connect_cb (location *l, int fd)
       st1 = l->connectlist.next (st);
       aclnt_cb cb = st->cb;
       (*cb) (RPC_FAILED);
-      delete st;
     }
     l->connecting = false;
   } else {
@@ -322,6 +327,8 @@ p2p::connect_cb (location *l, int fd)
     ptr<aclnt> c = aclnt::alloc (axprt_stream::alloc (fd), sfsp2p_program_1);
     l->c = c;
     l->connecting = false;
+    l->timeout_cb = delaycb(30,0,wrap(this, &p2p::timeout, l));
+
     doRPC_cbstate *st, *st1;
     for (st = l->connectlist.first; st; st = st1) {
       st1 = l->connectlist.next (st);
@@ -338,14 +345,8 @@ p2p::timing_cb(aclnt_cb cb, location *l, ptr<struct timeval> start, clnt_stat er
   gettimeofday(&now, NULL);
   l->total_latency += (now.tv_sec - start->tv_sec)*1000000 + (now.tv_usec - start->tv_usec);
   l->num_latencies++;
-  //free the aclnt
-  //  delete l->c;
   l->nout--;
   warn << "nout(tcb) " << l->n << " " << l->nout << "\n";
-  if (l->nout == 0) {
-    warn << "closed aclnt to " << l->n << "\n";
-    l->c = NULL;
-  }
   (*cb)(err);
 
 }
@@ -363,8 +364,10 @@ p2p::doRPC (sfs_ID &ID, int procno, const void *in, void *out,
   ptr<struct timeval> start = new refcounted<struct timeval>();
   gettimeofday(start, NULL);
   l->nout++;
-  if (l->c) {
+  if (l->c) {    
     warn << "found allocated aclnt " << l->nout << " ID: " << ID << "\n";
+    timecb_remove(l->timeout_cb);
+    l->timeout_cb = delaycb(30,0,wrap(this, &p2p::timeout, l));
     l->c->call (procno, in, out, wrap(mkref(this), &p2p::timing_cb, cb, l, start));
   } else {
     // If we are in the process of connecting; we should wait
