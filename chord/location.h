@@ -185,15 +185,6 @@ class locationtable : public virtual refcount {
  public:
   locationtable (ptr<chord> _chordnode, int _max_connections);
   bool betterpred1 (chordID current, chordID target, chordID newpred);
-  char betterpred2 (chordID myID, chordID current, chordID target, 
-		    chordID newpred);
-  bool betterpred3 (chordID myID, chordID current, chordID target, 
-		    chordID newpred);
-  bool betterpred_greedy (chordID myID, chordID current, chordID target, 
-			  chordID newpred); 
-  char betterpred_distest (chordID myID, chordID current, 
-			   chordID target, 
-			   chordID newpred);
 
   void incvnodes () { nvnodes++; };
   void replace_estimate (u_long o, u_long n);

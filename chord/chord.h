@@ -80,7 +80,7 @@ class toe_table {
   void get_toes_rmt_cb (chord_gettoes_res *res, int level, clnt_stat err);
 
  public:
-  toe_table (ptr<locationtable> locs) : locations (locs) {};
+  toe_table (ptr<locationtable> locs) : locations (locs), in_progress (0) {};
 
   vec<chordID> get_toes (int level);
   void add_toe (chordID id, net_address r, int level);
@@ -90,6 +90,70 @@ class toe_table {
   bool stabilizing () { return (in_progress > 0); };
   int level_to_delay (int level);
   void dump ();
+  void fill_getfingersres (chord_getfingersres *res);
+  void fill_getfingersresext (chord_getfingers_ext_res *res);
+  bool in_ith_arc (int i, chordID s);
+
+};
+
+class finger_table {
+  
+  ptr<locationtable> locations;
+  finger fingers[NBIT+1];
+  chordID myID;
+
+  void check ();
+  
+ public:
+  finger_table (ptr<locationtable> locs, chordID myID);
+
+  void updatefinger (chordID &x); //stick x(r) wherever it fits
+  void updatefinger (chordID &x, net_address& r); //stick x(r) wherever it fits
+  void replacefinger (int i); //find a better finger for the ith finger (no RPCs)
+  void deletefinger (chordID &x);
+
+  chordID closestpredfinger (chordID &x);
+  chordID closestsuccfinger (chordID &x);
+
+  bool succ_alive ();
+  chordID succ ();
+
+  bool alive (int i) { return fingers[i].first.alive; };
+  chordID operator[] (int i);
+  chordID start (int i) { return fingers[i].start; };
+
+  int countrefs (chordID &x);
+  void print ();
+  bool better_ith_finger (int i, chordID s);
+
+  void fill_getfingersres (chord_getfingersres *res);
+  void fill_getfingersresext (chord_getfingers_ext_res *res);
+};
+
+class succ_list {
+  chordID myID;
+  ptr<locationtable> locations;
+  node succlist[NSUCC+1];  
+  int nsucc;
+
+ public:  
+  succ_list (ptr<locationtable> locs, chordID myID);
+
+  chordID first_succ ();
+  int countrefs (chordID &x);
+  void print ();
+  void replace_succ (int j);
+  void new_succ (int i, chordID s);
+  chordID operator[] (int n);
+  bool nth_alive (int n) { return succlist[n].alive; };
+  void remove_succ (int j);
+  chordID closest_succ (chordID &x);
+  chordID closest_pred (chordID &x);
+  u_long estimate_nnodes ();
+  void fill_getsuccres (chord_getsucc_ext_res *res);
+  int num_succ () { return nsucc; };
+  void delete_succ (chordID &x);
+
 };
 
 class vnode : public virtual refcount {
@@ -98,10 +162,11 @@ class vnode : public virtual refcount {
   static const int max_retry = 5;
   
   ptr<locationtable> locations;
-  finger finger_table[NBIT+1];
-  node succlist[NSUCC+1];
+  ptr<finger_table> fingers;
+  ptr<succ_list> successors;
   ptr<toe_table> toes;
-  int nsucc;
+
+
   node predecessor;
   int myindex;
   bool stable;
@@ -144,15 +209,10 @@ class vnode : public virtual refcount {
   u_int32_t continuous_timer;
   u_int32_t backoff_timer;
 
-  void checkfingers (void);
-  void updatefingers (chordID &x, net_address &r);
-  void replacefinger (chordID &s, node *n);
-  u_long estimate_nnodes ();
-  chordID closestpredfinger (chordID &x);
-  chordID closestpredfinger_ss (chordID &x);
 
   u_int nout_backoff;
   u_int nout_continuous;
+
   void stabilize_backoff (int f, int s, u_int32_t t);
   void stabilize_continuous (u_int32_t t);
   int stabilize_succlist (int s);
@@ -168,6 +228,7 @@ class vnode : public virtual refcount {
   void stabilize_getsucclist_cb (int i, chordID s, net_address r, 
 				 chordstat status);
   void stabilize_getsucclist_ok (int i, chordID s, bool ok, chordstat status);
+
   void join_getsucc_ok (cbjoin_t cb, chordID s, bool ok, chordstat status);
   void join_getsucc_cb (cbjoin_t cb, chordID s, route r, chordstat status);
   void get_successor_cb (chordID n, cbchordID_t cb, chord_noderes *res, 

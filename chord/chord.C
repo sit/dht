@@ -29,7 +29,8 @@
 #include <chord.h>
 #include <qhash.h>
 
-#define PNODE
+#define PNODE 
+//#define TOES 1
 
 vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
 	      chordID _myID, int _vnode, int server_sel_mode) :
@@ -42,13 +43,10 @@ vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
   warnx << gettime () << " myID is " << myID << "\n";
   nout_continuous = 0;
   nout_backoff = 0;
-  finger_table[0].start = finger_table[0].first.n = myID;
-  finger_table[0].first.alive = true;
-  locations->increfcnt (myID);
-  succlist[0].n = myID;
-  succlist[0].alive = true;
-  nsucc = 0;
+
   toes = New refcounted<toe_table> (locations);
+  fingers = New refcounted<finger_table> (locations, myID);
+  successors = New refcounted<succ_list> (locations, myID);
 
   stable_fingers = false;
   stable_fingers2 = false;
@@ -56,17 +54,7 @@ vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
   stable_succlist2 = false;
   stable = false;
   locations->incvnodes ();
-  locations->increfcnt (myID);
-  for (int i = 1; i <= NSUCC; i++) {
-    succlist[i].alive = false;
-  }
-  for (int i = 1; i <= NBIT; i++) {
-    locations->increfcnt (myID);
-    finger_table[i].start = successorID(myID, i-1);
-    finger_table[i].first.n = myID;
-    finger_table[i].first.alive = true;
-  }
-  locations->increfcnt (myID);
+
   predecessor.n = myID;
   predecessor.alive = true;
 
@@ -103,112 +91,17 @@ vnode::~vnode ()
 chordID
 vnode::my_succ () 
 {
-  if (finger_table[1].first.alive) return finger_table[1].first.n;
-  for (int i = 1; i <= nsucc; i++) {
-    if (succlist[i].alive) return succlist[i].n;
-  }
-  return myID;
+  if (fingers->succ_alive ()) return fingers->succ ();
+  return successors->first_succ ();
 }
 
 int
 vnode::countrefs (chordID &x)
 {
-  int n = 0;
-  for (int i = 0; i <= NBIT; i++) {
-    if (finger_table[i].first.alive && (x == finger_table[i].first.n))
-      n++;
-    if (succlist[i].alive && (x == succlist[i].n))
-      n++;
-  }
+  int n = fingers->countrefs (x);
+  n += successors->countrefs (x);
   if (predecessor.alive && (x == predecessor.n)) n++;
   return n;
-}
-
-void
-vnode::checkfingers ()
-{
-  int j;
-  int i;
-  for (i = 1; i <= NBIT; i++) {
-    if (finger_table[i].first.n == myID) continue;
-    else break;
-  }
-  if (i > NBIT) return;
-
-  for (i = 1; i <= NBIT; i++) {
-    if (!finger_table[i].first.alive) continue;
-    j = i+1;
-    while ((j <= NBIT) && !finger_table[j].first.alive) j++;
-    if (j > NBIT) {
-      if (!betweenrightincl (finger_table[i].start, myID, 
-                             finger_table[i].first.n)) {
-        warnx << "table " << i << " bad\n";
-        warnx << "start " << finger_table[i].start << "\n";
-        warnx << "first " << finger_table[i].first.n << "\n";
-        print ();
-        assert (0);
-      }
-    } else {
-      if (finger_table[j].first.n == myID) {
-        return;
-      }
-      if (!betweenrightincl (finger_table[i].start, finger_table[j].first.n,
-                 finger_table[i].first.n)) {
-        warnx << "table " << i << " bad\n";
-        print ();
-        assert (0);
-      }
-    }
-  }
-}
-
-void 
-vnode::updatefingers (chordID &x, net_address &r)
-{
-  checkfingers();
-  for (int i = 1; i <= NBIT; i++) {
-    if (betweenleftincl (finger_table[i].start, finger_table[i].first.n, x)) {
-      locations->changenode (&finger_table[i].first, x, r);
-    }
-  }
-  checkfingers();
-}
-
-void
-vnode::replacefinger (chordID &s, node *n)
-{  
-  checkfingers ();
-#ifdef PNODE
-  n->n = closestsuccfinger (s);
-#else
-  n->n = locations->closestsuccloc (s);
-#endif
-  n->alive = true;
-  locations->increfcnt (n->n);
-  checkfingers ();
-}
-
-void 
-vnode::deletefingers (chordID &x)
-{
-  if (x == myID) return;
-
-  for (int i = 1; i <= NBIT; i++) {
-    if (finger_table[i].first.alive && (x == finger_table[i].first.n)) {
-      locations->deleteloc (finger_table[i].first.n);
-      finger_table[i].first.alive = false;
-    }
-  }
-  for (int i = 1; i <= NSUCC; i++) {
-    if (succlist[i].alive && (x == succlist[i].n)) {
-      locations->deleteloc (succlist[i].n);
-      succlist[i].alive = false;
-    }
-  }
-  if (predecessor.alive && (x == predecessor.n)) {
-    locations->deleteloc (predecessor.n);
-    predecessor.alive = false;
-  }
 }
 
 void
@@ -253,19 +146,9 @@ void
 vnode::print ()
 {
   warnx << "======== " << myID << "====\n";
-  for (int i = 1; i <= NBIT; i++) {
-    if (!finger_table[i].first.alive) continue;
-    warnx << "finger: " << i << " : " << finger_table[i].start << " : succ " 
-	  << finger_table[i].first.n << "\n";
-    //    if ((finger_table[i].first.n != finger_table[i-1].first.n) 
-    //|| !finger_table[i-1].first.alive) {
-    //warnx << "first " << i << ": " << finger_table[i].first.n << "\n";
-    //}
-  }
-  for (int i = 1; i <= nsucc; i++) {
-    if (!succlist[i].alive) continue;
-    warnx << "succ " << i << " : " << succlist[i].n << "\n";
-  }
+  fingers->print ();
+  successors->print ();
+
   warnx << "pred : " << predecessor.n << "\n";
 #ifdef TOES
   warnx << "------------- toes ----------------------------------\n";
@@ -275,144 +158,17 @@ vnode::print ()
 
 }
 
-chordID
-vnode::closestsuccfinger (chordID &x)
-{
-  chordID s = x;
-  for (int i = 0; i <= NBIT; i++) {
-    if (!finger_table[i].first.alive) continue;
-    if ((s == x) || between (x, s, finger_table[i].first.n)) {
-      s = finger_table[i].first.n;
-    }
-  }
-  for (int i = 1; i <= nsucc; i++) {
-    if ((succlist[i].alive) && between (x, s, succlist[i].n)) {
-      s = succlist[i].n;
-    }
-  }
-  //  warnx << "cloesestsuccfinger: " << myID << " of " << x << " is " << s << "\n";
-  return s;
-}
-
-chordID 
-vnode::closestpredfinger (chordID &x)
-{
-  chordID p = myID;
-  for (int i = NBIT; i >= 1; i--) {
-    if ((finger_table[i].first.alive) && 
-	between (myID, x, finger_table[i].first.n)) {
-      p = finger_table[i].first.n;
-      return p;
-    }
-  }
-  // no good entries in my finger table (e.g., fingers are down); check succlist
-  for (int i = nsucc; i >= 1; i--) {
-    if ((succlist[i].alive) && between (p, x, succlist[i].n)) {
-      p = succlist[i].n;
-      break;
-    }
-  }
-  return p;
-}
-
-chordID 
-vnode::closestpredfinger_ss (chordID &x)
-{
-  chordID p = myID;
-  char better = 0;
-  char best = 0;
-  for (int i = 1; i <= NBIT; i++) {
-    if (finger_table[i].first.alive && (p != finger_table[i].first.n)) {
-      if (server_selection_mode == 1)
-	better = locations->betterpred2 (myID, p, x, finger_table[i].first.n);
-      else if (server_selection_mode == 2)
-	better = locations->betterpred3 (myID, p, x, finger_table[i].first.n);
-      else if (server_selection_mode == 3)
-	better = locations->betterpred_distest (myID, p, x, 
-						finger_table[i].first.n);
-      else
-	better = locations->betterpred_greedy (myID, p, x, 
-					       finger_table[i].first.n);
-    
-      if ((finger_table[i].first.alive) && better) {
-	p = finger_table[i].first.n;
-	best = better;
-      }
-    }
-
-  }
-
-
-#ifdef VERYVERBOSE
-  if (best) {
-    warn << "chose " << p << " because ";
-    switch (best) {
-    case 1:
-      warn << "it was my first pred.\n";
-      break;
-    case 2:
-      warn << "I had no latency info\n";
-      break;
-    case 3:
-      warn << "the estimate was lower\n";
-      break;
-    default:
-      warn << "there was a bug in my code\n";
-    }
-  }
-
-  location *choice = locations->getlocation (p);
-
-  char buf[1024];
-  if (choice->nrpc)
-    sprintf (buf, "%f", (float)choice->rpcdelay/choice->nrpc);
-  else
-    sprintf (buf, " (no latency info) ");
-
-  if (choice->nrpc && (float)choice->rpcdelay/choice->nrpc > 50000)
-    warn << "LONG HOP " << buf << "\n";
-  else
-    warn << "SHORT HOP " << buf << "\n";
-#endif
-
-  if (p != myID) return p;
-
-  for (int i = nsucc; i >= 1; i--) {
-    bool better;
-    if (server_selection_mode == 1)
-      better = locations->betterpred2 (myID, p, x, finger_table[i].first.n);
-    else if (server_selection_mode == 2)
-      better = locations->betterpred3 (myID, p, x, finger_table[i].first.n);
-    else 
-      better = locations->betterpred_greedy (myID, p, x, 
-					     finger_table[i].first.n);
-    if ((succlist[i].alive) && better) {
-      p = succlist[i].n;
-      break;
-    }
-  }
-  return p;
-}
-
-u_long
-vnode::estimate_nnodes () 
-{
-  u_long n;
-  chordID d = diff (myID, succlist[nsucc].n);
-  if ((d > 0) && (nsucc > 0)) {
-    chordID s = d / nsucc;
-    chordID c = bigint (1) << NBIT;
-    chordID q = c / s;
-    n = q.getui ();
-  } else n = 1;
-  return n;
-}
 
 chordID
 vnode::lookup_closestsucc (chordID &x)
 {
 #ifdef PNODE
-  chordID s = closestsuccfinger (x);
+  chordID f = fingers->closestsuccfinger (x);
+  chordID s = successors->closest_succ (x);
+  if (between (x, s, f)) 
+    return f;
+  else 
+    return s;
 #else
   chordID s = locations->closestsuccloc (x);
 #endif
@@ -423,11 +179,12 @@ chordID
 vnode::lookup_closestpred (chordID &x)
 {
 #ifdef PNODE
-  if (server_selection_mode) 
-    return closestpredfinger_ss (x);
+  chordID f = fingers->closestpredfinger (x);
+  chordID s = successors->closest_pred (x);
+  if (between (f, x, s)) 
+    return s;
   else
-    return closestpredfinger (x);
-
+    return f;
 #else
   return locations->closestpredloc (x);
 #endif
@@ -442,8 +199,7 @@ vnode::join (cbjoin_t cb)
   if (!locations->lookup_anyloc (myID, &n)) {
     (*cb)(NULL, CHORD_ERRNOENT);
   } else {
-    net_address r = locations->getaddress (n);
-    updatefingers (n, r);
+    fingers->updatefinger (n);
     find_successor (myID, wrap (mkref (this), &vnode::join_getsucc_cb, cb));
   }
 }
@@ -464,13 +220,7 @@ void
 vnode::join_getsucc_ok (cbjoin_t cb, chordID s, bool ok, chordstat status)
 {
   if ((status == CHORD_OK) && ok) {
-    //  warnx << "join_getsucc_ok: " << myID << " " << s << "\n";
-    if (betweenleftincl (finger_table[1].start, finger_table[1].first.n, s)) {
-      // the successor that we found is better than the one from location table
-      locations->changenode (&finger_table[1].first, s, 
-			     locations->getaddress(s));
-      updatefingers (s, locations->getaddress(s));
-    }
+    fingers->updatefinger (s);
     stabilize ();
     (*cb) (this, CHORD_OK);
   } else if (status == CHORD_OK) {
@@ -485,8 +235,8 @@ void
 vnode::doget_successor (svccb *sbp)
 {
   ndogetsuccessor++;
-  if (finger_table[1].first.alive) {
-    chordID s = finger_table[1].first.n;
+  if (fingers->succ_alive ()) {
+    chordID s = fingers->succ ();
     chord_noderes res(CHORD_OK);
     res.resok->node = s;
     res.resok->r = locations->getaddress (s);
@@ -518,15 +268,15 @@ vnode::dotestrange_findclosestpred (svccb *sbp, chord_testandfindarg *fa)
   ndotestrange++;
   chordID x = fa->x;
   chord_testandfindres *res;
+  chordID succ = fingers->succ ();
 
-  if (finger_table[1].first.alive && 
-      betweenrightincl(myID, finger_table[1].first.n, x) ) {
+  if (fingers->succ_alive () && 
+      betweenrightincl(myID, succ, x) ) {
     res = New chord_testandfindres (CHORD_INRANGE);
     warnt("CHORD: testandfind_inrangereply");
-    //    warnx << "dotestrange_findclosestpred: " << myID << " succ of " << x 
-    //  << " is " << finger_table[1].first.n << "\n";
-    res->inres->x = finger_table[1].first.n;
-    res->inres->r = locations->getaddress (finger_table[1].first.n);
+
+    res->inres->x = succ;
+    res->inres->r = locations->getaddress (succ);
     sbp->reply(res);
     delete res;
   } else {
@@ -564,7 +314,7 @@ vnode::donotify_cb (chordID p, bool ok, chordstat status)
       net_address r = locations->getaddress (p);
       // warnx << "donotify_cb: updated predecessor: new pred is " << p << "\n";
       locations->changenode (&predecessor, p, r);
-      updatefingers (predecessor.n, r);
+      fingers->updatefinger (predecessor.n);
       get_fingers (predecessor.n); // XXX perhaps do this only once after join
     }
   } else if (status == CHORD_OK) {
@@ -617,25 +367,7 @@ vnode::dogetfingers (svccb *sbp)
 {
   chord_getfingersres res(CHORD_OK);
   ndogetfingers++;
-  int n = 1;
-  for (int i = 1; i <= NBIT; i++) {
-    if (!finger_table[i].first.alive) continue;
-    if (finger_table[i].first.n != finger_table[i-1].first.n) {
-      n++;
-    }
-  }
-  res.resok->fingers.setsize (n);
-  res.resok->fingers[0].x = finger_table[0].first.n;
-  res.resok->fingers[0].r = locations->getaddress (finger_table[0].first.n);
-  n = 1;
-  for (int i = 1; i <= NBIT; i++) {
-    if (!finger_table[i].first.alive) continue;
-    if (finger_table[i].first.n != finger_table[i-1].first.n) {
-      res.resok->fingers[n].x = finger_table[i].first.n;
-      res.resok->fingers[n].r = locations->getaddress (finger_table[i].first.n);
-      n++;
-    }
-  }
+  fingers->fill_getfingersres (&res);
   warnt("CHORD: dogetfingers_reply");
   sbp->reply (&res);
 }
@@ -646,33 +378,9 @@ vnode::dogetfingers_ext (svccb *sbp)
 {
   chord_getfingers_ext_res res(CHORD_OK);
   ndogetfingers_ext++;
-  int n = 1;
-  for (int i = 1; i <= NBIT; i++) {
-    if (!finger_table[i].first.alive) continue;
-    if (finger_table[i].first.n != finger_table[i-1].first.n) {
-      n++;
-    }
-  }
-  res.resok->fingers.setsize (n);
-  res.resok->fingers[0].x = finger_table[0].first.n;
-  location *l = locations->getlocation (finger_table[0].first.n);
-  res.resok->fingers[0].r = locations->getaddress (finger_table[0].first.n);
-  res.resok->fingers[0].a_lat = (long)(l->a_lat * 100);
-  res.resok->fingers[0].a_var = (long)(l->a_var * 100);
-  res.resok->fingers[0].nrpc = l->nrpc;
-  n = 1;
-  for (int i = 1; i <= NBIT; i++) {
-    if (!finger_table[i].first.alive) continue;
-    if (finger_table[i].first.n != finger_table[i-1].first.n) {
-      l = locations->getlocation (finger_table[i].first.n);
-      res.resok->fingers[n].x = finger_table[i].first.n;
-      res.resok->fingers[n].r = locations->getaddress (finger_table[i].first.n);
-      res.resok->fingers[n].a_lat = (long)(l->a_lat * 100);
-      res.resok->fingers[n].a_var = (long)(l->a_var * 100);
-      res.resok->fingers[n].nrpc = l->nrpc;
-      n++;
-    }
-  }
+
+  fingers->fill_getfingersresext (&res);
+
   warnt("CHORD: dogetfingers_reply");
   sbp->reply (&res);
 }
@@ -682,28 +390,7 @@ vnode::dogetsucc_ext (svccb *sbp)
 {
   chord_getsucc_ext_res res(CHORD_OK);
   ndogetsucc_ext++;
-  int n = 1;
-  for (int i = 1; i <= nsucc; i++) {
-    if (succlist[i].alive) n++;
-  }
-  res.resok->succ.setsize (n);
-  res.resok->succ[0].x = succlist[0].n;
-  location *l = locations->getlocation (succlist[0].n);
-  res.resok->succ[0].r = locations->getaddress (succlist[0].n);
-  res.resok->succ[0].a_lat = (long)(l->a_lat * 100);
-  res.resok->succ[0].a_var = (long)(l->a_var * 100);
-  res.resok->succ[0].nrpc = l->nrpc;
-  n = 1;
-  for (int i = 1; i <= nsucc; i++) {
-    if (!succlist[i].alive) continue;
-    l = locations->getlocation (succlist[i].n);
-    res.resok->succ[n].x = succlist[i].n;
-    res.resok->succ[n].r = locations->getaddress (succlist[i].n);
-    res.resok->succ[n].a_lat = (long)(l->a_lat * 100);
-    res.resok->succ[n].a_var = (long)(l->a_var * 100);
-    res.resok->succ[n].nrpc = l->nrpc;
-    n++;
-  }
+  successors->fill_getsuccres (&res);
   warnt("CHORD: dogetsucc_reply");
   sbp->reply (&res);
 }
@@ -731,7 +418,7 @@ vnode::dogettoes (svccb *sbp)
   for (unsigned int i = 0; i < t.size (); i++) {
     location *l = locations->getlocation (t[i]);
     res.resok->toes[i].x = t[i];
-    res.resok->toes[i].r = locations->getaddress (t[i]);
+    res.resok->toes[i].r = l->addr;
     res.resok->toes[i].a_lat = (long)(l->a_lat * 100);
     res.resok->toes[i].a_var = (long)(l->a_var * 100);
     res.resok->toes[i].nrpc = l->nrpc;
@@ -739,4 +426,16 @@ vnode::dogettoes (svccb *sbp)
   
   warnt ("CHORD: dogettoes_reply");
   sbp->reply (&res);
+}
+
+void
+vnode::deletefingers (chordID &x) 
+{
+ fingers->deletefinger (x);
+ successors->delete_succ (x);
+
+ if (predecessor.alive && (x == predecessor.n)) {
+   locations->deleteloc (predecessor.n);
+   predecessor.alive = false;
+ }
 }

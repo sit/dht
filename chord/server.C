@@ -92,8 +92,7 @@ vnode::get_predecessor_cb (chordID n, cbchordID_t cb, chord_noderes *res,
 chordID
 vnode::nth_successorID (int n) 
 {
-  if (n > nsucc) return myID;
-  return succlist[n].n;
+  return (*successors)[n];
 }
 
 void
@@ -122,7 +121,7 @@ void
 vnode::find_route (chordID &x, cbroute_t cb) 
 {
   nfindpredecessor++;
-  if (myID == finger_table[1].first.n) {    // is n the only node?
+  if (myID == (*fingers)[1]) {    // is n the only node?
     route search_path;
     cb (myID, search_path, CHORD_OK);
   } else {
@@ -272,7 +271,8 @@ vnode::get_fingers_cb (chordID x, chord_getfingersres *res,  clnt_stat err)
     warnx << "get_fingers_cb: RPC error " << res->status << "\n";
   } else {
     for (unsigned i = 0; i < res->resok->fingers.size (); i++) 
-      updatefingers (res->resok->fingers[i].x, res->resok->fingers[i].r);
+      fingers->updatefinger (res->resok->fingers[i].x, 
+			     res->resok->fingers[i].r);
   }
   delete res;
 }

@@ -1,6 +1,6 @@
 #include "chord.h"
 
-#define NTOES 3
+#define NTOES 2
 #define MAX_LEVELS 5
 
 bool present (vec<chordID> toes, chordID id);
@@ -8,19 +8,17 @@ bool present (vec<chordID> toes, chordID id);
 void
 vnode::stabilize_toes ()
 {
-
-  if (toes->stabilizing ()) return;
-
-
   int level = toes->filled_level ();
+  warn << "stabilizing toes at level " << level << "\n";
+  if (toes->stabilizing ()) return;
 
   if (level < 0) {
     //grab the succlist and stick it in the toe table
-    for (unsigned int i = 1; i < NSUCC + 1; i++) 
-      if (succlist[i].alive) {
-	toes->add_toe (succlist[i].n,
-		       locations->getaddress (succlist[i].n), 0);
-      }
+    //    for (unsigned int i = 1; i < ; i++) 
+    //  if (succlist[i].alive) {
+    //	toes->add_toe (succlist[i].n,
+    //		       locations->getaddress (succlist[i].n), 0);
+    //  }
   } else if (level < MAX_LEVELS) {
     //contact level (level) nodes and get their level (level) toes
     toes->get_toes_rmt (level + 1);
@@ -90,6 +88,7 @@ toe_table::add_toe_ping_cb (chordID id, int level)
 {
   location *l = locations->getlocation (id);
   if (l->a_lat < level_to_delay (level)) {
+    warn << "added " << id << " to level " << level << "\n";
     net_address r = locations->getaddress (id);
     locations->updateloc (id, r);
     toes.push_back (id);
@@ -105,7 +104,7 @@ toe_table::get_toes (int level)
   for (unsigned int i = 0; i < toes.size (); i++) {
     location *l = locations->getlocation (toes[i]);
     if (l->a_lat < up)
-      res.push_back ();
+      res.push_back (toes[i]);
   }
   return res;
 }

@@ -72,20 +72,21 @@ vnode::stabilize_continuous (u_int32_t t)
   u_int32_t nsec =  (t1 % 1000) * 1000000;
   continuous_timer = t;
   stabilize_continuous_tmo = delaycb (sec, nsec, 
-				      wrap (mkref (this), 
+				      wrap (this, 
 					    &vnode::stabilize_continuous, t));
 }
 
 void
 vnode::stabilize_succ ()
 {
-  while (!finger_table[1].first.alive) {   // notify() may result in failure
-    replacefinger (finger_table[1].start, &finger_table[1].first);
-    notify (finger_table[1].first.n, myID); 
+  chordID s = fingers->succ ();
+  if (!fingers->succ_alive ()) {   // notify() may result in failure
+    fingers->replacefinger (1);
+    notify (s, myID); 
   }
   nout_continuous++;
-  get_predecessor (finger_table[1].first.n, 
-		   wrap (mkref (this), &vnode::stabilize_getpred_cb));
+  get_predecessor (fingers->succ (), 
+		   wrap (this, &vnode::stabilize_getpred_cb));
 }
 
 void
@@ -94,16 +95,17 @@ vnode::stabilize_getpred_cb (chordID p, net_address r, chordstat status)
   // receive predecessor from my successor; in stable case it is me
   if (status) {
     warnx << "stabilize_getpred_cb: " << myID << " " 
-	  << finger_table[1].first.n << " failure " << status << "\n";
+	  << fingers->succ () << " failure " << status << "\n";
     stable_fingers = false;
     nout_continuous--;
   } else {
-    if (betweenleftincl (finger_table[1].start, finger_table[1].first.n, p)) {
+    if (fingers->better_ith_finger (1, p)) {
       locations->cacheloc (p, r);
-      challenge (p, wrap (mkref (this), &vnode::stabilize_getpred_cb_ok));
+      challenge (p, wrap (this, &vnode::stabilize_getpred_cb_ok));
     } else {
       nout_continuous--;
-      notify (finger_table[1].first.n, myID);
+      chordID s = fingers->succ ();
+      notify (s, myID);
     }
   }
 }
@@ -114,12 +116,11 @@ vnode::stabilize_getpred_cb_ok (chordID p, bool ok, chordstat status)
 {
   nout_continuous--;
   if ((status == CHORD_OK) && ok) {
-    if (betweenleftincl (finger_table[1].start, finger_table[1].first.n, p)) {
-      net_address r = locations->getaddress (p);
-      locations->changenode (&finger_table[1].first, p, r);
-      updatefingers (p, r);
+    if (fingers->better_ith_finger (1, p)) {
+      fingers->updatefinger (p);
       stable_fingers = false;
-      notify (finger_table[1].first.n, myID);
+      chordID s = fingers->succ ();
+      notify (s, myID);
     }
   }
 }
@@ -130,7 +131,7 @@ vnode::stabilize_pred ()
   if (predecessor.alive) {
     nout_continuous++;
     get_successor (predecessor.n,
-		   wrap (mkref (this), &vnode::stabilize_getsucc_cb));
+		   wrap (this, &vnode::stabilize_getsucc_cb));
   } else 
     stable_fingers = false;
 }
@@ -145,6 +146,7 @@ vnode::stabilize_getsucc_cb (chordID s, net_address r, chordstat status)
 	  << " failure " << status << "\n";
     stable_fingers = false;
   } else {
+    //XXX do something to fix situation?
     if (s != myID) 
       stable_fingers = false;
   }
@@ -196,7 +198,7 @@ vnode::stabilize_backoff (int f, int s, u_int32_t t)
   u_int32_t sec = t1 / 1000;
   u_int32_t nsec =  (t1 % 1000) * 1000000;
   backoff_timer = t;
-  stabilize_backoff_tmo = delaycb (sec, nsec, wrap (mkref (this), 
+  stabilize_backoff_tmo = delaycb (sec, nsec, wrap (this, 
 						    &vnode::stabilize_backoff,
 						    f, s, t));
 }
@@ -214,21 +216,19 @@ vnode::stabilize_finger (int f)
 
   if (i <= 1) i = 2;		// skip myself and immediate successor
 
-  if (!finger_table[i].first.alive) {
+  if (!fingers->alive (i)) {
     //  warnx << "stabilize: replace finger " << i << "\n" ;
-    replacefinger (finger_table[i].start, &finger_table[i].first);
+    fingers->replacefinger (i);
     stable_fingers = false;
   }
   if (i > 1) {
     for (; i <= NBIT; i++) {
-      if (!finger_table[i-1].first.alive) break;
-      if (between (finger_table[i-1].start, finger_table[i-1].first.n,
-		   finger_table[i].start)) {
-	chordID s = finger_table[i-1].first.n;
-	if (finger_table[i].first.n != s) {
-	  locations->changenode (&finger_table[i].first, s, 
-				 locations->getaddress(s));
-	  updatefingers (s, locations->getaddress(s));
+      if (!fingers->alive (i-1)) break;
+      //FED - don't understand this check
+      if (fingers->better_ith_finger (i-1, fingers->start(i))) {
+	chordID s = (*fingers)[i-1];
+	if ((*fingers)[i] != s) {
+	  fingers->updatefinger (s);
 	  stable_fingers = false;
 	}
       } else break;
@@ -236,8 +236,8 @@ vnode::stabilize_finger (int f)
     if (i <= NBIT) {
       // warnx << "stabilize: " << myID << " findsucc of finger " << i << "\n";
       nout_backoff++;
-      find_successor (finger_table[i].start, wrap (mkref (this), 
-				&vnode::stabilize_findsucc_cb, i));
+      chordID n = fingers->start (i);
+      find_successor (n, wrap (this, &vnode::stabilize_findsucc_cb, i));
       i++;
     }
   }
@@ -251,11 +251,11 @@ vnode::stabilize_findsucc_cb (int i, chordID s, route search_path,
   nout_backoff--;
   if (status) {
     warnx << "stabilize_findsucc_cb: " << myID << " " 
-	  << finger_table[i].first.n << " failure " << status << "\n";
+	  << (*fingers)[i] << " failure " << status << "\n";
     stable_fingers = false;
   } else {
-    if (betweenleftincl (finger_table[i].start, finger_table[i].first.n, s)) {
-      challenge (s, wrap (mkref (this), &vnode::stabilize_findsucc_ok, i));
+    if (fingers->better_ith_finger (i, s)) {
+      challenge (s, wrap (this, &vnode::stabilize_findsucc_ok, i));
     }
   }
 }
@@ -264,13 +264,8 @@ void
 vnode::stabilize_findsucc_ok (int i, chordID s, bool ok, chordstat status)
 {
   if ((status == CHORD_OK) && ok) {
-    if (betweenleftincl (finger_table[i].start, finger_table[i].first.n, s)) {
-      // warnx << "stabilize_findsucc_ok: " << myID << " " 
-      //   << "new successor of " << finger_table[i].start 
-      //    << " is " << s << "\n";
-      locations->changenode (&finger_table[i].first, s, 
-			     locations->getaddress(s));
-      updatefingers (s, locations->getaddress(s));
+    if (fingers->better_ith_finger (i, s)) {
+      fingers->updatefinger (s);
       stable_fingers = false;
     }
   }
@@ -279,73 +274,61 @@ vnode::stabilize_findsucc_ok (int i, chordID s, bool ok, chordstat status)
 int
 vnode::stabilize_succlist (int s)
 {
-  int j = s % (nsucc+1);
-
+  int j = s % (successors->num_succ () + 1);
+  
   if (j == 0) {
     if (stable_succlist) stable_succlist2 = true;
     else stable_succlist2 = false;
     stable_succlist = true;
   }
-  if (!succlist[j].alive) {
-    //  warnx << "stabilize: replace succ " << j << "\n";
+  if (!successors->nth_alive (j)) {
     stable_succlist = false;
-    replacefinger (succlist[j].n, &succlist[j]);
+    successors->replace_succ(j);
   }
   nout_backoff++;
-  get_successor (succlist[j].n,
-		 wrap (mkref (this), &vnode::stabilize_getsucclist_cb, j));
+  get_successor ((*successors)[j],
+		 wrap (this, &vnode::stabilize_getsucclist_cb, j));
   return j+1;
 }
 
 
 void
 vnode::stabilize_getsucclist_cb (int i, chordID s, net_address r, 
-			       chordstat status)
+				 chordstat status)
 {
+  int nsucc = successors->num_succ ();
   nout_backoff--;
   if (status) {
     warnx << "stabilize_getsucclist_cb: " << myID << " " << i << " : " 
-	  << succlist[i].n << " failure " << status << "\n";
+	  << (*successors)[i] << " failure " << status << "\n";
     stable_succlist = false;
-  } else {
-    //    warnx << "stabilize_getsucclist_cb: " << myID << " " << i 
-    //	  << " : successor of " 
-    //	  << succlist[i].n << " is " << s << "\n";
-    if (s == myID) {  // did we go full circle?
-      if (nsucc > i) {  // remove old entries?
-	stable_succlist = false;
-	for (int j = nsucc+1; j <= NSUCC; j++) {
-	  if (succlist[j].alive) {
-	    locations->deleteloc (succlist[j].n);
-	    succlist[j].alive = false;
-	  }
-	}
-      }
-      nsucc = i;
-    } else if (i < NSUCC) {
-      if (succlist[i+1].n != s) {
-	locations->cacheloc (s, r);
-	challenge (s, wrap (mkref (this), &vnode::stabilize_getsucclist_ok, 
-			    i+1));
-      }
-      if ((i+1) > nsucc) {
-	stable_succlist = false;
-	nsucc = i+1;
-      }
+  } else if (s == myID) {  // did we go full circle?
+    if (nsucc > i) {  // remove old entries?
+      stable_succlist = false;
+      for (int j = nsucc+1; j <= NSUCC; j++) 
+	successors->remove_succ (j);
     }
-    u_long n = estimate_nnodes ();
-    locations->replace_estimate (nnodes, n);
-    nnodes = n;
+    nsucc = i;
+  } else if (i < NSUCC) {
+    if ((*successors)[i+1] != s) {
+      locations->cacheloc (s, r);
+      challenge (s, wrap (this, &vnode::stabilize_getsucclist_ok, 
+			  i+1));
+    }
   }
+  u_long n = successors->estimate_nnodes ();
+  locations->replace_estimate (nnodes, n);
+  nnodes = n;
+  
 }
 
 void
 vnode::stabilize_getsucclist_ok (int i, chordID s, bool ok, chordstat status)
 {
   if ((status == CHORD_OK) && ok) {
-    if (succlist[i].n != s) {
+    if ((*successors)[i] != s) {
 	stable_succlist = false;
-	locations->changenode (&succlist[i], s, locations->getaddress (s));
+	successors->new_succ (i, s);
     }
   }
 }
