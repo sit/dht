@@ -49,6 +49,19 @@ static int REPLICATE      = getenv("REPLICATE") ? atoi(getenv("REPLICATE")) : 1;
 #define LEASE_TIME 2
 #define LEASE_INACTIVE 60
 
+EXITFN(close_databases);
+static vec<dbfe *> open_databases;
+
+static void
+close_databases ()
+{  
+  for (size_t i = 0; i < open_databases.size (); i++) {
+    open_databases[i]->sync ();
+    open_databases[i]->closedb ();
+  }
+}
+
+
 
 static int
 verifydb (dbfe *db)
@@ -124,6 +137,8 @@ dhash::dhash(str dbname, ptr<vnode> node,
     secondtry = true;
     goto dbagain;
   }
+
+  open_databases.push_back (db);
 
   host_node = node;
   assert (host_node);
