@@ -445,7 +445,7 @@ Kelips::gotinfo(Info i)
       }
     }
     if(add){
-      _info[i._ip] = new Info(i);
+      _info[i._ip] = New Info(i);
       _info[i._ip]->_rounds = _item_rounds;
     }
   } else if (i._heartbeat > _info[i._ip]->_heartbeat){

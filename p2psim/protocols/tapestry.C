@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.17 2003/10/28 22:40:54 strib Exp $ */
+/* $Id: tapestry.C,v 1.18 2003/10/29 21:28:40 thomer Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -167,7 +167,7 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
 {
 
   // find the next hop for the key.  if it's me, i'm done
-  IPAddress *ips = new IPAddress[_redundant_lookup_num];
+  IPAddress *ips = New IPAddress[_redundant_lookup_num];
   for( uint i = 0; i < _redundant_lookup_num; i++ ) {
     ips[i] = 0;
   }
@@ -525,7 +525,7 @@ Tapestry::handle_join(join_args *args, join_return *ret)
   }
 
   // route toward the root
-  IPAddress *ips = new IPAddress[_redundant_lookup_num];
+  IPAddress *ips = New IPAddress[_redundant_lookup_num];
   for( uint i = 0; i < _redundant_lookup_num; i++ ) {
     ips[i] = 0;
   }
@@ -592,7 +592,7 @@ Tapestry::handle_join(join_args *args, join_return *ret)
       // make the watchlist
       vector<bool *> wl;
       for( int i = 0; i < alpha+1; i++ ) {
-	bool *level = new bool[_base];
+	bool *level = New bool[_base];
 	wl.push_back(level);
 	for( uint j = 0; j < _base; j++ ) {
 	  wl[i][j] = false;
@@ -1256,7 +1256,7 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
 		  }
 
 		  if( add ) {
-		      toadd.push_back( new NodeInfo( j->_addr, j->_id ) );
+		      toadd.push_back( New NodeInfo( j->_addr, j->_id ) );
 		  }
 
 	      }

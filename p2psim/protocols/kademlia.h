@@ -58,7 +58,7 @@ public:
 
   string proto_name() { return "Kademlia"; }
   virtual void join(Args*);
-  virtual void crash(Args*) {}
+  virtual void crash(Args*);
   virtual void lookup(Args*);
 
   //
@@ -207,6 +207,7 @@ class k_traverser;
 class k_bucket {
 public:
   k_bucket(k_bucket*, bool, Kademlia * = 0);
+  virtual ~k_bucket();
 
   Kademlia *kademlia()  { return _kademlia; }
   void traverse(k_traverser*, string = "", unsigned = 0);
@@ -228,6 +229,7 @@ class k_bucket_node : public k_bucket {
 public:
   k_bucket_node(k_bucket *);
   k_bucket_node(Kademlia *);
+  virtual ~k_bucket_node();
   k_bucket *child[2];
   virtual void checkrep() const;
 };
@@ -238,6 +240,7 @@ class k_bucket_leaf : public k_bucket {
 public:
   k_bucket_leaf(Kademlia *);
   k_bucket_leaf(k_bucket *);
+  virtual ~k_bucket_leaf();
   k_bucket_node* divide(unsigned);
   virtual void checkrep() const;
 
@@ -255,6 +258,7 @@ class k_nodes {
 public:
   typedef set<k_nodeinfo*, Kademlia::older> nodeset_t;
   k_nodes(k_bucket_leaf *parent);
+  ~k_nodes();
   void insert(Kademlia::NodeID);
   void erase(Kademlia::NodeID);
   bool contains(Kademlia::NodeID) const;

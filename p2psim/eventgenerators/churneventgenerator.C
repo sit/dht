@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2003 Thomer M. Gil (thomer@csail.mit.edu)
+ * Copyright (c) 2003 Jeremy Stribling (strib@mit.edu)
+ *                    Thomer M. Gil (thomer@csail.mit.edu)
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -86,7 +87,7 @@ ChurnEventGenerator::run()
   for( pos = l.begin(); pos != l.end(); ++pos ) {
     ip = (IPAddress)(*pos);
 
-    Args *a = new Args();
+    Args *a = New Args();
     (*a)["wellknown"] = _wkn_string;
     uint jointime;
     if( ip == _wkn ) {
@@ -102,7 +103,7 @@ ChurnEventGenerator::run()
     }
 
     // also schedule their first lookup
-    a = new Args();
+    a = New Args();
     Time tolookup = next_exponential( _lookupmean );
     (*a)["key"] = get_lookup_key();
     if( now() + jointime + tolookup < _exittime ) {
@@ -132,7 +133,7 @@ ChurnEventGenerator::kick(Observed *o, ObserverInfo *oi)
   P2PEvent *p2p_observed = (P2PEvent *) ev;
   assert( p2p_observed );
 
-  Args *a = new Args();
+  Args *a = New Args();
   IPAddress ip = p2p_observed->node->ip();
   if( p2p_observed->type == "join" ) {
 

@@ -117,6 +117,17 @@ Kademlia::join(Args *args)
 }
 
 // }}}
+// {{{ Kademlia::crash
+void
+Kademlia::crash(Args *args)
+{
+  // destroy k-buckets
+  node()->crash();
+  delete _me;
+  delete _root;
+}
+
+// }}}
 // {{{ Kademlia::lookup
 void
 Kademlia::lookup(Args *args)
@@ -553,6 +564,11 @@ k_nodes::k_nodes(k_bucket_leaf *parent) : _parent(parent)
   nodes.clear();
 }
 // }}}
+// {{{ k_nodes::~k_nodes
+k_nodes::~k_nodes()
+{
+}
+// }}}
 // {{{ k_nodes::insert
 /*
  * pre: n is in the flyweight.
@@ -672,7 +688,7 @@ k_nodes::checkrep(bool rangecheck) const
   // all nodes are unique
   // all nodes are also in _nodes_by_id
   hash_map<Kademlia::NodeID, bool> haveseen;
-  for(set<k_nodeinfo*, Kademlia::older>::const_iterator i = nodes.begin(); i != nodes.end(); ++i) {
+  for(nodeset_t::const_iterator i = nodes.begin(); i != nodes.end(); ++i) {
     assert(_parent->kademlia()->flyweight.find((*i)->id) != _parent->kademlia()->flyweight.end());
     assert(haveseen.find((*i)->id) == haveseen.end());
     assert(_nodes_by_id.find(*i) != _nodes_by_id.end());
@@ -752,6 +768,14 @@ k_bucket_node::k_bucket_node(Kademlia *k) : k_bucket(0, false, k)
   checkrep();
 }
 // }}}
+// {{{ k_bucket_node::~k_bucket_node
+k_bucket_node::~k_bucket_node()
+{
+  cout << "~k_bucket_leaf" << endl;
+  delete child[0];
+  delete child[1];
+}
+// }}}
 // {{{ k_bucket_node::checkrep
 void
 k_bucket_node::checkrep() const
@@ -779,6 +803,12 @@ k_bucket_leaf::k_bucket_leaf(Kademlia *k) : k_bucket(0, true, k)
   replacement_cache = New set<k_nodeinfo*, Kademlia::younger>;
   assert(replacement_cache);
   checkrep();
+}
+// }}}
+// {{{ k_bucket_leaf::~k_bucket_leaf
+k_bucket_leaf::~k_bucket_leaf()
+{
+  cout << "~k_bucket_leaf" << endl;
 }
 // }}}
 // {{{ k_bucket_leaf::divide
@@ -869,6 +899,15 @@ k_bucket::k_bucket(k_bucket *parent, bool leaf, Kademlia *k) : leaf(leaf), paren
   } else
     _kademlia = parent->_kademlia;
   checkrep();
+}
+// }}}
+// {{{ k_bucket::~k_bucket
+k_bucket::~k_bucket()
+{
+  if(leaf)
+    delete (k_bucket_leaf*) this;
+  else
+    delete (k_bucket_node*) this;
 }
 // }}}
 // {{{ k_bucket::traverse

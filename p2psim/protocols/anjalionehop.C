@@ -4,7 +4,7 @@ AnjaliOneHop::AnjaliOneHop(Node *n, Args& a) : P2Protocol(n)
 {
   _slices = a.nget<uint>("slices",10,10);
   _units = a.nget<unit>("units",10,10);
-  loctable = new AnjaliLocTable(_slices, _units);
+  loctable = New AnjaliLocTable(_slices, _units);
   loctable->init(me);
   loctable->set_timeout(0); //no timeouts on loctable entries
 }
