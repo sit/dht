@@ -53,8 +53,7 @@ my @CONFS;
 # however, leave a mode where we can force all localhost behavior.
 my $conf = "a";
 my $i = 1;
-my @args = ("-f",
-	    "-j", "$ip:$wkport",
+my @args = ("-j", "$ip:$wkport",
 	    "-l", $ip,
 	    "-v", $v,
 	    "-m", $routeprot,

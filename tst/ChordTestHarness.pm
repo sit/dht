@@ -50,6 +50,7 @@ sub spawnlsd {
     my @args = ("$self->{build}/lsd/lsd",
 		"-d", "./db",
 		"-S", "./sock",
+		"-C", "./ctlsock",
 		);
     push @args, @_ if @_;
     # xxx save arguments?
@@ -83,7 +84,7 @@ sub killlsd {
     my $conf = shift;
     my $pid = $self->getpid ($conf);
 
-    kill SIGHUP, $pid;
+    kill SIGINT, $pid;
     my $reapedpid = waitpid (-1, WNOHANG);
     die "WTF: REAPED $reapedpid, EXPECTED $pid" if ($pid != $reapedpid);
     sleep 5;
@@ -99,7 +100,7 @@ sub reaplsds {
     my $self = shift;
     my $n = scalar keys %{$self->{pids}};
     return unless $n; # anything to reap?
-    my $hit = kill SIGHUP, $self->pids (); # encourage graceful exit
+    my $hit = kill SIGINT, $self->pids (); # encourage graceful exit
     warn "Apparently, only $hit of $n lsd's remaining...\n" unless $hit == $n;
 
     my $pid = 0;
