@@ -45,23 +45,27 @@ chord::chord (str _wellknownhost, int _wellknownport,
   logbase = _logbase;
   myport = startchord (port);
 
-  wellknown_node.r.hostname = _wellknownhost;
-  wellknown_node.r.port = _wellknownport ? _wellknownport : myport;
-  wellknown_node.x = make_chordID (wellknown_node.r.hostname,
-				   wellknown_node.r.port);
-  wellknown_node.coords.setsize (NCOORDS);
-  
   warnx << "chord: running on " << myname << ":" << myport << "\n";
 
   nrcv = New refcounted<u_int32_t>;
   *nrcv = 0;
   locations = New refcounted<locationtable> (nrcv, max_cache);
+  
+  wellknown_node.r.hostname = _wellknownhost;
+  wellknown_node.r.port = _wellknownport ? _wellknownport : myport;
+  wellknown_node.x = make_chordID (wellknown_node.r.hostname,
+				   wellknown_node.r.port);
+  wellknown_node.coords.setsize (NCOORDS);
+  // Make up some random initial information for this other node.
+  for (int i = 0; i < NCOORDS; i++)
+    wellknown_node.coords[i] = (int) uniform_random_f (1000.0);
 
-  //BAD LOC (ok)
-  bool ok = locations->insert (wellknown_node);
-  if (!ok) {
-    warn << "Well known host failed to verify! Bailing.\n";
-    exit (0);
+  if (myname != _wellknownhost || myport != _wellknownport) {
+    bool ok = locations->insert (wellknown_node);
+    if (!ok) {
+      warn << "Well known host failed to verify! Bailing.\n";
+      exit (0);
+    }
   }
 
   nvnode = 0;
@@ -149,8 +153,6 @@ chord::newvnode (cbjoin_t cb, ptr<fingerlike> fingers, ptr<route_factory> f)
   }
   warnx << "\n";
   locations->insert (newID, myname, myport, coords);
-  // force an update of the coords in the locationtable
-  locations->set_coords (newID, coords);
 
 #if 0  
   if (newID != wellknown_node.x) {
