@@ -125,11 +125,9 @@ client_accept_socket (int lfd)
 }
 
 static void
-client_listening_cb (int fd, int status)
+client_listen (int fd)
 {
-  if (status)
-    close (fd);
-  else if (listen (fd, 5) < 0) {
+  if (listen (fd, 5) < 0) {
     fatal ("Error from listen: %m\n");
     close (fd);
   } else {
@@ -151,13 +149,13 @@ startclntd()
   int clntfd = unixsocket (p2psocket);
   if (clntfd < 0) 
     fatal << "Error creating client socket (UNIX)" << strerror (errno) << "\n";
-  client_listening_cb (clntfd, 0);
+  client_listen (clntfd);
   
   int port = (myport == 0) ? 0 : myport + 1; 
   int tcp_clntfd = inetsocket (SOCK_STREAM, port);
   if (tcp_clntfd < 0)
     fatal << "Error creating client socket (TCP) " << strerror(errno) << "\n";
-  client_listening_cb (tcp_clntfd, 0);
+  client_listen (tcp_clntfd);
 
 }
 
