@@ -338,14 +338,15 @@ route_dhash::block_cb (s_dhash_block_arg *arg)
 void
 route_dhash::gotblock (ptr<dhash_block> block)
 {
-  // XXX fix the path, we might have fetched the block off a replica
-  block->hops = path ().size ();
-  block->errors = chord_iterator->failed_path ().size ();
-  block->retries = retries_done;
   //  warn << blockID << ": finished grabbing the block " << (getusec () - start) << " after that\n";
-  if (block) 
+  if (block) {
+    // XXX fix the path, we might have fetched the block off a replica
+    block->hops = path ().size ();
+    block->errors = chord_iterator->failed_path ().size ();
+    block->retries = retries_done;
+
     cb (DHASH_OK, block, path ());
-  else
+  } else
     (*cb) (DHASH_NOENT, NULL, path ());
 }
 
