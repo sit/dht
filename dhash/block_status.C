@@ -30,6 +30,15 @@ block_status::found_on (ptr<location> l)
   }
 }
 
+bool
+block_status::is_missing_on (chordID n) 
+{
+  for (size_t i = 0; i < missing.size (); i++)
+    if (missing[i]->id () == n) 
+      return true;
+  return false;
+}
+
 void
 block_status::print ()
 {
@@ -119,6 +128,31 @@ block_status_manager::where_missing (const chordID &b)
   return bs->missing;
 }
 
+bool 
+block_status_manager::missing_on (const chordID &b, chordID &n)
+{
+  block_status *bs = blocks[b];
+  if (bs == NULL) return false;
+  vec<ptr<location> > m = bs->missing;
+   for (u_int i = 0; i < m.size (); i++)
+     if (m[i]->id () == n) return true;
+   return false;
+}
+
+const vec<chordID>
+block_status_manager::missing_what (const chordID &n)
+{
+  vec<chordID > ret;
+  block_status *bs = blocks.first ();
+  while (bs) {
+    if (bs->is_missing_on (n)) {
+      ret.push_back (bs->id);
+    }
+    bs = blocks.next(bs);
+  }
+  return ret;
+}
+
 const ptr<location> 
 block_status_manager::best_missing (const chordID &b, vec<ptr<location> > succs)
 {
@@ -128,7 +162,7 @@ block_status_manager::best_missing (const chordID &b, vec<ptr<location> > succs)
   ptr<location> l = m[0];
 
   for (u_int i = 0; i < m.size (); i++)
-    if (between (my_id, best, m[i]->id ())
+    if (betweenbothincl (my_id, best, m[i]->id ())
 	&& in_vector (succs, b)) {
       best = m[i]->id ();
       l = m[i];
@@ -148,8 +182,12 @@ block_status_manager::pcount (const chordID &b, vec<ptr<location> > succs)
   vec<ptr<location> > missing = bs->missing;
 
   char is_missing;
+  // FED: removed below from for termination clause; allow holes by 
+  //      testing all successors
+  //      && s < dhash::num_efrags ()
+
   for (u_int s = 0; 
-       s < succs.size () && s < dhash::num_efrags ();
+       s < succs.size ();
        s++) 
     {      
       is_missing = 0;

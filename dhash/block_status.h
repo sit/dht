@@ -1,3 +1,6 @@
+#ifndef __BLOCK_STATUS_H__
+#define __BLOCK_STATUS_H__
+
 #include <ihash.h>
 #include <skiplist.h>
 
@@ -14,6 +17,7 @@ class block_status {
 
 public:
   block_status (chordID b) : id (b) {};
+  bool is_missing_on (chordID n);
   void missing_on (ptr<location> l);
   void found_on (ptr<location> l);
   void print ();
@@ -31,6 +35,9 @@ public:
   void add_block (const chordID &b);
   void del_block (const chordID &b);
   void missing (ptr<location> remote, const chordID &b);
+  const vec<chordID> missing_what (const chordID &n);
+  bool  missing_on (const chordID &b, chordID &n);
+
   const ptr<location> best_missing (const chordID &b, vec<ptr<location> > succs);
   void unmissing (ptr<location> remote, const chordID &b);
   chordID first_block ();
@@ -41,3 +48,5 @@ public:
   void status ();
   void print ();
 };
+
+#endif

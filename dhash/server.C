@@ -91,8 +91,8 @@ dhash_config_init::dhash_config_init ()
   ok = ok && set_int ("dhash.missing_outstanding_max", 15);
   
   ok = ok && set_int ("merkle.keyhash_timer", 10);
-  ok = ok && set_int ("merkle.replica_timer", 5);
-  ok = ok && set_int ("merkle.prt_timer", 5);
+  ok = ok && set_int ("merkle.replica_timer", 30);
+  ok = ok && set_int ("merkle.prt_timer", 30);
 
   //plab hacks
   ok = ok && set_int ("dhash.disable_db_env", 0);
@@ -178,6 +178,7 @@ dhash_impl::dhash_impl (str dbname) :
   msrv (NULL),
   pmaint_obj (NULL),
   mtree (NULL),
+  tmptree (NULL),
   replica_syncer (NULL),
   keyhash_mgr_rpcs (0),
   merkle_rep_tcb (NULL),
@@ -225,6 +226,7 @@ dhash_impl::init_after_chord (ptr<vnode> node)
   assert (host_node);
 
   // merkle state
+  // XXX what should needed be replaced with? CBV?
   msrv = New merkle_server (mtree, 
 			    wrap (node, &vnode::addHandler),
 			    wrap (this, &dhash_impl::needed),
@@ -264,15 +266,26 @@ dhash_impl::needed (ptr<location> from, bigint key)
 {
   // XXX should batch this so that we don't send 100 bytes of
   //     RPC header for each key we send!
-  trace << "merkle says we should have block " << key
-	<< "; notifying successor.\n";
+  trace << "needed: " << host_node->my_ID () << ": merkle says we should have block " << key << "\n";
 
-  ptr<dhash_ineed_arg> arg = New refcounted<dhash_ineed_arg> ();
-  arg->needed.setsize (1);
-  arg->needed[0] = key;
+  return;
+  /*
+  need_q.push_back (key);
+  if (need_q.size () >= 60 || (getusec () - need_last_send > 1000*1000)) {
+    warn << "sending an INEED RPC with " << need_q.size () << " keys\n";
+    need_last_send = getusec ();
+    ptr<dhash_ineed_arg> arg = New refcounted<dhash_ineed_arg> ();
+    arg->needed.setsize (need_q.size());
+    for (unsigned int i = 0; i < need_q.size (); i++)
+      arg->needed[i] = need_q[i];
 
-  doRPC (from, dhash_program_1, DHASHPROC_INEED, arg, NULL, aclnt_cb_null);
-  // XXX should perhaps check what happens after this call goes out!
+    doRPC (from, dhash_program_1, DHASHPROC_INEED, arg, NULL, aclnt_cb_null);
+    // XXX should perhaps check what happens after this call goes out!
+    need_q.clear ();
+  } else 
+    warn << "delaying INEED\n";
+  */
+
 }
 
 void
@@ -314,7 +327,7 @@ dhash_impl::outgoing_retrieve_cb (missing_state *ms, dhash_stat err,
     missing_outstanding_o--;
     delete ms;
   } else {
-    trace << " fetched key " << ms->key 
+    trace << host_node->my_ID () << " fetched key " << ms->key 
 	  << " so that I can send it to " << ms->from->id () << "\n";
     assert (b);
 
@@ -369,23 +382,27 @@ dhash_impl::outgoing_send_cb (missing_state *m, dhash_stat err,
 
 
 void
-dhash_impl::missing (ptr<location> from, bigint key)
+dhash_impl::missing (ptr<location> from, bigint key, bool missingLocal)
 {
-  // throttle the block downloads
-  if (missing_outstanding_i > MISSING_OUTSTANDING_MAX) {
-    if (missing_q[key] == NULL) {
-      missing_state *ms = New missing_state (key, from);
-      missing_q.insert (ms);
-    }
-    return;
+
+  if (missingLocal) {
+
+    //XXX check the DB to make sure we really are missing this block
+    trace << host_node->my_ID () << " merkle says we should have block " << key << ", fetching.\n";
+    
+    //XXX just note that we should have the block. don't get it
+    // unless the replication level justifies it
+    
+    bsm->missing (host_node->my_location (), key);
+
+    //the other guy must have this key if he told me I am missing it
+    bsm->unmissing (from, key);
+  } else {
+    bsm->missing (from, key);
+    trace << host_node->my_ID () << ": " << key
+	  << " needed on " << from->id () << "\n";
   }
 
-  trace << "merkle says we should have block " << key << ", fetching.\n";
-
-  missing_outstanding_i++;
-  assert (missing_outstanding_i >= 0);
-  cli->retrieve (blockID(key, DHASH_CONTENTHASH, DHASH_FRAG),
-		 wrap (this, &dhash_impl::missing_retrieve_cb, key));
 }
 
 void
@@ -419,7 +436,7 @@ dhash_impl::missing_retrieve_cb (bigint key, dhash_stat err,
     missing_state *ms = missing_q.first ();
     assert (ms);
     missing_q.remove (ms);
-    missing (ms->from, ms->key);
+    missing (ms->from, ms->key, true);
     delete ms;
   }
 }
@@ -489,23 +506,31 @@ dhash_impl::keyhash_mgr_lookup (chordID key, dhash_stat err,
 void
 dhash_impl::replica_maintenance_timer (u_int i)
 {
-
+  uint64_t start;
   merkle_rep_tcb = NULL;
   bigint rngmin = host_node->my_pred ()->id ();
   bigint rngmax = host_node->my_ID ();
-  vec<ptr<location> > succs = host_node->succs ();
+  vec<ptr<location> > nmsuccs = host_node->succs ();
+  //don't assume we are holding the block
+  // i.e. -> put ourselves on this of nodes to check for the block
+  vec<ptr<location> > succs;
+  succs.push_back (host_node->my_location ());
 
+  for (unsigned int j = 0; j < nmsuccs.size (); j++)
+    succs.push_back(nmsuccs[j]);
+  
   if (missing_outgoing_q.size () == 0) {
     //check to see if any blocks are near critical replication levels
     chordID first = bsm->first_block ();
     chordID b = first;
     do {
-      // + 1 for me
-      u_int count = bsm->pcount (b, succs) + 1;
+      u_int count = bsm->pcount (b, succs);
       if (count < num_efrags ())
 	{
-	  trace << "adding " << b << " to outgoing queue "
+	  trace << host_node->my_ID () << ": adding " << b 
+		<< " to outgoing queue "
 		<< "count= " << count << "\n";
+
 	  //decide where to send it
 	  ptr<location> to = bsm->best_missing (b, succs);
 	  
@@ -525,10 +550,25 @@ dhash_impl::replica_maintenance_timer (u_int i)
     goto out; // replica syncer is still running.
 
   if (i >= succs.size())
-    i = 0;
-    
+    i = 1;
+
+  //we'll use a temporary tree for syncing
+  // the tree will be "rigged" to remove
+  // keys that we already know the other node
+  // is missing and to include keys we should
+  // have.
+
+  if (tmptree) delete tmptree;
+  
+  start = getusec ();
+  tmptree = New merkle_tree(mtree->db, bsm, 
+			    succs[i]->id (), 
+			    succs);
+  trace << host_node->my_ID () << " tree build: " << getusec () - start << " usecs\n";
+
+  trace << host_node->my_ID () << " syncing with " << succs[i]->id () << "\n";
   replica_syncer = New refcounted<merkle_syncer> 
-    (mtree, 
+    (tmptree, 
      wrap (this, &dhash_impl::doRPC_unbundler, succs[i]),
      wrap (this, &dhash_impl::missing, succs[i]));
 
@@ -537,14 +577,15 @@ dhash_impl::replica_maintenance_timer (u_int i)
 
   // go to the end of the succ list even if we don't have that many frags
   // so that we keep track of extra frags
-  if (succs.size () > 1)
+  /*  if (succs.size () > 1)
     i = (i + 1) % (succs.size () - 1);
   else 
     i = 0;
+  */
 
  out:
   merkle_rep_tcb =
-    delaycb (reptm (), wrap (this, &dhash_impl::replica_maintenance_timer, i));
+    delaycb (reptm (), wrap (this, &dhash_impl::replica_maintenance_timer, i + 1));
 }
 
 
@@ -627,32 +668,40 @@ dhash_impl::dispatch (user_args *sbp)
       res.resok->accepted.setsize (arg->keys.size ());
       res.resok->dest.setsize (arg->keys.size ());
 
+      //XXX copied code
+      vec<ptr<location> > nmsuccs = host_node->succs ();
+      //don't assume we are holding the block
+      // i.e. -> put ourselves on this of nodes to check for the block
+      vec<ptr<location> > succs;
+      succs.push_back (host_node->my_location ());
+      for (unsigned int j = 0; j < nmsuccs.size (); j++)
+	succs.push_back(nmsuccs[j]);
+      //XXX end copied
+
       for (u_int i = 0; i < arg->keys.size (); i++) {
 	chordID key = arg->keys[i];
-	u_int count = bsm->pcount (key, host_node->succs ()) + 1;
+	u_int count = bsm->pcount (key, succs);
 	chordID pred = host_node->my_pred ()->id ();
 	bool mine = between (pred, host_node->my_ID (), key);
-	ref<dbrec> kkk = id2dbrec (key);
-	ptr<dbrec> hit = db->lookup (kkk);
 
-	if (mine && !hit) {
-	  //if I should have it, get it
+	// now that we are in succ list don't need to special case for ourselves
+	//	ref<dbrec> kkk = id2dbrec (key);
+	//	ptr<dbrec> hit = db->lookup (kkk);
+
+	// belongs to me and isn't replicated well
+	if (mine && count < dhash::num_efrags ()) {
 	  res.resok->accepted[i] = DHASH_SENDTO;
-	  ptr<location> l = host_node->my_location ();
-	  trace << "server: sending " << key << ": count=" << count << " to=" << l->id () << " (me) \n";
-	  l->fill_node (res.resok->dest[i]);
-	} else if (count >= dhash::num_efrags ()) {
-	  trace << "server: holding " << key << ": count=" << count << "\n";
-	  res.resok->accepted[i] = DHASH_HOLD;
-	} 
-	else {
-	  res.resok->accepted[i] = DHASH_SENDTO;
+	  // best missing might be me (RPC to myself is OK)
 	  ptr<location> l = bsm->best_missing (key, host_node->succs ());
 	  trace << "server: sending " << key << ": count=" << count << " to=" << l->id () << "\n";
 	  l->fill_node (res.resok->dest[i]);
 	  bsm->unmissing (l, key);
-	}
+	} else {
+	  trace << "server: holding " << key << ": count=" << count << "\n";
+	  res.resok->accepted[i] = DHASH_HOLD;
+	} 
       }
+
       sbp->reply (&res);
     }
     break;
@@ -711,20 +760,8 @@ dhash_impl::dispatch (user_args *sbp)
     break;
   case DHASHPROC_INEED:
     {
-      dhash_ineed_arg *arg = sbp->template getarg<dhash_ineed_arg> ();
-      chord_node remote;
-      sbp->fill_from (&remote);
-      ptr<location> l = host_node->locations->lookup (remote.x);
-      if (!l) {
-	sbp->reply (NULL);
-      } else {
-	for (size_t i = 0; i < arg->needed.size (); i++) {
-	  bsm->missing (l, arg->needed[i]);
-	  warnx << host_node->my_ID () << ": " << arg->needed[i]
-		<< " needed on " << l->id () << "\n";
-	}
-	sbp->reply (NULL);
-      }
+      warn << "INEED deprecated\n";
+      sbp->reply (NULL);
     }
     break;
   default:

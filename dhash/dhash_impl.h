@@ -1,3 +1,6 @@
+#ifndef __DHASH_IMPL_H__
+#define __DHASH_IMPL_H__
+
 #include "dhash.h"
 #include <pmaint.h>
 #include <dbfe.h>
@@ -100,6 +103,7 @@ class dhash_impl : public dhash {
   merkle_server *msrv;
   pmaint *pmaint_obj;
   merkle_tree *mtree;
+  merkle_tree *tmptree;
 
   ptr<merkle_syncer> replica_syncer;
 
@@ -112,7 +116,7 @@ class dhash_impl : public dhash {
   unsigned keyhash_mgr_rpcs;
 
   /* Called by merkle_syncer to notify of blocks we are succ to */
-  void missing (ptr<location> from, bigint key);
+  void missing (ptr<location> from, bigint key, bool local);
   void missing_retrieve_cb (bigint key, dhash_stat err, ptr<dhash_block> b,
 			    route r);
 
@@ -229,3 +233,5 @@ class dhash_impl : public dhash {
   void start (bool randomize = false);
   void fetch (blockID id, int cookie, cbvalue cb);
 };
+
+#endif
