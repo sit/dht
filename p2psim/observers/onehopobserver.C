@@ -67,6 +67,17 @@ OneHopObserver::get_sorted_nodes()
   return ids;
 }
 
+Chord::IDMap
+OneHopObserver::get_rand_alive_node()
+{
+  Chord::IDMap n;
+  uint r;
+  while (1) {
+    r = random() % ids.size();
+    if (Network::Instance()->alive(ids[r].ip))
+      return ids[r];
+  }
+}
 
 OneHopObserver::~OneHopObserver()
 {

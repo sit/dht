@@ -34,6 +34,7 @@ public:
   ~OneHopObserver();
   static OneHopObserver* Instance(Args*);
   vector<Chord::IDMap> get_sorted_nodes();
+  Chord::IDMap get_rand_alive_node();
   void addnode(Chord::IDMap n) { 
     vector<Chord::IDMap>::iterator p =
       upper_bound(ids.begin(),ids.end(),n,Chord::IDMap::cmp);
