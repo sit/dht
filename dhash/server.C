@@ -373,10 +373,10 @@ dhash_impl::outgoing_send_cb (missing_state *m, dhash_stat err,
     //mark it as being present
     bsm->unmissing (m->from, m->key);
     info << "repair: " << host_node->my_ID ()
-	 << " sent " << m->key << " to " << m->from <<  ".\n";
+	 << " sent " << m->key << " to " << m->from->id () <<  ".\n";
   } else
     info << "repair: " << host_node->my_ID ()
-	 << " error sending " << m->key << " to " << m->from
+	 << " error sending " << m->key << " to " << m->from->id ()
 	 << " (" << err << ").\n";
 
   delete m;
