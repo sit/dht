@@ -43,7 +43,35 @@ int Kelips::_ok_failures = 0;  // # legitimate lookup failures
 int Kelips::_bad_failures = 0; // lookup failed, but node was live
 int Kelips::_connected_sample= 0; // lookup failed, but node was live
 float Kelips::_connected_sz = 0.0;
+vector<u_int> Kelips::_allhops;
 
+Kelips::Kelips(IPAddress i, Args a) : P2Protocol(i)
+{
+  _started = false;
+  _live = false;
+
+  // settable parameters.
+  _k = a.nget<unsigned>("k", 20, 10);
+  _round_interval = a.nget<int>("round_interval", 2000, 10);
+  _group_targets = a.nget<u_int>("group_targets", 3, 10);
+  _contact_targets = a.nget<u_int>("contact_targets", 3, 10);
+  _group_ration = a.nget<u_int>("group_ration", 4, 10);
+  _contact_ration = a.nget<u_int>("contact_ration", 2, 10);
+  _n_contacts = a.nget<u_int>("n_contacts", 2, 10);
+  _item_rounds = a.nget<u_int>("item_rounds", 1, 10);
+  _timeout = a.nget<u_int>("timeout", 25000, 10);
+  _max_lookup_time = a.nget<uint>("maxlookuptime",4000,10);
+  _purge_time = a.nget<uint>("purgetime",1000,10);
+  _track_conncomp_timer = a.nget<uint>("track_conncomp_timer",0,10);
+  _to_multiplier = a.nget<uint>("timeout_multiplier",3,10);
+#ifdef HAVE_LIBGB
+  if ((_track_conncomp_timer) && (ip() == 1)) {
+    delaycb(_track_conncomp_timer, &Kelips::calculate_conncomp, (void*)NULL);
+  }
+#endif
+}
+
+#ifdef HAVE_LIBGB
 #define link z.V
 #define master y.V
 #define sz x.I \
@@ -111,29 +139,6 @@ int max_connected_component(Graph *g)
   return maxsz;  
 }
 
-Kelips::Kelips(IPAddress i, Args a) : P2Protocol(i)
-{
-  _started = false;
-  _live = false;
-
-  // settable parameters.
-  _k = a.nget<unsigned>("k", 20, 10);
-  _round_interval = a.nget<int>("round_interval", 2000, 10);
-  _group_targets = a.nget<u_int>("group_targets", 3, 10);
-  _contact_targets = a.nget<u_int>("contact_targets", 3, 10);
-  _group_ration = a.nget<u_int>("group_ration", 4, 10);
-  _contact_ration = a.nget<u_int>("contact_ration", 2, 10);
-  _n_contacts = a.nget<u_int>("n_contacts", 2, 10);
-  _item_rounds = a.nget<u_int>("item_rounds", 1, 10);
-  _timeout = a.nget<u_int>("timeout", 25000, 10);
-  _max_lookup_time = a.nget<uint>("maxlookuptime",4000,10);
-  _purge_time = a.nget<uint>("purgetime",1000,10);
-  _track_conncomp_timer = a.nget<uint>("track_conncomp_timer",0,10);
-
-  if ((_track_conncomp_timer) && (ip() == 1)) {
-    delaycb(_track_conncomp_timer, &Kelips::calculate_conncomp, (void*)NULL);
-  }
-}
 
 void
 Kelips::calculate_conncomp(void *)
@@ -177,6 +182,7 @@ Kelips::add_gb_edge(Graph *g)
     gb_new_edge(g->vertices + ip()-1, g->vertices+l[i]-1,1);
   }
 }
+#endif
 
 string
 i2s(unsigned long long x)
@@ -192,10 +198,16 @@ Kelips::~Kelips()
     printf("rpc_bytes %.0f\n", _rpc_bytes);
     printf("%d good, %d ok failures, %d bad failures\n",
            _good_lookups, _ok_failures, _bad_failures);
+
+    sort(_allhops.begin(), _allhops.end());
+
     if(_good_lookups > 0){
-      printf("avglat %.1f avghops %.2f\n",
+      printf("avglat %.1f avghops %.2f 10-hops %u 50-hops %u 90-hops %u\n",
              _good_latency / _good_lookups,
-             _good_hops / _good_lookups);
+             _good_hops / _good_lookups, 
+	     _allhops[(u_int)(0.1*_allhops.size())],
+	     _allhops[_allhops.size()/2],
+	     _allhops[(u_int)(0.9*_allhops.size())]);
     }
     printf("avg connected component: %.2f\n", _connected_sz/_connected_sample);
     print_stats();
@@ -361,11 +373,15 @@ Kelips::node_key_alive(ID key)
 void
 Kelips::lookup(Args *args)
 {
-  lookup_args *a = New lookup_args;
+  ID k = args->nget<ID>("key");
+  assert(k);
+  if (!node_key_alive(k))
+    return;
 
+  lookup_args *a = New lookup_args;
   a->key = args->nget<ID>("key");
-  assert(a->key);
   a->start = now();
+  a->retrytimes = 0;
   lookup_internal(a);
 }
 
@@ -394,6 +410,7 @@ Kelips::lookup_internal(lookup_args *a)
   Time t1 = now();
   bool ok = lookup_loop(key, history);
   Time t2 = now();
+  a->retrytimes++;
 
   bool oops = false;
   if(ok == false)
@@ -411,20 +428,28 @@ Kelips::lookup_internal(lookup_args *a)
       _good_lookups += 1;
       _good_latency += t2 - t1;
       _good_hops += history.size();
+      if (_allhops.size() < 50000)
+	_allhops.push_back(history.size());
     }
     assert( lasthop == key );
     record_lookup_stat( ip(), lasthop, t2-a->start, true, true );
   }else if ((t2 - a->start) > _max_lookup_time) {
     record_lookup_stat( ip(), lasthop, t2-a->start, false, false);
-  }else if (oops){
     if (Node::collect_stat()) {
-      _bad_failures += 1;
+	//printf("%u bad failure key %u retrytimes %u now %llu start %llu length %llu\n",ip(),a->key,a->retrytimes,now(),a->start, now()-a->start);
+	_bad_failures += 1;
     }
+  }else if (oops){
+    if (Node::collect_stat()) 
+      _bad_failures += 1;
     delaycb(100, &Kelips::lookup_internal, a);
     return;
   } else {
-    //ignore this failure
-    _ok_failures += 1;
+    //ignore this failure if no retry has been done before
+    if (Node::collect_stat()) 
+      _ok_failures += 1;
+    if (a->retrytimes >= 2) 
+      record_lookup_stat( ip(), lasthop, t2-a->start, false, false);
   }
 
   delete a;

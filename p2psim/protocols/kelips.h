@@ -54,13 +54,16 @@
 #include "consistenthash.h"
 #include "p2psim/p2psim.h"
 #include "p2psim/condvar.h"
+#include "p2psim/network.h"
 #include <map>
 #include <vector>
 #include <set>
 
+#ifdef HAVE_LIBGB
 extern "C" {
   #include "gb_graph.h" 
 }
+#endif
 
 class Kelips : public P2Protocol {
 public:
@@ -69,6 +72,7 @@ public:
   struct lookup_args{
     ID key;
     Time start;
+    u_int retrytimes;
   };
 
   Kelips(IPAddress i, Args a);
@@ -84,8 +88,10 @@ public:
   virtual void nodeevent (Args *) {};
 
   void lookup_internal(lookup_args *a);
+#ifdef HAVE_LIBGB
   void calculate_conncomp(void *);
   void add_gb_edge(Graph *g);
+#endif
 
  private:
   // typedef ConsistentHash::CHID ID;
@@ -105,6 +111,7 @@ public:
   Time _max_lookup_time;
   u_int _purge_time;      // period the purge timer is run
   u_int _track_conncomp_timer; 
+  u_int _to_multiplier; //a retransmit timer
   
 
   int _timeout;           // (25000???) milliseconds to group item timeout.
@@ -129,6 +136,7 @@ public:
   static int _bad_failures;
   static int _connected_sample;
   static float _connected_sz;
+  static vector<u_int> _allhops;
 
   // Information about one other node.
   class Info {
@@ -191,7 +199,16 @@ public:
     bool xRPC(IPAddress dst, int nitems, void (Kelips::* fn)(AT *, RT *),
               AT *args, RT *ret ){
     Time t1 = now();
-    bool ok = doRPC(dst, fn, args, ret);
+    Time timeout;
+
+    if ((_info.find(dst) == _info.end()) 
+      || (_info[dst]->_rtt == 9999) || 
+	(_info[dst]->_rtt == -1))
+      timeout = 1000; //1 second timeout
+    else
+      timeout = _to_multiplier * _info[dst]->_rtt;
+
+    bool ok = doRPC(dst, fn, args, ret, timeout);
     rpcstat(ok, dst, now() - t1, nitems);
     return ok;
   };
