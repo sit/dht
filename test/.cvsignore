@@ -7,3 +7,5 @@ example1
 example2
 testslave
 
+test_merkle_syncer
+test_merkle_tree
