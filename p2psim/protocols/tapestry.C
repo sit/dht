@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.9 2003/10/12 04:49:37 strib Exp $ */
+/* $Id: tapestry.C,v 1.10 2003/10/12 21:24:15 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -36,7 +36,7 @@ Tapestry::Tapestry(Node *n, Args a)
     _base(a.nget<uint>("base", 16, 10)),
     _bits_per_digit((uint) (log10(((double) _base))/log10((double) 2))),
     _digits_per_id((uint) 8*sizeof(GUID)/_bits_per_digit),
-    _redundant_lookup_num(a.nget<uint>("redunant_lookup_num", 3, 10))
+    _redundant_lookup_num(a.nget<uint>("redundant_lookup_num", 3, 10))
 {
   joined = false;
   _joining = false;
@@ -57,6 +57,10 @@ Tapestry::Tapestry(Node *n, Args a)
 
 Tapestry::~Tapestry()
 {
+
+  delete _rt;
+  delete _waiting_for_join;
+
   TapDEBUG(2) << "Destructing" << endl;
 
   TapDEBUG(0) << "PARAMS: base " << _base << " stabtimer " << _stabtimer <<
@@ -65,8 +69,6 @@ Tapestry::~Tapestry()
   // print out statistics
   print_stats();
 
-  delete _rt;
-  delete _waiting_for_join;
 }
 
 void
@@ -297,7 +299,7 @@ Tapestry::join(Args *args)
       unsigned donerpc = rcvRPC( &nn_rpcset, ok );
       nn_callinfo *ncall = nn_resultmap[donerpc];
       nn_return nnr = *(ncall->nr);
-      TapDEBUG(2) << ip() << " done with nn with " << ncall->ip << endl;
+      TapDEBUG(2) << "done with nn with " << ncall->ip << endl;
 
       if( ok ) {
 	for( uint k = 0; k < nnr.nodelist.size(); k++ ) {
@@ -597,6 +599,7 @@ Tapestry::handle_mc(mc_args *args, mc_return *ret)
   if( args->from_lock ) {
     // we won't be doing a multicast, so it's ok to add it now
     add_to_rt( args->new_ip, args->new_id );
+    _rt->remove_lock( args->new_ip, args->new_id );
     return;
   }
 
@@ -1037,7 +1040,7 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
 		  if( ni->_addr != ip() ) {
 		      record_stat(STAT_REPAIR);
 		      repair_return *rr = New repair_return();
-		      repair_args *ra = New repair_args();;
+		      repair_args *ra = New repair_args();
 		      ra->bad_id = *i;
 		      ra->level = (uint) match;
 		      ra->digit = digit;
@@ -1460,6 +1463,7 @@ RouteEntry::remove_at( uint pos )
   } else {
     // bring everyone else up one
     uint i = pos;
+    delete _nodes[i];
     for( ; i+1 < _size; i++ ) {
       _nodes[i] = _nodes[i+1];
     }
@@ -1590,7 +1594,7 @@ RoutingTable::RoutingTable( Tapestry *node, uint redundancy )
 
 RoutingTable::~RoutingTable()
 {
-  TapRTDEBUG(3) << "rt destroyed\n" << endl;
+  TapRTDEBUG(3) << "rt destroyed" << endl;
   //delete all route entries
   for( uint i = 0; i < _node->_digits_per_id; i++ ) {
     for( uint j = 0; j < _node->_base; j++ ) {
@@ -1809,6 +1813,7 @@ RoutingTable::remove_backpointer( IPAddress ip, GUID id, uint level )
        i != this_level->end(); i++ ) {
     NodeInfo curr_node = **i;
     if( curr_node == new_node ) {
+      delete *i;
       this_level->erase(i);
       // only erase the first occurance
       return;
@@ -1846,6 +1851,8 @@ RoutingTable::set_lock( IPAddress ip, GUID id )
   if( add ) {
     this_level->push_back( new_node );
     TapRTDEBUG(3) << "locks-adding " << ip << " to " << this_level << endl;
+  } else {
+    delete new_node;
   }
 }
 
@@ -1854,9 +1861,11 @@ RoutingTable::remove_lock( IPAddress ip, GUID id )
 {
   vector<NodeInfo *> * this_level = get_locks(id);
   NodeInfo new_node( ip, id );
+  TapRTDEBUG(3) << "locks-removed called for " << ip << endl;
   for(vector<NodeInfo *>::iterator i=this_level->begin(); 
       i != this_level->end(); ++i) {
     if( **i == new_node ) {
+      delete *i;
       this_level->erase(i);
       // only erase the first occurance
       TapRTDEBUG(3) << "locks-removing " << ip << " to " << this_level << endl;
