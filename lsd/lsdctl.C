@@ -30,7 +30,7 @@ const modevec modes[] = {
   { "stabilize", lsdctl_stabilize, "stabilize start|stop" },
   { "replicate", lsdctl_replicate, "replicate [-r] start|stop" },
   { "loctab", lsdctl_getloctab, "loctab [vnodenum]" },
-  { "rpcstats", lsdctl_getrpcstats, "rpcstats [-r]" },
+  { "rpcstats", lsdctl_getrpcstats, "rpcstats [-rf]" },
   { "myids", lsdctl_getmyids, "myids" },
   { NULL, NULL, NULL }
 };
@@ -297,7 +297,8 @@ int
 main (int argc, char *argv[])
 {
   setprogname (argv[0]);
-  
+  putenv ("POSIXLY_CORRECT=1"); // Prevents Linux from reordering options
+
   int ch;
   while ((ch = getopt (argc, argv, "S:vq")) != -1)
     switch (ch) {
