@@ -17,8 +17,16 @@ int tag_cmp (tag_t, tag_t);
 void ID_put (char *, chordID);
 void ID_get (chordID, char *);
 bool up_to_date (uint, vec<chordID>, vec<chord_node>);
-bool valid_proposal (ptr<dhc_block>, dhc_prepare_arg *, user_args *);
+void master_send_config (vec<chordID>, user_args *);
+bool valid_proposal (ptr<dhc_block>, u_int64_t,	paxos_seqnum_t, user_args *);
 
+static inline bool 
+valid_proposal (ptr<dhc_block> kb, dhc_propose_arg *arg, user_args *sbp)
+{ return valid_proposal (kb, arg->config_seqnum, arg->round, sbp); };
+
+static inline bool 
+valid_proposal (ptr<dhc_block> kb, dhc_prepare_arg *arg, user_args *sbp)
+{ return valid_proposal (kb, arg->config_seqnum, arg->round, sbp); };
 
 static inline ptr<dhc_block> 
 to_dhc_block (ptr<dbrec> rec)

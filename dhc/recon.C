@@ -171,7 +171,7 @@ dhc::recv_newconfig (user_args *sbp)
       sbp->reply (&res);
       return;
     }    
-    if (kb->meta->config.seqnum > newconfig->old_conf_seqnum + 1) {
+    if (kb->meta->config.seqnum >= newconfig->old_conf_seqnum + 1) {
       warn << "dhc::recv_newconfig Older config received.\n";
       dhc_newconfig_res res; res.status = DHC_CONF_MISMATCH;
       sbp->reply (&res);
@@ -179,7 +179,6 @@ dhc::recv_newconfig (user_args *sbp)
     }
   }
 
-  
   if (dhc_debug)
     warn << "\n\n dhc::recv_newconfig. kb before insert \n" 
 	 << kb->to_str () << "\n";

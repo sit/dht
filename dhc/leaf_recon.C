@@ -26,11 +26,12 @@ dhc::ask_master (ptr<dhc_block> kb, dhc_cb_t cb)
   b->proposal.proposer = myNode->my_ID ();
   dhcs.insert (b);
 
-  ref<dhc_prepare_arg> arg = New refcounted<dhc_prepare_arg> ();
+  ref<dhc_propose_arg> arg = New refcounted<dhc_propose_arg> ();
   arg->bID = kb->id;
   arg->round.seqnum = b->proposal.seqnum;
   arg->round.proposer = b->proposal.proposer;
   arg->config_seqnum = b->config_seqnum;
+  set_new_config (b, arg, myNode, n_replica);
 
   ref<dhc_prepare_res> res = New refcounted<dhc_prepare_res> (DHC_OK);
   ptr<location> master = myNode->locations->lookup (kb->masterID);
@@ -60,7 +61,8 @@ dhc::recv_permission (chordID bID, dhc_cb_t cb, ref<dhc_prepare_res> perm,
 
     vec<chordID> new_config;
     set_ac (&new_config, *perm->resok);
-    set_locations (&b->new_config, myNode, new_config);
+    if (new_config.size () > 0)
+      set_locations (&b->new_config, myNode, new_config);
     ptr<dbrec> key = id2dbrec (bID);
     ptr<dbrec> rec = db->lookup (key);
     ptr<dhc_block> kb = to_dhc_block (rec);
@@ -130,7 +132,7 @@ void
 dhc::recv_ask (user_args *sbp) 
 {
 
-  dhc_prepare_arg *ask = sbp->template getarg<dhc_prepare_arg> ();
+  dhc_propose_arg *ask = sbp->template getarg<dhc_propose_arg> ();
   ptr<dbrec> key = id2dbrec (ask->bID);
   ptr<dbrec> rec = db->lookup (key);
 
@@ -162,11 +164,27 @@ dhc::recv_ask (user_args *sbp)
   if (!valid_proposal (kb, ask, sbp))
     return;
 
-  dhc_soft *b = dhcs[kb->masterID];
-  if (!b) {
-    b = New dhc_soft (myNode, master_kb);
-    dhcs.insert (b);
-  }
+  dhc_soft *b = dhcs[kb->id];
+  if (b) {
+    if (b->pstat->acc_conf.size () > 0) {    //If the new configuration exists,
+      master_send_config (b->pstat->acc_conf, sbp);        //just send it back.
+      return;
+    } 
+    if (b->status == IDLE) {
+      b->status = RECON_INPROG;
+      b->pstat->init ();
+    } else {
+      dhc_prepare_res res (DHC_RECON_INPROG);
+      sbp->reply (&res);
+      return;
+    }      
+  } else 
+    b = New dhc_soft (myNode, kb);
+  dhcs.insert (b);
+
+  dhc_soft *mb = dhcs[kb->masterID];
+  if (!mb)
+    mb = New dhc_soft (myNode, master_kb);
 
   ref<dhc_prepare_arg> arg = New refcounted<dhc_prepare_arg> ();
   arg->bID = ask->bID;
@@ -174,36 +192,96 @@ dhc::recv_ask (user_args *sbp)
   arg->round.proposer = ask->round.proposer;
   arg->config_seqnum = ask->config_seqnum;
 
-  for (uint i=0; i<b->config.size (); i++) {
+  for (uint i=0; i<mb->config.size (); i++) {
     ref<dhc_prepare_res> res = New refcounted<dhc_prepare_res> (DHC_OK);
-    myNode->doRPC (b->config[i], dhc_program_1, DHCPROC_CMP, arg, res,
-		   wrap (this, &dhc::recv_cmp_ack, ask->bID, sbp, res));
+    myNode->doRPC (mb->config[i], dhc_program_1, DHCPROC_CMP, arg, res,
+		   wrap (this, &dhc::recv_cmp_ack, kb, sbp, res));
   }
 
 }
 
 void
-dhc::recv_cmp_ack (chordID bID, user_args *sbp, ref<dhc_prepare_res> ca,
+dhc::recv_cmp_ack (ptr<dhc_block> kb, user_args *sbp, ref<dhc_prepare_res> ca,
 		   clnt_stat err)
 {
 
-}
+  if (!err && ca->status == DHC_OK) {
+    dhc_soft *b = dhcs[kb->id];
+    assert (b);
+    b->pstat->promise_recvd++;
 
-#if 0
-void 
-dhc::recv_leaf_lookup ()
-{
+    if (b->pstat->promise_recvd > n_replica/2 && !b->pstat->sent_newconfig) {
+      if (!set_ac (&b->pstat->acc_conf, *ca->resok)) {
+	warn << "dhc::recv_cmp_ack Different conf accepted. Somethings's wrong!!\n";
+	exit (-1);
+      }
+      b->status = IDLE;
+      b->pstat->sent_newconfig = true;
+      dhcs.insert (b);
+      master_send_config (b->pstat->acc_conf, sbp);
 
+      kb->meta->config.seqnum += 1;
+      if (b->pstat->acc_conf.size () > 0) {
+	kb->meta->config.nodes.setsize (b->pstat->acc_conf.size ());
+	for (uint i=0; i<kb->meta->config.nodes.size (); i++)
+	  kb->meta->config.nodes[i] = b->pstat->acc_conf[i];
+      } else {
+	dhc_propose_arg *ask = sbp->template getarg<dhc_propose_arg> ();
+	kb->meta->config.nodes.setsize (ask->new_config.size ());
+	for (uint i=0; i<kb->meta->config.nodes.size (); i++)
+	  kb->meta->config.nodes[i] = ask->new_config[i];
+      }
+      ptr<dbrec> key = id2dbrec (kb->id);
+      db->del (key);
+      db->insert (key, to_dbrec (kb));
+    }
+  } else {
+    if (err == RPC_CANTSEND) {
+      warn << "dhc:recv_promise: cannot send RPC. retry???\n";
+    } else 
+      print_error ("dhc::recv_cmp_ack", err, ca->status);
+    dhc_prepare_res res (ca->status);
+    sbp->reply (&res);
+  }
 }
-#endif
 
 /* End master node protocol */
 
 /* Start master peer protocol */
-
+ 
 void
 dhc::recv_cmp (user_args *sbp)
 {
+  dhc_propose_arg *cmp = sbp->template getarg<dhc_propose_arg> ();
+  ptr<dbrec> key = id2dbrec (cmp->bID);
+  ptr<dbrec> rec = db->lookup (key);
+  
+  if (!rec) {
+    dhc_prepare_res res (DHC_BLOCK_NEXIST);
+    sbp->reply (&res);
+    return;
+  } 
+
+  //Create leaf block
+  ptr<dhc_block> kb = to_dhc_block (rec);
+  if (!valid_proposal (kb, cmp, sbp))
+    return;
+
+  dhc_soft *b = dhcs[cmp->bID];
+  if (b && b->status != IDLE) {
+      dhc_prepare_res res (DHC_RECON_INPROG);
+      sbp->reply (&res);
+  } else {      
+    dhc_prepare_res res (DHC_OK);
+    res.resok->new_config.setsize (0);
+    sbp->reply (&res);
+
+    // TODO: Record new config, instead of just proposal number
+    kb->meta->accepted.seqnum = cmp->round.seqnum;
+    kb->meta->accepted.proposer = cmp->round.proposer;
+    db->del (key);
+    db->insert (key, to_dbrec (kb));
+  }
 
 }
 

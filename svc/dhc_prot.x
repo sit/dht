@@ -23,7 +23,7 @@ struct paxos_seqnum_t {
   chordID proposer;
 };
 
-/* prepare/ask message */
+/* prepare message */
 struct dhc_prepare_arg {
    chordID bID; 		/* ID of Public Key block */
    paxos_seqnum_t round; 	/* new Paxos number same as proposal number*/ 
@@ -35,7 +35,7 @@ struct dhc_prepare_resok {
 				/* otherwise, set resok to NULL */
 };
 
-/* promise message */
+/* promise message and reply for ask */
 union dhc_prepare_res switch (dhc_stat status) {	
    case DHC_OK:
 	dhc_prepare_resok resok;
@@ -49,6 +49,7 @@ union dhc_prepare_res switch (dhc_stat status) {
 struct dhc_propose_arg {
    chordID bID;
    paxos_seqnum_t round;
+   u_int64_t config_seqnum;
    chordID new_config<>;
 };
 
@@ -140,7 +141,7 @@ program DHC_PROGRAM {
     DHCPROC_NEWBLOCK (dhc_put_arg) = 8; 
 
     dhc_prepare_res 
-    DHCPROC_ASK (dhc_prepare_arg) = 9;
+    DHCPROC_ASK (dhc_propose_arg) = 9;
 
     dhc_prepare_res
     DHCPROC_CMP (dhc_prepare_arg) = 10;

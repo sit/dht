@@ -307,7 +307,6 @@ struct dhc_soft {
     bzero (&proposal.proposer, sizeof (chordID));    
     promised.seqnum = kb->meta->accepted.seqnum;
     promised.proposer = kb->meta->accepted.proposer;
-
     
     pstat = New refcounted<paxos_state_t>;
   }
@@ -435,7 +434,9 @@ class dhc /*: public virtual refcount*/ {
   void recv_ask (user_args *);
   void recv_permission (chordID, dhc_cb_t, ref<dhc_prepare_res>, clnt_stat);
   void recv_cmp (user_args *);
-  void recv_cmp_ack (chordID, user_args *, ref<dhc_prepare_res>, clnt_stat);
+  void recv_cmp_ack (ptr<dhc_block>, user_args *, 
+		     ref<dhc_prepare_res>, clnt_stat);
+  void recv_leaf_lookup (chordID, user_args *);
 
   void recv_get (user_args *);
   void getblock_cb (user_args *, ptr<location>, ptr<read_state>, 
