@@ -115,6 +115,7 @@ EventQueue::advance()
 
   // XXX: time is not running smoothly. does that matter?
   Event *e = _queue.front();
+  assert(e->ts >= _time && e->ts < _time + 100000000);
   _time = e->ts;
 
   while(_queue.size() > 0){
@@ -123,8 +124,6 @@ EventQueue::advance()
       break;
     _queue.pop_front();
     Event::Execute(first); // new thread, execute(), delete Event
-    // Cannot free(first) here because P2PEvent::execute() send()s
-    // the event to some channel, i.e. it's still in use at this point.
   }
 }
 
@@ -132,9 +131,6 @@ EventQueue::advance()
 void
 EventQueue::add_event(Event *e)
 {
-  // time in event is offset always.  set to absolute time.
-  e->ts += _time;
-
   // empty queue
   if(_queue.empty()) {
     _queue.push_back(e);

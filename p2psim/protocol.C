@@ -107,10 +107,6 @@ Protocol::run()
         // application call
         // no longer happens, handled in EventQueue and Event
         assert(0);
-#if 0
-        ap = new pair<Protocol*, Event*>(this, event);
-        ThreadManager::Instance()->create(this->_node, Protocol::Dispatch, ap);
-#endif
         break;
 
       case 2:
@@ -121,36 +117,5 @@ Protocol::run()
       default:
         break;
     }
-  }
-}
-
-void
-Protocol::dispatch(P2PEvent *e)
-{
-  switch(e->event) {
-    case JOIN:
-      join(e->args);
-      break;
-
-    case LEAVE:
-      leave(e->args);
-      break;
-
-    case CRASH:
-      crash(e->args);
-      break;
-
-    case INSERT:
-      insert(e->args);
-      break;
-
-    case LOOKUP:
-      lookup(e->args);
-      break;
-
-    default:
-      cerr << "unknown event type " << e->event << endl;
-      assert(0);
-      break;
   }
 }

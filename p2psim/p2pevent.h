@@ -14,7 +14,7 @@ public:
 
   Node *node;
   string protocol;
-  Protocol::EventID event;
+  Protocol::event_f fn;
   Args *args;
 
  protected:
@@ -22,6 +22,7 @@ public:
 
  private:
   virtual void execute();
+  Protocol::event_f name2fn(string name);
 };
 
 #endif // __P2PEVENT_H

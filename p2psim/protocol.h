@@ -20,13 +20,6 @@ class Protocol;
 class Protocol : public Threaded {
 public:
   typedef void (Protocol::*member_f)(void*, void *);
-  typedef enum {
-    JOIN = 0,
-    LEAVE,
-    CRASH,
-    INSERT,
-    LOOKUP,
-  } EventID;
 
   Protocol(Node*);
   virtual ~Protocol();
@@ -34,13 +27,12 @@ public:
   Channel *appchan() { return _appchan; }
   Channel *netchan() { return _netchan; }
 
+  typedef void (Protocol::*event_f)(Args*);
   virtual void join(Args*) = 0;
   virtual void leave(Args*) = 0;
   virtual void crash(Args*) = 0;
   virtual void insert(Args*) = 0;
   virtual void lookup(Args*) = 0;
-
-  void dispatch(P2PEvent*);
 
 protected:
 
@@ -67,6 +59,7 @@ protected:
     };
 
     XEvent *e = new XEvent;
+    e->ts = now() + d;
     e->_target = dynamic_cast<BT*>(this);
     e->_fn = fn;
     e->_args = args;

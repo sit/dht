@@ -94,7 +94,7 @@ Network::run()
 	assert (srcnode);
         latency = _top->latency(srcnode, dstnode);
         ne = new NetEvent();
-        ne->ts = latency;
+        ne->ts = now() + latency;
         ne->node = dstnode;
         ne->p = p;
         send(EventQueue::Instance()->eventchan(), (Event**) &ne);

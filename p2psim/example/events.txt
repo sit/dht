@@ -10,10 +10,10 @@
 # event type "observe"
 #   observe timestamp observer [arguments]
 #
-node 0 1 Chord:0 wellknown=1 
-node 1 2 Chord:0 wellknown=1
-node 2 3 Chord:0 wellknown=1
-node 3 4 Chord:0 wellknown=1
+node 0 1 Chord:join wellknown=1 
+node 1 2 Chord:join wellknown=1
+node 2 3 Chord:join wellknown=1
+node 3 4 Chord:join wellknown=1
 
 # observe 100 ChordObserver reschedule=500 type=Chord
 
