@@ -80,13 +80,11 @@ class dhash {
   virtual void init_after_chord (ptr<vnode> node) = 0;
 
   virtual void print_stats () = 0;
+  virtual void start (bool randomize) = 0;
   virtual void stop () = 0;
   virtual void fetch (blockID id, int cookie, cbvalue cb) = 0;
 
   virtual dhash_stat key_status(const blockID &n) = 0;
 };
-
-// see dhash/server.C
-extern int JOSH;
 
 #endif

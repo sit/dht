@@ -17,6 +17,7 @@ public:
   pmaint (dhashcli *cli, ptr<vnode> host_node, ptr<dbfe> db, 
 	  delete_t delete_helper);
 
+  void start ();
   void stop ();
 
   enum { PRTTMSHORT = 1, PRTTMLONG = 60, MAX_PENDING = 20};

@@ -75,8 +75,10 @@ stabilize_manager::~stabilize_manager (void)
 void
 stabilize_manager::start (void)
 {
-  stabilize_continuous (stabilize_timer);
-  stabilize_backoff (stabilize_timer);
+  if (!stabilize_continuous_tmo)
+    stabilize_continuous (stabilize_timer);
+  if (!stabilize_backoff_tmo)
+    stabilize_backoff (stabilize_timer);
 }
 
 void

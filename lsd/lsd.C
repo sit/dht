@@ -31,6 +31,8 @@
 #include "dhashgateway.h"
 #include <sys/types.h>
 
+#include "lsdctl_prot.h"
+
 #include <debruijn.h>
 #include <fingerroute.h>
 #include <fingerroutepns.h>
@@ -65,6 +67,8 @@ static char *logfname;
 
 ptr<chord> chordnode;
 static str p2psocket;
+static str ctlsocket;
+
 vec<ref<dhash> > dh;
 int myport;
  
@@ -114,39 +118,100 @@ void stats ();
 void stop ();
 void halt ();
 
+// =====================================
+
 void
-client_accept (int fd)
+lsdctl_dispatch (ptr<asrv> s, svccb *sbp)
 {
-  if (fd < 0)
-    fatal ("EOF\n");
+  if (!sbp) {
+    // Close the server
+    s->setcb (NULL);
+    return;
+  }
+  warnx << "received lsdctl " << sbp->proc () << "\n";
 
-  ref<axprt_stream> x = axprt_stream::alloc (fd, 1024*1025);
+  switch (sbp->proc ()) {
+  case LSDCTL_NULL:
+    sbp->reply (NULL);
+    break;
 
+  case LSDCTL_EXIT:
+    sbp->reply (NULL);
+    halt ();
+    break;
+
+  case LSDCTL_SETSTABILIZE:
+    {
+      bool *s = sbp->template getarg<bool> ();
+      if (*s)
+	chordnode->stabilize ();
+      else
+	chordnode->stop ();
+
+      sbp->reply (s);
+    }
+    break;
+  case LSDCTL_SETREPLICATE:
+    {
+      lsdctl_setreplicate_arg *a = sbp->template getarg<lsdctl_setreplicate_arg> ();
+      if (a->enable) {
+	for (unsigned int i = 0; i < initialized_dhash; i++)
+	  dh[i]->start (a->randomize);
+      } else {
+	for (unsigned int i = 0; i < initialized_dhash; i++)
+	  dh[i]->stop ();
+      }
+      sbp->replyref (a->enable);
+    }
+    break;
+  default:
+    sbp->reject (PROC_UNAVAIL);
+    break;
+  }
+}
+
+// =====================================
+
+void
+control_accept (ref<axprt_stream> x)
+{
+  ptr<asrv> srv;
+  srv = asrv::alloc (x, lsdctl_prog_1, NULL);
+  srv->setcb (wrap (&lsdctl_dispatch, srv));
+}
+
+void
+gateway_accept (ref<axprt_stream> x)
+{
   // constructor of dhashgateway object calls mkref to maintain a
   // reference to itself until the program is gone.
   vNew refcounted<dhashgateway> (x, chordnode);
 }
 
+typedef callback<void, ref<axprt_stream> >::ptr acceptercb_t;
 static void
-client_accept_socket (int lfd)
+client_accept_socket (int lfd, acceptercb_t accepter)
 {
   sockaddr_un sun;
   bzero (&sun, sizeof (sun));
   socklen_t sunlen = sizeof (sun);
   int fd = accept (lfd, reinterpret_cast<sockaddr *> (&sun), &sunlen);
-  if (fd >= 0)
-    client_accept (fd);
+  if (fd < 0)
+    fatal ("EOF\n");
+
+  ref<axprt_stream> x = axprt_stream::alloc (fd, 1024*1025);
+  accepter (x);
 }
 
 static void
-client_listen (int fd)
+client_listen (int fd, acceptercb_t accepter)
 {
   if (listen (fd, 5) < 0) {
     fatal ("Error from listen: %m\n");
     close (fd);
   }
   else {
-    fdcb (fd, selread, wrap (client_accept_socket, fd));
+    fdcb (fd, selread, wrap (client_accept_socket, fd, accepter));
   }
 }
 
@@ -154,6 +219,7 @@ static void
 cleanup ()
 {
   unlink (p2psocket);
+  unlink (ctlsocket);
 }
 
 static void
@@ -163,15 +229,25 @@ startclntd()
   int clntfd = unixsocket (p2psocket);
   if (clntfd < 0) 
     fatal << "Error creating client socket (UNIX)" << strerror (errno) << "\n";
-  client_listen (clntfd);
+  client_listen (clntfd, wrap (gateway_accept));
   
   int port = (myport == 0) ? 0 : myport + 1; 
   int tcp_clntfd = inetsocket (SOCK_STREAM, port);
   if (tcp_clntfd < 0)
     fatal << "Error creating client socket (TCP) " << strerror(errno) << "\n";
-  client_listen (tcp_clntfd);
-
+  client_listen (tcp_clntfd, wrap (gateway_accept));
 }
+
+static void
+startcontroller ()
+{
+  unlink (ctlsocket);
+  int ctlfd = unixsocket (ctlsocket);
+  if (ctlfd < 0)
+    fatal << "Error creating control socket (UNIX)" << strerror (errno) << "\n";
+  client_listen (ctlfd, wrap (control_accept));
+}
+
 
 static void
 newvnode_cb (int n, ptr<vnode> my, chordstat stat)
@@ -187,17 +263,6 @@ newvnode_cb (int n, ptr<vnode> my, chordstat stat)
   if (n < vnodes)
     chordnode->newvnode (modes[mode].producer, wrap (newvnode_cb, n));
 }
-
-
-void
-halt ()
-{
-  warnx << "Exiting on command.\n";
-  info << "stopping.\n";
-  chordnode = NULL;
-  exit (0);
-}
-
 
 
 #ifdef PROFILING
@@ -354,31 +419,9 @@ bandwidth ()
 void
 stats () 
 {
-  warn << "STATS: " << JOSH << "\n";
-
-  if (JOSH) {
-    // only execute once
-    static bool unleashed = false;
-    if (!unleashed) {
-      warn << gettime () << " unleashing synchronization\n";
-      for (u_int i = 0 ; i < initialized_dhash; i++) {
-
-	u_int start_index = 0;
-	u_int start_delay = 0;
-	if (JOSH==2) {
-	  start_index = random_getword ()  % dhash::num_efrags ();
-	  start_delay = random_getword ()  % dhash::reptm ();
-	}
-	delaycb (start_delay, 0, 
-		 wrap (dh[i], &dhash::replica_maintenance_timer, start_index));
-      }
-
-      bandwidth ();
-      unleashed = true;
-      return;
-    }
-  }
-
+  warn << "STATS:\n";
+  //      bandwidth ();
+  
 #ifdef PROFILING
   toggle_profiling ();
 #else
@@ -399,6 +442,14 @@ stop ()
     dh[i]->stop ();
 }
 
+void
+halt ()
+{
+  warnx << "Exiting on command.\n";
+  info << "stopping.\n";
+  chordnode = NULL;
+  exit (0);
+}
 static void
 usage ()
 {
@@ -450,16 +501,20 @@ main (int argc, char **argv)
   int nreplica = 0;
   str db_name = "/var/tmp/db";
   p2psocket = "/tmp/chord-sock";
+  ctlsocket = "/tmp/lsdctl-sock";
   logfname = "lsd-trace.log";
   str myname = my_addr ();
   mode = MODE_CHORD;
 
   char *cffile = NULL;
 
-  while ((ch = getopt (argc, argv, "b:d:fFj:l:L:M:m:n:O:Pp:S:s:T:tv:"))!=-1)
+  while ((ch = getopt (argc, argv, "b:C:d:fFj:l:L:M:m:n:O:Pp:S:s:T:tv:"))!=-1)
     switch (ch) {
     case 'b':
       lbase = atoi (optarg);
+      break;
+    case 'C':
+      ctlsocket = optarg;
       break;
     case 'd':
       db_name = optarg;
@@ -638,6 +693,9 @@ main (int argc, char **argv)
 
   if (p2psocket) 
     startclntd();
+  if (ctlsocket)
+    startcontroller ();
+  
   info << "starting amain.\n";
 
   amain ();

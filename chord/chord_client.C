@@ -269,6 +269,16 @@ chord::stop () {
   vnodes.traverse (wrap (this, &chord::stop_cb));
 }
 
+void
+chord::stabilize_cb (const chordID &k, ptr<vnode> v) {
+  v->stabilize ();
+}
+
+void
+chord::stabilize () {
+  vnodes.traverse (wrap (this, &chord::stabilize_cb));
+}
+
 const rpc_program *
 chord::get_program (int progno)
 {

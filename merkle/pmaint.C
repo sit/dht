@@ -13,8 +13,16 @@ pmaint::pmaint (dhashcli *cli, ptr<vnode> host_node,
   db (db),
   delete_helper (delete_helper),  
   pmaint_searching (true),
-  pmaint_next_key (0)
+  pmaint_next_key (0),
+  active_cb (NULL)
 {
+}
+
+void
+pmaint::start ()
+{
+  if (active_cb)
+    return;
   int jitter = uniform_random (0, PRTTMLONG);
   active_cb = delaycb (PRTTMLONG + jitter, wrap (this, &pmaint::pmaint_next));
 }
@@ -27,6 +35,7 @@ pmaint::stop ()
     active_cb = NULL;
   }
 }
+
 //"dispatch loop" for pmaint
 void
 pmaint::pmaint_next ()

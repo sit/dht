@@ -200,6 +200,7 @@ class chord : public virtual refcount {
   void stats_cb (const chordID &k, ptr<vnode> v);
   void print_cb (strbuf outbuf, const chordID &k, ptr<vnode> v);
   void stop_cb (const chordID &k, ptr<vnode> v);
+  void stabilize_cb (const chordID &k, ptr<vnode> v);
   
   // Number of received RPCs, for locationtable comm stuff
   ptr<u_int32_t> nrcv;
@@ -219,6 +220,7 @@ class chord : public virtual refcount {
   void stats (void);
   void print (strbuf &outbuf);
   void stop (void);
+  void stabilize (void);
 
   int get_port () { return myport; }
 

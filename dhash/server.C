@@ -60,7 +60,6 @@
 #define trace modlogger ("dhash", modlogger::TRACE)
 
 #include <merkle_sync_prot.h>
-int JOSH = getenv("JOSH") ? atoi(getenv("JOSH")) : 0;
 int DHC_SERVER = getenv("DHC") ? atoi(getenv("DHC")) : 0;
 
 #include <configurator.h>
@@ -233,20 +232,11 @@ dhash_impl::init_after_chord (ptr<vnode> node)
 
   update_replica_list ();
   delaycb (synctm (), wrap (this, &dhash_impl::sync_cb));
-
-  if (!JOSH) {
-    merkle_rep_tcb = delaycb
-      (reptm (), wrap (this, &dhash_impl::replica_maintenance_timer, 0));
-  }
-
-  keyhash_mgr_tcb =
-    delaycb (keyhashtm (), wrap (this, &dhash_impl::keyhash_mgr_timer));
-  
 #if 0  
   pmaint_obj = New pmaint (cli, host_node, db, 
 			   wrap (this, &dhash_impl::db_delete_immutable));
-#endif /* 0 */  
-
+#endif /* 0 */
+  start ();
 }
 
 
@@ -932,10 +922,36 @@ dhash_impl::stop ()
   if (merkle_rep_tcb) {
     timecb_remove (merkle_rep_tcb);
     merkle_rep_tcb = NULL;
-    if (pmaint_obj)
-      pmaint_obj->stop ();
     warn << "stop merkle replication timer\n";
   }
+  if (pmaint_obj)
+    pmaint_obj->stop ();
+}
+
+void
+dhash_impl::start (bool randomize)
+{
+  u_long delay = 0;
+  if (!keyhash_mgr_tcb) {
+    if (randomize)
+      delay = random_getword () % keyhashtm (); 
+    keyhash_mgr_tcb =
+      delaycb (keyhashtm () + delay, wrap (this, &dhash_impl::keyhash_mgr_timer));
+  }
+  if (!merkle_rep_tcb) {
+    u_long index = 0;
+    if (randomize) {
+      delay = random_getword () % reptm ();
+      index = random_getword () % num_efrags ();
+    }
+    merkle_rep_tcb =
+      delaycb (reptm () + delay,
+	       wrap (this, &dhash_impl::replica_maintenance_timer, index));
+  }
+#if 0
+  if (pmaint_obj)
+    pmaint_obj->start ();
+#endif /* 0 */  
 }
 
 ptr<dbrec>

@@ -203,6 +203,7 @@ class dhash_impl : public dhash {
 
   void print_stats ();
   void stop ();
+  void start (bool randomize = false);
   void fetch (blockID id, int cookie, cbvalue cb);
 
   dhash_stat key_status (const blockID &n);
