@@ -8,6 +8,8 @@
 
 #include <vector>
 
+#define CHORD_SUCC_NUM 1  //successor list contains CHORD_SUCC_NUM elements
+
 class LocTable;
 
 class Chord : public Protocol {
@@ -34,6 +36,15 @@ public:
   struct get_predecessor_ret {
     IDMap n;
   };
+
+  struct get_successor_list_args {
+    Chord::CHID m; //number of successors wanted
+  };
+  
+  struct get_successor_list_ret {
+    vector<IDMap> v;
+  };
+
   struct notify_args {
     IDMap me;
   };
@@ -53,6 +64,7 @@ public:
 
   // RPC handlers.
   void get_predecessor_handler(get_predecessor_args *, get_predecessor_ret *);
+  void get_successor_list_handler(get_successor_list_args *, get_successor_list_ret *);
   void notify_handler(notify_args *, notify_ret *);
   void next_handler(next_args *, next_ret *);
 
@@ -66,6 +78,7 @@ protected:
   IDMap next(CHID n);
   void fix_predecessor();
   void fix_successor();
+  void fix_successor_list();
   void stabilize();
 };
 

@@ -1,10 +1,10 @@
-#include  "chordsucclistfinger.h"
+#include  "chordfinger.h"
 #include <iostream>
 using namespace std;
 
-ChordSuccListFinger::ChordSuccListFinger(Node *n) : ChordSuccList(n) 
+ChordFinger::ChordFinger(Node *n) : Chord(n) 
 {
-  loctable->resize((1 + NBCHID + SUCC_NUM), SUCC_NUM);
+  loctable->resize((1 + NBCHID + CHORD_SUCC_NUM), CHORD_SUCC_NUM);
   for (int i = 0; i < NBCHID; i++) {
     loctable->pin(ConsistentHash::successorID(me.id, i));
   }
@@ -12,7 +12,7 @@ ChordSuccListFinger::ChordSuccListFinger(Node *n) : ChordSuccList(n)
 }
 
 void
-ChordSuccListFinger::fix_fingers()
+ChordFinger::fix_fingers()
 {
   int i0 = 1;
   IDMap succ = loctable->succ(1);
@@ -34,7 +34,7 @@ ChordSuccListFinger::fix_fingers()
 }
 
 void
-ChordSuccListFinger::stabilize()
+ChordFinger::stabilize()
 {/*
   super.stabilize();
   fix_fingers();

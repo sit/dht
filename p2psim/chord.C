@@ -9,8 +9,8 @@ using namespace std;
 
 Chord::Chord(Node *n) : Protocol(n)
 {
-  me.id = ConsistentHash::getRandID(); 
   me.ip = n->ip();
+  me.id = ConsistentHash::ip2chid(me.ip); 
   loctable = new LocTable(me);
 }
 
@@ -120,6 +120,7 @@ Chord::stabilize()
   //in chord pseudocode, fig 6 of ToN paper, this is a separate periodically called function
   fix_predecessor();
   fix_successor();
+  fix_successor_list();
 }
 
 void
@@ -143,6 +144,31 @@ Chord::fix_successor()
   }
   */
 }
+
+void
+Chord::get_successor_list_handler(get_successor_list_args *args, get_successor_list_ret *ret)
+{
+  IDMap succ = loctable->succ(CHORD_SUCC_NUM);
+  ret->v.clear();
+  ret->v.push_back(succ);
+}
+
+
+void
+Chord::fix_successor_list()
+{
+  IDMap succ = loctable->succ(1);
+  if (succ.ip == 0) return;
+
+  get_successor_list_args gsa;
+  get_successor_list_ret gsr;
+  doRPC(succ.ip, &Chord::get_successor_list_handler, &gsa, &gsr);
+
+  for (unsigned int i = 0; i < (gsr.v).size(); i++) {
+    loctable->add_node(gsr.v[i]);
+  }
+}
+
 
 void
 Chord::notify_handler(notify_args *args, notify_ret *ret)
