@@ -65,7 +65,7 @@ class dhash {
   enum { NUM_DFRAGS = 7 };
   enum { SYNCTM = 30 };
   enum { KEYHASHTM = 10 };
-  enum { REPTM = 10 };
+  enum { REPTM = 3 };
   enum { PRTTM = 5 };
 
 

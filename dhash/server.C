@@ -71,6 +71,7 @@ dhash_impl::~dhash_impl ()
 
 dhash_impl::dhash_impl (str dbname, u_int k, int _ss_mode) 
 {
+  missing_outstanding = 0;
   nreplica = k;
   kc_delay = 11;
   rc_delay = 7;
@@ -181,7 +182,22 @@ dhash_impl::init_after_chord(ptr<vnode> node, ptr<route_factory> _r_factory)
 void
 dhash_impl::missing (chord_node from, bigint key)
 {
-#if 0
+  // throttle the block downloads
+  if (missing_outstanding > MISSING_OUTSTANDING_MAX) {
+    warn << "Queueing: q_sz " << missing_q.size ()
+	 << " out " << missing_outstanding
+	 << " key " << key
+	 << "\n";  
+    if (missing_q[key] == NULL) {
+      missing_state *ms = New missing_state (key, from);
+      missing_q.insert (ms);
+    } else {
+      warn << "ignoring dup: " << key << "\n"; 
+    }
+    return;
+  }
+
+#if 1
   timespec ts;
   clock_gettime (CLOCK_REALTIME, &ts);
   str tm =  strbuf (" %d.%06d", int (ts.tv_sec), int (ts.tv_nsec/1000));
@@ -189,32 +205,47 @@ dhash_impl::missing (chord_node from, bigint key)
   // calculate key range that we should be storing
   vec<chord_node> preds = host_node->preds ();
   assert (preds.size () > 0);
-  chordID p = preds.back ().x;
-  chordID m = host_node->my_ID ();
+  ///chordID p = preds.back ().x;
+  //chordID m = host_node->my_ID ();
 
   warn << tm << " "
        << host_node->my_ID () << ": missing key " << key << ", from " << from.x << "\n"; // 
-  warn << "[" << p << "," << m << "]\n";
+  //warn << "[" << p << "," << m << "]\n";
 #endif
+
+  missing_outstanding++;
+  assert (missing_outstanding >= 0);
   cli->retrieve2 (key, 0, wrap (this, &dhash_impl::missing_retrieve_cb, key));
 }
 
 void
 dhash_impl::missing_retrieve_cb (bigint key, dhash_stat err, ptr<dhash_block> b, route r)
 {
+  missing_outstanding--;
+  assert (missing_outstanding >= 0);
+
   if (err) {
     warn << "Could not retrieve key " << key << "\n";
-    return;
-  } 
-  assert (b);
+  } else {
+    assert (b);
+    // Oh, the memory copies.
+    str blk (b->data, b->len);
+    str frag = Ida::gen_frag (dhash::NUM_DFRAGS, blk);
+    str f = strbuf () << str (b->data, 4) << frag;
+    ref<dbrec> d = New refcounted<dbrec> (f.cstr (), f.len ());
+    ref<dbrec> k = id2dbrec (key);
+    dbwrite (k, d);
+  }
 
-  // Oh, the memory copies.
-  str blk (b->data, b->len);
-  str frag = Ida::gen_frag (dhash::NUM_DFRAGS, blk);
-  str f = strbuf () << str (b->data, 4) << frag;
-  ref<dbrec> d = New refcounted<dbrec> (f.cstr (), f.len ());
-  ref<dbrec> k = id2dbrec (key);
-  dbwrite (k, d);
+  while ((missing_outstanding <= MISSING_OUTSTANDING_MAX)
+	 && (missing_q.size () > 0)) {
+    warn << "dequeuing missing key\n";
+    missing_state *ms = missing_q.first ();
+    assert (ms);
+    missing_q.remove (ms);
+    missing (ms->from, ms->key);
+    delete ms;
+  }
 }
 
 
@@ -396,6 +427,11 @@ dhash_impl::replica_maintenance_timer (u_int i)
   warn << "dhash_impl::replica_maintenance_timer index " << i
        << ", #succs " << succs.size() << "\n";
 #endif
+  if (missing_q.size () > 0) {
+    u_int q_sz = missing_q.size ();
+    warn << "not syncing q_sz " << q_sz << " out " << missing_outstanding << "\n";
+    goto out; // don't find more missing keys, yet!
+  }
   if (succs.size() == 0)
     goto out; // can't do anything
   if (replica_syncer && !replica_syncer->done())
@@ -413,7 +449,7 @@ dhash_impl::replica_maintenance_timer (u_int i)
        << " range [" << rngmin << ", " << rngmax << "]\n";
 #endif
   replica_syncer->sync (rngmin, rngmax);
-  i = (i + 1) % NUM_EFRAGS;
+  i = (i + 1) % (NUM_EFRAGS - 1);
 
  out:
   merkle_rep_tcb =

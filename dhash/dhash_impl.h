@@ -62,7 +62,19 @@ struct keyhash_meta {
   long version;
 };
 
+struct missing_state {
+  ihash_entry <missing_state> link;
+  bigint key;
+  chord_node from;
+  missing_state (bigint key, chord_node from) : key (key), from (from) {}
+};
+
 class dhash_impl : public dhash {
+  ihash<bigint, missing_state,
+    &missing_state::key, &missing_state::link, hashID> missing_q;
+  enum { MISSING_OUTSTANDING_MAX = 15 };
+  u_int missing_outstanding;
+
   u_int nreplica;
   int kc_delay;
   int rc_delay;
