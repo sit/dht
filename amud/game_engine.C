@@ -68,9 +68,13 @@ game_engine::room_lookup_cb (mud_rlookup_cb_t cb, dhash_stat stat, ptr<dhash_blo
 void 
 game_engine::insert (ref<avatar> a, mud_cb_t cb, bool newa)
 {
-  ptr<option_block> opt = New refcounted <option_block>;
-  if (newa)
+  ptr<option_block> opt;
+  if (newa) {
+    opt = New refcounted <option_block>;
     opt->flags = DHASHCLIENT_NEWBLOCK;
+  } else 
+    opt = NULL;
+
   warn << "game_engine::insert" << a->to_str ();
 
   dhash->insert (a->ID (), a->bytes (), a->size (), 
@@ -80,10 +84,12 @@ game_engine::insert (ref<avatar> a, mud_cb_t cb, bool newa)
 void 
 game_engine::insert (ref<thing> t, mud_cb_t cb, bool newt)
 {
-  ptr<option_block> opt = New refcounted <option_block>;
-  if (newt)
+  ptr<option_block> opt; 
+  if (newt) {
+    opt = New refcounted <option_block>;
     opt->flags = DHASHCLIENT_NEWBLOCK; // + DHASHCLIENT_RMW;
-
+  } else
+    opt = NULL;
   //warn << "game_engine::insert" << t->to_str ();
 
   dhash->insert (t->ID (), t->bytes (), t->size (), 
@@ -136,5 +142,31 @@ game_engine::enter_player (ref<avatar> a)
 		 wrap (this, &game_engine::done_enter_player, a), NULL, DHASH_NOAUTH);
 }
 
+void
+game_engine::enter_player (ref<avatar> a, int i, mud_cb_t cb)
+{
+  if (rlist[i]) {
+    ref<room> r = rlist[i];
+    r->enter (a);
+    this->insert (r, cb);
+  } else {
+    char rn[50];
+    sprintf (rn, "%s%d", "r", i);
+    ref<room> r = New refcounted<room> (str (rn), dhash);
+    this->lookup (r, wrap (this, &game_engine::ep_lookup_cb, a, i, cb));
+  }
+}
 
+void
+game_engine::ep_lookup_cb (ref<avatar> a, int i, mud_cb_t cb, 
+			   mud_stat stat, ptr<room> r) 
+{
+  if (stat == MUD_OK) {
+    rlist[i] = r;
+    enter_player (a, i, cb);
+  } else {
+    warn << "game_engine::ep_lookup_cb mud_stat: " << stat << "\n";
+    (*cb) (stat);
+  }
+}
 

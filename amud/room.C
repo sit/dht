@@ -167,6 +167,10 @@ room::to_str ()
       << "  Room Name: " << get_name () << "\n"
       << "         ID: " << ID () << "\n"
       << "Description: " << describe () << "\n"
+      << "      North: " << north.get_name () << "\n"
+      << "      South: " << south.get_name () << "\n"
+      << "       East: " << east.get_name () << "\n"
+      << "       West: " << west.get_name () << "\n"
       << "    Objects: " << tlist.size () << " items\n";
 
   for (uint i=0; i<tlist.size (); i++)
