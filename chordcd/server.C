@@ -26,9 +26,6 @@
 #include "xdr_suio.h"
 #include "afsnode.h"
 
-#define RPCTRACE 0
-#define RPCTRACE_LOOKUP 0
-
 #define LSD_SOCKET "/tmp/chord-sock"
 #define CMTU 1024
 
@@ -113,9 +110,6 @@ chord_server::dispatch (ref<nfsserv> ns, nfscall *sbp)
   switch(sbp->proc()) {
   case NFSPROC3_READLINK:
     {
-#if RPCTRACE
-    warn << "** NFSPROC3_READLINK\n";
-#endif
     nfs_fh3 *nfh = sbp->template getarg<nfs_fh3> ();
     chordID fh = nfsfh_to_chordid (nfh);
     fetch_data (fh,wrap (this, &chord_server::readlink_inode_cb, sbp, fh));
@@ -123,9 +117,6 @@ chord_server::dispatch (ref<nfsserv> ns, nfscall *sbp)
     break;
   case NFSPROC3_GETATTR: 
     {
-#if RPCTRACE
-      warn << "** NFSPROC3_GETATTR\n";
-#endif
       nfs_fh3 *nfh = sbp->template getarg<nfs_fh3> ();
       chordID fh = nfsfh_to_chordid (nfh);
       fetch_data (fh,wrap (this, &chord_server::getattr_inode_cb, sbp, fh));
@@ -133,9 +124,6 @@ chord_server::dispatch (ref<nfsserv> ns, nfscall *sbp)
     break;
   case NFSPROC3_FSSTAT:
     {
-#if RPCTRACE
-      warn << "** NFSPROC3_FSSTAT\n";
-#endif
       fsstat3res res (NFS3_OK);
       rpc_clear (res);
       sbp->reply (&res);
@@ -143,9 +131,6 @@ chord_server::dispatch (ref<nfsserv> ns, nfscall *sbp)
     break;
   case NFSPROC3_FSINFO:
     {
-#if RPCTRACE
-      warn << "** NFSPROC3_FSINFO\n";
-#endif
       int blocksize = fsinfo.info.blocksize;
       fsinfo3res res (NFS3_OK);
       res.resok->rtmax = blocksize;
@@ -164,9 +149,6 @@ chord_server::dispatch (ref<nfsserv> ns, nfscall *sbp)
     break;
   case NFSPROC3_ACCESS:
     {
-#if RPCTRACE
-      warn << "** NFSPROC3_ACCESS\n";
-#endif
       access3args *aa = sbp->template getarg<access3args> ();
       nfs_fh3 *nfh = &(aa->object);
       chordID fh = nfsfh_to_chordid (nfh);
@@ -175,16 +157,7 @@ chord_server::dispatch (ref<nfsserv> ns, nfscall *sbp)
     break;
   case NFSPROC3_LOOKUP: 
     {
-#if RPCTRACE
-      warn << "** NFSPROC3_LOOKUP\n";
-#endif
       diropargs3 *dirop = sbp->template getarg<diropargs3> ();
-
-#if RPCTRACE_LOOKUP
-    print_diropargs3 (dirop, NULL, 0, "", "LK  ");
-#endif
-
-
 
       nfs_fh3 *nfh = &(dirop->dir);
       chordID fh = nfsfh_to_chordid (nfh);
@@ -193,9 +166,6 @@ chord_server::dispatch (ref<nfsserv> ns, nfscall *sbp)
     break;
   case NFSPROC3_READDIR:
     {
-#if RPCTRACE
-      warn << "** NFSPROC3_READDIR\n";
-#endif
       readdir3args *readdirop = sbp->template getarg<readdir3args> ();
       nfs_fh3 *nfh = &(readdirop->dir);
       chordID fh = nfsfh_to_chordid (nfh);
@@ -204,9 +174,6 @@ chord_server::dispatch (ref<nfsserv> ns, nfscall *sbp)
     break;
   case NFSPROC3_READDIRPLUS:
     {
-#if RPCTRACE
-      warn << "** NFSPROC3_READDIRPLUS\n";
-#endif
       readdirplus3args *readdirop = sbp->template getarg<readdirplus3args> ();
       nfs_fh3 *nfh = &(readdirop->dir);
       chordID fh = nfsfh_to_chordid (nfh);
@@ -215,9 +182,6 @@ chord_server::dispatch (ref<nfsserv> ns, nfscall *sbp)
     break;
   case NFSPROC3_READ:
     {
-#if RPCTRACE
-      warn << "** NFSPROC3_READ\n";
-#endif
       read3args *ra = sbp->template getarg<read3args> ();
       nfs_fh3 *nfh = &(ra->file);
       chordID fh = nfsfh_to_chordid (nfh);
@@ -276,9 +240,6 @@ chord_server::getattr_inode_cb (nfscall *sbp, chordID ID, ptr<sfsro_data> data)
     ro2nfsattr (data->inode, &fa, ID);
     *nfsres.attributes = fa;
 
-#if RPCTRACE
-    print_getattr3res (&nfsres, NULL, 0, "", "GA  ");
-#endif
     sbp->reply (&nfsres);
   }
 }
@@ -299,9 +260,6 @@ chord_server::access_inode_cb (nfscall *sbp, chordID ID, ptr<sfsro_data> data)
     
     nfsres.resok->access = access_check (data->inode, access_req);
     
-#if RPCTRACE
-    print_access3res (&nfsres, NULL, 0, "", "AC  ");
-#endif
     sbp->reply (&nfsres);
   }
 }
@@ -372,9 +330,6 @@ chord_server::lookup_lookup_cb (nfscall *sbp, ptr<sfsro_data> dirdata, chordID d
     ro2nfsattr (data->inode, &ofa, dataID);
     *nfsres->resok->obj_attributes.attributes = ofa;
     
-#if RPCTRACE_LOOKUP
-    print_lookup3res (nfsres, NULL, 0, "", "LK  ");
-#endif
     sbp->reply (nfsres);
   } else {
     sbp->error (status);
@@ -860,10 +815,6 @@ struct lookup_state {
 void
 chord_server::lookup(ptr<sfsro_data> dirdata, chordID dirID , str component, cblookup_t cb)
 {
-#if RPCTRACE_LOOKUP
-  warn << "looking in dirID=" << dirID << " for '" << component << "'\n";
-#endif
-
   if (!dirdata) {
     (*cb) (NULL, 0, NFS3ERR_STALE);
   } else if (dirdata->type != SFSRO_INODE) {
@@ -901,11 +852,6 @@ chord_server::lookup_scandir_nextblock_cb(ref<lookup_state> st, ptr<sfsro_data> 
     (*st->cb) (NULL, 0, NFS3ERR_STALE);
   else {
     sfsro_directory *dir = dat->dir;
-
-#if RPCTRACE_LOOKUP
-    warn << "cur " << st->curblock << " max " << st->maxblock << "\n";
-    print_sfsro_directory (dir, NULL, 0, "", "LK.DIRBLK  ");
-#endif    
 
     if (st->component == "..") { 
       namei (dat->dir->path, st->cb);
