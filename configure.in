@@ -1,4 +1,4 @@
-dnl $Id: configure.in,v 1.11 2002/01/26 00:03:28 fdabek Exp $
+dnl $Id: configure.in,v 1.12 2002/01/26 23:52:11 fdabek Exp $
 dnl
 dnl Process this file with autoconf to produce a configure script.
 dnl
@@ -52,6 +52,15 @@ else
 	DBLIB="$DBLIB"' $(top_builddir)/adb/libbtree.a'
 	DBDEPS="$DBDEPS"' $(top_builddir)/adb/libbtree.a'
 fi
+
+
+dnl Make sure we have a mesg_buf capable libarpc
+AC_MSG_CHECKING("for a good aclnt.h")
+AC_EGREP_HEADER(rpccb_msgbuf,
+		aclnt.h,
+		AC_MSG_RESULT("found"),
+		AC_MSG_ERROR("aclnt.h that defines rpccb_msgbuf not found. Install the latest build of SFS")
+)
 
 dnl let directories share header files
 for lib in chord dhash sfsrodb svc lsd; do
