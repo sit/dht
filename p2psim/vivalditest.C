@@ -8,9 +8,20 @@ using namespace std;
 
 vector<VivaldiTest*> VivaldiTest::_all;
 
-VivaldiTest::VivaldiTest(Node *n)
+VivaldiTest::VivaldiTest(Node *n, Args &args)
   : DHTProtocol(n), _next_neighbor(0), _neighbors(0)
 {
+  _vo = args.nget<int>("vivaldi-algorithm", 10);
+  _dim = args.nget<int>("model-dimension", 10);
+  if (_dim < 0) {
+    cerr << "dimension must be specified (and positive)\n";
+    exit (0);
+  }
+
+  int timestep_scaled = args.nget<int>("timestep", 1000, 10);
+  _timestep = (double)timestep_scaled/1000000.0;
+  _adaptive = atoi ((args)["adaptive"].c_str());
+  _neighbors = args.nget<int>("neighbors", 16);
 }
 
 VivaldiTest::~VivaldiTest()
@@ -21,29 +32,20 @@ void
 VivaldiTest::join(Args *args)
 {
 
-  int vo = args->nget<int>("vivaldi-algorithm", 10);
-  int dim = args->nget<int>("model-dimension", 10);
-  if (dim < 0) {
-    cerr << "dimension must be specified (and positive)\n";
-    exit (0);
-  }
 
-  int timestep_scaled = atoi((*args)["timestep"].c_str());
-  double t = (double)timestep_scaled/1000000.0;
-  int do_adaptive = atoi ((*args)["adaptive"].c_str());
-  switch(vo){
-  case 1: _vivaldi = New Vivaldi1(node(),dim); break;
-  case 2: _vivaldi = New Vivaldi2(node(),dim); break;
-  case 3: _vivaldi = New Vivaldi3(node(),dim); break;
-  case 4: _vivaldi = New Vivaldi4(node(),dim); break;
-  case 5: _vivaldi = New Vivaldi5(node(),dim); break;
-  case 6: _vivaldi = New Vivaldi6(node(),dim); break;
-  case 7: _vivaldi = New Vivaldi7(node(),dim); break;
-  case 8: _vivaldi = New Vivaldi8(node(),dim); break;
-  case 9: _vivaldi = New Vivaldi9(node(),dim); break;
+  switch(_vo){
+  case 1: _vivaldi = New Vivaldi1(node(),_dim); break;
+  case 2: _vivaldi = New Vivaldi2(node(),_dim); break;
+  case 3: _vivaldi = New Vivaldi3(node(),_dim); break;
+  case 4: _vivaldi = New Vivaldi4(node(),_dim); break;
+  case 5: _vivaldi = New Vivaldi5(node(),_dim); break;
+  case 6: _vivaldi = New Vivaldi6(node(),_dim); break;
+  case 7: _vivaldi = New Vivaldi7(node(),_dim); break;
+  case 8: _vivaldi = New Vivaldi8(node(),_dim); break;
+  case 9: _vivaldi = New Vivaldi9(node(),_dim); break;
   case 10: {
-    cout << "joined\n";
-    _vivaldi = New Vivaldi10(node(), dim, t, do_adaptive); 
+    cout << ip() << " joined: " << " t = " << _timestep << "\n";
+    _vivaldi = New Vivaldi10(node(), _dim, _timestep, _adaptive); 
     break;
   }
   default:
@@ -52,8 +54,6 @@ VivaldiTest::join(Args *args)
     exit(1);
   }
   
-  _neighbors = atoi((*args)["neighbors"].c_str());
-
   _all.push_back(this);
   
   addNeighbors ();
@@ -211,7 +211,6 @@ VivaldiTest::status()
 void
 VivaldiTest::tick(void *)
 {
-
   addNeighbors ();
   IPAddress dst;
   if(_neighbors > 0){

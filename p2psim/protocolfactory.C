@@ -55,7 +55,7 @@ ProtocolFactory::create(string s, Node *n)
   if (s == "Koorde")
     p = New Koorde(n, a);
   if (s == "VivaldiTest")
-    p = New VivaldiTest(n);
+    p = New VivaldiTest(n,a);
   
   assert(p);
 

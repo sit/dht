@@ -6,7 +6,7 @@
 
 class VivaldiTest : public DHTProtocol {
 public:
-  VivaldiTest(Node*);
+  VivaldiTest(Node*, Args &args);
   ~VivaldiTest();
   string proto_name() { return "VivaldiTest"; }
 
@@ -16,6 +16,7 @@ public:
   virtual void insert(Args*) { }
   virtual void lookup(Args*) { }
 
+  void tick(void *);
   void status();
   Vivaldi::Coord real();
   double error();
@@ -27,10 +28,14 @@ public:
 
   int _next_neighbor;
   int _neighbors; // if > 0, fix the number of neighbors
+  int _adaptive;
+  double _timestep;
+  int _vo;
+  int _dim;
+
   uint _old_all_size;
   vector<IPAddress> _nip; // our fixed neigbhors
 
-  void tick(void *);
   char *ts();
   void handler(void *, Vivaldi::Coord *);
 
