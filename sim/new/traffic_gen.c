@@ -17,12 +17,31 @@
 #define AVG_INSERT_INT   1000  /* 1 sec */
 
 
-#define AVG_EVENT_INT    714  /* 714 */  /* ms */
+/* assume we want x joins/leaves per second
+ * then we set
+ * 
+ *  #define TSK_JOIN  (x*100)
+ *  #define TSK_LEAVE TSK_JOIN
+ *
+ *  and choose AVG_EVENT_INT (which is measured in ms) such that
+ *
+ *  AVG_EVENT_INT*(TSK_JOIN+TSK_LEAVE+TSK_INSERT+TSK_FIND)/TSK_JOIN = 1000/x 
+ *
+ * Example: if we want x = 0.1 joins/leaves per second, then we choose
+ * 
+ * #define TSK_JOIN  10
+ * #define TSK_LEAVE 10
+ * #define AVG_EVENT_INT 714 
+ */
+
+#define AVG_EVENT_INT    725  /* 820 (1), 794 (3), 781 (4), 758 (6), 745 (7)
+                                 735 (8), 806 (2), 769 (5), 725 (9),
+				 714 (10) */  /* ms */
 #define NUM_EVENTS       10000
 
 /* an even is generated with a frequence proportional to TKS_* */
-#define TKS_JOIN      10
-#define TKS_LEAVE     10
+#define TKS_JOIN       9  
+#define TKS_LEAVE      9
 #define TKS_INSERT    20
 #define TKS_FIND      100
     

@@ -183,7 +183,7 @@ void printAllNodesInfo()
   int i;
   Node *n;
 
-printf("---------\n");
+  printf("---------\n");
 
   for (i = 0; i < HASH_SIZE; i++) {
     for (n = NodeHashTable[i]; n; n = n->next)

@@ -31,9 +31,6 @@ void leave_notify_succ(Node *n, Stack *stack)
 {
   Stack *top = topStack(stack);
 
-if (top->nodeId == 6788123)
- printf("leave_notify_succ = %d, %f\n", top->nodeId, Clock);
-
  if (n->status == PRESENT) {
     if (top->nodeId == n->predecessor) {
       deleteRefFromTables(n, top->nodeId);

@@ -1,0 +1,19 @@
+#!/bin/csh -f       
+
+foreach x (1)
+
+foreach seed1 (10 14 21 42 53 71 111 11 23 40)
+
+  foreach seed2 (31 3)
+
+    ./traffic_gen $seed1 > ! x
+    ./sim x $seed2 >! y
+    @ total = `grep found y | wc -l`
+    @ miss  = `grep NOT   y | wc -l`
+    @ ratio = ($miss * 10000) / $total
+#    echo $ratio", "$miss", "$total	
+    echo $ratio
+  end
+
+end
+end

@@ -1,7 +1,6 @@
 #ifndef INCL_STACK
 #define INCL_STACK
 
-
 /* upon a new function call, the current state and returning 
  * parameters are saved 
  */  
