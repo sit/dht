@@ -63,13 +63,6 @@ struct dhash_block {
   }
 };
 
-struct insert_info { 
-  chordID key;
-  vec<chordID> path;
-  insert_info (chordID k, vec<chordID> p) :
-    key (k), path (p) {};
-};
-
 static inline str dhasherr2str (dhash_stat status)
 {
   return rpc_print (strbuf (), status, 0, NULL, NULL);

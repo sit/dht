@@ -1,10 +1,12 @@
 #include <dhashgateway_prot.h>
 #include <route.h>
-class insert_info;
-class dhash_block;
 
-
-typedef callback<void, dhash_stat, ptr<insert_info> >::ref cbinsertgw_t;
+struct insert_info { 
+  chordID key;
+  vec<chordID> path;
+  insert_info (chordID k, vec<chordID> p) :
+    key (k), path (p) {};
+};
 
 class dhash_block;
 
