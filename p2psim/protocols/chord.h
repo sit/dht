@@ -32,7 +32,7 @@
 #define TIMEOUT_RETRY 5
 
 //#define CHORD_DEBUG
-#define DNODE 853
+//#define DNODE 853
 //#define RECORD_FETCH_LATENCY
 
 #define TIMEOUT(src,dst) (Network::Instance()->gettopology()->latency(src,dst)<=1000)?_to_multiplier*2*Network::Instance()->gettopology()->latency(src,dst):1000

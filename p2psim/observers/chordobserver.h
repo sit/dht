@@ -36,10 +36,21 @@ public:
   void static_simulation();
   virtual void kick(Observed *, ObserverInfo *);
   vector<Chord::IDMap> get_sorted_nodes();
-  void addnode() { _totallivenodes++; //printf("chordobserver %llu %d\n", now(), _totallivenodes);
-		 }
-  void delnode() { _totallivenodes--; //printf("chordobserver %llu %d\n", now(), _totallivenodes);
-                 }
+  void addnode(Chord::IDMap n) { 
+    assert(!_oracle_num);
+    vector<Chord::IDMap>::iterator p =
+      upper_bound(ids.begin(),ids.end(),n,Chord::IDMap::cmp);
+    if (p->id!=n.id) {
+      ids.insert(p,1,n);
+    }
+    _totallivenodes++; 
+  }
+  void delnode(Chord::IDMap n) { 
+    vector<Chord::IDMap>::iterator p =
+      find(ids.begin(),ids.end(),n);
+    ids.erase(p);
+    _totallivenodes--; 
+  }
 
 private:
   static ChordObserver *_instance;

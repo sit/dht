@@ -84,38 +84,7 @@ ChordObserver::get_sorted_nodes()
   assert(ids.size()>0);
   return ids;
 }
-/*
-//calculate how much time it takes to fetch the closest m out of r*m fragments
-void
-ChordObserver::static_simulation()
-{
-  Topology *t = Network::Instance()->gettopology();
-  unsigned rate = 2;
-  double all = 0.0;
-  unsigned query = 0;
-  unsigned max = 16;
-  vector<unsigned> lat;
-  for (unsigned m = 1; m <= max/rate; m++) {
-    unsigned l = m * rate;
-    query = 0;
-    all = 0.0;
-    for (unsigned id = 0; id < ids.size(); id++) {
-      for (unsigned i = 0; i < 10; i++) {
-	unsigned dstid = random() % (ids.size()+1);
-	lat.clear();
-	for (unsigned x = 0; x < l; x++) 
-	  lat.push_back(2*t->latency(ids[id].ip,ids[dstid+x].ip));
-	sort(lat.begin(),lat.end());
-//	alllat.push_back(lat[m-1]);
-	all+=lat[m-1];
-	query++;
-      }
-    }
-    printf("%u %.3f\n",m,all/(double)query);
-  }
 
-}
-*/
 void
 ChordObserver::static_simulation()
 {
@@ -164,28 +133,22 @@ ChordObserver::kick(Observed *o, ObserverInfo *oi)
   Chord *c = 0;
   const set<Node*> *l = Network::Instance()->getallnodes();
  
-  ids.clear();
-
   if( event_s == "join" ) {
 #ifdef CHORD_DEBUG
     printf("ChordObserver oracle node %u,%qx joined\n", n->ip(), n->id());
 #endif
     //add this newly joined node to the sorted list of alive nodes
-    /*
     vector<Chord::IDMap>::iterator p;
     p = upper_bound(ids.begin(),ids.end(),n->idmap(),Chord::IDMap::cmp);
     if (p->ip != n->ip()) 
       ids.insert(p,1,n->idmap()); 
-      */
     for (pos = l->begin(); pos != l->end(); ++pos) {
       c = (Chord *)(*pos);
       assert(c);
       if (c->alive() && c->ip() != n->ip()) {
-	ids.push_back(c->idmap());
 	c->oracle_node_joined(n->idmap());
       }
     }
-    sort(ids.begin(),ids.end(),Chord::IDMap::cmp);
     n->initstate();
   }else if (event_s == "crash") {
 #ifdef CHORD_DEBUG

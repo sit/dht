@@ -492,6 +492,7 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
 	  //just ping this finger to see if it is alive
 	  //record_stat(TYPE_PNS_UP,0);
 	  ok = failure_detect(currf, &Chord::null_handler, (void *)NULL,&currf,TYPE_PNS_UP,0,0);
+	  if (!alive()) goto PNS_DONE;
 #ifdef CHORD_DEBUG
 	  if (me.ip == DNODE) 
 	      printf("%s DNODE ping finger %u,%qx,%qx (%u) alive? %d \n", ts(),j,lap,finger,currf.ip, ok?1:0);
@@ -528,6 +529,7 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
 	    get_predsucc_ret gpr;
 	    record_stat(TYPE_PNS_UP,0);
 	    ok = doRPC(currf.ip, &Chord::get_predsucc_handler, &gpa, &gpr, TIMEOUT(me.ip,currf.ip));
+	    if (!alive()) goto PNS_DONE;
 	    if(ok) {
 	      record_stat(TYPE_PNS_UP,1);
 	      loctable->add_node(currf);//update timestamp
@@ -600,6 +602,7 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
 	    //ping this node, coz it might have been dead
 	    record_stat(TYPE_PNS_UP,0); 
 	    ok = doRPC(min_f.ip, &Chord::null_handler, (void *)NULL, &min_f, TIMEOUT(me.ip,min_f.ip));
+	    if (!alive()) goto PNS_DONE;
 	    if (ok) {
 	      record_stat(TYPE_PNS_UP,0); 
 	      if (x == 0) {

@@ -96,7 +96,6 @@ Chord::Chord(IPAddress i, Args& a, LocTable *l, const char *name) : P2Protocol(i
       me.id = ConsistentHash::ipname2chid(name);
     else
       me.id = ConsistentHash::ip2chid(me.ip);
-    printf("ip %u ipname %s id %qx\n", me.ip, name,me.id);
   }
 
   me.heartbeat = now();
@@ -250,18 +249,6 @@ bool Chord::failure_detect(IDMap dst, void (BT::* fn)(AT *, RT *), AT *args, RT 
     if (r) {
       return true;
     }
-    /*
-    tmp = loctable->add_check(dst,1);
-    if (tmp == -1) 
-      return false;
-    else if (tmp <= checks) {
-      //printf("%s, wierd! %d %d\n", ts(), tmp,checks);
-      return true;
-    }else{
-      checks = tmp;
-    }
-    will make things horribly slow
-    */
     checks++;
     retry_to = retry_to * 2;
   }
@@ -277,7 +264,6 @@ bool
 Chord::replace_node(IDMap n, IDMap &replacement)
 {
   return false;
-  //return  tmp;
 }
 
 void
@@ -291,8 +277,7 @@ Chord::lookup(Args *args)
     a->ipkey = 0;
   } else {
     a->ipkey = args->nget<IPAddress>("key");
-    Node *n = getpeer(a->ipkey);
-    if (!n->alive()) {
+    if (!Network::Instance()->alive(a->ipkey)) {
       delete a;
       return;
     }
@@ -362,7 +347,8 @@ Chord::lookup_internal(lookup_args *a)
 #endif
 
   }else{
-    if (_ipkey && (!getpeer(a->ipkey)->alive()) && a->retrytimes>=2) {
+    if (_ipkey && a->retrytimes<=1 && (!Network::Instance()->alive(a->ipkey))) {
+    }else if (_ipkey && (a->retrytimes >2 || Network::Instance()->alive(a->ipkey))) {
       record_lookup_stat(me.ip, lasthop.ip, a->latency, false, false, a->hops, a->num_to, a->total_to);
     }else{
 #ifdef CHORD_DEBUG
@@ -775,7 +761,6 @@ Chord::final_recurs_hop(next_recurs_args *args, next_recurs_ret *ret)
   tmp.tout = 0;
   ret->path.push_back(tmp);
   ret->finish_time = now();
-  assert(ret->v.size() >= 7);
 }
 
 vector<Chord::IDMap>
@@ -821,6 +806,7 @@ Chord::find_successors_recurs(CHID key, uint m, uint type, IDMap *lasthop, looku
 
   while (1) {
 
+    if (!alive()) return results;
     IDMap succ = loctable->succ(me.id+1,LOC_HEALTHY);
     if (succ.ip == 0) {
       if (!_join_scheduled) {
@@ -1093,7 +1079,6 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
 
       ret->lasthop = me;
       if (_recurs_direct) {
-	assert(ret->v.size() >= args->m);
 	record_stat(args->type,ret->v.size(),0);
 	r = doRPC(args->src.ip, &Chord::final_recurs_hop, args, ret);
 	if (r) 
@@ -1400,18 +1385,24 @@ Chord::join(Args *args)
   if (static_sim) {
     if ((args) && (!_inited))
       notifyObservers((ObserverInfo *)"join");
-#ifdef CHORD_DEBUG
-    printf("%s joined\n",ts());
-#endif
     _inited = true;
     return;
   }
 
   if (args) {
+    me.ip = ip();
+    if (_random_id)
+      me.id = ConsistentHash::getRandID();
+    else 
+      me.id = ConsistentHash::ip2chid(me.ip);
     me.heartbeat = now();
-    loctable->update_ifexists(me);
+
+    loctable->init(me);
+    if (_learn) 
+      learntable->init(me);
+
     _last_join_time = now();
-    ChordObserver::Instance(NULL)->addnode();
+    ChordObserver::Instance(NULL)->addnode(me);
     _join_scheduled++;
     // XXX: Thomer says: not necessary
     // node()->set_alive(); //if args is NULL, it's an internal join
@@ -2062,13 +2053,13 @@ Chord::leave(Args *args)
   assert(!static_sim);
   crash (args);
   loctable->del_all();
-  loctable->init(me);
+  ChordObserver::Instance(NULL)->delnode(me);
 }
 
 void
 Chord::crash(Args *args)
 {
-  ChordObserver::Instance(NULL)->delnode();
+  ChordObserver::Instance(NULL)->delnode(me);
   if (vis)
     printf ("vis %llu crash %16qx\n", now (), me.id);
 
@@ -2076,7 +2067,6 @@ Chord::crash(Args *args)
   //node()->crash ();
   _inited = false;
   loctable->del_all();
-  loctable->init(me);
 #ifdef CHORD_DEBUG
   if (me.ip == DNODE) 
     fprintf(stderr,"%s crashed\n", ts());
@@ -2085,7 +2075,6 @@ Chord::crash(Args *args)
   notifyObservers((ObserverInfo *)"crash");
   if (_learn) {
     learntable->del_all();
-    learntable->init(me);
   }
 }
 
@@ -2102,9 +2091,7 @@ void LocTable::init(Chord::IDMap m)
   me = m;
   pin(me.id, 1, 0);
   idmapwrap *elm = New idmapwrap(me, now());
-
-  bool ok = ring.insert(elm);
-  assert(ok);
+  ring.insert(elm);
 }
 
 void
@@ -2143,22 +2130,11 @@ LocTable::succ(ConsistentHash::CHID id, int status)
   if (size() == 1) {
     return me;
   }
-#ifdef CHORD_DEBUG
-  uint before = size();
-#endif
   vector<Chord::IDMap> v = succs(id, 1, status);
   uint vsz = v.size();
   if (vsz > 0) {
     return v[0];
   }
-#ifdef CHORD_DEBUG
-
-  if (id == (me.id + 1)) {
-    idmapwrap *ptr = ring.closestsucc(id);
-    fprintf(stderr,"%llu: ring sz %u before %u me %d %qx ptr %u,%qx is_succ %d asked %d status %d timestamp %llu\n", 
-	now(),size(), before, me.ip,me.id,ptr->n.ip,ptr->n.id,ptr->is_succ?1:0, status, ptr->status, ptr->timestamp);
-  }
-#endif
   Chord::IDMap tmp;
   tmp.ip = 0;
   return tmp;
@@ -2200,15 +2176,12 @@ LocTable::succs(ConsistentHash::CHID id, unsigned int m, int status)
 	if (j >= ring.size()) return v;
       }
     }else{
-      assert(ptr->n.ip!=me.ip);
       ring.remove(ptr->id);
-      //printf("%u,%qx del %p\n", me.ip, me.id, ptr);
       bzero(ptr, sizeof(*ptr));
       delete ptr;
       if (ring.size() <= 1) {
 	return v;
       }
-      //assert(ring.size() >= 2);
     }
     ptr = ptrnext;
   }
@@ -2446,7 +2419,7 @@ LocTable::del_node(Chord::IDMap n, bool force)
     delete elm;
   }
 #ifdef CHORD_DEBUG
-  Chord::IDMap succ2 = succ(me.id +1,0);
+  Chord::IDMap succ2 = succ(me.id +1,1);
   if (succ2.ip != succ1.ip) {
     idmapwrap *ptr = ring.closestsucc(me.id+1);
     printf("%llu (%u,%qx) del caused succ change from %u,%qx to %u,%qx what? %u,%qx\n", 
