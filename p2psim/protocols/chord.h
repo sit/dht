@@ -29,7 +29,7 @@
 #include "misc/vivaldi.h"
 #include "consistenthash.h"
 
-#undef CHORD_DEBUG
+#define CHORD_DEBUG
 #define PKT_OVERHEAD 20
 
 #define TYPE_USER_LOOKUP 0
@@ -113,7 +113,9 @@ public:
     CHID key;
     uint m;
     uint all; //get m out of the first all successors
+    vector<IDMap> deadnodes;
   };
+
   struct next_ret {
     bool done;
     vector<IDMap> v;

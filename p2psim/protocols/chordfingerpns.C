@@ -71,10 +71,15 @@ ChordFingerPNS::init_state(vector<IDMap> ids)
 	  min_f = ids[i];
 	  min_l = t->latency(me.ip, ids[i].ip);
 	  k++;
-	  if (k>= _samples) break;
+	  if (_samples > 0 && k>= _samples) break;
 	}
       }
  //     loctable->add_node(ids[s_pos]);//add immediate finger
+#ifdef CHORD_DEBUG
+      if (me.ip == 19) {
+	printf("init_state_add_node %qx, %u\n", min_f.id, min_f.ip);
+      }
+#endif
       loctable->add_node(min_f);//add pns finger
     }
   }
