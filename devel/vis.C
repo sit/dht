@@ -1159,7 +1159,7 @@ main (int argc, char** argv)
 
   str host = "not set";
   str sim_file = "network";
-  int cmd_port;
+  int cmd_port = 0;
   unsigned short port = 0;
   interval = 100;
   color_file = ".viscolors";
