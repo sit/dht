@@ -158,7 +158,6 @@ finger_table::check ()
   return;
 #endif
 
-
   int j;
   int i;
   // Starting from successor, find first finger who is not me.
@@ -176,9 +175,10 @@ finger_table::check ()
     if (j > NBIT) {
       if (!betweenrightincl (fingers[i].start, myID, 
                              fingers[i].first.n)) {
-        warnx << "table " << i << " bad\n";
-        warnx << "start " << fingers[i].start << "\n";
-        warnx << "first " << fingers[i].first.n << "\n";
+	warnx << myID << ": finger_table " << i << " bad\n";
+	warnx << myID << ": start " << fingers[i].start << "\n";
+	warnx << myID << ": first " << fingers[i].first.n << "\n";
+
         print ();
         assert (0);
       }
@@ -188,7 +188,7 @@ finger_table::check ()
       }
       if (!betweenrightincl (fingers[i].start, fingers[j].first.n,
                  fingers[i].first.n)) {
-        warnx << "table " << i << " bad\n";
+	warnx << myID << ": finger_table " << i << ", " << j << " bad\n";
         print ();
         assert (0);
       }
@@ -201,9 +201,8 @@ finger_table::print ()
 {
   for (int i = 1; i <= NBIT; i++) {
     if (!fingers[i].first.alive) continue;
-    warnx << "finger: " << i << " : " << fingers[i].start << " : succ " 
-	  << fingers[i].first.n << "\n";
-    
+      warnx << myID << ": finger: " << i << " : " << fingers[i].start
+	    << " : succ " << fingers[i].first.n << "\n";
   }
 }
 
@@ -296,8 +295,8 @@ finger_table::stabilize_getpred_cb (chordID sd,
 {
   // receive predecessor from my successor; in stable case it is me
   if (status) {
-    warnx << "stabilize_getpred_cb: " << myID << " " 
-	  << sd << " failure " << status << "\n";
+    warnx << myID << ": stabilize_getpred_cb " << sd
+	  << " failure " << status << "\n";
     stable_fingers = false;
     if (status == CHORD_RPCFAILURE)
       myvnode->deletefingers (sd);
@@ -405,7 +404,7 @@ finger_table::stabilize_finger_getpred_cb (chordID dn, int i, chordID p,
 {
   nout_backoff--;
   if (status) {
-    warnx << "stabilize_finger_getpred_cb: " << myID << " " 
+    warnx << myID << ": stabilize_finger_getpred_cb: " 
 	  << dn << " failure " << status << "\n";
     stable_fingers = false;
     if (status == CHORD_RPCFAILURE)
@@ -436,7 +435,7 @@ finger_table::stabilize_findsucc_cb (chordID dn, int i, chordID s,
 {
   nout_backoff--;
   if (status) {
-    warnx << "stabilize_findsucc_cb: " << myID << " " 
+    warnx << myID << ": stabilize_findsucc_cb: "
 	  << dn << " failure " << status << "\n";
     stable_fingers = false;
     if (status == CHORD_RPCFAILURE)

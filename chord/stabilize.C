@@ -133,15 +133,15 @@ stabilize_manager::stabilize_backoff (u_int32_t t)
   stabilize_backoff_tmo = NULL;
   if (!stable && stablenow) {
     stable = true;
-    warnx << gettime () << " stabilize: " << myID 
-	  << " stable! stabilize timer " << t << "\n";
+    warnx << gettime () << " " << myID
+	  << ": stabilize: stable! stabilize timer " << t << "\n";
   } else if (!stablenow) {
     stable = false;
   }
   if (backoff_stabilizing ()) {
     t *= 2;
-    warnx << gettime () << " stabilize_backoff: " << myID
-	  << " slow down " << t << "\n";
+    warnx << gettime () << " " << myID
+	  <<" stabilize_backoff: slow down " << t << "\n";
   } else {
     for (unsigned int i = 0; i < clients.size (); i++)
       clients[i]->do_backoff ();

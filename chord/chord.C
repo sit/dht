@@ -85,7 +85,7 @@ vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
 
 vnode::~vnode ()
 {
-  warnx << "vnode: destroyed\n";
+  warnx << myID << ": vnode: destroyed\n";
   exit (0);
 }
 
@@ -218,7 +218,7 @@ void
 vnode::join_getsucc_cb (cbjoin_t cb, chordID s, route r, chordstat status)
 {
   if (status) {
-    warnx << "join_getsucc_cb: " << myID << " " << status << "\n";
+    warnx << myID << ": join_getsucc_cb: " << status << "\n";
     join (cb);  // try again
   } else {
     fingers->updatefinger (s);
@@ -466,7 +466,7 @@ vnode::stabilize_getsucc_cb (chordID pred,
   // receive successor from my predecessor; in stable case it is me
   nout_continuous--;
   if (status) {
-    warnx << "stabilize_getpred_cb: " << myID << " " << pred 
+    warnx << myID << ": stabilize_getpred_cb: " << pred 
 	  << " failure " << status << "\n";
     // XXX destabilize fingers in deletefingers?
     // stable_fingers = false;

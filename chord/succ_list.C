@@ -46,13 +46,14 @@ succ_list::print ()
 {
   for (int i = 1; i <= nsucc; i++) {
     if (!succlist[i].alive) continue;
-    warnx << "succ " << i << " : " << succlist[i].n << "\n";
+    warnx << myID << ": succ " << i << " : " << succlist[i].n << "\n";
   }
 }
 
 void
 succ_list::replace_succ (int j)
 {
+  warnx << myID << ": replace succ " << j << "\n";
 #ifdef PNODE
   succlist[j].n = closestsuccfinger (succlist[j].n);
 #else
@@ -174,8 +175,7 @@ succ_list::stabilize_succlist ()
   int j = s % (nsucc + 1);
 
   if (j == 0) {
-    if (stable_succlist) stable_succlist2 = true;
-    else stable_succlist2 = false;
+    stable_succlist2 = stable_succlist;
     stable_succlist = true;     
   }
   if (!nth_alive (j)) {
@@ -197,7 +197,7 @@ succ_list::stabilize_getsucclist_cb (chordID jid, int i, chordID s, net_address 
   int nsucc = num_succ ();
   nout_backoff--;
   if (status) {
-    warnx << "stabilize_getsucclist_cb: " << myID << " " << i << " : " 
+    warnx << myID << ": stabilize_getsucclist_cb: " << i << " : " 
 	  << jid << " failure " << status << "\n";
     stable_succlist = false;
     if (status == CHORD_RPCFAILURE)
