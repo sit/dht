@@ -2,27 +2,46 @@
 
 import os
 import sys
-import availcalc
 
 debug = 0
 
 def load_reboots (fn):
     """Parse lines like:
     Reboot alice.cs.princeton.edu at 1095157217 up for 509274 down for 1623008 detected after 63607
+    Reinstall planetlab8.millennium.berkeley.edu at 1102028035 until 1102031217
     """
 
     db = {}
     fh = open (fn)
     for line in fh:
 	f = line.strip ().split ()
-	host  = f[1]
-	rtime = int(f[3])
-	dtime = rtime - int(f[9])
+	if f[0] == 'Reboot':
+	    host  = f[1]
+	    rtime = int(f[3])
+	    dtime = rtime - int(f[9])
+	elif f[0] == 'Reinstall':
+	    host  = f[1]
+	    dtime = int(f[3])
+	    rtime = int(f[5])
 	
 	hlist = db.get (host,[])
 	hlist.append ((dtime, rtime))
 	db[host] = hlist
     return db
+
+def ring_combinations (l, n, seed = 0):
+    """Generate all possible overlapping setes of n nodes in a ring from l"""
+    import random
+    # Simulate a "ring" by randomly permuting all nodes 
+    random.seed (seed)
+    random.shuffle (l) 
+    total = len (l)
+    if n > total: n = total
+    for i in range(0, total):
+	if i+n < total:
+	    yield l[i:i+n]
+	else:
+	    yield l[i:] + l[:(i+n-total)]
 
 def all_combinations (l, n):
     """Generate all possible combinations of n elements selected from l"""
@@ -113,6 +132,11 @@ if __name__ == '__main__':
 	print "Usage:", sys.argv[0], "reboots n t"
 	sys.exit (1)
 
+
+    try:
+	seed = int (os.environ['SEED'])
+    except:
+	seed = 0
     db = load_reboots (sys.argv[1])
     n  = int (sys.argv[2])
     ts = map (int, sys.argv[3:])
@@ -120,9 +144,7 @@ if __name__ == '__main__':
     hosts = db.keys ()
     nsimults = {}
     for t in ts: nsimults[t] = []
-    ncomb = availcalc.choose (len(hosts), n)
-    print "Processing", len (hosts), "hosts for", ncomb, "combinations..."
-    for combination in all_combinations (hosts, n):
+    for combination in ring_combinations (hosts, n, seed):
 	f = []	# list of all failures
 	for c in combination:
 	    f += map (lambda x: (x[0], x[1], c), db[c])
@@ -133,12 +155,10 @@ if __name__ == '__main__':
 	    nsimults[t].append (nsimult)
 	if (len(nsimults[ts[0]]) + 1) % 100 == 0:  sys.stderr.write(".")
 	if (len(nsimults[ts[0]]) + 1) % 7000 == 0: sys.stderr.write("\n")
-    assert ncomb == len (nsimults[ts[0]])
-    print
     for t in ts:
 	nsimults[t].sort ()
 	print "Total number of failures", n, "nodes within", t, "seconds:", sum (nsimults[t])
-	print "Fewest simultaneous failures:", min(nsimults[t])
-	print "Most simultaneous failures:", max(nsimults[t])
-	print "Median:", nsimults[t][ncomb/2]
-	print "Average simult failures per combo:", float(sum(nsimults[t]))/len(nsimults[t])
+	print "  Fewest simultaneous failures:", min(nsimults[t])
+	print "  Most simultaneous failures:", max(nsimults[t])
+ 	print "  Median:", nsimults[t][len(hosts)/2]
+	print "  Average simult failures per combo:", float(sum(nsimults[t]))/len(nsimults[t])
