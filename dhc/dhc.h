@@ -25,21 +25,24 @@ struct proposal_t {
 
 struct paxos_state_t {
   bool recon_inprogress;
-  int promise_recvd;
-  int accept_ack_recvd;
+  uint promise_recvd;
+  vec<chordID> acc_conf;
+  uint accept_ack_recvd;
 };
 
 struct keyhash_meta {
   ptr<replica_t> config;
   ptr<replica_t> new_config;   //next accepted config
-  paxos_seqnum_t proposal; //proposal number
-  paxos_seqnum_t promised; //promised number
-  ptr<proposal_t> accepted;     //accepted proposal
+  paxos_seqnum_t proposal;     //proposal number
+  paxos_seqnum_t promised;     //promised number
+  paxos_seqnum_t accepted;     //latest accepted proposal number
+  //ptr<proposal_t> accepted;    //accepted proposal (do we need this var?)
 
   paxos_state_t pstat;
 };
 
 struct dhc_block {
+  chordID id;
   ptr<keyhash_data> data;
   ptr<keyhash_meta> meta;
 };
@@ -48,25 +51,22 @@ class dhc {
   
   ptr<vnode> myNode;
   ptr<dbfe> db;
-  ptr<aclnt> dhcclnt;
+
+  uint n_replica;
 
   void recv_prepare ();
   void recv_promise (ptr<dhc_block>, ref<dhc_prepare_res>, clnt_stat);
-  void recv_accept ();
-  void recv_accept_ack ();
+  void recv_propose ();
+  void recv_accept (ptr<dhc_block>, ref<dhc_propose_res>, clnt_stat);
   void recv_newconfig ();
   
  public:
 
-  dhc (ptr<vnode>, str, str);
+  dhc (ptr<vnode>, str, uint, str);
   ~dhc () {};
   
   void recon (chordID);
   
 };
-
-// misc functions
-
-static void open_db (ptr<dbfe>, str, dbOptions, str);
 
 #endif /*_DHC_H_*/
