@@ -22,7 +22,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-# $Id: run-simulations.pl,v 1.23 2004/03/11 02:21:57 jinyang Exp $
+# $Id: run-simulations.pl,v 1.24 2004/06/15 18:58:31 jinyang Exp $
 
 use strict;
 use Getopt::Long;
@@ -109,6 +109,9 @@ if( $options{"protocol"} ) {
     } elsif( $prot eq "Kelips" or $prot eq "kelips" ) {
 	$protocol = "Kelips";
 	$observer = "KelipsObserver";
+    } elsif ($prot eq "OneHop" or $prot eq "onehop") {
+        $protocol = "OneHop";
+	$observer = "OneHopObserver";
     } else {
 	die( "Unrecognized protocol: $prot" );
     }
@@ -491,8 +494,7 @@ sub write_events_file {
     my $ipkeys = 0;
     if (defined $options{"ipkey"}) {
       $ipkeys = $options{"ipkey"};
-    }elsif( $protocol eq "Kademlia" or $protocol eq "Kelips" or $protocol 
-	eq "ChordFingerPNS" or $protocol eq "ChordFinger") {
+    }elsif( $protocol eq "Kademlia" or $protocol eq "Kelips") {
 	$ipkeys = 1;
     }
     
