@@ -103,7 +103,7 @@ store (dhashclient &dhash, int num)
 
 
 void
-fetch_cb (int i, struct timeval start, ptr<dhash_block> blk)
+fetch_cb (int i, struct timeval start, dhash_stat stat, ptr<dhash_block> blk, route path)
 {
   out--;
 
@@ -118,8 +118,14 @@ fetch_cb (int i, struct timeval start, ptr<dhash_block> blk)
     struct timeval end;
     gettimeofday(&end, NULL);
     float elapsed = (end.tv_sec - start.tv_sec)*1000.0 + (end.tv_usec - start.tv_usec)/1000.0;
-    fprintf (outfile, "%f %d\n", elapsed, blk->hops);
-  }
+    char estr[128];
+    sprintf (estr, "%f", elapsed);
+    warnx << IDs[i] << " " << estr << " " << blk->hops << " " <<  blk->errors << " " << blk->retries << " ";
+    for (u_int i=0; i < path.size (); i++) {
+      warnx << path[i] << " ";
+    }
+    warnx << "\n";
+  } 
 }
 
 
