@@ -58,6 +58,8 @@ class ChordAdapt: public P2Protocol {
       uint type;
       ConsistentHash::CHID overshoot;
       double timeout;
+      IDMap deadnode;
+      //vector<IDMap> deadnodes;
     };
 
     struct lookup_ret{
@@ -115,8 +117,13 @@ class ChordAdapt: public P2Protocol {
     void crash(Args*);
     void initstate();
     void stab_succ(void *x);
+
     void next_recurs(lookup_args *, lookup_ret *);
     int next_recurs_cb(bool, lookup_args *, lookup_ret *);
+
+    void next_iter(lookup_args *, lookup_ret *);
+    void next(lookup_args *,lookup_ret *);
+    int next_iter_cb(bool,lookup_args *,lookup_ret *);
 
     static void empty_cb(void *x);
     bool check_pred_correctness(ConsistentHash::CHID, IDMap n);
@@ -170,12 +177,16 @@ class ChordAdapt: public P2Protocol {
     ConsistentHash::CHID _max_succ_gap;
     vector<Stat> _stat;
     static vector<uint> rtable_sz;
+    unsigned long _last_bytes;
+    Time _last_bytes_time;
     vector<double> _calculated_prob;
     Time _last_calculated;
     
     HashMap<ConsistentHash::CHID, Time> _outstanding_lookups;
     HashMap<ConsistentHash::CHID, Time> _forwarded;
     HashMap<ConsistentHash::CHID, uint> _forwarded_nodrop;
+    HashMap<ConsistentHash::CHID, ConsistentHash::CHID> _sent;
+    HashMap<ConsistentHash::CHID, ConsistentHash::CHID> _progress;
 
     void consolidate_succ_list(IDMap n, vector<IDMap> oldlist, vector<IDMap> newlist, bool is_succ = true);
     void adjust_parallelism();

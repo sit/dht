@@ -261,6 +261,8 @@ bool Chord::failure_detect(IDMap dst, void (BT::* fn)(AT *, RT *), AT *args, RT 
   while (checks < num_retry) {
     record_stat(me.ip, dst.ip, type,num_args_id,num_args_else);
     r = doRPC(dst.ip, fn, args, ret, retry_to);
+    if (!alive()) 
+      return false;
     if (r) {
       return true;
     }
@@ -2551,6 +2553,7 @@ LocTable::get_closest_in_gap(uint m, ConsistentHash::CHID end, Chord::IDMap src,
 	 || (now()-elm->n.timestamp) < MINTIMEOUT
 	 || ti > to)) {
       for (i = v.begin(); i!= v.end(); ++i) {
+	assert(*i.ip > 0);
 	if (Network::Instance()->gettopology()->latency(src.ip,elm->n.ip) 
 	    >= Network::Instance()->gettopology()->latency(src.ip, (*i).ip)) 
 	  break;

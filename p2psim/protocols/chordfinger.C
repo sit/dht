@@ -119,6 +119,7 @@ ChordFinger::initstate()
       if (lap * j < min_lap) continue;
       tmpf.id = lap * j + me.id;
       uint s_pos = upper_bound(ids.begin(), ids.end(), tmpf, Chord::IDMap::cmp) - ids.begin();
+      s_pos = s_pos % sz;
       if (ConsistentHash::between(tmpf.id, tmpf.id + lap, ids[s_pos].id))
 	  loctable->add_node(ids[s_pos]);
     }
@@ -178,6 +179,7 @@ ChordFinger::fix_fingers(bool restart)
 	    gpa.pred = true;
 	    gpa.m = (_fingerlets - 1);
 	    ok = failure_detect(currf, &Chord::get_predsucc_handler, &gpa, &gpr, TYPE_FINGER_UP,0,0);
+	    if (!alive()) return;
 	    if(ok) {
 	      valid_fingers++;
 	      record_stat(currf.ip,me.ip,TYPE_FINGER_UP,1+gpr.v.size());
