@@ -28,9 +28,16 @@ fill_RR (domain_name dname, dns_type dt, dns_class cl,
     rr->rdata.address = (rr->rdata.address << 8) + 53;
     break;
   case NS:
+  case CNAME:
+  case MD:
+  case MF:
+  case MB:
+  case MG:
+  case MR:
+  case PTR:
     rr->rdlength = strlen (rr_data) + 1;
-    rr->rdata.nsdname = (string) malloc (rr->rdlength);
-    memmove (rr->rdata.nsdname, rr_data, rr->rdlength);
+    rr->rdata.hostname = (string) malloc (rr->rdlength);
+    memmove (rr->rdata.hostname, rr_data, rr->rdlength);
     break;
   default:
     break;
@@ -70,7 +77,14 @@ got_it (ptr<ddnsRR> rr)
 	   << "\n";
       break;
     case NS:
-      warn << "rdata.nsdname = " << rr->rdata.nsdname << "\n";
+    case CNAME:
+    case MD:
+    case MF:
+    case MB:
+    case MG:
+    case MR:
+    case PTR:
+      warn << "rdata.hostname = " << rr->rdata.hostname << "\n";
       break;
     default:
       return;

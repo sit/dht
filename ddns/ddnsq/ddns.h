@@ -79,36 +79,48 @@ struct mx_data {
  
 typedef union {
 //case A:
-	ip32addr address;
+  ip32addr address;
 //case NS:
-	domain_name nsdname;
 //case CNAME:
-	domain_name cname;
-//case SOA:
-	soa_data soa;
 //case MD:
 //case MF:
 //case MB:
-	domain_name madname;
 //case MG:
-	domain_name mgmname;
 //case MR:
-	domain_name newname;
-//case WKS:
-	wks_data wks;
 //case PTR:
-	domain_name ptrdname;
+  domain_name hostname;
+//case SOA:
+  soa_data soa;
+//case WKS:
+  wks_data wks;
 //case HINFO:
-	hinfo_data hinfo;
+  hinfo_data hinfo;
 //case MINFO:
-	minfo_data minfo;
+  minfo_data minfo;
 //case MX:
-	mx_data mx;
+  mx_data mx;
 //case TXT:
-	string txt_data;
+  string txt_data;
 //case DNULL:	
 //default:
-	string rdata;	
+  string rdata;	
+
+#if 0
+//case NS:
+  domain_name nsdname;
+//case CNAME:
+  domain_name cname;
+//case MD:
+//case MF:
+//case MB:
+  domain_name madname;
+//case MG:
+  domain_name mgmname;
+//case MR:
+  domain_name newname;
+//case PTR:
+  domain_name ptrdname;
+#endif
 } dns_rdata;	
 
 struct ddnsRR {

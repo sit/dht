@@ -110,7 +110,14 @@ ddns::ddnsRR2block (ptr<ddnsRR> rr, char *data, int datasize)
 		  rr->rdlength, datalen, datasize);
       break;
     case NS:
-      copy2block (data, (void *) rr->rdata.nsdname, 
+    case CNAME:
+    case MD:
+    case MF:
+    case MB:
+    case MG:
+    case MR:
+    case PTR:
+      copy2block (data, (void *) rr->rdata.hostname, 
 		  rr->rdlength, datalen, datasize);
       break;
     default:
@@ -229,8 +236,15 @@ ddns::lookup_cb (domain_name dname, chordID key,
 	  memmove (&rr_tmp->rdata.address, data, rr_tmp->rdlength);
 	  break;
 	case NS:
-	  rr_tmp->rdata.nsdname = (string) malloc (rr_tmp->rdlength);
-	  memmove (rr_tmp->rdata.nsdname, data, rr_tmp->rdlength);	
+	case CNAME:
+	case MD:
+	case MF:
+	case MB:
+	case MG:
+	case MR:
+	case PTR:
+	  rr_tmp->rdata.hostname = (string) malloc (rr_tmp->rdlength);
+	  memmove (rr_tmp->rdata.hostname, data, rr_tmp->rdlength);	
 	  break;
 	default:
 	  break;
