@@ -134,9 +134,11 @@ dhc::recon (chordID bID, dhc_cb_t cb)
 
   if (rec) {    
     ptr<dhc_block> kb = to_dhc_block (rec);
+#if 0
     if (kb->masterID != 0) 
       ask_master (kb, cb);
     else 
+#endif
       master_recon (kb, cb);
   } else {
     warn << "dhc:recon. Too many deaths. Tough luck.\n";
@@ -153,12 +155,15 @@ dhc::recv_newconfig (user_args *sbp)
   if (dhc_debug)
     warn << "\n\n" << myNode->my_ID () << " received newconfig msg.\n ";
 
+#if 0
   dhc_newconfig_arg *newconfig = sbp->template getarg<dhc_newconfig_arg> ();
   if (newconfig->type == DHC_DHC)
+#endif
     newconfig_normal (sbp);
-  else 
+#if 0
+  else
     newconfig_master (sbp);
-
+#endif
 }
 
 void
@@ -171,7 +176,7 @@ dhc::newconfig_normal (user_args *sbp)
 
   int newer = 1;
   if (!rec)
-    kb = New refcounted<dhc_block> (newconfig->bID, newconfig->mID);
+    kb = New refcounted<dhc_block> (newconfig->bID); //, newconfig->mID);
   else {
     kb = to_dhc_block (rec);
     newer = tag_cmp (newconfig->data.tag, kb->data->tag);
@@ -238,7 +243,7 @@ dhc::newconfig_normal (user_args *sbp)
   dhc_newconfig_res res; res.status = DHC_OK;
   sbp->reply (&res);
 }
-
+#if MLP
 void
 dhc::newconfig_master (user_args *sbp)
 {
@@ -258,7 +263,7 @@ dhc::newconfig_master (user_args *sbp)
     //Or, when a the leaf node reconfigures and the master node sends the 
     //decision to the master replicas.
     if (!kb)
-      kb = New refcounted<dhc_block> (newconfig->bID, newconfig->mID);
+      kb = New refcounted<dhc_block> (newconfig->bID); //, newconfig->mID);
     else
       newer = (newconfig->old_conf_seqnum >= kb->meta->config.seqnum);
     
@@ -266,8 +271,10 @@ dhc::newconfig_master (user_args *sbp)
       dhc_newconfig_res res; res.status = DHC_CONF_MISMATCH;
       sbp->reply (&res);
     } else {
+#if MLP
       if (newconfig->newblock)
 	send_config_to_succs (mb, newconfig);     //send block to k-1 succs of mID
+#endif
       kb->meta->config.seqnum = newconfig->old_conf_seqnum + 1;
       kb->meta->config.nodes.setsize (newconfig->new_config.size ());
       for (uint i=0; i<kb->meta->config.nodes.size (); i++)
@@ -281,7 +288,8 @@ dhc::newconfig_master (user_args *sbp)
     }
   }
 }
-
+#endif
+#if MLP
 void 
 dhc::send_config_to_succs (ptr<dhc_block> mb, dhc_newconfig_arg *newconfig)
 {
@@ -307,3 +315,4 @@ dhc::send_config_to_succs (ptr<dhc_block> mb, dhc_newconfig_arg *newconfig)
 		   wrap (this, &dhc::recv_m_newconf_ack, arg->bID, res));
   }
 }
+#endif
