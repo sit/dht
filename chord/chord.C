@@ -93,6 +93,7 @@ vnode_impl::vnode_impl (ptr<locationtable> _locations, ptr<fingerlike> stab,
 
   locations->pinpred (myID);
   locations->pinsucc (myID);
+  locations->pinsucclist (myID);
 
   ngetsuccessor = 0;
   ngetpredecessor = 0;

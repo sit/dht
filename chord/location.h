@@ -59,6 +59,8 @@ class locationtable : public virtual refcount {
   static const loctype LOC_REGULAR = 1 << 0;
   static const loctype LOC_PINSUCC = 1 << 1;
   static const loctype LOC_PINPRED = 1 << 2;
+  static const loctype LOC_PINSUCCLIST = 1 << 3;
+  static const loctype LOC_PINPREDLIST = 1 << 4;
   
   struct locwrap {
     ihash_entry<locwrap> hlink_;
@@ -106,7 +108,12 @@ class locationtable : public virtual refcount {
   void challenge_cb (int challenge, ptr<location> l,
 		     chord_challengeres *res, clnt_stat err);
 
+  // Circular, in-order traversal of all known nodes.
+  locwrap *next (locwrap *lw);
+  locwrap *prev (locwrap *lw);
+  
   void printloc (locwrap *l);
+  
   void doRPCcb (ptr<location> l, aclnt_cb realcb, clnt_stat err);
 
   void check_dead (ptr<location> l, unsigned int newwait);
@@ -114,6 +121,7 @@ class locationtable : public virtual refcount {
 		      chordID x, bool b, chordstat s);
 
   bool remove (locwrap *l);
+  void pin (const chordID &x, loctype pt);
   
  public:
   locationtable (ptr<u_int32_t> _nrcv, int _max_connections);
@@ -130,6 +138,8 @@ class locationtable : public virtual refcount {
   void insert (const chordID &n, sfs_hostname s, int _p,
 	       cbchallengeID_t cb);
   void cacheloc (const chordID &x, net_address &r, cbchallengeID_t cb);
+  void pinpredlist (const chordID &x);
+  void pinsucclist (const chordID &x);
   void pinsucc (const chordID &x);
   void pinpred (const chordID &x);
   

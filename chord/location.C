@@ -31,6 +31,9 @@
 #include <math.h>
 #include "location.h"
 
+// XXX should include succ_list.h but that's too much hassle.
+#define NSUCC 10
+
 bool nochallenges;
 const int CHORD_RPC_STP (0);
 const int CHORD_RPC_SFSU (1);
@@ -53,6 +56,28 @@ locationtable::printloc (locwrap *l)
 	  << ", C=" << l->loc_->challenged << ")\n";
 }
 #endif /* 0 */
+
+locationtable::locwrap *
+locationtable::next (locwrap *lw)
+{
+  if (!lw)
+    return NULL;
+  lw = loclist.next (lw);
+  if (lw == NULL)
+    lw = loclist.first ();
+  return lw;
+}
+
+locationtable::locwrap *
+locationtable::prev (locwrap *lw)
+{
+  if (!lw)
+    return NULL;
+  lw = loclist.prev (lw);
+  if (lw == NULL)
+    lw = loclist.last ();
+  return lw;
+}
 
 static void
 ignore_challengeresp (chordID x, bool b, chordstat s)
@@ -274,77 +299,97 @@ locationtable::delete_cachedlocs (void)
 {
   if (!size_cachedlocs)
     return;
+
+  // First, try to find a bad node
   locwrap *lw = cachedlocs.first;
-  locwrap *p = loclist.prev (lw);
-  locwrap *n = loclist.next (lw);
-  
-#if 0
-  if (size_cachedlocs == good) {
-    // must evict someone good... 
-    while ((p && p->type_ & LOC_PINSUCC) ||
-	   (n && n->type_ & LOC_PINPRED))
-    {
+  while (lw &&
+	 (lw->good () || (lw->loc_ && lw->loc_->outstanding_cbs.size ()))) {
       lw = cachedlocs.next (lw);
-      if (!lw)
-	break;
-      p = loclist.prev (lw);
-      n = loclist.next (lw);
-    }
-    if (!lw) { 
-      warnx << "locationtable::delete_cachedlocs: WOW! everyone is pinned!\n";
-      // but this is okay.
-      return;
-    }
-  } else
-#endif /* 0 */
-  {
-    // pick some loser.
-    while (lw->good () ||
-	   (lw->loc_ && lw->loc_->outstanding_cbs.size ()) ||
-	   (p && p->type_ & LOC_PINSUCC) ||
-	   (n && n->type_ & LOC_PINPRED))
-    {
-      lw = cachedlocs.next (lw);
-      if (!lw)
-	break;
-      p = loclist.prev (lw);
-      n = loclist.next (lw);
-    }
-    if (!lw) {
-      warnx << "locationtable::delete_cachedlocs: no bad nodes to evict.\n";
-      return;
-    }
+      continue;
   }
-  assert (lw);
-  remove (lw);
+  if (lw) {
+    remove (lw);
+    return;
+  }
+  // Else, find some unimportant cached node to evict.
+  assert (!lw);
+  warnx << "locationtable::delete_cachedlocs: no bad nodes to evict.\n";
+
+  lw = cachedlocs.first;
+  unsigned int n = NSUCC;
+  locwrap *c = NULL;
+  while (lw) {
+    // Continue to skip over those that are being challenged or
+    // are directly pinned
+    if (lw->loc_->outstanding_cbs.size () ||
+	(prev (lw) && prev (lw)->type_ & LOC_PINSUCC) ||
+	(next (lw) && next (lw)->type_ & LOC_PINPRED)) {
+      goto nextcandidate;
+    }
+    // Next, check to see if it is part of a predecessor or
+    // successor list by scanning to try and find a PINSUCCLIST/PINPREDLIST
+    // within NSUCC.
+    n = NSUCC;
+    c = lw;
+    while (n > 0) {
+      c = prev (c);
+      if (c == lw) break; // loop, so this check is okay
+      if (c->type_ & LOC_PINSUCCLIST)
+	goto nextcandidate;
+      n--;
+    }
+    n = NSUCC; c = lw;
+    while (n > 0) {
+      c = next (c);
+      if (c == lw) break; 
+      if (c->type_ & LOC_PINPREDLIST)
+	goto nextcandidate;
+      n--;
+    }
+    // If we're here, then this node has no reason to be saved.
+    remove (lw);
+    
+  nextcandidate:
+    lw = cachedlocs.next (lw);
+  }
+}
+
+void
+locationtable::pin (const chordID &x, loctype pt)
+{
+  locwrap *lw = locs[x];
+  if (lw)
+    lw->type_ |= pt;
+  else {
+    lw = New locwrap (x, pt);
+    locs.insert (lw);
+    loclist.insert (lw);
+    // DO NOT insert into cachedlocs.
+  }
 }
 
 void
 locationtable::pinpred (const chordID &x)
 {
-  locwrap *lw = locs[x];
-  if (lw)
-    lw->type_ |= LOC_PINPRED;
-  else {
-    lw = New locwrap (x, LOC_PINPRED);
-    locs.insert (lw);
-    loclist.insert (lw);
-    // DO NOT insert into cachedlocs.
-  }
+  pin (x, LOC_PINPRED);
+}
+
+void
+locationtable::pinpredlist (const chordID &x)
+{
+  pin (x, LOC_PINPREDLIST);
 }
 
 void
 locationtable::pinsucc (const chordID &x)
 {
-  locwrap *lw = locs[x];
-  if (lw)
-    lw->type_ |= LOC_PINSUCC;
-  else {
-    lw = New locwrap (x, LOC_PINSUCC);
-    locs.insert (lw);
-    loclist.insert (lw);
-    // DO NOT insert into cachedlocs.
-  }
+  pin (x, LOC_PINSUCC);
+}
+
+void
+locationtable::pinsucclist (const chordID &x)
+{
+  pin (x, LOC_PINSUCCLIST);
 }
 
 void
@@ -415,11 +460,9 @@ locationtable::closestsuccloc (const chordID &x) {
     l = loclist.closestsucc (x);
 
   // ...and now narrow it down to someone who's "good".
-  while (l && !l->good ()) {
-    l = loclist.next (l);
-    if (l == NULL)
-      l = loclist.first ();
-  }
+  while (l && !l->good ())
+    l = next (l);
+
   chordID n = l->loc_->n;
 
 #if 0
@@ -453,17 +496,12 @@ locationtable::closestpredloc (const chordID &x, vec<chordID> failed)
 {
   locwrap *l = locs[x];
   if (l) {
-    l = loclist.prev (l);
-    if (l == NULL)
-      l = loclist.last ();
+    l = prev (l);
   } else {
     l = loclist.closestpred (x);
   }
-  while (l && (!l->good () || (l->loc_ && in_vector (failed, l->loc_->n)))) {
-    l = loclist.prev (l);
-    if (l == NULL)
-      l = loclist.last ();
-  }
+  while (l && (!l->good () || (l->loc_ && in_vector (failed, l->loc_->n))))
+    l = prev (l);
   
   chordID n = l->loc_->n;
 
@@ -490,17 +528,12 @@ locationtable::closestpredloc (const chordID &x)
 {
   locwrap *l = locs[x];
   if (l) {
-    l = loclist.prev (l);
-    if (l == NULL)
-      l = loclist.last ();
+    l = prev (l);
   } else {
     l = loclist.closestpred (x);
   }
-  while (l && !l->good ()) {
-    l = loclist.prev (l);
-    if (l == NULL)
-      l = loclist.last ();
-  }
+  while (l && !l->good ())
+    l = prev (l);
   
   chordID n = l->loc_->n;
 
@@ -736,6 +769,9 @@ locationtable::remove (locwrap *lw)
 {
   if (!lw)
     return false;
+  
+  // XXX pray that there aren't any references to this location
+  //     floating around and certainly no references to its chordID
   
   if (lw->good ()) good--;
   
