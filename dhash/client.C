@@ -125,12 +125,6 @@ protected:
 		     wrap (this, &dhash_store::finish, res));
   }
   
-  void fail (str errstr)
-  {
-    warn << "dhash_store failed: " << blockID << ": " << errstr << "\n";
-    error = true;
-  }
-  
 public:
   
   static void execute (ptr<chord> clntnode, chordID destID, chordID blockID,
@@ -256,7 +250,7 @@ dhashcli::insert_lookup_cb (chordID blockID, ref<dhash_block> block,
   if (status != DHASH_OK) {
     warn << "insert_lookup_cb: failure\n";
     (*cb) (status, bigint(0)); // failure
-  }else 
+  } else 
     dhash_store::execute (clntnode, destID, blockID, block, cb);
 }
 
