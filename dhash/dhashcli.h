@@ -13,6 +13,8 @@ typedef callback<void, dhash_stat, vec<chordID> >::ref cbinsert_path_t;
 typedef callback<void, dhash_stat, vec<chord_node>, route>::ref dhashcli_lookupcb_t;
 typedef	callback<void, dhash_stat, bool>::ref sendblockcb_t;
 
+#include "download.h" // for cbretrieve_t
+
 // Forward declarations
 class dbfe;
 class vnode;
@@ -102,9 +104,6 @@ private:
 			   vec<chord_node> succs, route r);
   void retrieve_fetch_cb (ptr<rcv_state> rs, u_int i,
 			  ptr<dhash_block> block);
-  void retrieve_from_cache_cb (blockID bid, cb_ret cb,
-                               int options, ptr<chordID> guess,
-                               ptr<dhash_block> block);
 
   void insert_succlist_cb (ref<dhash_block> block, cbinsert_path_t cb,
 			   chordID guess,
@@ -121,9 +120,7 @@ private:
  public:
   dhashcli (ptr<vnode> node, ptr<route_factory> r_factory, int ss);
 
-  void retrieve_from_cache (blockID blockID, cb_ret cb,
-                            int options = 0,
-			    ptr<chordID> guess = NULL);
+  void retrieve_from_cache (blockID blockID, cbretrieve_t cb);
 
   void retrieve (blockID blockID, cb_ret cb, 
 		 int options = 0, 

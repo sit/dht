@@ -435,26 +435,11 @@ dhashcli::retrieve_fetch_cb (ptr<rcv_state> rs, u_int i,
 }
 
 void
-dhashcli::retrieve_from_cache_cb (blockID n, cb_ret cb,
-                                  int options, ptr<chordID> guess,
-				  ptr<dhash_block> block)
-{
-  vec<ptr<location> > ret;
-  if (block)
-    cb (DHASH_OK, block, ret);
-  else
-    retrieve (n, cb, options, guess);
-}
-
-void
-dhashcli::retrieve_from_cache (blockID n, cb_ret cb,
-                               int options, ptr<chordID> guess)
+dhashcli::retrieve_from_cache (blockID n, cbretrieve_t cb)
 {
   chord_node s;
   clntnode->my_location ()->fill_node (s);
-  dhash_download::execute 
-    (clntnode, s, n, NULL, 0, 0, 0,
-     wrap (this, &dhashcli::retrieve_from_cache_cb, n, cb, options, guess));
+  dhash_download::execute (clntnode, s, n, NULL, 0, 0, 0, cb);
 }
 
 void

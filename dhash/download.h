@@ -1,3 +1,6 @@
+#ifndef __DHASH_DOWNLOAD__H_
+#define __DHASH_DOWNLOAD__H_
+
 typedef callback<void, ptr<dhash_block> >::ref cbretrieve_t;
 
 class dhash_download {
@@ -40,3 +43,5 @@ public:
     vNew dhash_download (clntnode, source, blockID, data, len, totsz, cookie, cb);
   }
 };
+
+#endif
