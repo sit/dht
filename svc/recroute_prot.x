@@ -22,6 +22,25 @@ struct recroute_route_arg {
   chord_node_wire path<>;	/* path accumulator */
 };
 
+/** Almost there; overlap case. Looks a lot like above... */
+struct recroute_penult_arg {
+  unsigned routeid;
+  chord_node_wire origin;	/* where to send responses */
+  
+  chordID x;			/* key to route towards */
+  unsigned succs_desired;	/* how many successors of key desired */
+  chord_node_wire successors <>; /* Partial successor list */
+
+  /* upcall crap */
+  unsigned upcall_prog;
+  unsigned upcall_proc;
+  opaque upcall_args<>;
+  
+  unsigned retries;		/* number of times node's first try failed */
+  chord_node_wire path<>;	/* path accumulator */  
+};
+
+
 /** Incoming RPC completions */
 enum recroute_complete_stat {
   RECROUTE_ROUTE_OK = 0,
@@ -52,8 +71,6 @@ struct recroute_complete_arg {
   recroute_complete_res body;
 };
 
-
-
 program RECROUTE_PROGRAM {
   version RECROUTE_VERSION {
     void
@@ -64,5 +81,8 @@ program RECROUTE_PROGRAM {
 
     void
     RECROUTEPROC_COMPLETE (recroute_complete_arg) = 2;
+
+    void
+    RECROUTEPROC_PENULTIMATE (recroute_penult_arg) = 3;
   } = 1;
 } = 344460;

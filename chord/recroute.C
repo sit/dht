@@ -104,6 +104,11 @@ recroute<T>::dispatch (user_args *a)
       dorecroute (a, ra);
     }
     break;
+  case RECROUTEPROC_PENULTIMATE:
+    {
+      recroute_penult_arg *ra = a->template getarg<recroute_penult_arg> ();
+      dopenult (a, ra);
+    }
   case RECROUTEPROC_COMPLETE:
     {
       // Try to see if this is one of ours.
@@ -184,23 +189,14 @@ recroute<T>::dorecroute (user_args *sbp, recroute_route_arg *ra)
       if (minind < succind) {
 	p = cs[minind];
       } else {
-	// Hrm. If this is someone that is "past" the key, we need to
-	// actually just get successors from him, not just forward the
-	// request on.
 	ptr<location> nexthop = cs[minind];
 	rtrace << myID << ": dorecroute (" << ra->routeid << ", "
-	       << ra->x << "): going for succlist from " << nexthop->id () << "\n";
-
+	       << ra->x << "): going for penult from " << nexthop->id () << "\n";
 	cs.popn_front (succind); // just the overlap please
-	get_succlist (nexthop,
-		      wrap (this, &recroute<T>::dorecroute_succlist,
-			    sbp, ra, p, nexthop, cs));
+	dorecroute_sendpenult (ra, nexthop, p, cs);
+	sbp->replyref (rstat);
+	sbp = NULL;
 	return;
-	// Do not reply here. We need the sbp so that we can
-	// keep the ra around. Hmmm. Maybe it is worth coming up
-	// with a special RECROUTE RPC that you forward to people
-	// in this case that just says "return home with your complete
-	// successor list."
       }
     }
   }
@@ -213,39 +209,66 @@ recroute<T>::dorecroute (user_args *sbp, recroute_route_arg *ra)
 
 template<class T>
 void
-recroute<T>::dorecroute_succlist (user_args *sbp, recroute_route_arg *ra,
-				  ptr<location> p, ptr<location> f,
-				  vec<ptr<location> > cs,
-				  vec<chord_node> sl, chordstat stat)
+recroute<T>::dorecroute_sendpenult (recroute_route_arg *ra,
+				    ptr<location> nexthop,
+				    ptr<location> p,
+				    vec<ptr<location> > cs)
 {
   recroute_route_stat rstat (RECROUTE_ACCEPTED);
-  if (stat != CHORD_OK) {
-    rwarning << my_ID () << ": dorecroute (" << ra->routeid << ", " << ra->x
-	     << "): special case succlist request to "
-	     << f->id () << " failed: " << stat << "\n";
+  // Construct a new recroute_route_arg.
+  chord_node_wire me;
+  my_location ()->fill_node (me);
+  
+  ptr<recroute_penult_arg> nra = New refcounted<recroute_penult_arg> ();
+  // XXX this is obnoxious
+  nra->routeid = ra->routeid;
+  nra->origin = ra->origin;
+  nra->x = ra->x;
+  nra->succs_desired = ra->succs_desired;
+
+  nra->upcall_prog = ra->upcall_prog;
+  nra->upcall_proc = ra->upcall_proc;
+  nra->upcall_args = ra->upcall_args;
+
+  nra->retries = ra->retries;
+
+  nra->path.setsize (ra->path.size () + 1);
+  for (size_t i = 0; i < ra->path.size (); i++) {
+    nra->path[i] = ra->path[i];
+  }
+  nra->path[ra->path.size ()] = me;
+
+  nra->successors.setsize (cs.size ());
+  for (size_t i = 0; i < cs.size (); i++) {
+    cs[i]->fill_node (nra->successors[i]);
+  }
+			    
+  rtrace << my_ID () << ": dorecroute (" << ra->routeid << ", "
+	 << ra->x << "): penultforwarding to " << p->id () << "\n";
+
+  vec<chordID> failed;
+  failed.push_back (nexthop->id ());
+  doRPC (nexthop, recroute_program_1, RECROUTEPROC_PENULTIMATE,
+	 nra, NULL,
+	 wrap (this, &recroute<T>::dorecroute_sendpenult_cb, nra, p, failed));
+  // XXX support notification?
+}
+
+template<class T>
+void
+recroute<T>::dorecroute_sendpenult_cb (ptr<recroute_penult_arg> nra,
+				   ptr<location> p,
+				   vec<chordID> failed,
+				   clnt_stat err)
+{
+  if (err) {
     // Go back to wherever we were going to go in the first place.
-    ra->retries++;
-    dorecroute_sendroute (ra, p);
-    sbp->replyref (rstat);
-    sbp = NULL;
+    // ra->retries++;
+    // dorecroute_sendroute (ra, p);
+    rtrace << my_ID () << ": dorecroute (" << nra->routeid << ", "
+	   << nra->x << ": er. failure.....\n";
     return;
   }
-
-  u_long m = ra->succs_desired;
-
-  while (cs.back ()->id () != sl[0].x) cs.pop_back ();
-  cs.pop_back ();
-
-  u_long cs_size = cs.size ();
-  for (size_t i = 0; i < (m - cs_size) && (i < sl.size ()); i++) {
-    ptr<location> l = locations->lookup_or_create (sl[i]);
-    cs.push_back (l);
-  }
-  
-  dorecroute_sendcomplete (ra, cs);
-  sbp->replyref (rstat);
-  sbp = NULL;
-  return;
 }
 
 template<class T>
@@ -413,6 +436,61 @@ recroute<T>::recroute_sent_complete_cb (clnt_stat status)
   // We're not going to do anything more clever about this. It's dropped. Fini.
 }
 
+
+template<class T>
+void
+recroute<T>::dopenult (user_args *sbp, recroute_penult_arg *ra)
+{
+  chord_node_wire me;
+  my_location ()->fill_node (me);
+  
+  rtrace << my_ID () << ": dopenult (" << ra->routeid << ", " << ra->x
+	 << "): complete.\n";
+
+  ptr<recroute_complete_arg> ca = New refcounted<recroute_complete_arg> ();
+  ca->body.set_status (RECROUTE_ROUTE_OK);
+  ca->routeid = ra->routeid;
+  
+  ca->path.setsize (ra->path.size () + 1);
+  for (size_t i = 0; i < ra->path.size (); i++) {
+    ca->path[i] = ra->path[i];
+  }
+  ca->path[ra->path.size ()] = me;
+
+  u_long m = ra->succs_desired;
+  vec<ptr<location> > cs = succs ();
+  
+  // better hope someone made the right choice in talking to us.
+  assert (ra->successors.size () + cs.size () >= m);
+  
+  u_long tofill = m - ra->successors.size ();
+  if (tofill > cs.size ())
+    tofill = cs.size ();
+
+  ca->body.robody->successors.setsize (m);
+  for (size_t i = 0; i < ra->successors.size (); i++) {
+    chord_node foo = make_chord_node (ra->successors[i]);
+    if (foo.x == my_ID ())
+      break;
+    ca->body.robody->successors[i] = ra->successors[i];
+  }
+  for (size_t i = 0; i < tofill; i++) {
+    cs[i]->fill_node (ca->body.robody->successors[i + ra->successors.size ()]);
+  }
+  
+  ca->retries = ra->retries;
+  
+  ptr<location> l = locations->lookup_or_create (make_chord_node (ra->origin));
+  doRPC (l, recroute_program_1, RECROUTEPROC_COMPLETE,
+	 ca, NULL,
+	 wrap (this, &recroute<T>::recroute_sent_complete_cb));
+  // We don't really care if this is lost beyond the RPC system's
+  // retransmits.
+
+  sbp->reply (NULL);
+  sbp = NULL;
+}
+
 template<class T>
 void
 recroute<T>::docomplete (user_args *sbp, recroute_complete_arg *ca)
@@ -425,13 +503,12 @@ recroute<T>::docomplete (user_args *sbp, recroute_complete_arg *ca)
     sbp->reply (NULL);
     return;
   }
-  rtrace << "docomplete: routeid " << ca->routeid << " for key " <<
-    router->key () << " has returned! || ";
-  rtrace << " retries: " << ca->retries << "\n";
+  rtrace << "docomplete: routeid " << ca->routeid << " for key "
+	 << router->key () << " has returned! "
+	 << " retries: " << ca->retries << "\n";
   
   routers.remove (router);
   router->handle_complete (sbp, ca);
-
 }
 
 template<class T>

@@ -25,16 +25,22 @@ class recroute : public T {
   void dispatch (user_args *sbp);
 
   void dorecroute (user_args *sbp, recroute_route_arg *ra);
+  void dopenult (user_args *sbp, recroute_penult_arg *ra);
   void docomplete (user_args *sbp, recroute_complete_arg *ca);
 
   void find_succlist_cb (cbroute_t cb, route_recchord *ri, bool done);
 
   void sweeper ();
 
-  void dorecroute_succlist (user_args *sbp, recroute_route_arg *ra,
-			    ptr<location> p, ptr<location> f,
-			    vec<ptr<location> > cs,
-			    vec<chord_node> sl, chordstat stat);
+  void dorecroute_sendpenult (recroute_route_arg *ra,
+			      ptr<location> nexthop,
+			      ptr<location> p,
+			      vec<ptr<location> > cs);
+  void dorecroute_sendpenult_cb (ptr<recroute_penult_arg> nra,
+				 ptr<location> p,
+				 vec<chordID> failed,
+				 clnt_stat err);
+
   void dorecroute_sendcomplete (recroute_route_arg *ra,
 				const vec<ptr<location> > cs);
   void dorecroute_sendroute (recroute_route_arg *ra, ptr<location> p);
