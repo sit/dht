@@ -11,49 +11,6 @@
 chord_stats stats;
 
 
-// creates an array of edges of a fake network
-// stores in int* edges
-// after this function numnodes holds the number
-// of nodes in the fake network
-// NOTE: may later want to change file input name
-void 
-p2p::initialize_graph() 
-{
-  FILE *graphfp;
-  int cur_node, to_node, length,i,j;
-  int done = 0;
-  graphfp = fopen("gg","r");
-  if(graphfp == NULL)
-    printf("EEK-- didn't open input file correctly\n");
-  // first line of file is number of nodes
-  fscanf(graphfp,"%d",&numnodes); 
-  // create space for a numnodes by numnodes edge array
-  edges = (int *)calloc(numnodes*numnodes,sizeof(int));
-  // initialize edge array as -1 for all accept i,i entries
-  for(i=0;i<numnodes;i++)
-    for(j=0;j<numnodes;j++)
-      if(i == j)
-	*(edges+i*numnodes+j) = 0;
-      else
-	*(edges+i*numnodes+j) = -1;
-  // more nodes to find the edges of
-  while(fscanf(graphfp,"%d",&cur_node) != EOF && done == 0) 
-    {
-      fscanf(graphfp,"%d%d",&to_node,&length);
-      *(edges+cur_node*numnodes + to_node) = length;
-      // while there are more edges for this node
-      while(fscanf(graphfp,"%d",&to_node) != EOF && to_node != -1) 
-	{
-	  fscanf(graphfp,"%d",&length);
-	  *(edges+cur_node*numnodes + to_node) = length;
-	}
-      if(to_node != -1) // reached end of file
-	done = 1;
-    }
-  fclose(graphfp);
-}
-
-
 void
 p2p::timeout(location *l) {
   assert(l);
@@ -61,85 +18,37 @@ p2p::timeout(location *l) {
   if (l->nout == 0) l->x = NULL;
   else
     {
-      // warn << "timeout on node " << l->n << " has overdue RPCs\n";
+      warn << "timeout on node " << l->n << " has overdue RPCs\n";
       l->timeout_cb = delaycb(360,0,wrap(this, &p2p::timeout, l));
     }
 }
 
-void
-p2p::timing_cb(aclnt_cb cb, location *l, ptr<struct timeval> start, int procno, rpc_program progno,  clnt_stat err) 
-{
-  assert(l);
-  struct timeval now;
-  gettimeofday(&now, NULL);
-  long lat = ((now.tv_sec - start->tv_sec)*1000000 + (now.tv_usec - start->tv_usec))/1000;
-  //  warn << "Latency: " << lat << " type " << progno.progno << "," << procno << "\n";
-  l->total_latency += lat;
-  l->num_latencies++;
-  if (lat > l->max_latency) l->max_latency = lat;
-  l->nout--;
-  (*cb)(err);
 
-}
-
-// just add a time delay to represent distance
 void
 p2p::doRPC (sfs_ID &ID, rpc_program progno, int procno, 
 	    const void *in, void *out,
 	    aclnt_cb cb)
+
 {
-  
-  rpc_args *a = new rpc_args(ID,progno,procno,in,out,cb);
-  if (insert_or_lookup && (rpcdelay > 0)) {
-    warn << "DELAYED \n";
-    delaycb (0, rpcdelay, wrap(mkref(this), &p2p::doRealRPC, a)); 
-  } else {
-    doRealRPC (a);
-  }
 
-}
-
-// NOTE: now passing ID by value instead of referencing it...
-// (getting compiler errors before). now seems ok
-// May want to try to change back later (to avoid passing around
-// sfs_ID instead of a ptr
-
-void
-p2p::doRealRPC (rpc_args *a)
-{
-  sfs_ID ID = a->ID;
-  rpc_program progno = a->progno;
-  int procno = a->procno;
-  const void *in = a->in;
-  void *out = a->out;
-  aclnt_cb cb = a->cb;
-
-  //  warnx << "doRealRPC\n";
-  
   if (lookups_outstanding > 0) lookup_RPCs++;
 
   if ((insert_or_lookup > 0) && (myID != ID)) stats.total_rpcs++;
 
   location *l = locations[ID];
-  if (!l) { 
-    warn << "about to trip on " << ID << "\n";
-    sleep(1);
-    exit(12);
-  }
+
   assert (l);
   assert (l->alive);
-  ptr<struct timeval> start = new refcounted<struct timeval>();
-  gettimeofday(start, NULL);
+
   l->nout++;
   if (l->x) {    
     timecb_remove(l->timeout_cb);
     l->timeout_cb = delaycb(360,0,wrap(this, &p2p::timeout, l));
     ptr<aclnt> c = aclnt::alloc(l->x, progno);
-    c->call (procno, in, out, wrap(mkref(this), &p2p::timing_cb, cb, l, start, procno, progno));
+    c->call (procno, in, out, cb);
   } else {
     doRPC_cbstate *st = 
-      New doRPC_cbstate (progno, procno, in, out,  
-			 wrap(mkref(this), &p2p::timing_cb, cb, l, start, -procno, progno));
+      New doRPC_cbstate (progno, procno, in, out,  cb);
     l->connectlist.insert_tail (st);
     if (!l->connecting) {
       l->connecting = true;
