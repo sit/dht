@@ -190,7 +190,10 @@ locationtable::doRPC (const chordID &n, const rpc_program &prog,
 		      void *out, aclnt_cb cb)
 {
   ptr<location> l = lookup (n);
-  if (!l) panic << "location (" << n << ") is null.\n";
+  if (!l) {
+    stats ();
+    panic << "location (" << n << ") is null.\n";
+  }
   l->nrpc++;
   if (l->alive)
     return hosts->doRPC (l, prog, procno, in, out, 
