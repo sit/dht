@@ -3,7 +3,10 @@
 
 #include "location.h"
 #include "toe_table.h"
-#include "succ_list.h" // XXX only depends on NSUCC
+
+#include <coord.h>
+#include <modlogger.h>
+#define trace modlogger ("toes")
 
 toe_table::toe_table ()
   : in_progress (0)
@@ -13,12 +16,10 @@ toe_table::toe_table ()
     toes[i] = new vec<chordID>;
   }
   
-  
   last_level = -2;
   //warnx << "toe table created\n";
 
   stable_toes = false;
-
 }
 
 void toe_table::init (ptr<vnode> v, ptr<locationtable> locs, chordID ID)
@@ -26,6 +27,7 @@ void toe_table::init (ptr<vnode> v, ptr<locationtable> locs, chordID ID)
   locations = locs;
   myID = ID;
   myvnode = v;
+
   
 }
 
@@ -54,10 +56,9 @@ toe_table::prune_toes (int level)
 void
 toe_table::get_toes_rmt (int level) 
 {
-  in_progress++;
-
   vec<chordID> donors = get_toes (max(level - 1, 0));
   for (unsigned int i = 0; i < donors.size (); i++) {
+    in_progress++;
     ptr<chord_findtoes_arg> arg = New refcounted<chord_findtoes_arg> ();
     arg->level = level;
     locations->get_node (myID, &arg->n);
@@ -68,18 +69,17 @@ toe_table::get_toes_rmt (int level)
 		      arg, res, 
 		      wrap (this, &toe_table::get_toes_rmt_cb, res, level));
   }
-
 }
 
 void
 toe_table::get_toes_rmt_cb (chord_nodelistres *res, int level, clnt_stat err)
 {
+  in_progress--;
   if (!(err || res->status)){
     for (unsigned int i=0; i < res->resok->nlist.size (); i++) 
       add_toe (res->resok->nlist[i], level);
   }
   
-  in_progress--;
   delete res;
 }
 
@@ -111,97 +111,115 @@ toe_table::present (chordID id, int level)
 void
 toe_table::add_toe (const chord_node &n, int level) 
 {
-
-  if(n.x == myID) return;
+  if (n.x == myID) return;
   if (present (n.x, level)) return;
-    
-  in_progress++;
-  
 
-  locations->insert (n); // ping sucks.
-  myvnode->ping (n.x, wrap (this, &toe_table::add_toe_ping_cb, n, level));
-
+  if (locations->cached (n.x)) {
+    real_add_toe (n, level);
+  } else {
+    // Get some real data on this node before proceding.
+    in_progress++;
+    locations->insert (n);
+    myvnode->ping (n.x, wrap (this, &toe_table::add_toe_ping_cb, n, level));
+  }
 }
 
 void
-toe_table::add_toe_ping_cb (chord_node n, int level, chordstat err)
+toe_table::real_add_toe (const chord_node &n, int level)
 {
+  assert (level >= 0);
+  // Assumes that the node is not already in the toe table.
 
   chordID id = n.x;
-  if (!err && locations->get_a_lat (id) < level_to_delay (level)) {
-
+  // Get distance very defensively.
+  float dist = -1.0;
+  if (locations->cached (n.x)) {
+    dist = locations->get_a_lat (n.x);
+  }
+  if (dist <= 0.0) {
+    vec<float> them;
+    for (u_int i = 0; i < n.coords.size (); i++)
+      them.push_back (n.coords[i]);
+    vec<float> us = locations->get_coords (myID);
+    dist = Coord::distance_f (them, us);
+    trace << "using estimated latency.\n";
+  }
   
-    //can have more than one outstanding
-    if (present (id, level)) return;
-    
-    //bubble through the list looking for out of date and where to place
-    //the new id.  alternative would be to use a llist instead
+  if (dist >= level_to_delay (level))
+    return;
   
-    unsigned int newindex=0;
-    bool newset = false;
-    unsigned int i=0;
+  //bubble through the list looking for out of date and where to place
+  //the new id.  alternative would be to use a llist instead
+  unsigned int newindex = 0;
+  bool newset = false;
+  unsigned int i = 0;
 
-    //stick at beginning?
-    if(toes[level]->size () == 0){
-      newindex = 0;
-      newset = true;
-      toes[level]->push_back (id);
-      //warn << "stuck to empty front\n";
-    }
+  //stick at beginning?
+  if (toes[level]->size () == 0){
+    newindex = 0;
+    newset = true;
+    toes[level]->push_back (id);
+    //warn << "stuck to empty front\n";
+  }
     
-    //stick in middle?
-    while(!newset && i < toes[level]->size ()){
-      if(between(myID, (*toes[level])[i], id)){
-	newindex = i;
-	newset = true;
-	//warn << "stick in middle\n";
-      }
-      i++;
-    }
-
-    //stick at end?
-    if(!newset && (int)toes[level]->size () < target_size[level]){
-      newindex = toes[level]->size ();
+  //stick in middle?
+  while(!newset && i < toes[level]->size ()){
+    if(between(myID, (*toes[level])[i], id)){
+      newindex = i;
       newset = true;
-      //warn << "adding to end\n";
+      //warn << "stick in middle\n";
     }
-
-    if(newset && id != toes[level]->front()){
-      //need to expand?
-      if((int) toes[level]->size() < target_size[level]){
-	//warn << "expanding level " << level << "\n";
-	toes[level]->push_back(toes[level]->back());
-	//warn << "done expanding " << level << "\n";
-      }
-      else {
-	//warn << "going to eject "
-	//     << toes[level]->back()
-	//     << " from level " << level << "\n";
-      }
-      for(i = toes[level]->size() - 1; i > newindex ; i--)
-	(*toes[level])[i] = (*toes[level])[i-1];
-      //warn << "done shifting\n";
-      
-      (*toes[level])[newindex] = id;
-    }
-
-	  
-    if(newset){
-      warn << "added " << id << " to level " << level
-	   << " now " << toes[level]->size () << " index "
-	   << newindex << "\n";
-      dump();
-
-      //try to promote the new one right away
-      if(level+1 < MAX_LEVELS){
-	add_toe(n, level+1);
-      }
-      
-    }
-
+    i++;
   }
 
+  //stick at end?
+  if(!newset && (int)toes[level]->size () < target_size[level]){
+    newindex = toes[level]->size ();
+    newset = true;
+    //warn << "adding to end\n";
+  }
+
+  if(newset && id != toes[level]->front()){
+    //need to expand?
+    if((int) toes[level]->size() < target_size[level]){
+      //warn << "expanding level " << level << "\n";
+      toes[level]->push_back(toes[level]->back());
+      //warn << "done expanding " << level << "\n";
+    }
+    else {
+      //warn << "going to eject "
+      //     << toes[level]->back()
+      //     << " from level " << level << "\n";
+    }
+    for(i = toes[level]->size() - 1; i > newindex ; i--)
+      (*toes[level])[i] = (*toes[level])[i-1];
+    //warn << "done shifting\n";
+      
+    (*toes[level])[newindex] = id;
+  }
+
+	  
+  if(newset){
+    trace << "added " << id << " to level " << level
+	  << " now " << toes[level]->size () << " index "
+	  << newindex << "\n";
+
+    //try to promote the new one right away
+    if(level+1 < MAX_LEVELS){
+      real_add_toe(n, level+1);
+    }
+      
+  }
+
+}
+  
+void
+toe_table::add_toe_ping_cb (chord_node n, int level, chordstat err)
+{
   in_progress--;
+  // Can have more than one outstanding to a given node.
+  if (!err && !present (n.x, level))
+    real_add_toe (n, level);
 }
 
 vec<chordID> 
@@ -242,7 +260,7 @@ toe_table::filled_level ()
 }
 
 void
-toe_table::dump ()
+toe_table::print ()
 {
   for (int level=0; level < MAX_LEVELS; level++) {
     vec<chordID> vl = get_toes (level);
@@ -251,7 +269,6 @@ toe_table::dump ()
       warn << "     " << vl[i] << " latency: "
 	   << (int)locations->get_a_lat (vl[i])
 	   << " max " << level_to_delay(level) << "\n";
-	
     }
   }
 
@@ -263,10 +280,9 @@ toe_table::stabilize_toes ()
 {
   stable_toes = true;
 
-  //warn << "stabilizing toes at level " << level << "\n";
-  if (backoff_stabilizing () || continuous_stabilizing ()) return;
-
   int level = get_last_level () + 1;
+  //warn << "stabilizing toes at level " << level << "\n";
+
   if(level >= MAX_LEVELS - 1)
     level = -1;
 
@@ -287,7 +303,6 @@ toe_table::stabilize_toes ()
   if (level < 0) { //bootstrap off succ list
     // grab the succlist and stick it in the toe table
     vec<chord_node> succs = myvnode->succs ();
-    //warnx << "toe bootstrapping " << goodnodes << " " << numnodes << "\n";
     for (u_int i = 0; i < succs.size (); i++) {
       add_toe (succs[i], 0);
       //warnx << "add_toe called with " << ith_succ << "\n";
@@ -513,12 +528,13 @@ toe_table::betterpred_greedy (chordID myID, chordID current,
 
 void toe_table::fill_nodelistresext (chord_nodelistextres *res)
 {
+  fatal << "toe_table::fill_nodelistresext not implemented.\n";
 }
 
 void 
 toe_table::fill_nodelistres (chord_nodelistres *res)
 {
-  
+  fatal << "toe_table::fill_nodelistres not implemented.\n";
 }
 
 
@@ -558,6 +574,6 @@ ref<fingerlike_iter>
 toe_table::get_iter ()
 {
   ref<toeiter> iter = New refcounted<toeiter> ();
-  // XXX put something in here.
+  iter->nodes = get_toes ((get_last_level () < 0) ? 0 : get_last_level ());
   return iter;
 }

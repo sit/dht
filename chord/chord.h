@@ -153,7 +153,7 @@ class vnode : public virtual refcount {
   virtual vec<chord_node> preds () = 0;
 
 
-  virtual chordID lookup_closestpred (const chordID &x, vec<chordID> f) = 0;
+  virtual chordID lookup_closestpred (const chordID &x, const vec<chordID> &f) = 0;
   virtual chordID lookup_closestpred (const chordID &x) = 0;
   virtual chordID lookup_closestsucc (const chordID &x) = 0;
   

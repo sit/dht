@@ -298,7 +298,7 @@ vnode_impl::print () const
   warnx << "pred : " << my_pred () << "\n";
   if (toes) {
     warnx << "------------- toes ----------------------------------\n";
-    toes->dump ();
+    toes->print ();
   }
   warnx << "=====================================================\n";
 
@@ -329,21 +329,62 @@ vnode_impl::lookup_closestsucc (const chordID &x)
 }
 
 chordID
-vnode_impl::lookup_closestpred (const chordID &x, vec<chordID> failed_nodes)
+vnode_impl::closestcoordpred (const chordID &x, const vec<float> &n,
+			      const vec<chordID> &failed)
+{
+  chordID s = myID;
+
+  vec<ptr<fingerlike> > sources;
+  sources.push_back (toes);
+  sources.push_back (fingers);
+  sources.push_back (successors);
+  
+  float mindist = -1.0;
+  
+  for (size_t i = 0; i < sources.size (); i++) {
+    ref<fingerlike_iter> iter = sources[i]->get_iter ();
+    while (!iter->done ()) {
+      chordID c = iter->next ();
+      
+      // Don't give back nodes that querier doesn't want.
+      if (in_vector (failed, c)) continue;
+      // Do not overshoot, do not go backwards.
+      if (!between (myID, x, c)) continue;
+      
+      vec<float> them = locations->get_coords (c);
+      if (!them.size ())
+	continue; // XXX weird.
+      
+      // Always pick the possibility with the lowest distance.
+      float newdist = Coord::distance_f (n, them);
+      if (mindist < 0 || newdist < mindist) {
+	mindist = newdist;
+	s = c;
+      }
+    }
+  }
+  return s;
+}
+
+chordID
+vnode_impl::lookup_closestpred (const chordID &x, const vec<chordID> &failed)
 {
   chordID s;
   
   switch (lookup_mode) {
   case CHORD_LOOKUP_PROXIMITY:
-    s = toes->closestpred (x, failed_nodes);
-    break;
+    {
+      vec<float> me = locations->get_coords (my_ID ());
+      s = closestcoordpred (x, me, failed);
+      break;
+    }
   case CHORD_LOOKUP_FINGERLIKE:
-    s = fingers->closestpred (x, failed_nodes);
+    s = fingers->closestpred (x, failed);
     break;
   case CHORD_LOOKUP_FINGERSANDSUCCS:
     {
-      chordID f = fingers->closestpred (x, failed_nodes);
-      chordID u = successors->closestpred (x, failed_nodes);
+      chordID f = fingers->closestpred (x, failed);
+      chordID u = successors->closestpred (x, failed);
       if (between (myID, f, u)) 
 	s = f;
       else
@@ -351,7 +392,7 @@ vnode_impl::lookup_closestpred (const chordID &x, vec<chordID> failed_nodes)
       break;
     }
   case CHORD_LOOKUP_LOCTABLE:
-    s = locations->closestpredloc (x, failed_nodes);
+    s = locations->closestpredloc (x, failed);
     break;
   default:
     assert (0 == "invalid lookup_mode");
@@ -368,8 +409,12 @@ vnode_impl::lookup_closestpred (const chordID &x)
   
   switch (lookup_mode) {
   case CHORD_LOOKUP_PROXIMITY:
-    s = toes->closestpred (x);
-    break;
+    {
+      vec<chordID> failed;
+      vec<float> me = locations->get_coords (my_ID ());
+      s = closestcoordpred (x, me, failed);
+      break;
+    }
   case CHORD_LOOKUP_FINGERLIKE:
     s = fingers->closestpred (x);
     break;
@@ -526,7 +571,15 @@ vnode_impl::dotestrange_findclosestpred (user_args *sbp, chord_testandfindarg *f
     vec<chordID> f;
     for (unsigned int i=0; i < fa->failed_nodes.size (); i++)
       f.push_back (fa->failed_nodes[i]);
-    chordID p = lookup_closestpred (fa->x, f);
+    chordID p;
+    if (lookup_mode == CHORD_LOOKUP_PROXIMITY) {
+      // Don't use lookup_closestpred which returns things from the
+      // point of view of this node.
+      p = closestcoordpred (fa->x, convert_coords (sbp->transport_header ()),
+			    f);
+    } else {
+      p = lookup_closestpred (fa->x, f);
+    }
     bool ok = locations->get_node (p, &res->notinrange->n);
     assert (ok);
   }

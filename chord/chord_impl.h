@@ -160,6 +160,8 @@ class vnode_impl : public vnode {
 		 ref<dorpc_res> res, clnt_stat err);
 
   void update_coords (chordID u, vec<float> uc, float ud);
+  chordID closestcoordpred (const chordID &x, const vec<float> &n,
+			    const vec<chordID> &failed);
 
  public:
   chordID myID;
@@ -207,7 +209,7 @@ class vnode_impl : public vnode {
   vec<chord_node> succs () { return successors->succs (); };
   vec<chord_node> preds () { return predecessors->preds (); };
 
-  chordID lookup_closestpred (const chordID &x, vec<chordID> f);
+  chordID lookup_closestpred (const chordID &x, const vec<chordID> &f);
   chordID lookup_closestpred (const chordID &x);
   chordID lookup_closestsucc (const chordID &x);
   

@@ -18,6 +18,7 @@ class toe_table : public fingerlike {
   
   short last_level;
 
+  void real_add_toe (const chord_node &n, int level);
   void add_toe_ping_cb (chord_node n, int level, chordstat err);
   void get_toes_rmt_cb (chord_nodelistres *res, int level, clnt_stat err);
 
@@ -46,7 +47,6 @@ class toe_table : public fingerlike {
   void get_toes_rmt (int level);
   void stabilize_toes ();
   int level_to_delay (int level);
-  void dump ();
   short get_last_level () { return last_level; };
   void set_last_level (int l) { last_level = l; };
   void bump_target (int l) { target_size[l] *= 2; };
@@ -54,7 +54,7 @@ class toe_table : public fingerlike {
   short get_target_size (int level) { return target_size[level]; }
 
   // Stabilizable methods
-  bool backoff_stabilizing () { return false; /*in_progress > 0; */}
+  bool backoff_stabilizing () { return in_progress > 0; }
   void do_backoff () { stabilize_toes (); }
   bool isstable () { return stable_toes; }
 
@@ -67,7 +67,7 @@ class toe_table : public fingerlike {
   chordID closestpred (const chordID &x, vec<chordID> fail);
   chordID closestpred (const chordID &x);
   chordID closestsucc (const chordID &x);
-  void print () { warn << "I'm a toe table\n";};
+  void print ();
   void stats () { warn << "I'm a toe table\n";};
 
   ref<fingerlike_iter> get_iter ();
