@@ -1,6 +1,14 @@
 import random
 import sha
 
+def between (i, a, b):
+    if a < b:
+        return a < i and i < b
+    if a == b:
+        return a == i
+    if a > b:
+        return i > a or i < b
+    
 def random_id (nbits = 20):
     return random.randrange (0, 2**nbits)
 

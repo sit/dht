@@ -5,7 +5,7 @@ import sys
 
 from utils import size_rounder
 from simulator import event, simulator, event_generator
-import dhash
+import dht
 
 do_spread = 0
 
@@ -122,7 +122,7 @@ def parsable_monitor (t, dh):
 def usage ():
     sys.stderr.write ("%s [-i] [-m] [-s] events.txt type args\n" % sys.argv[0])
     sys.stderr.write ("where type is:\n")
-    a = dhash.known_types.keys ()
+    a = dht.known_types.keys ()
     a.sort ()
     for t in a:
 	sys.stderr.write ("\t%s\n" % t)
@@ -142,7 +142,7 @@ if __name__ == '__main__':
         sys.exit (1)
     for o, a in opts:
 	if o == '-b':
-	    dhash.BANDWIDTH_HACK = int (a)
+	    dht.node.BANDWIDTH_HACK = int (a)
 	elif o == '-i':
 	    monint = int (a)
         elif o == '-m':
@@ -154,13 +154,13 @@ if __name__ == '__main__':
         usage ()
 	sys.exit (1)
 
-    print "# bw =", dhash.BANDWIDTH_HACK
+    print "# bw =", dht.node.BANDWIDTH_HACK
     print "# args =", cmdv
     evfile = cmdv[0]
     dtype  = cmdv[1]
     gdh = None
     try:
-	dhashclass = dhash.known_types[dtype]
+	dhashclass = dht.known_types[dtype]
 	gdh = dhashclass (cmdv[2:])
     except KeyError, e:
 	sys.stderr.write ("invalid dhash type\n")
