@@ -90,14 +90,9 @@ format_rpcnode (merkle_tree *ltree, u_int depth, const merkle_hash &prefix,
   rpcnode->isleaf = node->isleaf ();
   
   if (!node->isleaf ()) {
-    rpcnode->child_isleaf.setsize (64);
     rpcnode->child_hash.setsize (64);
-    
-    for (int i = 0; i < 64; i++) {
-      const merkle_node *child = node->child (i);
-      rpcnode->child_isleaf[i] = child->isleaf ();
-      rpcnode->child_hash[i] = child->hash;
-    }
+    for (int i = 0; i < 64; i++)
+      rpcnode->child_hash[i] = node->child (i)->hash;
   } else {
     vec<merkle_hash> keys = database_get_keys (ltree->db, depth, prefix);
 

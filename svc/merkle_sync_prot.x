@@ -25,8 +25,6 @@ struct merkle_rpc_node {
   merkle_hash hash;
 
   merkle_hash child_hash<64>;
-  /* only valid when isleaf == true */
-  bool child_isleaf<64>; 
 };
 
 struct getnode_res_ok {
