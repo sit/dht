@@ -3,6 +3,7 @@
 #include "node.h"
 #include <string>
 #include <iostream>
+#include <typeinfo>
 using namespace std;
 
 NodeFactory *NodeFactory::_instance = 0;
