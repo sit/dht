@@ -1,6 +1,8 @@
 #include "chordcd.h"
 #include "sfscd_prot.h"
 
+#define CACHE_MAXSIZE 1000
+
 void gotrootfh (chord_server *server, ref<nfsserv> ns, sfsserver::fhcb cb, 
 		nfs_fh3 *fh);
 void
@@ -10,7 +12,8 @@ chord_server_alloc (sfsprog *prog, ref<nfsserv> ns, int tcpfd,
   if (!ma->cres || (ma->carg.civers == 5
 		    && !sfs_parsepath (ma->carg.ci5->sname))) {
 
-    chord_server *server = New chord_server ();
+    warn << "cache_size " << CACHE_MAXSIZE << "\n";
+    chord_server *server = New chord_server (CACHE_MAXSIZE);
     warn << "request to mount " << ma->carg.ci5->sname << "\n";
     server->setrootfh (ma->carg.ci5->sname, wrap (&gotrootfh, server, ns, cb));
     return;

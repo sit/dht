@@ -14,7 +14,7 @@
 //     - embedded inodes to improve LOOKUP performance
 //     - can make lots of optimizations to filesystem structure which are easy when
 //       the FS is read-only, but hard in a read-write filesystem, namely embedded inodes
-//     - currently never efficts anything from the cache
+//     - currently never evicts anything from the data_cache
 //     - need to think more about mappings between, fileid, nfs_fh, sfs_hash, chordID
 //   * XXX
 //     - search for this and find more
@@ -41,7 +41,8 @@ static void parentpath (str &parent, str &filename, const str inpath);
 
 
 
-chord_server::chord_server () 
+chord_server::chord_server (u_int cache_maxsize)
+  : data_cache (cache_maxsize)
 {
   int fd = unixsocket_connect (LSD_SOCKET);
   if (fd < 0) 
@@ -1222,6 +1223,12 @@ chord_server::get_data_partial_cb (dhash_res *res, char *buf,
   else if (res->status != DHASH_OK) {
     delete buf;
     delete read;
+    // 
+    // XXX the call to get_data() is expecting its callback to be
+    //     called back exactly once.  This code could callback once
+    //     for every chunk of the block.
+    //
+    assert (0); 
     (*cb) (NULL);
     return;
   } else {

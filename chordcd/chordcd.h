@@ -5,7 +5,7 @@
 #include "qhash.h"
 #include "sfsro_prot_cfs.h"
 #include "dhash_prot.h"
-
+#include "lrucache.h"
 
 
 typedef callback<void, ptr<sfsro_data> >::ref cbgetdata_t;
@@ -41,8 +41,8 @@ class chord_server  {
 
   ptr<aclnt> lsdclnt;
   ptr<aclnt> cclnt;
-  
-  qhash<chordID, ref<sfsro_data>, hashID> data_cache;
+
+  lrucache<chordID, ref<sfsro_data>, hashID> data_cache;
   qhash<chordID, list<fetch_wait_state, &fetch_wait_state::link>, hashID> pf_waiters;
 
 
@@ -120,6 +120,5 @@ class chord_server  {
  public:
   void dispatch (ref<nfsserv> ns, nfscall *sbp);
   void setrootfh (str root, cbfh_t cb);
-
-  chord_server ();
+  chord_server (u_int cache_maxsize);
 };
