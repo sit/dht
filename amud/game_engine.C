@@ -66,10 +66,11 @@ game_engine::room_lookup_cb (mud_rlookup_cb_t cb, dhash_stat stat, ptr<dhash_blo
 }
 
 void 
-game_engine::insert (ref<avatar> a, mud_cb_t cb)
+game_engine::insert (ref<avatar> a, mud_cb_t cb, bool newa)
 {
   ptr<option_block> opt = New refcounted <option_block>;
-  opt->flags = DHASHCLIENT_NEWBLOCK;
+  if (newa) 
+    opt->flags = DHASHCLIENT_NEWBLOCK;
   warn << "game_engine::insert" << a->to_str ();
 
   dhash->insert (a->ID (), a->bytes (), a->size (), 
@@ -77,10 +78,11 @@ game_engine::insert (ref<avatar> a, mud_cb_t cb)
 }
 
 void 
-game_engine::insert (ref<thing> t, mud_cb_t cb)
+game_engine::insert (ref<thing> t, mud_cb_t cb, bool newt)
 {
   ptr<option_block> opt = New refcounted <option_block>;
-  opt->flags = DHASHCLIENT_NEWBLOCK; // + DHASHCLIENT_RMW;
+  if (newt)
+    opt->flags = DHASHCLIENT_NEWBLOCK; // + DHASHCLIENT_RMW;
 
   //warn << "game_engine::insert" << t->to_str ();
 
@@ -89,12 +91,13 @@ game_engine::insert (ref<thing> t, mud_cb_t cb)
 }
 
 void
-game_engine::insert (ref<room> r, mud_cb_t cb)
+game_engine::insert (ref<room> r, mud_cb_t cb, bool newroom)
 {
   ptr<option_block> opt = New refcounted <option_block>;
-  opt->flags = DHASHCLIENT_NEWBLOCK; // + DHASHCLIENT_RMW;
+  if (newroom)
+    opt->flags = DHASHCLIENT_NEWBLOCK; // + DHASHCLIENT_RMW;
 
-  warn << "game_engine::insert" << r->to_str ();
+  warn << newroom << " game_engine::insert" << r->to_str ();
 
   dhash->insert (r->ID (), r->bytes (), r->size (), 
 		 wrap (this, &game_engine::done_insert, cb), opt, DHASH_NOAUTH);

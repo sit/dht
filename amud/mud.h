@@ -39,9 +39,9 @@ class game_engine {
   void set_mainroom (ref<room> r) { main_room = r; };
   void lookup (ref<room>, mud_rlookup_cb_t);
   void lookup (str name, mud_lookup_cb_t, bool create = 0);
-  void insert (ref<avatar>, mud_cb_t);
-  void insert (ref<thing>, mud_cb_t);
-  void insert (ref<room>, mud_cb_t);
+  void insert (ref<avatar>, mud_cb_t, bool newa = false);
+  void insert (ref<thing>, mud_cb_t, bool newt = false);
+  void insert (ref<room>, mud_cb_t, bool newroom = false);
   void enter_player (ref<avatar>);
 
 };
