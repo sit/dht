@@ -172,6 +172,23 @@ class vnode_impl : public vnode {
 				  const vec<chordID> &failed);
   ptr<location> closestproxpred  (const chordID &x, const vec<float> &n,
 				  const vec<chordID> &failed);
+  
+  // The RPCs
+  void doget_successor (user_args *sbp);
+  void doget_predecessor (user_args *sbp);
+  void dotestrange_findclosestpred (user_args *sbp, chord_testandfindarg *fa);
+  void donotify (user_args *sbp, chord_nodearg *na);
+  void doalert (user_args *sbp, chord_nodearg *na);
+  void dogetsucclist (user_args *sbp);
+  void dogetfingers (user_args *sbp);
+  void dogetfingers_ext (user_args *sbp);
+  void dogetsucc_ext (user_args *sbp);
+  void dogetpred_ext (user_args *sbp);
+  void dosecfindsucc (user_args *sbp, chord_testandfindarg *fa);
+  void dogettoes (user_args *sbp, chord_gettoes_arg *ta);
+  void dodebruijn (user_args *sbp, chord_debruijnarg *da);
+  void dofindroute (user_args *sbp, chord_findarg *fa);
+  void dofindtoes (user_args *sbp, chord_findtoes_arg *ta);
 
  public:
   chordID myID;
@@ -230,23 +247,6 @@ class vnode_impl : public vnode {
   ptr<location> lookup_closestpred (const chordID &x, const vec<chordID> &f);
   ptr<location> lookup_closestpred (const chordID &x);
   ptr<location> lookup_closestsucc (const chordID &x);
-  
-  // The RPCs
-  void doget_successor (user_args *sbp);
-  void doget_predecessor (user_args *sbp);
-  void dotestrange_findclosestpred (user_args *sbp, chord_testandfindarg *fa);
-  void donotify (user_args *sbp, chord_nodearg *na);
-  void doalert (user_args *sbp, chord_nodearg *na);
-  void dogetsucclist (user_args *sbp);
-  void dogetfingers (user_args *sbp);
-  void dogetfingers_ext (user_args *sbp);
-  void dogetsucc_ext (user_args *sbp);
-  void dogetpred_ext (user_args *sbp);
-  void dosecfindsucc (user_args *sbp, chord_testandfindarg *fa);
-  void dogettoes (user_args *sbp, chord_gettoes_arg *ta);
-  void dodebruijn (user_args *sbp, chord_debruijnarg *da);
-  void dofindroute (user_args *sbp, chord_findarg *fa);
-  void dofindtoes (user_args *sbp, chord_findtoes_arg *ta);
 
   //RPC demux
   void addHandler (const rpc_program &prog, cbdispatch_t cb);

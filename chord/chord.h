@@ -162,22 +162,6 @@ class vnode : public virtual refcount {
   virtual ptr<location> lookup_closestpred (const chordID &x, const vec<chordID> &f) = 0;
   virtual ptr<location> lookup_closestpred (const chordID &x) = 0;
   virtual ptr<location> lookup_closestsucc (const chordID &x) = 0;
-  
-  // The RPCs
-  virtual void doget_successor (user_args *sbp) = 0;
-  virtual void doget_predecessor (user_args *sbp) = 0;
-  virtual void dotestrange_findclosestpred (user_args *sbp, chord_testandfindarg *fa) = 0;
-  virtual void donotify (user_args *sbp, chord_nodearg *na) = 0;
-  virtual void doalert (user_args *sbp, chord_nodearg *na) = 0;
-  virtual void dogetsucclist (user_args *sbp) = 0;
-  virtual void dogetfingers (user_args *sbp) = 0;
-  virtual void dogetfingers_ext (user_args *sbp) = 0;
-  virtual void dogetsucc_ext (user_args *sbp) = 0;
-  virtual void dogetpred_ext (user_args *sbp) = 0;
-  virtual void dosecfindsucc (user_args *sbp, chord_testandfindarg *fa) = 0;
-  virtual void dogettoes (user_args *sbp, chord_gettoes_arg *ta) = 0;
-  virtual void dodebruijn (user_args *sbp, chord_debruijnarg *da) = 0;
-  virtual void dofindroute (user_args *sbp, chord_findarg *fa) = 0;
 
   //RPC demux
   virtual void addHandler (const rpc_program &prog, cbdispatch_t cb) = 0;
