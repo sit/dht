@@ -13,6 +13,10 @@ For details about the formatting of the APP data files, see:
     http://www.pdos.lcs.mit.edu/~strib/pl_app/
 """
 
+"""This number will change if something in the interface changes or if
+   something in the code that affects the output changes."""
+VERSION = 1
+
 class plapp:
     def __init__ (my, fn):
 	if fn[-3:] == '.gz':

@@ -8,6 +8,9 @@ import sys
 
 import plapp
 
+# Change this if anything important about the output changes.
+VERSION = 1
+
 progname = os.path.basename (sys.argv[0])
 now  = datetime.datetime.now ()
 
@@ -19,45 +22,71 @@ finish = now + datetime.timedelta (hours=-4)
 start  = now + datetime.timedelta (days=-1)
 
 hoststate = {}
-hosts  = None
 
 def usage (special=""):
     sys.stderr.write (progname + 
-	    "[-d root] [-h hosts] [-s daysago] [-f daysago]\n" +
+	    "[-d approot] [-s daysago] [-f daysago] [-o outdir]\n" +
 	    special + "\n")
 
-def readhosts (fn):
-    hl = []
-    fh = open (fn)
-    hl = fh.readlines ()
-    hl = map (string.strip, hl)
-    return hl
+def dump_header (time):
+    return "# plstate version %d\n# plapp version %d\n# time %d\n" \
+           % (VERSION, plapp.VERSION, time)
 
+def dump (dir, time, state):
+    # XXX could be more careful about if dir is not really a dir.
+    if not os.path.exists (dir):
+	os.mkdir (dir)
+    fn = os.path.join (dir, "%s.txt" % time)
+    fh = open (fn, "w")
+    fh.write (dump_header (time))
+    k = state.keys ()
+    k.sort ()
+    for h in k:
+        fh.write ("%s\t%d\n" % (h, state[h]))
+    fh.close ()
+
+def check_dump (dir, time):
+    fn = os.path.join (dir, "%s.txt" % time)
+    try:
+        fh = open (fn)
+    except:
+        return 0
+    expected = dump_header (time)
+    actual   = fh.read (len (expected))
+    fh.close ()
+    return actual == expected
+
+### main program ###
 try:
-    opts, cmdv = getopt.getopt (sys.argv[1:], "d:h:s:f:")
+    opts, cmdv = getopt.getopt (sys.argv[1:], "d:e:fo:s:")
 except getopt.GetoptError:
     usage ()
     sys.exit (1)
 
+force = 0
+outdir = ''
+
 for o, a in opts:
     if o == '-d':
 	root = a
-    elif o == '-f':
+    elif o == '-e':
 	finish = now + datetime.timedelta (days=-int(a))
-    elif o == '-h':
-	hosts = readhosts (a)
+    elif o == '-f':
+        force = 1
+    elif o == '-o':
+        outdir = a
     elif o == '-s':
 	start = now + datetime.timedelta (days=-int(a))
 
-os.chdir (root)
 oneday = datetime.timedelta (days=1)
 t = start.date ()
 while t <= finish.date ():
     # Find the appropriate directory of pl_app; organized by month/date
     dir = "%d-%02d/%d-%02d-%02d" % (t.year, t.month, t.year, t.month, t.day)
+    dumpdir = os.path.join (outdir, "%d-%02d-%02d" % (t.year, t.month, t.day))
     sys.stderr.write ("Processing %s...\n" % dir)
     try:
-	apps = os.listdir (dir)
+	apps = os.listdir (os.path.join (root, dir))
     except OSError, e:
 	sys.stderr.write ("Oops? %s\n" % e)
 	t += oneday
@@ -65,19 +94,16 @@ while t <= finish.date ():
     apps.sort ()
     for app in apps:
 	if app == '.' or app == '..': continue
-	fn = os.path.join (dir, app)
+	fn = os.path.join (root, dir, app)
 	p  = plapp.plapp (fn)
 	if p.datetime > finish:
 	    break
+        if not force and check_dump (dumpdir, p.time):
+            continue
 	sys.stderr.write ("%s\n" % p)
-	if hosts:
-	    dohosts = hosts
-	else:
-	    dohosts = p.hosts
-	for h in dohosts:
+	for h in p.hosts:
 	    v = p.get (h, h)
 	    if v[0] != '*':
-		if hoststate.get (h, 0) != 1: print p.time, "join", h
 		hoststate[h] = 1
 	    else:
 		# It appears that the host is down.  Maybe it
@@ -90,6 +116,6 @@ while t <= finish.date ():
 		    if goodness > 1: 
 			break
 		if goodness < 2:
-		    if hoststate.get (h, 0) != 0: print p.time, "fail", h
 		    hoststate[h] = 0
+        dump (dumpdir, p.time, hoststate)
     t += oneday
