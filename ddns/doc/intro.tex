@@ -5,8 +5,30 @@ thirteen root servers, which are responsbile for providing
 information about the root of the hierarchy and many top-level domains.
 The Internet Software Consortium, which runs one of the root servers,
 reported a load of 272 million queries per day in 2001~\cite{isc-root}.
+Recent reports~\cite{cert} have indicated that, just by running 
+older versions of the name resolution software (eg. ISC BIND), 
+name servers can set themselves up for denial-of-service attacks 
+(causing {\tt named} daemons to crash or go into infinite loop).
+If the root name servers were to be compromised, the Internet can 
+come to a halt especially when as much as 18\% of DNS lookups 
+can end up at the root servers. Breaking away from the heirarchical 
+pratice of serving DNS data can lessen impact of load and the severity 
+of security compromises faced by the root servers.
+
+%Leslie Lamport's supposed characterization of a
+%distributed system (as one in which you can't get work
+%done because of a machine you have never heard of is down)
+%is all too true in the current implementation of {DNS}.
+Jung {\it et al.}~\cite{dnscache:sigcommimw01} found that approximately
+35\% of DNS queries never receive an answer or receive
+a negative answer. Many of these failures are due to 
+improperly configured name servers or incorrect {\tt NS}-records).
+For example, {\tt NS}-records that point to non-existent 
+or non-authoritative name servers can cause lookups to fail
+or succeed only some of the times (if the server happens
+to have the record cached). 
 Configuring a name server can be an administrative nightmare.
-Poor network conditions are also to blame for failures in DNS look-ups.
+Poor network conditions are also to blame for failures in DNS lookups.
 Potential problems~\cite{dns-bind} that often arise include: 
 \begin{itemize}
 \item Forgetting to increment the serial number when updating the 
@@ -23,7 +45,7 @@ forgot to install the cache file or accidentally deleted it.
 This will cause all lookups outside 
 of the name server's authoritative zone to fail. 
 \item Loss of network connectivity to a name server 
-can cause some DNS look-ups to fail if the name server is
+can cause some DNS lookups to fail if the name server is
 the only one with the zone data. 
 \item A slave server can fail to load zone data 
 if it lost connectivity to the master server due to 
@@ -32,19 +54,6 @@ the master server in the config file, or if there is
 a syntax error in the zone data file on the master server.
 %-missing or incorrect subdomain delegation.\\
 \end{itemize}
-
-%Leslie Lamport's supposed characterization of a
-%distributed system (as one in which you can't get work
-%done because of a machine you have never heard of is down)
-%is all too true in the current implementation of {DNS}.
-Jung {\it et al.}~\cite{dnscache:sigcommimw01} found that approximately
-35\% of DNS queries never receive an answer or receive
-a negative answer. Many of these failures are due to 
-improperly configured name servers or incorrect {\tt NS}-records).
-For example, {\tt NS}-records that point to non-existent 
-or non-authoritative name servers can cause look-ups to fail
-or succeed only some of the times (if the server happens
-to have the record cached).
 
 %Such failures can go undetected because of the hierarchical
 %nature of DNS: lookups within an administrative domain might
@@ -61,9 +70,9 @@ the configuration problems and incorrect name server mapping
 ({\tt NS}-records) mentioned above. 
 The Chord protocol is robust against server failures 
 (host down or lost connection),
-hence we can reduce errors due to poor network connectivity as well.
+hence DDNS can reduce errors due to poor network connectivity as well.
 
-Every DNS look-up is fed directly to a group of servers that form
+Every DNS lookup is fed directly to a group of servers that form
 the Chord ring. Treat each lookup as flat.
  
 Even-handed discussion.\\
@@ -71,6 +80,11 @@ Distributing DNS data in a peer-to-peer network does have some
 disadvantages.In particular, we cannot easily dynamically 
 generate DNS responses. We discuss various solutions to 
 this problem in the implementation section.
+Separating the mechanism to lookup DNS information from the one 
+in which to verify it can increase performance and flexibility 
+in designing the name resolution system. Although it can open up 
+security holes. More cons...
+
 
 %**How to control caching on others name servers...** --obsolete b/c we're 
 %replacing name servers.
