@@ -19,6 +19,8 @@
  */
 
 #include "dbfe.h"
+#include "chord_util.h"
+
 #ifdef DMALLOC
 #include "dmalloc.h"
 #endif
@@ -283,7 +285,7 @@ int dbfe::IMPL_insert_sync_sleepycat(ref<dbrec> key, ref<dbrec> data) {
   int r = 0;
 
   if ((r = db->put(db, NULL, &skey, &content, 0)) != 0) return r;
-  db->sync(db, 0);
+
   return 0;
 } 
 
@@ -341,6 +343,10 @@ dbfe::IMPL_delete_async_sleepycat(ptr<dbrec> key, errReturn_cb cb) {
   (*cb)(err);
 }
 
+void
+dbfe::IMPL_sync () {
+  db->sync (db, 0L);
+}
 #else 
 
 ptr<dbEnumeration> dbfe::IMPL_make_enumeration_adb() {

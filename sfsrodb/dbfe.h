@@ -224,7 +224,10 @@ class dbfe {
   ptr<dbEnumeration> IMPL_make_enumeration_sleepycat();
   void IMPL_delete_async_sleepycat(ptr<dbrec> key, errReturn_cb cb);
   int IMPL_delete_sync_sleepycat(ptr<dbrec> key);
+  void IMPL_sync ();
 #else
+  #error ADB is marked broken
+
   btreeSync *gADB_sync;
   btreeDispatch *gADB_async;
 
@@ -261,6 +264,8 @@ class dbfe {
     { return (*lookup_impl_async)(key, cb); };
   void del(ref<dbrec> key, errReturn_cb cb) 
     { return (*delete_impl_async) (key, cb); };
+  void sync () 
+    { IMPL_sync (); };
 
   ptr<dbEnumeration> enumerate() { return (*make_enumeration)(); };
 
