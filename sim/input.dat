@@ -1,5 +1,8 @@
 #
-# Test file
+# join node time (10 usec)
+# leave  node time
+# insert originator key time
+# find originator key time
 #
 join 5 10
 join 3 100
