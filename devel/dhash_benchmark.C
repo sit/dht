@@ -185,7 +185,6 @@ afetch_cb (dhash_res *res, chordID key, char *buf, int i, struct timeval start, 
 
   if (off == res->resok->attr.size) finish (buf, read, start, i, res);
   while (off < res->resok->attr.size) {
-    assert (0);
     ptr<dhash_transfer_arg> arg = New refcounted<dhash_transfer_arg> ();
 
     arg->farg.key = key;

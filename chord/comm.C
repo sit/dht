@@ -107,7 +107,7 @@ locationtable::doRPC_gotaxprt (doRPC_cbstate *st,
   
   if (prog.progno == CHORD_PROGRAM) {
     u_int64_t s = getusec ();
-    c->call (st->procno, st->in, st->out, 
+    c->timedcall (60, st->procno, st->in, st->out, 
 	     wrap (mkref (this), &locationtable::doRPCcb,
 		   st, s));
   } else { 
@@ -136,7 +136,7 @@ locationtable::doRPC_gotaxprt (doRPC_cbstate *st,
     chord_RPC_res *res = New chord_RPC_res ();
     frpc_state *C = New frpc_state (res, st->out, st->procno, st->cb,
 				    l, getusec ());
-    c->call (CHORDPROC_HOSTRPC, &farg, res, 
+    c->timedcall (60, CHORDPROC_HOSTRPC, &farg, res, 
 	     wrap (mkref(this), &locationtable::doForeignRPC_cb, C, prog)); 
     delete st;
   }
