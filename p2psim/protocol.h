@@ -3,6 +3,7 @@
 
 #include "protocolfactory.h"
 #include "eventqueue.h"
+#include "observed.h"
 #include <stdio.h>
 class Node;
 
@@ -11,7 +12,7 @@ class Node;
 // one node find the Chord on another node by calling
 // getpeer(IPAddress). DHTProtocol has the DHT-specific
 // abstract methods.
-class Protocol {
+class Protocol : public Observed {
 public:
   Protocol(Node*);
   virtual ~Protocol();

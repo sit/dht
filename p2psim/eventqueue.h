@@ -5,12 +5,15 @@
 #include "../utils/skiplist.h"
 using namespace std;
 
-class EventQueue : public Threaded {
-  friend class Observer; // are executed in EventQueue's thread, so allowed.
+class EventQueue : public Threaded, Observed {
+  friend class FileEventGenerator;
+
+  // XXX: remove this
+  // are executed in EventQueue's thread, so allowed.
+  friend class Oldobserver;
 
 public:
   static EventQueue* Instance();
-  void parse(char*);
   Time time() { return _time; }
   Channel* eventchan() { return _eventchan; }
   void go();

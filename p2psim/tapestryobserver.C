@@ -22,7 +22,7 @@ TapestryObserver::Instance(Args *a)
 }
 
 
-TapestryObserver::TapestryObserver(Args *a) : Observer(a)
+TapestryObserver::TapestryObserver(Args *a) : Oldobserver(a)
 {
   _reschedule = 0;
   _reschedule = atoi((*a)["reschedule"].c_str());

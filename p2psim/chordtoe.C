@@ -104,7 +104,7 @@ LocTableToe::next_hop(Chord::CHID key, bool *done)
 }
 
 ChordToe::ChordToe (Node *n, Args &a) : 
-    ChordFingerPNS (n, a, new LocTableToe ()),  _numtoes (16)
+    ChordFingerPNS (n, a, New LocTableToe ()),  _numtoes (16)
 
 {
   _lookup_style = a.nget<uint>("lookup_style",0,10);

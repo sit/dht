@@ -2,6 +2,7 @@
 #define __VIVALDI_H
 
 #include "network.h"
+#include <cassert>
 
 // Compute Vivaldi synthetic coordinates.
 // Protocol-independent: doesn't care where the measurements

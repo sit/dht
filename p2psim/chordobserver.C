@@ -13,7 +13,7 @@ ChordObserver::Instance(Args *a)
 }
 
 
-ChordObserver::ChordObserver(Args *a) : Observer(a)
+ChordObserver::ChordObserver(Args *a) : Oldobserver(a)
 {
   if (!a)  {
     cout << now() << "ChordObserver created WRONGLY!" << endl;

@@ -48,10 +48,9 @@ P2PEvent::P2PEvent(string proto, vector<string> *v) : Event(v)
   // create a map for the arguments
   this->args = New Args;
   assert(this->args);
-  for(unsigned int i=2; i<v->size(); i++) {
-    vector<string> arg = split((*v)[i], "=");
-    this->args->insert(make_pair(arg[0], arg[1]));
-  }
+
+  // puts all the arguments starting at i in args
+  this->args->convert(v, 2);
 }
 
 

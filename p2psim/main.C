@@ -1,5 +1,6 @@
 #include "protocol.h"
 #include "topology.h"
+#include "eventgenerator.h"
 #include <time.h>
 #include <iostream>
 using namespace std;
@@ -37,7 +38,7 @@ threadmain(int argc, char *argv[])
     yield();
 
   // Creates an event queue, parses the file, etc.
-  EventQueue::Instance()->parse(event_file);
+  EventGenerator::parse(event_file);
 
   // Tell the eventqueue to start processing events.
   EventQueue::Instance()->go();

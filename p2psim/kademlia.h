@@ -207,6 +207,7 @@ public:
   ~k_bucket();
 
   peer_t* insert(NodeID, IPAddress, bool = false, string = "", unsigned = 0, k_bucket* = 0);
+  void k_bucket::erase(NodeID, IPAddress, string = "", unsigned = 0);
   bool stabilized(vector<NodeID>, string = "", unsigned = 0);
   void stabilize(string = "", unsigned = 0);
   void dump(string = "", unsigned = 0);

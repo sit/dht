@@ -1,7 +1,7 @@
 #include "eventfactory.h"
 #include "p2pevent.h"
 #include "simevent.h"
-#include "observeevent.h"
+#include "oldobserveevent.h"
 #include <iostream>
 using namespace std;
 
@@ -39,7 +39,7 @@ EventFactory::create(string type, vector<string> *v, string proto)
 
   else if(type == "observe") {
     assert(proto != "");
-    e = New ObserveEvent(proto, v);
+    e = New OldobserveEvent(proto, v);
   }
   
   else

@@ -1,6 +1,7 @@
 #include "network.h"
 #include "netevent.h"
 #include <iostream>
+#include <cassert>
 using namespace std;
 
 Network *Network::_instance = 0;

@@ -1,6 +1,4 @@
 #include "eventqueue.h"
-#include <fstream>
-#include "parse.h"
 #include "eventfactory.h"
 #include "protocolfactory.h"
 #include <iostream>
@@ -106,9 +104,11 @@ EventQueue::advance()
     Event::Execute(*i); // new thread, execute(), delete Event
   }
   _time = eqe->ts;
-
   _queue.remove(eqe->ts);
   delete eqe;
+
+  // time has moved forward
+  notifyObservers();
 
   if(!_queue.size())
     return false;
@@ -129,7 +129,7 @@ EventQueue::add_event(Event *e)
     bool b = _queue.insert(ee);
     assert(b);
   }
- // assert(ee->ts);
+  // assert(ee->ts);
   //assert(e->ts);
   ee->events.push_back(e);
 
@@ -164,41 +164,4 @@ EventQueue::dump()
     next = _queue.next(cur);
   }
   cout << endl;
-}
-
-
-void
-EventQueue::parse(char *file)
-{
-  ifstream in(file);
-
-  if(!in) {
-    cerr << "no such file " << file << endl;
-    threadexitsall(0);
-  }
-
-  string line;
-
-  set<string> allprotos = ProtocolFactory::Instance()->getnodeprotocols();
-  if (allprotos.size() > 1) {
-    cerr << "warning: running two diffferent protocols on the same node" << endl;
-  }
-
-  while(getline(in,line)) {
-    vector<string> words = split(line);
-
-    // skip empty lines and commented lines
-    if(words.empty() || words[0][0] == '#')
-      continue;
-
-    // create the appropriate event type (based on the first word of the line)
-    // and let that event parse the rest of the line
-    string event_type = words[0];
-    words.erase(words.begin());
-    for (set<string>::const_iterator i = allprotos.begin(); i != allprotos.end(); ++i) {
-      Event *e = EventFactory::Instance()->create(event_type, &words, *i);
-      assert(e);
-      add_event(e);
-    }
-  }
 }

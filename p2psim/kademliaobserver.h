@@ -1,10 +1,10 @@
 #ifndef __KADEMLIA_OBSERVER_H
 #define __KADEMLIA_OBSERVER_H
 
-#include "observer.h"
+#include "oldobserver.h"
 #include "kademlia.h"
 
-class KademliaObserver : public Observer {
+class KademliaObserver : public Oldobserver {
 public:
   static KademliaObserver* Instance(Args*);
   virtual void execute();

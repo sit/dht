@@ -3,7 +3,7 @@
 
 /* Gummadi's Chord PNS algorithm  (static) */
 ChordFingerPNS::ChordFingerPNS(Node *n, Args& a, LocTable *l) 
-  : Chord(n, a, new LocTablePNS()) 
+  : Chord(n, a, New LocTablePNS()) 
 { 
   _base = a.nget<uint>("base",2,10);
   _samples = a.nget<uint>("samples",16,10);
@@ -133,7 +133,7 @@ ChordFingerPNS::find_successors(CHID key, uint m, bool is_lookup)
 
     if(nr.v.size() > 0){
       
-      if (nr.v.size() < _asap) {
+      if ((int) nr.v.size() < _asap) {
 	//get successor list from the best next candidate
 	uint i;
 	for (i = 0; i < nr.v.size(); i++) {
@@ -222,7 +222,7 @@ DONE:
     printf("\n");
   }
 #endif
-  assert(nr.v.size() >= _asap);
+  assert((int) nr.v.size() >= _asap);
   return nr.v;
 }
 

@@ -34,6 +34,7 @@ sub main {
 
   open PROT, ">$ARGV[0]" || die "Could not open $ARGV[0]: $!\n";
   open TOP, ">$ARGV[1]" || die "Could not open $ARGV[1]: $!\n";
+  open EVOLD, ">$ARGV[2].old.format" || die "Could not open $ARGV[2].old.format: $!\n";
   open EV, ">$ARGV[2]" || die "Could not open $ARGV[2]: $!\n";
 
   while ($line = <STDIN>) {
@@ -61,13 +62,16 @@ sub main {
     } elsif ($line =~/^\s*protocol:\s*(.*)/) {
       &doprotocol(split(/,\s*/, $1));
     } else {
-      print EV "$line\n";
+      print EVOLD "$line\n";
     }
   }
 
-  close TOP || die "Could not close $ARGV[0]: $!\n";
-  close EV || die "Could not close $ARGV[1]: $!\n";
-  close PROT || die "Could not close $ARGV[2]: $!\n";
+  print EV "generator file name=$ARGV[2].old.format\n";
+
+  close PROT || die "Could not close $ARGV[0]: $!\n";
+  close TOP || die "Could not close $ARGV[1]: $!\n";
+  close EVOLD || die "Could not close $ARGV[2].old.format: $!\n";
+  close EV || die "Could not close $ARGV[2]: $!\n";
 }
 
 
@@ -106,7 +110,7 @@ sub donet {
 sub doevent {
   my ($n, $type, @args) = @_;
   print "doevent: $n $type @args\n";
-  print EV "node $time $allnodes[$n] $type @args\n";
+  print EVOLD "node $time $allnodes[$n] $type @args\n";
 }
 
 
@@ -125,20 +129,20 @@ sub doevents {
       $node =  int(rand ($nnodes-1)) + 2; # this will not ensure all nodes join the network
     }
     if ($type =~ /join/) {
-      print EV "node $time $allnodes[$node] $type @args\n";
+      print EVOLD "node $time $allnodes[$node] $type @args\n";
     } elsif ($type =~ /lookup/) {
       do{
         $node = int(rand ($nnodes)) + 1;
       }while($deadnodes[$node]);
       $keys[$nk] = makekey();
-      print EV "node $time $allnodes[$node] $type key=$keys[$nk]\n";
+      print EVOLD "node $time $allnodes[$node] $type key=$keys[$nk]\n";
       $nk++;
     } elsif ($type =~ /crash/) {
       while ($deadnodes[$node] == 1) {
         $node = int(rand ($nnodes)) + 1;
       }
       $deadnodes[$node] = 1;
-      print EV "node $time $allnodes[$node] $type\n";
+      print EVOLD "node $time $allnodes[$node] $type\n";
     }
 
     $time = $time + $interval;
@@ -149,7 +153,7 @@ sub doevents {
 
 sub doobserve {
    my ($start, @args) = @_;
-   print EV "observe $start numnodes=$nnodes @args\n";
+   print EVOLD "observe $start numnodes=$nnodes @args\n";
 }
 
 sub makekey {  

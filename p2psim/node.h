@@ -3,6 +3,7 @@
 
 #include "threaded.h"
 #include "rpchandle.h"
+#include "observed.h"
 #include "p2psim_hashmap.h"
 
 class Protocol;
@@ -61,6 +62,7 @@ private:
     static void thunk(void *xa) {
       Thunk *t = (Thunk *) xa;
       (t->_target->*(t->_fn))(t->_args, t->_ret);
+      t->_target->notifyObservers();
     }
 
     static void killme(void *xa) {

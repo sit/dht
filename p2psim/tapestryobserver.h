@@ -1,10 +1,10 @@
 #ifndef __TAPESTRY_OBSERVER_H
 #define __TAPESTRY_OBSERVER_H
 
-#include "observer.h"
+#include "oldobserver.h"
 #include "tapestry.h"
 
-class TapestryObserver : public Observer {
+class TapestryObserver : public Oldobserver {
 public:
   static TapestryObserver* Instance(Args*);
   virtual void execute();

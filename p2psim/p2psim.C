@@ -1,5 +1,5 @@
 #include "network.h"
-#include "observerfactory.h"
+#include "oldobserverfactory.h"
 #include "eventfactory.h"
 #include "threadmanager.h"
 
@@ -24,7 +24,7 @@ graceful_exit(void*)
   delete EventFactory::Instance();
   delete ProtocolFactory::Instance();
   delete ThreadManager::Instance();
-  delete ObserverFactory::Instance();
+  delete OldobserverFactory::Instance();
   send(Network::Instance()->exitchan(), 0);
   while(anyready())
     yield();

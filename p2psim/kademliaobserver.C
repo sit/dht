@@ -13,7 +13,7 @@ KademliaObserver::Instance(Args *a)
 }
 
 
-KademliaObserver::KademliaObserver(Args *a) : Observer(a)
+KademliaObserver::KademliaObserver(Args *a) : Oldobserver(a)
 {
   _reschedule = 0;
   _reschedule = atoi((*a)["reschedule"].c_str());

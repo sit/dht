@@ -2,9 +2,9 @@
 #define __CHORD_OBSERVER_H
 
 #include "chord.h"
-#include "observer.h"
+#include "oldobserver.h"
 
-class ChordObserver : public Observer {
+class ChordObserver : public Oldobserver {
 public:
   static ChordObserver* Instance(Args*);
   virtual void execute();

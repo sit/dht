@@ -1,38 +1,38 @@
-#include "observerfactory.h"
+#include "oldobserverfactory.h"
 #include "chordobserver.h"
 #include "kademliaobserver.h"
 #include "tapestryobserver.h"
 #include <iostream>
 using namespace std;
 
-ObserverFactory* ObserverFactory::_instance = 0;
+OldobserverFactory* OldobserverFactory::_instance = 0;
 
-ObserverFactory *
-ObserverFactory::Instance()
+OldobserverFactory *
+OldobserverFactory::Instance()
 {
   if(!_instance)
-    _instance = New ObserverFactory();
+    _instance = New OldobserverFactory();
   return _instance;
 }
 
-ObserverFactory::ObserverFactory()
+OldobserverFactory::OldobserverFactory()
 {
 }
 
-ObserverFactory::~ObserverFactory()
+OldobserverFactory::~OldobserverFactory()
 {
-  for(set<Observer*>::const_iterator i = _observers.begin(); i != _observers.end(); ++i)
+  for(set<Oldobserver*>::const_iterator i = _oldobservers.begin(); i != _oldobservers.end(); ++i)
     delete *i;
 }
 
 
-Observer *
-ObserverFactory::create(string s, Args *a)
+Oldobserver *
+OldobserverFactory::create(string s, Args *a)
 {
-  Observer *t = 0;
+  Oldobserver *t = 0;
 
-  // add a "type" parameter to the argument so that the observer knows that
-  // protocol to observe
+  // add a "type" parameter to the argument so that the oldobserver knows that
+  // protocol to oldobserve
   string type = OBSERVER_TYPE;
   a->insert(make_pair(type, s));
 
@@ -55,10 +55,10 @@ ObserverFactory::create(string s, Args *a)
   }
   
   else {
-    cerr << "No such observer " << s << endl;
+    cerr << "No such oldobserver " << s << endl;
     assert(false);
   }
 
-  _observers.insert(t);
+  _oldobservers.insert(t);
   return t;
 }

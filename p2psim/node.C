@@ -1,6 +1,7 @@
 #include "threadmanager.h"
 #include "network.h"
 #include <iostream>
+#include <cassert>
 using namespace std;
 
 Node::Node(IPAddress ip) : _ip(ip), _alive (true), _pktchan(0)

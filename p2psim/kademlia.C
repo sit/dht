@@ -649,8 +649,6 @@ k_bucket_tree::erase(NodeID id)
   KDEBUG(2) << "k_bucket_tree::erase: id = " << Kademlia::printbits(id) << endl;
   _nodes.erase(id);
 
-  // add replacement
-
   _self->dump();
 }
 
@@ -782,7 +780,6 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, bool init_state, string pr
     KDEBUG(4) << "insert: node = " << Kademlia::printbits(node) << ", ip = " << ip << ", prefix = " << prefix << endl;
 
   unsigned leftmostbit = Kademlia::getbit(node, depth);
-  unsigned myleftmostbit = Kademlia::getbit(_self->id(), depth);
   KDEBUG(4) << "insert: leftmostbit = " << leftmostbit << ", depth = " << depth << endl;
 
   //
@@ -824,27 +821,33 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, bool init_state, string pr
   }
 
   //
-  // _nodes ARRAY IS FULL.  PING THE LEAST-RECENTLY SEEN NODE.
+  // _nodes array is full.
+  //
+  // place in replacement cache
   //
   assert(_nodes->size() == _k);
   assert(_child[0] == 0);
   assert(_child[1] == 0);
 
-  // ping the least-recently seen node.  if that one is
-  // OK, then don't do anything.
-  // XXX: init_state hack. (assume all nodes are up.)
-  set<peer_t*>::const_iterator least_recent = _nodes->begin();
-  assert(*least_recent);
   if(init_state)
     return 0;
 
   peer_t *p = New peer_t(node, ip, now());
   assert(p);
+  _replacement_cache->insert(p);
+  return 0;
+
+#if 0
+  /*
+  // ping the least-recently seen node.  if that one is
+  // OK, then don't do anything.
+  // XXX: init_state hack. (assume all nodes are up.)
+  set<peer_t*>::const_iterator least_recent = _nodes->begin();
+  assert(*least_recent);
   if(_self->do_ping_wrapper(*least_recent)) {
-    // put in _replacement_cache
-    _replacement_cache->insert(p);
     return 0;
   }
+  */
 
   // evict the dead node
   _nodes->erase(least_recent);
@@ -883,6 +886,84 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, bool init_state, string pr
   // now insert at the right child
   KDEBUG(4) <<  "insert: after split, calling insert for prefix " << (prefix + (leftmostbit ? "1" : "0")) << " to depth " << (depth+1) << endl;
   return _child[leftmostbit]->insert(node, ip, init_state, prefix + (leftmostbit ? "1" : "0"), depth+1, root);
+}
+
+#endif
+
+}
+
+// }}}
+// {{{ k_bucket::erase
+void
+k_bucket::erase(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned depth)
+{
+#if 0
+  assert(_root);
+
+  if(depth == 0)
+    KDEBUG(4) << "erase: node = " << Kademlia::printbits(node) << ", ip = " << ip << ", prefix = " << prefix << endl;
+
+  unsigned leftmostbit = Kademlia::getbit(node, depth);
+  unsigned myleftmostbit = Kademlia::getbit(_self->id(), depth);
+  KDEBUG(4) << "erase: leftmostbit = " << leftmostbit << ", depth = " << depth << endl;
+
+  //
+  // NON-ENDLEAF NODE WITH CHILD
+  //
+  if(_child[leftmostbit]) {
+    assert(!_leaf);
+    KDEBUG(4) << "insert: _child[" << leftmostbit << "] exists, descending" << endl;
+    return _child[leftmostbit]->erase(node, ip, prefix + (leftmostbit ? "1" : "0"), depth+1);
+  }
+
+
+  //
+  // find the node in the set.
+  //
+  peer_t *p = 0;
+  for(set<peer_t*>::const_iterator it = _nodes->begin(); it != _nodes->end(); ++it)
+    if((*it)->id == node) {
+      p = *it;
+      break;
+    }
+  assert(p);
+
+  // XXX:
+  // evict the entry
+  // _nodes->erase(least_recent);
+  _nodes->erase(p);
+
+  //
+  // Now if the range in this k-bucket includes the node own ID, then split it,
+  // otherwise just return the peer_t we just inserted.
+  //
+  if(!(node >= (*_nodes->begin())->id && node <= (*_nodes->end())->id &&
+        (*_nodes->begin())->id != (*_nodes->end())->id))
+    return p;
+
+  assert(!_leaf);
+  // create both children
+  KDEBUG(4) <<  "erase: not a leaf.  creating subchildren" << endl;
+  _child[0] = New k_bucket(_self, _root);
+  _child[1] = New k_bucket(_self, _root);
+  _child[myleftmostbit ^ 1]->_leaf = true;
+  KDEBUG(4) <<  "erase: subchild " << (myleftmostbit ^ 1) << " is a leaf on depth " << depth << endl;
+
+  // now divide contents into separate buckets
+  // XXX: we have to ping these guys?
+  for(set<peer_t*>::const_iterator it = _nodes->begin(); it != _nodes->end(); ++it) {
+    assert(*it);
+    unsigned bit = Kademlia::getbit((*it)->id, depth);
+    KDEBUG(4) <<  "erase: pushed entry " << Kademlia::printbits((*it)->id) << " to side " << bit << endl;
+    _child[bit]->_nodes->insert(*it);
+  }
+  delete _nodes;
+  _nodes = 0;
+
+  // now insert at the right child
+  // KDEBUG(4) <<  "erase: after split, calling insert for prefix " << (prefix + (leftmostbit ? "1" : "0")) << " to depth " << (depth+1) << endl;
+  // return _child[leftmostbit]->erase(node, ip, init_state, prefix + (leftmostbit ? "1" : "0"), depth+1, root);
+#endif
 }
 
 // }}}
