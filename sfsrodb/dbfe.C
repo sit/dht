@@ -277,6 +277,8 @@ dbfe::dbfe() {
     db = NULL;
     dbe = NULL;
 
+    checkpoint_impl = wrap (this, &dbfe::IMPL_checkpoint_sleepycat);
+
     create_impl = wrap(this, &dbfe::IMPL_create_sleepycat);
     open_impl = wrap(this, &dbfe::IMPL_open_sleepycat);
     close_impl = wrap(this, &dbfe::IMPL_close_sleepycat);
@@ -326,9 +328,12 @@ int dbfe::IMPL_open_sleepycat(char *filename, dbOptions opts) {
     if (r) return r;
 
 
-    // uncomment the below for slightly better performance
-    //    r = dbe->set_flags(dbe, DB_TXN_NOSYNC, 1);
-    //    if (r) return r;
+    // clean up old log files not available in old versions
+#if ((DB_VERSION_MAJOR >= 4) && (DB_VERSION_MINOR >= 2))
+    r = dbe->set_flags(dbe, DB_LOG_AUTOREMOVE, 1);
+    if (r) return r;
+#endif
+    
     getcwd(cpath, MAXPATHLEN);
 
     r = dbe->set_data_dir(dbe, cpath);
@@ -385,6 +390,17 @@ int dbfe::IMPL_open_sleepycat(char *filename, dbOptions opts) {
   return r;
 }
 
+
+void
+dbfe::IMPL_checkpoint_sleepycat ()
+{
+  if (dbe)
+#if (DB_VERSION_MAJOR < 4)
+     txn_checkpoint (dbe, 0, 0, 0);
+#else
+     dbe->txn_checkpoint (dbe, 0, 0, 0);
+#endif
+}
 
 int 
 dbfe::IMPL_create_sleepycat(char *filename, dbOptions opts) 

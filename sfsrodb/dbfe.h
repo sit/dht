@@ -214,6 +214,7 @@ class dbfe {
   ivcb close_impl;
 
   insert_cb insert_impl;
+  callback<void>::ptr checkpoint_impl;
   lookup_cb lookup_impl;
 
   delete_cb delete_impl;
@@ -232,6 +233,7 @@ class dbfe {
   int IMPL_insert_sync_sleepycat(ref<dbrec> key, ref<dbrec> data);
   ptr<dbrec> IMPL_lookup_sync_sleepycat(ref<dbrec> key);
   void IMPL_insert_async_sleepycat(ref<dbrec> key, ref<dbrec> data, errReturn_cb cb);
+  void IMPL_checkpoint_sleepycat ();
   void IMPL_lookup_async_sleepycat(ref<dbrec> key, itemReturn_cb cb);
   ptr<dbEnumeration> IMPL_make_enumeration_sleepycat();
   void IMPL_delete_async_sleepycat(ptr<dbrec> key, errReturn_cb cb);
@@ -280,6 +282,9 @@ class dbfe {
     { return (*delete_impl_async) (key, cb); };
   void sync () 
     { IMPL_sync (); };
+
+  void checkpoint ()
+  {  (*checkpoint_impl) (); };
 
 
 
