@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.5 2003/10/09 23:49:08 strib Exp $ */
+/* $Id: tapestry.h,v 1.6 2003/10/10 23:33:35 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -23,6 +23,20 @@ public:
   // how many digits of base _b are in each id?
   const unsigned _digits_per_id;
 
+  // types of statistics we can record
+  enum stat_type
+  {
+    STAT_JOIN = 0,
+    STAT_LOOKUP,
+    STAT_NODELIST,
+    STAT_MC,
+    STAT_PING,
+    STAT_BACKPOINTER,
+    STAT_MCNOTIFY,
+    STAT_NN,
+    STAT_REPAIR,
+    STAT_SIZE
+  };
 
   Tapestry(Node *n, Args a);
   virtual ~Tapestry();
@@ -72,6 +86,7 @@ public:
     GUID owner_id;
     bool failed;
     int hopcount;
+    GUID real_owner_id;
   };
 
   void handle_lookup(lookup_args *args, lookup_return *ret);
@@ -154,6 +169,18 @@ public:
 
   void handle_nn(nn_args *args, nn_return *ret);
 
+  struct repair_args {
+    GUID bad_id;
+    uint level;
+    uint digit;
+  };
+
+  struct repair_return {
+    vector<NodeInfo> nodelist;
+  };
+
+  void handle_repair(repair_args *args, repair_return *ret);
+
   void init_state( list<Protocol*> );
 
 private:
@@ -183,6 +210,9 @@ private:
 
   // how many nearest neighbors do we keep at every step?
   static const uint _k = 16;
+  
+  // statitics per message
+  vector<uint> stat;
 
   /**
    * Convert a given IP address to an id in the Tapestry namespace
@@ -198,6 +228,8 @@ private:
   void next_hop( GUID key, IPAddress** ips, uint size );
   Time ping( IPAddress other_node, GUID other_id, bool &ok );
   GUID lookup_cheat( GUID key );
+  void record_stat( stat_type type );
+  void print_stats();
 
   class mc_callinfo { public:
     mc_callinfo(IPAddress xip, mc_args *mca, mc_return *mcr)
@@ -227,6 +259,14 @@ private:
     nn_return *nr;
   };
 
+  class repair_callinfo { public:
+    repair_callinfo(repair_args *rra, repair_return *rrr)
+      : ra(rra), rr(rrr) {}
+    ~repair_callinfo() { delete ra; }
+    repair_args *ra;
+    repair_return *rr;
+  };
+
   void multi_add_to_rt(	vector<NodeInfo *> *nodes );
 
   void multi_add_to_rt_start( RPCSet *ping_rpcset, 
@@ -235,7 +275,7 @@ private:
 
   void multi_add_to_rt_end( RPCSet *ping_rpcset,
 			    map<unsigned, ping_callinfo*> *ping_resultmap,
-			    Time before_ping );
+			    Time before_ping, bool repair );
   void have_joined();
 
 };
