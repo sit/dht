@@ -536,7 +536,7 @@ Kelips::newold_msg(vector<Info> &msg, vector<IPAddress> l, u_int ration)
   {
     // Half the ration for newly learned nodes.
     vector<IPAddress> nl = randomize(newold(l, true));
-    for(u_int i = 0; n < ration / 2 && i < nl.size(); i++, n++){
+    for(u_int i = 0; n <= ration / 2 && i < nl.size(); i++, n++){
       Info *ip = _info[nl[i]];
       ip->_rounds -= 1;
       msg.push_back(*ip);

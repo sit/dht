@@ -23,8 +23,6 @@
 
 // To do:
 // fix churn generator to not lookup dead nodes?
-// split lookup1(): fast path, and random/slow after failure.
-// if we know about the target node, go direct!
 
 // Does it stabilize after the expected number of rounds?
 // Gossip w/o favoring new nodes (nnodes: avg median):

@@ -7,13 +7,13 @@
 # name, min, max
 my $params =
     [
-     [ "round_interval", 500, 10000 ],
-     [ "group_targets", 2, 20 ],
-     [ "contact_targets", 2, 20 ],
-     [ "group_ration", 2, 20 ],
-     [ "contact_ration", 2, 20 ],
-     [ "n_contacts", 2, 20 ],
-     [ "item_rounds", 0, 6 ],
+     [ "round_interval", 500, 2000, 8000, 16000, 32000 ],
+     [ "group_targets", 1, 2, 4, 8 ],
+     [ "contact_targets", 1, 2, 4, 8 ],
+     [ "group_ration", 1, 2, 4, 8, 16 ],
+     [ "contact_ration", 1, 2, 4, 8 ],
+     [ "n_contacts", 2, 4, 8 ],
+     [ "item_rounds", 0, 1, 2, 4 ],
      ];
 
 my $nnodes = 100;
@@ -43,9 +43,8 @@ for($iters = 0; $iters < 200; $iters++){
     my $pi;
     for($pi = 0; $pi <= $#$params; $pi++){
         my $name = $params->[$pi][0];
-        my $lo = $params->[$pi][1];
-        my $hi = $params->[$pi][2];
-        my $x = $lo + int(rand($hi - $lo));
+        my $np = $#{$params->[$pi]};
+        my $x = $params->[$pi][1 + int(rand($np))];
         print PF "$name=$x ";
         print "$name=$x ";
     }
