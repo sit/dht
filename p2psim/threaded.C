@@ -11,7 +11,9 @@ Threaded::Threaded()
 Threaded::~Threaded()
 {
   chanfree(_exitchan);
-  threadexits(0);
+  // if this assert is pestering you, you did something very wrong.
+  // never remove this assert.
+  assert(threadid() == _thread);
 }
 
 

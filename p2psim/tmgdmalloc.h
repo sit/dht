@@ -7,7 +7,7 @@
 // ./configure --with-tmgdmalloc
 // #include "tmgdmalloc.h"
 //
-// Then use New and Delete, rather than new and delete.
+// Then use New rather than new.
 //
 // __tmg_dmalloc_stats will tell you the location of un-delete-d objects.
 //
@@ -33,7 +33,7 @@ namespace std {
 void __tmg_dmalloc_new(void *, size_t, const char*, unsigned);
 void __tmg_dmalloc_del(void *);
 void __tmg_dmalloc_stats();
-void __tmg_dmalloc_dump(void*);
+void __tmg_dmalloc_info(void *p);
 
 #ifdef WITH_TMGDMALLOC
 void* operator new(size_t, const char*, unsigned);

@@ -1,6 +1,7 @@
 #include "eventqueue.h"
 #include "network.h"
 #include "protocolfactory.h"
+#include "observerfactory.h"
 #include "eventfactory.h"
 #include "threadmanager.h"
 
@@ -21,17 +22,19 @@ graceful_exit(void*)
 
   // send an exit packet to the Network
   unsigned e = 1;
-  send(EventQueue::Instance()->exitchan(), &e); // doesn't delete!
+  send(EventQueue::Instance()->exitchan(), &e);
+  while(anyready())
+    yield();
 
   delete EventFactory::Instance();
   delete ProtocolFactory::Instance();
   delete ThreadManager::Instance();
+  delete ObserverFactory::Instance();
   send(Network::Instance()->exitchan(), 0);
   while(anyready())
     yield();
-  __tmg_dmalloc_stats();
 
-  // XXX: can't come before, but I don't understand why not
-  delete EventQueue::Instance();
+  __tmg_dmalloc_stats();
+  threadexitsall(0);
 }
 

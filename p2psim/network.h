@@ -4,8 +4,10 @@
 #include "topology.h"
 #include "protocol.h"
 #include <list>
-class Network : public Threaded {
+#include "p2psim.h"
+using namespace std;
 
+class Network : public Threaded {
 public:
   static Network* Instance() { return Instance(0); }
   static Network* Instance(Topology*);
@@ -14,10 +16,11 @@ public:
   Node* getnode(IPAddress id) { return _nodes[id]; }
   Topology *gettopology() { return _top; }
   list<Protocol*> getallprotocols(string);
-  ~Network();
 
 private:
   Network(Topology*);
+  ~Network();
+
   virtual void run();
 
   static Network *_instance;

@@ -659,16 +659,20 @@ k_bucket::~k_bucket()
   if(_child[0]) {
     delete _child[0];
     _child[0] = 0;
-  } if(_child[1]) {
+  }
+  
+  if(_child[1]) {
     delete _child[1];
     _child[1] = 0;
   }
 
-  if(_nodes) {
-    for(set<peer_t*>::const_iterator it = _nodes->begin(); it != _nodes->end(); ++it)
-      delete *it;
-    delete _nodes;
-  }
+  if(!_nodes)
+    return;
+
+  for(set<peer_t*>::const_iterator it = _nodes->begin(); it != _nodes->end(); ++it)
+    delete *it;
+  delete _nodes;
+  _nodes = 0;
 }
 
 // }}}

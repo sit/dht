@@ -10,15 +10,15 @@ class EventQueue : public Threaded {
 
 public:
   static EventQueue* Instance();
-
-  EventQueue();
-  ~EventQueue();
   void parse(char*);
   Time time() { return _time; }
   Channel* eventchan() { return _eventchan; }
   void go();
 
 private:
+  EventQueue();
+  ~EventQueue();
+
   struct eq_entry {
     eq_entry() { ts = 0; events.clear(); }
     eq_entry(Event *e) { ts = e->ts; events.clear(); }
@@ -36,7 +36,6 @@ private:
   virtual void run();
   void add_event(Event*);
   bool advance();
-  void drain();
 
   // for debuging
   void dump();

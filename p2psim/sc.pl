@@ -17,7 +17,7 @@ use strict;
 #
 # event: <node id>, <event-type>, <args>
 #
-# events: <number of events>, <start>, <interval>, <event-type>, <args>
+# events: <# of events>, <start>, <interval>, <distrib>, <event-type>, <args>
 #
 
 my $line;

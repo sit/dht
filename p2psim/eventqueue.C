@@ -31,8 +31,7 @@ EventQueue::EventQueue() : _time(0)
 }
 
 
-void
-EventQueue::drain()
+EventQueue::~EventQueue()
 {
   // delete the entire queue and say bye bye
   eq_entry *next = 0;
@@ -42,10 +41,6 @@ EventQueue::drain()
       delete (*i);
     delete cur;
   }
-}
-
-EventQueue::~EventQueue()
-{
   chanfree(_eventchan);
   chanfree(_gochan);
 }
@@ -97,7 +92,7 @@ EventQueue::advance()
   // if(nbrecvp(_exitchan) != 0) {
   unsigned *x;
   if((x = (unsigned *) nbrecvp(_exitchan)) != 0) {
-    drain();
+    delete this;
     return false;
   }
 
@@ -198,14 +193,8 @@ EventQueue::parse(char *file)
     // and let that event parse the rest of the line
     string event_type = words[0];
     words.erase(words.begin());
-    if ((event_type == "node") || (event_type == "observe")) {
-      for (set<string>::const_iterator i = allprotos.begin(); i != allprotos.end(); ++i) {
-	Event *e = EventFactory::Instance()->create(event_type, &words, *i);
-	assert(e);
-	add_event(e);
-      }
-    } else {
-      Event *e = EventFactory::Instance()->create(event_type, &words);
+    for (set<string>::const_iterator i = allprotos.begin(); i != allprotos.end(); ++i) {
+      Event *e = EventFactory::Instance()->create(event_type, &words, *i);
       assert(e);
       add_event(e);
     }

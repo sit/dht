@@ -5,7 +5,6 @@
 #include "eventqueue.h"
 #include <assert.h>
 #include <iostream>
-#include <stdio.h>
 #include "p2psim.h"
 using namespace std;
 
@@ -14,9 +13,9 @@ Network *Network::_instance = 0;
 Network*
 Network::Instance(Topology *top)
 {
-  if(_instance)
-    return _instance;
-  return (_instance = New Network(top));
+  if(!_instance)
+    _instance = New Network(top);
+  return _instance;
 }
 
 
@@ -36,11 +35,11 @@ Network::Network(Topology *top) : _top(0), _pktchan(0), _nodechan(0)
 
 Network::~Network()
 {
+  for(NMCI p = _nodes.begin(); p != _nodes.end(); ++p)
+    send(p->second->exitchan(), 0);
   chanfree(_pktchan);
   chanfree(_nodechan);
   delete _top;
-  for(NMCI p = _nodes.begin(); p != _nodes.end(); ++p)
-    send(p->second->exitchan(), 0);
 }
 
 
