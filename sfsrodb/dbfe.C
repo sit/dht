@@ -35,6 +35,7 @@
 #define TYPE_OPT "opt_dbtype"
 #define CREATE_OPT "opt_create"
 #define FLAG_OPT   "opt_flag"
+#define JOIN_OPT  "opt_join"
 #define DBENV_OPT    "opt_dbenv"
 
 ///////////////// static /////////////////////
@@ -55,6 +56,7 @@ dbGetImplInfo() {
   info->supportedOptions.push_back(TYPE_OPT);
   info->supportedOptions.push_back(CREATE_OPT);
   info->supportedOptions.push_back(FLAG_OPT);
+  info->supportedOptions.push_back(JOIN_OPT);
   info->supportedOptions.push_back(DBENV_OPT);
 #endif
   return info;
@@ -313,6 +315,7 @@ int dbfe::IMPL_open_sleepycat(char *filename, dbOptions opts) {
   if (mode == -1) mode = 0664;
   long flags = opts.getOption(FLAG_OPT);
   if (flags == -1) flags = DB_CREATE;
+  long join = opts.getOption(JOIN_OPT);
   long create = opts.getOption(CREATE_OPT);
   if (create == 0) flags |= DB_EXCL;
   //  long cacheSize = opts.getOption(CACHE_OPT);
@@ -343,7 +346,12 @@ int dbfe::IMPL_open_sleepycat(char *filename, dbOptions opts) {
     r = dbe->set_tmp_dir(dbe, cpath);
     if (r) return r;
     
-    r = dbe->open(dbe, NULL, DB_CREATE | DB_INIT_MPOOL | DB_INIT_LOCK | DB_INIT_LOG | DB_INIT_TXN | DB_RECOVER , 0);
+    if (join < 0) {
+      r = dbe->open(dbe, NULL, DB_CREATE | DB_INIT_MPOOL | DB_INIT_LOCK | DB_INIT_LOG | DB_INIT_TXN | DB_RECOVER , 0);
+    } else {
+      r = dbe->open(dbe, NULL, DB_JOINENV, 0);
+    }
+
     if (r){
       warn << "dbe->open returned " << r << " which is " << db_strerror(r) << "\n";
       return r;
