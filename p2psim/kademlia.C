@@ -25,7 +25,7 @@ IPAddress kademlia_wkn_ip = 0;
 Kademlia::Kademlia(Node *n)
   : DHTProtocol(n), _id(ConsistentHash::ip2chid(n->ip()) & 0x0000ffff)
 {
-  KDEBUG(1) << "id: " << printbits(_id) << endl;
+  KDEBUG(1) << "ip: " << ip() << endl;
   _values.clear();
 
   // precompute masks
@@ -66,7 +66,7 @@ Kademlia::join(Args *args)
   lookup_result lr;
   la.id = la.key = _id;
   la.ip = ip();
-  KDEBUG(2) << "join: lookup my id" << endl;
+  KDEBUG(2) << "join: lookup my id.  included ip = " << la.ip << endl;
   doRPC(wkn, &Kademlia::do_lookup, &la, &lr);
   KDEBUG(2) << "join: lookup my id: node " << printID(lr.id) << endl;
 
@@ -172,11 +172,12 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
 
   KDEBUG(3) << "do_lookup: id = " << printbits(largs->id) << ", ip = " << largs->ip << ", key = " << printbits(largs->key) << endl;
   NodeID callerID = largs->id;
-  NodeID callerIP = largs->ip;
+  IPAddress callerIP = largs->ip;
+  KDEBUG(3) << "do_lookup: callerIP = " << callerIP << endl;
 
   // deal with the empty case
   if(_tree->empty()) {
-    KDEBUG(3) << "do_lookup: tree is empty. returning myself" << endl;
+    KDEBUG(3) << "do_lookup: tree is empty. returning myself, ip = " << ip() << endl;
     lresult->id = _id;
     lresult->ip = ip();
     goto done;
@@ -197,7 +198,7 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
 
   // recursive lookup
   } else {
-    KDEBUG(3) << "do_lookup: recursive lookup to " << printbits(pp.first) << endl;
+    KDEBUG(3) << "do_lookup: recursive lookup to " << printbits(pp.first) << " at ip = " << pp.second << endl;
     largs->id = _id;
     largs->ip = ip();
     doRPC(pp.second, &Kademlia::do_lookup, largs, lresult);
@@ -400,6 +401,7 @@ k_bucket_tree::~k_bucket_tree()
 unsigned
 k_bucket_tree::insert(NodeID id, IPAddress ip)
 {
+  KDEBUG(2) << "k_bucket_tree::insert: ip = " << ip << endl;
   pair<peer_t*, unsigned> pp = _root->insert(id, ip);
   _nodes.push_back(pp.first);
   return pp.second;
@@ -460,9 +462,11 @@ k_bucket::~k_bucket()
   if(_child[1])
     delete _child[1];
 
-  if(_nodes)
+  if(_nodes) {
     for(unsigned i=0; i<_nodes->size(); i++)
       delete (*_nodes)[i];
+    delete _nodes;
+  }
 }
 
 // }}}
@@ -551,6 +555,8 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned de
 void
 k_bucket::stabilize(string prefix, unsigned depth)
 {
+  return;
+
   // go through tree depth-first and refresh buckets in the leaves of the tree.
   if(_child[0]) {
     assert(!_nodes);
@@ -577,12 +583,15 @@ k_bucket::stabilize(string prefix, unsigned depth)
   // now lookup a random key in this range
   NodeID mask = 0;
   for(unsigned i=0; i<depth; i++)
-    mask |= (1<<(Kademlia::idsize-depth-1));
+    mask |= (1<<(Kademlia::idsize-depth-i));
+
+  KDEBUG(1) << "stabilize: mask = " << Kademlia::printbits(mask) << endl;
   NodeID random_key = _self->id() & mask;
   KDEBUG(1) << "stabilize: random lookup for " << Kademlia::printbits(random_key) << endl;
   pair<NodeID, IPAddress> pp = _self->do_lookup_wrapper(kademlia_wkn_ip, random_key);
   _nodes->push_back(new peer_t(pp.first, pp.second, now()));
 }
+
 
 // }}}
 // {{{ k_bucket::stabilized
@@ -609,7 +618,7 @@ k_bucket::stabilized(vector<NodeID> lid, string prefix, unsigned depth)
     return true;
 
 
-  KDEBUG(2) << "stabilized: " << prefix << " not present, depth = " << depth << endl;
+  KDEBUG(2) << "stabilized: " << prefix << " not present, depth = " << depth << ", prefix = " << prefix << endl;
   NodeID lower_mask = 0;
 
   //
@@ -620,12 +629,15 @@ k_bucket::stabilized(vector<NodeID> lid, string prefix, unsigned depth)
   // On every iteration we add another bit.  lower_mask looks like 111...000,
   // but we use it as 000...111 by ~-ing it.
   for(unsigned i=0; i<depth; i++)
-    lower_mask |= (1<<(Kademlia::idsize-depth-1));
+    lower_mask |= (1<<(Kademlia::idsize-i-1));
+  KDEBUG(4) << "stabilized: lower_mask on depth " << depth << " = " << Kademlia::printbits(lower_mask) << endl;
 
   // flip the bit, and turn all bits to the right of the flipped bit into
   // zeroes.
   NodeID lower = _id ^ (1<<(Kademlia::idsize-depth-1));
+  KDEBUG(4) << "stabilized: lower before mask = " << Kademlia::printbits(lower) << endl;
   lower &= ~lower_mask;
+  KDEBUG(4) << "stabilized: lower after mask = " << Kademlia::printbits(lower) << endl;
 
   // upper bound is the id with one bit flipped and all bits to the right of
   // that turned into ones.
