@@ -28,6 +28,12 @@ recroute<T>::recroute (ref<chord> _chord,
 {
   addHandler (recroute_program_1, wrap (this, &recroute<T>::dispatch));
   sweep_cb = delaycb (60, 0, wrap (this, &recroute<T>::sweeper));
+
+  {
+    int x = 1;
+    assert (Configurator::only ().get_int ("chord.find_succlist_shaving", x));
+    shave = (x == 1);
+  }
 }
 
 template<class T>
@@ -162,7 +168,7 @@ recroute<T>::dorecroute (user_args *sbp, recroute_route_arg *ra)
 
     // Try to decide who to talk to next.
     if (overlap >= m) {
-      // Enough overlap to finish. XXX check succ_list_shaving?
+      // Enough overlap to finish.
       cs.popn_front (succind); // leave succind+1st succ at front
       if (succind > 0)
 	rtrace << myID << ": dorecroute (" << ra->routeid << ", "
@@ -172,7 +178,7 @@ recroute<T>::dorecroute (user_args *sbp, recroute_route_arg *ra)
       sbp->replyref (rstat);
       sbp = NULL;
       return;
-    } else if ((int)m - (int)overlap < (int)cs.size ()) {
+    } else if (shave && ((int)m - (int)overlap < (int)cs.size ())) {
       // Override the absolute best we could've done, which probably
       // is the predecessor since our succlist spans the key, and
       // select someone nice and fast to get more successors from.
@@ -194,6 +200,7 @@ recroute<T>::dorecroute (user_args *sbp, recroute_route_arg *ra)
       distbuf << "; i chose " << cs[minind]->id () << "(" << (int)mindist << ")\n";
       rtrace << header << distbuf;
       if (minind < succind) {
+	// This is proximity route selection!
 	p = cs[minind];
       } else {
 	ptr<location> nexthop = cs[minind];
@@ -545,15 +552,6 @@ void
 recroute<T>::find_succlist (const chordID &x, u_long m, cbroute_t cb,
 			   ptr<chordID> guess)
 {
-  static bool shave = true;
-  static bool initialized = false;
-  if (!initialized) {
-    int x = 1;
-    assert (Configurator::only ().get_int ("chord.find_succlist_shaving", x));
-    shave = (x == 1);
-    initialized = true;
-  }
-
   route_recchord *ri = static_cast<route_recchord *> (produce_iterator_ptr (x));
   if (shave) {
     rtrace << my_ID () << ": find_succlist (" << x << ", " << m
