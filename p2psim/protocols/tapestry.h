@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.33 2004/01/19 19:45:39 fdabek Exp $ */
+/* $Id: tapestry.h,v 1.34 2004/01/22 04:40:46 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -74,7 +74,18 @@ public:
   void oracle_node_died( IPAddress ip, GUID id, const set<Node*>* );
   void oracle_node_joined( Tapestry *t );
 
+  template<class BT, class AT, class RT>
+    bool Tapestry::retryRPC(IPAddress dst, void (BT::* fn)(AT *, RT *), 
+			    AT *args, RT *ret, uint type, uint num_args_id = 0,
+			    uint num_args_else = 0);
+
   void check_rt(void *x);
+
+  struct check_node_args {
+    IPAddress ip;
+  };
+
+  void check_node(check_node_args *args);
 
   struct join_args {
     IPAddress ip;
@@ -261,6 +272,11 @@ private:
   // timeout on lookups
   Time _max_lookup_time;
 
+  // timeout on declaring nodes dead
+  Time _declare_dead_time;
+  // factor above rtt for timeouts
+  uint _rtt_timeout_factor;
+
   // overall stats
   static unsigned long long _num_lookups;
   static unsigned long long _num_succ_lookups;
@@ -301,13 +317,15 @@ private:
   };
 
   class ping_callinfo { public:
-    ping_callinfo(IPAddress xip, GUID xid)
-      : ip(xip), id(xid), rtt(87654), failed(false) {}
+    ping_callinfo(IPAddress xip, GUID xid, Time xps)
+      : ip(xip), id(xid), pingstart(xps), rtt(87654), failed(false) {}
     ~ping_callinfo() {}
     IPAddress ip;
     GUID id;
+    Time pingstart;
     Time rtt;
     bool failed;
+    Time last_timeout;
   };
 
   class nn_callinfo { public:

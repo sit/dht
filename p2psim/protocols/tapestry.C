@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.41 2004/01/15 22:39:32 strib Exp $ */
+/* $Id: tapestry.C,v 1.42 2004/01/22 04:40:46 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -66,6 +66,9 @@ Tapestry::Tapestry(IPAddress i, Args a) : P2Protocol(i),
   _direct_reply = a.nget<bool>("direct_reply", 1, 10);
 
   _max_lookup_time = a.nget<Time>("maxlookuptime", 4000, 10);
+
+  _declare_dead_time = a.nget<Time>("declare_dead", 30000, 10);
+  _rtt_timeout_factor = a.nget<Time>("timeout_factor", 3, 10);
 
   // init stats
   while (stat.size() < (uint) STAT_SIZE) {
@@ -337,7 +340,9 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
       // it's not me, so forward the query
       record_stat(STAT_LOOKUP, 1, 0);
       Time before = now();
-      bool succ = doRPC( next, &Tapestry::handle_lookup, args, ret );
+      GUID nextid = ((Tapestry *)Network::Instance()->getnode(next))->id();
+      bool succ = doRPC( next, &Tapestry::handle_lookup, args, ret, 
+			 _rtt_timeout_factor*_rt->get_time(nextid) );
       if( succ ) {
 	_last_heard_map[next] = now();
 	if( !_direct_reply || (ret->failed && args->looker == ip()) ) {
@@ -350,10 +355,9 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
       } else {
 	// remove it from our routing table
 	if( _lookup_learn ) {
-	  GUID deadid = ((Tapestry *)Network::Instance()->getnode(next))->id();
-	  _rt->remove( deadid, false );
-	  _rt->remove_backpointer( next, deadid );
-	  _recently_dead.push_back(deadid);
+	  check_node_args *ca = New check_node_args();
+	  ca->ip = next;
+	  delaycb( 1, &Tapestry::check_node, ca );
 	}
 
 	// record the timeout stats
@@ -404,6 +408,47 @@ void
 Tapestry::insert(Args *args) 
 {
   TapDEBUG(2) << "Tapestry Insert" << endl;
+}
+
+
+template<class BT, class AT, class RT>
+bool
+Tapestry::retryRPC(IPAddress dst, void (BT::* fn)(AT *, RT *), 
+		   AT *args, RT *ret, uint type, uint num_args_id, 
+		   uint num_args_else)
+{
+  Time starttime = now();
+  GUID dstid = ((Tapestry *)Network::Instance()->getnode(dst))->id();
+  Time timeout;
+  if( _rt->contains( dstid ) ) {
+    timeout = _rtt_timeout_factor * _rt->get_time( dstid );
+  } else {
+    timeout = 1000;
+  }
+  while( now() < starttime + _declare_dead_time ) {
+    record_stat( type, num_args_id, num_args_else);
+    bool succ = doRPC(dst, fn, args, ret, timeout);
+    if (succ) {
+      return true;
+    }
+    timeout *= 2;
+  }
+  return false;
+}
+
+void 
+Tapestry::check_node(check_node_args *args)
+{
+  ping_args pa;
+  ping_return pr;
+  if(!retryRPC( args->ip, &Tapestry::handle_ping, &pa, &pr, STAT_PING, 0, 0 )){
+    // this node is dead dude
+    GUID dstid = ((Tapestry *)Network::Instance()->getnode(args->ip))->id();
+    _rt->remove( dstid, false );
+    _rt->remove_backpointer( args->ip, dstid );
+    _recently_dead.push_back(dstid);    
+  }
+  delete args;
 }
 
 void
@@ -1404,11 +1449,18 @@ Tapestry::multi_add_to_rt_start( RPCSet *ping_rpcset,
     if( (!check_exist) // && now() - _last_heard_map[ni->_addr] >= _stabtimer) 
 	|| !_rt->contains( ni->_id ) ) {
       record_stat(STAT_PING, 0, 0);
+      ping_callinfo *pi = New ping_callinfo(ni->_addr, ni->_id, now());
+      if( _rt->contains( ni->_id ) ) {
+	pi->last_timeout = _rtt_timeout_factor*_rt->get_time( ni->_id );
+      } else {
+	pi->last_timeout = 1000; // TODO: fix this hardcoded second?
+      }
       unsigned rpc = asyncRPC( ni->_addr, 
-			       &Tapestry::handle_ping, &pa, &pr );
+			       &Tapestry::handle_ping, &pa, &pr, 
+			       pi->last_timeout );
       assert(rpc);
       ping_resultmap->insert(rpc, New ping_callinfo(ni->_addr, 
-						    ni->_id));
+						    ni->_id, now()));
       ping_rpcset->insert(rpc);
       if( timing != NULL ) {
 	(*timing)[ni->_addr] = 1000000;
@@ -1427,28 +1479,49 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
 {
   // check for done pings
   assert( ping_rpcset->size() == (uint) ping_resultmap->size() );
-  uint setsize = ping_rpcset->size();
-  for( unsigned int j = 0; j < setsize; j++ ) {
-    bool ok;
-    unsigned donerpc = rcvRPC( ping_rpcset, ok );
-    Time ping_time = now() - before_ping;
-    ping_callinfo *pi = (*ping_resultmap)[donerpc];
-    if( !ok ) {
-      // we failed to contact this node.  remove from rt.
-      pi->failed = true;
-    } else {
-      record_stat( STAT_PING, 0, 0 );
-      // TODO: ok, but now how do I call rt->add without it placing 
-      // backpointers synchronously?
-      pi->rtt = ping_time;
-      if( timing != NULL ) {
-	(*timing)[pi->ip] = _rt->get_time( pi->id );
+  while( ping_rpcset->size() > 0 ) {
+    uint setsize = ping_rpcset->size();
+    for( unsigned int j = 0; j < setsize; j++ ) {
+      bool ok;
+      unsigned donerpc = rcvRPC( ping_rpcset, ok );
+      ping_callinfo *pi = (*ping_resultmap)[donerpc];
+      assert( pi );
+      Time ping_time = now() - pi->pingstart;
+      if( !ok ) {
+
+	// this ping failed.  remove if you've reached the max time limit,
+	// otherwise try the ping again.
+	if( now() - before_ping >= _declare_dead_time ) {
+	  pi->failed = true;
+	} else {
+	  // put another shrimp on the barbie . . .
+	  //	  cout << "oh yeah rescheduling baby for " << pi->ip << endl;
+	  ping_args pa;
+	  ping_return pr;
+	  pi->last_timeout *= 2;
+	  record_stat(STAT_PING, 0, 0);
+	  unsigned rpc = asyncRPC( pi->ip, 
+				   &Tapestry::handle_ping, &pa, &pr, 
+				   pi->last_timeout );
+	  assert(rpc);
+	  ping_rpcset->insert(rpc);
+	  ping_resultmap->remove( donerpc );
+	  ping_resultmap->insert( rpc, pi );
+	}
+
+      } else {
+	record_stat( STAT_PING, 0, 0 );
+	// TODO: ok, but now how do I call rt->add without it placing 
+	// backpointers synchronously?
+	pi->rtt = ping_time;
+	if( timing != NULL ) {
+	  (*timing)[pi->ip] = ping_time; //_rt->get_time( pi->id );
+	}
       }
+      TapDEBUG(3) << "multidone ip: " << pi->ip << " finished " << (j+1) << 
+	" total " << setsize << endl;
     }
-    TapDEBUG(3) << "multidone ip: " << pi->ip << " finished " << (j+1) << 
-      " total " << setsize << endl;
   }
-  
   // now that all the pings are done, we can add them to our routing table
   // (possibly sending synchronous backpointers around) without messing
   // up the measurements
@@ -1519,9 +1592,12 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
 	    if( ra->bad_ids->size() > 0 ) {
 	      record_stat(STAT_REPAIR, ra->bad_ids->size(), 
 			  2*ra->bad_ids->size());
+	      // just do these once, if we don't repair then oh well I guess...
 	      unsigned rpc = asyncRPC( ni->_addr, 
 				       &Tapestry::handle_repair, 
-				       ra, rr );
+				       ra, rr, 
+				       _rtt_timeout_factor*
+				       _rt->get_time(ni->_id) );
 	      assert(rpc);
 	      repair_resultmap.insert(rpc, New repair_callinfo( ra, rr ));
 	      repair_rpcset.insert(rpc);
