@@ -170,7 +170,6 @@ p2p::dorpc_connect_cb(location *l, ptr<axprt_stream> x) {
 void
 p2p::chord_connect(sfs_ID ID, callback<void, ptr<axprt_stream> >::ref cb) {
   
-  warn << "chord connect\n";
   location *l = locations[ID];
   assert (l);
   assert (l->alive);
@@ -190,7 +189,6 @@ void
 p2p::connect_cb (callback<void, ptr<axprt_stream> >::ref cb, int fd)
 {
 
-  warn << "connect cb\n";
   if (fd < 0) {
     (*cb)(NULL);
   } else {

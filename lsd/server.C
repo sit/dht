@@ -77,7 +77,7 @@ p2p::find_successor (sfs_ID &n, sfs_ID &x, cbroute_t cb)
   } else 
     start = n;
  
-  find_predecessor (n, x,
+  find_predecessor (start, x,
 		    wrap (mkref (this), &p2p::find_predecessor_cb, cb));
 }
 
@@ -215,7 +215,7 @@ p2p::query_location_table (sfs_ID x) {
   sfs_ID min = bigint(1) << 160;
   sfs_ID ret = -1;
   while (l) {
-    sfs_ID d = diff(x, l->n);
+    sfs_ID d = diff(l->n, x);
     if (d < min) { min = d; ret = l->n; }
     l = locations.next (l);
   }

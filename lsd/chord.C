@@ -556,7 +556,7 @@ p2p::dofindclosestpred (svccb *sbp, sfsp2p_findarg *fa)
   sfs_ID s = myID + 1;
 
   //  print ();
-  for (int i = NBIT; i > 1; i--) {
+  for (int i = NBIT; i >= 0; i--) {
     if ((finger_table[i].alive) && 
 	between (s, fa->x, finger_table[i].first)) {
       p = finger_table[i].first;
