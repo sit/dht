@@ -35,8 +35,8 @@ Vivaldi::Vivaldi(Node *n, int d)
   // Units are the same as Euclidean::Coords, presumably
   // milliseconds.
   for (int i = 0; i < _dim; i++) 
-    _c._v.push_back(random() % 50000 - 25000);
-    //_c._v.push_back (0.0);
+    //_c._v.push_back(random() % 200 - 100);
+    _c._v.push_back (0.0);
 }
 
 Vivaldi::~Vivaldi()
@@ -157,8 +157,8 @@ void
 Vivaldi10::algorithm(Sample s)
 {
 
-  if (s._latency > 1000000 ||
-      s._latency < 2000) return;
+    if (s._latency > 1000000 ||
+	s._latency < 1000) return;
 
   _samples.push_back(s);
   Coord f = net_force(_c, _samples);

@@ -243,7 +243,7 @@ bool Vivaldi::doRPC(IPAddress dst, BT *target, void (BT::*fn)(AT*, RT*),
   Time before = now();
   bool ok = node()->_doRPC(dst, Thunk::thunk, (void *) t);
   if(ok)
-    sample(dst, t->_c, (now() - before) / 2.0);
+    sample(dst, t->_c, (now() - before));
 
   delete t;
   return ok;
