@@ -25,6 +25,8 @@
  *
  */
 
+#include <dhash_common.h>
+#include <dhashclient.h>
 #include "block.h"
 #include "cs_client.h"
 #include "dir.h"

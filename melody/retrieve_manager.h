@@ -57,7 +57,7 @@ class retrieve_manager : public virtual refcount {
 
   retrieve_manager (dhashclient *d) : dhash(d), b_count(0) {};
   void retrieve (bigint id, callback<void, ptr<dhash_block> >::ptr cb);
-  void got_block (retrieve_block *tmp, dhash_stat s, ptr<dhash_block> blk, route p);
+  void got_block (retrieve_block *tmp, dhash_stat s, ptr<dhash_block> blk, vec<chordID> p);
 };
 
 #endif

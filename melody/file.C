@@ -155,7 +155,7 @@ void
 melody_file::venti_cb(callback<void, int, str>::ref ready_cb, str filename, 
 		      dhash_stat stat,
 		      ptr<dhash_block> blk,
-		      route p)
+		      vec<chordID> p)
 {
 #ifdef DEBUG
   warn << "venti_cb\n";

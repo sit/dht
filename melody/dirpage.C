@@ -25,6 +25,8 @@
  *
  */
 
+#include <dhash_common.h>
+#include <dhashclient.h>
 #include "dir.h"
 #include "cs_output.h"
 #include "dirpage.h"

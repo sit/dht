@@ -29,7 +29,6 @@
 
 #include "async.h"
 #include "file.h"
-#include "dhash.h"
 class cs_client;
 #include <sys/time.h>
 
@@ -59,15 +58,15 @@ class dir {
   // FIXME initialize all?
 
   void opendir(bigint tmp);
-  void opendir_got_venti(cb_ret cbr, 
+  void opendir_got_venti(cb_cret cbr, 
 			 dhash_stat stat,
 			 ptr<dhash_block> blk,
-			 route p);
-  void opendir_got_venti_noread(dhash_stat s, ptr<dhash_block> blk, route p);
-  void next_dirblk(cb_ret cbr);
-  void find_entry(dhash_stat stat, ptr<dhash_block> blk, route p);
-  void found_entry(dhash_stat stat, ptr<dhash_block> blk, route p);
-  void root_test_got_rb(dhash_stat stat, ptr<dhash_block> blk, route p);
+			 vec<chordID> p);
+  void opendir_got_venti_noread(dhash_stat s, ptr<dhash_block> blk, vec<chordID> p);
+  void next_dirblk(cb_cret cbr);
+  void find_entry(dhash_stat stat, ptr<dhash_block> blk, vec<chordID> p);
+  void found_entry(dhash_stat stat, ptr<dhash_block> blk, vec<chordID> p);
+  void root_test_got_rb(dhash_stat stat, ptr<dhash_block> blk, vec<chordID> p);
   void create_venti(cbs redir, str parent, dhash_stat status,
                     ptr<insert_info> i);
   void create_venti_done(cbs redir, str parent, dhash_stat status, 

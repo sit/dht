@@ -41,7 +41,7 @@ done(int *n, int ok)
 
 // compares fetched data with stored data
 void
-retrieve_cb(ptr<insert_info> i, dhash_stat stat, ptr<dhash_block> b, route p)
+retrieve_cb(ptr<insert_info> i, dhash_stat stat, ptr<dhash_block> b, vec<chordID> p)
 {
   warn << "this should fail\n";
   warn << "retrieved : " << b->data << "\n";

@@ -96,7 +96,7 @@ class chord_server {
   void fetch_data_cb (chordID ID, cbdata_t cb, 
 		      dhash_stat stat,
 		      ptr<dhash_block> blk,
-		      route path);
+		      vec<chordID> path);
 
  public:
 

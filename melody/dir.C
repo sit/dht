@@ -25,13 +25,13 @@
  *
  */
 
-#include "dir.h"
 #include "dhash_common.h"
 #include "dhashclient.h"
 #include <string.h>
 #include "rxx.h"
 #include "vec.h"
 #include "crypt.h"
+#include "dir.h"
 
 dir::dir(ptr<melody_file>acc, callback<void, const char *, int, int>::ptr afileout, callback<void, int, str>::ptr afilehead, cs_client *acs)
 {
@@ -53,7 +53,7 @@ dir::root_test()
 void
 dir::root_test_got_rb(dhash_stat stat, 
 		      ptr<dhash_block> blk,
-		      route p)
+		      vec<chordID> p)
 {
   if(!blk) {
     warn << "couldn't find root block\n";
@@ -129,10 +129,10 @@ dir::opendir(bigint dir)
 }
 
 void
-dir::opendir_got_venti(cb_ret cbr, 
+dir::opendir_got_venti(cb_cret cbr, 
 		       dhash_stat stat,
 		       ptr<dhash_block> blk,
-		       route p)
+		       vec<chordID> p)
 {
   if(!blk) {
     warn << (int)cs << " no such path found:";
@@ -160,7 +160,7 @@ dir::opendir_got_venti(cb_ret cbr,
 }
 
 void
-dir::opendir_got_venti_noread(dhash_stat stat, ptr<dhash_block> blk, route p)
+dir::opendir_got_venti_noread(dhash_stat stat, ptr<dhash_block> blk, vec<chordID> p)
 {
   if(!blk) {
     warn << (int)cs << " no such path found\n";
@@ -193,7 +193,7 @@ dir::opendir_got_venti_noread(dhash_stat stat, ptr<dhash_block> blk, route p)
 }
 
 void
-dir::next_dirblk(cb_ret cbr) {
+dir::next_dirblk(cb_cret cbr) {
   char tmp[sha1::hashsize];
   cbuf.copyout(tmp, sha1::hashsize);
   cbuf.rembytes(sha1::hashsize);
@@ -204,7 +204,7 @@ dir::next_dirblk(cb_ret cbr) {
 
 static rxx namechashrx ("(.+);([\\dabcdef]+)", "i");
 void
-dir::find_entry(dhash_stat stat, ptr<dhash_block> blk, route p)
+dir::find_entry(dhash_stat stat, ptr<dhash_block> blk, vec<chordID> p)
 {
   unsigned int name_index = 0;
   warn << "find_entry\n";
@@ -263,7 +263,7 @@ return; }
 }
 
 void
-dir::found_entry(dhash_stat stat, ptr<dhash_block> blk, route p)
+dir::found_entry(dhash_stat stat, ptr<dhash_block> blk, vec<chordID> p)
 {
   if(!blk) {
     warn << (int)cs << " block gone\n"; // FIXME add mroe error recovery
