@@ -42,6 +42,8 @@ class dhashclient {
 
 class dhash {
 
+  static const int nreplica = 5;
+
   dbfe *db;
 
   void dispatch (ptr<asrv> dhs, svccb *sbp);

@@ -415,6 +415,8 @@ p2p::bootstrap_done ()
 
   if (!stable) 
     bootstrap ();
+  else
+    print ();
 
 }
 
@@ -585,8 +587,7 @@ p2p::dofindsucc (sfs_ID &n, cbroute_t cb)
     set_closeloc (predecessor);
   }
 
-  find_successor (predecessor.first, n,
-		  wrap (mkref (this), &p2p::dofindsucc_cb, cb, n));
+  find_successor (myID, n, wrap (mkref (this), &p2p::dofindsucc_cb, cb, n));
 }
 
 void

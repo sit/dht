@@ -97,14 +97,17 @@ void
 p2p::find_predecessor (sfs_ID &n, sfs_ID &x, 
 		       cbroute_t cb)
 {
-  sfsp2p_findarg *fap = New sfsp2p_findarg;
-  sfsp2p_findres *res = New sfsp2p_findres (SFSP2P_OK);
-  fap->x = x;
-  
   route search_path;
-  doRPC (n, sfsp2p_program_1, SFSP2PPROC_FINDCLOSESTPRED, fap, res,
-	 wrap (mkref (this), &p2p::find_closestpred_cb, n, cb, res, 
-	       search_path));
+  if (n == finger_table[1].first) {
+    cb (n, search_path, SFSP2P_OK);
+  } else {
+    sfsp2p_findarg *fap = New sfsp2p_findarg;
+    sfsp2p_findres *res = New sfsp2p_findres (SFSP2P_OK);
+    fap->x = x;
+    doRPC (n, sfsp2p_program_1, SFSP2PPROC_FINDCLOSESTPRED, fap, res,
+	   wrap (mkref (this), &p2p::find_closestpred_cb, n, cb, res, 
+		 search_path));
+  }
 }
 
 void
@@ -123,17 +126,43 @@ p2p::find_closestpred_cb (sfs_ID n, cbroute_t cb,
   } else {
     warnx << "find_closestpred_cb: pred of " << res->resok->x << " is " 
 	  << res->resok->node << "\n";
-    
     updateloc (res->resok->node, res->resok->r, n);
     search_path.push_back(res->resok->node);
-    if (!(between (res->resok->node, n, res->resok->x) ||
-	  res->resok->node == n) ) {
-      
-      //      int found = testSearchCallbacks(res->resok->node, res->resok->x);
+    findpredecessor_cbstate *st = 
+      New findpredecessor_cbstate (res->resok->x, res->resok->node,
+				   search_path, cb);
+    //      int found = testSearchCallbacks(res->resok->node, res->resok->x);
+    get_successor (res->resok->node, 
+		   wrap (mkref (this), &p2p::find_closestpred_succ_cb, st));
+  }
+}
 
-      find_successor (res->resok->node, res->resok->x, cb);
+void
+p2p::find_closestpred_succ_cb (findpredecessor_cbstate *st,
+			       sfs_ID s, net_address r, sfsp2pstat status)
+{
+  if (status) {
+    warnx << "find_closestpred_succ_cb: failure " << status << "\n";
+    st->cb (st->x, st->search_path, status);
+  } else {
+    warnx << "find_closestpred_succ_cb: succ of " << st->nprime << " is " << s 
+	  << "\n";
+    if (st->nprime == s) {
+      warnx << "find_closestpred_succ_cb: " << s << " is the only Chord node\n";
+      st->cb (st->nprime, st->search_path, SFSP2P_OK);
+    } if (!between (st->nprime, s, st->x)) {
+      warnx << "find_closestpred_succ_cb: " << st->x << " is not between " 
+	    << st->nprime << " and " << s << "\n";
+      sfsp2p_findarg *fap = New sfsp2p_findarg;
+      sfsp2p_findres *res = New sfsp2p_findres (SFSP2P_OK);
+      fap->x = st->x;
+      doRPC (st->nprime, sfsp2p_program_1, SFSP2PPROC_FINDCLOSESTPRED, fap, res,
+	     wrap (mkref (this), &p2p::find_closestpred_cb, st->nprime, st->cb, 
+		   res, st->search_path));
     } else {
-      cb (res->resok->node, search_path, SFSP2P_OK);
+      warnx << "find_closestpred_succ_cb: " << st->x << " is between " 
+	    << st->nprime << " and " << s << "\n";
+      st->cb (st->nprime, st->search_path, SFSP2P_OK);
     }
   }
 }

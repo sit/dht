@@ -110,6 +110,16 @@ typedef callback<int,sfs_ID,sfs_ID>::ref cbsearch_t;
 #define ACT_NODE_UPDATE 2
 #define ACT_NODE_LEAVE 3
 
+struct findpredecessor_cbstate {
+  sfs_ID x;
+  sfs_ID nprime;
+  route search_path;
+  cbroute_t cb;
+  findpredecessor_cbstate (sfs_ID xi, sfs_ID npi, route spi, cbroute_t cbi) :
+    x (xi), nprime (npi), search_path (spi), cb (cbi) {};
+};
+
+
 struct location {
   sfs_ID n;
   net_address addr;
@@ -235,6 +245,8 @@ class p2p : public virtual refcount  {
   void find_successor (sfs_ID &n, sfs_ID &x, cbroute_t cb);
   void find_predecessor_cb (cbroute_t cb, sfs_ID p, route search_path, 
 			  sfsp2pstat status);
+  void find_closestpred_succ_cb (findpredecessor_cbstate *st, sfs_ID s,
+				 net_address r, sfsp2pstat status);
   void find_successor_cb (cbroute_t cb, route sp, sfs_ID s, net_address r,
 			    sfsp2pstat status);
 
