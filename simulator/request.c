@@ -279,9 +279,9 @@ void insertRequest_wait(Node *n, Request *r)
     r->done = FALSE;
     getNeighbors(n, r->x, &(r->pred), &(r->succ));
     r->del = r->dst; // delete node
-    r->timeouts++;    // increments the number of timeouts 
+    r->timeouts++;   // increment the number of timeouts 
     if ((r->dst = popNode(r)) == -1) {
-      // no node to retry; restart the request
+      // no need to retry; restart the request
       if (getNode(r->initiator) && 
 	  (getNode(r->initiator)->status != PRESENT)) 
 	printf("request of type %d has failed at time %f: initiator node %d has left the system\n",
@@ -325,8 +325,14 @@ void copySuccessorFingers(Node *n)
 {
   Finger *f;
   int    i;
+  Node   *s;
 
+  // get n's successor list
   f = n->fingerList->head;
+  if (f) s = getNode(f->id);
+  if (!s || s->status != PRESENT)
+    return;
+  f = s->fingerList->head;
   for (i = 0; i < NUM_SUCCS; i++) {
     if (!f)
       break;

@@ -48,12 +48,11 @@ void stabilize(Node *n)
   if (n->status == ABSENT)
     return;
 
-
   if (n->fingerList->head) {
 
     x[0] = chooseX(n);
     x[1] = successorId(n->id, 1);
-
+  
     i = (x[0] == x[1] ? 1 : 0);    
       
     for (; i < 2; i++) {
@@ -77,7 +76,8 @@ void stabilize(Node *n)
 	// insert request at r.x's successor
 	genEvent(dst, insertRequest, (void *)r, 
 	       Clock + intExp(AVG_PKT_DELAY));
-      }
+      } else
+	free(r); // memory leak fixed (ycheng@cs.ucsd.edu)
     }
   }
 
@@ -117,10 +117,9 @@ ID chooseX(Node *n)
       panic("chooseX: fingerList empty!\n");
 
     next = 0;
-#define PROB_REFRESH_
     if ((n->fingerList->size >= NUM_SUCCS) && 
 	funifRand(0., 1.) <= PROB_REFRESH_SUCC) {
-      next = unifRand(0, 2);
+      next = unifRand(1, 2);
       x = unifRand(0, NUM_SUCCS);
     } else
       x = unifRand(0, n->fingerList->size);
