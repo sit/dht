@@ -41,7 +41,7 @@ inserting one record and then fetching it a hundred thousand times.
 All three tests began each lookup at a random node in the Chord network.
 
 \begin{figure}
-\epsfig{file=figures/ok.store.eps,angle=270,width=3in}
+\epsfig{file=figures/ok.store.eps}%,angle=270,width=3in}
 \caption{
 storage balance for 120,000 records later used as answers to
 260,000 queries.
@@ -73,7 +73,7 @@ We conclude that DDNS does an adequate job of balancing
 storage among the peers.
 
 \begin{figure}
-\epsfig{file=figures/both.fetch.eps,angle=270,width=3in}
+\epsfig{file=figures/both.fetch.eps}%,angle=270,width=3in}
 \caption{load balance for the three tests.
 The graph shows a cumulative distribution for the number
 of RPCs served by each node during the test.}
@@ -104,7 +104,7 @@ PTR record for {\em 39.246.224.209.in-addr.arpa} was
 heavily loaded due to the 82,000 queries for that record.
 
 \begin{figure}
-\epsfig{file=figures/hops.eps,angle=270,width=3in}
+\epsfig{file=figures/hops.eps}%,angle=270,width=3in}
 \caption{client work to perform lookups. 
 The graph shows a cumulative distribution for the number
 of hops required for each lookup.}
