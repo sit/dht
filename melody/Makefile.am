@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.11 2003/01/19 16:44:15 jsr Exp $
+# $Id: Makefile.am,v 1.12 2003/02/19 22:42:56 sit Exp $
 
 $(PROGRAMS): $(LDEPS) 
 
@@ -11,7 +11,7 @@ noinst_PROGRAMS = melody it googleit $(DONATE)
 
 
 melody_SOURCES = block.C file.C cs_output.C dir.C dirpage.C http.C melody.C retrieve_manager.C
-melody_LDADD = ../dhash/libdhash.a ../svc/libsvc.la ${LDADD}
+melody_LDADD = ../dhash/libdhash.a ../merkle/libmerkle.a ../svc/libsvc.la ${LDADD}
 
 it_SOURCES = it.C cs_output.C
 googleit_SOURCES = googleit.C
