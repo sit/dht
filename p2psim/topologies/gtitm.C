@@ -46,9 +46,13 @@ gtitm::~gtitm()
 }
 
 Time
-gtitm::latency(IPAddress ip1, IPAddress ip2, bool ignored)
+gtitm::latency(IPAddress ip1x, IPAddress ip2x, bool ignored)
 {
   Vertex *a, *b;
+
+  IPAddress ip1 = Network::Instance()->first_ip(ip1x);
+  IPAddress ip2 = Network::Instance()->first_ip(ip2x);
+
   ((int)ip1)--;
   ((int)ip2)--;
   assert ((int)ip1 < _num && (int)ip2 < _num);
