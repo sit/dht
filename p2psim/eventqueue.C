@@ -21,7 +21,7 @@ EventQueue::Instance()
 }
 
 
-EventQueue::EventQueue() : _time(0)
+EventQueue::EventQueue() : _time(0), _end(false)
 {
   _eventchan = chancreate(sizeof(Event*), 0);
   assert(_eventchan);
@@ -57,6 +57,10 @@ EventQueue::run()
   recvp(_gochan);
 
   while(1){
+
+    if (_end) 
+      graceful_exit();
+
     // let others run
     while(anyready())
       yield();
