@@ -1,5 +1,5 @@
 %% -*- LaTeX -*-
-%% $Id: ddns.ltx,v 1.4 2001/12/06 23:03:00 athicha Exp $
+%% $Id: ddns.ltx,v 1.5 2001/12/06 23:06:26 rsc Exp $
 
 \documentclass{seminar}
 \special{papersize=11in,8.5in}
@@ -53,16 +53,75 @@ Russ Cox\\ Athicha Muthitacharoen \\(MIT LCS)}
 \end{slide}
 
 \begin{slide}
-\slname{Motivation}
+\slname{Background}
 \itms{
-  \item DNS Name Server Config
-  \item DoS
-  \item Ineffiency (Unresponsive..)
+  \item Before DNS, there was a global {\tt hosts.txt}
+  \item DNS is an attempt to distributed {\tt hosts.txt}, but:
+	\itms{
+	\item Everyone has to be a DNS admin.
+	\item Configuring DNS properly is tedious and time-consuming.
+	\item I can't have a domain without finding someone to serve my names.
+	}
+  \item A peer-to-peer framework is better.
 }
 \end{slide}
 
 \begin{slide}
-\slname{DNSSEC Helps Separate Authority from Service}
+\slname{IP-based DNS Authentication}
+\itms{
+  \item Assume that IP transport layer can be trusted.
+  \item Clients start by trusting some IP addresses for some parts of the hierarchy.
+  \ittms{ \item Ex.: Trust well-known root server addresses for {\tt *} }
+  \item Trusted servers delegate authority to other IP addresses.
+  \ittms { \item Ex.: Trust 18.18.2.25 for {\tt *.mit.edu} }
+  \item Works well for research system.
+  \item Not a great assumption if names are vital.
+}
+\end{slide}
+
+\begin{slide}
+\slname{DNSSEC: Public key-based DNS Authentication}
+\itms{
+  \item Assume that public key cryptography can be trusted.
+  \item Clients start by trusting some public keys for some parts of the hierarchy.
+  \ittms{ \item Ex.: Trust well-known root server keys for {\tt *} }
+  \item Trusted servers delegate authority to other IP addresses.
+  \ittms { \item Ex.: Trust $\mathit{Pub}_{\mathrm{MIT}}$ for {\tt *.mit.edu} }
+  \item (Hopefully) much more secure.
+}
+\end{slide}
+
+\begin{slide}
+\slname{Side Effects of Authentication}
+\itms{
+  \item IP authentication dictated lookup algorithm.
+  \item DNSSEC separates lookup from verification:
+  \ittms{ \item It doesn't matter where we get the data; we can check it.}
+  \item Can now explore other storage and service models.
+}
+\end{slide}
+
+\begin{slide}
+\slname{We explored DNS over Chord}
+\itms{
+  \item SHA1(name, query-type) is storage key for DHash
+  \item Lookup retrieves records and verifies them (DNSSEC).
+}
+\end{slide}
+
+\begin{slide}
+\slname{Qualitative Eval.}
+\itms{
+  \item Administration is easier
+  \ittms{ \item Not everyone needs a server.
+	\item Caching, fault tolerance handled automatically.
+	\item View is same from everywhere.
+  }
+  \item Dynamically-generated records are hard.
+  \ittms{ \item {\tt dig sdfsfdsdf.cs.bell-labs.com mx}
+	\item Akamai 
+  }
+}
 \end{slide}
 
 %%%%%%%%%%%%%%%%%%
