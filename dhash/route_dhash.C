@@ -6,203 +6,28 @@
 #include <location.h>
 #include <locationtable.h>
 #include <chord.h>
-#include <sfsmisc.h>
-#include <arpc.h>
-#include <crypt.h>
-#include <sys/time.h>
 #include <misc_utils.h>
 #ifdef DMALLOC
 #include "dmalloc.h"
 #endif
+#include "download.h"
 
-u_int MTU = (getenv ("DHASH_MTU") ? atoi (getenv ("DHASH_MTU")) : 1024);
+extern u_int MTU;
 #define LOOKUP_TIMEOUT 60
 static int gnonce;
-
-typedef callback<void, ptr<dhash_block> >::ref cbretrieve_t;
-
-
-// ---------------------------------------------------------------------------
-// dhash_download -- downloads a block of a specific chord node.  That node
-//                   should already be in the location table.
-
-class dhash_download {
-private:
-  typedef callback<void, ptr<dhash_fetchiter_res>, int, clnt_stat>::ptr
-    gotchunkcb_t;
-
-  ptr<vnode> clntnode;
-  uint npending;
-  bool error;
-  chord_node sourceID;
-  chordID blockID;
-  cbretrieve_t cb;
-
-  ptr<dhash_block> block;
-  int nextchunk;     //  fast
-  int numchunks;     //   retransmit
-  vec<long> seqnos;  //   parameters
-  bool didrexmit;
-
-  u_int64_t start;
-
-  dhash_download (ptr<vnode> clntnode, chord_node sourceID, chordID blockID,
-		  char *data, u_int len, u_int totsz, int cookie,
-		  cbretrieve_t cb)
-    : clntnode (clntnode),  npending (0), error (false), sourceID (sourceID), 
-      blockID (blockID), cb (cb), nextchunk (0), numchunks (0),
-      didrexmit (false)
-  {
-    start = getusec ();
-    // the first chunk of data may be passed in
-    if (data) {
-      process_first_chunk (data, len, totsz, cookie);
-      check_finish ();
-    } else
-      getchunk (0, MTU, 0, wrap (this,&dhash_download::first_chunk_cb));
-  }
-
-  long
-  getchunk (u_int start, u_int len, int cookie, gotchunkcb_t cb)
-  {
-    ptr<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg>;
-    arg->key   = blockID;
-    arg->ctype = DHASH_KEYHASH;
-    arg->dbtype = DHASH_BLOCK;
-    arg->start = start;
-    arg->len   = len;
-    arg->cookie = cookie;
-
-    npending++;
-    ptr<dhash_fetchiter_res> res = New refcounted<dhash_fetchiter_res> ();
-    //    warn << "SENT RPC for chunk " << numchunks << " at " << (getusec () - start) << "\n";
-
-    return clntnode->doRPC 
-      (sourceID, dhash_program_1, DHASHPROC_FETCHITER, arg, res, 
-       wrap (this, &dhash_download::gotchunk, cb, res, numchunks++));
-  }
-  
-  void
-  gotchunk (gotchunkcb_t cb, ptr<dhash_fetchiter_res> res,
-            int chunknum, clnt_stat err)
-  {
-    (*cb) (res, chunknum, err);
-  }
-
-
-  void
-  first_chunk_cb  (ptr<dhash_fetchiter_res> res, int chunknum, clnt_stat err)
-  {
-    npending--;
-
-    if (err || (res && res->status != DHASH_COMPLETE))
-      fail (dhasherr2str (res->status));
-    else {
-      int cookie     = res->compl_res->cookie;
-      size_t totsz   = res->compl_res->attr.size;
-      size_t datalen = res->compl_res->res.size ();
-      char  *data    = res->compl_res->res.base ();
-      process_first_chunk (data, datalen, totsz, cookie);
-    }
-    check_finish ();
-  }
-
-  void
-  process_first_chunk (char *data, size_t datalen, size_t totsz, int cookie)
-  {
-    block            = New refcounted<dhash_block> ((char *)NULL, totsz, DHASH_KEYHASH);
-    block->source    = sourceID.x;
-    block->hops      = 0;
-    block->errors    = 0;
-
-    add_data (data, datalen, 0);
-
-    //issue the RPCs to get the other chunks
-    size_t nread = datalen;
-    while (nread < totsz) {
-      int length = MIN (MTU, totsz - nread);
-      //      warn << "SENT RPC for [" << nread << ", " << nread + length << "]  at " << (getusec () - start) << "\n";
-      long seqno = getchunk (nread, length, cookie, wrap (this, &dhash_download::later_chunk_cb));
-      seqnos.push_back (seqno);
-      nread += length;
-    }
-  }
-
-  void
-  later_chunk_cb (ptr<dhash_fetchiter_res> res, int chunknum, clnt_stat err)
-  {
-    npending--;
-    
-    if (err || (res && res->status != DHASH_COMPLETE))
-      fail (dhasherr2str (res->status));
-    else {
-      //      warn << "GOT RPC for chunk " << chunknum << " at " << (getusec () - start) << "\n";
-
-      if (!didrexmit && (chunknum > nextchunk)) {
-	warn << "FAST retransmit: " << blockID << " chunk " << nextchunk << " being retransmitted\n";
-	clntnode->resendRPC(seqnos[nextchunk]);
-	didrexmit = true;  // be conservative: only fast rexmit once per block
-      }
-
-      nextchunk++;
-      add_data (res->compl_res->res.base (), res->compl_res->res.size (), 
-		res->compl_res->offset);
-    }
-    check_finish ();
-  }
-
-  void
-  add_data (char *data, int len, int off)
-  {
-    if ((unsigned)(off + len) > block->len)
-      fail (strbuf ("bad chunk: off %d, len %d, block %d", 
-		    off, len, block->len));
-    else
-      memcpy (&block->data[off], data, len);
-  }
-
-  void
-  check_finish ()
-  {
-    if (npending == 0) {
-      /* got all chunks */
-      if (error) 
-	block = NULL;
-      (*cb) (block);
-      delete this;
-    }
-  }
-
-  void
-  fail (str errstr)
-  {
-    warn << "dhash_download failed: " << blockID << ": " << errstr << " at " << sourceID.x << "\n";
-    error = true;
-  }
-
-public:
-  static void execute (ptr<vnode> clntnode, chord_node sourceID, chordID blockID,
-		       char *data, u_int len, u_int totsz, int cookie, cbretrieve_t cb)
-  {
-    vNew dhash_download (clntnode, sourceID, blockID, data, len, totsz, cookie, cb);
-  }
-};
-
-
-
 
 // ---------------------------------------------------------------------------
 // route_dhash -- lookups and downloads a block.
 
-route_dhash::route_dhash (ptr<route_factory> f, chordID blockID, dhash *dh,
+route_dhash::route_dhash (ptr<route_factory> f, blockID blockID, dhash *dh,
                           ptr<vnode> host_node, int options)
-  : dh (dh), host_node (host_node), options (options), blockID (blockID), 
+  : dh (dh), host_node (host_node), options (options), blckID (blockID), 
     f (f), dcb (NULL), retries_done (0)
 {
   ptr<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg> ();
-  arg->key = blockID;
-  arg->ctype = DHASH_KEYHASH;
-  arg->dbtype = DHASH_BLOCK;
+  arg->key = blckID.ID;
+  arg->ctype = blckID.ctype;
+  arg->dbtype = blckID.dbtype;
   f->get_node (&arg->from);
   arg->start = 0;
   arg->len = MTU;
@@ -217,7 +42,7 @@ route_dhash::route_dhash (ptr<route_factory> f, chordID blockID, dhash *dh,
   // The dhash server will respond back by sending an RPC *request* to us.  We'll associate the
   // incoming RPC request with 'arg' via gnonce.  We'll field the RPC request in 
   // route_dhash::block_cb. Our RPC response is essentially ignored.
-  chord_iterator = f->produce_iterator_ptr (blockID, dhash_program_1, DHASHPROC_FETCHITER, arg);
+  chord_iterator = f->produce_iterator_ptr (blockID.ID, dhash_program_1, DHASHPROC_FETCHITER, arg);
 }
 
 route_dhash::~route_dhash () 
@@ -242,8 +67,7 @@ route_dhash::reexecute ()
     retries_done++;
     timecb_remove (dcb);
     dcb = delaycb (LOOKUP_TIMEOUT, wrap (mkref(this), &route_dhash::timed_out));
-    dh->register_block_cb 
-      (nonce, wrap (mkref(this), &route_dhash::block_cb));
+    dh->register_block_cb (nonce, wrap (mkref(this), &route_dhash::block_cb));
     chord_iterator->send (NULL); // hint it with the end of the route?
   }
 }
@@ -299,7 +123,7 @@ route_dhash::walk (vec<chord_node> succs)
     }
     if (ok) {
       dhash_download::execute
-	(f->get_vnode (), s, blockID, NULL, 0, 0, 0,
+	(f->get_vnode (), s, blckID, NULL, 0, 0, 0,
 	 wrap (mkref(this), &route_dhash::walk_gotblock, succs));
     } else {
       warn << "walk: No luck walking successors, retrying..\n";
@@ -341,7 +165,7 @@ route_dhash::block_cb (s_dhash_block_arg *arg)
     chord_node n;
     host_node->locations->lookup (arg->source)->fill_node (n);
 
-    dhash_download::execute (f->get_vnode (), n, blockID,
+    dhash_download::execute (f->get_vnode (), n, blckID,
 			     arg->res.base (), arg->res.size (), 
 			     arg->attr.size, arg->cookie,
 			     wrap (mkref(this), &route_dhash::gotblock));

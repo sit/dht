@@ -87,10 +87,6 @@ class dhash {
   virtual void print_stats () = 0;
   virtual void stop () = 0;
   virtual void fetch (blockID id, int cookie, cbvalue cb) = 0;
-  virtual void register_block_cb (int nonce, cbblockuc_t cb) = 0;
-  virtual void unregister_block_cb (int nonce) = 0;
-  virtual void register_storecb_cb (int nonce, cbstorecbuc_t cb) = 0;
-  virtual void unregister_storecb_cb (int nonce) = 0;
 
   virtual dhash_stat key_status(const blockID &n) = 0;
 };

@@ -61,7 +61,7 @@ struct s_dhash_insertarg {
   chord_node_wire from;
   dhash_value data;
   int offset;
-  int32_t nonce;
+  int32_t nonce; /* XXX remove */
   store_status type;
   dhash_valueattr attr;
   bool last; /* used by the merkle code only */
@@ -75,7 +75,7 @@ struct s_dhash_fetch_arg {
   int32_t start;
   int32_t len;
   int32_t cookie;
-  int32_t nonce;
+  int32_t nonce; /* XXX remove */
 };
 
 struct s_dhash_keystatus_arg {
@@ -140,7 +140,7 @@ union dhash_fetchiter_res switch (dhash_stat status) {
 
 
 struct s_dhash_block_arg {
-  int32_t nonce;
+  int32_t nonce; /* XXX remove */
   dhash_value res;
   int32_t offset;
   dhash_valueattr attr;
@@ -154,7 +154,7 @@ struct s_dhash_block_arg {
 
 
 struct s_dhash_storecb_arg {
-  int32_t nonce;
+  int32_t nonce; /* XXX remove */
   dhash_stat status;
 };
 
@@ -181,8 +181,10 @@ program DHASH_PROGRAM {
     dhash_storeres
     DHASHPROC_STORE (s_dhash_insertarg) = 1;
 
+/* not used
     dhash_stat
     DHASHPROC_STORECB (s_dhash_storecb_arg) = 2;
+*/
 
     dhash_getkeys_res
     DHASHPROC_GETKEYS (s_dhash_getkeys_arg) = 3;
@@ -190,8 +192,10 @@ program DHASH_PROGRAM {
     dhash_fetchiter_res
     DHASHPROC_FETCHITER (s_dhash_fetch_arg) = 4;
 
+/* not used
     dhash_stat
     DHASHPROC_BLOCK (s_dhash_block_arg) = 5;
+*/
 
     dhash_offer_res
     DHASHPROC_OFFER (dhash_offer_arg) = 6;
@@ -238,7 +242,7 @@ program DHASH_PROGRAM {
 struct dhash_insert_arg {
   chordID   blockID;      /* the key */
   dhash_ctype ctype;
-  int32_t len;
+  int32_t len; /* XXX fix to not need len */
   dhash_value block;      /* the data block */
   int options;
   chordID guess; /* a guess as to where this block will end up */
@@ -246,15 +250,15 @@ struct dhash_insert_arg {
 
 struct dhash_retrieve_arg {
   chordID blockID;
-  dhash_ctype ctype;
+  dhash_ctype ctype; /* XXX fix to not need */
   int options;
   chordID guess;  /* a guess as to the location of the block */
 };
 
 struct dhash_retrieve_resok {
   dhash_value block;
-  dhash_ctype ctype;
-  int32_t len;
+  dhash_ctype ctype; /* XXX fix to not need */
+  int32_t len; /* XXX not needed */
   int hops;
   int errors;
   int retries;

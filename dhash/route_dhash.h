@@ -1,12 +1,12 @@
 class route_dhash : public virtual refcount {
 public:
-  route_dhash (ptr<route_factory> f, chordID key, dhash *dh, ptr<vnode> host_node, int options = 0);
+  route_dhash (ptr<route_factory> f, blockID key, dhash *dh, ptr<vnode> host_node, int options = 0);
   ~route_dhash ();
 
   void execute (cb_ret cbi, chordID first_hop_guess, u_int retries = 10);
   void execute (cb_ret cbi, u_int retries = 10);
   dhash_stat status () { return result; }
-  chordID key () { return blockID; }
+  chordID key () { return blckID.ID; }
   route path ();
   
  private:
@@ -16,7 +16,7 @@ public:
   route_iterator *chord_iterator;
   int options;
   dhash_stat result;
-  chordID blockID;
+  blockID blckID;
   cb_ret cb;
   ptr<route_factory> f;
   timecb_t *dcb;

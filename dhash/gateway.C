@@ -85,10 +85,10 @@ dhashgateway::dispatch (svccb *sbp)
 	guess = New refcounted<chordID> (arg->guess);
 
 	 
-      dhcli->insert2 (block, 
-		      wrap (this, &dhashgateway::insert_cb, sbp),
-		      arg->options,
-		      guess);
+      dhcli->insert (block, 
+		     wrap (this, &dhashgateway::insert_cb, sbp),
+		     arg->options,
+		     guess);
     }
     break;
     
@@ -102,9 +102,9 @@ dhashgateway::dispatch (svccb *sbp)
       }
 
 
-      dhcli->retrieve2 (blockID(arg->blockID, arg->ctype, DHASH_BLOCK),
-			wrap (this, &dhashgateway::retrieve_cb, sbp),
-			arg->options, guess);
+      dhcli->retrieve (blockID(arg->blockID, arg->ctype, DHASH_BLOCK),
+		       wrap (this, &dhashgateway::retrieve_cb, sbp),
+		       arg->options, guess);
     }
     break;
     

@@ -109,9 +109,6 @@ class dhash_impl : public dhash {
   ihash<int, pk_partial, &pk_partial::cookie, 
     &pk_partial::link> pk_cache;
   
-  qhash<int, cbblockuc_t> bcpt;
-  qhash<int, cbstorecbuc_t> scpt;
-
   unsigned keyhash_mgr_rpcs;
 
   void missing (ptr<location> from, bigint key);
@@ -232,10 +229,6 @@ class dhash_impl : public dhash {
   void print_stats ();
   void stop ();
   void fetch (blockID id, int cookie, cbvalue cb);
-  void register_block_cb (int nonce, cbblockuc_t cb);
-  void unregister_block_cb (int nonce);
-  void register_storecb_cb (int nonce, cbstorecbuc_t cb);
-  void unregister_storecb_cb (int nonce);
 
   dhash_stat key_status (const blockID &n);
 };

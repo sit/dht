@@ -166,9 +166,11 @@ dhash_impl::init_after_chord(ptr<vnode> node, ptr<route_factory> _r_factory)
   // RPC demux
   warn << host_node->my_ID () << " registered dhash_program_1\n";
   host_node->addHandler (dhash_program_1, wrap(this, &dhash_impl::dispatch));
+#if 0
   host_node->register_upcall (dhash_program_1.progno,
-			      wrap (this, &dhash_impl::route_upcall));
-  
+  			      wrap (this, &dhash_impl::route_upcall));
+#endif
+
   //the client helper class (will use for get_key etc)
   //don't cache here: only cache on user generated requests
   cli = New dhashcli (node, this, r_factory, false);
@@ -228,7 +230,8 @@ dhash_impl::missing (ptr<location> from, bigint key)
 
   missing_outstanding++;
   assert (missing_outstanding >= 0);
-  cli->retrieve2 (blockID(key, DHASH_CONTENTHASH, DHASH_FRAG), wrap (this, &dhash_impl::missing_retrieve_cb, key));
+  cli->retrieve (blockID(key, DHASH_CONTENTHASH, DHASH_FRAG),
+		 wrap (this, &dhash_impl::missing_retrieve_cb, key));
 }
 
 void
@@ -994,6 +997,7 @@ dhash_impl::sync_cb ()
   delaycb (SYNCTM, wrap (this, &dhash_impl::sync_cb));
 }
 
+#if 0
 void 
 dhash_impl::route_upcall (int procno,void *args, cbupcalldone_t cb)
 {
@@ -1051,6 +1055,7 @@ dhash_impl::sent_block_cb (dhash_stat *s, clnt_stat err)
     warn << "error sending block\n";
   delete s;
 }
+#endif
 
 dhash_fetchiter_res *
 dhash_impl::block_to_res (dhash_stat err, s_dhash_fetch_arg *arg,
@@ -1091,6 +1096,7 @@ dhash_impl::block_to_res (dhash_stat err, s_dhash_fetch_arg *arg,
   return res;
 }
 		     
+#if 0
 void
 dhash_impl::fetchiter_gotdata_cb (cbupcalldone_t cb, s_dhash_fetch_arg *a,
 			     int cookie, ptr<dbrec> val, dhash_stat err) 
@@ -1112,6 +1118,7 @@ dhash_impl::fetchiter_gotdata_cb (cbupcalldone_t cb, s_dhash_fetch_arg *a,
   
   (*cb) (true);
 }
+#endif
 
 void
 dhash_impl::fetchiter_sbp_gotdata_cb (user_args *sbp, s_dhash_fetch_arg *arg,
@@ -1215,66 +1222,12 @@ dhash_impl::dispatch (user_args *sbp)
       sbp->reply (&res);
     }
     break;
-  case DHASHPROC_STORECB:
-    {
-      s_dhash_storecb_arg *arg = sbp->template getarg<s_dhash_storecb_arg> ();
-
-      cbstorecbuc_t *cb = scpt[arg->nonce];
-      if (cb) {
-	(*cb) (arg);
-	scpt.remove (arg->nonce);
-      }
-      dhash_stat stat = DHASH_OK;
-      sbp->reply (&stat);
-    }
-    break;
-  case DHASHPROC_BLOCK:
-    {
-      s_dhash_block_arg *arg = sbp->template getarg<s_dhash_block_arg> ();
-
-      cbblockuc_t *cb = bcpt[arg->nonce];
-      if (cb) {
-	(*cb) (arg);
-	bcpt.remove (arg->nonce);
-      } else
-	warn << "no callback for " << arg->nonce << "\n";
-
-      dhash_stat stat = DHASH_OK;
-      sbp->reply (&stat);
-    }
-    break;
   default:
     sbp->replyref (PROC_UNAVAIL);
     break;
   }
 
   pred = host_node->my_pred ()->id ();
-}
-
-void
-dhash_impl::register_storecb_cb (int nonce, cbstorecbuc_t cb)
-{
-  scpt.insert (nonce, cb);
-}
-
-void
-dhash_impl::unregister_storecb_cb (int nonce)
-{
-  if (scpt[nonce])
-    scpt.remove (nonce);
-}
-
-void
-dhash_impl::register_block_cb (int nonce, cbblockuc_t cb)
-{
-  bcpt.insert (nonce, cb);
-}
-
-void
-dhash_impl::unregister_block_cb (int nonce)
-{
-  if (bcpt[nonce])
-    bcpt.remove (nonce);
 }
 
 void

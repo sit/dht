@@ -77,44 +77,41 @@ private:
 
   void lookup_findsucc_cb (chordID blockID, dhashcli_lookupcb_t cb,
 			   vec<chord_node> s, route path, chordstat err);
-  void retrieve_hop_cb (cb_ret cb, chordID key, dhash_stat status,  
-			ptr<dhash_block> block, route path);
-  void cache_block (ptr<dhash_block> block, route search_path, chordID key);
-  void finish_cache (dhash_stat status, chordID dest);
-  void retrieve_with_source_cb (cb_ret cb, dhash_stat status, 
-				ptr<dhash_block> block, route path);
     
-  void insert2_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb, 
-			  dhash_stat status, vec<chord_node> succs, route r);
-  void insert2_store_cb (ref<sto_state> ss, route r, u_int i, 
-			 ref<dhash_storeres> res, clnt_stat err);
-  void insert_stored_cb (chordID blockID, ref<dhash_block> block,  
-			 cbinsert_path_t cb, int trial,  
-			 dhash_stat stat, chordID retID);
-
+  void insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb, 
+			 dhash_stat status, vec<chord_node> succs, route r);
+  void insert_store_cb (ref<sto_state> ss, route r, u_int i, 
+			u_int nstores, u_int min_needed,
+			dhash_stat err, chordID id);
   void fetch_frag (rcv_state *rs);
 
-  void retrieve2_hop_cb (blockID blockID, route_iterator *ci, bool done);
-  void retrieve2_lookup_cb (blockID blockID,
-			    dhash_stat status, vec<chord_node> succs, route r);
-  void retrieve2_fetch_cb (blockID blockID, u_int i,
-			   ref<dhash_fetchiter_res> res,
-			   clnt_stat err);
+  void retrieve_frag_hop_cb (blockID blockID, route_iterator *ci, bool done);
+  void retrieve_lookup_cb (blockID blockID, dhash_stat status,
+			   vec<chord_node> succs, route r);
+  void retrieve_fetch_cb (blockID blockID, u_int i,
+			  ptr<dhash_block> block);
 
-  void insert2_succlist_cb (ref<dhash_block> block, cbinsert_path_t cb, chordID guess,
-			    vec<chord_node> succs, chordstat status);
+  void insert_succlist_cb (ref<dhash_block> block, cbinsert_path_t cb,
+			   chordID guess,
+			   vec<chord_node> succs, chordstat status);
+  void retrieve_block_hop_cb (blockID blockID, route_iterator *ci,
+			     int options, int retries, ptr<chordID> guess,
+			     bool done);
+  void retrieve_dl_or_walk_cb (blockID blockID, dhash_stat status, int options,
+			       int retries, ptr<chordID> guess,
+			       ptr<dhash_block> blk);
  public:
   dhashcli (ptr<vnode> node, dhash *dh, ptr<route_factory> r_factory, 
 	    bool do_cache, int ss_mode = 1);
 
 
-  void retrieve2 (blockID blockID, cb_ret cb, 
-		  int options = 0, 
-		  ptr<chordID> guess = NULL);
+  void retrieve (blockID blockID, cb_ret cb, 
+		 int options = 0, 
+		 ptr<chordID> guess = NULL);
 
-  void insert2 (ref<dhash_block> block, cbinsert_path_t cb, 
-		int options = 0, 
-		ptr<chordID> guess = NULL);
+  void insert (ref<dhash_block> block, cbinsert_path_t cb, 
+	       int options = 0, 
+	       ptr<chordID> guess = NULL);
 
   void storeblock (ptr<location> l, chordID blockID, ref<dhash_block> block,
 		   bool last, cbinsert_t cb, store_status stat = DHASH_STORE);
