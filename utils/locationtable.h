@@ -83,6 +83,8 @@ class locationtable {
 			const vec<float> &coords);
 
   void pin (const chordID &x, short num = 0);
+  void unpin (const chordID &x);
+
   void flush (void);
   
   bool lookup_anyloc (const chordID &n, chordID *r);

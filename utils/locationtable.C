@@ -352,6 +352,7 @@ locationtable::evict (size_t n)
 void
 locationtable::pin (const chordID &x, short num)
 {
+  pins_updated_ = false;
   pininfo *p = pinlist.search (x);
   if (num < -1)
     fatal << "unsupported predecessor pin amount " << num << ".\n";
@@ -371,6 +372,14 @@ locationtable::pin (const chordID &x, short num)
       p = New pininfo (x, false, 0, -num);
     pinlist.insert (p);
   }
+}
+
+void
+locationtable::unpin (const chordID &x)
+{
+  pins_updated_ = false;
+  pinlist.remove (x);
+  
 }
 
 void
