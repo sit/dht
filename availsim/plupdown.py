@@ -49,9 +49,6 @@ for o, a in opts:
     elif o == '-s':
 	start = now + datetime.timedelta (days=-int(a))
 
-for h in hosts:
-    hoststate[h] = 0
-
 os.chdir (root)
 oneday = datetime.timedelta (days=1)
 t = start.date ()
@@ -68,20 +65,26 @@ while t <= finish.date ():
 	if p.datetime > finish:
 	    break
 	sys.stderr.write ("%s\n" % p)
-	for h in hoststate:
+	if hosts:
+	    dohosts = hosts
+	else:
+	    dohosts = p.hosts
+	for h in dohosts:
 	    v = p.get (h, h)
 	    if v[0] != '*':
-		if hoststate[h] != 1: print p.time, "join", h
+		if hoststate.get (h, 0) != 1: print p.time, "join", h
 		hoststate[h] = 1
 	    else:
 		# It appears that the host is down.  Maybe it
 		# just couldn't report in in time, so let's see if
-		# a few other folks could talk to it.
+		# anyone else could talk to it
 		goodness = 0
 		for g in p.hosts:
 		    gv = p.get (g, h)
 		    if gv[0] != '*': goodness += 1
+		    if goodness > 1: 
+			break
 		if goodness < 2:
-		    if hoststate[h] != 0: print p.time, "fail", h
+		    if hoststate.get (h, 0) != 0: print p.time, "fail", h
 		    hoststate[h] = 0
     t += oneday
