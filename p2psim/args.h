@@ -9,8 +9,8 @@ using namespace std;
 class Args : public map<string,string> {
 public:
   template<class T>
-  T nget(string s) {
-    return (T) strtoull((*this)[s].c_str(), NULL,16);
+  T nget(string s, unsigned base = 16) {
+    return (T) strtoull((*this)[s].c_str(), NULL, base);
   }
 };
 

@@ -7,6 +7,9 @@
 #include <iostream>
 using namespace std;
 
+#define KDEBUG(x) DEBUG(x) << printbits(_id) << " "
+
+
 class Kademlia : public Protocol {
 public:
   typedef short NodeID;
@@ -28,7 +31,7 @@ public:
   static NodeID distance(NodeID, NodeID);
 
   bool stabilized(vector<NodeID>);
-  void dump() {};
+  void dump() { KDEBUG(2) << "*** DUMP ***" <<endl;  _fingers.dump(_id); };
   NodeID id () { return _id;}
 
 private:

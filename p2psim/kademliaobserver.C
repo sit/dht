@@ -41,9 +41,13 @@ KademliaObserver::execute()
 {
   list<Protocol*> l = Network::Instance()->getallprotocols(_type);
   list<Protocol*>::iterator pos;
+  // for(pos = l.begin(); pos != l.end(); ++pos) {
+  //   cout << "Calling dump on " << Kademlia::printID(((Kademlia*) *pos)->id()) << endl;
+  //   ((Kademlia*) *pos)->dump();
+  // }
 
   //i only want to sort it once after all nodes have joined! 
-  Kademlia* c;
+  Kademlia *c = 0;
   if (lid.size() != _num_nodes) {
     lid.clear();
     for (pos = l.begin(); pos != l.end(); ++pos) {

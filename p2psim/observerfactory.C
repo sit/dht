@@ -1,5 +1,6 @@
 #include "observerfactory.h"
 #include "chordobserver.h"
+#include "kademliaobserver.h"
 #include "args.h"
 #include "p2psim.h"
 using namespace std;
@@ -11,6 +12,9 @@ ObserverFactory::create(string s, Args *a)
 
   if(s == "ChordObserver") {
     t = ChordObserver::Instance(a);
+  }
+  if(s == "KademliaObserver") {
+    t = KademliaObserver::Instance(a);
   }
 
   return t;
