@@ -268,11 +268,3 @@ VivaldiTest::handler(void *args, Vivaldi::Coord *ret)
 {
   *ret = _vivaldi->my_location();
 }
-
-
-
-
-
-
-
-
