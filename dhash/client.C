@@ -50,7 +50,7 @@ dhashclient::dispatch (svccb *sbp)
       path.push_back (next);
       clntnode->doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, arg, i_res,
 		       wrap(this, &dhashclient::lookup_iter_cb, 
-			    sbp, i_res, chordID(0), next, path));
+			    sbp, i_res, next, path));
 
     } 
     break;
@@ -172,7 +172,6 @@ dhashclient::insert_store_cb(svccb *sbp, dhash_storeres *res,
 void 
 dhashclient::lookup_iter_cb (svccb *sbp, 
 			     dhash_fetchiter_res *res,
-			     chordID pprev,
 			     chordID prev,
 			     route path,
 			     clnt_stat err) 
@@ -182,16 +181,25 @@ dhashclient::lookup_iter_cb (svccb *sbp,
 
   if (err) {
     /* CASE I */
-    clntnode->alert (pprev, prev);
-    dhash_fetchiter_res *nres = New dhash_fetchiter_res ();
-    /* assumes an in-order RPC transport, otherwise retry
-     might reach prev before alert can update tables*/
-    clntnode->doRPC (prev, dhash_program_1, DHASHPROC_FETCHITER, 
-		     rarg, nres,
-		     wrap(this, &dhashclient::lookup_iter_cb, 
-			  sbp, nres, pprev, prev, path));
+    warn << "Case I\n";
+    chordID last = path.pop_back ();
+    if (path.size () > 0) {
+      chordID plast = path.back ();
+      clntnode->alert (plast, last);
+      dhash_fetchiter_res *nres = New dhash_fetchiter_res ();
+      /* assumes an in-order RPC transport, otherwise retry
+	 might reach prev before alert can update tables*/
+      clntnode->doRPC (plast, dhash_program_1, DHASHPROC_FETCHITER, 
+		       rarg, nres,
+		       wrap(this, &dhashclient::lookup_iter_cb, 
+			    sbp, nres, prev, path));
+    } else {
+      warn << "Case I (no succs)\n"; 
+      sbp->replyref (DHASH_NOENT);
+    }
   } else if (res->status == DHASH_COMPLETE) {
     /* CASE II */
+    warn << "Case II\n";
     memorize_block (arg->key, res);
     dhash_res *fres = New dhash_res (DHASH_OK);
     fres->resok->res = res->compl_res->res;
@@ -204,10 +212,12 @@ dhashclient::lookup_iter_cb (svccb *sbp,
   } else if (res->status == DHASH_CONTINUE) {
     chordID next = res->cont_res->next.x;
     if (next == prev) {
+      warn << "Case III.a\n";
       if (res->cont_res->succ_list.size () == 0) 
 	/*CASE III.a */
 	sbp->replyref (DHASH_NOENT);
       else {
+	warn << "Case III.b\n";
 	/* CASE III.b */
 	chordID first_succ = res->cont_res->succ_list[0].x;
 	clntnode->locations->cacheloc (first_succ,
@@ -218,8 +228,10 @@ dhashclient::lookup_iter_cb (svccb *sbp,
 			 rarg, fres,
 			 wrap (this, &dhashclient::query_successors,
 			       sbp, res, 0, rarg, fres));
+	return;
       }
     } else {
+      warn << "Case IV\n";
       /* CASE IV */
       clntnode->locations->cacheloc (next, res->cont_res->next.r, prev);
       dhash_fetchiter_res *nres = New dhash_fetchiter_res;
@@ -228,7 +240,7 @@ dhashclient::lookup_iter_cb (svccb *sbp,
       clntnode->doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, 
 		       rarg, nres,
 		       wrap(this, &dhashclient::lookup_iter_cb, 
-			    sbp, nres, prev, next, path));
+			    sbp, nres, next, path));
     }
   } else 
     sbp->replyref (DHASH_NOENT);
@@ -243,24 +255,27 @@ dhashclient::query_successors (svccb *sbp, dhash_fetchiter_res *res,
 			       dhash_res *fres, clnt_stat err) 
 {
   if (fres->status == DHASH_OK) {
+    warnx << "qs: found it " << fres->resok->attr.size << " \n";
     fres->resok->hops = 100 + n;
     sbp->reply (fres);
   } else if (res->cont_res->succ_list.size () == n + 1) {
+    warn << "qs: no more succs\n";
     sbp->replyref (DHASH_NOENT);
   } else {
+    warnx << "qs: loop\n";
     chordID prev_succ = res->cont_res->succ_list[n].x;
     chordID next_succ = res->cont_res->succ_list[n + 1].x;
     clntnode->locations->cacheloc (next_succ,
 				   res->cont_res->succ_list[n + 1].r,
 				   prev_succ);
 
-    dhash_res *fres = New dhash_res ();
+    dhash_res *nfres = New dhash_res ();
     clntnode->doRPC (next_succ, dhash_program_1, DHASHPROC_FETCH,
-		     rarg, fres,
+		     rarg, nfres,
 		     wrap (this, &dhashclient::query_successors,
-			   sbp, res, n + 1, rarg, fres));
+			   sbp, res, n + 1, rarg, nfres));
   }
-  delete res;
+  delete fres;
 }
 void
 dhashclient::transfer_cb (svccb *sbp, dhash_res *res, clnt_stat err)

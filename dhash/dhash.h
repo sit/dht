@@ -74,7 +74,6 @@ class dhashclient {
   void dispatch (svccb *sbp);
   void lookup_iter_cb (svccb *sbp, 
 		       dhash_fetchiter_res *res,
-		       chordID pprev,
 		       chordID prev,
 		       route path,
 		       clnt_stat err);

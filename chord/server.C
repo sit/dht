@@ -393,6 +393,7 @@ vnode::alert_cb (chordstat *res, clnt_stat err)
   } else if (*res != CHORD_OK) {
     warnx << "alert_cb: RPC error" << *res << "\n";
   }
+  delete res;
 }
 
 void 

@@ -122,7 +122,7 @@ class vnode : public virtual refcount {
   chordID findpredfinger (chordID &x);
   chordID findpredfinger2 (chordID &x);
 
-  void stabilize_backoff (int f, int s, int t);
+  void stabilize_backoff (int f, int s, u_int32_t t);
   void stabilize_continuous ();
   int stabilize_succlist (int s);
   int stabilize_finger (int f);

@@ -173,7 +173,7 @@ afetch_cb (dhash_res *res, chordID key, char *buf, int i, struct timeval start, 
 {
   
   if (err) {
-    fprintf(outfile, "RPC error: %d", err);
+    fprintf(outfile, "RPC error: %d\n", err);
     out--;
     return;
   }
@@ -187,8 +187,10 @@ afetch_cb (dhash_res *res, chordID key, char *buf, int i, struct timeval start, 
   memcpy(buf, res->resok->res.base (), res->resok->res.size ());
   unsigned int *read = New unsigned int(res->resok->res.size ());
   unsigned int off = res->resok->res.size ();
+  warnx << "off " << res->resok->attr.size << " size " << res->resok->res.size () << "\n";
   if (off == res->resok->attr.size) finish (buf, read, start, i, res);
   while (off < res->resok->attr.size) {
+    assert (0);
     ptr<dhash_transfer_arg> arg = New refcounted<dhash_transfer_arg> ();
 
     arg->farg.key = key;

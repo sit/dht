@@ -24,6 +24,7 @@
 #include <qhash.h>
 
 #define PNODE
+#define STOPSTABILIZE
 
 vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
 	      chordID _myID) :
@@ -316,6 +317,7 @@ vnode::stabilize (void)
 void
 vnode::stabilize_continuous (void)
 {
+#ifndef STOPSTABILIZE
   stabilize_succ ();
   stabilize_pred ();
   if (hasbecomeunstable () && stabilize_backoff_tmo) {
@@ -324,16 +326,18 @@ vnode::stabilize_continuous (void)
     stabilize_backoff_tmo = 0;
     stabilize_backoff (0, 0, stabilize_timer);
   }
-  u_int32_t time = uniform_random (0.5 * stabilize_timer, 
-				   1.5 * stabilize_timer);
-  time = time * 1000000;
-  //  warnx << gettime () << " stabilize " << myID << " " << time << " nsec\n";
-  stabilize_continuous_tmo = delaycb (time / 1000000000, time % 1000000000,
-			   wrap (this, &vnode::stabilize_continuous));
+  u_int32_t t1 = uniform_random (0.5 * stabilize_timer, 1.5 * stabilize_timer);
+  u_int32_t sec = t1 / 1000;
+  u_int32_t nsec =  (t1 % 1000) * 1000000;
+  warnx << "stabilize_backoff: sec " << sec << " nsec " << nsec << "\n";
+  stabilize_continuous_tmo = delaycb (sec, nsec, wrap (mkref (this), 
+					       &vnode::stabilize_continuous,
+					       f, s));
+#endif
 }
 
 void
-vnode::stabilize_backoff (int f, int s, int t)
+vnode::stabilize_backoff (int f, int s, u_int32_t t)
 {
   stabilize_backoff_tmo = 0;
   if (!stable && isstable ()) {
@@ -345,17 +349,34 @@ vnode::stabilize_backoff (int f, int s, int t)
     t = stabilize_timer;
     stable = false;
   }
+#ifdef STOPSTABILIZE
+  stabilize_succ ();
+  stabilize_pred ();
+#endif
   f = stabilize_finger (f);
   s = stabilize_succlist (s);
+#ifdef STOPSTABILIZE
+  if (isstable ()) { 
+    t = 2 * t;
+    if (t >= 50000) {
+      warnx << "stabilize_backoff: " << myID << " stop stabilizing\n";
+      return;
+    }
+  }
+  u_int32_t t1 = uniform_random (0.5 * stabilize_timer, 1.5 * stabilize_timer);
+#else
   if (isstable () && (t <= stabilize_timer_max * 1000)) {
-    warnx << myID << ": backoff to " << t << " msec\n";
     t = 2 * t;
   }
-  u_int32_t time = uniform_random (0.5 * t, 1.5 * t);
-  time = time * 1000000;
-  stabilize_backoff_tmo = delaycb (time / 1000000000, time % 1000000000, 
-			   wrap (mkref (this), &vnode::stabilize_backoff, 
-				 f, s, t));
+  u_int32_t t1 = uniform_random (0.5 * t, 1.5 * t);
+#endif
+  // warnx << myID << ": delay till " << t1 << " msec\n";
+  u_int32_t sec = t1 / 1000;
+  u_int32_t nsec =  (t1 % 1000) * 1000000;
+  // warnx << "stabilize_backoff: sec " << sec << " nsec " << nsec << "\n";
+  stabilize_backoff_tmo = delaycb (sec, nsec, wrap (mkref (this), 
+					       &vnode::stabilize_backoff,
+					       f, s, t));
 }
 
 void

@@ -5,6 +5,5 @@
 - determine when to run stabilize at runtime
 - server selection
 - implement nodeID identification
-- reimplement alert
 - smart implementation of location table
 - recursive lookup
