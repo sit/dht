@@ -2,7 +2,6 @@
 #include "dhash.h"
 #include "ddns.h"
 #include "sfsmisc.h"
-#include <iostream.h>
 
 dns_type 
 get_dtype (const char *type) 
@@ -120,13 +119,6 @@ ddns::ddnsRR2block (ptr<ddnsRR> rr, char *data, int datasize)
 		  rr->rdlength, datalen, datasize);
       break;
     case SOA:
-#if 0
-      warn << "soa.mname = " << rr->rdata.soa.mname << "\n";
-      warn << "soa.rname = " << rr->rdata.soa.rname << "\n";
-      warn << "soa.serial = " << rr->rdata.soa.serial << "\n";
-      warn << "soa.refresh = " << rr->rdata.soa.refresh << "\n";
-      warn << "soa.retry = " << rr->rdata.soa.retry << "\n";
-#endif
       copy2block (data, (void *) rr->rdata.soa.mname,
 		  strlen (rr->rdata.soa.mname) + 1, datalen, datasize);		
       copy2block (data, (void *) rr->rdata.soa.rname,
@@ -143,20 +135,30 @@ ddns::ddnsRR2block (ptr<ddnsRR> rr, char *data, int datasize)
 		  fieldsize, datalen, datasize);		
       break;
     case WKS:
-      copy2block (data, (void *) &rr->rdata.wks,
-		  rr->rdlength, datalen, datasize);		  
+      copy2block (data, (void *) &rr->rdata.wks.address,
+		  IP32ADDR_SIZE, datalen, datasize);	
+      copy2block (data, (void *) &rr->rdata.wks.protocol,
+		  sizeof (uint32), datalen, datasize);		  
+      copy2block (data, (void *) rr->rdata.wks.bitmap,
+		  strlen (rr->rdata.wks.bitmap) + 1, datalen, datasize);	
       break;
     case HINFO:
-      copy2block (data, (void *) &rr->rdata.hinfo,
-		  rr->rdlength, datalen, datasize);		  
+      copy2block (data, (void *) rr->rdata.hinfo.cpu,
+		  strlen (rr->rdata.hinfo.cpu) + 1, datalen, datasize);
+      copy2block (data, (void *) rr->rdata.hinfo.os,
+		  strlen (rr->rdata.hinfo.os) + 1, datalen, datasize);		  
       break;
     case MINFO:
-      copy2block (data, (void *) &rr->rdata.minfo,
-		  rr->rdlength, datalen, datasize);		  
+      copy2block (data, (void *) rr->rdata.minfo.rmailbx,
+		  strlen (rr->rdata.minfo.rmailbx) + 1, datalen, datasize);	
+      copy2block (data, (void *) rr->rdata.minfo.emailbx,
+		  strlen (rr->rdata.minfo.emailbx) + 1, datalen, datasize);	
       break;
     case MX:
-      copy2block (data, (void *) &rr->rdata.mx,
-		  rr->rdlength, datalen, datasize);		  
+      copy2block (data, (void *) &rr->rdata.mx.pref,
+		  sizeof (uint32), datalen, datasize);		  
+      copy2block (data, (void *) rr->rdata.mx.exchange,
+		  strlen (rr->rdata.mx.exchange) + 1, datalen, datasize);
       break;
     case TXT:
       copy2block (data, (void *) rr->rdata.txt_data,
@@ -240,46 +242,6 @@ ddns::lookup (domain_name dname, dns_type dt, ddns::lcb_t lcb)
     acheck ();
 }
 
-void 
-block2soa (soa_data *soa, char *data, int datalen)
-{
-
-  char *begstr = data;
-  char *endstr = strchr (data, '\0');
-  int fieldlen = endstr - begstr + 1;
-  
-  soa->mname = (char *) malloc (fieldlen);
-  memmove (soa->mname, begstr, fieldlen);
-  warn << "soa->mname = " << soa->mname << "\n";
-
-  begstr = endstr + 1;
-  endstr = strchr (begstr, '\0');
-
-  fieldlen = endstr - begstr + 1;
-  soa->rname = (char *) malloc (fieldlen);
-  memmove (soa->rname, begstr, fieldlen);
-  warn << "soa->rname = " << soa->rname << "\n";
-  
-  fieldlen = sizeof (uint32);
-  begstr = endstr + 1;
-  memmove (&soa->serial, begstr, fieldlen);
-  warn << "soa->serial = " << soa->serial << "\n";
-  begstr += fieldlen;
-  memmove (&soa->refresh, begstr, fieldlen);
-  warn << "soa->refresh = " << soa->refresh << "\n";
-  begstr += fieldlen;
-  memmove (&soa->retry, begstr, fieldlen);
-  warn << "soa->retry = " << soa->retry << "\n";
-  begstr += fieldlen;
-  memmove (&soa->expire, begstr, fieldlen);
-  warn << "soa->expire = " << soa->expire << "\n";
-  begstr += fieldlen;
-  memmove (&soa->minttl, begstr, fieldlen);
-  warn << "soa->minttl = " << soa->minttl << "\n";
-
-  warn << "datalen = " << datalen << " copiedlen = " << (begstr-data)+fieldlen << "\n\n";
-}
-
 void
 ddns::lookup_cb (domain_name dname, chordID key, 
 		 ref<dhash_res> res, ddns::lcb_t lcb, clnt_stat err)
@@ -330,24 +292,18 @@ ddns::lookup_cb (domain_name dname, chordID key,
 	case SOA:
 	  block2soa (&rr_tmp->rdata.soa, data, rr_tmp->rdlength);
 	  break;
-#if 0
 	case WKS:
-	  &rr_tmp->rdata.wks = (string) malloc (rr_tmp->rdlength);
-	  memmove (rr_tmp->rdata.wks, data, rr_tmp->rdlength);	
+	  block2wks (&rr_tmp->rdata.wks, data, rr_tmp->rdlength);	  
 	  break;
 	case HINFO:
-	  &rr_tmp->rdata.hinfo = (string) malloc (rr_tmp->rdlength);
-	  memmove (rr_tmp->rdata.hinfo, data, rr_tmp->rdlength);	
+	  block2hinfo (&rr_tmp->rdata.hinfo, data, rr_tmp->rdlength);	  
 	  break;
 	case MINFO:
-	  &rr_tmp->rdata.minfo = (string) malloc (rr_tmp->rdlength);
-	  memmove (rr_tmp->rdata.minfo, data, rr_tmp->rdlength);	
+	  block2minfo (&rr_tmp->rdata.minfo, data, rr_tmp->rdlength);	  
 	  break;
 	case MX:
-	  &rr_tmp->rdata.mx = (string) malloc (rr_tmp->rdlength);
-	  memmove (rr_tmp->rdata.mx, data, rr_tmp->rdlength);	
+	  block2mx (&rr_tmp->rdata.mx, data, rr_tmp->rdlength);	  
 	  break;
-#endif
 	case TXT:
 	  rr_tmp->rdata.txt_data = (string) malloc (rr_tmp->rdlength);
 	  memmove (rr_tmp->rdata.txt_data, data, rr_tmp->rdlength);	

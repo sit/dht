@@ -8,7 +8,7 @@ noinst_HEADERS = ddns.h
 
 with_chord = ${top_builddir}
 
-ddnsq_SOURCES = ddns.C ddnsq.C 
+ddnsq_SOURCES = ddns.C ddnsq.C misc.C
 ddnsq_LDADD = ${with_chord}/chord/libchord.a \
 	${with_chord}/dhash/libdhash.a \
 	${with_chord}/svc/libsvc.la \

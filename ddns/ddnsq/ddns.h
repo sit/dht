@@ -3,6 +3,7 @@
 
 #include "async.h"
 #include "chord.h"
+#include "dhash.h"
 
 typedef char* domain_name;
 typedef char* string;
@@ -104,23 +105,6 @@ typedef union {
 //case DNULL:	
 //default:
   string rdata;	
-
-#if 0
-//case NS:
-  domain_name nsdname;
-//case CNAME:
-  domain_name cname;
-//case MD:
-//case MF:
-//case MB:
-  domain_name madname;
-//case MG:
-  domain_name mgmname;
-//case MR:
-  domain_name newname;
-//case PTR:
-  domain_name ptrdname;
-#endif
 } dns_rdata;	
 
 struct ddnsRR {
@@ -135,6 +119,7 @@ struct ddnsRR {
 
 #define DNS_TYPE_SIZE  sizeof (dns_type)
 #define DNS_CLASS_SIZE sizeof (dns_class)
+#define IP32ADDR_SIZE  sizeof (ip32addr)
 #define TTL_SIZE       sizeof (ttl_t)
 #define RDLENGTH_SIZE  sizeof (rdl_t)
 
@@ -161,6 +146,16 @@ class ddns {
   void lookup (domain_name, dns_type, ddns::lcb_t);
   
 };
+
+/* misc.C */
+
+void block2soa (soa_data *, char *data, int datalen);
+void block2wks (wks_data *, char *data, int datalen);
+void block2hinfo (hinfo_data *, char *data, int datalen);
+void block2minfo (minfo_data *, char *data, int datalen);
+void block2mx (mx_data *, char *data, int datalen);
+
+/* End misc.C */
 
 #endif /* _DDNS_H_ */
 
