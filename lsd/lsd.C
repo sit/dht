@@ -651,7 +651,7 @@ main (int argc, char **argv)
   if (ss_mode & 1) 
     Configurator::only ().set_int ("dhash.order_successors", 1);
   if (ss_mode & 2)
-    Configurator::only ().set_int ("chord.greedy_route", 1);
+    Configurator::only ().set_int ("chord.greedy_lookup", 1);
   if (ss_mode & 4)
     Configurator::only ().set_int ("chord.find_succlist_shaving", 1);
 
