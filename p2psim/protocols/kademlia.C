@@ -69,6 +69,7 @@ Time Kademlia::_bad_lookup_latency = 0;
 long unsigned Kademlia::_bad_timeouts = 0;
 long unsigned Kademlia::_bad_hops = 0;
 Time Kademlia::_bad_hop_latency = 0;
+Time Kademlia::_default_timeout = 0;
 
 
 Kademlia::NodeID *Kademlia::_all_kademlias = 0;
@@ -108,6 +109,11 @@ Kademlia::Kademlia(IPAddress i, Args a)
   if(!refresh_rate) {
     refresh_rate = a.nget<unsigned>("refresh_rate", 1000, 10);
     // KDEBUG(1) << "refresh_rate = " << refresh_rate << endl;
+  }
+
+  if(!_default_timeout) {
+    _default_timeout = a.nget<Time>("default_timeout", 5000, 10);
+    // KDEBUG(1) << "default_timeout = " << _default_timeout << endl;
   }
 
   if(!Kademlia::pool)
@@ -350,8 +356,10 @@ join_restart:
   lookup_args la(_id, ip(), _id);
   lookup_result lr;
   record_stat(STAT_LOOKUP, 1, 0);
-  bool b = doRPC(wkn, &Kademlia::do_lookup, &la, &lr);
-  assert(b);
+  bool b = false;
+  do {
+    b = doRPC(wkn, &Kademlia::do_lookup, &la, &lr, Kademlia::_default_timeout);
+  } while(!b);
   record_stat(STAT_LOOKUP, lr.results.size(), 0);
 
   if(!alive())
@@ -396,7 +404,7 @@ join_restart:
     // if the RPC failed, or the node is now dead, start over
     k_nodeinfo *ki = flyweight[succ_id];
     record_stat(STAT_LOOKUP, 1, 0);
-    if(!doRPC(ki->ip, &Kademlia::do_lookup, &la, &lr)) {
+    if(!doRPC(ki->ip, &Kademlia::do_lookup, &la, &lr, Kademlia::_default_timeout)) {
       clear();
       goto join_restart;
     }
@@ -498,7 +506,7 @@ Kademlia::lookup_wrapper(lookup_wrapper_args *args)
     ping_args pa(fr.succ.id, fr.succ.ip);
     ping_result pr;
     Time pingbegin = now();
-    if(!doRPC(fr.succ.ip, &Kademlia::do_ping, &pa, &pr) && alive()) {
+    if(!doRPC(fr.succ.ip, &Kademlia::do_ping, &pa, &pr) && alive(), Kademlia::_default_timeout) {
       _lookup_dead_node++;
       if(flyweight[fr.succ.id])
         erase(fr.succ.id);
@@ -570,7 +578,7 @@ Kademlia::do_ping(ping_args *args, ping_result *result)
     find_node_result *fr = New find_node_result;                                        \
     fr->hops = HOPS;                                                                    \
     record_stat(STAT_FIND_VALUE, 1, 0);                                                 \
-    unsigned rpc = asyncRPC(x.ip, &Kademlia::find_node, fa, fr);                        \
+    unsigned rpc = asyncRPC(x.ip, &Kademlia::find_node, fa, fr, Kademlia::_default_timeout); \
     callinfo *ci = New callinfo(x, fa, fr);                                             \
     rpcset->insert(rpc);                                                                \
     outstanding_rpcs->insert(rpc, ci);                                                  \
@@ -1001,11 +1009,17 @@ Kademlia::erase(NodeID id)
   // KDEBUG(1) << "Kademlia::erase " << Kademlia::printID(id) << endl;
 
   // assert(flyweight.find(id, 0));
-  _root->erase(id);
   // KDEBUG(2) << "Kademlia::erase deleting id = " << printID(id) << ", ip = " << flyweight[id]->ip << endl;
   k_nodeinfo *ki = flyweight[id];
-  flyweight.remove(id);
-  Kademlia::pool->push(ki);
+
+  // 5, taken from Kademlia paper
+  if(++ki->timeouts >= 5) {
+    _root->erase(id);
+    flyweight.remove(id);
+    Kademlia::pool->push(ki);
+    return;
+  }
+  ki->lasttry = now();
 }
 // }}}
 // {{{ Kademlia::update_k_bucket
@@ -1175,6 +1189,8 @@ k_nodes::insert(Kademlia::NodeID n, bool touch = false)
 
   if(contained && touch && (ninfo->lastts != now())) {
     ninfo->lastts = now();
+    ninfo->timeouts = 0;
+    ninfo->lasttry = 0;
     _redo = _redo ? _redo : RESORT;
     checkrep();
     return;

@@ -38,12 +38,15 @@ using namespace std;
 class k_nodeinfo {
 public:
   typedef ConsistentHash::CHID NodeID;
-  k_nodeinfo() { id = 0; ip = 0; lastts = 0; }
+  k_nodeinfo() { id = 0; ip = 0; lastts = 0; timeouts = 0; lasttry = 0;}
   k_nodeinfo(NodeID, IPAddress);
   k_nodeinfo(k_nodeinfo*);
   NodeID id;
   IPAddress ip;
-  Time lastts;  // when we saw it last
+  Time lastts;   // last time we know it was alive
+
+  char timeouts; // how often we did not get a reply
+  Time lasttry;  // last time we tried
 
   inline void checkrep() const;
 };
@@ -98,6 +101,8 @@ private:
       newki->id = id;
       newki->ip = ip;
       newki->lastts = 0;
+      newki->lasttry = 0;
+      newki->timeouts = 0;
       _count--;
       return newki;
     }
@@ -111,6 +116,8 @@ private:
       newki->id = ki->id;
       newki->ip = ki->ip;
       newki->lastts = ki->lastts;
+      newki->timeouts = ki->timeouts;
+      newki->lasttry = ki->lasttry;
       _count--;
       return newki;
     }
@@ -137,6 +144,8 @@ private:
       ki->ip = 0;
       ki->id = 0;
       ki->lastts = 0;
+      ki->timeouts = 0;
+      ki->lasttry = 0;
     }
 
   private:
@@ -331,6 +340,7 @@ public:
   static unsigned refresh_rate;         // how often to refresh info
   static bool learn_from_rpc;           // do we learn from RPCs?
   static Time max_lookup_time;          // how long do we keep retrying
+  static Time _default_timeout;         // default timeout
   static k_nodeinfo_pool *pool;         // pool of k_nodeinfo_pool
   static const unsigned idsize = 8*sizeof(Kademlia::NodeID);
   HashMap<NodeID, k_nodeinfo*> flyweight;

@@ -142,8 +142,8 @@ Network::send(Packet *p)
   //
   // if timeout == 0, then let the failure model ADD some punishment.
   //
-  if(p->ok()) {
-    double random_number = (double) (((random() % 10000) / 100.00));
+  if(p->ok() && _top->lossrate()) {
+    double random_number = (double) ((random() % 10000) / 100.00);
     p->_ok = _top->lossrate() <= random_number ? true : false;
   }
 
