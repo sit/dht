@@ -217,6 +217,11 @@ p2p::p2p (str host, int hostport, const sfs_ID &hostID,
   initialize_graph();
 #endif
 
+#ifdef STATS
+  bzero(&stats, sizeof(chord_stats));
+  sigcb(SIGUSR1, wrap (this, &p2p::stats_cb));
+#endif /* STATS */
+  
   wellknownhost.hostname = host;
   wellknownhost.port = hostport;
   myaddress.port = port;
@@ -382,7 +387,7 @@ p2p::join_getsucc_cb (sfs_ID p, sfs_ID s, net_address r, sfsp2pstat status)
 void
 p2p::bootstrap ()
 {
-  warnx << "bootstrap\n";
+    warnx << "bootstrap\n";
   if (nbootstrap > 0) {
     //warnx << "bootstrap: we are busy bootstrapping\n";
     return;
@@ -435,7 +440,7 @@ p2p::bootstrap_succ_cb (int i, sfs_ID n, sfs_ID s,
     bootstrap_failure = true;
   } else {
     if (updatesucc (finger_table[i], s)) {
-      warnx << "bootstrap_succ_cb: updated\n";
+      //      warnx << "bootstrap_succ_cb: updated\n";
       stable = false;
     }
     if (nbootstrap <= 0)
@@ -548,7 +553,7 @@ p2p::dofindclosestpred (svccb *sbp, sfsp2p_findarg *fa)
   sfs_ID p = myID;
   sfs_ID s = myID + 1;
 
-  print ();
+  //  print ();
   for (int i = NBIT; i > 1; i--) {
     if ((finger_table[i].alive) && 
 	between (s, fa->x, finger_table[i].first)) {
@@ -556,7 +561,7 @@ p2p::dofindclosestpred (svccb *sbp, sfsp2p_findarg *fa)
       break;
     }
   }
-  warnx << "dofindclosestpred of " << fa->x << " is " << p << "\n";
+  //  warnx << "dofindclosestpred of " << fa->x << " is " << p << "\n";
   location *l = locations[p];
   assert (l);
   res.resok->x = fa->x;
@@ -590,14 +595,14 @@ void
 p2p::dofindsucc (sfs_ID &n, cbroute_t cb)
 {
   
-  warn << "do find succ " << n << "\n";
+  //  warn << "do find succ " << n << "\n";
   int i = successor_wedge (n);
   if (!predecessor.alive) {
     set_closeloc (predecessor);
   }
 
 
-  warn << "calling f_s " << predecessor.first << " " << n << "\n";
+  //  warn << "calling f_s " << predecessor.first << " " << n << "\n";
   find_successor (myID, n, wrap (mkref (this), &p2p::dofindsucc_cb, cb, n));
 
 }
@@ -614,7 +619,7 @@ p2p::dofindsucc_cb (cbroute_t cb, sfs_ID n, sfs_ID x,
     else  
       cb (x, search_path, SFSP2P_ERRNOENT);
   } else {
-    warn << "succ was " << x << "\n";
+    //    warn << "succ was " << x << "\n";
     cb (x, search_path, SFSP2P_OK);
   }
 }

@@ -5,7 +5,7 @@
 #include <dbfe.h>
 #include <arpc.h>
 
-dhash::dhash() {
+dhash::dhash(str dbname) {
 
   db = new dbfe();
 
@@ -16,10 +16,9 @@ dhash::dhash() {
   opts.addOption("opt_nodesize", 4096);
   opts.addOption("opt_create", 1);
 
+  warn << dbname << "\n";
   warn << "init dhash\n";
-  char dbname[1024];
-  sprintf(dbname, "dhash.db.%d", getpid ());
-  if (int err = db->opendb(const_cast < char *>(dbname), opts)) {
+  if (int err = db->opendb(const_cast < char *>(dbname.cstr()), opts)) {
     warn << "open returned: " << strerror(err) << err << "\n";
     exit (-1);
   }
@@ -102,7 +101,7 @@ dhash::storesvc_cb(svccb *sbp, dhash_stat err) {
 void
 dhash::fetch(sfs_ID id, cbvalue cb) 
 {
-  warn << "FETCHING " << id << "\n";
+  //  warn << "FETCHING " << id << "\n";
   ptr<dbrec> q = id2dbrec(id);
   db->lookup(q, wrap(this, &dhash::fetch_cb, cb));
 }
@@ -121,9 +120,11 @@ void
 dhash::store(sfs_ID id, dhash_value data, store_status type, cbstat cb) 
 {
 
+#if 0
   if (type == DHASH_STORE) warn << "STORING " << id << "\n";
   else if (type == DHASH_CACHE) warn << "CACHING " << id << "\n";
   else warn << "don't know what the hell I'm doing\n";
+#endif
 
   ptr<dbrec> k = id2dbrec(id);
   ptr<dbrec> d = New refcounted<dbrec> (data.base (), data.size ());
@@ -188,6 +189,6 @@ dhash::id2dbrec(sfs_ID id)
 void
 dhash::act_cb(sfs_ID id, char action) {
 
-  warn << "node " << id << " just " << action << "ed the network\n";
+  //  warn << "node " << id << " just " << action << "ed the network\n";
 
 }

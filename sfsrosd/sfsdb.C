@@ -46,11 +46,6 @@ sfsrodb::getinfo(sfs_fsinfo *fsinfo)
 }
 
 void
-sfsrodb::getinfo_cb(callback<void>::ref cb, sfs_fsinfo *fsinfo, dhash_res *res, clnt_stat err) 
-{
-}
-
-void
 sfsrodb::getconnectres (sfs_connectres *conres)
 {
     
@@ -66,14 +61,6 @@ sfsrodb::getconnectres (sfs_connectres *conres)
   conres->reply->servinfo.prog = SFSRO_PROGRAM;
   conres->reply->servinfo.vers = SFSRO_VERSION;
   bzero (&conres->reply->charge, sizeof (sfs_hashcharge));
-
-}
-
-
-void
-sfsrodb::getconnectres_cb(callback<void>::ref cb, sfs_connectres *conres, dhash_res *res,
-			  clnt_stat err) 
-{
 
 }
 
@@ -96,11 +83,9 @@ sfsrodb::getdata (sfs_hash *fh, sfsro_datares *res, callback<void>::ref cb)
   if (memcmp (key0, fh->base (), 20) == 0) {
     dat = data1;
     len = 128;
-    //    fd = open("key-1", O_RDONLY);
   } else if (memcmp (key1, fh->base (), 20) == 0) {
     dat = data0;
     len = 48;
-    //fd = open("key-0", O_RDONLY);
   } 
   
   if (dat) {
@@ -126,71 +111,7 @@ sfsrodb::getdata_cb(callback<void>::ref cb, sfsro_datares *res, dhash_res *dres,
     res->set_status (SFSRO_OK);
     res->resok->data.setsize(dres->resok->res.size ());
     memcpy (res->resok->data.base (), dres->resok->res.base (), dres->resok->res.size ());
-    
     (*cb)();
-    
   }
+  delete dres;
 }
-
-/*
-//FED - start and count are in units of the understood base: 64
-//      start is zero based
-void
-sfsrodb::getpartialdata (sfs_hash *fh, sfsro_datares *res, 
-			 callback<void>::ref cb,
-			 int start, int count)
-{
-  ref<dbrec> key = new refcounted<dbrec>((void *)fh->base (), fh->size ());
-  
-  dbp->lookup (key, wrap(this, &sfsrodb::getpartialdata_cb, 
-			 cb, res, start, count));
-}
-
-void
-sfsrodb::getpartialdata_cb(callback<void>::ref cb, sfsro_datares *res, 
-			   int start,
-			   int count,
-	       		   ptr<dbrec> result)  
-{
-  if (result == 0) {
-    res->set_status(SFSRO_ERRNOENT);
-    (*cb)();
-  } else {
-    assert (start + count <= STRIPE_BASE);
-
-    res->set_status (SFSRO_OK);
-    
-    int fracsize = (result->len)/STRIPE_BASE;
-    int rem = (result->len) % STRIPE_BASE;
-    int len = fracsize*(count);
-    if (start + count == STRIPE_BASE) len += rem;
-    int offset = fracsize*start;
-
-    res->resok->data.setsize(len);
-    memcpy (res->resok->data.base (), 
-	    (void *)((char *)result->value + offset), 
-	    len);
-    
-    (*cb)();
-    
-  }
-}
-
-void
-sfsrodb::putdata(sfs_hash *fh, sfsro_datares *res) 
-{
-  ref<dbrec> key = new refcounted<dbrec>( (void *) fh->base (),
-					  fh->size ());
-  ref<dbrec> data = new refcounted<dbrec>( (void *)res->resok->data.base (),
-					   res->resok->data.size () );
-  
-  dbp->insert(key, data, wrap(this, &sfsrodb::putdata_cb));
-  return;
-}
-
-void
-sfsrodb::putdata_cb(int err) 
-{
-  if (err) warn << "insert from putdata returned" << err << "\n";
-}
-*/

@@ -10,6 +10,19 @@
 
 #define NBIT 160
 
+
+#ifdef STATS
+struct chord_stats {
+  long insert_path_len;
+  long insert_ops;
+  long lookup_path_len;
+  long lookup_ops;
+};
+
+extern chord_stats stats;
+#endif /* STATS */
+
+
 typedef int cb_ID;
 
 struct hashID {
@@ -139,6 +152,7 @@ struct location {
   bool alive;
   long total_latency;
   long num_latencies;
+  long max_latency;
   int nout;
   timecb_t *timeout_cb;
   
@@ -149,6 +163,7 @@ struct location {
     x = NULL;
     total_latency = 0;
     num_latencies = 0;
+    max_latency = 0;
     nout = 0;
     timeout_cb = NULL;
   };
@@ -298,6 +313,8 @@ class p2p : public virtual refcount  {
 
   void registerActionCallback(cbaction_t cb);
   void doActionCallbacks(sfs_ID id, char action);
+
+  void stats_cb ();
 };
 
 extern ptr<p2p> defp2p;

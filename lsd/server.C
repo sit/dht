@@ -67,7 +67,7 @@ p2p::get_predecessor_cb (sfs_ID n, cbsfsID_t cb, sfsp2p_findres *res,
 void
 p2p::find_successor (sfs_ID &n, sfs_ID &x, cbroute_t cb)
 {
-  warn << "FS: " << n << " " << x << "\n";
+  //  warn << "FS: " << n << " " << x << "\n";
   find_predecessor (n, x,
 		    wrap (mkref (this), &p2p::find_predecessor_cb, cb));
 }
@@ -82,7 +82,7 @@ p2p::find_predecessor_cb (cbroute_t cb, sfs_ID p, route search_path,
   else if (status != SFSP2P_OK) {
     cb (p, search_path, status);
   } else {
-    warnx << "find_predecessor_cb: " << p << "\n";
+    //    warnx << "find_predecessor_cb: " << p << "\n";
     get_successor (p, wrap (mkref(this), &p2p::find_successor_cb, 
 				   cb, search_path));
   }
@@ -92,7 +92,7 @@ void
 p2p::find_successor_cb (cbroute_t cb, route search_path, sfs_ID s, 
 			net_address r, sfsp2pstat status)
 {
-  warnx << "find_successor_cb: " << s << "\n";
+  //  warnx << "find_successor_cb: " << s << "\n";
   cb (s, search_path, status);
 }
 
@@ -121,7 +121,7 @@ p2p::find_pred_test_cache_cb (sfs_ID n, sfs_ID x, cbroute_t cb, int found)
 	   wrap (mkref (this), &p2p::find_closestpred_cb, n, cb, res, 
 		 search_path));
   } else {
-    warn << "CACHE HIT (local node)\n";
+    //    warn << "CACHE HIT (local node)\n";
     cb (n, search_path, SFSP2P_CACHEHIT);
   }
 }
@@ -140,8 +140,8 @@ p2p::find_closestpred_cb (sfs_ID n, cbroute_t cb,
     warnx << "find_closestpred_cb: RPC error" << res->status << "\n";
     cb (n, search_path, res->status);
   } else {
-    warnx << "find_closestpred_cb: pred of " << res->resok->x << " is " 
-	  << res->resok->node << "\n";
+    //    warnx << "find_closestpred_cb: pred of " << res->resok->x << " is " 
+    //  << res->resok->node << "\n";
     updateloc (res->resok->node, res->resok->r, n);
     
     search_path.push_back(res->resok->node);
@@ -164,7 +164,7 @@ p2p::find_closestpred_test_cache_cb (sfs_ID node, findpredecessor_cbstate *st, i
     }
   else 
     {
-      warn << "CACHE HIT\n";
+      //      warn << "CACHE HIT\n";
       st->cb (st->nprime, st->search_path, SFSP2P_CACHEHIT);
     }
 }
@@ -178,14 +178,14 @@ p2p::find_closestpred_succ_cb (findpredecessor_cbstate *st,
     warnx << "find_closestpred_succ_cb: failure " << status << "\n";
     st->cb (st->x, st->search_path, status);
   } else {
-    warnx << "find_closestpred_succ_cb: succ of " << st->nprime << " is " << s 
-	  << "\n";
+    //    warnx << "find_closestpred_succ_cb: succ of " << st->nprime << " is " << s 
+    //	  << "\n";
     if (st->nprime == s) {
-      warnx << "find_closestpred_succ_cb: " << s << " is the only Chord node\n";
+      //      warnx << "find_closestpred_succ_cb: " << s << " is the only Chord node\n";
       st->cb (st->nprime, st->search_path, SFSP2P_OK);
     } else if (!between (st->nprime, s, st->x)) {
-      warnx << "find_closestpred_succ_cb: " << st->x << " is not between " 
-	    << st->nprime << " and " << s << "\n";
+      //      warnx << "find_closestpred_succ_cb: " << st->x << " is not between " 
+      //    << st->nprime << " and " << s << "\n";
       sfsp2p_findarg *fap = New sfsp2p_findarg;
       sfsp2p_findres *res = New sfsp2p_findres (SFSP2P_OK);
       fap->x = st->x;
@@ -193,8 +193,8 @@ p2p::find_closestpred_succ_cb (findpredecessor_cbstate *st,
 	     wrap (mkref (this), &p2p::find_closestpred_cb, st->nprime, st->cb, 
 		   res, st->search_path));
     } else {
-      warnx << "find_closestpred_succ_cb: " << st->x << " is between " 
-	    << st->nprime << " and " << s << "\n";
+      //      warnx << "find_closestpred_succ_cb: " << st->x << " is between " 
+      //	    << st->nprime << " and " << s << "\n";
       st->cb (st->nprime, st->search_path, SFSP2P_OK);
     }
   }

@@ -33,6 +33,8 @@ static int wellknownport;
 static sfs_ID wellknownID;
 static str p2psocket;
 dhash *dhs;
+int do_cache;
+str db_name;
 
 void
 doaccept (int fd)
@@ -64,7 +66,9 @@ client_accept (int fd)
   if (fd < 0)
     fatal ("EOF\n");
   ref<axprt_stream> x = axprt_stream::alloc (fd);
-  vNew dhashclient (x);
+  dhashclient *dhc =  New dhashclient (x);
+  dhc->set_caching(do_cache);
+   
 }
 
 
@@ -271,7 +275,7 @@ parseconfigfile (str cf, int index)
   defp2p = New refcounted<p2p> (wellknownhost, wellknownport, wellknownID, 
 				myport, myID);
     //instantiate single dhash object
-  dhs = New dhash();
+  dhs = New dhash(db_name);
 }
 
 static void
@@ -289,7 +293,10 @@ main (int argc, char **argv)
   sfsconst_init ();
   random_init ();
   int ch;
-  while ((ch = getopt (argc, argv, "S:i:f:")) != -1)
+  do_cache = 0;
+  int set_name = 0;
+  
+  while ((ch = getopt (argc, argv, "d:S:i:f:c")) != -1)
     switch (ch) {
     case 'S':
       p2psocket = optarg;
@@ -300,15 +307,25 @@ main (int argc, char **argv)
     case 'f':
       parseconfigfile (optarg, index);
       break;
+    case 'c':
+      do_cache = 1;
+      break;
+    case 'd':
+      db_name = optarg;
+      set_name = 1;
+      break;
     default:
       usage ();
       break;
     }
+
+  if (!set_name) fatal("must specify db name\n");
   if (!defp2p) 
     fatal ("Specify config file\n");
   if (p2psocket) 
     startclntd();
   amain ();
 }
+
 
 

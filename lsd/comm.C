@@ -8,6 +8,10 @@
  *
  */
 
+#ifdef STATS
+chord_stats stats;
+#endif /* STATS */
+
 // creates an array of edges of a fake network
 // stores in int* edges
 // after this function numnodes holds the number
@@ -67,8 +71,10 @@ p2p::timing_cb(aclnt_cb cb, location *l, ptr<struct timeval> start, clnt_stat er
 {
   struct timeval now;
   gettimeofday(&now, NULL);
-  l->total_latency += (now.tv_sec - start->tv_sec)*1000000 + (now.tv_usec - start->tv_usec);
+  long lat = ((now.tv_sec - start->tv_sec)*1000000 + (now.tv_usec - start->tv_usec))/1000;
+  l->total_latency += lat;
   l->num_latencies++;
+  if (lat > l->max_latency) l->max_latency = lat;
   l->nout--;
   (*cb)(err);
 
@@ -195,5 +201,34 @@ p2p::connect_cb (callback<void, ptr<axprt_stream> >::ref cb, int fd)
 }
 
 
+void
+p2p::stats_cb () {
 
+#ifdef STATS
+  warnx << "Chord Node " << myID << " status\n";
 
+  warnx << "Core layer stats\n";
+  warnx << "  Per link avg. RPC latencies\n";
+  location *l = locations.first ();
+  while (l) {
+    warnx << "link " << l->n << "\n";
+    printf("    Average latency: %f\n", ((float)(l->total_latency))/l->num_latencies);
+    printf("    Max latency: %d\n", l->max_latency);
+    l = locations.next(l);
+  }
+
+  warnx << "DHASH layer stats\n";
+#if 0
+  warnx << "   Caching is ";
+  if (do_caching) 
+    warnx << "on\n";
+  else
+    warnx << "off\n";
+#endif
+  warnx << "   " << stats.insert_ops << " insertions\n";
+  printf( "   %f average hops per insert\n", ((float)(stats.insert_path_len))/stats.insert_ops);
+  warnx << "   " << stats.lookup_ops << " lookups\n";
+  printf( "   %f average hops per lookup\n", ((float)(stats.insert_path_len))/stats.insert_ops);
+#endif /* STATS */
+
+}

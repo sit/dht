@@ -1,4 +1,4 @@
-//Last modified by $Author: fdabek $ on $Date: 2001/03/11 18:50:29 $
+//Last modified by $Author: fdabek $ on $Date: 2001/03/22 16:41:19 $
 #include <sfsrosd.h>
 #include "sfsdb.h"
 #include "rxx.h"
@@ -7,7 +7,7 @@
 #include "sfsrodb_core.h"
 
 #ifndef MAINTAINER
-enum { dumptrace = 0 };
+enum { dumptrace = 1 };
 #else /* MAINTAINER */
 const bool dumptrace (getenv ("SFSRO_TRACE"));
 #endif /* MAINTAINER */
@@ -68,14 +68,14 @@ sfsroclient::dispatch (ref<bool> d, svccb *sbp)
       return;
     case SFSPROC_CONNECT:
       {
-	warn << "connect\n";
+	//	warn << "connect\n";
 	sbp->reply (&cres);
 	return;
       }
     case SFSPROC_GETFSINFO:
       {
-	warn << "fsinfo request\n";
-	warn << "root fh is " << hexdump(&fsinfores.sfsro->v1->info.rootfh, 20) << "\n";
+	//	warn << "fsinfo request\n";
+	//	warn << "root fh is " << hexdump(&fsinfores.sfsro->v1->info.rootfh, 20) << "\n";
 	sbp->reply(&fsinfores);
 	return;
       }
@@ -94,8 +94,8 @@ sfsroclient::dispatch (ref<bool> d, svccb *sbp)
 
 	sfs_hash *fh = sbp->template getarg<sfs_hash> ();
 
-#if 0
-	if (dumptrace) {
+
+	if (1) {
 	  u_char *cp = reinterpret_cast<u_char *> (fh->base ());
 	  u_char *lim = cp + fh->size ();
 	  printf ("  { 0x%02x", *cp);
@@ -103,10 +103,8 @@ sfsroclient::dispatch (ref<bool> d, svccb *sbp)
 	    printf (", 0x%02x", *cp);
 	  printf (" },\n");
 	}
-#endif
-	sfsro_datares *res = New sfsro_datares();
 
-	warn << "GETDATA request for " << hexdump(fh, 20) << "\n";
+	sfsro_datares *res = New sfsro_datares();
         db.getdata(fh, res, wrap(this, &sfsroclient::getdata_cb, sbp, res, destroyed));
         return;
       }

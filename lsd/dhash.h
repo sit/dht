@@ -10,6 +10,8 @@
 #include <refcnt.h>
 #include <chord.h>
 #include <qhash.h>
+#include <sys/time.h>
+
 /*
  *
  * dhash.h
@@ -23,15 +25,14 @@ typedef callback<void, dhash_stat>::ptr cbstat;
 
 class dhashclient {
 
-  static const int do_caching = 0;
-
+  int do_caching;
   ptr<axprt_stream> x;
   ptr<asrv> p2pclntsrv;
 
   void dispatch (svccb *sbp);
   void cache_on_path(dhash_insertarg *item, route path);
 
-  void lookup_findsucc_cb (svccb *sbp, sfs_ID *n,  sfs_ID succ, route path, sfsp2pstat err);
+  void lookup_findsucc_cb (svccb *sbp, sfs_ID *n, struct timeval *tp,  sfs_ID succ, route path, sfsp2pstat err);
   void lookup_fetch_cb (svccb *sbp, dhash_res *res, clnt_stat err);
 
   void insert_findsucc_cb (svccb *sbp, dhash_insertarg *item, sfs_ID succ, route path, sfsp2pstat err);
@@ -42,6 +43,8 @@ class dhashclient {
   void search_cb(sfs_ID myTarget, sfs_ID node, sfs_ID target, cbi cb);
   void search_cb_cb (dhash_stat *res, cbi cb, clnt_stat err);
  public:
+  
+  void set_caching(char c) { do_caching = c;};
   dhashclient (ptr<axprt_stream> x);
 };
 
@@ -68,7 +71,7 @@ class dhash {
   qhash<sfs_ID, int, hashID> key_status;
 
  public:
-  dhash ();
+  dhash (str dbname);
   void accept(ptr<axprt_stream> x);
 };
 

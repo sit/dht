@@ -1,17 +1,18 @@
 #include <chord.h>
 #include <dhash.h>
 #include <chord_prot.h>
+#include <sys/time.h>
 
 /*
  * Implementation of the distributed hash service.
  */
 
 dhashclient::dhashclient (ptr<axprt_stream> _x)
-  : x (_x)
+  : x (_x), do_caching (0)
 {
   p2pclntsrv = asrv::alloc (x, dhashclnt_program_1,
 			 wrap (this, &dhashclient::dispatch));
-
+  
 }
 
 void
@@ -33,8 +34,13 @@ dhashclient::dispatch (svccb *sbp)
       if (do_caching)
 	defp2p->registerSearchCallback(wrap(this, &dhashclient::search_cb, *n));
 
+#ifdef STATS
+      timeval *tp = New struct timeval;
+      gettimeofday(tp, NULL);
+#endif /* STATS */
+
       defp2p->dofindsucc (*n, wrap(this, &dhashclient::lookup_findsucc_cb, 
-				   sbp, n));
+				   sbp, n, tp));
     } 
     break;
   case DHASHPROC_INSERT:
@@ -64,8 +70,13 @@ dhashclient::insert_findsucc_cb(svccb *sbp, dhash_insertarg *item,
     sbp->reply(res);
   } else {
 
-    for (unsigned int i = 0; i < path.size (); i++) warnx << path[i] << " ";
-    warnx << "were touched to insert " << item->key << "\n";
+    //    for (unsigned int i = 0; i < path.size (); i++) warnx << path[i] << " ";
+    // warnx << "were touched to insert " << item->key << "\n";
+
+#ifdef STATS
+    stats.insert_path_len += path.size ();
+    stats.insert_ops++;
+#endif /* STATS */
 
     dhash_stat *stat = New dhash_stat ();
     defp2p->doRPC(succ, dhash_program_1, DHASHPROC_STORE, item, stat, 
@@ -92,8 +103,8 @@ void
 dhashclient::cache_on_path(dhash_insertarg *item, route path) 
 {
   for (unsigned int i = 0; i < path.size (); i++) {
-    warn << "caching " << i << " out of " << path.size () << "\n";
-    warn << "item is " << item->key << "\n";
+    //    warn << "caching " << i << " out of " << path.size () << "\n";
+    //warn << "item is " << item->key << "\n";
     item->type = DHASH_CACHE;
     dhash_stat *res = New dhash_stat();
     defp2p->doRPC(path[i], dhash_program_1, DHASHPROC_STORE, item, res,
@@ -108,14 +119,14 @@ dhashclient::cache_store_cb(dhash_stat *res, clnt_stat err)
   if (err) {
     warn << "cache store failed\n";
   } else {
-    warn << "CACHE: propogated item\n";
+    //    warn << "CACHE: propogated item\n";
   }
   delete res;
 
 }
 
 void
-dhashclient::lookup_findsucc_cb(svccb *sbp, sfs_ID *n,
+dhashclient::lookup_findsucc_cb(svccb *sbp, sfs_ID *n, struct timeval *start,
 				sfs_ID succ, route path,
 				sfsp2pstat err) 
 {
@@ -124,9 +135,16 @@ dhashclient::lookup_findsucc_cb(svccb *sbp, sfs_ID *n,
     res->set_status (DHASH_NOENT);
     sbp->reply (res);
   } else {
+
+#ifdef STATS
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    long lat = ((now.tv_sec - start->tv_sec)*1000000 + (now.tv_usec - start->tv_usec))/1000;
+    stats.lookup_path_len += path.size ();
+    stats.lookup_ops++;
+#endif /* STATS */
+
     dhash_res *res = New dhash_res();
-    warnx << "lookup_findsucc_cb: successor of doc " << *n << " is " 
-	  << succ << "\n";
     defp2p->doRPC(succ, dhash_program_1, DHASHPROC_FETCH, n, res, 
 		  wrap(this, &dhashclient::lookup_fetch_cb, sbp, res));
   }
@@ -147,8 +165,6 @@ dhashclient::lookup_fetch_cb(svccb *sbp, dhash_res *res, clnt_stat err)
 void
 dhashclient::search_cb(sfs_ID my_target, sfs_ID node, sfs_ID target, cbi cb) {
 
-  warn << "just asked " << node << " about " << target << "\n";
-  warn << "I'm interested in " << my_target << "\n";
 
   if (my_target == target) {
     dhash_stat *status = New dhash_stat();
@@ -170,7 +186,7 @@ dhashclient::search_cb_cb (dhash_stat *res, cbi cb, clnt_stat err) {
     return;
   } 
   
-  warn << "res was " << *res << "\n";
+  //  warn << "res was " << *res << "\n";
   if (*res == DHASH_PRESENT)
     cb (1);
   else
