@@ -25,6 +25,8 @@
 #include "p2psim/topology.h"
 #include "p2psim/network.h"
 #include "p2psim/parse.h"
+#ifdef HAVE_LIBGB
+
 #include "gtitm.h"
 
 gtitm::gtitm(vector<string> *v)
@@ -84,3 +86,5 @@ gtitm::parse(ifstream &ifs)
     send(Network::Instance()->nodechan(), &n);
   }
 }
+
+#endif

@@ -8,7 +8,7 @@ p2psim_LDADD = p2psim_core.o \
 	       ../observers/observers.o \
 	       ../protocols/protocols.o \
 	       ../topologies/topologies.o \
-               -L/usr/local/lib -lthread -l9 -lfmt -lutf -lgmp -lcrypto -lgb
+               -L/usr/local/lib -lthread -l9 -lfmt -lutf -lgmp -lcrypto $(GBLIBS)
 
 noinst_PROGRAMS = p2psim_core.o
 p2psim_core_o_SOURCES = anyready.C condvar.C p2protocol.C event.C \
@@ -20,7 +20,7 @@ p2psim_core_o_SOURCES = anyready.C condvar.C p2protocol.C event.C \
 		        rpchandle.C threaded.C threadmanager.C \
 		        threadspeedup.C tmgdmalloc.C topology.C \
 		        oldobserver.C oldobserveevent.C
-p2psim_core_o_LIBS =
+p2psim_core_o_LIBS = 
 p2psim_core_o_LINK = $(LD) -r -o $@
 
 include $(top_srcdir)/Makefile.incl
