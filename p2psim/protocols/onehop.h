@@ -27,7 +27,6 @@
 
 #include "p2psim/p2protocol.h"
 #include "consistenthash.h"
-#include "chord.h"
 #include "p2psim/skiplist.h"
 #include <iostream>
 #include <stdio.h>
@@ -36,10 +35,12 @@
 #include <p2psim/network.h>
 
 #define FAILURE_DETECT_RETRY 5
+#define TIMEOUT(src,dst) (Network::Instance()->gettopology()->latency(src,dst)<=1000)?_to_multiplier*2*Network::Instance()->gettopology()->latency(src,dst):1000
 
 #define ALIVE 1
 #define DEAD 0
 
+#define TYPE_USER_LOOKUP 0
 #define ONEHOP_PING 1
 #define ONEHOP_LEADER_STAB 2
 #define ONEHOP_NOTIFY 3
@@ -48,44 +49,17 @@
 
 typedef unsigned long long bw;
 
-class OneHop;
-
-class OneHopLocTable : public LocTable {
-  protected:
-    int _k;
-    int _u;
-    ConsistentHash::CHID slice_size;
-  public:    
-    typedef Chord::IDMap IDMap;
-    ConsistentHash::CHID unit_size;
-    typedef ConsistentHash::CHID CHID;
-    OneHopLocTable(uint k, uint u) : LocTable() {
-    _k = k; //number of slices
-    _u = u; //number of units per slice
-    //slice_size = 0xffffffffffffffff / _k; 
-    slice_size = ((ConsistentHash::CHID)-1)/ _k; 
-    unit_size = slice_size / _u;
-  };
-  ~OneHopLocTable() {};
-  CHID print_slice_size () {return slice_size;}
-  IDMap slice_leader(CHID);
-  IDMap unit_leader(CHID);
-  vector<IDMap> unit_leaders(CHID);
-  CHID slice (CHID node) {return node/slice_size;}  
-  CHID unit (CHID node) {return (node % slice_size)/unit_size;}    
-  bool is_slice_leader(CHID node, CHID exp_leader);
-  bool is_unit_leader(CHID node, CHID exp_leader);
-  bool is_empty (CHID node);
-  bool is_empty_unit (CHID node);
-  void print();
-  IDMap succ (CHID id);
-  IDMap pred (CHID id);
-};
-
-
+class OneHopLocTable;
 
 class OneHop : public P2Protocol {
 public:
+  struct IDMap {
+    ConsistentHash::CHID id;
+    IPAddress ip;
+    static bool cmp(const IDMap& a, const IDMap& b) { return (a.id <= b.id);}
+    bool operator==(const IDMap a) { return (a.id == id); }
+  };
+  typedef ConsistentHash::CHID CHID;
   static long lookups;
   static long failed;
   static long num_nodes;
@@ -122,10 +96,6 @@ public:
   static unsigned debug_node;
   Time last_stabilize;
   
-  typedef Chord::IDMap IDMap;
-  typedef ConsistentHash::CHID CHID;
-  typedef LocTable::idmapwrap idmapwrap;
-  typedef LocTable::idmapcompare idmapcompare;
   int _k;
   int _u;
   
@@ -163,7 +133,6 @@ public:
     bool is_join_complete;
     IDMap leader;
     bool exists;
-    //skiplist<idmapwrap, ConsistentHash::CHID, &idmapwrap::id, &idmapwrap::sortlink_, idmapcompare> ring;
     vector<IDMap> table;
     join_leader_ret(int _k, int _u) {
       exists = false;
@@ -176,6 +145,7 @@ public:
   struct test_inform_dead_args {
     IDMap informed;
     IDMap suspect;
+    bool justdelete; 
   };
   
   struct notifyevent_args {
@@ -205,7 +175,7 @@ public:
   OneHop(IPAddress i, Args& a);
   ~OneHop();
   string proto_name() { return "OneHop";}
-  Chord::IDMap idmap() { return me;}
+  IDMap idmap() { return me;}
   void record_stat(IPAddress src, IPAddress dst, uint type, uint num_ids = 0, uint num_else = 0);
 
   // Functions callable from events file.
@@ -237,9 +207,9 @@ public:
 
   bool is_slice_leader(CHID, CHID);
   bool is_unit_leader(CHID, CHID);
-  Chord::IDMap OneHop::slice_leader(CHID node);
+  IDMap OneHop::slice_leader(CHID node);
   CHID slice (CHID node);
-  Chord::IDMap OneHop::unit_leader(CHID node);
+  IDMap OneHop::unit_leader(CHID node);
   CHID unit (CHID node);
 
   bool inform_dead (IDMap dead, IDMap recv);
@@ -304,6 +274,8 @@ public:
   //void notifyfromslice_handler(notifyevent_args *args, void *ret);
 
 protected:
+  static string printID(CHID id);
+
   OneHopLocTable *loctable;
   uint _to_multiplier; //jy: doRPC suffer from timeout if the dst is dead, the min of this value = 3
   uint _join_scheduled;
@@ -324,6 +296,70 @@ protected:
   IDMap _wkn;
   Time last_join;
 };
+
+class OneHopLocTable {
+  public:    
+    typedef ConsistentHash::CHID CHID;
+    typedef OneHop::IDMap IDMap;
+    CHID unit_size;
+
+    struct ohidmapwrap {
+      IPAddress ip;
+      CHID id;
+      sklist_entry<ohidmapwrap> sortlink_;
+      ohidmapwrap(IPAddress a, CHID b) {
+	ip = a;
+	id = b;
+      }
+    };
+    struct ohidmapcompare{
+      ohidmapcompare() {}
+      int operator() (CHID a, CHID b) const
+      { if (a == b) 
+	  return 0;
+	else if (a < b)
+	  return -1;
+	else 
+	  return 1;
+      }
+    };
+
+    OneHopLocTable(uint k, uint u) {
+      _k = k; //number of slices
+      _u = u; //number of units per slice
+      //slice_size = 0xffffffffffffffff / _k; 
+      slice_size = ((CHID)-1)/ _k; 
+      unit_size = slice_size / _u;
+    };
+
+    CHID print_slice_size () {return slice_size;}
+    IDMap slice_leader(CHID);
+    IDMap unit_leader(CHID);
+    vector<IDMap> unit_leaders(CHID);
+    CHID slice (CHID node) {return node/slice_size;}  
+    CHID unit (CHID node) {return (node % slice_size)/unit_size;}    
+    bool is_slice_leader(CHID node, CHID exp_leader);
+    bool is_unit_leader(CHID node, CHID exp_leader);
+    bool is_empty (CHID node);
+    bool is_empty_unit (CHID node);
+    void print();
+    void del_all();
+    void add_node(IDMap n);
+    void del_node(CHID id);
+    IDMap succ (CHID id);
+    IDMap pred (CHID id);
+    vector<IDMap> get_all();
+
+    ~OneHopLocTable() {del_all();}
+protected:
+    int _k;
+    int _u;
+    CHID slice_size;
+    skiplist<ohidmapwrap, CHID, &ohidmapwrap::id, &ohidmapwrap::sortlink_, ohidmapcompare> ring;
+};
+
+
+
 
 #endif /* __ONEHOP_H */
 

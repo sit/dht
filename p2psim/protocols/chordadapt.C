@@ -176,6 +176,8 @@ ChordAdapt::initstate()
       n = ids[r];
       n.timestamp = now();
       loctable->add_node(n);
+      if (_me.ip == 196) 
+	NDEBUG(4) << "add rand " << n.ip << "," << printID(n.id) << endl;
     }
   }
 
@@ -421,6 +423,22 @@ ChordAdapt::crash(Args *args)
   _stat.clear();
   for (uint i = 0; i < 10; i++)
     _calculated_prob[i] = (1-0.1*i);
+
+  _progress.clear();
+  /*
+  for (HashMap<ConsistentHash::CHID, Time>::iterator i = _sent.begin();
+            i != _sent.end(); ++i) {
+    list<IDMap>* s = (*i).value();
+    if (s)  delete s;
+  }
+  _sent.clear();
+
+  for (HashMap<ConsistentHash::CHID, Time>::iterator i = _dead.begin();
+            i != _dead.end(); ++i) {
+    list<IDMap>* s = (*i).value();
+    if (s)  delete s;
+  }
+  */
 }
 
 /* ------------------------ lookup ----------------------------------*/
@@ -452,15 +470,14 @@ ChordAdapt::lookup(Args *args)
   la.parallelism = _parallelism;
   la.type = TYPE_USER_LOOKUP;
   la.learnsz = _learn_num;
-  //la.deadnodes.clear();
-  la.deadnode.ip = 0;
+  la.deadnodes.clear();
   lr.done = false;
   lr.v.clear();
   lr.is_succ = false;
 
   _outstanding_lookups.insert(la.key, now());
   NDEBUG(2) << "start lookup key " << printID(la.key) << endl;
-  if (1) 
+  if (0) 
     next_recurs(&la,NULL);
   else 
     next_iter(&la,&lr);
@@ -483,31 +500,11 @@ ChordAdapt::next_iter(lookup_args *la, lookup_ret *lr)
     donelookup_handler(la,lr);
     return;
   }else if (lr->done) {
-    _sent.remove(la->src.id|la->key);
-    _progress.remove(la->src.id|la->key);
+        _progress.remove(la->key);
     la->nexthop = _me;
     donelookup_handler(la,lr);
     return;
   }
-
-  //estimate how many hops are left for this lookup
-  /*
-  uint est_n = ((ConsistentHash::CHID) -1 )/ConsistentHash::distance(_me.id,succ.id);
-  est_n *= 2; //give it some slack
-  //loctable->size is fast but not an accurate measure of routing table sz
-  uint est_b = (uint)(loctable->size()/(2*log(est_n)));
-  if (est_b < 2) 
-    est_b = 2;
-  uint est_hops = 0;
-  ConsistentHash::CHID d = ConsistentHash::distance(la->nexthop.id,la->key);
-  while (d > ConsistentHash::distance(_me.id,succ.id)) {
-    d = d/est_b;
-    est_hops++;
-  }
-  if (!est_hops)
-    est_hops = 1;
-  NDEBUG(4) << "next_iter est_hop " << est_hops << endl;
-  */
 
   double ttt;
   int para;
@@ -529,15 +526,24 @@ ChordAdapt::next_iter(lookup_args *la, lookup_ret *lr)
   }
 
   vector<IDMap> nexthops = loctable->preds(la->key, para, LOC_HEALTHY, ttt);
-  ConsistentHash::CHID mostprog = _progress.find(la->src.id|la->key);
-  ConsistentHash::CHID sent = _sent.find(la->src.id|la->key);
-  if (sent && ConsistentHash::between(mostprog,la->key,sent))
-    mostprog = sent;
+  ConsistentHash::CHID mostprog = _progress.find(la->key);
+  list<IDMap> *s = _sent.find(la->key);
+  if (!s) {
+    s = new list<IDMap>;
+    s->clear();
+    _sent.insert(la->key,s);
+  }
+  list<IDMap> *d = _dead.find(la->key);
+  if (!d) {
+    d = new list<IDMap>;
+    d->clear();
+    _dead.insert(la->key,d);
+  }
 
   uint sentout = 0;
   uint i=0,j=0;
   IDMap nh;
-  ConsistentHash::CHID bestsent = mostprog;
+  bool seen;
   while (sentout < para) {
     if (i < nexthops.size()) 
       nh = nexthops[i++];
@@ -545,68 +551,106 @@ ChordAdapt::next_iter(lookup_args *la, lookup_ret *lr)
       nh = lr->v[j++];
     else
       break;
-    if ((!j && (!mostprog || ConsistentHash::between(mostprog,la->key,nh.id)))
-      || ConsistentHash::between(bestsent,la->key,nh.id)) {
-  //  l->push_back(nh.id);
-      lookup_args *lla = new lookup_args;
-      bcopy(la,lla,sizeof(lookup_args));
-      /*
-      for (uint iii = 0; iii < la->deadnodes.size();iii++)
-	lla->deadnodes.push_back(la->deadnodes[i]);
-	*/
-      //lla->deadnodes = la->deadnodes;
-      lla->timeout = ttt;
-      lla->from.alivetime = now() - _last_joined_time;
-      lla->nexthop = nh;
-      lla->hops = la->hops+1;
-      lookup_ret *llr = new lookup_ret;
-      llr->is_succ = false;
-      llr->done = false;
-      llr->v.clear();
-      NDEBUG(4) << " key moha " << printID(la->key) << " to " << nh.ip 
-	<< "," << printID(nh.id) << " dead " 
-	<< lla->deadnode.ip << endl;
-      _rate_queue->do_rpc(nh.ip, &ChordAdapt::next,
-	  &ChordAdapt::next_iter_cb, lla, llr, 0, TYPE_USER_LOOKUP, 
-	  PKT_SZ(1,0), PKT_SZ(0,0),TIMEOUT(_me.ip, nh.ip));
-      sentout++;
-      if (!bestsent || ConsistentHash::between(bestsent,la->key,nh.id))
-	bestsent = nh.id;
+    if (!mostprog || ConsistentHash::between(mostprog,la->key,nh.id)) {
+      seen = false;
+      list<IDMap>::iterator li;
+      for (li = s->begin(); li != s->end(); ++li) {
+	if ((*li).ip == nh.ip) {
+	  seen = true;
+	  break;
+	}else if (ConsistentHash::between((*li).id,la->key,nh.id)) {
+	  break;
+	}
+      }
+      if (!seen) {
+	s->insert(li,nh);
+	lookup_args *lla = new lookup_args;
+	lla->key = la->key;
+	lla->no_drop = la->no_drop;
+        lla->from = la->from;
+	lla->src = la->src;
+	lla->ori = la->ori;
+	lla->m = la->m;
+	lla->parallelism = la->parallelism;
+	lla->type = la->type;
+	lla->learnsz = la->learnsz;
+	lla->to_num = la->to_num;
+	lla->to_lat = la->to_lat;
+
+	lla->timeout = ttt;
+	lla->from.alivetime = now() - _last_joined_time;
+	lla->prevhop = la->nexthop;
+	lla->nexthop = nh;
+	lla->hops = la->hops+1;
+	lla->deadnodes.clear();
+	for (list<IDMap>::iterator di = d->begin(); di != d->end(); ++di) {
+	  if (ConsistentHash::between(nh.id,la->key,(*di).id))
+	    lla->deadnodes.push_back((*di));
+	  else
+	    break;
+	}
+	lookup_ret *llr = new lookup_ret;
+	llr->is_succ = false;
+	llr->done = false;
+	llr->v.clear();
+	NDEBUG(4) << " key moha " << printID(la->key) << " to " << nh.ip 
+	  << "," << printID(nh.id) << " dead " 
+	  << (lla->deadnodes.size()?lla->deadnodes[0].ip:0) << endl;
+	_rate_queue->do_rpc(nh.ip, &ChordAdapt::next,
+	    &ChordAdapt::next_iter_cb, lla, llr, 0, TYPE_USER_LOOKUP, 
+	    PKT_SZ(1+2*lla->deadnodes.size(),0), PKT_SZ(0,0),TIMEOUT(_me.ip, nh.ip));
+	sentout++;
+      }
     }
   }
-  if (bestsent)
-    _sent.insert(la->src.id|la->key,bestsent);
-  uint outstanding =  _forwarded_nodrop.find(la->src.id | la->key);
+  uint outstanding =  _forwarded_nodrop.find(la->key);
 
   NDEBUG(4) << "next_iter key " << printID(la->key) << " mostprog " 
     << printID(mostprog) << " from " << la->nexthop.ip
-  << "," << printID(la->nexthop.id) << " qsz " << _rate_queue->size() 
-  << " bestsent " << printID(bestsent)<< " " << para << "," << _parallelism 
-  << "," << sentout<< "," << outstanding << endl;
+  << "," << printID(la->nexthop.id) << " quota " << _rate_queue->quota() 
+  << "," << para << "," << _parallelism << "," << sentout<< "," << outstanding << endl;
 
   if (!outstanding && !sentout) {
     assert(nexthops.size());
     nh = nexthops[0];
     lookup_args *lla = new lookup_args;
-    bcopy(la,lla,sizeof(lookup_args));
-    //lla->deadnodes = la->deadnodes;
+    lla->key = la->key;
+    lla->no_drop = la->no_drop;
+    lla->from = la->from;
+    lla->src = la->src;
+    lla->ori = la->ori;
+    lla->m = la->m;
+    lla->parallelism = la->parallelism;
+    lla->type = la->type;
+    lla->learnsz = la->learnsz;
+    lla->to_num = la->to_num; 
+    lla->to_lat = la->to_lat;
+
     lla->timeout = ttt;
     lla->from.alivetime = now() - _last_joined_time;
+    lla->prevhop = la->nexthop;
     lla->nexthop = nh;
     lla->hops = la->hops+1;
+    lla->deadnodes.clear();
+    for (list<IDMap>::iterator di = d->begin(); di != d->end(); ++di) {
+      if (ConsistentHash::between(nh.id,la->key,(*di).id))
+	lla->deadnodes.push_back((*di));
+      else
+	break;
+    }
     lookup_ret *llr = new lookup_ret;
     llr->is_succ = false;
     llr->done = false;
     llr->v.clear();
     NDEBUG(4) << " key resend " << printID(la->key) << " to " << nh.ip 
       << "," << printID(nh.id) << " dead " 
-      << lla->deadnode.ip << endl;
+      << (lla->deadnodes.size()?lla->deadnodes[0].ip:0) << endl;
     _rate_queue->do_rpc(nh.ip, &ChordAdapt::next,
 	&ChordAdapt::next_iter_cb, lla, llr, 0, TYPE_USER_LOOKUP, 
-	PKT_SZ(1,0), PKT_SZ(0,0),TIMEOUT(_me.ip, nh.ip));
+	PKT_SZ(1+2*lla->deadnodes.size(),0), PKT_SZ(0,0),TIMEOUT(_me.ip, nh.ip));
     sentout++;
   }
-  _forwarded_nodrop.insert(la->src.id|la->key,outstanding+sentout);
+  _forwarded_nodrop.insert(la->key,outstanding+sentout);
 }
 
 void
@@ -615,11 +659,8 @@ ChordAdapt::next(lookup_args *la, lookup_ret *lr)
   loctable->update_ifexists(la->from,0);
   la->nexthop.alivetime = now() - _last_joined_time;
 
-  if (la->deadnode.ip) {
-    NDEBUG(4) << " key " << printID(la->key) << " from " << la->from.ip << " del " << 
-      la->deadnode.ip << "," << printID(la->deadnode.id) << endl;
-    loctable->del_node(la->deadnode,true);
-  }
+  for (uint i = 0; i < la->deadnodes.size(); i++) 
+    loctable->del_node(la->deadnodes[i]);
 
   IDMap succ = loctable->succ(_me.id+1);
   if (ConsistentHash::between(_me.id,succ.id,la->key)) {
@@ -629,79 +670,181 @@ ChordAdapt::next(lookup_args *la, lookup_ret *lr)
   } else {
     assert(la->nexthop.ip == _me.ip);
     if (!_fixed_stab_int) 
-      lr->v = loctable->preds(la->key, 
-	  _rate_queue->critical()?1:la->learnsz, LOC_HEALTHY, la->timeout);
+      //lr->v = loctable->next_close_hops(la->key, la->learnsz, la->from, la->timeout);
+      lr->v = loctable->preds(la->key, la->learnsz, LOC_HEALTHY, la->timeout);
     else
+
       lr->v = loctable->preds(la->key, la->learnsz, 
 	  LOC_HEALTHY, _fixed_stab_to);
   }
+
+  NDEBUG(4) << " KEY " << printID(la->key) << " from " << la->from.ip << " dead " << 
+      (la->deadnodes.size()?la->deadnodes[0].ip:0) << " next " << (lr->v.size()>0?lr->v[0].ip:0) 
+      << "," << printID((lr->v.size()?lr->v[0].id:0)) << 
+      " succ " << succ.ip << "," << printID(succ.id) << 
+      " locsz " << loctable->live_size(la->timeout) << endl;
 }
 
 int
 ChordAdapt::next_iter_cb(bool b, lookup_args *la, lookup_ret *lr)
 {
   int ret_sz = 0;
+  uint outstanding =  _forwarded_nodrop.find(la->key);
+  outstanding--;
   if (alive()) {
     Time delta = now()-la->nexthop.timestamp;
     if (delta < la->nexthop.alivetime && delta > 5000)
       add_stat((double)(la->nexthop.alivetime-delta)/(double)(la->nexthop.alivetime), b);
     la->nexthop.timestamp = now();
-    if ((b) && (la->nexthop.ip!=_me.ip)){
-      /*
-      if ((lr->is_succ) && (lr->v.size() > 0)){
-	loctable->update_ifexists(la->nexthop,ConsistentHash::distance(la->nexthop.id,lr->v[lr->v.size()-1].id));
-	vector<IDMap> oldlist = loctable->between(la->nexthop.id+1,lr->v[lr->v.size()-1].id);
-	consolidate_succ_list(la->nexthop,oldlist,lr->v,false);
-	vector<IDMap> newlist = loctable->between(la->nexthop.id+1,lr->v[lr->v.size()-1].id);
-	NDEBUG(4) << "next_recurs_cb After consolidate: " << print_succs(newlist) << endl;
-//	for (uint i = 1; i < lr->v.size(); i++) 
-//	  loctable->update_ifexists(lr->v[i-1],lr->v[i].ip);
-      } else {
-      */
-	loctable->update_ifexists(la->nexthop,0);
-	for (uint i = 0; i < lr->v.size(); i++)  {
-	  /*
-	  IDMap xx = loctable->succ(lr->v[i].id,LOC_HEALTHY);
-	  if (xx.ip == lr->v[i].ip && xx.timestamp < lr->v[i].timestamp && lr->v[i].timestamp - xx.timestamp > 5000)
-	    add_stat((double)xx.alivetime/(double)(lr->v[i].timestamp - xx.timestamp+xx.alivetime), true);
-	    */
+    if ((b) && (la->nexthop.ip!=_me.ip)) {
+      	loctable->update_ifexists(la->nexthop,0);
+	for (uint i = 0; i < lr->v.size(); i++)  
 	  loctable->add_node(lr->v[i]);
-	}
-      //}
       NDEBUG(4) << "next_iter_cb key " << printID(la->key) << "src " 
 	<< la->src.ip << " ori " << la->ori.ip << " from " << la->nexthop.ip
 	<< "," << printID(la->nexthop.id) << " learnsz " << la->learnsz << " learnt " << lr->v.size() << ": " 
-	<< print_succs(lr->v) << " nodes " << printID(lr->v.size()?lr->v[0].id:0) << ","<<lr->v[0].alivetime
-	<<","<< (now()-lr->v[0].timestamp) << " overshoot " << printID(la->overshoot) << " locsz " 
+	<< print_succs(lr->v) << " outstanding " << outstanding << " locsz " 
 	<< loctable->size(LOC_HEALTHY,0.9) << " livesz " << loctable->live_size(0.9) << " done? " << (lr->done?1:0)<< endl;
       ret_sz = PKT_SZ(2*lr->v.size(),0);
+      /*
+      if ((la->prevhop.ip!=_me.ip) && lr->v.size() > 0) {
+	alert_args *aa = new alert_args;
+	aa->v.clear();
+	aa->dn.ip = 0;
+	for (uint i = 0; i < lr->v.size(); i++) 
+	  aa->v.push_back(lr->v[i]);
+	_rate_queue->do_rpc(la->prevhop.ip, &ChordAdapt::alert_nodes,
+	           &ChordAdapt::alert_cb, aa, (lookup_ret *)NULL, 0, TYPE_USER_LOOKUP,
+		           PKT_SZ(2*lr->v.size(),0), PKT_SZ(0,0),TIMEOUT(_me.ip, la->prevhop.ip));
+      }
+      */
     } else {
       la->to_num++;
       la->to_lat += TIMEOUT(_me.ip, la->nexthop.ip);
-      if (!la->deadnode.ip || ConsistentHash::between(la->deadnode.id,la->key,la->nexthop.id)) 
-	la->deadnode = la->nexthop;
       loctable->del_node(la->nexthop);
-      ConsistentHash::CHID bestsent = _sent.find(la->src.id|la->key);
-      if (bestsent == la->nexthop.id)
-	_sent.remove(la->src.id|la->key);
       ret_sz = 0;
+      list<IDMap> *d = _dead.find(la->key);
+      assert(d);
+      if (d) {
+	list<IDMap>::iterator di;
+	for (di = d->begin(); di!=d->end();++di) {
+	  if (ConsistentHash::between((*di).id,la->key,la->nexthop.id)) {
+	    d->insert(di,la->nexthop);
+	    break;
+	  }
+	}
+	if (di == d->end())
+	  d->push_back(la->nexthop);
+      }
       NDEBUG(4) << "next_iter_cb key " << printID(la->key) << "src " 
 	<< la->src.ip << " ori " << la->ori.ip << " from " << la->nexthop.ip
-	<< "," << printID(la->nexthop.id) << " dead " << endl;
+	<< "," << printID(la->nexthop.id) << " DEAD " << (d?d->size():0) << endl;
+/*
+      if (la->prevhop.ip!=_me.ip) {
+	alert_args *aa = new alert_args;
+	aa->v.clear();
+	aa->dn = la->nexthop;
+	_rate_queue->do_rpc(la->prevhop.ip, &ChordAdapt::alert_nodes,
+	    &ChordAdapt::alert_cb, aa, (lookup_ret *)NULL, 0, TYPE_USER_LOOKUP,
+	    PKT_SZ(2,0), PKT_SZ(0,0),TIMEOUT(_me.ip, la->prevhop.ip));
+      }
+      */
     }
-    uint outstanding =  _forwarded_nodrop.find(la->src.id | la->key);
-    outstanding--;
-    _forwarded_nodrop.insert(la->src.id|la->key,outstanding);
-    ConsistentHash::CHID prog = _progress.find(la->src.id|la->key);
-    if (b && (!prog || ConsistentHash::between(prog,la->key,la->nexthop.id))) { 
-      _progress.insert(la->src.id|la->key,la->nexthop.id);
-      next_iter(la,lr);
-    }else if (!outstanding &&  _outstanding_lookups.find(la->key)) 
-      next_iter(la,lr);
+    Time t = _outstanding_lookups.find(la->key);
+    if (outstanding)
+      _forwarded_nodrop.insert(la->key,outstanding);
+    else
+      _forwarded_nodrop.remove(la->key);
+    if (t) {
+      ConsistentHash::CHID prog = _progress.find(la->key);
+      if (b && (!prog || ConsistentHash::between(prog,la->key,la->nexthop.id))) { 
+	_progress.insert(la->key,la->nexthop.id);
+	next_iter(la,lr);
+      }else if (!outstanding &&  _outstanding_lookups.find(la->key)) 
+	next_iter(la,lr);
+    }
+    outstanding = _forwarded_nodrop.find(la->key);
+    if (!outstanding) 
+      alert_lookup_nodes(la->key,la->timeout);
   }
   delete la;
   if (lr) delete lr;
   return ret_sz;
+}
+
+void
+ChordAdapt::alert_lookup_nodes(ConsistentHash::CHID key, Time to)
+{
+  list<IDMap> *s = _sent.find(key);
+  if (!s) return;
+  list<IDMap> *dd = _dead.find(key);
+
+  vector<IDMap> v;
+  v.clear();
+  while (s->size()) {
+    if (dd->size() && s->front().ip == dd->front().ip) {
+      s->pop_front();
+      dd->pop_front();
+    }else if (!dd->size() 
+	|| ConsistentHash::between(dd->front().id,key,s->front().id)) {
+      v.push_back(s->front());
+      s->pop_front();
+    }else 
+      dd->pop_front();
+  }
+  //if (_rate_queue->critical()) return;
+
+  //vector<IDMap> v = loctable->preds(key, _learn_num, LOC_HEALTHY, to);
+
+  for (list<IDMap>::iterator i = s->begin(); i != s->end(); ++i) {
+    alert_args *la = new alert_args;
+    la->v.clear();
+    for (uint j = 0; j < v.size(); j++) 
+      la->v.push_back(v[j]);
+    la->d.clear();
+    la->k = key;
+    la->src = _me;
+    for (list<IDMap>::iterator jj = dd->begin(); jj!=dd->end();++jj)
+      la->d.push_back(*jj);
+    _rate_queue->do_rpc((*i).ip, &ChordAdapt::alert_nodes,
+	&ChordAdapt::alert_cb, la, (lookup_ret *)NULL, 0, TYPE_USER_LOOKUP,
+	PKT_SZ(2*(la->v.size()+la->d.size()),0), 
+	PKT_SZ(0,0),
+	TIMEOUT(_me.ip, (*i).ip)); 
+  }
+
+  if (s) {
+    delete s;
+    _sent.remove(key);
+  }
+  if (dd) {
+    delete dd;
+    _dead.remove(key);
+  }
+}
+
+void
+ChordAdapt::alert_nodes(alert_args *la, lookup_ret *lr)
+{
+  NDEBUG(4) << " alert_nodes key " << printID(la->k) << " " 
+    << print_succs(la->v) << " " << 
+    la->src.ip << " dead " << print_succs(la->d) << endl;
+  for (uint i = 0; i < la->v.size(); i++) {
+    if (la->v[i].ip == 0) 
+      NDEBUG(4) << " wierd " << endl;
+    loctable->add_node(la->v[i]);
+  }
+
+  for (uint i = 0; i < la->d.size(); i++) 
+    loctable->del_node(la->d[i]);
+}
+
+int
+ChordAdapt::alert_cb(bool b, alert_args *la, lookup_ret *lr)
+{
+  if (la)
+    delete la;
+  return 0;
 }
 
 /* ------------------------ lookup (recursive) ----------------------- */
@@ -880,7 +1023,7 @@ ChordAdapt::next_recurs(lookup_args *la, lookup_ret *lr)
   }
 
   //vector<IDMap> nexthops = loctable->preds(la->key, para, LOC_HEALTHY, ttt);
-  vector<IDMap> nexthops = loctable->next_close_hops(la->key, para, ttt);
+  vector<IDMap> nexthops = loctable->next_close_hops(la->key, para, _me,ttt);
 
   if (_fixed_stab_int)
     ttt = _fixed_stab_to;
@@ -1347,6 +1490,7 @@ ChordAdapt::learn_handler(learn_args *la, learn_ret *lr)
       lr->is_succ = false;
     }
   }
+  NDEBUG(4) << "learn_handler from src " << la->src.ip << " nodes " << print_succs(lr->v) << endl;
 }
 
 int

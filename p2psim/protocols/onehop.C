@@ -29,14 +29,13 @@
  * to fix(?) currently failure_detection is done with the failure of one packet
  */
 #include "onehop.h"
-#include "chord.h"
 #include "consistenthash.h"
 #include "observers/onehopobserver.h"
 #include <iostream>
 
 #define TESTPRINT(me,he,tag) if (me.ip==1159 && he.ip==2047) printf("WUWU now %llu tag %s\n", now(),tag);
 
-#define DEBUG_MSG(n,msg,s) if (n.ip == OneHop::debug_node) printf("%llu %u,%qx %s knows debug from sender %u,%qx\n",now(), me.ip, me.id, msg, s.ip, s.id);
+#define DEBUG_MSG(n,msg,s) if (p2psim_verbose && n.ip == OneHop::debug_node) printf("%llu %u,%qx %s knows debug from sender %u,%qx\n",now(), me.ip, me.id, msg, s.ip, s.id);
 
 #define MAX_IDS_MSG 295
 #define MAX_LOOKUP_TIME 4000
@@ -84,11 +83,9 @@ OneHop::OneHop(IPAddress i , Args& a) : P2Protocol(i)
   //number of units -- must be an odd number
   _u = a.nget<uint>("units",5,10);
   loctable = New OneHopLocTable(_k, _u);
-  loctable->size();
-  loctable->set_timeout(0); //no timeouts on loctable entries
   me.id = id();
   me.ip = ip();
-  loctable->init(me);
+  loctable->add_node(me);
   retries = 0; 
   _stab_timer = a.nget<uint>("stab",1000,10);
   leader_log.clear();
@@ -109,6 +106,7 @@ OneHop::OneHop(IPAddress i , Args& a) : P2Protocol(i)
   if (me.ip == 1)
     OneHop::sliceleader_bw_avg.clear();
   last_stabilize = 0;
+  _wkn.ip = 0;
 }
 
 void
@@ -135,21 +133,24 @@ OneHop::check_correctness(CHID k, IDMap n)
   IDMap tmp;
   tmp.id = k;
   uint idsz = ids.size();
-  uint pos = upper_bound(ids.begin(), ids.end(), tmp, Chord::IDMap::cmp) - ids.begin();
+  uint pos = upper_bound(ids.begin(), ids.end(), tmp, OneHop::IDMap::cmp) - ids.begin();
+  if (now() == 4227297 && n.ip == 504)
+    fprintf(stderr,"shit!\n");
   while (1) {
     if (pos >= idsz) pos = 0;
+    IDMap hehe = ids[pos];
     if (Network::Instance()->alive(ids[pos].ip))
       break;
     pos++;
   }
-  if (ids[pos].ip == n.ip) {
-    if (n.ip == OneHop::debug_node)
-      printf("now %llu %u,%qx key %qx find correct node %u,%qx\n", now(),me.ip, me.id, k,n.ip, n.id);
+  DEBUG(4) << now() << ":" << ip() << "," << printID(id())
+  << ":key " << printID(k) << " correct? " 
+    << (ids[pos].ip==n.ip?1:0) << " reply " << n.ip << "," << printID(n.id)
+    << " real " << ids[pos].ip << "," << printID(ids[pos].id) << endl;
+  if (ids[pos].ip == n.ip) 
     return true;
-  } else {
-    //printf("now %llu key %qx correct ip %u,%qx wrong ip %u,%qx\n", now(), k, ids[pos].ip, ids[pos].id, n.ip,n.id);
+  else 
     return false;
-  }
 }
 
 void
@@ -181,8 +182,9 @@ OneHop::lookup_internal(lookup_internal_args *la)
   }
 
   if (!_join_complete) {
-    DEBUG(1) << me.ip << ": failed at time "<<now()<< "coz join is incomplete last_join time " << last_join << endl;
-    delaycb(100, &OneHop::lookup_internal, la);
+    DEBUG(1) << now() << ":" << me.ip << ","<< printID(me.id) 
+      << ": failed at time "<<now()<< "coz join is incomplete last_join time " << last_join << endl;
+    delaycb(1000, &OneHop::lookup_internal, la);
     /*
     record_lookup_stat(me.ip, me.ip, now()-la->start_time, false, false,
 	la->hops,la->timeouts,la->timeout_lat);
@@ -221,10 +223,11 @@ OneHop::lookup_internal(lookup_internal_args *la)
     }else{
       la->timeouts++;
       la->timeout_lat += TIMEOUT(me.ip, succ_node.ip);
-      loctable->del_node(succ_node);
+      loctable->del_node(succ_node.id);
       test_inform_dead_args *aa = new test_inform_dead_args;
       aa->suspect= succ_node;
       aa->informed = me;
+      aa->justdelete = true;
       delaycb(0,&OneHop::test_dead_inform,aa);
       return;
     }
@@ -251,7 +254,7 @@ OneHop::lookup_internal(lookup_internal_args *la)
     delete la;
     return;
     */
-    delaycb(100,&OneHop::lookup_internal, la);
+    delaycb(1000,&OneHop::lookup_internal, la);
   }
 }
 
@@ -370,7 +373,8 @@ OneHop::lookup_handler(lookup_args *a, lookup_ret *r) {
   IDMap succ_node = loctable->succ(a->sender.id);
   if (succ_node.id != a->sender.id) {
       if (!alive()) return;
-      DEBUG(5) << ip() << ":Found new node " << a->sender.ip << " via lookup\n";
+      DEBUG(5) << now() << ":" << ip() << "," << printID(id()) 
+	<< ":Found new node " << a->sender.ip << " via lookup\n";
       DEBUG_MSG(a->sender,"lookup_handler",a->sender);
       loctable->add_node(a->sender);
       LogEntry *e = new LogEntry(a->sender, ALIVE, now());
@@ -396,22 +400,20 @@ OneHop::join(Args *args)
   OneHopObserver::Instance(NULL)->addnode(me); //jy
   last_join = now();
   //jy: get a random alive node from observer
-  IDMap wkn;
-  wkn.ip = me.ip;
-  while (wkn.ip == me.ip)
-    wkn = OneHopObserver::Instance(NULL)->get_rand_alive_node();
+  while (!_wkn.ip || _wkn.ip == me.ip)
+    _wkn = OneHopObserver::Instance(NULL)->get_rand_alive_node();
  
   if (ip() == OneHop::debug_node) 
-    DEBUG(0) << now() << ": ip " << me.ip << " id "<< me.id << " start to join  wkn " << wkn.ip << endl;
-  loctable->init(me);
+    DEBUG(0) << now() << ":" << me.ip << ","<< printID(me.id) << " start to join  wkn " << _wkn.ip << endl;
+  loctable->add_node(me);
 
   if (args && args->nget<uint>("first",0,10)==1) { //jy: a dirty hack, one hop does not like many nodes join at once
     _join_complete = true;
     delaycb(_stab_timer/2, &OneHop::stabilize, (void *)0);
-  }else if (wkn.ip != ip()) {
+  }else if (_wkn.ip != ip()) {
     IDMap fr;
-    fr.id = wkn.id;
-    fr.ip = wkn.ip;
+    fr.id = _wkn.id;
+    fr.ip = _wkn.ip;
     join_leader(fr, fr, args);
   }
   else { 
@@ -425,7 +427,7 @@ OneHop::join(Args *args)
   //who is my successor?
   if (alive()) {
     IDMap succ_node = loctable->succ(me.id+1);
-    DEBUG(1) << now() << ": ip " << me.ip << " id " << me.id << " succ_ip " 
+    DEBUG(1) << now() << ":" << me.ip << "," << printID(me.id) << " succ_ip " 
       << succ_node.ip << " succ_id " << succ_node.id << " join_complete " << _join_complete<< endl;
   }
 }
@@ -487,7 +489,7 @@ void
 OneHop::crash(Args *args) 
 {
   OneHopObserver::Instance(NULL)->delnode(me);
-  DEBUG(1) << now() << ": ip " << me.ip << " id "<< me.id << " crashed" << endl;
+  DEBUG(1) << now() << ":" << me.ip << ","<< printID(me.id) << " crashed" << endl;
   if (is_slice_leader(me.id, me.id)) {
     DEBUG(1) << " -- Slice leader\n";
     if (join_time > 0 && Node::collect_stat() && ((now()-join_time) > 180000)) {
@@ -517,14 +519,17 @@ OneHop::crash(Args *args)
   loctable->del_all();
   leader_log.clear();
   outer_log.clear();
+  low_to_high.clear();
+  high_to_low.clear();
   _join_complete = false;
+  _wkn.ip = 0;
 }
 
 void
 OneHop::join_leader(IDMap la, IDMap sender, Args *args) {
 
   IPAddress leader_ip = la.ip;
-  DEBUG(1) << now() << ": ip " << ip() << " id " << id() << " joining " << leader_ip << " in slice " << slice(id()) << endl;
+  DEBUG(1) << now() << ":" << ip() << "," << printID(id()) << " joining " << leader_ip << " in slice " << slice(id()) << endl;
   assert(leader_ip);
   join_leader_args ja;
   join_leader_ret* jr = new join_leader_ret (_k, _u);
@@ -544,7 +549,7 @@ OneHop::join_leader(IDMap la, IDMap sender, Args *args) {
   }
   bool tmpok = false;
   if (ok && !jr->is_join_complete) {
-    DEBUG(1) << now()<< ": ip " << ip() << " the leader " << leader_ip << " is still in the join process\n"; 
+    DEBUG(1) << now()<< ":" << ip() << "," << printID(id()) << " the leader " << leader_ip << " is still in the join process\n"; 
     ok = false;
     tmpok = true;
   }
@@ -565,13 +570,14 @@ OneHop::join_leader(IDMap la, IDMap sender, Args *args) {
       leader_log.push_back(*e);
       delete e;
       
-      DEBUG(1) << ip() <<":Joined successfully" << endl;
+      DEBUG(1) << now() << ":" << ip() <<"," << printID(id()) << ":Joined successfully" << endl;
       stabilize ((void *)0);   
     }
     else {
       //should contain updated slice leader info
       IDMap new_leader = jr->leader;
-      DEBUG(1) << now() << ": ip " << ip() << " join_leader again" << endl;
+      DEBUG(1) << now() << ":" << ip() << "," <<  printID(id()) 
+	<< " join_leader new " << new_leader.ip << "," << printID(id()) << endl;
       join_leader(new_leader, la, args);
     }
   }
@@ -582,16 +588,19 @@ OneHop::join_leader(IDMap la, IDMap sender, Args *args) {
     //node is really dead, not just in the process of joining,
     //inform redirecting node
     if (!tmpok) {
-      DEBUG(5) << ip() << ":" << leader_ip << "failed, repeating.\n"; 
-      DEBUG(5) << ip() << ":" << "Informing " << sender.ip << " that " << leader_ip << " has failed\n";
+      DEBUG(4) << now() << ":" << ip() << "," <<  printID(id()) 
+	<< ": " << leader_ip << "failed repeating informing " << sender.ip 
+	<< " that " << leader_ip << " has failed " << endl;
 
       //dead_ok = inform_dead (la, sender);
       test_inform_dead_args *aa = new test_inform_dead_args;
+      aa->justdelete = false;
       aa->suspect = la;
       aa->informed = sender;
       delaycb(0,&OneHop::test_dead_inform,aa);
     }
-    DEBUG(1) << now() << ": ip " << ip() << " rescheduling join" << endl;
+    DEBUG(1) << now() << ":" << ip() << "," <<  printID(id()) 
+      << "rescheduling join" << endl;
     delaycb (_retry_timer, &OneHop::join, (Args *)0);
   }
   delete jr;
@@ -603,7 +612,8 @@ OneHop::join_handler(join_leader_args *args, join_leader_ret *ret)
   CHID node = args->key;
   //contacted looks into loctable and checks if it is the correct leader
   //or if there is no correct leader
-  DEBUG(3) << ip() << ": Contacted by " << args->ip << " for join\n";
+  DEBUG(3) << now() << ":" << ip() << "," <<  printID(id()) 
+    << ": Contacted by " << args->ip << " for join\n";
   if (!_join_complete) {
     ret->is_join_complete = false;
     return;
@@ -620,21 +630,24 @@ OneHop::join_handler(join_leader_args *args, join_leader_ret *ret)
     LogEntry *e = new LogEntry(newnode, ALIVE, now());
     leader_log.push_back(*e);
     delete e;
-    DEBUG(3) << ip() << ":accepting " << newnode.ip << " for join\n";
+    DEBUG(3) << now() << ":" << ip() << "," <<  printID(id()) << ":accepting " << newnode.ip << " for join\n";
   }
   else {
     ret->is_slice_leader = false;
     ret->leader = slice_leader(node);
-    DEBUG(3) << ip() << ":not slice leader, not empty, so redirecting "<< args->ip << " to " << (ret->leader).ip <<endl;
+    DEBUG(3) << now() << ":" << ip() << "," <<  printID(id()) 
+      << ":not slice leader, not empty, so redirecting "<< args->ip << " to " << (ret->leader).ip <<endl;
   }
 }
 
 OneHop::~OneHop() {
 
   if (alive() && _join_complete) {
-    DEBUG(1) << ip() << ":In slice " << slice(id()) << endl;
+    DEBUG(1) << now() << ":" << ip() << "," <<  printID(id())
+      <<":In slice " << slice(id()) << endl;
     if (is_slice_leader(me.id, me.id)) {
-      DEBUG(1) << ip() << ":Slice leader of slice " << slice(me.id) << endl;
+      DEBUG(1) << now() << ":" << ip() << "," <<  printID(id()) 
+	<< ":Slice leader of slice " << slice(me.id) << endl;
     }
   }
   if (me.ip == 1) {
@@ -665,7 +678,8 @@ OneHop::stabilize(void* x)
   if (!_join_complete) return;
 
   
-  DEBUG(1) << now() << ": " << ip() << " stabilize last " << last_stabilize << " slice leader " 
+  DEBUG(1) << now() << ":" << ip() << "," <<  printID(id())
+    <<" stabilize last " << last_stabilize << " slice leader " 
     << slice(id()) << " unit leader " << unit(id()) << endl;
   last_stabilize = now();
   /*
@@ -723,6 +737,8 @@ OneHop::stabilize(void* x)
 	ONEHOP_PING, piggyback.log.size());
     if (ok) record_stat(succ.ip,me.ip,ONEHOP_PING,0,1);
 
+    DEBUG(4) << now() << ":" << ip() << "," << printID(me.id) 
+      << " succ " << succ.ip << "," << printID(succ.id) << " ok? " << (ok?1:0) << endl;
     if (!alive()) return;
    
     //very ugly hack to fix accouting -- clean up 
@@ -740,8 +756,9 @@ OneHop::stabilize(void* x)
 
     if (!ok) {
       if (me.id != succ.id)
-      loctable->del_node(succ);
-      DEBUG(5) << ip() <<":PING! Informing " << slice_leader(me.id).ip <<" that successor "<< succ.ip << " is dead\n";
+      loctable->del_node(succ.id);
+      DEBUG(5) << now() << ":" << ip() << "," <<  printID(id())
+	<<":PING! Informing " << slice_leader(me.id).ip <<" that successor "<< succ.ip << " is dead\n";
       LogEntry *e = new LogEntry(succ, DEAD, now());    
       na.log.push_back(*e);
       piggyback.log.push_back(*e);
@@ -749,7 +766,7 @@ OneHop::stabilize(void* x)
     } 
     else if (!gr.has_joined) {
       if (me.id != succ.id)
-        loctable->del_node(succ);
+        loctable->del_node(succ.id);
     }
     ok = ok && gr.has_joined;
     //if (ok && (!gr.correct))
@@ -769,6 +786,8 @@ OneHop::stabilize(void* x)
   ok = false;
   while (!ok) {
     IDMap pred = loctable->pred(me.id-1);
+    DEBUG(4) << now() << ":" << ip() << "," <<  printID(id())
+      << " pred " << pred.ip << "," << printID(pred.id) << " ok? " << (ok?1:0) << endl;
     general_ret gr;
     piggyback.up = 0; 
     bw data = 20+ 4*piggyback.log.size();
@@ -791,8 +810,9 @@ OneHop::stabilize(void* x)
     }
     if (!ok) {
       if (me.id != pred.id)
-      loctable->del_node(pred);
-      DEBUG(5) << ip() <<":PING! Informing " << slice_leader(me.id).ip << " that predecessor "<< pred.ip << " is dead\n";
+      loctable->del_node(pred.id);
+      DEBUG(5) << now() << ":" << ip() << "," <<  printID(id())
+	<<":PING! Informing " << slice_leader(me.id).ip << " that predecessor "<< pred.ip << " is dead\n";
       LogEntry *e = new LogEntry(pred, DEAD, now());
       na.log.push_back(*e);
       piggyback.log.push_back(*e);
@@ -800,7 +820,7 @@ OneHop::stabilize(void* x)
     }
     else if (!gr.has_joined) {
       if (me.id != pred.id)
-      loctable->del_node(pred);
+      loctable->del_node(pred.id);
     }
     ok = ok && gr.has_joined;
     //if (ok && (!gr.correct))
@@ -816,7 +836,8 @@ OneHop::stabilize(void* x)
       IDMap sliceleader = loctable->slice_leader(me.id);
       general_ret gr;
 
-      DEBUG(1) << ip() << ":stabilize time "<< now() << " notifyevent log sz " <<  na.log.size() << "to sliceleader "<<sliceleader.ip << endl;
+      DEBUG(1) << now() << ":" << ip() << "," << printID(id())
+	<< " stabilize "<< " notifyevent log sz " <<  na.log.size() << "to sliceleader "<<sliceleader.ip << endl;
       ok = fd_xRPC(sliceleader.ip, &OneHop::notifyevent_handler,&na,&gr, 
 	  ONEHOP_NOTIFY,na.log.size());
       if (ok) record_stat(sliceleader.ip,me.ip,ONEHOP_NOTIFY,0,1);
@@ -827,13 +848,14 @@ OneHop::stabilize(void* x)
         LogEntry *e = new LogEntry(sliceleader, DEAD, now());
         na.log.push_back(*e);
         if (me.id != sliceleader.id)
-        loctable->del_node(sliceleader);
-        DEBUG(5) << ip() <<":PING! Informing " << slice_leader(me.id).ip << " that old slice leader "<< sliceleader.ip << " is dead\n";
+        loctable->del_node(sliceleader.id);
+        DEBUG(5) << now() << ":" << ip() <<"," << printID(id())
+	  <<":PING! Informing " << slice_leader(me.id).ip << " that old slice leader "<< sliceleader.ip << " is dead\n";
         delete e;
       } 
       else if (!gr.has_joined) {
       if (me.id != sliceleader.id)
-        loctable->del_node(sliceleader);
+        loctable->del_node(sliceleader.id);
       }
       ok = ok && gr.has_joined;
       if (ok) { 
@@ -908,12 +930,13 @@ OneHop::leader_stabilize(void *x)
         delete e;
 
         if (me.id != succ.id)
-          loctable->del_node(succ);
+          loctable->del_node(succ.id);
       }
       if (ok && !gr.has_joined) {
-        DEBUG(5) << ip() << "Sending to an incompletely joined node\n";
+        DEBUG(5) << now() << ":" << ip() << "," << printID(id())
+	  << "Sending to an incompletely joined node\n";
         if (me.id != succ.id)
-          loctable->del_node(succ);
+          loctable->del_node(succ.id);
 
       }
     }
@@ -946,12 +969,13 @@ OneHop::leader_stabilize(void *x)
         send_unit.log.push_back(*e);
         delete e;
         if (me.id != pred.id)
-          loctable->del_node(pred);
+          loctable->del_node(pred.id);
       }
       if (ok && !gr.has_joined) {
-        DEBUG(5) << ip() << "Sending to an incompletely joined node\n";
+        DEBUG(5) << now() << ":" << ip() << "," << printID(id())
+	  << "Sending to an incompletely joined node\n";
         if (me.id != pred.id)
-          loctable->del_node(pred);
+          loctable->del_node(pred.id);
       }
     }
 
@@ -971,11 +995,11 @@ OneHop::leader_stabilize(void *x)
        LogEntry *e = new LogEntry(all_nodes[i], DEAD, now());
        leader_log.push_back(*e);
        send_unit.log.push_back(*e);
-       loctable->del_node(all_nodes[i]);
+       loctable->del_node(all_nodes[i],true);
        }
        if (ok && !gr.has_joined) {
        DEBUG(1) << ip() << "Sending to an incompletely joined node\n";
-       loctable->del_node(all_nodes[i]);
+       loctable->del_node(all_nodes[i],true);
        }
        }
 
@@ -1008,7 +1032,8 @@ OneHop::leader_stabilize(void *x)
     if (send_in.log.size() > 0) {
       for (uint i=0; i < all_nodes.size(); i++) {
         if (!alive()) {
-          DEBUG(3) << ip() << "Received events but died before sending them! Yikes!\n";
+          DEBUG(3) << now() << ":" << ip() << "," << printID(id())
+	    << "Received events but died before sending them! Yikes!\n";
           return;
         }
 
@@ -1028,8 +1053,9 @@ OneHop::leader_stabilize(void *x)
               //DEBUG(2) << ip() << ":Sent intra-slice to " << all_nodes[i].id << " in unit " << unit(all_nodes[i].id) << endl;
             }
             if ((!gr.has_joined) && (me.id != all_nodes[i].id)) {
-              loctable->del_node(all_nodes[i]);
-              DEBUG(5) << ip() << "Sending to an incompletely joined node -- failed\n";
+              loctable->del_node(all_nodes[i].id);
+	      DEBUG(5) << now() << ":" << ip() << "," << printID(id())
+		<< "Sending to an incompletely joined node -- failed\n";
             }
           }
           else {
@@ -1039,7 +1065,7 @@ OneHop::leader_stabilize(void *x)
             send_out.log.push_back(*e);
             delete e;
             if (me.id != all_nodes[i].id)
-              loctable->del_node(all_nodes[i]);
+              loctable->del_node(all_nodes[i].id);
           }
         }
 
@@ -1057,8 +1083,9 @@ OneHop::leader_stabilize(void *x)
                 act_interslice++;
                 if (!gr.has_joined) {
                   if (me.id != all_nodes[i].id)
-                    loctable->del_node(all_nodes[i]);
-                  DEBUG(5) << ip() << "Sending to an incompletely joined node\n";
+                    loctable->del_node(all_nodes[i].id);
+		  DEBUG(5) << now() << ":" << ip() << "," << printID(id())
+                  << "Sending to an incompletely joined node\n";
                 }
               }
               if (!ok) {
@@ -1067,7 +1094,7 @@ OneHop::leader_stabilize(void *x)
                 send_in.log.push_back(*e);
                 delete e;
                 if (me.id != all_nodes[i].id)
-                  loctable->del_node(all_nodes[i]);
+                  loctable->del_node(all_nodes[i].id);
               }
             }
           }
@@ -1097,7 +1124,8 @@ OneHop::ping_handler(notifyevent_args *args, general_ret *ret)
   IDMap succ_node = loctable->succ(args->sender.id);
   if (succ_node.id != args->sender.id) {
       if (!alive()) return;
-      DEBUG(5) << ip() << ":Found new node " << args->sender.ip << " via ping\n";
+      DEBUG(5) << now() << ":" << ip() << "," << printID(id())
+      << ":Found new node " << args->sender.ip << " via ping\n";
       DEBUG_MSG(args->sender,"ping_handler directly add sender",args->sender);
       loctable->add_node(args->sender);
       LogEntry *e = new LogEntry(args->sender, ALIVE, now());
@@ -1119,7 +1147,8 @@ OneHop::ping_handler(notifyevent_args *args, general_ret *ret)
     
       if (args->log[i]._state == DEAD) {
 	if (args->log[i]._node.ip == ip()) {
-	  DEBUG(3) << ip() << ":Panic! People think I am dead, but I'm not\n";
+	  DEBUG(3) << now() << ":" << ip() << "," << printID(id())
+	  << ":Panic! People think I am dead, but I'm not\n";
 	  //exit(-1);
 	  LogEntry *e = new LogEntry(me, ALIVE, now());
 	  leader_log.push_back(*e);
@@ -1131,7 +1160,7 @@ OneHop::ping_handler(notifyevent_args *args, general_ret *ret)
 
 	}
 	else {
-	  loctable->del_node(args->log[i]._node);
+	  loctable->del_node(args->log[i]._node.id);
 	}
       }
       else {
@@ -1174,7 +1203,8 @@ OneHop::notifyevent_handler(notifyevent_args *args, general_ret *ret)
 
   bool ok = false;
   if (!alive()) {
-    DEBUG(3) << ip() << "Received events but died before sending them! Yikes!\n";
+    DEBUG(3) << now() << ":" << ip() << "," << printID(id())
+    << "Received events but died before sending them! Yikes!\n";
     return;
   }
 
@@ -1186,11 +1216,13 @@ OneHop::notifyevent_handler(notifyevent_args *args, general_ret *ret)
   if (!me_leader) {
     //not slice leader, but still got message, forward to correct slice leader
     //must forward message to the correct slice leader
-    DEBUG(1) << ip() << ":I am not slice leader of "<< slice(id()) << ", still I got this message!\n";
+    DEBUG(1) << now() << ":" << ip() << "," << printID(id())
+    << ":I am not slice leader of "<< slice(id()) << ", still I got this message!\n";
     while (!ok) {
 
       IDMap sliceleader = loctable->slice_leader(me.id);
-      DEBUG(1) << ip() << ":Forwarding to " << sliceleader.ip << endl ;
+      DEBUG(1) << now() << ":" << ip() << "," << printID(id())
+      << ":Forwarding to " << sliceleader.ip << endl ;
 
       ok = fd_xRPC(sliceleader.ip, &OneHop::notifyevent_handler, args, &gr, 
 	  ONEHOP_NOTIFY, args->log.size());
@@ -1202,13 +1234,14 @@ OneHop::notifyevent_handler(notifyevent_args *args, general_ret *ret)
         leader_log.push_back(*e);
         args->log.push_back(*e);
         if (me.id != sliceleader.id)
-        loctable->del_node(sliceleader);
-        DEBUG(5) << ip() <<":PING! Informing " << slice_leader(me.id).ip << " that old slice leader "<< sliceleader.ip << " is dead\n";
+        loctable->del_node(sliceleader.id);
+	DEBUG(5) << now() << ":" << ip() << "," << printID(id())
+        <<":PING! Informing " << slice_leader(me.id).ip << " that old slice leader "<< sliceleader.ip << " is dead\n";
         delete e;
       }
       else if (!gr.has_joined) {
       if (me.id != sliceleader.id)
-        loctable->del_node(sliceleader);
+        loctable->del_node(sliceleader.id);
       }
       ok = ok && gr.has_joined;
       if (ok) { 
@@ -1223,14 +1256,15 @@ OneHop::notifyevent_handler(notifyevent_args *args, general_ret *ret)
     if (args->log[i]._state == DEAD) {
       if (!alive()) return;
       if (args->log[i]._node.ip == ip()) {
-        DEBUG(5) << ip() << ":Panic! People think I am dead, but I'm not\n";
+	DEBUG(5) << now() << ":" << ip() << "," << printID(id())
+        << ":Panic! People think I am dead, but I'm not\n";
         LogEntry *e = new LogEntry(me, ALIVE, now());
         leader_log.push_back(*e);
         delete e;
       }
       else {
         if (!alive()) return;
-        loctable->del_node(args->log[i]._node);
+        loctable->del_node(args->log[i]._node.id);
         if (me_leader || (is_slice_leader(me.id, me.id))) {
           LogEntry *e = new LogEntry(args->log[i]._node, DEAD, now());
           leader_log.push_back(*e);
@@ -1253,7 +1287,8 @@ OneHop::notifyevent_handler(notifyevent_args *args, general_ret *ret)
   IDMap succ_node = loctable->succ(args->sender.id);
   if (succ_node.id != args->sender.id) {
       if (!alive()) return;
-      DEBUG(5) << ip() << ":Found new node " << args->sender.ip << " via notify event\n";
+      DEBUG(5) << now() << ":" << ip() << "," << printID(id())
+      << ":Found new node " << args->sender.ip << " via notify event\n";
       DEBUG_MSG(args->sender,"notifyevent_handler directly add sender", args->sender);
       loctable->add_node(args->sender);
       LogEntry *e = new LogEntry(args->sender, ALIVE, now());
@@ -1276,7 +1311,8 @@ OneHop::notify_rec_handler(notifyevent_args *args, general_ret *ret)
  
     
   if (args->log.size() < 1)
-    DEBUG(5) << ip() <<":PANIC! Got empty log\n"; 
+    DEBUG(5) << now() << ":" << ip() << "," << printID(id())
+    <<":PANIC! Got empty log\n"; 
 
   for (uint i=0; i < args->log.size(); i++) {
     if (!alive()) return;
@@ -1291,7 +1327,8 @@ OneHop::notify_rec_handler(notifyevent_args *args, general_ret *ret)
 
     if (args->log[i]._state == DEAD) {
       if (args->log[i]._node.ip == ip()) {
-        DEBUG(5) << ip() << ":Panic! People think I am dead, but I'm not\n";
+	DEBUG(5) << now() << ":" << ip() << "," << printID(id())
+        << ":Panic! People think I am dead, but I'm not\n";
         //exit(-1);
         LogEntry *e = new LogEntry(me, ALIVE, now());
         leader_log.push_back(*e);
@@ -1303,7 +1340,7 @@ OneHop::notify_rec_handler(notifyevent_args *args, general_ret *ret)
 
       }
       else {
-        loctable->del_node(args->log[i]._node);
+        loctable->del_node(args->log[i]._node.id);
       }
     }
     else {
@@ -1323,7 +1360,8 @@ OneHop::notify_other_leaders(notifyevent_args *args, general_ret *ret)
   if (!alive()) return;
   IDMap succ_node = loctable->succ(args->sender.id);
   if (succ_node.id != args->sender.id) {
-    DEBUG(5) << ip() << ":Found new node " << args->sender.ip << " via slice leader ping\n";
+    DEBUG(5) << now() << ":" << ip() << "," << printID(id())
+    << ":Found new node " << args->sender.ip << " via slice leader ping\n";
     DEBUG_MSG(args->sender,"notify_other_leaders directly add sender", args->sender);
     loctable->add_node(args->sender);
     LogEntry *e = new LogEntry(args->sender, ALIVE, now());
@@ -1332,7 +1370,8 @@ OneHop::notify_other_leaders(notifyevent_args *args, general_ret *ret)
   }
 
   if (args->log.size() < 1)
-    DEBUG(5) << ip() <<":PANIC! Got empty log\n"; 
+    DEBUG(5) << now() << ":" << ip() << "," << printID(id())
+    <<":PANIC! Got empty log\n"; 
   for (uint i=0; i < args->log.size(); i++) {
     outer_log.push_back(args->log[i]);
   }
@@ -1351,11 +1390,13 @@ OneHop::notify_unit_leaders(notifyevent_args *args, general_ret *ret)
   
   if (!alive()) return;
   if (args->log.size() < 1)
-    DEBUG(5) << ip() <<":PANIC! Got empty log\n"; 
+    DEBUG(5) << now() << ":" << ip() << "," << printID(id())
+    <<":PANIC! Got empty log\n"; 
 
   IDMap succ_node = loctable->succ(args->sender.id);
   if (succ_node.id != args->sender.id) {
-    DEBUG(5) << ip() << ":Found new node " << args->sender.ip << " via same slice leader/unit leader ping\n";
+    DEBUG(5) << now() << ":" << ip() << "," << printID(id())
+    << ":Found new node " << args->sender.ip << " via same slice leader/unit leader ping\n";
     DEBUG_MSG(args->sender,"notify_unit_leader",args->sender);
     loctable->add_node(args->sender);
     LogEntry *e = new LogEntry(args->sender, ALIVE, now());
@@ -1363,13 +1404,16 @@ OneHop::notify_unit_leaders(notifyevent_args *args, general_ret *ret)
     args->log.push_back(*e);
     delete e;
   }
-  if (!_join_complete) DEBUG(3) << "Wow! Join not complete, still got this message\n";
+  if (!_join_complete) 
+    DEBUG(5) << now() << ":" << ip() << "," << printID(id())
+    << "Wow! Join not complete, still got this message\n";
   
   for (uint i=0; i < args->log.size(); i++) {
     if (args->log[i]._state == DEAD) {
       if (!alive()) return;
       if (args->log[i]._node.ip == ip()) {
-        DEBUG(5) << ip() << ":Panic! People think I am dead, but I'm not\n";
+	DEBUG(5) << now() << ":" << ip() << "," << printID(id())
+        << ":Panic! People think I am dead, but I'm not\n";
         LogEntry *e = new LogEntry(me, ALIVE, now());
         leader_log.push_back(*e);
         inner_log.push_back(*e);
@@ -1377,7 +1421,7 @@ OneHop::notify_unit_leaders(notifyevent_args *args, general_ret *ret)
       }
       else {
         inner_log.push_back(args->log[i]);
-        loctable->del_node(args->log[i]._node);
+        loctable->del_node(args->log[i]._node.id);
       }
     }
     else {
@@ -1392,22 +1436,30 @@ OneHop::notify_unit_leaders(notifyevent_args *args, general_ret *ret)
 void
 OneHop::test_dead_inform(test_inform_dead_args *a)
 {
-  bool ok = fd_xRPC (a->suspect.ip, &OneHop::test_dead_handler, 
-      (void *)NULL, (void *)NULL, ONEHOP_INFORMDEAD,0);
-  if (ok) {
-    record_stat(a->suspect.ip,me.ip,ONEHOP_INFORMDEAD,0);
-    loctable->add_node(a->suspect);
-    delete a;
-    return;
-  }
+  if (a->justdelete) {
+    DEBUG(4) << now() << ":" << ip() << "," << printID(id())
+      << " test_dead_inform from " << a->informed.ip << " about " 
+      << a->suspect.ip << endl;
+    loctable->del_node(a->suspect.id);
+  }else{
+    bool ok = fd_xRPC (a->suspect.ip, &OneHop::test_dead_handler, 
+	(void *)NULL, (void *)NULL, ONEHOP_INFORMDEAD,0);
+    if (ok) {
+      record_stat(a->suspect.ip,me.ip,ONEHOP_INFORMDEAD,0);
+      loctable->add_node(a->suspect);
+      delete a;
+      return;
+    } else 
+      loctable->del_node(a->suspect.id);
 
-  inform_dead_args ia;
-  ia.ip = a->suspect.ip;
-  ia.key = a->suspect.id;
-  ok = fd_xRPC(a->informed.ip,&OneHop::inform_dead_handler,
-      &ia, (void *)NULL, ONEHOP_INFORMDEAD,1);
-  if ((ok)&&(a->informed.ip!=me.ip)) record_stat(a->informed.ip,me.ip,ONEHOP_INFORMDEAD);
-  delete a;
+    inform_dead_args ia;
+    ia.ip = a->suspect.ip;
+    ia.key = a->suspect.id;
+    ok = fd_xRPC(a->informed.ip,&OneHop::inform_dead_handler,
+	&ia, (void *)NULL, ONEHOP_INFORMDEAD,1);
+    if ((ok)&&(a->informed.ip!=me.ip)) record_stat(a->informed.ip,me.ip,ONEHOP_INFORMDEAD);
+    delete a;
+  }
 }
 
 void
@@ -1430,7 +1482,8 @@ OneHop::inform_dead (IDMap dead, IDMap recv) {
 }
 
 void 
-OneHop::inform_dead_handler (inform_dead_args *ia, void *ir) {
+OneHop::inform_dead_handler (inform_dead_args *ia, void *ir) 
+{
   IDMap dead;
   dead.id = ia->key;
   dead.ip = ia->ip;
@@ -1438,17 +1491,18 @@ OneHop::inform_dead_handler (inform_dead_args *ia, void *ir) {
   leader_log.push_back(*e);
   delete e;
   if (me.id != dead.id)
-  loctable->del_node(dead);
+    loctable->del_node(dead.id);
 }
 
-Chord::IDMap
-OneHop::slice_leader(CHID node) {
-  return loctable->slice_leader(node);
-}
-
-Chord::IDMap
+OneHop::IDMap
 OneHop::unit_leader(CHID node) {
   return loctable->unit_leader(node);
+}
+
+
+OneHop::IDMap
+OneHop::slice_leader(CHID node) {
+  return loctable->slice_leader(node);
 }
 
 bool 
@@ -1471,20 +1525,26 @@ OneHop::unit (CHID node) {
   return loctable->unit(node);
 }
 
-Chord::IDMap
+OneHop::IDMap
 OneHopLocTable::succ(ConsistentHash::CHID id) {
   assert (ring.repok ());
-  idmapwrap *ptr = ring.closestsucc(id);
+  ohidmapwrap *ptr = ring.closestsucc(id);
   assert(ptr);
-  return (ptr->n);
+  IDMap n;
+  n.ip = ptr->ip;
+  n.id = ptr->id;
+  return n;
 }
 
-Chord::IDMap
+OneHop::IDMap
 OneHopLocTable::pred(ConsistentHash::CHID id) {
   assert (ring.repok ());
-  idmapwrap *ptr = ring.closestpred(id);
+  ohidmapwrap *ptr = ring.closestpred(id);
   assert(ptr);
-  return (ptr->n);
+  OneHop::IDMap n;
+  n.ip = ptr->ip;
+  n.id = ptr->id;
+  return n;
 }
 
 bool
@@ -1509,7 +1569,7 @@ bool OneHopLocTable::is_unit_leader(CHID node, CHID explead) {
 }
 */
         
-Chord::IDMap 
+OneHop::IDMap 
 OneHopLocTable::slice_leader(CHID node) {
   IDMap pot_succ;
   pot_succ.id = 0;
@@ -1522,7 +1582,7 @@ OneHopLocTable::slice_leader(CHID node) {
   return pot_succ;
 }
 
-Chord::IDMap 
+OneHop::IDMap 
 OneHopLocTable::unit_leader(CHID node) {
   IDMap pot_succ;
   pot_succ.id = 0;
@@ -1536,7 +1596,7 @@ OneHopLocTable::unit_leader(CHID node) {
   return pot_succ;
 }
 
-vector<Chord::IDMap>
+vector<OneHop::IDMap>
 OneHopLocTable::unit_leaders(CHID node) {
   vector<IDMap> ret_vec;
   IDMap pot_succ;
@@ -1556,7 +1616,8 @@ OneHopLocTable::unit_leaders(CHID node) {
       if(! ((pot_succ.ip == 0) || (unit(def) != unit(pot_succ.id)) || (slice(def) != slice(pot_succ.id))))
         ret_vec.push_back(pot_succ);
     }
-    else DEBUG(2) << "Empty unit\n";
+    else 
+      DEBUG(2) << "Empty unit\n";
   }
   return ret_vec;
 }
@@ -1588,13 +1649,62 @@ OneHopLocTable::is_empty_unit(CHID node) {
 
 void
 OneHopLocTable::print() {
-  idmapwrap *i = ring.first();
+  ohidmapwrap *i = ring.first();
   while (i) {
-    DEBUG(3) << i->n.ip << ":" << i->n.id << endl;
+    DEBUG(3) << i->ip << ":" << i->id << endl;
     i = ring.next(i);
   }
 }
 
+void
+OneHopLocTable::del_all() 
+{
+  ohidmapwrap *next;
+  ohidmapwrap *cur;
+  for (cur = ring.first(); cur; cur = next) {
+    next = ring.next(cur);
+    ring.remove(cur->id);
+    bzero(cur, sizeof(*cur));
+    delete cur;
+  }
+  assert (ring.repok ());
+}
+
+void
+OneHopLocTable::add_node(IDMap n)
+{
+  ohidmapwrap *elm = ring.search(n.id);
+  if (!elm) {
+    elm = New ohidmapwrap(n.ip,n.id);
+    ring.insert(elm);
+  }
+}
+
+void
+OneHopLocTable::del_node(CHID id)
+{
+  ohidmapwrap *elm = ring.remove(id);
+  if (elm) 
+    delete elm;
+}
+
+vector<OneHop::IDMap>
+OneHopLocTable::get_all()
+{
+  vector<OneHop::IDMap> v;
+  v.clear();
+
+  ohidmapwrap *currp; 
+  currp = ring.first();
+  OneHop::IDMap n;
+  while (currp) { 
+    n.ip = currp->ip;
+    n.id = currp->id;
+    v.push_back(n);
+    currp = ring.next(currp);
+  }
+  return v;
+}
 void
 OneHop::initstate()
 {
@@ -1603,6 +1713,14 @@ OneHop::initstate()
     loctable->add_node(ids[i]);
   }
 }
+string
+OneHop::printID(CHID id)
+{
+  char buf[128];
+  sprintf(buf,"%qx ",id);
+  return string(buf);
+}
+
 
 /*
 void

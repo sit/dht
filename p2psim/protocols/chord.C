@@ -1961,7 +1961,7 @@ Chord::crash(Args *args)
 
 /*************** LocTable ***********************/
 
-#define MINTIMEOUT 0
+#define MINTIMEOUT 30000
 
 LocTable::LocTable()
 {
@@ -2197,6 +2197,12 @@ LocTable::add_node(Chord::IDMap n, bool is_succ, bool assertadd, Chord::CHID fs,
   Chord::IDMap succ1; 
   Chord::IDMap pred1; 
 
+  if (!n.ip) {
+    if (p2psim_verbose>=4)
+      cout << " add_node wierd " << n.ip << endl;
+    return false;
+  }
+
   if (n.ip == me.ip)
     return false;
 
@@ -2386,7 +2392,7 @@ LocTable::live_size(double to)
   idmapwrap *elm = ring.first();
   uint n = 0;
   while (elm) {
-    if (elm->status <= LOC_HEALTHY && Network::Instance()->alive(elm->n.ip)
+    if (elm->status <= LOC_HEALTHY && elm->n.ip && Network::Instance()->alive(elm->n.ip)
 	&& (to<0.0000001 
 	  || elm->is_succ 
 	  || !elm->n.alivetime
@@ -2579,7 +2585,7 @@ LocTable::get_closest_in_gap(uint m, ConsistentHash::CHID end, Chord::IDMap src,
 }
 
 vector<Chord::IDMap>
-LocTable::next_close_hops(ConsistentHash::CHID key, uint n, double to)
+LocTable::next_close_hops(ConsistentHash::CHID key, uint n, Chord::IDMap src, double to)
 {
   idmapwrap *elm = ring.closestpred(key);
   Chord::IDMap mysucc = succ(me.id+1);
@@ -2622,7 +2628,7 @@ LocTable::next_close_hops(ConsistentHash::CHID key, uint n, double to)
       all.push_back(elm->n);
       i++;
 
-      if ((n==1) && (i == n) && topo->latency(me.ip,elm->n.ip) < 0.8*topo->median_lat()) {
+      if ((n==1) && (i == n) && topo->latency(src.ip,elm->n.ip) < 0.8*topo->median_lat()) {
 	l.push_back(elm->n);
 	return l;
       }
@@ -2631,8 +2637,8 @@ LocTable::next_close_hops(ConsistentHash::CHID key, uint n, double to)
 	l.push_back(elm->n);
       }else {
 	for (iter = l.begin(); iter != l.end(); ++iter) {
-	  if (topo->latency(me.ip,elm->n.ip)
-	      >= (0.5*topo->latency(me.ip,(*iter).ip)))
+	  if (topo->latency(src.ip,elm->n.ip)
+	      >= (0.5*topo->latency(src.ip,(*iter).ip)))
 	    break;
 	}
 	if (n > 1 && l.size() == 1) { //if parallelism >1, always choose one as the closest to key
@@ -2649,11 +2655,11 @@ LocTable::next_close_hops(ConsistentHash::CHID key, uint n, double to)
     elm = ring.prev(elm);
     if (!elm) elm = ring.last();
   }
-  if (p2psim_verbose >=4) {
-  printf("%llu med %llu %u,%qx key %qx all : ",now(),topo->median_lat(),me.ip,me.id,key);
-  for (uint i = 0; i < all.size(); i++) 
-    printf(" (%u,%qx,%llu,%llu,%llu) ",all[i].ip,all[i].id,topo->latency(me.ip,all[i].ip),now()-all[i].timestamp,all[i].alivetime);
-  printf("\n");
+  if (p2psim_verbose >=5) {
+    printf("%llu med %llu %u,%qx key %qx all : ",now(),topo->median_lat(),me.ip,me.id,key);
+    for (uint i = 0; i < all.size(); i++) 
+      printf(" (%u,%qx,%llu,%llu,%llu) ",all[i].ip,all[i].id,topo->latency(me.ip,all[i].ip),now()-all[i].timestamp,all[i].alivetime);
+    printf("\n");
   }
   return l;
 }
