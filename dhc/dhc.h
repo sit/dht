@@ -27,7 +27,7 @@ struct paxos_state_t {
   bool recon_inprogress;
   uint promise_recvd;
   vec<chordID> acc_conf;
-  uint accept_ack_recvd;
+  uint accept_recvd;
 };
 
 struct keyhash_meta {

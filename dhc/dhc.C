@@ -80,7 +80,7 @@ dhc::recv_promise (ptr<dhc_block> b, ref<dhc_prepare_res> promise,
       }
     
     if (b->meta->pstat.promise_recvd > n_replica/2) {
-      ptr<dhc_propose_arg> arg = New refcounted<dhc_propose_arg> ();
+      ptr<dhc_propose_arg> arg = New refcounted<dhc_propose_arg>;
       arg->bID = b->id;
       arg->round = b->meta->proposal;
       if (b->meta->pstat.acc_conf.size () > 0) {
@@ -107,7 +107,17 @@ dhc::recv_accept (ptr<dhc_block> b, ref<dhc_propose_res> proposal,
 		  clnt_stat err)
 {
   if (!err && proposal->status == DHC_OK) {
-
+    b->meta->pstat.accept_recvd++;
+    if (b->meta->pstat.accept_recvd > n_replica/2) {
+      ptr<dhc_newconfig_arg> arg = New refcounted<dhc_newconfig_arg>;
+      arg->bID = b->id;
+      arg->data = *b->data;
+      arg->old_conf_seqnum = b->meta->config->seqnum;
+      set_new_config (arg, b->meta->new_config->nodes);
+    }
   } else
     print_error ("dhc:recv_propose", errno, proposal->status);
 }
+
+
+

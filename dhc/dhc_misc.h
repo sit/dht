@@ -9,6 +9,8 @@ void print_error (str, int, int);
 
 void set_new_config (ptr<dhc_propose_arg>, ptr<vnode>, int);
 
+void set_new_config (ptr<dhc_newconfig_arg>, vec<ptr<location> >);
+
 static inline ptr<dhc_block> 
 to_dhc_block (ptr<dbrec> rec)
 {

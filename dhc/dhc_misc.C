@@ -35,3 +35,14 @@ set_new_config (ptr<dhc_propose_arg> arg, ptr<vnode> myNode, uint k)
     nodes->push_back (replicas[i]->id ());
   arg->new_config.set (nodes->base (), nodes->size ());
 }
+
+void
+set_new_config (ptr<dhc_newconfig_arg> arg, vec<ptr<location> > new_config)
+{
+  ptr<vec<chordID> > nodes = New refcounted<vec<chordID> >;
+  for (uint i=0; i<new_config.size (); i++)
+    nodes->push_back (new_config[i]->id ());
+  arg->new_config.set (nodes->base (), nodes->size ());
+}
+
+
