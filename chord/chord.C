@@ -362,6 +362,7 @@ bool candidate_is_closer (const chordID &c, // new candidate node
     mindist = newdist;
     return true;
   }
+  return false;
 }
 
 chordID
