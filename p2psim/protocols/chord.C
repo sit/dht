@@ -23,8 +23,11 @@
  */
 
 #include "observers/chordobserver.h"
+#include <iostream>
 #include <stdio.h>
 #include <assert.h>
+
+using namespace std;
 
 extern bool vis;
 bool static_sim;

@@ -32,7 +32,6 @@
 #include "observers/datastoreobserver.h"
 
 #include <assert.h>
-#include <hash_map.h>
 #include <stdio.h>
 
 

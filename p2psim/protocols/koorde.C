@@ -25,6 +25,9 @@
 #include "koorde.h"
 #include "observers/chordobserver.h"
 #include <stdio.h>
+#include <iostream>
+
+using namespace std;
 
 extern bool vis;
 extern bool static_sim;

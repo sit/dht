@@ -26,6 +26,10 @@
 #include "observers/chordobserver.h"
 #include "p2psim/network.h"
 #include <stdio.h>
+#include <iostream>
+
+using namespace std;
+
 extern bool static_sim;
 
 ChordFingerPNS::ChordFingerPNS(IPAddress i, Args& a, LocTable *l, const char *name) 

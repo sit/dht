@@ -26,6 +26,9 @@
 #include "p2psim/network.h"
 #include "protocols/protocolfactory.h"
 #include "e2egraph.h"
+#include <iostream>
+
+using namespace std;
 
 E2EGraph::E2EGraph(vector<string> *v)
 {

@@ -24,6 +24,9 @@
 
 #include  "chordfinger.h"
 #include "observers/chordobserver.h"
+#include <iostream>
+
+using namespace std;
 
 extern bool static_sim;
 

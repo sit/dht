@@ -27,9 +27,12 @@
 #include "observers/datastoreobserver.h"
 #include "observers/chordobserver.h"
 #include "protocols/consistenthash.h"
-#include "hash_map.h"
+#include "p2psim/p2psim_hashmap.h"
+#include <iostream>
 
-DataStore::DataStore (IPAddress i, Args& a, LocTable *l = NULL) :
+using namespace std;
+
+DataStore::DataStore (IPAddress i, Args& a, LocTable *l /* = NULL, see .h*/) :
   ChordFingerPNS(i, a, l)
 {
   _nreplicas = a.nget<uint>("replicas", 3, 10);
@@ -131,7 +134,7 @@ DataStore::lookup (Args *args)
 	done = true;
       }  else {
 	nsucc++;
-	if (nsucc >= _nreplicas  || nsucc >= v.size ()) {
+	if (nsucc >= (uint) _nreplicas  || nsucc >= (uint) v.size ()) {
 	  cerr << ip () << ": error looking up " << a->key << " "
 	       << nsucc << " " << _nreplicas << " " << v.size () << "\n";
 	  record_lookup_stat (me.ip, succ.ip, now () - a->start, true, false);

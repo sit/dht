@@ -70,7 +70,7 @@ OneHopObserver::get_sorted_nodes()
 Chord::IDMap
 OneHopObserver::get_rand_alive_node()
 {
-  Chord::IDMap n;
+  // Chord::IDMap n;
   uint r;
   while (1) {
     r = (random() % 10);
