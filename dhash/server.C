@@ -437,7 +437,7 @@ dhash_impl::block_to_res (dhash_stat err, s_dhash_fetch_arg *arg,
 
   return res;
 }
-		     
+
 
 void
 dhash_impl::fetchiter_sbp_gotdata_cb (user_args *sbp, s_dhash_fetch_arg *arg,
@@ -483,9 +483,8 @@ dhash_impl::dispatch (user_args *sbp)
 	if (ret)
           fetchiter_sbp_gotdata_cb (sbp, farg, -1, ret, DHASH_OK);
 	else {
-          dhash_fetchiter_res *res = New dhash_fetchiter_res (DHASH_NOENT);
-	  sbp->reply (res);
-          delete res;
+	  dhash_fetchiter_res res (DHASH_NOENT);
+	  sbp->reply (&res);
 	}
       }
       else {
@@ -494,9 +493,8 @@ dhash_impl::dispatch (user_args *sbp)
 	  fetch (id, farg->cookie,
 	         wrap (this, &dhash_impl::fetchiter_sbp_gotdata_cb, sbp, farg));
         } else {
-          dhash_fetchiter_res *res = New dhash_fetchiter_res (DHASH_NOENT);
-	  sbp->reply (res);
-          delete res;
+	  dhash_fetchiter_res res (DHASH_NOENT);
+	  sbp->reply (&res);
         }
       }
     }
@@ -525,12 +523,12 @@ dhash_impl::dispatch (user_args *sbp)
       else {
         ref<dbrec> k = id2dbrec(sarg->key);
 
-	bool already_present = (sarg->type == DHASH_CACHE) 
+	bool exists = (sarg->type == DHASH_CACHE) 
 	  ? (cache_db->lookup (k)) 
 	  : (dblookup (blockID (sarg->key, sarg->ctype, sarg->dbtype)));
 	
-	store (sarg, wrap(this, &dhash_impl::storesvc_cb, sbp,
-	                  sarg, already_present));	
+	store (sarg, exists,
+	       wrap(this, &dhash_impl::storesvc_cb, sbp, sarg, exists));	
       }
     }
     break;
@@ -732,8 +730,12 @@ is_keyhash_stale (ref<dbrec> prev, ref<dbrec> d)
 }
 
 void 
-dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
+dhash_impl::store (s_dhash_insertarg *arg, bool exists, cbstore cb)
 {
+  if (arg->ctype == DHASH_CONTENTHASH && exists) {
+    cb (DHASH_OK);
+    return;
+  }
 
   store_state *ss;
  
@@ -741,7 +743,7 @@ dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
     ss = pst_cache[arg->key];
   else
     ss = pst[arg->key];
-
+	
   if (ss == NULL) {
     ss = New store_state (arg->key, arg->attr.size);
     if (arg->type == DHASH_CACHE)
@@ -801,13 +803,11 @@ dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
       }
     case DHASH_APPEND:
       append (k, d, arg, cb);
-      if (ss) {
-        if (arg->type == DHASH_CACHE)
-          pst_cache.remove (ss);
-	else
-	  pst.remove (ss);
-        delete ss;
-      }
+      if (arg->type == DHASH_CACHE)
+        pst_cache.remove (ss);
+      else
+	pst.remove (ss);
+      delete ss;
       return;
     case DHASH_CONTENTHASH:
       if (arg->type == DHASH_CACHE) {
@@ -852,21 +852,16 @@ dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
         keys_others ++;
 
       /* statistics */
-      if (ss)
-        bytes_stored += ss->size;
-      else
-        bytes_stored += arg->data.size ();
+      bytes_stored += ss->size;
     }
 
     cb (stat);
 
-    if (ss) {
-      if (arg->type == DHASH_CACHE)
-        pst_cache.remove (ss);
-      else
-	pst.remove (ss);
-      delete ss;
-    }
+    if (arg->type == DHASH_CACHE)
+      pst_cache.remove (ss);
+    else 
+      pst.remove (ss);
+    delete ss;
   }
   else
     cb (DHASH_STORE_PARTIAL);

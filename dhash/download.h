@@ -38,7 +38,8 @@ private:
 
 public:
   static void execute (ptr<vnode> clntnode, chord_node source, blockID blockID,
-		       char *data, u_int len, u_int totsz, int cookie, cbretrieve_t cb) // XXX wtf is this cookie shit
+		       char *data, u_int len, u_int totsz, int cookie,
+		       cbretrieve_t cb) // XXX wtf is this cookie shit
   {
     vNew dhash_download (clntnode, source, blockID, data, len, totsz, cookie, cb);
   }

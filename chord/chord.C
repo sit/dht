@@ -591,6 +591,7 @@ vnode_impl::join_getsucc_cb (ptr<location> n,
     if (err == RPC_TIMEDOUT) {
       // try again. XXX limit the number of retries??
       join (n, cb);
+      delete route;
       return;
     }
     status = CHORD_RPCFAILURE;
@@ -802,6 +803,7 @@ vnode_impl::doalert_cb (chord_noderes *res, chordID x, clnt_stat err)
     warnx << "doalert_cb: " << x << " is indeed not alive\n";
     // doRPCcb has already killed this node for us.
   }
+  delete res;
 }
 
 void

@@ -123,6 +123,8 @@ dhashcli::retrieve (blockID blockID, cb_ret cb, int options,
       retrieve_lookup_cb (rs, s, r, CHORD_OK);
       return;
     }
+    else if (options & DHASHCLIENT_SUCCLIST_OPT)
+      warn << "cannot use succlist to find succs on retrieve\n";
 
     clntnode->find_succlist (blockID.ID, dhash::num_dfrags () + 2,
 			     wrap (this, &dhashcli::retrieve_lookup_cb, rs),
@@ -487,6 +489,8 @@ dhashcli::insert (ref<dhash_block> block, cbinsert_path_t cb,
         insert_lookup_cb (block, cb, DHASH_OK, s, r);
         return;
       }
+      else if (options & DHASHCLIENT_SUCCLIST_OPT)
+	warn << "cannot use succlist to find succs on insert\n";
     }
     lookup (block->ID, wrap (this, &dhashcli::insert_lookup_cb, block, cb));
   }

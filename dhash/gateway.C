@@ -179,6 +179,7 @@ dhashgateway::retrieve_cb (svccb *sbp, dhash_stat stat,
   // guaranteed to be around
   dhash_retrieve_arg *arg = sbp->template getarg<dhash_retrieve_arg> ();
   ptr<dhash_block> nb = 0;
+
   if (block && (arg->options & DHASHCLIENT_CACHE)) {
     nb = New refcounted<dhash_block>
       (block->data, block->len, block->ctype);

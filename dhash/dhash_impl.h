@@ -160,7 +160,7 @@ class dhash_impl : public dhash {
 			      s_dhash_insertarg *arg, cbstore cb,
 			      int cookie, ptr<dbrec> data, dhash_stat err);
   
-  void store (s_dhash_insertarg *arg, cbstore cb);
+  void store (s_dhash_insertarg *arg, bool exists, cbstore cb);
   
   void init_key_status ();
 

@@ -154,7 +154,10 @@ void
 route_chord::make_hop_cb (ptr<bool> del,
 			  chord_testandfindres *res, clnt_stat err)
 {
-  if (*del) return;
+  if (*del) {
+    delete res;
+    return;
+  }
   if (err) {
     //back up
     ptr<location> last_node_tried = pop_back ();
@@ -171,7 +174,8 @@ route_chord::make_hop_cb (ptr<bool> del,
 
   else if (res->status == CHORD_INRANGE) { 
     // found the successor
-    ptr<location> n0 = v->locations->insert (make_chord_node (res->inrange->n[0]));
+    ptr<location> n0 =
+      v->locations->insert (make_chord_node (res->inrange->n[0]));
     if (!n0) {
       warnx << v->my_ID () << ": make_hop_cb: inrange node ("
 	    << res->inrange->n[0] << ") not valid vnode!\n";
