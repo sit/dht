@@ -155,7 +155,7 @@ create_database ()
   //set up the options we want
   dbOptions opts;
   opts.addOption("opt_async", 1);
-  opts.addOption("opt_cachesize", 80000);
+  opts.addOption("opt_cachesize", 1000);
   opts.addOption("opt_nodesize", 4096);
 
   if (int err = db->opendb(DBNAME, opts)) {
