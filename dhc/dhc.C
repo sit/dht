@@ -9,7 +9,7 @@
 int RECON_TM = getenv("DHC_RECON_TM") ? atoi(getenv("DHC_RECON_TM")) : 15;
 int dhc_debug = getenv("DHC_DEBUG") ? atoi(getenv("DHC_DEBUG")) : 0;
 char out[200];
-int fd = open ("etna", O_WRONLY | O_APPEND | O_CREAT, 0777);
+int fd;
 
 dhc::dhc (ptr<vnode> node, str dbname, uint k) : 
   myNode (node), n_replica (k), recon_tm_rpcs (0)
@@ -27,7 +27,8 @@ dhc::dhc (ptr<vnode> node, str dbname, uint k) :
   db = New refcounted<dbfe> ();
   str dbs = strbuf () << dbname << ".dhc";
   open_db (db, dbs, opts, "dhc: keyhash rep db file");  
-
+  str logfile = strbuf () << dbname << ".log_etna";
+  fd = open (logfile.cstr (), O_WRONLY | O_APPEND | O_CREAT, 0777);
 }
 
 
@@ -107,8 +108,9 @@ dhc::recon_tm_lookup (ref<dhc_block> kb, bool guilty, vec<chord_node> succs,
 	gettimeofday (&tp, NULL);
 	start_recon = tp.tv_sec * (u_int64_t)1000000 + tp.tv_usec;
 	warn << myNode->my_ID () << " Start RECON at " << start_recon << "\n";
-	sprintf (out, "%llu RECON_START 1 0\n", start_recon);
-	write (fd, out, strlen (out) + 1);
+	str buf = strbuf () << start_recon << " " << myNode->myID () 
+			    << " RECON_START 1 0\n";
+	write (fd, buf.cstr (), buf.len ());
 	recon (kb->id, wrap (this, &dhc::recon_tm_done));
       } else { // Case 2
 	if (dhc_debug)
@@ -394,13 +396,15 @@ dhc::recv_newconfig_ack (chordID bID, dhc_cb_t cb, ref<dhc_newconfig_res> ack,
       end_recon = tp.tv_sec * (u_int64_t)1000000 + tp.tv_usec;
       warn << myNode->my_ID () << " End RECON at " << end_recon << "\n";
       warn << "             time elapse: " << end_recon-start_recon << " usecs\n";
-      sprintf (out, "%llu RECON_END 1 %llu usecs\n ", end_recon, end_recon-start_recon);
-      write (fd, out, strlen (out));
+      str buf = strbuf () << end_recon << " " << myNode->my_ID () 
+			  << " RECON_END 1 " << end_recon-start_recon 
+			  << " usecs\n";
+      write (fd, buf.cstr (), buf.len ());
       (*cb) (DHC_OK, clnt_stat (0));
     }    
   } else {
-    if (err == RPC_CANTSEND) {
-      warn << "dhc:recv_newconfig_ack: cannot send RPC. retry???\n";
+    if (err) {
+      warn << "dhc:recv_newconfig_ack: cannot send RPC. retry???????\n";
     } else {
       print_error ("dhc:recv_newconfig_ack", err, ack->status);
       (*cb) (ack->status, clnt_stat (0));
@@ -806,12 +810,17 @@ dhc::recv_getblock (user_args *sbp)
   ptr<dhc_block> kb = to_dhc_block (rec);
   if (b && b->status != IDLE && 
       !is_primary (getblock->bID, myNode->my_ID (), kb->meta->config.nodes)) {
-    dhc_get_res res (DHC_RECON_INPROG);
-    sbp->reply (&res);
+    if (b->status == RECON_INPROG) {
+      dhc_get_res res (DHC_RECON_INPROG);
+      sbp->reply (&res);
+    } else { 
+      dhc_get_res res (DHC_W_INPROG);
+      sbp->reply (&res);
+    }
     return;
   }
 
-  if (/*!kb->meta->cvalid ||*/ !is_member (myNode->my_ID (), kb->meta->config.nodes)) {
+  if (!is_member (myNode->my_ID (), kb->meta->config.nodes)) {
     dhc_get_res res (DHC_NOT_A_REPLICA);
     sbp->reply (&res);
     return;
