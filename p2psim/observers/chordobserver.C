@@ -72,6 +72,10 @@ ChordObserver::ChordObserver(Args *a)
     ids.push_back(n);
   }
   sort(ids.begin(),ids.end(),Chord::IDMap::cmp);
+#ifdef CHORD_DEBUG
+  for (uint i = 0; i < ids.size(); i++) 
+    printf("%qx %u\n", ids[i].id, ids[i].ip);
+#endif
   init_state();
 }
 
@@ -98,7 +102,6 @@ ChordObserver::init_state()
 void
 ChordObserver::kick(Observed *ob, ObserverInfo *oi)
 {
-  // Time t = now();
   if(_initnodes){
     _initnodes = false;
     init_state();
