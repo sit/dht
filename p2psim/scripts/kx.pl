@@ -4,7 +4,7 @@
 my $lifemean = 100000;
 my $deathmean = $lifemean;
 my $lookupmean = 10000; # 10000 for churn, 100 for lookup
-my $exittime = 1000;
+my $exittime = 200000;
 my $protocol = "Kelips";
 my $nnodes = 1837; # Jinyang uses mostly 1024, also 1837
 my $diameter = 100; # diameter of Euclidean universe
