@@ -336,7 +336,7 @@ int dbfe::IMPL_open_sleepycat(char *filename, dbOptions opts) {
     // uncomment the below for slightly better performance
     //    r = dbe->set_flags(dbe, DB_TXN_NOSYNC, 1);
     //    if (r) return r;
-    getwd(cpath);
+    getcwd(cpath, MAXPATHLEN);
     r = dbe->set_data_dir(dbe, cpath);
     if (r) return r;
     r = dbe->set_lg_dir(dbe, cpath);
