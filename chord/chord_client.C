@@ -46,7 +46,6 @@ static struct chord_config_init {
 
 chord_config_init::chord_config_init ()
 {
-  warnx << "chord_config_init\n";
   bool ok = true;
 
 #define set_int Configurator::only ().set_int

@@ -412,16 +412,17 @@ vnode_impl::doRPC (ref<location> l, const rpc_program &prog, int procno,
 #endif
 
     ref<dorpc_res> res = New refcounted<dorpc_res> (DORPC_OK);
+    xdrproc_t outproc = prog.tbl[procno].xdr_res;
     return rpcm->doRPC (me_, l, transport_program_1, TRANSPORTPROC_DORPC, 
 			arg, res, 
 			wrap (this, &vnode_impl::doRPC_cb, 
-			      prog, procno, out, cb, res));
+			      l, outproc, out, cb, res));
   }
 }
 
 
 void
-vnode_impl::doRPC_cb (const rpc_program prog, int procno,
+vnode_impl::doRPC_cb (ptr<location> l, xdrproc_t proc, 
 		      void *out, aclnt_cb cb, 
 		      ref<dorpc_res> res, clnt_stat err) 
 {
@@ -430,21 +431,21 @@ vnode_impl::doRPC_cb (const rpc_program prog, int procno,
   } else if (res->status != DORPC_OK) {
     cb (RPC_CANTRECV);
   } else {
-    float distance = locations->lookup (res->resok->src_id)->distance ();
+    float distance = l->distance ();
     vec<float> u_coords;
     for (unsigned int i = 0; i < res->resok->src_coords.size (); i++) {
       float c = ((float)res->resok->src_coords[i]);
       u_coords.push_back (c);
     }
 
-    update_coords (res->resok->src_id, 
+    update_coords (l,
 		   u_coords,
 		   distance);
     
     //unmarshall the result and copy to out
     xdrmem x ((char *)res->resok->results.base (), 
 	      res->resok->results.size (), XDR_DECODE);
-    xdrproc_t proc = prog.tbl[procno].xdr_res;
+
     assert (proc);
     if (!proc (x.xdrp (), out)) {
       fatal << "failed to unmarshall result\n";
@@ -457,13 +458,13 @@ vnode_impl::doRPC_cb (const rpc_program prog, int procno,
 #define MAXDIM 10
 #define DT 0.01
 void
-vnode_impl::update_coords (chordID u, vec<float> uc, float ud)
+vnode_impl::update_coords (ptr<location> u, vec<float> uc, float ud)
 {
 
 
   //  warn << myID << " --- starting update -----\n";
-  //update the node's coords in the locatoin table
-  locations->lookup (u)->set_coords (uc);
+  //update the node's coords in the location table
+  u->set_coords (uc);
   int iterations = 0;
   float ftot = 0.0;
   vec<float> coords = me_->coords ();

@@ -156,11 +156,11 @@ class vnode_impl : public vnode {
   void do_upcall_cb (char *a, int upcall_prog, int upcall_proc,
 		     cbupcalldone_t, bool v);
 
-  void doRPC_cb (const rpc_program prog, int procno,
+  void doRPC_cb (ptr<location> l, xdrproc_t proc,
 		 void *out, aclnt_cb cb, 
 		 ref<dorpc_res> res, clnt_stat err);
 
-  void update_coords (chordID u, vec<float> uc, float ud);
+  void update_coords (ptr<location> l, vec<float> uc, float ud);
   ptr<location> closestgreedpred (const chordID &x, const vec<float> &n,
 				  const vec<chordID> &failed);
   ptr<location> closestproxpred  (const chordID &x, const vec<float> &n,
