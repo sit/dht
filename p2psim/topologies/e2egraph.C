@@ -64,6 +64,7 @@ void
 E2EGraph::parse(ifstream &ifs)
 {
   string line;
+  vector<Time> tmp;
 
   while(getline(ifs,line)) {
     vector<string> words = split(line);
@@ -98,6 +99,9 @@ E2EGraph::parse(ifstream &ifs)
       }
       // latency between node1 and node2
       _pairwise[ip1 -1][ip2 -1] = (Time) lat;
+      tmp.push_back((Time)lat);
     }
   }
+  sort(tmp.begin(),tmp.end());
+  _med_lat = tmp[tmp.size()/2];
 }

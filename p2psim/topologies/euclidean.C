@@ -53,6 +53,9 @@ void
 Euclidean::parse(ifstream &ifs)
 {
   string line;
+  Time max_first, max_second;
+
+  max_first = max_second = 0;
   while(getline(ifs,line)) {
     vector<string> words = split(line);
 
@@ -80,6 +83,10 @@ Euclidean::parse(ifstream &ifs)
     }
     c.first = atoi(coords[0].c_str());
     c.second = atoi(coords[1].c_str());
+    if (c.first > max_first) 
+      max_first = c.first;
+    else if (c.second > max_second)
+      max_second = c.second;
 
     // what kind of node?
     Node *p = ProtocolFactory::Instance()->create(ipaddr);
@@ -92,4 +99,6 @@ Euclidean::parse(ifstream &ifs)
     // add the node to the network
     send(Network::Instance()->nodechan(), &p);
   }
+
+  _med_lat = sqrt(max_first * max_first + max_second * max_second)/3;
 }

@@ -75,6 +75,8 @@ G2Graph::parse(ifstream &ifs)
       _samples.push_back(lat);
     }
   }
+  sort(_samples.begin(), _samples.end());
+  _med_lat = _samples[_samples.size()/2];
 }
 
 Time
