@@ -319,6 +319,7 @@ class LocTable {
     Chord::IDMap succ(ConsistentHash::CHID id, int status = LOC_HEALTHY);
     vector<Chord::IDMap> succs(ConsistentHash::CHID id, unsigned int m, int status = LOC_HEALTHY);
     vector<Chord::IDMap> preds(Chord::CHID id, uint m, int status = LOC_HEALTHY, Time expire=0);
+    vector<Chord::IDMap> between(ConsistentHash::CHID start, ConsistentHash::CHID end, int status = LOC_HEALTHY);
     Chord::IDMap pred(Chord::CHID id, int status = LOC_ONCHECK);
     void checkpoint();
     void print();
@@ -351,6 +352,7 @@ class LocTable {
     void stat();
     Time pred_biggest_gap(Chord::IDMap &start, Chord::IDMap &end, ConsistentHash::CHID mingap, Time to = 0); //these two functions are too specialized
     vector<Chord::IDMap> get_closest_in_gap(uint m, ConsistentHash::CHID end, Chord::IDMap src, Time to = 0);
+    vector<Chord::IDMap> next_close_hops(ConsistentHash::CHID key, uint n, Time to, double ratio = 2.0);
 
   protected:
     bool _evict;

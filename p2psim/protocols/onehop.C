@@ -491,10 +491,10 @@ OneHop::crash(Args *args)
   if (is_slice_leader(me.id, me.id)) {
     DEBUG(1) << " -- Slice leader\n";
     if (join_time > 0 && Node::collect_stat() && ((now()-join_time) > 180000)) {
-      double avg = (double)1000.0*node_live_bytes/(double)(now()-join_time);
+      double avg = (double)1000.0*node_live_outbytes/(double)(now()-join_time);
       if (avg < 0.01) {
 	printf("%llu: me %u what?! avg %.2f too small last join %llu total_bytes_sent %u\n",
-	    now(),ip(),avg, join_time, node_live_bytes);
+	    now(),ip(),avg, join_time, node_live_outbytes);
       }else{
 	OneHop::sliceleader_bw_avg.push_back(avg);
       }

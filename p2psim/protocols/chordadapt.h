@@ -67,6 +67,7 @@ class ChordAdapt: public P2Protocol {
 
     struct lookup_ret{
       vector<IDMap> v;
+      bool is_succ;
       bool done;
     };
 
@@ -105,6 +106,7 @@ class ChordAdapt: public P2Protocol {
 
     struct learn_ret {
       int stat;
+      bool is_succ;
       vector<IDMap> v;
     };
 
@@ -156,6 +158,7 @@ class ChordAdapt: public P2Protocol {
     Time _join_scheduled;
     uint _burst_sz;
     uint _bw_overhead;
+    uint _big_overhead;
     uint _stab_basic_timer;
     Time _last_joined_time;
     bool _stab_basic_running;
@@ -180,7 +183,7 @@ class ChordAdapt: public P2Protocol {
     HashMap<ConsistentHash::CHID, Time> _forwarded;
     HashMap<ConsistentHash::CHID, uint> _forwarded_nodrop;
 
-    void consolidate_succ_list(IDMap, vector<IDMap>, vector<IDMap>);
+    void consolidate_succ_list(IDMap n, vector<IDMap> oldlist, vector<IDMap> newlist, bool is_succ = true);
     void adjust_parallelism();
     void add_stat(Time t, bool live);
     Time est_timeout(double p);

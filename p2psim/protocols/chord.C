@@ -2387,6 +2387,7 @@ Time
 LocTable::pred_biggest_gap(Chord::IDMap &start, Chord::IDMap &end, Time mingap, Time to)
 {
   idmapwrap *elm = ring.closestsucc(me.id+1);
+  Chord::IDMap mysucc = succ(me.id+1);
   assert(elm);
   Chord::IDMap prev= me;
   Time prevelapsed = 0;
@@ -2401,8 +2402,8 @@ LocTable::pred_biggest_gap(Chord::IDMap &start, Chord::IDMap &end, Time mingap, 
 	  && elm->n.timestamp < oldn.timestamp) 
       oldn = elm->n;
     if ((elm->status <= LOC_HEALTHY) && 
-	(elm->is_succ || !to || elm->n.ip == me.ip || now()-elm->n.timestamp < to)){
-      if ((!elm->is_succ) && (elm->n.ip!=me.ip)){
+	(!to || elm->n.ip == me.ip || now()-elm->n.timestamp < to)){
+      if ((elm->n.ip!=mysucc.ip) && (elm->n.ip!=me.ip)){
 	ConsistentHash::CHID gap = (ConsistentHash::CHID)(elm->n.id - prev.id);
 	ConsistentHash::CHID dist = (ConsistentHash::CHID)(prev.id - me.id);
 	if ((ConsistentHash::CHID)(me.id-prev.id) < dist) 
@@ -2422,15 +2423,19 @@ LocTable::pred_biggest_gap(Chord::IDMap &start, Chord::IDMap &end, Time mingap, 
     if (!elm) elm = ring.first();
   }
 
-  Chord::IDMap oldest = maxgap_n;
+  Chord::IDMap closest_n = maxgap_n;
   elm = ring.closestsucc(maxgap_n.id+1);
+  Topology *topo = Network::Instance()->gettopology();
+  Time closest = topo->latency(me.ip,closest_n.ip);
   while (elm->n.ip!=maxgap_end.ip) {
-    if (elm->status <= LOC_HEALTHY && elm->n.timestamp < oldest.timestamp) 
-      oldest = elm->n;
+    if (elm->status <= LOC_HEALTHY && topo->latency(me.ip,elm->n.ip) < closest) {
+      closest_n = elm->n;
+      closest = topo->latency(me.ip,elm->n.ip);
+    }
     elm = ring.next(elm);
     if (!elm) elm = ring.first();
   }
-  start = oldest;
+  start = closest_n;
   end = maxgap_end;
   if (start.ip==me.ip) {
     start = oldn;
@@ -2475,5 +2480,68 @@ LocTable::get_closest_in_gap(uint m, ConsistentHash::CHID end, Chord::IDMap src,
     if (!elm) elm = ring.first();
   }
 
+  return v;
+}
+
+vector<Chord::IDMap>
+LocTable::next_close_hops(ConsistentHash::CHID key, uint n, Time to, double ratio)
+{
+  idmapwrap *elm = ring.closestpred(key);
+  Chord::IDMap mysucc = succ(me.id+1);
+
+  Time t = now();
+  Topology *topo = Network::Instance()->gettopology();
+  while (elm->status!=LOC_HEALTHY ||
+      (elm->n.ip!=mysucc.ip && to && (t - elm->n.timestamp) > to)) {
+    elm = ring.prev(elm);
+    if (!elm) elm = ring.last();
+  }
+  vector<Chord::IDMap> l;
+  l.clear();
+  ConsistentHash::CHID dist = ConsistentHash::distance(elm->n.id,key);
+  if (elm->is_succ || dist < 2 * ConsistentHash::distance(me.id,mysucc.id)) {
+    l.push_back(elm->n);
+    if (n==1) return l;
+  }
+  vector<Chord::IDMap>::iterator iter;
+  uint i = 0;
+  l.clear();
+  while (i < 8) {
+    ConsistentHash::CHID dist2 = ConsistentHash::distance(me.id,elm->n.id);
+    if (!ConsistentHash::between(me.id,key,elm->n.id)
+	|| (l.size()>=n&&dist > ConsistentHash::distance(me.id,elm->n.id)))
+      break;
+    if (elm->status==LOC_HEALTHY && 
+	(elm->n.ip == mysucc.ip || !to || (t - elm->n.timestamp) <= to)) {
+      i++;
+      for (iter = l.begin(); iter != l.end(); ++iter) {
+	if (topo->latency(me.ip,elm->n.ip)
+	    >= topo->latency(me.ip,(*iter).ip))
+	  break;
+      }
+      if (iter!=l.begin() || l.size() < n) 
+	l.insert(iter,elm->n);
+
+      if (l.size() > n)
+	l.erase(l.begin());
+    }
+    elm = ring.prev(elm);
+    if (!elm) elm = ring.last();
+  }
+  return l;
+}
+
+vector<Chord::IDMap>
+LocTable::between(ConsistentHash::CHID start, ConsistentHash::CHID end, int status)
+{
+  idmapwrap *elm = ring.closestsucc(start);
+  vector<Chord::IDMap> v;
+  v.clear();
+  while (elm->status <= status && 
+      (elm->n.id == start || ConsistentHash::between(start,end,elm->n.id))) {
+    v.push_back(elm->n);
+    elm = ring.next(elm);
+    if (!elm) elm = ring.first();
+  }
   return v;
 }
