@@ -245,10 +245,18 @@ dhc::recv_put (user_args *sbp)
     return;    
   }
 
-  if (!b)
-    b = New dhc_soft (myNode, kb);
+  if (put->rmw) {
+    if (tag_cmp (kb->data->tag, put->ctag) != 0) {
+      dhc_put_res res; res.status = DHC_OLD_VER;
+      sbp->reply (&res);
+      return;
+    }
+  }
 
-  dhcs.insert (b);
+  if (!b) {
+    b = New dhc_soft (myNode, kb);
+    dhcs.insert (b);
+  }
 
   ptr<write_state> ws = New refcounted<write_state> (sbp);
   ws->new_data->tag.ver = kb->data->tag.ver + 1;

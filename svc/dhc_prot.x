@@ -112,6 +112,8 @@ struct dhc_put_arg {
    chordID bID;
    chordID writer;
    dhash_value value;
+   bool rmw;    //Does this write require read-modify-write consistency?
+   tag_t ctag;  //If so, send along current version.
 };
 
 struct dhc_putblock_arg {

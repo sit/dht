@@ -140,9 +140,9 @@ done_insert_object (ref<mud_obj> o, mud_stat stat)
 
 ref<room> insert_things ()
 {
-  ref<thing> t1 = New refcounted <thing> (str("Cranberry Muffin"));
+  ref<thing> t1 = New refcounted <thing> (str("Cranberry Muffin"), chordID(0));
   mud->insert (t1, wrap (&done_insert_object, t1));
-  ref<thing> t2 = New refcounted <thing> (str("Boston Creme Pie"));
+  ref<thing> t2 = New refcounted <thing> (str("Boston Creme Pie"), chordID(0));
   mud->insert (t2, wrap (&done_insert_object, t2));
 
   ref<room> r1 = New refcounted <room> (str("First room"));

@@ -10,12 +10,24 @@ class thing: public mud_obj {
   char *buf;
 
  public:
-  thing (str n, ptr<room> l=NULL) : mud_obj (n), buf (NULL) { };
+  tag_t ctag; //current version, for rmw updates
+
+  thing (str n, chordID writer, uint64 ver=0, ptr<room> l=NULL) : 
+    mud_obj (n), buf (NULL) {
+    ctag.ver = ver;
+    ctag.writer = writer;
+  };
 
   thing (char *bytes, uint size) : buf (NULL) {
     uint offst = 0;
     uint slen;
-    bcopy (bytes, &slen, USZ);
+
+    bcopy (bytes, &ctag.ver, USZ);
+    offst += USZ;
+    bcopy (bytes + offst, &ctag.writer, ID_SIZE);
+    offst += ID_SIZE;
+
+    bcopy (bytes + offst, &slen, USZ);
     offst += USZ;
     set_name (bytes + offst, slen);
     offst += slen;
@@ -25,7 +37,7 @@ class thing: public mud_obj {
   };
 
   uint size () {
-    return ( 2*USZ + get_name ().len () + describe ().len ());
+    return ( 3*USZ + ID_SIZE + get_name ().len () + describe ().len ());
   }; 
 
   char *bytes () {
@@ -34,9 +46,14 @@ class thing: public mud_obj {
     uint offst = 0;
     uint slen;
     buf = (char *) malloc (size ());
+
+    bcopy (&ctag.ver, buf + offst, USZ);
+    offst += USZ;
+    bcopy (&ctag.writer, buf + offst, ID_SIZE);
+    offst += ID_SIZE;
     
     slen = get_name ().len ();
-    bcopy (&slen , buf + offst, USZ);
+    bcopy (&slen, buf + offst, USZ);
     offst += USZ;
     bcopy (get_name ().cstr (), buf + offst, slen);
     offst += slen;
@@ -56,6 +73,7 @@ class thing: public mud_obj {
     ret << "\n"
 	<< "Object Name: " << get_name () << "\n"
 	<< "         ID: " << ID () << "\n"
+	<< "        tag: <" << ctag.ver << ", " << ctag.writer << ">\n"
 	<< "Description: " << describe () << "\n";
 
     return str (ret);

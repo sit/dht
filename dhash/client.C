@@ -763,6 +763,11 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb, int opti
       arg->bID = block->ID;
       arg->writer = clntnode->my_ID ();
       arg->value.set (block->data, block->len);
+      arg->rmw = (options & DHASHCLIENT_RMW) ? 1 : 0;
+      if (arg->rmw) { 
+	arg->ctag.ver = 0;
+	arg->ctag.writer = 0;
+      }
       ptr<dhc_put_res> res = New refcounted<dhc_put_res>;
 
       if (options & DHASHCLIENT_NEWBLOCK)

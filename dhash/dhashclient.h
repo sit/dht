@@ -3,6 +3,7 @@
 #define __DHASH_CLIENT_H__
 
 #include <dhashgateway_prot.h>
+#include <dhc_prot.h>
 #include <route.h>
 
 struct insert_info

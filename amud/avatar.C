@@ -6,7 +6,7 @@ avatar::avatar (str n, str p, ref<dhashclient> d, ptr<room> l=NULL) :
   mud_obj (n), dhash (d), passwd (p), buf (NULL), location (l)
 {
   if (!location)
-    location = New refcounted <room> (str("Limbo"));
+    location = New refcounted <room> (str("First room"));
 }
 
 avatar::avatar (char *bytes, uint size, ref<dhashclient> d) : 
@@ -30,11 +30,18 @@ avatar::avatar (char *bytes, uint size, ref<dhashclient> d) :
   bcopy (bytes + offst, &num_inv, USZ);
   offst += USZ;
 
+  uint64 ver;
+  chordID writer;
   for (uint i=0; i<num_inv; i++) {
+    bcopy (bytes + offst, &ver, USZ);
+    offst += USZ;
+    bcopy (bytes + offst, &writer, ID_SIZE);
+    offst += ID_SIZE;
     bcopy (bytes + offst, &slen, USZ);
     offst += USZ;
     str n (bytes + offst, slen);
-    ptr<thing> inv = New refcounted<thing> (n);
+
+    ptr<thing> inv = New refcounted<thing> (n, writer, ver);
     inventory.push_back (inv);
     offst += slen;
   }
@@ -76,11 +83,15 @@ avatar::bytes ()
   offst += USZ;
 
   for (uint i=0; i<inventory.size (); i++) {
+    bcopy (&inventory[i]->ctag.ver, buf + offst, USZ);
+    offst += USZ;
+    bcopy (&inventory[i]->ctag.writer, buf + offst, ID_SIZE);
+    offst += ID_SIZE;
+
     slen = inventory[i]->get_name ().len ();
     bcopy (&slen, buf + offst, USZ);
     offst += USZ;
-    bcopy (inventory[i]->get_name ().cstr (), buf + offst, 
-	   slen);
+    bcopy (inventory[i]->get_name ().cstr (), buf + offst, slen);
     offst += slen;
   }
   
