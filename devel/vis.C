@@ -2,6 +2,8 @@
 #include "gtk/gtk.h"
 #include "gdk/gdk.h"
 #include "math.h"
+#include "rxx.h"
+#include "async.h"
 
 #define WINX 600
 #define WINY 600
@@ -23,12 +25,23 @@ static GtkWidget *check_neighbors;
 static int glevel = 1;
 static char *color_file;
 static bool drawids = false;
+static bool simulated_input = false;
+
+struct get_fingers_args {
+  str hostname;
+  short port;
+  chordID ID;
+  ihash_entry <get_fingers_args> link;
+  get_fingers_args (chordID I, str h, short p) :
+    hostname (h), port (p), ID (I) { };
+};
 
 struct color_pair {
   GdkColor c;
   unsigned long lat;
 };
 
+static rxx finger_rxx ("([0-9]*)\\|([0-9]*) ");
 vec<color_pair> lat_map;
 
 struct f_node {
@@ -56,11 +69,14 @@ struct f_node {
 
 void setup ();
 ptr<aclnt> get_aclnt (str host, short port);
+
+void queue_node (chordID ID, str hostname, short port);
 void get_fingers (str host, short port);
 void get_fingers (chordID ID, str host, short port);
 void get_fingers_got_fingers (chordID ID, str host, short port, 
 			      chord_getfingers_ext_res *res,
 			      clnt_stat err);
+void get_cb (f_node *node_next);
 void add_fingers (chordID ID, str host, short port, chord_getfingers_ext_res *res);
 void update_fingers (f_node *n);
 void update_fingers_got_fingers (chordID ID, str host, short port, 
@@ -71,12 +87,6 @@ void update_toes (f_node *nu);
 void update_toes_got_toes (chordID ID, str host, short port, 
 			   chord_gettoes_res *res, clnt_stat err);
 
-void get_succ (str host, short port);
-void get_succ (chordID ID, str host, short port);
-void get_succ_got_succ (chordID ID, str host, short port, 
-			      chord_getsucc_ext_res *res,
-			      clnt_stat err);
-void add_succ (chordID ID, str host, short port, chord_getsucc_ext_res *res);
 void update_succlist (f_node *n);
 void update_succ_got_succ (chordID ID, str host, short port, 
 				 chord_getsucc_ext_res *res,
@@ -108,6 +118,8 @@ void set_foreground_lat (unsigned long lat);
 int main (int argc, char** argv);
 void gtk_poll ();
 
+ihash<chordID, get_fingers_args, &get_fingers_args::ID, 
+  &get_fingers_args::link, hashID> get_queue;
 ihash<chordID, f_node, &f_node::ID, &f_node::link, hashID> nodes;
 ptr<axprt_dgram> dgram_xprt;
 
@@ -123,6 +135,7 @@ setup ()
 void
 update () 
 {
+  if (simulated_input) return;
   f_node *n = nodes.first ();
   while (n) {
     update_fingers (n);
@@ -179,73 +192,11 @@ update_succ_got_succ (chordID ID, str host, short port,
   }
 
   f_node *nu = nodes[ID];
-  delete nu->ressucc;
+  if (nu->ressucc) delete nu->ressucc;
   nu->ressucc = res;
-
-  for (unsigned int i=0; i < res->resok->succ.size (); i++) {
-    if ( nodes[res->resok->succ[i].x] == NULL) 
-      get_fingers (res->resok->succ[i].x, res->resok->succ[i].r.hostname,
-		   res->resok->succ[i].r.port);
-  }
-}
-
-
-void 
-get_succ (str host, short port) 
-{
-  chordID ID = make_chordID (host, port);
-  get_succ (ID, host, port);
-}
-
-void
-get_succ (chordID ID, str host, short port) 
-{
-  ptr<aclnt> c = get_aclnt (host, port);
-  if (c == NULL) 
-    fatal << "locationtable::doRPC: couldn't aclnt::alloc\n";
-
-  chord_vnode n;
-  n.n = ID;
-  chord_getsucc_ext_res *res = New chord_getsucc_ext_res ();
-  c->timedcall (TIMEOUT, CHORDPROC_GETSUCC_EXT, &n, res,
-		wrap (&get_succ_got_succ, 
-		      ID, host, port, res));
   
 }
 
-void
-get_succ_got_succ (chordID ID, str host, short port, 
-			 chord_getsucc_ext_res *res,
-			 clnt_stat err) 
-{
-  if (err || res->status) {
-    warn << "get succ failed, deleting: " << ID << "\n";
-    if (nodes[ID])
-      nodes.remove (nodes[ID]);
-    draw_ring ();
-  } else
-    add_succ (ID, host, port, res);
-}
-
-void
-add_succ (chordID ID, str host, short port, chord_getsucc_ext_res *res) 
-{
-  f_node *n = nodes[ID];
-
-  if (n && n->ressucc) return;
-  if (!n) {
-    warn << "added " << ID << "\n";
-    n = New f_node (ID, host, port);
-    nodes.insert (n);
-  }
-  n->ressucc = res;
-  for (unsigned int i=0; i < res->resok->succ.size (); i++) {
-    if ( nodes[res->resok->succ[i].x] == NULL) 
-      get_succ (res->resok->succ[i].x, res->resok->succ[i].r.hostname,
-		   res->resok->succ[i].r.port);
-  }
-  draw_ring ();
-}
 
 //----- update fingers -----------------------------------------------------
 
@@ -282,12 +233,80 @@ update_fingers_got_fingers (chordID ID, str host, short port,
   update_toes (nu);
   for (unsigned int i=0; i < res->resok->fingers.size (); i++) {
     if ( nodes[res->resok->fingers[i].x] == NULL) 
-      get_fingers (res->resok->fingers[i].x, res->resok->fingers[i].r.hostname,
-		   res->resok->fingers[i].r.port);
+      queue_node (res->resok->fingers[i].x, res->resok->fingers[i].r.hostname,
+		  res->resok->fingers[i].r.port);
   }
 }
 
-void 
+
+void
+get_fingers (str file) 
+{
+  int i = 0;
+  char s[1024];
+
+  strbuf data = strbuf () << file2str (file);
+  chord_getfingers_ext_res *res = NULL;
+  chord_gettoes_res *nres = NULL;
+  while (str line = suio_getline(data.tosuio ())) {
+    f_node *n;
+    switch (i) {
+    case 0:
+      {
+	int ID = atoi (line);
+	n = New f_node (bigint (ID) * (bigint(1) << (160-24)),
+			file, 0);
+	nodes.insert (n);
+	res = New chord_getfingers_ext_res (CHORD_OK);
+	nres = New chord_gettoes_res (CHORD_OK);
+	n->res = res;
+	n->restoes = nres;
+      }
+      break;
+    case 1:
+    case 2:
+      {
+	vec<int> ids;
+	vec<int> lats;
+	const char *cs = line.cstr ();
+	strcpy (s, cs);
+	char *start = s;
+	char *end = s;
+	while ((end = strchr(start, ' '))) {
+	  *end = 0;
+	  end++;
+	  char *sid = start; 
+	  char *latency = strchr(sid, '|');
+	  *latency = 0;
+	  latency++;
+	  ids.push_back (atoi (sid));
+	  lats.push_back (atoi (latency));
+	  start = end;
+	}
+	if (i == 1) {
+	  res->resok->fingers.setsize (ids.size ());
+	  for (unsigned int i = 0; i < ids.size (); i++) {
+	    res->resok->fingers[i].x = 
+	      bigint (ids[i]) * (bigint(1) << (160-24));
+	    res->resok->fingers[i].a_lat = lats[i] * 1000;
+	  }
+	} else {
+	  nres->resok->toes.setsize (ids.size ());
+	  for (unsigned int i = 0; i < ids.size (); i++) {
+	    nres->resok->toes[i].x = 
+	      bigint (ids[i]) * (bigint(1) << (160-24));
+	    nres->resok->toes[i].a_lat = lats[i] * 1000;
+	  }
+	}
+      }
+      break;
+    }
+    i = (i + 1) % 3;
+  }
+  draw_ring ();
+}
+
+void
 get_fingers (str host, short port) 
 {
   chordID ID = make_chordID (host, port);
@@ -338,14 +357,44 @@ add_fingers (chordID ID, str host, short port, chord_getfingers_ext_res *res)
   n->res = res;
   for (unsigned int i=0; i < res->resok->fingers.size (); i++) {
     if ( nodes[res->resok->fingers[i].x] == NULL) 
-      get_fingers (res->resok->fingers[i].x, res->resok->fingers[i].r.hostname,
-		   res->resok->fingers[i].r.port);
+      queue_node (res->resok->fingers[i].x, res->resok->fingers[i].r.hostname,
+		  res->resok->fingers[i].r.port);
   }
   update_toes (n);
+  update_succlist (n);
   draw_ring ();
 }
 
+void
+queue_node (chordID ID, str hostname, short port)
+{
+  if (!get_queue[ID]) {
+    get_fingers_args *args = New get_fingers_args (ID, hostname, port);
+    get_queue.insert (args);
+  }
+}
 
+void
+get_cb (f_node *node_next) 
+{
+  if (get_queue.first ()) {
+    get_fingers_args *arg = get_queue.first ();
+    get_fingers (arg->ID, arg->hostname, arg->port);
+    get_queue.remove (arg);
+    delete arg;
+  } else {
+    if (node_next == NULL) 
+      node_next = nodes.first ();
+    if (node_next) {
+      update_fingers (node_next);
+      update_succlist (node_next);
+      
+      node_next = nodes.next (node_next);
+    }
+  }
+
+  delaycb (0, 1000*1000*interval, wrap (&get_cb, node_next));
+}
 //----- update toes -----------------------------------------------------
 
 void
@@ -707,29 +756,7 @@ draw_arc (chordID from, chordID to, GdkGC *draw_gc)
     oldy = (int)py;
   }
   draw_arrow (oldx, oldy, tox, toy, draw_gc);
-    /*
-      int m1, m2;
-      int w, h;
-      gint16 a1;
-      if (((x < a) && (y < b)) || ((x >= a) && (y < b))) {
-      m1 = a;
-      m2 = y;
-      w = (x < m1) ? (m1 - x) : (x - m1);
-      h = (b < m2) ? (m2 - b) : (b - m2);
-      a1 = (x < a) ? 32 : 48;
-      } else {
-      m1 = x;
-      m2 = b;
-      w = (a < m1) ? (m1 - a) : (a - m1);
-      h = (y < m2) ? (m2 - y) : (y - m2);
-      a1 = (x < a ) ? 48 : 32;
-      }
-      int l = m1 - w;
-      int t = m2 - h;
-      a1 = (gint16) a1 * 360;
-      gint16 a2 = (gint16) 16*360;
-      gdk_draw_arc (pixmap, draw_gc, FALSE, l, t, 2*w, 2*h, a1, a2);
-    */
+
 }
 
 
@@ -927,13 +954,21 @@ main (int argc, char** argv)
   gtk_init (&argc, &argv);
 
   str host = "not set";
+  str sim_file = "network";
   short port = 0;
-  interval = -1;
+  interval = 100;
   color_file = ".viscolors";
 
   int ch;
-  while ((ch = getopt (argc, argv, "j:a:l:f:i")) != -1) {
+  while ((ch = getopt (argc, argv, "j:a:l:f:i:s:")) != -1) {
     switch (ch) {
+    case 's':
+      {
+	simulated_input = true;
+	sim_file = optarg;
+	host = "simulated";
+	break;
+      }
     case 'j': 
       {
 	char *bs_port = strchr(optarg, ':');
@@ -986,14 +1021,12 @@ main (int argc, char** argv)
 
   initgraf ();
 
-  get_fingers (host, port);
-  get_succ (host, port);
+  if (!simulated_input) {
+    get_fingers (host, port);
+  } else
+    get_fingers (sim_file);
 
-  if (interval > 0) {
-    warn << "enabling auto-update at " << interval << " second intervals\n";
-    delaycb (interval, 0, wrap (&update));
-  }
- 
+  delaycb (0, 1000*1000*interval, wrap (&get_cb, (f_node *)NULL));
   gtk_poll ();
   amain ();
 }

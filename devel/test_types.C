@@ -180,11 +180,11 @@ main (int argc, char **argv)
     }
   case NOAUTH:
     {
-    dhash.insert (bigint (10), 
+      /*    dhash.insert (bigint (10), 
 		  data, 
 		  strlen (data), 
 		  wrap (&store_cb_noauth, dhash),
-		  DHASH_NOAUTH);
+		  DHASH_NOAUTH); */
     }
     break;
   case APPEND:
