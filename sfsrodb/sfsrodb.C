@@ -1,4 +1,4 @@
-/* $Id: sfsrodb.C,v 1.21 2002/04/02 16:38:48 cates Exp $ */
+/* $Id: sfsrodb.C,v 1.22 2002/04/20 20:53:10 cates Exp $ */
 
 /*
  * Copyright (C) 1999 Kevin Fu (fubob@mit.edu)
@@ -418,6 +418,7 @@ store_file (sfsro_inode *inode, str path)
   if ((fd = open (path, O_RDONLY)) < 0)
     fatal << "open failed: " << path << ": " << strerror(errno) << "\n";
 
+
   // Deal with direct pointers
   uint32 blocknum = 0;
   inode->reg->direct.setsize (SFSRO_NDIR);
@@ -550,8 +551,16 @@ sort_dir (const str path, vec < char *>&file_list)
     file_list.push_back (filename);
   }
 
+  //
+  // XXX this might be broken.... --josh
+  //
   qsort (file_list.base (), file_list.size (),
 	 sizeof (char *), compare_name);
+
+  if (closedir (dirp) < 0) {
+    warn << "closedir failed: " << path << ": " << strerror (errno) << "\n";
+    exit (0);
+  }
 
 }
 

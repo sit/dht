@@ -29,11 +29,59 @@
 #include "dhash_prot.h"
 #include "math.h"
 
+
+//#define STP_CONGESTION_CONTROL
+
+#ifndef STP_CONGESTION_CONTROL
+
+void
+locationtable::doRPC (chordID &ID, 
+		      rpc_program prog, int procno, 
+		      ptr<void> in, void *out, aclnt_cb cb)
+{
+  location *l = getlocation (ID);
+  assert (l);
+  assert (l->refcnt >= 0);
+  touch_cachedlocs (l);
+  
+  ref<aclnt> c = aclnt::alloc (dgram_xprt, prog, 
+			       (sockaddr *)&(l->saddr));
+  
+  c->call (procno, in, out, cb);
+}
+
+void
+locationtable::stats ()
+{
+  warn << "locationtable::stats () ===> NOP\n";
+}
+
+
+void
+locationtable::reset_idle_timer ()
+{
+  warn << "locationtable::reset_idle_timer () ===> NOP\n";
+}
+
+
+
+#else // STP_CONGESTION_CONTROL
+
+
 #define GAIN 0.2
 #define MAX_REXMIT 3
 #define USE_PERHOST_LATENCIES 1
 #define MIN_RPC_FAILURE_TIMER 3
 
+//#define __JJ__
+//#define __J__
+
+//#define PEG_CWIND
+//#define TIMEOUT_FUDGING
+
+// XXX need to protect against seqno wrap!!!
+//
+int global_seqno = 0;
 u_int64_t st = getusec ();
 
 const int aclnttrace (getenv ("ACLNT_TRACE")
@@ -74,7 +122,7 @@ locationtable::doRPC_udp (chordID &ID,
 {
 
   reset_idle_timer ();
-  if (left + cwind < seqno) {
+  if (left + cwind < global_seqno) {
     RPC_delay_args *args = New RPC_delay_args (ID, prog, procno,
 					       in, out, cb, getusec ());
     enqueue_rpc (args);
@@ -104,7 +152,7 @@ locationtable::doRPC_issue (chordID &ID,
   assert (l->refcnt >= 0);
   touch_cachedlocs (l);
   
-  rpc_state *C = New rpc_state (cb, ID, getusec (), seqno, prog.progno);
+  rpc_state *C = New rpc_state (cb, ID, getusec (), global_seqno, prog.progno);
   
   C->b = rpccb_chord::alloc (c, 
 			     wrap (this, &locationtable::doRPCcb, c, C),
@@ -114,19 +162,34 @@ locationtable::doRPC_issue (chordID &ID,
 			     procno, 
 			     (sockaddr *)&(l->saddr));
   
-  sent_elm *s = New sent_elm (seqno);
+  sent_elm *s = New sent_elm (global_seqno);
   sent_Q.insert_tail (s);
   
   long sec, nsec;
   setup_rexmit_timer (ID, &sec, &nsec);
   C->b->send (sec, nsec);
 
-  seqno++;
+  global_seqno++;
 }
 
 void
 locationtable::timeout (rpc_state *C)
 {
+#if 0
+  u_int64_t now = getusec ();
+  warn << "locationtable::timeout\n"; 
+  warn << "\t**now " << now << "\n";
+  warn << "\tID " << C->ID << "\n";
+  warn << "\ts " << C->s << "\n";
+  warn << "\tprogno " << C->progno << "\n";
+  warn << "\tseqno " << C->seqno << "\n";
+  warn << "\trexmits " << C->rexmits << "\n";
+#endif
+
+#ifdef __J__
+  warnx << gettime() << " TIMEOUT " << 1 + C->seqno << " cwind " << (int)cwind << "\n";
+#endif
+
   C->s = 0;
   rpc_done (-1);
 }
@@ -137,7 +200,19 @@ locationtable::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
 
   if (err) {
     nrpcfailed++;
-    warn << "locationtable::doRPCcb: failed: " << err << "\n";
+
+#ifdef __J__
+    warnx << gettime() << " FAILED " << 1 + C->seqno << " err " << err << "\n";
+#endif
+
+    u_int64_t now = getusec ();
+    warnx << "locationtable::doRPCcb: failed: " << err << "\n";
+    warnx << "\t**now " << now << "\n";
+    warnx << "\tID " << C->ID << "\n";
+    warnx << "\ts " << C->s << "\n";
+    warnx << "\tprogno " << C->progno << "\n";
+    warnx << "\tseqno " << C->seqno << "\n";
+    warnx << "\trexmits " << C->rexmits << "\n";
     chordnode->deletefingers (C->ID);
   } else if (C->s > 0) {
     u_int64_t now = getusec ();
@@ -147,8 +222,21 @@ locationtable::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
       update_latency (C->ID, lat, (C->progno == DHASH_PROGRAM));
     } else {
       warn << "*** Ignoring timewarp: C->s " << C->s << " > now " << now << "\n";
+      warnx << " " << now       << "\n";
+      warnx << " " << getusec() << "\n";
+      warnx << " " << getusec() << "\n";
+      warnx << " " << getusec() << "\n";
+      warnx << " " << getusec() << "\n";
+      warnx << " " << getusec() << "\n";
+      warnx << " " << getusec() << "\n";
+      warnx << " " << getusec() << "\n";
+      warnx << " " << getusec() << "\n";
+      warnx << " " << getusec() << "\n";
     }
   }
+
+  // 1019165504735614 C->s
+  // 1019161909872991 now 
 
   (C->cb) (err);
 
@@ -161,11 +249,15 @@ locationtable::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
 void
 locationtable::rpc_done (long acked_seqno)
 {
-
-  if (seqno < 0) {
+  // XXX acked_seqno
+  if (acked_seqno < 0) {
     update_cwind (-1);
     return;
   }
+
+#ifdef __JJ__
+  warnx << gettime() << " rpc_done " << 1 + acked_seqno << "\n";
+#endif
 
   // XXX this is all just debugging stuff... 
   //     put i suspect it has a reasonable
@@ -194,7 +286,7 @@ locationtable::rpc_done (long acked_seqno)
   
   update_cwind (acked_seqno);
 
-  while (Q.first && (left + cwind >= seqno) ) {
+  while (Q.first && (left + cwind >= global_seqno) ) {
     int qsize = (num_qed > 100) ? 100 :  num_qed;
     int next = (int)(qsize*((float)random()/(float)RAND_MAX));
     RPC_delay_args *args =  Q.first;
@@ -243,7 +335,7 @@ locationtable::update_cwind (int seq)
       if (sent_Q.first) 
 	left = sent_Q.first->seqno;
       else
-	left = seqno;
+	left = global_seqno;
     }
   } else {
     ssthresh = cwind/2; //MD
@@ -260,6 +352,10 @@ locationtable::update_cwind (int seq)
   if (cwind_cwind.size () > 10000) cwind_cwind.pop_front ();
   if (cwind_time.size () > 10000) cwind_time.pop_front ();
 
+
+#ifdef PEG_CWIND
+  cwind = 100.0; 
+#endif
 }
 
 void
@@ -299,9 +395,14 @@ locationtable::setup_rexmit_timer (chordID ID, long *sec, long *nsec)
   *sec = (long)(alat/1000000);
   *nsec = ((long)alat % 1000000) * 1000;
 
-  if (*nsec < 0 || *sec < 0)
+  *sec = 0;
+  *nsec = 1000000;  // 1 ms
+
+  if (*nsec < 0 || *sec < 0) {
+    stats ();
     panic ("[send to cates@mit.edu] setup: sec %ld, nsec %ld, alat %f, avg_lat %f, bf_lat %f, bf_var %f\n",
 	   *sec, *nsec, alat, avg_lat, bf_lat, bf_var);
+  }
 }
 
 
@@ -582,10 +683,20 @@ rpccb_chord::send (long _sec, long _nsec)
   sec = _sec;
   nsec = _nsec;
 
+#ifdef TIMEOUT_FUDGING
+  if (sec < 2) {
+    sec = 1;
+    nsec = 0;
+  }
+#endif
+
   if (nsec < 0 || sec < 0)
     panic ("[send to cates@mit.edu]: sec %ld, nsec %ld\n", sec, nsec);
 
   tmo = delaycb (sec, nsec, wrap (this, &rpccb_chord::timeout_cb, deleted));
+#if 0
+  warn ("%s xmited %d:%06d\n", gettime().cstr(), int (sec), int (nsec/1000));
+#endif
   xmit (0);
 }
 
@@ -597,26 +708,50 @@ rpccb_chord::timeout_cb (ptr<bool> del)
 
   if (utmo)
     utmo ();
-  
+
   if (rexmits > MAX_REXMIT) {
+    u_int64_t now = getusec ();
+    warn << "rpccb_chord::timeout_cb\n"; 
+    warn << "\t**now " << now << "\n";
+    warn << "\trexmits " << rexmits << "\n";
+
     tmo = NULL;
     timeout ();
     return;
-  }  else  {
+  } else {
     if (nsec < 0 || sec < 0)
       panic ("1 timeout_cb: sec %ld, nsec %ld\n", sec, nsec);
 
+#ifdef __J__
+    warnx << gettime() << " REXMIT " << xid
+	  << " rexmits " << rexmits << ", timeout "<< sec << ":" << nsec << "\n";
+#endif
     xmit (rexmits);
     if (rexmits == MAX_REXMIT) {
+      // XXX
+      // The intent of this code path is to do a conservative last ditch effort.
+      // However, if backed off value in <sec,nsec> exceeds MIN_RPC_FAILURE_TIMER
+      // then this this doesn't happen.
+      // --josh
       sec = MIN_RPC_FAILURE_TIMER;
       nsec = 0;
     } else {
       sec *= 2;
       nsec *= 2;
-      if (nsec > 1000000000) {
+      while (nsec >= 1000000000) {
 	nsec -= 1000000000;
 	sec += 1;
       }
+
+#if 0
+      sec *= 2;
+      nsec *= 2;
+      while (nsec >= 1000000000) {
+	nsec -= 1000000000;
+	sec += 1;
+      }
+#endif
+
     }
   }
 
@@ -634,3 +769,5 @@ rpccb_chord::finish_cb (aclnt_cb cb, ptr<bool> del, clnt_stat err)
   *del = true;
   cb (err);
 }
+
+#endif // STP_CONGESTION_CONTROL

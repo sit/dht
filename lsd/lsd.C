@@ -28,7 +28,7 @@
 #include "parseopt.h"
 #include <sys/types.h>
 
-//#define PROFILING 
+#define PROFILING 
 
 // When a process starts up profiling is not happening.  But by
 // sending a SIGUSR1, profiling is turned on.  (Another SIGUSR1 turns
@@ -44,7 +44,10 @@ extern "C" {
 
 EXITFN (cleanup);
 
-#define STORE_SIZE 60000 //size of block store per vnode (in blocks)
+// XXX temporary hack -- reset to something reasonable soon.
+//     [used to be 60000]
+//     --josh
+#define STORE_SIZE 2000000 //size of block store per vnode (in blocks)
 
 ptr<chord> chordnode;
 static str p2psocket;

@@ -95,7 +95,7 @@ dhash::dhash(str dbname, vnode *node, int k, int ss, int cs, int _ss_mode) :
 void
 dhash::sync_cb () 
 {
-  warn << "sync\n";
+  /// warn << "sync\n";
   db->sync ();
   delaycb (30, wrap (this, &dhash::sync_cb));
 }
@@ -944,7 +944,16 @@ dhash::responsible(const chordID& n)
 
 void
 dhash::store_flush (chordID key, dhash_stat value) {
-  warn << "flushing element " << key << " from store\n";
+  fatal << "flushing element " << key << " from store\n";
+
+  // XXX what's going on here?  
+  //     Why is the key entered into the key_cache, 
+  //     and at the same time deleted from the database?
+  //
+  //     Moreover, why does cache_flush() then delete
+  //     the key from the database again?
+  //     --josh
+
   ptr<dbrec> k = id2dbrec(key);
   dhash_stat c = DHASH_CACHED;
   key_cache.enter (key, &c);
