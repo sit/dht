@@ -62,6 +62,10 @@ private:
       next = prev = 0;
     }
 
+    ~k_nodeinfo_buffer() {
+      delete ki;
+    }
+
     k_nodeinfo *ki;
     k_nodeinfo_buffer *next;
     k_nodeinfo_buffer *prev;
@@ -70,33 +74,55 @@ private:
   class k_nodeinfo_pool
   {
   public:
-    k_nodeinfo_pool() { _head = _tail = New k_nodeinfo_buffer; }
+    k_nodeinfo_pool() {
+      _head = _tail = New k_nodeinfo_buffer;
+      _count = 0;
+      _buffer_limit = 8192;
+    }
+
+    ~k_nodeinfo_pool() {
+      k_nodeinfo_buffer *i = _head;
+      while(i) {
+        k_nodeinfo_buffer *next = i->next;
+        delete i;
+        i = next;
+      }
+    }
 
     k_nodeinfo* pop(Kademlia::NodeID id, IPAddress ip)
     {
-      if(_tail == _head)
+      if(!_count)
         return New k_nodeinfo(id, ip);
+
       k_nodeinfo *newki = _pop();
       newki->id = id;
       newki->ip = ip;
       newki->firstts = newki->lastts = 0;
+      _count--;
       return newki;
     }
 
     k_nodeinfo* pop(k_nodeinfo *ki)
     {
-      if(_tail == _head)
+      if(!_count)
         return New k_nodeinfo(ki);
+
       k_nodeinfo *newki = _pop();
       newki->id = ki->id;
       newki->ip = ki->ip;
       newki->firstts = ki->firstts;
       newki->lastts = ki->lastts;
+      _count--;
       return newki;
     }
 
     void push(k_nodeinfo *ki)
     {
+      // if(_count >= _buffer_limit) {
+        // delete ki;
+        // return;
+      // }
+
       // allocate new space
       if(_tail->next == 0) {
         _tail->next = New k_nodeinfo_buffer;
@@ -105,6 +131,7 @@ private:
 
       _tail = _tail->next;
       _tail->ki = ki;
+      _count++;
     }
 
   private:
@@ -115,6 +142,8 @@ private:
     }
 
   private:
+    unsigned _count;
+    unsigned _buffer_limit;
     k_nodeinfo_buffer* _head;
     k_nodeinfo_buffer* _tail;
   };
@@ -230,15 +259,14 @@ public:
   };
 
   class lookup_result { public:
-    lookup_result(Kademlia *k) { results.clear(); hops = 0; this->k = k; }
+    lookup_result() { results.clear(); hops = 0; }
     ~lookup_result() {
       for(set<k_nodeinfo*, closer>::const_iterator i = results.begin(); i != results.end(); ++i)
-        k->pool->push(*i);
+        Kademlia::pool->push(*i);
     }
     set<k_nodeinfo*, closer> results;
     NodeID rid;     // the guy who's replying
     unsigned hops;
-    Kademlia *k;
   };
   // }}}
   // {{{ ping_args and ping_result
@@ -279,9 +307,9 @@ public:
   static unsigned debugcounter;         // 
   static unsigned stabilize_timer;      // how often to stabilize
   static unsigned refresh_rate;         // how often to refresh info
+  static k_nodeinfo_pool *pool;         // pool of k_nodeinfo_pool
   static const unsigned idsize = 8*sizeof(Kademlia::NodeID);
   hash_map<NodeID, k_nodeinfo*> flyweight;
-  k_nodeinfo_pool *pool;
 // }}}
 // {{{ private
 private:
@@ -321,14 +349,13 @@ private:
   // utility 
   //
   class callinfo { public:
-    callinfo(Kademlia *k, k_nodeinfo *ki, lookup_args *la, lookup_result *lr)
-      : k(k), ki(ki), la(la), lr(lr) {}
+    callinfo(k_nodeinfo *ki, lookup_args *la, lookup_result *lr)
+      : ki(ki), la(la), lr(lr) {}
     ~callinfo() {
-      k->pool->push(ki);
+      Kademlia::pool->push(ki);
       delete la;
       delete lr;
     }
-    Kademlia *k;
     k_nodeinfo *ki;
     lookup_args *la;
     lookup_result *lr;
