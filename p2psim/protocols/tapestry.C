@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.11 2003/10/12 22:15:53 strib Exp $ */
+/* $Id: tapestry.C,v 1.12 2003/10/13 02:20:20 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -702,8 +702,13 @@ Tapestry::handle_nn(nn_args *args, nn_return *ret)
     nns.push_back( newnode );
   }
 
-  // do we really need to send the forward pointers?  The theory paper says to,
-  // but the Java implementation doesn't.  for now we won't.  TODO maybe.
+  // send all forward pointers at that level
+  for( uint i = 0; i < _base; i++ ) {
+    NodeInfo *newnode = _rt->read( args->alpha, i );
+    if( newnode != NULL ) {
+      nns.push_back( newnode );
+    }
+  }
 
   // add yourself to the list
   nns.push_back( New NodeInfo( ip(), id() ) );
@@ -1237,7 +1242,9 @@ Tapestry::next_hop( GUID key, IPAddress** ips, uint size )
 	  j = 0;
 	}
       }
-
+      TapDEBUG(4) << "looking for key " << print_guid(key) << ", level " <<
+	i << ", digit " << j << " is " << print_guid(re->get_first()->_id) << 
+	endl;
       // if it is us, go around another time
       // otherwise, we've found the next hop
       if( re->get_first()->_addr != ip() ) {
@@ -1246,6 +1253,7 @@ Tapestry::next_hop( GUID key, IPAddress** ips, uint size )
 	}
 	return;
       }
+      re = NULL;
     }
     
   }
@@ -1384,7 +1392,8 @@ Tapestry::lookup_cheat( GUID key )
   GUID bestmatch = lid[0];
   for( uint i = 1; i < lid.size(); i++ ) {
     GUID next = lid[i];
-
+    TapDEBUG(4) << "comparing " << print_guid(bestmatch) << " with " <<
+      print_guid( next ) << endl;
     // surrogate routing sucks.  must find the one who has a maxmatch digit
     // closest but greater than the keys.  If not, the one with the lowest
     // maxmatch digit.  For ties, go up a level and repeat
@@ -1395,11 +1404,12 @@ Tapestry::lookup_cheat( GUID key )
       if( (next_digit >= key_digit && best_digit >= key_digit && 
 	   next_digit < best_digit ) ||
 	  (next_digit < key_digit && best_digit < key_digit &&
-	   next_digit < key_digit) ||
+	   next_digit < best_digit) ||
 	  (next_digit >= key_digit && best_digit < key_digit) ) {
 
+	TapDEBUG(4) << "new best: digit " << (maxmatch+j) << " " << next_digit 
+		    << " " << best_digit << " " << key_digit << endl;
 	bestmatch = next;
-	best_digit = get_digit( bestmatch, maxmatch );
 	break;
 
       } else if( next_digit != best_digit ) {
@@ -1907,6 +1917,7 @@ RoutingTable::insertor( ostream &s ) const
   _node->print_guid( _node->id(), s );
   s << endl;
 
+  uint ones = 0;
   // now print out each row until you hit an empty one
   for( uint i = 0; i < _node->_digits_per_id; i++ ) {
     s << i << ": ";
@@ -1926,7 +1937,12 @@ RoutingTable::insertor( ostream &s ) const
     s << endl;
     // if we only found ourselves in this row, get out
     if( count <= 1 ) {
-      break;
+      ones++;
+      if( ones > 4 ) {
+	break;
+      }
+    } else {
+      ones = 0;
     }
   }
 
