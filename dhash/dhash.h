@@ -125,6 +125,7 @@ struct dhash_block {
   size_t len;
   int hops;
   int errors;
+  int retries;
   int lease;
   chordID source;
 
@@ -289,7 +290,7 @@ class dhash {
 			  dhash_stat status, chordID blockID);
 
   void get_key (chordID source, chordID key, cbstat_t cb);
-  void get_key_got_block (chordID key, cbstat_t cb, ptr<dhash_block> block);
+  void get_key_got_block (chordID key, cbstat_t cb, dhash_stat err, ptr<dhash_block> block, route path);
   void get_key_stored_block (cbstat_t cb, int err);
   
   void store_flush (chordID key, dhash_stat value);
@@ -409,7 +410,7 @@ public:
   ptr<route_factory> f;
   timecb_t *dcb;
   int nonce;
-
+  int retries_done;
   void block_cb (s_dhash_block_arg *arg);
   void reexecute ();
   void timed_out ();
@@ -431,11 +432,11 @@ private:
 
   void lookup_findsucc_cb (chordID blockID, dhashcli_lookupcb_t cb,
 			   chordID succID, route path, chordstat err);
-  void retrieve_hop_cb (cbretrieve_t cb, chordID key, dhash_stat status,
+  void retrieve_hop_cb (cb_ret cb, chordID key, dhash_stat status,
 			ptr<dhash_block> block, route path);
   void cache_block (ptr<dhash_block> block, route search_path, chordID key);
   void finish_cache (dhash_stat status, chordID dest);
-  void retrieve_with_source_cb (cbretrieve_t cb, dhash_stat status, 
+  void retrieve_with_source_cb (cb_ret cb, dhash_stat status, 
 				ptr<dhash_block> block, route path);
   void insert_lookup_cb (chordID blockID, ref<dhash_block> block,
 			 cbinsert_t cb, int trial,
@@ -448,9 +449,9 @@ private:
   dhashcli (ptr<vnode> node, dhash *dh, ptr<route_factory> r_factory, 
 	    bool do_cache);
   void retrieve (chordID blockID, bool askforlease, bool usecachedsucc, 
-		 cbretrieve_t cb);
+		 cb_ret cb);
 
-  void retrieve (chordID source, chordID blockID, cbretrieve_t cb);
+  void retrieve (chordID source, chordID blockID, cb_ret cb);
   void insert (chordID blockID, ref<dhash_block> block, 
                bool usecachedsucc, cbinsert_t cb);
   void storeblock (chordID dest, chordID blockID, ref<dhash_block> block,
@@ -471,7 +472,7 @@ private:
 	       cbinsertgw_t cb,  dhash_ctype t, bool usecachedsucc);
   void insertcb (cbinsertgw_t cb, bigint key, 
 		 ptr<dhash_insert_res>, clnt_stat err);
-  void retrievecb (cbretrieve_t cb, bigint key,  
+  void retrievecb (cb_ret cb, bigint key,  
 		   ref<dhash_retrieve_res> res, clnt_stat err);
 
 public:
@@ -507,8 +508,7 @@ public:
   // retrieve block and verify
 #define DHASHCLIENT_RETRIEVE_USE_CACHED_SUCCESSOR 0x1
 #define DHASHCLIENT_RETRIEVE_ASK_FOR_LEASE        0x2
-  void retrieve (bigint key, cbretrieve_t cb, int options = 0);
-  void retrieve (bigint key, int replicas, cbretrieve_t cb, int options = 0);
+  void retrieve (bigint key, cb_ret cb, int options = 0);
 
   // synchronouslly call setactive.
   // Returns true on error, and false on success.
@@ -523,7 +523,7 @@ class dhashgateway {
 
   void dispatch (svccb *sbp);
   void insert_cb (svccb *sbp, dhash_stat status, chordID blockID);
-  void retrieve_cb (svccb *sbp, ptr<dhash_block> block);
+  void retrieve_cb (svccb *sbp, dhash_stat status, ptr<dhash_block> block, route path);
   
 public:
   dhashgateway (ptr<axprt_stream> x, ptr<chord> clnt, dhash *dh,

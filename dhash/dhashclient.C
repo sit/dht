@@ -285,7 +285,7 @@ dhashclient::insertcb (cbinsertgw_t cb, bigint key,
 }
 
 void
-dhashclient::retrieve (bigint key, cbretrieve_t cb, int options)
+dhashclient::retrieve (bigint key, cb_ret cb, int options)
 {
   ref<dhash_retrieve_res> res = New refcounted<dhash_retrieve_res> (DHASH_OK);
   dhash_retrieve_arg arg;
@@ -297,7 +297,7 @@ dhashclient::retrieve (bigint key, cbretrieve_t cb, int options)
 }
 
 void
-dhashclient::retrievecb (cbretrieve_t cb, bigint key, 
+dhashclient::retrievecb (cb_ret cb, bigint key, 
 			 ref<dhash_retrieve_res> res, 
 			 clnt_stat err)
 {
@@ -318,14 +318,20 @@ dhashclient::retrievecb (cbretrieve_t cb, bigint key,
 						 res->resok->block.size(), 
 						 ctype);
       blk->hops = res->resok->hops;
+      blk->errors = res->resok->errors;
+      blk->retries = res->resok->retries;
       blk->lease = res->resok->lease;
-      (*cb) (blk);
+      route path;
+      for (u_int i = 0; i < res->resok->path.size (); i++)
+	path.push_back (res->resok->path[i]);
+      (*cb) (DHASH_OK, blk, path);
       return;
     } 
   }
 
   warn << "dhashclient::retrieve failed: " << key << ": " << errstr << "\n";
-  (*cb) (NULL); // failure
+  route e_path;
+  (*cb) (res->status, NULL, e_path); // failure
 }
 
 

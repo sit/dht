@@ -236,7 +236,7 @@ dhashcli::dhashcli (ptr<vnode> node, dhash *dh, ptr<route_factory> r_factory,  b
 
 void
 dhashcli::retrieve (chordID blockID, bool askforlease, 
-		    bool usecachedsucc, cbretrieve_t cb)
+		    bool usecachedsucc, cb_ret cb)
 
 {
   ///warn << "dhashcli::retrieve\n";
@@ -252,16 +252,16 @@ dhashcli::retrieve (chordID blockID, bool askforlease,
 }
 
 void
-dhashcli::retrieve_hop_cb (cbretrieve_t cb, chordID key,
+dhashcli::retrieve_hop_cb (cb_ret cb, chordID key,
 			   dhash_stat status, 
 			   ptr<dhash_block> blk, 
 			   route path) 
 {
   if (status) {
     warn << "iterator exiting w/ status\n";
-    (*cb) (NULL);
+    (*cb) (status, NULL, path);
   } else {
-    cb (blk); 
+    cb (status, blk, path); 
     cache_block (blk, path, key);
   }
 }
@@ -293,7 +293,7 @@ dhashcli::finish_cache (dhash_stat status, chordID dest)
 //use this version if you already know where the block is (and guessing
 // that you have the successor cached won't work)
 void
-dhashcli::retrieve (chordID source, chordID blockID, cbretrieve_t cb)
+dhashcli::retrieve (chordID source, chordID blockID, cb_ret cb)
 {
   ref<route_dhash> iterator = New refcounted<route_dhash>(r_factory, 
 							 blockID, dh);
@@ -303,13 +303,13 @@ dhashcli::retrieve (chordID source, chordID blockID, cbretrieve_t cb)
 }
 
 void
-dhashcli::retrieve_with_source_cb (cbretrieve_t cb, dhash_stat status, 
+dhashcli::retrieve_with_source_cb (cb_ret cb, dhash_stat status, 
 				   ptr<dhash_block> block, route path)
 {
   if (status) 
-    (*cb) (NULL);
+    (*cb) (status, NULL, path);
   else 
-    cb (block); 
+    cb (status, block, path); 
 }
 
 void

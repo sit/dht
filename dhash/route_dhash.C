@@ -190,7 +190,8 @@ route_dhash::route_dhash (ptr<route_factory> f, chordID blockID, dhash *dh,
 			  bool lease, bool ucs)
 
   : dh (dh), ask_for_lease (lease), use_cached_succ (ucs), 
-    blockID (blockID), f (f), dcb (NULL)
+			    blockID (blockID), f (f), dcb (NULL), 
+			    retries_done (0)
 {
   ptr<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg> ();
   arg->key = blockID;
@@ -229,6 +230,7 @@ route_dhash::reexecute ()
   } else {
     // XXX what if 'this' route_dhash was invoked with the other execute() ???
     retries--;
+    retries_done++;
     timecb_remove (dcb);
     dcb = delaycb (LOOKUP_TIMEOUT, wrap (mkref(this), &route_dhash::timed_out));
     dh->register_block_cb 
@@ -339,6 +341,8 @@ route_dhash::gotblock (ptr<dhash_block> block)
 {
   // XXX fix the path, we might have fetched the block off a replica
   block->hops = path ().size ();
+  block->errors = chord_iterator->failed_path ().size ();
+  block->retries = retries_done;
   if (block) 
     cb (DHASH_OK, block, path ());
   else

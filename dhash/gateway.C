@@ -106,19 +106,23 @@ dhashgateway::insert_cb (svccb *sbp, dhash_stat status, chordID destID)
 
 
 void
-dhashgateway::retrieve_cb (svccb *sbp, ptr<dhash_block> block)
+dhashgateway::retrieve_cb (svccb *sbp, dhash_stat stat, ptr<dhash_block> block, route path)
 {
   ///warn << "dhashgateway::retrieve_cb\n";
 
   dhash_retrieve_res res (DHASH_OK);
 
   if (!block)
-    res.set_status (DHASH_NOENT);
+    res.set_status (stat);
   else {
     res.resok->block.setsize (block->len);
-    res.resok->hops = block->hops % 100;
-    res.resok->errors = block->hops / 100;
+    res.resok->hops = block->hops;
+    res.resok->errors = block->errors;
+    res.resok->retries = block->retries;
     res.resok->lease = block->lease;
+    res.resok->path.setsize (path.size ());
+    for (u_int i = 0; i < path.size (); i++) 
+      res.resok->path[i] = path[i];
     memcpy (res.resok->block.base (), block->data, block->len);
   }
   sbp->reply (&res);

@@ -912,11 +912,11 @@ dhash::get_key (chordID source, chordID key, cbstat_t cb)
 
 
 void
-dhash::get_key_got_block (chordID key, cbstat_t cb, ptr<dhash_block> b) 
+dhash::get_key_got_block (chordID key, cbstat_t cb, dhash_stat err, ptr<dhash_block> b, route path) 
 {
 
-  if (!b)
-    cb (DHASH_STOREERR);
+  if (err)
+    cb (err);
   else {
     ref<dbrec> k = id2dbrec (key);
     ref<dbrec> d = New refcounted<dbrec> (b->data, b->len);
