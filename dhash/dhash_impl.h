@@ -77,8 +77,6 @@ class dhash_impl : public dhash {
   u_int missing_outstanding;
 
   u_int nreplica;
-  int kc_delay;
-  int rc_delay;
   int pk_partial_cookie;
   
   ptr<dbfe> db;
@@ -90,17 +88,8 @@ class dhash_impl : public dhash {
   merkle_server *msrv;
   pmaint *pmaint_obj;
   merkle_tree *mtree;
-  qhash<chordID, ptr<merkle_syncer>, hashID> active_syncers;
 
-  chordID replica_syncer_dstID;
   ptr<merkle_syncer> replica_syncer;
-
-  chordID partition_left;
-  chordID partition_right;
-  ptr<merkle_syncer> partition_syncer;
-  
-  ptr<dbEnumeration> partition_enumeration;
-  chordID partition_current;
 
 #if 0
   /* DHC */
@@ -204,7 +193,6 @@ class dhash_impl : public dhash {
   ~dhash_impl ();
 
   void replica_maintenance_timer (u_int index);
-  void partition_maintenance_timer ();
 
   void init_after_chord (ptr<vnode> node);
 

@@ -128,9 +128,22 @@ dhash::produce_dhash (str dbname, u_int nrepl)
 
 dhash_impl::~dhash_impl ()
 {
-  // XXX Do we need to free stuff?
-  if (pmaint_obj)
+  if (pmaint_obj) {
     delete pmaint_obj;
+    pmaint_obj = NULL;
+  }
+  if (mtree) {
+    delete mtree;
+    mtree = NULL;
+  }
+  if (msrv) {
+    delete msrv;
+    msrv = NULL;
+  }
+  if (cli) {
+    delete cli;
+    cli = NULL;
+  }
 }
 
 static void
@@ -143,15 +156,33 @@ open_worker (ptr<dbfe> mydb, str name, dbOptions opts, str desc)
   }
 }
 
-dhash_impl::dhash_impl (str dbname, u_int k) //: dhcs (dbname)
+dhash_impl::dhash_impl (str dbname, u_int k) :
+  missing_outstanding (0),
+  nreplica (k),
+  pk_partial_cookie (1),
+  db (NULL),
+  cache_db (NULL),
+  keyhash_db (NULL),
+  host_node (NULL),
+  cli (NULL),
+  msrv (NULL),
+  pmaint_obj (NULL),
+  mtree (NULL),
+  replica_syncer (NULL),
+  // dhcs (dbname),
+  // dhc_mgr (NULL),
+  keyhash_mgr_rpcs (0),
+  merkle_rep_tcb (NULL),
+  keyhash_mgr_tcb (NULL),
+  bytes_stored (0),
+  keys_stored (0),
+  keys_replicated (0),
+  keys_cached (0),
+  keys_others (0),
+  bytes_served (0),
+  keys_served (0),
+  rpc_answered (0)
 {
-
-  missing_outstanding = 0;
-  nreplica = k;
-  kc_delay = 11;
-  rc_delay = 7;
-  pk_partial_cookie = 1;
-
   //set up the options we want
   dbOptions opts;
   opts.addOption ("opt_async", 1);
@@ -171,7 +202,6 @@ dhash_impl::dhash_impl (str dbname, u_int k) //: dhcs (dbname)
 
   // merkle state
   mtree = New merkle_tree (db);
-  
 }
 
 void
@@ -186,34 +216,12 @@ dhash_impl::init_after_chord (ptr<vnode> node)
 			    wrap (this, &dhash_impl::missing),
 			    host_node);
 
-  replica_syncer_dstID = 0;
-  replica_syncer = NULL;
-  partition_left = 0;
-  partition_right = 0;
-  partition_syncer = NULL;
-  partition_current = 0;
-
-
-  merkle_rep_tcb = NULL;
-  keyhash_mgr_tcb = NULL;
-
   // RPC demux
   trace << host_node->my_ID () << " registered dhash_program_1\n";
   host_node->addHandler (dhash_program_1, wrap(this, &dhash_impl::dispatch));
 
   // the client helper class (will use for get_key etc)
   cli = New dhashcli (node);
-
-  /* statistics */
-  keys_stored = 0;
-  bytes_stored = 0;
-  keys_replicated = 0;
-  keys_cached = 0;
-  keys_others = 0;
-  keys_served = 0;
-  bytes_served = 0;
-  rpc_answered = 0;
-
 
   update_replica_list ();
   delaycb (synctm (), wrap (this, &dhash_impl::sync_cb));
@@ -223,9 +231,9 @@ dhash_impl::init_after_chord (ptr<vnode> node)
       (reptm (), wrap (this, &dhash_impl::replica_maintenance_timer, 0));
   }
 
-  keyhash_mgr_rpcs = 0;
   keyhash_mgr_tcb =
     delaycb (keyhashtm (), wrap (this, &dhash_impl::keyhash_mgr_timer));
+  
 #if 0  
   pmaint_obj = New pmaint (cli, host_node, db, 
 			   wrap (this, &dhash_impl::db_delete_immutable));
@@ -999,7 +1007,8 @@ dhash_impl::stop ()
   if (merkle_rep_tcb) {
     timecb_remove (merkle_rep_tcb);
     merkle_rep_tcb = NULL;
-    pmaint_obj->stop ();
+    if (pmaint_obj)
+      pmaint_obj->stop ();
     warn << "stop merkle replication timer\n";
   }
 }
