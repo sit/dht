@@ -4,7 +4,7 @@
 #include <parseopt.h>
 
 ptr<chord> chordnode;
-vec<ref<dhash> > dh;
+//vec<ref<dhash> > dh;
 vec<ref<dhc> > dhc_mgr;
 int vnodes;
 vec<ref<vnode> > vn;
@@ -17,23 +17,26 @@ str db_name = "/usr/athicha/tmp/db";
 */
 
 vnode_producer_t producer = wrap (fingerroute::produce_vnode);
-chordID ID1 = 23;
+str idstr("23");
+chordID ID1;
 int blocks_inserted = 0;
 
 void
 start_recon (chordID bID)
 {
-
+  dhc_mgr[0]->recon (bID);
 }
 
 void 
-newconfig_cb (ptr<dhc_newconfig_res> res, clnt_stat err)
+newconfig_cb (chordID nodeID, chordID bID, 
+	      ptr<dhc_newconfig_res> res, clnt_stat err)
 {
-  if (err || res->status != DHC_OK)
+  if (err || res->status != DHC_OK) {
     warn << "Something's wrong\n";
-  else {
+    warn << "dhc err_stat: " << res->status << "\n";
+  } else {
     blocks_inserted++;
-    warn << "insert_block succeeded " << blocks_inserted << "\n";
+    warn << nodeID << ":insert_block " << bID << " succeeded " << blocks_inserted << "\n";
     if (blocks_inserted == nreplica)
       start_recon (ID1);
   }
@@ -43,22 +46,26 @@ void
 insert_block (chordID bID)
 {
   str astr ("hello");
-  vec<chordID> nodes;
-  for (int i=0; i<nreplica; i++)
-    nodes.push_back (vn[i]->my_ID ());
-
-  ptr<dhc_newconfig_arg> arg = New refcounted<dhc_newconfig_arg>;
+  
+  ref<dhc_newconfig_arg> arg = New refcounted<dhc_newconfig_arg>;
   arg->bID = bID;
   arg->data.tag.ver = 0;
   arg->data.tag.writer = vn[0]->my_ID ();
-  arg->data.data.set ((char *) astr.cstr (), astr.len ());
+  arg->data.data.setsize (astr.len ());
+  memcpy (arg->data.data.base (), astr.cstr (), astr.len ());
   arg->old_conf_seqnum = 0;
-  arg->new_config.set (nodes.base (), nodes.size ());
+  arg->new_config.setsize (nreplica);
+  for (uint i=0; i<arg->new_config.size (); i++)
+    arg->new_config[i] = vn[i]->my_ID ();
 
-  ptr<dhc_newconfig_res> res = New refcounted<dhc_newconfig_res>;
-  for (int i=0; i<nreplica; i++)
-    vn[i]->doRPC (vn[i]->my_location (), dhc_program_1, DHCPROC_NEWCONFIG, 
-		  arg, res, wrap (newconfig_cb, res));
+  ref<dhc_newconfig_res> res = New refcounted<dhc_newconfig_res>;
+  ptr<location> dest;
+  for (int i=0; i<nreplica; i++) {
+    dest = vn[i]->my_location ();
+    vn[i]->doRPC (dest, dhc_program_1, DHCPROC_NEWCONFIG, 
+		  arg, res, wrap (newconfig_cb, vn[i]->my_ID (), 
+				  bID, res));
+  }
 }
 
 void
@@ -68,10 +75,11 @@ newvnode_cb (int n, ptr<vnode> my, chordstat stat)
     warnx << "newvnode_cb: status " << stat << "\n";
     fatal ("unable to join\n");
   }
-  dh[n]->init_after_chord (my);
+  //dh[n]->init_after_chord (my);
   vn.push_back (my);
+  str db_name_prime = strbuf () << db_name << "-" << n;
   warn << progname << ": started dhc_mgr " << n << "\n";
-  ref<dhc> dm = New refcounted<dhc> (my, db_name, nreplica);
+  ref<dhc> dm = New refcounted<dhc> (my, db_name_prime, nreplica);
   dhc_mgr.push_back (dm);
 
   n += 1;
@@ -111,14 +119,20 @@ main (int argc, char **argv)
   chordnode = New refcounted<chord> (wellknownhost, wellknownport,
 				     wellknownhost, wellknownport,
 				     max_loccache);
-
+#if 0	
   for (int i=0; i<vnodes; i++) {
     str db_name_prime = strbuf () << db_name << "-" << i;
     warn << "dhc_test: created new dhash\n";
     dh.push_back (dhash::produce_dhash (db_name_prime, nreplica));    
   }
+#endif
 
+  if (!str2chordID (idstr, ID1)) {
+    warnx << "Cannot convert string to chordID !!!\n";
+    exit (-1);
+  }
   chordnode->newvnode (producer, wrap (newvnode_cb, 0));
   
   amain ();
 }
+

@@ -4,6 +4,19 @@
 #include "dhc_misc.h"
 
 void
+ID_put (char *buf, chordID id)
+{
+  bzero (buf, ID_size);
+  mpz_get_rawmag_be (buf, ID_size, &id);
+};
+
+void
+ID_get (chordID *id, char *buf)
+{
+  mpz_set_rawmag_be (id, (const char *) buf, ID_size);
+};
+
+void
 open_db (ptr<dbfe> mydb, str name, dbOptions opts, str desc)
 {
   if (int err = mydb->opendb (const_cast <char *> (name.cstr ()), opts)) {

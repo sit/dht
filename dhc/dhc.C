@@ -1,6 +1,7 @@
 #include "dhc.h"
 #include "dhc_misc.h"
-#include "merkle_misc.h"
+#include <merkle_misc.h>
+#include <location.h>
 
 dhc::dhc (ptr<vnode> node, str dbname, uint k) : 
   myNode (node), n_replica (k)
@@ -23,14 +24,23 @@ dhc::dhc (ptr<vnode> node, str dbname, uint k) :
 void 
 dhc::recon (chordID bID)
 {
-  ptr<dbrec> rec = db->lookup (id2dbrec (bID));
-  if (rec) {
-    
+
+#if DHC_DEBUG
+  warn << myNode->my_ID () << " recon block " << bID << "\n";
+#endif
+
+  ptr<dbrec> key = id2dbrec (bID);
+  ptr<dbrec> rec = db->lookup (key);
+
+  if (rec) {    
     ptr<dhc_block> kb = to_dhc_block (rec);
     dhc_soft *b = dhcs[bID];
     if (!b)
       b = New dhc_soft (myNode, kb);
-
+    
+#if DHC_DEBUG
+    warn << "status 1\n" << b->to_str ();
+#endif
     if (!b->pstat->recon_inprogress) {
       b->pstat->recon_inprogress = true;
       b->proposal.seqnum = (b->promised.seqnum > b->proposal.seqnum) ?
@@ -39,21 +49,33 @@ dhc::recon (chordID bID)
       b->pstat->promise_recvd = 0;
       b->pstat->accept_recvd = 0;
       dhcs.insert (b);
+#if DHC_DEBUG
+      warn << "status 2\n" << b->to_str ();
+#endif
       
-      ptr<dhc_prepare_arg> arg = New refcounted<dhc_prepare_arg> ();
+      ref<dhc_prepare_arg> arg = New refcounted<dhc_prepare_arg> ();
       arg->bID = bID;
       arg->round.seqnum = b->proposal.seqnum;
       arg->round.proposer = b->proposal.proposer;
       arg->config_seqnum = b->config_seqnum;
-      
+
+#if DHC_DEBUG
+      warn << myNode->my_ID () << "sending proposal <" << arg->round.seqnum
+	   << "," << arg->round.proposer << ">\n";
+#endif
       ptr<dhc_prepare_res> res; 
 
+#if 0
       for (uint i=0; i<b->config.size (); i++) {
 	ptr<location> dest = b->config[i];
 	res = New refcounted<dhc_prepare_res> ();
+#if DHC_DEBUG
+	warn << "to node " << dest->id () << "\n";
+#endif
 	myNode->doRPC (dest, dhc_program_1, DHCPROC_PREPARE, arg, res, 
 		       wrap (this, &dhc::recv_promise, b->id, res)); 
-      } 
+      }
+#endif 
     } else
       warn << "dhc:recon. Another recon is still in progress.\n";
 
@@ -61,6 +83,7 @@ dhc::recon (chordID bID)
     warn << "dhc:recon. Too many deaths. Tough luck.\n";
     //I don't have the block, which means too many pred nodes
     //died before replicating the block on me. Tough luck.
+
 }
 
 void 
@@ -88,10 +111,11 @@ dhc::recv_promise (chordID bID, ref<dhc_prepare_res> promise,
       ptr<dhc_propose_arg> arg = New refcounted<dhc_propose_arg>;
       arg->bID = b->id;
       arg->round = b->proposal;
+#if DHC_DEBUG
+        warn << "status 3\n" << b->to_str ();    
+#endif 
       if (b->pstat->acc_conf.size () > 0) {
-	ref<vec<chordID> > nodes = 
-	  New refcounted<vec<chordID> > (b->pstat->acc_conf);
-	arg->new_config.set (nodes->base (), nodes->size ());
+	arg->new_config.set (b->pstat->acc_conf.base (), b->pstat->acc_conf.size ());
 	set_locations (b->new_config, myNode, b->pstat->acc_conf);
       } else 
 	set_new_config (b, arg, myNode, n_replica);
@@ -183,12 +207,12 @@ dhc::recv_prepare (user_args *sbp)
     dhc_soft *b = dhcs[kb->id];
     if (!b)
       b = New dhc_soft (myNode, kb);
-    if (!b->pstat->recon_inprogress)
+    if (!b->pstat->recon_inprogress) {
       b->pstat->recon_inprogress = true;
-    else {
+      dhcs.insert (b);
+    } else {
       dhc_prepare_res res (DHC_RECON_INPROG);
       sbp->reply (&res);
-      dhcs.insert (b);
       return;
     }
     
@@ -247,8 +271,9 @@ void
 dhc::recv_newconfig (user_args *sbp)
 {
   dhc_newconfig_arg *newconfig = sbp->template getarg<dhc_newconfig_arg> ();
-  ptr<dbrec> rec = db->lookup (id2dbrec (newconfig->bID));
-  ptr<dhc_block> kb;
+  ptr<dbrec> key = id2dbrec (newconfig->bID);
+  ptr<dbrec> rec = db->lookup (key);
+  ptr<dhc_block> kb = New refcounted<dhc_block> (newconfig->bID);
 
   if (!rec)
     kb = New refcounted<dhc_block> (newconfig->bID);
@@ -272,10 +297,20 @@ dhc::recv_newconfig (user_args *sbp)
   kb->data->data.set (newconfig->data.data.base (), newconfig->data.data.size ());
   kb->meta->config.seqnum = newconfig->old_conf_seqnum + 1;
   kb->meta->config.nodes.setsize (newconfig->new_config.size ());
-  bcopy (newconfig->new_config.base(), kb->meta->config.nodes.base (), 
-	 kb->meta->config.nodes.size ());
-  db->insert (id2dbrec (kb->id), to_dbrec (kb));
-  
+  for (uint i=0; i<kb->meta->config.nodes.size (); i++)
+    kb->meta->config.nodes[i] = newconfig->new_config[i];
+
+#if DHC_DEBUG
+  warn << "dhc::recv_newconfig newconfig: ";
+  for (uint i=0; i<kb->meta->config.nodes.size (); i++)
+    warnx << kb->meta->config.nodes[i] << " ";
+  warnx << "\n";
+  warn << "dhc::recv_newconfig Insert block " << kb->id << "\n";
+#endif
+
+  db->insert (key, to_dbrec (kb));
+  db->sync (); 
+
   // Remove b if it exists in hash table
   dhc_soft *b = dhcs[newconfig->bID];
   if (b) {
@@ -299,7 +334,7 @@ dhc::dispatch (user_args *sbp)
     break;
   case DHCPROC_NEWCONFIG:
     recv_newconfig (sbp);
-    break;
+  break;
   default:
     warn << "dhc:dispatch Unimplemented RPC " << sbp->procno << "\n"; 
     break;
