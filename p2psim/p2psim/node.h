@@ -62,8 +62,28 @@ public:
   static Args args() { return _args; }
   static void set_args (Args a) {_args = a; }
 
+  // statistic collection
+  typedef uint stat_type;
+  const static stat_type STAT_LOOKUP = 0;
+  static void record_bw_stat(stat_type type, uint num_ids, uint num_else);
+  static void record_lookup_stat(IPAddress src, IPAddress dst, Time interval, 
+				 bool complete, bool correct);
+  static void print_stats();
+
 protected:
   typedef set<unsigned> RPCSet;
+
+  // stats
+  static vector<uint> _bw_stats;
+  static vector<uint> _bw_counts;
+  static vector<Time> _correct_lookups;
+  static vector<Time> _incorrect_lookups;
+  static vector<Time> _failed_lookups;
+  static vector<double> _correct_stretch;
+  static vector<double> _incorrect_stretch;
+  static vector<double> _failed_stretch;
+  static void print_lookup_stat_helper( vector<Time> times, 
+					vector<double> stretch );
 
   // find peer protocol of my sub-type on a distant node.
   Node *getpeer(IPAddress);

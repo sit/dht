@@ -35,6 +35,15 @@ string Node::_protocol = "";
 Args Node::_args;
 Time Node::_collect_stat_time = 0;
 bool Node::_collect_stat = false;
+// static stat data structs:
+vector<uint> Node::_bw_stats;
+vector<uint> Node::_bw_counts;
+vector<Time> Node::_correct_lookups;
+vector<Time> Node::_incorrect_lookups;
+vector<Time> Node::_failed_lookups;
+vector<double> Node::_correct_stretch;
+vector<double> Node::_incorrect_stretch;
+vector<double> Node::_failed_stretch;
 
 Node::Node(IPAddress i) : _ip(i), _alive(true), _token(1) 
 {
@@ -149,6 +158,179 @@ Node::collect_stat()
     return false;
 }
 
+void 
+Node::record_bw_stat(stat_type type, uint num_ids, uint num_else)
+{
+  if( !collect_stat() ) {
+    return;
+  }
+
+  while( _bw_stats.size() <= type ) {
+    _bw_stats.push_back(0);
+    _bw_counts.push_back(0);
+  }
+  _bw_stats[type] += 20 + 4*num_ids + num_else;
+  _bw_counts[type]++;
+
+}
+
+void 
+Node::record_lookup_stat(IPAddress src, IPAddress dst, Time interval, 
+			 bool complete, bool correct)
+{
+
+  if( !collect_stat() ) {
+    return;
+  }
+
+  // get stretch as well
+  double stretch;
+  if( complete && correct ) {
+    Time rtt = 2*Network::Instance()->gettopology()->latency( src, dst );
+    if( rtt > 0 && interval > 0 ) { 
+      stretch = ((double) interval)/((double) rtt);
+    } else {
+      if( interval == 0 ) {
+	stretch = 1;
+      } else {
+	stretch = interval; // is this reasonable?
+      }
+    }
+  } else {
+    // the stretch should be the interval divided by the median ping time in
+    // the topology.  fake for now.  ***TODO***!!!
+    stretch = ((double) interval)/100.0;
+  }
+
+  // Stretch can be < 1 for recursive direct-reply routing 
+  // assert( stretch >= 1.0 );
+
+  if( complete && correct ) {
+    _correct_lookups.push_back( interval );
+    _correct_stretch.push_back( stretch );
+  } else if( !complete ) {
+    _failed_lookups.push_back( interval );
+    _failed_stretch.push_back( stretch );
+  } else {
+    _incorrect_lookups.push_back( interval );
+    _incorrect_stretch.push_back( stretch );
+  }
+
+}
+
+void
+Node::print_stats()
+{
+
+  if( !collect_stat() ) {
+    cout << "No stats were collected by time " << now() 
+	 << "; collect_stat_time=" << _collect_stat_time << endl;
+    return;
+  }
+
+  cout << "\n<-----STATS----->" << endl;
+
+  // first print out bw stats
+  uint total = 0;
+  cout << "BW_PER_TYPE:: ";
+  for( uint i = 0; i < _bw_stats.size(); i++ ) {
+    cout << i << ":" << _bw_stats[i] << " ";
+    total += _bw_stats[i];
+  }
+  cout << endl;
+  double total_time = ((double) (now() - _collect_stat_time))/1000.0;
+  uint num_nodes = Network::Instance()->size();
+  double overall_bw = ((double) total)/(total_time*((double) num_nodes));
+  printf( "BW_TOTALS:: time(s):%.3f nodes:%d overall_bw(bytes/node/s):%.3f\n", 
+	  total_time, num_nodes, overall_bw );
+
+  // then do lookup stats
+  double total_lookups = _correct_lookups.size() + _incorrect_lookups.size() +
+    _failed_lookups.size();
+  printf( "LOOKUP_RATES:: success:%.3f incorrect:%.3f failed:%.3f\n",
+	  ((double)_correct_lookups.size())/total_lookups,
+	  ((double)_incorrect_lookups.size())/total_lookups,
+	  ((double)_failed_lookups.size())/total_lookups );
+  cout << "CORRECT_LOOKUPS:: ";
+  print_lookup_stat_helper( _correct_lookups, _correct_stretch );
+  cout << "INCORRECT_LOOKUPS:: ";
+  print_lookup_stat_helper( _incorrect_lookups, _incorrect_stretch );
+  cout << "FAILED_LOOKUPS:: ";
+  print_lookup_stat_helper( _failed_lookups, _failed_stretch );
+  // now overall stats (put them all in one container
+  for( uint i = 0; i < _incorrect_lookups.size(); i++ ) {
+    _correct_lookups.push_back( _incorrect_lookups[i] );
+    _correct_stretch.push_back( _incorrect_stretch[i] );
+  }
+  for( uint i = 0; i < _failed_lookups.size(); i++ ) {
+    _correct_lookups.push_back( _failed_lookups[i] );
+    _correct_stretch.push_back( _failed_stretch[i] );
+  }
+  cout << "OVERALL_LOOKUPS:: ";
+  print_lookup_stat_helper( _correct_lookups, _correct_stretch );
+
+  cout << "<-----ENDSTATS----->\n" << endl;
+
+}
+
+void 
+Node::print_lookup_stat_helper( vector<Time> times, vector<double> stretch )
+{
+
+  assert( times.size() == stretch.size() );
+
+  // sort first, ask questions later
+  sort( times.begin(), times.end() );
+  sort( stretch.begin(), stretch.end() );
+
+  Time time_med, time_10, time_90;
+  double stretch_med, stretch_10, stretch_90;
+  if( times.size() == 0 ) {
+    time_med = 0;
+    time_10 = 0;
+    time_90 = 0;
+    stretch_med = 0;
+    stretch_10 = 0;
+    stretch_90 = 0;
+  } else {
+    if( times.size() % 2 == 0 ) {
+      time_med = (times[times.size()/2] + times[times.size()/2-1])/2;
+      stretch_med = (stretch[times.size()/2] + stretch[times.size()/2-1])/2;
+    } else {
+      time_med = times[(times.size()-1)/2];
+      stretch_med = stretch[(times.size()-1)/2];
+    }
+    time_10 = times[((uint) times.size()*.1)];
+    stretch_10 = stretch[((uint) times.size()*.1)];
+    time_90 = times[((uint) times.size()*.9)];
+    stretch_90 = stretch[((uint) times.size()*.9)];
+  }
+
+  // also need the means
+  Time time_total = 0;
+  double stretch_total = 0;
+  for( uint i = 0; i < times.size(); i++ ) {
+    time_total += times[i];
+    stretch_total += stretch[i];
+  }
+  double time_mean, stretch_mean;
+  if( times.size() == 0 ) {
+    time_mean = 0;
+    stretch_mean = 0;
+  } else {
+    time_mean = ((double) time_total)/((double) times.size());
+    stretch_mean = ((double) stretch_total)/((double) times.size());
+  }
+
+  printf( "lookup_10th:%llu lookup_mean:%.3f lookup_median:%llu lookup_90th:%llu ",
+	  time_10, time_mean, time_med, time_90 );
+
+  printf( "stretch_10th:%.3f stretch_mean:%.3f stretch_median:%.3f stretch_90th:%.3f ",
+	  stretch_10, stretch_mean, stretch_med, stretch_90 );
+
+  cout << " numlookups:" << times.size() << endl;
+
+}
 
 // Called by NetEvent::execute() to deliver a packet to a Node,
 // after Network processing (i.e. delays and failures).
@@ -224,6 +406,9 @@ Node::Receive(void *px)
   reply->_dst = p->_src;
 
   if (proto->alive ()) {
+    // && 
+    //      Network::Instance()->gettopology()->latency(p->_src, 
+    //						  p->_dst) != 50000) {
     (p->_fn)(p->_args);
     reply->_ok = true;
   } else {

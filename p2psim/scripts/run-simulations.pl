@@ -22,7 +22,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-# $Id: run-simulations.pl,v 1.12 2004/01/07 21:14:49 jinyang Exp $
+# $Id: run-simulations.pl,v 1.13 2004/01/07 23:35:51 strib Exp $
 
 use strict;
 use Getopt::Long;
@@ -79,7 +79,8 @@ my %options;
 {;}
 &GetOptions( \%options, "help|?", "topology=s", "lookupmean=s", "protocol=s", 
 	     "lifemean=s", "deathmean=s", "exittime=s", "churnfile=s", 
-	     "argsfile=s", "logdir=s", "seed=s", "randomize=i", "observer" ) 
+	     "argsfile=s", "logdir=s", "seed=s", "randomize=i", "observer",
+	     "stattime=s" ) 
     or &usage;
 
 if( $options{"help"} ) {
