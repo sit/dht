@@ -1,4 +1,6 @@
 #include "vivaldinode.h"
+#include "p2psim/network.h"
+#include "topologies/euclidean.h"
 
 VivaldiNode::VivaldiNode(IPAddress ip) : P2Protocol (ip)
 {
@@ -11,8 +13,8 @@ VivaldiNode::VivaldiNode(IPAddress ip) : P2Protocol (ip)
 
   // Start out at a random point/origin
   for (int i = 0; i < _dim; i++) 
-    //_c._v.push_back(random() % 200 - 100);
-    _c._v.push_back (0.0);
+    _c._v.push_back(random() % 200000 - 1000000);
+  //_c._v.push_back (0.0);
 }
 
 VivaldiNode::~VivaldiNode()
@@ -39,6 +41,7 @@ VivaldiNode::net_force(Coord c, vector<Sample> v)
     double noise = 0;
     double actual = v[i]._latency + noise;
     double expect = dist (c, v[i]._c);
+    //    cerr << "force " << c << " " << actual << " " << expect << "\n";
     if(actual >= 0){
       double grad = expect - actual;
       Coord dir = (v[i]._c - c);
@@ -84,8 +87,21 @@ VivaldiNode::algorithm(Sample s)
 
 }
 
+VivaldiNode::Coord
+VivaldiNode::real_coords ()
+{
+  Coord ret;
+
+  Topology *t = Network::Instance ()->gettopology ();
+  Euclidean *e = dynamic_cast<Euclidean *>(t);
+  if (e) {
+    pair<int, int> c = e->getcoords (ip ());
+    ret.init2d (c.first, c.second);
+  }
+  return ret;
+}
 
 ostream& operator<< (ostream &s, VivaldiNode::Coord &c) 
   {
-    return s<< "(" << c._v[0] << ", " << c._v[1] << ")";
+    return s << c._v[0] << " " << c._v[1];
   }

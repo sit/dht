@@ -40,7 +40,7 @@ public:
   //from vivaldi.h
   struct Coord {
     vector<double> _v;
-    void init2d (double x, double y) {_v.push_back (x); _v.push_back (y); };
+    void init2d (double x, double y) {_v.clear (); _v.push_back (x); _v.push_back (y); };
     Coord () {};
     int dim () {return _v.size();};
     Coord (uint d) {for (uint i=0;i<d;i++) _v.push_back(0.0);};
@@ -56,6 +56,7 @@ public:
   int nsamples() { return _nsamples; }
   void sample(IPAddress who, Coord c, double latency);
   Coord my_location() { return _c; }
+  Coord real_coords ();
   //end vivaldi.h
 
 protected:
@@ -91,6 +92,10 @@ protected:
     if (ok) {
       VivaldiNode * t = dynamic_cast<VivaldiNode *>(getpeer(dst));
       assert (t);
+      VivaldiNode::Coord tc = t->real_coords ();
+      VivaldiNode::Coord my = real_coords ();
+      //      cerr << "RPC from " << tc << " to " << my << " took " << now () - before << "\n";
+      
       sample (dst, t->my_location(), (now () - before));
     }
     delete t;

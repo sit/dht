@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 [NAMES_GO_HERE]
+ * Copyright (c) 2003 Robert Morris, Frank Dabek (rtm, fdabek)@mit.edu
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -37,7 +37,14 @@ vector<VivaldiTest*> VivaldiTest::_all;
 VivaldiTest::VivaldiTest(IPAddress i, Args &args)
   : VivaldiNode(i), _next_neighbor(0), _neighbors(0)
 {
-  _neighbors = args.nget<int>("neighbors", 16);
+  _neighbors = args.nget<int>("neighbors", 16, 10);
+  _total_nodes = args.nget<int>("totalnodes", -1, 10);
+  _vis = args.nget<int>("vis", 0, 10);
+
+  if (_total_nodes < 0) {
+    cerr << "totalnodes parameter not optional\n";
+    exit (-1);
+  }
   _ticks = 0;
 }
 
@@ -49,32 +56,71 @@ VivaldiTest::~VivaldiTest()
 void
 VivaldiTest::join(Args *args)
 {
+  if (_all.size () > _total_nodes && _total_nodes > 0) 
+      return;
   _all.push_back(this);
   addNeighbors ();
+  if (_vis && !init_state ()) cerr << "vis " << now () << " node " << ip () << " " << _c << "\n";
   delaycb(1000, &VivaldiTest::tick, (void *) 0);
 }
 
 
 void
+VivaldiTest::initstate () 
+{
+  Topology *t = Network::Instance ()->gettopology ();
+  Euclidean *e = dynamic_cast<Euclidean *>(t);
+  if (e) {
+    pair<int, int> c = e->getcoords (ip ());
+    _c.init2d ((double)(c.first), (double)(c.second));
+    if (_vis) cerr << "vis 0 node " << ip () << " " << _c << "\n";
+  }
+}
+
+void
 VivaldiTest::tick(void *)
 {
   _ticks++;
-  addNeighbors ();
   IPAddress dst;
   if(_neighbors > 0){
-        dst = _nip[random() % _neighbors];
-    // dst = _nip[_next_neighbor++ % _nip.size()];
+    if (random () % 2 == 0 && _nip_best.size () > 0 && false)
+      dst = _nip_best[random () % _nip_best.size ()];
+    else
+      dst = _nip[random() % _neighbors];
+
   } else {
     dst = _all[random() % _all.size()]->ip();
   }
 
   if(this->ip() == 1) {
-        status();
-	if (_ticks % 100 == 0) print_all_loc();
+
+    if (_ticks % 5 == 0) 
+      {
+	status();
+	//update neighbors
+	if (_neighbors > 0) {
+	  vector<IPAddress> best = best_n (_neighbors);
+	  for(unsigned i = 0; i < _all.size(); i++) 
+	    _all[i]->_nip_best = best;
+	}
+      }
+
+    if (_ticks % 100 == 0 || _vis) print_all_loc();
   }
 
+  //see if our dest has joined
+  Node *n = getpeer (dst);
+  if (!n) return;
 
   doRPC(dst, &VivaldiTest::handler, (void *) 0, (void *)0);
+  if (_vis) {
+    cout << "vis " << now () << " step " 
+	 << ip () << " 0 " << (int)error () << " ";
+    Coord loc = my_location ();
+    for (uint j = 0; j < loc.dim(); j++)
+      cout << (int)loc._v[j] << " ";
+    cout << endl;
+  }
   delaycb(1000, &VivaldiTest::tick, (void *) 0);
 }
 
@@ -87,23 +133,45 @@ VivaldiTest::handler(void *args, void *ret)
 void
 VivaldiTest::addNeighbors ()
 {
-  if (_old_all_size == _all.size ()) 
-    return;
-    
   _nip.clear ();
   
-  uint next_index = this->ip() + 1;
-  //  cerr << this->ip() << "'s neighbors are ";
+  cerr << "neighbors " << this->ip() << " ";
   while ((int)_nip.size () < _neighbors) {
-    if (next_index >= _all.size ()) next_index = 0;
-    _nip.push_back(_all[random () % _all.size ()]->ip());
-    //    cerr << _nip.back () << " ";
-    next_index++;
+    int cand = -1;
+    while (cand < 0 || cand > _total_nodes)
+      cand = (random () % (_total_nodes)) + 1;
+
+    _nip.push_back(cand);
+    //_nip.push_back(_all[random () % _all.size ()]->ip());
+    cerr << cand << " ";
   }
-  //  cerr << "\n";
-  _old_all_size = _all.size ();
+  cerr << "\n";
 }
 
+
+bool
+comp (pair<double, IPAddress> a, pair<double, IPAddress> b) 
+{
+  if (a.first < b.first) return true;
+  if (a.first > b.first) return false;
+  return false;
+} 
+
+vector<IPAddress>
+VivaldiTest::best_n(unsigned int n)
+{
+  vector<pair<double, IPAddress> > errs;
+  for(unsigned i = 0; i < _all.size(); i++)
+    errs.push_back ( pair<double, IPAddress>(_all[i]->error (),_all[i]->ip ()));
+
+  sort(errs.begin(), errs.end(), &comp);
+
+  vector<IPAddress> ret;
+  for (unsigned int i = 0; i < n && i < errs.size (); i++) {
+    ret.push_back (errs[i].second);
+  }
+  return ret;
+}
 
 // Calculate this node's error: average error in distance
 // to each other node.
@@ -148,9 +216,11 @@ VivaldiTest::total_error(double &e05, double &e50, double &e95)
     for (uint j = 0; j < n; j++) {
       if (i != j) {
 	VivaldiNode::Coord vc1 = _all[j]->my_location();
+	//vivaldi predicts ROUND-TRIP distances
 	double vd = dist(vc, vc1);
 	double rd = 2*t->latency(_all[i]->ip(), _all[j]->ip());
 	double e = fabs(vd - rd);
+	//	cerr << "error "  << vd << " " << rd << " " << e << "\n";
 	a.push_back(e);
 	errpts++;
       }
@@ -173,10 +243,11 @@ VivaldiTest::print_all_loc()
   VivaldiNode::Coord vc;
   for (uint i = 0; i < n; i++) {
     vc = _all[i]->my_location();
-    printf("%d ", (int) _all[i]->ip());
+    printf ("%d ", (int) _all[i]->ip());
     for (uint j = 0; j < vc._v.size(); j++)
-      printf ("%.1f ", vc._v[j]);
+      printf ("%d ", (int)vc._v[j]);
     printf ("\n");
+    
   }
 }
 

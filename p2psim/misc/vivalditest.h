@@ -39,11 +39,15 @@ public:
   virtual void crash(Args*) { }
   virtual void insert(Args*) { }
   virtual void lookup(Args*) { }
-
+  virtual void initstate ();
   void tick(void *);
   void status();
   double error();
+  vector<IPAddress> best_n (unsigned int n);
   void total_error(double &x05, double &x50, double &x95);
+  vector<IPAddress> _nip_best;
+  vector<IPAddress> _nip;
+
  private:
   int _ticks;
   Vivaldi *_vivaldi;
@@ -51,9 +55,10 @@ public:
 
   int _next_neighbor;
   int _neighbors; // if > 0, fix the number of neighbors
+  int _total_nodes;
+  int _vis;
 
   uint _old_all_size;
-  vector<IPAddress> _nip; // our fixed neigbhors
 
   void handler(void *, void *);
 
