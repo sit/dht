@@ -24,7 +24,7 @@
  */
 
 #include "network.h"
-#include "observers/oldobserverfactory.h"
+#include "observers/observerfactory.h"
 #include "threadmanager.h"
 
 unsigned verbose = 0;
@@ -40,7 +40,7 @@ unsigned verbose = 0;
 void
 graceful_exit(void*)
 {
-  delete OldobserverFactory::Instance();
+  delete ObserverFactory::Instance();
   delete Network::Instance(); // deletes nodes, protocols
   delete ThreadManager::Instance();
   __tmg_dmalloc_stats();

@@ -59,7 +59,7 @@ ChordObserver::ChordObserver(Args *a)
   for(set<string>::iterator pos=all.begin();pos!=all.end();++pos) {
     _type = *pos;
   }
-  assert(_type.find("Chord") == 0);
+  assert(_type.find("Chord") == 0 || _type.find("Koorde") == 0);
 
   ids.clear();
   set<Protocol*> l = Network::Instance()->getallprotocols(_type);

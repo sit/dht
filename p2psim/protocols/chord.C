@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 [NAMES_GO_HERE]
+ * Copyright (c) 2003 [Jinyang Li]
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -27,6 +27,17 @@
 #include <assert.h>
 extern bool vis;
 bool static_sim;
+
+//global statistics collecting varaibles
+vector<double> Chord::stat;
+double Chord::_lookup_num = 0;
+double Chord::_lookup_int_num = 0;
+double Chord::_lookup_hops = 0;
+double Chord::_lookup_timeouts = 0;
+double Chord::_lookup_to_waste = 0;
+double Chord::_lookup_interval = 0;
+double Chord::_lookup_success = 0;
+double Chord::_lookup_retries = 0;
 
 #define DNODE 33
 
@@ -101,26 +112,46 @@ Chord::Chord(Node *n, Args& a, LocTable *l)
   _join_scheduled = 0;
   _last_succlist_stabilized = 0;
 
-  stat.clear();
-  for (uint i = 0; i <= TYPE_PNS_UP; i++) 
-    stat.push_back(0);
+  if (me.ip == 1) {
+    stat.clear();
+    for (uint i = 0; i <= TYPE_PNS_UP; i++) 
+      stat.push_back(0.0);
+  }
+
 }
 
 void
 Chord::record_stat(uint bytes, uint type)
 {
   assert(type <= TYPE_PNS_UP);
-  stat[type] += (PKT_OVERHEAD+bytes);
+  stat[type] += ((double) PKT_OVERHEAD+bytes);
 }
 
 Chord::~Chord()
 {
+#ifdef CHORD_DEBUG
   printf("Chord done (%u,%qx)", me.ip, me.id);
-
   for (uint i = 0; i < stat.size(); i++) 
     printf(" %u", stat[i]);
-
   printf("\n");
+#endif
+  if (me.ip == 1) {
+    double allpkts = 0.0;
+    for (uint i = 0; i <= TYPE_PNS_UP; i++) 
+      allpkts += stat[i];
+
+    for (uint i = 0; i <= TYPE_PNS_UP; i++)
+      printf("%.0f ", stat[i]);
+
+    printf("%.0f ", allpkts);
+    printf("%.3f ", _lookup_interval/_lookup_num);
+    printf("%.3f ", _lookup_success/_lookup_num);
+    printf("%.3f ", _lookup_retries/_lookup_num);
+    printf("%.3f ", _lookup_hops/_lookup_int_num);
+    printf("%.3f ", _lookup_timeouts/_lookup_int_num);
+    printf("%.3f ", _lookup_to_waste/_lookup_int_num);
+    printf("%.0f\n", _lookup_num);
+  }
   delete loctable;
 }
 
@@ -203,30 +234,47 @@ Chord::lookup_internal(lookup_args *a)
   uint lookup_int = 0; 
   Time before = now();
 
+  //now() - before includes some extra garbage collection time that needs to be subtracted.
+  uint extra_time = 0; 
+
+
   if (_recurs) {
     v = find_successors_recurs(a->key, _frag, _allfrag, TYPE_USER_LOOKUP);
   } else {
     v = find_successors(a->key, _frag, _allfrag, TYPE_USER_LOOKUP, &lookup_int);
   }
-  if (lookup_int == 0) {
-    lookup_int = now() - before;
+  if (lookup_int > 0) {
+    extra_time = now() - before - lookup_int;
+    assert(extra_time >=0);
   }
+
   if (!node()->alive()) {
     delete a;
     return;
   }else if (v.size() > 0) {
+    _lookup_success += 1;
+#ifdef CHORD_DEBUG
     printf("%s key %qx lookup correct interval ", ts(), a->key);
+#endif
   }else if (now()-a->start >= MAX_LOOKUP_TIME) {
+#ifdef CHORD_DEBUG
     printf("%s key %qx lookup incorrect interval ", ts(), a->key); 
+#endif
   }else{
-    a->retrytimes.push_back(uint(now() - a->start));
-    delaycb(100, &Chord::lookup_internal, a);
+    a->retrytimes.push_back((uint)(now() - a->start - extra_time));
+    delaycb((100-extra_time)>0?100-extra_time:0, &Chord::lookup_internal, a);
     return;
   }
-  a->retrytimes.push_back((uint)lookup_int);
+
+  a->retrytimes.push_back((uint)(now()-a->start-extra_time));
+  _lookup_num += 1;
+  _lookup_interval += a->retrytimes[a->retrytimes.size()-1];
+  _lookup_retries +=  a->retrytimes.size();
+#ifdef CHORD_DEBUG
   for (uint i = 0; i < a->retrytimes.size(); i++) 
     printf("%u ", a->retrytimes[i]);
   printf("\n");
+#endif
   delete a;
 }
 
@@ -437,10 +485,17 @@ DONE:
   //jesus christ i'm done, however, i need to clean up my shit
   assert(reuse);
   if ((type == TYPE_USER_LOOKUP) && (node()->alive())) {
+
     if (lookup_int) 
       *lookup_int = now()-before;
-    printf("%s lookup key %qx, hops %d timeout %d wasted %d totalrpc %d\n", ts(), key, lastfinished.hop, totalto, wasted, totalrpc);
+
+    _lookup_hops += lastfinished.hop;
+    _lookup_timeouts += totalto;
+    _lookup_int_num += 1;
+    _lookup_to_waste += wasted;
+
 #ifdef CHORD_DEBUG
+    printf("%s lookup key %qx, hops %d timeout %d wasted %d totalrpc %d\n", ts(), key, lastfinished.hop, totalto, wasted, totalrpc);
     Topology *t = Network::Instance()->gettopology();
     printf("%s key %qx route: ", ts(), key);
     IDMap last;

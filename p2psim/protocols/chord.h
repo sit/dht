@@ -40,6 +40,7 @@
 #define TYPE_FIXPRED_UP 5
 #define TYPE_FINGER_UP 6
 #define TYPE_PNS_UP 7
+
 #define MAX_LOOKUP_TIME 4000
 #define MIN_BASIC_TIMER 100
 
@@ -218,7 +219,17 @@ protected:
   bool _isstable;
   bool _inited;
 
-  vector<uint> stat;
+  //global statistics of all Chord nodes
+  static vector<double> stat;
+  static double _lookup_num;
+  static double _lookup_int_num;
+  static double _lookup_hops;
+  static double _lookup_timeouts;
+  static double _lookup_to_waste;
+  static double _lookup_interval;
+  static double _lookup_success;
+  static double _lookup_retries;
+
 
   virtual vector<IDMap> find_successors_recurs(CHID key, uint m, uint all,
       uint type, uint *lookup_int = NULL);
@@ -230,6 +241,7 @@ protected:
   void fix_successor_list();
   void check_static_init();
   void record_stat(uint bytes, uint type);
+  void record_lookupstat(uint num, uint type);
 };
 
 typedef struct {
