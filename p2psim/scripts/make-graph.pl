@@ -5,7 +5,8 @@ use Getopt::Long;
 my $xstat = "BW_TOTALS:overall_bw";
 my @ystat = ("OVERALL_LOOKUPS:lookup_mean");
 my $xlabel;
-my @ylabel; 
+my @ylabel;
+my $hulllabel = "LOOKUP_RATES:success"; 
 my $param;
 my $paramname = "param";
 my $epsfile;
@@ -13,12 +14,15 @@ my @indats = ();
 my $xrange;
 my $yrange;
 my @graphlabels = ();
+my @hulllabelcmds = ();
 my $title;
 my $xop;
 my @yop = ();
+my $hullop;
 my $plottype;
 my $xparen = "";
 my @yparen = ("");
+my $hullparen = "";
 my $grid = 0;
 my $rtmgraph = 0;
 
@@ -62,6 +66,10 @@ make-graph.pl [options]
     --convex [both]           Generate convex hull graphs, not scatterplots
 				 If "both" is specified, both points and
 				   convex hull are shown
+    --hulllabel [<stat>]      Only valid with --convex.  Labels each point
+				 on the hull with the value of a specific
+				 statistic or parameter.  Defaults to
+			         "LOOKUP_RATES:success".
     --rtmgraph                Only valid with --param and --convex.  Holds all
                                  parameters but --param constant to values of
 				 points on the convex hull, and shows the
@@ -88,7 +96,7 @@ my %options;
 &GetOptions( \%options, "help|?", "x=s", "y=s@", "epsfile=s", 
 	     "param=s", "paramname=s", "datfile=s@", "label=s@", 
 	     "xrange=s", "yrange=s", "xlabel=s", "ylabel=s@", "title=s", 
-	     "convex:s", "plottype=s", "grid", "rtmgraph" )
+	     "convex:s", "plottype=s", "grid", "rtmgraph", "hulllabel:s" )
     or &usage;
 
 if( $options{"help"} ) {
@@ -110,6 +118,13 @@ if( defined $options{"y"} ) {
 	    $ystat[$i] = $y;
 	}
 	$i++;
+    }
+}
+if( defined $options{"hulllabel"} and $options{"hulllabel"} ne "" ) {
+    if( $options{"hulllabel"} =~ /^([\*\+\-\/].*)$/ ) {
+	$hulllabel = "$hulllabel" . $options{"hulllabel"};
+    } else {
+	$hulllabel = $options{"hulllabel"};
     }
 }
 if( defined $options{"xlabel"} ) {
@@ -220,13 +235,16 @@ for( my $i = 0; $i <= $#indats; $i++ ) {
 my @statlabels;
 my $xparam = 0;
 my @yparam = ();
+my $hullparam = 0;
 foreach my $y (@ystat) {
     push @yparam, 0;
 }
 my %xposes = ();
 my %yposes = ();
+my %hullposes = ();
 my @datfiles = ();
 my @xopsplit;
+my @hullopsplit;
 my @rtmfiles = ();
 
 my $index = 0;
@@ -234,6 +252,7 @@ foreach my $datfile (@indats) {
 
     my $xpos;
     my @ypos;
+    my $hullpos;
 
     open( DAT, "<$datfile" ) or die( "Cannot read $datfile" );
     my @dat = <DAT>;
@@ -257,6 +276,13 @@ foreach my $datfile (@indats) {
 	    $yparam[$i] = 1;
 	    $yposes{"$i-$datfile"} = $ypos[$i];
 	}
+    }
+    if( $hulllabel =~ /^param(\d+)/ ) {
+	if( $1 < 1 ) {
+	    die( "Can't have --hulllabel param$1" );
+	}
+	$hullpos = $1 - 1;
+	$hullparam = 1;
     }
     
     # look for ops (only done first time around
@@ -283,6 +309,17 @@ foreach my $datfile (@indats) {
 	    # split later on demand
 	}
     }
+
+    if( $hulllabel =~ /(\(?)([^\+\-\*\/]*)([\*\+\-\/].*)$/ ) {
+	if( defined $1 ) {
+	    $hullparen = $1;
+	} else {
+	    $hullparen = "";
+	}
+	$hulllabel = $2;
+	$hullop = $3;
+	@hullopsplit = &get_opsplit( $hullop );
+    } 
     
     for( my $i = 0; $i <= $#statlabels; $i++ ) {
 	
@@ -323,7 +360,22 @@ foreach my $datfile (@indats) {
 		$yposes{"$j-$index$stat"} = $i;
 	    }
 	}
-	     
+
+	if( !$hullparam &&
+	    ($l =~ /^\d+\)($hulllabel)(\(|$)/ || 
+	     $l =~ /^$hulllabel\)([^\(]*)(\(|$)/ ) ) {
+	    $hulllabel = $1;
+	    $hullpos = $i;
+	} elsif( $l =~ /^param(\d+)\)($hulllabel)(\(|$)/ ) {
+	    # we have ourselves a parameter.
+	    $hullparam = 1;
+	    $hullpos = $1 - 1;
+	}
+	# if there's a stat in the op, check it against this guy as well
+	if( defined $hullop && index( $hullop, $stat ) != -1 ) {
+	    $hullposes{"$index$stat"} = $i;
+	}
+
     }
     {;} # stupid emacs can't handle reg expressions very well
     if( !defined $xpos ) {
@@ -336,12 +388,18 @@ foreach my $datfile (@indats) {
 	}
 	$yposes{"$j-$datfile"} = $ypos[$j];
     }
+    if( !defined $hullpos ) {
+	die( "$hulllabel not a valid label in $datfile\n");
+    }
+    $hullposes{$datfile} = $hullpos;
 
     # if we're plotting vs some parameter, we have to rewrite the data with
     # that parameter along with the others
-    if( $xparam or grep( /1/, @yparam ) ) {
+    if( $xparam or grep( /1/, @yparam ) or $hullparam ) {
+	
 	my $last_valx = -1;
 	my @last_valy = ();
+	my $last_valhull = -1;
 	my %vals_used = ();
 	my $num_stats;
 	
@@ -370,6 +428,12 @@ foreach my $datfile (@indats) {
 			$last_valy[$j] = $params[$ypos[$j]];
 		    }
 		}
+		if( $hullparam && $#params < $hullpos) {
+		    die( "Wrong param number $hullpos for \"@params\"" );
+		}
+		if( $hullparam ) {
+		    $last_valhull = $params[$hullpos];
+		}
 		print DAT $line;
 		
 	    } elsif( $line =~ /^([^\#]*)$/ ) {
@@ -388,6 +452,9 @@ foreach my $datfile (@indats) {
 			$newline .= "$last_valy[$j] ";
 		    }
 		}
+		if( $hullparam ) {
+		    $newline .= "$last_valhull ";
+		}
 		print DAT "$newline\n";
 		$dat[$i] = "$newline\n";
 		
@@ -400,7 +467,7 @@ foreach my $datfile (@indats) {
 	my $i = 0;
 	if( $xparam ) {
 	    $i++;
-	    $xpos = $num_stats + 1;
+	    $xpos = $num_stats + $i;
 	}
 	$xposes{$newfile} = $xpos;
 	for( my $j = 0; $j <= $#ystat; $j++ ) {
@@ -410,6 +477,11 @@ foreach my $datfile (@indats) {
 	    }
 	    $yposes{"$j-$newfile"} = $ypos[$j];
 	}
+	if( $hullparam ) {
+	    $i++;
+	    $hullpos = $num_stats + $i;
+	}
+	$hullposes{$newfile} = $hullpos;
 	
 	close( DAT );
 	$labelhash{"$newfile"} = $labelhash{$datfile};
@@ -467,6 +539,9 @@ foreach my $datfile (@indats) {
 		    $yposes{"$j-$newfile$o"} = $yposes{"$j-$index$o"};
 		}
 	    }
+	    foreach my $o (@hullopsplit) {
+		$hullposes{"$newfile$o"} = $hullposes{"$index$o"};
+	    }
 
 	}
 	
@@ -480,6 +555,7 @@ foreach my $datfile (@indats) {
 	    for( my $j = 0; $j <= $#ystat; $j++ ) {
 		$yposes{"$j-$newfile"} = $ypos[$j];
 	    }
+	    $hullposes{$newfile} = $hullpos;
 	}
 	
     } else {
@@ -565,6 +641,7 @@ if( defined $plottype and
 	for( my $j = 0; $j <= $#ystat; $j++ ) {
 	    $yposes{"$j-$newfile"} = $yposes{"$j-$datfile"};
 	}
+	$hullposes{"$newfile"} = $hullposes{$datfile};
 	$datfiles[$i] = $newfile;
 
     }
@@ -582,6 +659,7 @@ if( defined $options{"convex"} ) {
 	    open( CON, ">$datfile.con" ) or 
 		die("Couldn't write to $datfile.con");
 	    my %headerhash = ();
+	    my %valshash = ();
 	    my $h;
 	    while( <DAT> ) {
 		
@@ -590,6 +668,8 @@ if( defined $options{"convex"} ) {
 		    next;
 		} else {
 		    
+		    my $v = $_;
+
 		    my @vals = split( /\s+/ ); 
 		    
 		    # do these operations before computing the hull!
@@ -647,6 +727,10 @@ if( defined $options{"convex"} ) {
 		    if( defined $param and $rtmgraph ) {
 			$headerhash{"$conx $cony"} = $h;
 		    }
+
+		    if( defined $options{"hulllabel"} ) {
+			$valshash{"$conx $cony"} = $v;
+		    }
 		}
 	    }
 
@@ -662,6 +746,60 @@ if( defined $options{"convex"} ) {
 	    $xposes{"$datfile$j.convex"} = $xposes{$datfile};
 	    for( my $k = 0; $k <= $#ystat; $k++ ) {
 		$yposes{"$k-$datfile$j.convex"} = $yposes{"$k-$datfile"};
+	    }
+	    $hullposes{"$datfile$j.convex"} = $hullposes{$datfile};
+
+	    # now figure out the hull labels
+	    if( defined $options{"hulllabel"} ) {
+		my @vals = ();
+		open( CON, "<$datfile$j.convex" ) or 
+		    die( "Couldn't open $datfile$j.convex" );
+		while( <CON> ) {
+		    if( /([\d\.]+) ([\d\.]+)/ ) {
+			if( defined $valshash{"$1 $2"} ) {
+
+			    my $xval = $1;
+			    my $yval = $2;
+
+			    # figure out what the hull label
+			    # for this point should be.
+			    my @v = split( /\s+/, $valshash{"$xval $yval"} );
+
+			    my $hulleval = "";
+			    if( defined $hullop ) {
+				
+				# check it for stats
+				$hulleval = $hullop;
+				foreach my $hull (@hullopsplit) {
+				    if( defined $hullposes{"$datfile$hull"} ) {
+					$hulleval =~ 
+				   s/$hull/$v[$hullposes{"$datfile$hull"}-1]/g;
+				    } elsif(defined $hullposes{"$index$hull"}){
+		        $hulleval =~ s/$hull/$v[$hullposes{"$index$hull"}-1]/g;
+				    } elsif( !($hull =~ /^[\d\.]*$/ ) ) {
+					die("Can't find a position for $hull");
+				    }
+				}
+				
+			    }
+
+			    my $hullval = eval("$hullparen" . 
+					       $v[$hullposes{$datfile}-1] . 
+					       "$hulleval");
+
+			    push( @hulllabelcmds,
+				  "set label \"$hullval\" at $xval, $yval " . 
+				  "font \"Times-Roman,16\"" );
+
+			} else {
+			    die( "val not defined: $1 $2" );
+			}
+		    } else {
+			die( "Weird line in $datfile$j.convex: $_" );
+		    }
+		}
+		close( CON );
+
 	    }
 
 	    # now if we're making an rtm graph, do it
@@ -756,6 +894,7 @@ if( defined $options{"convex"} ) {
 		    for( my $k = 0; $k <= $#ystat; $k++ ) {
 			$yposes{"$k-$newfile"} = $yposes{"$k-$datfile"};
 		    }
+		    $hullposes{"$newfile"} = $hullposes{$datfile};
 		    $num_h++;
 		    if( $num_h > 10 ) {
 			last;
@@ -803,6 +942,10 @@ if( defined $epsfile ) {
 
 if( defined $title ) {
     print GP "set title \"$title\"\n";
+}
+
+foreach my $hull (@hulllabelcmds) {
+    print GP "$hull\n";
 }
 
 print GP "plot ";
