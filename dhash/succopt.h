@@ -96,6 +96,12 @@ order_succs_by_latency (const vec<float> &l,
   out.clear ();
   for (size_t i = 0; i < succs.size (); i++) {
     out.push_back (succs[od[i].i]);
+#if 0
+    char buf[16];
+    sprintf (buf, "%5.2f", l [od[i].i]);
+    warn << "order " << succs [od[i].i].r.hostname
+         << ", " << buf << "\n";
+#endif
   }
 }
 

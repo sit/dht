@@ -763,10 +763,14 @@ rpc_manager::update_latency (ptr<location> from, ptr<location> l, u_int64_t lat)
   hostinfo *h = lookup_host (l->address ());
   if (h) {
     h->nrpc++;
-    err = (lat - h->a_lat);
-    h->a_lat = h->a_lat + GAIN*err;
-    if (err < 0) err = -err;
-    h->a_var = h->a_var + GAIN*(err - h->a_var);
+    if (h->a_lat == 0 && h->a_var == 0)
+      h->a_lat = lat;
+    else {
+      err = (lat - h->a_lat);
+      h->a_lat = h->a_lat + GAIN*err;
+      if (err < 0) err = -err;
+      h->a_var = h->a_var + GAIN*(err - h->a_var);
+    }
     if (lat > h->maxdelay) h->maxdelay = lat;
 
     // Copy info over to just this location
