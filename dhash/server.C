@@ -130,6 +130,16 @@ dhash_impl::~dhash_impl ()
   delete pmaint_obj;
 }
 
+static void
+open_worker (ptr<dbfe> mydb, str name, dbOptions opts, str desc)
+{
+  if (int err = mydb->opendb (const_cast <char *> (name.cstr ()), opts)) {
+    warning << desc << ": " << name <<"\n";
+    warning << "open returned: " << strerror (err) << "\n";
+    exit (-1);
+  }
+}
+
 dhash_impl::dhash_impl (str dbname, u_int k, int _ss_mode) 
 {
 
@@ -140,36 +150,22 @@ dhash_impl::dhash_impl (str dbname, u_int k, int _ss_mode)
   ss_mode = _ss_mode / 10;
   pk_partial_cookie = 1;
 
-  db = New refcounted<dbfe>();
-  
   //set up the options we want
   dbOptions opts;
-  opts.addOption("opt_async", 1);
-  opts.addOption("opt_cachesize", 1000);
-  opts.addOption("opt_nodesize", 4096);
+  opts.addOption ("opt_async", 1);
+  opts.addOption ("opt_cachesize", 1000);
+  opts.addOption ("opt_nodesize", 4096);
 
-  if (int err = db->opendb(const_cast < char *>(dbname.cstr()), opts)) {
-    warning << "db file: " << dbname <<"\n";
-    warning << "open returned: " << strerror(err) << "\n";
-    exit (-1);
-  }
- 
+  db = New refcounted<dbfe>();
   cache_db = New refcounted<dbfe> ();
   keyhash_db = New refcounted<dbfe> ();
 
-  str cdbs = strbuf() << dbname << ".c";
-  if (int err = cache_db->opendb(const_cast < char *> (cdbs.cstr()), opts)) {
-    warning << "cache db file: " << cdbs <<"\n";
-    warning << "open returned: " << strerror(err) << "\n";
-    exit (-1);
-  }
-
-  str kdbs = strbuf() << dbname << ".k";
-  if (int err = keyhash_db->opendb(const_cast < char *> (kdbs.cstr()), opts)) {
-    warning << "keyhash db file: " << kdbs <<"\n";
-    warning << "open returned: " << strerror(err) << "\n";
-    exit (-1);
-  }
+  str cdbs = strbuf () << dbname << ".c";
+  str kdbs = strbuf () << dbname << ".k";
+  
+  open_worker (db, dbname, opts, "db file");
+  open_worker (cache_db, cdbs, opts, "cache db file");
+  open_worker (keyhash_db, kdbs, opts, "keyhash db file");
 
   // merkle state
   mtree = New merkle_tree (db);
@@ -177,7 +173,7 @@ dhash_impl::dhash_impl (str dbname, u_int k, int _ss_mode)
 }
 
 void
-dhash_impl::init_after_chord(ptr<vnode> node, ptr<route_factory> _r_factory)
+dhash_impl::init_after_chord (ptr<vnode> node, ptr<route_factory> _r_factory)
 {
   this->r_factory = _r_factory;
 
@@ -208,8 +204,6 @@ dhash_impl::init_after_chord(ptr<vnode> node, ptr<route_factory> _r_factory)
   //the client helper class (will use for get_key etc)
   //don't cache here: only cache on user generated requests
   cli = New dhashcli (node, r_factory, 1); // XXX pick real server selection mode?
-
-  check_replica_tcb = NULL;
 
   /* statistics */
   keys_stored = 0;
@@ -992,10 +986,10 @@ dhash_impl::print_stats ()
 void
 dhash_impl::stop ()
 {
-  if (check_replica_tcb) {
+  if (keyhash_mgr_tcb) {
     warnx << "stop replica timer\n";
-    timecb_remove (check_replica_tcb);
-    check_replica_tcb = NULL;
+    timecb_remove (keyhash_mgr_tcb);
+    keyhash_mgr_tcb = NULL;
   }
   if (merkle_rep_tcb) {
     timecb_remove (merkle_rep_tcb);

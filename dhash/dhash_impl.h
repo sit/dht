@@ -178,7 +178,6 @@ class dhash_impl : public dhash {
   void dbdelete (ref<dbrec> key);
 
   vec<ptr<location> > replicas;
-  timecb_t *check_replica_tcb;
   timecb_t *merkle_rep_tcb;
   timecb_t *keyhash_mgr_tcb;
 
