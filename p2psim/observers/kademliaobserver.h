@@ -41,8 +41,6 @@ private:
   string _type;
 
   void init_state();
-
-  vector<Kademlia::NodeID> lid;
 };
 
 #endif // __KADEMLIA_OBSERVER_H

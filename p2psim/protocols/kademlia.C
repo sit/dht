@@ -119,7 +119,8 @@ Kademlia::join(Args *args)
     lookup_args la(_id, ip(), (_id ^ (1<<i)));
     lookup_result lr;
     if(!doRPC(ki->ip, &Kademlia::do_lookup, &la, &lr) && node()->alive())
-      erase(ki->id);
+      if(flyweight.find(ki->id) != flyweight.end())
+        erase(ki->id);
     if(!node()->alive())
       return;
     for(nodeinfo_set::const_iterator i = lr.results.begin(); i != lr.results.end(); ++i)
@@ -408,7 +409,8 @@ Kademlia::do_lookup_wrapper(k_nodeinfo *ki, NodeID key, set<k_nodeinfo*> *v)
   controlmsg++;
   if(!doRPC(ki->ip, &Kademlia::do_lookup, &la, &lr) && node()->alive()) {
     KDEBUG(2) << "do_lookup_wrapper: RPC to " << Kademlia::printbits(ki->id) << " failed " << endl;
-    erase(ki->id);
+    if(flyweight.find(ki->id) != flyweight.end())
+      erase(ki->id);
     return;
   }
   // caller not interested in result

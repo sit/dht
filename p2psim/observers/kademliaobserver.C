@@ -33,7 +33,6 @@ KademliaObserver::KademliaObserver(Args *a) : _type("Kademlia")
   assert(_nnodes > 0);
 
   _initstate = atoi((*a)["initstate"].c_str()) ? true : false;
-  lid.clear();
 
   // register as an observer of all Kadmelia instances
   list<Protocol*> l = Network::Instance()->getallprotocols(_type);
@@ -76,43 +75,27 @@ KademliaObserver::kick(Observed *, ObserverInfo *)
 bool
 KademliaObserver::stabilized()
 {
-  list<Protocol*> l = Network::Instance()->getallprotocols(_type);
-  list<Protocol*>::iterator pos;
+  list<Protocol*> allprotos = Network::Instance()->getallprotocols(_type);
+  list<Protocol*> liveprotos;
+  vector<Kademlia::NodeID> liveIDs;
 
-  //i only want to sort it once after all nodes have joined! 
-  Kademlia *k = 0;
-  if (lid.size() != _nnodes) {
-    lid.clear();
-    for (pos = l.begin(); pos != l.end(); ++pos) {
-      k = (Kademlia *)(*pos);
-      assert(k);
-      lid.push_back(k->id());
+  for(list<Protocol*>::const_iterator i = allprotos.begin(); i != allprotos.end(); ++i) {
+    Kademlia *k = (Kademlia *)(*i);
+    if(k->node()->alive()) {
+      liveprotos.push_back(*i);
+      liveIDs.push_back(k->id());
     }
-
-    sort(lid.begin(), lid.end());
-
-    // vector<Kademlia::NodeID>::iterator i;
-    // printf ("sorted nodes %d %d\n", lid.size (), _nnodes);
-    // for (i = lid.begin (); i != lid.end() ; ++i)
-    //   printf ("%hx\n", *i);
   }
 
-  for (pos = l.begin(); pos != l.end(); ++pos) {
-    k = (Kademlia *)(*pos);
-    assert(k);
-    // k->dump();
-    if (!k->stabilized(&lid)) {
+
+  for(list<Protocol*>::const_iterator i = liveprotos.begin(); i != liveprotos.end(); ++i) {
+    Kademlia *k = (Kademlia *)(*i);
+    if (!k->stabilized(&liveIDs)) {
       DEBUG(1) << now() << " NOT STABILIZED" << endl;
       return false;
     }
   }
 
   cout << now() << " STABILIZED" << endl;
-  DEBUG(1) << now() << " Kademlia finger tables" << endl;
-  for (pos = l.begin(); pos != l.end(); ++pos) {
-    assert(k);
-    k = (Kademlia *)(*pos);
-    // k->dump();
-  }
   return true;
 }
