@@ -84,7 +84,7 @@ RateControlQueue::send_one_rpc(void *x)
   if (_node->ip()!=qe->_dst) {
     _quota += (qe->_rsz-sz);
     _total_bytes += sz;
-    if (sz > PKT_OVERHEAD) {
+    if (sz >= PKT_OVERHEAD) {
       _node->record_bw_stat(qe->_type,0,sz-PKT_OVERHEAD);
       Node::record_inout_bw_stat(qe->_dst,_node->ip(),0,sz-PKT_OVERHEAD);
     }

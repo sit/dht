@@ -66,7 +66,6 @@ class ChordAdapt: public P2Protocol {
       vector<IDMap> v;
       bool is_succ;
       bool done;
-      bool loss;
     };
 
     struct alert_args {
@@ -106,7 +105,6 @@ class ChordAdapt: public P2Protocol {
     struct learn_ret {
       int stat;
       bool is_succ;
-      bool loss;
       vector<IDMap> v;
     };
 

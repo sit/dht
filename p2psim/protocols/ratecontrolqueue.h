@@ -117,7 +117,22 @@ class RateControlQueue {
     void detect_empty(void *x);
     void send_one_rpc(void *x);
     void stop_queue();
-    bool empty() { return (_qq.size() == 0 && (_quota) > (-_burst/2)) ;}
+    bool empty() { 
+      /*
+      if (_last_out_update) {
+	_outquota += ((int) ((now() - _last_out_update)*_rate));
+	_outquota -= (_node->total_outbytes()-_last_out);
+	_last_out = _node->total_outbytes();
+	_last_out_update= now();
+	if (_outquota < 0)
+	  return false;
+      }else{
+	_last_out_update= now();
+	_last_out = _node->total_outbytes();
+      }
+      */
+      return (_qq.size() == 0 && (_quota) > (-_burst/2));
+    }
     int quota() { return _quota;}
     uint total_bytes() { return _total_bytes;}
     uint size() { return _qq.size();}
@@ -130,15 +145,15 @@ class RateControlQueue {
 	return false;
     }
     bool very_critical() { 
-      return false;
-      //XXX what does _last_out do? seems like a bug
+      //return false;
       if (_fixed_stab)
 	return false;
       if (_last_out_update) {
-	_outquota += ((int) ((now() - _last_out)*_rate));
+	_outquota += ((int) ((now() - _last_out_update)*_rate));
 	_outquota -= (_node->total_outbytes()-_last_out);
 	if (_outquota < 6*_burst) 
 	  _outquota = 6 * _burst;
+	_last_out = _node->total_outbytes();
 	_last_out_update= now();
 	if (_outquota <= 3*_burst) 
 	  return true;
@@ -146,6 +161,7 @@ class RateControlQueue {
 	  return false;
       }else{
 	_last_out_update= now();
+	_last_out = _node->total_outbytes();
 	return false;
       }
     }

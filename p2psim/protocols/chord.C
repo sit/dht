@@ -1975,6 +1975,8 @@ void LocTable::init(Chord::IDMap m)
   me = m;
   idmapwrap *elm = New idmapwrap(me);
   ring.insert(elm);
+  full = me.id;
+  lastfull = now();
 }
 
 void
@@ -2459,39 +2461,72 @@ LocTable::sample_smallworld(uint est_n,Chord::IDMap &start, Chord::IDMap &end, d
 {
   //use LOC_REPLACEMENT 
   //to denote that the finger's succeeding gap is full
-  double x = random()/(double)((1<<31)-1);
-  ConsistentHash::CHID samp = me.id+((ConsistentHash::CHID)(-1)/(ConsistentHash::CHID)pow(est_n,1-x));
-  idmapwrap *elm = ring.closestsucc(samp);
-  if (elm->n.ip == me.ip) {
-    elm = ring.next(elm);
-    if (!elm) elm = ring.first();
-  }
   uint op = 0;
-  double ti;
-  ConsistentHash::CHID gap = 0;
-  start = end = me;
-  while ((gap <= mingap) && (elm->n.ip!=me.ip)) {
-    while (elm->is_succ || elm->status!=LOC_HEALTHY) {
-      if (elm->n.ip == me.ip)
-	return op;
+  if ((now()-lastfull) < 2*MINTIMEOUT) {
+    //start = end = me;
+    //return 0;
+    //get a random sample
+    double x = random()/(double)((1<<31)-1);
+    ConsistentHash::CHID samp = (ConsistentHash::CHID) (x * (ConsistentHash::CHID)(-1));
+    idmapwrap *elm = ring.closestsucc(samp);
+    while (elm->status > LOC_HEALTHY) {
       elm = ring.next(elm);
       if (!elm) elm = ring.first();
-      op++;
     }
     start = elm->n;
-    while (elm->n.ip!=me.ip) {
+    do {
       elm = ring.next(elm);
       if (!elm) elm = ring.first();
-      ti = (double)elm->n.alivetime/(double)(now()-elm->n.timestamp + elm->n.alivetime);
-      if (!elm->is_succ && elm->status <= LOC_HEALTHY
-	  && (ti > tt
-	    || (now()-elm->n.timestamp < MINTIMEOUT))
-	    || (!elm->n.alivetime))
-	break;
-      op++;
-    }
+    } while (elm->status > LOC_HEALTHY);
     end = elm->n;
-    gap = ConsistentHash::distance(start.id,end.id);
+    op = 0;
+  }else{
+      //get a good sample
+    double x = random()/(double)((1<<31)-1);
+    ConsistentHash::CHID samp = me.id+((ConsistentHash::CHID)(-1)/(ConsistentHash::CHID)pow(est_n,1-x));
+    idmapwrap *elm = ring.closestsucc(samp);
+    if (elm->n.ip == me.ip) {
+      elm = ring.next(elm);
+      if (!elm) elm = ring.first();
+    }
+    uint lsz = 0;
+    double ti;
+    ConsistentHash::CHID gap = 0;
+    start = end = me;
+    op = 1;
+    while ((gap <= mingap) && (elm->n.ip!=me.ip)) {
+      while (elm->is_succ || 
+	  (elm->status==LOC_REPLACEMENT)
+	  || (elm->status >= LOC_DEAD)
+	  || ((elm->status > LOC_HEALTHY) && ((now()-elm->n.timestamp) > (1 << elm->status)))) {
+	ti = (double)elm->n.alivetime/(double)(now()-elm->n.timestamp + elm->n.alivetime);
+	if (elm->n.ip == me.ip)
+	  return op;
+	elm = ring.next(elm);
+	if (!elm) elm = ring.first();
+	if ((elm->status <=LOC_HEALTHY) && (ti > tt || (now()-elm->n.timestamp < MINTIMEOUT)))
+	  lsz++;
+	op++;
+      }
+      start = elm->n;
+      while (elm->n.ip!=me.ip) {
+	if ((elm->status <=LOC_HEALTHY) && (ti > tt || (now()-elm->n.timestamp < MINTIMEOUT)))
+	  lsz++;
+	elm = ring.next(elm);
+	if (!elm) elm = ring.first();
+	ti = (double)elm->n.alivetime/(double)(now()-elm->n.timestamp + elm->n.alivetime);
+	if (!elm->is_succ && elm->status <= LOC_HEALTHY
+	    && (ti > tt
+	      || (now()-elm->n.timestamp < MINTIMEOUT))
+	      || (!elm->n.alivetime))
+	  break;
+	op++;
+      }
+      end = elm->n;
+      gap = ConsistentHash::distance(start.id,end.id);
+    }
+    if (op >= 0.9 * size())
+      lastfull = now();
   }
   return op;
 }
@@ -2682,6 +2717,7 @@ LocTable::next_close_hops(ConsistentHash::CHID key, uint n, Chord::IDMap src, do
 	(elm->is_succ 
 	 || to<0.0000000001 
 	 || ti >= to 
+	 //|| (elm->status < LOC_DEAD && ((now()-elm->n.timestamp) < (1<<elm->status)))
 	 || (!elm->n.alivetime && now()-elm->n.timestamp < 800000))) { 
       all.push_back(elm->n);
       i++;

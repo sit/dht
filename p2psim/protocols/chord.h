@@ -365,6 +365,8 @@ class LocTable {
     Chord::IDMap me;
     uint _max;
     uint _timeout;
+    ConsistentHash::CHID full;
+    Time lastfull;
 
     //evict one node to make sure ring contains <= _max elements
     void evict(); 

@@ -40,6 +40,7 @@ foreach my $log (@logs) {
     #print STDERR "$log\n";
 
     my @header = ("#");
+    my %allheader;
     my @log_stats = ();
     my $instats = 0;
     my @stats_found = ();
@@ -80,8 +81,11 @@ foreach my $log (@logs) {
 	    $instats = 1;
 	} elsif( $instats and /\<-----ENDSTATS-----\>/ ) {
 	    $instats = 0;
-	    push @headers, $h;
-
+	    if (!defined($allheader{$h})) {
+	      push @headers, $h;
+	      $allheader{$h} = 1;
+	      print STDERR "pushing $h\n";
+	    }
 	    for( my $i = 0; $i <= $#stats_found; $i++ ) {
 		my $s = $stats_found[$i];
 		$stats_used{$s} = "true";
@@ -124,7 +128,6 @@ if( defined $argsfile ) {
 }
 
 print "\n";
-
 foreach my $h (@headers) {
     
     print "$h\n";
