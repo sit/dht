@@ -57,7 +57,7 @@ struct s_dhash_insertarg {
   chordID key;
   dhash_dbtype dbtype;
   chord_node from;
-  chordID srcID;  // == from.x => redundant
+  chordID srcID;  /* == from.x => redundant */
   dhash_value data;
   int offset;
   int32_t nonce;
@@ -186,31 +186,31 @@ program DHASH_PROGRAM {
  *  are retrieved/inserted in their entirety, ie. are not broken into chunks. 
  */
 
-// struct dhash_contenthash_block {
-//   chordID     key;      /* the key */
-//   dhash_value block;    /* the data block */
-// };
-// 
-// struct dhash_publickey_block {
-//   sfs_pubkey2 pub_key;
-//   sfs_sig2 sig;
-//   dhash_value block;
-// };
-// 
-// union dhash_rpc_block switch (dhash_ctype ctype) {
-// case DHASH_CONTENTHASH:
-//   dhash_contenthash_block chash;
-// case DHASH_KEYHASH:
-//   dhash_publickey_block pkhash;
-// default:
-//   void;
-// };
-// 
-// struct dhash_insert2_arg {
-//   dhash_rpc_block block;
-//   int options;
-// };
-
+/* struct dhash_contenthash_block {
+   chordID     key;    
+   dhash_value block;  
+   };
+ 
+   struct dhash_publickey_block {
+   sfs_pubkey2 pub_key;
+   sfs_sig2 sig;
+   dhash_value block;
+   };
+ 
+   union dhash_rpc_block switch (dhash_ctype ctype) {
+   case DHASH_CONTENTHASH:
+   dhash_contenthash_block chash;
+   case DHASH_KEYHASH:
+   dhash_publickey_block pkhash;
+   default:
+   void;
+   };
+ 
+   struct dhash_insert2_arg {
+   dhash_rpc_block block;
+   int options;
+   };
+*/
 
 struct dhash_insert_arg {
   chordID   blockID;      /* the key */
@@ -258,9 +258,6 @@ program DHASHGATEWAY_PROGRAM {
 
 	        dhash_insert_res
 		DHASHPROC_INSERT (dhash_insert_arg) = 2;
-
-//	        dhash_insert_res
-//		DHASHPROC_INSERT2 (dhash_insert2_arg) = 3;
 
                 dhash_retrieve_res
 		DHASHPROC_RETRIEVE (dhash_retrieve_arg) = 4;
