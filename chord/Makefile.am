@@ -23,7 +23,8 @@ noinst_HEADERS = aclnt_chord.h \
 		 skiplist.h \
 		 stabilize.h \
 		 succ_list.h \
-		 toe_table.h
+		 toe_table.h \
+		 modlogger.h
 
 libchord_a_SOURCES = chord.C \
 		      route.C \
@@ -38,7 +39,8 @@ libchord_a_SOURCES = chord.C \
 		      finger_table.C \
 		      succ_list.C \
 		      pred_list.C \
-		      debruijn.C
+		      debruijn.C \
+		      modlogger.C
 
 EXTRA_DIST = .cvsignore
 CLEANFILES = core *.core *~ *.rpo
