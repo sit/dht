@@ -48,12 +48,8 @@ class node:
         # return hex(long(my.id)).lower()[2:-1]
         return "%d" % my.id
 
-class dhash:
-    """A Global View DHash simulator.  Subclass to actually store stuff.
-    Provides a simple paramterizable insert and lazy repair implementation.
-    The repair implementation does not delete excess fragments from nodes.
-    Repair happens at the end of each observed time step.
-
+class chord:
+    """A Global View Chord simulator.  Subclass to actually store stuff.
     Time is maintained by the external simulator.  The simulator calls
     time_changed whenever time is updated because of an additional event.
     """
@@ -143,6 +139,19 @@ class dhash:
             return my.nodes[diff+1:] + my.nodes[:n+1]
         return my.nodes[diff+1:n+1]
 
+    def time_changed (my, last_time, new_time):
+        for n in my.now_nodes:
+            if n.alive:
+                n.last_alive = last_time
+            else:
+                n.lifetime += last_time - n.last_alive
+        my.now_nodes = []
+
+class dhash (chord):
+    """Provides a simple paramterizable insert and lazy repair implementation.
+    The repair implementation does not delete excess fragments from nodes.
+    Repair happens at the end of each observed time step."""
+
     # Subclass and redefine these methods to produce more interesting
     # storage and repair behavior.
     def insert_block (my, id, block, size):
@@ -157,6 +166,11 @@ class dhash:
         n = my.allnodes[id]
         n.nrpc += len (succs)
         n.sent_bytes += isz * len (succs)
+
+	# Cache a copy of the block
+	if my.read_pieces () != 1:
+	    n.sent_bytes += size
+	    # XXX account for bytes of disk spaced used on succs[0]
 
         return succs[0]
 
@@ -187,13 +201,15 @@ class dhash:
 		    fixer.sent_bytes += isz
 		    needed -= 1
 		    if needed <= 0: break
-		# Account for bytes needed to reassemble the block.
-		nread = my.read_pieces () 
-		for s in haves:
-		    # the fixer has his own copy
-		    nread -= 1
-		    if nread <= 0: break
-		    s.sent_bytes += isz
+		if fixer != succs[0]: # first successor has a cached block
+		    # Account for bytes needed to reassemble the block.
+		    nread = my.read_pieces () 
+		    for s in haves:
+			# the fixer has his own copy
+			nread -= 1
+			if nread <= 0: break
+			s.sent_bytes += isz
+		    # XXX account for disk used by cache
 
     # XXX How long to wait until we do repair?
     def repair (my, affected_node):
@@ -239,12 +255,8 @@ class dhash:
 	    
     def time_changed (my, last_time, new_time):
         for n in my.now_nodes:
-            if n.alive:
-                n.last_alive = last_time
-            else:
-                n.lifetime += last_time - n.last_alive
             my.repair (n)
-        my.now_nodes = []
+	chord.time_changed (my, last_time, new_time)
     
     # Subclass and redefine these methods to explore basic changes.
     def min_pieces (my):
