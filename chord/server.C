@@ -536,10 +536,10 @@ vnode_impl::doRPC_cb (ptr<location> l, xdrproc_t proc,
       u_coords.push_back (c);
     }
 
-    update_coords (l,
-		   u_coords,
+    l->set_coords (u_coords);
+    update_coords (u_coords,
 		   distance);
-    
+
     //unmarshall the result and copy to out
     xdrmem x ((char *)res->resok->results.base (), 
 	      res->resok->results.size (), XDR_DECODE);
@@ -554,105 +554,62 @@ vnode_impl::doRPC_cb (ptr<location> l, xdrproc_t proc,
 }
 
 #define MAXDIM 10
-#define DT 0.01
 void
-vnode_impl::update_coords (ptr<location> u, vec<float> uc, float ud)
+vnode_impl::update_coords (vec<float> uc, float ud)
 {
 
 
   //  warn << myID << " --- starting update -----\n";
-  //update the node's coords
-  u->set_coords (uc);
-  int iterations = 0;
-  float ftot = 0.0;
   vec<float> coords = me_->coords ();
-  vec<float> f;
+  vec<float> f, v;
 
-  do {
-    //figure out the force on us by looking at all of the springs
-    //in the location table
-
-    //init f
-    f.clear ();
-    for (int i = 0; i < chord::NCOORDS; i++)
-      f.push_back (0.0);
-
-    bool ucached = locations->cached (u->id ());
-    ptr<location> l = ucached ? locations->first_loc () : u;
-    bool found_meas = false;
-    int cit = 0;
-
-    while (l) {
-      if ((l->coords ().size () > 0) && (l->id () != myID)) {
-
-	//  warn << myID << " setting a spring to " << l->n << "\n";
-	// print_vector ("l->coords", l->coords);
-	
-	vec<float> v = l->coords ();
-
-	float actual = l->distance ();
-	float expect = Coord::distance_f (coords, v);
+  
+  //init f
+  f.clear ();
+  for (int i = 0; i < chord::NCOORDS; i++) {
+    f.push_back (0.0);
+    v.push_back (uc[i]);
+  }
 
 
-	if (actual >= 0) {
-	  // force magnitude: > 0 --> stretched
-	  float grad = expect - actual;
+  float actual = ud;
+  float expect = Coord::distance_f (coords, uc);
+
+
+  if (actual >= 0 && actual < 1000000) { //ignore timeouts
+    // force magnitude: > 0 --> stretched
+    float grad = expect - actual;
 	  
-	  Coord::vector_sub (v, coords);
-	  
-	  float len = Coord::norm (v);
-	  float unit = 1.0/sqrtf(len);
-	  
-	  // scalar_mult(v, unit) is unit force vector
-	  // times grad gives the scaled force vector
-	  Coord::scalar_mult (v, unit*grad);
-	  
-	  // add v into the overall force vector
-	  Coord::vector_add (f, v);
-	  
-	  // Coord::print_vector ("f ", f);
-	  found_meas = true;
-	  cit++;
-	}
-      }
-      if (ucached)
-	l = locations->next_loc (l->id ());
-      else {
-	ucached= true;
-	l = locations->first_loc ();
-      }
+    Coord::vector_sub (v, coords);
+    
+    float len = Coord::norm (v);
+    while (len < 0.0001) {
+      for (int i = 0; i < chord::NCOORDS; i++)
+	v[i] = (double)(random () % 10 - 5) / 10.0;
+      len = Coord::norm (v);
     }
+    float unit = 1.0/sqrtf(len);
+	  
+    // scalar_mult(v, unit) is unit force vector
+    // times grad gives the scaled force vector
+    Coord::scalar_mult (v, unit*grad);
     
-    //print_vector ("f", f);
-    if (!found_meas) {
-      static int printcounter = 0;
-      if (printcounter == 0)
-	warn << "no springs!\n";
-      printcounter++;
-      if (printcounter == 1000)
-	printcounter = 0;
-      return;
-    } 
+    // add v into the overall force vector
+    Coord::vector_add (f, v);
+    
+    // Coord::print_vector ("f ", f);
+  }
       
-    //run the simulation for a bit
-    ftot = 0.0;
-    for (unsigned int k = 0; k < f.size (); k++)
-      ftot += fabs (f[k]);
+  
+  timestep -= 0.0025;
+  timestep = (timestep < 0.05) ? 0.05 : timestep;
 
-    float t = DT;
-    while (ftot*t > 1000.0) t /= 2.0;
-
-    gforce = ftot;
-
-    Coord::scalar_mult(f, t);
-    Coord::vector_add (coords, f);
-
-    //    Coord::print_vector ("f ", f);
-    //    Coord::print_vector("coords ", coords);
+  Coord::scalar_mult(f, timestep);
+  Coord::vector_add (coords, f);
+  
+  //  Coord::print_vector ("COORD f ", f);
+  //Coord::print_vector("COORD coords ", coords);
     
-    iterations++;
-  } while (false);
-
   me_->set_coords (coords);
 }
 

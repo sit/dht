@@ -124,7 +124,7 @@ chord::chord (str _wellknownhost, int _wellknownport,
   wkn.coords.setsize (NCOORDS);
   // Make up some random initial information for this other node.
   for (int i = 0; i < NCOORDS; i++)
-    wkn.coords[i] = (int) uniform_random_f (1000.0);
+    wkn.coords[i] = (int) uniform_random_f (1000000.0);
 
   if (myname != _wellknownhost || myport != _wellknownport) {
     wellknown_node = locations->insert (wkn);
@@ -214,7 +214,7 @@ chord::newvnode (cbjoin_t cb, ptr<fingerlike> fingers, ptr<route_factory> f)
   vec<float> coords;
   warn << gettime () << " coords are: ";
   for (int i = 0; i < NCOORDS; i++) {
-    coords.push_back (uniform_random_f (1000.0));
+    coords.push_back (uniform_random_f (1000000.0));
     warnx << (int) coords[i] << " " ;
   }
   warnx << "\n";

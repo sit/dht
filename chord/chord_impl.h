@@ -70,7 +70,8 @@ class vnode_impl : public vnode {
   ptr<stabilize_manager> stabilizer;
   
   int myindex;
-  
+  float timestep;
+
   ihash<unsigned long, 
     dispatch_record, 
     &dispatch_record::progno, 
@@ -164,10 +165,11 @@ class vnode_impl : public vnode {
 		 void *out, aclnt_cb cb, 
 		 ref<dorpc_res> res, clnt_stat err);
 
+
+  void update_coords (vec<float> uc, float ud);
   void check_dead_node_cb (ptr<location> l, chordstat s);
   void check_dead_nodes ();
 
-  void update_coords (ptr<location> l, vec<float> uc, float ud);
   ptr<location> closestgreedpred (const chordID &x, const vec<float> &n,
 				  const vec<chordID> &failed);
   ptr<location> closestproxpred  (const chordID &x, const vec<float> &n,
