@@ -20,6 +20,27 @@
  * LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
  * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ *
+ *
+ * HOWTO:
+
+In your events file, include the line:
+
+generator ChurnEventGenerator [arg1=val1 [arg2=val2 [...]]]
+
+Where args can currently be the following:
+name            default         description
+---------------------------------------------------------------------------
+wkn             1               the ip of the wellknown node (bootstrapper)
+proto                           the name of the protocol (i.e. "Chord")
+lifemean        100000          average time (ms) a node is alive at a time
+deathmean       lifemean        average time (ms) a node is dead at a time
+lookupmean      10000           average time (ms) between lookups per node
+exittime        200000          length of the experiment (in ms)
+ipkeys          false           generate lookups where keys are node IPs
+                                                                                
+Join, crash, and lookup events will be exponentially distributed about the
+means given above.
  */
 
 #ifndef __CHURN_EVENT_GENERATOR_H
@@ -45,7 +66,6 @@ private:
   unsigned _lookupmean;
   string _exittime_string;
   Time _exittime;
-  unsigned long _seed;
   bool _ipkeys;
   vector<IPAddress> _ips;
 

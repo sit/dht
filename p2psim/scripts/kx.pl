@@ -1,7 +1,17 @@
 #!/usr/bin/perl -w
 
-$protocol = "Kelips";
-defined $ARGV[0] and $protocol = $ARGV[0];
+# for ChurnEventGenerator
+my $lifemean = 100000;
+my $deathmean = $lifemean;
+my $lookupmean = 10000; # 10000 for churn, 100 for lookup
+my $exittime = 200000;
+my $protocol = "Kelips";
+my $nnodes = 1837; # Jinyang uses mostly 1024, also 1837
+my $diameter = 100; # diameter of Euclidean universe
+my $prefix = ""; # prefix to executable
+
+&process_args(@ARGV);
+@ARGV = ();
 
 # Run $protocol with many different parameter settings on the
 # standard ChurnGenerator workload.
@@ -31,11 +41,7 @@ my $param_lists = {
 
 my $params = $param_lists->{$protocol};
 
-my $nnodes = 1837; # Jinyang uses mostly 1024, also 1837
-defined $ARGV[1] and $nnodes = $ARGV[1];
-
 my $k = int(sqrt($nnodes));
-my $diameter = 100; # diameter of Euclidean universe
 
 # if defined, use this rather than random euclidean.
 my $king;
@@ -46,12 +52,6 @@ if($nnodes == 1024){
 } else {
     print STDERR "kx.pl: no king for $nnodes nodes\n";
 }
-
-# for ChurnEventGenerator
-my $lifemean = 100000;
-my $deathmean = $lifemean;
-my $lookupmean = 10000; # 10000 for churn, 100 for lookup
-my $exittime = 200000;
 
 my $pf = "pf$$";
 my $tf = defined($king) ? $king : "tf$$";
@@ -114,8 +114,6 @@ for($iters = 0; $iters < 500; $iters++){
     my $lat;
     my $hops;
 
-    my $prefix = "";
-    defined $ARGV[2] and $prefix = $ARGV[2];
     print "$prefix./p2psim $pf $tf $ef\n";
     open(P, "$prefix./p2psim $pf $tf $ef |");
     while(<P>){
@@ -144,4 +142,33 @@ for($iters = 0; $iters < 500; $iters++){
         printf("%s ", $pv{$name});
     }
     print "\n";
+}
+
+
+#
+# Processes arguments and sets options.
+#
+sub process_args {
+  my @args = @_;
+
+  while(@args) {
+    $_ = shift @args;
+    if(/^-l$/ || /^--lifemean$/) { $lifemean = shift @args; next; }
+    if(/^-d$/ || /^--deathmean$/){ $deathmean = shift @args; next; }
+    if(/^-p$/ || /^--protocol$/) { $protocol = shift @args; next; }
+    if(/^-n$/ || /^--nnodes$/)   { $nnodes = shift @args; next; }
+    if(/^-x$/ || /^--prefix$/)   { $prefix = shift @args; next; }
+    if(/^-h$/ || /^--help$/)     { &usage(); exit; }
+  }
+}
+
+sub usage {
+  print <<EOF;
+-h : help
+-l : lifemean
+-d : deathmean
+-p : protocol
+-n : nnodes
+-x : prefix
+EOF
 }

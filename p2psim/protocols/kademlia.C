@@ -212,7 +212,7 @@ Kademlia::initstate(set<Protocol*> *l)
 void
 Kademlia::join(Args *args)
 {
-  KDEBUG(1) << "Kademlia::join" << endl;
+  KDEBUG(0) << "Kademlia::join" << endl;
 
   IPAddress wkn = args->nget<IPAddress>("wellknown");
   assert(wkn);
@@ -309,7 +309,7 @@ void
 Kademlia::crash(Args *args)
 {
   // destroy k-buckets
-  KDEBUG(1) << "Kademlia::crash" << endl;
+  KDEBUG(0) << "Kademlia::crash" << endl;
   assert(node()->alive());
   node()->crash();
   for(hash_map<NodeID, k_nodeinfo*>::iterator i = flyweight.begin(); i != flyweight.end(); ++i) {
