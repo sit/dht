@@ -132,8 +132,7 @@ class vnode_impl : public vnode, public stabilizable {
   void get_fingers_cb (chordID x, chord_nodelistres *res, clnt_stat err);
   void get_fingers_chal_cb (chordID o, chordID x, bool ok, chordstat s);
 
-  void doalert_cb (svccb *sbp, chordID x, chordID s, net_address r, 
-		   chordstat stat);
+  void doalert_cb (chord_noderes *res, chordID x, clnt_stat err);
 
   void chord_upcall_done (chord_testandfindarg *fa,
 			  chord_testandfindres *res,
@@ -179,7 +178,7 @@ class vnode_impl : public vnode, public stabilizable {
 
   // For other modules
   long doRPC (const chordID &ID, rpc_program prog, int procno, 
-	      ptr<void> in, void *out, aclnt_cb cb);
+	      ptr<void> in, void *out, aclnt_cb cb, bool dead = false);
   void resendRPC (long seqno);
   void stats (void) const;
   void print (void) const;

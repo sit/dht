@@ -53,7 +53,7 @@ sfsrodb_core_sigusr1 ()
 static void
 check_cbs () 
 {
-  while (out >= 100)
+  while (out >= 16)
     acheck();
 }
 

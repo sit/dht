@@ -476,24 +476,22 @@ vnode_impl::doalert (svccb *sbp, chord_nodearg *na)
   ndoalert++;
   if (locations->cached (na->n.x)) {
     // check whether we cannot reach x either
-    get_successor (na->n.x, wrap (mkref (this), &vnode_impl::doalert_cb, sbp, 
-				  na->n.x));
-  } else {
-    sbp->replyref (chordstat (CHORD_UNKNOWNNODE));
+    chord_noderes *res = New chord_noderes (CHORD_OK);
+    ptr<chordID> v = New refcounted<chordID> (na->n.x);
+    doRPC (na->n.x, chord_program_1, CHORDPROC_GETSUCCESSOR, v, res,
+	   wrap (mkref (this), &vnode_impl::doalert_cb, res, na->n.x), true);
   }
+  sbp->replyref (chordstat (CHORD_OK));
 }
 
 void
-vnode_impl::doalert_cb (svccb *sbp, chordID x, chordID s, net_address r, 
-		   chordstat stat)
+vnode_impl::doalert_cb (chord_noderes *res, chordID x, clnt_stat err)
 {
-  if ((stat == CHORD_OK) || (stat == CHORD_ERRNOENT)) {
+  if (!err) {
     warnx << "doalert_cb: " << x << " is alive\n";
-    sbp->replyref (chordstat (CHORD_OK));
   } else {
     warnx << "doalert_cb: " << x << " is indeed not alive\n";
     // doRPCcb has already killed this node for us.
-    sbp->replyref (chordstat (CHORD_UNKNOWNNODE));
   }
 }
 

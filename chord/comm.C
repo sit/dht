@@ -43,6 +43,9 @@
 
 long outbytes;
 ihash<str, rpcstats, &rpcstats::key, &rpcstats::h_link> rpc_stats_tab;
+
+#define max_host_cache 1000
+
 // UTILITY FUNCTIONS
 
 const int shortstats (getenv ("SHORT_STATS") ? 1 : 0);
@@ -96,7 +99,7 @@ myselect (float *A, int p, int r, int i)
 // -----------------------------------------------------
 hostinfo::hostinfo (const net_address &r)
   : host (r.hostname), rpcdelay (0), nrpc (0), maxdelay (0),
-    a_lat (0.0), a_var (0.0)
+    a_lat (0.0), a_var (0.0), fd (-2)
 {
 }
 
@@ -105,6 +108,7 @@ hostinfo::hostinfo (const net_address &r)
 rpc_manager::rpc_manager (ptr<u_int32_t> _nrcv)
   : nrpc (0), nrpcfailed (0), nsent (0), npending (0), nrcv (_nrcv)
 {
+  warn << "CREATED RPC MANANGER\n";
   int dgram_fd = inetsocket (SOCK_DGRAM);
   if (dgram_fd < 0) fatal << "Failed to allocate dgram socket\n";
   dgram_xprt = axprt_dgram::alloc (dgram_fd, sizeof(sockaddr), 230000);
@@ -135,6 +139,36 @@ rpc_manager::get_avg_var ()
   return 0.0;
 }
 
+void
+rpc_manager::remove_host (hostinfo *h)
+{
+}
+
+hostinfo *
+rpc_manager::lookup_host (const net_address &r)
+{
+  str key = strbuf () << r.hostname << ":" << r.port << "\n";
+  hostinfo *h = hosts[key];
+  if (!h) {
+    if (hosts.size () > max_host_cache) {
+      hostinfo *o = hostlru.first;
+      hostlru.remove (o);
+      remove_host (o);
+      delete (o);
+    }
+    h = New hostinfo (r);
+    h->key = key;
+    hostlru.insert_tail (h);
+    hosts.insert (h);
+  } else {
+    // record recent access
+    hostlru.remove (h);
+    hostlru.insert_tail (h);
+  }
+  assert (h);
+  return h;
+}
+
 long
 rpc_manager::doRPC (ptr<location> l,
 		    rpc_program prog, int procno, 
@@ -146,6 +180,15 @@ rpc_manager::doRPC (ptr<location> l,
   
   c->call (procno, in, out, wrap (this, &rpc_manager::doRPCcb, cb)); 
   return 0;
+}
+
+long
+rpc_manager::doRPC_dead (ptr<location> l,
+			 rpc_program prog, int procno, 
+			 ptr<void> in, void *out, aclnt_cb cb,
+			 long fake_seqno /* = 0 */)
+{
+  doRPC (l, prog, procno, in, out, cb, fake_seqno);
 }
 
 void
@@ -170,40 +213,86 @@ tcp_manager::doRPC (ptr<location> l,
   RPC_delay_args *args = New RPC_delay_args (l, prog, procno,
 					     in, out, cb);
 
-  // wierd: tcpconnect wants the address in NBO, and port in HBO
-  tcpconnect (l->saddr.sin_addr, ntohs (l->saddr.sin_port),
-  	      wrap (this, &tcp_manager::doRPC_tcp_connect_cb, args));
-  return 0;
+  hostinfo *hi = lookup_host (l->addr);
+  if (hi->fd == -2) { //no connect initiated
+    // wierd: tcpconnect wants the address in NBO, and port in HBO
+    hi->fd = -1; // signal pending connect
+    tcpconnect (l->saddr.sin_addr, ntohs (l->saddr.sin_port),
+		wrap (this, &tcp_manager::doRPC_tcp_connect_cb, args));
+  } else if (hi->fd == -1) { //connect pending, add to waiters
+    cbv waitcb = wrap (this, &tcp_manager::send_RPC, args);
+    hi->connect_waiters.push_back (waitcb);
+  } else if (hi->fd > 0) { //already connected
+    send_RPC (args);
+  }
 }
 
+long
+tcp_manager::doRPC_dead (ptr<location> l,
+			 rpc_program prog, int procno, 
+			 ptr<void> in, void *out, aclnt_cb cb,
+			 long fake_seqno /* = 0 */)
+{
+  doRPC (l, prog, procno, in, out, cb, fake_seqno);
+}
+
+void
+tcp_manager::remove_host (hostinfo *h) 
+{
+  warn << "closing " << h->fd << " on " << h->host << "\n";
+  tcp_abort (h->fd);
+  h->fd = -2;
+  h->xp = NULL;
+}
+
+void
+tcp_manager::send_RPC (RPC_delay_args *args)
+{
+
+  hostinfo *hi = lookup_host (args->l->addr);
+  if (hi->xp->ateof()) 
+    {
+      hostlru.remove (hi);
+      hostlru.insert_tail (hi);
+      if (hi->fd > 0) close (hi->fd);
+      (args->cb) (RPC_CANTSEND);
+      return;
+    }
+  ptr<aclnt> c = aclnt::alloc (hi->xp, args->prog);
+  c->call (args->procno, args->in, args->out, 
+	   wrap (this, &tcp_manager::doRPC_tcp_cleanup, c, args));
+}
 void
 tcp_manager::doRPC_tcp_connect_cb (RPC_delay_args *args, int fd)
 {
+  ptr<axprt_stream> stream_xprt = NULL;
+  hostinfo *hi = lookup_host (args->l->addr);
+  hi->fd = fd;
   if (fd < 0) {
     warn << "locationtable: connect failed: " << strerror (errno) << "\n";
     (args->cb) (RPC_CANTSEND);
-    return;
+    delete args;
+  } else {
+    struct linger li;
+    li.l_onoff = 1;
+    li.l_linger = 0;
+    setsockopt (fd, SOL_SOCKET, SO_LINGER, (char *) &li, sizeof (li));
+    tcp_nodelay (fd);
+    make_async(fd);
+    stream_xprt = axprt_stream::alloc (fd);
+    hi->xp = stream_xprt;
+    assert (stream_xprt);
+    send_RPC (args);
   }
 
-  struct linger li;
-  li.l_onoff = 1;
-  li.l_linger = 0;
-  setsockopt (fd, SOL_SOCKET, SO_LINGER, (char *) &li, sizeof (li));
-
-  ptr<axprt_stream> stream_xprt = axprt_stream::alloc (fd);
-  assert (stream_xprt);
-  ptr<aclnt> c = aclnt::alloc (stream_xprt, args->prog);
-
-  c->call (args->procno, args->in, args->out, 
-	   wrap (this, &tcp_manager::doRPC_tcp_cleanup, args, fd));
-
+  for (unsigned int i = 0; i < hi->connect_waiters.size (); i++)
+    (*hi->connect_waiters[i])();
 }
 
 void
-tcp_manager::doRPC_tcp_cleanup (RPC_delay_args *args, int fd, clnt_stat err)
+tcp_manager::doRPC_tcp_cleanup (ptr<aclnt> c, RPC_delay_args *args, clnt_stat err)
 {
   (*args->cb)(err);
-  tcp_abort (fd);
   delete args;
 }
 
@@ -222,8 +311,7 @@ stp_manager::stp_manager (ptr<u_int32_t> _nrcv)
     cwind_cum (0.0),
     num_cwind_samples (0),
     num_qed (0),
-    idle_timer (NULL),
-    max_host_cache (100)
+    idle_timer (NULL)
 {
   delaycb (1, 0, wrap (this, &stp_manager::ratecb));
   reset_idle_timer ();
@@ -235,28 +323,6 @@ stp_manager::~stp_manager ()
 {
   if (idle_timer)
     timecb_remove (idle_timer);
-}
-
-hostinfo *
-stp_manager::lookup_host (const net_address &r)
-{
-  hostinfo *h = hosts[r.hostname];
-  if (!h) {
-    if (hosts.size () > max_host_cache) {
-      hostinfo *o = hostlru.first;
-      hostlru.remove (o);
-      delete (o);
-    }
-    h = New hostinfo (r);
-    hostlru.insert_tail (h);
-    hosts.insert (h);
-  } else {
-    // record recent access
-    hostlru.remove (h);
-    hostlru.insert_tail (h);
-  }
-  assert (h);
-  return h;
 }
 
 void
@@ -300,6 +366,21 @@ stp_manager::get_avg_var ()
 }
 
 long
+stp_manager::doRPC_dead (ptr<location> l,
+			 rpc_program prog, int procno, 
+			 ptr<void> in, void *out, aclnt_cb cb,
+			 long fake_seqno /* = 0 */)
+{
+  warn << "dead RPC call\n";
+    
+  ref<aclnt> c = aclnt::alloc (dgram_xprt, prog, 
+			       (sockaddr *)&(l->saddr));
+  
+  c->call (procno, in, out, cb); 
+  return 0;
+}
+
+long
 stp_manager::doRPC (ptr<location> l,
 		    rpc_program prog, int procno, 
 		    ptr<void> in, void *out, aclnt_cb cb,
@@ -318,6 +399,7 @@ stp_manager::doRPC (ptr<location> l,
     ref<aclnt> c = aclnt::alloc (dgram_xprt, prog, 
 				 (sockaddr *)&(l->saddr));
     rpc_state *C = New rpc_state (l, cb, getusec (), seqno, prog.progno);
+    C->procno = procno;
    
     C->b = rpccb_chord::alloc (c, 
 			       wrap (this, &stp_manager::doRPCcb, c, C),
@@ -334,6 +416,7 @@ stp_manager::doRPC (ptr<location> l,
     hostinfo *h = lookup_host (l->addr);
     setup_rexmit_timer (h, &sec, &nsec);
 
+    //    warn << getusec () << " sent an RPC destined for " << inet_ntoa (l->saddr.sin_addr) << "\n";
     C->b->send (sec, nsec);
     seqno++;
     nsent++;
@@ -352,23 +435,26 @@ stp_manager::doRPC (ptr<location> l,
 void
 stp_manager::timeout (rpc_state *C)
 {
+
 #if 0
   u_int64_t now = getusec ();
   warn << "stp_manager::timeout\n"; 
   warn << "\t**now " << now << "\n";
   warn << "\tID " << C->ID << "\n";
   warn << "\ts " << C->s << "\n";
-  warn << "\tprogno " << C->progno << "\n";
+  warn << "\tprogno.procno " << C->progno << "." << C->procno << "\n";
   warn << "\tseqno " << C->seqno << "\n";
   warn << "\trexmits " << C->rexmits << "\n";
-#endif
-
-#ifdef __J__
-  warnx << gettime() << " TIMEOUT " << 1 + C->seqno << " cwind " << (int)cwind << " ssthresh " << (int)ssthresh << "\n";
+  warn << "\tcwind " << (int)cwind << "\n";
+  warn << "\tleft " << left << "\n";
 #endif
 
   C->s = 0;
-  rpc_done (-1);
+  C->rexmits++;
+
+  //  remove_from_sentq (C->seqno);
+  update_cwind (-1);
+  //  rpc_done (C->seqno);
 }
 
 void
@@ -402,37 +488,19 @@ stp_manager::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
 
   user_rexmit_table.remove (C);
   (C->cb) (err);
+  //  if (C->s > 0) 
+    remove_from_sentq (C->seqno);
+  update_cwind (C->seqno);
   rpc_done (C->seqno);
   delete C;
-
 }
 
 void
-stp_manager::rpc_done (long acked_seqno)
+stp_manager::remove_from_sentq (long acked_seqno)
 {
-  // XXX acked_seqno
-  if (acked_seqno < 0) {
-    update_cwind (-1);
-    return;
-  }
-
-#ifdef __JJ__
-  warnx << gettime() << " rpc_done " << 1 + acked_seqno << "\n";
-#endif
-
-  // XXX this is all just debugging stuff... 
-  //     put i suspect it has a reasonable
-  //     performance impact.
-  // --josh
-  if (acked_seqno > 0) {
-    acked_seq.push_back (acked_seqno);
-    acked_time.push_back ((getusec () - st)/1000000.0);
-    if (acked_seq.size () > 10000) acked_seq.pop_front ();
-    if (acked_time.size () > 10000) acked_time.pop_front ();
-  }
-
+  
   // Ideally sent_Q should be a lru ordered hash table.
-  // this might clean up the clode slight and provide
+  // this might clean up the code slight and provide
   // a slight performance boost
   // --josh
   sent_elm *s = sent_Q.first;
@@ -444,15 +512,33 @@ stp_manager::rpc_done (long acked_seqno)
     }
     s = sent_Q.next (s);
   }
-  
-  update_cwind (acked_seqno);
 
+}
+void
+stp_manager::rpc_done (long acked_seqno)
+{
+
+#ifdef __JJ__
+  warnx << gettime() << " rpc_done " << 1 + acked_seqno << "\n";
+#endif
+
+  
   while (Q.first && (left + cwind >= seqno) ) {
-    //int qsize = (num_qed > 100) ? 100 :  num_qed;
-    //    int next = (int)(qsize*((float)random()/(float)RAND_MAX));
     RPC_delay_args *args = Q.first;
-    //    for (int i = 0; (args) && (i < next); i++)
-    //    args = Q.next (args);
+
+#ifdef RANDOMIZE_STP_Q
+    int qsize = (num_qed > 100) ? 100 :  num_qed;
+    int next = (int)(qsize*((float)random()/(float)RAND_MAX));
+    for (int i = 0; (args) && (i < next); i++)
+      args = Q.next (args);
+#endif
+
+    //stats
+    long now = getusec ();
+    long diff = now - args->now;
+    lat_inq.push_back (diff);
+    if (lat_inq.size () > 1000) lat_inq.pop_back ();
+
     assert (args);
     Q.remove (args);
 
@@ -497,6 +583,7 @@ stp_manager::rexmit (long seqno)
 void
 stp_manager::update_cwind (int seq) 
 {
+  float oldcwind = cwind;
   if (seq >= 0) {
     if (cwind < ssthresh) 
       cwind += 1.0; //slow start
@@ -511,20 +598,24 @@ stp_manager::update_cwind (int seq)
   } else {
     ssthresh = cwind_ewma/2; // MD
     if (ssthresh < 1.0) ssthresh = 1.0;
-    cwind = cwind/2;
-    if (cwind < 1.0) cwind = 1.0;
+    //    cwind = cwind/2;
+    // if (cwind < 1.0) cwind = 1.0;
+    cwind = 1.0;
+
   }
 
+  char buf[128];
+  sprintf (buf, "old cwind: %f, new %f\n", oldcwind, cwind);
   cwind_ewma = (cwind_ewma*49 + cwind)/50;
   cwind_cum += cwind;
   num_cwind_samples++;
   
+  //stats
   cwind_cwind.push_back (cwind);
   cwind_time.push_back ((getusec () - st)/1000000.0);
-  if (cwind_cwind.size () > 10000) cwind_cwind.pop_front ();
-  if (cwind_time.size () > 10000) cwind_time.pop_front ();
-
-
+  if (cwind_cwind.size () > 1000) cwind_cwind.pop_front ();
+  if (cwind_time.size () > 1000) cwind_time.pop_front ();
+  
 #ifdef PEG_CWIND
   cwind = 100.0; 
 #endif
@@ -534,6 +625,8 @@ void
 stp_manager::enqueue_rpc (RPC_delay_args *args) 
 {
   num_qed++;
+  qued_hist.push_back (num_qed);
+  if (qued_hist.size () > 1000) qued_hist.pop_back ();
   Q.insert_tail (args);
 }
 
@@ -655,16 +748,33 @@ void stp_manager::stats ()
     warnx << "lat: " << buf << "\n";
   }
 
+  warnx << "Latencies (in q):\n";
+  for (unsigned int i = 0; i < lat_inq.size (); i++) {
+    warnx << "lat(q): " << lat_inq[i] << "\n";
+  }
+
   warnx << "cwind over time:\n";
   for (unsigned int i = 0; i < cwind_cwind.size (); i++) {
     sprintf (buf, "%f %f", cwind_time[i], cwind_cwind[i]);
     warnx << "cw: " << buf << "\n";
   }
 
-  warnx << "ACK trace:\n";
-  for (unsigned int i = 0; i < acked_seq.size (); i++) {
-    sprintf (buf, "%f", acked_time[i]);
-    warnx << "at: " << buf << " " << acked_seq[i] << "\n";
+  warnx << "queue length over time:\n";
+  for (unsigned int i = 0; i < qued_hist.size (); i++) {
+    sprintf (buf, "%f %ld", cwind_time[i], qued_hist[i]);
+    warnx << "qued: " << buf << "\n";
+  }
+
+  warnx << "current RPCs queued for transmission pending window: " << num_qed << "\n";
+  RPC_delay_args *args = Q.first;
+  const rpcgen_table *rtp;
+  u_int64_t now = getusec ();
+  while (args) {
+    rtp = &(args->prog.tbl[args->procno]);
+    assert (rtp);
+    long diff = now - args->now;
+    warn << "  " << args->prog.name << "." << rtp->name << " for " << args->l->n << " queued for " << diff << "\n";
+    args = Q.next (args);
   }
 
   warnx << "per program bytes\n";
@@ -836,8 +946,10 @@ rpccb_chord::timeout_cb (ptr<bool> del)
     if (nsec < 0 || sec < 0)
       panic ("1 timeout_cb: sec %ld, nsec %ld\n", sec, nsec);
 
-    /*        warnx << gettime() << " REXMIT " << xid
-	      << " rexmits " << rexmits << ", timeout "<< sec << ":" << nsec << "\n";*/
+    sockaddr_in *s = (sockaddr_in *)dest;
+
+    warnx << gettime() << " REXMIT " << xid
+	  << " rexmits " << rexmits << ", timeout "<< sec << ":" << nsec << " destined for " << inet_ntoa (s->sin_addr) << "\n";
 
     xmit (rexmits);
     if (rexmits == MAX_REXMIT) {

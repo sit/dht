@@ -400,6 +400,8 @@ public:
   timecb_t *dcb;
   int nonce;
   int retries_done;
+  u_int64_t start;
+
   void block_cb (s_dhash_block_arg *arg);
   void reexecute ();
   void timed_out ();

@@ -202,13 +202,17 @@ locationtable::resendRPC (long seqno)
 long
 locationtable::doRPC (const chordID &n, rpc_program progno, 
 		      int procno, ptr<void> in, 
-		      void *out, aclnt_cb cb)
+		      void *out, aclnt_cb cb, bool dead)
 {
   ptr<location> l = lookup (n);
   if (!l) panic << "location (" << n << ") is null. forgot to call cacheloc\n?";
   l->nrpc++;
-  return hosts->doRPC (l, progno, procno, in, out, 
-		       wrap (this, &locationtable::doRPCcb, l, cb));
+  if (!dead)
+    return hosts->doRPC (l, progno, procno, in, out, 
+			 wrap (this, &locationtable::doRPCcb, l, cb));
+  else
+    return hosts->doRPC_dead (l, progno, procno, in, out, 
+			      wrap (this, &locationtable::doRPCcb, l, cb));
 
 }
 
@@ -608,7 +612,7 @@ locationtable::challenge (const chordID &x, cbchallengeID_t cb)
   ca->challenge = c;
   l->outstanding_cbs.push_back (cb);
   doRPC (l->n, chord_program_1, CHORDPROC_CHALLENGE, ca, res, 
-	 wrap (mkref (this), &locationtable::challenge_cb, c, l, res));
+	 wrap (mkref (this), &locationtable::challenge_cb, c, l, res), true);
 }
 
 void

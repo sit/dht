@@ -101,6 +101,7 @@ class route_chord : public route_iterator {
 
   void next_hop ();
 
+  void on_failure (chordID f);
   chordID pop_back ();
 };
 

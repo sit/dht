@@ -179,6 +179,16 @@ route_chord::pop_back ()
 
 
 void
+route_chord::on_failure (chordID f)
+{
+  failed_nodes.push_back (f);
+  warn << v->my_ID () << ": " << f << " is down. ";
+  v->alert (search_path.back (), f);
+  warn << " Now trying " << search_path.back () << "\n";
+  last_hop = false;
+  next_hop ();
+}
+void
 route_chord::make_hop_cb (ptr<bool> del,
 			  chord_testandfindres *res, clnt_stat err)
 {
@@ -189,15 +199,7 @@ route_chord::make_hop_cb (ptr<bool> del,
     //back up
     chordID last_node_tried = pop_back ();
     if (search_path.size () == 0) search_path.push_back (v->my_ID ());
-    failed_nodes.push_back (last_node_tried);
-    //chordID who_told_me = peek_back ();
-    //ask who_told_me for a new hint 
-    warn << v->my_ID () << ": " << last_node_tried << " is down. ";
-    warn << "alerting " << search_path.back () << "\n";
-    v->alert (search_path.back (), last_node_tried);
-    warn << " Now trying " << search_path.back () << "\n";
-    last_hop = false;
-    next_hop ();
+    on_failure (last_node_tried);
   } else if (res->status == CHORD_STOP) {
     //    warn << v->my_ID () << "; got STOP\n";
     r = CHORD_OK;
@@ -217,9 +219,6 @@ route_chord::make_hop_cb (ptr<bool> del,
     // haven't found the successor yet
     chordID last = search_path.back ();
     if (last == res->notinrange->n.x) {   
-      // last returns itself as best predecessor, but doesn't know
-      // what its immediate successor is---higher layer should use
-      // succlist to make forward progress
       warnx << v->my_ID() << ": make_route_cb: node " << last
 	   << "returned itself as best pred, looking for "
 	   << x << "\n";
@@ -230,12 +229,13 @@ route_chord::make_hop_cb (ptr<bool> del,
       chordID olddist = distance (search_path.back (), x);
       chordID newdist = distance (res->notinrange->n.x, x);
       if (newdist > olddist) {
+	warnx << "XXXXXXXXXXXXXXXXXXX WRONG WAY XXXXXXXXXXXXX\n";
 	warnx << v->my_ID() << ": make_route_cb: went in the wrong direction:"
 	      << " looking for " << x << "\n";
 	// xxx surely we can do something more intelligent here.
 	print ();
-	warnx << "sent me to " << res->notinrange->n.x << "\n";
-	assert (0);
+	warnx << v->my_ID() << ": " << search_path.back () << " sent me to " << res->notinrange->n.x << " looking for " << x << "\n";
+	warnx << "XXXXXXXXXXXXXXXXXXX WRONG WAY XXXXXXXXXXXXX\n";
       }
       
       v->locations->cacheloc (res->notinrange->n.x, res->notinrange->n.r,
@@ -256,17 +256,11 @@ route_chord::make_route_done_cb (chordID s, bool ok, chordstat status)
     search_path.push_back (s);
     last_hop = true;
   } else if (status == CHORD_RPCFAILURE) {
-    failed_nodes.push_back (s);
-    //ask who_told_me for a new hint 
-    warn << v->my_ID () << ": (from challenge route) " << s << " is down. ";
-    warn << "alerting " << search_path.back () << "\n";
-    v->alert (search_path.back (), s);
-    warn << " Now trying " << search_path.back () << "\n";
-    next_hop ();
+    on_failure (s);
   } else {
     warnx << v->my_ID () << ": make_route_done_cb: last challenge for "
 	  << s << " failed. (chordstat " << status << ")\n";
-    r = CHORD_RPCFAILURE;
+    assert (0);
   }
   if (stop) done = true;
   cb (done);
@@ -280,17 +274,11 @@ route_chord::make_hop_done_cb (chordID s, bool ok, chordstat status)
     search_path.push_back (s);
     assert (search_path.size () <= 1000);
   } else if (status == CHORD_RPCFAILURE) {
-    failed_nodes.push_back (s);
-    //ask who_told_me for a new hint 
-    warn << v->my_ID () << ": (from challenge hop) " << s << " is down. ";
-    warn << "alerting " << search_path.back () << "\n";
-    v->alert (search_path.back (), s);
-    warn << " Now trying " << search_path.back () << "\n";
-    next_hop ();
+    on_failure (s);
   } else {
     warnx << v->my_ID () << ": make_hop_done_cb: step challenge for "
 	  << s << " failed. (chordstat " << status << ")\n";
-    assert (0); // XXX handle malice more intelligently
+    assert (0);
   }
   cb (done);
 }
@@ -507,8 +495,7 @@ route_debruijn::make_hop_cb (ptr<bool> del, chord_debruijnres *res,
   if (*del) return;
   if (err) {
     warnx << "make_hop_cb: failure " << err << "\n";
-    r = CHORD_RPCFAILURE;
-    cb (done = true);
+    
     delete res;
   } else if (res->status == CHORD_STOP) {
     r = CHORD_OK;

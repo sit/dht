@@ -13,14 +13,19 @@ struct rpcstats {
 
 extern ihash<str, rpcstats, &rpcstats::key, &rpcstats::h_link> rpc_stats_tab;
 
+
 // store latency information about a host.
 struct hostinfo {
   sfs_hostname host;
+  str key;
   u_int64_t rpcdelay;
   u_int64_t nrpc;
   u_int64_t maxdelay;
   float a_lat;
   float a_var;
+  int fd;
+  ptr<axprt_stream> xp;
+  vec<cbv> connect_waiters;
 
   ihash_entry<hostinfo> hlink_;
   tailq_entry<hostinfo> lrulink_;
@@ -43,12 +48,14 @@ struct RPC_delay_args {
   void *out;
   aclnt_cb cb;
   long fake_seqno;
+  long now;
 
   tailq_entry<RPC_delay_args> q_link;
 
   RPC_delay_args (ptr<location> _l, rpc_program _prog, int _procno,
 		  ptr<void> _in, void *_out, aclnt_cb _cb) :
-    l (_l), prog (_prog), procno (_procno), in (_in), out (_out), cb (_cb) {};
+    l (_l), prog (_prog), procno (_procno), in (_in), 
+    out (_out), cb (_cb), now (getusec ()) {};
 };
 
 struct rpc_state {
@@ -57,6 +64,7 @@ struct rpc_state {
   aclnt_cb cb;
   u_int64_t s;
   int progno;
+  int procno;
   long seqno;
   long rexmit_ID;
 
@@ -84,12 +92,20 @@ class rpc_manager {
   ptr<u_int32_t> nrcv;
 
   ptr<axprt_dgram> dgram_xprt;
+
+  ihash<str, hostinfo, &hostinfo::key, &hostinfo::hlink_> hosts;
+  tailq<hostinfo, &hostinfo::lrulink_> hostlru;
+
+  hostinfo *lookup_host (const net_address &r);
+  virtual void remove_host (hostinfo *h);
   
  public:
   virtual void rexmit (long seqno) {};
   virtual void stats ();
   virtual long doRPC (ptr<location> l, rpc_program prog, int procno,
 		 ptr<void> in, void *out, aclnt_cb cb, long fake_seqno = 0);
+  virtual long doRPC_dead (ptr<location> l, rpc_program prog, int procno,
+			   ptr<void> in, void *out, aclnt_cb cb, long fake_seqno = 0);
   // the following may not necessarily make sense for all implementations.
   virtual float get_a_lat (ptr<location> l);
   virtual float get_a_var (ptr<location> l); 
@@ -106,11 +122,16 @@ class tcp_manager : public rpc_manager {
 		  void *out, aclnt_cb cb);
 
   void doRPC_tcp_connect_cb (RPC_delay_args *args, int fd);
-  void doRPC_tcp_cleanup (RPC_delay_args *args, int fd, clnt_stat err);
+  void doRPC_tcp_cleanup (ptr<aclnt> c, RPC_delay_args *args, clnt_stat err);
+  void send_RPC (RPC_delay_args *args);
+  void remove_host (hostinfo *h);
+
  public:
   void rexmit (long seqno) {};
   long doRPC (ptr<location> l, rpc_program prog, int procno,
 	      ptr<void> in, void *out, aclnt_cb cb, long fake_seqno = 0);
+  long doRPC_dead (ptr<location> l, rpc_program prog, int procno,
+		   ptr<void> in, void *out, aclnt_cb cb, long fake_seqno = 0);
   tcp_manager (ptr<u_int32_t> _nrcv) : rpc_manager (_nrcv) {}
   ~tcp_manager () {}
 };
@@ -134,6 +155,8 @@ class stp_manager : public rpc_manager {
   vec<float> cwind_cwind;
   vec<long> acked_seq;
   vec<float> acked_time;
+  vec<long> qued_hist;
+  vec<long> lat_inq;
 
   int seqno;
   float cwind;
@@ -154,17 +177,12 @@ class stp_manager : public rpc_manager {
 
   timecb_t *idle_timer;
 
-  tailq<hostinfo, &hostinfo::lrulink_> hostlru;
-  ihash<sfs_hostname, hostinfo, &hostinfo::host, &hostinfo::hlink_> hosts;
-  size_t max_host_cache; 
-
-  hostinfo *lookup_host (const net_address &r);
-
   // methods
   void doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err);
   
   void update_latency (ptr<location> l, u_int64_t lat, bool bf);
   void ratecb ();
+  void remove_from_sentq (long acked_seqno);
   void update_cwind (int acked);
   void timeout (rpc_state *s);
   void enqueue_rpc (RPC_delay_args *args);
@@ -179,6 +197,8 @@ class stp_manager : public rpc_manager {
   void rexmit (long seqno);
   long doRPC (ptr<location> l, rpc_program prog, int procno,
 	      ptr<void> in, void *out, aclnt_cb cb, long fake_seqno = 0);
+  long doRPC_dead (ptr<location> l, rpc_program prog, int procno,
+		   ptr<void> in, void *out, aclnt_cb cb, long fake_seqno = 0);
   float get_a_lat (ptr<location> l);
   float get_a_var (ptr<location> l);
   float get_avg_lat ();

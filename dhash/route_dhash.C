@@ -192,6 +192,7 @@ route_dhash::route_dhash (ptr<route_factory> f, chordID blockID, dhash *dh,
   arg->cookie = 0;
   arg->nonce = gnonce++;
   nonce = arg->nonce;
+  start = getusec ();
 
   dh->register_block_cb (arg->nonce, wrap (mkref(this), &route_dhash::block_cb));
 
@@ -232,6 +233,7 @@ route_dhash::reexecute ()
 void
 route_dhash::execute (cb_ret cbi, chordID first_hop, u_int _retries)
 {
+  start = getusec ();
   retries = _retries;
   cb = cbi;
   dcb = delaycb (LOOKUP_TIMEOUT, wrap (mkref(this), &route_dhash::timed_out));
@@ -241,6 +243,7 @@ route_dhash::execute (cb_ret cbi, chordID first_hop, u_int _retries)
 void
 route_dhash::execute (cb_ret cbi, u_int _retries)
 {
+  start = getusec ();
   retries = _retries;
   cb = cbi;
   dcb = delaycb (LOOKUP_TIMEOUT, wrap (mkref(this), &route_dhash::timed_out));
@@ -311,9 +314,12 @@ route_dhash::walk_gotblock (vec<chord_node> succs, ptr<dhash_block> block)
 void
 route_dhash::block_cb (s_dhash_block_arg *arg)
 {
+  //  warn << blockID << ": got the block cb " << (getusec () - start) << " usecs later\n";
+  start = getusec ();
   timecb_remove (dcb);
   dcb = NULL;
   if (arg->offset == -1) {
+    //    (*cb) (DHASH_NOENT, NULL, path ());
     warn << "Responsible node did not have block.  Walking\n";
     vec<chord_node> succs;
     for (u_int i = 0; i < arg->nodelist.size (); i++)
@@ -334,6 +340,7 @@ route_dhash::gotblock (ptr<dhash_block> block)
   block->hops = path ().size ();
   block->errors = chord_iterator->failed_path ().size ();
   block->retries = retries_done;
+  //  warn << blockID << ": finished grabbing the block " << (getusec () - start) << " after that\n";
   if (block) 
     cb (DHASH_OK, block, path ());
   else

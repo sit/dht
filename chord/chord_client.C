@@ -31,6 +31,7 @@
 #include "route.h"
 
 int logbase;  // base = 2 ^ logbase
+vec<ptr<axprt> > persistent_xprts;
 
 chord::chord (str _wellknownhost, int _wellknownport, 
 	      str _myname, int port, int max_cache,
@@ -80,9 +81,9 @@ chord::tcpclient_cb (int srvfd)
   if (fd < 0)
     warn << "chord: accept failed " << strerror (errno) << "\n";
   else {
-    // XXX i think this code no longer works...josh
-    //
     ptr<axprt> x = axprt_stream::alloc (fd, 230000);
+    persistent_xprts.push_back (x);
+
     ptr<asrv> s = asrv::alloc (x, chord_program_1);
     s->setcb (wrap (mkref(this), &chord::dispatch, s));
 
@@ -243,6 +244,13 @@ chord::handleProgram (const rpc_program &prog) {
     handledProgs.push_back (prog);
     ptr<asrv> s = asrv::alloc (x_dgram, prog);
     s->setcb (wrap (mkref(this), &chord::dispatch, s));
+
+    //handle this program on current connections
+    for (unsigned int i = 0; i < persistent_xprts.size (); i++) {
+      warn << "handling on a persistent xprt\n";
+      ptr<asrv> s2 = asrv::alloc (persistent_xprts[i], prog);
+      s2->setcb (wrap (mkref(this), &chord::dispatch, s2));
+    }
   }
   
 }
@@ -253,7 +261,6 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
     s->setcb (NULL);
     return;
   }
-
   (*nrcv)++;
   chordID *v = sbp->template getarg<chordID> ();
   vnode *vnodep = vnodes[*v];
