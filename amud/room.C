@@ -150,7 +150,7 @@ room::to_str ()
 void
 room::leave (ref<mud_obj> a)
 {
-  warn << "Room before delete: " << to_str ();
+  //warn << "Room before delete: " << to_str ();
 
   uint i;
   for (i=0; i<alist.size (); i++)
@@ -165,5 +165,5 @@ room::leave (ref<mud_obj> a)
   for (uint j=0; j<tmp.size (); j++)
     alist.push_back (tmp[j]);
 
-  warn << "Room after delete: " << to_str ();
+  //warn << "Room after delete: " << to_str ();
 }

@@ -187,18 +187,49 @@ avatar::look (dhash_stat stat, ptr<dhash_block> blk, vec<chordID> path)
 void 
 avatar::move (str command)
 {
+  ref<room> next = New refcounted<room> (str(""));
   if (!strncasecmp (command.cstr (), "WEST", 4) && 
-      location->west.get_name ().len ()) {
+      location->west.get_name ().len ())
+    next->set_name (location->west.get_name ().cstr (), 
+		    location->west.get_name ().len ());    
+  else 
+    if (!strncasecmp (command.cstr (), "EAST", 4) && 
+	location->east.get_name ().len ())
+      next->set_name (location->east.get_name ().cstr (), 
+		      location->east.get_name ().len ());    
+    else 
+      if (!strncasecmp (command.cstr (), "NORTH", 5) && 
+	  location->north.get_name ().len ())
+	next->set_name (location->north.get_name ().cstr (), 
+			location->north.get_name ().len ());    
+      else 
+	if (!strncasecmp (command.cstr (), "SOUTH", 5) && 
+	    location->south.get_name ().len ())
+	  next->set_name (location->south.get_name ().cstr (),
+			  location->south.get_name ().len ());    
+
+  if (next->get_name ().len ()) {
     //TODO: change state to limbo
-    ref<mud_obj> a = New refcounted<mud_obj> (get_name ());
-    location->leave (a);
-    ref<room> next = New refcounted<room> (location->west.get_name ());
-    dhash->insert (location->ID (), location->bytes (), location->size (),
-		   wrap (this, &avatar::done_remove, next), NULL, DHASH_NOAUTH);
+    dhash->retrieve (location->ID (), DHASH_NOAUTH, 
+		     wrap (this, &avatar::done_move_lookup, next));
   } else {
     cout << "You can't go that way!\n";
     play ();
   }
+}
+
+void
+avatar::done_move_lookup (ref<room> next, dhash_stat stat, ptr<dhash_block> blk, 
+			  vec<chordID> path)
+{
+  if (stat == DHASH_OK) {
+    location = New refcounted<room> (blk->data, blk->len);
+    ref<mud_obj> a = New refcounted<mud_obj> (get_name ());
+    location->leave (a);
+  
+    dhash->insert (location->ID (), location->bytes (), location->size (),
+		   wrap (this, &avatar::done_remove, next), NULL, DHASH_NOAUTH);
+  } 
 }
 
 void

@@ -20,6 +20,8 @@ class avatar: public mud_obj {
   void look (dhash_stat, ptr<dhash_block>, vec<chordID>);
   void get (str);
   void move (str);
+  void done_move_lookup (ref<room>, dhash_stat, ptr<dhash_block>, 
+			 vec<chordID>);
   void done_remove (ref<room>, dhash_stat, ptr<insert_info>);
   void done_enter_lookup (dhash_stat stat, ptr<dhash_block> blk, 
 			  vec<chordID> path);
