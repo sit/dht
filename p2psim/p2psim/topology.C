@@ -33,6 +33,7 @@ Topology::Topology()
 {
   _med_lat = 0;
   _lossrate = 0;
+  _noise = 0;
 }
 
 Topology::~Topology()
