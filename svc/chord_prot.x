@@ -16,7 +16,9 @@ enum sfsp2pstat {
   SFSP2P_ERRNOENT = 1,
   SFSP2P_RPCFAILURE = 2,
   SFSP2P_ERREXIST = 3,
-  SFSP2P_CACHEHIT = 4
+  SFSP2P_CACHEHIT = 4,
+  SFSP2P_INRANGE = 5,
+  SFSP2P_NOTINRANGE = 6
 };
 
 struct net_address {
@@ -39,6 +41,24 @@ union sfsp2p_findres switch (sfsp2pstat status) {
 
 struct sfsp2p_findarg {
   sfs_ID x;
+};
+
+struct sfsp2p_testandfindarg {
+  sfs_ID x;
+};
+
+struct sfsp2p_inrangeres {
+  net_address r;
+  sfs_ID succ;
+};
+
+union sfsp2p_testandfindres switch (sfsp2pstat status) {
+ case SFSP2P_INRANGE:
+   sfsp2p_inrangeres inres;
+ case SFSP2P_NOTINRANGE:
+   sfsp2p_findresok findres;
+ default:
+   void;
 };
 
 struct sfsp2p_notifyarg {
@@ -73,5 +93,9 @@ program SFSP2P_PROGRAM {
 
 		sfsp2pstat
         	SFSP2PPROC_CACHE (sfsp2p_cachearg) = 6;
+
+		sfsp2p_testandfindres
+                SFSP2PPROC_TESTRANGE_FINDCLOSESTPRED (sfsp2p_testandfindarg) = 7;
+  
 	} = 1;
 } = 344447;
