@@ -39,6 +39,8 @@ public:
   virtual void crash(Args*) { }
   virtual void insert(Args*) { }
   virtual void lookup(Args*) { }
+  virtual void nodeevent (Args *);
+
   virtual void initstate ();
   void tick(void *);
   void status();
@@ -52,6 +54,7 @@ public:
  private:
   int _ticks;
   int _grid_config;
+  int _ring_config;
   Vivaldi *_vivaldi;
   static vector<VivaldiTest*> _all;
 

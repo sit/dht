@@ -42,6 +42,7 @@ VivaldiTest::VivaldiTest(IPAddress i, Args &args)
   //guaranteed to be connected. Only works with 
   //consecutive IP addresses.
   _grid_config = args.nget<int>("grid_config",0,10);
+  _ring_config = args.nget<int>("ring_config",0,10);
 
   _neighbors = args.nget<int>("neighbors", 16, 10);
   _total_nodes = args.nget<uint>("totalnodes", 0, 10);
@@ -56,6 +57,14 @@ VivaldiTest::~VivaldiTest()
 
 
 void
+VivaldiTest::nodeevent (Args *args)
+{
+  int _queue = args->nget<int> ("queue", 0, 10);
+  if (_queue > 0) 
+    queue_delay (_queue);
+}
+
+void
 VivaldiTest::join(Args *args)
 {
   if (_total_nodes == 0) {
@@ -66,6 +75,10 @@ VivaldiTest::join(Args *args)
   if (_all.size () > _total_nodes && _total_nodes > 0) 
       return;
   _all.push_back(this);
+
+  int _queue = args->nget<int> ("queue", 0, 10);
+  if (_queue > 0) 
+    queue_delay (_queue);
 
   if (_grid_config) {
     int row = (int) sqrt(_total_nodes);
@@ -86,7 +99,7 @@ VivaldiTest::join(Args *args)
 
     nbr_ip = (int) ip() + row;
     if (nbr_ip <= (int)_total_nodes)
-      _nip.push_back(ip() + row);
+      _nip.push_back(nbr_ip);
 
     _neighbors = _nip.size();
     printf("%u joined with %d neighbors: ",ip(), _nip.size());
@@ -95,7 +108,26 @@ VivaldiTest::join(Args *args)
       printf("%u ", _nip[i]);
     }
     printf("\n");
-  }else{
+  }else if (_ring_config) {
+    //add "successor"
+    uint cand = ip () + 1;
+    if (cand > _total_nodes) cand = 1;
+    _nip.push_back (cand);
+
+    for (int i = 1; i < _neighbors; i++) {
+      int dist = 1 << i;
+      double r = ((double)random () / (double)RAND_MAX);
+      cand = ((int)(ip () + (1+r)*_total_nodes/dist ) % _total_nodes) + 1;
+      _nip.push_back (cand);
+    }
+    
+    printf("RC %u joined with %d neighbors: ",ip(), _nip.size());
+    for (uint i = 0; i < _nip.size(); i++) {
+      printf("%u ", _nip[i]);
+      assert(_nip[i] > 0 && _nip[i] <= _total_nodes);
+    }
+    printf("\n");
+  } else {
     addRandNeighbors ();
   }
   if (_vis && !init_state ()) cerr << "vis " << now () << " node " << ip () << " " << _c << "\n";

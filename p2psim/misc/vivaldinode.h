@@ -100,6 +100,7 @@ protected:
     if (ok) {
       VivaldiNode * t = dynamic_cast<VivaldiNode *>(getpeer(dst));
       assert (t);
+      cerr << "RTT from " << ip () << " to " << dst << " " << now () - before << endl;
       sample (dst, t->my_location(), t->my_error (), (now () - before));
     }
     delete t;
