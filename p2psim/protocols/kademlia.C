@@ -30,8 +30,6 @@
 #include <iostream>
 using namespace std;
 
-// unsigned global_lookups = 0;
-
 Kademlia::use_replacement_cache_t Kademlia::use_replacement_cache = FULL;
 unsigned Kademlia::debugcounter = 1;
 unsigned Kademlia::_nkademlias = 0;
@@ -235,7 +233,6 @@ Kademlia::~Kademlia()
 
     print_stats();
   }
-  // cout << "global_lookups = " << global_lookups << endl;
 
   if(_all_kademlias) {
     delete _all_kademlias;
@@ -359,12 +356,12 @@ join_restart:
   lookup_args la(_id, ip(), _id);
   la.stattype = Kademlia::STAT_JOIN;
   lookup_result lr;
-  record_stat(STAT_JOIN, 1, 0);
   bool b = false;
   do {
+    record_stat(STAT_JOIN, 1, 0);
     b = doRPC(wkn, &Kademlia::do_lookup, &la, &lr, Kademlia::_default_timeout);
+    record_stat(STAT_JOIN, lr.results.size(), 0);
   } while(!b);
-  record_stat(STAT_JOIN, lr.results.size(), 0);
 
   if(!alive())
     return;
@@ -397,6 +394,7 @@ join_restart:
   for(int i=cpl-1; i>=0; i--) {
     // XXX: should be random
     lookup_args la(_id, ip(), (_id ^ (((Kademlia::NodeID) 1)<<i)));
+    la.stattype = Kademlia::STAT_JOIN;
     lookup_result lr;
 
     // if we now believe our successor died, then start again
@@ -495,7 +493,9 @@ Kademlia::lookup_wrapper(lookup_wrapper_args *args)
   find_value(&fa, &fr);
   Time after = now();
   args->attempts++;
-  _time_spent_timeouts += fr.spent_in_timeout;
+
+  if(collect_stat())
+    _time_spent_timeouts += fr.spent_in_timeout;
 
   // if we found the node, ping it.
   if(args->key == fr.succ.id) {
@@ -504,7 +504,7 @@ Kademlia::lookup_wrapper(lookup_wrapper_args *args)
     Time pingbegin = now();
     // assert(_nodeid2kademlia[fr.succ.id]->ip() == fr.succ.ip);
     if(!doRPC(fr.succ.ip, &Kademlia::do_ping, &pa, &pr, Kademlia::_default_timeout) && alive()) {
-      _lookup_dead_node++;
+      if(collect_stat()) _lookup_dead_node++;
       if(flyweight[fr.succ.id] && !Kademlia::learn_stabilize_only)
         erase(fr.succ.id);
     }
@@ -518,16 +518,18 @@ Kademlia::lookup_wrapper(lookup_wrapper_args *args)
     }
     // cout << pingbegin - args->starttime << endl;
 
-    _good_lookups++;
-    _good_attempts += args->attempts;
-    _good_total_latency += (after - args->starttime);
-    _good_lookup_latency += (pingbegin - args->starttime);
-    _good_ping_latency += (after - pingbegin);
+    if(collect_stat()) {
+      _good_lookups++;
+      _good_attempts += args->attempts;
+      _good_total_latency += (after - args->starttime);
+      _good_lookup_latency += (pingbegin - args->starttime);
+      _good_ping_latency += (after - pingbegin);
 
-    _good_hops += fr.hops;
-    _good_timeouts += fr.timeouts;
-    _good_rpcs += fr.rpcs;
-    _good_hop_latency += fr.latency;
+      _good_hops += fr.hops;
+      _good_timeouts += fr.timeouts;
+      _good_rpcs += fr.rpcs;
+      _good_hop_latency += fr.latency;
+    }
     delete args;
     return;
   }
@@ -540,18 +542,20 @@ Kademlia::lookup_wrapper(lookup_wrapper_args *args)
   // we're out of time.
   if(now() - args->starttime > Kademlia::max_lookup_time) {
     if(alive_and_joined) {
-      _bad_failures++;
+      if(collect_stat()) _bad_failures++;
       record_lookup_stat(ip(), target_ip, after - args->starttime, false, false, fr.hops, fr.timeouts, fr.spent_in_timeout);
     } else {
-      _ok_failures++;
+      if(alive_and_joined) _ok_failures++;
       record_lookup_stat(ip(), target_ip, after - args->starttime, true, false, fr.hops, fr.timeouts, fr.spent_in_timeout);
     }
-    _bad_attempts += args->attempts;
-    _bad_lookup_latency += (after - args->starttime);
-    _bad_hops += fr.hops;
-    _bad_timeouts += fr.timeouts;
-    _bad_rpcs += fr.rpcs;
-    _bad_hop_latency += fr.latency;
+    if(collect_stat()) {
+      _bad_attempts += args->attempts;
+      _bad_lookup_latency += (after - args->starttime);
+      _bad_hops += fr.hops;
+      _bad_timeouts += fr.timeouts;
+      _bad_rpcs += fr.rpcs;
+      _bad_hop_latency += fr.latency;
+    }
 
     delete args;
     return;
@@ -607,7 +611,6 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
 {
   // KDEBUG(0) << "Kademlia::find_value: node " << printID(fargs->id) << " does find_value for " << printID(fargs->key) << endl;
   // assert(alive());
-  unsigned total_rpc = 0;
   HashMap<NodeID, bool> asked;
   HashMap<NodeID, unsigned> hops;
   bool deadtime = false;
@@ -646,8 +649,6 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
     for(set<k_nodeinfo, closer>::const_iterator i=successors.begin(); i != successors.end() && a < Kademlia::alpha; ++i, ++a) {
       k_nodeinfo ki = *i;
       SEND_RPC(ki, fargs, fresult, hops[ki.id]);
-      total_rpc++;
-      assert(total_rpc < 100);
       if(Network::Instance()->getnode(ki.ip)->alive())
         all_dead = false;
       fresult->rpcs++;
@@ -749,8 +750,6 @@ next_candidate:
       if(Kademlia::distance(front.id, fargs->key) < Kademlia::distance(fresult->succ.id, fargs->key))
         fresult->succ = front;
       SEND_RPC(front, fargs, fresult, hops[front.id]);
-      total_rpc++;
-      assert(total_rpc < 100);
 
       fresult->rpcs++;
       asked.insert(front.id, true);
@@ -852,7 +851,9 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
     closer::n = largs->key;
     if(!ok) {
       // KDEBUG(0) << "!ok" << endl;
-      if(flyweight[ci->ki.id] && (!Kademlia::learn_stabilize_only || largs->stattype == STAT_STABILIZE))
+      if(flyweight[ci->ki.id] && (!Kademlia::learn_stabilize_only ||
+                                   largs->stattype == STAT_STABILIZE ||
+                                   largs->stattype == STAT_LOOKUP))
         erase(ci->ki.id);
       delete ci;
 
@@ -885,7 +886,8 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
     // node was ok
     // KDEBUG(0) << "good reply" << endl;
     record_stat(largs->stattype, ci->fr->results.size(), 0);
-    if(!Kademlia::learn_stabilize_only || largs->stattype == STAT_STABILIZE)
+    if(!Kademlia::learn_stabilize_only || largs->stattype == STAT_STABILIZE ||
+                                          largs->stattype == STAT_LOOKUP)
       update_k_bucket(ci->ki.id, ci->ki.ip);
 
     // j = 0;
@@ -990,7 +992,8 @@ void
 Kademlia::find_node(find_node_args *largs, find_node_result *lresult)
 {
   // assert(alive());
-  if(!Kademlia::learn_stabilize_only || largs->stattype == STAT_STABILIZE)
+  if(!Kademlia::learn_stabilize_only || largs->stattype == STAT_STABILIZE ||
+                                        largs->stattype == STAT_LOOKUP)
     update_k_bucket(largs->id, largs->ip);
 
   lresult->rid = _id;
@@ -1167,18 +1170,9 @@ Kademlia::common_prefix(Kademlia::NodeID k1, Kademlia::NodeID k2)
 void
 Kademlia::record_stat(stat_type type, uint num_ids, uint num_else )
 {
-  _rpc_bytes += 20 + num_ids * 4 + num_else; // paper says 40 bytes per node entry
-
-  // if(type == 0 && (20+num_ids*4 + num_else) > 100) { 
-  //   cout << "num_ids = " << num_ids << endl;
-  //   cout << "num_else = " << num_else << endl;
-  //   assert(false);
-  // }
-  // assert((20+num_ids*4 + num_else) < 1000);
-
-  // if(type == 0)
-  //   global_lookups++;
   record_bw_stat(type, num_ids, num_else);
+  if(collect_stat())
+    _rpc_bytes += 20 + num_ids * 4 + num_else; // paper says 40 bytes per node entry
 }
 // }}}
 // {{{ Kademlia::distance
@@ -1234,13 +1228,15 @@ Kademlia::reap(void *r)
     // cout << "Kademlia::reap ok = " << ok << ", ki = " << endl;
     if(ok) {
       _ok_by_reaper++;
-      if(ri->k->alive() && (!Kademlia::learn_stabilize_only || ci->fa->stattype == STAT_STABILIZE))
+      if(ri->k->alive() && (!Kademlia::learn_stabilize_only || ci->fa->stattype == STAT_STABILIZE ||
+                                                               ci->fa->stattype == STAT_LOOKUP))
         ri->k->update_k_bucket(ci->ki.id, ci->ki.ip);
       ri->k->record_stat(ri->stat, ci->fr->results.size(), 0);
 
     } else if(ri->k->flyweight[ci->ki.id]) {
       _timeouts_by_reaper++;
-      if(ri->k->alive() && (!Kademlia::learn_stabilize_only || ci->fa->stattype == STAT_STABILIZE))
+      if(ri->k->alive() && (!Kademlia::learn_stabilize_only || ci->fa->stattype == STAT_STABILIZE ||
+                                                               ci->fa->stattype == STAT_LOOKUP))
         ri->k->erase(ci->ki.id);
     }
 
