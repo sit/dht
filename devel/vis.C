@@ -597,6 +597,33 @@ xy_to_ID (int sx, int sy)
 }
 
 void
+draw_arc (int x, int y, int a, int b, GdkGC *draw_gc)
+{
+  int m1, m2;
+  int w, h;
+  gint16 a1;
+  if (((x < a) && (y < b)) || ((x >= a) && (y < b))) {
+    m1 = a;
+    m2 = y;
+    w = (x < m1) ? (m1 - x) : (x - m1);
+    h = (b < m2) ? (m2 - b) : (b - m2);
+    a1 = (x < a) ? 32 : 48;
+  } else {
+    m1 = x;
+    m2 = b;
+    w = (a < m1) ? (m1 - a) : (a - m1);
+    h = (y < m2) ? (m2 - y) : (y - m2);
+    a1 = (x < a ) ? 48 : 32;
+  }
+  int l = m1 - w;
+  int t = m2 - h;
+  a1 = (gint16) a1 * 360;
+  gint16 a2 = (gint16) 16*360;
+  gdk_draw_arc (pixmap, draw_gc, FALSE, l, t, 2*w, 2*h, a1, a2);
+}
+
+
+void
 set_foreground_lat (long lat)
 {
   if (lat < 2000000) // < 20 ms
@@ -611,7 +638,6 @@ void
 draw_ring ()
 {
   GtkWidget *widget = drawing_area;
-
 
   gdk_draw_rectangle (pixmap,
 		      widget->style->white_gc,
@@ -676,12 +702,9 @@ draw_ring ()
 	  gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (check_succ_list))) {
 	for (unsigned int i=0; i < n->ressucc->resok->succ.size (); i++) {
 	  int a,b;
-	  gdk_gc_set_foreground (draw_gc, &brown);
+	  set_foreground_lat (n->ressucc->resok->succ[i].a_lat); 
 	  ID_to_xy (n->ressucc->resok->succ[i].x, &a, &b);
-	    gdk_draw_line (pixmap,
-			   draw_gc,
-			   x,y,
-			   a,b);
+	  draw_arc (x,y, a, b, draw_gc);
 	}
       }
 
