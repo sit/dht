@@ -78,6 +78,10 @@ popular DNS data about local machines is likely to be cached
 and thus available even after the partition.
 DDNS actually works better in this situation, since the remaining
 nodes will form a smaller Chord network and pool their caches.
+If proximity routing is deployed in Chord, then DDNS
+can use that make some probabilistic guarantee that all the 
+records for a machine gets stored on at least one node close to
+the record owner.
 % RSC: do we need to talk about healing the rings after a partition?
 % i'd like to just sweep this under the rug; we're getting too far into
 % Chord details.

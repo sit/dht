@@ -120,6 +120,49 @@ a cached copy of the block.
 Since the slashdot record got cached everywhere very quickly,
 virtually all lookups never left the requesting node.
 
+\begin{figure}
+\epsfig{file=figures/03.ok.lat.eps}
+\caption{Lookup latency distribution for successful queries.}
+\label{fig:oklat}
+\end{figure}
+
+Figure~\ref{fig:oklat} shows the distribution of latency
+for successful lookups in the one-day DNS trace. A very small
+fraction of lookups took more than 1000 ms to complete. 
+This was mostly caused by requesting DNS data from name servers
+that are behind slow links. If DNS were to be deployed over 
+Chord, lookups that takes too long will be terminated and 
+the request sent to the next replica for the data.
+
+\begin{figure}
+\epsfig{file=figures/imaglat.ok.eps}
+\caption{Imaginary latency to perform lookups.}
+\label{fig:imaglat}
+\end{figure}
+
+Imaginary latency in Figure~\ref{fig:imaglat}. 
+XXX I'm not sure what you did here, Russ.
+
+\begin{figure}
+\epsfig{file=figures/hopslat.eps}
+\caption{Estimated latency per lookup.}
+\label{fig:hopslat}
+\end{figure}
+
+Since only a miniscule fraction of name servers are slow
+(from Figure~\ref{fig:oklat}) we used the middle 95\% range
+of latency as the sample size to estimate the lookup latency
+over DDNS. For each lookup, we add up $x$ sampled latencies,
+where $x$ is the number of hops in that lookup. We plot the 
+estimated mean lookup latency and the error bars for one 
+standard deviation in both directions over all lookups consisting
+of $x$ hops. Figure~\ref{fig:hopslat} shows the estimated 
+lookup latency for successful queries on DDNS. Since the mean
+number of hops for a successful query is around 5 
+(from Figure~\ref{fig:hops}), the estimated mean latency 
+is approximately 350 ms. This is worse than the average mean in
+current DNS (XX ms). However, the worst case in DDNS is only 800 ms,
+compared to XX ms in the current DNS.
 
 %RSC: what does this mean?
 % Do a measure of how long it takes to converge to good load 
