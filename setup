@@ -1,5 +1,5 @@
 #! /bin/sh -e
-# $Id: setup,v 1.1 2001/01/16 22:00:07 fdabek Exp $
+# $Id: setup,v 1.2 2003/02/26 01:09:14 fdabek Exp $
 #
 # This script builds the files necessary to configure this package for
 # development.  Once you run this script, you will need GNU make,
@@ -10,6 +10,35 @@
 # You should generally only need to run this script if you just
 # checked sfs out of a CVS repository, or else somehow badly mangled
 # the Makefile.
+
+opt_c=
+opt_f=
+opt_n=
+
+for arg in "$@"; do
+case "$arg" in
+    -cf|-fc)
+	    opt_c='--copy'
+	    opt_f='--force'
+	    ;;
+    -c)
+	    opt_c='--copy'
+	    ;;
+    -f)
+	    opt_f='--force'
+	    ;;
+    -n)
+	    WANT_AUTOCONF_2_5=1
+	    export WANT_AUTOCONF_2_5
+	    WANT_AUTOMAKE_1_6=1
+	    export WANT_AUTOMAKE_1_6
+	    opt_n=yes
+	    ;;
+    *)
+	    echo setup: unknown option "$arg"
+	    ;;
+esac
+done
 
 if test ! -f configure.in; then
 	echo Must run this from source directory >&2
@@ -46,11 +75,19 @@ for dir in *; do
     fi
 done
 
+if test -z "${AM_ARGS:+set}"; then
+    AM_ARGS="--add-missing $opt_c $opt_f"
+fi
+if test -z "${LTI_ARGS:+set}"; then
+    LTI_ARGS="$opt_c $opt_f"
+fi
+
 set -x
 chmod +x setup
+libtoolize $LTI_ARGS
 aclocal
 autoheader
-automake --add-missing
+automake $AM_ARGS
 autoconf
 set +x
 

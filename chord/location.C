@@ -282,6 +282,7 @@ locationtable::insert (const chordID &n, sfs_hostname s, int p)
   r.hostname = s;
   r.port = p;
   insert (n, r);
+  return true;
 }
 
 void

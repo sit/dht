@@ -1,4 +1,4 @@
-dnl $Id: configure.in,v 1.30 2003/02/02 16:46:12 sit Exp $
+dnl $Id: configure.in,v 1.31 2003/02/26 01:09:14 fdabek Exp $
 dnl
 dnl Process this file with autoconf to produce a configure script.
 dnl
@@ -21,7 +21,7 @@ AM_CONDITIONAL(GTK_AVAILABLE, test "$GTK_CFLAGS")
 SFS_WFLAGS
 AC_PROG_INSTALL
 AC_PROG_LN_S
-AC_PROG_RANLIB
+#AC_PROG_RANLIB
 
 AM_DISABLE_SHARED
 test -z "$target" && target=NONE
