@@ -4,9 +4,6 @@
 void
 merkle_tree::rehash (u_int depth, const merkle_hash &key, merkle_node *n)
 {
-  if (!db)
-    return;
-
   n->hash = 0;
   if (n->count == 0)
     return;
@@ -41,9 +38,6 @@ merkle_tree::count_blocks (u_int depth, const merkle_hash &key,
   for (int i = 0; i < 64; i++)
     nblocks[i] = 0;
   
-  if (!db)
-    return;
-
   // XXX duplicates code with rehash ()
   merkle_hash prefix = key;
   prefix.clear_suffix (depth);
@@ -86,6 +80,7 @@ void
 merkle_tree::remove (u_int depth, block *b, merkle_node *n)
 {
   if (n->isleaf ()) {
+    assert (database_lookup (db, b->key));
     database_remove (db, b);
     assert (!database_lookup (db, b->key));
   } else {
@@ -112,8 +107,11 @@ merkle_tree::insert (u_int depth, block *b, merkle_node *n)
   if (n->isleaf ()) {
     // blocks with out data are inserted just so the merkle tree
     // is updated.  They are assumed to already be in the db.
-    if (b->data)
+    if (b->data) {
+      assert (!database_lookup (db, b->key));
       database_insert (db, b);
+      assert (database_lookup (db, b->key));
+    }
   } else {
     u_int32_t branch = b->key.read_slot (depth);
     ///warn << "depth " << depth << ", branch " << branch << "\n";
@@ -142,7 +140,7 @@ merkle_tree::merkle_tree (dbfe *db)
 {
   // populate merkle tree from initial db contents
   ptr<dbEnumeration> it = db->enumerate();
-  ptr<dbPair> d = it->nextElement(todbrec(merkle_hash(0)));
+  ptr<dbPair> d = it->firstElement();
   if (d)
     warn << "Database is not empty.  Loading into merkle tree\n";
 

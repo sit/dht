@@ -139,16 +139,20 @@ dhash::sendblock_XXX (XXX_SENDBLOCK_ARGS *a)
 void
 dhash::sendblock (bigint destID, bigint blockID, bool last, callback<void>::ref cb)
 {
+#if 0
   warn << "dhash::sendblock: destID " << destID
        << ", blockID " << blockID
        << ", last " << last << "\n";
+#endif
 
   ptr<dbrec> blk = db->lookup (id2dbrec (blockID));
 
   assert (blk); // XXX: don't assert here, maybe just callback?
   ref<dhash_block> dhblk = New refcounted<dhash_block> (blk->value, blk->len);
 
+#if 0
   warn << "dhash::sendblock: XXX DHASH_REPLICA hardcoded\n";
+#endif
   cli->storeblock (destID, blockID, dhblk, last,
 		   wrap (this, &dhash::sendblock_cb, cb), 
 		   DHASH_REPLICA);
@@ -170,8 +174,10 @@ dhash::replica_maintenance_timer (u_int index)
 {
   update_replica_list ();
 
+#if 0
   warn << "dhash::replica_maintenance_timer index " << index
        << ", #replicas " << replicas.size() << "\n";
+#endif
   
   if (!replica_syncer || replica_syncer->done()) {
     // watch out for growing/shrinking replica list

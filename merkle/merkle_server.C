@@ -41,7 +41,6 @@ private:
 public:
   ~merkle_send_range ()
   {
-    warn << (u_int)this << " DTOR merkle_send_range\n";
   }
 
   merkle_send_range (db_iterator *iter, sndblkfnc2_t sndblkfnc, chordID dstID)
@@ -109,7 +108,7 @@ format_rpcnode (merkle_tree *ltree, u_int depth, const merkle_hash &prefix,
       warn << "BUG: " << keys.size () << " != " << rpcnode->count << "\n";
       ltree->check_invariants ();
       warn << "BUG BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG BUG\n";
-      fatal << "----------------------------------------------------------\n\n\n";
+      panic << "----------------------------------------------------------\n\n\n";
     }
 
     rpcnode->child_hash.setsize (keys.size ());
