@@ -27,7 +27,6 @@ The following commands take care of all of this. As root, do:
   wget -q -O - http://pdos.lcs.mit.edu/~rsc/software/libfmt.tgz | tar xvfz -
   wget -q -O - http://pdos.lcs.mit.edu/~rsc/software/lib9.tgz | tar xvfz -
   wget -q -O - http://pdos.lcs.mit.edu/~rsc/software/libthread.tgz | tar xvfz -
-  mkdir -p /usr/local/man/man1
   mkdir -p /usr/local/man/man3
   mkdir -p /usr/local/man/man7
   cd libutf; make install
