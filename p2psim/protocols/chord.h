@@ -31,8 +31,6 @@
 
 #define TIMEOUT_RETRY 5
 
-//#define CHORD_DEBUG
-//#define DNODE 853
 //#define RECORD_FETCH_LATENCY
 
 #define TIMEOUT(src,dst) (Network::Instance()->gettopology()->latency(src,dst)<=1000)?_to_multiplier*2*Network::Instance()->gettopology()->latency(src,dst):1000
@@ -208,6 +206,8 @@ public:
   IDMap next_hop(CHID k);
 
   char *ts();
+  string header(); //debug message header
+  static string printID(CHID id);
 
   void stabilize();
   virtual void reschedule_basic_stabilizer(void *);
@@ -368,6 +368,6 @@ class LocTable {
     //evict one node to make sure ring contains <= _max elements
     void evict(); 
 };
+#define CDEBUG(x) if(p2psim_verbose >= (x)) cout << header() 
 
-#endif // __CHORD_H
-
+#endif //__CHORD_H

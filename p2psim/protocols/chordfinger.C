@@ -140,9 +140,7 @@ ChordFinger::fix_fingers(bool restart)
 {
 
   vector<IDMap> scs = loctable->succs(me.id + 1, _nsucc);
-#ifdef CHORD_DEBUG
-  printf("%s ChordFinger stabilize BEFORE ring sz %u succ %d\n", ts(), loctable->size(), scs.size());
-#endif
+  CDEBUG(3) << "fix_fingers start sz " << loctable->size() << endl;
   uint new_fingers,valid_fingers, skipped_fingers, dead_fingers, check_fingers,missing_finger;
   missing_finger = dead_fingers = new_fingers = valid_fingers = skipped_fingers = dead_fingers = check_fingers = 0;
 
@@ -223,21 +221,19 @@ ChordFinger::fix_fingers(bool restart)
       else
 	v = find_successors(finger, _fingerlets, TYPE_FINGER_LOOKUP, 0);
 
-#ifdef CHORD_DEBUG
-      if (v.size() > 0)
-	printf("%s fix_fingers %d finger (%qx) get (%u,%qx)\n", ts(), j, finger, 
-	    v[0].ip, v[0].id);
-#endif
+      if (v.size() > 0) 
+	CDEBUG(3) << "fix_fingers " << j << " finger " << printID(finger) 
+	  << "get " << v[0].ip << "," << printID(v[0].id) << endl;
       new_fingers++;
       for(uint k = 0; k <v.size();k++) 
 	loctable->add_node(v[k]); //XXX: might add dead nodes again and again
     }
   }
 FINGER_DONE:
-#ifdef CHORD_DEBUG
-  printf("%s ChordFinger stabilize AFTER ring sz %u restart? %d fingers %u skipped %u valid %u dead %u missing %u new %u\n", ts(), 
-      loctable->size(), restart?1:0, check_fingers, skipped_fingers, valid_fingers, dead_fingers, missing_finger, new_fingers);
-#endif
+  CDEBUG(3) << "fix_fingers done sz " << loctable->size() << " fingers " 
+    << check_fingers << " skipped " << skipped_fingers << " valid " 
+    << valid_fingers << " dead " << dead_fingers << " missing " << 
+    missing_finger << " new " << new_fingers << endl;
   return;
 }
 

@@ -154,19 +154,20 @@ Koorde::find_successors(CHID key, uint m, uint type, IDMap *lasthop, lookup_args
   r.next = me;
   r.k = key;
   r.i = firstimagin (me.id, mysucc.id, a.k, &r.kshift);
-#ifdef CHORD_DEBUG
-  printf ("%s find_successor key %qx, i=%qx\n", ts(), a.k,  r.i);
-#endif
+
+  CDEBUG(2) << "find_successors key " << printID(a.k) << "i="
+    << printID(r.i) << endl;
 
   if (vis && type == TYPE_USER_LOOKUP) 
     printf ("vis %llu search %16qx %16qx %16qx\n", now(), me.id, key, r.i);
 
   while (1) {
     if ((r.i == 0) || (count++ >= 1000)) {
-      printf ("%s find_successor: key = %16qx\n", ts(),key);
+      CDEBUG(0) << "find_successors key " << printID(key);
       for (uint i = 0; i < path.size (); i++) {
-	printf ("  %16qx i %16qx k %16qx\n", path[i].id, ipath[i], kpath[i]);
+	CDEBUG(0)<< printID(path[i].id) << printID(ipath[i])<<printID(kpath[i]);
       }
+      CDEBUG(0) << endl;
       assert (0);
     }
 
@@ -185,9 +186,8 @@ Koorde::find_successors(CHID key, uint m, uint type, IDMap *lasthop, lookup_args
     Time t_out = TIMEOUT(me.ip,r.next.ip);
     if (r.next.ip!=me.ip) 
       hops++;
-#ifdef CHORD_DEBUG
-    printf("%s key %qx contacting next %u,%qx\n",ts(),a.k,r.next.ip,r.next.id);
-#endif
+    CDEBUG(3) << "find_successors key " << printID(a.k) << " contacting next "
+      << r.next.ip << "," << printID(r.next.id) << endl;
     bool ok = doRPC(r.next.ip, &Koorde::koorde_next, &a, &r, t_out);
 
     if (args && args->latency >= _max_lookup_time) 
@@ -262,7 +262,7 @@ Koorde::find_successors(CHID key, uint m, uint type, IDMap *lasthop, lookup_args
       args->total_to += time_timeout;
       args->hops += hops;
     }
-#ifdef CHORD_DEBUG
+    /*
     printf ("find_successor for (id %qx, key %qx):",  me.id, key);
     if (r.v.size () > 0) {
       uint cor = 0;
@@ -283,7 +283,7 @@ Koorde::find_successors(CHID key, uint m, uint type, IDMap *lasthop, lookup_args
     } else {
       printf (" failed\n");
     }
-#endif
+    */
   }
 
   return r.v;
@@ -315,9 +315,8 @@ Koorde::koorde_next(koorde_lookup_arg *a, koorde_lookup_ret *r)
     r->v.clear ();
     r->v = loctable->succs(me.id + 1, a->nsucc);
     assert (r->v.size () > 0);
-#ifdef CHORD_DEBUG
-    printf ("%s koorde_next: done succ key = %qx: (%u,%qx) \n", ts(), a->k, succ.ip, succ.id);
-#endif
+    CDEBUG(3) << "koorde_next key " << printID(a->k) << "done: succ " << succ.ip 
+      << "," << printID(succ.id) << endl;
   } else if (a->i == me.id || ConsistentHash::betweenrightincl (me.id, succ.id, a->i)) {
     r->k = a->k;
     r->kshift = a->kshift;
@@ -338,10 +337,10 @@ Koorde::koorde_next(koorde_lookup_arg *a, koorde_lookup_ret *r)
       }
     } while (kk < a->badnodes.size());
     r->done = false;
-#ifdef CHORD_DEBUG
-    printf ("%s koorde_next key %qx: contact de bruijn (%u,%qx) i=%qx kshift=%qx debruijn pointer %qx \n", ts(), a->k,
-      r->next.ip, r->next.id, r->i, r->kshift, debruijn);
-#endif
+    CDEBUG(3) << "koorde_next key " << printID(a->k) << ": contact debruijn " 
+      << r->next.ip << "," << printID(r->next.id) << "i=" << printID(r->i) 
+      << "kshift=" << printID(r->kshift) << "debruijn " << printID(debruijn) 
+      << endl;
   } else {
     r->k = a->k;
     r->i = a->i;
@@ -360,11 +359,10 @@ Koorde::koorde_next(koorde_lookup_arg *a, koorde_lookup_ret *r)
     r->kshift = a->kshift;
     r->done = false;
  //   assert (ConsistentHash::betweenrightincl (me.id, r->i, r->next.id));
-#ifdef CHORD_DEBUG
-    printf ("%s koorde_next key %qx: follow succ (%u,%qx) pointer to (%u,%qx) i=%qx kshift=%qx debruijn pointer %qx \n", ts(), a->k,
-      succ.ip, succ.id, r->next.ip, r->next.id, r->i, r->kshift, debruijn);
-#endif
-
+    CDEBUG(3) << "koorde_next key " << printID(a->k) << "follow succ "<<succ.ip 
+      << "," << printID(succ.id) << " to " << r->next.ip << "," 
+      << printID(r->next.id) << "i=" << printID(r->i) << "kshift=" 
+      << printID(r->kshift) << " debruijn " << printID(debruijn) << endl;
   }
 }
 
