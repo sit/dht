@@ -341,6 +341,9 @@ dhashclient::retrievecb (cb_ret cb, bigint key,
       blk->hops = res->resok->hops;
       blk->errors = res->resok->errors;
       blk->retries = res->resok->retries;
+      for (u_int i = 0; i < res->resok->times.size (); i++)
+	blk->times.push_back (res->resok->times[i]);
+      
       route path;
       for (u_int i = 0; i < res->resok->path.size (); i++)
 	path.push_back (res->resok->path[i]);

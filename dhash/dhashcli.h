@@ -27,6 +27,7 @@ class dhashcli {
     ihash_entry <rcv_state> link;
     chordID key;
     route r;
+    vec<timespec> times;
     
     int incoming_rpcs;
     
@@ -35,6 +36,12 @@ class dhashcli {
     
     vec<str> frags;
     vec<cb_ret> callbacks;
+
+    void timemark () {
+      timespec x;
+      clock_gettime (CLOCK_REALTIME, &x);
+      times.push_back (x);
+    }
     
     void complete (dhash_stat s, ptr<dhash_block> b) {
       for (u_int i = 0; i < callbacks.size (); i++)
@@ -42,7 +49,9 @@ class dhashcli {
       delete this;
     }
       
-    rcv_state (chordID key) : key (key), incoming_rpcs (0), nextsucc (0) {}
+    rcv_state (chordID key) : key (key), incoming_rpcs (0), nextsucc (0) {
+      timemark ();
+    }
   };
 
   ihash<chordID, rcv_state, &rcv_state::key, &rcv_state::link, hashID> rcvs;

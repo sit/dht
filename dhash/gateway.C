@@ -135,6 +135,10 @@ dhashgateway::retrieve_cb (svccb *sbp, dhash_stat stat, ptr<dhash_block> block, 
     res.resok->path.setsize (path.size ());
     for (u_int i = 0; i < path.size (); i++) 
       res.resok->path[i] = path[i];
+    res.resok->times.setsize (block->times.size ());
+    for (u_int i = 0; i < block->times.size (); i++)
+      res.resok->times[i] = block->times[i];
+
     memcpy (res.resok->block.base (), block->data, block->len);
   }
   sbp->reply (&res);

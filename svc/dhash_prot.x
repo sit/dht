@@ -221,6 +221,7 @@ struct dhash_retrieve_resok {
   int hops;
   int errors;
   int retries;
+  u_int32_t times<>;
   chordID path<>;
 };
 

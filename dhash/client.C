@@ -52,7 +52,7 @@
 #endif
 #include <ida.h>
 
-static int SERVERSELECTION = getenv("SERVERSELECTION") ? atoi(getenv("SERVERSELECTION")) : 0;
+static int SERVERSELECTION = getenv("SERVERSELECTION") ? atoi(getenv("SERVERSELECTION")) : 1;
 
 // ---------------------------------------------------------------------------
 // DHASH_STORE
@@ -314,6 +314,7 @@ dhashcli::retrieve2_lookup_cb (chordID blockID,
 {
   rcv_state *rs = rcvs[blockID];
   assert (rs);
+  rs->timemark ();
   rs->r = r;
   
   if (status != DHASH_OK) {
@@ -399,6 +400,7 @@ dhashcli::retrieve2_succs_cb (chordID blockID, vec<chord_node> succs, chordstat 
 {
   rcv_state *rs = rcvs[blockID];
   assert (rs);
+  rs->timemark ();
   if (err) {
     trace << "retrieve (" << blockID << "): getsucclist failure:" << err << "\n";
     rcvs.remove (rs);
@@ -422,6 +424,7 @@ dhashcli::retrieve2_succs_cb (chordID blockID, vec<chord_node> succs, chordstat 
   if (SERVERSELECTION) {
     // Store list of successors ordered by expected distance.
     // fetch_frag will pull from this list in order.
+    modlogger ("orderer") << "ordering for block " << blockID << "\n";
     order_succs (clntnode->locations->get_coords (clntnode->my_ID ()),
 		 succs, rs->succs);
   } else {
@@ -480,6 +483,8 @@ dhashcli::retrieve2_fetch_cb (chordID blockID, u_int i,
       fetch_frag (rs);
       return;
     }
+    
+    rs->timemark ();
 
     str tmp (block);
     ptr<dhash_block> blk = 
@@ -488,6 +493,12 @@ dhashcli::retrieve2_fetch_cb (chordID blockID, u_int i,
     blk->hops = rs->r.size ();
     blk->errors = rs->nextsucc - dhash::NUM_DFRAGS;
     blk->retries = blk->errors;
+
+    for (size_t i = 1; i < rs->times.size (); i++) {
+      timespec diff = rs->times[i] - rs->times[i - 1];
+      blk->times.push_back (diff.tv_sec * 1000 +
+			    int (diff.tv_nsec/1000000));
+    }
     
     rcvs.remove (rs);
     rs->complete (DHASH_OK, blk);

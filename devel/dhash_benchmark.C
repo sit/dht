@@ -125,13 +125,22 @@ fetch_cb (int i, struct timeval start, dhash_stat stat, ptr<dhash_block> blk, ro
     char estr[128];
     sprintf (estr, "%f", elapsed);
 
-    buf << IDs[i] << " " << estr << " " << blk->hops << " " <<  blk->errors << " " << blk->retries << " ";
+    buf << IDs[i] << " " << estr;
+    buf << " /";
+    for (u_int i = 0; i < blk->times.size (); i++)
+      buf << " " << blk->times[i];
+    buf << " /";
+
+    buf << " " << blk->hops << " " <<  blk->errors
+	<< " " << blk->retries << " ";
     for (u_int i=0; i < path.size (); i++) {
       buf << path[i] << " ";
     }
+    
     buf << "\n";
     fprintf (outfile, str (buf).cstr ());
-    warnx << buf;
+    if (outfile != stdout)
+      warnx << buf;
   } 
 }
 

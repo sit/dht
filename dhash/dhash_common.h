@@ -15,6 +15,7 @@ struct dhash_block {
   int hops;
   int errors;
   int retries;
+  vec<u_long> times;
   chordID source;
 
   ~dhash_block () {  delete [] data; }
