@@ -26,33 +26,35 @@
 #include "parseopt.h"
 #include "refcnt.h"
 #include "bigint.h"
+#include "dbfe.h"
 #include "dhashgateway_prot.h"
 #include "proxy.h"
 
 static str proxy_socket;
-static ptr<aclnt> local = 0;
-static str proxyhost;
-static int proxyport = 0;
 static str lsd_socket = "";
 
-void
+ptr<aclnt> local = 0;
+ptr<dbfe> ilog = 0;
+str proxyhost;
+int proxyport = 0;
+extern void proxy_sync ();
+
+static void
+local_disconnect ()
+{
+  warn << "connection to local lsd down, shutting down proxy\n";
+  exit (0);
+}
+
+static void
 client_accept (int fd)
 {
   if (fd < 0)
     fatal ("EOF\n");
- 
-  if (local == 0) {
-    int lfd = unixsocket_connect(lsd_socket);
-    if (lfd < 0) {
-      fatal ("proxy: Error connecting to %s: %s\n",
-	     lsd_socket.cstr (), strerror (errno));
-    }
-    local = aclnt::alloc
-      (axprt_unix::alloc (lfd, 1024*1025), dhashgateway_program_1);
-    warn << "connection to local lsd established\n";
-  }
+  assert (local);
+  assert (ilog);
   ref<axprt_stream> x = axprt_stream::alloc (fd, 1024*1025);
-  vNew refcounted<proxygateway> (x, local, proxyhost, proxyport);
+  vNew refcounted<proxygateway> (x, local, ilog, proxyhost, proxyport);
 }
 
 static void
@@ -97,10 +99,35 @@ startclntd()
 }
 
 static void
+connect_local (int tries)
+{
+  if (local == 0) {
+    int lfd = unixsocket_connect (lsd_socket);
+    if (lfd < 0) {
+      if (tries > 20)
+	fatal ("proxy: Error connecting to %s: %s\n",
+	       lsd_socket.cstr (), strerror (errno));
+      else {
+	delaycb (2, wrap (connect_local, tries+1));
+	return;
+      }
+    }
+    local = aclnt::alloc
+      (axprt_unix::alloc (lfd, 1024*1025), dhashgateway_program_1);
+    local->seteofcb (wrap (local_disconnect));
+  
+    warn << "starting proxy between local lsd and remote lsd\n";
+    startclntd();
+    delaycb (1, wrap (proxy_sync));
+  }
+}
+
+static void
 usage ()
 {
   warnx << "Usage: " << progname
-        << "[-l <lsd socket>] [-S <socket>] [-x <proxy hostname:port>]\n";
+        << "[-d <insert log>] [-l <lsd socket>] "
+	<< "[-S <socket>] [-x <proxy hostname:port>]\n";
   exit (1);
 }
 
@@ -111,10 +138,14 @@ main (int argc, char **argv)
   mp_clearscrub ();
   random_init ();
   proxy_socket = "/tmp/proxy-sock";
+  str dbf = "proxy-log";
   int ch;
 
-  while ((ch = getopt (argc, argv, "l:S:x:"))!=-1)
+  while ((ch = getopt (argc, argv, "d:l:S:x:"))!=-1)
     switch (ch) {
+    case 'd':
+      dbf = optarg;
+      break;
     case 'l':
       lsd_socket = optarg;
       break;
@@ -153,9 +184,15 @@ main (int argc, char **argv)
   if (lsd_socket == "")
     usage ();
 
-  startclntd();
+  ilog = New refcounted<dbfe> ();
+  dbOptions opts;
 
-  warn << "starting proxy between local lsd and remote lsd\n";
+  if (int err = ilog->opendb (const_cast <char *> (dbf.cstr ()), opts)) {
+    warn << "cannot open insert log " << dbf << ": " << strerror (err) << "\n";
+    exit (-1);
+  }
+
+  delaycb (2, wrap (connect_local, 0));
   amain ();
 }
 

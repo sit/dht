@@ -21,20 +21,24 @@
 #include <dhashgateway_prot.h>
 #include "dhash_common.h"
 #include "proxy.h"
+#include "dbfe.h"
 #include "arpc.h"
 
 proxygateway::proxygateway (ptr<axprt_stream> x, ptr<aclnt> l,
-                            str host, int port)
+                            ptr<dbfe> il, str host, int port)
 {
+  local = l;
+  ilog = il;
+
   proxyclnt = 0;
   proxyhost = host;
   proxyport = port;
   tcpconnect (proxyhost, proxyport,
-              wrap (mkref (this), &proxygateway::proxy_connected, x, l));
+              wrap (mkref (this), &proxygateway::proxy_connected, x));
 }
 
 void
-proxygateway::proxy_connected (ptr<axprt_stream> x, ptr<aclnt> l, int fd)
+proxygateway::proxy_connected (ptr<axprt_stream> x, int fd)
 {
   if (fd < 0) {
     warn << "cannot connect to proxy "
@@ -48,7 +52,6 @@ proxygateway::proxy_connected (ptr<axprt_stream> x, ptr<aclnt> l, int fd)
 
   clntsrv = asrv::alloc (x, dhashgateway_program_1,
 	                 wrap (mkref (this), &proxygateway::dispatch));
-  local = l;
 }
 
 proxygateway::~proxygateway ()
@@ -74,18 +77,24 @@ proxygateway::dispatch (svccb *sbp)
     {
       dhash_insert_arg *arg = sbp->template getarg<dhash_insert_arg> ();
 
-      if ((arg->options & DHASHCLIENT_USE_CACHE) || proxyclnt == 0) {
+      if (arg->options & DHASHCLIENT_USE_CACHE) {
+	ptr<dhash_insert_res> res = New refcounted<dhash_insert_res> ();
+	local->call
+	  (DHASHPROC_INSERT, arg, res, 
+	   wrap (mkref(this), &proxygateway::local_insert_cb, false, sbp, res));
+      }
+
+      else if (proxyclnt == 0) {
 	arg->options = (arg->options | DHASHCLIENT_USE_CACHE);
 	ptr<dhash_insert_res> res = New refcounted<dhash_insert_res> ();
 	local->call
 	  (DHASHPROC_INSERT, arg, res,
-	   wrap (mkref (this), &proxygateway::local_insert_cb, sbp, res));
+	   wrap (mkref (this), &proxygateway::local_insert_cb, true, sbp, res));
       }
-      
+
       else {
 	int options = arg->options;
-	arg->options =
-	  (arg->options & (~(DHASHCLIENT_USE_CACHE | DHASHCLIENT_CACHE)));
+	arg->options = (arg->options & (~DHASHCLIENT_USE_CACHE));
 	ptr<dhash_insert_res> res = New refcounted<dhash_insert_res> ();
 	proxyclnt->call
 	  (DHASHPROC_INSERT, arg, res,
@@ -109,7 +118,7 @@ proxygateway::dispatch (svccb *sbp)
       else {
 	int options = arg->options;
 	arg->options =
-	  (arg->options & (~(DHASHCLIENT_USE_CACHE | DHASHCLIENT_CACHE)));
+	  (arg->options & (~DHASHCLIENT_USE_CACHE));
 	ptr<dhash_retrieve_res> res = New refcounted<dhash_retrieve_res> ();
 	proxyclnt->call
 	  (DHASHPROC_RETRIEVE, arg, res,
@@ -157,8 +166,7 @@ proxygateway::proxy_insert_cb (int options, svccb *sbp,
     na->len = arg->len;
     na->block.setsize (na->len);
     memmove (na->block.base (), arg->block.base (), na->len);
-    na->options = (arg->options | DHASHCLIENT_USE_CACHE);
-    na->guess = arg->guess;
+    na->options = DHASHCLIENT_USE_CACHE;
   }
 
   sbp->reply (res);
@@ -172,9 +180,27 @@ proxygateway::proxy_insert_cb (int options, svccb *sbp,
 }
 
 void
-proxygateway::local_insert_cb (svccb *sbp, ptr<dhash_insert_res> res,
-                               clnt_stat err)
+proxygateway::local_insert_cb (bool disconnected, svccb *sbp,
+                               ptr<dhash_insert_res> res, clnt_stat err)
 {
+  if (disconnected) {
+    dhash_insert_arg *arg = sbp->template getarg<dhash_insert_arg> ();
+    dhash_ctype t = arg->ctype;
+    bigint n = arg->blockID;
+    warn << "cannot connect to proxy, remember " << n << "\n";
+
+    ref<dbrec> k = my_id2dbrec (n);
+    if (!ilog->lookup (k)) {
+      ref<dbrec> d = New refcounted<dbrec> (&t, sizeof (t));
+      if (ilog->insert (k, d)) {
+        warn << "failed to insert " << n << " into insert log\n";
+        dhash_insert_res r (DHASH_RETRY);
+        sbp->reply (&r);
+        return;
+      }
+    }
+  }
+
   sbp->reply (res);
 }
 
