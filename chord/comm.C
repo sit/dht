@@ -44,6 +44,19 @@
 const int shortstats (getenv ("SHORT_STATS") ? 1 : 0);
 const int aclnttrace (getenv ("ACLNT_TRACE")
 		      ? atoi (getenv ("ACLNT_TRACE")) : 0);
+const bool aclnttime (getenv ("ACLNT_TIME"));
+
+static inline const char *
+tracetime ()
+{
+  static str buf ("");
+  if (aclnttime) {
+    timespec ts;
+    clock_gettime (CLOCK_REALTIME, &ts);
+    buf = strbuf (" %d.%06d", int (ts.tv_sec), int (ts.tv_nsec/1000));
+  }
+  return buf;
+}
 
 static
 int partition (float *A, int p, int r)
@@ -642,9 +655,11 @@ printreply (aclnt_cb cb, str name, void *res,
 {
   if (aclnttrace >= 3) {
     if (err)
-      warn << "ACLNT_TRACE: reply " << name << ": " << err << "\n";
+      warn << "ACLNT_TRACE:" << tracetime () 
+	   << " reply " << name << ": " << err << "\n";
     else if (aclnttrace >= 4) {
-      warn << "ACLNT_TRACE: reply " << name << "\n";
+      warn << "ACLNT_TRACE:" << tracetime ()
+	   << " reply " << name << "\n";
       if (aclnttrace >= 5 && print_res)
 	print_res (res, NULL, aclnttrace - 4, "REPLY", "");
     }
@@ -687,7 +702,7 @@ rpccb_chord::alloc (ptr<aclnt> c,
     assert (rtp);
     name = strbuf ("%s:%s x=%x", prog.name, rtp->name, xid);
 
-    warn << "ACLNT_TRACE: call " << name << "\n";
+    warn << "ACLNT_TRACE:" << tracetime () << " call " << name << "\n";
     if (aclnttrace >= 5 && rtp->print_arg)
       rtp->print_arg (in, NULL, aclnttrace - 4, "ARGS", "");
     if (aclnttrace >= 3 && cb != aclnt_cb_null)
