@@ -1338,10 +1338,12 @@ Kademlia::reap(void *r)
         ri->k->erase(ci->ki.id);
     }
 
-    // Note that we're purposely not marking not-ok nodes as dead, because
-    // in real life we probably wouldn't have waited for these RPCs to come
-    // back.  Also, doing so seems to bring down the success rate slightly,
-    // for reasons unclear.
+    // Although it slightly affects success rate, it's only fair
+    // to only count nodes as dead if you're alive when you receive
+    // their response.
+    if( !ok && Kademlia::death_notification && ri->k->alive() ) {
+      ri->is_dead->insert( ci->ki.id, true );
+    }
 
     ri->outstanding_rpcs->remove(donerpc);
     delete ci;
@@ -1384,13 +1386,14 @@ Kademlia::reap(void *r)
       
       IPAddress informant = i.key();
       vector<NodeID> *v = i.value();
+
+      if( informant == ri->k->ip() ) {
+	delete v;
+	continue;
+      }
       
       erase_args *ea = New erase_args(v);
       ri->k->record_stat(STAT_ERASE, v->size(), 0);
-      for( unsigned j = 0; j < v->size(); j++ ) {
-	cout << printID((*v)[j]) << ", ";
-      }
-      cout << endl;
       
       unsigned rpc = ri->k->asyncRPC(informant, &Kademlia::do_erase, ea, 
 				     (erase_result *) NULL, 
