@@ -74,6 +74,7 @@ ptr<chord> chordnode;
 static str p2psocket;
 static str ctlsocket;
 
+vec<ptr<vnode> > vlist;
 vec<ref<dhash> > dh;
 int myport;
  
@@ -124,6 +125,22 @@ void stop ();
 void halt ();
 
 // =====================================
+void
+lsdctl_fillnodeinfo (lsdctl_nodeinfo &ni, ptr<location> l)
+{
+  ni.n = l->id ();
+  ni.addr = l->address ();
+  ni.vnode_num = l->vnode ();
+  const vec<float> c = l->coords ();
+  for (int j = 0; j < 3; j++)
+    ni.coords[j] = (int32_t) c[j];
+  ni.a_lat = (u_int32_t) l->distance ();
+  ni.a_var = (u_int32_t) l->a_var ();
+  ni.nrpc = l->nrpc ();
+  ni.pinned = chordnode->locations->pinned (l->id ());
+  ni.alive = l->alive ();
+  ni.dead_time = l->dead_time ();
+}
 
 void
 lsdctl_dispatch (ptr<asrv> s, svccb *sbp)
@@ -186,19 +203,7 @@ lsdctl_dispatch (ptr<asrv> s, svccb *sbp)
       ptr<location> l = chordnode->locations->first_loc ();
       int i = 0;
       while (l != NULL) {
-	nl->nlist[i].n = l->id ();
-	nl->nlist[i].addr = l->address ();
-	nl->nlist[i].vnode_num = l->vnode ();
-	const vec<float> c = l->coords ();
-	for (int j = 0; j < 3; j++)
-	  nl->nlist[i].coords[j] = (int32_t) c[j];
-	nl->nlist[i].a_lat = (u_int32_t) l->distance ();
-	nl->nlist[i].a_var = (u_int32_t) l->a_var ();
-	nl->nlist[i].nrpc = l->nrpc ();
-	nl->nlist[i].pinned = chordnode->locations->pinned (l->id ());
-	nl->nlist[i].alive = l->alive ();
-	nl->nlist[i].dead_time = l->dead_time ();
-
+	lsdctl_fillnodeinfo (nl->nlist[i], l);
 	l = chordnode->locations->next_loc (l->id ());
 	i++;
       }
@@ -241,6 +246,16 @@ lsdctl_dispatch (ptr<asrv> s, svccb *sbp)
       }
 	
       sbp->reply (sl);
+    }
+    break;
+  case LSDCTL_GETMYIDS:
+    {
+      ptr<lsdctl_nodeinfolist> nl = New refcounted<lsdctl_nodeinfolist> ();
+      nl->nlist.setsize (vlist.size ());
+      for (unsigned int i = 0; i < vlist.size (); i++) {
+	lsdctl_fillnodeinfo (nl->nlist[i], vlist[i]->my_location ());
+      }
+      sbp->reply (nl);
     }
     break;
   default:
@@ -336,6 +351,7 @@ newvnode_cb (int n, ptr<vnode> my, chordstat stat)
     fatal ("unable to join\n");
   }
   dh[n]->init_after_chord (my);
+  vlist.push_back (my);
 
   n += 1;
   initialized_dhash = n;

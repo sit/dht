@@ -16,6 +16,7 @@ void lsdctl_stabilize (int argc, char *argv[]);
 void lsdctl_replicate (int argc, char *argv[]);
 void lsdctl_getloctab (int argc, char *argv[]);
 void lsdctl_getrpcstats (int argc, char *argv[]);
+void lsdctl_getmyids (int argc, char *argv[]);
 
 struct modevec {
   const char *name;
@@ -30,6 +31,7 @@ const modevec modes[] = {
   { "replicate", lsdctl_replicate, "replicate [-r] start|stop" },
   { "loctab", lsdctl_getloctab, "loctab [vnodenum]" },
   { "rpcstats", lsdctl_getrpcstats, "rpcstats [-r]" },
+  { "myids", lsdctl_getmyids, "myids" },
   { NULL, NULL, NULL }
 };
 
@@ -173,17 +175,10 @@ lsdctl_replicate (int argc, char *argv[])
     warnx << "lsdctl_replicate: lsd did not switch to new state.\n";
   exit (0);
 }
-   
-void
-lsdctl_getloctab (int argc, char *argv[])
-{
-  int vnode = 0; // XXX should actually get vnode from cmd line.
-  ptr<lsdctl_nodeinfolist> nl = New refcounted <lsdctl_nodeinfolist> ();
-  ptr<aclnt> c = lsdctl_connect (control_socket);
 
-  clnt_stat err = c->scall (LSDCTL_GETLOCTABLE, &vnode, nl);
-  if (err)
-    fatal << "lsdctl_loctab: " << err << "\n";
+strbuf
+lsdctl_nlist_printer (ptr<lsdctl_nodeinfolist> nl)
+{
   strbuf out;
   for (size_t i = 0; i < nl->nlist.size (); i++) {
     out << nl->nlist[i].n << " "
@@ -200,6 +195,35 @@ lsdctl_getloctab (int argc, char *argv[])
         << nl->nlist[i].alive << " "
         << nl->nlist[i].dead_time << "\n";
   }
+  return out;
+}
+
+void
+lsdctl_getmyids (int argc, char *argv[])
+{
+  ptr<lsdctl_nodeinfolist> nl = New refcounted <lsdctl_nodeinfolist> ();
+  ptr<aclnt> c = lsdctl_connect (control_socket);
+
+  clnt_stat err = c->scall (LSDCTL_GETMYIDS, NULL, nl);
+  if (err)
+    fatal << "lsdctl_loctab: " << err << "\n";
+  strbuf out (lsdctl_nlist_printer (nl));
+  make_sync (1);
+  out.tosuio ()->output (1);
+  exit (0);
+}
+
+void
+lsdctl_getloctab (int argc, char *argv[])
+{
+  int vnode = 0; // XXX should actually get vnode from cmd line.
+  ptr<lsdctl_nodeinfolist> nl = New refcounted <lsdctl_nodeinfolist> ();
+  ptr<aclnt> c = lsdctl_connect (control_socket);
+
+  clnt_stat err = c->scall (LSDCTL_GETLOCTABLE, &vnode, nl);
+  if (err)
+    fatal << "lsdctl_loctab: " << err << "\n";
+  strbuf out (lsdctl_nlist_printer (nl));
   make_sync (1);
   out.tosuio ()->output (1);
   exit (0);

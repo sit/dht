@@ -69,5 +69,9 @@ program LSDCTL_PROG {
 		lsdctl_rpcstatlist
 		LSDCTL_GETRPCSTATS (bool) = 6;
 		/** Get list and optionally clear (if true) existing stats */
+
+		lsdctl_nodeinfolist
+		LSDCTL_GETMYIDS (void) = 7;
+		/** Get the list of vnode IDs on this lsd */
 	} = 1;
 } = 344500;
