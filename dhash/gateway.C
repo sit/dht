@@ -56,16 +56,17 @@ compute_hash (const void *buf, size_t buflen)
 // ------------------------------------------------------------------------
 // DHASHGATEWAY
 
-dhashgateway::dhashgateway (ptr<axprt_stream> x, ptr<chord> node,
-			       dhash *dh,
-			       ptr<route_factory> f,
-			       bool do_cache)
+dhashgateway::dhashgateway (ptr<axprt_stream> x, 
+			    ptr<chord> node,
+			    dhash *dh,
+			    ptr<route_factory> f,
+			    bool do_cache)
 {
   clntsrv = asrv::alloc (x, dhashgateway_program_1, 
 			 wrap (this, &dhashgateway::dispatch));
   clntnode = node;
   this->dh = dh;
-  dhcli = New refcounted<dhashcli>(clntnode, dh, f, do_cache);
+  dhcli = New refcounted<dhashcli>(clntnode->active, dh, f, do_cache);
 }
 
 

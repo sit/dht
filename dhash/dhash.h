@@ -366,7 +366,6 @@ public:
 		    clnt_stat err);
   void nexthop_chalok_cb (chordID s, bool ok, chordstat status);  
   chordID lookup_next_hop (chordID k);
-  bool straddled (route path, chordID &k);
   
   void add_data (char *data, int len, int off);
   void finish_block_fetch (ptr<dhash_fetchiter_res> res, clnt_stat err);
@@ -375,7 +374,7 @@ public:
 };
 
 class dhashcli {
-  ptr<chord> clntnode;
+  ptr<vnode> clntnode;
   bool do_cache;
   dhash *dh;
   ptr<route_factory> r_factory;
@@ -397,7 +396,7 @@ private:
 			 cbinsert_t cb, dhash_stat status, chordID destID);
 
  public:
-  dhashcli (ptr<chord> node, dhash *dh, ptr<route_factory> r_factory, 
+  dhashcli (ptr<vnode> node, dhash *dh, ptr<route_factory> r_factory, 
 	    bool do_cache);
   void retrieve (chordID blockID, bool askforlease, bool usecachedsucc, 
 		 cbretrieve_t cb);

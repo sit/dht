@@ -93,7 +93,7 @@ dhash::dhash(str dbname, vnode *node,
   
   //the client helper class (will use for get_key etc)
   //don't cache here: only cache on user generated requests
-  cli = New dhashcli (node->chordnode, this, r_factory, false);
+  cli = New dhashcli (mkref(node), this, r_factory, false);
 
   // pred = 0; // XXX initialize to what?
   check_replica_tcb = NULL;
@@ -320,8 +320,6 @@ dhash::dispatch (svccb *sbp)
     break;
   case DHASHPROC_STORE:
     {
-      update_replica_list ();
-
       s_dhash_insertarg *sarg = sbp->template getarg<s_dhash_insertarg> ();
      
       if ((sarg->type == DHASH_STORE) && 
@@ -470,14 +468,7 @@ dhash::transfer_init_gotk_cb (dhash_stat err)
 void
 dhash::update_replica_list () 
 {
-  replicas.clear ();
-  chordID myID = host_node->my_ID ();
-  chordID successor = myID;
-  for (int i = 1; i < nreplica+1; i++) {
-    successor = host_node->locations->closestsuccloc (successor + 1);
-    if (successor != myID)
-      replicas.push_back (successor);
-  }
+  replicas = host_node->succs ();
 }
 
 void
@@ -491,7 +482,7 @@ dhash::install_replica_timer ()
 
 /* O( (number of replicas)^2 ) (but doesn't assume anything about
 ordering of chord::succlist*/
- bool 
+bool 
 dhash::isReplica(chordID id) { 
   for (unsigned int i=0; i < replicas.size(); i++)
     if (replicas[i] == id) return true;
@@ -507,37 +498,8 @@ dhash::check_replicas_cb () {
 void
 dhash::check_replicas () 
 {
-  // xxx write getreplicalist and diff the sorted list. more efficient.
-  ////if (!isReplica(nth)) key_store.traverse (wrap (this, &dhash::check_replicas_traverse_cb, nth));
-  chordID myID = host_node->my_ID ();
-  chordID nth = myID;
-  for (unsigned int i=0; i < replicas.size (); i++) {
-    chordID nth = host_node->locations->closestsuccloc (nth + 1);
-    if (isReplica(nth))
-      continue;
-
-    chordID start = host_node->my_pred();
-    ref<dbrec> startkey = id2dbrec(start);
-    ptr<dbEnumeration> it = db->enumerate();
-    ptr<dbPair> d = it->nextElement(startkey);
-    if(d) {
-      chordID k = dbrec2id (d->key);
-      chordID startk = k;
-      while (responsible (k)) {
-	transfer_key (nth, k, DHASH_REPLICA, 
-		      wrap (this, &dhash::fix_replicas_txerd));
-
-	d = it->nextElement();
-	if(!d)
-	  d = it->nextElement(id2dbrec(0));
-	k = dbrec2id(d->key);
-	if(k == startk)
-	  break;
-      }
-    }
-  }
-
-  update_replica_list ();
+  //XXX removed by fdabek: replace with something smart
+  // using merkle
 }
 
 void
@@ -552,13 +514,8 @@ dhash::fix_replicas_txerd (dhash_stat err)
 void
 dhash::replicate_key (chordID key, cbstat_t cb)
 {
+  update_replica_list ();
   if (replicas.size () > 0) {
-    if (!host_node->locations->cached (replicas[0])) {
-      check_replicas_cb ();
-      replicate_key (key, cb);
-      return;
-    }
-
     transfer_key (replicas[0], key, DHASH_REPLICA, 
 		  wrap (this, &dhash::replicate_key_cb, 1, cb, key));
   }
@@ -573,12 +530,6 @@ dhash::replicate_key_cb (unsigned int replicas_done, cbstat_t cb, chordID key,
   if (err) (*cb)(DHASH_ERR);
   else if (replicas_done >= replicas.size ()) (*cb)(DHASH_OK);
   else {
-    if (!host_node->locations->cached (replicas[replicas_done])) {
-      check_replicas_cb ();
-      replicate_key (key, cb);
-      return;
-    }
-
     transfer_key (replicas[replicas_done], key, DHASH_REPLICA,
 		  wrap (this, &dhash::replicate_key_cb, 
 			replicas_done + 1, cb, key));
@@ -597,6 +548,10 @@ dhash::transfer_fetch_cb (chordID to, chordID key, store_status stat,
 			  callback<void, dhash_stat>::ref cb,
 			  int cookie, ptr<dbrec> data, dhash_stat err) 
 {
+  if (!host_node->locations->cached (to)) {
+    warn << "the successor " << to << "left the cache already\n";
+    return;
+  }
   ref<dhash_block> blk = New refcounted<dhash_block> (data->value, data->len);
   cli->storeblock (to, key, blk, 
 		   wrap (this, &dhash::transfer_store_cb, cb),
@@ -1045,7 +1000,6 @@ dhash::stop ()
     warnx << "stop replica timer\n";
     timecb_remove (check_replica_tcb);
     check_replica_tcb = NULL;
-    update_replica_list ();
   }
 }
 

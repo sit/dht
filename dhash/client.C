@@ -59,10 +59,10 @@ protected:
   cbinsert_t cb;
   dhash_ctype ctype;
   store_status store_type;
-  ptr<chord> clntnode;
+  ptr<vnode> clntnode;
   int num_retries;
 
-  dhash_store (ptr<chord> clntnode, chordID destID, chordID blockID, 
+  dhash_store (ptr<vnode> clntnode, chordID destID, chordID blockID, 
 	       ptr<dhash_block> _block, store_status store_type, cbinsert_t cb)
     : destID (destID), 
 		 blockID (blockID), block (_block), cb (cb), 
@@ -113,8 +113,9 @@ protected:
     
     if (npending == 0) {
       if (status == DHASH_RETRY) {
-	clntnode->cacheloc (predID, pred_addr, 
-			    wrap (this, &dhash_store::retry_cachedloc));
+	clntnode->locations->cacheloc (predID, pred_addr, 
+				       wrap (this, 
+					     &dhash_store::retry_cachedloc));
       } else {
 	(*cb) (status, destID);
 	delete this;
@@ -158,7 +159,7 @@ protected:
   }
 public:
   
-  static void execute (ptr<chord> clntnode, chordID destID, chordID blockID,
+  static void execute (ptr<vnode> clntnode, chordID destID, chordID blockID,
                        ref<dhash_block> block, cbinsert_t cb, 
 		       store_status store_type = DHASH_STORE)
   {
@@ -173,7 +174,7 @@ public:
 // DHASHCLI
 
  
-dhashcli::dhashcli (ptr<chord> node, dhash *dh, ptr<route_factory> r_factory,  bool do_cache) : 
+dhashcli::dhashcli (ptr<vnode> node, dhash *dh, ptr<route_factory> r_factory,  bool do_cache) : 
   clntnode (node), 
   do_cache (do_cache),
   dh (dh),
@@ -287,7 +288,6 @@ dhashcli::insert_lookup_cb (chordID blockID, ref<dhash_block> block,
 
 //like insert, but doesn't do lookup. used by transfer_key
 void
-
 dhashcli::storeblock (chordID dest, chordID ID, ref<dhash_block> block, 
 			 cbinsert_t cb, store_status stat)
 {
