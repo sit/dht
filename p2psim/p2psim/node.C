@@ -33,6 +33,8 @@ using namespace std;
 
 string Node::_protocol = ""; 
 Args Node::_args;
+Time Node::_collect_stat_time = 0;
+bool Node::_collect_stat = false;
 
 Node::Node(IPAddress i) : _ip(i), _alive(true), _token(1) 
 {
@@ -134,6 +136,17 @@ Node::parse(char *filename)
   in.close();
 }
 
+bool
+Node::collect_stat()
+{
+  if (_collect_stat) 
+    return true;
+  if (now() >= _collect_stat_time) {
+    _collect_stat = true;
+    return true;
+  }else
+    return false;
+}
 
 
 // Called by NetEvent::execute() to deliver a packet to a Node,

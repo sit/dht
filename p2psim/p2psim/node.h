@@ -50,6 +50,8 @@ public:
   void set_alive(bool a) { _alive = a;}
   bool alive () { return _alive; }
   static bool init_state() { return (_args.nget<unsigned>("initstate",0,10) != 0); }
+  static bool collect_stat();
+  static void set_collect_stat_time(Time u) { _collect_stat_time = u;}
   void packet_handler(Packet *);
   static void Receive(void*);
 
@@ -188,6 +190,8 @@ protected:
   // The One Protocol and Its Arguments
   static string _protocol;
   static Args _args;
+  static Time _collect_stat_time;
+  static bool _collect_stat;
 };
 
 #endif // __PROTOCOL_H
