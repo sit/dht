@@ -37,7 +37,7 @@ Time Node::_collect_stat_time = 0;
 bool Node::_collect_stat = false;
 bool Node::_replace_on_death = true;
 // static stat data structs:
-vector<uint> Node::_bw_stats;
+vector<ulong> Node::_bw_stats;
 vector<uint> Node::_bw_counts;
 vector<Time> Node::_correct_lookups;
 vector<Time> Node::_incorrect_lookups;
@@ -337,7 +337,7 @@ Node::print_stats()
   cout << "\n<-----STATS----->" << endl;
 
   // first print out bw stats
-  uint total = 0;
+  ulong total = 0;
   cout << "BW_PER_TYPE:: ";
   for( uint i = 0; i < _bw_stats.size(); i++ ) {
     cout << i << ":" << _bw_stats[i] << " ";
@@ -649,6 +649,7 @@ Node::Receive(void *px)
   reply->_queue_delay = s->queue_delay ();
 
   if (Network::Instance()->alive(p->dst())) {
+      //      && Network::Instance()->gettopology()->latency(p->_src, p->_dst, p->reply()) != 100000 ) {
     (p->_fn)(p->_args);
     reply->_ok = true;
   } else {
