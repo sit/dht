@@ -50,6 +50,9 @@ foreach my $log (@logs) {
 		    }
 		}
 	    }
+	}elsif (/alive \d+ avg (\d+\.\d+).*longest/) {
+	  push @stats_found, "SHORTEST_PATH:mean";
+	  push @log_stats, $1;
 	} elsif( /mystat (\d+)/ ) {
 	    push @stats_found, "MY:stat";
 	    push @log_stats, $1;
