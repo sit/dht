@@ -193,7 +193,8 @@ pred_list::fill_nodelistres (chord_nodelistres *res)
   res->resok->nlist.setsize (NPRED); // over allocate
   chordID curpred = locations->closestsuccloc (backkey_);
   for (i = 0; (i < NPRED) && curpred != myID; i++) {
-    locations->fill_chord_node (res->resok->nlist[i], curpred);
+    bool ok = locations->get_node (curpred, &res->resok->nlist[i]);
+    assert (ok);
     curpred = locations->closestsuccloc (incID (curpred));
   }
   res->resok->nlist.setsize (i + 1);

@@ -174,7 +174,7 @@ class locationtable : public virtual refcount {
 
   void ping (const chordID &x, cbping_t cb);
 
-  void get_node (const chordID &x, chord_node *n);
+  bool get_node (const chordID &x, chord_node *n);
 
   //iterating over locations
   ptr<location> first_loc ();
@@ -186,7 +186,6 @@ class locationtable : public virtual refcount {
   bool cached (const chordID &x);
   const net_address & getaddress (const chordID &x);
   float get_a_lat (const chordID &x);
-  void fill_chord_node (chord_node &data, const chordID &x);
   void fill_getnodeext (chord_node_ext &data, const chordID &x);
   unsigned int get_nrpc(const chordID &x);
   void set_coords (const chordID &x, vec<float> coords);

@@ -188,7 +188,8 @@ vnode_impl::alert (const chordID &n, chordID &x)
   chordstat *res = New chordstat;
   nalert++;
   warnx << "alert: " << x << " died; notify " << n << "\n";
-  locations->fill_chord_node (na->n, x);
+  bool ok = locations->get_node (x, &na->n);
+  assert (ok);
 
   doRPC (n, chord_program_1, CHORDPROC_ALERT, na, res, 
 		    wrap (mkref (this), &vnode_impl::alert_cb, res));

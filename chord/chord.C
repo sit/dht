@@ -454,7 +454,8 @@ vnode_impl::doget_successor (user_args *sbp)
   
   chordID s = successors->succ ();
   chord_noderes res(CHORD_OK);
-  locations->fill_chord_node (*res.resok, s);
+  bool ok = locations->get_node (s, res.resok);
+  assert (ok);
   sbp->reply (&res);
 }
 
@@ -464,7 +465,8 @@ vnode_impl::doget_predecessor (user_args *sbp)
   ndogetpredecessor++;
   chordID p = my_pred ();
   chord_noderes res(CHORD_OK);
-  locations->fill_chord_node (*res.resok, p);
+  bool ok = locations->get_node (p, res.resok);
+  assert (ok);
   sbp->reply (&res);
 }
 
@@ -516,14 +518,16 @@ vnode_impl::dotestrange_findclosestpred (user_args *sbp, chord_testandfindarg *f
   chord_testandfindres *res = New chord_testandfindres ();  
   if (betweenrightincl(myID, succ, x) ) {
     res->set_status (CHORD_INRANGE);
-    locations->fill_chord_node (res->inrange->n, succ);
+    bool ok = locations->get_node (succ, &res->inrange->n);
+    assert (ok);
   } else {
     res->set_status (CHORD_NOTINRANGE);
     vec<chordID> f;
     for (unsigned int i=0; i < fa->failed_nodes.size (); i++)
       f.push_back (fa->failed_nodes[i]);
     chordID p = lookup_closestpred (fa->x, f);
-    locations->fill_chord_node (res->notinrange->n, p);
+    bool ok = locations->get_node (p, &res->notinrange->n);
+    assert (ok);
   }
 
   if (fa->upcall_prog)  {
@@ -555,7 +559,8 @@ vnode_impl::dofindclosestpred (user_args *sbp, chord_findarg *fa)
   chord_noderes res(CHORD_OK);
   chordID p = lookup_closestpred (fa->x);
   ndofindclosestpred++;
-  locations->fill_chord_node (*res.resok, p);
+  bool ok = locations->get_node (p, res.resok);
+  assert (ok);
   assert (0);
   //  sbp->reply (&res);
 }
@@ -698,18 +703,12 @@ vnode_impl::dogettoes (user_args *sbp, chord_gettoes_arg *ta)
 void
 vnode_impl::dogetsucclist (user_args *sbp)
 {
-  chord_nodelistres res (CHORD_OK);
   ndogetsucclist++;
-  
-  int curnsucc = successors->num_succ ();
-  chordID cursucc = myID;
-  res.resok->nlist.setsize (curnsucc + 1);
-  for (int i = 0; i <= curnsucc; i++) {
-    locations->fill_chord_node (res.resok->nlist[i], cursucc);
-    cursucc = locations->closestsuccloc (cursucc + 1);
-  }
+  chord_nodelistres res (CHORD_OK);
+  res.resok->nlist = succs ();
   sbp->reply (&res);
 }
+
 
 void
 vnode_impl::dodebruijn (user_args *sbp, chord_debruijnarg *da)
@@ -725,7 +724,8 @@ vnode_impl::dodebruijn (user_args *sbp, chord_debruijnarg *da)
   res = New chord_debruijnres ();
   if (betweenrightincl (myID, succ, da->x)) {
     res->set_status(CHORD_INRANGE);
-    locations->fill_chord_node (res->inres->node, succ);
+    bool ok = locations->get_node (succ, &res->inres->node);
+    assert (ok);
   } else {
     res->set_status (CHORD_NOTINRANGE);
     if (betweenrightincl (myID, succ, da->i)) {
@@ -733,13 +733,15 @@ vnode_impl::dodebruijn (user_args *sbp, chord_debruijnarg *da)
       // assert (d);  // XXXX return error
       // chordID nd =  d->debruijnprt (); 
       chordID nd = lookup_closestpred (doubleID (myID, logbase));
-      locations->fill_chord_node (res->noderes->node, nd);
+      bool ok = locations->get_node (nd, &res->noderes->node);
+      assert (ok);
       res->noderes->i = doubleID (da->i, logbase);
       res->noderes->i = res->noderes->i | topbits (logbase, da->k);
       res->noderes->k = shifttopbitout (logbase, da->k);
     } else {
       chordID x = lookup_closestpred (da->i); // succ
-      locations->fill_chord_node (res->noderes->node, x);
+      bool ok = locations->get_node (x, &res->noderes->node);
+      assert (ok);
       res->noderes->i = da->i;
       res->noderes->k = da->k;
     }
@@ -784,9 +786,10 @@ vnode_impl::dofindroute_cb (user_args *sbp, chord_findarg *fa,
   } else {
     chord_nodelistres res (CHORD_OK);
     res.resok->nlist.setsize (r.size ());
-    for (unsigned int i = 0; i < r.size (); i++) 
-      locations->fill_chord_node (res.resok->nlist[i], r[i]);
-
+    for (unsigned int i = 0; i < r.size (); i++) {
+      bool ok = locations->get_node (r[i], &res.resok->nlist[i]);
+      assert (ok);
+    }
     sbp->reply (&res);
   }
 }

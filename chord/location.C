@@ -468,14 +468,22 @@ locationtable::pinsucclist (const chordID &x)
   pin (x, LOC_PINSUCCLIST);
 }
 
-void
+bool
 locationtable::get_node (const chordID &x, chord_node *n)
 {
-  ptr<location> loc = lookup (x);
-  if (!loc) return;
-  n->x = loc->n;
-  n->r = loc->addr;
+  ptr<location> l = lookup (x);
+  if (!l)
+    return false;
+  n->x = l->n;
+  n->r = l->addr;
+
+  n->coords.setsize (l->coords.size ());
+  for (unsigned int i = 0; i < l->coords.size (); i++)
+    n->coords[i] = (int)(l->coords[i]*1000.0);
+
+  return true;
 }
+
 ptr<location>
 locationtable::lookup (const chordID &n)
 {
@@ -646,23 +654,6 @@ locationtable::set_coords (const chordID &x, vec<float> coords)
 
 }
 
-void
-locationtable::fill_chord_node (chord_node &data, const chordID &x) 
-{
-  locwrap *lw = locs[x];
-  if (!lw || (lw->type_ & LOC_REGULAR) == 0) {
-    return;
-  }
-  ptr<location> l = lw->loc_;
-  
-  data.x = x;
-  data.r = l->addr;
-  data.coords.setsize (l->coords.size ());
-  for (unsigned int i = 0; i < l->coords.size (); i++)
-    data.coords[i] = (int)(l->coords[i]*1000.0);
-
-  return;
-}
 
 void
 locationtable::fill_getnodeext (chord_node_ext &data, const chordID &x)
