@@ -2,18 +2,16 @@
 
 $(PROGRAMS): $(LDEPS)
 
-noinst_PROGRAMS = test_merkle_tree test_merkle_syncer stats_merkle_tree
 
 MYLDADD = ../merkle/libmerkle.a ../dhash/libdhash.a ../chord/libchord.a ../svc/libsvc.la $(LDADD)
 
-stats_merkle_tree_SOURCES = stats_merkle_tree.C
-stats_merkle_tree_LDADD = $(MYLDADD)
-
-test_merkle_tree_SOURCES = test_merkle_tree.C
-test_merkle_tree_LDADD = $(MYLDADD)
-
-test_merkle_syncer_SOURCES = test_merkle_syncer.C
-test_merkle_syncer_LDADD = $(MYLDADD)
+#noinst_PROGRAMS = test_merkle_tree test_merkle_syncer stats_merkle_tree
+#stats_merkle_tree_SOURCES = stats_merkle_tree.C
+#stats_merkle_tree_LDADD = $(MYLDADD)
+#test_merkle_tree_SOURCES = test_merkle_tree.C
+#test_merkle_tree_LDADD = $(MYLDADD)
+#test_merkle_syncer_SOURCES = test_merkle_syncer.C
+#test_merkle_syncer_LDADD = $(MYLDADD)
 
 noinst_LIBRARIES = libmerkle.a
 
