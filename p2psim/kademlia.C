@@ -58,6 +58,7 @@ Kademlia::join(Args *args)
 
   if(wkn == ip()) {
     KDEBUG(1) << "Node " << printID(_id) << " is wellknown." << endl;
+    _joined = true;
     return;
   }
 
@@ -75,7 +76,8 @@ Kademlia::join(Args *args)
   dump();
 
   // put reply (i.e., ``successor'' of our own ID) in table
-  _tree->insert(lr.id, lr.ip);
+  if(lr.id != _id)
+    _tree->insert(lr.id, lr.ip);
 
   // all entries further away than him need to be refereshed.
   // see section 2.3
@@ -137,7 +139,8 @@ Kademlia::insert(Args *args)
 void
 Kademlia::do_insert(insert_args *iargs, insert_result *iresult)
 {
-  _tree->insert(iargs->id, iargs->ip);
+  if(iargs->id != _id)
+    _tree->insert(iargs->id, iargs->ip);
 
   lookup_args la;
   lookup_result lr;
@@ -211,7 +214,8 @@ done:
   lresult->rid = _id;
 
   // insert caller into our tree
-  _tree->insert(callerID, callerIP);
+  if(callerID != _id)
+    _tree->insert(callerID, callerIP);
 
   dump();
 }
@@ -266,7 +270,8 @@ Kademlia::reschedule_stabilizer(void *x)
 void
 Kademlia::do_transfer(transfer_args *targs, transfer_result *tresult)
 {
-  _tree->insert(targs->id, targs->ip);
+  if(targs->id != _id)
+    _tree->insert(targs->id, targs->ip);
 
   KDEBUG(2) << "handle_transfer to node " << printbits(targs->id) << "\n";
   if(_values.size() == 0) {
