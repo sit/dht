@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.36 2003/12/14 23:28:10 strib Exp $ */
+/* $Id: tapestry.C,v 1.37 2003/12/16 06:18:26 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -69,6 +69,12 @@ Tapestry::Tapestry(IPAddress i, Args a) : P2Protocol(i),
     num_msgs.push_back(0);
   }
 
+  // initialize an array of guid digits
+  _my_id_digits = New uint[_digits_per_id];
+  for( uint i = 0; i < _digits_per_id; i++ ) {
+    _my_id_digits[i] = get_digit( id(), i );
+  }
+
 }
 
 Tapestry::~Tapestry()
@@ -76,6 +82,7 @@ Tapestry::~Tapestry()
 
   delete _rt;
   delete _waiting_for_join;
+  delete [] _my_id_digits;
 
   TapDEBUG(2) << "Destructing" << endl;
 
@@ -404,7 +411,7 @@ Tapestry::join(Args *args)
 
   // now that the multicast is over, it's time for nearest neighbor
   // ping everyone on the initlist
-  int init_level = guid_compare( id(), jr.surr_id ); 
+  int init_level = guid_compare( jr.surr_id, id_digits() ); 
   vector<NodeInfo *> seeds;
   TapDEBUG(2) << "init level of " << init_level << endl;
   for( int i = init_level; i >= 0; i-- ) {
@@ -649,7 +656,7 @@ Tapestry::handle_join(join_args *args, join_return *ret)
       
       // start by sending the new node all of the nodes in your table
       // up to the digit you share
-      int alpha = guid_compare( id(), args->id );
+      int alpha = guid_compare( args->id, id_digits() );
       vector<NodeInfo *> thisrow;
       
       bool stop = true;
@@ -1052,7 +1059,7 @@ Tapestry::stabilized(vector<GUID> lid)
 
     GUID currguid = lid[i];
     if( !_rt->contains(currguid) ) {
-      int match = guid_compare( currguid, id() );
+      int match = guid_compare( currguid, id_digits() );
       if( match == -1 ) {
 	TapDEBUG(1) << "doesn't have itself in the routing table!" << endl;
 	return false;
@@ -1085,7 +1092,7 @@ Tapestry::oracle_node_died( IPAddress deadip, GUID deadid,
   _rt->remove( deadid, false );
   _rt->remove_backpointer( deadip, deadid );
 
-  int match = guid_compare( id(), deadid );
+  int match = guid_compare( deadid, id_digits() );
   uint digit = get_digit( deadid, match );
 
   // now find a replacement
@@ -1097,7 +1104,7 @@ Tapestry::oracle_node_died( IPAddress deadip, GUID deadid,
     Tapestry *currnode = (Tapestry*) *i;
     if( currnode->ip() != ip() && currnode->alive() ) {
 
-      if( guid_compare( id(), currnode->id() ) == match &&
+      if( guid_compare( currnode->id_digits(), id_digits() ) == match &&
 	  get_digit( currnode->id(), match ) == digit ) {
 	Time rtt = 
 	  2*Network::Instance()->gettopology()->latency( ip(),
@@ -1130,7 +1137,7 @@ Tapestry::oracle_node_joined( Tapestry *t )
   Time rtt = 2*Network::Instance()->gettopology()->latency( ip(), t->ip() );
   if( _rt->add( t->ip(), t->id(), rtt, false ) ) {
       t->got_backpointer( ip(), id(), 
-			  guid_compare( id(), t->id() ), 
+			  guid_compare( t->id_digits(), id_digits() ), 
 			  false );
       // for now don't worry about removing backpointers for other people,
       // they don't really matter
@@ -1245,7 +1252,8 @@ Tapestry::initstate()
     // maximum match?  That would be a pain.
     if( _rt->contains( currnode->id() ) ) {
       currnode->got_backpointer( ip(), id(), 
-				 guid_compare( id(), currnode->id() ), 
+				 guid_compare( currnode->id_digits(), 
+					       id_digits() ), 
 				 false );
       known_nodes++;
     }
@@ -1402,7 +1410,7 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
 
 	    for(set<GUID>::iterator i=removed.begin();i != removed.end();++i) {
 
-	      int match = guid_compare( id(), *i );
+	      int match = guid_compare( *i, id_digits() );
 	      assert( match >= 0 ); // shouldn't be me
 	      if( j < (uint) match ) continue;
 	      uint digit = get_digit( *i, match );
@@ -1580,7 +1588,7 @@ Tapestry::next_hop( GUID key, IPAddress** ips, uint size )
 {
   // first, figure out how many digits we share, and start looking at 
   // that level
-  int level = guid_compare( id(), key );
+  int level = guid_compare( key, id_digits() );
   if( level == -1 ) {
     // it's us!
     if( size > 0 ) {
@@ -1698,6 +1706,28 @@ Tapestry::guid_compare( GUID key1, uint key2_digits[] )
   return (int) i;
 
 }
+
+int
+Tapestry::guid_compare( uint key1_digits[], uint key2_digits[] )
+{
+
+  uint i = 0;
+  // otherwise, figure out where they differ
+  for( ; i < _digits_per_id; i++ ) {
+    if( key1_digits[i] != key2_digits[i] ) {
+      break;
+    }
+  }
+
+  // if they're the same, return -1
+  if( i == _digits_per_id ) {
+    return -1;
+  }
+
+  return (int) i;
+
+}
+
 
 void
 Tapestry::leave(Args *args)
@@ -1820,7 +1850,7 @@ Tapestry::lookup_cheat( GUID key )
     assert(c);
     // only care about live, joined nodes (or live nodes in our rt)
     if( c->alive() && (c->is_joined() || _rt->contains(c->id())) ) {
-      int match = guid_compare( c->id(), key_digits );
+      int match = guid_compare( c->id_digits(), key_digits );
       if( match == -1 ) {
 	return c->id();
       } else if( match > maxmatch ) {
@@ -2228,7 +2258,7 @@ RoutingTable::get_entry( uint i, uint j )
 bool
 RoutingTable::contains( GUID id )
 {
-  int alpha = _node->guid_compare( _node->id(), id );  
+  int alpha = _node->guid_compare( id, _node->id_digits() );  
   if( alpha == -1 ) {
     alpha = _node->_digits_per_id - 1;
   }
@@ -2250,7 +2280,7 @@ Time
 RoutingTable::get_time( GUID id )
 {
 
-  uint alpha = _node->guid_compare( _node->id(), id );  
+  uint alpha = _node->guid_compare( id, _node->id_digits() );  
   RouteEntry *re = _table[alpha][_node->get_digit( id, alpha )];
   if( re != NULL ) {
     // see if it's in there anywhere
@@ -2278,7 +2308,7 @@ void
 RoutingTable::remove_backpointer( IPAddress ip, GUID id )
 {
 
-  int match = _node->guid_compare( _node->id(), id );
+  int match = _node->guid_compare( id, _node->id_digits() );
   for( int i = 0; i <= match; i++ ) {
     remove_backpointer( ip, id, i );
   }
@@ -2360,7 +2390,7 @@ RoutingTable::remove_lock( IPAddress ip, GUID id )
 vector<NodeInfo *> *
 RoutingTable::get_locks( GUID id )
 {
-  int match = _node->guid_compare( _node->id(), id );
+  int match = _node->guid_compare( id, _node->id_digits() );
   if( match == -1 ) {
     // can't lock yourself
     return NULL;

@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.27 2003/12/14 23:28:10 strib Exp $ */
+/* $Id: tapestry.h,v 1.28 2003/12/16 06:18:26 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -61,12 +61,14 @@ public:
   void print_guid( GUID id, ostream &s );
   uint get_digit( GUID id, uint digit );
   GUID id() { return _my_id; };
+  uint* id_digits() { return _my_id_digits; };
   IPAddress ip() { return P2Protocol::ip(); };
   void add_to_rt( IPAddress new_ip, GUID new_id );
   // how many digits do these keys share
   // returns -1 if they are the same
   int guid_compare( GUID key1, GUID key2 ); 
   int guid_compare( GUID key1, uint *key2_digits ); 
+  int guid_compare( uint *key1_digits, uint *key2_digits ); 
 
   bool stabilized(vector<GUID> lid);
 
@@ -213,6 +215,7 @@ private:
   uint _redundant_lookup_num;
 
   GUID _my_id;
+  uint *_my_id_digits;
 
   // threads waiting for join to finish
   ConditionVar *_waiting_for_join;
