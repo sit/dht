@@ -900,13 +900,19 @@ void
 dhashclient::insert (const char *buf, size_t buflen, 
 		     rabin_priv key, cbinsert_t cb)
 {
+  str msg (buf, buflen);
+  bigint sig = key.sign (msg);
+  insert(buf, buflen, sig, key, cb);
+}
+
+void
+dhashclient::insert (const char *buf, size_t buflen, 
+		     bigint sig, rabin_pub key, cbinsert_t cb)
+{
   long type = DHASH_KEYHASH;
   bigint pubkey = key.n;
   str pk_raw = pubkey.getraw ();
   chordID pkID = compute_hash (pk_raw.cstr (), pk_raw.len ());
-
-  str msg (buf, buflen);
-  bigint sig = key.sign (msg);
 
   xdrsuio x;
   int size = buflen + 3 & ~3;

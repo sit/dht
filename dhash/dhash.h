@@ -357,6 +357,8 @@ public:
 
   //inert under hash of public key
   void insert (const char *buf, size_t buflen, 
+		 bigint sig, rabin_pub key, cbinsert_t cb);
+  void insert (const char *buf, size_t buflen, 
 		 rabin_priv key, cbinsert_t cb);
 
 
