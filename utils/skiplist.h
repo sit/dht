@@ -32,6 +32,8 @@ class skiplist {
   T *head;
   T *tail;
 
+  // Number of distinct levels. Highest valid lvl in any of the forward
+  // pts is forward[lvl - 1].
   unsigned int lvl;
 
   /* No copying */
@@ -63,16 +65,18 @@ class skiplist {
     // be cut (or grown) to newlvl. new head will be at max (lvl, newlvl).
     (elm->*field).previous = NULL;
     if (newlvl < lvl) {
+      assert (head);
       // old head is now shorter
       for (i = 0; i < newlvl; i++)
 	(elm->*field).forward[i] = head;
-      for (i = newlvl; i < lvl; i++) 
-	(elm->*field).forward[i] = head ? (head->*field).forward[i] : NULL;
+      for (i = newlvl; i < lvl; i++) {
+	(elm->*field).forward[i] = (head->*field).forward[i];
+	(head->*field).forward[i] = NULL;
+      }
     } else {
       // old head is now taller.
-      for (i = 0; i < newlvl; i++) {
+      for (i = 0; i < newlvl; i++)
 	(elm->*field).forward[i] = head;
-      }
       if (head)
 	for (i = lvl; i < newlvl; i++)
 	  (head->*field).forward[i] = NULL;
@@ -222,6 +226,9 @@ class skiplist {
 	}
 	(next->*field).previous = NULL;
 	head = next;
+	while (lvl > 1 && (head->*field).forward[lvl - 1] == NULL)
+	  lvl--;
+
 	return oldhead;
       }
     }
@@ -245,8 +252,7 @@ class skiplist {
 	  break;
 	(update[i]->*field).forward[i] = (x->*field).forward[i];
       }
-      while (lvl > 0 &&
-	     (head->*field).forward[lvl - 1] == NULL)
+      while (lvl > 1 && (head->*field).forward[lvl - 1] == NULL)
 	lvl--;
       if (next)
 	(next->*field).previous = prev;
@@ -258,11 +264,11 @@ class skiplist {
     }
   }
 
-  T *first () {
+  T *first () const {
     return head;
   }
 
-  T *last () {
+  T *last () const {
     return tail;
   }
   
@@ -287,6 +293,44 @@ class skiplist {
       np = (p->*field).previous;
       (*cb) (p);
     }
+  }
+
+  bool repok () const {
+    if (head == NULL) {
+      assert (lvl == 1);
+      if (lvl != 1) return false;
+      assert (tail == NULL);
+      if (tail != NULL) return false;
+      return true;
+    }
+
+    T *p, *np, *cp;
+
+    p = head;
+    assert ((p->*field).previous == NULL);
+    
+    // All elements are unique and increasing.
+    for (int i = lvl - 1; i >= 0; i--) {
+      while (p != NULL) {
+	np = (p->*field).forward[i];
+	if (np && cmp (p->*key, np->*key) >= 0) {
+	  assert (false);
+	  return false;
+	}
+	if (i == 0 && np && (np->*field).previous != p) {
+	  assert (false);
+	  return false;
+	}
+	// The end is right.
+	if (i == 0 && !np) {
+	  assert (p == tail);
+	  if (p != tail) return false;
+	}
+	p = np;
+      }
+    }
+    
+    return true;
   }
 };
 

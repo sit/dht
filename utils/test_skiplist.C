@@ -21,7 +21,7 @@ int main (int argc, char *argv[])
   
   // single item case
   item *s = New item (1, "second");
-  test.insert (s);
+  test.insert (s); assert (test.repok ());
   item *t = test.search (1);
   assert (t == s);
   t = test.closestpred (2);
@@ -31,7 +31,7 @@ int main (int argc, char *argv[])
  
   // now there are two.
   t = New item (0, "first");
-  test.insert (t);
+  test.insert (t); assert (test.repok ());
   item *u = test.search (1);
   assert (u == s);
   u = test.search (0);
@@ -68,6 +68,7 @@ int main (int argc, char *argv[])
     item *z = New item (i, "no dupes!");
     bool b = test.insert (z);
     assert (!b);
+    assert (test.repok ());
   }
 
   // walking the list manually
@@ -113,6 +114,8 @@ int main (int argc, char *argv[])
   u = test.remove (1);
   assert (u == s);
   warnx << "'second' removed...\n";
+  delete u;
+  assert (test.repok ());
   test.traverse (wrap (print_item));
   u = test.first ();
   assert (u == w);
@@ -128,6 +131,8 @@ int main (int argc, char *argv[])
   // Remove from front
   u = test.remove (-1);
   warnx << "'zeroeth' removed...\n";
+  delete u;
+  assert (test.repok ());
   test.traverse (wrap (print_item));
   u = test.first ();
   assert (u == t);
@@ -142,23 +147,32 @@ int main (int argc, char *argv[])
   u = test.remove (2);
   assert (u == v);
   warnx << "'third' removed...\n";
+  delete u;
+  assert (test.repok ());
+  
   test.traverse (wrap (print_item));
   assert (test.last () == t);
 
   // Remove non-existent
   u = test.remove (5);
   assert (u == NULL);
+  assert (test.repok ());
 
   // Remove last.
   u = test.remove (0);
   assert (u == t);
   assert (test.first () == NULL);
   warnx << "'first' removed...\n";
+  delete u;
+  assert (test.repok ());
+
   test.traverse (wrap (print_item));
+  warnx << "Testing interlaced inserts with order checking (1).\n";
 
   for (int i = 0; i < 1031; i++) {
     unsigned int z = (i * 5) % 1031;
     test.insert (New item (z, "blah"));
+    assert (test.repok ());
   }
   
   for (int i = 0; i < 1031; i++) {
@@ -183,29 +197,57 @@ int main (int argc, char *argv[])
     item *c = test.remove (z);
     assert (c->key == (int) z);
     delete c;
+    assert (test.repok ());
   }
     
   assert (test.first () == NULL);
+  
+  warnx << "Testing interlaced inserts and removes (2).\n";
 
   for (int i = 0; i < 257; i++) {
     unsigned int z = (i * 13) % 513;
     test.insert (New item (z, "foo"));
+    assert (test.repok ());
   }
   for (int i = 0; i < 257; i++) {
     unsigned int z = (i * 13) % 513;
     unsigned int y = (i * 3) % 513;
-    warnx << "removing " << z  << " adding " << y << "\n";
     item *c = test.remove (z);
     assert (c->key == (int) z);
     delete c; c = NULL;
-    
+    assert (test.repok ());
     test.insert (New item (y, "baz"));
+    assert (test.repok ());
   }
 
   for (int i = 0; i < 257; i++) {
     unsigned int y = (i * 3) % 513;
     item *c = test.remove (y);
+    delete c;
+    assert (test.repok ());
   }
+
+  assert (test.first () == NULL);
+  warnx << "Testing random inserts and removes.\n";
+  // Some random stuff
+  for (int i = 200; i < 305; i += random() % 13) {
+    test.insert (New item (i, "qux"));
+    assert (test.repok ());
+  }
+  for (int i = 0; i < 230; i += random () % 11) {
+    test.insert (New item (i, "quz"));
+    assert (test.repok ());
+  }
+  while (test.first () != NULL) {
+    int i = random () % 305;
+    item *c = test.closestsucc (i);
+    item *d = test.remove (c->key);
+    assert (c == d);
+    assert (test.repok ());
+  }
+
+
+  assert (test.repok ());
 
   return 0;
 }
