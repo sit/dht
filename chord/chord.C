@@ -456,7 +456,7 @@ vnode_impl::doalert (svccb *sbp, chord_nodearg *na)
     chord_noderes *res = New chord_noderes (CHORD_OK);
     ptr<chordID> v = New refcounted<chordID> (na->n.x);
     doRPC (na->n.x, chord_program_1, CHORDPROC_GETSUCCESSOR, v, res,
-	   wrap (mkref (this), &vnode_impl::doalert_cb, res, na->n.x), true);
+	   wrap (mkref (this), &vnode_impl::doalert_cb, res, na->n.x));
   }
   sbp->replyref (chordstat (CHORD_OK));
 }

@@ -179,7 +179,7 @@ class vnode_impl : public vnode {
 
   // For other modules
   long doRPC (const chordID &ID, rpc_program prog, int procno, 
-	      ptr<void> in, void *out, aclnt_cb cb, bool dead = false);
+	      ptr<void> in, void *out, aclnt_cb cb);
   void resendRPC (long seqno);
   void stats (void) const;
   void print (void) const;

@@ -95,7 +95,7 @@ class vnode : public virtual refcount {
 
   // For other modules
   virtual long doRPC (const chordID &ID, rpc_program prog, int procno, 
-		      ptr<void> in, void *out, aclnt_cb cb, bool dead = false) = 0;
+		      ptr<void> in, void *out, aclnt_cb cb) = 0;
   virtual void resendRPC (long seqno) = 0;
   virtual void stats (void) const = 0;
   virtual void print (void) const = 0;
@@ -208,8 +208,8 @@ class chord : public virtual refcount {
     active->get_predecessor (n, cb);
   };
   long doRPC (chordID &n, rpc_program progno, int procno, ptr<void> in, 
-	      void *out, aclnt_cb cb, bool dead = false) {
-    return active->doRPC (n, progno, procno, in, out, cb, dead);
+	      void *out, aclnt_cb cb) {
+    return active->doRPC (n, progno, procno, in, out, cb);
   };
   void alert (chordID &n, chordID &x) {
     active->alert (n, x);

@@ -150,7 +150,7 @@ class locationtable : public virtual refcount {
 
   long doRPC (const chordID &n, rpc_program progno, 
 	      int procno, ptr<void> in, 
-	      void *out, aclnt_cb cb, bool dead = false);
+	      void *out, aclnt_cb cb);
   void resendRPC (long seqno);
 
   void ping (const chordID &x, cbping_t cb);
