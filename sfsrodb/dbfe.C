@@ -155,12 +155,27 @@ ptr<dbPair> dbEnumeration::nextElement() {
   DBT key, data;
   bzero(&key, sizeof(key));
   bzero(&data, sizeof(data));
+
+  // XXX hack
+  // nextElement doesn't return any data, just keys.
+  // use the lookup routine if you want the data. 
+  // Perhaps, change nextElement to only return a ptr<dbrec>!
+
+#if 1
+  data.flags = DB_DBT_PARTIAL;
+#endif
   int err = cursor->c_get(cursor, &key, &data, DB_NEXT);
   cursor_init = 1;
   if (err) return NULL;
-  
+
   ref<dbrec> keyrec = New refcounted<dbrec>(key.data, key.size);
+
+  // see above.
+#if 1
+  ptr<dbrec> valrec = NULL;
+#else
   ref<dbrec> valrec = New refcounted<dbrec>(data.data, data.size);
+#endif
   
   return New refcounted<dbPair>(keyrec, valrec);
 }

@@ -115,31 +115,20 @@ struct dbrec {
   char *value;
   long len;
   
-  dbrec(const void *v, long l) {
+  dbrec(const void *v, long l)
+  {
+    len = l;
     value = New char[l];
     memcpy(value, v, l);
-    len = l;
-  };
+  }
 
-  ~dbrec() {
-    delete [] value;
-  };
-
+  ~dbrec() {  delete [] value; }
 };
 
 struct dbPair {
-  ptr<dbrec> data;
   ptr<dbrec> key;
-  
-  dbPair(ref<dbrec> Key, ref<dbrec> Data) {
-    data = Data;
-    key = Key;
-  };
-
-  ~dbPair() {
-
-  };
-
+  ptr<dbrec> data;
+  dbPair(ref<dbrec> key, ptr<dbrec> data) : key (key), data (data) {}
 };
 
 struct optionRec {
