@@ -304,7 +304,6 @@ class dhash {
   void block_cached_loc (ptr<s_dhash_block_arg> arg, 
 			 chordID ID, bool ok, chordstat stat);
 
-  int dbcompare (ref<dbrec> a, ref<dbrec> b);
   void dbwrite (ref<dbrec> key, ref<dbrec> data);
 
 

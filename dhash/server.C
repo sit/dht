@@ -45,37 +45,6 @@ static int DONT_REPLICATE  = getenv("DONT_REPLICATE") ? atoi(getenv("DONT_REPLIC
 #define LEASE_TIME 2
 #define LEASE_INACTIVE 60
 
-// XXX: PUT THIS FUNCTION IN THE MERKLE DIRECTORY
-static int
-dbcompare (ref<dbrec> a, ref<dbrec> b)
-{
-  merkle_hash ax = to_merkle_hash (a);
-  merkle_hash bx = to_merkle_hash (b);
-  if (ax < bx) {
-    //warn << "dbcompare " << ax << " < " << bx << "\n";
-    return -1;
-  } else if (ax == bx) {
-    //warn << "dbcompare " << ax << " == " << bx << "\n";
-    return 0;
-  } else {
-    //warn << "dbcompare " << ax << " > " << bx << "\n";
-    return 1;
-  }
-}
-
-int
-dhash::dbcompare (ref<dbrec> a, ref<dbrec> b)
-{
-  chordID ax = dbrec2id (a);
-  chordID bx = dbrec2id (b);
-  if (ax < bx)
-    return -1;
-  else if (ax == bx)
-    return 0;
-  else
-    return 1;
-}
- 
 dhash::dhash(str dbname, ptr<vnode> node, 
 	     ptr<route_factory> _r_factory,
 	     u_int k, int _ss_mode) 
@@ -99,8 +68,6 @@ dhash::dhash(str dbname, ptr<vnode> node,
   pk_partial_cookie = 1;
 
   db = New dbfe();
-
-  db->set_compare_fcn (wrap (&::dbcompare));
 
   //set up the options we want
   dbOptions opts;
@@ -1148,54 +1115,16 @@ dhash::store_repl_cb (cbstore cb, dhash_stat err)
 ref<dbrec>
 dhash::id2dbrec(chordID id) 
 {
-#if 0
-  mstr whipme(sha1::hashsize+1);
-  whipme[0] = 0;
-  mpz_get_raw (whipme.cstr()+1, sha1::hashsize, &id);
-  void *key = (void *)whipme.cstr ();
-  int len = whipme.len ();
-
-
-  warn << "id2dbrec id: " << id << "\n";
-  warn << "id2dbrec hex: ";
-  for (int i = 0; i < len; i++)
-    warnx.fmt ("%02x", ((unsigned char *)key)[i]);
-  warnx << "\n";
-
-  ptr<dbrec> q = New refcounted<dbrec> (key, len);
-  return q;
-#else
   char buf[sha1::hashsize];
+  bzero (buf, sha1::hashsize);
   mpz_get_raw (buf, sha1::hashsize, &id);
-
-  // reverse the string...  
-  for (u_int i = 0; i < (sha1::hashsize / 2); i++) {
-    char tmp = buf[i];
-    buf[i] = buf[sha1::hashsize - 1 - i];
-    buf[sha1::hashsize - 1 - i] = tmp;
-  }
-
   return New refcounted<dbrec> (buf, sha1::hashsize);
-#if 0
-  mstr whipme(sha1::hashsize);
-  mpz_get_raw (whipme.cstr(), sha1::hashsize, &id);
-  return New refcounted<dbrec> (whipme.cstr(), whipme.len());
-#endif
-#endif
-
 }
 
 chordID
 dhash::dbrec2id (ptr<dbrec> r)
 {
-#if 0
-  str raw = str ( (char *)r->value, r->len);
-  chordID ret;
-  ret.setraw (raw);
-  return ret;
-#else
   return tobigint (to_merkle_hash (r));
-#endif
 }
 
 

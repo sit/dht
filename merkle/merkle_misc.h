@@ -26,6 +26,18 @@ struct block {
 };
 
 
+static inline void
+reverse (u_char *buf, u_int size)
+{
+  assert (size == 20);
+
+  for (u_int i = 0; i < (size / 2); i++) {
+    char tmp = buf[i];
+    buf[i] = buf[size - 1 - i];
+    buf[size - 1 - i] = tmp;
+  }
+}
+
 
 static inline merkle_hash
 to_merkle_hash (ptr<dbrec> a)
@@ -33,13 +45,16 @@ to_merkle_hash (ptr<dbrec> a)
   merkle_hash h;
   assert (a->len == h.size);
   bcopy (a->value, h.bytes, h.size);
+  reverse (h.bytes, h.size);
   return h;
 }
 
 static inline ref<dbrec>
 todbrec (const merkle_hash &h)
 {
-  return New refcounted<dbrec> (h.bytes, h.size);
+  ref<dbrec> ret = New refcounted<dbrec> (h.bytes, h.size);
+  reverse ((u_char *)ret->value, ret->len);
+  return ret;
 }
 
 

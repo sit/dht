@@ -127,25 +127,6 @@ test_rand (int upto)
   mtree.dump ();
 }
 
-#ifdef NEWDB
-static int
-dbcompare (ref<dbrec> a, ref<dbrec> b)
-{
-  merkle_hash ax = to_merkle_hash (a);
-  merkle_hash bx = to_merkle_hash (b);
-  if (ax < bx) {
-    //warn << "dbcompare " << ax << " < " << bx << "\n";
-    return -1;
-  } else if (ax == bx) {
-    //warn << "dbcompare " << ax << " == " << bx << "\n";
-    return 0;
-  } else {
-    //warn << "dbcompare " << ax << " > " << bx << "\n";
-    return 1;
-  }
-}
-#endif
- 
 static void
 create_database ()
 {
@@ -153,8 +134,6 @@ create_database ()
   unlink (DBNAME);
 
   db = New dbfe ();
-
-  db->set_compare_fcn (wrap (&dbcompare));
 
   //set up the options we want
   dbOptions opts;

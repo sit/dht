@@ -21,29 +21,10 @@ ptr<dbrec> FAKE_DATA = New refcounted<dbrec> ("FAKE", strlen ("FAKE"));
 
 
 // XXX: PUT THIS FUNCTION IN THE MERKLE DIRECTORY
-static int
-dbcompare (ref<dbrec> a, ref<dbrec> b)
-{
-  merkle_hash ax = to_merkle_hash (a);
-  merkle_hash bx = to_merkle_hash (b);
-  if (ax < bx) {
-    //warn << "dbcompare " << ax << " < " << bx << "\n";
-    return -1;
-  } else if (ax == bx) {
-    //warn << "dbcompare " << ax << " == " << bx << "\n";
-    return 0;
-  } else {
-    //warn << "dbcompare " << ax << " > " << bx << "\n";
-    return 1;
-  }
-}
-
-// XXX: PUT THIS FUNCTION IN THE MERKLE DIRECTORY
 static ptr<dbfe>
 create_database (char *dbname)
 {
   ptr<dbfe> db = New refcounted<dbfe> ();
-  db->set_compare_fcn (wrap (dbcompare));
 
   //set up the options we want
   dbOptions opts;
@@ -51,7 +32,7 @@ create_database (char *dbname)
   opts.addOption("opt_cachesize", 1000);
   opts.addOption("opt_nodesize", 4096);
 
-  // XXX: DONT UNLINK READ THE DB AND POPULATE THE MERKLE TREE 
+  // XXX: DONT UNLINK: READ THE DB AND POPULATE THE MERKLE TREE 
   unlink (dbname);
   if (int err = db->opendb(dbname, opts)) {
     warn << "open returned: " << strerror(err) << err << "\n";
@@ -70,13 +51,6 @@ sendblock (bigint blockID, bool last, callback<void>::ref cb)
 {
   XXX_SENDBLOCK_ARGS args (0, blockID, last, cb);
   keys_for_server.push_back (args);
-
-#if 0
-  merkle_hash key = to_merkle_hash(dhash::id2dbrec(blockID));
-  block b (key, FAKE_DATA);
-  SERVER.tree->insert (&b);
-  (*cb) ();
-#endif
 }
 
 // called by server to send block to syncer
@@ -84,12 +58,7 @@ static void
 sendblock2 (XXX_SENDBLOCK_ARGS *a)
 {
   keys_for_syncer.push_back (*a);
-#if 0
-  SYNCER.syncer->recvblk (a->blockID, a->last);
-  (*a->cb) ();
-#endif
 }
-
 
 // called by syncer to perform merkle RPC to server
 static void
