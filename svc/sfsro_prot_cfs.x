@@ -22,17 +22,11 @@ enum ftypero {
 };
 
 
-struct cfs_signed_fsinfo {
+struct cfs_fsinfo {
   unsigned start;       /* In seconds since UNIX epoch */
   unsigned duration;	/* seconds */
   chordID rootfh;
   unsigned blocksize;
-};
-
-struct cfs_fsinfo {
-  cfs_signed_fsinfo info;
-  sfs_pubkey pubkey;
-  sfs_sig sig;
 };
 
 /* XXX shouldn't all fields common to sfsro_inode_lnk and sfs_inode_reg

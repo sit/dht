@@ -848,31 +848,30 @@ dhashclient::insert (const char *buf, size_t buflen,
 {
   bigint pubkey = key.n;
   str pk_raw = pubkey.getraw ();
-  char hashbytes[sha1::hashsize];
-  sha1_hash (hashbytes, pk_raw.cstr (), pk_raw.len ());
-  chordID ID;
-  mpz_set_rawmag_be (&ID, hashbytes, sizeof (hashbytes));  // For big endian
+  chordID pkID = compute_hash (pk_raw.cstr (), pk_raw.len ());
 
   str msg (buf, buflen);
   bigint sig = key.sign (msg);
 
   xdrsuio x;
-  char *m_buf;
   int size = buflen + 3 & ~3;
-  if (!xdr_putbigint (&x, pubkey) ||
-      !xdr_putbigint (&x, sig) ||
-      !XDR_PUTLONG (&x, (long int *)&buflen) ||
-      !(m_buf = (char *)XDR_INLINE (&x, size))) {
-    cb (true, ID);
-    return;
-  }
-  memcpy (m_buf, buf, buflen);
-  
-  int m_len = x.uio ()->resid ();
-  const char *m_dat = suio_flatten (x.uio ());
-  insert (ID, m_dat, m_len, cb, DHASH_KEYHASH);
-  delete m_dat;
+  char *m_buf;
+  if (xdr_putbigint (&x, pubkey) &&
+      xdr_putbigint (&x, sig) &&
+      XDR_PUTLONG (&x, (long int *)&buflen) &&
+      (m_buf = (char *)XDR_INLINE (&x, size)))
+    {
+      memcpy (m_buf, buf, buflen);
+      
+      int m_len = x.uio ()->resid ();
+      char *m_dat = suio_flatten (x.uio ());
+      insert (pkID, m_dat, m_len, cb, DHASH_KEYHASH);
+      xfree (m_dat);
+    } else {
+      cb (true, pkID); // marshalling failed.
+    }
 }
+
 
 void
 dhashclient::insert (bigint key, const char *buf, 

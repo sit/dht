@@ -1,4 +1,4 @@
-/* $Id: sfsrodb_core.h,v 1.7 2002/01/07 22:30:25 cates Exp $ */
+/* $Id: sfsrodb_core.h,v 1.8 2002/02/04 19:47:34 cates Exp $ */
 
 /*
  *
@@ -39,19 +39,8 @@
 #define CONCUR_OPS 8
 
 bigint fh2mpz(const void *keydata, size_t keylen);
-
-/*
-  Requires: You have at some point called random_init();
-  Given: A filled buffer and allocated fh
-  Return: A file handle in fh.  Generate random bytes for the first
-  SFSRO_IVSIZE bytes in the opaque fh.  Add fh to fh_list
-*/
-void create_sfsrofh (sfs_hash *fh, 
-		     char *buf, size_t buflen);
-
-void sfsrodb_put (void *data, size_t len);
-void sfsrodb_put (const void *keydata, size_t keylen, void *data, size_t len);
-void sfsrodb_put (bigint key, void *data, size_t len);
+sfs_hash sfsrodb_put (void *data, size_t len);
+void sfsrodb_put (ptr <rabin_priv> sk, void *data, size_t len);
 
 
 #endif /* _SFSRODB_CORE_H_ */

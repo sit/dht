@@ -1,4 +1,4 @@
-/* $Id: sfsrodb_core.C,v 1.18 2002/01/10 17:11:32 fdabek Exp $ */
+/* $Id: sfsrodb_core.C,v 1.19 2002/02/04 19:47:34 cates Exp $ */
 
 /*
  *
@@ -47,12 +47,20 @@ fh2mpz(const void *keydata, size_t keylen)
   return n;
 }
 
+/*
+  Requires: You have at some point called random_init();
+  Given: A filled buffer and allocated fh
+  Return: A file handle in fh.  Generate random bytes for the first
+  SFSRO_IVSIZE bytes in the opaque fh.  Add fh to fh_list
+*/
+
 void
 create_sfsrofh (sfs_hash *fh, char *buf, size_t buflen)
 {
   bzero(fh->base (), fh->size ());
   sha1_hash (fh->base (), buf, buflen);
 }
+
 
 
 static void
@@ -63,28 +71,37 @@ sfsrodb_put_cb (bool failed, chordID key)
     fatal << "Could not store block " << key << "\n";
 }
 
-void
+sfs_hash
 sfsrodb_put (void *data, size_t len)
 {
+  sfs_hash h;
+  create_sfsrofh (&h, (char *)data, len);
+
   bigint key = compute_hash (data, len);
-  sfsrodb_put (key, data, len);
+  check_cbs ();
+  out++;
+  dhash->insert (key, (char *)data, len, wrap (sfsrodb_put_cb));
+
+  return h;
 }
 
-void
-sfsrodb_put (const void *keydata, size_t keylen, 
-	     void *data, size_t len)
-{
-  assert (keylen == 20);
-  bigint key = fh2mpz(keydata, keylen);
-  sfsrodb_put (key, data, len);
-}
+//  void
+//  sfsrodb_put (const void *keydata, size_t keylen,
+//  	     void *data, size_t len)
+//  {
+//    assert (keylen == sha1::hashsize);
+//    bigint key = fh2mpz(keydata, keylen);
+//    insert (key, data, len, DHASH_KEYHASH);
+//  }
+
 
 void
-sfsrodb_put (bigint key, void *data, size_t len)
+sfsrodb_put (ptr <rabin_priv> sk, void *data, size_t len)
 {
   check_cbs ();
   out++;
-  // XXX get rid of cast.
-  dhash->insert (key, (char *)data, len, wrap (sfsrodb_put_cb));
+  dhash->insert ((char *)data, len, *sk, wrap (sfsrodb_put_cb));
 }
+
+
 

@@ -1,4 +1,4 @@
-/* $Id: sfsrodb.C,v 1.18 2002/01/10 17:11:32 fdabek Exp $ */
+/* $Id: sfsrodb.C,v 1.19 2002/02/04 19:47:34 cates Exp $ */
 
 /*
  * Copyright (C) 1999 Kevin Fu (fubob@mit.edu)
@@ -196,10 +196,9 @@ store_inode (sfsro_inode *inode, sfs_hash *fh)
     callbuf = suio_flatten (x.uio ());
   }
 
-  create_sfsrofh (fh, callbuf, calllen);
-
   // Store the inode of this path in the database
-  sfsrodb_put (fh->base (), fh->size (), callbuf, calllen);
+  *fh = sfsrodb_put (callbuf, calllen);
+  
   fh_cnt++;
   if (inode->type == SFSROLNK)
     lnkinode_cnt++;
@@ -229,9 +228,7 @@ store_file_block (sfs_hash *fh, const char *block, size_t size)
     callbuf = suio_flatten (x.uio ());
   }
 
-  create_sfsrofh (fh, callbuf, calllen);
-
-  sfsrodb_put (fh->base (), fh->size (), callbuf, calllen);
+  *fh = sfsrodb_put (callbuf, calllen);
 
   filedatablk_cnt++;
   fh_cnt++;
@@ -285,10 +282,7 @@ process_sindirect (int &fd, bool &wrote_stuff, sfsro_inode *inode,
       callbuf = suio_flatten (x.uio ());
     }
     
-    create_sfsrofh (fh, callbuf, calllen);
-
-    sfsrodb_put (fh->base(), fh->size(),
-		 callbuf, calllen);
+    *fh = sfsrodb_put (callbuf, calllen);
     
     sindir_cnt++;
     fh_cnt++;
@@ -339,10 +333,7 @@ process_dindirect (int &fd, bool &wrote_stuff, sfsro_inode *inode,
       callbuf = suio_flatten (x.uio ());
     }
     
-    create_sfsrofh (fh, callbuf, calllen);
-
-    sfsrodb_put (fh->base(), fh->size(),
-		 callbuf, calllen);
+    *fh = sfsrodb_put (callbuf, calllen);
   
     dindir_cnt++;
     fh_cnt++;
@@ -391,11 +382,8 @@ process_tindirect (int &fd, bool &wrote_stuff, sfsro_inode *inode,
       callbuf = suio_flatten (x.uio ());
     }
     
-    create_sfsrofh (fh, callbuf, calllen);
+    *fh = sfsrodb_put (callbuf, calllen);
 
-    sfsrodb_put (fh->base(),
-		 fh->size(),
-		 callbuf, calllen);
     tindir_cnt++;
     fh_cnt++;
     xfree (callbuf);
@@ -508,9 +496,7 @@ store_directory (sfsro_inode *inode, sfs_hash *fh,
     callbuf = suio_flatten (x.uio ());
   }
 
-  create_sfsrofh (fh, callbuf, calllen);
-
-  sfsrodb_put (fh->base (), fh->size (), callbuf, calllen);
+  *fh = sfsrodb_put (callbuf, calllen);
 
   directory_cnt++;
   fh_cnt++;
@@ -553,6 +539,7 @@ sort_dir (const str path, vec < char *>&file_list)
   }
 
   while ((de = readdir (dirp))) {
+    // XXX memory leak!!!!
     filename = New char[strlen (de->d_name) + 1];
     memcpy (filename, de->d_name, strlen (de->d_name) + 1);
     file_list.push_back (filename);
@@ -757,7 +744,7 @@ sfsrodb_main (const str root, const str keyfile)
     }
     else if (!(sk = import_rabin_priv (key, NULL))) {
       warn << "could not decode " << keyfile << "\n";
-      warn << key << "\n";
+      //warn << key << "\n";
       fatal ("errors!\n");
     }
   }
@@ -769,35 +756,30 @@ sfsrodb_main (const str root, const str keyfile)
   recurse_path (root, &root_fh);
 
   sfsro_data dat (CFS_FSINFO);
-
-  dat.fsinfo->pubkey = sk->n;
-  dat.fsinfo->info.rootfh = fh2mpz(root_fh.base (), root_fh.size ());
-  time_t start, end;
-  dat.fsinfo->info.start = start = time (NULL);
-  dat.fsinfo->info.duration = sfsro_duration;
-  dat.fsinfo->info.blocksize = blocksize;
-  end = start + sfsro_duration;
+  time_t start = time (NULL);
+  dat.fsinfo->start = start;
+  dat.fsinfo->duration = sfsro_duration;
+  dat.fsinfo->rootfh = fh2mpz (root_fh.base (), root_fh.size ());
+  dat.fsinfo->blocksize = blocksize;
+  time_t end = dat.fsinfo->start + dat.fsinfo->duration;
 
   // XX Should make sure timezone is correct
   str stime (ctime (&start));
   str etime (ctime (&end));
-  warn << "Database good from: \n " << stime
-       << "until:\n " << etime;
+  warn << "Database good from: \n " << stime << "until:\n " << etime;
 
-  dat.fsinfo->sig = sk->sign (xdr2str (dat));
-  dat.fsinfo->pubkey = sk->n;
-  
-  char rootfh_hash[20];
-  str raw = sk->n.getraw ();
-  sha1_hash (rootfh_hash, raw.cstr (), raw.len ());
-  str rootfh_name = armor64A(rootfh_hash, 20);
-  warn << "exporting file system under " << rootfh_name << "\n";
+  str pk_raw = sk->n.getraw ();
+  char pk_hash[sha1::hashsize];
+  sha1_hash (pk_hash, pk_raw.cstr (), pk_raw.len ());
+  str pk_name = armor64A(pk_hash, sha1::hashsize);
+  warn << "exporting file system under " << pk_name << "\n";
 
   xdrsuio x (XDR_ENCODE);
   if (xdr_sfsro_data (x.xdrp (), &dat)) {
     void *v = suio_flatten (x.uio ());
     int l =  x.uio ()->resid ();
-    sfsrodb_put (rootfh_hash, 20, v, l);
+    sfsrodb_put (sk, v, l);
+    xfree (v);
   }
 
   if (verbose_mode) {
@@ -878,7 +860,7 @@ main (int argc, char **argv)
     }
   argc -= optind;
   argv += optind;
-  nfh = (blocksize - 100) / (20*2);
+  nfh = (blocksize - 100) / (sha1::hashsize*2);
 
   if ( (argc > 0) || !exp_dir || !sk_file )
     usage ();

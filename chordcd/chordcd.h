@@ -91,7 +91,8 @@ class chord_server {
   void read_file_data (bool pfonly, size_t block, sfsro_inode_reg *inode, cbdata_t cb);
   void read_file_data_bmap_cb (bool pfonly, cbdata_t cb, chordID ID, bool success);
 
-  void fetch_data (bool pfonly, chordID ID, cbdata_t cb, bool verify = true);
+  void fetch_data (bool pfonly, chordID ID, cbdata_t cb, 
+		   dhash_ctype t = DHASH_CONTENTHASH);
   void fetch_data_cb (chordID ID, cbdata_t cb, ptr<dhash_block> blk);
 
  public:

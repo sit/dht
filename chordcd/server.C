@@ -42,7 +42,6 @@
 //     - possibly, embedded inodes to improve LOOKUP performance
 //     - can make lots of optimizations to filesystem structure which are easy when
 //       the FS is read-only, but hard in a read-write filesystem, namely embedded inodes
-//     - Need to verify block hashes. 
 //     - copy the dispatch routine from sfsrocd
 //   * XXX
 //     - search for this and find more things to fix
@@ -101,7 +100,8 @@ chord_server::setrootfh (str root, cbfh_t rfh_cb)
     chordID ID;
     mpz_set_rawmag_be (&ID, dearm.cstr (), dearm.len ());
     //fetch the root file handle too..
-    fetch_data (false, ID, wrap (this, &chord_server::getroot_fh, rfh_cb), false);
+    fetch_data (false, ID, wrap (this, &chord_server::getroot_fh, rfh_cb), 
+		DHASH_KEYHASH);
   }
 }
 
@@ -116,12 +116,11 @@ chord_server::getroot_fh (cbfh_t rfh_cb, ptr<sfsro_data> d)
     warn << "root block had wrong type\n";
     (*rfh_cb) (NULL);
   } else {
-    // XXX verify the signature
     warn << "Mounted filesystem.\n";
-    warn << "  start     : " << ctime(&(time_t)d->fsinfo->info.start);
-    warn << "  duration  : " << d->fsinfo->info.duration  << " seconds \n";
-    warn << "  blocksize : " << d->fsinfo->info.blocksize << "\n";
-    this->rootdirID = d->fsinfo->info.rootfh;
+    warn << "  start     : " << ctime(&(time_t)d->fsinfo->start);
+    warn << "  duration  : " << d->fsinfo->duration  << " seconds \n";
+    warn << "  blocksize : " << d->fsinfo->blocksize << "\n";
+    this->rootdirID = d->fsinfo->rootfh;
     this->fsinfo = *d->fsinfo;
     fetch_data (false, rootdirID, wrap (this, &chord_server::getrootdir_cb, rfh_cb));
   }
@@ -173,7 +172,7 @@ chord_server::dispatch (ref<nfsserv> ns, nfscall *sbp)
     break;
   case NFSPROC3_FSINFO:
     {
-      int blocksize = fsinfo.info.blocksize;
+      int blocksize = fsinfo.blocksize;
       fsinfo3res res (NFS3_OK);
       res.resok->rtmax = blocksize;
       res.resok->rtpref = blocksize;
@@ -530,14 +529,14 @@ chord_server::read_inode_cb (nfscall *sbp, chordID ID, ptr<sfsro_data> data)
   else {
     //XXX if a read straddles two blocks we will do a short read 
     ///   i.e. only read the first block
-    size_t block = ra->offset / fsinfo.info.blocksize;
+    size_t block = ra->offset / fsinfo.blocksize;
     read_file_data (false, block, data->inode->reg, 
 		    wrap (this, &chord_server::read_data_cb,
 			  sbp, data, ID));
 
     size_t ftch_lim = block + PREFETCH_BLOCKS;
-    size_t file_bytes = roundup (data->inode->reg->size, fsinfo.info.blocksize);
-    size_t file_blks = file_bytes / fsinfo.info.blocksize;
+    size_t file_bytes = roundup (data->inode->reg->size, fsinfo.blocksize);
+    size_t file_blks = file_bytes / fsinfo.blocksize;
 
     for (size_t b = block + 1; b <= ftch_lim && b < file_blks; b++)
       read_file_data (true, b, data->inode->reg, wrap (this, &chord_server::ignore_data_cb));
@@ -565,7 +564,7 @@ chord_server::read_data_cb (nfscall *sbp, ptr<sfsro_data> inode, chordID inodeID
     read3res nfsres (NFS3_OK);
     
     fattr3 fa = ro2nfsattr(inode->inode);
-    unsigned int blocksize = (unsigned int)fsinfo.info.blocksize;
+    unsigned int blocksize = (unsigned int)fsinfo.blocksize;
     
     size_t start = ra->offset % blocksize;
     size_t n = MIN (MIN (ra->count, size), size - start);
@@ -720,7 +719,7 @@ chord_server::lookup(ptr<sfsro_data> dirdata, chordID dirID, str component, cblo
     namei (dirdata->inode->reg->path, cb);
   } else {
     ref<lookup_state> st =
-      New refcounted<lookup_state> (dirdata, component, cb, fsinfo.info.blocksize);
+      New refcounted<lookup_state> (dirdata, component, cb, fsinfo.blocksize);
     lookup_scandir_nextblock(st);
   }
 }
@@ -872,7 +871,7 @@ chord_server::bmap (bool pfonly, size_t block, sfsro_inode_reg *inode, cbbmap_t 
   chordID ID;
 
   // XXX this is the same calculation that is at the end of sfsrodb/sfsrodb.C
-  u_int32_t nfh = (fsinfo.info.blocksize - 100) / (20*2);
+  u_int32_t nfh = (fsinfo.blocksize - 100) / (20*2);
 
   if (block < SFSRO_NDIR) {
     ID = sfshash_to_chordid (&(inode->direct[block]));
@@ -971,7 +970,7 @@ chord_server::read_file_data_bmap_cb (bool pfonly, cbdata_t cb, chordID ID, bool
 //      but don't call it back.
 //
 void
-chord_server::fetch_data (bool pfonly, chordID ID, cbdata_t cb, bool verify)
+chord_server::fetch_data (bool pfonly, chordID ID, cbdata_t cb, dhash_ctype t)
 {
   if (ptr<sfsro_data> dat = data_cache [ID]) {
     (*cb) (dat);
@@ -987,11 +986,7 @@ chord_server::fetch_data (bool pfonly, chordID ID, cbdata_t cb, bool verify)
     wait_list *l = pf_waiters[ID];
     fetch_wait_state *w = New fetch_wait_state (cb);
     l->insert_head (w);
-
-    if (verify)
-      dhash.retrieve (ID, DHASH_CONTENTHASH,
-		      wrap (this, &chord_server::fetch_data_cb, ID, cb));
-
+    dhash.retrieve (ID, t, wrap (this, &chord_server::fetch_data_cb, ID, cb));
   }
 }
 
