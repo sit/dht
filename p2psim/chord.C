@@ -222,7 +222,7 @@ Chord::stabilized(vector<CHID> lid)
     iter++;
     if (iter == lid.end()) iter = lid.begin();
     if (succs[i-1].id != *iter) {
-      printf("%s not stablized, %d succ should be %16qx instead of (%u, %16qx)\n", ts(), i-1, *iter, succs[i-1].ip,  succs[i-1].id);
+      printf("%s not stablized, %5d succ should be %16qx instead of (%u, %16qx)\n", ts(), i-1, *iter, succs[i-1].ip,  succs[i-1].id);
       return false;
     }
   }
@@ -233,18 +233,11 @@ Chord::stabilized(vector<CHID> lid)
 void
 Chord::init_state(vector<IDMap> ids)
 {
-  vector<IDMap>::iterator iter;
-  iter = find(ids.begin(), ids.end(), me);
-  assert(iter != ids.end());
-  assert(ids.size() > nsucc);
-
-  for (unsigned int i = 0; i < nsucc; i++) {
-    iter++;
-    if (iter == ids.end()) iter = ids.begin();
+  printf("%s inited %d\n", ts(), ids.size());
+  for (vector<IDMap>::iterator iter = ids.begin (); iter < ids.end (); 
+       ++iter) {
     loctable->add_node(*iter);
   }
-
-  printf("%s inited %d\n", ts(), ids.size());
 }
 
 void

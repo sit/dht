@@ -87,27 +87,6 @@ ChordFinger::stabilized(vector<CHID> lid)
 }
 
 void
-ChordFinger::init_state(vector<IDMap> ids)
-{
-  Chord::init_state(ids);
-  IDMap succ = loctable->succ(me.id + 1);
-  unsigned int i0 = log_2(succ.id - me.id);
-
-  vector<IDMap>::iterator it;
-  IDMap finger;
-  unsigned int pos;
-  for (unsigned int i = i0; i < NBCHID; i++) {
-    finger.id = ConsistentHash::successorID(me.id,i);
-    it = upper_bound(ids.begin(), ids.end(), finger, IDMap::cmp);
-    pos = it - ids.begin();
-    if (pos >= ids.size()) {
-      pos = 0;
-    }
-    loctable->add_node(ids[pos]);
-  }
-}
-
-void
 ChordFinger::dump()
 {
   Chord::dump();

@@ -96,6 +96,7 @@ struct f_node {
   vector<ConsistentHash::CHID> succlist;
   vector<ConsistentHash::CHID> dfingers;
   vector<ConsistentHash::CHID> search;
+  vector<ConsistentHash::CHID> isearch;
   unsigned int draw;
   bool selected;
   bool highlight;
@@ -320,31 +321,6 @@ draw_node (f_node *iter)
   }
 
   draw_fingers (iter, false);
-
-  if (iter->search.size () > 0) {
-    int k, l;
-    ID_to_xy (iter->key, &k, &l);
-
-    gdk_gc_set_foreground (draw_gc, &red);
-
-    gdk_draw_arc (pixmap, draw_gc, FALSE, k - radius, l - radius,
-		  2*radius, 2*radius, (gint16)0, (gint16)64*360);
-
-    gdk_gc_set_foreground (draw_gc, &search_color);
-
-    for (uint j = 0; j < iter->search.size (); j++) {
-      int a, b;
-      ID_to_xy (iter->search[j], &a, &b);
-      draw_arrow (x, y, a, b, draw_gc);
-      x = a;
-      y = b;
-    }
-
-    gdk_gc_set_foreground (draw_gc, &GCValues.foreground);
-
-    uint i = find(iter->search.back ());
-    draw_fingers (&(nodes[i]), true);
-  }
 }
 
 
@@ -369,6 +345,40 @@ draw_ring ()
     if (iter->selected) {
       draw_node (iter);
     }
+
+    if (iter->search.size () > 0) {
+      int k, l;
+      ID_to_xy (iter->key, &k, &l);
+      int rad = radius + 2;
+
+      gdk_gc_set_foreground (draw_gc, &red);
+
+      gdk_draw_arc (pixmap, draw_gc, FALSE, k - rad, l - rad,
+		    2*rad, 2*rad, (gint16)0, (gint16)64*360);
+
+      gdk_gc_set_foreground (draw_gc, &search_color);
+
+      for (uint j = 0; j < iter->isearch.size (); j++) {
+	int a, b;
+	ID_to_xy (iter->isearch[j], &a, &b);
+	gdk_draw_arc (pixmap, draw_gc, FALSE, a - rad, b - rad,
+		      2*rad, 2*rad, (gint16)0, (gint16)64*360);
+      }
+
+      for (uint j = 0; j < iter->search.size (); j++) {
+	int a, b;
+	ID_to_xy (iter->search[j], &a, &b);
+	draw_arrow (x, y, a, b, draw_gc);
+	x = a;
+	y = b;
+      }
+
+      gdk_gc_set_foreground (draw_gc, &GCValues.foreground);
+
+      uint i = find(iter->search.back ());
+      draw_fingers (&(nodes[i]), true);
+    }
+
   }
   
   redraw ();
@@ -503,6 +513,11 @@ doevent (ulong t)
       uint i = find (id);
       nodes[i].key = strtoull (words[4].c_str (), NULL, 16);
       nodes[i].search.clear ();
+      nodes[i].isearch.clear ();
+      if (words.size () > 5) {
+	ConsistentHash::CHID k = strtoull (words[5].c_str (), NULL, 16);
+	nodes[i].isearch.push_back(k);
+      }
 
       if (displaysearch) step = true;
     }
@@ -512,7 +527,10 @@ doevent (ulong t)
       uint i = find (id);
       ConsistentHash::CHID n = strtoull (words[4].c_str (), NULL, 16);
       nodes[i].search.push_back(n);
-
+      if (words.size () > 5) {
+	ConsistentHash::CHID k = strtoull (words[5].c_str (), NULL, 16);
+	nodes[i].isearch.push_back(k);
+      }
       if (displaysearch) step = true;
     }
 

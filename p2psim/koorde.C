@@ -4,6 +4,7 @@
 using namespace std;
 
 extern bool vis;
+#define STABILIZE 1
 
 Koorde::Koorde(Node *n) : Chord(n, k) 
 {
@@ -99,7 +100,8 @@ Koorde::find_successors(CHID key, uint m, bool intern)
   //  a.k,  r.i);
 
   if (vis && !intern) 
-    printf ("vis %lu search %16qx %16qx\n", now(), me.id, key);
+    printf ("vis %lu search %16qx %16qx %16qx\n", now(), me.id, key, r.i);
+
   while (1) {
     assert (count++ < 1000);
 
@@ -115,18 +117,16 @@ Koorde::find_successors(CHID key, uint m, bool intern)
     ipath.push_back (a.i);
     kpath.push_back (a.kshift);
 
-    if (vis && !intern) 
-      printf ("vis %lu step %16qx %16qx\n", now (), me.id, r.next.id);
-
     doRPC (r.next.ip, &Koorde::koorde_next, &a, &r);
+
+    if (vis && !intern) 
+      printf ("vis %lu step %16qx %16qx %16qx\n", now (), me.id, last.id,
+	      r.i);
     
     if (r.done) break;
   }
 
   assert (r.v.size () > 0);
-
-  if (vis & !intern) 
-    printf ("vis %lu step %16qx %16qx\n", now (), me.id, r.v[0].id);
 
   path.push_back (r.next.id);
   ipath.push_back (r.i);
@@ -234,8 +234,10 @@ Koorde::fix_debruijn ()
 void
 Koorde::reschedule_stabilizer(void *x)
 {
+#if STABLIZE
   Koorde::stabilize();
   delaycb(STABLE_TIMER, &Koorde::reschedule_stabilizer, (void *)0);
+#endif
 }
 
 void
@@ -300,7 +302,7 @@ Koorde::stabilized (vector<ConsistentHash::CHID> lid)
       printf ("loop %u,%qx not stable: finger %d should be %qx but is %qx\n", 
 	      me.ip, me.id, j, lid[i], dfingers[j].id);
       for (uint l = 0; l < dfingers.size (); l++) {
-	printf ("succ finger %d is %qx\n", l, dfingers[l].id);
+	printf ("succ debruijn finger %d is %qx\n", l, dfingers[l].id);
       }
 
     }

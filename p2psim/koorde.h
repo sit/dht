@@ -32,7 +32,7 @@ public:
   void dump();
 
 protected:
-  static const uint logbase = 4;
+  static const uint logbase = 1;
   static const uint k = 1 << logbase;  // k-degree de bruijn graph; 
 
   Chord::CHID debruijn;  // = k * me
