@@ -38,11 +38,11 @@ test_packunpack ()
 }
 
 bool
-test_block (str b)
+test_block (str b, int m)
 {
   vec<str> frags;
-  for (int i = 0; i < 8; i++) {
-    str f = Ida::gen_frag (8, b);
+  for (int i = 0; i < m; i++) {
+    str f = Ida::gen_frag (m, b);
     frags.push_back (f);
   }
 
@@ -54,9 +54,9 @@ test_block (str b)
   }
   
   str b2 (block2);
-  assert (b2.len() == 8192);
+  assert (b2.len() == b.len ());
   ok = true;
-  for (int i = 0; i < 8192; i++) {
+  for (size_t i = 0; i < b.len (); i++) {
     if (b[i] != b2[i]) {
       warnx << i << " " << b[i] << " " << b2[i] << "\n";
       ok = false;
@@ -67,13 +67,35 @@ test_block (str b)
 }
 
 bool
-test_single (char c)
+test_single (char c, int sz = 8192, int m = 8)
 {
   strbuf block;
-  for (int i = 0; i < 8192; i++)
+  for (int i = 0; i < sz; i++)
     block.fmt ("%c", c);
   
-  return test_block (block);
+  return test_block (block, m);
+}
+
+bool
+test_cyclic (int sz, int m = 8)
+{
+  strbuf block;
+  for (int i = 0; i < sz; i++) {
+    char c = i % 256;
+    block.fmt ("%c", c);
+  }
+  return test_block (block, m);
+}
+
+bool
+test_random (int sz, int m = 8)
+{
+  strbuf block;
+  for (int i = 0; i < sz; i++) {
+    char c = random () % 256;
+    block.fmt ("%c", c);
+  }
+  return test_block (block, m);
 }
 
 int
@@ -91,13 +113,35 @@ main (int argc, char *argv[])
       exit (1);
   }
 
-  warnx << "Testing 8k cyclical block\n";
-  strbuf block;
-  for (int i = 0; i < 8192; i++) {
-    char c = i % 256;
-    block.fmt ("%c", c);
+  int sz = 32768;
+  while (sz > 512) {
+    warnx << "Testing " << sz << " byte cyclical block\n";
+    ok = test_cyclic (sz);
+    if (!ok)
+      exit (1);
+    sz >>= 1;
   }
-  ok = test_block (block);
-  if (!ok)
-    exit (1);
+  
+  u_long seed = time (NULL);
+  srandom (seed);
+  sz = 32767;
+  while (sz > 256) {
+    warnx << "Testing " << sz << " byte random block w/ seed " << seed << "\n";
+    ok = test_random (sz);
+    if (!ok)
+      exit (1);
+    if (sz & 1)
+      sz -= 1;
+    else
+      sz >>= 1;
+  }
+
+  for (int i = 0; i < 32; i++) {
+    sz = (random () % 32768) + 1;
+    warnx << "Testing " << sz << " byte random block, m = " << i+1 << "\n";
+    ok = test_random (sz, i + 1);
+    if (!ok)
+      exit (1);
+  }
+  
 }

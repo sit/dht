@@ -68,6 +68,7 @@ Ida::INV (u_long a)
  * Generate one piece.
  * Clears out and replaces it with the following:
  *  Total # of FIELD elements (including this one).
+ *  Length of decoded block
  *  M
  *  M-element matrix row.
  *  N/m
@@ -77,14 +78,16 @@ Ida::INV (u_long a)
 void
 Ida::gen_frag_ (int m, const str &in, vec<u_long> &out)
 {
-  int fraglen = in.len () / (2*m);
+  size_t rawlen = in.len ();
+  size_t fraglen = (rawlen + 2*m - 1) / (2*m);
   
-  int total = 2 + m + 1 + fraglen;
+  size_t total = 3 + m + 1 + fraglen;
   out.clear ();
   out.setsize (total);
   size_t outp = 0;
   
   out[outp++] = total;
+  out[outp++] = rawlen;
   out[outp++] = m;
   
   /* generate our matrix row; these are the 'a's */
@@ -102,16 +105,16 @@ Ida::gen_frag_ (int m, const str &in, vec<u_long> &out)
   warnx << "\n";
 #endif /* 0 */
   out[outp++] = fraglen;
-  
+
   u_long cik, inp;
-  for (int k = 0; k < fraglen; k++) {
+  for (size_t k = 0; k < fraglen; k++) {
     cik = 0;
     inp = k*2*m;
     for (int j = 0; j < m; j++) {
       // Encode two bytes at a time.
-      u_long bi = (u_char) in[inp++];
+      u_long bi = (inp > rawlen) ? 0 : (u_char) in[inp++];
       bi <<= 8;
-      bi |= (u_char) in[inp++];
+      bi |= (inp > rawlen) ? 0 : (u_char) in[inp++];
       assert (bi == (bi & 0x0000ffff));
       
       cik = ADD(cik, MUL(bi, v[j]));
@@ -166,6 +169,7 @@ Ida::pack (vec<u_long> &in)
 str
 Ida::gen_frag (int m, const str &in)
 {
+  assert (m);
   vec<u_long> tmp;
   gen_frag_ (m, in, tmp);
   // This copy is cheap; only refcounting involved.
@@ -215,7 +219,8 @@ Ida::reconstruct (const vec<str> &frags, strbuf &out)
   int inp = 0;
 
   // XXX select a fragment at random until a good one is found.
-  u_long len = unpackone (frags[0], inp); 
+  u_long len = unpackone (frags[0], inp);
+  u_long rawlen = unpackone (frags[0], inp);
   u_long m = unpackone (frags[0], inp);
   if (len < m + 3) {
     idatrace << "fragment 0 too short.\n";
@@ -236,10 +241,16 @@ Ida::reconstruct (const vec<str> &frags, strbuf &out)
   for (size_t i = 0; i < m; i++) {
     int inp = 0;
     str in = frags[i];
-    u_long len = unpackone (in, inp);
+    len = unpackone (in, inp);
     if (len < m + 3) {
       idatrace << "fragment " << i << " length " << len
 	       << "too short; want at least " << m + 3 << "\n";
+      return false;
+    }
+    u_long myrawlen = unpackone (in, inp);
+    if (myrawlen != rawlen) {
+      idatrace << "fragment " << i << " rawlen = " << myrawlen
+	       << "not consistent; expected rawlen = " << rawlen << "\n";
       return false;
     }
     u_long mym = unpackone (in, inp);
@@ -289,6 +300,8 @@ Ida::reconstruct (const vec<str> &frags, strbuf &out)
   // Produce the decoded block.
   vec<u_long> c;
   c.setsize (m);
+  char *outb = out.tosuio ()->getspace (blocksize * 2 * m);
+  size_t outp = 0;
   for (size_t inp = 0; inp < blocksize; inp++) {
     for (size_t i = 0; i < m; i++) {
       c[i] = dfrags[i][inp];
@@ -298,11 +311,11 @@ Ida::reconstruct (const vec<str> &frags, strbuf &out)
       for (size_t j = 0; j < m; j++)
 	b = ADD (b, MUL(c[j], a_inv[i][j]));
       assert (!(b & 0xffff0000));
-      out.fmt ("%c%c",
-	       (char) (b >> 8) & 0xff,
-	       (char) (b       & 0xff));
+      outb[outp++] = (char) (b >> 8) & 0xff;
+      outb[outp++] = (char) (b       & 0xff);
     }
   }
+  out.tosuio ()->print (outb, rawlen);
   return true;
 }
 
