@@ -105,6 +105,7 @@ main (int argc, char *argv[])
     
     aout->flush ();
   }
+  cursor->c_close (cursor);
 
   db->close (db, 0);
   dbe->close (dbe, 0);
