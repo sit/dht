@@ -523,6 +523,7 @@ main (int argc, char **argv)
       {
 	char *bs_port = strchr(optarg, ':');
 	if (!bs_port) usage ();
+	char *sep = bs_port;
 	*bs_port = 0;
 	bs_port++;
 	if (inet_addr (optarg) == INADDR_NONE) {
@@ -538,7 +539,7 @@ main (int argc, char **argv)
 	  wellknownhost = optarg;
 
 	wellknownport = atoi (bs_port);
-	
+	*sep = ':'; // restore optarg for argv printing later.
 	break;
       }
     case 'l':
