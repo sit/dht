@@ -1,5 +1,5 @@
 // -*-c++-*-
-/* $Id: sfsrocd.h,v 1.1 2001/01/16 22:00:08 fdabek Exp $ */
+/* $Id: sfsrocd.h,v 1.2 2001/01/25 21:36:01 fdabek Exp $ */
 
 /*
  *
@@ -33,6 +33,7 @@
 #include "crypt.h"
 #include "list.h"
 #include <sfsclient.h>
+
 
 extern blowfish fhkey;
 
@@ -271,7 +272,7 @@ public:
   static void fh2fileid (const sfs_hash *fh, uint64 *fileid);
 
   bool setrootfh (const sfs_fsinfo *fsi);
-  void setrootfh_1 (int start, int len, int fd);
+  void setrootfh_1 (int fd);
   void dispatch (nfscall *sbp);
 };
 

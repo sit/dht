@@ -1,4 +1,4 @@
-/* $Id: server.C,v 1.2 2001/01/18 16:21:50 fdabek Exp $ */
+/* $Id: server.C,v 1.3 2001/01/25 21:36:00 fdabek Exp $ */
 
 /*
  *
@@ -1036,26 +1036,24 @@ server::setrootfh (const sfs_fsinfo *fsi)
   mirrors.push_back (sfsroc);
   mi[0].aclnt_index = 0;
   mi[0].slice_start = 0;
-  mi[0].slice_len = 64;
+  mi[0].slice_len = STRIPE_BASE;
   numMirrors = 1;
   updateMirrorDivision ();
   
   warn << "attempting to contact " << fsi->sfsro->v1->mirrors.size () << " mirrors\n";
   for (unsigned int i = 0; i < fsi->sfsro->v1->mirrors.size (); i++) {
     warn << "trying Mirror " << i << "\n";
-    warn << fsi->sfsro->v1->mirrors[i].host << "is mirroring from " << fsi->sfsro->v1->mirrors[i].start << " to " << fsi->sfsro->v1->mirrors[i].len << "\n";
+    warn << fsi->sfsro->v1->mirrors[i].host << "is mirroring.";
     warn << "size = " << fsi->sfsro->v1->mirrors.size () << " > " << i << "\n";
     tcpconnect (fsi->sfsro->v1->mirrors[i].host, 
 		11977,  //FED - should be SFS_PORT or something
-		wrap(this, &server::setrootfh_1,
-		fsi->sfsro->v1->mirrors[i].start,
-		fsi->sfsro->v1->mirrors[i].len));
+		wrap(this, &server::setrootfh_1));
     warn << "did tcpconnect for i = " << i << "\n";
   }
   return true;
 }
 void
-server::setrootfh_1 (int start, int len, int fd) {
+server::setrootfh_1 (int fd) {
   
   if (fd < 0) { 
     warn << "unable to contact mirror\n";
@@ -1070,8 +1068,6 @@ server::setrootfh_1 (int start, int len, int fd) {
   
   //this table holds info about spans etc.
   mi[numMirrors].aclnt_index = numMirrors;
-  mi[numMirrors].slice_start = start;
-  mi[numMirrors].slice_len = len;
 
   numMirrors++;
 
@@ -1336,61 +1332,12 @@ sort_mirrors(mirror_info *mi, int num_in) {
 #define END(x) (x.slice_start + x.slice_len)
 
 void
-mirrorselect(mirror_info *mi, int num_in, mirror_info *mo, int *num_out)
-{
-  int i = 0, m = 0, inum_out = 0;
-  
-  const int lastone = num_in - 1;
-  while (m < lastone)
-    {
-      //initialize new mirror values
-      mo[inum_out].aclnt_index = mi[m].aclnt_index;
-      mo[inum_out].slice_start = i;
-      mo[inum_out].total_bytes = 0;
-      mo[inum_out].total_ticks = 0;
-
-      //make sure we didn't overshoot small mirror
-      if (i > END(mi[m])) {
-	m++;
-	continue;
-      }
-      
-      //start with slice_len as large as it can be
-      mo[inum_out].slice_len = mi[m].slice_len - (i - mi[m].slice_start);
-      
-      //ease up if we're hogging (divide up what's left among mirrors left)
-      int fairshare =  (64 - i) / (num_in - inum_out);
-      if (mo[inum_out].slice_len > fairshare)
-	mo[inum_out].slice_len = fairshare;
-      
-      //but make sure we don't fall short of next mirror
-      if (END(mo[inum_out]) < mi[m + 1].slice_start)
-	mo[inum_out].slice_len += mi[m+1].slice_start - END(mo[inum_out]);
-      
-      m++;
-      i += mo[inum_out++].slice_len;
-    }
-
-  mo[inum_out].aclnt_index = mi[lastone].aclnt_index;
-  mo[inum_out].slice_start = i;
-  mo[inum_out].slice_len = 64 - i;
-  
-  inum_out += 1;
-  *num_out = inum_out;
-  
-}
-
-void
 server::updateMirrorDivision() {
 
-    sort_mirrors(mi, numMirrors);
-  warn << "printing " << numMirrors << " mirrors\n";
-  for (int i = 0; i < numMirrors; i++)
-    warn << mi[i].aclnt_index << " : " << mi[i].slice_start << " to " << mi[i].slice_start + mi[i].slice_len << "\n";
 
 
-  mirrorselect(mi, numMirrors, mo, &mo_size);
   /*
+    //coral snake like stuff
   int denom = 0;
   for (int i = 0; i < numMirrors; i++) 
     denom += mo[i].performance;
@@ -1408,139 +1355,16 @@ server::updateMirrorDivision() {
   }
 
   */
- warn << "mo_size = " << mo_size << "\n"; 
- for (int i = 0; i < mo_size; i++)
-   warn << mo[i].aclnt_index << " : " << mo[i].slice_start << " to " << mi[i].slice_start + mo[i].slice_len << "\n";
+  
+  // XXX - bogus division for starters
+  mo_size = 1;
+  mo[0].aclnt_index = mi[0].aclnt_index;
+  mo[0].slice_start = 0;
+  mo[0].slice_len = STRIPE_BASE;
+  warn << "mo_size = " << mo_size << "\n"; 
+  for (int i = 0; i < mo_size; i++)
+  warn << mo[i].aclnt_index << " : " << mo[i].slice_start << " to " << mi[i].slice_start + mo[i].slice_len << "\n";
 
 }
 
-
-//  void
-//  intersect_val(mirror_info *mi, int num_in, int v, int *out, int *size_out) {
-  
-//    *size_out = 0;
-//    for (int i=0; i < num_in; i++) {
-//      int slice_end = mi[i].slice_start + mi[i].slice_len - 1;
-//      if ((v <= slice_end) && (v >= mi[i].slice_start)) {
-//        out[*size_out] = i;
-//        *size_out += 1;
-//      }
-//    }
-  
-//  }
-
-//  //split the ranges at the start and finish of every range
-//  void
-//  split_pass(mirror_info *mi, int num_in, mirror_info **mo, int *num_out) {
-
-//    int isect[64];
-//    int num_isect;  
-//    //XXX - figure out a real upper bound or allocate on the fly
-//    mirror_info *out = (mirror_info *)malloc(sizeof(mirror_info)*64);
-//    int no = 0;
-
-//    //check for start cuts
-//    for (int i = 0; i < num_in; i++) {
-//      intersect_val(mi, num_in, mi[i].slice_start, isect, &num_isect);
-
-//      if (num_isect > 1) {
-//        for (int j = 0; j < num_isect; j++) {
-//  	if ((isect[j] != i) && (mi[isect[j]].slice_start != mi[i].slice_start)) {
-
-//  	  out[no].aclnt_index = mi[isect[j]].aclnt_index;
-//  	  out[no].slice_start = mi[isect[j]].slice_start;
-//  	  out[no].slice_len = mi[i].slice_start - out[no].slice_start + 1;
-
-//  	  mi[isect[j]].slice_start = mi[i].slice_start;
-	  
-//  	  no += 1;
-//  	}
-//        }
-//      } // for j
-    
-//    } //for i
-
-//    //repeat with end points
-//    for (int i = 0; i < num_in; i++) {
-//      int slice_end = mi[i].slice_start + mi[i].slice_len;
-//      intersect_val(mi, num_in, slice_end, isect, &num_isect);
-    
-//      if (num_isect > 1) {
-//        for (int j = 0; j < num_isect; j++) {
-//  	if ((isect[j] != i) &&  (mi[isect[j]].slice_start + mi[isect[j]].slice_len - 1 != slice_end)) {
-//  	  out[no].aclnt_index = mi[isect[j]].aclnt_index;
-//  	  out[no].slice_start = slice_end + 1;
-//  	  out[no].slice_len = slice_end - out[no].slice_start + 1;
-	  
-//  	  mi[isect[j]].slice_len -= out[no].slice_len;
-	  
-//  	  no += 1;
-//  	  }
-//  	}
-//      } // for j
-    
-//    }
-  
-//    //tack mi onto out
-//    memcpy(out + no, mi, sizeof(mirror_info)*num_in);
-//    *mo = out;
-//    *num_out = num_in + no;
-//  }
-
-//  void
-//  split(mirror_info *mi, int num_in, mirror_info **mo, int *num_out) {
-//    mirror_info *mo2;
-//    int out2;
-
-//    split_pass(mi, num_in, &mo2, &out2);
-//    split_pass(mo2, out2, mo, num_out);
-//    free(mo2);
-//  }
-
-
-//  void
-//  server::updateMirrorDivision() {
-//    mo_size = 0;
-
-//    for (unsigned int j = 0; j < mirrors.size() ; j++) warn << mi[j].aclnt_index << " : " << mi[j].slice_start << " ----> " << mi[j].slice_len << "\n";
-
-//    mirror_info *split_ranges;
-//    int num_split;
-//    split(mi, mirrors.size (), &split_ranges, &num_split);
-
-//    for (int j = 0; j < num_split; j++) warn << split_ranges[j].aclnt_index << " : " << split_ranges[j].slice_start << " -- " << split_ranges[j].slice_len << "\n";
-
-//    int i = 0;
-//    int ints[64];
-//    int num_ints;
-//    while (i < 64) {
-//      intersect_val(split_ranges, num_split, i, ints, &num_ints);
-//      if (num_ints == 0) {
-//        printf("error: no possible tiling\n");
-//        exit(0);
-//      } else if (num_ints == 1) {
-//        mo[mo_size].aclnt_index = split_ranges[ints[0]].aclnt_index;
-//        mo[mo_size].slice_start = split_ranges[ints[0]].slice_start;
-//        mo[mo_size].slice_len = split_ranges[ints[0]].slice_len;
-//        mo_size += 1;
-//        i += split_ranges[ints[0]].slice_len; 
-//      } else {
-//        int runlen = split_ranges[ints[0]].slice_len;
-//        int permirror = runlen/num_ints;
-
-//        for (int j = 0; j < num_ints; j++) {
-//  	int fudge = (j == num_ints - 1) ? runlen % num_ints : 0;
-
-//  	mo[mo_size].aclnt_index = split_ranges[ints[j]].aclnt_index;
-//  	mo[mo_size].slice_start = i;
-//  	mo[mo_size].slice_len = permirror + fudge;
-//  	mo_size += 1;
-	
-//  	i += permirror+fudge;
-//        }
-//      }
-
-//    }
-  
-//  }
 
