@@ -52,7 +52,7 @@ Chord::find_successors(CHID key, int m)
 
   IDMap nprime = me;
   int count = 0;
-  printf("%s find_successors key %qu\n", ts(), PID(key));
+  //printf("%s find_successors key %qu\n", ts(), PID(key));
   while(1){
     assert(count++ < 100);
     next_args na;
@@ -64,8 +64,10 @@ Chord::find_successors(CHID key, int m)
     if(nr.done){
       return nr.v;
     } else {
+      /*
       printf("%s !!! node %qu refers to next %qu for key %qu\n",
              ts(), PID(nprime.id), PID(nr.next.id), PID(key));
+	     */
       nprime = nr.next;
     }
   }
@@ -90,15 +92,19 @@ Chord::next_handler(next_args *args, next_ret *ret)
     ret->done = true;
     ret->v.clear();
     ret->v.push_back(succ);
+    /*
     printf("%s next_handler done key=%qu succ=%qu\n",
            ts(), PID(args->key), PID(succ.id));
+	   */
  }else {
     ret->done = false;
     //ret->next = loctable->next(args->key);
     ret->next = succ;
     assert(ret->next.ip != me.ip);
+    /*
     printf("%s next_handler NOT done key=%qu, goto next %qu\n",
            ts(), PID(args->key), PID(ret->next.id));
+	   */
   }
 }
 
@@ -331,7 +337,7 @@ LocTable::add_node(Chord::IDMap n)
 {
   if (!n.ip || (n.ip == ring[0].ip)) return;
 
-  int i;
+  unsigned int i;
   for (i = 1; i <= ring.size()-1 ; i++) {
 
     if (ring[i].ip == n.ip) {

@@ -12,7 +12,7 @@ class ChordFinger: public Chord {
 
   protected:
     void fix_fingers();
-    void stabilize();
+    void stabilize(void *);
 };
 
 #endif

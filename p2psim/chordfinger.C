@@ -34,9 +34,8 @@ ChordFinger::fix_fingers()
 }
 
 void
-ChordFinger::stabilize()
-{/*
-  super.stabilize();
+ChordFinger::stabilize(void *x)
+{
+  Chord::stabilize(NULL);
   fix_fingers();
-  */
 }

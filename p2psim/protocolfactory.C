@@ -3,6 +3,7 @@
 #include "kademlia.h"
 #include "pastry.h"
 #include "koorde.h"
+#include "chordfinger.h"
 #include "vivalditest.h"
 #include <typeinfo>
 #include <iostream>
@@ -53,7 +54,10 @@ ProtocolFactory::create(string s, Node *n)
     p = new Koorde(n);
   if (s == "VivaldiTest")
     p = new VivaldiTest(n);
+  if (s == "ChordFinger")
+    p = new ChordFinger(n);
 
+  assert(p);
   _protnames[typeid(*p).name()] = s;
   return p;
 }

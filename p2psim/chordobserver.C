@@ -22,9 +22,9 @@ ChordObserver::Instance(Args *a)
 
 ChordObserver::ChordObserver(Args *a)
 {
-  cout << "Instantiated with jinyang = " << (*a)["jinyang"] << endl;
   _reschedule = 0;
   _reschedule = atoi((*a)["reschedule"].c_str());
+  _type = (*a)["type"];
 }
 
 ChordObserver::~ChordObserver()
@@ -34,7 +34,7 @@ ChordObserver::~ChordObserver()
 void
 ChordObserver::execute()
 {
-  list<Protocol*> l = Network::Instance()->getallprotocols("Chord");
+  list<Protocol*> l = Network::Instance()->getallprotocols(_type);
   list<Protocol*>::iterator pos;
   Chord* c;
   int n = 0;

@@ -3,6 +3,7 @@
 
 #include "observer.h"
 #include "args.h"
+#include <string>
 
 class ChordObserver : public Observer {
 public:
@@ -14,6 +15,7 @@ private:
   ChordObserver(Args*);
   ~ChordObserver();
   unsigned int _reschedule;
+  string _type;
 };
 
 #endif // __CHORD_OBSERVER_H
