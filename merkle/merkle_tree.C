@@ -46,6 +46,68 @@ merkle_tree::merkle_tree (ptr<dbfe> realdb)
   //check_invariants ();
 }
 
+//build a merkle tree custom-tailored for remoteID
+merkle_tree::merkle_tree (ptr<dbfe> realdb,
+			  block_status_manager *bsm,
+			  chordID remoteID,
+			  vec<ptr<location> > succs)
+{
+  chordID localID = succs[0]->id ();
+  // create a temporary in-memory database
+  ptr<dbfe> fakedb = New refcounted<dbfe> ();
+  // put the memory db "under" the merkle tree
+  db = fakedb;
+
+  dbOptions opts;
+  opts.addOption("opt_cachesize", 1000);
+  opts.addOption("opt_nodesize", 4096);
+  if (int err = fakedb->opendb(NULL, opts))
+    fatal << "merkle_tree::merkle_tree opendb failed: " << strerror(err);
+
+  // populate merkle tree/mem db from realdb
+  ptr<dbEnumeration> it = realdb->enumerate ();
+  ptr<dbPair> d = it->firstElement();
+  ptr<dbrec> FAKE_DATA = New refcounted<dbrec> ("", 1);
+  for (int i = 0; d; i++, d = it->nextElement()) {
+    //    warn << "key[" << i << "] " << dbrec2id (d->key) << "\n";
+    chordID k = dbrec2id(d->key);
+
+    //leave out keys that we know the other side doesn't have
+    if (!bsm->missing_on (k, remoteID)) {
+      block b (to_merkle_hash (d->key), FAKE_DATA);
+      int ret = insert (0, &b, &root);
+      assert (!ret);
+    } else {
+      warn << "leaving " << k << " out of merkle tree for " << remoteID <<"\n";
+    }
+
+  }
+
+  //now add the keys that we know we are missing
+  vec<chordID> mis = bsm->missing_what (localID);
+  for (unsigned int i = 0; i < mis.size (); i++)
+    {
+      block b (to_merkle_hash (id2dbrec(mis[i])), FAKE_DATA);
+      // only fake having a key if: we really don't have it, and
+      // it's already replicated enough
+      if (!database_lookup (fakedb, b.key) && 
+	  bsm->pcount (mis[i], succs) >= dhash::num_efrags ()) {
+	int ret = insert (0, &b, &root);
+	warn << "added extra key " << mis[i] << " to merkle tree for " << remoteID << "\n";
+	assert (!ret);
+      } else {
+	bsm->unmissing (succs[0], tobigint(b.key));
+	warn << "had " << tobigint(b.key) << " even though bsm thought I didn't\n";
+      }
+    }
+
+  // Put the realdb under the merkle tree.  This works since it has
+  // the same keys as the in-mem db.
+  //db = realdb;
+  check_invariants ();
+}
+
+
 
 void
 merkle_tree::rehash (u_int depth, const merkle_hash &key, merkle_node *n)
@@ -170,7 +232,7 @@ merkle_tree::remove (block *b)
 {
   // assert block must exist..
   if (!database_lookup (db, b->key)) {
-    fatal << "merkle_tree::remove: key does not exists " << b->key << "\n";
+    fatal << "merkle_tree::remove: key does not exist " << b->key << "\n";
     return;
   }
 

@@ -204,9 +204,15 @@ pmaint::handed_off_cb (bigint key, int status)
   if (status == PMAINT_HANDOFF_ERROR) {
     warning << host_node->my_ID () << " error handing off key " << key << "\n";    
     pmaint_next_key = decID (key);
-  }  else
+  }  else {
     pmaint_next_key = incID (key); //use next key only if no error on this one
-
+    warning << host_node->my_ID () << " handed off key " << key << " ok.";
+    if (status == PMAINT_HANDOFF_NOTPRESENT) 
+      warning << " Was not present\n";
+    else
+      warning << " Was present.\n";
+  }
+  
   pmaint_searching = true; 
   active_cb = delaycb (PRTTMSHORT, wrap (this, &pmaint::pmaint_next));
 }
@@ -237,9 +243,9 @@ pmaint::pmaint_handoff_cb (bigint key,
     warning << "handoff failed for key\n";
     cb (PMAINT_HANDOFF_ERROR); //error
   } else if (!present) {
-    trace << host_node->my_ID () << " deleting " << key << " after handoff\n";
-    delete_helper (id2dbrec(key));
-    assert (!db->lookup (id2dbrec (key)));
+    //    trace << host_node->my_ID () << " deleting " << key << " after handoff\n";
+    //  delete_helper (id2dbrec(key));
+    //   assert (!db->lookup (id2dbrec (key)));
     cb (PMAINT_HANDOFF_NOTPRESENT); //ok, not present
   } else { 
     cb (PMAINT_HANDOFF_PRESENT); //ok, present

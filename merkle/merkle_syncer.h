@@ -11,7 +11,7 @@
 // see comment in merkle_syncer::doRPC for this work around.
 struct RPC_delay_args;
 typedef callback<void, RPC_delay_args *>::ref rpcfnc_t;
-typedef callback<void, bigint>::ref missingfnc_t;
+typedef callback<void, bigint, bool>::ref missingfnc_t;
 
 class merkle_syncer {
  private:
@@ -88,5 +88,10 @@ void
 compare_nodes (merkle_tree *ltree, bigint rngmin, bigint rngmax, 
 	       merkle_node *lnode, merkle_rpc_node *rnode,
 	       missingfnc_t missingfnc, rpcfnc_t rpcfnc);
+
+void
+compare_keylists (vec<chordID> lkeys, vec<chordID> rkeys,
+		  chordID rngmin, chordID rngmax,
+		  missingfnc_t missingfnc);
 
 #endif /* _MERKLE_SYNCER_H_ */

@@ -8,8 +8,11 @@
 #include "dhash_common.h"
 
 
-vec<merkle_hash> database_get_keys (dbfe *db, u_int depth, 
-				    const merkle_hash &prefix);
+vec<merkle_hash> database_get_keys     (dbfe *db, u_int depth, 
+				        const merkle_hash &prefix);
+vec<bigint>      database_get_keyrange (dbfe *db, 
+				    const bigint &min,
+				    const bigint &max);
 
 static inline str err2str (merkle_stat status)
 {

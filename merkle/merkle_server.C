@@ -44,6 +44,8 @@ merkle_server::dispatch (user_args *sbp)
       merkle_hash lnode_prefix;
       lnode = ltree->lookup (&lnode_depth, rnode->depth, rnode->prefix);
       if (lnode_depth != rnode->depth) {
+	// FED: used to be an assert, now a warning. Think code handles
+	// this case.
 	warn << "local depth ( " << lnode_depth 
 	     << ") is not equal to remote depth (" << rnode->depth << ")\n";
 	warn << "prefix is " << rnode->prefix << "\n";
@@ -56,15 +58,24 @@ merkle_server::dispatch (user_args *sbp)
       chord_node from;
       sbp->fill_from (&from);
       ptr<location> l = host_node->locations->lookup_or_create (from);
-
-      compare_nodes (ltree, arg->rngmin, arg->rngmax, lnode, rnode,
-		     wrap (this, &merkle_server::missing, l),
-		     wrap (this, &merkle_server::doRPC, l));
-
       sendnode_res res (MERKLE_OK);
       format_rpcnode (ltree, lnode_depth, lnode_prefix, 
 		      lnode, &res.resok->node);
+      // and reply
       sbp->reply (&res);
+
+      // this is the bidirectional part. Do this after the reply
+      // because it is potentially expensive and might lag the reply,
+      // distorting the RTT
+
+      // XXX don't need this call. The caller can figure out what
+      // he needs without my help and I don't know what to do
+      // even if I do find that I'm missing data
+      /*
+      compare_nodes (ltree, arg->rngmin, arg->rngmax, lnode, rnode,
+		     wrap (this, &merkle_server::missing, l),
+		     wrap (this, &merkle_server::doRPC, l));
+      */
       break;
     }
      

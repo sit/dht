@@ -5,6 +5,8 @@
 #include "sha1.h"
 #include "merkle_hash.h"
 #include "merkle_node.h"
+#include <dhash_impl.h>
+#include "block_status.h"
 
 class merkle_tree;
 
@@ -31,7 +33,7 @@ private:
   int insert (u_int depth, block *b, merkle_node *n);
   merkle_node *lookup (u_int *depth, u_int max_depth, 
 		       const merkle_hash &key, merkle_node *n);
-
+  
 public:
   enum { max_depth = merkle_hash::NUM_SLOTS }; // XXX off by one? or two?
   ptr<dbfe> db;     // public for testing only
@@ -40,6 +42,10 @@ public:
 
 
   merkle_tree (ptr<dbfe> db); 
+  merkle_tree::merkle_tree (ptr<dbfe> realdb,
+			    block_status_manager *bsm,
+			    chordID remoteID,
+			    vec<ptr<location> > succs);
   void remove (block *b);
   int insert (block *b);
   merkle_node *lookup_exact (u_int depth, const merkle_hash &key);

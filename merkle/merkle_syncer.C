@@ -104,6 +104,7 @@ merkle_syncer::next (void)
   assert (!sync_done);
   assert (!fatal_err);
 
+  // st is queue of pending index nodes
   while (st.size ()) {
     pair<merkle_rpc_node, int> &p = st.back ();
     merkle_rpc_node *rnode = &p.first;
@@ -115,23 +116,26 @@ merkle_syncer::next (void)
       fatal << "lookup_exact didn't match for " << rnode->prefix << " at depth " << rnode->depth << "\n";
     }
     
-    if (lnode->isleaf ()) {
-      fatal << "lnode was a leaf\n";
-    }
 
 #ifdef MERKLE_SYNC_DETAILED_TRACE
     warn << "starting from slot " << p.second << "\n";
 #endif
+
+    // XXX not clear p.second will ever enter > 0
     while (p.second < 64) {
       u_int i = p.second;
       p.second += 1;
 #ifdef MERKLE_SYNC_DETAILED_TRACE
       warn << "CHECKING: " << i;
 #endif
+
       bigint remote = tobigint (rnode->child_hash[i]);
       bigint local = tobigint (lnode->child (i)->hash);
 
       u_int depth = rnode->depth + 1;
+
+      //prefix is the high bits of the first key 
+      // the node is responsible for.
       merkle_hash prefix = rnode->prefix;
       prefix.write_slot (rnode->depth, i);
       bigint slot_rngmin = tobigint (prefix);
@@ -217,7 +221,8 @@ merkle_syncer::sendnode_cb (ref<sendnode_arg> arg, ref<sendnode_res> res,
     fatal << "lookup failed: " << rnode->prefix << " at " << rnode->depth << "\n";
   }
   
-  compare_nodes (ltree, local_rngmin, local_rngmax, lnode, rnode, missingfnc, rpcfnc);
+  compare_nodes (ltree, local_rngmin, local_rngmax, lnode, rnode, 
+		 missingfnc, rpcfnc);
 
   if (!lnode->isleaf () && !rnode->isleaf) {
 #ifdef MERKLE_SYNC_TRACE
@@ -270,21 +275,27 @@ merkle_getkeyrange::getkeys_cb (ref<getkeys_arg> arg, ref<getkeys_res> res,
     return;
   }
 
+  vec<chordID> rkeys;
+  chordID round_max = current;
+  chordID next_cur = current;
   for (u_int i = 0; i < res->resok->keys.size (); i++) {
     const merkle_hash &key = res->resok->keys[i];
-    bigint key2  = tobigint (key);
-    if (!database_lookup (db, key)) 
-      (*missing) (key2);
-    
-    // if (key2 >= current)
-    //  current = key2 + 1;
-    if (betweenbothincl (current, incID (key2), key2))
-      current = incID (key2);
+    bigint bkey = tobigint(key);
+    rkeys.push_back (bkey);
+    if (round_max < bkey) round_max = bkey;
+    if (betweenbothincl (next_cur, incID (bkey), bkey))
+      next_cur = incID (bkey);
   }
 
+  vec<chordID> lkeys = database_get_keyrange (db, current, round_max);
+  compare_keylists (lkeys, rkeys, current, round_max, missing);
+
+
+  current = next_cur;
+  
   if (!res->resok->morekeys)
     current = incID (rngmax);  // set done
-
+  
   go ();
 }
 
@@ -303,6 +314,38 @@ merkle_getkeyrange::doRPC (int procno, ptr<void> in, void *out, aclnt_cb cb)
 // ---------------------------------------------------------------------------
 
 void
+compare_keylists (vec<chordID> lkeys,
+		  vec<chordID> vrkeys,
+		  chordID rngmin, chordID rngmax,
+		  missingfnc_t missingfnc)
+{
+  // populate a hash table with the remote keys
+  qhash<chordID, int, hashID> rkeys;
+  for (u_int i = 0; i < vrkeys.size (); i++) {
+    if (betweenbothincl (rngmin, rngmax, vrkeys[i])) 
+      rkeys.insert (vrkeys[i], 1);
+  }
+    
+  // do I have something he doesn't have?
+  for (unsigned int i = 0; i < lkeys.size (); i++) {
+    if (!rkeys[lkeys[i]]) {
+      (*missingfnc) (lkeys[i], false);
+    } else {
+      rkeys.remove (lkeys[i]);
+    }
+  }
+
+  //anything left: he has and I don't
+  qhash_slot<chordID, int> *slot = rkeys.first ();
+  while (slot) {
+    warn << "local missing [" << rngmin << ", " << rngmax << "] key=" << slot->key << "\n";
+    (*missingfnc) (slot->key, true);
+    slot = rkeys.next (slot);
+  }
+   
+}
+
+void
 compare_nodes (merkle_tree *ltree, bigint rngmin, bigint rngmax, 
 	       merkle_node *lnode, merkle_rpc_node *rnode,
 	       missingfnc_t missingfnc, rpcfnc_t rpcfnc)
@@ -315,15 +358,18 @@ compare_nodes (merkle_tree *ltree, bigint rngmin, bigint rngmax,
 #endif
 
   if (rnode->isleaf) {
+
+    vec<chordID> lkeys = database_get_keyrange (ltree->db, rngmin,rngmax);
+    //massage the rnode into a list of chordIDs
+    vec<chordID> rkeys;
     for (u_int i = 0; i < rnode->child_hash.size (); i++) {
       merkle_hash key = rnode->child_hash[i];
-      if (betweenbothincl (rngmin, rngmax, tobigint (key)))
-	if (database_lookup (ltree->db, key) == NULL) {
-	  warn << "1 [" << rngmin << "," << rngmax << "] => missing key " 
-	       << key << "\n";
-	  (*missingfnc) (tobigint (key));
-	}
+      if (betweenbothincl (rngmin, rngmax, tobigint (key))) 
+	rkeys.push_back (tobigint(key));
     }
+
+    compare_keylists (lkeys, rkeys, rngmin, rngmax, missingfnc);    
+	
   } else if (lnode->isleaf () && !rnode->isleaf) {
     bigint tmpmin = tobigint (rnode->prefix);
     bigint node_width = bigint (1) << (160 - rnode->depth);
