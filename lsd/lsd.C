@@ -69,9 +69,7 @@ static char *monitor_host;
 ptr<chord> chordnode;
 static str p2psocket;
 int ss_mode;
-bool do_cache;
 int lbase;
-int cache_size;
 vec<ref<dhash> > dh;
 int myport;
 
@@ -501,12 +499,10 @@ main (int argc, char **argv)
   sigcb(SIGINT, wrap (&halt));
 
   int ch;
-  do_cache = false;
   ss_mode = 0;
   lbase = 1;
 
   myport = 0;
-  cache_size = 2000;
   // ensure enough room for fingers and successors.
   int max_loccache;
   Configurator::only ().get_int ("locationtable.maxcache", max_loccache);
@@ -522,20 +518,14 @@ main (int argc, char **argv)
 
   char *cffile = NULL;
 
-  while ((ch = getopt (argc, argv, "B:b:cd:fFj:l:L:M:m:n:O:Pp:S:s:T:tv:w:")) != -1)
+  while ((ch = getopt (argc, argv, "b:d:fFj:l:L:M:m:n:O:Pp:S:s:T:tv:w:")) != -1)
     switch (ch) {
-    case 'B':
-      cache_size = atoi (optarg);
-      break;
     case 'b':
       lbase = atoi (optarg);
       if (mode != MODE_DEBRUIJN && lbase != 1) {
 	warnx << "logbase " << lbase << " only supported in debruijn\n";
 	lbase = 1;
       }
-      break;
-    case 'c':
-      do_cache = true;
       break;
     case 'd':
       db_name = optarg;
