@@ -51,8 +51,6 @@ Euclidean::latency(IPAddress ip1x, IPAddress ip2x, bool reply)
     return 0;
   else {
     Time t= (Time) hypot(labs(c2.first - c1.first), labs(c2.second - c1.second));
-    if (t > 1000) 
-      fprintf(stderr,"warning! %u,%u -> %u,%u\n",c1.first,c1.second,c2.first,c2.second);
     return t;
   }
 }
