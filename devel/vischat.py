@@ -29,7 +29,7 @@ class vischat (asynchat.async_chat):
         
     def found_terminator (self):
         # Assumes that vis handles all request in order.
-        print "### %s" % self.buffer
+        # print "### %s" % self.buffer
         if self.buffer[0] == '.':
             z = self.outstanding.pop (0)
             if z:

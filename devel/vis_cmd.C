@@ -147,6 +147,5 @@ arrow_annotation::draw (bool ggeo, GtkWidget *drawing_area)
 void
 arc_annotation::draw (bool ggeo, GtkWidget *drawing_area)
 {
-  warnx << "drawing from " << id_a << " " << id_b << "\n";
   draw_arc (id_a, id_b, drawing_area->style->black_gc);
 }
