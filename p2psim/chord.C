@@ -25,45 +25,66 @@ Chord::s()
   return string(buf);
 }
 
+// Returns at least m successors of key.
+// This is the lookup() code in Figure 3 of the SOSP03 submission.
+// A local call, use find_successors_handler for an RPC.
+// Not recursive.
+vector<Chord::IDMap>
+Chord::find_successors(CHID key, int m)
+{
+  // assert(m <= successor list length);
+
+  IDMap nprime = me;
+  int count = 0;
+  while(1){
+    assert(count++ < 100);
+    next_args na;
+    next_ret nr;
+    na.key = key;
+    na.m = m;
+    na.who = me;
+    doRPC(nprime.ip, Chord::next_handler, &na, &nr);
+    if(nr.done){
+      return nr.v;
+    } else {
+      nprime = nr.next;
+    }
+  }
+}
+
+// From Figure 3 of SOSP03 submission.
+// Returns either m successors of the given key,
+// or the node to talk to next.
+void
+Chord::next_handler(next_args *args, next_ret *ret)
+{
+  IDMap succ = loctable->succ(args->m);
+  printf("Chord(%u) next key=%u succ=%u\n",
+         me.id, args->key, succ.id);
+  if(ConsistentHash::between(me.id, succ.id, args->key) ||
+     succ.id == me.id){
+    ret->done = true;
+    ret->v.clear();
+    ret->v.push_back(succ);
+  } else {
+    ret->done = false;
+    ret->next = succ;
+  }
+}
+
 // Handle a find_successor RPC.
+// Only used for Chord's internal maintenance (e.g. join).
+// DHash &c should use find_successors.
 void
 Chord::find_successor_handler(find_successor_args *args,
                               find_successor_ret *ret)
 {
-  Chord::CHID n = args->n;
+  printf("Chord(%u,%u)::find_successor_handler(%u)\n",
+         me.ip, me.id, args->n);
 
-  printf("Chord(%u,%u)::find_successor_x(%u)\n", me.ip, me.id, (int) n);
-
-#if 1
-  ret->succ = me;
-#else
-  /*
-  if (recursive) {
-    nn = loctable->next(n);
-    if (nn.ip == me.ip) {
-      ret->succ = me;
-      return;
-    }else{
-      return doRPC((IPAddress)successor.ip, Chord::lookup, n, recursive);
-    }
-  }else{
-  */
-  Chord::IDMap tmp;
-  Chord::IDMap *nn, *cn;
-  cn = &me;
-  tmp = loctable->next(n);
-  nn = &tmp;
-  while (nn->ip != cn->ip) {
-    cn = nn;
-    struct lookup_args la;
-    struct lookup_ret lr;
-    la.key = n;
-    // Hmm, what is lookup? Why not find_successor?
-    doRPC((cn->ip), Chord::lookup_handler, &la, &lr);
-    nn = lr.succ;
-  }
-  ret->succ = *cn;
-#endif
+  vector<Chord::IDMap> sl = find_successors(args->n, 1);
+  assert(sl.size() > 0);
+  ret->succ = sl[0];
 }
 
 // External event that tells a node to contact the well-known node
@@ -78,7 +99,7 @@ Chord::join(Args *args)
   find_successor_ret fsr;
   fsa.n = me.id;
   doRPC(wkn, Chord::find_successor_handler, &fsa, &fsr);
-  printf("Chord(%u,%u)::join2 %u\n", me.ip, me.id, fsr.succ.ip);
+  printf("Chord(%u,%u)::join2 %u\n", me.ip, me.id, fsr.succ.id);
   loctable->add_node(fsr.succ);
   // stabilize();
 }
@@ -173,7 +194,7 @@ Chord::IDMap
 LocTable::next(Chord::CHID n)
 {
   //no locality consideration
-  for (int i = 0; i < _end; i++) {
+  for (unsigned int i = 0; i < _end; i++) {
     if ((ring[i+1].ip == 0) || ConsistentHash::between(ring[i].id, ring[i+1].id, n)) {
       return ring[i];
     } 
@@ -187,7 +208,7 @@ LocTable::add_node(Chord::IDMap n)
 
   assert(_end <= _max -1);
 
-  for (int i = 1; i < _end ; i++) {
+  for (unsigned int i = 1; i < _end ; i++) {
 
     if (ring[i].ip == n.ip) {
       return;
@@ -198,7 +219,7 @@ LocTable::add_node(Chord::IDMap n)
 
       if (_end < (_max -1)) {
 	//there is space to add more node in the ring
-	for (int j = _end; j >= i; j--) {
+	for (unsigned int j = _end; j >= i; j--) {
 	  ring[j+1] = ring[j];
 	}
 	ring[i] = n;
@@ -208,7 +229,7 @@ LocTable::add_node(Chord::IDMap n)
       } else {
 	if (i <= _succ_num) {
 	  //evict the last one of the _succ_num succecessors??
-	  for (int j = _succ_num; j > i; j++) {
+	  for (unsigned int j = _succ_num; j > i; j++) {
 	    ring[j] = ring[j-1];
 	  }
 	  ring[i] = n;
@@ -233,7 +254,7 @@ LocTable::notify(Chord::IDMap n)
 void
 LocTable::del_node(Chord::IDMap n)
 {
-  int i;
+  unsigned int i;
 
   for (i = 0; i <= _end; i++) {
     if (ring[i].ip == n.ip) {

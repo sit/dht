@@ -4,7 +4,7 @@
 #include "p2psim.h"
 #include "protocol.h"
 #include "consistenthash.h"
-
+#include <vector>
 
 class LocTable;
 
@@ -19,6 +19,7 @@ public:
   Chord(Node *n);
   virtual ~Chord();
 
+  // Functions callable from events file.
   virtual void join(Args*);
   virtual void leave(Args*) {};
   virtual void crash(Args*) {};
@@ -28,35 +29,39 @@ public:
 
   // Chord RPC argument/return types.
   struct find_successor_args {
-    Chord::CHID n;
+    CHID n;
   };
   struct find_successor_ret {
-    Chord::IDMap succ;
+    IDMap succ;
   };
   struct get_predecessor_args {
     int dummy;
   };
   struct get_predecessor_ret {
-    Chord::IDMap n;
-  };
-  struct lookup_args {
-    Chord::CHID key;
-  };
-  struct lookup_ret {
-    Chord::IDMap succ;
+    IDMap n;
   };
   struct notify_args {
-    Chord::IDMap me;
+    IDMap me;
   };
   struct notify_ret {
     int dummy;
+  };
+  struct next_args {
+    CHID key;
+    int m;
+    IDMap who;
+  };
+  struct next_ret {
+    bool done;
+    vector<IDMap> v;
+    IDMap next;
   };
 
   // RPC handlers.
   void find_successor_handler(find_successor_args *, find_successor_ret *);
   void get_predecessor_handler(get_predecessor_args *, get_predecessor_ret *);
-  void lookup_handler(lookup_args *, lookup_ret *);
   void notify_handler(notify_args *, notify_ret *);
+  void next_handler(next_args *, next_ret *);
 
   string s();
 
@@ -64,6 +69,7 @@ protected:
   LocTable *loctable;
   IDMap me;
 
+  vector<IDMap> find_successors(CHID key, int m);
   IDMap next(CHID n);
   void fix_predecessor();
   void fix_successor();
@@ -83,7 +89,8 @@ class LocTable {
       ring = (Chord::IDMap *)malloc(sizeof(Chord::IDMap) * _max);
       assert(ring);
       bzero(ring, sizeof(Chord::IDMap) * _max); //init 
-      ring[0] = me; //ring[0] is always be me, ring[1] is always succ
+      ring[0] = me; // ring[0] is always me
+      ring[1] = me; // ring[1] is always successor
       _end = 2; 
 
     }; 

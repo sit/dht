@@ -5,8 +5,8 @@
 
 topology Euclidean
 
-0 0,0 Kademlia Chord
-1 5,5 Kademlia
+0 0,0 Kademlia
+1 5,5 Kademlia Chord
 2 8,8 Kademlia Chord
 3 12,6 Kademlia
 4 13,8 Kademlia

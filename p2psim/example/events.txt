@@ -9,7 +9,8 @@
 #
 node 0 0 Kademlia:0 wellknown=0
 node 2 1 Kademlia:0 wellknown=0
-node 10 2 Chord:0 wellknown=0
+node 10 1 Chord:0 wellknown=1
+node 10 2 Chord:0 wellknown=1
 
 #this doesn't work yet.
 #simulator 100 exit

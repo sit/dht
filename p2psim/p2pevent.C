@@ -8,6 +8,7 @@
 #include <iostream>
 #include <vector>
 #include <string>
+#include <stdio.h>
 using namespace std;
 
 P2PEvent::P2PEvent()
@@ -34,7 +35,7 @@ P2PEvent::P2PEvent(vector<string> *v) : Event(v)
   // create a map for the arguments
   this->args = new Protocol::Args;
   assert(this->args);
-  for(int i=2; i<v->size(); i++) {
+  for(unsigned int i=2; i<v->size(); i++) {
     vector<string> arg = split((*v)[i], "=");
     this->args->insert(make_pair(arg[0], arg[1]));
   }
