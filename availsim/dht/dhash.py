@@ -40,8 +40,9 @@ class node:
         return hex(long(my.id)).lower()[2:-1]
 
 class dhash:
-    """A Global View DHash simulator.
-    The basic DHash here just stores 3 copies of blocks on successors, no repair.
+    """A Global View DHash simulator.  Subclass to actually store stuff.
+    Provides a simple paramterizable insert and lazy repair implementation.
+    The repair implementation does not delete excess fragments from nodes.
     """
     def __init__ (my):
         my.nodes = []
@@ -49,6 +50,7 @@ class dhash:
         my.allnodes = {}
 
     def add_node (my, id):
+        # Find or create the node
         if id in my.allnodes:
             nnode = my.allnodes[id]
         else:
@@ -65,6 +67,8 @@ class dhash:
             bisect.insort (my.nodes, nnode)
         else:
             raise KeyError, "Duplicate insert of %d" % id
+        
+        my.repair (nnode)
     
     def _failure (my, id, crash):
         n = my.allnodes[id]
@@ -86,7 +90,7 @@ class dhash:
         my._failure (id, 1)
 
     def find_successor_index (my, id):
-        # Find node that is the successor...
+        # if id in my.nodes, returns the index of id.
         n = bisect.bisect_left (map(lambda x: x.id, my.nodes), id)
         if n >= len(my.nodes):
             n = 0            
@@ -99,47 +103,78 @@ class dhash:
         return n
 
     def succ (my, o, num = 1):
+        """Return successor of o from active nodes. If o is active node,
+        returns o. If num not specified, returns immediate successor.
+        Otherwise, returns list of num immediate successors."""
         id = o
         if isinstance (o, node): id = o.id
         n = my.find_successor_index (id)
+        if num == 1:
+            return my.nodes[n]
         diff = n + num - len (my.nodes)
         if diff > 0:
             if diff > n: diff = n
             return my.nodes[n:] + my.nodes[:diff]
         return my.nodes[n:n+num]
 
-    def pred (my, o):
+    def pred (my, o, num = 1):
+        """Returns num predecessor's of o, not including o if  o in nodes."""
         id = o
         if isinstance (o, node): id = o.id
         n = my.find_predecessor_index (id)
-        return my.nodes[n]
+        if num == 1:
+            return my.nodes[n]
+        diff = n - num
+        if diff < 0:
+            diff += len (my.nodes)
+            if diff < n: diff = n
+            return my.nodes[diff+1:] + my.nodes[:n+1]
+        return my.nodes[diff+1:n+1]
 
-    # Subclass and redefine these methods to actually store data.
+    # Subclass and redefine these methods to produce more interesting
+    # storage and repair behavior.
     def insert_block (my, block, size):
-        pass
-    def repair (my, failed_node):
-        pass
-    def availability_summary (my):
-        return "Nothing available."
-
-class dhash_replica_norepair (dhash):
-    def __init__ (my, replicas = 3):
-        dhash.__init__ (my)
-        my.bytes = 0
-        my.blocks = {}
-        my.replicas = replicas
-        
-    def insert_block (my, block, size):
+        """Basic insertion code to store insert_pieces() pieces on
+        successors of key.  Returns the successor."""
         if block not in my.blocks:
             my.blocks[block] = size
-        succs = my.succ (block, my.replicas)
+        succs = my.succ (block, my.insert_pieces ())
+        isz   = my.insert_piece_size (size)
         for s in succs:
-            s.store (block, size)
+            s.store (block, isz)
         return succs[0]
 
-    def repair (my, failed_node):
-        pass
+    def _repair (my, an, succs, resp_blocks):
+        desc = "failure"
+        if an.alive: desc = "join"
+        for b in resp_blocks:
+            # Check their availability
+            avail = 0
+            for s in succs:
+                if b in s.blocks: avail += 1
+            # Lazy repair waits until last possible moment.
+            if avail == 0:
+                print "LOST block", b, "after", desc, "of", an
+            if avail < my.min_pieces ():
+                print "REPAIR block", b, "after", desc, "of", an
+                isz = my.insert_piece_size (my.blocks[b])
+                for s in succs:
+                    if b not in s.blocks:
+                        s.store (b, isz)
 
+    # XXX How long to wait until we do repair?
+    def repair (my, affected_node):
+        count = my.insert_pieces ()
+        preds = my.pred (affected_node, count)
+        succs = my.succ (affected_node, count)
+        # succ's does not include affected_node if it is dead.
+        slice = preds + succs
+        for i in range(1,len(slice) - count):
+            p = slice[i - 1]
+            s = slice[i:i+count]
+            r = filter (lambda b: between (b, p.id, s[0].id), my.blocks.keys ())
+            my._repair (affected_node, s, r)
+    
     def availability_summary (my):
         blocks = {}
         disk_bytes_used = 0
@@ -150,31 +185,45 @@ class dhash_replica_norepair (dhash):
                 blocks[b] = blocks.get (b, 0) + 1
         avail = 0
         for (b, c) in blocks.items ():
-            if c >= 1:
+            if c >= my.read_pieces ():
                 avail += 1
         return "%d/%d blocks; %s bytes used" % (avail,
                                                 len(my.blocks),
                                                 size_rounder(disk_bytes_used))
 
-class dhash_replica_lazy (dhash_replica_norepair):
-    # XXX How long to wait until we do repair?
-    def repair (my, failed_node):
-        pred = my.pred (failed_node)
-        succs = my.succ (failed_node, my.replicas)
-        # Find blocks that we were responsible for
-        resp_blocks = filter (lambda b: between (b, pred.id, failed_node.id),
-                              my.blocks.keys ())
-        for b in resp_blocks:
-            # Check their availabiltiy
-            avail = 0
-            for s in succs:
-                if b in s.blocks: avail += 1
-            # Lazy repair waits until last possible moment.
-            if avail == 1:
-                print "REPAIR block", b, "after failure of", failed_node
-                for s in succs:
-                    if b not in s.blocks:
-                        s.store (b, my.blocks[b])
+    # Subclass and redefine these methods to explore basic changes.
+    def min_pieces (my):
+        """The minimum number of pieces we need before repairing.
+        Probably should be at least as big as read_pieces."""
+        return 0
+    def read_pieces (my):
+        """The number of pieces on different nodes needed to for successful read."""
+        return 0
+    def insert_pieces (my):
+        """The number of pieces to write into the system initially."""
+        return 0
+    def insert_piece_size (my, whole_size):
+        """How big is each piece that gets inserted?"""
+        return 0
+
+class dhash_replica_norepair (dhash):
+    def __init__ (my, replicas = 3):
+        dhash.__init__ (my)
+        my.bytes = 0
+        my.blocks = {}
+        my.replicas = replicas
+    def min_pieces (my):
+        return 0
+    def read_pieces (my):
+        return 1
+    def insert_pieces (my):
+        return my.replicas
+    def insert_piece_size (my, size):
+        return size
+
+class dhash_replica (dhash_replica_norepair):
+    def min_pieces (my):
+        return my.replicas
 
 class dhash_fragments (dhash):
     def __init__ (my, dfrags, efrags):
@@ -183,53 +232,17 @@ class dhash_fragments (dhash):
         my.efrags = efrags
         my.blocks = {}
 
-    def frag_size (my, size):
-        return int (1.02 * (size / my.dfrags))
-        
-    def insert_block (my, block, size):
-        if block not in my.blocks:
-            my.blocks[block] = size
+    def min_pieces (my):
+        # Should this by dfrags?
+        return my.efrags
+    def read_pieces (my):
+        return my.dfrags
+    def insert_pieces (my):
+        return my.efrags
+    def insert_piece_size (my, size):
         # A vague estimate of overhead from encoding... 2%-ish
-        fragsize = my.frag_size (size)
-        succs = my.succ (block, my.efrags)
-        for s in succs:
-            s.store (block, fragsize)
-        return succs[0]
-
-    def repair (my, failed_node):
-        pred = my.pred (failed_node)
-        succs = my.succ (failed_node, my.efrags)
-        resp_blocks = filter (lambda b: between (b, pred.id, failed_node.id),
-                              my.blocks.keys ())
-        for b in resp_blocks:
-            fragsize = my.frag_size (my.blocks[b])
-            # Check their availabiltiy
-            avail = 0
-            for s in succs:
-                if b in s.blocks: avail += 1
-            if avail <= my.efrags: ### efrags? or dfrags?
-                print "REPAIR frags for", b, "after failure of", failed_node
-                for s in succs:
-                    if b not in s.blocks:
-                        s.store (b, fragsize)
+        return int (1.02 * (size / my.dfrags))
                         
-    def availability_summary (my):
-        blocks = {}
-        disk_bytes_used = 0
-        # XXX should really search in successors of block based on read
-        for n in my.nodes:
-            disk_bytes_used += n.bytes
-            for b in n.blocks:
-                blocks[b] = blocks.get (b, 0) + 1
-        avail = 0
-        for (b, c) in blocks.items ():
-            if c >= my.dfrags:
-                avail += 1
-        return "%d/%d blocks; %s bytes used" % (avail,
-                                                len(my.blocks),
-                                                size_rounder(disk_bytes_used))
-
-
 if __name__ == '__main__':
     gdh = dhash_replica_norepair()
     gdh.add_node (55)
@@ -267,4 +280,11 @@ if __name__ == '__main__':
     assert len(gdh.succ(63, 3)) == 3
     assert len(gdh.succ(24, 3)) == 3
     assert len(gdh.succ(35, 3)) == 3
-    
+
+    assert gdh.pred (5).id == 4
+    assert gdh.pred (31).id == 30
+    assert gdh.pred (30).id == 23
+    assert gdh.pred (3).id == 63
+    assert len(gdh.pred(5, 3)) == 3
+
+
