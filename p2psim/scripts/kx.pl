@@ -114,7 +114,6 @@ for($iters = 0; $iters < 500; $iters++){
     my $lat;
     my $hops;
 
-    print "$prefix./p2psim $pf $tf $ef\n";
     open(P, "$prefix./p2psim $pf $tf $ef |");
     while(<P>){
         if(/^rpc_bytes ([0-9]+)/){
