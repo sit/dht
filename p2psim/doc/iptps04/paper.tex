@@ -1,0 +1,110 @@
+% Headers {{{1
+\documentclass[letterpaper,twocolumn,10pt]{article}
+\usepackage{url,graphicx,epsfig,alltt,fancybox}
+\usepackage[english]{babel}
+\usepackage{times}
+\usepackage[colorlinks,linkcolor=blue,citecolor=blue,urlcolor=blue]{hyperref}
+
+\title{\Large \bf Snore: the peer-to-peer simulator we were all waiting for}
+\author{Zeeb and Zoob \\
+{\em CSAIL, M.I.T., Cambridge, MA} \\
+{\tt \{zeeb,zoob\}@csail.mit.edu}}
+\date{}
+\begin{document}
+\maketitle
+
+% 1}}}
+% Abstract {{{1
+\begin{abstract}
+\end{abstract}
+
+We want to dominate the world, so everyone should use Snore.
+
+% 1}}}
+% Introduction {{{1
+\thispagestyle{empty}
+\section{Introduction}
+\label{Section:Introduction}
+
+A large number of P2P protocols have been proposed in the literature.  There
+is no unified framework for evaluating the performance of these protocols.
+Deploying in real-world network can be complex and depending on the comparison
+you wish to do, not even useful.
+
+Framework for comparing P2P protocols.  Should allow for easy coding of
+protocols and simple models for underlying topologies.  Preferably, allow for
+pseudo code to be written, abstracting away all the intricacies of network
+protocols, etc.
+
+Why another simulator?  Why not NS?
+
+Challenges: scaling.
+
+Why is this a reasonable thing to do?  Not oversimplified?  Results correspond
+with real life!
+
+% 1}}}
+% Related work {{{1
+\section{Related work}
+\label{Section:Related}
+
+Other simulators suck.
+
+% 1}}}
+% Design considerations {{{1
+\section{Design considerations}
+\label{Section:Design}
+
+Maybe this section is useless.  In fact, maybe this entire paper is useless.
+
+
+% }}}1
+% Implementation {{{1
+\section{Implementation}
+\label{Section:Implementation}
+
+Which protocols supported.  How many lines of code for each compared to the
+real thing?  How easy was it to take pseudocode and dump it in the simulator.
+
+Russ' threads package allows for simple coding.
+
+% }}}1
+% Experiments {{{1
+\section{Experiments}
+\label{Section:Experiments}
+
+Number of threads.  Number of nodes.  How many messages can we deliver to
+nodes per second, or something like that.
+
+Show that numbers that come out have some correspondence to the real world.
+Topology models are OK, demonstrate with King data set.
+
+Where is the bottleneck?
+
+[Must hack simulator to reduce threads.]
+
+
+% 1}}}
+% Conclusion {{{1
+\section{Conclusion}
+\label{Section:Conclusion}
+
+% 1}}}
+% Acknowledgements {{{1
+\section{Acknowledgements}
+\label{Section:Acknowledgements}
+
+\vfill
+
+% 1}}}
+% Bibliography {{{1
+\pagebreak
+
+% \begin{flushleft}
+% % \bibliographystyle{alpha}
+% % \bibliography{paper}
+% \end{flushleft}
+
+\end{document}
+% 1}}}
+% vim: set foldlevel=0 fen:

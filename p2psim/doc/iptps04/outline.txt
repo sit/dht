@@ -1,9 +1,0 @@
-which protocols supported
-
-topology, king set
-
-how easy pseudocode -> simulator, lines of code?
-
-scaling
-
-challenges
