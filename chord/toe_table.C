@@ -224,6 +224,8 @@ toe_table::get_toes (int level)
 {
   //int up = level_to_delay (level);
   vec<chordID> res;
+  if(level < 0 || level >= MAX_LEVELS)
+    return res;
   for (unsigned int i = 0; i < toes[level]->size (); i++) {
     //warn << "get toes " << level << " " << toes[level]->size () << "\n";
     //if (locations->get_a_lat ((*toes[level])[i]) < up)
