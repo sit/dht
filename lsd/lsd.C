@@ -70,10 +70,6 @@ static str p2psocket;
 vec<ref<dhash> > dh;
 int myport;
  
-bool useproxy = false;
-str proxyhost;
-int proxyport = 0;
-
 enum routing_mode_t {
   MODE_SUCC,
   //  MODE_LOCTABLE,
@@ -123,10 +119,7 @@ client_accept (int fd)
 
   // constructor of dhashgateway object calls mkref to maintain a
   // reference to itself until the program is gone.
-  if (useproxy)
-    vNew refcounted<dhashgateway> (x, chordnode, proxyhost, proxyport);
-  else
-    vNew refcounted<dhashgateway> (x, chordnode);
+  vNew refcounted<dhashgateway> (x, chordnode);
 }
 
 static void
@@ -482,7 +475,6 @@ usage ()
     "[-s <server select mode>] "
     "[-L <warn/fatal/panic output file name>] "
     "[-T <trace file name (aka new log)>] "
-    "[-x <proxy hostname:port>] "
     "\n";
   exit (1);
 }
@@ -527,7 +519,7 @@ main (int argc, char **argv)
 
   char *cffile = NULL;
 
-  while ((ch = getopt (argc, argv, "b:d:fFj:l:L:M:m:n:O:Pp:S:s:T:tv:w:x:"))!=-1)
+  while ((ch = getopt (argc, argv, "b:d:fFj:l:L:M:m:n:O:Pp:S:s:T:tv:w:"))!=-1)
     switch (ch) {
     case 'b':
       lbase = atoi (optarg);
@@ -628,31 +620,6 @@ main (int argc, char **argv)
     case 'w':
       monitor_host = optarg;
       break;
-    case 'x':
-      {
-	char *bs_port = strchr (optarg, ':');
-	if (!bs_port) usage ();
-	char *sep = bs_port;
-	*bs_port = 0;
-	bs_port++;
-	if (inet_addr (optarg) == INADDR_NONE) {
-	  //yep, this blocks
-	  struct hostent *h = gethostbyname (optarg);
-	  if (!h) {
-	    warn << "Invalid address or hostname: " << optarg << "\n";
-	    usage ();
-	  }
-	  struct in_addr *ptr = (struct in_addr *)h->h_addr;
-	  proxyhost = inet_ntoa (*ptr);
-	}
-	else
-	  proxyhost = optarg;
-
-	proxyport = atoi (bs_port);
-	*sep = ':'; // restore optarg for argv printing later.
-	useproxy = true;
-	break;
-      }
     default:
       usage ();
       break;
