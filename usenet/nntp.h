@@ -55,7 +55,7 @@ class nntp {
   vec<c_jmp_entry_t> cmd_table;
 
 public:
-  nntp (int _s);
+  nntp (int _s, const sockaddr_in &sin);
   ~nntp ();
 
   static u_int64_t fedinbytes () { return fedinbytes_; }

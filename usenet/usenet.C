@@ -54,18 +54,19 @@ reconfig ()
 void
 tryaccept (int s)
 {
-  int new_s;
-  struct sockaddr *addr;
-  unsigned int addrlen = sizeof (struct sockaddr_in);
+  sockaddr_in sin;
+  socklen_t sinlen = sizeof (sin);
+  bzero (&sin, sizeof (sin));
 
-  addr = (struct sockaddr *) calloc (1, addrlen);
-  new_s = accept (s, addr, &addrlen);
-  if (new_s > 0) {
-    make_async (new_s);
-    vNew nntp (new_s);
-  } else
-    perror (progname);
-  free (addr);
+  int fd = accept (s, (sockaddr *) &sin, &sinlen);
+  if (fd < 0) {
+    if (errno != EAGAIN)
+      warn ("accept: %m\n");
+    return;
+  }
+
+  make_async (fd);
+  vNew nntp (fd, sin);
 }
 
 void

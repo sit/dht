@@ -25,7 +25,7 @@ u_int64_t nntp::nconn_ (0);
 u_int64_t nntp::fedinbytes_ (0);
 u_int64_t nntp::dhashbytes_ (0);
 
-nntp::nntp (int _s) :
+nntp::nntp (int _s, const sockaddr_in &sin) :
 	s (_s),
 	aio (aios::alloc (_s)),
 	cur_group (New refcounted<newsgroup> ()),
@@ -34,7 +34,8 @@ nntp::nntp (int _s) :
 {
   nconn_++;
   if (nntp_trace >= 1)
-    warn << s << ": connected\n";
+    warn ("%d: accepted connection from %s:%d\n",
+	  s, inet_ntoa (sin.sin_addr), ntohs (sin.sin_port));
   aio->settimeout (opt->client_timeout);
   if (nntp_trace >= 9)
     aio->setdebug (strbuf("%d", s));
@@ -445,7 +446,8 @@ nntp::read_post (str resp, str bad, bool takedht)
     if (g->loaded ()) {
       g->addid (msgid, ID);
       posted = true;
-      postlog << msgid << " (" << ID << ") posted.\n";
+      postlog << msgid << " (" << ID << ") posted (" 
+	      << wholeart.len () << " bytes).\n";
     }
     if (nntp_trace >= 3)
       warn << postlog;
