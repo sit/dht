@@ -1,19 +1,25 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.5 2002/01/10 17:11:30 fdabek Exp $
+# $Id: Makefile.am,v 1.6 2002/01/26 00:04:47 fdabek Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
-noinst_PROGRAMS =  dbm typetest
+if BUILDVIS
+VIS = vis
+endif
 
-#noinst_HEADERS = trace_papers.h
+noinst_PROGRAMS = dbm typetest $(VIS)
 
-#playtrace_SOURCES = playtrace.C
-#playtrace_single_SOURCES = playtrace_single.C
+
 dbm_SOURCES = dhash_benchmark.C
 dbm_LDADD = ../dhash/libdhash.a ../chord/libchord.a ../svc/libsvc.la $(LDADD)
 
 typetest_SOURCES = test_types.C
 typetest_LDADD = ../dhash/libdhash.a ../chord/libchord.a ../svc/libsvc.la $(LDADD)
+
+vis_SOURCES = vis.C
+INCLUDES = @GTK_CFLAGS@
+vis_LDADD =  ../chord/libchord.a ../svc/libsvc.la @GTK_LIBS@ $(LDADD)
+
 
 EXTRA_DIST = .cvsignore
 CLEANFILES = core *.core *~ *.rpo
