@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.12 2003/10/24 22:35:13 strib Exp $ */
+/* $Id: tapestry.h,v 1.13 2003/11/02 02:48:19 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -207,12 +207,10 @@ private:
 
   // how else are we gonna route?
   RoutingTable *_rt;
-  QLock rt_lock;
 
   // used during join to keep track of the next nodes to ping
   // during nearest neighbor
   vector<NodeInfo *> initlist;
-  QLock initlist_lock;
 
   // how many nearest neighbors do we keep at every step?
   static const uint _k = 16;
@@ -220,7 +218,6 @@ private:
   // statitics per message
   vector<uint> stat;
   vector<uint> num_msgs;
-  QLock stat_lock;
 
   bool _joining;
   bool _stab_scheduled;
