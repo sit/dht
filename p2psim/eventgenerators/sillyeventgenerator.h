@@ -22,44 +22,28 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "eventgeneratorfactory.h"
-#include "fileeventgenerator.h"
-#include "churneventgenerator.h"
-#include "sillyeventgenerator.h"
+#ifndef __SILLY_EVENT_GENERATOR_H
+#define __SILLY_EVENT_GENERATOR_H
 
-EventGeneratorFactory *EventGeneratorFactory::_instance = 0;
+#include "p2psim/eventgenerator.h"
+#include "p2psim/p2psim.h"
+#include "p2psim/args.h"
+#include <set>
+using namespace std;
 
-EventGeneratorFactory*
-EventGeneratorFactory::Instance()
-{
-  if(!_instance)
-    _instance = New EventGeneratorFactory();
-  return _instance;
-}
+class SillyEventGenerator : public EventGenerator {
+public:
+  SillyEventGenerator(Args *);
+  virtual void kick(Observed *, ObserverInfo*);
+  virtual void run();
 
-EventGeneratorFactory::EventGeneratorFactory()
-{
-}
+private:
+  void bullshit();
+  string _proto;
+  string _exittime;
+  set<IPAddress> _ips;
+  Time _prevtime;
+};
 
-EventGeneratorFactory::~EventGeneratorFactory()
-{
-}
+#endif // __CHURN_EVENT_GENERATOR_H
 
-
-EventGenerator *
-EventGeneratorFactory::create(string type, Args *a)
-{
-  EventGenerator *eg = 0;
-
-  if(type == "FileEventGenerator")
-    eg = New FileEventGenerator(a);
-
-  if(type == "ChurnEventGenerator")
-    eg = New ChurnEventGenerator(a);
-
-  if(type == "SillyEventGenerator")
-    eg = New SillyEventGenerator(a);
-
-  delete a;
-  return eg;
-}

@@ -24,6 +24,8 @@
 
 #include "threadmanager.h"
 #include "p2psim.h"
+#include <iostream>
+using namespace std;
 
 ThreadManager *ThreadManager::_instance = 0;
 
@@ -36,17 +38,19 @@ ThreadManager::Instance()
   return _instance;
 }
 
-ThreadManager::ThreadManager()
+ThreadManager::ThreadManager() : _counter(0)
 {
 }
 
 ThreadManager::~ThreadManager()
 {
+  DEBUG(1) << "ThreadManager created " << _counter << " threads." << endl;
 }
 
 int
 ThreadManager::create(void (*fn)(void*), void *args, int ss)
 {
+  _counter++;
   int tid = ::threadcreate(fn, args, THREAD_MULTIPLY * ss);
   return tid;
 }

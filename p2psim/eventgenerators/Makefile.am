@@ -1,6 +1,6 @@
 noinst_PROGRAMS = eventgenerators.o
 eventgenerators_o_SOURCES = churneventgenerator.C eventgeneratorfactory.C \
-			fileeventgenerator.C
+			fileeventgenerator.C sillyeventgenerator.C
 LIBS =
 eventgenerators_o_LINK = $(LD) -r -o $@
 

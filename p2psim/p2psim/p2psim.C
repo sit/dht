@@ -42,6 +42,7 @@ graceful_exit(void*)
 {
   delete OldobserverFactory::Instance();
   delete Network::Instance(); // deletes nodes, protocols
+  delete ThreadManager::Instance();
   __tmg_dmalloc_stats();
 
   threadexitsall(0);

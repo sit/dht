@@ -39,6 +39,7 @@ private:
   ThreadManager();
 
   static ThreadManager* _instance;
+  unsigned _counter;
 };
 
 

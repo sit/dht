@@ -22,44 +22,58 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "eventgeneratorfactory.h"
-#include "fileeventgenerator.h"
-#include "churneventgenerator.h"
 #include "sillyeventgenerator.h"
+#include "events/p2pevent.h"
+#include "events/simevent.h"
+#include "p2psim/eventqueue.h"
+#include "p2psim/network.h"
+#include <iostream>
+using namespace std;
 
-EventGeneratorFactory *EventGeneratorFactory::_instance = 0;
-
-EventGeneratorFactory*
-EventGeneratorFactory::Instance()
+SillyEventGenerator::SillyEventGenerator(Args *args)
 {
-  if(!_instance)
-    _instance = New EventGeneratorFactory();
-  return _instance;
+  _proto = (*args)["proto"];
+  assert(_proto != "");
+
+  _exittime = (*args)["exittime"];
+  assert(_exittime != "");
+
+  _ips = Network::Instance()->getallips();
+  EventQueue::Instance()->registerObserver(this);
+  _prevtime = 0;
 }
 
-EventGeneratorFactory::EventGeneratorFactory()
+void
+SillyEventGenerator::run()
 {
+  // first register the exit event
+  vector<string> simargs;
+  simargs.push_back(_exittime);
+  simargs.push_back("exit");
+  SimEvent *se = New SimEvent(&simargs);
+  add_event(se);
+
+  bullshit();
+  EventQueue::Instance()->go();
 }
 
-EventGeneratorFactory::~EventGeneratorFactory()
+
+void
+SillyEventGenerator::kick(Observed *o, ObserverInfo *oi)
 {
+  if(now() == _prevtime)
+    return;
+
+  bullshit();
+  _prevtime = now();
 }
 
-
-EventGenerator *
-EventGeneratorFactory::create(string type, Args *a)
+void
+SillyEventGenerator::bullshit()
 {
-  EventGenerator *eg = 0;
-
-  if(type == "FileEventGenerator")
-    eg = New FileEventGenerator(a);
-
-  if(type == "ChurnEventGenerator")
-    eg = New ChurnEventGenerator(a);
-
-  if(type == "SillyEventGenerator")
-    eg = New SillyEventGenerator(a);
-
-  delete a;
-  return eg;
+  Args *a = New Args();
+  char key[32]; sprintf(key, "%d", (unsigned) (random() % _ips.size())+1);
+  (*a)["ip"] = string(key);
+  P2PEvent *e = New P2PEvent(now()+1, _proto, ((random() % _ips.size())+1), "lookup", a);
+  add_event(e);
 }

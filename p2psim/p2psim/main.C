@@ -83,7 +83,7 @@ parse_args(int argc, char *argv[])
     switch (ch) {
     case 'e':
       seed = atoi(optarg);
-      fprintf(stderr,"srand set seed to %u\n",seed);
+      // fprintf(stderr,"srand set seed to %u\n",seed);
       srandom(seed);
       break;
     case 'f':

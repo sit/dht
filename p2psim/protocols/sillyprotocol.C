@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 Thomer M. Gil (thomer@csail.mit.edu)
+ * Copyright (c) 2003 Thomer M. Gil
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -22,44 +22,33 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "eventgeneratorfactory.h"
-#include "fileeventgenerator.h"
-#include "churneventgenerator.h"
-#include "sillyeventgenerator.h"
+#include "sillyprotocol.h"
+#include <iostream>
+using namespace std;
 
-EventGeneratorFactory *EventGeneratorFactory::_instance = 0;
-
-EventGeneratorFactory*
-EventGeneratorFactory::Instance()
-{
-  if(!_instance)
-    _instance = New EventGeneratorFactory();
-  return _instance;
-}
-
-EventGeneratorFactory::EventGeneratorFactory()
+SillyProtocol::SillyProtocol(Node *n, Args a) : P2Protocol(n)
 {
 }
 
-EventGeneratorFactory::~EventGeneratorFactory()
+SillyProtocol::~SillyProtocol()
 {
 }
 
-
-EventGenerator *
-EventGeneratorFactory::create(string type, Args *a)
+void
+SillyProtocol::join(Args *args)
 {
-  EventGenerator *eg = 0;
+}
 
-  if(type == "FileEventGenerator")
-    eg = New FileEventGenerator(a);
+void
+SillyProtocol::lookup(Args *args)
+{
+  IPAddress ip = args->nget<IPAddress>("ip", 1, 10);
+  silly_args a;
+  silly_result r;
+  doRPC(ip, &SillyProtocol::be_silly, &a, &r);
+}
 
-  if(type == "ChurnEventGenerator")
-    eg = New ChurnEventGenerator(a);
-
-  if(type == "SillyEventGenerator")
-    eg = New SillyEventGenerator(a);
-
-  delete a;
-  return eg;
+void
+SillyProtocol::be_silly(silly_args *a, silly_result *r)
+{
 }

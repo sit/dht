@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 Thomer M. Gil (thomer@csail.mit.edu)
+ * Copyright (c) 2003 Thomer M. Gil
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -22,44 +22,32 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "eventgeneratorfactory.h"
-#include "fileeventgenerator.h"
-#include "churneventgenerator.h"
-#include "sillyeventgenerator.h"
+#ifndef __SILLY_PROTOCOL_H
+#define __SILLY_PROTOCOL_H
 
-EventGeneratorFactory *EventGeneratorFactory::_instance = 0;
+#include "p2psim/p2protocol.h"
+using namespace std;
 
-EventGeneratorFactory*
-EventGeneratorFactory::Instance()
-{
-  if(!_instance)
-    _instance = New EventGeneratorFactory();
-  return _instance;
-}
+class SillyProtocol : public P2Protocol {
+public:
+  SillyProtocol(Node*, Args);
+  ~SillyProtocol();
 
-EventGeneratorFactory::EventGeneratorFactory()
-{
-}
+  string proto_name() { return "SillyProtocol"; }
+  virtual void join(Args*);
+  virtual void crash(Args*) { node()->crash(); }
+  virtual void lookup(Args*);
 
-EventGeneratorFactory::~EventGeneratorFactory()
-{
-}
+  struct silly_args {
+  };
 
+  struct silly_result {
+  };
 
-EventGenerator *
-EventGeneratorFactory::create(string type, Args *a)
-{
-  EventGenerator *eg = 0;
+  void be_silly(silly_args*, silly_result*);
 
-  if(type == "FileEventGenerator")
-    eg = New FileEventGenerator(a);
+private:
+  IPAddress _otherguy;
+};
 
-  if(type == "ChurnEventGenerator")
-    eg = New ChurnEventGenerator(a);
-
-  if(type == "SillyEventGenerator")
-    eg = New SillyEventGenerator(a);
-
-  delete a;
-  return eg;
-}
+#endif // __SILLY_PROTOCOL_H
