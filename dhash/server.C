@@ -54,7 +54,9 @@
 #endif
 
 #include <modlogger.h>
-#define dhashtrace modlogger ("dhash")
+#define warning modlogger ("dhash", modlogger::WARNING)
+#define info  modlogger ("dhash", modlogger::INFO)
+#define trace modlogger ("dhash", modlogger::TRACE)
 
 #include <merkle_sync_prot.h>
 int JOSH = getenv("JOSH") ? atoi(getenv("JOSH")) : 0;
@@ -149,8 +151,8 @@ dhash_impl::dhash_impl (str dbname, u_int k, int _ss_mode)
   opts.addOption("opt_nodesize", 4096);
 
   if (int err = db->opendb(const_cast < char *>(dbname.cstr()), opts)) {
-    warn << "db file: " << dbname <<"\n";
-    warn << "open returned: " << strerror(err) << "\n";
+    warning << "db file: " << dbname <<"\n";
+    warning << "open returned: " << strerror(err) << "\n";
     exit (-1);
   }
  
@@ -159,15 +161,15 @@ dhash_impl::dhash_impl (str dbname, u_int k, int _ss_mode)
 
   str cdbs = strbuf() << dbname << ".c";
   if (int err = cache_db->opendb(const_cast < char *> (cdbs.cstr()), opts)) {
-    warn << "cache db file: " << cdbs <<"\n";
-    warn << "open returned: " << strerror(err) << "\n";
+    warning << "cache db file: " << cdbs <<"\n";
+    warning << "open returned: " << strerror(err) << "\n";
     exit (-1);
   }
 
   str kdbs = strbuf() << dbname << ".k";
   if (int err = keyhash_db->opendb(const_cast < char *> (kdbs.cstr()), opts)) {
-    warn << "keyhash db file: " << kdbs <<"\n";
-    warn << "open returned: " << strerror(err) << "\n";
+    warning << "keyhash db file: " << kdbs <<"\n";
+    warning << "open returned: " << strerror(err) << "\n";
     exit (-1);
   }
 
@@ -202,7 +204,7 @@ dhash_impl::init_after_chord(ptr<vnode> node, ptr<route_factory> _r_factory)
   keyhash_mgr_tcb = NULL;
 
   // RPC demux
-  warn << host_node->my_ID () << " registered dhash_program_1\n";
+  trace << host_node->my_ID () << " registered dhash_program_1\n";
   host_node->addHandler (dhash_program_1, wrap(this, &dhash_impl::dispatch));
 
   //the client helper class (will use for get_key etc)
@@ -274,7 +276,7 @@ dhash_impl::missing_retrieve_cb (bigint key, dhash_stat err,
   assert (missing_outstanding >= 0);
 
   if (err) {
-    warn << "Could not retrieve key " << key << "\n";
+    trace << "Could not retrieve key " << key << "\n";
   } else {
     assert (b);
     // Oh, the memory copies.
@@ -287,7 +289,7 @@ dhash_impl::missing_retrieve_cb (bigint key, dhash_stat err,
     ref<dbrec> k = id2dbrec (key);
     int ret = dbwrite (k, d, DHASH_CONTENTHASH);
     if (ret != 0)
-      warn << "merkle dbwrite failure: " << db_strerror (ret) << "\n";
+      warning << "merkle dbwrite failure: " << db_strerror (ret) << "\n";
   }
 
   while ((missing_outstanding <= MISSING_OUTSTANDING_MAX)
@@ -323,7 +325,7 @@ dhash_impl::keyhash_mgr_timer ()
       if (responsible (n)) {
         // replicate a block if we are responsible for it
         for (unsigned j=0; j<replicas.size(); j++) {
-	  // warnx << "keyhash: " << n << " to " << replicas[j]->id () << "\n";
+	  // trace << "keyhash: " << n << " to " << replicas[j]->id () << "\n";
           keyhash_mgr_rpcs ++;
           cli->sendblock (replicas[j], blockID(n, DHASH_KEYHASH, DHASH_BLOCK),
 			  keyhash_db,
@@ -353,7 +355,7 @@ dhash_impl::keyhash_mgr_lookup (chordID key, dhash_stat err,
   keyhash_mgr_rpcs --;
   if (!err) {
       keyhash_mgr_rpcs ++;
-      // warnx << "keyhash: sync " << key << " to " << r.back()->id () << "\n";
+      // trace << "keyhash: sync " << key << " to " << r.back()->id () << "\n";
       cli->sendblock (r.back (), blockID(key, DHASH_KEYHASH, DHASH_BLOCK),
 		      keyhash_db,
 		      wrap (this, &dhash_impl::keyhash_sync_done));
@@ -471,7 +473,7 @@ dhash_impl::dispatch (user_args *sbp)
       for (u_int i = 0; i < arg->keys.size (); i++) {
 	ref<dbrec> kkk = id2dbrec (arg->keys[i]);
 	res.resok->accepted[i] = !db->lookup (kkk);
-	warn << host_node->my_ID () << ": " << arg->keys[i]
+	info << host_node->my_ID () << ": " << arg->keys[i]
 	     << (res.resok->accepted[i] ? " not" : "") << " present\n";
       }
 
@@ -800,7 +802,7 @@ dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
     case DHASH_CONTENTHASH:
       if (arg->type == DHASH_CACHE) {
 	if (!verify_content_hash (arg->key, ss->buf, ss->size)) {
-	  warnx << "cache: cannot verify " << ss->size << " bytes\n";
+	  warning << "cache: cannot verify " << ss->size << " bytes\n";
 	  stat = DHASH_STORE_NOVERIFY;
 	  break;
 	}
@@ -817,7 +819,7 @@ dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
       {
 	int ret = dbwrite (k, d, arg->ctype);
 	if (ret != 0) {
-	  warn << "dbwrite failure: " << db_strerror (ret) << "\n";
+	  warning << "dbwrite failure: " << db_strerror (ret) << "\n";
 	  stat = DHASH_STOREERR;
 	}
       }
@@ -1014,8 +1016,8 @@ dhash_impl::dbwrite (ref<dbrec> key, ref<dbrec> data, dhash_ctype ctype)
   if (key->isFrag() &&
       (u_long) data->len > 9 + 2 * num_dfrags ())
     x = strbuf () << " " << hexdump (data->value + 8, 2*(num_dfrags () + 1));
-  dhashtrace << "dbwrite: " << host_node->my_ID ()
-	     << " " << action << " " << dbrec2id(key) << x << "\n";
+  info << "dbwrite: " << host_node->my_ID ()
+       << " " << action << " " << dbrec2id(key) << x << "\n";
 
   return ret;
 }
@@ -1028,7 +1030,7 @@ dhash_impl::dbdelete (ref<dbrec> key)
   assert (exists);
   block blk (hkey, NULL);
   mtree->remove (&blk);
-  warn << "dbdelete: " << host_node->my_ID ()
+  info << "dbdelete: " << host_node->my_ID ()
        << " " << dbrec2id(key) << "\n";
 }
 

@@ -2,8 +2,9 @@
 
 // Statics
 int modlogger::logfd = 2;
+int modlogger::maxprio = modlogger::INFO;
 
-modlogger::modlogger (char *module)
+modlogger::modlogger (char *module, int p) : prio (p)
 {
   timespec ts;
   clock_gettime (CLOCK_REALTIME, &ts);
@@ -23,6 +24,8 @@ modlogger::operator() (const char *fmt, ...) const
 
 modlogger::~modlogger ()
 {
+  if (prio > maxprio)
+    return;
   int saved_errno = errno;
   uio->output (logfd);
   errno = saved_errno;

@@ -50,7 +50,10 @@
 #include <coord.h>
 #include <misc_utils.h>
 #include <modlogger.h>
-#define trace modlogger ("dhashcli")
+
+#define warning modlogger ("dhashcli", modlogger::WARNING)
+#define info  modlogger ("dhashcli", modlogger::INFO)
+#define trace modlogger ("dhashcli", modlogger::TRACE)
 
 #ifdef DMALLOC
 #include <dmalloc.h>
@@ -76,9 +79,8 @@ dhashcli::retrieve (blockID blockID, cb_ret cb, int options,
   // at any given time.
   chordID myID = clntnode->my_ID ();
 
-#ifdef VERBOSE_LOG    
   trace << myID << ": retrieve (" << blockID << "): new retrieve.\n";
-#endif /* VERBOSE_LOG */
+  
   ptr<rcv_state> rs = New refcounted<rcv_state> (blockID);
   rs->callbacks.push_back (cb);
   
@@ -138,7 +140,7 @@ dhashcli::retrieve_dl_or_walk_cb (ptr<rcv_state> rs, dhash_stat status,
       rs->complete (DHASH_NOENT, NULL);
       rs = NULL;
     } else if (rs->succs.size() == 0) {
-      warn << "walk: No luck walking successors, retrying..\n";
+      trace << myID << ": walk (" << rs->key << "): No luck walking successors, retrying..\n";
       route_iterator *ci = r_factory->produce_iterator_ptr (rs->key.ID);
       delaycb (5, wrap (ci, &route_iterator::first_hop, 
 			wrap (this, &dhashcli::retrieve_block_hop_cb,
@@ -266,9 +268,9 @@ order_succs (const vec<float> &me, const vec<chord_node> &succs,
 #ifdef VERBOSE_LOG
     char buf[10]; // argh. please shoot me.
     sprintf (buf, "%5.2f", d2me[i].d_);
-    modlogger ("orderer") << d2me[i].i_ << " "
-			  << succs[d2me[i].i_] << " "
-			  << buf << "\n";
+    modlogger ("orderer", modlogger::TRACE) << d2me[i].i_ << " "
+					    << succs[d2me[i].i_] << " "
+					    << buf << "\n";
 #endif /* VERBOSE_LOG */    
     out.push_back (succs[d2me[i].i_]);
   }
@@ -308,8 +310,9 @@ dhashcli::retrieve_lookup_cb (ptr<rcv_state> rs,
   if (server_selection_mode & 1) {
     // Store list of successors ordered by expected distance.
     // fetch_frag will pull from this list in order.
-#ifdef VERBOSE_LOG    
-    modlogger ("orderer") << "ordering for block " << rs->key << "\n";
+#ifdef VERBOSE_LOG
+    modlogger ("orderer", modlogger::TRACE) << "ordering for block "
+					    << rs->key << "\n";
 #endif /* VERBOSE_LOG */    
     order_succs (clntnode->my_location ()->coords (),
 		 succs, rs->succs);
@@ -359,7 +362,7 @@ dhashcli::retrieve_fetch_cb (ptr<rcv_state> rs, u_int i,
   
   if (!Ida::reconstruct (rs->frags, newblock)) {
     if (rs->frags.size () >= dhash::num_dfrags ()) {
-      trace << myID << ": retrieve (" << rs->key << "): reconstruction failed.\n";
+      warning << myID << ": retrieve (" << rs->key << "): reconstruction failed.\n";
       rs->errors++;
       fetch_frag (rs);
     }
@@ -478,7 +481,7 @@ dhashcli::insert_succlist_cb (ref<dhash_block> block, cbinsert_path_t cb,
   if (status) {
     vec<chordID> rrr;
     cb (DHASH_CHORDERR, rrr);
-    warn << "succlist: failure\n";
+    info << "insert_succlist_cb: failure (" << block->ID << "\n";
     return;
   }
 
@@ -518,7 +521,7 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
   }
 
   if (dhash::num_efrags () > succs.size ()) {
-    warn << "Not enough successors: |succs| " << succs.size ()
+    info << "Not enough successors: |succs| " << succs.size ()
 	 << ", EFRAGS " << dhash::num_efrags () << "\n";
     (*cb) (DHASH_STOREERR, mt); // XXX Not the right error code...
     return;
@@ -531,7 +534,7 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
   if (m > dhash::num_dfrags ())
     m = dhash::num_dfrags ();
 
-  // warnx << "Using m = " << m << " for block size " << block->len << "\n";
+  // trace << "Using m = " << m << " for block size " << block->len << "\n";
 
   for (u_int i = 0; i < dhash::num_efrags (); i++) {
     assert (i < succs.size ());
@@ -564,9 +567,9 @@ dhashcli::insert_store_cb (ref<sto_state> ss, route r, u_int i,
 {
   ss->out -= 1;
   if (err) {
-    warnx << "fragment/block store failed: " << ss->block->ID
-	  << " fragment " << i << "/" << nstores
-	  << ": " << err << "\n";
+    info << "fragment/block store failed: " << ss->block->ID
+	 << " fragment " << i << "/" << nstores
+	 << ": " << err << "\n";
   } else {
     ss->good += 1;
   }
@@ -577,10 +580,10 @@ dhashcli::insert_store_cb (ref<sto_state> ss, route r, u_int i,
   if (ss->out == 0) {
     chordID myID = clntnode->my_ID ();
     if (ss->good < nstores) {
-      trace << myID << ": store (" << ss->block->ID << "): only stored "
-	    << ss->good << " of " << nstores << " encoded.\n";
+      warning << myID << ": store (" << ss->block->ID << "): only stored "
+	      << ss->good << " of " << nstores << " encoded.\n";
       if (ss->good < min_needed) {
-	trace << myID << ": store (" << ss->block->ID << "): failed;"
+	warning << myID << ": store (" << ss->block->ID << "): failed;"
 	  " insufficient frags/blocks stored.\n";
 	
 	r_ret.push_back (ss->succs[0].x);

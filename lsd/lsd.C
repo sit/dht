@@ -41,7 +41,7 @@
 #include "route_secchord.h"
 
 #include <modlogger.h>
-#define lsdtrace modlogger ("lsd")
+#define info modlogger ("lsd")
 
 //#define PROFILING 
 
@@ -214,7 +214,7 @@ void
 halt ()
 {
   warnx << "Exiting on command.\n";
-  lsdtrace << "stopping.\n";
+  info << "stopping.\n";
   exit (0);
 }
 
@@ -539,7 +539,7 @@ main (int argc, char **argv)
 
   char *cffile = NULL;
 
-  while ((ch = getopt (argc, argv, "B:b:cd:fFj:l:L:M:m:n:O:Pp:S:s:T:v:w:")) != -1)
+  while ((ch = getopt (argc, argv, "B:b:cd:fFj:l:L:M:m:n:O:Pp:S:s:T:tv:w:")) != -1)
     switch (ch) {
     case 'B':
       cache_size = atoi (optarg);
@@ -630,6 +630,9 @@ main (int argc, char **argv)
     case 's':
       ss_mode = atoi(optarg);
       break;
+    case 't':
+      modlogger::setmaxprio (modlogger::TRACE);
+      break;
     case 'T':
       logfname = optarg;
       break;
@@ -665,7 +668,7 @@ main (int argc, char **argv)
     strbuf x = strbuf ("starting: ");
     for (int i = 0; i < argc; i++) { x << argv[i] << " "; }
     x << "\n";
-    lsdtrace << x;
+    info << x;
   }
 
   if (cffile) {
@@ -703,7 +706,7 @@ main (int argc, char **argv)
 
   if (p2psocket) 
     startclntd();
-  lsdtrace << "starting amain.\n";
+  info << "starting amain.\n";
   if (monitor_host)
     monitor_start (monitor_host);
 
