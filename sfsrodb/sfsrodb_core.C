@@ -1,4 +1,4 @@
-/* $Id: sfsrodb_core.C,v 1.19 2002/02/04 19:47:34 cates Exp $ */
+/* $Id: sfsrodb_core.C,v 1.20 2002/02/11 22:25:32 cates Exp $ */
 
 /*
  *
@@ -35,7 +35,7 @@ long out=0;
 static void
 check_cbs () 
 {
-  while (out > 8) 
+  while (out > 100) 
     acheck();
 }
 

@@ -88,8 +88,8 @@ public:
 	vNew cache_entry (this, kk, vv);
         return 1;
       } else {
-	// XXX what if a new value under an old key.  Is
-	// touch() really the expected behavior?  --josh
+	// XXX What if entering a new value under an old key.  Does
+	// touch() really give the expected behavior?  --josh
 	ad->touch ();
         return 0;
       }
@@ -100,7 +100,6 @@ public:
       cache_entry *ad = entries[k];
       assert (ad);
       delete ad;
-      num_cache_entries--;
     }
 
    VALUE *lookup (KEY& kk)

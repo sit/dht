@@ -106,10 +106,19 @@ dhash::dispatch (svccb *sbp)
       
       dhash_fetchiter_res res (DHASH_CONTINUE);
       if (key_status (farg->key) != DHASH_NOTPRESENT) {
-	//fetch the key and return it, end of story
-	fetch (farg->key, wrap (this, &dhash::fetchiter_svc_cb,
-				sbp, farg));
-	return;
+	if (farg->len > 0) {
+	  //fetch the key and return it, end of story
+	  fetch (farg->key, wrap (this, &dhash::fetchiter_svc_cb, sbp, farg));
+	  return;
+	} else {
+	  // on zero length request, we just return
+	  // whether we store the block or not
+	  res.set_status (DHASH_COMPLETE);
+	  res.compl_res->res.setsize (0);
+	  res.compl_res->attr.size = 0;
+	  res.compl_res->offset = 0;
+	  res.compl_res->source = host_node->my_ID ();
+	} 
       } else if (responsible (farg->key))  {
 	//no where else to go, return NOENT or RETRY?
 	res.set_status (DHASH_NOENT);

@@ -297,16 +297,18 @@ dhashgateway::lookup_iter_cb (svccb *sbp,
     }
   } else if (res->status == DHASH_COMPLETE) {
     /* CASE II */
-    save_chunk (arg->key, res, path);
-    dhash_res *fres = New dhash_res (DHASH_OK);
-    fres->resok->res = res->compl_res->res;
-    fres->resok->offset = res->compl_res->offset;
-    fres->resok->attr = res->compl_res->attr;
-    fres->resok->hops = path.size()-1 + nerror*100;
-    fres->resok->source = path.back ();
-    cache_on_path (arg->key, path);
-    sbp->reply (fres);
-    delete fres;
+    // a zero size just checks if the block exists, ie. no download occurs
+    if (res->compl_res->res.size() > 0) {
+      save_chunk (arg->key, res, path);
+      cache_on_path (arg->key, path);
+    }
+    dhash_res fres (DHASH_OK);
+    fres.resok->res = res->compl_res->res;
+    fres.resok->offset = res->compl_res->offset;
+    fres.resok->attr = res->compl_res->attr;
+    fres.resok->hops = path.size()-1 + nerror*100;
+    fres.resok->source = path.back ();
+    sbp->reply (&fres);
   } else if (res->status == DHASH_CONTINUE) {
     chordID next = res->cont_res->next.x;
     chordID prev = path.back ();
@@ -505,11 +507,12 @@ dhashgateway::cache_on_path (chordID key, route path)
   warnx << "\n";
 #endif
 
-  if (!block_complete (key))
+  if (!block_complete (key)) 
     return;
 
   if (do_caching && path.size () >= 2)
     send_block (key, path[path.size () - 2], DHASH_CACHE);
+
   forget_block (key);
 }
 
@@ -594,8 +597,34 @@ protected:
     : gwclnt (gwclnt), npending_rpcs (0), error (false), key (key),
       block (buf, buflen), cb (cb), auth_type (t)
   {
-    step1();
+    check_exists ();
   }
+
+  void check_exists ()
+  {
+    ptr<dhash_res> res = New refcounted<dhash_res> (DHASH_OK);
+    dhash_fetch_arg arg;
+    arg.key = key;
+    arg.len = 0;
+    arg.start = 0;
+    gwclnt->call (DHASHPROC_LOOKUP, &arg, res,
+		 wrap (this, &dhash_insert::check_exists_cb, res));
+  }
+
+  void check_exists_cb (ptr<dhash_res> res, clnt_stat err)
+  {
+    if (!err && res->status == DHASH_OK) {
+      warn << "exists: " << key << "\n";
+      // if the data is already inserted, report back success
+      (*cb) (false, key);
+      delete this;
+    } else {
+      warn << "NOT exists: " << key << "\n";
+      // otherwise, we need to insert the data
+      step1 ();
+    }
+  }
+
 
   void step1 ()
   {
@@ -657,14 +686,17 @@ protected:
     else if (res->status != DHASH_OK) 
       fail (dhasherr2str (res->status));
 
-    if (npending_rpcs == 0 && cb)
+    if (npending_rpcs == 0) {
+      warn << "finished insert: " << key << "\n";
       (*cb) (error, key);
+      delete this;
+    }
   }
 
   void fail (str errstr)
   {
     if (errstr)
-      warn ("dhash_insert failed: %s: %s\n", key.cstr (), errstr.cstr ());
+      warn << "dhash_insert failed: " << key << ": " << errstr << "\n";
 
     error = true;
   }
@@ -674,7 +706,7 @@ public:
   static void execute (ptr<aclnt> gwclnt, bigint key, const char *buf,
 		       size_t buflen, cbinsert_t cb, dhash_ctype t)
   {
-    vNew refcounted<dhash_insert>(gwclnt, key, buf, buflen, cb, t);
+    vNew dhash_insert (gwclnt, key, buf, buflen, cb, t);
   }
 };
 
@@ -704,7 +736,7 @@ protected:
   {
     ptr<dhash_res> res = New refcounted<dhash_res> (DHASH_OK);
     dhash_fetch_arg arg;
-    arg.key = this->key;
+    arg.key = key;
     arg.len = FOO_MTU;
     arg.start = 0;
     npending_rpcs++;
@@ -770,13 +802,13 @@ protected:
 	ptr<dhash_block> contents = get_block_contents (block, t);
 	(*cb) (contents);
       }
+      delete this;
     }
   }
 
   void fail (str errstr)
   {
-    warn ("dhash_retrieve failed: %s: %s\n",
-	  key.cstr (), errstr.cstr ());
+    warn << "dhash_retrieve failed: " << key << ": " << errstr << "\n";
     error = true;
   }
 
@@ -818,7 +850,7 @@ public:
   static void execute (ptr<aclnt> gwclnt, bigint key, dhash_ctype t,
 		       cbretrieve_t cb, bool verify)
   {
-    vNew refcounted<dhash_retrieve>(gwclnt, key, t, cb, verify);
+    vNew dhash_retrieve (gwclnt, key, t, cb, verify);
   }
 };
 
@@ -909,3 +941,4 @@ dhashclient::sync_setactive (int32 n)
   
   return (err || res != DHASH_OK);
 }
+
