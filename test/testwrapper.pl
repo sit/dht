@@ -1,4 +1,29 @@
 #!/usr/bin/perl -w 
+# 
+# testwrapper.pl  convenient wrapper around testing tools
+# 
+# Copyright (C) 2002  Thomer M. Gil (thomer@lcs.mit.edu)
+#   		       Massachusetts Institute of Technology
+# 
+#  Permission is hereby granted, free of charge, to any person obtaining
+#  a copy of this software and associated documentation files (the
+#  "Software"), to deal in the Software without restriction, including
+#  without limitation the rights to use, copy, modify, merge, publish,
+#  distribute, sublicense, and/or sell copies of the Software, and to
+#  permit persons to whom the Software is furnished to do so, subject to
+#  the following conditions:
+# 
+#  The above copyright notice and this permission notice shall be
+#  included in all copies or substantial portions of the Software.
+# 
+#  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+#  EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+#  MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+#  NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+#  LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+#  OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+#  WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+# 
 
 use FileHandle;
 use Data::Dumper;
@@ -21,7 +46,7 @@ my $SLEEP = "5";
 
 sub usage {
   print <<EOF;
-Usage: testsetup [-c ] [-d] [-h] [-k] [-q] [-s] [-v] CONFIG_FILE
+Usage: testwrapper.pl [-c ] [-d] [-h] [-k] [-q] [-s] [-v] CONFIG_FILE
 
 -c,--confsave / +c  :  don't delete generated conf file, default off
 -d,--dryrun   / +d  :  don't really do anything
@@ -199,7 +224,7 @@ sub main {
 sub do_execute {
   my ($host, $cmd) = @_;
   unless($host eq "localhost" || $host =~ m/^127/) {
-    $cmd = "$SSH $host->{NAME} $cmd";
+    $cmd = "$SSH $host $cmd";
   }
   $suppress and $cmd .= " > /dev/null 2>&1";
   $verbose >= 2 and print "executing: $cmd\n";
