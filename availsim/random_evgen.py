@@ -3,9 +3,9 @@ import bisect
 import random
 import string
 import sys
+from utils import random_id, random_interval
 
 initial_nodes = 200
-nbits = 20
 
 mttr   = 60.0 # time steps to repair
 mttf   = 60.0 # time steps to failure
@@ -16,16 +16,9 @@ pc     = 0.10  # chance of a failure being a complete crash
 mu_i   = 10    # number of blocks inserted per timestep
 sd_i   = 10
 
-
 stop_time = 1000
 if len (sys.argv) > 1:
     stop_time = int (sys.argv[1])
-
-def random_id ():
-    return random.randrange (0, 2**nbits)
-
-def random_interval (mean, sd):
-    return max (0, int (random.gauss (mean, sd)))
 
 class event:
     def __init__ (my, t, type, args):
@@ -67,7 +60,7 @@ for t in xrange(0,stop_time):
 	    # Initiate repair!
 	    nt = random_interval (mttr, sd)
 	    add_event (t + nt, "join", ev.args)
-        elif ev.type == "join" and t > mttf:  # give some startup time.
+        elif ev.type == "join":  # give some startup time.
             # Schedule failure.
 	    nt = random_interval (mttf, sd)
             type = "fail"

@@ -1,3 +1,12 @@
+import random
+import sha
+
+def random_id (nbits = 20):
+    return random.randrange (0, 2**nbits)
+
+def random_interval (mean, sd):
+    return max (0, int (random.gauss (mean, sd)))
+
 def str2chordID (s):
     newID = 0L
     for c in s.lower ():
@@ -12,7 +21,7 @@ def str2chordID (s):
     
 def make_chordID (ip, port, vnode):
     """Create a chordID the same way that the C++ implementation does."""
-    return sha("%s.%d.%d" % (ip, port, vnode)).hexdigest ()
+    return sha.sha("%s.%d.%d" % (ip, port, vnode)).hexdigest ()
 
 # Taken from cb's ls.py
 def size_rounder(bytes):                ### express byte size as 4-char string
