@@ -426,10 +426,12 @@ Chord::next_handler(next_args *args, next_ret *ret)
     }
   }
 
-  if ((ret->v.size() >= args->m)
-      || (succs.size() < args->m)) { //this means there's < m nodes in the system 
+  if ((ret->v.size() >= (unsigned) args->m) ||
+      (succs.size() < (unsigned) args->m))
+  {
+    //this means there's < m nodes in the system 
     ret->done = true;
- } else {
+  } else {
     ret->done = false;
     // XXX for iterative, me should really be the requesting node
     bool done;

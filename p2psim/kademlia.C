@@ -191,8 +191,11 @@ Kademlia::lookup(Args *args)
   lookup_args la(_id, ip(), key, true);
   lookup_result lr;
 
+  Time before = now();
   do_lookup(&la, &lr);
+  Time after = now();
   KDEBUG(1) << "lookup: " << printID(key) << " is on " << Kademlia::printbits(lr.rid) << endl;
+  cout << "latency = " << after - before << endl;
 }
 
 // }}}
@@ -247,26 +250,6 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
       toask = tasks.front();
       tasks.pop_front();
     }
-
-    // printf("do_lookup: toask after pop = %p", toask);
-    // if(toask) {
-    //   string s = printbits(toask->id);
-    //   printf("  toask id = %s, ip = %d", s.c_str(), toask->ip);
-    // }
-    // printf("\n");
-
-    /*
-    assert(toask == 0);
-    for(vector<peer_t*>::const_iterator i=results->begin(); i != results->end(); ++i) {
-      KDEBUG(2) << "do_lookup: considering for asyncRPC id = " << printbits((*i)->id) << ", ip = " << (*i)->ip << endl;
-      if(!asked[(*i)->id]) {
-        toask = *i;
-        KDEBUG(2) << "do_lookup: taken" << endl;
-        break;
-      }
-      KDEBUG(2) << "do_lookup: already considered" << endl;
-    }
-    */
 
     KDEBUG(2) << "do_lookup: top of the loop, outstanding = " << outstanding << endl;
 
@@ -406,8 +389,8 @@ Kademlia::do_lookup_wrapper(peer_t *p, Kademlia::NodeID key,
   lookup_args la(_id, ip(), key, true);
   lookup_result lr;
 
-  _controlmsg++;
   assert(p->ip);
+  _controlmsg++;
   if(!doRPC(p->ip, &Kademlia::do_lookup, &la, &lr))
     _tree->erase(p->id);
 
@@ -491,7 +474,7 @@ Kademlia::init_state(list<Protocol*> l)
   // just bloody call insert on everyone
   for(list<Protocol*>::const_iterator i = l.begin(); i != l.end(); ++i) {
     Kademlia *k = (Kademlia *) *i;
-    _tree->insert(k->id(), k->node()->ip());
+    _tree->insert(k->id(), k->node()->ip(), true);
   }
 }
 
@@ -634,14 +617,18 @@ k_bucket_tree::~k_bucket_tree()
 // }}}
 // {{{ k_bucket_tree::insert (pair)
 void
-k_bucket_tree::insert(NodeID id, IPAddress ip)
+k_bucket_tree::insert(NodeID id, IPAddress ip, bool init_state)
 {
   if(id == _id)
     return;
 
   peer_t *p = 0;
-  if((p = _root->insert(id, ip)))
+  if((p = _root->insert(id, ip, init_state)) || init_state) {
     _nodes[id] = p;
+    return;
+  }
+
+  // return 0 and we're not init_state-ing.  put in replacement cache.
 }
 
 // }}}
@@ -661,6 +648,9 @@ k_bucket_tree::erase(NodeID id)
 {
   KDEBUG(2) << "k_bucket_tree::erase: id = " << Kademlia::printbits(id) << endl;
   _nodes.erase(id);
+
+  // add replacement
+
   _self->dump();
 }
 
@@ -747,8 +737,10 @@ k_bucket::k_bucket(Kademlia *k, k_bucket_tree *root) : _leaf(false),
   _child[0] = _child[1] = 0;
   _id = _self->id(); // for KDEBUG purposes only
 
-  _nodes = New set<peer_t*, SortedByLastTime>;
+  _nodes = New set<peer_t*, OldestFirst>;
   _nodes->clear();
+  _replacement_cache = New set<peer_t*, NewestFirst>;
+  _replacement_cache->clear();
   if(!_k)
     _k = Kademlia::k();
   assert(_nodes);
@@ -781,7 +773,7 @@ k_bucket::~k_bucket()
 // }}}
 // {{{ k_bucket::insert
 peer_t*
-k_bucket::insert(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned depth, k_bucket *root)
+k_bucket::insert(Kademlia::NodeID node, IPAddress ip, bool init_state, string prefix, unsigned depth, k_bucket *root)
 {
   if(!root)
     root = this; // i.e. Kademlia::_root
@@ -799,7 +791,7 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned de
   if(_child[leftmostbit]) {
     assert(!_leaf);
     KDEBUG(4) << "insert: _child[" << leftmostbit << "] exists, descending" << endl;
-    return _child[leftmostbit]->insert(node, ip, prefix + (leftmostbit ? "1" : "0"), depth+1, root);
+    return _child[leftmostbit]->insert(node, ip, init_state, prefix + (leftmostbit ? "1" : "0"), depth+1, root);
   }
 
 
@@ -840,18 +832,25 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned de
 
   // ping the least-recently seen node.  if that one is
   // OK, then don't do anything.
+  // XXX: init_state hack. (assume all nodes are up.)
   set<peer_t*>::const_iterator least_recent = _nodes->begin();
   assert(*least_recent);
-  if(_self->do_ping_wrapper(*least_recent))
+  if(init_state)
     return 0;
+
+  peer_t *p = New peer_t(node, ip, now());
+  assert(p);
+  if(_self->do_ping_wrapper(*least_recent)) {
+    // put in _replacement_cache
+    _replacement_cache->insert(p);
+    return 0;
+  }
 
   // evict the dead node
   _nodes->erase(least_recent);
   _root->erase((*least_recent)->id);
 
   // insert the new one
-  peer_t *p = New peer_t(node, ip, now());
-  assert(p);
   _nodes->insert(p);
 
   //
@@ -883,7 +882,7 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned de
 
   // now insert at the right child
   KDEBUG(4) <<  "insert: after split, calling insert for prefix " << (prefix + (leftmostbit ? "1" : "0")) << " to depth " << (depth+1) << endl;
-  return _child[leftmostbit]->insert(node, ip, prefix + (leftmostbit ? "1" : "0"), depth+1, root);
+  return _child[leftmostbit]->insert(node, ip, init_state, prefix + (leftmostbit ? "1" : "0"), depth+1, root);
 }
 
 // }}}
@@ -903,7 +902,7 @@ k_bucket::stabilize(string prefix, unsigned depth)
   assert(_nodes);
   if(_nodes->size()) {
     // make a temporary copy
-    set<peer_t*, SortedByLastTime> tmpcopy(*_nodes);
+    set<peer_t*, OldestFirst> tmpcopy(*_nodes);
     for(set<peer_t*>::const_iterator it = tmpcopy.begin(); it != tmpcopy.end(); ++it) {
       if(now() - (*it)->lastts < KADEMLIA_REFRESH)
         continue;

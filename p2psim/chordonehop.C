@@ -82,7 +82,7 @@ ChordOneHop::stabilize()
     //and receivers will get garbage
     uint outstanding = rpcset.size();
     while (outstanding > 0) {
-      unsigned donerpc = rcvRPC(&rpcset);
+      // unsigned donerpc = rcvRPC(&rpcset);
       outstanding--;
       assert(outstanding == rpcset.size());
     }

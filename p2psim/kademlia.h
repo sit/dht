@@ -57,8 +57,6 @@ public:
   };
 
   struct lookup_result {
-    // NodeID id;      // answer to the lookup
-    // IPAddress ip;   // answer to the lookup
     vector<peer_t*> results;
     NodeID rid;     // the guy who's replying
   };
@@ -208,7 +206,7 @@ public:
   k_bucket(Kademlia*, k_bucket_tree*);
   ~k_bucket();
 
-  peer_t* insert(NodeID, IPAddress, string = "", unsigned = 0, k_bucket* = 0);
+  peer_t* insert(NodeID, IPAddress, bool = false, string = "", unsigned = 0, k_bucket* = 0);
   bool stabilized(vector<NodeID>, string = "", unsigned = 0);
   void stabilize(string = "", unsigned = 0);
   void dump(string = "", unsigned = 0);
@@ -219,19 +217,33 @@ private:
   bool _leaf;                   // this should/can not be split further
   Kademlia *_self;              // the kademlia node that this tree is part of
   k_bucket_tree *_root;         // root of the tree that I'm a part of
+  NodeID _id;                   // XXX: so that KDEBUG() works. can be removed later.
 
-  // the following are mutually exclusive, they could go into a union.
-  class SortedByLastTime { public:
+  /*
+   * LEAFS
+   */
+  class OldestFirst { public:
     bool operator()(const peer_t* p1, const peer_t* p2) {
       return p1->lastts != p2->lastts ?
              p1->lastts < p2->lastts :
              p1 < p2;
     }
   };
-  set<peer_t*, SortedByLastTime> *_nodes;      // for a leaf
-  k_bucket* _child[2];          // for a node
+  set<peer_t*, OldestFirst> *_nodes;
 
-  NodeID _id; // so that KDEBUG() works. can be removed later.
+  class NewestFirst { public:
+    bool operator()(const peer_t* p1, const peer_t* p2) {
+      return p1->lastts != p2->lastts ?
+             p1->lastts > p2->lastts :
+             p1 > p2;
+    }
+  };
+  set<peer_t*, NewestFirst> *_replacement_cache;
+
+  /*
+   * NON-LEAFS
+   */
+  k_bucket* _child[2];          // for a node
 };
 
 // }}}
@@ -242,7 +254,7 @@ public:
 
   k_bucket_tree(Kademlia*);
   ~k_bucket_tree();
-  void insert(NodeID node, IPAddress ip);
+  void insert(NodeID node, IPAddress ip, bool = false);
   void insert(vector<peer_t*>*);
   void erase(NodeID node);
   bool stabilized(vector<NodeID>);

@@ -25,6 +25,7 @@ KademliaObserver::KademliaObserver(Args *a) : Observer(a)
   lid.clear();
 }
 
+
 KademliaObserver::~KademliaObserver()
 {
 }
@@ -36,6 +37,7 @@ KademliaObserver::init_state()
   list<Protocol*> l = Network::Instance()->getallprotocols(_type);
   for(list<Protocol*>::iterator pos = l.begin(); pos != l.end(); ++pos) {
     Kademlia *k = (Kademlia*) *pos;
+    DEBUG(1) << "KademliaObserver::init_state " << now() << endl;
     k->init_state(l);
   }
 }
@@ -80,7 +82,6 @@ KademliaObserver::execute()
         reschedule(_reschedule);
       return;
     }
-
   }
 
   DEBUG(1) << now() << " STABILIZED" << endl;
