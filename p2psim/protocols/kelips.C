@@ -73,8 +73,8 @@ Kelips::add_edge(int *matrix, int sz)
   for(map<IPAddress, Info *>::const_iterator ii = _info.begin();
       ii != _info.end();
       ++ii){
-    if (ii->first!=ip() &&Network::Instance()->getnode(ii->first)->alive()) 
-      matrix[(ip()-1)*sz + ii->first-1] = 1;
+    if (ii->first!=ip() &&Network::Instance()->alive(ii->first))
+      matrix[(first_ip()-1)*sz + getpeer(ii->first)->first_ip()-1] = 1;
   }
 }
 
@@ -227,6 +227,8 @@ Kelips::crash(Args *a)
   if (0)
     printf("%qd %d crash\n", now(), ip());
 
+  //cout << now()<<" crash on ip = " << ip() << ", first_ip = " << first_ip() << endl;
+
   assert(_live == true);
   _live = false;
 
@@ -242,19 +244,9 @@ bool
 Kelips::node_key_alive(ID key)
 {
   if(ip2id((IPAddress) key) == key){
-    Node *n = Network::Instance()->getnode((IPAddress) key);
-    assert(n);
-    return n->alive();
-  } else {
-    const set<IPAddress> *ips = Network::Instance()->getallips();
-    for(set<IPAddress>::const_iterator i = ips->begin(); i != ips->end(); ++i){
-      if(ip2id(*i) == key){
-        return Network::Instance()->getnode(*i)->alive();
-      }
-    }
-  }
+    return Network::Instance()->alive((IPAddress) key);
+  } 
   assert(0);
-  return false;
 }
 
 void
@@ -401,7 +393,13 @@ Kelips::lookup1(lookup_args *a)
     IPAddress ip = closest_contact(id2group(a->key));
     if(ip == 0)
       return false;
-    bool ok = xRPC(ip, 3, &Kelips::handle_lookup1, &(a->key), &ip1, STAT_LOOKUP, &(a->total_to), &(a->num_to));
+
+    assert(id2group(a->key) == id2group(ip));
+    //bool ok = xRPC(ip, 3, &Kelips::handle_lookup1, &(a->key), &ip1, STAT_LOOKUP, &(a->total_to), &(a->num_to));
+    lookup1_args aaa;
+    aaa.key = a->key;
+    aaa.dst_ip = ip;
+    bool ok = xRPC(ip, 3, &Kelips::handle_lookup1, &aaa, &ip1, STAT_LOOKUP, &(a->total_to), &(a->num_to));
     a->history.push_back(ip);
     if(!ok || ip1 == 0 || (now()-a->start>=_max_lookup_time))
       return false;
@@ -419,7 +417,12 @@ bool
 Kelips::lookupvia(lookup_args *a, IPAddress via)
 {
   IPAddress ip1 = 0;
-  bool ok = xRPC(via, 3, &Kelips::handle_lookup1, &(a->key), &ip1, STAT_LOOKUP,&(a->total_to), &(a->num_to));
+  assert(id2group(a->key) == id2group(via));
+  lookup1_args aaa;
+  aaa.key = a->key;
+  aaa.dst_ip = via;
+  //bool ok = xRPC(via, 3, &Kelips::handle_lookup1, &(a->key), &ip1, STAT_LOOKUP,&(a->total_to), &(a->num_to));
+  bool ok = xRPC(via, 3, &Kelips::handle_lookup1, &aaa, &ip1, STAT_LOOKUP,&(a->total_to), &(a->num_to));
   a->history.push_back(via);
 
   if(ok == false || ip1 == 0 || (now()-a->start>=_max_lookup_time))
@@ -451,7 +454,12 @@ Kelips::lookup2(lookup_args *a)
     return false;
 
   IPAddress ip2 = 0;
-  ok = xRPC(ip1, 2, &Kelips::handle_lookup1, &(a->key), &ip2, STAT_LOOKUP, &(a->total_to),&(a->num_to));
+  assert(id2group(a->key) == id2group(ip1));
+  //ok = xRPC(ip1, 2, &Kelips::handle_lookup1, &(a->key), &ip2, STAT_LOOKUP, &(a->total_to),&(a->num_to));
+  lookup1_args aaa;
+  aaa.key = a->key;
+  aaa.dst_ip = ip1;
+  ok = xRPC(ip1, 2, &Kelips::handle_lookup1, &aaa, &ip2, STAT_LOOKUP, &(a->total_to),&(a->num_to));
   a->history.push_back(ip1);
 
   if(!ok || ip2 == 0 || (now()-a->start>=_max_lookup_time))
@@ -497,9 +505,13 @@ Kelips::find_by_id(ID key)
 // Someone outside the group is asking us which node is
 // responsible for the given key.
 void
-Kelips::handle_lookup1(ID *kp, IPAddress *res)
+//Kelips::handle_lookup1(ID *kp, IPAddress *res)
+Kelips::handle_lookup1(lookup1_args *kp, IPAddress *res)
 {
-  ID key = *kp;
+  //ID key = *kp;
+  ID key = kp->key;
+  assert(Network::Instance()->alive(kp->dst_ip));
+  assert(ip() == kp->dst_ip);
 
   assert(id2group(key) == group());
 

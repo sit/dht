@@ -97,7 +97,7 @@ parse_args(int argc, char *argv[])
   int ch;
   uint seed;
 
-  while ((ch = getopt (argc, argv, "e:fo:v")) != -1) {
+  while ((ch = getopt (argc, argv, "e:fo:rv")) != -1) {
     switch (ch) {
     case 'e':
       seed = atoi(optarg);
@@ -112,6 +112,9 @@ parse_args(int argc, char *argv[])
 	options.push_back (optarg);
 	break;	
       }
+    case 'r':
+      Node::_replace_on_death = false;
+      break;
     case 'v':
       vis = true;
       break;

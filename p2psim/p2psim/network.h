@@ -41,12 +41,27 @@ public:
   void send(Packet *);
 
   // observers
-  Node* getnode(IPAddress id) { return _nodes[id]; }
+  Node* getnode(IPAddress id) { return _nodes[first_ip(id)];}
+
+  Node* getnodefromfirstip(IPAddress f) {
+    return _nodes[f];
+  }
+  IPAddress first2currip (IPAddress first_ip) { return _nodes[first_ip]->ip();}
   Topology *gettopology() { return _top; }
   const set<Node*> *getallnodes();
-  const set<IPAddress> *getallips();
+  vector<IPAddress> *getallfirstips();
   unsigned size() { return _nodes.size(); }
   Time avglatency();
+  bool alive(IPAddress ip) {
+    Node *n = getnode(ip);
+    return (n->ip()==ip && n->alive());
+  }
+
+  // 
+  IPAddress unused_ip();
+  void map_ip(IPAddress, IPAddress);
+  IPAddress first_ip(IPAddress);
+  bool changed() { return _changed; }
 
   ~Network();
 
@@ -63,8 +78,12 @@ private:
   FailureModel *_failure_model;
 
   set<Node*> *_all_nodes;
-  set<IPAddress> *_all_ips;
+  vector<IPAddress> *_all_ips;
+  HashMap<IPAddress, bool> _corpses;
 
+  HashMap<IPAddress, IPAddress> _new2old;
+  IPAddress _highest_ip;
+  bool _changed;
   Channel *_nodechan;
 };
 

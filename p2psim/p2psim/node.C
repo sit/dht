@@ -35,6 +35,7 @@ string Node::_protocol = "";
 Args Node::_args;
 Time Node::_collect_stat_time = 0;
 bool Node::_collect_stat = false;
+bool Node::_replace_on_death = true;
 // static stat data structs:
 vector<uint> Node::_bw_stats;
 vector<uint> Node::_bw_counts;
@@ -59,9 +60,9 @@ Node::Node(IPAddress i) : _queue_len(0), _ip(i), _alive(true), _token(1)
   if ((ip() == 1) && (_track_conncomp_timer > 0)) {
     delaycb(_track_conncomp_timer, &Node::calculate_conncomp, (void*)NULL);
   }
-
   _num_joins_pos = -1;
-
+  _prev_ip = 0;
+  _first_ip = _ip;
 }
 
 Node::~Node()
@@ -487,14 +488,14 @@ Node::calculate_conncomp(void *)
       old[i] = 99999;
     }
     int alive = 0;
-    for(uint i = 1; i <= sz; i++) {
-      Node *t = dynamic_cast<Node*>(Network::Instance()->getnode(i));
-      if (t->alive()) {
-	old[(i-1)*sz + (i-1)] = 0;
-	t->add_edge(old, sz);
-	alive++;
-      }
+    for (set<Node*>::iterator i = l->begin(); i != l->end(); ++l) {
+      if(!(*i)->alive())
+        continue;
+      old[((*i)->first_ip()-1)*sz + (*i)->first_ip()-1] = 0;
+      (*i)->add_edge(old,sz);
+      alive++;
     }
+
     for (uint k = 0; k < sz; k++) {
       for (uint i = 0; i < sz; i++) {
 	for (uint j = 0; j < sz; j++) {
@@ -606,8 +607,7 @@ void
 Node::Receive(void *px)
 {
   Packet *p = (Packet *) px;
-  Node *proto = Network::Instance()->getnode(p->dst());
-  assert(proto);
+  assert(Network::Instance()->getnode(p->dst()));
 
   // make reply
   Packet *reply = New Packet;
@@ -618,7 +618,7 @@ Node::Receive(void *px)
   Node *s = Network::Instance()->getnode(reply->src());
   reply->_queue_delay = s->queue_delay ();
 
-  if (proto->alive () && Network::Instance()->gettopology()->latency(p->_src, p->_dst, p->reply()) != 100000 ) {
+  if (Network::Instance()->alive(p->dst())) {
     (p->_fn)(p->_args);
     reply->_ok = true;
   } else {
@@ -631,6 +631,20 @@ Node::Receive(void *px)
 
   // ...and we're done
   taskexit(0);
+}
+
+IPAddress
+Node::set_alive(bool a)
+{ 
+  if(!a && _replace_on_death) {
+    _prev_ip = _ip;
+  } else if(a && _replace_on_death && _prev_ip) {
+    _ip = Network::Instance()->unused_ip();
+    Network::Instance()->map_ip(_first_ip, _ip);
+  }
+
+  _alive = a;
+  return _ip;
 }
 
 #include "bighashmap.cc"

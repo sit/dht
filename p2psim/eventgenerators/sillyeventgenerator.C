@@ -35,7 +35,7 @@ SillyEventGenerator::SillyEventGenerator(Args *args)
   _exittime = (*args)["exittime"];
   assert(_exittime != "");
 
-  _ips = Network::Instance()->getallips();
+  _ips = Network::Instance()->getallfirstips();
   EventQueue::Instance()->registerObserver(this);
   _prevtime = 0;
 }

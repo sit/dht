@@ -26,6 +26,7 @@
 #define __E2EGRAPH_H
 
 #include <string>
+#include "p2psim/bighashmap.hh"
 using namespace std;
 
 

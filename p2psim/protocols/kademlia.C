@@ -352,6 +352,12 @@ Kademlia::join(Args *args)
 
   IPAddress wkn = args->nget<IPAddress>("wellknown");
 
+  // pick a new ID
+  _nodeid2kademlia->remove(_id);
+  _id = ConsistentHash::ip2chid(ip());
+  assert(!_nodeid2kademlia->find_pair(_id));
+  _nodeid2kademlia->insert(_id, this);
+
   // I am the well-known node
   if(wkn == ip()) {
     if(stabilize_timer)

@@ -70,7 +70,7 @@ private:
   string _exittime_string;
   Time _exittime;
   bool _ipkeys;
-  vector<IPAddress> _ips;
+  vector<IPAddress> *_ips;
 
   Time next_exponential(u_int mean);
   string get_lookup_key();

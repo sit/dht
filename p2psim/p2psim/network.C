@@ -52,10 +52,13 @@ Network::Network(Topology *top, FailureModel *fm) : _top(0),
   _failure_model = fm;
   assert(_failure_model);
 
-  _all_ips = New set<IPAddress>;
+  _all_ips = New vector<IPAddress>;
   assert(_all_ips);
   _all_nodes = New set<Node*>;
   assert(_all_nodes);
+
+  _highest_ip = 0;
+  _changed = false;
 
   // get the nodes
   thread();
@@ -77,18 +80,23 @@ Network::~Network()
 const set<Node*> *
 Network::getallnodes()
 {
+  // copy only non-mapped IP address
   if(!_all_nodes->size())
     for(HashMap<IPAddress, Node*>::const_iterator p = _nodes.begin(); p != _nodes.end(); ++p)
       _all_nodes->insert(p.value());
+
   return _all_nodes;
 }
 
-const set<IPAddress> *
-Network::getallips()
+vector<IPAddress> *
+Network::getallfirstips()
 {
   if(!_all_ips->size())
-    for(HashMap<IPAddress, Node*>::const_iterator p = _nodes.begin(); p != _nodes.end(); ++p)
-      _all_ips->insert(p.key());
+    for(HashMap<IPAddress, Node*>::const_iterator p = _nodes.begin(); p != _nodes.end(); ++p) {
+      _all_ips->push_back(p.key());
+    }
+
+  _changed = false;
   return _all_ips;
 }
 
@@ -139,6 +147,13 @@ Network::gaussian(double variance)
 }
 
 
+IPAddress
+Network::unused_ip()
+{
+  return ++_highest_ip;
+}
+
+
 
 
 // Protocols should call send() to send a packet into the network.
@@ -147,8 +162,8 @@ Network::send(Packet *p)
 {
   extern bool with_failure_model;
 
-  Node *dst = _nodes[p->dst()];
-  Node *src = _nodes[p->src()];
+  Node *dst = getnode(p->dst());
+  Node *src = getnode(p->src());
   assert (dst);
   assert (src);
 
@@ -188,10 +203,27 @@ Network::send(Packet *p)
   Time tmplat = (Time) (latency + 
 			gaussian(latency*(_top->noise_variance()/100.0)));
   ne->ts = now() + tmplat;
-  ne->node = dst;
+  ne->ip = p->dst();
   ne->p = p;
   EventQueue::Instance()->add_event(ne);
 }
+
+
+void
+Network::map_ip(IPAddress firstx, IPAddress newx)
+{
+  assert(!_new2old.find_pair(newx));
+  _new2old.insert(newx, firstx);
+}
+
+IPAddress
+Network::first_ip(IPAddress newx)
+{
+  if(_new2old.find_pair(newx))
+    return _new2old[newx];
+  return newx;
+}
+
 
 void
 Network::run()
@@ -216,9 +248,17 @@ Network::run()
     switch(i) {
       // register node on network
       case 0:
-        if(_nodes[node->ip()])
-          cerr << "warning: " << node->ip() << " already in network" << endl;
+        if(_nodes[node->ip()]) {
+          cout << "warning: node " << node->ip() << " already exists" << endl;
+          _nodes.remove(node->ip());
+        }
+
         _nodes.insert(node->ip(), node);
+
+        if(node->ip() > _highest_ip)
+          _highest_ip = node->ip();
+
+        _changed = true;
         break;
 
       default:

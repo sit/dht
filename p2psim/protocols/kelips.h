@@ -78,6 +78,10 @@ public:
     Time total_to;
     u_int num_to;
   };
+  struct lookup1_args{
+    ID key;
+    IPAddress dst_ip;
+  };
 
   Kelips(IPAddress i, Args a);
   virtual ~Kelips();
@@ -177,7 +181,7 @@ public:
   vector<IPAddress> newold(vector<IPAddress> a, bool xnew);
   void newold_msg(vector<Info> &msg, vector<IPAddress> l, u_int ration);
   void handle_lookup_final(ID *kp, bool *done);
-  void handle_lookup1(ID *kp, IPAddress *res);
+  void handle_lookup1(lookup1_args *kp, IPAddress *res);
   bool lookup1(lookup_args *a);
   bool lookupvia(lookup_args *a, IPAddress via);
   bool lookup2(lookup_args *a);

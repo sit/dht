@@ -42,7 +42,7 @@ private:
   void bullshit();
   string _proto;
   string _exittime;
-  const set<IPAddress> *_ips;
+  vector<IPAddress> *_ips;
   Time _prevtime;
 };
 

@@ -63,6 +63,7 @@ ChurnEventGenerator::ChurnEventGenerator(Args *args)
   Node::set_collect_stat_time(args->nget("stattime",0,10));
 
   _ipkeys = args->nget("ipkeys", 0, 10);
+  _ips = NULL;
 
   EventQueue::Instance()->registerObserver(this);
 }
@@ -79,14 +80,12 @@ ChurnEventGenerator::run()
 
   // start all nodes at a random time between 1 and n (except the wkn, who
   // starts at 1)
-  const set<IPAddress> *tmpips = Network::Instance()->getallips();
-  for(set<IPAddress>::const_iterator i = tmpips->begin(); i != tmpips->end(); ++i)
-    _ips.push_back(*i);
+  vector<IPAddress> *_ips = Network::Instance()->getallfirstips();
 
 
   IPAddress ip = 0;
-  for(u_int xxx = 0; xxx < _ips.size(); xxx++){
-    ip = _ips[xxx];
+  for(u_int xxx = 0; xxx < _ips->size(); xxx++){
+    ip = (*_ips)[xxx];
 
     Args *a = New Args();
     (*a)["wellknown"] = _wkn_string;
@@ -96,7 +95,7 @@ ChurnEventGenerator::run()
     } else {
       // add one to the mod factor because typical 2^n network sizes
       // make really bad mod factors
-      jointime = (random()%(_ips.size()+1)) + 1;
+      jointime = (random()%(_ips->size()+1)) + 1;
     }
     if( now() + jointime < _exittime ) {
       P2PEvent *e = New P2PEvent(now() + jointime, ip, "join", a);
@@ -138,7 +137,7 @@ ChurnEventGenerator::kick(Observed *o, ObserverInfo *oi)
   assert( p2p_observed );
 
   Args *a = New Args();
-  IPAddress ip = p2p_observed->node->ip();
+  IPAddress ip = p2p_observed->node->first_ip();
   if( p2p_observed->type == "join" ) {
 
     // the wellknown can't crash (***TODO: fix this?***) also if lifemean is zero, this node won't die
@@ -146,8 +145,10 @@ ChurnEventGenerator::kick(Observed *o, ObserverInfo *oi)
     if (( ip != _wkn ) && ( _lifemean > 0)) {
 
       // pick a time for this node to die
-      Time todie = next_exponential( _lifemean );
-      //cout << now() << ": crashing " << ip << " in " << todie << " ms" << endl;
+      Time todie = 0;
+      while (!todie) {
+	todie = next_exponential( _lifemean );
+      }
       if( now() + todie < _exittime ) {
 	P2PEvent *e = New P2PEvent(now() + todie, ip, "crash", a);
 	add_event(e);
@@ -161,7 +162,9 @@ ChurnEventGenerator::kick(Observed *o, ObserverInfo *oi)
     p2p_observed->node->record_crash();
     // pick a time for the node to rejoin
     Time tojoin = 0;
-    tojoin = next_exponential( _deathmean );
+    while (!tojoin) {
+      tojoin = next_exponential( _deathmean );
+    }
     (*a)["wellknown"] = _wkn_string;
     //cout << now() << ": joining " << ip << " in " << tojoin << " ms" << endl;
     if( now() + tojoin < _exittime ) {
@@ -206,13 +209,18 @@ ChurnEventGenerator::next_exponential( u_int mean )
 string
 ChurnEventGenerator::get_lookup_key()
 {
+  if((!_ips) || Network::Instance()->changed()) {
+    _ips = Network::Instance()->getallfirstips();
+  }
+
   if(_ipkeys){
     // for Kelips, use only keys equal to live IP addresses.
     for(int iters = 0; iters < 50; iters++){
-      IPAddress ip = _ips[random() % _ips.size()];
-      if(Network::Instance()->getnode(ip)->alive()){
+      IPAddress ip = (*_ips)[random() % _ips->size()];
+      IPAddress currip = Network::Instance()->first2currip(ip);
+      if(Network::Instance()->alive(currip)){
         char buf[10];
-        sprintf(buf, "%x", ip);
+        sprintf(buf, "%x", currip);
         return string(buf);
       }
     }

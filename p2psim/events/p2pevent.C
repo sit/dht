@@ -65,10 +65,10 @@ P2PEvent::name2fn(string name)
 P2PEvent::P2PEvent(vector<string> *v) : Event("P2PEvent", v)
 {
   // node-id
-  IPAddress ip = (IPAddress) strtoull((*v)[0].c_str(), NULL, 10);
-  this->node = Network::Instance()->getnode(ip);
+  IPAddress first_ip = (IPAddress) strtoull((*v)[0].c_str(), NULL, 10);
+  this->node = Network::Instance()->getnodefromfirstip(first_ip);
   if(!this->node) {
-    cerr << "can't execute event on non-existing node with id " << ip << endl;
+    cerr << "can't execute event on non-existing node with id " << first_ip << endl;
     return;
   }
 
@@ -81,10 +81,10 @@ P2PEvent::P2PEvent(vector<string> *v) : Event("P2PEvent", v)
   assert(this->args);
 }
 
-P2PEvent::P2PEvent(Time ts, IPAddress ip, string operation, Args *a) :
+P2PEvent::P2PEvent(Time ts, IPAddress first_ip, string operation, Args *a) :
     Event("P2PEvent", ts, true)
 {
-  this->node = Network::Instance()->getnode(ip);
+  this->node = Network::Instance()->getnodefromfirstip(first_ip);
   this->fn = name2fn(operation);
   if(!(this->args = a)) {
     this->args = New Args();

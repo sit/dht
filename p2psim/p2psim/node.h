@@ -29,7 +29,7 @@
 #include "eventqueue.h"
 #include "rpchandle.h"
 #include "observed.h"
-#include "p2psim/args.h"
+#include "args.h"
 #include "bighashmap.hh"
 #include <assert.h>
 #include <stdio.h>
@@ -47,9 +47,7 @@ public:
   virtual void initstate() {};
 
   IPAddress ip() { return _ip; }
-  void set_alive(bool a) { 
-    _alive = a;
-  }
+  IPAddress set_alive(bool a);
   bool alive () { return _alive; }
   static bool init_state() { return (_args.nget<unsigned>("initstate",0,10) != 0); }
   static bool collect_stat();
@@ -79,6 +77,11 @@ public:
 
   int queue_delay () { return _queue_len; };
   void queue_delay (int q) { _queue_len = q; };
+
+  // whether nodes should be replace when they die
+  static bool _replace_on_death;
+
+  IPAddress first_ip() { return _first_ip; }
 
 protected:
   typedef set<unsigned> RPCSet;
@@ -236,6 +239,9 @@ protected:
   static Args _args;
   static Time _collect_stat_time;
   static bool _collect_stat;
+
+  IPAddress _first_ip;
+  IPAddress _prev_ip;
 };
 
 #endif // __PROTOCOL_H

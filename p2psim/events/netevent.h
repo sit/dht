@@ -33,7 +33,7 @@ class NetEvent : public Event {
 public:
   NetEvent();
 
-  Node *node;
+  IPAddress ip;
   Packet *p;
 
  protected:

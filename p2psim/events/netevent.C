@@ -24,6 +24,7 @@
  */
 
 #include "netevent.h"
+#include "p2psim/network.h"
 
 NetEvent::NetEvent()
   : Event("NetEvent", 0, false)
@@ -37,5 +38,5 @@ NetEvent::~NetEvent()
 void
 NetEvent::execute()
 {
-  node->packet_handler(p);
+  Network::Instance()->getnode(ip)->packet_handler(p);
 }

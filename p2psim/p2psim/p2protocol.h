@@ -27,6 +27,7 @@
 
 #include "node.h"
 #include "args.h"
+#include "network.h"
 using namespace std;
 
 class Node;

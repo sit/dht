@@ -42,8 +42,17 @@ E2EGraph::~E2EGraph()
 }
 
 Time
-E2EGraph::latency(IPAddress ip1, IPAddress ip2, bool reply)
+E2EGraph::latency(IPAddress ip1x, IPAddress ip2x, bool reply)
 {
+  IPAddress ip1 = Network::Instance()->first_ip(ip1x);
+  IPAddress ip2 = Network::Instance()->first_ip(ip2x);
+
+  if(!(ip1 > 0 && ip1 <= _num) ||
+    (!(ip2 > 0 && ip2 <= _num)))
+  {
+    cout << "ip1 = " << ip1 << ", ip2 = " << ip2 << endl;
+  }
+
   //we can not use random ip address for e2egraph now
   assert(ip1 > 0 && ip1 <= _num);
   assert(ip2 > 0 && ip2 <= _num);
@@ -59,7 +68,6 @@ E2EGraph::latency(IPAddress ip1, IPAddress ip2, bool reply)
     return 0;
   }
 }
-
 
 void
 E2EGraph::parse(ifstream &ifs)
@@ -86,7 +94,6 @@ E2EGraph::parse(ifstream &ifs)
       }else{
 	p = ProtocolFactory::Instance()->create(ipaddr,words[2].c_str());
       }
-      assert(!Network::Instance()->getnode(ipaddr));
 
       // add the node to the network
       send(Network::Instance()->nodechan(), &p);
@@ -113,3 +120,5 @@ E2EGraph::parse(ifstream &ifs)
   _med_lat = tmp[tmp.size()/2];
 
 }
+
+#include "p2psim/bighashmap.cc"

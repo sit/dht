@@ -172,7 +172,7 @@ ChurnFileEventGenerator::kick(Observed *o, ObserverInfo* oi)
   assert( p2p_observed );
 
   Args *a = New Args();
-  IPAddress ip = p2p_observed->node->ip();
+  IPAddress ip = p2p_observed->node->first_ip();
 
   if( p2p_observed->type == "lookup" ) {
     // pick a time for the next lookup
