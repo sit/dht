@@ -6,7 +6,7 @@
 // Koorde extends base Chord with k-degree debruijn routing
 class Koorde : public Chord {
 public:
-  Koorde(Node *n, uint degree, uint resilience);
+  Koorde(Node *n, uint degree, uint nsucc, uint resilience);
   ~Koorde() {};
 
   struct koorde_lookup_arg {
@@ -29,14 +29,19 @@ public:
   void koorde_next (koorde_lookup_arg *, koorde_lookup_ret *);
 
   bool stabilized(vector<ConsistentHash::CHID>);
+  vector<Chord::IDMap> Koorde::find_successors(CHID key, uint m, bool intern);
+  void init_state(vector<IDMap> ids);
   void dump();
 
 protected:
   uint logbase;  // log degree
   uint k;  // k-degree de bruijn graph; 
+  uint nsucc;
+  uint resilience;  // resilience
 
   Chord::CHID debruijn;  // = k * me
-  // vector<IDMap> dfingers;  // predecessor(debruijn) + k - 1 successors
+  Chord::CHID debruijnpred;  // = k * me - x
+
   IDMap last;
   bool isstable;
   vector<IDMap> lastdfingers;
@@ -45,10 +50,13 @@ protected:
   Chord::CHID Koorde::firstimagin (CHID, CHID, CHID, CHID*);
   IDMap Koorde::closestpreddfinger (CHID);
 
-  vector<Chord::IDMap> Koorde::find_successors(CHID key, uint m, bool intern);
   void fix_debruijn();
   void stabilize();
   void reschedule_stabilizer(void *x);
+  bool debruijn_stabilized (ConsistentHash::CHID finger, uint n,
+			    vector<ConsistentHash::CHID> lid);
+  void debruijn_dump (Chord::CHID finger, uint n);
+
 };
 
 #endif // __KOORDE_H

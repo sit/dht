@@ -12,6 +12,7 @@ using namespace std;
 
 extern uint base;
 extern uint resilience;
+extern uint successors;
 
 ProtocolFactory *ProtocolFactory::_instance = 0;
 
@@ -53,7 +54,7 @@ ProtocolFactory::create(string s, Node *n)
   if (s == "Pastry")
     p = new Pastry(n);
   if (s == "Koorde")
-    p = new Koorde(n, base, resilience);
+    p = new Koorde(n, base, successors, resilience);
   if (s == "VivaldiTest")
     p = new VivaldiTest(n);
   if (s == "ChordFinger")

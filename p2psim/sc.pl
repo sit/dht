@@ -79,14 +79,17 @@ sub doevents {
 	    $node = ($node % $nnodes) + 1;
 	} elsif ($distr =~ /constant/) {
 	    $node = 1;
+	} elsif ($distr =~ /random/) {
+	    $node =  int(rand ($nnodes-1)) + 2;
 	}
-
 	if ($type =~ /join/) {
 	    print EV "node $time $node $protocol:$type @args\n";
 	} elsif ($type =~ /lookup/) {
 	    $keys[$nk] = makekey();
 	    print EV "node $time $node $protocol:$type key=$keys[$nk]\n";
 	    $nk++;
+	} elsif ($type =~ /crash/) {
+	    print EV "node $time $node $protocol:$type\n";
 	}
 
 	$time = $time + $interval;
