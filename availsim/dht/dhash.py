@@ -12,8 +12,12 @@ class dhash (chord):
     def __init__ (my, args = []):
 	chord.__init__ (my, args)
 	my.do_repair = 0
+	# Sizes of all blocks
         my.blocks = {}
+	# Sorted list of blocks.keys ()
         my.block_keys = []
+	# Incrementally maintained mapping from blocks->num of copies
+	# in look_ahead () of successor.
 	my.available = {}
 	for a in args: 
 	    if a == 'repair':
@@ -33,7 +37,16 @@ class dhash (chord):
 	    return my.copy_block (ev.src_id, ev.id, ev.block, ev.size, ev.desc)
 	return chord.process (my, ev)
 
-    def available_blocks (my):
+    def _extant_counts_check (my):
+	"""How many copies of each block are there?"""
+	blocks = {}
+	for n in my.nodes:
+	    for b in n.blocks:
+		blocks[b] = blocks.get (b, 0) + 1
+	extant = blocks.values ()
+	# assert blocks == my.available # same keys and same values???
+	return extant
+    def _available_blocks_check (my):
 	"""Find how many blocks would be using look_ahead reading."""
 	scannable = my.look_ahead ()
         needed = my.read_pieces ()
@@ -55,7 +68,15 @@ class dhash (chord):
 		    extant += 1
 	    if extant >= needed:
 		avail += 1
+	assert my.available_blocks () == avail
 	return avail
+
+    def available_blocks (my):
+	"""Number of readable blocks"""
+	needed = my.read_pieces ()
+	counts = my.available.values ()
+	extant = [x for x in counts if x >= needed]
+	return len (extant), counts
 
     # Subclass and redefine these methods to produce more interesting
     # storage behavior.
@@ -162,7 +183,9 @@ class dhash (chord):
 		start = bisect.bisect_right (k, p.id)
 		stop  = bisect.bisect_left  (k, s[0].id)
 		r = k[start:] + k[:stop]
-            newevs += my._repair (t, affected_node, s, r)
+	    evs = my._repair (t, affected_node, s, r)
+	    if evs is not None:
+		newevs += evs
 	return newevs
 
     # Primary implementations that keep track of what blocks are
@@ -324,21 +347,35 @@ class dhash_cates (dhash):
     def add_node (my, t, id):
 	newevs = dhash.add_node (my, t, id)
 	if len (my.nodes) >= 16:
-	    evs = my._pmaint_join (my.allnodes[id])
+	    evs = my._pmaint_join (t, my.allnodes[id])
 	    if newevs is not None:
 		newevs += evs
 	    else:
 		newevs = evs
 	return newevs
 
-    def _pmaint_join (my, n):
-	succs = my.succ (n, 18)
+    def _XXX_pmaint_join (my, t, n):
+	runlen = my.look_ahead ()
+        preds = my.pred (n, runlen)
+        succs = my.succ (n, runlen)
+        span = preds + succs
+	# consider the predecessors who should be doing the repair
+        for i in range(1,len(span) - runlen + 1):
+            p = span[i - 1]
+	    # let them see further than they would have inserted.
+            s = span[i:i+runlen]
+
+	    pid = p.id
+	    nid = s[0].id
+
+    def _pmaint_join (my, t, n):
+	events = []
 	preds = my.pred (n, 16)
 	nid = n.id
 	# Perhaps this new guy has returned with some new blocks
 	# that he now should give away to someone else...
 	pid = preds[0].id
-	lostblocks = filter (lambda x: not between (x, pid, nid), n.blocks)
+	lostblocks = [b for b in n.blocks if not between (b, pid, nid)]
 	# if len(lostblocks): print "# LOST", len(lostblocks), "blocks"
 	for b in lostblocks:
 	    lsuccs = my.succ (b, 14)
@@ -346,20 +383,19 @@ class dhash_cates (dhash):
 		if b not in s.blocks:
 		    assert n != s
 		    isz = my.insert_piece_size (my.blocks[b])
-		    s.store (b, isz)
-		    n.sent_bytes += isz
-		    n.sent_bytes_breakdown['pm'] += isz
+		    # Round event time up to the next whole unit
+		    nt = int (n.sendremote (t, isz) + 0.5)
+		    events.append (event (nt, "copy", ["pmaint", nid, s.id, b, isz]))
 		    break
 	    # Either someone wanted it and they took it, or no one wanted it.
 	    # Safe to delete either way 
-	    # XXX of course no one wants this... the moment n failed,
-	    #     dhash's aggressive repair fixed the low availability.
 	    n.unstore (b)
 
 	# Next, fix blocks that are in the wrong place now because
 	# this guy appeared; give them to this new guy.
+	succs = my.succ (n, 18)
 	for s in succs[1:]:
-	    lostblocks = filter (lambda x: between (x, pid, nid), s.blocks)
+	    lostblocks = [b for b in s.blocks if between (b, pid, nid)]
 	    if len(lostblocks): print "# LoST", len(lostblocks), "blocks"
 	    for b in lostblocks:
 		if b not in n.blocks:
@@ -369,3 +405,4 @@ class dhash_cates (dhash):
 		    s.sent_bytes += isz
 		    s.sent_bytes_breakdown['pm'] += isz
 		s.unstore (b)
+	return events

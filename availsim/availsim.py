@@ -49,7 +49,7 @@ def calc_spread (dh, stats):
     stats['spread_max'] = smax
     
 sbkeys = ['insert', 'join_repair_write', 'join_repair_read',
-	  'failure_repair_write', 'failure_repair_read', 'pm']
+	  'failure_repair_write', 'failure_repair_read', 'pmaint_repair_write']
 def _monitor (dh):
     stats = {}
     allnodes = dh.allnodes.values ()
@@ -68,15 +68,8 @@ def _monitor (dh):
 	stats['sent_bytes::%s' % k] = \
 		sum ([n.sent_bytes_breakdown.get (k, 0) for n in allnodes])
 
-    extant = [x for x in dh.available.values () if x > 0]
-    stats['avail_blocks'] = len (extant)
-#    assert stats['avail_blocks'] == dh.available_blocks ()
+    stats['avail_blocks'], extant = dh.available_blocks ()
 
-#    blocks = {}
-#    for n in dh.nodes:
-#	for b in n.blocks:
-#	    blocks[b] = blocks.get (b, 0) + 1
-#    extant = blocks.values ()
     try: 
 	avg = sum (extant, 0.0) / len (extant)
 	minimum = min (extant)
@@ -85,7 +78,7 @@ def _monitor (dh):
 	avg, minimum, maximum = 0, 0, 0
     stats['extant_avg'] = avg
     stats['extant_min'] = minimum
-    stats['extant_max'] = maximum                      
+    stats['extant_max'] = maximum
 
     if do_spread:
 	calc_spread (dh, stats)

@@ -1,3 +1,4 @@
+from chord import chord
 from dhash import dhash
 
 class dhash_oracle (dhash):
@@ -20,6 +21,7 @@ class dhash_oracle (dhash):
 		else:
 		    donthaves.append (s)
 	    avail = len (haves)
+	    
 	    # I might fail or the only copy might be pushed off soon
 	    if avail == 1 and (haves[0] == an or haves[0] == succs[len(succs) - 1]):
 		s = donthaves[0]
@@ -36,8 +38,10 @@ class dhash_oracle (dhash):
 	return None
 
     def add_node (my, t, id):
-	newevs = dhash.add_node (my, t, id)
-	assert (len (newevs) == 0)
+	# XXX the default dhash add_node tracks
+	#     availability but there's no point in doing
+	#     that for an oracle.
+	newevs = chord.add_node (my, t, id)
 	my.repair (t, my.allnodes[id])
 	return None
 
@@ -57,6 +61,8 @@ class durability_oracle (dhash_oracle):
     Only has to repair before a node leaves permanently, taking away
     the last copy.
     """
+    def fail_node (my, t, id):
+	chord.fail_node (my, t, id)
     def crash_node (my, t, id):
 	try:
 	    n = my.allnodes[id]
