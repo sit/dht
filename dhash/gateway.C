@@ -126,31 +126,29 @@ dhashgateway::insert_cb (svccb *sbp, dhash_stat status, vec<chordID> path)
   sbp->reply (&res);
 }
 
-#define SET_RETRIEVE_REPLY \
-  if (!block) \
-    res.set_status (stat); \
-  else { \
-    res.resok->block.setsize (block->len); \
-    res.resok->ctype = block->ctype; \
-    res.resok->len = block->len; \
-    res.resok->hops = block->hops; \
-    res.resok->errors = block->errors; \
-    res.resok->retries = block->retries; \
-    res.resok->path.setsize (path.size ()); \
-    for (u_int i = 0; i < path.size (); i++) \
-      res.resok->path[i] = path[i]->id (); \
-    res.resok->times.setsize (block->times.size ()); \
-    for (u_int i = 0; i < block->times.size (); i++) \
-      res.resok->times[i] = block->times[i]; \
-    memcpy (res.resok->block.base (), block->data, block->len); \
-  }
 
 void
 dhashgateway::retrieve_cb (svccb *sbp, dhash_stat stat,
                            ptr<dhash_block> block, route path)
 {
   dhash_retrieve_res res (DHASH_OK);
-  SET_RETRIEVE_REPLY;
+  if (!block)
+    res.set_status (stat);
+  else {
+    res.resok->block.setsize (block->len);
+    res.resok->ctype = block->ctype;
+    res.resok->len = block->len;
+    res.resok->hops = block->hops;
+    res.resok->errors = block->errors;
+    res.resok->retries = block->retries;
+    res.resok->path.setsize (path.size ());
+    for (u_int i = 0; i < path.size (); i++)
+      res.resok->path[i] = path[i]->id ();
+    res.resok->times.setsize (block->times.size ());
+    for (u_int i = 0; i < block->times.size (); i++)
+      res.resok->times[i] = block->times[i];
+    memcpy (res.resok->block.base (), block->data, block->len);
+  }
   sbp->reply (&res);
 }
 
