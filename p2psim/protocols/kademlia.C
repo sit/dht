@@ -762,8 +762,8 @@ next_candidate:
       successors.erase(front);
 
       // for sake of statistics, keep track of time spent waiting for nodes that
-      // are all dead.
-      if(!Network::Instance()->getnode(front.ip)->alive()) {
+      // are all dead. (if we're not already in deadtime.)
+      if(!deadtime && !Network::Instance()->getnode(front.ip)->alive()) {
         bool all_dead = true;
         for(HashMap<unsigned, callinfo*>::iterator i = outstanding_rpcs->begin(); i; i++) {
           if(Network::Instance()->getnode((i.value())->ki.ip)->alive()) {
@@ -773,7 +773,6 @@ next_candidate:
         }
 
         // all outstanding RPCs to dead nodes, but we're not in deadtime yet.
-        assert(!deadtime);
         if(all_dead) {
           deadtime = true;
           deadtimestart = now();
