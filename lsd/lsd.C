@@ -279,7 +279,7 @@ main (int argc, char **argv)
   mode = MODE_CHORD;
   lookup_mode = CHORD_LOOKUP_LOCTABLE;
 
-  while ((ch = getopt (argc, argv, "PfFB:b:cd:j:l:M:n:p:S:s:v:m:")) != -1)
+  while ((ch = getopt (argc, argv, "PfFB:b:cd:j:l:M:n:p:S:s:v:m:L:")) != -1)
     switch (ch) {
     case 'm':
       if (strcmp (optarg, "debruijn") == 0)
@@ -364,6 +364,14 @@ main (int argc, char **argv)
       if (vnode >= chord::max_vnodes)
 	fatal << "Too many virtual nodes (" << vnode << ")\n";
       break;
+    case 'L':
+      {
+	int logfd = open (optarg, O_RDWR | O_CREAT, 0666);
+	if (logfd <= 0) fatal << "Could not open logfile " << optarg << " for appending\n";
+	lseek (logfd, SEEK_END, 0);
+	errfd = logfd;
+	break;
+      }
     default:
       usage ();
       break;
@@ -395,6 +403,14 @@ main (int argc, char **argv)
   sigcb(SIGUSR2, wrap (&stop));
   sigcb(SIGHUP, wrap (&halt));
 
+  time_t now = time (NULL);
+  warn << "lsd starting up at " << ctime ((const time_t *)&now);
+  warn << " running with options: \n";
+  warn << "  IP/port: " << myname << ":" << myport << "\n";
+  warn << "  vnodes: " << vnode << "\n";
+  warn << "  lookup_mode: " << mode << "\n";
+    
+    
   if (p2psocket) 
     startclntd();
   amain ();
