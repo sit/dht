@@ -453,7 +453,6 @@ stp_manager::update_cwind (int seq)
     ssthresh = cwind/2; //MD
     if (ssthresh < 1.0) ssthresh = 1.0;
     cwind = 1.0;
-
   }
 
   cwind_cum += cwind;
@@ -485,17 +484,21 @@ stp_manager::setup_rexmit_timer (hostinfo *h, long *sec, long *nsec)
 
   float alat;
 
-  if (nrpc > MIN_SAMPLES)
+  if (nrpc > MIN_SAMPLES) {
     if (avg_lat >  bf_lat + 4*bf_var) {
       alat = avg_lat;
     } else {
       alat = bf_lat + 4*bf_var;
     }
+    alat *= 2;
+  }
   else 
     alat = 1000000;
 
-  if (h->nrpc > MIN_SAMPLES) 
+  if (h->nrpc > MIN_SAMPLES) {
     alat = h->a_lat + 4*h->a_var;
+    alat *= 2;
+  }
 
   //statistics
   timers.push_back (alat);
@@ -757,9 +760,9 @@ rpccb_chord::timeout_cb (ptr<bool> del)
     xmit (rexmits);
     if (rexmits == MAX_REXMIT) {
       // XXX
-      // The intent of this code path is to do a conservative last ditch effort.
-      // However, if backed off value in <sec,nsec> exceeds MIN_RPC_FAILURE_TIMER
-      // then this this doesn't happen.
+      // The intent of this code path is to do a conservative last
+      // ditch effort. However, if backed off value in <sec,nsec>
+      // exceeds MIN_RPC_FAILURE_TIMER then this doesn't happen.
       // --josh
       sec = MIN_RPC_FAILURE_TIMER;
       nsec = 0;
@@ -770,16 +773,6 @@ rpccb_chord::timeout_cb (ptr<bool> del)
 	nsec -= 1000000000;
 	sec += 1;
       }
-
-#if 0
-      sec *= 2;
-      nsec *= 2;
-      while (nsec >= 1000000000) {
-	nsec -= 1000000000;
-	sec += 1;
-      }
-#endif
-
     }
   }
 
