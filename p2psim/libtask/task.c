@@ -343,3 +343,9 @@ deltask(Tasklist *l, Task *t)
 		l->tail = t->prev;
 }
 
+unsigned int
+taskid(void)
+{
+	return taskrunning->id;
+}
+
