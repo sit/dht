@@ -1,0 +1,370 @@
+#include <assert.h>
+
+// SFS includes
+#include <refcnt.h>
+#include <err.h>
+#include <crypt.h>
+
+#include "modlogger.h"
+#define idatrace modlogger ("ida")
+#include "ida.h"
+
+
+// Auto-generated field inverses file
+#include "ida-field.C"
+
+// If you change this, it must be prime and then you will
+// have to be very careful about how well the operations below
+// execute in 32-bit variables.   Basically, the code is not
+// really flexible enough to allow you to arbitrarily change
+// this constant.  It may be safer to lower it than raise it,
+// but why would you want to do that?
+// Also, you'll need to change the constant in ida-genfield.py.
+const u_long Ida::field = 65537;
+
+const char Ida::magic = 0xef;
+
+inline u_long
+Ida::DIV (u_long a, u_long b)
+{
+  return MUL (a, INV(b));
+}
+
+inline u_long
+Ida::MUL (u_long a, u_long b)
+{
+  // If you change field, better think about this.
+  assert (field == 65537);
+  assert (sizeof (u_long) >= 4);
+
+  // field - 1 is -1, it's square is 1.  In the case
+  // where field is p = 65537, only -1 will overflow an unsigned
+  // 32-bit number.
+  if (a == field - 1 && b == field - 1)
+    return 1;
+  
+  return (a * b % field);
+}
+
+inline u_long
+Ida::SUB (u_long a, u_long b)
+{
+  return ((a - b) + field) % field;
+}
+
+inline u_long
+Ida::ADD (u_long a, u_long b)
+{
+  return (a + b) % field;
+}
+
+inline u_long
+Ida::INV (u_long a)
+{
+  return inv[a];
+}
+
+/*
+ * Generate one piece.
+ * Clears out and replaces it with the following:
+ *  Total # of FIELD elements (including this one).
+ *  M
+ *  M-element matrix row.
+ *  N/m
+ *  N/m data elements.
+ * While we operate with u_longs, each element will really be 2 bytes.
+ */
+void
+Ida::gen_frag_ (int m, const str &in, vec<u_long> &out)
+{
+  int fraglen = in.len () / (2*m);
+  
+  int total = 2 + m + 1 + fraglen;
+  out.clear ();
+  out.setsize (total);
+  size_t outp = 0;
+  
+  out[outp++] = total;
+  out[outp++] = m;
+  
+  /* generate our matrix row; these are the 'a's */
+  vec<u_long> v;
+  v.setsize (m);
+  for (int k = 0; k < m; k++) {
+    u_long vi = random_getword () % field;
+    out[outp++] = vi;
+    v[k] = vi;
+  }
+#if 0  
+  for (int k = 0; k < m; k++) {
+    warnx ("%8lu", v[k]);
+  }
+  warnx << "\n";
+#endif /* 0 */
+  out[outp++] = fraglen;
+  
+  u_long cik, inp;
+  for (int k = 0; k < fraglen; k++) {
+    cik = 0;
+    inp = k*2*m;
+    for (int j = 0; j < m; j++) {
+      // Encode two bytes at a time.
+      u_long bi = (u_char) in[inp++];
+      bi <<= 8;
+      bi |= (u_char) in[inp++];
+      assert (bi == (bi & 0x0000ffff));
+      
+      cik = ADD(cik, MUL(bi, v[j]));
+      assert (cik < field);
+    }
+    out[outp++] = cik;
+  }
+}
+
+/* 
+ * Packs in into a string and returns it.
+ */
+str
+Ida::pack (vec<u_long> &in)
+{
+  int i, n;
+
+  n = in[0]; /* over length */
+  
+  strbuf out;
+  // This encoding takes advantage of the fact that the 32-bit in[]
+  // values rarely have anything in the high 16 bits.
+  for (i = 0; i < n; i++) {
+    register u_long c = in[i];
+    // The magic character and high-bit nums must be encoded carefully.
+    // NOTE: if field == 65537, the highest order byte should always be zero.
+    assert (!(c & 0xff000000));
+    char c1 = (char) (c >> 8) & 0xff;
+    char c2 = (char) c & 0xff;
+    if (c & 0xffff0000) {
+      out.fmt ("%c%c%c%c",
+	       magic,
+	       (char) (c >> 16) & 0xff,
+	       c1,
+	       c2);
+    } else {
+      if (c1 == magic) {
+	out.fmt ("%c%c%c%c", magic, 0, c1, c2);
+      } else {
+	out.fmt ("%c%c", c1, c2);
+      }
+    }
+  }
+  // XXX there is a copy here, but I'm not sure we can really get
+  //     rid of it the way that str's and strbuf's are structured.
+  //     The other option would be to use a char array but then
+  //     callers would have to worry about delete'ing the memory.
+  return out;
+}
+
+
+str
+Ida::gen_frag (int m, const str &in)
+{
+  vec<u_long> tmp;
+  gen_frag_ (m, in, tmp);
+  // This copy is cheap; only refcounting involved.
+  return pack (tmp);
+}
+
+// =========
+
+inline u_long
+Ida::unpackone (const str &in, int &inp)
+{
+  // XXX handle cases where input string is too short
+  u_long x;
+  if (in[inp] != magic)
+    x = ((u_char) in[inp++] << 8) | (u_char) in[inp++];
+  else {
+    inp++;
+    x = (((u_char) in[inp++] << 16) |
+	 ((u_char) in[inp++] <<  8) |
+	 ((u_char) in[inp++]));
+  }
+  assert(!(x & 0xff000000));
+  return x;
+}
+      
+bool
+Ida::unpack (const str &in, vec<u_long> &out)
+{
+  int inp = 0;
+  u_long n = unpackone (in, inp);
+  
+  inp = 0;
+  out.setsize (n);
+  for (u_long i = 0; i < n; i++) {
+    out[i] = unpackone (in, inp);
+  }
+
+  return true;
+}
+
+/*
+ * Decodes the fragments in frags and returns recoded block in out.
+ */
+bool
+Ida::reconstruct (const vec<str> &frags, strbuf &out)
+{
+  int inp = 0;
+
+  // XXX select a fragment at random until a good one is found.
+  u_long len = unpackone (frags[0], inp); 
+  u_long m = unpackone (frags[0], inp);
+  if (len < m + 3) {
+    idatrace << "fragment 0 too short.\n";
+    return false;
+  }
+  if (frags.size () < m) {
+    idatrace << "not enough fragments.\n";
+    return false;
+  }
+  
+  u_long blocksize = 0;
+
+  vec<vec<u_long> > dfrags; // data section of fragments
+  vec<vec<u_long> > a;      // encoding matrix for fragments
+
+  // Sanity check the fragments and extract the encoding matrix.
+  // Use a customized unpack to avoid some memory copies.
+  for (size_t i = 0; i < m; i++) {
+    int inp = 0;
+    str in = frags[i];
+    u_long len = unpackone (in, inp);
+    if (len < m + 3) {
+      idatrace << "fragment " << i << " length " << len
+	       << "too short; want at least " << m + 3 << "\n";
+      return false;
+    }
+    u_long mym = unpackone (in, inp);
+    if (mym != m) {
+      idatrace << "fragment " << i << " m = " << mym
+	       << "not consistent; expected m = " << m << "\n";
+      return false;
+    }
+
+    // Extract row of encode matrix
+    vec<u_long> arow;
+    for (size_t j = 0; j < m; j++) {
+      arow.push_back (unpackone (in, inp));
+    }
+
+    u_long myblocksize = unpackone (in, inp);
+    if (!blocksize)
+      blocksize = myblocksize;
+    if (blocksize != myblocksize) {
+      idatrace << "fragment " << i << " block length " << myblocksize
+	       << " not consistent; expected " << blocksize << "\n";
+      idatrace << hexdump (in.cstr (), in.len ()) << "\n";
+      return false;
+    }
+    len -= m + 3;
+
+    // Extract encoded block
+    vec<u_long> drow;
+    while (len > 0) {
+      drow.push_back (unpackone (in, inp));
+      len--;
+    }
+
+    // If all good, push things onto our to-be-decoded matrix.
+    a.push_back (arow);
+    dfrags.push_back (drow);
+  }
+  
+  // Calculate the decode matrix
+  vec<vec<u_long> > a_inv;
+  bool ok = minvert (m, m, a, a_inv);
+  if (!ok) {
+    idatrace << "couldn't invert matrix.\n";
+    return false;
+  }	   
+
+  // Produce the decoded block.
+  vec<u_long> c;
+  c.setsize (m);
+  for (size_t inp = 0; inp < blocksize; inp++) {
+    for (size_t i = 0; i < m; i++) {
+      c[i] = dfrags[i][inp];
+    }
+    for (size_t i = 0; i < m; i++) {
+      u_long b = 0;
+      for (size_t j = 0; j < m; j++)
+	b = ADD (b, MUL(c[j], a_inv[i][j]));
+      assert (!(b & 0xffff0000));
+      out.fmt ("%c%c",
+	       (char) (b >> 8) & 0xff,
+	       (char) (b       & 0xff));
+    }
+  }
+  return true;
+}
+
+bool
+Ida::minvert (int rows, int cols,
+	      vec<vec<u_long> > &from,
+	      vec<vec<u_long> > &to)
+{
+  int r, c, r1;
+  u_long x, y;
+  
+  to.setsize (0);
+  to.reserve (rows);
+  for (r = 0; r < rows; r++) {
+    vec<u_long> row;
+    row.reserve (cols);
+    for (c = 0; c < cols; c++)
+      row.push_back (from[r][c]);
+    for (c = 0; c < cols; c++)
+      row.push_back (r == c);
+    to.push_back (row);
+  }
+
+#if 0
+  for (r = 0; r < rows; r++) {
+    for (c = 0; c < 2*cols; c++)
+      warnx ("%8lu,", to[r][c]);
+    warnx ("\n");
+  }
+#endif /* 0 */
+
+  // Row reduction
+  for (r = 0; r < rows; r++){
+    x = to[r][r];
+
+    // No pivot? [Swap rows??? XXX]
+    if (x == 0)
+      return false;
+    
+    for (c = 0; c < cols*2; c++)
+      to[r][c] = DIV(to[r][c], x);
+    for (r1 = 0; r1 < rows; r1++){
+      if (r1 == r)
+	continue;
+      y = DIV(to[r1][r], to[r][r]);
+      for (c = 0; c < cols*2; c++) {
+	to[r1][c] = SUB(to[r1][c], MUL(y, to[r][c]));
+      }
+    }
+  }
+
+#if 0
+  for (r = 0; r < rows; r++) {
+    for (c = 0; c < 2*cols; c++)
+      warnx ("%8lu,", to[r][c]);
+    warnx ("\n");
+  }
+#endif /* 0 */
+  
+  for (r = 0; r < rows; r++) {
+    to[r].popn_front (cols);
+  }
+  return true;
+}
+

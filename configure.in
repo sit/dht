@@ -1,4 +1,4 @@
-dnl $Id: configure.in,v 1.31 2003/02/26 01:09:14 fdabek Exp $
+dnl $Id: configure.in,v 1.32 2003/03/07 20:16:45 sit Exp $
 dnl
 dnl Process this file with autoconf to produce a configure script.
 dnl
@@ -47,19 +47,19 @@ fi
 
 
 dnl Make sure we have a mesg_buf capable libarpc
-AC_MSG_CHECKING("for a good aclnt.h")
+AC_MSG_CHECKING(for a good aclnt.h)
 AC_EGREP_HEADER(rpccb_msgbuf,
 		aclnt.h,
-		AC_MSG_RESULT("found"),
-		AC_MSG_ERROR("aclnt.h that defines rpccb_msgbuf not found. Install the latest build of SFS")
+		AC_MSG_RESULT(found),
+		AC_MSG_ERROR(aclnt.h that defines rpccb_msgbuf not found. Install the latest build of SFS.)
 )
 
 dnl Make sure we have sfscrypt.h
-AC_MSG_CHECKING("for sfscrypt.h")
+AC_MSG_CHECKING(for sfscrypt.h)
 AC_EGREP_HEADER(sfspriv,
 		sfscrypt.h,
-		AC_MSG_RESULT("found"),
-		AC_MSG_ERROR("new style sfscrypt not found. Install the latest build of SFS")
+		AC_MSG_RESULT(found),
+		AC_MSG_ERROR(new style sfscrypt not found. Install the latest build of SFS.)
 )
 
 dnl let directories share header files
@@ -71,7 +71,7 @@ done
 ETAGS_ARGS='-C /dev/null'
 AC_SUBST(ETAGS_ARGS)
 
-AC_OUTPUT(Makefile svc/Makefile  
+AC_OUTPUT(Makefile svc/Makefile utils/Makefile 
 	sfsrodb/Makefile dhash/Makefile lsd/Makefile
 	merkle/Makefile chord/Makefile chordcd/Makefile 
 	devel/Makefile ddns/Makefile ddns/ddnsq/Makefile
