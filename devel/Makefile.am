@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.40 2005/01/26 04:47:08 sit Exp $
+# $Id: Makefile.am,v 1.41 2005/01/26 15:27:08 sit Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -10,6 +10,11 @@ endif
 bin_PROGRAMS = dbm walk findroute filestore nodeq dbdump $(VIS) 
 bin_SCRIPTS = dbm.py usenetlsdmon.py nodeq-filter
 chorddata_DATA =  RPC.py RPCProto.py vischat.py
+
+EXTRA_DIST = .cvsignore $(bin_SCRIPTS) $(chorddata_DATA)
+CLEANFILES = core *.core *~ *.rpo
+MAINTAINERCLEANFILES = Makefile.in
+
 
 noinst_PROGRAMS = test_types coords dhc_test pkc builddb
 noinst_HEADERS = rpclib.h
@@ -52,8 +57,3 @@ vis_SOURCES = vis.C vis.h vis_update.C vis_cmd.C
 INCLUDES = $(GSTUFF_CFLAGS) 
 vis_LDADD =  ../chord/libchord.a ../svc/libsvc.la ../utils/libutil.a $(GSTUFF_LIBS) $(LDADD)
 endif
-
-EXTRA_DIST = .cvsignore dbm.py usenetlsdmon.py vischat.py RPC.py RPCProto.py
-CLEANFILES = core *.core *~ *.rpo
-MAINTAINERCLEANFILES = Makefile.in
-
