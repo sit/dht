@@ -1,4 +1,4 @@
-/* $Id: sfsrodb_core.C,v 1.2 2001/03/02 09:49:57 fdabek Exp $ */
+/* $Id: sfsrodb_core.C,v 1.3 2001/03/11 18:50:29 fdabek Exp $ */
 
 /*
  *
@@ -34,11 +34,9 @@ fh2mpz(const void *keydata, size_t keylen)
   str s ((const char *)keydata, keylen);
   bigint n;
   n.setraw (s);
-  if (n < bigint(0)) {
+  if (n < bigint(0)) 
     n *= bigint(-1);
-    warn << "N was less than zero\n";
-  }
-  warn << "after all of that n =" << n << "\n";
+  
   
   return n;
 }
@@ -50,7 +48,7 @@ sfsrodb_put (ptr<aclnt> db, const void *keydata, size_t keylen,
 {
   int err;
 
-  warn << "inserting " << contentlen << "bytes of data under a " << keylen << " byte key\n";
+  //  warn << "inserting " << contentlen << "bytes of data under a " << keylen << " byte key\n";
   dhash_insertarg *arg = New dhash_insertarg ();
   
   bigint n = fh2mpz(keydata, keylen);

@@ -62,13 +62,12 @@ dhash::fetchsvc_cb(svccb *sbp, ptr<dbrec> val, dhash_stat err)
     res->set_status(DHASH_NOENT);
   } else {
     res->set_status (DHASH_OK);
-    warn << "fetched a " << val->len << " key\n";
     res->resok->res.setsize (val->len);
     memcpy (res->resok->res.base (), val->value, val->len);
   }
    
   sbp->reply(res);
-  delete res;  
+  //  delete res;  
 }
 
 void
@@ -81,6 +80,7 @@ dhash::storesvc_cb(svccb *sbp, dhash_stat err) {
 void
 dhash::fetch(sfs_ID id, cbvalue cb) 
 {
+  //  warn << "FETCHING \n\n\n FETCHING " << id << "\n\n\n";
   ptr<dbrec> q = id2dbrec(id);
   db->lookup(q, wrap(this, &dhash::fetch_cb, cb));
 }
@@ -98,6 +98,8 @@ dhash::fetch_cb(cbvalue cb, ptr<dbrec> ret)
 void 
 dhash::store(sfs_ID id, dhash_value data, cbstat cb) 
 {
+
+  //  warn << "STORING \n\n\n STORING " << id << "\n\n\n";
   ptr<dbrec> k = id2dbrec(id);
   ptr<dbrec> d = New refcounted<dbrec> (data.base (), data.size ());
   db->insert(k, d, wrap(this, &dhash::store_cb, cb));

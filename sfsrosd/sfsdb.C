@@ -84,20 +84,20 @@ sfsrodb::getdata (sfs_hash *fh, sfsro_datares *res, callback<void>::ref cb)
 {
   bigint n = fh2mpz((const void *)fh->base (), fh->size ());
   dhash_res *dres = New dhash_res();
-  dbp->call(DHASHPROC_LOOKUP, &n, res, wrap(this, &sfsrodb::getdata_cb, cb, dres, res));
+  dbp->call(DHASHPROC_LOOKUP, &n, dres, wrap(this, &sfsrodb::getdata_cb, cb, res, dres));
 }
 
 void
-sfsrodb::getdata_cb(callback<void>::ref cb, dhash_res *res, sfsro_datares *dres, clnt_stat err)  
+sfsrodb::getdata_cb(callback<void>::ref cb, sfsro_datares *res, dhash_res *dres, clnt_stat err)  
 {
-  if (err != 0) {
-    dres->set_status(SFSRO_ERRNOENT);
+
+  if (err != 0){
+    res->set_status(SFSRO_ERRNOENT);
     (*cb)();
   } else {
-    dres->set_status (SFSRO_OK);
-    
-    dres->resok->data.setsize(res->resok->res.size ());
-    memcpy (dres->resok->data.base (), res->resok->res.base (), res->resok->res.size ());
+    res->set_status (SFSRO_OK);
+    res->resok->data.setsize(dres->resok->res.size ());
+    memcpy (res->resok->data.base (), dres->resok->res.base (), dres->resok->res.size ());
     
     (*cb)();
     

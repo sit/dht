@@ -78,7 +78,7 @@ p2p::find_predecessor_cb (cbroute_t cb, sfs_ID p, route search_path,
   if (status != SFSP2P_OK) {
     cb (p, search_path, status);
   } else {
-    warnx << "find_predecessor_cb: " << p << "\n";
+    //    warnx << "find_predecessor_cb: " << p << "\n";
     get_successor (p, wrap (mkref(this), &p2p::find_successor_cb, 
 				   cb, search_path));
   }
@@ -88,7 +88,7 @@ void
 p2p::find_successor_cb (cbroute_t cb, route search_path, sfs_ID s, 
 			  net_address r, sfsp2pstat status)
 {
-  warnx << "find_successor_cb: " << s << "\n";
+  //  warnx << "find_successor_cb: " << s << "\n";
   cb (s, search_path, status);
 }
 

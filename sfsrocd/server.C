@@ -1,4 +1,4 @@
-/* $Id: server.C,v 1.8 2001/03/09 04:23:49 fdabek Exp $ */
+/* $Id: server.C,v 1.9 2001/03/11 18:50:28 fdabek Exp $ */
 
 /*
  *
@@ -190,8 +190,6 @@ void
 server::get_data (const sfs_hash *fh, 
 		  callback<void, sfsro_datares *, clnt_stat>::ref cb) 
 {
-
-  warn << "getting data for " << hexdump(fh, 20) << "\n";
 
  
   sfsro_datares *res = New sfsro_datares (SFSRO_OK);
@@ -555,7 +553,7 @@ server::dir_lookupres (nfscall *sbp, const sfsro_directory *dir)
 			  wrap (this, &server::dir_lookup_parentres,
 				sbp, dir_fh));
     } else {
-      warn << "looking up " << dirop->name << "in dir w/fh=" << hexdump(&fh,20) << "\n";
+      //      warn << "looking up " << dirop->name << "in dir w/fh=" << hexdump(&fh,20) << "\n";
       
       const sfsro_dirent *dirent = dirent_lookup(sbp, &(dirop->name), dir);
       
@@ -768,8 +766,6 @@ server::inode_lookup (const sfs_hash *fh, nfscall *sbp, cbinode_t cb)
 {
   const sfsro_inode *inode;
 
-  warn << "inode_lookup fh " << hexdump (fh, 20) << "\n";
-
   // XX cache
   cstat.ic_tot++;
 
@@ -854,7 +850,7 @@ server::dispatch (nfscall *sbp)
 	} 
       else
 	{
-	  warn << "not in root level\n";
+
 	  // case II: lookup not on root level. "Normal" case.
 	  sfs_hash fh;
 	  nfs2ro(nfh, &fh);

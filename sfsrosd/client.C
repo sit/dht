@@ -1,9 +1,10 @@
-//Last modified by $Author: fdabek $ on $Date: 2001/03/09 04:23:50 $
+//Last modified by $Author: fdabek $ on $Date: 2001/03/11 18:50:29 $
 #include <sfsrosd.h>
 #include "sfsdb.h"
 #include "rxx.h"
 #include "vec.h"
 #include "qhash.h"
+#include "sfsrodb_core.h"
 
 #ifndef MAINTAINER
 enum { dumptrace = 0 };
@@ -122,6 +123,10 @@ sfsroclient::getdata_cb(svccb *sbp, sfsro_datares *res, ref<bool> d)
 {
   if (*d)
     return;
+  
+  if (res->resok->data.size () == 0) 
+    warn << "key not found\n";
+
   sbp->reply(res);
   delete (res);
   return;

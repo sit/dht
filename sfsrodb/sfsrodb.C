@@ -1,4 +1,4 @@
-/* $Id: sfsrodb.C,v 1.4 2001/03/02 09:49:57 fdabek Exp $ */
+/* $Id: sfsrodb.C,v 1.5 2001/03/11 18:50:29 fdabek Exp $ */
 
 /*
  * Copyright (C) 1999 Kevin Fu (fubob@mit.edu)
@@ -194,6 +194,8 @@ store_inode (sfsro_inode *inode, sfs_hash *fh)
 
   create_sfsrofh (IV, SFSRO_IVSIZE, fh, callbuf, calllen);
 
+  warn << "storing inode:" << hexdump(fh, 20) << "\n";
+  warn << " it's " << calllen << " bytes long\n";
   // Store the inode of this path in the database
   if (!sfsrodb_put (sfsrodb, fh->base (), fh->size (), callbuf, calllen)) {
     //    warn << "Found identical inode, compressing.\n";

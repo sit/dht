@@ -25,7 +25,7 @@ class sfsrodb {
   void getinfo_cb(callback<void>::ref cb, sfs_fsinfo *fsinfo, dhash_res *res, clnt_stat err);
   void getconnectres_cb(callback<void>::ref cb, sfs_connectres *cres, dhash_res *res,
   			clnt_stat err);
-  void getdata_cb(callback<void>::ref cb, dhash_res *res, sfsro_datares *res, clnt_stat err);
+  void getdata_cb(callback<void>::ref cb, sfsro_datares *res, dhash_res *res, clnt_stat err);
 //  void getpartialdata_cb(callback<void>::ref cb, sfsro_datares *res, 
 //		  int fraction,
 //		  int whole,
