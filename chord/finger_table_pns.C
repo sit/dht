@@ -10,11 +10,6 @@
 #define trace   modlogger ("finger_table_pns", modlogger::TRACE)
 #define warning modlogger ("finger_table_pns", modlogger::WARNING)
 
-pnsfinger::pnsfinger (ptr<location> l_)
- : n_ (l_->id ()), loc_ (l_) 
-{
-}
-
 ptr<finger_table> 
 finger_table_pns::produce_finger_table (ptr<vnode> v, ptr<locationtable> l)
 {
@@ -24,36 +19,26 @@ finger_table_pns::produce_finger_table (ptr<vnode> v, ptr<locationtable> l)
 finger_table_pns::finger_table_pns (ptr<vnode> v, ptr<locationtable> l)
   : finger_table (v, l), fp (0)
 {
+  for (int i = 0; i < NBIT; i++)
+    pnsfingers[i] = NULL;
 }
 
 finger_table_pns::~finger_table_pns ()
 {
-  pnsfinger *f, *nf;
-  f = pnsfingers.first ();
-  while (f != NULL) {
-    nf = pnsfingers.next (f);
-    pnsfingers.remove (f->n_);
-    delete f;
-    f = nf;
-  }
 }
 
 ptr<location>
 finger_table_pns::finger (int i)
 {
-  pnsfinger *l = pnsfingers.closestsucc (starts[i]);
-  int sz = pnsfingers.size ();
-  pnsfinger *nf;
-  if (l && !l->loc_->alive () && sz-- > 0) {
-    nf = pnsfingers.next (l);
-    if (nf == NULL)
-      nf = pnsfingers.first ();
-    pnsfingers.remove (l->n_);
-    delete l;
-    l = nf;
-  }
-  if (sz)
-    return l->loc_;
+  ptr<location> pnsf = pnsfingers[i];
+
+  if (pnsf && pnsf->alive ())
+    return pnsf;
+  
+  pnsfingers[i] = NULL;
+  // XXX try to find some other PNS finger that is good enough.
+  warning << myvnode->my_ID () << ": falling through to real finger "
+	  << i << "\n";
 
   return finger_table::finger (i);
 }
@@ -70,7 +55,6 @@ finger_table_pns::stats ()
 {
   warnx << "PNS finger table\n";
 }
-
 
 void
 finger_table_pns::stabilize_finger ()
@@ -144,9 +128,9 @@ finger_table_pns::getsucclist_cb (int l, int r, vec<chord_node> succs,
       trace << "new PNS finger " << l << " is successor "
 	    << best_succ << "; latency: " << (int)mindist
 	    << " is better than " << real_lat << "\n";
-      ptr<location> l = locations->insert (succs[best_succ]); 
-      pnsfinger *pnsf = New pnsfinger (l);
-      pnsfingers.insert (pnsf);
+      ptr<location> nl = locations->insert (succs[best_succ]);
+      for (int i = l; i < r; i++)
+	pnsfingers[i] = nl;
     }
   }
 }

@@ -5,17 +5,9 @@
 #include "skiplist.h"
 #include "finger_table.h"
 
-struct pnsfinger {
-  sklist_entry<pnsfinger> sortlink_;
-  chordID n_;
-  ptr<location> loc_;
-  pnsfinger (ptr<location> l_);
-};
-
 class finger_table_pns : public finger_table {
-  // these are the "fast" fingers corresponding to each slow finger  
-  skiplist<pnsfinger, chordID,
-    &pnsfinger::n_, &pnsfinger::sortlink_> pnsfingers;
+  // these are the "fast" fingers corresponding to each slow finger
+  ptr<location> pnsfingers[NBIT];
 
   int fp;
 
