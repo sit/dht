@@ -50,23 +50,11 @@ merkle_server::dispatch (user_args *sbp)
       chord_node from;
       sbp->fill_from (&from);
 
-      vec<chord_node> preds = host_node->preds ();
-      assert (preds.size () > 0);
-      bigint rngmin = preds.back ().x;
-      bigint rngmax = host_node->my_ID ();
-
-#if 0
-      bigint rngmin = 0; //host_node->my_pred ();
-      bigint rngmax = bigint (1) << 160; //host_node->my_ID ();
-#endif
-
-      compare_nodes (ltree, rngmin, rngmax, lnode, rnode,
+      compare_nodes (ltree, arg->rngmin, arg->rngmax, lnode, rnode,
 		     wrap (this, &merkle_server::missing, from),
 		     wrap (this, &merkle_server::doRPC, from));
 
       sendnode_res res (MERKLE_OK);
-      res.resok->rngmin = rngmin;
-      res.resok->rngmax = rngmax;
       format_rpcnode (ltree, lnode_depth, lnode_prefix, lnode, &res.resok->node);
       sbp->reply (&res);
       break;

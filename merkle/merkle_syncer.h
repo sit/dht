@@ -23,11 +23,9 @@ class merkle_syncer {
   void missing (const merkle_hash &key);
 
  public:
-
   merkle_tree *ltree; // local tree
   rpcfnc_t rpcfnc;
   missingfnc_t missingfnc;
-
 
   str fatal_err;
   bool sync_done;
@@ -37,12 +35,6 @@ class merkle_syncer {
 
   bigint remote_rngmin;
   bigint remote_rngmax;
-
-  int pending_rpcs;
-
-  int receiving_blocks;
-  uint64 num_sends_pending;
-  db_iterator *sendblocks_iter;
 
   vec<pair<merkle_rpc_node, int> > st;
 
@@ -72,6 +64,7 @@ private:
   bigint current;
   missingfnc_t missing;
   rpcfnc_t rpcfnc;
+
   void go ();
   void getkeys_cb (ref<getkeys_arg> arg, ref<getkeys_res> res, clnt_stat err);
   void doRPC (int procno, ptr<void> in, void *out, aclnt_cb cb);

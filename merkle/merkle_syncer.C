@@ -39,9 +39,6 @@ merkle_syncer::sync (bigint rngmin, bigint rngmax)
   local_rngmin = rngmin;
   local_rngmax = rngmax;
 
-  remote_rngmin = 0;
-  remote_rngmax = (bigint (1) << 160) - 1;
-
   // start at the root of the merkle tree
   sendnode (0, 0);
 }
@@ -86,7 +83,6 @@ merkle_syncer::getsummary ()
   strbuf sb;
 
   sb << "[" << local_rngmin << "," << local_rngmax << "] ";
-  sb << "[" << remote_rngmin << "," << remote_rngmax << "] ";
 
   if (fatal_err)
     sb << fatal_err;
@@ -103,7 +99,6 @@ merkle_syncer::next (void)
 #ifdef MERKLE_SYNC_DETAILED_TRACE
   warn << (u_int)this << " next >>>>>>>>>>>>>>>>>>>>>>>>>>: st.size " << st.size () << "\n";
   warn << "local range [" <<  local_rngmin << "," << local_rngmax << "]\n";
-  warn << "remote range [" <<  remote_rngmin << "," << remote_rngmax << "]\n";
 #endif
   assert (!sync_done);
   assert (!fatal_err);
@@ -136,15 +131,13 @@ merkle_syncer::next (void)
       bigint slot_width = bigint (1) << (160 - 6*depth);
       bigint slot_rngmax = slot_rngmin + slot_width - 1;
 
-      bool slot_in_local_range = overlap (local_rngmin, local_rngmax, slot_rngmin, slot_rngmax);
-      bool slot_in_remote_range = overlap (remote_rngmin, remote_rngmax, slot_rngmin, slot_rngmax);
+      bool overlaps = overlap (local_rngmin, local_rngmax, slot_rngmin, slot_rngmax);
 
       if (remote != local) {
 #ifdef MERKLE_SYNC_DETAILED_TRACE
 	warnx << " differ. local " << local << " != remote " << remote;
 #endif
-	if (( (remote != 0) && slot_in_local_range)
-	    || ((local != 0) && slot_in_remote_range)) {
+	if (overlaps) {
 #ifdef MERKLE_SYNC_DETAILED_TRACE
 	  warnx << " .. sending\n";
 #endif
@@ -192,6 +185,8 @@ merkle_syncer::sendnode (u_int depth, const merkle_hash &prefix)
   assert (lnode_depth == depth);
 
   format_rpcnode (ltree, depth, prefix, lnode, &arg->node);
+  arg->rngmin = local_rngmin;
+  arg->rngmax = local_rngmax;
   doRPC (MERKLESYNC_SENDNODE, arg, res,
 	 wrap (this, &merkle_syncer::sendnode_cb, arg, res));
 }
@@ -215,9 +210,6 @@ merkle_syncer::sendnode_cb (ref<sendnode_arg> arg, ref<sendnode_res> res,
 
   merkle_rpc_node *rnode = &res->resok->node;
   assert (rnode->depth == arg->node.depth); // XXX relax this
-
-  remote_rngmin = res->resok->rngmin;
-  remote_rngmax = res->resok->rngmax;
 
   merkle_node *lnode = ltree->lookup_exact (rnode->depth, rnode->prefix);
   assert (lnode); // XXX fix this

@@ -315,6 +315,9 @@ dhash_impl::keyhash_mgr_lookup (chordID key, dhash_stat err,
 // --------------------------------------------------------------------------------
 // replica maintenance
 
+
+#if 0
+// using pred lists
 void
 dhash_impl::replica_maintenance_timer (u_int index)
 {
@@ -377,68 +380,44 @@ dhash_impl::replica_maintenance_timer (u_int index)
   merkle_rep_tcb =
     delaycb (REPTM, wrap (this, &dhash_impl::replica_maintenance_timer, index));
 }
+#endif
 
 
-
-#if 0
+#if 1
+// using succ list
 void
-dhash_impl::replica_maintenance_timer (u_int index)
+dhash_impl::replica_maintenance_timer (u_int i)
 {
   merkle_rep_tcb = NULL;
-  update_replica_list ();
-
-#if 0
-  warn << "dhash_impl::replica_maintenance_timer index " << index
-       << ", #replicas " << replicas.size() << "\n";
-#endif
-  
-  if (!replica_syncer || replica_syncer->done()) {
-    // watch out for growing/shrinking replica list
-    if (index >= replicas.size())
-      index = 0;
-    
-    if (replicas.size() > 0) {
-      chord_node replica = replicas[index];
-
-      if (replica_syncer) {
+  bigint rngmin = host_node->my_pred ();
+  bigint rngmax = host_node->my_ID ();
+  vec<chord_node> succs = host_node->succs ();
 #if 1
-        warn << "DONE " << replica_syncer->getsummary () << "\n";
+  warn << "dhash_impl::replica_maintenance_timer index " << i
+       << ", #succs " << succs.size() << "\n";
 #endif
-	assert (replica_syncer->done());
-	assert (*active_syncers[replica_syncer_dstID] == replica_syncer);
-	active_syncers.remove (replica_syncer_dstID);
-	replica_syncer = NULL;
-      }
+  if (succs.size() == 0)
+    goto out; // can't do anything
+  if (replica_syncer && !replica_syncer->done())
+    goto out; // replica syncer is still running.
+  if (i >= succs.size())
+    i = 0;
+    
+  replica_syncer = New refcounted<merkle_syncer> 
+    (mtree, 
+     wrap (this, &dhash_impl::doRPC_unbundler, succs[i]),
+     wrap (this, &dhash_impl::missing, succs[i]));
 
-      if (active_syncers[replica.x]) {
-	warnx << "replica_maint: already syncing with "
-	      << replica.x << ", skip\n";
-	replica_syncer = NULL;
-      }
-      else {
-        replica_syncer_dstID = replica.x;
-        replica_syncer = New refcounted<merkle_syncer> 
-	  (mtree, 
-	   wrap (this, &dhash_impl::doRPC_unbundler, replica),
-	   wrap (this, &dhash_impl::sendblock, replica));
-        active_syncers.insert (replica.x, replica_syncer);
-        
-        bigint rngmin = host_node->my_pred ();
-        bigint rngmax = host_node->my_ID ();
-     
-#if 0
-        warn << "biSYNC with " << replicas[index]
-	     << " range [" << rngmin << ", " << rngmax << "]\n";
+#if 1
+  warn << "sync with " << succs[i]
+       << " range [" << rngmin << ", " << rngmax << "]\n";
 #endif
-        replica_syncer->sync (rngmin, rngmax);
-      }
+  replica_syncer->sync (rngmin, rngmax);
+  i = (i + 1) % NUM_EFRAGS;
 
-      index = (index + 1) % nreplica;
-    }
-  }
-
+ out:
   merkle_rep_tcb =
-    delaycb (REPTM, wrap (this, &dhash_impl::replica_maintenance_timer, index));
+    delaycb (REPTM, wrap (this, &dhash_impl::replica_maintenance_timer, i));
 }
 #endif
 
