@@ -1,2 +1,3 @@
 # CXXFLAGS = -g -Wall -fno-exceptions -fno-default-inline -fno-inline
 CXXFLAGS = -g -Wall -fno-exceptions -O2
+INCLUDES = -I/usr/local/include/sfs-0.7.2/ -I/usr/local/include $(EXTRA_INCLUDES) $(GTKINCLUDES)
