@@ -5,7 +5,7 @@
 #include <misc_utils.h>
 #include "download.h"
 
-u_int MTU = (getenv ("DHASH_MTU") ? atoi (getenv ("DHASH_MTU")) : 1200);
+u_int MTU = (getenv ("DHASH_MTU") ? atoi (getenv ("DHASH_MTU")) : 1210);
 
 // ---------------------------------------------------------------------------
 // dhash_download -- downloads a block of a specific chord node.  That node
@@ -41,7 +41,6 @@ dhash_download::getchunk (u_int start, u_int len, int cookie, gotchunkcb_t cb)
 
   npending++;
   ptr<dhash_fetchiter_res> res = New refcounted<dhash_fetchiter_res> ();
-  warn << "SENT RPC for " << blckID << " chunk " << numchunks << " at " << (getusec () - start) << "\n";
 
   return clntnode->doRPC 
     (source, dhash_program_1, DHASHPROC_FETCHITER, arg, res, 

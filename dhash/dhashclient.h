@@ -44,7 +44,8 @@ class dhashclient {
 
   // inserts under the contents hash. 
   // (buf need not remain involatile after the call returns)
-  void insert (const char *buf, size_t buflen, cbinsertgw_t cb, ptr<option_block> options = NULL);
+  void insert (const char *buf, size_t buflen, cbinsertgw_t cb, 
+	       ptr<option_block> options = NULL);
   void insert (bigint key, const char *buf, size_t buflen, cbinsertgw_t cb,
                ptr<option_block> options = NULL);
 
