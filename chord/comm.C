@@ -109,7 +109,7 @@ rpc_state::rpc_state (ref<location> l, aclnt_cb c, u_int64_t S, long s, int p)
 
 // -----------------------------------------------------
 hostinfo::hostinfo (const net_address &r)
-  : host (r.hostname), rpcdelay (0), nrpc (0), maxdelay (0),
+  : host (r.hostname), nrpc (0), maxdelay (0),
     a_lat (0.0), a_var (0.0), fd (-2)
 {
 }
@@ -117,7 +117,10 @@ hostinfo::hostinfo (const net_address &r)
 // -----------------------------------------------------
 
 rpc_manager::rpc_manager (ptr<u_int32_t> _nrcv)
-  : nrpc (0), nrpcfailed (0), nsent (0), npending (0), nrcv (_nrcv)
+  : a_lat (0.0),
+    a_var (0.0),
+    avg_lat (0.0),
+    nrpc (0), nrpcfailed (0), nsent (0), npending (0), nrcv (_nrcv)
 {
   warn << "CREATED RPC MANAGER\n";
   int dgram_fd = inetsocket (SOCK_DGRAM);
@@ -126,30 +129,6 @@ rpc_manager::rpc_manager (ptr<u_int32_t> _nrcv)
   if (!dgram_xprt) fatal << "Failed to allocate dgram xprt\n";
 
   next_xid = &random_getword;
-}
-
-float
-rpc_manager::get_a_lat (ptr<location> l)
-{
-  return 0.0;
-}
-
-float
-rpc_manager::get_a_var (ptr<location> l)
-{
-  return 0.0;
-}
-
-float
-rpc_manager::get_avg_lat ()
-{
-  return 0.0;
-}
-
-float
-rpc_manager::get_avg_var ()
-{
-  return 0.0;
 }
 
 void
@@ -190,8 +169,13 @@ rpc_manager::doRPC (ptr<location> l,
 {
   ref<aclnt> c = aclnt::alloc (dgram_xprt, prog, 
 			       (sockaddr *)&(l->saddr));
+
+  // Make sure that there is an entry in the table for this guy.
+  (void) lookup_host (l->addr);
   
-  c->call (procno, in, out, wrap (this, &rpc_manager::doRPCcb, cb)); 
+  u_int64_t sent = getusec ();
+  c->call (procno, in, out,
+	   wrap (this, &rpc_manager::doRPCcb, cb, l, sent)); 
   return 0;
 }
 
@@ -205,12 +189,24 @@ rpc_manager::doRPC_dead (ptr<location> l,
 }
 
 void
-rpc_manager::doRPCcb (aclnt_cb realcb, clnt_stat err)
+rpc_manager::doRPCcb (aclnt_cb realcb, ptr<location> l, u_int64_t sent,
+		      clnt_stat err)
 {
   if (err)
     nrpcfailed++;
-  else
+  else {
     nrpc++;
+    // Only update latency on successful RPC.
+    // This probably includes time needed for rexmits.
+    u_int64_t now = getusec ();
+    // prevent overflow, caused by time reversal
+    if (now >= sent) {
+      u_int64_t lat = now - sent;
+      update_latency (l, lat);
+    } else {
+      warn << "*** Ignoring timewarp: sent " << sent << " > now " << now << "\n";
+    }
+  }
   
   (realcb) (err);
 }
@@ -324,10 +320,6 @@ tcp_manager::doRPC_tcp_cleanup (ptr<aclnt> c, RPC_delay_args *args, clnt_stat er
 // -----------------------------------------------------
 stp_manager::stp_manager (ptr<u_int32_t> _nrcv)
   : rpc_manager (_nrcv),
-    a_lat (0.0),
-    a_var (0.0),
-    avg_lat (0.0),
-    rpcdelay (0),
     seqno (0),
     cwind (1.0),
     cwind_ewma (1.0),
@@ -365,27 +357,27 @@ stp_manager::ratecb () {
 }
 
 float
-stp_manager::get_a_lat (ptr<location> l)
+rpc_manager::get_a_lat (ptr<location> l)
 {
   hostinfo *h = lookup_host (l->addr);
   return h->a_lat;
 }
 
 float
-stp_manager::get_a_var (ptr<location> l)
+rpc_manager::get_a_var (ptr<location> l)
 {
   hostinfo *h = lookup_host (l->addr);
   return h->a_var;
 }
 
 float
-stp_manager::get_avg_lat ()
+rpc_manager::get_avg_lat ()
 {
   return a_lat;
 }
 
 float
-stp_manager::get_avg_var ()
+rpc_manager::get_avg_var ()
 {
   return a_var;
 }
@@ -496,7 +488,7 @@ stp_manager::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
       // prevent overflow, caused by time reversal
       if (now >= C->s) {
 	u_int64_t lat = now - C->s;
-	update_latency (C->loc, lat, (C->progno == DHASH_PROGRAM));
+	update_latency (C->loc, lat);
       } else {
 	warn << "*** Ignoring timewarp: C->s " << C->s << " > now " << now << "\n";
 	warnx << " " << now       << "\n";
@@ -695,11 +687,9 @@ stp_manager::setup_rexmit_timer (hostinfo *h, long *sec, long *nsec)
 }
 
 void
-stp_manager::update_latency (ptr<location> l, u_int64_t lat, bool bf)
+rpc_manager::update_latency (ptr<location> l, u_int64_t lat)
 {
-
   //do the gloal latencies
-  rpcdelay += lat;
   nrpc++;
 
   //update global latency
@@ -726,7 +716,6 @@ stp_manager::update_latency (ptr<location> l, u_int64_t lat, bool bf)
   //update per-host latency
   hostinfo *h = lookup_host (l->addr);
   if (h) {
-    h->rpcdelay += lat;
     h->nrpc++;
     err = (lat - h->a_lat);
     h->a_lat = h->a_lat + GAIN*err;

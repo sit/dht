@@ -67,7 +67,6 @@ struct rpc_state {
 struct hostinfo {
   sfs_hostname host;
   str key;
-  u_int64_t rpcdelay;
   u_int64_t nrpc;
   u_int64_t maxdelay;
   float a_lat;
@@ -84,8 +83,17 @@ struct hostinfo {
 
 // Default implementation, udp aclnt
 class rpc_manager {
-  virtual void doRPCcb (aclnt_cb realcb, clnt_stat err);
+  static const float GAIN = 0.2;
+  virtual void doRPCcb (aclnt_cb realcb, ptr<location> l, u_int64_t sent,
+			clnt_stat err);
+  
  protected:
+  // statistics
+  float a_lat;
+  float a_var;
+  float avg_lat;
+  vec<float> lat_history;
+
   // counters
   u_int64_t nrpc;
   u_int64_t nrpcfailed;
@@ -100,7 +108,8 @@ class rpc_manager {
 
   hostinfo *lookup_host (const net_address &r);
   virtual void remove_host (hostinfo *h);
-  
+  void update_latency (ptr<location> l, u_int64_t lat);
+
  public:
   virtual void rexmit (long seqno) {};
   virtual void stats ();
@@ -139,17 +148,8 @@ class tcp_manager : public rpc_manager {
 #define MAX_REXMIT 4
 #define MIN_RPC_FAILURE_TIMER 2
 class stp_manager : public rpc_manager {
-  static const float GAIN = 0.2;
-  
-  // statistics
-  float a_lat;
-  float a_var;
-  float avg_lat;
-  u_int64_t rpcdelay;
-
   // state
   vec<float> timers;
-  vec<float> lat_history;
   vec<float> cwind_time;
   vec<float> cwind_cwind;
   vec<long> acked_seq;
@@ -179,7 +179,6 @@ class stp_manager : public rpc_manager {
   // methods
   void doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err);
   
-  void update_latency (ptr<location> l, u_int64_t lat, bool bf);
   void ratecb ();
   void remove_from_sentq (long acked_seqno);
   void update_cwind (int acked);
@@ -198,10 +197,6 @@ class stp_manager : public rpc_manager {
 	      ptr<void> in, void *out, aclnt_cb cb, long fake_seqno = 0);
   long doRPC_dead (ptr<location> l, const rpc_program &prog, int procno,
 		   ptr<void> in, void *out, aclnt_cb cb, long fake_seqno = 0);
-  float get_a_lat (ptr<location> l);
-  float get_a_var (ptr<location> l);
-  float get_avg_lat ();
-  float get_avg_var ();
 
   stp_manager (ptr<u_int32_t> _nrcv);
   ~stp_manager ();
