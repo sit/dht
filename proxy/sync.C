@@ -148,6 +148,10 @@ sync_connected (int fd)
 void
 proxy_sync ()
 {
-  multiconnect(proxyhosts, proxyports, 3, wrap (sync_connected));
+  if (proxyhosts.size() > 0) {
+    multiconnect(proxyhosts, proxyports, 3, wrap (sync_connected));
+  } else {
+    sync_connected(-1);
+  }
 }
 

@@ -96,7 +96,8 @@ multiconnect(vec<str> hosts, vec<int> ports, int timeout, cbi::ptr cb) {
   // tries hosts/ports in sequence until one connects.  calls <cb>
   // once the first connects, and closes all other successful
   // connections. Connections are started <timeout> seconds apart.
-
+  assert(hosts.size() == ports.size());
+  assert(hosts.size() > 0);
   ptr<multiconn_args> args = New refcounted<multiconn_args> (hosts, ports, timeout, cb);
   multiconnect_real(args, 0);
 }
@@ -114,7 +115,11 @@ proxygateway::proxygateway (ptr<axprt_stream> x, ptr<dbfe> cache,
   proxyhosts = hosts;
   proxyports = ports;
 
-  multiconnect(proxyhosts, proxyports, 3, wrap (mkref (this), &proxygateway::proxy_connected, x));
+  if (proxyhosts.size() > 0) {
+    multiconnect(proxyhosts, proxyports, 3, wrap (mkref (this), &proxygateway::proxy_connected, x));
+  } else {
+    proxy_connected(x, -1);
+  }
 }
 
 void
