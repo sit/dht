@@ -71,7 +71,6 @@ struct location {
   bool connecting;
   tailq<doRPC_cbstate, &doRPC_cbstate::connectlink> connectlist;
   ihash_entry<location> fhlink;
-  bool alive;
   u_int64_t rpcdelay;
   u_int64_t nrpc;
   u_int64_t maxdelay;

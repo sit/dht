@@ -99,7 +99,8 @@ vnode::updatefingers (chordID &x, net_address &r)
 void 
 vnode::deletefingers (chordID &x)
 {
-  assert (x != myID);
+  if (x == myID) return;
+
   for (int i = 1; i <= NBIT; i++) {
     if (finger_table[i].first.alive && (x == finger_table[i].first.n)) {
       locations->deleteloc (finger_table[i].first.n);

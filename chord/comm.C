@@ -64,6 +64,7 @@ locationtable::doForeignRPC (rpc_program prog,
   location *l = getlocation (ID);
   assert (l);
   ptr<aclnt> c = aclnt::alloc (l->x, chord_program_1);
+  assert (c);
   chord_RPC_res *res = New chord_RPC_res ();
   c->call (CHORDPROC_HOSTRPC, &farg, res, 
 	   wrap (this, &locationtable::doForeignRPC_cb, res, out, 
@@ -78,8 +79,6 @@ locationtable::doForeignRPC_cb (chord_RPC_res *res,
 				aclnt_cb cb,
 				clnt_stat err)
 {
-
-
   if ((err) || (res->status)) (*cb)(err);
   else {
     char *mRes = res->resok->marshalled_res.base ();
@@ -133,9 +132,13 @@ locationtable::doRPC (chordID &ID, rpc_program prog, int procno,
 
     if (prog.progno == CHORD_PROGRAM) {
       ptr<aclnt> c = aclnt::alloc(l->x, prog);
-      u_int64_t s = getnsec ();
-      c->call (procno, in, out, wrap (mkref (this), &locationtable::doRPCcb,
+      if (c == 0) {
+	(*cb) (RPC_CANTSEND);
+      } else {
+	u_int64_t s = getnsec ();
+	c->call (procno, in, out, wrap (mkref (this), &locationtable::doRPCcb,
 				      cb, l, s));
+      }
     } else 
       doForeignRPC (prog, procno, in, out, ID, cb);
     
@@ -222,7 +225,7 @@ locationtable::chord_connect(chordID ID, callback<void,
     					 &locationtable::timeout, l));
     (*cb)(l->x);
   } else {
-    warnx << "tcpconnect: " << l->addr.hostname << " " << l->addr.port << "\n";
+    //    warnx << "tcpconnect: " << l->addr.hostname << " " << l->addr.port << "\n";
     tcpconnect (l->addr.hostname, l->addr.port, 
 		wrap (mkref (this), &locationtable::connect_cb, cb));
   }

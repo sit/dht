@@ -261,6 +261,7 @@ vnode::testrange_findclosestpred_cb (chord_testandfindres *res,
 {
   warnt("CHORD: testrange_findclosestpred_cb");
   if (err) {
+    warnx << "testrange_findclosestpred_cb: failure " << err << "\n";
     chordnode->deletefingers(st->nprime);
     st->cb(st->nprime, st->search_path, CHORD_RPCFAILURE);
     delete st;
@@ -360,6 +361,7 @@ vnode::notify_cb (chordID n, chordstat *res, clnt_stat err)
 void
 vnode::alert (chordID &n, chordID &x)
 {
+  assert (0);
   ptr<chord_nodearg> na = New refcounted<chord_nodearg>;
   chordstat *res = New chordstat;
   nalert++;

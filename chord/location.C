@@ -169,8 +169,8 @@ void
 locationtable::updateloc (chordID &x, net_address &r, chordID &source)
 {
   if (locs[x] == NULL) {
-    warnx << "updateloc: ADD " << x << " at port " << r.port << " source: " 
-    	  << source << "\n";
+    // warnx << "updateloc: ADD " << x << " at port " << r.port << " source: " 
+    //  << source << "\n";
     location *loc = New location (x, r, source);
     loc->refcnt++;
     locs.insert (loc);
