@@ -3,7 +3,7 @@
 Summary: Chord -- a distributed hash table
 Name: chord
 Version: 0.1
-Release: 2
+Release: 3
 Copyright: BSD 
 Group: Applications/Internet
 Source: http://www.pdos.lcs.mit.edu/~fdabek/chord-0.1.tar.gz
@@ -46,6 +46,7 @@ rm -rf $RPM_BUILD_ROOT
 %{_bindir}/findroute
 %{_bindir}/lsd
 %{_bindir}/lsdctl
+%{_bindir}/lsdping
 %{_bindir}/nodeq
 %{_bindir}/nodeq-filter
 %{_bindir}/sfsrodb
@@ -67,6 +68,10 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Sat Feb 26 2005 Emil Sit <sit@mit.edu>
+- Add Frank's lsdping
+- Bump package release number because of new merkle.
+
 * Sun Feb 20 2005 Emil Sit <sit@mit.edu>
 - Add udbctl for usenet control
 
