@@ -1,8 +1,8 @@
 # Kademlia args file, for input into scripts/run-simulations.pl
-alpha 1 2 3 4 5
+alpha 1 2 3 4 5 6 7
 k 8 16 32
-stabilize_timer 3600
-refresh_rate 3600
-learn 0 1
-rcache 0 1 2
-default_timeout 5000
+stabilize_timer 3600000
+refresh_rate 3600000
+learn 1
+rcache 1
+default_timeout 1000

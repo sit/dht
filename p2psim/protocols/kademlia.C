@@ -669,7 +669,6 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
   unsigned useless_replies = 0;
   NodeID last_before_merge = ~fargs->key;
   while(true) {
-    assert(outstanding_rpcs->size() == (int) Kademlia::alpha);
     bool ok;
     unsigned donerpc = rcvRPC(rpcset, ok);
     callinfo *ci = (*outstanding_rpcs)[donerpc];
@@ -745,31 +744,33 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
     }
 
 next_candidate:
-    k_nodeinfo front = *successors.begin();
-    if(Kademlia::distance(front.id, fargs->key) < Kademlia::distance(fresult->succ.id, fargs->key))
-      fresult->succ = front;
-    SEND_RPC(front, fargs, fresult, hops[front.id]);
+    while(outstanding_rpcs->size() < (int) Kademlia::alpha) {
+      k_nodeinfo front = *successors.begin();
+      if(Kademlia::distance(front.id, fargs->key) < Kademlia::distance(fresult->succ.id, fargs->key))
+        fresult->succ = front;
+      SEND_RPC(front, fargs, fresult, hops[front.id]);
 
-    fresult->rpcs++;
-    asked.insert(front.id, true);
-    successors.erase(front);
+      fresult->rpcs++;
+      asked.insert(front.id, true);
+      successors.erase(front);
 
-    // for sake of statistics, keep track of time spent waiting for nodes that
-    // are all dead.
-    if(!Network::Instance()->getnode(front.ip)->alive()) {
-      bool all_dead = true;
-      for(HashMap<unsigned, callinfo*>::iterator i = outstanding_rpcs->begin(); i; i++) {
-        if(Network::Instance()->getnode((i.value())->ki.ip)->alive()) {
-          all_dead = false;
-          break;
+      // for sake of statistics, keep track of time spent waiting for nodes that
+      // are all dead.
+      if(!Network::Instance()->getnode(front.ip)->alive()) {
+        bool all_dead = true;
+        for(HashMap<unsigned, callinfo*>::iterator i = outstanding_rpcs->begin(); i; i++) {
+          if(Network::Instance()->getnode((i.value())->ki.ip)->alive()) {
+            all_dead = false;
+            break;
+          }
         }
-      }
 
-      // all outstanding RPCs to dead nodes, but we're not in deadtime yet.
-      assert(!deadtime);
-      if(all_dead) {
-        deadtime = true;
-        deadtimestart = now();
+        // all outstanding RPCs to dead nodes, but we're not in deadtime yet.
+        assert(!deadtime);
+        if(all_dead) {
+          deadtime = true;
+          deadtimestart = now();
+        }
       }
     }
   }
