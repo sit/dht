@@ -124,7 +124,7 @@ Chord::find_successors(CHID key, uint m, bool intern)
     if (nr.v.size () == 0) {
       printf ("failed\n");
     } else {
-      printf ("is (%u, %qx) hops %d\n", nr.v[0].ip, nr.v[0].id, count);
+      printf ("is (%u, %qx) hops %d %d\n", nr.v[0].ip, nr.v[0].id, count+1, route.size());
     }
   }
   return nr.v;
@@ -445,7 +445,7 @@ void
 LocTable::add_sortednodes(vector<Chord::IDMap> l)
 {
   uint sz = pinlist.size();
-  uint lsz = l.size();
+  int lsz = l.size();
   Chord::IDMap tmppin;
   tmppin.ip = 0;
   uint pos;

@@ -48,7 +48,7 @@ ProtocolFactory::create(string s, Node *n)
   Protocol *p = 0;
 
   if(s == "Chord")
-    p = new Chord(n);
+    p = new Chord(n, successors);
   if (s == "Kademlia")
     p = new Kademlia(n);
   if (s == "Pastry")
@@ -58,7 +58,7 @@ ProtocolFactory::create(string s, Node *n)
   if (s == "VivaldiTest")
     p = new VivaldiTest(n);
   if (s == "ChordFinger")
-    p = new ChordFinger(n);
+    p = new ChordFinger(n,base,(successors>resilience? successors:resilience));
 
   assert(p);
   _protnames[typeid(*p).name()] = s;

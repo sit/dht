@@ -7,7 +7,7 @@
 
 class ChordFinger: public Chord {
   public:
-    ChordFinger(Node *n);
+    ChordFinger(Node *n, uint base, uint successors);
     ~ChordFinger() {};
 
     void stabilize();
@@ -17,6 +17,7 @@ class ChordFinger: public Chord {
 
   protected:
     void fix_fingers();
+    uint _base;
 };
 
 #endif

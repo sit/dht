@@ -4,26 +4,23 @@
 #include <algorithm>
 using namespace std;
 
-#define BASE 2
 
-ChordFinger::ChordFinger(Node *n) : Chord(n) 
+ChordFinger::ChordFinger(Node *n, uint base, uint successors) : Chord(n, successors), _base(base)
 {
-  uint level = (uint) ConsistentHash::log_b((CHID)-1, BASE);
+  uint level = (uint) ConsistentHash::log_b((CHID)-1, _base);
   CHID finger;
   CHID lap = 1;
   uint num = 0;
   for (unsigned int i = 0; i < level; i++) {
-    for (unsigned int j = 1; j <= (BASE - 1); j++) {
+    for (unsigned int j = 1; j <= (_base- 1); j++) {
       finger = lap * j + me.id;
       loctable->pin(finger, 1, 0);
       num++;
     }
-    lap = (lap * BASE);
+    lap = (lap * _base);
   }
 }
 
-//this is a hack to make sure the number of entries in the loctable 
-//is exactly some number of pre-specified maximum
 void
 ChordFinger::fix_fingers()
 {
@@ -74,12 +71,12 @@ ChordFinger::stabilized(vector<CHID> lid)
   CHID finger;
   uint pos;
 
-  uint level = (uint) ConsistentHash::log_b((CHID)-1, BASE);
+  uint level = (uint) ConsistentHash::log_b((CHID)-1, _base);
   CHID lap = 1;
 
   IDMap succ;
   for (uint i = 0; i < level; i++) {
-    for (uint j = 1; j <= (BASE - 1); j++) {
+    for (uint j = 1; j <= (_base - 1); j++) {
       if (lap < min_lap) continue;
       finger = lap * j + me.id;
       it = upper_bound(lid.begin(), lid.end(), finger);
@@ -93,7 +90,7 @@ ChordFinger::stabilized(vector<CHID> lid)
 	return false;
       }
     }
-    lap = (lap * BASE);
+    lap = (lap * _base);
   }
   return true;
 }
