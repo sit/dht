@@ -391,7 +391,7 @@ stats ()
 	u_int start_delay = 0;
 	if (JOSH==2) {
 	  start_index = random_getword ()  % dhash::num_efrags ();
-	  start_delay = random_getword ()  % dhash::REPTM;
+	  start_delay = random_getword ()  % dhash::reptm ();
 	}
 	delaycb (start_delay, 0, 
 		 wrap (dh[i], &dhash::replica_maintenance_timer, start_index));

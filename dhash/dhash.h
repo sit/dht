@@ -63,11 +63,10 @@ extern unsigned int MTU;
 
 class dhash {
  public:
-
-  enum { SYNCTM = 30 };
-  enum { KEYHASHTM = 10 };
-  enum { REPTM = 3 };
-
+  static u_long reptm ();
+  static u_long keyhashtm ();
+  static u_long synctm ();
+  
   static u_long num_efrags ();
   static u_long num_dfrags ();
 

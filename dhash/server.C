@@ -76,13 +76,14 @@ dhash_config_init::dhash_config_init ()
   ok = ok && set_int ("dhash.efrags", 14);
   /** Number of fragments needed to reconstruct a given block */
   ok = ok && set_int ("dhash.dfrags", 7);
+  /** How frequently to sync database to disk */
+  ok = ok && set_int ("dhash.sync_timer", 30);
 
   // Josh magic....
   ok = ok && set_int ("dhash.missing_outstanding_max", 15);
   
-  ok = ok && set_int ("merkle.sync_timer", 30);
   ok = ok && set_int ("merkle.keyhash_timer", 10);
-  ok = ok && set_int ("merkle.replica_timer", 3);
+  ok = ok && set_int ("merkle.replica_timer", 5*60);
   ok = ok && set_int ("merkle.prt_timer", 5);
 
   assert (ok);
@@ -90,32 +91,25 @@ dhash_config_init::dhash_config_init ()
 }
 
 // Things that read from Configurator
-u_long
-dhash::num_efrags ()
-{
-  static bool initialized = false;
-  static int efrags = 0;
-  if (!initialized) {
-    initialized = Configurator::only ().get_int ("dhash.efrags", efrags);
-    assert (initialized);
-  }
-
-  return efrags;
+#define DECL_CONFIG_METHOD(name,key)			\
+u_long							\
+dhash::##name ()					\
+{							\
+  static bool initialized = false;			\
+  static int v = 0;					\
+  if (!initialized) {					\
+    initialized = Configurator::only ().get_int (key, v);	\
+    assert (initialized);				\
+  }							\
+  return v;						\
 }
 
-u_long
-dhash::num_dfrags ()
-{
-  static bool initialized = false;
-  static int dfrags = 0;
-  if (!initialized) {
-    initialized = Configurator::only ().get_int ("dhash.dfrags", dfrags);
-    assert (initialized);
-  }
-  
-  return dfrags;
-}
-
+DECL_CONFIG_METHOD(reptm, "merkle.replica_timer")
+DECL_CONFIG_METHOD(keyhashtm, "merkle.keyhash_timer")
+DECL_CONFIG_METHOD(synctm, "dhash.sync_timer")
+DECL_CONFIG_METHOD(num_efrags, "dhash.efrags")
+DECL_CONFIG_METHOD(num_dfrags, "dhash.dfrags")
+#undef DECL_CONFIG_METHOD
 
 // Pure virtual destructors still need definitions
 dhash::~dhash () {}
@@ -226,16 +220,16 @@ dhash_impl::init_after_chord(ptr<vnode> node, ptr<route_factory> _r_factory)
 
 
   update_replica_list ();
-  delaycb (SYNCTM, wrap (this, &dhash_impl::sync_cb));
+  delaycb (synctm (), wrap (this, &dhash_impl::sync_cb));
 
   if (!JOSH) {
     merkle_rep_tcb = 
-      delaycb (REPTM, wrap (this, &dhash_impl::replica_maintenance_timer, 0));
+      delaycb (reptm (), wrap (this, &dhash_impl::replica_maintenance_timer, 0));
   }
 
   keyhash_mgr_rpcs = 0;
   keyhash_mgr_tcb =
-    delaycb (KEYHASHTM, wrap (this, &dhash_impl::keyhash_mgr_timer));
+    delaycb (keyhashtm (), wrap (this, &dhash_impl::keyhash_mgr_timer));
   pmaint_obj = New pmaint (cli, host_node, db, 
 			   wrap (this, &dhash_impl::dbdelete));
 
@@ -345,7 +339,7 @@ dhash_impl::keyhash_mgr_timer ()
     }
   }
   keyhash_mgr_tcb =
-    delaycb (KEYHASHTM, wrap (this, &dhash_impl::keyhash_mgr_timer));
+    delaycb (keyhashtm (), wrap (this, &dhash_impl::keyhash_mgr_timer));
 }
 
 void
@@ -395,7 +389,7 @@ dhash_impl::replica_maintenance_timer (u_int i)
 
  out:
   merkle_rep_tcb =
-    delaycb (REPTM, wrap (this, &dhash_impl::replica_maintenance_timer, i));
+    delaycb (reptm (), wrap (this, &dhash_impl::replica_maintenance_timer, i));
 }
 
 
@@ -406,7 +400,9 @@ dhash_impl::sync_cb ()
 {
   // warn << "** SYNC\n";
   db->sync ();
-  delaycb (SYNCTM, wrap (this, &dhash_impl::sync_cb));
+  cache_db->sync ();
+  keyhash_db->sync ();
+  delaycb (synctm (), wrap (this, &dhash_impl::sync_cb));
 }
 
 
