@@ -51,7 +51,7 @@ private:
     int ok;
   };
   void do_join(void *args, void *result);
-  void merge_into_ftable(NodeID id, IPAddress ip);
+  unsigned merge_into_ftable(NodeID id, IPAddress ip);
 
 
   // lookup
@@ -62,9 +62,11 @@ private:
     NodeID key;
   };
   struct lookup_result {
-    NodeID id;
-    IPAddress ip;
+    NodeID id;      // answer to the lookup
+    IPAddress ip;   // answer to the lookup
+    NodeID rid;     // the guy who's replying
   };
+
   void do_lookup(void *args, void *result);
 
 
@@ -89,7 +91,6 @@ private:
   };
   struct transfer_result {
     map<NodeID, Value> values;
-    fingers_t *fingers;
   };
   void do_transfer(void *args, void *result);
                                                                                   
@@ -101,11 +102,11 @@ private:
       _ft[i].valid = true;
       _ft[i].retries = 0;
       _id2ip[id] = ip;
-      cout << "set " << i << endl;
-      cout << "_id " << printbits(_id) << endl;
-      cout << " id " << printbits(id) << endl;
-      cout << " fp " << printbits(Kademlia::flipbitandmaskright(_id, i)) << endl;
-      cout << " mr " << printbits(Kademlia::maskright(id, i)) << endl;
+      KDEBUG(5) << "set " << i << endl;
+      KDEBUG(5) << "_id " << printbits(_id) << endl;
+      KDEBUG(5) << " id " << printbits(id) << endl;
+      KDEBUG(5) << " fp " << printbits(Kademlia::flipbitandmaskright(_id, i)) << endl;
+      KDEBUG(5) << " mr " << printbits(Kademlia::maskright(id, i)) << endl;
       assert(Kademlia::flipbitandmaskright(_id, i) == Kademlia::maskright(id, i));
     }
 

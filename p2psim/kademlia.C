@@ -119,77 +119,36 @@ Kademlia::join(Args *args)
   doRPC(wkn, &Kademlia::do_lookup, &la, &lr);
   KDEBUG(1) << "Result of lookup for " << printID(_id) << " is " << printID(lr.id) << ", which is node " << lr.ip << endl;
 
+  // put well known dude in finger table
+  NodeID succ = lr.rid;
+  IPAddress succip = lr.ip;
 
-  // get the finger table and data of the guy with an ID closest to ours
-  // merge his data into ours.
-  if(lr.id != _id) {
-    transfer_args ta;
-    transfer_result tr;
-    ta.id = _id;
-    ta.ip = ip();
-    tr.fingers = 0;
-    KDEBUG(1) << "Node " << printbits(_id) << " initiating transfer from " << printbits(lr.id) << endl;
-    doRPC(lr.ip, &Kademlia::do_transfer, &ta, &tr);
-    assert(tr.fingers);
+  unsigned entry = merge_into_ftable(succ, wkn);
+  KDEBUG(3) << "Inserted at entry " << entry << endl;
 
-    // put that guy in our finger table
-    merge_into_ftable(lr.id, lr.ip);
-
-    // see which entries of his finger table are valid for ours
-    for(unsigned i=0; i<idsize; i++) {
-      if(tr.fingers->valid(i)) {
-        assert((i >= 0) && (i < (8*sizeof(NodeID))));
-        KDEBUG(5) << printbits(_id) << " is merging stuff from " << printbits(lr.ip) << " in iteratio " << i << endl;
-        merge_into_ftable(tr.fingers->get_id(i), tr.fingers->get_ip(i));
-      }
-    }
-
-    // merge that data in our _values table
-    for(map<NodeID, Value>::const_iterator pos = tr.values.begin(); pos != tr.values.end(); ++pos)
-      _values[pos->first] = pos->second;
-
-    KDEBUG(1) << "Transfer done." << endl;
-  } else {
-    assert(false);
+  // all entries further away than him need to be refereshed.
+  // see section 2.3
+  for(unsigned i=entry+1; i<idsize; i++) {
+    // always look up on the previous node we learned about.
+    la.key = (_id ^ (i<<i));
+    KDEBUG(3) << "looking up entry " << i << ": " << printbits(la.key) << endl;
+    doRPC(lr.ip, &Kademlia::do_lookup, &la, &lr);
+    KDEBUG(3) << "looking result for entry " << i << ": " << printbits(lr.id) << endl;
+    if(lr.id != _id)
+      merge_into_ftable(la.key, lr.ip);
   }
 
+  // now get the keys from our successor
+  transfer_args ta;
+  transfer_result tr;
+  ta.id = _id;
+  ta.ip = ip();
+  KDEBUG(1) << "Node " << printbits(_id) << " initiating transfer from " << printbits(lr.id) << endl;
+  doRPC(succip, &Kademlia::do_transfer, &ta, &tr);
 
-  join_args ja;
-  join_result jr;
-  ja.id = _id;
-  ja.ip = ip();
-
-  // why are we using wkn for the first lookup?
-  IPAddress thisip = wkn;
-  for(unsigned i=0; i<idsize; i++) {
-    NodeID key = flipbitandmaskright(_id, i);
-
-    KDEBUG(2) << "*** Iteration " << i << ".  Doing lookup for " << printbits(key) << " to join\n";
-
-    lookup_args la;
-    lookup_result lr;
-
-    la.id = _id;
-    la.ip = ip();
-    la.key = key;
-    doRPC(wkn, &Kademlia::do_lookup, &la, &lr);
-
-    // don't put myself into finger table
-    if(lr.id == _id)
-      continue;
-
-    // send a join request to that guy
-    thisip = lr.ip;
-    if(!doRPC(thisip, &Kademlia::do_join, &ja, &jr)) {
-      _fingers.unset(i);
-      continue;
-    }
-
-    KDEBUG(2) << printbits(_id) << " looked up " << printbits(key) << " in iteration " << i << endl;
-    KDEBUG(2) << " lr.id = " << printbits(lr.id) << endl;
-    KDEBUG(2) << " lr.ip = " << printbits(lr.ip) << endl;
-    _fingers.set(i, lr.id, thisip);
-  }
+  // merge that data in our _values table
+  for(map<NodeID, Value>::const_iterator pos = tr.values.begin(); pos != tr.values.end(); ++pos)
+    _values[pos->first] = pos->second;
 }
 
 void
@@ -207,8 +166,6 @@ Kademlia::do_transfer(void *args, void *result)
   transfer_args *targs = (transfer_args*) args;
   transfer_result *tresult = (transfer_result*) result;
   merge_into_ftable(targs->id, targs->ip);
-
-  tresult->fingers = &_fingers;
 
   KDEBUG(1) << "handle_transfer to node " << printID(targs->id) << "\n";
   if(_values.size() == 0) {
@@ -235,10 +192,10 @@ Kademlia::do_lookup(void *args, void *result)
   lookup_args *largs = (lookup_args*) args;
   lookup_result *lresult = (lookup_result*) result;
   KDEBUG(3) << "do_lookup calls merge_into_ftable" << endl;
-  merge_into_ftable(largs->id, largs->ip);
 
   NodeID bestID = _id;
   NodeID bestdist = distance(_id, largs->key);
+
   KDEBUG(3) << "do_lookup for key " << printID(largs->key) << ", bestID = " << printID(bestID) << ", bestdist =  " << printID(bestdist) << "\n";
 
   // XXX: very inefficient
@@ -267,16 +224,18 @@ Kademlia::do_lookup(void *args, void *result)
 
   // otherwise do the lookup call to whomever we think is best
   doRPC(_fingers.get_ipbyid(bestID), &Kademlia::do_lookup, args, result);
+
+  // only merge _after_ the lookup to avoid returning a node's own id.
+  merge_into_ftable(largs->id, largs->ip);
 }
 
 
 
-void
+unsigned
 Kademlia::merge_into_ftable(NodeID id, IPAddress ip)
 {
-  // never put own id in finger table
-  if(id == _id)
-    return;
+  assert(id != _id);
+  unsigned entry = 0;
 
   KDEBUG(2) << "merge_into_ftable" << endl;
 
@@ -291,9 +250,11 @@ Kademlia::merge_into_ftable(NodeID id, IPAddress ip)
       // cout << "calling for i = " << i << endl;
       _fingers.set(i, id, ip);
       called++;
+      entry = i;
     }
   }
   assert(called <= 1);
+  return entry;
 }
 
 
