@@ -43,6 +43,16 @@ struct sfsp2p_findarg {
   sfs_ID x;
 };
 
+struct sfsp2p_notifyarg {
+  sfs_ID x;
+  net_address r;
+};
+
+struct sfsp2p_cachearg {
+  sfs_ID key;
+  sfs_ID node;
+};
+
 struct sfsp2p_testandfindarg {
   sfs_ID x;
 };
@@ -61,14 +71,15 @@ union sfsp2p_testandfindres switch (sfsp2pstat status) {
    void;
 };
 
-struct sfsp2p_notifyarg {
-  sfs_ID x;
-  net_address r;
+struct sfsp2p_getfingersresok {
+  sfs_ID fingers<>;
 };
 
-struct sfsp2p_cachearg {
-  sfs_ID key;
-  sfs_ID node;
+union sfsp2p_getfingersres switch (sfsp2pstat status) {
+  case SFSP2P_OK:
+    sfsp2p_getfingersresok resok;
+  default:
+    void;
 };
 
 program SFSP2P_PROGRAM {
@@ -95,7 +106,9 @@ program SFSP2P_PROGRAM {
         	SFSP2PPROC_CACHE (sfsp2p_cachearg) = 6;
 
 		sfsp2p_testandfindres
-                SFSP2PPROC_TESTRANGE_FINDCLOSESTPRED (sfsp2p_testandfindarg) = 7;
+                SFSP2PPROC_TESTRANGE_FINDCLOSESTPRED (sfsp2p_testandfindarg) = 7; 
+		sfsp2p_getfingersres
+		SFSP2PPROC_GETFINGERS (void) = 8;
   
 	} = 1;
 } = 344447;

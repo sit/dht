@@ -17,9 +17,11 @@ void p2p::updateall (sfs_ID &x)
       finger_table[i].first = x;
     }
   }
+#if 0
   if (between (predecessor, myID, x)) {
     predecessor = x;
   }
+#endif
 }
 
 sfs_ID p2p::findclosestpred (sfs_ID &x)
@@ -431,8 +433,11 @@ p2p::donotify (svccb *sbp, sfsp2p_notifyarg *na)
   if ((predecessor == myID) || between (predecessor, myID, na->x)) {
     warnx << "donotify: updated predecessor: new pred is " << na->x << "\n";
     predecessor = na->x;
-    updateall (predecessor);
-    print ();
+    if (predecessor != myID) {
+      updateall (predecessor);
+      print ();
+      get_fingers (predecessor); // XXX perhaps do this only once after join
+    }
   }
   sbp->replyref (sfsp2pstat (SFSP2P_OK));
 }
@@ -444,19 +449,44 @@ p2p::doalert (svccb *sbp, sfsp2p_notifyarg *na)
 
   // perhaps less aggressive and check status of x first
   deleteloc (na->x);
-  // bootstrap ();
   sbp->replyref (sfsp2pstat (SFSP2P_OK));
+}
+
+void
+p2p::dogetfingers (svccb *sbp)
+{
+  sfsp2p_getfingersres res(SFSP2P_OK);
+  int n = 1;
+
+  for (int i = 1; i <= NBIT; i++) {
+    if (finger_table[i].first != finger_table[i-1].first) {
+      n++;
+    }
+  }
+  warnx << "dogetfingers: " << n << "\n";
+  res.resok->fingers.setsize (n);
+  res.resok->fingers[0] = finger_table[0].first;
+  n = 1;
+  for (int i = 1; i <= NBIT; i++) {
+    if (finger_table[i].first != finger_table[i-1].first) {
+      res.resok->fingers[n] = finger_table[i].first;
+      n++;
+    }
+  }
+  warnt("CHORD: dogetfingers_reply");
+  sbp->reply (&res);
 }
 
 void
 p2p::dofindsucc (sfs_ID &n, cbroute_t cb)
 {
+  // warn << "calling f_s " << predecessor.first << " " << n << "\n";
   find_successor (myID, n, wrap (mkref (this), &p2p::dofindsucc_cb, cb, n));
 }
 
 void
 p2p::dofindsucc_cb (cbroute_t cb, sfs_ID n, sfs_ID x,
-		    route search_path, sfsp2pstat status) 
+                    route search_path, sfsp2pstat status) 
 {
   if (status) {
     warnx << "dofindsucc_cb for " << n << " returned " <<  status << "\n";
@@ -467,7 +497,7 @@ p2p::dofindsucc_cb (cbroute_t cb, sfs_ID n, sfs_ID x,
       warnx << "dofindsucc_cb: last node " << last << " contacted failed\n";
       alert (lastOK, last);
       find_successor_restart (lastOK, x, search_path,
-			      wrap (mkref (this), &p2p::dofindsucc_cb, cb, n));
+                              wrap (mkref (this), &p2p::dofindsucc_cb, cb, n));
     } else {
       cb (x, search_path, SFSP2P_ERRNOENT);
     }
@@ -476,5 +506,3 @@ p2p::dofindsucc_cb (cbroute_t cb, sfs_ID n, sfs_ID x,
     cb (x, search_path, SFSP2P_OK);
   }
 }
-
-

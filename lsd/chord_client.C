@@ -34,14 +34,6 @@ client::dispatch (svccb *sbp)
       defp2p->dofindclosestpred (sbp, fa);
     }
     break;
-  case SFSP2PPROC_TESTRANGE_FINDCLOSESTPRED:
-    {
-      warnt("CHORD: testandfindrequest");
-      sfsp2p_testandfindarg *fa = 
-	sbp->template getarg<sfsp2p_testandfindarg> ();
-      defp2p->dotestandfind (sbp, fa);
-    }
-    break;
   case SFSP2PPROC_NOTIFY:
     {
       sfsp2p_notifyarg *na = sbp->template getarg<sfsp2p_notifyarg> ();
@@ -53,6 +45,18 @@ client::dispatch (svccb *sbp)
       sfsp2p_notifyarg *na = sbp->template getarg<sfsp2p_notifyarg> ();
       defp2p->doalert (sbp, na);
     }
+    break;
+  case SFSP2PPROC_TESTRANGE_FINDCLOSESTPRED:
+    {
+      warnt("CHORD: testandfindrequest");
+      sfsp2p_testandfindarg *fa = 
+	sbp->template getarg<sfsp2p_testandfindarg> ();
+      defp2p->dotestandfind (sbp, fa);
+    }
+    break;
+  case SFSP2PPROC_GETFINGERS:
+    warnt("CHORD: getfingers_request");
+    defp2p->dogetfingers (sbp);
     break;
   default:
     sbp->reject (PROC_UNAVAIL);

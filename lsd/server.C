@@ -269,8 +269,6 @@ p2p::test_and_find_cb (sfsp2p_testandfindres *res, findpredecessor_cbstate *st, 
   } else {
     warn("WTF");
   }
-
-
 }
 
 void
@@ -305,4 +303,33 @@ p2p::find_closestpred_succ_cb (findpredecessor_cbstate *st,
     }
   }
 }
+
+void 
+p2p::get_fingers (sfs_ID &x)
+{
+  sfsp2p_getfingersres *res = New sfsp2p_getfingersres (SFSP2P_OK);
+  doRPC (x, sfsp2p_program_1, SFSP2PPROC_GETFINGERS, NULL, res,
+	 wrap (mkref (this), &p2p::get_fingers_cb, x, res));
+}
+
+void
+p2p::get_fingers_cb (sfs_ID x, sfsp2p_getfingersres *res,  clnt_stat err) 
+{
+  if (err) {
+    net_address dr;
+    warnx << "get_fingers_cb: RPC failure " << err << "\n";
+    deleteloc (x);
+  } else if (res->status) {
+    net_address dr;
+    warnx << "get_fingers_cb: RPC error " << res->status << "\n";
+  } else {
+    warnx << "get_fingers_cb: " << res->resok->fingers.size () << " fingers\n";
+    for (unsigned i = 0; i < res->resok->fingers.size (); i++) {
+      warnx << "get_fingers_cb: " << res->resok->fingers[i] << "\n";
+      updateall (res->resok->fingers[i]);
+    }
+    print ();
+  }
+}
+
 

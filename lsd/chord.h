@@ -283,6 +283,7 @@ class p2p : public virtual refcount  {
   void updateall (sfs_ID &x);
   sfs_ID findclosestpred (sfs_ID &x);
 
+  sfs_ID query_location_table (sfs_ID x);
   void deleteloc (sfs_ID &n);
   void updateloc (sfs_ID &x, net_address &r, sfs_ID &source);
   bool lookup_anyloc (sfs_ID &n, sfs_ID *r);
@@ -344,6 +345,9 @@ class p2p : public virtual refcount  {
   void alert (sfs_ID &n, sfs_ID &x);
   void alert_cb (sfsp2pstat *res, clnt_stat err);
 
+  void get_fingers (sfs_ID &x);
+  void get_fingers_cb (sfs_ID x, sfsp2p_getfingersres *res,  clnt_stat err);
+
   void doget_successor (svccb *sbp);
   void doget_predecessor (svccb *sbp);
   void dofindclosestsucc (svccb *sbp, sfsp2p_findarg *fa);  
@@ -354,6 +358,7 @@ class p2p : public virtual refcount  {
   void dofindsucc (sfs_ID &n, cbroute_t cb);
   void dofindsucc_cb (cbroute_t cb, sfs_ID n, sfs_ID x,
 		      route search_path, sfsp2pstat status);
+  void dogetfingers (svccb *sbp);
 
   void timing_cb(aclnt_cb cb, location *l, ptr<struct timeval> start, int procno, rpc_program progno, clnt_stat err);
 
@@ -368,9 +373,6 @@ class p2p : public virtual refcount  {
   void doActionCallbacks(sfs_ID id, char action);
 
   void stats_cb ();
-
-  sfs_ID query_location_table (sfs_ID x);
-  
 };
 
 extern ptr<p2p> defp2p;
