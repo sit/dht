@@ -8,8 +8,6 @@
 #include <list>
 using namespace std;
 
-// extern int anyready();
-
 EventQueue *EventQueue::_instance = 0;
 
 EventQueue*
@@ -36,6 +34,8 @@ EventQueue::~EventQueue()
 void
 EventQueue::run()
 {
+  extern int anyready();
+
   Alt a[2];
   Event *e;
 
@@ -43,9 +43,11 @@ EventQueue::run()
   a[0].v = &e;
   a[0].op = CHANRCV;
 
+
+
   while(1) {
     // XXX: BIG FUCKING SCARY HACK
-    for(int i=0; i<10; i++)
+    while(anyready())
       yield();
 
     // NB: this is pretty essential.
