@@ -216,7 +216,8 @@ struct dhc_block {
     strbuf ret;
     ret << "\n DHC block " << id 
 	<< "\n meta data: " << meta->to_str ()
-	<< "\n      data: " << data->data.base () 
+	<< "\n data size: " << data->data.size ()
+      //<< "\n      data: " << data->data.base () 
 	<< "\n";
     return str(ret);
   }
@@ -298,6 +299,8 @@ struct dhc_soft {
   }
 };
 
+typedef callback<void, dhc_stat, ptr<keyhash_data> >::ref dhc_getcb_t;
+
 class dhc {
   
   ptr<vnode> myNode;
@@ -312,6 +315,11 @@ class dhc {
   void recv_accept (chordID, ref<dhc_propose_res>, clnt_stat);
   void recv_newconfig (user_args *);
   void recv_newconfig_ack (chordID, ref<dhc_newconfig_res>, clnt_stat);
+  void recv_get (user_args *);
+  void getblock_cb (chordID, dhc_soft *, ref<dhc_get_res>, clnt_stat);
+
+  void get_lookup_cb (chordID, dhc_getcb_t, vec<chord_node>, route, chordstat);
+  void get_result_cb (chordID, dhc_getcb_t, ptr<dhc_get_res>, clnt_stat);
   
  public:
 
@@ -319,6 +327,7 @@ class dhc {
   ~dhc () {};
   
   void recon (chordID);
+  void get (chordID, dhc_getcb_t);
   void dispatch (user_args *);
   
 };

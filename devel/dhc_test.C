@@ -45,7 +45,7 @@ newconfig_cb (chordID nodeID, chordID bID,
 void
 insert_block (chordID bID)
 {
-  str astr ("hello");
+  str astr ("hello\0");
   
   ref<dhc_newconfig_arg> arg = New refcounted<dhc_newconfig_arg>;
   arg->bID = bID;

@@ -7,7 +7,7 @@ enum dhc_stat {
    DHC_LOW_PROPOSAL = 2, 
    DHC_PROP_MISMATCH = 3,
    DHC_NOT_A_REPLICA = 4,
-   /* DHC_ACCEPTED_PROP = 5, */
+   DHC_CHORDERR = 5,
    DHC_RECON_INPROG = 6,
    DHC_OLD_VER = 7
 };
@@ -124,11 +124,14 @@ program DHC_PROGRAM {
     dhc_get_res
     DHCPROC_GET (dhc_get_arg) = 4;
 
+    dhc_get_res
+    DHCPROC_GETBLOCK (dhc_get_arg) = 5;
+
     dhc_gettag_res
-    DHCPROC_GETTAG (dhc_gettag_arg) = 5;
+    DHCPROC_GETTAG (dhc_gettag_arg) = 6;
 
     void
-    DHCPROC_PUT (dhc_put_arg) = 6;
+    DHCPROC_PUT (dhc_put_arg) = 7;
      
   } = 1;	
 } = 344452;

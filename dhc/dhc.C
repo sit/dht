@@ -2,6 +2,7 @@
 #include "dhc_misc.h"
 #include <merkle_misc.h>
 #include <location.h>
+#include <locationtable.h>
 
 dhc::dhc (ptr<vnode> node, str dbname, uint k) : 
   myNode (node), n_replica (k)
@@ -198,7 +199,7 @@ dhc::recv_newconfig_ack (chordID bID, ref<dhc_newconfig_res> ack,
 			 clnt_stat err)
 {
   if (!err && ack->status == DHC_OK) {
-
+    
   } else 
     print_error ("dhc:recv_newconfig_ack", err, ack->status);
 }
@@ -330,7 +331,8 @@ dhc::recv_newconfig (user_args *sbp)
     }
   }
 
-  kb->data->tag = newconfig->data.tag;
+  kb->data->tag.ver = newconfig->data.tag.ver;
+  kb->data->tag.writer = newconfig->data.tag.writer;
   kb->data->data.set (newconfig->data.data.base (), newconfig->data.data.size ());
   kb->meta->config.seqnum = newconfig->old_conf_seqnum + 1;
   
@@ -361,6 +363,84 @@ dhc::recv_newconfig (user_args *sbp)
 }
 
 void 
+dhc::get (chordID bID, dhc_getcb_t cb)
+{
+  ptr<location> l = myNode->locations->lookup (bID);
+  if (l) {
+    ptr<dhc_get_arg> arg = New refcounted<dhc_get_arg>;
+    arg->bID = bID;
+    ptr<dhc_get_res> res = New refcounted<dhc_get_res>;
+    myNode->doRPC (l, dhc_program_1, DHCPROC_GET, arg, res,
+		   wrap (this, &dhc::get_result_cb, bID, cb, res));
+  } else
+    myNode->find_successor (bID, wrap (this, &dhc::get_lookup_cb, bID, cb));
+}
+
+void 
+dhc::get_lookup_cb (chordID bID, dhc_getcb_t cb, vec<chord_node> succ, 
+		    route path, chordstat err)
+{
+  if (!err) {
+    ptr<location> l = myNode->locations->lookup (succ[0].x); 
+    ptr<dhc_get_arg> arg = New refcounted<dhc_get_arg>;
+    arg->bID = bID;
+    ptr<dhc_get_res> res = New refcounted<dhc_get_res>;
+    myNode->doRPC (l, dhc_program_1, DHCPROC_GET, arg, res,
+		   wrap (this, &dhc::get_result_cb, bID, cb, res));    
+  } else
+    (*cb) (DHC_CHORDERR, 0);
+}
+
+void 
+dhc::get_result_cb (chordID bID, dhc_getcb_t cb, ptr<dhc_get_res> res, clnt_stat err)
+{
+  if (!err && res->status == DHC_OK) {
+    ptr<keyhash_data> data = New refcounted<keyhash_data> ();
+    data->tag.ver = res->resok->data.tag.ver;
+    data->tag.writer = res->resok->data.tag.writer;
+    data->data.set (res->resok->data.data.base (), res->resok->data.data.size ());
+    (*cb) (DHC_OK, data);
+  } else 
+    if (err)
+      (*cb) (DHC_CHORDERR, 0);
+    else (*cb) (res->status, 0);
+}
+
+void 
+dhc::recv_get (user_args *sbp)
+{
+  dhc_get_arg *get = sbp->template getarg<dhc_get_arg> ();
+  ptr<dbrec> key = id2dbrec (get->bID);
+  ptr<dbrec> rec = db->lookup (key);
+
+  if (!rec) {
+    //wait and retry
+  } else {
+    dhc_soft *b = dhcs[get->bID];
+    if (b && b->pstat->recon_inprogress) 
+      ; //wait and retry
+
+    ptr<dhc_block> kb = to_dhc_block (rec);
+    if (!b) {
+      b = New dhc_soft (myNode, kb);
+      dhcs.insert (b);
+    }
+    ptr<dhc_get_arg> arg = New refcounted<dhc_get_arg>;
+    arg->bID = get->bID;
+    ptr<dhc_get_res> res = New refcounted<dhc_get_res>;
+    for (uint i=0; i<b->config.size (); i++)
+      myNode->doRPC (b->config[i], dhc_program_1, DHCPROC_GETBLOCK, arg, res,
+		     wrap (this, &dhc::getblock_cb, get->bID, b, res));
+  }
+}
+
+void 
+dhc::getblock_cb (chordID bID, dhc_soft *b, ref<dhc_get_res> res, clnt_stat err)
+{
+
+}
+
+void 
 dhc::dispatch (user_args *sbp)
 {
   switch (sbp->procno) {
@@ -372,9 +452,13 @@ dhc::dispatch (user_args *sbp)
     break;
   case DHCPROC_NEWCONFIG:
     recv_newconfig (sbp);
-  break;
+    break;
+  case DHCPROC_GET:
+    recv_get (sbp);
+    break;
   default:
     warn << "dhc:dispatch Unimplemented RPC " << sbp->procno << "\n"; 
+    sbp->reject (PROC_UNAVAIL);
     break;
   }
 
