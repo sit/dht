@@ -31,6 +31,7 @@
 #include "chordtoe.h"
 #include "chordonehop.h"
 #include "tapestry.h"
+#include "kelips.h"
 
 extern uint base;
 extern uint resilience;
@@ -80,6 +81,8 @@ ProtocolFactory::create(string s, Node *n)
     p = New Pastry(n);
   if (s == "Tapestry")
     p = New Tapestry(n, a);
+  if (s == "Kelips")
+    p = New Kelips(n, a);
   if (s == "Koorde")
     p = New Koorde(n, a);
   if (s == "VivaldiTest")
