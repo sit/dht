@@ -26,7 +26,7 @@ struct cfs_signed_fsinfo {
   unsigned start;       /* In seconds since UNIX epoch */
   unsigned duration;	/* seconds */
   chordID rootfh;
-  int blocksize;
+  unsigned blocksize;
 };
 
 struct cfs_fsinfo {
