@@ -26,6 +26,9 @@ protected:
   Chord::CHID debruijn;
 
   Chord::CHID nextimagin (CHID i, CHID kshift);
+
+  vector<Chord::IDMap> Koorde::find_successors(CHID key, int m);
+
 };
 
 #endif // __KOORDE_H

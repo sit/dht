@@ -1,4 +1,5 @@
 #include "koorde.h"
+#include <stdio.h>
 #include <iostream>
 using namespace std;
 
@@ -7,6 +8,20 @@ topbit (Chord::CHID n)
 {
   uint r = n > 31;
   return r;
+}
+
+vector<Chord::IDMap>
+Koorde::find_successors(CHID key, int m)
+{
+  cout << "Koorde find_successor" << endl;
+  koorde_lookup_arg a;
+  koorde_lookup_ret r;
+  a.k = key;
+  a.kshift = key;
+  a.i = me.id;
+  koorde_lookup (&a, &r);
+  vector<Chord::IDMap> succs;
+  succs.push_back (r.r);
 }
 
 Koorde::Koorde(Node *n) : Chord(n) {
@@ -26,6 +41,8 @@ void
 Koorde::koorde_lookup(koorde_lookup_arg *a, koorde_lookup_ret *r)
 {
   IDMap succ = loctable->succ(me.id);
+  printf ("Koorde (%u) lookup key=%u kshift=%u i=%u succ=%u\n", 
+	  me.id, a->k, a->kshift, a->i, succ.id);
   if (ConsistentHash::between (me.id, succ.id, a->k)) {
     r->r = succ;
   } else if (ConsistentHash::between (me.id, succ.id, a->i)) {

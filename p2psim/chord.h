@@ -74,7 +74,7 @@ protected:
   LocTable *loctable;
   IDMap me;
 
-  vector<IDMap> find_successors(CHID key, int m);
+  virtual vector<IDMap> find_successors(CHID key, int m);
   IDMap next(CHID n);
   void fix_predecessor();
   void fix_successor();
