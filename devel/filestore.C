@@ -13,8 +13,9 @@
 #include <verify.h>
 
 dhashclient *dhash;
-int inflight = 0;
+int inflight = 0, maxinflight;
 FILE *outfile;
+callback<void>::ptr todo = 0;
 
 // write block functions ----------------------------------
 
@@ -23,7 +24,14 @@ void insert_cb(dhash_stat s, ptr<insert_info>) {
     warn << "bad store\n";
 
   inflight--;
-  if(inflight == 0)
+
+  // wakeup from throttling
+  if((inflight < maxinflight) &&
+     (todo != NULL)) {
+    cbv f = todo;
+    todo = 0;
+    f();
+  } else if(inflight == 0)
     exit(0);
 }
 
@@ -180,12 +188,18 @@ void gotblock_cb(int len, dhash_stat st, ptr<dhash_block> bl,
     fatal("write failure\n");
 
   inflight--;
-  if(inflight == 0)
+  // wakeup from throttling
+  if((inflight < maxinflight) &&
+     (todo != NULL)) {
+    cbv f = todo;
+    todo = 0;
+    f();
+  } else if(inflight == 0)
     exit(0);
 }
 
-void gotindirect_cb(int len, dhash_stat st, ptr<dhash_block> bl,
-		    vec<chordID> vc) {
+void gotindirect_step(int len, unsigned int step,
+		      dhash_stat st, ptr<dhash_block> bl) {
   if(st != DHASH_OK) {
     warnx << "at " << len;
     fatal(" lost indirect\n");
@@ -193,12 +207,24 @@ void gotindirect_cb(int len, dhash_stat st, ptr<dhash_block> bl,
 
   char *buf = bl->data;
   chordID ID;
-  for(unsigned int i=0; i<bl->len; i+=sha1::hashsize) {
-    mpz_set_rawmag_be (&ID, buf+i, sha1::hashsize);  // For big endian
-    dhash->retrieve(ID, wrap(&gotblock_cb, len+(i*BLOCKSIZE/sha1::hashsize)));
+  for(unsigned int i=step; i<bl->len; i+=sha1::hashsize) {
+    if(inflight >= maxinflight) {
+      // throttling
+      todo = wrap(&gotindirect_step, len, i, st, bl);
+      return;
+    }
+
+    mpz_set_rawmag_be (&ID, buf+i, sha1::hashsize);
+    dhash->retrieve(ID, wrap(&gotblock_cb, 
+			     len+(i*BLOCKSIZE/sha1::hashsize)));
     warnx << "retrieve " << ID << "\n";
     inflight++;
   }
+}
+
+void gotindirect_cb(int len,
+		    dhash_stat st, ptr<dhash_block> bl, vec<chordID> vc) {
+  gotindirect_step(len, 0, st, bl);
 }
 
 void gotinode_cb(dhash_stat st, ptr<dhash_block> bl, vec<chordID> vc) {
@@ -213,10 +239,35 @@ void gotinode_cb(dhash_stat st, ptr<dhash_block> bl, vec<chordID> vc) {
 
   chordID ID;
   for(unsigned int i=0; i<(in.blen); i+=sha1::hashsize) {
-    mpz_set_rawmag_be(&ID, in.buf+i, sha1::hashsize);  // For big endian
-    dhash->retrieve(ID, wrap(&gotindirect_cb, (BLOCKSIZE/sha1::hashsize)*(i*BLOCKSIZE/20)));
+    mpz_set_rawmag_be(&ID, in.buf+i, sha1::hashsize);
+    dhash->retrieve(ID, wrap(&gotindirect_cb, 
+			     (BLOCKSIZE/sha1::hashsize)*(i*BLOCKSIZE/20)));
     warnx << "retrieve " << ID << "\n";
   }
+}
+
+void store_send(FILE *f, indirect *in, inode *n) {
+  char buf[BLOCKSIZE];
+  int len;
+  chordID ID;
+  do {
+    if(inflight >= maxinflight) {
+       // throttling
+      todo = wrap(&store_send, f, in, n);
+      return;
+    }
+
+    len = fread(buf, 1, BLOCKSIZE, f);
+    warnx << "len " << len << " inflight " << inflight << "\n";
+    ID = write_block(buf, len);
+
+    in->add_hash(ID);
+  } while(len == BLOCKSIZE);
+
+  in->write_out();
+  n->write_out();
+  delete in;
+  delete n;
 }
 
 void store(char *name) {
@@ -224,36 +275,26 @@ void store(char *name) {
   if(stat(name, &st) == -1)
     fatal("couldn't stat file\n");
 
-  inode n(name, st.st_size);
+  inode *n = New inode(name, st.st_size);
 
   FILE *f = fopen(name, "r");
   if(f == NULL)
     fatal("couldn't open file\n");
 
-  char buf[BLOCKSIZE];
-  int len;
-  indirect in(&n);
-  chordID ID;
-  do {
-    len = fread(buf, 1, BLOCKSIZE, f);
-    warnx << "len " << len << "\n";
-    ID = write_block(buf, len);
-
-    in.add_hash(ID);
-  } while(len == BLOCKSIZE);
-
-  in.write_out();
-  n.write_out();
+  indirect *in = New indirect(n);
+  store_send(f, in, n);
 }
 
 int main(int argc, char *argv[]) {
-  if(argc != 4)
-    fatal("filestore [sockname] -[fls] [filename/hash]\n");
+  if(argc != 5)
+    fatal("Usage: filestore sockname -[fls] filename_or_hash"
+	  " num_RPCs_in_flight\n");
 
   dhash = New dhashclient(argv[1]);
   chordID ID;
   char *cmd = argv[2];
   char *name = argv[3];
+  maxinflight = atoi(argv[4]);
 
   if(!strcmp(cmd, "-s")) {
     // store
@@ -271,7 +312,8 @@ int main(int argc, char *argv[]) {
     warnx << "retrieve " << ID << "\n";
 
   } else {
-    fatal("filestore [sockname] -[fls] [filename/hash]\n");
+    fatal("Usage: filestore sockname -[fls] filename_or_hash"
+	  " num_RPCs_in_flight\n");
   }
 
   amain();
