@@ -175,9 +175,10 @@ class dhash:
                     avail += 1
             # Lazy repair waits until last possible moment.
             if avail == 0:
-                print "# LOST block", b, "after", desc, "of", an, "|", succs
+		# print "# LOST block", b, "after", desc, "of", an, "|", succs
+		pass
             elif avail < my.min_pieces ():
-                print "# REPAIR block", b, "after", desc, "of", an
+		# print "# REPAIR block", b, "after", desc, "of", an
                 isz = my.insert_piece_size (my.blocks[b])
                 for s in succs:
                     if b not in s.blocks:
