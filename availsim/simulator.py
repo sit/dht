@@ -121,3 +121,7 @@ class simulator:
             last_time = ev.time
 
         monitor (last_time + 1, my.dh)
+	# XXX update node lifetimes 
+	for n in my.dh.nodes:
+	    if n.alive:
+		n.stop (last_time + 1)

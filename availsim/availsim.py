@@ -129,14 +129,17 @@ if __name__ == '__main__':
     # default monitor, every 12 hours
     monitor = print_monitor
     monint  = 12 * 60 * 60
+    dump_bw_cdf = 0
     try:
-	opts, cmdv = getopt.getopt (sys.argv[1:], "b:i:mp:s")
+	opts, cmdv = getopt.getopt (sys.argv[1:], "b:ci:mp:s")
     except getopt.GetoptError:
         usage ()
         sys.exit (1)
     for o, a in opts:
 	if o == '-b':
 	    dht.node.BANDWIDTH_HACK = int (a)
+	elif o == '-c':
+	    dump_bw_cdf = 1
 	elif o == '-i':
 	    monint = int (a)
         elif o == '-m':
@@ -168,3 +171,9 @@ if __name__ == '__main__':
     evfh = open (evfile)
     eg = simulator.event_generator (evfh)
     sim.run (eg, monitor, monint)
+
+    if dump_bw_cdf:
+	print "###### Per-node sent-bytes (node sent_bytes stored_bytes lifetime)"
+	for n in gdh.allnodes:
+	    v = gdh.allnodes[n]
+	    print "#B", n, v.sent_bytes, v.bytes, v.lifetime
