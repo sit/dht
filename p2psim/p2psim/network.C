@@ -110,6 +110,9 @@ Network::avglatency()
   if(answer)
     return answer;
 
+  if(_nodes.size() == 0 || _nodes.size() == 1)
+    return (answer = 0);
+
   for(HashMap<IPAddress, Node*>::const_iterator p = _nodes.begin(); p != _nodes.end(); ++p) {
     for(HashMap<IPAddress, Node*>::const_iterator q = _nodes.begin(); q != _nodes.end(); ++q) {
       if(p.key() == q.key())
