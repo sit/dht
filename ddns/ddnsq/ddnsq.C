@@ -93,7 +93,7 @@ mkrr(char *name, dns_type t, int nval, char **val)
       break;
     case WKS:
 	  nf = splitfields(val[i], f, nelem(f), ';');
-	  if(nf != 3){
+	  if(nf != 2){
 	    cerr << "wks format: ipaddress;protocol";
 	    return nil;
 	  }
