@@ -29,45 +29,42 @@
 #include "dhash.h"
 #include "block.h"
 
-venti_block::venti_block(melody_file *ac, melody_block *bl)
+venti_block::venti_block(dhashclient *dh, melody_block *bl, venti_block *ap)
 {
 #ifdef DEBUG
   warn << "venti_block1\n";
 #endif
   memcpy(&data, bl, bl->size);
-  more_init(ac, NULL, 0);
+  more_init(ap, 0);
+  dhash = dh;
 }
 
-venti_block::venti_block(melody_file *ac, venti_block *ap)
-{
-#ifdef DEBUG
-  warn << "venti_block2\n";
-#endif
-  ap->get_block(&data, wrap(this, &venti_block::more_init, ac, ap));
-}
-
-venti_block::venti_block(melody_file *ac, venti_block *ap, callback<void>::ref acb)
+venti_block::venti_block(dhashclient *dh, venti_block *ap, cbv acb)
 {
 #ifdef DEBUG
   warn << "venti_block2c\n";
 #endif
-  ap->get_block(&data, wrap(this, &venti_block::more_init_gb, ac, ap, acb));
+  warn << (int)this << " venti_block2c\n";
+  ap->get_block(&data, wrap(this, &venti_block::more_init_gb, ap, acb));
+  dhash = dh;
 }
 
-venti_block::venti_block(melody_file *ac, callback<void, int, bigint>::ptr dcb)
+venti_block::venti_block(dhashclient *dh, callback<void, int, bigint>::ptr dcb)
 {
 #ifdef DEBUG
   warn << "venti_block3\n";
   warn << "new venti_block for size " << asize << "\n";
 #endif
+  warn << (int)this << " venti_block3\n";
   data.type = 2;
   data.size = 12;
-  more_init(ac, NULL, 0);
+  more_init(NULL, 0);
+  dhash = dh;
   done_cb = dcb;
 }
 
 void
-venti_block::more_init(melody_file *ac, venti_block *ap, int dummy)
+venti_block::more_init(venti_block *ap, int dummy)
 {
 #ifdef DEBUG
   warn << "more_init\n";
@@ -75,19 +72,18 @@ venti_block::more_init(melody_file *ac, venti_block *ap, int dummy)
   if(data.type != 2)
     warn << "block not venti type\n";
   hashindex = data.data;
-  conn = ac;
   parent = ap;
   offset = 0;
   done = false;
 }
 
 void
-venti_block::more_init_gb(melody_file *ac, venti_block *ap, callback<void>::ref acb, int dummy)
+venti_block::more_init_gb(venti_block *ap, callback<void>::ref acb, int dummy)
 {
 #ifdef DEBUG
   warn << "more_init_gb_nc\n";
 #endif
-  more_init(ac, ap, dummy);
+  more_init(ap, dummy);
   acb();
 }
 
@@ -115,9 +111,9 @@ venti_block::get_block (melody_block *bl, cbi cb)
 #endif
   if(empty()) {
     if(parent == NULL) { // no more data
-      strbuf foo;
-      foo << "retrieved " << conn->blocks << " blocks";
-      (*conn->statuscb) (foo);
+      //      strbuf foo;
+      //      foo << "retrieved";
+      //      (*conn->statuscb) (foo);
     } else {
       parent->get_block(&data, wrap(this, &venti_block::get_block_rc, bl, cb, offset)); // need sync... what does this mean? FIXME
       offset += BLOCKPAYLOAD; // FIXME fixed?
@@ -152,7 +148,7 @@ venti_block::get_block2 (melody_block *bl, cbi cb, int of)
 #ifdef DEBUG
   warn << "gb trying to retrieve " << blockhash << "\n";
 #endif
-  conn->dhash->retrieve (blockhash, DHASH_CONTENTHASH, wrap (this, &venti_block::get_block_cb, bl, cb, of));
+  dhash->retrieve (blockhash, DHASH_CONTENTHASH, wrap (this, &venti_block::get_block_cb, bl, cb, of));
 }
 
 // final function in get_block chain.
@@ -162,45 +158,74 @@ venti_block::get_block_cb(melody_block *bl, cbi cb, int of, ptr<dhash_block> blk
 #ifdef DEBUG
   warn << "gb_cb\n";
 #endif
-  conn->blocks++;
-
-  if(blk->len > BLOCKSIZE)
-    warn << "gb_cb block too big\n";
-  else
-    memcpy(bl, blk->data, blk->len);
-  cb(of);
+  if(blk) {
+    if(blk->len > BLOCKSIZE)
+      warn << "gb_cb block too big\n";
+    else
+      memcpy(bl, blk->data, blk->len);
+    cb(of);
+  } else
+    // FIXME error?
+    ;
 }
 
 void
-venti_block::reset_cb (bool error, chordID key)
+venti_block::reset_cb (cbv after, bool error, chordID key)
 {
 #ifdef DEBUG
   warn << "reset_cb\n";
 #endif
-  conn->blocks++;
+  warn << (int)this << " reset_cb\n";
 
   if (error)
     warn << "venti_block store error\n";
   if(done) {
-    strbuf foo;
-    foo << "stored " << conn->blocks << " blocks";
-    warn << "reset_cb " << (int)conn << "\n";
-    (*conn->statuscb) (foo);
+    //    strbuf foo;
+    //    foo << "stored " << conn->blocks << " blocks";
+    //    warn << "reset_cb\n";// << (int)conn << "\n";
+    //    (*conn->statuscb) (foo);
   }
+  after();
 }
 
 void
-venti_block::reset()
+venti_block::reset(cbv after)
 {
   if(parent == NULL)
-    parent = New venti_block(conn, done_cb);
+    parent = New venti_block(dhash, done_cb);
+  warn << (int)this << " reset to " << (int)parent << "\n";
 
   bigint mehash = compute_hash (&data, data.size);
 #ifdef DEBUG
   warn << "reset " << mehash << "\n";
 #endif
-  parent->add_hash(&mehash);
-  conn->dhash->insert ((char *)&data, data.size, wrap (this, &venti_block::reset_cb));
+  parent->add_hash(&mehash, wrap(&null));
+  dhash->insert ((char *)&data, data.size, wrap (this, &venti_block::reset_cb, after));
+
+  hashindex = data.data;
+  data.size = 12;
+}
+
+void
+venti_block::reset_cb_s (bool error, chordID key)
+{
+  if (error)
+    warn << "venti_block reset_cb_s store error\n";
+}
+
+void
+venti_block::reset_s()
+{
+  if(parent == NULL)
+    parent = New venti_block(dhash, done_cb);
+  warn << (int)this << " reset to " << (int)parent << "\n";
+
+  bigint mehash = compute_hash (&data, data.size);
+#ifdef DEBUG
+  warn << "reset " << mehash << "\n";
+#endif
+  parent->add_hash(&mehash, wrap(&null));
+  dhash->insert ((char *)&data, data.size, wrap (this, &venti_block::reset_cb_s));
 
   hashindex = data.data;
   data.size = 12;
@@ -214,17 +239,16 @@ venti_block::close_cb (bool error, chordID key)
 #ifdef DEBUG
   warn << "close_cb\n";
 #endif
-  conn->blocks++;
+  warn << (int)this << " close_cb\n";
 
   if (error)
     warn << "venti_block store error\n";
   if(done) {
-    strbuf foo;
-    foo << "stored " << conn->blocks << " blocks";
-    warn << "close_cb " << (int)conn << "\n";
-    (*conn->statuscb) (foo);
+    //    strbuf foo;
+    //    foo << "stored " << conn->blocks << " blocks";
+    //    warn << "close_cb\n";// << (int)conn << "\n";
+    //    (*conn->statuscb) (foo);
   }
-  delete(this);
 }
 
 void
@@ -237,11 +261,12 @@ venti_block::close(int size)
 #ifdef DEBUG
   warn << "close vb " << mehash << "\n";
 #endif
-  conn->dhash->insert ((char *)&data, data.size, wrap (this, &venti_block::close_cb));
+  warn << (int)this << " close vb " << mehash << "\n";
+  dhash->insert ((char *)&data, data.size, wrap (this, &venti_block::close_cb));
 
   if(parent) {
-    parent->add_hash(&mehash);
-    parent->close(size);
+    parent->add_hash(&mehash, wrap(parent, &venti_block::close, size));
+    //    parent->close(size); // FIXME, make async after the add_hash/reset_cb
   } else {
     warn << "hash: " << mehash << "\n";
     done = true;
@@ -251,7 +276,7 @@ venti_block::close(int size)
 }
 
 void
-venti_block::add_hash(bigint *hash)
+venti_block::add_hash(bigint *hash, cbv after)
 {
   assert(hashindex);
 
@@ -263,7 +288,24 @@ venti_block::add_hash(bigint *hash)
   data.size += sha1::hashsize;
 
   if(full())
-    reset();
+    reset(after);
+  else
+    after();
+}
+void
+venti_block::add_hash_s(bigint *hash)
+{
+  assert(hashindex);
+
+#ifdef DEBUG
+  warn << "add_hash " << *hash << "\n";
+#endif
+  mpz_get_raw (hashindex, sha1::hashsize, hash);
+  hashindex += sha1::hashsize;
+  data.size += sha1::hashsize;
+
+  if(full())
+    reset_s();
 }
 
 bool
@@ -294,184 +336,11 @@ venti_block::empty()
     return false;
 }
 
-
-void
-melody_file::write_cb (bool error, chordID key)
+venti_block::~venti_block()
 {
-#ifdef DEBUG
-  warn << "write_cb\n";
-#endif
-  if (error) {
-    warn << "melody_file store error\n";
-    (*error_cb)(); //FIXME more/better error reporting?
-  }
-  blocks++;
-  outstanding--;
-
-  if((outstanding < 20) && sleeping.first) { // FIXME tune 20?
-    sleeping.first->readcb_wakeup();
-    sleeping.remove(sleeping.first);
-  }
+  warn << (int)this << " ~venti_block\n";
+  if(parent)
+    delete(parent);
 }
 
-void
-melody_file::close()
-{
-  flush();
-  vstack->close(wsize);
-}
-
-void
-melody_file::flush()
-{
-  int len = wbuf.resid();
-  if(wbuf.resid() > 0) {
-    wbuf.copyout(cbuf.data, wbuf.resid());
-    cbuf.type = 1;
-    cbuf.offset = wsize - len;
-    cbuf.size = len;
-    wbuf.rembytes(wbuf.resid());
-    
-    bigint hash = compute_hash (&cbuf, len + 12);
-    dhash->insert ((char *)&cbuf, len + 12, wrap (this, &melody_file::write_cb));
-
-    vstack->add_hash(&hash);
-  }
-}
-void 
-melody_file::write(const char *buf, int len)
-{
-#ifdef DEBUG
-  warn << "write " << len << "\n";
-#endif
-  outstanding++;
-  wsize += len;
-  wbuf.copy(buf, len);
-
-  if(wbuf.resid() >= BLOCKPAYLOAD) {
-    wbuf.copyout(cbuf.data, BLOCKPAYLOAD);
-    wbuf.rembytes(BLOCKPAYLOAD);
-    cbuf.type = 1;
-    cbuf.offset = wsize - len;
-    cbuf.size = len;
-    
-    bigint hash = compute_hash (&cbuf, len + 12);
-    dhash->insert ((char *)&cbuf, len + 12, wrap (this, &melody_file::write_cb));
-
-    vstack->add_hash(&hash);
-  }
-}
-
-void
-melody_file::openw(callback<void, int, bigint>::ptr done_cb, callback<void>::ptr ecb)
-{
-  blocks = 0;
-  wsize = 0;
-  error_cb = ecb;
-  vstack = New venti_block(this, done_cb);
-}
-
-void
-melody_file::find_venti_depth(int asize) {
-#ifdef DEBUG
-  warn << "fvd\n";
-#endif
-  size = asize;
-  venti_depth = 1;
-  int file_blocks = size / BLOCKPAYLOAD;
-  int file_blocks_hashsize = file_blocks * sha1::hashsize;
-
-  unsigned int cursize = file_blocks_hashsize, curblocks;
-
-  while(cursize > BLOCKPAYLOAD) {
-    venti_depth++;
-    curblocks = cursize / BLOCKPAYLOAD;
-    cursize = curblocks * sha1::hashsize;
-  }
-
-  warn << "venti_depth " << venti_depth << " for size " << size << "\n";
-}
-
-void
-melody_file::next_venti_cb(int index, cbi ready_cb)
-{
-#ifdef DEBUG
-  warn << "next_venti_cb\n";
-#endif
-  index++;
-  if(index < venti_depth)
-    vstack = New venti_block(this, vstack, wrap(this, &melody_file::next_venti_cb, index, ready_cb));
-  else if(index == venti_depth)
-    ready_cb(size);
-  else
-    warn << "venti_depth and index error\n";
-}
-
-void
-melody_file::venti_cb(cbi ready_cb, ptr<dhash_block> blk)
-{
-#ifdef DEBUG
-  warn << "venti_cb\n";
-#endif
-  blocks++;
-  find_venti_depth(((struct melody_block *)blk->data)->offset);
-
-  vstack = New venti_block(this, ((struct melody_block *)blk->data));
-  next_venti_cb(0, ready_cb);
-}
-
-void
-melody_file::openr(bigint filehash, callback<void, const char *, int, int>::ptr rcb, cbi ready_cb)
-{
-  vstack = NULL;
-  blocks = 0;
-  read_cb = rcb;
-#ifdef DEBUG
-  warn << "trying to retrieve " << filehash << "\n";
-#endif
-  dhash->retrieve (filehash, DHASH_CONTENTHASH, wrap (this, &melody_file::venti_cb, ready_cb));
-}
-
-void
-melody_file::skip(int blocks)
-{
-  vstack->skip(blocks, 0);
-}
-
-void
-melody_file::next()
-{
-  vstack->get_block(&cbuf, wrap(this, &melody_file::next_cb));
-}
-
-void
-melody_file::next_cb(int offset)
-{
-  (*read_cb)(cbuf.data, cbuf.size, offset);
-}
-
-melody_file::melody_file(str csock, callback<void, str>::ptr scb)
-{
-#ifdef DEBUG
-  warn << "cf1\n";
-#endif
-  dhash = New dhashclient(csock);
-  statuscb = scb;
-  vstack = NULL;
-  outstanding = 0;
-}
-
-bool
-melody_file::sleeptest(cs_client *c) {
-  if(outstanding > 20) {
-    sleeping.insert_tail(c);
-    return true;
-  } else
-    return false;
-}
-
-void
-melody_file::sleepdied(cs_client *c) {
-  if(sleeping.first)
-    sleeping.remove(c);
-}
+void null() {}

@@ -27,16 +27,18 @@
  *
  */
 
-class melody_conn;
+class cs_output;
 
 #include "async.h"
 #include "http.h"
-#include "cs_output.h"
+#include "list.h"
 #include "dirpage.h"
+//#include "cs_output.h"
 
 class cs_client {
   int s;
-  melody_file *f;
+  in_addr ip;
+  ptr<melody_file>f;
   timecb_t *timeout;
   suio req;
   httpreq reqheaders;
@@ -46,21 +48,25 @@ class cs_client {
   bool sleeping;
   callback<void>::ptr accept_more;
   str endtag;
+  bool done;
 
 public:
   static int num_active;
-
-  cs_client(int cfd, callback<void>::ptr am);
-  ~cs_client();
   tailq_entry <cs_client> sleep_link;
+
+  cs_client(int cfd, callback<void>::ptr am, in_addr aip);
+  ~cs_client();
   void readcb_wakeup();
+  void dir_wakeup();
 
 private:
   void xfer_done(str status);
   void requestcb();
   void died();
+  void put2sleep();
   void readc(const char *buf, int len, int b_offset);
   void readcb();
+  void readcb_actual();
   void writec();
   void input(suio *req, str referrer);
 };

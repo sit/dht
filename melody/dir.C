@@ -32,190 +32,329 @@
 #include "vec.h"
 #include "crypt.h"
 
-dir::dir(melody_file *acc, callback<void, const char *, int, int>::ptr afileout, callback<void, int>::ptr afilehead, cs_client *acs)
+dir::dir(ptr<melody_file>acc, callback<void, const char *, int, int>::ptr afileout, callback<void, int, str>::ptr afilehead, cs_client *acs)
 {
   cc = acc;
   fileout = afileout;
   filehead = afilehead;
   cs = acs;
   char tmp[sha1::hashsize] = DIRROOT;
-  mpz_set_rawmag_be(&dirhash, tmp, sha1::hashsize);
+  mpz_set_rawmag_be(&vhash, tmp, sha1::hashsize);
+  noread = false;
 }
 
 void
 dir::root_test()
 {
-  cc->dhash->retrieve (dirhash, DHASH_APPEND, wrap (this, &dir::root_test_cb));
+  cc->dhash->retrieve (vhash, DHASH_APPEND, wrap (this, &dir::root_test_got_rb));
 }
 
 void
-dir::root_test_cb(ptr<dhash_block> blk)
+dir::root_test_got_rb(ptr<dhash_block> blk)
 {
   if(!blk) {
+    warn << "couldn't find root block\n";
     struct dir_record dr;
     dr.type = 0;
-    mpz_get_raw (dr.key, sha1::hashsize, &dirhash);
+    dr.size = 0;
+    gettimeofday(&dr.ctime, NULL);
+    mpz_get_raw (dr.key, sha1::hashsize, &vhash);
     strncpy(dr.entry, "..", 256);
-    cc->dhash->append (dirhash, (char *)&dr, sizeof(dr), wrap (this, &dir::flush_cb, true, wrap(this, &dir::null)));
-  }
+    dirhash = random_bigint(sha1::hashsize*8);
+    cc->dhash->append (dirhash, (char *)&dr, sizeof(dr), wrap (this, &dir::create_venti, wrap(this, &dir::root_done), str("")));
+  } else
+    root_done("");
 }
+
+void
+dir::root_done(str foo)
+{
+  delete(cc);
+  delete(this);
+};
 
 dir::~dir()
 {
-  warn << (int)cs << " delete dir " << "\n";
-  delete cc;
+  warn << (int)cs << " delete dir\n";
 }
 
-static rxx pathrx ("[^/]+", "i");
+static rxx pathrx ("^/+([^/;]+;[\\dabcdef]+)", "i");
+//static rxx pathrx ("[^/]+", "i");
 void
-dir::opendir(str path, callback<void>::ptr agotdir)
+dir::opendir(str path, callback<void>::ptr agotdir, bool anoread)
 {
   gotdir = agotdir;
+  noread = anoread;
   char tmp[sha1::hashsize] = DIRROOT;
   bigint root;
   mpz_set_rawmag_be(&root, tmp, sha1::hashsize);
 
-  vec<str> pathelm;
   strbuf tmpath = path;
   while(pathrx.search(tmpath)) {
-    pathelm.push_back(pathrx[0]);
+    pathelm.push_back(pathrx[1]);
     tmpath.tosuio()->rembytes(pathrx.end(0));
   }
 
-  opendir(pathelm, root);
+  opendir(root);
 }
 
+//loops:
+// open elements of path, for each dir,
+//  read hash from venti block, for each hash,
+//   read dir block... do find_entry
+
 void
-dir::opendir(vec<str> pathelm, bigint dir)
+dir::opendir(bigint dir)
 {
+  vhash = dir;
   if(pathelm.size() > 0)
-    cc->dhash->retrieve (dir, DHASH_APPEND, wrap (this, &dir::find_entry, pathelm));
+    cc->dhash->retrieve (dir, DHASH_APPEND, wrap (this, &dir::opendir_got_venti, wrap(this, &dir::find_entry)));
+  else if(noread)
+    cc->dhash->retrieve (dir, DHASH_APPEND, wrap (this, &dir::opendir_got_venti_noread));
   else
-    cc->dhash->retrieve (dir, DHASH_APPEND, wrap (this, &dir::found_entry));
+    cc->dhash->retrieve (dir, DHASH_APPEND, wrap (this, &dir::opendir_got_venti, wrap(this, &dir::found_entry)));
 }
 
 void
-dir::find_entry(vec<str> pathelm, ptr<dhash_block> blk)
+dir::opendir_got_venti(cbretrieve_t cbr, ptr<dhash_block> blk)
 {
   if(!blk) {
     warn << (int)cs << " no such path found: " << pathelm.front() << "\n";
     // FIXME error reporting
     return;
   }
-  buf.copy(blk->data, blk->len);
+
+  struct melody_block *mb = (struct melody_block *)blk->data;
+
+  if(mb->type != 2) {
+    warn << (int)cs << " not venti type dir\n";
+    return;
+  }
+
+  cbuf.copy(blk->data, blk->len);
+  cbuf.rembytes(sizeof(int)*3);
+  next_dirblk(cbr);
+}
+
+void
+dir::opendir_got_venti_noread(ptr<dhash_block> blk)
+{
+  if(!blk) {
+    warn << (int)cs << " no such path found: " << pathelm.front() << "\n";
+    // FIXME error reporting
+    return;
+  }
+
+  struct melody_block *mb = (struct melody_block *)blk->data;
+
+  if(mb->type != 2) {
+    warn << (int)cs << " not venti type dir\n";
+    return;
+  }
+
+  cbuf.copy(blk->data, blk->len);
+  cbuf.rembytes(sizeof(int)*3);
+
+  while(cbuf.resid() >= 2*sha1::hashsize)
+    cbuf.rembytes(sha1::hashsize);
+  char tmp[sha1::hashsize];
+  cbuf.copyout(tmp, sha1::hashsize);
+  mpz_set_rawmag_be(&dirhash, tmp, sha1::hashsize);
+  exist = true;
+  gotdir();
+}
+
+void
+dir::next_dirblk(cbretrieve_t cbr) {
+  char tmp[sha1::hashsize];
+  cbuf.copyout(tmp, sha1::hashsize);
+  cbuf.rembytes(sha1::hashsize);
+  mpz_set_rawmag_be(&dirhash, tmp, sha1::hashsize);
+  cc->dhash->retrieve (dirhash, DHASH_APPEND, cbr);
+}
+
+static rxx namechashrx ("(.+);([\\dabcdef]+)", "i");
+void
+dir::find_entry(ptr<dhash_block> blk)
+{
   unsigned int name_index = 0;
 
   while(name_index < blk->len) {
     struct dir_record *di = (struct dir_record *) (((char *)blk->data) + name_index);
+    if(!namechashrx.search(pathelm.front())) {
+      // FIXME error reporting
+      warn << (int)cs << " bad path: " << pathelm.front() << "\n";
+      return;
+    }
 
-    if(pathelm.front() == di->entry) {
+    bigint pathhash(namechashrx[2],16), dehash; // ??
+    mpz_set_rawmag_be(&dehash, di->key, sha1::hashsize);
+    //    warn << (int)cs << " de " << di->entry << ":" << dehash << "\n";
+    //    warn << (int)cs << " d2 " << namechashrx[1] << ":" << pathhash << "\n";
+
+    if((namechashrx[1] == di->entry) &&
+       (pathhash == dehash)) {
       pathelm.pop_front();
       if(pathelm.size() > 0) {
-	bigint tmp;
-	mpz_set_rawmag_be(&tmp, di->key, sha1::hashsize);
-	opendir(pathelm, tmp);
+	if(di->type == 0)
+	  opendir(dehash);
+	else
+	  warn << (int)cs << " whaaa? trying to read non-dir type block\n";
       } else {
 	mpz_set_rawmag_be(&dirhash, di->key, sha1::hashsize);
 	warn << (int)cs << " found " << dirhash << "\n";
 	if(di->type == 0)
-	  cc->dhash->retrieve (dirhash, DHASH_APPEND, wrap (this, &dir::found_entry));
-	else {
-	  cc->openr(dirhash, fileout, filehead);
+	  opendir(dirhash);
+	else if(di->type == 1) {
+	  cc->openr(dirhash, fileout, filehead, di->entry);
 	}
       }
-      buf.clear();
       return;
     }
     name_index += sizeof(struct dir_record);
   }
-  buf.clear();
 
+  if(cbuf.resid() < sha1::hashsize) {
   // FIXME failure
-  exist = false;
-  gotdir();
+  //  exist = false;
+  //  gotdir();
+  } else
+    next_dirblk(wrap(this, &dir::find_entry));
 }
 
 void
 dir::found_entry(ptr<dhash_block> blk)
 {
-  if(blk) {
-    buf.copy(blk->data, blk->len);
+  if(!blk) {
+    warn << (int)cs << " block gone\n"; // FIXME add mroe error recovery
+    return;
+  }
+  buf.copy(blk->data, blk->len);
+
+  if(cbuf.resid() < sha1::hashsize) {
     entry_index = 0;
     exist = true;
     gotdir();
   } else
-    warn << (int)cs << " block gone\n"; // FIXME add mroe error recovery
+    next_dirblk(wrap(this, &dir::found_entry));
 }
 
 void
-dir::add_dir(str dir, str parent, cbv redir)
+dir::add_dir(str dir, str parent, cbs redir)
 {
   bigint tmphash = random_bigint(sha1::hashsize*8);
+  combdir << parent << dir << ";" << tmphash;
   warn << (int)cs << " trying to add " << dir << ": " << tmphash << " to " << parent << ":" << dirhash << "\n";
-
-  strbuf tmp = parent;
-  tmp << dir;
-  warn << (int)cs << " looking to see if " << tmp << " exists\n";
-  opendir(tmp, wrap(this, &dir::add, dir, 0, tmphash, 0, redir));
+  add(dir, 0, tmphash, 0, redir, combdir);
 }
 
 void
-dir::add_file(str file, str parent, bigint filehash, int size, cbv redir)
+dir::add_file(str file, str parent, bigint filehash, int size, cbs redir)
 {
   warn << (int)cs << " trying to add " << file << " to " << dirhash << "\n";
-  strbuf tmp = parent;
-  tmp << file;
-  warn << (int)cs << " looking to see if " << tmp << " exists\n";
-  opendir(tmp, wrap(this, &dir::add, file, 1, filehash, size, redir));
+  add(file, 1, filehash, size, redir, parent);
 }
 
 void
-dir::null() {}
-
-void
-dir::add(str name, int type, bigint tmphash, int size, cbv redir)
+dir::add(str name, int type, bigint tmphash, int size, cbs redir, str parent)
 {
-  if(exist) {
-    exist = false;
-    return; // FIXME change file name to new "version"
-  }
   struct dir_record dr;
   dr.type = type;
   dr.size = size;
+  gettimeofday(&dr.ctime, NULL);
   strncpy(dr.entry, name.cstr(), 256);
   mpz_get_raw (dr.key, sha1::hashsize, &tmphash);
+  buf.clear();
+  buf.copy(&dr, sizeof(dr));
+
   if(type == 0)
-    cc->dhash->append (dirhash, (char *)&dr, sizeof(dr), wrap (this, &dir::flush_cb, false, wrap(this, &dir::add2, type, tmphash, size, redir)));
+    cc->dhash->append (dirhash, (char *)&dr, sizeof(dr), wrap (this, &dir::flush_cb, wrap(this, &dir::add2, tmphash, size, redir), parent));
   else
-    cc->dhash->append (dirhash, (char *)&dr, sizeof(dr), wrap (this, &dir::flush_cb, true, redir));
+    cc->dhash->append (dirhash, (char *)&dr, sizeof(dr), wrap (this, &dir::flush_cb, redir, parent));
 }
 
 void
-dir::add2(int type, bigint tmphash, int size, cbv redir) {
+dir::add2(bigint tmphash, int size, cbs redir, str parent) {
   struct dir_record dr;
-  dr.type = type;
+  dr.type = 0;
   dr.size = size;
+  gettimeofday(&dr.ctime, NULL);
   strncpy(dr.entry, "..", 256);
-  mpz_get_raw (dr.key, sha1::hashsize, &dirhash);
-  cc->dhash->append (tmphash, (char *)&dr, sizeof(dr), wrap (this, &dir::flush_cb, true, redir));
+  mpz_get_raw (dr.key, sha1::hashsize, &vhash);
+  vhash = tmphash;
+  cc->dhash->append (random_bigint(sha1::hashsize*8), (char *)&dr, sizeof(dr), wrap (this, &dir::create_venti, redir, parent));
+}
+
+// only creating one layer venti, so dirs are limited to ~700000 entries
+void
+dir::create_venti(cbs redir, str parent, bool error, chordID key)
+{
+  if(error) {
+    warn << "can't add dir block\n";
+    exit(1);
+  }
+
+  struct {
+    int type, offset, size;
+    char tmp[sha1::hashsize];
+  } mb;
+  mb.type = 2;
+  mb.offset = 0;
+  mb.size = 0;
+  mpz_get_raw (mb.tmp, sha1::hashsize, &key);
+  cc->dhash->append(vhash, (char *)&mb, sizeof(mb), wrap(this, &dir::create_venti_done, redir, parent));
 }
 
 void
-dir::flush_cb(bool done, cbv redir, bool error, chordID key)
+dir::create_venti_done(cbs redir, str parent, bool error, chordID key) {
+  if(error) {
+    warn << "can't add venti block\n";
+    exit(1);
+  }
+  redir(parent);
+}
+
+void
+dir::flush_cb(cbs redir, str parent, bool error, chordID key)
 {
   warn << (int)cs << " flush_cb " << (int)this << "\n";
-  if (error)
-    warn << (int)cs << " dir store error\n";
-  buf.clear();
-  redir();
-  if(done)
-    delete this;
+  if (error) {
+    //    warn << (int)cs << " dir store error\n";
+    // existing dir block is probably full
+    // Ok, let's add another dir block
+    warn << (int)cs << " but it's ok, we need to add new dir block\n";
+    struct dir_record dr;
+    buf.copyout(&dr, sizeof(struct dir_record));
+    bigint tmphash = random_bigint(sha1::hashsize*8);
+    cc->dhash->append (tmphash, (char *)&dr, sizeof(dr), wrap (this, &dir::after_new_dir_block, redir, parent));
+  } else
+    redir(parent);
+}
+
+void
+dir::after_new_dir_block(cbs redir, str parent, bool error, chordID key) {
+  if(error) {
+    warn << (int)cs << " can't add new dir block.\n";
+    exit(1);
+  }
+  char tmp[sha1::hashsize];
+  mpz_get_raw (tmp, sha1::hashsize, &key);
+  cc->dhash->append(vhash, tmp, sha1::hashsize, wrap(this, &dir::after_appended_new_dirhash, redir, parent));
+}
+
+void
+dir::after_appended_new_dirhash(cbs redir, str parent, bool error, chordID key) {
+  if(error) {
+    warn << (int)cs << " can't append new dirhash.\n";
+    exit(1);
+  }
+  redir(parent);
 }
 
 bool
 dir::more(void)
 {
-  return sizeof(struct dir_record) <= buf.resid();
+  return(sizeof(struct dir_record) <= buf.resid());
 }
 
 void
@@ -223,6 +362,6 @@ dir::readdir(struct dir_record *dr)
 {
   buf.copyout(dr, sizeof(struct dir_record));
   buf.rembytes(sizeof(struct dir_record));
-  warn << (int)cs << " ei " << entry_index << " diel " << dr->entry << " sdr " << sizeof(struct dir_record) << " bl " << buf.resid() << "\n";
+  //  warn << (int)cs << " ei " << entry_index << " diel " << dr->entry << " sdr " << sizeof(struct dir_record) << " bl " << buf.resid() << "\n";
   entry_index += sizeof(struct dir_record);
 }

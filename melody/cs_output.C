@@ -27,18 +27,29 @@
 
 #include "cs_output.h"
 
-cs_output::cs_output(int as, callback<void>::ptr foo, cs_client *acs)
+cs_output::cs_output(int as, callback<void>::ptr foo, cs_client *acs, callback<void>::ptr adpcb)
 {
   s = as;
   nomore = false;
-  closed = false;
   timeout = NULL;
   ccd = foo;
+  dpcb = adpcb;
   cs = acs;
   bytes_out = 0;
 }
 
-void 
+bool
+cs_output::take(const char *buf, int len, cs_client *c)
+{
+  take(buf, len);
+  if(out.resid() >= 256*1024) {
+    sleeping.insert_tail(c);
+    return false;
+  } else
+    return true;
+}
+
+void
 cs_output::take(const char *buf, int len)
 {
   out.copy(buf, len);
@@ -48,7 +59,7 @@ cs_output::take(const char *buf, int len)
   }
 }
 
-void 
+void
 cs_output::take(const char *buf)
 {
   take(buf, strlen(buf));
@@ -57,7 +68,6 @@ cs_output::take(const char *buf)
 void 
 cs_output::cb(void)
 {
-  bool moreto = true;
   int tmp = out.resid();
   timecb_remove(timeout);
   timeout = NULL;
@@ -68,28 +78,30 @@ cs_output::cb(void)
   if(res == -1) {
     perror(progname);
     fdcb(s, selwrite, NULL);
-    closed = true; // FIXME this is hackish. need better way to report error back to block layer and cancel retrieval
-    moreto = false;
+    (*dpcb)();
+    died();
+    return;
   } else
     bytes_out += tmp - out.resid();
 
+  if((out.resid() < 256*1024) && sleeping.first) { //FIXME tune?
+    sleeping.first->dir_wakeup();
+    sleeping.remove(sleeping.first);
+  }
+
   if(out.resid() == 0) {
     fdcb(s, selwrite, NULL);
-    moreto = false;
     if(nomore) {
 warn << (int)cs << " cs_output::cb shutdown WR\n";
 warn << (int)cs << " wrote " << bytes_out << " bytes\n";
-      shutdown(s, SHUT_WR);
       warn << (int)cs << " cs_ouput done\n";
       warn << (int)cs << " deleting " << (int)this << "\n";
-      (*ccd)();
-      delete(this);
+      died();
     }
+    return;
   }
 
-  if(moreto) {
-    timeout = delaycb(10, 0, wrap(this, &cs_output::died));
-  }
+  timeout = delaycb(10, 0, wrap(this, &cs_output::died));
 }
 
 void
@@ -103,8 +115,10 @@ cs_output::died()
 {
   timeout = NULL;
   warn << (int)cs << " died deleting " << (int)this << "\n";
+  fdcb(s, selwrite, NULL);
+  shutdown(s, SHUT_WR);
   (*ccd)();
-  delete this;
+  delete(this);
 }
 
 cs_output::~cs_output()
@@ -113,6 +127,4 @@ cs_output::~cs_output()
     warn << (int)cs << " ahhh! had to remove timeout???\n";
     timecb_remove(timeout);
   }
-  fdcb(s, selread, NULL);
-  close(s);
 }

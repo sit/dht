@@ -28,25 +28,26 @@
  */
 
 #include "async.h"
-class cs_client;
+#include "cs_client.h"
 
 class cs_output {
   int s;
   timecb_t *timeout;
   suio out;
   bool nomore;
-  callback<void>::ptr ccd;
+  callback<void>::ptr ccd, dpcb;
   cs_client *cs;
+  tailq < cs_client, &cs_client::sleep_link > sleeping;
 public:
   int bytes_out;
-  bool closed;
+  bool take(const char *buf, int len, cs_client *c);
   void take(const char *buf, int len);
   void take(const char *buf);
   void cb(void);
   void done(void);
   void died(void);
   ~cs_output();
-  cs_output(int as, callback<void>::ptr foo, cs_client *cs);
+  cs_output(int as, callback<void>::ptr foo, cs_client *cs, callback<void>::ptr adpcb);
 };
 
 #endif

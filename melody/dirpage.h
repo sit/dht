@@ -36,7 +36,7 @@ class cs_client;
 class dirpage {
   cs_output *out;
   dir *d;
-  melody_file *cc;
+  ptr<melody_file> cc;
   str hosturl;
   bool started, fileout_started;
   int offset, size;
@@ -45,16 +45,17 @@ class dirpage {
   void add_dir_cb(str dir, str parent);
   void add_file_cb(str dir, str parent, int size, bigint filehash);
   void fileout(const char *buf, int len, int b_offset);
-  void fileout_head (int size);
+  void fileout_head (int size, str filename);
   void redirect(str path);
 
 public:
-  dirpage(melody_file *acc, str ahosturl, cs_client *cs);
+  dirpage(ptr<melody_file>acc, str ahosturl, cs_client *cs);
   ~dirpage();
   void start(cs_output *aout);
   void output(str path, str referrer);
   void add_dir(str dir, str parent);
   void add_file(str file, str parent, int size, bigint filehash);
+  void fileout_stop();
 };
 
 #endif

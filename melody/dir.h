@@ -28,9 +28,10 @@
  */
 
 #include "async.h"
-#include "block.h"
+#include "file.h"
 #include "dhash.h"
 class cs_client;
+#include <sys/time.h>
 
 #define DIRROOT { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6 }
 
@@ -38,38 +39,49 @@ struct dir_record {
   int type;
   char key[20];
   int size;
+  struct timeval ctime;
   char entry[256];
 };
 
 class dir {
-  melody_file *cc;
-  bigint dirhash;
-  suio buf;
+  ptr<melody_file>cc;
+
+  bigint dirhash, vhash;
+  suio buf, cbuf;
   unsigned int entry_index;
   int strip;
-  bool exist;
+  bool exist, noread;
   callback<void, const char *, int, int>::ptr fileout;
-  callback<void, int>::ptr filehead;
+  callback<void, int, str>::ptr filehead;
   callback<void>::ptr gotdir;
+  strbuf combdir;
+  vec<str> pathelm;
   // FIXME initialize all?
 
-  void opendir(vec<str> pathelm, bigint tmp);
-  void flush_cb(bool done, cbv redir, bool error, chordID key);
-  void find_entry(vec<str> pathelm, ptr<dhash_block> blk);
+  void opendir(bigint tmp);
+  void opendir_got_venti(cbretrieve_t cbr, ptr<dhash_block> blk);
+  void opendir_got_venti_noread(ptr<dhash_block> blk);
+  void next_dirblk(cbretrieve_t cbr);
+  void find_entry(ptr<dhash_block> blk);
   void found_entry(ptr<dhash_block> blk);
-  void root_test_cb(ptr<dhash_block> blk);
-  void add(str name, int type, bigint tmphash, int size, cbv redir);
-  void add2(int type, bigint tmphash, int size, cbv redir);
-  void null();
+  void root_test_got_rb(ptr<dhash_block> blk);
+  void create_venti(cbs redir, str parent, bool error, chordID key);
+  void create_venti_done(cbs redir, str parent, bool error, chordID key);
+  void root_done(str foo);
+  void add(str name, int type, bigint tmphash, int size, cbs redir, str parent);
+  void add2(bigint tmphash, int size, cbs redir, str parent);
+  void flush_cb(cbs redir, str parent, bool error, chordID key);
+  void after_new_dir_block(cbs redir, str parent, bool error, chordID key);
+  void after_appended_new_dirhash(cbs redir, str parent, bool error, chordID key);
 
 public:
   cs_client *cs;
 
   ~dir();
-  dir(melody_file *acc, callback<void, const char *, int, int>::ptr afileout, callback<void, int>::ptr afilehead, cs_client *cs);
-  void add_dir(str dir, str parent, cbv redir);
-  void add_file(str dir, str parent, bigint filehash, int size, cbv redir);
-  void opendir(str path, callback<void>::ptr agotdir);
+  dir(ptr<melody_file>acc, callback<void, const char *, int, int>::ptr afileout, callback<void, int, str>::ptr afilehead, cs_client *cs);
+  void add_dir(str dir, str parent, cbs redir);
+  void add_file(str dir, str parent, bigint filehash, int size, cbs redir);
+  void opendir(str path, callback<void>::ptr agotdir, bool anoread);
   bool more(void);
   void readdir(struct dir_record *dr);
   bool exists() { return exist; }

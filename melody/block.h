@@ -29,8 +29,6 @@
 
 #include "sfsmisc.h"
 #include "dhash.h"
-#include "list.h"
-#include "cs_client.h"
 
 #define BLOCKSIZE 8192
 #define BLOCKPAYLOAD (BLOCKSIZE - (3*sizeof(int)))
@@ -54,84 +52,49 @@ struct melody_block {
    itself and tell it's parent about the block that it just stored.
 */
 
-class melody_file;
-
 class venti_block {
+  dhashclient *dhash;
   struct melody_block data;
   char *hashindex;
   venti_block *parent;
   int offset;
   bool done;
-  melody_file *conn;
   callback<void, int, bigint>::ptr done_cb;
 
   bool full();
-  bool empty();
-  void reset();
-  void reset_cb(bool error, chordID key);
+  void reset(cbv after);
+  void reset_cb(cbv after, bool error, chordID key);
+  void reset_s();
+  void reset_cb_s(bool error, chordID key);
   void close_cb(bool error, chordID key);
-  void more_init(melody_file *ac, venti_block *ap, int dummy);
-  void more_init_gb(melody_file *ac, venti_block *ap, callback<void>::ref, int dummy);
+  void more_init(venti_block *ap, int dummy);
+  void more_init_gb(venti_block *ap, cbv cb, int dummy);
 
   void get_block_cb(melody_block *bl, cbi cb, int of, ptr<dhash_block> blk);
   void get_block_rc(melody_block *bl, cbi cb, int of, int dummy);
   void get_block2 (melody_block *bl, cbi cb, int of);
 
  public:
-  void add_hash(bigint *hash);
+  void add_hash(bigint *hash, cbv after);
+  void add_hash_s(bigint *hash);
+  bool empty();
 
   // for creating a vstack for new files
-  venti_block(melody_file *ac, callback<void, int, bigint>::ptr done_cb);
+  venti_block(dhashclient *dh, callback<void, int, bigint>::ptr done_cb);
 
   // for creating a vstack for existing files
-  venti_block(melody_file *ac, melody_block *bl);
-  venti_block(melody_file *ac, venti_block *ap);
-  venti_block(melody_file *ac, venti_block *ap, callback<void>::ref);
+  venti_block(dhashclient *dh, melody_block *bl, venti_block *ap);
+  venti_block(dhashclient *dh, venti_block *ap, cbv acb);
 
   // fetch single block. can use sequentially
   void get_block (melody_block *bl, cbi);
   void skip(int blocks, int dummy);
 
   void close(int size);
+
+  ~venti_block();
 };
 
-/* simple interface for storing and retrieving files in dhash using
-the venti_blocks to keep track of the data.  */
-
-class melody_file {
- public:
-  melody_file(str csock, callback<void, str>::ptr scb);
-
-  // for storing a file
-  void openw(callback<void, int, bigint>::ptr done_cb, callback<void>::ptr error_cb);
-  void write(const char *buf, int len); // sequential, one-time write (can't update existing file)
-  // for fetching a file
-  void openr(bigint filehash, callback<void, const char *, int, int>::ptr read_cb, cbi ready_cb);
-  void skip(int blocks);
-  void next();
-  void close();
-
-  bool sleeptest(cs_client *c);
-  void sleepdied(cs_client *c);
-  dhashclient *dhash;
-  int blocks;
-  callback<void, str>::ptr statuscb;
-
- private:
-  int size, wsize, venti_depth, outstanding;
-  melody_block cbuf;
-  venti_block *vstack;
-  tailq < cs_client, &cs_client::sleep_link > sleeping;
-  callback<void, const char *, int, int>::ptr read_cb;
-  suio wbuf;
-  callback<void>::ptr error_cb;
-
-  void find_venti_depth(int asize);
-  void venti_cb(cbi ready_cb, ptr<dhash_block> blk);
-  void next_venti_cb(int index, cbi ready_cb);
-  void write_cb (bool error, chordID key);
-  void next_cb(int offset);
-  void flush();
-};
+void null();
 
 #endif
