@@ -11,7 +11,7 @@ SimEvent::SimEvent()
 
 SimEvent::SimEvent(vector<string> *v) : Event(v)
 {
-  this->_op = v->at(0);
+  this->_op = (*v)[0];
 }
 
 SimEvent::~SimEvent()

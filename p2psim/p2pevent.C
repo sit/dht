@@ -21,11 +21,11 @@ P2PEvent::P2PEvent()
 P2PEvent::P2PEvent(vector<string> *v) : Event(v)
 {
   // node-id
-  this->node = ip2node((IPAddress) atoi(v->at(0).c_str()));
+  this->node = ip2node((IPAddress) atoi((*v)[0].c_str()));
   assert(this->node);
 
   // protocol
-  vector<string> proto_action = split(v->at(1), ":");
+  vector<string> proto_action = split((*v)[1], ":");
   this->protocol = proto_action[0];
 
   // operation-id
@@ -35,7 +35,7 @@ P2PEvent::P2PEvent(vector<string> *v) : Event(v)
   this->args = new Protocol::Args;
   assert(this->args);
   for(int i=2; i<v->size(); i++) {
-    vector<string> arg = split(v->at(i), "=");
+    vector<string> arg = split((*v)[i], "=");
     this->args->insert(make_pair(arg[0], arg[1]));
   }
 }
