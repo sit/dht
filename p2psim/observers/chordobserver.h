@@ -42,8 +42,8 @@ public:
 
 private:
   static ChordObserver *_instance;
-  bool _initnodes;
   string _type;
+  unsigned int _oracle_num;
 
   void init_state();
   vector<Chord::IDMap> ids;
