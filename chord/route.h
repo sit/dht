@@ -104,7 +104,7 @@ class route_debruijn : public route_iterator {
 
   void send (chordID guess);
   void send (bool ucs);
-  void first_hop (cbhop_t cb, bool ucs); // ucs = false, by default
+  void first_hop (cbhop_t cb, bool ucs = false);
   void first_hop (cbhop_t cb, chordID guess);
   void print ();
   void next_hop ();

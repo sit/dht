@@ -141,7 +141,7 @@ vnode::find_route (chordID &x, cbroute_t cb)
 #ifdef FINGERS
   route_chord *ri = New route_chord (mkref(this), x);
 #else
-  ptr<route_debruijn> ri = New refcounted<route_debruijn> (mkref(this), x);
+  route_debruijn *ri = New route_debruijn (mkref(this), x);
 #endif
   ri->first_hop(wrap (this, &vnode::find_route_hop_cb, cb, ri));
 }
