@@ -1,9 +1,10 @@
-/* $Id: tapestry.h,v 1.3 2003/08/05 21:42:14 thomer Exp $ */
+/* $Id: tapestry.h,v 1.4 2003/09/26 17:46:25 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
 
 #include "chord.h"
+#include "p2psim.h"
 
 class NodeInfo;
 class RouteEntry;
@@ -33,7 +34,7 @@ public:
   virtual void insert(Args*);
 
   // print it to stdout
-  void print_guid( GUID id );
+  string print_guid( GUID id );
   // print it in the stream
   void print_guid( GUID id, ostream &s );
   uint get_digit( GUID id, uint digit );
@@ -131,6 +132,8 @@ public:
 
 private:
 
+#define TapDEBUG(x) DEBUG(x) << now() << ": (" << ip() << "/" << print_guid(id()) << ") "
+
   GUID _my_id;
 
   // have we finished our join yet?
@@ -158,6 +161,15 @@ private:
   // returns ip() if we are the root
   IPAddress next_hop( GUID key );
   Time ping( IPAddress other_node, GUID other_id );
+
+  class mc_callinfo { public:
+    mc_callinfo(IPAddress xip, mc_args *mca, mc_return *mcr)
+      : ip(xip), ma(mca), mr(mcr) {}
+    ~mc_callinfo() { delete ma; delete mr; }
+    IPAddress ip;
+    mc_args *ma;
+    mc_return *mr;
+  };
 
 };
 
@@ -249,6 +261,8 @@ class RoutingTable {
   vector<NodeInfo> *get_locks( GUID id );
 
  private:
+
+#define TapRTDEBUG(x) DEBUG(x) << now() << ": (" << _node->ip() << "/" << _node->print_guid(_node->id()) << ") "
 
   static const Time MAXTIME = 1000;
 

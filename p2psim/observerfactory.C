@@ -1,6 +1,7 @@
 #include "observerfactory.h"
 #include "chordobserver.h"
 #include "kademliaobserver.h"
+#include "tapestryobserver.h"
 #include <iostream>
 using namespace std;
 
@@ -47,6 +48,10 @@ ObserverFactory::create(string s, Args *a)
 
   else if(s == "Kademlia") {
     t = KademliaObserver::Instance(a);
+  }
+
+  else if(s == "Tapestry") {
+    t = TapestryObserver::Instance(a);
   }
   
   else {

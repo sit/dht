@@ -5,6 +5,7 @@
 #include "vivalditest.h"
 #include "chordtoe.h"
 #include "chordonehop.h"
+#include "tapestry.h"
 
 extern uint base;
 extern uint resilience;
@@ -52,6 +53,8 @@ ProtocolFactory::create(string s, Node *n)
     p = New Kademlia(n, a);
   if (s == "Pastry")
     p = New Pastry(n);
+  if (s == "Tapestry")
+    p = New Tapestry(n);
   if (s == "Koorde")
     p = New Koorde(n, a);
   if (s == "VivaldiTest")

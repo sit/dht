@@ -1,9 +1,10 @@
-/* $Id: tapestry.C,v 1.5 2003/08/08 07:30:11 thomer Exp $ */
+/* $Id: tapestry.C,v 1.6 2003/09/26 17:46:25 strib Exp $ */
 
 #include "tapestry.h"
 #include <stdio.h>
 #include <math.h>
 #include <iostream>
+#include <map>
 using namespace std;
 
 Tapestry::Tapestry(Node *n)
@@ -14,29 +15,26 @@ Tapestry::Tapestry(Node *n)
 {
   joined = false;
   _my_id = get_id_from_ip(ip());
-  cout << "Tapestry Constructor for " << ip() << " and id: ";
-  print_guid(_my_id);
-  cout << endl;
+  TapDEBUG(2) << "Constructing" << endl;
   _rt = New RoutingTable(this);
-  cout << *_rt << endl;
 }
 
 Tapestry::~Tapestry()
 {
-  cout << "Tapestry Destructor" << endl;
+  TapDEBUG(2) << "Destructing" << endl;
   delete _rt;
 }
 
 void
 Tapestry::lookup(Args *args) 
 {
-  cout << "Tapestry Lookup" << endl;
+  TapDEBUG(2) << "Tapestry Lookup" << endl;
 }
 
 void
 Tapestry::insert(Args *args) 
 {
-  cout << "Tapestry Insert" << endl;
+  TapDEBUG(2) << "Tapestry Insert" << endl;
 }
 
 // External event that tells a node to contact the well-known node
@@ -44,10 +42,10 @@ Tapestry::insert(Args *args)
 void
 Tapestry::join(Args *args)
 {
-  cout << "Tapestry join" << endl;
+  TapDEBUG(2) << "Tapestry join" << endl;
 
   IPAddress wellknown_ip = args->nget<IPAddress>("wellknown");
-  cout << ip() << " Wellknown: " << wellknown_ip << endl;
+  TapDEBUG(3) << ip() << " Wellknown: " << wellknown_ip << endl;
 
   // if we're the well known node, we're done
   if( ip() == wellknown_ip ) {
@@ -67,14 +65,14 @@ Tapestry::join(Args *args)
   // ping everyone on the initlist
   int init_level = guid_compare( id(), jr.surr_id ); 
   vector<NodeInfo *> seeds;
-  cout << now() << ": " << ip() << " with init level of " << init_level << endl;
+  TapDEBUG(3) << "init level of " << init_level << endl;
   for( int i = init_level; i >= 0; i-- ) {
     
     // go through each member of the init list, add them to your routing 
     // table, and ask them for their forward and backward pointers 
     for( uint j = 0; j < initlist.size(); j++ ) {
       NodeInfo ni = initlist[j];
-      cout << now() << ": " << ip() << " adding in join: " << ni._addr << endl;
+      TapDEBUG(3) << "adding in join: " << ni._addr << " " << i << endl;
       add_to_rt( ni._addr, ni._id );
       nn_args nna;
       nna.ip = ip();
@@ -82,6 +80,7 @@ Tapestry::join(Args *args)
       nna.alpha = i;
       nn_return nnr;
       doRPC( ni._addr, &Tapestry::handle_nn, &nna, &nnr );
+      TapDEBUG(3) << ip() << " done with nn with " << ni._addr << endl;
 
       for( uint k = 0; k < nnr.nodelist.size(); k++ ) {
 	// make sure this one isn't on there yet
@@ -102,11 +101,11 @@ Tapestry::join(Args *args)
 	if( add ) {
 	  NodeInfo *newseed = New NodeInfo( currseed->_addr, currseed->_id );
 	  seeds.push_back( newseed );
-	  cout << ip() << " has a seed of " << newseed->_addr << " and ";
-	  print_guid( newseed->_id );
-	  cout << endl;
+	  TapDEBUG(3) << " has a seed of " << newseed->_addr << " and " << 
+	    print_guid( newseed->_id ) << endl;
 	}
       }
+      TapDEBUG(3) << "done with adding seeds with " << ni._addr << endl;
 
     }
 
@@ -120,8 +119,11 @@ Tapestry::join(Args *args)
     for( uint j = 0; j < seeds.size(); j++ ) {
       NodeInfo *currseed = seeds[j];
       // add them all to the routing table (this gets us the ping time for free
+      TapDEBUG(3) << "about to get distance for " << currseed->_addr << endl;
       add_to_rt( currseed->_addr, currseed->_id );
+      TapDEBUG(3) << "added to rt for " << currseed->_addr << endl;
       currseed->_distance = ping( currseed->_addr, currseed->_id );
+      TapDEBUG(3) << "got distance for " << currseed->_addr << endl;
 
       // is there anyone on the list farther than you?  if so, replace
       bool added = false;
@@ -130,7 +132,7 @@ Tapestry::join(Args *args)
 	if( currclose == NULL || currclose->_distance > currseed->_distance ) {
 	  closestk[k] = currseed;
 	  added = true;
-	  //	  cout << "close is " << currseed->_addr << endl;
+	  //TapDEBUG(2) << "close is " << currseed->_addr << endl;
 	  break;
 	}
       }
@@ -141,13 +143,15 @@ Tapestry::join(Args *args)
 
     }
 
+    TapDEBUG(3) << "gathered closest for level " << i << endl;
+
     // these k are the next initlist
     initlist.clear();
     seeds.clear();
     for( uint k = 0; k < _k; k++ ) {
       NodeInfo *currclose = closestk[k];
       if( currclose != NULL ) {
-	//cout << "close is " << currclose->_addr << endl;
+	TapDEBUG(3) << "close is " << currclose->_addr << endl;
 	initlist.push_back( *currclose );
       }
     }
@@ -155,25 +159,29 @@ Tapestry::join(Args *args)
 
 
   joined = true;
-  cout << now() << ": " << ip() << " join done" << endl;
-  cout << *_rt << endl;
+  TapDEBUG(2) << "join done" << endl;
+  TapDEBUG(2) << *_rt << endl;
 
 }
 
 void
 Tapestry::handle_join(join_args *args, join_return *ret)
 {
-  cout << ip() << " got a join message from " << args->ip << "/";
-  print_guid(args->id);
-  cout << endl;
+  TapDEBUG(2) << "got a join message from " << args->ip << "/" << 
+    print_guid(args->id) << endl;
 
   // if our join has not yet finished, we must delay the handling of this
   // person's join.
   while( !joined ) {
-    cout << ip() << " delaying join of " << args->ip << endl;
+    TapDEBUG(3) << "delaying join of " << args->ip << endl;
     ping_args pa;
     ping_return pr;
-    doRPC( args->ip, &Tapestry::handle_ping, &pa, &pr );    
+    Time before = now();
+    // TODO: these are unforgivable hacks
+    doRPC( args->ip, &Tapestry::handle_ping, &pa, &pr );
+    if( now() == before ) {
+      doRPC( 1, &Tapestry::handle_ping, &pa, &pr );
+    }
   }
 
   // route toward the root
@@ -181,8 +189,7 @@ Tapestry::handle_join(join_args *args, join_return *ret)
   if( next == ip() ) {
     // we are the surrogate root for this node, start the integration
     
-    cout << now() << ": " << ip() << " is the surrogate root for " << 
-      args->ip << endl;
+    TapDEBUG(2) << "is the surrogate root for " << args->ip << endl;
 
     // start by sending the new node all of the nodes in your table
     // up to the digit you share
@@ -248,7 +255,7 @@ void
 Tapestry::handle_nodelist(nodelist_args *args, nodelist_return *ret)
 {
 
-  cout << ip() << " is handling a nodelist message" << endl;
+  TapDEBUG(3) << "handling a nodelist message" << endl;
 
   // add each to your routing table
   for( uint i = 0; i < args->nodelist.size(); i++ ) {
@@ -262,8 +269,7 @@ void
 Tapestry::handle_mc(mc_args *args, mc_return *ret)
 {
 
-  cout << now() << ": " << ip() << " got multicast message for " <<
-    args->new_ip << endl;
+  TapDEBUG(3) << "got multicast message for " << args->new_ip << endl;
 
   // lock this node
   _rt->set_lock( args->new_ip, args->new_id );
@@ -293,7 +299,6 @@ Tapestry::handle_mc(mc_args *args, mc_return *ret)
   }
   mca.nodelist = nodelist;
 
-
   doRPC( args->new_ip, &Tapestry::handle_mcnotify, &mca, &mcr );
 
   // don't go on if this is from a lock
@@ -301,6 +306,9 @@ Tapestry::handle_mc(mc_args *args, mc_return *ret)
     return;
   }
 
+  RPCSet rpcset;
+  map<unsigned, mc_callinfo*> resultmap;
+  unsigned int numcalls = 0;
   // then, find any other node that shares this prefix and multicast
   // TODO: asynchronous
   for( uint i = args->alpha; i < _digits_per_id; i++ ) {
@@ -310,16 +318,20 @@ Tapestry::handle_mc(mc_args *args, mc_return *ret)
       if( ni == NULL || ni->_addr == ip() || ni->_addr == args->new_ip ) {
 	continue;
       } else {
-	mc_args mca;
-	mca.new_ip = args->new_ip;
-	mca.new_id = args->new_id;
-	mca.alpha = i + 1;
-	mca.from_lock = false;
-	cout << ip() << " multicasting info for " << args->new_ip << " to " << 
-	  ni->_addr << "/";
-	print_guid( ni->_id );
-	cout << endl;
-	doRPC( ni->_addr, &Tapestry::handle_mc, &mca, ret );
+	mc_args *mca = new mc_args();
+	mc_return *mcr = new mc_return();
+	mca->new_ip = args->new_ip;
+	mca->new_id = args->new_id;
+	mca->alpha = i + 1;
+	mca->from_lock = false;
+	mca->watchlist = args->watchlist;
+	TapDEBUG(3) << "multicasting info for " << args->new_ip << " to " << 
+	  ni->_addr << "/" << print_guid( ni->_id ) << endl;
+	unsigned rpc = asyncRPC( ni->_addr, &Tapestry::handle_mc, mca, mcr );
+	assert(rpc);
+	resultmap[rpc] = new mc_callinfo(ni->_addr, mca, mcr);
+	rpcset.insert(rpc);
+	numcalls++;
       }
       
     }
@@ -330,24 +342,34 @@ Tapestry::handle_mc(mc_args *args, mc_return *ret)
   for( uint i = 0; i < locks->size(); i++ ) {
     NodeInfo ni = (*locks)[i];
     if( ni._addr != args->new_ip ) {
-      	mc_args mca;
-	mca.new_ip = args->new_ip;
-	mca.new_id = args->new_id;
-	mca.alpha = args->alpha;
-	mca.from_lock = true;
-	cout << ip() << " multicasting info for " << args->new_ip << " to " << 
-	  ni._addr << "/";
-	print_guid( ni._id );
-	cout << " as a lock " << endl;
-	doRPC( ni._addr, &Tapestry::handle_mc, &mca, ret );
+	mc_args *mca = new mc_args();
+	mc_return *mcr = new mc_return();
+	mca->new_ip = args->new_ip;
+	mca->new_id = args->new_id;
+	mca->alpha = args->alpha;
+	mca->from_lock = true;
+	mca->watchlist = args->watchlist;
+	TapDEBUG(3) << "multicasting info for " << args->new_ip << " to " << 
+	  ni._addr << "/" << print_guid( ni._id ) << " as a lock " << endl;
+	unsigned rpc = asyncRPC( ni._addr, &Tapestry::handle_mc, mca, mcr );
+	assert(rpc);
+	resultmap[rpc] = new mc_callinfo(ni._addr, mca, mcr);
+	rpcset.insert(rpc);
+	numcalls++;
     }
   }
 
+  // wait for them all to return
+  for( unsigned int i = 0; i < numcalls; i++ ) {
+    unsigned donerpc = rcvRPC( &rpcset );
+    mc_callinfo *ci = resultmap[donerpc];
+    TapDEBUG(3) << "mc to " << ci->ip << " is done" << endl;
+    delete ci;
+  }
 
   _rt->remove_lock( args->new_ip, args->new_id );
 
-  cout << now() << ": " << ip() << " multicast done for " << args->new_ip 
-       << endl;
+  TapDEBUG(3) << "multicast done for " << args->new_ip << endl;
 
   // TODO: object pointer transferal
 
@@ -382,6 +404,7 @@ Tapestry::handle_nn(nn_args *args, nn_return *ret)
 void 
 Tapestry::handle_ping(ping_args *args, ping_return *ret)
 {
+  TapDEBUG(4) << "pinged." << endl;
   // do nothing
 }
 
@@ -389,7 +412,7 @@ void
 Tapestry::handle_mcnotify(mcnotify_args *args, mcnotify_return *ret)
 {
 
-  cout << now() << ": " << ip() << " got mcnotify from " << args->ip << endl;
+  TapDEBUG(3) << "got mcnotify from " << args->ip << endl;
   NodeInfo mc_node( args->ip, args->id );
   initlist.push_back( mc_node );
 
@@ -429,15 +452,14 @@ Tapestry::stabilized(vector<GUID> lid)
     if( !_rt->contains(currguid) ) {
       int match = guid_compare( currguid, id() );
       if( match == -1 ) {
-	cout << ip() << " doesn't have itself in the routing table!" << endl;
+	TapDEBUG(1) << "doesn't have itself in the routing table!" << endl;
 	return false;
       } else {
 	NodeInfo * ni = _rt->read( match, get_digit( currguid, match ) );
 	if( ni == NULL ) {
-	  cout << ip() << " has a hole in the routing table at (" << match <<
-	    "," << get_digit( currguid, match ) << ") where "; 
-	  print_guid( currguid ); 
-	  cout << " would fit." << endl;
+	  TapDEBUG(1) << "has a hole in the routing table at (" << match <<
+	    "," << get_digit( currguid, match ) << ") where " << 
+	    print_guid( currguid ) << " would fit." << endl;
 	    return false;
 	}
       }
@@ -459,7 +481,9 @@ Tapestry::ping( IPAddress other_node, GUID other_id )
   Time before = now();
   ping_args pa;
   ping_return pr;
+  TapDEBUG(4) << "about to ping " << other_node << endl;
   doRPC( other_node, &Tapestry::handle_ping, &pa, &pr );
+  TapDEBUG(4) << "done with ping " << other_node << endl;
   return now() - before;
 }
 
@@ -467,19 +491,19 @@ void
 Tapestry::place_backpointer( IPAddress bpip, int level, bool remove )
 {
   backpointer_args bpa;
-  cout << ip() << " sending bp to " << bpip << endl;
   bpa.ip = ip();
   bpa.id = id();
   bpa.level = level;
   bpa.remove = remove;
   backpointer_return bpr;
+  TapDEBUG(3) << "sending bp to " << bpip << endl;
   doRPC( bpip, &Tapestry::handle_backpointer, &bpa, &bpr );
 }
 
 void 
 Tapestry::handle_backpointer(backpointer_args *args, backpointer_return *ret)
 {
-  cout << ip() << " got a bp msg from " << args->id << endl;
+  TapDEBUG(3) << "got a bp msg from " << args->id << endl;
 
   if( args->remove ) {
     _rt->remove_backpointer( args->ip, args->id, args->level );
@@ -577,18 +601,23 @@ Tapestry::leave(Args *args)
 void
 Tapestry::crash(Args *args)
 {
-  cout << "Tapestry crash" << endl;
+  TapDEBUG(2) << "Tapestry crash" << endl;
 }
 
-void
+string
 Tapestry::print_guid( GUID id )
 {
+
+  char buf[_digits_per_id+1];
+
   //printf( "initial guid: %16qx\n", id );
   // print it out, digit by digit
   // (in order to get leading zeros)
   for( uint i = 0; i < _digits_per_id; i++ ) {
-    printf( "%x", get_digit(id, i) );
+    sprintf( &(buf[i]), "%x", get_digit(id, i) );
   }
+
+  return string(buf);
 
 }
 
@@ -742,9 +771,9 @@ RouteEntry::add( NodeInfo *new_node, NodeInfo **kicked_out )
 
 RoutingTable::RoutingTable( Tapestry *node )
 {
-  cout << "Routing Table constructor" << endl;
   assert(node);
   _node = node;
+  TapRTDEBUG(2) << "Routing Table constructor" << endl;
   _table = New RouteEntry **[_node->_digits_per_id];
   // initialize all the rows
   for( uint i = 0; i < _node->_digits_per_id; i++ ) {
@@ -801,7 +830,7 @@ RoutingTable::add( IPAddress ip, GUID id, Time distance )
       in_added = in_added | level_added;
       if( kicked_out_node != NULL ) {
 	// tell the node we're no longer pointing to it at this level
-	//cout << kicked_out_node << endl;
+	//TapRTDEBUG(2) << kicked_out_node << endl;
 	_node->place_backpointer( kicked_out_node->_addr, i, true );
       }
       if( level_added && ip != _node->ip() ) {
@@ -917,25 +946,31 @@ RoutingTable::set_lock( IPAddress ip, GUID id )
     return;
   }
   NodeInfo new_node( ip, id );
-  this_level->push_back( new_node );
+  bool add = true;
+  for(vector<NodeInfo>::iterator i=this_level->begin(); 
+      i != this_level->end(); ++i) {
+    if( *i == new_node ) {
+      add = false;
+    }
+  }
+  if( add ) {
+    this_level->push_back( new_node );
+  }
 }
 
 void 
 RoutingTable::remove_lock( IPAddress ip, GUID id )
 {
-  // TODO
-  /*
-  vector<NodeInfo> * this_level = get_backpointers(level);
+  vector<NodeInfo> * this_level = get_locks(id);
   NodeInfo new_node( ip, id );
-  for( uint i = 0; i < this_level->size(); i++ ) {
-    NodeInfo curr_node = (*this_level)[i];
-    if( curr_node == new_node ) {
-      //this_level->erase(&curr_node);
+  for(vector<NodeInfo>::iterator i=this_level->begin(); 
+      i != this_level->end(); ++i) {
+    if( *i == new_node ) {
+      this_level->erase(i);
       // only erase the first occurance
       return;
     }
   }
-  */
 
 }
 
