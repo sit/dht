@@ -162,7 +162,7 @@ protected:
       block (NULL), usecachedsucc (usecachedsucc), do_cache (false)
   {
     npending++;
-    dhcli->lookup_iter (source, key, 0, MTU, false, 
+    dhcli->lookup_iter (source, key, 0, MTU, false, 0,
 			wrap (this, &dhash_retrieve::first_chunk_cb));
   }
 
@@ -182,6 +182,7 @@ protected:
 	uint32 length = MIN (MTU, totsz - nread);
 	npending++;
 	dhcli->lookup_iter (sourceID, key, offset, length, usecachedsucc,
+			    chunk->cookie,
 			    wrap (this, &dhash_retrieve::finish));
 	nread += length;
       }
@@ -366,7 +367,7 @@ dhashcli::insert (chordID blockID, ref<dhash_block> block,
 //i.e. to fetch chunks of a block after the first
 void
 dhashcli::lookup_iter (chordID sourceID, chordID blockID, uint32 off,
-                       uint32 len, bool usecachedsucc,
+                       uint32 len, bool usecachedsucc, int cookie,
 		       dhashcli_lookup_itercb_t cb)
 {
   warnt ("DHASH: lookup_iter");
@@ -375,6 +376,7 @@ dhashcli::lookup_iter (chordID sourceID, chordID blockID, uint32 off,
   arg->key   = blockID;
   arg->start = off;
   arg->len   = len;
+  arg->cookie = cookie;
 
   ptr<dhash_fetchiter_res> res = New refcounted<dhash_fetchiter_res> (DHASH_OK);
   doRPC (sourceID, dhash_program_1, DHASHPROC_FETCHITER, arg, res,
@@ -400,6 +402,7 @@ dhashcli::lookup_iter_with_source_cb (ptr<dhash_fetchiter_res> fres,
 					 fres->compl_res->offset,
 					 fres->compl_res->attr.size,
 					 fres->compl_res->source);
+    chunk->cookie = fres->compl_res->cookie;
     (*cb) (DHASH_OK, path, chunk);
   }
 }
@@ -418,6 +421,7 @@ dhashcli::next_hop (chordID k, bool cachedsucc)
 #endif    
 }
 
+//use this versin of lookup_iter on the first block fetch
 void
 dhashcli::lookup_iter (chordID blockID, uint32 off, uint32 len,
                        bool usecachedsucc, dhashcli_lookup_itercb_t cb)
@@ -431,6 +435,7 @@ dhashcli::lookup_iter (chordID blockID, uint32 off, uint32 len,
   arg->start = off;
   arg->len   = len;
   arg->v     = path[0];
+  arg->cookie = 0;
 
   ref<dhash_fetchiter_res> res = New refcounted <dhash_fetchiter_res> (DHASH_CONTINUE);
 
@@ -491,6 +496,7 @@ dhashcli::lookup_iter_cb (chordID blockID, dhashcli_lookup_itercb_t cb,
 					 path.back ());
 
     chunk->hops = path.size () + nerror*100;
+    chunk->cookie = res->compl_res->cookie;
     (*cb) (DHASH_OK, path, chunk);
   } else if (res->status == DHASH_CONTINUE) {
     chordID next = res->cont_res->next.x;

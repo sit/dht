@@ -57,7 +57,8 @@ dhash::dhash(str dbname, vnode *node, int k, int ss, int cs, int _ss_mode)
   kc_delay = 11;
   rc_delay = 7;
   ss_mode = _ss_mode / 10;
-  
+  pk_partial_cookie = 1;
+
   db = New dbfe();
 
   db->set_compare_fcn (wrap (this, &dhash::dbcompare));
@@ -126,7 +127,9 @@ dhash::dispatch (svccb *sbp)
       if (key_status (farg->key) != DHASH_NOTPRESENT) {
 	if (farg->len > 0) {
 	  //fetch the key and return it, end of story
-	  fetch (farg->key, wrap (this, &dhash::fetchiter_svc_cb, sbp, farg));
+	  fetch (farg->key, 
+		 farg->cookie,
+		 wrap (this, &dhash::fetchiter_svc_cb, sbp, farg));
 	  return;
 	} else {
 	  // on zero length request, we just return
@@ -229,7 +232,7 @@ dhash::dispatch (svccb *sbp)
 
 void
 dhash::fetchiter_svc_cb (svccb *sbp, s_dhash_fetch_arg *arg,
-			 ptr<dbrec> val, dhash_stat err) 
+			 int cookie, ptr<dbrec> val, dhash_stat err) 
 {
   dhash_fetchiter_res res (DHASH_CONTINUE);
   if (err) 
@@ -244,10 +247,21 @@ dhash::fetchiter_svc_cb (svccb *sbp, s_dhash_fetch_arg *arg,
     res.compl_res->attr.size = val->len;
     res.compl_res->offset = arg->start;
     res.compl_res->source = host_node->my_ID ();
+    res.compl_res->cookie = cookie;
 
     memcpy (res.compl_res->res.base (), 
 	    (char *)val->value + arg->start, 
 	    n);
+
+    //free the cookie if we just read the last byte
+    pk_partial *part = pk_cache[cookie];
+    if (part &&
+	arg->len + arg->start == val->len) {
+      pk_cache.remove (part);
+      delete part;
+    }
+
+	
     /* statistics */
     keys_served++;
     bytes_served += n;
@@ -451,13 +465,13 @@ void
 dhash::transfer_key (chordID to, chordID key, store_status stat, 
 		     callback<void, dhash_stat>::ref cb) 
 {
-  fetch(key, wrap(this, &dhash::transfer_fetch_cb, to, key, stat, cb));
+  fetch(key, -1, wrap(this, &dhash::transfer_fetch_cb, to, key, stat, cb));
 }
 
 void
 dhash::transfer_fetch_cb (chordID to, chordID key, store_status stat, 
 			  callback<void, dhash_stat>::ref cb,
-			  ptr<dbrec> data, dhash_stat err) 
+			  int cookie, ptr<dbrec> data, dhash_stat err) 
 {
   ref<dhash_block> blk = New refcounted<dhash_block> (data->value, data->len);
   cli->storeblock (to, key, blk, 
@@ -510,27 +524,40 @@ dhash::get_key_stored_block (cbstat_t cb, int err)
 // --- node to database transfers --- 
 
 void
-dhash::fetch(chordID id, cbvalue cb) 
+dhash::fetch(chordID id, int cookie, cbvalue cb) 
 {
   warnt("DHASH: FETCH_before_db");
 
-  ptr<dbrec> q = id2dbrec(id);
-  db->lookup(q, wrap(this, &dhash::fetch_cb, cb));
-
+  //if the cookie is in the hash, return that value
+  pk_partial *part = pk_cache[cookie];
+  if (part) {
+    cb (cookie, part->val, DHASH_OK);
+    //if done, free
+  } else {
+    ptr<dbrec> q = id2dbrec(id);
+    db->lookup(q, wrap(this, &dhash::fetch_cb, cookie, cb));
+  }
 }
 
 void
-dhash::fetch_cb (cbvalue cb, ptr<dbrec> ret) 
+dhash::fetch_cb (int cookie, cbvalue cb, ptr<dbrec> ret) 
 {
 
   warnt("DHASH: FETCH_after_db");
 
   if (!ret) {
-    ////warn << "lookup ==> NOENT\n";
-    (*cb)(NULL, DHASH_NOENT);
+    (*cb)(cookie, NULL, DHASH_NOENT);
   } else {
-    ////warn << "lookup ==> OK\n";
-    (*cb)(ret, DHASH_OK);
+    //make up a cookie and insert in hash if this is the first fetch of a KEYHASH
+    if ((cookie == 0) && 
+	dhash::block_type (ret) == DHASH_KEYHASH) {
+      pk_partial *part = New pk_partial (ret, pk_partial_cookie);
+      pk_partial_cookie++;
+      pk_cache.insert (part);
+      (*cb)(part->cookie, ret, DHASH_OK);
+    } else
+      (*cb)(-1, ret, DHASH_OK);
+    
   }
 }
 
@@ -570,7 +597,7 @@ dhash::append (ptr<dbrec> key, ptr<dbrec> data,
 	cb (DHASH_STOREERR);
       }
   } else {
-    fetch (arg->key, wrap (this, &dhash::append_after_db_fetch,
+    fetch (arg->key, -1, wrap (this, &dhash::append_after_db_fetch,
 			   key, data, arg, cb));
   }
 }
@@ -578,7 +605,7 @@ dhash::append (ptr<dbrec> key, ptr<dbrec> data,
 void
 dhash::append_after_db_fetch (ptr<dbrec> key, ptr<dbrec> new_data,
 			      s_dhash_insertarg *arg, cbstore cb,
-			      ptr<dbrec> data, dhash_stat err)
+			      int cookie, ptr<dbrec> data, dhash_stat err)
 {
   if (dhash::block_type (data) != DHASH_APPEND) {
     cb (DHASH_STORE_NOVERIFY);

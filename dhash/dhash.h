@@ -48,7 +48,7 @@
 
 struct store_cbstate;
 
-typedef callback<void, ptr<dbrec>, dhash_stat>::ptr cbvalue;
+typedef callback<void, int, ptr<dbrec>, dhash_stat>::ptr cbvalue;
 typedef callback<void, struct store_cbstate *,dhash_stat>::ptr cbstat;
 typedef callback<void,dhash_stat>::ptr cbstore;
 typedef callback<void,dhash_stat>::ptr cbstat_t;
@@ -114,6 +114,7 @@ struct dhash_block_chunk {
   int hops;
   chordID source;
   chordID key;
+  int cookie;
 
   ~dhash_block_chunk () {delete chunk_data; };
   
@@ -129,6 +130,17 @@ struct dhash_block_chunk {
       
 };
 
+struct pk_partial {
+  ptr<dbrec> val;
+  int bytes_read;
+  int cookie;
+  ihash_entry <pk_partial> link;
+
+  pk_partial (ptr<dbrec> v, int c) : val (v), 
+		bytes_read (0),
+		cookie (c) {};
+};
+
 class dhashcli;
 
 class dhash {
@@ -137,14 +149,15 @@ class dhash {
   int kc_delay;
   int rc_delay;
   int ss_mode;
+  int pk_partial_cookie;
 
   dbfe *db;
   vnode *host_node;
   dhashcli *cli;
 
   ihash<chordID, store_state, &store_state::key, &store_state::link, hashID> pst;
+  ihash<int, pk_partial, &pk_partial::cookie, &pk_partial::link> pk_cache;
 
-  qhash<int, unsigned long> rqc;
 
   void doRPC (chordID ID, rpc_program prog, int procno,
 	      ptr<void> in, void *out, aclnt_cb cb);
@@ -153,9 +166,9 @@ class dhash {
   void sync_cb ();
 
   void storesvc_cb (svccb *sbp, s_dhash_insertarg *arg, dhash_stat err);
-  void fetch_cb (cbvalue cb,  ptr<dbrec> ret);
+  void fetch_cb (int cookie, cbvalue cb,  ptr<dbrec> ret);
   void fetchiter_svc_cb (svccb *sbp, s_dhash_fetch_arg *farg,
-			 ptr<dbrec> val, dhash_stat stat);
+			 int cookie, ptr<dbrec> val, dhash_stat stat);
 
   void append (ptr<dbrec> key, ptr<dbrec> data,
 	       s_dhash_insertarg *arg,
@@ -163,7 +176,7 @@ class dhash {
   void append_after_db_store (cbstore cb, chordID k, int stat);
   void append_after_db_fetch (ptr<dbrec> key, ptr<dbrec> new_data,
 			      s_dhash_insertarg *arg, cbstore cb,
-			      ptr<dbrec> data, dhash_stat err);
+			      int cookie, ptr<dbrec> data, dhash_stat err);
 
   void store (s_dhash_insertarg *arg, cbstore cb);
   void store_cb(store_status type, chordID id, cbstore cb, int stat);
@@ -200,7 +213,7 @@ class dhash {
 		     callback<void, dhash_stat>::ref cb);
   void transfer_fetch_cb (chordID to, chordID key, store_status stat, 
 			  callback<void, dhash_stat>::ref cb,
-			  ptr<dbrec> data, dhash_stat err);
+			  int cookie, ptr<dbrec> data, dhash_stat err);
   void transfer_store_cb (callback<void, dhash_stat>::ref cb, 
 			  bool err, chordID blockID);
 
@@ -246,7 +259,7 @@ class dhash {
 
   void print_stats ();
   void stop ();
-  void fetch (chordID id, cbvalue cb);
+  void fetch (chordID id, int cookie, cbvalue cb);
   dhash_stat key_status(const chordID &n);
 
   static bool verify (chordID key, dhash_ctype t, char *buf, int len);
@@ -301,7 +314,7 @@ class dhashcli {
   void insert (chordID blockID, ref<dhash_block> block, 
                bool usecachedsucc, cbinsert_t cb);
   void lookup_iter (chordID sourceID, chordID blockID, uint32 off,
-                    uint32 len, bool usecachedsucc,
+                    uint32 len, bool usecachedsucc, int cookie,
 		    dhashcli_lookup_itercb_t cb);
   void lookup_iter (chordID blockID, uint32 off, uint32 len,
                     bool usecachedsucc, dhashcli_lookup_itercb_t cb);
