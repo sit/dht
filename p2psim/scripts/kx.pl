@@ -18,9 +18,9 @@ my $king = undef;
 
 # if defined, use this rather than random euclidean.
 if(!defined $king && $nnodes == 1024) {
-    $king = "/home/am4/jinyang/chord/sfsnet/p2psim/oldking1024-t";
+    $king = "/home/am4/jinyang/chord/sfsnet/p2psim/topofile/oldking1024-t";
 } elsif(!defined $king && $nnodes == 1837){
-    $king = "/home/am4/jinyang/chord/sfsnet/p2psim/oldking1837-t";
+    $king = "/home/am4/jinyang/chord/sfsnet/p2psim/topofile/oldking1837-t";
 } else {
     print STDERR "kx.pl: no king for $nnodes nodes\n";
 }
