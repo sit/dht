@@ -224,7 +224,7 @@ draw_arrow (int fromx, int fromy,
 		 fromx,fromy,
 		 tox,toy);
 
-  float t = atan2 ((tox - fromx), (toy - fromy));
+  float t = std::atan2 ((float) (tox - fromx), (float) (toy - fromy));
   float phi = PI/4 - t;
   float theta = PI/4 + t;
   float l = 10.0;
