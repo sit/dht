@@ -565,7 +565,7 @@ dhash_impl::dispatch (user_args *sbp)
 	    break;
 	}
       }
-      res.resok->keys.set (keys->base (), keys->size (), freemode::NOFREE);
+      res.resok->keys.set (keys->base (), keys->size ());
       sbp->reply (&res);
     }
     break;
