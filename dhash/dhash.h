@@ -319,7 +319,8 @@ class dhash {
   chordID pred;
   vec<chordID> replicas;
   timecb_t *check_replica_tcb;
-  timecb_t *merkle_tcb;
+  timecb_t *merkle_rep_tcb;
+  timecb_t *merkle_part_tcb;
 
   /* statistics */
   long bytes_stored;

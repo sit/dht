@@ -100,6 +100,7 @@ dhash::dhash(str dbname, ptr<vnode> node,
 {
   if (MERKLE_ENABLED) warn << "MERKLE_ENABLED on\n";
   if (REPLICATE) warn << "REPLICATE on\n";
+  if (PARTITION_ENABLED) warn << "PARTITION_ENABLED on\n";
 
   warn << "In dhash constructor " << node->my_ID () << "\n";
   this->r_factory = _r_factory;
@@ -157,6 +158,8 @@ dhash::dhash(str dbname, ptr<vnode> node,
     partition_syncer = NULL;
     partition_enumeration = db->enumerate();
   }
+  merkle_rep_tcb = NULL;
+  merkle_part_tcb = NULL;
 
   // RPC demux
   warn << host_node->my_ID () << " registered dhash_program_1\n";
@@ -185,10 +188,11 @@ dhash::dhash(str dbname, ptr<vnode> node,
   delaycb (SYNCTM, wrap (this, &dhash::sync_cb));
 
   if (MERKLE_ENABLED) {
-    merkle_tcb =
+    merkle_rep_tcb = 
       delaycb (REPTM, wrap (this, &dhash::replica_maintenance_timer, 0));
     if (PARTITION_ENABLED)
-      delaycb (PRTTM, wrap (this, &dhash::partition_maintenance_timer));
+      merkle_part_tcb =
+	delaycb (PRTTM, wrap (this, &dhash::partition_maintenance_timer));
   } else {
     install_replica_timer ();
     transfer_initial_keys ();
@@ -237,7 +241,7 @@ dhash::sendblock_cb (callback<void>::ref cb, dhash_stat err, chordID blockID)
 void
 dhash::replica_maintenance_timer (u_int index)
 {
-  merkle_tcb = NULL;
+  merkle_rep_tcb = NULL;
   update_replica_list ();
 
 #if 0
@@ -285,7 +289,7 @@ dhash::replica_maintenance_timer (u_int index)
     }
   }
 
-  merkle_tcb = delaycb (REPTM, wrap (this, &dhash::replica_maintenance_timer, index));
+  merkle_rep_tcb = delaycb (REPTM, wrap (this, &dhash::replica_maintenance_timer, index));
 }
 
 #if 0
@@ -307,6 +311,7 @@ dhash::replica_maintenance_timer (u_int index)
 void
 dhash::partition_maintenance_timer ()
 {
+  merkle_part_tcb = NULL;
 #if 0
   warn << "** dhash::partition_maintenance_timer ()\n";
 #endif
@@ -343,7 +348,7 @@ dhash::partition_maintenance_timer ()
     }
   }
 
-  delaycb (PRTTM, wrap (this, &dhash::partition_maintenance_timer));
+  merkle_part_tcb = delaycb (PRTTM, wrap (this, &dhash::partition_maintenance_timer));
 }
   
 
@@ -1418,10 +1423,15 @@ dhash::stop ()
     timecb_remove (check_replica_tcb);
     check_replica_tcb = NULL;
   }
-  if (merkle_tcb) {
-    timecb_remove (merkle_tcb);
-    merkle_tcb = NULL;
-    warn << "stop merkle timer\n";
+  if (merkle_rep_tcb) {
+    timecb_remove (merkle_rep_tcb);
+    merkle_rep_tcb = NULL;
+    warn << "stop merkle replication timer\n";
+  }
+  if (merkle_part_tcb) {
+    timecb_remove (merkle_part_tcb);
+    merkle_part_tcb = NULL;
+    warn << "stop merkle partition timer\n";
   }
 }
 
