@@ -169,7 +169,10 @@ VivaldiTest::tick(void *)
 	dst = _nip[random() % _neighbors];
     } else {
       //default: pick one of our neighbors
-      dst = _nip[random() % _neighbors];
+      if (_nip.size () > 0)
+	dst = _nip[random() % _nip.size ()];
+      else 	
+	dst = _all[random() % _all.size()]->ip();
     }
     //pick any node, neighbor set == all nodes
   } else {
@@ -289,6 +292,13 @@ VivaldiTest::addGridNeighbors ()
 void
 VivaldiTest::addNearNeighbors ()
 {
+  
+  if (_all.size () != _total_nodes) 
+    {
+      cerr << _all.size () << " " << _total_nodes << "\n";
+      return;
+    }
+
   _nip.clear ();
   IPAddress my_ip = this->ip ();
   Topology *t = (Network::Instance()->gettopology());
@@ -318,7 +328,7 @@ VivaldiTest::addNearNeighbors ()
     cerr << d[i].second << " ";
 
   cerr << "\n";
-  if (_nip.size () == (unsigned)_neighbors)_aux_added = true;
+  if (_nip.size () == (unsigned)_neighbors) _aux_added = true;
 }
 
 void

@@ -170,7 +170,7 @@ VivaldiNode::net_force(Coord c, vector<Sample> v)
       double grad = expect - actual;
       Coord dir = (v[i]._c - c);
       double l = length(dir);
-      while (l < 0.0001) { //nodes are on top of one another
+      while (plane_length(dir) < 1.0) { //nodes are on top of one another
 	for (uint j = 0; j < dir._v.size(); j++) //choose a random direction
 	    dir._v[j] += (double)(random () % 10 - 5) / 10.0;
 	if (usinght)
@@ -182,7 +182,7 @@ VivaldiNode::net_force(Coord c, vector<Sample> v)
       VivaldiNode::Coord udir;
       if (_adaptive == A_REL_REL) {
 	if (_pred_err > 0 && v[i]._error > 0)
-	  udir = dir * unit * grad * (_pred_err)/(_pred_err + v[i]._error);
+	  udir =  dir * unit * grad * (_pred_err)/(_pred_err + v[i]._error);
 	else if (_pred_err > 0)
 	  udir = dir * unit * grad * 0.0;
 	else if (v[i]._error > 0)
@@ -190,8 +190,9 @@ VivaldiNode::net_force(Coord c, vector<Sample> v)
       } else 
 	udir = dir * unit * grad;
       
-      //uncomment below for constant for springs
+      //uncomment below for constant force springs
       //VivaldiNode::Coord udir = dir * unit * 1000;
+
       f = f + udir;
     }
   }
@@ -283,9 +284,10 @@ VivaldiNode::algorithm(Sample s)
     //(really) old adaptive timestep
     //  t = (_curts > _timestep) ? _curts : _timestep;
     t = _pred_err;
-    if (t < 0 || t > 1.0) t = 1.0;
-    t /= 4;
-    if (t < 0.05) t = 0.05;
+    t = t / 2;
+    if (t < 0 || t > 0.25) t = 0.25;
+    
+    //    if (t < 0.05) t = 0.05;
   } else if (_adaptive == A_REL_REL) {
     t = _timestep;
   } else if (_adaptive == 0) {
@@ -458,6 +460,17 @@ length(VivaldiNode::Coord c)
   return l;
 }
 
+double
+plane_length(VivaldiNode::Coord c)
+{
+  double l = 0.0;
+  for (unsigned int i = 0; i < c._v.size (); i++) 
+    l += c._v[i]*c._v[i];
+  l = sqrt(l);
+  return l;
+}
+
+
 VivaldiNode::Coord 
 cross (VivaldiNode::Coord a, VivaldiNode::Coord b)
 {
@@ -562,7 +575,6 @@ double
 VivaldiNode::spherical_dist (VivaldiNode::Coord a, VivaldiNode::Coord b)
 {
   double arc_dist = spherical_dist_arc (a, b);
-  //  cerr << "dist from " << a << " to " << b << " is " << dist << "\n";
   return arc_dist * _radius;
 }
 

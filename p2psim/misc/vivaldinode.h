@@ -140,5 +140,6 @@ VivaldiNode::Coord operator+(VivaldiNode::Coord, VivaldiNode::Coord);
 VivaldiNode::Coord operator/(VivaldiNode::Coord, double);
 VivaldiNode::Coord operator*(VivaldiNode::Coord, double);
 double length(VivaldiNode::Coord);
+double plane_length(VivaldiNode::Coord);
 ostream& operator<<(ostream&, VivaldiNode::Coord&);
 #endif // __PROTOCOL_H
