@@ -131,7 +131,7 @@ newvnode_cb (int nreplica, int n, vnode *my)
 {
   str db_name_prime = strbuf () << db_name << "-" << n;
   if (ndhash == MAX_VNODES) fatal << "Too many virtual nodes (1024)\n";
-  dh[ndhash++] = New dhash (db_name_prime, my, nreplica);
+  //  dh[ndhash++] = New dhash (db_name_prime, my, nreplica);
   if (n > 0) chordnode->newvnode (wrap (newvnode_cb, nreplica, n-1));
 }
 

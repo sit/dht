@@ -37,8 +37,7 @@ locationtable::locationtable (ptr<chord> _chordnode, int set_rpcdelay,
   nvnodes = 0;
   nnodes = 0;
   nnodessum = 0;
-  delayed_tmo = delaycb (delayed_timer, 0, 
-			 wrap (this, &locationtable::cleanup_connections));
+
 }
 
 void
@@ -280,7 +279,7 @@ locationtable::delete_cachedlocs (void)
   assert (l->refcnt == 0);
   warnx << "DELETE: " << l->n << "\n";
   locs.remove (l);
-  delete_connections (l);
+  //  delete_connections (l);
   cachedlocs.remove (l);
   size_cachedlocs--;
   delete l;

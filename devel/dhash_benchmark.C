@@ -49,8 +49,6 @@ store_block(chordID key, void *data, unsigned int datasize)
   i_arg->attr.size = datasize;
   i_arg->offset = 0;
   memcpy(i_arg->data.base (), (char *)data, n);
-  warn << "writing " << i_arg->data.size() << " bytes  at " << i_arg->offset 
-       << " of " << datasize << " bytes\n";
   clnt_stat err = cp2p ()->scall(DHASHPROC_INSERT, i_arg, &res);
   if (err) warn << "RPC error: " << err << "\n";
   if (err) return -err;
@@ -96,8 +94,7 @@ fetch_block(int i, chordID key, int datasize)
   assert (err == 0);
   if (res.status != DHASH_OK) 
     warn << "error " << res.status << "fetching data\n";
-  else
-    warn << "got " << res.resok->res.size () << "bytes\n";
+
   memcpy(buf, res.resok->res.base (), res.resok->res.size ());
   unsigned int read = res.resok->res.size ();
   
@@ -108,8 +105,6 @@ fetch_block(int i, chordID key, int datasize)
     err = cp2p ()->scall(DHASHPROC_LOOKUP, &arg, &res);
     if (res.status != DHASH_OK) 
       warn << "error fetching data\n";
-    else
-      warn << "got " << res.resok->res.size () << "bytes\n";
     memcpy(buf + read, res.resok->res.base (), res.resok->res.size ());
     read += res.resok->res.size ();
   };
@@ -187,7 +182,7 @@ afetch_cb (dhash_res *res, chordID key, char *buf, int i, struct timeval start, 
   memcpy(buf, res->resok->res.base (), res->resok->res.size ());
   unsigned int *read = New unsigned int(res->resok->res.size ());
   unsigned int off = res->resok->res.size ();
-  warnx << "off " << res->resok->attr.size << " size " << res->resok->res.size () << "\n";
+
   if (off == res->resok->attr.size) finish (buf, read, start, i, res);
   while (off < res->resok->attr.size) {
     assert (0);
@@ -220,7 +215,6 @@ afetch_cb2 (dhash_res *res, char *buf, unsigned int *read, int i, struct timeval
   memcpy(buf + res->resok->offset, res->resok->res.base (), res->resok->res.size ());
   *read += res->resok->res.size ();
   out_op--;
-  warn << "read " << *read << " of " << res->resok->attr.size << "\n";
   if (*read == res->resok->attr.size) finish (buf, read, start, i, res);
   
   delete res;

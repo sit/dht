@@ -227,7 +227,7 @@ class vnode : public virtual refcount {
 class chord : public virtual refcount {
 
   struct server {
-    ptr<axprt_stream> x;
+    ptr<axprt_dgram> x;
     ~server (void) { 
       warnx << "server: delete\n";
     };
@@ -251,7 +251,7 @@ class chord : public virtual refcount {
   int ntestrange;
   int ngetfingers;
 
-  void dispatch (ptr<asrv> s, ptr<axprt_stream> x, svccb *sbp);
+  void dispatch (ptr<asrv> s, ptr<axprt_dgram> x, svccb *sbp);
   void doaccept (int fd);
   void print_conn (u_int32_t k, ref<axprt_stream> x);
   void flush_server (u_int32_t k, ref<axprt_stream> x);

@@ -37,7 +37,6 @@ chord::chord (str _wellknownhost, int _wellknownport,
   locations = New refcounted<locationtable> (mkref (this), set_rpcdelay, 
 					     max_cache, max_connections/2);
   locations->insert (wellknownID, wellknownhost.hostname, wellknownhost.port);
-  servers.set_flushcb (wrap (this, &chord::flush_server));
   nvnode = 0;
   ngetsuccessor = 0;
   ngetpredecessor = 0;
@@ -48,71 +47,22 @@ chord::chord (str _wellknownhost, int _wellknownport,
   ngetfingers = 0;
 }
 
-void
-chord::doaccept (int fd)
-{
-  ptr<asrv> s;
-  if (fd < 0)
-    fatal ("EOF\n");
-  tcp_nodelay (fd);
-  ptr<axprt_stream> x = axprt_stream::alloc (fd);
-  s = asrv::alloc (x, chord_program_1);
-  s->setcb (wrap (mkref(this), &chord::dispatch, s, x));
-  // servers.traverse (wrap (this, &chord::print_conn));
-  if (!servers.insert (ptr2int(x), x)) {
-    fatal ("doaccept: couldn't insert server\n");
-  }
-}
-
-void
-chord::print_conn (u_int32_t k, ref<axprt_stream> x)
-{
-  char buf[100];
-  axprt_stream *x1 = x;
-  sprintf (buf, "k 0x%x x 0x%x\n", k, reinterpret_cast<u_int32_t> (x1));
-  warnx << "print_conn: " << buf;
-}
-
-void
-chord::flush_server (u_int32_t k, ref<axprt_stream> x)
-{
-  x->reclaim ();
-}
-
-void
-chord::accept_standalone (int lfd)
-{
-  sockaddr_in sin;
-  bzero (&sin, sizeof (sin));
-  socklen_t sinlen = sizeof (sin);
-  int fd = accept (lfd, reinterpret_cast<sockaddr *> (&sin), &sinlen);
-  if (fd >= 0) {
-    doaccept (fd);
-  } else {
-    fatal ("accept_standalone: accept failed\n");
-  }
-}
-
 int
 chord::startchord (int myp)
 {
-  int p = myp;
-  int srvfd = inetsocket (SOCK_STREAM, myp);
-  if (srvfd < 0)
-    fatal ("binding TCP port %d: %m\n", myp);
   if (myp == 0) {
-    struct sockaddr_in la;
-    socklen_t len;
-    len = sizeof (la);
-    if (getsockname (srvfd, (struct sockaddr *) &la, &len) < 0) {
-      fatal ("getsockname failed\n");
-    }
-    p = ntohs (la.sin_port);
-    warnx << "startp2pd: local port " << p << "\n";
+    myp = arc4random () & 0xfff;
+    myp = myp | 0xf000;
   }
-  listen (srvfd, 100);
-  fdcb (srvfd, selread, wrap (mkref (this), &chord::accept_standalone, srvfd));
-  return p;
+
+  int srvfd = inetsocket (SOCK_DGRAM, myp);
+  if (srvfd < 0)
+    fatal ("binding UDP port %d: %m\n", myp);
+
+  ptr<axprt_dgram> x = axprt_dgram::alloc (srvfd);
+  ptr<asrv> s = asrv::alloc (x, chord_program_1);
+  s->setcb (wrap (mkref(this), &chord::dispatch, s, x));
+  return myp;
 }
 
 
@@ -244,14 +194,14 @@ chord::register_handler (int progno, chordID dest, cbdispatch_t hand)
 }
 
 void
-chord::dispatch (ptr<asrv> s, ptr<axprt_stream> x, svccb *sbp)
+chord::dispatch (ptr<asrv> s, ptr<axprt_dgram> x, svccb *sbp)
 {
   if (!sbp) {
     s->setcb (NULL);
     return;
   }
-  ptr<axprt_stream> x1 = servers[ptr2int(x)];
-  assert (x1 == x);
+  //  ptr<axprt_stream> x1 = servers[ptr2int(x)];
+  //  assert (x1 == x);
   chord_vnode *v = sbp->template getarg<chord_vnode> ();
   vnode *vnodep = vnodes[v->n];
   if (!vnodep) {

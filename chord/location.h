@@ -32,22 +32,10 @@ struct hashID {
   }
 };
 
-struct rpc_args {
-  chordID ID;
-  rpc_program progno;
-  int procno;
-  const void *in;
-  void *out;
-  aclnt_cb cb;
-  rpc_args(chordID id, rpc_program progn, int proc, const void *i, void *o, 
-	   aclnt_cb c) : ID (id), progno (progn), procno (proc),in (i),
-    out (o), cb (c){};
-};
-
 struct location;
 
 struct doRPC_cbstate {
-  rpc_program progno;
+  rpc_program prog;
   int procno;
   ptr<void> in;
   void *out;
@@ -55,23 +43,23 @@ struct doRPC_cbstate {
   chordID ID;
   tailq_entry<doRPC_cbstate> connectlink;
 
-  doRPC_cbstate (rpc_program ro, int pi, ptr<void> ini, void *outi,
-		 aclnt_cb cbi, chordID id) : progno (ro), procno (pi), 
-		   in (ini), out (outi), cb (cbi), ID (id) {};
+  doRPC_cbstate (rpc_program pr, int pi, ptr<void> ini, 
+		 void *outi,  aclnt_cb cbi, chordID id) : prog (pr), 
+		    procno (pi), in (ini), out (outi), cb (cbi), ID (id) {};
 };
 
 
 struct frpc_state {
   chord_RPC_res *res;
   void *out;
-  rpc_program prog;
   int procno;
   aclnt_cb cb;
   location *l;
   u_int64_t s;
 
-  frpc_state (chord_RPC_res *r, void *o, rpc_program p, int pr, aclnt_cb c,
-		location *L, u_int64_t S) : res (r), out (o), prog (p), 
+  frpc_state (chord_RPC_res *r, void *o, int pr, 
+	      aclnt_cb c,
+	      location *L, u_int64_t S) : res (r), out (o),  
     procno (pr), cb (c), l (L), s (S) {};
 };
 
@@ -79,7 +67,8 @@ struct location {
   int refcnt;	// locs w. refcnt == 0 are in the cache; refcnt > 0 are fingers
   chordID n;
   net_address addr;
-  ptr<axprt_stream> x;
+  in_addr inetaddr;
+
   tailq<doRPC_cbstate, &doRPC_cbstate::connectlink> connectlist;
   ihash_entry<location> fhlink;
   tailq_entry<location> cachelink;
@@ -91,20 +80,24 @@ struct location {
   u_int64_t maxdelay;
 
   location (chordID &_n, net_address &_r) : n (_n), addr (_r) {
-    x = NULL;
     refcnt = 0;
     rpcdelay = 0;
     nrpc = 0;
     maxdelay = 0;
+    struct hostent *h = gethostbyname (_r.hostname.cstr ());
+    inetaddr.s_addr = *(u_int32_t *)(h->h_addr);
   };
+
   location (chordID &_n, sfs_hostname _s, int _p) : n (_n) {
     addr.hostname = _s;
     addr.port = _p;
-    x = NULL;
     refcnt = 0;
     rpcdelay = 0;
     nrpc = 0;
     maxdelay = 0;
+    struct hostent *h = gethostbyname (_s.cstr ());
+    inetaddr.s_addr = *(u_int32_t *)(h->h_addr);
+
   };
   ~location () {
     warnx << "~location: delete " << n << "\n";
@@ -146,7 +139,11 @@ class locationtable : public virtual refcount {
 
   void connect_cb (location *l, callback<void, ptr<axprt_stream> >::ref cb, 
 		   int fd);
-  void doRPCcb (aclnt_cb cb, location *l, u_int64_t s, clnt_stat err);
+  void doRPCcb (doRPC_cbstate *st, u_int64_t s, clnt_stat err);
+  void doRPC_gotaxprt (doRPC_cbstate *st,
+		       rpc_program prog,
+		       ptr<aclnt> c,
+		       clnt_stat err);
   void dorpc_connect_cb(location *l, ptr<axprt_stream> x);
   void chord_connect(chordID ID, callback<void, ptr<axprt_stream> >::ref cb);
   void decrefcnt (location *l);
@@ -188,13 +185,15 @@ class locationtable : public virtual refcount {
 
   long new_xid (svccb *sbp);
   void reply (long xid, void *out, long outlen);
-  bool doForeignRPC (rpc_program prog, 
+  bool doForeignRPC (ptr<aclnt> c, rpc_program prog,
 		     unsigned long procno,
-		     void *in, 
+		     ptr<void> in,
 		     void *out,
 		     chordID ID,
 		     aclnt_cb cb);
-  void doForeignRPC_cb (frpc_state *C, clnt_stat err);
+
+  void doForeignRPC_cb (frpc_state *C, rpc_program prog,
+			clnt_stat err);
 };
 
 #endif _LOCATION_H_
