@@ -131,23 +131,16 @@ sub dofile {
 sub convert {
     my($id) = @_;
 
-    while(length($id) < 40){
+    while (length($id) < 40){
         $id = "0" . $id;
     }
 
     my $i;
     my $x = 0.0;
     for($i = 0; $i < 10; $i++){
-        if($id =~ /^(.)/){
-            my $c = $1;
-            $id =~ s/^.//;
-            $x *= 16.0;
-            if($c =~ /[0-9]/){
-                $x += ord($c) - ord('0');
-            } else {
-                $x += ord($c) - ord('a') + 10;
-            }
-        }
+	my $c = substr ($id, $i, 1);
+	$x *= 16.0;
+	$x += hex ($c);
     }
     return $x / 1048575.0;
 }
