@@ -160,9 +160,7 @@ dhc::recon (chordID bID, dhc_cb_t cb)
       dhcs.remove (b);
 
     b = New dhc_soft (myNode, kb);
-    
-    if (b->status == IDLE)
-      b->status = RECON_INPROG;
+    b->status = RECON_INPROG;
 
     // Do recon even if there is another recon in progress
     b->pstat->init ();
@@ -302,12 +300,14 @@ dhc::recv_accept (chordID bID, dhc_cb_t cb,
       exit (-1);
     }
     
-    ptr<dbrec> rec = db->lookup (id2dbrec (bID));
+    ptr<dbrec> key = id2dbrec (bID);
+    ptr<dbrec> rec = db->lookup (key);
     if (!rec) {
       warn << "dhc::recv_accept " << bID << " not found in database.\n";
       exit (-1);
     }
     ptr<dhc_block> kb = to_dhc_block (rec);
+#if 1
     if (tag_cmp (kb->data->tag, proposal->data->tag) < 0) {
       kb->data->tag.ver = proposal->data->tag.ver;
       kb->data->tag.writer = proposal->data->tag.writer;
@@ -315,11 +315,12 @@ dhc::recv_accept (chordID bID, dhc_cb_t cb,
       kb->data->data.setsize (proposal->data->data.size ());
       memmove (kb->data->data.base (), proposal->data->data.base (), 
 	       kb->data->data.size ());
-      db->insert (id2dbrec (kb->id), to_dbrec (kb));
+      db->del (key);
+      db->insert (key, to_dbrec (kb));
       if (dhc_debug)
 	warn << "dhc::recv_accept update to size " << kb->data->data.size () << "\n"; 
     }
-
+#endif
     b->pstat->accept_recvd++;
     if (b->pstat->accept_recvd > n_replica/2 && !b->pstat->sent_newconfig) {
       b->pstat->sent_newconfig = true;
@@ -330,12 +331,6 @@ dhc::recv_accept (chordID bID, dhc_cb_t cb,
       arg->data.data.setsize (kb->data->data.size ());
       memmove (arg->data.data.base (), kb->data->data.base (), kb->data->data.size ());
       arg->old_conf_seqnum = kb->meta->config.seqnum;
-#if 0
-      if (!set_ac (&kb->meta->new_config.nodes, b->pstat->acc_conf)) {
-	warn << "dhc::recv_accept Different accepted configs!!\n";
-	exit (-1);
-      }
-#endif
       set_new_config (arg, b->new_config); //b->pstat->acc_conf);
 
       if (dhc_debug)
@@ -350,10 +345,6 @@ dhc::recv_accept (chordID bID, dhc_cb_t cb,
 	myNode->doRPC (dest, dhc_program_1, DHCPROC_NEWCONFIG, arg, res,
 		       wrap (this, &dhc::recv_newconfig_ack, b->id, cb, res));
       }
-#if 0 //We didn't change kb at all.
-      db->insert (id2dbrec (kb->id), to_dbrec (kb));
-      db->sync ();
-#endif
     }
   } else {
     if (err == RPC_CANTSEND) {
@@ -424,13 +415,6 @@ dhc::recv_prepare (user_args *sbp)
   ptr<dbrec> rec = db->lookup (id2dbrec (prepare->bID));
   if (rec) {
     ptr<dhc_block> kb = to_dhc_block (rec);
-#if 0
-    if (!kb->meta->cvalid) {
-      dhc_prepare_res res (DHC_NOT_A_REPLICA);
-      sbp->reply (&res);
-      return;
-    }
-#endif    
 
     if (dhc_debug)
       warn << "\n\n" << "kb status\n" << kb->to_str ();    
@@ -492,7 +476,8 @@ dhc::recv_propose (user_args *sbp)
 	  << "," << propose->round.proposer << ">\n";
   }
 
-  ptr<dbrec> rec = db->lookup (id2dbrec (propose->bID));
+  ptr<dbrec> key = id2dbrec (propose->bID);
+  ptr<dbrec> rec = db->lookup (key);
   dhc_soft *b = dhcs[propose->bID];
   if (!b || !rec) {
     warn << "dhc::recv_propose Block " << propose->bID 
@@ -511,12 +496,13 @@ dhc::recv_propose (user_args *sbp)
     if (set_ac (&b->pstat->acc_conf, *propose)) {
       kb->meta->accepted.seqnum = propose->round.seqnum;
       kb->meta->accepted.proposer = propose->round.proposer;
-      db->insert (id2dbrec (kb->id), to_dbrec (kb));
+      db->del (key);
+      db->insert (key, to_dbrec (kb));
       dhc_propose_res res (DHC_OK);
       res.data->tag.ver = kb->data->tag.ver;
       res.data->tag.writer = kb->data->tag.writer;
       res.data->data.setsize (kb->data->data.size ());
-      memmove (res.data->data.base (), kb->data->data.base (), kb->data->data.size ());
+      memmove (res.data->data.base (), kb->data->data.base (), res.data->data.size ());
       sbp->reply (&res);
       //db->sync ();
     } else {
@@ -544,13 +530,15 @@ dhc::recv_newconfig (user_args *sbp)
     sbp->reply (&res);
     return;
   }
-
+  
+  int newer = 1;
   if (!rec)
     kb = New refcounted<dhc_block> (newconfig->bID);
   else {
     kb = to_dhc_block (rec);
-    if (tag_cmp (kb->data->tag, newconfig->data.tag) > 0) {
-      warn << "dhc::recv_newconfig Block received is an older version.\n"
+    newer = tag_cmp (newconfig->data.tag, kb->data->tag);
+    if (newer < 0) {
+      warn << "dhc::recv_newconfig Block received is older version.\n"
 	   << "                    Not updating database\n";
       dhc_newconfig_res res; res.status = DHC_OLD_VER;
       sbp->reply (&res);
@@ -562,27 +550,35 @@ dhc::recv_newconfig (user_args *sbp)
       sbp->reply (&res);
       return;      
     }
-    if (dhc_debug)
-      warn << "\n\n dhc::recv_newconfig. " << kb->to_str ();
   }
 
-  kb->data->tag.ver = newconfig->data.tag.ver;
-  kb->data->tag.writer = newconfig->data.tag.writer;
-  kb->data->data.clear ();
-  kb->data->data.setsize (newconfig->data.data.size ());
-  memmove (kb->data->data.base (), newconfig->data.data.base (), 
-	   newconfig->data.data.size ());
-  kb->meta->config.seqnum = newconfig->old_conf_seqnum + 1;
   
+  if (dhc_debug)
+    warn << "\n\n dhc::recv_newconfig. kb before insert \n" 
+	 << kb->to_str () << "\n";
+
+  if (newer > 0) {
+    if (dhc_debug)
+      warn << "\n\n dhc::recv_newconfig. updating kb data \n";
+    kb->data->tag.ver = newconfig->data.tag.ver;
+    kb->data->tag.writer = newconfig->data.tag.writer;
+    kb->data->data.clear ();
+    kb->data->data.setsize (newconfig->data.data.size ());
+    memmove (kb->data->data.base (), newconfig->data.data.base (), 
+	     newconfig->data.data.size ());
+  }
+
+  kb->meta->config.seqnum = newconfig->old_conf_seqnum + 1;
   kb->meta->config.nodes.setsize (newconfig->new_config.size ());
   for (uint i=0; i<kb->meta->config.nodes.size (); i++)
     kb->meta->config.nodes[i] = newconfig->new_config[i];
 
   if (dhc_debug)
-    warn << "dhc::recv_newconfig inserting \n"
+    warn << "dhc::recv_newconfig kb after insert \n"
 	 << kb->to_str () << "\n";
 
-  db->insert (id2dbrec (kb->id), to_dbrec (kb));
+  db->del (key);
+  db->insert (key, to_dbrec (kb));
   //db->sync (); 
 
   if (b && !is_primary (newconfig->bID, 
@@ -934,13 +930,6 @@ dhc::recv_put (user_args *sbp)
   }
     
   ptr<dhc_block> kb = to_dhc_block (rec);
-#if 0
-  if (!kb->meta->cvalid) {
-    dhc_put_res res; res.status = DHC_NOT_A_REPLICA;
-    sbp->reply (&res);
-    return;
-  }
-#endif
   if (!is_primary (put->bID, myNode->my_ID (), kb->meta->config.nodes)) {
     dhc_put_res res; res.status = DHC_NOT_PRIMARY;
     sbp->reply (&res);

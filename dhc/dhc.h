@@ -361,7 +361,12 @@ struct read_state {
 	break;
       }
     if (!found) {
-      blocks.push_back (kd);
+      keyhash_data d;
+      d.tag.ver = kd.tag.ver;
+      d.tag.writer = kd.tag.writer;
+      d.data.setsize (kd.data.size ());
+      memmove (d.data.base (), kd.data.base (), kd.data.size ());
+      blocks.push_back (d);
       bcount.push_back (1);
     }
   }
