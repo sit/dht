@@ -10,6 +10,7 @@ ID_put (char *buf, chordID id)
   mpz_get_rawmag_be (buf, ID_size, &id);
 };
 
+
 void
 ID_get (chordID *id, char *buf)
 {
@@ -29,8 +30,8 @@ open_db (ptr<dbfe> mydb, str name, dbOptions opts, str desc)
 void 
 print_error (str where, int err, int dhc_err)
 {
-  if (err)
-    warn << where << ": " << strerror (err) << "\n";
+  if (err) 
+    warn << where << ": " << strerror (errno) << "\n";
   else
     warn << where << ": " << dhc_err << "\n";
   exit (-1);

@@ -82,9 +82,12 @@ dhc::recon (chordID bID)
 }
 
 void 
-dhc::recv_promise (chordID bID, ref<dhc_prepare_res> promise, 
-		   clnt_stat err)
+dhc::recv_promise (chordID bID, ref<dhc_prepare_res> promise, clnt_stat err)
 {
+#if DHC_DEBUG
+  warn << myNode->my_ID () << " received promise msg. bID: " << bID << "\n";
+#endif
+
   if (!err && (promise->status == DHC_OK)) {
 	       //promise->status == DHC_ACCEPTED_PROP)) {
 
@@ -103,9 +106,9 @@ dhc::recv_promise (chordID bID, ref<dhc_prepare_res> promise,
     }
     
     if (b->pstat->promise_recvd > n_replica/2) {
-      ptr<dhc_propose_arg> arg = New refcounted<dhc_propose_arg>;
-      arg->bID = b->id;
-      arg->round = b->proposal;
+       ptr<dhc_propose_arg> arg = New refcounted<dhc_propose_arg>;
+       arg->bID = b->id;
+       arg->round = b->proposal;
 #if DHC_DEBUG
         warn << "status 3\n" << b->to_str ();    
 #endif 
@@ -125,8 +128,15 @@ dhc::recv_promise (chordID bID, ref<dhc_prepare_res> promise,
 		       wrap (this, &dhc::recv_accept, b->id, res));
       }
     }
-  } else
-    print_error ("dhc:recv_promise", errno, promise->status);
+  } else {
+#if 0
+    if (err && errno == EAGAIN) {
+      myNode->doRPC (dest, dhc_program_1, DHCPROC_PREPARE, prepare_arg, promise,
+		     wrap (this, &dhc::recv_promise, dest, bID, prepare_arg, promise));
+    } else 
+#endif
+      print_error ("dhc:recv_promise", err, promise->status);
+  }
 }
 
 void
@@ -190,6 +200,11 @@ void
 dhc::recv_prepare (user_args *sbp)
 {
   dhc_prepare_arg *prepare = sbp->template getarg<dhc_prepare_arg> ();
+
+#if DHC_DEBUG
+  warn << myNode->my_ID () << " received prepare msg. bID: " << prepare->bID << "\n";
+#endif
+
   ptr<dbrec> rec = db->lookup (id2dbrec (prepare->bID));
   if (rec) {
     ptr<dhc_block> kb = to_dhc_block (rec);
@@ -205,11 +220,12 @@ dhc::recv_prepare (user_args *sbp)
     if (!b->pstat->recon_inprogress) {
       b->pstat->recon_inprogress = true;
       dhcs.insert (b);
-    } else {
-      dhc_prepare_res res (DHC_RECON_INPROG);
-      sbp->reply (&res);
-      return;
-    }
+    } else 
+      if (myNode->my_ID () != prepare->round.proposer) {
+	dhc_prepare_res res (DHC_RECON_INPROG);
+	sbp->reply (&res);
+	return;
+      }
     
     if (paxos_cmp (prepare->round, b->promised) == 1) {
       b->promised = prepare->round;

@@ -259,9 +259,6 @@ struct dhc_soft {
   {
     id = kb->id;
     config_seqnum = kb->meta->config.seqnum;
-#if DHC_DEBUG
-    warn << "status in dhc_soft constructor\n " << kb->to_str ();
-#endif
     set_locations (&config, myNode, kb->meta->config.nodes);
     proposal.seqnum = 0;
     bzero (&proposal.proposer, sizeof (chordID));    
