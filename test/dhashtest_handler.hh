@@ -10,7 +10,7 @@
  * version. For more information, see the `COPYING' file in the source
  * distribution.
  *
- * $Id: dhashtest_handler.hh,v 1.3 2002/11/26 07:26:16 thomer Exp $
+ * $Id: dhashtest_handler.hh,v 1.4 2002/11/26 07:32:08 thomer Exp $
  *
  */
 

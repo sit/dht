@@ -11,6 +11,7 @@
  * distribution.
  *
  */
+#include <time.h>
 #include "config.h"
 #include "default_handler.hh"
 #include "dhashtest_handler.hh"
