@@ -273,7 +273,7 @@ fetch(int num, int size) {
 void
 usage(char *progname) 
 {
-  printf("%s: control_socket num_trials data_size file <f or s> nops\n", 
+  printf("%s: vnode_num control_socket num_trials data_size file <f or s> nops\n", 
 	 progname);
   exit(0);
 }
@@ -288,16 +288,16 @@ main (int argc, char **argv)
 
   sfsconst_init ();
 
-  if (argc < 7) {
+  if (argc < 8) {
     usage (argv[0]);
     exit (1);
   }
 
-  control_socket = argv[1];
-  int num = atoi(argv[2]);
-  int datasize = atoi(argv[3]);
+  control_socket = argv[2];
+  int num = atoi(argv[3]);
+  int datasize = atoi(argv[4]);
 
-  char *output = argv[4];
+  char *output = argv[5];
   if (strcmp(output, "-") == 0)
     outfile = stdout;
   else
@@ -308,14 +308,18 @@ main (int argc, char **argv)
     exit(1);
   }
 
+  int i = atoi(argv[1]);
+  dhash_stat ares;
+  cp2p ()->scall(DHASHPROC_ACTIVE, &i, &ares);
+
   prepare_test_data (num, datasize);
 
-  OPS_OUT = atoi(argv[6]);
+  OPS_OUT = atoi(argv[7]);
 
   struct timeval start;
   gettimeofday (&start, NULL);
 
-  if (argv[5][0] == 's')
+  if (argv[6][0] == 's')
     store(num, datasize);
   else
     fetch(num, datasize);

@@ -95,6 +95,14 @@ dhashclient::dispatch (svccb *sbp)
 				    sbp, p_item));
     }
     break;
+  case DHASHPROC_ACTIVE:
+    {
+      warnt("DHASH: change_active_request");
+      int32 *n =  sbp->template getarg<int32> ();
+      clntnode->set_active (*n);
+      sbp->replyref (DHASH_OK);
+    }
+    break;
   default:
     sbp->reject (PROC_UNAVAIL);
     break;

@@ -230,6 +230,7 @@ class chord : public virtual refcount {
   net_address myaddress;
   chordID wellknownID;
   qhash<chordID, ref<vnode>, hashID> vnodes;
+  ptr<vnode> active;
 
   int ngetsuccessor;
   int ngetpredecessor;
@@ -255,10 +256,6 @@ class chord : public virtual refcount {
 	 int max_connections);
   ptr<vnode> newvnode (cbjoin_t cb);
   ptr<vnode> newvnode (chordID &x, cbjoin_t cb);
-  chordID lookup_closestpred (chordID k) { 
-     ptr<vnode> v = vnodes.first()->value;
-     return v->lookup_closestpred (k); 
-  };
   void deletefingers (chordID x);
   int countrefs (chordID &x);
   void stats (void);
@@ -268,26 +265,37 @@ class chord : public virtual refcount {
   void register_handler (int progno, chordID dest, cbdispatch_t hand);
 
   //'wrappers' for vnode functions (to be called from higher layers)
+  void set_active (int n) { 
+    int i=0;
+    qhash_slot<chordID, ref<vnode> > *s = vnodes.first ();
+    while ( (s) && (i++ < n)) s = vnodes.next (s);
+    if (!s) active = vnodes.first ()->value;
+    else  active = s->value;
+
+    warn << "Active node now " << active->my_ID () << "\n";
+  };
+
+  chordID lookup_closestpred (chordID k) { 
+    return active->lookup_closestpred (k); 
+  };
   void find_successor (chordID n, cbroute_t cb) {
-    ptr<vnode> v = vnodes.first()->value;
-    return v->dofindsucc (n, cb);
+    active->dofindsucc (n, cb);
   };
   void get_predecessor (chordID n, cbsfsID_t cb) {
-    ptr<vnode> v = vnodes.first ()->value;
-    return v->get_predecessor (n, cb);
+    active->get_predecessor (n, cb);
   };
   void doRPC (chordID &n, rpc_program progno, int procno, ptr<void> in, 
 	      void *out, aclnt_cb cb) {
     locations->doRPC (n, progno, procno, in, out, cb);
   };
   void alert (chordID &n, chordID &x) {
-    vnodes.first()->value->alert (n, x);
+    active->alert (n, x);
   };
   chordID nth_successorID (int n) {
-    return vnodes.first()->value->nth_successorID (n);
+    return active->nth_successorID (n);
   };
   chordID clnt_ID () {
-    return vnodes.first()->value->my_ID ();
+    return active->my_ID ();
   }
 };
 

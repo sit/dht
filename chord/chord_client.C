@@ -25,7 +25,7 @@ chord::chord (str _wellknownhost, int _wellknownport,
 	      const chordID &_wellknownID,
 	      int port, str myhost, int set_rpcdelay, int max_cache, 
 	      int max_connections) :
-  wellknownID (_wellknownID)
+  wellknownID (_wellknownID), active (NULL)
 {
   myaddress.port = startchord (port);
   myaddress.hostname = myhost;
@@ -44,6 +44,7 @@ chord::chord (str _wellknownhost, int _wellknownport,
   nalert = 0;
   ntestrange = 0;
   ngetfingers = 0;
+
 }
 
 int
@@ -112,6 +113,7 @@ chord::newvnode (cbjoin_t cb)
   warn << "insert: " << newID << "\n";
   vnodes.insert (newID, vnodep);
   vnodep->join (cb);
+  if (!active) active = vnodep;
   return vnodep;
 }
 
@@ -132,6 +134,7 @@ chord::newvnode (chordID &x, cbjoin_t cb)
     vnodep->stabilize ();
     (*cb) (vnodep);
   }
+  if (!active) active = vnodep;
   return vnodep;
 }
 

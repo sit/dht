@@ -17,7 +17,8 @@ enum dhash_stat {
   DHASH_REPLICATED = 6,
   DHASH_STORE_PARTIAL = 11,
   DHASH_COMPLETE = 12,
-  DHASH_CONTINUE = 13
+  DHASH_CONTINUE = 13,
+  DHASH_INVALIDVNODE = 14
 };
 
 enum store_status {
@@ -143,6 +144,9 @@ program DHASHCLNT_PROGRAM {
 		dhash_storeres
 		DHASHPROC_SEND (dhash_send_arg) = 5;
 
+		dhash_stat
+         	DHASHPROC_ACTIVE (int32) = 6;
+		
 	} = 1;
 } = 344448;
 
