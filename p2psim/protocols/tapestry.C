@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.24 2003/11/05 21:52:25 strib Exp $ */
+/* $Id: tapestry.C,v 1.25 2003/11/13 19:25:40 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -114,45 +114,58 @@ Tapestry::lookup(Args *args)
 
   TapDEBUG(0) << "Tapestry Lookup for key " << print_guid(key) << endl;
 
-  // we'll be trying this X times, to simulate application-level retries
-  uint num_tries = 1;
+  wrap_lookup_args *wla = New wrap_lookup_args();
+  wla->key = key;
+  wla->starttime = now();
+  wla->num_tries = 1;
+
+  lookup_wrapper( wla );
+
+}
+
+void
+Tapestry::lookup_wrapper(wrap_lookup_args *args)
+{
 
   lookup_args la;
-  la.key = key;
+  la.key = args->key;
   la.looker = ip();
 
   lookup_return lr;
-  while( num_tries <= 5 ) {
     
-    lr.hopcount = 0;
-    lr.failed = false;
-    
-    handle_lookup( &la, &lr );
-
-    if( !lr.failed && lr.owner_id == lr.real_owner_id ) {
-      TapDEBUG(0) << "Lookup complete for key " << print_guid(key) 
-		  << ": ip " << lr.owner_ip << ", id " 
-		  << print_guid(lr.owner_id) << ", hops " << lr.hopcount
-		  << ", numtries " << num_tries << endl;
-      
-      break;
-    } else {
-      TapDEBUG(0) << "one lookup failed or was incorrect for key " 
-		  << print_guid(key) << ", numtries " << num_tries << endl;
-    }
-
-    num_tries++;
-
-  }
-
-  if( lr.failed ) {
-    TapDEBUG(0) << "Lookup failed for key " << print_guid(key) << endl;
-  } else if( lr.owner_id != lr.real_owner_id ) {
-    TapDEBUG(0) << "Lookup incorrect for key " << print_guid(key) 
+  lr.hopcount = 0;
+  lr.failed = false;
+  
+  handle_lookup( &la, &lr );
+  
+  if( !lr.failed && lr.owner_id == lr.real_owner_id ) {
+    TapDEBUG(0) << "Lookup complete for key " << print_guid(args->key) 
 		<< ": ip " << lr.owner_ip << ", id " 
-		<< print_guid(lr.owner_id) << ", real root " 
-		<< print_guid(lr.real_owner_id) << " hops " 
-		<< lr.hopcount << ", numtries " << num_tries << endl;
+		<< print_guid(lr.owner_id) << ", hops " << lr.hopcount
+		<< ", numtries " << args->num_tries << endl;
+    delete args;
+  } else {
+    if( now() - args->starttime < 4000 ) {
+      args->num_tries = args->num_tries+1;
+      TapDEBUG(1) << "one lookup failed or was incorrect for key " 
+		  << print_guid(args->key) << ", numtries " << args->num_tries 
+		  << endl;
+      delaycb( 100, &Tapestry::lookup_wrapper, args );
+    } else {
+      
+      if( lr.failed ) {
+	TapDEBUG(0) << "Lookup failed for key " << print_guid(args->key) 
+		    << endl;
+      } else if( lr.owner_id != lr.real_owner_id ) {
+	TapDEBUG(0) << "Lookup incorrect for key " << print_guid(args->key) 
+		    << ": ip " << lr.owner_ip << ", id " 
+		    << print_guid(lr.owner_id) << ", real root " 
+		    << print_guid(lr.real_owner_id) << " hops " 
+		    << lr.hopcount << ", numtries " << args->num_tries << endl;
+      }
+      delete args;
+
+    }
   }
 
 }
@@ -195,7 +208,7 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
 	break;
       } else {
 	// print out that a failure happened
-	TapDEBUG(0) << "Failure happened during the lookup of key " << 
+	TapDEBUG(1) << "Failure happened during the lookup of key " << 
 	  print_guid(args->key) << ", trying to reach node " << next << 
 	  " for node " << args->looker << endl;
 	ret->failed = false;
@@ -1056,6 +1069,7 @@ Tapestry::init_state(set<Protocol *> lid)
 
   // now that everyone's been added, place backpointers on everyone 
   // who is still in the table
+  uint known_nodes = 0;
   for(set<Protocol*>::const_iterator i = lid.begin(); i != lid.end(); ++i) {
 
     Tapestry *currnode = (Tapestry*) *i;
@@ -1069,8 +1083,11 @@ Tapestry::init_state(set<Protocol *> lid)
       currnode->got_backpointer( ip(), id(), 
 				 guid_compare( id(), currnode->id() ), 
 				 false );
+      known_nodes++;
     }
   }
+  
+  TapDEBUG(0) << "INITSTATE: " << known_nodes << endl;
 
   have_joined();
   TapDEBUG(2) << "init_state: finished adding everyone" << endl;

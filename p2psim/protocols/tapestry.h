@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.17 2003/11/04 22:15:48 thomer Exp $ */
+/* $Id: tapestry.h,v 1.18 2003/11/13 19:25:40 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -6,15 +6,13 @@
 #include "chord.h"
 #include "p2psim/p2psim.h"
 #include "p2psim/condvar.h"
-#include <map>
+#include <map.h>
 
 class NodeInfo;
 class RouteEntry;
 class RoutingTable;
 
 class Tapestry : public P2Protocol {
-  friend class RoutingTable; // for RPCSet
-
 public:
 
   typedef unsigned long long GUID;
@@ -93,6 +91,14 @@ public:
   };
 
   void handle_lookup(lookup_args *args, lookup_return *ret);
+
+  struct wrap_lookup_args {
+    GUID key;
+    Time starttime;
+    uint num_tries;
+  };
+
+  void lookup_wrapper(wrap_lookup_args *args);
 
   struct nodelist_args {
     vector<NodeInfo *> nodelist;
