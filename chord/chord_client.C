@@ -282,7 +282,7 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
 	trace << "unknown vnode " << *v << " for procedure "
 	      << sbp->proc ()
 	      << " (" << arg->progno << "." << arg->procno << ").\n";
-	sbp->replyref (chordstat (CHORD_UNKNOWNNODE));
+	sbp->replyref (rpcstat (DORPC_UNKNOWNNODE));
 	return;
       }
       
@@ -302,20 +302,19 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
       void *unmarshalled_args = prog->tbl[arg->procno].alloc_arg ();
       if (!proc (x.xdrp (), unmarshalled_args)) {
 	warn << "dispatch: error unmarshalling arguments\n";
-	sbp->replyref (chordstat (CHORD_RPCFAILURE));
+	sbp->replyref (rpcstat (DORPC_MARSHALLERR));
 	return;
       }
 
       //call the handler
+      user_args *ua = New user_args (sbp, unmarshalled_args, 
+				     prog, arg->procno, arg->send_time);
+      vnodep->fill_user_args (ua);
       if (!vnodep->progHandled (arg->progno)) {
 	trace << "dispatch to vnode " << *v << " doesn't handle "
 	      << arg->progno << "." << arg->procno << "\n";
-	chordstat res = CHORD_NOHANDLER;
-	sbp->replyref (res);
+	ua->replyref (chordstat (CHORD_NOHANDLER));
       } else {	      
-	user_args *ua = New user_args (sbp, unmarshalled_args, 
-				       prog, arg->procno, arg->send_time);
-	vnodep->fill_user_args (ua);
 	cbdispatch_t dispatch = vnodep->getHandler(arg->progno);
 	(dispatch)(ua);
       }  

@@ -31,7 +31,7 @@
 #include "arpc.h"
 #include "aclnt_chord.h"
 #include "skiplist.h"
-#include "chord_prot.h"
+#include "chord_types.h"
 #include "chord_util.h"
 
 struct location {
@@ -134,7 +134,7 @@ class locationtable : public virtual refcount {
   // Returns false of n is not a plausible chordID for s:p.
   bool insert (const chord_node &n);
   bool insert (const chordID &n, 
-	       sfs_hostname s, 
+	       chord_hostname s, 
 	       int p, 
 	       const vec<float> &coords);
   

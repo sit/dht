@@ -29,10 +29,10 @@
  */
 
 #include <math.h>
+#include "chord_prot.h"
 #include "comm.h"
 #include "location.h"
 #include "modlogger.h"
-#include "transport_prot.h"
 
 #define loctrace modlogger ("loctable")
 
@@ -293,7 +293,7 @@ locationtable::insert (const chord_node &n)
 
 bool
 locationtable::insert (const chordID &n, 
-		       sfs_hostname s, 
+		       chord_hostname s, 
 		       int p, 
 		       const vec<float> &coords)
 {
@@ -578,17 +578,22 @@ locationtable::fill_getnodeext (chord_node_ext &data, const chordID &x)
 {
   locwrap *lw = locs[x];
   if (!lw || (lw->type_ & LOC_REGULAR) == 0) {
-    data.alive = false;
+    loctrace << "!!! Unexpected bad node.\n";
+    data.n.x = 0;
     return;
   }
   ptr<location> l = lw->loc_;
   
-  data.x = x;
-  data.r = l->addr;
+  data.n.x = x;
+  data.n.r = l->addr;
+
+  data.n.coords.setsize (l->coords.size ());
+  for (unsigned int i = 0; i < l->coords.size (); i++)
+    data.n.coords[i] = (int)(l->coords[i]);
+
   data.a_lat = (long) (hosts->get_a_lat (l) * 100);
   data.a_var = (long) (hosts->get_a_var (l) * 100);
   data.nrpc  = l->nrpc;
-  data.alive = l->alive;
   
   return;
 }

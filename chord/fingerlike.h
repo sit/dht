@@ -26,7 +26,7 @@
 #ifndef _FINGERLIKE_H_
 #define _FINGERLIKE_H_
 
-#include "chord_prot.h"
+#include "chord_types.h"
 #include "stabilize.h"
 
 class vnode;

@@ -8,7 +8,7 @@
 
 %#include "bigint.h"
 %#include "sfs_prot.h"
-%#include "chord_prot.h"
+%#include "chord_types.h"
 
 const SFSRO_FHSIZE = 20;
 const SFSRO_NDIR = 128;

@@ -28,8 +28,8 @@
 #ifndef _CHORD_UTIL_H
 #define _CHORD_UTIL_H
 
-#include "chord_prot.h"
-#include "transport_prot.h"
+#include <chord_types.h>
+#include <transport_prot.h>
 
 // the identifier for the ihash class
 struct hashID {
@@ -69,11 +69,11 @@ int bitindexzeros (chordID p, int bm, int b0);
 int bitindexmismatch (chordID n, chordID p);
 u_long log2 (u_long n);
 
-sfs_hostname my_addr ();
+chord_hostname my_addr ();
 chordID init_chordID (int index, str name, int p);
 chordID make_chordID (str hostname, int port, int index = 0);
-bool is_authenticID (const chordID &x, sfs_hostname n, int p, int vnode);
-int is_authenticID (const chordID &x, sfs_hostname n, int p);
+bool is_authenticID (const chordID &x, chord_hostname n, int p, int vnode);
+int is_authenticID (const chordID &x, chord_hostname n, int p);
 bool str2chordID (str c, chordID &newID);
 
 inline const strbuf &

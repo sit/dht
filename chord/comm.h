@@ -1,7 +1,7 @@
 #ifndef _SFSNET_COMM_H_
 #define _SFSNET_COMM_H_
 
-#include "chord_prot.h"
+#include "chord_types.h"
 #include "ihash.h"
 #include "arpc.h"
 #include "chord_util.h"
@@ -73,7 +73,7 @@ struct rpc_state {
 
 // store latency information about a host.
 struct hostinfo {
-  sfs_hostname host;
+  chord_hostname host;
   str key;
   u_int64_t nrpc;
   u_int64_t maxdelay;

@@ -130,9 +130,9 @@ getsucc_cb (chord_nodelistextres *res, clnt_stat err)
   assert (err == 0 && res->status == CHORD_OK);
   assert (res->resok->nlist.size () >= 2);
 
-  chordID n    = res->resok->nlist[1].x;
-  str host     = res->resok->nlist[1].r.hostname;
-  u_short port = res->resok->nlist[1].r.port;
+  chordID n    = res->resok->nlist[1].n.x;
+  str host     = res->resok->nlist[1].n.r.hostname;
+  u_short port = res->resok->nlist[1].n.r.port;
   int index    = is_authenticID (n, host, port);
   assert (index >= 0);
   warnx << n << " " << host << " " << " " << index << "\n";
@@ -154,7 +154,6 @@ int
 main (int argc, char** argv) 
 {
   setprogname (argv[0]);
-  sfsconst_init ();
   random_init ();
   setup ();
 

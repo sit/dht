@@ -1,9 +1,10 @@
 %#include "bigint.h"
-%#include "chord_prot.h"
+%#include "chord_types.h"
 
 enum rpcstat {
   DORPC_OK = 0,
-  DORPC_MARSHALLERR = 1
+  DORPC_MARSHALLERR = 1,
+  DORPC_UNKNOWNNODE = 2
 };
 
 struct dorpc_arg {

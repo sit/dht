@@ -37,7 +37,7 @@
 #include <merkle_misc.h>
 #include <dhash_prot.h>
 #include <chord.h>
-#include <chord_prot.h>
+#include <chord_types.h>
 #include <chord_util.h>
 #include <location.h>
 #include <dbfe.h>

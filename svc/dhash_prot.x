@@ -1,7 +1,7 @@
-%#include <chord_prot.h>
+%#include <chord_types.h>
 
 typedef opaque dhash_value<>;
-typedef int32 dhash_hopcount;
+typedef int32_t dhash_hopcount;
 
 enum dhash_stat {
   DHASH_OK = 0,
@@ -54,7 +54,7 @@ struct s_dhash_insertarg {
   chordID srcID;  // == from.x => redundant
   dhash_value data;
   int offset;
-  int32 nonce;
+  int32_t nonce;
   store_status type;
   dhash_valueattr attr;
   bool last; /* used by the merkle code only */
@@ -63,10 +63,10 @@ struct s_dhash_insertarg {
 struct s_dhash_fetch_arg {
   chordID key;
   chord_node from;
-  int32 start;
-  int32 len;
-  int32 cookie;
-  int32 nonce;
+  int32_t start;
+  int32_t len;
+  int32_t cookie;
+  int32_t nonce;
 };
 
 struct s_dhash_keystatus_arg {
@@ -112,10 +112,10 @@ union dhash_storeres switch (dhash_stat status) {
 
 struct dhash_fetchiter_complete_res {
   dhash_value res;
-  int32 offset;
+  int32_t offset;
   dhash_valueattr attr;
   chordID source;
-  int32 cookie;
+  int32_t cookie;
 };
 
 union dhash_fetchiter_res switch (dhash_stat status) {
@@ -131,12 +131,12 @@ union dhash_fetchiter_res switch (dhash_stat status) {
 
 
 struct s_dhash_block_arg {
-  int32 nonce;
+  int32_t nonce;
   dhash_value res;
-  int32 offset;
+  int32_t offset;
   dhash_valueattr attr;
   chordID source;
-  int32 cookie;
+  int32_t cookie;
   /* if a the sender of this RPC doesn't have the block 
    * then he sends back a list of successors.
    */
@@ -145,7 +145,7 @@ struct s_dhash_block_arg {
 
 
 struct s_dhash_storecb_arg {
-  int32 nonce;
+  int32_t nonce;
   dhash_stat status;
 };
 
@@ -259,7 +259,7 @@ program DHASHGATEWAY_PROGRAM {
 		DHASHPROC_RETRIEVE (dhash_retrieve_arg) = 4;
                 
 		dhash_stat
-         	DHASHPROC_ACTIVE (int32) = 5;
+         	DHASHPROC_ACTIVE (int32_t) = 5;
 		
 	} = 1;
 } = 344448;

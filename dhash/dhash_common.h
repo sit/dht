@@ -1,7 +1,7 @@
 #ifndef _DHASH_COMMON_H_
 #define _DHASH_COMMON_H_
 
-#include <chord_prot.h>
+#include <chord_types.h>
 #include <dhash_prot.h>
 
 #define DHASHCLIENT_USE_CACHED_SUCCESSOR 0x1

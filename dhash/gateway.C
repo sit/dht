@@ -27,7 +27,7 @@
  */
 
 #include <chord.h>
-#include <chord_prot.h>
+#include <chord_types.h>
 
 #include "dhash_common.h"
 #include "dhash.h"

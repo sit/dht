@@ -1,4 +1,4 @@
-%#include <chord_prot.h>
+%#include <chord_types.h>
 %#include <merkle_hash.h>
 
 enum merkle_stat {

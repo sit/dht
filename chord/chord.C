@@ -777,7 +777,6 @@ vnode_impl::dogetpred_ext (user_args *sbp)
 {
   ndogetpred_ext++;
   chord_nodeextres res(CHORD_OK);
-  res.resok->alive = true;
   locations->fill_getnodeext (*res.resok, my_pred ());
   sbp->reply (&res);
 }

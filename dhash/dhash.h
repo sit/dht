@@ -35,8 +35,8 @@
 #include <arpc.h>
 #include <async.h>
 
+#include <chord_types.h>
 #include <dhash_prot.h>
-#include <chord_prot.h>
 #include <route.h>
 
 class dhash_block;

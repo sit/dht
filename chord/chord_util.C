@@ -346,7 +346,7 @@ log2 (u_long n)
   return l;
 }
 
-sfs_hostname
+chord_hostname
 my_addr () {
   vec<in_addr> addrs;
   if (!myipaddrs (&addrs))
@@ -397,7 +397,7 @@ make_chordID (str hostname, int port, int index)
 }
 
 bool
-is_authenticID (const chordID &x, sfs_hostname n, int p, int vnode)
+is_authenticID (const chordID &x, chord_hostname n, int p, int vnode)
 {
   chordID ID;
   
@@ -420,7 +420,7 @@ is_authenticID (const chordID &x, sfs_hostname n, int p, int vnode)
 }
 
 int
-is_authenticID (const chordID &x, sfs_hostname n, int p)
+is_authenticID (const chordID &x, chord_hostname n, int p)
 {
   chordID ID;
   char id[sha1::hashsize];

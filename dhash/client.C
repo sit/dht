@@ -33,7 +33,7 @@
 #include <arpc.h>
 #include <crypt.h>
 
-#include <chord_prot.h>
+#include <chord_types.h>
 #include <chord.h>
 #include <route.h>
 #include <location.h>

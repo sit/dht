@@ -38,7 +38,7 @@
 // #define __J__ 1
 
 #include <crypt.h>
-#include "dhash_prot.h"
+#include <chord_prot.h>
 #include "chord_util.h"
 #include "comm.h"
 #include "location.h"
@@ -514,12 +514,14 @@ stp_manager::timeout (rpc_state *C)
 void
 stp_manager::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
 {
+  dorpc_res *res = (dorpc_res *)C->out;
   if (err) {
     nrpcfailed++;
-    warn << getusec () << " RPC failure: " << err << " destined for " << C->ID << " seqno " << C->seqno << "\n";
+    warn << gettime () << " RPC failure: " << err << " destined for " << C->ID << " seqno " << C->seqno << "\n";
+  } else if (res->status != DORPC_OK) {
+    warn << gettime () << " Higher-level RPC Failure " << res->status << "\n";
   } else {
-
-    dorpc_res *res = (dorpc_res *)C->out;
+    
     u_int64_t sent_time = res->resok->send_time_echo;
     u_int64_t now = getusec ();
     // prevent overflow, caused by time reversal

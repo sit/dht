@@ -133,9 +133,9 @@ getsucc_cb (chordID dest, str desthost,
   }
 
 
-  chordID n    = res->resok->nlist[1].x;
-  str host     = res->resok->nlist[1].r.hostname;
-  u_short port = res->resok->nlist[1].r.port;
+  chordID n    = res->resok->nlist[1].n.x;
+  str host     = res->resok->nlist[1].n.r.hostname;
+  u_short port = res->resok->nlist[1].n.r.port;
 
   // wrapped around ring. done.
   if (n == wellknown_ID) {

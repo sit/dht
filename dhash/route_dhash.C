@@ -4,7 +4,7 @@
 #include "route_dhash.h"
 #include <location.h>
 #include <chord.h>
-#include <chord_prot.h>
+#include <chord_types.h>
 #include "sfsmisc.h"
 #include "arpc.h"
 #include "crypt.h"

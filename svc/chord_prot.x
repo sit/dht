@@ -6,12 +6,7 @@
  * falsely claiming credit for this work.
  */
 
-%#include "bigint.h"
-%#include <sfs_prot.h>
-
-%#define NBIT 160
-
-typedef bigint chordID;
+%#include "chord_types.h"
 
 enum chordstat {
   CHORD_OK = 0,
@@ -20,19 +15,7 @@ enum chordstat {
   CHORD_INRANGE = 3,
   CHORD_NOTINRANGE = 4,
   CHORD_NOHANDLER = 5,
-  CHORD_UNKNOWNNODE = 6,
-  CHORD_STOP = 7
-};
-
-struct net_address {
-  sfs_hostname hostname;
-  int32_t port;
-};
-
-struct chord_node {
-  chordID x;
-  net_address r;
-  int32_t coords<>;
+  CHORD_STOP = 6
 };
 
 union chord_noderes switch (chordstat status) {
@@ -51,15 +34,6 @@ union chord_nodelistres switch (chordstat status) {
    chord_nodelistresok resok;
  default:
    void;
-};
-
-struct chord_node_ext {
-  chordID x;
-  net_address r;
-  int32_t a_lat;
-  int32_t a_var;
-  u_int64_t nrpc;
-  bool alive;
 };
 
 union chord_nodeextres switch (chordstat status) {

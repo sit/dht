@@ -30,7 +30,7 @@
 #include "dhash.h"
 #include "dhashclient.h"
 #include "verify.h"
-#include <chord_prot.h>
+#include <chord_types.h>
 #include "sfsmisc.h"
 #include "arpc.h"
 #include <sfscrypt.h>
