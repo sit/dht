@@ -62,7 +62,6 @@ newsgroup::open (str g, unsigned long *count,
 
   char *c = rec->value;
   int len = rec->len;
-  warn << "xv " << str (c, len) << "\n";
   *count = 0;
   *first = 0;
   *last = 0;
