@@ -59,7 +59,10 @@ public:
   void insert (const char *buf, size_t buflen, cbinsertgw_t cb,
 	       ptr<option_block> options = NULL);
   // Insert under the provided key.  User can specify own key by using
-  // c = DHASH_NOAUTH.
+  // c = DHASH_NOAUTH. c must equal DHASH_CONTENTHASH or DHASH_NOAUTH.
+  // 
+  // NOTE: (maybe we should just use a bool like key_is_hash, defaulting 
+  // to true?)
   void insert (bigint key, const char *buf, size_t buflen, cbinsertgw_t cb,
                ptr<option_block> options = NULL,
 	       dhash_ctype c = DHASH_CONTENTHASH);
