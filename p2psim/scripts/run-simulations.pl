@@ -22,7 +22,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-# $Id: run-simulations.pl,v 1.11 2003/12/26 06:13:56 jinyang Exp $
+# $Id: run-simulations.pl,v 1.12 2004/01/07 21:14:49 jinyang Exp $
 
 use strict;
 use Getopt::Long;
@@ -33,6 +33,7 @@ my $lookupmean = 10000;
 my $lifemean = 100000;
 my $deathmean = 100000;
 my $exittime = 200000;
+my $stattime = 100000;
 my $churnfile = "";
 my $argsfile = "";
 my $logdir = "/tmp";
@@ -54,6 +55,7 @@ run-simulations [options]
     --lookupmean <time>       The average time (ms) between lookups on a node
     --lifemean <time>         The average time (ms) a node is alive
     --deathmean <time>        The average time (ms) a node is dead
+    --stattime <time>         The start time for collecting statistics
     --exittime <time>         The length of the test
     --churnfile <churn_file>  The churnfile to use (if any)
     --argsfile <arg_file>     File containing the argument sets to simulate
@@ -159,6 +161,12 @@ if( defined $options{"seed"} ) {
     srand( $seed * $$ ); 
 }
 
+if ( defined $options{"stattime"}) {
+    $stattime = $options{"stattime"};
+}else{
+    $stattime = int ($exittime/2);
+}
+
 # now, figure out what directory we're in, and what
 # directory this script is in.  Get the p2psim command
 my $script_dir = "$0";
@@ -229,7 +237,7 @@ if( $protocol eq "Kademlia" or $protocol eq "Kelips" ) {
 
 print EF "generator $eg_type ipkeys=$ipkeys " .
     "lifemean=$lifemean deathmean=$deathmean lookupmean=$lookupmean " . 
-    "exittime=$exittime ";
+    "exittime=$exittime stattime=$stattime";
 
 if( $churnfile ne "" ) {
     print EF "file=$churnfile";
