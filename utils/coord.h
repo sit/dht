@@ -5,7 +5,8 @@ class str;
 #include <vec.h>
 #include <chord_types.h>
 
-#define NCOORD 3
+#define NCOORD 2
+#define USING_HT 1
 #define PRED_ERR_MULT 1000.0
 
 // Perhaps this should be made a coordinate in the sort of standard
@@ -15,7 +16,6 @@ struct Coord {
 
   vec<float> coords;
   float ht;
-  
 
 
   unsigned int size () const { return coords.size (); };
@@ -37,6 +37,7 @@ struct Coord {
   float distance_f (const Coord &c);
   float distance_f (const chord_node_wire &c);
   float norm ();
+  float plane_norm ();
   void scalar_mult (float s);
   void vector_add (const Coord &b);
   void vector_sub (const Coord &b);
