@@ -21,7 +21,6 @@ class dhashcli {
   bool do_cache;
   dhash *dh;
   ptr<route_factory> r_factory;
-  u_int64_t start;
 
   struct rcv_state {
     ihash_entry <rcv_state> link;

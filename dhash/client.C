@@ -295,11 +295,13 @@ dhashcli::retrieve2 (chordID blockID, int options, cb_ret cb)
 {
   // Only one lookup for a block should be in progress from a node
   // at any given time.
+  chordID myID = clntnode->my_ID ();
   rcv_state *rs = rcvs[blockID];
   if (rs) {
-    trace << "retrieve (" << blockID << "): simultaneous retrieve!\n";
+    trace << myID << ": retrieve (" << blockID << "): simultaneous retrieve!\n";
     rs->callbacks.push_back (cb);
   } else {
+    trace << myID << ": retrieve (" << blockID << "): new retrieve.\n";
     rs = New rcv_state (blockID);
     rs->callbacks.push_back (cb);
     rcvs.insert (rs);
@@ -312,13 +314,17 @@ void
 dhashcli::retrieve2_lookup_cb (chordID blockID, 
 			       dhash_stat status, chordID destID, route r)
 {
+  chordID myID = clntnode->my_ID ();
   rcv_state *rs = rcvs[blockID];
-  assert (rs);
+  if (!rs) {
+    trace << myID << ": retrieve (" << blockID << "): not in table?\n";
+    assert (rs);
+  }
   rs->timemark ();
   rs->r = r;
   
   if (status != DHASH_OK) {
-    trace << "retrieve (" << blockID << "): lookup failure:" << status << "\n";
+    trace << myID << ": retrieve (" << blockID << "): lookup failure:" << status << "\n";
     rcvs.remove (rs);
     rs->complete (status, NULL); // failure
     rs = NULL;
@@ -334,9 +340,23 @@ dhashcli::fetch_frag (rcv_state *rs)
 {
   register size_t i = rs->nextsucc;
 
+  chordID myID = clntnode->my_ID ();
+
+  // Ugh. No more successors available.
   if (i >= rs->succs.size ()) {
-    // Ugh. No more successors available.  Should we try harder?
-    // Should we force them to retry?  How do you do that?
+    // If there are outstanding fragments, there is still hope.
+    // XXX Actually, this is a lie. If we know that they will not
+    //     provide us with enough total fragments to reconstruct the
+    //     block,  e.g. incoming_rpcs + frags.size < NUM_DFRAGS,
+    //     we should just give up to the user now.  However for
+    //     book keeping purposes, we don't do this.
+    if (rs->incoming_rpcs > 0)
+      return;
+    
+    // Should we try harder? Like, try and get more successors and
+    // check out the swath? No, let's just fail and have the higher
+    // level know that they should retry.
+    trace << myID << ": retrieve (" << rs->key << "): out of successors; failing.\n";
     rcvs.remove (rs);
     rs->complete (DHASH_NOENT, NULL);
     rs = NULL;
@@ -398,11 +418,12 @@ order_succs (const vec<float> &me, const vec<chord_node> &succs,
 void
 dhashcli::retrieve2_succs_cb (chordID blockID, vec<chord_node> succs, chordstat err)
 {
+  chordID myID = clntnode->my_ID ();
   rcv_state *rs = rcvs[blockID];
   assert (rs);
   rs->timemark ();
   if (err) {
-    trace << "retrieve (" << blockID << "): getsucclist failure:" << err << "\n";
+    trace << myID << ": retrieve (" << blockID << "): getsucclist failure:" << err << "\n";
     rcvs.remove (rs);
     rs->complete (DHASH_CHORDERR, NULL); // failure
     rs = NULL;    
@@ -413,7 +434,7 @@ dhashcli::retrieve2_succs_cb (chordID blockID, vec<chord_node> succs, chordstat 
     succs.pop_back ();
 
   if (succs.size () < dhash::NUM_DFRAGS) {
-    trace << "retrieve (" << blockID << "): "
+    trace << myID << ": retrieve (" << blockID << "): "
 	  << "insufficient number of successors returned!\n";
     rcvs.remove (rs);
     rs->complete (DHASH_CHORDERR, NULL); // failure
@@ -440,26 +461,28 @@ dhashcli::retrieve2_fetch_cb (chordID blockID, u_int i,
 			      ref<dhash_fetchiter_res> res,
 			      clnt_stat err)
 {
+  chordID myID = clntnode->my_ID ();
   // XXX collect fragments and decode block
   rcv_state *rs = rcvs[blockID];
   if (!rs) {
     // Here it might just be that we got a fragment back after we'd
     // already gotten enough to reconstruct the block.
-    trace << "retrieve: unexpected fragment for " << blockID << ", discarding.\n";
+    trace << myID << ": retrieve (" << blockID << "): unexpected fragment from "
+	  << i + 1 << ", discarding.\n";
     return;
   }
 
   rs->incoming_rpcs -= 1;
 
   if (err) {
-    warnx << "fetch failed: " << blockID
-	  << " from successor " << i+1  << ": " << err << "\n";
+    trace << myID << ": retrieve (" << blockID
+	  << "): failed from successor " << i+1  << ": " << err << "\n";
     fetch_frag (rs);
     return;
   } else if (res->status != DHASH_COMPLETE) {
-    warnx << "fetch failed: " << blockID
-	  << "from successor " << i+1 << ": " << dhasherr2str (res->status)
-	  << "\n";
+    trace << myID << ": retrieve (" << blockID
+	  << "): failed from successor " << i+1 << ": "
+	  << dhasherr2str (res->status) << "\n";
     fetch_frag (rs);
     return;
   } else if (res->compl_res->attr.size > res->compl_res->res.size()) {
@@ -479,7 +502,7 @@ dhashcli::retrieve2_fetch_cb (chordID blockID, u_int i,
   if (rs->frags.size () >= dhash::NUM_DFRAGS) {
     strbuf block;
     if (!Ida::reconstruct (rs->frags, block)) {
-      warnx << "Reconstruction failed, blockID " << blockID << "\n";
+      trace << myID << ": retrieve (" << blockID << "): reconstruction failed.\n";
       fetch_frag (rs);
       return;
     }
@@ -671,11 +694,12 @@ dhashcli::insert2_store_cb (ref<sto_state> ss, u_int i, ref<dhash_storeres> res,
 
   // Count down until all outstanding RPCs have returned
   if (ss->out == 0) {
+    chordID myID = clntnode->my_ID ();
     if (ss->good < dhash::NUM_EFRAGS) {
-      trace << "store (" << ss->block->ID << "): only stored " << ss->good
+      trace << myID << ": store (" << ss->block->ID << "): only stored " << ss->good
 	    << " of " << dhash::NUM_EFRAGS << " encoded.\n";
       if (ss->good < dhash::NUM_DFRAGS) {
-	trace << "store (" << ss->block->ID << "): failed;"
+	trace << myID << ": store (" << ss->block->ID << "): failed;"
 	  " insufficient frags stored.\n";
 	(*ss->cb) (DHASH_STOREERR, ss->succs[0].x);
 	// We should do something here to try and store this fragment
@@ -691,7 +715,6 @@ void
 dhashcli::insert (chordID blockID, ref<dhash_block> block, 
                   int options, cbinsert_t cb)
 {
-  start = getusec ();
   lookup (blockID, options,
           wrap (this, &dhashcli::insert_lookup_cb, blockID, block, cb, 0));
 }
@@ -701,7 +724,6 @@ dhashcli::insert_lookup_cb (chordID blockID, ref<dhash_block> block,
 			    cbinsert_t cb, int trial,
 			    dhash_stat status, chordID destID, route r)
 {
-  //  warn << "(insert timing) " << blockID << " finished lookup " << (getusec () - start) << " after start\n";
   if (status != DHASH_OK) {
     warn << "insert_lookup_cb: failure\n";
     // XXX call dhashcli::insert_stored_cb() to retry
@@ -717,7 +739,6 @@ dhashcli::insert_stored_cb (chordID blockID, ref<dhash_block> block,
 			    cbinsert_t cb, int trial,
 			    dhash_stat stat, chordID retID)
 {
-  //  warn << "(insert timing) " << blockID << " finished store " << (getusec () - start) << " after start\n";
   if (stat && stat != DHASH_WAIT && (trial <= 2)) {
     //try the lookup again if we got a RETRY
     warn << "got a RETRY failure (" << trial << "). Trying the lookup again\n";
