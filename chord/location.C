@@ -32,6 +32,14 @@
 #include "chord.h"
 
 bool nochallenges;
+const int CHORD_RPC_STP (0);
+const int CHORD_RPC_SFSU (1);
+const int CHORD_RPC_SFST (2);
+const int CHORD_RPC_DEFAULT (CHORD_RPC_STP);
+
+int chord_rpc_style (getenv ("CHORD_RPC_STYLE") ?
+		     atoi (getenv ("CHORD_RPC_STYLE")) :
+		     0);
 
 #if 0
 void
@@ -57,11 +65,6 @@ cbchallengeID_t cbchall_null (wrap (ignore_challengeresp));
 location::location (const chordID &_n, const net_address &_r) 
   : n (_n), addr (_r), alive (true), challenged (false)
 {
-  rpcdelay = 0;
-  nrpc = 0;
-  a_lat = 0.0;
-  a_var = 0.0;
-  maxdelay = 0;
   bzero(&saddr, sizeof(sockaddr_in));
   saddr.sin_family = AF_INET;
   inet_aton (_r.hostname.cstr (), &saddr.sin_addr);
@@ -73,46 +76,32 @@ location::~location () {
 }
 
 void
-locationtable::start_network ()
+locationtable::initialize_rpcs ()
 {
-  int dgram_fd = inetsocket (SOCK_DGRAM);
-  if (dgram_fd < 0) fatal << "Failed to allocate dgram socket\n";
-  dgram_xprt = axprt_dgram::alloc (dgram_fd, sizeof(sockaddr), 230000);
-  if (!dgram_xprt) fatal << "Failed to allocate dgram xprt\n";
+  if (chord_rpc_style == CHORD_RPC_SFSU)
+    hosts = New refcounted<rpc_manager> (chordnode);
+  if (chord_rpc_style == CHORD_RPC_SFST)
+    hosts = New refcounted<tcp_manager> (chordnode);
+  else
+    hosts = New refcounted<stp_manager> (chordnode);
 
-  delaycb (1, 0, wrap (this, &locationtable::ratecb));
-
-  reset_idle_timer ();
+  // see also chord::startchord
 }
 
 locationtable::locationtable (ptr<chord> _chordnode, int _max_cache)
   : chordnode (_chordnode),
+#ifdef PNODE
+    myvnode (NULL),
+#endif /* PNODE */
     good (0),
     size_cachedlocs (0),
     max_cachedlocs (_max_cache), 
-    rpcdelay (0),
-    nrpc (0),
-    a_lat (0.0),
-    a_var (0.0),
-    avg_lat (0.0),
-    bf_lat (0.0),
-    bf_var (0.0),
-    nrpcfailed (0),
-    nsent (0),
-    npending (0),
     nnodessum (0),
     nnodes (0),
     nvnodes (0),
-    seqno (0),
-    cwind (1.0),
-    ssthresh (6.0),
-    left (0),
-    cwind_cum (0.0),
-    num_cwind_samples (0),
-    num_qed (0),
-    idle_timer (NULL)
+    nchallenge (0)
 {
-  start_network ();
+  initialize_rpcs ();
 }
 
 locationtable::locationtable (const locationtable &src)
@@ -123,32 +112,15 @@ locationtable::locationtable (const locationtable &src)
 #endif /* PNODE */  
   max_cachedlocs = src.max_cachedlocs;
 
+  initialize_rpcs ();
+
   // State parameters will be zeroed in the copy
   good = 0;
   size_cachedlocs = 0; 
-  nrpc = 0;
-  nrpcfailed = 0;
-  a_lat = 0.0;
-  a_var = 0.0;
-  avg_lat = 0.0;
-  bf_lat = 0.0;
-  bf_var = 0.0;
-  nsent = 0;
-  npending = 0;
-  nchallenge = 0;
-  size_cachedlocs = 0;
   nvnodes = 0;
   nnodes = 0;
   nnodessum = 0;
-  seqno = 0;
-  cwind = 1;
-  ssthresh = 6;
-  left = 0;
-  cwind_cum = 0.0;
-  num_cwind_samples = 0;
-  num_qed = 0;
-
-  idle_timer = NULL;
+  nchallenge = 0;
 
   // Deep copy the list of locations. Do not copy pins because those
   // reflect the needs of the individual vnodes; each vnode should
@@ -161,8 +133,6 @@ locationtable::locationtable (const locationtable &src)
     realinsert (loc);
     if (loc->challenged) good++;
   }
-  
-  start_network ();
 }
 
 bool
@@ -175,24 +145,45 @@ locationtable::locwrap::good ()
 }
 
 void
-locationtable::ratecb () {
-#if 0
-  warnx << "sent " << nsent << " RPCs in the last second\n";
-  warnx << "received " << chordnode->nrcv << " RPCs in the last second\n";
-  warnx << npending << " RPCs are outstanding\n";
-#endif
-
-  delaycb (1, 0, wrap (this, &locationtable::ratecb));
-  nsent = 0;
-  chordnode->nrcv = 0;
-}
-
-void
 locationtable::replace_estimate (u_long o, u_long n)
 {
   assert (nvnodes > 0);
   nnodessum = nnodessum - o + n;
   nnodes = nnodessum / nvnodes;
+}
+
+void
+locationtable::doRPC (const chordID &n, rpc_program progno, 
+		      int procno, ptr<void> in, 
+		      void *out, aclnt_cb cb)
+{
+  ptr<location> l = lookup (n);
+  hosts->doRPC (l, progno, procno, in, out, 
+		wrap (this, &locationtable::doRPCcb, l, cb));
+  l->nrpc++;
+}
+
+void
+locationtable::doRPCcb (ptr<location> l, aclnt_cb realcb, clnt_stat err)
+{
+  if (err) {
+    if (l->alive) {
+      // xxx should really kill all nodes that share the same ip/port.
+      //     maybe should increase granularity of hostinfo cache for
+      //     stp from per-host to per ip/port... but this is no worse
+      //     than before.
+      good--;
+      l->alive = false;
+    }
+  } else {
+    if (!l->alive) {
+      l->alive = true;
+      if (l->challenged)
+	good++;
+    }
+  }
+
+  (realcb) (err);
 }
 
 void
@@ -570,8 +561,8 @@ locationtable::fill_getnodeext (chord_node_ext &data, const chordID &x)
   
   data.x = x;
   data.r = l->addr;
-  data.a_lat = (long) (l->a_lat * 100);
-  data.a_var = (long) (l->a_var * 100);
+  data.a_lat = (long) (hosts->get_a_lat (l) * 100);
+  data.a_var = (long) (hosts->get_a_var (l) * 100);
   data.nrpc  = l->nrpc;
   data.alive = l->alive;
   
@@ -616,7 +607,14 @@ float
 locationtable::get_a_lat (const chordID &x)
 {
   locwrap *l = locs[x];
-  if (l && l->type_ & LOC_REGULAR)
-    return l->loc_->a_lat;
-  return 1e8; // xxx something big?
+  assert (l);
+  assert (l->type_ & LOC_REGULAR);
+  
+  return hosts->get_a_lat (l->loc_);
+}
+
+void
+locationtable::stats ()
+{
+  hosts->stats ();
 }

@@ -46,22 +46,11 @@ struct hashID {
   }
 };
 
-struct sent_elm {
-  tailq_entry<sent_elm> q_link;
-  long seqno;
-  
-  sent_elm (long s) : seqno (s) {};
-};
-
 struct location {
   chordID n;
   net_address addr;
   sockaddr_in saddr;
-  u_int64_t rpcdelay;
-  u_int64_t nrpc;
-  u_int64_t maxdelay;
-  float a_lat;
-  float a_var;
+  unsigned int nrpc;
   bool alive; // whether this node responded to its last RPC
   bool challenged; // whether this node has been succesfully challenged
   vec<cbchallengeID_t> outstanding_cbs;
@@ -69,37 +58,7 @@ struct location {
   ~location ();
 };
 
-struct RPC_delay_args {
-  chordID ID;
-  rpc_program prog;
-  int procno;
-  ptr<void> in;
-  void *out;
-  aclnt_cb cb;
-
-  tailq_entry<RPC_delay_args> q_link;
-
-  RPC_delay_args (chordID _id, rpc_program _prog, int _procno,
-		  ptr<void> _in, void *_out, aclnt_cb _cb) :
-    ID (_id), prog (_prog), procno (_procno), in (_in), out (_out), cb (_cb) {};
-};
-
-struct rpc_state {
-  aclnt_cb cb;
-  ptr<location> loc;
-  chordID ID;
-  u_int64_t s;
-  int progno;
-  long seqno;
-  rpccb_chord *b;
-  int rexmits;
-  
-  rpc_state (aclnt_cb c, ptr<location> l, u_int64_t S, long s, int p) 
-    : cb (c), loc (l), s (S), progno (p), seqno (s), b (NULL), rexmits (0)
-  {
-    ID = l->n;
-  };
-};
+#include "comm.h"
 
 class locationtable : public virtual refcount {
   typedef unsigned short loctype;
@@ -126,6 +85,7 @@ class locationtable : public virtual refcount {
 #ifdef PNODE
   ptr<vnode> myvnode;
 #endif /* PNODE */
+  ptr<rpc_manager> hosts;
 
   // Indices into our locations... for O(1) access, for expiring,
   //   for rapid successor/pred lookups.
@@ -137,91 +97,17 @@ class locationtable : public virtual refcount {
   u_int32_t size_cachedlocs;
   u_int32_t max_cachedlocs;
 
-  u_int64_t rpcdelay;
-  u_int64_t nrpc;
-  float a_lat;
-  float a_var;
-  float avg_lat;
-  float bf_lat;
-  float bf_var;
-  u_int64_t nrpcfailed;
-  u_int64_t nsent;
-  u_int64_t npending;
-  u_int64_t nchallenge;
-  vec<float> timers;
-  vec<float> lat_little;
-  vec<float> lat_big;
-  vec<float> cwind_time;
-  vec<float> cwind_cwind;
-  vec<long> acked_seq;
-  vec<float> acked_time;
-  
   u_long nnodessum;
   u_long nnodes;
   unsigned nvnodes;
-  
-  int seqno;
-  float cwind;
-  float ssthresh;
-  int left;
-  float cwind_cum;
-  int num_cwind_samples;
-  int num_qed;
-
-  tailq<RPC_delay_args, &RPC_delay_args::q_link> Q;
-  tailq<sent_elm, &sent_elm::q_link> sent_Q;
-
-  timecb_t *idle_timer;
-
-  ptr<axprt_dgram> dgram_xprt;
-  //ptr<aclnt> dgram_clnt;
-
-  qhash<long, svccb *> octbl;
+  unsigned nchallenge;
   
   locationtable ();
-
-  void start_network ();
-
-  void connect_cb (location *l, callback<void, ptr<axprt_stream> >::ref cb, 
-		   int fd);
-
+  void initialize_rpcs ();
   
-  void doRPC_udp (ptr<location> l, rpc_program progno, 
-		  int procno, ptr<void> in, 
-		  void *out, aclnt_cb cb);
-
-  void doRPC_tcp (ptr<location> l, rpc_program progno, 
-		  int procno, ptr<void> in, 
-		  void *out, aclnt_cb cb);
-
-  void doRPC_tcp_connect_cb (RPC_delay_args *args, int fd);
-
-  void doRPC_issue (ptr<location> l,
-		    rpc_program prog, int procno, 
-		    ptr<void> in, void *out, aclnt_cb cb,
-		    ref<aclnt> c);
-
-  void doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err);
-  void doRPCreg_cb (ptr<location> l, aclnt_cb realcb, clnt_stat err);
-
-  void dorpc_connect_cb (location *l, ptr<axprt_stream> x);
-  void chord_connect (chordID ID, callback<void, ptr<axprt_stream> >::ref cb);
-
   void delete_cachedlocs ();
   void realinsert (ref<location> l);
   ptr<location> lookup (const chordID &n);
-  
-  void update_latency (ptr<location> l, u_int64_t lat, bool bf);
-  void ratecb ();
-  void update_cwind (int acked);
-  void rexmit_handler (rpc_state *s);
-  void timeout (rpc_state *s);
-  void enqueue_rpc (RPC_delay_args *args);
-  void rpc_done (long seqno);
-  void reset_idle_timer ();
-  void idle ();
-  void setup_rexmit_timer (ptr<location> l, long *sec, long *nsec);
-  void timeout_cb (rpc_state *C);
   
   bool betterpred1 (chordID current, chordID target, chordID newpred);
 
@@ -230,6 +116,7 @@ class locationtable : public virtual refcount {
 		     chord_challengeres *res, clnt_stat err);
 
   void printloc (locwrap *l);
+  void doRPCcb (ptr<location> l, aclnt_cb realcb, clnt_stat err);
   
  public:
   locationtable (ptr<chord> _chordnode, int _max_connections);
@@ -275,6 +162,9 @@ class locationtable : public virtual refcount {
 };
 
 extern bool nochallenges;
+extern int chord_rpc_style;
+extern const int CHORD_RPC_STP;  // our own rpc style
+extern const int CHORD_RPC_SFSU; // libarpc over UDP
+extern const int CHORD_RPC_SFST; // libarpc over TCP
 
 #endif /* _LOCATION_H_ */
-

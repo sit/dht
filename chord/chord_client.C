@@ -144,7 +144,8 @@ chord::startchord (int myp, int type)
 int
 chord::startchord (int myp)
 {
-  if (getenv("DHASHTCP")) {
+  // see also locationtable constructor.
+  if (chord_rpc_style == CHORD_RPC_SFST) {
     // Ensure the DGRAM and STREAM sockets are on same port #,
     // since it is included in the Chord ID's hash.
     myp = startchord (myp, SOCK_STREAM);
