@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.39 2004/01/31 03:26:33 strib Exp $ */
+/* $Id: tapestry.h,v 1.40 2004/06/09 23:21:43 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -236,6 +236,7 @@ private:
 
   // how many nodes to lookup at a time (at most)
   uint _redundant_lookup_num;
+  uint _redundancy;
 
   GUID _my_id;
   uint *_my_id_digits;
@@ -281,6 +282,7 @@ private:
 
   // timeout on declaring nodes dead
   Time _declare_dead_time;
+  uint _declare_dead_num;
   // factor above rtt for timeouts
   uint _rtt_timeout_factor;
 
@@ -335,7 +337,8 @@ private:
 
   class ping_callinfo { public:
     ping_callinfo(IPAddress xip, GUID xid, Time xps)
-      : ip(xip), id(xid), pingstart(xps), rtt(87654), failed(false) {}
+      : ip(xip), id(xid), pingstart(xps), rtt(87654), failed(false), 
+      times_tried(0) {}
     ~ping_callinfo() {}
     IPAddress ip;
     GUID id;
@@ -343,6 +346,7 @@ private:
     Time rtt;
     bool failed;
     Time last_timeout;
+    uint times_tried;
   };
 
   class nn_callinfo { public:
