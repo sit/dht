@@ -2,11 +2,14 @@
 #define __BLOCK_STATUS_H__
 
 #include <ihash.h>
+#include <vec.h>
 #include <skiplist.h>
 
 struct hashID;
 struct location;
 class block_status_manager;
+
+u_long num_efrags ();
 
 class block_status {
   friend class block_status_manager;

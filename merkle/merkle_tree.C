@@ -1,5 +1,7 @@
-#include <dhash_impl.h>
+#include <chord_types.h>
+#include <id_utils.h>
 #include <block_status.h>
+#include <location.h>
 #include "merkle_tree.h"
 
 void
@@ -93,7 +95,7 @@ merkle_tree::merkle_tree (ptr<dbfe> realdb,
       // only fake having a key if: we really don't have it, and
       // it's already replicated enough
       if (!database_lookup (fakedb, b.key) && 
-	  bsm->pcount (mis[i], succs) >= dhash::num_efrags ()) {
+	  bsm->pcount (mis[i], succs) >= num_efrags ()) {
 	int ret = insert (0, &b, &root);
 	warn << "added extra key " << mis[i] << " to merkle tree for " << remoteID << "\n";
 	assert (!ret);

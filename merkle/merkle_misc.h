@@ -4,9 +4,6 @@
 #include "qhash.h"
 #include "merkle_hash.h"
 #include "merkle_sync_prot.h"
-#include "dhash_prot.h"
-#include "dhash_common.h"
-
 
 vec<merkle_hash> database_get_keys     (dbfe *db, u_int depth, 
 				        const merkle_hash &prefix);

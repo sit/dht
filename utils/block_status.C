@@ -1,9 +1,22 @@
 #include <chord_types.h>
 #include <location.h>
 #include <id_utils.h>
+#include <configurator.h>
 #include "block_status.h"
 #include "misc_utils.h"
 #include "dhash.h"
+
+u_long
+num_efrags ()
+{
+  static bool initialized = false;
+  static int v = 0;
+  if (!initialized) {
+    initialized = Configurator::only ().get_int ("dhash.efrags", v);
+    assert (initialized);
+  }
+  return v;
+}
 
 void
 block_status::missing_on (ptr<location> l)
@@ -178,13 +191,13 @@ block_status_manager::pcount (const chordID &b, vec<ptr<location> > succs)
   //for every successor, assume present if not in missing list
   // and if succ # < dhash::efrags
   block_status *bs = blocks[b];
-  if (!bs) return dhash::num_efrags ();
+  if (!bs) return num_efrags ();
   vec<ptr<location> > missing = bs->missing;
 
   char is_missing;
   // FED: removed below from for termination clause; allow holes by 
   //      testing all successors
-  //      && s < dhash::num_efrags ()
+  //      && s < num_efrags ()
 
   for (u_int s = 0; 
        s < succs.size ();
