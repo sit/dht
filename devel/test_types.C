@@ -187,18 +187,32 @@ fetch_cb (dhashclient dhash, int btype, dhash_stat stat,
     warn << "Error\n";
     return;
   }
-  ptr<keyhash_payload> p = keyhash_payload::decode (blk);
-  if (!p ||
-      datasize != p->buf ().len () ||
-      memcmp (data, p->buf ().cstr (), datasize) != 0) {
-    fatal << "verification failed";
+  switch (btype) {
+  case CONTENT_HASH:
+    {
+      if (datasize != blk->len || memcmp (data, blk->data, datasize) != 0) {
+	fatal << "verification failed";
+      }
+    }
+    break;
+  case PUB_KEY:
+    {
+      ptr<keyhash_payload> p = keyhash_payload::decode (blk);
+      if (!p ||
+	  datasize != p->buf ().len () ||
+	  memcmp (data, p->buf ().cstr (), datasize) != 0) {
+	fatal << "verification failed";
+      }
+    }
+    break;
+  default:
+    fatal << "wtf\n";
   }
-  else {
-    warn << "retrieve success\n path: ";
-    for (unsigned int i = 0; i < path.size (); i++)
-      warnx << path[i] << " ";
-    warnx << "\n";
-  }
+
+  warn << "retrieve success\n path: ";
+  for (unsigned int i = 0; i < path.size (); i++)
+    warnx << path[i] << " ";
+  warnx << "\n";
 
   // assumption is that no block has ChordID 0.
   bigint n = 0;
@@ -260,7 +274,7 @@ main (int argc, char **argv)
   switch (atoi (argv[3])) {
   case CONTENT_HASH:
     {
-      if (atoi(argv[4]) == 1) useGuess = true;
+      if (argc < 4 && atoi(argv[4]) == 1) useGuess = true;
       dhash.insert (data, datasize, wrap(&store_cb_ch, dhash));
       break;
     }
