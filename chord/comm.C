@@ -21,6 +21,8 @@
 
 #include "chord.h"
 
+#define TIMEOUT 60
+
 void
 locationtable::doForeignRPC_cb (frpc_state *C, rpc_program prog,
 				clnt_stat err)
@@ -107,7 +109,7 @@ locationtable::doRPC_gotaxprt (doRPC_cbstate *st,
   
   if (prog.progno == CHORD_PROGRAM) {
     u_int64_t s = getusec ();
-    c->timedcall (60, st->procno, st->in, st->out, 
+    c->timedcall (TIMEOUT, st->procno, st->in, st->out, 
 	     wrap (mkref (this), &locationtable::doRPCcb,
 		   st, s));
   } else { 
@@ -136,7 +138,7 @@ locationtable::doRPC_gotaxprt (doRPC_cbstate *st,
     chord_RPC_res *res = New chord_RPC_res ();
     frpc_state *C = New frpc_state (res, st->out, st->procno, st->cb,
 				    l, getusec ());
-    c->timedcall (60, CHORDPROC_HOSTRPC, &farg, res, 
+    c->timedcall (TIMEOUT, CHORDPROC_HOSTRPC, &farg, res, 
 	     wrap (mkref(this), &locationtable::doForeignRPC_cb, C, prog)); 
     delete st;
   }
@@ -154,6 +156,7 @@ locationtable::doRPCcb (doRPC_cbstate *st, u_int64_t s, clnt_stat err)
     chordnode->deletefingers (st->ID);
   } else {
     location *l = getlocation (st->ID);
+    assert (l);
     u_int64_t lat = getusec () - s;
     l->rpcdelay += lat;
     l->nrpc++;
@@ -173,9 +176,6 @@ locationtable::stats ()
   warnx << "LOCATION TABLE STATS: estimate # nodes " << nnodes << "\n";
   warnx << "total # of RPCs: good " << nrpc << " failed " << nrpcfailed << "\n";
     fprintf(stderr, "       Average latency: %f\n", ((float) (rpcdelay/nrpc)));
-  warnx << "total # of connections opened: " << nconnections << "\n";
-  warnx << "total # of connections delayed: " << ndelayedconnections << "\n";
-  warnx << "total # of active connections: " << size_connections << "\n";
   warnx << "  Per link avg. RPC latencies\n";
   for (location *l = locs.first (); l ; l = locs.next (l)) {
     warnx << "    link " << l->n << " : # RPCs: " << l->nrpc << "\n";

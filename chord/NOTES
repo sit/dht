@@ -1,4 +1,3 @@
-- test lookups during failures (don't run stabilize)
 - test lookups during joins
 - test inserts during joins
 

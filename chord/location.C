@@ -262,8 +262,6 @@ locationtable::touch_cachedlocs (location *l)
 void
 locationtable::add_cachedlocs (location *l)
 {
-  //  warnx << "add_cachedlocs : add " << l->n << " size lru " 
-  //          << size_cachedlocs << " max lru " << max_cachedlocs << "\n";
   if (size_cachedlocs >= max_cachedlocs) {
     delete_cachedlocs ();
   }
@@ -279,7 +277,6 @@ locationtable::delete_cachedlocs (void)
   assert (l->refcnt == 0);
   warnx << "DELETE: " << l->n << "\n";
   locs.remove (l);
-  //  delete_connections (l);
   cachedlocs.remove (l);
   size_cachedlocs--;
   delete l;

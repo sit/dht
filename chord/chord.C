@@ -235,7 +235,6 @@ vnode::findpredfinger (chordID &x)
   // no good entries in my finger table (e.g., fingers are down); check succlist
   for (int i = nsucc; i >= 1; i--) {
     if ((succlist[i].alive) && between (p, x, succlist[i].n)) {
-      // warnx << "findpredfinger: take entry from succlist\n";
       p = succlist[i].n;
       break;
     }
@@ -778,10 +777,8 @@ chordID
 vnode::my_succ () 
 {
   if (finger_table[1].first.alive) return finger_table[1].first.n;
-  else {
-    int i = 0;
-    while ( (i < nsucc) && (!succlist[i].alive)) i++;
-    if (i == nsucc) return chordID (0);
-    else return succlist[i].n;
+  for (int i = 1; i <= nsucc; i++) {
+    if (succlist[i].alive) return succlist[i].n;
   }
+  return myID;
 }
