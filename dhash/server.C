@@ -306,7 +306,8 @@ dhash_impl::outgoing_retrieve_cb (missing_state *ms, dhash_stat err,
     trace << "retrieve missing out block " 
 	  << ms->key << " failed: " << err << "\n";
     missing_outstanding_o--;
-    /* XXX need to do something here? */
+    missing_outgoing_q.remove (ms);
+    delete ms;
   } else {
     trace << " fetched key " << ms->key 
 	  << " so that I can send it to " << ms->from->id () << "\n";
@@ -338,11 +339,15 @@ dhash_impl::outgoing_send_cb (missing_state *m, dhash_stat err,
 
   missing_outstanding_o--;
 
-  if (err || present)
-    return;  //leave it on the queue, we'll try again
-  
+  if (!err && !present) {
+    //mark it as being present
+    bsm->unmissing (m->from, m->key);
+    warn << "sent " << m->key << " sucessfully\n"; 
+  } else
+    warn << "error sending " << m->key << "\n";
+
   //success
-  missing_outgoing_q.remove (m);
+  missing_outgoing_q.remove (m); 
   delete m;
 }
 
@@ -473,7 +478,7 @@ dhash_impl::replica_maintenance_timer (u_int i)
   bigint rngmax = host_node->my_ID ();
   vec<ptr<location> > succs = host_node->succs ();
 
-  if (missing_q.size () > 0) 
+  if (missing_q.size () > 0 || missing_outgoing_q.size () > 0) 
     goto out; // don't find more missing keys, yet!
 
   {
@@ -483,7 +488,7 @@ dhash_impl::replica_maintenance_timer (u_int i)
     do {
       //missing on this many means at most num_dfrags + 2 are out there
       if (bsm->mcount (b) > 0 &&
-	  bsm->mcount (b) > succs.size () - num_dfrags () - 2)
+	  bsm->mcount (b) > succs.size () - num_efrags ())
 	{
 	  trace << "adding " << b << " to outgoing queue\n";
 	  //decide where to send it

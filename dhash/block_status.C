@@ -17,13 +17,15 @@ block_status::missing_on (ptr<location> l)
 void
 block_status::found_on (ptr<location> l)
 {
-  size_t last = missing.size ();
-  for (size_t i = 0; i < missing.size (); i++)
+  size_t last = missing.size () - 1;
+  for (size_t i = 0; i < missing.size (); i++) {
+    assert (missing[i]);
     if (missing[i]->id () == l->id ()) {
       missing[i] = missing[last];
       missing.pop_back ();
       return;
     }
+  }
 }
 
 block_status_manager::block_status_manager (chordID me) : my_id (me)
