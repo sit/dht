@@ -37,9 +37,12 @@ main (int argc, char *argv[])
     r = dbe->set_tmp_dir (dbe, cpath);
     assert (!r);
     
+    dbe->set_errfile (dbe, stdout);
     r = dbe->open (dbe, NULL, 
-		   DB_CREATE| DB_INIT_MPOOL | DB_INIT_LOCK | 
-		   DB_INIT_LOG | DB_INIT_TXN | DB_RECOVER , 0);
+		   DB_JOINENV,
+		   //		   DB_CREATE| DB_INIT_MPOOL | DB_INIT_LOCK | 
+		   // DB_INIT_LOG | DB_INIT_TXN | DB_RECOVER | DB_JOINENV,
+		   0);
     assert (!r);
     
   }
@@ -49,16 +52,17 @@ main (int argc, char *argv[])
   
   if (mode == MODE_OLD) {
 #if ((DB_VERSION_MAJOR < 4) || ((DB_VERSION_MAJOR == 4) && (DB_VERSION_MINOR < 1)))
-    r = db->open(db, (const char *)argv[2], NULL, DB_BTREE, 0, 0664);
+    r = db->open(db, (const char *)argv[2], NULL, DB_BTREE, DB_RDONLY, 0664);
 #else
-    r = db->open(db, NULL, (const char *)argv[2], NULL, DB_BTREE, 0, 0664);
+    r = db->open(db, NULL, (const char *)argv[2], NULL, 
+		 DB_BTREE, DB_RDONLY, 0664);
 #endif
     
 } else {
 #if ((DB_VERSION_MAJOR < 4) || ((DB_VERSION_MAJOR == 4) && (DB_VERSION_MINOR < 1)))
-  r = db->open(db, "db", NULL, DB_BTREE, 0, 0664);
+  r = db->open(db, "db", NULL, DB_BTREE, DB_RDONLY, 0664);
 #else
-  r = db->open(db, NULL, "db", NULL, DB_BTREE, 0, 0664);
+  r = db->open(db, NULL, "db", NULL, DB_BTREE, DB_RDONLY, 0664);
 #endif
   
 }
@@ -102,6 +106,8 @@ main (int argc, char *argv[])
     err_flush ();
   }
 
+  db->close (db, 0);
+  dbe->close (dbe, 0);
   warn << "total keys: " << keys << "\n";
   warn << "total bytes: " << totalsz << "\n";
 }
