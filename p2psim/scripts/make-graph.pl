@@ -26,6 +26,7 @@ my @yparen = ("");
 my $hullparen = "";
 my $grid = 0;
 my $rtmgraph = 0;
+my $fontsize = 26;
 
 sub usage {
     select(STDERR);
@@ -76,6 +77,7 @@ make-graph.pl [options]
 				 on the hull with the value of a specific
 				 statistic or parameter.  Defaults to
 			         "LOOKUP_RATES:success".
+    --fontsize <size>         How big is the font?  Default=26.
     --rtmgraph                Only valid with --param and --convex.  Holds all
                                  parameters but --param constant to values of
 				 points on the convex hull, and shows the
@@ -103,7 +105,7 @@ my %options;
 	     "param=s", "paramname=s", "datfile=s@", "label=s@", 
 	     "xrange=s", "yrange=s", "xlabel=s", "ylabel=s@", "title=s", 
 	     "convex:s", "plottype=s", "grid", "rtmgraph", "hulllabel:s",
-	     "overallconvex:s" )
+	     "overallconvex:s", "fontsize=s" )
     or &usage;
 
 if( $options{"help"} ) {
@@ -249,6 +251,9 @@ if( defined $options{"grid"} ) {
 }
 if( defined $options{"rtmgraph"} ) {
     $rtmgraph = 1;
+}
+if( defined $options{"fontsize"} ) {
+    $fontsize = $options{"fontsize"};
 }
 
 #figure out label issues
@@ -1003,10 +1008,10 @@ if( defined $yrange ) {
 }
 
 if( defined $epsfile ) {
-    print GP "set terminal postscript eps 'Times-Roman' 26\n";
+    print GP "set terminal postscript eps 'Times-Roman' $fontsize\n";
     print GP "set output \"$epsfile\"\n";
 } else {
-    print GP "set terminal postscript color 'Times-Roman' 26\n";
+    print GP "set terminal postscript color 'Times-Roman' $fontsize\n";
     print GP "set output \"/tmp/paramplot-$$.eps\"\n";
 }
 
@@ -1104,6 +1109,12 @@ foreach my $file (@iterfiles) {
 	
 	print GP "\"$file\" using ($xparen\$$xpos):($yparen[$k]\$$ypos) " . 
 	    "$t with $type";
+
+	# make overall hulls thicker
+	if( defined $options{"overallconvex"} and 
+	    defined $labelhash{"$file.overall"} ) {
+	    print GP " lw 6";
+	}
 
 	if( @convexfiles ) {
 	    $yindex++;
