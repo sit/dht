@@ -813,7 +813,7 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb, int opti
     str frag = Ida::gen_frag (m, blk);
     
     ref<dhash_block> blk = New refcounted<dhash_block> 
-      ((char *)NULL, frag.len (), DHASH_CONTENTHASH);
+      ((char *)NULL, frag.len (), block->ctype);
     bcopy (frag.cstr (), blk->data, frag.len ());
     
     // Count up for each RPC that will be dispatched

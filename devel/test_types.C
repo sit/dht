@@ -205,6 +205,14 @@ fetch_cb (dhashclient dhash, int btype, dhash_stat stat,
       }
     }
     break;
+  case NOAUTH:
+    {
+      size_t l = strlen(data_one);
+      if (l + 1 != blk->len || memcmp (data_one, blk->data, l+1) != 0) {
+	fatal << "verification failed";
+      }
+    }
+    break;
   default:
     fatal << "wtf\n";
   }
@@ -296,11 +304,12 @@ main (int argc, char **argv)
     }
   case NOAUTH:
     {
-      /*    dhash.insert (bigint (10), 
-		  data, 
-		  strlen (data), 
-		  wrap (&store_cb_noauth, dhash),
-		  DHASH_NOAUTH); */
+      dhash.insert (bigint (10), 
+		    data_one, 
+		    strlen (data_one) + 1, 
+		    wrap (&store_cb_noauth, dhash),
+		    NULL,
+		    DHASH_NOAUTH);
     }
     break;
   case APPEND:
