@@ -89,6 +89,7 @@ Chord::Chord(IPAddress i, Args& a, LocTable *l, const char *name) : P2Protocol(i
   assert(_frag <= _nsucc);
 
   me.ip = ip();
+  assert(me.ip>0);
   if (_random_id)
     me.id = ConsistentHash::getRandID();
   else {

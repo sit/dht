@@ -74,6 +74,9 @@ long unsigned Kademlia::_bad_hops = 0;
 Time Kademlia::_bad_hop_latency = 0;
 Time Kademlia::_default_timeout = 0;
 
+unsigned Kademlia::_to_multiplier = 0;
+unsigned Kademlia::_to_cheat = 0;
+
 
 Kademlia::NodeID *Kademlia::_all_kademlias = 0;
 HashMap<Kademlia::NodeID, Kademlia*> *Kademlia::_nodeid2kademlia = 0;
@@ -118,6 +121,11 @@ Kademlia::Kademlia(IPAddress i, Args a)
   if(!_default_timeout) {
     _default_timeout = a.nget<Time>("default_timeout", 1000, 10);
   }
+
+  if (!_to_multiplier) {
+    _to_multiplier = a.nget<unsigned>("timeout_multiplier",3,10);
+  }
+  _to_cheat = a.nget<unsigned>("timeout_cheat",1,10);
 
   if(!Kademlia::pool)
     Kademlia::pool = New k_nodeinfo_pool();
@@ -258,6 +266,17 @@ Kademlia::~Kademlia()
     pool = 0;
   }
 }
+
+// jy
+Time
+Kademlia::timeout(IPAddress dst)
+{
+  if (_to_cheat)
+    return _to_multiplier * 2 * Network::Instance()->gettopology()->latency(_me.ip,dst);
+  else
+    return Kademlia::_default_timeout;
+}
+
 // }}}
 // {{{ Kademlia::initstate
 void
@@ -376,7 +395,7 @@ join_restart:
   do {
     record_stat(STAT_JOIN, 1, 0);
     before = now();
-    b = doRPC(wkn, &Kademlia::do_lookup, &la, &lr, Kademlia::_default_timeout);
+    b = doRPC(wkn, &Kademlia::do_lookup, &la, &lr, timeout(wkn));
     record_stat(STAT_JOIN, lr.results.size(), 0);
   } while(!b);
 
@@ -523,7 +542,7 @@ Kademlia::lookup_wrapper(lookup_wrapper_args *args)
     ping_result pr;
     Time pingbegin = now();
     // assert(_nodeid2kademlia[fr.succ.id]->ip() == fr.succ.ip);
-    if(!doRPC(fr.succ.ip, &Kademlia::do_ping, &pa, &pr, Kademlia::_default_timeout) && alive()) {
+    if(!doRPC(fr.succ.ip, &Kademlia::do_ping, &pa, &pr, timeout(fr.succ.ip)) && alive()) {
       if(collect_stat()) _lookup_dead_node++;
       if(flyweight[fr.succ.id] && !Kademlia::learn_stabilize_only)
         erase(fr.succ.id);
@@ -606,7 +625,7 @@ Kademlia::do_ping(ping_args *args, ping_result *result)
     fr->hops = HOPS;                                                                    \
     fr->which_alpha = WHICH_ALPHA;                                                      \
     record_stat(ARGS->stattype, 1, 0);                                                  \
-    unsigned rpc = asyncRPC(x.ip, &Kademlia::find_node, fa, fr, Kademlia::_default_timeout); \
+    unsigned rpc = asyncRPC(x.ip, &Kademlia::find_node, fa, fr, timeout(x.ip)); \
     callinfo *ci = New callinfo(x, fa, fr);                                             \
     ci->before = now();                                                                 \
     rpcset->insert(rpc);                                                                \

@@ -348,12 +348,15 @@ public:
   static bool force_stabilization;      // stabilize all buckets, not only old ones
   static Time max_lookup_time;          // how long do we keep retrying
   static Time _default_timeout;         // default timeout
+  static unsigned _to_cheat;            // whether to use roundtrip estimates as timeout
+  static unsigned _to_multiplier;       // the multiplier used to calculate timeout
   static k_nodeinfo_pool *pool;         // pool of k_nodeinfo_pool
   static const unsigned idsize = 8*sizeof(Kademlia::NodeID);
   HashMap<NodeID, k_nodeinfo*> flyweight;
 // }}}
 // {{{ private
 private:
+  Time timeout(IPAddress dst);      //how to calculate timeout for RPC
   void insert(NodeID, IPAddress, Time = 0, char = 0, bool = false);
   void touch(NodeID);
   void erase(NodeID);

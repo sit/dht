@@ -4,4 +4,4 @@ k 1 2 4 8 16 32
 stabilize_timer 300000 600000 1200000 2400000 3600000
 stablearn_only 0 1
 rcache 1
-default_timeout 1000
+timeout_cheat 1
