@@ -1,21 +1,20 @@
 #ifndef __KADEMLIA_OBSERVER_H
 #define __KADEMLIA_OBSERVER_H
 
-#include "oldobserver.h"
+#include "protocolobserver.h"
 #include "kademlia.h"
 
-class KademliaObserver : public Oldobserver {
+class KademliaObserver : ProtocolObserver {
 public:
-  static KademliaObserver* Instance(Args*);
-  virtual void execute();
+  KademliaObserver(Args *args);
+  ~KademliaObserver();
+  virtual void kick();
+  virtual bool stabilized();
 
 private:
-  static KademliaObserver *_instance;
-  KademliaObserver(Args*);
-  ~KademliaObserver();
-  unsigned int _reschedule;
   unsigned int _num_nodes;
   unsigned int _init_num;
+  string _type;
 
   void init_state();
 

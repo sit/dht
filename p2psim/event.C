@@ -8,9 +8,10 @@ Event::Event()
   _id = _uniqueid++;
 }
 
-
-Event::~Event()
+Event::Event(Time ts)
 {
+  _id = _uniqueid++;
+  this->ts = ts;
 }
 
 
@@ -19,6 +20,11 @@ Event::Event(vector<string> *v)
   _id = _uniqueid++;
   this->ts = (Time) strtoull((*v)[0].c_str(), NULL, 10);
   v->erase(v->begin());
+}
+
+
+Event::~Event()
+{
 }
 
 // Call Execute(), not execute(), to enforce the free-ing rule,

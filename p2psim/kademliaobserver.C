@@ -2,22 +2,8 @@
 #include <iostream>
 using namespace std;
 
-KademliaObserver* KademliaObserver::_instance = 0;
-
-KademliaObserver*
-KademliaObserver::Instance(Args *a)
+KademliaObserver::KademliaObserver(Args *a) : _type("Kademlia")
 {
-  if(!_instance)
-    _instance = New KademliaObserver(a);
-  return _instance;
-}
-
-
-KademliaObserver::KademliaObserver(Args *a) : Oldobserver(a)
-{
-  _reschedule = 0;
-  _reschedule = atoi((*a)["reschedule"].c_str());
-
   _num_nodes = atoi((*a)["numnodes"].c_str());
   assert(_num_nodes > 0);
 
@@ -44,13 +30,17 @@ KademliaObserver::init_state()
 
 
 void
-KademliaObserver::execute()
+KademliaObserver::kick()
 {
   if(_init_num) {
     init_state();
     _init_num = 0;
   }
+}
 
+bool
+KademliaObserver::stabilized()
+{
   list<Protocol*> l = Network::Instance()->getallprotocols(_type);
   list<Protocol*>::iterator pos;
 
@@ -78,9 +68,7 @@ KademliaObserver::execute()
     c->dump();
     if (!c->stabilized(lid)) {
       DEBUG(1) << now() << " NOT STABILIZED" << endl;
-      if (_reschedule > 0)
-        reschedule(_reschedule);
-      return;
+      return false;
     }
   }
 
@@ -91,4 +79,5 @@ KademliaObserver::execute()
     c = (Kademlia *)(*pos);
     c->dump();
   }
+  return true;
 }

@@ -62,12 +62,18 @@ EventQueue::run()
     while(anyready())
       yield();
 
+    // time is going to move forward. notify observers, who will not add events
+    // into the eventqueue using EventQueueObserver::add_event
+    notifyObservers((ObserverInfo*) _queue.size());
+
     // process any waiting events-to-be-scheduled
+    cout << "eventqueue going into block on _eventchan" << endl;
     if((e = (Event*) nbrecvp(_eventchan)) != 0) {
       assert(e->ts);
       add_event(e);
       continue;
     }
+    cout << "eventqueue going into block on _eventchan" << endl;
                                                                                   
     // everyone else is quiet.
     // must be time for the next event.
@@ -106,9 +112,6 @@ EventQueue::advance()
   _time = eqe->ts;
   _queue.remove(eqe->ts);
   delete eqe;
-
-  // time has moved forward
-  notifyObservers();
 
   if(!_queue.size())
     return false;

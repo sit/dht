@@ -2,12 +2,13 @@
 #define __OBSERVER_H
 
 class Observed;
+class ObserverInfo;
 
 class Observer {
 public:
   Observer() {}
   virtual ~Observer() {}
-  virtual void kick(Observed *) = 0;
+  virtual void kick(Observed *, ObserverInfo* = 0) = 0;
 };
 
 

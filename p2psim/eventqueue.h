@@ -2,11 +2,12 @@
 #define __EVENTQUEUE_H
 
 #include "event.h"
+#include "observed.h"
 #include "../utils/skiplist.h"
 using namespace std;
 
-class EventQueue : public Threaded, Observed {
-  friend class FileEventGenerator;
+class EventQueue : public Threaded, public Observed {
+  friend class EventQueueObserver;
 
   // XXX: remove this
   // are executed in EventQueue's thread, so allowed.

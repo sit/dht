@@ -1,34 +1,27 @@
 #include "fileeventgenerator.h"
 #include "protocolfactory.h"
-#include "parse.h"
-#include "event.h"
 #include "eventfactory.h"
 #include "eventqueue.h"
 #include <fstream>
 using namespace std;
 
-FileEventGenerator::FileEventGenerator(vector<string> *v)
+FileEventGenerator::FileEventGenerator(Args *args)
 {
-  Args args;
-  args.convert(v);
-  cout << "FileEventGenerator, name = " << args["name"] << endl;
-
-  ifstream in(args["name"].c_str());
-  if(!in) {
-    cerr << "no such file " << args["name"] << ", did you supply the name parameter?" << endl;
-    threadexitsall(0);
-  }
-
-  // register as observer of EventQueue
+  cout << "FileEventGenerator, name = " << (*args)["name"] << endl;
+  _name = (*args)["name"];
   EventQueue::Instance()->registerObserver(this);
-
-  parse(in);
 }
 
 
 void
-FileEventGenerator::parse(ifstream &in)
+FileEventGenerator::run()
 {
+  ifstream in(_name.c_str());
+  if(!in) {
+    cerr << "no such file " << _name << ", did you supply the name parameter?" << endl;
+    threadexitsall(0);
+  }
+
   string line;
 
   set<string> allprotos = ProtocolFactory::Instance()->getnodeprotocols();
@@ -50,12 +43,14 @@ FileEventGenerator::parse(ifstream &in)
     for (set<string>::const_iterator i = allprotos.begin(); i != allprotos.end(); ++i) {
       Event *e = EventFactory::Instance()->create(event_type, &words, *i);
       assert(e);
-      EventQueue::Instance()->add_event(e);
+      add_event(e);
     }
   }
+
+  EventQueue::Instance()->go();
 }
 
 void
-FileEventGenerator::kick(Observed *)
+FileEventGenerator::kick(Observed *o, ObserverInfo* oi)
 {
 }

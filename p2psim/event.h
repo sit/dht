@@ -10,6 +10,7 @@ public:
 
   Event();
   Event(vector<string>*);
+  Event(Time);
 
   Time ts;  // absolute time
   unsigned id() { return _id; }

@@ -6,6 +6,7 @@ class P2PEvent : public Event {
 public:
   P2PEvent();
   P2PEvent(string, vector<string>*);
+  P2PEvent(Time, string, IPAddress, string, Args * = 0);
 
   Node *node;
   string protocol;

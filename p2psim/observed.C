@@ -17,8 +17,8 @@ Observed::unregisterObserver(Observer *o)
 }
 
 void
-Observed::notifyObservers()
+Observed::notifyObservers(ObserverInfo *oi)
 {
   for(set<Observer*>::const_iterator i = _observers.begin(); i != _observers.end(); ++i)
-    (*i)->kick(this);
+    (*i)->kick(this, oi);
 }

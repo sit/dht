@@ -41,7 +41,8 @@ threadmain(int argc, char *argv[])
   EventGenerator::parse(event_file);
 
   // Tell the eventqueue to start processing events.
-  EventQueue::Instance()->go();
+  // should be done by some event generator
+  // EventQueue::Instance()->go();
 }
 
 

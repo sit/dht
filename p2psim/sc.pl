@@ -66,7 +66,7 @@ sub main {
     }
   }
 
-  print EV "generator file name=$ARGV[2].old.format\n";
+  print EV "generator FileEventGenerator name=$ARGV[2].old.format\n";
 
   close PROT || die "Could not close $ARGV[0]: $!\n";
   close TOP || die "Could not close $ARGV[1]: $!\n";

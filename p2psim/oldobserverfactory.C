@@ -46,9 +46,11 @@ OldobserverFactory::create(string s, Args *a)
     t = ChordObserver::Instance(a);
   }
 
+  /*
   else if(s == "Kademlia") {
-    t = KademliaObserver::Instance(a);
+    t = New KademliaObserver();
   }
+  */
 
   else if(s == "Tapestry") {
     t = TapestryObserver::Instance(a);

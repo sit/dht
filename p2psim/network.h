@@ -12,6 +12,8 @@ public:
   static Network* Instance(Topology*);
   Channel* pktchan() { return _pktchan; }
   Channel* nodechan() { return _nodechan; }
+
+  // information
   Node* getnode(IPAddress id) { return _nodes[id]; }
   Topology *gettopology() { return _top; }
   list<Protocol*> getallprotocols(string);

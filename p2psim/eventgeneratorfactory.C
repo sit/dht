@@ -1,5 +1,6 @@
 #include "eventgeneratorfactory.h"
 #include "fileeventgenerator.h"
+#include "churneventgenerator.h"
 #include "p2psim.h"
 
 EventGeneratorFactory *EventGeneratorFactory::_instance = 0;
@@ -25,8 +26,15 @@ EventGenerator *
 EventGeneratorFactory::create(string type, vector<string> *v)
 {
   EventGenerator *eg = 0;
-  if(type == "file")
-    eg = New FileEventGenerator(v);
+  Args *a = New Args(v);
+  assert(a);
 
+  if(type == "FileEventGenerator")
+    eg = New FileEventGenerator(a);
+
+  if(type == "ChurnEventGenerator")
+    eg = New ChurnEventGenerator(a);
+
+  delete a;
   return eg;
 }

@@ -4,18 +4,17 @@
 #include "observer.h"
 #include <fstream>
 #include <string>
+#include "threaded.h"
+#include "eventqueueobserver.h"
 using namespace std;
 
-class EventGenerator : public Observer {
+class EventGenerator : public EventQueueObserver, public Threaded {
 public:
   EventGenerator() {};
   virtual ~EventGenerator() {};
 
   // to parse the first line and generate an EventGenerator subtype
   static EventGenerator* EventGenerator::parse(char *filename);
-
-  // to the rest of the file
-  virtual void parse(ifstream&) = 0;
 };
 
 #endif //  __EVENT_GENERATOR_H

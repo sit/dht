@@ -26,24 +26,26 @@ EventGenerator::parse(char *filename)
 
     // read generator string
     if(words[0] != "generator") {
-      cerr << "first line in event file should be ``generator [G]''" << endl;
+      cerr << "first word of each line in event file should be ``generator''" << endl;
       exit(-1);
     }
     words.erase(words.begin());
 
     string generator = words[0];
     words.erase(words.begin());
-    gen = EventGeneratorFactory::Instance()->create(generator, &words);
-    break;
+    if(!(gen = EventGeneratorFactory::Instance()->create(generator, &words))) {
+      cerr << "unknown generator " << generator << endl;
+      exit(-1);
+    }
+
+    // spawn off this event generator thread
+    gen->thread();
   }
 
   if(!gen) {
-    cerr << "the generator you specified is unknown" << endl;
+    cerr << "you should specify at least one generator" << endl;
     exit(-1);
   }
-
-  // leave the rest of the file to the specific generator
-  gen->parse(in);
 
   return gen;
 }

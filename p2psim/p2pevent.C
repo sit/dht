@@ -46,11 +46,20 @@ P2PEvent::P2PEvent(string proto, vector<string> *v) : Event(v)
   this->fn = name2fn((*v)[1]);
 
   // create a map for the arguments
-  this->args = New Args;
+  this->args = New Args(v, 2);
   assert(this->args);
+}
 
-  // puts all the arguments starting at i in args
-  this->args->convert(v, 2);
+P2PEvent::P2PEvent(Time ts, string proto, IPAddress ip, string operation,
+    Args *a) : Event(ts)
+{
+  this->protocol = proto;
+  this->node = Network::Instance()->getnode(ip);
+  this->fn = name2fn(operation);
+  if(!(this->args = a)) {
+    this->args = New Args();
+    assert(this->args);
+  }
 }
 
 

@@ -2,13 +2,15 @@
 #define __OBSERVED_H
 
 #include "observer.h"
+#include "observerinfo.h"
 #include <set>
 using namespace std;
 
-class Observed { public:
+class Observed {
+public:
   void registerObserver(Observer *);
   void unregisterObserver(Observer *);
-  void notifyObservers();
+  void notifyObservers(ObserverInfo* = 0);
 
 protected:
   Observed();

@@ -17,7 +17,8 @@ p2psim_SOURCES = main.C node.C network.C chord.C packet.C topology.C \
 		 e2egraph.C g2graph.C threadspeedup.C dhtprotocol.C \
 		 rpchandle.C tapestry.C tapestryobserver.C tmgdmalloc.C \
 		 condvar.C observer.C observed.C eventgeneratorfactory.C \
-		 fileeventgenerator.C eventgenerator.C
+		 fileeventgenerator.C eventgenerator.C churneventgenerator.C \
+		 eventqueueobserver.C
 
 p2psim_LDADD = -L/usr/local/lib -lthread -l9 -lfmt -lutf -lgmp -lcrypto
 # CXXFLAGS = -g -Wall -fno-exceptions -fno-default-inline -fno-inline

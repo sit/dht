@@ -3,20 +3,18 @@
 
 #include "eventgenerator.h"
 #include "p2psim.h"
-#include <vector>
+#include "args.h"
 #include <string>
-#include <fstream>
 using namespace std;
 
 class FileEventGenerator : public EventGenerator {
 public:
-  FileEventGenerator(vector<string> *);
+  FileEventGenerator(Args*);
+  virtual void kick(Observed *, ObserverInfo*);
+  virtual void run();
 
-  // to read properties
-  virtual void parse(ifstream &in);
-
-  // because we're an Observer
-  virtual void kick(Observed *);
+private:
+  string _name;
 };
 
 
