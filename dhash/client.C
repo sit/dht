@@ -6,9 +6,7 @@
 #include "crypt.h"
 #include <sys/time.h>
 #include "chord_util.h"
-#ifdef DMALLOC
 #include "dmalloc.h"
-#endif
 
 /*
  * Implementation of the distributed hash service.
@@ -89,7 +87,7 @@ dhashclient::dispatch (svccb *sbp)
       doRPC (targ->source, dhash_program_1, DHASHPROC_FETCHITER, 
 		       farg, res, 
 		       wrap (this, &dhashclient::transfer_cb,
-			     sbp, res));
+			     farg->key, sbp, res));
     }
     break;
   case DHASHPROC_SEND:
@@ -109,7 +107,6 @@ dhashclient::dispatch (svccb *sbp)
     {
       warnt("DHASH: insert_request");
       dhash_insertarg *item = sbp->template getarg<dhash_insertarg> ();
-      memorize_block (item);
       ptr<dhash_insertarg> p_item = New refcounted<dhash_insertarg> (*item);
       chordID n = item->key;
       clntnode->find_successor (n, wrap(this, &dhashclient::insert_findsucc_cb,
@@ -133,7 +130,6 @@ dhashclient::dispatch (svccb *sbp)
 void
 dhashclient::lookup_res_cb (svccb *sbp, dhash_fetchrecurs_res *res, clnt_stat err) {
 
-  //  memorize_block (arg->key, res);
   dhash_res *fres = New dhash_res (DHASH_OK);
   if (res->status == DHASH_RFETCHDONE) {
     fres->resok->res = res->compl_res->res;
@@ -167,7 +163,6 @@ dhashclient::insert_findsucc_cb(svccb *sbp, ptr<dhash_insertarg> item,
     doRPC(succ, dhash_program_1, DHASHPROC_STORE, item, res,
 		wrap(this, &dhashclient::insert_store_cb, sbp, res, item, succ));
     
-    //    cache_on_path (item->key, path);
   }
 }
 
@@ -269,7 +264,7 @@ dhashclient::lookup_iter_cb (svccb *sbp,
     }
   } else if (res->status == DHASH_COMPLETE) {
     /* CASE II */
-    memorize_block (arg->key, res);
+    memorize_block (arg->key, res, path);
     dhash_res *fres = New dhash_res (DHASH_OK);
     fres->resok->res = res->compl_res->res;
     fres->resok->offset = res->compl_res->offset;
@@ -317,14 +312,18 @@ iterres2res (dhash_fetchiter_res *ires, dhash_res *res)
 }
 
 void
-dhashclient::transfer_cb (svccb *sbp, dhash_fetchiter_res *ires, clnt_stat err)
+dhashclient::transfer_cb (chordID key, svccb *sbp, 
+			  dhash_fetchiter_res *ires, clnt_stat err)
 {
   dhash_res *res = New dhash_res(DHASH_OK);
   if ((err) || (ires->status != DHASH_COMPLETE)) 
     res->set_status (DHASH_RPCERR);
-  else 
+  else {
     iterres2res(ires, res);
-
+    memorize_block (key, ires);
+    assert (pst[key]);
+    cache_on_path (key, pst[key]->path);
+  }
   sbp->reply (res);
   delete res;
   delete ires;
@@ -351,10 +350,17 @@ dhashclient::send_cb (svccb *sbp, dhash_storeres *res,
 };
 				  
 void
-dhashclient::memorize_block (dhash_insertarg *item) 
+dhashclient::memorize_block (chordID key, dhash_fetchiter_res *res, route path) 
 {
-  memorize_block (item->key, item->attr.size, item->offset, 
-		  item->data.base(), item->data.size ());
+  if (res->status != DHASH_COMPLETE) return;
+  memorize_block (key, res->compl_res->attr.size,
+		  res->compl_res->offset,
+		  res->compl_res->res.base (),
+		  res->compl_res->res.size ());
+  store_state *ss = pst[key];
+  assert (ss);
+  ss->path = path;
+
 }
 void
 dhashclient::memorize_block (chordID key, dhash_fetchiter_res *res) 
@@ -371,9 +377,10 @@ dhashclient::memorize_block (chordID key, int tsize,
 {
   store_state *ss = pst[key];
   if (!ss) {
-    store_state nss (tsize);
-    pst.insert(key, nss);
-    ss = pst[key];
+    warn << "allocate store_state (client) for " << key << "\n";
+    store_state *nss = New store_state(key, tsize);
+    pst.insert(nss);
+    ss = nss;
   } 
   ss->read += dsize;
   memcpy (ss->buf + offset, base, dsize);
@@ -390,8 +397,10 @@ void
 dhashclient::forget_block (chordID key)
 {
   store_state *ss = pst[key];
-  delete ss->buf;
-  pst.remove (key);
+  if (ss) {
+    pst.remove (pst[key]);
+    delete ss;
+  }
 }
 
 void
@@ -402,7 +411,7 @@ dhashclient::cache_on_path (chordID key, route path)
     return;
   }
   if (!block_memorized (key)) return;
-  //  for (unsigned int i=0; i < path.size (); i++)
+
   if (path.size () < 2) return;
 
   send_block (key, path[path.size () - 2], DHASH_CACHE);

@@ -12,6 +12,7 @@
 #include <qhash.h>
 #include <sys/time.h>
 #include <chord.h>
+#include <dmalloc.h>
 /*
  *
  * dhash.h
@@ -42,11 +43,20 @@ struct store_cbstate {
 };
 
 struct store_state {
+  chordID key;
   unsigned int read;
   unsigned int size;
   char *buf;
-  
-  store_state (int z) : read(0), size(z), buf(New char[z]) {};
+  route path;
+
+  ihash_entry <store_state> link;
+
+  store_state (chordID k, int z) : key(k), 
+    read(0), size(z), buf(New char[z]) { };
+
+  ~store_state () { 
+    delete[] buf; 
+  };
 };
 
 struct query_succ_state {
@@ -69,7 +79,7 @@ class dhashclient {
   int do_caching;
   int nreplica;
 
-  qhash<chordID, store_state, hashID> pst;
+  ihash<chordID, store_state, &store_state::key, &store_state::link, hashID> pst;
 
   void doRPC (chordID ID, rpc_program prog, int procno,
 	      ptr<void> in, void *out, aclnt_cb cb);
@@ -102,7 +112,7 @@ class dhashclient {
 		       chordID source,
 		       clnt_stat err);
 
-  void transfer_cb (svccb *sbp, dhash_fetchiter_res *res, clnt_stat err);
+  void transfer_cb (chordID key, svccb *sbp, dhash_fetchiter_res *res, clnt_stat err);
   void send_cb (svccb *sbp, dhash_storeres *res, 
 		      chordID source, clnt_stat err);
 
@@ -110,7 +120,7 @@ class dhashclient {
   void send_block (chordID key, chordID to, store_status stat);
   void send_store_cb (dhash_storeres *res, clnt_stat err);
 
-  void memorize_block (dhash_insertarg *item);
+  void memorize_block (chordID key, dhash_fetchiter_res *res, route path);
   void memorize_block (chordID key, dhash_fetchiter_res *res);
   void memorize_block (chordID key, int tsize, 
 		       int offset, void *base, int dsize);
@@ -133,7 +143,7 @@ class dhash {
   vnode *host_node;
   net_address t_source;
 
-  qhash<chordID, store_state, hashID> pst;
+  ihash<chordID, store_state, &store_state::key, &store_state::link, hashID> pst;
 
   int qnonce;
   qhash<int, unsigned long> rqc;

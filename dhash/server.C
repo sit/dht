@@ -5,9 +5,7 @@
 #include <chord_util.h>
 #include <dbfe.h>
 #include <arpc.h>
-#ifdef DMALLOC
 #include <dmalloc.h>
-#endif
 
 
 dhash::dhash(str dbname, vnode *node, int k, int ss, int cs, int _ss_mode) :
@@ -290,16 +288,19 @@ dhash::dispatch (unsigned long procno,
 	return;
       }
      
-      if ((sarg->type == DHASH_STORE) && (!responsible (sarg->key))) {
+      if ((sarg->type == DHASH_STORE) && 
+	  (!responsible (sarg->key)) && 
+	  (!pst[sarg->key])) {
 	warnt("DHASH: retry");
+	warn << "RETRY for " << sarg->key << "\n";
 	dhash_storeres *res = New dhash_storeres (DHASH_RETRY);
 	chordID pred = host_node->my_pred ();
 	res->pred->p.x = pred;
 	res->pred->p.r = host_node->chordnode->locations->getaddress (pred);
 	dhash_reply (rpc_id, DHASHPROC_STORE, res);
       } else {
-	warnt("DHASH: will store");
-	store(sarg, wrap(this, &dhash::storesvc_cb, rpc_id, sarg));	
+	warnt ("DHASH: will store");
+	store (sarg, wrap(this, &dhash::storesvc_cb, rpc_id, sarg));	
       }
       
     }
@@ -839,9 +840,10 @@ dhash::store (dhash_insertarg *arg, cbstore cb)
   store_state *ss = pst[arg->key];
   if (arg->data.size () != arg->attr.size) {
     if (!ss) {
-      store_state nss (arg->attr.size);
-      pst.insert(arg->key, nss);
-      ss = pst[arg->key];
+      warn << "allocating an ss for " << arg->key << "\n";
+      store_state *nss = New store_state (arg->key, arg->attr.size);
+      pst.insert(nss);
+      ss = nss;
     }
     ss->read += arg->data.size ();
     memcpy (ss->buf + arg->offset, arg->data.base (), arg->data.size ());
@@ -870,12 +872,13 @@ dhash::store (dhash_insertarg *arg, cbstore cb)
       stat = DHASH_CACHED;
       key_cache.enter (id, &stat);
     }
-    
-    db->insert (k, d, wrap(this, &dhash::store_cb, arg->type, id, cb));
 
     /* statistics */
     if (ss) bytes_stored += ss->size;
     else bytes_stored += arg->data.size ();
+    
+    db->insert (k, d, wrap(this, &dhash::store_cb, arg->type, id, cb));
+
     
   } else
     cb (DHASH_STORE_PARTIAL);
@@ -897,18 +900,17 @@ dhash::store_cb(store_status type, chordID id, cbstore cb, int stat)
 {
   warnt("DHASH: STORE_after_db");
 
-  if (stat) warn << "DB3 gave the error : " << stat << "\n";
   if (stat != 0) 
     (*cb)(DHASH_STOREERR);
   else if (type == DHASH_STORE)
-    replicate_key (id,  wrap (this, &dhash::store_repl_cb, cb));
+    replicate_key (id, wrap (this, &dhash::store_repl_cb, cb));
   else	   
     (*cb)(DHASH_OK);
   
   store_state *ss = pst[id];
   if (ss) {
-    if (ss) delete ss->buf;
-    pst.remove (id);
+    pst.remove (pst[id]);
+    delete ss;
   }
 }
 
