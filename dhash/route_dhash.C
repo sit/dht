@@ -200,6 +200,7 @@ route_dhash::route_dhash (ptr<route_factory> f, chordID blockID, dhash *dh,
   arg->cookie = 0;
   arg->nonce = gnonce++;
   arg->lease = ask_for_lease;
+  nonce = arg->nonce;
 
   dh->register_block_cb (arg->nonce, wrap (mkref(this), &route_dhash::block_cb));
 
@@ -230,6 +231,8 @@ route_dhash::reexecute ()
     retries--;
     timecb_remove (dcb);
     dcb = delaycb (LOOKUP_TIMEOUT, wrap (mkref(this), &route_dhash::timed_out));
+    dh->register_block_cb 
+      (nonce, wrap (mkref(this), &route_dhash::block_cb));
     chord_iterator->send (use_cached_succ);
   }
 }
