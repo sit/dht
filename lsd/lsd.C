@@ -227,10 +227,10 @@ clear_stats (const rpc_program &prog)
 void
 dump_rpcstats (const rpc_program &prog, bool first, bool last)
 {
-  static rpc_program total;
-
   // In arpc/rpctypes.h -- if defined
 #ifdef RPC_PROGRAM_STATS
+  static rpc_program total;
+
   str fmt1 ("%-40s %15s %15s %15s %15s %15s %15s\n");
   str fmt2 ("%-40s %15d %15d %15d %15d %15d %15d\n");
 
