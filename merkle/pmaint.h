@@ -17,6 +17,8 @@ public:
   pmaint (dhashcli *cli, ptr<vnode> host_node, ptr<dbfe> db, 
 	  delete_t delete_helper);
 
+  void stop ();
+
   enum { PRTTMSHORT = 1, PRTTMLONG = 60, MAX_PENDING = 20};
   enum { PMAINT_HANDOFF_ERROR = 0, PMAINT_HANDOFF_NOTPRESENT = 1, 
 	 PMAINT_HANDOFF_PRESENT = -1};
@@ -38,6 +40,8 @@ private:
   bigint pmaint_next_key;
 
   vec<chord_node> pmaint_succs;
+
+  timecb_t *active_cb;
 
   void pmaint_next ();
   void pmaint_lookup (chordID key, dhash_stat err, vec<chord_node> sl, route r);

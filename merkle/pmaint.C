@@ -16,10 +16,17 @@ pmaint::pmaint (dhashcli *cli, ptr<vnode> host_node,
   pmaint_next_key (0)
 {
   int jitter = uniform_random (0, PRTTMLONG);
-  delaycb (PRTTMLONG + jitter, wrap (this, &pmaint::pmaint_next));
+  active_cb = delaycb (PRTTMLONG + jitter, wrap (this, &pmaint::pmaint_next));
 }
 
-
+void
+pmaint::stop ()
+{
+  if (active_cb) {
+    timecb_remove (active_cb);
+    active_cb = NULL;
+  }
+}
 //"dispatch loop" for pmaint
 void
 pmaint::pmaint_next ()
@@ -30,10 +37,11 @@ pmaint::pmaint_next ()
     if (key != -1) {
       pmaint_next_key = key;
       cli->lookup (key, wrap (this, &pmaint::pmaint_lookup, pmaint_next_key));
+      active_cb = NULL;
     } else { 
       //data base is empty
       //check back later
-      delaycb (PRTTMLONG, wrap (this, &pmaint::pmaint_next));
+      active_cb = delaycb (PRTTMLONG, wrap (this, &pmaint::pmaint_next));
     }
   }
 }
@@ -60,7 +68,7 @@ pmaint::pmaint_lookup (bigint key, dhash_stat err, vec<chord_node> sl, route r)
     // warn << "not enough successors: " << sl.size () 
     //	    << " vs " << dhash::num_efrags () << "\n";
     //try again later
-    delaycb (PRTTMLONG, wrap (this, &pmaint::pmaint_next));
+    active_cb = delaycb (PRTTMLONG, wrap (this, &pmaint::pmaint_next));
     return;
   }
 
@@ -70,7 +78,7 @@ pmaint::pmaint_lookup (bigint key, dhash_stat err, vec<chord_node> sl, route r)
     //i.e. in the successor list. Do nothing.
     pmaint_next_key = incID (pmaint_next_key);
     //next time we'll do a lookup with the next key
-    delaycb (PRTTMSHORT, wrap (this, &pmaint::pmaint_next));
+    active_cb = delaycb (PRTTMSHORT, wrap (this, &pmaint::pmaint_next));
   } else {
     //case II: this key doesn't belong to us. Offer it to another node
 
@@ -105,7 +113,7 @@ pmaint::pmaint_offer ()
     pmaint_searching = true;
     //we're done with the offer phase
     //signal that we should start scanning again.
-    delaycb (PRTTMSHORT, wrap (this, &pmaint::pmaint_next));
+    active_cb = delaycb (PRTTMSHORT, wrap (this, &pmaint::pmaint_next));
     return;
   } 
 
