@@ -236,11 +236,10 @@ main (int argc, char **argv)
   while ((ch = getopt (argc, argv, "S:cd:s:v:j:p:B:n:l:")) != -1)
     switch (ch) {
     case 'l':
-      if (inet_addr (optarg) == INADDR_NONE) {
-	warn << "must specify bind address in dotted decimal form\n";
-	exit (1);
-      }
+      if (inet_addr (optarg) == INADDR_NONE)
+	fatal << "must specify bind address in dotted decimal form\n";
       myname = optarg;
+      break;
     case 'n':
       nreplica = atoi (optarg);
       break;
