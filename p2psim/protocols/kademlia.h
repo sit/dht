@@ -30,7 +30,6 @@
 #include "consistenthash.h"
 #include <list>
 #include <iostream>
-#include <sstream>
 using namespace std;
 
 // }}}
@@ -270,7 +269,6 @@ public:
     set<k_nodeinfo*, closer> results;
     NodeID rid;     // the guy who's replying
     unsigned hops;
-    ostringstream log;
   };
   // }}}
   // {{{ ping_args and ping_result
@@ -451,18 +449,6 @@ class k_traverser { public:
 
 private:
   string _type;
-};
-// }}}
-// {{{ class k_collect_closest
-class k_collect_closest : public k_traverser { public:
-  k_collect_closest(Kademlia::NodeID n);
-  virtual ~k_collect_closest() {}
-  virtual void execute(k_bucket*, string, unsigned, unsigned);
-
-  set<Kademlia::NodeID, Kademlia::IDcloser> results;
-
-private:
-  Kademlia::NodeID _node;
 };
 // }}}
 // {{{ class k_stabilizer
