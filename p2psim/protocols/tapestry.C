@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.8 2003/10/12 03:04:36 strib Exp $ */
+/* $Id: tapestry.C,v 1.9 2003/10/12 04:49:37 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -264,6 +264,8 @@ Tapestry::join(Args *args)
     RPCSet ping_rpcset;
     map<unsigned, ping_callinfo*> ping_resultmap;
     Time before_ping = now();
+    TapDEBUG(3) << "initing level " << i << " out of " << init_level 
+		<< " size = " << initlist.size() << endl;
     multi_add_to_rt_start( &ping_rpcset, &ping_resultmap, &initlist, true );
 
     RPCSet nn_rpcset;
@@ -399,6 +401,7 @@ Tapestry::join(Args *args)
   for( uint l = 0; l < initlist.size(); l++ ) {
     delete initlist[l];
   }
+  initlist.clear();
 
   have_joined();
   TapDEBUG(2) << "join done" << endl;
@@ -419,7 +422,7 @@ Tapestry::handle_join(join_args *args, join_return *ret)
     // hmmm. if we're now dead, indicate some kind of timeout probably
     if( !node()->alive() ) {
       ret->failed = true;
-      return; //????
+      return; //TODO: ????
     }
   }
 
