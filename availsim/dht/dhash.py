@@ -35,6 +35,11 @@ class dhash (chord):
 		my.crash_node = my.crash_node_repair
 
     def process (my, ev):
+	now = ev.time
+	uat = my.unavailable_time
+	for b in uat:
+	    my.total_unavailability += now - uat[b]
+	    uat[b] = now
 	if ev.type == "insert":
 	    return my.insert_block (ev.id, ev.block, ev.size)
 	elif ev.type == "copy":
@@ -121,7 +126,6 @@ class dhash (chord):
 	    d.store (block, size)
 	    my.available[block] += 1
 	    if my.available[block] == needed:
-		my.total_unavailability += t - my.unavailable_time[block]
 		del my.unavailable_time[block]
 	return None
 
@@ -167,8 +171,9 @@ class dhash (chord):
 	    avail = len (haves)
 	    my.available[b] = avail
             if avail < read_pieces:
-		my.unavailable_time[b] = t
-		# print "# LOST block", b, "after failure of", an, "|", succs
+		if b not in my.unavailable_time:
+		    my.unavailable_time[b] = t
+		    # print "# LOST block", b, "after failure of", an, "|", succs
 	    elif avail < min_pieces:
 		# print "# REPAIR block", b, "after failure of", an
 		needed = min_pieces - avail
@@ -222,7 +227,6 @@ class dhash (chord):
 	    else:
 		my.available[b] += 1
 		if my.available[b] == needed:
-		    my.total_unavailability += t - my.unavailable_time[b]
 		    del my.unavailable_time[b]
 	return events
 
@@ -273,11 +277,10 @@ class dhash (chord):
 	    if n in real_succs[:-1]:
 		av[b] += 1
 		if av[b] == needed:
-		    my.total_unavailability += t - uat[b]
 		    del uat[b]
 	    if b in real_succs[-1].blocks:
 		av[b] -= 1
-		if av[b] == 0: uat[b] = t
+		if b not in uat and av[b] < needed: uat[b] = t
 	return newevs
     def fail_node (my, t, id):
 	try:
@@ -285,12 +288,13 @@ class dhash (chord):
 	    av = my.available
 	    uat = my.unavailable_time
 	    la = my.look_ahead ()
+	    needed = my.read_pieces ()
 	    getsucclist = my.succ
 	    for b in n.blocks:
 		real_succs = getsucclist (b, la)
 		if n in real_succs:
 		    av[b] -= 1
-		    if av[b] == 0: uat[b] = t
+		    if b not in uat and av[b] < needed: uat[b] = t
 	    return chord.fail_node (my, t, id)
 	except:
 	    pass
@@ -301,12 +305,13 @@ class dhash (chord):
 	    av = my.available
 	    uat = my.unavailable_time
 	    la = my.look_ahead ()
+	    needed = my.read_pieces ()
 	    getsucclist = my.succ
 	    for b in n.blocks:
 		real_succs = getsucclist (b, la)
 		if n in real_succs:
 		    av[b] -= 1
-		    if av[b] == 0: uat[b] = t
+		    if b not in uat and av[b] < needed: uat[b] = t
 	    return chord.crash_node (my, t, id)
 	except:
 	    pass

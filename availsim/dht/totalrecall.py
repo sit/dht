@@ -65,18 +65,12 @@ class totalrecall_base (chord):
 	    my.longt = int (args.pop (0))
 	except:
 	    my.longt = 4
-
 	try:
 	    if args[0] == 'succplace':
 		my.placement = my._successor_placement
 		args.pop (0)
 	except IndexError:
 	    pass
-	my.available = {}
-	# block -> (time of last unavailability) mapping 
-	my.unavailable_time = {}
-	# The total number of seconds that blocks are unavailable.
-	my.total_unavailability = 0
 	chord.__init__ (my, args)
 
 	# Mapping from blocks to size
@@ -87,13 +81,20 @@ class totalrecall_base (chord):
 	my.inodes = {}
 	# Number of available copies of each block
 	my.available = {}
-	# The time at which a block became unavailable.
+	# block -> (time of last unavailability) mapping 
 	my.unavailable_time = {}
+	# The total number of seconds that blocks are unavailable.
 	my.total_unavailability = 0
+
 	# For debugging
 	# random.seed (0)
 
     def process (my, ev):
+	now = ev.time
+	uat = my.unavailable_time
+	for b in uat:
+	    my.total_unavailability += now - uat[b]
+	    uat[b] = now
 	if ev.type == "insert":
 	    return my.insert_block (ev.id, ev.block, ev.size)
 	elif ev.type == "copy":
@@ -179,7 +180,6 @@ class totalrecall_base (chord):
 	    d.store (block, size)
 	    my.available[block] += 1
 	    if my.available[block] == needed:
-		my.total_unavailability += t - my.unavailable_time[block]
 		del my.unavailable_time[block]
 	return None
 
@@ -188,6 +188,7 @@ class totalrecall_base (chord):
 	# people.  Each one of them needs to figure out that
 	# this guy failed and do something about it.
 	events = []
+	needed = my.read_pieces ()
 	for b in blocks:
 	    # 1. Partition the nodes in the inodes into live/dead to
 	    #    calculate available redundancy factor, $f$.
@@ -207,9 +208,10 @@ class totalrecall_base (chord):
 		else:
 		    deadnodes.append (n)
 	    my.available[b] = len (livenodes)
-	    if len (livenodes) == 0:
-		my.unavailable_time[b] = t
-		# print "# LOST", b
+	    if len (livenodes) < needed:
+		if b not in my.unavailable_time:
+		    my.unavailable_time[b] = t
+		    # print "# LOST", b
 		continue
 	    rfactor /= my.blocks[b]
 	    if rfactor < my.shortt:
@@ -260,7 +262,6 @@ class totalrecall_base (chord):
 	    if n in inodes[b]:
 		avail[b] += 1
 		if avail[b] == needed:
-		    my.total_unavailability += t - uat[b]
 		    del uat[b]
 	    else:
 		# print "#", n, "not in inodes for" ,b,
