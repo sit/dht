@@ -1,4 +1,4 @@
-/* $Id: server.C,v 1.1 2001/01/16 22:00:08 fdabek Exp $ */
+/* $Id: server.C,v 1.2 2001/01/18 16:21:50 fdabek Exp $ */
 
 /*
  *
@@ -213,6 +213,7 @@ server::get_data (const sfs_hash *fh,
   ress->setsize(numMirrors);
   ptr<int> recvd = New refcounted<int>(0);
   
+#if 0
   //added to play with proxy stuff
   in_addr_t pubaddr;
   inet_pton(AF_INET, "18.26.4.124", &pubaddr);
@@ -230,23 +231,25 @@ server::get_data (const sfs_hash *fh,
 							 ress, res, 0,
 							 recvd, cb));
   }
-    /*
+#endif
+
+    
   for (int currentMirror = 0; currentMirror < mo_size; currentMirror++) {
     ptr<aclnt> target = mirrors[mo[currentMirror].aclnt_index];
     sfsro_datares *res = New sfsro_datares (SFSRO_OK);
     
-    ptr<sfsro_partialgetarg> arg = New refcounted<sfsro_partialgetarg>();      
-    arg->key = *fh;
-    arg->offset = mo[currentMirror].slice_start;
-    arg->len = mo[currentMirror].slice_len;
-    
-    mi_timestamp(&(mo[currentMirror]));
-    target->call (SFSROPROC_GETDATA_PARTIAL, arg, res, wrap(mkref (this),
-							    &server::get_data_cb,
-							    ress, res, currentMirror,
-							    recvd, cb));
+     ptr<sfsro_partialgetarg> arg = New refcounted<sfsro_partialgetarg>();      
+     arg->key = *fh;
+     arg->offset = mo[currentMirror].slice_start;
+     arg->len = mo[currentMirror].slice_len;
+      
+     mi_timestamp(&(mo[currentMirror]));
+     target->call (SFSROPROC_GETDATA_PARTIAL, arg, res, wrap(mkref (this),
+							      &server::get_data_cb,
+							      ress, res, currentMirror,
+							      recvd, cb));
   }
-  */
+  
   
 }
 

@@ -17,9 +17,6 @@ const SFSRO_FHDB_KEYS     = 255;
 const SFSRO_FHDB_CHILDREN = 256; /* must be  KEYS+1 */
 const SFSRO_FHDB_NFH      = 256; /* FHDB blocks are approx 5KB each */
 
-typedef uint32 sfs_ipaddr;
-typedef int32  sfs_ipport;
-
 enum sfsrostat {
   SFSRO_OK = 0,
   SFSRO_ERRNOENT = 1

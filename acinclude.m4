@@ -1,4 +1,4 @@
-dnl $Id: acinclude.m4,v 1.1 2001/01/16 22:00:07 fdabek Exp $
+dnl $Id: acinclude.m4,v 1.2 2001/01/18 16:21:42 fdabek Exp $
 dnl
 dnl Find full path to program
 dnl
@@ -1119,7 +1119,7 @@ elif test -f ${with_sfs}/include/sfs/autoconf.h \
     LIBARPC=${sfslibdir}/libarpc.la
     LIBSFSCRYPT=${sfslibdir}/libsfscrypt.la
     LIBSFSMISC=${sfslibdir}/libsfsmisc.la
-    LIBSVC=${sfslibdir}/libsvc.la
+    LIBSVC=../svc//libsvc.la
     RPCC=${with_sfs}/bin/rpcc
 else
     AC_MSG_ERROR("Can\'t find SFS libraries")
