@@ -486,7 +486,19 @@ dhashcli::retrieve_lookup_cb (ptr<rcv_state> rs, vec<chord_node> succs,
     rs = NULL;
     return;
   }
-  
+  strbuf s;
+  s << myID << ": retrieve_verbose (" << rs->key << "): route";
+  for (size_t i = 0; i < r.size (); i++)
+    s << " " << r[i]->id ();
+  s << "\n";
+  trace << s;
+  s.tosuio ()->clear ();
+  s << myID << ": retrieve_verbose (" << rs->key << "): succs";
+  for (size_t i = 0; i < succs.size (); i++)
+    s << " " << succs[i].x;
+  s << "\n";
+  trace << s;
+
   doassemble (rs, succs);
 }
 
@@ -512,6 +524,10 @@ dhashcli::retrieve_fetch_cb (ptr<rcv_state> rs, u_int i,
     fetch_frag (rs);
     return;
   }
+
+  trace << myID << ": retrieve_verbose (" << rs->key << "): read from "
+	<< rs->succs[i].x << "\n";
+    
   
 #ifdef VERBOSE_LOG  
   bigint h = compute_hash (block->data, block->len);

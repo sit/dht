@@ -21,6 +21,10 @@ visport = int (sys.argv[4])
 
 interesting_keys = []
 msgkeyre = re.compile ("msgkey ([0-9a-f]+)$")
+routere  = re.compile ("retrieve_verbose.*route (.*)$")
+succsre  = re.compile ("retrieve_verbose.*succs (.*)$")
+readre   = re.compile ("dhashcli: ([0-9a-f]+): retrieve.*read from (.*)$")
+
 def monitor_usenet (vc, fh):
     lines = fh.readlines ()
     if len(lines) == 0:
@@ -30,7 +34,7 @@ def monitor_usenet (vc, fh):
         m = msgkeyre.search (line)
         if m:
             k = m.group (1)
-            print "usenet: watching %s" % k
+            print line,
             interesting_keys.append (k)
 
 def monitor_lsd (vc, fh):
@@ -39,9 +43,26 @@ def monitor_lsd (vc, fh):
         fh.seek (0, 2)
         return
     for line in lines:
+        # Really, should only either have one interesting key
+        # or accumulate lines and process them all at once.
         for k in interesting_keys:
             if k in line:
                 print line,
+                m = routere.search (line)
+                if m:
+                    route = m.group (1).split ()
+                    break
+                m = succsre.search (line)
+                if m:
+                    succs = m.group (1).split ()
+                    for s in succs:
+                        vc.highlight (s)
+                    break
+                m = readre.search (line)
+                if m:
+                    vc.select (m.group (2))
+                    vc.arc (m.group (1), m.group (2))
+                    break
                 break
 
 
@@ -56,7 +77,7 @@ def listcb (lines):
 vc = vischat.vischat (vishost, visport)
 def connected (v):
     print "Connection to vis established."
-    v.list (listcb)
+    # v.list (listcb)
     v.reset ()
 
 lfh = open (lsdlog)
