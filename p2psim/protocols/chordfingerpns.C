@@ -127,11 +127,11 @@ ChordFingerPNS::reschedule_pns_stabilizer(void *x)
 void
 ChordFingerPNS::fix_pns_fingers(bool restart)
 {
-  vector<IDMap> scs = loctable->succs(me.id + 1, _stab_succ>0?_stab_succ:1);
+  vector<IDMap> scs = loctable->succs(me.id + 1, _nsucc);
 #ifdef CHORD_DEBUG
-  printf("%s ChordFingerPNS stabilize BEFORE _stab_succ %u ring sz %u succ %d\n", ts(), _stab_succ, loctable->size(), scs.size());
+  printf("%s ChordFingerPNS stabilize BEFORE ring sz %u succ %d restart %u\n", ts(), loctable->size(), scs.size(), restart?1:0);
 #endif
-  /*
+    /*
   uint dead_finger = 0;
   uint missing_finger = 0;
   uint real_missing_finger = 0;
@@ -198,7 +198,7 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
 	    loctable->del_node(currf);
 //	    dead_finger++;
 	  }
-	}else{
+	} else {
 //	  missing_finger++;
 	  if ((currf.ip == prevf.ip) && (prevfpred.ip) && (!ConsistentHash::between(finger, currf.id, prevfpred.id))) 
 	      continue;
@@ -253,7 +253,7 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
 	  }
 	}
 	if (min_f.ip!=me.ip) {
-	  vector<IDMap> newsucc = loctable->succs(me.id+1, _stab_succ);
+	  vector<IDMap> newsucc = loctable->succs(me.id+1, _nsucc);
 	  if (newsucc.size() && (!ConsistentHash::betweenrightincl(finger,finger+lap,newsucc[newsucc.size()-1].id))) {
 //	    new_added_finger++;
 	    loctable->add_node(min_f);
@@ -273,7 +273,7 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
   }
 PNS_DONE:
 #ifdef CHORD_DEBUG
-  printf("%s ChordFingerPNS stabilize AFTER _stab_succ %u ring sz %u restart %d\n", ts(), _stab_succ, loctable->size(), restart?1:0);
+  printf("%s ChordFingerPNS stabilize AFTER ring sz %u restart %d\n", ts(), loctable->size(), restart?1:0);
 #endif
   return;
   /*

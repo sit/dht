@@ -280,7 +280,8 @@ Koorde::koorde_next(koorde_lookup_arg *a, koorde_lookup_ret *r)
 {
 
   //i have not joined successfully, refuse to answer query
-  if (!_stab_succ) {
+  IDMap succ = loctable->succ(me.id+1);
+  if (!succ.ip) {
     fprintf(stderr,"%s not yet stabilized, refuse to reply to %qx\n", ts(), a->k);
     r->next.ip = 0;
     r->next.id = 0;
@@ -288,7 +289,6 @@ Koorde::koorde_next(koorde_lookup_arg *a, koorde_lookup_ret *r)
     return;
   }
 
-  IDMap succ = loctable->succ(me.id + 1);
   //printf ("Koorde_next (id=%qx, key=%qx, kshift=%qx, i=%qx) succ=(%u,%qx)\n", 
   //me.id, a->k, a->kshift, a->i, succ.ip, succ.id);
   if (ConsistentHash::betweenrightincl (me.id, succ.id, a->k) ||
@@ -301,8 +301,8 @@ Koorde::koorde_next(koorde_lookup_arg *a, koorde_lookup_ret *r)
     r->v.clear ();
     r->v = loctable->succs(me.id + 1, a->nsucc);
     assert (r->v.size () > 0);
-    printf ("%s Koorde_next: done succ key = %qx: (%u,%qx) _stab_succ %d\n", 
-       ts(), a->k, succ.ip, succ.id, _stab_succ);
+    printf ("%s Koorde_next: done succ key = %qx: (%u,%qx) \n", 
+       ts(), a->k, succ.ip, succ.id);
   } else if (a->i == me.id || ConsistentHash::betweenrightincl (me.id, succ.id, a->i)) {
     r->k = a->k;
     r->kshift = a->kshift;
@@ -323,8 +323,8 @@ Koorde::koorde_next(koorde_lookup_arg *a, koorde_lookup_ret *r)
       }
     } while (kk < a->badnodes.size());
     r->done = false;
-    printf ("%s Koorde_next: contact de bruijn (%u,%qx) i=%qx kshift=%qx debruijn pointer %qx _stab_succ %d\n", ts(),
-      r->next.ip, r->next.id, r->i, r->kshift, debruijn, _stab_succ);
+    printf ("%s Koorde_next: contact de bruijn (%u,%qx) i=%qx kshift=%qx debruijn pointer %qx \n", ts(),
+      r->next.ip, r->next.id, r->i, r->kshift, debruijn);
   } else {
     r->k = a->k;
     r->i = a->i;
@@ -343,8 +343,8 @@ Koorde::koorde_next(koorde_lookup_arg *a, koorde_lookup_ret *r)
     r->kshift = a->kshift;
     r->done = false;
  //   assert (ConsistentHash::betweenrightincl (me.id, r->i, r->next.id));
-    printf ("%s Koorde_next: follow succ (%u,%qx) pointer to (%u,%qx) i=%qx kshift=%qx debruijn pointer %qx _stab_succ %d\n", ts(),
-      succ.ip, succ.id, r->next.ip, r->next.id, r->i, r->kshift, debruijn, _stab_succ);
+    printf ("%s Koorde_next: follow succ (%u,%qx) pointer to (%u,%qx) i=%qx kshift=%qx debruijn pointer %qx \n", ts(),
+      succ.ip, succ.id, r->next.ip, r->next.id, r->i, r->kshift, debruijn);
 
   }
 }

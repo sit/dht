@@ -30,16 +30,19 @@
 #include "consistenthash.h"
 
 #undef CHORD_DEBUG
-#define DNODE 137
+#define DNODE 894
 #define PKT_OVERHEAD 20
 
 #define TYPE_USER_LOOKUP 0
 #define TYPE_JOIN_LOOKUP 1
 #define TYPE_FINGER_LOOKUP 2
-#define TYPE_BASIC_UP 3
-#define TYPE_FINGER_UP 4
-#define TYPE_PNS_UP 5
+#define TYPE_FIXSUCC_UP 3
+#define TYPE_FIXSUCCLIST_UP 4
+#define TYPE_FIXPRED_UP 5
+#define TYPE_FINGER_UP 6
+#define TYPE_PNS_UP 7
 #define MAX_LOOKUP_TIME 4000
+#define MIN_BASIC_TIMER 100
 
 class LocTable;
 
@@ -116,6 +119,7 @@ public:
     bool done;
     vector<IDMap> v;
     vector<IDMap> next;
+    bool correct;
   };
 
   struct nextretinfo{
@@ -149,12 +153,13 @@ public:
 
   struct next_recurs_ret {
     vector<IDMap> v;
+    bool correct;
   };
 
   struct lookup_args{
     CHID key;
     Time start;
-    uint retry;
+    vector<uint> retrytimes;
   };
   // RPC handlers.
   void null_handler (void *args, void *ret);
@@ -198,7 +203,6 @@ protected:
   uint _alpha;
   int _asap;
   uint _recurs;
-  uint _stab_succ;
   IDMap _wkn;
   uint _join_scheduled;
   uint _parallel;
@@ -219,7 +223,7 @@ protected:
   virtual vector<IDMap> find_successors(CHID key, uint m, uint all,
       uint type, Time start, IDMap *last = NULL);
 
-  void fix_successor();
+  void fix_successor(void *x=NULL);
   void fix_predecessor();
   void fix_successor_list();
   void check_static_init();

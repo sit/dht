@@ -73,9 +73,9 @@ void
 ChordFinger::fix_fingers(bool restart)
 {
 
-  vector<IDMap> scs = loctable->succs(me.id + 1, _stab_succ>0?_stab_succ:1);
+  vector<IDMap> scs = loctable->succs(me.id + 1, _nsucc);
 
-  printf("%s ChordFinger stabilize BEFORE _stab_succ %u ring sz %u succ %d\n", ts(), _stab_succ, loctable->size(), scs.size());
+  printf("%s ChordFinger stabilize BEFORE ring sz %u succ %d\n", ts(), loctable->size(), scs.size());
 
   if (scs.size() == 0) return;
 
@@ -141,7 +141,7 @@ ChordFinger::fix_fingers(bool restart)
     }
   }
 FINGER_DONE:
-  printf("%s ChordFinger stabilize AFTER _stab_succ %u ring sz %u\n", ts(), _stab_succ, loctable->size());
+  printf("%s ChordFinger stabilize AFTER ring sz %u\n", ts(), loctable->size());
 }
 
 void
