@@ -1076,7 +1076,7 @@ rpccb_chord::timeout_cb (ptr<bool> del)
     assert (l == msglen);
     char *newbuf = suio_flatten (x.uio ());
     memcpy (msgbuf, newbuf, msglen);
-    free (newbuf);
+    xfree (newbuf);
 
 
     //send it

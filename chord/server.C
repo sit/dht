@@ -381,7 +381,7 @@ user_args::reply (void *res)
   rpc_res->resok->procno = procno;
   rpc_res->resok->results.setsize (res_len);
   memcpy (rpc_res->resok->results.base (), marshalled_res, res_len);
-  free (marshalled_res);
+  xfree (marshalled_res);
 
   assert (rpc_res->status == DORPC_OK);
 
@@ -498,7 +498,7 @@ vnode_impl::doRPC (ref<location> l, const rpc_program &prog, int procno,
     arg->args.setsize (args_len);
     void *marshalled_args = suio_flatten (x.uio ());
     memcpy (arg->args.base (), marshalled_args, args_len);
-    free (marshalled_args);
+    xfree (marshalled_args);
 
 #ifdef RPC_PROGRAM_STATS
     prog.outcall_num[procno] += 1;

@@ -365,6 +365,7 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
       void *unmarshalled_args = prog->tbl[arg->procno].alloc_arg ();
       if (!proc (x.xdrp (), unmarshalled_args)) {
 	warn << "dispatch: error unmarshalling arguments\n";
+        xdr_delete (prog->tbl[arg->procno].xdr_arg, unmarshalled_args);
 	sbp->replyref (rpcstat (DORPC_MARSHALLERR));
 	return;
       }

@@ -660,7 +660,7 @@ dhash_impl::append (ref<dbrec> key, ptr<dbrec> data,
 	int ret = dbwrite (key, marshalled_data, DHASH_APPEND);
 	assert (!ret);
 	append_after_db_store (cb, arg->key, 0);
-	delete m_dat;
+	xfree (m_dat);
       } else {
 	cb (DHASH_STOREERR);
       }
@@ -695,7 +695,7 @@ dhash_impl::append_after_db_fetch (ref<dbrec> key, ptr<dbrec> new_data,
 	int ret = dbwrite (key, marshalled_data, DHASH_APPEND);
 	assert (!ret);
 	append_after_db_store (cb, arg->key, 0);
-	delete m_dat;
+	xfree (m_dat);
       } else {
 	cb (DHASH_STOREERR);
       }

@@ -122,7 +122,7 @@ route_chord::make_hop (ptr<location> n)
     arg->upcall_proc = uc_procno;
     arg->upcall_args.setsize (arglen);
     memcpy (arg->upcall_args.base (), marshalled_args, arglen);
-    delete marshalled_args;
+    xfree (marshalled_args);
   } else
     arg->upcall_prog = 0;
 
@@ -421,7 +421,7 @@ route_debruijn::make_hop (ptr<location> n, chordID &x, chordID &k, chordID &i)
     arg->upcall_proc = uc_procno;
     arg->upcall_args.setsize (arglen);
     memcpy (arg->upcall_args.base (), marshalled_args, arglen);
-    delete marshalled_args;
+    xfree (marshalled_args);
   } else
     arg->upcall_prog = 0;
 
