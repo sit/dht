@@ -104,9 +104,9 @@ locationtable::reset_idle_timer ()
 //#define PEG_CWIND
 //#define TIMEOUT_FUDGING
 
-// XXX need to protect against seqno wrap!!!
-//
-int global_seqno = 0;
+// XXX need to protect against seqno wrap!!! 
+// XXX I don't know what this means. -ES
+
 u_int64_t st = getusec ();
 
 const int aclnttrace (getenv ("ACLNT_TRACE")
@@ -146,7 +146,7 @@ locationtable::doRPC_udp (chordID &ID,
 			  ptr<void> in, void *out, aclnt_cb cb)
 {
   reset_idle_timer ();
-  if (left + cwind < global_seqno) {
+  if (left + cwind < seqno) {
     RPC_delay_args *args = New RPC_delay_args (ID, prog, procno,
 					       in, out, cb, getusec ());
     enqueue_rpc (args);
@@ -176,7 +176,7 @@ locationtable::doRPC_issue (chordID &ID,
   //  assert (l->refcnt >= 0);
   touch_cachedlocs (l);
   
-  rpc_state *C = New rpc_state (cb, ID, getusec (), global_seqno, prog.progno);
+  rpc_state *C = New rpc_state (cb, ID, getusec (), seqno, prog.progno);
   
   C->b = rpccb_chord::alloc (c, 
 			     wrap (this, &locationtable::doRPCcb, c, C),
@@ -186,14 +186,14 @@ locationtable::doRPC_issue (chordID &ID,
 			     procno, 
 			     (sockaddr *)&(l->saddr));
   
-  sent_elm *s = New sent_elm (global_seqno);
+  sent_elm *s = New sent_elm (seqno);
   sent_Q.insert_tail (s);
   
   long sec, nsec;
   setup_rexmit_timer (ID, &sec, &nsec);
   C->b->send (sec, nsec);
 
-  global_seqno++;
+  seqno++;
 }
 
 void
@@ -319,7 +319,7 @@ locationtable::rpc_done (long acked_seqno)
   
   update_cwind (acked_seqno);
 
-  while (Q.first && (left + cwind >= global_seqno) ) {
+  while (Q.first && (left + cwind >= seqno) ) {
     int qsize = (num_qed > 100) ? 100 :  num_qed;
     int next = (int)(qsize*((float)random()/(float)RAND_MAX));
     RPC_delay_args *args =  Q.first;
@@ -368,7 +368,7 @@ locationtable::update_cwind (int seq)
       if (sent_Q.first) 
 	left = sent_Q.first->seqno;
       else
-	left = global_seqno;
+	left = seqno;
     }
   } else {
     ssthresh = cwind/2; //MD
