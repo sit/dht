@@ -61,7 +61,7 @@ sub spawnlsd {
 	$self->{pids}->{$pid} = $conf;  # for us
 	return $pid;
     } else {
-	$ENV{SHORT_STATS} = 1; # avoid extraneous RPC statistics; see comm.C
+	# $ENV{SHORT_STATS} = 1; # avoid extraneous RPC statistics; see comm.C
 	# $ENV{CHORD_RPC_STYLE} = 0; # default STP for RPCs; see location.C
 	chdir $rundir or die "Couldn't chdir $rundir: $!\n";
 	open (PID, "> pid"); print PID $$; close (PID);
