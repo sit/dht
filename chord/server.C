@@ -393,14 +393,14 @@ vnode::get_fingers_cb (chordID x, chord_getfingersres *res,  clnt_stat err)
 void
 vnode::challenge (chordID &x, cbchallengeID_t cb)
 {
+  int c = random ();
   ptr<chord_challengearg> ca = New refcounted<chord_challengearg>;
   chord_challengeres *res = New chord_challengeres (CHORD_OK);
   nchallenge++;
-  // warnx << "challenge: " << myID << " : " << x << "\n";
   ca->v.n = x;
-  ca->challenge = 1;
+  ca->challenge = c;
   doRPC (x, chord_program_1, CHORDPROC_CHALLENGE, ca, res, 
-		    wrap (mkref (this), &vnode::challenge_cb, 1, x, cb, res));
+		    wrap (mkref (this), &vnode::challenge_cb, c, x, cb, res));
 }
 
 void
@@ -419,6 +419,9 @@ vnode::challenge_cb (int challenge, chordID x, cbchallengeID_t cb,
   } else {
     net_address r = locations->getaddress (x);
     bool ok = is_authenticID (x, r.hostname, r.port, res->resok->index);
+    if (!ok) {
+      warnx << "challenge_cb: " << myID << " x " << x << " is not authentic\n";
+    }
     cb (x, ok, res->status);
   }
   delete res;

@@ -36,14 +36,7 @@ chord::chord (str _wellknownhost, int _wellknownport,
 					     max_cache, max_connections);
   locations->insert (wellknownID, wellknownhost.hostname, wellknownhost.port);
   nvnode = 0;
-  ngetsuccessor = 0;
-  ngetpredecessor = 0;
-  nfindclosestpred = 0;
-  nnotify = 0;
-  nalert = 0;
-  ntestrange = 0;
-  ngetfingers = 0;
-  nrcv = 0;
+  srandom ((unsigned int) (getusec() & 0xFFFFFFFF));
 }
 
 int
@@ -124,13 +117,6 @@ chord::stats ()
 {
   warnx << "CHORD NODE STATS\n";
   warnx << "# vnodes: " << nvnode << "\n";
-  warnx << "# getsuccesor requests " << ngetsuccessor << "\n";
-  warnx << "# getpredecessor requests " << ngetpredecessor << "\n";
-  warnx << "# findclosestpred requests " << nfindclosestpred << "\n";
-  warnx << "# notify requests " << nnotify << "\n";  
-  warnx << "# alert requests " << nalert << "\n";  
-  warnx << "# testrange requests " << ntestrange << "\n";  
-  warnx << "# getfingers requests " << ngetfingers << "\n";
   vnodes.traverse (wrap (this, &chord::stats_cb));
   locations->stats ();
 }

@@ -220,6 +220,7 @@ vnode::stats ()
   warnx << "# alert requests " << ndoalert << "\n";  
   warnx << "# testrange requests " << ndotestrange << "\n";  
   warnx << "# getfingers requests " << ndogetfingers << "\n";
+  warnx << "# dochallenge requests " << ndochallenge << "\n";
 
   warnx << "# getsuccesor calls " << ngetsuccessor << "\n";
   warnx << "# getpredecessor calls " << ngetpredecessor << "\n";
@@ -239,6 +240,7 @@ vnode::stats ()
   warnx << "# notify calls " << ndonotify << "\n";  
   warnx << "# alert calls " << ndoalert << "\n";  
   warnx << "# getfingers calls " << ndogetfingers << "\n";
+  warnx << "# challenge calls " << nchallenge << "\n";
 }
 
 void
@@ -449,9 +451,6 @@ vnode::stabilize_getpred_cb_ok (chordID p, bool ok, chordstat status)
       stable_fingers = false;
       notify (finger_table[1].first.n, myID);
     }
-  } else if (status == CHORD_OK) {
-    warnx << "stabilize_pred_cb_ok: " << myID << " couldn't authenticate "
-	  << p << "\n";
   }
 }
 
@@ -603,7 +602,17 @@ vnode::stabilize_findsucc_cb (int i, chordID s, route search_path,
     stable_fingers = false;
   } else {
     if (betweenleftincl (finger_table[i].start, finger_table[i].first.n, s)) {
-      // warnx << "stabilize_findsucc_cb: " << myID << " " 
+      challenge (s, wrap (mkref (this), &vnode::stabilize_findsucc_ok, i));
+    }
+  }
+}
+
+void
+vnode::stabilize_findsucc_ok (int i, chordID s, bool ok, chordstat status)
+{
+  if ((status == CHORD_OK) && ok) {
+    if (betweenleftincl (finger_table[i].start, finger_table[i].first.n, s)) {
+      // warnx << "stabilize_findsucc_ok: " << myID << " " 
       //   << "new successor of " << finger_table[i].start 
       //    << " is " << s << "\n";
       locations->changenode (&finger_table[i].first, s, 
@@ -662,8 +671,9 @@ vnode::stabilize_getsucclist_cb (int i, chordID s, net_address r,
       nsucc = i;
     } else if (i < NSUCC) {
       if (succlist[i+1].n != s) {
-	stable_succlist = false;
-	locations->changenode (&succlist[i+1], s, r);
+	locations->cacheloc (s, r);
+	challenge (s, wrap (mkref (this), &vnode::stabilize_getsucclist_ok, 
+			    i+1));
       }
       if ((i+1) > nsucc) {
 	stable_succlist = false;
@@ -673,6 +683,17 @@ vnode::stabilize_getsucclist_cb (int i, chordID s, net_address r,
     u_long n = estimate_nnodes ();
     locations->replace_estimate (nnodes, n);
     nnodes = n;
+  }
+}
+
+void
+vnode::stabilize_getsucclist_ok (int i, chordID s, bool ok, chordstat status)
+{
+  if ((status == CHORD_OK) && ok) {
+    if (succlist[i].n != s) {
+	stable_succlist = false;
+	locations->changenode (&succlist[i], s, locations->getaddress (s));
+    }
   }
 }
 
@@ -694,12 +715,25 @@ vnode::join_getsucc_cb (cbjoin_t cb, chordID s, route r, chordstat status)
     warnx << "join_getsucc_cb: " << myID << " " << status << "\n";
     join (cb);  // try again
   } else {
-    //    warnx << "join_getsucc_cb: " << myID << " " << s << "\n";
-    // XXX challenge s
+    //    locations->cacheloc (na->n.x, na->n.r);
+    challenge (s, wrap (mkref (this), &vnode::join_getsucc_ok, cb));
+  }
+}
+
+void
+vnode::join_getsucc_ok (cbjoin_t cb, chordID s, bool ok, chordstat status)
+{
+  if ((status == CHORD_OK) && ok) {
+    //  warnx << "join_getsucc_ok: " << myID << " " << s << "\n";
     locations->changenode (&finger_table[1].first, s, locations->getaddress(s));
     updatefingers (s, locations->getaddress(s));
     stabilize ();
     (*cb) (this);
+  } else if (status == CHORD_OK) {
+    warnx << "join_getsucc_ok: " << myID 
+	  << " join failed, because succ is not authentic\n";
+  } else {
+    join (cb);  // try again
   }
 }
 

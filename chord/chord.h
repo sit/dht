@@ -136,10 +136,13 @@ class vnode : public virtual refcount {
   void stabilize_pred (void);
   void stabilize_getpred_cb (chordID s, net_address r, chordstat status);
   void stabilize_getpred_cb_ok (chordID p, bool ok, chordstat status);
+  void stabilize_findsucc_ok (int i, chordID s, bool ok, chordstat status);
   void stabilize_findsucc_cb (int i, chordID s, route path, chordstat status);
   void stabilize_getsucc_cb (chordID s, net_address r, chordstat status);
   void stabilize_getsucclist_cb (int i, chordID s, net_address r, 
 				 chordstat status);
+  void stabilize_getsucclist_ok (int i, chordID s, bool ok, chordstat status);
+  void join_getsucc_ok (cbjoin_t cb, chordID s, bool ok, chordstat status);
   void join_getsucc_cb (cbjoin_t cb, chordID s, route r, chordstat status);
   void find_closestpred (chordID &n, chordID &x, findpredecessor_cbstate *st);
   void find_closestpred_cb (chordID n, findpredecessor_cbstate *st,
@@ -240,14 +243,6 @@ class chord : public virtual refcount {
   chordID wellknownID;
   qhash<chordID, ref<vnode>, hashID> vnodes;
   ptr<vnode> active;
-
-  int ngetsuccessor;
-  int ngetpredecessor;
-  int nfindclosestpred;
-  int nnotify;
-  int nalert;
-  int ntestrange;
-  int ngetfingers;
 
   void dispatch (ptr<asrv> s, ptr<axprt_dgram> x, svccb *sbp);
   int startchord (int myp);
