@@ -80,7 +80,7 @@ dhash::dbcompare (ref<dbrec> a, ref<dbrec> b)
  
 dhash::dhash(str dbname, ptr<vnode> node, 
 	     ptr<route_factory> _r_factory,
-	     int k, int _ss_mode) 
+	     u_int k, int _ss_mode) 
 {
   warn << "in dhash constructor " << node->my_ID () << "\n";
   this->r_factory = _r_factory;
@@ -97,7 +97,7 @@ dhash::dhash(str dbname, ptr<vnode> node,
   //set up the options we want
   dbOptions opts;
   opts.addOption("opt_async", 1);
-  opts.addOption("opt_cachesize", 80000);
+  opts.addOption("opt_cachesize", 1000);
   opts.addOption("opt_nodesize", 4096);
 
   if (int err = db->opendb(const_cast < char *>(dbname.cstr()), opts)) {
@@ -171,10 +171,7 @@ dhash::sendblock (bigint destID, bigint blockID, bool last, callback<void>::ref 
   ref<dhash_block> dhblk = New refcounted<dhash_block> (blk->value, blk->len);
 
   warn << "dhash::sendblock: XXX DHASH_REPLICA hardcoded\n";
-  cli->storeblock (destID, blockID, dhblk, 
-#if 0
-		   last,
-#endif
+  cli->storeblock (destID, blockID, dhblk, last,
 		   wrap (this, &dhash::sendblock_cb, cb), DHASH_REPLICA);
 }
 
@@ -625,6 +622,9 @@ void
 dhash::update_replica_list () 
 {
   replicas = host_node->succs ();
+  // trim down successors to just the replicas
+  while (replicas.size () > nreplica)
+    replicas.pop_back ();
 }
 
 void
@@ -670,6 +670,7 @@ dhash::fix_replicas_txerd (dhash_stat err)
 void
 dhash::replicate_key (chordID key, cbstat_t cb)
 {
+  // XXX HACK
   if (MERKLE_ENABLED) {
     warn << "\n\n\n****NOT REPLICATING KEY\n";
     (cb) (DHASH_OK);
@@ -717,7 +718,7 @@ dhash::transfer_fetch_cb (chordID to, chordID key, store_status stat,
     (*cb) (DHASH_NOENT);
   } else {
     ref<dhash_block> blk = New refcounted<dhash_block> (data->value,data->len);
-    cli->storeblock (to, key, blk, 
+    cli->storeblock (to, key, blk, false,
 		     wrap (this, &dhash::transfer_store_cb, cb),
 		     stat);
   }
@@ -1178,7 +1179,6 @@ dhash::doRPC_unbundler (chordID ID, RPC_delay_args *args)
   getnode_arg *arg = static_cast<getnode_arg *>(in);
   arg->dstID = ID;
   arg->srcID = host_node->my_ID ();
-
   doRPC (ID, args->prog, args->procno, args->in, args->out, args->cb);
 }
 

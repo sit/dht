@@ -169,7 +169,7 @@ class merkle_syncer;
 
 class dhash {
   
-  int nreplica;
+  u_int nreplica;
   int kc_delay;
   int rc_delay;
   int ss_mode;
@@ -318,7 +318,7 @@ class dhash {
 
  public:
   dhash (str dbname, ptr<vnode> node, ptr<route_factory> r_fact,
-	 int nreplica = 0, int ss_mode = 0);
+	 u_int nreplica = 0, int ss_mode = 0);
   void accept(ptr<axprt_stream> x);
 
   void print_stats ();
@@ -442,7 +442,7 @@ private:
   void insert (chordID blockID, ref<dhash_block> block, 
                bool usecachedsucc, cbinsert_t cb);
   void storeblock (chordID dest, chordID blockID, ref<dhash_block> block,
-		   cbinsert_t cb, store_status stat = DHASH_STORE);
+		   bool last, cbinsert_t cb, store_status stat = DHASH_STORE);
 
   void lookup (chordID blockID, bool usecachedsucc, dhashcli_lookupcb_t cb);
 };

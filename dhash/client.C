@@ -61,14 +61,16 @@ protected:
   store_status store_type;
   ptr<vnode> clntnode;
   int num_retries;
+  bool last;
 
   dhash_store (ptr<vnode> clntnode, chordID destID, chordID blockID, 
-	       ptr<dhash_block> _block, store_status store_type, cbinsert_t cb)
+	       ptr<dhash_block> _block, store_status store_type, 
+	       bool last, cbinsert_t cb)
     : destID (destID), 
 		 blockID (blockID), block (_block), cb (cb), 
 		 ctype (block_type(_block)), 
 		 store_type (store_type),
-		 clntnode (clntnode), num_retries (0)
+		 clntnode (clntnode), num_retries (0), last (last)
   {
     start ();
   }
@@ -138,7 +140,7 @@ protected:
     arg->offset  = off;
     arg->type    = store_type;
     arg->attr.size     = totsz;
-    arg->last    = false;
+    arg->last    = last;
 
     ///warn << "XXXXXX dhashcli::store ==> store_cb\n";
     clntnode->doRPC (destID, dhash_program_1, DHASHPROC_STORE, arg, res,
@@ -162,10 +164,10 @@ protected:
 public:
   
   static void execute (ptr<vnode> clntnode, chordID destID, chordID blockID,
-                       ref<dhash_block> block, cbinsert_t cb, 
+                       ref<dhash_block> block, bool last, cbinsert_t cb, 
 		       store_status store_type = DHASH_STORE)
   {
-    vNew dhash_store (clntnode, destID, blockID, block, store_type, cb);
+    vNew dhash_store (clntnode, destID, blockID, block, store_type, last, cb);
   }
 };
 
@@ -227,7 +229,7 @@ dhashcli::cache_block (ptr<dhash_block> block, route search_path, chordID key)
     unsigned int path_size = search_path.size ();
     if (path_size > 1) {
       chordID cache_dest = search_path[path_size - 2];
-      dhash_store::execute (clntnode, cache_dest, key, block, 
+      dhash_store::execute (clntnode, cache_dest, key, block, false,
 			    wrap (this, &dhashcli::finish_cache),
 			    DHASH_CACHE);
     }
@@ -281,15 +283,15 @@ dhashcli::insert_lookup_cb (chordID blockID, ref<dhash_block> block,
     warn << "insert_lookup_cb: failure\n";
     (*cb) (status, bigint(0)); // failure
   } else 
-    dhash_store::execute (clntnode, destID, blockID, block, cb);
+    dhash_store::execute (clntnode, destID, blockID, block, false, cb);
 }
 
 //like insert, but doesn't do lookup. used by transfer_key
 void
 dhashcli::storeblock (chordID dest, chordID ID, ref<dhash_block> block, 
-			 cbinsert_t cb, store_status stat)
+		      bool last, cbinsert_t cb, store_status stat)
 {
-  dhash_store::execute (clntnode, dest, ID, block, cb, stat);
+  dhash_store::execute (clntnode, dest, ID, block, last, cb, stat);
 }
 
 
