@@ -1,4 +1,4 @@
-/* $Id: http.C,v 1.1 2002/05/01 20:35:09 jsr Exp $ */
+/* $Id: http.C,v 1.2 2002/05/17 00:00:28 jsr Exp $ */
 
 /*
  *
@@ -25,6 +25,7 @@
 #include "rxx.h"
 #include "sha1.h"
 #include <pwd.h>
+#include <time.h>
 
 static rxx hdrnameval ("^([^\\s:]+):\\s*(.*)\r?\n\\z", "s");
 
