@@ -7,7 +7,7 @@
 
 int RECON_TM = getenv("DHC_RECON_TM") ? atoi(getenv("DHC_RECON_TM")) : 0;
 //int DHC_DEBUG = getenv("DHC_DEBUG") ? atoi(getenv("DHC_DEBUG")) : 0;
-#define DHC_DEBUG 0
+#define DHC_DEBUG 1
 
 dhc::dhc (ptr<vnode> node, str dbname, uint k) : 
   myNode (node), n_replica (k), recon_tm_rpcs (0)
@@ -813,7 +813,7 @@ dhc::put (ptr<location> dest, chordID bID, chordID writer, ref<dhash_value> valu
 		     wrap (this, &dhc::put_result_cb, bID, cb, res));      
   } else {
 #if 0
-    //this part is broken
+    //this part is broken. no lookups. dhash client already provided us with dest.
     put_args *pa = New put_args (bID, writer, value);
     warn << "*****check 1 block = " << str (pa->value->base (), pa->value->size ())
 	 << "\n";
