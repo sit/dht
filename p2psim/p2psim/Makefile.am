@@ -20,6 +20,7 @@ p2psim_core_o_SOURCES = anyready.C condvar.C dhtprotocol.C event.C \
 		        rpchandle.C threaded.C threadmanager.C \
 		        threadspeedup.C tmgdmalloc.C topology.C \
 		        oldobserver.C
+p2psim_core_o_LIBS =
 p2psim_core_o_LINK = $(LD) -r -o $@
 
 include $(top_srcdir)/Makefile.incl
