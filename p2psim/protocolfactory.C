@@ -6,10 +6,12 @@
 #include "chordfinger.h"
 #include "chordfingerpns.h"
 #include "vivalditest.h"
-#include <typeinfo>
-#include <iostream>
 #include "p2psim.h"
 #include "chordtoe.h"
+
+#include <typeinfo>
+#include <iostream>
+#include <set>
 
 using namespace std;
 
@@ -80,4 +82,11 @@ void
 ProtocolFactory::setprotargs(string p, Args a)
 {
   _protargs[p] = a;
+  _protocols.insert(p);
+}
+
+set<string>
+ProtocolFactory::getnodeprotocols()
+{
+  return _protocols;
 }

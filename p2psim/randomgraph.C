@@ -30,8 +30,8 @@ RandomGraph::parse(ifstream &ifs)
       continue;
 
     // nodeid and at least one protocol
-    if(words.size() < 2) {
-      cerr << "RandomGraph: provide nodeid and at least one protocol per line" << endl;
+    if(words.size() < 1) {
+      cerr << "RandomGraph: provide nodeid per line" << endl;
       exit(1);
     }
 
@@ -42,14 +42,8 @@ RandomGraph::parse(ifstream &ifs)
       exit(1);
     }
 
-    // what kind of node?
-    Node *n = new Node(ipaddr);
-
-    // all the rest are protocols on this node
-    for(unsigned int i=1; i<words.size(); i++)
-      send(n->protchan(), &(words[i]));
-
     // add the node to the network
+    Node *n = new Node(ipaddr);
     send(Network::Instance()->nodechan(), &n);
 
     // remember the new node in DVGraph's tables

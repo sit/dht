@@ -36,17 +36,12 @@ G2Graph::parse(ifstream &ifs)
     if(words.empty() || words[0][0] == '#')
       continue;
 
-
     if (words.size() == 2) {
       IPAddress ipaddr = atoi(words[0].c_str());
       assert(ipaddr > 0 && ipaddr <= _num);
 
       // what kind of node?
       Node *n = new Node(ipaddr);
-
-      // all the rest are protocols on this node
-      for(unsigned int i=1; i<words.size(); i++)
-	send(n->protchan(), &(words[i]));
 
       // add the node to the network
       send(Network::Instance()->nodechan(), &n);

@@ -41,8 +41,8 @@ Euclidean::parse(ifstream &ifs)
       continue;
 
     // nodeid, coordinates and at least one protocol
-    if(words.size() < 3) {
-      cerr << "provide nodeid, coordinates and at least one protocol per line" << endl;
+    if(words.size() < 2) {
+      cerr << "provide nodeid and coordinates per line" << endl;
       continue;
     }
 
@@ -64,10 +64,6 @@ Euclidean::parse(ifstream &ifs)
     if(_nodes.find(n->ip()) != _nodes.end())
       cerr << "warning: node " << ipaddr << " already added! (" <<words[0]<<")" << endl;
     _nodes[n->ip()] = c;
-
-    // all the rest are protocols on this node
-    for(unsigned int i=2; i<words.size(); i++)
-      send(n->protchan(), &(words[i]));
 
     // add the node to the network
     send(Network::Instance()->nodechan(), &n);

@@ -1,8 +1,0 @@
-protocol Chord
-base=2
-resilience=1
-successors=3
-fingers=1000
-
-protocol Kademlia
-blah=5

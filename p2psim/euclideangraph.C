@@ -31,9 +31,9 @@ EuclideanGraph::parse(ifstream &ifs)
     if(words.empty() || words[0][0] == '#')
       continue;
 
-    // nodeid, coordinates, and at least one protocol
-    if(words.size() < 3) {
-      cerr << "EuclideanGraph: provide nodeid, coordinates and at least one protocol per line" << endl;
+    // nodeid and coordinates
+    if(words.size() < 2) {
+      cerr << "EuclideanGraph: provide nodeid and coordinates per line" << endl;
       exit(1);
     }
 
@@ -48,14 +48,8 @@ EuclideanGraph::parse(ifstream &ifs)
     c._x = atof(coords[0].c_str());
     c._y = atof(coords[1].c_str());
 
-    // what kind of node?
-    Node *n = new Node(ipaddr);
-
-    // all the rest are protocols on this node
-    for(unsigned int i=2; i<words.size(); i++)
-      send(n->protchan(), &(words[i]));
-
     // add the node to the network
+    Node *n = new Node(ipaddr);
     send(Network::Instance()->nodechan(), &n);
 
     // remember the new node in DVGraph's tables

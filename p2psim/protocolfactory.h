@@ -4,6 +4,7 @@
 #include "node.h"
 #include "args.h"
 #include <typeinfo>
+#include <set>
 #include <map>
 #include <string>
 
@@ -15,10 +16,13 @@ public:
   static void DeleteInstance();
   Protocol *create(string, Node*);
   void setprotargs(string, Args);
+  set<string> getnodeprotocols();
 
 private:
   static ProtocolFactory *_instance;
   map<string, Args> _protargs;
+  set<string> _protocols;
+
   ProtocolFactory();
   ~ProtocolFactory();
 };

@@ -1,4 +1,6 @@
 #include <iostream>
+#include <set>
+#include <string>
 using namespace std;
 
 #include <assert.h>
@@ -16,15 +18,20 @@ Node::Node(IPAddress ip) : _ip(ip), _alive (true), _pktchan(0)
 {
   _pktchan = chancreate(sizeof(Packet*), 0);
   assert(_pktchan);
-  _protchan = chancreate(sizeof(string), 0);
-  assert(_protchan);
+
+  // add all the protocols
+  set<string> allprotos = ProtocolFactory::Instance()->getnodeprotocols();
+  for(set<string>::const_iterator i = allprotos.begin(); i != allprotos.end(); ++i) {
+    Protocol *prot = ProtocolFactory::Instance()->create(*i, this);
+    register_proto(prot);
+  }
+
   thread();
 }
 
 Node::~Node()
 {
   chanfree(_pktchan);
-  chanfree(_protchan);
   _protmap.clear();
 }
 
@@ -42,25 +49,19 @@ Node::register_proto(Protocol *p)
 void
 Node::run()
 {
-  Alt a[4];
+  Alt a[3];
   Packet *p;
-  string protname;
-  Protocol *prot;
   unsigned exit;
 
   a[0].c = _pktchan;
   a[0].v = &p;
   a[0].op = CHANRCV;
 
-  a[1].c = _protchan;
-  a[1].v = &protname;
+  a[1].c = _exitchan;
+  a[1].v = &exit;
   a[1].op = CHANRCV;
 
-  a[2].c = _exitchan;
-  a[2].v = &exit;
-  a[2].op = CHANRCV;
-
-  a[3].op = CHANEND;
+  a[2].op = CHANEND;
   
   while(1) {
     int i;
@@ -80,14 +81,8 @@ Node::run()
         }
         break;
 
-      // add protocol to node
-      case 1:
-        prot = ProtocolFactory::Instance()->create(protname, this);
-        register_proto(prot);
-        break;
-
       //exit
-      case 2:
+      case 1:
         // cout << "Node exit" << endl;
         for(PMCI p = _protmap.begin(); p != _protmap.end(); ++p){
           // send(p->second->exitchan(), 0);

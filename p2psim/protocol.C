@@ -84,7 +84,6 @@ Protocol::parse(char *filename)
   }
 
   string line;
-  string protocol = "";
   map<string, Args> xmap;
   while(getline(in,line)) {
     vector<string> words = split(line);
@@ -94,21 +93,15 @@ Protocol::parse(char *filename)
       continue;
 
     // read protocol string
-    if(words[0] == "protocol") {
-      words.erase(words.begin());
-      protocol = words[0];
-      continue;
-    }
+    string protocol = words[0];
+    words.erase(words.begin());
 
     // this is a variable assignment
-    vector<string> xargs = split(words[0], "=");
-
-    if(protocol == "") {
-      cerr << "protocol line missing in " << filename << endl;
-      threadexitsall(0);
+    while(words.size()) {
+      vector<string> xargs = split(words[0], "=");
+      words.erase(words.begin());
+      xmap[protocol].insert(make_pair(xargs[0], xargs[1]));
     }
-
-    xmap[protocol].insert(make_pair(xargs[0], xargs[1]));
   }
 
   for(map<string, Args>::const_iterator i = xmap.begin(); i != xmap.end(); ++i)
