@@ -63,7 +63,10 @@ sub generate_events
 
 sub run_kademlia
 {
-  system "p2psim/p2psim -e 1 kademlia-prot.txt oldking1024-t kademlia-events.txt > /tmp/sim-$$";
+  my ($nnodes) = @_;
+
+  # system "p2psim/p2psim -e 1 kademlia-prot.txt oldking1024-t kademlia-events.txt > /tmp/sim-$$";
+  system "p2psim/p2psim -e 1 kademlia-prot.txt kademlia-top.txt kademlia-events.txt > /tmp/sim-$$";
   my $totlatency = 0;
   my $nlatencies = 0;
   my $bytes = 0;
@@ -87,7 +90,7 @@ sub run_kademlia
       print STDERR "kadx.pl: p2psim $$ no output\n";
   }
 
-  print sprintf("%.2f ", $totlatency/$nlatencies), $bytes, "\n";
+  print sprintf("%.2f ", $totlatency/$nlatencies), $bytes/($nnodes * $exittime), "\n";
 }
 
 sub generate_prot
@@ -105,7 +108,7 @@ sub generate_prot
         print $pf "Kademlia k=$k alpha=$alpha stabilize_timer=$stabtimer\n";
         $pf->close();
 
-        &run_kademlia();
+        &run_kademlia($$nnodes);
         eval "\$alpha " . $params->{ALPHA}->{INC} . ";"
       }
       eval "\$k " . $params->{K}->{INC} . ";"
