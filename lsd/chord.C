@@ -211,6 +211,8 @@ p2p::p2p (str host, int hostport, const sfs_ID &hostID,
   lookup_ops = 0;
   lookups_outstanding = 0;
   lookup_RPCs = 0;
+  insert_or_lookup = 0;
+  rpcdelay = 0;
 
   lsd_location_lookup = (getenv("LSD_LOCATION_LOOKUP"));
 

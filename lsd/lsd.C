@@ -215,7 +215,7 @@ initID (sfs_ID *ID, int index)
 }
 
 static void
-parseconfigfile (str cf, int index)
+parseconfigfile (str cf, int index, int set_rpcdelay)
 {  
   parseargs pa (cf);
   bool errors = false;
@@ -292,6 +292,7 @@ parseconfigfile (str cf, int index)
   myport = startp2pd(myport);
   defp2p = New refcounted<p2p> (wellknownhost, wellknownport, wellknownID, 
 				myport, myID);
+  defp2p->rpcdelay = set_rpcdelay;
     //instantiate single dhash object
   dhs = New dhash(db_name, nreplica, ss, cs);
 }
@@ -314,6 +315,7 @@ main (int argc, char **argv)
   do_cache = 0;
   int set_name = 0;
   int set_index = 0;
+  int set_rpcdelay = 0;
   
   while ((ch = getopt (argc, argv, "d:S:i:f:c")) != -1)
     switch (ch) {
@@ -324,10 +326,13 @@ main (int argc, char **argv)
       set_index = 1;
       index = atoi (optarg);
       break;
+    case 'r':
+      set_rpcdelay = atoi(optarg);
+      break;
     case 'f':
       if (!set_name) fatal("must specify db name\n");
       if (!set_index) fatal ("must specify virtual index");
-      parseconfigfile (optarg, index);
+      parseconfigfile (optarg, index, set_rpcdelay);
       break;
     case 'c':
       do_cache = 1;

@@ -85,22 +85,20 @@ p2p::doRPC (sfs_ID &ID, rpc_program progno, int procno,
 	    const void *in, void *out,
 	    aclnt_cb cb)
 {
-  // will IDs map to node numbers?? (ie. if ID is 
-  // something diff then this may give weird results)
-
-  // get "distance" between self and destination
-
+  rpc_args *a = new rpc_args(ID,progno,procno,in,out,cb);
 #ifdef _SIM_ 
   int time = 0;
   int dist = *(edges+(int)myID.getsi()*numnodes+(int)ID.getsi());
   time = dist*10; // Not sure how to scale time delay
-  // should not be delayed if not simulating
-  timecb_t* decb =  delaycb (time, 0, 
-			     wrap(mkref (this), &p2p::doRealRPC, ID, 
-				  progno, procno, in, out, cb));
+  delaycb(time, 0, wrap(mkref (this), &p2p::doRealRPC, a));
 #else
-  doRealRPC (ID, progno, procno, in, out, cb);
+  if (insert_or_lookup && (rpcdelay > 0)) {
+    delaycb (0, rpcdelay, wrap(mkref(this), &p2p::doRealRPC, a)); 
+  } else {
+    doRealRPC (a);
+  }
 #endif
+
 }
 
 // NOTE: now passing ID by value instead of referencing it...
@@ -109,9 +107,16 @@ p2p::doRPC (sfs_ID &ID, rpc_program progno, int procno,
 // sfs_ID instead of a ptr
 
 void
-p2p::doRealRPC (sfs_ID ID, rpc_program progno, int procno, const void *in, void *out,
-		aclnt_cb cb)
+p2p::doRealRPC (rpc_args *a)
 {
+  sfs_ID ID = a->ID;
+  rpc_program progno = a->progno;
+  int procno = a->procno;
+  const void *in = a->in;
+  void *out = a->out;
+  aclnt_cb cb = a->cb;
+
+  //  warnx << "doRealRPC\n";
   
   if (lookups_outstanding > 0) lookup_RPCs++;
   

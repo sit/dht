@@ -23,8 +23,6 @@ struct chord_stats {
 
 extern chord_stats stats;
 
-
-
 typedef int cb_ID;
 
 struct hashID {
@@ -110,6 +108,18 @@ public:
   void set_flushcb (flushcb_t cb ) {
     fcb = cb;
   }
+};
+
+struct rpc_args {
+  sfs_ID ID;
+  rpc_program progno;
+  int procno;
+  const void *in;
+  void *out;
+  aclnt_cb cb;
+  rpc_args(sfs_ID id, rpc_program progn, int proc, const void *i, void *o, 
+	   aclnt_cb c) : ID (id), progno (progn), procno (proc),in (i),
+    out (o), cb (c){};
 };
 
 
@@ -233,6 +243,9 @@ class p2p : public virtual refcount  {
   list<searchcb_entry, &searchcb_entry::link> searchCallbacks;
 
  public:
+  bool insert_or_lookup;
+  int rpcdelay;
+
   p2p (str host, int hostport, const sfs_ID &hostID, int myport, 
        const sfs_ID &ID);
 
@@ -263,8 +276,9 @@ class p2p : public virtual refcount  {
 
   void timeout(location *l);
   void connect_cb (callback<void, ptr<axprt_stream> >::ref cb, int fd);
-  void doRPC (sfs_ID &n, rpc_program progno, int procno, const void *in, void *out,
-	      aclnt_cb cb);
+  void doRPC (sfs_ID &n, rpc_program progno, int procno, const void *in, 
+	      void *out, aclnt_cb cb);
+  void doRealRPC (rpc_args *a);
   void dorpc_connect_cb(location *l, ptr<axprt_stream> x);
   void chord_connect(sfs_ID ID, callback<void, ptr<axprt_stream> >::ref cb);
 

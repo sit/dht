@@ -36,7 +36,7 @@ dhashclient::dispatch (svccb *sbp)
 
       struct timeval *tp = New struct timeval();
       gettimeofday(tp, NULL);
-
+      defp2p->insert_or_lookup = true;
       defp2p->dofindsucc (*n, wrap(this, &dhashclient::lookup_findsucc_cb, 
 				   sbp, n, tp));
     } 
@@ -45,7 +45,7 @@ dhashclient::dispatch (svccb *sbp)
     {
       dhash_insertarg *item = sbp->template getarg<dhash_insertarg> ();
       sfs_ID n = item->key;
-      
+      defp2p->insert_or_lookup = true;
       defp2p->dofindsucc (n, wrap(this, &dhashclient::insert_findsucc_cb, 
 				  sbp, item));
     }
