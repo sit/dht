@@ -1,0 +1,13 @@
+1. Forgot to increment serial number
+2. Forgot to signal primary master server
+3. Slave server can't load zone data.
+4. Added name to database file but forgot to add PTR record.
+5. Syntax error in the conf file or DNS db file.
+6. Missing Dot at the End of a Name in a DNS db file.
+7. Missing cache data.
+8. Loss of network connectivity
+9. Missing subdomain delegation
+10. Incorrect subdomain delegation
+11. Syntax error in resolv.conf
+12. Default domain not set
+13. Response from unexpected source.
