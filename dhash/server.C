@@ -48,9 +48,9 @@ dhash::dhash(str dbname, vnode *node, int k, int ss, int cs) :
 
   //  init_key_status ();
   update_replica_list ();
-  install_replica_timer ();
-  install_keycheck_timer ();
-  transfer_initial_keys ();
+  //  install_replica_timer ();
+  // install_keycheck_timer ();
+  //transfer_initial_keys ();
 
   // RPC demux
   host_node->addHandler (DHASH_PROGRAM, wrap(this, &dhash::dispatch));
@@ -110,7 +110,7 @@ dhash::dispatch (unsigned long procno,
 	s_list.push_back (nsucc);
 	for (int i = 0; i < NSUCC; i++) {
 	  chordID next = host_node->lookup_closestsucc (last);
-	  if (next > s_list[0].x) break;
+	  if (next == s_list[0].x) break;
 	  nsucc.x = next;
 	  nsucc.r = host_node->chordnode->locations->getaddress (nsucc.x);
 	  s_list.push_back (nsucc);
@@ -122,21 +122,26 @@ dhash::dispatch (unsigned long procno,
 	  res->cont_res->succ_list[i] = s_list[i];
 
 	chordID best_succ = res->cont_res->succ_list[0].x;
+
 	if (dh_server_select && (nid == my_succ)) {
 	  //returning a node which will hold the key, pick the fastest
 	  locationtable *locations = host_node->chordnode->locations;
 	  location *c = locations->getlocation (best_succ);
 	  location *n;
-	  for (int i = 0; i < nreplica; i++) {
-	    n = locations->getlocation(res->cont_res->succ_list[i+1].x);
-	    if (n->nrpc == 0) break;
-	    if ((!c->nrpc) || (n->rpcdelay/n->nrpc) < (c->rpcdelay/c->nrpc)) {
+	  int lim = ((int)s_list.size () < nreplica) ? 
+	    s_list.size ():
+	    nreplica + 1;
+	  for (int i = 1; i < lim; i++) {
+	    n = locations->getlocation(res->cont_res->succ_list[i].x);
+	    if (n->nrpc == 0) {
+	    } else if ((c->nrpc == 0) || 
+		       (n->rpcdelay/n->nrpc) < (c->rpcdelay/c->nrpc)) {
 	      c = n;
-	      best_succ = res->cont_res->succ_list[i + 1].x;
+	      best_succ = res->cont_res->succ_list[i].x;
 	    }
 	  }
 	}
-	
+
 	res->cont_res->next.x = best_succ;
 	res->cont_res->next.r = 
 	  host_node->chordnode->locations->getaddress (best_succ);
@@ -149,7 +154,7 @@ dhash::dispatch (unsigned long procno,
     break;
   case DHASHPROC_STORE:
     {
-
+      update_replica_list ();
       warnt("DHASH: STORE_request");
 
       dhash_insertarg *sarg = New dhash_insertarg ();
@@ -891,7 +896,8 @@ dhash::print_stats ()
   warnx << "  " << keys_cached << " keys cached\n";
   warnx << "  " << keys_replicated << " keys replicated\n";
   warnx << "  " << bytes_stored << " total bytes held\n";
-    
+
+  printkeys ();
 }
 
 void

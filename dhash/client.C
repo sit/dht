@@ -44,14 +44,12 @@ dhashclient::dispatch (svccb *sbp)
       ptr<dhash_fetch_arg> arg = New refcounted<dhash_fetch_arg> (*farg);
 
       chordID next = clntnode->lookup_closestpred (arg->key);
-      //      warn << "looking for " << arg->key << "; hop is " << next << "\n";
 
       dhash_fetchiter_res *i_res = New dhash_fetchiter_res (DHASH_CONTINUE);
       
       route path;
       path.push_back (next);
 
-      warnx << "disptach: looking for " << arg->key << " at " << next << "\n";
       doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, arg,i_res,
 		       wrap(this, &dhashclient::lookup_iter_cb, 
 			    sbp, i_res, path, 0));
@@ -202,6 +200,7 @@ dhashclient::lookup_iter_cb (svccb *sbp,
 {
   dhash_fetch_arg *arg = sbp->template getarg<dhash_fetch_arg> ();
   ptr<dhash_fetch_arg> rarg = New refcounted<dhash_fetch_arg>(*arg);
+  
 
   if (err) {
     /* CASE I */
@@ -224,7 +223,6 @@ dhashclient::lookup_iter_cb (svccb *sbp,
       /* assumes an in-order RPC transport, otherwise retry
 	 might reach prev before alert can update tables*/
 
-      warnx << "I: looking for " << arg->key << " at " << plast << "\n";
       doRPC (plast, dhash_program_1, DHASHPROC_FETCHITER, 
 		       rarg, nres,
 		       wrap(this, &dhashclient::lookup_iter_cb, 
@@ -246,28 +244,20 @@ dhashclient::lookup_iter_cb (svccb *sbp,
     chordID next = res->cont_res->next.x;
     chordID prev = path.back ();
     //    warn << "node " << prev << " returned " << next << "\n";
-    if (next == prev) {
-      if (res->cont_res->succ_list.size () == 0) {
-	/*CASE III.a */
-	sbp->replyref (DHASH_NOENT);
-      } 
-      /* CASE IV */
-      if (straddled (path, arg->key)) {
-	sbp->replyref (DHASH_NOENT);
-      } else {
-	clntnode->locations->cacheloc (next, res->cont_res->next.r);
-	dhash_fetchiter_res *nres = New dhash_fetchiter_res (DHASH_CONTINUE);
-	path.push_back (next);
-	assert (path.size () < 1000);
+    if ((next == prev) || (straddled (path, arg->key))) {
+      sbp->replyref (DHASH_NOENT);
+    } else {
+      clntnode->locations->cacheloc (next, res->cont_res->next.r);
+      dhash_fetchiter_res *nres = New dhash_fetchiter_res (DHASH_CONTINUE);
+      path.push_back (next);
+      assert (path.size () < 1000);
 
-	warnx << "IV: looking for " << arg->key << " at " << next << "\n";
-
-	doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, 
-			 rarg, nres,
-			 wrap(this, &dhashclient::lookup_iter_cb, 
-			      sbp, nres, path, nerror));
-      }
+      doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, 
+	     rarg, nres,
+	     wrap(this, &dhashclient::lookup_iter_cb, 
+		  sbp, nres, path, nerror));
     }
+
   } else {
     /* the last node queried was responbile but doesn't have it */
     sbp->replyref (DHASH_NOENT);

@@ -24,7 +24,7 @@
 #include <qhash.h>
 
 #define PNODE
-#define FASTSTABILIZE		// for testing purposes
+//#define FASTSTABILIZE		// for testing purposes
 
 const int chord_server_select = (getenv ("CHORD_SERVER_SELECTION")
 			   ? atoi (getenv ("CHORD_SERVER_SELECTION")) : 0);
@@ -140,7 +140,6 @@ vnode::checkfingers ()
         warnx << "start " << finger_table[i].start << "\n";
         warnx << "first " << finger_table[i].first.n << "\n";
         print ();
-        assert (0);
       }
     } else {
       if (finger_table[j].first.n == myID) {
@@ -150,7 +149,6 @@ vnode::checkfingers ()
                  finger_table[i].first.n)) {
         warnx << "table " << i << " bad\n";
         print ();
-        assert (0);
       }
     }
   }
@@ -363,12 +361,14 @@ chordID
 vnode::lookup_closestpred (chordID &x)
 {
 #ifdef PNODE
-  if (chord_server_select) 
+
+  if (chord_server_select) { 
     return findpredfinger2 (x);
-  else
+}  else
     return findpredfinger (x);
+
 #else
-  return = locations->findpredloc (x);
+  return  locations->findpredloc (x);
 #endif
 
 }
