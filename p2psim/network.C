@@ -76,6 +76,7 @@ Network::run()
   
   while(1) {
     int i;
+
     if((i = alt(a)) < 0) {
       cerr << "interrupted" << endl;
       continue;
@@ -91,6 +92,7 @@ Network::run()
 	assert (srcnode);
         latency = _top->latency(srcnode->ip(), dstnode->ip());
         ne = New NetEvent();
+        assert(ne);
         ne->ts = now() + latency;
         ne->node = dstnode;
         ne->p = p;

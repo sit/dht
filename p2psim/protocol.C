@@ -52,10 +52,16 @@ Protocol::rcvRPC(RPCSet *hset)
 }
 
 
+// returns true if we can call rcvRPC without blocking
 bool
 Protocol::select(RPCSet *hset)
 {
-  Alt a[hset->size()+1];
+  // no outstanding RPCs: we would block
+  if(!hset->size())
+    return false;
+
+  int na = hset->size() + 1;
+  Alt *a = (Alt *) malloc(sizeof(Alt) * na); // might be big, take off stack!
   Packet *p;
 
   int i = 0;
@@ -75,6 +81,10 @@ Protocol::select(RPCSet *hset)
     assert(false);
   }
   assert(i <= (int) hset->size());
+  // i == noblkindex means that none of the channels can be read which means
+  // we're going to block were we to do that. so i != noblkindex means we can do
+  // it without blocking.
+  free(a);
   return i != noblkindex;
 }
 

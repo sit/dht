@@ -30,7 +30,7 @@ ChordFinger::fix_fingers()
   IDMap succ = loctable->succ(me.id + 1);
 
   if (succ.ip == 0 || succ.id == me.id) return;
-  unsigned int i0 = (uint) ConsistentHash::log_b(succ.id - me.id, 2);
+  // unsigned int i0 = (uint) ConsistentHash::log_b(succ.id - me.id, 2);
 
   vector<Chord::IDMap> v;
   CHID finger;

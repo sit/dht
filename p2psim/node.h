@@ -47,6 +47,7 @@ public:
   void crash () { _alive = false; }
   bool alive () { return _alive; }
   void set_alive() { _alive = true;}
+  static void Receive(void*);
 
 private:
 
@@ -93,7 +94,6 @@ private:
 
 
   virtual void run();
-  static void Receive(void*);
 
   IPAddress _ip;        // my ip address
   bool _alive;

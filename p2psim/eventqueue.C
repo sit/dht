@@ -97,6 +97,7 @@ EventQueue::advance()
 
   // XXX: time is not running smoothly. does that matter?
   eq_entry *eqe = _queue.first();
+  assert(eqe);
   for(vector<Event*>::const_iterator i = eqe->events.begin(); i != eqe->events.end(); ++i) {
     assert((*i)->ts == eqe->ts &&
            (*i)->ts >= _time &&

@@ -23,6 +23,6 @@ ThreadManager::~ThreadManager()
 int
 ThreadManager::create(void (*fn)(void*), void *args, int ss)
 {
-  int tid = ::threadcreate(fn, args, 3 * ss);
+  int tid = ::threadcreate(fn, args, THREAD_MULTIPLY * ss);
   return tid;
 }

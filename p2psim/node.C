@@ -54,7 +54,7 @@ Node::run()
   a[1].op = CHANRCV;
 
   a[2].op = CHANEND;
-  
+
   while(1) {
     int i;
     if((i = alt(a)) < 0) {
@@ -110,8 +110,8 @@ Node::_doRPC_send(IPAddress dst, void (*fn)(void *), void (*killme)(void *), voi
   p->_src = ip();
   p->_dst = dst;
 
-  // where to send the reply
-  Channel *c = p->_c = chancreate(sizeof(Packet*), 0);
+  // where to send the reply, buffered for single reply
+  Channel *c = p->_c = chancreate(sizeof(Packet*), 1);
 
   // send it off. blocks, but Network reads constantly
   send(Network::Instance()->pktchan(), &p);
@@ -122,7 +122,6 @@ Node::_doRPC_send(IPAddress dst, void (*fn)(void *), void (*killme)(void *), voi
 bool
 Node::_doRPC_receive(RPCHandle *rpch)
 {
-  // block on reply
   Packet *reply = (Packet *) recvp(rpch->channel());
   bool ok = reply->_ok;
   delete reply;

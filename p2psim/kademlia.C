@@ -123,7 +123,7 @@ Kademlia::join(Args *args)
   // done
   _joined++;
 
-  KDEBUG(1) << _joined << ": " << Kademlia::printbits(_id) << " joined" << endl;
+  DEBUG(1) << _joined << ": " << Kademlia::printbits(_id) << " joined" << endl;
   delaycb(STABLE_TIMER, &Kademlia::reschedule_stabilizer, (void *) 0);
 }
 
@@ -248,6 +248,8 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
     }
     */
 
+    KDEBUG(2) << "do_lookup: top of the loop, outstanding = " << outstanding << endl;
+
     // we're done.
     if(!toask && !outstanding) {
       KDEBUG(2) << "do_lookup: nobody to ask, none outstanding. goodbye." << endl;
@@ -262,8 +264,9 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
       assert(la && lr);
       assert(toask);
       assert(toask->ip <= 512 && toask->ip > 0);
-      KDEBUG(2) << "do_lookup: doing find_node asyncRPC to " << Kademlia::printbits(toask->id) << endl;
+      KDEBUG(2) << "do_lookup: thread " << threadid() << " doing find_node asyncRPC to " << Kademlia::printbits(toask->id) << endl;
       rpc = asyncRPC(toask->ip, &Kademlia::find_node, la, lr);
+      KDEBUG(2) << "do_lookup: thread " << threadid() << " came back from find_node asyncRPC to " << Kademlia::printbits(toask->id) << endl;
       assert(rpc);
       rpcset.insert(rpc);
       resultmap[rpc] = New callinfo(toask->ip, la, lr);
@@ -279,13 +282,13 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
     // rcvRPC, but receive as many as we can while we're at it.  Use select() to
     // not block beyond the first rcvRPC.
     do {
-      KDEBUG(2) << "do_lookup: going into rcvRPC" << endl;
+      KDEBUG(2) << "do_lookup: thread " << threadid() << " going into rcvRPC, outstanding = " << outstanding << endl;
       unsigned donerpc = rcvRPC(&rpcset);
-      KDEBUG(2) << "do_lookup: rcvRPC returned" << endl;
       outstanding--;
       assert(donerpc);
       callinfo *ci = resultmap[donerpc];
       resultmap.erase(donerpc);
+      KDEBUG(2) << "do_lookup: thread " << threadid() << " rcvRPC returned, " << Kademlia::printbits(ci->lr->rid) << " replied" << endl;
 
       // update our own k-buckets
       _tree->insert(ci->lr->rid, ci->ip);
@@ -356,9 +359,11 @@ Kademlia::do_lookup_wrapper(peer_t *p, Kademlia::NodeID key,
 void
 Kademlia::find_node(lookup_args *largs, lookup_result *lresult)
 {
+  KDEBUG(2) << "find_node" << endl;
+
   // deal with the empty case
   if(_tree->empty()) {
-    KDEBUG(3) << "do_lookup: tree is empty. returning myself, ip = " << ip() << endl;
+    KDEBUG(3) << "find_node: tree is empty. returning myself, ip = " << ip() << endl;
     peer_t *p = New peer_t(_id, ip());
     lresult->results.push_back(p);
     goto done;
@@ -524,7 +529,7 @@ Kademlia::dump()
   if(!verbose)
     return;
 
-  cout << "*** DUMP FOR " << printbits(_id) << endl;
+  cout << now() << " *** DUMP FOR " << printbits(_id) << endl;
   cout << "   *** -------------------------- ***" << endl;
   _tree->dump();
   cout << "   *** -------------------------- ***" << endl;
@@ -830,8 +835,9 @@ k_bucket::stabilize(string prefix, unsigned depth)
       // find the closest node to the ID we're looking for
       vector<peer_t*> *best = New vector<peer_t*>;
       _root->get((*it)->id, best);
-      KDEBUG(1) << "stabilize: lookup for " << Kademlia::printbits((*it)->id) << endl;
+      KDEBUG(1) << "threadid = " << threadid() << " stabilize: lookup for " << Kademlia::printbits((*it)->id) << ", on " << Kademlia::printbits((*best)[0]->id) << ":" << (*best)[0]->ip << endl;
       _self->do_lookup_wrapper((*best)[0], (*it)->id);
+      KDEBUG(1) << "stabilize: lookup for " << Kademlia::printbits((*it)->id) << " returned" << endl;
       delete best;
     }
     return;
