@@ -22,7 +22,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-# $Id: run-simulations.pl,v 1.8 2003/12/09 20:29:39 strib Exp $
+# $Id: run-simulations.pl,v 1.9 2003/12/12 23:15:19 jinyang Exp $
 
 use strict;
 use Getopt::Long;
@@ -230,7 +230,7 @@ if( $churnfile ne "" ) {
 }
 
 print EF "\n";
-print EF "observer $observer initnodes=1\n";
+#print EF "observer $observer initnodes=1\n";
 close( EF );
 
 # now run the simulation
@@ -409,9 +409,12 @@ sub run_command {
     
     print "# $arg_string > $logfile \n";
     #print "$p2psim_cmd $protfile $topology $eventfile >> $logfile";
+    my $before = time();
     system( "$p2psim_cmd $protfile $topology $eventfile >> $logfile " .
 	    "2>> $logfile" )
 	and die( "$p2psim_cmd $protfile $topology $eventfile failed" );
+    my $complete_time = time() - $before;
+    print "# completed in $complete_time seconds\n";
     
     unlink( $protfile );
     
