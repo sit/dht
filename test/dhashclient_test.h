@@ -30,7 +30,7 @@
 
 
 #include "async.h"
-#include "dhash.h"
+#include "dhashclient.h"
 #include "test.h"
 
 

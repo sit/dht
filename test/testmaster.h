@@ -25,7 +25,7 @@
  */
 
 #include "async.h"
-#include "dhash.h"
+#include "dhash_common.h"
 #include "test.h"
 #include "dhashclient_test.h"
 
