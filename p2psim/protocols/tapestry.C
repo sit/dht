@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.23 2003/11/04 01:39:38 strib Exp $ */
+/* $Id: tapestry.C,v 1.24 2003/11/05 21:52:25 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -129,23 +129,16 @@ Tapestry::lookup(Args *args)
     
     handle_lookup( &la, &lr );
 
-    if( !lr.failed ) {
-      if( lr.owner_id == lr.real_owner_id ) {
-	TapDEBUG(0) << "Lookup complete for key " << print_guid(key) 
-		    << ": ip " << lr.owner_ip << ", id " 
-		    << print_guid(lr.owner_id) << ", hops " << lr.hopcount
-		    << ", numtries " << num_tries << endl;
-      } else {
-	TapDEBUG(0) << "Lookup incorrect for key " << print_guid(key) 
-		    << ": ip " << lr.owner_ip << ", id " 
-		    << print_guid(lr.owner_id) << ", real root " 
-		    << print_guid(lr.real_owner_id) << " hops " 
-		    << lr.hopcount << ", numtries " << num_tries << endl;
-      }
+    if( !lr.failed && lr.owner_id == lr.real_owner_id ) {
+      TapDEBUG(0) << "Lookup complete for key " << print_guid(key) 
+		  << ": ip " << lr.owner_ip << ", id " 
+		  << print_guid(lr.owner_id) << ", hops " << lr.hopcount
+		  << ", numtries " << num_tries << endl;
+      
       break;
     } else {
-      TapDEBUG(0) << "one lookup failed for key " << print_guid(key) 
-		  << ", numtries " << num_tries << endl;
+      TapDEBUG(0) << "one lookup failed or was incorrect for key " 
+		  << print_guid(key) << ", numtries " << num_tries << endl;
     }
 
     num_tries++;
@@ -154,6 +147,12 @@ Tapestry::lookup(Args *args)
 
   if( lr.failed ) {
     TapDEBUG(0) << "Lookup failed for key " << print_guid(key) << endl;
+  } else if( lr.owner_id != lr.real_owner_id ) {
+    TapDEBUG(0) << "Lookup incorrect for key " << print_guid(key) 
+		<< ": ip " << lr.owner_ip << ", id " 
+		<< print_guid(lr.owner_id) << ", real root " 
+		<< print_guid(lr.real_owner_id) << " hops " 
+		<< lr.hopcount << ", numtries " << num_tries << endl;
   }
 
 }
@@ -1005,7 +1004,7 @@ Tapestry::check_rt(void *x)
 	// there should be no other duplicates though, so vector is safe
 	continue;
       }
-      for( uint k = 0; k < re->size() && k < _repair_backups+1; k++ ) {
+      for( uint k = 0; k < re->size() && k <= _repair_backups; k++ ) {
 	nodes.push_back( re->get_at(k) );
       }
     }
