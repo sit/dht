@@ -89,13 +89,22 @@ struct chord_nodearg {
 struct chord_testandfindarg {
   chordID v;
   chordID x;
+  int nonce;
+  unsigned upcall_prog;
+  unsigned upcall_proc;
+  opaque upcall_args<>;
+};
+
+struct chord_testandfindres_resok {
+  chord_node n;
+  opaque upcall_res<>;
 };
 
 union chord_testandfindres switch (chordstat status) {
  case CHORD_INRANGE:
-   chord_node inres;
+   chord_testandfindres_resok inrange;
  case CHORD_NOTINRANGE:
-   chord_node noderes;
+   chord_testandfindres_resok notinrange;
  default:
    void;
 };
@@ -153,9 +162,6 @@ program CHORD_PROGRAM {
 
 		chord_noderes 
 		CHORDPROC_GETPREDECESSOR (chordID) = 2;
-
-	  	chord_noderes
-		CHORDPROC_FINDCLOSESTPRED (chord_findarg) = 3;
 
 		chordstat
 		CHORDPROC_NOTIFY (chord_nodearg) = 4;

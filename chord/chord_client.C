@@ -246,6 +246,18 @@ chord::stop () {
   vnodes.traverse (wrap (this, &chord::stop_cb));
 }
 
+void
+chord::get_program (int progno, rpc_program **prog)
+{
+  for (unsigned int i = 0; i < handledProgs.size (); i++)
+    if (progno == (int)handledProgs[i].progno) {
+      *prog = &(handledProgs[i]);
+      return;
+    }
+  *prog = NULL;
+}
+
+
 bool
 chord::isHandled (int progno) {
   for (unsigned int i = 0; i < handledProgs.size (); i++)
@@ -299,14 +311,15 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
 	vnodep->doget_predecessor (sbp);
       }
       break;
-    case CHORDPROC_FINDCLOSESTPRED:
-      {
-	chord_findarg *fa = sbp->template getarg<chord_findarg> ();
-	warn << "(find_pred) looking for " << fa->v << "\n";
-	warnt("CHORD: findclosestpred_request");
-	vnodep->dofindclosestpred (sbp, fa);
-      }
-      break;
+      /*    case CHORDPROC_FINDCLOSESTPRED:
+	    {
+	    chord_findarg *fa = sbp->template getarg<chord_findarg> ();
+	    warn << "(find_pred) looking for " << fa->v << "\n";
+	    warnt("CHORD: findclosestpred_request");
+	    vnodep->dofindclosestpred (sbp, fa);
+	    }
+	    break;
+      */
     case CHORDPROC_NOTIFY:
       {
 	chord_nodearg *na = sbp->template getarg<chord_nodearg> ();

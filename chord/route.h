@@ -34,10 +34,25 @@ class route_chord : public route_iterator {
   void make_hop_cb (chord_testandfindres *res, clnt_stat err);
   void make_route_done_cb (chordID s, bool ok, chordstat status);
   void make_hop_done_cb (chordID s, bool ok, chordstat status);
+
+  bool do_upcall;
+  int uc_procno;
+  ptr<void> uc_args;
+  void *upcall_res;
+  int upcall_res_len;
+  rpc_program prog;
+
  public:
-  route_chord (ptr<vnode> vi, chordID xi) : route_iterator (vi, xi) {};
+  route_chord (ptr<vnode> vi, chordID xi);
+  route_chord (ptr<vnode> vi, chordID xi,
+	       rpc_program uc_prog,
+	       int uc_procno,
+	       ptr<void> uc_args);
+
   void first_hop (cbhop_t cb);
   void next_hop ();
+  void get_upcall_res (void *res);
+
 };
 
 class route_debruijn: public route_iterator {

@@ -100,6 +100,9 @@ dhash::dhash(str dbname, vnode *node, int k, int ss, int cs, int _ss_mode)
 
   // RPC demux
   host_node->addHandler (dhash_program_1, wrap(this, &dhash::dispatch));
+  host_node->register_upcall (dhash_program_1.progno,
+			      wrap (this, &dhash::route_upcall));
+
   delaycb (30, wrap (this, &dhash::sync_cb));
 }
 
@@ -111,6 +114,95 @@ dhash::sync_cb ()
 }
 
 void
+dhash::route_upcall (int procno, void *args, cbupcalldone_t cb)
+{
+  warnt ("DHASH: fetchiter_request");
+
+  s_dhash_fetch_arg *farg = static_cast<s_dhash_fetch_arg *>(args);
+
+  dhash_fetchiter_res *res;
+  if (key_status (farg->key) != DHASH_NOTPRESENT) {
+    if (farg->len > 0) {
+      //fetch the key and return it, end of story
+      fetch (farg->key, 
+	     farg->cookie,
+	     wrap (this, &dhash::fetchiter_gotdata_cb, cb, farg));
+      return;
+    } else {
+      // on zero length request, we just return
+      // whether we store the block or not
+      res  = New dhash_fetchiter_res (DHASH_CONTINUE);
+      res->compl_res->res.setsize (0);
+      res->compl_res->attr.size = 0;
+      res->compl_res->offset = 0;
+      res->compl_res->source = host_node->my_ID ();
+    } 
+  } else if (responsible (farg->key)) 
+    //no where else to go, return NOENT or RETRY?
+    res = New dhash_fetchiter_res (DHASH_NOENT);
+  else 
+    res = New dhash_fetchiter_res (DHASH_CONTINUE);
+  
+  (*cb) (res);
+}
+
+
+dhash_fetchiter_res *
+dhash::block_to_res (dhash_stat err, s_dhash_fetch_arg *arg,
+		     int cookie, ptr<dbrec> val)
+{
+  dhash_fetchiter_res *res;
+  if (err) 
+    res = New dhash_fetchiter_res  (DHASH_NOENT);
+  else {
+    res = New dhash_fetchiter_res  (DHASH_COMPLETE);
+    
+    int n = (arg->len + arg->start < val->len) ? 
+      arg->len : val->len - arg->start;
+
+    res->compl_res->res.setsize (n);
+    res->compl_res->attr.size = val->len;
+    res->compl_res->offset = arg->start;
+    res->compl_res->source = host_node->my_ID ();
+    res->compl_res->cookie = cookie;
+    
+    memcpy (res->compl_res->res.base (), 
+	    (char *)val->value + arg->start, 
+	    n);
+    
+    //free the cookie if we just read the last byte
+    pk_partial *part = pk_cache[cookie];
+    if (part &&
+	arg->len + arg->start == val->len) {
+      pk_cache.remove (part);
+      delete part;
+    }
+	
+    bytes_served += n;
+  }
+
+  return res;
+}
+		     
+void
+dhash::fetchiter_gotdata_cb (cbupcalldone_t cb, s_dhash_fetch_arg *arg,
+			     int cookie, ptr<dbrec> val, dhash_stat err) 
+{
+  dhash_fetchiter_res *res = block_to_res (err, arg, cookie, val);
+  (*cb) (res);
+  delete res;
+}
+
+void
+dhash::fetchiter_sbp_gotdata_cb (svccb *sbp, s_dhash_fetch_arg *arg,
+				 int cookie, ptr<dbrec> val, dhash_stat err)
+{
+  dhash_fetchiter_res *res = block_to_res (err, arg, cookie, val);
+  sbp->reply (res);
+  delete res;
+}
+
+void
 dhash::dispatch (svccb *sbp) 
 {
 
@@ -119,59 +211,19 @@ dhash::dispatch (svccb *sbp)
 
   case DHASHPROC_FETCHITER:
     {
-      warnt ("DHASH: fetchiter_request");
-      
+      //the only reason to get here is to fetch the 2-n chunks
       s_dhash_fetch_arg *farg = sbp->template getarg<s_dhash_fetch_arg> ();
       
-      dhash_fetchiter_res res (DHASH_CONTINUE);
-      if (key_status (farg->key) != DHASH_NOTPRESENT) {
-	if (farg->len > 0) {
-	  //fetch the key and return it, end of story
-	  fetch (farg->key, 
-		 farg->cookie,
-		 wrap (this, &dhash::fetchiter_svc_cb, sbp, farg));
-	  return;
-	} else {
-	  // on zero length request, we just return
-	  // whether we store the block or not
-	  res.set_status (DHASH_COMPLETE);
-	  res.compl_res->res.setsize (0);
-	  res.compl_res->attr.size = 0;
-	  res.compl_res->offset = 0;
-	  res.compl_res->source = host_node->my_ID ();
-	} 
-      } else if (responsible (farg->key))  {
-	//no where else to go, return NOENT or RETRY?
-	res.set_status (DHASH_NOENT);
+      if ((key_status (farg->key) != DHASH_NOTPRESENT) && (farg->len > 0)) {
+	//fetch the key and return it, end of story
+	fetch (farg->key, 
+	       farg->cookie,
+	       wrap (this, &dhash::fetchiter_sbp_gotdata_cb, sbp, farg));
       } else {
-	res.set_status (DHASH_CONTINUE);
-	chordID nid;
-	chordID myID = host_node->my_ID ();
-	chordID my_succ = host_node->my_succ ();
-	if (betweenrightincl(myID, my_succ, farg->key))
-	  nid = my_succ;
-	else {
-	  // XXX closestpred boils down to a between() call.
-	  //     don't we really want a betweenleftincl() ???
-	  //     wouldn't this save one hop???
-	  //
-	  //     --josh
-#ifdef FINGERS
-	    nid = host_node->lookup_closestpred (farg->key);
-#else
-	    nid = host_node->lookup_closestsucc (farg->key);
-#endif
-	}
-
-	res.cont_res->next.x = nid;
-	res.cont_res->next.r = host_node->locations->getaddress (nid);
+	fatal << "Try the upcall instead\n";
       }
-      
-      sbp->reply (&res);
     }
     break;
-    
-
   case DHASHPROC_STORE:
     {
       update_replica_list ();
@@ -228,47 +280,7 @@ dhash::dispatch (svccb *sbp)
 
   pred = host_node->my_pred ();
   return;
-}
-
-void
-dhash::fetchiter_svc_cb (svccb *sbp, s_dhash_fetch_arg *arg,
-			 int cookie, ptr<dbrec> val, dhash_stat err) 
-{
-  dhash_fetchiter_res res (DHASH_CONTINUE);
-  if (err) 
-    res.set_status (DHASH_NOENT);
-  else {
-    res.set_status (DHASH_COMPLETE);
-    
-    int n = (arg->len + arg->start < val->len) ? 
-      arg->len : val->len - arg->start;
-
-    res.compl_res->res.setsize (n);
-    res.compl_res->attr.size = val->len;
-    res.compl_res->offset = arg->start;
-    res.compl_res->source = host_node->my_ID ();
-    res.compl_res->cookie = cookie;
-
-    memcpy (res.compl_res->res.base (), 
-	    (char *)val->value + arg->start, 
-	    n);
-
-    //free the cookie if we just read the last byte
-    pk_partial *part = pk_cache[cookie];
-    if (part &&
-	arg->len + arg->start == val->len) {
-      pk_cache.remove (part);
-      delete part;
-    }
-
-	
-    /* statistics */
-    keys_served++;
-    bytes_served += n;
   }
-  
-  sbp->reply (&res);
-}
 
 void
 dhash::storesvc_cb(svccb *sbp,
@@ -493,6 +505,7 @@ dhash::transfer_store_cb (callback<void, dhash_stat>::ref cb,
 void
 dhash::get_key (chordID source, chordID key, cbstat_t cb) 
 {
+  return;
   warn << "fetching a block (" << key << " from " << source << "\n";
   cli->retrieve(source, key, wrap (this, &dhash::get_key_got_block, key, cb));
 }

@@ -13,6 +13,22 @@ route_iterator::print ()
 // Finger table routing 
 //
 
+route_chord::route_chord (ptr<vnode> vi, chordID xi) : 
+  route_iterator (vi, xi), do_upcall (false) {};
+
+route_chord::route_chord (ptr<vnode> vi, chordID xi,
+			  rpc_program uc_prog,
+			  int uc_procno,
+			  ptr<void> uc_args) : 
+  route_iterator (vi, xi), do_upcall (true)
+{
+
+  prog = uc_prog;
+  this->uc_args = uc_args;
+  this->uc_procno = uc_procno;
+
+};
+
 void
 route_chord::first_hop (cbhop_t cbi)
 {
@@ -20,8 +36,7 @@ route_chord::first_hop (cbhop_t cbi)
   search_path.push_back (v->my_ID ());
   if (v->lookup_closestsucc (v->my_ID () + 1) 
       == v->my_ID ()) {  // is myID the only node?
-    done = true;
-    cb (done);
+    next_hop (); //do it anyways
   } else {
     chordID n = v->lookup_closestpred (x);
     if ((n == v->my_ID()) && (x == v->my_ID())) {
@@ -46,15 +61,53 @@ route_chord::make_hop (chordID &n)
   ptr<chord_testandfindarg> arg = New refcounted<chord_testandfindarg> ();
   arg->v = n;
   arg->x = x;
-  chord_testandfindres *nres = New chord_testandfindres (CHORD_OK);
-  v->doRPC (n, chord_program_1, CHORDPROC_TESTRANGE_FINDCLOSESTPRED, arg, nres, 
-	 wrap (this, &route_chord::make_hop_cb, nres));
+  if (do_upcall) {
+    arg->upcall_prog = prog.progno;
+    arg->upcall_proc = uc_procno;
 
+    xdrproc_t inproc = prog.tbl[uc_procno].xdr_arg;
+    xdrsuio x (XDR_ENCODE);
+    if ((!inproc) || (!inproc (x.xdrp (), uc_args))) {
+      r = CHORD_RPCFAILURE;
+      (cb) (done = true);
+      return;
+    }
+    int upcall_args_len = x.uio ()->resid ();
+    char *upcall_args = suio_flatten (x.uio ());
+
+    arg->upcall_args.setsize (upcall_args_len);
+    memcpy (arg->upcall_args.base (), upcall_args, upcall_args_len);
+  } else
+    arg->upcall_prog = 0;
+
+  chord_testandfindres *nres = New chord_testandfindres (CHORD_OK);
+  v->doRPC (n, chord_program_1, CHORDPROC_TESTRANGE_FINDCLOSESTPRED, 
+	    arg, nres, wrap (this, &route_chord::make_hop_cb, nres));
+
+}
+
+void
+route_chord::get_upcall_res (void *res)
+{
+  xdrmem x ((char *)upcall_res, upcall_res_len, XDR_DECODE);
+  xdrproc_t proc = prog.tbl[uc_procno].xdr_res;
+  assert (proc);
+  if (!proc (x.xdrp (), res)) 
+    warn << "get_upcall_res: error unmarshalling\n";
+  return;
 }
 
 void
 route_chord::make_hop_cb (chord_testandfindres *res, clnt_stat err)
 {
+
+  upcall_res = (res->status == CHORD_INRANGE) ? 
+    (res->inrange->upcall_res.base ()) : 
+    (res->notinrange->upcall_res.base ());
+  upcall_res_len = (res->status == CHORD_INRANGE) ? 
+    (res->inrange->upcall_res.size ()) : 
+    (res->notinrange->upcall_res.size ());
+
   if (err) {
     warnx << "make_hop_cb: failure " << err << "\n";
     r = CHORD_RPCFAILURE;
@@ -62,12 +115,12 @@ route_chord::make_hop_cb (chord_testandfindres *res, clnt_stat err)
     cb (done);
   } else if (res->status == CHORD_INRANGE) { 
     // found the successor
-    v->locations->cacheloc (res->inres->x, res->inres->r,
+    v->locations->cacheloc (res->inrange->n.x, res->inrange->n.r,
 			 wrap (this, &route_chord::make_route_done_cb));
   } else if (res->status == CHORD_NOTINRANGE) {
     // haven't found the successor yet
     chordID last = search_path.back ();
-    if (last == res->noderes->x) {   
+    if (last == res->notinrange->n.x) {   
       // last returns itself as best predecessor, but doesn't know
       // what its immediate successor is---higher layer should use
       // succlist to make forward progress
@@ -77,7 +130,7 @@ route_chord::make_hop_cb (chord_testandfindres *res, clnt_stat err)
     } else {
       // make sure that the new node sends us in the right direction,
       chordID olddist = distance (search_path.back (), x);
-      chordID newdist = distance (res->noderes->x, x);
+      chordID newdist = distance (res->notinrange->n.x, x);
       if (newdist > olddist) {
 	warnx << "PROBLEM: went in the wrong direction: " << v->my_ID ()
 	      << "looking for " << x << "\n";
@@ -87,7 +140,7 @@ route_chord::make_hop_cb (chord_testandfindres *res, clnt_stat err)
       }
       
       // ask the new node for its best predecessor
-      v->locations->cacheloc (res->noderes->x, res->noderes->r,
+      v->locations->cacheloc (res->notinrange->n.x, res->notinrange->n.r,
 			   wrap (this, &route_chord::make_hop_done_cb));
     }
   } else {
@@ -103,8 +156,6 @@ route_chord::make_route_done_cb (chordID s, bool ok, chordstat status)
   if (ok && status == CHORD_OK) {
     search_path.push_back (s);
   } else if (status == CHORD_RPCFAILURE) {
-    // xxx? should we retry locally before failing all the way to
-    //      the top-level?
     r = CHORD_RPCFAILURE;
   } else {
     warnx << v->my_ID () << ": make_route_done_cb: last challenge for "

@@ -52,6 +52,10 @@ typedef callback<void,chordID,net_address,chordstat>::ref cbchordID_t;
 typedef callback<void,vec<chord_node>,chordstat>::ref cbchordIDlist_t;
 typedef callback<void,chordID,route,chordstat>::ref cbroute_t;
 typedef callback<void, svccb *>::ref cbdispatch_t;
+/* cbupcall_t (int procno, void *marshalled_args, void **result) */
+/* NOTE: marshalled_args WILL BE FREED after the callback exits */
+typedef callback<void, void *>::ref cbupcalldone_t;
+typedef callback<void, int, void *, cbupcalldone_t>::ref cbupcall_t; 
 
 class route_iterator;
 
@@ -73,6 +77,7 @@ class vnode : public virtual refcount, public stabilizable {
   chordID last_pred;		// for stabilize
 
   qhash<unsigned long, cbdispatch_t> dispatch_table;
+  qhash<int, cbupcall_t> upcall_table;
 
   u_long ngetsuccessor;
   u_long ngetpredecessor;
@@ -131,6 +136,12 @@ class vnode : public virtual refcount, public stabilizable {
 
   void doalert_cb (svccb *sbp, chordID x, chordID s, net_address r, 
 		   chordstat stat);
+
+  void upcall_done (chord_testandfindarg *fa,
+		    chord_testandfindres *res,
+		    svccb *sbp,
+		    char *args,
+		    void *uc_res);
  public:
   chordID myID;
   ptr<chord> chordnode;
@@ -153,6 +164,9 @@ class vnode : public virtual refcount, public stabilizable {
   void find_successor (chordID &x, cbroute_t cb);
   void notify (chordID &n, chordID &x);
   void alert (chordID &n, chordID &x);
+
+  //upcall
+  void register_upcall (int progno, cbupcall_t cb);
 
   // For other modules
   void doRPC (const chordID &ID, rpc_program prog, int procno, 
@@ -233,6 +247,7 @@ class chord : public virtual refcount {
   //RPC demux
   void handleProgram (const rpc_program &prog);
   bool isHandled (int progno);
+  void get_program (int progno, rpc_program **prog);
 
   //'wrappers' for vnode functions (to be called from higher layers)
   void set_active (int n) { 

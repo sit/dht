@@ -102,11 +102,6 @@ union dhash_storeres switch (dhash_stat status) {
    void;
 };
 
-struct dhash_fetchiter_continue_res {
-  chord_node next;
-  /////chord_node succ_list<>;
-};
-
 struct dhash_fetchiter_complete_res {
   dhash_value res;
   int32 offset;
@@ -119,7 +114,9 @@ union dhash_fetchiter_res switch (dhash_stat status) {
  case DHASH_COMPLETE:
    dhash_fetchiter_complete_res compl_res;
  case DHASH_CONTINUE:
-   dhash_fetchiter_continue_res cont_res;
+   void;
+ case DHASH_NOENT:
+   void;
  default:
    void;
 };

@@ -264,6 +264,12 @@ vnode::addHandler (const rpc_program &prog, cbdispatch_t cb)
 };
 
 void
+vnode::register_upcall (int progno, cbupcall_t cb)
+{
+  upcall_table.insert (progno, cb);
+}
+
+void
 vnode::doRPC (const chordID &ID, rpc_program prog, int procno, 
 	      ptr<void> in, void *out, aclnt_cb cb) {
   locations->doRPC (ID, prog, procno, in, out, cb);

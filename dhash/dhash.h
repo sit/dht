@@ -137,6 +137,7 @@ class dhash {
   ihash<chordID, store_state, &store_state::key, &store_state::link, hashID> pst;
   ihash<int, pk_partial, &pk_partial::cookie, &pk_partial::link> pk_cache;
 
+  void route_upcall (int procno, void *args, cbupcalldone_t cb);
 
   void doRPC (chordID ID, rpc_program prog, int procno,
 	      ptr<void> in, void *out, aclnt_cb cb);
@@ -146,8 +147,12 @@ class dhash {
 
   void storesvc_cb (svccb *sbp, s_dhash_insertarg *arg, dhash_stat err);
   void fetch_cb (int cookie, cbvalue cb,  ptr<dbrec> ret);
-  void fetchiter_svc_cb (svccb *sbp, s_dhash_fetch_arg *farg,
-			 int cookie, ptr<dbrec> val, dhash_stat stat);
+  dhash_fetchiter_res * block_to_res (dhash_stat err, s_dhash_fetch_arg *arg,
+				      int cookie, ptr<dbrec> val);
+  void fetchiter_gotdata_cb (cbupcalldone_t cb, s_dhash_fetch_arg *farg,
+			     int cookie, ptr<dbrec> val, dhash_stat stat);
+  void fetchiter_sbp_gotdata_cb (svccb *sbp, s_dhash_fetch_arg *farg,
+				 int cookie, ptr<dbrec> val, dhash_stat stat);
 
   void append (ptr<dbrec> key, ptr<dbrec> data,
 	       s_dhash_insertarg *arg,
@@ -374,8 +379,8 @@ public:
 
 
 class route_dhash : public route_iterator {
-
-public:
+  
+ public:
   route_dhash (ptr<vnode> vi, chordID xi, 
 	       bool ucs = false);
   route_dhash (ptr<vnode> vi, chordID xi,
@@ -384,8 +389,10 @@ public:
   void first_hop (cbhop_t cb);
   ptr<dhash_block> get_block () {return block;};
   dhash_stat get_status () { return result; };
-  
-private:
+  route path ();
+
+ private:
+  ptr<route_chord> chord_iterator;
   int nerror;
   int nhops;
   bool use_cached_succ;
@@ -395,7 +402,9 @@ private:
   dhash_stat result;
   bool given_first;
   chordID first_hop_guess;
+  bool last_hop;
 
+  void hop_cb (bool done);
   void make_hop (chordID &n);
   void make_hop_cb (ptr<dhash_fetchiter_res> res, 
 		    clnt_stat err);
