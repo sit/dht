@@ -35,10 +35,6 @@ using namespace std;
 class EventQueue : public Threaded, public Observed {
   friend class EventQueueObserver;
 
-  // XXX: remove this
-  // are executed in EventQueue's thread, so allowed.
-  friend class Oldobserver;
-
 public:
   static EventQueue* Instance();
   ~EventQueue();

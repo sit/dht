@@ -1,4 +1,4 @@
 # describes which protocols to run on the node
 # Format:
 # {PROTOCOL} [KEY=VAL [KEY=VAL [...]]]
-Kademlia k=20 alpha=3 stabilize_timer=32000 refresh_rate=32000
+Kademlia k=20 alpha=3 stabilize_timer=32000 refresh_rate=32000 initstate=1

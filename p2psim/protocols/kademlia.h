@@ -30,6 +30,7 @@
 #include "consistenthash.h"
 #include <list>
 #include <iostream>
+#include "p2psim/bighashmap.hh"
 using namespace std;
 
 // }}}
@@ -119,13 +120,14 @@ private:
     void push(k_nodeinfo *ki)
     {
       // verify that this pointer isn't in here yet.
-      if(Kademlia::docheckrep) {
-        k_nodeinfo_buffer *i = _head;
-        do {
-          assert(i->ki != ki);
-        } while(i->next == 0);
-      }
-
+      // if(Kademlia::docheckrep) {
+      //   k_nodeinfo_buffer *i = _head;
+      //   do {
+      //     assert(i->ki != ki);
+      //   } while(i->next == 0);
+      // }
+      if(_count >= _buffer_limit)
+        delete ki;
 
       // allocate new space
       if(_tail->next == 0) {
@@ -136,6 +138,9 @@ private:
       _tail = _tail->next;
       _tail->ki = ki;
       _count++;
+      ki->ip = 0;
+      ki->id = 0;
+      ki->lastts = ki->firstts = 0;
     }
 
   private:
@@ -249,6 +254,44 @@ public:
   //
   // RPC arguments
   // 
+  // {{{ find_value_args and find_value_args
+  struct find_value_args {
+    find_value_args(NodeID xid, IPAddress xip, NodeID k = 0) :
+      id(xid), ip(xip), key(k), tid(threadid()) {}
+    NodeID id;
+    IPAddress ip;
+    NodeID key;
+
+    // for debugging
+    unsigned tid;
+  };
+
+  class find_value_result { public:
+    find_value_result() { hops = 0; succ = 0; }
+    ~find_value_result() { Kademlia::pool->pop(succ); }
+    k_nodeinfo *succ;
+    NodeID rid;
+    unsigned hops;
+  };
+  // }}}
+  // {{{ find_node_args and find_node_result
+  struct find_node_args {
+    find_node_args(NodeID xid, IPAddress xip, NodeID k = 0) :
+      id(xid), ip(xip), key(k), tid(threadid()) {}
+    NodeID id;
+    IPAddress ip;
+    NodeID key;
+
+    // for debugging
+    unsigned tid;
+  };
+
+  class find_node_result { public:
+    find_node_result() { }
+    vector<k_nodeinfo*> results;
+    NodeID rid;
+  };
+  // }}}
   // {{{ lookup_args and lookup_result
   struct lookup_args {
     lookup_args(NodeID xid, IPAddress xip, NodeID k = 0, bool ri = false) :
@@ -290,8 +333,9 @@ public:
   // RPCable methods
   //
   void do_lookup(lookup_args*, lookup_result*);
+  void find_value(find_value_args*, find_value_result*);
   void do_ping(ping_args*, ping_result*);
-  void find_node(lookup_args*, lookup_result*);
+  void find_node(find_node_args*, find_node_result*);
 
 
   //
@@ -313,7 +357,7 @@ public:
   static unsigned refresh_rate;         // how often to refresh info
   static k_nodeinfo_pool *pool;         // pool of k_nodeinfo_pool
   static const unsigned idsize = 8*sizeof(Kademlia::NodeID);
-  hash_map<NodeID, k_nodeinfo*> flyweight;
+  HashMap<NodeID, k_nodeinfo*> flyweight;
 // }}}
 // {{{ private
 private:
@@ -354,16 +398,16 @@ private:
   // utility 
   //
   class callinfo { public:
-    callinfo(k_nodeinfo *ki, lookup_args *la, lookup_result *lr)
-      : ki(ki), la(la), lr(lr) {}
+    callinfo(k_nodeinfo *ki, find_node_args *fa, find_node_result *fr)
+      : ki(ki), fa(fa), fr(fr) {}
     ~callinfo() {
       Kademlia::pool->push(ki);
-      delete la;
-      delete lr;
+      delete fa;
+      delete fr;
     }
     k_nodeinfo *ki;
-    lookup_args *la;
-    lookup_result *lr;
+    find_node_args *fa;
+    find_node_result *fr;
   };
 
   struct reap_info {
@@ -372,12 +416,12 @@ private:
 
     Kademlia *k;
     RPCSet *rpcset;
-    hash_map<unsigned, callinfo*>* outstanding_rpcs;
+    HashMap<unsigned, callinfo*>* outstanding_rpcs;
   };
 
   // hack for initstate
-  static set<NodeID> *_all_kademlias;
-  static hash_map<NodeID, Kademlia*> *_nodeid2kademlia;
+  static NodeID *_all_kademlias;
+  static HashMap<NodeID, Kademlia*> *_nodeid2kademlia;
 // }}}
 };
 
@@ -385,28 +429,43 @@ private:
 // {{{ class k_nodes
 class k_bucket;
 
+int k_nodeinfo_cmp(const void *k1, const void *k2);
+
 /*
- * keeps a sorted set of nodes.  the size of the set never exceeds Kademlia::k.
+ * stores a set of k_nodeinfo*.  the size of the set formally never exceeds
+ * Kademlia::k, but internally we let it grow bigger.  only once every so often
+ * we truncate it.  (see get())
  */
 class k_nodes {
 public:
-  typedef set<k_nodeinfo*, Kademlia::older> nodeset_t;
   k_nodes(k_bucket *parent);
   ~k_nodes();
   void insert(Kademlia::NodeID, bool);
   void erase(Kademlia::NodeID);
-  bool contains(Kademlia::NodeID) const;
-  bool inrange(Kademlia::NodeID) const;
-  bool full() const { return nodes.size() >= Kademlia::k; }
-  bool empty() const { return !nodes.size(); }
+  bool contains(Kademlia::NodeID);
+  bool inrange(Kademlia::NodeID);
+  bool full() const { return _map.size() >= (int) Kademlia::k; }
+  bool empty() const { return !_map.size(); }
   void clear();
-  inline void checkrep(bool = true) const;
+  void rebuild();
+  inline void checkrep();
 
-  nodeset_t nodes;
+  unsigned size() {
+    return _map.size() >= (int) Kademlia::k ? Kademlia::k : _map.size();
+  }
 
+  k_nodeinfo* last() {
+    return get(size()-1);
+  }
+
+  inline k_nodeinfo* get(unsigned);
 private:
+
   k_bucket *_parent;
-  set<k_nodeinfo*, Kademlia::idless> _nodes_by_id;
+
+  k_nodeinfo **_nodes;
+  HashMap<k_nodeinfo*, bool> _map;
+  unsigned _redo; // 0: nothing, 1: resort, 2: refill & resort
 };
 // }}}
 // {{{ class k_bucket 
@@ -420,7 +479,7 @@ public:
   void traverse(k_traverser*, Kademlia*, string = "", unsigned = 0, unsigned = 0);
   void insert(Kademlia::NodeID, bool, bool = false, string = "", unsigned = 0);
   void erase(Kademlia::NodeID, string = "", unsigned = 0);
-  void find_node(Kademlia::NodeID, set<k_nodeinfo*, Kademlia::closer> *, unsigned = Kademlia::k, unsigned = 0);
+  void find_node(Kademlia::NodeID, vector<k_nodeinfo*>*, unsigned = Kademlia::k, unsigned = 0);
   void checkrep();
 
   void divide(unsigned);
@@ -430,7 +489,7 @@ public:
 
   // in case we are a leaf
   k_nodes *nodes;
-  set<k_nodeinfo*, Kademlia::younger> *replacement_cache;
+  k_nodes *replacement_cache;
 
   // in case are a node, i.e., not a leaf
   k_bucket *child[2];
