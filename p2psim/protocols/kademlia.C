@@ -332,11 +332,15 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
     KDEBUG(2) << "do_lookup: top of the loop. outstaning rpcs = " << outstanding_rpcs->size() << endl;
 
     // stop if we've had an answer from the best k nodes we know of.
-    // remember the first guy we haven't asked yet.
+    // also mark the fact whether we asked everyone already
     unsigned k_counter = 0;
-    unsigned we_are_done = false;
+    bool we_are_done = false;
+    bool asked_all = true;
     for(set<k_nodeinfo*, closer>::const_iterator i = lresult->results.begin(); i != lresult->results.end(); ++i) {
       KDEBUG(2) << "do_lookup: finished? considering result " << printID((*i)->id) << endl;
+      if(asked.find((*i)->id) == replied.end())
+        asked_all = false;
+
       if(replied.find((*i)->id) == replied.end()) {
         KDEBUG(2) << "do_lookup: finished? haven't gotten a reply from " << printID((*i)->id) << " yet, so no." << endl;
         break;
@@ -349,6 +353,12 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
       }
     }
 
+    // there are no more outstanding RPCs and we asked everyone we could have
+    // asked.  there's simply nothing else we can do.
+    if(!outstanding_rpcs->size() && asked_all)
+      break;
+
+    // we_are_done: we've had an answer from the best k nodes we know of
     if(we_are_done) {
       reap_info *ri = New reap_info();
       ri->k = this;
