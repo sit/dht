@@ -70,8 +70,18 @@ client_accept (int fd)
 
   // XXX these dhashgateway objects are leaked
   //
-  dhashgateway *c = New dhashgateway (x, chordnode);
-  c->set_caching (do_cache);
+
+#if 1
+   vNew dhashgateway (x, chordnode);
+#else   
+   // XXX
+   // the dhashgateway object no longer controls the caching behavior..
+   // I still need to restore this functionality..
+   // --josh
+   //
+   dhashgateway *c = New dhashgateway (x, chordnode);
+   c->set_caching (do_cache);
+#endif
 }
 
 static void
@@ -275,6 +285,7 @@ main (int argc, char **argv)
       p2psocket = optarg;
       break;
     case 'c':
+       warn << "XXX FIXME....'-c' flag currently has no effect --josh\n";  
       do_cache = true;
       break;
     case 'd':

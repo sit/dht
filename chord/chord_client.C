@@ -70,9 +70,13 @@ chord::tcpclient_cb (int srvfd)
   if (fd < 0)
     warn << "chord: accept failed " << strerror (errno) << "\n";
   else {
+    // XXX i think this code no longer works...josh
+    //
     ptr<axprt> x = axprt_stream::alloc (fd, 230000);
     ptr<asrv> s = asrv::alloc (x, chord_program_1);
-    ptr<asrv> s2 = asrv::alloc (x, dhash_program_1);
+    ptr<asrv> s2 = asrv::alloc (x, dhash_program_1); // XXX not needed?? 
+                                                     // Dhash calls setHandler to register.
+                                                     // --josh
     s->setcb (wrap (mkref(this), &chord::dispatch, s));
     s2->setcb (wrap (mkref(this), &chord::dispatch, s2));
   }

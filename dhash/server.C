@@ -37,15 +37,31 @@
 #include <dmalloc.h>
 #endif
 
-dhash::dhash(str dbname, vnode *node, int k, int ss, int cs, int _ss_mode) :
-  key_store(ss), key_cache(cs) {
+int
+dhash::dbcompare (ref<dbrec> a, ref<dbrec> b)
+{
+  chordID ax = dbrec2id (a);
+  chordID bx = dbrec2id (b);
+  if (ax < bx)
+    return -1;
+  else if (ax == bx)
+    return 0;
+  else
+    return 1;
+}
 
+
+dhash::dhash(str dbname, vnode *node, int k, int ss, int cs, int _ss_mode) 
+{
   nreplica = k;
   kc_delay = 11;
   rc_delay = 7;
   ss_mode = _ss_mode / 10;
   
   db = New dbfe();
+
+  db->set_compare_fcn (wrap (this, &dhash::dbcompare));
+
   //set up the options we want
   dbOptions opts;
   opts.addOption("opt_async", 1);
@@ -64,13 +80,9 @@ dhash::dhash(str dbname, vnode *node, int k, int ss, int cs, int _ss_mode) :
   //recursive state
   qnonce = 1;
 
-  key_store.set_flushcb (wrap (this, &dhash::store_flush));
-  key_replicate.set_flushcb (wrap (this, &dhash::store_flush));  
-  key_cache.set_flushcb (wrap (this, &dhash::cache_flush));
 
   // pred = 0; // XXX initialize to what?
   check_replica_tcb = NULL;
-  check_key_tcb = NULL;
 
   /* statistics */
   keys_stored = 0;
@@ -81,10 +93,8 @@ dhash::dhash(str dbname, vnode *node, int k, int ss, int cs, int _ss_mode) :
   bytes_served = 0;
   rpc_answered = 0;
 
-  init_key_status ();
   update_replica_list ();
   install_replica_timer ();
-  install_keycheck_timer (true, host_node->my_pred ());
   transfer_initial_keys ();
 
   // RPC demux
@@ -95,7 +105,6 @@ dhash::dhash(str dbname, vnode *node, int k, int ss, int cs, int _ss_mode) :
 void
 dhash::sync_cb () 
 {
-  /// warn << "sync\n";
   db->sync ();
   delaycb (30, wrap (this, &dhash::sync_cb));
 }
@@ -150,34 +159,6 @@ dhash::dispatch (svccb *sbp)
 	res.cont_res->next.x = nid;
 	res.cont_res->next.r = 
 	  host_node->chordnode->locations->getaddress (nid);
-
-#if 0
-	vec <chord_node> s_list;
-	chordID last = nid;
-	chord_node nsucc;
-	nsucc.x = nid;
-	nsucc.r = host_node->chordnode->locations->getaddress (nsucc.x);
-	s_list.push_back (nsucc);
-	for (int i = 0; i < NSUCC; i++) {
-	  chordID next = host_node->lookup_closestsucc (last);
-	  if (next == s_list[0].x) break;
-	  nsucc.x = next;
-	  nsucc.r = host_node->chordnode->locations->getaddress (nsucc.x);
-	  s_list.push_back (nsucc);
-	  last = nsucc.x;
-	}
-	
-	res.cont_res->succ_list.setsize (s_list.size ());
-	for (unsigned int i = 0; i < s_list.size (); i++)
-	  res.cont_res->succ_list[i] = s_list[i];
-
-	chordID best_succ = res.cont_res->succ_list[0].x;
-
-	res.cont_res->next.x = nid;
-	res.cont_res->next.r = 
-	  host_node->chordnode->locations->getaddress (best_succ);
-#endif
-
       }
       
       sbp->reply (&res);
@@ -210,27 +191,28 @@ dhash::dispatch (svccb *sbp)
     break;
   case DHASHPROC_GETKEYS:
     {
-      s_dhash_getkeys_arg *gkarg = 
-	sbp->template getarg<s_dhash_getkeys_arg> ();
+      s_dhash_getkeys_arg *gkarg = sbp->template getarg<s_dhash_getkeys_arg> ();
       
       dhash_getkeys_res res (DHASH_OK);
       ref<vec<chordID> > keys = New refcounted<vec<chordID> >;
-      chordID mypred = host_node->my_pred ();
-      key_store.traverse (wrap (this, &dhash::get_keys_traverse_cb, keys, 
-				mypred, gkarg->pred_id));
 
+      // XXX this is really inefficient!  ==> use cursors!
+      // XXX and may produce huge RPCs    ==> use chunking!
+      ptr<dbEnumeration> it = db->enumerate();
+      ptr<dbPair> d = it->nextElement();    
+      while (d) {
+	chordID k = dbrec2id (d->key);
+	if (between (pred, gkarg->pred_id, k))
+	  keys->push_back (k);
+	d = it->nextElement();
+      }
       res.resok->keys.set (keys->base (), keys->size (), freemode::NOFREE);
       sbp->reply (&res);
     }
     break;
   case DHASHPROC_KEYSTATUS:
     {
-      s_dhash_keystatus_arg *arg = 
-	sbp->template getarg<s_dhash_keystatus_arg> ();
-
-      //return the status of this key (needed?)
-      dhash_stat stat = key_status (arg->key);
-      sbp->reply (&stat);
+      fatal << "screw off\n";
     }
     break;
   default:
@@ -305,25 +287,6 @@ dhash::get_keys_traverse_cb (ptr<vec<chordID> > vKeys,
 // -------- reliability stuff
 
 void
-dhash::init_key_status () 
-{
-  dhash_stat c = DHASH_CACHED;
-  dhash_stat s = DHASH_STORED;
-  /* probably not safe if I ever fix ADB */
-  ptr<dbEnumeration> it = db->enumerate();
-  ptr<dbPair> d = it->nextElement();
-  while (d) {
-    chordID k = dbrec2id (d->key);
-    if (responsible (k)) 
-      key_store.enter (k, &s);
-    else
-      key_store.enter (k, &c);
-
-    d = it->nextElement();
-  } 
-}
-
-void
 dhash::transfer_initial_keys ()
 {
   chordID succ = host_node->my_succ ();
@@ -349,9 +312,9 @@ dhash::transfer_init_getkeys_cb (dhash_getkeys_res *res, clnt_stat err)
 
   chordID succ = host_node->my_succ ();
   for (unsigned int i = 0; i < res->resok->keys.size (); i++) {
-    if (key_status (res->resok->keys[i]) == DHASH_NOTPRESENT)
-      get_key (succ, res->resok->keys[i], 
-	       wrap (this, &dhash::transfer_init_gotk_cb));
+    chordID k = res->resok->keys[i];
+    if (key_status (k) == DHASH_NOTPRESENT)
+      get_key (succ, k, wrap (this, &dhash::transfer_init_gotk_cb));
   }
   delete res;
 }
@@ -379,12 +342,6 @@ dhash::install_replica_timer ()
 }
 
 
-void 
-dhash::install_keycheck_timer (bool first, chordID pred) 
-{
-  check_key_tcb = delaycb (kc_delay, 0, 
-			   wrap (this, &dhash::check_keys_timer_cb, first, pred));
-}
 
 /* O( (number of replicas)^2 ) (but doesn't assume anything about
 ordering of chord::succlist*/
@@ -404,22 +361,36 @@ dhash::check_replicas_cb () {
 void
 dhash::check_replicas () 
 {
+  ////if (!isReplica(nth)) key_store.traverse (wrap (this, &dhash::check_replicas_traverse_cb, nth));
+
   for (unsigned int i=0; i < replicas.size (); i++) {
     chordID nth = host_node->nth_successorID (i+1);
-    if (!isReplica(nth)) 
-      key_store.traverse (wrap (this, &dhash::check_replicas_traverse_cb, 
-				nth));
+    if (isReplica(nth))
+      continue;
+
+    // XXX this is really inefficient!
+    //     We only need to transfer blocks in the range for which we are
+    //     the home node, ie blocks in the range (predID, myID].  Since, 
+    //     the database is already sorted by key, we should be able to
+    //     use cursors to do much better than iterating over the whole
+    //     database as we do here..
+    //
+    ptr<dbEnumeration> it = db->enumerate();
+    ptr<dbPair> d = it->nextElement();    
+    while (d) {
+      chordID k = dbrec2id (d->key);
+      if (responsible (k)) {
+	transfer_key (nth, k, DHASH_REPLICA, 
+		      wrap (this, &dhash::fix_replicas_txerd));
+      }
+      d = it->nextElement();
+    }
   }
+
   update_replica_list ();
 }
 
-void
-dhash::check_replicas_traverse_cb (chordID to, const chordID &key)
-{
-  if (key_status (key) == DHASH_STORED)
-    transfer_key (to, key, DHASH_REPLICA, wrap (this, 
-						&dhash::fix_replicas_txerd));
-}
+
 
 void
 dhash::fix_replicas_txerd (dhash_stat err) 
@@ -427,33 +398,8 @@ dhash::fix_replicas_txerd (dhash_stat err)
   if (err) warn << "error replicating key\n";
 }
 
-void
-dhash::check_keys_timer_cb (bool first, chordID pred)
-{
-  chordID current_pred = host_node->my_pred ();
 
-  // only if the predecessor has changed do we need to
-  // check the keys.  first handles the initial condition
-  // where we don't have a previous predecessor to compare
-  // against.
-  if (first ||  current_pred != pred) {
-    // printkeys ();
-    key_store.traverse (wrap (this, &dhash::check_keys_traverse_cb));
-    key_replicate.traverse (wrap (this, &dhash::check_keys_traverse_cb));
-    key_cache.traverse (wrap (this, &dhash::check_keys_traverse_cb));
-  }
-  install_keycheck_timer (false, current_pred);
-}
 
-void
-dhash::check_keys_traverse_cb (const chordID &key) 
-{
-  if ( (responsible (key)) && (key_status(key) != DHASH_STORED)) {
-    change_status (key, DHASH_STORED);
-  } else if ( (!responsible (key) && (key_status (key) == DHASH_STORED))) {
-    change_status (key, DHASH_REPLICATED); 
-  }
-}
 // --- node to node transfers ---
 void
 dhash::replicate_key (chordID key, cbstat_t cb)
@@ -640,8 +586,6 @@ dhash::get_key_finish (char *buf, unsigned int size, chordID key, cbstat_t cb)
 {
   ptr<dbrec> k = id2dbrec (key);
   ptr<dbrec> d = New refcounted<dbrec> (buf, size);
-  dhash_stat stat = DHASH_STORED;
-  key_store.enter (key, &stat);
   db->insert (k, d, wrap(this, &dhash::get_key_finish_store, cb));
 }
 
@@ -674,9 +618,12 @@ dhash::fetch_cb (cbvalue cb, ptr<dbrec> ret)
   warnt("DHASH: FETCH_after_db");
 
   if (!ret) {
+    ////warn << "lookup ==> NOENT\n";
     (*cb)(NULL, DHASH_NOENT);
-  } else
+  } else {
+    ////warn << "lookup ==> OK\n";
     (*cb)(ret, DHASH_OK);
+  }
 }
 
 void
@@ -704,7 +651,7 @@ dhash::append (ptr<dbrec> key, ptr<dbrec> data,
 	dhash_stat stat;
 	chordID id = arg->key;
 	stat = DHASH_STORED;
-	keys_stored += key_store.enter (id, &stat);
+	keys_stored += 1;
 
 	db->insert (key, marshalled_data, 
 		    wrap(this, &dhash::append_after_db_store, cb, arg->key));
@@ -805,6 +752,7 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
 	((arg->attr.ctype == DHASH_NOAUTH) 
 	 && key_status (arg->key) != DHASH_NOTPRESENT)) {
 
+      warn << "*** NO VERIFY\n";
       cb (DHASH_STORE_NOVERIFY);
       if (ss) {
 	pst.remove (ss);
@@ -819,13 +767,13 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
     chordID id = arg->key;
     if (arg->type == DHASH_STORE) {
       stat = DHASH_STORED;
-      keys_stored += key_store.enter (id, &stat);
+      keys_stored += 1;
     } else if (arg->type == DHASH_REPLICA) {
       stat = DHASH_REPLICATED;
-      keys_replicated += key_replicate.enter (id, &stat);
+      keys_replicated += 1;
     } else {
       stat = DHASH_CACHED;
-      keys_cached += key_cache.enter (id, &stat);
+      keys_cached += 1;
     }
 
 #if 1
@@ -837,6 +785,7 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
 #endif
     
 #if 1
+    ///warn << "insert: " << dbrec2id (k) << " type " << arg->attr.ctype << "\n";
     db->insert (k, d, wrap(this, &dhash::store_cb, arg->type, id, cb));
 #else
     store_cb (arg->type, id, cb, 0);
@@ -875,7 +824,7 @@ dhash::store_repl_cb (cbstore cb, dhash_stat err)
 
 // --------- utility
 
-ptr<dbrec>
+ref<dbrec>
 dhash::id2dbrec(chordID id) 
 {
   str whipme = id.getraw ();
@@ -893,44 +842,23 @@ dhash::dbrec2id (ptr<dbrec> r) {
   ret.setraw (raw);
   return ret;
 }
-void
-dhash::change_status (chordID key, dhash_stat newstat) 
-{
-  if (key_status (key) == DHASH_STORED) 
-    key_store.remove (key);
-  else if (key_status (key) == DHASH_REPLICATED)
-    key_replicate.remove (key);
-  else if (key_status (key) == DHASH_CACHED)
-    key_cache.remove (key);
-  else
-    assert (0);
 
-  if (newstat == DHASH_STORED)
-    key_store.enter (key, &newstat);
-  if (newstat == DHASH_REPLICATED)
-    key_replicate.enter (key, &newstat);
-  else if (newstat == DHASH_CACHED)
-    key_cache.enter (key, &newstat);
-}
 
 
 dhash_stat
 dhash::key_status(const chordID &n) 
 {
-  dhash_stat * s_stat = key_store.peek (n);
-  if (s_stat != NULL)
-    return *s_stat;
+  ptr<dbrec> val = db->lookup (id2dbrec (n));
+  if (!val)
+    return DHASH_NOTPRESENT;
 
-  s_stat = key_replicate.peek (n);
-  if (s_stat != NULL)
-    return *s_stat;
-  
-  dhash_stat * c_stat = key_cache.peek (n);
-  if (c_stat != NULL)
-    return *c_stat;
-
-  return DHASH_NOTPRESENT;
+  // XXX we dont distinguish replicated vs cached
+  if (responsible (n))
+    return DHASH_STORED;
+  else
+    return DHASH_REPLICATED;
 }
+
 
 char
 dhash::responsible(const chordID& n) 
@@ -942,42 +870,6 @@ dhash::responsible(const chordID& n)
   return (between (p, m, n));
 }
 
-void
-dhash::store_flush (chordID key, dhash_stat value) {
-  fatal << "flushing element " << key << " from store\n";
-
-  // XXX what's going on here?  
-  //     Why is the key entered into the key_cache, 
-  //     and at the same time deleted from the database?
-  //
-  //     Moreover, why does cache_flush() then delete
-  //     the key from the database again?
-  //     --josh
-
-  ptr<dbrec> k = id2dbrec(key);
-  dhash_stat c = DHASH_CACHED;
-  key_cache.enter (key, &c);
-  db->del (k, wrap(this, &dhash::store_flush_cb));
-}
- 
-void
-dhash::store_flush_cb (int err) {
-  if (err) warn << "Error removing element\n";
-}
-
-void
-dhash::cache_flush (chordID key, dhash_stat value) {
-
-  if (key_status (key) != DHASH_CACHED) return;
-  warn << "flushing element " << key << " from cache\n";
-  ptr<dbrec> k = id2dbrec(key);
-  db->del (k, wrap(this, &dhash::cache_flush_cb));
-}
-
-void
-dhash::cache_flush_cb (int err) {
-  if (err) warn << "err flushing from cache\n";
-}
 
 
 void
@@ -996,9 +888,14 @@ dhash::doRPC (chordID ID, rpc_program prog, int procno,
 void
 dhash::printkeys () 
 {
-  key_store.traverse (wrap (this, &dhash::printkeys_walk));
-  key_replicate.traverse (wrap (this, &dhash::printkeys_walk));
-  key_cache.traverse (wrap (this, &dhash::printcached_walk));
+  
+  ptr<dbEnumeration> it = db->enumerate();
+  ptr<dbPair> d = it->nextElement();    
+  while (d) {
+    chordID k = dbrec2id (d->key);
+    printkeys_walk (k);
+    d = it->nextElement();
+  }
 }
 
 void
@@ -1044,4 +941,69 @@ dhash::stop ()
     check_replica_tcb = NULL;
     update_replica_list ();
   }
+}
+
+
+
+
+static void
+join(store_chunk *c)
+{
+  store_chunk *cnext;
+
+  while (c->next && c->end >= c->next->start) {
+    cnext = c->next;
+    if (c->end < cnext->end)
+      c->end = cnext->end;
+    c->next = cnext->next;
+    delete cnext;
+  }
+}
+
+
+bool
+store_state::iscomplete()
+{
+  return have && have->start==0 && have->end==(unsigned)size;
+}
+
+bool
+store_state::addchunk(unsigned int start, unsigned int end, void *base)
+{
+  store_chunk **l, *c;
+
+#if 0
+  warn << "store_state";
+  for(c=have; c; c=c->next)
+    warnx << " [" << (int)c->start << " " << (int)c->end << "]";
+  warnx << "; add [" << (int)start << " " << (int)end << "]\n";
+#endif
+
+  if(start >= end)
+    return false;
+
+  if(start >= end || end > size)
+    return false;
+  
+  l = &have;
+  for (l=&have; *l; l=&(*l)->next) {
+    c = *l;
+    // our start touches this block
+    if (c->start <= start && start <= c->end) {
+      // we have new data
+      if (end > c->end) {
+        memmove (buf+start, base, end-start);
+        c->end = end;
+        join(c);
+      }
+      return true;
+    }
+    // our start comes before this block; break to insert
+    if (start < c->start)
+      break;
+  }
+  *l = New store_chunk(start, end, *l);
+  memmove(buf+start, base, end-start);
+  join(*l);
+  return true;
 }

@@ -94,60 +94,56 @@ dhash::verify_dnssec ()
 ptr<dhash_block>
 dhash::get_block_contents (ptr<dbrec> d, dhash_ctype t)
 {
-  ptr<dhash_block> b = New refcounted<dhash_block> (d->value, d->len);
-  return get_block_contents (b, t);
+  return get_block_contents (d->value, d->len, t);
 }
+
 
 ptr<dhash_block> 
 dhash::get_block_contents (ptr<dhash_block> block, dhash_ctype t) 
 {
+  return get_block_contents (block->data, block->len, t);
+}
+
+
+ptr<dhash_block> 
+dhash::get_block_contents (char *data, unsigned int len, dhash_ctype t) 
+{
+  // XXX make this function shorter...
   long type;
-  xdrmem x1 (block->data, (unsigned)block->len, XDR_DECODE);
-  if (!XDR_GETLONG (&x1, &type))
+  long contentlen;
+  char *content;
+
+  xdrmem x1 (data, len, XDR_DECODE);
+  if (!XDR_GETLONG (&x1, &type) || type != t)
     return NULL;
-  if (type != t) return NULL;
   
   switch (t) {
+  case DHASH_KEYHASH:
+    {
+      bigint a,b;
+      if (!xdr_getbigint (&x1, a) || !xdr_getbigint (&x1, b))
+	return NULL;
+    }
+    /* FALL THROUGH */
+
   case DHASH_CONTENTHASH:
   case DHASH_NOAUTH:
   case DHASH_APPEND:
     {
-      long contentlen;
       if (!XDR_GETLONG (&x1, &contentlen))
 	return NULL;
-      
-      char *content;
       if (!(content = (char *)XDR_INLINE (&x1, contentlen)))
 	return NULL;
-      
-      ptr<dhash_block> ret = New refcounted<dhash_block>
-	(content, contentlen);
-      return ret;
     }
     break;
-  case DHASH_KEYHASH:
-    {
-      bigint a,b;
-      
-      long contentlen;
-      if (!xdr_getbigint (&x1, a) || 
-	  !xdr_getbigint (&x1, b) ||
-	  !XDR_GETLONG (&x1, &contentlen))
-	return NULL;
-	
-      char *content;
-      if (!(content = (char *)XDR_INLINE (&x1, contentlen)))
-	return NULL;
-      
-      ptr<dhash_block> ret = New refcounted<dhash_block>
-	(content, contentlen);
-      return ret;
-    }
-    break;
+
   default:
     return NULL;
   }
+
+  return New refcounted<dhash_block> (content, contentlen);
 }
+
 
 dhash_ctype
 dhash::block_type (ptr<dbrec> data)

@@ -39,17 +39,9 @@ enum dhash_ctype {
   DHASH_UNKNOWN = 5
 };
 
-struct dhash_blockattr {
+struct dhash_valueattr {
   unsigned size;
   dhash_ctype ctype;
-};
-
-struct dhash_insertarg {
-  chordID key;
-  dhash_value data;
-  int offset;
-  store_status type;
-  dhash_blockattr attr;
 };
 
 
@@ -59,17 +51,11 @@ struct s_dhash_insertarg {
   dhash_value data;
   int offset;
   store_status type;
-  dhash_blockattr attr;
+  dhash_valueattr attr;
 };
 
 struct s_dhash_fetch_arg {
   chord_vnode v;
-  chordID key;
-  int32 start;
-  int32 len;
-};
-
-struct dhash_fetch_arg {
   chordID key;
   int32 start;
   int32 len;
@@ -80,10 +66,6 @@ struct s_dhash_keystatus_arg {
   chordID key;
 };
 
-struct dhash_transfer_arg {
-  dhash_fetch_arg farg;
-  chordID source;
-};
 
 struct dhash_pred {
   chord_node p;
@@ -108,7 +90,7 @@ struct s_dhash_getkeys_arg {
 struct dhash_resok {
   dhash_value res;
   int32 offset;
-  dhash_blockattr attr;
+  dhash_valueattr attr;
   int32 hops;
   chordID source;
 };
@@ -142,7 +124,7 @@ struct dhash_fetchiter_continue_res {
 struct dhash_fetchiter_complete_res {
   dhash_value res;
   int32 offset;
-  dhash_blockattr attr;
+  dhash_valueattr attr;
   int32 hops;
   chordID source;
 };
@@ -156,34 +138,7 @@ union dhash_fetchiter_res switch (dhash_stat status) {
    void;
 };
 
-struct dhash_send_arg {
-  dhash_insertarg iarg;
-  chordID dest;
-};
 
-program DHASHGATEWAY_PROGRAM {
-	version DHASHCLNT_VERSION {
-
-		void 
-		DHASHPROC_NULL (void) = 1;
-
-		dhash_res
-		DHASHPROC_LOOKUP (dhash_fetch_arg) = 2;
-
-		dhash_res
-		DHASHPROC_TRANSFER (dhash_transfer_arg) = 3;
-
-		dhash_storeres
-        	DHASHPROC_INSERT (dhash_insertarg) = 4;
-
-		dhash_storeres
-		DHASHPROC_SEND (dhash_send_arg) = 5;
-
-		dhash_stat
-         	DHASHPROC_ACTIVE (int32) = 6;
-		
-	} = 1;
-} = 344448;
 
 program DHASH_PROGRAM {
   version DHASH_VERSION {
@@ -202,6 +157,53 @@ program DHASH_PROGRAM {
 
   } = 1;
 } = 344449;
+
+
+
+//  --------------------------------------------------------------------------
+//  The DHASHGATEWAY_PROGRAM is the very narrow interface between clients of 
+//  dhash (such as chordcd, sfsrodb, dbm) and the lsd process.  Since this RPC 
+//  interface is intended to be transported over a unix domain socket, blocks 
+//  are retrieved/inserted in their entirety, ie. are not broken into chunks. 
+
+
+struct dhash_insert_arg {
+  chordID     blockID;    // the key
+  dhash_value block;  // the data block
+  dhash_ctype ctype;  // and type of the data block
+};
+
+
+struct dhash_retrieve_arg {
+  chordID blockID;
+};
+
+union dhash_retrieve_res switch (dhash_stat status) {
+ case DHASH_OK:
+   dhash_value block;
+ default:
+   void;
+};
+
+
+program DHASHGATEWAY_PROGRAM {
+	version DHASHCLNT_VERSION {
+		void 
+		DHASHPROC_NULL (void) = 1;
+
+	        dhash_stat
+		DHASHPROC_INSERT (dhash_insert_arg) = 2;
+
+                dhash_retrieve_res
+		DHASHPROC_RETRIEVE (dhash_retrieve_arg) = 3;
+
+		dhash_stat
+         	DHASHPROC_ACTIVE (int32) = 4;
+		
+	} = 1;
+} = 344448;
+
+
 
 
 

@@ -182,7 +182,6 @@ struct dbEnumeration {
 ref<dbImplInfo> dbGetImplInfo();
 
 class dbfe {
-
   typedef callback<void, int>::ptr errReturn_cb;
   typedef callback<void, ptr<dbrec> >::ptr itemReturn_cb;
   typedef callback<int, char *, dbOptions>::ptr open_cb;
@@ -196,6 +195,7 @@ class dbfe {
 
   typedef callback<void, ref<dbrec>, ref<dbrec>, errReturn_cb >::ptr insert_cb_async;
   typedef callback<void, ref<dbrec>, itemReturn_cb >::ptr lookup_cb_async;
+
 
   open_cb create_impl;
   open_cb  open_impl;
@@ -225,6 +225,9 @@ class dbfe {
   void IMPL_delete_async_sleepycat(ptr<dbrec> key, errReturn_cb cb);
   int IMPL_delete_sync_sleepycat(ptr<dbrec> key);
   void IMPL_sync ();
+
+  static int IMPL_compare_fcn_sleepycat (DB *db, const DBT *a, const DBT *b);
+
 #else
   #error ADB is marked broken
 
@@ -247,6 +250,13 @@ class dbfe {
   char closed;
   
  public:
+
+#ifdef SLEEPYCAT
+  typedef callback<int, ref<dbrec>, ref<dbrec> >::ptr compare_fcn_t;
+  compare_fcn_t compare;
+  int set_compare_fcn (compare_fcn_t fn) { compare = fn; }
+#endif
+
   dbfe();
   ~dbfe();
 
@@ -266,6 +276,9 @@ class dbfe {
     { return (*delete_impl_async) (key, cb); };
   void sync () 
     { IMPL_sync (); };
+
+
+
 
   ptr<dbEnumeration> enumerate() { return (*make_enumeration)(); };
 

@@ -173,6 +173,7 @@ main (int argc, char **argv)
     }
   case PUB_KEY:
     {
+    assert (argc == 5 && "last argument is pubkey file");
     str key = file2wstr (argv[4]);
     ptr<rabin_priv> sk =  import_rabin_priv (key, NULL);
     dhash.insert (data, strlen(data), *sk, wrap (&store_cb_pk, dhash));

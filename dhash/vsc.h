@@ -155,3 +155,6 @@ public:
   }
 };
 
+
+
+#error "This class is not used.  Dhash no longer keeps an in-core index of the its block store"

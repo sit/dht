@@ -46,8 +46,6 @@
  * Include file for the distributed hash service
  */
 
-#include "vsc.h"
-
 struct store_cbstate;
 
 typedef callback<void, ptr<dbrec>, dhash_stat>::ptr cbvalue;
@@ -56,17 +54,6 @@ typedef callback<void,dhash_stat>::ptr cbstore;
 typedef callback<void,dhash_stat>::ptr cbstat_t;
 
 #define MTU 1024
-
-struct store_cbstate {
-  svccb *sbp;
-  int nreplica;
-  int r;
-  dhash_insertarg *item;
-  cbstat cb;
-  store_cbstate (svccb *sbpi, int ni, dhash_insertarg *ii, cbstat cbi) :
-    sbp (sbpi), nreplica (ni), item (ii), cb (cbi) 
-  { r = nreplica + 1; };
-};
 
 struct store_chunk {
   store_chunk *next;
@@ -102,77 +89,6 @@ struct store_state {
   bool iscomplete ();
 };
 
-struct query_succ_state {
-  vec<chord_node> succ;
-  int pathlen;
-  svccb *sbp;
-  ptr<dhash_fetch_arg> rarg;
-  chordID source;
-
-  query_succ_state (vec<chord_node> s, int p, svccb *sb,
-		    ptr<dhash_fetch_arg> r, chordID so) :
-    succ (s), pathlen (p), sbp (sb), rarg (r), source (so) {};
-};
-class dhashgateway {
-
-  ptr<axprt_stream> x;
-  ptr<asrv> clntsrv;
-  ptr<chord> clntnode;
-
-  bool do_caching;
-
-  ihash<chordID, store_state, &store_state::key, &store_state::link, hashID> pst;
-
-  void doRPC (chordID ID, rpc_program prog, int procno,
-	      ptr<void> in, void *out, aclnt_cb cb);
-
-  bool straddled (route path, chordID &k);
-  void dispatch (svccb *sbp);
-
-  void lookup_iter_cb (svccb *sbp, 
-		       dhash_fetchiter_res *res,
-		       route path,
-		       int nerror,
-		       clnt_stat err);
-
-  void query_successors (vec<chord_node> succ, 
-			 int pathlen,
-			 svccb *sbp,
-			 ptr<dhash_fetch_arg> rarg,
-			 chordID source);
-  
-  void query_successors_fetch_cb (query_succ_state *st,
-				  chordID prev,
-				  dhash_fetchiter_res *fres, 
-				  clnt_stat err);
-
-  void insert_findsucc_cb (svccb *sbp, ptr<dhash_insertarg> item, chordID succ,
-			   route path, chordstat err);
-  void insert_store_cb(svccb *sbp,  dhash_storeres *res,
-		       ptr<s_dhash_insertarg> item,
-		       chordID source,
-		       unsigned int attempts,
-		       clnt_stat err);
-
-  void transfer_cb (chordID key, svccb *sbp, dhash_fetchiter_res *res, clnt_stat err);
-  void send_cb (svccb *sbp, dhash_storeres *res, 
-		      ptr<s_dhash_insertarg> iarg, clnt_stat err);
-
-  void cache_on_path (chordID key, route path);
-  void send_block (chordID key, chordID to, store_status stat);
-  void send_store_cb (dhash_storeres *res, clnt_stat err);
-
-  void save_chunk (chordID key, dhash_fetchiter_res *res, route path);
-  void save_chunk (chordID key, dhash_fetchiter_res *res);
-  void save_chunk (chordID key, int tsize, 
-		       int offset, void *base, int dsize);
-  bool block_complete (chordID key);
-  void forget_block (chordID key);
-
- public:  
-  void set_caching (bool c) { do_caching = c; };
-  dhashgateway (ptr<axprt_stream> x, ptr<chord> clnt);
-};
 
 
 struct dhash_block {
@@ -188,6 +104,8 @@ struct dhash_block {
       memcpy (data, buf, len);
   }
 };
+
+
 
 class dhash {
 
@@ -243,9 +161,6 @@ class dhash {
   void replicate_key_cb (unsigned int replicas_done, cbstat_t cb, chordID key,
 			 dhash_stat err);
 
-  void install_keycheck_timer (bool first, chordID pred);
-  void check_keys_timer_cb (bool first, chordID pred);
-  void check_keys_traverse_cb (const chordID &key);
 
   void install_replica_timer ();
   void check_replicas_cb ();
@@ -286,17 +201,14 @@ class dhash {
   void printkeys_walk (const chordID &k);
   void printcached_walk (const chordID &k);
 
-  ptr<dbrec> id2dbrec(chordID id);
+  int dbcompare (ref<dbrec> a, ref<dbrec> b);
+
+  ref<dbrec> id2dbrec(chordID id);
   chordID dbrec2id (ptr<dbrec> r);
 
-  vs_cache<chordID, dhash_stat> key_store;
-  vs_cache<chordID, dhash_stat> key_replicate;
-  vs_cache<chordID, dhash_stat> key_cache;
-  
   chordID pred;
   vec<chordID> replicas;
   timecb_t *check_replica_tcb;
-  timecb_t *check_key_tcb;
 
   /* statistics */
   long bytes_stored;
@@ -321,9 +233,11 @@ class dhash {
   static bool verify_content_hash (chordID key,  char *buf, int len);
   static bool verify_key_hash (chordID key, char *buf, int len);
   static bool verify_dnssec ();
-  static ptr<dhash_block> get_block_contents (ptr<dhash_block> block,
-					      dhash_ctype t);
   static ptr<dhash_block> get_block_contents (ptr<dbrec> d, dhash_ctype t);
+  static ptr<dhash_block> get_block_contents (ptr<dhash_block> block, dhash_ctype t);
+  static ptr<dhash_block> get_block_contents (char *data, unsigned int len, dhash_ctype t);
+
+
   static dhash_ctype block_type (ptr<dbrec> d);
 
 };
@@ -331,7 +245,36 @@ class dhash {
 
 
 typedef callback<void, bool, chordID>::ref cbinsert_t;
+typedef cbinsert_t cbstore_t;
 typedef callback<void, ptr<dhash_block> >::ref cbretrieve_t;
+typedef callback<void, ptr<dhash_res> >::ref dhashcli_lookup_itercb_t;
+typedef callback<void, ptr<dhash_storeres> >::ref dhashcli_storecb_t;
+typedef callback<void, dhash_stat, chordID>::ref dhashcli_lookupcb_t;
+
+
+class dhashcli {
+  ptr<chord> clntnode;
+
+ private:
+  void doRPC (chordID ID, rpc_program prog, int procno, ptr<void> in, void *out, aclnt_cb cb);
+  void lookup_iter_with_source_cb (ptr<dhash_fetchiter_res> fres, dhashcli_lookup_itercb_t cb, clnt_stat err);
+  void lookup_iter_cb (chordID blockID, dhashcli_lookup_itercb_t cb, ref<dhash_fetchiter_res> res, 
+		       route path, int nerror,  clnt_stat err);
+  void lookup_findsucc_cb (chordID blockID, dhashcli_lookupcb_t cb, chordID succID, route path, chordstat err);
+  void store_cb (dhashcli_storecb_t cb, ref<dhash_storeres> res,  clnt_stat err);
+
+ public:
+  dhashcli (ptr<chord> node) : clntnode (node) {}
+  void retrieve (chordID blockID, cbretrieve_t cb);
+  void insert (chordID blockID, ref<dhash_block> block, dhash_ctype ctype, cbinsert_t cb);
+  void lookup_iter (chordID sourceID, chordID blockID, uint32 off, uint32 len, dhashcli_lookup_itercb_t cb);
+  void lookup_iter (chordID blockID, uint32 off, uint32 len, dhashcli_lookup_itercb_t cb);
+  void store (chordID destID, chordID blockID, char *data, size_t len, size_t off, size_t totsz, 
+	      dhash_ctype ctype, dhashcli_storecb_t cb);
+  void lookup (chordID blockID, dhashcli_lookupcb_t cb);
+};
+
+
 
 class dhashclient {
 private:
@@ -339,43 +282,54 @@ private:
 
   // inserts under the specified key
   // (buf need not remain involatile after the call returns)
-  //
   void insert (bigint key, const char *buf, size_t buflen, 
 	       cbinsert_t cb, dhash_ctype t);
+  void insertcb (cbinsert_t cb, bigint key, dhash_stat *res, clnt_stat err);
+  void retrievecb (cbretrieve_t cb, bigint key, dhash_ctype ctype, 
+		   ref<dhash_retrieve_res> res, clnt_stat err);
 
 public:
-  //
   // sockname is the unix path (ex. /tmp/chord-sock) used
   // to communicate to lsd. 
-  //
   dhashclient(str sockname);
 
   void append (chordID to, const char *buf, size_t buflen, cbinsert_t cb);
 
   // inserts under the contents hash. 
   // (buf need not remain involatile after the call returns)
-  //
   void insert (const char *buf, size_t buflen, cbinsert_t cb);
-  void insert (bigint hash, const char *buf, size_t buflen, cbinsert_t cb);
 
-  //inert under hash of public key
-  void insert (const char *buf, size_t buflen, 
-		 rabin_priv key, cbinsert_t cb);
-  void insert (const char *buf, size_t buflen, 
-		 bigint sig, rabin_pub key, cbinsert_t cb);
-  void insert (bigint hash, const char *buf, size_t buflen, 
-		 bigint sig, rabin_pub key, cbinsert_t cb);
+  //insert under hash of public key
+  void insert (const char *buf, size_t buflen, rabin_priv key, cbinsert_t cb);
+  void insert (const char *buf, size_t buflen, bigint sig, rabin_pub key, cbinsert_t cb);
+  void insert (bigint hash, const char *buf, size_t buflen, bigint sig, rabin_pub key, cbinsert_t cb);
 
 
   // retrieve block and verify
-  //
   void retrieve (bigint key, dhash_ctype type, cbretrieve_t cb);
 
   // synchronouslly call setactive.
   // Returns true on error, and false on success.
-  //
   bool sync_setactive (int32 n);
 };
+
+
+
+
+
+class dhashgateway {
+  ptr<asrv> clntsrv;
+  ptr<chord> clntnode;
+  ptr<dhashcli> dhcli;
+
+  void dispatch (svccb *sbp);
+  void insert_cb (svccb *sbp, bool err, chordID blockID);
+  void retrieve_cb (svccb *sbp, ptr<dhash_block> block);
+
+public:
+  dhashgateway (ptr<axprt_stream> x, ptr<chord> clnt);
+};
+
 
 bigint compute_hash (const void *buf, size_t buflen);
 

@@ -993,29 +993,26 @@ chord_server::fetch_data (bool pfonly, chordID ID, cbdata_t cb, dhash_ctype t)
 void
 chord_server::fetch_data_cb (chordID ID, cbdata_t cb, ptr<dhash_block> blk)
 {
-  if (!blk) {
-    warn << "fetch_data failed\n";
-    (*cb) (NULL);
-  } else {
-    ptr<sfsro_data> data = New refcounted<sfsro_data>;
-    xdrmem x (blk->data, blk->len, XDR_DECODE);
-    if (!xdr_sfsro_data (x.xdrp (), data)) {
-      warn << "Couldn't unmarshall data\n";
-      (*cb) (NULL);
-    } else {
-      data_cache.insert (ID, data);
-      
-      wait_list *l = pf_waiters[ID];
-      assert (l); 
-      
-      while (fetch_wait_state *w = l->first) {
-	(*w->cb) (data);
-	l->remove (w);
-	delete w;
-      }
+  ptr<sfsro_data> data = NULL;
 
-      pf_waiters.remove (ID);
+  if (blk) {
+    data = New refcounted<sfsro_data>;
+    xdrmem x (blk->data, blk->len, XDR_DECODE);
+    if (xdr_sfsro_data (x.xdrp (), data)) {
+      data_cache.insert (ID, data);
+    } else {
+      warn << "Couldn't unmarshall data\n";
     }
   }
-}
 
+  wait_list *l = pf_waiters[ID];
+  assert (l); 
+  
+  while (fetch_wait_state *w = l->first) {
+    (*w->cb) (data);
+    l->remove (w);
+    delete w;
+  }
+  
+  pf_waiters.remove (ID);
+}

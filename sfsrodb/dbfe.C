@@ -261,10 +261,17 @@ int dbfe::IMPL_open_sleepycat(char *filename, dbOptions opts) {
  long create = opts.getOption(CREATE_OPT);
  if (create == 0) flags |= DB_EXCL;
 
-  r = db->open(db, (const char *)filename, NULL, DB_BTREE, flags, mode);
+ 
+ if (compare) {
+   db->app_private = this;
+   r =  db->set_bt_compare (db, IMPL_compare_fcn_sleepycat);
+   if (r != 0) return r;
+ }
 
+ r = db->open(db, (const char *)filename, NULL, DB_BTREE, flags, mode);
  return r;
 }
+
 
 int 
 dbfe::IMPL_create_sleepycat(char *filename, dbOptions opts) 
@@ -347,6 +354,22 @@ void
 dbfe::IMPL_sync () {
   db->sync (db, 0L);
 }
+
+
+
+int
+dbfe::IMPL_compare_fcn_sleepycat (DB *db, const DBT *a, const DBT *b)
+{
+  dbfe *dbf = (dbfe *)db->app_private;
+
+  ref<dbrec> arec = New refcounted<dbrec>(a->data, a->size);
+  ref<dbrec> brec = New refcounted<dbrec>(b->data, b->size);
+
+  return dbf->compare (arec, brec);
+}
+
+
+
 #else 
 
 ptr<dbEnumeration> dbfe::IMPL_make_enumeration_adb() {
