@@ -7,7 +7,7 @@ debruijn::debruijn (ptr<vnode> v,
 {
   mydoubleID = doubleID (myID);
   warn << myID << " debruijn: double " << mydoubleID << "\n";
-  locs->pinsucc (mydoubleID);
+  locations->pinsucc (mydoubleID);
 }
 
 void
@@ -26,4 +26,11 @@ debruijn::finddoublesucc_cb (chordID s, route search_path, chordstat status)
     //  warnx << myID << ": finddoublesucc_cb: " << mydoubleID << " is " << s 
     //  << "\n";
   }
+}
+
+void
+debruijn::print ()
+{
+    warnx << myID << ": double: " << mydoubleID
+	    << " : succ " << locations->closestsuccloc (mydoubleID) << "\n";
 }

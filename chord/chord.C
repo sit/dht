@@ -167,6 +167,8 @@ vnode::print ()
   warnx << "======== " << myID << "====\n";
 #ifdef FINGERS
   fingers->print ();
+#else
+  dutch->print ();
 #endif
   successors->print ();
 

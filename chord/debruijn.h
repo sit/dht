@@ -12,7 +12,7 @@ class debruijn : public stabilizable {
  public:
   debruijn (ptr<vnode> v, ptr<locationtable> locs, chordID myID);
 
-  // void print ();
+  void print ();
   // void stats ();
 
   void stabilize();

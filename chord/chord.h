@@ -45,7 +45,7 @@
 
 typedef int cb_ID;
 
-#define FINGERS 1
+// #define FINGERS 1
 
 typedef vec<chordID> route;
 

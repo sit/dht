@@ -16,7 +16,7 @@
 static const unsigned int DRAW_IMMED_SUCC = 1 << 0;
 static const unsigned int DRAW_SUCC_LIST  = 1 << 1;
 static const unsigned int DRAW_IMMED_PRED = 1 << 2;
-static const unsigned int DRAW_PRED_LIST  = 1 << 3; // unused
+static const unsigned int DRAW_DEBRUIJN   = 1 << 3;
 static const unsigned int DRAW_FINGERS    = 1 << 4;
 static const unsigned int DRAW_TOES       = 1 << 5;
 
@@ -31,6 +31,7 @@ void draw_toggle_cb (GtkWidget *widget, gpointer data);
 static handler_info handlers[] = {
   { DRAW_IMMED_SUCC, "immed. succ", NULL, GTK_SIGNAL_FUNC (draw_toggle_cb) },
   { DRAW_SUCC_LIST,  "succ. list",  NULL, GTK_SIGNAL_FUNC (draw_toggle_cb) },
+  { DRAW_DEBRUIJN,  "debruijn node",  NULL, GTK_SIGNAL_FUNC (draw_toggle_cb) },
   { DRAW_IMMED_PRED, "immed. pred", NULL, GTK_SIGNAL_FUNC (draw_toggle_cb) },
   { DRAW_FINGERS,    "fingers",     NULL, GTK_SIGNAL_FUNC (draw_toggle_cb) },
   { DRAW_TOES,       "neighbors",   NULL, GTK_SIGNAL_FUNC (draw_toggle_cb) }
@@ -72,6 +73,7 @@ struct f_node {
   unsigned short port;
   chord_nodelistextres *fingers;
   chord_nodeextres *predecessor;
+  chord_debruijnres *debruijn;
   chord_nodelistextres *successors;
   chord_nodelistextres *toes;
   ihash_entry <f_node> link;
@@ -86,6 +88,7 @@ struct f_node {
     predecessor = NULL;
     successors = NULL;
     toes = NULL;
+    debruijn = NULL;
   };
   ~f_node () { 
     if (fingers) delete fingers;
@@ -123,6 +126,9 @@ void update_pred (f_node *n);
 void update_pred_got_pred (chordID ID, str host, unsigned short port,
 			   chord_nodeextres *res, clnt_stat err);
 
+void update_debruijn (f_node *nu);
+void update_debruijn_got_debruijn (chordID n, chord_debruijnres *res,
+			     clnt_stat err);
 void update ();
 void initgraf ();
 void init_color_list (char *filename);
@@ -180,6 +186,7 @@ update ()
   while (n) {
     update_fingers (n);
     update_pred (n);
+    update_debruijn (n);
     update_succlist (n);
     update_toes (n);
     n = nodes.next (n);
@@ -309,6 +316,40 @@ update_pred_got_pred (chordID ID, str host, unsigned short port,
     add_node (res->resok->x, res->resok->r.hostname, res->resok->r.port);
 }
 
+//----- update debruijn finger -------------------------------------------------
+
+void
+update_debruijn (f_node *nu)
+{
+  chordID n = nu->ID;
+  ptr<chord_debruijnarg> arg = New refcounted<chord_debruijnarg> ();
+  arg->v = n;
+  arg->x = n + 1;
+  arg->d = n;
+  chord_debruijnres *nres = New chord_debruijnres (CHORD_OK);
+  doRPC (nu, CHORDPROC_DEBRUIJN, arg, nres, 
+	 wrap (&update_debruijn_got_debruijn, n, nres));
+}
+
+void
+update_debruijn_got_debruijn (chordID ID, chord_debruijnres *res, clnt_stat err)
+{
+  if (err  || res->status == CHORD_INRANGE) {
+    delete res;
+    return;
+  }
+  assert (res->status == CHORD_NOTINRANGE);
+  f_node *nu = nodes[ID];
+
+  if (nu->debruijn) delete nu->debruijn;
+  nu->debruijn = res;
+
+  if (nodes[res->noderes->node.x] == NULL) 
+    add_node (res->noderes->node.x, res->noderes->node.r.hostname, 
+	      res->noderes->node.r.port);
+}
+
+
 //----- update fingers -----------------------------------------------------
 void
 update_fingers (f_node *nu)
@@ -420,6 +461,7 @@ get_cb (chordID next)
       update_pred (nu);
       update_succlist (nu);
       update_toes (nu);
+      update_debruijn (nu);
     }
   } else {
     f_node *node_next = nodes[next];
@@ -430,7 +472,7 @@ get_cb (chordID next)
       update_pred (node_next);
       update_succlist (node_next);
       update_toes (node_next);
-      
+      update_debruijn (node_next);
       node_next = nodes.next (node_next);
       if (node_next == NULL) 
 	node_next = nodes.first ();
@@ -1212,6 +1254,14 @@ draw_ring ()
       int a,b;
       set_foreground_lat (n->predecessor->resok->a_lat); 
       ID_to_xy (n->predecessor->resok->x, &a, &b);
+      draw_arrow (x,y,a,b, draw_gc);
+    }
+
+    if (n->debruijn &&
+	((n->draw & DRAW_DEBRUIJN) == DRAW_DEBRUIJN)) {
+      int a,b;
+      set_foreground_lat (1); 
+      ID_to_xy (n->debruijn->noderes->node.x, &a, &b);
       draw_arrow (x,y,a,b, draw_gc);
     }
 
