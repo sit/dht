@@ -32,67 +32,6 @@ Koorde::Koorde(Node *n, Args &a) : Chord(n, a)
   isstable = true;
 }
 
-
-#if 0  
-// Create an imaginary node i with as many bits from k as possible and
-// such that start < i <= succ.
-Chord::CHID 
-Koorde::firstimagin (CHID start, CHID succ, CHID k, CHID *kr) 
-{
-  Chord::CHID i;
-
-  //  printf ("start %16qx succ %16qx k %16qx\n", start, succ, k);
-
-  if (start == succ) {  // XXX yuck
-    i = start + 1;
-    *kr = k;
-  } else {
-    int bm = ConsistentHash::bitposmatch (start, succ) - 1;
-    int bs = bm;
-
-    // skip the first 0 bits in start; result will be smaller than succ
-    for ( ; bs >= 0; bs--) {
-      if (ConsistentHash::getbit (start, bs, 1) == 0)
-	break;
-    }
-    bs--;
-
-    // skip till the next 0 bit in start;
-    for ( ; bs >= 0; bs--) {
-      if (ConsistentHash::getbit (start, bs, 1) == 0)
-	break;
-    }
-
-    // set that bit to 1, now start < i <= succ holds
-    i = ConsistentHash::setbit (start, bs, 1);
-    bs--;
-    
-    int mod = ((NBCHID - 1) - bs) % logbase; 
-    if (mod != 0) bs = bs - logbase + mod;
-
-    if (bs >= 0) {
-      assert (((NBCHID - 1 - bs) % logbase) == 0);
-      // slap top bits from k into i at pos bs
-      ConsistentHash::CHID mask = (((CHID) 1) << (bs+1)) - 1;
-      mask = ~mask;
-      i = i & mask;
-      ConsistentHash::CHID bot = k >> (NBCHID - bs - 1);
-      i = i | bot;
-      
-      // shift bs top bits out k
-      *kr = k << (bs + 1);
-      // printf ("start %qx succ %qx i %qx k %qx bm %d bs %d kbits %d kr %qx\n",
-      //         start, succ, i, k, bm, bs, NBCHID - 1 - bs, *kr);
-    } else {
-      *kr = k;
-    }
-    assert (ConsistentHash::betweenrightincl (start, succ, i));
-  }
-  // printf ("i %16qx kr %16qx\n", i, *kr);
-  return i;
-}
-#endif
-
 // Create an imaginary node i with as many bits from k as possible and
 // such that start < i <= succ.
 Chord::CHID 

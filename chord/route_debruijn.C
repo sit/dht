@@ -4,56 +4,48 @@
 #include <locationtable.h>
 #include <misc_utils.h>
 
+// Create an imaginary node i with as many bits from k as possible and
+// such that start < i <= succ.
 static chordID
-createdebruijnkey (chordID p, chordID n, chordID &x, chordID *k, int logbase)
+firstimagin (chordID start, chordID succ, chordID k, chordID *kr, int logbase)
 {
-  // to reduce lookup time from O(b)---where b is 160---to O(N)---where
-  // is the number of nodes. create r with as many top bits from x as possible,
-  // but while p <= r <= n:
+  chordID i = start + 1;
 
-  // compute bm, the bit in p in which p and n mismatch
-  int bm = bitindexmismatch (n, p);
-  int bs = bm;
-
-  // skip the first 0 bit in p; result will be smaller than n
-  for ( ; bs >= 0; bs--) {
-    if (p.getbit (bs) == 0)
-      break;
-  }
-  bs--;
-
-  // skip till the next 0 bit in p;
-  for ( ; bs >= 0; bs--) {
-    if (p.getbit (bs) == 0)
-      break;
-  }
-  // set that bit to 1, now q is larger than p and smaller than n.
-  chordID r = p;
-  r.setbit (bs, 1);
-  bs--;
-  
-  int mod = bs % logbase;
-  bs = bs - mod - 1;
-
-  if (bs >= 0) {
-    // slap top bits from x at pos in r, starting with b0x 0s
-    r = createbits (r, bs, x);
-    // compute the remainder of key that debruijn needs to shift in
-    chordID kr = shifttopbitout (bs+1, x);
-    *k = kr;
+  if (start == succ) {  // XXX yuck
+    *kr = k;
   } else {
-    *k = x;
+    uint bs;
+    chordID top;
+    chordID bot;
+    chordID j;
+    for (bs = NBIT - logbase - 1; bs > 0; bs -= logbase) {
+      assert (((NBIT - 1 - bs) % logbase) == 0);
+      top = start >> (bs + 1);
+      i = top << (bs + 1);
+      j = (top + 1) << (bs + 1);
+      bot = k >> (NBIT - bs - 1);
+      i = i | bot;
+      j = j | bot;
+      if (betweenrightincl (start, succ, i)) {
+	break;
+      }
+      if (betweenrightincl (start, succ, j)) {
+	i = j;
+	break;
+      }
+    }
+    if (bs > 0) {
+      // shift bs top bits out k
+      *kr = shifttopbitout (bs + 1, k);
+    } else {
+      *kr = k;
+    }
+    // warnx  << "start: " << start << " succ " << succ << " i " << i << " k " 
+    //   <<  k << " bs " << bs << " kbits " << NBIT - 1 - bs << " kr " 
+    //   << *kr << " logbase " << logbase << "\n";
   }
-
-  //  warnx << "r = " << r << "\nn (" << n.nbits () << ")= " << n
-  //<< "\np (" << p.nbits () << ")= " << p 
-  //<< "\nx (" << x.nbits () << ")= " << x
-  //<< "\n";
-  //warnx << "k: " << *k << "\n";
-
-  assert (betweenrightincl (p, n, r));
-
-  return r;
+  // warnx << "i " << i << " kr " << *kr << "\n";
+  return i;
 }
 
 route_debruijn::route_debruijn (ptr<debruijn> vi, chordID xi, int l) : 
@@ -93,8 +85,7 @@ route_debruijn::first_hop (cbhop_t cbi, ptr<chordID> guess)
     if (guess) l = v->locations->lookup (*guess);
     if (!l) l = v->my_location ();
     chordID k;
-    chordID r = createdebruijnkey (myID, v->my_succ ()->id (), x, &k,
-				   logbase_);
+    chordID r = firstimagin (myID, v->my_succ ()->id (), x, &k, logbase_);
 
     search_path.push_back (l);
     virtual_path.push_back (r);

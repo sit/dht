@@ -36,7 +36,7 @@ debruijn::debruijn (ref<chord> _chord,
 {
   stabilizer->register_client (mkref (this));
   mydoubleID = doubleID (my_ID (), logbase_);
-  locations->pin (mydoubleID, -1);
+  locations->pin (mydoubleID, -1); // XXX ping logbase successors of mydoubleID
   addHandler (debruijn_program_1, wrap (this, &debruijn::dispatch));
   warn << my_ID () << " de bruijn: double :" << mydoubleID << "\n";  
 }
@@ -133,7 +133,8 @@ debruijn::dodebruijn (user_args *sbp, debruijn_arg *da)
   // << " k " << da->k << "\n";
 
   res = New debruijn_res ();
-  if (betweenrightincl (myID, succ->id (), da->x)) {
+  if (betweenrightincl (myID, succ->id (), da->x) ||
+      (myID == succ->id ())) {
     res->set_status(CHORD_INRANGE);
     succ->fill_node (res->inres->node);
     vec<ptr<location> > succs = successors->succs ();
@@ -144,14 +145,11 @@ debruijn::dodebruijn (user_args *sbp, debruijn_arg *da)
     vec<chordID> ignored_failed;
     res->set_status (CHORD_NOTINRANGE);
     if (betweenrightincl (myID, succ->id (), da->i)) {
-      // ptr<debruijn> d = dynamic_cast< ptr<debruijn> >(fingers);
-      // assert (d);  // XXXX return error
-      // chordID nd =  d->debruijnprt (); 
-      ptr<location> nd = closestpred (doubleID (myID, logbase_), ignored_failed);
-      nd->fill_node (res->noderes->node);
+      res->noderes->k = shifttopbitout (logbase_, da->k);
       res->noderes->i = doubleID (da->i, logbase_);
       res->noderes->i = res->noderes->i | topbits (logbase_, da->k);
-      res->noderes->k = shifttopbitout (logbase_, da->k);
+      ptr<location> nd = closestpred (res->noderes->i, ignored_failed);
+      nd->fill_node (res->noderes->node);
     } else {
       ptr<location> x = closestpred (da->i, ignored_failed); // succ
       x->fill_node (res->noderes->node);
