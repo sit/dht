@@ -74,16 +74,3 @@ program SFSP2P_PROGRAM {
         	SFSP2PPROC_CACHE (sfsp2p_cachearg) = 6;
 	} = 1;
 } = 344447;
-
-program SFSP2PCLNT_PROGRAM {
-	version SFSP2PCLNT_VERSION {
-
-		void 
-		SFSP2PCLNTPROC_NULL (void) = 0;
-
-		sfs_ID
-		SFSP2PCLNTPROC_FINDSUCC (sfs_ID) = 1;
-
-	} = 1;
-} = 344448;
-

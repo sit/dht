@@ -8,6 +8,49 @@
  *
  */
 
+// creates an array of edges of a fake network
+// stores in int* edges
+// after this function numnodes holds the number
+// of nodes in the fake network
+// NOTE: may later want to change file input name
+void 
+p2p::initialize_graph() 
+{
+  FILE *graphfp;
+  int cur_node, to_node, length,i,j;
+  int done = 0;
+  graphfp = fopen("gg","r");
+  if(graphfp == NULL)
+    printf("EEK-- didn't open input file correctly\n");
+  // first line of file is number of nodes
+  fscanf(graphfp,"%d",&numnodes); 
+  // create space for a numnodes by numnodes edge array
+  edges = (int *)calloc(numnodes*numnodes,sizeof(int));
+  // initialize edge array as -1 for all accept i,i entries
+  for(i=0;i<numnodes;i++)
+    for(j=0;j<numnodes;j++)
+      if(i == j)
+	*(edges+i*numnodes+j) = 0;
+      else
+	*(edges+i*numnodes+j) = -1;
+  // more nodes to find the edges of
+  while(fscanf(graphfp,"%d",&cur_node) != EOF && done == 0) 
+    {
+      fscanf(graphfp,"%d%d",&to_node,&length);
+      *(edges+cur_node*numnodes + to_node) = length;
+      // while there are more edges for this node
+      while(fscanf(graphfp,"%d",&to_node) != EOF && to_node != -1) 
+	{
+	  fscanf(graphfp,"%d",&length);
+	  *(edges+cur_node*numnodes + to_node) = length;
+	}
+      if(to_node != -1) // reached end of file
+	done = 1;
+    }
+  fclose(graphfp);
+}
+
+
 void
 p2p::timeout(location *l) {
   // warn << "timeout on " << l->n << " closing socket\n";
@@ -71,12 +114,14 @@ p2p::doRPC (sfs_ID &ID, int procno, const void *in, void *out,
   // get "distance" between self and destination
   int time = 0;
 
-  #ifdef _SIM_ 
+#ifdef _SIM_ 
   int dist = *(edges+(int)myID.getsi()*numnodes+(int)ID.getsi());
   time = dist*10; // Not sure how to scale time delay
-  #endif
   // should not be delayed if not simulating
   timecb_t* decb =  delaycb (time, 0,wrap(mkref (this), &p2p::doRealRPC,ID,procno,in,out,cb));
+#else
+  doRealRPC (ID, procno, in, out, cb);
+#endif
 }
 
 // NOTE: now passing ID by value instead of referencing it...

@@ -20,7 +20,7 @@
  */
 
 #include "chord.h"
-#include "chord_client.h"
+#include "dhash.h"
 #include "parseopt.h"
 
 EXITFN (cleanup);
@@ -62,7 +62,7 @@ client_accept (int fd)
   if (fd < 0)
     fatal ("EOF\n");
   ref<axprt_stream> x = axprt_stream::alloc (fd);
-  vNew sfsp2pclient (x);
+  vNew dhashclient (x);
 }
 
 

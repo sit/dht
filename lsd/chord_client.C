@@ -1,5 +1,4 @@
 #include <chord.h>
-#include <chord_client.h>
 
 client::client (ptr<axprt_stream> x)
 {
@@ -49,37 +48,4 @@ client::dispatch (svccb *sbp)
     break;
   }
 }
-
-
-sfsp2pclient::sfsp2pclient (ptr<axprt_stream> _x)
-  : x (_x)
-{
-  p2pclntsrv = asrv::alloc (x, sfsp2pclnt_program_1,
-			 wrap (this, &sfsp2pclient::dispatch));
-}
-
-void
-sfsp2pclient::dispatch (svccb *sbp)
-{
-  if (!sbp) {
-    delete this;
-    return;
-  }
-  assert (defp2p);
-  switch (sbp->proc ()) {
-  case SFSP2PCLNTPROC_NULL:
-    sbp->reply (NULL);
-    return;
-  case SFSP2PCLNTPROC_FINDSUCC:
-    {
-      sfs_ID *n = sbp->template getarg<sfs_ID> ();
-      defp2p->dofindsucc (sbp, *n);
-    } 
-    break;
-  default:
-    sbp->reject (PROC_UNAVAIL);
-    break;
-  }
-}
-
 

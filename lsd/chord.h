@@ -258,4 +258,11 @@ class p2p : public virtual refcount  {
 
 extern ptr<p2p> defp2p;
 
+class client {
+  ptr<asrv> p2psrv;
+  void dispatch (svccb *sbp);
+ public:
+  client (ptr<axprt_stream> x);
+};
+
 #endif _CHORD_H_
