@@ -6,6 +6,9 @@
 #endif
 
 extern unsigned verbose;
+#define DEBUG(x) if(verbose >= (x)) cout
+
+
 
 class Node;
 

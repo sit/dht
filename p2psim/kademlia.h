@@ -9,7 +9,7 @@ using namespace std;
 
 class Kademlia : public Protocol {
 public:
-  typedef long long NodeID;
+  typedef short NodeID;
   typedef unsigned Value;
   static const unsigned idsize = 8*sizeof(NodeID);
 
@@ -23,6 +23,8 @@ public:
   virtual void lookup(Args*);
 
   static string printbits(NodeID);
+  static string printID(NodeID id);
+  void dumpfingers() { _fingers.dump(_id); };
   static NodeID distance(NodeID, NodeID);
 
   bool stabilized(vector<NodeID>);
@@ -54,6 +56,16 @@ private:
     IPAddress ip;
   };
   void do_lookup(void *args, void *result);
+
+
+  // insert
+  struct insert_args {
+    NodeID key;
+    Value val;
+  };
+  struct insert_result {
+  };
+  void do_insert(void *args, void *result);
 
 
   // transfer

@@ -6,12 +6,13 @@
 using namespace std;
 
 
-#define DEBUG(x) if(verbose >= (x)) cout
-
-
 Kademlia::Kademlia(Node *n) : Protocol(n)
 {
-  _id = (((NodeID) random()) << 32) | random();
+  // _id = (((NodeID) random()) << 32) | random();
+  // printf("id = %llx\n", _id);
+  _id = (NodeID) random();
+
+  DEBUG(1) << "contructor: " << printbits(_id) << endl;
   _values.clear();
 }
 
@@ -72,7 +73,7 @@ Kademlia::join(Args *args)
     lookup_result lr;
 
     la.key = key;
-    doRPC(ip, &Kademlia::do_lookup, &la, &lr);
+    do_lookup(&la, &lr);
 
     // send a join request to that guy
     ip = lr.ip;
@@ -100,7 +101,7 @@ Kademlia::do_transfer(void *args, void *result)
   transfer_args *targs = (transfer_args*) args;
   transfer_result *tresult = (transfer_result*) result;
 
-  DEBUG(1) << "handle_transfer to node " << targs->id << "\n";
+  DEBUG(1) << "handle_transfer to node " << printID(targs->id) << "\n";
   if(_values.size() == 0) {
     DEBUG(1) << "handle_transfer_cb; no values: done!\n";
     return;
@@ -127,11 +128,11 @@ Kademlia::do_lookup(void *args, void *result)
 
   NodeID bestID = _id;
   NodeID bestdist = distance(_id, largs->key);
-  DEBUG(3) << "do_lookup, bestID = " << bestID << ", bestdist =  " << bestdist << "\n";
+  DEBUG(3) << "do_lookup, bestID = " << printID(bestID) << ", bestdist =  " << printID(bestdist) << "\n";
 
   // XXX: very inefficient
   for(unsigned i=0; i<idsize; i++) {
-    DEBUG(3) << "handle_lookup, considering _fingers[" << i << "], key: " << _fingers.get_id(i) << "\n";
+    DEBUG(3) << "do_lookup, considering _fingers[" << i << "], key: " << printID(_fingers.get_id(i)) << "\n";
     if(!_fingers.valid(i)) {
       DEBUG(3) << "entry " << i << " is invalid\n";
       continue;
@@ -149,6 +150,7 @@ Kademlia::do_lookup(void *args, void *result)
   if(bestID == _id) {
     lresult->id = bestID;
     lresult->ip = ip();
+    DEBUG(2) << "I am the best match" << endl;
     return;
   }
 
@@ -161,11 +163,12 @@ Kademlia::do_lookup(void *args, void *result)
 void
 Kademlia::handle_join(NodeID id, IPAddress ip)
 {
+  DEBUG(2) << "handle_join (myid = " << printID(_id) << "), id = " << printID(id) << ", ip = " << ip << endl;
   for(unsigned i=0; i<idsize; i++) {
     NodeID newdist = distance(id, _id ^ (1<<i));
     NodeID curdist = distance(_fingers.get_id(i), _id ^ (1<<i));
     if(newdist < curdist) {
-      cout << "handle_join " << printbits(id) << " is better than old " << printbits(_fingers.get_id(i)) << " for entry " << i << "\n";
+      DEBUG(2) << "handle_join " << printbits(id) << " is better than old " << printbits(_fingers.get_id(i)) << " for entry " << i << "\n";
       _fingers.set(i, id, ip);
     }
   }
@@ -174,13 +177,24 @@ Kademlia::handle_join(NodeID id, IPAddress ip)
 string
 Kademlia::printbits(NodeID id)
 {
-  string s;
+  char buf[128];
+
+  unsigned j=0;
   for(int i=idsize-1; i>=0; i--)
-    s += ((id >> i) & 0x1);
-  s += " (";
-  s += id;
-  s += ")";
-  return s;
+    sprintf(&(buf[j++]), "%u", (unsigned) (id >> i) & 0x1);
+  // sprintf(&(buf[j]), " (%llx)", id);
+  sprintf(&(buf[j]), " (%hx)", id);
+
+  return string(buf);
+}
+
+
+string
+Kademlia::printID(NodeID id)
+{
+  char buf[128];
+  sprintf(buf, "%hx", id);
+  return string(buf);
 }
 
 
@@ -193,7 +207,7 @@ Kademlia::distance(Kademlia::NodeID from, Kademlia::NodeID to)
 
   ret = from ^ to;
 
-  DEBUG(5) << ret << "\n";
+  DEBUG(5) << printID(ret) << "\n";
   return ret;
 }
 
@@ -212,10 +226,36 @@ Kademlia::crash(Args*)
 }
 
 void
-Kademlia::insert(Args*)
+Kademlia::insert(Args *args)
 {
-  cout << "Kademlia insert" << endl;
+  insert_args ia;
+  insert_result ir;
+
+  ia.key = args->nget<NodeID>("key");
+  ia.val = args->nget<Value>("val");
+  do_insert(&ia, &ir);
 }
+
+
+void
+Kademlia::do_insert(void *args, void *result)
+{
+  insert_args *iargs = (insert_args*) args;
+  // insert_result *iresult = (insert_result*) result;
+
+  lookup_args la;
+  lookup_result lr;
+  la.key = iargs->key;
+  do_lookup(&la, &lr);
+
+  if(lr.id == _id) {
+    _values[iargs->key] = iargs->val;
+    return;
+  }
+
+  doRPC(lr.ip, &Kademlia::do_insert, &la, &lr);
+}
+
 
 void
 Kademlia::lookup(Args *args)

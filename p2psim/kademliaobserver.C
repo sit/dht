@@ -57,7 +57,8 @@ KademliaObserver::execute()
     vector<Kademlia::NodeID>::iterator i;
     printf ("sorted nodes %d %d\n", lid.size (), _num_nodes);
     for (i = lid.begin (); i != lid.end() ; ++i) {
-      printf ("%qx\n", *i);
+      // printf ("%qx\n", *i);
+      printf ("%hx\n", *i);
     }
   }
 
