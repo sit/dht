@@ -14,7 +14,8 @@ struct recroute_complete_arg;
  */
 class route_recchord : public route_iterator {
   static long get_nonce ();
-  void first_hop_cb (ptr<recroute_route_arg> ra,
+  void first_hop_cb (ptr<bool> del,
+		     ptr<recroute_route_arg> ra,
 		     recroute_route_stat *res,
 		     ptr<location> p,
 		     clnt_stat status);

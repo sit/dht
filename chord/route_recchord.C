@@ -123,18 +123,19 @@ route_recchord::first_hop (cbhop_t cbi, ptr<chordID> guess)
   recroute_route_stat *res = New recroute_route_stat (RECROUTE_ACCEPTED);
   v->doRPC (p, recroute_program_1, RECROUTEPROC_ROUTE,
 	    ra, res,
-	    wrap (this, &route_recchord::first_hop_cb, ra, res, p));
+	    wrap (this, &route_recchord::first_hop_cb, deleted, ra, res, p));
 }
 
 void
-route_recchord::first_hop_cb (ptr<recroute_route_arg> ra,
+route_recchord::first_hop_cb (ptr<bool> del,
+			      ptr<recroute_route_arg> ra,
 			      recroute_route_stat *res,
 			      ptr<location> p,
 			      clnt_stat status)
 {
   // XXX what a pain; this is rather similar to recroute::recroute_hop_cb
   //     should figure out if there is a clean way to abstract code.
-  if (!status && *res == RECROUTE_ACCEPTED) {
+  if (del || (!status && *res == RECROUTE_ACCEPTED)) {
     delete res; res = NULL;
     return;
   }
@@ -157,7 +158,7 @@ route_recchord::first_hop_cb (ptr<recroute_route_arg> ra,
 
   v->doRPC (p, recroute_program_1, RECROUTEPROC_ROUTE,
 	    ra, res,
-	    wrap (this, &route_recchord::first_hop_cb, ra, res, p));
+	    wrap (this, &route_recchord::first_hop_cb, del, ra, res, p));
 }
 
 void
