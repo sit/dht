@@ -56,6 +56,8 @@ vector<Time> Node::_time_sessions;
 //vector<double> Node::_per_node_avg;
 vector<double> Node::_per_node_in;
 vector<double> Node::_per_node_out;
+uint Node::totalin = 0;
+uint Node::totalout = 0;
 
 Node::Node(IPAddress i) : _queue_len(0), _ip(i), _alive(true), _token(1) 
 {
@@ -192,10 +194,9 @@ Node::collect_stat()
 void
 Node::record_inout_bw_stat(IPAddress dst, uint num_ids, uint num_else)
 {
-  if (!collect_stat() || dst == ip()) 
+  if (dst == ip()) 
     return;
-  if (join_time)
-    node_live_outbytes += 20 + 4*num_ids + num_else;
+  node_live_outbytes += 20 + 4*num_ids + num_else;
   Node *n = Network::Instance()->getnode(dst);
   if (n && n->alive())
     n->record_in_bytes(20 + 4*num_ids + num_else);
@@ -214,11 +215,6 @@ Node::record_bw_stat(stat_type type, uint num_ids, uint num_else)
   }
   _bw_stats[type] += 20 + 4*num_ids + num_else;
   _bw_counts[type]++;
-
-  /*
-  if (join_time)
-    node_live_bytes += 20 + 4*num_ids + num_else;
-    */
 }
 
 void 
@@ -289,12 +285,12 @@ Node::record_join()
 {
 
   // do this first to make sure state is initialized for this node
+  join_time = now();
   check_num_joins_pos();
   if( !collect_stat() ) {
     return;
   }
 
-  join_time = now();
   //node_live_bytes = 0;
   node_live_inbytes = 0;
   node_live_outbytes = 0;
@@ -404,6 +400,8 @@ Node::print_stats()
       _per_node_in[sz/2], _per_node_in[(uint)(sz*0.9)], 
       _per_node_in[(uint)(sz*0.95)], _per_node_in[(uint)(sz*0.99)], 
       _per_node_in[sz-1], allavg/sz);
+  }else{
+    printf("FUCK!!!!!\n");
   }
 
   sort(_per_node_out.begin(),_per_node_out.end());

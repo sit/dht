@@ -68,7 +68,7 @@ public:
   const static stat_type STAT_LOOKUP = 0;
   void record_bw_stat(stat_type type, uint num_ids, uint num_else);
   void record_inout_bw_stat(IPAddress dst, uint num_ids, uint num_else);
-  void record_in_bytes(uint b) { node_live_inbytes += b;}
+  void record_in_bytes(uint b) { if (!join_time) join_time = now(); node_live_inbytes += b;}
   static void record_lookup_stat(IPAddress src, IPAddress dst, Time interval, 
 				 bool complete, bool correct, 
 				 uint num_hops = 0, uint num_timeouts = 0, 
@@ -113,6 +113,8 @@ public:
   static vector<double> _per_node_avg;
   static vector<double> _per_node_in;
   static vector<double> _per_node_out;
+  static uint totalin;
+  static uint totalout;
   int _num_joins_pos;
   static void print_lookup_stat_helper( vector<Time> times, 
 					vector<double> stretch,
