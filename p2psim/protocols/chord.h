@@ -263,8 +263,8 @@ class LocTable {
   void init (Chord::IDMap me);
   virtual ~LocTable();
 
-    Chord::IDMap succ(ConsistentHash::CHID id);
-    vector<Chord::IDMap> succs(ConsistentHash::CHID id, unsigned int m);
+    Chord::IDMap succ(ConsistentHash::CHID id, Time *ts = NULL);
+    vector<Chord::IDMap> succs(ConsistentHash::CHID id, unsigned int m, Time *ts = NULL);
     vector<Chord::IDMap> preds(Chord::CHID id, uint m);
     Chord::IDMap pred(Chord::CHID id);
     void checkpoint();

@@ -154,6 +154,8 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
   vector<IDMap> v;
   CHID finger;
   Chord::IDMap currf, prevf, prevfpred;
+  Time currf_ts;
+  Time t = now();
   bool ok;
 
   CHID lap = (CHID) -1;
@@ -167,7 +169,7 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
       finger = lap * j + me.id;
       if ((ConsistentHash::betweenrightincl(finger,finger+lap,scs[scs.size()-1].id)) || (!node()->alive()))
 	goto PNS_DONE;
-      currf = loctable->succ(finger);
+      currf = loctable->succ(finger, &currf_ts);
 //      testf.push_back(currf);
    //   total_finger++;
       if (currf.ip == me.ip) continue;
@@ -175,6 +177,8 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
       if ((!restart) && (currf.ip)) { 
 
 	if (ConsistentHash::between(finger, finger + lap, currf.id)) {
+	  //if lookup has updated the timestamp of this finger, ignore it
+	  if ((t - currf_ts) < _stab_pns_timer) continue;
 	  assert(currf.ip != prevf.ip);
 	  prevf = currf;
 	  prevfpred.ip = 0;

@@ -1230,7 +1230,9 @@ LocTable::succ(ConsistentHash::CHID id, Time *ts)
   }
 }
 
-/* returns m successors including or after the number id*/
+/* returns m successors including or after the number id
+   also returns the timestamp of the first node
+ */
 vector<Chord::IDMap>
 LocTable::succs(ConsistentHash::CHID id, unsigned int m, Time *ts)
 {
@@ -1258,6 +1260,9 @@ LocTable::succs(ConsistentHash::CHID id, unsigned int m, Time *ts)
     if ((!_timeout)||(t - ptr->timestamp) < _timeout) {
       if (v.size() > 0) 
 	assert(ptr->n.ip != v[v.size()-1].ip);
+      if ((v.size() == 0) && (ts)){
+	*ts = ptr->timestamp;
+      }
       v.push_back(ptr->n);
       j++;
       if (j >= ring.size()) return v;
