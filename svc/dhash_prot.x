@@ -89,6 +89,7 @@ default:
 struct s_dhash_getkeys_arg {
   chordID v;
   chordID pred_id;
+  chordID start;
 };
 
 
