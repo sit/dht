@@ -117,6 +117,12 @@ getsucc_cb (chord_nodelistextres *res, clnt_stat err)
   assert (index >= 0);
   warnx << n << " " << host << " " << port << " " << index << "\n";
 
+  for (u_int i = 0; i < res->resok->nlist.size ();i++) 
+    {
+      chord_node y = make_chord_node (res->resok->nlist[i].n);
+      warn << "      succ (" << i << "): " << y.x << "\n";
+    }
+
   // wrapped around ring. done.
   if (n == wellknown_ID)
     exit (0);
