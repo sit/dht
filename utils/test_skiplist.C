@@ -156,22 +156,17 @@ int main (int argc, char *argv[])
   warnx << "'first' removed...\n";
   test.traverse (wrap (print_item));
 
-  for (int i = 0; i < 500; i++) {
-    test.insert (New item (2*i, "blah"));
+  for (int i = 0; i < 1031; i++) {
+    unsigned int z = (i * 5) % 1031;
+    test.insert (New item (z, "blah"));
   }
-  for (int i = 499; i >= 0; i--) {
-    test.insert (New item (2*i + 1, "foo"));
+  
+  for (int i = 0; i < 1031; i++) {
+    unsigned int z = (i * 7) % 1031;
+    item *c = test.search (z);
+    assert (c->key == (int) z);
   }
 
-  item *c = test.search (1000);
-  assert (c == NULL);
-  for (int i = 0; i < 1000; i++) {
-    c = test.search (i);
-    assert (c != NULL);
-    assert (c->key == i);
-  }
-      
-  
   item *a = test.first ();
   item *b = test.next (a);
   while (b) {
@@ -183,18 +178,35 @@ int main (int argc, char *argv[])
     b = test.next (a);
   }
   
-  b = test.last ();
-  a = test.prev (b);
-  while (a) {
-    if (b->key - 1 != a->key) {
-      test.traverse (wrap (print_item));
-      fatal << "backwards a key = " << a->key << ", b key = " << b->key << "\n";
-    }
-    b = a;
-    a = test.prev (b);
+  for (int i = 0; i < 1031; i++) {
+    unsigned int z = (i * 11) % 1031;
+    item *c = test.remove (z);
+    assert (c->key == (int) z);
+    delete c;
   }
-  test.traverse (wrap (print_item));
-  test.rtraverse (wrap (print_item));
+    
+  assert (test.first () == NULL);
+
+  for (int i = 0; i < 257; i++) {
+    unsigned int z = (i * 13) % 513;
+    test.insert (New item (z, "foo"));
+  }
+  for (int i = 0; i < 257; i++) {
+    unsigned int z = (i * 13) % 513;
+    unsigned int y = (i * 3) % 513;
+    warnx << "removing " << z  << " adding " << y << "\n";
+    item *c = test.remove (z);
+    assert (c->key == (int) z);
+    delete c; c = NULL;
+    
+    test.insert (New item (y, "baz"));
+  }
+
+  for (int i = 0; i < 257; i++) {
+    unsigned int y = (i * 3) % 513;
+    item *c = test.remove (y);
+  }
+
   return 0;
 }
 

@@ -183,7 +183,7 @@ class skiplist {
       unsigned int i;
       if (newlvl > lvl) {
 	for (i = lvl; i < newlvl; i++)
-	  update[i] = elm;
+	  update[i] = head;
 	lvl = newlvl;
       }
       for (i = 0; i < lvl; i++) {
@@ -246,7 +246,7 @@ class skiplist {
 	(update[i]->*field).forward[i] = (x->*field).forward[i];
       }
       while (lvl > 0 &&
-	     (head->*field).forward[lvl] == NULL)
+	     (head->*field).forward[lvl - 1] == NULL)
 	lvl--;
       if (next)
 	(next->*field).previous = prev;
