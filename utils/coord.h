@@ -17,3 +17,8 @@ struct Coord {
   static void scalar_mult (vec<float> &v, float s);
   //  static vec<float> scalar_mult (const vec<float> &v, float s);
 };
+
+#if defined (__ppc__)
+#define sqrtf sqrt
+#endif
+
