@@ -121,6 +121,10 @@ stabilize_manager::stabilize_continuous (u_int32_t t)
     for (unsigned int i = 0; i < clients.size (); i++)
       clients[i]->do_continuous ();
   }
+
+  if (t > stabilize_timer_max * 1000)
+    t = stabilize_timer_max * 1000;
+
   u_int32_t t1 = uniform_random (0.5 * t, 1.5 * t);
   u_int32_t sec = t1 / 1000;
   u_int32_t nsec =  (t1 % 1000) * 1000000;
@@ -155,6 +159,10 @@ stabilize_manager::stabilize_backoff (u_int32_t t)
     else if (t > stabilize_timer)  // ring is unstable; speed up stabilization
       t -= stabilize_decrease_timer;
   }
+  
+  if (t > stabilize_timer_max * 1000)
+    t = stabilize_timer_max * 1000;
+
   u_int32_t t1 = uniform_random (0.5 * t, 1.5 * t);
   u_int32_t sec = t1 / 1000;
   u_int32_t nsec =  (t1 % 1000) * 1000000;
