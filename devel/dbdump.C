@@ -44,12 +44,13 @@ main (int argc, char *argv[])
 		   //		   DB_CREATE| DB_INIT_MPOOL | DB_INIT_LOCK | 
 		   // DB_INIT_LOG | DB_INIT_TXN | DB_RECOVER | DB_JOINENV,
 		   0);
-    assert (!r);
-    
+    if (r) 
+      fatal << "couldn't open db env: " << db_strerror(r) << "\n";
   }
   
   r = db_create(&db, dbe, 0);
-  assert (r==0);
+  if (r) 
+    fatal << "couldn't open db: " << db_strerror(r) << "\n";
   
   if (mode == MODE_OLD) {
 #if ((DB_VERSION_MAJOR < 4) || ((DB_VERSION_MAJOR == 4) && (DB_VERSION_MINOR < 1)))
@@ -92,15 +93,26 @@ main (int argc, char *argv[])
       fatal << "err: " << err << " " << strerror (err) << "\n";
     }
 
+    aout << "key[" << i << "] " << hexdump (key.data, key.size) << " ";
+
+#ifdef VERIFY_DATA
+    DBT odata = data;
+
     bzero (&data, sizeof (data));
     err = db->get (db, NULL, &key, &data, 0);
-    if (err)
+    if (err) {
       warn << "lookup err: " << err << " " << strerror (err) << "\n";
-
-    aout << "key[" << i << "] " << hexdump (key.data, key.size) 
-	 << " " << data.size << "\n";
+    } else {
+      aout << " " << odata.size << " " << data.size << "\n";
+      if (odata.size == data.size &&
+	  memcmp (odata.data, data.data, odata.size)) {
+	aout << "data sizes the same but data is different\n";
+      }
+    }
+#else
+    aout << data.size << "\n"; 
+#endif /* VERIFY_DATA */
     keys++;
-
     totalsz += data.size;
     
     aout->flush ();
