@@ -1,5 +1,7 @@
 #include <assert.h>
 #include "sfsp2p.h"
+#include <qhash.h>
+#include <sys/time.h>
 
 #define MAX_INT 0x7fffffff
 
@@ -322,21 +324,33 @@ p2p::connect_cb (location *l, int fd)
     for (st = l->connectlist.first; st; st = st1) {
       st1 = l->connectlist.next (st);
       c->call (st->procno, st->in, st->out, st->cb);
-      delete st;
     }
     l->connecting = false;
   }
 }
 
 void
+p2p::timing_cb(aclnt_cb cb, location *l, ptr<struct timeval> start, clnt_stat err) 
+{
+  struct timeval now;
+  gettimeofday(&now, NULL);
+  l->total_latency += (now.tv_sec - start->tv_sec)*1000000 + (now.tv_usec - start->tv_usec);
+  l->num_latencies++;
+  (*cb)(err);
+}
+
+void
 p2p::doRPC (sfs_ID &ID, int procno, const void *in, void *out,
 		      aclnt_cb cb)
 {
+
   location *l = locations[ID];
   assert (l);
   assert (l->alive);
   if (l->c) {
-    l->c->call (procno, in, out, cb);
+    ptr<struct timeval> start = new refcounted<struct timeval>();
+    gettimeofday(start, NULL);
+    l->c->call (procno, in, out, wrap(this, &p2p::timing_cb, cb, l, start));
   } else {
     // If we are in the process of connecting; we should wait
     doRPC_cbstate *st = New doRPC_cbstate (procno, in, out, cb);
@@ -1102,6 +1116,7 @@ client::client (ptr<axprt_stream> x)
 {
   // we are calling this too often
   p2psrv = asrv::alloc (x, sfsp2p_program_1,  wrap (this, &client::dispatch));
+
 }
 
 void

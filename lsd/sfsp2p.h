@@ -5,6 +5,7 @@
 #include <sfsp2p_prot.h>
 #include "arpc.h"
 #include "crypt.h"
+#include "sys/time.h"
 
 #define NBIT 32
 
@@ -84,16 +85,19 @@ public:
 
 typedef callback<void,sfs_ID,route,sfsp2pstat>::ref cbsfsID_t;
 
+struct location;
+
 struct doRPC_cbstate {
   int procno;
   const void *in;
   void *out;
   aclnt_cb cb;
   tailq_entry<doRPC_cbstate> connectlink;
-
+  
   doRPC_cbstate (int pi, const void *ini, void *outi,
                       aclnt_cb cbi) : procno (pi), in (ini),  
     out (outi), cb (cbi) {};
+  
 };
 
 struct location {
@@ -105,11 +109,16 @@ struct location {
   tailq<doRPC_cbstate, &doRPC_cbstate::connectlink> connectlist;
   ihash_entry<location> fhlink;
   bool alive;
+  long total_latency;
+  long num_latencies;
+
   location (sfs_ID &_n, route &_r, sfs_ID _source) : 
     n (_n), r (_r), source (_source) {
     connecting = false; 
     alive = true;
     c = NULL;
+    total_latency = 0;
+    num_latencies = 0;
   };
   location (sfs_ID &_n, sfs_hostname _s, int _p, sfs_ID &_source) : n (_n) {
     r.server = _s;
@@ -120,6 +129,7 @@ struct location {
     c = NULL;
   }
 };
+
   
 struct attribute {
   sfs_ID n;
@@ -250,6 +260,8 @@ class p2p : public virtual refcount  {
   void domove (svccb *sbp, sfsp2p_movearg *ma);
   void doinsert (svccb *sbp, sfsp2p_insertarg *ia);
   void dolookup (svccb *sbp, sfs_ID *n);
+
+  void timing_cb(aclnt_cb cb, location *l, ptr<struct timeval> start, clnt_stat err);
 };
 
 extern ptr<p2p> defp2p;
