@@ -3,7 +3,7 @@
 
 #include "chord.h"
 
-// Koorde extends base Chord with debruijn routing
+// Koorde extends base Chord with k-degree debruijn routing
 class Koorde : public Chord {
 public:
   Koorde(Node *n);
@@ -13,6 +13,7 @@ public:
     CHID k;
     CHID kshift;
     CHID i;
+    uint nsucc;
   };
 
   struct koorde_lookup_ret {
@@ -21,6 +22,7 @@ public:
     CHID kshift;
     CHID i;
     bool done;
+    vector<IDMap> v;
   };
 
   // RPC handlers
@@ -30,19 +32,23 @@ public:
   void dump();
 
 protected:
-  Chord::CHID debruijn;
-  IDMap d;
+  static const uint k = 2;  // k-degree de bruijn graph; 
+  static const uint logbase = k >> 1;  // degree k = 2 ^ logbase
+  Chord::CHID debruijn;  // = k * me
+  vector<IDMap> dfingers;  // predecessor(debruijn) + k - 1 successors
   IDMap last;
   bool isstable;
 
   static Chord::CHID Koorde::nextimagin (CHID i, CHID kshift) {
-    uint t = ConsistentHash::getbit (kshift, NBCHID - 1);
-    CHID r = i << 1 | t;
+    uint t = ConsistentHash::getbit (kshift, NBCHID - logbase, logbase);
+    CHID r = i << logbase | t;
     // printf ("nextimagin: kshift %qx topbit is %u, i is %qx new i is %qx\n",
     //  kshift, t, i, r);
     return r;
   }
   Chord::CHID Koorde::firstimagin (CHID, CHID, CHID, CHID*);
+  IDMap Koorde::closestpreddfinger (CHID);
+
 
   vector<Chord::IDMap> Koorde::find_successors(CHID key, int m);
   void fix_debruijn();

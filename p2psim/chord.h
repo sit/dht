@@ -6,7 +6,7 @@
 
 #include <vector>
 
-#define CHORD_SUCC_NUM 3  //successor list contains CHORD_SUCC_NUM elements
+#define CHORD_SUCC_NUM 3  // default number of successors maintained
 #define STABLE_TIMER 500
 
 #include "p2psim.h"
@@ -21,7 +21,7 @@ public:
     IPAddress ip; //the IP address for the node
   };
 
-  Chord(Node *n);
+  Chord(Node *n, uint numsucc = CHORD_SUCC_NUM);
   virtual ~Chord();
 
   // Functions callable from events file.
@@ -72,6 +72,7 @@ public:
 
   CHID id () { return me.id; }
   virtual bool stabilized(vector<CHID>);
+
   virtual void dump();
   char *ts();
 
@@ -81,8 +82,9 @@ public:
 protected:
   LocTable *loctable;
   IDMap me;
+  uint nsucc;
 
-  virtual vector<IDMap> find_successors(CHID key, int m);
+  virtual vector<IDMap> find_successors(CHID key, uint m);
   void fix_predecessor();
   void fix_successor();
   void fix_successor_list();

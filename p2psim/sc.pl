@@ -79,9 +79,9 @@ sub doevents {
 	    $node = 1;
 	}
 
-	if ($type == 0) {
+	if ($type =~ /join/) {
 	    print EV "node $time $node $protocol:$type @args\n";
-	} elsif ($type == 4) {
+	} elsif ($type =~ /lookup/) {
 	    $keys[$nk] = makekey();
 	    print EV "node $time $node $protocol:$type key=$keys[$nk]\n";
 	    $nk++;

@@ -78,9 +78,13 @@ public:
     return i + 1;
   }
 
-  static uint getbit (CHID n, uint p) {
+  // get n bits from x starting at pos p
+  static uint getbit (CHID x, uint p, uint n = 1) {
     assert (p < NBCHID);
-    uint r = ((n >> p) & 0x1);
+    assert (n < 32);
+    assert (n >= 1);
+    uint m = (0x1 << n) - 1;
+    uint r = ((x >> p) & m);
     return r;
   };
 

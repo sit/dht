@@ -11,12 +11,13 @@
 
 using namespace std;
 
-Chord::Chord(Node *n) : Protocol(n)
+Chord::Chord(Node *n, uint numsucc) : Protocol(n)
 {
+  nsucc = numsucc;
   me.ip = n->ip();
   me.id = ConsistentHash::ip2chid(me.ip); 
   loctable = new LocTable(me);
-  loctable->resize(2+CHORD_SUCC_NUM, CHORD_SUCC_NUM);
+  loctable->resize(2+nsucc, nsucc);
 }
 
 Chord::~Chord()
@@ -48,9 +49,9 @@ Chord::lookup(Args *args)
 // A local call, use find_successors_handler for an RPC.
 // Not recursive.
 vector<Chord::IDMap>
-Chord::find_successors(CHID key, int m)
+Chord::find_successors(CHID key, uint m)
 {
-  assert(m <= CHORD_SUCC_NUM);
+  assert(m <= nsucc);
 
   IDMap nprime = me;
   int count = 0;
@@ -169,7 +170,7 @@ Chord::stabilize()
 
     fix_predecessor();
     fix_successor();
-    if (CHORD_SUCC_NUM > 1) fix_successor_list();
+    if (nsucc > 1) fix_successor_list();
   }
 }
 
@@ -180,7 +181,7 @@ Chord::stabilized(vector<CHID> lid)
   iter = find(lid.begin(), lid.end(), me.id);
   assert(iter != lid.end());
   IDMap succ;
-  for (unsigned int i=1; i <= CHORD_SUCC_NUM; i++) {
+  for (unsigned int i=1; i <= nsucc; i++) {
     iter++;
     if (iter == lid.end()) iter = lid.begin();
     succ = loctable->succ(i);
@@ -214,7 +215,7 @@ Chord::fix_successor()
 void
 Chord::get_successor_list_handler(get_successor_list_args *args, get_successor_list_ret *ret)
 {
-  ret->v = loctable->succs(CHORD_SUCC_NUM);
+  ret->v = loctable->succs(nsucc);
 }
 
 
@@ -299,13 +300,16 @@ vector<Chord::IDMap>
 LocTable::succs(unsigned int m)
 {
   assert(m <= CHORD_SUCC_NUM);
-  int end = (CHORD_SUCC_NUM > (ring.size()-2))? (ring.size() - 2) : CHORD_SUCC_NUM;
+  int end = (CHORD_SUCC_NUM> (ring.size()-2))? (ring.size() - 2) : CHORD_SUCC_NUM;
   vector<Chord::IDMap> v;
   v.clear();
   for (int i = 1; i <= end; i++) {
     if (ring[i].ip) {
       v.push_back(ring[i]);
     }
+  }
+  if (v.size () == 0) {
+    v.push_back(ring[0]);
   }
   return v;
 }
@@ -340,8 +344,7 @@ LocTable::pred(Chord::CHID n) {
       return ring[i];
     } 
   }
-  assert(0);
-  return ring[0];
+  return ring[ring.size () - 1];  // n must be between (last, first]
 }
 
 Chord::IDMap
