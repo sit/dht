@@ -1,6 +1,12 @@
 #ifndef __KELIPS_H
 #define __KELIPS_H
 
+// To Do:
+// OOPS short gossip intervals don't work right since gossip() blocks
+// there is something wrong with proximity routing, not fast enuf
+// log timeouts' contribution to rtt
+// need to parameterize number of nodes to ping per gossip round
+
 // Differences from Kelips as described in IPTPS 2003 paper:
 // I look up IDs, not files.
 // When/how do you learn RTT to a new node? So you know whether to
