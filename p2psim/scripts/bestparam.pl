@@ -18,9 +18,10 @@ my $xmax = -1;
 my $xmaxy = -1;
 my $xrange = "";
 my $yrange = "";
+my $expr = 0;
 
 my %options;
-&GetOptions(\%options,"xrange=s","yrange=s","datfile=s") or 
+&GetOptions(\%options,"x=s","y=s","xrange=s","yrange=s","datfile=s") or 
     die "usage: bestparam.pl --xrange ?? --yrange ?? --datfile ?? --x ?? --y ??\n";
 
 if( defined $options{"x"} ) {
@@ -29,6 +30,10 @@ if( defined $options{"x"} ) {
 
 if( defined $options{"y"} ) {
     $ystat = $options{"y"};
+    if ($ystat=~/(\d+)\-(.*)/) { #JY: too lazy to do correct expression, just a special case
+      $expr = $1;
+      $ystat = $2;
+    }
 }
 
 if (defined $options{"datfile"}) {
@@ -63,21 +68,27 @@ for (my $i = 1; $i <= $#dat; $i++) {
 	$name = $1;
     } else {
 	my @items = split(/\s+/,$dat[$i]);
+	my $xval = $items[$xpos];
+	my $yval = $items[$ypos];
+	if ($expr!=0) {
+	  $yval = $expr - $yval;
+	  die "y value is negative $yval ($expr-$items[$ypos]) ystat $ystat ypos $ypos \n" if ($yval < 0);
+	}
 	die "corrupt file\n" if (!defined($name));
 	if (!defined($options{"xrange"})) {
-	    if ($xmin > $items[$xpos]) {
-		$xmin = $items[$xpos];
-		$xminy = $items[$ypos];
-	    }elsif ($xmax < $items[$xpos]) {
-		$xmax = $items[$xpos];
-		$xmaxy = $items[$ypos];
+	    if ($xmin > $xval) {
+		$xmin = $xval;
+		$xminy = $yval;
+	    }elsif ($xmax < $xval) {
+		$xmax = $xval;
+		$xmaxy = $yval;
 	    }
 	}
 	my @p = split(/\s+/,$name);
 	for (my $j = 0; $j <= $#p; $j++) {
-	    $params[$j]->{$p[$j]} .= "$items[$xpos] $items[$ypos]\n";
+	    $params[$j]->{$p[$j]} .= "$xval $yval\n";
 	}
-	$alldat .= "$items[$xpos] $items[$ypos]\n";
+	$alldat .= "$xval $yval\n";
 	undef $name;
     }
 }
@@ -159,7 +170,8 @@ for (my $i = 0; $i <= $#params; $i++) {
 	    die "area $area how can this be possible?\n" if ($area <= $base_area);
 	    if ($mindiff > ($area-$base_area)) {
 		$mindiff = $area-$base_area;
-		$mindiff_name = "param $i value $paramvalues[$j] ";
+		my $whichparam = $i+1;
+		$mindiff_name = "param $whichparam value $paramvalues[$j] ";
 	    }
 	}
 	push @paramdiffs, $mindiff;
