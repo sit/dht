@@ -135,7 +135,7 @@ VivaldiTest::addNeighbors ()
 {
   _nip.clear ();
   
-  cerr << "neighbors " << this->ip() << " ";
+  cerr << "neighbors for " << this->ip() << " ";
   while ((int)_nip.size () < _neighbors) {
     int cand = -1;
     while (cand < 0 || cand > _total_nodes)

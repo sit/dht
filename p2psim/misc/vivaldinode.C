@@ -84,12 +84,16 @@ VivaldiNode::net_force(Coord c, vector<Sample> v)
   //calcuate weights
   double sum = 0.0;
   for (unsigned int i = 0; i < v.size (); i++) {
-    sum += 1.0/v[i]._error;
+    if (v[i]._error > 0) sum += 1.0/v[i]._error;
+    else sum += 1.0;
   }
   vector<double> weights;
   //  cerr << "weights: ";
   for (unsigned int i = 0; i < v.size (); i++) {
-    weights.push_back (v.size()*(1.0/v[i]._error)/sum);
+    if (v[i]._error > 0) 
+      weights.push_back (v.size()*(1.0/v[i]._error)/sum);
+    else
+      weights.push_back (1.0);
     //    cerr << "(" << weights.back () << ", " << v[i]._error << ") ";
   }
   //  cerr << "\n";
