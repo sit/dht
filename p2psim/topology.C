@@ -39,8 +39,10 @@ Topology::parse(char *filename)
       cerr << "first line in topology file should be ``topology [T]''" << endl;
       exit(-1);
     }
+    words.erase(words.begin());
 
-    string topology = words[1];
+
+    string topology = words[0];
     words.erase(words.begin());
     top = TopologyFactory::create(topology, &words);
     break;
