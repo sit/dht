@@ -368,7 +368,7 @@ tcp_manager::stats ()
   rpc_manager::stats ();
   for (hostinfo *h = hosts.first (); h ; h = hosts.next (h)) {
     warnx << "  host " << h->host << ": rpcs " << h->nrpc;
-    sprintf (buf, ", lat %9.1f, var %9.1f\n", h->a_lat/1000, h->a_var/1000);
+    sprintf (buf, ", lat %.1f, var %.1f\n", h->a_lat/1000, h->a_var/1000);
     warnx << buf;
   }
 }
