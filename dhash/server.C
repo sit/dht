@@ -305,25 +305,17 @@ dhash_impl::keyhash_mgr_timer ()
   update_replica_list ();
 
   if (keyhash_mgr_rpcs == 0) {
-    vec<chordID> keys;
     ptr<dbEnumeration> iter = keyhash_db->enumerate ();
     ptr<dbPair> entry = iter->nextElement (id2dbrec(0));
     while (entry) {
       chordID n = dbrec2id (entry->key);
-      keys.push_back (n);
-      entry = iter->nextElement ();
-    }
-  
-    // XXX why 2 loops? (see while loop above)
-    for (unsigned i=0; i<keys.size(); i++) {
-      chordID n = keys[i];
       if (responsible (n)) {
         // replicate a block if we are responsible for it
         for (unsigned j=0; j<replicas.size(); j++) {
 	  // warnx << "for " << n << ", replicate to " << replicas[j] << "\n";
           keyhash_mgr_rpcs ++;
-          sendblock (replicas[j], blockID(n, DHASH_KEYHASH, DHASH_BLOCK), false,
-	             wrap (this, &dhash_impl::keyhash_sync_done));
+          sendblock (replicas[j], blockID(n, DHASH_KEYHASH, DHASH_BLOCK),
+		     false, wrap (this, &dhash_impl::keyhash_sync_done));
 	}
       }
       else {
