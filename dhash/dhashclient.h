@@ -39,12 +39,6 @@ private:
 	                 cbinsertgw_t cb,  dhash_ctype t, 
 	                 size_t realsize, ptr<option_block> options = NULL);
 
-  // represents insert functions common to NOAUTH blocks and CONTENT_HASH
-  // blocks
-  void insert_worker_nopk (bigint key, const char* buf, size_t buflen,
-                           cbinsertgw_t cb, dhash_ctype t,
-                           ptr<option_block> options = NULL);
-
   void insertcb (cbinsertgw_t cb, bigint key, 
 		 ptr<dhash_insert_res>, clnt_stat err);
   void retrievecb (cb_cret cb, bigint key,  
