@@ -18,9 +18,6 @@ class Node;
 
 typedef unsigned IPAddress;
 
-// mildly useful
-typedef unsigned latency_t;
-
 // time, in milliseconds
 typedef unsigned long long Time;
 

@@ -195,7 +195,7 @@ Kademlia::lookup(Args *args)
   do_lookup(&la, &lr);
   Time after = now();
   KDEBUG(1) << "lookup: " << printID(key) << " is on " << Kademlia::printbits(lr.rid) << endl;
-  cout << "latency = " << after - before << endl;
+  // cout << "latency = " << after - before << endl;
 }
 
 // }}}

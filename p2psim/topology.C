@@ -1,5 +1,6 @@
 #include "topologyfactory.h"
 #include "network.h"
+#include "failuremodelfactory.h"
 #include "parse.h"
 #include <iostream>
 using namespace std;
@@ -16,6 +17,8 @@ Topology::~Topology()
 Topology*
 Topology::parse(char *filename)
 {
+  extern bool with_failure_model;
+
   ifstream in(filename);
   if(!in) {
     cerr << "no such file " << filename << endl;
@@ -24,25 +27,35 @@ Topology::parse(char *filename)
 
   string line;
   Topology *top = 0;
+  FailureModel *failure_model = 0;
   while(getline(in,line)) {
     vector<string> words = split(line);
 
+    // break on first empty line
+    if(words.empty())
+      break;
+
     // skip empty lines and commented lines
-    if(words.empty() || words[0][0] == '#')
+    if(words[0][0] == '#')
       continue;
 
     // read topology string
-    if(words[0] != "topology") {
-      cerr << "first line in topology file should be ``topology [T]''" << endl;
+    if(words[0] == "topology") {
+      words.erase(words.begin());
+      string topology = words[0];
+      words.erase(words.begin());
+      top = TopologyFactory::create(topology, &words);
+    } else if(words[0] == "failure_model") {
+      words.erase(words.begin());
+      string fm = words[0];
+      words.erase(words.begin());
+      failure_model = FailureModelFactory::create(fm, &words);
+      if(!with_failure_model)
+        cerr << "warning: -f flag but found failure_model keyword. ignoring failure_model!" << filename << endl;
+    } else {
+      cerr << "first line in topology file should be ``topology [T]'' or ``failure_model [F]" << endl;
       exit(-1);
     }
-    words.erase(words.begin());
-
-
-    string topology = words[0];
-    words.erase(words.begin());
-    top = TopologyFactory::create(topology, &words);
-    break;
   }
 
   if(!top) {
@@ -50,8 +63,13 @@ Topology::parse(char *filename)
     exit(-1);
   }
 
+  if(!failure_model) {
+    cerr << "the failure_model you specified is unknown" << endl;
+    exit(-1);
+  }
+
   // create the network
-  Network::Instance(top);
+  Network::Instance(top, failure_model);
 
   // leave the rest of the file to the specific topology
   top->parse(in);

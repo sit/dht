@@ -11,12 +11,12 @@ public:
   ~G2Graph();
   
   virtual void parse(ifstream&);
-  virtual latency_t latency(IPAddress, IPAddress);
+  virtual Time latency(IPAddress, IPAddress);
 
 private:
   unsigned int _num;
-  map<pair<IPAddress, IPAddress>, latency_t> _latmap;
-  vector<latency_t> _samples;
+  map<pair<IPAddress, IPAddress>, Time> _latmap;
+  vector<Time> _samples;
 };
 
 #endif //G2Graph

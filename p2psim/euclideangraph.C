@@ -82,7 +82,7 @@ EuclideanGraph::parse(ifstream &ifs)
     for(j = 0; j < _n; j++){
       Coord c2 = _coords[j];
       double d = hypot(c2._x - c1._x, c2._y - c1._y);
-      latency_t lat = latency(_i2ip[i], _i2ip[j]);
+      Time lat = latency(_i2ip[i], _i2ip[j]);
       sum += fabs(d - lat);
     }
   }

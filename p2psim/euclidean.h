@@ -10,7 +10,7 @@ public:
   
   typedef pair<int, int> Coord;
   virtual void parse(ifstream&);
-  virtual latency_t latency(IPAddress, IPAddress);
+  virtual Time latency(IPAddress, IPAddress);
   Coord getcoords(IPAddress n) { return _nodes[n]; }
 
 private:

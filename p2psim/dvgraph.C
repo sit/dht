@@ -17,7 +17,7 @@ DVGraph::~DVGraph()
 }
 
 // return the latency along the path from n1 to n2.
-latency_t
+Time
 DVGraph::latency(IPAddress a, IPAddress b)
 {
   dv();

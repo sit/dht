@@ -2,8 +2,8 @@
 
 unsigned Packet::_unique = 0;
 
-Packet::Packet() : _fn(0), _killme(0), _args(0), _c(0), _src(0),
-		   _dst(0), _ok (true)
+Packet::Packet() : _fn(0), _killme(0), _args(0), _touchtime(0),
+                   _punished(false), _c(0), _src(0), _dst(0), _ok(true)
 {
   _id = _unique++;
 }

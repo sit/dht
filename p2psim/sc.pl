@@ -93,7 +93,7 @@ sub donet {
   my ($n, $top, $place) = @_;
   print "donet: $n $top $place\n";
   $nnodes = $n;
-  print TOP "topology $top\n\n";
+  print TOP "topology $top\nfailure_model NullFailureModel\n\n";
 
   &generate_randnodes($n);
   for (my $i = 1; $i <= $n; $i++) {

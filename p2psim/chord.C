@@ -133,7 +133,7 @@ Chord::lookup(Args *args)
     }
 
     Topology *t = Network::Instance()->gettopology();
-    vector<latency_t> lat;
+    vector<Time> lat;
 
     //calculate what is the random fetch time
     lat.clear();
@@ -147,14 +147,14 @@ Chord::lookup(Args *args)
     sort(lat.begin(), lat.end());
     if (lat.size() < _frag) return;
 
-    latency_t rand_fetch_lat = lat[_frag-1];
+    Time rand_fetch_lat = lat[_frag-1];
 
     lat.clear();
     for (uint i = 0; i < vsz; i++) {
       lat.push_back(2 * t->latency(me.ip, v[i].ip));
     } 
     sort(lat.begin(), lat.end());
-    latency_t fetch_lat = lat[_frag - 1];
+    Time fetch_lat = lat[_frag - 1];
  
     vector<IDMap> ids = ChordObserver::Instance(NULL)->get_sorted_nodes(0);
     IDMap tmp;
@@ -187,7 +187,7 @@ Chord::lookup(Args *args)
     uint interval = now() - begin;
     printf("%s asap %d recurs %d lookup %d succeeded %16qx %d succs interval %u %u %u %u %u\n", 
 	ts(), _asap, recurs, _frag, k, vsz, 
-	lat[_frag-1], rand_fetch_lat, fetch_lat, interval , recurs>0?recurs_int:interval);
+	(unsigned) lat[_frag-1], (unsigned) rand_fetch_lat, (unsigned) fetch_lat, interval , recurs>0?recurs_int:interval);
   }
 
 }
@@ -315,7 +315,7 @@ Chord::find_successors(CHID key, uint m, bool is_lookup)
   if (nr.v.size() > 0) {
     printf("%s find_successors %qx route: ", ts(), key);
     for (uint i = 0; i < route.size(); i++) {
-      printf("(%u,%qx,%d,%d) ", route[i].ip, route[i].id, 2*t->latency(me.ip,route[i].ip), route[i].choices);
+      printf("(%u, %qx, %d, %d) ", route[i].ip, route[i].id, 2 * (unsigned) t->latency(me.ip,route[i].ip), route[i].choices);
     }
     printf("\n");
   }
@@ -366,7 +366,7 @@ Chord::find_successors_recurs(CHID key, uint m, bool is_lookup, uint *recurs_int
       np = fr.path[psz-1].n;
     }
 #ifdef CHORD_DEBUG
-    printf("(%u,%qx,%u,%u) ", nn.ip, nn.id, t->latency(np.ip, nn.ip), nn.choices);
+    printf("(%u,%qx,%u,%u) ", nn.ip, nn.id, (unsigned) t->latency(np.ip, nn.ip), nn.choices);
 #endif
     recurs_lat += t->latency(np.ip, nn.ip);
     if (i > 0) {

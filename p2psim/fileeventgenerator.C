@@ -7,7 +7,7 @@ using namespace std;
 
 FileEventGenerator::FileEventGenerator(Args *args)
 {
-  cout << "FileEventGenerator, name = " << (*args)["name"] << endl;
+  // cout << "FileEventGenerator, name = " << (*args)["name"] << endl;
   _name = (*args)["name"];
   EventQueue::Instance()->registerObserver(this);
 }

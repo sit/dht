@@ -14,13 +14,13 @@ Euclidean::~Euclidean()
 {
 }
 
-latency_t
+Time
 Euclidean::latency(IPAddress ip1, IPAddress ip2)
 {
   Coord c1 = _nodes[ip1];
   Coord c2 = _nodes[ip2];
 
-  return (latency_t) hypot(labs(c2.first - c1.first), labs(c2.second - c1.second));
+  return (Time) hypot(labs(c2.first - c1.first), labs(c2.second - c1.second));
 }
 
 

@@ -52,7 +52,7 @@ G2Graph::parse(ifstream &ifs)
   }
 }
 
-latency_t
+Time
 G2Graph::latency(IPAddress ip1, IPAddress ip2)
 {
 

@@ -269,10 +269,10 @@ ChordFingerPNS::find_successors_recurs(CHID key, uint m, bool is_lookup, uint *r
   printf("\n");
 
   //calculate the optimal route
-  vector<latency_t> lat;
+  vector<Time> lat;
   lat.clear();
   uint j = 0;
-  latency_t total_forward = 0;
+  Time total_forward = 0;
 
   vector<IDMap> results;
   results.clear();

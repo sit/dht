@@ -10,6 +10,7 @@ char *event_file;
 char *protocol_file;
 bool static_sim = false;
 bool vis = false;
+bool with_failure_model = true;
 
 void parse_args(int argc, char *argv[]);
 void usage();
@@ -48,11 +49,14 @@ parse_args(int argc, char *argv[])
   int ch;
   uint seed;
 
-  while ((ch = getopt (argc, argv, "e:vx")) != -1) {
+  while ((ch = getopt (argc, argv, "e:fvx")) != -1) {
     switch (ch) {
     case 'e':
       seed = atoi(optarg);
       srandom(seed);
+      break;
+    case 'f':
+      with_failure_model = false;
       break;
     case 'v':
       vis = true;

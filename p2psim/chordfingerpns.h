@@ -20,8 +20,8 @@ class LocTablePNS : public LocTable {
       //then pick the physically closest successor to be the next_hop
       if (nsucc > 1) {
 	uint num = 0;
-	latency_t min_lat = 100000000;
-	latency_t lat;
+	Time min_lat = 100000000;
+	Time lat;
 	Chord::IDMap min_s = me;
 	Topology *t = Network::Instance()->gettopology();
 	vector<Chord::IDMap> succs = this->succs(me.id+1, nsucc);

@@ -20,12 +20,22 @@ public:
   unsigned id() { return _id; }
   bool ok()     { return _ok; }
 
+  void touch()    { _touchtime = now(); }
+  Time touched()  { return _touchtime; }
+
+  void punish()   { _punished = true; }
+  bool punished() { return _punished; }
+
 private:
   // RPC function and arguments.
   // No explicit reply; put it in the args.
   void (*_fn)(void *);
   void (*_killme)(void *);
   void *_args;
+
+  Time _touchtime;        // last time packet was touch()-ed
+  bool _punished;         // whether packet has been punished by
+                          // failure model
 
   friend class Node;
   Channel *_c;            // where to send the reply

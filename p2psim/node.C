@@ -47,11 +47,27 @@ Node::register_proto(Protocol *p)
 void
 Node::got_packet(Packet *p)
 {
-  if(p->reply()){
-    send(p->channel(), &p);
-  } else {
+  extern bool with_failure_model;
+
+  if(!p->reply()){
+    // if this failed, then ask the failure model how long to delay it, and
+    // push it back to the network to drift around there for a bit.
     ThreadManager::Instance()->create(Node::Receive, p);
+    return;
   }
+
+  // IF we're running with failure_models
+  // if this packet failed to arrive then delay it a bit before it arrives
+  if(with_failure_model && !p->ok() && !p->punished()) {
+    send(Network::Instance()->failedpktchan(), &p);
+    p->punish();
+    return;
+  }
+
+
+  // packet is a reply and has been punished for its failure according to some
+  // failure model. so now it can finally arrive.
+  send(p->channel(), &p);
 }
 
 void
