@@ -37,6 +37,13 @@ unsigned Kademlia::debugcounter = 1;
 unsigned Kademlia::stabilize_timer = 0;
 unsigned Kademlia::refresh_rate = 0;
 
+double Kademlia::_rpc_bytes = 0;
+double Kademlia::_good_latency = 0;
+double Kademlia::_good_hops = 0;
+int Kademlia::_good_lookups = 0;
+int Kademlia::_ok_failures = 0;  // # legitimate lookup failures
+int Kademlia::_bad_failures = 0; // lookup failed, but node was live
+
 set<Kademlia::NodeID> *Kademlia::_all_kademlias = 0;
 hash_map<Kademlia::NodeID, Kademlia*> *Kademlia::_nodeid2kademlia = 0;
 
@@ -46,7 +53,7 @@ hash_map<Kademlia::NodeID, Kademlia*> *Kademlia::_nodeid2kademlia = 0;
 Kademlia::Kademlia(Node *n, Args a)
   : P2Protocol(n), _id(ConsistentHash::ip2chid(n->ip()))
 {
-  KDEBUG(1) << "ip: " << ip() << ", idsize = " << idsize << endl;
+  KDEBUG(0) << "id: " << printID(_id) << ", ip: " << ip() << endl;
   if(getenv("P2PSIM_CHECKREP"))
     docheckrep = strcmp(getenv("P2PSIM_CHECKREP"), "0") ? true : false;
 
@@ -65,10 +72,10 @@ Kademlia::Kademlia(Node *n, Args a)
   _root = New k_bucket(0, this);
 
   // init stats
-  while (stat.size() < (uint) STAT_SIZE) {
-    stat.push_back(0);
-    num_msgs.push_back(0);
-  }
+  // while (stat.size() < (uint) STAT_SIZE) {
+  //   stat.push_back(0);
+  //   num_msgs.push_back(0);
+  // }
 }
 
 Kademlia::NodeID Kademlia::closer::n = 0;
@@ -84,7 +91,16 @@ Kademlia::~Kademlia()
   delete _root;
   delete _me;
   */
-  cout << "lookup " << stat[STAT_LOOKUP] << " " << num_msgs[STAT_LOOKUP] << endl;
+  if(ip() == 1){
+    printf("rpc_bytes %.0f\n", _rpc_bytes);
+    printf("%d good, %d ok failures, %d bad failures\n",
+           _good_lookups, _ok_failures, _bad_failures);
+    if(_good_lookups > 0) {
+      printf("avglat %.1f avghops %.2f\n",
+             _good_latency / _good_lookups,
+             _good_hops / _good_lookups);
+    }
+  }
 }
 // }}}
 // {{{ Kademlia::initstate
@@ -94,6 +110,7 @@ Kademlia::initstate(set<Protocol*> *l)
   KDEBUG(1) << "Kademlia::initstate" << endl;
 
   if(!_all_kademlias) {
+    KDEBUG(0) << "allocating all" << endl;
     _all_kademlias = New set<NodeID>;
     _nodeid2kademlia = New hash_map<NodeID, Kademlia*>;
     for(set<Protocol*>::const_iterator i = l->begin(); i != l->end(); ++i) {
@@ -309,18 +326,26 @@ Kademlia::crash(Args *args)
 
 // }}}
 // {{{ Kademlia::lookup
+//
+// we assume lookups are only for node IDs, but we have to cheat to do this.
 void
 Kademlia::lookup(Args *args)
 {
-  NodeID key = args->nget<long long>("key", 0, 16);
-  KDEBUG(1) << "Kademlia::lookup: " << printID(key) << endl;
-  assert(node()->alive());
+  IPAddress key_ip = args->nget<NodeID>("key");
+  // find node with this
+  Kademlia *k = (Kademlia*) Network::Instance()->getnode(key_ip)->getproto(proto_name());
+  NodeID key = k->id();
 
-  lookup_args la(_id, ip(), key, true);
+  KDEBUG(0) << "Kademlia::lookup: " << printID(key) << endl;
+  assert(node()->alive());
+  assert(_nodeid2kademlia->find(key) != _nodeid2kademlia->end());
+
+  lookup_args la(_id, ip(), key);
   lookup_result lr;
 
   Time before = now();
   do_lookup(&la, &lr);
+  Time after = now();
 
   // get best match
   k_nodeinfo *ki = *lr.results.begin();
@@ -330,21 +355,32 @@ Kademlia::lookup(Args *args)
   assert(ki);
   ki->checkrep();
 
-  // now ping that node
-  ping_args pa(ki->id, ki->ip);
-  ping_result pr;
-  record_stat(STAT_PING, 1, 0); // we send our ID
-  assert(ki->ip > 0 && ki->ip <= 1024);
-  if(!doRPC(ki->ip, &Kademlia::do_ping, &pa, &pr) && node()->alive()) {
-    KDEBUG(2) << "Kademlia::lookup: ping RPC to " << Kademlia::printID(ki->id) << " failed " << endl;
-    if(flyweight.find(ki->id) != flyweight.end())
-      erase(ki->id);
-  }
-  record_stat(STAT_PING, 0, 0);
+  
+  bool isalive = (*_nodeid2kademlia)[key]->node()->alive();
 
-  Time after = now();
-  KDEBUG(2) << "lookup: " << printID(key) << " is on " << Kademlia::printID(lr.rid) << endl;
-  cout << "latency " << after - before << endl;
+  // did we find that node?
+  if(key == ki->id){
+    _good_lookups += 1;
+    _good_latency += after - before;
+    _good_hops += lr.hops;
+  } else if(isalive){
+    _bad_failures += 1;
+  } else {
+    _ok_failures += 1;
+  }
+
+  // now ping that node
+  // ping_args pa(ki->id, ki->ip);
+  // ping_result pr;
+  // record_stat(STAT_PING, 1, 0); // we send our ID
+  // assert(ki->ip > 0 && ki->ip <= 1024);
+  // if(!doRPC(ki->ip, &Kademlia::do_ping, &pa, &pr) && node()->alive()) {
+  //   KDEBUG(2) << "Kademlia::lookup: ping RPC to " << Kademlia::printID(ki->id) << " failed " << endl;
+  //   if(flyweight.find(ki->id) != flyweight.end())
+  //     erase(ki->id);
+  // }
+  // record_stat(STAT_PING, 0, 0);
+  // cout << "latency " << after - before << endl;
 }
 
 // }}}
@@ -522,6 +558,9 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
       (*outstanding_rpcs)[rpc] = ci;
     }
 
+    // this was one more hop
+    lresult->hops++;
+
     //
     // now block on outstanding_rpcs
     //
@@ -607,7 +646,7 @@ receive_rpc:
 void
 Kademlia::do_lookup_wrapper(k_nodeinfo *ki, NodeID key)
 {
-  lookup_args la(_id, ip(), key, true);
+  lookup_args la(_id, ip(), key);
   lookup_result lr;
 
   assert(node()->alive());
@@ -830,9 +869,11 @@ Kademlia::common_prefix(Kademlia::NodeID k1, Kademlia::NodeID k2)
 void
 Kademlia::record_stat(stat_type type, uint num_ids, uint num_else )
 {
-  assert(stat.size() > (unsigned) type);
-  stat[type] += 20 + 4*num_ids + num_else;
-  num_msgs[type]++;
+  _rpc_bytes += 20 + num_ids * 4 + num_else; // paper says 40 bytes per node entry
+
+  // assert(stat.size() > (unsigned) type);
+  // stat[type] += 20 + 4*num_ids + num_else;
+  // num_msgs[type]++;
 }
 // }}}
 // {{{ Kademlia::distance

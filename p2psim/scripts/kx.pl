@@ -1,11 +1,15 @@
 #!/usr/bin/perl -w
 
-# Run Kelips with many different parameter settings on the
+$protocol = "Kelips";
+defined $ARGV[0] and $protocol = $ARGV[0];
+
+# Run $protocol with many different parameter settings on the
 # standard ChurnGenerator workload.
 # Each line of output is x=bytes y=latency.
 
 # name, min, max
-my $params =
+my $param_lists = {
+  "Kelips" =>
     [
      [ "round_interval", 125, 500, 2000, 8000, 24000 ],
      [ "group_targets", 1, 4, 16, 64 ],
@@ -15,9 +19,21 @@ my $params =
      [ "n_contacts", 2, 4, 8 ],
      [ "item_rounds", 0, 1, 4 ],
      [ "timeout", 5000, 10000, 20000, 40000 ]
-     ];
+    ],
+
+  "Kademlia" =>
+    [
+     [ "alpha", 1, 2, 3, 4, 5 ],
+     [ "k", 8, 16, 32 ],
+     [ "stabtimer", 2000, 4000, 8000, 16000, 32000 ],
+    ],
+};
+
+my $params = $param_lists->{$protocol};
 
 my $nnodes = 1837; # Jinyang uses mostly 1024, also 1837
+defined $ARGV[1] and $nnodes = $ARGV[1];
+
 my $k = int(sqrt($nnodes));
 my $diameter = 100; # diameter of Euclidean universe
 
@@ -62,7 +78,7 @@ my $iters;
 for($iters = 0; $iters < 500; $iters++){
     print "# ";
     open(PF, ">$pf");
-    print PF "Kelips k=$k ";
+    print PF "$protocol k=$k ";
     my $pi;
     my %pv;
     for($pi = 0; $pi <= $#$params; $pi++){
@@ -90,15 +106,18 @@ for($iters = 0; $iters < 500; $iters++){
     }
 
     open(EF, ">$ef");
-    print EF "generator ChurnEventGenerator proto=Kelips ipkeys=1 lifemean=$lifemean deathmean=$deathmean lookupmean=$lookupmean exittime=$exittime\n";
-    print EF "observer KelipsObserver initnodes=1\n";
+    print EF "generator ChurnEventGenerator proto=$protocol ipkeys=1 lifemean=$lifemean deathmean=$deathmean lookupmean=$lookupmean exittime=$exittime\n";
+    print EF "observer $protocol" . "Observer initnodes=1\n";
     close(EF);
 
     my $bytes;
     my $lat;
     my $hops;
 
-    open(P, "./p2psim $pf $tf $ef |");
+    my $prefix = "";
+    defined $ARGV[2] and $prefix = $ARGV[2];
+    print "$prefix./p2psim $pf $tf $ef\n";
+    open(P, "$prefix./p2psim $pf $tf $ef |");
     while(<P>){
         if(/^rpc_bytes ([0-9]+)/){
             $bytes = $1;

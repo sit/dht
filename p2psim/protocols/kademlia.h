@@ -149,7 +149,7 @@ public:
   // 
   // {{{ lookup_args and lookup_result
   struct lookup_args {
-    lookup_args(NodeID xid, IPAddress xip, NodeID k = 0, bool b = false) :
+    lookup_args(NodeID xid, IPAddress xip, NodeID k = 0) :
       id(xid), ip(xip), key(k) { this->tid = threadid(); };
     NodeID id;
     IPAddress ip;
@@ -160,7 +160,7 @@ public:
   };
 
   struct lookup_result {
-    lookup_result() { results.clear(); }
+    lookup_result() { results.clear(); hops = 0; }
     ~lookup_result() {
       for(set<k_nodeinfo*, closer>::const_iterator i = results.begin(); i != results.end(); ++i) {
         char ptr[32]; sprintf(ptr, "%p", *i);
@@ -170,6 +170,7 @@ public:
     }
     set<k_nodeinfo*, closer> results;
     NodeID rid;     // the guy who's replying
+    unsigned hops;
   };
   // }}}
   // {{{ ping_args and ping_result
@@ -230,10 +231,19 @@ private:
     STAT_PING,
     STAT_SIZE
   };
-  vector<unsigned> stat;
-  vector<unsigned> num_msgs;
+  // vector<unsigned> stat;
+  // vector<unsigned> num_msgs;
   void record_stat(stat_type, unsigned, unsigned);
   void update_k_bucket(NodeID, IPAddress);
+
+  // global statistics
+  static double _rpc_bytes; // total traffic
+  static double _good_latency; // successful lookups
+  static double _good_hops;
+  static int _good_lookups;
+  static int _ok_failures;
+  static int _bad_failures;
+
 
   //
   // utility 
