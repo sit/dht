@@ -141,12 +141,12 @@ struct attribute {
 
 // For successor wedge: first is lowest node in the wedge
 // For predecessor wedge: first is the highest node in the wedge
-struct wedge {
-  sfs_ID start;
-  sfs_ID end;
-  sfs_ID first;
-  bool alive;
-};
+//struct wedge {
+//  sfs_ID start;
+//  sfs_ID end;
+//  sfs_ID first;
+//  bool alive;
+//};
 
 class client {
   ptr<asrv> p2psrv;
@@ -185,6 +185,12 @@ class p2p : public virtual refcount  {
  public:
   p2p (str host, int hostport, const sfs_ID &hostID, int myport, 
        const sfs_ID &ID);
+  //
+  ~p2p(); // added to help do RPCs/lookup
+  void routtables (svccb *sbp);
+  void getstats (svccb *sbp);
+  //
+
   void deleteloc (sfs_ID &n);
   void updateloc (sfs_ID &x, route &r, sfs_ID &source);
   bool lookup_anyloc (sfs_ID &n, sfs_ID *r);
