@@ -13,11 +13,7 @@
 #include <debruijn.h>
 #include <fingerroute.h>
 #include <fingerroutepns.h>
-#include <proxroute.h>
 #include <recroute.h>
-#if 0
-#include "route_secchord.h"
-#endif
 
 #include <modlogger.h>
 #define info modlogger ("cd")
@@ -39,8 +35,6 @@ routing_mode_desc modes[] = {
   { MODE_SUCC, wrap (vnode::produce_vnode) },
   { MODE_CHORD, wrap (fingerroute::produce_vnode) },
   { MODE_DEBRUIJN, wrap (debruijn::produce_vnode) },
-  { MODE_PROX, wrap (proxroute::produce_vnode) },
-  { MODE_PROXREC, wrap (recroute<proxroute>::produce_vnode) },
   { MODE_PNS, wrap (fingerroutepns::produce_vnode) },
   { MODE_PNSREC, wrap (recroute<fingerroutepns>::produce_vnode) },
   { MODE_CHORDREC, wrap (recroute<fingerroute>::produce_vnode) },
