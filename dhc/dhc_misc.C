@@ -56,13 +56,13 @@ set_new_config (dhc_soft *b, ptr<dhc_propose_arg> arg, ptr<vnode> myNode,
   
   for (uint i=0; i<k; i++) {
     arg->new_config[i] = replicas[i]->id ();
-    // Also set the new_config in b's meta data. 
     b->new_config.push_back (replicas[i]);
   }
 }
 
 void
-set_locations (vec<ptr<location> > *locs, ptr<vnode> myNode, vec<chordID> ids)
+set_locations (vec<ptr<location> > *locs, ptr<vnode> myNode, 
+	       vec<chordID> ids)
 {
   ptr<location> l;
   locs->clear ();
@@ -79,6 +79,25 @@ set_new_config (ptr<dhc_newconfig_arg> arg, vec<chordID> new_config)
 
   for (uint i=0; i<new_config.size (); i++)
     arg->new_config[i] = new_config[i];
+}
+
+void 
+set_new_config (ptr<dhc_newconfig_arg> arg, vec<ptr<location> > *l, 
+		ptr<vnode> myNode, uint k) 
+{
+  vec<ptr<location> > replicas = myNode->succs ();
+
+  if (replicas.size () < k) {
+    warn << "dhc_misc: succ list smaller than" << k << "replicas\n";
+    k = replicas.size ();
+  }
+
+  arg->new_config.setsize (k);
+  
+  for (uint i=0; i<k; i++) {
+    arg->new_config[i] = replicas[i]->id ();  
+    l->push_back (replicas[i]);
+  }
 }
 
 int

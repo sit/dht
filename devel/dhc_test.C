@@ -9,7 +9,7 @@ vec<ref<dhc> > dhc_mgr;
 int vnodes;
 vec<ref<vnode> > vn;
 int nreplica;
-str db_name = "/usr/athicha/tmp/db";
+str db_name = "/scratch/athicha/tmp/db";
 
 /*
   { MODE_CHORD, "chord", "use fingers and successors",
@@ -19,7 +19,6 @@ str db_name = "/usr/athicha/tmp/db";
 vnode_producer_t producer = wrap (fingerroute::produce_vnode);
 str idstr("23");
 chordID ID1;
-int blocks_inserted = 0;
 int n_writes = 0;
 
 void getcb (chordID, dhc_stat, ptr<keyhash_data>);
@@ -74,17 +73,14 @@ start_recon (chordID bID)
 }
 
 void 
-newconfig_cb (chordID nodeID, chordID bID, 
-	      ptr<dhc_newconfig_res> res, clnt_stat err)
+newconfig_cb (chordID bID, dhc_stat err)
 {
-  if (err || res->status != DHC_OK) {
+  if (err) {
     warn << "Something's wrong\n";
-    warn << "dhc err_stat: " << res->status << "\n";
+    warn << "dhc err_stat: " << err << "\n";
   } else {
-    blocks_inserted++;
-    warn << nodeID << ":insert_block " << bID << " succeeded " << blocks_inserted << "\n";
-    if (blocks_inserted == nreplica)
-      start_recon (ID1);
+    warn << "********** insert_block " << bID << " succeeded \n";
+    start_recon (ID1);
   }
 }
 
@@ -92,7 +88,12 @@ void
 insert_block (chordID bID)
 {
   str astr ("hello\0");
-  
+  ref<dhash_value> value = New refcounted<dhash_value>;
+  value->setsize (astr.len ());
+  memcpy (value->base (), astr.cstr (), value->size ());
+  dhc_mgr[0]->put (bID, vn[0]->my_ID (), value, 
+		   wrap (newconfig_cb, bID), true);
+#if 0  
   ref<dhc_newconfig_arg> arg = New refcounted<dhc_newconfig_arg>;
   arg->bID = bID;
   arg->data.tag.ver = 0;
@@ -112,6 +113,7 @@ insert_block (chordID bID)
 		  arg, res, wrap (newconfig_cb, vn[i]->my_ID (), 
 				  bID, res));
   }
+#endif
 }
 
 void

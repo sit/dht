@@ -12,7 +12,8 @@ enum dhc_stat {
    DHC_OLD_VER = 7,
    DHC_BLOCK_NEXIST = 8,
    DHC_RW_INPROG = 9,
-   DHC_NOT_PRIMARY = 10
+   DHC_NOT_PRIMARY = 10,
+   DHC_BLOCK_EXIST = 11
 };
 
 struct paxos_seqnum_t {
@@ -147,6 +148,8 @@ program DHC_PROGRAM {
 
     dhc_put_res
     DHCPROC_PUTBLOCK (dhc_putblock_arg) = 8;
-     
+    
+    dhc_put_res
+    DHCPROC_NEWBLOCK (dhc_put_arg) = 9; 
   } = 1;	
 } = 344452;
