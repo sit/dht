@@ -43,12 +43,9 @@ dhashclient::dispatch (svccb *sbp)
 				wrap (this, &dhashclient::lookup_findsucc_cb, 
 				      sbp));
       */
-      dhash_fetch_arg *farg = sbp->template getarg<dhash_fetch_arg>();
-
-      ptr<dhash_fetch_arg> arg = New refcounted<dhash_fetch_arg> (*farg);
-
+      ptr<dhash_fetch_arg> arg = New refcounted<dhash_fetch_arg> ();
       chordID next = clntnode->lookup_closestpred (arg->key);
-      dhash_fetchiter_res *i_res = New dhash_fetchiter_res ();
+      dhash_fetchiter_res *i_res = New dhash_fetchiter_res (DHASH_COMPLETE);
       
       route path;
       path.push_back (next);
@@ -148,8 +145,8 @@ dhashclient::lookup_iter_cb (svccb *sbp,
     fres->resok->attr = res->compl_res->attr;
     fres->resok->hops = path.size ();
     fres->resok->source = prev;
-    sbp->reply (fres);
     cache_on_path (arg->key, path);
+    sbp->reply (fres);
   } else if (res->status == DHASH_CONTINUE) {
     chordID next = res->cont_res->next.x;
     clntnode->locations->cacheloc (next, res->cont_res->next.r, prev);
