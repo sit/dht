@@ -38,15 +38,15 @@ Vivaldi::sample(IPAddress who, Coord c, double latency)
 }
 
 Vivaldi::Coord
-Vivaldi::net_force(vector<Sample> v)
+Vivaldi::net_force(Coord c, vector<Sample> v)
 {
   Coord f;
   f._x = 0;
   f._y = 0;
   for(unsigned i = 0; i < v.size(); i++){
-    double d = dist(_c, v[i]._c);
+    double d = dist(c, v[i]._c);
     if(d > 0.01){
-      Coord direction = (v[i]._c - _c);
+      Coord direction = (v[i]._c - c);
       direction = direction / d;
       f = f + (direction * (d - v[i]._latency));
     }
@@ -96,7 +96,7 @@ Vivaldi1::algorithm(Sample s)
   if(_samples.size() < 10)
     return;
 
-  Coord f = net_force(_samples);
+  Coord f = net_force(_c, _samples);
 
   // apply the force to our coordinates
   _c = _c + (f * 0.001);
@@ -113,7 +113,7 @@ Vivaldi2::algorithm(Sample s)
   if(_samples.size() < 10)
     return;
 
-  Coord f = net_force(_samples);
+  Coord f = net_force(_c, _samples);
 
   // apply the force to our coordinates
   _c = _c + (f * _damp);
@@ -141,11 +141,11 @@ Vivaldi3::algorithm(Sample s)
   if(randf() < _jumpprob){
     vector<Sample> v;
     v.push_back(wrongest(_samples));
-    Coord f = net_force(v);
+    Coord f = net_force(_c, v);
     _c = _c + f;
-    _jumpprob /= 2;
+    _jumpprob /= 1.1;
   } else {
-    Coord f = net_force(_samples);
+    Coord f = net_force(_c, _samples);
 
     // apply the force to our coordinates
     _c = _c + (f * 0.001);
@@ -166,11 +166,11 @@ Vivaldi4::algorithm(Sample s)
   if(randf() < _jumpprob){
     vector<Sample> v;
     v.push_back(lowest_latency(_samples));
-    Coord f = net_force(v);
+    Coord f = net_force(_c, v);
     _c = _c + f;
-    _jumpprob /= 2;
+    _jumpprob /= 1.1;
   } else {
-    Coord f = net_force(_samples);
+    Coord f = net_force(_c, _samples);
     _c = _c + (f * 0.001);
   }
 
@@ -191,9 +191,9 @@ Vivaldi5::algorithm(Sample s)
   if(randf() < _jumpprob){
     Sample s = lowest_latency(_samples);
     _c = s._c;
-    _jumpprob /= 2;
+    _jumpprob /= 1.1;
   } else {
-    Coord f = net_force(_samples);
+    Coord f = net_force(_c, _samples);
     _c = _c + (f * 0.001);
   }
 
@@ -211,9 +211,84 @@ Vivaldi6::algorithm(Sample s)
 
   if(randf() < _jumpprob){
     _c = _samples[random() % _samples.size()]._c;
-    _jumpprob /= 2;
+    _jumpprob /= 1.1;
   } else {
-    Coord f = net_force(_samples);
+    Coord f = net_force(_c, _samples);
+    _c = _c + (f * 0.001);
+  }
+
+  _samples.clear();
+}
+
+// Combination of 2 and 5.
+// This one really sucks. It starts converging very quickly, then
+// after about 100 samples it actually starts to diverge, and doesn't
+// start converging again until about 10000 samples. I think the
+// whole random-jump plan is a mistake.
+void
+Vivaldi7::algorithm(Sample s)
+{
+  _samples.push_back(s);
+  if(_samples.size() < 10)
+    return;
+
+  if(randf() < _jumpprob){
+    Sample s = lowest_latency(_samples);
+    _c = s._c;
+    _jumpprob /= 1.1;
+  } else {
+    Coord f = net_force(_c, _samples);
+    _c = _c + (f * _damp);
+    _damp *= 0.95;
+    if(_damp < 0.001)
+      _damp = 0.001;
+  }
+
+  _samples.clear();
+}
+
+// Like 6, but only jump if the new position
+// has lower apparent error.
+// Starts strong but never gets even as good as algorithm 1.
+void
+Vivaldi8::algorithm(Sample s)
+{
+  _samples.push_back(s);
+  if(_samples.size() < 10)
+    return;
+
+  Coord f = net_force(_c, _samples);
+
+  if(randf() < _jumpprob){
+    Sample s = _samples[random() % _samples.size()];
+    Coord f1 = net_force(s._c, _samples);
+    if(length(f1) < length(f) * 0.97){
+      _c = s._c;
+    }
+    _jumpprob /= 1.1;
+  } else {
+    _c = _c + (f * 0.001);
+  }
+
+  _samples.clear();
+}
+
+// Like 1, but every once in a while jump all the way to
+// "best" position.
+// Starts off a bit slower than 2, but eventually overtakes it. Slightly.
+void
+Vivaldi9::algorithm(Sample s)
+{
+  _samples.push_back(s);
+  if(_samples.size() < 10)
+    return;
+
+  Coord f = net_force(_c, _samples);
+
+  if(randf() < _jumpprob){
+    _c = _c + (f * 0.1);
+    _jumpprob /= 1.1;
+  } else {
     _c = _c + (f * 0.001);
   }
 
@@ -221,12 +296,12 @@ Vivaldi6::algorithm(Sample s)
 }
 
 // variants:
+// each node talks to a fixed (random) set of other nodes.
 // somehow have a few nodes choose themselves as landmarks,
 //   they agree on positions, everyone else follows.
 // add nodes one at a time
 // more dimensions
 // every sample by itself, not every 10
-// random jump at exponentially increasing intervals
 
 // spring relaxation doesn't seem to work any better than the
 // much stupider scheme of moving to eliminate 1/100th of the

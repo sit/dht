@@ -49,7 +49,7 @@ class Vivaldi {
   double randf() { return (random()%1000000000) / 1000000000.0; }
   Sample wrongest(vector<Sample> v);
   Sample lowest_latency(vector<Sample> v);
-  Coord net_force(vector<Sample> v);
+  Coord net_force(Coord c, vector<Sample> v);
 
   virtual void algorithm(Sample) = 0; // override this
 };
@@ -89,6 +89,26 @@ class Vivaldi5 : public Vivaldi3 {
 class Vivaldi6 : public Vivaldi3 {
  public:
   Vivaldi6(Node *n) : Vivaldi3(n) { }
+  void algorithm(Sample);
+};
+
+class Vivaldi7 : public Vivaldi {
+ public:
+  double _damp;
+  double _jumpprob;
+  Vivaldi7(Node *n) : Vivaldi(n), _damp(0.1), _jumpprob(0.1) { }
+  void algorithm(Sample);
+};
+
+class Vivaldi8 : public Vivaldi3 {
+ public:
+  Vivaldi8(Node *n) : Vivaldi3(n) { }
+  void algorithm(Sample);
+};
+
+class Vivaldi9 : public Vivaldi3 {
+ public:
+  Vivaldi9(Node *n) : Vivaldi3(n) { }
   void algorithm(Sample);
 };
 

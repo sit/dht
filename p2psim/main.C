@@ -43,14 +43,9 @@ threadmain(int argc, char *argv[])
 void
 parse_args(int argc, char *argv[])
 {
-  if(argc <= 2) {
+  if(argc != 3) {
     usage(argv[0]);
     exit(1);
-  }
-
-  if(!strcmp(argv[1], "-h")) {
-    usage(argv[0]);
-    exit(0);
   }
 
   topology_file = argv[1];

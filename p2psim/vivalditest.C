@@ -31,6 +31,9 @@ VivaldiTest::join(Args *args)
   case 4: _vivaldi = new Vivaldi4(node()); break;
   case 5: _vivaldi = new Vivaldi5(node()); break;
   case 6: _vivaldi = new Vivaldi6(node()); break;
+  case 7: _vivaldi = new Vivaldi7(node()); break;
+  case 8: _vivaldi = new Vivaldi8(node()); break;
+  case 9: _vivaldi = new Vivaldi9(node()); break;
   default:
     fprintf(stderr, "VivaldiTest: bad Vivaldi algorithm %s\n",
             (*args)["vivaldi-algorithm"].c_str());
