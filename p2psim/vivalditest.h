@@ -29,6 +29,8 @@ public:
   void tick(void *);
   char *ts();
   void handler(void *, Vivaldi::Coord *);
+
+  void print_all_loc();
 };
 
 #endif // __VIVALDITEST_H

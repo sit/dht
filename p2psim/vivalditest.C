@@ -79,9 +79,9 @@ VivaldiTest::error()
     Vivaldi::Coord vc1 = _all[i]->_vivaldi->my_location();
     double vd = dist(vc, vc1);
     double rd = t->latency(node(), _all[i]->node());
-    sum += (vd - rd) * (vd - rd);
+    sum += sqrt((vd - rd) * (vd - rd));
   }
-  return sqrt(sum / _all.size());
+  return (sum / _all.size());
 }
 
 // return 5th, 50th, 95th percentiles of node error
@@ -103,6 +103,17 @@ VivaldiTest::total_error(double &e05, double &e50, double &e95)
     e05 = a[0];
     e50 = a[n / 2];
     e95 = a[n-1];
+  }
+}
+
+void
+VivaldiTest::print_all_loc()
+{
+  unsigned int n = _all.size();
+  Vivaldi::Coord vc;
+  for (uint i = 0; i < n; i++) {
+    vc = _all[i]->_vivaldi->my_location();
+    printf("COORD %u: %.1f %.1f\n", (unsigned) now(), vc._x, vc._y);
   }
 }
 
@@ -135,12 +146,7 @@ VivaldiTest::status()
          vc._x,
          vc._y);
   fflush(stdout);
-
-  unsigned int n = _all.size();
-  for (uint i = 0; i < n; i++) {
-    vc = _all[i]->_vivaldi->my_location();
-    printf("COORD %u: %.1f %.1f\n", (unsigned) now(), vc._x, vc._y);
-  }
+  print_all_loc();
 }
 
 void
