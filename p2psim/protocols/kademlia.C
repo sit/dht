@@ -1206,7 +1206,7 @@ Kademlia::reap(void *r)
     delete ci;
   }
 
-  ri->k->_riset.remove(ri);
+  // ri->k->_riset.remove(ri);
   delete ri;
   // cout << "reaper done" << endl;
   threadexits(0);
