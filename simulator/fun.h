@@ -68,18 +68,22 @@ Node *getNode(int id);
 int getRandomActiveNodeId();
 int getRandomNodeId();
 void printAllNodesInfo();
-void updateSuccessor(Node *n, int id);
 void netFailure(Node *n, int *percentage);
 ID popNode(Request *r);
 void pushNode(Request *r, ID nid);
 
 
-
 /* functions implemented by event.c */
-void genEvent(int nodeType, void (*fun)(), void *params, double time);
-Event *getEvent(CalQueue *evCal, double time);
-Event **initEventQueue();
-void removeEvent(CalQueue *evCal, Event *ev);
+void genEvent(int nodeId, void (*fun)(), void *params, double time);
+void insertEvent(CalQueue *evCal, Event *ev, double time);
+Event *getEvent(CalQueue *evCal, double time, double* event_time);
+Heap *initEventQueue();
+/* heap functions*/
+void initHeap(Heap* h, int num);
+void insertHeapNode(Heap* h, double time, Event* event);
+Event *extractHeapMax(Heap* h, double* time);
+Event *inspectHeapMax(Heap* h, double* time);
+void heapify(Heap* h, int idx);
 
 /* functions implemented by in.c */
 void readInputFile(char *file);
@@ -98,6 +102,7 @@ void printFingerList(Node *n);
 ID   getSuccessor(Node *n);
 ID   getPredecessor(Node *n);
 void removeFinger(FingerList *fList, Finger *f);
+void loseFinger(Node* n, ID* remove);
 
 /* functions implemented by request.c */
 Request *newRequest(ID x, int type, int style, ID initiator);

@@ -25,23 +25,25 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-
+#include <string.h>
 #include "incl.h"
 
 // use a calendar queue to maintain events
-
-Event **initEventQueue()
+Heap *initEventQueue()
 {
-  Event **q;
+  Heap* h;
+  int i;
 
-  if (!(q = (Event **)calloc(1, MAX_NUM_ENTRIES*sizeof(Event **))))
+  if (!(h = (Heap *)calloc(1, MAX_NUM_ENTRIES*sizeof(Heap))))
     panic("initEventQueue: memory alloc. error.\n");
 
-  return q;
+  for (i = 0; i < MAX_NUM_ENTRIES; i++) 
+     initHeap(&h[i], 1500);
+
+  return h;
 }
 
-
-Event *newEvent(int nodeId, void (*fun)(), void *params, double time)
+Event *newEvent(int nodeId, void (*fun)(), void *params)
 {
   Event *ev;
 
@@ -51,48 +53,21 @@ Event *newEvent(int nodeId, void (*fun)(), void *params, double time)
   ev->nodeId = nodeId;
   ev->fun = fun;
   ev->params = params;
-  ev->time = time;
 
   return ev;
 }
 
 
-// delete event ev from the calendar queue
-void removeEvent(CalQueue *evCal, Event *ev)
-{
-  int idx;
-  Event *p;
-
-  // get entry to insert the new event 
-  idx = ((int)ev->time/ENTRY_TUNIT) % evCal->size;
-
-  p = evCal->q[idx];
-
-  if (p == ev) {
-    evCal->q[idx] = ev->next;
-    free(ev);
-  }
-
-  for (; p->next; p = p->next) {
-    if (p->next == ev) {
-      p->next = p->next->next;
-      free(ev);
-    }
-  }
-}
-
-    
 // insert new event in the calendar queue 
 void insertEvent(CalQueue *evCal, Event *ev, double time) 
 {
   int idx;
-  Event *p;
 
   if (time > MAX_TIME)
     return;
 
   if (evCal->time > time)
-    panic("Insert Event: event inserted in the past\n");
+    panic("InsertEvent: event inserted in the past\n");
 
   // get calendar queue entry to insert the new event 
   idx = ((int)time/ENTRY_TUNIT) % evCal->size;
@@ -100,26 +75,16 @@ void insertEvent(CalQueue *evCal, Event *ev, double time)
   if (idx >= evCal->size)
     panic("insertEvent: exceed calendar queue size\n");
 
-  ev->time = time;
-  ev->next = NULL;
-
-  // insert event at the tail of the queue in the corresponding entry 
-  p = evCal->q[idx];
-  if (!p) 
-    evCal->q[idx] = ev;
-  else {
-    for (p; p->next; p = p->next);
-    p->next = ev;
-  }
+  insertHeapNode(&evCal->heaps[idx], time, ev);
 }
 
 
 // return next event from the calendar queue
-Event *getEvent(CalQueue *evCal, double time)
+Event *getEvent(CalQueue *evCal, double time, double* event_time)
 {
-  Event *p, *q;
+  Event *p;
+  int slice_begin = ((int)time/ENTRY_TUNIT)*ENTRY_TUNIT;
   int idx = ((int)time/ENTRY_TUNIT) % evCal->size;
-  double minTime;
   static int oldIdx = 0;
 
   if (idx - oldIdx > 1) 
@@ -129,52 +94,150 @@ Event *getEvent(CalQueue *evCal, double time)
 
   evCal->time = time;
 
-  if (!evCal->q[idx])
+  if ( !(p = inspectHeapMax(&evCal->heaps[idx], event_time)) )
     return NULL;
 
-  p = evCal->q[idx];
+  // check to make sure we're in the correct timeslice
+  if (*event_time < slice_begin) {
+      printf("time: %f. p->time: %f. slice_begin: %d\n", 
+	    time, *event_time, slice_begin);
+      panic("");
+  } else if (*event_time >= slice_begin + ENTRY_TUNIT) {
 
-  minTime = p->time;
+      // corresponds to the future
+      return NULL; 
 
-  for (q = p->next; q; q = q->next) {
-    if (q->time < minTime)
-      minTime = q->time;
-    
   }
 
-  if (minTime > time + ENTRY_TUNIT)
-    return NULL;
+  p = extractHeapMax(&evCal->heaps[idx], event_time);
 
-  if (p->time <= minTime) {
-    evCal->q[idx] = p->next;
-    return p;
-  }
-  for (q = p; q->next; q = q->next) {
-
-    if (q->next->time <= minTime) {
-      p = q->next;
-      q->next = q->next->next;
-      return p;
-    }
-  }
-
-
-  return NULL;
+  return p;
 }     
 
 
-// create a new event and insert in in teh calendar queue
+// create a new event and insert it in the calendar queue
 void genEvent(int nodeId, void (*fun)(), void *params, double time)
 {
   Event *ev;
 
-  ev = newEvent(nodeId, fun, params, time);
+  ev = newEvent(nodeId, fun, params);
 
   insertEvent(&EventQueue, ev, time);
 }
 
+///////////////////////////////////////////////////////////////////
+//                  Heap functions                               //
+//////////////////////////////////////////////////////////////////
+
+// stupid heap implementation. use arrays and realloc when necessary.
+
+// allocate room for 1500 events at a time
+#define REALLOC_INCREMENT 1500
+
+#define parent(i) (i/2)
+#define left(i)   (2*i)
+#define right(i)  (2*i + 1)
 
 
+void initHeap(Heap* h, int num)
+{
+    memset(h, 0, sizeof(Heap)); 
 
+    // we'll index our array from 1
+    if (!(h->array = (HeapNode*)calloc(num + 1, sizeof(HeapNode))))
+	panic("newHeap: memory alloc error. 2.\n");
+
+    h->size = 0;
+    h->max  = num;
+    
+}
+
+void insertHeapNode(Heap* h, double time, Event* ev)
+{
+    int idx;
+
+    HeapNode hn;
+    hn.time = time;
+    hn.eventp = ev;
+
+    h->size++;
+    if (h->size > h->max) {
+
+	h->array = realloc(h->array,
+		          (h->max+1)*sizeof(HeapNode) + // what we have now
+			   REALLOC_INCREMENT*sizeof(HeapNode));
+	h->max += REALLOC_INCREMENT;
+
+    }
+
+    idx = h->size;
+
+    while (idx > 1 && h->array[parent(idx)].time > time) {
+
+	h->array[idx] = h->array[parent(idx)];
+	idx = parent(idx);
+
+    }
+
+    h->array[idx] = hn;
+}
+
+Event* extractHeapMax(Heap* h, double* time)
+{
+    void *ret;
+    if (h->size < 1) 
+	return NULL;
+
+    ret = h->array[1].eventp; 
+    *time = h->array[1].time;
+
+    h->array[1] = h->array[h->size];
+    h->size--;
+    
+    heapify(h, 1); // the 1-indexed array again
+
+    return ret;
+}
+
+Event* inspectHeapMax(Heap* h, double* time)
+{
+    void *ret;
+    if (h->size < 1)
+	return NULL;
+
+    *time = h->array[1].time;
+    ret = h->array[1].eventp;
+    return ret;
+}
+
+void heapify(Heap* h, int idx)
+{
+    int i = idx;
+    while (1) {
+
+	int l = left(i);
+	int r = right(i);
+	int smallest = i;
+
+	if (l <= h->size && h->array[l].time < h->array[i].time)
+	    smallest = l;
+
+	if (r <= h->size && h->array[r].time < h->array[smallest].time)
+	    smallest = r;
+
+	if (smallest != i) {
+
+	    HeapNode temp = h->array[smallest];
+	    h->array[smallest] = h->array[i];
+	    h->array[i] = temp;
+
+	    i = smallest;
+
+	} else 
+
+	    break;
+
+    }
+}
 
 

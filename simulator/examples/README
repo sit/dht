@@ -14,7 +14,7 @@ b) run the simulation on the resulting event file
 
 Example:
 
->..\sim simple.ev 11
+>..\sim -i simple.ev -s 11
 
 The output of sim records each simulated event. For document
 insertions and queries we also give the number of hops and timeouts of

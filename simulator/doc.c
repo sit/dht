@@ -27,8 +27,6 @@
 #include <stdlib.h>
 #include "incl.h"
 
-extern Node *NodeHashTable[HASH_SIZE];
-
 int insertDocInList(DocList *docList, Document *doc);
 Document *findDocInList(DocList *docList, ID docId);
 void removeDocFromList(DocList *docList, ID docId);
@@ -102,6 +100,7 @@ void insertDocument(Node *n, ID *docId)
     printf("document %d not inserted at time %f: initiator node %d not present\n", 
 	   *docId, Clock, n->id);
     insertDocInList(&PendingDocs, newDoc(*docId));
+    free(docId); // MW: adding
     return;
   }
   r = newRequest(*docId, REQ_TYPE_INSERTDOC, REQ_STYLE_ITERATIVE, n->id);
@@ -112,6 +111,8 @@ void insertDocument(Node *n, ID *docId)
   // if the insertion is succesful the document is removed 
   // from the list 
   insertDocInList(&PendingDocs, newDoc(*docId));
+
+  free(docId); // MW: adding
 }
   
 
@@ -127,6 +128,13 @@ void insertDocumentLocal(Node *n, ID *docId)
     // allocate space for new document 
     doc = newDoc(*docId);
 
+    // MW: other calls to insertDocInList don't check its return value;
+    // that leads to memory leaks (since the doclist might not accept the
+    // doc). for consistency, let's also just assume the insert went fine
+    // here. (and insertDocInList will change so that it never rejects
+    // documents.)
+    //
+#if 0
     if (!insertDocInList(n->docList, doc)) {
       // no room to insert document 
       printf("document %x not inserted at node %x at time %f: no more storage space\n", 
@@ -138,6 +146,11 @@ void insertDocumentLocal(Node *n, ID *docId)
 	     *docId, n->id, Clock);
       removeDocFromList(&PendingDocs, *docId);
     }
+#endif
+    insertDocInList(n->docList, doc);
+    printf("document %d inserted at node %d at time %f\n", 
+	     *docId, n->id, Clock);
+    removeDocFromList(&PendingDocs, *docId);
   }
 }
 
@@ -147,17 +160,36 @@ void insertDocumentLocal(Node *n, ID *docId)
 // if document already in the list, do nothing and return TRUE
 int insertDocInList(DocList *docList, Document *doc)
 {
-  Document *tmp;
-
+  // MW: see comment above. the return value of this function is rarely
+  // checked. our callers expect that the insert went fine, so let's meet
+  // their expectations!
+#if 0
   if (docList->size >= MAX_NUM_DOCS) {
     /* no room available in document list */
     return FALSE;
   }
+#endif
 
-  /* insert document at the head of the list */
-  tmp = docList->head;
-  docList->head = doc;
-  doc->next = tmp;
+  // insert document in order; don't insert if it's already there
+  Document** pp;
+
+  if (fake_doc_list_ops) {
+      free(doc);
+      return TRUE;
+  }
+
+  doc->next = NULL;
+
+  for (pp = &docList->head; *pp; pp = &((*pp)->next)) {
+	
+      if (doc->id < (*pp)->id)  {
+	  doc->next = *pp;
+	  break;
+      } else if (doc->id == (*pp)->id) 
+	  return TRUE;
+  }
+
+  *pp = doc;
 
   return TRUE;
 }
@@ -168,36 +200,41 @@ Document *findDocInList(DocList *docList, ID docId)
 {
   Document *doc;
 
-  for (doc = docList->head; doc; doc = doc->next)
+  if (fake_doc_list_ops) {
+      // fool the code that is calling us
+      return (Document*)4;
+  }
+
+  for (doc = docList->head; doc; doc = doc->next) {
     if (doc->id == docId)
       return doc;
+    else if (doc->id > docId) // we passed it
+      return NULL;
+  }
 
   return NULL;
+
 }
 
 
 // remove document docId (if any) from docList
 void removeDocFromList(DocList *docList, ID docId)
 {
-  Document *d, *temp;
+  // in-order search/removal
+  Document** pp;
+  Document* d;
 
-  if (!docList->head)
-    return;
-
-  if (docList->head->id == docId) {
-    temp = docList->head;
-    docList->head = temp->next;
-    free(temp);
-    return;
-  }
-
-  for (d = docList->head; d->next; d = d->next) {
-    if (d->next->id == docId) {
-      temp = d->next;
-      d->next = temp->next;
-      free(temp);
+  if (fake_doc_list_ops)
       return;
-    }
+
+  for (pp = &(docList->head); *pp; pp = &((*pp)->next)) {
+    if (docId == (*pp)->id) {
+	d = *pp;	
+	*pp = (*pp)->next;
+	free(d);
+	return;
+    } else if (docId < (*pp)->id) 
+	return;
   }
 }
 
@@ -231,7 +268,7 @@ void updateDocList(Node *n, Node *s)
 #ifdef TRACE
     printf("updateDocList: node %d has been deleted in the meantime!\n",
 	   s->id);
-#endif TRACE
+#endif // TRACE
     return;
   }
 

@@ -24,6 +24,7 @@
  */
 
 #include <stdio.h>
+#include <math.h>
 #include "stdlib.h"
 #include "incl.h"
 
@@ -62,7 +63,7 @@ void stabilize(Node *n)
       
       dst = r->succ; 
       if ((funifRand(0., 1.) < 0.1) && 
-	  (n->fingerList->size <  MAX_NUM_FINGERS))
+	  (n->fingerList->size <  max_location_cache))
 	dst = getRandomActiveNodeId();
       if (dst != n->id) {
 
@@ -106,7 +107,7 @@ ID chooseX(Node *n)
 
   // refresh a finger n+2^{i-1} with probability PROB_REFRESH_FINGER 
   if (funifRand(0., 1.) < PROB_REFRESH_FINGER) {
-    if (n->fingerId >= NUM_BITS)
+    if (n->fingerId >= num_fingers)
       n->fingerId = 1;
     x = successorId(n->id, (1 << n->fingerId));
     n->fingerId++;
@@ -117,10 +118,10 @@ ID chooseX(Node *n)
       panic("chooseX: fingerList empty!\n");
 
     next = 0;
-    if ((n->fingerList->size >= NUM_SUCCS) && 
+    if ((n->fingerList->size >= num_successors) && 
 	funifRand(0., 1.) <= PROB_REFRESH_SUCC) {
       next = unifRand(1, 2);
-      x = unifRand(0, NUM_SUCCS);
+      x = unifRand(0, num_successors);
     } else
       x = unifRand(0, n->fingerList->size);
     for (f = n->fingerList->head; (f && x--) ; f = f->next);

@@ -29,9 +29,17 @@
 #ifdef DECL_VAR
 CalQueue EventQueue;
 double    Clock   = 0;
+int fake_doc_list_ops = 0;
+int num_successors = DEFAULT_NUM_SUCCS; 
+int num_fingers = DEFAULT_NUM_FINGERS;
+int max_location_cache = DEFAULT_MAX_LOCATION_CACHE;
 #else
 extern CalQueue EventQueue;
 extern double   Clock;
+extern int fake_doc_list_ops;
+extern int num_successors;
+extern int num_fingers;
+extern int max_location_cache;
 #endif
 
 #endif

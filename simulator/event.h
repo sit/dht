@@ -26,19 +26,32 @@
 #ifndef INCL_EVENTS
 #define INCL_EVENTS
 
-
+// these objects get stored in HeapNodes
 typedef struct _event {
   int           nodeId;    /* nodeId */
-  double        time;
-  void          (*fun)();  /* function to be called when the evnt occurs */
-  void           *params;  /* address to the parameters to be passed to fun */
-  struct _event *next;  /* next event in the list */
+  void          (*fun)();  /* function to be called when the event occurs */
+  void           *params;  /* address of the parameters to be passed to fun */
 } Event;
+
+
+// a (key,value) pair, where the key is the time the event will take place
+// and the value is a pointer to a HeapNode
+typedef struct _heapnode {
+    double time;
+    Event *eventp;	
+} HeapNode;
+
+typedef struct _Heap {
+    int size;	     // number of events in the heap
+    int max;	     // maximum number of events in the heap
+    HeapNode* array; // array of HeapNodes
+} Heap;
 
 typedef struct _calQueue {
   int     size;   /* size of the calendar queueue */
   double  time;   /* current time */
-  Event  **q;
+  struct _Heap* heaps; /* array of heaps */
 } CalQueue;
+
 
 #endif

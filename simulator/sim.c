@@ -27,36 +27,118 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <stdlib.h>
+#include <unistd.h>
+#include <math.h>
+#include <string.h>
+#include <signal.h>
 
 #define DECL_VAR
 #include "incl.h"
+
+extern int num_successors;
+
+void sigint_handler(int);
+
+void usage(char* cmd)
+{
+    fprintf(stderr,
+	    "usage: %s "
+	    "-i inputfile "
+	    "[-s random seed] "
+	    "[-n num_successors] "
+	    "[-l max_location_cache] "
+	    "[-g num_fingers] "
+	    "[-f] "
+	    "\n", cmd);
+
+    exit(-1);
+}
+
 
 int main(int argc, char **argv) 
 {
   Event *ev;
   Node  *n;
+  extern char* optarg;
+  char* inputfile = "";
+  int seed = 0;
+  char ch;
+  
+  while ((ch = getopt(argc, argv, "i:s:l:g:n:f")) != EOF) {
 
-  if (argc != 3) {
-    printf("usage: %s input.ev seed\n", argv[0]);
-    exit (-1);
+    switch(ch) {
+
+	case 'i':
+	    inputfile = optarg;
+	    break;
+
+	case 's':
+	    seed = atoi(optarg);
+	    break;
+
+	case 'l':
+	    max_location_cache = atoi(optarg);
+	    break;
+   
+	case 'g':
+	    num_fingers = atoi(optarg);
+	    break;
+
+	case 'n':
+	    num_successors = atoi(optarg);
+	    break;
+
+	case 'f':
+	    // MW. 4/10/03. when we have millions of documents, a llist is not
+	    // the best way to store documents. in these tests, we care only 
+	    // about routing performance, so every lookup is assumed to
+	    // succeed. this flag tells sim to not store any docs in
+	    // its doc lists.
+	    fake_doc_list_ops = 1;
+	    break;
+
+	default:
+	    usage(argv[0]);
+    }
+
   }
 
-  EventQueue.q = initEventQueue();
+  // the only mandatory argument
+  if (!strcmp(inputfile, ""))
+      usage(argv[0]);
+
+  EventQueue.heaps = initEventQueue();
   EventQueue.size = MAX_NUM_ENTRIES;
 
-  initRand(atoi(argv[2]));
+  signal(SIGINT, sigint_handler);
+  initRand(seed);
+  readInputFile(inputfile);
 
-  readInputFile(argv[1]);
+  // this is a rough check and ignores the fact that successors will
+  // overlap with fingers. but if the user satisfies this check,
+  // correctness is ensured. it's a conservative estimate, in other words
+  if (max_location_cache < (num_successors - 1) + num_fingers) {
+      printf("there are %d fingers and %d successors.\nThe location cache "
+	     "has to be at least as big as the number of fingers plus\n"
+	     "the number of successors minus one\n", 
+	     num_fingers, num_successors);
+      exit(-1);
+   }
+
+  printf("simulation beginning.\n"
+	 "num_succs=%d, seed=%d location_cache=%d num_fingers=%d\n", 
+	 num_successors, seed, max_location_cache, num_fingers);
 
   while (Clock < MAX_TIME) {
-    ev = getEvent(&EventQueue, Clock);
+    double clock_evtime;
+    ev = getEvent(&EventQueue, Clock, &clock_evtime);
     if (!ev) 
       Clock = (double)((int)(Clock/ENTRY_TUNIT) + 1.0)*ENTRY_TUNIT; 
     else {
-      Clock = ev->time;
+      Clock = clock_evtime;
       {
         static double tsec = 0.;
-        if (ev->time/1000000. > tsec) {
+        if (Clock/1000000. > tsec) {
           tsec += 1.0;
 	}
       }
@@ -80,16 +162,11 @@ void exitSim(void)
   exit(0);
 }
 
-
-
-
-
-
-
-
-
-
-
-
+// put this in as a placeholder 
+void sigint_handler(int param)
+{
+    fprintf(stderr, "Exiting . . .\n");
+    exit(1);
+}
 
 

@@ -53,9 +53,12 @@ void insertRequest(Node *n, Request *r)
 { 
   RequestList *rList = n->reqList;
 
-  if (!rList->head) 
+  if (!rList->head)  {
     rList->head = rList->tail = r;
-  else {
+
+    genEvent(n->id, processRequest, (void *)NULL, Clock);
+
+  } else {
     rList->tail->next = r;
     rList->tail = r;
   }
@@ -80,6 +83,29 @@ Request *getRequest(Node *n)
   return r;
 }
 
+void clean_up_reqs(Node* n)
+{
+    Request *r;
+
+    while ((r = getRequest(n))) {
+
+       printf("dead node. initiator: %d. sender: %d. "
+	  "current loc: %d. pred: %d. succ: %d. dst: %d. del: %d. timeouts: %d. "
+	  "hops: %d.\n", r->initiator, r->sender, n->id, r->pred,
+	  r->succ, r->dst, r->del, r->timeouts, r->hops);
+
+	if (r->type == REQ_TYPE_INSERTDOC || r->type == REQ_TYPE_FINDDOC) 
+	    printf("FAILED LOOKUP\n");
+
+       // remove a finger entry if appropriate
+       if (r->sender != n->id)  
+	    genEvent(r->sender, loseFinger, (void*)newInt(n->id), 
+		    Clock + TIME_OUT);
+
+       free(r);
+  }
+
+}
 
 // process request
 void processRequest(Node *n)
@@ -87,12 +113,12 @@ void processRequest(Node *n)
   ID      succ, pred, dst, old_succ;
   Request *r;
 
-  // periodically invoke process request
-  if (n->status != ABSENT)
-    genEvent(n->id, processRequest, (void *)NULL, 
-	     Clock + unifRand(0.5*PROC_REQ_PERIOD, 1.5*PROC_REQ_PERIOD));
+  if (n->status == ABSENT) {
+      clean_up_reqs(n);
+      return;
+  }
 
-  while ((r  = getRequest(n))) {
+  while ((r = getRequest(n))) {
 
     if (r->del != -1) {
       Finger *f = getFinger(n->fingerList, r->del);
@@ -200,6 +226,8 @@ void processRequest(Node *n)
       genEvent(n->id, insertRequest_wait, (void *)r, 
 	       Clock + intExp(AVG_PKT_DELAY));
     } else {
+      insertFinger(n, dst); // MW: add a node to the list if we become
+			    // aware of it
       genEvent(dst, insertRequest, (void *)r, Clock + intExp(AVG_PKT_DELAY));
     }
   }
@@ -239,20 +267,54 @@ int processRequest1(Node *n, Request *r)
     switch (r->type) {
 
     case REQ_TYPE_INSERTDOC:
-      printf("insert doc request (hops= %d timeouts= %d ); ", 
-	     r->hops, r->timeouts);
-      insertDocumentLocal(getNode(getSuccessor(n)), &r->x);
+
+      // MW: if successor is down, then we model (perhaps incorrectly) that
+      // the document fails to be inserted. we also remove the
+      // corresponding node from the location cache of the current node,
+      // after a suitable delay. We impose this delay b/c a timeout
+      // would presumably take a packet delay's worth plus TIME_OUT
+      // (actually, it should just be TIME_OUT but elsewhere Ion used
+      // packet delay's worth plus TIME_OUT, so we follow suit).
+      s = getNode(getSuccessor(n));
+      if (s->status == ABSENT) {
+	 
+	 genEvent(n->id, loseFinger, (void*)newInt(s->id), 
+		    Clock + intExp(AVG_PKT_DELAY) + TIME_OUT);
+	 printf("insert FAILED. successor down.\n");
+         printf("stats dump: failed in processRequest1. "
+		"initiator: %d. sender: %d. current loc: %d. pred: %d. "
+		"succ: %d. dst: %d. del: %d. timeouts: %d. "
+	        "hops: %d.\n", r->initiator, r->sender, n->id, 
+		r->pred, r->succ, r->dst, r->del, r->timeouts, r->hops);
+      } else {
+        printf("insert doc request (hops= %d timeouts= %d ); ", 
+	       r->hops, r->timeouts);
+	insertDocumentLocal(s, &r->x);
+
+      }
       return TRUE;
 
     case REQ_TYPE_FINDDOC:
-      printf("find doc request (hops= %d timeouts= %d ); ", 
-	     r->hops, r->timeouts);
-      s = getNode(getSuccessor(n));
-      findDocumentLocal(s, &r->x);
-      if (s->status == ABSENT)
-	removeFinger(n->fingerList, n->fingerList->head);
-      return TRUE;
 
+      // MW: see comment above.
+      s = getNode(getSuccessor(n));
+      if (s->status == ABSENT) {
+	  genEvent(n->id, loseFinger, (void*)newInt(s->id), 
+		  Clock + intExp(AVG_PKT_DELAY) + TIME_OUT);
+	  printf("find FAILED. successor down.\n");
+          printf("stats dump: failed in processRequest1. "
+		"initiator: %d. sender: %d. current loc: %d. pred: %d. "
+		"succ: %d. dst: %d. del: %d. timeouts: %d. "
+	        "hops: %d.\n", r->initiator, r->sender, n->id, 
+		r->pred, r->succ, r->dst, r->del, r->timeouts, r->hops);
+      } else {
+	  printf("find doc request (hops= %d timeouts= %d ); ", 
+	    r->hops, r->timeouts);
+	  findDocumentLocal(s, &r->x);
+      }
+
+      return TRUE; 
+    
     case REQ_TYPE_JOIN:
       join1(r->x, getSuccessor(n));
       return TRUE;
@@ -274,7 +336,11 @@ void insertRequest_wait(Node *n, Request *r)
 {
 
   // send message to dst
-  if (getNode(r->dst)->status != PRESENT) {
+  if (getNode(r->dst)->status == ABSENT) {
+
+    // MW: need to remove the finger if the next hop on the path is down
+    genEvent(r->initiator, loseFinger, (void*)newInt(r->dst), 
+		Clock + TIME_OUT);
 
     r->done = FALSE;
     getNeighbors(n, r->x, &(r->pred), &(r->succ));
@@ -294,6 +360,7 @@ void insertRequest_wait(Node *n, Request *r)
 
   } else {
     pushNode(r, r->dst);
+    insertFinger(n, r->dst); // MW: add any node to the list we become aware of
     genEvent(r->dst, insertRequest, (void *)r, Clock);
   }
 }
@@ -325,7 +392,7 @@ void copySuccessorFingers(Node *n)
 {
   Finger *f;
   int    i;
-  Node   *s;
+  Node   *s = NULL;
 
   // get n's successor list
   f = n->fingerList->head;
@@ -333,7 +400,7 @@ void copySuccessorFingers(Node *n)
   if (!s || s->status != PRESENT)
     return;
   f = s->fingerList->head;
-  for (i = 0; i < NUM_SUCCS; i++) {
+  for (i = 0; i < num_successors; i++) {
     if (!f)
       break;
     insertFinger(n, f->id);

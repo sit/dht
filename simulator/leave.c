@@ -58,6 +58,8 @@ void leave(Node *n, void *dummy) {
 
   printf("node %d left at time %f\n", n->id, Clock);
   n->status = ABSENT;
+
+  free(dummy);	// MW. just in case someone passed in something non-NULL
 }
 
 

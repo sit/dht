@@ -26,10 +26,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <assert.h>
 
 #include "incl.h"
 
-void evictFinger(FingerList *fList);
+void testEviction(FingerList *fList, ID id);
+void evictFinger(FingerList *fList, ID id);
 void cleanFingerList(FingerList *fList);
 void setPresent(ID id);
 
@@ -70,6 +72,34 @@ ID getPredecessor(Node *n)
     return n->id;
 }
 
+void loseFinger(Node* n, ID* remove)
+{
+    FingerList* fList;
+    Finger* f;
+
+    // something happened between the time the finger was absent and now.
+    // In real life, this means nothing would happen, since the timeout
+    // couldn't be detected until this event fired. In simulation world, it
+    // means we shouldn't be evicting the finger. The sequence of events
+    // that would have generated this is :
+    //    life as usual | 'remove' dies ... | 'insertFinger' called ...
+    //       (200 ms go by, say) | 'remove' comes back |  500 ms
+    //       have gone by since 'insertFinger' was called | loseFinger is
+    //       called
+    if (getNode(*remove)->status == PRESENT) {
+	free(remove);
+	return;
+    }
+
+    fList = n->fingerList;
+    if (fList && (f = getFinger(fList, *remove)))
+	removeFinger(fList, f);
+
+    free(remove);
+}
+ 
+
+
 // insert new finger in the list; if the finger is already in the
 // list, refresh it
 void insertFinger(Node *n, ID id)
@@ -82,9 +112,6 @@ void insertFinger(Node *n, ID id)
 
   updateDocList(n, getNode(id));
   updateDocList(getNode(id), n);
-
-  // remove finger entries that have expired
-  cleanFingerList(fList);
 
 #ifdef OPTIMIZATION
   // optimization: if n's predecessor changes 
@@ -105,14 +132,13 @@ void insertFinger(Node *n, ID id)
     return;
   }
 
-  // make room for the new finger
-  if (fList->size == MAX_NUM_FINGERS)
-    evictFinger(fList);
-
   if (!fList->size) {
     // fList empty; insert finger in fList
     fList->size++;
     fList->head = fList->tail = newFinger(id);
+
+    testEviction(fList, n->id);
+
     setPresent(id);
     return;
   }
@@ -122,6 +148,8 @@ void insertFinger(Node *n, ID id)
     fList->head = newFinger(id);
     fList->head->next = ftemp;
     fList->size++;
+    
+    testEviction(fList, n->id);
     setPresent(id);
     return;
   }
@@ -142,8 +170,34 @@ void insertFinger(Node *n, ID id)
       break;
     }
   }
+
+  // if we need to evict, do it after the latest has been added, the
+  // reason being that the latest addition may be the only candidate
+  // for eviction (if, for example, the elements in the fingertable
+  // were only the successors and the fingers, neither of which should
+  // be removed).
+  testEviction(fList, n->id);
+  return;
 }
 
+void
+testEviction(FingerList* fList, ID owner)
+{
+  if (fList->size > max_location_cache) {
+
+    // note that b/c the first successor is also the first
+    // finger, we have that in certain cases an fList size of
+    // num_succs + num_fingers is too big (if the user set
+    // num_successors to 1 and max_location_cache to 24, e.g.)
+    assert(fList->size >= num_successors + num_fingers); 
+
+    // we are assured of being able to evict an element since
+    // the list is big enough
+    evictFinger(fList, owner);
+    assert(fList->size == max_location_cache);
+  }
+
+}
 
 // search and return finger id from fList
 Finger *getFinger(FingerList *fList, ID id)
@@ -227,32 +281,69 @@ void cleanFingerList(FingerList *fList)
   }
 }
 
-
-// evict the finger that has not been refrerred for the longest time
-// (it implements LRU)
-void evictFinger(FingerList *fList)
+// evict the location cache entry that has not been refrerred for the 
+// longest time (in LRU fashion). the successors are effectively
+// pinned in. also, this function computes, in an online fashion,
+// which of the elements are bona fide fingers (as opposed to 
+// location cache entries), and the ones that are actually fingers
+// are not considered for LRU replacement. this models what the real Chord
+// algorithm does. --MW
+void evictFinger(FingerList *fList, ID owner)
 {
-  Finger *f, *ftemp;
+  Finger *f = NULL, *ftemp = NULL, *fmarked = NULL;
+  ID previd;
   int     i;
   double time = MAX_TIME;
-
+  int k = 0;	// current finger, 
+  int is_finger = 0;
 
   ftemp = fList->head;
-  for (i = 0; i < NUM_SUCCS - 1; i++)
+
+  // don't evict successors
+  for (i = 0; i < num_successors; i++)
     ftemp = ftemp->next;
 
-  for (f = ftemp; f->next; f = f->next) {
-    if (f->last < time)
-      time = f->last;
+  // should be at least as many location cache entries as 
+  // successors and as fingers, so we shouldn't be out of entries
+  // here
+  if (!ftemp)
+      assert(0); 
+
+  previd = owner;
+
+  for (f = ftemp; f; f = f->next) {
+    
+     is_finger = 0;
+     // rounding up b/c that's consistent with our model if storing
+     // quantities at their successors
+     ID succ_id = successorId(owner, 1 << k);
+
+     // need to avoid evicting fingers.  this while loop skips over fingers
+     // that count as multiple order fingers (which is inevitable when N
+     // is much less than 2^m, where m is the number of bits for ID space.)
+     // On the first iteration, previd = owner, so we're figuring out
+     // how many fingers were covered by the successor list.
+    while ((between(succ_id, previd, f->id ) || f->id == succ_id) 
+	     && k < num_fingers) { 
+	 is_finger = 1; 
+	 k++; 
+	 succ_id = successorId(owner, 1 << k);
+     }
+
+     // checks for LRU; only examines non-fingers
+     if (!is_finger && f->last < time) {
+	time = f->last;
+	fmarked = f;
+     }
+    
+     previd = f->id;
   }
 
-  for (f = ftemp; f->next; f = f->next) {
-    if (f->last == time) {
-      removeFinger(fList, f);
-      return;
-    }
-  }
+  assert(fmarked);
+  removeFinger(fList, fmarked);
 }
+
+
 
 // get predecessor and successor of x
 void getNeighbors(Node *n, ID x, ID *pred, ID *succ)

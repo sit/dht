@@ -26,6 +26,7 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "incl.h"
 
@@ -65,11 +66,13 @@ void readLine(FILE *fp)
   } else if (strcmp(cmd, "fail") == 0) {
     /* arg1 - nodeId; arg2 - time */
     if (getNode(arg1))
-      genEvent(arg1, nodeFailure, (void *)newInt(arg2), arg2);
+      // MW: note: the 3rd argument used to be (improperly) non-NULL
+      genEvent(arg1, nodeFailure, NULL, arg2);
   } else if (strcmp(cmd, "leave") == 0) {
     /* arg1 - nodeId; arg2 - time */
     if (getNode(arg1))
-      genEvent(arg1, leave, (void *)newInt(arg2), arg2);
+      // MW: same comment as above
+      genEvent(arg1, leave, NULL, arg2);
   } else if (strcmp(cmd, "find") == 0) {
     fscanf(fp, "%d", &arg3);
     /* arg1 - nodeId; arg2 - argId; arg3 - time */

@@ -55,7 +55,7 @@ typedef int ID;
 
 // average interval between two invocations of the stabilization()
 // procedure. The duration of this interval is
-// uniformly distributed in [STABILIZDE_REC_PERIOD, 1.5*STABILIZE_PERIOD)
+// uniformly distributed in [.5*STABILIZDE_REC_PERIOD, 1.5*STABILIZE_PERIOD)
 #define STABILIZE_PERIOD 30000  /* ms */
 
 // timeout to detect a node failure. a node eliminates a finger from
@@ -64,10 +64,14 @@ typedef int ID;
 #define TIME_OUT        500 /* ms */
 
 // maximum simulation time 
-#define MAX_TIME     5e+07 /* in ms */   
+#define MAX_TIME     MAX_INT /* in ms */   
 
 // size of hash table used to maintain all nodes
-#define HASH_SIZE        100000 
+//#define HASH_SIZE        100000 
+//  there are times when sim loops through the entire hash table; better
+//  to have a smaller hash table even if it means slightly more collisions
+//  on average -- MW
+#define HASH_SIZE	 10000
 
 // calendar queue parameters: number of entries and the time interval
 // covered by an entry (in event.c)
@@ -78,10 +82,12 @@ typedef int ID;
 #define MAX_NUM_DOCS    100000
 
 // finger table size (see pseudocode.txt)
-#define MAX_NUM_FINGERS 40
+#define DEFAULT_NUM_FINGERS 20
+#define DEFAULT_MAX_LOCATION_CACHE 50
 // number of successors maintained by each node; these are the first
 // NUM_SUCC nodes in the finger table
-#define NUM_SUCCS 20
+#define DEFAULT_NUM_SUCCS 20
+
 
 // display some debugging  info
 // #define TRACE

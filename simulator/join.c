@@ -24,6 +24,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include "incl.h"
 
 // initiate join request
@@ -48,6 +49,8 @@ void join(Node *n, int *nodeId) {
     processRequest(n);
     printf("node %d joins at time %f\n", n->id, Clock); 
   }
+
+  free(nodeId); // MW adding; otherwise heap memory for the parameter is leaked
 }
 
 

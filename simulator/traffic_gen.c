@@ -29,6 +29,7 @@
 
 #include "incl.h"
 #include "traffic_gen.h"
+#include <string.h>
 
 // This program reads a script file and generates
 // a list of events to be processed by ./sim
