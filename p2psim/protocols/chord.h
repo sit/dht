@@ -30,7 +30,6 @@
 #include "consistenthash.h"
 
 #undef CHORD_DEBUG
-#define DNODE 894
 #define PKT_OVERHEAD 20
 
 #define TYPE_USER_LOOKUP 0

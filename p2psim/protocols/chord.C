@@ -28,6 +28,7 @@
 extern bool vis;
 bool static_sim;
 
+#define DNODE 115
 
 Chord::Chord(Node *n, Args& a, LocTable *l)
   : P2Protocol(n), _isstable (false)
@@ -754,7 +755,7 @@ Chord::join(Args *args)
     node()->set_alive(); //if args is NULL, it's an internal join
 #ifdef CHORD_DEBUG
     assert(before<5000 || (!_inited));
-    printf("%s start to join inited? %u\n",ts(), _inited?1:0);
+    printf("%s start to join inited? %u basic stab running %u\n",ts(), _inited?1:0, _stab_basic_running?1:0);
     if (me.ip == DNODE) {
       fprintf(stderr,"%s start to join\n", ts());
     }
@@ -797,18 +798,32 @@ Chord::join(Args *args)
   record_stat(4, TYPE_JOIN_LOOKUP);
   bool ok = doRPC(_wkn.ip, &Chord::find_successors_handler, &fa, &fr);
   if (ok) record_stat(4*fr.v.size(), TYPE_JOIN_LOOKUP);
+#ifdef CHORD_DEBUG
+  if (me.ip == DNODE) 
+    fprintf(stderr,"%s fuck!\n",ts());
+#endif
 
-  if (!node()->alive()) return;
+  if (!node()->alive()) {
+    _join_scheduled--;
+    return;
+  }
 
   if (fr.v.size() < 1) {
+    _join_scheduled--;
     if (!_join_scheduled) {
-      delaycb(2000, &Chord::join, (Args *)0);
+      delaycb(200, &Chord::join, (Args *)0);
       _join_scheduled++;
     }
     return;
   }
 
   assert (ok);
+
+  for (uint i = 0; i < fr.v.size(); i++) {
+    if (fr.v[i].ip != me.ip) 
+      loctable->add_node(fr.v[i],true);
+  }
+
 #ifdef CHORD_DEBUG
   Time after = now();
   if (me.ip == DNODE) 
@@ -822,11 +837,7 @@ Chord::join(Args *args)
   }
   printf("\n");
 #endif
-  for (uint i = 0; i < fr.v.size(); i++) {
-    if (fr.v[i].ip != me.ip) 
-      loctable->add_node(fr.v[i],true);
-  }
-  
+ 
 
   if (!_stab_basic_running) {
     _stab_basic_running = true;
@@ -842,8 +853,9 @@ Chord::join(Args *args)
 #ifdef CHORD_DEBUG
     fprintf(stderr,"%s join failed! return %u\n", ts(), fr.v.size());
 #endif
+    _join_scheduled--;
     if (!_join_scheduled) {
-      delaycb(2000, &Chord::join, (Args *)0);
+      delaycb(200, &Chord::join, (Args *)0);
       _join_scheduled++;
       return;
     }
@@ -855,6 +867,11 @@ Chord::join(Args *args)
 void
 Chord::reschedule_basic_stabilizer(void *x)
 {
+#ifdef CHORD_DEBUG
+  if (me.ip == DNODE) {
+    printf("%s special treatment !!\n",ts());
+  }
+#endif
   assert(!static_sim);
   if (!node()->alive()) {
     _stab_basic_running = false;
@@ -880,6 +897,11 @@ Chord::reschedule_basic_stabilizer(void *x)
 void
 Chord::stabilize()
 {
+#ifdef CHORD_DEBUG
+  if (me.ip == DNODE) {
+    printf("%s special treatment\n",ts());
+  }
+#endif
 
   IDMap pred1 = loctable->pred(me.id-1);
   IDMap succ1 = loctable->succ(me.id+1);
