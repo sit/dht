@@ -27,7 +27,6 @@ struct group {
   
   void xover (unsigned long, unsigned long);
   strbuf next (void);
-  //  void next_cb (str, dhash_stat, ptr<dhash_block>, vec<chordID>);
   bool more (void) { return start <= stop; };
   bool loaded (void) { return rec; };
   chordID getid (unsigned long);

@@ -221,7 +221,8 @@ nntp::cmd_group (str c) {
     if (cur_group.open (grouprx[1], &count, &first, &last) < 0) {
       out << badgroup;
     } else {
-      out << groupb << count << " " << first << " " << last << " " << cur_group.name () << groupe;
+      out << groupb << count << " " << first << " " << last << " "
+	  << cur_group.name () << groupe;
     }
   } else
     out << syntax;
@@ -253,24 +254,10 @@ nntp::cmd_article (str c) {
 
     warn << "msgkey " << msgkey << "\n";
 
-    if (msgkey != 0) {
-      dhash->retrieve (msgkey, wrap (this, &nntp::cmd_article_cb, !artrx[1], msgkey));
-
-#if 0
-      key = New refcounted<dbrec> (msgid, msgid.len ());
-      d = article_db->lookup (key);
-      if (!d) {
-	out << noarticle;
-	return;
-      }
-
-      if (!artrx[1]) {
-	out << articleb << cur_group.cur_art << " " << msgid << articlee;
-      }
-      out << str (d->value, d->len) << "\r\n";
-      out << period;
-#endif
-    } else
+    if (msgkey != 0)
+      dhash->retrieve (msgkey,
+		       wrap (this, &nntp::cmd_article_cb, !artrx[1], msgkey));
+    else
       out << noarticle;
   } else {
     out << syntax;
@@ -329,19 +316,23 @@ warn << " resid " << in.resid () << " rem " << postrx.len (0) << "\n";
       warn << "mdg len " << postrx.len (0) << "\n";
       msgid = postmrx[1];
     } else {
-#if 0
-      char hashbytes[sha1::hashsize];
-      sha1_hash (hashbytes, postrx[1], postrx[1].len ());
-      mpz_set_rawmag_be (&ID, hashbytes, sizeof (hashbytes));
-#endif
       msgid = strbuf () << "<" << ID << "@usenetDHT>";
     }
 
     dhash->insert (postrx[1], postrx[1].len (),
 		   wrap (this, &nntp::read_post_cb));
 
+    int line = 0;
+
+    for (unsigned int i = 0; i < postrx[3].len (); i++)
+      if (postrx[3][i] == '\n')
+	line++; // xxx make this only count lines of body
+
+    str header = strbuf () << postrx[2] << "Lines: " << line << "\r\n" <<
+      "ChordID: " << ID << "\r\n";
+
     k = New refcounted<dbrec> (msgid, msgid.len ());
-    d = New refcounted<dbrec> (postrx[2], postrx[2].len ());
+    d = New refcounted<dbrec> (header, header.len ());
     header_db->insert(k, d);
 
     g = New refcounted<group> ();

@@ -42,7 +42,8 @@ struct nntp {
   void cmd_check (str);
   void cmd_takethis (str);
 
-  void cmd_article_cb (bool, chordID, dhash_stat, ptr<dhash_block>, vec<chordID>);
+  void cmd_article_cb (bool, chordID, dhash_stat, ptr<dhash_block>,
+		       vec<chordID>);
   void read_post_cb (dhash_stat, ptr<insert_info>);
 
   vec<c_jmp_entry_t> cmd_table;
