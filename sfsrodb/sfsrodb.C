@@ -1,4 +1,4 @@
-/* $Id: sfsrodb.C,v 1.27 2002/11/13 05:49:52 fdabek Exp $ */
+/* $Id: sfsrodb.C,v 1.28 2002/12/20 22:16:27 fdabek Exp $ */
 
 /*
  * Copyright (C) 1999 Kevin Fu (fubob@mit.edu)
@@ -47,7 +47,7 @@
 #include "sfscrypt.h"
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
-#define LSD_SOCKET "/tmp/chord-sock"
+str lsd_socket;
 
 ptr<dhashclient> dhash_cli;
 
@@ -804,7 +804,7 @@ sfsrodb_main (const str root, const str keyfile)
     //timestamp = "SHIT";
   }
 
-  dhash_cli = New refcounted <dhashclient> (LSD_SOCKET);
+  dhash_cli = New refcounted <dhashclient> (lsd_socket);
 
   ptr <sfspriv> sk;
   if (!keyfile) {
@@ -970,13 +970,14 @@ main (int argc, char **argv)
 
   char *exp_dir = NULL;
   char *sk_file = NULL;
-
+  
   verbose_mode = false;
   initialize = false;
   blocksize = 8192;
+  lsd_socket = "/tmp/chord-sock";
 
   int ch;
-  while ((ch = getopt (argc, argv, "b:d:s:vwx")) != -1)
+  while ((ch = getopt (argc, argv, "b:d:s:S:vwx")) != -1)
     switch (ch) {
     case 'b':
       if (!convertint (optarg, &blocksize)
@@ -997,6 +998,9 @@ main (int argc, char **argv)
       break;
     case 'x':
       x_flag = true;
+      break;
+    case 'S':
+      lsd_socket = optarg;
       break;
     case '?':
     default:

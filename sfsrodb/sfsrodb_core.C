@@ -125,7 +125,7 @@ sfsrodb_put_cb (timespec ts, dhash_stat status, ptr<insert_info> i)
 
   out--;
   if (status != DHASH_OK)
-    fatal << "Could not store block " << i->key << "\n";
+    warn << "Could not store block " << i->key << "\n";
 }
 
 
