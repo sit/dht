@@ -37,11 +37,36 @@
 #include <dmalloc.h>
 #endif
 
+#include <merkle_sync_prot.h>
+
+#define MERKLE_ENABLED 0
+#if MERKLE_ENABLED
+#define MNEW
+#endif
+
 #define LEASE_TIME 2
 #define LEASE_INACTIVE 60
 
+// XXX: PUT THIS FUNCTION IN THE MERKLE DIRECTORY
+static int
+dbcompare (ref<dbrec> a, ref<dbrec> b)
+{
+  merkle_hash ax = to_merkle_hash (a);
+  merkle_hash bx = to_merkle_hash (b);
+  if (ax < bx) {
+    //warn << "dbcompare " << ax << " < " << bx << "\n";
+    return -1;
+  } else if (ax == bx) {
+    //warn << "dbcompare " << ax << " == " << bx << "\n";
+    return 0;
+  } else {
+    //warn << "dbcompare " << ax << " > " << bx << "\n";
+    return 1;
+  }
+}
 
-int dhash::dbcompare (ref<dbrec> a, ref<dbrec> b)
+int
+dhash::dbcompare (ref<dbrec> a, ref<dbrec> b)
 {
   chordID ax = dbrec2id (a);
   chordID bx = dbrec2id (b);
@@ -53,7 +78,7 @@ int dhash::dbcompare (ref<dbrec> a, ref<dbrec> b)
     return 1;
 }
  
-dhash::dhash(str dbname, vnode *node, 
+dhash::dhash(str dbname, ptr<vnode> node, 
 	     ptr<route_factory> _r_factory,
 	     int k, int _ss_mode) 
 {
@@ -67,7 +92,7 @@ dhash::dhash(str dbname, vnode *node,
 
   db = New dbfe();
 
-  db->set_compare_fcn (wrap (this, &dhash::dbcompare));
+  db->set_compare_fcn (wrap (&::dbcompare));
 
   //set up the options we want
   dbOptions opts;
@@ -81,9 +106,17 @@ dhash::dhash(str dbname, vnode *node,
     exit (-1);
   }
 
-
   host_node = node;
   assert (host_node);
+
+  // merkle state
+  mtree = New merkle_tree (db);
+  msrv = New merkle_server (mtree, node, wrap (this, &dhash::sendblock_XXX));
+  replica_syncer_dstID = 0;
+  replica_syncer = NULL;
+  partition_syncer_dstID = 0;
+  partition_syncer = NULL;
+
 
   // RPC demux
   warn << host_node->my_ID () << " registered dhash_program_1\n";
@@ -93,7 +126,7 @@ dhash::dhash(str dbname, vnode *node,
   
   //the client helper class (will use for get_key etc)
   //don't cache here: only cache on user generated requests
-  cli = New dhashcli (mkref(node), this, r_factory, false);
+  cli = New dhashcli (node, this, r_factory, false);
 
   // pred = 0; // XXX initialize to what?
   check_replica_tcb = NULL;
@@ -107,12 +140,135 @@ dhash::dhash(str dbname, vnode *node,
   bytes_served = 0;
   rpc_answered = 0;
 
+
   update_replica_list ();
   install_replica_timer ();
   transfer_initial_keys ();
 
   delaycb (30, wrap (this, &dhash::sync_cb));
+  if (MERKLE_ENABLED) {
+    delaycb (5, wrap (this, &dhash::replica_maintenance_timer, 0));
+    delaycb (5, wrap (this, &dhash::partition_maintenance_timer, 0));
+  }
 }
+
+void
+dhash::sendblock_XXX (XXX_SENDBLOCK_ARGS *a)
+{
+  sendblock (a->destID, a->blockID, a->last, a->cb);
+}
+
+void
+dhash::sendblock (bigint destID, bigint blockID, bool last, callback<void>::ref cb)
+{
+  warn << "dhash::sendblock: destID " << destID
+       << ", blockID " << blockID
+       << ", last " << last << "\n";
+
+  ptr<dbrec> blk = db->lookup (id2dbrec (blockID));
+
+  assert (blk); // XXX: don't assert here, maybe just callback?
+  ref<dhash_block> dhblk = New refcounted<dhash_block> (blk->value, blk->len);
+
+  warn << "dhash::sendblock: XXX DHASH_REPLICA hardcoded\n";
+  cli->storeblock (destID, blockID, dhblk, 
+#if 0
+		   last,
+#endif
+		   wrap (this, &dhash::sendblock_cb, cb), DHASH_REPLICA);
+}
+
+
+void
+dhash::sendblock_cb (callback<void>::ref cb, dhash_stat err, chordID blockID)
+{
+  // XXX don't assert, how propogate the error??
+  if (err)
+    fatal << "Error sending block: " << blockID << ", err " << err << "\n";
+
+  (*cb) ();
+}
+
+void
+dhash::replica_maintenance_timer (u_int index)
+{
+  update_replica_list ();
+
+  warn << "dhash::replica_maintenance_timer index " << index
+       << ", #replicas " << replicas.size() << "\n";
+  
+  if (!replica_syncer || replica_syncer->done()) {
+    // watch out for growing/shrinking replica list
+    if (index >= replicas.size())
+      index = 0;
+    
+    if (replicas.size() > 0) {
+      chordID replicaID = replicas[index];
+
+      if (replica_syncer) {
+	assert (replica_syncer->done());
+	assert (*active_syncers[replica_syncer_dstID] == replica_syncer);
+	active_syncers.remove (replica_syncer_dstID);
+      }
+
+      if (active_syncers[replicaID])
+	fatal << "Strange: already syncing with " << replicaID << "\n";
+
+
+      replica_syncer_dstID = replicaID;
+      replica_syncer = New refcounted<merkle_syncer> 
+	(mtree, 
+	 wrap (this, &dhash::doRPC_unbundler, replicaID),
+	 wrap (this, &dhash::sendblock, replicaID));
+      active_syncers.insert (replicaID, replica_syncer);
+      
+      bigint rngmin = host_node->my_pred ();
+      bigint rngmax = host_node->my_ID ();
+      
+      warn << "biSYNC with " << replicas[index]
+	   << " range [" << rngmin << ", " << rngmax << "]\n";
+      replica_syncer->sync (rngmin, rngmax, merkle_syncer::BIDIRECTIONAL);
+      index = (index + 1) % nreplica;
+    }
+  }
+
+  delaycb (5, wrap (this, &dhash::replica_maintenance_timer, index));
+}
+
+void
+dhash::partition_maintenance_timer (int index)
+{
+  update_replica_list ();
+
+  // HOW TO ITERATE BACKWARDS IN DB??????????????
+
+#if 0
+   // maintenace is continual
+   while (1) {
+      // get the HIGHEST key (assumes database is sorted by keys)
+      <key, block> = database.last ()
+       
+      while (1) {
+          node = chord_lookup (key)
+          pred = chord_get_predecessor (node)
+     
+          // don't sync with self
+          if (node.id != myID)
+            synchronize (node, database[pred.id ... node.id])
+
+          // skip over entire database range which was synchronized 
+          <key, block> = database.previous (pred_node.id)
+          if (key == NO_MORE_KEYS)
+             break;
+      }
+   }
+#endif
+
+   delaycb (5, wrap (this, &dhash::partition_maintenance_timer, index));
+}
+
+
+
 
 void 
 dhash::sync_cb () 
@@ -514,13 +670,18 @@ dhash::fix_replicas_txerd (dhash_stat err)
 void
 dhash::replicate_key (chordID key, cbstat_t cb)
 {
-  update_replica_list ();
-  if (replicas.size () > 0) {
-    transfer_key (replicas[0], key, DHASH_REPLICA, 
-		  wrap (this, &dhash::replicate_key_cb, 1, cb, key));
+  if (MERKLE_ENABLED) {
+    warn << "\n\n\n****NOT REPLICATING KEY\n";
+    (cb) (DHASH_OK);
+  } else {
+    update_replica_list ();
+    if (replicas.size () > 0) {
+      transfer_key (replicas[0], key, DHASH_REPLICA, 
+		    wrap (this, &dhash::replicate_key_cb, 1, cb, key));
+    }
+    else
+      (cb)(DHASH_OK);
   }
-  else
-    (cb)(DHASH_OK);
 }
 
 void
@@ -579,15 +740,22 @@ dhash::get_key (chordID source, chordID key, cbstat_t cb)
 
 
 void
-dhash::get_key_got_block (chordID key, cbstat_t cb, ptr<dhash_block> block) 
+dhash::get_key_got_block (chordID key, cbstat_t cb, ptr<dhash_block> b) 
 {
 
-  if (!block)
+  if (!b)
     cb (DHASH_STOREERR);
   else {
     ptr<dbrec> k = id2dbrec (key);
-    ptr<dbrec> d = New refcounted<dbrec> (block->data, block->len);
+    ptr<dbrec> d = New refcounted<dbrec> (b->data, b->len);
+
+#ifdef MNEW
+    block blk (to_merkle_hash (k), d);
+    mtree->insert (&blk);
+    get_key_stored_block (cb, 0);
+#else
     db->insert (k, d, wrap(this, &dhash::get_key_stored_block, cb));
+#endif
   }
 }
 
@@ -668,8 +836,14 @@ dhash::append (ptr<dbrec> key, ptr<dbrec> data,
 	stat = DHASH_STORED;
 	keys_stored += 1;
 
+#ifdef MNEW
+	block blk (to_merkle_hash (key), marshalled_data);
+	mtree->insert (&blk);
+	append_after_db_store (cb, arg->key, 0);
+#else
 	db->insert (key, marshalled_data, 
 		    wrap(this, &dhash::append_after_db_store, cb, arg->key));
+#endif
 
 	delete m_dat;
 	
@@ -708,8 +882,14 @@ dhash::append_after_db_fetch (ptr<dbrec> key, ptr<dbrec> new_data,
 	ptr<dbrec> marshalled_data =
 	  New refcounted<dbrec> (m_dat, m_len);
 
+#ifdef MNEW
+	block blk (to_merkle_hash (key), marshalled_data);
+	mtree->insert (&blk);
+	append_after_db_store (cb, arg->key, 0);
+#else
 	db->insert (key, marshalled_data, 
 		    wrap(this, &dhash::append_after_db_store, cb, arg->key));
+#endif
 
 	delete m_dat;
       } else {
@@ -769,6 +949,12 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
   if (ss->iscomplete()) {
     ptr<dbrec> k = id2dbrec(arg->key);
     ptr<dbrec> d = New refcounted<dbrec> (ss->buf, ss->size);
+
+    if (active_syncers[arg->srcID]) {
+      ptr<merkle_syncer> syncer = *active_syncers[arg->srcID];
+      syncer->recvblk (arg->key, arg->last);
+    }
+
 
     dhash_ctype ctype = block_type (d);
 
@@ -857,8 +1043,13 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
     else
       bytes_stored += arg->data.size ();
 
+#ifdef MNEW
+    block blk (to_merkle_hash (k), d);
+    mtree->insert (&blk);
+    store_cb (arg->type, id, cb, 0);
+#else
     db->insert (k, d, wrap(this, &dhash::store_cb, arg->type, id, cb));
-
+#endif
   } else
     cb (DHASH_STORE_PARTIAL);
 }
@@ -891,25 +1082,60 @@ dhash::store_repl_cb (cbstore cb, dhash_stat err)
 
 // --------- utility
 
+// XXX move to merkle directory since the byte order must match
+//     the way merkle_hashes are converted into dbrecs  
+
 ref<dbrec>
 dhash::id2dbrec(chordID id) 
 {
+#if 0
   mstr whipme(sha1::hashsize+1);
   whipme[0] = 0;
   mpz_get_raw (whipme.cstr()+1, sha1::hashsize, &id);
   void *key = (void *)whipme.cstr ();
   int len = whipme.len ();
 
+
+  warn << "id2dbrec id: " << id << "\n";
+  warn << "id2dbrec hex: ";
+  for (int i = 0; i < len; i++)
+    warnx.fmt ("%02x", ((unsigned char *)key)[i]);
+  warnx << "\n";
+
   ptr<dbrec> q = New refcounted<dbrec> (key, len);
   return q;
+#else
+  char buf[sha1::hashsize];
+  mpz_get_raw (buf, sha1::hashsize, &id);
+
+  // reverse the string...  
+  for (u_int i = 0; i < (sha1::hashsize / 2); i++) {
+    char tmp = buf[i];
+    buf[i] = buf[sha1::hashsize - 1 - i];
+    buf[sha1::hashsize - 1 - i] = tmp;
+  }
+
+  return New refcounted<dbrec> (buf, sha1::hashsize);
+#if 0
+  mstr whipme(sha1::hashsize);
+  mpz_get_raw (whipme.cstr(), sha1::hashsize, &id);
+  return New refcounted<dbrec> (whipme.cstr(), whipme.len());
+#endif
+#endif
+
 }
 
 chordID
-dhash::dbrec2id (ptr<dbrec> r) {
+dhash::dbrec2id (ptr<dbrec> r)
+{
+#if 0
   str raw = str ( (char *)r->value, r->len);
   chordID ret;
   ret.setraw (raw);
   return ret;
+#else
+  return tobigint (to_merkle_hash (r));
+#endif
 }
 
 
@@ -935,6 +1161,25 @@ dhash::responsible(const chordID& n)
   chordID p = host_node->my_pred ();
   chordID m = host_node->my_ID ();
   return (between (p, m, n));
+}
+
+void
+dhash::doRPC_unbundler (chordID ID, RPC_delay_args *args)
+{
+  // all values bundled in 'args' because of the limit on
+  // the max number of wrap argument (in callback.h)
+
+  // HACK ALERT (sorta):
+  //   All merkle RPCs start with dstID and srcID.
+  //   This code stamps this on the RPC, so the merkle code
+  //   doesn't have to.
+
+  void *in = args->in;
+  getnode_arg *arg = static_cast<getnode_arg *>(in);
+  arg->dstID = ID;
+  arg->srcID = host_node->my_ID ();
+
+  doRPC (ID, args->prog, args->procno, args->in, args->out, args->cb);
 }
 
 void

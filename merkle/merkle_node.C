@@ -57,7 +57,7 @@ merkle_node::leaf2internal ()
 void
 merkle_node::dump (u_int depth) const
 {
-#if 0
+#if 1
   warnx << "[NODE " 
 	<< strbuf ("0x%x", (u_int)this)
 	<< ", entry " << strbuf ("0x%x", (u_int)entry)
@@ -71,9 +71,11 @@ merkle_node::dump (u_int depth) const
   if (!n->isleaf ()) {
     for (int i = 0; i < 64; i++) {
       const merkle_node *child = n->child (i);
-      indent (depth + 1);
-      warnx << "[" << i << "]: ";
-      child->dump (depth + 1);
+      if (child->count) {
+	indent (depth + 1);
+	warnx << "[" << i << "]: ";
+	child->dump (depth + 1);
+      }
     }
   }
 }
@@ -94,57 +96,48 @@ merkle_node::initialize (u_int64_t _count)
 
 merkle_node::~merkle_node ()
 {
-#if 0
-  warnx << "~MN:" 
-	<< strbuf ("0x%x", (u_int)this)
-	<< ", entry " << strbuf ("0x%x", (u_int)entry)
-	<< ", trash " << strbuf ("0x%x", (u_int)(((merkle_node *)0x8172028)->entry))
-	<< ">> \n";
-  err_flush ();
-#endif
-
-  assert ((u_int)entry != 0xc5c5c5c5);
-
-#if 0
-  if (!isleaf ())
-    for (int i = 0; i < 64; i++) {
-      warnx << strbuf ("~MN: 0x%x child[%d] -- before (%x)\n", 
-		       (u_int)this, i, (u_int)(((merkle_node *)0x8172028)->entry));
-      delete child (i);
-      warnx << strbuf ("~MN: 0x%x child[%d] -- after (%x)\n", (u_int)this, i, 
-		       (u_int)(((merkle_node *)0x8172028)->entry));
-    }
-#else
   // recursively deletes down the tree
   delete entry;
-#endif
-
   // not necessary, but helps catch dangling pointers
   bzero (this, sizeof (*this)); 
-#if 0
-  warnx << strbuf ("~MN: 0x%x (%x)\n", (u_int)this, (u_int)(((merkle_node *)0x8172028)->entry));
-#endif
-#if 0
-  if ((u_int)this == 0x8172008) {
-    asm ("int $3");
-  }
-#endif
 }
 
 void
-merkle_node::check_invariants (u_int depth, merkle_hash prefix, database *db)
+merkle_node::check_invariants (u_int depth, merkle_hash prefix, dbfe *db)
 {
+#if 0
+  warn << "CHECKING: " << strbuf ("0x%x", (u_int)this) << " depth " << depth << " pfx: " << prefix << "\n";
+
+
+  bool ack = (((u_int)this) == 0x8104000);
+  // XXXX
+#endif
+  bool ack = false;
+
   sha1ctx sc;
   merkle_hash mhash = 0;
   u_int64_t _count = 0;
   if (isleaf ()) {
     assert (count <= 64);
+
+#ifdef NEWDB
+    vec<merkle_hash> keys = database_get_keys (db, depth, prefix);
+    if (ack) {
+      warn << "depth " << depth << "\n";
+      warn << "prefix " << prefix << "\n";
+      warn << "keys.size () " << keys.size() << "\n";
+    }
+
+    for (u_int i = 0; i < keys.size (); i++, _count++)
+      sc.update (keys[i].bytes, keys[i].size);
+#else
     for (block *cur = db->cursor (prefix) ; cur; cur = db->next (cur)) {
       if (!prefix_match (depth, cur->key, prefix))
 	break;
       _count += 1;
       sc.update (cur->key.bytes, cur->key.size);
     }
+#endif
   } else {
     assert (count > 64);
     for (int i = 0; i < 64; i++) {
@@ -156,6 +149,8 @@ merkle_node::check_invariants (u_int depth, merkle_hash prefix, database *db)
     }
   }
   
+  //warn << "[" << strbuf ("0x%x", (u_int)this) << "] cnt " << count << " _cnt " << _count << "\n";
+
   assert (count == _count);
   if (count == 0)
     assert (hash == 0);

@@ -1,3 +1,4 @@
+%#include <chord_prot.h>
 %#include <merkle_hash.h>
 
 enum merkle_stat {
@@ -9,6 +10,8 @@ enum merkle_stat {
 // GETNODE
 
 struct getnode_arg {
+  chordID dstID;
+  chordID srcID;
   uint32 depth;
   merkle_hash prefix;	
 };
@@ -41,6 +44,8 @@ union getnode_res switch (merkle_stat status) {
 // GETBLOCKLIST
 
 struct getblocklist_arg {
+  chordID dstID;
+  chordID srcID;
   merkle_hash keys<64>;
 };
 
@@ -61,6 +66,8 @@ union getblocklist_res switch (merkle_stat status) {
 
 
 struct getblockrange_arg {
+  chordID dstID;
+  chordID srcID;
   bigint rngmin;
   bigint rngmax;
   bool bidirectional;
@@ -83,21 +90,6 @@ union getblockrange_res switch (merkle_stat status) {
    void;
 };
 
-////////////////////////////////////////////////////////////
-// SENDBLOCK
-
-struct sendblock_arg {
-  merkle_hash key;
-  bool last;
-};
-
-union sendblock_res switch (merkle_stat status) {
- case MERKLE_OK:
-   void;
- default:
-   void;
-};
-
 program MERKLESYNC_PROGRAM {
 	version MERKLESYNC_VERSION {
 	        getnode_res
@@ -109,7 +101,5 @@ program MERKLESYNC_PROGRAM {
 		getblockrange_res
                 MERKLESYNC_GETBLOCKRANGE (getblockrange_arg) = 4;
 
-		sendblock_res
-  	        MERKLESYNC_SENDBLOCK (sendblock_arg) = 5;
 	} = 1;
 } = 344450;

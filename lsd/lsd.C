@@ -34,7 +34,7 @@
 
 // When a process starts up profiling is not happening.  But by
 // sending a SIGUSR1, profiling is turned on.  (Another SIGUSR1 turns
-// it off.)  This always specific, user-controlled periods of time to
+// it off.)  This allows specific, user-controlled periods of time to
 // be profiled.  Program must be compiled with -pg for this to work.
 
 
@@ -245,7 +245,7 @@ main (int argc, char **argv)
 {
 
 #ifdef PROFILING
-  toggle_profiling ();
+  toggle_profiling (); // turn profiling off
 #endif
 
   int vnode = 1;

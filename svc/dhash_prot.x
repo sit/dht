@@ -51,10 +51,12 @@ struct dhash_valueattr {
 struct s_dhash_insertarg {
   chordID v;
   chordID key;
+  chordID srcID;
   dhash_value data;
   int offset;
   store_status type;
   dhash_valueattr attr;
+  bool last; // used by the merkle code only
 };
 
 struct s_dhash_fetch_arg {

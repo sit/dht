@@ -43,6 +43,10 @@
 #include <route.h>
 #include <sfscrypt.h>
 
+#include <merkle.h>
+#include <merkle_server.h>
+#include <merkle_misc.h>
+
 /*
  *
  * dhash.h
@@ -146,6 +150,23 @@ struct pk_partial {
 
 class dhashcli;
 
+// This is a big hack to work around the limit on the
+// number of args in a wrap.
+//
+struct XXX_SENDBLOCK_ARGS {
+  bigint destID;
+  bigint blockID;
+  bool last;
+  callback<void>::ref cb;
+
+  XXX_SENDBLOCK_ARGS (bigint destID, bigint blockID, bool last, callback<void>::ref cb)
+    : destID (destID), blockID (blockID), last (last), cb (cb)
+  {}
+};
+
+class merkle_server;
+class merkle_syncer;
+
 class dhash {
   
   int nreplica;
@@ -155,9 +176,17 @@ class dhash {
   int pk_partial_cookie;
   
   dbfe *db;
-  vnode *host_node;
+  ptr<vnode> host_node;
   dhashcli *cli;
   ptr<route_factory> r_factory;
+
+  merkle_server *msrv;
+  merkle_tree *mtree;
+  qhash<chordID, ptr<merkle_syncer>, hashID> active_syncers;
+  chordID replica_syncer_dstID;
+  ptr<merkle_syncer> replica_syncer;
+  chordID partition_syncer_dstID;
+  ptr<merkle_syncer> partition_syncer;
 
   ihash<chordID, store_state, &store_state::key, 
     &store_state::link, hashID> pst;
@@ -172,6 +201,15 @@ class dhash {
 	&quorum_reservation::link, hashID> quorum_reservations;
 
   qhash<int, cbblockuc_t> bcpt;
+
+  void sendblock_XXX (XXX_SENDBLOCK_ARGS *a);
+  void sendblock (bigint destID, bigint blockID, bool last, callback<void>::ref cb);
+  void sendblock_cb (callback<void>::ref cb, dhash_stat err, chordID blockID);
+
+  void replica_maintenance_timer (u_int index);
+  void partition_maintenance_timer (int index);
+  void doRPC_unbundler (chordID ID, RPC_delay_args *args);
+
 
   void route_upcall (int procno, void *args, cbupcalldone_t cb);
 
@@ -279,7 +317,7 @@ class dhash {
   long rpc_answered;
 
  public:
-  dhash (str dbname, vnode *node, ptr<route_factory> r_fact,
+  dhash (str dbname, ptr<vnode> node, ptr<route_factory> r_fact,
 	 int nreplica = 0, int ss_mode = 0);
   void accept(ptr<axprt_stream> x);
 

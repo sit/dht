@@ -18,12 +18,20 @@ merkle_tree::rehash (u_int depth, const merkle_hash &key, merkle_node *n)
     merkle_hash prefix = key;
     prefix.clear_suffix (depth);
     ///warn << "prefix: " << prefix << "\n";
+
+#ifdef NEWDB
+    vec<merkle_hash> keys = database_get_keys (db, depth, prefix);
+    for (u_int i = 0; i < keys.size (); i++)
+      sc.update (keys[i].bytes, keys[i].size);
+#else
     for (block *cur = db->cursor (prefix) ; cur; cur = db->next (cur)) {
       if (!prefix_match (depth, cur->key, key))
 	break;
       sc.update (cur->key.bytes, cur->key.size);
       ///warn << "LEAF: update " << cur->key << "\n";
     }
+#endif
+
   } else {
     for (int i = 0; i < 64; i++) {
       merkle_node *child = n->child (i); 
@@ -50,12 +58,21 @@ merkle_tree::count_blocks (u_int depth, const merkle_hash &key,
   merkle_hash prefix = key;
   prefix.clear_suffix (depth);
   
+#ifdef NEWDB
+  vec<merkle_hash> keys = database_get_keys (db, depth, prefix);
+  for (u_int i = 0; i < keys.size (); i++) {
+    u_int32_t branch = keys[i].read_slot (depth);
+    nblocks[branch] += 1;
+  }
+#else
   for (block *cur = db->cursor (prefix); cur; cur = db->next (cur)) {
     if (!prefix_match (depth, cur->key, key))
       break;
     u_int32_t branch = cur->key.read_slot (depth);
     nblocks[branch] += 1;
   }
+#endif
+
 }
 
 
@@ -89,8 +106,14 @@ merkle_tree::remove (u_int depth, block *b, merkle_node *n)
 {
   if (n->isleaf ()) {
     if (db) {
+#ifdef NEWDB      
+      database_remove (db, b);
+      assert (!database_lookup (db, b->key));
+#else
       db->remove (b);
       assert (!db->lookup (b->key));
+#endif
+
     }
   } else {
     u_int32_t branch = b->key.read_slot (depth);
@@ -114,8 +137,12 @@ merkle_tree::insert (u_int depth, block *b, merkle_node *n)
     leaf2internal (depth, b->key, n);
   
   if (n->isleaf ()) {
+#ifdef NEWDB 
+    database_insert (db, b);
+#else
     if (db)
       db->insert (b);
+#endif
   } else {
     u_int32_t branch = b->key.read_slot (depth);
     ///warn << "depth " << depth << ", branch " << branch << "\n";
@@ -139,30 +166,54 @@ merkle_tree::lookup (u_int *depth, u_int max_depth, merkle_hash &key, merkle_nod
   return lookup (depth, max_depth, key, n->child (branch));
 }
 
-merkle_tree::merkle_tree (database *db) 
+merkle_tree::merkle_tree (dbfe *db) 
   : db (db)
 {
   // assert db is initially empty 
+
+#ifdef NEWDB
+  vec<merkle_hash> keys = database_get_keys (db, 0, merkle_hash (0));
+  assert (!db || (keys.size () == 0));
+#else
   assert (!db ||!db->first ());
+#endif
 }
 
 void
 merkle_tree::remove (block *b)
 {
-  // must exist..
+  // assert block must exist..
+#ifdef NEWDB
+  assert (db);
+  if (!database_lookup (db, b->key)) {
+    warn << "merkle_tree::remove: key does not exists " << b->key << "\n";
+    return;
+  }
+  assert (!db || database_lookup (db, b->key));
+#else
   assert (!db || db->lookup (b->key));
+#endif
+
   remove (0, b, &root);
 }
 
 void
 merkle_tree::insert (block *b)
 {
+  warn <<  "\n\n\n **** merkle_tree::insert: " << b->key << "\n";
+
   // forbid dups..
-  if (db && db->lookup (b->key))
-    warn << "ACK: " << b->key << "\n";
+#ifdef NEWDB
+  assert (db);
+  if (database_lookup (db, b->key)) {
+    warn << "merkle_tree::insert: key already exists " << b->key << "\n";
+    return;
+  }
+#else
   assert (!db || !db->lookup (b->key));
+#endif
   ///dump ();
-  ///check_invariants ();
+  //check_invariants ();
   insert (0, b, &root);
   ///dump ();
   //check_invariants ();
@@ -209,7 +260,6 @@ void
 merkle_tree::dump ()
 {
   root.dump (0);
-  //db->dump ();
 }
 
 void

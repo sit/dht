@@ -2,149 +2,20 @@
 #include "qhash.h"
 #include "async.h"
 #include "bigint.h"
-
-extern uint global_calls;
-extern uint global_replies;
-
-uint global_getnode_outstanding = 0;
-
-static bigint
-tobigint (const merkle_hash &h)
-{
-#if 0
-  str raw = str ((char *)h.bytes, h.size);
-  bigint ret;
-  ret.setraw (raw);
-  return ret;
-#else
-  bigint ret = 0;
-  for (int i = h.size - 1; i >= 0; i--) {
-    ret <<= 8;
-    ret += h.bytes[i];
-  }
-  return ret;
-#endif
-}
-
-// ---------------------------------------------------------------------------
-// database iterators
-
-class db_range_iterator : public db_iterator {
-  // iterates over a range of database keys   
-private:
-  database *db;
-  block *b;
-  u_int depth;
-  merkle_hash prefix;
-
-protected:
-  bool match () { return (b && prefix_match (depth, b->key, prefix)); }
-
-public:
-  virtual bool more ()  { return !!b; }
-
-  virtual merkle_hash
-  peek ()
-  {
-    assert (more ());
-    return b->key;
-  }
-
-  virtual merkle_hash
-  next ()
-  {
-    assert (more ());
-    merkle_hash ret = b->key;
-    b = db->next (b);
-    if (!match ()) 
-      b = NULL;
-    return ret;
-  }
-
-  db_range_iterator (database *db, u_int depth, merkle_hash prefix) : 
-    db (db), b (NULL), depth (depth), prefix (prefix)
-  {
-    b = db->cursor (prefix);
-    if (!match ())
-      b = NULL;
-  }
-  virtual ~db_range_iterator () { }
-};
-
-
-class db_range_xiterator : public db_range_iterator {
-  // iterates over a range of database keys, keys in the exclusion set
-  // ('xset') are skipped
-
-private:
-  qhash<merkle_hash, bool> *xset;
-  bigint rngmin;
-  bigint rngmax;
-
-  void
-  advance ()
-  {
-    while (db_range_iterator::more ()) {
-      merkle_hash h = db_range_iterator::peek ();
-      bigint hh = tobigint (h);
-      if ((!(*xset)[h]) && hh >= rngmin && hh <= rngmax)
-	break;
-      db_range_iterator::next ();
-    }
-  }
-
-public:
-  virtual merkle_hash
-  next ()
-  {
-    merkle_hash ret = db_range_iterator::next ();
-    advance ();
-    return ret;
-  }
-
-  db_range_xiterator (database *db, u_int depth, merkle_hash prefix,
-		      qhash<merkle_hash, bool> *xset, bigint rngmin, bigint rngmax)
-    : db_range_iterator (db, depth, prefix), xset (xset), rngmin (rngmin), rngmax (rngmax)
-  { 
-    advance (); 
-  }
-
-  virtual ~db_range_xiterator () { delete xset; xset = NULL; }
-};
-
-
+#include "chord_util.h"
 
 // ---------------------------------------------------------------------------
 // util junk
 
-static bool
-overlap (bigint l1, bigint r1, bigint l2, bigint r2)
-{
-  assert (l1 <= r1 && l2 <= r2);
-  bool res = ((r2 >= l1) && (r1 >= l2));
-  assert (res == true);
-  return res;
-}
 
+// Check whether [l1, r1] overlaps [l2, r2] on the circle.
 static bool
-contains (bigint l, bigint r, bigint key)
+overlap (const bigint &l1, const bigint &r1, const bigint &l2, const bigint &r2)
 {
-  bool res = (l <= key && key <= r);
-  if (!res) {
-    warn << "l " << l << "\n";
-    warn << "r " << r << "\n";
-    warn << "key " << key << "\n";
-  }
-  assert (res == true);
-  return res;
+  // There might be a more efficient way to do this..
+  return (betweenbothincl (l1, r1, l2) || betweenbothincl (l1, r1, r2)
+	  || betweenbothincl (l2, r2, l1) || betweenbothincl (l2, r2, r1));
 }
-
-static bool
-contains (bigint l, bigint r, merkle_hash h)
-{
-  return contains (l, r, tobigint (h));
-}
-
 
 static qhash<merkle_hash, bool> *
 make_set (rpc_vec<merkle_hash, 64> &v)
@@ -186,137 +57,22 @@ merkle_syncer::dump ()
   warn << "  st.size () " << st.size () << "\n"; 
 }
 
-merkle_syncer::merkle_syncer (merkle_tree *ltree, int fd)
-  : ltree (ltree)
+merkle_syncer::merkle_syncer (merkle_tree *ltree, rpcfnc_t rpcfnc, sndblkfnc_t sndblkfnc)
+  : ltree (ltree), rpcfnc (rpcfnc), sndblkfnc (sndblkfnc)
 {
-  ptr<axprt_stream> x = axprt_stream::alloc (fd);
-  assert (x);
-  clnt = aclnt::alloc (x, merklesync_program_1);
-  assert (clnt);
-  srv = asrv::alloc (x, merklesync_program_1, wrap (this, &merkle_syncer::dispatch));
-  assert (srv);
-  
-  receiving_blocks = false;
+  fatal_err = NULL;
+  sync_done = false;
+
+  receiving_blocks = 0;
   num_sends_pending = 0;
   sendblocks_iter = NULL;
-  tcb = NULL;
-}
-
-
-void
-merkle_syncer::dispatch (svccb *sbp)
-{
-  if (!sbp)
-    return;
-  
-  switch (sbp->proc ()) {
-  case MERKLESYNC_GETNODE:
-    {
-      assert (sendblocks_iter == NULL);
-      
-      //warn << (u_int) this << " dis..GETNODE\n";
-      
-      getnode_arg *arg = sbp->template getarg<getnode_arg> ();
-      merkle_node *lnode;
-      u_int lnode_depth;
-      merkle_hash lnode_prefix;
-      lnode = ltree->lookup (&lnode_depth, arg->depth, arg->prefix);
-      lnode_prefix = arg->prefix;
-      lnode_prefix.clear_suffix (lnode_depth);
-      
-      getnode_res res (MERKLE_OK);
-      format_rpcnode (lnode_depth, lnode_prefix, lnode, &res.resok->node);
-      sbp->reply (&res);
-      break;
-    }
-    
-  case MERKLESYNC_GETBLOCKLIST:
-    {
-      assert (sendblocks_iter == NULL);
-      
-      //warn << (u_int) this << " dis..GETBLOCKLIST\n";	
-      getblocklist_arg *arg = sbp->template getarg<getblocklist_arg> ();
-      ref<getblocklist_arg> arg_copy = New refcounted <getblocklist_arg> (*arg);
-      getblocklist_res res (MERKLE_OK);
-      sbp->reply (&res);
-      
-      // XXX if the blocks arrive ahead of res, the remote side gets stuck.
-      for (u_int i = 0; i < arg_copy->keys.size (); i++) {
-	merkle_hash key = arg_copy->keys[i];
-	bool last = (i + 1 == arg_copy->keys.size ());
-	sendblock (key, last);
-      }
-      break;
-    }
-    
-    
-  case MERKLESYNC_GETBLOCKRANGE:
-    {
-      assert (sendblocks_iter == NULL);
-      
-      //warn << (u_int) this << " dis..GETBLOCKRANGE\n";	
-      getblockrange_arg *arg = sbp->template getarg<getblockrange_arg> ();
-      getblockrange_res res (MERKLE_OK);
-      
-      if (arg->bidirectional) {
-	res.resok->desired_xkeys.setsize (arg->xkeys.size ());
-	for (u_int i = 0; i < arg->xkeys.size (); i++) {
-	  block *b = ltree->db->lookup (arg->xkeys[i]);
-	  res.resok->desired_xkeys[i] = (b == NULL);
-	}
-      }
-      
-      if (sendblocks_iter) {
-	warn << "this: " << (u_int)this << "\n";
-	warn << "more: " << sendblocks_iter->more () << "\n";
-	fatal << "sendblocks_iter is set\n";
-      }
-      
-      assert (sendblocks_iter == NULL);
-      
-      sendblocks_iter = New db_range_xiterator
-	(ltree->db, arg->depth, arg->prefix, make_set (arg->xkeys),
-	 arg->rngmin, arg->rngmax);
-      
-      res.resok->will_send_blocks = sendblocks_iter->more ();
-      if (!sendblocks_iter->more ())
-	sendblocks_iter = NULL;
-      
-      sbp->reply (&res);
-      // XXX if blocks are reordered ahead of reply....remote gets stuck
-      next ();
-      break;
-    }
-    
-  case MERKLESYNC_SENDBLOCK:
-    {
-      //warn << (u_int) this << " dis..SENDBLOCK\n";
-      sendblock_arg *arg = sbp->template getarg<sendblock_arg> ();
-      //warn << (u_int)this << " dis..SENDBLOCK >>>>>>> " << arg->key << " last " << arg->last << "\n";
-      bool last = arg->last;
-      ltree->insert (New block (arg->key));
-      sendblock_res res (MERKLE_OK);
-      sbp->reply (&res); // DONT REFERENCE ARG AFTER THIS LINE!!!!
-
-      if (last) {
-	receiving_blocks = false;
-	next ();
-      }
-      break;
-    }
-    
-    
-  default:
-    assert (0);
-    sbp->reject (PROC_UNAVAIL);
-    break;
-  }
 }
 
 
 void
 merkle_syncer::send_some (void)
 {
+
   while (sendblocks_iter->more () && num_sends_pending < 64) {
     merkle_hash key = sendblocks_iter->next ();
     sendblock (key, !sendblocks_iter->more ());
@@ -331,28 +87,33 @@ merkle_syncer::send_some (void)
 void
 merkle_syncer::next (void)
 {
-  //warn << (u_int)this << " next >>>>>>>>>>>>>>>>>>>>>>>>>>>>\n";
-  
+  /**/warn << (u_int)this << " next >>>>>>>>>>>>>>>>>>>>>>>>>>>>\n";
+
+  if (fatal_err) {
+    /**/warn << (u_int)this << " not continuing after error: " << fatal_err << "\n";
+    return;
+  }
+
   if (sendblocks_iter && !sendblocks_iter->more ())
     sendblocks_iter = NULL;
   
-  //warn << "NEXT....";
+  /**/warn << "NEXT....";
   if (receiving_blocks) {
-    //warn << "recving...";
+    /**/warn << "recving...";
   }
   
   if (sendblocks_iter) {
-    //warn << "sending...";
+    /**/warn << "sending...";
     send_some ();
   }
   
   if (receiving_blocks || sendblocks_iter || num_sends_pending > 0) {
-    //warn << "\n";
+    /**/warn << "\n";
     return;
   }
   
   while (st.size ()) {
-    //warn << "NEXT: SIZE != 0\n"; 
+    /**/warn << "NEXT: SIZE != 0\n"; 
     
     pair<merkle_rpc_node, int> &p = st.back ();
     merkle_rpc_node *rnode = &p.first;
@@ -364,10 +125,10 @@ merkle_syncer::next (void)
     
     while (p.second < 64) {
       int i = p.second;
-      //warn << "CHECKING: i " << i << ", size " << st.size ()  << "\n"; 
+      /**/warn << "CHECKING: i " << i << ", size " << st.size ()  << "\n"; 
       p.second += 1;
       if (rnode->child_hash[i] != lnode->child (i)->hash) {
-	//warn << " * DIFFER: i " << i << ", size " << st.size ()  << "\n"; 
+	/**/warn << " * DIFFER: i " << i << ", size " << st.size ()  << "\n"; 
 	unsigned int depth = rnode->depth + 1;
 	merkle_hash prefix = rnode->prefix;
 	prefix.write_slot (rnode->depth, i);
@@ -380,7 +141,7 @@ merkle_syncer::next (void)
 	getnode (depth, prefix);
 	return;
       } else {
-	//warn << " * IDENTICAL: i " << i << ", size " << st.size ()  << "\n"; 
+	/**/warn << " * IDENTICAL: i " << i << ", size " << st.size ()  << "\n"; 
       }
     }
     
@@ -389,42 +150,38 @@ merkle_syncer::next (void)
   }
 
   if (receiving_blocks || sendblocks_iter || (num_sends_pending > 0)) {
-    //warn << "\n";
+    /**/warn << "\n";
     return;
   }
  
+  sync_done = true;
+
+#if 0
   if (synccb) {
     cbv::ptr tmp = synccb;
     synccb = NULL;
     tmp ();
   }
+#endif
 
-  //warn << "OK!\n";
+  /**/warn << "OK!\n";
   //XXX_main ();
 }
 
 void
 merkle_syncer::sendblock (merkle_hash key, bool last)
 {
+  warn << (u_int)this << " sendblock >>>>>>> " << key << " last " << last << "\n";
   num_sends_pending++;
-  //warn << (u_int)this << " sendblock >>>>>>> " << key << " last " << last << "\n";
-  sendblock_arg arg;
-  arg.key = key;
-  arg.last = last;
-  ref<sendblock_res> res = New refcounted <sendblock_res> ();
-  global_calls += 1;
-  clnt->call (MERKLESYNC_SENDBLOCK, &arg, res,
-	      wrap (this, &merkle_syncer::sendblock_cb, res));
+  (*sndblkfnc) (tobigint (key), last, wrap (this, &merkle_syncer::sendblock_cb));
 }
 
 void
-merkle_syncer::sendblock_cb (ref<sendblock_res> res, clnt_stat err)
+merkle_syncer::sendblock_cb ()
 {
-  global_replies += 1;
-
   num_sends_pending--;
   next ();
-  //warn << "************* sendblock_cb (" << err << ")\n";
+  //warn << "************* sendblock_cb\n";
 }
 
 
@@ -437,28 +194,34 @@ merkle_syncer::getblocklist (vec<merkle_hash> keys)
     return;
   }
   
-  receiving_blocks = true;
-  getblocklist_arg arg;
-  arg.keys = keys;
+  receiving_blocks = keys.size ();
+
+  fatal << "XXX THIS will never get set to false ... !!!!!!!!\n";
+
+  ref<getblocklist_arg> arg = New refcounted<getblocklist_arg> ();
+  arg->keys = keys;
   
   ref<getblocklist_res> res = New refcounted<getblocklist_res> ();
-  global_calls += 1;
-  clnt->call (MERKLESYNC_GETBLOCKLIST, &arg, res, 
-	      wrap (this, &merkle_syncer::getblocklist_cb, res));
+  doRPC (MERKLESYNC_GETBLOCKLIST, arg, res, 
+	 wrap (this, &merkle_syncer::getblocklist_cb, res));
 }
 
 
 void
 merkle_syncer::getblocklist_cb (ref<getblocklist_res> res, clnt_stat err)
 {
-  global_replies += 1;
-
   //warn << (u_int)this << " getblocklist_cb >>>>>>>>>>>>>>>>>>>>>>\n";
   
   if (err) {
-    fatal << "getblocklst_cb (" << err << ")\n";
+    warn << "getblocklst_cb (" << err << ")\n";
+    fatal_err = strbuf () << "GETBLOCKLIST: rpc error " << err;
+    sync_done = true;
+    return;
   } else if (res->status != MERKLE_OK) {
-    fatal << "getblocklst_cb (" << res->status << ")\n";
+    warn << "getblocklst_cb (" << err2str (res->status) << ")\n";
+    fatal_err = strbuf () << "GETBLOCKLIST: protocol error " << err2str (res->status);
+    sync_done = true;
+    return;
   } else {
     
   }
@@ -466,39 +229,7 @@ merkle_syncer::getblocklist_cb (ref<getblocklist_res> res, clnt_stat err)
 
 
 
-void
-merkle_syncer::format_rpcnode (u_int depth, const merkle_hash &prefix,
-			       const merkle_node *node, merkle_rpc_node *rpcnode)
-{
-  rpcnode->depth = depth;
-  rpcnode->prefix = prefix;
-  rpcnode->count = node->count;
-  rpcnode->hash = node->hash;
-  rpcnode->isleaf = node->isleaf ();
-  
-  if (!node->isleaf ()) {
-    rpcnode->child_isleaf.setsize (64);
-    rpcnode->child_hash.setsize (64);
-    
-    for (int i = 0; i < 64; i++) {
-      const merkle_node *child = node->child (i);
-      rpcnode->child_isleaf[i] = child->isleaf ();
-      rpcnode->child_hash[i] = child->hash;
-      if (child->hash == 0) {
-	extern uint global_count_zeroes_in_getnode_reply;
-	global_count_zeroes_in_getnode_reply++;
-      }
-    }
-  } else {
-    vec<merkle_hash> keys = database_get_keys (ltree->db, depth, prefix);
-    rpcnode->child_hash.setsize (keys.size ());
-    for (u_int i = 0; i < keys.size (); i++) {
-      rpcnode->child_hash[i] = keys[i];
-    }
-  }
-}
-
-
+#if 0
 void
 merkle_syncer::sync (cbv::ptr cb, mode_t m)
 {
@@ -511,13 +242,14 @@ merkle_syncer::sync (cbv::ptr cb, mode_t m)
   // get remote hosts's root node
   getnode (0, 0);
 }
+#endif
 
 void
-merkle_syncer::sync_range (bigint _rngmin, bigint _rngmax)
+merkle_syncer::sync (bigint _rngmin, bigint _rngmax, mode_t m)
 {
+  mode = m;
   rngmin = _rngmin;
   rngmax = _rngmax;
-  assert (rngmin <= rngmax);
 
   // get remote hosts's root node
   getnode (0, 0);
@@ -527,9 +259,6 @@ merkle_syncer::sync_range (bigint _rngmin, bigint _rngmax)
 void
 merkle_syncer::getnode (u_int depth, const merkle_hash &prefix)
 {
-  assert (global_getnode_outstanding == 0);
-  global_getnode_outstanding += 1;
-
   //warn << (u_int)this << " getnode >>>>>>>>>>>>>>>>>>>>>>\n";
   
   assert (sendblocks_iter == NULL);
@@ -539,8 +268,7 @@ merkle_syncer::getnode (u_int depth, const merkle_hash &prefix)
   arg->depth = depth;
   
   ref<getnode_res> res = New refcounted<getnode_res> ();
-  global_calls += 1;
-  clnt->call (MERKLESYNC_GETNODE, arg, res,
+  doRPC (MERKLESYNC_GETNODE, arg, res,
 	      wrap (this, &merkle_syncer::getnode_cb, arg, res));
 }
 
@@ -548,13 +276,13 @@ merkle_syncer::getnode (u_int depth, const merkle_hash &prefix)
 bool
 merkle_syncer::inrange (const merkle_hash &key)
 {
-  bool res = (contains (rngmin, rngmax, key));
+  // is key in [rngmin, rngmax] on the circle
+  bool res = (betweenbothincl (rngmin, rngmax, tobigint (key)));
   if (!res) {
     warn << "rngmin " << rngmin << "\n";
     warn << "rngmax " << rngmax << "\n";
     warn << "key " << key << "\n";
   }
-  assert (res == true);
   return res;
 }
 
@@ -563,18 +291,17 @@ merkle_syncer::inrange (const merkle_hash &key)
 void
 merkle_syncer::getnode_cb (ref<getnode_arg> arg, ref<getnode_res> res, clnt_stat err)
 {
-  assert (global_getnode_outstanding == 1);
-  global_getnode_outstanding -= 1;
-
-  global_replies += 1;
-
-  //warn << (u_int)this << " getnode_cb >>>>>>>>>>>>>>>>>>>>>>\n";
+  warn << (u_int)this << " getnode_cb >>>>>>>>>>>>>>>>>>>>>>\n";
   
   if (err) {
-    fatal << "getnode_cb (" << err << ")\n";
+    warn << "getnode_cb (" << err << ")\n";
+    fatal_err = strbuf () << "GETNODE: rpc error " << err;
+    sync_done = true;
     return;
   } else if (res->status != MERKLE_OK) {
-    fatal << "getnode_cb (" << res->status << ")\n";
+    warn << "getnode_cb (" << err2str (res->status) << ")\n";
+    fatal_err = strbuf () << "GETNODE: protocol error " << err2str (res->status);
+    sync_done = true;
     return;
   }
 
@@ -589,7 +316,7 @@ merkle_syncer::getnode_cb (ref<getnode_arg> arg, ref<getnode_res> res, clnt_stat
   assert (lnode); // XXX fix this
   
   if (lnode->isleaf () && rnode->isleaf) {
-    //warn << "L vs L\n";
+    warn << "L vs L\n";
 
     vec<merkle_hash> lkeys = database_get_keys (ltree->db, arg->depth, arg->prefix);
     qhash<merkle_hash, bool> lset, rset;
@@ -614,21 +341,26 @@ merkle_syncer::getnode_cb (ref<getnode_arg> arg, ref<getnode_res> res, clnt_stat
       for (u_int i = 0; i < keys_to_send.size (); i++)
 	sendblock (keys_to_send[i], false);
 
+    warn << "lkeys.size " << lkeys.size () << "\n";
+    warn << "keys_to_send.size " << keys_to_send.size () << "\n";
+    warn << "keys_to_get.size " << keys_to_get.size () << "\n";
+
     getblocklist (keys_to_get);
     next ();
   }
   else if (lnode->isleaf () && !rnode->isleaf) {
-    //warn << "L vs I\n";
-    getblockrange (rnode->depth, rnode->prefix);
+    warn << "L vs I\n";
+    getblockrange (rnode);
   }
   else if (!lnode->isleaf () && rnode->isleaf) {
-    //warn << "I vs L\n";
+    warn << "I vs L\n";
     
     vec<merkle_hash> keys_to_get;
     for (u_int i = 0; i < rnode->child_hash.size (); i++) {
       merkle_hash key = rnode->child_hash[i];
       if (!inrange (key)) continue; 
-      if (ltree->db->lookup (key)) continue;
+      if (database_lookup (ltree->db, key))
+	continue;
       keys_to_get.push_back (key);
     }
     
@@ -648,7 +380,7 @@ merkle_syncer::getnode_cb (ref<getnode_arg> arg, ref<getnode_res> res, clnt_stat
     next ();
   }
   else {
-    //warn << "I vs I\n";
+    warn << "I vs I\n";
     st.push_back (pair<merkle_rpc_node, int> (*rnode, 0));
     next ();
   }
@@ -658,44 +390,50 @@ merkle_syncer::getnode_cb (ref<getnode_arg> arg, ref<getnode_res> res, clnt_stat
 
 
 void
-merkle_syncer::getblockrange (u_int depth, const merkle_hash &prefix)
+merkle_syncer::getblockrange (merkle_rpc_node *rnode)
 {
   //warn << (u_int)this << " getblockrange >>>>>>>>>>>>>>>>>>>>>>\n";
   
-  receiving_blocks = true;
+  receiving_blocks = rnode->count;
   
   ref<getblockrange_res> res = New refcounted<getblockrange_res> ();
   ref<getblockrange_arg> arg = New refcounted<getblockrange_arg> ();
-  arg->depth  = depth;
-  arg->prefix = prefix;
+  arg->depth  = rnode->depth;
+  arg->prefix = rnode->prefix;
   arg->rngmin = rngmin;
   arg->rngmax = rngmax;
   arg->bidirectional = (mode == BIDIRECTIONAL);
 
-  vec<merkle_hash> keys = database_get_keys (ltree->db, depth, prefix);
+  vec<merkle_hash> keys = database_get_keys (ltree->db, rnode->depth, rnode->prefix);
   vec<merkle_hash> xkeys;
   for (uint i = 0; i < keys.size (); i++)
     if (inrange (keys[i]))
       xkeys.push_back (keys[i]);
 
-  arg->xkeys =  xkeys;
+  receiving_blocks -= xkeys.size ();
+  assert (receiving_blocks >= 0); 
 
-  global_calls += 1;
-  clnt->call (MERKLESYNC_GETBLOCKRANGE, arg, res,
-	      wrap (this, &merkle_syncer::getblockrange_cb, arg, res));
+  arg->xkeys =  xkeys;
+  doRPC (MERKLESYNC_GETBLOCKRANGE, arg, res,
+	 wrap (this, &merkle_syncer::getblockrange_cb, arg, res));
 }
 
 
 void
 merkle_syncer::getblockrange_cb (ref<getblockrange_arg> arg, ref<getblockrange_res> res, clnt_stat err)
 {
-  global_replies += 1;
   //warn << (u_int)this << " getblockrange_cb >>>>>>>>>>>>>>>>>>>>>>\n";
   
   if (err) {
-    fatal << "getblockrange_cb (" << err << ")\n";
+    warn << "getblockrange_cb (" << err << ")\n";
+    fatal_err = strbuf () << "GETBLOCKRANGE: rpc error " << err;
+    sync_done = true;
+    return;
   } else if (res->status != MERKLE_OK) {
-    fatal << "getblockrange_cb (" << res->status << ")\n";
+    warn << "getblockrange_cb (" << res->status << ")\n";
+    fatal_err = strbuf () << "GETBLOCKRANGE: protocol error " << err2str (res->status);
+    sync_done = true;
+    return;
   } else {
     if (mode == BIDIRECTIONAL) {
       assert (res->resok->desired_xkeys.size () == arg->xkeys.size ());
@@ -703,8 +441,35 @@ merkle_syncer::getblockrange_cb (ref<getblockrange_arg> arg, ref<getblockrange_r
 	if (res->resok->desired_xkeys[i])
 	  sendblock (arg->xkeys[i], false); // last flag doesn't really matter
       
-      receiving_blocks = res->resok->will_send_blocks;
+      if (!res->resok->will_send_blocks)
+	receiving_blocks = 0;
+      else
+	assert (receiving_blocks >= 0);
     }
+    next ();
+  }
+}
+
+
+
+void
+merkle_syncer::doRPC (int procno, ptr<void> in, void *out, aclnt_cb cb)
+{
+#if 0
+  // Can't do this since callback.h is configured for only 5 arguments. 
+  (*rpcfnc) (merklesync_program_1, procno, in, out, cb);
+#else
+  // So, resort to bundling all values into one argument for now.
+  struct RPC_delay_args args (NULL, merklesync_program_1, procno, in, out, cb);
+  (*rpcfnc) (&args);
+#endif
+}
+
+void
+merkle_syncer::recvblk (bigint key, bool last)
+{
+  if (last) {
+    receiving_blocks = 0; 
     next ();
   }
 }

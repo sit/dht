@@ -1,7 +1,15 @@
 #ifndef _MERKLE_MISC_H_
 #define _MERKLE_MISC_H_
 
+#include "qhash.h"
 #include "merkle_hash.h"
+#include "merkle_sync_prot.h"
+
+
+static inline str err2str (merkle_stat status)
+{
+  return rpc_print (strbuf (), status, 0, NULL, NULL);
+}
 
 template <class T1, class T2>
 struct pair {
@@ -10,137 +18,175 @@ struct pair {
   pair (T1 f, T2 s) : first (f), second (s) {}
 };
 
-
 struct block {
   merkle_hash key;
+  ptr<dbrec> data;
   itree_entry<block> link;
-  block () { key.randomize (); }
-  block (u_int i) : key (i) {}
-  block (merkle_hash key) : key (key) {}
+  // XXX CLEAN: fake data should be delete
+  void fakedata () { data = New refcounted<dbrec> ("FAKE", strlen ("FAKE")); }
+  block () { key.randomize (); fakedata (); }
+  block (u_int i) : key (i) { fakedata (); }
+  block (merkle_hash key) : key (key) { fakedata (); }
+  block (merkle_hash key, ptr<dbrec> data) : key (key), data (data) {}
 };
 
 
 
+static inline merkle_hash
+to_merkle_hash (ptr<dbrec> a)
+{
+  merkle_hash h;
+  assert (a->len == h.size);
+  bcopy (a->value, h.bytes, h.size);
+  return h;
+}
 
-// Supposed to roughly correspond to the on-disk DB.
-// It supports insert(), lookup(), and blocks are in sorted order.
-struct database : public itree<merkle_hash, block, &block::key, &block::link> {
-  typedef itree<merkle_hash, block, &block::key, &block::link> super_t;
-
-  struct database_stats {
-    uint64 num_lookup;
-    uint64 num_insert;
-    uint64 num_remove;
-    uint64 num_cursor;
-    uint64 num_get_keys;
-    uint64 num_next;
-  } stats;
-
-  database ()
-  {
-    bzero (this, sizeof (this));
-  }
+static inline ref<dbrec>
+todbrec (const merkle_hash &h)
+{
+  return New refcounted<dbrec> (h.bytes, h.size);
+}
 
 
-  void
-  clear ()
-  {
-    while (block *b = first ()) {
-      remove (b);
-      delete b;
-    }
-  }
-
-  ~database ()
-  {
-    clear ();
-  }
-
-  block *
-  next (block *b)
-  {
-    stats.num_next++;
-    return super_t::next (b);
-  }
-
-  // find first block with key >= pos.
-  block *
-  cursor (merkle_hash pos)
-  {
-    stats.num_cursor++;
-
-#if 1
-    block *ret = lookup (pos);
-    if (ret)
-      return ret;
-    else {
-      block b(pos);
-      insert (&b);
-      block *ret = lookup (pos);
-      assert (ret == &b);
-      ret = super_t::next (ret);
-      remove (&b);
-      return ret;
-    }
+static inline bigint
+tobigint (const merkle_hash &h)
+{
+#if 0
+  str raw = str ((char *)h.bytes, h.size);
+  bigint ret;
+  ret.setraw (raw);
+  return ret;
 #else
-    for (block *b = first (); b; b = super_t::next (b))
-      if (b->key >= pos)
-	return b;
-    return NULL; 
+  bigint ret = 0;
+  for (int i = h.size - 1; i >= 0; i--) {
+    ret <<= 8;
+    ret += h.bytes[i];
+  }
+  return ret;
 #endif
-  }
-
-  block *
-  lookup (merkle_hash key)
-  {
-    stats.num_lookup++;
-    return this->operator [] (key);
-  }
-
-  vec<merkle_hash>
-  get_keys (u_int depth, merkle_hash prefix)
-  {
-    stats.num_get_keys++;
-    vec<merkle_hash> ret;
-    block *b = cursor (prefix);
-    for ( ; b && prefix_match (depth, b->key, prefix); b = next (b))
-      ret.push_back (b->key);
-    return ret;
-  }
-
-  void
-  dump ()
-  {
-    warnx << "DATABASE\n";
-    for (block *b = first (); b; b = next (b))
-      warnx << b->key << "\n";
-  }
-
-
-
-  void
-  dump_stats ()
-  {
-    warn << "Database stats......\n";
-    warn << "  size " << stats.num_insert - stats.num_remove << "\n";
-    warn << "  num_insert " << stats.num_insert << "\n";
-    warn << "  num_remove " << stats.num_remove << "\n";
-    warn << "  num_cursor " << stats.num_cursor << "\n";
-    warn <<"   num_get_keys " << stats.num_get_keys << "\n";
-    warn << "  num_next " << stats.num_next << "\n";
-  }
-};
+}
 
 
 static inline vec<merkle_hash>
-database_get_keys (database *db, u_int depth, merkle_hash prefix)
+database_get_keys (dbfe *db, u_int depth, const merkle_hash &prefix)
 {
   vec<merkle_hash> ret;
-  block *b = db->cursor (prefix);
-  for ( ; b && prefix_match (depth, b->key, prefix); b = db->next (b))
-    ret.push_back (b->key);
+  ptr<dbEnumeration> iter = db->enumerate ();
+  ptr<dbPair> entry = iter->nextElement (todbrec(prefix));
+
+  while (entry) {
+    merkle_hash key = to_merkle_hash (entry->key);
+    if (!prefix_match (depth, key, prefix))
+      break;
+    ret.push_back (key);
+    entry = iter->nextElement ();
+  }
+
   return ret;
 }
+
+
+static inline int
+database_remove (dbfe *db, block *b)
+{
+  return db->del (todbrec(b->key));
+}
+
+
+static inline int
+database_insert (dbfe *db, block *b)
+{
+  return db->insert (todbrec (b->key), b->data);
+}
+
+
+static inline ptr<dbrec>
+database_lookup (dbfe *db, const merkle_hash &key)
+{
+  return db->lookup (todbrec (key));
+}
+
+
+static inline ptr<dbEnumeration>
+database_enumerate (dbfe *db)
+{
+  // XXX: DEAD CODE?
+
+  assert (0); // WHY??
+  return db->enumerate();
+}
+
+static inline ptr<dbPair>
+nextElement (ptr<dbEnumeration> iterator)
+{
+  // XXX: DEAD CODE?
+
+  assert (0); // want to return pair<merkle_hash, ptr<dbrec>> ?
+  return iterator->nextElement ();
+}
+
+static inline ptr<dbPair>
+nextElement (ptr<dbEnumeration> iterator, const merkle_hash &startkey)
+{
+  // XXX: DEAD CODE?
+
+
+  assert (0); // want to return pair<merkle_hash, ptr<dbrec>> ?
+  return iterator->nextElement (todbrec (startkey));
+}
+
+
+
+// ------------------------------------------------------------------------------
+// database iterators
+
+class db_iterator {
+public:
+  virtual bool more () = 0;
+  virtual merkle_hash next () = 0;
+  virtual merkle_hash peek () = 0;
+};
+
+
+
+class db_range_iterator : public db_iterator {
+  // iterates over a range of database keys   
+private:
+  dbfe *db;
+  ptr<dbEnumeration> iter;
+  ptr<dbPair> entry;
+  u_int depth;
+  merkle_hash prefix;
+
+protected:
+  bool match ();
+
+public:
+  virtual bool more ();
+  virtual merkle_hash peek ();
+  virtual merkle_hash next ();
+  db_range_iterator (dbfe *db, u_int depth, merkle_hash prefix);
+  virtual ~db_range_iterator ();
+};
+
+
+class db_range_xiterator : public db_range_iterator {
+  // iterates over a range of database keys, keys in the exclusion set
+  // (i.e., 'xset') are skipped
+
+private:
+  qhash<merkle_hash, bool> *xset;
+  bigint rngmin;
+  bigint rngmax;
+
+  void advance ();
+
+public:
+  virtual merkle_hash next ();
+  db_range_xiterator (dbfe *db, u_int depth, merkle_hash prefix,
+		      qhash<merkle_hash, bool> *xset, bigint rngmin, bigint rngmax);
+  virtual ~db_range_xiterator ();
+};
 
 
 #endif /* _MERKLE_MISC_H_ */

@@ -24,7 +24,7 @@ public:
   merkle_node ();
   void initialize (u_int64_t _count);
   ~merkle_node ();
-  void check_invariants (u_int depth, merkle_hash prefix, database *db);
+  void check_invariants (u_int depth, merkle_hash prefix, dbfe *db);
 };
 
 

@@ -132,12 +132,14 @@ protected:
     ref<s_dhash_insertarg> arg = New refcounted<s_dhash_insertarg> ();
     arg->v       = destID;
     arg->key     = blockID;
+    arg->srcID   = clntnode->my_ID ();
     arg->data.setsize (len);
     memcpy (arg->data.base (), data, len);
     arg->offset  = off;
     arg->type    = store_type;
     arg->attr.size     = totsz;
-    
+    arg->last    = false;
+
     ///warn << "XXXXXX dhashcli::store ==> store_cb\n";
     clntnode->doRPC (destID, dhash_program_1, DHASHPROC_STORE, arg, res,
 		     wrap (this, &dhash_store::finish, res));

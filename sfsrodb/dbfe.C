@@ -39,6 +39,16 @@
 
 ///////////////// static /////////////////////
 
+// XXX fix comment
+// Hash table to map 'DB *' to 'dbfe *'.
+//  Compare callback needs to associate the 'DB *' with 
+//  the high-level 'dbfe *'.
+ihash<DB *, dbfe, &dbfe::db, &dbfe::dbmap_link> dbmap;
+
+
+
+// XXX fix the u_int casting..
+
 ref<dbImplInfo>
 dbGetImplInfo() {
   ref<dbImplInfo> info = New refcounted<dbImplInfo>();
@@ -261,7 +271,8 @@ dbfe::dbfe() {
 }
 
 dbfe::~dbfe() {
-    closedb ();
+  dbmap.remove (this);
+  closedb ();
 }
 
 #ifdef SLEEPYCAT
@@ -279,9 +290,10 @@ int dbfe::IMPL_open_sleepycat(char *filename, dbOptions opts) {
  if (create == 0) flags |= DB_EXCL;
  long cacheSize = opts.getOption(CACHE_OPT);
  
-#if 0
+#if 1
  if (compare) {
-   db->app_private = this;
+   dbmap.insert (this);
+   //db->app_private = this;
    r =  db->set_bt_compare (db, IMPL_compare_fcn_sleepycat);
    if (r != 0) return r;
  }
@@ -397,13 +409,16 @@ dbfe::IMPL_sync () {
 int
 dbfe::IMPL_compare_fcn_sleepycat (DB *db, const DBT *a, const DBT *b)
 {
-#if 0
-  dbfe *dbf = (dbfe *)db->app_private;
+#if 1
+  //dbfe *dbf = (dbfe *)db->app_private;
+  dbfe *dbf = dbmap[db];
+  assert (dbf);
 
   ref<dbrec> arec = New refcounted<dbrec>(a->data, a->size);
   ref<dbrec> brec = New refcounted<dbrec>(b->data, b->size);
 
   return dbf->compare (arec, brec);
+  //return compare (arec, brec);
 #else
   assert (0);
   return -1;

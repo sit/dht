@@ -87,6 +87,7 @@
 
 #include "vec.h"
 #include "async.h"
+#include "ihash.h"
 #include "callback.h"
 
 #ifdef SLEEPYCAT
@@ -101,11 +102,20 @@
 #include "btreeDispatch.h"
 #endif /* !SLEEPYCAT */
 
+struct hashfn<DB *> {
+  hashfn () {}
+  hash_t operator() (const DB *a) const
+  {
+    return (u_int)a;
+  }
+};
+
+
 struct dbrec {
   char *value;
   long len;
   
-  dbrec(void *v, long l) {
+  dbrec(const void *v, long l) {
     value = New char[l];
     memcpy(value, v, l);
     len = l;
@@ -217,8 +227,6 @@ class dbfe {
   callback<ptr<dbEnumeration> >::ptr make_enumeration;
 
 #ifdef SLEEPYCAT
-  DB* db;  
-
   int IMPL_open_sleepycat(char *filename, dbOptions opts);
   int IMPL_close_sleepycat();
   int IMPL_create_sleepycat(char *filename, dbOptions opts);
@@ -257,6 +265,10 @@ class dbfe {
  public:
 
 #ifdef SLEEPYCAT
+  DB* db; // needs to be public for the ihash
+  ihash_entry <dbfe> dbmap_link;
+
+
   typedef callback<int, ref<dbrec>, ref<dbrec> >::ptr compare_fcn_t;
   compare_fcn_t compare;
   void set_compare_fcn (compare_fcn_t fn) { compare = fn; }

@@ -34,12 +34,12 @@ private:
 
 public:
   enum { max_depth = merkle_hash::NUM_SLOTS }; // XXX off by one? or two?
-  database *db;     // public for testing only
+  dbfe *db;     // public for testing only
   merkle_node root; // ditto
   merkle_tree_stats stats;
 
 
-  merkle_tree (database *db); 
+  merkle_tree (dbfe *db); 
   void remove (block *b);
   void insert (block *b);
   merkle_node *lookup_exact (u_int depth, merkle_hash &key);
