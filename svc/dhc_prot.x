@@ -18,6 +18,12 @@ enum dhc_stat {
    DHC_NOT_MASTER = 13
 };
 
+enum dhc_type {
+   DHC_DHC = 0,
+   DHC_MASTER = 1,
+   DHC_MASTER_REP = 2 
+};
+
 struct paxos_seqnum_t {
   u_int64_t seqnum; 		
   chordID proposer;
@@ -74,6 +80,7 @@ union dhc_propose_res switch (dhc_stat status) {
 struct dhc_newconfig_arg {
    chordID bID;
    chordID mID;
+   dhc_type type;
    keyhash_data data;
    u_int64_t old_conf_seqnum;
    chordID new_config<>;

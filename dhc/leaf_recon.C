@@ -145,22 +145,6 @@ dhc::recv_ask (user_args *sbp)
   //Create leaf block
   ptr<dhc_block> kb = to_dhc_block (rec);
 
-  //Lookup master block
-  key = id2dbrec (kb->masterID);
-  rec = db->lookup (key);
-  if (!rec) {
-    dhc_prepare_res res (DHC_NOT_MASTER);
-    sbp->reply (&res);
-    return;    
-  }
-
-  ptr<dhc_block> master_kb = to_dhc_block (rec);
-  if (master_kb->masterID != 0) {
-    dhc_prepare_res res (DHC_NOT_MASTER);
-    sbp->reply (&res);
-    return;
-  }
-
   if (!valid_proposal (kb, ask, sbp))
     return;
 
@@ -182,21 +166,18 @@ dhc::recv_ask (user_args *sbp)
     b = New dhc_soft (myNode, kb);
   dhcs.insert (b);
 
-  dhc_soft *mb = dhcs[kb->masterID];
-  if (!mb) {
-    mb = New dhc_soft (myNode, master_kb);
-    dhcs.insert (mb);
-  }
-
   ref<dhc_prepare_arg> arg = New refcounted<dhc_prepare_arg> ();
   arg->bID = ask->bID;
   arg->round.seqnum = ask->round.seqnum;
   arg->round.proposer = ask->round.proposer;
   arg->config_seqnum = ask->config_seqnum;
 
-  for (uint i=0; i<mb->config.size (); i++) {
+  uint k = (myNode->succs ().size () < n_replica) ? 
+    myNode->succs ().size () : n_replica;
+
+  for (uint i=0; i<k-1; i++) {
     ref<dhc_prepare_res> res = New refcounted<dhc_prepare_res> (DHC_OK);
-    myNode->doRPC (mb->config[i], dhc_program_1, DHCPROC_CMP, arg, res,
+    myNode->doRPC (myNode->succs ()[i], dhc_program_1, DHCPROC_CMP, arg, res,
 		   wrap (this, &dhc::recv_cmp_ack, kb, sbp, res));
   }
 
@@ -212,7 +193,7 @@ dhc::recv_cmp_ack (ptr<dhc_block> kb, user_args *sbp, ref<dhc_prepare_res> ca,
     assert (b);
     b->pstat->promise_recvd++;
 
-    if (b->pstat->promise_recvd > n_replica/2 && !b->pstat->sent_newconfig) {
+    if (b->pstat->promise_recvd >= n_replica/2 && !b->pstat->sent_newconfig) {
       if (!set_ac (&b->pstat->acc_conf, *ca->resok)) {
 	warn << "dhc::recv_cmp_ack Different conf accepted. Somethings's wrong!!\n";
 	exit (-1);
@@ -222,18 +203,19 @@ dhc::recv_cmp_ack (ptr<dhc_block> kb, user_args *sbp, ref<dhc_prepare_res> ca,
       dhcs.insert (b);
       master_send_config (b->pstat->acc_conf, sbp);
 
-      dhc_soft *mb = dhcs[kb->masterID];
-      assert (mb);
-
       ptr<dhc_newconfig_arg> arg = New refcounted<dhc_newconfig_arg>;
       arg->bID = kb->id;
       arg->mID = kb->masterID;
+      arg->type = DHC_MASTER_REP;
       arg->old_conf_seqnum = kb->meta->config.seqnum;
       set_new_config (arg, b->pstat->acc_conf); 
 
+      uint k = (myNode->succs ().size () < n_replica) ? 
+	myNode->succs ().size () : n_replica;
       ptr<dhc_newconfig_res> res; 
-      for (uint i=0; i<mb->new_config.size (); i++) {
-	ptr<location> dest = mb->new_config[i];
+
+      for (uint i=0; i<k-1; i++) {
+	ptr<location> dest = myNode->succs ()[i];
 	res = New refcounted<dhc_newconfig_res>;
 	myNode->doRPC (dest, dhc_program_1, DHCPROC_NEWCONFIG, arg, res,
 		       wrap (this, &dhc::recv_m_newconf_ack, b->id, res));

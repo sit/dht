@@ -35,9 +35,8 @@ dhc::recon_timer ()
 	recon_tm_rpcs++;
 	myNode->find_successor (chordID (key), wrap (this, &dhc::recon_tm_lookup, 
 						     kb, guilty));	
-      } else 
-	warn << "did not find key = " << key << "\n";
-      entry = iter->nextElement ();
+	entry = iter->nextElement ();
+      }
     }
   }
 
@@ -61,7 +60,8 @@ dhc::recon_tm_lookup (ref<dhc_block> kb, bool guilty, vec<chord_node> succs,
 		      route r, chordstat err)
 {
   recon_tm_rpcs--;
-  warn << myNode->my_ID () << ": End find_successor \n";
+  warn << "dhc::recon_tm_lookup block id " << kb->id << "\n";
+
   if (!err) {
 #if 0
     if (dhc_debug) {
@@ -207,6 +207,9 @@ dhc::recv_newconfig (user_args *sbp)
   db->insert (key, to_dbrec (kb));
   //db->sync (); 
 
+  if (newconfig->type == DHC_MASTER)
+    send_config_to_succs (newconfig);     //send block to k-1 succs of me
+
   str buf;
   if (is_primary (newconfig->bID, myNode->my_ID (), kb->meta->config.nodes)) 
     dhc_trace << "bID " << newconfig->bID << " conf " 
@@ -226,4 +229,27 @@ dhc::recv_newconfig (user_args *sbp)
 
   dhc_newconfig_res res; res.status = DHC_OK;
   sbp->reply (&res);
+}
+
+void 
+dhc::send_config_to_succs (dhc_newconfig_arg *newconfig)
+{
+  ref<dhc_newconfig_arg> arg = New refcounted<dhc_newconfig_arg> ();
+  arg->bID = newconfig->bID;
+  arg->mID = newconfig->mID;
+  arg->type = DHC_MASTER_REP;
+  //arg->data = ignore this value
+  arg->old_conf_seqnum = newconfig->old_conf_seqnum;
+  arg->new_config.setsize (newconfig->new_config.size ());
+  for (uint i=0; i<arg->new_config.size (); i++) 
+    arg->new_config[i] = newconfig->new_config[i];
+
+  uint k = (myNode->succs ().size () < n_replica) ? 
+    myNode->succs ().size () : n_replica;
+  for (uint i=0; i<k-1; i++) {
+    ref<dhc_newconfig_res> res = New refcounted<dhc_newconfig_res> ();
+    myNode->doRPC (myNode->succs ()[i], dhc_program_1, DHCPROC_NEWCONFIG,
+		   arg, res, wrap (this, &dhc::recv_m_newconf_ack, 
+				   arg->bID, res));
+  }
 }

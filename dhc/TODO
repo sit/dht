@@ -1,3 +1,6 @@
+-garbage collect old blocks. send new config also to old replicas so they can purge
+that block from the database.
+
 -do not allow inserting of a NEW block twice!
 
 -make sure number of replicas is exactly as specified. I just saw 6 replicas when n=5

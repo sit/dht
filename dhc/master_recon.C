@@ -209,47 +209,42 @@ dhc::recv_newconfig_ack (chordID bID, dhc_cb_t cb, ref<dhc_newconfig_res> ack,
   if (!err && ack->status == DHC_OK) {
 
     dhc_soft *b = dhcs[bID];
-    if (!b) {
-      warn << "dhc::recv_newconfig_ack " << bID << " not found in hash table.\n";
-      exit (-1);
-    }
+    if (b) {
+      b->pstat->newconfig_ack_recvd++;
 
-    b->pstat->newconfig_ack_recvd++;
-
-    if (dhc_debug)    
-      warn << "dhc::recv_newconfig_ack: " << b->to_str () << "\n";
+      if (dhc_debug)    
+	warn << "dhc::recv_newconfig_ack: " << b->to_str () << "\n";
     
-    if (b->pstat->newconfig_ack_recvd > n_replica/2 && 
-	!b->pstat->sent_reply) {
-      //Might have to change so that primary who is also the next primary
-      //updates its db locally first.
-      if (is_primary (bID, myNode->my_ID (), b->pstat->acc_conf)) 
-	b->status = IDLE; 
-      b->pstat->sent_reply = true;
-      dhcs.insert (b);
-      if (dhc_debug)
-	warn << "\n\n" << myNode->my_ID () << " :Recon block " << bID 
-	     << " succeeded !!!!!!\n\n";
+      if (b->pstat->newconfig_ack_recvd > n_replica/2 && 
+	  !b->pstat->sent_reply) {
+	//Might have to change so that primary who is also the next primary
+	//updates its db locally first.
+	if (is_primary (bID, myNode->my_ID (), b->pstat->acc_conf)) 
+	  b->status = IDLE; 
+	b->pstat->sent_reply = true;
+	dhcs.insert (b);
+	if (dhc_debug)
+	  warn << "\n\n" << myNode->my_ID () << " :Recon block " << bID 
+	       << " succeeded !!!!!!\n\n";
 
-      timeval tp;
-      gettimeofday (&tp, NULL);
-      end_recon = tp.tv_sec * (u_int64_t)1000000 + tp.tv_usec;
-      warn << myNode->my_ID () << " End RECON at " << end_recon << "\n";
-      warn << "             time elapse: " << end_recon-start_recon << " usecs\n";
-      dhc_trace << end_recon << " " << myNode->my_ID () 
-		<< " RECON_END 1 " << end_recon-start_recon 
-		<< " usecs\n";
-
-      (*cb) (DHC_OK, clnt_stat (0));
-    }    
-  } else {
+	timeval tp;
+	gettimeofday (&tp, NULL);
+	end_recon = tp.tv_sec * (u_int64_t)1000000 + tp.tv_usec;
+	warn << myNode->my_ID () << " End RECON at " << end_recon << "\n";
+	warn << "             time elapse: " << end_recon-start_recon << " usecs\n";
+	dhc_trace << end_recon << " " << myNode->my_ID () 
+		  << " RECON_END 1 " << end_recon-start_recon 
+		  << " usecs\n";
+      }
+    }
+    (*cb) (DHC_OK, clnt_stat (0));
+  } else
     if (err) {
       warn << "dhc:recv_newconfig_ack: cannot send RPC. retry???????\n";
     } else {
       print_error ("dhc:recv_newconfig_ack", err, ack->status);
       (*cb) (ack->status, clnt_stat (0));
-    }
-  }
+    }    
 }
 
 void 

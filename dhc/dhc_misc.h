@@ -31,15 +31,13 @@ valid_proposal (ptr<dhc_block> kb, dhc_prepare_arg *arg, user_args *sbp)
 static inline ptr<dhc_block> 
 to_dhc_block (ptr<dbrec> rec)
 {
-  ptr<dhc_block> b = New refcounted<dhc_block> (rec->value, rec->len);
-  return b;
+  return (New refcounted<dhc_block> (rec->value, rec->len));
 };
 
 static inline ptr<dbrec> 
 to_dbrec (ptr<dhc_block> block)
 {
-  ptr<dbrec> rec = New refcounted<dbrec> (block->bytes (), block->size ());
-  return rec;
+  return New refcounted<dbrec> (block->bytes (), block->size ());
 };
 
 static inline bool

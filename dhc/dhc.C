@@ -4,6 +4,7 @@
 #include "merkle_misc.h"
 #include "dhash.h"
 #include "location.h"
+#include "locationtable.h"
 
 int dhc_debug = getenv("DHC_DEBUG") ? atoi(getenv("DHC_DEBUG")) : 0;
 int RECON_TM = getenv("DHC_RECON_TM") ? atoi(getenv("DHC_RECON_TM")) : 15;
@@ -421,7 +422,8 @@ dhc::recv_newblock (user_args *sbp)
   
   ptr<dhc_newconfig_arg> arg = New refcounted<dhc_newconfig_arg>;
   arg->bID = put->bID;
-  arg->mID = put->writer; //The initial write ID is the master node's ID.
+  arg->mID = put->writer; //CHANGE THIS! The initial write ID is the master node's ID.
+  arg->type = DHC_DHC;
   arg->data.tag.ver = 0;
   arg->data.tag.writer = put->writer;
   arg->data.data.setsize (put->value.size ());
@@ -430,11 +432,11 @@ dhc::recv_newblock (user_args *sbp)
   vec<ptr<location> > l;
   set_new_config (arg, &l, myNode, n_replica);
 
+  ptr<dhc_newconfig_res> res; 
   ptr<uint> ack_rcvd = New refcounted<uint>;
   *ack_rcvd = 0;
-  ptr<dhc_newconfig_res> res; 
-
   for (uint i=0; i<arg->new_config.size (); i++) {
+    arg->type = DHC_DHC;
     res = New refcounted<dhc_newconfig_res>;
     if (dhc_debug)
       warn << "\n\nsending newconfig to " << l[i]->id () << "\n";
@@ -445,6 +447,19 @@ dhc::recv_newblock (user_args *sbp)
   }
 
   l.clear ();
+
+  if (dhc_debug) 
+    warn << "\n\nsend newconfig to master node\n";
+  ptr<location> master = myNode->locations->lookup (arg->mID);
+  if (master) {
+    arg->type = DHC_MASTER;
+    arg->data.data.clear (); 
+    res = New refcounted<dhc_newconfig_res>;
+    ptr<uint> tmp = NULL;
+    myNode->doRPC (master, dhc_program_1, DHCPROC_NEWCONFIG, arg, res,
+		   wrap (this, &dhc::recv_newblock_ack, sbp, tmp, res));    
+  }
+
 }
 
 void
@@ -452,7 +467,7 @@ dhc::recv_newblock_ack (user_args *sbp, ptr<uint> ack_rcvd,
 			ref<dhc_newconfig_res> ack, clnt_stat err)
 {
   if (!err && ack->status == DHC_OK) {
-    if (++(*ack_rcvd) == n_replica) {
+    if (ack_rcvd && (++(*ack_rcvd) == n_replica)) {
       dhc_put_res res; res.status = DHC_OK;
       sbp->reply (&res);
     }

@@ -165,7 +165,7 @@ struct dhc_block {
     uint msize, offst = 0;
     ID_get (&id, bytes);
     offst += ID_size;
-    ID_get (&masterID, bytes);
+    ID_get (&masterID, bytes + offst);
 
     offst += ID_size;
     bcopy (bytes + offst, &msize, sizeof (uint));
@@ -210,7 +210,7 @@ struct dhc_block {
     uint offst = 0;
     ID_put (buf, id);
     offst += ID_size;
-    ID_put (buf, masterID);
+    ID_put (buf + offst, masterID);
     offst += ID_size;
 
     bcopy (meta->bytes (), buf + offst, meta->size ());
@@ -430,6 +430,7 @@ class dhc /*: public virtual refcount*/ {
   void recv_accept (chordID, dhc_cb_t, ref<dhc_propose_res>, clnt_stat);
   void recv_newconfig (user_args *);
   void recv_newconfig_ack (chordID, dhc_cb_t, ref<dhc_newconfig_res>, clnt_stat);
+  void send_config_to_succs (dhc_newconfig_arg *);
 
   void recv_ask (user_args *);
   void recv_permission (chordID, dhc_cb_t, ref<dhc_prepare_res>, clnt_stat);
