@@ -26,7 +26,7 @@ nntp::nntp (int _s) :
 
   deleted = New refcounted<bool> (false);
 
-  cmd_hello("MODE READER\r\n");
+  cmd_hello ("READER");
 
   add_cmd ("CHECKDHT", wrap (this, &nntp::cmd_check));
   add_cmd ("TAKEDHT", wrap (this, &nntp::cmd_takedht));
@@ -59,14 +59,14 @@ void
 nntp::process_line (const str data, int err)
 {
   if (err < 0) {
-    warnx << "nntp aio oops " << err << "\n";
+    warn << s << ": nntp aio oops " << err << "\n";
     if (err == ETIMEDOUT) {
       delete this;
       return;
     }
   }
   if (!data || !data.len()) {
-    warnx << "nntp data oops\n";
+    warn << s << ": nntp data oops\n";
     delete this;
     return;
   }
@@ -83,7 +83,6 @@ nntp::add_cmd (const char *cmd, cbs fn)
   cmd_table.push_back (c_jmp_entry_t (cmd, fn));
 }
 
-static rxx cmdrx ("^(.+)");
 char *unknown = "500 command not recognized\r\n";
 
 void
@@ -92,41 +91,45 @@ nntp::command (void)
   unsigned int i = 0;
   
   str line = lines.pop_front ();
-  if (cmdrx.search (line)) {
-    for (i = 0; i < cmd_table.size (); i++) {
-      if (!strncasecmp (cmdrx[1], cmd_table[i].cmd, cmd_table[i].len)) {
-	if (nntp_trace >= 1)
-	  warn << s << ": dispatching " << cmdrx[1] << "\n";
-	cmd_table[i].fn (cmdrx[1]);
-	return;
-      }
+  vec<str> cmdargs;
+  int n = split (&cmdargs, rxx("\\s+"), line, 2);
+  assert (n >= 0);
+  if (n == 0)
+    return;
+  
+  for (i = 0; i < cmd_table.size (); i++) {
+    if (!strcasecmp (cmdargs[0], cmd_table[i].cmd)) {
+      if (nntp_trace >= 1)
+	warn << s << ": dispatching " << cmdargs[0] << "\n";
+      cmd_table[i].fn ((n > 1) ? cmdargs[1] : str(""));
+      return;
     }
   }
 
   if (nntp_trace >= 1)
-    warn << s << ": unknown command: " << cmdrx[1] << "\n";
+    warn << s << ": unknown command: " << cmdargs[0] << "\n";
   aio << unknown;
 }
 
 // --- basic commands
 
-static rxx hellorx ("^MODE (READER)?(STREAM)?", "i");
 char *hello = "200 DHash news server - posting allowed\r\n";
 char *stream = "203 Streaming is OK\r\n";
 char *syntax = "501 command syntax error\r\n";
 
 void
 nntp::cmd_hello (str c) {
-  if (hellorx.search (c)) {
-    if (hellorx[1]) {
+  if (c) {
+    if (!strcasecmp (c, "reader")) {
       aio << hello;
       return;
     }
-    if (hellorx[2]) {
+    else if (!strcasecmp (c, "stream")) {
       aio << stream;
       return;
     }
   }
+  
   aio << syntax;
 }
 
@@ -168,7 +171,7 @@ nntp::cmd_list (str c) {
   aio << period;
 }
 
-static rxx overrx ("^XOVER( ((\\d+)-)?(\\d+)?)?", "i");
+static rxx overrx ("((\\d+)-)?(\\d+)?", "i");
 // poorly written regexes follow:
 //( (\\d+)?((\\d+)-(\\d+)?)?)?");
 // ?(\\d+)?(-)?(\\d+)?");
@@ -178,39 +181,48 @@ char *nogroup = "412 No newsgroup selected\r\n";
 void
 nntp::cmd_over (str c) {
   unsigned long start, stop = -1UL;
-
+  
   if (!cur_group->loaded ()) {
     aio << nogroup;
-  } else if (overrx.search (c)) {
-    // extract start and stop
-
-    if (overrx[3]) {
-      // endless
-      start = strtoul (overrx[3], NULL, 10);
-      if (overrx[4]) {
-	// range
-	stop = strtoul (overrx[4], NULL, 10);
+  } else if (!c) {
+    start = stop = cur_group->cur_art;
+  } else {
+    vec<str> limits;
+    int n = split (&limits, rxx("-"), c, (size_t) -1, true);
+    warn << s << ": xover " << c << " splits to " << n << "/" << limits.size();
+    for (size_t i = 0; i < limits.size (); i++)
+      warnx << " '" << limits[i] << "'";
+    warnx << "\n";
+    if (n > 0) {
+      // grab the first number...
+      if (!convertint (limits[0], &start)) {
+	aio << syntax;
+	return;
       }
-    } else if (overrx[4]) {
-      // single
-      start = stop = strtoul (overrx[4], NULL, 10);
-    } else {
-      // current
-      start = stop = cur_group->cur_art;
-    }
-    cur_group->xover (start, stop);
-
+      // and see if there is a second...
+      if (n > 1) {
+	if (limits[1].len () > 0) {
+	  if (!convertint (limits[1], &stop)) {
+	    aio << syntax;
+	    return;
+	  }
+	} else {
+	  // get all until the end.
+	}
+      } else {
+	// single
+	stop = start;
+      }
+    } 
+    cur_group->xover (start, stop + 1);
     aio << overview;
     do {
       aio << cur_group->next ();
     } while (cur_group->more ());
     aio << period;
-  } else {
-    aio << syntax;
   }
 }
 
-static rxx grouprx ("^GROUP (.+)$", "i");
 char *groupb = "211 ";
 char *groupe = " group selected\r\n";
 char *badgroup = "411 no such news group\r\n";
@@ -219,8 +231,8 @@ void
 nntp::cmd_group (str c) {
   unsigned long count, first, last;
 
-  if (grouprx.search (c)) {
-    if (cur_group->open (grouprx[1], &count, &first, &last) < 0) {
+  if (c) {
+    if (cur_group->open (c, &count, &first, &last) < 0) {
       aio << badgroup;
     } else {
       aio << groupb << count << " " << first << " " << last << " "
@@ -231,8 +243,6 @@ nntp::cmd_group (str c) {
 }
 
 // --- retrieve article
-
-static rxx artrx ("^ARTICLE (.+)\\s*$", "i");
 char *noarticle = "430 no such article found\r\n";
 
 void
@@ -242,14 +252,17 @@ nntp::cmd_article (str c) {
 
   if (!cur_group->loaded ()) {
     aio << nogroup;
-  } else if (artrx.search (c)) {
+  } else {
     unsigned long cur_art;
-    if (convertint (artrx[1], &cur_art)) {
+    if (!c) {
+      msgkey = cur_group->getid (cur_group->cur_art);
+    }
+    else if (convertint (c, &cur_art)) {
       msgkey = cur_group->getid (cur_art);
       cur_group->cur_art = cur_art;
     } else {
-      msgkey = cur_group->getid (artrx[1]);
-    } 
+      msgkey = cur_group->getid (c);
+    }
 
     if (nntp_trace >= 4)
       warn << s << ": msgkey " << msgkey << "\n";
@@ -260,8 +273,6 @@ nntp::cmd_article (str c) {
 			     false, msgkey));
     else
       aio << noarticle;
-  } else {
-    aio << syntax;
   }
 }
 
@@ -308,10 +319,7 @@ static rxx postheadend ("^\\s?$");
 void
 nntp::read_post (str resp, str bad)
 {
-  ptr<dbrec> k, d;
-  ptr<newsgroup> g;
   str ng, msgid;
-  bool posted = false;
   chordID ID;
   
   strbuf prefix ("%d: read_post: ", s);
@@ -321,9 +329,8 @@ nntp::read_post (str resp, str bad)
   lines.pop_back();
   
   int headerend  = 0;
-  int msgid_line = 0;
 
-  for (size_t i = 0; i < lines.size(); i++) {
+  for (size_t i = 0; i < lines.size (); i++) {
     // warnx << "Checking... ||" << lines[i] << "||\n";
     if (!headerend && postheadend.search (lines[i])) {
       if (nntp_trace >= 4)
@@ -333,13 +340,15 @@ nntp::read_post (str resp, str bad)
     }
     if (postcontrol.search (lines[i])) {
       docontrol (postcontrol[1]);
-      lines.setsize(0);
+      lines.setsize (0);
+      aio << resp;
+      posting = false;
+      process_input = wrap (this, &nntp::command);
       return;
     } else if (postmrx.search (lines[i])) {
       if (nntp_trace >= 4)
 	warn << prefix << "found msgid " << postmrx[1] << "\n";
       msgid = postmrx[1];
-      msgid_line = i;
     } else if (postngrx.search (lines[i])) {
       if (nntp_trace >= 4)
 	warn << prefix << "found newsgroup list " << postngrx[1] << "\n";
@@ -348,6 +357,18 @@ nntp::read_post (str resp, str bad)
   }
   int linecount = lines.size () - headerend;
 
+  if (!msgid || !ng || linecount <= 0) {
+    aio << bad;
+    lines.setsize (0);
+    posting = false;
+    process_input = wrap (this, &nntp::command);
+    return;
+  } else
+    aio << resp;
+
+  // Satisified that we have received a valid article;
+  // now try and post it somewhere.
+  bool posted;
   strbuf header;
   strbuf body;
   while (headerend > 0) {
@@ -359,58 +380,60 @@ nntp::read_post (str resp, str bad)
 
   str wholeart = strbuf () << header << body;
 
-  ID = compute_hash (wholeart, wholeart.len ()); 
-  if (!msgid_line) 
-      msgid = strbuf () << "<" << ID << "@usenetDHT>"; // default msgid
-
-  dhash->insert (wholeart, wholeart.len (),
-		 wrap (this, &nntp::read_post_cb));
-
+  ID = compute_hash (wholeart, wholeart.len ());
+  
   header << "X-Lines: " << linecount << "\r\n" << "X-ChordID: " << ID << "\r\n";
-
   str h (header);
-  k = New refcounted<dbrec> (msgid, msgid.len ());
-  d = New refcounted<dbrec> (h, h.len ());
-  header_db->insert(k, d);
   if (nntp_trace >= 5)
     warn << "----\n" << h << "----\n";
 
-  if (ng) { 
-    g = New refcounted<newsgroup> ();
-    while (postgrx.search (ng)) {
-      strbuf postlog;
+  vec<str> groups;
+  ptr<newsgroup> g = New refcounted<newsgroup> ();
+  while (postgrx.search (ng)) {
+    groups.push_back (postgrx[1]);
+    strbuf postlog;
+    if (nntp_trace >= 2)
+      postlog << prefix << "group " << postgrx[1] << ": ";
+    if (g->open (postgrx[1]) < 0) {
       if (nntp_trace >= 2)
-	postlog << prefix << "group " << postgrx[1] << ": ";
-      if (g->open (postgrx[1]) < 0) {
-	if (nntp_trace >= 2)
-	  postlog << "unknown, so ignoring.\n";
-      } else {
-	g->addid (msgid, ID);
-	posted = true;
-	if (nntp_trace >= 2)
-	  postlog << msgid << " (" << ID << ") posted.\n";
-      }
+	postlog << "unknown, so ignoring.\n";
+    } else {
+      g->addid (msgid, ID);
+      posted = true;
       if (nntp_trace >= 2)
-	warn << postlog;
-
-      ng = ng + postgrx[0].len ();
+	postlog << msgid << " (" << ID << ") posted.\n";
     }
-  }
+    if (nntp_trace >= 2)
+      warn << postlog;
     
-  if (posted)
-    aio << resp;
-  else
-    aio << bad;
+    ng = ng + postgrx[0].len ();
+  }
+  
+  if (posted) {
+    ptr<dbrec> k = New refcounted<dbrec> (msgid, msgid.len ());
+    ptr<dbrec> d = New refcounted<dbrec> (h, h.len ());
+    header_db->insert (k, d);
+    dhash->insert (wholeart, wholeart.len (),
+		   wrap (this, &nntp::read_post_cb, k, groups));
+  }
 
   posting = false;
   process_input = wrap (this, &nntp::command);
 }
 
 void
-nntp::read_post_cb (dhash_stat status, ptr<insert_info> i)
+nntp::read_post_cb (ptr<dbrec> msgid, vec<str> groups,
+		    dhash_stat status, ptr<insert_info> i)
 {
-  if (status != DHASH_OK)
-    warn << "didn't store in DHASH after all\n";
+  str k (msgid->value, msgid->len);
+  if (status == DHASH_OK) {
+    feed_article (k, groups);
+    return;
+  }
+  // Clean up state after something goes wrong...
+  warn << s << ": didn't store " << k
+       << " in DHash after all: " << status << "\n";
+  header_db->del (msgid);
 }
 
 void
@@ -427,15 +450,14 @@ char *ihavesend = "335 send article to be transferred.  End with <CR-LF>.<CR-LF>
 char *ihaveok = "235 article transferred ok\r\n";
 char *ihaveno = "435 article not wanted - do not send it\r\n";
 char *ihavebad = "436 transfer failed - try again later\r\n";
-static rxx ihaverx ("^IHAVE (<.+?>)", "i");
 
 void
 nntp::cmd_ihave (str c)
 {
   ptr<dbrec> key, d;
 
-  if (ihaverx.search (c)) {
-    key = New refcounted<dbrec> (ihaverx[1], ihaverx[1].len ());
+  if (c.len ()) {
+    key = New refcounted<dbrec> (c, c.len ());
     d = header_db->lookup (key);
     if (!d) {
       aio << ihavesend;
@@ -447,7 +469,6 @@ nntp::cmd_ihave (str c)
     aio << syntax;
 }    
 
-static rxx checkrx ("^CHECK (<.+?>)", "i");
 char *checksendb = "238 ";
 char *checksende = " no such article found, please send it to me\r\n";
 char *checknob = "438 ";
@@ -458,18 +479,17 @@ nntp::cmd_check (str c)
 {
   ptr<dbrec> key, d;
 
-  if (checkrx.search (c)) {
-    key = New refcounted<dbrec> (checkrx[1], checkrx[1].len ());
+  if (c.len ()) {
+    key = New refcounted<dbrec> (c, c.len ());
     d = header_db->lookup (key);
     if (!d)
-      aio << checksendb << checkrx[1] << checksende;
+      aio << checksendb << c << checksende;
     else
-      aio << checknob << checkrx[1] << checknoe;
+      aio << checknob << c << checknoe;
   } else
     aio << syntax;
 }
 
-static rxx takethisrx ("^TAKETHIS (<.+?>)", "i");
 char *takethisokb = "239 ";
 char *takethisoke = " article transferred ok\r\n";
 char *takethisbadb = "439 ";
@@ -480,9 +500,9 @@ nntp::cmd_takethis (str c)
 {
   str resp, bad;
 
-  if (takethisrx.search (c)) {
-    resp = strbuf () << takethisokb << takethisrx[1] << takethisoke;
-    bad = strbuf () << takethisbadb << takethisrx[1] << takethisbade;
+  if (c.len ()) {
+    resp = strbuf () << takethisokb << c << takethisoke;
+    bad = strbuf () << takethisbadb << c << takethisbade;
     posting = true;
     process_input = wrap (this, &nntp::read_post, resp, bad);
   } else

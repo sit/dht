@@ -1,24 +1,58 @@
 #include <async.h>
 #include <aios.h>
 #include <rxx.h>
+#include <dbfe.h>
 #include "usenet.h"
 #include "newspeer.h"
 
 static vec<ptr<newspeer> > peers;
+
+void
+feed_article (str id, const vec<str> &groups)
+{
+  for (size_t i = 0; i < peers.size (); i++) {
+    for (size_t j = 0; j < groups.size (); j++) {
+      if (peers[i]->desired (groups[j])) {
+	peers[i]->queue_article (id);
+	break;
+      }
+    }
+  }
+}
 
 newspeer::newspeer (str h, u_int16_t p) :
   hostname (h),
   port (p),
   s (-1),
   aio (NULL),
+  conncb (NULL),
   state (HELLO_WAIT),
   dhtok (false),
   streamok (false)
 {
+  start_feed ();
 }
 
 newspeer::~newspeer ()
 {
+  if (conncb) {
+    timecb_remove (conncb);
+    conncb = NULL;
+  }
+}
+
+void
+newspeer::reset ()
+{
+  s = -1;
+  aio = NULL;
+  if (conncb) {
+    timecb_remove (conncb);
+    conncb = NULL;
+  }
+  state = HELLO_WAIT;
+  dhtok = false;
+  streamok = false;
 }
 
 ptr<newspeer>
@@ -63,8 +97,9 @@ newspeer::desired (str group)
 }
 
 void
-newspeer::start_feed (int t = 60)
+newspeer::start_feed (int t)
 {
+  conncb = NULL;
   tcpconnect (hostname, port, wrap (this, &newspeer::feed_connected, t));
 }
 
@@ -74,12 +109,13 @@ newspeer::feed_connected (int t, int s)
   if (s < 0) {
     t *= 2; if (t > 3600) t = 3600;
     warn << "Connection to " << hostname << ":" << port << " failed: "
-	 << strerror (errno) << "; retry in " << t << "seconds.\n";
-    delaycb (t, 0, wrap (this, &newspeer::start_feed, t));
+	 << strerror (errno) << "; retry in " << t << " seconds.\n";
+    conncb = delaycb (t, 0, wrap (this, &newspeer::start_feed, t));
     return;
   }
   aio = aios::alloc (s);
   aio->settimeout (opt->peer_timeout);
+  aio->setdebug (strbuf("%dp", s));
   // Start lockstep
   state = HELLO_WAIT;
   aio->readline (wrap (this, &newspeer::process_line));
@@ -90,16 +126,17 @@ static rxx emptyrxx ("^\\s*$");
 void
 newspeer::process_line (const str data, int err)
 {
+  strbuf prefix ("%dp: ", s);
   if (err < 0) {
-    warnx << "newspeer aio oops " << err << "\n";
+    warn << prefix << "newspeer aio oops " << err << "\n";
     if (err == ETIMEDOUT) {
-      delete this;
+      reset ();
       return;
     }
   }
   if (!data || !data.len()) {
-    warnx << "newspeer data oops\n";
-    delete this;
+    warn << prefix << "newspeer data oops\n";
+    reset ();
     return;
   }
   if (stattxtrx.match (data)) {
@@ -109,7 +146,7 @@ newspeer::process_line (const str data, int err)
 	state = MODE_CHANGE;
 	aio << "MODE STREAM\r\n";
       } else {
-	warnx << s << ": Unexpected input from peer: " << data << "\n";
+	warn << prefix << "Unexpected input from peer: " << data << "\n";
       }
     }
     else if (state == MODE_CHANGE) {
@@ -118,36 +155,40 @@ newspeer::process_line (const str data, int err)
       if (code[0] == '2') {
 	streamok = true;
 	if (code != "203")
-	  warnx << s << ": Unexpected (but ok) response to mode stream: "
+	  warn << prefix << "Unexpected (but ok) response to mode stream: "
 		<< data << "\n";
+	flush_queue ();
       }
       else if (code != "500") {
-	warnx << s << ": Unexpected response to mode stream: " << data << "\n";
+	warn << prefix << "Unexpected response to mode stream: " << data << "\n";
       }
     }
     else if (state == DHT_CHECK || state == FEEDING) {
-      state = FEEDING;
       if (code == "238") {				// CHECK, CHECKDHT
-	dhtok = true;
-	// send_article (stattxtrx[2]); // XXX
+	if (state == DHT_CHECK)
+	  dhtok = true;
+	send_article (stattxtrx[2]);
       } else if (code == "239" || code == "438") { // TAKETHIS, TAKEDHT
 	// fantastic. some article went over ok.
 	// XXX remove from list of articles to send
       } else if (code == "431" || code == "400" || code == "439") {
 	// something went wrong. try again later... XXX
-	warnx << s << ": dropping to-delay article on the floor " << data << "\n";
+	warn << prefix << "dropping to-delay article on the floor " << data << "\n";
       } else if (code == "480") {			// CHECK*, TAKE*
 	// permission denied.  disconnect and go away.
-	warnx << s << ": permission denied!\n";
+	warn << prefix << "permission denied!\n";
       }
       else if (code[0] != '5') {
-	warnx << s << ": Unexpected response to mode stream: " << data << "\n";
+	warn << prefix << "Unexpected response to check/take command: " << data << "\n";
+	if (state == DHT_CHECK)
+	  dhtok = false;
       }
+      state = FEEDING;
     }
     else
-      fatal << s << ": UNKNOWN STATE: " << state << "\n";
+      fatal << prefix <<  "UNKNOWN STATE: " << state << "\n";
   } else if (emptyrxx.match(data)) {
-    warnx << "empty line\n";
+    warn << prefix << "empty line\n";
   } else {
     // XXX what is correct error code?
     aio << "500 What?\r\n";
@@ -166,8 +207,8 @@ newspeer::flush_queue ()
       aio << "CHECKDHT " << id << "\r\n";
     } else {
       aio << "CHECK " << id << "\r\n";
-    } 
-    if (!streamok)
+    }
+    if (!streamok || state == DHT_CHECK)
       break;
   }
 }
@@ -179,4 +220,34 @@ newspeer::queue_article (str id)
     outq.pop_front ();
   }
   outq.push_back (id);
+  warn << hostname << ": queued " << id << "\n";
+  if (!aio) {
+    if (!conncb)
+      start_feed ();
+  }
+  else
+    flush_queue ();
+}
+
+void
+newspeer::send_article (str id)
+{
+  ptr<dbrec> key, d;
+
+  key = New refcounted<dbrec> (id, id.len ());
+  d = header_db->lookup (key);
+  if (!d) {
+    warn << hostname << ": was going to send " << id << " but not in db?!!\n";
+    return;
+  }
+
+  str header (d->value, d->len);
+  if (dhtok) {
+    aio << "TAKEDHT " << id << "\r\n";
+    aio << header << ".\r\n";
+  } else {
+    // dispatch a body fetch
+    // aio << "TAKETHIS " << id << "\r\n";
+    warn << hostname << ": would send " << id << " via TAKETHIS.\n";
+  }
 }

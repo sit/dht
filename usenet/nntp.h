@@ -43,7 +43,7 @@ class nntp {
 
   void cmd_article_cb (ptr<bool>, bool, chordID, dhash_stat, ptr<dhash_block>,
 		       vec<chordID>);
-  void read_post_cb (dhash_stat, ptr<insert_info>);
+  void read_post_cb (ptr<dbrec>, vec<str>, dhash_stat, ptr<insert_info>);
   void docontrol (str);
 
   vec<c_jmp_entry_t> cmd_table;

@@ -2,6 +2,7 @@
 #define _NEWSPEER_H_
 
 struct aios;
+struct timecb_t;
 
 enum peerstate {
   HELLO_WAIT,
@@ -16,6 +17,7 @@ class newspeer {
 
   int s;
   ptr<aios> aio;
+  timecb_t *conncb;
   peerstate state;
 
   // what remote host desires
@@ -29,7 +31,10 @@ class newspeer {
   void feed_connected (int t, int s);
   void process_line (const str data, int err);
 
+  void send_article (str id);
   void flush_queue ();
+
+  void reset ();
   
  public:
   static ptr<newspeer> alloc (str h, u_int16_t p);
@@ -39,7 +44,7 @@ class newspeer {
   bool add_pattern (str p);
   bool desired (str group);
   
-  void start_feed (int t);
+  void start_feed (int t = 60);
   void queue_article (str id);
 };
 

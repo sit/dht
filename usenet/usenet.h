@@ -1,5 +1,5 @@
 // -*-c++-*-
-/* $Id: usenet.h,v 1.4 2004/08/30 19:46:17 sit Exp $ */
+/* $Id: usenet.h,v 1.5 2004/09/07 21:12:34 sit Exp $ */
 
 /*
  *
@@ -49,5 +49,8 @@ private:
 };
 
 extern options *opt;
+
+/* newspeer.C (partial) */
+void feed_article (str id, const vec<str> &groups);
 
 #endif /* USENET */

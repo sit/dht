@@ -178,7 +178,7 @@ newsgroup::next (void)
   strbuf resp;
   resp << start << "\t";
 
-  if (more () &&
+  if (more () && len > 0 &&
       listrx.search (str (c, len))) {
     art = header_db->lookup(New refcounted<dbrec> (listrx[2],
 						   listrx[2].len ()));
