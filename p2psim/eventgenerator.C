@@ -1,6 +1,7 @@
 #include "eventgenerator.h"
 #include "parse.h"
 #include "eventgeneratorfactory.h"
+#include <lib9.h>
 #include <thread.h>
 #include <vector>
 using namespace std;
