@@ -112,6 +112,7 @@ public:
       return NULL;
     }
   
+#if 0
    void traverse (callback<void, KEY>::ref cb ) 
      {
        cache_entry *e = entries.first ();
@@ -122,8 +123,20 @@ public:
 	   e = next;
 	 }
      }
+#endif
 
-   VALUE *peek (KEY& k) {
+   void traverse (callback<void, const KEY&>::ref cb ) 
+     {
+       cache_entry *e = entries.first ();
+       while (e) 
+	 {
+	   cache_entry *next = entries.next (e); // in case cb deletes e
+	   cb (e->k);
+	   e = next;
+	 }
+     }
+
+   VALUE *peek (const KEY& k) {
     cache_entry *ad = entries[k];
     if (ad) {
       return &ad->v;

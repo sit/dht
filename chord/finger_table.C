@@ -1,10 +1,13 @@
 #include "chord.h"
 
+//#define FINGER_TABLE_CHECK
+
+
+
 finger_table::finger_table (ptr<vnode> v,
 			    ptr<locationtable> locs,
 			    chordID ID)
   : myvnode (v), locations (locs), myID (ID) 
-
 {
   fingers[0].start = fingers[0].first.n = myID;
   fingers[0].first.alive = true;
@@ -36,7 +39,12 @@ finger_table::operator[] (int i)
 bool
 finger_table::better_ith_finger (int i, chordID s)
 {
-  return betweenleftincl (fingers[i].start, fingers[i].first.n, s);
+  // ASSUMES: s is alive
+
+  if (!alive(i))
+    return true;
+  else
+    return betweenleftincl (fingers[i].start, fingers[i].first.n, s);
 }
 
 bool
@@ -87,6 +95,10 @@ finger_table::replacefinger (int i)
 void 
 finger_table::deletefinger (chordID &x)
 {
+  // XXX should deleted fingers be replaced immediatedly???
+  //     Seems yes if is a large pool of locations recorded
+  //     just for cases like these...
+
   if (x == myID) return;
   check ();
   for (int i = 1; i <= NBIT; i++) {
@@ -141,6 +153,12 @@ finger_table::countrefs (chordID &x)
 void
 finger_table::check ()
 {
+#ifndef FINGER_TABLE_CHECK 
+  // This takes too much CPU.  [josh]
+  return;
+#endif
+
+
   int j;
   int i;
   // Starting from successor, find first finger who is not me.
@@ -290,6 +308,11 @@ finger_table::stabilize_getpred_cb (chordID sd,
 	(p, r, wrap (this, &finger_table::stabilize_getpred_cb_ok, sd));
     } else {
       nout_continuous--;
+
+      // Shouldn't it be the case that if we ask our successor a
+      // question (in this case, for its predecessor), then it already
+      // knowns about us -- ie. there's no need to notify it??
+      // --josh
       myvnode->notify (sd, myID);
     }
   }
@@ -309,14 +332,41 @@ finger_table::stabilize_getpred_cb_ok (chordID sd,
 }
 
 
+//
+// This routine tries to keep as finger table entries pointing at the
+// optimal chord nodes, ie. those closest to the power-of-2 divisions
+// around the ring.  It's impossible to achieve global optimality
+// because a chord node cannot omniscently and in real-time see when
+// other nodes join and leave the system.  Instead, the finger table
+// should be optimal w.r.t. the joins and leaves this node has
+// observed.
+//
+// Consider the case where nodes never leave:
+//    - new nodes are offered to all fingers by calling
+//    updatefinger().  therefore all fingers are guaranteed to be
+//    optimal.
+//
+// Now consider the actions taken when a node dies:
+//   - when node x dies, exactly those finger table entries that
+//   pointed at it should be changed to point at the next closest
+//   known node succeeding x, ie. closestsucc(x).  This is the optimal 
+//   thing to do.  (XXX this is not what is currently done XXX)
+//
+// Note: the result of this is that fingers are never dead.
+
+//
+// Now the proceeding text describes what the optimal steps to take
+// are given the information we've observed.  But there are active 
+// steps taken as well to keep fingers up-to-date, ie. to approach
+// the omniscent global optimality... these are...
+
 void
 finger_table::stabilize_finger ()
 {
   int i = f % (NBIT+1);
 
   if (i == 0) {
-    if (stable_fingers) stable_fingers2 = true;
-    else stable_fingers2 = false;
+    stable_fingers2 = stable_fingers;
     stable_fingers = true;
   }
 
@@ -328,15 +378,6 @@ finger_table::stabilize_finger ()
     stable_fingers = false;
   }
 
-  // the last finger we stabilized might be a better finger
-  // for the current finger under consideration. if so, we
-  // can skip this finger and go to the next.
-  if (alive (i-1)) {
-    chordID s = fingers[i-1].first.n;
-    updatefinger (s); // update all places where this guy would be better
-    i++;
-  }
-  
   if (i <= NBIT) {
     nout_backoff++;
     if (alive (i)) {

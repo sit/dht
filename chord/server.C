@@ -312,10 +312,8 @@ void
 vnode::get_fingers_cb (chordID x, chord_getfingersres *res,  clnt_stat err) 
 {
   if (err) {
-    net_address dr;
     warnx << "get_fingers_cb: RPC failure " << err << "\n";
   } else if (res->status) {
-    net_address dr;
     warnx << "get_fingers_cb: RPC error " << res->status << "\n";
   } else {
     // XXX we should challenge the new entries!

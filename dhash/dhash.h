@@ -229,7 +229,7 @@ class dhash {
   void get_keys_traverse_cb (ptr<vec<chordID> > vKeys,
 			     chordID mypred,
 			     chordID predid,
-			     chordID key);
+			     const chordID &key);
 
   void init_key_status ();
   void transfer_initial_keys ();
@@ -242,14 +242,14 @@ class dhash {
   void replicate_key_cb (unsigned int replicas_done, cbstat_t cb, chordID key,
 			 dhash_stat err);
 
-  void install_keycheck_timer ();
-  void check_keys_timer_cb ();
-  void check_keys_traverse_cb (chordID key);
+  void install_keycheck_timer (bool first, chordID pred);
+  void check_keys_timer_cb (bool first, chordID pred);
+  void check_keys_traverse_cb (const chordID &key);
 
   void install_replica_timer ();
   void check_replicas_cb ();
   void check_replicas ();
-  void check_replicas_traverse_cb (chordID to, chordID key);
+  void check_replicas_traverse_cb (chordID to, const chordID &key);
   void fix_replicas_txerd (dhash_stat err);
 
   void change_status (chordID key, dhash_stat newstatus);
@@ -279,11 +279,11 @@ class dhash {
 
   void transfer_key_cb (chordID key, dhash_stat err);
 
-  char responsible(chordID& n);
+  char responsible(const chordID& n);
 
   void printkeys ();
-  void printkeys_walk (chordID k);
-  void printcached_walk (chordID k);
+  void printkeys_walk (const chordID &k);
+  void printcached_walk (const chordID &k);
 
   ptr<dbrec> id2dbrec(chordID id);
   chordID dbrec2id (ptr<dbrec> r);
@@ -314,7 +314,7 @@ class dhash {
   void print_stats ();
   void stop ();
   void fetch (chordID id, cbvalue cb);
-  dhash_stat key_status(chordID n);
+  dhash_stat key_status(const chordID &n);
 
   static bool verify (chordID key, dhash_ctype t, char *buf, int len);
   static bool verify_content_hash (chordID key,  char *buf, int len);

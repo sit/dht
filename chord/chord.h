@@ -203,9 +203,9 @@ class finger_table : public stabilizable {
   bool succ_alive ();
   chordID succ ();
 
-  bool alive (int i) { return fingers[i].first.alive; };
+  bool alive (int i) { return fingers[i].first.alive; }
   chordID operator[] (int i);
-  chordID start (int i) { return fingers[i].start; };
+  chordID start (int i) { return fingers[i].start; }
 
   int countrefs (chordID &x);
   void print ();

@@ -1,4 +1,4 @@
-/* $Id: sfsrodb_core.h,v 1.9 2002/02/14 22:14:30 cates Exp $ */
+/* $Id: sfsrodb_core.h,v 1.10 2002/04/02 16:38:48 cates Exp $ */
 
 /*
  *
@@ -45,5 +45,6 @@ sfs_hash sfsrodb_put (void *data, size_t len);
 void sfsrodb_put (ptr <rabin_priv> sk, void *data, size_t len);
 ptr<sfsro_data> sfsrodb_get (bigint key, dhash_ctype t = DHASH_CONTENTHASH);
 
+void sfsrodb_core_sigusr1 ();
 
 #endif /* _SFSRODB_CORE_H_ */

@@ -84,7 +84,7 @@ dhash::dhash(str dbname, vnode *node, int k, int ss, int cs, int _ss_mode) :
   init_key_status ();
   update_replica_list ();
   install_replica_timer ();
-  install_keycheck_timer ();
+  install_keycheck_timer (true, host_node->my_pred ());
   transfer_initial_keys ();
 
   // RPC demux
@@ -290,7 +290,7 @@ void
 dhash::get_keys_traverse_cb (ptr<vec<chordID> > vKeys,
 			     chordID mypred,
 			     chordID predid,
-			     chordID key)
+			     const chordID &key)
 {
   
   if (between (mypred, predid, key)) 
@@ -373,14 +373,15 @@ dhash::install_replica_timer ()
 {
   check_replica_tcb = delaycb (rc_delay, 0, 
 			       wrap (this, &dhash::check_replicas_cb));
-};
+}
+
 
 void 
-dhash::install_keycheck_timer () 
+dhash::install_keycheck_timer (bool first, chordID pred) 
 {
   check_key_tcb = delaycb (kc_delay, 0, 
-			   wrap (this, &dhash::check_keys_timer_cb));
-};
+			   wrap (this, &dhash::check_keys_timer_cb, first, pred));
+}
 
 /* O( (number of replicas)^2 ) (but doesn't assume anything about
 ordering of chord::succlist*/
@@ -410,7 +411,7 @@ dhash::check_replicas ()
 }
 
 void
-dhash::check_replicas_traverse_cb (chordID to, chordID key)
+dhash::check_replicas_traverse_cb (chordID to, const chordID &key)
 {
   if (key_status (key) == DHASH_STORED)
     transfer_key (to, key, DHASH_REPLICA, wrap (this, 
@@ -424,17 +425,25 @@ dhash::fix_replicas_txerd (dhash_stat err)
 }
 
 void
-dhash::check_keys_timer_cb () 
+dhash::check_keys_timer_cb (bool first, chordID pred)
 {
-  // printkeys ();
-  key_store.traverse (wrap (this, &dhash::check_keys_traverse_cb));
-  key_replicate.traverse (wrap (this, &dhash::check_keys_traverse_cb));
-  key_cache.traverse (wrap (this, &dhash::check_keys_traverse_cb));
-  install_keycheck_timer ();
+  chordID current_pred = host_node->my_pred ();
+
+  // only if the predecessor has changed do we need to
+  // check the keys.  first handles the initial condition
+  // where we don't have a previous predecessor to compare
+  // against.
+  if (first ||  current_pred != pred) {
+    // printkeys ();
+    key_store.traverse (wrap (this, &dhash::check_keys_traverse_cb));
+    key_replicate.traverse (wrap (this, &dhash::check_keys_traverse_cb));
+    key_cache.traverse (wrap (this, &dhash::check_keys_traverse_cb));
+  }
+  install_keycheck_timer (false, current_pred);
 }
 
 void
-dhash::check_keys_traverse_cb (chordID key) 
+dhash::check_keys_traverse_cb (const chordID &key) 
 {
   if ( (responsible (key)) && (key_status(key) != DHASH_STORED)) {
     change_status (key, DHASH_STORED);
@@ -822,7 +831,11 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
     else
       bytes_stored += arg->data.size ();
     
+#if 1
     db->insert (k, d, wrap(this, &dhash::store_cb, arg->type, id, cb));
+#else
+    store_cb (arg->type, id, cb, 0);
+#endif
   } else
     cb (DHASH_STORE_PARTIAL);
 }
@@ -897,7 +910,7 @@ dhash::change_status (chordID key, dhash_stat newstat)
 
 
 dhash_stat
-dhash::key_status(chordID n) 
+dhash::key_status(const chordID &n) 
 {
   dhash_stat * s_stat = key_store.peek (n);
   if (s_stat != NULL)
@@ -915,7 +928,7 @@ dhash::key_status(chordID n)
 }
 
 char
-dhash::responsible(chordID& n) 
+dhash::responsible(const chordID& n) 
 {
   store_state *ss = pst[n];
   if (ss) return true; //finish any store we start
@@ -971,7 +984,7 @@ dhash::printkeys ()
 }
 
 void
-dhash::printkeys_walk (chordID k) 
+dhash::printkeys_walk (const chordID &k) 
 {
   dhash_stat status = key_status (k);
   if (status == DHASH_STORED)
@@ -983,7 +996,7 @@ dhash::printkeys_walk (chordID k)
 }
 
 void
-dhash::printcached_walk (chordID k) 
+dhash::printcached_walk (const chordID &k) 
 {
   warn << host_node->my_ID () << " " << k << " CACHED\n";
 }

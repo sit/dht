@@ -1,4 +1,4 @@
-/* $Id: sfsrodb.C,v 1.20 2002/02/14 22:14:30 cates Exp $ */
+/* $Id: sfsrodb.C,v 1.21 2002/04/02 16:38:48 cates Exp $ */
 
 /*
  * Copyright (C) 1999 Kevin Fu (fubob@mit.edu)
@@ -1005,6 +1005,10 @@ main (int argc, char **argv)
     warnx << "export directory : " << exp_dir << "\n";
     warnx << "SK keyfile       : " << sk_file << "\n";
   }
+
+
+
+  sigcb(SIGUSR1, wrap (&sfsrodb_core_sigusr1));
 
   return (sfsrodb_main (exp_dir, sk_file));
 }

@@ -143,8 +143,14 @@ locationtable::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
     warn << "locationtable::doRPCcb: failed: " << err << "\n";
     chordnode->deletefingers (C->ID);
   } else if (C->s > 0) {
-    u_int64_t lat = getusec () - C->s;
-    update_latency (C->ID, lat, (C->progno == DHASH_PROGRAM));
+    u_int64_t now = getusec ();
+    // prevent overflow, caused by time reversal
+    if (now >= C->s) {
+      u_int64_t lat = now - C->s;
+      update_latency (C->ID, lat, (C->progno == DHASH_PROGRAM));
+    } else {
+      warn << "*** Ignoring timewarp: C->s " << C->s << " > now " << now << "\n";
+    }
   }
 
   (C->cb) (err);
@@ -152,7 +158,7 @@ locationtable::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
   if (!c->xprt ()->reliable) {
     rpc_done (C->seqno);
     delete C;
-  };
+  }
 }
 
 void

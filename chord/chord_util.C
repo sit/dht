@@ -82,7 +82,7 @@ uniform_random(double a, double b)
 }
 
 chordID
-incID (chordID &n)
+incID (const chordID &n)
 {
   chordID s = n + 1;
   chordID b (1);
@@ -94,7 +94,7 @@ incID (chordID &n)
 }
 
 chordID
-decID (chordID &n)
+decID (const chordID &n)
 {
   chordID p = n - 1;
   chordID b (1);
@@ -106,7 +106,7 @@ decID (chordID &n)
 }
 
 chordID
-successorID (chordID &n, int p)
+successorID (const chordID &n, int p)
 {
   chordID s;
   chordID t (1);
@@ -122,7 +122,7 @@ successorID (chordID &n, int p)
 }
 
 chordID
-predecessorID (chordID &n, int p)
+predecessorID (const chordID &n, int p)
 {
   chordID s;
   chordID t (1);
@@ -139,7 +139,7 @@ predecessorID (chordID &n, int p)
 
 // Check whether n in (a,b) on the circle.
 bool
-between (chordID &a, chordID &b, chordID &n)
+between (const chordID &a, const chordID &b, const chordID &n)
 {
   bool r;
   if (a == b) {
@@ -153,7 +153,7 @@ between (chordID &a, chordID &b, chordID &n)
 }
 
 bool
-betweenleftincl (chordID &a, chordID &b, chordID &n)
+betweenleftincl (const chordID &a, const chordID &b, const chordID &n)
 {
   bool r;
   if ((a == b) && (n == a)) {
@@ -167,7 +167,7 @@ betweenleftincl (chordID &a, chordID &b, chordID &n)
 }
 
 bool
-betweenrightincl (chordID &a, chordID &b, chordID &n)
+betweenrightincl (const chordID &a, const chordID &b, const chordID &n)
 {
   bool r;
   if ((a == b) && (n == a)) {
@@ -181,7 +181,7 @@ betweenrightincl (chordID &a, chordID &b, chordID &n)
 }
 
 chordID
-distance(chordID a, chordID b) 
+distance(const chordID &a, const chordID &b) 
 {
   if (a < b) return (b - a);
   else {
@@ -191,7 +191,7 @@ distance(chordID a, chordID b)
 }
 
 chordID
-diff (chordID a, chordID b)
+diff (const chordID &a, const chordID &b)
 {
   chordID diff = (b - a);
   if (diff > 0) return diff;
@@ -199,7 +199,7 @@ diff (chordID a, chordID b)
 }
 
 u_long
-topbits (int n, chordID a)
+topbits (int n, const chordID &a)
 {
   assert (n <= 32);
   chordID x = a >> (NBIT - n);
@@ -279,7 +279,7 @@ make_chordID (str hostname, int port, int index = 0)
 }
 
 bool
-is_authenticID (chordID &x, sfs_hostname n, int p, int vnode)
+is_authenticID (const chordID &x, sfs_hostname n, int p, int vnode)
 {
   chordID ID;
   

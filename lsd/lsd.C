@@ -26,6 +26,21 @@
 #include "chord.h"
 #include "dhash.h"
 #include "parseopt.h"
+#include <sys/types.h>
+
+//#define PROFILING 
+
+// When a process starts up profiling is not happening.  But by
+// sending a SIGUSR1, profiling is turned on.  (Another SIGUSR1 turns
+// it off.)  This always specific, user-controlled periods of time to
+// be profiled.  Program must be compiled with -pg for this to work.
+
+
+#ifdef PROFILING 
+extern "C" {
+  void moncontrol(int);
+}
+#endif
 
 EXITFN (cleanup);
 
@@ -132,21 +147,48 @@ halt ()
   exit (0);
 }
 
+
+
+#ifdef PROFILING
+void
+toggle_profiling ()
+{
+  static int pfstate = 1;
+  if (pfstate)
+    warn << "Turning profiling off\n";
+  else
+    warn << "Turning profiling on\n";
+
+  pfstate = !pfstate;
+  moncontrol (pfstate ? 1 : 0);
+}
+#endif
+
 void
 stats () 
 {
-  chordnode->stats ();
-  for (int i = 0 ; i < ndhash; i++)
-    dh[i]->print_stats ();
+#ifdef PROFILING
+  toggle_profiling ();
+#else
+  //  chordnode->stats ();
+  //  for (int i = 0 ; i < ndhash; i++)
+  //    dh[i]->print_stats ();
   chordnode->print ();
+#endif
 }
+
+
 
 void
 stop ()
 {
+#if 1
   chordnode->stop ();
   for (int i = 0 ; i < ndhash; i++)
     dh[i]->stop ();
+#else
+  setenv ("LOG_FILE", "log", 1);
+#endif
 }
 
 static void
@@ -163,6 +205,11 @@ usage ()
 int
 main (int argc, char **argv)
 {
+
+#ifdef PROFILING
+  toggle_profiling ();
+#endif
+
   int vnode = 1;
   setprogname (argv[0]);
   sfsconst_init ();
@@ -262,6 +309,9 @@ main (int argc, char **argv)
   sigcb(SIGUSR1, wrap (&stats));
   sigcb(SIGUSR2, wrap (&stop));
   sigcb(SIGHUP, wrap (&halt));
+
+  assert (setlinebuf (stdout) == 0);
+  assert (setlinebuf (stderr) == 0);
 
   if (p2psocket) 
     startclntd();

@@ -1,5 +1,3 @@
-/* $Id: sfsrodb_core.C,v 1.22 2002/03/18 23:33:36 fdabek Exp $ */
-
 /*
  *
  * Copyright (C) 1999 Kevin Fu (fubob@mit.edu)
@@ -27,15 +25,37 @@
 #include "dhash.h"
 #include "dhash_prot.h"
 #include "arpc.h"
+#include "sys/time.h"
+
+#ifndef timespecsub
+#define timespecsub(vvp, uvp)						\
+	do {								\
+		(vvp)->tv_sec -= (uvp)->tv_sec;				\
+		(vvp)->tv_nsec -= (uvp)->tv_nsec;			\
+		if ((vvp)->tv_nsec < 0) {				\
+			(vvp)->tv_sec--;				\
+			(vvp)->tv_nsec += 1000000000;			\
+		}							\
+	} while (0)
+#endif
 
 long out=0;
+long blkcnt = 0;
 
 #define SMTU MTU
+
+bool usr1 = false;
+
+void
+sfsrodb_core_sigusr1 ()
+{
+  usr1 = !usr1;  // toggle
+}
 
 static void
 check_cbs () 
 {
-  while (out >= 100) 
+  while (out >= 100)
     acheck();
 }
 
@@ -73,22 +93,35 @@ t()
 }
 
   
+static timespec periodic;
+
 
 static void
 sfsrodb_put_cb (timespec ts, bool failed, chordID key)
 {
-#if 0
-  timespec ts2;
-  clock_gettime (CLOCK_REALTIME, &ts2);
-  uint32 ns = 1000000000 * (ts2.tv_sec - 1 - ts.tv_sec) + 1000000000 + ts2.tv_nsec - ts.tv_nsec;
-  uint32 us = ns / 1000;
-  uint32 ms = us / 1000;
+  if (blkcnt % 1000 == 0) {
+    static timespec diff;
+    clock_gettime (CLOCK_REALTIME, &diff);
+    timespecsub(&diff, &periodic);
+    warn << blkcnt << ", sec/1k " << diff.tv_sec << "\n";
+    clock_gettime (CLOCK_REALTIME, &periodic);
+  }
 
-  //warn ("ts2  %d:%09d\n", int (ts2.tv_sec), int (ts2.tv_nsec));
-  //warn ("ts   %d:%09d\n", int (ts.tv_sec), int (ts.tv_nsec));
+  blkcnt++;
 
-  warnx << ms << " ms\n";
-#endif
+  if (usr1) {
+    timespec ts2;
+    clock_gettime (CLOCK_REALTIME, &ts2);
+    timespec diff = ts2;
+    timespecsub(&diff, &ts);
+    
+    uint32 ms = 1000 * diff.tv_sec  + diff.tv_nsec / 1000000;
+    //warn ("ts2  %ld:%09ld\n", ts2.tv_sec, ts2.tv_nsec);
+    //warn ("ts   %ld:%09ld\n", ts.tv_sec, ts.tv_nsec);
+    //warn ("df   %ld:%09ld\n", diff.tv_sec, diff.tv_nsec);
+    warn << ms << " ms (" << blkcnt << ")\n";
+    //  warnx << ms << "\n";
+  }
 
   out--;
   if (failed)
@@ -100,14 +133,14 @@ sfsrodb_put_cb (timespec ts, bool failed, chordID key)
 sfs_hash
 sfsrodb_put (void *data, size_t len)
 {
+  if (blkcnt == 0)  clock_gettime (CLOCK_REALTIME, &periodic);
+
   sfs_hash h;
   create_sfsrofh (&h, (char *)data, len);
-
-
   check_cbs ();
   out++;
 
-  //warn << t() << " -- INSERT\n";
+  //warn << t() << " -- INSERT (" << blkcnt << ")\n";
   timespec ts;
   clock_gettime (CLOCK_REALTIME, &ts);
   dhash->insert ((char *)data, len, wrap (sfsrodb_put_cb, ts));
@@ -119,8 +152,11 @@ sfsrodb_put (void *data, size_t len)
 void
 sfsrodb_put (ptr <rabin_priv> sk, void *data, size_t len)
 {
+  if (blkcnt == 0) clock_gettime (CLOCK_REALTIME, &periodic);
+
   check_cbs ();
   out++;
+
   //warn << t() << " -- INSERT\n";
   timespec ts;
   clock_gettime (CLOCK_REALTIME, &ts);
@@ -172,3 +208,11 @@ sfsrodb_get (bigint key, dhash_ctype t)
 }
 
 
+
+// 53300 - 54300:                       (107 sec/1k)
+// 71000 = Mon Mar 25 17:54:35 EST 2002
+// 74000 = Mon Mar 25 18:01:17 EST 2002 (134 sec/1k)
+// 86000 = Mon Mar 25 18:27:12 EST 2002 (129 sec/1k)
+// 93000 = Mon Mar 25 18:43:34 EST 2002 (140 sec/1k)
+// 98000 = Mon Mar 25 18:59:46 EST 2002 (194 sec/1k)
+// 136000 - 140000                         (380 sec/1k)
