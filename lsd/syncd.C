@@ -4,21 +4,26 @@
 #include <location.h>
 #include <locationtable.h>
 
-void
+static void
 usage () 
 {
-  fatal << "syncer: some args\n";
+  warnx << "Usage: " << progname << " -j hostname:port\n"
+        << "\t[-v <number of vnodes>]\n"
+        << "\t[-d <dbprefix>]\n"
+        << "\t[-e <efrags>]\n"
+        << "\t[-c <dfrags>]\n";
+  exit (1);
 }
 
 int 
 main (int argc, char **argv) 
 {
   str db_name = "/var/tmp/db";
-  str p2psocket = "/tmp/chord-sock";
   char *logfname = NULL;
   int vnodes = 1;
-  int efrags=14, dfrags=7;
+  int efrags = 14, dfrags = 7;
   char ch;
+
   chord_node host;
   host.r.port = 0;
 
@@ -26,30 +31,21 @@ main (int argc, char **argv)
   
   while ((ch = getopt (argc, argv, "d:S:v:e:c:p:t:j:"))!=-1)
     switch (ch) {
-      
     case 'd':
       db_name = optarg;
       break;
-      
     case 'L':
       logfname = optarg;
       break;
-
     case 'v':
       vnodes = atoi (optarg);
       break;
-
     case 'e':
       efrags = atoi (optarg);
       break;
     case 'c':
       dfrags = atoi  (optarg);
       break;
-
-    case 'S':
-      p2psocket = optarg;
-      break;
-
     case 'j':
       {
 	char *bs_port = strchr (optarg, ':');
@@ -80,8 +76,8 @@ main (int argc, char **argv)
       break;
     }
 
-  assert (dfrags > 0 && efrags > 0);
-  assert (host.r.port > 0);
+  if (! (dfrags > 0 && efrags > 0 && host.r.port > 0))
+    usage ();
 
   ptr<locationtable> locations = New refcounted<locationtable> (1024);
   
