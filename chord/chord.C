@@ -54,16 +54,17 @@ vnode::vnode (ptr<locationtable> _locations, ptr<fingerlike> stab,
   fingers->init (mkref(this), locations, myID);
 
   successors = New refcounted<succ_list> (mkref(this), locations, myID);
-
-  toes = New refcounted<toe_table> ();
-  toes->init (mkref(this), locations, myID);
-
   stabilizer = New refcounted<stabilize_manager> (myID);
 
   stabilizer->register_client (successors);
   stabilizer->register_client (mkref (this));
   stabilizer->register_client (fingers);
-  stabilizer->register_client (toes);
+
+  if (lookup_mode == CHORD_LOOKUP_PROXIMITY) {
+    toes = New refcounted<toe_table> ();
+    toes->init (mkref(this), locations, myID);
+    stabilizer->register_client (toes);
+  }
 
 #ifndef PNODE
   // If vnode's share a locationtable, then we don't need to register this
@@ -180,10 +181,10 @@ vnode::print ()
   successors->print ();
 
   warnx << "pred : " << my_pred () << "\n";
-#ifdef TOES
-  warnx << "------------- toes ----------------------------------\n";
-  toes->dump ();
-#endif /*TOES*/
+  if (lookup_mode == CHORD_LOOKUP_PROXIMITY) {
+    warnx << "------------- toes ----------------------------------\n";
+    toes->dump ();
+  }
   warnx << "=====================================================\n";
 
 }

@@ -101,7 +101,7 @@ class tcp_manager : public rpc_manager {
 };
 
 // congestion control udp implementation.
-#define MAX_REXMIT 8
+#define MAX_REXMIT 4
 #define MIN_RPC_FAILURE_TIMER 8
 class stp_manager : public rpc_manager {
   static const float GAIN = 0.2;
