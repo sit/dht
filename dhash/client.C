@@ -358,7 +358,7 @@ dhashcli::retrieve2_succs_cb (chordID blockID, vec<chord_node> succs, chordstat 
 	  << "insufficient number of successors returned!\n";
     rcvs.remove (rs);
     rs->complete (DHASH_CHORDERR, NULL); // failure
-    rs = NULL;    
+    rs = NULL;
     return;
   }
   
@@ -374,7 +374,7 @@ dhashcli::retrieve2_succs_cb (chordID blockID, vec<chord_node> succs, chordstat 
     arg->key = blockID;
     clntnode->locations->get_node (clntnode->my_ID (), &arg->from);
     arg->start = 0;
-    arg->len = 1024;
+    arg->len = 65536; // 64K is about as big as an IP packet will go...
     arg->cookie = 0;
     arg->nonce = 0;
     
@@ -413,10 +413,17 @@ dhashcli::retrieve2_fetch_cb (chordID blockID, u_int i,
 	  << "\n";
     // XXX dispatch to a new successor.
     return;
+  } else if (res->compl_res->attr.size > res->compl_res->res.size()) {
+    warnx << "we requested too short of a block!\n";
+    assert (0);
   } else {
     warnx << "fetch succeeded: " << blockID
 	  << " from successor " << i+1 << "\n";
   }
+
+  bigint h = compute_hash (res->compl_res->res.base (), res->compl_res->res.size ());
+  warnx << "Got frag: " << i << " " << h << " " << res->compl_res->res.size () << "\n";
+
 
   // strip off the 4 bytes header to get the fragment
   assert (res->compl_res->res.size () >= 4);
@@ -575,7 +582,7 @@ dhashcli::insert2_succs_cb (ref<dhash_block> block, cbinsert_t cb,
 
       warn << "Frag " << i << " to " << succs[i].x << "\n";
       bigint h = compute_hash (arg->data.base (), arg->data.size ());
-      warn << "Put frag: " << i << " " << h << "\n";
+      warn << "Put frag: " << i << " " << h << " " << arg->data.size () << "\n";
 
 
       ref<dhash_storeres> res = New refcounted<dhash_storeres> (DHASH_OK);
