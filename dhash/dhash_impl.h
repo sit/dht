@@ -66,14 +66,14 @@ struct keyhash_meta {
 
 struct missing_state {
   ihash_entry <missing_state> link;
-  blockID key;
+  bigint key;
   ptr<location> from;
-  missing_state (blockID key, ptr<location> from) : key (key), from (from) {}
+  missing_state (bigint key, ptr<location> from) : key (key), from (from) {}
 };
 
 class dhash_impl : public dhash {
-  ihash<blockID, missing_state,
-    &missing_state::key, &missing_state::link, bhashID> missing_q;
+  ihash<bigint, missing_state,
+    &missing_state::key, &missing_state::link, hashID> missing_q;
   enum { MISSING_OUTSTANDING_MAX = 15 };
   u_int missing_outstanding;
 
@@ -114,8 +114,8 @@ class dhash_impl : public dhash {
 
   unsigned keyhash_mgr_rpcs;
 
-  void missing (ptr<location> from, blockID key);
-  void missing_retrieve_cb (blockID key, dhash_stat err, ptr<dhash_block> b,
+  void missing (ptr<location> from, bigint key);
+  void missing_retrieve_cb (bigint key, dhash_stat err, ptr<dhash_block> b,
 			    route r);
   
   void sendblock (ptr<location> dst, bigint blockID, dhash_ctype ct, bool last, callback<void>::ref cb);
@@ -197,7 +197,7 @@ class dhash_impl : public dhash {
   char responsible(const chordID& n);
 
   void printkeys ();
-  void printkeys_walk (const blockID &k);
+  void printkeys_walk (const chordID &k);
   void printcached_walk (const chordID &k);
 
   void dbwrite (ref<dbrec> key, ref<dbrec> data);
@@ -236,5 +236,5 @@ class dhash_impl : public dhash {
   void register_storecb_cb (int nonce, cbstorecbuc_t cb);
   void unregister_storecb_cb (int nonce);
 
-  dhash_stat key_status (const blockID &n);
+  dhash_stat key_status (const chordID &n);
 };

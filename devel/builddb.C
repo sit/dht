@@ -118,7 +118,7 @@ main (int argc, char** argv)
     chordID ID = compute_hash (block, block_size);
     if (between (minID, maxID, ID)) {
       n++;
-      ref<dbrec> key = id2dbrec(ID, DHASH_FRAG, DHASH_CONTENTHASH);
+      ref<dbrec> key = id2dbrec(ID);
       ptr<dbrec> data = marshal_dhashblock (&block[0], block_size);
       ptr<dbrec> frag = gen_frag (data);
       db->insert (key, frag);

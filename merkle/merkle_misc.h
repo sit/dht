@@ -77,36 +77,14 @@ tobigint (const merkle_hash &h)
 #endif
 }
 
-static inline blockID
-toblockID (const merkle_hash &h)
-{
-  bigint i = tobigint (h);
-  dhash_dbtype d = (dhash_dbtype)h.bytes[0];
-  dhash_ctype c = (dhash_ctype)h.bytes[1];
-  return blockID (i>>16, c, d);
-}
 
 static inline ref<dbrec>
-id2dbrec(chordID id, dhash_dbtype dt, dhash_ctype ct) 
+id2dbrec(chordID id)
 {
-  char buf[blockID::size];
-  bzero (buf, blockID::size);
-  buf[sha1::hashsize] = (char)ct;
-  buf[sha1::hashsize+1] = (char)dt;
+  char buf[sha1::hashsize];
+  bzero (buf, sha1::hashsize);
   mpz_get_rawmag_be (buf, sha1::hashsize, &id);
-  return New refcounted<dbrec> (buf, blockID::size);
-}
-
-static inline ref<dbrec>
-id2dbrec(chordID id) 
-{
-  return id2dbrec(id, (dhash_dbtype)0, (dhash_ctype)0);
-}
-
-static inline ref<dbrec>
-id2dbrec(const blockID &id)
-{
-  return id2dbrec(id.ID, id.dbtype, id.ctype);
+  return New refcounted<dbrec> (buf, sha1::hashsize);
 }
 
 
@@ -117,11 +95,6 @@ dbrec2id (ptr<dbrec> r)
   return tobigint (to_merkle_hash (r));
 }
 
-static inline blockID
-dbrec2blockID (ptr<dbrec> r)
-{
-  return toblockID (to_merkle_hash (r));
-}
 
 static inline vec<merkle_hash>
 database_get_keys (dbfe *db, u_int depth, const merkle_hash &prefix)

@@ -18,7 +18,7 @@ private:
   void setbit (unsigned int i, bool on);
 
 public:
-  enum {  size = sha1::hashsize+2 };
+  enum {  size = sha1::hashsize };
   enum {  NUM_SLOTS = 27 };
   u_int8_t bytes[size];
 

@@ -11,7 +11,7 @@
 // see comment in merkle_syncer::doRPC for this work around.
 struct RPC_delay_args;
 typedef callback<void, RPC_delay_args *>::ref rpcfnc_t;
-typedef callback<void, blockID>::ref missingfnc_t;
+typedef callback<void, bigint>::ref missingfnc_t;
 
 class merkle_syncer {
  private:

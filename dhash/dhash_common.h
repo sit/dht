@@ -9,7 +9,7 @@
 #define DHASHCLIENT_NO_RETRY_ON_LOOKUP   0x2
 
 struct blockID {
-  enum { size = sha1::hashsize+2 };
+  enum { size = sha1::hashsize };
 
   chordID ID;
   dhash_ctype ctype;
