@@ -7,42 +7,14 @@
 #include <usenet.h>
 #include <nntp.h>
 
-char *hello = "200 DHash news server - posting allowed\r\n";
-char *unknown = "500 command not recognized\r\n";
-char *listb = "215 list of newsgroups follows\r\n";
-char *period = ".\r\n";
-char *groupb = "211 ";
-char *groupe = " group selected\r\n";
-char *badgroup = "411 no such news group\r\n";
-char *nogroup = "412 No newsgroup selected\r\n";
-char *syntax = "501 command syntax error\r\n";
-char *overview = "224 Overview information follows\r\n";
-char *articleb = "220 ";
-char *articlee = " article retrieved - head and body follow\r\n";
-char *postgo = "340 send article to be posted. End with <CR-LF>.<CR-LF>\r\n";
-char *postok = "240 article posted ok\r\n";
-char *postbad = "441 posting failed\r\n";
-char *noarticle = "430 no such article found\r\n";
-char *help = "100 help text follow\r\n";
-char *ihavesend = "335 send article to be transferred.  End with <CR-LF>.<CR-LF>\r\n";
-char *ihaveok = "235 article transferred ok\r\n";
-char *ihaveno = "435 article not wanted - do not send it\r\n";
-char *ihavebad = "436 transfer failed - try again later\r\n";
-char *stream = "203 Streaming is OK\r\n";
-char *checksendb = "238 ";
-char *checksende = " no such article found, please send it to me\r\n";
-char *checknob = "438 ";
-char *checknoe = " already have it, please don't send it to me\r\n";
-char *takethisokb = "239 ";
-char *takethisoke = " article transferred ok\r\n";
-char *takethisbadb = "439 ";
-char *takethisbade = " article transfer failed\r\n";
+#define TIMEOUT 600
 
 nntp::nntp (int _s) : s (_s), process_input (wrap (this, &nntp::command)),
 		      posting (false)
 {
   warn << "connect " << s << "\n";
   fdcb (s, selread, wrap (this, &nntp::input));
+  timeout = delaycb (TIMEOUT, wrap (this, &nntp::died));
 
   cmd_hello("MODE READER\r\n");
   fdcb (s, selwrite, wrap (this, &nntp::output));
@@ -67,6 +39,17 @@ nntp::~nntp (void)
   fdcb (s, selread, NULL);
   fdcb (s, selwrite, NULL);
   close (s);
+  if (timeout) {
+    timecb_remove (timeout);
+    timeout = NULL;
+  }
+}
+
+void
+nntp::died (void)
+{
+  timeout = NULL;
+  delete this;
 }
 
 void
@@ -79,6 +62,8 @@ void
 nntp::output (void)
 {
   warn << "out: " << out << "\n";
+  timecb_remove (timeout);
+  timeout = delaycb (TIMEOUT, wrap (this, &nntp::died));
 
   int left = out.tosuio ()->output (s);
 
@@ -92,9 +77,10 @@ nntp::output (void)
 void
 nntp::input (void)
 {
-  int res;
+  timecb_remove (timeout);
+  timeout = delaycb (TIMEOUT, wrap (this, &nntp::died));
 
-  res = in.input (s);
+  int res = in.input (s);
   if (res <= 0) {
     warn << "bye bye happiness " << s << "\n";
     delete this;
@@ -106,6 +92,7 @@ nntp::input (void)
 }
 
 static rxx cmdrx ("(.+\\r\\n)", "m");
+char *unknown = "500 command not recognized\r\n";
 
 void
 nntp::command (void)
@@ -133,7 +120,12 @@ nntp::command (void)
   }
 }
 
+// --- basic commands
+
 static rxx hellorx ("^MODE (READER)?(STREAM)?", "i");
+char *hello = "200 DHash news server - posting allowed\r\n";
+char *stream = "203 Streaming is OK\r\n";
+char *syntax = "501 command syntax error\r\n";
 
 void
 nntp::cmd_hello (str c) {
@@ -152,7 +144,30 @@ nntp::cmd_hello (str c) {
   out << syntax;
 }
 
+void
+nntp::cmd_quit (str c)
+{
+  warn << "quit " << s << "\n";
+  delete this;
+}
+
+char *help = "100 help text follow\r\n";
+char *period = ".\r\n";
+
+void
+nntp::cmd_help (str c)
+{
+  warn << "help\n";
+  out << help;
+  for (unsigned int i = 0; i < cmd_table.size(); i++)
+    out << cmd_table[i].cmd << "\r\n";
+  out << period;
+}
+
+// --- list newgroups
+
 // format:  foo 2 1 y\r\n
+char *listb = "215 list of newsgroups follows\r\n";
 
 void
 nntp::cmd_list (str c) {
@@ -170,8 +185,11 @@ nntp::cmd_list (str c) {
 }
 
 static rxx overrx ("^XOVER( ((\\d+)-)?(\\d+)?)?", "i");
+// poorly written regexes follow:
 //( (\\d+)?((\\d+)-(\\d+)?)?)?");
 // ?(\\d+)?(-)?(\\d+)?");
+char *overview = "224 Overview information follows\r\n";
+char *nogroup = "412 No newsgroup selected\r\n";
 
 void
 nntp::cmd_over (str c) {
@@ -211,6 +229,9 @@ nntp::cmd_over (str c) {
 }
 
 static rxx grouprx ("^GROUP (.+)\\r", "i");
+char *groupb = "211 ";
+char *groupe = " group selected\r\n";
+char *badgroup = "411 no such news group\r\n";
 
 void
 nntp::cmd_group (str c) {
@@ -228,7 +249,10 @@ nntp::cmd_group (str c) {
     out << syntax;
 }
 
+// --- retrieve article
+
 static rxx artrx ("^ARTICLE ?(<[^>]+>)?(\\d+)?", "i");
+char *noarticle = "430 no such article found\r\n";
 
 void
 nntp::cmd_article (str c) {
@@ -242,11 +266,7 @@ nntp::cmd_article (str c) {
     if (artrx[2]) {
       msgkey = cur_group.getid (strtoul (artrx[2], NULL, 10));
       cur_group.cur_art = strtoul (artrx[2], NULL, 10);
-    warn << "msgkeytt " << msgkey << "\n";
-
     } else if (artrx[1]) {
-      // xxx fixme, need to look at header_db? 
-      //            or enhance the group_db to have a msgid index?
       msgkey = cur_group.getid (artrx[1]);
     } else {
       msgkey = cur_group.getid ();
@@ -265,6 +285,9 @@ nntp::cmd_article (str c) {
   }
 }
 
+char *articleb = "220 ";
+char *articlee = " article retrieved - head and body follow\r\n";
+
 void
 nntp::cmd_article_cb (bool head, chordID msgkey,
 		      dhash_stat status, ptr<dhash_block> blk, vec<chordID> r)
@@ -281,6 +304,12 @@ nntp::cmd_article_cb (bool head, chordID msgkey,
   fdcb (s, selwrite, wrap (this, &nntp::output));
 }
 
+// --- post article
+
+char *postgo = "340 send article to be posted. End with <CR-LF>.<CR-LF>\r\n";
+char *postok = "240 article posted ok\r\n";
+char *postbad = "441 posting failed\r\n";
+
 void
 nntp::cmd_post (str c)
 {
@@ -294,6 +323,7 @@ static rxx postrx ("^((.+?\\n\\r\\n)(.+?\\n))\\.\\r\\n", "ms");
 static rxx postmrx ("Message-ID: (<.+>)\\r");
 static rxx postngrx ("Newsgroups: (.+)\\r");
 static rxx postgrx (",?([^,]+)");
+static rxx postcontrol ("Control: (.+)\\r");
 
 void
 nntp::read_post (str resp, str bad)
@@ -311,6 +341,11 @@ nntp::read_post (str resp, str bad)
 warn << " resid " << in.resid () << " rem " << postrx.len (0) << "\n";
     ID = compute_hash (postrx[1], postrx[1].len ());
 
+    if (postcontrol.search (postrx[2])) {
+      docontrol (postcontrol[1]);
+      return;
+    }
+
     if (postmrx.search (postrx[2])) {
       warn << "found msgid " << postmrx[1] << "\n";
       warn << "mdg len " << postrx.len (0) << "\n";
@@ -326,7 +361,7 @@ warn << " resid " << in.resid () << " rem " << postrx.len (0) << "\n";
 
     for (unsigned int i = 0; i < postrx[3].len (); i++)
       if (postrx[3][i] == '\n')
-	line++; // xxx make this only count lines of body
+	line++;
 
     str header = strbuf () << postrx[2] << "Lines: " << line << "\r\n" <<
       "ChordID: " << ID << "\r\n";
@@ -353,15 +388,11 @@ warn << " resid " << in.resid () << " rem " << postrx.len (0) << "\n";
       }
     }
     in.rembytes (postrx.len (0));
-    warn << "ok ";
 
-    if (posted) {
-      warnx << resp << "\n";
+    if (posted)
       out << resp;
-    } else {
-      warnx << bad << "\n";
+    else
       out << bad;
-    }
 
     fdcb (s, selwrite, wrap (this, &nntp::output));
     posting = false;
@@ -378,26 +409,19 @@ nntp::read_post_cb (dhash_stat status, ptr<insert_info> i)
 }
 
 void
-nntp::cmd_quit (str c)
+nntp::docontrol (str ctrl)
 {
-  warn << "quit " << s << "\n";
-  delete this;
+  warn << "received control message: " << ctrl << "\n";
+  // xxx store control message in dhash?
+  // xxx propogate control message?
 }
 
-void
-nntp::cmd_help (str c)
-{
-  warn << "help\n";
-  out << help;
-  for (unsigned int i = 0; i < cmd_table.size(); i++)
-    out << cmd_table[i].cmd << "\r\n";
-  out << period;
-}
+// --- News transfer commands:
 
-
-
-// News transfer commands:
-
+char *ihavesend = "335 send article to be transferred.  End with <CR-LF>.<CR-LF>\r\n";
+char *ihaveok = "235 article transferred ok\r\n";
+char *ihaveno = "435 article not wanted - do not send it\r\n";
+char *ihavebad = "436 transfer failed - try again later\r\n";
 static rxx ihaverx ("^IHAVE (<.+?>)", "i");
 
 void
@@ -420,6 +444,10 @@ nntp::cmd_ihave (str c)
 }    
 
 static rxx checkrx ("^CHECK (<.+?>)", "i");
+char *checksendb = "238 ";
+char *checksende = " no such article found, please send it to me\r\n";
+char *checknob = "438 ";
+char *checknoe = " already have it, please don't send it to me\r\n";
 
 void
 nntp::cmd_check (str c)
@@ -439,6 +467,10 @@ nntp::cmd_check (str c)
 }
 
 static rxx takethisrx ("^TAKETHIS (<.+?>)", "i");
+char *takethisokb = "239 ";
+char *takethisoke = " article transferred ok\r\n";
+char *takethisbadb = "439 ";
+char *takethisbade = " article transfer failed\r\n";
 
 void
 nntp::cmd_takethis (str c)

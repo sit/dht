@@ -107,7 +107,7 @@ group::getid (unsigned long index)
       return 0;
   }
 
-  return 0; // xxx bad?
+  return 0;
 }
 
 static rxx getchordid ("ChordID: (.+)\\r");

@@ -22,9 +22,11 @@ struct nntp {
   group cur_group;
   cbv process_input;
   bool posting;
+  timecb_t *timeout;
 
   nntp (int _s);
   ~nntp ();
+  void died (void);
   void input (void);
   void command (void);
   void output (void);
@@ -45,6 +47,7 @@ struct nntp {
   void cmd_article_cb (bool, chordID, dhash_stat, ptr<dhash_block>,
 		       vec<chordID>);
   void read_post_cb (dhash_stat, ptr<insert_info>);
+  void docontrol (str);
 
   vec<c_jmp_entry_t> cmd_table;
 };

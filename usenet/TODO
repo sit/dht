@@ -1,10 +1,15 @@
+rfc1036:
+ check for headers: from, subject, newsgroups
+ add certain headers when accepting or sending news articles
+  Date, Message-ID, Path, NNTP-Posting-host
+ handle control messages:
+  cancel, version, checkgroups, sendsys, newgroup, rmgroup, ihave/sendme
+
 +fix line counts
-check for headers: from, subject, newsgroups
-add certain headers when accepting or sending news articles
- Date, Message-ID, Path, NNTP-Posting-host
 +filter out (potential) tabs in XOVER responses
-add timeouts to nntp connections
-handle control messages
+
+better record format for group_db. currently is a flat list
++add timeouts to nntp connections
 +recheck fdcb output
 store in DHash. plan:
   receive article
