@@ -524,7 +524,7 @@ Kademlia::lookup(Args *args)
   NodeID key = k->id();
   //KDEBUG(0) << "Kademlia::lookup: ip " << key_ip << " id " << printID(key) << endl;
 
-  lookup_wrapper_args *lwa = new lookup_wrapper_args();
+  lookup_wrapper_args *lwa = New lookup_wrapper_args();
   lwa->ipkey = key_ip;
   lwa->key = key;
   lwa->starttime = now();
@@ -1350,9 +1350,9 @@ Kademlia::reap(void *r)
   }
 
   // make vectors of dead-nodes sorted by the neighbor that told you.
-  HashMap<IPAddress, vector<NodeID> *> bad_info;
   if( Kademlia::death_notification ) {
 
+    HashMap<IPAddress, vector<NodeID> *> bad_info;
     HashMap<unsigned, erase_args*> deathmap;
     RPCSet deathrpcset;
 
@@ -1421,6 +1421,7 @@ Kademlia::reap(void *r)
 
   // ri->k->_riset.remove(ri);
   delete ri;
+
   // cout << "reaper done" << endl;
   taskexit(0);
 }
