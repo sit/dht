@@ -46,21 +46,24 @@ ChordOneHop::init_state(vector<IDMap> ids)
   printf("%s init_state %d entries\n", ts(), loctable->size());
 }
 void
-ChordOneHop::reschedule_stabilizer(void *x)
+ChordOneHop::reschedule_basic_stabilizer(void *x)
 {
+  assert(!static_sim);
   printf("%s start stabilizing\n",ts());
   if (!node()->alive()) {
-    _stab_running = false;
+    _stab_basic_running = false;
     return;
   }
 
-  Time t = now();
-  ChordOneHop::stabilize();
-  printf("%s end stabilizing\n",ts());
-
-  t = now() - t - _stabtimer;
-  if (t < 0) t = 0;
-  delaycb(_stabtimer, &ChordOneHop::reschedule_stabilizer, (void *)0);
+  _stab_basic_running = true;
+  if (_stab_basic_outstanding > 0) {
+  }else{
+    _stab_basic_outstanding++;
+    stabilize();
+    _stab_basic_outstanding--;
+    assert(_stab_basic_outstanding == 0);
+  }
+  delaycb(_stabtimer, &ChordOneHop::reschedule_basic_stabilizer, (void *) 0);
 }
 
 void
@@ -195,7 +198,7 @@ ChordOneHop::join(Args *args)
 }
 
 vector<Chord::IDMap>
-ChordOneHop::find_successors(CHID k, uint m, bool is_lookup)
+ChordOneHop::find_successors(CHID k, uint m, uint all, bool is_lookup)
 {
   vector<Chord::IDMap> v;
   v.clear();

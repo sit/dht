@@ -35,17 +35,20 @@ class ChordFinger: public Chord {
     ~ChordFinger() {};
     string proto_name() { return "ChordFinger"; }
 
-    virtual void stabilize();
     bool stabilized(vector<CHID> lid);
-    virtual void reschedule_stabilizer(void *x);
+    void reschedule_finger_stabilizer(void *x);
     void dump();
-    //void init_state(vector<IDMap> ids);
+    void init_state(vector<IDMap> ids);
+    virtual void join(Args *);
 
   protected:
-    void fix_fingers();
+    void fix_fingers(bool restart=false);
     uint _base;
     uint _maxf;
     uint _numf; //number of fingers ChordFinger should be keeping
+    uint _stab_finger_outstanding;
+    bool _stab_finger_running;
+
 };
 
 #endif

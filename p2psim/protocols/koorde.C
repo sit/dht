@@ -120,6 +120,14 @@ Koorde::join(Args *args)
     if (fr.last.ip > 0) loctable->add_node(fr.last);
   }
   Chord::join(args);
+
+  //schedule finger stabilizer
+  if (!_stab_debruijn_running) {
+    _stab_debruijn_running = true;
+    reschedule_debruijn_stabilizer(NULL); //a hack, no null means restart fixing fingres
+  }else{
+    fix_debruijn();
+  }
 }
 
 // Iterative version of the figure 2 algo in IPTPS'03 paper.
@@ -440,31 +448,22 @@ NEXT:
 }
 
 void
-Koorde::reschedule_stabilizer(void *x)
+Koorde::reschedule_debruijn_stabilizer(void *x)
 {
   assert(!static_sim);
   if (!node()->alive()) {
-    _stab_running = false;
+    _stab_debruijn_running = false;
     return;
   }
-  _stab_running = true;
-  if (_stab_outstanding > 0) {
+  _stab_debruijn_running = true;
+  if (_stab_debruijn_outstanding > 0) {
   }else{
-    _stab_outstanding++;
-    Koorde::stabilize();
-    _stab_outstanding--;
-    assert(_stab_outstanding == 0);
+    _stab_debruijn_outstanding++;
+    fix_debruijn();
+    _stab_debruijn_outstanding--;
+    assert(_stab_debruijn_outstanding == 0);
   }
-  delaycb(_stabtimer, &Koorde::reschedule_stabilizer, (void *) 0);
-}
-
-void
-Koorde::stabilize()
-{
-  Chord::stabilize();
-  Time t = now();
-  fix_debruijn();
-  printf ("%s Koorde stabilize debruijn finish %qx in time %lld\n",ts(),debruijn, now()-t);
+  delaycb(_stabtimer, &Koorde::reschedule_debruijn_stabilizer, (void *) 0);
 }
 
 bool

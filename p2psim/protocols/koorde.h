@@ -66,6 +66,8 @@ protected:
   uint nsucc;
   uint fingers;   // number of successors of debruijn finger
   uint resilience;  // resilience
+  uint _stab_debruijn_outstanding;
+  uint _stab_debruijn_running;
 
   Chord::CHID debruijn;  // = k * me
   Chord::CHID debruijnpred;  // = k * me - x
@@ -78,8 +80,7 @@ protected:
   IDMap Koorde::closestpreddfinger (CHID);
 
   void fix_debruijn();
-  void stabilize();
-  void reschedule_stabilizer(void *x);
+  void reschedule_debruijn_stabilizer(void *x);
   bool debruijn_stabilized (ConsistentHash::CHID finger, uint n,
 			    vector<ConsistentHash::CHID> lid);
   void debruijn_dump (Chord::CHID finger, uint n);

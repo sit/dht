@@ -28,11 +28,11 @@
 
 /* ChordFingerPNS does Gummadi^2's PNS proximity routing, it's completely static now*/
 
-#include "chordfinger.h"
+#include "chord.h"
 #include <algorithm>
 using namespace std;
 
-#define USE_OVERLAP 1
+#define USE_OVERLAP 0
 
 class LocTablePNS : public LocTable {
   public:
@@ -81,6 +81,7 @@ class LocTablePNS : public LocTable {
 
       for (uint i = 0; i < fingers.size(); i++) {
 	idmapwrap *elm = ring.closestsucc(fingers[i].f_s);
+	assert(elm);
 	uint min_l = 1000000;
 	Chord::IDMap min_f;
 	while (ConsistentHash::between(fingers[i].f_s, fingers[i].f_e, elm->id)) {
@@ -88,6 +89,7 @@ class LocTablePNS : public LocTable {
 	    min_f = elm->n;
 	  }
 	  elm = ring.next(elm);
+	  if (!elm) elm = ring.first();
 	}
 	if (min_l < 1000000) 
 	  fingers[i].n = min_f;
@@ -136,26 +138,32 @@ DDONE:
 	  return min_s;
 	}
       } 
-
-      if (fingers.size() == 0) {
-	Chord::IDMap tmp = LocTable::next_hop(key,done);
-	assert(tmp.ip != me.ip);
-	return tmp;
+      return LocTable::next_hop(key,done);
+/*
+      uint fsz = fingers.size();
+      if (fsz == 0) {
+	return LocTable::next_hop(key,done);
       }else{
 	//only use PNS fingers + succ as next hops
 	pns_entry tmp;
 	tmp.n.id = key;
 	uint pos = upper_bound(fingers.begin(), fingers.end(), tmp, pns_entry::cmp) - fingers.begin();
-	pos = pos % fingers.size();
+	pos = pos % fsz;
 	uint i = pos;
 	while (fingers[i].n.ip == 0) {
-	  i= (i-1)%fingers.size();
+	  if (i == 0) 
+	    i = fsz-1;
+	  else
+	    i--;
 	  if (i == pos) 
-	    assert(0);
+	    return LocTable::next_hop(key,done);
 	}
-	assert(fingers[i].n.ip && fingers[i].n.ip!=me.ip);
-	return fingers[i].n;
+	if (ConsistentHash::between(me.id, key, fingers[i].n.id))
+	  return fingers[i].n;
+	else
+	  return LocTable::next_hop(key,done);
       }
+      */
     };
 
     void del_node(Chord::IDMap n) {
@@ -193,7 +201,7 @@ DDONE:
     vector<pns_entry> fingers;
 };
 
-class ChordFingerPNS: public ChordFinger {
+class ChordFingerPNS: public Chord {
   public:
     ChordFingerPNS(Node *n, Args& a, LocTable *l = NULL);
     ~ChordFingerPNS() {};
@@ -203,16 +211,17 @@ class ChordFingerPNS: public ChordFinger {
     void dump();
     void init_state(vector<IDMap> ids);
 
-    void reschedule_stabilizer(void *x);
-    void stabilize();
-    void fix_pns_fingers();
-    vector<Chord::IDMap> find_successors(CHID key, uint m, bool is_lookup);
+    void reschedule_pns_stabilizer(void *x);
+    void fix_pns_fingers(bool restart);
     void my_next_recurs_handler(next_recurs_args *, next_recurs_ret *);
-    void ChordFingerPNS::pns_next_recurs_handler(next_recurs_args *, next_recurs_ret *);
+    void pns_next_recurs_handler(next_recurs_args *, next_recurs_ret *);
+    void join(Args*);
 
   protected:
     uint _base;
     int _samples;
+    uint _stab_pns_outstanding;
+    bool _stab_pns_running;
 };
 
 #endif

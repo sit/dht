@@ -40,14 +40,14 @@ class ChordOneHop: public Chord {
     void join(Args *);
     void stabilize();
     bool stabilized(vector<ConsistentHash::CHID> lid) {return false;};
-    void reschedule_stabilizer(void *x);
+    void reschedule_basic_stabilizer(void *x);
     void init_state(vector<IDMap> ids);
 
     void del_handler(deladd_args *, void *);
     void add_handler(deladd_args *, void *);
     void getloctable_handler(void *, get_successor_list_ret *);
 
-    virtual vector<IDMap> find_successors(CHID key, uint m, bool is_lookup);
+    virtual vector<IDMap> find_successors(CHID key, uint m, uint all, bool is_lookup);
 };
 #endif //__CHORDONEHOP_H
 

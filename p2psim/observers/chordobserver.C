@@ -51,7 +51,7 @@ ChordObserver::ChordObserver(Args *a) : Oldobserver(a)
   _allsorted = get_sorted_nodes(_num_nodes);
   // printf("ChordObserver created %d nodes\n", _num_nodes);
   for (uint i = 0; i < _allsorted.size(); i++) {
-    // printf("%qx %u\n", _allsorted[i].id, _allsorted[i].ip);
+     printf("%qx %u\n", _allsorted[i].id, _allsorted[i].ip);
   }
 
   _init_num = atoi((*a)["initnodes"].c_str());
@@ -129,12 +129,13 @@ ChordObserver::init_nodes(unsigned int num)
 void
 ChordObserver::execute()
 {
+  if (!_reschedule) return;
+
   if (_init_num > 0) {
     init_nodes(_init_num);
     _init_num = 0;
   }
 
-  if (!_reschedule) return;
 
   set<Protocol*> l = Network::Instance()->getallprotocols(_type);
   set<Protocol*>::iterator pos;
