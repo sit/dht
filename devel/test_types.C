@@ -32,16 +32,36 @@
 #include <sys/time.h>
 
 void store_cb_pk (dhashclient dhash, bool error, chordID key);
+void store_cb_ch (dhashclient dhash, bool error, chordID key);
+void store_cb_noauth (dhashclient dhash, bool error, chordID key);
+void store_cb_append (dhashclient dhash, bool error, chordID key);
+void fetch_cb_append (dhashclient dhash, ptr<dhash_block> blk);
+void store_cb_append_second (dhashclient dhash, bool error, chordID key);
+void fetch_cb_append_second (dhashclient dhash, ptr<dhash_block> blk);
+
 void fetch_cb (ptr<dhash_block> blk);
 
 char *data = "This is some test data";
+char *data_too = " so is this.";
+
 str control_socket;
 unsigned int datasize;
 
-int out = 0;
-int MAX_OPS_OUT = 1024;
+#define CONTENT_HASH 1
+#define PUB_KEY 2
+#define APPEND 3
+#define NOAUTH 4
 
+void 
+store_cb_ch (dhashclient dhash, bool error, chordID key)
+{
+  if (error)
+    warn << "contenthash store error\n";
+  else
+    warn << "contenthash store success\n";
 
+  dhash.retrieve (key, DHASH_CONTENTHASH, wrap (&fetch_cb));
+}
 
 void
 store_cb_pk (dhashclient dhash, bool error, chordID key)
@@ -51,7 +71,7 @@ store_cb_pk (dhashclient dhash, bool error, chordID key)
   else
     warn << "pk store successful\n";
 
-  dhash.retrieve (key, DHASH_KEYHASH, wrap (fetch_cb));
+  dhash.retrieve (key, DHASH_KEYHASH, wrap (&fetch_cb));
 }
 
 void
@@ -62,14 +82,52 @@ store_cb_noauth (dhashclient dhash, bool error, chordID key)
   else
     warn << "noauth store successful " << key << "\n";
 
-  dhash.retrieve (key, DHASH_NOAUTH, wrap (fetch_cb));
+  dhash.retrieve (key, DHASH_NOAUTH, wrap (&fetch_cb));
 }
 
+void
+store_cb_append (dhashclient dhash, bool error, chordID key)
+{
+  if (error)
+    warn << "store db error " << key << "\n";
+  else
+    warn << "store db successful " << key << "\n";
+  
+  dhash.retrieve (key, DHASH_APPEND, wrap (&fetch_cb_append, dhash));
+}
+
+void
+fetch_cb_append (dhashclient dhash, ptr<dhash_block> blk) 
+{
+  if (!blk)
+    fatal << "append: error\n";
+
+  dhash.append (bigint (20), data_too, strlen (data_too), 
+		wrap (&store_cb_append_second, dhash));
+}
+
+void
+store_cb_append_second (dhashclient dhash, bool error, chordID key)
+{
+  if (error)
+    warn << "append error " << key << "\n";
+
+  dhash.retrieve (key, DHASH_APPEND, wrap (&fetch_cb_append_second, dhash));
+}
+
+void
+fetch_cb_append_second (dhashclient dhash, ptr<dhash_block> blk) 
+{
+  if (!blk)
+    fatal << "append (second): error\n";
+  
+  warn << "data (" << blk->len << " bytes) was " << blk->data << "\n";
+  exit (0);
+}
 
 void
 fetch_cb (ptr<dhash_block> blk)
 {
-  out--;
 
   if (!blk) {
     warn << "Error\n";
@@ -86,11 +144,9 @@ fetch_cb (ptr<dhash_block> blk)
 void
 usage (char *progname) 
 {
-  warn << progname << " some args\n";
+  warn << progname << " sock randseed mode [mode options]\n";
   exit(0);
 }
-
-
 
 int
 main (int argc, char **argv)
@@ -98,25 +154,49 @@ main (int argc, char **argv)
   setprogname (argv[0]);
 
   sfsconst_init ();
+  
+  if (argc < 3) usage (argv[0]);
 
   control_socket = argv[1];
   dhashclient dhash (control_socket);
 
-  str key = file2wstr (argv[2]);
-  ptr<rabin_priv> sk =  import_rabin_priv (key, NULL);
-
-  unsigned int seed = strtoul (argv[3], NULL, 10);
+  unsigned int seed = strtoul (argv[2], NULL, 10);
   srandom (seed);
 
   datasize = strlen(data);
-  //  warn << "Testing content hash:\n";
-  //dhash.insert (data[i], 100, wrap(&store_cb));
-  warn << "Testing pub key\n";
-  //  dhash.insert (data, strlen(data), *sk, wrap (&store_cb_pk, dhash));
-  dhash.insert (bigint (10), 
-		data, 
-		strlen (data), 
-		wrap (&store_cb_noauth, dhash),
-		DHASH_NOAUTH);
+
+  switch (atoi (argv[3])) {
+  case CONTENT_HASH:
+    {
+    dhash.insert (data, strlen(data), wrap(&store_cb_ch, dhash));
+    break;
+    }
+  case PUB_KEY:
+    {
+    str key = file2wstr (argv[4]);
+    ptr<rabin_priv> sk =  import_rabin_priv (key, NULL);
+    dhash.insert (data, strlen(data), *sk, wrap (&store_cb_pk, dhash));
+    break;
+    }
+  case NOAUTH:
+    {
+    dhash.insert (bigint (10), 
+		  data, 
+		  strlen (data), 
+		  wrap (&store_cb_noauth, dhash),
+		  DHASH_NOAUTH);
+    }
+    break;
+  case APPEND:
+    {
+    dhash.append (bigint (20), data, strlen (data), 
+		  wrap (&store_cb_append, dhash));
+    }
+    break;
+  default:
+    usage (argv[0]);
+    break;
+  }
+	  
   amain ();
 }
