@@ -1,4 +1,8 @@
+#include <chord.h>
+#include <id_utils.h>
 #include "merkle.h"
+#include <transport_prot.h>
+#include <comm.h>
 
 struct {
   ptr<dbfe> db;
@@ -32,8 +36,11 @@ create_database (char *dbname)
   opts.addOption("opt_cachesize", 1000);
   opts.addOption("opt_nodesize", 4096);
 
-  // XXX: DONT UNLINK: READ THE DB AND POPULATE THE MERKLE TREE 
-  unlink (dbname);
+  // XXX ugh?
+  char cmd[80];
+  sprintf (cmd, "rm -r %s", dbname);
+  system (cmd);
+
   if (int err = db->opendb(dbname, opts)) {
     warn << "open returned: " << strerror(err) << err << "\n";
     exit (-1);
@@ -41,39 +48,132 @@ create_database (char *dbname)
   return db;
 }
 
+vec<chordID> keys_for_server;
+vec<chordID> keys_for_syncer;
 
-vec<XXX_SENDBLOCK_ARGS> keys_for_server;
-vec<XXX_SENDBLOCK_ARGS> keys_for_syncer;
-
-// called by syncer to send block to server
 static void
-sendblock (bigint blockID, bool last, callback<void>::ref cb)
+sendblock (bigint blockID, bool missingLocal)
 {
-  XXX_SENDBLOCK_ARGS args (0, blockID, last, cb);
-  keys_for_server.push_back (args);
+  if (missingLocal)
+    keys_for_syncer.push_back (blockID);
+  else
+    keys_for_server.push_back (blockID);
 }
 
-// called by server to send block to syncer
 static void
-sendblock2 (XXX_SENDBLOCK_ARGS *a)
+doRPCcb (xdrproc_t proc, dorpc_res *res, aclnt_cb cb, void *out, clnt_stat err)
 {
-  keys_for_syncer.push_back (*a);
+  xdrmem x ((char *)res->resok->results.base (), 
+	    res->resok->results.size (), XDR_DECODE);
+
+  if (err) {
+    warnx << "doRPC: err = " << err << "\n";
+  } else if (!proc (x.xdrp (), out)) {
+    warnx << "failed to unmarshall result\n";
+    cb (RPC_CANTSEND);
+    return;
+  }
+  cb (err);
+  delete res;
 }
 
 // called by syncer to perform merkle RPC to server
 static void
 doRPC (RPC_delay_args *a)
 {
-  SYNCER.clnt->call (a->procno, a->in, a->out, a->cb);
+  //form the transport RPC
+  ptr<dorpc_arg> arg = New refcounted<dorpc_arg> ();
+  // Other fields don't matter.
+  arg->progno = a->prog.progno;
+  arg->procno = a->procno;
+
+  xdrproc_t inproc = a->prog.tbl[a->procno].xdr_arg;
+  xdrproc_t outproc = a->prog.tbl[a->procno].xdr_res;
+  assert (outproc);
+  xdrsuio x (XDR_ENCODE);
+  if ((!inproc) || (!inproc (x.xdrp (), (void *)a->in))) {
+    fatal << "failed to marshall args\n";
+  } 
+  int args_len = x.uio ()->resid ();
+  arg->args.setsize (args_len);
+  void *marshalled_args = suio_flatten (x.uio ());
+  memcpy (arg->args.base (), marshalled_args, args_len);
+  free (marshalled_args);
+
+  dorpc_res *res = New dorpc_res (DORPC_OK);
+  SYNCER.clnt->call (TRANSPORTPROC_DORPC, arg, res,
+                     wrap (&doRPCcb, outproc, res, a->cb, a->out));
+}
+
+
+vec<const rpc_program *> handledProgs;
+vec<cbdispatch_t> handlers;
+
+static void 
+transport_dispatch (svccb *sbp)
+{
+  if (!sbp) {
+    warnx << "transport server eof\n";
+    return;
+  }
+
+  dorpc_arg *arg = sbp->template getarg<dorpc_arg> ();
+
+  chord_node_wire nw;
+  bzero (&nw, sizeof (chord_node_wire));
+
+  const rpc_program *prog (NULL);
+  unsigned int i (0);
+  for (unsigned int i = 0; i < handledProgs.size (); i++)
+    if (arg->progno == (int)handledProgs[i]->progno) {
+      prog = handledProgs[i];
+      break;
+    }
+  char *arg_base = (char *)(arg->args.base ());
+  int arg_len = arg->args.size ();
+  
+  xdrmem x (arg_base, arg_len, XDR_DECODE);
+  xdrproc_t proc = prog->tbl[arg->procno].xdr_arg;
+  assert (proc);
+  
+  void *unmarshalled_args = prog->tbl[arg->procno].alloc_arg ();
+  if (!proc (x.xdrp (), unmarshalled_args)) {
+    warn << "dispatch: error unmarshalling arguments: "
+	 << arg->progno << "." << arg->procno << "\n";
+    xdr_delete (prog->tbl[arg->procno].xdr_arg, unmarshalled_args);
+    sbp->replyref (rpcstat (DORPC_MARSHALLERR));
+    return;
+  }
+  user_args *ua = New user_args (sbp, unmarshalled_args,
+				 prog, arg->procno, 0);
+  ua->me_ = New refcounted<location> (make_chord_node (nw));
+  handlers[i] (ua);
 }
 
 // called by server to register handler fielding merkle RPCs
 static void
 addHandler (const rpc_program &prog, cbdispatch_t cb)
 {
-  SERVER.srv->setcb (cb);
+  handledProgs.push_back (&prog);
+  handlers.push_back (cb);
 }
 
+void
+finish ()
+{
+  // Force all destructors to be called, hopefully.
+  handledProgs.clear ();
+  handlers.clear ();
+
+  SYNCER.syncer = NULL;
+  SERVER.server = NULL;
+  SYNCER.clnt = NULL;
+  SERVER.srv  = NULL;
+  SYNCER.tree = NULL;
+  SERVER.tree = NULL;
+  SYNCER.db   = NULL;
+  SERVER.db   = NULL;
+}
 
 void
 setup ()
@@ -88,18 +188,18 @@ setup ()
 
   // these are closed by axprt_stream's dtor, right? 
   int fds[2];
-  assert (pipe (fds) == 0);
-  warn << "PIPES: " << fds[0] << ":" << fds[1] << "\n";
-  SERVER.srv = asrv::alloc (axprt_stream::alloc (fds[0]), merklesync_program_1);
-  SYNCER.clnt = aclnt::alloc (axprt_stream::alloc (fds[1]), merklesync_program_1);
+  assert (socketpair (AF_UNIX, SOCK_STREAM, 0, fds) == 0);
+  warn << "sockets: " << fds[0] << ":" << fds[1] << "\n";
+  SERVER.srv = asrv::alloc (axprt_stream::alloc (fds[0]), transport_program_1);
+  SYNCER.clnt = aclnt::alloc (axprt_stream::alloc (fds[1]), transport_program_1);
   assert (SERVER.srv && SYNCER.clnt);
+  SERVER.srv->setcb (wrap (&transport_dispatch));
 
   SYNCER.syncer = New refcounted<merkle_syncer> (SYNCER.tree, 
 						 wrap (doRPC),
 						 wrap (sendblock));
   SERVER.server = New refcounted<merkle_server> (SERVER.tree, 
-						 wrap (addHandler),
-						 wrap (sendblock2));
+						 wrap (addHandler));
   warn << " <= setup() DONE!\n";
   err_flush ();
 }
@@ -174,7 +274,7 @@ addinc (ptr<merkle_tree> tr1, ptr<merkle_tree> tr2, int count)
 
 
 void
-dump_stats (merkle_syncer::mode_t m)
+dump_stats ()
 {
   warn << "\n\n=======================================================================\n";
   warn << "SERVER.tree->root " << SERVER.tree->root.hash << " cnt " << SERVER.tree->root.count << "\n";
@@ -193,16 +293,12 @@ dump_stats (merkle_syncer::mode_t m)
   //host1->clnt->dump_stats ();
   //warn  << "++++++++++++++++++++++++client2+++++++++++++++++++++++++++++\n";
   //host2->clnt->dump_stats ();
-
-  if (m == merkle_syncer::BIDIRECTIONAL)
-    assert (SERVER.tree->root.hash == SYNCER.tree->root.hash);
-
 }
 
 
  
 void
-test (merkle_syncer::mode_t m, uint progress, uint data_points)
+test (uint progress, uint data_points)
 {
   uint64 large_sz = (1 << 30) / (1 << 13);  // 1 GB
   large_sz /= 100;
@@ -212,15 +308,13 @@ test (merkle_syncer::mode_t m, uint progress, uint data_points)
   warn << "\n\n\n\n############################################################\n";
   warn << "REPLICA TEST " << large_sz << "/" << small_sz << "\n";
   setup ();
-  // SERVER.tree -- holds large_sz blocks
-  // SYNCER.tree -- holds small_sz blocks
 
-  if (m == merkle_syncer::BIDIRECTIONAL) {
-    addrand (SERVER.tree, SYNCER.tree, small_sz);
-    addrand (SERVER.tree, large_sz - small_sz);
-  } else {
+  if (progress % 2) {
     addrand (SERVER.tree, large_sz);
     addrand (SYNCER.tree, small_sz);
+  } else {
+    addrand (SERVER.tree, small_sz);
+    addrand (SYNCER.tree, large_sz);
   }
 
   warn  << "+++++++++++++++++++++++++server tree++++++++++++++++++++++++++++++\n";
@@ -232,29 +326,29 @@ test (merkle_syncer::mode_t m, uint progress, uint data_points)
   warn << "\n\n ************************* RUNNING TEST ************************\n";
   bigint rngmin  = 0;
   bigint rngmax = (bigint (1) << 160)  - 1;
-  SYNCER.syncer->sync (rngmin, rngmax, m);
+  SYNCER.syncer->sync (rngmin, rngmax);
 
   while (!SYNCER.syncer->done ()) {
     acheck ();
 
     while (keys_for_server.size ()) {
-      XXX_SENDBLOCK_ARGS args = keys_for_server.pop_front ();
-      merkle_hash key = to_merkle_hash(dhash::id2dbrec(args.blockID));
+      chordID k = keys_for_server.pop_front ();
+      merkle_hash key = to_merkle_hash(id2dbrec(k));
       block b (key, FAKE_DATA);
       SERVER.tree->insert (&b);
-      (*args.cb) ();
     }
-
     while (keys_for_syncer.size ()) {
-      XXX_SENDBLOCK_ARGS args = keys_for_syncer.pop_front ();
-      SYNCER.syncer->recvblk (args.blockID, args.last);
-      (*args.cb) ();
+      chordID k = keys_for_syncer.pop_front ();
+      merkle_hash key = to_merkle_hash(id2dbrec(k));
+      block b (key, FAKE_DATA);
+      SYNCER.tree->insert (&b);
     }
   }
 
   warn << "\n\n *********************** DONE *****************************\n";
 
-  dump_stats (m);
+  dump_stats ();
+  finish ();
 }
 
 
@@ -262,9 +356,8 @@ test (merkle_syncer::mode_t m, uint progress, uint data_points)
 int
 main ()
 {
-  merkle_syncer::mode_t m = merkle_syncer::UNIDIRECTIONAL;
   u_int start_point = 0;
   u_int data_points = 100;
   for (u_int i = start_point; i < data_points; i++) 
-    test (m, i, data_points);
+    test (i, data_points);
 }
