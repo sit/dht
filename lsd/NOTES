@@ -1,0 +1,17 @@
+CACHING
+-------
+
+what should be cached?
+ - just the data
+ - data + name of primary
+
+consistency?
+ - expiration time
+ - server enforced (caches alert server to their presence, server pushes out updates)
+ - cache enforced (cache checks periodically for new info)
+ - none (note that we don't have an update or delete operation in chord)
+ - none (this isn't an issue in SFSRO as long as the fsinfo isn't stale)
+
+replacement
+ - LRU
+

@@ -1,4 +1,4 @@
-/* $Id: sfsrodb_core.C,v 1.7 2001/03/19 04:08:32 fdabek Exp $ */
+/* $Id: sfsrodb_core.C,v 1.8 2001/03/21 16:10:01 fdabek Exp $ */
 
 /*
  *
@@ -41,8 +41,19 @@ bool
 sfsrodb_put (ptr<aclnt> db, const void *keydata, size_t keylen, 
 	     void *contentdata, size_t contentlen)
 {
-  int err;
 
+#if 0
+  static int i=0;
+  char filename[128];
+  sprintf(filename, "key-%d", i++);
+
+  int fd = open (filename, O_WRONLY | O_CREAT, 0666);
+  write (fd, contentdata, contentlen);
+  close (fd);
+#endif
+
+  int err;
+  
   //  warn << "inserting " << contentlen << "bytes of data under a " << keylen << " byte key\n";
   dhash_insertarg *arg = New dhash_insertarg ();
   
@@ -61,6 +72,7 @@ sfsrodb_put (ptr<aclnt> db, const void *keydata, size_t keylen,
     warn << "insert returned " << err << strerror(err) << "\n";
     return false;
   } else return true;
+
 }
 
 
@@ -92,6 +104,8 @@ verify_sfsrofh (char *iv, uint iv_len,
 		char *buf, size_t buflen)
 {
   assert (iv_len == SFSRO_IVSIZE);
+
+  return 1;
 
   char tempbuf[fh->size ()];
   struct iovec iov[2];

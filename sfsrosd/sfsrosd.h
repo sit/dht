@@ -8,6 +8,7 @@
 #include <sfsdb.h>
 #include "vec.h"
 
+
 extern sfs_connectres cres;
 extern sfs_fsinfo fsinfores;
 extern sfsrodb db;

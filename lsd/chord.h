@@ -8,7 +8,7 @@
 #include "sys/time.h"
 #include "vec.h"
 
-#define NBIT 32
+#define NBIT 160
 
 typedef int cb_ID;
 

@@ -23,7 +23,10 @@ dhash::dhash() {
     warn << "open returned: " << strerror(err) << err << "\n";
     exit (-1);
   }
-  
+
+  assert(defp2p);
+  //  defp2p->registerActionCallback(wrap(this, &dhash::act_cb));
+
 
 }
 
@@ -180,4 +183,11 @@ dhash::id2dbrec(sfs_ID id)
 
   ptr<dbrec> q = New refcounted<dbrec> (key, len);
   return q;
+}
+
+void
+dhash::act_cb(sfs_ID id, char action) {
+
+  warn << "node " << id << " just " << action << "ed the network\n";
+
 }

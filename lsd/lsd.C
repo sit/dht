@@ -166,8 +166,7 @@ startp2pd (int myp)
   listen (srvfd, 1000);
   fdcb (srvfd, selread, wrap (accept_standalone, srvfd));
 
-  //instantiate single dhash object
-  dhs = New dhash();
+
   return p;
 }
 
@@ -271,6 +270,8 @@ parseconfigfile (str cf, int index)
   myport = startp2pd(myport);
   defp2p = New refcounted<p2p> (wellknownhost, wellknownport, wellknownID, 
 				myport, myID);
+    //instantiate single dhash object
+  dhs = New dhash();
 }
 
 static void

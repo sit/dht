@@ -1,4 +1,4 @@
-/* $Id: server.C,v 1.9 2001/03/11 18:50:28 fdabek Exp $ */
+/* $Id: server.C,v 1.10 2001/03/21 16:10:01 fdabek Exp $ */
 
 /*
  *
@@ -532,6 +532,7 @@ server::dir_lookupres (nfscall *sbp, const sfsro_directory *dir)
   nfs2ro(&dirop->dir, &fh);
   ref<const sfs_hash> dir_fh = New refcounted<const sfs_hash> (fh);
 
+  warn << "dir_lookupres: looking up " << dirop->name << " wrt " << dir->path << "and the fh is " << hexdump(dirop->dir.data.base(), dirop->dir.data.size()) << "\n";
   if (dirop->name == "."  
       || (dirop->name == ".." && dir->path.len () == 0))
     {
@@ -648,7 +649,7 @@ void
 server::lookupinode_lookupres (nfscall *sbp, const sfsro_inode *ip)
 {
   
-  warn << ip->reg->size << " " << ip->reg->direct.size() << "\n";
+  //  warn << ip->reg->size << " " << ip->reg->direct.size() << "\n";
   if (ip->type != SFSRODIR && ip->type != SFSRODIR_OPAQ) 
     sbp->error (NFS3ERR_NOTDIR);
   else if (ip->reg->direct.size() <= 0) {
@@ -772,7 +773,7 @@ server::inode_lookup (const sfs_hash *fh, nfscall *sbp, cbinode_t cb)
   if (!sfsrocd_nocache && (inode = ic.lookup (*fh))) {
     cb (inode);
 
-    warn << inode->reg->size << " " << inode->reg->direct.size() << "\n";
+    //    warn << inode->reg->size << " " << inode->reg->direct.size() << "\n";
     // XX cache
     cstat.ic_hit++;
   } else {
@@ -817,6 +818,7 @@ server::nfs3_fsinfo (nfscall *sbp)
 void
 server::dispatch (nfscall *sbp)
 {
+  //  warn << "dispatch: " << sbp->proc() << "\n";
   switch(sbp->proc()) {
   case NFSPROC3_NULL:
     sbp->reply (NULL);
@@ -836,7 +838,7 @@ server::dispatch (nfscall *sbp)
     {
       diropargs3 *dirop = sbp->template getarg<diropargs3> ();
       nfs_fh3 *nfh = &(dirop->dir);
-
+      
       if (memcmp(nfh->data.base (), rootfh.data.base(), nfh->data.size()) == 0)
 	{
 	  //case I: lookup is on root level and must be translated into a 
@@ -969,14 +971,22 @@ server::lookup_mount(nfscall *sbp, sfsro_datares *res, clnt_stat err) {
 bool
 server::setrootfh (const sfs_fsinfo *fsi)
 {
-  if (fsi->prog != SFSRO_PROGRAM || fsi->sfsro->vers != SFSRO_VERSION)
+
+
+
+  warn << "root fh is " << hexdump(&fsi->sfsro->v1->info.rootfh, 20) << "\n";
+
+  //  warn << "prog= " << fsi->prog << " isn't " << SFSRO_PROGRAM << " or vers= " << fsi->sfsro->vers << " isn't " << SFSRO_VERSION << "\n";
+  if (fsi->prog != SFSRO_PROGRAM || fsi->sfsro->vers != SFSRO_VERSION) 
     return false;
+  
   if (!sfsrocd_noverify
       && !verify_sfsrosig (&fsi->sfsro->v1->sig, &fsi->sfsro->v1->info,
 			   &servinfo.host.pubkey)) {
     warn << "failed to verify signature " << path << "\n";
     return false;
   }
+
   if (!fsinfo)
     memcpy (IV, fsi->sfsro->v1->info.iv.base (), SFSRO_IVSIZE);
   else if (memcmp (IV, fsi->sfsro->v1->info.iv.base (), SFSRO_IVSIZE)) {
@@ -987,7 +997,6 @@ server::setrootfh (const sfs_fsinfo *fsi)
   sfsroc = aclnt::alloc (x, sfsro_program_1);
   ro2nfs (&fsi->sfsro->v1->info.rootfh, &rootfh);
 
-  warn << "root fh is " << hexdump(&fsi->sfsro->v1->info.rootfh, 20) << "\n";
 
   return true;
 }

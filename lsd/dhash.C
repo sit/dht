@@ -12,8 +12,6 @@ dhashclient::dhashclient (ptr<axprt_stream> _x)
   p2pclntsrv = asrv::alloc (x, dhashclnt_program_1,
 			 wrap (this, &dhashclient::dispatch));
 
-  defp2p->registerActionCallback(wrap(this, &dhashclient::act_cb));
-
 }
 
 void
@@ -31,10 +29,12 @@ dhashclient::dispatch (svccb *sbp)
   case DHASHPROC_LOOKUP:
     {
       sfs_ID *n = sbp->template getarg<sfs_ID> ();
-      cb_ID scbid = defp2p->registerSearchCallback(wrap(this, &dhashclient::search_cb, *n));
-      
+
+      if (do_caching)
+	defp2p->registerSearchCallback(wrap(this, &dhashclient::search_cb, *n));
+
       defp2p->dofindsucc (*n, wrap(this, &dhashclient::lookup_findsucc_cb, 
-				   sbp, n, scbid));
+				   sbp, n));
     } 
     break;
   case DHASHPROC_INSERT:
@@ -70,7 +70,9 @@ dhashclient::insert_findsucc_cb(svccb *sbp, dhash_insertarg *item,
     dhash_stat *stat = New dhash_stat ();
     defp2p->doRPC(succ, dhash_program_1, DHASHPROC_STORE, item, stat, 
 		  wrap(this, &dhashclient::insert_store_cb, sbp, stat));
-    cache_on_path(item, path);
+
+    if (do_caching)
+      cache_on_path(item, path);
 
   }
 }
@@ -113,7 +115,7 @@ dhashclient::cache_store_cb(dhash_stat *res, clnt_stat err)
 }
 
 void
-dhashclient::lookup_findsucc_cb(svccb *sbp, sfs_ID *n, cb_ID scbid,
+dhashclient::lookup_findsucc_cb(svccb *sbp, sfs_ID *n,
 				sfs_ID succ, route path,
 				sfsp2pstat err) 
 {
@@ -141,12 +143,6 @@ dhashclient::lookup_fetch_cb(svccb *sbp, dhash_res *res, clnt_stat err)
 
 // ----------- notification
 
-void
-dhashclient::act_cb(sfs_ID id, char action) {
-
-  //  warn << "node " << id << " just " << action << "ed the network\n";
-
-}
 
 void
 dhashclient::search_cb(sfs_ID my_target, sfs_ID node, sfs_ID target, cbi cb) {

@@ -5,6 +5,7 @@
 
 #define MAX_INT 0x7fffffff
 
+//note that a search callback only "fires" once
 cb_ID
 p2p::registerSearchCallback(cbsearch_t cb) 
 {
@@ -50,6 +51,7 @@ p2p::registerActionCallback(cbaction_t cb)
 void
 p2p::doActionCallbacks(sfs_ID id, char action) 
 {
+  //  warn << "\n\n\n\n ACTION CALLBACKS " << actionCallbacks.size() << "\n";
   for (unsigned int i=0; i < actionCallbacks.size (); i++)
     actionCallbacks[i] (id, action);
 }

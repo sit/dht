@@ -17,6 +17,8 @@ p2p::updatepred (wedge &w, sfs_ID &x)
   if (w.first == x)
     return false;
 
+  doActionCallbacks(x, ACT_NODE_JOIN);
+
   if (!between (w.start, w.end, w.first)) {
     if (between (w.start, w.end, x)) {
       w.first = x;
@@ -38,6 +40,7 @@ p2p::updatesucc (wedge &w, sfs_ID &x)
   if (w.first == x)
     return false;
 
+  doActionCallbacks(x, ACT_NODE_JOIN);
   if (!between (w.start, w.end, w.first)) {
     if (between (w.start, w.end, x)) {
       w.first = x;
@@ -129,6 +132,7 @@ p2p::set_closeloc (wedge &w)
   // warnx << "set_closeloc: replace " << w.first << " with " << n << "\n";
   w.first = n;
   w.alive = true;
+  doActionCallbacks(n, ACT_NODE_JOIN);
 }
 
 
@@ -136,8 +140,8 @@ void
 p2p::updateloc (sfs_ID &x, net_address &r, sfs_ID &source)
 {
   if (locations[x] == NULL) {
-    // warnx << "add: " << x << " at port " << r.port << " source: " 
-    //	  << source << "\n";
+     warnx << "add: " << x << " at port " << r.port << " source: " 
+    	  << source << "\n";
     location *loc = New location (x, r, source);
     locations.insert (loc);
     doActionCallbacks(x, ACT_NODE_JOIN);
@@ -290,7 +294,7 @@ p2p::stabilize_getsucc_cb (sfs_ID s, net_address r, sfsp2pstat status)
     bootstrap ();
   } else {
     if (updatepred (predecessor, s)) {
-      print ();
+      //      print ();
       bootstrap ();
     }
   }
@@ -416,8 +420,8 @@ p2p::bootstrap_done ()
 
   if (!stable) 
     bootstrap ();
-  else
-    print ();
+  //  else
+  //  print ();
 
 }
 
@@ -431,7 +435,7 @@ p2p::bootstrap_succ_cb (int i, sfs_ID n, sfs_ID s,
     bootstrap_failure = true;
   } else {
     if (updatesucc (finger_table[i], s)) {
-      // warnx << "bootstrap_succ_cb: updated\n";
+      warnx << "bootstrap_succ_cb: updated\n";
       stable = false;
     }
     if (nbootstrap <= 0)

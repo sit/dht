@@ -1,4 +1,4 @@
-/* $Id: sfsrodb.C,v 1.6 2001/03/16 01:04:01 frank Exp $ */
+/* $Id: sfsrodb.C,v 1.7 2001/03/21 16:10:01 fdabek Exp $ */
 
 /*
  * Copyright (C) 1999 Kevin Fu (fubob@mit.edu)
@@ -699,7 +699,7 @@ recurse_path (const str path, sfs_hash * fh)
     // XXXXX need to take of the prefix of path
     directory.dir->path = substr (path, relpathlen);
 
-    //    warn << "Dir path" << directory.dir->path << "\n";
+        warn << "Dir path" << directory.dir->path << "\n";
 
     directory.dir->eof = true;
     rpc_ptr < sfsro_dirent > *direntp = &directory.dir->entries;
@@ -770,6 +770,7 @@ sfsrodb_main (const str root, const str keyfile, const char *dbfile)
   }
   else {
     str key = file2wstr (keyfile);
+    warn << key << "\n\n";
     if (!key) {
       warn << keyfile << ": " << strerror (errno) << "\n";
       fatal ("errors!\n");

@@ -104,24 +104,18 @@ main (int argc, char **argv)
 
 
   db = sfsrodb (sfsrodbfile);	// XXX - this is very poor style
-  db.getconnectres (&cres, wrap(&getcres_cb));
+
+
+  
+  db.getconnectres (&cres);
+  db.getinfo(&fsinfores);
+
   sigcb (SIGINT, wrap (exit, 1));
   sigcb (SIGTERM, wrap (exit, 1));
 
-  
+  start_server ();
   amain();
 }
-
-void getcres_cb() {
-  db.getinfo(&fsinfores, wrap(&getinfo_cb));
-}
-
-void getinfo_cb() {
-  start_server ();
-
-}
-
-
 
 
 
