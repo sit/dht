@@ -91,8 +91,10 @@ succ_list::stabilize_succlist ()
     
     int goodnodes = locations->usablenodes () - 1;
     int newnsucc = (NSUCC > goodnodes) ? goodnodes : NSUCC;
+    warnx << myID << ": estimating total number of nodes as "
+	  << locations->estimate_nodes () << ";"
     // warnx << myID << ": stabilize_succlist newnsucc = " << newnsucc
-    //	  << " goodnodes = " << goodnodes << "\n";
+	  << " goodnodes = " << goodnodes << "\n";
 
     // wait until we've discovered some other node via cts process.
     if (newnsucc == 0)

@@ -46,41 +46,6 @@ struct hashID {
   }
 };
 
-struct location;
-
-struct RPC_delay_args {
-  chordID ID;
-  rpc_program prog;
-  int procno;
-  ptr<void> in;
-  void *out;
-  aclnt_cb cb;
-  u_int64_t s;
-
-  tailq_entry<RPC_delay_args> q_link;
-
-  RPC_delay_args (chordID _ID, rpc_program _prog, int _procno,
-		 ptr<void> _in, void *_out, aclnt_cb _cb, u_int64_t _s) :
-    ID (_ID), prog (_prog), procno (_procno), 
-		   in (_in), out (_out), cb (_cb), s (_s) {};
-    
-};
-
-
-struct rpc_state {
-  aclnt_cb cb;
-  chordID ID;
-  u_int64_t s;
-  int progno;
-  long seqno;
-  rpccb_chord *b;
-  int rexmits;
-  
-  rpc_state (aclnt_cb c, chordID id, u_int64_t S, long s, int p) 
-    : cb (c), ID (id), s (S), progno (p), seqno (s), b (NULL), rexmits (0) {};
-
-};
-
 struct sent_elm {
   tailq_entry<sent_elm> q_link;
   long seqno;
@@ -89,13 +54,9 @@ struct sent_elm {
 };
 
 struct location {
-  //  int refcnt; // locs w. refcnt == 0 are in the cache; refcnt > 0 are fingers
   chordID n;
   net_address addr;
   sockaddr_in saddr;
-  ihash_entry<location> fhlink;
-  tailq_entry<location> cachelink;
-  sklist_entry<location> skiplink;
   u_int64_t rpcdelay;
   u_int64_t nrpc;
   u_int64_t maxdelay;
@@ -104,12 +65,63 @@ struct location {
   bool alive; // whether this node responded to its last RPC
   bool challenged; // whether this node has been succesfully challenged
   vec<cbchallengeID_t> outstanding_cbs;
-
-  location (chordID &_n, net_address &_r);
+  location (const chordID &_n, const net_address &_r);
   ~location ();
 };
 
+struct RPC_delay_args {
+  chordID ID;
+  rpc_program prog;
+  int procno;
+  ptr<void> in;
+  void *out;
+  aclnt_cb cb;
+
+  tailq_entry<RPC_delay_args> q_link;
+
+  RPC_delay_args (chordID _id, rpc_program _prog, int _procno,
+		  ptr<void> _in, void *_out, aclnt_cb _cb) :
+    ID (_id), prog (_prog), procno (_procno), in (_in), out (_out), cb (_cb) {};
+};
+
+struct rpc_state {
+  aclnt_cb cb;
+  ptr<location> loc;
+  chordID ID;
+  u_int64_t s;
+  int progno;
+  long seqno;
+  rpccb_chord *b;
+  int rexmits;
+  
+  rpc_state (aclnt_cb c, ptr<location> l, u_int64_t S, long s, int p) 
+    : cb (c), loc (l), s (S), progno (p), seqno (s), b (NULL), rexmits (0)
+  {
+    ID = l->n;
+  };
+};
+
 class locationtable : public virtual refcount {
+  typedef unsigned short loctype;
+  static const loctype LOC_REGULAR = 1 << 0;
+  static const loctype LOC_PINSUCC = 1 << 1;
+  static const loctype LOC_PINPRED = 1 << 2;
+  
+  struct locwrap {
+    ihash_entry<locwrap> hlink_;
+    tailq_entry<locwrap> uselink_;
+    sklist_entry<locwrap> sortlink_;
+
+    ptr<location> loc_; 
+    loctype type_;
+    chordID n_;
+    locwrap (ptr<location> l, loctype lt = LOC_REGULAR) :
+      loc_ (l), type_ (lt) { n_ = l->n; }
+    locwrap (const chordID &x, loctype lt) :
+      loc_ (NULL), type_ (lt), n_ (x) { }
+    bool good ();
+  };
+  
   ptr<chord> chordnode;
 #ifdef PNODE
   ptr<vnode> myvnode;
@@ -117,9 +129,9 @@ class locationtable : public virtual refcount {
 
   // Indices into our locations... for O(1) access, for expiring,
   //   for rapid successor/pred lookups.
-  ihash<chordID,location,&location::n,&location::fhlink,hashID> locs;
-  tailq<location, &location::cachelink> cachedlocs;
-  skiplist<location,chordID,&location::n,&location::skiplink> loclist;
+  ihash<chordID, locwrap, &locwrap::n_, &locwrap::hlink_, hashID> locs;
+  tailq<locwrap, &locwrap::uselink_> cachedlocs;
+  skiplist<locwrap, chordID, &locwrap::n_, &locwrap::sortlink_> loclist;
   size_t good;
 
   u_int32_t size_cachedlocs;
@@ -172,17 +184,34 @@ class locationtable : public virtual refcount {
 
   void connect_cb (location *l, callback<void, ptr<axprt_stream> >::ref cb, 
 		   int fd);
+
+  
+  void doRPC_udp (ptr<location> l, rpc_program progno, 
+		  int procno, ptr<void> in, 
+		  void *out, aclnt_cb cb);
+
+  void doRPC_tcp (ptr<location> l, rpc_program progno, 
+		  int procno, ptr<void> in, 
+		  void *out, aclnt_cb cb);
+
+  void doRPC_tcp_connect_cb (RPC_delay_args *args, int fd);
+
+  void doRPC_issue (ptr<location> l,
+		    rpc_program prog, int procno, 
+		    ptr<void> in, void *out, aclnt_cb cb,
+		    ref<aclnt> c);
+
   void doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err);
-  void doRPCreg_cb (chordID ID, aclnt_cb realcb, clnt_stat err);
+  void doRPCreg_cb (ptr<location> l, aclnt_cb realcb, clnt_stat err);
 
-  void dorpc_connect_cb(location *l, ptr<axprt_stream> x);
-  void chord_connect(chordID ID, callback<void, ptr<axprt_stream> >::ref cb);
-  void touch_cachedlocs (location *l);
-  void add_cachedlocs (location *l);
-  void delete_cachedlocs (void);
-  void remove_cachedlocs (location *l);
+  void dorpc_connect_cb (location *l, ptr<axprt_stream> x);
+  void chord_connect (chordID ID, callback<void, ptr<axprt_stream> >::ref cb);
 
-  void update_latency (chordID ID, u_int64_t lat, bool bf);
+  void delete_cachedlocs ();
+  void realinsert (ref<location> l);
+  ptr<location> lookup (const chordID &n);
+  
+  void update_latency (ptr<location> l, u_int64_t lat, bool bf);
   void ratecb ();
   void update_cwind (int acked);
   void rexmit_handler (rpc_state *s);
@@ -191,15 +220,16 @@ class locationtable : public virtual refcount {
   void rpc_done (long seqno);
   void reset_idle_timer ();
   void idle ();
-  void setup_rexmit_timer (chordID ID, long *sec, long *nsec);
+  void setup_rexmit_timer (ptr<location> l, long *sec, long *nsec);
   void timeout_cb (rpc_state *C);
   
   bool betterpred1 (chordID current, chordID target, chordID newpred);
 
   void ping_cb (cbping_t cb, clnt_stat err);
-  void challenge_cb (int challenge, chordID x,
+  void challenge_cb (int challenge, ptr<location> l,
 		     chord_challengeres *res, clnt_stat err);
 
+  void printloc (locwrap *l);
   
  public:
   locationtable (ptr<chord> _chordnode, int _max_connections);
@@ -210,55 +240,38 @@ class locationtable : public virtual refcount {
   u_long estimate_nodes () { return nnodes; }
   void replace_estimate (u_long o, u_long n);
 
-  void fill_getnodeext (chord_node_ext &data, chordID &x);
 #ifdef PNODE
   void setvnode (ptr<vnode> v) { myvnode = v; }
 #endif /* PNODE */  
   void incvnodes () { nvnodes++; };
-  void insertgood (chordID &n, sfs_hostname s, int p);
-  void insert (chordID &_n, sfs_hostname _s, int _p,
+  
+  void insertgood (const chordID &n, sfs_hostname s, int p);
+  void insert (const chordID &n, sfs_hostname s, int _p,
 	       cbchallengeID_t cb);
-  void cacheloc (chordID &x, net_address &r,
-		 cbchallengeID_t cb);
-#if 0  
-  void updateloc (chordID &x, net_address &r,
-		  cbchallengeID_t cb);
-#endif /* 0 */  
-  bool lookup_anyloc (chordID &n, chordID *r);
-  chordID closestsuccloc (chordID x);
-  chordID closestpredloc (chordID x);
+  void cacheloc (const chordID &x, net_address &r, cbchallengeID_t cb);
+  void pinsucc (const chordID &x);
+  void pinpred (const chordID &x);
+  
+  bool lookup_anyloc (const chordID &n, chordID *r);
+  chordID closestsuccloc (const chordID &x);
+  chordID closestpredloc (const chordID &x);
 
-  void doRPC (chordID &n, rpc_program progno, 
+  void doRPC (const chordID &n, rpc_program progno, 
 	      int procno, ptr<void> in, 
 	      void *out, aclnt_cb cb);
 
-  void doRPC_udp (chordID &n, rpc_program progno, 
-		  int procno, ptr<void> in, 
-		  void *out, aclnt_cb cb);
-
-  void doRPC_tcp (chordID &n, rpc_program progno, 
-		  int procno, ptr<void> in, 
-		  void *out, aclnt_cb cb);
-
-
-  void doRPC_tcp_connect_cb (RPC_delay_args *args, int fd);
-
-  void doRPC_issue (chordID &ID, 
-		    rpc_program prog, int procno, 
-		    ptr<void> in, void *out, aclnt_cb cb,
-		    ref<aclnt> c);
-
-  void ping (chordID ID, cbping_t cb);
-  void challenge (chordID &x, cbchallengeID_t cb);
+  void ping (const chordID &x, cbping_t cb);
+  void challenge (const chordID &x, cbchallengeID_t cb);
 
   void stats ();
     
   // info about a particular location...
-  bool alive (chordID &x);
-  bool challenged (chordID &x);
-  bool cached (chordID &x);
-  net_address & getaddress (chordID &x);
-  float get_a_lat (chordID &x);
+  bool alive (const chordID &x);
+  bool challenged (const chordID &x);
+  bool cached (const chordID &x);
+  net_address & getaddress (const chordID &x);
+  float get_a_lat (const chordID &x);
+  void fill_getnodeext (chord_node_ext &data, const chordID &x);
 };
 
 extern bool nochallenges;

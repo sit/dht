@@ -244,18 +244,17 @@ main (int argc, char **argv)
   p2psocket = "/tmp/chord-sock";
   str myname = my_addr ();
 
-  while ((ch = getopt (argc, argv, "S:cd:s:v:j:p:B:n:l:")) != -1)
+  while ((ch = getopt (argc, argv, "B:cd:j:l:M:n:p:S:s:v:")) != -1)
     switch (ch) {
-    case 'l':
-      if (inet_addr (optarg) == INADDR_NONE)
-	fatal << "must specify bind address in dotted decimal form\n";
-      myname = optarg;
+    case 'B':
+      cache_size = atoi (optarg);
       break;
-    case 'n':
-      nreplica = atoi (optarg);
+    case 'c':
+      warn << "XXX FIXME....'-c' flag currently has no effect --josh\n";  
+      do_cache = true;
       break;
-    case 'p':
-      myport = atoi (optarg);
+    case 'd':
+      db_name = optarg;
       break;
     case 'j': 
       {
@@ -279,18 +278,22 @@ main (int argc, char **argv)
 	
 	break;
       }
-    case 'B':
-      cache_size = atoi (optarg);
+    case 'l':
+      if (inet_addr (optarg) == INADDR_NONE)
+	fatal << "must specify bind address in dotted decimal form\n";
+      myname = optarg;
+      break;
+    case 'M':
+      max_loccache = atoi (optarg);
+      break;
+    case 'n':
+      nreplica = atoi (optarg);
+      break;
+    case 'p':
+      myport = atoi (optarg);
       break;
     case 'S':
       p2psocket = optarg;
-      break;
-    case 'c':
-       warn << "XXX FIXME....'-c' flag currently has no effect --josh\n";  
-      do_cache = true;
-      break;
-    case 'd':
-      db_name = optarg;
       break;
     case 's':
       ss_mode = atoi(optarg);

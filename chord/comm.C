@@ -35,38 +35,35 @@
 #ifndef STP_CONGESTION_CONTROL
 
 void
-locationtable::doRPC (chordID &ID, 
+locationtable::doRPC (const chordID &ID, 
 		      rpc_program prog, int procno, 
 		      ptr<void> in, void *out, aclnt_cb cb)
 {
-  location *l = locs[ID];
-  assert (l);
-  //  assert (l->refcnt >= 0);
-  touch_cachedlocs (l);
-  
+  ptr<location> l = lookup (ID);
+  if (!l) {
+    panic << "locationtable::doRPC: unable to look up " << ID << " for RPC.\n";
+    // XXX do something less belligerent.
+  }
+    
   ref<aclnt> c = aclnt::alloc (dgram_xprt, prog, 
 			       (sockaddr *)&(l->saddr));
   
-  c->call (procno, in, out, wrap (this, &locationtable::doRPCreg_cb, ID, cb));
+  c->call (procno, in, out, wrap (this, &locationtable::doRPCreg_cb, l, cb));
 }
 
 void
-locationtable::doRPCreg_cb (chordID ID, aclnt_cb realcb, clnt_stat err)
+locationtable::doRPCreg_cb (ptr<location> l, aclnt_cb realcb, clnt_stat err)
 {
-  location *l = locs[ID];
-  assert (l);
   if (err) {
     nrpcfailed++;
     if (l->alive) {
       good--;
       l->alive = false;
     }
-    // xxx we won't clean out a node while there's an outstanding RPC,
-    //     will we???
   } else {
     if (!l->alive) {
       l->alive = true;
-      if (l->alive && l->challenged)
+      if (l->challenged)
 	good++;
     }
   }
@@ -129,41 +126,40 @@ long geo_distance (chordID x, chordID y)
 const int dhashtcp (getenv ("DHASHTCP") ? 1 : 0);
 
 void
-locationtable::doRPC (chordID &ID, 
+locationtable::doRPC (const chordID &ID, 
 		      rpc_program prog, int procno, 
 		      ptr<void> in, void *out, aclnt_cb cb)
 {
+  ptr<location> l = lookup (ID);
+  if (l == NULL)
+    panic << "locationtable::doRPC: unable to look up " << ID << " for RPC.\n";
+  
   if (dhashtcp)
-    doRPC_tcp (ID, prog, procno, in, out, cb);
+    doRPC_tcp (l, prog, procno, in, out, cb);
   else
-    doRPC_udp (ID, prog, procno, in, out, cb);
+    doRPC_udp (l, prog, procno, in, out, cb);
 }
 
 
 void
-locationtable::doRPC_udp (chordID &ID, 
+locationtable::doRPC_udp (ptr<location> l,
 			  rpc_program prog, int procno, 
 			  ptr<void> in, void *out, aclnt_cb cb)
 {
   reset_idle_timer ();
   if (left + cwind < seqno) {
-    RPC_delay_args *args = New RPC_delay_args (ID, prog, procno,
-					       in, out, cb, getusec ());
+    RPC_delay_args *args = New RPC_delay_args (l, prog, procno,
+					       in, out, cb);
     enqueue_rpc (args);
   } else {
-    location *l = locs[ID];
-    assert (l);
-    //    assert (l->refcnt >= 0);
-    touch_cachedlocs (l);
-    
     ref<aclnt> c = aclnt::alloc (dgram_xprt, prog, 
 				 (sockaddr *)&(l->saddr));
-    doRPC_issue (ID, prog, procno, in, out, cb, c);
+    doRPC_issue (l, prog, procno, in, out, cb, c);
   }
 }
 
 void
-locationtable::doRPC_issue (chordID &ID, 
+locationtable::doRPC_issue (ptr<location> l,
 			    rpc_program prog, int procno, 
 			    ptr<void> in, void *out, aclnt_cb cb,
 			    ref<aclnt> c)
@@ -171,12 +167,7 @@ locationtable::doRPC_issue (chordID &ID,
   /* statistics */
   nsent++;
 
-  location *l = locs[ID];
-  assert (l);
-  //  assert (l->refcnt >= 0);
-  touch_cachedlocs (l);
-  
-  rpc_state *C = New rpc_state (cb, ID, getusec (), seqno, prog.progno);
+  rpc_state *C = New rpc_state (cb, l, getusec (), seqno, prog.progno);
   
   C->b = rpccb_chord::alloc (c, 
 			     wrap (this, &locationtable::doRPCcb, c, C),
@@ -190,7 +181,7 @@ locationtable::doRPC_issue (chordID &ID,
   sent_Q.insert_tail (s);
   
   long sec, nsec;
-  setup_rexmit_timer (ID, &sec, &nsec);
+  setup_rexmit_timer (l, &sec, &nsec);
   C->b->send (sec, nsec);
 
   seqno++;
@@ -237,16 +228,14 @@ locationtable::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
     warnx << "\tseqno " << C->seqno << "\n";
     warnx << "\trexmits " << C->rexmits << "\n";
 
-    if (locs[C->ID]->alive) {
+    if (C->loc->alive) {
       good--;
-      locs[C->ID]->alive = false;
+      C->loc->alive = false;
     }
-    // xxx we won't clean out a node while there's an outstanding RPC,
-    //     will we???
   } else {
-    if (!locs[C->ID]->alive) {
-      locs[C->ID]->alive = true;
-      if (locs[C->ID]->alive && locs[C->ID]->challenged)
+    if (!C->loc->alive) {
+      C->loc->alive = true;
+      if (C->loc->challenged)
 	good++;
     }
     if (C->s > 0) {
@@ -254,7 +243,7 @@ locationtable::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
       // prevent overflow, caused by time reversal
       if (now >= C->s) {
 	u_int64_t lat = now - C->s;
-	update_latency (C->ID, lat, (C->progno == DHASH_PROGRAM));
+	update_latency (C->loc, lat, (C->progno == DHASH_PROGRAM));
       } else {
 	warn << "*** Ignoring timewarp: C->s " << C->s << " > now " << now << "\n";
 	warnx << " " << now       << "\n";
@@ -322,7 +311,7 @@ locationtable::rpc_done (long acked_seqno)
   while (Q.first && (left + cwind >= seqno) ) {
     int qsize = (num_qed > 100) ? 100 :  num_qed;
     int next = (int)(qsize*((float)random()/(float)RAND_MAX));
-    RPC_delay_args *args =  Q.first;
+    RPC_delay_args *args = Q.first;
     for (int i = 0; (args) && (i < next); i++)
       args = Q.next (args);
     assert (args);
@@ -400,7 +389,7 @@ locationtable::enqueue_rpc (RPC_delay_args *args)
 
 
 void
-locationtable::setup_rexmit_timer (chordID ID, long *sec, long *nsec)
+locationtable::setup_rexmit_timer (ptr<location> l, long *sec, long *nsec)
 {
 #define MIN_SAMPLES 10
 
@@ -416,7 +405,6 @@ locationtable::setup_rexmit_timer (chordID ID, long *sec, long *nsec)
     alat = 1000000;
 
 #ifdef USE_PERHOST_LATENCIES
-  location *l = locs[ID];
   if (l->nrpc > MIN_SAMPLES) 
     alat = l->a_lat + 4*l->a_var;
 #endif /* USE_PERHOST_LATENCIES */
@@ -473,11 +461,8 @@ myselect (float *A, int p, int r, int i)
 
 
 void
-locationtable::update_latency (chordID ID, u_int64_t lat, bool bf)
+locationtable::update_latency (ptr<location> l, u_int64_t lat, bool bf)
 {
-  location *l = locs[ID];
-  assert (l);
-
   l->rpcdelay += lat;
   l->nrpc++;
   rpcdelay += lat;
@@ -500,12 +485,14 @@ locationtable::update_latency (chordID ID, u_int64_t lat, bool bf)
 #define NUMLOCS 100
 #define PERCENTILE 0.95
 
-  location *cl = locs.first ();
+  locwrap *cl = locs.first ();
+  while (cl && cl->type_ != LOC_REGULAR) cl = locs.next (cl);
   float host_lats [NUMLOCS];
   int i;
   for (i = 0; i < NUMLOCS && cl; i++) {
-    host_lats[i] = cl->a_lat + 4*cl->a_var;
+    host_lats[i] = cl->loc_->a_lat + 4*cl->loc_->a_var;
     cl = locs.next (cl);
+    while (cl && cl->type_ != LOC_REGULAR) cl = locs.next (cl);
   }
   int which = (int)(PERCENTILE*i);
   avg_lat = myselect (host_lats, 0, i - 1, which + 1);
@@ -537,19 +524,18 @@ locationtable::stats ()
   warnx << buf;
   sprintf(buf, "       Average cwind: %f\n", cwind_cum/num_cwind_samples);
   warnx << buf << "  Per link avg. RPC latencies\n";
-  for (location *l = locs.first (); l ; l = locs.next (l)) {
-    warnx << "    link " << l->n
-       // << " : refcnt: " << l->refcnt
-	  << " # RPCs: " << l->nrpc
-	  << " challenged: " << l->challenged << "\n";
+  for (locwrap *l = locs.first (); l ; l = locs.next (l)) {
+    warnx << "    link " << l->loc_->n
+	  << " # RPCs: " << l->loc_->nrpc
+	  << " challenged: " << l->loc_->challenged << "\n";
     sprintf (buf, "       Average latency: %f\n"
 	     "       Average variance: %f\n",
-	     l->a_lat, l->a_var);
+	     l->loc_->a_lat, l->loc_->a_var);
     warnx << buf;
-    sprintf (buf, "       Max latency: %qd\n", l->maxdelay);
+    sprintf (buf, "       Max latency: %qd\n", l->loc_->maxdelay);
     warnx << buf;
     sprintf (buf, "       Net address: %s\n", 
-	     inet_ntoa (l->saddr.sin_addr));
+	     inet_ntoa (l->loc_->saddr.sin_addr));
     warnx << buf;
   }
   if (shortstats) return;
@@ -588,18 +574,13 @@ locationtable::stats ()
 
 
 void
-locationtable::doRPC_tcp (chordID &ID, 
+locationtable::doRPC_tcp (ptr<location> l,
 			  rpc_program prog, int procno, 
 			  ptr<void> in, void *out, aclnt_cb cb)
 {
-  location *l = locs[ID];
-  assert (l);
-  touch_cachedlocs (l);
-
   // hack to avoid limit on wrap()'s number of arguments
-  RPC_delay_args *args = New RPC_delay_args (ID, prog, procno,
-					     in, out, cb, getusec ());
-
+  RPC_delay_args *args = New RPC_delay_args (l->n, prog, procno,
+					     in, out, cb);
 
   // wierd: tcpconnect wants the address in NBO, and port in HBO
   tcpconnect (l->saddr.sin_addr, ntohs (l->saddr.sin_port),
@@ -615,7 +596,6 @@ locationtable::doRPC_tcp_connect_cb (RPC_delay_args *args, int fd)
     (args->cb) (RPC_CANTSEND);
     return;
   }
-
 
   chordID ID = args->ID;
 

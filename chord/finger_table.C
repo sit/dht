@@ -9,6 +9,7 @@ finger_table::finger_table (ptr<vnode> v,
   for (int i = 0; i < NBIT; i++) {
     starts[i] = successorID (myID, i);
     fingers[i] = myID;
+    locations->pinsucc (starts[i]);
   }
 
   f = 0;

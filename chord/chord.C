@@ -55,6 +55,8 @@ vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
   locations->incvnodes ();
 
   predecessor = myID;
+  locations->pinpred (myID);
+  locations->pinsucc (myID);
 
   ngetsuccessor = 0;
   ngetpredecessor = 0;
