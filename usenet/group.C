@@ -29,13 +29,13 @@ grouplist::next (str *f, unsigned long *i)
 
 
 
-unsigned long
+int
 group::open (str g)
 {
   rec = group_db->lookup(New refcounted<dbrec> (g, g.len ()));
   if (rec == NULL) {
     warn << "can't find group " << g << " " << g.len () << "\n";
-    return -1UL;
+    return -1;
   }
   warn << "rec len " << rec->len << "\n";
 
@@ -45,26 +45,28 @@ group::open (str g)
   return 0;
 }
 
-unsigned long
-group::open (str g, unsigned long *first, unsigned long *last)
+int
+group::open (str g, volatile unsigned long *count,
+	     unsigned long *first, unsigned long *last)
 {
   if (open (g) < 0)
-    return -1UL;
+    return -1;
 
   char *c = rec->value;
-  int len = rec->len, i = 0;
+  int len = rec->len;
+  *count = 0;
   *first = 0;
   *last = 0;
 
   for (; listrx.search (str (c, len))
        ; c += listrx.len (0), len -= listrx.len (0) ) {
-    if (i == 0)
+    if (*count == 0)
       *first = strtoul (listrx[1], NULL, 10);
-    i++;
+    (*count)++;
     *last = strtoul (listrx[1], NULL, 10);
   }
 
-  return i;
+  return 0;
 }
 
 static rxx listrxend (".*(\\d+)(<.+?>)$");
@@ -112,7 +114,7 @@ group::xover (unsigned long a, unsigned long b)
 {
   start = a;
   stop = b;
-  // xxx b == -1
+
   assert (rec);
   c = rec->value;
   len = rec->len;

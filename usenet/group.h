@@ -20,8 +20,8 @@ struct group {
   str group_name;
 
   group () : rec (0), cur_art (0) {};
-  unsigned long open (str);
-  unsigned long open (str, unsigned long *, unsigned long *);
+  int open (str);
+  int open (str, volatile unsigned long *, unsigned long *, unsigned long *);
   str name (void) { return group_name; };
   
   void xover (unsigned long, unsigned long);

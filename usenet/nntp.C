@@ -59,8 +59,10 @@ nntp::output (void)
   warn << out;
 
   int left = out.tosuio ()->output (s);
-  // xxx check if left < 0?
-  if (!left)
+
+  if (left < 0)
+    delete this;
+  else if (!left)
     fdcb (s, selwrite, NULL);
 }
 
@@ -69,8 +71,6 @@ nntp::command (void)
 {
   suio in;
   int res;
-
-  //  timemark("cmd");
 
   res = in.input (s);
   if (res <= 0) {
@@ -97,44 +97,52 @@ nntp::cmd_hello (str c) {
   out << hello;
 }
 
+// format:  foo 2 1 y\r\n
+
 void
 nntp::cmd_list (str c) {
   warn << "list\n";
-  out << listb;
-  // foo 2 1 y\r\n
   grouplist g;
   str n;
   unsigned long i;
 
+  out << listb;
   do {
     g.next (&n, &i);
     out << n << " " << i << " 1 y\r\n";
   } while (g.more ());
-
   out << period;
 }
 
-static rxx overrx ("^XOVER ?(\\d+)?(-)?(\\d+)?");
+static rxx overrx ("^XOVER( ((\\d+)-)?(\\d+)?)?");
+//( (\\d+)?((\\d+)-(\\d+)?)?)?");
+// ?(\\d+)?(-)?(\\d+)?");
 
 void
 nntp::cmd_over (str c) {
   warn << "over " << c;
+  unsigned long start, stop = -1UL;
 
   if (!cur_group.loaded ()) {
     out << nogroup;
   } else if (overrx.search (c)) {
-    // xxx can crash on bad input? XOVER -3
+    // extract start and stop
+
     if (overrx[3]) {
-      // range
-      cur_group.xover (strtoul (overrx[1], NULL, 10), 
-		       strtoul (overrx[3], NULL, 10));
-    } else if (overrx[2]) {
       // endless
-    } else if (overrx[1]) {
+      start = strtoul (overrx[3], NULL, 10);
+      if (overrx[4]) {
+	// range
+	stop = strtoul (overrx[4], NULL, 10);
+      }
+    } else if (overrx[4]) {
       // single
+      start = stop = strtoul (overrx[4], NULL, 10);
     } else {
       // current
+      start = stop = cur_group.cur_art;
     }
+    cur_group.xover (start, stop);
 
     out << overview;
     do {
@@ -152,13 +160,13 @@ static rxx grouprx ("^GROUP (.+)\r\n", "m");
 void
 nntp::cmd_group (str c) {
   warn << "group " << c;
-  unsigned long i, first, last;
+  unsigned long count, first, last;
 
   if (grouprx.search (c)) {
-    if ((i = cur_group.open (grouprx[1], &first, &last)) < 0) {
+    if (cur_group.open (grouprx[1], &count, &first, &last) < 0) {
       out << badgroup;
     } else {
-      out << groupb << i << " " << first << " " << last << " " << cur_group.name () << groupe;
+      out << groupb << count << " " << first << " " << last << " " << cur_group.name () << groupe;
     }
   } else
     out << syntax;
