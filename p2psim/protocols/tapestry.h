@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.36 2004/01/26 21:56:59 strib Exp $ */
+/* $Id: tapestry.h,v 1.37 2004/01/28 22:22:05 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -125,6 +125,7 @@ public:
     uint num_tries;
     uint num_timeouts;
     Time time_timeouts;
+    uint hopcount;
   };
 
   void lookup_wrapper(wrap_lookup_args *args);

@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.47 2004/01/27 04:26:31 strib Exp $ */
+/* $Id: tapestry.C,v 1.48 2004/01/28 22:22:04 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -172,6 +172,7 @@ Tapestry::lookup(Args *args)
   wla->key = key;
   wla->starttime = now();
   wla->num_tries = 1;
+  wla->hopcount = 0;
   wla->num_timeouts = 0;
   wla->time_timeouts = 0;
 
@@ -204,6 +205,7 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
     return;
   }
 
+  args->hopcount += lr.hopcount;
   args->num_timeouts += lr.num_timeouts;
   args->time_timeouts += lr.time_timeouts;
 
@@ -218,21 +220,21 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
     if( _verbose ) {
       TapDEBUG(0) << "Lookup complete for key " << print_guid(args->key) 
 		  << ": ip " << lr.owner_ip << ", id " 
-		  << print_guid(lr.owner_id) << ", hops " << lr.hopcount
+		  << print_guid(lr.owner_id) << ", hops " << args->hopcount
 		  << ", numtries " << args->num_tries << endl;
     }
     _num_lookups++;
     _num_succ_lookups++;
-    _num_hops += lr.hopcount;
+    _num_hops += args->hopcount;
     if( _direct_reply ) {
       _total_latency += ( lr.time_done - args->starttime );
       record_lookup_stat( ip(), lr.owner_ip, lr.time_done - args->starttime,
-			  true, true, lr.hopcount, args->num_timeouts, 
+			  true, true, args->hopcount, args->num_timeouts, 
 			  args->time_timeouts);
     } else {
       _total_latency += ( now() - args->starttime );
       record_lookup_stat( ip(), lr.owner_ip, now() - args->starttime,
-			  true, true, lr.hopcount, args->num_timeouts, 
+			  true, true, args->hopcount, args->num_timeouts, 
 			  args->time_timeouts);
     }
     delete args;
@@ -253,7 +255,7 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
 		      << endl;
 	}
 	record_lookup_stat( ip(), ip(), _max_lookup_time,
-			    false, false, lr.hopcount, args->num_timeouts, 
+			    false, false, args->hopcount, args->num_timeouts, 
 			    args->time_timeouts );
 	_num_fail_lookups++;
       } else if( lr.owner_id != lr.real_owner_id ) {
@@ -268,11 +270,11 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
 		      << ": ip " << lr.owner_ip << ", id " 
 		      << print_guid(lr.owner_id) << ", real root " 
 		      << print_guid(lr.real_owner_id) << " hops " 
-		      << lr.hopcount << ", numtries " << args->num_tries 
+		      << args->hopcount << ", numtries " << args->num_tries 
 		      << endl;
 	}
 	record_lookup_stat( ip(), ip(), _max_lookup_time,
-			    true, false, lr.hopcount, args->num_timeouts, 
+			    true, false, args->hopcount, args->num_timeouts, 
 			    args->time_timeouts );
 	_num_inc_lookups++;
       } else {
@@ -280,7 +282,7 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
       }
 
       _num_lookups++;
-      _num_hops += lr.hopcount;
+      _num_hops += args->hopcount;
       // all failures get the max time
       _total_latency += _max_lookup_time;
 
@@ -323,8 +325,6 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
     if( next == ip() ) {
       ret->owner_ip = ip();
       ret->owner_id = id();
-      // this will be incremented at each hop backwards
-      ret->hopcount = 0;
       ret->real_owner_id = lookup_cheat( args->key );
       ret->failed = false;
       if( _direct_reply ) {
@@ -347,6 +347,8 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
 			 _rtt_timeout_factor*_rt->get_time(nextid) );
       if( succ ) {
 	_last_heard_map[next] = now();
+	// every successful RPC counts as a "hop"
+	ret->hopcount++;
 	if( !_direct_reply || (ret->failed && args->looker == ip()) ) {
 	  // only record in the non-direct reply case OR
 	  // if it's a direct reply and a failure, we should include 
@@ -363,13 +365,12 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
 	}
 
 	// record the timeout stats
+	// every unsuccessful RPC counts as a "timeout"
 	ret->num_timeouts++;
 	ret->time_timeouts += (now() - before);
 
       }
       if( succ && !ret->failed ) {
-	// don't need to try the next one
-	ret->hopcount++;
 	break;
       } else {
  
@@ -460,6 +461,8 @@ Tapestry::check_node(check_node_args *args)
     _rt->remove( dstid, false );
     _rt->remove_backpointer( args->ip, dstid );
     _recently_dead.push_back(dstid);    
+    TapDEBUG(2) << "Declaring (" << args->ip << "/" << print_guid(dstid) 
+		<< ") dead in check_node" << endl;
   }
   delete args;
 }
@@ -1554,6 +1557,8 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
 	// put another shrimp on the barbie . . .
 	check_node_args *ca = New check_node_args();
 	ca->ip = pi->ip;
+	TapDEBUG(2) << "Forking off check of (" << pi->ip << "/" 
+		    << print_guid(pi->id) << ")" << endl;
 	delaycb( 1, &Tapestry::check_node, ca );
       }
       
