@@ -138,7 +138,7 @@ initID (str s, chordID *ID)
 }
 
 static void
-parseconfigfile (str cf, int index, int set_rpcdelay)
+parseconfigfile (str cf, int nvnode, int set_rpcdelay)
 {  
   parseargs pa (cf);
   bool errors = false;
@@ -155,7 +155,6 @@ parseconfigfile (str cf, int index, int set_rpcdelay)
   int ss = 10000;
   int cs = 1000;
   myport = 0;
-  int nvnode = 1;
   while (pa.getline (&av, &line)) {
     if (!strcasecmp (av[0], "#")) {
     } else if (!strcasecmp (av[0], "myport")) {
@@ -173,11 +172,6 @@ parseconfigfile (str cf, int index, int set_rpcdelay)
       if (av.size () != 2 || !convertint (av[1], &wellknownport)) {
         errors = true;
         warn << cf << ":" << line << ": usage: wellknownport <number>\n";
-      }
-    } else if (!strcasecmp (av[0], "vnode")) {
-      if (av.size () != 2 || !convertint (av[1], &nvnode)) {
-        errors = true;
-        warn << cf << ":" << line << ": usage: vnode <number>\n";
       }
     } else if (!strcasecmp (av[0], "myID")) {
       if (av.size () != 2) {
@@ -243,39 +237,37 @@ parseconfigfile (str cf, int index, int set_rpcdelay)
 static void
 usage ()
 {
-  warnx << "Usage: " << progname << " [-p port] [-S socket]\n";
+  warnx << "Usage: " << progname 
+	<< "-d <dbfile> -S <sock> -v <nvnode> -f <conffile> -c <cache?>\n"; 
   exit (1);
 }
 
 int
 main (int argc, char **argv)
 {
-  int index = 0;
+  int vnode = 1;
   setprogname (argv[0]);
   sfsconst_init ();
   random_init ();
   int ch;
   do_cache = 0;
   int set_name = 0;
-  int set_index = 0;
   int set_rpcdelay = 0;
   
-  while ((ch = getopt (argc, argv, "d:S:i:f:c")) != -1)
+  while ((ch = getopt (argc, argv, "d:S:v:f:c")) != -1)
     switch (ch) {
     case 'S':
       p2psocket = optarg;
       break;
-    case 'i':
-      set_index = 1;
-      index = atoi (optarg);
+    case 'v':
+      vnode = atoi (optarg);
       break;
     case 'r':
       set_rpcdelay = atoi(optarg);
       break;
     case 'f':
       if (!set_name) fatal("must specify db name\n");
-      if (!set_index) fatal ("must specify virtual index\n");
-      parseconfigfile (optarg, index, set_rpcdelay);
+      parseconfigfile (optarg, vnode, set_rpcdelay);
       break;
     case 'c':
       do_cache = 1;
