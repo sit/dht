@@ -95,6 +95,7 @@ struct f_node {
     if (predecessor) delete predecessor;
     if (successors) delete successors;
     if (toes) delete toes;
+    if (debruijn) delete debruijn;
   };
 };
 
