@@ -98,6 +98,15 @@ public:
     return r;
   };
 
+  static CHID log_b(CHID n, uint base) {
+    unsigned int i = 0;
+    while (n > 0) {
+      n = n / base;
+      i++;
+    }
+    return i - 1;
+  }
+
 };
 
 #endif // __CONSISTENTHASH_H

@@ -6,20 +6,9 @@ using namespace std;
 
 #define BASE 2
 
-static inline unsigned int 
-log_b(ConsistentHash::CHID gap, uint base)
-{
-  unsigned int i = 0;
-  while (gap > 0) {
-    gap = gap / base;
-    i++;
-  }
-  return i;
-}
-
 ChordFinger::ChordFinger(Node *n) : Chord(n) 
 {
-  uint level = log_b((CHID)-1, BASE);
+  uint level = (uint) ConsistentHash::log_b((CHID)-1, BASE);
   CHID finger;
   CHID lap = 1;
   uint num = 0;
@@ -41,7 +30,7 @@ ChordFinger::fix_fingers()
   IDMap succ = loctable->succ(me.id + 1);
 
   if (succ.ip == 0 || succ.id == me.id) return;
-  unsigned int i0 = log_b(succ.id - me.id, 2);
+  unsigned int i0 = (uint) ConsistentHash::log_b(succ.id - me.id, 2);
   
   //
   vector<Chord::IDMap> v;
@@ -85,7 +74,7 @@ ChordFinger::stabilized(vector<CHID> lid)
   CHID finger;
   uint pos;
 
-  uint level = log_b((CHID)-1, BASE);
+  uint level = (uint) ConsistentHash::log_b((CHID)-1, BASE);
   CHID lap = 1;
 
   IDMap succ;
@@ -114,7 +103,7 @@ ChordFinger::dump()
 {
   Chord::dump();
   IDMap succ = loctable->succ(me.id + 1);
-  unsigned int i0 = log_b(succ.id - me.id,2);
+  unsigned int i0 = (uint) ConsistentHash::log_b(succ.id - me.id,2);
   CHID finger;
   for (unsigned int i = i0; i < NBCHID; i++) {
     finger = ConsistentHash::successorID(me.id,i);
