@@ -227,33 +227,55 @@ Ida::unpack (const str &in, vec<u_long> &out)
   return true;
 }
 
+static void
+drop (vec<str> &frags, unsigned i)
+{
+  for (unsigned x = i; x+1 < frags.size (); x++) {
+    frags [x] = frags [x+1];
+  }
+  frags.pop_back ();
+}
+
+static void
+random_shuffle (vec<str> &frags)
+{
+  for (unsigned i=0; i<frags.size (); i++) {
+    int r = rand () % (frags.size ());
+    if ((unsigned)r == i) continue;
+    str t = frags [i];
+    frags [i] = frags [r];
+    frags [r] = t;
+  }
+}
+
 /*
  * Decodes the fragments in frags and returns recoded block in out.
  */
 bool
-Ida::reconstruct (const vec<str> &frags, strbuf &out)
+Ida::reconstruct (const vec<str> &f, strbuf &out)
 {
-  if (frags.size () == 0) {
+  if (f.size () == 0) {
     idatrace << "no fragments!\n";
     return false;
   }
   int inp = 0;
 
-#if 0
-  // Select a random combination of the supplied fragments.
-  vec<ptrdiff_t> o;
-  o.setsize (frags.size ());
-#endif /* 0 */  
-  
+  vec<str> frags = f;
+  random_shuffle (frags);
+
   u_long len = unpackone (frags[0], inp);
   u_long rawlen = unpackone (frags[0], inp);
   u_long m = unpackone (frags[0], inp);
   if (len < m + 4) {
-    idatrace << "fragment 0 too short; coded length " << frags[0].len () << "\n";
+    idatrace
+      << "fragment 0 too short; coded length " << frags[0].len () << "\n";
     return false;
   }
   if (frags.size () < m) {
-    //idatrace << "not enough fragments (" << frags.size () << "/" << m << ").\n";
+#if 0
+    idatrace
+      << "not enough fragments (" << frags.size () << "/" << m << ").\n";
+#endif
     return false;
   }
   
@@ -272,19 +294,22 @@ Ida::reconstruct (const vec<str> &frags, strbuf &out)
       idatrace << "fragment " << i << " length " << len
 	       << " too short; want at least " << m + 4 << "; coded length "
 	       << in.len () << ".\n";
-      return false;
+      drop (frags, i);
+      continue;
     }
     u_long myrawlen = unpackone (in, inp);
     if (myrawlen != rawlen) {
       idatrace << "fragment " << i << " rawlen = " << myrawlen
 	       << " not consistent; expected rawlen = " << rawlen << "\n";
-      return false;
+      drop (frags, i);
+      continue;
     }
     u_long mym = unpackone (in, inp);
     if (mym != m) {
       idatrace << "fragment " << i << " m = " << mym
 	       << " not consistent; expected m = " << m << "\n";
-      return false;
+      drop (frags, i);
+      continue;
     }
 
     // Extract row of encode matrix
@@ -300,7 +325,8 @@ Ida::reconstruct (const vec<str> &frags, strbuf &out)
       idatrace << "fragment " << i << " block length " << myblocksize
 	       << " not consistent; expected " << blocksize << "\n";
       idatrace << hexdump (in.cstr (), in.len ()) << "\n";
-      return false;
+      drop (frags, i);
+      continue;
     }
     len -= m + 4;
     assert (len == blocksize);
@@ -316,7 +342,12 @@ Ida::reconstruct (const vec<str> &frags, strbuf &out)
     a.push_back (arow);
     dfrags.push_back (drow);
   }
-  
+
+  if (frags.size () < m) {
+    idatrace << "not enough fragments left\n";
+    return false;
+  }
+
   // Calculate the decode matrix
   vec<vec<u_long> > a_inv;
   bool ok = minvert (m, m, a, a_inv);
