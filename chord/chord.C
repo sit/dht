@@ -280,14 +280,39 @@ vnode::doget_predecessor (svccb *sbp)
 }
 
 void
+vnode::do_upcall (int upcall_prog, int upcall_proc,
+		  void *uc_args, int uc_args_len,
+		  cbupcalldone_t done_cb)
+
+{
+  cbupcall_t cb = upcall_table[upcall_prog];
+  assert (cb);
+  
+  rpc_program *prog;
+  chordnode->get_program (upcall_prog, &prog);
+  assert (prog);
+  
+  xdrmem x ((char *)uc_args, uc_args_len, XDR_DECODE);
+  xdrproc_t proc = prog->tbl[upcall_proc].xdr_arg;
+  assert (proc);
+  
+  char *unmarshalled_args = New char[uc_args_len];
+  bzero (unmarshalled_args, uc_args_len);
+  if (!proc (x.xdrp (), unmarshalled_args))
+    fatal << "upcall: error unmarshalling arguments\n";
+  
+  //run the upcall. It returns a pointer to its result and a length in the cb
+  (*cb)(upcall_proc, (void *)unmarshalled_args, done_cb);
+}
+
+void
 vnode::dotestrange_findclosestpred (svccb *sbp, chord_testandfindarg *fa) 
 {
   ndotestrange++;
   chordID x = fa->x;
-  chord_testandfindres *res;
   chordID succ = successors->succ ();
 
-  res = New chord_testandfindres ();  
+  chord_testandfindres *res = New chord_testandfindres ();  
   if (locations->alive (succ) && 
       betweenrightincl(myID, succ, x) ) {
     warnt("CHORD: testandfind_inrangereply");
@@ -302,32 +327,14 @@ vnode::dotestrange_findclosestpred (svccb *sbp, chord_testandfindarg *fa)
     warnt("CHORD: testandfind_notinrangereply");
   }
 
-  if (fa->upcall_prog) {
-    cbupcall_t cb = upcall_table[fa->upcall_prog];
-    assert (cb);
+  if (fa->upcall_prog)  {
+    do_upcall (fa->upcall_prog, fa->upcall_proc,
+	       fa->upcall_args.base (), fa->upcall_args.size (),
+	       wrap (this, &vnode::chord_upcall_done, fa, res, sbp));
 
-    rpc_program *prog;
-    chordnode->get_program (fa->upcall_prog, &prog);
-    assert (prog);
-    
-    xdrmem x (fa->upcall_args.base (), fa->upcall_args.size (), XDR_DECODE);
-    xdrproc_t proc = prog->tbl[fa->upcall_proc].xdr_arg;
-    assert (proc);
-    
-    char *unmarshalled_args = New char[fa->upcall_args.size ()];
-    bzero (unmarshalled_args, fa->upcall_args.size ());
-    if (!proc (x.xdrp (), unmarshalled_args)) {
-      warn << "upcall: error unmarshalling arguments\n";
-      return;
-    }
-    
-    (*cb)(fa->upcall_proc, (void *)unmarshalled_args, 
-	  wrap (this, &vnode::upcall_done, fa, res, sbp, unmarshalled_args));
   } else {
-    if (res->status == CHORD_INRANGE)
-      res->inrange->upcall_res.setsize (0);
-    else
-      res->notinrange->upcall_res.setsize (0);
+    if (res->status == CHORD_INRANGE) res->inrange->stop = false;
+    else res->inrange->stop = false;
 
     sbp->reply(res);
     delete res;
@@ -335,40 +342,17 @@ vnode::dotestrange_findclosestpred (svccb *sbp, chord_testandfindarg *fa)
 }
 
 void
-vnode::upcall_done (chord_testandfindarg *fa,
-		    chord_testandfindres *res,
-		    svccb *sbp,
-		    char *args,
-		    void *uc_res)
+vnode::chord_upcall_done (chord_testandfindarg *fa,
+			  chord_testandfindres *res,
+			  svccb *sbp,
+			  bool stop)
 {
-  //marshall the result
-  rpc_program *prog;
-  chordnode->get_program (fa->upcall_prog, &prog);
-  assert (prog);
-  xdrproc_t proc = prog->tbl[fa->upcall_proc].xdr_res;
-  assert (proc);
+  
+  if (res->status == CHORD_INRANGE) res->inrange->stop = stop;
+  else res->notinrange->stop = stop;
 
-  xdrsuio x (XDR_ENCODE);
-  if (!proc (x.xdrp (), static_cast<void *> (uc_res))) {
-    warn << "upcall: failed to marshall result\n";
-    assert (0);
-  }
-  
-  size_t marshalled_len = x.uio ()->resid ();
-  char *marshalled_data = suio_flatten (x.uio ());
-  
-  if (res->status == CHORD_INRANGE) {
-    res->inrange->upcall_res.setsize (marshalled_len);
-    memcpy (res->inrange->upcall_res.base (), marshalled_data, marshalled_len);
-  } else {
-    res->notinrange->upcall_res.setsize (marshalled_len);
-    memcpy (res->notinrange->upcall_res.base (), 
-	    marshalled_data, marshalled_len);
-  }
-  
   sbp->reply (res);
   delete res;
-  delete args;
 }
 
 

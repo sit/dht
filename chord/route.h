@@ -24,9 +24,22 @@ class route_iterator : public virtual refcount {
   chordID key () { return x; };
   route path () { return search_path; };
   chordstat status () { return r; };
+
   virtual void print ();
   virtual void first_hop (cbhop_t cb) {};
   virtual void next_hop () {};
+
+  static char * marshall_upcall_args (rpc_program *prog, 
+				      int uc_procno,
+				      ptr<void> uc_args,
+				      int *upcall_args_len);
+  
+  static bool unmarshall_upcall_res (rpc_program *prog, 
+				     int uc_procno, 
+				     void *upcall_res,
+				     int upcall_res_len,
+				     void *dest);
+
 };
 
 class route_chord : public route_iterator {
@@ -34,13 +47,14 @@ class route_chord : public route_iterator {
   void make_hop_cb (chord_testandfindres *res, clnt_stat err);
   void make_route_done_cb (chordID s, bool ok, chordstat status);
   void make_hop_done_cb (chordID s, bool ok, chordstat status);
+  void send_hop_cb (bool done);
 
   bool do_upcall;
   int uc_procno;
   ptr<void> uc_args;
-  void *upcall_res;
-  int upcall_res_len;
   rpc_program prog;
+  bool stop;
+  bool last_hop;
 
  public:
   route_chord (ptr<vnode> vi, chordID xi);
@@ -49,10 +63,12 @@ class route_chord : public route_iterator {
 	       int uc_procno,
 	       ptr<void> uc_args);
 
-  void first_hop (cbhop_t cb);
-  void next_hop ();
-  void get_upcall_res (void *res);
+  void first_hop (cbhop_t cb, bool ucs = false);
+  void first_hop (cbhop_t cb, chordID guess);
+  void send (chordID guess);
+  void send (bool ucs = false);
 
+  void next_hop ();
 };
 
 class route_debruijn: public route_iterator {

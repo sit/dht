@@ -52,9 +52,8 @@ typedef callback<void,chordID,net_address,chordstat>::ref cbchordID_t;
 typedef callback<void,vec<chord_node>,chordstat>::ref cbchordIDlist_t;
 typedef callback<void,chordID,route,chordstat>::ref cbroute_t;
 typedef callback<void, svccb *>::ref cbdispatch_t;
-/* cbupcall_t (int procno, void *marshalled_args, void **result) */
-/* NOTE: marshalled_args WILL BE FREED after the callback exits */
-typedef callback<void, void *>::ref cbupcalldone_t;
+
+typedef callback<void, bool>::ref cbupcalldone_t;
 typedef callback<void, int, void *, cbupcalldone_t>::ref cbupcall_t; 
 
 class route_iterator;
@@ -137,11 +136,15 @@ class vnode : public virtual refcount, public stabilizable {
   void doalert_cb (svccb *sbp, chordID x, chordID s, net_address r, 
 		   chordstat stat);
 
-  void upcall_done (chord_testandfindarg *fa,
-		    chord_testandfindres *res,
-		    svccb *sbp,
-		    char *args,
-		    void *uc_res);
+  void chord_upcall_done (chord_testandfindarg *fa,
+			  chord_testandfindres *res,
+			  svccb *sbp,
+			  bool stop);
+  
+  void do_upcall (int upcall_prog, int upcall_proc,
+		  void *uc_args, int uc_args_len,
+		  cbupcalldone_t app_cb);
+
  public:
   chordID myID;
   ptr<chord> chordnode;

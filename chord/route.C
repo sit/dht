@@ -8,19 +8,49 @@ route_iterator::print ()
   }
 }
 
+char *
+route_iterator::marshall_upcall_args (rpc_program *prog, 
+				      int uc_procno,
+				      ptr<void> uc_args,
+				      int *upcall_args_len)
+{
+  xdrproc_t inproc = prog->tbl[uc_procno].xdr_arg;
+  xdrsuio x (XDR_ENCODE);
+  if ((!inproc) || (!inproc (x.xdrp (), uc_args))) 
+    return NULL;
+  
+  *upcall_args_len = x.uio ()->resid ();
+  return suio_flatten (x.uio ());
+}
+
+
+bool
+route_iterator::unmarshall_upcall_res (rpc_program *prog, 
+				       int uc_procno, 
+				       void *upcall_res,
+				       int upcall_res_len,
+				       void *dest)
+{
+  xdrmem x ((char *)upcall_res, upcall_res_len, XDR_DECODE);
+  xdrproc_t proc = prog->tbl[uc_procno].xdr_res;
+  assert (proc);
+  if (!proc (x.xdrp (), dest)) 
+    return true;
+  return false;
+}
 
 //
 // Finger table routing 
 //
 
 route_chord::route_chord (ptr<vnode> vi, chordID xi) : 
-  route_iterator (vi, xi), do_upcall (false) {};
+  route_iterator (vi, xi), do_upcall (false), last_hop (false) {};
 
 route_chord::route_chord (ptr<vnode> vi, chordID xi,
 			  rpc_program uc_prog,
 			  int uc_procno,
 			  ptr<void> uc_args) : 
-  route_iterator (vi, xi), do_upcall (true)
+  route_iterator (vi, xi), do_upcall (true), last_hop (false)
 {
 
   prog = uc_prog;
@@ -30,7 +60,15 @@ route_chord::route_chord (ptr<vnode> vi, chordID xi,
 };
 
 void
-route_chord::first_hop (cbhop_t cbi)
+route_chord::first_hop (cbhop_t cbi, chordID guess)
+{
+  cb = cbi;
+  search_path.push_back (guess);
+  next_hop ();
+}
+
+void
+route_chord::first_hop (cbhop_t cbi, bool ucs)
 {
   cb = cbi;
   if (v->lookup_closestsucc (v->my_ID () + 1) 
@@ -38,11 +76,12 @@ route_chord::first_hop (cbhop_t cbi)
     search_path.push_back (v->my_ID ());
     next_hop (); //do it anyways
   } else {
-    chordID n = v->lookup_closestpred (x);
-    if ((n == v->my_ID()) && (x == v->my_ID())) {
-      print ();
-      assert (0);
-    }
+    chordID n;
+    if (ucs) 
+      n = v->lookup_closestsucc (x);
+    else
+      n = v->lookup_closestpred (x);
+
     search_path.push_back (n);
     next_hop ();
   }
@@ -55,6 +94,25 @@ route_chord::next_hop ()
   make_hop(n);
 }
 
+
+void
+route_chord::send (chordID guess)
+{
+  first_hop (wrap (this, &route_chord::send_hop_cb), guess);
+}
+
+void
+route_chord::send (bool ucs)
+{
+  first_hop (wrap (this, &route_chord::send_hop_cb), ucs);
+}
+
+void
+route_chord::send_hop_cb (bool done)
+{
+  if (!done) next_hop ();
+}
+
 void
 route_chord::make_hop (chordID &n)
 {
@@ -62,21 +120,17 @@ route_chord::make_hop (chordID &n)
   arg->v = n;
   arg->x = x;
   if (do_upcall) {
+    int arglen;
+    char *marshalled_args = route_iterator::marshall_upcall_args (&prog,
+								  uc_procno,
+								  uc_args,
+								  &arglen);
+								  
     arg->upcall_prog = prog.progno;
     arg->upcall_proc = uc_procno;
-
-    xdrproc_t inproc = prog.tbl[uc_procno].xdr_arg;
-    xdrsuio x (XDR_ENCODE);
-    if ((!inproc) || (!inproc (x.xdrp (), uc_args))) {
-      r = CHORD_RPCFAILURE;
-      (cb) (done = true);
-      return;
-    }
-    int upcall_args_len = x.uio ()->resid ();
-    char *upcall_args = suio_flatten (x.uio ());
-
-    arg->upcall_args.setsize (upcall_args_len);
-    memcpy (arg->upcall_args.base (), upcall_args, upcall_args_len);
+    arg->upcall_args.setsize (arglen);
+    memcpy (arg->upcall_args.base (), marshalled_args, arglen);
+    delete marshalled_args;
   } else
     arg->upcall_prog = 0;
 
@@ -86,33 +140,23 @@ route_chord::make_hop (chordID &n)
 
 }
 
-void
-route_chord::get_upcall_res (void *res)
-{
-  xdrmem x ((char *)upcall_res, upcall_res_len, XDR_DECODE);
-  xdrproc_t proc = prog.tbl[uc_procno].xdr_res;
-  assert (proc);
-  if (!proc (x.xdrp (), res)) 
-    warn << "get_upcall_res: error unmarshalling\n";
-  return;
-}
 
 void
 route_chord::make_hop_cb (chord_testandfindres *res, clnt_stat err)
 {
-
-  upcall_res = (res->status == CHORD_INRANGE) ? 
-    (res->inrange->upcall_res.base ()) : 
-    (res->notinrange->upcall_res.base ());
-  upcall_res_len = (res->status == CHORD_INRANGE) ? 
-    (res->inrange->upcall_res.size ()) : 
-    (res->notinrange->upcall_res.size ());
+  if (res->status == CHORD_INRANGE)
+    stop = res->inrange->stop;
+  else
+    stop = res->notinrange->stop;
 
   if (err) {
     warnx << "make_hop_cb: failure " << err << "\n";
     r = CHORD_RPCFAILURE;
-    done = 1;
-    cb (done);
+    cb (done = true);
+  } else if (last_hop) {
+    //talked to the successor
+    r = CHORD_OK;
+    cb (done = true);
   } else if (res->status == CHORD_INRANGE) { 
     // found the successor
     v->locations->cacheloc (res->inrange->n.x, res->inrange->n.r,
@@ -125,8 +169,7 @@ route_chord::make_hop_cb (chord_testandfindres *res, clnt_stat err)
       // what its immediate successor is---higher layer should use
       // succlist to make forward progress
       r = CHORD_ERRNOENT;
-      done = true;
-      cb (done);
+      cb (done = true);
     } else {
       // make sure that the new node sends us in the right direction,
       chordID olddist = distance (search_path.back (), x);
@@ -162,7 +205,8 @@ route_chord::make_route_done_cb (chordID s, bool ok, chordstat status)
 	  << s << " failed. (chordstat " << status << ")\n";
     assert (0); // XXX handle malice more intelligently
   }
-  done = true;
+  if (stop) done = true;
+  last_hop = true;
   cb (done);
 }
 
@@ -187,6 +231,7 @@ route_chord::make_hop_done_cb (chordID s, bool ok, chordstat status)
 	  << s << " failed. (chordstat " << status << ")\n";
     assert (0); // XXX handle malice more intelligently
   }
+  if (stop) done = true;
   cb (done);
 }
 
