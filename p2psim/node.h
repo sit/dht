@@ -23,14 +23,15 @@ public:
 
   Channel *pktchan() { return _pktchan; }
   Channel *protchan() { return _protchan; }
-  void crash () { alive = false; }
+  void crash () { _alive = false; }
+  bool alive () { return _alive; }
 
 private:
   virtual void run();
   static void Receive(void*);
 
   IPAddress _ip;        // my ip address
-  bool alive;
+  bool _alive;
   Channel *_pktchan;    // for packets
   Channel *_protchan;   // to register protocols
 

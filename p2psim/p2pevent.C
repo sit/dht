@@ -76,6 +76,6 @@ P2PEvent::execute()
     cerr << "ERROR: protocol " << protocol << " not running on node " << node->ip() << endl;
     threadexitsall(0);
   }
-
-  (proto->*fn)(args);
+  if (proto->node()->alive())
+    (proto->*fn)(args);
 }

@@ -11,7 +11,7 @@ using namespace std;
 #include "network.h"
 #include "protocol.h"
 
-Node::Node(IPAddress ip) : _ip(ip), alive (true), _pktchan(0)
+Node::Node(IPAddress ip) : _ip(ip), _alive (true), _pktchan(0)
 {
   _pktchan = chancreate(sizeof(Packet*), 0);
   assert(_pktchan);
@@ -106,7 +106,7 @@ Node::sendPacket(IPAddress dst, Packet *p)
   p->_dst = dst;
 
   Node *n = Network::Instance()->getnode(p->_dst);
-  if (!n->alive) return false;  // XXX simulate timeout
+  if (!n->alive ()) return false;  // XXX simulate timeout
 
   // where to send the reply
   Channel *c = p->_c = chancreate(sizeof(Packet*), 0);
