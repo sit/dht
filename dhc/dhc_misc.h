@@ -42,6 +42,23 @@ set_ac (vec<chordID> ap, dhc_prepare_resok res)
   return true;
 };
 
+static inline bool
+set_ac (vec<chordID> ap, dhc_propose_arg arg)
+{
+  if (ap.size () == 0) {
+    for (uint i=0; i<arg.new_config.size (); i++) 
+      ap.push_back (arg.new_config[i]);
+    return true;
+  }
+  if (ap.size () != arg.new_config.size ())
+    return false;
+  for (uint i=0; i<ap.size (); i++) {
+    if (ap[i] != arg.new_config[i])
+      return false;
+  }
+  return true;
+};
+
 #endif /* _DHC_MISC_H */
 
 

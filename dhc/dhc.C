@@ -154,11 +154,39 @@ dhc::recv_prepare (user_args *sbp)
 	nodes = New refcounted<vec<chordID> >;
       res.resok->new_config.set (nodes->base (), nodes->size());
       sbp->reply (&res);
+      db->insert (id2dbrec (b->id), to_dbrec (b));
     }
-      
   } else {
     warn << "dhc:recv_prepare This node does not have block " 
 	 << prepare->bID << "\n";
+    exit (-1);
+  }
+}
+
+void 
+dhc::recv_propose (user_args *sbp)
+{
+  dhc_propose_arg *propose = sbp->template getarg<dhc_propose_arg> ();
+  ptr<dbrec> rec = db->lookup (id2dbrec (propose->bID));
+  if (rec) {
+    ptr<dhc_block> b = to_dhc_block (rec);
+    if (paxos_cmp (b->meta->promised, propose->round) != 0) {
+      dhc_propose_res res (DHC_PROP_MISMATCH);
+      sbp->reply (&res);
+    } else {
+      if (set_ac (b->meta->pstat.acc_conf, *propose)) {
+	b->meta->accepted = propose->round;
+	db->insert (id2dbrec (b->id), to_dbrec (b));
+	dhc_propose_res res (DHC_OK);
+	sbp->reply (&res);
+      } else {
+	dhc_propose_res res (DHC_CONF_MISMATCH);
+	sbp->reply (&res);
+      }
+    }
+  } else {
+    warn << "dhc:recv_propose This node does not have block " 
+	 << propose->bID << "\n";
     exit (-1);
   }
 }
@@ -171,10 +199,10 @@ dhc::dispatch (user_args *sbp)
     recv_prepare (sbp);
     break;
   case DHCPROC_PROPOSE:
-    recv_propose ();
+    recv_propose (sbp);
     break;
   case DHCPROC_NEWCONFIG:
-    recv_newconfig ();
+    recv_newconfig (sbp);
     break;
   default:
     warn << "dhc:dispatch Unimplemented RPC " << sbp->procno << "\n"; 
