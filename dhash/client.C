@@ -400,23 +400,23 @@ dhashcli::retrieve_from_cache (blockID n, cb_ret cb,
 }
 
 void
-dhashcli::retrieve_and_cache_cb (cb_ret cb, ptr<dhash_block> block, route path,
-                                 dhash_stat err, chordID id, bool present)
+dhashcli::retrieve_and_cache_cb (dhash_stat err, chordID id, bool present)
 {
-  cb (DHASH_OK, block, path);
+  if (err)
+    warn << "caching retrieved block failed\n";
 }
 
 void
 dhashcli::retrieve_and_cache (cb_ret cb, int options, dhash_stat stat, 
                               ptr<dhash_block> block, route path)
 {
-  if (block && (options & DHASHCLIENT_CACHE))
+  if (block && (options & DHASHCLIENT_CACHE)) {
+    cb (DHASH_OK, block, path);
     dhash_store::execute (clntnode, clntnode->my_location (),
                           blockID (block->ID, block->ctype, DHASH_BLOCK),
-		          block,
-		          wrap (this, &dhashcli::retrieve_and_cache_cb,
-			        cb, block, path),
+		          block, wrap (this, &dhashcli::retrieve_and_cache_cb),
 			  DHASH_CACHE);
+  }
   else
     cb (stat, block, path);
 }

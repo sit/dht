@@ -805,7 +805,7 @@ dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
         if (!cache_db->lookup (k)) {
           cache_db->insert (k, d);
 	  info << "dbwrite: " << host_node->my_ID ()
-	       << " C " << arg->key << "\n";
+	       << " C " << arg->key << " " << ss->size << "\n";
 	}
 	break;
       }
