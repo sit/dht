@@ -216,7 +216,7 @@ main (int argc, char **argv)
 
   int vnode = 1;
   setprogname (argv[0]);
-  sfsconst_init ();
+  // sfsconst_init ();
   random_init ();
 
   int ch;
