@@ -1,7 +1,7 @@
 import bisect
 from node import node
 
-class chord:
+class chord (object):
     """A Global View Chord simulator.
     
     This is the base class for various derived classes, providing
