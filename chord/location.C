@@ -205,7 +205,7 @@ locationtable::doRPC (const chordID &n, rpc_program progno,
 		      void *out, aclnt_cb cb)
 {
   ptr<location> l = lookup (n);
-  if (!l) fatal << "location (" << n << ") is null. forgot to call cacheloc\n?";
+  if (!l) panic << "location (" << n << ") is null. forgot to call cacheloc\n?";
   l->nrpc++;
   return hosts->doRPC (l, progno, procno, in, out, 
 		       wrap (this, &locationtable::doRPCcb, l, cb));
@@ -581,6 +581,11 @@ void
 locationtable::challenge (const chordID &x, cbchallengeID_t cb)
 {
   ptr<location> l = lookup (x);
+  if (!l) {
+    warn << "locationtable::challenge() l is NULL\n";
+    cb (x, false, chordstat (CHORD_ERRNOENT));
+  }
+
   if (nochallenges) {
     if (!l->challenged)
       good++;
