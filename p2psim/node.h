@@ -4,6 +4,7 @@
 #include "threaded.h"
 #include "rpchandle.h"
 #include "p2psim_hashmap.h"
+#include "tmgdmalloc.h"
 
 using namespace std;
 
@@ -87,7 +88,7 @@ private:
     // target is probably the result of a dynamic_cast<BT*>...
     assert(target);
 
-    Thunk<BT, AT, RT>  *t = new Thunk<BT, AT, RT>;
+    Thunk<BT, AT, RT>  *t = New Thunk<BT, AT, RT>;
     t->_target = target;
     t->_fn = fn;
     t->_args = args;

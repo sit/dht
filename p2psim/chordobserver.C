@@ -16,7 +16,7 @@ ChordObserver*
 ChordObserver::Instance(Args *a)
 {
   if(!_instance)
-    _instance = new ChordObserver(a);
+    _instance = New ChordObserver(a);
   return _instance;
 }
 

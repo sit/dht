@@ -17,7 +17,7 @@ TapestryObserver*
 TapestryObserver::Instance(Args *a)
 {
   if(!_instance)
-    _instance = new TapestryObserver(a);
+    _instance = New TapestryObserver(a);
   return _instance;
 }
 

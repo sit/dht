@@ -1,4 +1,5 @@
 #include "threadmanager.h"
+#include "p2psim.h"
 
 ThreadManager *ThreadManager::_instance = 0;
 
@@ -7,7 +8,7 @@ ThreadManager*
 ThreadManager::Instance()
 {
   if(!_instance)
-    _instance = new ThreadManager();
+    _instance = New ThreadManager;
   return _instance;
 }
 

@@ -17,7 +17,7 @@ EventQueue::Instance()
 {
   if(_instance)
     return _instance;
-  return (_instance = new EventQueue());
+  return (_instance = New EventQueue());
 }
 
 
@@ -31,7 +31,8 @@ EventQueue::EventQueue() : _time(0)
 }
 
 
-EventQueue::~EventQueue()
+void
+EventQueue::drain()
 {
   // delete the entire queue and say bye bye
   eq_entry *next = 0;
@@ -41,9 +42,14 @@ EventQueue::~EventQueue()
       delete (*i);
     delete cur;
   }
+}
+
+EventQueue::~EventQueue()
+{
   chanfree(_eventchan);
   chanfree(_gochan);
 }
+
 
 // Signal to start processing events, main calls
 // this just once.
@@ -77,10 +83,6 @@ EventQueue::run()
     // everyone else is quiet.
     // must be time for the next event.
                                                                                   
-    // no more events.  we're done!
-    if(!_queue.size())
-      ::graceful_exit();
-                                                                                  
     // run events for next time in the queue
     if(!advance())
       break;
@@ -91,18 +93,16 @@ EventQueue::run()
 bool
 EventQueue::advance()
 {
-  if(!_queue.size()) {
-    cerr << "queue is empty" << endl;
-    exit(-1);
-  }
-
   // don't advance if we should be exiting
   // if(nbrecvp(_exitchan) != 0) {
   unsigned *x;
   if((x = (unsigned *) nbrecvp(_exitchan)) != 0) {
-    delete this;
+    drain();
     return false;
   }
+
+  if(!_queue.size())
+    return false;
 
   // XXX: time is not running smoothly. does that matter?
   eq_entry *eqe = _queue.first();
@@ -127,7 +127,7 @@ EventQueue::add_event(Event *e)
 
   eq_entry *ee = 0;
   if(!(ee = _queue.search(e->ts))) {
-    ee = new eq_entry(e);
+    ee = New eq_entry(e);
     assert(ee);
     bool b = _queue.insert(ee);
     assert(b);

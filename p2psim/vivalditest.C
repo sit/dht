@@ -35,18 +35,18 @@ VivaldiTest::join(Args *args)
   double t = (double)timestep_scaled/1000000.0;
   int do_adaptive = atoi ((*args)["adaptive"].c_str());
   switch(vo){
-  case 1: _vivaldi = new Vivaldi1(node(),dim); break;
-  case 2: _vivaldi = new Vivaldi2(node(),dim); break;
-  case 3: _vivaldi = new Vivaldi3(node(),dim); break;
-  case 4: _vivaldi = new Vivaldi4(node(),dim); break;
-  case 5: _vivaldi = new Vivaldi5(node(),dim); break;
-  case 6: _vivaldi = new Vivaldi6(node(),dim); break;
-  case 7: _vivaldi = new Vivaldi7(node(),dim); break;
-  case 8: _vivaldi = new Vivaldi8(node(),dim); break;
-  case 9: _vivaldi = new Vivaldi9(node(),dim); break;
+  case 1: _vivaldi = New Vivaldi1(node(),dim); break;
+  case 2: _vivaldi = New Vivaldi2(node(),dim); break;
+  case 3: _vivaldi = New Vivaldi3(node(),dim); break;
+  case 4: _vivaldi = New Vivaldi4(node(),dim); break;
+  case 5: _vivaldi = New Vivaldi5(node(),dim); break;
+  case 6: _vivaldi = New Vivaldi6(node(),dim); break;
+  case 7: _vivaldi = New Vivaldi7(node(),dim); break;
+  case 8: _vivaldi = New Vivaldi8(node(),dim); break;
+  case 9: _vivaldi = New Vivaldi9(node(),dim); break;
   case 10: {
     cout << "joined\n";
-    _vivaldi = new Vivaldi10(node(), dim, t, do_adaptive); 
+    _vivaldi = New Vivaldi10(node(), dim, t, do_adaptive); 
     break;
   }
   default:

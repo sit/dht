@@ -2,37 +2,23 @@
 #define __P2PSIM_HASHMAP
 
 #include "config.h"
-#include <stdio.h>
-
 #include <string>
+
 #ifdef HAVE_EXT_HASH_MAP
 # include <ext/hash_map>
+using namespace __gnu_cxx;
+namespace __gnu_cxx {
 #else
 # include <hash_map>
-#endif
-
-#ifdef HAVE_EXT_HASH_MAP
-using namespace __gnu_cxx;
-#else
 using namespace std;
-#endif
-
-#ifndef HAVE_EXT_HASH_MAP
 namespace std {
-#else
-namespace __gnu_cxx {
 #endif
   template<> struct hash<std::string> {
     size_t operator()(const std::string &x) const {
       return hash<const char*>()(x.c_str());
     }
   };
-
-  template<> struct hash<void*> {
-    size_t operator()(void *x) const {
-      return (size_t) x;
-    }
-  };
 }
+
 
 #endif // __P2PSIM_HASHMAP

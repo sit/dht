@@ -5,6 +5,8 @@
 # include <config.h>
 #endif
 
+#include "tmgdmalloc.h"
+
 extern unsigned verbose;
 #define DEBUG(x) if(verbose >= (x)) cout
 
@@ -25,11 +27,8 @@ typedef unsigned long long Time;
 // returns the current time
 Time now();
 
-// maps ip address to Node, may return 0
-Node *ip2node(IPAddress);
-
 // tries to clean things up cleanly
-void graceful_exit();
+void graceful_exit(void*);
 
 #ifdef WITH_DMALLOC
 # include "dmalloc.h"

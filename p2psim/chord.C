@@ -38,7 +38,7 @@ Chord::Chord(Node *n, Args& a, LocTable *l)
   if (l) 
     loctable = l;
   else
-    loctable = new LocTable(_timeout);
+    loctable = New LocTable(_timeout);
 
   loctable->init (me);
 
@@ -411,7 +411,7 @@ Chord::join(Args *args)
   _inited = true;
 
   if (_vivaldi_dim > 0) {
-    _vivaldi = new Vivaldi10(node(), _vivaldi_dim, 0.05, 1); 
+    _vivaldi = New Vivaldi10(node(), _vivaldi_dim, 0.05, 1); 
   }
 
   IDMap wkn;
@@ -738,7 +738,7 @@ void LocTable::init (Chord::IDMap m)
 {
   me = m;
   pin(me.id, 1, 0);
-  idmapwrap *elm = new idmapwrap(me, now());
+  idmapwrap *elm = New idmapwrap(me, now());
 
   ring.insert(elm);
 }
@@ -936,7 +936,7 @@ LocTable::add_node(Chord::IDMap n)
     assert (ring.repok ());
     return;
   } else {
-    elm = new idmapwrap(n,now());
+    elm = New idmapwrap(n,now());
     assert(elm && elm->n.ip);
     if (ring.insert(elm)) {
     }else{

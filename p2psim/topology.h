@@ -13,10 +13,10 @@ public:
   virtual void parse(ifstream&) = 0;
 
   virtual latency_t latency(IPAddress, IPAddress) = 0;
+  virtual ~Topology();
 
 protected:
   Topology();
-  virtual ~Topology();
 };
 
 #endif //  __TOPOLOGY_H

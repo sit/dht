@@ -31,6 +31,8 @@ Node::Node(IPAddress ip) : _ip(ip), _alive (true), _pktchan(0)
 
 Node::~Node()
 {
+  for(PMCI p = _protmap.begin(); p != _protmap.end(); ++p)
+    delete p->second;
   _protmap.clear();
   chanfree(_pktchan);
 }
@@ -85,12 +87,8 @@ Node::run()
       //exit
       case 1:
         // cout << "Node exit" << endl;
-        for(PMCI p = _protmap.begin(); p != _protmap.end(); ++p){
-          // send(p->second->exitchan(), 0);
-          delete p->second; // XXX bad but so was Protocol::run().
-        }
-        _protmap.clear();
         delete this;
+        break;
 
 
       default:
@@ -116,7 +114,7 @@ Node::_doRPC(IPAddress dst, void (*fn)(void *), void *args)
 RPCHandle*
 Node::_doRPC_send(IPAddress dst, void (*fn)(void *), void *args)
 {
-  Packet *p = new Packet();
+  Packet *p = New Packet;
   p->_fn = fn;
   p->_args = args;
   p->_src = ip();
@@ -127,7 +125,7 @@ Node::_doRPC_send(IPAddress dst, void (*fn)(void *), void *args)
 
   // send it off. blocks, but Network reads constantly
   send(Network::Instance()->pktchan(), &p);
-  return new RPCHandle(c, p);
+  return New RPCHandle(c, p);
 }
 
 
@@ -155,7 +153,7 @@ Node::Receive(void *px)
   Node *n = Network::Instance()->getnode(p->dst());
 
   // make reply
-  Packet *reply = new Packet();
+  Packet *reply = New Packet;
   reply->_c = p->_c;
   reply->_src = p->_dst;
   reply->_dst = p->_src;

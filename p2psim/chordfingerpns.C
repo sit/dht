@@ -8,7 +8,7 @@
 using namespace std;
 
 /* Gummadi's Chord PNS algorithm  (static) */
-ChordFingerPNS::ChordFingerPNS(Node *n, Args& a) : Chord(n, a, new LocTable()) 
+ChordFingerPNS::ChordFingerPNS(Node *n, Args& a) : Chord(n, a, New LocTable()) 
 { 
   _base = a.nget<uint>("base",2,10);
   _samples = a.nget<uint>("samples",16,10);

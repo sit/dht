@@ -43,7 +43,7 @@ RandomGraph::parse(ifstream &ifs)
     }
 
     // add the node to the network
-    Node *n = new Node(ipaddr);
+    Node *n = New Node(ipaddr);
     send(Network::Instance()->nodechan(), &n);
 
     // remember the new node in DVGraph's tables

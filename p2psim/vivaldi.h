@@ -205,7 +205,7 @@ bool Vivaldi::doRPC(IPAddress dst, BT *target, void (BT::*fn)(AT*, RT*),
     }
   };
 
-  Thunk *t = new Thunk;
+  Thunk *t = New Thunk;
   t->_target = target;
   t->_fn = fn;
   t->_args = args;

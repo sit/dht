@@ -1,5 +1,6 @@
 #include "threadmanager.h"
 #include <assert.h>
+using namespace std;
 
 Threaded::Threaded()
 {

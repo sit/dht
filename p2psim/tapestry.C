@@ -1,4 +1,4 @@
-/* $Id: tapestry.C,v 1.3 2003/08/05 21:42:14 thomer Exp $ */
+/* $Id: tapestry.C,v 1.4 2003/08/07 21:39:14 thomer Exp $ */
 
 #include "tapestry.h"
 #include "node.h"
@@ -22,7 +22,7 @@ Tapestry::Tapestry(Node *n)
   cout << "Tapestry Constructor for " << ip() << " and id: ";
   print_guid(_my_id);
   cout << endl;
-  _rt = new RoutingTable(this);
+  _rt = New RoutingTable(this);
   cout << *_rt << endl;
 }
 
@@ -105,7 +105,7 @@ Tapestry::join(Args *args)
 	  }
 	}
 	if( add ) {
-	  NodeInfo *newseed = new NodeInfo( currseed->_addr, currseed->_id );
+	  NodeInfo *newseed = New NodeInfo( currseed->_addr, currseed->_id );
 	  seeds.push_back( newseed );
 	  cout << ip() << " has a seed of " << newseed->_addr << " and ";
 	  print_guid( newseed->_id );
@@ -628,13 +628,13 @@ Tapestry::get_digit( GUID id, uint digit )
 RouteEntry::RouteEntry()
 {
   _size = 0;
-  _nodes = new NodeInfo *[NODES_PER_ENTRY];
+  _nodes = New NodeInfo *[NODES_PER_ENTRY];
 }
 
 RouteEntry::RouteEntry( NodeInfo *first_node )
 {
   assert( first_node );
-  _nodes = new NodeInfo *[NODES_PER_ENTRY];
+  _nodes = New NodeInfo *[NODES_PER_ENTRY];
   _nodes[0] = first_node;
   _size = 1;
 }
@@ -750,21 +750,21 @@ RoutingTable::RoutingTable( Tapestry *node )
   cout << "Routing Table constructor" << endl;
   assert(node);
   _node = node;
-  _table = new RouteEntry **[_node->_digits_per_id];
+  _table = New RouteEntry **[_node->_digits_per_id];
   // initialize all the rows
   for( uint i = 0; i < _node->_digits_per_id; i++ ) {
-    _table[i] = new RouteEntry *[_node->_base];
+    _table[i] = New RouteEntry *[_node->_base];
   }
 
   // now we add ourselves to the table
   add( _node->ip(), _node->id(), 0 );
 
-  _backpointers = new vector<NodeInfo> *[_node->_digits_per_id];
+  _backpointers = New vector<NodeInfo> *[_node->_digits_per_id];
 
   // init the locks
-  _locks = new vector<NodeInfo> **[_node->_digits_per_id];
+  _locks = New vector<NodeInfo> **[_node->_digits_per_id];
   for( uint i = 0; i < _node->_digits_per_id; i++ ) {
-    _locks[i] = new vector<NodeInfo> *[_node->_base];
+    _locks[i] = New vector<NodeInfo> *[_node->_base];
   }
 
 }
@@ -789,11 +789,11 @@ RoutingTable::add( IPAddress ip, GUID id, Time distance )
   // find the spots where it fits and add it
   for( uint i = 0; i < _node->_digits_per_id; i++ ) {
     uint j = _node->get_digit( id, i );
-    NodeInfo *new_node = new NodeInfo( ip, id, distance );
+    NodeInfo *new_node = New NodeInfo( ip, id, distance );
     RouteEntry *re = _table[i][j];
     if( re == NULL ) {
       // brand new entry, huzzah
-      re = new RouteEntry( new_node );
+      re = New RouteEntry( new_node );
       _table[i][j] = re;
       in_added = true;
       if( ip != _node->ip() ) {
@@ -907,7 +907,7 @@ RoutingTable::get_backpointers( uint level )
 {
   vector<NodeInfo> * this_level = _backpointers[level];
   if( this_level == NULL ) {
-    this_level = new vector<NodeInfo>;
+    this_level = New vector<NodeInfo>;
     _backpointers[level] = this_level;
   }
   return this_level;
@@ -954,7 +954,7 @@ RoutingTable::get_locks( GUID id )
   }
   vector<NodeInfo> * this_level = _locks[match][_node->get_digit(id, match)];
   if( this_level == NULL ) {
-    this_level = new vector<NodeInfo>;
+    this_level = New vector<NodeInfo>;
     _locks[match][_node->get_digit(id, match)] = this_level;
   }
   return this_level;

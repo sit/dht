@@ -46,7 +46,7 @@ protected:
       };
     };
 
-    XEvent *e = new XEvent;
+    XEvent *e = New XEvent;
     e->ts = now() + d;
     e->_target = dynamic_cast<BT*>(this);
     assert(e->_target);

@@ -26,18 +26,9 @@ ProtocolFactory*
 ProtocolFactory::Instance()
 {
   if(!_instance)
-    _instance = new ProtocolFactory();
+    _instance = New ProtocolFactory();
   return _instance;
 }
-
-void
-ProtocolFactory::DeleteInstance()
-{
-  if(!_instance)
-    return;
-  delete _instance;
-}
-
 
 ProtocolFactory::ProtocolFactory()
 {
@@ -57,21 +48,21 @@ ProtocolFactory::create(string s, Node *n)
     a = _protargs[s];
 
   if(s == "Chord")
-    p = new Chord(n, a);
+    p = New Chord(n, a);
   if (s == "ChordFinger")
-    p = new ChordFinger(n, a);
+    p = New ChordFinger(n, a);
   if (s == "ChordFingerPNS")
-    p = new ChordFingerPNS(n, a);
+    p = New ChordFingerPNS(n, a);
   if (s == "ChordToe")
-    p = new ChordToe(n, a);
+    p = New ChordToe(n, a);
   if (s == "Kademlia")
-    p = new Kademlia(n, a);
+    p = New Kademlia(n, a);
   if (s == "Pastry")
-    p = new Pastry(n);
+    p = New Pastry(n);
   if (s == "Koorde")
-    p = new Koorde(n, a);
+    p = New Koorde(n, a);
   if (s == "VivaldiTest")
-    p = new VivaldiTest(n);
+    p = New VivaldiTest(n);
   
   assert(p);
 

@@ -46,7 +46,7 @@ G2Graph::parse(ifstream &ifs)
       assert(ipaddr > 0 && ipaddr <= _num);
 
       // what kind of node?
-      Node *n = new Node(ipaddr);
+      Node *n = New Node(ipaddr);
 
       // add the node to the network
       send(Network::Instance()->nodechan(), &n);

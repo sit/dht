@@ -1,6 +1,7 @@
 #include "eventqueue.h"
 #include "simevent.h"
 #include "p2psim.h"
+#include "threadmanager.h"
 #include <lib9.h>
 #include <thread.h>
 #include <iostream>
@@ -24,7 +25,7 @@ SimEvent::execute()
 {
   if(_op == "exit") {
     cout << "simulation exits at the end of cycle " << now() << "." << endl;
-    ::graceful_exit();
+    ThreadManager::Instance()->create(&::graceful_exit, (void *)0);
   } else
     cerr << "SimEvent::execute(): unknown op " << _op << "\n";
 }

@@ -18,7 +18,7 @@ Observer::reschedule(Time t)
 {
   // XXX: this is only safe because Observers are executed in the
   // context of EventQueue's thread.
-  ObserveEvent *e = new ObserveEvent(this);
+  ObserveEvent *e = New ObserveEvent(this);
   e->ts = now() + t;
   EventQueue::Instance()->add_event(e);
 }

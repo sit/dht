@@ -16,7 +16,6 @@ public:
 
 private:
   hash_map<IPAddress, Coord> _nodes;
-  Channel *_distchan;   // to request distances
 };
 
 #endif //  __EUCLIDEAN_H

@@ -16,7 +16,7 @@ Network::Instance(Topology *top)
 {
   if(_instance)
     return _instance;
-  return (_instance = new Network(top));
+  return (_instance = New Network(top));
 }
 
 
@@ -38,13 +38,16 @@ Network::~Network()
 {
   chanfree(_pktchan);
   chanfree(_nodechan);
+  delete _top;
+  for(NMCI p = _nodes.begin(); p != _nodes.end(); ++p)
+    send(p->second->exitchan(), 0);
 }
 
 
 list<Protocol*>
 Network::getallprotocols(string proto)
 {
-  list<Protocol*> pl; // XXX: should we just new this?  return may be expensive
+  list<Protocol*> pl; // XXX: should we just New this?  return may be expensive
 
   for(NMCI p = _nodes.begin(); p != _nodes.end(); ++p)
     pl.push_back(p->second->getproto(proto));
@@ -93,7 +96,7 @@ Network::run()
 	assert (dstnode);
 	assert (srcnode);
         latency = _top->latency(srcnode->ip(), dstnode->ip());
-        ne = new NetEvent();
+        ne = New NetEvent();
         ne->ts = now() + latency;
         ne->node = dstnode;
         ne->p = p;
@@ -109,8 +112,6 @@ Network::run()
 
       // exit
       case 2:
-        for(NMCI p = _nodes.begin(); p != _nodes.end(); ++p)
-          send(p->second->exitchan(), 0);
         delete this;
         break;
 

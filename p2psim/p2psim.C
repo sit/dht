@@ -1,8 +1,8 @@
 #include "eventqueue.h"
 #include "network.h"
-#include <iostream>
 #include "protocolfactory.h"
 #include "eventfactory.h"
+#include "threadmanager.h"
 
 #include "p2psim.h"
 using namespace std;
@@ -14,27 +14,24 @@ now() {
   return EventQueue::Instance()->time();
 }
 
-Node*
-ip2node(IPAddress a)
-{
-  return Network::Instance()->getnode(a);
-}
-
-
 void
-graceful_exit()
+graceful_exit(void*)
 {
   extern int anyready();
 
   // send an exit packet to the Network
   unsigned e = 1;
-  send(EventQueue::Instance()->exitchan(), &e);
-  send(Network::Instance()->exitchan(), &e);
+  send(EventQueue::Instance()->exitchan(), &e); // doesn't delete!
 
+  delete EventFactory::Instance();
+  delete ProtocolFactory::Instance();
+  delete ThreadManager::Instance();
+  send(Network::Instance()->exitchan(), 0);
   while(anyready())
     yield();
+  __tmg_dmalloc_stats();
 
-  EventFactory::DeleteInstance();
-  ProtocolFactory::DeleteInstance();
-  threadexitsall(0);
+  // XXX: can't come before, but I don't understand why not
+  delete EventQueue::Instance();
 }
+

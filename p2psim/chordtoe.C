@@ -40,7 +40,7 @@ LocTableToe::next_hop(Chord::CHID key, bool *done)
 }
 
 ChordToe::ChordToe (Node *n, Args &a) : 
-  ChordFinger (n, a, new LocTableToe ()),  _numtoes (16)
+  ChordFinger (n, a, New LocTableToe ()),  _numtoes (16)
 {
 };
 

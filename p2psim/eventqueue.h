@@ -26,11 +26,6 @@ private:
     vector<Event*> events;
     sklist_entry<eq_entry> _sortlink;
   };
-  /*
-  class TimeCompare { public:
-    int operator()(const Time &t1, const Time &t2) const { return t1 < t2; }
-  };
-  */
   skiplist<eq_entry, Time, &eq_entry::ts, &eq_entry::_sortlink> _queue;
 
   static EventQueue *_instance;
@@ -41,6 +36,7 @@ private:
   virtual void run();
   void add_event(Event*);
   bool advance();
+  void drain();
 
   // for debuging
   void dump();

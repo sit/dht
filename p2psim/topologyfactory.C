@@ -12,19 +12,19 @@ TopologyFactory::create(string s, vector<string>* v)
   Topology *t = 0;
 
   if(s == "Euclidean")
-    t = new Euclidean(v);
+    t = New Euclidean(v);
 
   if(s == "RandomGraph")
-    t = new RandomGraph(v);
+    t = New RandomGraph(v);
 
   if(s == "EuclideanGraph")
-    t = new EuclideanGraph(v);
+    t = New EuclideanGraph(v);
 
   if (s == "E2EGraph")
-    t = new E2EGraph(v);
+    t = New E2EGraph(v);
 
   if (s == "G2Graph")
-    t = new G2Graph(v);
+    t = New G2Graph(v);
 
   return t;
 }

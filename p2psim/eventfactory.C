@@ -11,18 +11,9 @@ EventFactory*
 EventFactory::Instance()
 {
   if(!_instance)
-    _instance = new EventFactory();
+    _instance = New EventFactory();
   return _instance;
 }
-
-void
-EventFactory::DeleteInstance()
-{
-  if(!_instance)
-    return;
-  delete _instance;
-}
-
 
 EventFactory::EventFactory()
 {
@@ -38,11 +29,11 @@ EventFactory::create(string type, vector<string> *v, string proto)
 {
   Event *e = 0;
   if (type == "node")
-    e = new P2PEvent(proto,v);
+    e = New P2PEvent(proto,v);
   else if(type == "simulator")
-    e = new SimEvent(v);
+    e = New SimEvent(v);
   else if(type == "observe")
-    e = new ObserveEvent(proto,v);
+    e = New ObserveEvent(proto,v);
   else
     cerr << "unknown event type" << endl;
   return e;

@@ -18,7 +18,7 @@ ObserveEvent::ObserveEvent(Observer *o)
 ObserveEvent::ObserveEvent(string proto, vector<string> *v) : Event(v)
 {
   // create a map for the arguments
-  Args *a = new Args;
+  Args *a = New Args;
   for(unsigned int i = 0; i < v->size(); i++) {
     vector<string> arg = split((*v)[i], "=");
     a->insert(make_pair(arg[0], arg[1]));

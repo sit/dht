@@ -140,7 +140,7 @@ public:
   class callinfo { public:
     callinfo(IPAddress xip, lookup_args *xla, lookup_result *xlr)
       : ip(xip), la(xla), lr(xlr) {}
-    ~callinfo() { Delete(la); Delete(lr); }
+    ~callinfo() { delete la; delete lr; }
     IPAddress ip;
     lookup_args *la;
     lookup_result *lr;

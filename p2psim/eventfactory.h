@@ -5,13 +5,12 @@
 class EventFactory {
 public:
   static EventFactory* Instance();
-  static void DeleteInstance();
   Event *create(string type, vector<string>* v, string proto="");
+  ~EventFactory();
 
 private:
   static EventFactory *_instance;
   EventFactory();
-  ~EventFactory();
 };
 
 #endif // __EVENT_FACTORY_H

@@ -9,10 +9,10 @@ using namespace std;
 class ProtocolFactory {
 public:
   static ProtocolFactory* Instance();
-  static void DeleteInstance();
   Protocol *create(string, Node*);
   void setprotargs(string, Args);
   set<string> getnodeprotocols();
+  ~ProtocolFactory();
 
 private:
   static ProtocolFactory *_instance;
@@ -20,7 +20,6 @@ private:
   set<string> _protocols;
 
   ProtocolFactory();
-  ~ProtocolFactory();
 };
 
 #endif // __PROT_FACTORY_H

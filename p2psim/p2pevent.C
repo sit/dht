@@ -39,7 +39,7 @@ P2PEvent::P2PEvent(string proto, vector<string> *v) : Event(v)
 {
   // node-id
   IPAddress ip = (IPAddress) strtoull((*v)[0].c_str(), NULL, 10);
-  this->node = ip2node(ip);
+  this->node = Network::Instance()->getnode(ip);
   if(!this->node) {
     cerr << "can't execute event on non-exiting node with id " << ip << endl;
     return;
@@ -53,7 +53,7 @@ P2PEvent::P2PEvent(string proto, vector<string> *v) : Event(v)
   this->fn = name2fn((*v)[1]);
 
   // create a map for the arguments
-  this->args = new Args;
+  this->args = New Args;
   assert(this->args);
   for(unsigned int i=2; i<v->size(); i++) {
     vector<string> arg = split((*v)[i], "=");
@@ -64,6 +64,7 @@ P2PEvent::P2PEvent(string proto, vector<string> *v) : Event(v)
 
 P2PEvent::~P2PEvent()
 {
+  delete args;
 }
 
 void

@@ -49,7 +49,7 @@ EuclideanGraph::parse(ifstream &ifs)
     c._y = atof(coords[1].c_str());
 
     // add the node to the network
-    Node *n = new Node(ipaddr);
+    Node *n = New Node(ipaddr);
     send(Network::Instance()->nodechan(), &n);
 
     // remember the new node in DVGraph's tables

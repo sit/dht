@@ -17,7 +17,7 @@ KademliaObserver*
 KademliaObserver::Instance(Args *a)
 {
   if(!_instance)
-    _instance = new KademliaObserver(a);
+    _instance = New KademliaObserver(a);
   return _instance;
 }
 

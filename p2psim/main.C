@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
+using namespace std;
 
 #include "chord.h"
 #include "network.h"
@@ -20,6 +21,9 @@ bool vis = false;
 
 void parse_args(int argc, char *argv[]);
 void usage();
+
+
+Channel *exitchan = 0;
 
 void
 threadmain(int argc, char *argv[])
@@ -47,6 +51,7 @@ threadmain(int argc, char *argv[])
   // Tell the eventqueue to start processing events.
   EventQueue::Instance()->go();
 }
+
 
 void
 parse_args(int argc, char *argv[])

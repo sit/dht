@@ -57,7 +57,7 @@ E2EGraph::parse(ifstream &ifs)
       assert(ipaddr > 0 && ipaddr <= _num);
 
       // what kind of node?
-      Node *n = new Node(ipaddr);
+      Node *n = New Node(ipaddr);
 
       assert(!Network::Instance()->getnode(ipaddr));
 

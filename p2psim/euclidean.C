@@ -58,7 +58,7 @@ Euclidean::parse(ifstream &ifs)
     c.second = atoi(coords[1].c_str());
 
     // what kind of node?
-    Node *n = new Node(ipaddr);
+    Node *n = New Node(ipaddr);
 
     // add the new node it to the topology
     if(_nodes.find(n->ip()) != _nodes.end())
