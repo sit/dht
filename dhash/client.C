@@ -316,9 +316,9 @@ dhashcli::insert_stored_cb (chordID blockID, ref<dhash_block> block,
 			    cbinsert_t cb, int trial,
 			    dhash_stat stat, chordID retID)
 {
-  if (stat && (trial <= 2)) {
+  if (stat && stat != DHASH_WAIT && (trial <= 2)) {
     //try the lookup again if we got a RETRY
-    warn << "got a RETRY failure. (" << trial << "Trying the lookup again\n";
+    warn << "got a RETRY failure (" << trial << "). Trying the lookup again\n";
     lookup (blockID, false, 
 	    wrap (this, &dhashcli::insert_lookup_cb,
 		  blockID, block, cb, trial + 1));
