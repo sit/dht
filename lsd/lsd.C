@@ -1,4 +1,4 @@
-/*
+*
  *
  * Copyright (C) 2000 Frans Kaashoek (kaashoek@lcs.mit.edu)
  *                    Frank Dabek (fdabek@mit.edu)
@@ -58,6 +58,7 @@ int myport;
 #define MODE_DEBRUIJN 1
 #define MODE_CHORD 2
 int mode;
+int lookup_mode;
 
 void stats ();
 void stop ();
@@ -136,7 +137,7 @@ get_factory (int mode)
 {
   if (mode == MODE_DEBRUIJN) 
     return New refcounted<debruijn_route_factory> ();
-  else 
+  else
     return New refcounted<chord_route_factory> ();
 }
 
@@ -145,7 +146,7 @@ get_fingerlike (int mode)
 {
   if (mode == MODE_DEBRUIJN) 
     return New refcounted<debruijn> ();
-  else 
+  else
     return New refcounted<finger_table> ();
 }
 
@@ -265,12 +266,17 @@ main (int argc, char **argv)
   p2psocket = "/tmp/chord-sock";
   str myname = my_addr ();
   mode = MODE_CHORD;
+  lookup_mode = CHORD_LOOKUP_LOCTABLE;
 
   while ((ch = getopt (argc, argv, "B:cd:j:l:M:n:p:S:s:v:m:")) != -1)
     switch (ch) {
     case 'm':
       if (strcmp (optarg, "debruijn") == 0)
 	mode = MODE_DEBRUIJN;
+      else if (strcmp (optarg, "proximity") == 0){
+	lookup_mode = CHORD_LOOKUP_PROXIMITY;
+	mode = MODE_CHORD;
+      }
       else if (strcmp (optarg, "chord") == 0)
 	mode = MODE_CHORD;
       else
@@ -355,7 +361,8 @@ main (int argc, char **argv)
 				     myname,
 				     myport,
 				     max_loccache,
-				     ss_mode);
+				     ss_mode,
+				     lookup_mode);
 
   ptr<route_factory> f = get_factory (mode);
   ptr<fingerlike> fl = get_fingerlike (mode);

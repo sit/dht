@@ -55,7 +55,6 @@ typedef callback<void, svccb *>::ref cbdispatch_t;
 typedef callback<void, bool>::ref cbupcalldone_t;
 typedef callback<void, int, void *, cbupcalldone_t>::ref cbupcall_t; 
 
-
 #include "toe_table.h"
 #include "finger_table.h"
 #include "succ_list.h"
@@ -156,10 +155,12 @@ class vnode : public virtual refcount, public stabilizable {
   ptr<locationtable> locations;
   ptr<route_factory> factory;
   int server_selection_mode;
+  int lookup_mode;
 
   vnode (ptr<locationtable> _locations, ptr<fingerlike> stab, 
 	 ptr<route_factory> f, ptr<chord> _chordnode, 
-	 chordID _myID, int _vnode, int server_sel_mode);
+	 chordID _myID, int _vnode, int server_sel_mode,
+	 int lookup_mode);
   ~vnode (void);
   chordID my_ID () { return myID; };
   chordID my_pred ();
@@ -229,6 +230,7 @@ class chord : public virtual refcount {
   str myname;
   chordID wellknownID;
   int ss_mode;
+  int lookup_mode;
   ptr<axprt> x_dgram;
   vec<rpc_program> handledProgs;
 
@@ -250,7 +252,8 @@ class chord : public virtual refcount {
   ptr<locationtable> locations; 
     
   chord (str _wellknownhost, int _wellknownport,
-	 str _myname, int port, int max_cache, int server_selection_mode);
+	 str _myname, int port, int max_cache, int server_selection_mode,
+	 int lookup_mode);
   ptr<vnode> newvnode (cbjoin_t cb, ptr<fingerlike> fingers,
 		       ptr<route_factory> f);
   void stats (void);
@@ -306,5 +309,9 @@ class chord : public virtual refcount {
   u_int64_t nrcv;
     
 };
+
+extern const int CHORD_LOOKUP_FINGERLIKE;
+extern const int CHORD_LOOKUP_LOCTABLE;
+extern const int CHORD_LOOKUP_PROXIMITY;
 
 #endif /* _CHORD_H_ */

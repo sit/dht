@@ -30,9 +30,11 @@
 
 chord::chord (str _wellknownhost, int _wellknownport, 
 	      str _myname, int port, int max_cache, 
-	      int server_selection_mode) :
+	      int server_selection_mode,
+	      int l_mode) :
   myname (_myname), 
   ss_mode (server_selection_mode % 10),
+  lookup_mode (l_mode),
   active (NULL)
 {
   myport = startchord (port);
@@ -155,7 +157,8 @@ chord::newvnode (cbjoin_t cb, ptr<fingerlike> fingers, ptr<route_factory> f)
   
   ptr<vnode> vnodep = New refcounted<vnode> (nlocations, fingers, f,
 					     mkref (this), newID, 
-					     nvnode, ss_mode);
+					     nvnode, ss_mode,
+					     lookup_mode);
 #ifdef PNODE
   nlocations->setvnode (vnodep);
 #endif /* PNODE */

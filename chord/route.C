@@ -336,7 +336,7 @@ route_debruijn::first_hop (cbhop_t cbi, chordID guess) {
 }
 
 void
-route_debruijn::first_hop (cbhop_t cbi, bool ucs = false)
+route_debruijn::first_hop (cbhop_t cbi, bool ucs)
 {
   cb = cbi;
   chordID myID = v->my_ID ();

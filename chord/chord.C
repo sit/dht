@@ -30,18 +30,23 @@
 #include <qhash.h>
 
 const int chord::max_vnodes = 1024;
-//#define TOES 1
+
+const int CHORD_LOOKUP_FINGERLIKE (0);
+const int CHORD_LOOKUP_LOCTABLE (1);
+const int CHORD_LOOKUP_PROXIMITY (2);
 
 vnode::vnode (ptr<locationtable> _locations, ptr<fingerlike> stab,
 	      ptr<route_factory> f,
 	      ptr<chord> _chordnode,
-	      chordID _myID, int _vnode, int server_sel_mode) :
+	      chordID _myID, int _vnode, int server_sel_mode,
+	      int l_mode) :
   myindex (_vnode),
   myID (_myID), 
   chordnode (_chordnode),
   locations (_locations),
   factory (f),
-  server_selection_mode (server_sel_mode)
+  server_selection_mode (server_sel_mode),
+  lookup_mode (l_mode)
 {
   warnx << gettime () << " myID is " << myID << "\n";
 
@@ -50,7 +55,9 @@ vnode::vnode (ptr<locationtable> _locations, ptr<fingerlike> stab,
 
   successors = New refcounted<succ_list> (mkref(this), locations, myID);
 
-  toes = New refcounted<toe_table> (locations, myID);
+  toes = New refcounted<toe_table> ();
+  toes->init (mkref(this), locations, myID);
+
   stabilizer = New refcounted<stabilize_manager> (myID);
 
   stabilizer->register_client (successors);
@@ -181,27 +188,33 @@ vnode::print ()
 
 }
 
-#define LOCLOOKUP 1
-
 chordID
 vnode::lookup_closestsucc (const chordID &x)
 {
-#ifdef LOCLOOKUP
-  chordID s = locations->closestsuccloc (x);
-#else
-  chordID s = fingers->closestsucc (x);
-#endif
+  chordID s;
+
+  if (lookup_mode == CHORD_LOOKUP_PROXIMITY)
+    s = toes->closestsucc (x);
+  else if (lookup_mode == CHORD_LOOKUP_FINGERLIKE)
+    s = fingers->closestsucc (x);
+  else
+    s = locations->closestsuccloc (x);
+
   return s;
 }
 
 chordID
 vnode::lookup_closestpred (const chordID &x)
 {
-#if LOCLOOKUP
-  chordID s = locations->closestpredloc (x);
-#else
-  chordID s = fingers->closestpred (x);
-#endif
+  chordID s;
+
+  if (lookup_mode == CHORD_LOOKUP_PROXIMITY)
+    s = toes->closestpred (x);
+  else if (lookup_mode == CHORD_LOOKUP_FINGERLIKE)
+    s = fingers->closestpred (x);
+  else 
+    s = locations->closestpredloc (x);
+
   return s;
 }
 

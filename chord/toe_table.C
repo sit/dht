@@ -3,8 +3,8 @@
 
 bool present (vec<chordID> toes, chordID id);
 
-toe_table::toe_table (ptr<locationtable> locs, chordID ID)
-  : locations (locs), myID (ID), in_progress (0)
+toe_table::toe_table ()
+  : in_progress (0)
 {
   for (int i=0; i < MAX_LEVELS; i++) 
     target_size[i] = 2; //must be less than nsucc to bootstrap
@@ -14,6 +14,14 @@ toe_table::toe_table (ptr<locationtable> locs, chordID ID)
 
   stable_toes = false;
 
+}
+
+void toe_table::init (ptr<vnode> v, ptr<locationtable> locs, chordID ID)
+{
+  locations = locs;
+  myID = ID;
+  myvnode = v;
+  
 }
 
 void
@@ -387,4 +395,22 @@ void
 toe_table::fill_nodelistres (chord_nodelistres *res)
 {
   
+}
+
+
+chordID
+toe_table::closestsucc (const chordID &x)
+{
+
+  warnx << "doing a toe table lookup\n";
+  return locations->closestsuccloc(x);
+
+}
+
+chordID
+toe_table::closestpred (const chordID &x)
+{
+
+  warnx << "doing a toe table closestpred\n";
+  return locations->closestpredloc(x);
 }
