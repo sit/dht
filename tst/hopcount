@@ -89,7 +89,7 @@ print "Fetching.\n";
 $harness->fetch ("a", 0, "fetch.log");
 {
     my $randconf = $CONFS[rand @CONFS];
-    while ($randconf eq "a") {
+    while ($randconf eq "a" && scalar @CONFS > 1) {
 	$randconf = $CONFS[rand @CONFS];
     }
     print "Fetching again from node $randconf.\n";
