@@ -242,6 +242,7 @@ locationtable::checkrefcnt (int i)
   for (location *l = locs.first (); l != NULL; l = locs.next (l)) {
     x = l->n;
     n = chordnode->countrefs (x);
+    m = l->refcnt;
     if (n != m) {
       warnx << "checkrefcnt " << i << " for " << x << " : refcnt " 
             << l->refcnt << " appearances " << n << "\n";
