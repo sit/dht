@@ -44,6 +44,7 @@ public:
   static unsigned k()   { return _k; }
 
   pair<NodeID, IPAddress> do_lookup_wrapper(IPAddress, NodeID);
+  void do_insert_wrapper(NodeID, IPAddress);
 
   // public, because k_bucket needs it.
   struct lookup_args {

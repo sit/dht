@@ -156,6 +156,14 @@ Kademlia::do_insert(insert_args *iargs, insert_result *iresult)
 }
 
 // }}}
+// {{{ Kademlia::do_insert_wrapper
+void
+Kademlia::do_insert_wrapper(NodeID id, IPAddress ip)
+{
+  _tree->insert(id, ip);
+}
+
+// }}}
 // {{{ Kademlia::lookup
 void
 Kademlia::lookup(Args *args)
@@ -169,8 +177,8 @@ void
 Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
 {
   pair<NodeID, IPAddress> pp;
-
   KDEBUG(3) << "do_lookup: id = " << printbits(largs->id) << ", ip = " << largs->ip << ", key = " << printbits(largs->key) << endl;
+  dump();
   NodeID callerID = largs->id;
   IPAddress callerIP = largs->ip;
   KDEBUG(3) << "do_lookup: callerIP = " << callerIP << endl;
@@ -254,6 +262,7 @@ void
 Kademlia::reschedule_stabilizer(void *x)
 {
   // if stabilize blah.
+  KDEBUG(3) << "reschedule_stabilizer" << endl;
   stabilize();
   delaycb(STABLE_TIMER, &Kademlia::reschedule_stabilizer, (void *) 0);
 }
@@ -373,6 +382,9 @@ Kademlia::crash(Args*)
 void
 Kademlia::dump()
 {
+  if(!verbose)
+    return;
+
   cout << "*** DUMP FOR " << printbits(_id) << endl;
   cout << "   *** -------------------------- ***" << endl;
   _tree->dump();
@@ -402,8 +414,12 @@ k_bucket_tree::~k_bucket_tree()
 unsigned
 k_bucket_tree::insert(NodeID id, IPAddress ip)
 {
-  KDEBUG(2) << "k_bucket_tree::insert: ip = " << ip << endl;
+  printf("k_bucket_tree, this = %p\n", this);
+  KDEBUG(2) << "k_bucket_tree::insert: BEFORE id = " << Kademlia::printbits(id) << ", ip = " << ip << endl;
+  _self->dump();
   pair<peer_t*, unsigned> pp = _root->insert(id, ip);
+  KDEBUG(2) << "k_bucket_tree::insert: AFTER id = " << Kademlia::printbits(id) << ", ip = " << ip << endl;
+  _self->dump();
   _nodes.push_back(pp.first);
   return pp.second;
 }
@@ -454,6 +470,7 @@ k_bucket::k_bucket(Kademlia *k) : _leaf(false), _self(k)
   _child[0] = _child[1] = 0;
   _id = _self->id(); // for KDEBUG purposes only
   _nodes = new vector<peer_t*>;
+  _nodes->clear();
   assert(_nodes);
 }
 
@@ -521,6 +538,7 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned de
   if(_nodes->size() < _k) {
     KDEBUG(4) <<  "insert: added on level " << depth << endl;
     peer_t *p = new peer_t(node, ip, now());
+    printf("*** push_back 1 on %p\n", _nodes);
     _nodes->push_back(p);
     return make_pair(p, depth);
   }
@@ -546,6 +564,10 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned de
     for(unsigned i=0; i<_nodes->size(); i++) {
       unsigned bit = Kademlia::getbit((*_nodes)[i]->id, depth);
       KDEBUG(4) <<  "insert: pushed entry " << i << " (" << Kademlia::printbits((*_nodes)[i]->id) << ") to side " << bit << endl;
+      printf("*** push_back 2 on %p\n", _nodes);
+      assert(_child[bit]);
+      assert(_child[bit]->_nodes);
+      assert(_child[bit]->_nodes->size() == 0);
       _child[bit]->_nodes->push_back((*_nodes)[i]);
     }
     delete _nodes;
@@ -567,8 +589,6 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned de
 void
 k_bucket::stabilize(string prefix, unsigned depth)
 {
-  return;
-
   // go through tree depth-first and refresh buckets in the leaves of the tree.
   if(_child[0]) {
     assert(!_nodes);
@@ -601,7 +621,11 @@ k_bucket::stabilize(string prefix, unsigned depth)
   NodeID random_key = _self->id() & mask;
   KDEBUG(1) << "stabilize: random lookup for " << Kademlia::printbits(random_key) << endl;
   pair<NodeID, IPAddress> pp = _self->do_lookup_wrapper(kademlia_wkn_ip, random_key);
-  _nodes->push_back(new peer_t(pp.first, pp.second, now()));
+
+  // XXX: nasty.  the lookup itself may have inserted
+  _self->do_insert_wrapper(pp.first, pp.second);
+  // printf("*** push_back 3 on %p\n", _nodes);
+  // _nodes->push_back(new peer_t(pp.first, pp.second, now()));
 }
 
 
@@ -725,9 +749,11 @@ k_bucket::dump(string prefix, unsigned depth)
     return;
   }
 
-  for(unsigned i=0; i<_nodes->size(); i++)
+  for(unsigned i=0; i<_nodes->size(); i++) {
+    printf("   *** _nodes = %p, size = %d\n", _nodes, _nodes->size());
     if((*_nodes)[i])
       cout << "   *** " << prefix << " [" << i << "] : " << Kademlia::printbits((*_nodes)[i]->id) << endl;
+  }
 }
 
 // }}}
