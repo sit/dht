@@ -246,10 +246,6 @@ void
 doRPCcb (chordID ID, int procno, dorpc_res *res, void *out, aclnt_cb cb, clnt_stat err)
 {
   f_node *nu = nodes[ID];
-  
-  nu->coords.clear ();
-  for (unsigned int i = 0; i < res->resok->src_coords.size (); i++)
-    nu->coords.push_back (((float)res->resok->src_coords[i])/1000.0);
 
   if (!nu) return;
   // If we've already removed a node, then there's no reason to even
@@ -261,6 +257,11 @@ doRPCcb (chordID ID, int procno, dorpc_res *res, void *out, aclnt_cb cb, clnt_st
     delete nu;
     return;
   }
+  
+  nu->coords.clear ();
+  for (unsigned int i = 0; i < res->resok->src_coords.size (); i++)
+    nu->coords.push_back (((float)res->resok->src_coords[i])/1000.0);
+
 
   xdrmem x ((char *)res->resok->results.base (), 
 	    res->resok->results.size (), XDR_DECODE);
@@ -418,6 +419,7 @@ update_fingers (f_node *nu)
   doRPC (nu, CHORDPROC_GETFINGERS_EXT, &n, res,
 	 wrap (&update_fingers_got_fingers, 
 	       nu->ID, nu->host, nu->port, res));
+  
 }
 
 void
@@ -546,7 +548,6 @@ get_cb (chordID next)
 void
 update_toes (f_node *nu)
 {
-  return;
   chord_gettoes_arg n;
   n.level = glevel;
   chord_nodelistextres *res = New chord_nodelistextres ();
@@ -573,6 +574,7 @@ update_toes_got_toes (chordID ID, str host, unsigned short port,
       add_node (res->resok->nlist[i].x, res->resok->nlist[i].r.hostname,
 		res->resok->nlist[i].r.port);
   }
+
 }
 
 // ------- graphics and UI handlers -------------------------------------
