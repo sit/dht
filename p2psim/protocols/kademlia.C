@@ -473,6 +473,7 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
   // - wait for an RPC to come back
   // - update results set
   //
+  NodeID last_in_set = (NodeID) -1;
   while(true) {
     KDEBUG(2) << "do_lookup: top of the loop. outstaning rpcs = " << outstanding_rpcs->size() << endl;
 
@@ -530,13 +531,23 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
       break;
     }
 
+
+    // did the last round of alpha nodes not reveal anything new?
+    // blast out RPCs to all remaining nodes
     //
-    // pick alpha nodes from the k best guys in the resultset, provided we
-    // didn't already ask them, and, to the best of our knowledge, they're still
-    // alive.
+    // lresult->results.size() is too high, since some of them we RPCd already
+    unsigned effective_alpha = Kademlia::alpha;
+    if((*lresult->results.rbegin())->id == last_in_set)
+      effective_alpha = lresult->results.size();
+
+
     //
-    k_nodeinfo* toask[Kademlia::alpha];
-    for(unsigned i=0; i<Kademlia::alpha; i++)
+    // pick effective_alpha nodes from the k best guys in the resultset,
+    // provided we didn't already ask them, and, to the best of our knowledge,
+    // they're still alive.
+    //
+    k_nodeinfo* toask[effective_alpha];
+    for(unsigned i=0; i<effective_alpha; i++)
       toask[i] = 0;
 
     k_counter = 0;
@@ -546,7 +557,7 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
         KDEBUG(2) << "do_lookup: setting toask[" << j << "] to " << printID((*i)->id) << endl;
         toask[j++] = *i;
       }
-      if(++k_counter >= Kademlia::k || j >= Kademlia::alpha)
+      if(++k_counter >= Kademlia::k || j >= effective_alpha)
         break;
     };
 
@@ -554,7 +565,8 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
     //
     // send an RPC to all selected alpha nodes
     //
-    for(unsigned i=0; i<Kademlia::alpha; i++) {
+    last_in_set = (*lresult->results.rbegin())->id;
+    for(unsigned i=0; i<effective_alpha; i++) {
       if(toask[i] == 0)
         break;
 
@@ -586,10 +598,9 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
     lresult->hops++;
 
     //
-    // now block on outstanding_rpcs
+    // wait for all alpha RPCs to get back
     //
-receive_rpc:
-    if(outstanding_rpcs->size()) {
+    while(outstanding_rpcs->size()) {
       KDEBUG(2) << "do_lookup: thread " << threadid() << " going into rcvRPC, outstanding = " << outstanding_rpcs->size() << endl;
 
       bool ok;
@@ -600,7 +611,7 @@ receive_rpc:
       outstanding_rpcs->erase(outstanding_rpcs->find(donerpc));
 
       // if the node is dead, then remove this guy from our flyweight and, if he
-      // was in our results, from the results.  but since we didn't make any
+      // was in our results, from the results.  since we didn't make any
       // progress at all, we should give rcvRPC another chance.
       closer::n = largs->key;
       if(!ok) {
@@ -612,7 +623,7 @@ receive_rpc:
         char ptr[32]; sprintf(ptr, "%p", ci);
         KDEBUG(2) << "do_lookup: RPC to " << Kademlia::printID(ci->ki->id) << " failed, deleting ci = " << ptr << endl;
         delete ci;
-        goto receive_rpc;
+        continue;
       }
 
       //
@@ -622,6 +633,7 @@ receive_rpc:
       update_k_bucket(ci->lr->rid, ci->ki->ip);
 
       // put results that this node tells us in our results set
+      // we need to know whether this improved the best k.
       for(nodeinfo_set::const_iterator i = ci->lr->results.begin(); i != ci->lr->results.end(); ++i) {
         char ptr[32]; sprintf(ptr, "%p", (*i));
         KDEBUG(2) << "do_lookup: RETURNED RESULT from " << Kademlia::printID(ci->lr->rid) << " for rcvRPC entry id = " << printID((*i)->id) << ", ip = " << (*i)->ip << ", ptr = " << ptr << endl;
@@ -640,15 +652,15 @@ receive_rpc:
       KDEBUG(2) << "do_lookup: bottom of loop, ci = " << ptr << endl;
       delete ci;
     }
-  }
 
-  // destroy all entries in results that are not part of the best k
-  while(lresult->results.size() > Kademlia::k) {
-    k_nodeinfo *i = *lresult->results.rbegin();
-    char ptr[32]; sprintf(ptr, "%p", i);
-    lresult->results.erase(lresult->results.find(i));
-    KDEBUG(2) << "do_lookup: deleting in truncate id = " << printID(i->id) << ", ip = " << i->ip << ", ptr = " << ptr << endl;
-    delete i;
+    // destroy all entries in results that are not part of the best k
+    while(lresult->results.size() > Kademlia::k) {
+      k_nodeinfo *i = *lresult->results.rbegin();
+      char ptr[32]; sprintf(ptr, "%p", i);
+      lresult->results.erase(lresult->results.find(i));
+      KDEBUG(2) << "do_lookup: deleting in truncate id = " << printID(i->id) << ", ip = " << i->ip << ", ptr = " << ptr << endl;
+      delete i;
+    }
   }
 
   KDEBUG(2) << "do_lookup: results that I'm returning to " << printID(largs->id) << " who was looking key " << printID(largs->key) << endl;
