@@ -29,7 +29,7 @@ struct dhash_blockattr {
 };
 
 struct dhash_insertarg {
-  sfs_ID key;
+  chordID key;
   dhash_value data;
   int offset;
   store_status type;
@@ -37,13 +37,13 @@ struct dhash_insertarg {
 };
 
 struct dhash_fetch_arg {
-  sfs_ID key;
+  chordID key;
   int32 start;
   int32 len;
 };
 
 struct dhash_pred {
-  sfs_ID n;
+  chordID n;
 };
 
 struct dhash_resok {
@@ -98,7 +98,7 @@ program DHASH_PROGRAM {
     DHASHPROC_FETCH (dhash_fetch_arg) = 2;
 
     dhash_stat
-    DHASHPROC_CHECK (sfs_ID) = 3;
+    DHASHPROC_CHECK (chordID) = 3;
 
   } = 1;
 } = 344449;

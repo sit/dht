@@ -9,16 +9,20 @@
 %#include "bigint.h"
 %#include <sfs_prot.h>
 
-typedef bigint sfs_ID;
+typedef bigint chordID;
 
-enum sfsp2pstat {
-  SFSP2P_OK = 0,
-  SFSP2P_ERRNOENT = 1,
-  SFSP2P_RPCFAILURE = 2,
-  SFSP2P_ERREXIST = 3,
-  SFSP2P_CACHEHIT = 4,
-  SFSP2P_INRANGE = 5,
-  SFSP2P_NOTINRANGE = 6
+enum chordstat {
+  CHORD_OK = 0,
+  CHORD_ERRNOENT = 1,
+  CHORD_RPCFAILURE = 2,
+  CHORD_ERREXIST = 3,
+  CHORD_CACHEHIT = 4,
+  CHORD_INRANGE = 5,
+  CHORD_NOTINRANGE = 6
+};
+
+struct chord_vnode {
+  chordID n;
 };
 
 struct net_address {
@@ -26,89 +30,92 @@ struct net_address {
   int32_t port;
 };
 
-struct sfsp2p_findresok {
-  sfs_ID x;
-  sfs_ID node;
+struct chord_noderesok {
+  chordID node;
   net_address r;
 };
 
-union sfsp2p_findres switch (sfsp2pstat status) {
- case SFSP2P_OK:
-   sfsp2p_findresok resok;
+union chord_noderes switch (chordstat status) {
+ case CHORD_OK:
+   chord_noderesok resok;
  default: 
    void;
 };
 
-struct sfsp2p_findarg {
-  sfs_ID x;
+struct chord_findarg {
+  chord_vnode v;
+  chordID x;
 };
 
-struct sfsp2p_notifyarg {
-  sfs_ID x;
+struct chord_node {
+  chordID x;
   net_address r;
 };
 
-struct sfsp2p_cachearg {
-  sfs_ID key;
-  sfs_ID node;
+struct chord_nodearg {
+  chord_vnode v;
+  chord_node n;
 };
 
-struct sfsp2p_testandfindarg {
-  sfs_ID x;
+struct chord_cachearg {
+  chord_vnode v;
+  chordID key;
+  chordID node;
 };
 
-struct sfsp2p_inrangeres {
-  net_address r;
-  sfs_ID succ;
+struct chord_testandfindarg {
+  chord_vnode v;
+  chordID x;
 };
 
-union sfsp2p_testandfindres switch (sfsp2pstat status) {
- case SFSP2P_INRANGE:
-   sfsp2p_inrangeres inres;
- case SFSP2P_NOTINRANGE:
-   sfsp2p_findresok findres;
+union chord_testandfindres switch (chordstat status) {
+ case CHORD_INRANGE:
+   chord_node inres;
+ case CHORD_NOTINRANGE:
+   chord_noderesok noderes;
  default:
    void;
 };
 
-struct sfsp2p_getfingersresok {
-  sfs_ID fingers<>;
+struct chord_getfingersresok {
+  chord_node fingers<>;
 };
 
-union sfsp2p_getfingersres switch (sfsp2pstat status) {
-  case SFSP2P_OK:
-    sfsp2p_getfingersresok resok;
+union chord_getfingersres switch (chordstat status) {
+  case CHORD_OK:
+    chord_getfingersresok resok;
   default:
     void;
 };
 
-program SFSP2P_PROGRAM {
-	version SFSP2P_VERSION {
+program CHORD_PROGRAM {
+	version CHORD_VERSION {
 		void 
-		SFSP2PPROC_NULL (void) = 0;
+		CHORDPROC_NULL (chord_vnode) = 0;
 
-		sfsp2p_findres 
-		SFSP2PPROC_GETSUCCESSOR (void) = 1;
+		chord_noderes 
+		CHORDPROC_GETSUCCESSOR (chord_vnode) = 1;
 
-		sfsp2p_findres 
-		SFSP2PPROC_GETPREDECESSOR (void) = 2;
+		chord_noderes 
+		CHORDPROC_GETPREDECESSOR (chord_vnode) = 2;
 
-	  	sfsp2p_findres
-		SFSP2PPROC_FINDCLOSESTPRED (sfsp2p_findarg) = 3;
+	  	chord_noderes
+		CHORDPROC_FINDCLOSESTPRED (chord_findarg) = 3;
 
-		sfsp2pstat
-		SFSP2PPROC_NOTIFY (sfsp2p_notifyarg) = 4;
+		chordstat
+		CHORDPROC_NOTIFY (chord_nodearg) = 4;
 
-		sfsp2pstat
-		SFSP2PPROC_ALERT (sfsp2p_notifyarg) = 5;
+		chordstat
+		CHORDPROC_ALERT (chord_nodearg) = 5;
 
-		sfsp2pstat
-        	SFSP2PPROC_CACHE (sfsp2p_cachearg) = 6;
+		chordstat
+        	CHORDPROC_CACHE (chord_cachearg) = 6;
 
-		sfsp2p_testandfindres
-                SFSP2PPROC_TESTRANGE_FINDCLOSESTPRED (sfsp2p_testandfindarg) = 7; 
-		sfsp2p_getfingersres
-		SFSP2PPROC_GETFINGERS (void) = 8;
+		chord_testandfindres
+                CHORDPROC_TESTRANGE_FINDCLOSESTPRED (chord_testandfindarg) = 7; 
+
+		chord_getfingersres
+		CHORDPROC_GETFINGERS (chord_vnode) = 8;
   
 	} = 1;
 } = 344447;

@@ -25,41 +25,11 @@
 
 EXITFN (cleanup);
 
-ptr<p2p> defp2p;
-static sfs_ID myID;
-static int myport;
-static str myhost;
-static str wellknownhost;
-static int wellknownport;
-static sfs_ID wellknownID;
+ptr<chord> chordnode;
 static str p2psocket;
-dhash *dhs;
+// dhash *dhs;
 int do_cache;
 str db_name;
-
-void
-doaccept (int fd)
-{
-  if (fd < 0)
-    fatal ("EOF\n");
-  tcp_nodelay (fd);
-  ref<axprt_stream> x = axprt_stream::alloc (fd);
-  vNew client (x);
-  dhs->accept (x);
-}
-
-static void
-accept_standalone (int lfd)
-{
-  sockaddr_in sin;
-  bzero (&sin, sizeof (sin));
-  socklen_t sinlen = sizeof (sin);
-  int fd = accept (lfd, reinterpret_cast<sockaddr *> (&sin), &sinlen);
-  if (fd >= 0)
-    doaccept (fd);
-  else 
-    warnx << "accept_standalone: accept failed\n";
-}
 
 void
 client_accept (int fd)
@@ -67,11 +37,10 @@ client_accept (int fd)
   if (fd < 0)
     fatal ("EOF\n");
   ref<axprt_stream> x = axprt_stream::alloc (fd);
-  dhashclient *dhc =  New dhashclient (x);
-  dhc->set_caching(do_cache);
+  //  dhashclient *dhc =  New dhashclient (x);
+  // dhc->set_caching(do_cache);
    
 }
-
 
 static void
 client_accept_socket (int lfd)
@@ -83,7 +52,6 @@ client_accept_socket (int lfd)
   if (fd >= 0)
     client_accept (fd);
 }
-
 
 static void
 client_listening_cb (int fd, int status)
@@ -151,69 +119,14 @@ startclntd()
   client_listening_cb (clntfd, 0);
 }
 
-static int
-startp2pd (int myp)
-{
-  int p = myp;
-  int srvfd = inetsocket (SOCK_STREAM, myp);
-  if (srvfd < 0)
-    fatal ("binding TCP port %d: %m\n", myp);
-  if (myp == 0) {
-    struct sockaddr_in la;
-    socklen_t len;
-    len = sizeof (la);
-    if (getsockname (srvfd, (struct sockaddr *) &la, &len) < 0) {
-      fatal ("getsockname failed\n");
-    }
-    p = ntohs (la.sin_port);
-    warnx << "startp2pd: local port " << p << "\n";
-  }
-  listen (srvfd, 1000);
-  fdcb (srvfd, selread, wrap (accept_standalone, srvfd));
-
-
-  return p;
-}
-
-
 static void
-initID (str s, sfs_ID *ID)
+initID (str s, chordID *ID)
 {
-  sfs_ID n (s);
-  sfs_ID b (1);
+  chordID n (s);
+  chordID b (1);
   b = b << NBIT;
   b = b - 1;
   *ID = n & b;
-}
-
-static void
-initID (sfs_ID *ID, int index)
-{
-#if 1
-  *ID = random_bigint (NBIT);
-#else
-  vec<in_addr> addrs;
-  if (!myipaddrs (&addrs))
-    fatal ("cannot find my IP address.\n");
-
-  in_addr *addr = addrs.base ();
-  while (addr < addrs.lim () && ntohl (addr->s_addr) == INADDR_LOOPBACK)
-    addr++;
-  if (addr >= addrs.lim ())
-    fatal ("cannot find my IP address.\n");
-
-  str ids = inet_ntoa (*addr);
-  ids = ids << "." << index;
-  warnx << "my address: " << ids << "\n";
-  char id[sha1::hashsize];
-  sha1_hash (id, ids, ids.len());
-  mpz_set_rawmag_be (ID, id, sizeof (id));  // For big endian
-  sfs_ID b (1);
-  b = b << NBIT;
-  b = b - 1;
-  *ID = *ID & b;
-#endif
-  warnx << "myid: " << *ID << "\n";
 }
 
 static void
@@ -223,11 +136,18 @@ parseconfigfile (str cf, int index, int set_rpcdelay)
   bool errors = false;
   int line;
   vec<str> av;
+  int myport;
+  str myhost;
+  str wellknownhost;
+  int wellknownport;
   bool myid = false;
+  chordID myID;
+  chordID wellknownID;
   int nreplica = 0;
   int ss = 10000;
   int cs = 1000;
   myport = 0;
+  int nvnode = 1;
   while (pa.getline (&av, &line)) {
     if (!strcasecmp (av[0], "#")) {
     } else if (!strcasecmp (av[0], "myport")) {
@@ -245,6 +165,11 @@ parseconfigfile (str cf, int index, int set_rpcdelay)
       if (av.size () != 2 || !convertint (av[1], &wellknownport)) {
         errors = true;
         warn << cf << ":" << line << ": usage: wellknownport <number>\n";
+      }
+    } else if (!strcasecmp (av[0], "vnode")) {
+      if (av.size () != 2 || !convertint (av[1], &nvnode)) {
+        errors = true;
+        warn << cf << ":" << line << ": usage: vnode <number>\n";
       }
     } else if (!strcasecmp (av[0], "myID")) {
       if (av.size () != 2) {
@@ -290,24 +215,24 @@ parseconfigfile (str cf, int index, int set_rpcdelay)
      }
    }
   }
-
-  if (!myid) {
-    initID (&myID, index);
-  }
-
   if (!myhost) {
     myhost = myname ();
   }
-
   if (errors) {
     fatal ("errors in config file\n");
   }
-  myport = startp2pd(myport);
-  defp2p = New refcounted<p2p> (wellknownhost, wellknownport, wellknownID, 
-				myport, myhost, myID);
-  defp2p->rpcdelay = set_rpcdelay;
+  chordnode = New refcounted<chord> (wellknownhost, wellknownport, 
+				     wellknownID, myport, myhost, set_rpcdelay);
+  if (myid) chordnode->newvnode (myID);
+  else chordnode->newvnode ();
+
+  for (int i = 1; i < nvnode; i++) {
+    chordnode->newvnode ();
+  }
+  sigcb(SIGUSR1, wrap (chordnode, &chord::stats));
+
     //instantiate single dhash object
-  dhs = New dhash(db_name, nreplica, ss, cs);
+  // dhs = New dhash(db_name, nreplica, ss, cs);
 }
 
 static void
@@ -359,7 +284,7 @@ main (int argc, char **argv)
       break;
     }
 
-  if (!defp2p) 
+  if (!chordnode) 
     fatal ("Specify config file\n");
   if (p2psocket) 
     startclntd();

@@ -1,0 +1,6 @@
+- test lookups during failures (don't run stabilize)
+- test lookups during joins
+- statistics
+- size of location table (clean out entries with refcnt == 0)
+- dmalloc
+- recursive lookup

@@ -1,3 +1,24 @@
+/*
+ *
+ * Copyright (C) 2000 Frans Kaashoek (kaashoek@lcs.mit.edu)
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation; either version 2, or (at
+ * your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307
+ * USA
+ *
+ */
+
 #include <sys/time.h>
 #include <assert.h>
 #include <chord.h>
@@ -34,6 +55,14 @@ gettime()
   return buf;
 }
 
+u_int64_t
+getnsec ()
+{
+  timeval tv;
+  gettimeofday (&tv, NULL);
+  return tv.tv_sec * INT64(1000000) + tv.tv_usec;
+}
+
 int 
 uniform_random(double a, double b)
 {
@@ -46,11 +75,11 @@ uniform_random(double a, double b)
   return (int)(a + f);
 }
 
-sfs_ID
-incID (sfs_ID &n)
+chordID
+incID (chordID &n)
 {
-  sfs_ID s = n + 1;
-  sfs_ID b (1);
+  chordID s = n + 1;
+  chordID b (1);
   b = b << NBIT;
   if (s >= b)
     return s - b;
@@ -58,11 +87,11 @@ incID (sfs_ID &n)
     return s;
 }
 
-sfs_ID
-decID (sfs_ID &n)
+chordID
+decID (chordID &n)
 {
-  sfs_ID p = n - 1;
-  sfs_ID b (1);
+  chordID p = n - 1;
+  chordID b (1);
   b = b << NBIT;
   if (p < 0)
     return p + b;
@@ -70,32 +99,32 @@ decID (sfs_ID &n)
     return p;
 }
 
-sfs_ID
-successorID (sfs_ID &n, int p)
+chordID
+successorID (chordID &n, int p)
 {
-  sfs_ID s;
-  sfs_ID t (1);
-  sfs_ID b (1);
+  chordID s;
+  chordID t (1);
+  chordID b (1);
   
   b = b << NBIT;
   s = n;
-  sfs_ID t1 = t << p;
+  chordID t1 = t << p;
   s = s + t1;
   if (s >= b)
     s = s - b;
   return s;
 }
 
-sfs_ID
-predecessorID (sfs_ID &n, int p)
+chordID
+predecessorID (chordID &n, int p)
 {
-  sfs_ID s;
-  sfs_ID t (1);
-  sfs_ID b (1);
+  chordID s;
+  chordID t (1);
+  chordID b (1);
   
   b = b << NBIT;
   s = n;
-  sfs_ID t1 = t << p;
+  chordID t1 = t << p;
   s = s - t1;
   if (s < 0)
     s = s + b;
@@ -104,7 +133,7 @@ predecessorID (sfs_ID &n, int p)
 
 // Check whether n in (a,b) on the circle.
 bool
-between (sfs_ID &a, sfs_ID &b, sfs_ID &n)
+between (chordID &a, chordID &b, chordID &n)
 {
   bool r;
   if (a == b) {
@@ -119,7 +148,7 @@ between (sfs_ID &a, sfs_ID &b, sfs_ID &n)
 }
 
 bool
-betweenlefincl (sfs_ID &a, sfs_ID &b, sfs_ID &n)
+betweenlefincl (chordID &a, chordID &b, chordID &n)
 {
   bool r;
   if ((a == b) && (n == a)) {
@@ -134,7 +163,7 @@ betweenlefincl (sfs_ID &a, sfs_ID &b, sfs_ID &n)
 }
 
 bool
-betweenrightincl (sfs_ID &a, sfs_ID &b, sfs_ID &n)
+betweenrightincl (chordID &a, chordID &b, chordID &n)
 {
   //  bool f = (b - a) > 0;  
   bool r;
@@ -149,10 +178,10 @@ betweenrightincl (sfs_ID &a, sfs_ID &b, sfs_ID &n)
   return r;
 }
 
-sfs_ID
-diff(sfs_ID a, sfs_ID b) 
+chordID
+diff(chordID a, chordID b) 
 {
-  sfs_ID diff = (b - a);
+  chordID diff = (b - a);
   if (diff > 0) return diff;
   else return (bigint(1) << 160) - diff;
 }

@@ -1,16 +1,16 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.10 2001/06/21 19:03:33 fdabek Exp $
+# $Id: Makefile.am,v 1.11 2001/07/05 15:35:21 kaashoek Exp $
 
 $(PROGRAMS): $(LDEPS)
 
 bin_PROGRAMS = lsd
 
-noinst_HEADERS = \
-chord.h chord_util.h
+# noinst_HEADERS =
 
-lsd_SOURCES = chord.C chord_client.C chord_util.C server.C lsd.C comm.C chord_callbacks.C
+lsd_SOURCES = lsd.C
 
-lsd_LDADD = ../dhash/libdhash.a ../svc/libsvc.la  $(DBLIB) ${LDADD} 
+# lsd_LDADD = ../dhash/libdhash.a ../svc/libsvc.la  $(DBLIB) ${LDADD} 
+lsd_LDADD = ../chord/libchord.a ../svc/libsvc.la  $(DBLIB) ${LDADD} 
 
 
 EXTRA_DIST = .cvsignore
