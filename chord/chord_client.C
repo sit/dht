@@ -126,7 +126,8 @@ chord::initID (int index)
   return ID;
 }
 
-void
+
+ptr<vnode>
 chord::newvnode ()
 {
   chordID newID = initID (nvnode);
@@ -136,9 +137,10 @@ chord::newvnode ()
   vnodes.insert (vnodep);
   locations->checkrefcnt (0);
   vnodep->join ();
+  return vnodep;
 }
 
-void
+ptr<vnode>
 chord::newvnode (chordID &x)
 {
   if (x != wellknownID) 
@@ -152,6 +154,7 @@ chord::newvnode (chordID &x)
   } else {
     vnodep->stabilize (0);
   }
+  return vnodep;
 }
 
 void

@@ -223,8 +223,8 @@ class chord : public virtual refcount {
   ptr<locationtable> locations; 
   chord (str _wellknownhost, int _wellknownport, const chordID &_wellknownID,
 	 int port, str myhost, int set_rpcdelay);
-  void newvnode (void);
-  void newvnode (chordID &x);
+  ptr<vnode> newvnode (void);
+  ptr<vnode> newvnode (chordID &x);
   void deletefingers (chordID &x);
   int countrefs (chordID &x);
   void stats (void);
