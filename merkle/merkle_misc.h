@@ -89,17 +89,15 @@ id2dbrec(chordID id, dhash_dbtype tpe)
 static inline ref<dbrec>
 id2dbrec(chordID id) 
 {
-  char buf[sha1::hashsize];
-  bzero (buf, sha1::hashsize);
-  mpz_get_rawmag_be (buf, sha1::hashsize, &id);
-  return New refcounted<dbrec> (buf, sha1::hashsize);
+  return id2dbrec (id, (dhash_dbtype)0);
 }
 
 
 static inline chordID
 dbrec2id (ptr<dbrec> r)
 {
-  return tobigint (to_merkle_hash (r)) >> 8;
+  // tobigint(.) strips of the dhash_dbtype
+  return tobigint (to_merkle_hash (r));
 }
 
 
