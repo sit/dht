@@ -17,9 +17,9 @@
  */
 route_recchord::route_recchord (ptr<vnode> vi, chordID xi) : 
   route_iterator (vi, xi),
-  started_ (false),
   routeid_ (get_nonce ())
 {
+  start_time_.tv_sec = 0;
 }
 
 route_recchord::route_recchord (ptr<vnode> vi, chordID xi,
@@ -27,9 +27,9 @@ route_recchord::route_recchord (ptr<vnode> vi, chordID xi,
 				int uc_procno,
 				ptr<void> uc_args) : 
   route_iterator (vi, xi, uc_prog, uc_procno, uc_args),
-  started_ (false),
   routeid_ (get_nonce ())
 {
+  start_time_.tv_sec = 0;
 }
 
 route_recchord::~route_recchord ()
@@ -46,7 +46,7 @@ route_recchord::get_nonce ()
 bool
 route_recchord::started () const
 {
-  return started_;
+  return (start_time_.tv_sec > 0);
 }
 
 const timespec &

@@ -14,7 +14,6 @@ struct recroute_complete_arg;
  */
 class route_recchord : public route_iterator {
   timespec start_time_;
-  bool started_;
   
   static long get_nonce ();
   void first_hop_cb (ptr<bool> del,
