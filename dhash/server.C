@@ -206,14 +206,18 @@ dhash::sendblock (bigint destID, bigint blockID, bool last, callback<void>::ref 
 {
   warnx << "sendblock: to " << destID << ", id " << blockID << ", last " << last << "\n";
 
-  ptr<dbrec> blk = db->lookup (id2dbrec (blockID));
+#if 0
+  ptr<location> l = host_node->locations->lookup (destID);
+  if (!l) {
+    warn << "dhash::sendblock: destination " << destID << " not cached." << "\n";
+    (*cb) (); // XXX no error propogation
+    return;
+  }
+#endif
 
+  ptr<dbrec> blk = db->lookup (id2dbrec (blockID));
   assert (blk); // XXX: don't assert here, maybe just callback?
   ref<dhash_block> dhblk = New refcounted<dhash_block> (blk->value, blk->len);
-
-#if 0
-  warn << "dhash::sendblock: XXX DHASH_REPLICA hardcoded\n";
-#endif
   cli->storeblock (destID, blockID, dhblk, last,
 		   wrap (this, &dhash::sendblock_cb, cb), 
 		   DHASH_REPLICA);
@@ -1403,7 +1407,7 @@ dhash::print_stats ()
   warnx << "  " << bytes_served << " bytes served\n";
   warnx << "  " << rpc_answered << " rpc answered\n";
 
-  printkeys ();
+  //printkeys ();
 }
 
 void
