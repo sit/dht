@@ -24,6 +24,11 @@ class node:
         
         my.nrpc = 0
         my.sent_bytes = 0
+	my.sent_bytes_breakdown = {}
+	sbkeys = ['insert', 'join_repair_write', 'join_repair_read',
+		  'failure_repair_write', 'failure_repair_read']
+	for k in sbkeys:
+	    my.sent_bytes_breakdown[k] = 0
 
     def start (my):
         my.alive = 1
@@ -167,6 +172,7 @@ class dhash (chord):
         n = my.allnodes[id]
         n.nrpc += len (succs)
         n.sent_bytes += isz * len (succs)
+	n.sent_bytes_breakdown['insert'] += isz * len (succs)
 
         return succs[0]
 
@@ -195,6 +201,7 @@ class dhash (chord):
 		    s.store (b, isz)
 		    fixer.nrpc += 1
 		    fixer.sent_bytes += isz
+		    fixer.sent_bytes_breakdown['%s_repair_write' % desc] += isz
 		    needed -= 1
 		    if needed <= 0: break
 		if b not in fixer.cached_blocks:
@@ -205,6 +212,7 @@ class dhash (chord):
 			nread -= 1
 			if nread <= 0: break
 			s.sent_bytes += isz
+			s.sent_bytes_breakdown['%s_repair_read' % desc] += isz
 		    fixer.cached_blocks[b] = 1
 		    # XXX account for disk used by cache
 

@@ -98,11 +98,20 @@ def file_evgen (fname):
         except Exception, e:
             sys.stderr.write ("Bad event at line %d: %s\n" % (lineno, e))
 
+sbkeys = ['insert', 'join_repair_write', 'join_repair_read',
+	  'failure_repair_write', 'failure_repair_read']
 def _monitor (t, dh):
-    allb = sum (dh.blocks.values ())
-    sb   = sum ([n.sent_bytes for n in dh.allnodes.values ()])
-    ub   = sum ([n.bytes      for n in dh.allnodes.values ()])
-    avb  = sum ([n.bytes      for n in dh.nodes])
+    stats = {}
+    allnodes = dh.allnodes.values ()
+
+    stats['usable_bytes'] = sum (dh.blocks.values ())
+    stats['sent_bytes']   = sum ([n.sent_bytes for n in allnodes])
+    stats['disk_bytes']   = sum ([n.bytes      for n in allnodes])
+    stats['avail_bytes']  = sum ([n.bytes      for n in dh.nodes])
+
+    for k in sbkeys:
+	stats['sent_bytes::%s' % k] = \
+		sum ([n.sent_bytes_breakdown.get (k, 0) for n in allnodes])
 
     blocks = {}
     for n in dh.nodes:
@@ -115,24 +124,35 @@ def _monitor (t, dh):
 	maximum = max (extant)
     except:
 	avg, minimum, maximum = 0, 0, 0
-    return allb, sb, ub, avb, avg, minimum, maximum
+    stats['extant_avg'] = avg
+    stats['extant_min'] = minimum
+    stats['extant_max'] = maximum
+
+    return stats
 
 def print_monitor (t, dh):
-    allb, sb, ub, avb, avg, minimum, maximum = _monitor (t, dh)
+    s = _monitor (t, dh)
 
     print "%4d" % t, "%4d nodes;" % len(dh.nodes), 
-    print "%sB sent;" % size_rounder (sb),
-    print "%sB put;" % size_rounder (allb),
-    print "%sB avail;" % size_rounder (avb),
-    print "%sB stored;" % size_rounder (ub),
-    print "%d/%5.2f/%d extant;" % (minimum, avg, maximum),
-    print "%d/%d blocks avail" % (dh.available_blocks (), len (dh.blocks))
+    print "%sB sent;" % size_rounder (s['sent_bytes']),
+    print "%sB put;" % size_rounder (s['usable_bytes']),
+    print "%sB avail;" % size_rounder (s['avail_bytes']),
+    print "%sB stored;" % size_rounder (s['disk_bytes']),
+    print "%d/%5.2f/%d extant;" % s['extant_min', 'extant_avg', 'extant_max'],
+    print "%d/%d blocks avail" % (dh.available_blocks (), len (dh.blocks)),
+    for k in sbkeys:
+	print "%sB sent[%s];" % (size_rounder(s['sent_bytes::%s' % k]), k)
 
 def parsable_monitor (t, dh):
-    allb, sb, ub, avb, avg, minimum, maximum = _monitor (t, dh)
+    s = _monitor (t, dh)
 
-    print t, len(dh.nodes), sb, allb, avb, ub, minimum, "%.2f" % avg, maximum,
-    print dh.available_blocks (), len (dh.blocks)
+    print t, len(dh.nodes), 
+    print ' '.join(["%d" % s[k] for k in ['sent_bytes','usable_bytes','avail_bytes','disk_bytes']]),
+    print s['extant_min'], "%5.2f" % s['extant_avg'], s['extant_max'],
+    print dh.available_blocks (), len (dh.blocks),
+    for k in sbkeys:
+	print "%d" % s['sent_bytes::%s' % k],
+    print
 
 if __name__ == '__main__':
     import sys
