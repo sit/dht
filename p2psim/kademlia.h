@@ -129,13 +129,16 @@ public:
   //
   class fingers_t;
   struct transfer_args {
+    transfer_args(NodeID xid, IPAddress xip) : id(xid), ip(xip) {}
     NodeID id;
     IPAddress ip;
   };
   struct transfer_result {
-    map<NodeID, Value> values;
+    map<NodeID, Value> *values;
   };
   void do_transfer(transfer_args *targs, transfer_result *tresult);
+
+  void _tree_insert(peer_t&);
   // }}}
 // }}}
 };
@@ -199,6 +202,7 @@ public:
   k_bucket_tree(Kademlia*);
   ~k_bucket_tree();
   void insert(NodeID node, IPAddress ip);
+  void insert(vector<peer_t*>*);
   void erase(NodeID node);
   bool stabilized(vector<NodeID>);
   void stabilize();
