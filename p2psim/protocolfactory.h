@@ -12,13 +12,11 @@ public:
   static ProtocolFactory* Instance();
   static void DeleteInstance();
   Protocol *create(string, Node*);
-  string name(Protocol*);
 
 private:
   static ProtocolFactory *_instance;
   ProtocolFactory();
   ~ProtocolFactory();
-  map<string, string> _protnames;
 };
 
 #endif // __PROT_FACTORY_H

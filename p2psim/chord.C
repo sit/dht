@@ -8,7 +8,8 @@
 using namespace std;
 extern bool vis;
 
-Chord::Chord(Node *n, uint numsucc) : Protocol(n), _isstable (false)
+Chord::Chord(Node *n, uint numsucc)
+  : Protocol(n), _isstable (false)
 {
   nsucc = numsucc;
   me.ip = n->ip();

@@ -10,6 +10,7 @@ class VivaldiTest : public Protocol {
 public:
   VivaldiTest(Node*);
   ~VivaldiTest();
+  string proto_name() { return "VivaldiTest"; }
 
   virtual void join(Args*);
   virtual void leave(Args*) { }

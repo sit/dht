@@ -59,15 +59,11 @@ ProtocolFactory::create(string s, Node *n)
   if (s == "VivaldiTest")
     p = new VivaldiTest(n);
   if (s == "ChordFinger")
-    p = new ChordFinger(n,base,(successors>resilience? successors:resilience), fingers);
+    p = new ChordFinger(n,base,(successors>resilience? successors:resilience),
+                        fingers);
 
   assert(p);
-  _protnames[typeid(*p).name()] = s;
-  return p;
-}
+  assert(p->proto_name() == s);
 
-string
-ProtocolFactory::name(Protocol *s)
-{
-  return _protnames[typeid(*s).name()];
+  return p;
 }

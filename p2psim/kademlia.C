@@ -1,8 +1,8 @@
 // {{{ headers
 #include "kademlia.h"
+#include "chord.h"
 #include "packet.h"
 #include "nodefactory.h"
-#include "chord.h"
 #include <stdio.h>
 #include <algorithm>
 #include <iostream>
@@ -22,7 +22,8 @@ unsigned k_bucket::_k = Kademlia::k();
 IPAddress kademlia_wkn_ip = 0;
 // }}}
 // {{{ Kademlia::Kademlia
-Kademlia::Kademlia(Node *n) : Protocol(n), _id(ConsistentHash::ip2chid(n->ip()) & 0x0000ffff)
+Kademlia::Kademlia(Node *n)
+  : Protocol(n), _id(ConsistentHash::ip2chid(n->ip()) & 0x0000ffff)
 {
   KDEBUG(1) << "id: " << printbits(_id) << endl;
   _values.clear();

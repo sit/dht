@@ -14,6 +14,7 @@ public:
 
   Pastry(Node*);
   ~Pastry();
+  string proto_name() { return "Pastry"; }
 
   virtual void join(Args*);
   virtual void leave(Args*);

@@ -8,6 +8,7 @@ class Koorde : public Chord {
 public:
   Koorde(Node *n, uint degree, uint nsucc, uint resilience, uint fingers);
   ~Koorde() {};
+  string proto_name() { return "Koorde"; }
 
   struct koorde_lookup_arg {
     CHID k;

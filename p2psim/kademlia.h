@@ -21,6 +21,7 @@ public:
 
   Kademlia(Node*);
   ~Kademlia();
+  string proto_name() { return "Kademlia"; }
 
   virtual void join(Args*);
   virtual void leave(Args*);

@@ -33,6 +33,7 @@ public:
 
   Chord(Node *n, uint numsucc = CHORD_SUCC_NUM);
   virtual ~Chord();
+  string proto_name() { return "Chord"; }
 
   // Functions callable from events file.
   virtual void join(Args*);

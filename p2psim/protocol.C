@@ -22,3 +22,9 @@ Protocol::Protocol(Node *n) : _node(n)
 Protocol::~Protocol()
 {
 }
+
+Protocol *
+Protocol::getpeer(IPAddress a)
+{
+  return (Network::Instance()->getnode(a)->getproto(proto_name()));
+}

@@ -21,9 +21,7 @@ public:
   Protocol(Node*);
   virtual ~Protocol();
   Node *node() { return _node; }
-  string proto_name() {
-    return ProtocolFactory::Instance()->name(this);
-  }
+  virtual string proto_name() = 0;
 
   typedef void (Protocol::*event_f)(Args*);
   virtual void join(Args*) = 0;
@@ -33,6 +31,11 @@ public:
   virtual void lookup(Args*) = 0;
 
 protected:
+
+  IPAddress ip() { return _node->ip(); }
+
+  // find peer protocol of my sub-type on a distant node.
+  Protocol *getpeer(IPAddress);
 
   // Why are we forbidding non-Protocols from using delaycb()?
   // Use of a template allows us to type-check the argument
@@ -64,47 +67,14 @@ protected:
     send(EventQueue::Instance()->eventchan(), &e);
   }
 
-  IPAddress ip() { return _node->ip(); }
-
   // Send an RPC from a Protocol on one Node to a method
-  // of the same Protocol class on a different Node.
+  // of the same Protocol sub-class on a different Node.
   template<class BT, class AT, class RT>
     bool doRPC(IPAddress dst, void (BT::* fn)(AT *, RT *),
                AT *args, RT *ret) {
-    // Compile-time check: does BT inherit from Protocol?
-    Protocol *dummy1 = (BT *) 0; dummy1 = dummy1;
-
-    class Thunk {
-    public:
-      BT *_target;
-      void (BT::*_fn)(AT *, RT *);
-      AT *_args;
-      RT *_ret;
-      static void thunk(void *xa) {
-        Thunk *t = (Thunk *) xa;
-        (t->_target->*(t->_fn))(t->_args, t->_ret);
-      }
-    };
-
-    Thunk *t = new Thunk;
-    t->_target = dynamic_cast<BT*>
-      (Network::Instance()->getnode(dst)->getproto(proto_name()));
-    t->_fn = fn;
-    t->_args = args;
-    t->_ret = ret;
-
-    // Will fail if it's not legal to call BT::fn
-    // in the target Protocol sub-class. I.e. if BT is not
-    // the same as the calling Protocol sub-class, or
-    // a super-class. We want to let Koorde call Chord methods,
-    // but we want to prevent Koorde from calling a Kademlia
-    // method on a Koorde Protocol.
-    assert(t->_target);
-
-    bool ok = _node->_doRPC(dst, Thunk::thunk, (void *) t);
-
-    delete t;
-    return ok;
+    return _node->doRPC(dst,
+                        dynamic_cast<BT*>(getpeer(dst)),
+                        fn, args, ret);
   }
 
 private:
