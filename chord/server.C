@@ -1,5 +1,3 @@
-#include <chord_util.h>
-#include <chord.h>
 /*
  *
  * Copyright (C) 2000 Frans Kaashoek (kaashoek@lcs.mit.edu)
@@ -26,6 +24,10 @@
  *  WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
  */
+
+#include <chord_util.h>
+#include <chord.h>
+#include <route.h>
 
 void 
 vnode::get_successor (chordID n, cbchordID_t cb)
@@ -138,258 +140,30 @@ vnode::find_successor_cb (chordID x, cbroute_t cb, chordID s,
   cb (s, search_path, status);
 }
 
+void
+vnode::find_route_hop_cb (cbroute_t cb, ptr<route_iterator> ri, bool done)
+{
+  if (done) {
+    //    warnx << "find_route_hop_cb " << ri->key () << " path:\n";
+    // ri->print ();
+    cb (ri->last_node (), ri->path (), ri->status ());
+  } else {
+    //warnx << "find_route_hop_cb " << ri->key () << " hop " << ri->last_node () 
+    //  << "\n";
+    ri->next_hop ();
+  }
+}
+
+void
+vnode::find_route (chordID &x, cbroute_t cb) 
+{
 #ifdef FINGERS
-void
-vnode::find_route (chordID &x, cbroute_t cb) 
-{
-  nfindpredecessor++;
-  if (lookup_closestsucc (myID + 1) == myID) {    // is myID the only node?
-    route search_path;
-    cb (myID, search_path, CHORD_OK);
-  } else {
-    chordID n = lookup_closestpred (x);
-    route search_path;
-    if ((n == myID) && (x == myID)) {
-      print ();
-      assert (0);
-    }
-    search_path.push_back (n);
-    findpredecessor_cbstate *st = 
-      New findpredecessor_cbstate (x, search_path, cb);
-    testrange_findclosestpred (n, x, st);
-  }
-}
-
-
-void
-vnode::testrange_findclosestpred (chordID n, chordID x, 
-				  findpredecessor_cbstate *st)
-{
-  //  warn << "looking for closestpred of " << n << " " << x << "\n";
-
-  ptr<chord_testandfindarg> arg = New refcounted<chord_testandfindarg> ();
-  arg->v = n;
-  arg->x = x;
-  chord_testandfindres *nres = New chord_testandfindres (CHORD_OK);
-  ntestrange++;
-  doRPC (n, chord_program_1, CHORDPROC_TESTRANGE_FINDCLOSESTPRED, arg, nres, 
-	 wrap (this, &vnode::testrange_findclosestpred_cb, nres, st));
-}
-
-void
-vnode::testrange_findclosestpred_cb (chord_testandfindres *res,
-				     findpredecessor_cbstate *st, 
-				     clnt_stat err) 
-{
-  if (err) {
-    warnx << "testrange_findclosestpred_cb: failure " << err << "\n";
-    chordID l = st->search_path.back ();
-    st->cb (l, st->search_path, CHORD_RPCFAILURE);
-    delete st;
-  } else if (res->status == CHORD_INRANGE) { 
-    // found the successor
-    locations->cacheloc (res->inres->x, res->inres->r,
-			 wrap (this, &vnode::testrange_fcp_done_cb, st));
-  } else if (res->status == CHORD_NOTINRANGE) {
-    // haven't found the successor yet
-    chordID last = st->search_path.back ();
-    if (last == res->noderes->x) {   
-      // last returns itself as best predecessor, but doesn't know
-      // what its immediate successor is---higher layer should use
-      // succlist to make forward progress
-      st->cb (st->search_path.back (), st->search_path, CHORD_ERRNOENT);
-      delete st;
-    } else {
-      // make sure that the new node sends us in the right direction,
-      chordID olddist = distance (st->search_path.back (), st->x);
-      chordID newdist = distance (res->noderes->x,         st->x);
-      if (newdist > olddist) {
-	warnx << "PROBLEM: went in the wrong direction: " << myID
-	      << "looking for " << st->x << "\n";
-	// xxx surely we can do something more intelligent here.
-	for (unsigned i = 0; i < st->search_path.size (); i++) {
-	  warnx << st->search_path[i] << "\n";
-	}
-	assert (0);
-      }
-      
-      // ask the new node for its best predecessor
-      locations->cacheloc (res->noderes->x, res->noderes->r,
-			   wrap (this, &vnode::testrange_fcp_step_cb, st));
-    }
-  } else {
-    warn("WTF");
-    delete st;
-  }
-  delete res;
-}
-
-void
-vnode::testrange_fcp_done_cb (findpredecessor_cbstate *st,
-			      chordID s, bool ok, chordstat status)
-{
-  if (ok && status == CHORD_OK) {
-    st->search_path.push_back (s);
-    assert (st->search_path.size () < 1000);
-    st->cb (st->search_path.back (), st->search_path, CHORD_OK);
-    delete st;
-  } else if (status == CHORD_RPCFAILURE) {
-    // xxx? should we retry locally before failing all the way to
-    //      the top-level?
-    st->cb (st->search_path.back (), st->search_path, CHORD_RPCFAILURE);
-  } else {
-    warnx << myID << ": testrange_fcp_done_cb: last challenge for "
-	  << s << " failed. (chordstat " << status << ")\n";
-    assert (0); // XXX handle malice more intelligently
-  }
-}
-
-void
-vnode::testrange_fcp_step_cb (findpredecessor_cbstate *st,
-			      chordID s, bool ok, chordstat status)
-{
-  if (ok && status == CHORD_OK) {
-    st->search_path.push_back (s);
-    if (st->search_path.size () >= 1000) {
-      warnx << "PROBLEM: too long a search path: " << myID << " looking for "
-	    << st->x << "\n";
-      for (unsigned i = 0; i < st->search_path.size (); i++) {
-	warnx << st->search_path[i] << "\n";
-      }
-      assert (0);
-    }
-    testrange_findclosestpred (s, st->x, st);
-  } else if (status == CHORD_RPCFAILURE) {
-    // xxx? should we retry locally before failing all the way to
-    //      the top-level?
-    st->cb (st->search_path.back (), st->search_path, CHORD_RPCFAILURE);
-  } else {
-    warnx << myID << ": testrange_fcp_step_cb: step challenge for "
-	  << s << " failed. (chordstat " << status << ")\n";
-    assert (0); // XXX handle malice more intelligently
-  }
-}
-  
+  ptr<route_chord> ri = New refcounted<route_chord> (mkref(this), x);
 #else
-
-void
-vnode::find_route (chordID &x, cbroute_t cb) 
-{
-  nfindpredecessor++;
-  if (myID == lookup_closestsucc (myID + 1)) {    // is myID the only node?
-    route search_path;
-    cb (myID, search_path, CHORD_OK);
-  } else {
-    route search_path;
-    route virtual_path;
-    chordID n = lookup_closestsucc (x);
-    search_path.push_back (n);
-    virtual_path.push_back (x);
-    findpredecessor_cbstate *st = 
-      New findpredecessor_cbstate (x, search_path, virtual_path, cb);
-    warnx << myID << " find_route " << x << " @ " << n << "\n";
-    find_debruijn_route (n, x, x, st);
-  }
-}
-
-void
-vnode::find_debruijn_route (chordID n, chordID x, chordID d, 
-				  findpredecessor_cbstate *st)
-{
-  ptr<chord_debruijnarg> arg = New refcounted<chord_debruijnarg> ();
-  arg->v = n;
-  arg->x = x;
-  arg->d = d;
-  chord_debruijnres *nres = New chord_debruijnres (CHORD_OK);
-  doRPC (n, chord_program_1, CHORDPROC_DEBRUIJN, arg, nres, 
-	 wrap (this, &vnode::debruijn_cb, d, nres, st));
-
-}
-
-void
-vnode::debruijn_cb (chordID d, chord_debruijnres *res,
-			     findpredecessor_cbstate *st,
-			     clnt_stat err)
-{
-  chordID l = st->search_path.back ();
-
-  if (err) {
-    warnx << "find_debruijn_cb: failure " << err << "\n";
-    st->cb (l, st->search_path, CHORD_RPCFAILURE);
-    delete st;
-  } else if (res->status == CHORD_INRANGE) { 
-    // found the successor
-    warnx << "find_debruijn_cb: succ = " << res->inres->x << "\n";
-    locations->cacheloc (res->inres->x, res->inres->r,
-			 wrap (this, &vnode::debruijn_fcp_done_cb, st));
-  } else if (res->status == CHORD_NOTINRANGE) {
-    // haven't found the successor yet; ask the new node
-    locations->cacheloc (res->noderes->node.x, res->noderes->node.r,
-			 wrap (this, &vnode::debruijn_fcp_step_cb, 
-			       res->noderes->d, st));
-  } else {
-    warn("WTF");
-    delete st;
-  }
-  delete res;
-}
-
-
-void
-vnode::debruijn_fcp_done_cb (findpredecessor_cbstate *st,
-			      chordID s, bool ok, chordstat status)
-{
-  if (ok && status == CHORD_OK) {
-    st->search_path.push_back (s);
-    st->virtual_path.push_back (myID);
-    warnx << "debruijn_fcp_done_cb: path size " << st->search_path.size () 
-	  << "\n";
-
-    for (unsigned i = 0; i < st->search_path.size (); i++) {
-      warnx << st->search_path[i] << " " << st->virtual_path[i] << "\n";
-    }
-
-    st->cb (st->search_path.back (), st->search_path, CHORD_OK);
-    delete st;
-  } else if (status == CHORD_RPCFAILURE) {
-    // xxx? should we retry locally before failing all the way to
-    //      the top-level?
-    st->cb (st->search_path.back (), st->search_path, CHORD_RPCFAILURE);
-  } else {
-    warnx << myID << ": debruijn_fcp_done_cb: last challenge for "
-	  << s << " failed. (chordstat " << status << ")\n";
-    assert (0); // XXX handle malice more intelligently
-  }
-}
-
-
-void
-vnode::debruijn_fcp_step_cb (chordID d, findpredecessor_cbstate *st, chordID s, 
-      bool ok, chordstat status)
-{
-  if (ok && status == CHORD_OK) {
-    st->search_path.push_back (s);
-    st->virtual_path.push_back (d);
-    if (st->search_path.size () >= 100) {
-      warnx << "PROBLEM: with search path: " << myID << " looking for "
-	    << st->x << " last d: "  << d << "\n";
-      for (unsigned i = 0; i < st->search_path.size (); i++) {
-	warnx << st->search_path[i] << " " << st->virtual_path[i] << "\n";
-      }
-      assert (0);
-    }
-    find_debruijn_route (s, st->x, d, st);
-  } else if (status == CHORD_RPCFAILURE) {
-    // xxx? should we retry locally before failing all the way to
-    //      the top-level?
-    st->cb (st->search_path.back (), st->search_path, CHORD_RPCFAILURE);
-  } else {
-    warnx << myID << ": debruijn_fcp_step_cb: step challenge for "
-	  << s << " failed. (chordstat " << status << ")\n";
-    assert (0); // XXX handle malice more intelligently
-  }
-}
+  ptr<route_debruijn> ri = New refcounted<route_debruijn> (mkref(this), x);
 #endif
+  ri->first_hop(wrap (this, &vnode::find_route_hop_cb, cb, ri));
+}
 
 void
 vnode::notify (chordID &n, chordID &x)

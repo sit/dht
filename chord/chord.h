@@ -53,17 +53,7 @@ typedef callback<void,vec<chord_node>,chordstat>::ref cbchordIDlist_t;
 typedef callback<void,chordID,route,chordstat>::ref cbroute_t;
 typedef callback<void, svccb *>::ref cbdispatch_t;
 
-struct findpredecessor_cbstate {
-  chordID x;
-  route search_path;
-  route virtual_path;
-  cbroute_t cb;
-  findpredecessor_cbstate (chordID xi, route spi, cbroute_t cbi) :
-    x (xi), search_path (spi), cb (cbi) {};
-  findpredecessor_cbstate (chordID xi, route spi, route vpi, cbroute_t cbi) :
-    x (xi), search_path (spi), virtual_path (vpi), cb (cbi) {};
-};
-
+class route_iterator;
 
 #include "toe_table.h"
 #include "finger_table.h"
@@ -129,28 +119,9 @@ class vnode : public virtual refcount, public stabilizable {
   void get_succlist_cb (cbchordIDlist_t cb, chord_nodelistres *res,
 			clnt_stat err);
 
+  void find_route_hop_cb (cbroute_t cb, ptr<route_iterator> ri, bool done);
   void find_route (chordID &x, cbroute_t cb);
   void dofindroute_cb (svccb *sbp, chordID s, route r, chordstat err);
-  
-#ifdef FINGERS
-  void testrange_findclosestpred (chordID node, chordID x, 
-				  findpredecessor_cbstate *st);
-  void testrange_findclosestpred_cb (chord_testandfindres *res, 
-			 findpredecessor_cbstate *st, clnt_stat err);
-  void testrange_fcp_done_cb (findpredecessor_cbstate *st,
-			      chordID s, bool ok, chordstat status);
-  void testrange_fcp_step_cb (findpredecessor_cbstate *st,
-			      chordID s, bool ok, chordstat status);
-#else
-  void find_debruijn_route (chordID n, chordID x, chordID d, 
-			   findpredecessor_cbstate *st);
-  void debruijn_cb (chordID d, chord_debruijnres *res,
-		     findpredecessor_cbstate *st, clnt_stat err);
-  void debruijn_fcp_done_cb (findpredecessor_cbstate *st,
-			    chordID s, bool ok, chordstat status);
-  void debruijn_fcp_step_cb (chordID e, findpredecessor_cbstate *st, chordID s, 
-			    bool ok, chordstat status);
-#endif
   
   void notify_cb (chordID n, chordstat *res, clnt_stat err);
   void alert_cb (chordstat *res, clnt_stat err);
