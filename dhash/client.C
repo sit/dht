@@ -125,7 +125,12 @@ dhashcli::retrieve (blockID blockID, cb_ret cb, int options,
     else if (options & DHASHCLIENT_SUCCLIST_OPT)
       warn << "cannot use succlist to find succs on retrieve\n";
 
-    clntnode->find_succlist (blockID.ID, dhash::num_dfrags () + 2,
+    // XXX jinyang won't say if 1.5 works in general, but for num_dfrags
+    //     of 7, this gives the "right" answer of getting 11 successors,
+    //     for optimal latency.
+    clntnode->find_succlist (blockID.ID,
+			     dhash::num_dfrags () +
+			       (dhash::num_dfrags () + 1)/2,
 			     wrap (this, &dhashcli::retrieve_lookup_cb, rs),
 			     guess);
   }
