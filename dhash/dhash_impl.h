@@ -118,6 +118,7 @@ class dhash_impl : public dhash {
 			   dhash_stat err, ptr<dhash_block> b, route r);
 
   unsigned keyhash_mgr_rpcs;
+  void update_replica_list ();
   vec<ptr<location> > replicas;
   timecb_t *keyhash_mgr_tcb;
   void keyhash_mgr_timer ();
@@ -151,6 +152,7 @@ class dhash_impl : public dhash {
 				 int cookie, ptr<dbrec> val, dhash_stat stat);
   void sent_block_cb (dhash_stat *s, clnt_stat err);
 
+  void fetch (blockID id, int cookie, cbvalue cb);
   void append (ref<dbrec> key, ptr<dbrec> data,
 	       s_dhash_insertarg *arg,
 	       cbstore cb);
@@ -162,13 +164,7 @@ class dhash_impl : public dhash {
   void store (s_dhash_insertarg *arg, bool exists, cbstore cb);
   
   dhash_stat key_status (const blockID &n);
-
-  void update_replica_list ();
-  
   char responsible(const chordID& n);
-
-  void printkeys ();
-  strbuf printkeys_walk (const chordID &k);
 
   ptr<dbrec> dblookup(const blockID &i);
   int db_insert_immutable (ref<dbrec> key, ref<dbrec> data, dhash_ctype ctype);
@@ -209,7 +205,6 @@ class dhash_impl : public dhash {
   
   void stop ();
   void start (bool randomize = false);
-  void fetch (blockID id, int cookie, cbvalue cb);
 };
 
 #endif

@@ -85,7 +85,6 @@ class dhash {
   
   virtual void start (bool randomize) = 0;
   virtual void stop () = 0;
-  virtual void fetch (blockID id, int cookie, cbvalue cb) = 0;
 };
 
 #endif

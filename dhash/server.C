@@ -970,27 +970,6 @@ dhash_impl::doRPC (ptr<location> ID, const rpc_program &prog, int procno,
 
 
 // ---------- debug ----
-void
-dhash_impl::printkeys () 
-{
-  warn << key_info ();
-}
-
-strbuf
-dhash_impl::printkeys_walk (const chordID &k) 
-{
-  // DHASH_BLOCK is ignored on the line below
-  strbuf sb;
-  dhash_stat status = key_status (blockID (k, DHASH_CONTENTHASH, DHASH_BLOCK));
-  if (status == DHASH_STORED)
-    sb << k << " STORED @ " << host_node->my_ID ();
-  else if (status == DHASH_REPLICATED)
-    sb << k << " REPLICATED @ " << host_node->my_ID ();
-  else
-    sb << k << " UNKNOWN";
-  return sb;
-}
-
 #if 0
 /* Hrm. This should remind someone to print cached blocks, once we
  * figure out what to cache and when... */
@@ -1009,8 +988,8 @@ dhash_impl::print_stats ()
   vec<dstat> ds = stats ();
   for (size_t i = 0; i < ds.size (); i++)
     warnx << "  " << ds[i].value << " " << ds[i].desc << "\n";
-
-  printkeys ();
+  
+  warnx << key_info ();
 }
 
 vec<dstat>
@@ -1031,17 +1010,26 @@ dhash_impl::stats ()
 strbuf
 dhash_impl::key_info ()
 {
+  // XXX only prints DHASH_CONTENTHASH records
+  // XXX probably a terrible idea to enumerate the database!!!
   ptr<dbEnumeration> it = db->enumerate();
   ptr<dbPair> d = it->nextElement();
   strbuf out;
   while (d) {
-    // XXX now only prints DHASH_CONTENTHASH records
     chordID k = dbrec2id (d->key);
-    out << printkeys_walk (k) << " missing on " << bsm->mcount (k) << "\n";;
+    const vec<ptr<location> > w = bsm->where_missing (k);
+    out << (responsible (k) ? "RESPONSIBLE " : "REPLICA ") << k;
+    if (w.size ()) {
+      chord_node n;
+      out << " missing on ";
+      for (size_t i = 0; i < w.size (); i++) {
+	w[i]->fill_node (n);
+	out << n << " ";
+      }
+    } 
+    out << "\n";
     d = it->nextElement();
   }
-
-  bsm->print ();
   return out;
 }
 
