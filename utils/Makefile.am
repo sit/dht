@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-## $Id: Makefile.am,v 1.6 2003/04/16 18:25:39 sit Exp $
+## $Id: Makefile.am,v 1.7 2003/05/06 17:39:14 fdabek Exp $
 
 noinst_LIBRARIES = libutil.a
 
@@ -9,10 +9,11 @@ noinst_HEADERS = \
 	ida.h \
 	id_utils.h \
 	location.h \
-	locationtable.C \
-	misc_utils.C \
+	locationtable.h \
+	misc_utils.h \
 	modlogger.h \
-	skiplist.h
+	skiplist.h \
+	ida-field.C
 
 libutil_a_SOURCES = \
 	configurator.C \
@@ -22,10 +23,12 @@ libutil_a_SOURCES = \
 	location.C \
 	locationtable.C \
 	misc_utils.C \
-	modlogger.C
+	modlogger.C 
+
 
 # should really figure out how to encode explict rule so that make
 # will run ida-genfield.py to update ida-field.C if ida-genfield.py changes.
+
 
 TESTS = test_ida test_skiplist
 check_PROGRAMS = $(TESTS)

@@ -1,4 +1,4 @@
-dnl $Id: configure.in,v 1.35 2003/05/02 00:50:36 fdabek Exp $
+dnl $Id: configure.in,v 1.36 2003/05/06 17:39:13 fdabek Exp $
 dnl
 dnl Process this file with autoconf to produce a configure script.
 dnl
@@ -16,9 +16,9 @@ AC_PROG_CXX
 AC_PATH_PROGS(M4, gm4 gnum4 m4, '$(top_srcdir)/missing')
 
 dnl Check for GTK and allow conditional Makefile.am statements
-dnl AM_PATH_GTK_FOO(1.2.0,,AC_MSG_WARN(gtk not available; vis will not be built))
+dnl AM_PATH_GTK(1.2.0,,AC_MSG_WARN(gtk not available; vis will not be built))
 
-PKG_CHECK_MODULES_FOO(GSTUFF, gtk+-2.0 >= 2.0)
+PKG_CHECK_MODULES(GSTUFF, gtk+-2.0 >= 2.0)
 AM_CONDITIONAL(GTK_AVAILABLE, test "$GSTUFF_CFLAGS")
 AC_SUBST(GSTUFF_CFLAGS)
 AC_SUBST(GSTUFF_LIBS)

@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.13 2003/05/02 01:33:01 jsr Exp $
+# $Id: Makefile.am,v 1.14 2003/05/06 17:39:13 fdabek Exp $
 
 $(PROGRAMS): $(LDEPS) 
 
@@ -19,7 +19,7 @@ if GTK_AVAILABLE
 donation_plugin_SOURCES = donation_plugin.C
 INCLUDES = $(GSTUFF_CFLAGS)
 donation_plugin_LDFLAGS = -pthread
-donation_plugin_LDADD = -lxmms $(GTK_LIBS) $(LDADD)
+donation_plugin_LDADD = -lxmms $(GSTUFF_LIBS) $(LDADD)
 endif
 
 EXTRA_DIST = .cvsignore

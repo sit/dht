@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.9 2003/03/31 15:16:00 sit Exp $
+# $Id: Makefile.am,v 1.10 2003/05/06 17:39:13 fdabek Exp $
 
 $(PROGRAMS): $(LDEPS) libsfsrodb.a
 
@@ -8,7 +8,7 @@ noinst_LIBRARIES = libsfsrodb.a
 bin_PROGRAMS = sfsrodb 
 
 noinst_HEADERS = \
-sfsrodb.h sfsrodb_core.h
+sfsrodb.h sfsrodb_core.h dbfe.h
 
 libsfsrodb_a_SOURCES = \
 sfsrodb_core.C dbfe.C
