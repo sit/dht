@@ -33,7 +33,7 @@ class dhashclient {
   void cache_on_path(dhash_insertarg *item, route path);
 
   void lookup_findsucc_cb (svccb *sbp, sfs_ID *n, struct timeval *tp,  sfs_ID succ, route path, sfsp2pstat err);
-  void lookup_fetch_cb (svccb *sbp, dhash_res *res, clnt_stat err);
+  void lookup_fetch_cb (svccb *sbp, dhash_res *res, struct timeval *tp, clnt_stat err);
 
   void insert_findsucc_cb (svccb *sbp, dhash_insertarg *item, sfs_ID succ, route path, sfsp2pstat err);
   void insert_store_cb (svccb *sbp, dhash_stat *res,clnt_stat err);

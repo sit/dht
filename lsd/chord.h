@@ -17,6 +17,9 @@ struct chord_stats {
   long insert_ops;
   long lookup_path_len;
   long lookup_ops;
+  long lookup_lat;
+  long lookup_max_lat;
+  long lookup_bytes_fetched;
 };
 
 extern chord_stats stats;

@@ -211,9 +211,9 @@ p2p::stats_cb () {
   warnx << "  Per link avg. RPC latencies\n";
   location *l = locations.first ();
   while (l) {
-    warnx << "link " << l->n << "\n";
-    printf("    Average latency: %f\n", ((float)(l->total_latency))/l->num_latencies);
-    printf("    Max latency: %d\n", l->max_latency);
+    warnx << "    link " << l->n << "\n";
+    printf("       Average latency: %f\n", ((float)(l->total_latency))/l->num_latencies);
+    printf("       Max latency: %d\n", l->max_latency);
     l = locations.next(l);
   }
 
@@ -226,9 +226,12 @@ p2p::stats_cb () {
     warnx << "off\n";
 #endif
   warnx << "   " << stats.insert_ops << " insertions\n";
-  printf( "   %f average hops per insert\n", ((float)(stats.insert_path_len))/stats.insert_ops);
+  printf( "      %f average hops per insert\n", ((float)(stats.insert_path_len))/stats.insert_ops);
   warnx << "   " << stats.lookup_ops << " lookups\n";
-  printf( "   %f average hops per lookup\n", ((float)(stats.insert_path_len))/stats.insert_ops);
+  printf( "      %f average hops per lookup\n", ((float)(stats.lookup_path_len))/stats.lookup_ops);
+  printf( "      %f ms average latency per lookup operation\n", ((float)(stats.lookup_lat))/stats.lookup_ops);
+  printf( "      %d ms greatest latency for a lookup\n", stats.lookup_max_lat);
+  printf( "      %f KB/sec avg. total bandwidth\n", ((float)(stats.lookup_bytes_fetched))/(stats.lookup_lat));
 #endif /* STATS */
 
 }
