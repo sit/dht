@@ -225,23 +225,11 @@ class vnode : public virtual refcount {
 
 
 class chord : public virtual refcount {
-
-  struct server {
-    ptr<axprt_dgram> x;
-    ~server (void) { 
-      warnx << "server: delete\n";
-    };
-  };
-
   int nvnode;
   net_address wellknownhost;
   net_address myaddress;
   chordID wellknownID;
   qhash<chordID, ref<vnode>, hashID> vnodes;
-  myvs_cache<u_int32_t, ref<axprt_stream> > servers;
-  u_int32_t ptr2int (ptr<axprt_stream> x) { 
-    axprt_stream *x1 = x; return reinterpret_cast<u_int32_t> (x1);
-  }
 
   int ngetsuccessor;
   int ngetpredecessor;
@@ -252,10 +240,6 @@ class chord : public virtual refcount {
   int ngetfingers;
 
   void dispatch (ptr<asrv> s, ptr<axprt_dgram> x, svccb *sbp);
-  void doaccept (int fd);
-  void print_conn (u_int32_t k, ref<axprt_stream> x);
-  void flush_server (u_int32_t k, ref<axprt_stream> x);
-  void accept_standalone (int lfd);
   int startchord (int myp);
   chordID initID (int index);
   void deletefingers_cb (chordID x, const chordID &k, ptr<vnode> v);

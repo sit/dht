@@ -2,7 +2,6 @@
 - test lookups during joins
 - test inserts during joins
 
-- DoRPC should return errors only when a tcpconnect fails
 - determine when to run stabilize at runtime
 - server selection
 - implement nodeID identification

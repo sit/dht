@@ -61,8 +61,6 @@ dhash::dispatch (unsigned long procno,
   char *marshalled_arg = arg->marshalled_args.base ();
   int arg_len = arg->marshalled_args.size ();
 
-  warn << "arg_len " << arg_len << "\n";
-
   xdrmem x (marshalled_arg, arg_len, XDR_DECODE);
   xdrproc_t proc = dhash_program_1.tbl[procno].xdr_arg;
 

@@ -25,8 +25,7 @@ chord::chord (str _wellknownhost, int _wellknownport,
 	      const chordID &_wellknownID,
 	      int port, str myhost, int set_rpcdelay, int max_cache, 
 	      int max_connections) :
-  wellknownID (_wellknownID),
-  servers (max_connections /2)
+  wellknownID (_wellknownID)
 {
   myaddress.port = startchord (port);
   myaddress.hostname = myhost;
@@ -35,7 +34,7 @@ chord::chord (str _wellknownhost, int _wellknownport,
   warnx << "chord: myport is " << myaddress.port << "\n";
   warnx << "chord: myname is " << myaddress.hostname << "\n";
   locations = New refcounted<locationtable> (mkref (this), set_rpcdelay, 
-					     max_cache, max_connections/2);
+					     max_cache, max_connections);
   locations->insert (wellknownID, wellknownhost.hostname, wellknownhost.port);
   nvnode = 0;
   ngetsuccessor = 0;
@@ -50,14 +49,18 @@ chord::chord (str _wellknownhost, int _wellknownport,
 int
 chord::startchord (int myp)
 {
-  if (myp == 0) {
-    myp = arc4random () & 0xfff;
-    myp = myp | 0xf000;
-  }
-
   int srvfd = inetsocket (SOCK_DGRAM, myp);
   if (srvfd < 0)
     fatal ("binding UDP port %d: %m\n", myp);
+
+  if (myp ==0) {
+    struct sockaddr_in addr;
+    socklen_t len = sizeof (addr);
+    bzero (&addr, sizeof (addr));
+    if (getsockname (srvfd, (sockaddr *) &addr, &len) < 0) 
+      fatal ("getsockname failed %m\n");
+    myp = ntohs (addr.sin_port);
+  }
 
   ptr<axprt_dgram> x = axprt_dgram::alloc (srvfd);
   ptr<asrv> s = asrv::alloc (x, chord_program_1);
@@ -119,7 +122,8 @@ chord::newvnode (chordID &x, cbjoin_t cb)
     locations->insert (x, myaddress.hostname, myaddress.port);
   ptr<vnode> vnodep = New refcounted<vnode> (locations, mkref (this), x);
   nvnode++;
-  warn << "insert: " << x << "\n";
+  warn << "insert: " << x << "@" << myaddress.hostname << "(" 
+       << myaddress.port << ")\n";
   vnodes.insert (x, vnodep);
   if (x != wellknownID) {
     vnodep->join (cb);
@@ -200,8 +204,6 @@ chord::dispatch (ptr<asrv> s, ptr<axprt_dgram> x, svccb *sbp)
     s->setcb (NULL);
     return;
   }
-  //  ptr<axprt_stream> x1 = servers[ptr2int(x)];
-  //  assert (x1 == x);
   chord_vnode *v = sbp->template getarg<chord_vnode> ();
   vnode *vnodep = vnodes[v->n];
   if (!vnodep) {
