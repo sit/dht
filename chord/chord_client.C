@@ -297,7 +297,8 @@ chord::isHandled (int progno) {
 }
 void
 chord::handleProgram (const rpc_program &prog) {
-  warn << "chord::handleProgram: " << prog.progno << "\n";
+  warn << "chord::handleProgram: " << prog.name
+       << " (" << prog.progno << ")\n";
   if (isHandled (prog.progno)) return;
   else {
     handledProgs.push_back (&prog);
