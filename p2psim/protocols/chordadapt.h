@@ -57,7 +57,7 @@ class ChordAdapt: public P2Protocol {
       uint parallelism;
       uint type;
       ConsistentHash::CHID overshoot;
-      double timeout;
+      Time timeout;
       IDMap prevhop;
       vector<IDMap> deadnodes;
     };

@@ -350,7 +350,7 @@ Node::print_dist_stats(vector<double> v)
     allavg += v[i];
   if (sz > 0) {
     printf("1p:%.3f 5p:%.3f 10p:%.3f 50p:%.3f 90p:%.3f 95p:%.3f 99p:%.3f 100p:%.3f avg:%.3f\n", 
-      v[(uint)sz*0.01], v[(uint)(sz*0.05)],v[(uint)(sz*0.1)],
+      v[(uint)(sz*0.01)], v[(uint)(sz*0.05)],v[(uint)(sz*0.1)],
       v[sz/2], v[(uint)(sz*0.9)], 
       v[(uint)(sz*0.95)], v[(uint)(sz*0.99)], 
       v[sz-1], allavg/sz);

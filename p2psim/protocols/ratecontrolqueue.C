@@ -1,6 +1,6 @@
 #include "chord.h"
 #include "ratecontrolqueue.h"
-
+#include <iostream>
 
 bool operator< (const q_elm& a, const q_elm& b) { return (b._priority < a._priority); }
 

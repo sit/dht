@@ -26,6 +26,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <assert.h>
+#include <iostream>
 
 vector<uint> ChordAdapt::rtable_sz;
 
@@ -577,7 +578,7 @@ ChordAdapt::next_iter(lookup_args *la, lookup_ret *lr)
 	lla->to_num = la->to_num;
 	lla->to_lat = la->to_lat;
 
-	lla->timeout = ttt;
+	lla->timeout = (Time) ttt;
 	lla->from.alivetime = now() - _last_joined_time;
 	lla->prevhop = la->nexthop;
 	lla->nexthop = nh;
@@ -626,7 +627,7 @@ ChordAdapt::next_iter(lookup_args *la, lookup_ret *lr)
     lla->to_num = la->to_num; 
     lla->to_lat = la->to_lat;
 
-    lla->timeout = ttt;
+    lla->timeout = (Time) ttt;
     lla->from.alivetime = now() - _last_joined_time;
     lla->prevhop = la->nexthop;
     lla->nexthop = nh;
@@ -1054,7 +1055,7 @@ ChordAdapt::next_recurs(lookup_args *la, lookup_ret *lr)
     }
     if (_rate_queue->critical())
       lla->learnsz = 1;
-    lla->timeout = ttt;
+    lla->timeout = (Time) ttt;
     lla->hops = la->hops+1;
     lla->nexthop = nexthops[i];
     lla->from = _me;
@@ -1443,7 +1444,7 @@ ChordAdapt::empty_queue(void *a)
 
 
   la->m = _learn_num;
-  la->timeout = _tt;
+  la->timeout = (Time) _tt;
   la->n = pred;
   la->src = _me;
   la->src.alivetime = now()-_last_joined_time;
