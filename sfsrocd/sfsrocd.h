@@ -1,5 +1,5 @@
 // -*-c++-*-
-/* $Id: sfsrocd.h,v 1.2 2001/01/25 21:36:01 fdabek Exp $ */
+/* $Id: sfsrocd.h,v 1.3 2001/02/23 04:44:47 fdabek Exp $ */
 
 /*
  *
@@ -253,6 +253,8 @@ private:
 
   ///FED - mirror hack
   void updateMirrorDivision();
+
+  void lookup_mount(nfscall *sbp, sfsro_datares *res, clnt_stat err);
 protected:
   server (const sfsserverargs &a)
     : sfsserver (a) {}

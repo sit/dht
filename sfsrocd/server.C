@@ -1,4 +1,4 @@
-/* $Id: server.C,v 1.4 2001/02/13 23:53:34 fdabek Exp $ */
+/* $Id: server.C,v 1.5 2001/02/23 04:44:46 fdabek Exp $ */
 
 /*
  *
@@ -628,12 +628,15 @@ server::dir_lookupres (nfscall *sbp, const sfsro_directory *dir)
 			  wrap (this, &server::dir_lookup_parentres,
 				sbp, dir_fh));
     } else {
+      warn << "looking up " << dirop->name << "in dir w/fh=" << hexdump(&fh,20) << "\n";
+      
       const sfsro_dirent *dirent = dirent_lookup(sbp, &(dirop->name), dir);
       
-      if (dirent == NULL)
+      if (dirent == NULL) {
 	///// XXX do we need to send post_op_attr if errors?
+	warn << "returning NOENT in dir_lookupres\n";
 	sbp->error (NFS3ERR_NOENT);
-      else {
+      } else {
 	ref<const sfs_hash> obj_fh 
 	  (New refcounted<const sfs_hash> (dirent->fh));
 	
@@ -717,26 +720,30 @@ server::dir_lookup (const sfsro_inode *ip, nfscall *sbp, cbdirent_t cb)
 }
 
 void
-server::lookupinode_lookupres(nfscall *sbp, const sfsro_inode *ip)
+server::lookupinode_lookupres (nfscall *sbp, const sfsro_inode *ip)
 {
+  
+  warn << ip->reg->size << " " << ip->reg->direct.size() << "\n";
   if (ip->type != SFSRODIR && ip->type != SFSRODIR_OPAQ) 
     sbp->error (NFS3ERR_NOTDIR);
-  else if (ip->reg->direct.size() <= 0)
+  else if (ip->reg->direct.size() <= 0) {
+    warn << "returning NOENT in lookupinode+lookupres\n";
     sbp->error (NFS3ERR_NOENT);
-  else
+  }  else
     dir_lookup(ip, sbp, wrap (this, &server::dir_lookupres, sbp));
 }
 
 void
-server::readdirinode_lookupres(nfscall *sbp, ref<const sfs_hash> fh,
+server::readdirinode_lookupres (nfscall *sbp, ref<const sfs_hash> fh,
 			       const sfsro_inode *ip)
 {
 
   if (ip->type != SFSRODIR && ip->type != SFSRODIR_OPAQ) 
     sbp->error (NFS3ERR_NOTDIR);
-  else if (ip->reg->direct.size() <= 0)
+  else if (ip->reg->direct.size() <= 0) {
+    warn << "returning NOENT in readdirinode+lookupres\n";
     sbp->error (NFS3ERR_NOENT);
-  else {
+  } else {
 
     readdir3res *nfsres = sbp->template getres<readdir3res> ();
     rpc_clear (*nfsres);
@@ -759,9 +766,10 @@ server::readdirplusinode_lookupres(nfscall *sbp,
 {
   if (ip->type != SFSRODIR && ip->type != SFSRODIR_OPAQ) 
     sbp->error (NFS3ERR_NOTDIR);
-  else if (ip->reg->direct.size() <= 0)
+  else if (ip->reg->direct.size() <= 0) {
+    warn << "returning NOENT in readdirplusinode+lookupres\n";
     sbp->error (NFS3ERR_NOENT);
-  else {
+}  else {
     readdirplus3res *nfsres = sbp->template getres<readdirplus3res> ();
     rpc_clear (*nfsres);
     nfsres->set_status (NFS3_OK);
@@ -832,21 +840,22 @@ void
 server::inode_lookup (const sfs_hash *fh, nfscall *sbp, cbinode_t cb)
 {
   const sfsro_inode *inode;
-  
+
+  warn << "inode_lookup fh " << hexdump (fh, 20) << "\n";
+
   // XX cache
   cstat.ic_tot++;
 
   if (!sfsrocd_nocache && (inode = ic.lookup (*fh))) {
     cb (inode);
 
+    warn << inode->reg->size << " " << inode->reg->direct.size() << "\n";
     // XX cache
     cstat.ic_hit++;
   } else {
     // XX cache
     cstat.ic_miss++;
     sfsro_datares *res = New sfsro_datares (SFSRO_OK);
-
-    // warn << "inode_lookup fh " << hexdump (fh, 20) << "\n";
 
     ref<const sfs_hash> fh_ref = New refcounted<const sfs_hash> (*fh);
 
@@ -905,11 +914,26 @@ server::dispatch (nfscall *sbp)
       diropargs3 *dirop = sbp->template getarg<diropargs3> ();
       nfs_fh3 *nfh = &(dirop->dir);
 
-      sfs_hash fh;
-      nfs2ro(nfh, &fh);
-
-      inode_lookup (&fh, sbp, 
-		    wrap (this, &server::lookupinode_lookupres, sbp));
+      if (memcmp(nfh->data.base (), rootfh.data.base(), nfh->data.size()) == 0)
+	{
+	  //case I: lookup is on root level and must be translated into a 
+	  //        request for fsinfo.
+	  
+	  warn << "mount request for " << dirop->name << "\n";
+	  sfs_hash *fsinfo_fh = New sfs_hash ();
+	  memcpy(fsinfo_fh->base(), dirop->name.cstr(), 20);
+	  get_data(fsinfo_fh, wrap(this, &server::lookup_mount, sbp));
+	  
+	} 
+      else
+	{
+	  // case II: lookup not on root level. "Normal" case.
+	  sfs_hash fh;
+	  nfs2ro(nfh, &fh);
+	  
+	  inode_lookup (&fh, sbp, 
+			wrap (this, &server::lookupinode_lookupres, sbp));
+	}
     }
     break;
   case NFSPROC3_ACCESS:
@@ -989,6 +1013,31 @@ server::dispatch (nfscall *sbp)
     sbp->error (NFS3ERR_ROFS);
     break;
   }
+}
+
+void
+server::lookup_mount(nfscall *sbp, sfsro_datares *res, clnt_stat err) {
+
+  if (err) {
+    fatal << "error looking up mount point\n";
+  }
+  
+  sfs_fsinfo *mounted_fsinfo = New sfs_fsinfo();
+  xdrmem x (static_cast<char *>(res->resok->data.base ()), res->resok->data.size (), XDR_DECODE);
+  if (!xdr_sfs_fsinfo (x.xdrp (), mounted_fsinfo)) {
+    warn << "error decoding returned fsinfo\n";
+  }
+
+  warn << "mounted root fh=" << hexdump (&mounted_fsinfo->sfsro->v1->info.rootfh, 20) << "\n";
+  
+  ref<const sfs_hash> root_fh = New refcounted<const sfs_hash> (fsinfo->sfsro->v1->info.rootfh);
+  ref<const sfs_hash> obj_fh 
+    (New refcounted<const sfs_hash> (mounted_fsinfo->sfsro->v1->info.rootfh));
+	
+  inode_lookup(&fsinfo->sfsro->v1->info.rootfh, sbp, 
+	       wrap (this, &server::dir_lookupres_dir_attr, 
+		     sbp, root_fh, obj_fh));
+
 }
 
 bool
@@ -1258,9 +1307,10 @@ server::lookup_parent_rofh_lookupres (nfscall *sbp,
 
   if (ip->type != SFSRODIR && ip->type != SFSRODIR_OPAQ) 
     sbp->error (NFS3ERR_NOTDIR);
-  else if (ip->reg->direct.size() <= 0)
+  else if (ip->reg->direct.size() <= 0) {
+    warn << "returning NOENT in lookup_parent_rofh_lookupres\n";
     sbp->error (NFS3ERR_NOENT);
-  else
+}  else
     dir_lookup (ip, sbp, 
 		wrap (this, &server::lookup_parent_rofh_lookupres2,
 		      sbp, pathvec, cb));
@@ -1278,9 +1328,10 @@ server::lookup_parent_rofh_lookupres2 (nfscall *sbp,
   
   const sfsro_dirent *dirent = dirent_lookup(sbp, &filename, dir);
 
-  if (dirent == NULL)
+  if (dirent == NULL) {
+    warn << "returning NOENT in lookup_parent_rofh_lookupres2\n";
     sbp->error (NFS3ERR_NOENT);
-  else
+} else
     lookup_parent_rofh (sbp, &dirent->fh, pathvec, cb);
 }
 
