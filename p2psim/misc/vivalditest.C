@@ -56,7 +56,7 @@ VivaldiTest::~VivaldiTest()
 void
 VivaldiTest::join(Args *args)
 {
-  if (_all.size () > _total_nodes && _total_nodes > 0) 
+  if ((int)_all.size () > _total_nodes && _total_nodes > 0) 
       return;
   _all.push_back(this);
   addNeighbors ();
@@ -117,7 +117,7 @@ VivaldiTest::tick(void *)
     cout << "vis " << now () << " step " 
 	 << ip () << " 0 " << (int)error () << " ";
     Coord loc = my_location ();
-    for (uint j = 0; j < loc.dim(); j++)
+    for (int j = 0; j < loc.dim(); j++)
       cout << (int)loc._v[j] << " ";
     cout << endl;
   }
@@ -199,7 +199,22 @@ VivaldiTest::error()
     return 0;
 }
 
-// return 5th, 50th, 95th percentiles of node error
+void
+VivaldiTest::node_errors (double &e05, double &e50, double &e95)
+{
+  vector<double> a;
+  for (unsigned int i = 0; i < _all.size (); i++) 
+    a.push_back (_all[i]->error ());
+  
+  sort(a.begin(), a.end());
+  if(a.size () > 5){
+    e05 = a[a.size () / 20];
+    e50 = a[a.size () / 2];
+    e95 = a[a.size () - (a.size() / 20)];
+  }
+}
+
+// return 5th, 50th, 95th percentiles of per-link errors
 void
 VivaldiTest::total_error(double &e05, double &e50, double &e95)
 {
@@ -265,14 +280,17 @@ VivaldiTest::status()
 
   VivaldiNode::Coord vc = my_location();
   double e05, e50, e95;
-  total_error(e05, e50, e95);
-  printf("vivaldi %u %u %d %.5f %.5f %.5f\n",
+  // total_error(e05, e50, e95);
+  node_errors (e05, e50, e95);
+  
+  printf("vivaldi %u %u %d %.5f %.5f %.5f %.5f\n",
          (unsigned) now(),
          this->ip(),
          _ticks,
          e05,
          e50,
-         e95);
+         e95,
+	 my_error ());
 
   fflush(stdout);
 }

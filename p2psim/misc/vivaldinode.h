@@ -50,12 +50,16 @@ public:
     Coord _c;
     double _latency;
     IPAddress _who;
-    Sample(Coord c, double l, IPAddress w) { _c = c; _latency = l; _who = w;}
+    double _error;
+    Sample(Coord c, double l, double e, IPAddress w) { 
+      _c = c; _latency = l; _who = w; _error = e;
+    }
   };
   
   int nsamples() { return _nsamples; }
-  void sample(IPAddress who, Coord c, double latency);
+  void sample(IPAddress who, Coord c, double e, double latency);
   Coord my_location() { return _c; }
+  double my_error () { return _pred_err; }
   Coord real_coords ();
   //end vivaldi.h
 
@@ -67,6 +71,8 @@ protected:
   int _adaptive; //use adaptive timestep?
   double _timestep; //minimum timestep
   double _curts;
+  double _pred_err; // running average of prediction error
+  int _window_size;
 
   Coord _c; // current estimated coordinates
   vector<Sample> _samples;
@@ -76,6 +82,8 @@ protected:
   Sample lowest_latency(vector<Sample> v);
   Coord net_force(Coord c, vector<Sample> v);
   Coord net_force1(Coord c, vector<Sample> v);
+  vector<double> get_weights (vector<Sample> v);
+  void update_error (vector<Sample> v);
 
   virtual void algorithm(Sample); // override this
   //end vivaldi.h
@@ -92,11 +100,7 @@ protected:
     if (ok) {
       VivaldiNode * t = dynamic_cast<VivaldiNode *>(getpeer(dst));
       assert (t);
-      VivaldiNode::Coord tc = t->real_coords ();
-      VivaldiNode::Coord my = real_coords ();
-      //      cerr << "RPC from " << tc << " to " << my << " took " << now () - before << "\n";
-      
-      sample (dst, t->my_location(), (now () - before));
+      sample (dst, t->my_location(), t->my_error (), (now () - before));
     }
     delete t;
     return ok;

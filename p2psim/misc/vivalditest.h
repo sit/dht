@@ -45,6 +45,7 @@ public:
   double error();
   vector<IPAddress> best_n (unsigned int n);
   void total_error(double &x05, double &x50, double &x95);
+  void node_errors(double &x05, double &x50, double &x95);
   vector<IPAddress> _nip_best;
   vector<IPAddress> _nip;
 
