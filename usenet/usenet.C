@@ -80,8 +80,8 @@ startlisten (void)
 void
 syncdb (void)
 {
-  group_db->sync ();
-  header_db->sync ();
+  group_db->checkpoint ();
+  header_db->checkpoint ();
   delaycb (opt->sync_interval, wrap (&syncdb));
 }
 
@@ -130,12 +130,7 @@ main (int argc, char *argv[])
 
   dhash = New dhashclient (sock);
 
-  //set up the options we want
   dbOptions opts;
-  opts.addOption ("opt_async", 1);
-  opts.addOption ("opt_cachesize", 1000);
-  opts.addOption ("opt_nodesize", 4096);
-
   group_db = New dbfe ();
   if (int err = group_db->opendb ("groups", opts)) {
     warn << "open returned: " << strerror (err) << "\n";
