@@ -70,7 +70,7 @@ public:
       if(p1->id == p2->id)
         return false;
       if(p1->lastts == p2->lastts)
-        return p1->id <  p2->id;
+        return p1->id < p2->id;
       return p1->lastts < p2->lastts;
     }
   };
@@ -80,7 +80,7 @@ public:
       if(p1->id == p2->id)
         return false;
       if(p1->lastts == p2->lastts)
-        return p1->id >  p2->id;
+        return p1->id < p2->id;
       return p1->lastts > p2->lastts;
     }
   };

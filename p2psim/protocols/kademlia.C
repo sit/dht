@@ -906,20 +906,25 @@ k_bucket_leaf::checkrep()
   assert(replacement_cache);
   nodes->checkrep();
 
-  // no doubles in replacement_cache, none of them should be in nodes either,
-  // and all entries should be sorted youngest first.
-  hash_map<Kademlia::NodeID, bool> haveseen;
-  set<k_nodeinfo*, Kademlia::younger>::const_iterator prev, cur;
-
   if(!replacement_cache->size())
     return;
 
+  // all entrues are unique
+  hash_map<Kademlia::NodeID, bool> haveseen;
+  for(set<k_nodeinfo*, Kademlia::younger>::const_iterator i = replacement_cache->begin(); i != replacement_cache->end(); ++i) {
+    assert(haveseen.find((*i)->id) == haveseen.end());
+    haveseen[(*i)->id] = true;
+  }
+
+  // no doubles in replacement_cache, none of them should be in nodes either,
+  // and all entries should be sorted youngest first.
+  set<k_nodeinfo*, Kademlia::younger>::const_iterator prev, cur;
   cur = prev = replacement_cache->begin();
+  assert(!nodes->contains((*cur)->id));
   cur++;
   while(cur != replacement_cache->end()) {
     assert((*prev)->lastts >= (*cur)->lastts);
     assert(!nodes->contains((*cur)->id));
-    assert(haveseen.find((*cur)->id) == haveseen.end());
     prev = cur++;
   }
 
@@ -1000,7 +1005,7 @@ k_bucket::insert(Kademlia::NodeID id, bool init_state, string prefix, unsigned d
   k_nodeinfo *kinfo = kademlia()->flyweight[id];
 
   if(depth == 0)
-    KDEBUG(4) << "insert: id = " << Kademlia::printbits(id) << ", ip = " << kinfo->ip << ", prefix = " << prefix << endl;
+    KDEBUG(4) << "k_bucket::insert: id = " << Kademlia::printbits(id) << ", ip = " << kinfo->ip << ", prefix = " << prefix << endl;
 
   unsigned leftmostbit = Kademlia::getbit(id, depth);
   KDEBUG(4) << "insert: leftmostbit = " << leftmostbit << ", depth = " << depth << endl;
@@ -1009,7 +1014,7 @@ k_bucket::insert(Kademlia::NodeID id, bool init_state, string prefix, unsigned d
   // NON-LEAF: RECURSE DEEPER
   //
   if(!leaf) {
-    KDEBUG(4) << "insert: child[" << leftmostbit << "] exists, descending" << endl;
+    KDEBUG(4) << "k_bucket::insert: child[" << leftmostbit << "] exists, descending" << endl;
     return ((k_bucket_node *) this)->child[leftmostbit]->insert(id, init_state, prefix + (leftmostbit ? "1" : "0"), depth+1);
   }
 
@@ -1021,6 +1026,7 @@ k_bucket::insert(Kademlia::NodeID id, bool init_state, string prefix, unsigned d
   // if this node is not in the k-bucket, and there's still space, add it.
   k_nodes *nodes = ((k_bucket_leaf*)this)->nodes;
   if(nodes->contains(id) || !nodes->full()) {
+    KDEBUG(4) << "k_bucket::insert nodes contains " << Kademlia::printbits(id) << " OR is not full." << endl;
     assert(!nodes->inrange(kademlia()->id()));
     nodes->insert(id);
     nodes->checkrep(false);
@@ -1038,11 +1044,23 @@ k_bucket::insert(Kademlia::NodeID id, bool init_state, string prefix, unsigned d
     return;
   }
 
-  // we're full already, just put in replacement cache.
+  // we're full already, just put in replacement cache, and truncate to
+  // Kademlia::k
+  //
   // XXX: this is wrong.  we haven't heard from this guy yet.
   // do we need a ping?
+  if(((k_bucket_leaf*)this)->replacement_cache->find(kinfo) != ((k_bucket_leaf*)this)->replacement_cache->end()) {
+    KDEBUG(4) << "k_bucket::insert removing " << Kademlia::printbits(id) << " from replacement first." << endl;
+    ((k_bucket_leaf*)this)->replacement_cache->erase(kinfo);
+  }
+
   kinfo->lastts = now();
+  KDEBUG(4) << "k_bucket::insert adding " << Kademlia::printbits(id) << " to replacement cache." << endl;
   ((k_bucket_leaf*)this)->replacement_cache->insert(kinfo);
+  // while(((k_bucket_leaf*)this)->replacement_cache->size() >= Kademlia::k) {
+  //   k_nodeinfo *ki = *((k_bucket_leaf*)this)->replacement_cache->rbegin();
+  //   ((k_bucket_leaf*)this)->replacement_cache->erase(ki);
+  // }
 
   checkrep();
 }
