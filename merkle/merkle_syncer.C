@@ -64,6 +64,7 @@ merkle_syncer::merkle_syncer (merkle_tree *ltree, rpcfnc_t rpcfnc, sndblkfnc_t s
   sync_done = false;
   synccb = NULL;
 
+  tcb = NULL;
   pending_rpcs = 0;
   receiving_blocks = 0;
   num_sends_pending = 0;
@@ -195,9 +196,8 @@ merkle_syncer::getblocklist (vec<merkle_hash> keys)
 {
   warn << (u_int)this << " getblocklist >>>>>>>>>>>>>>>>>>>>>>\n";
   
-  if (keys.size () == 0) {
+  if (keys.size () == 0) 
     return;
-  }
   
   receiving_blocks = keys.size ();
 
@@ -223,6 +223,8 @@ merkle_syncer::getblocklist_cb (ref<getblocklist_res> res, clnt_stat err)
     error (strbuf () << "GETBLOCKLIST: protocol error " << err2str (res->status));
     return;
   } else {
+    assert (tcb == 0);
+    tcb = delaycb (BLOCKTIMEOUT, wrap (this, &merkle_syncer::error, str ("GETBLOCKLIST: timeout")));
     next ();
   }
 }
@@ -429,6 +431,10 @@ merkle_syncer::getblockrange_cb (ref<getblockrange_arg> arg, ref<getblockrange_r
       else
 	assert (receiving_blocks >= 0);
     }
+    if (receiving_blocks > 0) {
+      assert (tcb == 0);
+      tcb = delaycb (BLOCKTIMEOUT, wrap (this, &merkle_syncer::error, str ("GETBLOCKRANGE: timeout")));
+    }
     next ();
   }
 }
@@ -454,9 +460,14 @@ merkle_syncer::recvblk (bigint key, bool last)
 {
   //warn << (u_int)this << " recvblk >>>>>>>>>>>>>>>>>> last " << last << "\n";
 
+  timecb_remove (tcb);
+  tcb = NULL;
+
   if (last) {
     receiving_blocks = 0; 
     next ();
+  } else {
+    tcb = delaycb (BLOCKTIMEOUT, wrap (this, &merkle_syncer::error, str ("timeout")));
   }
 }
 
@@ -477,5 +488,8 @@ merkle_syncer::error (str err)
 
 merkle_syncer::~merkle_syncer()
 {
+  timecb_remove (tcb);
+  tcb = NULL;
   warn.fmt ("0x%x DTOR merkle_syncer\n", (u_int)this);
 }
+

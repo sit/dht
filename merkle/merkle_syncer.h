@@ -19,6 +19,8 @@ class merkle_syncer {
  private:
   void error (str err);
 
+  enum { BLOCKTIMEOUT = 10 };
+
  public:
   typedef enum {
     BIDIRECTIONAL,
@@ -40,6 +42,7 @@ class merkle_syncer {
   bigint rngmin;
   bigint rngmax;
 
+  timecb_t *tcb;
   int pending_rpcs;
   int receiving_blocks;
   uint64 num_sends_pending;
