@@ -207,7 +207,8 @@ route_dhash::route_dhash (ptr<route_factory> f, chordID blockID, dhash *dh,
 route_dhash::~route_dhash () 
 {
   dh->unregister_block_cb (nonce);
-  chord_iterator->goaway();
+  delete chord_iterator;
+  chord_iterator = NULL;
   timecb_remove (dcb);
   dcb = NULL;
 }
