@@ -14,6 +14,7 @@ struct recroute_complete_arg;
  */
 class route_recchord : public route_iterator {
   timespec start_time_;
+  u_long desired_;
   
   static u_long get_nonce ();
   void first_hop_cb (ptr<bool> del,
@@ -39,6 +40,7 @@ class route_recchord : public route_iterator {
   void next_hop ();
   ptr<location> pop_back ();
 
+  void set_desired (u_long m);
   void handle_complete (user_args *sbp, recroute_complete_arg *ca);
   void handle_timeout ();
   

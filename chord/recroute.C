@@ -313,6 +313,38 @@ recroute<T>::stats () const
   }
 }
 
+template<class T>
+void
+recroute<T>::find_succlist (const chordID &x, u_long m, cbroute_t cb,
+			   ptr<chordID> guess)
+{
+  static bool shave = true;
+  static bool initialized = false;
+  if (!initialized) {
+    int x = 1;
+    assert (Configurator::only ().get_int ("chord.find_succlist_shaving", x));
+    shave = (x == 1);
+    initialized = true;
+  }
+
+  route_recchord *ri = static_cast<route_recchord *> (produce_iterator_ptr (x));
+  if (shave)
+    ri->set_desired (m);
+  ri->first_hop (wrap (this, &recroute<T>::find_succlist_cb, cb, ri),
+		 guess);
+}
+
+template<class T>
+void
+recroute<T>::find_succlist_cb (cbroute_t cb, route_recchord *ri, bool done)
+{
+  assert (done); // Expect that we are only called when totally done.
+  vec<chord_node> cs = ri->successors ();
+  cb (cs, ri->path (), ri->status ());
+  delete ri;
+  return;
+}
+
 // override produce_iterator*
 template<class T>
 ptr<route_iterator>

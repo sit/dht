@@ -27,7 +27,7 @@ class recroute : public T {
   void dorecroute (user_args *sbp, recroute_route_arg *ra);
   void docomplete (user_args *sbp, recroute_complete_arg *ca);
 
-  void route_cb (cbroute_t cb, route_iterator *ri, bool done);
+  void find_succlist_cb (cbroute_t cb, route_recchord *ri, bool done);
 
   void sweeper ();
   
@@ -40,6 +40,9 @@ class recroute : public T {
   // Override select routing related methods of vnode
   void stats () const;
 
+  void find_succlist (const chordID &x, u_long m, cbroute_t cb,
+		      ptr<chordID> guess);
+  
   ptr<route_iterator> produce_iterator (chordID xi);
   ptr<route_iterator> produce_iterator (chordID xi,
 					const rpc_program &uc_prog,

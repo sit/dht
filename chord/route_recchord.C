@@ -13,10 +13,11 @@
 
 /*
  * TODO
- * XXX Come up with a way to pass succs_desired into the iterator.
+ * XXX Cleverly get the number of successors for desired_
  */
 route_recchord::route_recchord (ptr<vnode> vi, chordID xi) : 
   route_iterator (vi, xi),
+  desired_ (vi->succs ().size ()),
   routeid_ (get_nonce ())
 {
   start_time_.tv_sec = 0;
@@ -27,6 +28,7 @@ route_recchord::route_recchord (ptr<vnode> vi, chordID xi,
 				int uc_procno,
 				ptr<void> uc_args) : 
   route_iterator (vi, xi, uc_prog, uc_procno, uc_args),
+  desired_ (vi->succs ().size ()),
   routeid_ (get_nonce ())
 {
   start_time_.tv_sec = 0;
@@ -53,6 +55,15 @@ const timespec &
 route_recchord::start_time () const
 {
   return start_time_;
+}
+
+void
+route_recchord::set_desired (u_long m)
+{
+  u_long ns = v->succs ().size (); // XXX export succ_list num_succ method?
+  if (m > ns)
+    m = ns;
+  desired_ = m;
 }
 
 void
@@ -124,7 +135,7 @@ route_recchord::first_hop (cbhop_t cbi, ptr<chordID> guess)
   v->my_location ()->fill_node (ra->origin);
   ra->x = x;
   ra->retries = 0;
-  ra->succs_desired = 16; // XXX at least should grab nsucc...
+  ra->succs_desired = desired_;
 
   if (do_upcall) {
     int arglen;
