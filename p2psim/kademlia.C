@@ -16,7 +16,7 @@ void
 Kademlia::join_kademlia(void *x)
 {
   Args *a = (Args*) x;
-  IPAddress wkn = (IPAddress) atoi(((*a)["wellknown"]).c_str());
+  IPAddress wkn = (IPAddress) a->uget("wellknown");
 
   IPAddress myip = ip();
   doRPC(wkn, Kademlia::do_join, &myip, (void*) 0);
@@ -48,13 +48,13 @@ Kademlia::crash(Args*)
 }
 
 void
-Kademlia::insert_doc(Args*)
+Kademlia::insert(Args*)
 {
-  cout << "Kademlia insert_doc" << endl;
+  cout << "Kademlia insert" << endl;
 }
 
 void
-Kademlia::lookup_doc(Args*)
+Kademlia::lookup(Args*)
 {
-  cout << "Kademlia lookup_doc" << endl;
+  cout << "Kademlia lookup" << endl;
 }
