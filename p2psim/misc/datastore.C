@@ -97,23 +97,33 @@ DataStore::lookup (Args *args)
   a->start = now();
 
   IDMap lasthop;
-  vector<IDMap> v = find_successors (a->key, _nreplicas, 
+  vector<IDMap> v;
+
+  if (_recurs)
+    v = find_successors_recurs(a->key, _nreplicas,
 				     TYPE_USER_LOOKUP, &lasthop, a);
+  else
+    v = find_successors (a->key, _nreplicas, 
+				     TYPE_USER_LOOKUP, &lasthop, a);
+
+  if (!alive()) return;
 
   if (v.size() > 0) {
     bool done = false;
-    int nsucc = 0;
+    uint nsucc = 0;
     while (!done) {
       IDMap succ = v[nsucc];
 
       //send an RPC to get the data
       // we should really have it returned directly
-      fetch_args *args = new fetch_args ();
-      args->key = a->key;
-      fetch_res *res = new fetch_res ();
-      doRPC (succ.ip, &DataStore::fetch_handler, args, res);
+      fetch_args args;
+      args.key = a->key;
+      fetch_res res;
+      res.present = false;
+      doRPC (succ.ip, &DataStore::fetch_handler, &args, &res);
+      if (!alive()) break; 
       
-      if (res->present) {
+      if (res.present) {
 	cerr << ip () << ": data object " << a->key 
 	     << " found successfully at node " << succ.id << " ("
 	     << nsucc << ")\n";
@@ -128,8 +138,6 @@ DataStore::lookup (Args *args)
 	  done = true;
 	}
       }
-      delete args;
-      delete res;
     }
   }
 

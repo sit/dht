@@ -63,8 +63,8 @@ Chord::Chord(IPAddress i, Args& a, LocTable *l, const char *name) : P2Protocol(i
   assert(_allfrag <= _nsucc);
 
   //recursive routing?
-  _recurs = a.nget<uint>("recurs",0,10);
-  _recurs_direct = a.nget<uint>("recurs_direct",0,10);
+  _recurs = a.nget<uint>("recurs",1,10);
+  _recurs_direct = a.nget<uint>("recurs_direct",1,10);
   _stopearly_overshoot = a.nget<uint>("stopearlyovershoot",0,10);
 
   //parallel lookup? parallelism only works in iterative lookup now
@@ -770,6 +770,7 @@ Chord::find_successors_recurs(CHID key, uint m, uint type, IDMap *lasthop, looku
   fa.m = m;
   fa.src = me;
 
+  CDEBUG(3) << "find_successors_recurs start key " << printID(key) << endl;
   //do the parallel recursive lookup thing
   //doRPC(me.ip, &Chord::next_recurs_handler, args, ret);
   hash_map<unsigned, next_recurs_ret*> resultmap;
@@ -959,7 +960,6 @@ RECURS_DONE:
     delete resultmap[donerpc];
   }
 
-  
   return results;
 }
 
@@ -1003,7 +1003,7 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
 
   Topology *t = Network::Instance()->gettopology();
 
-  CDEBUG(2) << " next_recurs key " << args->ipkey << "," << printID(args->ipkey)
+  CDEBUG(2) << " next_recurs key " << args->ipkey << "," << printID(args->key)
     << "arrived pathsz " << ret->path.size() <<" src "<< args->src.ip << endl;
 
   while (1) {
@@ -1216,7 +1216,6 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
       }else{
 	record_stat(args->type,0);
       }
-      assert(ret->nexthop.ip==next.ip);
       if (!static_sim) loctable->update_ifexists(ret->nexthop); //update timestamp
       ret->nexthop = me;
       return;
