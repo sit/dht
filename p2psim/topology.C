@@ -20,6 +20,10 @@ Topology*
 Topology::parse(char *filename)
 {
   ifstream in(filename);
+  if(!in) {
+    cerr << "no such file " << filename << endl;
+    threadexitsall(0);
+  }
 
   string line;
   Topology *top = 0;

@@ -16,16 +16,12 @@ Pastry::Pastry(Node *n) : Protocol(n),
   BN_init(_id);
   BN_pseudo_rand(_id, idlength, -1, 0);
   cout << "Pastry id = " << BN_bn2hex(_id) << endl;
-
-  // routing table as an array of RTRow's, indexed by length of common prefix.
-  _rtable = new vector<RTRow>;
 }
 
 
 Pastry::~Pastry()
 {
   BN_free(_id);
-  delete[] _rtable;
 }
 
 void
@@ -86,23 +82,30 @@ Pastry::get_digit(NodeID nx, unsigned d)
   for(int i=0; i<_b; i++)
     if(BN_is_bit_set(n, i))
       r |= 1<<i;
+  BN_free(n);
   return r;
 }
 
 
-// D = destination key
-// A = our ID
+//
+// Routing algorithm from Table 1 in Pastry paper.
+//
 void
-Pastry::route(NodeID D)
+Pastry::route(NodeID D, void*)
 {
+  IPAddress nexthop;
+
   // if in leaf set
   //   forward to the node that is closes
   //   return;
   //
+
+  // if it's in our routing table, forward it.
   unsigned l = shared_prefix_len(D, _id);
-  if((*_rtable)[get_digit(D, l)][l].second) {
-    // use routing table
-  } else {
-    // rare case
+  if((nexthop = _rtable[get_digit(D, l)][l].second)) {
+    doRPC(nexthop, &Pastry::route, D, (void*)0);
+    return;
   }
+
+  // handle the so-called rare case.
 }

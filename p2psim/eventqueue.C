@@ -8,6 +8,8 @@
 #include <list>
 using namespace std;
 
+// extern int anyready();
+
 EventQueue *EventQueue::_instance = 0;
 
 EventQueue*
@@ -95,6 +97,10 @@ EventQueue::advance()
       break;
     (*pos)->execute();
   }
+
+  // XXX: we need to delete the Event objects themselves, but we don't know when
+  // the threads that use them are done with them.
+
   // remove processed events from queue
   _queue.erase(_queue.begin(), pos);
 }
@@ -137,6 +143,11 @@ void
 EventQueue::parse(char *file)
 {
   ifstream in(file);
+
+  if(!in) {
+    cerr << "no such file " << file << endl;
+    threadexitsall(0);
+  }
 
   string line;
   while(getline(in,line)) {
