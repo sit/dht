@@ -329,10 +329,10 @@ tcp_manager::doRPC_tcp_connect_cb (RPC_delay_args *args, int fd)
     make_async(fd);
 
     if (chord_rpc_style == CHORD_RPC_SFST) {
-      send_RPC (args);
       hi->fd = fd;
       hi->xp = axprt_stream::alloc (fd);
       assert (hi->xp);
+      send_RPC (args);
       while (hi->connect_waiters.size ())
 	send_RPC (hi->connect_waiters.pop_front ());
     } else {
