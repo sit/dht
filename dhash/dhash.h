@@ -87,7 +87,7 @@ class dhashclient {
   
   void query_successors_fetch_cb (query_succ_state *st,
 				  chordID prev,
-				  dhash_res *fres, 
+				  dhash_fetchiter_res *fres, 
 				  clnt_stat err);
 
   void insert_findsucc_cb (svccb *sbp, ptr<dhash_insertarg> item, chordID succ,
@@ -97,7 +97,7 @@ class dhashclient {
 		       chordID source,
 		       clnt_stat err);
 
-  void transfer_cb (svccb *sbp, dhash_res *res, clnt_stat err);
+  void transfer_cb (svccb *sbp, dhash_fetchiter_res *res, clnt_stat err);
   void send_cb (svccb *sbp, dhash_storeres *res, 
 		      chordID source, clnt_stat err);
 
@@ -112,6 +112,16 @@ class dhashclient {
   bool block_memorized (chordID key);
   void forget_block (chordID key);
 
+  void finish_tcp (dhash_fetchiter_res *res,
+		   svccb *sbp,
+		   chordID key);
+  void finish_tcp_conn (dhash_fetchiter_res *res,
+			svccb *sbp,
+			chordID key,
+			int fd);
+  void finish_tcp_readdata (dhash_res *res,
+			    svccb *sbp,
+			    int fd);
  public:  
   void set_caching(char c) { do_caching = c;};
   dhashclient (ptr<axprt_stream> x, int nreplica, ptr<chord> clnt);
@@ -125,6 +135,7 @@ class dhash {
 
   dbfe *db;
   vnode *host_node;
+  net_address t_source;
 
   qhash<chordID, store_state, hashID> pst;
 
@@ -183,10 +194,11 @@ class dhash {
 			  chordID to, clnt_stat err);
 
   void get_key (chordID source, chordID key, cbstat_t cb);
-  void get_key_initread_cb (cbstat_t cb, dhash_res *res, chordID source, 
+  void get_key_initread_cb (cbstat_t cb, dhash_fetchiter_res *res, 
+			    chordID source, 
 			    chordID key, clnt_stat err);
   void get_key_read_cb (chordID key, char *buf, unsigned int *read, 
-			dhash_res *res, cbstat_t cb, clnt_stat err);
+			dhash_fetchiter_res *res, cbstat_t cb, clnt_stat err);
   void get_key_finish (char *buf, unsigned int size, chordID key, cbstat_t cb);
   void get_key_finish_store (cbstat_t cb, int err);
 
@@ -202,6 +214,12 @@ class dhash {
   void printkeys ();
   void printkeys_walk (chordID k);
   void printcached_walk (chordID k);
+
+  void initialize_transfer_socket ();
+  void transfer_socket_accept (int tfd);
+  void do_tcp_transfer (int fd);
+  void tcp_read_header (int fd);
+  void tcp_write_data (int fd, int bwr, ptr<dbrec> val, dhash_stat err);
 
   ptr<dbrec> id2dbrec(chordID id);
   chordID dbrec2id (ptr<dbrec> r);

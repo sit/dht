@@ -64,8 +64,8 @@ dhashclient::dispatch (svccb *sbp)
       dhash_transfer_arg *targ = sbp->template getarg<dhash_transfer_arg>();
       ptr<dhash_fetch_arg> farg = 
 	New refcounted<dhash_fetch_arg>(targ->farg);
-      dhash_res *res = New dhash_res (DHASH_OK);
-      clntnode->doRPC (targ->source, dhash_program_1, DHASHPROC_FETCH, 
+      dhash_fetchiter_res *res = New dhash_fetchiter_res (DHASH_OK);
+      clntnode->doRPC (targ->source, dhash_program_1, DHASHPROC_FETCHITER, 
 		       farg, res, 
 		       wrap (this, &dhashclient::transfer_cb,
 			     sbp, res));
@@ -248,6 +248,9 @@ dhashclient::lookup_iter_cb (svccb *sbp,
     cache_on_path (arg->key, path);
     sbp->reply (fres);
     delete fres;
+  } else if (res->status == DHASH_USE_TCP) {
+    finish_tcp (res, sbp, arg->key);
+    return;
   } else if (res->status == DHASH_CONTINUE) {
     chordID next = res->cont_res->next.x;
     chordID prev = path.back ();
@@ -289,6 +292,74 @@ dhashclient::lookup_iter_cb (svccb *sbp,
 }
 
 void
+dhashclient::finish_tcp (dhash_fetchiter_res *res,
+			 svccb *sbp,
+			 chordID key) 
+{
+  tcpconnect (res->tcp_res->tcp_source.hostname, res->tcp_res->tcp_source.port,
+	      wrap (this, &dhashclient::finish_tcp_conn, res, sbp, key));
+}
+
+void
+dhashclient::finish_tcp_conn (dhash_fetchiter_res *res,
+			      svccb *sbp,
+			      chordID key,
+			      int fd) 
+{
+  make_async (fd);
+
+  xdrproc_t inproc = dhash_program_1.tbl[DHASHPROC_TCPFETCH].xdr_arg;
+  assert (inproc);
+  xdrsuio x (XDR_ENCODE);
+  if (!inproc (x.xdrp (), &key)) {
+    sbp->replyref (DHASH_RPCERR);
+    return;
+  }
+  size_t marshalled_len = x.uio ()->resid ();
+  char *marshalled_data = suio_flatten (x.uio ());
+  //assume its writeable
+  write (fd, &marshalled_len, 4);
+  write (fd, marshalled_data, marshalled_len);
+  
+
+  dhash_res *cres = New dhash_res (DHASH_OK);
+  cres->resok->offset = 0;
+  cres->resok->attr.size = res->tcp_res->attr.size;
+  cres->resok->hops = res->tcp_res->hops;
+  cres->resok->source = res->tcp_res->source;
+  //  cres->resok->res.setsize (res->tcp_res.attr.size);
+  cres->resok->res.setsize (0);
+  delete res;
+
+  fdcb (fd, selread, wrap(this, &dhashclient::finish_tcp_readdata, 
+			  cres, sbp, fd));
+
+  
+}
+
+void
+dhashclient::finish_tcp_readdata (dhash_res *res,
+				  svccb *sbp,
+				  int fd) 
+{
+  //  char *buf = (char *)(res->res.base () + bytes_read);
+  char buf[128000];
+  int err = read (fd, buf, 128000);
+  if (err <= 0) {
+    fdcb (fd, selread, NULL);
+    close (fd);
+    if (err == 0) 
+      sbp->reply (res);
+    else {
+      res->set_status (DHASH_RPCERR);
+      sbp->reply (res);
+    }
+    delete res;
+  }
+  
+}
+
+void
 dhashclient::query_successors (vec<chord_node> succ, 
 			       int pathlen,
 			       svccb *sbp,
@@ -298,31 +369,39 @@ dhashclient::query_successors (vec<chord_node> succ,
   chord_node first_node = succ.pop_front ();
   clntnode->locations->cacheloc (first_node.x,
 				 first_node.r);
-  dhash_res *fres = New dhash_res (DHASH_OK);
+  dhash_fetchiter_res *fres = New dhash_fetchiter_res (DHASH_COMPLETE);
   query_succ_state *st = New query_succ_state (succ, pathlen, sbp, rarg, source);
-  clntnode->doRPC (first_node.x, dhash_program_1, DHASHPROC_FETCH,
+  clntnode->doRPC (first_node.x, dhash_program_1, DHASHPROC_FETCHITER,
 		   rarg, fres,
 		   wrap (this, &dhashclient::query_successors_fetch_cb,
 			 st, first_node.x, fres));
   
 }
 
+
+void
+iterres2res (dhash_fetchiter_res *ires, dhash_res *res) 
+{
+    res->resok->offset = ires->compl_res->offset;
+    res->resok->attr = ires->compl_res->attr;
+    res->resok->source = ires->compl_res->source;
+    res->resok->res = ires->compl_res->res;
+    res->resok->hops = 0;
+}
+
 void
 dhashclient::query_successors_fetch_cb (query_succ_state *st,
 					chordID prev,
-					dhash_res *fres, 
+					dhash_fetchiter_res *fres, 
 					clnt_stat err) 
 {
-  if ((err) || (fres->status != DHASH_OK)) {
+  if ((err) || (fres->status != DHASH_COMPLETE)) {
 
     if (st->succ.size () == 0) {
       st->sbp->replyref (DHASH_NOENT);
       return;
-    }
-
-    if (err) {
+    } else if (err) {
       st->pathlen += 100;
-      warn << "alerting " << st->source << " about " << prev << " from query_succ\n";
       clntnode->alert (st->source, prev);
     } else 
       st->pathlen++;
@@ -331,15 +410,18 @@ dhashclient::query_successors_fetch_cb (query_succ_state *st,
     clntnode->locations->cacheloc (next_succ.x,
 				   next_succ.r);
     
-    dhash_res *nfres = New dhash_res (DHASH_OK);
-    clntnode->doRPC (next_succ.x, dhash_program_1, DHASHPROC_FETCH,
+    dhash_fetchiter_res *nfres = New dhash_fetchiter_res (DHASH_OK);
+    clntnode->doRPC (next_succ.x, dhash_program_1, DHASHPROC_FETCHITER,
 		     st->rarg, nfres,
 		     wrap (this, &dhashclient::query_successors_fetch_cb,
 			   st, next_succ.x, nfres));
     
   } else if (fres->status == DHASH_OK) {
-    fres->resok->hops =  st->pathlen;
-    st->sbp->reply (fres);
+    fres->compl_res->hops =  st->pathlen;
+    dhash_res *res = New dhash_res (DHASH_OK);
+    iterres2res (fres, res);
+    st->sbp->reply (res);
+    delete res;
     delete st;
   } else {
     fatal << "WTF\n";
@@ -349,13 +431,17 @@ dhashclient::query_successors_fetch_cb (query_succ_state *st,
 }
 
 void
-dhashclient::transfer_cb (svccb *sbp, dhash_res *res, clnt_stat err)
+dhashclient::transfer_cb (svccb *sbp, dhash_fetchiter_res *ires, clnt_stat err)
 {
-  if (err) res->set_status (DHASH_RPCERR);
-  else if (res->status == DHASH_OK) res->resok->hops = 0;
-  
+  dhash_res *res = New dhash_res(DHASH_OK);
+  if ((err) || (ires->status != DHASH_COMPLETE)) 
+    res->set_status (DHASH_RPCERR);
+  else 
+    iterres2res(ires, res);
+
   sbp->reply (res);
   delete res;
+  delete ires;
 }
 
 void
@@ -369,7 +455,7 @@ dhashclient::send_cb (svccb *sbp, dhash_storeres *res,
       New refcounted<dhash_insertarg> (sarg->iarg);
     dhash_storeres *nres = New dhash_storeres (DHASH_OK);
     clntnode->locations->cacheloc (nres->pred->p.x, nres->pred->p.r);
-    clntnode->doRPC (nres->pred->p.x, dhash_program_1, DHASHPROC_FETCH,
+    clntnode->doRPC (nres->pred->p.x, dhash_program_1, DHASHPROC_STORE,
 		     iarg, nres, wrap (this, &dhashclient::send_cb,
 				       sbp, nres, sarg->dest));
   } else if (res->status == DHASH_OK) {

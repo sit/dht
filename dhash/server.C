@@ -9,6 +9,7 @@
 #include <dmalloc.h>
 #endif
 
+#define DGRAM_LIMIT 64000
 
 dhash::dhash(str dbname, vnode *node, int k, int ss, int cs) :
   host_node (node), key_store(ss), key_cache(cs) {
@@ -47,6 +48,7 @@ dhash::dhash(str dbname, vnode *node, int k, int ss, int cs) :
   install_replica_timer ();
   install_keycheck_timer ();
   transfer_initial_keys ();
+  initialize_transfer_socket ();
 
   // RPC demux
   host_node->addHandler (DHASH_PROGRAM, wrap(this, &dhash::dispatch));
@@ -65,18 +67,6 @@ dhash::dispatch (unsigned long procno,
   xdrproc_t proc = dhash_program_1.tbl[procno].xdr_arg;
 
   switch (procno) {
-  case DHASHPROC_FETCH:
-    {
-
-      dhash_fetch_arg *farg = New dhash_fetch_arg ();
-      if (!proc (x.xdrp (), farg)) {
-	warn << "DHASH: error unmarshalling arguments\n";
-	return;
-      }
-      warnt ("DHASH: FETCH_request");
-      fetch (farg->key, wrap (this, &dhash::fetchsvc_cb, rpc_id, farg));
-    }
-    break;
 
   case DHASHPROC_FETCHITER:
     {
@@ -203,7 +193,14 @@ dhash::fetchiter_svc_cb (long xid, dhash_fetch_arg *arg,
 {
   dhash_fetchiter_res *res = New dhash_fetchiter_res (DHASH_CONTINUE);
   if (err) res->set_status (DHASH_NOENT);
-  else {
+  else if (val->len > DGRAM_LIMIT) {
+    res->set_status (DHASH_USE_TCP);
+    res->tcp_res->attr.size = val->len;
+    res->tcp_res->tcp_source.hostname = t_source.hostname;
+    res->tcp_res->tcp_source.port = t_source.port;
+    res->tcp_res->source = host_node->my_ID ();
+    res->tcp_res->hops = 0;
+  } else {
     res->set_status (DHASH_COMPLETE);
   
     int n = (arg->len + arg->start < val->len) ? 
@@ -223,38 +220,6 @@ dhash::fetchiter_svc_cb (long xid, dhash_fetch_arg *arg,
   
   dhash_reply (xid, DHASHPROC_FETCHITER, res);
   delete res;
-  delete arg;
-}
-
-void
-dhash::fetchsvc_cb (long xid,
-		    dhash_fetch_arg *arg, 
-		    ptr<dbrec> val, 
-		    dhash_stat err)
-{
-  dhash_res *res = New dhash_res (DHASH_OK);
-
-  if (err == DHASH_OK) {
-    res->set_status (DHASH_OK);
-    int n;
-    if (arg->len == 0) {
-      n = val->len;
-      arg->start = 0;
-    } else
-      n = (arg->len + arg->start < val->len) ? arg->len : val->len - arg->start;
-    
-    res->resok->res.setsize (n);
-    res->resok->attr.size = val->len;
-    res->resok->offset = arg->start;
-    memcpy (res->resok->res.base (), (char *)val->value + arg->start, n);
-  } else {
-    res->set_status (DHASH_NOENT);
-  }
-
-  warnt("DHASH: FETCH_replying");
-
-  dhash_reply (xid, DHASHPROC_FETCH, res);
-  delete res;  
   delete arg;
 }
 
@@ -353,8 +318,9 @@ void
 dhash::update_replica_list () 
 {
   replicas.clear ();
-  for (int i = 1; i < nreplica+1; i++)
-    replicas.push_back(host_node->nth_successorID (i));
+  for (int i = 1; i < nreplica+1; i++) 
+    if (host_node->nth_successorID (i) != 0)
+      replicas.push_back(host_node->nth_successorID (i));
 }
 
 void
@@ -389,7 +355,7 @@ dhash::check_replicas_cb () {
 void
 dhash::check_replicas () 
 {
-  for (int i=0; i < nreplica; i++) {
+  for (unsigned int i=0; i < replicas.size (); i++) {
     chordID nth = host_node->nth_successorID (i+1);
     if (!isReplica(nth)) 
       key_store.traverse (wrap (this, &dhash::check_replicas_traverse_cb, 
@@ -539,13 +505,13 @@ dhash::transfer_store_cb (callback<void, dhash_stat>::ref cb,
 void
 dhash::get_key (chordID source, chordID key, cbstat_t cb) 
 {
-  dhash_res *res = New dhash_res (DHASH_OK);
+  dhash_fetchiter_res *res = New dhash_fetchiter_res (DHASH_OK);
   ptr<dhash_fetch_arg> arg = New refcounted<dhash_fetch_arg>;
   arg->key = key; 
   arg->len = MTU;  
   arg->start = 0;
 
-  host_node->chordnode->doRPC(source, dhash_program_1, DHASHPROC_FETCH, 
+  host_node->chordnode->doRPC(source, dhash_program_1, DHASHPROC_FETCHITER, 
 			      arg, res,
 			      wrap(this, 
 				   &dhash::get_key_initread_cb, 
@@ -553,34 +519,35 @@ dhash::get_key (chordID source, chordID key, cbstat_t cb)
 }
 
 void
-dhash::get_key_initread_cb (cbstat_t cb, dhash_res *res, chordID source, 
+dhash::get_key_initread_cb (cbstat_t cb, dhash_fetchiter_res *res, 
+			    chordID source, 
 			    chordID key, clnt_stat err) 
 {
-  if ((err) || (res->status != DHASH_OK)) {
+  if ((err) || (res->status != DHASH_COMPLETE)) {
     (cb)(DHASH_RPCERR);
-  } else if (res->resok->attr.size == res->resok->res.size ()) {
-    get_key_finish (res->resok->res.base (), res->resok->res.size (), 
+  } else if (res->compl_res->attr.size == res->compl_res->res.size ()) {
+    get_key_finish (res->compl_res->res.base (), res->compl_res->res.size (), 
 		    key, cb);
   } else {
-    char *buf = New char[res->resok->attr.size];
+    char *buf = New char[res->compl_res->attr.size];
     assert (buf);
-    memcpy (buf, res->resok->res.base (), res->resok->res.size ());
-    unsigned int *read = New unsigned int(res->resok->res.size ());
+    memcpy (buf, res->compl_res->res.base (), res->compl_res->res.size ());
+    unsigned int *read = New unsigned int(res->compl_res->res.size ());
     unsigned int offset = *read;
     do {
       ptr<dhash_fetch_arg> arg = New refcounted<dhash_fetch_arg>;
       arg->key = key;
-      arg->len = (offset + MTU < res->resok->attr.size) ? 
-	MTU : res->resok->attr.size - offset;
+      arg->len = (offset + MTU < res->compl_res->attr.size) ? 
+	MTU : res->compl_res->attr.size - offset;
       arg->start = offset;
-      dhash_res *new_res = New dhash_res(DHASH_OK);
-      host_node->chordnode->doRPC(source, dhash_program_1, DHASHPROC_FETCH, 
+      dhash_fetchiter_res *new_res = New dhash_fetchiter_res(DHASH_OK);
+      host_node->chordnode->doRPC(source, dhash_program_1, DHASHPROC_FETCHITER,
 				  arg, new_res,
 				  wrap(this, 
 				       &dhash::get_key_read_cb, key, 
 				       buf, read, new_res, cb));
       offset += arg->len;
-    } while (offset  < res->resok->attr.size);
+    } while (offset  < res->compl_res->attr.size);
   }
   
   delete res;
@@ -588,17 +555,17 @@ dhash::get_key_initread_cb (cbstat_t cb, dhash_res *res, chordID source,
 
 void
 dhash::get_key_read_cb (chordID key, char *buf, unsigned int *read, 
-			dhash_res *res, cbstat_t cb, clnt_stat err) 
+			dhash_fetchiter_res *res, cbstat_t cb, clnt_stat err) 
 {
-  if ( (err) || (res->status != DHASH_OK)) {
+  if ( (err) || (res->status != DHASH_COMPLETE)) {
     delete buf;
     (*cb)(DHASH_RPCERR);
   } else {
-    *read += res->resok->res.size ();
-    memcpy (buf + res->resok->offset, res->resok->res.base (), 
-	    res->resok->res.size ());
-    if (*read == res->resok->attr.size) {
-      get_key_finish (buf, res->resok->res.size (), key, cb);
+    *read += res->compl_res->res.size ();
+    memcpy (buf + res->compl_res->offset, res->compl_res->res.base (), 
+	    res->compl_res->res.size ());
+    if (*read == res->compl_res->attr.size) {
+      get_key_finish (buf, res->compl_res->res.size (), key, cb);
       delete buf;
       delete res;
     }
@@ -858,6 +825,106 @@ dhash::dhash_reply (long xid, unsigned long procno, void *res)
   delete marshalled_data;
 }
 
+// ---- TCP SHIT ----
+
+int 
+get_port (int fd) 
+{
+  sockaddr_in sin;
+  socklen_t sinlen = sizeof (sin);
+  bzero (&sin, sinlen);
+  sin.sin_family = AF_INET;
+  if (getsockname (fd, (sockaddr *) &sin, &sinlen) < 0)
+    return -1;
+  else 
+    return ntohs (sin.sin_port);
+} 
+
+void
+dhash::initialize_transfer_socket () 
+{
+  int tfd = inetsocket (SOCK_STREAM, 0);
+  assert (tfd > 0);
+  make_async (tfd);
+  int t_port = get_port (tfd);
+  t_source.port = t_port;
+  t_source.hostname = host_node->chordnode->myaddress.hostname;
+  if (listen (tfd, 5) < 0)
+    fatal << "Couldn't listen on port " << t_port << " for TCP transfers\n";
+  fdcb (tfd, selread, wrap (this, &dhash::transfer_socket_accept, tfd));
+}
+
+void
+dhash::transfer_socket_accept (int tfd )
+{
+  sockaddr_in sin;
+  socklen_t sinlen = sizeof (sin);
+  bzero (&sin, sinlen);
+    
+  int fd = ::accept (tfd, (sockaddr *) &sin, &sinlen);
+  if (fd > 0) {
+    do_tcp_transfer (fd);
+  } else if (errno != EAGAIN) 
+    warn << "Error accepting client for TCP transfer\n";
+}
+
+/* simple protocol for transfering large blocks:
+   
+   ---> length of arg [4 bytes]
+   ---> arg [length bytes]
+   <--- data
+
+ */
+ 
+void
+dhash::do_tcp_transfer (int fd) 
+{
+  make_async (fd);
+  fdcb (fd, selread, wrap (this, &dhash::tcp_read_header, fd));
+}
+
+void
+dhash::tcp_read_header (int fd) 
+{
+  long buf[1024];
+  int br = read (fd, buf, sizeof(buf));
+  if (br < 0) {
+    close (fd);
+  } else {
+    if (br < 4) fatal << "get a real network\n";
+    long marshalled_len = buf[0];
+    char *marshalled_arg = (char *)(&buf[1]);
+    xdrmem x (marshalled_arg, marshalled_len, XDR_DECODE);
+    xdrproc_t proc = dhash_program_1.tbl[DHASHPROC_TCPFETCH].xdr_arg;
+
+    tcp_fetch_arg arg;
+    if (!proc (x.xdrp (), &arg)) {
+      warn << "DHASH: error unmarshalling arguments\n";
+      return;
+    }
+
+    fdcb (fd, selread, NULL);
+    fetch (arg.key, wrap (this, &dhash::tcp_write_data, fd, 0));
+  }
+  
+}
+
+void
+dhash::tcp_write_data (int fd, int byteswritten, ptr<dbrec> val, dhash_stat err) {
+  if (err) {
+    fdcb (fd, selwrite, NULL);
+    close (fd);
+  } else {
+    int err = write (fd, (char *)val->value + byteswritten, val->len - byteswritten);
+    if (err > 0) byteswritten += err;
+    if (byteswritten == val->len) {
+      fdcb (fd, selwrite, NULL);
+      close (fd);
+    } else
+      fdcb (fd, selwrite, wrap (this, &dhash::tcp_write_data, fd, byteswritten, val, DHASH_OK));
+  }
+
+}
 // ---------- debug ----
 void
 dhash::printkeys () 

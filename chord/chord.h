@@ -227,7 +227,6 @@ class vnode : public virtual refcount {
 class chord : public virtual refcount {
   int nvnode;
   net_address wellknownhost;
-  net_address myaddress;
   chordID wellknownID;
   qhash<chordID, ref<vnode>, hashID> vnodes;
   ptr<vnode> active;
@@ -251,6 +250,8 @@ class chord : public virtual refcount {
   // locations contains all nodes that appear as fingers in vnodes plus
   // a number of cached nodes.  the cached nodes have refcnt = 0
   ptr<locationtable> locations; 
+  net_address myaddress;
+    
   chord (str _wellknownhost, int _wellknownport, const chordID &_wellknownID,
 	 int port, str myhost, int set_rpcdelay, int max_cache, 
 	 int max_connections);

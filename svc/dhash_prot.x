@@ -18,7 +18,8 @@ enum dhash_stat {
   DHASH_STORE_PARTIAL = 11,
   DHASH_COMPLETE = 12,
   DHASH_CONTINUE = 13,
-  DHASH_INVALIDVNODE = 14
+  DHASH_INVALIDVNODE = 14,
+  DHASH_USE_TCP = 15
 };
 
 enum store_status {
@@ -54,14 +55,6 @@ struct dhash_pred {
   chord_node p;
 };
 
-struct dhash_resok {
-  dhash_value res;
-  int32 offset;
-  dhash_blockattr attr;
-  int32 hops;
-  chordID source;
-};
-
 struct dhash_getkeys_ok {
   chordID keys<>;
 };
@@ -76,9 +69,26 @@ struct dhash_getkeys_arg {
   chordID pred_id;
 };
 
+struct dhash_resok {
+  dhash_value res;
+  int32 offset;
+  dhash_blockattr attr;
+  int32 hops;
+  chordID source;
+};
+
+struct dhash_tcpok {
+  dhash_blockattr attr;
+  net_address tcp_source;
+  int32 hops;
+  chordID source;
+};
+
 union dhash_res switch (dhash_stat status) {
  case DHASH_OK:
    dhash_resok resok;
+ case DHASH_USE_TCP:
+   dhash_tcpok tcpok;
 default:
    void;
 };
@@ -117,6 +127,8 @@ union dhash_fetchiter_res switch (dhash_stat status) {
    dhash_fetchiter_complete_res compl_res;
  case DHASH_CONTINUE:
    dhash_fetchiter_continue_res cont_res;
+ case DHASH_USE_TCP:
+   dhash_tcpok tcp_res;
  default:
    void;
 };
@@ -124,6 +136,11 @@ union dhash_fetchiter_res switch (dhash_stat status) {
 struct dhash_send_arg {
   dhash_insertarg iarg;
   chordID dest;
+};
+
+struct tcp_fetch_arg {
+  chordID key;
+  int op;
 };
 
 program DHASHCLNT_PROGRAM {
@@ -156,9 +173,6 @@ program DHASH_PROGRAM {
     dhash_storeres
     DHASHPROC_STORE (dhash_insertarg) = 1;
 
-    dhash_res
-    DHASHPROC_FETCH (dhash_fetch_arg) = 2;
-
     dhash_getkeys_res
     DHASHPROC_GETKEYS (dhash_getkeys_arg) = 3;
 
@@ -167,6 +181,9 @@ program DHASH_PROGRAM {
 
     dhash_fetchiter_res
     DHASHPROC_FETCHITER (dhash_fetch_arg) = 5;
+
+    void
+    DHASHPROC_TCPFETCH (tcp_fetch_arg) = 6;
 
   } = 1;
 } = 344449;
