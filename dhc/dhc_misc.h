@@ -101,8 +101,7 @@ is_primary (chordID bID, chordID nID, vec<chordID> config)
       if ((bID < config[i]) && (config[i] < nID))
 	next = config[i];
     return (next == nID);
-  }
-  if (bID > nID) {
+  } else {
     for (uint i=0; i<config.size (); i++)
       if ((config[i] > bID) && (config[i] < nID))
 	next = config[i];
