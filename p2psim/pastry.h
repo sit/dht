@@ -3,13 +3,12 @@
 
 #include "protocol.h"
 #include "node.h"
-#include "bigint.h"
 #include <vector>
 using namespace std;
 
 class Pastry : public Protocol {
 public:
-  typedef bigint NodeID;
+  typedef long long NodeID;
   const unsigned idlength;
 
   Pastry(Node*);

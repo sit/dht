@@ -10,6 +10,7 @@ using namespace std;
 class EventFactory {
 public:
   static EventFactory* Instance();
+  static void DeleteInstance();
   Event *create(string, vector<string>*);
 
 private:

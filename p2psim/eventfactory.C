@@ -14,6 +14,15 @@ EventFactory::Instance()
   return _instance;
 }
 
+void
+EventFactory::DeleteInstance()
+{
+  if(!_instance)
+    return;
+  delete _instance;
+}
+
+
 EventFactory::EventFactory()
 {
 }

@@ -27,7 +27,6 @@ private:
   virtual void run();
   void add_event(Event*);
   void advance();
-
   void graceful_exit();
 
   // for debuging

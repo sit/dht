@@ -25,6 +25,9 @@ Time now();
 // maps ip address to Node, may return 0
 Node *ip2node(IPAddress);
 
+// tries to clean things up cleanly
+void graceful_exit();
+
 #ifdef WITH_DMALLOC
 # include "dmalloc.h"
 #endif

@@ -52,7 +52,6 @@ Protocol::_doRPC(IPAddress dst, member_f fn, void *args, void *ret)
   Packet *p = new Packet();
   p->_dst = dst;
   p->_src = _node->ip();
-  p->_c = chancreate(sizeof(Packet*), 0);
   p->_protocol = ProtocolFactory::Instance()->name(this);
   p->_fn = fn;
   p->_args = args;
@@ -63,9 +62,9 @@ Protocol::_doRPC(IPAddress dst, member_f fn, void *args, void *ret)
   // wait for reply. blocking.
   Packet *reply = (Packet *) recvp(p->_c);
   assert(reply->_ret == p->_ret);
-  return true;
 
-  // Why don't we need to delete the Packet?
+  delete p;
+  return true;
 }
 
 
@@ -140,7 +139,7 @@ Protocol::run()
 
       case 2:
         // graceful exit
-        // cout << "Protocol exit!" << endl;
+        // cout << "Protocol exit" << endl;
         delete this;
 
       default:
@@ -170,8 +169,9 @@ Protocol::Receive(void *p)
   reply->_protocol = packet->_protocol;
   reply->_args = 0;
   reply->_ret = packet->_ret;
-  reply->_fn = 0;        // indicates that this is a RPC reply
+  reply->_fn = 0;               // indicates that this is a RPC reply
 
+  // now that the packet has been received and processed, we can delet it.
   send(Network::Instance()->pktchan(), &reply);
 
   // this is somewhat scary
@@ -220,4 +220,6 @@ Protocol::dispatch(P2PEvent *e)
       cerr << "uknown event type " << e->event << endl;
       break;
   }
+
+  delete e;
 }

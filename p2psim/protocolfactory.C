@@ -18,6 +18,15 @@ ProtocolFactory::Instance()
   return _instance;
 }
 
+void
+ProtocolFactory::DeleteInstance()
+{
+  if(!_instance)
+    return;
+  delete _instance;
+}
+
+
 ProtocolFactory::ProtocolFactory()
 {
 }

@@ -1,32 +1,25 @@
 #include "pastry.h"
 #include "packet.h"
 #include <iostream>
-// #include "bigint.h"
 #include "p2psim.h"
 using namespace std;
 
 Pastry::Pastry(Node *n) : Protocol(n),
   // suggested values in paper
-  idlength(128),
+  idlength(64),
   _b(4),
   _L(2 << _b),
   _M(2 << _b)
 {
   // create a random 128-bit ID
-  /*
-  _id = BN_new();
-  BN_init(_id);
-  BN_pseudo_rand(_id, idlength, -1, 0);
-  */
+  // _id = random;
   _id = 5;
-  // cout << "Pastry id = " << BN_bn2hex(_id) << endl;
-  cout << "Pastry id = " << _id.getstr() << endl;
+  cout << "Pastry id = " << _id << endl;
 }
 
 
 Pastry::~Pastry()
 {
-  // BN_free(_id);
 }
 
 void

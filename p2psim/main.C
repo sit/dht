@@ -9,6 +9,8 @@
 #include "eventqueue.h"
 #include "topology.h"
 
+#include "dmalloc.h"
+
 char *topology_file;
 char *event_file;
   
@@ -20,13 +22,10 @@ threadmain(int argc, char *argv[])
 {
   extern int anyready();
   parse_args(argc, argv);
-
-  Packet *p = (Packet*) malloc(sizeof(Packet));
-
+  
   // Creates a network with the appropriate underlying topology.
   Topology::parse(topology_file);
 
-  // XXX: ugh.
   // make sure the network ate all the nodes
   while(anyready())
     yield();

@@ -10,6 +10,7 @@ Threaded::Threaded()
 Threaded::~Threaded()
 {
   chanfree(_exitchan);
+  threadexits(0);
 }
 
 void

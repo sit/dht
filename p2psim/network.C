@@ -19,13 +19,6 @@ Network::Instance(Topology *top)
   return (_instance = new Network(top));
 }
 
-void
-Network::DeleteInstance()
-{
-  if(_instance)
-    delete _instance;
-  _instance = 0;
-}
 
 Network::Network(Topology *top) : _top(0), _pktchan(0), _nodechan(0)
 {
@@ -45,22 +38,18 @@ Network::~Network()
 {
   chanfree(_pktchan);
   chanfree(_nodechan);
-  while(_nodelist.size() > 0){
-    Node *n = _nodelist.front();
-    _nodelist.pop_front();
-    send(n->exitchan(), 0);
-  }
 }
 
 
 void
 Network::run()
 {
-  Alt a[3];
+  Alt a[4];
   Packet *p;
   Node *node;
   NetEvent *ne;
   Time latency;
+  unsigned exit;
 
   a[0].c = _pktchan;
   a[0].v = &p;
@@ -70,7 +59,11 @@ Network::run()
   a[1].v = &node;
   a[1].op = CHANRCV;
 
-  a[2].op = CHANEND;
+  a[2].c = _exitchan;
+  a[2].v = &exit;
+  a[2].op = CHANRCV;
+
+  a[3].op = CHANEND;
   
   while(1) {
     int i;
@@ -97,7 +90,14 @@ Network::run()
         if(_nodes[node->ip()])
           cerr << "warning: " << node->ip() << " already in network" << endl;
         _nodes[node->ip()] = node;
-        _nodelist.push_back(node);
+        break;
+
+      // exit
+      case 2:
+        // cout << "Network exit" << endl;
+        for(NMCI p = _nodes.begin(); p != _nodes.end(); ++p)
+          send(p->second->exitchan(), 0);
+        delete this;
         break;
 
       default:

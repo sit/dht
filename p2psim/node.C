@@ -89,8 +89,7 @@ Node::run()
 
       //exit
       case 2:
-        // send all protocols an exit
-        // cout << "exit node channel" << endl;
+        // cout << "Node exit" << endl;
         for(PMCI p = _protmap.begin(); p != _protmap.end(); ++p)
           send(p->second->exitchan(), 0);
         _protmap.clear();

@@ -30,6 +30,9 @@ EventQueue::EventQueue() : _time(0)
 
 EventQueue::~EventQueue()
 {
+  // delete me
+  chanfree(_eventchan);
+  threadexitsall(0);
 }
 
 void
@@ -61,20 +64,24 @@ EventQueue::run()
   }
 }
 
+
 void
 EventQueue::graceful_exit()
 {
   extern int anyready();
   cout << "End of simulation, chances are I'm going to segfault now.\n";
-  Network::DeleteInstance();
+
+  // stop stuff
+  send(Network::Instance()->exitchan(), 0);
 
   // give everyone a chance to clean up
-  while(anyready()) {
-    // cout << "Others are ready in exit" << endl;
+  while(anyready())
     yield();
-  }
-  threadexitsall(0);
+
+  ::graceful_exit();
+  delete this;
 }
+
 
 // moves time forward to the next event
 void

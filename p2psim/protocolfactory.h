@@ -9,6 +9,7 @@ using namespace std;
 class ProtocolFactory {
 public:
   static ProtocolFactory* Instance();
+  static void DeleteInstance();
   Protocol *create(string, Node*);
   string name(Protocol*);
 
