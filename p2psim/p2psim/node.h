@@ -43,7 +43,7 @@ public:
   Node(IPAddress);
   virtual ~Node();
   static void Node::parse(char*);
-  virtual void initstate(const set<Node*>*) {};
+  virtual void initstate() {};
 
   IPAddress ip() { return _ip; }
   void set_alive(bool a) { _alive = a;}

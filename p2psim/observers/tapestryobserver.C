@@ -119,12 +119,13 @@ TapestryObserver::kick(Observed *o, ObserverInfo *oi )
     Tapestry *n = (Tapestry *) o;
     assert( n );
 
-    const set<Node*> *l = Network::Instance()->getallnodes();
     set<Node*>::iterator pos;
     Tapestry *c = 0;
     if( event_s == "join" ) {
-      n->initstate(l);
+      n->initstate();
     }
+
+    const set<Node*> *l = Network::Instance()->getallnodes();
     for (pos = l->begin(); pos != l->end(); ++pos) {
       c = (Tapestry *)(*pos);
       assert(c);

@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.24 2003/12/07 02:26:34 strib Exp $ */
+/* $Id: tapestry.h,v 1.25 2003/12/08 15:55:48 thomer Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -52,7 +52,7 @@ public:
   virtual void crash(Args*);
   virtual void lookup(Args*);
   virtual void insert(Args*);
-  virtual void initstate(const set<Node*>*);
+  virtual void initstate();
 
   // print it to stdout
   string print_guid( GUID id );

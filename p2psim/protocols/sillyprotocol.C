@@ -40,6 +40,20 @@ SillyProtocol::~SillyProtocol()
 }
 
 void
+SillyProtocol::initstate()
+{
+  // put any "cheat" code here.
+  // for example, we may want to initialize our routing tables such that we are
+  // immediately in a stabilized state, rather than going through the
+  // time-consuming process of joining all the nodes individually.
+  //
+  // Network::Instance()->getallnodes() returns a const set<Node*>*, i.e., a set
+  // of all the Nodes in the system.
+  cout << "initstate on " << ip() << endl;
+}
+
+
+void
 SillyProtocol::join(Args *args)
 {
 }

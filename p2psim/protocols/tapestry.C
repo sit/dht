@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.33 2003/12/07 02:26:34 strib Exp $ */
+/* $Id: tapestry.C,v 1.34 2003/12/08 15:55:48 thomer Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -1146,12 +1146,13 @@ Tapestry::check_rt(void *x)
 }
 
 void
-Tapestry::initstate(const set<Node *> *lid)
+Tapestry::initstate()
 {
-
   if( !_init_state ) {
     return;
   }
+
+  const set<Node *> *lid = Network::Instance()->getallnodes();
 
   // TODO: we shouldn't need locking in here, right?
 

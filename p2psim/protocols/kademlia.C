@@ -152,8 +152,9 @@ Kademlia::~Kademlia()
 // }}}
 // {{{ Kademlia::initstate
 void 
-Kademlia::initstate(const set<Node*> *l)
+Kademlia::initstate()
 {
+  const set<Node*> *l = Network::Instance()->getallnodes();
   KDEBUG(1) << "Kademlia::initstate l->size = " << l->size() << endl;
 
   if(!_all_kademlias) {

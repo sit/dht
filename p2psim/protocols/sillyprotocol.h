@@ -36,6 +36,7 @@ public:
   string proto_name() { return "SillyProtocol"; }
   virtual void join(Args*);
   virtual void lookup(Args*);
+  virtual void initstate();
 
   struct silly_args {
   };

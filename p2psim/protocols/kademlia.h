@@ -161,7 +161,7 @@ public:
   virtual void join(Args*);
   virtual void crash(Args*);
   virtual void lookup(Args*);
-  virtual void initstate(const set<Node*>*);
+  virtual void initstate();
 
   //
   // functors
