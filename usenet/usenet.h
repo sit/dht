@@ -2,6 +2,9 @@
 #define USENET
 
 #include <dbfe.h>
-extern dbfe *group_db, *article_db;
+#include <dhashclient.h>
+
+extern dbfe *group_db, *header_db;
+extern dhashclient *dhash;
 
 #endif /* USENET */

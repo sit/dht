@@ -9,7 +9,7 @@ grouplist::grouplist ()
   d = it->nextElement();    
 };
 
-static rxx listrx ("^(\\d+)(<[^>]+>)");
+static rxx listrx ("^(\\d+)(<[^>]+>)([^:]+):");
 
 void
 grouplist::next (str *f, unsigned long *i)
@@ -70,43 +70,72 @@ group::open (str g, volatile unsigned long *count,
   return 0;
 }
 
-static rxx listrxend ("(\\d+)(<[^>]+>)$");
+static rxx listrxend ("(\\d+)(<[^>]+>)([^:]+):$");
 
 void
-group::addid (str id)
+group::addid (str msgid, chordID ID)
 {
   assert (rec);
   str old (rec->value, rec->len), updated;
   ptr<dbrec> k = New refcounted<dbrec> (group_name, group_name.len ());
 
   if (listrxend.search (old))
-    updated = strbuf () << old << strtoul (listrxend[1], NULL, 10) + 1 << id;
+    updated = strbuf () << old <<
+      strtoul (listrxend[1], NULL, 10) + 1 << msgid << ID << ":";
   else
-    updated = strbuf () << "1" << id;
+    updated = strbuf () << "1" << msgid << ID << ":";
 
   rec = New refcounted<dbrec> (updated, updated.len ());
   
   group_db->insert (k, rec);
 }
 
-str
+// now returns the chordid
+chordID
 group::getid (unsigned long index)
 {
+  chordID ID;
+
   if (rec == NULL)
-    return str ();
+    return 0;
 
   char *c = rec->value;
   int len = rec->len;
 
   for (; listrx.search (str (c, len))
        ; c += listrx.len (0), len -= listrx.len (0) ) {
-    if (index == strtoul (listrx[1], NULL, 10))
-      return listrx[2];
-    else if (index < strtoul (listrx[1], NULL, 10))
-      return str ();
+    if (index == strtoul (listrx[1], NULL, 10)) {
+      warn << "got ID " << listrx[3] << "\n";
+      ID = listrx[3].cstr ();
+      //      mpz_set_rawmag_be (&ID, listrx[3], sha1::hashsize);
+      return bigint (listrx[3], 16);
+    } else if (index < strtoul (listrx[1], NULL, 10))
+      return 0;
   }
 
-  return str (); // xxx bad?
+  return 0; // xxx bad?
+}
+
+chordID
+group::getid (str msgid)
+{
+  chordID ID;
+
+  if (rec == NULL)
+    return 0;
+
+  char *c = rec->value;
+  int len = rec->len;
+
+  for (; listrx.search (str (c, len))
+       ; c += listrx.len (0), len -= listrx.len (0) ) {
+    if (msgid == listrx[2]) {
+      mpz_set_rawmag_be (&ID, listrx[3], sha1::hashsize);
+      return ID;
+    }
+  }
+
+  return 0; // xxx bad?
 }
 
 void
@@ -129,7 +158,7 @@ static rxx overdate ("Date: (.+)\\r");
 static rxx overmsgid ("Message-ID: (.+)\\r");
 static rxx overref ("References: (.+)\\r");
 
-//  char *foomsg = "foosub\tfooauth\tfoodate\t<dd>\tfooref\t10000\t100";
+// format: "subject\tauthor\tdate\t<msgid>\treferences\tsize\tlines"
 strbuf
 group::next (void)
 {
@@ -139,8 +168,13 @@ group::next (void)
 
   if (more () &&
       listrx.search (str (c, len))) {
-    art = article_db->lookup(New refcounted<dbrec> (listrx[2],
-						    listrx[2].len ()));
+#if 0
+    dhash->retrieve (listrx[3], wrap (this, &group::next_cb, listrx[2]));
+
+    warn << "mgs " << listrx[3] << "\n";
+#endif
+    art = header_db->lookup(New refcounted<dbrec> (listrx[2],
+						   listrx[2].len ()));
 
     warn << "mgs " << listrx[2] << "\n";
 
@@ -165,7 +199,7 @@ group::next (void)
 	  if (art->value[i] == '\n')
 	    line++; // xxx make this only count lines of body
 	resp << "\t" << art->len  << "\t" << line;
-      // xxx filter out tabs
+	// xxx filter out tabs
       } else
 	warn << "msg parse error\n";
     }
@@ -178,3 +212,36 @@ group::next (void)
   resp << "\t\r\n";
   return resp;
 }
+
+#if 0
+void
+group::next_cb (str altmsgid, 
+		dhash_stat status, ptr<dhash_block> blk, vec<chordID> r)
+{
+  if (status != DHASH_OK)
+    warn << "missing article\n";
+  else {
+    str msg (blk->data, blk->len); // xxx
+    int i, line = 0;
+    if (oversub.search (msg) &&
+	overfrom.search (msg) &&
+	overdate.search (msg)) {
+      resp << oversub[1] << "\t" << overfrom[1] << "\t";
+      resp << overdate[1] << "\t";
+
+      if (overmsgid.search (msg))
+	resp << overmsgid[1] << "\t";
+      else
+	resp << altmsgid << "\t";
+      if (overref.search (msg))
+	resp << overref[1];
+      for (i = 0; i < blk->len; i++)
+	if (blk->data[i] == '\n')
+	  line++; // xxx make this only count lines of body
+      resp << "\t" << blk->len  << "\t" << line;
+      // xxx filter out tabs
+    } else
+      warn << "msg parse error\n";
+  }
+}
+#endif

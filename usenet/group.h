@@ -2,6 +2,7 @@
 #define GROUP_H
 
 #include <dbfe.h>
+#include <chord.h>
 
 struct grouplist {
   ptr<dbEnumeration> it;
@@ -26,12 +27,14 @@ struct group {
   
   void xover (unsigned long, unsigned long);
   strbuf next (void);
+  //  void next_cb (str, dhash_stat, ptr<dhash_block>, vec<chordID>);
   bool more (void) { return start <= stop; };
   bool loaded (void) { return rec; };
-  str getid (unsigned long);
-  str getid (void) { return getid (cur_art); };
+  chordID getid (unsigned long);
+  chordID getid (void) { return getid (cur_art); };
+  chordID getid (str);
 
-  void addid (str);
+  void addid (str, chordID);
 };
 
 #endif /* GROUP_H */

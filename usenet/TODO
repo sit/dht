@@ -1,2 +1,27 @@
-fix line counts to reflect only the body
+fix line counts
 add/remove certain headers when accepting or sending news articles
+filter out (potential) tabs in XOVER responses
+add timeouts to nntp connections
+handle control messages
+recheck fdcb output
+store in DHash. plan:
+  store message body, header and inode block in DHash
+  transfer msgids? headers? between servers
+
+ design:
+  receive article
++  split into header and body.
++  store both in dhash
++  feed header to indexing code
+   send header to other nodes?
+  receive header
+   feed header to indexing code
+   send header to other nodes?
++ msg overview
++  fetch header info from header_db
++ read article by num
++  fetch record from group_db
++  use chordID to fetch article from dhash
+  read article by msgid
+   fetch header from header_db??
+   use chordID to fetch article from dhash

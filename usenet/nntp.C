@@ -1,6 +1,8 @@
 #include <rxx.h>
 #include <crypt.h>
-#include <chord.h>
+#include <dhash_common.h>
+#include <dhashclient.h>
+#include <verify.h>
 
 #include <usenet.h>
 #include <nntp.h>
@@ -230,25 +232,31 @@ static rxx artrx ("^ARTICLE ?(<[^>]+>)?(\\d+)?", "i");
 void
 nntp::cmd_article (str c) {
   warn << "article " << c;
-  str msgid;
+  chordID msgkey;
   ptr<dbrec> key, d;
 
   if (!cur_group.loaded ()) {
     out << nogroup;
   } else if (artrx.search (c)) {
     if (artrx[2]) {
-      msgid = cur_group.getid (strtoul (artrx[2], NULL, 10));
+      msgkey = cur_group.getid (strtoul (artrx[2], NULL, 10));
       cur_group.cur_art = strtoul (artrx[2], NULL, 10);
+    warn << "msgkeytt " << msgkey << "\n";
+
     } else if (artrx[1]) {
-      msgid = artrx[1];
+      // xxx fixme, need to look at header_db? 
+      //            or enhance the group_db to have a msgid index?
+      msgkey = cur_group.getid (artrx[1]);
     } else {
-      msgid = cur_group.getid ();
+      msgkey = cur_group.getid ();
     }
 
-    if (msgid) {
+    warn << "msgkey " << msgkey << "\n";
 
-      warn << "msgid " << msgid << "\n";
+    if (msgkey != 0) {
+      dhash->retrieve (msgkey, wrap (this, &nntp::cmd_article_cb, !artrx[1], msgkey));
 
+#if 0
       key = New refcounted<dbrec> (msgid, msgid.len ());
       d = article_db->lookup (key);
       if (!d) {
@@ -261,12 +269,29 @@ nntp::cmd_article (str c) {
       }
       out << str (d->value, d->len) << "\r\n";
       out << period;
+#endif
     } else
       out << noarticle;
   } else {
     out << syntax;
     warn << "error\n";
   }
+}
+
+void
+nntp::cmd_article_cb (bool head, chordID msgkey,
+		      dhash_stat status, ptr<dhash_block> blk, vec<chordID> r)
+{
+  if (status != DHASH_OK) {
+    out << noarticle;
+    return;
+  }
+  if (head) {
+    out << articleb << cur_group.cur_art << " " << msgkey << articlee;
+  }
+  out << str (blk->data, blk->len) << "\r\n";
+  out << period;
+  fdcb (s, selwrite, wrap (this, &nntp::output));
 }
 
 void
@@ -278,7 +303,7 @@ nntp::cmd_post (str c)
   process_input = wrap (this, &nntp::read_post, postok, postbad);
 }
 
-static rxx postrx ("^(.+?\\n)\\.\\r\\n", "ms");
+static rxx postrx ("^((.+?\\n\\r\\n)(.+?\\n))\\.\\r\\n", "ms");
 static rxx postmrx ("Message-ID: (<.+>)\\r");
 static rxx postngrx ("Newsgroups: (.+)\\r");
 static rxx postgrx (",?([^,]+)");
@@ -290,31 +315,37 @@ nntp::read_post (str resp, str bad)
   ptr<group> g;
   str ng, msgid;
   bool posted = false;
+  chordID ID;
 
   warn << "rp " << hexdump (str (in), in.resid ()) << "\n";
   warn << str (in) << "\n";
 
   if (postrx.search (str (in))) {
 warn << " resid " << in.resid () << " rem " << postrx.len (0) << "\n";
+    ID = compute_hash (postrx[1], postrx[1].len ());
 
-    if (postmrx.search (postrx[1])) {
+    if (postmrx.search (postrx[2])) {
       warn << "found msgid " << postmrx[1] << "\n";
       warn << "mdg len " << postrx.len (0) << "\n";
       msgid = postmrx[1];
     } else {
+#if 0
       char hashbytes[sha1::hashsize];
       sha1_hash (hashbytes, postrx[1], postrx[1].len ());
-      chordID ID;
       mpz_set_rawmag_be (&ID, hashbytes, sizeof (hashbytes));
+#endif
       msgid = strbuf () << "<" << ID << "@usenetDHT>";
     }
 
+    dhash->insert (postrx[1], postrx[1].len (),
+		   wrap (this, &nntp::read_post_cb));
+
     k = New refcounted<dbrec> (msgid, msgid.len ());
-    d = New refcounted<dbrec> (postrx[1], postrx[1].len ());
-    article_db->insert(k, d);
+    d = New refcounted<dbrec> (postrx[2], postrx[2].len ());
+    header_db->insert(k, d);
 
     g = New refcounted<group> ();
-    if (postngrx.search (postrx[1])) {
+    if (postngrx.search (postrx[2])) {
       ng = postngrx[1];
 
       while (postgrx.search (ng)) {
@@ -322,7 +353,7 @@ warn << " resid " << in.resid () << " rem " << postrx.len (0) << "\n";
 	if (g->open (postgrx[1]) < 0)
 	  warn << "tried to post unknown group " << postgrx[1] << "\n";
 	else {
-	  g->addid (msgid);
+	  g->addid (msgid, ID);
 	  posted = true;
 	}
 
@@ -345,6 +376,13 @@ warn << " resid " << in.resid () << " rem " << postrx.len (0) << "\n";
     process_input = wrap (this, &nntp::command);
     process_input ();
   }
+}
+
+void
+nntp::read_post_cb (dhash_stat status, ptr<insert_info> i)
+{
+  if (status != DHASH_OK)
+    warn << "didn't store in DHASH after all\n";
 }
 
 void
@@ -378,7 +416,7 @@ nntp::cmd_ihave (str c)
 
   if (ihaverx.search (c)) {
     key = New refcounted<dbrec> (ihaverx[1], ihaverx[1].len ());
-    d = article_db->lookup (key);
+    d = header_db->lookup (key);
     if (!d) {
       out << ihavesend;
       posting = true;
@@ -399,7 +437,7 @@ nntp::cmd_check (str c)
 
   if (checkrx.search (c)) {
     key = New refcounted<dbrec> (checkrx[1], checkrx[1].len ());
-    d = article_db->lookup (key);
+    d = header_db->lookup (key);
     if (!d)
       out << checksendb << checkrx[1] << checksende;
     else

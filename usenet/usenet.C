@@ -1,14 +1,16 @@
 #include <async.h>
 #include <dbfe.h>
+#include <dhashclient.h>
 
 #include <nntp.h>
 
 #define USENET_PORT 11999 // xxx
 #define SYNCTM 5
 
-dbfe *group_db, *article_db;
-// in group_db, each key is a group name. each record contains messageIDs
-// in article_db, each key is a messageID. each record is an article
+dbfe *group_db, *header_db;
+// in group_db, each key is a group name. each record contains artnum,messageID,chordID
+// in header_db, each key is a messageID. each record is a header (plus lines and other info)
+dhashclient *dhash;
 
 void
 timemark(str foo)
@@ -54,13 +56,18 @@ void
 syncdb (void)
 {
   group_db->sync ();
-  article_db->sync ();
+  header_db->sync ();
 }
 
 int
 main (int argc, char *argv[])
 {
   setprogname (argv[0]);
+
+  if (argc < 2)
+    fatal ("Usage: usenet chord_socket [reset_group_db]\n");
+
+  dhash = New dhashclient(argv[1]);
 
   //set up the options we want
   dbOptions opts;
@@ -73,13 +80,13 @@ main (int argc, char *argv[])
     warn << "open returned: " << strerror (err) << "\n";
     exit (-1);
   }
-  article_db = New dbfe ();
-  if (int err = article_db->opendb ("articles", opts)) {
+  header_db = New dbfe ();
+  if (int err = header_db->opendb ("headers", opts)) {
     warn << "open returned: " << strerror (err) << "\n";
     exit (-1);
   }
 
-  if (argc > 1) {
+  if (argc > 2) {
     // construct dummy group
     ref<dbrec> d = New refcounted<dbrec> ("", 0);
     ref<dbrec> k = New refcounted<dbrec> ("foo", 3);
