@@ -322,8 +322,6 @@ int dbfe::IMPL_open_sleepycat(char *filename, dbOptions opts) {
   if(do_dbenv) {
     fd = open(".", O_RDONLY);
     if(fd == -1) fatal << "can't open current working dir\n";
-    close (fd);
-
     mkdir(filename, 0755);
     r = chdir(filename);
     if(r == -1) fatal << "couldn't chdir to " << filename << "\n";
