@@ -14,7 +14,9 @@ noinst_HEADERS = aclnt_chord.h \
 		 pred_list.h \
 		 proxroute.h \
 		 route.h \
-		 route_secchord.h \
+		 recroute.h \
+		 recroute.C \
+		 route_recchord.h \
 		 stabilize.h \
 		 succ_list.h \
 		 toe_table.h \
@@ -31,6 +33,7 @@ libchord_a_SOURCES = chord.C \
 		      route.C \
 		      route_chord.C \
 		      route_debruijn.C \
+		      route_recchord.C \
 		      server.C \
 		      stabilize.C \
 		      succ_list.C \

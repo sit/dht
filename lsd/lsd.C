@@ -34,10 +34,11 @@
 #include "route.h"
 #include "crypt.h"
 
-#include "debruijn.h"
-#include "fingerroute.h"
-#include "fingerroutepns.h"
-#include "proxroute.h"
+#include <debruijn.h>
+#include <fingerroute.h>
+#include <fingerroutepns.h>
+#include <proxroute.h>
+#include <recroute.h>
 #if 0
 #include "route_secchord.h"
 #endif
@@ -76,7 +77,9 @@ enum routing_mode_t {
   MODE_CHORD,
   MODE_DEBRUIJN,
   MODE_PROX,
+  MODE_PROXREC,
   MODE_PNS,
+  MODE_PNSREC
 } mode;
 
 struct routing_mode_desc {
@@ -84,7 +87,8 @@ struct routing_mode_desc {
   char *cmdline;
   char *desc;
   vnode_producer_t producer;
-};
+};					       
+
 
 /* List of routing modes.  Please keep this in sync with the enum above. */
 routing_mode_desc modes[] = {
@@ -96,8 +100,12 @@ routing_mode_desc modes[] = {
     wrap (debruijn::produce_vnode) },
   { MODE_PROX, "prox", "use toes in some ad hoc way to improve routing",
     wrap (proxroute::produce_vnode) },
+  { MODE_PROXREC, "proxrec", "use toes in some ad hoc way recursively",
+    wrap (recroute<proxroute>::produce_vnode) },
   { MODE_PNS, "pns", "use proximity neighbor selection",
-    wrap (fingerroutepns::produce_vnode) }
+    wrap (fingerroutepns::produce_vnode) },
+  { MODE_PNSREC, "pnsrec", "g^2 pns recursive",
+    wrap (recroute<fingerroutepns>::produce_vnode) },
 };
 
 void stats ();
@@ -697,3 +705,7 @@ main (int argc, char **argv)
   amain ();
 }
 
+// This is needed to instantiate recursive routing classes.
+#include <recroute.C>
+template class recroute<fingerroutepns>;
+template class recroute<fingerroute>;

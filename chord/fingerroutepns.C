@@ -16,10 +16,12 @@ fingerroutepns::produce_vnode (ref<chord> _chordnode,
 			       ref<rpc_manager> _rpcm,
 			       ref<location> _l)
 {
-  return New refcounted<fingerroutepns> (_chordnode, _rpcm, _l, wrap (&finger_table_pns::produce_finger_table));
+  return New refcounted<fingerroutepns> (_chordnode, _rpcm, _l);
 }
 
-fingerroutepns::fingerroutepns (ref<chord> _chordnode, 
-				ref<rpc_manager> _rpcm,
-				ref<location> _l,
-				cb_fingertableproducer_t ftp) : fingerroute (_chordnode, _rpcm, _l, ftp) {};
+fingerroutepns::fingerroutepns (ref<chord> _c,
+				ref<rpc_manager> _r,
+				ref<location> _l)
+  : fingerroute (_c, _r, _l, wrap (&finger_table_pns::produce_finger_table))
+{
+}

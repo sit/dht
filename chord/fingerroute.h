@@ -8,11 +8,22 @@ class finger_table;
 
 class fingerroute : public vnode_impl {
  protected:
+  fingerroute (ref<chord> _chordnode, 
+	       ref<rpc_manager> _rpcm,
+	       ref<location> _l,
+	       cb_fingertableproducer_t ftp);
+    
+  fingerroute (ref<chord> _chordnode, 
+	       ref<rpc_manager> _rpcm,
+	       ref<location> _l);
+
   ptr<finger_table> fingers_;
   
  private:
   bool gotfingers_; // fed locationtable with pred's fingers?
 
+  void init ();
+  
   void dogetfingers (user_args *sbp);
   void dogetfingers_ext (user_args *sbp);
 
@@ -25,11 +36,6 @@ class fingerroute : public vnode_impl {
   static ref<vnode> produce_vnode (ref<chord> _chordnode, 
 				   ref<rpc_manager> _rpcm,
 				   ref<location> _l);
-  
-  fingerroute (ref<chord> _chordnode, 
-	       ref<rpc_manager> _rpcm,
-	       ref<location> _l,
-	       cb_fingertableproducer_t ftp);
 
   virtual ~fingerroute (void);
   

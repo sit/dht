@@ -16,15 +16,14 @@ proxroute::produce_vnode (ref<chord> _chordnode,
 			  ref<location> _l)
       
 {
-  return New refcounted<proxroute> (_chordnode, _rpcm, _l, wrap(&finger_table::produce_finger_table));
+  return New refcounted<proxroute> (_chordnode, _rpcm, _l);
 }
 
 proxroute::proxroute (ref<chord> _chord,
 		      ref<rpc_manager> _rpcm,
-		      ref<location> _l,
-		      cb_fingertableproducer_t ftp)
+		      ref<location> _l)
   
-  : fingerroute (_chord, _rpcm, _l, ftp)
+  : fingerroute (_chord, _rpcm, _l, wrap(&finger_table::produce_finger_table))
 {
   toes = New refcounted<toe_table> (mkref (this), locations);
 

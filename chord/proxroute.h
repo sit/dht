@@ -30,8 +30,7 @@ class proxroute : public fingerroute {
 
   proxroute (ref<chord> _chordnode, 
 	     ref<rpc_manager> _rpcm,
-	     ref<location> _l,
-	     cb_fingertableproducer_t ftp);
+	     ref<location> _l);
   virtual ~proxroute (void);
   
   virtual void dispatch (user_args *a);

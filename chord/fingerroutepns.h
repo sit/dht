@@ -8,20 +8,15 @@
 class finger_table;
 
 class fingerroutepns : public fingerroute {
-
 protected:
   fingerroutepns (ref<chord> _chordnode, 
 		  ref<rpc_manager> _rpcm,
-		  ref<location> _l,
-		  cb_fingertableproducer_t ftp);
+		  ref<location> _l);
 
  public:
   static ref<vnode> produce_vnode (ref<chord> _chordnode, 
 				   ref<rpc_manager> _rpcm,
 				   ref<location> _l);
-
-  
-
 };
 
 #endif /* _FINGERROUTEPNS_H_ */

@@ -3,7 +3,6 @@
 #include <id_utils.h>
 #include <misc_utils.h>
 #include "finger_table.h"
-#include "finger_table_pns.h"
 #include "pred_list.h"
 #include "succ_list.h"
 
@@ -15,7 +14,30 @@ fingerroute::produce_vnode (ref<chord> _chordnode,
 			    ref<rpc_manager> _rpcm,
 			    ref<location> _l)
 {
-  return New refcounted<fingerroute> (_chordnode, _rpcm, _l, wrap (&finger_table::produce_finger_table));
+  return New refcounted<fingerroute> (_chordnode, _rpcm, _l);
+}
+
+void 
+fingerroute::init ()
+{
+  stabilizer->register_client (fingers_);
+
+  addHandler (fingers_program_1, wrap (this, &fingerroute::dispatch));
+
+  // XXX hack.
+  // Watch to see when the predecessor stabilizes and grab its fingers.
+  // Just an optimization to seed good fingers quickly.
+  (void) delaycb (10, wrap (this, &fingerroute::first_fingers));  
+}
+
+fingerroute::fingerroute (ref<chord> _chord,
+			  ref<rpc_manager> _rpcm,
+			  ref<location> _l)
+  : vnode_impl (_chord, _rpcm, _l),
+    gotfingers_ (false)
+{
+  fingers_ = New refcounted<finger_table> (mkref (this), locations);
+  init ();
 }
 
 fingerroute::fingerroute (ref<chord> _chord,
@@ -26,14 +48,7 @@ fingerroute::fingerroute (ref<chord> _chord,
     gotfingers_ (false)
 {
   fingers_ = ftp (mkref (this), locations);
-  stabilizer->register_client (fingers_);
-
-  addHandler (fingers_program_1, wrap (this, &fingerroute::dispatch));
-
-  // XXX hack.
-  // Watch to see when the predecessor stabilizes and grab its fingers.
-  // Just an optimization to seed good fingers quickly.
-  (void) delaycb (10, wrap (this, &fingerroute::first_fingers));
+  init ();
 }
 
 fingerroute::~fingerroute () {}
