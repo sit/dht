@@ -50,8 +50,7 @@ ptr<chord> chordnode;
 static str p2psocket;
 bool do_cache;
 int cache_size;
-dhash *dh[chord::max_vnodes + 1];
-int ndhash = 0;
+vec<dhash *> dh;
 int myport;
 
 void stats ();
@@ -129,12 +128,12 @@ newvnode_cb (int nreplica, str db_name, int ss_mode, int n, vnode *my,
     fatal ("unable to join\n");
   }
   str db_name_prime = strbuf () << db_name << "-" << n;
-  if (ndhash >= chord::max_vnodes)
+  if ((int)dh.size () >= chord::max_vnodes)
     fatal << "Too many virtual nodes (" << chord::max_vnodes << ")\n";
-  dh[ndhash++] = New dhash (db_name_prime, my, nreplica, 
+  dh.push_back( New dhash (db_name_prime, my, nreplica, 
 			    STORE_SIZE, 
 			    cache_size, 
-			    ss_mode);
+			    ss_mode));
   if (n > 0) chordnode->newvnode (wrap (newvnode_cb, nreplica, db_name, 
 					ss_mode, n-1));
 }
@@ -170,9 +169,9 @@ stats ()
 #ifdef PROFILING
   toggle_profiling ();
 #else
-  //  chordnode->stats ();
-  //  for (int i = 0 ; i < ndhash; i++)
-  //    dh[i]->print_stats ();
+  chordnode->stats ();
+  for (unsigned int i = 0 ; i < dh.size (); i++)
+    dh[i]->print_stats ();
   chordnode->print ();
 #endif
 }
@@ -184,7 +183,7 @@ stop ()
 {
 #if 1
   chordnode->stop ();
-  for (int i = 0 ; i < ndhash; i++)
+  for (unsigned int i = 0 ; i < dh.size (); i++)
     dh[i]->stop ();
 #else
   setenv ("LOG_FILE", "log", 1);
