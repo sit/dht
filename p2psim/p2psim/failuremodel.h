@@ -29,7 +29,9 @@
 
 class FailureModel {
 public:
-  virtual Time failure_latency(Packet*) = 0;
+  // notice that we're punishing the reply.  so the src, dst in this packet are
+  // actually the receiver and sender of this RPC, respectively.
+  virtual Time failure_latency(Packet *reply) = 0;
 };
 
 #endif // __FAILURE_MODEL_H

@@ -29,6 +29,8 @@
 class NullFailureModel : public FailureModel {
 public:
   NullFailureModel() { }
+  // notice that we're punishing the reply.  so the src, dst in this packet are
+  // actually the receiver and sender of this RPC, respectively.
   virtual Time failure_latency(Packet*) { return 0; }
 };
 

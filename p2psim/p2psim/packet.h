@@ -44,8 +44,8 @@ public:
   unsigned id() { return _id; }
   bool ok()     { return _ok; }
 
-  void touch()    { _touchtime = now(); }
-  Time touched()  { return _touchtime; }
+  // void touch()    { _touchtime = now(); }
+  // Time touched()  { return _touchtime; }
 
   void punish()   { _punished = true; }
   bool punished() { return _punished; }

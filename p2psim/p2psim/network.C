@@ -41,12 +41,10 @@ Network::Instance(Topology *top, FailureModel *fm)
 
 
 Network::Network(Topology *top, FailureModel *fm) : _top(0), _pktchan(0),
-  _failedpktchan(0), _nodechan(0)
+  _nodechan(0)
 {
   _pktchan = chancreate(sizeof(Packet*), 0);
   assert(_pktchan);
-  _failedpktchan = chancreate(sizeof(Packet*), 0);
-  assert(_failedpktchan);
   _nodechan = chancreate(sizeof(Node*), 0);
   assert(_nodechan);
   _top = top;
@@ -65,7 +63,6 @@ Network::~Network()
     delete p->second;
   chanfree(_pktchan);
   chanfree(_nodechan);
-  chanfree(_failedpktchan);
   delete _top;
 }
 
@@ -85,7 +82,9 @@ Network::getallprotocols(string proto)
 void
 Network::run()
 {
-  Alt a[4];
+  extern bool with_failure_model;
+
+  Alt a[3];
   Packet *p;
   Node *node;
   NetEvent *ne;
@@ -95,15 +94,11 @@ Network::run()
   a[0].v = &p;
   a[0].op = CHANRCV;
 
-  a[1].c = _failedpktchan;
-  a[1].v = &p;
+  a[1].c = _nodechan;
+  a[1].v = &node;
   a[1].op = CHANRCV;
 
-  a[2].c = _nodechan;
-  a[2].v = &node;
-  a[2].op = CHANRCV;
-
-  a[3].op = CHANEND;
+  a[2].op = CHANEND;
   
   while(1) {
     int i;
@@ -117,14 +112,18 @@ Network::run()
     switch(i) {
       // get packet from network and schedule delivery
       case 0:
-        // first time this packet goes onto the network, touch it.
-        if(!p->touched())
-          p->touch();
         dstnode = _nodes[p->dst()];
 	srcnode = _nodes[p->src()];
 	assert (dstnode);
 	assert (srcnode);
         latency = _top->latency(srcnode->ip(), dstnode->ip());
+
+        // p->ok is set on the receiving side, so if it's false, this must be a
+        // reply.  punish the packet by delaying it according to the failure
+        // model
+        if(with_failure_model && !p->ok())
+          latency += _failure_model->failure_latency(p);
+
         ne = New NetEvent();
         assert(ne);
         ne->ts = now() + latency;
@@ -133,20 +132,8 @@ Network::run()
         EventQueue::Instance()->here(ne);
         break;
     
-      // get failed packet from network and let it linger around for a bit.
-      case 1:
-	assert (p->touched());
-        latency = _failure_model->failure_latency(p);
-        ne = New NetEvent();
-        assert(ne);
-        ne->ts = now() + latency;
-        ne->node = _nodes[p->dst()];
-        ne->p = p;
-        EventQueue::Instance()->here(ne);
-        break;
-    
       // register node on network
-      case 2:
+      case 1:
         if(_nodes[node->ip()])
           cerr << "warning: " << node->ip() << " already in network" << endl;
         _nodes[node->ip()] = node;
