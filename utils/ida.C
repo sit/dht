@@ -70,6 +70,7 @@ Ida::optimal_dfrag (u_long len, u_long mtu)
   // Calculate best packing for fragments to minimize packet count.
   // Estimate first assuming no per-fragment overhead.
   u_long m = (len + (mtu - 1)) / mtu;
+  if (m == 0) m = 1; // Handle special case if len == 0
   // Check to see that a fragment would really fit, with overhead
   u_long nomfragsize = (len / m) + (4 + m)*2;
   // If it doesn't fit (i.e. would need to chunk), might as well parallelize.
