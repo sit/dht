@@ -17,19 +17,19 @@ typedef struct c_jmp_entry {
 
 struct nntp {
   int s;
-  suio in;
-  strbuf out;
+  ptr<aios> aio;
+
+  vec<str> lines; // buffer of lines to be processed
   newsgroup cur_group;
   cbv process_input;
   bool posting;
-  timecb_t *timeout;
+  ptr<bool> deleted;
 
   nntp (int _s);
   ~nntp ();
   void died (void);
-  void input (void);
+  void process_line (const str, int);
   void command (void);
-  void output (void);
   void add_cmd (const char *, cbs);
   void cmd_hello (str);
   void cmd_list (str);
@@ -44,7 +44,7 @@ struct nntp {
   void cmd_check (str);
   void cmd_takethis (str);
 
-  void cmd_article_cb (bool, chordID, dhash_stat, ptr<dhash_block>,
+  void cmd_article_cb (ptr<bool>, bool, chordID, dhash_stat, ptr<dhash_block>,
 		       vec<chordID>);
   void read_post_cb (dhash_stat, ptr<insert_info>);
   void docontrol (str);

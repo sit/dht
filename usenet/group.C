@@ -119,7 +119,7 @@ newsgroup::getid (unsigned long index)
   return 0;
 }
 
-static rxx getchordid ("ChordID: (.+)\\r");
+static rxx getchordid ("^X-ChordID: (.+)$", "m");
 chordID
 newsgroup::getid (str msgid)
 {
@@ -153,7 +153,7 @@ static rxx overfrom ("From: (.+)\\r");
 static rxx overdate ("Date: (.+)\\r");
 static rxx overmsgid ("Message-ID: (.+)\\r");
 static rxx overref ("References: (.+)\\r");
-static rxx overlines ("Lines: (.+)\\r");
+static rxx overlines ("X-Lines: (.+)\\r");
 
 str
 tabfilter (str f)

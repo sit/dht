@@ -1,7 +1,7 @@
 #include <async.h>
+#include <aios.h>
 #include <dbfe.h>
 #include <dhashclient.h>
-
 #include <nntp.h>
 
 #define USENET_PORT 11999 // xxx
@@ -96,6 +96,8 @@ main (int argc, char *argv[])
     k = New refcounted<dbrec> ("baz", 3);
     group_db->insert(k, d);
     k = New refcounted<dbrec> ("rec.bicycles.misc", 17);
+    group_db->insert(k, d);
+    k = New refcounted<dbrec> ("alt.binaries.pictures.rail", 26);
     group_db->insert(k, d);
   }
 
