@@ -376,7 +376,7 @@ class route_dhash : public virtual refcount {
   
 public:
   route_dhash (ptr<route_factory> f,
-	       chordID xi, 
+	       chordID key, 
 	       dhash *dh, 
 	       bool lease = false,
 	       bool ucs = false);
@@ -386,7 +386,7 @@ public:
   void execute (cb_ret cbi, chordID first_hop_guess);
   void execute (cb_ret cbi);
   dhash_stat status () { return result; }
-  chordID key () {return xi;}
+  chordID key () {return blockID;}
   ptr<dhash_block> get_block () const { return block; }
   route path ();
   
@@ -400,7 +400,7 @@ public:
   ptr<dhash_block> block;
   dhash_stat result;
   bool last_hop;
-  chordID xi;
+  chordID blockID;
   cb_ret cb;
   ptr<route_factory> f;
   timecb_t *dcb;
@@ -424,6 +424,7 @@ public:
 			   clnt_stat err);
   void fail (str errstr);
   void timed_out ();
+  void timed_out_after_wait ();
 };
 
 class dhashcli {

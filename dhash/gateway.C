@@ -408,7 +408,6 @@ dhashclient::retrievecb (cbretrieve_t cb, bigint key,
     if (!verify (key, ctype, res->resok->block.base (), 
 		      res->resok->block.size ())) {
       errstr = strbuf () << "data did not verify";
-      printf("%s\n", res->resok->block.base ());
     } else {
       // success
       ptr<dhash_block> blk = get_block_contents (res->resok->block.base(), 

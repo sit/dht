@@ -15,12 +15,12 @@ unsigned int MTU = (getenv ("DHASH_MTU") ?
 		   atoi (getenv ("DHASH_MTU")) :
 		   1024);
 
-int gnonce;
+static int gnonce;
 
 #define LOOKUP_TIMEOUT 30
 
 route_dhash::route_dhash (ptr<route_factory> f,
-			  chordID xi,
+			  chordID blockID,
 			  dhash *dh,
 			  bool lease,
 			  bool ucs) 
@@ -28,30 +28,34 @@ route_dhash::route_dhash (ptr<route_factory> f,
   : ask_for_lease (lease),
     use_cached_succ (ucs), 
     npending (0), fetch_error (false),
-    xi (xi),
+    blockID (blockID),
     f (f),
     ignore_block (false)
 {
 
   last_hop = false;
   ptr<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg> ();
-  arg->key = xi;
+  arg->key = blockID;
   f->get_node (&arg->from);
   arg->start = 0;
   arg->len = MTU;
   arg->cookie = 0;
   arg->nonce = gnonce++;
   arg->lease = ask_for_lease;
+  dh->register_block_cb (arg->nonce, wrap (mkref(this), &route_dhash::block_cb));
 
-  dh->register_block_cb (arg->nonce, wrap (mkref(this), 
-					   &route_dhash::block_cb));
-  chord_iterator = f->produce_iterator_ptr (xi, dhash_program_1, DHASHPROC_FETCHITER, arg);
-};
+  // Along the chord lookup route 'arg' will get upcalled to each dhash server (dhash::do_upcall)
+  // The dhash server will respond back by sending an RPC to us.  We'll match the incoming
+  // RPC request with 'arg' via gnonce.  We'll field the RPC request in route_dhash::block_cb.
+  // Our RPC response is essentially ignored.
+  chord_iterator = f->produce_iterator_ptr (blockID, dhash_program_1, DHASHPROC_FETCHITER, arg);
+}
 
 route_dhash::~route_dhash () 
 {
   delete chord_iterator;
 }
+
 void
 route_dhash::execute (cb_ret cbi, chordID first_hop)
 {
@@ -72,14 +76,28 @@ void
 route_dhash::timed_out ()
 {
   warn << "lookup TIMED OUT\n";
-  (*cb)(DHASH_TIMEDOUT, NULL, path ());
+  // give the network a bit to heal, then retry the block fetch
+  delaycb (5, wrap (mkref(this), &route_dhash::timed_out_after_wait));
+
+#if 0
+ (*cb)(DHASH_TIMEDOUT, NULL, path ());
   //XXX what happens if the request comes back
   //    after we've given up on it?
   // gotta do something, the timecb_remove below is causing a panic
   // once the block comes in after the timer has timed_out. ignore it?
   ignore_block = true;
+#endif
 }
 
+void
+route_dhash::timed_out_after_wait ()
+{
+  execute (cb);
+}
+
+//  A node along the lookup path will send an RPC (request!) to us
+//  if it has (or should have) the block we request.  This request
+//  is dispatched from dhash::dispatch DHASHPROC_BLOCK to here.
 void
 route_dhash::block_cb (s_dhash_block_arg *arg)
 {
@@ -88,6 +106,7 @@ route_dhash::block_cb (s_dhash_block_arg *arg)
     return;
   timecb_remove (dcb);
   if (arg->offset == -1) {
+    // The node responsible for the block didn't have it.
     (*cb)(DHASH_NOENT, NULL, path ());
     return;
   }
@@ -118,7 +137,7 @@ route_dhash::block_cb (s_dhash_block_arg *arg)
 
       ptr<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg>;
       arg->v     = sourceID;
-      arg->key   = xi;
+      arg->key   = blockID;
       arg->start = offset;
       arg->len   = length;
       arg->cookie = cookie;
@@ -177,7 +196,7 @@ route_dhash::finish_block_fetch (ptr<dhash_fetchiter_res> res, int blocknum,
       block->lease = res->compl_res->lease;
   
     if ((blocknum > nextblock) && (numblocks - blocknum > 1)) {
-      warn << "FAST retransmit: " << xi << " chunk " << nextblock << " being retransmitted\n";
+      warn << "FAST retransmit: " << blockID << " chunk " << nextblock << " being retransmitted\n";
       
       f->get_vnode ()->resendRPC(seqnos[nextblock]);
       //only one per fetch; finding more is too much bookkeeping
@@ -197,7 +216,7 @@ void
 route_dhash::fail (str errstr)
 {
 
-  warn << "dhash_store failed: " << xi << ": " << errstr << "\n";
+  warn << "dhash_store failed: " << blockID << ": " << errstr << "\n";
 
   fetch_error = true;
 }
