@@ -6,11 +6,14 @@
 #include <string>
 #include "consistenthash.h"
 #include <vector>
+#include "chord.h"
+#include "koorde.h"
 
 class ChordObserver : public Observer {
 public:
   static ChordObserver* Instance(Args*);
   virtual void execute();
+  vector<Chord::IDMap> get_sorted_nodes(unsigned int = 0);
 
 private:
   void init_nodes(unsigned int num);
@@ -24,6 +27,7 @@ private:
   unsigned int _init_num;
 
   vector<ConsistentHash::CHID> lid;
+  vector<Chord::IDMap> _allsorted;
 };
 
 #endif // __CHORD_OBSERVER_H

@@ -132,12 +132,14 @@ protected:
   uint i0;
   vector<IDMap> lastscs;
   bool _isstable;
+  bool _inited;
 
   IDMap find_successors_recurs(CHID key, bool intern);
   virtual vector<IDMap> find_successors(CHID key, uint m, bool intern);
 
   void fix_successor();
   void fix_successor_list();
+  void check_static_init();
 };
 
 typedef struct {

@@ -4,12 +4,15 @@
 #include "topology.h"
 #include "network.h"
 #include "vivaldi.h"
+#include "chordobserver.h"
 #include <stdio.h>
 #include <iostream>
 #include <algorithm>
 
 using namespace std;
 extern bool vis;
+extern bool static_sim;
+
 #define CHORD_DEBUG
 Chord::Chord(Node *n, uint numsucc)
   : DHTProtocol(n), _isstable (false)
@@ -26,6 +29,8 @@ Chord::Chord(Node *n, uint numsucc)
   if (vis) {
     printf ("vis %llu node %16qx\n", now (), me.id);
   }
+  _inited = false;
+  _vivaldi = NULL;
 }
 
 Chord::~Chord()
@@ -43,8 +48,20 @@ Chord::ts()
 }
 
 void
+Chord::check_static_init()
+{
+  if (!_inited) {
+    assert(static_sim);
+    _inited = true;
+    this->init_state(ChordObserver::Instance(NULL)->get_sorted_nodes(0));
+  }
+}
+
+void
 Chord::lookup(Args *args) 
 {
+  check_static_init();
+
   CHID k = args->nget<CHID>("key");
   uint recurs = args->nget<int>("recurs");
   Time begin = now();
@@ -63,6 +80,7 @@ Chord::lookup(Args *args)
 void
 Chord::find_successors_handler(find_successors_args *args, find_successors_ret *ret)
 {
+  check_static_init();
   ret->v = find_successors(args->key, args->m, true);
 }
 
@@ -102,9 +120,14 @@ Chord::find_successors(CHID key, uint m, bool intern)
 
     
     cout << id() << " --> " << nprime.ip << "\n";
-    Chord *target = dynamic_cast<Chord *>(getpeer(nprime.ip));
-    bool r = _vivaldi->doRPC(nprime.ip, target,
-			     &Chord::next_handler, &na, &nr);
+
+    bool r;
+    if (_vivaldi) {
+      Chord *target = dynamic_cast<Chord *>(getpeer(nprime.ip));
+      r = _vivaldi->doRPC(nprime.ip, target, &Chord::next_handler, &na, &nr);
+    } else
+      r = doRPC(nprime.ip, &Chord::next_handler, &na, &nr);
+
     if(r && nr.done){
       route.push_back(nr.v[0]);
 #ifdef CHORD_DEBUG
@@ -118,9 +141,11 @@ Chord::find_successors(CHID key, uint m, bool intern)
 
       //actually talk to the successor
       cout << id() << " ---> " << nr.v[0].ip << "\n";
-      target = dynamic_cast<Chord *>(getpeer(nr.v[0].ip));
-      r = _vivaldi->doRPC(nr.v[0].ip, target,
-			  &Chord::null_handler, (void *)NULL, (void *)NULL);
+      if (_vivaldi) {
+	Chord *target = dynamic_cast<Chord *>(getpeer(nr.v[0].ip));
+	r = _vivaldi->doRPC(nr.v[0].ip, target, &Chord::null_handler, (void *)NULL, (void *)NULL);
+      } else
+	r = doRPC(nr.v[0].ip, &Chord::null_handler, (void *)NULL, (void *)NULL);
 
       if (vis && !intern) 
 	printf ("vis %llu step %16qx %16qx\n", now(), me.id, nr.v[0].id);
@@ -142,7 +167,7 @@ Chord::find_successors(CHID key, uint m, bool intern)
 	alert_ret ar;
 	aa.n = nprime;
 	nprime = route.back ();
-        doRPC (nprime.ip, &Chord::alert_handler, &aa, &ar);
+	doRPC(nprime.ip, &Chord::alert_handler, &aa, &ar);
       } else {
 	nr.v.clear ();
 	break; 
@@ -188,8 +213,7 @@ Chord::find_successors_recurs(CHID key, bool intern)
     }
   }
   uint inteval = now() - before;
-  printf("%s find_successors_recurs my estimate %u real %u\n", ts(), total_lat, inteval);
-//  assert(inteval == total_lat);
+  assert(inteval == total_lat);
   printf("\n");
 
 #endif
@@ -197,10 +221,9 @@ Chord::find_successors_recurs(CHID key, bool intern)
 }
 void
 Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
-{/*
-  printf("fuck!\n");
-  ret->v.clear();
-  */
+{
+  check_static_init();
+
   IDMap succ = loctable->succ(me.id+1);
   if(ConsistentHash::betweenrightincl(me.id, succ.id, args->key) ||
       succ.id == me.id) {
@@ -208,16 +231,31 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
     ret->v.push_back(succ);
   }else{
 
-    IDMap next = loctable->pred(args->key);
-
+    bool r = false;
     next_recurs_args nargs;
     next_recurs_ret nret;
 
     nargs.key = args->key;
     nargs.v = args->v;
-    nargs.v.push_back(next);
 
-    doRPC(next.ip, &Chord::next_recurs_handler, &nargs, &nret);
+    while (!r) {
+      IDMap next = loctable->pred(args->key);
+      nargs.v.push_back(next);
+
+      if (_vivaldi) {
+	Chord *target = dynamic_cast<Chord *>(getpeer(next.ip));
+	r = _vivaldi->doRPC(next.ip, target, &Chord::next_recurs_handler, &nargs, &nret);
+      } else
+	r = doRPC(next.ip, &Chord::next_recurs_handler, &nargs, &nret);
+
+      if (!r) {
+	printf ("%16qx rpc to %16qx failed %llu\n", me.id, next.id, now ());
+	printf ("vis %llu delete %16qx %16qx\n", now (), me.id, next.id);
+	nargs.v.pop_back();
+	loctable->del_node(next);
+      }
+    }
+
     ret->v = nret.v;
   }
 
@@ -233,13 +271,8 @@ Chord::null_handler (void *args, void *ret)
 void
 Chord::next_handler(next_args *args, next_ret *ret)
 {
-  /*
-  vector<IDMap> v = loctable->succ_for_key(args->key);
-  if (v.size() >= args->m) {
-    printf("%s next_handler key=%u, %u succs, %u\n",
-           ts(), args->key, v.size(), v[0].id);
-    */
-  //IDMap succ = loctable->succ(args->m);
+  check_static_init();
+
   IDMap succ = loctable->succ(me.id+1);
   if(ConsistentHash::betweenrightincl(me.id, succ.id, args->key) ||
      succ.id == me.id){
@@ -258,10 +291,12 @@ Chord::next_handler(next_args *args, next_ret *ret)
 void
 Chord::join(Args *args)
 {
+  assert(!static_sim);
+
   if (vis) {
     printf("vis %llu join %16qx\n", now (), me.id);
   }
-
+  _inited = true;
 
   int dim = args->nget<int>("model-dimension", 10);
   if (dim <= 0) {
@@ -269,7 +304,6 @@ Chord::join(Args *args)
     exit (0);
   }
 
-  int wsize = atoi((*args)["window-size"].c_str());
   _vivaldi = new Vivaldi10(node(), 3, 0.05, 1); 
 
 
@@ -318,9 +352,12 @@ Chord::stabilize()
   notify_args na;
   notify_ret nr;
   na.me = me;
-  Chord *target = dynamic_cast<Chord *>(getpeer(succ1.ip));
-  _vivaldi->doRPC(succ1.ip, target,
-		  &Chord::notify_handler, &na, &nr);
+  if (_vivaldi) {
+    Chord *target = dynamic_cast<Chord *>(getpeer(succ1.ip));
+    _vivaldi->doRPC(succ1.ip, target, &Chord::notify_handler, &na, &nr);
+  } else
+    doRPC(succ1.ip, &Chord::notify_handler, &na, &nr);
+
 
   if (nsucc > 1) fix_successor_list();
 
@@ -367,6 +404,7 @@ Chord::init_state(vector<IDMap> ids)
 {
   loctable->add_sortednodes(ids);
   printf("Chord: %s inited %d %d\n", ts(), ids.size(), loctable->size());
+  _inited = true;
 }
 
 void
@@ -376,9 +414,13 @@ Chord::fix_successor()
 
   get_predecessor_args gpa;
   get_predecessor_ret gpr;
-  Chord *target = dynamic_cast<Chord *>(getpeer(succ1.ip));
-  bool ok = _vivaldi->doRPC(succ1.ip, target,
-			    &Chord::get_predecessor_handler, &gpa, &gpr);
+  bool ok;
+  if (_vivaldi) {
+    Chord *target = dynamic_cast<Chord *>(getpeer(succ1.ip));
+    ok = _vivaldi->doRPC(succ1.ip, target, &Chord::get_predecessor_handler, &gpa, &gpr);
+  } else
+    ok = doRPC(succ1.ip, &Chord::get_predecessor_handler, &gpa, &gpr);
+
   assert (ok);
 
 #ifdef CHORD_DEBUG
@@ -391,6 +433,7 @@ Chord::fix_successor()
 void
 Chord::get_successor_list_handler(get_successor_list_args *args, get_successor_list_ret *ret)
 {
+  assert(!static_sim);
   ret->v = loctable->succs(me.id+1, nsucc);
 }
 
@@ -401,9 +444,13 @@ Chord::fix_successor_list()
   IDMap succ = loctable->succ(me.id+1);
   get_successor_list_args gsa;
   get_successor_list_ret gsr;
-  Chord *target = dynamic_cast<Chord *>(getpeer(succ.ip));
-  bool ok = _vivaldi->doRPC(succ.ip, target,
-			    &Chord::get_successor_list_handler, &gsa, &gsr);
+  bool ok;
+  if (_vivaldi) {
+    Chord *target = dynamic_cast<Chord *>(getpeer(succ.ip));
+    ok = _vivaldi->doRPC(succ.ip, target, &Chord::get_successor_list_handler, &gsa, &gsr);
+  } else
+    ok = doRPC(succ.ip, &Chord::get_successor_list_handler, &gsa, &gsr);
+
   assert (ok);
   for (unsigned int i = 0; i < (gsr.v).size(); i++) {
     loctable->add_node(gsr.v[i]);
@@ -436,7 +483,7 @@ Chord::fix_successor_list()
 void
 Chord::notify_handler(notify_args *args, notify_ret *ret)
 {
-  //  printf ("notify_handler %16qx: %16qx\n", me.id, args->me.id);
+  assert(!static_sim);
   IDMap p1 = loctable->pred();
   loctable->add_node(args->me);
 }
@@ -445,6 +492,7 @@ Chord::notify_handler(notify_args *args, notify_ret *ret)
 void
 Chord::alert_handler(alert_args *args, alert_ret *ret)
 {
+  assert(!static_sim);
   printf ("vis %llu delete %16qx %16qx\n", now (), me.id, args->n.id);
   loctable->del_node(args->n);
 }
@@ -453,6 +501,7 @@ void
 Chord::get_predecessor_handler(get_predecessor_args *args,
                                get_predecessor_ret *ret)
 {
+  assert(!static_sim);
   ret->n = loctable->pred();
 }
 
@@ -476,12 +525,14 @@ Chord::dump()
 void
 Chord::leave(Args *args)
 {
+  assert(!static_sim);
   crash (args);
 }
 
 void
 Chord::crash(Args *args)
 {
+  assert(!static_sim);
   printf ("vis %llu crash %16qx\n", now (), me.id);
   node()->crash ();
 }

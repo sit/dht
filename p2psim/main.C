@@ -14,6 +14,7 @@
 
 char *topology_file;
 char *event_file;
+bool static_sim = false;
 bool vis = false;
 uint base = 2;  // XXX probably need something like a configuration file
 uint resilience = 1;
@@ -51,10 +52,16 @@ void
 parse_args(int argc, char *argv[])
 {
   int ch;
-  while ((ch = getopt (argc, argv, "b:f:r:s:v")) != -1) {
+  uint seed;
+
+  while ((ch = getopt (argc, argv, "b:e:f:r:s:v:x")) != -1) {
     switch (ch) {
     case 'b':
       base = atoi(optarg);
+      break;
+    case 'e':
+      seed = atoi(optarg);
+      srandom(seed);
       break;
     case 'f':
       fingers = atoi(optarg);
@@ -67,6 +74,9 @@ parse_args(int argc, char *argv[])
       break;
     case 'v':
       vis = true;
+      break;
+    case 'x':
+      static_sim = true;
       break;
     default:
       usage ();

@@ -3,7 +3,7 @@
 #include <iostream>
 #include <algorithm>
 using namespace std;
-
+extern bool static_sim;
 
 ChordFinger::ChordFinger(Node *n, uint base, uint successors, uint maxf) : Chord(n, successors), _base(base),_maxf(maxf)
 {
@@ -51,6 +51,7 @@ ChordFinger::init_state(vector<IDMap> ids)
       numf++;
     }
   }
+  _inited = true;
   Chord::init_state(ids);
   printf("ChordFinger: %s inited %d %d %d %d %d %d\n", ts(), ids.size(), loctable->size(), _maxf, numf, _numf, loctable->psize());
 }
@@ -79,6 +80,7 @@ ChordFinger::fix_fingers()
 void
 ChordFinger::reschedule_stabilizer(void *x)
 {
+  assert(!static_sim);
   ChordFinger::stabilize();
   delaycb(STABLE_TIMER, &ChordFinger::reschedule_stabilizer, (void *)0);
 }

@@ -7,8 +7,6 @@
 #include <algorithm>
 #include <stdio.h>
 
-#include "chord.h"
-#include "koorde.h"
 
 using namespace std;
 
@@ -25,6 +23,10 @@ ChordObserver::Instance(Args *a)
 
 ChordObserver::ChordObserver(Args *a)
 {
+  if (!a)  {
+    cout << now() << "ChordObserver created WRONGLY!" << endl;
+    exit(1);
+  }
   _reschedule = 0;
   _reschedule = atoi((*a)["reschedule"].c_str());
   _type = (*a)["type"];
@@ -36,15 +38,24 @@ ChordObserver::ChordObserver(Args *a)
     init_nodes(_init_num);
   }
   lid.clear();
+  _allsorted.clear();
 }
 
 ChordObserver::~ChordObserver()
 {
 }
 
-void
-ChordObserver::init_nodes(unsigned int num)
+/*
+ * if max = 0 or _num_nodes, then it returns all sorted nodes,
+ otherwise, return max number of nodes */
+
+vector<Chord::IDMap>
+ChordObserver::get_sorted_nodes(unsigned int max)
 {
+  if ((!max || (max == _num_nodes)) && _allsorted.size() > 0) {
+    return _allsorted;
+  }
+
   list<Protocol*> l = Network::Instance()->getallprotocols(_type);
   list<Protocol*>::iterator pos;
 
@@ -61,23 +72,35 @@ ChordObserver::init_nodes(unsigned int num)
     n.id = c->id();
     ids.push_back(n);
 
-    if (++i == num) {
+    if (++i == max) {
       break;
     }
   }
 
   sort(ids.begin(),ids.end(),Chord::IDMap::cmp);
-  i = 0;
+
+  if ((!max)|| (max == _num_nodes)) {
+    _allsorted = ids;
+  }
+  return ids;
+}
+
+void
+ChordObserver::init_nodes(unsigned int num)
+{
+  vector<Chord::IDMap> ids;
+
+  list<Protocol*> l = Network::Instance()->getallprotocols(_type);
+  list<Protocol*>::iterator pos;
+  Chord *c;
+  
+  ids = get_sorted_nodes(num);
+  unsigned int i = 0;
   for (pos = l.begin(); pos != l.end(); ++pos) {
     c = (Chord *)(*pos);
     assert(c); 
     c->init_state(ids);
-    /*
-    tmp = ids[853].ip;
-    printf("observer2(tmp) %u\n",tmp);
-    */
     if (++i == num) break;
-
   }
 }
 

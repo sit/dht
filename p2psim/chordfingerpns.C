@@ -10,7 +10,6 @@ using namespace std;
 
 ChordFingerPNS::ChordFingerPNS(Node *n, uint base, uint successors, uint samples) : Chord(n, successors), _base(base), _samples(samples)
 {
-  srandom(1);
 }
 
 void
@@ -67,6 +66,7 @@ ChordFingerPNS::init_state(vector<IDMap> ids)
     }
   }
 
+  _inited = true;
   //add successors
   Chord::init_state(ids);
 }
