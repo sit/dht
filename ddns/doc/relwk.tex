@@ -73,9 +73,6 @@ Authentication is done by retrieving the public key of the
 owner and verifying that data in the RRSet check with the 
 associated SIG RR. Resolvers can retrieve public keys by 
 requesting the KEY resource record, which also has an associated
-SIG RR. KEY RRSets are signed by a higher level zone.
+SIG RR. KEY RRSets are signed by a higher level zone. DDNS adopts 
+the RRSet authentication and key distribution mechanisms from DNSSEC.
 
-SDSI
-
-DDNS adopts the RRSet authentication mechanisms from DNSSEC,
-and the key distribution scheme from SDSI.
