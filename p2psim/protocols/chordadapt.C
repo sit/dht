@@ -63,9 +63,14 @@ ChordAdapt::ChordAdapt(IPAddress i, Args& a) : P2Protocol(i)
   uint numnodes = Network::Instance()->gettopology()->num();
   if (_min_bw_overhead && _max_bw_overhead) {
     _bw_overhead = _min_bw_overhead + 
-      (uint)((this->first_ip()-1)*((double)(_max_bw_overhead-_min_bw_overhead)/(double)numnodes));
+      (uint)((this->first_ip()-1)*((double)(_max_bw_overhead-_min_bw_overhead+1)/(double)numnodes));
+    uint mid =  (_min_bw_overhead+_max_bw_overhead)/2;
     if (_bw_overhead == _min_bw_overhead)
       _special = 1;
+    else if (_bw_overhead == mid)
+      _special = 2;
+    else if (_bw_overhead == _max_bw_overhead)
+      _special = 3;
     else
       _special = 0;
     _burst_sz = _burst * _bw_overhead;
@@ -403,7 +408,7 @@ ChordAdapt::find_successors_handler(lookup_args *la, lookup_ret *lr)
 void
 ChordAdapt::crash(Args *args)
 {
-  NDEBUG(1) << "crashed locsz " << loctable->size() << " livesz " << loctable->live_size() 
+  NDEBUG(1) << "crashed rawsz " << loctable->size(LOC_DEAD) << " locsz " << loctable->size() << " livesz " << loctable->live_size() 
     << " locsz_used " << loctable->size(LOC_HEALTHY, _tt) << " livesz_used " 
     << loctable->live_size(_tt) << " live_time " << now()-_last_joined_time 
     << " para " << _parallelism << " timeout " << _tt << " est_n " << _est_n << endl;

@@ -58,14 +58,24 @@ vector<double> Node::_per_node_in;
 vector<double> Node::_per_node_out;
 uint Node::totalin = 0;
 uint Node::totalout = 0;
-vector<double> Node::_special_node_in;
-vector<double> Node::_special_node_out;
+vector< vector<double> > Node::_special_node_in;
+vector< vector<double> > Node::_special_node_out;
+double Node::maxinburstrate = 0.0;
+double Node::maxoutburstrate = 0.0;
+
 
 Node::Node(IPAddress i) : _queue_len(0), _ip(i), _alive(true), _token(1) 
 {
   _track_conncomp_timer = _args.nget<uint>("track_conncomp_timer",0,10);
-  if ((ip() == 1) && (_track_conncomp_timer > 0)) {
-    delaycb(_track_conncomp_timer, &Node::calculate_conncomp, (void*)NULL);
+  if (ip()==1) {
+    Node::_special_node_in.resize(3);
+    Node::_special_node_out.resize(3);
+    for (uint i = 0; i < 3; i++) {
+      Node::_special_node_in[i].clear();
+      Node::_special_node_out[i].clear();
+    }
+    if  (_track_conncomp_timer > 0)
+      delaycb(_track_conncomp_timer, &Node::calculate_conncomp, (void*)NULL);
   }
   _num_joins_pos = -1;
   _prev_ip = 0;
@@ -193,6 +203,31 @@ Node::collect_stat()
     return false;
 }
 
+#define BURSTTIME 100000
+void 
+Node::record_in_bytes(uint b) { 
+  node_live_inbytes += b;
+  if ((now()-node_last_inburstime) > BURSTTIME) {
+    double burstrate = (double)(1000*(node_live_inbytes-node_lastburst_live_inbytes))/(double)((now()-node_last_inburstime));
+    if (burstrate > Node::maxinburstrate)
+      Node::maxinburstrate = burstrate;
+    node_last_inburstime = now();
+    node_lastburst_live_inbytes = node_live_inbytes;
+  }
+}
+
+void 
+Node::record_out_bytes(uint b) { 
+  node_live_outbytes += b;
+  if ((now()-node_last_outburstime) > BURSTTIME) {
+    double burstrate = (double)(1000*(node_live_outbytes-node_lastburst_live_outbytes))/(double)((now()-node_last_outburstime));
+    if (burstrate > Node::maxoutburstrate) 
+      Node::maxoutburstrate = burstrate;
+    node_last_outburstime = now();
+    node_lastburst_live_outbytes = node_live_outbytes;
+  }
+}
+
 void
 Node::record_inout_bw_stat(IPAddress src, IPAddress dst, uint num_ids, uint num_else)
 {
@@ -295,6 +330,9 @@ Node::record_join()
   //node_live_bytes = 0;
   node_live_inbytes = 0;
   node_live_outbytes = 0;
+  node_lastburst_live_outbytes = 0;
+  node_lastburst_live_inbytes = 0;
+  node_last_inburstime = node_last_outburstime = join_time;
 
   check_num_joins_pos();
   if( !collect_stat() ) {
@@ -323,9 +361,9 @@ Node::record_crash()
       //_per_node_avg.push_back((double)1000.0*node_live_bytes/(double)duration);
       _per_node_out.push_back((double)1000.0*node_live_outbytes/(double)duration);
       _per_node_in.push_back((double)1000.0*node_live_inbytes/(double)duration);
-      if (_special) {
-	_special_node_out.push_back((double)1000.0*node_live_outbytes/(double)duration);
-	_special_node_in.push_back((double)1000.0*node_live_inbytes/(double)duration);
+      if ((_special) && (_special < 4)){
+	Node::_special_node_out[_special-1].push_back((double)1000.0*node_live_outbytes/(double)duration);
+	Node::_special_node_in[_special-1].push_back((double)1000.0*node_live_inbytes/(double)duration);
 	NDEBUG(4) << "special crashed IN: " << node_live_inbytes << " OUT: " 
 	  << node_live_outbytes << " DURATION: " << duration << " AVG_IN: " 
 	  << ((double)1000.0*node_live_outbytes/(double)duration)
@@ -430,13 +468,15 @@ Node::print_stats()
   if (_per_node_out.size())
     print_dist_stats(_per_node_out);
 
-  cout << "BW_SPENODE_IN:: ";
-  if (_special_node_in.size())
-    print_dist_stats(_special_node_in);
+  for (uint i = 0; i < 3; i++) {
+    printf("BW_SPE%uNODE_IN:: ",i+1);
+    print_dist_stats(_special_node_in[i]);
+  }
 
-  cout << "BW_SPENODE:: ";
-  if (_special_node_out.size())
-    print_dist_stats(_special_node_out);
+  for (uint i = 0; i < 3; i++) {
+    printf("BW_SPE%uNODE:: ",i+1);
+    print_dist_stats(_special_node_out[i]);
+  }
 
   // then do lookup stats
   double total_lookups = _correct_lookups.size() + _incorrect_lookups.size() +
@@ -473,6 +513,7 @@ Node::print_stats()
 			    _correct_hops /* this isn't used */,
 			    true );
 
+  cout << "WORST_BURST:: in:" << maxinburstrate << " out:" << maxoutburstrate << endl;
   cout << "<-----ENDSTATS----->\n" << endl;
 
 }

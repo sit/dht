@@ -2216,8 +2216,6 @@ LocTable::add_node(Chord::IDMap n, bool is_succ, bool assertadd, Chord::CHID fs,
     pred1 = pred(me.id-1);
   }
   idmapwrap *elm = ring.closestsucc(n.id);
-  Chord::IDMap pp = pred(n.id-1, LOC_HEALTHY);
-  idmapwrap *elmpp = ring.search(pp.id);
   if (elm && elm->id == n.id) {
     if (replacement && elm->status == LOC_HEALTHY)
 	elm->status = LOC_REPLACEMENT;
@@ -2256,7 +2254,7 @@ LocTable::add_node(Chord::IDMap n, bool is_succ, bool assertadd, Chord::CHID fs,
     newelm->status = replacement? LOC_REPLACEMENT:LOC_HEALTHY;
     if (ring.insert(newelm)) {
     }else{
-      assert(0);
+      abort();
     }
     return true;
   }

@@ -70,8 +70,8 @@ public:
   unsigned long get_out_bw_stat() { return node_live_outbytes;}
   void record_bw_stat(stat_type type, uint num_ids, uint num_else);
   static void record_inout_bw_stat(IPAddress src, IPAddress dst, uint num_ids, uint num_else);
-  void record_in_bytes(uint b) { node_live_inbytes += b;}
-  void record_out_bytes(uint b) { node_live_outbytes += b;}
+  void record_in_bytes(uint b);
+  void record_out_bytes(uint b); 
   static void record_lookup_stat(IPAddress src, IPAddress dst, Time interval, 
 				 bool complete, bool correct, 
 				 uint num_hops = 0, uint num_timeouts = 0, 
@@ -117,8 +117,8 @@ public:
   static vector<double> _per_node_avg;
   static vector<double> _per_node_in;
   static vector<double> _per_node_out;
-  static vector<double> _special_node_out;
-  static vector<double> _special_node_in;
+  static vector< vector<double> > _special_node_out;
+  static vector< vector<double> > _special_node_in;
   uint _special;
   static uint totalin;
   static uint totalout;
@@ -133,6 +133,12 @@ public:
   //uint node_live_bytes;
   uint node_live_outbytes;
   uint node_live_inbytes;
+  Time node_last_inburstime;
+  Time node_last_outburstime;
+  uint node_lastburst_live_inbytes;
+  uint node_lastburst_live_outbytes;
+  static double maxinburstrate;
+  static double maxoutburstrate;
 
   // find peer protocol of my sub-type on a distant node.
   Node *getpeer(IPAddress);
