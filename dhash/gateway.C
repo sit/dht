@@ -45,15 +45,11 @@
 // ------------------------------------------------------------------------
 // DHASHGATEWAY
 
-dhashgateway::dhashgateway (ptr<axprt_stream> x, 
-			    ptr<chord> node,
-			    bool do_cache,
-			    int ss_mode)
+dhashgateway::dhashgateway (ptr<axprt_stream> x, ptr<chord> node)
 {
   clntsrv = asrv::alloc (x, dhashgateway_program_1, 
 			 wrap (this, &dhashgateway::dispatch));
-  clntnode = node;
-  dhcli = New refcounted<dhashcli> (clntnode->active, ss_mode);
+  dhcli = New refcounted<dhashcli> (node->active);
 }
 
 
@@ -62,8 +58,6 @@ dhashgateway::dispatch (svccb *sbp)
 {
   if (!sbp)
     return;
-
-  assert (clntnode);
 
   switch (sbp->proc ()) {
   case DHASHPROC_NULL:

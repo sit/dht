@@ -176,14 +176,13 @@ class vnode_impl : public vnode {
  public:
   chordID myID;
   ptr<chord> chordnode;
-  int server_selection_mode;
   int lookup_mode;
 
   vnode_impl (ptr<locationtable> _locations,
 	      ptr<rpc_manager> _rpcm,
 	      ptr<fingerlike> stab, 
 	      ptr<route_factory> f, ptr<chord> _chordnode, 
-	      chordID _myID, int _vnode, int server_sel_mode,
+	      chordID _myID, int _vnode, 
 	      int lookup_mode);
   ~vnode_impl (void);
   

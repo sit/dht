@@ -11,7 +11,6 @@ class dhash_block;
 
 class dhashgateway {
   ptr<asrv> clntsrv;
-  ptr<chord> clntnode;
   ptr<dhashcli> dhcli;
 
   void dispatch (svccb *sbp);
@@ -22,7 +21,5 @@ class dhashgateway {
                     route path);
   
 public:
-  dhashgateway (ptr<axprt_stream> x, ptr<chord> clnt, 
-		bool do_cache = false,
-		int ss_mode = 0);
+  dhashgateway (ptr<axprt_stream> x, ptr<chord> clnt);
 };

@@ -55,20 +55,15 @@ chord_config_init::chord_config_init ()
   ok = ok && set_int ("chord.ncoords", 3);
 
   ok = ok && set_str ("chord.rpc_mode", "stp");
-  /**
-   * Hackish way of turning on and off various optimizations.
-   * The value of server_selection_mode is treated as a bitfield.
-   * Be sure to check the description here against the real usage....
-   *
-   * 1 => in dhash, sort successor lists based on coordinates to select
-   *      closest fragments for fetch.
-   * 2 => in chord, don't use the lookup_mode's lookup_closestsucc; use
-   *      the greedy metric instead.  Probably desirable if toes are
-   *      enabled.
-   * 4 => in dhash, try to terminate retrieves early if the hop has
-   *      returned a "sufficient" number of successors.
-   */
-  ok = ok && set_int ("chord.server_selection_mode", 5);
+
+  /** don't use the lookup_mode's lookup_closestsucc; use
+   *  the greedy metric instead.  Probably desirable if toes are
+   *  enabled. */
+  ok = ok && set_int ("chord.greedy_lookup", 0);
+  /** try to terminate retrieves early if the hop has
+   *  returned a "sufficient" number of successors.  */
+  ok = ok && set_int ("chord.find_succlist_shaving", 1);
+
   /**
    * Determine how to find the "closest known predecessor to x".
    * Legal values currently include:
@@ -88,10 +83,8 @@ int logbase;  // base = 2 ^ logbase
 
 chord::chord (str _wellknownhost, int _wellknownport, 
 	      str _myname, int port, int max_cache,
-	      int server_selection_mode,
 	      int l_mode, int _logbase) :
   myname (_myname),
-  ss_mode (server_selection_mode % 10),
   lookup_mode (l_mode),
   nrcv (NULL),
   rpcm (NULL),
@@ -235,7 +228,7 @@ chord::newvnode (cbjoin_t cb, ptr<fingerlike> fingers, ptr<route_factory> f)
 
   ptr<vnode> vnodep = vnode::produce_vnode (locations, rpcm, fingers, f,
 					    mkref (this), newID, 
-					    nvnode, ss_mode,
+					    nvnode,
 					    lookup_mode);
   f->setvnode (vnodep);
   

@@ -112,7 +112,7 @@ class vnode : public virtual refcount {
      ptr<rpc_manager> _rpcm,
      ptr<fingerlike> stab, 
      ptr<route_factory> f, ptr<chord> _chordnode, 
-     chordID _myID, int _vnode, int server_sel_mode,
+     chordID _myID, int _vnode,
      int lookup_mode);
 
   virtual ~vnode (void) = 0;
@@ -192,7 +192,6 @@ class chord : public virtual refcount {
   ptr<location> wellknown_node;
   int myport;
   str myname;
-  int ss_mode;
   int lookup_mode;
   ptr<axprt> x_dgram;
   vec<const rpc_program *> handledProgs;
@@ -221,7 +220,6 @@ class chord : public virtual refcount {
     
   chord (str _wellknownhost, int _wellknownport,
 	 str _myname, int port, int max_cache,
-	 int server_selection_mode,
 	 int lookup_mode, int _logbase);
   ptr<vnode> newvnode (cbjoin_t cb, ptr<fingerlike> fingers,
 		       ptr<route_factory> f);

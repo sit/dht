@@ -95,7 +95,7 @@ client_accept (int fd)
   ref<axprt_stream> x = axprt_stream::alloc (fd, 1024*1025);
 
   // XXX these dhashgateway objects are leaked
-  vNew dhashgateway (x, chordnode, do_cache, ss_mode);
+  vNew dhashgateway (x, chordnode);
 }
 
 static void
@@ -502,7 +502,7 @@ main (int argc, char **argv)
 
   int ch;
   do_cache = false;
-  ss_mode = 1;
+  ss_mode = 0;
   lbase = 1;
 
   myport = 0;
@@ -658,20 +658,29 @@ main (int argc, char **argv)
     bool ok = Configurator::only ().parse (cffile);
     assert (ok);
   }
-  Configurator::only ().dump ();
-  
+
+  // Override cf file stuff
   max_loccache = max_loccache * (vnodes + 1);
+
+  if (ss_mode & 1) 
+    Configurator::only ().set_int ("dhash.order_successors", 1);
+  if (ss_mode & 2)
+    Configurator::only ().set_int ("chord.greedy_route", 1);
+  if (ss_mode & 4)
+    Configurator::only ().set_int ("chord.find_succlist_shaving", 1);
+
+  Configurator::only ().dump ();
+
   chordnode = New refcounted<chord> (wellknownhost, wellknownport,
 				     myname,
 				     myport,
 				     max_loccache,
-				     ss_mode,
 				     lookup_mode, lbase);
 
   for (int i = 0; i < vnodes; i++) {
     str db_name_prime = strbuf () << db_name << "-" << i;
     warn << "lsd: created new dhash\n";
-    dh.push_back( dhash::produce_dhash (db_name_prime, nreplica, ss_mode));
+    dh.push_back( dhash::produce_dhash (db_name_prime, nreplica));
   }
 
   ptr<route_factory> f = get_factory (mode);

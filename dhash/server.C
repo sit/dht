@@ -199,9 +199,8 @@ dhash_impl::init_after_chord (ptr<vnode> node)
   trace << host_node->my_ID () << " registered dhash_program_1\n";
   host_node->addHandler (dhash_program_1, wrap(this, &dhash_impl::dispatch));
 
-  //the client helper class (will use for get_key etc)
-  //don't cache here: only cache on user generated requests
-  cli = New dhashcli (node, 1); // XXX pick real server selection mode?
+  // the client helper class (will use for get_key etc)
+  cli = New dhashcli (node);
 
   /* statistics */
   keys_stored = 0;

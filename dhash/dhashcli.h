@@ -26,7 +26,7 @@ class route_iterator;
 class dhashcli {
   ptr<vnode> clntnode;
   ptr<route_factory> r_factory;
-  int server_selection_mode;
+  bool ordersucc_;
 
   struct rcv_state {
     ihash_entry <rcv_state> link;
@@ -83,8 +83,6 @@ class dhashcli {
       block (b), cb (x), out (0), good (0) {}
   };
 
-
-private:
   void lookup_findsucc_cb (chordID blockID, dhashcli_lookupcb_t cb,
 			   vec<chord_node> s, route path, chordstat err);
     
@@ -116,7 +114,7 @@ private:
   void sendblock_cb (callback<void, dhash_stat, bool>::ref cb, 
 		     dhash_stat err, chordID dest, bool present);
  public:
-  dhashcli (ptr<vnode> node, int ss);
+  dhashcli (ptr<vnode> node);
 
   void retrieve_from_cache (blockID blockID, cbretrieve_t cb);
 

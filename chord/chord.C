@@ -52,12 +52,12 @@ vnode::produce_vnode (ptr<locationtable> _locations,
 		      ptr<fingerlike> stab,
 		      ptr<route_factory> f,
 		      ptr<chord> _chordnode,
-		      chordID _myID, int _vnode, int server_sel_mode,
+		      chordID _myID, int _vnode,
 		      int l_mode)
 {
   return New refcounted<vnode_impl> (_locations, _rpcm,
 				     stab, f, _chordnode, _myID,
-				     _vnode, server_sel_mode, l_mode);
+				     _vnode, l_mode);
 }
 
 // Pure virtual destructors still need definitions
@@ -80,14 +80,13 @@ vnode_impl::vnode_impl (ptr<locationtable> _locations,
 			ptr<fingerlike> stab,
 			ptr<route_factory> f,
 			ptr<chord> _chordnode,
-			chordID _myID, int _vnode, int server_sel_mode,
+			chordID _myID, int _vnode, 
 			int l_mode) :
   rpcm (_rpcm),
   factory (f),
   myindex (_vnode),
   myID (_myID), 
   chordnode (_chordnode),
-  server_selection_mode (server_sel_mode),
   lookup_mode (l_mode)
 {
   locations = _locations;
@@ -688,6 +687,15 @@ vnode_impl::do_upcall (int upcall_prog, int upcall_proc,
 void
 vnode_impl::dotestrange_findclosestpred (user_args *sbp, chord_testandfindarg *fa) 
 {
+  static bool initialized = false;
+  static bool greedy = false;
+  if (!initialized) {
+    int x = 0;
+    assert (Configurator::only ().get_int ("chord.greedy_lookup", x));
+    greedy = (x == 1);
+    initialized = true;
+  }
+
   ndotestrange++;
   chordID x = fa->x;
   chordID succ = my_succ ()->id ();
@@ -708,7 +716,7 @@ vnode_impl::dotestrange_findclosestpred (user_args *sbp, chord_testandfindarg *f
     for (unsigned int i=0; i < fa->failed_nodes.size (); i++)
       f.push_back (fa->failed_nodes[i]);
     ptr<location> p;
-    if (server_selection_mode & 2) {
+    if (greedy) {
       p = closestgreedpred (fa->x, convert_coords (sbp->transport_header ()),
 			    f);
     } else if (lookup_mode == CHORD_LOOKUP_PROXIMITY) {

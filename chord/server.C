@@ -140,13 +140,22 @@ void
 vnode_impl::find_succlist_hop_cb (cbroute_t cb, route_iterator *ri, u_long m,
 				  bool done)
 {
+  static bool shave = true;
+  static bool initialized = false;
+  if (!initialized) {
+    int x = 1;
+    assert (Configurator::only ().get_int ("chord.find_succlist_shaving", x));
+    shave = (x == 1);
+    initialized = true;
+  }
+
   vec<chord_node> cs = ri->successors ();
   if (done) {
     cb (cs, ri->path (), ri->status ());
     delete ri;
     return;
   }
-  if (server_selection_mode & 4) {
+  if (shave) {
     size_t left = 0;
     if (cs.size () < m)
       left = cs.size ();

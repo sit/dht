@@ -36,6 +36,7 @@
 #include <chord_types.h>
 #include <chord.h>
 #include <route.h>
+#include <configurator.h>
 #include <location.h>
 #include <locationtable.h>
 #include <merkle_misc.h>
@@ -62,14 +63,34 @@
 
 #include "succopt.h"
 
+static struct dhashcli_config_init {
+  dhashcli_config_init ();
+} dcci;
+
+dhashcli_config_init::dhashcli_config_init ()
+{
+  bool ok = true;
+
+#define set_int Configurator::only ().set_int
+
+  /** Whether or not to order successors by expected latency */
+  ok = ok && set_int ("dhashcli.order_successors", 1);
+
+  assert (ok);
+#undef set_int
+}
+
 
 // ---------------------------------------------------------------------------
 // DHASHCLI
 
  
-dhashcli::dhashcli (ptr<vnode> node, int ss = 1)
-  : clntnode (node), r_factory (node->get_factory ()), server_selection_mode (ss)
+dhashcli::dhashcli (ptr<vnode> node)
+  : clntnode (node), r_factory (node->get_factory ()), ordersucc_ (true)
 {
+  int ordersucc = 1;
+  Configurator::only ().get_int ("dhashcli.order_successors", ordersucc);
+  ordersucc_ = (ordersucc > 0);
 }
 
 void
@@ -323,7 +344,7 @@ dhashcli::retrieve_lookup_cb (ptr<rcv_state> rs, vec<chord_node> succs,
     return;
   }
 
-  if (server_selection_mode & 1) {
+  if (ordersucc_) {
     if (rs->succopt) {
       // Have actual measured latencies, so might as well use them
       vec<float> lt;
