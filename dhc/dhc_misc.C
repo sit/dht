@@ -96,6 +96,7 @@ set_new_config (dhc_soft *b, ptr<dhc_propose_arg> arg, ptr<vnode> myNode,
     b->new_config.push_back (replicas[i-1]);
   }
 }
+
 void
 set_new_config (ptr<dhc_newconfig_arg> arg, vec<chordID> new_config)
 {

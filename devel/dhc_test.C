@@ -14,7 +14,7 @@ str control_socket;
 u_int64_t start_insert, end_insert;
 ptr<sfspriv> sk;
 
-int insert_count, read_count;
+int insert_count, read_count, count;
 u_int64_t start_massive_insert, end_massive_insert;
 u_int64_t start_massive_read, end_massive_read;
 u_int64_t total_massive_insert;
@@ -40,7 +40,7 @@ write_cb (dhashclient dhash, dhash_stat stat, ptr<insert_info> i)
     exit (-1);
   }
 
-  if (insert_count < 100) {
+  if (insert_count < count) {
     mp = keyhash_payload (insert_count+1, str (data, DATASIZE));
     mp.sign (sk, mpk, ms);
     gettimeofday (&tp, NULL);
@@ -48,10 +48,12 @@ write_cb (dhashclient dhash, dhash_stat stat, ptr<insert_info> i)
     dhash.insert (mp.id (mpk), mpk, ms, mp, wrap (&write_cb, dhash), NULL);
   }
 
-  if (insert_count == 100) {
+  if (insert_count == count) {
     warn << "DHC_TEST: Massive Insert Successful \n";
     warn << "           elapse time " << total_massive_insert
 	 << " usecs\n";
+    exit (1);
+#if 0
     read_count = 0;
     gettimeofday (&tp, NULL);
     start_massive_read = tp.tv_sec * (u_int64_t) 1000000 + tp.tv_usec;
@@ -59,16 +61,18 @@ write_cb (dhashclient dhash, dhash_stat stat, ptr<insert_info> i)
       read_count++;
       dhash.retrieve (i->key, DHASH_KEYHASH, wrap (&readonly_cb, i->key, dhash));
     }
+#endif
   }
 }
 
+#if 0
 void 
 read_cb (chordID key, dhashclient dhash, dhash_stat stat, 
 	 ptr<dhash_block> blk, vec<chordID> path)
 {
   if (!blk) {
     warn << "DHC READ error dhash_stat: " << stat << "\n";
-    return;
+    exit (-1);
   }
 
   ptr<keyhash_payload> p = keyhash_payload::decode (blk);
@@ -76,6 +80,7 @@ read_cb (chordID key, dhashclient dhash, dhash_stat stat,
       DATASIZE != p->buf ().len () ||
       memcmp (data, p->buf ().cstr (), DATASIZE) != 0) {
     fatal << "verification failed";
+    exit (-1);
   } else {
     warn << "retrieve success\n path: ";
     for (uint i = 0; i < path.size (); i++)
@@ -85,13 +90,14 @@ read_cb (chordID key, dhashclient dhash, dhash_stat stat,
     read_count = 0;
     gettimeofday (&tp, NULL);
     start_massive_read = tp.tv_sec * (u_int64_t) 1000000 + tp.tv_usec;
-    for (int i=0; i<10; i++) {
+    for (int i=0; i<1; i++) {
       read_count++;
       dhash.retrieve (key, DHASH_KEYHASH, wrap (&readonly_cb, key, dhash));
     }
   }
 
 }
+#endif
 
 void 
 newblock_cb (dhashclient dhash, dhash_stat stat, ptr<insert_info> i)
@@ -100,12 +106,16 @@ newblock_cb (dhashclient dhash, dhash_stat stat, ptr<insert_info> i)
   gettimeofday (&tp, NULL);
   end_insert = tp.tv_sec * (u_int64_t)1000000 + tp.tv_usec;
 
-  if (stat != DHASH_OK) 
+  if (stat != DHASH_OK) {
     warn << "DHC NEWBLOCK error dhash_stat: " << stat << "\n";
+    exit (-1);
+  }
   else {
     warn << "DHC NEWBLOCK insert successful\n";
     warn << "DHC End Insert at " << end_insert << "\n";
     warn << "      elapse time " << end_insert - start_insert << " usecs\n";
+    exit (1);
+#if 0
     insert_count = 0;
     total_massive_insert = 0;
     mp = keyhash_payload (1, str (data, DATASIZE));
@@ -113,6 +123,7 @@ newblock_cb (dhashclient dhash, dhash_stat stat, ptr<insert_info> i)
     gettimeofday (&tp, NULL);
     start_massive_insert = tp.tv_sec * (u_int64_t) 1000000 + tp.tv_usec;
     dhash.insert (mp.id (mpk), mpk, ms, mp, wrap (&write_cb, dhash), NULL); 
+#endif
   }
 }
 
@@ -122,8 +133,9 @@ readonly_cb (chordID key, dhashclient dhash, dhash_stat stat,
 {
   if (!blk) {
     warn << "DHC READ error dhash_stat: " << stat << "\n";
+    exit (-1);
   } else
-    if (++read_count >= 100) {
+    if (++read_count >= count) {
       timeval tp;
       gettimeofday (&tp, NULL);
       end_massive_read = tp.tv_sec * (u_int64_t) 1000000 + tp.tv_usec;      
@@ -131,6 +143,7 @@ readonly_cb (chordID key, dhashclient dhash, dhash_stat stat,
       warn << "           elapsed time: " 
 	   << end_massive_read - start_massive_read 
 	   << "\n";
+      exit (1);
     } else 
       dhash.retrieve (key, DHASH_KEYHASH, wrap (&readonly_cb, key, dhash));
 }
@@ -139,7 +152,7 @@ static void
 usage ()
 {
   warnx << "usage: " << progname
-	<< " sock randseed mode pubkeyfile \n";
+	<< " sock randseed mode count[>10] pubkeyfile \n";
   exit (1);
 }
 
@@ -148,7 +161,7 @@ main (int argc, char **argv)
 {
   setprogname (argv[0]);
 
-  if (argc < 3)
+  if (argc < 5)
     usage ();
 
   control_socket = argv[1];
@@ -157,7 +170,9 @@ main (int argc, char **argv)
   unsigned int seed = strtoul (argv[2], NULL, 10);
   srandom (seed);
 
-  str key = file2wstr (argv[4]);
+  count = atoi (argv[4]);
+
+  str key = file2wstr (argv[5]);
   sk = sfscrypt.alloc_priv (key, SFS_SIGN);
 
   keyhash_payload p (0, str (data, DATASIZE));
@@ -172,15 +187,20 @@ main (int argc, char **argv)
     timeval tp;
     gettimeofday (&tp, NULL);
     start_insert = tp.tv_sec * (u_int64_t) 1000000 + tp.tv_usec;
-    warn << "DHC Start Insert at " << start_insert << "\n";
+    warn << "DHC Start Insert NewBlock at " << start_insert << "\n";
     dhash.insert (p.id (pk), pk, s, p, wrap (&newblock_cb, dhash), opt);    
     break;
   }
-  case WRITE:
-    
+  case WRITE: {
+    timeval tp;
+    gettimeofday (&tp, NULL);
+    start_insert = tp.tv_sec * (u_int64_t) 1000000 + tp.tv_usec;
+    warn << "DHC Start Write Block at " << start_insert << "\n";
+    dhash.insert (p.id (pk), pk, s, p, wrap (&write_cb, dhash));        
     break;
+  }    
   case READ: {
-    p.sign (sk, pk, s);
+    //p.sign (sk, pk, s);
     timeval tp;
     gettimeofday (&tp, NULL);
     start_massive_read = tp.tv_sec * (u_int64_t) 1000000 + tp.tv_usec;

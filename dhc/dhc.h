@@ -399,6 +399,7 @@ class dhc : public virtual refcount {
 
   uint n_replica;
   uint recon_tm_rpcs;
+  timecb_t *recon_tm;
   
   void recon_timer ();
   void recon_tm_lookup (ref<dhc_block>, bool, vec<chord_node>, route, chordstat);

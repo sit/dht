@@ -1,4 +1,5 @@
 #include <sys/time.h>
+#include <iostream.h>
 #include "dhc.h"
 #include "dhc_misc.h"
 #include <merkle_misc.h>
@@ -25,7 +26,7 @@ dhc::dhc (ptr<vnode> node, str dbname, uint k) :
   warn << myNode->my_ID () << " registered dhc_program_1\n";
   myNode->addHandler (dhc_program_1, wrap (this, &dhc::dispatch));
   
-  delaycb (RECON_TM, wrap (this, &dhc::recon_timer));
+  recon_tm = delaycb (RECON_TM, wrap (this, &dhc::recon_timer));
 
 }
 
@@ -42,6 +43,8 @@ dhc::recon_timer ()
        but the current set of replicas do not match the current successors.
        Send the block to the potential primary.
    */
+  
+  recon_tm = NULL;
 
   if (recon_tm_rpcs == 0) {
     bool guilty;
@@ -53,7 +56,7 @@ dhc::recon_timer ()
       ptr<dbrec> rec = db->lookup (entry->key);
       if (rec) {
 	ref<dhc_block> kb = to_dhc_block (rec);
-	if ((guilty = responsible (myNode, key))) {// || kb->meta->cvalid) {
+	if (guilty = responsible (myNode, key)) {// || kb->meta->cvalid) {
 	  recon_tm_rpcs++;
 	  myNode->find_successor (key, wrap (this, &dhc::recon_tm_lookup, kb, guilty));	
 	}
@@ -63,7 +66,7 @@ dhc::recon_timer ()
     }
   }
 
-  delaycb (RECON_TM, wrap (this, &dhc::recon_timer));  
+  recon_tm = delaycb (RECON_TM, wrap (this, &dhc::recon_timer));  
 }
 
 u_int64_t start_recon = 0, end_recon = 0;
@@ -304,8 +307,10 @@ dhc::recv_accept (chordID bID, dhc_cb_t cb,
 	myNode->doRPC (dest, dhc_program_1, DHCPROC_NEWCONFIG, arg, res,
 		       wrap (this, &dhc::recv_newconfig_ack, b->id, cb, res));
       }
+#if 0 //We didn't change kb at all.
       db->insert (id2dbrec (kb->id), to_dbrec (kb));
       db->sync ();
+#endif
     }
   } else {
     if (err == RPC_CANTSEND) {
@@ -328,10 +333,11 @@ dhc::recv_newconfig_ack (chordID bID, dhc_cb_t cb, ref<dhc_newconfig_res> ack,
       warn << "dhc::recv_newconfig_ack " << bID << " not found in hash table.\n";
       exit (-1);
     }
-    if (dhc_debug)    
-      warn << "dhc::recv_newconfig_ack: " << b->to_str () << "\n";
 
     b->pstat->newconfig_ack_recvd++;
+
+    if (dhc_debug)    
+      warn << "dhc::recv_newconfig_ack: " << b->to_str () << "\n";
     
     if (b->pstat->newconfig_ack_recvd > n_replica/2 && 
 	!b->pstat->sent_reply) {
@@ -348,7 +354,7 @@ dhc::recv_newconfig_ack (chordID bID, dhc_cb_t cb, ref<dhc_newconfig_res> ack,
       end_recon = tp.tv_sec * (u_int64_t)1000000 + tp.tv_usec;
       warn << myNode->my_ID () << " End RECON at " << end_recon << "\n";
       warn << "             time elapse: " << end_recon-start_recon << " usecs\n";
-      exit (0); //So that I can read the time.
+      //exit (0);
       (*cb) (DHC_OK, clnt_stat (0));
     }    
   } else {
@@ -380,6 +386,10 @@ dhc::recv_prepare (user_args *sbp)
       return;
     }
 #endif    
+
+    if (dhc_debug)
+      warn << "\n\n" << "kb status\n" << kb->to_str ();    
+
     if (kb->meta->config.seqnum != prepare->config_seqnum) {
       dhc_prepare_res res (DHC_CONF_MISMATCH);
       sbp->reply (&res);
@@ -507,8 +517,9 @@ dhc::recv_newconfig (user_args *sbp)
     if (dhc_debug)
       warn << "\n\n dhc::recv_newconfig. " << kb->to_str ();
 
-    if (kb->meta->config.seqnum != 0 &&
-	kb->meta->config.seqnum != newconfig->old_conf_seqnum) {
+    //It's fine to receive newer configs even if it skips the configs.
+    if (//kb->meta->config.seqnum != 0 &&
+	kb->meta->config.seqnum > newconfig->old_conf_seqnum) {
       dhc_newconfig_res res; res.status = DHC_CONF_MISMATCH;
       sbp->reply (&res);
       return;      
@@ -529,8 +540,8 @@ dhc::recv_newconfig (user_args *sbp)
     warn << "dhc::recv_newconfig inserting \n"
 	 << kb->to_str () << "\n";
 
-  db->insert (key, to_dbrec (kb));
-  //db->sync (); 
+  db->insert (id2dbrec (kb->id), to_dbrec (kb));
+  db->sync (); 
 
 #if 0
   // TODO: Handle simutaneous recons better.
@@ -779,11 +790,6 @@ dhc::put (ptr<location> dest, chordID bID, chordID writer, ref<dhash_value> valu
   if (dhc_debug)
     warn << "\n\n" << myNode->my_ID () << " in dhc::put bID " << bID << "\n";
    
-  //verify_keyhash as in dhash/server.C:747
-  //but already verified by the client!!!
-
-  //ptr<location> l = myNode->locations->lookup (bID);
-
   if (dest) {
     ptr<dhc_put_arg> arg = New refcounted<dhc_put_arg>;
     arg->bID = bID;
