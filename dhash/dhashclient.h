@@ -25,18 +25,21 @@ struct option_block
   chordID guess;
 };
 
+
+typedef char salt_t [20];
+
 class keyhash_payload
 {
 private:
-  char _salt [20];
+  salt_t _salt;
   long _version;
   str _buf;
 
 public:
   keyhash_payload ();
-  keyhash_payload (char *s);
+  keyhash_payload (salt_t s);
   keyhash_payload (long version, str buf);
-  keyhash_payload (char *s, long version, str buf);
+  keyhash_payload (salt_t s, long version, str buf);
   ~keyhash_payload () {}
   
   const char* salt () const { return _salt; }

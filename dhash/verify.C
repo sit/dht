@@ -194,26 +194,26 @@ keyhash_version (char *value, unsigned int len)
 keyhash_payload::keyhash_payload (long version, str buf)
   : _version (version), _buf (buf)
 {
-  memset (_salt, 0, 20);
+  memset (_salt, 0, sizeof (salt_t));
 }
 
-keyhash_payload::keyhash_payload (char *s, long version, str buf)
+keyhash_payload::keyhash_payload (salt_t s, long version, str buf)
   : _version (version), _buf (buf)
 {
-  memmove (_salt, s, 20);
+  memmove (_salt, s, sizeof (salt_t));
 }
 
 // empty payload, useful only for computing ids
 keyhash_payload::keyhash_payload ()
   : _version (0), _buf ("")
 {
-  memset (_salt, 0, 20);
+  memset (_salt, 0, sizeof (salt_t));
 }
 
-keyhash_payload::keyhash_payload (char *s)
+keyhash_payload::keyhash_payload (salt_t s)
   : _version (0), _buf ("")
 {
-  memmove (_salt, s, 20);
+  memmove (_salt, s, sizeof (salt_t));
 }
 
 chordID
@@ -229,7 +229,7 @@ keyhash_payload::id (sfs_pubkey2 pk) const
 
   sha1ctx ctx;
   ctx.update (pubkeystr.cstr(), pubkeystr.len());
-  ctx.update (_salt, 20);
+  ctx.update (_salt, sizeof (salt_t));
   ctx.final (digest);
 
   bigint chordid;
@@ -242,7 +242,7 @@ keyhash_payload::sign (ptr<sfspriv> key, sfs_pubkey2& pk, sfs_sig2& sig) const
 {
   iovec iovs [3];
   iovs [0].iov_base = const_cast<char *> (_salt);
-  iovs [0].iov_len = 20;
+  iovs [0].iov_len = sizeof (salt_t);
   iovs [1].iov_base = (char *) &_version;
   iovs [1].iov_len = sizeof (long);
   iovs [2].iov_base = const_cast<char *> (_buf.cstr ());
@@ -258,7 +258,7 @@ keyhash_payload::verify (sfs_pubkey2 pubkey, sfs_sig2 sig) const
   ptr<sfspub> pk = sfscrypt.alloc (pubkey, SFS_VERIFY);
   iovec iovs [3];
   iovs [0].iov_base = const_cast<char *> (_salt);
-  iovs [0].iov_len = 20;
+  iovs [0].iov_len = sizeof (salt_t);
   iovs [1].iov_base = (char *) &_version;
   iovs [1].iov_len = sizeof (long);
   iovs [2].iov_base = const_cast<char *> (_buf.cstr ());
@@ -270,7 +270,7 @@ keyhash_payload::verify (sfs_pubkey2 pubkey, sfs_sig2 sig) const
 int
 keyhash_payload::encode (xdrsuio &x, sfs_pubkey2 pk, sfs_sig2 sig) const
 {
-  long plen = _buf.len () + sizeof (long) + 20;
+  long plen = _buf.len () + sizeof (long) + sizeof (salt_t);
   long v = _version;
 
   if (!xdr_sfs_pubkey2 (&x, &pk) ||
@@ -281,9 +281,9 @@ keyhash_payload::encode (xdrsuio &x, sfs_pubkey2 pk, sfs_sig2 sig) const
 
   // stuff the salt into the xdr structure
   char* salt_slot;
-  if ((salt_slot = (char *)XDR_INLINE(&x, 20)) == NULL)
+  if ((salt_slot = (char *)XDR_INLINE(&x, sizeof (salt_t))) == NULL)
     return -1;
-  memmove (salt_slot, _salt, 20);
+  memmove (salt_slot, _salt, sizeof (salt_t));
 
   char *m_buf;
   int size = _buf.len () + 3 & ~3;
@@ -300,13 +300,13 @@ keyhash_payload::decode (xdrmem &x, long plen)
   long version;
   char *salt;
   char *buf;
-  long buflen = plen - sizeof (long) - 20;
+  long buflen = plen - sizeof (long) - sizeof (salt_t);
 
-  if (plen < (long)((sizeof (long))+20))
+  if (plen < (long)((sizeof (long))+sizeof (salt_t)))
     return p;
   if (!XDR_GETLONG (&x, &version))
     return p;
-  if (!(salt = (char *)XDR_INLINE (&x, 20)))
+  if (!(salt = (char *)XDR_INLINE (&x, sizeof (salt_t))))
     return p;
   if (!(buf = (char *)XDR_INLINE (&x, buflen)))
     return p;

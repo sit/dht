@@ -137,8 +137,8 @@ dhashclient::insert (const char *buf, size_t buflen, cbinsertgw_t cb,
  * long payload_len
  * signed payload (see struct keyhash_payload)
  *   long version
- *   char salt [20];
- *   char block_data[payload_len-20-sizeof(long)]
+ *   salt_t salt
+ *   char block_data[payload_len-sizeof(salt_t)-sizeof(long)]
  */
 void
 dhashclient::insert (bigint hash, sfs_pubkey2 key, sfs_sig2 sig,
