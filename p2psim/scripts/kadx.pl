@@ -107,7 +107,7 @@ sub generate_prot
         print $pf "Kademlia k=$k alpha=$alpha stabilize_timer=$stabtimer\n";
         $pf->close();
 
-        &run_kademlia($$nnodes);
+        &run_kademlia($nnodes);
         eval "\$alpha " . $params->{ALPHA}->{INC} . ";"
       }
       eval "\$k " . $params->{K}->{INC} . ";"
