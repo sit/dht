@@ -61,6 +61,7 @@ typedef callback<void, struct store_cbstate *,dhash_stat>::ptr cbstat;
 typedef callback<void,dhash_stat>::ptr cbstore;
 typedef callback<void,dhash_stat>::ptr cbstat_t;
 typedef callback<void, s_dhash_block_arg *>::ptr cbblockuc_t;
+typedef callback<void, s_dhash_storecb_arg *>::ptr cbstorecbuc_t;
 
 extern unsigned int MTU;
 
@@ -205,6 +206,7 @@ class dhash {
 	&quorum_reservation::link, hashID> quorum_reservations;
 
   qhash<int, cbblockuc_t> bcpt;
+  qhash<int, cbstorecbuc_t> scpt;
 
   void sendblock_XXX (XXX_SENDBLOCK_ARGS *a);
   void sendblock (bigint destID, bigint blockID, bool last, callback<void>::ref cb);
@@ -244,8 +246,12 @@ class dhash {
 			      int cookie, ptr<dbrec> data, dhash_stat err);
   
   void store (s_dhash_insertarg *arg, cbstore cb);
-  void store_cb(store_status type, chordID id, cbstore cb, int stat);
-  void store_repl_cb (cbstore cb, dhash_stat err);
+  void store_cb (store_status type, chordID id, chordID srcID, int32 nonce,
+                 cbstore cb, int stat);
+  void store_repl_cb (cbstore cb, chordID id, chordID srcID, int32 nonce,
+                      dhash_stat err);
+  void send_storecb (chordID key, chordID srcID, uint32 nonce, dhash_stat stat);
+  void sent_storecb_cb (dhash_stat *s, clnt_stat err);
   
   void get_keys_traverse_cb (ptr<vec<chordID> > vKeys,
 			     chordID mypred,
@@ -263,9 +269,8 @@ class dhash {
   void update_replica_list ();
   bool isReplica(chordID id);
   void replicate_key (chordID key, cbstat_t cb);
-  void replicate_key_cb (unsigned int replicas_done, cbstat_t cb, chordID key,
-			 dhash_stat err);
-
+  void replicate_key_cb (int* replicas, int *replica_err,
+                         cbstat_t cb, chordID key, dhash_stat err);
 
   void install_replica_timer ();
   void check_replicas_cb ();
@@ -333,6 +338,8 @@ class dhash {
   void fetch (chordID id, int cookie, cbvalue cb);
   void register_block_cb (int nonce, cbblockuc_t cb);
   void unregister_block_cb (int nonce);
+  void register_storecb_cb (int nonce, cbstorecbuc_t cb);
+  void unregister_storecb_cb (int nonce);
 
   dhash_stat key_status(const chordID &n);
 

@@ -185,6 +185,7 @@ dhash::dhash(str dbname, ptr<vnode> node,
 
   if (MERKLE_ENABLED) {
     merkle_tcb = delaycb (REPTM, wrap (this, &dhash::replica_maintenance_timer, 0));
+    // delaycb (PRTTM, wrap (this, &dhash::partition_maintenance_timer));
   } else {
     install_replica_timer ();
     transfer_initial_keys ();
@@ -267,9 +268,11 @@ dhash::replica_maintenance_timer (u_int index)
       
       bigint rngmin = host_node->my_pred ();
       bigint rngmax = host_node->my_ID ();
-      
+     
+#if 0
       warn << "biSYNC with " << replicas[index]
 	   << " range [" << rngmin << ", " << rngmax << "]\n";
+#endif
       replica_syncer->sync (rngmin, rngmax, merkle_syncer::BIDIRECTIONAL);
       index = (index + 1) % nreplica;
     }
@@ -608,10 +611,8 @@ dhash::dispatch (svccb *sbp)
 	res.pred->p.x = pred;
         res.pred->p.r = host_node->locations->getaddress (pred);
 	sbp->reply (&res);
-      } else {
+      } else
 	store (sarg, wrap(this, &dhash::storesvc_cb, sbp, sarg));	
-      }
-      
     }
     break;
   case DHASHPROC_GETKEYS:
@@ -644,6 +645,17 @@ dhash::dispatch (svccb *sbp)
       sbp->reply (&res);
     }
     break;
+  case DHASHPROC_STORECB:
+    {
+      s_dhash_storecb_arg *arg = sbp->template getarg<s_dhash_storecb_arg> ();
+      cbstorecbuc_t *cb = scpt[arg->nonce];
+      if (cb) {
+	(*cb) (arg);
+	scpt.remove (arg->nonce);
+      }
+      sbp->replyref (DHASH_OK);
+    }
+    break;
   case DHASHPROC_BLOCK:
     {
       s_dhash_block_arg *arg = sbp->template getarg<s_dhash_block_arg> ();
@@ -665,7 +677,20 @@ dhash::dispatch (svccb *sbp)
 
   pred = host_node->my_pred ();
   return;
-  }
+}
+
+void
+dhash::register_storecb_cb (int nonce, cbstorecbuc_t cb)
+{
+  scpt.insert (nonce, cb);
+}
+
+void
+dhash::unregister_storecb_cb (int nonce)
+{
+  if (scpt[nonce])
+    scpt.remove (nonce);
+}
 
 void
 dhash::register_block_cb (int nonce, cbblockuc_t cb)
@@ -796,8 +821,6 @@ dhash::fix_replicas_txerd (dhash_stat err)
   if (err) warn << "error replicating key\n";
 }
 
-
-
 // --- node to node transfers ---
 void
 dhash::replicate_key (chordID key, cbstat_t cb)
@@ -807,33 +830,50 @@ dhash::replicate_key (chordID key, cbstat_t cb)
     (cb) (DHASH_OK);
   } else {
     update_replica_list ();
-    if (replicas.size () > 0) {
-      transfer_key (replicas[0], key, DHASH_REPLICA, 
-		    wrap (this, &dhash::replicate_key_cb, 1, cb, key));
+
+    if (replicas.size () == 0) {
+      (cb) (DHASH_OK);
+      return;
     }
-    else
-      (cb)(DHASH_OK);
+
+    int *replica_cnt = New int;
+    int *replica_err  = New int;
+    *replica_cnt = replicas.size ();
+    *replica_err  = 0;
+
+    for (unsigned i=0; i<replicas.size (); i++) {
+      transfer_key (replicas[i], key, DHASH_REPLICA, 
+		    wrap (this, &dhash::replicate_key_cb,
+		          replica_cnt, replica_err, cb, key));
+    }
+
   }
 }
 
 void
-dhash::replicate_key_cb (unsigned int replicas_done, cbstat_t cb, chordID key,
-			 dhash_stat err) 
+dhash::replicate_key_cb (int* replica_cnt, int *replica_err,
+                         cbstat_t cb, chordID key, dhash_stat err) 
 {
-  if (err) (*cb)(DHASH_ERR);
-  else if (replicas_done >= replicas.size ()) (*cb)(DHASH_OK);
-  else {
-    transfer_key (replicas[replicas_done], key, DHASH_REPLICA,
-		  wrap (this, &dhash::replicate_key_cb, 
-			replicas_done + 1, cb, key));
+  *replica_cnt = *replica_cnt -1;
+  if (err)
+    *replica_err = 1;
+
+  if (*replica_cnt == 0) {
+    int err = *replica_err;
+    delete replica_cnt;
+    delete replica_err;
+    if (err)
+      (*cb) (DHASH_STOREERR);
+    else
+      (*cb) (DHASH_OK);
   }
-						
 }
+
 void
 dhash::transfer_key (chordID to, chordID key, store_status stat, 
 		     callback<void, dhash_stat>::ref cb) 
 {
-  fetch(key, -1, wrap(this, &dhash::transfer_fetch_cb, to, key, stat, cb));
+  fetch (key, -1, wrap(this, &dhash::transfer_fetch_cb, to, key, stat, cb));
 }
 
 void
@@ -1114,9 +1154,11 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
 	    } else {
 	      reservation->reserved_until = timenow + 1;
 	    }
-	    store_cb (arg->type, arg->key, cb, DHASH_OK);
+	    store_cb (arg->type, arg->key, arg->srcID, arg->nonce,
+		      cb, DHASH_OK);
 	  } else {
-	    store_cb (arg->type, arg->key, cb, DHASH_STOREERR);
+	    store_cb (arg->type, arg->key, arg->srcID, arg->nonce,
+		      cb, DHASH_STOREERR);
 	  }
 	  return;
 	}
@@ -1156,21 +1198,46 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
       bytes_stored += arg->data.size ();
 
     dbwrite (k, d);
-    store_cb (arg->type, id, cb, 0);
+    store_cb (arg->type, id, arg->srcID, arg->nonce, cb, 0);
   } else
     cb (DHASH_STORE_PARTIAL);
 }
 
 void
-dhash::store_cb(store_status type, chordID id, cbstore cb, int stat) 
+dhash::sent_storecb_cb (dhash_stat *s, clnt_stat err) 
 {
-  if (stat != 0)
-    (*cb)(DHASH_STOREERR);
-  else	   
-    (*cb)(DHASH_OK);
+  if (err || !s || (s && *s))
+    warn << "error sending storecb\n";
+  delete s;
+}
 
-  if (type == DHASH_STORE)
-    replicate_key (id, wrap (this, &dhash::store_repl_cb, cb));
+void
+dhash::send_storecb (chordID key, chordID srcID, uint32 nonce, dhash_stat stat)
+{
+  ptr<s_dhash_storecb_arg> arg = New refcounted<s_dhash_storecb_arg> ();
+  arg->v = srcID;
+  arg->nonce = nonce;
+  arg->status = stat;
+  dhash_stat *res = New dhash_stat ();
+  doRPC (srcID, dhash_program_1, DHASHPROC_STORECB,
+	 arg, res, wrap (this, &dhash::sent_storecb_cb, res));  
+}
+
+void
+dhash::store_cb (store_status type, chordID id, chordID srcID, int32 nonce,
+                 cbstore cb, int stat) 
+{
+  if (stat)
+    (*cb) (DHASH_STOREERR);
+  else
+    (*cb) (DHASH_OK);
+
+  if (!stat && type == DHASH_STORE)
+    replicate_key
+      (id, wrap (this, &dhash::store_repl_cb, cb, id, srcID, nonce));
+
+  // don't need to send storecb RPC if type is NOT DHASH_STORE or if
+  // there is an error
 
   store_state *ss = pst[id];
   if (ss) {
@@ -1180,10 +1247,13 @@ dhash::store_cb(store_status type, chordID id, cbstore cb, int stat)
 }
 
 void
-dhash::store_repl_cb (cbstore cb, dhash_stat err) 
+dhash::store_repl_cb (cbstore cb, chordID id, chordID srcID, int32 nonce,
+                      dhash_stat err) 
 {
-  /*  if (err) cb (err);
-      else cb (DHASH_OK); */
+  if (err)
+    send_storecb (id, srcID, nonce, DHASH_STOREERR);
+  else
+    send_storecb (id, srcID, nonce, DHASH_OK);
 }
 
 

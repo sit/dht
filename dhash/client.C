@@ -45,6 +45,8 @@
 //     - the address of the nodeID must already by in the location cache.
 //     - XXX don't really handle RACE conditions..
 
+static uint32 store_nonce = 0;
+
 class dhash_store {
 protected:
   uint npending;
@@ -53,8 +55,10 @@ protected:
 
   chordID destID;
   chordID predID;
+  uint32 nonce;
   net_address pred_addr;
   chordID blockID;
+  dhash *dh;
   ptr<dhash_block> block;
   cbinsert_t cb;
   dhash_ctype ctype;
@@ -66,16 +70,34 @@ protected:
   int numblocks;
   vec<long> seqnos;
 
-  dhash_store (ptr<vnode> clntnode, chordID destID, chordID blockID, 
-	       ptr<dhash_block> _block, store_status store_type, 
-	       bool last, cbinsert_t cb)
-    : destID (destID), 
-		 blockID (blockID), block (_block), cb (cb), 
-		 ctype (block_type(_block)), 
-		 store_type (store_type),
-		 clntnode (clntnode), num_retries (0), last (last)
+  void storecb_cb (s_dhash_storecb_arg *arg)
   {
+    // warn << "STORECB_CB " << nonce << "\n";
+    if (arg->status)
+      (*cb) (arg->status, destID);
+    else
+      (*cb) (DHASH_OK, destID);
+    delete this;
+  }
+
+  dhash_store (ptr<vnode> clntnode, chordID destID, chordID blockID,
+               dhash *dh, ptr<dhash_block> _block, store_status store_type, 
+	       bool last, cbinsert_t cb)
+    : destID (destID), blockID (blockID), dh (dh), block (_block), cb (cb),
+      ctype (block_type(_block)), store_type (store_type),
+      clntnode (clntnode), num_retries (0), last (last)
+  {
+    if (store_type == DHASH_STORE) {
+      nonce = store_nonce++;
+      dh->register_storecb_cb (nonce, wrap (this, &dhash_store::storecb_cb));
+    }
     start ();
+  }
+  
+  ~dhash_store ()
+  {
+    if (store_type == DHASH_STORE)
+      dh->unregister_storecb_cb (nonce);
   }
     
   void start ()
@@ -103,7 +125,6 @@ protected:
 
   void finish (ptr<dhash_storeres> res, int num, clnt_stat err)
   {
-    ///warn << "dhash_store....finish: " << npending << "\n";
     npending--;
 
     if (err) {
@@ -135,8 +156,10 @@ protected:
 				       wrap (this, 
 					     &dhash_store::retry_cachedloc));
       } else {
-	(*cb) (status, destID);
-	delete this;
+	if (error || store_type != DHASH_STORE) {
+	  (*cb) (status, destID);
+	  delete this;
+	}
       }
     }
   }
@@ -155,6 +178,7 @@ protected:
     memcpy (arg->data.base (), data, len);
     arg->offset  = off;
     arg->type    = store_type;
+    arg->nonce   = nonce;
     arg->attr.size     = totsz;
     arg->last    = last;
     
@@ -186,10 +210,11 @@ protected:
 public:
   
   static void execute (ptr<vnode> clntnode, chordID destID, chordID blockID,
-                       ref<dhash_block> block, bool last, cbinsert_t cb, 
-		       store_status store_type = DHASH_STORE)
+                       dhash *dh, ref<dhash_block> block, bool last,
+		       cbinsert_t cb, store_status store_type = DHASH_STORE)
   {
-    vNew dhash_store (clntnode, destID, blockID, block, store_type, last, cb);
+    vNew dhash_store (clntnode, destID, blockID, dh,
+	              block, store_type, last, cb);
   }
 };
 
@@ -250,7 +275,7 @@ dhashcli::cache_block (ptr<dhash_block> block, route search_path, chordID key)
     unsigned int path_size = search_path.size ();
     if (path_size > 1) {
       chordID cache_dest = search_path[path_size - 2];
-      dhash_store::execute (clntnode, cache_dest, key, block, false,
+      dhash_store::execute (clntnode, cache_dest, key, dh, block, false,
 			    wrap (this, &dhashcli::finish_cache),
 			    DHASH_CACHE);
     }
@@ -305,7 +330,7 @@ dhashcli::insert_lookup_cb (chordID blockID, ref<dhash_block> block,
     warn << "insert_lookup_cb: failure\n";
     (*cb) (status, bigint(0)); // failure
   } else 
-    dhash_store::execute (clntnode, destID, blockID, block, false, 
+    dhash_store::execute (clntnode, destID, blockID, dh, block, false, 
 			  wrap (this, &dhashcli::insert_stored_cb, 
 				blockID, block, cb, trial));
 }
@@ -330,7 +355,7 @@ void
 dhashcli::storeblock (chordID dest, chordID ID, ref<dhash_block> block, 
 		      bool last, cbinsert_t cb, store_status stat)
 {
-  dhash_store::execute (clntnode, dest, ID, block, last, cb, stat);
+  dhash_store::execute (clntnode, dest, ID, dh, block, last, cb, stat);
 }
 
 

@@ -54,6 +54,7 @@ struct s_dhash_insertarg {
   chordID srcID;
   dhash_value data;
   int offset;
+  int32 nonce;
   store_status type;
   dhash_valueattr attr;
   bool last; /* used by the merkle code only */
@@ -148,11 +149,22 @@ struct s_dhash_block_arg {
   chord_node nodelist<>; 
 };
 
+
+struct s_dhash_storecb_arg {
+  chordID v;
+  int32 nonce;
+  dhash_stat status;
+};
+
+
 program DHASH_PROGRAM {
   version DHASH_VERSION {
 
     dhash_storeres
     DHASHPROC_STORE (s_dhash_insertarg) = 1;
+
+    dhash_stat
+    DHASHPROC_STORECB (s_dhash_storecb_arg) = 2;
 
     dhash_getkeys_res
     DHASHPROC_GETKEYS (s_dhash_getkeys_arg) = 3;
