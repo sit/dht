@@ -14,12 +14,20 @@ static GtkWidget *window = NULL;
 static GtkWidget *drawing_area = NULL;
 static GdkGC *draw_gc = NULL;
 static GdkColormap *cmap = NULL;
-static GdkColor red, green, blue, brown;
 static short interval = -1;
 static GtkWidget *check_fingers;
 static GtkWidget *check_immed_succ;
 static GtkWidget *check_succ_list;
 static GtkWidget *check_neighbors;
+static int glevel = 1;
+static char *color_file;
+
+struct color_pair {
+  GdkColor c;
+  unsigned long lat;
+};
+
+vec<color_pair> lat_map;
 
 struct f_node {
   chordID ID;
@@ -69,6 +77,10 @@ void update_succ_got_succ (chordID ID, str host, short port,
 				 clnt_stat err);
 void update ();
 void initgraf ();
+void init_color_list (char *filename);
+void draw_arrow (int fromx, int fromy, 
+		 int tox, int toy);
+
 static gint configure_event (GtkWidget *widget, GdkEventConfigure *event);
 static gint expose_event (GtkWidget *widget, GdkEventExpose *event);
 static gint delete_event(GtkWidget *widget, GdkEvent *event, gpointer data);
@@ -86,7 +98,7 @@ void ID_to_xy (chordID ID, int *x, int *y);
 chordID xy_to_ID (int sx, int sy);
 void ID_to_string (chordID ID, char *str);
 double ID_to_angle (chordID ID);
-void set_foreground_lat (long lat);
+void set_foreground_lat (unsigned long lat);
 int main (int argc, char** argv);
 void gtk_poll ();
 
@@ -339,7 +351,7 @@ update_toes (f_node *nu)
   
   chord_gettoes_arg n;
   n.v.n = nu->ID;
-  n.level = 1;
+  n.level = glevel;
   chord_gettoes_res *res = New chord_gettoes_res ();
   c->timedcall (TIMEOUT, CHORDPROC_GETTOES, &n, res,
 		wrap (&update_toes_got_toes, 
@@ -458,23 +470,10 @@ initgraf ()
   gtk_widget_show (vbox);
   gtk_widget_show (window);
 
-  draw_gc = gdk_gc_new (drawing_area->window);
-  assert (draw_gc);
-  cmap = gdk_colormap_get_system ();
-  if (!gdk_color_parse ("green", &green) ||
-      !gdk_colormap_alloc_color (cmap, &green, FALSE, TRUE))
-    fatal << "couldn't get the color I wanted\n";
-  if (!gdk_color_parse ("blue", &blue) ||
-      !gdk_colormap_alloc_color (cmap, &blue, FALSE, TRUE))
-    fatal << "couldn't get the color I wanted\n";
-  if (!gdk_color_parse ("red", &red) ||
-      !gdk_colormap_alloc_color (cmap, &red, FALSE, TRUE))
-  if (!gdk_color_parse ("brown", &brown) ||
-      !gdk_colormap_alloc_color (cmap, &brown, FALSE, TRUE))
-    fatal << "couldn't get the color I wanted\n";
+  init_color_list (color_file);
 }
 
-void 
+void
 redraw_cb (GtkWidget *widget, gpointer data)
 {
   draw_ring ();
@@ -593,43 +592,164 @@ xy_to_ID (int sx, int sy)
 }
 
 void
-draw_arc (int x, int y, int a, int b, GdkGC *draw_gc)
+init_color_list (char *filename)
 {
-  int m1, m2;
-  int w, h;
-  gint16 a1;
-  if (((x < a) && (y < b)) || ((x >= a) && (y < b))) {
-    m1 = a;
-    m2 = y;
-    w = (x < m1) ? (m1 - x) : (x - m1);
-    h = (b < m2) ? (m2 - b) : (b - m2);
-    a1 = (x < a) ? 32 : 48;
-  } else {
-    m1 = x;
-    m2 = b;
-    w = (a < m1) ? (m1 - a) : (a - m1);
-    h = (y < m2) ? (m2 - y) : (y - m2);
-    a1 = (x < a ) ? 48 : 32;
+  GdkColor c;
+  color_pair p;
+  draw_gc = gdk_gc_new (drawing_area->window);
+  assert (draw_gc);
+  cmap = gdk_colormap_get_system ();
+
+  FILE *cf = fopen (filename, "r");
+  if (!cf) { 
+    warn << "couldn't open " << filename << " using default color map\n";
+    if (!gdk_color_parse ("red", &c) ||
+	!gdk_colormap_alloc_color (cmap, &c, FALSE, TRUE))
+      fatal << "couldn't get the color I wanted\n";
+    p.c = c;
+    p.lat = RAND_MAX;
+    lat_map.push_back (p);
+    return;
   }
-  int l = m1 - w;
-  int t = m2 - h;
-  a1 = (gint16) a1 * 360;
-  gint16 a2 = (gint16) 16*360;
-  gdk_draw_arc (pixmap, draw_gc, FALSE, l, t, 2*w, 2*h, a1, a2);
+  
+  char color[1024];
+  unsigned long lat;
+  while (fscanf (cf, "%ld %s\n", &lat, color) == 2) 
+    {
+      if (!gdk_color_parse (color, &c) ||
+	  !gdk_colormap_alloc_color (cmap, &c, FALSE, TRUE))
+	fatal << "couldn't get the color I wanted\n";
+      p.c = c;
+      p.lat = lat * 1000 * 100; //convert from ms
+      lat_map.push_back (p);
+    }
+  
+
+}
+
+void
+draw_arc (chordID from, chordID to, GdkGC *draw_gc)
+{
+
+  double from_angle = ID_to_angle (from);
+  double to_angle = ID_to_angle (to);
+  double median = (from_angle + to_angle) / 2;
+  if (to_angle < from_angle) median -= PI;
+  double theta;
+  if (to_angle > from_angle) theta = to_angle - from_angle;
+  else theta = 2*PI - (from_angle - to_angle);
+
+  double rad =  ((WINX)/2 - 10)*cos(theta/2)*0.8;
+
+  int fromx, tox;
+  int fromy, toy;
+  ID_to_xy (from, &fromx, &fromy);
+  ID_to_xy (to, &tox, &toy);
+
+  if (theta < 0.1) {
+    gdk_draw_line (pixmap, 
+		   drawing_area->style->black_gc, 
+		   (gint)fromx, (gint)fromy,
+		   (gint)tox,  (gint)toy);
+    return;
+  }
+
+  double c1x, c2x;
+  double c1y, c2y;
+
+  c1x = 5 + (int)((WINX - 5)/2 + sin (median + 0.1)*rad);
+  c1y = 5 + (int)((WINY - 5)/2 - cos (median + 0.1)*rad);
+  c2x = 5 + (int)((WINX - 5)/2 + sin (median - 0.1)*rad);
+  c2y = 5 + (int)((WINY - 5)/2 - cos (median - 0.1)*rad);
+
+#ifdef DEBUG_BEZ
+  gdk_draw_arc (pixmap,
+		widget->style->black_gc,
+		TRUE,
+		(gint)c1x,(gint)c1y,
+		4,4,
+		(gint16)0, (gint16)64*360);
+
+  gdk_draw_arc (pixmap,
+		widget->style->black_gc,
+		TRUE,
+		(gint)c2x,(gint)c2y,
+		4,4,
+		(gint16)0, (gint16)64*360);
+#endif
+  GtkWidget *widget = drawing_area;
+
+  int oldx = fromx;
+  int oldy = fromy;
+  for (float t=0.0; t < 1.0; t += 0.01) {
+    float a = t;
+    float b = 1 - t;
+      
+    float px = fromx*(b*b*b) + 3*c1x*b*b*a + 3*c2x*b*a*a 
+      + tox*a*a*a;
+    float py = fromy*(b*b*b) + 3*c1y*b*b*a + 3*c2y*b*a*a 
+      + toy*a*a*a;
+    
+    gdk_draw_line (pixmap, 
+		   widget->style->black_gc, 
+		   (gint)oldx, (gint)oldy,
+		   (gint)px,  (gint)py);
+    oldx = (int)px;
+    oldy = (int)py;
+  }
+    /*
+      int m1, m2;
+      int w, h;
+      gint16 a1;
+      if (((x < a) && (y < b)) || ((x >= a) && (y < b))) {
+      m1 = a;
+      m2 = y;
+      w = (x < m1) ? (m1 - x) : (x - m1);
+      h = (b < m2) ? (m2 - b) : (b - m2);
+      a1 = (x < a) ? 32 : 48;
+      } else {
+      m1 = x;
+      m2 = b;
+      w = (a < m1) ? (m1 - a) : (a - m1);
+      h = (y < m2) ? (m2 - y) : (y - m2);
+      a1 = (x < a ) ? 48 : 32;
+      }
+      int l = m1 - w;
+      int t = m2 - h;
+      a1 = (gint16) a1 * 360;
+      gint16 a2 = (gint16) 16*360;
+      gdk_draw_arc (pixmap, draw_gc, FALSE, l, t, 2*w, 2*h, a1, a2);
+    */
 }
 
 
 void
-set_foreground_lat (long lat)
+set_foreground_lat (unsigned long lat)
 {
-  if (lat < 2000000) // < 20 ms
-    gdk_gc_set_foreground (draw_gc, &red);
-  else if (lat < 10000000) // [20, 100] ms
-    gdk_gc_set_foreground (draw_gc, &green);
-  else // > 100 ms
-    gdk_gc_set_foreground (draw_gc, &blue);
+  unsigned int i = 0; 
+  while (i < lat_map.size () &&
+	 lat > lat_map[i].lat) i++;
+  
+    gdk_gc_set_foreground (draw_gc, &lat_map[i].c);
 }
 
+void
+draw_arrow (int fromx, int fromy, 
+	    int tox, int toy)
+{
+  gdk_draw_line (pixmap,
+		 draw_gc,
+		 fromx,fromy,
+		 tox,toy);
+  gdk_draw_rectangle (pixmap,
+		      draw_gc,
+		      true,
+		      tox,
+		      toy,
+		      6,
+		      6);
+  
+}
 void
 draw_ring ()
 {
@@ -675,10 +795,7 @@ draw_ring ()
 	{
 	  int a,b;
 	  ID_to_xy (n->res->resok->fingers[1].x, &a, &b);
-	  gdk_draw_line (pixmap,
-			 draw_gc,
-			 x,y,
-			 a,b);
+	  draw_arrow (x,y,a,b);
 	}
 
       if (n->res && 
@@ -687,20 +804,14 @@ draw_ring ()
 	  int a,b;
 	  set_foreground_lat (n->res->resok->fingers[i].a_lat); 
 	  ID_to_xy (n->res->resok->fingers[i].x, &a, &b);
-	  gdk_draw_line (pixmap,
-			 draw_gc,
-			 x,y,
-			 a,b);
+	  draw_arrow (x,y,a,b);
 	}
       }
 
       if (n->ressucc && 
 	  gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (check_succ_list))) {
-	for (unsigned int i=0; i < n->ressucc->resok->succ.size (); i++) {
-	  int a,b;
-	  set_foreground_lat (n->ressucc->resok->succ[i].a_lat); 
-	  ID_to_xy (n->ressucc->resok->succ[i].x, &a, &b);
-	  draw_arc (x,y, a, b, draw_gc);
+	for (unsigned int i=1; i < n->ressucc->resok->succ.size (); i++) {
+	  draw_arc (n->ID, n->ressucc->resok->succ[i].x, draw_gc);
 	}
       }
 
@@ -710,10 +821,7 @@ draw_ring ()
 	  int a,b;
 	  ID_to_xy (n->restoes->resok->toes[i].x, &a, &b);
 	  set_foreground_lat (n->restoes->resok->toes[i].a_lat); 
-	  gdk_draw_line (pixmap,
-			 draw_gc,
-			 x,y,
-			 a,b);
+	  draw_arrow (x,y,a,b);
 	}
       }
     }
@@ -779,13 +887,14 @@ main (int argc, char** argv)
 
   setup ();
   gtk_init (&argc, &argv);
-  
+
   str host = "not set";
   short port = 0;
   interval = -1;
-  
+  color_file = ".viscolors";
+
   int ch;
-  while ((ch = getopt (argc, argv, "j:a:")) != -1) {
+  while ((ch = getopt (argc, argv, "j:a:l:f:")) != -1) {
     switch (ch) {
     case 'j': 
       {
@@ -809,11 +918,21 @@ main (int argc, char** argv)
 	
 	break;
       }
-  case 'a':
-    {
-      interval = atoi (optarg);
-    }
-    break;
+    case 'a':
+      {
+	interval = atoi (optarg);
+      }
+      break;
+    case 'l':
+      {
+	glevel = atoi (optarg);
+	break;
+      }
+    case 'f':
+      {
+	color_file = optarg;
+      }
+      break;
   default:
     usage ();
     }
