@@ -24,7 +24,7 @@ class node:
         my.sent_bytes = 0
 	my.sent_bytes_breakdown = {}
 	sbkeys = ['insert', 'join_repair_write', 'join_repair_read',
-		  'failure_repair_write', 'failure_repair_read', 'pm']
+		  'failure_repair_write', 'failure_repair_read', 'pmaint_repair_write']
 	for k in sbkeys:
 	    my.sent_bytes_breakdown[k] = 0
 

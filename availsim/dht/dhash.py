@@ -120,6 +120,7 @@ class dhash (chord):
 
     def _repair_join (my, t, an, succs, resp_blocks):
 	if an == succs[-1]:
+	    events = []
 	    # Blocks that someone else is responsible for
 	    # should go back to that person because the next
 	    # join might push me out of place.
@@ -137,8 +138,9 @@ class dhash (chord):
 			# XXX should move fragments, or
 			# possibly reconstruct and make a new one.
 			events.append (event (nt, "copy",
-			    ["pmaint", an.id, s.id, b, sz]))
+			    ["pmaint", an.id, an.last_alive, s.id, b, sz]))
 			break
+	    return events
 
     def _repair_fail (my, t, an, succs, resp_blocks):
 	"""Helper to repair_fail that does real work"""
@@ -203,11 +205,11 @@ class dhash (chord):
 		for s in succs:
 		    if b not in s.blocks:
 			isz = an.blocks[b]
-			nt = int (n.sendremote (t, isz) + 0.5)
+			nt = int (an.sendremote (t, isz) + 0.5)
 			# XXX should move fragments, or
 			# possibly reconstruct and make a new one.
 			events.append (event (nt, "copy",
-			    ["pmaint", an.id, s.id, b, isz]))
+			    ["pmaint", an.id, an.last_alive, s.id, b, isz]))
 			break
 	return events
 
@@ -418,19 +420,19 @@ class dhash_cates (dhash):
 		    # XXX should move fragments, or
 		    # possibly reconstruct and make a new one.
 		    return event (nt, "copy",
-			["pmaint", n.id, s.id, b, sz])
+			["pmaint", n.id, n.last_alive, s.id, b, sz])
 
-    def _pmaint_join_XXX (my, t, id):
+    def _pmaint_join_XXX (my, t, an):
 	"""aka partition maintenance"""
 	events = []
 	runlen = min (my.look_ahead () + 1, len (my.nodes))
 	getsucclist = my.succ
 	# Fix blocks that we're no longer in the succlist for.
-	for b in n.blocks:
+	for b in an.blocks:
 	    # Need to call getsucclist for n == an, since an
 	    # might be really far out of place or really old,
 	    succs = getsucclist (b, runlen)
-	    e = my._repair_join_check (t, n, b, succs)
+	    e = my._repair_join_check (t, an, b, succs)
 	    if e: events.append (e)
 	ansucclist = getsucclist (an, runlen)
 	assert ansucclist[0] == an
@@ -446,15 +448,15 @@ class dhash_cates (dhash):
 	    sid = neighborhood[i - 1].id
 	    for b in neighborhood[i].blocks:
 		if not between (b, pid, sid):
-		    isz = n.blocks[b]
+		    isz = an.blocks[b]
 		    # We're not in the successor list so pmaint
 		    for s in neighborhood[0]: # XXX BOGUS!!!
 			if b not in s.blocks:
-			    nt = int (n.sendremote (t, isz) + 0.5)
+			    nt = int (an.sendremote (t, isz) + 0.5)
 			    # XXX should move fragments, or
 			    # possibly reconstruct and make a new one.
 			    events.append (event (nt, "copy",
-				["pmaint", n.id, s.id, b, isz]))
+				["pmaint", an.id, an.last_alive, s.id, b, isz]))
 			    break
 	return events
       
@@ -475,7 +477,8 @@ class dhash_cates (dhash):
 		    isz = my.insert_piece_size (my.blocks[b])
 		    # Round event time up to the next whole unit
 		    nt = int (n.sendremote (t, isz) + 0.5)
-		    events.append (event (nt, "copy", ["pmaint", nid, s.id, b, isz]))
+		    events.append (event (nt, "copy",
+			["pmaint", nid, n.last_alive, s.id, b, isz]))
 		    break
 	    # Either someone wanted it and they took it, or no one wanted it.
 	    # Safe to delete either way 
