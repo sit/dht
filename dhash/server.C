@@ -367,6 +367,7 @@ dhash_impl::send_frag (blockID key, str block, ptr<location> to)
     } else {
       info << "repair: " << host_node->my_ID ()
 	   << " sent " << key << " to " << to->id () <<  ".\n";
+      bsm->unmissing (host_node->my_location (), key.ID);
     }
     repair_outstanding--;
   } else {
