@@ -70,6 +70,8 @@ public:
 				 bool complete, bool correct, 
 				 uint num_hops = 0, uint num_timeouts = 0, 
 				 Time time_timeouts = 0);
+  void record_join();
+  void record_crash();
   static void print_stats();
 
   void calculate_conncomp(void *);
@@ -96,10 +98,15 @@ protected:
   static vector<uint> _failed_hops;
   static vector<double> _num_timeouts;
   static vector<Time> _time_timeouts;
+  static vector<uint> _num_joins;
+  static vector<Time> _last_joins;
+  static vector<Time> _time_sessions;
+  int _num_joins_pos;
   static void print_lookup_stat_helper( vector<Time> times, 
 					vector<double> stretch,
 					vector<uint> hops,
 					bool timeouts = false );
+  void check_num_joins_pos();
   int _queue_len;
 
   // find peer protocol of my sub-type on a distant node.

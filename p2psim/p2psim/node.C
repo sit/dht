@@ -49,6 +49,9 @@ vector<uint> Node::_incorrect_hops;
 vector<uint> Node::_failed_hops;
 vector<double> Node::_num_timeouts;
 vector<Time> Node::_time_timeouts;
+vector<uint> Node::_num_joins;
+vector<Time> Node::_last_joins;
+vector<Time> Node::_time_sessions;
 
 Node::Node(IPAddress i) : _queue_len(0), _ip(i), _alive(true), _token(1) 
 {
@@ -56,6 +59,8 @@ Node::Node(IPAddress i) : _queue_len(0), _ip(i), _alive(true), _token(1)
   if ((ip() == 1) && (_track_conncomp_timer > 0)) {
     delaycb(_track_conncomp_timer, &Node::calculate_conncomp, (void*)NULL);
   }
+
+  _num_joins_pos = -1;
 
 }
 
@@ -244,6 +249,47 @@ Node::record_lookup_stat(IPAddress src, IPAddress dst, Time interval,
 }
 
 void
+Node::check_num_joins_pos()
+{
+  if( _num_joins_pos == -1 ) {
+    _num_joins_pos = _num_joins.size();
+    _num_joins.push_back(0);
+    // initialize people starting from the stattime
+    _last_joins.push_back(_collect_stat_time);
+  }
+}
+
+void
+Node::record_join()
+{
+
+  // do this first to make sure state is initialized for this node
+  check_num_joins_pos();
+  if( !collect_stat() ) {
+    return;
+  }
+
+  assert( _num_joins[_num_joins_pos] == 0 || !_last_joins[_num_joins_pos] );
+  _num_joins[_num_joins_pos]++;
+  _last_joins[_num_joins_pos] = now();
+}
+
+void
+Node::record_crash()
+{
+
+  if( !collect_stat() ) {
+    return;
+  }
+
+  check_num_joins_pos();
+  assert( _num_joins_pos >= 0 );
+  Time session = now() - _last_joins[_num_joins_pos];
+  _last_joins[_num_joins_pos] = 0;
+  _time_sessions.push_back( session );
+}
+
+void
 Node::print_stats()
 {
 
@@ -251,6 +297,24 @@ Node::print_stats()
     cout << "No stats were collected by time " << now() 
 	 << "; collect_stat_time=" << _collect_stat_time << endl;
     return;
+  }
+
+  // add up the time everyone has been alive (including the last session)
+  Time live_time = 0;
+  for( uint i = 0; i < _time_sessions.size(); i++ ) {
+    live_time += _time_sessions[i];
+  }
+  for( uint i = 0; i < _last_joins.size(); i++ ) {
+    // if this person joined at 0 and never failed, or was otherwise
+    // alive at the end
+    //    if( _num_joins[i] == 0 && _last_joins[i] == 0 ) {
+      // that means this one never died
+    //  live_time += now() - _collect_stat_time;
+    //  printf( "yup\n" );
+    //    } else 
+    if( _last_joins[i] != 0 ) {
+      live_time += now() - _last_joins[i];
+    }
   }
 
   cout << "\n<-----STATS----->" << endl;
@@ -264,10 +328,13 @@ Node::print_stats()
   }
   cout << endl;
   double total_time = ((double) (now() - _collect_stat_time))/1000.0;
+  // already accounts for nodes in live_time . . .
+  double live_time_s = ((double) live_time)/1000.0;
   uint num_nodes = Network::Instance()->size();
   double overall_bw = ((double) total)/(total_time*((double) num_nodes));
-  printf( "BW_TOTALS:: time(s):%.3f nodes:%d overall_bw(bytes/node/s):%.3f\n", 
-	  total_time, num_nodes, overall_bw );
+  double live_bw = ((double) total)/live_time_s; 
+  printf( "BW_TOTALS:: time(s):%.3f nodes:%d overall_bw(bytes/node/s):%.3f live_bw(bytes/node/s):%.3f\n", 
+	  total_time, num_nodes, overall_bw, live_bw );
 
   // then do lookup stats
   double total_lookups = _correct_lookups.size() + _incorrect_lookups.size() +

@@ -142,10 +142,12 @@ ChurnEventGenerator::kick(Observed *o, ObserverInfo *oi)
   if( p2p_observed->type == "join" ) {
 
     // the wellknown can't crash (***TODO: fix this?***) also if lifemean is zero, this node won't die
+    p2p_observed->node->record_join();
     if (( ip != _wkn ) && ( _lifemean > 0)) {
 
       // pick a time for this node to die
       Time todie = next_exponential( _lifemean );
+      //cout << now() << ": crashing " << ip << " in " << todie << " ms" << endl;
       if( now() + todie < _exittime ) {
 	P2PEvent *e = New P2PEvent(now() + todie, ip, "crash", a);
 	add_event(e);
@@ -156,9 +158,12 @@ ChurnEventGenerator::kick(Observed *o, ObserverInfo *oi)
     }
 
   } else if( p2p_observed->type == "crash" ) {
+    p2p_observed->node->record_crash();
     // pick a time for the node to rejoin
-    Time tojoin = next_exponential( _deathmean );
+    Time tojoin = 0;
+    tojoin = next_exponential( _deathmean );
     (*a)["wellknown"] = _wkn_string;
+    //cout << now() << ": joining " << ip << " in " << tojoin << " ms" << endl;
     if( now() + tojoin < _exittime ) {
       P2PEvent *e = New P2PEvent(now() + tojoin, ip, "join", a);
       add_event(e);
@@ -172,6 +177,8 @@ ChurnEventGenerator::kick(Observed *o, ObserverInfo *oi)
     (*a)["key"] = get_lookup_key();
     string tmptmp = (*a)["key"];
     if( now() + tolookup < _exittime ) {
+      //      cout << now() << ": Scheduling lookup to " << ip << " in " << tolookup 
+      //	   << " for " << (*a)["key"] << endl;
       P2PEvent *e = New P2PEvent(now() + tolookup, ip, "lookup", a);
       add_event(e);
     } else {
