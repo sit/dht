@@ -123,7 +123,7 @@ ChordFingerPNS::oracle_node_joined(IDMap n)
 	uint s_pos = upper_bound(ids.begin(), ids.end(), tmpf, Chord::IDMap::cmp) - ids.begin();
 	uint n_pos = find(ids.begin(),ids.end(),n) - ids.begin();
 	n_pos = n_pos + sz;
-	if (n_pos - s_pos <= _samples) {
+	if (_samples < 0 || (int)(n_pos - s_pos) <= _samples) {
 	  //choose the closer one
 	  Topology *t = Network::Instance()->gettopology();
 	  if (t->latency(me.ip, n.ip) < t->latency(me.ip, s.ip)) {
@@ -289,10 +289,10 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
 	  prevf = currf;
 	  prevfpred.ip = 0;
 	  //just ping this finger to see if it is alive
-	  record_stat(0, TYPE_PNS_UP);
+	  record_stat(TYPE_PNS_UP,0);
 	  ok = doRPC(currf.ip, &Chord::null_handler, (void *)NULL, (void *)NULL);
 	  if(ok) {
-	    record_stat(0, TYPE_PNS_UP);
+	    record_stat(TYPE_PNS_UP,0);
 	    loctable->add_node(currf);//update timestamp
 	    valid_finger++;//testing
 	    continue;
@@ -312,10 +312,10 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
 	    //get predecessor, coz new finger within the candidate range might show up
 	    get_predecessor_args gpa;
 	    get_predecessor_ret gpr;
-	    record_stat(0, TYPE_PNS_UP);
+	    record_stat(TYPE_PNS_UP,0);
 	    ok = doRPC(currf.ip, &Chord::get_predecessor_handler, &gpa, &gpr);
 	    if(ok) {
-	      record_stat(4, TYPE_PNS_UP);
+	      record_stat(TYPE_PNS_UP,1);
 	      loctable->add_node(currf);//update timestamp
 	      prevfpred = gpr.n;
 	      if (!ConsistentHash::between(finger, currf.id, gpr.n.id)) 
@@ -358,10 +358,10 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
 	    new_added_finger++; //testing
 	    assert(ConsistentHash::between(finger,finger+lap,min_f.id));
 	    //ping this node, coz it might have been dead
-	    record_stat(0,TYPE_FINGER_LOOKUP); 
+	    record_stat(TYPE_FINGER_LOOKUP,0); 
 	    ok = doRPC(min_f.ip, &Chord::null_handler, (void *)NULL, (void *)NULL);
 	    if (ok) {
-	      record_stat(0,TYPE_FINGER_LOOKUP); 
+	      record_stat(TYPE_FINGER_LOOKUP,0); 
 	      loctable->add_node(min_f);
 	      tmp = loctable->succ(finger);
 	      while (tmp.ip != min_f.ip) {
@@ -487,7 +487,7 @@ ChordFingerPNS::pns_next_recurs_handler(next_recurs_args *args, next_recurs_ret 
       tmp.tout = 0;
       args->path.push_back(tmp);
 
-      record_stat(4+1,args->type?1:0);
+      record_stat(args->type?1:0,1,1);
       bool r = doRPC(next.ip, &ChordFingerPNS::pns_next_recurs_handler, args, ret);
 
       if (!alive()) {
@@ -496,7 +496,7 @@ ChordFingerPNS::pns_next_recurs_handler(next_recurs_args *args, next_recurs_ret 
       }
 
       if (r) {
-	record_stat(4*ret->v.size(),args->type);
+	record_stat(args->type,ret->v.size());
 	loctable->add_node(next);
 	return;
       } else {

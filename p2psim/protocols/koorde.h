@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 [NAMES_GO_HERE]
+ * Copyright (c) 2003 [Frans Kaashoek]
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -56,7 +56,7 @@ public:
 
   bool stabilized(vector<ConsistentHash::CHID>);
   void join(Args*);
-  vector<Chord::IDMap> Koorde::find_successors(CHID key, uint m, uint all, uint type, uint *lookup_lat = NULL, IDMap *last = NULL);
+  vector<Chord::IDMap> Koorde::find_successors(CHID key, uint m, uint all, uint type, IDMap *lasthop = NULL, uint *lookup_lat = NULL);
   void initstate();
   void dump();
 

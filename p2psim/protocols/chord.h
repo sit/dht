@@ -28,7 +28,7 @@
 #include "p2psim/p2protocol.h"
 #include "consistenthash.h"
 
-#define CHORD_DEBUG
+//#define CHORD_DEBUG
 #define PKT_OVERHEAD 20
 
 #define TYPE_USER_LOOKUP 0
@@ -154,6 +154,7 @@ public:
     vector<IDMap> v;
     bool correct;
     uint finish_time;
+    IDMap lasthop;
   };
 
   struct lookup_args{
@@ -240,15 +241,15 @@ protected:
 
 
   virtual vector<IDMap> find_successors_recurs(CHID key, uint m, uint all,
-      uint type, uint *lookup_int = NULL);
+      uint type, IDMap *lasthop = NULL, uint *lookup_int = NULL);
   virtual vector<IDMap> find_successors(CHID key, uint m, uint all,
-      uint type, uint *lookup_int = NULL, IDMap *last = NULL);
+      uint type, IDMap *lasthop = NULL, uint *lookup_int = NULL);
 
   void fix_successor(void *x=NULL);
   void fix_predecessor();
   void fix_successor_list();
   void check_static_init();
-  void record_stat(uint bytes, uint type);
+  void record_stat(uint type, uint num_ids, uint num_else = 0);
   void record_lookupstat(uint num, uint type);
 
 private:
