@@ -463,7 +463,7 @@ Node::calculate_conncomp(void *)
 	(double)allp/(double)path->size(),(*path)[(u_int)(0.1*path->size())], 
 	(*path)[(u_int)(0.5*path->size())], 
 	(*path)[(u_int)(0.9*path->size())], 
-	(*path)[path->size()-1], failed/(failed+path->size()));
+	(*path)[path->size()-1], (float) (failed/(failed+path->size())));
 
     delete path;
     free(old);
