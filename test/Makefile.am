@@ -1,10 +1,15 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.13 2003/01/09 17:02:43 cates Exp $
+# $Id: Makefile.am,v 1.14 2003/01/10 03:54:22 sit Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
 MYLDADD = ../sfsrodb/libsfsrodb.a ../dhash/libdhash.a ../merkle/libmerkle.a \
           ../chord/libchord.a ../svc/libsvc.la $(DBLIB) $(LDADD)
+
+TESTS = test_merkle_tree \
+	test_merkle_syncer
+
+check_PROGRAMS = $(TESTS)
 
 #stats_merkle_tree_SOURCES = stats_merkle_tree.C
 #stats_merkle_tree_LDADD = $(MYLDADD)
@@ -16,7 +21,7 @@ test_merkle_syncer_SOURCES = test_merkle_syncer.C
 test_merkle_syncer_LDADD = $(MYLDADD)
 
 bin_PROGRAMS = block testslave
-noinst_PROGRAMS = example1 example2 test_merkle_tree  test_merkle_syncer #stats_merkle_tree
+noinst_PROGRAMS = example1 example2 #stats_merkle_tree
 noinst_LIBRARIES = libdtest.a
 
 libdtest_a_SOURCES = testmaster.C test.C dhashclient_test.C
