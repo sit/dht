@@ -732,11 +732,11 @@ dhash_impl::route_upcall (int procno,void *args, cbupcalldone_t cb)
 
     // we don't have the block, but if we just joined,
     // it should be at one of our successors.
-    vec<chordID> succs = host_node->succs ();
+    vec<chord_node> succs = host_node->succs ();
     arg->nodelist.setsize (succs.size ());
     for (u_int i = 0; i < succs.size (); i++) {
-      arg->nodelist[i].x = succs[i];
-      arg->nodelist[i].r = host_node->locations->getaddress (succs[i]);
+      arg->nodelist[i].x = succs[i].x;
+      arg->nodelist[i].r = succs[i].r;
     }
 
     host_node->locations->cacheloc (farg->from.x, farg->from.r,
@@ -994,23 +994,10 @@ dhash_impl::storesvc_cb(svccb *sbp,
 void
 dhash_impl::update_replica_list () 
 {
-#if 1
-  // derive the replicas from the successor list 
-  replicas.clear ();
-  vec<chordID> succs = host_node->succs ();
-  for (u_int i = 0; i < succs.size () && i < nreplica; i++) {
-    chord_node n;
-    n.x = -1; // XXX hacky
-    host_node->locations->get_node (succs[i], &n);
-    assert (n.x != -1); // node should be in location table
-    replicas.push_back (n);
-  }
-#else
- replicas = host_node->succs ();
+  replicas = host_node->succs ();
   // trim down successors to just the replicas
   while (replicas.size () > nreplica)
     replicas.pop_back ();
-#endif
 }
 
 

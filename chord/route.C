@@ -515,7 +515,8 @@ route_debruijn::make_hop_cb (ptr<bool> del, chord_debruijnres *res,
     if (stop) done = true;
     cb (done);
   } else {
-    warn("WTF");
+    warnx << "Unexpected status: " << res->status << "\n";
+    assert (0);
   }
   delete res;
 }

@@ -44,16 +44,20 @@ succ_list::operator[] (unsigned int n)
   return ret;
 }
 
-vec<chordID>
+vec<chord_node>
 succ_list::succs ()
 {
-  vec<chordID> ret;
+  vec<chord_node> ret;
   chordID cur = succ ();
-  ret.push_back (cur);
+  chord_node n;
+
+  locations->get_node (cur, &n);
+  ret.push_back (n);
 
   for (u_int i = 1; i < num_succ (); i++) {
     cur = locations->closestsuccloc (cur + 1);
-    ret.push_back (cur);
+    locations->get_node (cur, &n);
+    ret.push_back (n);
   }
   return ret;
 }

@@ -3,7 +3,7 @@
 
 #include "stabilize.h"
 
-#define NPRED    10 //2*10     // 2 * log of # vnodes
+#define NPRED    16 //2*10     // 2 * log of # vnodes
 
 /**
  * This class is analogous to the successor list.
@@ -44,7 +44,7 @@ class pred_list : public stabilizable {
   chordID pred ();
   chordID operator[] (unsigned int n);
   
-  vec<chordID> preds ();
+  vec<chord_node> preds ();
 
   void update_pred (const chordID &p, const net_address &r);
   

@@ -37,7 +37,7 @@ class succ_list : public fingerlike {
   void stabilize_succ ();
   void stabilize_succlist ();
   
-  vec<chordID> succs ();
+  vec<chord_node> succs ();
 
   // Stabilizable methods
   bool backoff_stabilizing () { return nout_backoff > 0; }

@@ -119,9 +119,9 @@ route_secchord::first_hop (cbhop_t cbi, bool ucs)
   cb = cbi;
 
   clear_nexthops ();
-  vec<chordID> sl = v->succs ();
+  vec<chord_node> sl = v->succs ();
   for (u_int i = 0; i < sl.size (); i++) {
-    node *n = New node (sl[i], v->locations->getaddress (sl[i]));
+    node *n = New node (sl[i].x, sl[i].r);
     nexthops_.insert (n); // disregard return val; no dupes in first hop
     warnx << v->my_ID () << ": secchord::first_hop: inserting " << n->n_ << "\n";
   }

@@ -195,7 +195,8 @@ class vnode_impl : public vnode {
   void stats (void) const;
   void print (void) const;
   void stop (void);
-  vec<chordID> succs () { return successors->succs (); };
+  vec<chord_node> succs () { return successors->succs (); };
+  vec<chord_node> preds () { return predecessors->preds (); };
   void doRPC_reply (svccb *sbp, void *res, const rpc_program &prog, int procno);
 
   chordID lookup_closestpred (const chordID &x, vec<chordID> f);

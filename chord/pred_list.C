@@ -1,5 +1,6 @@
 #include "chord.h"
 #include "pred_list.h"
+#include "chord_util.h"
 #include "location.h"
 
 pred_list::pred_list (ptr<vnode> v,
@@ -24,6 +25,27 @@ pred_list::pred ()
 {
   return locations->closestpredloc (myID);
 }
+
+vec<chord_node>
+pred_list::preds ()
+{
+  vec<chord_node> ret;
+  chordID cur = pred ();
+  chordID start = cur;
+  chord_node n;
+
+  locations->get_node (cur, &n);
+  ret.push_back (n);
+
+  cur = locations->closestpredloc (decID (cur));
+  for (u_int i = 1; i < NPRED && cur != start; i++) {
+    locations->get_node (cur, &n);
+    ret.push_back (n);
+    cur = locations->closestpredloc (decID (cur));
+  }
+  return ret;
+}
+  
 
 void
 pred_list::update_pred (const chordID &p, const net_address &r)
@@ -84,12 +106,17 @@ pred_list::stabilize_predlist ()
 {
   u_long n = locations->usablenodes ();
   chordID preddist (1);
+  // XXX should this depend on NPRED?
   preddist = (preddist << NBIT) * log2 (n) / n;
-  warnx << myID << ": stabilizing pred list with preddist " << preddist
-	<< " for estimated " << n << " nodes.\n";
-  
+  if (preddist == 0) {
+    stable_predlist = true;
+    return;
+  }
+  // warnx << myID << ": stabilizing pred list with preddist " << preddist
+  //	<< " for estimated " << n << " nodes.\n";
+
   backkey_ = diff (preddist, myID);
-  warnx << myID << ": searching for successor to " << backkey_ << ".\n";
+  // warnx << myID << ": searching for successor to " << backkey_ << ".\n";
 
   nout_backoff++;
   v_->find_successor (backkey_,
@@ -113,7 +140,11 @@ pred_list::stabilize_predlist_gotsucclist (vec<chord_node> sl, chordstat s)
       continue;
     stable_predlist = false;
     warnx << myID << ": stabilize_predlist adding " << sl[i].x << "\n";
-    locations->insert (sl[i].x, sl[i].r);
+    // XXX should ping these nodes?
+    bool ok = locations->insert (sl[i].x, sl[i].r);
+    const char *stat = ok ? " bad " : " new ";
+    warnx << myID << ": stabilize_predlist: received " << stat << "predecessor "
+	  << sl[i] << ".\n";
   }
 }
 
@@ -127,8 +158,7 @@ pred_list::do_continuous ()
 void
 pred_list::do_backoff ()
 {
-  // XXX disabled for now
-  // stabilize_predlist ();
+  stabilize_predlist ();
   return;
 }
 
@@ -136,8 +166,7 @@ bool
 pred_list::isstable ()
 {
   // Won't be true until update_pred has been called once.
-  return oldpred_ == pred ();
-  //  return stable_predlist;
+  return oldpred_ == pred () && stable_predlist;
 }
 
 void

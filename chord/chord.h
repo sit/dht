@@ -103,7 +103,8 @@ class vnode : public virtual refcount {
   virtual void stats (void) const = 0;
   virtual void print (void) const = 0;
   virtual void stop (void) = 0;
-  virtual vec<chordID> succs () = 0;
+  virtual vec<chord_node> succs () = 0;
+  virtual vec<chord_node> preds () = 0;
   virtual void doRPC_reply (svccb *sbp, void *res, 
 			    const rpc_program &prog, int procno) = 0;
 
