@@ -345,8 +345,11 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
       
       //find the program
       const rpc_program *prog = get_program (arg->progno);
-      if (!prog) 
-	fatal << "bad prog: " << arg->progno << "\n";
+      if (!prog) {
+	warn << "bad program: " << arg->progno << "\n";
+	sbp->replyref (rpcstat (DORPC_MARSHALLERR));
+	return;
+      }
       
       //unmarshall the args
       char *arg_base = (char *)(arg->args.base ());
