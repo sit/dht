@@ -22,7 +22,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-# $Id: run-simulations.pl,v 1.19 2004/01/27 21:57:59 strib Exp $
+# $Id: run-simulations.pl,v 1.20 2004/01/27 22:30:50 thomer Exp $
 
 use strict;
 use Getopt::Long;
@@ -39,6 +39,7 @@ my $argsfile = "";
 my $logdir = "/tmp";
 my $observer = "";
 my $seed = "";
+my $nice = 0;
 my $randomize;
 my $withobserver = 0;
 
@@ -65,6 +66,7 @@ run-simulations [options]
     --randomize <num>         Randomizes the order of param combos.  The number
 	                        supplied specifies how many times to iterate.
     --observer                Use an observer
+    --nice <n>                run p2psim nice
     --command <cmd>           p2psim or some other binary?
 
 EOUsage
@@ -80,8 +82,8 @@ my %options;
 {;}
 &GetOptions( \%options, "help|?", "topology=s", "lookupmean=s", "protocol=s", 
 	     "lifemean=s", "deathmean=s", "exittime=s", "churnfile=s", 
-	     "argsfile=s", "logdir=s", "seed=s", "randomize=i", "observer",
-	     "stattime=s", "command=s") 
+	     "argsfile=s", "logdir=s", "seed=s", "nice=i", "randomize=i",
+             "observer", "stattime=s", "command=s") 
     or &usage;
 
 if( $options{"help"} ) {
@@ -162,6 +164,9 @@ if( defined $options{"seed"} ) {
     $seed = $options{"seed"};
     srand( $seed * $$ ); 
 }
+if( defined $options{"nice"} ) {
+    $nice = $options{"nice"};
+}
 
 if ( defined $options{"stattime"}) {
     $stattime = $options{"stattime"};
@@ -177,10 +182,14 @@ if( $script_dir !~ m%^/% ) {	# relative pathname
 } 
 $script_dir =~ s%/(./)?[^/]*$%%;	# strip off script name
 my $p2psim_cmd;
+if ($nice) {
+  $p2psim_cmd = "nice -n $nice ";
+}
+
 if (defined $options{"command"}) {
-  $p2psim_cmd = "$script_dir/../p2psim/$options{\"command\"}";
+  $p2psim_cmd .= "$script_dir/../p2psim/$options{\"command\"}";
 }else{
-  $p2psim_cmd = "$script_dir/../p2psim/p2psim";
+  $p2psim_cmd .= "$script_dir/../p2psim/p2psim";
 }
 
 #if( $seed ne "" ) {
