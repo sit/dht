@@ -62,6 +62,7 @@ Kademlia::Kademlia(Node *n, Args a)
 }
 
 Kademlia::NodeID Kademlia::closer::n = 0;
+Kademlia::NodeID Kademlia::IDcloser::n = 0;
 // }}}
 // {{{ Kademlia::join
 void
@@ -105,7 +106,8 @@ Kademlia::join(Args *args)
   // of prefix we have in common
   k_collect_closest getsuccessor(_id, 1);
   _root->traverse(&getsuccessor, this);
-  k_nodeinfo *ki = *getsuccessor.results.begin();
+  k_nodeinfo *ki = flyweight[*getsuccessor.results.begin()];
+  assert(ki);
 
   unsigned cpl = common_prefix(_id, ki->id);
   KDEBUG(2) << "join: successor is " << printbits(ki->id) << ", cpl = " << cpl << endl;
@@ -226,10 +228,12 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
   }
 
   // keep a map of which nodes we already asked
-  for(set<k_nodeinfo*>::const_iterator i = successors.results.begin(); i != successors.results.end(); ++i) {
-    KDEBUG(2) << "do_lookup: 2. putting in queue task " << printbits((*i)->id) << ", ip = " << (*i)->ip << endl;
-    asked[(*i)->id] = false;
-    tasks.push_back((*i)->id);
+  for(set<NodeID>::const_iterator i = successors.results.begin(); i != successors.results.end(); ++i) {
+    k_nodeinfo *ki = flyweight[*i];
+    assert(ki);
+    KDEBUG(2) << "do_lookup: 2. putting in queue task " << printbits(ki->id) << ", ip = " << ki->ip << endl;
+    asked[ki->id] = false;
+    tasks.push_back(ki->id);
   }
 
   // issue new RPCs
@@ -437,11 +441,11 @@ Kademlia::find_node(lookup_args *largs, lookup_result *lresult)
     // fill result vector
     k_collect_closest successors(largs->key);
     _root->traverse(&successors, this);
-    for(set<k_nodeinfo*, Kademlia::closer>::const_iterator i = successors.results.begin(); i != successors.results.end(); ++i) {
-      k_nodeinfo *p = New k_nodeinfo(*i);
+    for(set<NodeID, Kademlia::closer>::const_iterator i = successors.results.begin(); i != successors.results.end(); ++i) {
+      k_nodeinfo *p = New k_nodeinfo(flyweight[*i]);
       assert(p);
-      char ptr[32]; sprintf(ptr, "%p", (*i));
-      KDEBUG(3) << "find_node: adding, id = " << Kademlia::printbits((*i)->id) << ", ptr = " << ptr << " to reply" << endl;
+      char ptr[32]; sprintf(ptr, "%p", p);
+      KDEBUG(3) << "find_node: adding, id = " << Kademlia::printbits(*i) << ", ptr = " << ptr << " to reply" << endl;
       lresult->results.insert(p);
     }
   }
@@ -1235,7 +1239,11 @@ k_stabilizer::execute(k_bucket_leaf *k, string prefix, unsigned depth)
     }
     
     for(vector<Kademlia::NodeID>::const_iterator i = idvec.begin(); i != idvec.end(); ++i) {
-      assert(mykademlia->flyweight.find(*i) != mykademlia->flyweight.end());
+      // it may have been erased in the meantime.
+      if(mykademlia->flyweight.find(*i) != mykademlia->flyweight.end())
+        continue;
+
+      // we may not need to refresh it.
       Time lastts = mykademlia->flyweight[(*i)]->lastts;
       if(now() - lastts < Kademlia::refresh_rate)
         continue;
@@ -1243,9 +1251,11 @@ k_stabilizer::execute(k_bucket_leaf *k, string prefix, unsigned depth)
       // find the closest node to the ID we're looking for
       k_collect_closest getsuccessor(*i, 1);
       mykademlia->root()->traverse(&getsuccessor, mykademlia);
-      k_nodeinfo *ki = *getsuccessor.results.begin();
+      Kademlia::NodeID succ = *getsuccessor.results.begin();
+      assert(mykademlia->flyweight.find(succ) != mykademlia->flyweight.end());
+      k_nodeinfo *ki = mykademlia->flyweight[succ];
 
-      KDEBUG(1) << "k_stabilizer: threadid = " << threadid() << " stabilize: lookup for " << Kademlia::printbits(*i) << ", on " << Kademlia::printbits(ki->id) << endl;
+      KDEBUG(1) << "k_stabilizer: threadid = " << threadid() << " stabilize: lookup for " << Kademlia::printbits(*i) << ", on " << Kademlia::printbits(succ) << endl;
       // will add it to the tree
       mykademlia->do_lookup_wrapper(ki, *i);
       // in the mean time we may have crash
@@ -1267,9 +1277,13 @@ k_stabilizer::execute(k_bucket_leaf *k, string prefix, unsigned depth)
 
   k_collect_closest getsuccessor(random_key);
   mykademlia->root()->traverse(&getsuccessor, mykademlia);
-  for(k_collect_closest::resultset_t::const_iterator i = getsuccessor.results.begin(); i != getsuccessor.results.end(); ++i) {
-    KDEBUG(1) << "k_stabilizer: random lookup for " << Kademlia::printbits(random_key) << ", sending to " << Kademlia::printbits((*i)->id) << endl;
-    mykademlia->do_lookup_wrapper((*i), random_key);
+  for(set<Kademlia::NodeID>::const_iterator i = getsuccessor.results.begin(); i != getsuccessor.results.end(); ++i) {
+    if(mykademlia->flyweight.find(*i) == mykademlia->flyweight.end())
+      continue;
+
+    k_nodeinfo *ki = mykademlia->flyweight[*i];
+    KDEBUG(1) << "k_stabilizer: random lookup for " << Kademlia::printbits(random_key) << ", sending to " << Kademlia::printbits(*i) << endl;
+    mykademlia->do_lookup_wrapper(ki, random_key);
     if(!mykademlia->node()->alive())
       return;
   }
@@ -1420,7 +1434,7 @@ k_check::execute(k_bucket_leaf *k, string prefix, unsigned depth)
 k_collect_closest::k_collect_closest(Kademlia::NodeID n, unsigned best) :
   k_traverser("k_collect_closest"), _node(n) , _best(best)
 {
-  Kademlia::closer::n = n;
+  Kademlia::IDcloser::n = n;
   _lowest = (Kademlia::NodeID) -1;
   results.clear();
   checkrep();
@@ -1446,16 +1460,16 @@ k_collect_closest::execute(k_bucket_leaf *k, string prefix, unsigned depth)
     if(results.size() >= _best && Kademlia::distance((*i)->id, _node) >= _lowest)
       continue;
     KDEBUG(5) << "k_collect_closest::execute: insert = " << Kademlia::printbits((*i)->id) << " in resultset" << endl;
-    results.insert(*i);
+    results.insert((*i)->id);
   }
 
   KDEBUG(5) << "k_collect_closest::execute: resultset.size() = " << results.size() << endl;
 
   // prune the resultset
   while(results.size() > _best) {
-    k_nodeinfo *ki = *results.rbegin();
-    KDEBUG(5) << "k_collect_closest::execute: erase = " << Kademlia::printbits(ki->id) << " from resultset" << endl;
-    results.erase(ki);
+    Kademlia::NodeID n = *results.rbegin();
+    KDEBUG(5) << "k_collect_closest::execute: erase = " << Kademlia::printbits(n) << " from resultset" << endl;
+    results.erase(n);
   }
 
   if(!results.size()) {
@@ -1463,9 +1477,9 @@ k_collect_closest::execute(k_bucket_leaf *k, string prefix, unsigned depth)
     return;
   }
 
-  k_nodeinfo *last = *results.rbegin();
+  Kademlia::NodeID last = *results.rbegin();
   assert(last);
-  _lowest = Kademlia::distance(last->id, _node);
+  _lowest = Kademlia::distance(last, _node);
 
   checkrep();
 }
@@ -1482,9 +1496,9 @@ k_collect_closest::checkrep()
   if(results.size() == 0)
     assert(_lowest == (Kademlia::NodeID) -1);
   else {
-    k_nodeinfo *last = *results.rbegin();
+    Kademlia::NodeID last = *results.rbegin();
     assert(last);
-    assert(_lowest == Kademlia::distance(last->id, _node));
+    assert(_lowest == Kademlia::distance(last, _node));
   }
 }
 // }}}

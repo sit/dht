@@ -85,6 +85,21 @@ public:
     }
   };
 
+
+  class IDcloser { public:
+    bool operator()(const NodeID &n1, const NodeID &n2) const {
+      if(n1 == n2);
+        return false;
+      Kademlia::NodeID dist1 = Kademlia::distance(n1, n);
+      Kademlia::NodeID dist2 = Kademlia::distance(n2, n);
+      if(dist1 == dist2)
+        return n1 < n2;
+      return dist1 < dist2;
+    }
+    static NodeID n;
+  };
+
+
   class closer { public:
     bool operator()(const k_nodeinfo* p1, const k_nodeinfo* p2) const {
       if(p1->id == p2->id)
@@ -97,6 +112,7 @@ public:
     }
     static NodeID n;
   };
+
 
   class idless { public:
     bool operator()(const k_nodeinfo* p1, const k_nodeinfo* p2) const {
@@ -290,12 +306,11 @@ private:
 // }}}
 // {{{ class k_collect_closest
 class k_collect_closest : public k_traverser { public:
-  typedef set<k_nodeinfo*, Kademlia::closer> resultset_t;
   k_collect_closest(Kademlia::NodeID, unsigned best = Kademlia::k);
   virtual ~k_collect_closest() {}
   virtual void execute(k_bucket_leaf *, string, unsigned);
 
-  resultset_t results;
+  set<Kademlia::NodeID, Kademlia::IDcloser> results;
 
 private:
   inline void checkrep();
