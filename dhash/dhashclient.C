@@ -98,10 +98,12 @@ dhashclient::append (chordID to, const char *buf, size_t buflen,
  * key = provided by user or hash of data depending on type of insert
  */
 void
-dhashclient::insert_worker_nopk (bigint key, const char *buf,
-                                 size_t buflen, cbinsertgw_t cb, 
-                                 dhash_ctype t, ptr<option_block> options)
+dhashclient::insert (bigint key, const char *buf,
+                     size_t buflen, cbinsertgw_t cb,
+		     ptr<option_block> options,
+		     dhash_ctype t)
 {
+  assert (t == DHASH_CONTENTHASH || t == DHASH_NOAUTH);
   xdrsuio x;
   int size = buflen + 3 & ~3;
   char *m_buf;
@@ -118,21 +120,11 @@ dhashclient::insert_worker_nopk (bigint key, const char *buf,
 }
 
 void
-dhashclient::insert (bigint key, const char *buf,
-                     size_t buflen, cbinsertgw_t cb,
-		     ptr<option_block> options,
-		     dhash_ctype c)
-{
-  assert (c == DHASH_CONTENTHASH || c == DHASH_NOAUTH);
-  insert_worker_nopk (key, buf, buflen, cb, c, options);
-}
-
-void
 dhashclient::insert (const char *buf, size_t buflen, cbinsertgw_t cb,
                      ptr<option_block> options)
 {
   bigint key = compute_hash (buf, buflen);
-  insert (key, buf, buflen, cb, options);
+  insert (key, buf, buflen, cb, options, DHASH_CONTENTHASH);
 }
 
 /* 
