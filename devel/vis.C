@@ -326,7 +326,9 @@ update_debruijn (f_node *nu)
   ptr<chord_debruijnarg> arg = New refcounted<chord_debruijnarg> ();
   arg->v = n;
   arg->x = n + 1;
-  arg->d = n;
+  arg->d = n + 1;
+  arg->upcall_prog = 0;
+  
   chord_debruijnres *nres = New chord_debruijnres (CHORD_OK);
   doRPC (nu, CHORDPROC_DEBRUIJN, arg, nres, 
 	 wrap (&update_debruijn_got_debruijn, n, nres));
