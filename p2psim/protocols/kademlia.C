@@ -95,7 +95,7 @@ Kademlia::join(Args *args)
   // get our ``successor'' and compute length
   // of prefix we have in common
   k_collect_closest getsuccessor(_id, 1);
-  _root->traverse(&getsuccessor);
+  _root->traverse(&getsuccessor, this);
   k_nodeinfo *ki = *getsuccessor.results.begin();
 
   unsigned cpl = common_prefix(_id, ki->id);
@@ -132,6 +132,8 @@ Kademlia::crash(Args *args)
   node()->crash();
   delete _me;
   delete _root;
+  for(hash_map<NodeID, k_nodeinfo*>::iterator i = flyweight.begin(); i != flyweight.end(); ++i)
+    delete (*i).second;
   flyweight.clear();
   joined--;
 
@@ -186,13 +188,13 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
 
   // get a list of nodes sorted on distance to largs->key
   k_collect_closest successors(largs->key);
-  _root->traverse(&successors);
+  _root->traverse(&successors, this);
 
   // we can't do anything but return ourselves
   if(!successors.results.size()) {
     KDEBUG(2) << "do_lookup: my tree is empty; returning myself." << endl;
     KDEBUG(2) << "_me = " << Kademlia::printbits(_me->id) << endl;
-    results->insert(_me);
+    results->insert(New k_nodeinfo(_me));
     goto done;
   }
 
@@ -331,10 +333,10 @@ done:
   KDEBUG(2) << "do_lookup, thread " << threadid() << ": done, was working for " << Kademlia::printbits(largs->id) << ", looking for " << Kademlia::printbits(largs->key) << endl;
 
   // this is the final answer
-  // XXX: no longer sorting on close, but now on timestamp
+  // XXX: no longer sorting on close, but now on timestamp.  is that correct?
   for(set<k_nodeinfo*, closer>::const_iterator i=results->begin(); i != results->end(); ++i) {
     (*i)->checkrep();
-    lresult->results.insert(*i);
+    lresult->results.insert(New k_nodeinfo(*i));
   }
 
   unsigned k = 0;
@@ -405,7 +407,7 @@ Kademlia::find_node(lookup_args *largs, lookup_result *lresult)
   } else {
     // fill result vector
     k_collect_closest successors(largs->key);
-    _root->traverse(&successors);
+    _root->traverse(&successors, this);
     for(set<k_nodeinfo*, Kademlia::closer>::const_iterator i = successors.results.begin(); i != successors.results.end(); ++i)
       lresult->results.insert(*i);
   }
@@ -437,7 +439,7 @@ Kademlia::stabilize()
   KDEBUG(1) << "stabilize" << endl;
 
   k_stabilizer stab;
-  _root->traverse(&stab);
+  _root->traverse(&stab, this);
 
   KDEBUG(1) << "notifyObservers" << endl;
   notifyObservers();
@@ -455,7 +457,7 @@ Kademlia::stabilized(vector<NodeID> *lid)
       copylid.push_back(*i);
 
   k_stabilized stab(&copylid);
-  _root->traverse(&stab);
+  _root->traverse(&stab, this);
   return stab.stabilized();
 }
 
@@ -496,12 +498,8 @@ Kademlia::touch(NodeID id)
   assert(flyweight.find(id) != flyweight.end());
   KDEBUG(1) << "Kademlia::touch " << Kademlia::printbits(id) << endl;
 
-
-  // k_dumper dump;
-  // _root->traverse(&dump);
-
   k_finder find(id);
-  _root->traverse(&find);
+  _root->traverse(&find, this);
   assert(find.found() == 1);
 
   if(!flyweight[id]->firstts)
@@ -647,7 +645,6 @@ k_nodes::insert(Kademlia::NodeID n)
 void
 k_nodes::erase(Kademlia::NodeID n)
 {
-  cout << "erase in" << endl;
   checkrep();
   assert(n);
   assert(_parent->kademlia()->flyweight.find(n) != _parent->kademlia()->flyweight.end());
@@ -660,7 +657,6 @@ k_nodes::erase(Kademlia::NodeID n)
   _nodes_by_id.erase(ninfo);
 
   checkrep();
-  cout << "erase out" << endl;
 }
 // }}}
 // {{{ k_nodes::contains
@@ -767,6 +763,13 @@ k_nodes::checkrep(bool rangecheck) const
 k_nodeinfo::k_nodeinfo(NodeID id, IPAddress ip) : id(id), ip(ip)
 {
   firstts = lastts = 0;
+  checkrep();
+}
+// }}}
+// {{{ k_nodeinfo::k_nodeinfo
+k_nodeinfo::k_nodeinfo(k_nodeinfo *k) : id(k->id), ip(k->ip), firstts(k->firstts), lastts(k->lastts)
+{
+  checkrep();
 }
 // }}}
 // {{{ k_nodeinfo::checkrep
@@ -834,6 +837,8 @@ k_bucket_leaf::k_bucket_leaf(Kademlia *k) : k_bucket(0, true, k)
 // {{{ k_bucket_leaf::~k_bucket_leaf
 k_bucket_leaf::~k_bucket_leaf()
 {
+  delete nodes;
+  delete replacement_cache;
 }
 // }}}
 // {{{ k_bucket_leaf::divide
@@ -933,7 +938,7 @@ k_bucket::~k_bucket()
 // }}}
 // {{{ k_bucket::traverse
 void
-k_bucket::traverse(k_traverser *traverser, string prefix, unsigned depth)
+k_bucket::traverse(k_traverser *traverser, Kademlia *k, string prefix, unsigned depth)
 {
   checkrep();
 
@@ -943,8 +948,12 @@ k_bucket::traverse(k_traverser *traverser, string prefix, unsigned depth)
     KDEBUG(1) << "k_nodes::traverser for " << traverser->type() << endl;
 
   if(!leaf) {
-    ((k_bucket_node*) this)->child[0]->traverse(traverser, prefix + "0", depth+1);
-    ((k_bucket_node*) this)->child[1]->traverse(traverser, prefix + "1", depth+1);
+    ((k_bucket_node*) this)->child[0]->traverse(traverser, k, prefix + "0", depth+1);
+    if(!k->node()->alive())
+      return;
+    ((k_bucket_node*) this)->child[1]->traverse(traverser, k, prefix + "1", depth+1);
+    if(!k->node()->alive())
+      return;
     checkrep();
     return;
   }
@@ -1111,14 +1120,14 @@ k_stabilizer::execute(k_bucket_leaf *k, string prefix, unsigned depth)
 
       // find the closest node to the ID we're looking for
       k_collect_closest getsuccessor(*i, 1);
-      mykademlia->root()->traverse(&getsuccessor);
+      mykademlia->root()->traverse(&getsuccessor, mykademlia);
       k_nodeinfo *ki = *getsuccessor.results.begin();
 
       KDEBUG(1) << "threadid = " << threadid() << " stabilize: lookup for " << Kademlia::printbits(*i) << ", on " << Kademlia::printbits(ki->id) << endl;
       // will add it to the tree
       mykademlia->do_lookup_wrapper(ki, *i);
       // in the mean time we may have crash
-      if(mykademlia->node()->alive())
+      if(!mykademlia->node()->alive())
         return;
       KDEBUG(1) << "k_stabilizer: lookup for " << Kademlia::printbits(*i) << " returned" << endl;
     }
@@ -1135,11 +1144,11 @@ k_stabilizer::execute(k_bucket_leaf *k, string prefix, unsigned depth)
   Kademlia::NodeID random_key = _id & mask;
 
   k_collect_closest getsuccessor(random_key);
-  mykademlia->root()->traverse(&getsuccessor);
+  mykademlia->root()->traverse(&getsuccessor, mykademlia);
   for(k_collect_closest::resultset_t::const_iterator i = getsuccessor.results.begin(); i != getsuccessor.results.end(); ++i) {
     KDEBUG(1) << "k_stabilizer: random lookup for " << Kademlia::printbits(random_key) << ", sending to " << Kademlia::printbits((*i)->id) << endl;
     mykademlia->do_lookup_wrapper((*i), random_key);
-    if(mykademlia->node()->alive())
+    if(!mykademlia->node()->alive())
       return;
   }
 }

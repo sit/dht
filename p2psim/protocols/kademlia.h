@@ -37,6 +37,7 @@ class k_nodeinfo {
 public:
   typedef ConsistentHash::CHID NodeID;
   k_nodeinfo(NodeID, IPAddress);
+  k_nodeinfo(k_nodeinfo*);
   NodeID id;
   IPAddress ip;
   Time firstts; // when we saw it first
@@ -210,7 +211,7 @@ public:
   virtual ~k_bucket();
 
   Kademlia *kademlia()  { return _kademlia; }
-  void traverse(k_traverser*, string = "", unsigned = 0);
+  void traverse(k_traverser*, Kademlia*, string = "", unsigned = 0);
   void insert(Kademlia::NodeID, bool = false, string = "", unsigned = 0);
   void erase(Kademlia::NodeID, string = "", unsigned = 0);
   virtual void checkrep() const;
