@@ -235,7 +235,6 @@ bool Chord::failure_detect(IDMap dst, void (BT::* fn)(AT *, RT *), AT *args, RT 
     uint type, uint num_args_id, uint num_args_else, int num_retry)
 {
   bool r;
-  Topology *t = Network::Instance()->gettopology();
   Time retry_to = TIMEOUT(me.ip,dst.ip);
   int checks;
   //checks = loctable->add_check(dst,0);
@@ -393,7 +392,6 @@ Chord::find_successors(CHID key, uint m, uint type, IDMap *lasthop, lookup_args 
   hop_info h;
   vector<IDMap> results;
   uint outstanding, alertoutstanding;
-  Topology *t = Network::Instance()->gettopology();
 
   h.from = me;
   h.to = me;
@@ -744,7 +742,6 @@ Chord::find_successors_recurs(CHID key, uint m, uint type, IDMap *lasthop, looku
 
   if (!alive()) return fr.v;
 
-  Topology *t = Network::Instance()->gettopology();
 #ifdef CHORD_DEBUG
   printf("%s find_successors_recurs %qx result %d,%d route: ",ts(), key, m,fr.v.size());
 #endif
@@ -997,7 +994,6 @@ Chord::null_handler (void *args, IDMap *ret)
 void
 Chord::alert_delete(alert_args *aa)
 {
-  Topology *t = Network::Instance()->gettopology();
   if (aa->dst != me.ip) 
     record_stat(TYPE_MISC,1);
   doRPC(aa->dst, &Chord::alert_handler, aa, (void *)NULL, TIMEOUT(me.ip,aa->dst));
@@ -1532,8 +1528,9 @@ Chord::fix_successor(void *x)
       }
       return;
     }
-
+#ifdef CHORD_DEBUG
     Time before = now();
+#endif
 
     ok = failure_detect(succ1,&Chord::get_predecessor_handler, &gpa, &gpr, TYPE_FIXSUCC_UP,0);
     if (ok) record_stat(TYPE_FIXSUCC_UP,2);
