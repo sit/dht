@@ -78,7 +78,6 @@ class dhash_impl : public dhash {
   u_int nreplica;
   int kc_delay;
   int rc_delay;
-  int ss_mode;
   int pk_partial_cookie;
   
   ptr<dbfe> db;
@@ -191,7 +190,7 @@ class dhash_impl : public dhash {
   long rpc_answered;
 
  public:
-  dhash_impl (str dbname, u_int nreplica = 0, int ss_mode = 0);
+  dhash_impl (str dbname, u_int nreplica = 0);
   ~dhash_impl ();
 
   void replica_maintenance_timer (u_int index);

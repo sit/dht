@@ -46,7 +46,6 @@ typedef int cb_ID;
 class chord;
 class vnode;
 
-class fingerlike;
 class route_factory;
 class chord;
 class location;
@@ -55,6 +54,7 @@ class rpc_manager;
 struct user_args;
 
 typedef vec<ptr<location> > route;
+class route_iterator;
 
 typedef callback<void,ptr<vnode>,chordstat>::ref cbjoin_t;
 typedef callback<void,chord_node,chordstat>::ref cbchordID_t;
@@ -65,7 +65,7 @@ typedef callback<void,chordstat>::ptr cbping_t;
 typedef callback<void, bool>::ref cbupcalldone_t;
 typedef callback<void, int, void *, cbupcalldone_t>::ref cbupcall_t; 
 
-extern int logbase;
+typedef callback<ref<vnode>, ref<chord>, ref<rpc_manager>, ref<location> >::ref vnode_producer_t;
 
 struct user_args {
   //info about the RPC
@@ -107,12 +107,9 @@ class vnode : public virtual refcount {
   ptr<locationtable> locations;
 
   static ref<vnode> produce_vnode
-    (ptr<locationtable> _locations,
-     ptr<rpc_manager> _rpcm,
-     ptr<fingerlike> stab, 
-     ptr<route_factory> f, ptr<chord> _chordnode, 
-     chordID _myID, int _vnode,
-     int lookup_mode);
+    (ref<chord> _chordnode, 
+     ref<rpc_manager> _rpcm,
+     ref<location> _l);
 
   virtual ~vnode (void) = 0;
 
@@ -121,7 +118,16 @@ class vnode : public virtual refcount {
   virtual ptr<location> my_pred () const = 0;
   virtual ptr<location> my_succ () const = 0;
 
-  virtual ptr<route_factory> get_factory () = 0;
+  virtual ptr<route_iterator> produce_iterator (chordID xi) = 0;
+  virtual ptr<route_iterator> produce_iterator (chordID xi,
+						const rpc_program &uc_prog,
+						int uc_procno,
+						ptr<void> uc_args) = 0;
+  virtual route_iterator *produce_iterator_ptr (chordID xi) = 0;
+  virtual route_iterator *produce_iterator_ptr (chordID xi,
+						const rpc_program &uc_prog,
+						int uc_procno,
+						ptr<void> uc_args) = 0;
 
   // The API
   virtual void stabilize (void) = 0;
@@ -129,7 +135,6 @@ class vnode : public virtual refcount {
   virtual void get_successor (ptr<location> n, cbchordID_t cb) = 0;
   virtual void get_predecessor (ptr<location> n, cbchordID_t cb) = 0;
   virtual void get_succlist (ptr<location> n, cbchordIDlist_t cb) = 0;
-  virtual void get_fingers (ptr<location> n, cbchordIDlist_t cb) = 0;
   virtual void notify (ptr<location> n, chordID &x) = 0;
   virtual void alert (ptr<location> n, chordID &x) = 0;
   virtual void ping (ptr<location> n, cbping_t cb) = 0;
@@ -148,17 +153,14 @@ class vnode : public virtual refcount {
 
   virtual void resendRPC (long seqno) = 0;
   virtual void fill_user_args (user_args *a) = 0;
-
+  
   virtual void stats (void) const = 0;
   virtual void print (strbuf &outbuf) const = 0;
   virtual void stop (void) = 0;
   virtual vec<ptr<location> > succs () = 0;
   virtual vec<ptr<location> > preds () = 0;
 
-
-  virtual ptr<location> lookup_closestpred (const chordID &x, const vec<chordID> &f) = 0;
-  virtual ptr<location> lookup_closestpred (const chordID &x) = 0;
-  virtual ptr<location> lookup_closestsucc (const chordID &x) = 0;
+  virtual ptr<location> closestpred (const chordID &x, const vec<chordID> &f) = 0;
 
   //RPC demux
   virtual void addHandler (const rpc_program &prog, cbdispatch_t cb) = 0;
@@ -173,7 +175,6 @@ class chord : public virtual refcount {
   ptr<location> wellknown_node;
   int myport;
   str myname;
-  int lookup_mode;
   ptr<axprt> x_dgram;
   vec<const rpc_program *> handledProgs;
 
@@ -181,7 +182,6 @@ class chord : public virtual refcount {
 
   void dispatch (ptr<asrv> s, svccb *sbp);
   void tcpclient_cb (int srvfd);
-  int startchord (int myp);
   int startchord (int myp, int type);
   void stats_cb (const chordID &k, ptr<vnode> v);
   void print_cb (strbuf outbuf, const chordID &k, ptr<vnode> v);
@@ -200,10 +200,10 @@ class chord : public virtual refcount {
   ptr<locationtable> locations; 
     
   chord (str _wellknownhost, int _wellknownport,
-	 str _myname, int port, int max_cache,
-	 int lookup_mode, int _logbase);
-  ptr<vnode> newvnode (cbjoin_t cb, ptr<fingerlike> fingers,
-		       ptr<route_factory> f);
+	 str _myname, int port, int max_cache);
+
+  int startchord (int myp);
+  ptr<vnode> newvnode (vnode_producer_t p, cbjoin_t cb);
   void stats (void);
   void print (strbuf &outbuf);
   void stop (void);
@@ -227,16 +227,8 @@ class chord : public virtual refcount {
     warn << "Active node now " << active->my_ID () << "\n";
   };
 
-  ptr<location> lookup_closestpred (chordID k, vec<chordID> f) { 
-    return active->lookup_closestpred (k, f); 
-  };
-
-  ptr<location> lookup_closestpred (chordID k) { 
-    return active->lookup_closestpred (k); 
-  };
-
-  ptr<location> lookup_closestsucc (chordID k) { 
-    return active->lookup_closestsucc (k); 
+  ptr<location> closestpred (chordID k, vec<chordID> f) { 
+    return active->closestpred (k, f); 
   };
   void find_succlist (chordID n, u_long m, cbroute_t cb, ptr<chordID> guess) {
     active->find_succlist (n, m, cb, guess);
@@ -258,10 +250,5 @@ class chord : public virtual refcount {
     return active->my_ID ();
   };    
 };
-
-extern const int CHORD_LOOKUP_FINGERLIKE;
-extern const int CHORD_LOOKUP_LOCTABLE;
-extern const int CHORD_LOOKUP_PROXIMITY;
-extern const int CHORD_LOOKUP_FINGERSANDSUCCS;
 
 #endif /* _CHORD_H_ */

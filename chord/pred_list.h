@@ -1,9 +1,10 @@
 #ifndef _PRED_LIST_H_
 #define _PRED_LIST_H_
 
-#include "stabilize.h"
+// Predecessor lists are totally broken. DO NOT USE!
+#undef PRED_LIST
 
-#define NPRED    16 //2*10     // 2 * log of # vnodes
+#include "stabilize.h"
 
 /**
  * This class is analogous to the successor list.
@@ -20,13 +21,16 @@ class pred_list : public stabilizable {
   ptr<vnode> v_;
   ptr<locationtable> locations;
 
+#ifdef PRED_LIST
+  size_t npred_;
+  chordID backkey_;
+#endif /* PRED_LIST */
+
   u_int nout_continuous;
   ptr<location> oldpred_; // used to check if predecessor is stable
-  bool gotfingers_; // seed finger list from first predecessor acquired
   
   u_int nout_backoff;
   bool stable_predlist;
-  chordID backkey_; 
 
   void stabilize_pred ();
   void stabilize_getsucc_cb (chordID sd, chord_node s, chordstat status);
@@ -53,6 +57,9 @@ class pred_list : public stabilizable {
   bool isstable ();
   void fill_nodelistresext (chord_nodelistextres *res);
   void fill_nodelistres (chord_nodelistres *res);
+  
+  ptr<location> closestpred (const chordID &x, vec<chordID> fail) ;
+  ptr<location> closestsucc (const chordID &x);
 };
 
 #endif /* _PRED_LIST_H_ */

@@ -1,5 +1,4 @@
 #include "chord.h"
-#include "fingerlike.h"
 #include "succ_list.h"
 #include <location.h>
 #include <locationtable.h>
@@ -280,7 +279,6 @@ succ_list::stabilize_getpred_cb (ptr<location> sd, chord_node p, chordstat statu
   }
 }
 
-// ===== fingerlike methods ======
 // XXX currently an exhaustive search of the successors
 ptr<location>
 succ_list::closestpred (const chordID &x, vec<chordID> failed)
@@ -294,47 +292,14 @@ succ_list::closestpred (const chordID &x, vec<chordID> failed)
   return best;
 }
 
-ptr<location>
-succ_list::closestpred (const chordID &x)
-{
-  ptr<location> best = myvnode->my_location ();
-  for (u_int i = 0; i < num_succ (); i++) {
-    ptr<location> n = locations->closestsuccloc (incID (best->id ()));
-    if (between (myID, x, n->id ()))
-      best = n;
-  }
-  return best;
-}
-
-ptr<location>
-succ_list::closestsucc (const chordID &x) 
-{
-  fatal << "not implemented\n";
-}
-
-
-class succiter : public fingerlike_iter {
-  friend class succ_list;
-public:
-  succiter () : fingerlike_iter () {};
-};
-
-ref<fingerlike_iter>
-succ_list::get_iter ()
-{
-  ref<succiter> iter = New refcounted<succiter> ();
-
-  ptr<location> id = myvnode->my_location ();
-  u_int ns = num_succ ();
-  if (ns == 0) {
-    iter->nodes.push_back (id);
-    return iter;
-  }
-  
-  for (u_int i = 0; i < ns; i++) {
-    id = locations->closestsuccloc (id->id () + 1);  
-    iter->nodes.push_back (id);
-  }
-
-  return iter;
-}
+//  ptr<location>
+//  succ_list::closestpred (const chordID &x)
+//  {
+//    ptr<location> best = myvnode->my_location ();
+//    for (u_int i = 0; i < num_succ (); i++) {
+//      ptr<location> n = locations->closestsuccloc (incID (best->id ()));
+//      if (between (myID, x, n->id ()))
+//        best = n;
+//    }
+//    return best;
+//  }

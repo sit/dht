@@ -119,9 +119,9 @@ DECL_CONFIG_METHOD(dhash_mtu, "dhash.mtu")
 dhash::~dhash () {}
 
 ref<dhash>
-dhash::produce_dhash (str dbname, u_int nrepl, int ss_mode)
+dhash::produce_dhash (str dbname, u_int nrepl)
 {
-  return New refcounted<dhash_impl> (dbname, nrepl, ss_mode);
+  return New refcounted<dhash_impl> (dbname, nrepl);
 }
 
 dhash_impl::~dhash_impl ()
@@ -140,14 +140,13 @@ open_worker (ptr<dbfe> mydb, str name, dbOptions opts, str desc)
   }
 }
 
-dhash_impl::dhash_impl (str dbname, u_int k, int _ss_mode) 
+dhash_impl::dhash_impl (str dbname, u_int k) 
 {
 
   missing_outstanding = 0;
   nreplica = k;
   kc_delay = 11;
   rc_delay = 7;
-  ss_mode = _ss_mode / 10;
   pk_partial_cookie = 1;
 
   //set up the options we want

@@ -6,23 +6,16 @@
 #include <locationtable.h>
 
 // fingers are now zero-indexed!
-finger_table::finger_table ()  
+finger_table::finger_table (ptr<vnode> v, ptr<locationtable> l)
+  : myvnode (v),
+    locations (l),
+    f (0),
+    stable_fingers (false),
+    stable_fingers2 (false),
+    nout_backoff (0),
+    nslowfinger (0),
+    nfastfinger (0)
 {
-
-  f = 0;
-  stable_fingers = false;
-  stable_fingers2 = false;
-  nout_backoff = 0;
-
-  nslowfinger = 0;
-  nfastfinger = 0;
-}
-
-void 
-finger_table::init (ptr<vnode> v, ptr<locationtable> locs)
-{
-  myvnode = v;
-  locations = locs;
   myID = v->my_ID ();
   
   for (int i = 0; i < NBIT; i++) {
@@ -31,7 +24,6 @@ finger_table::init (ptr<vnode> v, ptr<locationtable> locs)
     locations->pin (starts[i], 1);
     // locations->pin (starts[i], "nsucc"); // XXX look up nsucc from config
   }
-
 }
 
 ptr<location>
@@ -45,19 +37,6 @@ ptr<location>
 finger_table::operator[] (int i)
 {
   return finger (i);
-}
-
-ptr<location>
-finger_table::closestsucc (const chordID &x)
-{
-  ptr<location> n;
-
-  for (int i = 0; i < NBIT; i++) {
-    n = finger (i);
-    if (between (myID, n->id (), x))
-      return n;
-  }
-  return myvnode->my_location ();
 }
 
 ptr<location>
@@ -75,18 +54,18 @@ finger_table::closestpred (const chordID &x, vec<chordID> failed)
 }
 
 
-ptr<location>
-finger_table::closestpred (const chordID &x)
-{
-  ptr<location> n;
+//  ptr<location>
+//  finger_table::closestpred (const chordID &x)
+//  {
+//    ptr<location> n;
 
-  for (int i = NBIT - 1; i >= 0; i--) {
-    n = finger (i);
-    if (between (myID, x, n->id ()))
-      return n;
-  }
-  return myvnode->my_location ();
-}
+//    for (int i = NBIT - 1; i >= 0; i--) {
+//      n = finger (i);
+//      if (between (myID, x, n->id ()))
+//        return n;
+//    }
+//    return myvnode->my_location ();
+//  }
 
 void
 finger_table::print (strbuf &outbuf)
@@ -106,27 +85,23 @@ finger_table::print (strbuf &outbuf)
 void
 finger_table::fill_nodelistres (chord_nodelistres *res)
 {
-  ref<fingerlike_iter> iter = get_iter ();
-  res->resok->nlist.setsize (iter->size () + 1);
+  vec<ptr<location> > fs = get_fingers ();
+  res->resok->nlist.setsize (fs.size () + 1);
 
   myvnode->my_location ()->fill_node (res->resok->nlist[0]);
-  for (size_t i = 1; i <= iter->size (); i++) {
-    ptr<location> f = iter->next ();
-    f->fill_node (res->resok->nlist[i]);
-  }
+  for (size_t i = 1; i <= fs.size (); i++)
+    fs[i-1]->fill_node (res->resok->nlist[i]);
 }
 
 void
 finger_table::fill_nodelistresext (chord_nodelistextres *res)
 {
-  ref<fingerlike_iter> iter = get_iter ();
-  res->resok->nlist.setsize (iter->size () + 1);
+  vec<ptr<location> > fs = get_fingers ();
+  res->resok->nlist.setsize (fs.size () + 1);
 
   myvnode->my_location ()->fill_node_ext (res->resok->nlist[0]);
-  for (size_t i = 1; i <= iter->size (); i++) {
-    ptr<location> f = iter->next ();
-    f->fill_node_ext (res->resok->nlist[i]);
-  }
+  for (size_t i = 1; i <= fs.size (); i++)
+    fs[i-1]->fill_node_ext (res->resok->nlist[i]);
 }
 
 void
@@ -230,25 +205,20 @@ finger_table::stabilize_findsucc_cb (chordID dn, int i,
   }
 }
 
-class ftiter : public fingerlike_iter {
-  friend class finger_table;
-public:
-  ftiter () : fingerlike_iter () {};
-};
-
-ref<fingerlike_iter>
-finger_table::get_iter ()
+vec<ptr<location> >
+finger_table::get_fingers ()
 {
-  ref<ftiter> iter = New refcounted<ftiter> ();
+  vec<ptr<location> > fs;
+  
   ptr<location> curfinger = myvnode->my_location ();
   ptr<location> prevfinger = curfinger;
 
   for (int i = 0; i < NBIT; i++) {
     curfinger = finger (i);
     if (curfinger != prevfinger) {
-      iter->nodes.push_back (curfinger);
+      fs.push_back (curfinger);
       prevfinger = curfinger;
     }
   }
-  return iter;
+  return fs;  
 }

@@ -1,6 +1,0 @@
-- remove hard constants
-- smart implementation of location table
-- recursive lookup
-- perhaps use refcnted locations.
-- cache whether a location is authenticated
-- new UDP transport layer

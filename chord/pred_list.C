@@ -1,6 +1,6 @@
-// Predecessor lists are totally broken. DO NOT USE!
 // This implementation is just set up to maintain strict predecessors.
-#undef PRED_LIST
+// Some code exists to find predecessor lists but it will give wrong answers.
+// See pred_list.h.
 
 #include "chord.h"
 #include "pred_list.h"
@@ -17,20 +17,20 @@ pred_list::pred_list (ptr<vnode> v,
 		      ptr<locationtable> locs)
   : myID (v->my_ID ()), v_ (v), locations (locs),
     nout_continuous (0),
-    gotfingers_ (false),
+#ifdef PRED_LIST
+    backkey_ (0),
+    npred_ (0),
+#endif /* PRED_LIST */    
     nout_backoff (0),
     stable_predlist (false)
 {
-  backkey_ = 0;
-
   oldpred_ = v->my_location ();
   
   locations->pin (myID, -1);
 #ifdef PRED_LIST  
-  size_t npred;
-  bool ok = Configurator::only ().get_int ("chord.nsucc", npred);
+  bool ok = Configurator::only ().get_int ("chord.nsucc", npred_);
   assert (ok);
-  locations->pinpredlist (myID, npred);
+  locations->pin (myID, -npred_);
 #endif /* PRED_LIST */  
 }
 
@@ -51,7 +51,7 @@ pred_list::preds ()
   ptr<location> start = cur;
   // XXX it's not always safe to go backwards. Nodes we run
   //     into going backwards might point off the ring!
-  for (u_int i = 1; i < NPRED && cur != start; i++) {
+  for (u_int i = 1; i < npred_ && cur != start; i++) {
     cur = locations->closestpredloc (decID (cur->id ()));
     ret.push_back (cur);
   }
@@ -66,23 +66,10 @@ pred_list::update_pred (const chord_node &p)
   ptr<location> curp = pred ();
   
   ptr<location> ploc;
-  if (!gotfingers_ || between (curp->id (), myID, p.x))
+  if (between (curp->id (), myID, p.x))
     ploc = locations->insert (p);
-  
-  if (!gotfingers_ && ploc)
-    v_->get_fingers (ploc, wrap (this, &pred_list::update_pred_fingers_cb));
 
   oldpred_ = pred ();
-}
-
-void
-pred_list::update_pred_fingers_cb (vec<chord_node> nlist, chordstat s)
-{
-  if (s)
-    return;
-  gotfingers_ = true;
-  for (unsigned i = 0; i < nlist.size (); i++)
-    locations->insert (nlist[i]);
 }
 
 void
@@ -107,9 +94,8 @@ pred_list::stabilize_getsucc_cb (chordID pred, chord_node s, chordstat status)
   } else {
     // maybe we're not stable. insert this guy's successor in
     // location table; maybe he is our predecessor.
-    if (!gotfingers_ || s.x != myID) {
+    if (s.x != myID)
       update_pred (s);
-    }
   }
 }
 
@@ -119,7 +105,7 @@ pred_list::stabilize_predlist ()
 #ifdef PRED_LIST  
   u_long n = locations->usablenodes ();
   chordID preddist (1);
-  // XXX should this depend on NPRED?
+  // XXX should this depend on npred_?
   preddist = (preddist << NBIT) * log2 (n) / n;
   if (preddist == 0) {
     stable_predlist = true;
@@ -191,33 +177,35 @@ pred_list::isstable ()
 void
 pred_list::fill_nodelistresext (chord_nodelistextres *res)
 {
-  fatal << "not implemented.\n";
-#if 0  
+#ifdef PRED_LIST
   // XXX it's not always safe to go backwards. Nodes we run
   //     into going backwards might point off the ring!
   u_int i = 0;
-  res->resok->nlist.setsize (NPRED); // over allocate
+  res->resok->nlist.setsize (npred_); // over allocate
   chordID curpred = locations->closestsuccloc (backkey_);
-  for (i = 0; (i < NPRED) && curpred != myID; i++) {
+  for (i = 0; (i < npred_) && curpred != myID; i++) {
     locations->lookup (curpred)->fill_node_ext (res->resok->nlist[i]);
     curpred = locations->closestsuccloc (incID (curpred));
   }
   res->resok->nlist.setsize (i + 1);
+#else
+  fatal << "not implemented.\n";
 #endif /* 0 */
 }
 
 void
 pred_list::fill_nodelistres (chord_nodelistres *res)
 {
-  fatal << "not implemented.\n";
-#if 0  
+#ifdef PRED_LIST  
   u_int i = 0;
-  res->resok->nlist.setsize (NPRED); // over allocate
+  res->resok->nlist.setsize (npred_); // over allocate
   chordID curpred = locations->closestsuccloc (backkey_);
-  for (i = 0; (i < NPRED) && curpred != myID; i++) {
+  for (i = 0; (i < npred_) && curpred != myID; i++) {
     locations->lookup (curpred)->fill_node (res->resok->nlist[i]);
     curpred = locations->closestsuccloc (incID (curpred));
   }
   res->resok->nlist.setsize (i + 1);
-#endif /* 0 */  
+#else
+  fatal << "not implemented.\n";
+#endif /* PRED_LIST */
 }

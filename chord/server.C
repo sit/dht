@@ -26,8 +26,12 @@
  */
 
 #include "chord_impl.h"
-#include "route.h"
-#include <transport_prot.h>
+
+#include "stabilize.h"
+#include "toe_table.h"
+#include "succ_list.h"
+#include "pred_list.h"
+
 #include <coord.h>
 #include "comm.h"
 #include <location.h>
@@ -129,7 +133,7 @@ void
 vnode_impl::find_succlist (const chordID &x, u_long m, cbroute_t cb,
 			   ptr<chordID> guess)
 {
-  route_iterator *ri = factory->produce_iterator_ptr (x);
+  route_iterator *ri = produce_iterator_ptr (x);
   ri->first_hop (wrap (this, &vnode_impl::find_succlist_hop_cb, cb, ri, m),
 		 guess);
 }
@@ -198,7 +202,7 @@ vnode_impl::find_successor_cb (chordID x, cbroute_t cb, vec<chord_node> s,
 void
 vnode_impl::find_route (const chordID &x, cbroute_t cb) 
 {
-  route_iterator *ri = factory->produce_iterator_ptr (x);
+  route_iterator *ri = produce_iterator_ptr (x);
   ri->first_hop(wrap (this, &vnode_impl::find_route_hop_cb, cb, ri), NULL);
 }
 
@@ -259,36 +263,6 @@ vnode_impl::alert_cb (chordstat *res, clnt_stat err)
     warnx << "alert_cb: RPC failure " << err << "\n";
   } else if (*res != CHORD_OK) {
     warnx << "alert_cb: returns " << *res << "\n";
-  }
-  delete res;
-}
-
-void 
-vnode_impl::get_fingers (ptr<location> n, cbchordIDlist_t cb)
-{
-  chord_nodelistres *res = New chord_nodelistres (CHORD_OK);
-  ptr<chordID> v = New refcounted<chordID> (n->id ());
-  ngetfingers++;
-  doRPC (n, chord_program_1, CHORDPROC_GETFINGERS, v, res,
-	 wrap (mkref (this), &vnode_impl::get_fingers_cb, cb, n->id (), res));
-}
-
-void
-vnode_impl::get_fingers_cb (cbchordIDlist_t cb,
-			    chordID x, chord_nodelistres *res, clnt_stat err) 
-{
-  vec<chord_node> nlist;
-  if (err) {
-    warnx << "get_fingers_cb: RPC failure " << err << "\n";
-    cb (nlist, CHORD_RPCFAILURE);
-  } else if (res->status) {
-    warnx << "get_fingers_cb: RPC error " << res->status << "\n";
-    cb (nlist, res->status);
-  } else {
-    // xxx there must be something more intelligent to do here
-    for (unsigned int i = 0; i < res->resok->nlist.size (); i++)
-      nlist.push_back (make_chord_node (res->resok->nlist[i]));
-    cb (nlist, CHORD_OK);
   }
   delete res;
 }

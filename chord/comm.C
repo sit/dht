@@ -542,6 +542,7 @@ stp_manager::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
     warnx << gettime () << " RPC failure: " << err
           << " destined for " << C->ID << " seqno " << C->seqno << "\n";
   } else if (res->status == DORPC_MARSHALLERR) {
+    nrpcfailed++;
     err = RPC_CANTDECODEARGS;
     warnx << gettime () << " RPC Failure: DORPC_MARSHALLERR for " << C->ID 
           << "\n";
@@ -551,6 +552,11 @@ stp_manager::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
     err = RPC_SYSTEMERROR;
     warnx << gettime () << " RPC Failure: DORPC_UNKNOWNNODE for " << C->ID 
           << "\n";
+  } else if (res->status == DORPC_NOHANDLER) {
+    nrpcfailed++;
+    err = RPC_PROGUNAVAIL;
+    warnx << gettime () << " RPC Failure: DORPC_NOHANDLER for " << C->ID
+	  << "\n";
   } else {
     assert (res->status == DORPC_OK);
     u_int64_t sent_time = res->resok->send_time_echo;

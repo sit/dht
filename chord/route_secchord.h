@@ -56,21 +56,4 @@ class route_secchord : public route_iterator {
   ptr<location> pop_back ();
 };
 
-class secchord_route_factory : public route_factory {
- public:
-  secchord_route_factory (ptr<vnode> vi) : route_factory (vi) {};
-  secchord_route_factory () {};
-
-  ptr<route_iterator> produce_iterator (chordID xi);
-  ptr<route_iterator> produce_iterator (chordID xi,
-					rpc_program uc_prog,
-					int uc_procno,
-					ptr<void> uc_args);
-  route_iterator *produce_iterator_ptr (chordID xi);
-  route_iterator *produce_iterator_ptr (chordID xi,
-					rpc_program uc_prog,
-					int uc_procno,
-					ptr<void> uc_args);
-};
-
 #endif /* !_ROUTE_SECCHORD_H_ */

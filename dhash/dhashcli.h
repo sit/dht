@@ -19,13 +19,11 @@ typedef	callback<void, dhash_stat, bool>::ref sendblockcb_t;
 class dbfe;
 class vnode;
 class dhash;
-class route_factory;
 class dhash_block;
 class route_iterator;
 
 class dhashcli {
   ptr<vnode> clntnode;
-  ptr<route_factory> r_factory;
   bool ordersucc_;
 
   struct rcv_state {

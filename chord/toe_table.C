@@ -2,6 +2,7 @@
 #include "chord.h"
 #include "toe_table.h"
 
+#include <prox_prot.h>
 #include <coord.h>
 #include <location.h>
 #include <locationtable.h>
@@ -9,8 +10,8 @@
 #include <modlogger.h>
 #define trace modlogger ("toes")
 
-toe_table::toe_table ()
-  : in_progress (0)
+toe_table::toe_table (ptr<vnode> v, ptr<locationtable> l)
+  :  locations (l), myvnode (v), in_progress (0)
 {
   for (int i=0; i < MAX_LEVELS; i++) {
     target_size[i] = 5; //must be less than nsucc to bootstrap
@@ -18,16 +19,8 @@ toe_table::toe_table ()
   }
   
   last_level = MAX_LEVELS; // will start at 0
-
-  stable_toes = false;
-}
-
-void toe_table::init (ptr<vnode> v, ptr<locationtable> locs)
-{
-  locations = locs;
   myID = v->my_ID ();
-  myvnode = v;
-  
+  stable_toes = false;
 }
 
 void
@@ -64,13 +57,13 @@ toe_table::get_toes_rmt (int level)
   vec<ptr<location> > donors = get_toes (max(level - 1, 0));
   for (unsigned int i = 0; i < donors.size (); i++) {
     in_progress++;
-    ptr<chord_findtoes_arg> arg = New refcounted<chord_findtoes_arg> ();
+    ptr<prox_findtoes_arg> arg = New refcounted<prox_findtoes_arg> ();
     arg->level = level;
     myvnode->my_location ()->fill_node (arg->n);
 
     chord_nodelistres *res = New chord_nodelistres ();
-    myvnode->doRPC (donors[i], chord_program_1,
-		    CHORDPROC_FINDTOES,
+    myvnode->doRPC (donors[i], prox_program_1,
+		    PROXPROC_FINDTOES,
 		    arg, res, 
 		    wrap (this, &toe_table::get_toes_rmt_cb, res, level));
   }
@@ -314,44 +307,4 @@ void
 toe_table::fill_nodelistres (chord_nodelistres *res)
 {
   fatal << "toe_table::fill_nodelistres not implemented.\n";
-}
-
-
-ptr<location>
-toe_table::closestsucc (const chordID &x)
-{
-  //warnx << "doing a toe table lookup\n";
-  return locations->closestsuccloc(x);
-
-}
-
-ptr<location>
-toe_table::closestpred (const chordID &x, vec<chordID> failed)
-{
-
-  //warnx << "doing a toe table closestpred (with failures)\n";
-  return locations->closestpredloc(x, failed);
-}
-
-
-ptr<location>
-toe_table::closestpred (const chordID &x)
-{
-
-  //warnx << "doing a toe table closestpred\n";
-  return locations->closestpredloc(x);
-}
-
-class toeiter : public fingerlike_iter {
-  friend class toe_table;
-public:
-  toeiter () : fingerlike_iter () {};
-};
-
-ref<fingerlike_iter>
-toe_table::get_iter ()
-{
-  ref<toeiter> iter = New refcounted<toeiter> ();
-  iter->nodes = get_toes (filled_level ());
-  return iter;
 }

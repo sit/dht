@@ -11,8 +11,9 @@ noinst_HEADERS = aclnt_chord.h \
 		 comm.h \
 		 debruijn.h \
 		 finger_table.h \
-		 fingerlike.h \
+		 fingerroute.h \
 		 pred_list.h \
+		 proxroute.h \
 		 route.h \
 		 route_secchord.h \
 		 stabilize.h \
@@ -20,18 +21,21 @@ noinst_HEADERS = aclnt_chord.h \
 		 toe_table.h
 
 libchord_a_SOURCES = chord.C \
-		      route.C \
-		      route_secchord.C \
-		      stabilize.C \
 		      chord_client.C \
 		      chord_util.C \
-		      server.C \
 		      comm.C \
-		      toe_table.C \
+		      debruijn.C \
 		      finger_table.C \
-		      succ_list.C \
+		      fingerroute.C \
 		      pred_list.C \
-		      debruijn.C
+		      proxroute.C \
+		      route.C \
+		      route_chord.C \
+		      route_debruijn.C \
+		      server.C \
+		      stabilize.C \
+		      succ_list.C \
+		      toe_table.C 
 
 EXTRA_DIST = .cvsignore
 CLEANFILES = core *.core *~ *.rpo

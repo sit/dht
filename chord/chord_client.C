@@ -56,42 +56,25 @@ chord_config_init::chord_config_init ()
 
   ok = ok && set_str ("chord.rpc_mode", "stp");
 
-  /** don't use the lookup_mode's lookup_closestsucc; use
-   *  the greedy metric instead.  Probably desirable if toes are
+  /** use the greedy metric instead.  Probably desirable if toes are
    *  enabled. */
   ok = ok && set_int ("chord.greedy_lookup", 0);
   /** try to terminate retrieves early if the hop has
    *  returned a "sufficient" number of successors.  */
   ok = ok && set_int ("chord.find_succlist_shaving", 1);
 
-  /**
-   * Determine how to find the "closest known predecessor to x".
-   * Legal values currently include:
-   *  fingerlike: only use fingerlike (e.g. finger table)
-   *  fingersandsuccs: look at all fingers + successors
-   *  loctable: look at any cached location
-   *  proximity: look at the nodes discovered by toes
-   *             (falling back to successors)
-   */
-  ok = ok && set_str ("chord.lookup_mode", "fingerlike");
   assert (ok);
 #undef set_int
 #undef set_str
 }
 
-int logbase;  // base = 2 ^ logbase
-
 chord::chord (str _wellknownhost, int _wellknownport, 
-	      str _myname, int port, int max_cache,
-	      int l_mode, int _logbase) :
+	      str _myname, int port, int max_cache) :
   myname (_myname),
-  lookup_mode (l_mode),
   nrcv (NULL),
   rpcm (NULL),
   active (NULL)
 {
-  logbase = _logbase;
-
   str rpcstr;
   bool ok = Configurator::only ().get_str ("chord.rpc_mode", rpcstr);
   assert (ok);
@@ -121,8 +104,7 @@ chord::chord (str _wellknownhost, int _wellknownport,
   chord_node wkn;
   wkn.r.hostname = _wellknownhost;
   wkn.r.port = _wellknownport ? _wellknownport : myport;
-  wkn.x = make_chordID (wkn.r.hostname,
-				   wkn.r.port);
+  wkn.x = make_chordID (wkn.r.hostname, wkn.r.port);
   wkn.vnode_num = 0;
   wkn.coords.setsize (NCOORDS);
   // Make up some random initial information for this other node.
@@ -193,8 +175,9 @@ chord::startchord (int myp, int type)
 int
 chord::startchord (int myp)
 {
-  // see also locationtable constructor.
-  if ((chord_rpc_style == CHORD_RPC_SFST) || (chord_rpc_style == CHORD_RPC_SFSBT))  {
+  if ((chord_rpc_style == CHORD_RPC_SFST) ||
+      (chord_rpc_style == CHORD_RPC_SFSBT))
+  {
     // Ensure the DGRAM and STREAM sockets are on same port #,
     // since it is included in the Chord ID's hash.
     myp = startchord (myp, SOCK_STREAM);
@@ -206,7 +189,7 @@ chord::startchord (int myp)
 
 
 ptr<vnode>
-chord::newvnode (cbjoin_t cb, ptr<fingerlike> fingers, ptr<route_factory> f)
+chord::newvnode (vnode_producer_t p, cbjoin_t cb)
 {
   if (nvnode > max_vnodes)
     fatal << "Maximum number of vnodes (" << max_vnodes << ") reached.\n";
@@ -226,11 +209,7 @@ chord::newvnode (cbjoin_t cb, ptr<fingerlike> fingers, ptr<route_factory> f)
     wellknown_node = l;
   locations->pin (newID);
 
-  ptr<vnode> vnodep = vnode::produce_vnode (locations, rpcm, fingers, f,
-					    mkref (this), newID, 
-					    nvnode,
-					    lookup_mode);
-  f->setvnode (vnodep);
+  ptr<vnode> vnodep = (*p) (mkref (this), rpcm, l);
   
   if (!active) active = vnodep;
   nvnode++;
@@ -349,8 +328,7 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
       //find the program
       const rpc_program *prog = get_program (arg->progno);
       if (!prog) {
-	warn << "bad program: " << arg->progno << "\n";
-	sbp->replyref (rpcstat (DORPC_MARSHALLERR));
+	sbp->replyref (rpcstat (DORPC_NOHANDLER));
 	return;
       }
       
@@ -364,7 +342,8 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
       
       void *unmarshalled_args = prog->tbl[arg->procno].alloc_arg ();
       if (!proc (x.xdrp (), unmarshalled_args)) {
-	warn << "dispatch: error unmarshalling arguments\n";
+	warn << "dispatch: error unmarshalling arguments: "
+	     << arg->progno << "." << arg->procno << "\n";
         xdr_delete (prog->tbl[arg->procno].xdr_arg, unmarshalled_args);
 	sbp->replyref (rpcstat (DORPC_MARSHALLERR));
 	return;

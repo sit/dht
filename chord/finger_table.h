@@ -1,9 +1,9 @@
 #ifndef _FINGER_TABLE_H_
 #define _FINGER_TABLE_H_
 
-#include "fingerlike.h"
+#include "stabilize.h"
 
-class finger_table : public fingerlike {
+class finger_table : public stabilizable {
   ptr<vnode> myvnode;
   ptr<locationtable> locations;
   
@@ -27,30 +27,28 @@ class finger_table : public fingerlike {
 
   
  public:
-  finger_table ();
+  finger_table (ptr<vnode> v, ptr<locationtable> l);
 
   ptr<location> finger (int i);
   ptr<location> operator[] (int i);
   chordID start (int i) { return starts[i]; }
+  
+  vec<ptr<location> > get_fingers ();
 
   void stabilize_finger ();
 
+  void print (strbuf &outbuf);
+  void stats ();
+  
   // Stabilize methods
   bool backoff_stabilizing () { return nout_backoff > 0; }
   void do_backoff () { stabilize_finger (); }
   bool isstable () { return stable_fingers && stable_fingers2; }
-  void print (strbuf &outbuf);
+
   void fill_nodelistres (chord_nodelistres *res);
   void fill_nodelistresext (chord_nodelistextres *res);
-  void stats ();
 
-  //fingerlike methods
-  void init (ptr<vnode> v, ptr<locationtable> locs);
   ptr<location> closestpred (const chordID &x, vec<chordID> fail);
-  ptr<location> closestpred (const chordID &x);
-  ptr<location> closestsucc (const chordID &x);
-
-  ref<fingerlike_iter> get_iter ();
 };
 
 #endif /* _FINGER_TABLE_H_ */

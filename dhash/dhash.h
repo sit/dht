@@ -72,7 +72,7 @@ class dhash {
   virtual void replica_maintenance_timer (u_int index) = 0;
 
   static ref<dhash> produce_dhash
-    (str dbname, u_int nreplica = 0, int ss_mode = 0);
+    (str dbname, u_int nreplica = 0);
 
   virtual ~dhash () = 0;
   

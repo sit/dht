@@ -3,9 +3,9 @@
 
 #define MAX_LEVELS 10
 
-#include "fingerlike.h"
+#include "stabilize.h"
 
-class toe_table : public fingerlike {
+class toe_table : public stabilizable {
   static const int max_delay = 800; // ms
 
   vec<vec<ptr<location> >*, MAX_LEVELS> toes;
@@ -23,8 +23,7 @@ class toe_table : public fingerlike {
   bool stable_toes;
 
  public:
-  toe_table ();
-
+  toe_table (ptr<vnode> v, ptr<locationtable> l);
   
   bool present (chordID id);
   bool present (chordID id, int level);
@@ -46,19 +45,12 @@ class toe_table : public fingerlike {
   void do_backoff () { stabilize_toes (); }
   bool isstable () { return stable_toes; }
 
-  
   void fill_nodelistresext (chord_nodelistextres *res);
   void fill_nodelistres (chord_nodelistres *res);
 
-  //fingerlike methods
-  void init (ptr<vnode> v, ptr<locationtable> locs);
-  ptr<location> closestpred (const chordID &x, vec<chordID> fail);
-  ptr<location> closestpred (const chordID &x);
-  ptr<location> closestsucc (const chordID &x);
-  void print (strbuf &outbuf);
-  void stats () { warn << "I'm a toe table\n";};
+  //  ptr<location> closestpred (const chordID &x, vec<chordID> fail);
 
-  ref<fingerlike_iter> get_iter ();
+  void print (strbuf &outbuf);
 };
 
 #endif /* _TOE_TABLE_H_ */

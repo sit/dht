@@ -1,7 +1,9 @@
 #ifndef _SUCC_LIST_H_
 #define _SUCC_LIST_H_
 
-class succ_list : public fingerlike {
+#include "stabilize.h"
+
+class succ_list : public stabilizable {
   chordID myID;
   ptr<vnode> myvnode;
   ptr<locationtable> locations;
@@ -45,15 +47,9 @@ class succ_list : public fingerlike {
   bool isstable () { return stable_succlist && stable_succlist2; } // XXX
   void fill_nodelistresext (chord_nodelistextres *res);
   void fill_nodelistres (chord_nodelistres *res);
-  void print (strbuf &outbuf);
-  void stats () { warn << "stats go here\n"; };
 
-  // Fingerlike methods
-  ptr<location> closestpred (const chordID &x);
+  void print (strbuf &out);
+
   ptr<location> closestpred (const chordID &x, vec<chordID> fail);
-  ptr<location> closestsucc (const chordID &x);
-  void init (ptr<vnode> v, ptr<locationtable> locs) { warn << "not needed\n";};
-
-  ref<fingerlike_iter> get_iter (); 
 };
 #endif /* _SUCC_LIST_H_ */

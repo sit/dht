@@ -5,6 +5,9 @@
 #include "rxx.h"
 #include "async.h"
 #include "chord_prot.h"
+#include "debruijn_prot.h"
+#include "prox_prot.h"
+#include "fingers_prot.h"
 #include "transport_prot.h"
 #include "misc_utils.h"
 #include "chord_util.h"
@@ -92,7 +95,7 @@ struct f_node {
   unsigned short port;
   chord_nodelistextres *fingers;
   chord_nodeextres *predecessor;
-  chord_debruijnres *debruijn;
+  debruijn_res *debruijn;
   chord_nodelistextres *successors;
   chord_nodelistextres *toes;
   ihash_entry <f_node> link;
@@ -176,7 +179,7 @@ void update_pred_got_pred (chordID ID, str host, unsigned short port,
 			   chord_nodeextres *res, clnt_stat err);
 
 void update_debruijn (f_node *nu);
-void update_debruijn_got_debruijn (chordID n, chord_debruijnres *res,
+void update_debruijn_got_debruijn (chordID n, debruijn_res *res,
 			     clnt_stat err);
 void update ();
 void initgraf ();
@@ -292,7 +295,7 @@ add_node (str host, unsigned short port)
 }
 
 void
-doRPCcb (chordID ID, int procno, dorpc_res *res, void *out, aclnt_cb cb, clnt_stat err)
+doRPCcb (chordID ID, xdrproc_t outproc, dorpc_res *res, void *out, aclnt_cb cb, clnt_stat err)
 {
   f_node *nu = nodes[ID];
 
@@ -300,7 +303,7 @@ doRPCcb (chordID ID, int procno, dorpc_res *res, void *out, aclnt_cb cb, clnt_st
   // If we've already removed a node, then there's no reason to even
   // notify the cb of anything in this program.
   
-  if (err || res->status) {
+  if (err || res->status == DORPC_UNKNOWNNODE) {
     if (!err) warn << "status: " << res->status << "\n";
     warn << "deleting " << ID << ":" << nu->host << "\n";
     nodes.remove (nu);
@@ -310,6 +313,10 @@ doRPCcb (chordID ID, int procno, dorpc_res *res, void *out, aclnt_cb cb, clnt_st
     delete nu;
     return;
   }
+
+  // Don't have good results here, so just ignore it.
+  if (res->status != DORPC_OK)
+    return;
   
   nu->coords.clear ();
   for (unsigned int i = 0; i < res->resok->src_coords.size (); i++)
@@ -317,10 +324,8 @@ doRPCcb (chordID ID, int procno, dorpc_res *res, void *out, aclnt_cb cb, clnt_st
 
   xdrmem x ((char *)res->resok->results.base (), 
 	    res->resok->results.size (), XDR_DECODE);
-  xdrproc_t proc = chord_program_1.tbl[procno].xdr_res;
-  assert (proc);
-  if (!proc (x.xdrp (), out)) {
-    fatal << "failed to unmarshall result: " << procno << "\n";
+  if (!outproc (x.xdrp (), out)) {
+    fatal << "failed to unmarshall result.\n";
     cb (RPC_CANTSEND);
   } else 
     cb (err);
@@ -329,7 +334,7 @@ doRPCcb (chordID ID, int procno, dorpc_res *res, void *out, aclnt_cb cb, clnt_st
 }
 
 void
-doRPC (f_node *nu, int procno, const void *in, void *out, aclnt_cb cb)
+doRPC (f_node *nu, const rpc_program &prog, int procno, const void *in, void *out, aclnt_cb cb)
 {
   ptr<aclnt> c = get_aclnt (nu->host, nu->port);
   if (c == NULL) 
@@ -342,11 +347,12 @@ doRPC (f_node *nu, int procno, const void *in, void *out, aclnt_cb cb)
   arg->dest_id = nu->ID;
   arg->src_id = bigint (0);
   arg->src_vnode_num = 0;
-  arg->progno = chord_program_1.progno;
+  arg->progno = prog.progno;
   arg->procno = procno;
   
   //marshall the args ourself
-  xdrproc_t inproc = chord_program_1.tbl[procno].xdr_arg;
+  xdrproc_t inproc = prog.tbl[procno].xdr_arg;
+  xdrproc_t outproc = prog.tbl[procno].xdr_res;
   xdrsuio x (XDR_ENCODE);
   if ((!inproc) || (!inproc (x.xdrp (), (void *)in))) {
     fatal << "failed to marshall args\n";
@@ -360,7 +366,7 @@ doRPC (f_node *nu, int procno, const void *in, void *out, aclnt_cb cb)
     dorpc_res *res = New dorpc_res (DORPC_OK);
 
     c->timedcall (TIMEOUT, TRANSPORTPROC_DORPC, 
-		  arg, res, wrap (&doRPCcb, nu->ID, procno, res, out, cb));
+		  arg, res, wrap (&doRPCcb, nu->ID, outproc, res, out, cb));
     
   }
 }  
@@ -372,7 +378,7 @@ update_succlist (f_node *nu)
 {
   chordID n = nu->ID;
   chord_nodelistextres *res = New chord_nodelistextres ();
-  doRPC (nu, CHORDPROC_GETSUCC_EXT, &n, res,
+  doRPC (nu, chord_program_1, CHORDPROC_GETSUCC_EXT, &n, res,
 	 wrap (&update_succ_got_succ, 
 	       nu->ID, nu->host, nu->port, res));
 }
@@ -403,7 +409,7 @@ update_pred (f_node *nu)
 {
   chordID n = nu->ID;
   chord_nodeextres *res = New chord_nodeextres ();
-  doRPC (nu, CHORDPROC_GETPRED_EXT, &n, res,
+  doRPC (nu, chord_program_1, CHORDPROC_GETPRED_EXT, &n, res,
 	 wrap (&update_pred_got_pred,
 	       nu->ID, nu->host, nu->port, res));
 }
@@ -433,19 +439,19 @@ update_debruijn (f_node *nu)
 {
   return;
   chordID n = nu->ID;
-  ptr<chord_debruijnarg> arg = New refcounted<chord_debruijnarg> ();
+  ptr<debruijn_arg> arg = New refcounted<debruijn_arg> ();
   arg->n = n;
   arg->x = n + 1;
   arg->i = n + 1;
   arg->upcall_prog = 0;
   
-  chord_debruijnres *nres = New chord_debruijnres (CHORD_OK);
-  doRPC (nu, CHORDPROC_DEBRUIJN, arg, nres, 
+  debruijn_res *nres = New debruijn_res (CHORD_OK);
+  doRPC (nu, debruijn_program_1, DEBRUIJNPROC_ROUTE, arg, nres, 
 	 wrap (&update_debruijn_got_debruijn, n, nres));
 }
 
 void
-update_debruijn_got_debruijn (chordID ID, chord_debruijnres *res, clnt_stat err)
+update_debruijn_got_debruijn (chordID ID, debruijn_res *res, clnt_stat err)
 {
   if (err  || res->status == CHORD_INRANGE) {
     delete res;
@@ -469,7 +475,7 @@ update_fingers (f_node *nu)
 {
   chordID n = nu->ID;
   chord_nodelistextres *res = New chord_nodelistextres ();
-  doRPC (nu, CHORDPROC_GETFINGERS_EXT, &n, res,
+  doRPC (nu, fingers_program_1, FINGERSPROC_GETFINGERS_EXT, &n, res,
 	 wrap (&update_fingers_got_fingers, 
 	       nu->ID, nu->host, nu->port, res));
   
@@ -597,10 +603,10 @@ get_cb (chordID next)
 void
 update_toes (f_node *nu)
 {
-  chord_gettoes_arg n;
+  prox_gettoes_arg n;
   n.level = glevel;
   chord_nodelistextres *res = New chord_nodelistextres ();
-  doRPC (nu, CHORDPROC_GETTOES, &n, res,
+  doRPC (nu, prox_program_1, PROXPROC_GETTOES, &n, res,
 	 wrap (&update_toes_got_toes, 
 	       nu->ID, nu->host, nu->port, res));
 }
@@ -942,7 +948,7 @@ lookup_cb (GtkWidget *widget, gpointer data)
   chord_findarg fa;
   fa.x = search_key;
   chord_nodelistres *res = New chord_nodelistres ();
-  doRPC (current_node, CHORDPROC_FINDROUTE, &fa, res,
+  doRPC (current_node, chord_program_1, CHORDPROC_FINDROUTE, &fa, res,
 	 wrap (&lookup_complete_cb, current_node->ID, res));
   // XXX display a dialog box for progress...
 

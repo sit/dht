@@ -34,11 +34,12 @@
 #include "route.h"
 #include "crypt.h"
 
-#include "fingerlike.h"
 #include "debruijn.h"
-#include "finger_table.h"
-
+#include "fingerroute.h"
+#include "proxroute.h"
+#if 0
 #include "route_secchord.h"
+#endif
 
 #include <modlogger.h>
 #define info modlogger ("lsd")
@@ -58,8 +59,6 @@ extern "C" {
 
 EXITFN (cleanup);
 
-#define STORE_SIZE 2000000 //size of block store per vnode (in blocks)
-
 int vnodes = 1;
 u_int initialized_dhash = 0;
 
@@ -68,8 +67,6 @@ static char *monitor_host;
 
 ptr<chord> chordnode;
 static str p2psocket;
-int ss_mode;
-int lbase;
 vec<ref<dhash> > dh;
 int myport;
  
@@ -77,12 +74,40 @@ bool useproxy = false;
 str proxyhost;
 int proxyport = 0;
 
-#define MODE_DEBRUIJN 1
-#define MODE_CHORD 2
-#define MODE_SECCHORD 3
+enum routing_mode_t {
+  MODE_SUCC,
+  //  MODE_LOCTABLE,
+  MODE_CHORD,
+  MODE_DEBRUIJN,
+  MODE_PROX,
+  //  MODE_SECCHORD,
+  //  MODE_CHORD_RECURSIVE
+} mode;
 
-int mode;
-int lookup_mode;
+struct routing_mode_desc {
+  routing_mode_t m;
+  char *cmdline;
+  char *desc;
+  vnode_producer_t producer;
+};
+
+/* List of routing modes.  Please keep this in sync with the enum above. */
+routing_mode_desc modes[] = {
+  { MODE_SUCC, "successors", "use only successor lists",
+    wrap (vnode::produce_vnode) },
+  //  { MODE_LOCTABLE, "loctable", "use any node in loctable",
+  //  wrap (locroute::produce_vnode) },
+  { MODE_CHORD, "chord", "use fingers and successors",
+    wrap (fingerroute::produce_vnode) },
+  { MODE_DEBRUIJN, "debruijn", "use debruijn routing",
+    wrap (debruijn::produce_vnode) },
+  { MODE_PROX, "prox", "use toes in some ad hoc way to improve routing",
+    wrap (proxroute::produce_vnode) },
+//    { MODE_SECCHORD, "secchord", "use careful routing (broken)",
+//      wrap (secchord::produce_vnode) },
+//    { MODE_CHORD_RECURSIVE, "recchord", "chord, but do lookups recursively",
+//      wrap (recchord::produce_vnode) }
+};
 
 void stats ();
 void stop ();
@@ -130,13 +155,12 @@ client_listen (int fd)
 static void
 cleanup ()
 {
-   unlink (p2psocket);
+  unlink (p2psocket);
 }
 
 static void
 startclntd()
 {
-
   unlink (p2psocket);
   int clntfd = unixsocket (p2psocket);
   if (clntfd < 0) 
@@ -151,36 +175,6 @@ startclntd()
 
 }
 
-
-ptr<route_factory> 
-get_factory (int mode) 
-{
-  ptr<route_factory> f;
-  switch (mode) {
-  case MODE_DEBRUIJN:
-    f = New refcounted<debruijn_route_factory> ();
-    break;
-  case MODE_CHORD:
-    f = New refcounted<chord_route_factory> ();
-    break;
-  case MODE_SECCHORD:
-    f = New refcounted<secchord_route_factory> ();
-    break;
-  default:
-    fatal << "bad route mode" << mode << "\n";
-  }
-  return f;
-}
-
-ptr<fingerlike> 
-get_fingerlike (int mode) 
-{
-  if (mode == MODE_DEBRUIJN) 
-    return New refcounted<debruijn> ();
-  else
-    return New refcounted<finger_table> ();
-}
-
 static void
 newvnode_cb (int n, ptr<vnode> my, chordstat stat)
 {  
@@ -192,11 +186,8 @@ newvnode_cb (int n, ptr<vnode> my, chordstat stat)
 
   n += 1;
   initialized_dhash = n;
-  if (n < vnodes) {
-    ptr<route_factory> f = get_factory (mode);
-    ptr<fingerlike> fl = get_fingerlike (mode);
-    chordnode->newvnode (wrap (newvnode_cb, n), fl, f);
-  }
+  if (n < vnodes)
+    chordnode->newvnode (modes[mode].producer, wrap (newvnode_cb, n));
 }
 
 
@@ -513,9 +504,11 @@ main (int argc, char **argv)
   sigcb(SIGHUP, wrap (&halt));
   sigcb(SIGINT, wrap (&halt));
 
+  int nmodes = sizeof (modes)/sizeof(modes[0]);
+    
   int ch;
-  ss_mode = 0;
-  lbase = 1;
+  int ss_mode = 0;
+  int lbase = 1;
 
   myport = 0;
   // ensure enough room for fingers and successors.
@@ -529,7 +522,6 @@ main (int argc, char **argv)
   logfname = "lsd-trace.log";
   str myname = my_addr ();
   mode = MODE_CHORD;
-  lookup_mode = CHORD_LOOKUP_LOCTABLE;
 
   char *cffile = NULL;
 
@@ -537,19 +529,14 @@ main (int argc, char **argv)
     switch (ch) {
     case 'b':
       lbase = atoi (optarg);
-      if (mode != MODE_DEBRUIJN && lbase != 1) {
-	warnx << "logbase " << lbase << " only supported in debruijn\n";
-	lbase = 1;
-      }
       break;
     case 'd':
       db_name = optarg;
       break;
     case 'f':
-      lookup_mode = CHORD_LOOKUP_FINGERLIKE;
-      break;
+      warnx << "-f mode is no longer supported... using -F.\n";
     case 'F':
-      lookup_mode = CHORD_LOOKUP_FINGERSANDSUCCS;
+      mode = MODE_CHORD;
       break;
     case 'j': 
       {
@@ -593,14 +580,21 @@ main (int argc, char **argv)
       max_loccache = atoi (optarg);
       break;
     case 'm':
-      if (strcmp (optarg, "debruijn") == 0)
-	mode = MODE_DEBRUIJN;
-      else if (strcmp (optarg, "chord") == 0)
-	mode = MODE_CHORD;
-      else if (strcmp (optarg, "secchord") == 0)
-	mode = MODE_SECCHORD;
-      else
-	fatal << "allowed modes are secchord, chord and debruijn\n";
+      {
+	int i;
+	for (i = 0; i < nmodes; i++) {
+	  if (strcmp (optarg, modes[i].cmdline) == 0) {
+	    mode = modes[i].m;
+	    break;
+	  }
+	}
+	if (i == nmodes) {
+	  strbuf s;
+	  for (i = 0; i < nmodes; i++)
+	    s << " " << modes[i].cmdline;
+	  fatal << "allowed modes are" << s << "\n";
+	}
+      }
       break;
     case 'n':
       nreplica = atoi (optarg);
@@ -609,7 +603,7 @@ main (int argc, char **argv)
       cffile = optarg;
       break;
     case 'P':
-      lookup_mode = CHORD_LOOKUP_PROXIMITY;
+      mode = MODE_PROX;
       break;
     case 'p':
       myport = atoi (optarg);
@@ -670,21 +664,12 @@ main (int argc, char **argv)
 	 << chord::max_vnodes << ")\n";
     usage ();
   }
-  if ((mode != MODE_CHORD) && (lookup_mode == CHORD_LOOKUP_PROXIMITY))
-    fatal << "proximity only supported in mode chord\n";
 
   {
     int logfd = open (logfname, O_WRONLY|O_APPEND|O_CREAT, 0666);
     if (logfd < 0)
       fatal << "Couldn't open " << optarg << " for append.\n";
     modlogger::setlogfd (logfd);
-  }
-  
-  {
-    strbuf x = strbuf ("starting: ");
-    for (int i = 0; i < argc; i++) { x << argv[i] << " "; }
-    x << "\n";
-    info << x;
   }
 
   if (cffile) {
@@ -702,13 +687,25 @@ main (int argc, char **argv)
   if (ss_mode & 4)
     Configurator::only ().set_int ("chord.find_succlist_shaving", 1);
 
+  if (lbase != 1) {
+    if (mode != MODE_DEBRUIJN)
+      warnx << "logbase " << lbase << " only supported in debruijn\n";
+    Configurator::only ().set_int ("debruijn.logbase", lbase);
+  }
+
   Configurator::only ().dump ();
+  
+  {
+    strbuf x = strbuf ("starting: ");
+    for (int i = 0; i < argc; i++) { x << argv[i] << " "; }
+    x << "\n";
+    info << x;
+  }
 
   chordnode = New refcounted<chord> (wellknownhost, wellknownport,
 				     myname,
 				     myport,
-				     max_loccache,
-				     lookup_mode, lbase);
+				     max_loccache);
 
   for (int i = 0; i < vnodes; i++) {
     str db_name_prime = strbuf () << db_name << "-" << i;
@@ -716,10 +713,7 @@ main (int argc, char **argv)
     dh.push_back( dhash::produce_dhash (db_name_prime, nreplica));
   }
 
-  ptr<route_factory> f = get_factory (mode);
-  ptr<fingerlike> fl = get_fingerlike (mode);
-  chordnode->newvnode (wrap (newvnode_cb, 0), fl, f);
-
+  chordnode->newvnode (modes[mode].producer, wrap (newvnode_cb, 0));
 
   time_t now = time (NULL);
   warn << "lsd starting up at " << ctime ((const time_t *)&now);

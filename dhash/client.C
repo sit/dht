@@ -86,7 +86,7 @@ dhashcli_config_init::dhashcli_config_init ()
 
  
 dhashcli::dhashcli (ptr<vnode> node)
-  : clntnode (node), r_factory (node->get_factory ()), ordersucc_ (true)
+  : clntnode (node), ordersucc_ (true)
 {
   int ordersucc = 1;
   Configurator::only ().get_int ("dhashcli.order_successors", ordersucc);
@@ -105,7 +105,7 @@ dhashcli::retrieve (blockID blockID, cb_ret cb, int options,
   rs->callbacks.push_back (cb);
   
   if (blockID.ctype == DHASH_KEYHASH) {
-    route_iterator *ci = r_factory->produce_iterator_ptr (blockID.ID);
+    route_iterator *ci = clntnode->produce_iterator_ptr (blockID.ID);
     ci->first_hop (wrap (this, &dhashcli::retrieve_block_hop_cb, rs, ci,
 			 options, 5, guess),
 		   guess);
@@ -178,7 +178,7 @@ dhashcli::retrieve_dl_or_walk_cb (ptr<rcv_state> rs, dhash_stat status,
     else if (rs->succs.size() == 0) {
       trace << myID << ": walk ("<< rs->key
 	    << "): No luck walking successors, retrying..\n";
-      route_iterator *ci = r_factory->produce_iterator_ptr (rs->key.ID);
+      route_iterator *ci = clntnode->produce_iterator_ptr (rs->key.ID);
       delaycb (5, wrap (ci, &route_iterator::first_hop, 
 			wrap (this, &dhashcli::retrieve_block_hop_cb,
 			      rs, ci, options, retries - 1, guess),

@@ -4,7 +4,8 @@
 enum rpcstat {
   DORPC_OK = 0,
   DORPC_MARSHALLERR = 1,
-  DORPC_UNKNOWNNODE = 2
+  DORPC_UNKNOWNNODE = 2,
+  DORPC_NOHANDLER = 3
 };
 
 struct dorpc_arg {
