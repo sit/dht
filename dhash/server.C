@@ -993,27 +993,25 @@ dhash_impl::dbwrite (ref<dbrec> key, ref<dbrec> data, dhash_ctype ctype)
   bool ismutable = (ctype != DHASH_CONTENTHASH);
   int ret = 0;
   if (!exists) {
-    action = "new";
+    action = "N"; // New
     ret = mtree->insert (&blk);
   } else if (exists && ismutable) {
-    // update an existing mutable block
-    action = "update";
+    action = "U"; // update an existing mutable block
     mtree->remove (&blk);
     ret = mtree->insert (&blk);
   } else {
-    action = "repeat-store";
+    action = "R"; // Re-write
   }
 
-  // The utility of this is highly dependent on the encoding used by
-  // Ida::gen_frag.  Should ideally have a DHASH_FRAGMENT type too.
   // Won't deal well if there's a magic expansion in the encoding
-  // vector either.
+  // vector.  Should really know how big the full block is so that
+  // the right amount of the key's encoding vector is extracted...
   str x ("");
   if (key->isFrag() &&
-      data->len > 9 + 2* (int) num_dfrags ())
+      (u_long) data->len > 9 + 2 * num_dfrags ())
     x = strbuf () << " " << hexdump (data->value + 8, 2*(num_dfrags () + 1));
-  //  warn << "dbwrite: " << host_node->my_ID ()
-  //  << " " << action << " " << dbrec2id(key) << x << "\n";
+  dhashtrace << "dbwrite: " << host_node->my_ID ()
+	     << " " << action << " " << dbrec2id(key) << x << "\n";
 
   return ret;
 }
