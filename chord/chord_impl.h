@@ -110,6 +110,8 @@ class vnode_impl : public vnode {
   u_long ndofindtoes;
   u_long ndodebruijn;
 
+  vec<ptr<location> > dead_nodes;
+
   void dispatch (user_args *a);
   void stabilize_pred (void);
   void stabilize_getsucc_cb (chordID pred,
@@ -160,6 +162,9 @@ class vnode_impl : public vnode {
   void doRPC_cb (ptr<location> l, xdrproc_t proc,
 		 void *out, aclnt_cb cb, 
 		 ref<dorpc_res> res, clnt_stat err);
+
+  void check_dead_node_cb (ptr<location> l, chordstat s);
+  void check_dead_nodes ();
 
   void update_coords (ptr<location> l, vec<float> uc, float ud);
   ptr<location> closestgreedpred (const chordID &x, const vec<float> &n,

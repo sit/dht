@@ -146,6 +146,8 @@ vnode_impl::vnode_impl (ptr<locationtable> _locations,
   ndogettoes = 0;
   ndofindtoes = 0;
   ndodebruijn = 0;
+
+  delaycb (60, 0, wrap (this, &vnode_impl::check_dead_nodes));
 }
 
 vnode_impl::~vnode_impl ()

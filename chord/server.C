@@ -33,6 +33,7 @@
 #include <location.h>
 #include <locationtable.h>
 #include <math.h>
+#include <configurator.h>
 
 float gforce = 1000000;
 
@@ -350,6 +351,57 @@ vnode_impl::ping_cb (cbping_t cb, chord_node n, chordstat status)
   cb (status);
 }
 
+void
+vnode_impl::check_dead_node_cb (ptr<location> l, chordstat s)
+{
+  if (s != CHORD_OK) {
+    unsigned i=0;
+    for (i=0; i<dead_nodes.size (); i++)
+    if (dead_nodes[i]->id () == l->id ())
+        break;
+    if (i == dead_nodes.size ())
+      dead_nodes.push_back (l);
+  }
+  else {
+    warn << l->id () << " back to life\n";
+    chord_node n;
+    l->fill_node (n);
+    ptr<location> nl = locations->lookup (l->id ());
+    if (nl)
+      nl->set_alive (true);
+    else
+      locations->insert (n);
+    stabilize ();
+    notify (my_succ (), myID);
+  }
+}
+
+void
+vnode_impl::check_dead_nodes ()
+{
+  vec<ptr<location> > sl = succs ();
+  size_t sz = sl.size ();
+  int nsucc;
+  bool ok = Configurator::only ().get_int ("chord.nsucc", nsucc);
+  assert (ok);
+
+  while (!dead_nodes.empty ()) {
+    ptr<location> l = dead_nodes.pop_front ();
+    timespec ts;
+    clock_gettime (CLOCK_REALTIME, &ts);
+    if ((ts.tv_sec - l->dead_time ()) < 2592000 &&
+	(sz < (unsigned)nsucc ||
+	 (sz > 1 &&
+	  between (sl[0]->id (), sl[sz-1]->id (), l->id ())))) {
+      // not enough successors, or if the dead node could be a
+      // successor
+      ping (l, wrap (this, &vnode_impl::check_dead_node_cb, l));
+    }
+  }
+
+  delaycb (60, 0, wrap (this, &vnode_impl::check_dead_nodes));
+}
+
 
 long
 vnode_impl::doRPC (const chordID &ID, const rpc_program &prog, int procno, 
@@ -416,10 +468,21 @@ vnode_impl::doRPC_cb (ptr<location> l, xdrproc_t proc,
 		      ref<dorpc_res> res, clnt_stat err) 
 {
   if (err) {
+    if (!l->alive ()) {
+      // benjie: no longer alive, put it on the dead_nodes list so
+      // we can try to contact it periodically
+      unsigned i=0;
+      for (i=0; i<dead_nodes.size (); i++)
+      if (dead_nodes[i]->id () == l->id ())
+          break;
+      if (i == dead_nodes.size ())
+        dead_nodes.push_back (l);
+    }
     cb (err);
-  } else if (res->status != DORPC_OK) {
+  }
+  else if (res->status != DORPC_OK)
     cb (RPC_CANTRECV);
-  } else {
+  else {
     float distance = l->distance ();
     vec<float> u_coords;
     for (unsigned int i = 0; i < res->resok->src_coords.size (); i++) {
