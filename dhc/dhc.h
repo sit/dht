@@ -7,149 +7,90 @@
 #include <chord_types.h>
 #include <dhash_types.h>
 #include <location.h>
+#include <locationtable.h>
 #include <dhc_prot.h>
+
+extern void set_locations (vec<ptr<location> >, ptr<vnode>, vec<chordID>);
 
 // PK blocks data structure for maintaining consistency.
 
 struct replica_t {
   u_int64_t seqnum;
-  vec<ptr<location> > nodes;
-  uint size;
-  u_char *buf;
+  vec<chordID> nodes;
   
   replica_t () : seqnum (0) { };
 
-  u_char *bytes ()
-  {
-    size = sizeof (u_int64_t) + nodes.size ();
-    if (buf) free (buf);
-    buf = (u_char *) malloc (size);
-    bcopy (&seqnum, buf, sizeof (u_int64_t));
-    bcopy (nodes.base (), buf + sizeof (u_int64_t), nodes.size ());
-    return buf;
-  }
-
-  ~replica_t () 
-  { 
-    nodes.clear (); 
-    if (buf) free (buf);
-  }
+  ~replica_t () { nodes.clear (); }
 };
 
-#if 0
-struct proposal_t {
-  paxos_seqnum_t proposal_num;
-  u_int64_t cur_config_seqnum;
-  ptr<replica_t> new_config;
+struct keyhash_meta {
+  replica_t config;
+  paxos_seqnum_t accepted;
 };
-#endif
+
+struct dhc_block {
+  chordID id;
+  ptr<keyhash_meta> meta;
+  ptr<keyhash_data> data;
+};
 
 struct paxos_state_t {
   bool recon_inprogress;
   uint promise_recvd;
   uint accept_recvd;
   vec<chordID> acc_conf;
-  uint size;
-  u_char *buf;
   
-  paxos_state_t () : recon_inprogress(false), promise_recvd(0), accept_recvd(0),
-    buf (NULL)
-  { acc_conf = vec<chordID> (); }
+  paxos_state_t () : recon_inprogress(false), promise_recvd(0), accept_recvd(0) {}
   
-  u_char *bytes () 
-  {
-    if (buf) free (buf);
-    size = sizeof (bool) + sizeof (uint) + sizeof (uint) + acc_conf.size ();
-    buf = (u_char *) malloc (size);
-    bcopy (&recon_inprogress, buf, sizeof (bool));
-    bcopy (&promise_recvd, buf + sizeof (bool), sizeof (uint));
-    bcopy (&accept_recvd, buf + sizeof (bool) + sizeof (uint), sizeof (uint));
-    bcopy (acc_conf.base (), buf + sizeof (bool) + 2*sizeof (uint), acc_conf.size ());
-    return buf;
-  }
-  
-  ~paxos_state_t () 
-  {
-    if (buf) free (buf);
-    acc_conf.clear ();
-  }
+  ~paxos_state_t () { acc_conf.clear ();}
 };
 
-struct keyhash_meta {
-  ptr<replica_t> config;
-  ptr<replica_t> new_config;   //next accepted config
-  paxos_seqnum_t proposal;     //proposal number
-  paxos_seqnum_t promised;     //promised number
-  paxos_seqnum_t accepted;     //latest accepted proposal number
+struct dhc_soft {
+  chordID id;
+  u_int64_t config_seqnum;
+  vec<ptr<location> > config;
+  vec<ptr<location> > new_config;   //next accepted config
+  paxos_seqnum_t proposal;
+  paxos_seqnum_t promised;
 
   ptr<paxos_state_t> pstat;
+  
+  ihash_entry <dhc_soft> link;
 
-  uint size;
-  u_char *buf;
-
-  keyhash_meta () : buf (NULL)
+  dhc_soft (ptr<vnode> myNode, ptr<dhc_block> kb)
   {
-    config = New refcounted<replica_t>;
+    id = kb->id;
+    config_seqnum = kb->meta->config.seqnum;
+    set_locations (config, myNode, kb->meta->config.nodes);
     proposal.seqnum = 0;
-    bzero (&proposal.proposer, sizeof (chordID));
-    promised.seqnum = 0;
-    bzero (&promised.proposer, sizeof (chordID));
-    accepted.seqnum = 0;
-    bzero (&accepted.proposer, sizeof (chordID));    
-
+    bzero (&proposal.proposer, sizeof (chordID));    
+    promised.seqnum = kb->meta->accepted.seqnum;
+    bcopy (&kb->meta->accepted.proposer, &promised.proposer, sizeof (chordID));
+    
     pstat = New refcounted<paxos_state_t>;
   }
   
-  void set_new_config ()
+  ~dhc_soft () 
   {
-    
+    config.clear ();
+    new_config.clear ();
   }
-
-  u_char *bytes () 
-  {
-    u_char *cbuf = config->bytes ();
-    u_char *pbuf = pstat->bytes ();
-    size = config->size + 3*sizeof (paxos_seqnum_t) + pstat->size;
-
-    if (buf) free (buf);
-    buf = (u_char *) malloc (size);
-    bcopy (cbuf, buf, config->size);
-    bcopy (&proposal, buf + config->size, sizeof (paxos_seqnum_t));
-    bcopy (&promised, buf + config->size + sizeof (paxos_seqnum_t), 
-	   sizeof (paxos_seqnum_t));
-    bcopy (&accepted, buf + config->size + 2*sizeof (paxos_seqnum_t), 
-	   sizeof (paxos_seqnum_t));
-    bcopy (pbuf, buf + config->size + 3*sizeof (paxos_seqnum_t), 
-	   pstat->size);
-
-    return buf;
-  }
-
-  ~keyhash_meta () 
-  {
-    if (buf) free (buf);
-  }
-};
-
-struct dhc_block {
-  chordID id;
-  ptr<keyhash_data> data;
-  ptr<keyhash_meta> meta;
 };
 
 class dhc {
   
   ptr<vnode> myNode;
   ptr<dbfe> db;
+  ihash<chordID, dhc_soft, &dhc_soft::id, &dhc_soft::link, hashID> dhcs;
 
   uint n_replica;
 
   void recv_prepare (user_args *);
-  void recv_promise (ptr<dhc_block>, ref<dhc_prepare_res>, clnt_stat);
+  void recv_promise (chordID, ref<dhc_prepare_res>, clnt_stat);
   void recv_propose (user_args *);
-  void recv_accept (ptr<dhc_block>, ref<dhc_propose_res>, clnt_stat);
+  void recv_accept (chordID, ref<dhc_propose_res>, clnt_stat);
   void recv_newconfig (user_args *);
-  void recv_newconfig_ack (ptr<dhc_block>, ref<dhc_newconfig_res>, clnt_stat);
+  void recv_newconfig_ack (chordID, ref<dhc_newconfig_res>, clnt_stat);
   
  public:
 

@@ -21,7 +21,7 @@ print_error (str where, int err, int dhc_err)
 }
 
 void
-set_new_config (ptr<dhc_block> b, ptr<dhc_propose_arg> arg, ptr<vnode> myNode, 
+set_new_config (dhc_soft *b, ptr<dhc_propose_arg> arg, ptr<vnode> myNode, 
 		uint k)
 {
   ptr<vec<chordID> > nodes = New refcounted<vec<chordID> >;
@@ -32,17 +32,28 @@ set_new_config (ptr<dhc_block> b, ptr<dhc_propose_arg> arg, ptr<vnode> myNode,
     k = replicas.size ();
   }
 
-  if (b->meta->new_config->nodes.size () > 0) {
+  if (b->new_config.size () > 0) {
     warn << "Already a new_config??\n";
     exit (-1);
   }
 
   for (uint i=0; i<k; i++) {
     nodes->push_back (replicas[i]->id ());
-    b->meta->new_config->seqnum = b->meta->config->seqnum + 1;
-    b->meta->new_config->nodes.push_back (replicas[i]);
+    // Also set the new_config in b's meta data.
+    b->new_config.push_back (replicas[i]);
   }
   arg->new_config.set (nodes->base (), nodes->size ());
+}
+
+void
+set_locations (vec<ptr<location> > locs, ptr<vnode> myNode, vec<chordID> ids)
+{
+  ptr<location> l;
+  locs.clear ();
+  for (uint i=0; i<ids.size (); i++)
+    if (l = myNode->locations->lookup (ids[i]))
+      locs.push_back (l);
+    else warn << "Node " << ids[i] << " does not exist !!!!\n";
 }
 
 void
