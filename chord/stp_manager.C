@@ -40,7 +40,7 @@ stp_manager::~stp_manager ()
 
 void
 stp_manager::ratecb () {
-#if 0
+#ifdef VERBOSE_LOG
   warnx << "sent " << nsent << " RPCs in the last second\n";
   warnx << "received " << *nrcv << " RPCs in the last second\n";
   warnx << npending << " RPCs are outstanding\n";
@@ -143,8 +143,11 @@ stp_manager::timeout (rpc_state *C)
   // the retransmit timers of any RPCs that are
   // bound for the same destination.
 
+#ifdef VERBOSE_LOG  
   warn << "timeout for RPC pending on " << C->loc->id ()
-       << " " << inet_ntoa (C->loc->saddr().sin_addr) << (u_int)C->out << "\n";
+       << " " << inet_ntoa (C->loc->saddr().sin_addr)
+       << " " (u_int)C->out << "\n";
+#endif /* VERBOSE_LOG */
 
 #if 0
   rpc_state *O = pending.first;
@@ -187,16 +190,18 @@ void
 stp_manager::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
 {
   dorpc_res *res = (dorpc_res *)C->out;
-
+  
   //  warn << "RPCTIMING: " << getusec () << " out = " << (u_int)C->out << " returned\n";
 
   if (err) {
     nrpcfailed++;
     C->loc->set_alive (false);
     warnx << gettime () << " RPC failure: " << err
-          << " destined for " << C->ID << " seqno " << C->seqno << "\n";
-
-
+          << " destined for " << C->ID
+	  << " at " << inet_ntoa (C->loc->saddr().sin_addr)
+	  << " seqno " << C->seqno
+	  << " out " << (u_int) C->out
+	  << "\n";
   } else if (res->status == DORPC_MARSHALLERR) {
     nrpcfailed++;
     err = RPC_CANTDECODEARGS;
@@ -223,7 +228,6 @@ stp_manager::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
       update_latency (C->from, C->loc, lat);
     } 
   }
-
   
   pending.remove (C);
   user_rexmit_table.remove (C);
@@ -614,8 +618,10 @@ rpccb_chord::send (long _sec, long _nsec)
 void
 rpccb_chord::reset_tmo ()
 {
+#ifdef VERBOSE_LOG
   long oldsec = sec;
   long oldnsec = nsec;
+#endif /* VERBOSE_LOG */
   nsec *= 2;
   sec *= 2;
   while (nsec >= 1000000000) {
@@ -624,8 +630,12 @@ rpccb_chord::reset_tmo ()
   }
 
   if (sec > 2) sec = 2;
-
-  warn << inet_ntoa (((sockaddr_in *)&s)->sin_addr) << ": timer was " << oldsec << "." << oldnsec << " now is " << sec << "." << nsec << "; rexmits is " << rexmits << "\n";
+#ifdef VERBOSE_LOG
+  warn << inet_ntoa (((sockaddr_in *)&s)->sin_addr)
+       << ": timer was " << oldsec << "." << oldnsec
+       << " now is " << sec << "." << nsec
+       << "; rexmits is " << rexmits << "\n";
+#endif /* VERBOSE_LOG */  
   if (tmo) timecb_remove (tmo);
   tmo = delaycb (sec, nsec, wrap (this, &rpccb_chord::timeout_cb, deleted));
 }
@@ -660,9 +670,9 @@ rpccb_chord::timeout_cb (ptr<bool> del)
     sockaddr_in *s = (sockaddr_in *)dest;
     dorpc_arg *args = (dorpc_arg *)in.get ();
 
-    warnx << gettime() << " REXMIT " << xid
-	  << " " << args->progno << ":" << args->procno << 
-	  " rexmits " << rexmits << ", timeout " 
+    warnx << gettime () << " REXMIT " << xid
+	  << " " << args->progno << ":" << args->procno
+	  << " rexmits " << rexmits << ", timeout " 
 	  << sec*1000 + nsec/(1000*1000) << " ms, destined for " 
 	  << inet_ntoa (s->sin_addr) << " out is " << (u_int)outmem << "\n";
 
