@@ -1,0 +1,9 @@
+#
+# Test file
+#
+join 5 10
+join 3 100
+join 11 100
+join 7 100
+join 4 100         
+ 
