@@ -160,6 +160,8 @@ dhc::recv_accept (chordID bID, ref<dhc_propose_res> proposal,
       arg->bID = kb->id;
       arg->data.tag.ver = kb->data->tag.ver;
       arg->data.tag.writer = kb->data->tag.writer;
+      warn << "*******kb->data len " << kb->data->data.size () 
+	   << " kb->data " << kb->data->data.base () << "\n";
       arg->data.data.set (kb->data->data.base (), kb->data->data.size ());
       arg->old_conf_seqnum = kb->meta->config.seqnum;
       if (!set_ac (&kb->meta->new_config.nodes, b->pstat->acc_conf)) {
