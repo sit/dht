@@ -75,7 +75,10 @@ sub doevents {
     for (my $i = 1; $i <= $n; $i++) {
 	if ($distr =~ /linear/) {
 	    $node = ($node % $nnodes) + 1;
+	} elsif ($distr =~ /constant/) {
+	    $node = 1;
 	}
+
 	if ($type == 0) {
 	    print EV "node $time $node $protocol:$type @args\n";
 	} elsif ($type == 4) {
@@ -83,6 +86,7 @@ sub doevents {
 	    print EV "node $time $node $protocol:$type key=$keys[$nk]\n";
 	    $nk++;
 	}
+
 	$time = $time + $interval;
     }
 }

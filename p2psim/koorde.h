@@ -33,14 +33,16 @@ protected:
   Chord::CHID debruijn;
   IDMap d;
   IDMap last;
+  bool isstable;
 
   static Chord::CHID Koorde::nextimagin (CHID i, CHID kshift) {
-    uint t = ConsistentHash::topbit (kshift);
+    uint t = ConsistentHash::getbit (kshift, NBCHID - 1);
     CHID r = i << 1 | t;
     // printf ("nextimagin: kshift %qx topbit is %u, i is %qx new i is %qx\n",
     //  kshift, t, i, r);
     return r;
   }
+  Chord::CHID Koorde::firstimagin (CHID, CHID, CHID, CHID*);
 
   vector<Chord::IDMap> Koorde::find_successors(CHID key, int m);
   void fix_debruijn();

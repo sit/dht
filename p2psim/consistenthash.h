@@ -65,11 +65,34 @@ public:
     memcpy (&r, buf, 8);
     return r;
   }
-
-  static uint topbit (CHID n) {
-    uint r = n >> (NBCHID - 1);
-    return r;
+ 
+  // return last bit pos in which n and m match.  if n==m, then pos is 0.
+  // if n != m, then pos is NBCHID.
+  static uint bitposmatch (CHID n, CHID m) {
+    uint i;
+    for (i = NBCHID - 1; i >= 0; i--) {
+      if (getbit (n, i) != getbit (m, i)) {
+	break;
+      }
+    }
+    return i + 1;
   }
+
+  static uint getbit (CHID n, uint p) {
+    assert (p < NBCHID);
+    uint r = ((n >> p) & 0x1);
+    return r;
+  };
+
+  static CHID setbit (CHID n, uint p, uint v) {
+    assert (p < NBCHID);
+    CHID mask = ((CHID) 1) << p;
+    mask = ~mask;
+    CHID r = n & mask;
+    CHID val = ((CHID) v) << p;
+    r = r | val;
+    return r;
+  };
 
 };
 
