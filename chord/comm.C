@@ -351,11 +351,17 @@ void
 tcp_manager::doRPC_tcp_cleanup (ptr<aclnt> c, RPC_delay_args *args,
                                 clnt_stat err)
 {
-  long now = getusec ();
-  long diff = now - args->now;
-  if (diff > 5000000)
-    warn << "long tcp latency to " << args->l->address ().hostname
-         << ": " << diff << "\n";
+  long diff;
+  if (args->from && 
+      args->from->address ().hostname == args->l->address ().hostname)
+    diff = 5000;
+  else {
+    long now = getusec ();
+    diff = now - args->now;
+    if (diff > 5000000)
+      warn << "long tcp latency to " << args->l->address ().hostname
+           << ": " << diff << "\n";
+  }
   update_latency (NULL, args->l, diff);
   (*args->cb)(err);
   delete args;
