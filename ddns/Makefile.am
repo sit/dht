@@ -2,8 +2,6 @@
 
 SUBDIRS = ddnsq
 
-CLEANFILES = core *.core *~
-
 EXTRA_DIST = .cvsignore
 CLEANFILES = core *.core *~ *.rpo
 MAINTAINERCLEANFILES = Makefile.in
