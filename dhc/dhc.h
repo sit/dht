@@ -17,21 +17,85 @@ extern void set_locations (vec<ptr<location> >, ptr<vnode>, vec<chordID>);
 struct replica_t {
   u_int64_t seqnum;
   vec<chordID> nodes;
+  uint size;
+  u_char *buf;
   
   replica_t () : seqnum (0) { };
-
-  ~replica_t () { nodes.clear (); }
+  ~replica_t () { if (buf) free (buf); nodes.clear (); }
+  u_char *bytes ()
+  {
+    if (buf) free (buf);
+    size = sizeof (seqnum) + nodes.size ();
+    buf = (u_char *) malloc (size);
+    bcopy (&seqnum, buf, sizeof (seqnum));
+    bcopy (nodes.base (), buf + sizeof (seqnum), nodes.size ());
+    return buf;
+  }
 };
 
 struct keyhash_meta {
   replica_t config;
   paxos_seqnum_t accepted;
+  uint size;
+  u_char *buf;
+  
+  keyhash_meta () 
+  {
+    accepted.seqnum = 0;
+    bzero (&accepted.proposer, sizeof (chordID));        
+  }
+  ~keyhash_meta () { if (buf) free (buf); }
+  u_char *bytes ()
+  {
+    if (buf) free (buf);
+    u_char *cbuf = config.bytes ();
+    size = config.size + sizeof (u_int64_t) + sizeof (chordID);
+    buf = (u_char *) malloc (size);
+    bcopy (cbuf, buf, config.size);
+    bcopy (&accepted.seqnum, buf + config.size, sizeof (u_int64_t));
+    bcopy (&accepted.proposer, buf + config.size + sizeof (u_int64_t),
+	   sizeof (chordID));
+    return buf;
+  }
+
 };
 
 struct dhc_block {
   chordID id;
   ptr<keyhash_meta> meta;
   ptr<keyhash_data> data;
+  uint size;
+  u_char *buf;
+
+  dhc_block ()
+  {
+    meta = New refcounted<keyhash_meta>;
+    data = New refcounted<keyhash_data>;
+  }
+
+  ~dhc_block () 
+  {
+    if (buf) free (buf);
+    delete meta;
+    delete data;
+  }
+  
+  u_char *bytes ()
+  {
+    if (buf) free (buf);
+    u_char *mbuf = meta->bytes ();
+    size = sizeof (chordID) + meta->size + sizeof (u_int64_t) + sizeof (chordID) +
+      data->data.size ();
+    buf = (u_char *) malloc (size);
+    bcopy (&id, buf, sizeof (chordID));
+    bcopy (mbuf, buf + sizeof (chordID), meta->size);
+    bcopy (&data->tag.ver, buf + sizeof (chordID) + meta->size, sizeof (u_int64_t));
+    bcopy (&data->tag.writer, buf + sizeof (chordID) + meta->size + sizeof (u_int64_t),
+	   sizeof (chordID));
+    bcopy (data->data.base (), buf + sizeof (chordID) + meta->size + 
+	   sizeof (u_int64_t) + sizeof (chordID), data->data.size ());
+    return buf;
+  }
 };
 
 struct paxos_state_t {
@@ -42,7 +106,7 @@ struct paxos_state_t {
   
   paxos_state_t () : recon_inprogress(false), promise_recvd(0), accept_recvd(0) {}
   
-  ~paxos_state_t () { acc_conf.clear ();}
+  ~paxos_state_t () { acc_conf.clear (); }
 };
 
 struct dhc_soft {

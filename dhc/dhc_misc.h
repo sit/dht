@@ -22,7 +22,9 @@ to_dhc_block (ptr<dbrec> rec)
 static inline ptr<dbrec> 
 to_dbrec (ptr<dhc_block> block)
 {
-  return NULL;
+  u_char *bytes = block->bytes ();
+  ptr<dbrec> rec = New refcounted<dbrec> (bytes, block->size);
+  return rec;
 };
 
 static inline bool
