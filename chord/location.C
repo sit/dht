@@ -373,17 +373,6 @@ locationtable::lookup (const chordID &n)
     return NULL;
   }
 
-  {
-    locwrap *foo = locs.first ();
-    size_t mygood = 0;
-    while (foo) {
-      if (foo->good ())
-	mygood++;
-      foo = locs.next (foo);
-    }
-    assert (good == mygood);
-  }
-
   cachedlocs.remove (l);
   cachedlocs.insert_tail (l);
   return l->loc_;
