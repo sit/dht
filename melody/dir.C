@@ -55,7 +55,7 @@ dir::root_test_cb(ptr<dhash_block> blk)
     struct dir_record dr;
     dr.type = 0;
     mpz_get_raw (dr.key, sha1::hashsize, &dirhash);
-    strlcpy(dr.entry, "..", 256);
+    strncpy(dr.entry, "..", 256);
     cc->dhash->append (dirhash, (char *)&dr, sizeof(dr), wrap (this, &dir::flush_cb, true, wrap(this, &dir::null)));
   }
 }
@@ -182,7 +182,7 @@ dir::add(str name, int type, bigint tmphash, int size, cbv redir)
   struct dir_record dr;
   dr.type = type;
   dr.size = size;
-  strlcpy(dr.entry, name.cstr(), 256);
+  strncpy(dr.entry, name.cstr(), 256);
   mpz_get_raw (dr.key, sha1::hashsize, &tmphash);
   if(type == 0)
     cc->dhash->append (dirhash, (char *)&dr, sizeof(dr), wrap (this, &dir::flush_cb, false, wrap(this, &dir::add2, type, tmphash, size, redir)));
@@ -195,7 +195,7 @@ dir::add2(int type, bigint tmphash, int size, cbv redir) {
   struct dir_record dr;
   dr.type = type;
   dr.size = size;
-  strlcpy(dr.entry, "..", 256);
+  strncpy(dr.entry, "..", 256);
   mpz_get_raw (dr.key, sha1::hashsize, &dirhash);
   cc->dhash->append (tmphash, (char *)&dr, sizeof(dr), wrap (this, &dir::flush_cb, true, redir));
 }
