@@ -168,6 +168,18 @@ struct dhash_retrieve_arg {
 struct dhash_retrieve_resok {
   dhash_value block;
   int hops;
+  int errors;
+};
+
+struct dhash_insert_resok {
+  chordID destID;
+};
+
+union dhash_insert_res switch (dhash_stat status) {
+ case DHASH_OK:
+   dhash_insert_resok resok;
+ default:
+   void;
 };
 
 union dhash_retrieve_res switch (dhash_stat status) {
@@ -183,7 +195,7 @@ program DHASHGATEWAY_PROGRAM {
 		void 
 		DHASHPROC_NULL (void) = 1;
 
-	        dhash_stat
+	        dhash_insert_res
 		DHASHPROC_INSERT (dhash_insert_arg) = 2;
 
                 dhash_retrieve_res
