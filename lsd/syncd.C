@@ -1,5 +1,6 @@
 #include <arpc.h>
 #include <crypt.h>
+#include <configurator.h>
 #include <id_utils.h>
 #include <syncer.h>
 #include <location.h>
@@ -80,6 +81,9 @@ main (int argc, char **argv)
 
   if (! (dfrags > 0 && efrags > 0 && host.r.port > 0))
     usage ();
+
+  Configurator::only ().set_int ("dhash.dfrags", dfrags);
+  Configurator::only ().set_int ("dhash.efrags", efrags);
 
   ptr<locationtable> locations = New refcounted<locationtable> (1024);
   
