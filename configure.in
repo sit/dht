@@ -1,4 +1,4 @@
-dnl $Id: configure.in,v 1.23 2002/12/09 00:31:26 jbicket Exp $
+dnl $Id: configure.in,v 1.24 2003/01/03 19:56:16 sit Exp $
 dnl
 dnl Process this file with autoconf to produce a configure script.
 dnl
@@ -14,14 +14,9 @@ AC_PROG_CC
 AC_PROG_CPP
 AC_PROG_CXX
 
-dnl gtk for the visualization tool
-AC_ARG_ENABLE(vis,
---enable-vis             Build the visualization tool (needs gtk),,
-enable_vis=no)
-if test "$enable_vis" = yes; then
-	AM_PATH_GTK_FOO(1.2.0,,AC_MSG_ERROR(devel/vis needs GTK))
-fi
-AM_CONDITIONAL(BUILDVIS, test "$enable_vis" = yes)
+dnl Check for GTK and allow conditional Makefile.am statements
+AM_PATH_GTK_FOO(1.2.0,,AC_MSG_WARN(gtk not available; vis will not be built))
+AM_CONDITIONAL(GTK_AVAILABLE, test "$GTK_CFLAGS")
 
 dnl physical nodes?
 AC_MSG_CHECKING(whether to emulate physical nodes...)
@@ -32,20 +27,10 @@ AC_ARG_ENABLE(pnode,
     AC_MSG_RESULT(yes)
 fi],AC_MSG_RESULT(no))
 
-dnl debruijn routing?
-AC_MSG_CHECKING(whether to use Debruijn routing instead of fingers...)
-AC_ARG_ENABLE(debruijn,
---enable-debruijn       Use Debruijn routing over Finger Table,
-    AC_MSG_RESULT(yes),[
-    AC_DEFINE(FINGERS, 1, [Undefine if Debruijn routing is desired])
-    AC_MSG_RESULT(no)])
-
-
-dnl more checks that fuck up the gtk test
 SFS_WFLAGS
 AC_PROG_INSTALL
 AC_PROG_LN_S
-dnl AC_PROG_RANLIB
+AC_PROG_RANLIB
 
 AM_DISABLE_SHARED
 test -z "$target" && target=NONE
