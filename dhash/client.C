@@ -301,6 +301,7 @@ dhashcli::lookup_route (chordID blockID, bool usecachedsucc, dhashcli_routecb_t 
     chordID x = clntnode->lookup_closestsucc (blockID);
     route e_path;
     (*cb) (DHASH_OK, x, e_path);
+    return;
   }
   clntnode->find_successor (blockID,
 			    wrap (this, &dhashcli::lookup_findsucc_route_cb,
