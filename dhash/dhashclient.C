@@ -63,7 +63,7 @@ dhashclient::dhashclient(str sockname)
 	   sockname.cstr (), strerror (errno));
   }
 
-  gwclnt = aclnt::alloc (axprt_unix::alloc (fd), dhashgateway_program_1);
+  gwclnt = aclnt::alloc (axprt_unix::alloc (fd, 1024*1025), dhashgateway_program_1);
 }
 
 dhashclient::dhashclient (ptr<axprt_stream> xprt)

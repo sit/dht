@@ -91,7 +91,7 @@ client_accept (int fd)
   if (fd < 0)
     fatal ("EOF\n");
 
-  ref<axprt_stream> x = axprt_stream::alloc (fd);
+  ref<axprt_stream> x = axprt_stream::alloc (fd, 1024*1025);
 
   // XXX these dhashgateway objects are leaked
   //
