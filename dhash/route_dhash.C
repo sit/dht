@@ -12,7 +12,7 @@
 #endif
 
 u_int MTU = (getenv ("DHASH_MTU") ? atoi (getenv ("DHASH_MTU")) : 1024);
-#define LOOKUP_TIMEOUT 30
+#define LOOKUP_TIMEOUT 60
 static int gnonce;
 
 
@@ -322,13 +322,13 @@ route_dhash::block_cb (s_dhash_block_arg *arg)
     for (u_int i = 0; i < arg->nodelist.size (); i++)
       succs.push_back (arg->nodelist[i]);
     walk (succs);
-    return;
+  } else {
+    dhash_download::execute (f->get_vnode (), arg->source, blockID,
+			     arg->res.base (), arg->res.size (), 
+			     arg->attr.size,
+			     arg->cookie, arg->lease, ask_for_lease,
+			     wrap (mkref(this), &route_dhash::gotblock));
   }
-
-  dhash_download::execute (f->get_vnode (), arg->source, blockID,
-			   arg->res.base (), arg->res.size (), arg->attr.size,
-			   arg->cookie, arg->lease, ask_for_lease,
-			   wrap (mkref(this), &route_dhash::gotblock));
 }
 
 void

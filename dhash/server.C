@@ -184,8 +184,7 @@ dhash::dhash(str dbname, ptr<vnode> node,
   delaycb (SYNCTM, wrap (this, &dhash::sync_cb));
 
   if (MERKLE_ENABLED) {
-    delaycb (REPTM, wrap (this, &dhash::replica_maintenance_timer, 0));
-    //delaycb (PRTTM, wrap (this, &dhash::partition_maintenance_timer));
+    merkle_tcb = delaycb (REPTM, wrap (this, &dhash::replica_maintenance_timer, 0));
   } else {
     install_replica_timer ();
     transfer_initial_keys ();
@@ -234,6 +233,7 @@ dhash::sendblock_cb (callback<void>::ref cb, dhash_stat err, chordID blockID)
 void
 dhash::replica_maintenance_timer (u_int index)
 {
+  merkle_tcb = NULL;
   update_replica_list ();
 
 #if 0
@@ -275,7 +275,7 @@ dhash::replica_maintenance_timer (u_int index)
     }
   }
 
-  delaycb (REPTM, wrap (this, &dhash::replica_maintenance_timer, index));
+  merkle_tcb = delaycb (REPTM, wrap (this, &dhash::replica_maintenance_timer, index));
 }
 
 #if 0
@@ -1312,6 +1312,11 @@ dhash::stop ()
     warnx << "stop replica timer\n";
     timecb_remove (check_replica_tcb);
     check_replica_tcb = NULL;
+  }
+  if (merkle_tcb) {
+    timecb_remove (merkle_tcb);
+    merkle_tcb = NULL;
+    warn << "stop merkle timer\n";
   }
 }
 
