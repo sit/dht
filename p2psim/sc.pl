@@ -108,6 +108,9 @@ sub doevents {
 	    print EV "node $time $allnodes[$node] $protocol:$type key=$keys[$nk]\n";
 	    $nk++;
 	} elsif ($type =~ /crash/) {
+	    while ($deadnodes[$node] == 1) {
+		$node = int(rand ($nnodes)) + 1;
+	    }
 	    $deadnodes[$node] = 1;
 	    print EV "node $time $allnodes[$node] $protocol:$type\n";
 	}

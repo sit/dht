@@ -199,6 +199,9 @@ Koorde::find_successors(CHID key, uint m, bool intern)
 	r.kshift = kpath.back ();
 	r.i = ipath.back ();
         doRPC (r.next.ip, &Chord::alert_handler, &aa, &ar);
+	path.pop_back ();
+	kpath.pop_back ();
+	ipath.pop_back ();
       } else {
 	r.v.clear ();
 	break; 
