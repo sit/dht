@@ -597,20 +597,19 @@ vnode_impl::update_coords (vec<float> uc, float ud)
     // add v into the overall force vector
     Coord::vector_add (f, v);
     
-    // Coord::print_vector ("f ", f);
-  }
-      
-  
-  timestep -= 0.0025;
-  timestep = (timestep < 0.05) ? 0.05 : timestep;
+    timestep -= 0.0025;
+    timestep = (timestep < 0.05) ? 0.05 : timestep;
 
-  Coord::scalar_mult(f, timestep);
-  Coord::vector_add (coords, f);
+    Coord::scalar_mult(f, timestep);
+    Coord::vector_add (coords, f);
   
-  //  Coord::print_vector ("COORD f ", f);
-  //Coord::print_vector("COORD coords ", coords);
+    //  Coord::print_vector ("COORD f ", f);
+    //Coord::print_vector("COORD coords ", coords);
     
-  me_->set_coords (coords);
+    me_->set_coords (coords);
+  } else {
+    printf ("COORD: ignored actual of %f\n", actual);
+  }
 }
 
 long
