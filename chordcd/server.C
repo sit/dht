@@ -1,6 +1,6 @@
 // KNOWN ISSUES:
 //   * READDIR
-//     - doesn't handle boundary conditions exactly correctly
+//     - 
 //   * READDIRP
 //     - completely broken/not really implemented
 //   * READ
@@ -38,10 +38,8 @@
 static void splitpath (vec<str> &out, str in);
 static fattr3 ro2nfsattr (sfsro_inode *si);
 
-static void parentpath (str &parent, str &filename, const str fullpath);
-static str parentpath(const str fullpath);
 
-
+// XXX keep in sync with same function in sfsrodb/sfsrodb.C
 static uint64
 path2fileid(const str path)
 {
@@ -76,7 +74,6 @@ chord_server::setrootfh (str root, cbfh_t rfh_cb)
     str dearm = dearmor64A (rootfhstr);
     chordID ID;
     mpz_set_rawmag_be (&ID, dearm.cstr (), dearm.len ());
-
     //fetch the root file handle too..
     fetch_data (ID, wrap (this, &chord_server::getroot_fh, rfh_cb));
   }
@@ -308,12 +305,12 @@ chord_server::lookup_inode_cb (nfscall *sbp, chordID ID, ptr<sfsro_data> data)
     sbp->error (NFS3ERR_STALE);
   else if (data->type != SFSRO_INODE) 
     sbp->error (NFS3ERR_IO);
-  else if (data->inode->type != SFSRODIR && data->inode->type != SFSRODIR_OPAQ) {
+  else if (data->inode->type != SFSRODIR && data->inode->type != SFSRODIR_OPAQ)
     sbp->error (NFS3ERR_NOTDIR);
-  } else {
-      diropargs3 *dirop = sbp->template getarg<diropargs3> ();
-      lookup (data, ID, dirop->name,
-		 wrap (this, &chord_server::lookup_lookup_cb, sbp, data, ID));
+  else {
+    diropargs3 *dirop = sbp->template getarg<diropargs3> ();
+    lookup (data, ID, dirop->name,
+	    wrap (this, &chord_server::lookup_lookup_cb, sbp, data, ID));
   }
 }
 
@@ -344,47 +341,6 @@ chord_server::lookup_lookup_cb (nfscall *sbp, ptr<sfsro_data> dirdata, chordID d
 }
 
 
-/* Given a path, split it into two pieces:
-   the parent directory path and the filename.
-
-   Examples:
-
-   path      parent   filename
-   "/"       "/"      ""
-   "/a"      "/"      "a"
-   "/a/"     "/"      "a"
-   "/a/b"    "/a"     "b"
-   "/a/b/c"  "/a/b"   "c"
-*/
-static void
-parentpath (str &parent, str &filename, const str inpath)
-{
-  vec<str> ppv;
-  parent = str ("/");
-  filename = str ("");
-
-  splitpath (ppv, inpath);
-
-  if (ppv.size () == 0)
-    return;
-
-  filename = ppv.pop_back ();
-  if (ppv.size () == 0)
-    return;
-
-  // What a non-intuitive way to do concatenation!
-  parent = strbuf () << "/" << join (str("/"), ppv);
-}
-
-
-static str
-parentpath (const str fullpath)
-{
-  str p;
-  str c;
-  parentpath (p, c, fullpath);
-  return p;
-}
 
 void
 chord_server::readdir_inode_cb (nfscall *sbp, chordID dataID, ptr<sfsro_data> data)
@@ -397,19 +353,6 @@ chord_server::readdir_inode_cb (nfscall *sbp, chordID dataID, ptr<sfsro_data> da
     sbp->error (NFS3ERR_NOTDIR);
   else {
     readdir3args *nfsargs = sbp->template getarg<readdir3args> ();
-    
-    // subtle note:
-    //   The cookie of the last entry in a directory is special.
-    //   Its value is set to: (block # << 32) | 0xffffffff.
-    //   Thus when cookie is incremented, this roles over to the
-    //   first entry in the next directory block.  But
-    //   if cookie is set to being in the middle of the block,
-    //   incrementing it simply moves on to the next directory
-    //   entry within that block.
-
-    if (nfsargs->cookie != 0)
-      nfsargs->cookie++; // start with the next directory entry
-
     uint32 blockno = nfsargs->cookie >> 32;
     read_file_data (blockno, data->inode->reg, false,
 		    wrap (this, &chord_server::readdir_fetch_dirdata_cb,
@@ -430,13 +373,9 @@ chord_server::readdir_fetch_dirdata_cb (nfscall *sbp,
       sbp->error (NFS3ERR_IO);
   } else {
     readdir3args *nfsargs = sbp->template getarg<readdir3args> ();
-    uint64 cookie = nfsargs->cookie;
-    uint32 blockno = cookie >> 32;
-    uint32 entryno = (u_int32_t)cookie;
-
+    uint32 blockno = nfsargs->cookie >> 32;
+    uint32 entryno = (uint32)nfsargs->cookie;
     sfsro_directory *dir = dirblk->dir;
-    str dirpath = dirInodeData->inode->reg->path;
-    str parpath = parentpath (dirpath);
 
     readdir3res nfsres (NFS3_OK);
     nfsres.resok->dir_attributes.set_present (true);
@@ -445,53 +384,27 @@ chord_server::readdir_fetch_dirdata_cb (nfscall *sbp,
     rpc_ptr<entry3> *direntp = &nfsres.resok->reply.entries;
     sfsro_dirent *roe = dir->entries;
 
-    // account for dot and dotdot
-    uint32 skip = entryno;
-    if (!blockno && cookie >= 2)
-      skip -= 2;
-    while (skip-- > 0 && roe)
-      roe = roe->nextentry;
+    int space = nfsargs->count - 184; // reserve hdr and trailing NULL dirent
 
-    int space = nfsargs->count;
-    space -= 200; // bytes used up to now on the header. XXX just a guess.
-    space -= 4;   // reserve bytes for the NULL terminating the entry list
-    space -= 4;   // reserve bytes for the EOF flag
-
-    for (; space > 0 && roe; cookie++) {
-      str fullpath;
-      str name;
-      if (cookie == 0) {
-	name = str (".");
-	fullpath = dirpath;
-      } else if (cookie == 1) {
-	name = str ("..");
-	fullpath = parpath;
-      } else {
-	name = roe->name;
-	if (parpath  == "/")
-	  fullpath = strbuf() << parpath << roe->name;
-	else
-	  fullpath = strbuf() << parpath << str ("/") << roe->name;
-	roe = roe->nextentry;
-      }
-
-      space -= 8 + 4 + name.len() + 4 + 20; // XXX incorrect calculation
+    //warn << "------ cookie " << nfsargs->cookie << " ---------\n";
+    for (uint i = 1; space > 0 && roe ; roe = roe->nextentry, i++) {
+      if (i <= entryno)
+	continue;
+      //warn << "i " << i << ", entryno " << entryno  << ", space " << space;
+      //warn << ", roe[" << roe->name << ", fileid " << roe->fileid << "]\n";
+      space -= ((roe->name.len() + 3) & ~3) + 24; // marshaled entry size
       if (space >= 0) {
 	(*direntp).alloc ();
-	(*direntp)->name = name;
-	(*direntp)->fileid = path2fileid(fullpath);
-	(*direntp)->cookie = cookie;
-	// mark the last dirent in the directory block, see above note
-	if (cookie > 1 && !roe)
-	  (*direntp)->cookie |= 0xffffffff;
-
+	(*direntp)->name = roe->name;
+	(*direntp)->fileid = roe->fileid;
+	(*direntp)->cookie = (uint64 (blockno)) << 32 | i;
+	if (!roe)
+	  (*direntp)->cookie = (uint64 (blockno + 1)) << 32;
 	direntp = &(*direntp)->nextentry;
       }
     }
-
-    if (!roe && dir->eof)
-      nfsres.resok->reply.eof = true;
     
+    nfsres.resok->reply.eof = (!roe && dir->eof);
     sbp->reply (&nfsres);
   }
 }
@@ -505,9 +418,9 @@ chord_server::readdirp_inode_cb (nfscall *sbp, chordID ID, ptr<sfsro_data> data)
     sbp->error (NFS3ERR_STALE);
   else if (data->type != SFSRO_INODE) 
     sbp->error (NFS3ERR_IO);
-  else if (data->inode->type != SFSRODIR && data->inode->type != SFSRODIR_OPAQ) {
+  else if (data->inode->type != SFSRODIR && data->inode->type != SFSRODIR_OPAQ)
     sbp->error (NFS3ERR_NOTDIR);
-  } else {
+  else {
     fetch_data (sfshash_to_chordid(&data->inode->reg->direct[0]),
 		wrap (this, &chord_server::readdirp_fetch_dir_data, 
 		      sbp, data, ID));
@@ -672,6 +585,7 @@ ro2nfsattr (sfsro_inode *si)
   fattr3 ni;
   // XXX this is duplicated code.  It 
   // should be fixed in the spec file.
+
   if (si->type == SFSROLNK) {
     ni.nlink = si->lnk->nlink;
     ni.size = si->lnk->dest.len ();
@@ -742,7 +656,8 @@ struct lookup_state {
     dirdata (dirdata), component (component), cb (cb)
   {
     assert (dirdata->type == SFSRO_INODE); 
-    assert (dirdata->inode->type == SFSRODIR || dirdata->inode->type == SFSRODIR_OPAQ);
+    assert (dirdata->inode->type == SFSRODIR ||
+	    dirdata->inode->type == SFSRODIR_OPAQ);
     dirinode = dirdata->inode->reg;
 
     curblock = 0;
@@ -755,7 +670,7 @@ struct lookup_state {
 
 
 void
-chord_server::lookup(ptr<sfsro_data> dirdata, chordID dirID , str component, cblookup_t cb)
+chord_server::lookup(ptr<sfsro_data> dirdata, chordID dirID, str component, cblookup_t cb)
 {
   if (!dirdata) {
     (*cb) (NULL, 0, NFS3ERR_STALE);
@@ -766,6 +681,8 @@ chord_server::lookup(ptr<sfsro_data> dirdata, chordID dirID , str component, cbl
     (*cb) (NULL, 0, NFS3ERR_IO);    
   } else if (component == ".") {
     (*cb) (dirdata, dirID, NFS3_OK);
+  } else if (component == "..") {
+    namei (dirdata->inode->reg->path, cb);
   } else {
     ref<lookup_state> st =
       New refcounted<lookup_state> (dirdata, component, cb, fsinfo.info.blocksize);
@@ -794,18 +711,13 @@ chord_server::lookup_scandir_nextblock_cb(ref<lookup_state> st, ptr<sfsro_data> 
   if (dat == NULL || dat->type != SFSRO_DIRBLK) 
     (*st->cb) (NULL, 0, NFS3ERR_STALE);
   else {
-    sfsro_directory *dir = dat->dir;
-
-    if (st->component == "..") { 
-      namei (st->dirdata->inode->reg->path, st->cb);
+    sfsro_dirent *dirent = dirent_lookup (st->component, dat->dir);
+    if (dirent) {
+      chordID componentID = sfshash_to_chordid (&dirent->fh);
+      fetch_data (componentID,
+		  wrap (this, &chord_server::lookup_component_inode_cb, st, componentID));
     } else {
-      sfsro_dirent *dirent = dirent_lookup (st->component, dir);
-      if (dirent) {
-	chordID componentID = sfshash_to_chordid (&dirent->fh);
-	fetch_data (componentID, wrap (this, &chord_server::lookup_component_inode_cb, st, componentID));
-      } else {
-	lookup_scandir_nextblock(st);
-      }
+      lookup_scandir_nextblock(st);
     }
   }
 }
@@ -874,7 +786,7 @@ chord_server::namei_iter (ref<namei_state> st, ptr<sfsro_data> inode, chordID in
 {
   if (!st->components.size ()) {
     (*st->cb) (inode, inodeID, NFS3_OK);
-  } else if (inode->inode->type != SFSRODIR && 
+  } else if (inode->inode->type != SFSRODIR &&
 	     inode->inode->type != SFSRODIR_OPAQ) {  
     (*st->cb) (NULL, 0, NFS3ERR_IO);
   } else {
