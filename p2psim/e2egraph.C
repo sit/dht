@@ -66,7 +66,7 @@ E2EGraph::parse(ifstream &ifs)
 
       int lat = atoi(words[1].c_str());
       if (lat < 0) {
-	lat = 0;
+	lat = 100000;
       }
       // latency between node1 and node2
       _pairwise[ip1 -1][ip2 -1] = (latency_t) lat;

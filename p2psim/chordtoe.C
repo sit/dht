@@ -1,40 +1,114 @@
 #include "chordtoe.h"
 
+#define TOE_GREEDY_LAT 0
+#define TOE_GREEDY_ID 1
+#define TOE_NOTGREEDY_LAT 3
+#define TOE_RTM 2
 Chord::IDMap 
 LocTableToe::next_hop(Chord::CHID key, bool *done) 
 {
-  idmapwrap *e = ring.first ();
+
   Topology *t = Network::Instance()->gettopology ();
-  idmapwrap *b = NULL;
-  int best = RAND_MAX;
-
-  while (e) {
-    //    cerr << "trying: " << e->n.id << " for [" << me.id << ", " << key << "]\n";
-    if (ConsistentHash::betweenrightincl(me.id, key, e->n.id)) {
-      int lat = t->latency (e->n.ip, me.ip);
-      if (lat < best) {
-	best = lat;
-	b = e;
-	//	cerr << key << " --- new best: " << b->n.ip << " w lat " << lat << "\n";
-      } 
-    }
-    e = ring.next (e);
-    //if (e) cerr << "next_hop for " << me.ip << " / " << key << " looking at " << e->n.ip << "\n";
-  }
-
-  assert (b);
-  Chord::IDMap ret = b->n;
-  
-  assert (ret.ip != me.ip);
-  assert (ConsistentHash::betweenrightincl(me.id, key, ret.id));
 
   *done = false;
-  return ret;
+  
+  if (_style == TOE_GREEDY_LAT) {
+    idmapwrap *e = ring.first ();
+    idmapwrap *b = NULL;
+    int best = RAND_MAX;
+
+    int i = 0;
+    while (e) {
+      if (ConsistentHash::betweenrightincl(me.id, key, e->n.id)) {
+	int lat = t->latency (me.ip, e->n.ip);
+	if (lat < best) {
+	  best = lat;
+	  b = e;
+	} 
+      }
+      e = ring.next (e);
+      i++;
+    }
+    
+    assert (b);
+
+
+    Chord::IDMap ret = b->n;
+      
+    assert (ret.ip != me.ip);
+    assert (ConsistentHash::betweenrightincl(me.id, key, ret.id));
+      
+    return ret;
+      
+  } else if (_style == TOE_NOTGREEDY_LAT) {
+    int worst_lat = -1;
+    Chord::IDMap b;
+    //check the toes first
+    for (uint i = 0; i < _toes.size (); i++) 
+      {
+	if (ConsistentHash::betweenrightincl(me.id, key, _toes[i].id)) {
+	  int lat = t->latency (me.ip, _toes[i].ip);
+	  if (lat > worst_lat) 
+	    {
+	      b = _toes[i];
+	      worst_lat = lat;
+	    }
+	}
+      }
+    
+    if (worst_lat > 0) {
+      return b;
+    } else
+      //toes suck. just take something
+      return LocTable::next_hop (key, done);
+
+      
+  } else if (_style == TOE_GREEDY_ID) {
+    return LocTable::next_hop (key, done);
+  } else if (_style == TOE_RTM) {
+
+    ConsistentHash::CHID mindist = 0;
+    bool found = false;
+    Chord::IDMap b;
+    //check the toes first
+    for (uint i = 0; i < _toes.size (); i++) 
+      {
+	if (ConsistentHash::betweenrightincl(me.id, key, _toes[i].id)) {
+	  ConsistentHash::CHID dist = ConsistentHash::distance (_toes[i].id, key);
+	  assert (dist > 0);
+	  if ((!found || dist < mindist)) 
+	    {
+	      found = true;
+	      b = _toes[i];
+	      mindist =  dist;
+	    }
+	}
+      }
+    
+    Chord::IDMap ret;
+    if (found) {
+      ret = b;
+    } else {
+      //toes suck. just take something
+      ret = LocTable::next_hop (key, done);
+    }
+
+    assert (ret.ip < 900);
+    return ret;
+  } else {
+    assert (0);
+    Chord::IDMap Ireturn;
+    return Ireturn;
+  }
+
 }
 
 ChordToe::ChordToe (Node *n, Args &a) : 
-  ChordFinger (n, a, New LocTableToe ()),  _numtoes (16)
+    ChordFingerPNS (n, a, new LocTableToe ()),  _numtoes (16)
+
 {
+  _lookup_style = a.nget<uint>("lookup_style",0,10);
+  (dynamic_cast <LocTableToe *>(loctable))->set_style (_lookup_style);
 };
 
 
@@ -50,10 +124,12 @@ ChordToe::add_toe (IDMap id)
   int worstlat = t->latency(me.ip, _toes[0].ip);
   vector<IDMap>::iterator i;
   vector<IDMap>::iterator worst = _toes.begin ();
+  //  cerr << "considering toes: ";
   for (i = _toes.begin (); i != _toes.end (); ++i)
     {
       IDMap cur = *i;
       int lat = t->latency (me.ip, cur.ip);
+      //    cerr << lat << " ";
       if (lat > worstlat) 
 	{
 	  worstlat = lat;
@@ -61,6 +137,7 @@ ChordToe::add_toe (IDMap id)
 	}
     }
   
+  // cerr << "; evicted " << worstlat << "\n";
   _toes.erase (worst);
   return worstlat;
 }
@@ -70,6 +147,8 @@ ChordToe::init_state (vector<IDMap> ids)
 {
   loctable->set_evict (false);
 
+  ChordFingerPNS::init_state (ids);
+
   int worst_lat = 1000000; //timeout is a good max
 
   Topology *t = Network::Instance()->gettopology ();
@@ -78,16 +157,17 @@ ChordToe::init_state (vector<IDMap> ids)
   for (uint i = 0; i < ids.size(); i++)
     {
       int lat = t->latency (me.ip, ids[i].ip);
-      if (lat < worst_lat || _toes.size () < _numtoes) 
+      if ((lat < worst_lat || _toes.size () < _numtoes)) 
 	worst_lat = add_toe (ids[i]);
     }
 
   //add the toes
-  for (uint i = 0; i < _toes.size (); i++)
+  for (uint i = 0; i < _toes.size (); i++) {
     loctable->add_node (_toes[i]);
+  }
 
-  //  Chord::init_state (ids);
-  ChordFinger::init_state (ids);
+  (dynamic_cast <LocTableToe *>(loctable))->set_toes (_toes);
+
 }
 
 

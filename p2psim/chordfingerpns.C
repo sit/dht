@@ -2,7 +2,8 @@
 #include <stdio.h>
 
 /* Gummadi's Chord PNS algorithm  (static) */
-ChordFingerPNS::ChordFingerPNS(Node *n, Args& a) : Chord(n, a, New LocTable()) 
+ChordFingerPNS::ChordFingerPNS(Node *n, Args& a, LocTable *l) 
+  : Chord(n, a, l) 
 { 
   _base = a.nget<uint>("base",2,10);
   _samples = a.nget<uint>("samples",16,10);

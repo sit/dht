@@ -105,8 +105,17 @@ public:
       i++;
     }
     return i - 1;
-  }
+  };
 
+  static CHID distance (CHID a, CHID b)
+  {
+    if (a < b) return (b - a);
+    else {
+      CHID t;
+      memset (&t, 255,sizeof(CHID));
+      return (t - a) + b;
+    }
+  }
 };
 
 #endif // __CONSISTENTHASH_H

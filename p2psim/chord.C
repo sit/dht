@@ -75,7 +75,7 @@ char *
 Chord::ts()
 {
   static char buf[50];
-  sprintf(buf, "%llu Chord(%5u,%16qx)", now(), me.ip, me.id);
+  sprintf(buf, "%llu Chord(%u,%qx)", now(), me.ip, me.id);
   return buf;
 }
 
@@ -291,17 +291,16 @@ Chord::find_successors_recurs(CHID key, bool intern, bool is_lookup)
 
 #ifdef CHORD_DEBUG
   Topology *t = Network::Instance()->gettopology();
-  printf("%s find_successors_recurs %qx route [%d]",ts(),key,fr.v.size());
+  printf("%s find_successors_recurs %qx route ",ts(),key);
   uint total_lat = 0;
   for (uint i = 0; i < fr.v.size(); i++) {
     IDMap n = fr.v[i];
-    printf("(%u,%qx,%u, %u) ", n.ip, n.id, total_lat, 
-	i < (fr.v.size()-1)? 2 * t->latency(fr.v[i].ip, fr.v[i+1].ip): 0);
+    printf("(%u,%qx,%u,%u) ", n.ip, n.id, total_lat, i < (fr.v.size()-1)? 2 * t->latency(fr.v[i].ip, fr.v[i+1].ip): 0);
     if ((i+3) <= fr.v.size()) {
       total_lat += 2 * t->latency(fr.v[i].ip,fr.v[i+1].ip);
     }
   }
-  printf(" [%d] \n",fr.v.size());
+  printf("\n");
   uint interval = now() - before;
   assert(interval == total_lat);
 
