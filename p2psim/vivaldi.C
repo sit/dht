@@ -15,7 +15,8 @@ Vivaldi::Vivaldi(Node *n, int d)
   // Units are the same as Euclidean::Coords, presumably
   // milliseconds.
   for (int i = 0; i < _dim; i++) 
-    _c._v.push_back(random() % 50000 - 25000);
+    //    _c._v.push_back(random() % 50000 - 25000);
+    _c._v.push_back (0.0);
 }
 
 Vivaldi::~Vivaldi()
@@ -23,11 +24,6 @@ Vivaldi::~Vivaldi()
 }
 
 
-ostream& 
-operator<< (ostream &s, Vivaldi::Coord &c)
-{
-  return s<< "(" << c._v[0] << ", " << c._v[1] << ")";
-}
 
 ostream& 
 operator<< (ostream &s, Vivaldi::Sample &c)
@@ -38,7 +34,7 @@ operator<< (ostream &s, Vivaldi::Sample &c)
 void
 Vivaldi::sample(IPAddress who, Coord c, double latency)
 {
-  algorithm(Sample(c, latency));
+  algorithm(Sample(c, latency, who));
   _nsamples += 1;
 }
 
@@ -69,10 +65,16 @@ Vivaldi::net_force(Coord c, vector<Sample> v)
     double noise = 0;
     double actual = v[i]._latency + noise;
     double expect = dist (c, v[i]._c);
-    if(actual >= 0 && (expect > 0.01) ){
+    if(actual >= 0){
       double grad = expect - actual;
       Coord dir = (v[i]._c - c);
-      double unit = 1.0/length(dir);
+      double l = length(dir);
+      while (l < 0.0001) { //nodes are on top of one another
+	for (uint j = 0; j < dir._v.size(); j++) //choose a random direction
+	    dir._v[j] += (double)(random () % 10 - 5) / 10.0;
+	l = length (dir);
+      }
+      double unit = 1.0/(l);
       Vivaldi::Coord udir = dir * unit * grad;
       f = f + udir;
     }
@@ -135,25 +137,21 @@ void
 Vivaldi10::algorithm(Sample s)
 {
   _samples.push_back(s);
-  if(_samples.size() < 10)
-    return;
-
   Coord f = net_force(_c, _samples);
-  //  Coord f1 = net_force1(_c, _samples);
-  
-  //  cerr << f << " " << f1 << "\n";
-  double t = 0.01;
-  float ftot = 0;
-  for (int i = 0; i < f.dim(); i++)
-    ftot += f._v[i];
 
-  while (ftot*t > 100.0) t /= 2.0;
+  _curts = _curts - 0.025;
+  double t;
+  if (_adapt)
+    t = (_curts > _timestep) ? _curts : _timestep;
+  else 
+    t = _timestep;
 
   // apply the force to our coordinates
   _c = _c + (f * t);
 
-  if (_samples.size () > 16)
-    _samples.erase(_samples.begin()); //this is so much better than pop_front
+  _samples.clear ();
+
+
 }
 
 // algo1(), but starts without much damping, and gradually
@@ -400,3 +398,8 @@ Vivaldi9::algorithm(Sample s)
 // with _damp, it diverges if it starts with >=0.5, but is fine
 // if it starts as 0.1. and 0.1 converges pretty quick, much
 // faster than w/o decreasing damping.
+
+ostream& operator<< (ostream &s, Vivaldi::Coord &c) 
+  {
+    return s<< "(" << c._v[0] << ", " << c._v[1] << ")";
+  }

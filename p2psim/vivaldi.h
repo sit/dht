@@ -49,7 +49,8 @@ class Vivaldi : Protocol {
   struct Sample {
     Coord _c;
     double _latency;
-    Sample(Coord c, double l) { _c = c; _latency = l; }
+    IPAddress _who;
+    Sample(Coord c, double l, IPAddress w) { _c = c; _latency = l; _who = w;}
   };
   vector<Sample> _samples;
 
@@ -121,8 +122,13 @@ class Vivaldi9 : public Vivaldi3 {
 };
 
 class Vivaldi10 : public Vivaldi {
+  double _timestep;
+  double _bbox_max;
+  double _curts;
+  int _adapt;
  public:
-  Vivaldi10(Node *n, int d) : Vivaldi (n,d) { }
+  Vivaldi10(Node *n, int d, double t, int ad) : Vivaldi (n,d), 
+    _timestep (t), _bbox_max (100000), _curts(1.0), _adapt (ad) { };
   void algorithm(Sample);
 };
 
@@ -183,6 +189,7 @@ length(Vivaldi::Coord c)
   return sqrt(l);
 }
 
+
 template<class BT, class AT, class RT>
 bool Vivaldi::doRPC(IPAddress dst, BT *target, void (BT::*fn)(AT*, RT*),
                     AT *args, RT *ret) {
@@ -220,5 +227,7 @@ bool Vivaldi::doRPC(IPAddress dst, BT *target, void (BT::*fn)(AT*, RT*),
   delete t;
   return ok;
 }
+
+ostream& operator<< (ostream &s, Vivaldi::Coord &c);
 
 #endif

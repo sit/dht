@@ -82,6 +82,8 @@ ChordObserver::execute()
   list<Protocol*> l = Network::Instance()->getallprotocols(_type);
   list<Protocol*>::iterator pos;
 
+  vivaldi_error ();
+  return;
   //i only want to sort it once after all nodes have joined! 
   Chord *c = 0;
   if (lid.size() != _num_nodes) {
@@ -119,4 +121,53 @@ ChordObserver::execute()
     c = (Chord *)(*pos);
     c->dump();
   }
+}
+
+void
+ChordObserver::vivaldi_error()
+{
+  Topology *t = (Network::Instance()->gettopology());
+  assert (t);
+  vector<double> avg_errs;
+
+  list<Protocol*> l = Network::Instance()->getallprotocols(_type);
+  list<Protocol*>::iterator outer, inner; 
+  for (outer = l.begin(); outer != l.end(); ++outer) {
+    double sum = 0;
+    uint sum_sz = 0;
+    Chord *c = (Chord *)(*outer);
+    assert (c);
+    if (!c->_vivaldi) continue;
+
+    cout << "COORD " <<  c->id() << " " << now () << ": ";
+    Vivaldi::Coord vc = c->get_coords();
+    for (uint j = 0; j < vc._v.size(); j++)
+      cout << vc._v[j] << " ";
+
+    cout << "\n";
+    for (inner = l.begin(); inner != l.end(); ++inner) {
+      Chord *h = (Chord *)(*inner);
+      assert (h);
+      if (!h->_vivaldi) continue;
+      Vivaldi::Coord vc1 = h->get_coords ();
+      double vd = dist(vc, vc1);
+      double rd = t->latency(c->node(), h->node());
+      if (rd > 0.0 && vd > 0.0) {
+	//	cout << c->id () << " to " << h->id () << ". Predicted: " << 
+	//vd << " real latency was " << rd << "\n";
+
+	sum += fabs(vd - rd);
+	sum_sz++;
+      }
+      
+    }
+    if (sum_sz)
+      cout << now() << " average error for " << c->id () << ": " << sum/sum_sz 
+      	   << " after " << c->_vivaldi->nsamples() << endl;
+      avg_errs.push_back (sum/sum_sz);
+  }
+
+  sort (avg_errs.begin(), avg_errs.end());
+  
+  cout << " vivaldi median error: " << avg_errs[avg_errs.size() / 2] << "\n";
 }

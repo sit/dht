@@ -3,13 +3,15 @@
 
 #include "dhtprotocol.h"
 #include "consistenthash.h"
+
+#include "vivaldi.h"
 #include "../utils/skiplist.h"
 
 #include <vector>
 
 #define CHORD_SUCC_NUM 3  // default number of successors maintained
 #define STABLE_TIMER 500
-#define CHORD_DEBUG
+#define PAD "000000000000000000000000"
 
 #include "p2psim.h"
 
@@ -17,6 +19,8 @@ class LocTable;
 
 class Chord : public DHTProtocol {
 public:
+  Vivaldi *_vivaldi;
+  
   typedef ConsistentHash::CHID CHID;
 
   class IDMap{
@@ -37,6 +41,11 @@ public:
   virtual void crash(Args*);
   virtual void lookup(Args*);
   virtual void insert(Args*) {};
+
+
+  Vivaldi::Coord get_coords () {
+    return _vivaldi->my_location ();
+  }
 
   struct get_predecessor_args {
     int dummy;
@@ -87,6 +96,7 @@ public:
   };
 
   // RPC handlers.
+  void null_handler (void *args, void *ret);
   void get_predecessor_handler(get_predecessor_args *, get_predecessor_ret *);
   void get_successor_list_handler(get_successor_list_args *, get_successor_list_ret *);
   //void get_successor_list_handler(get_predecessor_args *, get_predecessor_ret *);

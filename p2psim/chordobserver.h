@@ -14,6 +14,7 @@ public:
 
 private:
   void init_nodes(unsigned int num);
+  void vivaldi_error();
   static ChordObserver *_instance;
   ChordObserver(Args*);
   ~ChordObserver();

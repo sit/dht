@@ -1,13 +1,14 @@
 #include "chord.h"
 #include "node.h"
 #include "packet.h"
+#include "vivaldi.h"
 #include <stdio.h>
 #include <iostream>
 #include <algorithm>
 
 using namespace std;
 extern bool vis;
-
+#define CHORD_DEBUG
 Chord::Chord(Node *n, uint numsucc)
   : DHTProtocol(n), _isstable (false)
 {
@@ -89,7 +90,11 @@ Chord::find_successors(CHID key, uint m, bool intern)
     if (vis && !intern) 
       printf ("vis %llu step %16qx %16qx\n", now(), me.id, nprime.id);
 
-    bool r = doRPC(nprime.ip, &Chord::next_handler, &na, &nr);
+    
+    cout << id() << " --> " << nprime.ip << "\n";
+    Chord *target = dynamic_cast<Chord *>(getpeer(nprime.ip));
+    bool r = _vivaldi->doRPC(nprime.ip, target,
+			     &Chord::next_handler, &na, &nr);
     if(r && nr.done){
       route.push_back(nr.v[0]);
 #ifdef CHORD_DEBUG
@@ -100,6 +105,12 @@ Chord::find_successors(CHID key, uint m, bool intern)
       }
       printf("\n");
 #endif
+
+      //actually talk to the successor
+      cout << id() << " ---> " << nr.v[0].ip << "\n";
+      target = dynamic_cast<Chord *>(getpeer(nr.v[0].ip));
+      r = _vivaldi->doRPC(nr.v[0].ip, target,
+			  &Chord::null_handler, (void *)NULL, (void *)NULL);
 
       if (vis && !intern) 
 	printf ("vis %llu step %16qx %16qx\n", now(), me.id, nr.v[0].id);
@@ -140,6 +151,11 @@ Chord::find_successors(CHID key, uint m, bool intern)
   return nr.v;
 }
 
+void
+Chord::null_handler (void *args, void *ret) 
+{
+  return;
+}
 // From Figure 3 of SOSP03 submission.
 // Returns either m successors of the given key,
 // or the node to talk to next.
@@ -175,6 +191,17 @@ Chord::join(Args *args)
     printf("vis %llu join %16qx\n", now (), me.id);
   }
 
+
+  int dim = args->nget<int>("model-dimension", 10);
+  if (dim <= 0) {
+    cerr << "dimension must be specified (and positive)\n";
+    exit (0);
+  }
+
+  int wsize = atoi((*args)["window-size"].c_str());
+  _vivaldi = new Vivaldi10(node(), 3, 0.05, 1); 
+
+
   IDMap wkn;
   wkn.ip = args->nget<IPAddress>("wellknown");
   assert (wkn.ip);
@@ -198,13 +225,14 @@ Chord::join(Args *args)
   reschedule_stabilizer(NULL);
 }
 
+
 void
 Chord::reschedule_stabilizer(void *x)
 {
-  if (!_isstable) {
+  //  if (!_isstable) {
     stabilize();
     delaycb(STABLE_TIMER, &Chord::reschedule_stabilizer, (void *) 0);
-  }
+    //  }
 }
 
 // Which paper is this code from? -- PODC 
@@ -219,9 +247,17 @@ Chord::stabilize()
   notify_args na;
   notify_ret nr;
   na.me = me;
-  doRPC(succ1.ip, &Chord::notify_handler, &na, &nr);
+  Chord *target = dynamic_cast<Chord *>(getpeer(succ1.ip));
+  _vivaldi->doRPC(succ1.ip, target,
+		  &Chord::notify_handler, &na, &nr);
 
   if (nsucc > 1) fix_successor_list();
+
+  //vivaldi random lookups
+  CHID random_key = ConsistentHash::getRandID ();
+  cerr << ip() << " looking up " << random_key << "\n";
+  vector<Chord::IDMap> ignore = find_successors (random_key, 1, false);
+  
 }
 
 bool
@@ -269,7 +305,9 @@ Chord::fix_successor()
 
   get_predecessor_args gpa;
   get_predecessor_ret gpr;
-  bool ok = doRPC(succ1.ip, &Chord::get_predecessor_handler, &gpa, &gpr);
+  Chord *target = dynamic_cast<Chord *>(getpeer(succ1.ip));
+  bool ok = _vivaldi->doRPC(succ1.ip, target,
+			    &Chord::get_predecessor_handler, &gpa, &gpr);
   assert (ok);
 
 #ifdef CHORD_DEBUG
@@ -292,7 +330,9 @@ Chord::fix_successor_list()
   IDMap succ = loctable->succ(me.id+1);
   get_successor_list_args gsa;
   get_successor_list_ret gsr;
-  bool ok = doRPC(succ.ip, &Chord::get_successor_list_handler, &gsa, &gsr);
+  Chord *target = dynamic_cast<Chord *>(getpeer(succ.ip));
+  bool ok = _vivaldi->doRPC(succ.ip, target,
+			    &Chord::get_successor_list_handler, &gsa, &gsr);
   assert (ok);
   for (unsigned int i = 0; i < (gsr.v).size(); i++) {
     loctable->add_node(gsr.v[i]);
