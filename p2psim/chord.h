@@ -91,12 +91,15 @@ public:
   struct next_recurs_args {
     bool is_lookup;
     CHID key;
-    vector<IDMap> v;
+    vector<IDMap> path;
+    uint m;
   };
 
   struct next_recurs_ret {
     vector<IDMap> v;
+    vector<IDMap> path;
   };
+
   // RPC handlers.
   void null_handler (void *args, void *ret);
   void get_predecessor_handler(get_predecessor_args *, 
@@ -126,6 +129,7 @@ protected:
   uint _vivaldi_dim;
   uint _timeout;
   uint _stabtimer;
+  uint _frag;
   bool _stab_running;
 
   LocTable *loctable;
@@ -138,8 +142,10 @@ protected:
 
   vector<uint> stat;
 
-  IDMap find_successors_recurs(CHID key, bool intern, bool is_lookup = false);
-  virtual vector<IDMap> find_successors(CHID key, uint m, bool is_lookup);
+  virtual vector<IDMap> find_successors_recurs(CHID key, uint m, 
+					       bool is_lookup = false);
+  virtual vector<IDMap> find_successors(CHID key, uint m, 
+                                        bool is_lookup = false);
 
   IDMap fix_successor();
   void fix_successor_list();

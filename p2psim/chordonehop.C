@@ -84,6 +84,7 @@ ChordOneHop::stabilize()
     while (outstanding > 0) {
       // unsigned donerpc = rcvRPC(&rpcset);
       outstanding--;
+      assert(outstanding == rpcset.size());
     }
   } 
 
@@ -140,6 +141,7 @@ ChordOneHop::join(Args *args)
 
   unsigned rpc = 0;
   RPCSet rpcset;
+  rpcset.clear();
   unsigned total = 0;
 
   for (uint i = 0; i < v.size(); i++) {
@@ -155,7 +157,6 @@ ChordOneHop::join(Args *args)
     total++;
     //doRPC(v[i].ip, &ChordOneHop::add_handler, &aa, (void *)NULL); 
   }
-
   assert(total == rpcset.size());
   //i must receive these RPCs, otherwise, aa got deallocated 
   //and receivers will get garbage
@@ -163,6 +164,8 @@ ChordOneHop::join(Args *args)
   while (outstanding > 0) {
     // unsigned donerpc = rcvRPC(&rpcset);
     outstanding--;
+    assert(outstanding == rpcset.size());
+    assert(aa.n.ip == me.ip);
   }
 
 }

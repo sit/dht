@@ -25,6 +25,7 @@ ChordFingerPNS::init_state(vector<IDMap> ids)
 
   Topology *t = Network::Instance()->gettopology();
   IDMap tmpf;
+  uint f = 0;
   while (lap > min_lap) {
     lap = lap / _base;
     for (uint j = 1; j <= (_base -1); j++) {
@@ -63,6 +64,7 @@ ChordFingerPNS::init_state(vector<IDMap> ids)
 	  }
 	}
       }
+      printf("%s finger %d distance %d\n", ts(), ++f, min_l);
       loctable->add_node(min_f);
 //      ((LocTablePNS *)loctable)->add_finger(make_pair(min_f_pred, min_f));
       //Gummadi assumes the node knows the idspace each of the neighbors is 

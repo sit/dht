@@ -8,7 +8,7 @@ public:
   Euclidean(vector<string>*);
   ~Euclidean();
   
-  typedef pair<unsigned, unsigned> Coord;
+  typedef pair<int, int> Coord;
   virtual void parse(ifstream&);
   virtual latency_t latency(IPAddress, IPAddress);
   Coord getcoords(IPAddress n) { return _nodes[n]; }
