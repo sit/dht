@@ -154,20 +154,20 @@ rpc_manager::get_avg_var ()
 void
 rpc_manager::remove_host (hostinfo *h)
 {
+  hostlru.remove (h);
+  hosts.remove (h);
+  delete h;
 }
 
 hostinfo *
 rpc_manager::lookup_host (const net_address &r)
 {
+  // XXX could use ihash2
   str key = strbuf () << r.hostname << ":" << r.port << "\n";
   hostinfo *h = hosts[key];
   if (!h) {
-    if (hosts.size () > max_host_cache) {
-      hostinfo *o = hostlru.first;
-      hostlru.remove (o);
-      remove_host (o);
-      delete (o);
-    }
+    if (hosts.size () > max_host_cache)
+      remove_host (hostlru.first); // evict oldest
     h = New hostinfo (r);
     h->key = key;
     hostlru.insert_tail (h);
@@ -177,7 +177,6 @@ rpc_manager::lookup_host (const net_address &r)
     hostlru.remove (h);
     hostlru.insert_tail (h);
   }
-  assert (h);
   return h;
 }
 
@@ -252,28 +251,35 @@ void
 tcp_manager::remove_host (hostinfo *h) 
 {
   warn << "closing " << h->fd << " on " << h->host << "\n";
+  hostlru.remove (h);
+  hosts.remove (h);
   tcp_abort (h->fd);
   h->fd = -2;
   h->xp = NULL;
+  delete h;
 }
 
 void
 tcp_manager::send_RPC (RPC_delay_args *args)
 {
-
   hostinfo *hi = lookup_host (args->l->addr);
-  if (hi->xp->ateof()) 
-    {
-      hostlru.remove (hi);
-      hostlru.insert_tail (hi);
-      if (hi->fd > 0) close (hi->fd);
-      (args->cb) (RPC_CANTSEND);
-      return;
-    }
+  if (hi->xp->ateof()) {
+    remove_host (hi);
+    delaycb (0, 0, wrap (this, &tcp_manager::send_RPC_ateofcb, args));
+    return;
+  }
   ptr<aclnt> c = aclnt::alloc (hi->xp, args->prog);
   c->call (args->procno, args->in, args->out, 
 	   wrap (this, &tcp_manager::doRPC_tcp_cleanup, c, args));
 }
+
+
+void
+tcp_manager::send_RPC_ateofcb  (RPC_delay_args *args)
+{
+  (*args->cb) (RPC_CANTSEND);
+}
+
 void
 tcp_manager::doRPC_tcp_connect_cb (RPC_delay_args *args, int fd)
 {

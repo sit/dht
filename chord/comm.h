@@ -125,6 +125,7 @@ class tcp_manager : public rpc_manager {
   void doRPC_tcp_connect_cb (RPC_delay_args *args, int fd);
   void doRPC_tcp_cleanup (ptr<aclnt> c, RPC_delay_args *args, clnt_stat err);
   void send_RPC (RPC_delay_args *args);
+  void send_RPC_ateofcb (RPC_delay_args *args);
   void remove_host (hostinfo *h);
 
  public:
