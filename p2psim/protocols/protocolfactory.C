@@ -31,6 +31,7 @@
 #include "koorde.h"
 #include "chordfingerpns.h"
 #include "misc/vivalditest.h"
+#include "misc/datastore.h"
 #include "chordtoe.h"
 #include "chordonehop.h"
 #include "tapestry.h"
@@ -93,6 +94,8 @@ ProtocolFactory::create(IPAddress i, const char *name)
     p = New SillyProtocol(i, a);
   if (s == "VivaldiTest")
     p = New VivaldiTest(i, a);
+  if (s == "DataStore")
+    p = New DataStore(i, a);
   
   assert(p);
   return p;
