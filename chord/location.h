@@ -109,13 +109,10 @@ struct node {
 };
 
 class locationtable : public virtual refcount {
-  static const int delayed_timer = 1;  // seconds
-
   ptr<chord> chordnode;
   ihash<chordID,location,&location::n,&location::fhlink,hashID> locs;
   tailq<location, &location::cachelink> cachedlocs;  // the cached location
 
-  timecb_t *delayed_tmo;
   int size_cachedlocs;
   int max_cachedlocs;
 
