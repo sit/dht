@@ -362,7 +362,6 @@ private:
   k_nodeinfo _me;      // info about me
   k_bucket *_root;
   bool _joined;
-  static unsigned _joincounter;
 
   void record_stat(stat_type, unsigned, unsigned);
   friend class k_stabilizer;

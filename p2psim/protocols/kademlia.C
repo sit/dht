@@ -72,7 +72,6 @@ long unsigned Kademlia::_bad_timeouts = 0;
 long unsigned Kademlia::_bad_hops = 0;
 Time Kademlia::_bad_hop_latency = 0;
 Time Kademlia::_default_timeout = 0;
-unsigned Kademlia::_joincounter = 0;
 
 
 Kademlia::NodeID *Kademlia::_all_kademlias = 0;
@@ -84,7 +83,7 @@ HashMap<Kademlia::NodeID, Kademlia*> *Kademlia::_nodeid2kademlia = 0;
 // }}}
 // {{{ Kademlia::Kademlia
 Kademlia::Kademlia(IPAddress i, Args a)
-  : P2Protocol(i), _id(ConsistentHash::ip2chid(_joincounter++))
+  : P2Protocol(i), _id(ConsistentHash::ip2chid(ip()))
 {
   // KDEBUG(1) << "id: " << printID(_id) << ", ip: " << ip() << endl;
   if(getenv("P2PSIM_CHECKREP"))
@@ -345,10 +344,6 @@ Kademlia::join(Args *args)
     return;
 
   IPAddress wkn = args->nget<IPAddress>("wellknown");
-
-  // pick a new ID
-  _id = ConsistentHash::ip2chid(_joincounter++);
-  _nodeid2kademlia->insert(_id, this);
 
   // I am the well-known node
   if(wkn == ip()) {
