@@ -19,107 +19,7 @@
  * Include file for the distributed hash service
  */
 
-template<class KEY, class VALUE>
-class vs_cache {
-  struct cache_entry {
-    vs_cache    *c;
-     KEY    k;
-    VALUE        v;
-
-    ihash_entry<cache_entry> fhlink;
-    tailq_entry<cache_entry> lrulink;
-
-    cache_entry (vs_cache<KEY, VALUE> *cc,
-	        KEY &kk,  VALUE *vv)
-      : c (cc), k (kk)
-    {      v = *vv;
-    c->lrulist.insert_tail (this);
-    c->entries.insert (this);
-    c->num_cache_entries++;
-    while (c->num_cache_entries > implicit_cast<u_int> (c->max_cache_entries)) {
-      if (c->fcb) (c->fcb) (c->lrulist.first->k, c->lrulist.first->v);
-      delete c->lrulist.first;
-    }
-    }
-
-    ~cache_entry ()
-    {
-      c->lrulist.remove (this);
-      c->entries.remove (this);
-      c->num_cache_entries--;
-    }
-
-    void touch ()
-    {
-      c->lrulist.remove (this);
-      c->lrulist.insert_tail (this);
-    }
-  };
-
-  typedef callback<void, KEY, VALUE>::ptr flushcb_t;
-  
-private:
-  friend class cache_entry;   //XXX hashid is a hack that ruins the generic nature of the cache
-  ihash<KEY, cache_entry, &cache_entry::k, &cache_entry::fhlink, hashID> entries;
-  u_int num_cache_entries;
-  tailq<cache_entry, &cache_entry::lrulink> lrulist;
-  u_int max_cache_entries;
-  flushcb_t fcb;
-public:
-  vs_cache (u_int max_entries = 250) : num_cache_entries (0), 
-    max_cache_entries (max_entries), 
-    fcb (NULL) { };
-
-  ~vs_cache () { entries.deleteall (); }
-  void flush () { entries.deleteall (); }
-  void enter ( KEY& kk,  VALUE *vv)
-    {
-      cache_entry *ad = entries[kk];
-      if (!ad)
-	vNew cache_entry (this, kk, vv);
-      else 
-	ad->touch ();
-    }
-  
-  void remove ( KEY& k) 
-    {
-      
-      entries.remove(entries[k]);
-    }
-
-   VALUE *lookup ( KEY& kk)
-    {
-      cache_entry *ad = entries[kk];
-      if (ad) {
-	ad->touch ();
-	return &ad->v;
-      }
-      return NULL;
-    }
-  
-   void traverse ( callback<void, KEY>::ref cb ) 
-     {
-       cache_entry *e = entries.first ();
-       while (e) 
-	 {
-	   cb (e->k);
-	   e = entries.next (e);
-	 }
-     }
-
-   VALUE *peek ( KEY& k) {
-    cache_entry *ad = entries[k];
-    if (ad) {
-      return &ad->v;
-    }
-    return NULL;
-  }
-  
-  void set_flushcb (flushcb_t cb ) {
-    fcb = cb;
-  }
-};
-
+#include "vsc.h"
 
 struct store_cbstate;
 
@@ -151,26 +51,25 @@ struct retry_state {
   svccb *sbp;
   chordID succ;
   route path;
-  searchcb_entry *scb;
+
   retry_state (chordID ni, svccb *sbpi, chordID si,
-	       route pi, searchcb_entry *scbi) :
-    n (ni), sbp (sbpi), succ (si), path (pi), scb (scbi) {};
+	       route pi) :
+    n (ni), sbp (sbpi), succ (si), path (pi) {};
 };
 
 class dhashclient {
 
   ptr<axprt_stream> x;
+  ptr<asrv> clntsrv;
+  ptr<chord> clntnode;
+
   int do_caching;
   int num_replicas;
-
-  ptr<asrv> p2pclntsrv;
-
 
   void dispatch (svccb *sbp);
   void cache_on_path(ptr<dhash_insertarg> item, route path);
 
-  void lookup_findsucc_cb (svccb *sbp, chordID n,
-			   searchcb_entry *scb,
+  void lookup_findsucc_cb (svccb *sbp,
 			   chordID succ, route path, chordstat err);
   void lookup_fetch_cb (dhash_res *res, retry_state *st,  clnt_stat err);
   void retry (retry_state *st, chordID p, net_address r, chordstat stat);
@@ -182,47 +81,53 @@ class dhashclient {
 
   void cache_store_cb(dhash_stat *res, clnt_stat err);
 
-  void search_cb(chordID myTarget, chordID node, chordID target, cbi cb);
-  void search_cb_cb (dhash_stat *res, cbi cb, clnt_stat err);
  public:
   
   void set_caching(char c) { do_caching = c;};
   void set_num_replicas(int num) { num_replicas = num; };
 
-  dhashclient (ptr<axprt_stream> x);
+  dhashclient (ptr<axprt_stream> x, ptr<chord> clnt);
 };
 
 class dhash {
 
   int nreplica;
-
   dbfe *db;
+  ptr<vnode> host_node;
 
   qhash<chordID, store_state, hashID> pst;
 
-  void dispatch (ptr<asrv> dhs, svccb *sbp);
-  void fetchsvc_cb (svccb *sbp, chordID n, ptr<dbrec> val, dhash_stat err);
-  void storesvc_cb (svccb *sbp, dhash_stat err);
+  void dhash_reply (long xid, unsigned long procno, void *res);
+
+  void dispatch (unsigned long, chord_RPC_arg *, unsigned long);
+  void fetchsvc_cb (long xid, dhash_fetch_arg *arg, ptr<dbrec> val, dhash_stat err);
+  void storesvc_cb (long xid, dhash_insertarg *arg, dhash_stat err);
   
   void fetch (chordID id, cbvalue cb);
   void fetch_cb (cbvalue cb,  ptr<dbrec> ret);
 
-  void store (chordID id, dhash_value data, store_status type, cbstore cb);
+  void store (dhash_insertarg *arg, cbstore cb);
   void store_cb(store_status type, chordID id, cbstore cb, int stat);
   void store_repl_cb (cbstore cb, dhash_stat err);
   bool store_complete (dhash_insertarg *arg);
 
-  void replicate_key (chordID key, int degree, callback<void, dhash_stat>::ref cb);
-  void replicate_key_succ_cb (chordID key, int degree_remaining, callback<void, dhash_stat>::ref cb,
+  void replicate_key (chordID key, int degree, 
+		      callback<void, dhash_stat>::ref cb);
+  void replicate_key_succ_cb (chordID key, int degree_remaining, 
+			      callback<void, dhash_stat>::ref cb,
 			      vec<chordID> repls, chordID succ, chordstat err);
-  void replicate_key_transfer_cb (chordID key, int degree_remaining, callback<void, dhash_stat>::ref cb,
-				  chordID succ, vec<chordID> repls, dhash_stat err);
+  void replicate_key_transfer_cb (chordID key, int degree_remaining, 
+				  callback<void, dhash_stat>::ref cb,
+				  chordID succ, 
+				  vec<chordID> repls, dhash_stat err);
 
   void cache_store_cb(dhash_res *res, clnt_stat err);
   
   dhash_stat key_status(chordID n);
-  void transfer_key (chordID to, chordID key, store_status stat, callback<void, dhash_stat>::ref cb);
-  void transfer_fetch_cb (chordID to, chordID key, store_status stat, callback<void, dhash_stat>::ref cb,
+  void transfer_key (chordID to, chordID key, store_status stat, 
+		     callback<void, dhash_stat>::ref cb);
+  void transfer_fetch_cb (chordID to, chordID key, store_status stat, 
+			  callback<void, dhash_stat>::ref cb,
 			  ptr<dbrec> data, dhash_stat err);
   void transfer_store_cb (callback<void, dhash_stat>::ref cb, 
 			  dhash_storeres *res, clnt_stat err);
@@ -241,7 +146,11 @@ class dhash {
   void rereplicate_cb (chordID k);
   void rereplicate_replicate_cb (dhash_stat err);
 
-  char responsible(chordID n);
+  char responsible(chordID& n);
+
+  void printkeys ();
+  void printkeys_walk (chordID k);
+  void printcached_walk (chordID k);
 
   ptr<dbrec> id2dbrec(chordID id);
 
@@ -252,7 +161,8 @@ class dhash {
   vec<chordID> replicas;
 
  public:
-  dhash (str dbname, int nreplica, int ss = 10000, int cs = 1000);
+  dhash (str dbname, ptr<vnode> node, 
+	 int nreplica = 0, int ss = 10000, int cs = 1000);
   void accept(ptr<axprt_stream> x);
 };
 

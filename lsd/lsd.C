@@ -27,7 +27,6 @@ EXITFN (cleanup);
 
 ptr<chord> chordnode;
 static str p2psocket;
-// dhash *dhs;
 int do_cache;
 str db_name;
 
@@ -37,9 +36,7 @@ client_accept (int fd)
   if (fd < 0)
     fatal ("EOF\n");
   ref<axprt_stream> x = axprt_stream::alloc (fd);
-  //  dhashclient *dhc =  New dhashclient (x);
-  // dhc->set_caching(do_cache);
-   
+  vNew dhashclient (x, chordnode);
 }
 
 static void
@@ -223,16 +220,15 @@ parseconfigfile (str cf, int index, int set_rpcdelay)
   }
   chordnode = New refcounted<chord> (wellknownhost, wellknownport, 
 				     wellknownID, myport, myhost, set_rpcdelay);
-  if (myid) chordnode->newvnode (myID);
-  else chordnode->newvnode ();
+
+  if (myid) vNew dhash (db_name, chordnode->newvnode (myID));
+  else vNew dhash (db_name, chordnode->newvnode ());
 
   for (int i = 1; i < nvnode; i++) {
-    chordnode->newvnode ();
+    vNew dhash (db_name, chordnode->newvnode ());
   }
   sigcb(SIGUSR1, wrap (chordnode, &chord::stats));
 
-    //instantiate single dhash object
-  // dhs = New dhash(db_name, nreplica, ss, cs);
 }
 
 static void

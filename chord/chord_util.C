@@ -31,18 +31,19 @@ static FILE *LOG = NULL;
 void
 warnt(char *msg) {
   
-  if (LOG == NULL) {
-    char *filename = getenv("LOG_FILE");
-    if (filename == NULL) 
-      LOG = fopen("/tmp/dhash.log", "a");
-    else if (filename[0] == '-')
+  char *filename = getenv("LOG_FILE");
+  if (filename != NULL) 
+    if (filename[0] == '-')
       LOG = stdout;
     else
       LOG = fopen(filename, "a");
+  
+  if (LOG) {
+    str time = gettime(); 
+    fprintf(LOG, "%s %s\n", time.cstr(), msg);
+    fflush (LOG);
+    fclose (LOG);
   }
-  str time = gettime(); 
-  fprintf(LOG, "%s %s\n", time.cstr(), msg);
-
 }
 
 str 

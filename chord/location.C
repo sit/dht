@@ -186,8 +186,8 @@ locationtable::checkrefcnt (int i)
     n = chordnode->countrefs (x);
     m = l->connecting ? l->refcnt - 1 : l->refcnt;
     if (n != m) {
-      warnx << "checkrefcnt " << i << " for " << x << " : refcnt " 
-		      << l->refcnt << " appearances " << n << "\n";
+      //      warnx << "checkrefcnt " << i << " for " << x << " : refcnt " 
+      //	      << l->refcnt << " appearances " << n << "\n";
     }
   }
 }

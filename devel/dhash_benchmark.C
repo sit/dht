@@ -14,7 +14,7 @@ static FILE *outfile;
 
 int out = 0;
 
-void afetch_cb (dhash_res *res, sfs_ID key, char *buf, int i, struct timeval start, clnt_stat err);
+void afetch_cb (dhash_res *res, chordID key, char *buf, int i, struct timeval start, clnt_stat err);
 void afetch_cb2 (dhash_res *res, char *buf, unsigned int *read, int i, struct timeval start, clnt_stat err);
 
 ref<aclnt>
@@ -34,7 +34,7 @@ cp2p ()
 #define MTU 8192
 
 int
-store_block(sfs_ID key, void *data, unsigned int datasize) 
+store_block(chordID key, void *data, unsigned int datasize) 
 {
   dhash_insertarg i_arg;
   unsigned int written = 0;
@@ -60,7 +60,7 @@ store_block(sfs_ID key, void *data, unsigned int datasize)
 
 
 int
-fetch_block(int i, sfs_ID key, int datasize) 
+fetch_block(int i, chordID key, int datasize) 
 {
   dhash_res res;
   char *buf = New char[datasize];
@@ -71,6 +71,10 @@ fetch_block(int i, sfs_ID key, int datasize)
   arg.start = 0;
   int err = cp2p ()->scall(DHASHPROC_LOOKUP, &arg, &res);
   assert (err == 0);
+  if (res.status != DHASH_OK) 
+    warn << "error " << res.status << "fetching data\n";
+  else
+    warn << "got " << res.resok->res.size () << "bytes\n";
   memcpy(buf, res.resok->res.base (), res.resok->res.size ());
   unsigned int read = res.resok->res.size ();
   
@@ -79,6 +83,10 @@ fetch_block(int i, sfs_ID key, int datasize)
       res.resok->attr.size - read;
     arg.start = read;
     err = cp2p ()->scall(DHASHPROC_LOOKUP, &arg, &res);
+    if (res.status != DHASH_OK) 
+      warn << "error fetching data\n";
+    else
+      warn << "got " << res.resok->res.size () << "bytes\n";
     memcpy(buf + read, res.resok->res.base (), res.resok->res.size ());
     read += res.resok->res.size ();
   };
@@ -99,7 +107,7 @@ fetch_block(int i, sfs_ID key, int datasize)
 
 
 int
-fetch_block_async(int i, sfs_ID key, int datasize) 
+fetch_block_async(int i, chordID key, int datasize) 
 {
   dhash_res *res = New dhash_res ();
   char *buf = New char[datasize];
@@ -116,11 +124,10 @@ fetch_block_async(int i, sfs_ID key, int datasize)
 }
 
 void
-afetch_cb (dhash_res *res, sfs_ID key, char *buf, int i, struct timeval start, clnt_stat err) 
+afetch_cb (dhash_res *res, chordID key, char *buf, int i, struct timeval start, clnt_stat err) 
 {
   assert (err == 0);
-
-  //  warn << "first read: " << res->resok->res.size () << " of " << res->resok->attr.size << "\n";
+  assert (res->status == DHASH_OK);
 
   memcpy(buf, res->resok->res.base (), res->resok->res.size ());
   unsigned int *read = New unsigned int(res->resok->res.size ());
@@ -145,12 +152,9 @@ afetch_cb2 (dhash_res *res, char *buf, unsigned int *read, int i, struct timeval
 {
   assert(err == 0);
   assert(res->status == DHASH_OK);
-  //  warn << "read " << res->resok->res.size () << " of " << res->resok->attr.size << " at " 
-  //    << res->resok->offset << "\n";
   memcpy(buf + res->resok->offset, res->resok->res.base (), res->resok->res.size ());
   *read += res->resok->res.size ();
 
-  
   if (*read == res->resok->attr.size) {
     out--;
       
@@ -171,13 +175,13 @@ afetch_cb2 (dhash_res *res, char *buf, unsigned int *read, int i, struct timeval
   delete res;
 }
 
-sfs_ID
+chordID
 random_ID () {
   return random_bigint(NBIT);
 }
 
 //size must be word sized
-sfs_ID
+chordID
 make_block(void *data, int size) 
 {
   
@@ -191,7 +195,7 @@ make_block(void *data, int size)
 void
 prepare_test_data(int num, int datasize) 
 {
-  IDs = new sfs_ID[num];
+  IDs = new chordID[num];
   data = (void **)malloc(sizeof(void *)*num);
   for (int i = 0; i < num; i++) {
     data[i] = malloc(datasize);
@@ -220,30 +224,12 @@ int
 fetch(int num, int size) {
   
   for (int i = 0; i < num; i++) {
-    //    struct timeval end;
-    //  struct timeval start;
-    // gettimeofday(&start, NULL);
-
     fetch_block_async(i, IDs[i],  size);
-
   }
 
   while (out > 0) acheck();
   return 0;
 }
-
-#if 0
-int 
-fetch(int num, int size) {
-  ptr<aclnt> clnt = cp2p();
-  for (int i = 0; i < num; i++) {
-    int err = fetch_block(i, IDs[i], size);
-    assert(err == 0);
-  }
-
-  return 0;
-}
-#endif
 
 void
 usage(char *progname) 

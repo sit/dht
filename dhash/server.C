@@ -8,10 +8,10 @@
 
 #define REP_DEGREE 0
 
-dhash::dhash(str dbname, int k, int ss, int cs) :
-  key_store(ss), key_cache(cs) {
+dhash::dhash(str dbname, ptr<vnode> node, int k, int ss, int cs) :
+  host_node (node), key_store(ss), key_cache(cs) {
 
-  db = new dbfe();
+  db = New dbfe();
   nreplica = k;
 
   //set up the options we want
@@ -26,61 +26,74 @@ dhash::dhash(str dbname, int k, int ss, int cs) :
     exit (-1);
   }
   
-  assert(defp2p);
-  defp2p->registerActionCallback(wrap(this, &dhash::act_cb));
+  assert(host_node);
+  //  defp2p->registerActionCallback(wrap(this, &dhash::act_cb));
 
   key_store.set_flushcb(wrap(this, &dhash::store_flush));
   key_cache.set_flushcb(wrap(this, &dhash::cache_flush));
 
-  pred = defp2p->my_pred ();
+  pred = host_node->my_pred ();
+
+  // RPC demux
+  host_node->addHandler (DHASH_PROGRAM, wrap(this, &dhash::dispatch));
 }
 
 void
-dhash::accept(ptr<axprt_stream> x) {
-  ptr<asrv> dhashsrv = asrv::alloc (x, dhash_program_1);
-  dhashsrv->setcb( wrap (this, &dhash::dispatch, dhashsrv));
-}    
-
-void
-dhash::dispatch(ptr<asrv> dhashsrv, svccb *sbp) 
+dhash::dispatch(unsigned long procno, 
+		chord_RPC_arg *arg,
+		unsigned long rpc_id) 
 {
-  if (!sbp) {
-    dhashsrv = NULL;
-    return;
-  }
-  switch (sbp->proc ()) {
+
+  char *marshalled_arg = arg->marshalled_args.base ();
+  int arg_len = arg->marshalled_args.size ();
+
+  xdrmem x (marshalled_arg, arg_len, XDR_DECODE);
+  xdrproc_t proc = dhash_program_1.tbl[procno].xdr_arg;
+
+  switch (procno) {
   case DHASHPROC_FETCH:
     {
+
+      dhash_fetch_arg *farg = New dhash_fetch_arg ();
+      if (!proc (x.xdrp (), farg)) {
+	warn << "DHASH: error unmarshalling arguments\n";
+	return;
+      }
       warnt ("DHASH: FETCH_request");
-      dhash_fetch_arg *arg = 
-	sbp->template getarg<dhash_fetch_arg> ();
-      fetch (arg->key, wrap (this, &dhash::fetchsvc_cb, sbp));
+      fetch (farg->key, wrap (this, &dhash::fetchsvc_cb, rpc_id, farg));
     }
     break;
+
   case DHASHPROC_STORE:
     {
 
       warnt("DHASH: STORE_request");
 
-      dhash_insertarg *arg = sbp->template getarg<dhash_insertarg> ();
-
-      if ((arg->type == DHASH_STORE) && (!responsible (arg->key))) {
+      dhash_insertarg *sarg = New dhash_insertarg ();
+      if (!proc (x.xdrp (), sarg)) {
+	warn << "DHASH: error unmarshalling arguments\n";
+	return;
+      }
+     
+      if ((sarg->type == DHASH_STORE) && (!responsible (sarg->key))) {
 	warnt("DHASH: retry");
 	dhash_storeres *res = New dhash_storeres();
 	res->set_status (DHASH_RETRY);
-	res->pred->n = defp2p->my_pred ();
+	res->pred->n = host_node->my_pred ();
       } else {
 	warnt("DHASH: will store");
-	store(arg, wrap(this, &dhash::storesvc_cb, sbp));	
+	store(sarg, wrap(this, &dhash::storesvc_cb, rpc_id, sarg));	
       }
+      
     }
     break;
+#if 0
   case DHASHPROC_CHECK:
     {
 
       warnt("DHASH: CHECK_request");
 	    
-      sfs_ID *n = sbp->template getarg<sfs_ID> ();
+      chordID *n = sbp->template getarg<chordID> ();
       dhash_stat status = key_status (*n);
       sbp->replyref ( status );
       
@@ -88,19 +101,23 @@ dhash::dispatch(ptr<asrv> dhashsrv, svccb *sbp)
       
     }
     break;
+#endif
   default:
-    sbp->reject (PROC_UNAVAIL);
     break;
   }
-  pred = defp2p->my_pred ();
+  pred = host_node->my_pred ();
+  delete arg;
   return;
 }
 
 void
-dhash::fetchsvc_cb (svccb *sbp, ptr<dbrec> val, dhash_stat err)
+dhash::fetchsvc_cb (long xid,
+		    dhash_fetch_arg *arg, 
+		    ptr<dbrec> val, 
+		    dhash_stat err)
 {
   dhash_res *res = New dhash_res ();
-  dhash_fetch_arg *arg = sbp->template getarg<dhash_fetch_arg> ();
+
   if (err == DHASH_OK) {
     res->set_status (DHASH_OK);
     int n;
@@ -119,15 +136,19 @@ dhash::fetchsvc_cb (svccb *sbp, ptr<dbrec> val, dhash_stat err)
   } else {
     warnx << "partial_fetch: retry\n";
     res->set_status (DHASH_RETRY);
-    res->pred->n = defp2p->my_pred ();
+    res->pred->n = host_node->my_pred ();
   }
 
   warnt("DHASH: FETCH_replying");
-  sbp->reply(res);
+
+  dhash_reply (xid, DHASHPROC_FETCH, res);
   delete res;  
+  delete arg;
 }
 void
-dhash::storesvc_cb(svccb *sbp, dhash_stat err) {
+dhash::storesvc_cb(long xid,
+		   dhash_insertarg *arg,
+		   dhash_stat err) {
   
   warnt("DHASH: STORE_replying");
 
@@ -141,22 +162,24 @@ dhash::storesvc_cb(svccb *sbp, dhash_stat err) {
   } else
     res->set_status (err);
 
-  sbp->reply(res); 
+  dhash_reply (xid, DHASHPROC_STORE, res);
+  delete res;
+  delete arg;
 }
 
 
 // ----------   chord triggered callbacks -------- 
 void
-dhash::act_cb(sfs_ID id, char action) {
+dhash::act_cb(chordID id, char action) {
 
   warn << "node " << id << " just " << action << "ed the network\n";
-  sfs_ID m = defp2p->my_ID ();
+  chordID m = host_node->my_ID ();
 
   if (action == ACT_NODE_LEAVE) {
 #if 0 
    //lost a replica?
     if (replicas.size () > 0) {
-      sfs_ID final_replica = replicas.back ();
+      chordID final_replica = replicas.back ();
       if (between (m, final_replica, id)) 
 	key_store.traverse (wrap (this, &dhash::rereplicate_cb));
     }
@@ -172,13 +195,13 @@ dhash::act_cb(sfs_ID id, char action) {
 #if 0
     //new node should be a replica?
     if (replicas.size () > 0) {
-      sfs_ID final_replica = replicas.back ();
+      chordID final_replica = replicas.back ();
       if (between (m, final_replica, id)) 
 	key_store.traverse (wrap (this, &dhash::fix_replicas_cb, id));
     }
 #endif
 
-    pred = defp2p->my_pred ();
+    pred = host_node->my_pred ();
   } else {
     fatal << "update action not supported\n";
   }
@@ -186,16 +209,15 @@ dhash::act_cb(sfs_ID id, char action) {
 }
 
 void
-dhash::walk_cb(sfs_ID pred, sfs_ID id, sfs_ID k) 
+dhash::walk_cb(chordID pred, chordID id, chordID k) 
 {
   if ((key_status (k) == DHASH_STORED) && (between (pred, id, k))) {
-    warn << k << " is between " << pred << " and " << id << "\n";
     transfer_key (id, k, DHASH_STORE, wrap(this, &dhash::transfer_key_cb, k));
   }
 }
 
 void
-dhash::transfer_key_cb (sfs_ID key, dhash_stat err)
+dhash::transfer_key_cb (chordID key, dhash_stat err)
 {
 
   if (err == DHASH_OK) {
@@ -208,7 +230,7 @@ dhash::transfer_key_cb (sfs_ID key, dhash_stat err)
 }
 
 void
-dhash::fix_replicas_cb (sfs_ID id, sfs_ID k) 
+dhash::fix_replicas_cb (chordID id, chordID k) 
 {
   if (key_status (k) == DHASH_REPLICATED) 
     transfer_key (id, k, DHASH_REPLICA, wrap (this, &dhash::fix_replicas_transfer_cb));
@@ -222,7 +244,7 @@ dhash::fix_replicas_transfer_cb (dhash_stat err)
 }
 
 void
-dhash::rereplicate_cb (sfs_ID k) 
+dhash::rereplicate_cb (chordID k) 
 {
   if (key_status (k) == DHASH_STORED)
     replicate_key (k, REP_DEGREE, wrap (this, &dhash::rereplicate_replicate_cb));
@@ -236,13 +258,13 @@ dhash::rereplicate_replicate_cb (dhash_stat err)
 //---------------- no sbp's below this line --------------
 
 void
-dhash::transfer_key (sfs_ID to, sfs_ID key, store_status stat, callback<void, dhash_stat>::ref cb) 
+dhash::transfer_key (chordID to, chordID key, store_status stat, callback<void, dhash_stat>::ref cb) 
 {
   fetch(key, wrap(this, &dhash::transfer_fetch_cb, to, key, stat, cb));
 }
 
 void
-dhash::transfer_fetch_cb (sfs_ID to, sfs_ID key, store_status stat, callback<void, dhash_stat>::ref cb,
+dhash::transfer_fetch_cb (chordID to, chordID key, store_status stat, callback<void, dhash_stat>::ref cb,
 			  ptr<dbrec> data, dhash_stat err) 
 {
   
@@ -267,8 +289,8 @@ dhash::transfer_fetch_cb (sfs_ID to, sfs_ID key, store_status stat, callback<voi
       else 
 	warn << "going to transfer (REPLICA) " << key << " to " << to << "\n";
  
-      defp2p->doRPC(to, dhash_program_1, DHASHPROC_STORE, i_arg, res,
-		    wrap(this, &dhash::transfer_store_cb, cb, res));
+      host_node->chordnode->doRPC(to, dhash_program_1, DHASHPROC_STORE, i_arg, res,
+			     wrap(this, &dhash::transfer_store_cb, cb, res));
 
       off += remain;
      } while (off < static_cast<unsigned long>(data->len));
@@ -289,7 +311,7 @@ dhash::transfer_store_cb (callback<void, dhash_stat>::ref cb,
 }
 
 void
-dhash::fetch(sfs_ID id, cbvalue cb) 
+dhash::fetch(chordID id, cbvalue cb) 
 {
   warnt("DHASH: FETCH_before_db");
 
@@ -315,7 +337,6 @@ void
 dhash::store (dhash_insertarg *arg, cbstore cb)
 {
 
-  warn << "store request for " << arg->data.size () << " of " << arg->attr.size << " at " << arg->offset << "\n";
   store_state *ss = pst[arg->key];
   if (arg->data.size () != arg->attr.size) {
     if (!ss) {
@@ -338,7 +359,7 @@ dhash::store (dhash_insertarg *arg, cbstore cb)
     else 
       d = New refcounted<dbrec>(ss->buf, ss->size);
     warnt("DHASH: STORE_before_db");
-    sfs_ID id = arg->key;
+    chordID id = arg->key;
     db->insert (k, d, wrap(this, &dhash::store_cb, arg->type, id, cb));
     dhash_stat stat;
     if (arg->type == DHASH_STORE) {
@@ -367,7 +388,7 @@ dhash::store_complete (dhash_insertarg *arg)
 }
 
 void
-dhash::store_cb(store_status type, sfs_ID id, cbstore cb, int stat) 
+dhash::store_cb(store_status type, chordID id, cbstore cb, int stat) 
 {
   warnt("DHASH: STORE_after_db");
 
@@ -395,12 +416,12 @@ dhash::store_repl_cb (cbstore cb, dhash_stat err)
 }
 
 void 
-dhash::replicate_key (sfs_ID key, int degree, callback<void, dhash_stat>::ref cb) 
+dhash::replicate_key (chordID key, int degree, callback<void, dhash_stat>::ref cb) 
 {
   warnt ("DHASH: replicate_key");
   if (degree > 0) {
-    sfs_ID succ = defp2p->my_succ ();
-    vec<sfs_ID> repls;
+    chordID succ = host_node->my_succ ();
+    vec<chordID> repls;
     transfer_key (succ, key, DHASH_REPLICA, wrap (this, &dhash::replicate_key_transfer_cb,
 						  key, degree, cb, succ, repls));
   } else
@@ -408,9 +429,10 @@ dhash::replicate_key (sfs_ID key, int degree, callback<void, dhash_stat>::ref cb
 }
 
 void
-dhash::replicate_key_succ_cb (sfs_ID key, int degree_remaining, callback<void, dhash_stat>::ref cb,
-			      vec<sfs_ID> repls,
-			      sfs_ID succ, sfsp2pstat err) 
+dhash::replicate_key_succ_cb (chordID key, int degree_remaining, 
+			      callback<void, dhash_stat>::ref cb,
+			      vec<chordID> repls,
+			      chordID succ, chordstat err) 
 {
   warnt ("DHASH: replicate_key_succ_cb");
   if (err) {
@@ -423,8 +445,8 @@ dhash::replicate_key_succ_cb (sfs_ID key, int degree_remaining, callback<void, d
 }
 
 void
-dhash::replicate_key_transfer_cb (sfs_ID key, int degree_remaining, callback<void, dhash_stat>::ref cb,
-				  sfs_ID succ, vec<sfs_ID> repls,
+dhash::replicate_key_transfer_cb (chordID key, int degree_remaining, callback<void, dhash_stat>::ref cb,
+				  chordID succ, vec<chordID> repls,
 				  dhash_stat err)
 {
 
@@ -436,29 +458,30 @@ dhash::replicate_key_transfer_cb (sfs_ID key, int degree_remaining, callback<voi
     replicas = repls;
     cb (DHASH_OK);
   } else {
-    defp2p->get_succ (succ, wrap (this, &dhash::replicate_key_succ_cb, 
-				  key, 
-				  degree_remaining - 1,
-				  cb, repls));
+    host_node->get_succ (succ, wrap (this, &dhash::replicate_key_succ_cb, 
+				key, 
+				degree_remaining - 1,
+				cb, repls));
   }
 }
 
 // --------- utility
 
 ptr<dbrec>
-dhash::id2dbrec(sfs_ID id) 
+dhash::id2dbrec(chordID id) 
 {
+  warn << "id2dbrec " << id << "\n";
   str whipme = id.getraw ();
   void *key = (void *)whipme.cstr ();
   int len = whipme.len ();
   
-  //  warn << "id2dbrec: " << id << "=" << hexdump(key, len) << "\n";
+  warn << "id2dbrec: " << id << "=" << hexdump(key, len) << "\n";
   ptr<dbrec> q = New refcounted<dbrec> (key, len);
   return q;
 }
 
 dhash_stat
-dhash::key_status(sfs_ID n) {
+dhash::key_status(chordID n) {
   dhash_stat * s_stat = key_store.peek (n);
   if (s_stat != NULL)
     return *s_stat;
@@ -471,15 +494,15 @@ dhash::key_status(sfs_ID n) {
 }
 
 char
-dhash::responsible(sfs_ID n) 
+dhash::responsible(chordID& n) 
 {
-    sfs_ID p = defp2p->my_pred ();
-    sfs_ID m = defp2p->my_ID ();
-    return (between (p, m, n));
+  chordID p = host_node->my_pred ();
+  chordID m = host_node->my_ID ();
+  return (between (p, m, n));
 }
 
 void
-dhash::store_flush (sfs_ID key, dhash_stat value) {
+dhash::store_flush (chordID key, dhash_stat value) {
   warn << "flushing element " << key << " from store\n";
   ptr<dbrec> k = id2dbrec(key);
   key_cache.enter (key, &value);
@@ -492,7 +515,7 @@ dhash::store_flush_cb (int err) {
 }
 
 void
-dhash::cache_flush (sfs_ID key, dhash_stat value) {
+dhash::cache_flush (chordID key, dhash_stat value) {
   warn << "flushing element " << key << " from cache\n";
   ptr<dbrec> k = id2dbrec(key);
   db->del (k, wrap(this, &dhash::cache_flush_cb));
@@ -503,23 +526,45 @@ dhash::cache_flush_cb (int err) {
   if (err) warn << "err flushing from cache\n";
 }
 
+// - RPC 
+
+void
+dhash::dhash_reply (long xid, unsigned long procno, void *res) 
+{
+
+  xdrproc_t proc = dhash_program_1.tbl[procno].xdr_res;
+  assert (proc);
+
+  xdrsuio x (XDR_ENCODE);
+  if (!proc (x.xdrp (), static_cast<void *> (res))) {
+    warn << "failed to marshall result\n";
+    assert (0);
+  }
+
+  size_t marshalled_len = x.uio ()->resid ();
+  char *marshalled_data = suio_flatten (x.uio ());
+
+  host_node->chordnode->locations->reply(xid, marshalled_data, 
+					 marshalled_len);
+}
+
 // ---------- debug ----
 void
 dhash::printkeys () 
 {
-  warn << "ID: " << defp2p->my_ID () << "\n";
+  warn << "ID: " << host_node->my_ID () << "\n";
   key_store.traverse (wrap (this, &dhash::printkeys_walk));
   key_cache.traverse (wrap (this, &dhash::printcached_walk));
 }
 
 void
-dhash::printkeys_walk (sfs_ID k) 
+dhash::printkeys_walk (chordID k) 
 {
   warn << k << " STORED\n";
 }
 
 void
-dhash::printcached_walk (sfs_ID k) 
+dhash::printcached_walk (chordID k) 
 {
   warn << k << " CACHED\n";
 }

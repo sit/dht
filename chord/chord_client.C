@@ -91,6 +91,7 @@ chord::chord (str _wellknownhost, int _wellknownport,
   nalert = 0;
   ntestrange = 0;
   ngetfingers = 0;
+
 }
 
 
@@ -134,6 +135,7 @@ chord::newvnode ()
   locations->insert (newID, myaddress.hostname, myaddress.port, newID);
   ptr<vnode> vnodep = New refcounted<vnode> (locations, mkref (this), newID);
   nvnode++;
+  warn << "insert: " << newID << "\n";
   vnodes.insert (vnodep);
   locations->checkrefcnt (0);
   vnodep->join ();
@@ -147,6 +149,7 @@ chord::newvnode (chordID &x)
     locations->insert (x, myaddress.hostname, myaddress.port, x);
   ptr<vnode> vnodep = New refcounted<vnode> (locations, mkref (this), x);
   nvnode++;
+  warn << "insert: " << x << "\n";
   vnodes.insert (vnodep);
   locations->checkrefcnt (0);
   if (x != wellknownID) {
@@ -194,6 +197,13 @@ chord::stats ()
   locations->stats ();
 }
 
+void 
+chord::register_handler (int progno, chordID dest, cbdispatch_t hand)
+{
+  vnode *vnodep = vnodes[dest];
+  assert (vnodep);
+  vnodep->addHandler (progno, hand);
+}
 void
 chord::dispatch (svccb *sbp)
 {
@@ -231,6 +241,7 @@ chord::dispatch (svccb *sbp)
     {
       chord_findarg *fa = sbp->template getarg<chord_findarg> ();
       vnode *vnodep = vnodes[fa->v.n];
+      warn << "(find_pred) looking for " << fa->v.n << "\n";
       assert (vnodep);
       warnt("CHORD: findclosestpred_request");
       nfindclosestpred++;
@@ -261,6 +272,7 @@ chord::dispatch (svccb *sbp)
       warnt("CHORD: testandfindrequest");
       chord_testandfindarg *fa = 
 	sbp->template getarg<chord_testandfindarg> ();
+      warn << "looking for " << fa->v.n << "\n";
       vnode *vnodep = vnodes[fa->v.n];
       assert (vnodep);
       ntestrange++;
@@ -275,6 +287,23 @@ chord::dispatch (svccb *sbp)
       warnt("CHORD: getfingers_request");
       ngetfingers++;
       vnodep->dogetfingers (sbp);
+    }
+    break;
+  case CHORDPROC_HOSTRPC:
+    {
+      chord_RPC_arg *arg = sbp->template getarg<chord_RPC_arg> ();
+
+      vnode *vnodep = vnodes[arg->dest];
+      assert (vnodep);
+      cbdispatch_t dispatch = vnodep->getHandler(arg->host_prog);
+      if (dispatch) {
+	long xid = locations->new_xid (sbp);
+	(dispatch)(arg->host_proc, arg, xid);
+      } else {
+	chord_RPC_res res;
+	res.set_status (CHORD_NOHANDLER);
+	sbp->replyref (res);
+      }
     }
     break;
   default:

@@ -11,10 +11,10 @@
  * Implementation of the distributed hash service.
  */
 
-dhashclient::dhashclient (ptr<axprt_stream> _x)
-  : x (_x), do_caching (0), num_replicas(0)
+dhashclient::dhashclient (ptr<axprt_stream> _x, ptr<chord> node)
+  : x (_x), clntnode(node), do_caching (0), num_replicas(0)
 {
-  p2pclntsrv = asrv::alloc (x, dhashclnt_program_1,
+  clntsrv = asrv::alloc (x, dhashclnt_program_1,
 			 wrap (this, &dhashclient::dispatch));
 }
 
@@ -25,7 +25,7 @@ dhashclient::dispatch (svccb *sbp)
     delete this;
     return;
   }
-  assert (defp2p);
+  assert (clntnode);
 
   switch (sbp->proc ()) {
   case DHASHPROC_NULL:
@@ -34,17 +34,11 @@ dhashclient::dispatch (svccb *sbp)
   case DHASHPROC_LOOKUP:
     {
       dhash_fetch_arg *arg = sbp->template getarg<dhash_fetch_arg> ();
-
+      
       warnt("DHASH: lookup_request");
-
-      searchcb_entry *scb = NULL;
-#if 0
-      if (do_caching)
-	scb = defp2p->registerSearchCallback(wrap(this, &dhashclient::search_cb, arg->key));
-#endif
-
-      defp2p->dofindsucc (arg->key,wrap(this,&dhashclient::lookup_findsucc_cb, 
-				   sbp, scb));
+            clntnode->find_successor (arg->key, 
+				wrap (this, &dhashclient::lookup_findsucc_cb, 
+				     sbp));
     } 
     break;
   case DHASHPROC_INSERT:
@@ -52,10 +46,10 @@ dhashclient::dispatch (svccb *sbp)
       warnt("DHASH: insert_request");
       dhash_insertarg *item = sbp->template getarg<dhash_insertarg> ();
       ptr<dhash_insertarg> p_item = New refcounted<dhash_insertarg> (*item);
-      sfs_ID n = item->key;
-      defp2p->insert_or_lookup = true;
-      defp2p->dofindsucc (n, wrap(this, &dhashclient::insert_findsucc_cb, 
-				  sbp, p_item));
+      chordID n = item->key;
+      warn << "inserting " << n << "\n";
+      clntnode->find_successor (n, wrap(this, &dhashclient::insert_findsucc_cb, 
+				    sbp, p_item));
     }
     break;
   default:
@@ -66,8 +60,8 @@ dhashclient::dispatch (svccb *sbp)
 
 void
 dhashclient::insert_findsucc_cb(svccb *sbp, ptr<dhash_insertarg> item,
-				sfs_ID succ, route path,
-				sfsp2pstat err) {
+				chordID succ, route path,
+				chordstat err) {
   if (err) {
     dhash_res res;
     warn << "error finding sucessor\n";
@@ -75,17 +69,14 @@ dhashclient::insert_findsucc_cb(svccb *sbp, ptr<dhash_insertarg> item,
     sbp->reply(&res);
   } else {
 
+    warn << "succ was " << succ << "\n";
+
     warnt("DHASH: insert_after_dofindsucc|issue_STORE");
 
     dhash_storeres *res = New dhash_storeres();
-    defp2p->doRPC(succ, dhash_program_1, DHASHPROC_STORE, item, res,
-		  wrap(this, &dhashclient::insert_store_cb, sbp, res));
-
-#if 0
-    if (do_caching) 
-      cache_on_path(item, path);
-#endif
-
+    clntnode->doRPC(succ, dhash_program_1, DHASHPROC_STORE, item, res,
+		wrap(this, &dhashclient::insert_store_cb, sbp, res));
+    
   }
 }
 
@@ -95,7 +86,7 @@ dhashclient::insert_store_cb(svccb *sbp,  dhash_storeres *res,
 {
 
   warnt("DHASH: insert_after_STORE");
-
+  
   if (res->status) {
     // error in insertion/replication: return to caller
     warnx << "insert_store_cb: failed " << res->status << "\n";
@@ -114,8 +105,8 @@ dhashclient::cache_on_path(ptr<dhash_insertarg> item, route path)
     warn << "caching " << i << " out of " << path.size () << " on " << path[i] << "\n";
     warn << "item is " << item->key << "\n";
     dhash_stat *res = New dhash_stat();
-    defp2p->doRPC(path[i], dhash_program_1, DHASHPROC_STORE, item, res,
-		  wrap(this, &dhashclient::cache_store_cb, res));
+    clntnode->doRPC(path[i], dhash_program_1, DHASHPROC_STORE, item, res,
+		wrap(this, &dhashclient::cache_store_cb, res));
   }
 }
 
@@ -133,13 +124,10 @@ dhashclient::cache_store_cb(dhash_stat *res, clnt_stat err)
 }
 
 void
-dhashclient::lookup_findsucc_cb(svccb *sbp,
-				searchcb_entry *scb,
-				sfs_ID succ, route path,
-				sfsp2pstat err)
+dhashclient::lookup_findsucc_cb(svccb *sbp, 
+				chordID succ, route path,
+				chordstat err)
 {
-  if (scb)
-    defp2p->removeSearchCallback(scb);
 
   if (err) {
     warnx << "lookup_findsucc_cb: FETCH FAILURE " << err << "\n";
@@ -153,10 +141,10 @@ dhashclient::lookup_findsucc_cb(svccb *sbp,
     dhash_fetch_arg *arg = sbp->template getarg<dhash_fetch_arg>();
     ptr<dhash_fetch_arg> a = New refcounted<dhash_fetch_arg> (*arg);
     dhash_res *res = New dhash_res(DHASH_OK);
-    retry_state *st = New retry_state (arg->key, sbp, succ, path, scb);
+    retry_state *st = New retry_state (arg->key, sbp, succ, path);
     
-    defp2p->doRPC(succ, dhash_program_1, DHASHPROC_FETCH, a, res, 
-		  wrap(this, &dhashclient::lookup_fetch_cb, res, st));
+    clntnode->doRPC(succ, dhash_program_1, DHASHPROC_FETCH, a, res, 
+		wrap(this, &dhashclient::lookup_fetch_cb, res, st));
   }
 }
 
@@ -165,30 +153,22 @@ dhashclient::lookup_fetch_cb(dhash_res *res, retry_state *st, clnt_stat err)
 {
   if (err) {
     warnx << "lookup_fetch_cb failed " << err << "\n";
-    sfs_ID l = st->path.back ();
+    chordID l = st->path.back ();
     warnx << "lookup_fetch_cb: last " << l << " failed " << st->succ << "\n";
+#if 0
     defp2p->deleteloc (st->succ);
     defp2p->alert (l, st->succ);
-    defp2p->dofindsucc (st->n, wrap(this, &dhashclient::lookup_findsucc_cb, 
-				   st->sbp, st->scb));
+#endif
+    clntnode->find_successor (st->n, 
+			      wrap(this, &dhashclient::lookup_findsucc_cb, 
+				   st->sbp));
   } else if (res->status == DHASH_RETRY) {
     warnx << "lookup_fetch_cb: retry for " << st->n << " at " 
 	  << st->succ << "\n";
-    defp2p->get_predecessor (st->succ, wrap (this, &dhashclient::retry, st));
+    clntnode->get_predecessor (st->succ, wrap (this, &dhashclient::retry, st));
   } else {
 
     warnt("DHASH: lookup_after_FETCH");
-
-
-#if 0
-    if (do_caching) {
-      ptr<dhash_insertarg> di = New refcounted<dhash_insertarg> ();
-      di->key = st->n;
-      di->data = res->resok->res;
-      cache_on_path(di, st->path);
-      delete di;
-    }
-#endif
 
     st->sbp->reply (res);
     
@@ -198,7 +178,7 @@ dhashclient::lookup_fetch_cb(dhash_res *res, retry_state *st, clnt_stat err)
 }
 
 void
-dhashclient::retry (retry_state *st, sfs_ID p, net_address a, sfsp2pstat stat)
+dhashclient::retry (retry_state *st, chordID p, net_address a, chordstat stat)
 {
   if (stat) {
     warnx << "retry: failure FETCH FAILURE " << st->n << " err " 
@@ -209,46 +189,9 @@ dhashclient::retry (retry_state *st, sfs_ID p, net_address a, sfsp2pstat stat)
   } else {
     dhash_res *r = New dhash_res();
     warnx << "retry: " << st->n << " at " << p << "\n";
-    ptr<sfs_ID> p_n = New refcounted<sfs_ID> (st->n);
-    defp2p->doRPC(p, dhash_program_1, DHASHPROC_FETCH, p_n, r, 
-		  wrap(this, &dhashclient::lookup_fetch_cb, r,st));
+    ptr<chordID> p_n = New refcounted<chordID> (st->n);
+    clntnode->doRPC(p, dhash_program_1, DHASHPROC_FETCH, p_n, r, 
+		wrap(this, &dhashclient::lookup_fetch_cb, r,st));
   }
 }
-
-
-// ----------- notification
-
-
-void
-dhashclient::search_cb(sfs_ID my_target, sfs_ID node, sfs_ID target, cbi cb) {
-
-
-  if (my_target == target) {
-    dhash_stat *status = New dhash_stat();
-    ptr<sfs_ID> target_h = New refcounted<sfs_ID>();
-    *target_h = target;
-    defp2p->doRPC (node, dhash_program_1, DHASHPROC_CHECK, target_h, status,
-		   wrap(this, &dhashclient::search_cb_cb, status, cb));
-  } else
-    cb (0);
-  
-}
-
-void
-dhashclient::search_cb_cb (dhash_stat *res, cbi cb, clnt_stat err) {
-
-  if (err) {
-    warn << "DHASH_CHECK failed in search_cb\n";
-    cb (0);
-    return;
-  } 
-  
-  //  warn << "res was " << *res << "\n";
-  if (*res != DHASH_NOTPRESENT) {
-    warn << "CACHE HIT\n";
-    cb (1);
-  } else
-    cb (0);
-}
-
 

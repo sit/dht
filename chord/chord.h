@@ -42,8 +42,11 @@ typedef vec<chordID> route;
 typedef callback<void,chordID,net_address,chordstat>::ref cbsfsID_t;
 typedef callback<void,chordID,route,chordstat>::ref cbroute_t;
 typedef callback<void,chordID,char>::ref cbaction_t;
-typedef callback<void,chordID,chordID,callback<void,int>::ref >::ref cbsearch_t;
+typedef callback<void,chordID,chordID,callback<void,int>::ref>::ref cbsearch_t;
 typedef callback<void,int>::ref cbtest_t;
+typedef callback<void, ref<axprt_stream> >::ptr cbaxprt;
+typedef unsigned long cxid_t;
+typedef callback<void, unsigned long, chord_RPC_arg *, cxid_t>::ref cbdispatch_t;
 
 #define ACT_NODE_JOIN 1
 #define ACT_NODE_UPDATE 2
@@ -75,11 +78,12 @@ class vnode : public virtual refcount  {
   static const int max_retry = 5;
   
   ptr<locationtable> locations;
-  ptr<chord> chordnode;
   finger finger_table[NBIT+1];
   node succlist[NBIT+1];
   int nsucc;
   node predecessor;
+
+  qhash<unsigned long, cbdispatch_t> dispatch_table;
 
   int ngetsuccessor;
   int ngetpredecessor;
@@ -144,6 +148,7 @@ class vnode : public virtual refcount  {
  public:
   chordID myID;
   ihash_entry<vnode> fhlink;
+  ptr<chord> chordnode;
 
   vnode (ptr<locationtable> _locations, ptr<chord> _chordnode, chordID _myID);
   chordID my_ID () { return myID; };
@@ -181,7 +186,6 @@ class vnode : public virtual refcount  {
   void deletefingers (chordID &x);
   void stats (void);
 
-  // For dhash
   void timing_cb(aclnt_cb cb, location *l, ptr<struct timeval> start, 
 		 int procno, rpc_program progno, clnt_stat err);
 
@@ -193,6 +197,14 @@ class vnode : public virtual refcount  {
 		int result);
   void registerActionCallback(cbaction_t cb);
   void doActionCallbacks(chordID id, char action);
+
+  //RPC demux
+  void addHandler (unsigned long prog, cbdispatch_t cb) {
+    dispatch_table.insert (prog, cb);
+  };
+  cbdispatch_t getHandler (unsigned long prog) {
+    return dispatch_table [prog];
+  };
 };
 
 class chord : public virtual refcount {
@@ -216,7 +228,7 @@ class chord : public virtual refcount {
   void accept_standalone (int lfd);
   int startchord (int myp);
   chordID initID (int index);
-
+ 
  public:
   // locations contains all nodes that appear as fingers in vnodes plus
   // a number of cached nodes.  the cached nodes have refcnt = 0
@@ -228,10 +240,21 @@ class chord : public virtual refcount {
   void deletefingers (chordID &x);
   int countrefs (chordID &x);
   void stats (void);
+
+  //support for demultiplexing RPCs to vnodes
+  void register_handler (int progno, chordID dest, cbdispatch_t hand);
+
+  //'wrappers' for vnode functions (to be called from higher layers)
+  void find_successor (chordID n, cbroute_t cb) {
+    vnodes.first()->dofindsucc (n, cb);
+  };
+  void get_predecessor (chordID n, cbsfsID_t cb) {
+    vnodes.first()->get_predecessor (n, cb);
+  };
   void doRPC (chordID &n, rpc_program progno, int procno, ptr<void> in, 
 	      void *out, aclnt_cb cb) {
     locations->doRPC (n, progno, procno, in, out, cb);
-  }
+  };
 
 };
 

@@ -18,7 +18,8 @@ enum chordstat {
   CHORD_ERREXIST = 3,
   CHORD_CACHEHIT = 4,
   CHORD_INRANGE = 5,
-  CHORD_NOTINRANGE = 6
+  CHORD_NOTINRANGE = 6,
+  CHORD_NOHANDLER = 7
 };
 
 struct chord_vnode {
@@ -88,6 +89,24 @@ union chord_getfingersres switch (chordstat status) {
     void;
 };
 
+struct chord_RPC_arg {
+  chordID  dest;
+  unsigned host_prog;
+  unsigned host_proc;
+  opaque marshalled_args<>;
+};
+
+struct chord_RPC_resok {
+  opaque marshalled_res<>;
+};
+
+union chord_RPC_res switch (chordstat status) {
+ case CHORD_OK:
+   chord_RPC_resok resok;
+ default:
+   void;
+};
+
 program CHORD_PROGRAM {
 	version CHORD_VERSION {
 		void 
@@ -116,6 +135,8 @@ program CHORD_PROGRAM {
 
 		chord_getfingersres
 		CHORDPROC_GETFINGERS (chord_vnode) = 8;
-  
+		
+		chord_RPC_res
+		CHORDPROC_HOSTRPC (chord_RPC_arg) = 9;
 	} = 1;
 } = 344447;

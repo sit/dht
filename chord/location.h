@@ -52,11 +52,13 @@ struct doRPC_cbstate {
   ptr<void> in;
   void *out;
   aclnt_cb cb;
+  chordID ID;
+
   tailq_entry<doRPC_cbstate> connectlink;
   
   doRPC_cbstate (rpc_program ro, int pi, ptr<void> ini, void *outi,
-		 aclnt_cb cbi) : progno (ro), procno (pi), in (ini),  
-    out (outi), cb (cbi) {};
+		 aclnt_cb cbi, chordID id) : progno (ro), procno (pi), in (ini),  
+		   out (outi), cb (cbi), ID (id) {};
   
 };
 
@@ -75,7 +77,7 @@ struct location {
   u_int64_t maxdelay;
   int nout;
   timecb_t *timeout_cb;
-  
+
   location (chordID &_n, net_address &_r, chordID _source) : 
     n (_n), addr (_r), source (_source) {
     connecting = false; 
@@ -99,6 +101,8 @@ struct location {
     rpcdelay = 0;
     nrpc = 0;
     maxdelay = 0;
+    
+    
   }
 
   ~location () {
@@ -117,6 +121,11 @@ class locationtable : public virtual refcount {
   u_int64_t rpcdelay;
   u_int64_t nrpc;
   u_int64_t nrpcfailed;
+
+  qhash<long, svccb *> octbl;
+  unsigned long last_xid;
+  
+  locationtable () : last_xid (0) {};
 
   void connect_cb (callback<void, ptr<axprt_stream> >::ref cb, int fd);
   void doRPCcb (aclnt_cb cb, location *l, u_int64_t s, clnt_stat err);
@@ -143,6 +152,21 @@ class locationtable : public virtual refcount {
   void doRPC (chordID &n, rpc_program progno, int procno, ptr<void> in, 
 	      void *out, aclnt_cb cb);
   void stats ();
+
+  long new_xid (svccb *sbp);
+  void reply (long xid, void *out, long outlen);
+  bool doForeignRPC (rpc_program prog, 
+		     unsigned long procno,
+		     void *in, 
+		     void *out,
+		     chordID ID,
+		     aclnt_cb cb);
+  void doForeignRPC_cb (chord_RPC_res *res,
+			void *out,
+			rpc_program prog,
+			int procno,
+			aclnt_cb cb,
+			clnt_stat err);
 };
 
 #endif _LOCATION_H_

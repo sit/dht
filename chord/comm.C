@@ -33,24 +33,112 @@ locationtable::timeout(location *l) {
   }
 }
 
+bool
+locationtable::doForeignRPC (rpc_program prog,
+			     unsigned long procno,
+			     void *in, 
+			     void *out,
+			     chordID ID,
+			     aclnt_cb cb) 
+{
+  xdrproc_t inproc = prog.tbl[procno].xdr_arg;
+  if (!inproc) return false;
+
+  xdrsuio x (XDR_ENCODE);
+  if (!inproc (x.xdrp (), const_cast<void *> (in))) {
+    return false;
+  }
+
+  size_t marshalled_len = x.uio ()->resid ();
+  char *marshalled_data = suio_flatten (x.uio ());
+
+  chord_RPC_arg farg;
+  farg.dest = ID;
+  farg.host_prog = prog.progno;
+  farg.host_proc = procno;
+  farg.marshalled_args.setsize (marshalled_len);
+  memcpy (farg.marshalled_args.base (), marshalled_data, marshalled_len);
+  
+  location *l = getlocation (ID);
+  assert (l);
+  ptr<aclnt> c = aclnt::alloc (l->x, chord_program_1);
+  chord_RPC_res *res = New chord_RPC_res ();
+  c->call (CHORDPROC_HOSTRPC, &farg, res, 
+	   wrap (this, &locationtable::doForeignRPC_cb, res, out, 
+		 prog, procno, cb)); 
+}
+
 void
-locationtable::doRPC (chordID &ID, rpc_program progno, int procno, 
+locationtable::doForeignRPC_cb (chord_RPC_res *res,
+				void *out,
+				rpc_program prog,
+				int procno,
+				aclnt_cb cb,
+				clnt_stat err)
+{
+
+
+  if ((err) || (res->status)) (*cb)(err);
+  else {
+    char *mRes = res->resok->marshalled_res.base ();
+    size_t reslen = res->resok->marshalled_res.size ();
+    xdrmem x (mRes, reslen, XDR_DECODE);
+    xdrproc_t outproc = prog.tbl[procno].xdr_res;
+    if (! outproc (x.xdrp (), out) ) {
+      cb (RPC_CANTDECODERES);
+    } else {
+      cb (RPC_SUCCESS);
+    }
+  }
+  delete res;
+}
+
+long
+locationtable::new_xid (svccb *sbp)
+{
+  last_xid += 1;
+  octbl.insert (last_xid, sbp);
+  return last_xid;
+}
+
+void
+locationtable::reply (long xid, 
+		      void *out,
+		      long outlen) 
+{
+  svccb **sbp = octbl[xid];
+  assert (sbp);
+  chord_RPC_res res;
+  res.set_status (CHORD_OK);
+  res.resok->marshalled_res.setsize (outlen);
+  memcpy (res.resok->marshalled_res.base (), out, outlen);
+  (*sbp)->replyref (res);
+  octbl.remove (xid);
+}
+
+void
+locationtable::doRPC (chordID &ID, rpc_program prog, int procno, 
 		      ptr<void> in, void *out, aclnt_cb cb)
 
 {
-  location *l = getlocation(ID);
+  location *l = getlocation (ID);
   assert (l);
   assert (l->refcnt >= 0);
   l->nout++;
   if (l->x) {    
     timecb_remove(l->timeout_cb);
     l->timeout_cb = delaycb(360,0,wrap(this, &locationtable::timeout, l));
-    ptr<aclnt> c = aclnt::alloc(l->x, progno);
-    u_int64_t s = getnsec ();
-    c->call (procno, in, out, wrap (mkref (this), &locationtable::doRPCcb,
-				    cb, l, s));
+
+    if (prog.progno == CHORD_PROGRAM) {
+      ptr<aclnt> c = aclnt::alloc(l->x, prog);
+      u_int64_t s = getnsec ();
+      c->call (procno, in, out, wrap (mkref (this), &locationtable::doRPCcb,
+				      cb, l, s));
+    } else 
+      doForeignRPC (prog, procno, in, out, ID, cb);
+    
   } else {
-    doRPC_cbstate *st = New doRPC_cbstate (progno, procno, in, out,  cb);
+    doRPC_cbstate *st = New doRPC_cbstate (prog, procno, in, out, cb, ID);
     l->connectlist.insert_tail (st);
     if (!l->connecting) {
       chord_connect(ID, wrap (mkref (this), 
@@ -99,12 +187,18 @@ locationtable::dorpc_connect_cb(location *l, ptr<axprt_stream> x)
   l->timeout_cb = delaycb (360, 0, wrap(this, &locationtable::timeout, l));
   doRPC_cbstate *st, *st1;
   for (st = l->connectlist.first; st; st = st1) {
-    ptr<aclnt> c = aclnt::alloc (x, st->progno);
-    c->call (st->procno, st->in, st->out, st->cb);
-    st1 = l->connectlist.next (st);
+
+    if (st->progno.progno == CHORD_PROGRAM) {
+      ptr<aclnt> c = aclnt::alloc (x, st->progno);
+      c->call (st->procno, st->in, st->out, st->cb);
+    } else {
+      doForeignRPC (st->progno, st->procno, st->in, st->out, st->ID, st->cb);
+    }
+    
+      st1 = l->connectlist.next (st);
     l->connectlist.remove(st);
   }
-  decrefcnt (l);
+  //  decrefcnt (l);
 }
 
 void
@@ -121,7 +215,7 @@ locationtable::chord_connect(chordID ID, callback<void,
   if (l->x) {    
     timecb_remove(l->timeout_cb);
     l->timeout_cb = delaycb(360, 0, wrap(mkref(this), 
-					 &locationtable::timeout, l));
+    					 &locationtable::timeout, l));
     (*cb)(l->x);
   } else {
     warnx << "tcpconnect: " << l->addr.hostname << " " << l->addr.port << "\n";

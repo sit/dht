@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.11 2001/07/05 15:35:21 kaashoek Exp $
+# $Id: Makefile.am,v 1.12 2001/07/10 02:39:51 fdabek Exp $
 
 $(PROGRAMS): $(LDEPS)
 
@@ -10,7 +10,8 @@ bin_PROGRAMS = lsd
 lsd_SOURCES = lsd.C
 
 # lsd_LDADD = ../dhash/libdhash.a ../svc/libsvc.la  $(DBLIB) ${LDADD} 
-lsd_LDADD = ../chord/libchord.a ../svc/libsvc.la  $(DBLIB) ${LDADD} 
+lsd_LDADD = ../chord/libchord.a  ../dhash/libdhash.a ../svc/libsvc.la \
+	 $(DBLIB) ${LDADD} 
 
 
 EXTRA_DIST = .cvsignore

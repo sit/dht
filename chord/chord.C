@@ -26,8 +26,8 @@
 vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
 	      chordID _myID) :
   locations (_locations),
-  chordnode (_chordnode),
-  myID (_myID)
+  myID (_myID), 
+  chordnode (_chordnode)
 {
   warnx << "myID is " << myID << "\n";
   finger_table[0].start = finger_table[0].first.n = myID;
@@ -144,6 +144,9 @@ vnode::stats ()
 void
 vnode::print ()
 {
+
+  return;
+
   warnx << "======== " << myID << "====\n";
   for (int i = 1; i <= NBIT; i++) {
     if (!finger_table[i].first.alive) continue;
@@ -181,7 +184,7 @@ vnode::stabilize (int c)
   int j = c % (nsucc+1);
 
   warnt("CHORD: stabilize");
-  warnx << "stabilize: " << myID << " " << i << "\n";
+  //  warnx << "stabilize: " << myID << " " << i << "\n";
   print ();
 
   locations->checkrefcnt (1);
@@ -213,7 +216,7 @@ vnode::stabilize (int c)
   get_successor (succlist[j].n,
 		 wrap (mkref (this), &vnode::stabilize_getsucclist_cb, j));
   int time = uniform_random (0.5 * stabilize_timer, 1.5 * stabilize_timer);
-  stabilize_tmo = delaycb (0, time * 1000000, 
+  stabilize_tmo = delaycb (time / 1000, time * 1000, 
 			   wrap (mkref (this), &vnode::stabilize, i+1));
   locations->checkrefcnt (2);
 }
@@ -306,10 +309,12 @@ vnode::stabilize_getsucclist_cb (int i, chordID s, net_address r,
 void
 vnode::join ()
 {
-  chordID n;
+  chordID n(69);
 
+  warn << "n before lookup_anyloc " << n << "\n";
   if (!locations->lookup_anyloc(myID, &n))
     fatal ("No nodes left to join\n");
+  warn << "find succ from join " << n << " " << myID << "\n";
   find_successor (n, myID, wrap (mkref (this), &vnode::join_getsucc_cb));
 }
 

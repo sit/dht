@@ -25,6 +25,7 @@
 void 
 vnode::get_successor (chordID n, cbsfsID_t cb)
 {
+  warn << "get successor of " << n << "\n";
   ngetsuccessor++;
   chord_noderes *res = New chord_noderes (CHORD_OK);
   ptr<chord_vnode> v = New refcounted<chord_vnode>;
@@ -194,6 +195,7 @@ vnode::find_closestpred (chordID &n, chordID &x, findpredecessor_cbstate *st)
   fap->v.n = n;
   fap->x = x;
   warnt("CHORD: issued_FINDCLOSESTPRED_RPC");
+  warn << "issuing rpc w/ n=" << n << "\n";
   locations->doRPC (n, chord_program_1, CHORDPROC_FINDCLOSESTPRED, fap, res,
 		    wrap (mkref (this), &vnode::find_closestpred_cb, n, st, 
 			  res));
@@ -204,6 +206,7 @@ vnode::find_closestpred_cb (chordID n, findpredecessor_cbstate *st,
 			  chord_noderes *res, clnt_stat err)
 {
   warnt("CHORD: find_closestpred_cb");
+  warn << "looking for closestpred of " << res->resok->node << "\n";
   if (err) {
     warnx << "find_closestpred_cb: RPC failure " << err << "\n";
     chordnode->deletefingers (n);
@@ -219,7 +222,7 @@ vnode::find_closestpred_cb (chordID n, findpredecessor_cbstate *st,
     locations->cacheloc (res->resok->node, res->resok->r, n);
     st->search_path.push_back(res->resok->node);
 #ifdef UNOPT
-    get_successor (node, 
+    get_successor (res->resok->node, 
 		   wrap (mkref (this), &vnode::find_closestpred_succ_cb, st));
 #else
     testrange_findclosestpred (res->resok->node, st->x, st);
@@ -231,6 +234,7 @@ void
 vnode::testrange_findclosestpred (chordID n, chordID x, 
 				  findpredecessor_cbstate *st)
 {
+  warn << "looking for closestpred of " << n << " " << x << "\n";
   ptr<chord_testandfindarg> arg = New refcounted<chord_testandfindarg> ();
   arg->v.n = n;
   arg->x = x;
