@@ -261,10 +261,15 @@ locationtable::figure_pins (void)
   // pinsucc_ from among those pins. 
   size_t sz = size ();
   while (cpin) {
-    if (cpin->pinsucc_ > 0) {
-      unsigned short to_pin = cpin->pinsucc_;
+    assert (cpin->pinsucc_*cpin->pinpred_ == 0); //can't pin both ways
+    if (cpin->pinsucc_ > 0 || cpin->pinpred_ > 0) {
+      unsigned short to_pin = (cpin->pinsucc_ > 0) ? 
+	cpin->pinsucc_ : cpin->pinpred_;
       size_t cursz = sz;
-      cur = loclist.closestsucc (cpin->n_);
+      if (cpin->pinsucc_ > 0) 
+	cur = loclist.closestsucc (cpin->n_);
+      else
+	cur = loclist.closestpred (cpin->n_);
       do {
 	if (cur->good ()) {
 	  loctrace << "pinning cur " << cur->n_ << "\n";
@@ -272,17 +277,19 @@ locationtable::figure_pins (void)
 	  to_pin--;
 	}
 	cursz--;
-	cur = next (cur);
+	if (cpin->pinsucc_ > 0) cur = next (cur);
+	else cur = prev (cur);
 	// Only iterate through all locations once.
 	// And only as far as needed.
       } while (to_pin > 0 && cursz > 0);
     }
     cpin = pinlist.next (cpin);
     if (cpin) 
-      loctrace << "step pin = " << cpin->n_ << " " << cpin->pinsucc_ << "\n";
+      loctrace << "step pin = " << cpin->n_ << " " 
+	       << cpin->pinsucc_ << " " << cpin->pinpred_ << " " << "\n";
   }
 }
-
+  
 // Evict n nodes. If n == 0, evict as many as you can.
 void
 locationtable::evict (size_t n)
@@ -339,8 +346,8 @@ locationtable::pin (const chordID &x, short num)
 {
   pins_updated_ = false;
   pininfo *p = pinlist.search (x);
-  if (num < -1)
-    fatal << "unsupported predecessor pin amount " << num << ".\n";
+  //  if (num < -1)
+  //fatal << "unsupported predecessor pin amount " << num << ".\n";
   if (p) {
     if (num == 0)
       p->pinself_ = true;
