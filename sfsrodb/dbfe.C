@@ -258,12 +258,8 @@ int dbfe::IMPL_open_sleepycat(char *filename, dbOptions opts) {
  if (flags == -1) flags = DB_CREATE;
  long create = opts.getOption(CREATE_OPT);
  if (create == 0) flags |= DB_EXCL;
- else {
-   flags |= DB_CREATE;
-   flags &= ~DB_EXCL;
- }
 
- r = db->open(db, (const char *)filename, NULL, DB_BTREE, flags, mode);
+  r = db->open(db, (const char *)filename, NULL, DB_BTREE, flags, mode);
 
  return r;
 }
@@ -287,7 +283,7 @@ int dbfe::IMPL_insert_sync_sleepycat(ref<dbrec> key, ref<dbrec> data) {
   int r = 0;
 
   if ((r = db->put(db, NULL, &skey, &content, 0)) != 0) return r;
-  //  db->sync(db, 0);
+  db->sync(db, 0);
   return 0;
 } 
 
