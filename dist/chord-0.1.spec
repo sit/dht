@@ -50,6 +50,7 @@ rm -rf $RPM_BUILD_ROOT
 %{_bindir}/nodeq
 %{_bindir}/nodeq-filter
 %{_bindir}/sfsrodb
+%{_bindir}/syncd
 %{_bindir}/usenet
 %{_bindir}/usenetlsdmon.py
 %{_bindir}/udbctl
@@ -68,6 +69,9 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Thu Mar 10 2005 Emil Sit <sit@mit.edu>
+- syncd!
+
 * Sat Feb 26 2005 Emil Sit <sit@mit.edu>
 - Add Frank's lsdping
 - Bump package release number because of new merkle.
