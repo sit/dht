@@ -28,7 +28,6 @@
 
 #include "protocolfactory.h"
 #include "kademlia.h"
-#include "pastry.h"
 #include "koorde.h"
 #include "chordfingerpns.h"
 #include "misc/vivalditest.h"

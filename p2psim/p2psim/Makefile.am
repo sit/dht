@@ -10,6 +10,12 @@ p2psim_LDADD = p2psim_core.o \
 	       ../topologies/topologies.o \
                -L/usr/local/lib -lthread -l9 -lfmt -lutf -lgmp -lcrypto $(GBLIBS)
 
+EXTRA_DIST = args.h condvar.h event.h eventgenerator.h eventqueue.h \
+             eventqueueobserver.h failuremodel.h network.h node.h observed.h \
+             observer.h observerinfo.h p2protocol.h p2psim.h p2psim_hashmap.h \
+             packet.h parse.h rpchandle.h threaded.h threadmanager.h tmgdmalloc.h \
+             topology.h skiplist.h keyfunc.h
+
 noinst_PROGRAMS = p2psim_core.o
 p2psim_core_o_SOURCES = anyready.C condvar.C p2protocol.C event.C \
 		        eventqueue.C \

@@ -2,6 +2,10 @@ noinst_PROGRAMS = observers.o
 observers_o_SOURCES = kademliaobserver.C protocolobserver.C \
                     tapestryobserver.C chordobserver.C  \
 		    kelipsobserver.C observerfactory.C
+
+EXTRA_DIST = chordobserver.h kademliaobserver.h kelipsobserver.h \
+             observerfactory.h protocolobserver.h tapestryobserver.h
+
 LIBS =
 observers_o_LINK = $(LD) -r -o $@
 

@@ -1,6 +1,8 @@
 noinst_PROGRAMS = failuremodels.o
 failuremodels_o_SOURCES = failuremodelfactory.C roundtripsfailuremodel.C
 
+EXTRA_DIST = failuremodelfactory.h nullfailuremodel.h roundtripsfailuremodel.h
+
 LIBS =
 failuremodels_o_LINK = $(LD) -r -o $@
 
