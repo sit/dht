@@ -995,10 +995,11 @@ draw_ring ()
 
       
       if (n->predecessor &&
-	  ((n->draw & DRAW_IMMED_PRED) == DRAW_IMMED_PRED)) {
+	  ((n->draw & DRAW_IMMED_PRED) == DRAW_IMMED_PRED) &&
+	  n->predecessor->resok->nlist.size () > 1) {
 	int a,b;
-	set_foreground_lat (n->predecessor->resok->nlist[0].a_lat); 
-	ID_to_xy (make_chordID (n->predecessor->resok->nlist[0].n), &a, &b);
+	set_foreground_lat (n->predecessor->resok->nlist[1].a_lat); 
+	ID_to_xy (make_chordID (n->predecessor->resok->nlist[1].n), &a, &b);
 	draw_arrow (x,y,a,b, draw_gc);
       }
       
@@ -1161,7 +1162,6 @@ main (int argc, char** argv)
   str sim_file = "network";
   int cmd_port = 0;
   unsigned short port = 0;
-  interval = 100;
   color_file = ".viscolors";
 
   int ch;

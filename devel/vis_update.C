@@ -5,7 +5,7 @@
 #include "vis.h"
 
 GtkWidget *total_nodes (NULL);
-short interval (100);
+short interval (1000);
 
 vec<chordID> get_queue;
 ihash<chordID, f_node, &f_node::ID, &f_node::link, hashID> nodes;
