@@ -42,9 +42,6 @@
 #define dhashtrace modlogger ("dhash")
 
 #include <merkle_sync_prot.h>
-static int MERKLE_ENABLED = getenv("MERKLE_ENABLED") ? atoi(getenv("MERKLE_ENABLED")) : 1;
-static int PARTITION_ENABLED = getenv("PARTITION_ENABLED") ? atoi(getenv("PARTITION_ENABLED")) : 1;
-static int REPLICATE = getenv("REPLICATE") ? atoi(getenv("REPLICATE")) : 1;
 static int KEYHASHDB = getenv("KEYHASHDB") ? atoi(getenv("KEYHASHDB")) : 0;
 int JOSH = getenv("JOSH") ? atoi(getenv("JOSH")) : 0;
 
@@ -101,10 +98,6 @@ dhash::dhash(str dbname, ptr<vnode> node,
 	     ptr<route_factory> _r_factory,
 	     u_int k, int _ss_mode) 
 {
-  if (MERKLE_ENABLED) warn << "MERKLE_ENABLED on\n";
-  if (REPLICATE) warn << "REPLICATE on\n";
-  if (PARTITION_ENABLED) warn << "PARTITION_ENABLED on\n";
-
   warn << "In dhash constructor " << node->my_ID () << "\n";
   this->r_factory = _r_factory;
   nreplica = k;
@@ -182,19 +175,18 @@ keyhashdbagain:
   host_node = node;
   assert (host_node);
 
-  if (MERKLE_ENABLED) {
-    // merkle state
-    mtree = New merkle_tree (db);
-    msrv = New merkle_server (mtree, 
-			      wrap (node, &vnode::addHandler),
-			      wrap (this, &dhash::sendblock_XXX));
-    replica_syncer_dstID = 0;
-    replica_syncer = NULL;
-    partition_left = 0;
-    partition_right = 0;
-    partition_syncer = NULL;
-    partition_enumeration = db->enumerate();
-  }
+  // merkle state
+  mtree = New merkle_tree (db);
+  msrv = New merkle_server (mtree, 
+			    wrap (node, &vnode::addHandler),
+			    wrap (this, &dhash::sendblock_XXX));
+  replica_syncer_dstID = 0;
+  replica_syncer = NULL;
+  partition_left = 0;
+  partition_right = 0;
+  partition_syncer = NULL;
+  partition_enumeration = db->enumerate();
+
   merkle_rep_tcb = NULL;
   merkle_part_tcb = NULL;
   keyhash_mgr_tcb = NULL;
@@ -225,15 +217,13 @@ keyhashdbagain:
   update_replica_list ();
   delaycb (SYNCTM, wrap (this, &dhash::sync_cb));
 
-  if (MERKLE_ENABLED && !JOSH) {
+  if (!JOSH) {
     merkle_rep_tcb = 
       delaycb (REPTM, wrap (this, &dhash::replica_maintenance_timer, 0));
     merkle_part_tcb =
       delaycb (PRTTM, wrap (this, &dhash::partition_maintenance_timer));
-  } else {
-    // install_replica_timer ();
-    // transfer_initial_keys ();
   }
+
   if (KEYHASHDB) {
     keyhash_mgr_rpcs = 0;
     keyhash_mgr_tcb =
@@ -422,9 +412,6 @@ void
 dhash::partition_maintenance_timer ()
 {
   merkle_part_tcb = NULL;
-
-  if (!PARTITION_ENABLED)
-    return;
 
 #if 0
   warn << "** dhash::partition_maintenance_timer ()\n";
@@ -934,30 +921,25 @@ dhash::fix_replicas_txerd (dhash_stat err)
 void
 dhash::replicate_key (chordID key, cbstat_t cb)
 {
-  if (!REPLICATE) {
-    // warn << "\n\n\n****NOT REPLICATING KEY\n";
+  update_replica_list ();
+  
+  if (replicas.size () == 0) {
     (cb) (DHASH_OK);
-  } else {
-    update_replica_list ();
-
-    if (replicas.size () == 0) {
-      (cb) (DHASH_OK);
-      return;
-    }
-
-    int *replica_cnt = New int;
-    int *replica_err  = New int;
-    *replica_cnt = replicas.size ();
-    *replica_err  = 0;
-
-    for (unsigned i=0; i<replicas.size (); i++) {
-      transfer_key (replicas[i].x, key, DHASH_REPLICA, 
-		    wrap (this, &dhash::replicate_key_cb,
-		          replica_cnt, replica_err, cb, key));
-    }
-
+    return;
+  }
+  
+  int *replica_cnt = New int;
+  int *replica_err  = New int;
+  *replica_cnt = replicas.size ();
+  *replica_err  = 0;
+  
+  for (unsigned i=0; i<replicas.size (); i++) {
+    transfer_key (replicas[i].x, key, DHASH_REPLICA, 
+		  wrap (this, &dhash::replicate_key_cb,
+			replica_cnt, replica_err, cb, key));
   }
 }
+
 
 void
 dhash::replicate_key_cb (int* replica_cnt, int *replica_err,
@@ -1473,30 +1455,26 @@ dhash::stop ()
 void
 dhash::dbwrite (ref<dbrec> key, ref<dbrec> data)
 {
-  if (MERKLE_ENABLED) {
-    char *action;
-    block blk (to_merkle_hash (key), data);
-    bool exists = !!database_lookup (mtree->db, blk.key);
-    bool ismutable = (block_type (data) != DHASH_CONTENTHASH);
-    if (!exists) {
-      action = "new";
-      mtree->insert (&blk);
-    } else if (exists && ismutable) {
-      // update an existing mutable block
-      action = "update";
-      mtree->remove (&blk);
-      mtree->insert (&blk);
-    } else {
-      action = "repeat-store";
-    }
-    dhashtrace << "dbwrite: " << host_node->my_ID ()
-	       << " " << action << " " << dbrec2id(key) << "\n";
+  char *action;
+  block blk (to_merkle_hash (key), data);
+  bool exists = !!database_lookup (mtree->db, blk.key);
+  bool ismutable = (block_type (data) != DHASH_CONTENTHASH);
+  if (!exists) {
+    action = "new";
+    mtree->insert (&blk);
+  } else if (exists && ismutable) {
+    // update an existing mutable block
+    action = "update";
+    mtree->remove (&blk);
+    mtree->insert (&blk);
   } else {
-    db->insert (key, data);
+    action = "repeat-store";
   }
-
-
+  dhashtrace << "dbwrite: " << host_node->my_ID ()
+	     << " " << action << " " << dbrec2id(key) << "\n";
 }
+
+
 
 static void
 join(store_chunk *c)
