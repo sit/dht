@@ -1,5 +1,5 @@
 // -*-c++-*-
-/* $Id: sfsrocd.h,v 1.6 2001/03/23 06:21:34 fdabek Exp $ */
+/* $Id: sfsrocd.h,v 1.7 2001/03/26 16:53:07 fdabek Exp $ */
 
 /*
  *
@@ -61,7 +61,7 @@ extern cache_stat cstat;
 extern const bool sfsrocd_noverify;
 extern const bool sfsrocd_nocache;
 extern const bool sfsrocd_cache_stat;
-extern const bool sfsrocd_prefetch;
+extern const int sfsrocd_prefetch;
 #else /* !MAINTAINER */
 enum { sfsrocd_noverify = 0, sfsrocd_nocache = 0, sfsrocd_cache_stat = 0 };
 #endif /* !MAINTAINER */
@@ -159,6 +159,7 @@ private:
   cache<sfs_hash, sfsro_inode, 512> ic;             // inode cache
   cache<sfs_hash, sfsro_indirect, 512> ibc;         // Indirect block cache
   cache<sfs_hash, sfsro_directory, 512> dc;         // Directory block cache
+  cache<sfs_hash, sfsro_datares, 128> rfhc;         // root fh cache
 
   // we need to reduce the miss penalty here.  required if
   // we want "compression"
@@ -242,7 +243,7 @@ private:
   get_data_cb( callback<void, sfsro_datares *, clnt_stat>::ref cb,
 	       sfsro_datares *res, clnt_stat err);
 
-  void lookup_mount(nfscall *sbp, sfsro_datares *res, clnt_stat err);
+  void lookup_mount(nfscall *sbp, sfs_hash *fh, sfsro_datares *res, clnt_stat err);
 
   void fh_prefetch (size_t b, const sfsro_inode *ip, const sfs_hash *fh);
   void prefetch_blockres (const sfs_hash *fh, size_t b, const char *d, size_t len);

@@ -1,4 +1,4 @@
-/* $Id: server.C,v 1.12 2001/03/23 06:21:34 fdabek Exp $ */
+/* $Id: server.C,v 1.13 2001/03/26 16:53:06 fdabek Exp $ */
 
 /*
  *
@@ -337,7 +337,7 @@ server::read_file (const sfsro_inode *ip, nfscall *sbp,
 
   size_t first_blknr = ra->offset / SFSRO_BLKSIZE;
   size_t last_blknr = (ra->offset + (ra->count - 1) ) / SFSRO_BLKSIZE;
-  size_t prefetch_limit_blknr = last_blknr + data_prefetch_blocks;
+  size_t prefetch_limit_blknr = last_blknr + sfsrocd_prefetch;
 
   //  nblk = (nblk == 0) ? 1 : nblk;
   for (size_t i = first_blknr; i <= last_blknr; i++) {
@@ -541,7 +541,7 @@ server::dir_lookupres (nfscall *sbp, const sfsro_directory *dir)
   nfs2ro(&dirop->dir, &fh);
   ref<const sfs_hash> dir_fh = New refcounted<const sfs_hash> (fh);
 
-  warn << "dir_lookupres: looking up " << dirop->name << " wrt " << dir->path << "and the fh is " << hexdump(dirop->dir.data.base(), dirop->dir.data.size()) << "\n";
+  //  warn << "dir_lookupres: looking up " << dirop->name << " wrt " << dir->path << "and the fh is " << hexdump(dirop->dir.data.base(), dirop->dir.data.size()) << "\n";
   if (dirop->name == "."  
       || (dirop->name == ".." && dir->path.len () == 0))
     {
@@ -853,11 +853,18 @@ server::dispatch (nfscall *sbp)
 	  //case I: lookup is on root level and must be translated into a 
 	  //        request for fsinfo.
 	  
-	  warn << "mount request for " << dirop->name.cstr() << " (" << dirop->name.len () << ")\n";
+	  //  warn << "mount request for " << dirop->name.cstr() << " (" << dirop->name.len () << ")\n";
 	  sfs_hash *fsinfo_fh = New sfs_hash ();
 	  memcpy(fsinfo_fh->base(), dirop->name.cstr(), 20);
-	  get_data(fsinfo_fh, wrap(this, &server::lookup_mount, sbp));
 	  
+	  sfsro_datares *res = (sfsro_datares *)rfhc.lookup(*fsinfo_fh);
+	  if (res) {
+	    //warn << "HIT on rfhc\n";
+	    lookup_mount(sbp, fsinfo_fh, res, clnt_stat(0));
+	  } else {
+	    get_data(fsinfo_fh, wrap(this, &server::lookup_mount, sbp, fsinfo_fh));
+	    warn << "MISS on rfhc\n";
+	  }
 	} 
       else
 	{
@@ -951,12 +958,14 @@ server::dispatch (nfscall *sbp)
 }
 
 void
-server::lookup_mount(nfscall *sbp, sfsro_datares *res, clnt_stat err) {
+server::lookup_mount(nfscall *sbp, sfs_hash *fh, sfsro_datares *res, clnt_stat err) {
 
   if (err) {
     fatal << "error looking up mount point\n";
   }
   
+  rfhc.enter (*fh, res);
+
   sfs_fsinfo *mounted_fsinfo = New sfs_fsinfo();
   xdrmem x (static_cast<char *>(res->resok->data.base ()), res->resok->data.size (), XDR_DECODE);
   if (!xdr_sfs_fsinfo (x.xdrp (), mounted_fsinfo)) {
@@ -965,7 +974,7 @@ server::lookup_mount(nfscall *sbp, sfsro_datares *res, clnt_stat err) {
     return;
   }
 
-  warn << "mounted root fh=" << hexdump (&mounted_fsinfo->sfsro->v1->info.rootfh, 20) << "\n";
+  //  warn << "mounted root fh=" << hexdump (&mounted_fsinfo->sfsro->v1->info.rootfh, 20) << "\n";
   
   ref<const sfs_hash> root_fh = New refcounted<const sfs_hash> (fsinfo->sfsro->v1->info.rootfh);
   ref<const sfs_hash> obj_fh 
