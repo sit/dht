@@ -17,8 +17,8 @@ char *event_file;
 bool vis = false;
 uint base = 2;  // XXX probably need something like a configuration file
 uint resilience = 1;
-uint successors = 1;
-uint fingers = 1;
+uint successors = 3;
+uint fingers = 1000;
   
 void parse_args(int argc, char *argv[]);
 void usage();

@@ -118,7 +118,7 @@ VivaldiTest::error()
   for(unsigned i = 0; i < _all.size(); i++){
     Vivaldi::Coord vc1 = _all[i]->_vivaldi->my_location();
     double vd = dist(vc, vc1);
-    double rd = t->latency(node(), _all[i]->node());
+    double rd = t->latency(node()->ip(), _all[i]->node()->ip());
     sum += fabs(vd - rd);
     if (_vivaldi->nsamples() % 500 == 0)
       printf ("pair_error %d --> %d : %f %f\n", ip(), _all[i]->ip(), vd, rd);
@@ -143,7 +143,7 @@ VivaldiTest::total_error(double &e05, double &e50, double &e95)
 	Vivaldi::Coord vc1 = _all[j]->_vivaldi->my_location();
 	//	double e = _all[i]->error();
 	double vd = dist(vc, vc1);
-	double rd = t->latency(_all[i]->node(), _all[j]->node());
+	double rd = t->latency(_all[i]->node()->ip(), _all[j]->node()->ip());
 	double e = fabs(vd - rd);
 	a.push_back(e);
 	errpts++;

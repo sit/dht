@@ -19,9 +19,6 @@ public:
   DVGraph();
   ~DVGraph();
   
-  latency_t latency(Node *a, Node *b) {
-    return latency(a->ip(), b->ip());
-  }
   latency_t latency(IPAddress a, IPAddress b);
 
  protected:

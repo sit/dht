@@ -28,10 +28,9 @@ E2EGraph::~E2EGraph()
 }
 
 latency_t
-E2EGraph::latency(Node *n1, Node *n2)
+E2EGraph::latency(IPAddress ip1, IPAddress ip2)
 {
-  IPAddress ip1 = n1->ip();
-  IPAddress ip2 = n2->ip();
+  //we can not use random ip address for e2egraph now
   assert(ip1 > 0 && ip1 <= _num);
   assert(ip2 > 0 && ip2 <= _num);
   return (latency_t) _pairwise[ip1-1][ip2-1];

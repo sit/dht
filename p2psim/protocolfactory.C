@@ -4,6 +4,7 @@
 #include "pastry.h"
 #include "koorde.h"
 #include "chordfinger.h"
+#include "chordfingerpns.h"
 #include "vivalditest.h"
 #include <typeinfo>
 #include <iostream>
@@ -50,6 +51,10 @@ ProtocolFactory::create(string s, Node *n)
 
   if(s == "Chord")
     p = new Chord(n, successors);
+  if (s == "ChordFinger")
+    p = new ChordFinger(n,base,(successors>resilience? successors:resilience), fingers);
+  if (s == "ChordFingerPNS")
+    p = new ChordFingerPNS(n,base,successors);
   if (s == "Kademlia")
     p = new Kademlia(n);
   if (s == "Pastry")
@@ -58,10 +63,7 @@ ProtocolFactory::create(string s, Node *n)
     p = new Koorde(n, base, successors, resilience, fingers);
   if (s == "VivaldiTest")
     p = new VivaldiTest(n);
-  if (s == "ChordFinger")
-    p = new ChordFinger(n,base,(successors>resilience? successors:resilience),
-                        fingers);
-
+  
   assert(p);
 
   return p;

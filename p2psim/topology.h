@@ -13,7 +13,7 @@ public:
   static Topology* parse(char *);
   virtual void parse(ifstream&) = 0;
 
-  virtual latency_t latency(Node*, Node*) = 0;
+  virtual latency_t latency(IPAddress, IPAddress) = 0;
 
 protected:
   Topology();

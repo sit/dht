@@ -49,6 +49,7 @@ ChordObserver::init_nodes(unsigned int num)
   list<Protocol*>::iterator pos;
 
   vector<Chord::IDMap> ids;
+  ids.clear();
   Chord *c;
   Chord::IDMap n;
   unsigned int i = 0;
@@ -71,6 +72,10 @@ ChordObserver::init_nodes(unsigned int num)
     c = (Chord *)(*pos);
     assert(c); 
     c->init_state(ids);
+    /*
+    tmp = ids[853].ip;
+    printf("observer2(tmp) %u\n",tmp);
+    */
     if (++i == num) break;
 
   }
@@ -83,7 +88,6 @@ ChordObserver::execute()
   list<Protocol*>::iterator pos;
 
   vivaldi_error ();
-  return;
   //i only want to sort it once after all nodes have joined! 
   Chord *c = 0;
   if (lid.size() != _num_nodes) {
@@ -151,7 +155,7 @@ ChordObserver::vivaldi_error()
       if (!h->_vivaldi) continue;
       Vivaldi::Coord vc1 = h->get_coords ();
       double vd = dist(vc, vc1);
-      double rd = t->latency(c->node(), h->node());
+      double rd = t->latency(c->node()->ip(), h->node()->ip());
       if (rd > 0.0 && vd > 0.0) {
 	//	cout << c->id () << " to " << h->id () << ". Predicted: " << 
 	//vd << " real latency was " << rd << "\n";
@@ -167,7 +171,9 @@ ChordObserver::vivaldi_error()
       avg_errs.push_back (sum/sum_sz);
   }
 
-  sort (avg_errs.begin(), avg_errs.end());
-  
-  cout << " vivaldi median error: " << avg_errs[avg_errs.size() / 2] << "\n";
+  if (avg_errs.size() > 0) {
+    sort (avg_errs.begin(), avg_errs.end());
+    
+    cout << " vivaldi median error: " << avg_errs[avg_errs.size() / 2] << "\n";
+  }
 }

@@ -92,7 +92,7 @@ Network::run()
 	srcnode = _nodes[p->src()];
 	assert (dstnode);
 	assert (srcnode);
-        latency = _top->latency(srcnode, dstnode);
+        latency = _top->latency(srcnode->ip(), dstnode->ip());
         ne = new NetEvent();
         ne->ts = now() + latency;
         ne->node = dstnode;

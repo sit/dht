@@ -17,7 +17,7 @@ public:
   
   typedef pair<unsigned, unsigned> Coord;
   virtual void parse(ifstream&);
-  virtual latency_t latency(Node*, Node*);
+  virtual latency_t latency(IPAddress, IPAddress);
   Coord getcoords(IPAddress n) { return _nodes[n]; }
 
 private:

@@ -95,6 +95,14 @@ public:
     vector<IDMap> v;
   };
 
+  struct next_recurs_args {
+    CHID key;
+    vector<IDMap> v;
+  };
+
+  struct next_recurs_ret {
+    vector<IDMap> v;
+  };
   // RPC handlers.
   void null_handler (void *args, void *ret);
   void get_predecessor_handler(get_predecessor_args *, get_predecessor_ret *);
@@ -104,6 +112,7 @@ public:
   void alert_handler(alert_args *, alert_ret *);
   void next_handler(next_args *, next_ret *);
   void find_successors_handler(find_successors_args *, find_successors_ret *);
+  void next_recurs_handler(next_recurs_args *, next_recurs_ret *);
 
   CHID id () { return me.id; }
   virtual void init_state(vector<IDMap> ids);
@@ -124,7 +133,9 @@ protected:
   vector<IDMap> lastscs;
   bool _isstable;
 
+  IDMap find_successors_recurs(CHID key, bool intern);
   virtual vector<IDMap> find_successors(CHID key, uint m, bool intern);
+
   void fix_successor();
   void fix_successor_list();
 };
@@ -177,8 +188,10 @@ class LocTable {
     void clear_pins();
     uint size();
     unsigned int psize() { return pinlist.size();}
+    void set_evict(bool v) { _evict = v; }
 
   private:
+    bool _evict;
     skiplist<idmapwrap, ConsistentHash::CHID, &idmapwrap::id, &idmapwrap::sortlink_> ring;
     ConsistentHash::CHID myid;
     vector<pin_entry> pinlist;

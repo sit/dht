@@ -101,9 +101,9 @@ sub doevents {
 	if ($type =~ /join/) {
 	    print EV "node $time $allnodes[$node] $protocol:$type @args\n";
 	} elsif ($type =~ /lookup/) {
-	    while ($deadnodes[$node] == 1) {
+	    do{
 		$node = int(rand ($nnodes)) + 1;
-	    }
+	    }while($deadnodes[$node]);
 	    $keys[$nk] = makekey();
 	    print EV "node $time $allnodes[$node] $protocol:$type key=$keys[$nk]\n";
 	    $nk++;
@@ -141,11 +141,12 @@ sub generate_randnodes()
   my %h;
   my $node;
   for (my $i = 1; $i <= $n; $i++) {
-    do {
-      $node = int (rand 4294967295);
-    }while (defined($h{$node}) || ($node == 0));
+#do {
+#      $node = int (rand 4294967295);
+#    }while (defined($h{$node}) || ($node == 0));
     $h{$node} = 1;
-    $allnodes[$i] = $node;
+#    $allnodes[$i] = $node;
+    $allnodes[$i] = $i;
     $deadnodes[$i] = 0;
   }
 }
