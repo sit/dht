@@ -34,46 +34,31 @@ EventQueue::~EventQueue()
 void
 EventQueue::run()
 {
+  Event *e = 0;
   extern int anyready();
 
-  Alt a[2];
-  Event *e;
-
-  a[0].c = _eventchan;
-  a[0].v = &e;
-  a[0].op = CHANRCV;
-
-
-
-  while(1) {
-    // XXX: BIG FUCKING SCARY HACK
+  while(1){
+    // let others run
     while(anyready())
       yield();
-
-    // NB: this is pretty essential.
-    // block, (i.e., yield) if the queue is empty.
-    // if the queue is empty
-    a[1].op = _queue.empty() ? CHANEND : CHANNOBLK;
-
-    int i;
-    if((i = alt(a)) < 0) {
-      cerr << "interrupted" << endl;
+                                                                                  
+    // process any waiting events-to-be-scheduled
+    if((e = (Event*)nbrecvp(_eventchan)) != 0){
+      add_event(e);
       continue;
     }
-
-    switch(i) {
-      case 0:
-        add_event(e);
-        break;
-
-      // nothing's ready. push time forward to the next event
-      case 1:
-        advance();
-        break;
-
-      default:
-        break;
+                                                                                  
+    // everyone else is quiet.
+    // must be time for the next event.
+                                                                                  
+    if(_queue.empty()){
+      // no more events.  we're done!
+      cout << "End of simulation\n";
+      threadexitsall(0);
     }
+                                                                                  
+    // run events for next time in the queue
+    advance();
   }
 }
 
