@@ -131,20 +131,43 @@ def _monitor (t, dh):
 	avg, minimum, maximum = 0, 0, 0
     stats['extant_avg'] = avg
     stats['extant_min'] = minimum
-    stats['extant_max'] = maximum
+    stats['extant_max'] = maximum                      
 
+
+    ssum = 0
+    min = 64
+    max = -1
+    for b in dh.blocks:
+        succs = dh.succ (b, 2*dh.insert_pieces ())
+        found = 0
+        examined = 0
+        for s in succs:
+            examined = examined + 1
+            if b in s.blocks:
+                found = found + 1
+                if (found == dh.read_pieces()):
+                    break
+        ssum += examined
+        if examined < min: min = examined
+        if examined > max: max = examined
+    stats['spread_min'] = min
+    if (len(dh.blocks) > 0): stats['spread_avg'] = ssum/len(dh.blocks)
+    else: stats['spread_avg'] = 0
+    stats['spread_max'] = max
+    
     return stats
 
 def print_monitor (t, dh):
     s = _monitor (t, dh)
 
-    print "%4d" % t, "%4d nodes;" % len(dh.nodes), 
+    print "%4d" % t, "%4d nodes;" % len(dh.nodes),
     print "%sB sent;" % size_rounder (s['sent_bytes']),
     print "%sB put;" % size_rounder (s['usable_bytes']),
     print "%sB avail;" % size_rounder (s['avail_bytes']),
     print "%sB stored;" % size_rounder (s['disk_bytes']),
-    print "%d/%5.2f/%d extant;" % s['extant_min', 'extant_avg', 'extant_max'],
-    print "%d/%d blocks avail" % (dh.available_blocks (), len (dh.blocks)),
+    print "%d/%5.2f/%d extant;" % (s['extant_min'], s['extant_avg'], s['extant_max']),
+    print "%d/%d blocks avail" % (dh.available_blocks (), len (dh.blocks))
+    print "%d/%d avg %5.2f block spread" % (s['spread_min'], s['spread_max'], s['spread_avg'])
     for k in sbkeys:
 	print "%sB sent[%s];" % (size_rounder(s['sent_bytes::%s' % k]), k)
 
