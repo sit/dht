@@ -31,11 +31,14 @@ locationtable::locationtable (ptr<chord> _chordnode, int set_rpcdelay,
   nrpcfailed = 0;
   rpcdelay = 0;
   nconnections = 0;
+  ndelayedconnections = 0;
   size_cachedlocs = 0;
   size_connections = 0;
   nvnodes = 0;
   nnodes = 0;
   nnodessum = 0;
+  delayed_tmo = delaycb (delayed_timer, 0, 
+			 wrap (this, &locationtable::cleanup_connections));
 }
 
 void
@@ -239,7 +242,6 @@ locationtable::checkrefcnt (int i)
   for (location *l = locs.first (); l != NULL; l = locs.next (l)) {
     x = l->n;
     n = chordnode->countrefs (x);
-    m = l->connecting ? l->refcnt - 1 : l->refcnt;
     if (n != m) {
       warnx << "checkrefcnt " << i << " for " << x << " : refcnt " 
             << l->refcnt << " appearances " << n << "\n";
@@ -276,7 +278,6 @@ locationtable::delete_cachedlocs (void)
   assert (l);
   assert (l->refcnt == 0);
   warnx << "DELETE: " << l->n << "\n";
-  assert (!l->connecting);
   locs.remove (l);
   delete_connections (l);
   cachedlocs.remove (l);

@@ -53,13 +53,11 @@ struct doRPC_cbstate {
   void *out;
   aclnt_cb cb;
   chordID ID;
-
   tailq_entry<doRPC_cbstate> connectlink;
-  
+
   doRPC_cbstate (rpc_program ro, int pi, ptr<void> ini, void *outi,
-		 aclnt_cb cbi, chordID id) : progno (ro), procno (pi), in (ini),  
-		   out (outi), cb (cbi), ID (id) {};
-  
+		 aclnt_cb cbi, chordID id) : progno (ro), procno (pi), 
+		   in (ini), out (outi), cb (cbi), ID (id) {};
 };
 
 
@@ -82,17 +80,17 @@ struct location {
   chordID n;
   net_address addr;
   ptr<axprt_stream> x;
-  bool connecting;
   tailq<doRPC_cbstate, &doRPC_cbstate::connectlink> connectlist;
   ihash_entry<location> fhlink;
   tailq_entry<location> cachelink;
   tailq_entry<location> connlink;
+  tailq_entry<location> delaylink;
+
   u_int64_t rpcdelay;
   u_int64_t nrpc;
   u_int64_t maxdelay;
 
   location (chordID &_n, net_address &_r) : n (_n), addr (_r) {
-    connecting = false; 
     x = NULL;
     refcnt = 0;
     rpcdelay = 0;
@@ -102,7 +100,6 @@ struct location {
   location (chordID &_n, sfs_hostname _s, int _p) : n (_n) {
     addr.hostname = _s;
     addr.port = _p;
-    connecting = false;
     x = NULL;
     refcnt = 0;
     rpcdelay = 0;
@@ -120,10 +117,14 @@ struct node {
 };
 
 class locationtable : public virtual refcount {
+  static const int delayed_timer = 1;  // seconds
+
   ptr<chord> chordnode;
   ihash<chordID,location,&location::n,&location::fhlink,hashID> locs;
   tailq<location, &location::cachelink> cachedlocs;  // the cached location
-  tailq<location, &location::connlink> connections;  // open connections
+  tailq<location, &location::connlink> connections;  // active connections
+  tailq<location, &location::delaylink> delayedconnections;
+  timecb_t *delayed_tmo;
   int size_cachedlocs;
   int max_cachedlocs;
   int size_connections;
@@ -132,6 +133,7 @@ class locationtable : public virtual refcount {
   u_int64_t nrpc;
   u_int64_t nrpcfailed;
   unsigned nconnections;
+  unsigned ndelayedconnections;
 
   u_long nnodessum;
   u_long nnodes;
@@ -155,6 +157,10 @@ class locationtable : public virtual refcount {
   void touch_connections (location *l);
   void delete_connections (location *l);
   void add_connections (location *l);
+  void delay_connections (location *l);
+  void cleanup_connections ();
+  void remove_connections (location *l);
+  bool present_connections(location *l);
  public:
   locationtable (ptr<chord> _chordnode, int set_rpcdelay, int _max_cache,
 		 int _max_connections);

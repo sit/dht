@@ -116,6 +116,8 @@ class vnode : public virtual refcount {
 
   timecb_t *stabilize_continuous_tmo;
   timecb_t *stabilize_backoff_tmo;
+  u_int32_t continuous_timer;
+  u_int32_t backoff_timer;
 
   void updatefingers (chordID &x, net_address &r);
   void replacefinger (node *n);
@@ -123,8 +125,10 @@ class vnode : public virtual refcount {
   chordID findpredfinger (chordID &x);
   chordID findpredfinger2 (chordID &x);
 
+  u_int nout_backoff;
+  u_int nout_continuous;
   void stabilize_backoff (int f, int s, u_int32_t t);
-  void stabilize_continuous ();
+  void stabilize_continuous (u_int32_t t);
   int stabilize_succlist (int s);
   int stabilize_finger (int f);
   void stabilize_succ (void);
@@ -223,12 +227,9 @@ class vnode : public virtual refcount {
 class chord : public virtual refcount {
 
   struct server {
-    ptr<asrv> srv;
     ptr<axprt_stream> x;
     ~server (void) { 
       warnx << "server: delete\n";
-      srv = 0;
-      x->reclaim ();
     };
   };
 

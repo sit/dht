@@ -55,6 +55,7 @@ locationtable::doForeignRPC (rpc_program prog,
     chord_RPC_res *res = New chord_RPC_res ();
     frpc_state *C = New frpc_state (res, out, prog, procno, cb,
 				   l, getusec ());
+    touch_connections (l);
     c->call (CHORDPROC_HOSTRPC, &farg, res, 
 	   wrap (this, &locationtable::doForeignRPC_cb, C)); 
   } else {
@@ -126,6 +127,7 @@ locationtable::doRPC (chordID &ID, rpc_program prog, int procno,
   assert (l->refcnt >= 0);
   touch_cachedlocs (l);
   if (l->x) {    
+    assert (present_connections (l));
     if (prog.progno == CHORD_PROGRAM) {
       ptr<aclnt> c = aclnt::alloc(l->x, prog);
       if (c == 0) {
@@ -142,13 +144,20 @@ locationtable::doRPC (chordID &ID, rpc_program prog, int procno,
     
   } else {
     doRPC_cbstate *st = New doRPC_cbstate (prog, procno, in, out, cb, ID);
-    l->connectlist.insert_tail (st);
-    if (!l->connecting) {
-      chord_connect(ID, wrap (mkref (this), 
-			      &locationtable::dorpc_connect_cb, l));
+    if (l->connectlist.first) {
+      l->connectlist.insert_tail (st);
+    } else {
+      l->connectlist.insert_tail (st);
+      if (size_connections >= max_connections) {
+        delay_connections (l);
+      } else {
+	chord_connect(ID, wrap (mkref (this), 
+				&locationtable::dorpc_connect_cb, l));
+      }
     }
   }
 }
+
 
 void
 locationtable::doRPCcb (aclnt_cb cb, location *l, u_int64_t s, clnt_stat err)
@@ -171,7 +180,6 @@ void
 locationtable::dorpc_connect_cb(location *l, ptr<axprt_stream> x) 
 {
   assert(l);
-  l->connecting = false;
   if (x == NULL) {
     warnx << "connect_cb: connect failed\n";
     doRPC_cbstate *st, *st1;
@@ -189,10 +197,7 @@ locationtable::dorpc_connect_cb(location *l, ptr<axprt_stream> x)
 
   assert (l->refcnt >= 0);
   l->x = x;
-  l->connecting = false;
-  add_connections (l);
   nconnections++;
-  //  l->timeout_cb = delaycb (360, 0, wrap(this, &locationtable::timeout, l));
   doRPC_cbstate *st, *st1;
   for (st = l->connectlist.first; st; st = st1) {
     if (st->progno.progno == CHORD_PROGRAM) {
@@ -215,14 +220,15 @@ locationtable::chord_connect(chordID ID, callback<void,
   location *l = getlocation(ID);
   assert (l);
   assert (l->refcnt >= 0);
-  l->connecting = true;
+  add_connections (l);
   //  increfcnt (ID);
   ptr<struct timeval> start = new refcounted<struct timeval>();
   gettimeofday(start, NULL);
-  if (l->x) {    
+  if (l->x) {
     (*cb)(l->x);
   } else {
-    warnx << "tcpconnect: " << l->addr.hostname << " " << l->addr.port << "\n";
+    warnx << "tcpconnect: " << l->n << "@" << l->addr.hostname << " " 
+	  << l->addr.port << "\n";
     tcpconnect (l->addr.hostname, l->addr.port, 
 		wrap (mkref (this), &locationtable::connect_cb, l, cb));
   }
@@ -234,9 +240,11 @@ locationtable::connect_cb (location *l,
 {
   if (fd < 0) {
     assert (l);
-    warnx << "connect failed: " << l->addr.hostname << " " 
+    assert (l->x == 0);
+    warnx << "connect failed: " << l->n << "@" << l->addr.hostname << " " 
 	    << l->addr.port << "\n";
     warn (" connect failed %m\n");
+    remove_connections (l);
     (*cb)(NULL);
   } else {
     tcp_nodelay(fd);
@@ -245,12 +253,25 @@ locationtable::connect_cb (location *l,
   }
 }
 
+bool
+locationtable::present_connections (location *l)
+{
+  for (location *m = connections.first; m != NULL; m = connections.next (m)) {
+    if (l->n == m->n) return 1;
+  }
+  return 0;
+}
+
 void
 locationtable::add_connections (location *l)
 {
-  assert (l->x);
+  assert (l->x == 0);
   if (size_connections >= max_connections) {
     delete_connections (connections.first);
+  }
+  if (present_connections (l)) {
+    warnx << "add_connections: " << l->n << " is already present\n";
+    assert (0);
   }
   connections.insert_tail (l);
   size_connections++;
@@ -260,6 +281,10 @@ void
 locationtable::touch_connections (location *l)
 {
   assert (l->x);
+  if (!present_connections (l)) {
+    warnx << "touch_connections: " << l->n << " not on connect list\n";
+    assert (0);
+  }
   connections.remove (l);
   connections.insert_tail (l);
 }
@@ -268,14 +293,65 @@ void
 locationtable::delete_connections (location *l)
 {
   assert (l);
-  assert (!l->connecting);
   if (l->x) {
     warnx << "delete connection to " << l->n << "@" << l->addr.hostname << " "
-	  << l->addr.port << "\n";
+      	  << l->addr.port << "\n";
+    if (!present_connections (l)) {
+      warnx << "touch_connections: " << l->n << " not on connect list\n";
+      assert (0);
+    }
     connections.remove (l);
     size_connections--;
     l->x = NULL;
   }
+}
+
+void
+locationtable::remove_connections (location *l)
+{
+  if (!present_connections (l)) {
+    warnx << "touch_connections: " << l->n << " not on connect list\n";
+    assert (0);
+  }
+  connections.remove (l);
+  size_connections--;
+}
+
+void
+locationtable::delay_connections (location *n)
+{
+  if (present_connections (n)) {
+    warnx << "delay_connections: already on the connections list\n";
+    assert (0);
+  }
+  ndelayedconnections++;
+  assert (n->x == 0);
+  for (location *l = delayedconnections.first; l != 0; 
+       l = delayedconnections.next (l)) {
+    if (l->n == n->n) return;
+  }
+  warnx << "delay_connection: to " << n->n << "\n";
+  delayedconnections.insert_tail (n);
+}
+
+void
+locationtable::cleanup_connections ()
+{
+  if (delayedconnections.first) {
+    warnx << "cleanup_connections\n";
+    while (size_connections >= max_connections / 2) {
+      delete_connections (connections.first);
+      location *l = delayedconnections.first;
+      if (l == 0) break;
+      else {
+	delayedconnections.remove (l);
+	chord_connect(l->n, wrap (mkref (this), 
+			      &locationtable::dorpc_connect_cb, l));
+      }
+    }
+  }
+  delayed_tmo = delaycb (delayed_timer, 0, 
+			 wrap (this, &locationtable::cleanup_connections));
 }
 
 void
@@ -287,6 +363,8 @@ locationtable::stats ()
   warnx << "total # of RPCs: good " << nrpc << " failed " << nrpcfailed << "\n";
     fprintf(stderr, "       Average latency: %f\n", ((float) (rpcdelay/nrpc)));
   warnx << "total # of connections opened: " << nconnections << "\n";
+  warnx << "total # of connections delayed: " << ndelayedconnections << "\n";
+  warnx << "total # of active connections: " << size_connections << "\n";
   warnx << "  Per link avg. RPC latencies\n";
   for (location *l = locs.first (); l ; l = locs.next (l)) {
     warnx << "    link " << l->n << " : # RPCs: " << l->nrpc << "\n";

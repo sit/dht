@@ -33,6 +33,8 @@ vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
   chordnode (_chordnode)
 {
   warnx << gettime () << " myID is " << myID << "\n";
+  nout_continuous = 0;
+  nout_backoff = 0;
   finger_table[0].start = finger_table[0].first.n = myID;
   finger_table[0].first.alive = true;
   locations->increfcnt (myID);
@@ -151,6 +153,8 @@ vnode::stats ()
 {
   warnx << "VIRTUAL NODE STATS " << myID << " stable? " << isstable () << "\n";
   warnx << "# estimated node in ring " << nnodes << "\n";
+  warnx << "continuous_timer " << continuous_timer << " backoff " 
+	<< backoff_timer << "\n";
   warnx << "# getsuccesor requests " << ndogetsuccessor << "\n";
   warnx << "# getpredecessor requests " << ndogetpredecessor << "\n";
   warnx << "# findclosestpred requests " << ndofindclosestpred << "\n";
@@ -306,72 +310,39 @@ vnode::hasbecomeunstable (void)
 void
 vnode::stabilize (void)
 {
-  stabilize_continuous ();
+  stabilize_continuous (stabilize_timer);
   stabilize_backoff (0, 0, stabilize_timer);
 }
 
 void
-vnode::stabilize_continuous (void)
+vnode::stabilize_continuous (u_int32_t t)
 {
 #ifndef STOPSTABILIZE
-  stabilize_succ ();
-  stabilize_pred ();
+  if (nout_continuous > 0) {
+    // stabilizing too fast
+    t = 2 * t;
+    // warnx << "stabilize_continuous: " << myID << " " << nout_continuous 
+    //  << " slow down " << t << "\n";
+  } else {
+    stabilize_succ ();
+    stabilize_pred ();
+  }
   if (hasbecomeunstable () && stabilize_backoff_tmo) {
-    //    warnx << "stabilize_continuous: cancel backoff timer and restart\n";
+    // warnx << "stabilize_continuous: " << myID 
+    //  << " cancel backoff tmo; restart\n";
     timecb_remove (stabilize_backoff_tmo);
     stabilize_backoff_tmo = 0;
     stabilize_backoff (0, 0, stabilize_timer);
   }
-  u_int32_t t1 = uniform_random (0.5 * stabilize_timer, 1.5 * stabilize_timer);
+  u_int32_t t1 = uniform_random (0.5 * t, 1.5 * t);
   u_int32_t sec = t1 / 1000;
   u_int32_t nsec =  (t1 % 1000) * 1000000;
   //  warnx << "stabilize_continuous: sec " << sec << " nsec " << nsec << "\n";
-  stabilize_continuous_tmo = delaycb (sec, nsec, wrap (mkref (this), 
-					       &vnode::stabilize_continuous));
+  continuous_timer = t;
+  stabilize_continuous_tmo = delaycb (sec, nsec, 
+				      wrap (mkref (this), 
+					    &vnode::stabilize_continuous, t));
 #endif
-}
-
-void
-vnode::stabilize_backoff (int f, int s, u_int32_t t)
-{
-  stabilize_backoff_tmo = 0;
-  if (!stable && isstable ()) {
-    stable = true;
-    warnx << gettime () << " stabilize: " << myID 
-	  << " stable! with estimate # nodes " << nnodes << "\n";
-    print ();
-  } else if (!isstable ()) {
-    t = stabilize_timer;
-    stable = false;
-  }
-#ifdef STOPSTABILIZE
-  stabilize_succ ();
-  stabilize_pred ();
-#endif
-  f = stabilize_finger (f);
-  s = stabilize_succlist (s);
-#ifdef STOPSTABILIZE
-  if (isstable ()) { 
-    t = 2 * t;
-    if (t >= 50000) {
-      warnx << "stabilize_backoff: " << myID << " stop stabilizing\n";
-      return;
-    }
-  }
-  u_int32_t t1 = uniform_random (0.5 * stabilize_timer, 1.5 * stabilize_timer);
-#else
-  if (isstable () && (t <= stabilize_timer_max * 1000)) {
-    t = 2 * t;
-  }
-  u_int32_t t1 = uniform_random (0.5 * t, 1.5 * t);
-#endif
-  // warnx << myID << ": delay till " << t1 << " msec\n";
-  u_int32_t sec = t1 / 1000;
-  u_int32_t nsec =  (t1 % 1000) * 1000000;
-  // warnx << "stabilize_backoff: sec " << sec << " nsec " << nsec << "\n";
-  stabilize_backoff_tmo = delaycb (sec, nsec, wrap (mkref (this), 
-					       &vnode::stabilize_backoff,
-					       f, s, t));
 }
 
 void
@@ -382,6 +353,7 @@ vnode::stabilize_succ ()
     replacefinger (&finger_table[1].first);
     notify (finger_table[1].first.n, myID); 
   }
+  nout_continuous++;
   get_predecessor (finger_table[1].first.n, 
 		   wrap (mkref (this), &vnode::stabilize_getpred_cb));
 }
@@ -390,6 +362,7 @@ void
 vnode::stabilize_getpred_cb (chordID p, net_address r, chordstat status)
 {
   // receive predecessor from my successor; in stable case it is me
+  nout_continuous--;
   if (status) {
     warnx << "stabilize_getpred_cb: " << myID << " " 
 	  << finger_table[1].first.n << " failure " << status << "\n";
@@ -405,6 +378,80 @@ vnode::stabilize_getpred_cb (chordID p, net_address r, chordstat status)
     }
     notify (finger_table[1].first.n, myID);
   }
+}
+
+void
+vnode::stabilize_pred ()
+{
+  if (predecessor.alive) {
+    nout_continuous++;
+    get_successor (predecessor.n,
+		   wrap (mkref (this), &vnode::stabilize_getsucc_cb));
+  } else 
+    stable_fingers = false;
+}
+
+void
+vnode::stabilize_getsucc_cb (chordID s, net_address r, chordstat status)
+{
+  // receive successor from my predecessor; in stable case it is me
+  nout_continuous--;
+  if (status) {
+    warnx << "stabilize_getpred_cb: " << myID << " " << predecessor.n 
+	  << " failure " << status << "\n";
+    stable_fingers = false;
+  } else {
+    if (s != myID) {
+      stable_fingers = false;
+      // warnx << "stabilize_succ_cb: " << myID << " my pred " 
+      //   << predecessor.n << " has " << s << " as succ\n";
+    }
+  }
+}
+
+void
+vnode::stabilize_backoff (int f, int s, u_int32_t t)
+{
+  stabilize_backoff_tmo = 0;
+  if (!stable && isstable ()) {
+    stable = true;
+    warnx << gettime () << " stabilize: " << myID 
+	  << " stable! with estimate # nodes " << nnodes << "\n";
+  } else if (!isstable ()) {
+    stable = false;
+  }
+#ifdef STOPSTABILIZE
+  stabilize_succ ();
+  stabilize_pred ();
+#endif
+  if (nout_backoff > 0) {
+    t = 2 * t;
+    // warnx << "stabilize_backoff: " << myID << " " << nout_backoff 
+    //  << " slow down " << t << "\n";
+  } else {
+    f = stabilize_finger (f);
+    s = stabilize_succlist (s);
+#ifdef STOPSTABILIZE
+    if (isstable ()) { 
+      t = 2 * t;
+      if (t >= 50000) {
+	warnx << "stabilize_backoff: " << myID << " stop stabilizing\n";
+	return;
+      }
+    }
+#else
+    if (isstable () && (t <= stabilize_timer_max * 1000)) {
+      t = 2 * t;
+    }
+#endif
+  }
+  u_int32_t t1 = uniform_random (0.5 * t, 1.5 * t);
+  u_int32_t sec = t1 / 1000;
+  u_int32_t nsec =  (t1 % 1000) * 1000000;
+  backoff_timer = t;
+  stabilize_backoff_tmo = delaycb (sec, nsec, wrap (mkref (this), 
+						    &vnode::stabilize_backoff,
+						    f, s, t));
 }
 
 int
@@ -441,6 +488,7 @@ vnode::stabilize_finger (int f)
     }
     if (i <= NBIT) {
       // warnx << "stabilize: " << myID << " findsucc of finger " << i << "\n";
+      nout_backoff++;
       find_successor (myID, finger_table[i].start,
 			  wrap (mkref (this), 
 				&vnode::stabilize_findsucc_cb, i));
@@ -454,6 +502,7 @@ void
 vnode::stabilize_findsucc_cb (int i, chordID s, route search_path, 
 			    chordstat status)
 {
+  nout_backoff--;
   if (status) {
     warnx << "stabilize_findsucc_cb: " << myID << " " 
 	  << finger_table[i].first.n << " failure " << status << "\n";
@@ -467,33 +516,6 @@ vnode::stabilize_findsucc_cb (int i, chordID s, route search_path,
 			     locations->getaddress(s));
       updatefingers (s, locations->getaddress(s));
       stable_fingers = false;
-    }
-  }
-}
-
-void
-vnode::stabilize_pred ()
-{
-  if (predecessor.alive) {
-    get_successor (predecessor.n,
-		   wrap (mkref (this), &vnode::stabilize_getsucc_cb));
-  } else 
-    stable_fingers = false;
-}
-
-void
-vnode::stabilize_getsucc_cb (chordID s, net_address r, chordstat status)
-{
-  // receive successor from my predecessor; in stable case it is me
-  if (status) {
-    warnx << "stabilize_getpred_cb: " << myID << " " << predecessor.n 
-	  << " failure " << status << "\n";
-    stable_fingers = false;
-  } else {
-    if (s != myID) {
-      stable_fingers = false;
-      // warnx << "stabilize_succ_cb: " << myID << " my pred " 
-      //   << predecessor.n << " has " << s << " as succ\n";
     }
   }
 }
@@ -513,6 +535,7 @@ vnode::stabilize_succlist (int s)
     stable_succlist = false;
     replacefinger (&succlist[j]);
   }
+  nout_backoff++;
   get_successor (succlist[j].n,
 		 wrap (mkref (this), &vnode::stabilize_getsucclist_cb, j));
   return j+1;
@@ -523,6 +546,7 @@ void
 vnode::stabilize_getsucclist_cb (int i, chordID s, net_address r, 
 			       chordstat status)
 {
+  nout_backoff--;
   if (status) {
     warnx << "stabilize_getsucclist_cb: " << myID << " " << i << " : " 
 	  << succlist[i].n << " failure " << status << "\n";

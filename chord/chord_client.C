@@ -86,10 +86,11 @@ chord::accept_standalone (int lfd)
   bzero (&sin, sizeof (sin));
   socklen_t sinlen = sizeof (sin);
   int fd = accept (lfd, reinterpret_cast<sockaddr *> (&sin), &sinlen);
-  if (fd >= 0)
+  if (fd >= 0) {
     doaccept (fd);
-  else 
-    warnx << "accept_standalone: accept failed\n";
+  } else {
+    fatal ("accept_standalone: accept failed\n");
+  }
 }
 
 int
@@ -109,7 +110,7 @@ chord::startchord (int myp)
     p = ntohs (la.sin_port);
     warnx << "startp2pd: local port " << p << "\n";
   }
-  listen (srvfd, 1000);
+  listen (srvfd, 100);
   fdcb (srvfd, selread, wrap (mkref (this), &chord::accept_standalone, srvfd));
   return p;
 }
@@ -222,7 +223,6 @@ chord::stats ()
   warnx << "# getfingers requests " << ngetfingers << "\n";
   vnodes.traverse (wrap (this, &chord::stats_cb));
   locations->stats ();
-  exit (0);
 }
 
 void
