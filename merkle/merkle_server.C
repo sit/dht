@@ -13,7 +13,7 @@ private:
   db_iterator *iter;
   u_int num_sends_pending;
   sndblkfnc2_t sndblkfnc;
-  chordID dstID;
+  chord_node dst;
 
   void
   go ()
@@ -21,7 +21,7 @@ private:
     while (iter->more () && num_sends_pending < 64) {
       merkle_hash key = iter->next ();
       num_sends_pending++;
-      XXX_SENDBLOCK_ARGS a (dstID, tobigint (key), !iter->more(), 
+      XXX_SENDBLOCK_ARGS a (dst, tobigint (key), !iter->more(), 
 			    wrap (this, &merkle_send_range::sendcb));
       (*sndblkfnc) (&a);
     }
@@ -43,8 +43,8 @@ public:
   {
   }
 
-  merkle_send_range (db_iterator *iter, sndblkfnc2_t sndblkfnc, chordID dstID)
-    : iter (iter), num_sends_pending (0), sndblkfnc (sndblkfnc), dstID (dstID)
+  merkle_send_range (db_iterator *iter, sndblkfnc2_t sndblkfnc, chord_node dst)
+    : iter (iter), num_sends_pending (0), sndblkfnc (sndblkfnc), dst (dst)
   {
     go ();
   }
@@ -147,14 +147,14 @@ merkle_server::dispatch (svccb *sbp)
       getblocklist_arg *arg = sbp->template getarg<getblocklist_arg> ();
       ref<getblocklist_arg> arg_copy = New refcounted <getblocklist_arg> (*arg);
       getblocklist_res res (MERKLE_OK);
-      chordID srcID = arg->srcID;  // MUST be before sbp->reply
+      chord_node src = arg->src;  // MUST be before sbp->reply
       sbp->reply (&res);
       
       // XXX DEADLOCK: if the blocks arrive before res, the remote side gets stuck.
       for (u_int i = 0; i < arg_copy->keys.size (); i++) {
 	merkle_hash key = arg_copy->keys[i];
 	bool last = (i + 1 == arg_copy->keys.size ());
-	XXX_SENDBLOCK_ARGS a (srcID, tobigint (key), last, wrap (&ignorecb));
+	XXX_SENDBLOCK_ARGS a (src, tobigint (key), last, wrap (&ignorecb));
 	(*sndblkfnc) (&a);
       }
       break;
@@ -181,11 +181,11 @@ merkle_server::dispatch (svccb *sbp)
 				     make_set (arg->xkeys), arg->rngmin,
 				     arg->rngmax);
       res.resok->will_send_blocks = iter->more ();
-      bigint srcID = arg->srcID;
+      chord_node src = arg->src;
       sbp->reply (&res);  // DONT REF arg AFTER THIS POINT!!!!
 
       // XXX DEADLOCK: if the blocks arrive before 'res'...remote gets stuck
-      vNew merkle_send_range (iter, sndblkfnc, srcID);
+      vNew merkle_send_range (iter, sndblkfnc, src);
       break;
     }
     

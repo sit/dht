@@ -10,8 +10,8 @@ enum merkle_stat {
 /* GETNODE */
 
 struct getnode_arg {
-  chordID dstID;
-  chordID srcID;
+  chord_node dst;
+  chord_node src;
   uint32 depth;
   merkle_hash prefix;	
 };
@@ -42,8 +42,8 @@ union getnode_res switch (merkle_stat status) {
 /* GETBLOCKLIST */
 
 struct getblocklist_arg {
-  chordID dstID;
-  chordID srcID;
+  chord_node dst;
+  chord_node src;
   merkle_hash keys<64>;
 };
 
@@ -62,8 +62,8 @@ union getblocklist_res switch (merkle_stat status) {
 /* GETBLOCKRANGE */
 
 struct getblockrange_arg {
-  chordID dstID;
-  chordID srcID;
+  chord_node dst;
+  chord_node src;
   bigint rngmin;
   bigint rngmax;
   bool bidirectional;

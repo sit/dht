@@ -139,13 +139,13 @@ class dhashcli;
 // number of args in a wrap.
 //
 struct XXX_SENDBLOCK_ARGS {
-  bigint destID;
+  chord_node dest;
   bigint blockID;
   bool last;
   callback<void>::ref cb;
 
-  XXX_SENDBLOCK_ARGS (bigint destID, bigint blockID, bool last, callback<void>::ref cb)
-    : destID (destID), blockID (blockID), last (last), cb (cb)
+  XXX_SENDBLOCK_ARGS (chord_node dest, bigint blockID, bool last, callback<void>::ref cb)
+    : dest (dest), blockID (blockID), last (last), cb (cb)
   {}
 };
 
@@ -190,7 +190,7 @@ class dhash {
   unsigned keyhash_mgr_rpcs;
 
   void sendblock_XXX (XXX_SENDBLOCK_ARGS *a);
-  void sendblock (bigint destID, bigint blockID, bool last, callback<void>::ref cb);
+  void sendblock (chord_node dst, bigint blockID, bool last, callback<void>::ref cb);
   void sendblock_cb (callback<void>::ref cb, dhash_stat err, chordID blockID);
 
   void keyhash_mgr_timer ();
@@ -198,7 +198,7 @@ class dhash {
   void keyhash_sync_done ();
   void partition_maintenance_lookup_cb (dhash_stat err, chordID hostID);
   void partition_maintenance_pred_cb (chordID predID, net_address addr, chordstat stat);
-  void doRPC_unbundler (chordID ID, RPC_delay_args *args);
+  void doRPC_unbundler (chord_node dst, RPC_delay_args *args);
 
 
   void route_upcall (int procno, void *args, cbupcalldone_t cb);
@@ -298,7 +298,7 @@ class dhash {
 
 
   chordID pred;
-  vec<chordID> replicas;
+  vec<chord_node> replicas;
   timecb_t *check_replica_tcb;
   timecb_t *merkle_rep_tcb;
   timecb_t *merkle_part_tcb;

@@ -244,27 +244,21 @@ keyhashdbagain:
 void
 dhash::sendblock_XXX (XXX_SENDBLOCK_ARGS *a)
 {
-  sendblock (a->destID, a->blockID, a->last, a->cb);
+  // XXX fix this
+  sendblock (a->dest, a->blockID, a->last, a->cb);
 }
 
 void
-dhash::sendblock (bigint destID, bigint blockID, bool last, callback<void>::ref cb)
+dhash::sendblock (chord_node dst, bigint blockID, bool last, callback<void>::ref cb)
 {
-  // warnx << "sendblock: to " << destID << ", id " << blockID << ", from " << host_node->my_ID () << "\n";
+  // warnx << "sendblock: to " << dst.x << ", id " << blockID << ", from " << host_node->my_ID () << "\n";
 
-#if 0
-  ptr<location> l = host_node->locations->lookup (destID);
-  if (!l) {
-    warn << "dhash::sendblock: destination " << destID << " not cached." << "\n";
-    (*cb) (); // XXX no error propogation
-    return;
-  }
-#endif
+  // XXX insert dst into the location table...
 
   ptr<dbrec> blk = db->lookup (id2dbrec (blockID));
   assert (blk); // XXX: don't assert here, maybe just callback?
   ref<dhash_block> dhblk = New refcounted<dhash_block> (blk->value, blk->len);
-  cli->storeblock (destID, blockID, dhblk, last,
+  cli->storeblock (dst.x, blockID, dhblk, last,
 		   wrap (this, &dhash::sendblock_cb, cb), 
 		   DHASH_REPLICA);
 }
@@ -337,9 +331,14 @@ dhash::keyhash_mgr_lookup (chordID key, dhash_stat err, chordID host)
 {
   keyhash_mgr_rpcs --;
   if (!err) {
+    chord_node n;
+    n.x = -1;
+    host_node->locations->get_node (partition_right, &n);
+    assert (n.x != -1); // node should be in location table
+
     keyhash_mgr_rpcs ++;
     // warnx << "for " << key << ", sending to " << host << "\n";
-    sendblock (host, key, false, wrap (this, &dhash::keyhash_sync_done));
+    sendblock (n, key, false, wrap (this, &dhash::keyhash_sync_done));
   }
 }
 
@@ -360,7 +359,7 @@ dhash::replica_maintenance_timer (u_int index)
       index = 0;
     
     if (replicas.size() > 0) {
-      chordID replicaID = replicas[index];
+      chord_node replica = replicas[index];
 
       if (replica_syncer) {
 #if 1
@@ -372,18 +371,18 @@ dhash::replica_maintenance_timer (u_int index)
 	replica_syncer = NULL;
       }
 
-      if (active_syncers[replicaID]) {
+      if (active_syncers[replica.x]) {
 	warnx << "replica_maint: already syncing with "
-	      << replicaID << ", skip\n";
+	      << replica.x << ", skip\n";
 	replica_syncer = NULL;
       }
       else {
-        replica_syncer_dstID = replicaID;
+        replica_syncer_dstID = replica.x;
         replica_syncer = New refcounted<merkle_syncer> 
 	  (mtree, 
-	   wrap (this, &dhash::doRPC_unbundler, replicaID),
-	   wrap (this, &dhash::sendblock, replicaID));
-        active_syncers.insert (replicaID, replica_syncer);
+	   wrap (this, &dhash::doRPC_unbundler, replica),
+	   wrap (this, &dhash::sendblock, replica));
+        active_syncers.insert (replica.x, replica_syncer);
         
         bigint rngmin = host_node->my_pred ();
         bigint rngmax = host_node->my_ID ();
@@ -502,10 +501,15 @@ dhash::partition_maintenance_pred_cb (chordID predID, net_address addr,
       partition_syncer = NULL;
     }
     else {
+      chord_node n;
+      n.x = -1; // XXX hacky
+      host_node->locations->get_node (partition_right, &n);
+      assert (n.x != -1); // node should be in location table
+
       partition_syncer = New refcounted<merkle_syncer> 
 	(mtree, 
-	 wrap (this, &dhash::doRPC_unbundler, partition_right),
-	 wrap (this, &dhash::sendblock, partition_right));
+	 wrap (this, &dhash::doRPC_unbundler, n),
+	 wrap (this, &dhash::sendblock, n));
       active_syncers.insert (partition_right, partition_syncer);
       
 #if 0
@@ -870,10 +874,23 @@ dhash::transfer_init_gotk_cb (dhash_stat err)
 void
 dhash::update_replica_list () 
 {
-  replicas = host_node->succs ();
+#if 1
+  // derive the replicas from the successor list 
+  replicas.clear ();
+  vec<chordID> succs = host_node->succs ();
+  for (u_int i = 0; i < succs.size () && i < nreplica; i++) {
+    chord_node n;
+    n.x = -1; // XXX hacky
+    host_node->locations->get_node (succs[i], &n);
+    assert (n.x != -1); // node should be in location table
+    replicas.push_back (n);
+  }
+#else
+ replicas = host_node->succs ();
   // trim down successors to just the replicas
   while (replicas.size () > nreplica)
     replicas.pop_back ();
+#endif
 }
 
 void
@@ -890,7 +907,7 @@ ordering of chord::succlist*/
 bool 
 dhash::isReplica(chordID id) { 
   for (unsigned int i=0; i < replicas.size(); i++)
-    if (replicas[i] == id) return true;
+    if (replicas[i].x == id) return true;
   return false;
 }
 
@@ -934,7 +951,7 @@ dhash::replicate_key (chordID key, cbstat_t cb)
     *replica_err  = 0;
 
     for (unsigned i=0; i<replicas.size (); i++) {
-      transfer_key (replicas[i], key, DHASH_REPLICA, 
+      transfer_key (replicas[i].x, key, DHASH_REPLICA, 
 		    wrap (this, &dhash::replicate_key_cb,
 		          replica_cnt, replica_err, cb, key));
     }
@@ -1356,21 +1373,26 @@ dhash::responsible(const chordID& n)
 }
 
 void
-dhash::doRPC_unbundler (chordID ID, RPC_delay_args *args)
+dhash::doRPC_unbundler (chord_node dst, RPC_delay_args *args)
 {
-  // all values bundled in 'args' because of the limit on
+  // All values bundled in 'args' because of the limit on
   // the max number of wrap argument (in callback.h)
+  //
+  // All merkle RPCs start with dst and src (chord_node).
+  // This code stamps these on the RPC, so the merkle 
+  // code doesn't have to.
 
-  // HACK ALERT (sorta):
-  //   All merkle RPCs start with dstID and srcID.
-  //   This code stamps this on the RPC, so the merkle code
-  //   doesn't have to.
+  chord_node self;
+  self.x = -1;  // XXX hacky
+  host_node->locations->get_node (host_node->my_ID (), &self);
+  assert (self.x != -1); 
 
   void *in = args->in;
   getnode_arg *arg = static_cast<getnode_arg *>(in);
-  arg->dstID = ID;
-  arg->srcID = host_node->my_ID ();
-  doRPC (ID, args->prog, args->procno, args->in, args->out, args->cb);
+  arg->dst = dst;
+  arg->src = self;
+
+  host_node->doRPC (dst, args->prog, args->procno, args->in, args->out, args->cb);
 }
 
 void
