@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.20 2003/05/02 00:51:00 fdabek Exp $
+# $Id: Makefile.am,v 1.21 2003/06/13 21:39:38 sit Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -18,7 +18,7 @@ coords_SOURCES = walk_coords.C
 coords_LDADD = $(MYLDADD) ../chord/libchord.a ../utils/libutil.a ../svc/libsvc.la  $(LDADD) 
 
 builddb_SOURCES = builddb.C
-builddb_LDADD = ../sfsrodb/libsfsrodb.a ../chord/libchord.a ../utils/libutil.a $(DBLIB) $(MYLDADD) $(LDADD)
+builddb_LDADD = ../sfsrodb/libsfsrodb.a ../dhash/libdhash.a ../merkle/libmerkle.a ../chord/libchord.a ../utils/libutil.a ../svc/libsvc.la $(DBLIB) $(LDADD)
 
 dbm_SOURCES = dhash_benchmark.C
 dbm_LDADD = $(MYLDADD) $(LDADD)

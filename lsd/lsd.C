@@ -389,7 +389,7 @@ stats ()
 	u_int start_index = 0;
 	u_int start_delay = 0;
 	if (JOSH==2) {
-	  start_index = random_getword ()  % dhash::NUM_EFRAGS;
+	  start_index = random_getword ()  % dhash::num_efrags ();
 	  start_delay = random_getword ()  % dhash::REPTM;
 	}
 	delaycb (start_delay, 0, 

@@ -196,7 +196,7 @@ class dhash_impl : public dhash {
  public:
   dhash_impl (str dbname, u_int nreplica = 0, int ss_mode = 0);
   ~dhash_impl ();
-  
+
   void replica_maintenance_timer (u_int index);
   void partition_maintenance_timer ();
 

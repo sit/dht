@@ -65,15 +65,15 @@ pmaint::pmaint_lookup (bigint key, dhash_stat err, vec<chord_node> sl, route r)
   chordID pred = r.pop_back ()->id ();
   assert (succ == sl[0].x);
 
-  if (dhash::NUM_EFRAGS > sl.size ()) {
+  if (dhash::num_efrags () > sl.size ()) {
     warn << "not enough successors: " << sl.size () 
-	 << " vs " << dhash::NUM_EFRAGS << "\n";
+	 << " vs " << dhash::num_efrags () << "\n";
     //try again later
     delaycb (PRTTM, wrap (this, &pmaint::pmaint_next));
     return;
   }
 
-  if (betweenbothincl (sl[0].x, sl[dhash::NUM_EFRAGS - 1].x, 
+  if (betweenbothincl (sl[0].x, sl[dhash::num_efrags () - 1].x, 
 		       host_node->my_ID ())) { 
     //case I: we are a replica of the key. 
     //i.e. in the successor list. Do nothing.
@@ -126,7 +126,7 @@ pmaint::pmaint_offer ()
 
   assert (pmaint_offers_pending == 0);
   pmaint_offers_erred = 0;
-  for (u_int i = 0; i < pmaint_succs.size () && i < dhash::NUM_EFRAGS; i++) {
+  for (u_int i = 0; i < pmaint_succs.size () && i < dhash::num_efrags (); i++) {
     ref<dhash_offer_res> res = New refcounted<dhash_offer_res> (DHASH_OK);
     pmaint_offers_pending += 1;
     host_node->doRPC (pmaint_succs[i], dhash_program_1, 

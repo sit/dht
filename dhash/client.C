@@ -175,7 +175,7 @@ dhashcli::retrieve_dl_or_walk_cb (blockID blockID, dhash_stat status,
 
     blk->ID = rs->key.ID;
     blk->hops = rs->r.size ();
-    blk->errors = rs->nextsucc - dhash::NUM_DFRAGS;
+    blk->errors = rs->nextsucc - dhash::num_dfrags ();
     blk->retries = blk->errors;
 
     rcvs.remove (rs);
@@ -199,10 +199,10 @@ dhashcli::retrieve_frag_hop_cb (blockID blockID, route_iterator *ci, bool done)
   if (server_selection_mode & 4) {
     size_t left = 0;
     // XXX + 2? geez.
-    if (cs.size () < dhash::NUM_DFRAGS + 2)
+    if (cs.size () < dhash::num_dfrags () + 2)
       left = cs.size ();
     else
-      left = cs.size () - (dhash::NUM_DFRAGS + 2);
+      left = cs.size () - (dhash::num_dfrags () + 2);
     for (size_t i = 1; i < left; i++) {
       if (betweenrightincl (cs[i-1].x, cs[i].x, blockID.ID)) {
 	cs.popn_front (i);
@@ -321,10 +321,10 @@ dhashcli::retrieve_lookup_cb (blockID blockID,
     return;
   }
   
-  while (succs.size () > dhash::NUM_EFRAGS)
+  while (succs.size () > dhash::num_efrags ())
     succs.pop_back ();
 
-  if (succs.size () < dhash::NUM_DFRAGS) {
+  if (succs.size () < dhash::num_dfrags ()) {
     trace << myID << ": retrieve (" << blockID << "): "
 	  << "insufficient number of successors returned!\n";
     rcvs.remove (rs);
@@ -347,7 +347,7 @@ dhashcli::retrieve_lookup_cb (blockID blockID,
 
   // Dispatch NUM_DFRAGS parallel requests, even though we don't know
   // how many fragments will truly be needed.
-  for (u_int i = 0; i < dhash::NUM_DFRAGS; i++)
+  for (u_int i = 0; i < dhash::num_dfrags (); i++)
     fetch_frag (rs);
 }
 
@@ -388,7 +388,7 @@ dhashcli::retrieve_fetch_cb (blockID blockID, u_int i,
   strbuf newblock;
   
   if (!Ida::reconstruct (rs->frags, newblock)) {
-    if (rs->frags.size () >= dhash::NUM_DFRAGS) {
+    if (rs->frags.size () >= dhash::num_dfrags ()) {
       trace << myID << ": retrieve (" << blockID 
 	    << "): reconstruction failed.\n";
       rs->errors++;
@@ -549,9 +549,9 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
     return;
   }
 
-  if (dhash::NUM_EFRAGS > succs.size ()) {
+  if (dhash::num_efrags () > succs.size ()) {
     warn << "Not enough successors: |succs| " << succs.size ()
-	 << ", EFRAGS " << dhash::NUM_EFRAGS << "\n";
+	 << ", EFRAGS " << dhash::num_efrags () << "\n";
     (*cb) (DHASH_STOREERR, mt); // XXX Not the right error code...
     return;
   }
@@ -560,12 +560,12 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
 
   // Cap the maximum.
   u_long m = Ida::optimal_dfrag (block->len, MTU);
-  if (m > dhash::NUM_DFRAGS)
-    m = dhash::NUM_DFRAGS;
+  if (m > dhash::num_dfrags ())
+    m = dhash::num_dfrags ();
 
   warnx << "Using m = " << m << " for block size " << block->len << "\n";
 
-  for (u_int i = 0; i < dhash::NUM_EFRAGS; i++) {
+  for (u_int i = 0; i < dhash::num_efrags (); i++) {
     assert (i < succs.size ());
     str frag = Ida::gen_frag (m, blk);
     
@@ -584,7 +584,7 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
 			  blk,
 			  wrap (this, &dhashcli::insert_store_cb,
 				ss, r, i,
-				dhash::NUM_EFRAGS, dhash::NUM_DFRAGS),
+				dhash::num_efrags (), dhash::num_dfrags ()),
 			  DHASH_FRAGMENT);
   }
 }

@@ -87,6 +87,34 @@ dhash_config_init::dhash_config_init ()
 #undef set_int
 }
 
+// Things that read from Configurator
+u_long
+dhash::num_efrags ()
+{
+  static bool initialized = false;
+  static int efrags = 0;
+  if (!initialized) {
+    initialized = Configurator::only ().get_int ("dhash.efrags", efrags);
+    assert (initialized);
+  }
+
+  return efrags;
+}
+
+u_long
+dhash::num_dfrags ()
+{
+  static bool initialized = false;
+  static int dfrags = 0;
+  if (!initialized) {
+    initialized = Configurator::only ().get_int ("dhash.dfrags", dfrags);
+    assert (initialized);
+  }
+  
+  return dfrags;
+}
+
+
 // Pure virtual destructors still need definitions
 dhash::~dhash () {}
 
@@ -145,7 +173,7 @@ dhash_impl::dhash_impl (str dbname, u_int k, int _ss_mode)
 
   // merkle state
   mtree = New merkle_tree (db);
-			   
+  
 }
 
 void
@@ -252,8 +280,8 @@ dhash_impl::missing_retrieve_cb (bigint key, dhash_stat err,
     // Oh, the memory copies.
     str blk (b->data, b->len);
     u_long m = Ida::optimal_dfrag (b->len, MTU);
-    if (m > dhash::NUM_DFRAGS)
-      m = dhash::NUM_DFRAGS;
+    if (m > num_dfrags ())
+      m = num_dfrags ();
     str frag = Ida::gen_frag (m, blk);
     ref<dbrec> d = New refcounted<dbrec> (frag.cstr (), frag.len ());
     ref<dbrec> k = id2dbrec (key);
@@ -356,7 +384,7 @@ dhash_impl::replica_maintenance_timer (u_int i)
 
 
   replica_syncer->sync (rngmin, rngmax);
-  i = (i + 1) % (NUM_EFRAGS - 1);
+  i = (i + 1) % (num_efrags () - 1);
 
  out:
   merkle_rep_tcb =
@@ -949,8 +977,8 @@ dhash_impl::dbwrite (ref<dbrec> key, ref<dbrec> data, dhash_ctype ctype)
   // vector either.
   str x ("");
   if (key->isFrag() &&
-      data->len > 9 + 2*NUM_DFRAGS)
-    x = strbuf () << " " << hexdump (data->value + 8, 2*(NUM_DFRAGS + 1));
+      data->len > 9 + 2* (int) num_dfrags ())
+    x = strbuf () << " " << hexdump (data->value + 8, 2*(num_dfrags () + 1));
   //  warn << "dbwrite: " << host_node->my_ID ()
   //  << " " << action << " " << dbrec2id(key) << x << "\n";
 

@@ -74,7 +74,10 @@ gen_frag (ptr<dbrec> block)
 {
   // see: dhashcli::insert2_succs_cb ()
   str blk (block->value, block->len);
-  str frag = Ida::gen_frag (dhash::NUM_DFRAGS, blk);
+  u_long m = Ida::optimal_dfrag (block->len, MTU);
+  if (m > dhash::num_dfrags ())
+      m = dhash::num_dfrags ();
+  str frag = Ida::gen_frag (m, blk);
   // prepend type of block onto fragment
   //str res (strbuf (block->value, 4) << frag);
   str res (strbuf () << str (block->value, 4) << frag);
