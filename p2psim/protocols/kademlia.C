@@ -1174,7 +1174,7 @@ k_bucket::traverse(k_traverser *traverser, Kademlia *k, string prefix, unsigned 
     if(!k->node()->alive() || !child[0])
       return;
     child[0]->traverse(traverser, k, prefix + "0", depth+1, 0);
-    if(!k->node()->alive() || !child[1])
+    if(!k->node()->alive() || !child[1] || leaf)
       return;
     child[1]->traverse(traverser, k, prefix + "1", depth+1, 1);
     if(!k->node()->alive())
@@ -1338,20 +1338,13 @@ k_bucket::collapse()
   KDEBUG(2) << "k_bucket::collapse" << endl;
   checkrep();
 
-  if(!leaf) {
-    delete child[0];
-    delete child[1];
-  } else {
-    delete nodes;
-    delete replacement_cache;
+  if(!leaf)
+    leaf = true;
+  else {
+    nodes->nodes.clear();
+    replacement_cache->clear();
   }
 
-  nodes = New k_nodes(this);
-  assert(nodes);
-  replacement_cache = New set<k_nodeinfo*, Kademlia::younger>;
-  assert(replacement_cache);
-
-  leaf = true;
   checkrep();
 }
 // }}}
@@ -1372,8 +1365,10 @@ k_bucket::divide(unsigned depth)
 
   // we are transforming from leaf to node.  allocate the children
   leaf = false;
-  child[0] = New k_bucket(this);
-  child[1] = New k_bucket(this);
+  if(!child[0])
+    child[0] = New k_bucket(this);
+  if(!child[1])
+    child[1] = New k_bucket(this);
   assert(child[0]);
   assert(child[1]);
 
@@ -1394,8 +1389,8 @@ k_bucket::divide(unsigned depth)
   if(child[1]->nodes->inrange(kademlia()->id()))
     child[1]->divide(depth+1);
 
-  delete replacement_cache;
-  delete nodes;
+  replacement_cache->clear();
+  nodes->nodes.clear();
 
   checkrep();
 }
@@ -1469,7 +1464,7 @@ k_stabilizer::execute(k_bucket *k, string prefix, unsigned depth, unsigned leftr
   Kademlia *mykademlia = k->kademlia();
   Kademlia::NodeID _id = mykademlia->id();
 
-  if(!mykademlia->node()->alive())
+  if(!k->leaf || !mykademlia->node()->alive())
     return;
 
   // return if any entry in this k-bucket is fresh
