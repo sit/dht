@@ -58,6 +58,16 @@ public:
     IPAddress ip;   // answer to the lookup
     NodeID rid;     // the guy who's replying
   };
+
+  //
+  // ping
+  //
+  struct ping_args {};
+  struct ping_result {};
+  void do_ping(ping_args*, ping_result*);
+  bool do_ping_wrapper(IPAddress, ping_args*, ping_result*);
+
+
 // }}}
 // {{{ private
  private:
@@ -105,7 +115,6 @@ public:
   struct insert_result {
   };
   void do_insert(insert_args *args, insert_result *result);
-
 
   //
   // transfer

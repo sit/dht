@@ -239,6 +239,23 @@ Kademlia::do_lookup_wrapper(IPAddress use_ip, Kademlia::NodeID key)
 }
 
 // }}}
+// {{{ Kademlia::do_ping
+void
+Kademlia::do_ping(ping_args *pargs, ping_result *presult)
+{
+  // should we update our tree as a result of a ping.  I don't think so.
+  return;
+}
+
+// }}}
+// {{{ Kademlia::do_ping_wrapper
+bool
+Kademlia::do_ping_wrapper(IPAddress use_ip, ping_args *pargs, ping_result *presult)
+{
+  return doRPC(use_ip ? use_ip : _wkn, &Kademlia::do_ping, pargs, presult);
+}
+
+// }}}
 // {{{ Kademlia::stabilized
 bool
 Kademlia::stabilized(vector<NodeID> lid)
@@ -543,15 +560,37 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned de
   }
 
   //
-  // _nodes ARRAY IS FULL.  SPLIT IF IT IS A NON-LEAF NODE.
+  // _nodes ARRAY IS FULL.  PING THE LEAST-RECENTLY SEEN NODE.
   //
 
   assert(_nodes->size() == _k);
   assert(_child[0] == 0);
   assert(_child[1] == 0);
 
+  // ping the least-recently seen node.
+  set<peer_t*>::const_iterator least_recent = _nodes->begin();
+  if(_self->do_ping_wrapper((*least_recent)->ip, 0, 0))
+    return make_pair((peer_t*)0, depth);
+
+  // evict the dead one
+  _nodes->erase(least_recent);
+
+  // insert the new one
+  peer_t *p = new peer_t(node, ip, now());
+  _nodes->insert(p);
+
+  //
+  //  Now if this k-bucket contains the node own ID, then split it.
+  //
+  // XXX: should return make_pair(p, depth);
+  if(node >= (*_nodes->begin())->id &&
+     node <= (*_nodes->end())->id &&
+     (*_nodes->begin())->id != (*_nodes->end())->id)
+  {
+    assert(!_leaf);
+
   // split if this is not a final leaf
-  if(!_leaf) {
+  // if(!_leaf) {
     // create both children
     KDEBUG(4) <<  "insert: not a leaf.  creating subchildren" << endl;
     _child[0] = new k_bucket(_self, _root);
@@ -560,6 +599,7 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned de
     KDEBUG(4) <<  "insert: subchild " << (myleftmostbit ^ 1) << " is a leaf on depth " << depth << endl;
 
     // now divide contents into separate buckets
+    // XXX: we have to ping these guys?
     for(set<peer_t*>::const_iterator it = _nodes->begin(); it != _nodes->end(); ++it) {
       unsigned bit = Kademlia::getbit((*it)->id, depth);
       KDEBUG(4) <<  "insert: pushed entry " << Kademlia::printbits((*it)->id) << " to side " << bit << endl;
@@ -575,8 +615,8 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned de
 
   // this is a leaf and it's full.
   // XXX: evict one. oh wait, we're leaving the more trustworthy ones in.
-  KDEBUG(4) <<  "insert: last make_pair on depth " << depth << endl;
-  return make_pair((peer_t*)0, depth);
+  // KDEBUG(4) <<  "insert: last make_pair on depth " << depth << endl;
+  // return make_pair((peer_t*)0, depth);
 }
 
 // }}}
