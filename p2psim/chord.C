@@ -185,7 +185,7 @@ Chord::join(Args *args)
          after - before);
   loctable->add_node(fr.v[0]);
 
-  reschedule_stabilizer(NULL);
+  //reschedule_stabilizer(NULL);
 }
 
 void
@@ -248,8 +248,8 @@ Chord::stabilized(vector<CHID> lid)
 void
 Chord::init_state(vector<IDMap> ids)
 {
-  printf("%s inited %d\n", ts(), ids.size());
   loctable->add_sortednodes(ids);
+  printf("%s inited %d %d\n", ts(), ids.size(), loctable->size());
 }
 
 void
@@ -449,11 +449,11 @@ LocTable::add_sortednodes(vector<Chord::IDMap> l)
   tmppin.ip = 0;
   uint pos;
   int ptr;
-  Chord::IDMap n;
-  pin_entry p;
+  //Chord::IDMap n;
+//  pin_entry p;
 
   for (uint i = 0; i < sz; i++) {
-    p = pinlist[i];
+ //   p = pinlist[i];
     tmppin.id = pinlist[i].id;
     pos = upper_bound(l.begin(), l.end(), tmppin, Chord::IDMap::cmp) - l.begin();
     if (pos >= lsz) pos = 0;
@@ -463,14 +463,14 @@ LocTable::add_sortednodes(vector<Chord::IDMap> l)
     }
     for (uint k = 0; k < pinlist[i].pin_pred; k++) {
       if (ptr< 0) ptr= (lsz-1);
-      n = l[ptr];
+   //   n = l[ptr];
       add_node(l[ptr]);
       ptr--;
     }
     ptr = pos; 
     for (uint k = 0; k < pinlist[i].pin_succ; k++) {
       if (ptr >= lsz) ptr= 0;
-      n = l[ptr];
+  //    n = l[ptr];
       add_node(l[ptr]);
       ptr++;
     }
