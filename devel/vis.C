@@ -6,7 +6,7 @@
 #define WINX 600
 #define WINY 600
 #define PI 3.14159
-#define TIMEOUT 5
+#define TIMEOUT 10
 
 /* GTK stuff */
 static GdkPixmap *pixmap = NULL;
@@ -16,6 +16,10 @@ static GdkGC *draw_gc = NULL;
 static GdkColormap *cmap = NULL;
 static GdkColor red, green, blue, brown;
 static short interval = -1;
+static GtkWidget *check_fingers;
+static GtkWidget *check_immed_succ;
+static GtkWidget *check_succ_list;
+static GtkWidget *check_neighbors;
 
 struct f_node {
   chordID ID;
@@ -23,12 +27,17 @@ struct f_node {
   short port;
   chord_getfingers_ext_res *res;
   chord_getsucc_ext_res *ressucc;
+  chord_gettoes_res *restoes;
   ihash_entry <f_node> link;
   bool draw;
 
   f_node (chordID i, str h, short p) :
-    ID (i), host (h), port (p), draw (true) { res = NULL; ressucc = NULL;};
-  ~f_node () { delete res; };
+    ID (i), host (h), port (p), draw (true) { res = NULL; ressucc = NULL; restoes = NULL;};
+  ~f_node () { 
+    if (res) delete res; 
+    if (ressucc) delete ressucc; 
+    if (restoes) delete restoes;
+  };
 };
 
 void setup ();
@@ -43,6 +52,11 @@ void update_fingers (f_node *n);
 void update_fingers_got_fingers (chordID ID, str host, short port, 
 				 chord_getfingers_ext_res *res,
 				 clnt_stat err);
+
+void update_toes (f_node *nu);
+void update_toes_got_toes (chordID ID, str host, short port, 
+			   chord_gettoes_res *res, clnt_stat err);
+
 void get_succ (str host, short port);
 void get_succ (chordID ID, str host, short port);
 void get_succ_got_succ (chordID ID, str host, short port, 
@@ -64,6 +78,7 @@ static gint button_down_event (GtkWidget *widget,
 void draw_all_cb (GtkWidget *widget, gpointer data);
 void draw_none_cb (GtkWidget *widget, gpointer data);
 void quit_cb (GtkWidget *widget, gpointer data);
+void redraw_cb (GtkWidget *widget, gpointer data);
 void update_cb (GtkWidget *widget, gpointer data);
 void redraw();
 void draw_ring ();
@@ -71,6 +86,7 @@ void ID_to_xy (chordID ID, int *x, int *y);
 chordID xy_to_ID (int sx, int sy);
 void ID_to_string (chordID ID, char *str);
 double ID_to_angle (chordID ID);
+void set_foreground_lat (long lat);
 int main (int argc, char** argv);
 void gtk_poll ();
 
@@ -89,7 +105,6 @@ setup ()
 void
 update () 
 {
-  warn << "update\n";
   f_node *n = nodes.first ();
   while (n) {
     update_fingers (n);
@@ -246,6 +261,7 @@ update_fingers_got_fingers (chordID ID, str host, short port,
   delete nu->res;
   nu->res = res;
 
+  update_toes (nu);
   for (unsigned int i=0; i < res->resok->fingers.size (); i++) {
     if ( nodes[res->resok->fingers[i].x] == NULL) 
       get_fingers (res->resok->fingers[i].x, res->resok->fingers[i].r.hostname,
@@ -296,7 +312,6 @@ add_fingers (chordID ID, str host, short port, chord_getfingers_ext_res *res)
   f_node *n = nodes[ID];
 
   if (n && n->res) return;
-
   if (!n) {
     warn << "added " << ID << "\n";
     n = New f_node (ID, host, port);
@@ -308,9 +323,46 @@ add_fingers (chordID ID, str host, short port, chord_getfingers_ext_res *res)
       get_fingers (res->resok->fingers[i].x, res->resok->fingers[i].r.hostname,
 		   res->resok->fingers[i].r.port);
   }
+  update_toes (n);
   draw_ring ();
 }
 
+
+//----- update toes -----------------------------------------------------
+
+void
+update_toes (f_node *nu)
+{
+  ptr<aclnt> c = get_aclnt (nu->host, nu->port);
+  if (c == NULL) 
+    fatal << "locationtable::doRPC: couldn't aclnt::alloc\n";
+  
+  chord_gettoes_arg n;
+  n.v.n = nu->ID;
+  n.level = 1;
+  chord_gettoes_res *res = New chord_gettoes_res ();
+  c->timedcall (TIMEOUT, CHORDPROC_GETTOES, &n, res,
+		wrap (&update_toes_got_toes, 
+		      nu->ID, nu->host, nu->port, res));
+}
+
+void
+update_toes_got_toes (chordID ID, str host, short port, 
+		      chord_gettoes_res *res, clnt_stat err)
+{
+  if (err || res->status) {
+    warn << "(update toes) deleting " << ID << "\n";
+    if (nodes[ID])
+      nodes.remove (nodes[ID]);
+    return;
+  }
+
+  f_node *nu = nodes[ID];
+  if (!nu) return;
+  if (nu->restoes) delete nu->restoes;
+  nu->restoes = res;
+  draw_ring ();
+}
 
 void
 initgraf (int argc, char **argv)
@@ -323,6 +375,11 @@ initgraf (int argc, char **argv)
 
   GtkWidget *draw_all = gtk_button_new_with_label ("Show All");
   GtkWidget *draw_none = gtk_button_new_with_label ("Show None");
+  check_fingers = gtk_check_button_new_with_label ("fingers");
+  check_immed_succ = 
+    gtk_check_button_new_with_label ("immed. succ.");
+  check_succ_list = gtk_check_button_new_with_label ("succ. list");
+  check_neighbors = gtk_check_button_new_with_label ("neighbors");
   GtkWidget *refresh = gtk_button_new_with_label ("Refresh");
   GtkWidget *quit = gtk_button_new_with_label ("Quit");
   GtkWidget *sep = gtk_vseparator_new ();
@@ -330,6 +387,11 @@ initgraf (int argc, char **argv)
   //organize things into boxes
   GtkWidget *vbox = gtk_vbox_new (FALSE, 0);
   gtk_box_pack_start (GTK_BOX (vbox), draw_all, TRUE, FALSE, 0);
+  gtk_box_pack_start (GTK_BOX (vbox), draw_none, TRUE, FALSE, 0);
+  gtk_box_pack_start (GTK_BOX (vbox), check_fingers, TRUE, FALSE, 0);
+  gtk_box_pack_start (GTK_BOX (vbox), check_immed_succ, TRUE, FALSE, 0);
+  gtk_box_pack_start (GTK_BOX (vbox), check_succ_list, TRUE, FALSE, 0);
+  gtk_box_pack_start (GTK_BOX (vbox), check_neighbors, TRUE, FALSE, 0);
   gtk_box_pack_start (GTK_BOX (vbox), draw_none, TRUE, FALSE, 0);
   gtk_box_pack_start (GTK_BOX (vbox), refresh, TRUE, FALSE, 0);
   gtk_box_pack_start (GTK_BOX (vbox), quit, TRUE, FALSE, 0);
@@ -354,6 +416,20 @@ initgraf (int argc, char **argv)
 			       GTK_SIGNAL_FUNC (quit_cb),
 			       NULL);
 
+  gtk_signal_connect_object (GTK_OBJECT (check_fingers), "toggled",
+			     GTK_SIGNAL_FUNC (redraw_cb),
+			     NULL);
+  gtk_signal_connect_object (GTK_OBJECT (check_immed_succ), "toggled",
+			     GTK_SIGNAL_FUNC (redraw_cb),
+			     NULL);
+  gtk_signal_connect_object (GTK_OBJECT (check_succ_list), "toggled",
+			     GTK_SIGNAL_FUNC (redraw_cb),
+			     NULL);
+  gtk_signal_connect_object (GTK_OBJECT (check_neighbors), "toggled",
+			     GTK_SIGNAL_FUNC (redraw_cb),
+			     NULL);
+
+
   gtk_signal_connect (GTK_OBJECT (window), "delete_event",
 		      GTK_SIGNAL_FUNC (delete_event), NULL);  
   gtk_signal_connect (GTK_OBJECT (drawing_area), "expose_event",
@@ -373,6 +449,10 @@ initgraf (int argc, char **argv)
 
   gtk_widget_show (drawing_area);
   gtk_widget_show (draw_all);
+  gtk_widget_show (check_fingers);
+  gtk_widget_show (check_succ_list);
+  gtk_widget_show (check_neighbors);
+  gtk_widget_show (check_immed_succ);
   gtk_widget_show (draw_none);
   gtk_widget_show (refresh);
   gtk_widget_show (quit);
@@ -393,10 +473,15 @@ initgraf (int argc, char **argv)
   if (!gdk_color_parse ("red", &red) ||
       !gdk_colormap_alloc_color (cmap, &red, FALSE, TRUE))
   if (!gdk_color_parse ("brown", &brown) ||
-      !gdk_colormap_alloc_color (cmap, &red, FALSE, TRUE))
+      !gdk_colormap_alloc_color (cmap, &brown, FALSE, TRUE))
     fatal << "couldn't get the color I wanted\n";
 }
 
+void 
+redraw_cb (GtkWidget *widget, gpointer data)
+{
+  draw_ring ();
+}
 void 
 quit_cb (GtkWidget *widget,
 	 gpointer data) {  
@@ -512,6 +597,17 @@ xy_to_ID (int sx, int sy)
 }
 
 void
+set_foreground_lat (long lat)
+{
+  if (lat < 2000000) // < 20 ms
+    gdk_gc_set_foreground (draw_gc, &red);
+  else if (lat < 10000000) // [20, 100] ms
+    gdk_gc_set_foreground (draw_gc, &green);
+  else // > 100 ms
+    gdk_gc_set_foreground (draw_gc, &blue);
+}
+
+void
 draw_ring ()
 {
   GtkWidget *widget = drawing_area;
@@ -549,36 +645,60 @@ draw_ring ()
 		     x,y,
 		     IDs);
 #endif
+
     if (n->draw) {
-      if (n->res) {
+      
+      if (n->res && 
+	  gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (check_immed_succ)))
+	{
+	  int a,b;
+	  ID_to_xy (n->res->resok->fingers[1].x, &a, &b);
+	  gdk_draw_line (pixmap,
+			 draw_gc,
+			 x,y,
+			 a,b);
+	}
+
+      if (n->res && 
+	  gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (check_fingers))) {
 	for (unsigned int i=0; i < n->res->resok->fingers.size (); i++) {
 	  int a,b;
-	  if (n->res->resok->fingers[i].a_lat < 2000000) // < 20 ms
-	    gdk_gc_set_foreground (draw_gc, &red);
-	  else if (n->res->resok->fingers[i].a_lat < 10000000) // [20, 100] ms
-	    gdk_gc_set_foreground (draw_gc, &green);
-	  else // > 100 ms
-	    gdk_gc_set_foreground (draw_gc, &blue);
-
+	  set_foreground_lat (n->res->resok->fingers[i].a_lat); 
 	  ID_to_xy (n->res->resok->fingers[i].x, &a, &b);
 	  gdk_draw_line (pixmap,
 			 draw_gc,
 			 x,y,
 			 a,b);
 	}
-	if (n->ressucc) {
-	  for (unsigned int i=0; i < n->ressucc->resok->succ.size (); i++) {
-	    int a,b;
-	    gdk_gc_set_foreground (draw_gc, &brown);
-	    ID_to_xy (n->ressucc->resok->succ[i].x, &a, &b);
+      }
+
+      if (n->ressucc && 
+	  gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (check_succ_list))) {
+	for (unsigned int i=0; i < n->ressucc->resok->succ.size (); i++) {
+	  int a,b;
+	  gdk_gc_set_foreground (draw_gc, &brown);
+	  ID_to_xy (n->ressucc->resok->succ[i].x, &a, &b);
 	    gdk_draw_line (pixmap,
 			   draw_gc,
 			   x,y,
 			   a,b);
-	  }
+	}
+      }
+
+      if (n->restoes && 
+	  gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (check_neighbors))) {
+	for (unsigned int i=0; i < n->restoes->resok->toes.size (); i++) {
+	  int a,b;
+	  ID_to_xy (n->restoes->resok->toes[i].x, &a, &b);
+	  set_foreground_lat (n->restoes->resok->toes[i].a_lat); 
+	  gdk_draw_line (pixmap,
+			 draw_gc,
+			 x,y,
+			 a,b);
 	}
       }
     }
+    
     n = nodes.next (n);
   }
   redraw ();
