@@ -44,6 +44,12 @@ Chord::lookup(Args *args)
   printf("%s lookup results (%u,%16qx)\n", ts(), ans, (ans != 0) ? v[0].id : 0);
 }
 
+void
+Chord::find_successors_handler(find_successors_args *args, find_successors_ret *ret)
+{
+  ret->v = find_successors(args->key, args->m, true);
+}
+
 // Returns at least m successors of key.
 // This is the lookup() code in Figure 3 of the SOSP03 submission.
 // A local call, use find_successors_handler for an RPC.
@@ -66,7 +72,6 @@ Chord::find_successors(CHID key, uint m, bool intern)
     next_ret nr;
     na.key = key;
     na.m = m;
-    na.who = me;
     doRPC(nprime.ip, &Chord::next_handler, &na, &nr);
     if(nr.done){
 #ifdef CHORD_DEBUG
@@ -106,7 +111,7 @@ Chord::next_handler(next_args *args, next_ret *ret)
      When a node first joins the system,
      two entries (me and the wellknown node) are inserted into loctable
      but we do not want to mis-use either as the successor answer during find_successor*/
-  if(loctable->size()!=2 && ConsistentHash::betweenrightincl(me.id, succ.id, args->key) ||
+  if(ConsistentHash::betweenrightincl(me.id, succ.id, args->key) ||
      succ.id == me.id){
     ret->done = true;
     ret->v.clear();
@@ -119,10 +124,7 @@ Chord::next_handler(next_args *args, next_ret *ret)
     ret->done = false;
     ret->next = loctable->pred(args->key);
     //ret->next = succ;
-    if (ret->next.ip == me.ip) {
-      assert(loctable->size() == 2);
-      ret->next = loctable->succ(args->key);
-    }
+    assert(ret->next.ip != me.ip);
  }
 }
 
@@ -142,13 +144,17 @@ Chord::join(Args *args)
   loctable->add_node (wkn);
 
   Time before = now();
-  vector<IDMap> succs = find_successors (me.id + 1, 1, true);
-  assert (succs.size () > 0);
+  find_successors_args fa;
+  find_successors_ret fr;
+  fa.key = me.id + 1;
+  fa.m = 1;
+  doRPC(wkn.ip, &Chord::find_successors_handler, &fa, &fr);
+  assert(fr.v.size() > 0);
   Time after = now();
   printf("%s join2 %16qx, elapsed %ld\n",
-         ts(), succs[0].id,
+         ts(), fr.v[0].id,
          after - before);
-  loctable->add_node(succs[0]);
+  loctable->add_node(fr.v[0]);
 
   reschedule_stabilizer(NULL);
 }

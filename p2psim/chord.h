@@ -65,12 +65,20 @@ public:
   struct next_args {
     CHID key;
     int m;
-    IDMap who;
   };
   struct next_ret {
     bool done;
     vector<IDMap> v;
     IDMap next;
+  };
+
+  struct find_successors_args {
+    CHID key;
+    int m;
+  };
+
+  struct find_successors_ret {
+    vector<IDMap> v;
   };
 
   // RPC handlers.
@@ -79,6 +87,7 @@ public:
   //void get_successor_list_handler(get_predecessor_args *, get_predecessor_ret *);
   void notify_handler(notify_args *, notify_ret *);
   void next_handler(next_args *, next_ret *);
+  void find_successors_handler(find_successors_args *, find_successors_ret *);
 
   CHID id () { return me.id; }
   virtual void init_state(vector<IDMap> ids);
@@ -139,5 +148,4 @@ class LocTable {
 };
 
 #endif // __CHORD_H
-
 
