@@ -85,7 +85,7 @@ nntp::process_line (const str data, int err)
       return;
     }
   }
-  if (!data || !data.len()) {
+  if (!data) {
     warn << s << ": nntp data oops\n";
     delete this;
     return;
