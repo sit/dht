@@ -31,9 +31,9 @@ EuclideanGraph::parse(ifstream &ifs)
     if(words.empty() || words[0][0] == '#')
       continue;
 
-    // nodeid, nodetype, and at least one protocol
-    if(words.size() < 4) {
-      cerr << "EuclideanGraph: provide nodeid, coordinates, Node, and at least one protocol per line" << endl;
+    // nodeid, coordinates, and at least one protocol
+    if(words.size() < 3) {
+      cerr << "EuclideanGraph: provide nodeid, coordinates and at least one protocol per line" << endl;
       exit(1);
     }
 

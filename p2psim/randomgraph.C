@@ -29,9 +29,9 @@ RandomGraph::parse(ifstream &ifs)
     if(words.empty() || words[0][0] == '#')
       continue;
 
-    // nodeid, nodetype, and at least one protocol
-    if(words.size() < 3) {
-      cerr << "RandomGraph: provide nodeid, Node, and at least one protocol per line" << endl;
+    // nodeid and at least one protocol
+    if(words.size() < 2) {
+      cerr << "RandomGraph: provide nodeid and at least one protocol per line" << endl;
       exit(1);
     }
 

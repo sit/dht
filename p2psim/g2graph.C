@@ -36,8 +36,8 @@ G2Graph::parse(ifstream &ifs)
     if(words.empty() || words[0][0] == '#')
       continue;
 
-    if (words.size() == 3) {
 
+    if (words.size() == 2) {
       IPAddress ipaddr = atoi(words[0].c_str());
       assert(ipaddr > 0 && ipaddr <= _num);
 
@@ -51,7 +51,7 @@ G2Graph::parse(ifstream &ifs)
       // add the node to the network
       send(Network::Instance()->nodechan(), &n);
 
-    }else{ 
+    } else { 
       int lat = atoi(words[0].c_str());
       assert(lat > 0);
       _samples.push_back(lat);

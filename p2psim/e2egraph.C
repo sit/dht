@@ -48,8 +48,9 @@ E2EGraph::parse(ifstream &ifs)
     if(words.empty() || words[0][0] == '#')
       continue;
 
-    if (words.size() >= 3) {
-
+    // XXX Thomer:  The else clause also seems
+    // to expect 2 words per line?
+    if (words.size() >= 2) {
       IPAddress ipaddr = atoi(words[0].c_str());
       assert(ipaddr > 0 && ipaddr <= _num);
 
