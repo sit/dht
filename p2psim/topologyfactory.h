@@ -3,7 +3,6 @@
 
 #include "topology.h"
 #include <string>
-#include <vector>
 using namespace std;
 
 class TopologyFactory {

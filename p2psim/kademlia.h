@@ -2,7 +2,6 @@
 #define __KADEMLIA_H
 
 #include "chord.h"
-#include "p2psim.h"
 
 extern unsigned kdebugcounter;
 class k_bucket_tree;
@@ -83,6 +82,7 @@ public:
   hash_map<NodeID, Value> _values;   // key/value pairs
   IPAddress _wkn;               // well-known IP address
   peer_t *_me;
+  static unsigned _joined;      // how many have joined
 
   void reschedule_stabilizer(void*);
   void stabilize();
@@ -272,6 +272,6 @@ private:
 
 // }}}
 
-#define KDEBUG(x) DEBUG(x) << kdebugcounter++ << ". " << Kademlia::printbits(_id) << " "
+#define KDEBUG(x) DEBUG(x) << kdebugcounter++ << "(" << now() << "). " << Kademlia::printbits(_id) << " "
 
 #endif // __KADEMLIA_H

@@ -2,6 +2,7 @@
 #include "kademlia.h"
 #include <stdio.h>
 #include <iostream>
+#include <deque>
 using namespace std;
 
 #define STABLE_TIMER 500 //use a["stabtimer"] to set stabilization timer
@@ -10,6 +11,7 @@ using namespace std;
 unsigned kdebugcounter = 1;
 unsigned Kademlia::_k = 0;
 unsigned Kademlia::_alpha = 0;
+unsigned Kademlia::_joined = 0;
 
 unsigned k_bucket::_k = 0;
 unsigned k_bucket_tree::_k = 0;
@@ -77,6 +79,8 @@ Kademlia::join(Args *args)
 
   if(wkn == ip()) {
     KDEBUG(1) << "Node " << printID(_id) << " is wellknown." << endl;
+    _joined++;
+    delaycb(STABLE_TIMER, &Kademlia::reschedule_stabilizer, (void *) 0);
     return;
   }
 
@@ -116,6 +120,10 @@ Kademlia::join(Args *args)
   if(!doRPC(p->ip, &Kademlia::do_transfer, &ta, &tr))
     _tree->erase(p->id);
 
+  // done
+  _joined++;
+
+  KDEBUG(1) << _joined << ": " << Kademlia::printbits(_id) << " joined" << endl;
   delaycb(STABLE_TIMER, &Kademlia::reschedule_stabilizer, (void *) 0);
 }
 
@@ -190,6 +198,7 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
   lookup_args *la = 0;
   lookup_result *lr = 0;
   unsigned rpc = 0;
+  deque<peer_t*> tasks;
 
 
   // store caller id and ip
@@ -206,7 +215,8 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
   // we can't do anything but return ourselves
   if(!results->size()) {
     KDEBUG(2) << "do_lookup: my tree is empty; returning myself." << endl;
-    lresult->results.push_back(_me);
+    KDEBUG(2) << "_me = " << Kademlia::printbits(_me->id) << endl;
+    results->push_back(_me);
     goto done;
   }
 
@@ -214,12 +224,18 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
   for(vector<peer_t*>::const_iterator i=results->begin(); i != results->end(); ++i) {
     KDEBUG(2) << "do_lookup: results entry id = " << printbits((*i)->id) << ", ip = " << (*i)->ip << endl;
     asked[(*i)->id] = false;
+    tasks.push_back(*i);
   }
 
   // issue new RPCs
   while(true) {
     // find the first that we haven't asked yet.
     peer_t *toask = 0;
+    if(tasks.size()) {
+      toask = tasks.front();
+      tasks.pop_front();
+    }
+    /*
     assert(toask == 0);
     for(vector<peer_t*>::const_iterator i=results->begin(); i != results->end(); ++i) {
       KDEBUG(2) << "do_lookup: considering for asyncRPC id = " << printbits((*i)->id) << ", ip = " << (*i)->ip << endl;
@@ -230,6 +246,7 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
       }
       KDEBUG(2) << "do_lookup: already considered" << endl;
     }
+    */
 
     // we're done.
     if(!toask && !outstanding)
@@ -241,11 +258,9 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
       la = New lookup_args(_id, ip(), largs->id);
       lr = New lookup_result;
       assert(la && lr);
-      KDEBUG(2) << "do_lookup: going into asyncRPC" << endl;
       assert(toask);
       assert(toask->ip <= 512 && toask->ip > 0);
       rpc = asyncRPC(toask->ip, &Kademlia::find_node, la, lr);
-      KDEBUG(2) << "do_lookup: returning from asyncRPC" << endl;
       assert(rpc);
       rpcset.insert(rpc);
       resultmap[rpc] = New callinfo(toask->ip, la, lr);
@@ -288,8 +303,10 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
 
       // mark new nodes as not yet asked
       for(vector<peer_t*>::const_iterator i=results->begin(); i != results->end(); ++i)
-        if(asked.find((*i)->id) == asked.end())
+        if(asked.find((*i)->id) == asked.end()) {
           asked[(*i)->id] = false;
+          tasks.push_front(*i);
+        }
       delete ci;
     } while(select(&rpcset));
   }
@@ -300,6 +317,9 @@ done:
   KDEBUG(2) << "do_lookup: done" << endl;
   // this is the answer
   lresult->results = *results;
+  unsigned k = 0;
+  for(vector<peer_t*>::const_iterator i = lresult->results.begin(); i != lresult->results.end(); ++i)
+    KDEBUG(2) << "do_lookup reply [" << k++ << "] : " << printbits((*i)->id) << endl;
   delete results;
 
   // put the caller in the tree
@@ -395,7 +415,6 @@ void
 Kademlia::reschedule_stabilizer(void *x)
 {
   // if stabilize blah.
-  KDEBUG(1) << "reschedule_stabilizer" << endl;
   stabilize();
   delaycb(STABLE_TIMER, &Kademlia::reschedule_stabilizer, (void *) 0);
 }
@@ -722,6 +741,7 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned de
     assert(p);
     pair<set<peer_t*>::iterator, bool> b = _nodes->insert(p);
     assert(b.second);
+    // dump();
     return p;
   }
 
@@ -958,10 +978,9 @@ k_bucket::dump(string prefix, unsigned depth)
   }
 
   unsigned i = 0;
-  for(set<peer_t*>::const_iterator it = _nodes->begin(); it != _nodes->end(); ++it) {
+  for(set<peer_t*>::const_iterator it = _nodes->begin(); it != _nodes->end(); ++it)
     if(*it)
       cout << "   *** " << prefix << " [" << i++ << "] : " << Kademlia::printbits((*it)->id) << ", firstts = " << (*it)->firstts << ", lastts = " << (*it)->lastts << endl;
-  }
 }
 
 // }}}

@@ -4,7 +4,6 @@
 #include "topology.h"
 #include "protocol.h"
 #include <list>
-#include "p2psim.h"
 using namespace std;
 
 class Network : public Threaded {

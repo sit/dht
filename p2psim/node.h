@@ -4,7 +4,6 @@
 #include "threaded.h"
 #include "rpchandle.h"
 #include "p2psim_hashmap.h"
-#include "p2psim.h"
 
 class Protocol;
 

@@ -3,7 +3,6 @@
 
 
 #include "p2psim_hashmap.h"
-#include <string>
 using namespace std;
 
 // arguments
