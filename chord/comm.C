@@ -47,6 +47,42 @@
 
 ihash<str, rpcstats, &rpcstats::key, &rpcstats::h_link> rpc_stats_tab;
 
+static inline rpcstats *
+getstats (const rpc_program &prog, int procno)
+{
+  const rpcgen_table *rtp;
+  rtp = &prog.tbl[procno];
+  assert (rtp);
+  str key = strbuf ("%s:%s", prog.name, rtp->name);
+  rpcstats *stats = rpc_stats_tab[key];
+  if (!stats) {
+    stats = New rpcstats (key);
+    rpc_stats_tab.insert (stats);
+  }
+  return stats;
+}
+
+void
+track_call (const rpc_program &prog, int procno, size_t b)
+{
+  rpcstats *stats = getstats (prog, procno);
+  stats->call (b);
+}
+
+void
+track_rexmit (const rpc_program &prog, int procno, size_t b)
+{
+  rpcstats *stats = getstats (prog, procno);
+  stats->rexmit (b);
+}
+
+void
+track_reply (const rpc_program &prog, int procno, size_t b)
+{
+  rpcstats *stats = getstats (prog, procno);
+  stats->reply (b);
+}
+
 
 const int CHORD_RPC_STP (0);
 const int CHORD_RPC_SFSU (1);

@@ -15,6 +15,7 @@ void lsdctl_trace (int argc, char *argv[]);
 void lsdctl_stabilize (int argc, char *argv[]);
 void lsdctl_replicate (int argc, char *argv[]);
 void lsdctl_getloctab (int argc, char *argv[]);
+void lsdctl_getrpcstats (int argc, char *argv[]);
 
 struct modevec {
   const char *name;
@@ -28,6 +29,7 @@ const modevec modes[] = {
   { "stabilize", lsdctl_stabilize, "stabilize start|stop" },
   { "replicate", lsdctl_replicate, "replicate [-r] start|stop" },
   { "loctab", lsdctl_getloctab, "loctab [vnodenum]" },
+  { "rpcstats", lsdctl_getrpcstats, "rpcstats [-r]" },
   { NULL, NULL, NULL }
 };
 
@@ -202,6 +204,69 @@ lsdctl_getloctab (int argc, char *argv[])
   out.tosuio ()->output (1);
   exit (0);
 }
+
+static int
+statcmp (const void *a, const void *b)
+{
+  return strcmp (((lsdctl_rpcstat *) a)->key.cstr (),
+		 ((lsdctl_rpcstat *) b)->key.cstr ());
+}
+void
+lsdctl_getrpcstats (int argc, char *argv[])
+{
+  int ch;
+  bool clear = false;
+  bool formatted = false;
+  while ((ch = getopt (argc, argv, "rf")) != -1)
+    switch (ch) {
+    case 'r':
+      clear = true;
+      break;
+    case 'f':
+      formatted = true;
+      break;
+    default:
+      usage ();
+      break;
+    }
+
+  ptr<lsdctl_rpcstatlist> nl = New refcounted <lsdctl_rpcstatlist> ();
+  ptr<aclnt> c = lsdctl_connect (control_socket);
+
+  clnt_stat err = c->scall (LSDCTL_GETRPCSTATS, &clear, nl);
+  if (err)
+    fatal << "lsdctl_rpcstats: " << err << "\n";
+  strbuf out;
+  if (formatted)
+    out.fmt ("%54s | %-15s | %-15s | %-15s\n",
+	     "Proc", "Calls (bytes/#)", "Rexmits", "Replies");
+  
+  lsdctl_rpcstat *ndx = New lsdctl_rpcstat[nl->stats.size ()];
+  for (size_t i = 0; i < nl->stats.size (); i++)
+    ndx[i] = nl->stats[i];
+  qsort (ndx, nl->stats.size (), sizeof (lsdctl_rpcstat), &statcmp);
+
+  str fmt;
+  if (formatted)
+    fmt = "%-54s | %7llu %7llu | %7llu %7llu | %7llu %7llu\n";
+  else
+    fmt = "%s %llu %llu %llu %llu %llu %llu\n";
+  for (size_t i = 0; i < nl->stats.size (); i++) {
+    out.fmt (fmt,
+	     ndx[i].key.cstr (),
+	     ndx[i].call_bytes,
+	     ndx[i].ncall,
+	     ndx[i].rexmit_bytes,
+	     ndx[i].nrexmit,
+	     ndx[i].reply_bytes,
+	     ndx[i].nreply);
+  }
+  delete[] ndx;
+  make_sync (1);
+  out.tosuio ()->output (1);
+  exit (0);
+}
+
 
 int
 main (int argc, char *argv[])

@@ -23,6 +23,20 @@ struct lsdctl_nodeinfolist {
   lsdctl_nodeinfo nlist<>;
 };
 
+struct lsdctl_rpcstat {
+  str key;
+  u_int64_t ncall;
+  u_int64_t call_bytes;
+  u_int64_t nrexmit;
+  u_int64_t rexmit_bytes;
+  u_int64_t nreply;
+  u_int64_t reply_bytes;
+};
+
+struct lsdctl_rpcstatlist {
+  lsdctl_rpcstat stats<>;
+};
+
 program LSDCTL_PROG {
 	version LSDCTL_VERSION {
 		void
@@ -50,5 +64,9 @@ program LSDCTL_PROG {
 		LSDCTL_GETLOCTABLE (int) = 5;
 		/** Return location table for given vnode.
 		 *  This is often the same, regardless of vnode. */
+
+		lsdctl_rpcstatlist
+		LSDCTL_GETRPCSTATS (bool) = 6;
+		/** Get list and optionally clear (if true) existing stats */
 	} = 1;
 } = 344500;

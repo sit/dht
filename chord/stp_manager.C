@@ -526,8 +526,12 @@ void stp_manager::stats ()
   rpcstats *s = rpc_stats_tab.first ();
   while (s) {
     warnx << "  " << s->key << "\n";
-    warnx << "    bytes: " << s->bytes << "\n";
-    warnx << "    calls: " << s->calls << "\n";
+    warnx << "    calls (bytes/num):   " << s->call_bytes
+	  << "/" << s->ncall << "\n";
+    warnx << "    rexmits (bytes/num): " << s->rexmit_bytes
+	  << "/" << s->nrexmit << "\n";
+    warnx << "    replies (bytes/num): " << s->reply_bytes
+	  << "/" << s->nreply << "\n";
     s = rpc_stats_tab.next (s);
   }
 }
@@ -567,24 +571,8 @@ rpccb_chord::alloc (ptr<aclnt> c,
   }
 
   // per program/proc RPC stats
-  str key;
-  const rpcgen_table *rtp;
-  rtp = &prog.tbl[procno];
-  assert (rtp);
-  key = strbuf ("%s:%s", prog.name, rtp->name);
-
-  //  str key = strbuf () << prog.progno << ":" << procno;
-  rpcstats *stats = rpc_stats_tab[key];
-  if (!stats) {
-    stats = New rpcstats ();
-    stats->key = key;
-    stats->calls = 0;
-    stats->bytes = 0;
-    rpc_stats_tab.insert (stats);
-  }
   suio *s = x.uio ();
-  stats->bytes += s->resid ();
-  stats->calls++;
+  track_call (prog, procno, s->resid ());
   outbytes += s->resid ();
   
   ptr<bool> deleted  = New refcounted<bool> (false);
@@ -611,7 +599,7 @@ rpccb_chord::send (long _sec, long _nsec)
   nsec = _nsec;
 
   if (nsec < 0 || sec < 0)
-    panic ("[send to cates@mit.edu]: sec %ld, nsec %ld\n", sec, nsec);
+    panic ("[send to chord-dev@amsterdam.lcs.mit.edu]: sec %ld, nsec %ld\n", sec, nsec);
 
   tmo = delaycb (sec, nsec, wrap (this, &rpccb_chord::timeout_cb, deleted));
   //  warn ("%s xmited %d:%06d\n", gettime().cstr(), int (sec), int (nsec/1000));
@@ -690,6 +678,7 @@ rpccb_chord::timeout_cb (ptr<bool> del)
 			      in)) {
       fatal << "error remarshalling\n";
     }
+    track_rexmit (prog, procno, x.uio()->resid ());
 
     //keep our old xid 
     assert (x.iov ()[0].iov_len >= 4);

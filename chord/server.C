@@ -388,11 +388,7 @@ user_args::reply (void *res)
   if (res_len > 0)
     marshalled_res = suio_flatten (x.uio ());
 
-
-#ifdef RPC_PROGRAM_STATS
-  prog->outreply_num[procno] += 1;
-  prog->outreply_bytes[procno] += res_len;
-#endif
+  track_reply (*prog, procno, res_len);
 
   //stuff into a transport wrapper
   dorpc_res *rpc_res = New dorpc_res (DORPC_OK);
@@ -584,6 +580,8 @@ vnode_impl::doRPC (ref<location> l, const rpc_program &prog, int procno,
     memcpy (arg->args.base (), marshalled_args, args_len);
     xfree (marshalled_args);
 
+    // This is the real call; cf transport tracking in stp_manager.
+    track_call (prog, procno, args_len);
 
     ref<dorpc_res> res = New refcounted<dorpc_res> (DORPC_OK);
     xdrproc_t outproc = prog.tbl[procno].xdr_res;

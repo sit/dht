@@ -26,6 +26,7 @@
 #include <misc_utils.h>
 #include <configurator.h>
 
+#include <comm.h>
 #include "chord.h"
 #include "dhash.h"
 #include "dhashgateway.h"
@@ -203,6 +204,40 @@ lsdctl_dispatch (ptr<asrv> s, svccb *sbp)
       sbp->reply (nl);
     }
     break;
+  case LSDCTL_GETRPCSTATS:
+    {
+      bool *clear = sbp->template getarg<bool> ();
+      
+      ptr<lsdctl_rpcstatlist> sl = New refcounted<lsdctl_rpcstatlist> ();
+      sl->stats.setsize (rpc_stats_tab.size ());
+
+      rpcstats *s = rpc_stats_tab.first ();
+      int i = 0;
+      while (s) {
+	sl->stats[i].key          = s->key;
+	sl->stats[i].ncall        = s->ncall;
+	sl->stats[i].nrexmit      = s->nrexmit;
+	sl->stats[i].nreply       = s->nreply;
+	sl->stats[i].call_bytes   = s->call_bytes;
+	sl->stats[i].rexmit_bytes = s->rexmit_bytes;
+	sl->stats[i].reply_bytes  = s->reply_bytes;
+	s = rpc_stats_tab.next (s);
+	i++;
+      }
+      if (*clear) {
+	s = rpc_stats_tab.first ();
+	while (s) {
+	  rpcstats *t = rpc_stats_tab.next (s);
+	  rpc_stats_tab.remove (s);
+	  delete s;
+	  s = t;
+	}
+	rpc_stats_tab.clear ();
+      }
+	
+      sbp->reply (sl);
+    }
+    break;
   default:
     sbp->reject (PROC_UNAVAIL);
     break;
@@ -319,147 +354,10 @@ toggle_profiling ()
 }
 #endif
 
-void 
-clear_stats (const rpc_program &prog)
-{
-#ifdef RPC_PROGRAM_STATS
-  bzero (prog.outcall_num, sizeof (prog.outcall_num));
-  bzero (prog.outcall_bytes, sizeof (prog.outcall_bytes));
-  bzero (prog.outcall_numrex, sizeof (prog.outcall_numrex));
-  bzero (prog.outcall_bytesrex, sizeof (prog.outcall_bytesrex));
-  bzero (prog.outreply_num, sizeof (prog.outreply_num));
-  bzero (prog.outreply_bytes, sizeof (prog.outreply_bytes));
-#endif
-}
-
-void
-dump_rpcstats (const rpc_program &prog, bool first, bool last)
-{
-  warn << "dump_rpcstats: " << (u_int)&prog << "\n";
-
-  // In arpc/rpctypes.h -- if defined
-#ifdef RPC_PROGRAM_STATS
-  static rpc_program total;
-
-  str fmt1 ("%-40s %15s %15s %15s %15s %15s %15s\n");
-  str fmt2 ("%-40s %15d %15d %15d %15d %15d %15d\n");
-
-  if (first) {
-    bzero (&total, sizeof (total));
-    warn.fmt (fmt1,
-	      "",
-	      "outcall_num","outcall_bytes",
-	      "outcall_numrex","outcall_bytesrex",
-	      "outreply_num","outreply_bytes");
-  }
-
-  rpc_program subtotal;
-  bzero (&subtotal, sizeof (subtotal));
-  for (size_t procno = 0; procno < prog.nproc; procno++) {
-    if (strlen (prog.tbl[procno].name) == 1)
-      continue;
-
-    warn.fmt (fmt2,
-	      prog.tbl[procno].name,
-	      prog.outcall_num[procno],
-	      prog.outcall_bytes[procno],
-	      prog.outcall_numrex[procno],
-	      prog.outcall_bytesrex[procno],
-	      prog.outreply_num[procno],
-	      prog.outreply_bytes[procno]);
-    
-    subtotal.outcall_num[0] += prog.outcall_num[procno];
-    subtotal.outcall_bytes[0] += prog.outcall_bytes[procno];
-    subtotal.outcall_numrex[0] += prog.outcall_numrex[procno];
-    subtotal.outcall_bytesrex[0] += prog.outcall_bytesrex[procno];
-    subtotal.outreply_num[0] += prog.outreply_num[procno];
-    subtotal.outreply_bytes[0] += prog.outreply_bytes[procno];
-  }
-  
-  str tmp = strbuf () << "SUMMARY " << prog.name;
-  warn.fmt (fmt2,
-	    tmp.cstr (),
-	    subtotal.outcall_num[0],
-	    subtotal.outcall_bytes[0],
-	    subtotal.outcall_numrex[0],
-	    subtotal.outcall_bytesrex[0],
-	    subtotal.outreply_num[0],
-	    subtotal.outreply_bytes[0]);
-
-  warn << "TOTAL " << prog.name << "  out*_num "
-       << subtotal.outcall_num[0]
-          + subtotal.outcall_numrex[0] + subtotal.outreply_num[0]
-       << " out*_bytes " 
-       << subtotal.outcall_bytes[0]
-          + subtotal.outcall_bytesrex[0] + subtotal.outreply_bytes[0]
-       << "\n";
-
-  warn << "\n";
-
-  total.outcall_num[0] += subtotal.outcall_num[0];
-  total.outcall_bytes[0] += subtotal.outcall_bytes[0];
-  total.outcall_numrex[0] += subtotal.outcall_numrex[0];
-  total.outcall_bytesrex[0] += subtotal.outcall_bytesrex[0];
-  total.outreply_num[0] += subtotal.outreply_num[0];
-  total.outreply_bytes[0] += subtotal.outreply_bytes[0];
-  
-  if (last) {
-    warn.fmt (fmt2,
-	      "SUMMARY all protocols",
-	      total.outcall_num[0],
-	      total.outcall_bytes[0],
-	      total.outcall_numrex[0],
-	      total.outcall_bytesrex[0],
-	      total.outreply_num[0],
-	      total.outreply_bytes[0]);
-
-    warn << "TOTAL all protocols      out*_num " 
-	 << total.outcall_num[0]
-	    + total.outcall_numrex[0] + total.outreply_num[0]
-	 << " out*_bytes " 
-	 << total.outcall_bytes[0]
-	    + total.outcall_bytesrex[0] + total.outreply_bytes[0]
-	 << "\n";
-  }
-
-#endif
-}
-
-
-
-void
-bandwidth ()
-{
-  warn << gettime () << " bandwidth\n";
-
-  static bool first_call = true;
-  extern const rpc_program chord_program_1;
-  extern const rpc_program merklesync_program_1;
-  extern const rpc_program dhash_program_1;
-
-  if (!first_call) {
-    // don't dump on the first call, because stats
-    // have not been cleared yet.
-    dump_rpcstats (chord_program_1, true, false);
-    dump_rpcstats (dhash_program_1, false, false);
-    dump_rpcstats (merklesync_program_1, false, true);
-  }
-
-  clear_stats (chord_program_1);
-  clear_stats (dhash_program_1);
-  clear_stats (merklesync_program_1);
-
-  warn << gettime () << " bandwidth delaycb\n";
-  delaycb (1, 0, wrap (bandwidth));
-  first_call = false;
-}
-
-
 void
 stats () 
 {
   warn << "STATS:\n";
-  //      bandwidth ();
   
 #ifdef PROFILING
   toggle_profiling ();
