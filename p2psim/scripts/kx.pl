@@ -9,6 +9,7 @@ my $protocol = "Kelips";
 my $nnodes = 1837; # Jinyang uses mostly 1024, also 1837
 my $diameter = 100; # diameter of Euclidean universe
 my $prefix = ""; # prefix to executable
+my $observer = 1;
 
 
 &process_args(@ARGV);
@@ -109,7 +110,7 @@ for($iters = 0; $iters < 500; $iters++){
 
     open(EF, ">$ef");
     print EF "generator ChurnEventGenerator proto=$protocol ipkeys=1 lifemean=$lifemean deathmean=$deathmean lookupmean=$lookupmean exittime=$exittime\n";
-    print EF "observer $protocol" . "Observer initnodes=1\n";
+    $observer and print EF "observer $protocol" . "Observer initnodes=1\n";
     close(EF);
 
     my $bytes;
@@ -157,6 +158,7 @@ sub process_args {
     $_ = shift @args;
     if(/^-l$/ || /^--lifemean$/) { $lifemean = shift @args; next; }
     if(/^-d$/ || /^--deathmean$/){ $deathmean = shift @args; next; }
+    if(/^-o$/ || /^--observer$/) { $observer = 0; next; }
     if(/^-p$/ || /^--protocol$/) { $protocol = shift @args; next; }
     if(/^-n$/ || /^--nnodes$/)   { $nnodes = shift @args; next; }
     if(/^-x$/ || /^--prefix$/)   { $prefix = shift @args; next; }
@@ -171,6 +173,7 @@ sub usage {
 -d : deathmean
 -p : protocol
 -n : nnodes
+-o : NO observer
 -x : prefix
 EOF
 }
