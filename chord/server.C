@@ -485,7 +485,9 @@ vnode_impl::check_dead_nodes ()
         ping (l, wrap (this, &vnode_impl::check_dead_node_cb, l, backoff));
       }
       else
-	check_dead_node_cb (l, backoff, CHORD_ERRNOENT);
+	delaycb (0,
+		 wrap (this, &vnode_impl::check_dead_node_cb,
+		       l, backoff, CHORD_ERRNOENT));
     }
   }
 
