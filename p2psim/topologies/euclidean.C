@@ -100,5 +100,5 @@ Euclidean::parse(ifstream &ifs)
     send(Network::Instance()->nodechan(), &p);
   }
 
-  _med_lat = (Time) sqrt(max_first * max_first + max_second * max_second)/3;
+  _med_lat = (Time) sqrt((double) (max_first * max_first + max_second * max_second))/3;
 }

@@ -81,7 +81,7 @@ VivaldiTest::join(Args *args)
     queue_delay (_queue);
 
   if (_grid_config) {
-    int row = (int) sqrt(_total_nodes);
+    int row = (int) sqrt((double) _total_nodes);
     printf("my ip is %u\n", _ip);
     int nbr_ip;
     

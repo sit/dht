@@ -312,10 +312,10 @@ Node::print_lookup_stat_helper( vector<Time> times, vector<double> stretch,
       time_med = times[(times.size()-1)/2];
       stretch_med = stretch[(times.size()-1)/2];
     }
-    time_10 = times[((uint) times.size()*.1)];
-    stretch_10 = stretch[((uint) times.size()*.1)];
-    time_90 = times[((uint) times.size()*.9)];
-    stretch_90 = stretch[((uint) times.size()*.9)];
+    time_10 = times[(uint) (times.size()*.1)];
+    stretch_10 = stretch[(uint) (times.size()*.1)];
+    time_90 = times[(uint) (times.size()*.9)];
+    stretch_90 = stretch[(uint) (times.size()*.9)];
   }
 
   // also need the means

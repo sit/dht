@@ -16,7 +16,7 @@ VivaldiNode::VivaldiNode(IPAddress ip) : P2Protocol (ip)
   long timestep_scaled = args().nget<uint>("timestep", 5000, 10);
   _timestep = ((double)timestep_scaled)/1000000;
   _pred_err  = -1;
-  _window_size = args().nget<uint>("window-size", -1, 10);
+  _window_size = args().nget<uint>("window-size", (uint) -1, 10);
 
   // Start out at a random point
   // for (int i = 0; i < _dim; i++) 

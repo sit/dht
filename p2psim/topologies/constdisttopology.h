@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 [NAMES_GO_HERE]
+ * Copyright (c) 2003 Thomer M. Gil
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -20,58 +20,31 @@
  * LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
  * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ *
+ *
+ * example topology file:
+topology ConstDistTopology
+failure_model NullFailureModel
+
+1024 100
  */
 
-#include "topologyfactory.h"
-#include "constdisttopology.h"
-#include "euclidean.h"
-#include "e2egraph.h"
-#include "e2easymgraph.h"
-#include "e2elinkfailgraph.h"
-#include "e2etimegraph.h"
-#include "g2graph.h"
-#include "randomgraph.h"
-#include "euclideangraph.h"
-// #ifdef HAVE_SGB
-// #include "gtitm.h"
-// #endif
+#ifndef __CONST_DIST_TOPOLOGY_H
+#define __CONST_DIST_TOPOLOGY_H
 
-Topology *
-TopologyFactory::create(string s, vector<string>* v)
-{
-  Topology *t = 0;
+#include "p2psim/p2psim.h"
+#include "p2psim/topology.h"
 
-  if(s == "Euclidean")
-    t = New Euclidean(v);
+class ConstDistTopology : public Topology {
+public:
+  ConstDistTopology(vector<string>*);
+  ~ConstDistTopology();
+  
+  virtual void parse(ifstream&);
+  virtual Time latency(IPAddress, IPAddress, bool = false);
 
-  if(s == "RandomGraph")
-    t = New RandomGraph(v);
+private:
+  Time _latency;
+};
 
-  if(s == "EuclideanGraph")
-    t = New EuclideanGraph(v);
-
-  if (s == "E2EGraph")
-    t = New E2EGraph(v);
-
-  if (s == "G2Graph")
-    t = New G2Graph(v);
-
-#ifdef HAVE_SGB
-  if (s == "gtitm")
-    t = New gtitm (v);
-#endif
-
-  if (s == "E2EAsymGraph")
-    t = New E2EAsymGraph(v);
-
-  if (s == "E2ETimeGraph")
-    t = New E2ETimeGraph(v);
-
-  if (s == "E2ELinkFailGraph")
-    t = New E2ELinkFailGraph(v);
-
-  if (s == "ConstDistTopology")
-    t = New ConstDistTopology(v);
-
-  return t;
-}
+#endif //  __CONST_DIST_TOPOLOGY_H

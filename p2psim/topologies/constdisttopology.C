@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 [NAMES_GO_HERE]
+ * Copyright (c) 2003 Thomer M. Gil
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -22,56 +22,50 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "topologyfactory.h"
+#include "p2psim/network.h"
+#include "p2psim/parse.h"
+#include "p2psim/topology.h"
+#include "protocols/protocolfactory.h"
 #include "constdisttopology.h"
-#include "euclidean.h"
-#include "e2egraph.h"
-#include "e2easymgraph.h"
-#include "e2elinkfailgraph.h"
-#include "e2etimegraph.h"
-#include "g2graph.h"
-#include "randomgraph.h"
-#include "euclideangraph.h"
-// #ifdef HAVE_SGB
-// #include "gtitm.h"
-// #endif
+#include <iostream>
+using namespace std;
 
-Topology *
-TopologyFactory::create(string s, vector<string>* v)
+ConstDistTopology::ConstDistTopology(vector<string>*)
 {
-  Topology *t = 0;
+}
 
-  if(s == "Euclidean")
-    t = New Euclidean(v);
+ConstDistTopology::~ConstDistTopology()
+{
+}
 
-  if(s == "RandomGraph")
-    t = New RandomGraph(v);
+Time
+ConstDistTopology::latency(IPAddress ip1, IPAddress ip2, bool reply)
+{
+  return _latency;
+}
 
-  if(s == "EuclideanGraph")
-    t = New EuclideanGraph(v);
 
-  if (s == "E2EGraph")
-    t = New E2EGraph(v);
+void
+ConstDistTopology::parse(ifstream &ifs)
+{
+  string line;
 
-  if (s == "G2Graph")
-    t = New G2Graph(v);
+  while(getline(ifs,line)) {
+    vector<string> words = split(line);
 
-#ifdef HAVE_SGB
-  if (s == "gtitm")
-    t = New gtitm (v);
-#endif
+    // skip empty lines and commented lines
+    if(words.empty() || words[0][0] == '#')
+      continue;
 
-  if (s == "E2EAsymGraph")
-    t = New E2EAsymGraph(v);
+    // size delay
+    unsigned size = (unsigned) atoi(words[0].c_str());
+    _latency = (Time) atoi(words[1].c_str());
 
-  if (s == "E2ETimeGraph")
-    t = New E2ETimeGraph(v);
-
-  if (s == "E2ELinkFailGraph")
-    t = New E2ELinkFailGraph(v);
-
-  if (s == "ConstDistTopology")
-    t = New ConstDistTopology(v);
-
-  return t;
+    // create the nodes
+    for(unsigned ipaddr = 1; ipaddr < size; ipaddr++) {
+      Node *p = ProtocolFactory::Instance()->create((IPAddress) ipaddr);
+      send(Network::Instance()->nodechan(), &p);
+    }
+    break;
+  }
 }
