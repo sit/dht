@@ -1,0 +1,170 @@
+#!/usr/bin/perl
+
+$ps = "";
+$minx = 100000000;
+$miny = 100000000;
+$maxx = -100000000;
+$maxy = -100000000;
+
+$minx = $miny = -500000;
+$maxx = $maxy = 500000;
+
+while(<>){
+	if (/^vivaldi [0-9]+ 1 ([0-9]+) (.*)/){
+		&plotpage;
+		$ticks = $1;
+		$caption = $2;
+	}
+	next if ! /^([0-9]+) at (-?[0-9]+),(-?[0-9]+)(,ht=([0-9]+))?[^ ]* with error ([0-9.]+)/;
+	$x{$1} = $2;
+	$y{$1} = $3;
+	$ht{$1} = $5;
+	if(!$5){
+		$ht{$1} = 0;
+	}
+	$err{$1} = $6 + 0.0;
+}
+
+&header;
+print $ps;
+&trailer;
+
+sub header {
+	$minx = $miny if $miny < $minx;
+	$maxx = $maxy if $maxy > $maxx;
+
+	print <<EOF;
+%!PS-Adobe-2.0
+%%Creator: psgraph for vivaldi
+%%Pages: (atend)
+%%BoundingBox: 0 0 612 792
+%%EndComments
+%%BeginProlog
+
+/left 72 def
+/right 612 72 sub def
+/bot 72 def
+/top 612 72 sub def
+/wid right left sub def
+/ht top bot sub def
+
+0 0 0 setrgbcolor
+
+/setrange {
+	/cmax exch def
+	/cmin exch def
+	/smax exch def
+	/smin exch def
+	/cwid cmax cmin sub def
+	/cht cmax cmin sub def
+} def
+
+/plotrange {
+	1 setlinewidth
+	left top moveto
+	right top lineto
+	right bot lineto
+	left bot lineto
+	left top lineto
+	stroke
+
+	/Helvetica findfont 12 scalefont setfont
+	left bot moveto 0 -20 rmoveto
+	smin show 
+
+	right top moveto 0 20 rmoveto
+	smax show
+	0 setlinewidth
+} def
+
+/xymoveto {
+	cmin sub cht div ht mul bot add
+	exch
+	cmin sub cwid div wid mul left add
+	exch
+	moveto
+} def
+
+/sym {
+	currentpoint -2 -2 rlineto moveto
+	currentpoint 2 -2 rlineto moveto
+	currentpoint -2 2 rlineto moveto
+	currentpoint 2 2 rlineto moveto
+} def
+
+/plot {
+	/e exch def
+	/h exch def
+	/y exch def
+	/x exch def
+
+	x y xymoveto sym
+	currentpoint
+	0 h cht div ht mul rlineto
+	moveto
+	e cwid div wid mul 0 rlineto
+	stroke
+} def
+
+/ploterr {
+	/e exch def
+	div ht mul bot add right 10 add exch moveto
+	e cwid div wid mul 0 rlineto
+	stroke
+} def
+
+/plotpage {
+	/cap exch def
+	/ticks exch def
+
+	/Times-Roman findfont 15 scalefont setfont
+	left bot moveto 0 -50 rmoveto ticks show
+	left bot moveto 72 -50 rmoveto cap show
+	showpage
+} def	
+
+($minx) ($maxx) $minx $maxx setrange
+%%EndProlog
+EOF
+}
+
+sub plotpage {
+	return if ! keys %x;
+
+	$npage++;
+	$ps .= "%%Page: $npage $npage\n";
+	$ps .= "plotrange\n";
+	foreach $k (keys %x){
+		$minx = $x{$k} if $x{$k} < $minx;
+		$miny = $y{$k} if $y{$k} < $miny;
+		$maxx = $x{$k} if $x{$k} > $maxx;
+		$maxy = $y{$k} if $y{$k} > $maxy;
+	}
+
+	@errs = ();
+	foreach $k (keys %x){
+		push @errs, $err{$k};
+		$ps .= "$x{$k} $y{$k} $ht{$k} $err{$k} plot\n";
+	}
+	@errs = sort {$a <=> $b} @errs;
+	for($i=0; $i<@errs; $i++){
+		$n = @errs;
+		$ps .= "$i $n $errs[$i] ploterr\n";
+	}
+	$ps .= "($ticks) ($caption) plotpage\n";
+
+
+	%x = ();
+	%y = ();
+	%ht = ();
+	%err = ();
+}
+
+sub trailer {
+	print <<EOF;
+%%Trailer
+%%Pages: $npage
+%%EOF
+EOF
+}
+

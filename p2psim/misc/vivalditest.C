@@ -48,7 +48,7 @@ VivaldiTest::VivaldiTest(IPAddress i, Args &args)
   _total_nodes = args.nget<uint>("totalnodes", 0, 10);
   _vis = args.nget<int>("vis", 0, 10);
 
-    _ticks = 0;
+  _ticks = 0;
 }
 
 VivaldiTest::~VivaldiTest()
@@ -242,7 +242,7 @@ VivaldiTest::best_n(unsigned int n)
   return ret;
 }
 
-// Calculate this node's error: average error in distance
+// Calculate this node's error: median error in distance
 // to each other node.
 double
 VivaldiTest::error()
@@ -251,7 +251,7 @@ VivaldiTest::error()
   vector<double> a;
   int sum_sz = 0;
   VivaldiNode::Coord vc = my_location();
-  for(unsigned i = 0; i < _all.size(); i++){
+  for(uint i = 0; i < _all.size(); i++){
     VivaldiNode::Coord vc1 = _all[i]->my_location();
     double vd = dist(vc, vc1);
     double rd = 2*t->latency(this->ip(), _all[i]->ip());
@@ -262,10 +262,11 @@ VivaldiTest::error()
 
   sort (a.begin (), a.end ());
   int n = _all.size ();
-  if(n > 5){
-    return a[sum_sz / 2];
-  } else
-    return 0;
+  if(n > 5)
+    _last_error = a[sum_sz/2];
+  else
+    _last_error = 0;
+  return _last_error;
 }
 
 void
@@ -332,8 +333,7 @@ VivaldiTest::print_all_loc()
       printf ("%s%d", j ? "," : "", (int)vc._v[j]);
     if ((int)vc._ht)
       printf (",ht=%d", (int)vc._ht);
-    printf ("\n");
-    
+    printf (" with error %f\n", _all[i]->_last_error);
   }
 }
 

@@ -62,6 +62,7 @@ public:
   int _neighbors; // if > 0, fix the number of neighbors
   uint _total_nodes;
   int _vis;
+  double _last_error;
 
   uint _old_all_size;
 
