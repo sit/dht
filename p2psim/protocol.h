@@ -25,7 +25,7 @@ public:
   virtual string proto_name() = 0;
 
 protected:
-  typedef set<RPCHandle*> RPCSet;
+  typedef set<unsigned> RPCSet;
 
   IPAddress ip() { return _node->ip(); }
 
@@ -76,22 +76,33 @@ protected:
   // of the same Protocol sub-class on a different Node.
   // This one is asynchronous
   template<class BT, class AT, class RT>
-  RPCHandle* asyncRPC(IPAddress dst, void (BT::* fn)(AT *, RT *),
-               AT *args, RT *ret)
+  unsigned asyncRPC(IPAddress dst,
+      void (BT::* fn)(AT *, RT *), AT *args, RT *ret, unsigned token = 0)
   {
+    if(token)
+      assert(_rpcmap.find(token) == _rpcmap.end());
+    else
+      while(!token || _rpcmap.find(token) != _rpcmap.end())
+        token = _token++;
+
     RPCHandle *rpch = _node->asyncRPC(dst, dynamic_cast<BT*>(getpeer(dst)),
         fn, args, ret);
-    rpch->args = (void*) args;
-    rpch->ret = (void*) ret;
-    return rpch;
+    if(!rpch)
+      return 0;
+
+    _rpcmap[token] = rpch;
+    return token;
   }
 
   // returns one of the RPCHandle's for which a reply has arrived
-  RPCHandle* select(RPCSet*);
+  unsigned select(RPCSet*);
+  void cancelRPC(unsigned);
 
 
 private:
   Node *_node;
+  map<unsigned, RPCHandle*> _rpcmap;
+  unsigned _token;
 };
 
 #endif // __PROTOCOL_H

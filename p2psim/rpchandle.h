@@ -10,9 +10,6 @@ class RPCHandle { public:
   RPCHandle(Channel*, Packet*, Thing* = 0);
   ~RPCHandle();
 
-  void *args;
-  void *ret;
-
   Channel *channel() { return _c; }
   Packet *packet() { return _p; }
 

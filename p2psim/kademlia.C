@@ -70,10 +70,10 @@ Kademlia::join(Args *args)
   KDEBUG(2) << "join: lookup my id.  included ip = " << la.ip << endl;
   // doRPC(wkn, &Kademlia::do_lookup, &la, &lr);
   RPCSet *rpcset = new RPCSet;
-  rpcset->insert(asyncRPC(wkn, &Kademlia::do_lookup, &la, &lr));
-  RPCHandle* rpch = select(rpcset);
-  assert(rpch->args == &la);
-  assert(rpch->ret == &lr);
+  unsigned token = asyncRPC(wkn, &Kademlia::do_lookup, &la, &lr);
+  rpcset->insert(token);
+  unsigned ready = select(rpcset);
+  assert(ready == token);
 
   KDEBUG(2) << "join: lookup my id: node " << printID(lr.id) << endl;
 

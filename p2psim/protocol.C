@@ -17,7 +17,7 @@ using namespace std;
 #include "rpchandle.h"
 #include "p2psim.h"
 
-Protocol::Protocol(Node *n) : _node(n)
+Protocol::Protocol(Node *n) : _node(n), _token(1)
 {
 }
 
@@ -31,19 +31,20 @@ Protocol::getpeer(IPAddress a)
   return (Network::Instance()->getnode(a)->getproto(proto_name()));
 }
 
-RPCHandle*
-Protocol::select(set<RPCHandle*> *hset)
+unsigned
+Protocol::select(RPCSet *hset)
 {
   Alt a[hset->size()+1];
   Packet *p;
-  map<unsigned, RPCHandle*> xmap;
+  map<unsigned, unsigned> index2token;
 
   int i = 0;
-  for(set<RPCHandle*>::const_iterator j = hset->begin(); j != hset->end(); j++) {
-    a[i].c = (*j)->channel();
+  for(RPCSet::const_iterator j = hset->begin(); j != hset->end(); j++) {
+    assert(_rpcmap[*j]);
+    a[i].c = _rpcmap[*j]->channel();
     a[i].v = &p;
     a[i].op = CHANRCV;
-    xmap[i] = *j;
+    index2token[i] = *j;
     i++;
   }
   a[i].op = CHANEND;
@@ -54,7 +55,18 @@ Protocol::select(set<RPCHandle*> *hset)
   }
   assert(i <= (int) hset->size());
 
-  assert(xmap[i]);
-  hset->erase(xmap[i]);
-  return xmap[i];
+  unsigned token = index2token[i];
+  assert(token);
+  hset->erase(token);
+  cancelRPC(token);
+  return token;
+}
+
+
+void
+Protocol::cancelRPC(unsigned token)
+{
+  assert(_rpcmap.find(token) != _rpcmap.end());
+  delete _rpcmap[token];
+  _rpcmap.erase(token);
 }
