@@ -181,7 +181,7 @@ main_loop ()
     cout << "Unimplemented. Would you like to help?\n";
     break;
   case 4:
-    cout << "We are freezing your brain for whackey experiments...\n";
+    cout << "Bye !!!\n";
     exit (0);
   default:
     cout << "Invalid option\n";

@@ -130,8 +130,9 @@ avatar::to_str ()
       << "   Password: " << passwd << "\n"
       << "  Inventory: " << inventory.size () << " items.\n";
 
-  for (uint i=0; i<inventory.size (); i++)
+  for (uint i=0; i<inventory.size (); i++) {
     ret << "      item " << i << ": " << inventory[i]->get_name () << "\n";
+  }
 
   ret << "   Location: " << location->get_name () << "\n";
   return str (ret);
@@ -146,6 +147,9 @@ avatar::enter (ref<room> r)
 void 
 avatar::play ()
 {
+  //TODO: Check status if there are any incomplete ops,
+  //      like moving rooms, taking things, ...
+
   str command = read_input ();
   if (!strncasecmp (command.cstr (), "LOOK", 4))
     dhash->retrieve (location->ID (), DHASH_NOAUTH, 
@@ -285,7 +289,14 @@ avatar::done_enter_cb (dhash_stat stat, ptr<insert_info> i)
 void 
 avatar::get (str command)
 {
+  char num[100];
+  strcpy (num, command.cstr () + 4);
+  int k = atoi (num);
 
+  cout << "Getting object " << k << ".\n";
+  //location->remove (); do a set delete operation on room and if success,
+  //then add thing to inventory.
+  
 }
 
 str
@@ -293,7 +304,7 @@ avatar::read_input ()
 {
   cout << "\nType something: ";
   char input[100]; 
-  cin >> input;
+  cin.getline (input, 100);
   str command(input);
   return command;
 }

@@ -15,8 +15,8 @@ dhc::master_recon (ptr<dhc_block> kb, dhc_cb_t cb)
   if (b)
     dhcs.remove (b);
   //Erasing recon instance and restart Paxos.
-  //This is the simplest way, not to have competing Paxos instances on the
-  //same node.
+  //This is the simplest way, not to have competing Paxos instances of the
+  //same block on the same node.
 
   b = New dhc_soft (myNode, kb);
   b->status = RECON_INPROG;
@@ -170,7 +170,7 @@ dhc::recv_accept (chordID bID, dhc_cb_t cb,
       b->pstat->sent_newconfig = true;
       ptr<dhc_newconfig_arg> arg = New refcounted<dhc_newconfig_arg>;
       arg->bID = kb->id;
-      arg->mID = kb->masterID;
+      //arg->mID = kb->masterID;
       arg->data.tag.ver = kb->data->tag.ver;
       arg->data.tag.writer = kb->data->tag.writer;
       arg->data.data.setsize (kb->data->data.size ());

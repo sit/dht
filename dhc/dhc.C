@@ -431,8 +431,8 @@ dhc::recv_newblock (user_args *sbp)
   
   ptr<dhc_newconfig_arg> arg = New refcounted<dhc_newconfig_arg>;
   arg->bID = nb->bID;
-  arg->mID = 0;
-  arg->type = DHC_DHC;
+  //arg->mID = 0;
+  //arg->type = DHC_DHC;
   arg->data.tag.ver = 0;
   arg->data.tag.writer = nb->writer;
   arg->data.data.setsize (nb->value.size ());
@@ -455,7 +455,7 @@ dhc::recv_newblock (user_args *sbp)
   }
 
   l.clear ();
-
+#if 0
   if (arg->mID != 0) {
     if (dhc_debug) 
       warn << "\n\nsend newconfig to master node\n";
@@ -473,6 +473,7 @@ dhc::recv_newblock (user_args *sbp)
       exit (-1);
     }
   }
+#endif
 }
 
 void
@@ -523,12 +524,14 @@ dhc::dispatch (user_args *sbp)
   case DHCPROC_NEWBLOCK:
     recv_newblock (sbp);
     break;
+#if 0
   case DHCPROC_ASK:
     recv_ask (sbp);
     break;
   case DHCPROC_CMP:
     recv_cmp (sbp);
     break;
+#endif
   default:
     warn << "dhc:dispatch Unimplemented RPC " << sbp->procno << "\n"; 
     sbp->reject (PROC_UNAVAIL);
