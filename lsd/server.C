@@ -222,7 +222,7 @@ p2p::test_and_find_cb (sfsp2p_testandfindres *res, findpredecessor_cbstate *st, 
   warnt("CHORD: test_and_find_cb");
 
   if (err) {
-    warn("RPC error");
+    st->cb(st->nprime, st->search_path, SFSP2P_RPCFAILURE);
   } else if (res->status == SFSP2P_INRANGE) {
     st->search_path.push_back(res->inres->succ);
     updateloc (res->inres->succ, res->inres->r, st->nprime);
