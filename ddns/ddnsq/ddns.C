@@ -89,6 +89,7 @@ int
 ddns::ddnsRR2block (ptr<ddnsRR> rr, char *data, int datasize)
 {
   int datalen = 0;
+  int fieldsize = sizeof (uint32);
   
   while (rr) {
     copy2block (data, (void *) rr->dname, 
@@ -119,13 +120,27 @@ ddns::ddnsRR2block (ptr<ddnsRR> rr, char *data, int datasize)
 		  rr->rdlength, datalen, datasize);
       break;
     case SOA:
+#if 0
       warn << "soa.mname = " << rr->rdata.soa.mname << "\n";
       warn << "soa.rname = " << rr->rdata.soa.rname << "\n";
       warn << "soa.serial = " << rr->rdata.soa.serial << "\n";
       warn << "soa.refresh = " << rr->rdata.soa.refresh << "\n";
       warn << "soa.retry = " << rr->rdata.soa.retry << "\n";
+#endif
       copy2block (data, (void *) rr->rdata.soa.mname,
-		  rr->rdlength, datalen, datasize);		  
+		  strlen (rr->rdata.soa.mname) + 1, datalen, datasize);		
+      copy2block (data, (void *) rr->rdata.soa.rname,
+		  strlen (rr->rdata.soa.rname) + 1, datalen, datasize);		
+      copy2block (data, (void *) &rr->rdata.soa.serial,
+		  fieldsize, datalen, datasize);		
+      copy2block (data, (void *) &rr->rdata.soa.refresh,
+		  fieldsize, datalen, datasize);		
+      copy2block (data, (void *) &rr->rdata.soa.retry,
+		  fieldsize, datalen, datasize);		
+      copy2block (data, (void *) &rr->rdata.soa.expire,
+		  fieldsize, datalen, datasize);		
+      copy2block (data, (void *) &rr->rdata.soa.minttl,
+		  fieldsize, datalen, datasize);		
       break;
     case WKS:
       copy2block (data, (void *) &rr->rdata.wks,
@@ -229,27 +244,24 @@ void
 block2soa (soa_data *soa, char *data, int datalen)
 {
 
-#if 1
-  char *begstr, *endstr = strchr (data, '\0');
-  begstr = endstr + 1; 
-  int fieldlen = endstr - data + 1;
+  char *begstr = data;
+  char *endstr = strchr (data, '\0');
+  int fieldlen = endstr - begstr + 1;
   
   soa->mname = (char *) malloc (fieldlen);
-  memmove (soa->mname, data, fieldlen);
+  memmove (soa->mname, begstr, fieldlen);
   warn << "soa->mname = " << soa->mname << "\n";
 
-  warn << "data = " << data << "\n";
+  begstr = endstr + 1;
+  endstr = strchr (begstr, '\0');
 
-  endstr = strchr (data + fieldlen + 1, '\0');
-  warn << "data + " << fieldlen +1 << " = " << data + fieldlen + 1 << "\n";
-
-  fieldlen = endstr - (data + fieldlen);
+  fieldlen = endstr - begstr + 1;
   soa->rname = (char *) malloc (fieldlen);
-  memmove (soa->rname, data + 7, fieldlen);
+  memmove (soa->rname, begstr, fieldlen);
   warn << "soa->rname = " << soa->rname << "\n";
   
   fieldlen = sizeof (uint32);
-  begstr = endstr;
+  begstr = endstr + 1;
   memmove (&soa->serial, begstr, fieldlen);
   warn << "soa->serial = " << soa->serial << "\n";
   begstr += fieldlen;
@@ -265,13 +277,7 @@ block2soa (soa_data *soa, char *data, int datalen)
   memmove (&soa->minttl, begstr, fieldlen);
   warn << "soa->minttl = " << soa->minttl << "\n";
 
-  warn << "datalen = " << datalen << " copiedlen = " << (begstr-data)+fieldlen << "\n";
-#else
-  //streambuf *sbuf = New streambuf (); // = New iostream(data);
-  //istream datastr (sbuf->setbuf (data, datalen));
-  data >> soa->mname;
-  
-#endif
+  warn << "datalen = " << datalen << " copiedlen = " << (begstr-data)+fieldlen << "\n\n";
 }
 
 void

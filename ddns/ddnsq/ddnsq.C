@@ -44,13 +44,12 @@ fill_RR (domain_name dname, dns_type dt, dns_class cl,
     memmove (rr->rdata.soa.mname, "hello\0", 6);
     rr->rdata.soa.rname = (string) malloc (6);
     memmove (rr->rdata.soa.rname, "there\0", 6);
-    rr->rdata.soa.serial = 343;
-    rr->rdata.soa.refresh = 224;
-    rr->rdata.soa.retry = 6;
-    rr->rdata.soa.expire = 87;
-    rr->rdata.soa.minttl = 6578;
+    rr->rdata.soa.serial = 1;
+    rr->rdata.soa.refresh = 22;
+    rr->rdata.soa.retry = 333;
+    rr->rdata.soa.expire = 4444;
+    rr->rdata.soa.minttl = 55555;
     rr->rdlength = 6 + 6 + 5*sizeof (uint32);
-    warn << "mname = " << rr->rdata.soa.mname << "\n";
     break;
   default:
     break;
