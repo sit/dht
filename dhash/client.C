@@ -41,6 +41,9 @@
 #include "verify.h"
 #include "route_dhash.h"
 
+#include <modlogger.h>
+#define trace modlogger ("dhashcli")
+
 #include <chord_util.h>
 #ifdef DMALLOC
 #include <dmalloc.h>
@@ -301,93 +304,119 @@ dhashcli::dhashcli (ptr<vnode> node, dhash *dh, ptr<route_factory> r_factory,
 void
 dhashcli::retrieve2 (chordID blockID, int options, cb_ret cb)
 {
-  lookup (blockID, options,
-          wrap (this, &dhashcli::retrieve2_lookup_cb, blockID, cb));
-
+  // Only one lookup for a block should be in progress from a node
+  // at any given time.
+  rcv_state *rs = rcvs[blockID];
+  if (rs) {
+    trace << "retrieve (" << blockID << "): simultaneous retrieve!\n";
+    rs->callbacks.push_back (cb);
+  } else {
+    rs = New rcv_state (blockID);
+    rs->callbacks.push_back (cb);
+    rcvs.insert (rs);
+    lookup (blockID, options,
+	    wrap (this, &dhashcli::retrieve2_lookup_cb, blockID));
+  }
 }
 
 void
-dhashcli::retrieve2_lookup_cb (chordID blockID, cb_ret cb, 
+dhashcli::retrieve2_lookup_cb (chordID blockID, 
 			       dhash_stat status, chordID destID, route r)
 {
+  rcv_state *rs = rcvs[blockID];
+  assert (rs);
+  rs->r = r;
+  
   if (status != DHASH_OK) {
-    warn << "retrieve2_lookup_cb: failure\n";
-    (*cb) (status, NULL, r); // failure
+    trace << "retrieve (" << blockID << "): lookup failure:" << status << "\n";
+    rcvs.remove (rs);
+    rs->complete (status, NULL); // failure
+    rs = NULL;
   } else {
     assert (r.size () >= 1);
     clntnode->get_succlist (r.back (), 
-			    wrap (this, &dhashcli::retrieve2_succs_cb, blockID, cb));
+			    wrap (this, &dhashcli::retrieve2_succs_cb, blockID));
   }
 }
 
 
 void
-dhashcli::retrieve2_succs_cb (chordID blockID, cb_ret cb,
-			      vec<chord_node> succs, chordstat err)
+dhashcli::retrieve2_succs_cb (chordID blockID, vec<chord_node> succs, chordstat err)
 {
-  if (err)
-    (*cb) (DHASH_CHORDERR, NULL, route ());
-  else {
-    rcv_state *rs = New rcv_state (blockID);
-    rs->callbacks.push_back (cb);
-    rcvs.insert (rs);
+  rcv_state *rs = rcvs[blockID];
+  assert (rs);
+  if (err) {
+    trace << "retrieve (" << blockID << "): getsucclist failure:" << err << "\n";
+    rcvs.remove (rs);
+    rs->complete (DHASH_CHORDERR, NULL); // failure
+    rs = NULL;    
+    return;
+  }
 
+  if (succs.size () < NUM_DFRAGS) {
+    trace << "retrieve (" << blockID << "): "
+	  << "insufficient number of successors returned!\n";
+    rcvs.remove (rs);
+    rs->complete (DHASH_CHORDERR, NULL); // failure
+    rs = NULL;    
+    return;
+  }
+  
+  // Copy for future reference in case we need to make more RPCs later.
+  rs->succs = succs;
+  rs->usedsuccs.zsetsize (succs.size ());
 
-    for (u_int i = 0; i < NUM_DFRAGS; i++) {
-      assert (i < succs.size ());
-
-      ref<dhash_fetchiter_res> res = New refcounted<dhash_fetchiter_res> (DHASH_OK);
-      ref<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg> ();
-
-      arg->v = succs[i].x;
-      arg->key = blockID;
-      clntnode->locations->get_node (clntnode->my_ID (), &arg->from);
-      arg->start = 0;
-      arg->len = 1024;
-      arg->cookie = 0;
-      arg->nonce = 0;
-
-      rs->incoming_rpcs += 1;
-      clntnode->doRPC (succs[i], dhash_program_1, DHASHPROC_FETCHITER,
-		       arg, res,
-		       wrap (this, &dhashcli::retrieve2_fetch_cb, blockID, cb, i, res));
-    }
+  for (u_int i = 0; i < NUM_DFRAGS; i++) {
+    ref<dhash_fetchiter_res> res = New refcounted<dhash_fetchiter_res> (DHASH_OK);
+    ref<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg> ();
+    
+    arg->v = succs[i].x;
+    arg->key = blockID;
+    clntnode->locations->get_node (clntnode->my_ID (), &arg->from);
+    arg->start = 0;
+    arg->len = 1024;
+    arg->cookie = 0;
+    arg->nonce = 0;
+    
+    rs->incoming_rpcs += 1;
+    rs->usedsuccs[i] = true;
+    clntnode->doRPC (succs[i], dhash_program_1, DHASHPROC_FETCHITER,
+		     arg, res,
+		     wrap (this, &dhashcli::retrieve2_fetch_cb, blockID, i, res));
   }
 }
 
 void
-dhashcli::retrieve2_fetch_cb (chordID blockID, cb_ret cb, u_int i,
+dhashcli::retrieve2_fetch_cb (chordID blockID, u_int i,
 			      ref<dhash_fetchiter_res> res,
 			      clnt_stat err)
 {
   // XXX collect fragments and decode block
-
-  if (rcvs[blockID])
-    rcvs[blockID]->incoming_rpcs -= 1;
-
-  if (err) {
-    warn << "fetch failed: " << blockID
-	 << " fragment " << i+1 << "/" << NUM_DFRAGS
-	 << ": RPC error" << "\n";
-    return; // XXX ???
-  } else if (res->status != DHASH_COMPLETE) {
-    warn << "fetch failed: " << blockID
-	 << " fragment " << i+1 << "/" << NUM_DFRAGS
-	 << ": " << dhasherr2str (res->status) << "\n";
-    return; // XXX ???
-  } else {
-    warn << "fetch succeeded: " << blockID
-	 << " fragment " << i+1 << "/" << NUM_DFRAGS << "\n";
-  }
-
   rcv_state *rs = rcvs[blockID];
   if (!rs) {
-    warn << "Unexpected fragment: " << blockID << "\n";
-    return; // XXX ???
+    // Here it might just be that we got a fragment back after we'd
+    // already gotten enough to reconstruct the block.
+    trace << "retrieve: unexpected fragment for " << blockID << ", discarding.\n";
+    return;
   }
 
-  bigint h = compute_hash (res->compl_res->res.base (), res->compl_res->res.size ());
-  warn << "Got frag: " << i << " " << h << "\n";
+  rs->incoming_rpcs -= 1;
+
+  if (err) {
+    warnx << "fetch failed: " << blockID
+	  << " from successor " << i+1  << ": " << err << "\n";
+    // XXX dispatch to a new successor.
+    return;
+  } else if (res->status != DHASH_COMPLETE) {
+    warnx << "fetch failed: " << blockID
+	  << "from successor " << i+1 << ": " << dhasherr2str (res->status)
+	  << "\n";
+    // XXX dispatch to a new successor.
+    return;
+  } else {
+    warnx << "fetch succeeded: " << blockID
+	  << " from successor " << i+1 << "\n";
+  }
 
   // strip off the 4 bytes header to get the fragment
   assert (res->compl_res->res.size () >= 4);
@@ -396,21 +425,18 @@ dhashcli::retrieve2_fetch_cb (chordID blockID, cb_ret cb, u_int i,
 
   if (rs->frags.size () >= NUM_DFRAGS) {
     strbuf block;
-    if (!Ida::reconstruct (rs->frags, block))
-      fatal << "Reconstruction failed, blockID " << blockID << "\n";
+    if (!Ida::reconstruct (rs->frags, block)) {
+      warnx << "Reconstruction failed, blockID " << blockID << "\n";
+      // XXX get more fragments.
+    }
 
     str tmp (block);
     ptr<dhash_block> blk = 
       New refcounted<dhash_block> (tmp.cstr (), tmp.len ());
     
-    route r; // XXX totally fake.
-
-    for (u_int i = 0; i < rs->callbacks.size (); i++)
-      (*rs->callbacks[i]) (DHASH_OK, blk, r);
-
-    assert (rs->incoming_rpcs == 0);
     rcvs.remove (rs);
-    delete rs;
+    rs->complete (DHASH_OK, blk);
+    rs = NULL;
   }
 }
 
@@ -517,11 +543,15 @@ dhashcli::insert2_succs_cb (ref<dhash_block> block, cbinsert_t cb,
     ref<u_int> out = New refcounted<u_int> (0);
     str blk (block->data, block->len);
 
-    for (u_int i = 0; i < NUM_EFRAGS; i++) {
-      if (i >= succs.size ())
-	fatal << "i " << i << ", |succs| " << succs.size ()
-	      << ", EFRAGS " << NUM_EFRAGS << "\n";
+    if (NUM_EFRAGS > succs.size ()) {
+      warn << "Not enough successors: |succs| " << succs.size ()
+	   << ", EFRAGS " << NUM_EFRAGS << "\n";
+      (*cb) (DHASH_STOREERR, 0); // XXX Not the right error code...
+      return;
+    }
 
+    for (u_int i = 0; i < NUM_EFRAGS; i++) {
+      assert (i < succs.size ());
       str frag = Ida::gen_frag (NUM_DFRAGS, blk);
 
       ref<s_dhash_insertarg> arg = New refcounted<s_dhash_insertarg> ();

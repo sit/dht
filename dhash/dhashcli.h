@@ -5,6 +5,7 @@
 #include <ihash.h>
 #include <refcnt.h>
 #include <vec.h>
+#include <bitvec.h>
 
 typedef callback<void, dhash_stat, chordID>::ref cbinsert_t;
 typedef callback<void, dhash_stat, chordID, route>::ref dhashcli_lookupcb_t;
@@ -26,9 +27,22 @@ class dhashcli {
   struct rcv_state {
     ihash_entry <rcv_state> link;
     chordID key;
+    route r;
+    
     int incoming_rpcs;
+    
+    vec<chord_node> succs;
+    bitvec usedsuccs;
+    
     vec<str> frags;
     vec<cb_ret> callbacks;
+    
+    void complete (dhash_stat s, ptr<dhash_block> b) {
+      for (u_int i = 0; i < callbacks.size (); i++)
+	(callbacks[i]) (s, b, r);
+      delete this;
+    }
+      
     rcv_state (chordID key) : key (key), incoming_rpcs (0) {}
   };
 
@@ -62,14 +76,14 @@ private:
 			 ref<u_int> out, u_int i, ref<dhash_storeres> res,
 			 clnt_stat err);
 
-  void retrieve2_lookup_cb (chordID blockID, cb_ret cb, 
+  void retrieve2_lookup_cb (chordID blockID,
 			    dhash_stat status, chordID destID, route r);
 
-  void retrieve2_succs_cb (chordID blockID, cb_ret cb,
+  void retrieve2_succs_cb (chordID blockID,
 			   vec<chord_node> succs, chordstat err);
 
 
-  void retrieve2_fetch_cb (chordID blockID, cb_ret cb, u_int i,
+  void retrieve2_fetch_cb (chordID blockID, u_int i,
 			   ref<dhash_fetchiter_res> res,
 			   clnt_stat err);
 
