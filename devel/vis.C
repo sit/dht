@@ -6,6 +6,7 @@
 #define WINX 600
 #define WINY 600
 #define PI 3.14159
+#define TIMEOUT 5
 
 /* GTK stuff */
 static GdkPixmap *pixmap = NULL;
@@ -14,23 +15,34 @@ static GtkWidget *drawing_area = NULL;
 static GdkGC *draw_gc = NULL;
 static GdkColormap *cmap = NULL;
 static GdkColor red, green, blue;
+static short interval = -1;
 
 struct f_node {
   chordID ID;
+  str host;
+  short port;
   chord_getfingers_ext_res *res;
   ihash_entry <f_node> link;
   bool draw;
 
-  f_node (chordID i, chord_getfingers_ext_res *r) : 
-    ID (i), res (r), draw (true) {};
+  f_node (chordID i, str h, short p, chord_getfingers_ext_res *r) : 
+    ID (i), host (h), port (p), res (r), draw (true) {};
   ~f_node () { delete res; };
 };
 
 void setup ();
+ptr<aclnt> get_aclnt (str host, short port);
 void get_fingers (str host, short port);
 void get_fingers (chordID ID, str host, short port);
-void get_fingers_cb (chord_getfingers_ext_res *res, chordID ID, clnt_stat err);
-void add_fingers (chordID ID, chord_getfingers_ext_res *res);
+void get_fingers_got_fingers (chordID ID, str host, short port, 
+			      chord_getfingers_ext_res *res,
+			      clnt_stat err);
+void add_fingers (chordID ID, str host, short port, chord_getfingers_ext_res *res);
+void update_fingers (f_node *n);
+void update_fingers_got_fingers (chordID ID, str host, short port, 
+				 chord_getfingers_ext_res *res,
+				 clnt_stat err);
+void update ();
 void initgraf (int argc, char **argv);
 static gint configure_event (GtkWidget *widget, GdkEventConfigure *event);
 static gint expose_event (GtkWidget *widget, GdkEventExpose *event);
@@ -41,6 +53,7 @@ static gint button_down_event (GtkWidget *widget,
 void draw_all_cb (GtkWidget *widget, gpointer data);
 void draw_none_cb (GtkWidget *widget, gpointer data);
 void quit_cb (GtkWidget *widget, gpointer data);
+void update_cb (GtkWidget *widget, gpointer data);
 void redraw();
 void draw_ring ();
 void ID_to_xy (chordID ID, int *x, int *y);
@@ -48,6 +61,7 @@ chordID xy_to_ID (int sx, int sy);
 void ID_to_string (chordID ID, char *str);
 double ID_to_angle (chordID ID);
 int main (int argc, char** argv);
+void gtk_poll ();
 
 ihash<chordID, f_node, &f_node::ID, &f_node::link, hashID> nodes;
 ptr<axprt_dgram> dgram_xprt;
@@ -61,15 +75,22 @@ setup ()
   if (!dgram_xprt) fatal << "Failed to allocate dgram xprt\n";
 }
 
-void 
-get_fingers (str host, short port) 
+void
+update () 
 {
-  chordID ID = make_chordID (host, port);
-  get_fingers (ID, host, port);
+  warn << "update\n";
+  f_node *n = nodes.first ();
+  while (n) {
+    update_fingers (n);
+    n = nodes.next (n);
+  }  
+
+  if (interval > 0)
+    delaycb (interval, 0, wrap (&update));
 }
 
-void
-get_fingers (chordID ID, str host, short port) 
+ptr<aclnt>
+get_aclnt (str host, short port)
 {
   sockaddr_in saddr;
   bzero(&saddr, sizeof(sockaddr_in));
@@ -80,29 +101,90 @@ get_fingers (chordID ID, str host, short port)
   ptr<aclnt> c = aclnt::alloc (dgram_xprt, chord_program_1, 
 			       (sockaddr *)&(saddr));
 
+  return c;
+}
+
+void
+update_fingers (f_node *nu)
+{
+  ptr<aclnt> c = get_aclnt (nu->host, nu->port);
+  if (c == NULL) 
+    fatal << "locationtable::doRPC: couldn't aclnt::alloc\n";
+  
+  chord_vnode n;
+  n.n = nu->ID;
+  chord_getfingers_ext_res *res = New chord_getfingers_ext_res ();
+  c->timedcall (TIMEOUT, CHORDPROC_GETFINGERS_EXT, &n, res,
+		wrap (&update_fingers_got_fingers, 
+		      nu->ID, nu->host, nu->port, res));
+}
+
+void
+update_fingers_got_fingers (chordID ID, str host, short port, 
+			    chord_getfingers_ext_res *res, clnt_stat err)
+{
+  if (err || res->status) {
+    warn << "(update) deleting " << ID << "\n";
+    if (nodes[ID])
+      nodes.remove (nodes[ID]);
+    return;
+  }
+
+  f_node *nu = nodes[ID];
+  delete nu->res;
+  nu->res = res;
+
+  for (unsigned int i=0; i < res->resok->fingers.size (); i++) {
+    if ( nodes[res->resok->fingers[i].x] == NULL) 
+      get_fingers (res->resok->fingers[i].x, res->resok->fingers[i].r.hostname,
+		   res->resok->fingers[i].r.port);
+  }
+}
+
+void 
+get_fingers (str host, short port) 
+{
+  chordID ID = make_chordID (host, port);
+  get_fingers (ID, host, port);
+}
+
+void
+get_fingers (chordID ID, str host, short port) 
+{
+  ptr<aclnt> c = get_aclnt (host, port);
   if (c == NULL) 
     fatal << "locationtable::doRPC: couldn't aclnt::alloc\n";
 
   chord_vnode n;
   n.n = ID;
   chord_getfingers_ext_res *res = New chord_getfingers_ext_res ();
-  clnt_stat err = c->scall (CHORDPROC_GETFINGERS_EXT, &n, res);
-
-  if (err) 
-    fatal << "getfingers failed: " << err << "\n";
-  if (res->status)
-    fatal << "getfingers failed: " << res->status << "\n";
-
-  add_fingers (ID, res);
+  c->timedcall (TIMEOUT, CHORDPROC_GETFINGERS_EXT, &n, res,
+		wrap (&get_fingers_got_fingers, 
+		      ID, host, port, res));
+  
 }
 
 void
-add_fingers (chordID ID, chord_getfingers_ext_res *res) 
+get_fingers_got_fingers (chordID ID, str host, short port, 
+			 chord_getfingers_ext_res *res,
+			 clnt_stat err) 
+{
+  if (err || res->status) {
+    warn << "get fingers failed, deleting: " << ID << "\n";
+    if (nodes[ID])
+      nodes.remove (nodes[ID]);
+    draw_ring ();
+  } else
+    add_fingers (ID, host, port, res);
+}
+
+void
+add_fingers (chordID ID, str host, short port, chord_getfingers_ext_res *res) 
 {
   if (nodes[ID]) return;
 
   warn << "added " << ID << "\n";
-  f_node *n = New f_node (ID, res);
+  f_node *n = New f_node (ID, host, port, res);
   nodes.insert (n);
   for (unsigned int i=0; i < res->resok->fingers.size (); i++) {
     if ( nodes[res->resok->fingers[i].x] == NULL) 
@@ -124,6 +206,7 @@ initgraf (int argc, char **argv)
 
   GtkWidget *draw_all = gtk_button_new_with_label ("Show All");
   GtkWidget *draw_none = gtk_button_new_with_label ("Show None");
+  GtkWidget *refresh = gtk_button_new_with_label ("Refresh");
   GtkWidget *quit = gtk_button_new_with_label ("Quit");
   GtkWidget *sep = gtk_vseparator_new ();
 
@@ -131,6 +214,7 @@ initgraf (int argc, char **argv)
   GtkWidget *vbox = gtk_vbox_new (FALSE, 0);
   gtk_box_pack_start (GTK_BOX (vbox), draw_all, TRUE, FALSE, 0);
   gtk_box_pack_start (GTK_BOX (vbox), draw_none, TRUE, FALSE, 0);
+  gtk_box_pack_start (GTK_BOX (vbox), refresh, TRUE, FALSE, 0);
   gtk_box_pack_start (GTK_BOX (vbox), quit, TRUE, FALSE, 0);
 
   GtkWidget *hbox = gtk_hbox_new (FALSE, 0);
@@ -145,6 +229,9 @@ initgraf (int argc, char **argv)
 			       NULL);
   gtk_signal_connect_object (GTK_OBJECT (draw_none), "clicked",
 			       GTK_SIGNAL_FUNC (draw_none_cb),
+			       NULL);
+  gtk_signal_connect_object (GTK_OBJECT (refresh), "clicked",
+			       GTK_SIGNAL_FUNC (update_cb),
 			       NULL);
   gtk_signal_connect_object (GTK_OBJECT (quit), "clicked",
 			       GTK_SIGNAL_FUNC (quit_cb),
@@ -170,6 +257,7 @@ initgraf (int argc, char **argv)
   gtk_widget_show (drawing_area);
   gtk_widget_show (draw_all);
   gtk_widget_show (draw_none);
+  gtk_widget_show (refresh);
   gtk_widget_show (quit);
   gtk_widget_show (sep);
   gtk_widget_show (hbox);
@@ -194,6 +282,7 @@ void
 quit_cb (GtkWidget *widget,
 	 gpointer data) {  
   gtk_main_quit ();
+  exit (0);
 }
 void 
 draw_all_cb (GtkWidget *widget,
@@ -219,7 +308,12 @@ draw_none_cb (GtkWidget *widget,
   draw_ring ();
 }
 
-
+void
+update_cb (GtkWidget *widget,
+	   gpointer data)
+{
+  update ();
+}
 
 
 gint 
@@ -397,6 +491,12 @@ redraw()
   gtk_widget_draw( drawing_area, &update_rect);
 }
 
+void 
+usage ()
+{
+  fatal << "vis [gtk options] -j <IP in dotted decimal>:<port> [-a delay]\n";
+}
+
 int
 main (int argc, char** argv) 
 {
@@ -407,13 +507,66 @@ main (int argc, char** argv)
 
   setup ();
   initgraf (argc, argv);
+  str host = "not set";
+  short port = 0;
+  interval = -1;
+  
+  int ch;
+  while ((ch = getopt (argc, argv, "j:a:")) != -1) {
+    switch (ch) {
+    case 'j': 
+      {
+	char *bs_port = strchr(optarg, ':');
+	if (!bs_port) usage ();
+	*bs_port = 0;
+	bs_port++;
+	if (inet_addr (optarg) == INADDR_NONE) {
+	  //yep, this blocks
+	  struct hostent *h = gethostbyname (optarg);
+	  if (!h) {
+	    warn << "Invalid address or hostname: " << optarg << "\n";
+	    usage ();
+	  }
+	  struct in_addr *ptr = (struct in_addr *)h->h_addr;
+	  host = inet_ntoa (*ptr);
+	} else
+	  host = optarg;
 
-  if (argc != 3) 
-    fatal << "vis [gtk options] <IP in dotted decimal> <port>\n";
+	port = atoi (bs_port);
+	
+	break;
+      }
+  case 'a':
+    {
+      interval = atoi (optarg);
+    }
+    break;
+  default:
+    usage ();
+    }
+  };
 
-  get_fingers (argv[1], atoi (argv[2]));
+  if (host == "not set")
+    usage ();
 
-  gtk_main ();
-  gtk_exit (0);
+  get_fingers (host, port);
+
+  if (interval > 0) {
+    warn << "enabling auto-update at " << interval << " second intervals\n";
+    delaycb (interval, 0, wrap (&update));
+  }
+ 
+  gtk_poll ();
+  amain ();
 }
 
+void
+gtk_poll () 
+{
+  if (gtk_main_iteration_do (false)) {
+    //    gtk_exit (0);
+    //exit (0);
+  }
+  
+  delaycb (0, 5000000, wrap (&gtk_poll));
+}
