@@ -1,7 +1,13 @@
-#!/usr//bin/perl
+#!/usr/bin/perl -w
 
+my $USAGE = "Usage: $0 #-expected-vnodes logfile [logfiles ...]";
 my @ids;
 my $nv = 0;
+
+die "$USAGE\n" if scalar @ARGV < 2;
+
+my $expected = shift;
+die "$USAGE\n#-expected-vnodes must be numeric.\n" unless $expected =~ /^\d+$/;
 
 for $i (0 .. $#ARGV) {
    dofile ($ARGV[$i], $i);
@@ -9,10 +15,13 @@ for $i (0 .. $#ARGV) {
 
 @ids = sort { $a->[1] <=> $b->[1] } @ids;
 
-print "ids: $#ids+1\n";
+print "ids: ", scalar @ids, "\n";
+if (scalar @ids != $expected) {
+  warn "Expected ", $expected, " vnodes; got ", scalar @ids, "\n";
+}
 
 for ($i = 0; $i <= $#ids; $i++) {
- printf ("%d %.7f %s\n", $ids[$i]->[0], $ids[$i]->[1], $ids[$i]->[2]);
+  printf ("%d %16.7f %40s\n", $ids[$i]->[0], $ids[$i]->[1], $ids[$i]->[2]);
 }
 
 my $s = 0;
@@ -24,8 +33,12 @@ for $i (0 .. $#ARGV) {
    }
    print "$ARGV[$i]: stable\n";
 }
-print "stable $#ARGV\n";
-exit(17);
+print "stable ", scalar @ARGV, "\n";
+if (scalar @ids != $expected) {
+  exit(1);
+} else {
+  exit(17);
+}
 
 
 sub findindex {

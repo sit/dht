@@ -65,6 +65,7 @@ push @CONFS, $conf;
 
 # Start up the rest of the nodes.
 while ($i < $n) {
+  sleep 5; # allow some time for each subsequent lsd to startup
   $conf++; # automagic incrementor!
   $i++;
   # use a random port, to encourage interesting results.
@@ -72,14 +73,23 @@ while ($i < $n) {
   push @CONFS, $conf;
 }
 
+{
+  my @pids = $harness->pids ();
+  die "Expected $n lsd's, not ", @pids, ". Exiting.\n"
+   if ($n != scalar @pids);
+}
+
 # wait stable
 print "Waiting for nodes to go stable...\n";
 my $waitcount = 0;
 while (1) {
     sleep 20;
-    kill SIGUSR1, $harness->pids (); # what stat.pl does
+    my $hit = kill SIGUSR1, $harness->pids (); # what stat.pl does
+    die "Only signalled $hit of $n processes!\n" if ($hit != $n);
+
     sleep 10;
-    my $s = system ("$SRC/stable.pl $r/lsd-*/log"); # yeah, shell globbing.
+    my $t = $n * $v; # total expected vnodes
+    my $s = system ("$SRC/stable.pl $t $r/lsd-*/log"); # yeah, shell globbing.
     if ((($s >> 8) & 0xFF) == 17) {
 	last;
     }

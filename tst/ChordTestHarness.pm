@@ -54,9 +54,9 @@ sub spawnlsd {
     push @args, @_ if @_;
     # xxx save arguments?
 
-    print "RUNNING: lsd @args\n";
     if (my $pid = fork ()) {
 	# parent
+        print "RUNNING conf $conf ($pid): lsd @args\n";
 	$self->{confs}->{$conf} = $pid; # for caller
 	$self->{pids}->{$pid} = $conf;  # for us
 	return $pid;
@@ -77,13 +77,22 @@ sub spawnlsd {
 
 sub reaplsds {
     my $self = shift;
-    return unless scalar keys %{$self->{pids}}; # anything to reap?
-    kill SIGHUP, $self->pids (); # encourage graceful exit
+    my $n = scalar keys %{$self->{pids}};
+    return unless $n; # anything to reap?
+    my $hit = kill SIGHUP, $self->pids (); # encourage graceful exit
+    warn "Apparently, only $hit of $n lsd's remaining...\n" unless $hit == $n;
+
     my $pid = 0;
     while ($pid != -1) {
 	$pid = waitpid (-1, WNOHANG);
 	next unless $pid > 0;
-	print "Child $pid returned ", $?, "\n";
+	my $signalno = $? & 127;
+	my $coredumped = $? & 128;
+
+	print "Conf $self->{pids}->{$pid} ($pid) returned ", $? >> 8, 
+	  ($signalno   ? ", signal $signalno" : ""),
+	  ($coredumped ? ", dumped core" : ""), ".\n";
+
 	my $c =	delete $self->{pids}->{$pid};
 	die "Assert: rep inv violated.\n" unless defined $c;
 	my $p = delete $self->{confs}->{$c};
