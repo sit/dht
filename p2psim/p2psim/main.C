@@ -31,6 +31,7 @@
 #include "eventgenerator.h"
 #include "network.h"
 #include <time.h>
+#include <signal.h>
 #include <iostream>
 using namespace std;
 
@@ -44,6 +45,15 @@ bool with_failure_model = true;
 
 void parse_args(int argc, char *argv[]);
 void usage();
+
+void
+handle_signal_usr1( int sig )
+{
+
+  cout << "SIGUSR1: The current time is " << EventQueue::Instance()->time() 
+       << endl;
+
+}
 
 void
 taskmain(int argc, char *argv[])
@@ -63,7 +73,8 @@ taskmain(int argc, char *argv[])
   // Put a protocol on all these nodes.
   Node::parse(protocol_file);
 
-  
+  signal( SIGUSR1, handle_signal_usr1 );
+
   // Creates a network with the appropriate underlying topology and give Network
   // a chance to eat them all.
   Topology::parse(topology_file);
