@@ -434,11 +434,14 @@ void
 dhash::block_cached_loc (ptr<s_dhash_block_arg> arg, 
 			 chordID ID, bool ok, chordstat stat)
 {
-  if (!ok || stat) fatal << "challenge of " << ID << " failed\n";
-
-  dhash_stat *res = New dhash_stat ();
-  doRPC (ID, dhash_program_1, DHASHPROC_BLOCK,
-	 arg, res, wrap (this, &dhash::sent_block_cb, res));  
+  if (!ok || stat) {
+    warn << "challenge of " << ID << " failed\n";
+    //just fail, the lookup will time out
+  } else {
+    dhash_stat *res = New dhash_stat ();
+    doRPC (ID, dhash_program_1, DHASHPROC_BLOCK,
+	   arg, res, wrap (this, &dhash::sent_block_cb, res));  
+  }
 }
 
 void

@@ -107,7 +107,9 @@ route_dhash::block_cb (s_dhash_block_arg *arg)
     block->lease = arg->lease;
   
   npending = 0;
-  
+  nextblock = 1;
+  numblocks = 1;
+  seqnos.push_back (0);
   //issue the RPCs to get the other chunks
   while (nread < totsz) {
     int offset = nread;
@@ -123,10 +125,14 @@ route_dhash::block_cb (s_dhash_block_arg *arg)
       arg->lease = ask_for_lease;
 
       ptr<dhash_fetchiter_res> res = New refcounted<dhash_fetchiter_res> ();
-      f->get_vnode ()->doRPC (sourceID, dhash_program_1, DHASHPROC_FETCHITER, 
-			   arg, res,
-			   wrap (mkref(this), 
-				 &route_dhash::finish_block_fetch, res));
+      long seqno = f->get_vnode ()->doRPC (sourceID, dhash_program_1, 
+					   DHASHPROC_FETCHITER, 
+					   arg, res,
+					   wrap (mkref(this), 
+						 &route_dhash::finish_block_fetch, 
+						 res, numblocks++));
+      
+      seqnos.push_back (seqno);
       nread += length;
     }
   //process the first block
@@ -159,7 +165,7 @@ route_dhash::check_finish ()
 }
 
 void 
-route_dhash::finish_block_fetch (ptr<dhash_fetchiter_res> res,
+route_dhash::finish_block_fetch (ptr<dhash_fetchiter_res> res, int blocknum,
 				 clnt_stat err)
 {
   npending--;
@@ -170,6 +176,15 @@ route_dhash::finish_block_fetch (ptr<dhash_fetchiter_res> res,
     if (ask_for_lease && block->lease > res->compl_res->lease)
       block->lease = res->compl_res->lease;
   
+    if ((blocknum > nextblock) && (numblocks - blocknum > 1)) {
+      warn << "FAST retransmit: " << xi << " chunk " << nextblock << " being retransmitted\n";
+      
+      f->get_vnode ()->resendRPC(seqnos[nextblock]);
+      //only one per fetch; finding more is too much bookkeeping
+      numblocks = 0;
+    }
+
+    nextblock++;
     add_data (res->compl_res->res.base (), res->compl_res->res.size (), 
 	      res->compl_res->offset);
   }

@@ -380,8 +380,9 @@ public:
   chordID key () {return xi;}
   ptr<dhash_block> get_block () const { return block; }
   route path ();
-
+  
  private:
+  vec<long> seqnos;
   route_iterator *chord_iterator;
   bool ask_for_lease;
   bool use_cached_succ;
@@ -396,6 +397,9 @@ public:
   timecb_t *dcb;
   bool ignore_block;
 
+  int nextblock;
+  int numblocks;
+
   void check_finish ();
   void block_cb (s_dhash_block_arg *arg);
   void hop_cb (bool done);
@@ -406,7 +410,9 @@ public:
   chordID lookup_next_hop (chordID k);
   
   void add_data (char *data, int len, int off);
-  void finish_block_fetch (ptr<dhash_fetchiter_res> res, clnt_stat err);
+  void finish_block_fetch (ptr<dhash_fetchiter_res> res, 
+			   int blocknum,
+			   clnt_stat err);
   void fail (str errstr);
   void timed_out ();
 };
@@ -430,8 +436,12 @@ private:
   void retrieve_with_source_cb (cbretrieve_t cb, dhash_stat status, 
 				ptr<dhash_block> block, route path);
   void insert_lookup_cb (chordID blockID, ref<dhash_block> block,
-			 cbinsert_t cb, dhash_stat status, chordID destID);
-
+			 cbinsert_t cb, int trial,
+			 dhash_stat status, chordID destID);
+  void insert_stored_cb (chordID blockID, ref<dhash_block> block,
+			 cbinsert_t cb, int trial,
+			 dhash_stat stat, chordID retID);
+    
  public:
   dhashcli (ptr<vnode> node, dhash *dh, ptr<route_factory> r_factory, 
 	    bool do_cache);

@@ -149,16 +149,21 @@ protected:
   
   void retry_cachedloc (chordID id, bool ok, chordstat stat) 
   {
-    if (!ok || stat) fatal << "challenge of " << id << " failed\n";
-    num_retries++;
-    if (num_retries > 5) {
-      (*cb)(DHASH_RETRY, destID);
+    if (!ok || stat) {
+      warn << "challenge of " << id << " failed\n";
+      (*cb) (DHASH_CHORDERR, destID);
       delete this;
     } else {
-      warn << "retrying(" << num_retries << "): dest was " 
-	   << destID << " now is " << predID << "\n";
-      destID = predID;
-      start ();
+      num_retries++;
+      if (num_retries > 2) {
+	(*cb)(DHASH_RETRY, destID);
+	delete this;
+      } else {
+	warn << "retrying(" << num_retries << "): dest was " 
+	     << destID << " now is " << predID << "\n";
+	destID = predID;
+	start ();
+      }
     }
   }
 public:
@@ -272,20 +277,38 @@ dhashcli::insert (chordID blockID, ref<dhash_block> block,
 {
   lookup (blockID, usecachedsucc, 
 	  wrap (this, &dhashcli::insert_lookup_cb,
-		blockID, block, cb));
+		blockID, block, cb, 0));
 }
 
 void
 dhashcli::insert_lookup_cb (chordID blockID, ref<dhash_block> block,
-			    cbinsert_t cb, dhash_stat status, chordID destID)
+			    cbinsert_t cb, int trial,
+			    dhash_stat status, chordID destID)
 {
   if (status != DHASH_OK) {
     warn << "insert_lookup_cb: failure\n";
     (*cb) (status, bigint(0)); // failure
   } else 
-    dhash_store::execute (clntnode, destID, blockID, block, false, cb);
+    dhash_store::execute (clntnode, destID, blockID, block, false, 
+			  wrap (this, &dhashcli::insert_stored_cb, 
+				blockID, block, cb, trial));
 }
 
+void
+dhashcli::insert_stored_cb (chordID blockID, ref<dhash_block> block,
+			    cbinsert_t cb, int trial,
+			    dhash_stat stat, chordID retID)
+{
+  if (stat && (trial <= 2)) {
+    //try the lookup again if we got a RETRY
+    warn << "got a RETRY failure. (" << trial << "Trying the lookup again\n";
+    lookup (blockID, false, 
+	    wrap (this, &dhashcli::insert_lookup_cb,
+		  blockID, block, cb, trial + 1));
+  } else {
+    cb (stat, retID);
+  }
+}
 //like insert, but doesn't do lookup. used by transfer_key
 void
 dhashcli::storeblock (chordID dest, chordID ID, ref<dhash_block> block, 
