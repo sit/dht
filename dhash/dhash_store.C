@@ -55,6 +55,7 @@ dhash_store::finish (ptr<dhash_storeres> res, int num, clnt_stat err)
   chord_node pred_node;
 
   if (err) {
+    // XXX set status?
     error = true;
     warn << "dhash_store failed: " << bid << ": RPC error" << "\n";
   } 
@@ -84,18 +85,19 @@ dhash_store::finish (ptr<dhash_storeres> res, int num, clnt_stat err)
     if (status == DHASH_RETRY) {
       ptr<location> pn = clntnode->locations->lookup_or_create (pred_node);
       if (!pn && !returned) {
-	(*cb) (DHASH_CHORDERR, dest->id (), false);
-	returned = true;
+        status = DHASH_CHORDERR;
+	done (false);
 	return;
       }
       num_retries++;
       if (num_retries > 2) {
 	if (!returned) {
-	  (*cb)(DHASH_RETRY, dest->id (), false);
-	  returned = true;
+	  status = DHASH_RETRY;
+	  done (false);
 	  return;
 	}
       } else {
+	assert (!returned);
 	warn << "retrying (" << num_retries << "): dest was " 
 	     << dest->id () << " now is " << pred_node.x << "\n";
 	dest = pn;
@@ -137,7 +139,11 @@ dhash_store::store (ptr<location> dest, blockID blockID, char *data,
 void 
 dhash_store::done (bool present)
 {
-  if (!returned && npending == 0) {
+  if (!returned) { 
+    if (dcb) {
+      timecb_remove (dcb);
+      dcb = NULL;
+    }
     (*cb) (status, dest->id (), present);
     returned = true;
   }
@@ -147,12 +153,11 @@ dhash_store::done (bool present)
 void 
 dhash_store::timed_out ()
 {
-  dcb = 0;
+  dcb = NULL;
   error = true;
   status = DHASH_TIMEDOUT;
-  npending = 0;
   done (false);
+  // npending might still be > 0;
+  // need to wait until all the RPCs really time out, and
+  // get collected by finish ().
 }
-
-
-

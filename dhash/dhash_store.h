@@ -48,12 +48,17 @@ protected:
   dhash_store (ptr<vnode> clntnode, ptr<location> dest, blockID bid,
                ptr<dhash_block> _block, store_status store_type, 
 	       cbclistore_t cb)
-    : dest (dest), block (_block), bid (bid), cb (cb),
+    : npending (0),
+      error (false),
+      status (DHASH_OK),
+      dest (dest), block (_block), bid (bid), cb (cb),
       ctype (_block->ctype), store_type (store_type),
-      clntnode (clntnode), num_retries (0)
+      clntnode (clntnode), num_retries (0),
+      nextblock (0),
+      numblocks (0),
+      dcb (NULL),
+      returned (false)
   {
-    returned = false;
-    dcb = NULL;
     start ();
   }
   
@@ -62,6 +67,8 @@ protected:
     if (dcb)
       timecb_remove (dcb);
     dcb = NULL;
+    block = NULL;
+    dest = NULL;
   }
 
   void done (bool present);
