@@ -55,8 +55,13 @@ locationtable::doForeignRPC_cb (frpc_state *C, rpc_program prog,
 
   if ((err) || (C->res->status)) {
     nrpcfailed++;
+    warn << "locationtable::doForeignRPC_cb rpc failed: err "
+	 << strerror(err) << " status " << C->res->status << "\n";
     chordnode->deletefingers (C->ID);
-    (C->cb)(err);
+    if (err)
+      (C->cb) (err);
+    else
+      (C->cb) (RPC_CANTSEND);
   } else {
     u_int64_t lat = getusec () - C->s;
     update_latency (C->ID, lat);
@@ -159,6 +164,7 @@ locationtable::doRPC (chordID &from, chordID &ID,
   ptr<aclnt> c = aclnt::alloc (dgram_xprt, chord_program_1, 
 			       (sockaddr *)&(l->saddr));
   if (c == NULL) {
+    warn << "locationtable::doRPC: couldn't aclnt::alloc\n";
     chordnode->deletefingers (ID);
     (cb) (RPC_CANTSEND);
     return;
@@ -385,6 +391,7 @@ locationtable::doRPCcb (chordID ID, aclnt_cb cb,  u_int64_t s,
 
   if (err) {
     nrpcfailed++;
+    warn << "locationtable::doRPCcb: failed: " << strerror(err) << "\n";
     chordnode->deletefingers (ID);
   } else {
     u_int64_t lat = getusec () - s;
