@@ -511,11 +511,17 @@ stp_manager::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
   if (err) {
     nrpcfailed++;
     C->loc->set_alive (false);
-    warn << gettime () << " RPC failure: " << err << " destined for " << C->ID << " seqno " << C->seqno << "\n";
-  } else if (res->status != DORPC_OK) {
-    warn << gettime () << " Higher-level RPC Failure " << res->status << "\n";
+    warnx << gettime () << " RPC failure: " << err << " destined for " << C->ID << " seqno " << C->seqno << "\n";
+  } else if (res->status == DORPC_MARSHALLERR) {
+    err = RPC_CANTDECODEARGS;
+    warnx << gettime () << " RPC Failure: DORPC_MARSHALLERR for " << C->ID << "\n";
+  } else if (res->status == DORPC_UNKNOWNNODE) {
+    nrpcfailed++;
+    C->loc->set_alive (false);
+    err = RPC_SYSTEMERROR;
+    warnx << gettime () << " RPC Failure: DORPC_UNKNOWNNODE for " << C->ID << "\n";
   } else {
-    
+    assert (res->status == DORPC_OK);
     u_int64_t sent_time = res->resok->send_time_echo;
     u_int64_t now = getusec ();
     // prevent overflow, caused by time reversal
