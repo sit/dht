@@ -57,6 +57,7 @@ vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
 
   predecessor.n = myID;
   predecessor.alive = true;
+  locations->increfcnt (myID);
 
   nnodes = 0;
   ngetsuccessor = 0;
