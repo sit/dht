@@ -271,7 +271,7 @@ nntp::cmd_article (str c) {
     if (msgkey != 0)
       dhash->retrieve (msgkey,
 		       wrap (this, &nntp::cmd_article_cb, deleted,
-			     false, msgkey));
+			     true, msgkey));
     else
       aio << noarticle;
   }
