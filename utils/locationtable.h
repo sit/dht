@@ -51,7 +51,8 @@ class locationtable {
   unsigned nvnodes;
 
   bool pins_updated_;
-  
+
+  void process_pin (pininfo *cpin, int num);
   void figure_pins ();
   void evict (size_t n);
   ptr<location> realinsert (ref<location> l);

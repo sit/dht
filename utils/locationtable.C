@@ -211,7 +211,32 @@ locationtable::insert (const chordID &n,
   return realinsert (loc);
 }
 
-// XXX this code currently only handles a single predecessor. NOT pred lists.
+void
+locationtable::process_pin (pininfo *cpin, int num)
+{
+  unsigned short to_pin = (num > 0) ? num : -num;
+  size_t cursz = size ();
+  locwrap *cur;
+  if (num > 0) 
+    cur = loclist.closestsucc (cpin->n_);
+  else
+    cur = loclist.closestpred (cpin->n_);
+  do {
+    if (cur->good ()) {
+      loctrace << "pinning cur " << cur->n_ << "\n";
+      cur->pinned_ = true;
+      to_pin--;
+    }
+    cursz--;
+    if (num > 0)
+      cur = next (cur);
+    else
+      cur = prev (cur);
+    // Only iterate through all locations once.
+    // And only as far as needed.
+  } while (to_pin > 0 && cursz > 0);
+}
+
 void
 locationtable::figure_pins (void)
 {
@@ -259,30 +284,12 @@ locationtable::figure_pins (void)
   // to do it too often.  A more clever technique might be to try and
   // collapse pins that appear between nodes and select the maximum
   // pinsucc_ from among those pins. 
-  size_t sz = size ();
   while (cpin) {
-    assert (cpin->pinsucc_*cpin->pinpred_ == 0); //can't pin both ways
-    if (cpin->pinsucc_ > 0 || cpin->pinpred_ > 0) {
-      unsigned short to_pin = (cpin->pinsucc_ > 0) ? 
-	cpin->pinsucc_ : cpin->pinpred_;
-      size_t cursz = sz;
-      if (cpin->pinsucc_ > 0) 
-	cur = loclist.closestsucc (cpin->n_);
-      else
-	cur = loclist.closestpred (cpin->n_);
-      do {
-	if (cur->good ()) {
-	  loctrace << "pinning cur " << cur->n_ << "\n";
-	  cur->pinned_ = true;
-	  to_pin--;
-	}
-	cursz--;
-	if (cpin->pinsucc_ > 0) cur = next (cur);
-	else cur = prev (cur);
-	// Only iterate through all locations once.
-	// And only as far as needed.
-      } while (to_pin > 0 && cursz > 0);
-    }
+    if (cpin->pinsucc_ > 0)
+      process_pin (cpin, cpin->pinsucc_);
+    if (cpin->pinpred_ > 0)
+      process_pin (cpin, -cpin->pinpred_);
+
     cpin = pinlist.next (cpin);
     if (cpin) 
       loctrace << "step pin = " << cpin->n_ << " " 
