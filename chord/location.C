@@ -405,14 +405,12 @@ locationtable::lookup_anyloc (const chordID &n, chordID *r)
 chordID
 locationtable::closestsuccloc (const chordID &x) {
   // Find the first actual successor as quickly as possible...
+  // Recall that responsibility is right inclusive, n is responsible
+  // for keys in (p, n].
   locwrap *l = locs[x];
-  if (l) {
-    l = loclist.next (l);
-    if (l == NULL)
-      l = loclist.first ();
-  } else {
+  if (!l)
     l = loclist.closestsucc (x);
-  }
+
   // ...and now narrow it down to someone who's "good".
   while (l && !l->good ()) {
     l = loclist.next (l);

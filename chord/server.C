@@ -138,7 +138,7 @@ void
 vnode::find_route (chordID &x, cbroute_t cb) 
 {
   nfindpredecessor++;
-  if (myID == lookup_closestsucc (myID)) {    // is myID the only node?
+  if (myID == lookup_closestsucc (myID + 1)) {    // is myID the only node?
     route search_path;
     cb (myID, search_path, CHORD_OK);
   } else {
@@ -270,7 +270,7 @@ void
 vnode::find_route (chordID &x, cbroute_t cb) 
 {
   nfindpredecessor++;
-  if (myID == lookup_closestsucc (myID)) {    // is myID the only node?
+  if (myID == lookup_closestsucc (myID + 1)) {    // is myID the only node?
     route search_path;
     cb (myID, search_path, CHORD_OK);
   } else {

@@ -335,7 +335,7 @@ dhash::update_replica_list ()
   chordID myID = host_node->my_ID ();
   chordID successor = myID;
   for (int i = 1; i < nreplica+1; i++) {
-    successor = host_node->locations->closestsuccloc (myID);
+    successor = host_node->locations->closestsuccloc (successor + 1);
     if (successor != myID)
       replicas.push_back (successor);
   }
@@ -373,7 +373,7 @@ dhash::check_replicas ()
   chordID myID = host_node->my_ID ();
   chordID nth = myID;
   for (unsigned int i=0; i < replicas.size (); i++) {
-    chordID nth = host_node->locations->closestsuccloc (nth);
+    chordID nth = host_node->locations->closestsuccloc (nth + 1);
     if (isReplica(nth))
       continue;
 

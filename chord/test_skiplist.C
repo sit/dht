@@ -17,6 +17,8 @@ int main (int argc, char *argv[])
 {
   skiplist<item,int,&item::key,&item::sklink> test;
 
+  // w[-1,zeroth] t[0,first] s[1,second] v[2,third]
+  
   // single item case
   item *s = New item (1, "second");
   test.insert (s);
@@ -40,8 +42,15 @@ int main (int argc, char *argv[])
   u = test.closestpred (1);
   assert (u == t);
 
-  u = test.closestsucc (0);
+  u = test.closestpred (0);
   assert (u == s);
+  
+  u = test.closestsucc (0);
+  assert (u == t);
+
+  u = test.closestsucc (1);
+  assert (u == s);
+
   
   // insert at end and before beginning
   item *v = New item (2, "third");
@@ -90,13 +99,13 @@ int main (int argc, char *argv[])
   u = test.closestsucc (-2);
   assert (u == w);
   u = test.closestsucc (-1);
-  assert (u == t);
-  u = test.closestsucc (0);
-  assert (u == s);
-  u = test.closestsucc (1);
-  assert (u == v);
-  u = test.closestsucc (2);
   assert (u == w);
+  u = test.closestsucc (0);
+  assert (u == t);
+  u = test.closestsucc (1);
+  assert (u == s);
+  u = test.closestsucc (2);
+  assert (u == v);
   u = test.closestsucc (3);
   assert (u == w);
   

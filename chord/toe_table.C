@@ -148,7 +148,7 @@ toe_table::stabilize_toes ()
     int goodnodes = locations->usablenodes () - 1;
     int numnodes = (NSUCC > goodnodes) ? goodnodes : NSUCC;
     for (int i = 1; i < numnodes; i++) {
-      ith_succ = locations->closestsuccloc (myID);
+      ith_succ = locations->closestsuccloc (myID + 1);
       add_toe (ith_succ, locations->getaddress (ith_succ), 0);
     }
   } else if (level < MAX_LEVELS) { //building table

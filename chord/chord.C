@@ -181,14 +181,14 @@ vnode::print ()
 
 
 chordID
-vnode::lookup_closestsucc (chordID &x)
+vnode::lookup_closestsucc (const chordID &x)
 {
   chordID s = locations->closestsuccloc (x);
   return s;
 }
 
 chordID
-vnode::lookup_closestpred (chordID &x)
+vnode::lookup_closestpred (const chordID &x)
 {
   chordID s = locations->closestpredloc (x);
   return s;
@@ -459,7 +459,7 @@ vnode::dogetsucclist (svccb *sbp)
   for (int i = 0; i <= curnsucc; i++) {
     res.resok->nlist[i].x = cursucc;
     res.resok->nlist[i].r = locations->getaddress (cursucc);
-    cursucc = locations->closestsuccloc (cursucc);
+    cursucc = locations->closestsuccloc (cursucc + 1);
   }
   sbp->reply (&res);
 }

@@ -13,7 +13,7 @@ succ_list::succ_list (ptr<vnode> v,
 {
   nnodes = 0;
 
-  oldsucc = myID - 1;
+  oldsucc = myID;
   stable_succlist = false;
   stable_succlist2 = false;
   nout_backoff = 0;
@@ -23,7 +23,7 @@ succ_list::succ_list (ptr<vnode> v,
 chordID 
 succ_list::succ ()
 {
-  return locations->closestsuccloc (myID);
+  return locations->closestsuccloc (myID + 1);
 }
 
 int
@@ -39,7 +39,7 @@ succ_list::print ()
 {
   chordID id = myID;
   for (int i = 0; i < num_succ (); i++) {
-    id = locations->closestsuccloc (id);
+    id = locations->closestsuccloc (id + 1);
     warnx << myID << ": succ " << i + 1 << " : " << id << "\n";
   }
 }
@@ -51,7 +51,7 @@ succ_list::estimate_nnodes ()
   chordID lastsucc = myID;
   int nsucc = num_succ ();
   for (int i = 0; i < nsucc; i++)
-    lastsucc = locations->closestsuccloc (lastsucc);
+    lastsucc = locations->closestsuccloc (lastsucc + 1);
   chordID d = diff (myID, lastsucc);
   if ((d > 0) && (nsucc > 0)) {
     chordID s = d / nsucc;
@@ -72,7 +72,7 @@ succ_list::fill_getsuccres (chord_nodelistextres *res)
   res->resok->nlist.setsize (curnsucc + 1);
   for (int i = 0; i <= curnsucc; i++) {
     locations->fill_getnodeext (res->resok->nlist[i], cursucc);
-    cursucc = locations->closestsuccloc (cursucc);
+    cursucc = locations->closestsuccloc (cursucc + 1);
   }
 }
 
@@ -120,7 +120,7 @@ succ_list::stabilize_getsucclist_cb (chordID s, vec<chord_node> nlist,
   chordID cursucc = succ ();
   for (i = 0; i < curnsucc; i++) {
     succlist.push_back (cursucc);
-    cursucc = locations->closestsuccloc (cursucc);
+    cursucc = locations->closestsuccloc (cursucc + 1);
   }
 
   i = 0; j = 0;

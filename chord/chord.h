@@ -184,8 +184,8 @@ class vnode : public virtual refcount, public stabilizable {
   void stats (void);
   void print (void);
   void stop (void);
-  chordID lookup_closestpred (chordID &x);
-  chordID lookup_closestsucc (chordID &x);
+  chordID lookup_closestpred (const chordID &x);
+  chordID lookup_closestsucc (const chordID &x);
 
   // For stabilization of the predecessor
   bool continuous_stabilizing () { return nout_continuous > 0; }

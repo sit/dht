@@ -93,8 +93,8 @@ class skiplist {
 
   // If list is empty, return NULL.
   // If list has more than one:
-  //   return first element such that t->next.key >= k
-  //   if the key is is before the head, return the last element.
+  //   return first element x such that x->next.key >= k
+  //   if the key is before the head, return the last element.
   T *closestpred (const K &k) const {
     T *x = head;
     if (x == NULL)
@@ -125,15 +125,15 @@ class skiplist {
 
   // If the list is empty, return NULL
   // If the list has more than one:
-  //   return first element x such that x->key > k
+  //   return first element x such that x->key >= k
   //   if it happens that the key is after the last element
   //   in the list, return the first element. (??)
   T *closestsucc (const K &k) const {
     if (head == NULL)
       return NULL;
-    if (cmp (k, head->*key) < 0)
+    if (cmp (k, head->*key) <= 0)
       return head;
-    if (cmp (k, tail->*key) >= 0)
+    if (cmp (k, tail->*key) > 0)
       return head;
 
     T *x = closestpred (k);
@@ -143,12 +143,8 @@ class skiplist {
       x = head;
     else
       x = (x->*field).forward[0];
-    if (x && (cmp (x->*key, k) == 0)) {
-      T *y = (x->*field).forward[0];
-      return y ? y : head;
-    } else {
-      return x;
-    }
+
+    return x;
   }
 
   
