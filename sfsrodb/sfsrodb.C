@@ -1,4 +1,4 @@
-/* $Id: sfsrodb.C,v 1.25 2002/10/16 19:16:58 benjie Exp $ */
+/* $Id: sfsrodb.C,v 1.26 2002/10/16 19:54:01 benjie Exp $ */
 
 /*
  * Copyright (C) 1999 Kevin Fu (fubob@mit.edu)
@@ -817,7 +817,7 @@ sfsrodb_main (const str root, const str keyfile)
       warn << keyfile << ": " << strerror (errno) << "\n";
       fatal ("errors!\n");
     }
-    else if (!(sk = sfscrypt.alloc_priv (key, SFS_DECRYPT))) {
+    else if (!(sk = sfscrypt.alloc_priv (key, SFS_DECRYPT | SFS_SIGN))) {
       warn << "could not decode " << keyfile << "\n";
       warn << key << "\n";
       fatal ("errors!\n");
