@@ -41,6 +41,12 @@ Euclidean::parse(ifstream &ifs)
     if(words.empty() || words[0][0] == '#')
       continue;
 
+    // nodeid, coordinates, nodetype, and at least one protocol
+    if(words.size() < 4) {
+      cerr << "provide nodeid, coordinates, nodeid, and at least one protocol per line" << endl;
+      continue;
+    }
+
     // node-id
     IPAddress ipaddr = atoi(words[0].c_str());
     if(!ipaddr)
