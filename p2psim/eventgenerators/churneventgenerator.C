@@ -59,16 +59,6 @@ ChurnEventGenerator::ChurnEventGenerator(Args *args)
     _exittime = args->nget( "exittime", 200000, 10 );
   }
 
-  _seed = args->nget( "seed", 0, 10 );
-
-  if( _seed ) {
-    srand( _seed );
-  } else {
-    time_t now = time(NULL);
-    DEBUG(1) << "using seed " << now << endl;
-    srand( now );
-  }
-
   _ipkeys = args->nget("ipkeys", 0, 10);
 
   EventQueue::Instance()->registerObserver(this);
@@ -103,7 +93,7 @@ ChurnEventGenerator::run()
     } else {
       // add one to the mod factor because typical 2^n network sizes
       // make really bad mod factors
-      jointime = (rand()%(_ips.size()+1)) + 1;
+      jointime = (random()%(_ips.size()+1)) + 1;
     }
     if( now() + jointime < _exittime ) {
       P2PEvent *e = New P2PEvent(now() + jointime, _proto, ip, "join", a);
@@ -185,7 +175,7 @@ ChurnEventGenerator::next_exponential( uint mean )
 
   assert( mean > 0 );
 
-  double x = ( (double)rand() / (double)(RAND_MAX) );
+  double x = ( (double)random() / (double)(RAND_MAX) );
   uint rt = (uint) ((-(mean*1.0))*log( 1 - x ));
   return (Time) rt;
 
