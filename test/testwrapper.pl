@@ -34,11 +34,13 @@ my %values = ();
 my @hosts = ();
 my @tests = ();
 my $CF = "config.txt";
-my $killall = 0;
+my $killall = 1;
 my $dryrun = 0;
 my $suppress = 1;
 my $quiet = 1;
 my $confsave = 0;
+my $tolog = 1;
+my $LOG = "log.txt";
 
 my $SSH = "ssh";
 my $SLEEP = "5";
@@ -46,14 +48,15 @@ my $SLEEP = "5";
 
 sub usage {
   print <<EOF;
-Usage: testwrapper.pl [-c ] [-d] [-h] [-k] [-q] [-s] [-v] CONFIG_FILE
+Usage: testwrapper.pl [-c ] [-d] [-h] [-k] [-l LOG] [-q] [-s] [-v] CONFIG_FILE
 
 -c,--confsave / +c  :  don't delete generated conf file, default off
 -d,--dryrun   / +d  :  don't really do anything
 -h,--help           :  show this help
--k,--killall  / +k  :  killall testslaves first, default off. DOESN'T WORK.
--q,--quiet    / +q  :  suppress stdout/stderr of tests, default on
--s,--suppress / +s  :  suppress stdout/stderr of running processes, default on
+-k,--killall  / +k  :  killall testslaves first, default on.
+-l,--log LOG  / +l  :  send all output to log LOG, default on
+-q,--quiet    / +q  :  suppress stdout/stderr of tests, default off
+-s,--suppress / +s  :  suppress stdout/stderr of running processes, default off
 -v,--verbose  / +v  :  blah blah blah blah blah blah blah
 EOF
 }
@@ -72,10 +75,16 @@ sub uniqueport {
   }
 }
 
+sub do_log {
+  my ($level, $str) = @_;
+  $verbose >= $level and system "echo \"$str\" >>$LOG";
+}
+
 sub main {
   &process_args(@ARGV);
   @ARGV = ();
   srand(time ^ ($$ + ($$ << 15)));
+  -f $LOG and unlink $LOG;
 
   #
   #  Read the config file
@@ -115,7 +124,7 @@ sub main {
     for(my $i = 0; $keys[$i]; $i++) {
       $keys[$i] and $n++;
       next unless $keys[$i] =~ m/\$(\w+)/;
-      exists $values{$1} or warn "undefined variable $1\n";
+      exists $values{$1} or warn "undefined variable $1";
       $keys[$i] = $values{$1};
     }
 
@@ -131,7 +140,7 @@ sub main {
                  TESLA => $teslapath,
                  SLAVE => $slavepath,
                };
-    $verbose >= 2 and print "$CF: $hostname\n";
+    &do_log(2, "$CF: $hostname");
 
     #
     # pick a random, unique port for the tesla control port and lsd port
@@ -142,13 +151,13 @@ sub main {
     push @hosts, $host;
   }
   $fh->close();
-  $verbose >= 2 and print Dumper(@hosts);
+  &do_log(2, Dumper(@hosts));
 
   #
   # well-known lsd
   #
   my $master = "$hosts[0]->{NAME}:$hosts[0]->{LSDPORT}";
-  $verbose >= 2 and print "master is $master\n";
+  &do_log(2, "master is $master");
 
   #
   # Start the lsd nodes
@@ -186,9 +195,9 @@ sub main {
   # Run the tests
   #
   foreach (@tests) {
-    $verbose >= 1 and print "running test: $_ $cf\n";
+    &do_log(1, "running test: $_ $cf");
     my $cmd = "$_ $cf";
-    $quiet and $cmd .= " >/dev/null 2>&1";
+    $quiet and $cmd .= " >>$LOG 2>&1";
     unless($dryrun) {
       print "$_ : ";
       if(system "$cmd") {
@@ -216,8 +225,9 @@ sub do_execute {
   unless($host eq "localhost" || $host =~ m/^127/) {
     $cmd = "$SSH $host $cmd";
   }
-  $suppress and $cmd .= " > /dev/null 2>&1";
-  $verbose >= 2 and print "executing: $cmd\n";
+
+  $suppress and $cmd .= " >>$LOG 2>&1";
+  &do_log(2, "executing: $cmd");
   $dryrun or system "$cmd &";
 }
 
@@ -233,6 +243,8 @@ sub process_args {
     if(/^-h/ || /^--help/)        { &usage(); exit; }
     if(/^-k/ || /^--killall/)     { $killall++; next; }
     if(/^\+k/)                    { $killall--; next; }
+    if(/^-l/ || /^--log/)         { $LOG = shift @args; $tolog++; next; }
+    if(/^\+l/)                    { $tolog--; next; }
     if(/^-q/ || /^--quiet/)       { $quiet++; next; }
     if(/^\+q/)                    { $quiet--; next; }
     if(/^-s/ || /^--suppress/)    { $suppress++; next; }
@@ -242,7 +254,7 @@ sub process_args {
     $CF = $_;
   }
 
-  $verbose >= 2 and print "config file = $CF\n";
+  &do_log(2, "config file = $CF");
 }
 
 &main();

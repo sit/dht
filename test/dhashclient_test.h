@@ -40,9 +40,9 @@ class dhashclient_test : public dhashclient { public:
   ~dhashclient_test()  {}
 
   enum rw_t {
-    READ = 0,
-    WRITE,
-    RW
+    READ = 0x01,
+    WRITE = 0x02,
+    RW = 0x04
   };
 
 
@@ -91,27 +91,36 @@ private:
         struct {
           unsigned flags;
           unsigned host;
+          unsigned port;
           unsigned perc;
         } drop;
       } iargs;
     } oargs;
-    char b[16];
+    char b[20];
   } instruct_t;
 
   class instruct_thunk { public:
-    instruct_thunk(callback<void, int>::ref cbx) : cb(cbx) {}
-    ~instruct_thunk() {}
+    instruct_thunk(callback<void, int>::ref cbx) : cb(cbx) { lockcounter = 0; }
+    ~instruct_thunk() {
+      if(lockcounter) {
+        delete lockcounter;
+        lockcounter = 0;
+      }
+    }
+
     instruct_t instruct;
     dhashclient_test *blockee;
     int fd;
     callback<void, int>::ref cb;
     ptr<hostent> h;
+    int *lockcounter; // cb is called only when cb drops to 0
   };
 
   instruct_thunk *instruct_init(unsigned cmd, callback<void, int>::ref cb);
   void instruct(instruct_thunk*);
   void instruct_cb1(instruct_thunk*, int);
   void instruct_cb2(instruct_thunk*);
+  void empty_cb(int);
 };
 
 #endif // __DHASHCLIENT_TEST

@@ -13,8 +13,11 @@ SLAVE_PATH = /home/thomer/install/bin/testslave
 # IP address (not hostname!), path to tesla, path to lsd, path to testslave
 # You can't mix localhost (127...) addresses and non-localhost addresses.
 #
-18.26.4.76 $TESLA_PATH $LSD_PATH $SLAVE_PATH
-18.26.4.9 /home/am0/thomer/install/bin/tesla /home/am0/thomer/install/bin/lsd /home/am0/thomer/install/bin/testslave
+# 18.26.4.76 $TESLA_PATH $LSD_PATH $SLAVE_PATH
+# 18.26.4.9 /home/am0/thomer/install/bin/tesla /home/am0/thomer/install/bin/lsd /home/am0/thomer/install/bin/testslave
+127.0.0.1 $TESLA_PATH $LSD_PATH $SLAVE_PATH
+127.0.0.1 $TESLA_PATH $LSD_PATH $SLAVE_PATH
+127.0.0.1 $TESLA_PATH $LSD_PATH $SLAVE_PATH
 
 # determines how long to sleep before starting the tests.
 # default is 5

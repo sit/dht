@@ -105,7 +105,7 @@ set(char *s, vec<str> *names, vec<int> *tcp)
 
 
 int droprate = 0;
-char *dropfrom = 0;
+char *blockee = 0; // or droppee
 
 
 void
@@ -120,7 +120,7 @@ start_test(int cmd, dhashclient_test::rw_t flags, testmaster *tm)
   else if(cmd & UNISOLATE)
     (*tm)[0]->unisolate(flags, wrap(&done));
   else if(cmd & DROP)
-    (*tm)[0]->drop(flags, 0, droprate, wrap(&done));
+    (*tm)[0]->drop(flags, blockee ? (*tm)[1] : 0, droprate, wrap(&done));
 }
 
 
@@ -134,7 +134,6 @@ main(int argc, char *argv[])
   vec<str> names;
   vec<int> dhp;
   vec<int> tcp;
-  char *blockee = 0;
 
 
   char ch;
@@ -157,7 +156,7 @@ main(int argc, char *argv[])
         char *c;
         if((c = strchr(optarg, ':'))) {
           *c = 0;
-          dropfrom = c+1;
+          blockee = c+1;
         }
         droprate = atoi(optarg);
         break;
@@ -211,7 +210,7 @@ main(int argc, char *argv[])
   warn << "BLOCKER host = " << names[0] << ", control_port = " << tcp[0] << "\n";
 
   // BLOCKEE
-  if(cmd & BLOCK || cmd & UNBLOCK) {
+  if(cmd & BLOCK || cmd & UNBLOCK || cmd & DROP) {
     set(blockee, &names, &tcp);
     dhp.push_back(0);
     warn << "BLOCKEE host = " << names[1] << ", control_port = " << tcp[1] << "\n";

@@ -94,7 +94,7 @@ testmaster::unixdomainsock(int i, str &p2psocket, int &fd)
 void
 testmaster::dry_setup(callback<void>::ref cb)
 {
-  DEBUG(1) << "dry_setup\n";
+  DEBUG(2) << "dry_setup\n";
   _nhosts = _slaves.size();
 
   for(unsigned i = 0; i < _slaves.size(); i++) {
@@ -111,8 +111,7 @@ void
 testmaster::dry_setup_cb(int i, str p2psocket, callback<void>::ref cb,
     ptr<hostent> h, int err)
 {
-  DEBUG(1) << "dry_setup_cb\n";
-
+  DEBUG(2) << "dry_setup_cb\n";
   if(!h)
     fatal << "dns_hostbyname " << strerror(err) << "\n";
 
@@ -130,11 +129,13 @@ testmaster::dry_setup_cb(int i, str p2psocket, callback<void>::ref cb,
 void
 testmaster::setup(callback<void>::ref cb)
 {
+  DEBUG(2) << "setup\n";
   for(unsigned i = 0; i < _slaves.size(); i++) {
     // bogus unix domain socket
     str p2psocket;
     int fd;
     unixdomainsock(i, p2psocket, fd); // by reference
+    DEBUG(2) << "created p2psock " << p2psocket << " for client " << i << "\n";
 
     // create a connection to the other side for this unix socket
     conthunk tx = { i, p2psocket, _slaves[i], fd, cb };
@@ -200,10 +201,11 @@ testmaster::accept_connection(const int unixsocket_fd, const int there_fd, bool 
 void
 testmaster::addnode_cb(conthunk tx, const int there_fd)
 {
-  DEBUG(2) << "connected to " << tx.s->name << ":" << tx.s->dhash_port << "\n";
+  DEBUG(2) << "addnode_cb for " << tx.s->name << ":" << tx.s->dhash_port << "\n";
 
   if(there_fd == -1) {
-    warn << "could not connect to " << tx.s->name << ":" << tx.s->dhash_port << "\n";
+    warn << "could not connect to " << tx.s->name << ":" << tx.s->dhash_port
+        << ", error = " << strerror(errno) << "\n";
     return;
   }
 

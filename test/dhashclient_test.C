@@ -75,10 +75,48 @@ void
 dhashclient_test::drop(rw_t flags, dhashclient_test *dht, int percentage,
     callback<void, int>::ref cb)
 {
+  printf("drop flags = %x\n", flags);
+
+  // XXX: we cannot drop packets from a specific host/port combination because
+  // we don't know the port that lsd uses to send.  what we can do, however, is
+  // tell the blockee to drop packets to us.
+  //
+  // we have to make sure, though, not to do the callback twice
+  int *n = 0;
+  if((flags & READ) && dht) {
+    warn << "cannot drop READS from specific host. doing a symmetric drop WRITE\n";
+
+    if(flags == READ) {
+      warn << "full reverse\n";
+      dht->drop(WRITE, this, percentage, cb);
+      return;
+    }
+
+    // XXX: foul hack.  do a reverse drop-call.  lockcounter has to drop to zero
+    // before we do the callback.
+    warn << "doing partial send\n";
+    instruct_thunk *tx = instruct_init(DROP, cb);
+    DROP_ARG(tx, flags) = WRITE;
+    DROP_ARG(tx, host) = _myip;
+    DROP_ARG(tx, port) = _test_dhashport;
+    DROP_ARG(tx, perc) = percentage;
+    n = New int(2);
+    tx->lockcounter = n;
+    instruct(tx);
+
+    // casting trickery for gcc
+    flags = (rw_t) (((int) flags) &= ~READ);
+  }
+
   instruct_thunk *tx = instruct_init(DROP, cb);
   DROP_ARG(tx, flags) = flags;
   DROP_ARG(tx, host) = dht ? dht->ip() : 0;
+  DROP_ARG(tx, port) = dht ? dht->dhashport() : 0;
   DROP_ARG(tx, perc) = percentage;
+  if(n) {
+    delete tx->lockcounter;
+    tx->lockcounter = n;
+  }
   instruct(tx);
 }
 
@@ -107,7 +145,10 @@ dhashclient_test::instruct_cb1(instruct_thunk *tx, int fd)
 {
   if(fd < 0) {
     warn << "tcpconnect failed\n";
+    if(tx->lockcounter)
+      *tx->lockcounter = 0;
     tx->cb(0);
+    delete tx;
     return;
   }
 
@@ -120,11 +161,17 @@ dhashclient_test::instruct_cb2(instruct_thunk *tx)
 {
   // XXX
   printf("writing cmd = %x\n", CMD_ARG(tx));
-  if(write(tx->fd, tx->instruct.b, 16) < 0) 
+  if(write(tx->fd, tx->instruct.b, 20) < 0) 
     fatal << "write\n";
 
   fdcb(tx->fd, selwrite, 0);
   close(tx->fd);
-  tx->cb(1);
-  free(tx);
+
+  // when we're not using a lockcounter, do callback.
+  // if we're using a lockcounter, only do callback when it dropped to zero
+  if(tx->lockcounter)
+    warn << "instruct_cb2, lockcounter set to " << *tx->lockcounter << "\n";
+  if(!tx->lockcounter || !(--(*tx->lockcounter)))
+    tx->cb(1);
+  delete tx;
 }
