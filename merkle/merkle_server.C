@@ -24,7 +24,8 @@ merkle_server::missing (ptr<location> n, bigint key)
 void
 merkle_server::doRPC (ptr<location> dst, RPC_delay_args *args)
 {
-  host_node->doRPC (dst, args->prog, args->procno, args->in, args->out, args->cb);
+  host_node->doRPC (dst, args->prog, args->procno, args->in, 
+		    args->out, args->cb);
 }
 
 void
@@ -43,7 +44,12 @@ merkle_server::dispatch (user_args *sbp)
       u_int lnode_depth;
       merkle_hash lnode_prefix;
       lnode = ltree->lookup (&lnode_depth, rnode->depth, rnode->prefix);
-      assert (lnode_depth == rnode->depth);
+      if (lnode_depth != rnode->depth) {
+	warn << "local depth ( " << lnode_depth 
+	     << ") is not equal to remote depth (" << rnode->depth << ")\n";
+	warn << "prefix is " << lnode_prefix << "\n";
+	fatal << "exiting\n";
+      }
       lnode_prefix = rnode->prefix;
       // XXX isn't this a NOP, given the previous assertion about equal depths 
       lnode_prefix.clear_suffix (lnode_depth);
@@ -58,7 +64,8 @@ merkle_server::dispatch (user_args *sbp)
 		     wrap (this, &merkle_server::doRPC, l));
 
       sendnode_res res (MERKLE_OK);
-      format_rpcnode (ltree, lnode_depth, lnode_prefix, lnode, &res.resok->node);
+      format_rpcnode (ltree, lnode_depth, lnode_prefix, 
+		      lnode, &res.resok->node);
       sbp->reply (&res);
       break;
     }

@@ -1,5 +1,37 @@
 #include "merkle_tree.h"
 
+merkle_tree::merkle_tree (dbfe *realdb)
+{
+  // create a temporary in-memory database
+  ptr<dbfe> fakedb = New refcounted<dbfe> ();
+  // put the memory db "under" the merkle tree
+  db = fakedb;
+
+  dbOptions opts;
+  opts.addOption("opt_cachesize", 1000);
+  opts.addOption("opt_nodesize", 4096);
+  if (int err = fakedb->opendb(NULL, opts))
+    fatal << "merkle_tree::merkle_tree opendb failed: " << strerror(err);
+
+  // populate merkle tree/mem db from realdb
+  ptr<dbEnumeration> it = realdb->enumerate ();
+  ptr<dbPair> d = it->firstElement();
+  ptr<dbrec> FAKE_DATA = New refcounted<dbrec> ("", 1);
+  for (int i = 0; d; i++, d = it->nextElement()) {
+    if (i == 0)
+      warn << "Database is not empty.  Loading into merkle tree\n";
+    warn << "key[" << i << "] " << dbrec2id (d->key) << "\n";
+    block b (to_merkle_hash (d->key), FAKE_DATA);
+    insert (0, &b, &root);
+  }
+
+  // Put the realdb under the merkle tree.  This works since it has
+  // the same keys as the in-mem db.
+  db = realdb;
+  //check_invariants ();
+}
+
+
 void
 merkle_tree::rehash (u_int depth, const merkle_hash &key, merkle_node *n)
 {
@@ -53,7 +85,6 @@ merkle_tree::count_blocks (u_int depth, const merkle_hash &key,
 void
 merkle_tree::leaf2internal (u_int depth, const merkle_hash &key, merkle_node *n) 
 {
-  ///warn << "leaf2internal >>>>>>>>>>>>>>>>>>>>>\n";
   assert (n->isleaf ());
   array<u_int64_t, 64> nblocks;
   count_blocks (depth, key, nblocks);
@@ -71,7 +102,6 @@ merkle_tree::leaf2internal (u_int depth, const merkle_hash &key, merkle_node *n)
     prefix.write_slot (depth, i);
     rehash (depth+1, prefix, child);
   }
-  ///warn << "leaf2internal <<<<<<<<<<<<<<<<<<<<<<\n";
 }
 
 
@@ -98,7 +128,6 @@ merkle_tree::remove (u_int depth, block *b, merkle_node *n)
 void
 merkle_tree::insert (u_int depth, block *b, merkle_node *n)
 {
-  ///warn << "insert, b->key " << b->key << " >>>>>>>>>>>>>>>>>>>>\n";  
   
   if (n->isleaf () && n->leaf_is_full ())
     leaf2internal (depth, b->key, n);
@@ -116,50 +145,9 @@ merkle_tree::insert (u_int depth, block *b, merkle_node *n)
   n->count += 1;
   rehash (depth, b->key, n);
   ///warn << "IH: " << n->hash << "\n";
-  ///warn << "insert, b->key " << b->key << " <<<<<<<<<<<<<<<<<<<<\n";  
 }
 
-merkle_node *
-merkle_tree::lookup (u_int *depth, u_int max_depth, const merkle_hash &key, merkle_node *n)
-{
-  // recurse down as much as possible
-  if (*depth == max_depth || n->isleaf ())
-    return n;
-  u_int32_t branch = key.read_slot (*depth);
-  *depth += 1;
-  return lookup (depth, max_depth, key, n->child (branch));
-}
 
-merkle_tree::merkle_tree (dbfe *realdb)
-{
-  // create a temporary in-memory database
-  ptr<dbfe> fakedb = New refcounted<dbfe> ();
-  // put the memory db "under" the merkle tree
-  db = fakedb;
-
-  dbOptions opts;
-  opts.addOption("opt_cachesize", 1000);
-  opts.addOption("opt_nodesize", 4096);
-  if (int err = fakedb->opendb(NULL, opts))
-    fatal << "merkle_tree::merkle_tree opendb failed: " << strerror(err);
-
-  // populate merkle tree/mem db from realdb
-  ptr<dbEnumeration> it = realdb->enumerate ();
-  ptr<dbPair> d = it->firstElement();
-  ptr<dbrec> FAKE_DATA = New refcounted<dbrec> ("", 1);
-  for (int i = 0; d; i++, d = it->nextElement()) {
-    if (i == 0)
-      warn << "Database is not empty.  Loading into merkle tree\n";
-    warn << "key[" << i << "] " << dbrec2id (d->key) << "\n";
-    block b (to_merkle_hash (d->key), FAKE_DATA);
-    insert (0, &b, &root);
-  }
-
-  // Put the realdb under the merkle tree.  This works since it has
-  // the same keys as the in-mem db.
-  db = realdb;
-  //check_invariants ();
-}
 
 void
 merkle_tree::remove (block *b)
@@ -186,6 +174,20 @@ merkle_tree::insert (block *b)
   //check_invariants ();
 }
 
+
+merkle_node *
+merkle_tree::lookup (u_int *depth, u_int max_depth, 
+		     const merkle_hash &key, merkle_node *n)
+{
+  // recurse down as much as possible
+  if (*depth == max_depth || n->isleaf ())
+    return n;
+  u_int32_t branch = key.read_slot (*depth); 
+  //the [6*depth, 6*(depth +1) bits determine which branch to follow
+  // for a given key
+  *depth += 1;
+  return lookup (depth, max_depth, key, n->child (branch));
+}
 
 // return the node a given depth matching key
 // returns NULL if no such node exists

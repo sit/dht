@@ -98,7 +98,6 @@ void
 merkle_syncer::next (void)
 {
 #ifdef MERKLE_SYNC_DETAILED_TRACE
-  warn << (u_int)this << " next >>>>>>>>>>>>>>>>>>>>>>>>>>: st.size " << st.size () << "\n";
   warn << "local range [" <<  local_rngmin << "," << local_rngmax << "]\n";
 #endif
   assert (!sync_done);
@@ -110,9 +109,15 @@ merkle_syncer::next (void)
     assert (!rnode->isleaf);
     
     merkle_node *lnode = ltree->lookup_exact (rnode->depth, rnode->prefix);
-    assert (lnode); // XXX fix this
-    assert (!lnode->isleaf ()); // XXX fix this
+
+    if (!lnode) {
+      fatal << "lookup_exact didn't match for " << rnode->prefix << " at depth " << rnode->depth << "\n";
+    }
     
+    if (lnode->isleaf ()) {
+      fatal << "lnode was a leaf\n";
+    }
+
 #ifdef MERKLE_SYNC_DETAILED_TRACE
     warn << "starting from slot " << p.second << "\n";
 #endif
@@ -173,9 +178,6 @@ merkle_syncer::next (void)
 void
 merkle_syncer::sendnode (u_int depth, const merkle_hash &prefix)
 {
-#ifdef MERKLE_SYNC_TRACE
-  warn << (u_int)this << " sendnode >>>>>>>>>>>>>>>>>>>>>>\n";
-#endif
 
   ref<sendnode_arg> arg = New refcounted<sendnode_arg> ();
   ref<sendnode_res> res = New refcounted<sendnode_res> ();
@@ -197,9 +199,7 @@ void
 merkle_syncer::sendnode_cb (ref<sendnode_arg> arg, ref<sendnode_res> res, 
 			    clnt_stat err)
 {
-#ifdef MERKLE_SYNC_TRACE
-  warn << (u_int)this << " sendnode_cb >>>>>>>>>>>>>>>>>>>>>>\n";
-#endif
+
   if (err) {
     error (strbuf () << "SENDNODE: rpc error " << err);
     return;
@@ -213,7 +213,9 @@ merkle_syncer::sendnode_cb (ref<sendnode_arg> arg, ref<sendnode_res> res,
   assert (rnode->depth == arg->node.depth); // XXX relax this
 
   merkle_node *lnode = ltree->lookup_exact (rnode->depth, rnode->prefix);
-  assert (lnode); // XXX fix this
+  if (!lnode) {
+    fatal << "lookup failed: " << rnode->prefix << " at " << rnode->depth << "\n";
+  }
   
   compare_nodes (ltree, local_rngmin, local_rngmax, lnode, rnode, missingfnc, rpcfnc);
 
@@ -315,7 +317,8 @@ compare_nodes (merkle_tree *ltree, bigint rngmin, bigint rngmax,
       merkle_hash key = rnode->child_hash[i];
       if (betweenbothincl (rngmin, rngmax, tobigint (key)))
 	if (database_lookup (ltree->db, key) == NULL) {
-	  warn << "1 [" << rngmin << "," << rngmax << "] => missing key "  << key << "\n";
+	  warn << "1 [" << rngmin << "," << rngmax << "] => missing key " 
+	       << key << "\n";
 	  (*missingfnc) (tobigint (key));
 	}
     }
