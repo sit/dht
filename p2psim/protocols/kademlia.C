@@ -42,6 +42,7 @@ unsigned Kademlia::k = 0;
 unsigned Kademlia::alpha = 0;
 unsigned Kademlia::stabilize_timer = 0;
 unsigned Kademlia::refresh_rate = 0;
+Time Kademlia::max_lookup_time = 0;
 
 long unsigned Kademlia::_rpc_bytes = 0;
 long unsigned Kademlia::_good_rpcs = 0;
@@ -50,6 +51,7 @@ long unsigned Kademlia::_ok_by_reaper = 0;
 long unsigned Kademlia::_timeouts_by_reaper = 0;
 
 long unsigned Kademlia::_good_lookups = 0;
+long unsigned Kademlia::_good_attempts = 0;
 long unsigned Kademlia::_lookup_dead_node = 0;
 long unsigned Kademlia::_ok_failures = 0;
 long unsigned Kademlia::_bad_failures = 0;
@@ -84,6 +86,7 @@ Kademlia::Kademlia(IPAddress i, Args a)
     docheckrep = strcmp(getenv("P2PSIM_CHECKREP"), "0") ? true : false;
 
   use_replacement_cache = a.nget<use_replacement_cache_t>("rcache", ENABLED, 10);
+  max_lookup_time = a.nget<Time>("maxlookuptime", 4000, 10);
 
   if(!k) {
     k = a.nget<unsigned>("k", 20, 10);
@@ -166,24 +169,25 @@ Kademlia::~Kademlia()
 #  9: number of timed out RPCs reaped by reaper\n\
 #\n\
 # 10: number of good lookups\n\
-# 11: number of good lookups, but node was dead\n\
-# 12: number of bad lookups, node was dead\n\
-# 13: number of bad lookups, node was alive\n\
+# 11: number of attempts for good lookups\n\
+# 12: number of good lookups, but node was dead\n\
+# 13: number of bad lookups, node was dead\n\
+# 14: number of bad lookups, node was alive\n\
 #\n\
-# 14: avg total lookup latency (good)\n\
-# 15: avg pure lookup latency (good)\n\
-# 16: avg pure ping latency (good)\n\
-# 17: number of timeouts suffered during lookup (good)\n\
+# 15: avg total lookup latency (good)\n\
+# 16: avg pure lookup latency (good)\n\
+# 17: avg pure ping latency (good)\n\
+# 18: number of timeouts suffered during lookup (good)\n\
 #\n\
-# 18: avg number of hops (good)\n\
-# 19: avg latency per hop (good)\n\
+# 19: avg number of hops (good)\n\
+# 20: avg latency per hop (good)\n\
 #\n\
-# 20: avg pure lookup latency (bad)\n\
-# 21: number of timeouts suffered during lookup (bad)\n\
-# 22: avg number of hops (bad)\n\
-# 23: avg latency per hop (bad)\n\
+# 21: avg pure lookup latency (bad)\n\
+# 22: number of timeouts suffered during lookup (bad)\n\
+# 23: avg number of hops (bad)\n\
+# 24: avg latency per hop (bad)\n\
 #\n\
-%u %u %u %u    %lu %lu %lu %lu %lu    %lu %lu %lu %lu    %.2f %.2f %.2f %lu    %.2f %.2f   %.2f %lu %.2f %.2f\n",
+%u %u %u %u    %lu %lu %lu %lu %lu    %lu %lu %lu %lu %lu    %.2f %.2f %.2f %lu    %.2f %.2f   %.2f %lu %.2f %.2f\n",
         Kademlia::k,
         Kademlia::alpha,
         Kademlia::stabilize_timer,
@@ -196,6 +200,7 @@ Kademlia::~Kademlia()
         _timeouts_by_reaper,
 
         _good_lookups,
+        _good_attempts,
         _lookup_dead_node,
         _ok_failures,
         _bad_failures,
@@ -440,7 +445,9 @@ Kademlia::clear()
 void
 Kademlia::lookup(Args *args)
 {
-  static unsigned outcounter = 0;
+  // KDEBUG(1) << "Kademlia::lookup: " << printID(key) << endl;
+  // assert(alive());
+  // assert(_nodeid2kademlia->find(key, 0));
 
   if(!_joined)
     return;
@@ -450,72 +457,93 @@ Kademlia::lookup(Args *args)
   Kademlia *k = (Kademlia*) Network::Instance()->getnode(key_ip);
   NodeID key = k->id();
 
-  // KDEBUG(1) << "Kademlia::lookup: " << printID(key) << endl;
-  // assert(alive());
-  // assert(_nodeid2kademlia->find(key, 0));
+  lookup_wrapper_args *lwa = new lookup_wrapper_args();
+  lwa->key = key;
+  lwa->starttime = now();
+  lwa->timeout_count = 0;
+  lwa->timeout_time = 0;
+  lwa->attempts = 0;
 
-  find_value_args fa(_id, ip(), key);
+  lookup_wrapper(lwa);
+}
+
+// }}}
+// {{{ Kademlia::lookup_wrapper
+void
+Kademlia::lookup_wrapper(lookup_wrapper_args *args)
+{
+  static unsigned outcounter = 0;
+
+  if(!alive()) {
+    delete args;
+    return;
+  }
+
+  find_value_args fa(_id, ip(), args->key);
   find_value_result fr;
 
-  Time before = now();
   find_value(&fa, &fr);
-
-  bool alive_and_joined = (*_nodeid2kademlia)[key]->alive() &&
-                          (*_nodeid2kademlia)[key]->_joined;
-
-  // now ping that nod.
   Time after = now();
-  Time pingbegin = now();
-
+  args->attempts++;
+  // XXX: timeout_count and timeout_time
 
   // if we found the node, ping it.
-  if(key == fr.succ.id) {
+  if(args->key == fr.succ.id) {
     ping_args pa(fr.succ.id, fr.succ.ip);
     ping_result pr;
-    pingbegin = now();
+    Time pingbegin = now();
     if(!doRPC(fr.succ.ip, &Kademlia::do_ping, &pa, &pr) && alive()) {
       _lookup_dead_node++;
       if(flyweight[fr.succ.id])
         erase(fr.succ.id);
     }
     after = now();
-  }
 
-  // failure case
-  IPAddress lasthop = fr.history.size() ? fr.history.back() : ip();
-  if(key != fr.succ.id) {
-    _bad_lookup_latency += (after - before);
-    _bad_hops += fr.hops;
-    _bad_timeouts += fr.timeouts;
-    _bad_rpcs += fr.rpcs;
-    _bad_hop_latency += fr.latency;
-
-    if(alive_and_joined) {
-      _bad_failures++;
-      record_lookup_stat(ip(), lasthop, after-before, false, false);
-    } else {
-      _ok_failures++;
-      record_lookup_stat(ip(), lasthop, after-before, true, false);
+    record_lookup_stat(ip(), fr.succ.ip, after - args->starttime, true, true);
+    if(outcounter++ >= 1000) {
+      KDEBUG(0) <<  pingbegin - args->starttime << "ms lookup (" << args->attempts << "a, " << fr.hops << "h, " << fr.rpcs << "r, " << fr.timeouts << "t), " << after - pingbegin << "ms ping, " << after - args->starttime << "ms total." << endl;
+      outcounter = 0;
     }
+
+    _good_lookups++;
+    _good_attempts += args->attempts;
+    _good_total_latency += (after - args->starttime);
+    _good_lookup_latency += (pingbegin - args->starttime);
+    _good_ping_latency += (after - pingbegin);
+
+    _good_hops += fr.hops;
+    _good_timeouts += fr.timeouts;
+    _good_rpcs += fr.rpcs;
+    _good_hop_latency += fr.latency;
+    delete args;
     return;
   }
 
-  // good case
-  record_lookup_stat(ip(), lasthop, after-before, true, true);
-  if(outcounter++ >= 1000) {
-    KDEBUG(0) <<  pingbegin - before << "ms lookup (" << fr.hops << "h, " << fr.rpcs << "r, " << fr.timeouts << "t), " << after - pingbegin << "ms ping, " << after - before << "ms total." << endl;
-    outcounter = 0;
+
+  bool alive_and_joined = (*_nodeid2kademlia)[args->key]->alive() &&
+                          (*_nodeid2kademlia)[args->key]->_joined;
+  IPAddress target_ip = (*_nodeid2kademlia)[args->key]->ip();
+
+  // we're out of time.
+  if(now() - args->starttime > Kademlia::max_lookup_time) {
+    if(alive_and_joined) {
+      _bad_failures++;
+      record_lookup_stat(ip(), target_ip, after - args->starttime, false, false, args->timeout_count, args->timeout_time);
+    } else {
+      _ok_failures++;
+      record_lookup_stat(ip(), target_ip, after - args->starttime, true, false, args->timeout_count, args->timeout_time);
+    }
+    delete args;
+    return;
   }
 
-  _good_lookups++;
-  _good_total_latency += (after - before);
-  _good_lookup_latency += (pingbegin - before);
-  _good_ping_latency += (after - pingbegin);
-
-  _good_hops += fr.hops;
-  _good_timeouts += fr.timeouts;
-  _good_rpcs += fr.rpcs;
-  _good_hop_latency += fr.latency;
+  // try again in a bit.
+  _bad_lookup_latency += (after - args->starttime);
+  _bad_hops += fr.hops;
+  _bad_timeouts += fr.timeouts;
+  _bad_rpcs += fr.rpcs;
+  _bad_hop_latency += fr.latency;
+  delaycb(100, &Kademlia::lookup_wrapper, args);
 }
 
 // }}}
@@ -530,9 +558,10 @@ Kademlia::do_ping(ping_args *args, ping_result *result)
 
 // }}}
 // {{{ Kademlia::util for find_value and do_lookup
-#define SEND_RPC(x, ARGS, RESULT) {                                                     \
+#define SEND_RPC(x, ARGS, RESULT, HOPS) {                                               \
     find_node_args *fa = New find_node_args(_id, ip(), ARGS->key);                      \
-    find_node_result *fr = New find_node_result(RESULT->hops);                          \
+    find_node_result *fr = New find_node_result;                                        \
+    fr->hops = HOPS;                                                                    \
     record_stat(STAT_FIND_VALUE, 1, 0);                                                 \
     unsigned rpc = asyncRPC(x.ip, &Kademlia::find_node, fa, fr);                        \
     callinfo *ci = New callinfo(x, fa, fr);                                             \
@@ -562,6 +591,7 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
   // KDEBUG(0) << "Kademlia::find_value: node " << printID(fargs->id) << " does find_value for " << printID(fargs->key) << endl;
   // assert(alive());
   HashMap<NodeID, bool> asked;
+  HashMap<NodeID, unsigned> hops;
   update_k_bucket(fargs->id, fargs->ip);
   fresult->rid = _id;
   fresult->hops = 0;
@@ -571,8 +601,10 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
   set<k_nodeinfo, closer> successors;
   vector<k_nodeinfo*> tmp;
   _root->find_node(fargs->key, &tmp);
-  for(unsigned i=0; i<tmp.size(); i++)
+  for(unsigned i=0; i<tmp.size(); i++) {
     successors.insert(tmp[i]);
+    hops.insert(tmp[i]->id, 0);
+  }
 
   // we can't do anything but return ourselves
   if(!successors.size()) {
@@ -593,7 +625,7 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
     unsigned a = 0;
     for(set<k_nodeinfo, closer>::const_iterator i=successors.begin(); i != successors.end() && a < Kademlia::alpha; ++i, ++a) {
       k_nodeinfo ki = *i;
-      SEND_RPC(ki, fargs, fresult);
+      SEND_RPC(ki, fargs, fresult, hops[ki.id]);
       fresult->rpcs++;
       asked.insert(ki.id, true);
       successors.erase(ki);
@@ -649,29 +681,25 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
       if(asked[ki.id])
         continue;
       successors.insert(ki);
+      if(!hops.find_pair(ki.id))
+        hops.insert(ki.id, ci->fr->hops+1);
     }
+    delete ci;
 
     // cut out elements beyond index k
     while(successors.size() > Kademlia::k)
       successors.erase(*successors.rbegin());
 
-    // did we improve? increase hop count.
-    improved = (distance(successors.begin()->id, fargs->key) < distance(fresult->succ.id, fargs->key));
-    if(improved && ci->fr->hop+1 > fresult->hops) {
-      fresult->hops = ci->fr->hop+1;
-      fresult->history.push_back(ci->ki.ip);
-      fresult->latency += (now() - ci->fr->startts);
-    }
-    delete ci;
-
     // found the key
     ki = *successors.begin();
     if(ki.id == fargs->key) {
+      fresult->hops = hops[ki.id];
       fresult->succ = ki;
       CREATE_REAPER(STAT_FIND_VALUE); // returns
     }
 
     // if our standing hasn't improved,
+    improved = (distance(successors.begin()->id, fargs->key) < distance(fresult->succ.id, fargs->key));
     if(was_in_last_rpc)
       useless_replies = improved ? 0 : useless_replies++;
 
@@ -688,7 +716,7 @@ next_candidate:
     k_nodeinfo front = *successors.begin();
     if(Kademlia::distance(front.id, fargs->key) < Kademlia::distance(fresult->succ.id, fargs->key))
       fresult->succ = front;
-    SEND_RPC(front, fargs, fresult);
+    SEND_RPC(front, fargs, fresult, hops[front.id]);
     fresult->rpcs++;
     asked.insert(ki.id, true);
     if(last_rpcs.size() < (int) Kademlia::alpha)
@@ -704,8 +732,6 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
 {
   // KDEBUG(1) << "Kademlia::do_lookup: node " << printID(largs->id) << " does lookup for " << printID(largs->key) << ", flyweight.size() = " << endl;
   // assert(alive());
-  unsigned hop = 0;
-
   update_k_bucket(largs->id, largs->ip);
   lresult->rid = _id;
 
@@ -735,13 +761,10 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
     unsigned a = 0;
     for(set<k_nodeinfo, closer>::const_iterator i=successors.begin(); i != successors.end() && a < Kademlia::alpha; ++i, ++a) {
       k_nodeinfo ki = *i;
-      SEND_RPC(ki, largs, lresult);
+      SEND_RPC(ki, largs, lresult, 0);
       successors.erase(ki);
     }
   }
-
-  // we're going to have to do a hop.
-  hop = 1;
 
   // send an RPC back for each incoming reply.
   HashMap<NodeID, bool> replied;
@@ -806,7 +829,7 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
     if(successors.size() <= (Kademlia::k - Kademlia::alpha)) {
       NODES_ITER(&successors) {
         k_nodeinfo ki = *i;
-        SEND_RPC(ki, largs, lresult);
+        SEND_RPC(ki, largs, lresult, 0);
         successors.erase(ki);
       }
       continue;
@@ -828,7 +851,7 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
 
 next_candidate:
     k_nodeinfo front = *successors.begin();
-    SEND_RPC(front, largs, lresult);
+    SEND_RPC(front, largs, lresult, 0);
     successors.erase(front);
   }
 }

@@ -44,7 +44,7 @@ public:
   bool reply() { return _fn == 0; }
   unsigned id() { return _id; }
   bool ok()     { return _ok; }
-  unsigned timeout() { return _timeout; }
+  Time timeout() { return _timeout; }
 
 private:
   // RPC function and arguments.
@@ -59,7 +59,7 @@ private:
   IPAddress _dst;
   bool _ok;               // was the target node available?
   unsigned _id;
-  unsigned _timeout;      // use failure model or override?
+  Time _timeout;          // if set, after how long this RPC should time out
   static unsigned _unique;
 };
 

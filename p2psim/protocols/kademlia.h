@@ -231,7 +231,6 @@ public:
     unsigned rpcs;      // total number of RPCs we sent
     unsigned hops;      // number of hops for lookups
     unsigned timeouts;  // number of RPCs to dead nodes
-    vector<IPAddress> history; // history of nodes
     Time latency;   // latency from nodes that make hopcount go up
   };
   // }}}
@@ -248,13 +247,10 @@ public:
   };
 
   class find_node_result { public:
-    find_node_result(unsigned h = 0) : hop(h) { startts = now(); }
-    unsigned hop;
+    find_node_result() {}
     vector<k_nodeinfo> results;
+    unsigned hops;
     NodeID rid;
-
-    //
-    Time startts;
   };
   // }}}
   // {{{ lookup_args and lookup_result
@@ -275,6 +271,14 @@ public:
     set<k_nodeinfo, closer> results;
     NodeID rid;     // the guy who's replying
     unsigned hops;
+  };
+
+  struct lookup_wrapper_args {
+    NodeID key;
+    Time starttime;
+    unsigned timeout_count;
+    Time timeout_time;
+    unsigned attempts;
   };
   // }}}
   // {{{ ping_args and ping_result
@@ -325,6 +329,7 @@ public:
   static unsigned debugcounter;         // 
   static unsigned stabilize_timer;      // how often to stabilize
   static unsigned refresh_rate;         // how often to refresh info
+  static Time max_lookup_time;          // how long do we keep retrying
   static k_nodeinfo_pool *pool;         // pool of k_nodeinfo_pool
   static const unsigned idsize = 8*sizeof(Kademlia::NodeID);
   HashMap<NodeID, k_nodeinfo*> flyweight;
@@ -352,6 +357,7 @@ private:
   friend class k_stabilizer;
   void update_k_bucket(NodeID, IPAddress);
   void clear();
+  void lookup_wrapper(lookup_wrapper_args*);
 
   // number of instantiated kademlias.
   static unsigned _nkademlias;
@@ -364,6 +370,7 @@ private:
   static long unsigned _timeouts_by_reaper;
 
   static long unsigned _good_lookups;
+  static long unsigned _good_attempts;
   static long unsigned _lookup_dead_node;
   static long unsigned _ok_failures;
   static long unsigned _bad_failures;

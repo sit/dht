@@ -376,14 +376,14 @@ Node::packet_handler(Packet *p)
 // i.e. absence of time-out.
 //
 bool
-Node::_doRPC(IPAddress dst, void (*fn)(void *), void *args, unsigned timeout)
+Node::_doRPC(IPAddress dst, void (*fn)(void *), void *args, Time timeout)
 {
   return _doRPC_receive(_doRPC_send(dst, fn, 0, args, timeout));
 }
 
 
 RPCHandle*
-Node::_doRPC_send(IPAddress dst, void (*fn)(void *), void (*killme)(void *), void *args, unsigned timeout)
+Node::_doRPC_send(IPAddress dst, void (*fn)(void *), void (*killme)(void *), void *args, Time timeout)
 {
   Packet *p = New Packet;
   p->_fn = fn;
