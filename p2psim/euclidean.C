@@ -1,7 +1,7 @@
 #include "topology.h"
 #include "protocol.h"
 #include "protocolfactory.h"
-#include "euclidian.h"
+#include "euclidean.h"
 #include "network.h"
 #include <cmath>
 #include <iostream>
@@ -9,16 +9,16 @@
 
 using namespace std;
 
-Euclidian::Euclidian()
+Euclidean::Euclidean()
 {
 }
 
-Euclidian::~Euclidian()
+Euclidean::~Euclidean()
 {
 }
 
 latency_t
-Euclidian::latency(Node *n1, Node *n2)
+Euclidean::latency(Node *n1, Node *n2)
 {
   Coord c1 = _nodes[n1->id()];
   Coord c2 = _nodes[n2->id()];
@@ -28,7 +28,7 @@ Euclidian::latency(Node *n1, Node *n2)
 
 
 void
-Euclidian::parse(ifstream &ifs)
+Euclidean::parse(ifstream &ifs)
 {
   // XXX: this is crap
   while(!ifs.eof()) {

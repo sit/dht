@@ -1,6 +1,5 @@
 #include "topology.h"
 #include "topologyfactory.h"
-#include "euclidian.h"
 #include "network.h"
 #include <iostream>
 #include <fstream>

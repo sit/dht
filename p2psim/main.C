@@ -5,7 +5,6 @@
 
 #include "chord.h"
 #include "network.h"
-#include "euclidian.h"
 #include "event.h"
 #include "eventqueue.h"
 #include "topology.h"

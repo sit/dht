@@ -5,8 +5,8 @@ TopologyFactory::create(string s)
 {
   Topology *t = 0;
 
-  if(s == "Euclidian") {
-    t = new Euclidian();
+  if(s == "Euclidean") {
+    t = new Euclidean();
   }
 
   return t;
