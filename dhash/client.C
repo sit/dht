@@ -410,6 +410,16 @@ dhashcli::retrieve_fetch_cb (ptr<rcv_state> rs, u_int i,
 #endif /* VERBOSE_LOG */
   
   str frag (block->data, block->len);
+  for (size_t j = 0; j < rs->frags.size (); j++) {
+    if (rs->frags[j] == frag) {
+      warning << myID << ": retrieve (" << rs->key
+	      << "): duplicate fragment retrieved from successor " << i+1
+	      << "; same as fragment " << j << "\n";
+      rs->errors++;
+      fetch_frag (rs);
+      return;
+    }
+  }
   rs->frags.push_back (frag);
 
   strbuf newblock;
