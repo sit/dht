@@ -1,10 +1,10 @@
-#include <coord.h>
-#include <id_utils.h>
-#include <locationtable.h>
-#include <block_status.h>
-#include <merkle_tree.h>
-#include <merkle_syncer.h>
-#include <dbfe.h>
+class locationtable;
+class location;
+class block_status_manager;
+class merkle_tree;
+class merkle_syncer;
+class dbfe;
+struct RPC_delay_args;
 
 typedef callback<void, ptr<location> >::ref  cb_location;
 typedef callback<void, vec<ptr<location> > >::ref cb_locationlist;
@@ -52,7 +52,4 @@ protected:
   void missing (ptr<location> from,
 		vec<ptr<location> > succs,
 		bigint key, bool missingLocal);
-
-  void check_replication (chordID key, vec<ptr<location> > succs);
-  
 };

@@ -71,7 +71,9 @@ struct repair_state {
   ihash_entry <repair_state> link;
   bigint hashkey;
   const blockID key;
-  repair_state (blockID key) : hashkey (key.ID), key (key) {}
+  const ptr<location> where;
+  repair_state (blockID key, ptr<location> w) :
+    hashkey (key.ID), key (key), where (w) {};
 };
 
 class dhash_impl : public dhash {
@@ -106,9 +108,14 @@ class dhash_impl : public dhash {
   /* Called by merkle_syncer to notify of blocks we are succ to */
   void missing (ptr<location> from, bigint key, bool local);
 
-  void repair (blockID b);
-  void repair_retrieve_cb (blockID key, dhash_stat err, ptr<dhash_block> b,
-			   route r);
+  timecb_t *repair_tcb;
+  void repair_timer ();
+  void repair_flush_q ();
+  void repair (blockID k, ptr<location> to);
+  void send_frag (blockID k, str block, ptr<location> to);
+  void send_frag_cb (ptr<location> to, blockID k, dhash_stat err, bool present);
+  void repair_retrieve_cb (blockID k, ptr<location> to,
+			   dhash_stat err, ptr<dhash_block> b, route r);
 
   unsigned keyhash_mgr_rpcs;
   vec<ptr<location> > replicas;

@@ -1,7 +1,15 @@
-#include <callback.h>
-#include <syncer.h>
+#include <arpc.h>
 #include <../devel/rpclib.h>
 #include <comm.h>
+
+#include <dhash_prot.h>
+#include <locationtable.h>
+#include <block_status.h>
+#include <merkle_tree.h>
+#include <merkle_syncer.h>
+#include <dbfe.h>
+
+#include <syncer.h>
 
 syncer::syncer (ptr<locationtable> locations,
 		ptr<location> h,
@@ -27,7 +35,7 @@ syncer::syncer (ptr<locationtable> locations,
     fatal << "open returned: " << strerror (err) << "\n";
   }
   
-  replica_timer = 5;
+  replica_timer = 180;
   
   delaycb (replica_timer, wrap(this, &syncer::sync_replicas)); 
 };
@@ -58,11 +66,10 @@ syncer::update_pred_cb (cb_location cb, chord_noderes *res, clnt_stat err)
 {
   if (err) {
     warn << "my local node is down?\n";
-   (*cb) (NULL);
+    (*cb) (NULL);
   } else {
     chord_node n = make_chord_node (*res->resok);
-    ptr<location> x = New refcounted<location> (n);
-    x = locations->insert (x);
+    ptr<location> x = locations->lookup_or_create (n);
     cb (x);
   }
 }
@@ -93,8 +100,7 @@ syncer::get_succlist_cb (chord_nodelistres *res,
     size_t sz = res->resok->nlist.size ();
     for (size_t i = 0; i < sz; i++) {
       chord_node n = make_chord_node (res->resok->nlist[i]);
-      ptr<location> s = New refcounted<location> (n);
-      s = locations->insert (s);
+      ptr<location> s = locations->lookup_or_create (n);
       ret.push_back (s);
     }
   }
@@ -107,7 +113,6 @@ syncer::get_succlist_cb (chord_nodelistres *res,
 void
 syncer::sync_replicas ()
 {
-
   if (replica_syncer && !replica_syncer->done ()) {
     // still working on the last sync
     delaycb (replica_timer, wrap(this, &syncer::sync_replicas)); 
@@ -184,41 +189,22 @@ syncer::missing (ptr<location> from,
 		 vec<ptr<location> > succs,
 		 bigint key, bool missingLocal)
 {
-  
   if (missingLocal) {
-
     //XXX check the DB to make sure we really are missing this block
-    
-    // just note that we should have the block. don't get it
-    // unless the replication level justifies it
-    
     bsm->missing (host_loc, key);
-
     //the other guy must have this key if he told me I am missing it
     bsm->unmissing (from, key);
   } else {
     bsm->missing (from, key);
   }
 
-  check_replication (key, succs);
-}
-
-void
-syncer::check_replication (chordID key, vec<ptr<location> > succs)
-{
-  u_int count = bsm->pcount (key, succs);
-  if (count < efrags)
-      {
-	//decide where to send it
-	ptr<location> to = bsm->best_missing (key, succs);
-
-	warn << succs[0]->id () << ":  sending " << key
-	     << " to " << to->id () 
-	      << "count= " << count << "\n";
-	
-	
-	//tell my node to send it
-	// XXX define this RPC
-      } 
-
+  dhash_bsmupdate_arg a;
+  a.t = BSM_MISSING;
+  a.local = missingLocal;
+  from->fill_node (a.n);
+  a.key = key;
+  /* This stuff probably doesn't matter */
+  a.ctype = DHASH_CONTENTHASH;
+  a.dbtype = DHASH_FRAG;
+  doRPC (dhash_program_1, DHASHPROC_BSMUPDATE, &a, NULL, aclnt_cb_null);
 }

@@ -157,12 +157,6 @@ struct dhash_bsmupdate_arg {
   dhash_dbtype dbtype;
 };
 
-struct dhash_repair_arg {
-  chordID key;
-  dhash_ctype ctype;
-  dhash_dbtype dbtype;
-};
-
 program DHASH_PROGRAM {
   version DHASH_VERSION {
     void
@@ -189,9 +183,5 @@ program DHASH_PROGRAM {
      */
     void
     DHASHPROC_BSMUPDATE (dhash_bsmupdate_arg) = 5;
-
-    /* For the syncer to tell DHash it needs to repair a block. */
-    dhash_stat
-    DHASHPROC_REPAIR (dhash_repair_arg) = 6;
   } = 1;
 } = 344449;

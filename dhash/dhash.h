@@ -62,6 +62,7 @@ typedef callback<void, dhash_stat, ptr<dhash_block>, vec<ptr<location> > >::ptr 
 
 class dhash {
  public:
+  static u_long reptm ();
   static u_long keyhashtm ();
   static u_long synctm ();
   

@@ -1,17 +1,18 @@
+#include <arpc.h>
+#include <id_utils.h>
 #include <syncer.h>
 #include <location.h>
+#include <locationtable.h>
+
 void
 usage () 
 {
-  warn << "syncer: some args\n";
-  exit (-1);
+  fatal << "syncer: some args\n";
 }
 
 int 
 main (int argc, char **argv) 
 {
-  
-
   str db_name = "/var/tmp/db";
   str p2psocket = "/tmp/chord-sock";
   char *logfname = NULL;
@@ -22,8 +23,6 @@ main (int argc, char **argv)
   host.r.port = 0;
 
   setprogname (argv[0]);
-  mp_clearscrub ();
-  random_init ();
   
   while ((ch = getopt (argc, argv, "d:S:v:e:c:p:t:j:"))!=-1)
     switch (ch) {
@@ -77,7 +76,7 @@ main (int argc, char **argv)
       }
      
     default:
-      fatal << "don't fall through\n";
+      usage ();
       break;
     }
 
@@ -88,7 +87,7 @@ main (int argc, char **argv)
   
   chord_node ret;
   for (u_int i = 0; i < 3; i++)
-    ret.coords.push_back (0.0);
+    ret.coords.push_back (0);
   ret.r.hostname = host.r.hostname;
   ret.r.port = host.r.port;
   for (int i = 0; i < vnodes; i++) {
