@@ -178,7 +178,7 @@ succ_list::stabilize_getsucclist_cb (chordID s, vec<chord_node> nlist,
       // if succlist[i] < nlist[j].x
       // then, maybe someone we knew about is dead now. best be sure.
       nout_backoff++;
-      locations->ping
+      myvnode->ping
 	(succlist[i], wrap (this, &succ_list::stabilize_getsucclist_check,
 			    s, succlist[i]));
       i++;
@@ -206,7 +206,7 @@ succ_list::stabilize_getsucclist_cb (chordID s, vec<chord_node> nlist,
   while (i < curnsucc) {
     check = true;
     nout_backoff++;
-    locations->ping
+    myvnode->ping
       (succlist[i], wrap (this, &succ_list::stabilize_getsucclist_check,
 			  s, succlist[i]));
     i++;

@@ -55,8 +55,8 @@ struct RPC_delay_args {
 struct rpc_state {
   chordID ID;
   ref<location> loc;
+  ptr<location> from;
   aclnt_cb cb;
-  u_int64_t s;
   int progno;
   int procno;
   long seqno;
@@ -65,8 +65,10 @@ struct rpc_state {
   rpccb_chord *b;
   int rexmits;
   ihash_entry <rpc_state> h_link;
-  
-  rpc_state (ref<location> l, aclnt_cb c, u_int64_t S, long s, int p);
+
+  void *out;
+
+  rpc_state (ptr<location> from, ref<location> l, aclnt_cb c,  long s, int p, void *out);
 };
 
 // store latency information about a host.
@@ -99,6 +101,8 @@ class rpc_manager {
   float a_var;
   float avg_lat;
   vec<float> lat_history;
+  float c_err;
+  float c_var;
 
   // counters
   u_int64_t nrpc;
@@ -114,7 +118,7 @@ class rpc_manager {
 
   hostinfo *lookup_host (const net_address &r);
   virtual void remove_host (hostinfo *h);
-  void update_latency (ptr<location> l, u_int64_t lat);
+  void update_latency (ptr<location> from, ptr<location> l, u_int64_t lat);
 
  public:
   virtual void rexmit (long seqno) {};

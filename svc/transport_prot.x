@@ -9,6 +9,7 @@ enum rpcstat {
 struct dorpc_arg {
   chordID dest_id;
   chordID src_id;
+  u_int64_t send_time;
   int32_t src_vnode_num;
   int32_t src_coords<>;
   int32_t progno;
@@ -18,6 +19,7 @@ struct dorpc_arg {
 
 struct dorpc_successres {
   chordID src_id;
+  u_int64_t send_time_echo;
   int32_t src_vnode_num;
   int32_t src_coords<>;
   int32_t progno;
@@ -34,9 +36,6 @@ union dorpc_res switch (rpcstat status) {
 
 program TRANSPORT_PROGRAM {
   version TRANSPORT_VERSION {
-    void
-    TRANSPORTPROC_NULL (void) = 0;
-
     dorpc_res
     TRANSPORTPROC_DORPC (dorpc_arg) = 1;
   } = 1;

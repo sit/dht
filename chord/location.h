@@ -34,8 +34,6 @@
 #include "chord_prot.h"
 #include "chord_util.h"
 
-typedef callback<void,chordstat>::ptr cbping_t;
-
 struct location {
   chordID n;
   net_address addr;
@@ -104,8 +102,6 @@ class locationtable : public virtual refcount {
   
   bool betterpred1 (chordID current, chordID target, chordID newpred);
 
-  void ping_cb (cbping_t cb, clnt_stat err);
-
   // Circular, in-order traversal of all known nodes.
   locwrap *next (locwrap *lw);
   locwrap *prev (locwrap *lw);
@@ -158,8 +154,6 @@ class locationtable : public virtual refcount {
 	      int procno, ptr<void> in, 
 	      void *out, aclnt_cb cb);
   void resendRPC (long seqno);
-
-  void ping (const chordID &x, cbping_t cb);
 
   bool get_node (const chordID &x, chord_node *n);
 

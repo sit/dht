@@ -49,6 +49,7 @@ long outbytes;
 ihash<str, rpcstats, &rpcstats::key, &rpcstats::h_link> rpc_stats_tab;
 
 #define max_host_cache 1000
+#define CWIND_MULT 4
 
 // UTILITY FUNCTIONS
 
@@ -101,9 +102,9 @@ myselect (float *A, int p, int r, int i)
 }
 
 // -----------------------------------------------------
-rpc_state::rpc_state (ref<location> l, aclnt_cb c, u_int64_t S, long s, int p)
-  : loc (l), cb (c),  s (S), progno (p), seqno (s),
-    b (NULL), rexmits (0)
+rpc_state::rpc_state (ptr<location> from, ref<location> l, aclnt_cb c, long s, int p, void *out)
+  : loc (l), from (from), cb (c), progno (p), seqno (s),
+    b (NULL), rexmits (0), out (out)
 {
   ID = l->n;
 };
@@ -121,6 +122,8 @@ rpc_manager::rpc_manager (ptr<u_int32_t> _nrcv)
   : a_lat (0.0),
     a_var (0.0),
     avg_lat (0.0),
+    c_err (0.0),
+    c_var (0.0),
     nrpc (0), nrpcfailed (0), nsent (0), npending (0), nrcv (_nrcv)
 {
   warn << "CREATED RPC MANAGER\n";
@@ -203,7 +206,7 @@ rpc_manager::doRPCcb (aclnt_cb realcb, ptr<location> l, u_int64_t sent,
     // prevent overflow, caused by time reversal
     if (now >= sent) {
       u_int64_t lat = now - sent;
-      update_latency (l, lat);
+      update_latency (NULL, l, lat);
     } else {
       warn << "*** Ignoring timewarp: sent " << sent << " > now " << now << "\n";
     }
@@ -404,7 +407,7 @@ stp_manager::doRPC (ptr<location> from, ptr<location> l,
 		    long _fake_seqno /* = 0 */)
 {
   reset_idle_timer ();
-  if (left + cwind*10 < seqno) {
+  if (left + cwind*CWIND_MULT < seqno) {
     RPC_delay_args *args = New RPC_delay_args (from, l, prog, procno,
 					       in, out, cb);
     args->fake_seqno = fake_seqno;
@@ -417,7 +420,7 @@ stp_manager::doRPC (ptr<location> from, ptr<location> l,
 
     ref<aclnt> c = aclnt::alloc (dgram_xprt, prog, 
 				 (sockaddr *)&(l->saddr));
-    rpc_state *C = New rpc_state (l, cb, getusec (), seqno, prog.progno);
+    rpc_state *C = New rpc_state (from, l, cb, seqno, prog.progno, out);
     C->procno = procno;
    
     C->b = rpccb_chord::alloc (c, 
@@ -458,7 +461,6 @@ stp_manager::timeout (rpc_state *C)
   warn << "stp_manager::timeout\n"; 
   warn << "\t**now " << now << "\n";
   warn << "\tID " << C->ID << "\n";
-  warn << "\ts " << C->s << "\n";
   warn << "\tprogno.procno " << C->progno << "." << C->procno << "\n";
   warn << "\tseqno " << C->seqno << "\n";
   warn << "\trexmits " << C->rexmits << "\n";
@@ -466,7 +468,6 @@ stp_manager::timeout (rpc_state *C)
   warn << "\tleft " << left << "\n";
 #endif
 
-  C->s = getusec ();
   C->rexmits++;
   warn << getusec () << " resent an RPC (" 
        << C->progno << "." << C->procno << ") destined for " 
@@ -483,14 +484,16 @@ stp_manager::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
     nrpcfailed++;
     warn << getusec () << " RPC failure: " << err << " destined for " << C->ID << " seqno " << C->seqno << "\n";
   } else {
-    if (C->s > 0) {
-      u_int64_t now = getusec ();
-      // prevent overflow, caused by time reversal
-      if (now >= C->s) {
-	u_int64_t lat = now - C->s;
-	update_latency (C->loc, lat);
+
+    dorpc_res *res = (dorpc_res *)C->out;
+    u_int64_t sent_time = res->resok->send_time_echo;
+    u_int64_t now = getusec ();
+    // prevent overflow, caused by time reversal
+    if (now >= sent_time) {
+      u_int64_t lat = now - sent_time;
+      update_latency (C->from, C->loc, lat);
       } else {
-	warn << "*** Ignoring timewarp: C->s " << C->s << " > now " << now << "\n";
+	warn << "*** Ignoring timewarp: sent_time " << sent_time << " > now " << now << "\n";
 	warnx << " " << now       << "\n";
 	warnx << " " << getusec() << "\n";
 	warnx << " " << getusec() << "\n";
@@ -502,13 +505,12 @@ stp_manager::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
 	warnx << " " << getusec() << "\n";
 	warnx << " " << getusec() << "\n";
       }
-    }
   }
+
 
   user_rexmit_table.remove (C);
   (C->cb) (err);
-  //  if (C->s > 0) 
-    remove_from_sentq (C->seqno);
+  remove_from_sentq (C->seqno);
   update_cwind (C->seqno);
   rpc_done (C->seqno);
   delete C;
@@ -537,12 +539,7 @@ void
 stp_manager::rpc_done (long acked_seqno)
 {
 
-#ifdef __JJ__
-  warnx << gettime() << " rpc_done " << 1 + acked_seqno << "\n";
-#endif
-
-  
-  while (Q.first && (left + cwind >= seqno) ) {
+  if (Q.first && (left + cwind*CWIND_MULT >= seqno) ) {
     int qsize = (num_qed > 100) ? 100 :  num_qed;
     int next = (int)(qsize*((float)random()/(float)RAND_MAX));
     RPC_delay_args *next_arg = Q.first;
@@ -574,6 +571,9 @@ stp_manager::rpc_done (long acked_seqno)
     num_qed--;
   }
 
+  if (Q.first && (left + cwind*CWIND_MULT >= seqno) ) {
+    delaycb (0, 1000000, wrap (this, &stp_manager::rpc_done, acked_seqno));
+  }
 }
 
 void
@@ -606,7 +606,6 @@ stp_manager::rexmit (long seqno)
 void
 stp_manager::update_cwind (int seq) 
 {
-  float oldcwind = cwind;
   if (seq >= 0) {
     if (cwind < ssthresh) 
       cwind += 1.0; //slow start
@@ -627,8 +626,6 @@ stp_manager::update_cwind (int seq)
 
   }
 
-  char buf[128];
-  sprintf (buf, "old cwind: %f, new %f\n", oldcwind, cwind);
   cwind_ewma = (cwind_ewma*49 + cwind)/50;
   cwind_cum += cwind;
   num_cwind_samples++;
@@ -669,7 +666,7 @@ stp_manager::setup_rexmit_timer (ptr<location> from, ptr<location> l, long *sec,
 
   if ((gforce < 50000.0) && l && from && (l->coords.size () > 0) && (from->coords.size () > 0)) {
     float dist = Coord::distance_f (from->coords, l->coords);
-    alat = dist*2.0 + 5000; //scale it to be safe
+    alat = dist + 5.0*c_err + 5000; //scale it to be safe
   }
 
   //statistics
@@ -677,6 +674,7 @@ stp_manager::setup_rexmit_timer (ptr<location> from, ptr<location> l, long *sec,
   if (timers.size () > 1000) timers.pop_front ();
   
   *sec = (long)(alat / 1000000);
+  if (*sec > 1) *sec = 1;
   *nsec = ((long)alat % 1000000) * 1000;
   
   if (*nsec < 0 || *sec < 0) {
@@ -686,7 +684,7 @@ stp_manager::setup_rexmit_timer (ptr<location> from, ptr<location> l, long *sec,
 }
 
 void
-rpc_manager::update_latency (ptr<location> l, u_int64_t lat)
+rpc_manager::update_latency (ptr<location> from, ptr<location> l, u_int64_t lat)
 {
   //do the gloal latencies
   nrpc++;
@@ -718,12 +716,21 @@ rpc_manager::update_latency (ptr<location> l, u_int64_t lat)
     cur = hosts.next (cur);
   }
   int which = (int)(PERCENTILE*i);
-  
   avg_lat = myselect (host_lats, 0, i - 1, which + 1);
-
   lat_history.push_back (avg_lat);
   if (lat_history.size () > 1000) lat_history.pop_front ();
-  
+
+  //do the coordinate variance if available
+  if (from && l && from->coords.size () > 0 && l->coords.size () > 0) {
+    float predicted = Coord::distance_f (from->coords, l->coords);
+    float sample_err = (lat - predicted);
+    //    warn << "To " << l->n << " " << (int)sample_err << " " << (int)lat << " " << (int)predicted << " " 
+    //	 << (int)c_err << " " << (int)c_var << "\n";
+
+    if (sample_err < 0) sample_err = -sample_err;
+    c_err = (c_err*49 + sample_err)/50;
+    c_var = c_var + GAIN*(sample_err - c_var);
+   }
 }
 
 void
@@ -843,11 +850,16 @@ rpccb_chord::alloc (ptr<aclnt> c,
   xdrsuio x (XDR_ENCODE);
   const rpc_program &prog = c->rp;
   
+  //re-write the timestamp
+  dorpc_arg *args = (dorpc_arg *)in.get ();
+  args->send_time = getusec ();
+
   if (!aclnt::marshal_call (x, authnone_create (), prog.progno, 
 			    prog.versno, procno, 
 			    prog.tbl[procno].xdr_arg,
 			    in)) {
-      return NULL;
+    warn << "marshalling failed\n";
+    return NULL;
   }
   
   assert (x.iov ()[0].iov_len >= 4);
@@ -903,7 +915,9 @@ rpccb_chord::alloc (ptr<aclnt> c,
 				      out,
 				      prog.tbl[procno].xdr_res,
 				      dest,
-				      deleted);
+				      deleted,
+				      in,
+				      procno);
   
   return ret;
 }
@@ -963,7 +977,38 @@ rpccb_chord::timeout_cb (ptr<bool> del)
     warnx << gettime() << " REXMIT " << xid
 	  << " rexmits " << rexmits << ", timeout "<< sec*1000 + nsec/(1000*1000) << " ms, destined for " << inet_ntoa (s->sin_addr) << "\n";
 
+    //re-write the timestamp
+    dorpc_arg *args = (dorpc_arg *)in.get ();
+    args->send_time = getusec ();
+
+    //remarshall the args
+    xdrsuio x (XDR_ENCODE);
+    const rpc_program &prog = c->rp;
+    if (!aclnt::marshal_call (x, authnone_create (), prog.progno, 
+			      prog.versno, procno, 
+			      prog.tbl[procno].xdr_arg,
+			      in)) {
+      fatal << "error remarshalling\n";
+    }
+
+    //keep our old xid 
+    assert (x.iov ()[0].iov_len >= 4);
+    u_int32_t &txid = *reinterpret_cast<u_int32_t *> (x.iov ()[0].iov_base);
+    txid = xid;
+
+    //update the msg buffer so we send with the new timestamp
+    unsigned int l = x.uio ()->resid ();
+    assert (l == msglen);
+    char *newbuf = suio_flatten (x.uio ());
+    memcpy (msgbuf, newbuf, msglen);
+    free (newbuf);
+
+
+    //send it
     xmit (rexmits);
+
+
+
     if (rexmits == MAX_REXMIT) {
       // XXX
       // The intent of this code path is to do a conservative last
@@ -996,3 +1041,4 @@ rpccb_chord::finish_cb (aclnt_cb cb, ptr<bool> del, clnt_stat err)
   *del = true;
   cb (err);
 }
+

@@ -117,8 +117,10 @@ toe_table::add_toe (const chord_node &n, int level)
     
   in_progress++;
   
+
   locations->insert (n); // ping sucks.
-  locations->ping (n.x, wrap (this, &toe_table::add_toe_ping_cb, n, level));
+  myvnode->ping (n.x, wrap (this, &toe_table::add_toe_ping_cb, n, level));
+
 }
 
 void

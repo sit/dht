@@ -132,6 +132,7 @@ class vnode_impl : public vnode {
   
   void notify_cb (chordID n, chordstat *res, clnt_stat err);
   void alert_cb (chordstat *res, clnt_stat err);
+  void ping_cb (cbping_t cb, chord_node n, chordstat status);
   
   void get_fingers_cb (cbchordIDlist_t cb,
 		       chordID x, chord_nodelistres *res, clnt_stat err);
@@ -186,7 +187,8 @@ class vnode_impl : public vnode {
   void find_successor (const chordID &x, cbroute_t cb);
   void notify (const chordID &n, chordID &x);
   void alert (const chordID &n, chordID &x);
-  
+  void ping (const chordID &x, cbping_t cb);
+
   //upcall
   void register_upcall (int progno, cbupcall_t cb);
 

@@ -58,7 +58,7 @@ typedef callback<void,chord_node,chordstat>::ref cbchordID_t;
 typedef callback<void,vec<chord_node>,chordstat>::ref cbchordIDlist_t;
 typedef callback<void,chordID,route,chordstat>::ref cbroute_t;
 typedef callback<void, user_args *>::ref cbdispatch_t;
-
+typedef callback<void,chordstat>::ptr cbping_t;
 typedef callback<void, bool>::ref cbupcalldone_t;
 typedef callback<void, int, void *, cbupcalldone_t>::ref cbupcall_t; 
 
@@ -70,13 +70,15 @@ struct user_args {
   int procno;
   svccb *sbp;
   const rpc_program *prog;
+  u_int64_t send_time;
 
   //info about the vnode that will reply
   chordID myID;
   int myindex;
   vec<float> coords;
 
-  user_args (svccb *s, void *a, const rpc_program *pr, int p) : args (a), procno (p), sbp (s), prog (pr) {};
+  user_args (svccb *s, void *a, const rpc_program *pr, int p, u_int64_t st) : 
+    args (a), procno (p), sbp (s), prog (pr), send_time (st) {};
 
   void *getvoidarg () { return args; };
   const void *getvoidarg () const { return args; };
@@ -130,7 +132,8 @@ class vnode : public virtual refcount {
   virtual void find_successor (const chordID &x, cbroute_t cb) = 0;
   virtual void notify (const chordID &n, chordID &x) = 0;
   virtual void alert (const chordID &n, chordID &x) = 0;
-  
+  virtual void ping (const chordID &x, cbping_t cb) = 0;
+
   //upcall
   virtual void register_upcall (int progno, cbupcall_t cb) = 0;
 

@@ -227,19 +227,19 @@ locationtable::doRPCcb (ptr<location> l, aclnt_cb realcb, clnt_stat err)
       loctrace << "dead " << l->n << " " << l->addr << "\n";
       good--;
       l->alive = false;
-      if (!l->checkdeadcb)
-	l->checkdeadcb = delaycb (60, 0,
-	  wrap(this, &locationtable::check_dead, l, 120));
+      /*      if (!l->checkdeadcb)
+	      l->checkdeadcb = delaycb (60, 0,
+	wrap(this, &locationtable::check_dead, l, 120)); */
     }
   } else {
     if (!l->alive) {
       loctrace << "alive " << l->n << " " << l->addr << "\n";
       good++;
       l->alive = true;
-      if (l->checkdeadcb) {
-	timecb_remove (l->checkdeadcb);
-	l->checkdeadcb = NULL;
-      }
+      /*      if (l->checkdeadcb) {
+	      timecb_remove (l->checkdeadcb);
+	      l->checkdeadcb = NULL;
+	      } */
     }
 
     //update distance estimate for coords
@@ -542,28 +542,6 @@ locationtable::closestpredloc (const chordID &x)
   return n;
 }
 
-void
-locationtable::ping (const chordID &x, cbping_t cb) 
-{
-  ptr<chordID> v = New refcounted<chordID> (x);
-  doRPC (NULL, x, transport_program_1, TRANSPORTPROC_NULL,
-	 v, NULL,
-	 wrap (this, &locationtable::ping_cb, cb));
-}
-
-void
-locationtable::ping_cb (cbping_t cb, clnt_stat err) 
-{
-  if (err) {
-    warn << "error pinging: " << err << "\n";   
-    if (cb)
-      (*cb) (CHORD_RPCFAILURE);
-  } else {
-    if (cb)
-      (*cb) (CHORD_OK);
-  }
-}
-
 vec<float> 
 locationtable::get_coords (const chordID &x)
 {
@@ -686,6 +664,7 @@ locationtable::stats ()
   hosts->stats ();
 }
 
+#if 0
 void
 locationtable::check_dead (ptr<location> l, unsigned int newwait)
 {
@@ -738,6 +717,7 @@ locationtable::check_dead_cb (ptr<location> l, unsigned int newwait,
       wrap (this, &locationtable::check_dead, l, newwait*2));
   }
 }
+#endif
 
 bool
 locationtable::remove (locwrap *lw)
@@ -755,11 +735,12 @@ locationtable::remove (locwrap *lw)
   cachedlocs.remove (lw);
   size_cachedlocs--;
 
-  if ((lw->type_ & LOC_REGULAR) && lw->loc_->checkdeadcb) {
-    timecb_remove (lw->loc_->checkdeadcb);
-    lw->loc_->checkdeadcb = NULL;
-  }
-
+  /*  if ((lw->type_ & LOC_REGULAR) && lw->loc_->checkdeadcb) {
+      timecb_remove (lw->loc_->checkdeadcb);
+      lw->loc_->checkdeadcb = NULL;
+      }
+  */
+  
   {
     // This code is here only for sanity checking.
     locwrap *foo = locs.first ();

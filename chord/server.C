@@ -296,6 +296,7 @@ user_args::reply (void *res)
   dorpc_res *rpc_res = New dorpc_res (DORPC_OK);
 
   rpc_res->resok->src_id = myID;
+  rpc_res->resok->send_time_echo = send_time;
   rpc_res->resok->src_vnode_num = myindex;
   rpc_res->resok->src_coords.setsize (coords.size ());
   for (unsigned int i = 0; i < coords.size (); i++)
@@ -314,6 +315,19 @@ user_args::reply (void *res)
   sbp->reply (rpc_res);
   delete rpc_res;
   delete this;
+}
+
+void
+vnode_impl::ping (const chordID &x, cbping_t cb)
+{
+  //close enough
+  get_successor (x, wrap (this, &vnode_impl::ping_cb, cb));
+}
+
+void
+vnode_impl::ping_cb (cbping_t cb, chord_node n, chordstat status) 
+{
+  cb (status);
 }
 
 long

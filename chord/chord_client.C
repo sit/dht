@@ -265,11 +265,6 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
   }
 
   switch (sbp->proc ()) {
-  case TRANSPORTPROC_NULL:
-    {
-      sbp->reply (NULL);
-      break;
-    }
   case TRANSPORTPROC_DORPC:
     {
       //v (the destination chordID) is at the top of the header
@@ -310,7 +305,7 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
 	sbp->replyref (res);
       } else {	      
 	user_args *ua = New user_args (sbp, unmarshalled_args, 
-				       prog, arg->procno);
+				       prog, arg->procno, arg->send_time);
 	vnodep->fill_user_args (ua);
 	cbdispatch_t dispatch = vnodep->getHandler(arg->progno);
 	(dispatch)(ua);

@@ -5,16 +5,21 @@ class rpccb_chord : public rpccb_msgbuf {
  protected:
   rpccb_chord (ref<aclnt> c, xdrsuio &x, aclnt_cb _cb, cbv u_tmo,
 	       void *out, xdrproc_t outproc, const sockaddr *d, 
-	       ptr<bool> del) :
+	       ptr<bool> del, ptr<void> in, int procno) :
     rpccb_msgbuf (c, x, wrap (this, &rpccb_chord::finish_cb, _cb, del), out, 
 		  outproc, d), 
-    utmo (u_tmo), deleted (del)  {};
+    utmo (u_tmo), deleted (del), c (c), procno (procno), in (in) {};
 
   int rexmits;
   timecb_t *tmo;
   long sec, nsec;
   cbv utmo;
   ptr<bool> deleted;
+
+
+  ptr<aclnt> c;
+  int procno;
+  ptr<void> in;
 
 private:
   void timeout_cb (ptr<bool> del);
