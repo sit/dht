@@ -77,8 +77,6 @@ void
 dhashcli::retrieve (blockID blockID, cb_ret cb, int options, 
 		    ptr<chordID> guess)
 {
-  // Only one lookup for a block should be in progress from a node
-  // at any given time.
   chordID myID = clntnode->my_ID ();
 
   trace << myID << ": retrieve (" << blockID << "): new retrieve.\n";
@@ -577,8 +575,6 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
       ((char *)NULL, frag.len (), DHASH_CONTENTHASH);
     bcopy (frag.cstr (), blk->data, frag.len ());
     
-    bigint h = compute_hash (blk->data, blk->len);
-
     // Count up for each RPC that will be dispatched
     ss->out += 1;
 
