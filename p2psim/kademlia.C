@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <iostream>
 #include "../utils/skiplist.h"
+#define TMG_DMALLOC
+#include "tmgdmalloc.h"
 #include "p2psim.h"
 using namespace std;
 
@@ -57,7 +59,7 @@ Kademlia::Kademlia(Node *n, Args a)
   //     _rightmasks[i] = ~mask;
   //   }
   // }
-  _tree = new k_bucket_tree(this);
+  _tree = New(k_bucket_tree, this);
   assert(_tree);
 }
 
@@ -200,14 +202,15 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
   KDEBUG(2) << "Node " << printbits(callerID) << " does lookup for " << printID(largs->key) << endl;
 
   // fill it with the best that i know of
-  vector<peer_t*> *results = new vector<peer_t*>;
+  vector<peer_t*> *results = New(vector<peer_t*>);
   assert(results);
   _tree->get(largs->key, results);
 
   // we can't do anything but return ourselves
   if(!results->size()) {
     KDEBUG(2) << "do_lookup: my tree is empty; returning myself." << endl;
-    lresult->results.push_back(new peer_t(_id, ip()));
+    peer_t *p = New(peer_t, _id, ip());
+    lresult->results.push_back(p);
     goto done;
   }
 
@@ -239,8 +242,8 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
     // there's a guy we didn't ask yet, and there's less than alpha outstanding
     // RPCs: send out another one.
     if(toask && outstanding < _alpha) {
-      la = new lookup_args(_id, ip(), largs->id);
-      lr = new lookup_result;
+      la = New(lookup_args, _id, ip(), largs->id);
+      lr = New(lookup_result);
       assert(la && lr);
       KDEBUG(2) << "do_lookup: going into asyncRPC" << endl;
       assert(toask);
@@ -249,7 +252,7 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
       KDEBUG(2) << "do_lookup: returning from asyncRPC" << endl;
       assert(rpc);
       rpcset.insert(rpc);
-      resultmap[rpc] = new callinfo(toask->ip, la, lr);
+      resultmap[rpc] = New(callinfo, toask->ip, la, lr);
       asked[toask->id] = true;
 
       // don't block yet if there's more RPCs we can send
@@ -275,7 +278,7 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
 
       // merge both tables and cut out everything after the first k.
       SortNodes sn(largs->key);
-      vector<peer_t*> *newresults = new vector<peer_t*>(results->size() + ci->lr->results.size());
+      vector<peer_t*> *newresults = New(vector<peer_t*>, results->size() + ci->lr->results.size());
       assert(newresults);
       merge(results->begin(), results->end(), 
             ci->lr->results.begin(), ci->lr->results.end(),
@@ -334,7 +337,8 @@ Kademlia::find_node(lookup_args *largs, lookup_result *lresult)
   // deal with the empty case
   if(_tree->empty()) {
     KDEBUG(3) << "do_lookup: tree is empty. returning myself, ip = " << ip() << endl;
-    lresult->results.push_back(new peer_t(_id, ip()));
+    peer_t *p = New(peer_t, _id, ip());
+    lresult->results.push_back(p);
     goto done;
   }
 
@@ -376,6 +380,7 @@ Kademlia::do_ping_wrapper(peer_t *p)
 bool
 Kademlia::stabilized(vector<NodeID> lid)
 {
+  __tmg_dmalloc_large_dump();
   return _tree->stabilized(lid);
 }
 
@@ -510,7 +515,7 @@ Kademlia::dump()
 k_bucket_tree::k_bucket_tree(Kademlia *k) : _self(k)
 {
   _nodes.clear();
-  _root = new k_bucket(_self, this);
+  _root = New(k_bucket, _self, this);
 
   _id = _self->id(); // for KDEBUG purposes only
   if(!_k)
@@ -583,7 +588,7 @@ k_bucket_tree::get(NodeID key, vector<peer_t*> *v, unsigned nbest)
 
   for(hash_map<NodeID, peer_t*>::const_iterator i = _nodes.begin(); i != _nodes.end(); i++) {
     if(best.size() < nbest || (Kademlia::distance(i->second->id, key) < best.last()->dist)) {
-      struct best_entry *be = new best_entry;
+      struct best_entry *be = New(best_entry);
       assert(be);
       be->dist = Kademlia::distance(i->second->id, key);
       be->peer = i->second;
@@ -657,7 +662,9 @@ k_bucket::k_bucket(Kademlia *k, k_bucket_tree *root) : _leaf(false), _self(k), _
 {
   _child[0] = _child[1] = 0;
   _id = _self->id(); // for KDEBUG purposes only
-  _nodes = new set<peer_t*, SortedByLastTime>;
+
+  typedef set<peer_t*, SortedByLastTime> Xset; // tmg dmalloc doesn't like comma's
+  _nodes = New(Xset);
   _nodes->clear();
   if(!_k)
     _k = Kademlia::k();
@@ -726,7 +733,7 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned de
   // if not full, just add the new id.
   if(_nodes->size() < _k) {
     KDEBUG(4) <<  "insert: added on level " << depth << endl;
-    peer_t *p = new peer_t(node, ip, now());
+    peer_t *p = New(peer_t, node, ip, now());
     assert(p);
     _nodes->insert(p);
     return p;
@@ -751,7 +758,7 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned de
   _root->erase((*least_recent)->id);
 
   // insert the new one
-  peer_t *p = new peer_t(node, ip, now());
+  peer_t *p = New(peer_t, node, ip, now());
   assert(p);
   _nodes->insert(p);
 
@@ -766,8 +773,8 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned de
   assert(!_leaf);
   // create both children
   KDEBUG(4) <<  "insert: not a leaf.  creating subchildren" << endl;
-  _child[0] = new k_bucket(_self, _root);
-  _child[1] = new k_bucket(_self, _root);
+  _child[0] = New(k_bucket, _self, _root);
+  _child[1] = New(k_bucket, _self, _root);
   _child[myleftmostbit ^ 1]->_leaf = true;
   KDEBUG(4) <<  "insert: subchild " << (myleftmostbit ^ 1) << " is a leaf on depth " << depth << endl;
 
@@ -810,7 +817,7 @@ k_bucket::stabilize(string prefix, unsigned depth)
         continue;
 
       // find the closest node to the ID we're looking for
-      vector<peer_t*> *best = new vector<peer_t*>;
+      vector<peer_t*> *best = New(vector<peer_t*>);
       _root->get((*it)->id, best);
       KDEBUG(1) << "stabilize: lookup for " << Kademlia::printbits((*it)->id) << endl;
       _self->do_lookup_wrapper((*best)[0], (*it)->id);
@@ -827,7 +834,7 @@ k_bucket::stabilize(string prefix, unsigned depth)
   KDEBUG(1) << "stabilize: mask = " << Kademlia::printbits(mask) << endl;
   NodeID random_key = _self->id() & mask;
 
-  vector<peer_t*> *best = new vector<peer_t*>;
+  vector<peer_t*> *best = New(vector<peer_t*>);
   _root->get(random_key, best);
   for(vector<peer_t*>::const_iterator i = best->begin(); i != best->end(); ++i) {
     KDEBUG(1) << "stabilize: random lookup for " << Kademlia::printbits(random_key) << endl;

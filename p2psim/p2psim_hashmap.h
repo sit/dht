@@ -26,6 +26,12 @@ namespace __gnu_cxx {
       return hash<const char*>()(x.c_str());
     }
   };
+
+  template<> struct hash<void*> {
+    size_t operator()( void*x ) const {
+      return hash<const char*>()((const char*)x);
+    }
+  };
 }
 
 #endif // __P2PSIM_HASHMAP
