@@ -397,6 +397,7 @@ void
 Kademlia::stabilize()
 {
   KDEBUG(1) << "stabilize" << endl;
+
   k_stabilizer stab;
   _root->traverse(&stab);
 
@@ -442,7 +443,7 @@ inline
 unsigned
 Kademlia::getbit(NodeID n, unsigned i)
 {
-  return (n & (1<<((sizeof(NodeID)*8)-i-1))) ? 1 : 0;
+  return (n & (((NodeID) 1)<<((sizeof(NodeID)*8)-i-1))) ? 1 : 0;
 }
 
 // }}}
@@ -790,6 +791,9 @@ k_bucket_leaf::divide(unsigned depth)
   // can't do full checkrep because inrange() is true
   assert(nodes->inrange(kademlia()->id()));
 
+  // now divide contents into separate buckets
+  // XXX: we have to ping these guys?
+
   // Now we are a leaf, but we need to replace ourselves with a node rather than
   // a leaf.
   k_bucket_node *newnode = 0;
@@ -803,15 +807,11 @@ k_bucket_leaf::divide(unsigned depth)
   }
 
   // create both children
-  KDEBUG(4) <<  "k_bucket_leaf::creating subchildren" << endl;
+  KDEBUG(4) <<  "k_bucket_leaf::divide creating subchildren" << endl;
 
-  // KDEBUG(4) <<  "erase: subchild " << (myleftmostbit ^ 1) << " is a leaf on depth " << depth << endl;
-
-  // now divide contents into separate buckets
-  // XXX: we have to ping these guys?
   for(k_nodes::nodeset_t::const_iterator i = nodes->nodes.begin(); i != nodes->nodes.end(); ++i) {
     unsigned bit = Kademlia::getbit((*i)->id, depth);
-    KDEBUG(4) <<  "k_bucket_leaf::divide: pushed entry " << Kademlia::printbits((*i)->id) << " to side " << bit << endl;
+    KDEBUG(4) <<  "k_bucket_leaf::divide on depth " << depth << ": pushed entry " << Kademlia::printbits((*i)->id) << " to side " << bit << endl;
     ((k_bucket_leaf*)newnode->child[bit])->nodes->insert((*i)->id);
   }
 
@@ -872,21 +872,20 @@ k_bucket::k_bucket(k_bucket *parent, bool leaf, Kademlia *k) : leaf(leaf), paren
 void
 k_bucket::traverse(k_traverser *traverser, string prefix, unsigned depth)
 {
-  checkrep();
+  // checkrep();
 
   // XXX: for KDEBUG
   Kademlia::NodeID _id = kademlia()->id();
+  if(!depth)
+    KDEBUG(1) << "k_nodes::traverser for " << traverser->type() << endl;
 
   if(!leaf) {
-    KDEBUG(1) << "k_nodes::traverser " << prefix << " going to 0" << endl;
     ((k_bucket_node*) this)->child[0]->traverse(traverser, prefix + "0", depth+1);
-    KDEBUG(1) << "k_nodes::traverser " << prefix << " going to 1" << endl;
     ((k_bucket_node*) this)->child[1]->traverse(traverser, prefix + "1", depth+1);
     checkrep();
     return;
   }
 
-  KDEBUG(1) << "k_nodes::traverser " << prefix << " calling execute " << endl;
   traverser->execute((k_bucket_leaf*) this, prefix, depth);
 
   // the divide() may have killed us.
@@ -1073,7 +1072,7 @@ k_stabilizer::execute(k_bucket_leaf *k, string prefix, unsigned depth)
   k_collect_closest getsuccessor(random_key);
   mykademlia->root()->traverse(&getsuccessor);
   for(k_collect_closest::resultset_t::const_iterator i = getsuccessor.results.begin(); i != getsuccessor.results.end(); ++i) {
-    KDEBUG(1) << "k_stabilizer: random lookup for " << Kademlia::printbits(random_key) << endl;
+    KDEBUG(1) << "k_stabilizer: random lookup for " << Kademlia::printbits(random_key) << ", sending to " << Kademlia::printbits((*i)->id) << endl;
     mykademlia->do_lookup_wrapper((*i), random_key);
   }
 }
@@ -1136,13 +1135,12 @@ k_stabilized::execute(k_bucket_leaf *k, string prefix, unsigned depth)
   // qualify for this entry in the finger table, so the node that says there
   // is no such is WRONG.
   if(it != _v->end() && *it <= upper) {
-    KDEBUG(4) << "stabilized: entry " << depth << " is invalid, but " << Kademlia::printbits(*it) << " matches " << endl;
+    KDEBUG(4) << "stabilized: prefix " << prefix << " on depth " << depth << " is invalid, but " << Kademlia::printbits(*it) << " matches " << endl;
     KDEBUG(4) << "stabilized: lowermask = " << Kademlia::printbits(lower_mask) << endl;
     KDEBUG(4) << "stabilized: ~lowermask = " << Kademlia::printbits(~lower_mask) << endl;
     KDEBUG(4) << "stabilized: lower = " << Kademlia::printbits(lower) << endl;
     KDEBUG(4) << "stabilized: upper = " << Kademlia::printbits(upper) << endl;
     _stabilized = false;
-    return;
   }
   // assert(false);
 }
@@ -1159,9 +1157,22 @@ k_finder::execute(k_bucket_leaf *k, string prefix, unsigned depth)
 }
 // }}}
 
+// {{{ k_dumper::execute
+void
+k_dumper::execute(k_bucket_leaf *k, string prefix, unsigned depth)
+{
+  string spaces = "";
+  for(unsigned i=0; i<depth; i++)
+    spaces += "  ";
+  cout << spaces << "prefix: " << prefix << endl;
+  for(Kademlia::nodeinfo_set::const_iterator i = k->nodes->nodes.begin(); i != k->nodes->nodes.end(); ++i)
+    cout << spaces << "  " << Kademlia::printbits((*i)->id) << ", lastts = " << (*i)->lastts << endl;
+}
+// }}}
+
 // {{{ k_collect_closest::k_collect_closest
 k_collect_closest::k_collect_closest(Kademlia::NodeID n, unsigned best) :
-  _node(n) , _best(best)
+  k_traverser("k_collect_closest"), _node(n) , _best(best)
 {
   Kademlia::closer::n = n;
   _lowest = (Kademlia::NodeID) -1;

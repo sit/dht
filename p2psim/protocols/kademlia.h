@@ -273,7 +273,13 @@ private:
 
 // {{{ class k_traverser
 class k_traverser { public:
+  k_traverser(string type = "") : _type(type) {}
+  virtual ~k_traverser() {}
   virtual void execute(k_bucket_leaf*, string, unsigned) = 0;
+  string type() { return _type; };
+
+private:
+  string _type;
 };
 // }}}
 // {{{ class k_collect_closest
@@ -294,14 +300,15 @@ private:
 // }}}
 // {{{ class k_stabilizer
 class k_stabilizer : public k_traverser { public:
-  k_stabilizer() {}
+  k_stabilizer() : k_traverser("k_stabilizer") {}
   virtual ~k_stabilizer() {}
   virtual void execute(k_bucket_leaf *, string, unsigned);
 };
 // }}}
 // {{{ class k_stabilized
 class k_stabilized : public k_traverser { public:
-  k_stabilized(vector<Kademlia::NodeID> *v) : _v(v), _stabilized(true) {}
+  k_stabilized(vector<Kademlia::NodeID> *v) :
+    k_traverser("k_stabilized"), _v(v), _stabilized(true) {}
 
   virtual ~k_stabilized() {}
   virtual void execute(k_bucket_leaf*, string, unsigned);
@@ -314,7 +321,7 @@ private:
 // }}}
 // {{{ class k_finder
 class k_finder : public k_traverser { public:
-  k_finder(Kademlia::NodeID n) : _n(n), _found(0) {}
+  k_finder(Kademlia::NodeID n) : k_traverser("k_finder"), _n(n), _found(0) {}
 
   virtual ~k_finder() {}
   virtual void execute(k_bucket_leaf*, string, unsigned);
@@ -323,6 +330,15 @@ class k_finder : public k_traverser { public:
 private:
   Kademlia::NodeID _n;
   unsigned _found;
+};
+// }}}
+// {{{ class k_dumper
+class k_dumper : public k_traverser { public:
+  k_dumper() : k_traverser("k_dumper") {}
+  virtual ~k_dumper() {}
+  virtual void execute(k_bucket_leaf*, string, unsigned);
+
+private:
 };
 // }}}
 
