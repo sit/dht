@@ -200,7 +200,7 @@ rpc_manager::doRPC_dead (ptr<location> l,
 			 ptr<void> in, void *out, aclnt_cb cb,
 			 long fake_seqno /* = 0 */)
 {
-  doRPC (l, prog, procno, in, out, cb, fake_seqno);
+  return doRPC (l, prog, procno, in, out, cb, fake_seqno);
 }
 
 void
@@ -236,6 +236,7 @@ tcp_manager::doRPC (ptr<location> l,
   } else if (hi->fd > 0) { //already connected
     send_RPC (args);
   }
+  return 0;
 }
 
 long
@@ -244,7 +245,7 @@ tcp_manager::doRPC_dead (ptr<location> l,
 			 ptr<void> in, void *out, aclnt_cb cb,
 			 long fake_seqno /* = 0 */)
 {
-  doRPC (l, prog, procno, in, out, cb, fake_seqno);
+  return doRPC (l, prog, procno, in, out, cb, fake_seqno);
 }
 
 void
