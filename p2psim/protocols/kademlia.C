@@ -365,7 +365,6 @@ Kademlia::initstate()
 void
 Kademlia::join(Args *args)
 {
-  // KDEBUG(1) << "Kademlia::join" << endl;
   if(_joined)
     return;
 
@@ -376,6 +375,7 @@ Kademlia::join(Args *args)
   _id = ConsistentHash::ip2chid(ip());
   assert(!_nodeid2kademlia->find_pair(_id));
   _nodeid2kademlia->insert(_id, this);
+  //KDEBUG(1) << "Kademlia::join ip " << ip() << " now " << now() << endl;
 
   // I am the well-known node
   if(wkn == ip()) {
@@ -468,7 +468,7 @@ void
 Kademlia::crash(Args *args)
 {
   // destroy k-buckets
-  // KDEBUG(1) << "Kademlia::crash" << endl;
+  //KDEBUG(1) << "Kademlia::crash ip " << ip() << endl;
   // assert(alive());
   _root->collapse();
   for(HashMap<NodeID, k_nodeinfo*>::iterator i = flyweight.begin(); i; i++)
@@ -510,6 +510,7 @@ Kademlia::lookup(Args *args)
   // KDEBUG(0) << "Kademlia::lookup: " << printID(key) << endl;
 
   lookup_wrapper_args *lwa = new lookup_wrapper_args();
+  lwa->ipkey = key_ip;
   lwa->key = key;
   lwa->starttime = now();
   lwa->attempts = 0;
@@ -575,9 +576,14 @@ Kademlia::lookup_wrapper(lookup_wrapper_args *args)
   }
 
 
-  bool alive_and_joined = (*_nodeid2kademlia)[args->key]->alive() &&
-                          (*_nodeid2kademlia)[args->key]->_joined;
-  IPAddress target_ip = (*_nodeid2kademlia)[args->key]->ip();
+  //node crashed and some other nodes rejoined into its old master node,
+  //deleting the crashed node's entry, this cannot be relied upon to 
+  //determine node liveliness
+  //bool alive_and_joined = (*_nodeid2kademlia)[args->key]->alive() &&
+  //                        (*_nodeid2kademlia)[args->key]->_joined;
+  bool alive_and_joined = Network::Instance()->alive(args->ipkey)&&
+                          ((Kademlia*)Network::Instance()->getnode(args->ipkey))->_joined;
+  IPAddress target_ip = args->ipkey;
 
   // we're out of time.
   if(now() - args->starttime > Kademlia::max_lookup_time) {

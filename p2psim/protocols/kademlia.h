@@ -289,6 +289,7 @@ public:
   };
 
   struct lookup_wrapper_args {
+    IPAddress ipkey;
     NodeID key;
     Time starttime;
     unsigned attempts;
