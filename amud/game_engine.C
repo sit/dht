@@ -75,7 +75,7 @@ game_engine::insert (ref<avatar> a, mud_cb_t cb, bool newa)
   } else 
     opt = NULL;
 
-  warn << "game_engine::insert" << a->to_str ();
+  //warn << "game_engine::insert" << a->to_str ();
 
   dhash->insert (a->ID (), a->bytes (), a->size (), 
 		 wrap (this, &game_engine::done_insert, cb), opt, DHASH_NOAUTH);

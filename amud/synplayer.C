@@ -9,13 +9,14 @@ ptr<dhashclient> dhash;
 game_engine *mud;
 
 void done_insert (ptr<avatar> a, chordID rID, mud_stat stat);
+void really_done (mud_stat);
 
 void 
-new_player (str name, chordID rID)
+new_player (str name, int i)
 {
-  str pw (0);
+  str pw ("");
   ref<avatar> a = New refcounted<avatar> (name, pw, dhash);
-  mud->insert (a, wrap (&done_insert, a, rID));
+  mud->insert (a, wrap (&done_insert, a, i), true);
 }
 
 void 
@@ -23,9 +24,16 @@ done_insert (ptr<avatar> a, chordID rID, mud_stat stat)
 {
   if (stat == MUD_OK) {
     cout << "\nAvatar " << a->get_name () << " creation successful!\n";
-    //mud->enter_player (a, rID);
+    mud->enter_player (a, 0, wrap (&really_done));
   } else
     cout << "Avatar creation error: stat = " << stat << "\n";
+}
+
+void 
+really_done (mud_stat stat)
+{
+  if (stat == MUD_OK) 
+    cout << "Insert success!!"; 
 }
 
 static void
@@ -38,7 +46,6 @@ usage ()
 int 
 main (int argc, char **argv)
 {
-
   setprogname (argv[0]);
 
   if (argc < 2)
@@ -49,9 +56,7 @@ main (int argc, char **argv)
 
   mud = New game_engine (dhash);
   str name ("a1");
-  str rname ("r1");
-  chordID rID = compute_hash (rname.cstr (), rname.len ());
-  new_player (name, rID);
+  new_player (name, 0);
 
   amain ();
 }
