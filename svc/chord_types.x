@@ -53,7 +53,6 @@ struct chord_node_ext {
   chord_node_wire n;
   int32_t a_lat;
   int32_t a_var;
-  int32_t pred_err;
   u_int64_t nrpc;
 };
 
