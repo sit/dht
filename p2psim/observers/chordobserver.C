@@ -52,6 +52,7 @@ ChordObserver::ChordObserver(Args *a)
   _instance = this;
   assert(a);
   _initnodes = atoi((*a)["initnodes"].c_str());
+  _totallivenodes = 0;
 
   set<string> all = ProtocolFactory::Instance()->getnodeprotocols();
   assert(all.size()==1);
@@ -79,6 +80,8 @@ ChordObserver::ChordObserver(Args *a)
   init_state();
 }
 
+
+
 vector<Chord::IDMap>
 ChordObserver::get_sorted_nodes()
 {
@@ -102,8 +105,5 @@ ChordObserver::init_state()
 void
 ChordObserver::kick(Observed *ob, ObserverInfo *oi)
 {
-  if(_initnodes){
-    _initnodes = false;
-    init_state();
-  }
+  
 }

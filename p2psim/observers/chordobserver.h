@@ -35,6 +35,8 @@ public:
   static ChordObserver* Instance(Args*);
   virtual void kick(Observed *, ObserverInfo *);
   vector<Chord::IDMap> get_sorted_nodes();
+  void addnode() { _totallivenodes++; printf("chordobserver %llu %d\n", now(), _totallivenodes);}
+  void delnode() { _totallivenodes--; printf("chordobserver %llu %d\n", now(), _totallivenodes);}
 
 private:
   static ChordObserver *_instance;
@@ -43,6 +45,7 @@ private:
 
   void init_state();
   vector<Chord::IDMap> ids;
+  uint _totallivenodes;
 };
 
 #endif // __CHORD_OBSERVER_H
