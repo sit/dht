@@ -392,8 +392,8 @@ join_restart:
   // KDEBUG(2) << "join: succ_id is " << printID(succ_id) << endl;
   unsigned cpl = common_prefix(_id, succ_id);
 
-  // all entries further away than him need to be refreshed.
-  // see section 2.3 in techreport.
+  // all entries further away than him need to be refreshed.  this is similar to
+  // stabilization.
   for(int i=cpl-1; i>=0; i--) {
     // XXX: should be random
     lookup_args la(_id, ip(), (_id ^ (((Kademlia::NodeID) 1)<<i)));
@@ -405,21 +405,14 @@ join_restart:
       goto join_restart;
     }
 
-    // if the RPC failed, or the node is now dead, start over
-    k_nodeinfo *ki = flyweight[succ_id];
-    la.stattype = Kademlia::STAT_JOIN;
-    record_stat(STAT_JOIN, 1, 0);
-    if(!doRPC(ki->ip, &Kademlia::do_lookup, &la, &lr, Kademlia::_default_timeout)) {
-      clear();
-      goto join_restart;
-    }
-    record_stat(STAT_JOIN, lr.results.size(), 0);
+    // do a refresh on that bucket
+    do_lookup(&la, &lr);
 
     if(!alive())
       return;
 
     // fill our finger table
-    for(set<k_nodeinfo, older>::const_iterator i = lr.results.begin(); i != lr.results.end(); ++i)
+    NODES_ITER(&lr.results)
       if(!flyweight[i->id] && i->id != _id)
         insert(i->id, i->ip, i->timeouts);
         //  ... but not touch.  we didn't actually talk to the node.
