@@ -2,9 +2,13 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 
+#include <amisc.h>
+
 #include "location.h"
 #include "misc_utils.h"
+#if 0
 #include <chord_util.h>
+#endif /* 0 */
 #include "modlogger.h"
 
 
@@ -17,6 +21,12 @@ location::init ()
   saddr_.sin_family = AF_INET;
   inet_aton (addr_.hostname.cstr (), &saddr_.sin_addr);
   saddr_.sin_port = htons (addr_.port);
+#if 0
+  if (!is_authenticID (n_, addr_.hostname, addr_.port, vnode_)) {
+    trace << "badnode " << n_ << " " << addr_ << " " << vnode_ << "\n";
+    vnode_ = -1;
+  }
+#endif /* 0 */  
 }
 
 location::location (const chordID &n, 
@@ -29,6 +39,7 @@ location::location (const chordID &n,
     a_lat_ (0.0),
     a_var_ (0.0),
     alive_ (true),
+    dead_time_ (0),
     nrpc_ (0)
 {
   coords_ = coords;
@@ -42,6 +53,7 @@ location::location (const chord_node &node)
     a_lat_ (0.0),
     a_var_ (0.0),
     alive_ (true),
+    dead_time_ (0),
     nrpc_ (0)
 {
   for (unsigned int i = 0; i < node.coords.size (); i++)
@@ -80,6 +92,17 @@ location::fill_node_ext (chord_node_ext &data) const
   data.a_lat = static_cast<int> (a_lat_);
   data.a_var = static_cast<int> (a_var_);
   data.nrpc  = nrpc_;
+}
+
+void
+location::set_alive (bool alive)
+{
+  if (!alive) {
+    timespec ts;
+    clock_gettime (CLOCK_REALTIME, &ts);
+    dead_time_ = ts.tv_sec;
+  }
+  alive_ = alive;
 }
 
 void

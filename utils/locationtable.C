@@ -179,7 +179,16 @@ locationtable::insert (const chordID &n,
 {
   ptr<location> loc = lookup (n);
   if (loc != NULL) {
-    loc->set_alive (true);
+    // Try to dampen node becoming alive so it only happens once
+    // a minute.
+    if (!loc->alive ()) {
+      timespec ts;
+      clock_gettime (CLOCK_REALTIME, &ts);
+      if (ts.tv_sec - loc->dead_time () > 60)
+	loc->set_alive (true);
+      else
+	loctrace << "locationtable::insert: damping " << loc->id () << "\n";
+    }
     return loc;
   }
     
@@ -414,14 +423,16 @@ locationtable::closestsuccloc (const chordID &x) {
   // Find the first actual successor as quickly as possible...
   // Recall that responsibility is right inclusive, n is responsible
   // for keys in (p, n].
+  int sz = size ();
   locwrap *l = locs[x];
   if (!l)
     l = loclist.closestsucc (x);
 
   // ...and now narrow it down to someone who's "good".
-  while (l && !l->good ())
+  while (l && !l->good () && sz-- > 0)
     l = next (l);
 
+  assert (sz > 0); // could it be that we have no good nodes?
 #if 0
   chordID n = l->loc_->id ();
 
@@ -446,15 +457,18 @@ locationtable::closestsuccloc (const chordID &x) {
 ptr<location>
 locationtable::closestpredloc (const chordID &x, vec<chordID> failed) 
 {
+  int sz = size ();
   locwrap *l = locs[x];
   if (l) {
     l = prev (l);
   } else {
     l = loclist.closestpred (x);
   }
-  while (l && (!l->good () || (l->loc_ && in_vector (failed, l->loc_->id ()))))
+  while (l && (!l->good () || in_vector (failed, l->loc_->id ()))
+           && sz-- > 0)
     l = prev (l);
-  
+
+  assert (sz > 0);
 #if 0
   chordID n = l->loc_->id ();
 

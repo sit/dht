@@ -15,6 +15,7 @@ class location {
   float a_var_;
   
   bool alive_;
+  time_t dead_time_;
 
   sockaddr_in saddr_;
   unsigned long nrpc_;
@@ -34,6 +35,7 @@ class location {
   float distance () const { return a_lat_; };
   float a_var () const { return a_var_; };
   bool alive () const { return alive_; };
+  time_t dead_time () const { return dead_time_; }
   const sockaddr_in &saddr () const { return saddr_; };
   unsigned long nrpc () const { return nrpc_; };
 
@@ -42,7 +44,7 @@ class location {
   void fill_node_ext (chord_node_ext &data) const;
 
   // Mutators
-  void set_alive (bool alive) { alive_ = alive; };
+  void set_alive (bool alive);
   void set_coords (const vec<float> &coords);
   void set_distance (float dist) { a_lat_ = dist; };
   void set_variance (float variance) { a_var_ = variance; };

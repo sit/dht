@@ -40,7 +40,7 @@ toe_table::prune_toes (int level)
     ptr<location> id = (*toes[level])[i];
     //do based on coords instead
     vec<float> them = id->coords ();
-    if(Coord::distance_f(us, them) >= level_to_delay (level))
+    if(!id->alive () || Coord::distance_f(us, them) >= level_to_delay (level))
       removeindex = i;
   }
   
@@ -196,10 +196,13 @@ toe_table::get_toes (int level)
 {
   //int up = level_to_delay (level);
   vec<ptr<location> > res;
-  if(level < 0 || level >= MAX_LEVELS)
+  if (level < 0 || level >= MAX_LEVELS)
     return res;
-  for (unsigned int i = 0; i < toes[level]->size (); i++)
-    res.push_back ((*toes[level])[i]);
+  for (unsigned int i = 0; i < toes[level]->size (); i++) {
+    ptr<location> l =  (*toes[level])[i];
+    if (l->alive ())
+      res.push_back ((*toes[level])[i]);
+  }
 
   return res;
 }
