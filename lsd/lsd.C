@@ -198,12 +198,13 @@ parseconfigfile (str cf, int nvnode, int set_rpcdelay)
         warn << cf << ":" << line << ": usage: nreplica <number>\n";
       }
    } else if (!strcasecmp (av[0], "wellknownhost")) {
-      if (av.size () != 2) {
+      if (av.size () != 2 || inet_addr (av[1]) == INADDR_NONE) {
         errors = true;
-        warn << cf << ":" << line << ": usage: wellknownhost <hostname>\n";
+        warn << cf << ":" << line << ": usage: wellknownhost <ip address>\n";
       }
-      else
+      else {
         wellknownhost = av[1];
+      }
    } else if (!strcasecmp (av[0], "storesize")) {
      if (av.size () != 2 || !convertint (av[1], &ss)) {
        errors = true;
