@@ -64,10 +64,19 @@ ChordAdapt::ChordAdapt(IPAddress i, Args& a) : P2Protocol(i)
 
 ChordAdapt::~ChordAdapt()
 {
-  if (_me.ip == 1) 
+  if (alive()) {
+    vector<IDMap>::iterator p = find(ids.begin(),ids.end(),_me);
+    ids.erase(p);
+    for (HashMap<ConsistentHash::CHID, Time>::iterator i = _outstanding_lookups.begin();
+	i != _outstanding_lookups.end(); ++i) {
+      NDEBUG(2) << "done lookup key " << printID(i.key()) << "timeout failed" << endl;
+      record_lookup_stat(_me.ip, _me.ip, now()-i.value(), false, false, 0, 0, 0);
+    }
+  }
+  delete loctable;
+  if (ids.size() == 0) 
     Node::print_stats();
 
-  delete loctable;
 }
 
 /* -------------- initstate ---------------- */
@@ -122,7 +131,7 @@ ChordAdapt::join(Args *args)
     ids.insert(p,1,_me);
 
   NDEBUG(1) << "start to join locsz " << loctable->size()  << " succsz " 
-    << loctable->succ_size() << " wkn " << _wkn.ip << endl;
+    << loctable->succ_size() << " wkn " << _wkn.ip << " idsz " << ids.size() << endl;
 
   if (args && args->nget<uint>("first",0,10)==1) {
     //start basic successor stabilization
@@ -245,7 +254,8 @@ ChordAdapt::find_successors_handler(lookup_args *la, lookup_ret *lr)
 void
 ChordAdapt::crash(Args *args)
 {
-  NDEBUG(1) << "crashed locsz " << loctable->size() << endl;
+  NDEBUG(1) << "crashed locsz " << loctable->size() << " ids " 
+    << ids.size() << endl;
   _rate_queue->stop_queue();
   loctable->del_all();
   _outstanding_lookups.clear();
@@ -260,6 +270,7 @@ void
 ChordAdapt::lookup(Args *args)
 {
   if ((_join_scheduled) && (loctable->size() < 2)) {
+    NDEBUG(2) << "lookup key failed not yet joined" << endl;
     record_lookup_stat(_me.ip, _me.ip, 0, false, false, 0, 0, 0);
     return;
   }

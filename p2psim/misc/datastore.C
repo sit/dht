@@ -196,7 +196,7 @@ DataStore::stabilize_data (void *a)
 
   
   _curr_succ++;
-  if (_curr_succ >= _nreplicas - 1) curr_succ = 0;
+  if (_curr_succ >= _nreplicas - 1) _curr_succ = 0;
   int start = random () % 5000;
   delaycb (start, &DataStore::stabilize_data, (void *) 0);
 }

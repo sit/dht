@@ -15,6 +15,8 @@ RateControlQueue::RateControlQueue(Node *n, double rate, int burst, void (*fn)(v
   _quota = 0;
   _last_update = 0;
   _running = false;
+  _total_bytes = 0;
+  _start_time = 0;
 }
 
 void
@@ -24,6 +26,10 @@ RateControlQueue::delay_send(void *x)
     return;
 
   assert(_running);
+
+  if (!_start_time)
+    _start_time = now();
+
   _quota += (int)((now()-_last_update)*_rate);
 
   _last_update = now();
@@ -38,6 +44,7 @@ RateControlQueue::delay_send(void *x)
     qe = _qq.top();
     _qq.pop();
     _quota -= qe->_sz;
+    _total_bytes += qe->_sz;
     if (_qq.size() > 10)
       QDEBUG(4) << " delay_send sendrpc (" << qe->_type << "," << qe->_priority
       << ") to " << qe->_dst << endl;;
@@ -58,13 +65,16 @@ RateControlQueue::send_one_rpc(void *x)
   _node->record_bw_stat(qe->_type,0,qe->_sz);
   bool b = _node->_doRPC(qe->_dst, qe->_fn, qe->_t, qe->_timeout);
 
-  if (qe->_cb) {
-    int sz = (qe->_cb)(b, qe->_t);
-    _quota -= sz;
-    _node->record_bw_stat(qe->_type,0,sz);
-  }else{
-    _quota -= PKT_OVERHEAD;
-  }
+  int sz;
+  if (qe->_cb) 
+    sz = (qe->_cb)(b, qe->_t);
+  else
+    sz = PKT_OVERHEAD;
+  
+  _quota -= sz;
+  _node->record_bw_stat(qe->_type,0,sz);
+  _total_bytes += sz;
+
   qe->_killme(qe->_t);
   delete qe;
 }
@@ -80,4 +90,6 @@ RateControlQueue::stop_queue()
   }
   _running = false;
   _quota = 0;
+  QDEBUG(4) << "stopped total bytes " << _total_bytes << " start time " << _start_time << 
+    " avg bytes " << (double)_total_bytes/(now()-_start_time) << endl;
 }
