@@ -705,11 +705,19 @@ vnode_impl::dogetsucclist (user_args *sbp)
 {
   ndogetsucclist++;
   chord_nodelistres res (CHORD_OK);
-  res.resok->nlist = succs ();
+
+  vec<chord_node> s = succs ();
+  chord_node self;
+  bool ok = locations->get_node (my_ID (), &self);
+  assert (ok);
+
+  // the succs we send back starts with 'us'
+  res.resok->nlist.setsize (1 + s.size ());
+  res.resok->nlist[0] = self;
+  for (u_int i = 0; i < s.size (); i++)
+    res.resok->nlist[i + 1] = s[i];
   sbp->reply (&res);
 }
-
-
 void
 vnode_impl::dodebruijn (user_args *sbp, chord_debruijnarg *da)
 {
