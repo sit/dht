@@ -26,6 +26,7 @@
 #define __EUCLIDEAN_H
 
 #include "p2psim/p2psim.h"
+#include "p2psim/topology.h"
 
 class Euclidean : public Topology {
 public:
