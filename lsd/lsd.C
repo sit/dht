@@ -185,8 +185,7 @@ get_fingerlike (int mode)
 }
 
 static void
-newvnode_cb (int nreplica, str db_name, int ss_mode, 
-	     int n, ptr<route_factory> f_old,
+newvnode_cb (int n, ptr<route_factory> f_old,
 	     ptr<vnode> my, chordstat stat)
 {
   
@@ -194,17 +193,13 @@ newvnode_cb (int nreplica, str db_name, int ss_mode,
     warnx << "newvnode_cb: status " << stat << "\n";
     fatal ("unable to join\n");
   }
-  str db_name_prime = strbuf () << db_name << "-" << n;
-  warn << "lsd: created new dhash\n";
-  dh.push_back( New dhash (db_name_prime, my, f_old, nreplica, 
-			   ss_mode));
+  dh[n]->init_after_chord(my, f_old);
 
   n += 1;
   if (n < vnodes) {
     ptr<route_factory> f = get_factory (mode);
     ptr<fingerlike> fl = get_fingerlike (mode);
-    chordnode->newvnode (wrap (newvnode_cb, nreplica, db_name, 
-			       ss_mode, n, f), fl, f);
+    chordnode->newvnode (wrap (newvnode_cb, n, f), fl, f);
   }
 }
 
@@ -599,10 +594,15 @@ main (int argc, char **argv)
 				     ss_mode,
 				     lookup_mode, lbase);
 
+  for (int i = 0; i < vnodes; i++) {
+    str db_name_prime = strbuf () << db_name << "-" << i;
+    warn << "lsd: created new dhash\n";
+    dh.push_back( New dhash (db_name_prime, nreplica, ss_mode));
+  }
+
   ptr<route_factory> f = get_factory (mode);
   ptr<fingerlike> fl = get_fingerlike (mode);
-  chordnode->newvnode (wrap (newvnode_cb, nreplica, db_name, ss_mode, 
-			     0, f), fl, f);
+  chordnode->newvnode (wrap (newvnode_cb, 0, f), fl, f);
 
   sigcb(SIGUSR1, wrap (&stats));
   sigcb(SIGUSR2, wrap (&stop));

@@ -94,12 +94,8 @@ verifydb (dbfe *db)
 
 
 
-dhash::dhash(str dbname, ptr<vnode> node, 
-	     ptr<route_factory> _r_factory,
-	     u_int k, int _ss_mode) 
+dhash::dhash(str dbname, u_int k, int _ss_mode) 
 {
-  warn << "In dhash constructor " << node->my_ID () << "\n";
-  this->r_factory = _r_factory;
   nreplica = k;
   kc_delay = 11;
   rc_delay = 7;
@@ -172,11 +168,20 @@ keyhashdbagain:
     open_databases.push_back (keyhash_db);
   }
 
+  // merkle state
+  mtree = New merkle_tree (db);
+}
+
+void
+dhash::init_after_chord(ptr<vnode> node, ptr<route_factory> _r_factory)
+{
+  warn << "In dhash init_after_chord " << node->my_ID () << "\n";
+  this->r_factory = _r_factory;
+
   host_node = node;
   assert (host_node);
 
   // merkle state
-  mtree = New merkle_tree (db);
   msrv = New merkle_server (mtree, 
 			    wrap (node, &vnode::addHandler),
 			    wrap (this, &dhash::sendblock_XXX));

@@ -318,8 +318,8 @@ class dhash {
   void replica_maintenance_timer (u_int index);
   void partition_maintenance_timer ();
 
-  dhash (str dbname, ptr<vnode> node, ptr<route_factory> r_fact,
-	 u_int nreplica = 0, int ss_mode = 0);
+  dhash (str dbname, u_int nreplica = 0, int ss_mode = 0);
+  void init_after_chord(ptr<vnode> node, ptr<route_factory> r_fact);
   void accept(ptr<axprt_stream> x);
 
   void print_stats ();
