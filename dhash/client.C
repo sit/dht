@@ -139,14 +139,17 @@ dhashcli::retrieve_dl_or_walk_cb (ptr<rcv_state> rs, dhash_stat status,
     if (options & DHASHCLIENT_NO_RETRY_ON_LOOKUP) {
       rs->complete (DHASH_NOENT, NULL);
       rs = NULL;
-    } else if (rs->succs.size() == 0) {
-      trace << myID << ": walk (" << rs->key << "): No luck walking successors, retrying..\n";
+    }
+    else if (rs->succs.size() == 0) {
+      trace << myID << ": walk ("<< rs->key
+	    << "): No luck walking successors, retrying..\n";
       route_iterator *ci = r_factory->produce_iterator_ptr (rs->key.ID);
       delaycb (5, wrap (ci, &route_iterator::first_hop, 
 			wrap (this, &dhashcli::retrieve_block_hop_cb,
 			      rs, ci, options, retries - 1, guess),
 			guess));
-    } else {
+    }
+    else {
       chord_node s = rs->succs.pop_front ();
       dhash_download::execute (clntnode, s, rs->key, NULL, 0, 0, 0,
 			       wrap (this, &dhashcli::retrieve_dl_or_walk_cb,
@@ -277,6 +280,26 @@ order_succs (const vec<float> &me, const vec<chord_node> &succs,
 }
 
 
+static void
+patch_succ_list (vec<chord_node> &succs,
+                 const vec<ptr<location> > &from, unsigned needed)
+{
+  for (unsigned i=0; i<from.size () && succs.size ()<needed; i++) {
+    chord_node x;
+    from [i]->fill_node (x);
+    bool found = false;
+    for (unsigned j=0; j<succs.size () && !found; j++)
+      if (succs [j].x == x.x)
+	found = true;
+    if (!found)
+      succs.push_back (x);
+  }
+#if 0
+  for (unsigned i=0; i<succs.size (); i++)
+    warn << "succ " << i << ": " << succs [i].x << "\n";
+#endif
+}
+
 
 void
 dhashcli::retrieve_lookup_cb (ptr<rcv_state> rs,
@@ -292,10 +315,32 @@ dhashcli::retrieve_lookup_cb (ptr<rcv_state> rs,
     trace << myID << ": retrieve (" << rs->key 
           << "): lookup failure: " << status << "\n";
     rs->complete (status, NULL); // failure
-    rs = NULL;    
+    rs = NULL;
     return;
   }
-  
+
+  // benjie: if number of successors is smaller than num_efrags,
+  // that's likely an indication that the ring is small.
+  if (succs.size () < dhash::num_efrags ()) {
+    chord_node s;
+    clntnode->my_location ()->fill_node (s);
+
+    bool in_succ_list = false;
+    for (unsigned i=0; i<succs.size () && !in_succ_list; i++)
+      if (succs [i].x == s.x)
+	in_succ_list = true;
+
+    if (in_succ_list) {
+      vec<ptr<location> > sl = clntnode->succs ();
+      patch_succ_list (succs, sl, dhash::num_efrags ());
+    }
+    else
+      // clntnode is not in succ list, but there aren't enough
+      // successors. this is probably an indication that the lookup is
+      // done on clntnode itself.
+      succs.push_back (s);
+  }
+
   while (succs.size () > dhash::num_efrags ())
     succs.pop_back ();
 
@@ -336,8 +381,8 @@ dhashcli::retrieve_fetch_cb (ptr<rcv_state> rs, u_int i,
   if (rs->completed) {
     // Here it might just be that we got a fragment back after we'd
     // already gotten enough to reconstruct the block.
-    trace << myID << ": retrieve (" << rs->key << "): unexpected fragment from "
-	  << i + 1 << ", discarding.\n";
+    trace << myID << ": retrieve (" << rs->key
+          << "): unexpected fragment from " << i + 1 << ", discarding.\n";
     return;
   }
 
@@ -362,7 +407,8 @@ dhashcli::retrieve_fetch_cb (ptr<rcv_state> rs, u_int i,
   
   if (!Ida::reconstruct (rs->frags, newblock)) {
     if (rs->frags.size () >= dhash::num_dfrags ()) {
-      warning << myID << ": retrieve (" << rs->key << "): reconstruction failed.\n";
+      warning << myID << ": retrieve (" << rs->key
+	      << "): reconstruction failed.\n";
       rs->errors++;
       fetch_frag (rs);
     }
@@ -501,9 +547,50 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
     return;
   }
 
+  // benjie: if number of successors is smaller than num_efrags,
+  // that's likely an indication that the ring is small.
+  if (succs.size () < dhash::num_efrags ()) {
+    chord_node s;
+    clntnode->my_location ()->fill_node (s);
+
+    bool in_succ_list = false;
+    for (unsigned i=0; i<succs.size () && !in_succ_list; i++)
+      if (succs [i].x == s.x)
+	in_succ_list = true;
+
+    if (in_succ_list) {
+      vec<ptr<location> > sl = clntnode->succs ();
+      patch_succ_list (succs, sl, dhash::num_efrags ());
+    }
+    else
+      // clntnode is not in succ list, but there aren't enough
+      // successors. this is probably an indication that the lookup is
+      // done on clntnode itself.
+      succs.push_back (s);
+  }
+
+  if (succs.size () < dhash::num_dfrags ()) {
+    // this is a failure condition, since we can't hope to reconstruct
+    // the block reliably.
+    info << "Not enough successors for insert: |succs| " << succs.size ()
+	 << ", DFRAGS " << dhash::num_dfrags () << "\n";
+    (*cb) (DHASH_STOREERR, mt);
+    return;
+  }
+
+  if (succs.size () < dhash::num_efrags ())
+    // benjie: this is not a failure condition, since if we don't
+    // receive num_efrags number of store replies in insert_store_cb,
+    // we are still allowed to proceed.
+    info << "Number of successors less than desired: |succs| " << succs.size ()
+	 << ", EFRAGS " << dhash::num_efrags () << "\n";
+
+  while (succs.size () > dhash::num_efrags ())
+    succs.pop_back ();
+
   ref<sto_state> ss = New refcounted<sto_state> (block, cb);
   ss->succs = succs;
-  
+
   if (block->ctype == DHASH_KEYHASH) {
     for (u_int i = 0; i < succs.size (); i++) {
       // Count up for each RPC that will be dispatched
@@ -514,20 +601,16 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
 			    blockID(block->ID, block->ctype, DHASH_BLOCK),
 			    block,
 			    wrap (this, &dhashcli::insert_store_cb,  
-				  ss, r, i,
-				  ss->succs.size (), ss->succs.size () / 2),
+				  ss, r, i, ss->succs.size (),
+				  // benjie: use dfrags as the number
+				  // of blocks we want to succeed when
+				  // storing whole keyhash blocks
+				  dhash::num_dfrags ()),
 			    i == 0 ? DHASH_STORE : DHASH_REPLICA);
     }
     return;
   }
 
-  if (dhash::num_efrags () > succs.size ()) {
-    info << "Not enough successors: |succs| " << succs.size ()
-	 << ", EFRAGS " << dhash::num_efrags () << "\n";
-    (*cb) (DHASH_STOREERR, mt);
-    return;
-  }
-  
   str blk (block->data, block->len);
 
   // Cap the maximum.
@@ -537,8 +620,7 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
 
   // trace << "Using m = " << m << " for block size " << block->len << "\n";
 
-  for (u_int i = 0; i < dhash::num_efrags (); i++) {
-    assert (i < succs.size ());
+  for (u_int i = 0; i < succs.size (); i++) {
     str frag = Ida::gen_frag (m, blk);
     
     ref<dhash_block> blk = New refcounted<dhash_block> 
@@ -552,7 +634,7 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
 
     ptr<location> dest = clntnode->locations->lookup_or_create (succs[i]);
     dhash_store::execute (clntnode, dest,
-			  blockID(block->ID, block->ctype, DHASH_FRAG),
+			  blockID (block->ID, block->ctype, DHASH_FRAG),
 			  blk,
 			  wrap (this, &dhashcli::insert_store_cb,
 				ss, r, i,
