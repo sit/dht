@@ -4,6 +4,7 @@
 #include "chordfingerpns.h"
 #include "vivalditest.h"
 #include "chordtoe.h"
+#include "chordonehop.h"
 
 extern uint base;
 extern uint resilience;
@@ -45,6 +46,8 @@ ProtocolFactory::create(string s, Node *n)
     p = New ChordFingerPNS(n, a);
   if (s == "ChordToe")
     p = New ChordToe(n, a);
+  if (s == "ChordOneHop") 
+    p = New ChordOneHop(n,a);
   if (s == "Kademlia")
     p = New Kademlia(n, a);
   if (s == "Pastry")

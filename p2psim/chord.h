@@ -99,13 +99,15 @@ public:
   };
   // RPC handlers.
   void null_handler (void *args, void *ret);
-  void get_predecessor_handler(get_predecessor_args *, get_predecessor_ret *);
-  void get_successor_list_handler(get_successor_list_args *, get_successor_list_ret *);
-  //void get_successor_list_handler(get_predecessor_args *, get_predecessor_ret *);
+  void get_predecessor_handler(get_predecessor_args *, 
+                               get_predecessor_ret *);
+  void get_successor_list_handler(get_successor_list_args *, 
+                                  get_successor_list_ret *);
   void notify_handler(notify_args *, notify_ret *);
   void alert_handler(alert_args *, alert_ret *);
   void next_handler(next_args *, next_ret *);
-  void find_successors_handler(find_successors_args *, find_successors_ret *);
+  void find_successors_handler(find_successors_args *, 
+                               find_successors_ret *);
   void next_recurs_handler(next_recurs_args *, next_recurs_ret *);
 
   CHID id () { return me.id; }
@@ -191,6 +193,7 @@ class LocTable {
     void add_node(Chord::IDMap n);
     void add_sortednodes(vector<Chord::IDMap> l);
     void del_node(Chord::IDMap n);
+    void del_all();
     void notify(Chord::IDMap n);
     void pin(Chord::CHID x, uint pin_succ, uint pin_pred);
     void clear_pins();
@@ -198,17 +201,22 @@ class LocTable {
     uint psize() { return pinlist.size();}
     void set_evict(bool v) { _evict = v; }
 
-    virtual Chord::IDMap next_hop(Chord::CHID key, bool *done); //pick the next hop for lookup;
+    //pick the next hop for lookup;
+    virtual Chord::IDMap next_hop(Chord::CHID key, bool *done); 
+
+    vector<Chord::IDMap> get_all();
 
   protected:
     bool _evict;
-    skiplist<idmapwrap, ConsistentHash::CHID, &idmapwrap::id, &idmapwrap::sortlink_> ring;
+    skiplist<idmapwrap, ConsistentHash::CHID, &idmapwrap::id, 
+             &idmapwrap::sortlink_> ring;
     Chord::IDMap me;
     vector<pin_entry> pinlist;
     uint _max;
     uint _timeout;
 
-    void evict(); //evict one node to make sure ring contains <= _max elements
+    //evict one node to make sure ring contains <= _max elements
+    void evict(); 
 };
 
 #endif // __CHORD_H

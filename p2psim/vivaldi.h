@@ -189,6 +189,7 @@ bool Vivaldi::doRPC(IPAddress dst, BT *target, void (BT::*fn)(AT*, RT*),
                     AT *args, RT *ret) {
   // target is probably the result of a dynamic_cast<BT*>...
   assert(target);
+  assert(dst);
 
   class Thunk {
   public:

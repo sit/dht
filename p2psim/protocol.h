@@ -3,6 +3,7 @@
 
 #include "protocolfactory.h"
 #include "eventqueue.h"
+#include <stdio.h>
 class Node;
 
 // A Protocol is just a named object attached to a Node.
@@ -61,6 +62,7 @@ protected:
   template<class BT, class AT, class RT>
     bool doRPC(IPAddress dst, void (BT::* fn)(AT *, RT *),
                AT *args, RT *ret) {
+    assert(dst > 0);
     return _node->doRPC(dst,
                         dynamic_cast<BT*>(getpeer(dst)),
                         fn, args, ret);
@@ -73,6 +75,7 @@ protected:
   unsigned asyncRPC(IPAddress dst,
       void (BT::* fn)(AT *, RT *), AT *args, RT *ret, unsigned token = 0)
   {
+    assert(dst);
     if(token)
       assert(_rpcmap.find(token) == _rpcmap.end());
     else

@@ -141,6 +141,7 @@ Node::Receive(void *px)
 {
   Packet *p = (Packet *) px;
   Node *n = Network::Instance()->getnode(p->dst());
+  assert(n);
 
   // make reply
   Packet *reply = New Packet;

@@ -24,42 +24,6 @@ ChordFinger::ChordFinger(Node *n, Args &a,
     }
   }
 }
-/*
-void
-ChordFinger::init_state(vector<IDMap> ids)
-{
-  loctable->clear_pins();
-
-  loctable->pin(me.id,1,0);
-  loctable->pin(me.id+1,nsucc,0);
-  loctable->pin(me.id-1,0,1);
-
-  //estimates the size of the network by looking at how far away my successor is from me 
-  uint sz = ids.size();
-  uint my_pos = find(ids.begin(), ids.end(), me) - ids.begin();
-  assert(ids[my_pos].id == me.id);
-  CHID min_lap = ids[(my_pos+1) % sz].id - me.id;
-
-
-  CHID lap = (CHID) -1;
-
-  CHID finger;
-  uint numf = 0;
-  while (lap > min_lap) {
-    lap = lap/_base;
-    for (uint j = 1; j <= (_base - 1); j++) {
-      if (lap * j < min_lap) continue;
-      finger = lap * j + me.id;
-      loctable->pin(finger, 1, 0);
-      numf++;
-    }
-  }
-  _inited = true;
-  Chord::init_state(ids);
-  printf("ChordFinger: %s inited %d %d %d %d %d\n", ts(), ids.size(), loctable->size(), numf, _numf, loctable->psize());
-}
-*/
-
 void
 ChordFinger::fix_fingers()
 {
@@ -67,17 +31,45 @@ ChordFinger::fix_fingers()
 
   if (succ.ip == 0 || succ.id == me.id) return;
   unsigned int i0 = (uint) ConsistentHash::log_b(succ.id - me.id, 2);
-  
-  //
+
   vector<Chord::IDMap> v;
   CHID finger;
-  for (unsigned int i = i0; i < NBCHID; i++) {
-    finger = ConsistentHash::successorID(me.id,i);
-    v = find_successors(finger, 1, false);
+  Chord::IDMap currf;
+  bool ok;
+
+  CHID lap = (CHID) -1;
+  CHID min_lap = succ.id - me.id;
+  while (lap > min_lap) {
+    lap = lap/_base;
+    for (uint j = 1; j <= (_base-1); j++) {
+      finger = lap * j + me.id;
+      currf = loctable->succ(finger);
+      if (ConsistentHash::between(finger, finger+lap, currf.id )) {
+	//just ping this finger to see if it is alive
+	record_stat();
+	if (_vivaldi) {
+	  Chord *target = dynamic_cast<Chord*>(getpeer(currf.ip));
+	  ok = _vivaldi->doRPC(currf.ip, target, &Chord::null_handler, 
+	      (void*)NULL, (void *)NULL);
+	}else
+	  ok = doRPC(currf.ip, &Chord::null_handler, 
+	      (void *)NULL, (void *)NULL);
+
+	if (!ok) {
+	  loctable->del_node(currf);
+	} else {
+	  loctable->add_node(currf);//update timestamp
+	  continue;
+	}
+      }
+    
+      v = find_successors(finger, 1, false);
 #ifdef CHORD_DEBUG
-    // printf("%s fix_fingers %d finger (%qx) get (%u,%qx)\n", ts(), i, finger, v[0].ip, v[0].id);
+      printf("%s fix_fingers %d finger (%qx) get (%u,%qx)\n", ts(), i, finger, 
+	v[0].ip, v[0].id);
 #endif
-    if (v.size() > 0) loctable->add_node(v[0]);
+      if (v.size() > 0) loctable->add_node(v[0]);
+    }
   }
 }
 

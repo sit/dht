@@ -34,6 +34,7 @@ ObserverFactory::create(string s, Args *a)
      (s == "ChordFinger") ||
      (s == "ChordFingerPNS") ||
      (s == "ChordToe") ||
+     (s == "ChordOneHop") ||
      (s == "Koorde"))
   {
     t = ChordObserver::Instance(a);
