@@ -251,8 +251,10 @@ dhash::replica_maintenance_timer (u_int index)
 
       if (replica_syncer) {
 	assert (replica_syncer->done());
-	assert (*active_syncers[replica_syncer_dstID] == replica_syncer);
-	active_syncers.remove (replica_syncer_dstID);
+	// assert (*active_syncers[replica_syncer_dstID] == replica_syncer);
+	if (active_syncers[replica_syncer_dstID] &&
+	    *active_syncers[replica_syncer_dstID] == replica_syncer)
+	  active_syncers.remove (replica_syncer_dstID);
       }
 
       if (active_syncers[replicaID])
@@ -311,8 +313,10 @@ dhash::partition_maintenance_timer ()
     // create a syncer when there is none or the existing one is done
     if (partition_syncer) {
       assert (partition_syncer->done());
-      assert (*active_syncers[partition_right] == partition_syncer);
-      active_syncers.remove (partition_right);
+      // assert (*active_syncers[partition_right] == partition_syncer);
+      if (active_syncers[partition_right] &&
+	  *active_syncers[partition_right] == partition_syncer)
+        active_syncers.remove (partition_right);
     }
 
     // handles initial condition (-1) and key space wrap around..
