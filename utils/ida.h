@@ -1,4 +1,4 @@
-/* $Id: ida.h,v 1.1 2003/03/07 20:16:46 sit Exp $ */
+/* $Id: ida.h,v 1.2 2003/06/13 04:44:22 sit Exp $ */
 
 /*
  * Rabin's Information Dispersal Algorithm.
@@ -49,6 +49,11 @@ class Ida {
   // Only public for testing purposes
   static str pack (vec<u_long> &in);
   static bool unpack (const str &in, vec<u_long> &out);
+
+  // The best number of fragments to require for reconstruction,
+  // minimizing the number of packets needed to transmit a
+  // fragment for block of size len with the given MTU.
+  static u_long optimal_dfrag (u_long len, u_long mtu);
   
   // Encodes in into a fragment and returns encoded fragment
   // as a string. m such fragments required for reconstruction.

@@ -345,6 +345,8 @@ dhashcli::retrieve_lookup_cb (blockID blockID,
     rs->succs = succs;
   }
 
+  // Dispatch NUM_DFRAGS parallel requests, even though we don't know
+  // how many fragments will truly be needed.
   for (u_int i = 0; i < dhash::NUM_DFRAGS; i++)
     fetch_frag (rs);
 }
@@ -369,12 +371,13 @@ dhashcli::retrieve_fetch_cb (blockID blockID, u_int i,
   if (!block) {
     trace << myID << ": retrieve (" << blockID
 	  << "): failed from successor " << i+1 << "\n";
+    rs->errors++;
     fetch_frag (rs);
     return;
   }
   
-  bigint h = compute_hash (block->data, block->len);
 #ifdef VERBOSE_LOG  
+  bigint h = compute_hash (block->data, block->len);
   trace << myID << ": retrieve (" << blockID << ") got frag " << i
 	<< " with hash " << h << " " << res->compl_res->res.size () << "\n";
 #endif /* VERBOSE_LOG */
@@ -382,36 +385,36 @@ dhashcli::retrieve_fetch_cb (blockID blockID, u_int i,
   str frag (block->data, block->len);
   rs->frags.push_back (frag);
 
-  if (rs->frags.size () >= dhash::NUM_DFRAGS) {
-    strbuf block;
-
-    if (!Ida::reconstruct (rs->frags, block)) {
+  strbuf newblock;
+  
+  if (!Ida::reconstruct (rs->frags, newblock)) {
+    if (rs->frags.size () >= dhash::NUM_DFRAGS) {
       trace << myID << ": retrieve (" << blockID 
 	    << "): reconstruction failed.\n";
+      rs->errors++;
       fetch_frag (rs);
-      return;
     }
-    
-    rs->timemark ();
-
-    str tmp (block);
-    ptr<dhash_block> blk = 
-      New refcounted<dhash_block> (tmp.cstr (), tmp.len (), rs->key.ctype);
-    blk->ID = rs->key.ID;
-    blk->hops = rs->r.size ();
-    blk->errors = rs->nextsucc - dhash::NUM_DFRAGS;
-    blk->retries = blk->errors;
-
-    for (size_t i = 1; i < rs->times.size (); i++) {
-      timespec diff = rs->times[i] - rs->times[i - 1];
-      blk->times.push_back (diff.tv_sec * 1000 +
-			    int (diff.tv_nsec/1000000));
-    }
-    
-    rcvs.remove (rs);
-    rs->complete (DHASH_OK, blk);
-    rs = NULL;
+    return;
   }
+  rs->timemark ();
+  
+  str tmp (newblock);
+  ptr<dhash_block> blk = 
+    New refcounted<dhash_block> (tmp.cstr (), tmp.len (), rs->key.ctype);
+  blk->ID = rs->key.ID;
+  blk->hops = rs->r.size ();
+  blk->errors = rs->errors;
+  blk->retries = blk->errors;
+  
+  for (size_t i = 1; i < rs->times.size (); i++) {
+    timespec diff = rs->times[i] - rs->times[i - 1];
+    blk->times.push_back (diff.tv_sec * 1000 +
+			  int (diff.tv_nsec/1000000));
+  }
+  
+  rcvs.remove (rs);
+  rs->complete (DHASH_OK, blk);
+  rs = NULL;
 }
 
 void
@@ -555,9 +558,16 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
   
   str blk (block->data, block->len);
 
+  // Cap the maximum.
+  u_long m = Ida::optimal_dfrag (block->len, MTU);
+  if (m > dhash::NUM_DFRAGS)
+    m = dhash::NUM_DFRAGS;
+
+  warnx << "Using m = " << m << " for block size " << block->len << "\n";
+
   for (u_int i = 0; i < dhash::NUM_EFRAGS; i++) {
     assert (i < succs.size ());
-    str frag = Ida::gen_frag (dhash::NUM_DFRAGS, blk);
+    str frag = Ida::gen_frag (m, blk);
     
     ref<dhash_block> blk = New refcounted<dhash_block> 
       ((char *)NULL, frag.len (), DHASH_CONTENTHASH);

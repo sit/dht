@@ -64,6 +64,20 @@ Ida::INV (u_long a)
   return inv[a];
 }
 
+u_long
+Ida::optimal_dfrag (u_long len, u_long mtu)
+{
+  // Calculate best packing for fragments to minimize packet count.
+  // Estimate first assuming no per-fragment overhead.
+  u_long m = (len + (mtu - 1)) / mtu;
+  // Check to see that a fragment would really fit, with overhead
+  u_long nomfragsize = (len / m) + (4 + m)*2;
+  // If it doesn't fit (i.e. would need to chunk), might as well parallelize.
+  if (nomfragsize > mtu)
+    m++;
+  return m;
+}
+
 /*
  * Generate one piece.
  * Clears out and replaces it with the following:
@@ -236,7 +250,7 @@ Ida::reconstruct (const vec<str> &frags, strbuf &out)
     return false;
   }
   if (frags.size () < m) {
-    idatrace << "not enough fragments (" << frags.size () << "/" << m << ").\n";
+    //idatrace << "not enough fragments (" << frags.size () << "/" << m << ").\n";
     return false;
   }
   

@@ -30,6 +30,7 @@ class dhashcli {
     blockID key;
     route r;
     vec<timespec> times;
+    int errors;
     
     int incoming_rpcs;
     
@@ -51,7 +52,12 @@ class dhashcli {
       delete this;
     }
       
-    rcv_state (blockID key) : key (key), incoming_rpcs (0), nextsucc (0) {
+    rcv_state (blockID key) :
+      key (key),
+      errors (0),
+      incoming_rpcs (0),
+      nextsucc (0)
+    {
       timemark ();
     }
   };
