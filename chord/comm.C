@@ -270,10 +270,19 @@ void
 tcp_manager::remove_host (hostinfo *h) 
 {
   warn << "closing " << h->fd << " on " << h->host << "\n";
+  
   //XXX unnecessary SO_LINGER already set
-  //tcp_abort (h->fd);
-  h->fd = -2;
-  h->xp = NULL;
+  // tcp_abort (h->fd);
+  
+  if (chord_rpc_style == CHORD_RPC_SFST) {
+    h->fd = -2;
+    h->xp = NULL;
+    while (h->connect_waiters.size ()) {
+      RPC_delay_args *a =  h->connect_waiters.pop_front ();
+      a->cb (RPC_CANTSEND);
+      delete a;
+    }
+  }
 }
 
 void
@@ -283,12 +292,15 @@ tcp_manager::send_RPC (RPC_delay_args *args)
   hostinfo *hi = lookup_host (args->l->address ());
   if (!hi->xp) {
     delaycb (0, 0, wrap (this, &tcp_manager::send_RPC_ateofcb, args));
-  } else if (hi->xp->ateof()) {
+  }
+  else if (hi->xp->ateof()) {
     hostlru.remove (hi);
     hostlru.insert_tail (hi);
+    args->l->set_alive (false);
     remove_host (hi);
     delaycb (0, 0, wrap (this, &tcp_manager::send_RPC_ateofcb, args));
-  } else {
+  }
+  else {
     ptr<aclnt> c = aclnt::alloc (hi->xp, args->prog);
     c->call (args->procno, args->in, args->out, 
 	     wrap (this, &tcp_manager::doRPC_tcp_cleanup, c, args));
@@ -309,25 +321,16 @@ tcp_manager::doRPC_tcp_connect_cb (RPC_delay_args *args, int fd)
     warn << "locationtable: connect failed: " << strerror (errno) << "\n";
     (args->cb) (RPC_CANTSEND);
     delete args;
-
-    if (chord_rpc_style == CHORD_RPC_SFST) {
-      hi->fd = -2; // signal no connect initiated
-      while (hi->connect_waiters.size ()) {
-	RPC_delay_args *a =  hi->connect_waiters.pop_front ();
-	a->cb (RPC_CANTSEND);
-	delete a;
-      }
-    }
-
-  } else {
-
+    args->l->set_alive (false);
+    remove_host (hi);
+  }
+  else {
     struct linger li;
     li.l_onoff = 1;
     li.l_linger = 0;
     setsockopt (fd, SOL_SOCKET, SO_LINGER, (char *) &li, sizeof (li));
     tcp_nodelay (fd);
     make_async(fd);
-
     if (chord_rpc_style == CHORD_RPC_SFST) {
       hi->fd = fd;
       hi->xp = axprt_stream::alloc (fd);
@@ -335,7 +338,8 @@ tcp_manager::doRPC_tcp_connect_cb (RPC_delay_args *args, int fd)
       send_RPC (args);
       while (hi->connect_waiters.size ())
 	send_RPC (hi->connect_waiters.pop_front ());
-    } else {
+    }
+    else {
       ptr<axprt_stream> xp = axprt_stream::alloc (fd);
       assert (xp);
       ptr<aclnt> c = aclnt::alloc (xp, args->prog);
