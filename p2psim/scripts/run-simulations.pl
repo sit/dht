@@ -22,7 +22,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-# $Id: run-simulations.pl,v 1.13 2004/01/07 23:35:51 strib Exp $
+# $Id: run-simulations.pl,v 1.14 2004/01/16 19:33:12 jinyang Exp $
 
 use strict;
 use Getopt::Long;
@@ -425,7 +425,7 @@ sub run_command {
     print LOG "# topology=$topology seed=$randseed\n";
     close( LOG );
     
-    print "# $arg_string > $logfile \n";
+    print "# $arg_string randseed $randseed > $logfile \n";
     #print "$p2psim_cmd $protfile $topology $eventfile >> $logfile";
     my $before = time();
     system( "$p2psim_cmd -e $randseed $protfile $topology $eventfile >> $logfile " .
