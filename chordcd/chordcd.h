@@ -97,30 +97,15 @@ class chord_server  {
   void read_file_data (size_t block, sfsro_inode_reg *inode, bool pfonly, cbgetdata_t cb);
   void read_file_data_bmap_cb (cbgetdata_t cb, bool pfonly, chordID ID, bool success);
 
-  void get_data (chordID ID, cbgetdata_t cb, bool pf_only);
-  void get_data_initial_cb (dhash_res *res, cbgetdata_t cb, chordID ID,
-			    clnt_stat err);
-  void get_data_partial_cb (dhash_res *res, char *buf, 
-			    unsigned int *read,
-			    cbgetdata_t cb,
-			    chordID ID,
-			    clnt_stat err);
-  void finish_getdata (char *buf, unsigned int size, 
-		       cbgetdata_t cb, chordID ID);
-
-
-
-
-  void fetch_data2 (chordID ID, cbfetch_block_t cb);
-  void getdata2 (chordID ID, cbgetdata_t cb);
-  void getdata2_initial_cb(ptr<getdata_state> st,
+  void getdata (chordID ID, cbgetdata_t cb);
+  void getdata_initial_cb(ptr<getdata_state> st,
 			    ptr<dhash_res> res, 
 			    clnt_stat err);
-  void getdata2_fragment_cb(ptr<getdata_state> st,
+  void getdata_fragment_cb(ptr<getdata_state> st,
 			    ptr<dhash_res> res,
 			    clnt_stat err);
 
-  void getdata2_finish (ptr<getdata_state> st);
+  void getdata_finish (ptr<getdata_state> st);
 
 
 

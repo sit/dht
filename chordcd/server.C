@@ -1,6 +1,4 @@
 // KNOWN ISSUES:
-//   * READDIR
-//     - 
 //   * READDIRP
 //     - completely broken/not really implemented
 //   * READ
@@ -11,8 +9,7 @@
 //       when it is sure that the entry does not exists
 //     - or binary lookup could be implemented
 //   * GENERAL
-//     - get_data() don't re-issue request for block x, if x has a pending read
-//     - embedded inodes to improve LOOKUP performance
+//     - possibly, embedded inodes to improve LOOKUP performance
 //     - can make lots of optimizations to filesystem structure which are easy when
 //       the FS is read-only, but hard in a read-write filesystem, namely embedded inodes
 //     - Need to verify block hashes. 
@@ -90,6 +87,11 @@ chord_server::getroot_fh (cbfh_t rfh_cb, ptr<sfsro_data> d)
     warn << "root block had wrong type\n";
     (*rfh_cb) (NULL);
   } else {
+    // XXX verify the signature
+    warn << "Mounted filesystem.\n";
+    warn << "  start     : " << ctime(&(time_t)d->fsinfo->info.start);
+    warn << "  duration  : " << d->fsinfo->info.duration  << " seconds \n";
+    warn << "  blocksize : " << d->fsinfo->info.blocksize << "\n";
     this->rootdirID = d->fsinfo->info.rootfh;
     this->fsinfo = *d->fsinfo;
     fetch_data (rootdirID, wrap (this, &chord_server::getrootdir_cb, rfh_cb));
@@ -459,7 +461,7 @@ chord_server::readdirp_fetch_dir_data (nfscall *sbp, ptr<sfsro_data> dirdata,
     //fh2fileid (&roe->fh, &(*last)->fileid); // XXX broken
     (*last)->name = roe->name;
     
-    // XXXX Make LINUX happy
+    // XXX Make LINUX happy
     off +=  sizeof ((*last)->fileid) + roe->name.len();
     if (j + 1 >= n) (*last)->cookie = INT64 (0x400ffffffff);
     else (*last)->cookie = off;
@@ -538,7 +540,6 @@ chord_server::read_data_cb (nfscall *sbp, ptr<sfsro_data> inode, chordID inodeID
 
     // XXX avoid a data copy by marshalling directly into the xdr buffer
     nfsres.resok->data.setsize(n);
-    memset (nfsres.resok->data.base (), 'a', nfsres.resok->data.size ());
     memcpy (nfsres.resok->data.base(), buf + start, 
 	    nfsres.resok->data.size ()); 
     nfsres.resok->file_attributes.set_present(1);
@@ -661,10 +662,9 @@ struct lookup_state {
     dirinode = dirdata->inode->reg;
 
     curblock = 0;
+    maxblock = -1; 
     if (dirinode->direct.size() > 0)
       maxblock = (dirinode->direct.size() - 1)  / blocksize;
-    else
-      maxblock = -1; 
   }
 };
 
@@ -919,7 +919,7 @@ void
 chord_server::read_file_data_bmap_cb (cbgetdata_t cb, bool pfonly, chordID ID, bool success)
 {
   if (success) {
-    get_data (ID, cb, pfonly);
+    getdata (ID, cb);
   } else {
     (*cb) (NULL);
   }
@@ -931,181 +931,7 @@ chord_server::read_file_data_bmap_cb (cbgetdata_t cb, bool pfonly, chordID ID, b
 void
 chord_server::fetch_data (chordID ID, cbfetch_block_t cb)
 {
-#if 0
-  fetch_data2 (ID, cb);
-  return;
-#endif
-
-  get_data (ID, cb, false);
-}
-
-
-void
-chord_server::get_data (chordID ID, cbgetdata_t cb, bool pf_only) 
-{
-#if 0
-  getdata2 (ID, cb);
-  return;
-#endif
-
-  //check for pending request for the same data
-  wait_list *l;
-  if ( (l = pf_waiters[ID]) ) {
-    if (!pf_only) { //pre-fetching in-flight data --> NOP
-      fetch_wait_state *w = New fetch_wait_state (cb);
-      l->insert_head (w);
-    }
-    return;
-  }
-
-  //check cache
-  ptr<sfsro_data> dat;
-  if ((dat = data_cache [ID])) {
-    (*cb) (dat);
-    return;
-  }
-
-
-  dhash_fetch_arg arg;
-  arg.key = ID;
-  arg.len = CMTU;
-  arg.start = 0;
-  
-  
-  dhash_res *res = New dhash_res (DHASH_OK);
-
-  cclnt->call (DHASHPROC_LOOKUP, &arg, res, 
-	       wrap (this, &chord_server::get_data_initial_cb, res, cb, ID)); 
-}
-
-
-void
-chord_server::get_data_initial_cb (dhash_res *res, cbgetdata_t cb, chordID ID,
-				   clnt_stat err) 
-{
-  
-  if (err) 
-    fatal << "EOF from chord daemon. Shutting down\n";
-  else if (res->status != DHASH_OK) {
-    warn << "error fetching " << ID << "\n";
-    finish_getdata (NULL, 0, cb, bigint (0));
-  } else if (res->resok->attr.size == res->resok->res.size ()) {
-    finish_getdata (res->resok->res.base (), res->resok->res.size (), 
-		    cb, ID);
-  } else {
-    char *buf = New char[res->resok->attr.size];
-    memset (buf, 'a', res->resok->attr.size);
-    memcpy (buf, res->resok->res.base (), res->resok->res.size ());
-    unsigned int offset = res->resok->res.size ();
-    unsigned int *read = New unsigned int (offset);
-    while (offset < res->resok->attr.size) {
-      // XXX arg can just be stack allocated right?
-      ptr<dhash_transfer_arg> arg = New refcounted<dhash_transfer_arg> ();
-      arg->farg.key = ID;
-      arg->farg.len = (offset + CMTU < res->resok->attr.size) ? CMTU :
-	res->resok->attr.size - offset;
-      arg->source = res->resok->source;
-      arg->farg.start = offset;
-
-      dhash_res *new_res = New dhash_res (DHASH_OK);
-      
-      // XXX what would happen if DHASH had cached the block
-      // so that get_data_partial_cb happened right away,
-      // ie. without offset being incremented??
-      //
-      cclnt->call (DHASHPROC_TRANSFER, arg, new_res,
-		   wrap (this, &chord_server::get_data_partial_cb, 
-			 new_res, buf, read, cb, ID));
-      offset += arg->farg.len;
-    }
-  }
-
-  // XXX make res refcounted so we dont need delete
-  delete res;
-}
-
-void
-chord_server::get_data_partial_cb (dhash_res *res, char *buf, 
-				   unsigned int *read,
-				   cbgetdata_t cb,
-				   chordID ID,
-				   clnt_stat err) 
-{
-  if (err)
-    fatal << "EOF from chord daemon. Shutting down\n";
-  else if (res->status != DHASH_OK) {
-    delete buf;   // XXX make refcounted so we dont need delete
-    delete read;  // XXX make refcounted so we dont need delete
-
-    // 
-    // XXX the call to get_data() is expecting its callback to be
-    //     called back exactly once.  This code could callback once
-    //     for every chunk of the block.
-    //
-    assert (0); 
-    (*cb) (NULL);
-    return;
-  } else {
-    memcpy (buf + res->resok->offset, res->resok->res.base (),
-	    res->resok->res.size ());
-    *read += res->resok->res.size ();
-  }
-
-  if (*read == res->resok->attr.size) {
-    finish_getdata (buf, res->resok->attr.size, cb, ID);
-    delete read;
-  }
-
-  delete res;
-}  
-
-
-void
-chord_server::finish_getdata (char *buf, unsigned int size, cbgetdata_t cb,
-			      chordID ID) 
-{
-  if (!buf) {
-    warn << "error fetching " << ID << "(null) \n";
-    (*cb)(NULL);
-  } else {
-    // XXX - check hash
-    ptr<sfsro_data> data = New refcounted<sfsro_data>;
-    xdrmem x (buf, size, XDR_DECODE);
-    if (!xdr_sfsro_data (x.xdrp (), data)) {
-      warn << "Couldn't unmarshall data\n";
-      delete buf;
-      (*cb)(NULL);
-    } else {
-      (*cb)(data);
-
-      // add to cache
-      data_cache.insert (ID, data);
-      
-      // XXX - check prefetch list
-      wait_list *l;
-      if ( (l = pf_waiters[ID]) ) {
-	fetch_wait_state *w = l->first;
-	while (w) {
-	  (*w->cb) (data);
-	  fetch_wait_state *next = l->next (w);
-	  l->remove (w);
-	  w = next;
-	}
-      }
-      
-      delete buf;
-    }
-  }
-}
-
-
-
-// ------------------------ raw data fetch 2 ------------------
-
-void
-chord_server::fetch_data2 (chordID ID, cbfetch_block_t cb)
-{
-  getdata2 (ID, cb);
+  getdata (ID, cb);
 }
 
 struct getdata_state {
@@ -1115,7 +941,7 @@ struct getdata_state {
 
   // state variables
   char *buf;       // block is accumulated here   
-  uint32 bufsize;  // size of buffer
+  uint32 bufsize;
   uint32 nread;    // bytes copied into buf so far (not necessarily contigous) 
   uint32 npending; // pending RPCs
 
@@ -1126,7 +952,7 @@ struct getdata_state {
 
 
 void
-chord_server::getdata2 (chordID ID, cbgetdata_t cb)
+chord_server::getdata (chordID ID, cbgetdata_t cb)
 {
   if (wait_list *l = pf_waiters[ID]) {
     fetch_wait_state *w = New fetch_wait_state (cb);
@@ -1144,13 +970,13 @@ chord_server::getdata2 (chordID ID, cbgetdata_t cb)
     arg.start = 0; // XXX perhaps, lookup should be pointed at the last fragment, 
                    // otherwise both the first and last frags are not maximally sized.
     cclnt->call (DHASHPROC_LOOKUP, &arg, res, 
-		 wrap (this, &chord_server::getdata2_initial_cb, st, res));
+		 wrap (this, &chord_server::getdata_initial_cb, st, res));
   }
 }
 
 
 void
-chord_server::getdata2_initial_cb(ptr<getdata_state> st,
+chord_server::getdata_initial_cb(ptr<getdata_state> st,
 				  ptr<dhash_res> res, 
 				  clnt_stat err)
 {
@@ -1160,10 +986,10 @@ chord_server::getdata2_initial_cb(ptr<getdata_state> st,
     fatal << "error fetching " << st->ID << "\n";
   } else {
     st->bufsize = res->resok->attr.size;
-    // XXX sanity check..
+
     st->buf = New char[st->bufsize];
-    st->npending = 1; // fake a fragment callback
-    getdata2_fragment_cb (st, res, RPC_SUCCESS);
+    st->npending = 1; // fake a fragment callback..
+    getdata_fragment_cb (st, res, RPC_SUCCESS);
 
     uint32 offset = res->resok->res.size ();
     while (offset < res->resok->attr.size) {
@@ -1175,7 +1001,7 @@ chord_server::getdata2_initial_cb(ptr<getdata_state> st,
       arg.farg.start = offset;
       arg.farg.len = MIN (CMTU, res->resok->attr.size - offset);
       cclnt->call (DHASHPROC_TRANSFER, &arg, new_res,
-		   wrap (this, &chord_server::getdata2_fragment_cb, st, new_res));
+		   wrap (this, &chord_server::getdata_fragment_cb, st, new_res));
       
       offset += arg.farg.len;
     }
@@ -1184,7 +1010,7 @@ chord_server::getdata2_initial_cb(ptr<getdata_state> st,
 
 
 void
-chord_server::getdata2_fragment_cb(ptr<getdata_state> st,
+chord_server::getdata_fragment_cb(ptr<getdata_state> st,
 				   ptr<dhash_res> res,
 				   clnt_stat err)
 {
@@ -1195,17 +1021,24 @@ chord_server::getdata2_fragment_cb(ptr<getdata_state> st,
   else {
     st->npending--;
     st->nread += res->resok->res.size ();
-    // XXX bounds check
-    memcpy (&st->buf[res->resok->offset], res->resok->res.base (), res->resok->res.size ());
 
+    uint32 offset = res->resok->offset;
+    uint32 length = res->resok->res.size();
+    if (offset + length > st->bufsize) {
+      fatal << "get_data_fragment_cb: " << st->ID << ", offset " << offset
+	    << ", length " << length << ", bufsize " << st->bufsize << "\n";
+    }
+
+    memcpy (&st->buf[offset], res->resok->res.base (), length);
+    
     if (st->npending == 0 && st->nread == st->bufsize)
-      getdata2_finish(st);
+      getdata_finish(st);
   }
 }
 
 
 void
-chord_server::getdata2_finish (ptr<getdata_state> st)
+chord_server::getdata_finish (ptr<getdata_state> st)
 {
   ptr<sfsro_data> data = New refcounted<sfsro_data>;
   xdrmem x (st->buf, st->bufsize, XDR_DECODE);
@@ -1220,7 +1053,7 @@ chord_server::getdata2_finish (ptr<getdata_state> st)
     if (wait_list *l = pf_waiters[st->ID]) {
       while (fetch_wait_state *w = l->first) {
 	(*w->cb) (data);
-	l->remove (l->first);
+	l->remove (w);
       }
     }
   }
