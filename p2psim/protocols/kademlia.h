@@ -43,7 +43,7 @@ public:
   Time firstts; // when we saw it first
   Time lastts;  // when we saw it last
 
-  void checkrep() const;
+  inline void checkrep() const;
 };
 // }}}
 // {{{ class Kademlia
@@ -164,6 +164,7 @@ public:
   //
   // member variables
   //
+  static bool docheckrep;
   static unsigned k;                    // number of nodes per k-bucket
   static unsigned alpha;                // alpha from kademlia paper; no of simultaneous RPCs
   static unsigned debugcounter;         // 
@@ -214,7 +215,7 @@ public:
   void traverse(k_traverser*, Kademlia*, string = "", unsigned = 0);
   void insert(Kademlia::NodeID, bool = false, string = "", unsigned = 0);
   void erase(Kademlia::NodeID, string = "", unsigned = 0);
-  virtual void checkrep() const;
+  inline virtual void checkrep() const;
 
   bool leaf;
 
@@ -232,7 +233,7 @@ public:
   k_bucket_node(Kademlia *);
   virtual ~k_bucket_node();
   k_bucket *child[2];
-  virtual void checkrep() const;
+  inline virtual void checkrep() const;
 };
 // }}}
 // {{{ class k_bucket_leaf
@@ -243,7 +244,7 @@ public:
   k_bucket_leaf(k_bucket *);
   virtual ~k_bucket_leaf();
   k_bucket_node* divide(unsigned);
-  virtual void checkrep();
+  inline virtual void checkrep();
 
   k_nodes *nodes;
   set<k_nodeinfo*, Kademlia::younger> *replacement_cache;
@@ -266,7 +267,7 @@ public:
   bool inrange(Kademlia::NodeID) const;
   bool full() const { return nodes.size() >= Kademlia::k; }
   bool empty() const { return !nodes.size(); }
-  void checkrep(bool = true) const;
+  inline void checkrep(bool = true) const;
 
   nodeset_t nodes;
 
@@ -297,7 +298,7 @@ class k_collect_closest : public k_traverser { public:
   resultset_t results;
 
 private:
-  void checkrep();
+  inline void checkrep();
   Kademlia::NodeID _node;
   Kademlia::NodeID _lowest;
   unsigned _best;
@@ -365,5 +366,5 @@ private:
 };
 // }}}
 
-#define KDEBUG(x) DEBUG(x) << Kademlia::debugcounter++ << "(" << now() << "). " << Kademlia::printbits(_id) << " "
+#define KDEBUG(x) DEBUG(x) << Kademlia::debugcounter++ << "(" << now() << "). " << Kademlia::printbits(_id) << "(" << threadid() << ") "
 #endif // __KADEMLIA_H
