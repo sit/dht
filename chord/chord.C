@@ -29,6 +29,7 @@
 #include <chord.h>
 #include <qhash.h>
 
+const int chord::max_vnodes = 1024;
 //#define TOES 1
 
 vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
