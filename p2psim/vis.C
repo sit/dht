@@ -1027,7 +1027,7 @@ main (int argc, char** argv)
       {
 	interval = atoi (optarg);
 	argc -= 2;
-	argv += 2;;
+	argv += 2;
       }
       break;
     case 'i':

@@ -5,11 +5,18 @@ using namespace std;
 
 extern bool vis;
 
-Koorde::Koorde(Node *n) : Chord(n, k) 
+#define INIT 1
+
+Koorde::Koorde(Node *n, uint base, uint resilience) : 
+  Chord(n, 1 << resilience)
 {
+  logbase = base;
+  k = 1 << logbase; 
   debruijn = me.id << logbase;
-  printf ("Koorde: (%u,%qx) %d debruijn=%qx\n", me.ip, me.id, k, debruijn);
+  printf ("Koorde: (%u,%qx) debruijn=%qx base %u k %u resilience %u\n", 
+	  me.ip, me.id, debruijn, k, base, 1 << resilience);
   loctable->pin (debruijn, k, 1);
+  isstable = true;
 }
 
   
@@ -84,7 +91,7 @@ Koorde::find_successors(CHID key, uint m, bool intern)
   int count = 0;
   koorde_lookup_arg a;
   koorde_lookup_ret r;
-  vector<ConsistentHash::CHID> path;
+  vector<IDMap> path;
   vector<ConsistentHash::CHID> ipath;
   vector<ConsistentHash::CHID> kpath;
   IDMap mysucc = loctable->succ(me.id + 1);
@@ -112,13 +119,29 @@ Koorde::find_successors(CHID key, uint m, bool intern)
 
     last = r.next;
 
-    path.push_back (r.next.id);
+    path.push_back (r.next);
     ipath.push_back (a.i);
     kpath.push_back (a.kshift);
 
     if (!doRPC (r.next.ip, &Koorde::koorde_next, &a, &r)) {
-      printf ("rpc failure for %u\n", r.next.ip);
-      assert (0);
+      printf ("rpc failure %16qx to %16qx at %lu\n", me.id, r.next.id,
+	      now ());
+      loctable->del_node (last);
+      path.pop_back ();
+      ipath.pop_back ();
+      kpath.pop_back ();
+      if (path.size () > 0) {
+	alert_args aa;
+	alert_ret ar;
+	r.next = path.back ();
+	r.kshift = kpath.back ();
+	r.i = ipath.back ();
+        doRPC (r.next.ip, &Chord::alert_handler, &aa, &ar);
+      } else {
+	r.v.clear ();
+	break; 
+      }
+
     }
 
     if (vis && !intern) 
@@ -128,21 +151,31 @@ Koorde::find_successors(CHID key, uint m, bool intern)
     if (r.done) break;
   }
 
-  assert (r.v.size () > 0);
 
-  path.push_back (r.next.id);
-  ipath.push_back (r.i);
-  kpath.push_back (r.kshift);
+  if (r.v.size () > 0) {
+    path.push_back (r.next);
+    ipath.push_back (r.i);
+    kpath.push_back (r.kshift);
+  }
 
   if (!intern) {
-    printf ("find_successor for (id %qx, key %qx) is (%u,%qx) hops %d\n", 
-	    me.id, key, r.v[0].ip, r.v[0].id, count);
-    for (uint i = 0; i < path.size () - 1; i++) {
-      printf ("  %16qx i %16qx k %16qx\n", path[i], ipath[i], kpath[i]);
+    printf ("find_successor for (id %qx, key %qx):",  me.id, key);
+    if (r.v.size () > 0) {
+      int cor = 0;
+      for (uint i = 0; i < path.size () - 1; i++) {
+	if (ipath[i] == ipath[i+1]) cor++;
+      }
+      printf (" is (%u,%qx) hops %d cor %d debruijn %d\n", r.v[0].ip, 
+	      r.v[0].id, path.size (), cor, path.size () - cor);
+      for (uint i = 0; i < path.size (); i++) {
+	printf ("  %16qx i %16qx k %16qx\n", path[i].id, ipath[i], kpath[i]);
+      }
+      CHID s = r.v[0].id;
+      assert ((me.id == mysucc.id) || (me.id == s) ||
+	      ConsistentHash::betweenrightincl (me.id, s, key));
+    } else {
+      printf (" failed\n");
     }
-    CHID s = r.v[0].id;
-    assert ((me.id == mysucc.id) || (me.id == s) ||
-	  ConsistentHash::betweenrightincl (me.id, s, key));
   }
 
   return r.v;

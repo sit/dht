@@ -10,6 +10,8 @@
 #include "p2psim.h"
 using namespace std;
 
+extern uint base;
+extern uint resilience;
 
 ProtocolFactory *ProtocolFactory::_instance = 0;
 
@@ -51,7 +53,7 @@ ProtocolFactory::create(string s, Node *n)
   if (s == "Pastry")
     p = new Pastry(n);
   if (s == "Koorde")
-    p = new Koorde(n);
+    p = new Koorde(n, base, resilience);
   if (s == "VivaldiTest")
     p = new VivaldiTest(n);
   if (s == "ChordFinger")

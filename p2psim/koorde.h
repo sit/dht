@@ -6,7 +6,7 @@
 // Koorde extends base Chord with k-degree debruijn routing
 class Koorde : public Chord {
 public:
-  Koorde(Node *n);
+  Koorde(Node *n, uint degree, uint resilience);
   ~Koorde() {};
 
   struct koorde_lookup_arg {
@@ -32,8 +32,8 @@ public:
   void dump();
 
 protected:
-  static const uint logbase = 8;
-  static const uint k = 1 << logbase;  // k-degree de bruijn graph; 
+  uint logbase;  // log degree
+  uint k;  // k-degree de bruijn graph; 
 
   Chord::CHID debruijn;  // = k * me
   // vector<IDMap> dfingers;  // predecessor(debruijn) + k - 1 successors

@@ -15,6 +15,8 @@
 char *topology_file;
 char *event_file;
 bool vis = false;
+uint base = 1;  // XXX probably need something like a configuration file
+uint resilience = 1;
   
 void parse_args(int argc, char *argv[]);
 void usage();
@@ -47,32 +49,36 @@ void
 parse_args(int argc, char *argv[])
 {
   int ch;
-  while ((ch = getopt (argc, argv, "v")) != -1) {
+  while ((ch = getopt (argc, argv, "b:r:v")) != -1) {
     switch (ch) {
-    case 'v':
-      {
-	vis = true;
-	argc--;
-	argv++;
-      }
+    case 'b':
+      base = atoi(optarg);
       break;
-  default:
-    usage ();
+    case 'r':
+      resilience = atoi(optarg);
+      break;
+    case 'v':
+      vis = true;
+      break;
+    default:
+      usage ();
     }
-  };
+  }
+  argc -= optind;
+  argv += optind;
 
-  if(argc != 3) {
+  if(argc != 2) {
     usage();
     exit(1);
   }
 
-  topology_file = argv[1];
-  event_file = argv[2];
+  topology_file = argv[0];
+  event_file = argv[1];
 }
 
 
 void
 usage()
 {
-  cout << "Usage: p2psim [-v] TOPOLOGY EVENTS" << endl;
+  cout << "Usage: p2psim [-v] [-b <degree>] [-r <resilience>] TOPOLOGY EVENTS" << endl;
 }

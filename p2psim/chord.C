@@ -342,6 +342,7 @@ Chord::dump()
 
   printf("myID is %16qx %5u\n", me.id, me.ip);
   printf("===== %16qx =====\n", me.id);
+  printf ("ring size %d\n", loctable->size ());
 
   vector<IDMap> v = loctable->succs(me.id+1, nsucc);
   for (unsigned int i = 0; i < v.size(); i++) {
