@@ -387,7 +387,7 @@ nntp::read_post (str resp, str bad, bool takedht)
 
   // Satisified that we have received a valid article;
   // now try and post it somewhere.
-  bool posted;
+  bool posted (false);
   strbuf header;
   strbuf body;
   while (headerend > 0) {

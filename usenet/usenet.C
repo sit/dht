@@ -99,7 +99,6 @@ main (int argc, char *argv[])
   char *sock = "/tmp/chord-sock";
   char *dirbase = NULL;
   char *cffile  = NULL;
-  char *root    = NULL;
   bool create_groups = false;
 
   int ch;
