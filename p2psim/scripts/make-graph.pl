@@ -1162,7 +1162,9 @@ foreach my $file (@iterfiles) {
 	    $y = ":$ylabel[$k]";
 	}
 	if( defined $options{"convex"} && $options{"convex"} eq "both" ) {
-	    # don't label the lines, label the points later on
+	    # we want linespoints to be labeled, so do it here
+	    $t = "t \"" . $labelhash{$indats[$i]} . "$y\"";
+	    $type = "linespoints";
 	} elsif( $file =~ /paramplot.*\.(\d+)\.(\d+)\.dat/ ) {
 	    my $prefix = "";
 	    if( $labelhash{$indats[$1]} ne "" ) {
@@ -1246,6 +1248,9 @@ foreach my $file (@iterfiles) {
 		}
 		if( defined $param and $rtmgraph and @convexfiles ) {
 		    $t = "notitle";
+		} elsif( defined $options{"convex"} && 
+			 $options{"convex"} eq "both" ) {
+		    $t = "notitle";
 		} elsif( $datfile =~ /paramplot.*\.(\d+)\.(\d+)\.dat/ ) {
 		    my $prefix = "";
 		    if( $labelhash{$indats[$1]} ne "" ) {
@@ -1276,9 +1281,16 @@ foreach my $file (@iterfiles) {
 		    $oldypos = "$oldypos$newyop";
 		}
 
-		print GP ", \"$datfile\" using " . 
-		    "($xparen\$$oldxpos):($yparen[$k]\$$oldypos) " . 
-		    "$t with $type lt " .  ($k+($j-1)*($#ystat+1)+1) . " lw $linewidth";
+		my $type_num = ($k+($j-1)*($#ystat+1)+1);
+		if( $type ne "points" ) {
+		    print GP ", \"$datfile\" using " . 
+			"($xparen\$$oldxpos):($yparen[$k]\$$oldypos) " . 
+			    "$t with $type lt $type_num lw $linewidth";
+		} else {
+		    print GP ", \"$datfile\" using " . 
+			"($xparen\$$oldxpos):($yparen[$k]\$$oldypos) " . 
+			    "$t with $type lt $type_num pt $type_num";
+		}
 
 	    }
 
