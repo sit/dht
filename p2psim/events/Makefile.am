@@ -1,5 +1,5 @@
 noinst_PROGRAMS = events.o
-events_o_SOURCES = eventfactory.C netevent.C oldobserveevent.C \
+events_o_SOURCES = eventfactory.C netevent.C \
                       p2pevent.C simevent.C
 LIBS =
 events_o_LINK = $(LD) -r -o $@

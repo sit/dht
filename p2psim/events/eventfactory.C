@@ -25,7 +25,7 @@
 #include "eventfactory.h"
 #include "p2pevent.h"
 #include "simevent.h"
-#include "oldobserveevent.h"
+#include "p2psim/oldobserveevent.h"
 #include <iostream>
 using namespace std;
 
