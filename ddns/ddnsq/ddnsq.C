@@ -6,7 +6,7 @@ ptr<ddns> ddns_clnt;
 static void 
 usage ()
 {
-  warnx << "usage: " << progname << " <s|r> hostname [rr_type=A] [rr_data]\n";
+  warnx << "usage: " << progname << " <s|r> hostname rr_type[=A] [rr_data]\n";
   exit (1);
 }
 
@@ -91,11 +91,12 @@ main (int argc, char **argv)
 
   sfsconst_init ();
   warn << "argc : " << argc << "\n";
-  if (argc < 3) 
+  if (argc < 4) 
     usage ();
   else {
     hostname = (string) malloc (sizeof (argv[2])+1);
     strcpy (hostname,argv[2]);
+    rr_type = get_dtype (argv[3]);
     if (strlen (hostname) > DOMAIN_LEN) 
       fatal ("domain name longer than %d\n", DOMAIN_LEN);
     if (!strcasecmp(argv[1], "s")) {
@@ -103,7 +104,6 @@ main (int argc, char **argv)
       if (argc < 5) 
 	usage ();
       else {
-	rr_type = get_dtype (argv[3]);
 	warn << "argv[4] = " << argv[4] << "\n";
 	rr_data = (string) malloc (sizeof (argv[4]));
 	strcpy (rr_data,argv[4]);
@@ -118,7 +118,7 @@ main (int argc, char **argv)
     store_it (hostname, rr_type);
   } else {
     warn << "hostname = " << hostname << "size = " << strlen (hostname) << "\n";
-    ddns_clnt->lookup (hostname, wrap (got_it));
+    ddns_clnt->lookup (hostname, rr_type, wrap (got_it));
   }
 
   return 0;

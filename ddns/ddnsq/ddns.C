@@ -123,11 +123,16 @@ ddns::ddnsRR2block (ptr<ddnsRR> rr, char *data, int datasize)
 }
 
 chordID 
-ddns::getcID (domain_name dname)
+ddns::getcID (domain_name dname, dns_type dt)
 {
   chordID key;
   char id[sha1::hashsize];
-  sha1_hash (id, dname, strlen (dname));
+  int dlen = strlen (dname);
+  int keylen = dlen + DNS_TYPE_SIZE;
+  char keystr[keylen];
+  memmove (keystr, dname, dlen);
+  memmove (keystr + dlen, &dt, DNS_TYPE_SIZE);
+  sha1_hash (id, keystr, keylen);
   mpz_set_rawmag_be (&key, id, sizeof (id));
   return key;
 }
@@ -139,7 +144,7 @@ ddns::store (domain_name dname, ref<ddnsRR> rr)
   warn << "dname = " << dname << "\n";
   ref<dhash_storeres> res = New refcounted<dhash_storeres> (); 
   ref<dhash_insertarg> i_arg = New refcounted<dhash_insertarg> ();
-  i_arg->key = getcID (dname);
+  i_arg->key = getcID (dname, rr->type);
   char *data = (char *) malloc(DMTU);
   int datasize = ddnsRR2block (rr, data, DMTU);
   warn << "final datasize = " << datasize << "\n";
@@ -170,13 +175,13 @@ ddns::store_cb (domain_name dname, chordID key,
 }
 
 void
-ddns::lookup (domain_name dname, ddns::lcb_t lcb)
+ddns::lookup (domain_name dname, dns_type dt, ddns::lcb_t lcb)
 {
   nlookup++;
   ref<dhash_res> res = New refcounted<dhash_res> (DHASH_OK);
   
   dhash_fetch_arg arg;
-  arg.key = getcID (dname);
+  arg.key = getcID (dname, dt);
   arg.len = DMTU;
   arg.start = 0;
   dhash_clnt->call (DHASHPROC_LOOKUP, &arg, res, wrap(this, &ddns::lookup_cb, 

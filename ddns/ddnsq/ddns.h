@@ -137,7 +137,7 @@ class ddns {
   ptr<aclnt> get_dclnt ();
 
   int nlookup, nstore;
-  chordID getcID (domain_name);
+  chordID getcID (domain_name, dns_type);
   int ddnsRR2block (ptr<ddnsRR>, char *, int);
   void store_cb (domain_name, chordID, ref<dhash_storeres>, clnt_stat);
   void lookup_cb (domain_name, chordID, ref<dhash_res>, ddns::lcb_t, clnt_stat);
@@ -146,7 +146,7 @@ class ddns {
   ddns (const char *, int);
   ~ddns ();
   void store (domain_name, ref<ddnsRR>);
-  void lookup (domain_name, ddns::lcb_t);
+  void lookup (domain_name, dns_type, ddns::lcb_t);
   
 };
 
