@@ -1,3 +1,4 @@
+#include <chord.h>
 #include "merkle_syncer.h"
 #include "qhash.h"
 #include "async.h"

@@ -119,9 +119,6 @@ class dhash_impl : public dhash {
   void missing (ptr<location> from, bigint key, bool local);
   void missing_retrieve_cb (bigint key, dhash_stat err, ptr<dhash_block> b,
 			    route r);
-
-  /* Called by merkle_server to notify of blocks we should have rep/frag of */
-  void needed (ptr<location> from, bigint key);
   
   void sendblock (ptr<location> dst, blockID blockID,
 		  callback<void, dhash_stat, bool>::ref cb);

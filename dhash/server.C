@@ -226,11 +226,8 @@ dhash_impl::init_after_chord (ptr<vnode> node)
   assert (host_node);
 
   // merkle state
-  // XXX what should needed be replaced with? CBV?
   msrv = New merkle_server (mtree, 
-			    wrap (node, &vnode::addHandler),
-			    wrap (this, &dhash_impl::needed),
-			    host_node);
+			    wrap (node, &vnode::addHandler));
 
   bsm = New refcounted<block_status_manager> (host_node->my_ID ());
 
@@ -259,33 +256,6 @@ dhash_impl::init_after_chord (ptr<vnode> node)
   bool ok = Configurator::only ().get_int ("dhash.start_maintenance", v);
   if (!ok || v)
     start ();
-}
-
-void
-dhash_impl::needed (ptr<location> from, bigint key)
-{
-  // XXX should batch this so that we don't send 100 bytes of
-  //     RPC header for each key we send!
-  trace << "needed: " << host_node->my_ID () << ": merkle says we should have block " << key << "\n";
-
-  return;
-  /*
-  need_q.push_back (key);
-  if (need_q.size () >= 60 || (getusec () - need_last_send > 1000*1000)) {
-    warn << "sending an INEED RPC with " << need_q.size () << " keys\n";
-    need_last_send = getusec ();
-    ptr<dhash_ineed_arg> arg = New refcounted<dhash_ineed_arg> ();
-    arg->needed.setsize (need_q.size());
-    for (unsigned int i = 0; i < need_q.size (); i++)
-      arg->needed[i] = need_q[i];
-
-    doRPC (from, dhash_program_1, DHASHPROC_INEED, arg, NULL, aclnt_cb_null);
-    // XXX should perhaps check what happens after this call goes out!
-    need_q.clear ();
-  } else 
-    warn << "delaying INEED\n";
-  */
-
 }
 
 void
@@ -758,12 +728,6 @@ dhash_impl::dispatch (user_args *sbp)
 	store (sarg, exists,
 	       wrap(this, &dhash_impl::storesvc_cb, sbp, sarg, exists));	
       }
-    }
-    break;
-  case DHASHPROC_INEED:
-    {
-      warn << "INEED deprecated\n";
-      sbp->reply (NULL);
     }
     break;
   default:

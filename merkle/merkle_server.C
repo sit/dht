@@ -1,3 +1,9 @@
+#include <chord.h>
+#include "merkle_hash.h"
+#include "merkle_node.h"
+#include "merkle_tree.h"
+#include "merkle_syncer.h"
+#include "merkle_sync_prot.h"
 #include "merkle_server.h"
 #include <location.h>
 #include <locationtable.h>
@@ -6,25 +12,10 @@
 // ---------------------------------------------------------------------------
 // merkle_server
 
-merkle_server::merkle_server (merkle_tree *ltree, addHandler_t addHandler, 
-			      missingfnc2_t missingfnc, vnode *host_node)
-  : ltree (ltree), host_node (host_node), missingfnc (missingfnc)
+merkle_server::merkle_server (merkle_tree *ltree, addHandler_t addHandler)
+  : ltree (ltree)
 {
   (*addHandler) (merklesync_program_1, wrap(this, &merkle_server::dispatch));
-}
-
-
-void
-merkle_server::missing (ptr<location> n, bigint key)
-{
-  (*missingfnc) (n, key);
-}
-
-void
-merkle_server::doRPC (ptr<location> dst, RPC_delay_args *args)
-{
-  host_node->doRPC (dst, args->prog, args->procno, args->in, 
-		    args->out, args->cb);
 }
 
 void
@@ -59,23 +50,6 @@ merkle_server::dispatch (user_args *sbp)
 		      lnode, &res.resok->node);
       // and reply
       sbp->reply (&res);
-
-      // this is the bidirectional part. Do this after the reply
-      // because it is potentially expensive and might lag the reply,
-      // distorting the RTT
-
-      // XXX don't need this call. The caller can figure out what
-      // he needs without my help and I don't know what to do
-      // even if I do find that I'm missing data
-      /*
-      // Get remote sides ip:port and chordID
-      chord_node from;
-      sbp->fill_from (&from);
-      ptr<location> l = host_node->locations->lookup_or_create (from);
-      compare_nodes (ltree, arg->rngmin, arg->rngmax, lnode, rnode,
-		     wrap (this, &merkle_server::missing, l),
-		     wrap (this, &merkle_server::doRPC, l));
-      */
       break;
     }
      
