@@ -1036,11 +1036,18 @@ void
 set_foreground_lat (unsigned long lat)
 {
   unsigned int i = 0; 
-  while (i < lat_map.size () &&
-	 lat > lat_map[i].lat) i++;
-  
+  while (i < lat_map.size () && lat > lat_map[i].lat) 
+    i++;
+
+  // XXX quick hack....--josh
+  assert (lat_map.size () != 0);
+  if (i >= lat_map.size ())
+    i = lat_map.size () - 1;
+
+
   gdk_gc_set_foreground (draw_gc, &lat_map[i].c);
 }
+
 
 void
 draw_arrow (int fromx, int fromy, 
