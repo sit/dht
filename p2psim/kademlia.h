@@ -101,10 +101,14 @@ private:
       _ft[i].valid = true;
       _ft[i].retries = 0;
       _id2ip[id] = ip;
-
+      cout << "set " << i << endl;
+      cout << "_id " << printbits(_id) << endl;
+      cout << " id " << printbits(id) << endl;
+      cout << " fp " << printbits(Kademlia::flipbitandmaskright(_id, i)) << endl;
+      cout << " mr " << printbits(Kademlia::maskright(id, i)) << endl;
       assert(Kademlia::flipbitandmaskright(_id, i) == Kademlia::maskright(id, i));
-
     }
+
     void unset(unsigned i) { _ft[i].valid = false; }
     void dump(NodeID myid) {
       string s;
