@@ -60,7 +60,7 @@ public:
 
   Chord(IPAddress i, Args& a, LocTable *l = NULL); 
   virtual ~Chord();
-  string proto_name() { return "Chord"; }
+  virtual string proto_name() { return "Chord"; }
 
   // Functions callable from events file.
   virtual void join(Args*);
@@ -107,6 +107,8 @@ public:
     CHID key;
     uint m;
     uint all; //get m out of the first all successors
+    bool retry;
+    uint type;
     vector<IDMap> deadnodes;
   };
 
@@ -140,6 +142,7 @@ public:
   };
 
   struct next_recurs_args {
+    IPAddress src;
     uint type;
     CHID key;
     vector<lookup_path> path;
@@ -150,6 +153,7 @@ public:
   struct next_recurs_ret {
     vector<IDMap> v;
     bool correct;
+    uint finish_time;
   };
 
   struct lookup_args{
@@ -168,9 +172,12 @@ public:
   void next_handler(next_args *, next_ret *);
   void find_successors_handler(find_successors_args *, 
                                find_successors_ret *);
+
+  void final_recurs_hop(next_recurs_args *args, next_recurs_ret *ret);
   virtual void my_next_recurs_handler(next_recurs_args *, next_recurs_ret *);
   void next_recurs_handler(next_recurs_args *, next_recurs_ret *);
   void lookup_internal(lookup_args *a);
+  void ping_delete(alert_args *aa);
 
   CHID id () { return me.id; }
   virtual void initstate();
@@ -224,6 +231,8 @@ protected:
   static double _lookup_interval;
   static vector<double> _lookup_lat_v;
   static double _lookup_success;
+  static double _lookup_raw_success;
+  static double _lookup_raw_num;
   static double _lookup_retries;
 
 
@@ -238,6 +247,9 @@ protected:
   void check_static_init();
   void record_stat(uint bytes, uint type);
   void record_lookupstat(uint num, uint type);
+
+private:
+  Time _last_join_time;
 };
 
 typedef struct {

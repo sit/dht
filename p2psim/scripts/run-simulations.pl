@@ -22,7 +22,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-# $Id: run-simulations.pl,v 1.10 2003/12/15 01:32:03 strib Exp $
+# $Id: run-simulations.pl,v 1.11 2003/12/26 06:13:56 jinyang Exp $
 
 use strict;
 use Getopt::Long;
@@ -168,9 +168,9 @@ if( $script_dir !~ m%^/% ) {	# relative pathname
 $script_dir =~ s%/(./)?[^/]*$%%;	# strip off script name
 my $p2psim_cmd = "$script_dir/../p2psim/p2psim";
 
-if( $seed ne "" ) {
-    $p2psim_cmd .= " -e $seed";
-}
+#if( $seed ne "" ) {
+#    $p2psim_cmd .= " -e $seed";
+#}
 
 # parse the args file to get all the arguments
 open( ARGS, "<$argsfile" ) or die( "Couldn't open args file: $argsfile" );
@@ -408,17 +408,18 @@ sub run_command {
     if( -f $logfile ) { 
 	return 0;
     }
-    
+  
+    my $randseed = int 1000000 * rand();
     open( LOG, ">$logfile" ) or die( "Couldn't open $logfile" );
     print LOG "# lookupmean=$lookupmean lifemean=$lifemean " . 
 	"deathmean=$deathmean file=$churnfile exit=$exittime\n";
-    print LOG "# topology=$topology seed=$seed\n";
+    print LOG "# topology=$topology seed=$randseed\n";
     close( LOG );
     
     print "# $arg_string > $logfile \n";
     #print "$p2psim_cmd $protfile $topology $eventfile >> $logfile";
     my $before = time();
-    system( "$p2psim_cmd $protfile $topology $eventfile >> $logfile " .
+    system( "$p2psim_cmd -e $randseed $protfile $topology $eventfile >> $logfile " .
 	    "2>> $logfile" )
 	and die( "$p2psim_cmd $protfile $topology $eventfile failed" );
     my $complete_time = time() - $before;
