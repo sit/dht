@@ -164,10 +164,14 @@ struct dbEnumeration {
   void ne_cb(callback<void, ptr<dbPair> >::ref cb, tid_t, int, record *);
 #endif
 
+  ptr<dbPair> getElement(u_int32_t flags, ptr<dbrec> startkey);
   ptr<dbPair> nextElement();
+  ptr<dbPair> prevElement();
   ptr<dbPair> nextElement(ref<dbrec> startkey);
-  void nextElement(callback<void, ptr<dbPair> >::ref cb);
-  char hasMoreElements();
+  ptr<dbPair> lastElement();
+
+  //ptr<dbPair> prevElement(ref<dbrec> startkey); -- not implemented
+  char hasMoreElements();  // broken -- don't use
 
 #ifdef SLEEPYCAT
   DB* db_sync;

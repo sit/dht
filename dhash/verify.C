@@ -105,6 +105,12 @@ get_block_contents (ptr<dbrec> d, dhash_ctype t)
   return get_block_contents (d->value, d->len, t);
 }
 
+ptr<dhash_block>
+get_block_contents (ref<dbrec> d, dhash_ctype t)
+{
+  return get_block_contents (d->value, d->len, t);
+}
+
 
 ptr<dhash_block> 
 get_block_contents (ptr<dhash_block> block, dhash_ctype t) 
@@ -173,6 +179,12 @@ get_block_contents (char *data, unsigned int len, dhash_ctype t)
 
 dhash_ctype
 block_type (ptr<dbrec> data)
+{
+  return block_type (data->value, data->len);
+}
+
+dhash_ctype
+block_type (ref<dbrec> data)
 {
   return block_type (data->value, data->len);
 }

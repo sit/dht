@@ -185,8 +185,12 @@ class dhash {
   qhash<chordID, ptr<merkle_syncer>, hashID> active_syncers;
   chordID replica_syncer_dstID;
   ptr<merkle_syncer> replica_syncer;
+  chordID partition_syncer_predID;
   chordID partition_syncer_dstID;
   ptr<merkle_syncer> partition_syncer;
+
+  ptr<dbEnumeration> partition_enumeration;
+  ptr<dbPair> partition_dbpair;
 
   ihash<chordID, store_state, &store_state::key, 
     &store_state::link, hashID> pst;
@@ -207,7 +211,10 @@ class dhash {
   void sendblock_cb (callback<void>::ref cb, dhash_stat err, chordID blockID);
 
   void replica_maintenance_timer (u_int index);
-  void partition_maintenance_timer (int index);
+  void partition_maintenance_timer ();
+  void partition_maintenance_lookup_cb (dhash_stat err, chordID hostID);
+  void partition_maintenance_pred_cb (chordID hostID, 
+				     chordID predID, net_address addr, chordstat stat);
   void doRPC_unbundler (chordID ID, RPC_delay_args *args);
 
 
@@ -229,11 +236,11 @@ class dhash {
 				 int cookie, ptr<dbrec> val, dhash_stat stat);
   void sent_block_cb (dhash_stat *s, clnt_stat err);
 
-  void append (ptr<dbrec> key, ptr<dbrec> data,
+  void append (ref<dbrec> key, ptr<dbrec> data,
 	       s_dhash_insertarg *arg,
 	       cbstore cb);
   void append_after_db_store (cbstore cb, chordID k, int stat);
-  void append_after_db_fetch (ptr<dbrec> key, ptr<dbrec> new_data,
+  void append_after_db_fetch (ref<dbrec> key, ptr<dbrec> new_data,
 			      s_dhash_insertarg *arg, cbstore cb,
 			      int cookie, ptr<dbrec> data, dhash_stat err);
   
@@ -298,6 +305,7 @@ class dhash {
 			 chordID ID, bool ok, chordstat stat);
 
   int dbcompare (ref<dbrec> a, ref<dbrec> b);
+  void dbwrite (ref<dbrec> key, ref<dbrec> data);
 
 
   chordID pred;
@@ -338,12 +346,14 @@ bool verify_content_hash (chordID key,  char *buf, int len);
 bool verify_key_hash (chordID key, char *buf, int len);
 bool verify_dnssec ();
 bool verify_quorum ();
+ptr<dhash_block> get_block_contents (ref<dbrec> d, dhash_ctype t);
 ptr<dhash_block> get_block_contents (ptr<dbrec> d, dhash_ctype t);
 ptr<dhash_block> get_block_contents (ptr<dhash_block> block, dhash_ctype t);
 ptr<dhash_block> get_block_contents (char *data, 
 				     unsigned int len, 
 				     dhash_ctype t);
 dhash_ctype block_type (ptr<dbrec> d);
+dhash_ctype block_type (ref<dbrec> d);
 dhash_ctype block_type (ref<dhash_block> d);
 dhash_ctype block_type (ptr<dhash_block> d);
 dhash_ctype block_type (char *value, unsigned int len);

@@ -127,8 +127,12 @@ dbEnumeration::~dbEnumeration() {
 }
 #endif
 
-char dbEnumeration::hasMoreElements() {
+char
+dbEnumeration::hasMoreElements()
+{
 #ifdef SLEEPYCAT
+  assert (0); // i don't think this works.  --josh
+
   char ci = cursor_init;
   ptr<dbPair> next = nextElement();
   if (next == NULL) return 0;
@@ -150,60 +154,54 @@ char dbEnumeration::hasMoreElements() {
 }
 
 #ifdef SLEEPYCAT
-ptr<dbPair> dbEnumeration::nextElement() {
-  
-  DBT key, data;
-  bzero(&key, sizeof(key));
-  bzero(&data, sizeof(data));
-
+ptr<dbPair>
+dbEnumeration::getElement(u_int32_t flags, ptr<dbrec> startkey)
+{
   // XXX hack
   // nextElement doesn't return any data, just keys.
   // use the lookup routine if you want the data. 
   // Perhaps, change nextElement to only return a ptr<dbrec>!
-
-#if 1
-  data.flags = DB_DBT_PARTIAL;
-#endif
-  int err = cursor->c_get(cursor, &key, &data, DB_NEXT);
-  cursor_init = 1;
-  if (err) return NULL;
-
-  ref<dbrec> keyrec = New refcounted<dbrec>(key.data, key.size);
-
-  // see above.
-#if 1
-  ptr<dbrec> valrec = NULL;
-#else
-  ref<dbrec> valrec = New refcounted<dbrec>(data.data, data.size);
-#endif
-  
-  return New refcounted<dbPair>(keyrec, valrec);
-}
-void dbEnumeration::nextElement(callback<void, ptr<dbPair> >::ref cb) {
-  
-  ptr<dbPair> res = nextElement();
-  if (res)
-    (*cb)(res);
-  else
-    (*cb)(NULL);
-  return;
-}
-
-ptr<dbPair> dbEnumeration::nextElement(ref<dbrec> startkey) {
   DBT key, data;
   bzero(&key, sizeof(key));
+  if (startkey) {
+    key.size = startkey->len;
+    key.data = startkey->value;
+  }
   bzero(&data, sizeof(data));
-  key.size = startkey->len;
-  key.data = startkey->value;
-  int err = cursor->c_get(cursor, &key, &data, DB_SET_RANGE);
+  data.flags = DB_DBT_PARTIAL;
+  int err = cursor->c_get(cursor, &key, &data, flags);
   cursor_init = 1;
-  if (err) return NULL;
-  
+  if (err) 
+    return NULL;
   ref<dbrec> keyrec = New refcounted<dbrec>(key.data, key.size);
-  ref<dbrec> valrec = New refcounted<dbrec>(data.data, data.size);
-  
+  ptr<dbrec> valrec = NULL;
   return New refcounted<dbPair>(keyrec, valrec);
 }
+
+ptr<dbPair>
+dbEnumeration::nextElement()
+{
+  return getElement (DB_NEXT, NULL);
+}
+
+ptr<dbPair>
+dbEnumeration::prevElement()
+{
+  return getElement (DB_PREV, NULL);
+}
+
+ptr<dbPair>
+dbEnumeration::nextElement(ref<dbrec> startkey)
+{
+  return getElement(DB_SET_RANGE, startkey);
+}
+
+ptr<dbPair>
+dbEnumeration::lastElement()
+{
+  return getElement(DB_LAST, NULL);
+}
+
 #else
 ptr<dbPair> dbEnumeration::nextElement() {
   assert(ADB_sync);

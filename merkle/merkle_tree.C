@@ -178,10 +178,8 @@ merkle_tree::insert (block *b)
 {
   //warn <<  "\n\n\n **** merkle_tree::insert: " << b->key << "\n";
 
-  if (database_lookup (db, b->key)) {
-    //warn << "merkle_tree::insert: key already exists " << b->key << "\n";
-    return;
-  }
+  if (database_lookup (db, b->key))
+    fatal << "merkle_tree::insert: key already exists " << b->key << "\n";
 
   //check_invariants ();
   insert (0, b, &root);

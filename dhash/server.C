@@ -38,10 +38,9 @@
 #endif
 
 #include <merkle_sync_prot.h>
-
-#define MERKLE_ENABLED 0
-#define MERKLE_TREE    1
-#define REPLICATE_KEY  1
+static int MERKLE_ENABLED = !!getenv("MERKLE_ENABLED");
+static int MERKLE_TREE    = !!getenv("MERKLE_TREE");
+static int DONT_REPLICATE  = !!getenv("DONT_REPLICATE");
 
 #define LEASE_TIME 2
 #define LEASE_INACTIVE 60
@@ -81,6 +80,16 @@ dhash::dhash(str dbname, ptr<vnode> node,
 	     ptr<route_factory> _r_factory,
 	     u_int k, int _ss_mode) 
 {
+  if (MERKLE_ENABLED)   warn << "MERKLE_ENABLED on\n";
+  if (MERKLE_TREE)      warn << "MERKLE_TREE on\n";
+  if (DONT_REPLICATE)   warn << "DONT_REPLICATE on\n";
+
+  if (MERKLE_ENABLED)
+    if (!MERKLE_TREE)
+      fatal << "if MERKLE_ENABLED is on, MERKLE_TREE must be too\n";
+
+
+
   warn << "In dhash constructor " << node->my_ID () << "\n";
   this->r_factory = _r_factory;
   nreplica = k;
@@ -116,7 +125,11 @@ dhash::dhash(str dbname, ptr<vnode> node,
   replica_syncer_dstID = 0;
   replica_syncer = NULL;
   partition_syncer_dstID = 0;
+  partition_syncer_predID = 0;
   partition_syncer = NULL;
+  partition_enumeration = db->enumerate();
+  partition_dbpair = NULL;
+
 
   // RPC demux
   warn << host_node->my_ID () << " registered dhash_program_1\n";
@@ -148,7 +161,7 @@ dhash::dhash(str dbname, ptr<vnode> node,
   delaycb (30, wrap (this, &dhash::sync_cb));
   if (MERKLE_ENABLED) {
     delaycb (5, wrap (this, &dhash::replica_maintenance_timer, 0));
-    delaycb (5, wrap (this, &dhash::partition_maintenance_timer, 0));
+    //delaycb (5, wrap (this, &dhash::partition_maintenance_timer));
   }
 }
 
@@ -233,17 +246,40 @@ dhash::replica_maintenance_timer (u_int index)
 }
 
 void
-dhash::partition_maintenance_timer (int index)
+dhash::partition_maintenance_timer ()
 {
   update_replica_list ();
 
-  // HOW TO ITERATE BACKWARDS IN DB??????????????
+  if (!partition_syncer || partition_syncer->done()) {
+      if (partition_syncer) {
+	assert (partition_syncer->done());
+	assert (*active_syncers[partition_syncer_dstID] == partition_syncer);
+	active_syncers.remove (partition_syncer_dstID);
+      }
 
+      assert (0); // skip by [predID,nodeID] chunks
+      if (partition_dbpair)
+	partition_dbpair = partition_enumeration->prevElement ();
+
+      if (!partition_dbpair) {
+	// get the largest database key
+	partition_enumeration = db->enumerate();
+	partition_dbpair = partition_enumeration->lastElement ();
+	assert (partition_dbpair);
+      }
+
+      chordID blockID = dbrec2id(partition_dbpair->key);
+      cli->lookup (blockID, true, wrap (this, &dhash::partition_maintenance_lookup_cb));
+  } else {
+    delaycb (5, wrap (this, &dhash::partition_maintenance_timer));
+  }
+
+  
 #if 0
-   // maintenace is continual
+   // maintenance is continual
    while (1) {
       // get the HIGHEST key (assumes database is sorted by keys)
-      <key, block> = database.last ()
+      key = database.last ()
        
       while (1) {
           node = chord_lookup (key)
@@ -251,19 +287,51 @@ dhash::partition_maintenance_timer (int index)
      
           // don't sync with self
           if (node.id != myID)
-            synchronize (node, database[pred.id ... node.id])
+            synchronize (node, database[pred.id ... node.id]
 
           // skip over entire database range which was synchronized 
-          <key, block> = database.previous (pred_node.id)
+          key = database.previous (pred_node.id)
           if (key == NO_MORE_KEYS)
              break;
       }
    }
 #endif
 
-   delaycb (5, wrap (this, &dhash::partition_maintenance_timer, index));
+
 }
 
+
+void
+dhash::partition_maintenance_lookup_cb (dhash_stat err, chordID hostID)
+{
+  assert (err == 0);
+  host_node->get_predecessor (hostID, wrap (this, &dhash::partition_maintenance_pred_cb, hostID));
+}
+
+
+void
+dhash::partition_maintenance_pred_cb (chordID hostID, 
+				     chordID predID, net_address addr, chordstat status)
+{
+  assert (status == 0);
+  assert (hostID != host_node->my_ID());
+
+  if (active_syncers[hostID])
+    fatal << "Strange: already syncing with " << hostID << "\n";
+
+  partition_syncer = New refcounted<merkle_syncer> 
+    (mtree, 
+     wrap (this, &dhash::doRPC_unbundler, hostID),
+     wrap (this, &dhash::sendblock, hostID));
+  active_syncers.insert (hostID, partition_syncer);
+  
+  warn << "uniSYNC range [" << predID << ", " << hostID << "]\n";
+  replica_syncer->sync (predID, hostID, merkle_syncer::UNIDIRECTIONAL, NULL);
+  partition_syncer_predID = predID;
+  partition_syncer_dstID = hostID;
+
+  delaycb (5, wrap (this, &dhash::partition_maintenance_timer));
+}
 
 
 
@@ -674,7 +742,7 @@ dhash::fix_replicas_txerd (dhash_stat err)
 void
 dhash::replicate_key (chordID key, cbstat_t cb)
 {
-  if (!REPLICATE_KEY) {
+  if (DONT_REPLICATE) {
     warn << "\n\n\n****NOT REPLICATING KEY\n";
     (cb) (DHASH_OK);
   } else {
@@ -750,12 +818,11 @@ dhash::get_key_got_block (chordID key, cbstat_t cb, ptr<dhash_block> b)
   if (!b)
     cb (DHASH_STOREERR);
   else {
-    ptr<dbrec> k = id2dbrec (key);
-    ptr<dbrec> d = New refcounted<dbrec> (b->data, b->len);
+    ref<dbrec> k = id2dbrec (key);
+    ref<dbrec> d = New refcounted<dbrec> (b->data, b->len);
 
 #if MERKLE_TREE
-    block blk (to_merkle_hash (k), d);
-    mtree->insert (&blk);
+    dbwrite (k, d);
     get_key_stored_block (cb, 0);
 #else
     db->insert (k, d, wrap(this, &dhash::get_key_stored_block, cb));
@@ -814,7 +881,7 @@ dhash::fetch_cb (int cookie, cbvalue cb, ptr<dbrec> ret)
 }
 
 void
-dhash::append (ptr<dbrec> key, ptr<dbrec> data,
+dhash::append (ref<dbrec> key, ptr<dbrec> data,
 	       s_dhash_insertarg *arg,
 	       cbstore cb)
 {
@@ -832,8 +899,7 @@ dhash::append (ptr<dbrec> key, ptr<dbrec> data,
 	memcpy (m_buf, data->value, buflen);
 	int m_len = x.uio ()->resid ();
 	char *m_dat = suio_flatten (x.uio ());
-	ptr<dbrec> marshalled_data =
-	  New refcounted<dbrec> (m_dat, m_len);
+	ref<dbrec> marshalled_data = New refcounted<dbrec> (m_dat, m_len);
 
 	dhash_stat stat;
 	chordID id = arg->key;
@@ -841,8 +907,7 @@ dhash::append (ptr<dbrec> key, ptr<dbrec> data,
 	keys_stored += 1;
 
 #if MERKLE_TREE
-	block blk (to_merkle_hash (key), marshalled_data);
-	mtree->insert (&blk);
+	dbwrite (key, marshalled_data);
 	append_after_db_store (cb, arg->key, 0);
 #else
 	db->insert (key, marshalled_data, 
@@ -861,7 +926,7 @@ dhash::append (ptr<dbrec> key, ptr<dbrec> data,
 }
 
 void
-dhash::append_after_db_fetch (ptr<dbrec> key, ptr<dbrec> new_data,
+dhash::append_after_db_fetch (ref<dbrec> key, ptr<dbrec> new_data,
 			      s_dhash_insertarg *arg, cbstore cb,
 			      int cookie, ptr<dbrec> data, dhash_stat err)
 {
@@ -887,8 +952,7 @@ dhash::append_after_db_fetch (ptr<dbrec> key, ptr<dbrec> new_data,
 	  New refcounted<dbrec> (m_dat, m_len);
 
 #if MERKLE_TREE
-	block blk (to_merkle_hash (key), marshalled_data);
-	mtree->insert (&blk);
+	dbwrite (key, marshalled_data);
 	append_after_db_store (cb, arg->key, 0);
 #else
 	db->insert (key, marshalled_data, 
@@ -951,8 +1015,8 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
   }
 
   if (ss->iscomplete()) {
-    ptr<dbrec> k = id2dbrec(arg->key);
-    ptr<dbrec> d = New refcounted<dbrec> (ss->buf, ss->size);
+    ref<dbrec> k = id2dbrec(arg->key);
+    ref<dbrec> d = New refcounted<dbrec> (ss->buf, ss->size);
 
     if (active_syncers[arg->srcID]) {
       ptr<merkle_syncer> syncer = *active_syncers[arg->srcID];
@@ -1048,8 +1112,7 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
       bytes_stored += arg->data.size ();
 
 #if MERKLE_TREE
-    block blk (to_merkle_hash (k), d);
-    mtree->insert (&blk);
+    dbwrite (k, d);
     store_cb (arg->type, id, cb, 0);
 #else
     db->insert (k, d, wrap(this, &dhash::store_cb, arg->type, id, cb));
@@ -1250,8 +1313,25 @@ dhash::stop ()
   }
 }
 
+void
+dhash::dbwrite (ref<dbrec> key, ref<dbrec> data)
+{
+#if MERKLE_TREE
+  block blk (to_merkle_hash (key), data);
+  // new mutable blocks overwrite their current entry in the database
+  bool exists = !!database_lookup (mtree->db, blk->key);
+  bool Mutable = (block_type(data) != DHASH_CONTENTHASH);
+  if (exists && Mutable) {
+    mtree->remove (blk->key);
+    exists = false;
+  }
 
-
+  if (!exists)
+    mtree->insert (&blk);
+#else
+  db->insert (key, data);
+#endif
+}
 
 static void
 join(store_chunk *c)

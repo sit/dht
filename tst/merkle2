@@ -14,7 +14,7 @@ if ($> == 0) {
 my $SRC = abs_path (dirname ($0));
 
 sub usage {
-  print STDERR "Usage: $0 outputroot buildroot iterations]\n";
+  print STDERR "Usage: $0 outputroot buildroot iterations\n";
   print STDERR @_, "\n" if @_;
   exit (1);
 }
