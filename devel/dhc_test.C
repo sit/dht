@@ -17,7 +17,7 @@ ptr<sfspriv> sk;
 int insert_count, read_count, count;
 u_int64_t start_massive_insert, end_massive_insert;
 u_int64_t start_massive_read, end_massive_read;
-u_int64_t total_massive_insert;
+u_int64_t total_massive_time;
 
 void readonly_cb (chordID key, dhashclient dhash, dhash_stat stat, 
 		  ptr<dhash_block> blk, vec<chordID> path);
@@ -33,7 +33,7 @@ write_cb (dhashclient dhash, dhash_stat stat, ptr<insert_info> i)
   if (stat == DHASH_OK) {
     gettimeofday (&tp, NULL);
     end_massive_insert = tp.tv_sec * (u_int64_t) 1000000 + tp.tv_usec;
-    total_massive_insert += (end_massive_insert - start_massive_insert);
+    total_massive_time += (end_massive_insert - start_massive_insert);
     insert_count++;
   } else {
     warn << "write_cb err dhash_stat: " << stat << "\n";
@@ -50,18 +50,9 @@ write_cb (dhashclient dhash, dhash_stat stat, ptr<insert_info> i)
 
   if (insert_count == count) {
     warn << "DHC_TEST: Massive Insert Successful \n";
-    warn << "           elapse time " << total_massive_insert
+    warn << "           elapse time " << total_massive_time
 	 << " usecs\n";
     exit (1);
-#if 0
-    read_count = 0;
-    gettimeofday (&tp, NULL);
-    start_massive_read = tp.tv_sec * (u_int64_t) 1000000 + tp.tv_usec;
-    for (int j=0; j<10; j++) {
-      read_count++;
-      dhash.retrieve (i->key, DHASH_KEYHASH, wrap (&readonly_cb, i->key, dhash));
-    }
-#endif
   }
 }
 
@@ -115,15 +106,6 @@ newblock_cb (dhashclient dhash, dhash_stat stat, ptr<insert_info> i)
     warn << "DHC End Insert at " << end_insert << "\n";
     warn << "      elapse time " << end_insert - start_insert << " usecs\n";
     exit (1);
-#if 0
-    insert_count = 0;
-    total_massive_insert = 0;
-    mp = keyhash_payload (1, str (data, DATASIZE));
-    mp.sign (sk, mpk, ms);
-    gettimeofday (&tp, NULL);
-    start_massive_insert = tp.tv_sec * (u_int64_t) 1000000 + tp.tv_usec;
-    dhash.insert (mp.id (mpk), mpk, ms, mp, wrap (&write_cb, dhash), NULL); 
-#endif
   }
 }
 
@@ -142,7 +124,8 @@ readonly_cb (chordID key, dhashclient dhash, dhash_stat stat,
       warn << "DHC Massive READ successful\n";
       warn << "           elapsed time: " 
 	   << end_massive_read - start_massive_read 
-	   << "\n";
+	   << " for " << read_count 
+	   << " reads\n";
       exit (1);
     } else 
       dhash.retrieve (key, DHASH_KEYHASH, wrap (&readonly_cb, key, dhash));
@@ -180,6 +163,8 @@ main (int argc, char **argv)
   sfs_sig2 s;
   p.sign (sk, pk, s);
 
+  total_massive_time = 0;
+
   switch (atoi (argv[3])) {
   case NEWBLOCK: {
     ptr<option_block> opt = New refcounted<option_block>;
@@ -192,22 +177,27 @@ main (int argc, char **argv)
     break;
   }
   case WRITE: {
+    insert_count = 0;
     timeval tp;
     gettimeofday (&tp, NULL);
-    start_insert = tp.tv_sec * (u_int64_t) 1000000 + tp.tv_usec;
-    warn << "DHC Start Write Block at " << start_insert << "\n";
+    start_massive_insert = tp.tv_sec * (u_int64_t) 1000000 + tp.tv_usec;
+    warn << "DHC Start Write Block at " << start_massive_insert << "\n";
     dhash.insert (p.id (pk), pk, s, p, wrap (&write_cb, dhash));        
     break;
   }    
   case READ: {
-    //p.sign (sk, pk, s);
+    read_count = 0;
     timeval tp;
     gettimeofday (&tp, NULL);
     start_massive_read = tp.tv_sec * (u_int64_t) 1000000 + tp.tv_usec;
-    read_count = 10;
-    for (int i=0; i<10; i++)
-      dhash.retrieve (p.id (pk), DHASH_KEYHASH, 
-		      wrap (&readonly_cb, p.id (pk), dhash));
+    if (count < 10) 
+      for (int i=0; i<count; i++)
+	dhash.retrieve (p.id (pk), DHASH_KEYHASH, 
+			wrap (&readonly_cb, p.id (pk), dhash));
+    else
+      for (int i=0; i<10; i++)
+	dhash.retrieve (p.id (pk), DHASH_KEYHASH, 
+			wrap (&readonly_cb, p.id (pk), dhash));
     break;
   }
   default:
