@@ -26,9 +26,9 @@ void
 Koorde::koorde_lookup(koorde_lookup_arg *a, koorde_lookup_ret *r)
 {
   IDMap succ = loctable->succ(me.id);
-  if (ConsistentHash::between (a->k, me.id, succ.id)) {
+  if (ConsistentHash::between (me.id, succ.id, a->k)) {
     r->r = succ;
-  } else if (ConsistentHash::between (a->i, me.id, succ.id)) {
+  } else if (ConsistentHash::between (me.id, succ.id, a->i)) {
     koorde_lookup_arg na;
     koorde_lookup_ret nr;
     IDMap d = loctable->pred (debruijn);

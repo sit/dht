@@ -28,13 +28,6 @@ public:
   virtual void lookup(Args*) {};
   virtual void insert(Args*) {};
 
-  // Chord RPC argument/return types.
-  struct find_successor_args {
-    CHID n;
-  };
-  struct find_successor_ret {
-    IDMap succ;
-  };
   struct get_predecessor_args {
     int dummy;
   };
@@ -59,7 +52,6 @@ public:
   };
 
   // RPC handlers.
-  void find_successor_handler(find_successor_args *, find_successor_ret *);
   void get_predecessor_handler(get_predecessor_args *, get_predecessor_ret *);
   void notify_handler(notify_args *, notify_ret *);
   void next_handler(next_args *, next_ret *);

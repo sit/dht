@@ -76,39 +76,27 @@ Chord::next_handler(next_args *args, next_ret *ret)
   }
 }
 
-// Handle a find_successor RPC.
-// Only used for Chord's internal maintenance (e.g. join).
-// DHash &c should use find_successors.
-void
-Chord::find_successor_handler(find_successor_args *args,
-                              find_successor_ret *ret)
-{
-  printf("Chord(%u,%u)::find_successor_handler(%u)\n",
-         me.ip, me.id, args->n);
-
-  vector<Chord::IDMap> sl = find_successors(args->n, 1);
-  assert(sl.size() > 0);
-  ret->succ = sl[0];
-}
-
 // External event that tells a node to contact the well-known node
 // and try to join.
 void
 Chord::join(Args *args)
 {
-  IPAddress wkn = args->nget<IPAddress>("wellknown");
-  assert(wkn);
-  cout << s() + "::join" << endl;
+  IDMap wkn;
+  wkn.id = args->nget<CHID>("wellknown");
+  wkn.ip = args->nget<IPAddress>("wellknown");
+  assert (wkn.ip);
+  loctable->add_node (wkn);
+
+  cout << s() + "::join wellknown " << wkn.id << endl;
   Time before = now();
-  find_successor_args fsa;
-  find_successor_ret fsr;
-  fsa.n = me.id;
-  doRPC(wkn, &Chord::find_successor_handler, &fsa, &fsr);
+  vector<IDMap> succs = find_successors (me.id + 1, 1);
+  assert (succs.size () > 0);
   Time after = now();
   printf("Chord(%u,%u)::join2 %u, elapsed %ld\n",
-         me.ip, me.id, fsr.succ.id,
+         me.ip, me.id, succs[0].id,
          after - before);
-  loctable->add_node(fsr.succ);
+  loctable->add_node(succs[0]);
+  
   // stabilize();
 }
 
