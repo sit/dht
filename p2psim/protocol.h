@@ -54,9 +54,8 @@ protected:
     assert(e->_target);
     e->_fn = fn;
     e->_args = args;
-    assert(e->ts >= now());
 
-    send(EventQueue::Instance()->eventchan(), &e);
+    EventQueue::Instance()->here(e);
   }
 
   // Send an RPC from a Protocol on one Node to a method

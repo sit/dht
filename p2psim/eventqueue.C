@@ -48,6 +48,15 @@ EventQueue::go()
   send(_gochan, 0);
 }
 
+// Call this to schedule a new event.
+// Don't send to eventchan() directly.
+void
+EventQueue::here(Event *e)
+{
+  assert(e->ts >= now());
+  send(eventchan(), &e);
+}
+
 void
 EventQueue::run()
 {
@@ -93,13 +102,13 @@ EventQueue::advance()
   // XXX: time is not running smoothly. does that matter?
   eq_entry *eqe = _queue.first();
   assert(eqe);
+  _time = eqe->ts;
   for(vector<Event*>::const_iterator i = eqe->events.begin(); i != eqe->events.end(); ++i) {
     assert((*i)->ts == eqe->ts &&
            (*i)->ts >= _time &&
            (*i)->ts < _time + 100000000);
     Event::Execute(*i); // new thread, execute(), delete Event
   }
-  _time = eqe->ts;
   _queue.remove(eqe->ts);
   delete eqe;
 

@@ -92,8 +92,7 @@ Network::run()
         ne->ts = now() + latency;
         ne->node = dstnode;
         ne->p = p;
-        assert(ne->ts >= now());
-        send(EventQueue::Instance()->eventchan(), (Event**) &ne);
+        EventQueue::Instance()->here(ne);
         break;
     
       // register node on network

@@ -59,7 +59,6 @@ Node::run()
 {
   Alt a[2];
   Packet *p;
-  unsigned exit;
 
   a[0].c = _pktchan;
   a[0].v = &p;
