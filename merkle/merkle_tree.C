@@ -148,9 +148,9 @@ merkle_tree::merkle_tree (dbfe *db)
   if (d)
     warn << "Database is not empty.  Loading into merkle tree\n";
 
-  int i = 0;
+  //int i = 0;
   while (d) {
-    warn << "key[" << i++ << "] " << dhash::dbrec2id (d->key) << "\n";
+    //warn << "key[" << i++ << "] " << dhash::dbrec2id (d->key) << "\n";
     // NULL data b/c we are updating the merkle tree only
     // not writing to the underlying database
     block b (to_merkle_hash (d->key), NULL);
