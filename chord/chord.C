@@ -437,7 +437,7 @@ void
 vnode_impl::donotify (user_args *sbp, chord_nodearg *na)
 {
   ndonotify++;
-#if 0
+
   chord_node s;
   sbp->fill_from (&s);
   s.x = make_chordID (s.r.hostname, s.r.port, s.vnode_num);
@@ -449,11 +449,10 @@ vnode_impl::donotify (user_args *sbp, chord_nodearg *na)
     sbp->reply (&res);
   }
   else {
-#endif
     predecessors->update_pred (make_chord_node (na->n));
     chordstat res = CHORD_OK;
     sbp->reply (&res);
-    //  }
+  }
 }
 
 void
