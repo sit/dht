@@ -1,4 +1,4 @@
-/* $Id: http.C,v 1.2 2002/05/17 00:00:28 jsr Exp $ */
+/* $Id: http.C,v 1.3 2003/01/02 21:59:19 jastr Exp $ */
 
 /*
  *
@@ -21,10 +21,15 @@
  *
  */
 
+#ifdef __linux /*kludge for strptime on planetlab*/
+#  define _GNU_SOURCE
+#endif
+
 #include "http.h"
 #include "rxx.h"
 #include "sha1.h"
 #include <pwd.h>
+
 #include <time.h>
 
 static rxx hdrnameval ("^([^\\s:]+):\\s*(.*)\r?\n\\z", "s");

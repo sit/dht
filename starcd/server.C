@@ -49,8 +49,8 @@
 chord_server::chord_server (u_int cache_maxsize)
   : dhash (LSD_SOCKET)
 {
-  srandomdev ();
-  count = random ();
+  random_init();
+  count = random_getword();
 }
 
 void
