@@ -25,20 +25,20 @@ ChordFinger::ChordFinger(Node *n) : Chord(n)
 void
 ChordFinger::fix_fingers()
 {
-  int i0 = 0;
   IDMap succ = loctable->succ(me.id + 1);
 
   if (succ.ip == 0 || succ.id == me.id) return;
-
-  CHID gap = succ.id - me.id;
-  while (gap > 0) {
-    i0++;
-    gap = gap >> 1;
-  }
+  unsigned int i0 = log_2(succ.id - me.id);
   
+  //
   vector<Chord::IDMap> v;
+  CHID finger;
   for (unsigned int i = i0; i < NBCHID; i++) {
-    v = find_successors(ConsistentHash::successorID(me.id,i), 1, true);
+    finger = ConsistentHash::successorID(me.id,i);
+    v = find_successors(finger, 1, true);
+#ifdef CHORD_DEBUG
+    printf("%s fix_fingers %d finger (%qx) get (%u,%qx)\n", ts(), i, finger, v[0].ip, v[0].id);
+#endif
     if (v.size() > 0) loctable->add_node(v[0]);
   }
 }
@@ -56,8 +56,6 @@ ChordFinger::stabilize()
   Chord::stabilize();
   fix_fingers();
 }
-
-
 
 bool
 ChordFinger::stabilized(vector<CHID> lid)
@@ -88,6 +86,26 @@ ChordFinger::stabilized(vector<CHID> lid)
   return true;
 }
 
+void
+ChordFinger::init_state(vector<IDMap> ids)
+{
+  Chord::init_state(ids);
+  IDMap succ = loctable->succ(me.id + 1);
+  unsigned int i0 = log_2(succ.id - me.id);
+
+  vector<IDMap>::iterator it;
+  IDMap finger;
+  unsigned int pos;
+  for (unsigned int i = i0; i < NBCHID; i++) {
+    finger.id = ConsistentHash::successorID(me.id,i);
+    it = upper_bound(ids.begin(), ids.end(), finger, IDMap::cmp);
+    pos = it - ids.begin();
+    if (pos >= ids.size()) {
+      pos = 0;
+    }
+    loctable->add_node(ids[pos]);
+  }
+}
 
 void
 ChordFinger::dump()

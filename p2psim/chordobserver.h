@@ -13,12 +13,14 @@ public:
   virtual void execute();
 
 private:
+  void init_nodes(unsigned int num);
   static ChordObserver *_instance;
   ChordObserver(Args*);
   ~ChordObserver();
   unsigned int _reschedule;
   string _type;
   unsigned int _num_nodes;
+  unsigned int _init_num;
 
   vector<ConsistentHash::CHID> lid;
 };

@@ -30,11 +30,50 @@ ChordObserver::ChordObserver(Args *a)
   _type = (*a)["type"];
   _num_nodes = atoi((*a)["numnodes"].c_str());
   assert(_num_nodes > 0);
+
+  _init_num = atoi((*a)["initnodes"].c_str());
+  if (_init_num > 0) {
+    init_nodes(_init_num);
+  }
   lid.clear();
 }
 
 ChordObserver::~ChordObserver()
 {
+}
+
+void
+ChordObserver::init_nodes(unsigned int num)
+{
+  list<Protocol*> l = Network::Instance()->getallprotocols(_type);
+  list<Protocol*>::iterator pos;
+
+  vector<Chord::IDMap> ids;
+  Chord *c;
+  Chord::IDMap n;
+  unsigned int i = 0;
+
+  for (pos = l.begin(); pos != l.end(); ++pos) {
+    c = (Chord *)(*pos);
+    assert(c);
+    n.ip = c->node()->ip();
+    n.id = c->id();
+    ids.push_back(n);
+
+    if (++i == num) {
+      break;
+    }
+  }
+
+  sort(ids.begin(),ids.end(),Chord::IDMap::cmp);
+  i = 0;
+  for (pos = l.begin(); pos != l.end(); ++pos) {
+    c = (Chord *)(*pos);
+    assert(c); 
+    c->init_state(ids);
+    if (++i == num) break;
+
+  }
 }
 
 void

@@ -12,6 +12,7 @@ class ChordFinger: public Chord {
 
     void stabilize();
     bool stabilized(vector<CHID> lid);
+    void init_state(vector<IDMap> ids);
     void reschedule_stabilizer(void *x);
     void dump();
 

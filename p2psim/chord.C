@@ -55,6 +55,10 @@ Chord::find_successors(CHID key, uint m, bool intern)
 
   IDMap nprime = me;
   int count = 0;
+
+#ifdef CHORD_DEBUG
+  vector<IDMap> route;
+#endif
   //printf("%s find_successors key %qu\n", ts(), PID(key));
   while(1){
     assert(count++ < 100);
@@ -65,12 +69,19 @@ Chord::find_successors(CHID key, uint m, bool intern)
     na.who = me;
     doRPC(nprime.ip, &Chord::next_handler, &na, &nr);
     if(nr.done){
+#ifdef CHORD_DEBUG
+      route.push_back(nr.v[0]);
+      printf("%s find_successor %qx route: ",ts(), key);
+      for (unsigned int i = 0; i < route.size(); i++) {
+	printf("(%u,%qx) ", route[i].ip, route[i].id);
+      }
+      printf("\n");
+#endif
       return nr.v;
     } else {
-      /*
-      printf("%s !!! node %qu refers to next %qu for key %qu\n",
-             ts(), PID(nprime.id), PID(nr.next.id), PID(key));
-	     */
+#ifdef CHORD_DEBUG
+      route.push_back(nr.next);
+#endif
       nprime = nr.next;
     }
   }
@@ -90,7 +101,12 @@ Chord::next_handler(next_args *args, next_ret *ret)
     */
   //IDMap succ = loctable->succ(args->m);
   IDMap succ = loctable->succ(me.id+1);
-  if(ConsistentHash::betweenrightincl(me.id, succ.id, args->key) ||
+
+  /* The condition loctable->size()!=2 is a terrible hack. 
+     When a node first joins the system,
+     two entries (me and the wellknown node) are inserted into loctable
+     but we do not want to mis-use either as the successor answer during find_successor*/
+  if(loctable->size()!=2 && ConsistentHash::betweenrightincl(me.id, succ.id, args->key) ||
      succ.id == me.id){
     ret->done = true;
     ret->v.clear();
@@ -103,12 +119,11 @@ Chord::next_handler(next_args *args, next_ret *ret)
     ret->done = false;
     ret->next = loctable->pred(args->key);
     //ret->next = succ;
-    assert(ret->next.ip != me.ip);
-    /*
-    printf("%s next_handler NOT done key=%qu, goto next %qu\n",
-           ts(), PID(args->key), PID(ret->next.id));
-	   */
-  }
+    if (ret->next.ip == me.ip) {
+      assert(loctable->size() == 2);
+      ret->next = loctable->succ(args->key);
+    }
+ }
 }
 
 // External event that tells a node to contact the well-known node
@@ -193,6 +208,22 @@ Chord::stabilized(vector<CHID> lid)
   return true;
 }
 
+void
+Chord::init_state(vector<IDMap> ids)
+{
+  vector<IDMap>::iterator iter;
+  iter = find(ids.begin(), ids.end(), me);
+  assert(iter != ids.end());
+  assert(ids.size() > nsucc);
+
+  for (unsigned int i = 0; i < nsucc; i++) {
+    iter++;
+    if (iter == ids.end()) iter = ids.begin();
+    loctable->add_node(*iter);
+  }
+
+  printf("%s inited %d\n", ts(), ids.size());
+}
 
 void
 Chord::fix_successor()
@@ -202,6 +233,10 @@ Chord::fix_successor()
   get_predecessor_args gpa;
   get_predecessor_ret gpr;
   doRPC(succ1.ip, &Chord::get_predecessor_handler, &gpa, &gpr);
+
+#ifdef CHORD_DEBUG
+  printf("%s fix_successor old successor (%u,%qx)'s predecessor is (%u, %qx)\n", ts(), succ1.ip, succ1.id, gpr.n.ip, gpr.n.id);
+#endif
 
   if (gpr.n.ip) loctable->add_node(gpr.n);
 }

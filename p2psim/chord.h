@@ -9,6 +9,7 @@
 #define CHORD_SUCC_NUM 3  // default number of successors maintained
 #define STABLE_TIMER 500
 #define PAD "000000000000000000000000"
+#undef CHORD_DEBUG
 
 #include "p2psim.h"
 
@@ -17,9 +18,17 @@ class LocTable;
 class Chord : public Protocol {
 public:
   typedef ConsistentHash::CHID CHID;
-  struct IDMap {
+  /*
+  static int cmp_idmap(const IDMap a, const IDMap b) {
+    return a.id - b.id;
+  }*/
+
+  class IDMap{
+    public:
     ConsistentHash::CHID id; //consistent hashing ID for the node
     IPAddress ip; //the IP address for the node
+    static bool cmp(const IDMap& a, const IDMap& b) { return (a.id < b.id);}
+    bool operator==(const IDMap a) { return (a.id == id); }
   };
 
   Chord(Node *n, uint numsucc = CHORD_SUCC_NUM);
@@ -72,6 +81,7 @@ public:
   void next_handler(next_args *, next_ret *);
 
   CHID id () { return me.id; }
+  virtual void init_state(vector<IDMap> ids);
   virtual bool stabilized(vector<CHID>);
 
   virtual void dump();
@@ -84,6 +94,8 @@ protected:
   LocTable *loctable;
   IDMap me;
   uint nsucc;
+  CHID _prev_succ;
+  uint i0;
 
   virtual vector<IDMap> find_successors(CHID key, uint m, bool intern);
   void fix_successor();
@@ -114,6 +126,7 @@ class LocTable {
     void del_node(Chord::IDMap n);
     void notify(Chord::IDMap n);
     void pin(Chord::CHID x, uint pin_succ, uint pin_pred);
+    unsigned int size() { return ring.size();}
 
   private:
     vector<Chord::IDMap> ring;
@@ -125,8 +138,5 @@ class LocTable {
 };
 
 #endif // __CHORD_H
-
-
-
 
 
