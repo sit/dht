@@ -157,7 +157,7 @@ pred_list::do_continuous ()
 void
 pred_list::do_backoff ()
 {
-  stabilize_predlist ();
+  //stabilize_predlist ();
   return;
 }
 
