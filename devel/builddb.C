@@ -49,7 +49,11 @@ ptr<dbrec>
 marshal_dhashblock (char *buf, size_t buflen)
 {
   ptr<dbrec> ret = NULL;
-
+  
+  ret = New refcounted<dbrec> (buf, buflen);
+  return ret;
+  
+  /*
   long type = DHASH_CONTENTHASH;
   xdrsuio x;
   int size = buflen + 3 & ~3;
@@ -68,6 +72,7 @@ marshal_dhashblock (char *buf, size_t buflen)
   } else {
     fatal << "Marshaling failed\n";
   }
+  */
 }
 
 ptr<dbrec>
@@ -81,8 +86,8 @@ gen_frag (ptr<dbrec> block)
   str frag = Ida::gen_frag (m, blk);
   // prepend type of block onto fragment
   //str res (strbuf (block->value, 4) << frag);
-  str res (strbuf () << str (block->value, 4) << frag);
-  return New refcounted<dbrec> (res.cstr (), res.len ());
+  //str res (strbuf () << str (block->value, 4) << frag);
+  return New refcounted<dbrec> (frag.cstr (), frag.len ());
 }
 
 int
