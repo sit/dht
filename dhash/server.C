@@ -153,10 +153,13 @@ dhash::dispatch (svccb *sbp)
 	  //     wouldn't this save one hop???
 	  //
 	  //     --josh
+	  if (farg->usecachedsucc)
+	    nid = host_node->lookup_closestsucc (farg->key);
+	  else
 #ifdef FINGERS
-	  nid = host_node->lookup_closestpred (farg->key);
+	    nid = host_node->lookup_closestpred (farg->key);
 #else
-	  nid = host_node->lookup_closestsucc (farg->key);
+	    nid = host_node->lookup_closestsucc (farg->key);
 #endif
 	}
 

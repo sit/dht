@@ -270,13 +270,18 @@ class dhashcli {
 
  public:
   dhashcli (ptr<chord> node) : clntnode (node) {}
-  void retrieve (chordID blockID, cbretrieve_t cb);
-  void insert (chordID blockID, ref<dhash_block> block, dhash_ctype ctype, cbinsert_t cb);
-  void lookup_iter (chordID sourceID, chordID blockID, uint32 off, uint32 len, dhashcli_lookup_itercb_t cb);
-  void lookup_iter (chordID blockID, uint32 off, uint32 len, dhashcli_lookup_itercb_t cb);
-  void store (chordID destID, chordID blockID, char *data, size_t len, size_t off, size_t totsz, 
-	      dhash_ctype ctype, dhashcli_storecb_t cb);
-  void lookup (chordID blockID, dhashcli_lookupcb_t cb);
+  void retrieve (chordID blockID, bool usecachedsucc, cbretrieve_t cb);
+  void insert (chordID blockID, ref<dhash_block> block, dhash_ctype ctype,
+               bool usecachedsucc, cbinsert_t cb);
+  void lookup_iter (chordID sourceID, chordID blockID, uint32 off,
+                    uint32 len, bool usecachedsucc,
+		    dhashcli_lookup_itercb_t cb);
+  void lookup_iter (chordID blockID, uint32 off, uint32 len,
+                    bool usecachedsucc, dhashcli_lookup_itercb_t cb);
+  void store (chordID destID, chordID blockID, char *data, size_t len,
+              size_t off, size_t totsz, dhash_ctype ctype,
+	      dhashcli_storecb_t cb);
+  void lookup (chordID blockID, bool usecachedsucc, dhashcli_lookupcb_t cb);
 };
 
 
@@ -288,7 +293,7 @@ private:
   // inserts under the specified key
   // (buf need not remain involatile after the call returns)
   void insert (bigint key, const char *buf, size_t buflen, 
-	       cbinsert_t cb, dhash_ctype t);
+	       cbinsert_t cb, dhash_ctype t, bool usecachedsucc);
   void insertcb (cbinsert_t cb, bigint key, dhash_stat *res, clnt_stat err);
   void retrievecb (cbretrieve_t cb, bigint key, dhash_ctype ctype, 
 		   ref<dhash_retrieve_res> res, clnt_stat err);
@@ -302,17 +307,22 @@ public:
 
   // inserts under the contents hash. 
   // (buf need not remain involatile after the call returns)
-  void insert (const char *buf, size_t buflen, cbinsert_t cb);
-  void insert (bigint key, const char *buf, size_t buflen, cbinsert_t cb);
+  void insert (const char *buf, size_t buflen, cbinsert_t cb,
+               bool usecachedsucc = false);
+  void insert (bigint key, const char *buf, size_t buflen, cbinsert_t cb,
+               bool usecachedsucc = false);
 
   //insert under hash of public key
-  void insert (const char *buf, size_t buflen, rabin_priv key, cbinsert_t cb);
-  void insert (const char *buf, size_t buflen, bigint sig, rabin_pub key, cbinsert_t cb);
-  void insert (bigint hash, const char *buf, size_t buflen, bigint sig, rabin_pub key, cbinsert_t cb);
-
+  void insert (const char *buf, size_t buflen, rabin_priv key, cbinsert_t cb,
+               bool usecachedsucc = false);
+  void insert (const char *buf, size_t buflen, bigint sig, rabin_pub key,
+               cbinsert_t cb, bool usecachedsucc = false);
+  void insert (bigint hash, const char *buf, size_t buflen, bigint sig,
+               rabin_pub key, cbinsert_t cb, bool usecachedsucc = false);
 
   // retrieve block and verify
-  void retrieve (bigint key, dhash_ctype type, cbretrieve_t cb);
+  void retrieve (bigint key, dhash_ctype type, cbretrieve_t cb,
+                 bool usecachedsucc = false);
 
   // synchronouslly call setactive.
   // Returns true on error, and false on success.

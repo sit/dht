@@ -66,14 +66,17 @@ protected:
   bigint key;
   cbretrieve_t cb;  
   ptr<dhash_block> block;
+  bool usecachedsucc;
 
 
-  dhash_retrieve (dhashcli *dhcli, bigint key, cbretrieve_t cb)
+  dhash_retrieve (dhashcli *dhcli, bigint key, bool usecachedsucc,
+                  cbretrieve_t cb)
     : dhcli (dhcli), npending (0), error (false), key (key), cb (cb),
-      block (NULL)
+      block (NULL), usecachedsucc (usecachedsucc)
   {
     npending++;
-    dhcli->lookup_iter (key, 0, MTU, wrap (this, &dhash_retrieve::first_chunk_cb));
+    dhcli->lookup_iter (key, 0, MTU, usecachedsucc,
+	                wrap (this, &dhash_retrieve::first_chunk_cb));
   }
 
 
@@ -90,7 +93,7 @@ protected:
 	uint32 offset = nread;
 	uint32 length = MIN (MTU, totsz - nread);
 	npending++;
-	dhcli->lookup_iter (sourceID, key, offset, length,
+	dhcli->lookup_iter (sourceID, key, offset, length, usecachedsucc,
 			    wrap (this, &dhash_retrieve::finish));
 	nread += length;
       }
@@ -132,9 +135,10 @@ protected:
 
 
 public:
-  static void execute (dhashcli *dhcli, bigint key, cbretrieve_t cb)
+  static void execute (dhashcli *dhcli, bigint key, bool usecachedsucc,
+                       cbretrieve_t cb)
   {
-    vNew dhash_retrieve (dhcli, key, cb);
+    vNew dhash_retrieve (dhcli, key, usecachedsucc, cb);
   }
 };
 
@@ -168,8 +172,8 @@ protected:
       char  *chunkdat = &block->data[nstored];
       size_t chunkoff = nstored;
       npending++;
-      dhcli->store (destID, blockID, chunkdat, chunklen, chunkoff, block->len, ctype,
-		    wrap (this, &dhash_store::finish));
+      dhcli->store (destID, blockID, chunkdat, chunklen, chunkoff, 
+	            block->len, ctype, wrap (this, &dhash_store::finish));
       nstored += chunklen;
     }
   }
@@ -198,8 +202,8 @@ protected:
 
 public:
 
-  static void execute (dhashcli *dhcli, chordID destID, chordID blockID, ref<dhash_block> block, 
-		       dhash_ctype ctype, cbstore_t cb)
+  static void execute (dhashcli *dhcli, chordID destID, chordID blockID,
+                       ref<dhash_block> block, dhash_ctype ctype, cbstore_t cb)
   {
     vNew dhash_store (dhcli, destID, blockID, block, ctype, cb);
   }
@@ -223,11 +227,10 @@ protected:
   dhash_ctype ctype;
   cbinsert_t cb;
 
-
-  dhash_insert (dhashcli *dhcli, chordID blockID, ref<dhash_block> block, dhash_ctype ctype, cbinsert_t cb)
+  dhash_insert (dhashcli *dhcli, chordID blockID, ref<dhash_block> block, dhash_ctype ctype, bool usecachedsucc, cbinsert_t cb)
     : dhcli (dhcli), blockID (blockID), block (block), ctype (ctype), cb (cb)
   {
-    dhcli->lookup (blockID, wrap (this, &dhash_insert::lookup_cb));
+    dhcli->lookup (blockID, usecachedsucc, wrap (this, &dhash_insert::lookup_cb));
   }
 
   void lookup_cb (dhash_stat status, chordID destID)
@@ -242,9 +245,11 @@ protected:
   }
 
 public:
-  static void execute (dhashcli *dhcli, chordID blockID, ref<dhash_block> block, dhash_ctype ctype, cbinsert_t cb)
+  static void execute (dhashcli *dhcli, chordID blockID,
+                       ref<dhash_block> block, dhash_ctype ctype,
+		       bool usecachedsucc, cbinsert_t cb)
   {
-    vNew dhash_insert (dhcli, blockID, block, ctype, cb);
+    vNew dhash_insert (dhcli, blockID, block, ctype, usecachedsucc, cb);
   }
 };
 
@@ -288,22 +293,25 @@ dhashcli::doRPC (chordID ID, rpc_program prog, int procno,
 
 
 void
-dhashcli::retrieve (chordID blockID, cbretrieve_t cb)
+dhashcli::retrieve (chordID blockID, bool usecachedsucc, cbretrieve_t cb)
 {
   ///warn << "dhashcli::retrieve\n";
-  dhash_retrieve::execute (this, blockID, cb);
+  dhash_retrieve::execute (this, blockID, usecachedsucc, cb);
 }
 
 
 void
-dhashcli::insert (chordID blockID, ref<dhash_block> block, dhash_ctype ctype, cbinsert_t cb)
+dhashcli::insert (chordID blockID, ref<dhash_block> block, dhash_ctype ctype, 
+                  bool usecachedsucc, cbinsert_t cb)
 {
-  dhash_insert::execute (this, blockID, block, ctype, cb);
+  dhash_insert::execute (this, blockID, block, ctype, usecachedsucc, cb);
 }
 
 
 void
-dhashcli::lookup_iter (chordID sourceID, chordID blockID, uint32 off, uint32 len, dhashcli_lookup_itercb_t cb)
+dhashcli::lookup_iter (chordID sourceID, chordID blockID, uint32 off,
+                       uint32 len, bool usecachedsucc,
+		       dhashcli_lookup_itercb_t cb)
 {
   warnt ("DHASH: lookup_iter");
   ptr<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg>;
@@ -311,6 +319,7 @@ dhashcli::lookup_iter (chordID sourceID, chordID blockID, uint32 off, uint32 len
   arg->key   = blockID;
   arg->start = off;
   arg->len   = len;
+  arg->usecachedsucc = usecachedsucc;
 
   ptr<dhash_fetchiter_res> res = New refcounted<dhash_fetchiter_res> (DHASH_OK);
   doRPC (sourceID, dhash_program_1, DHASHPROC_FETCHITER, arg, res,
@@ -335,13 +344,15 @@ dhashcli::lookup_iter_with_source_cb (ptr<dhash_fetchiter_res> fres,
 
 
 void
-dhashcli::lookup_iter (chordID blockID, uint32 off, uint32 len, dhashcli_lookup_itercb_t cb)
+dhashcli::lookup_iter (chordID blockID, uint32 off, uint32 len,
+                       bool usecachedsucc, dhashcli_lookup_itercb_t cb)
 {
   ptr<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg>;
   arg->key   = blockID;
   arg->start = off;
   arg->len   = len;
   arg->v     = clntnode->clnt_ID ();
+  arg->usecachedsucc = usecachedsucc;
   
   route path;
   path.push_back (clntnode->clnt_ID ());
@@ -451,8 +462,9 @@ void dhashcli::lookup_iter_chalok_cb (ptr<s_dhash_fetch_arg> arg,
 
 
 void
-dhashcli::store (chordID destID, chordID blockID, char *data, size_t len, size_t off, size_t totsz, 
-		 dhash_ctype ctype, dhashcli_storecb_t cb)
+dhashcli::store (chordID destID, chordID blockID, char *data, size_t len,
+                 size_t off, size_t totsz, dhash_ctype ctype,
+		 dhashcli_storecb_t cb)
 {
   ref<dhash_storeres> res = New refcounted<dhash_storeres> (DHASH_OK);
   ref<s_dhash_insertarg> arg = New refcounted<s_dhash_insertarg> ();
@@ -490,10 +502,16 @@ dhashcli::store_cb (dhashcli_storecb_t cb, ref<dhash_storeres> res,
 
 
 void
-dhashcli::lookup (chordID blockID, dhashcli_lookupcb_t cb)
+dhashcli::lookup (chordID blockID, bool usecachedsucc, dhashcli_lookupcb_t cb)
 {
-  clntnode->find_successor (blockID,
-			    wrap (this, &dhashcli::lookup_findsucc_cb, blockID, cb));
+  if (usecachedsucc) {
+    chordID x = clntnode->lookup_closestsucc (blockID);
+    (*cb) (DHASH_OK, x);
+  }
+  else
+    clntnode->find_successor (blockID,
+			      wrap (this, &dhashcli::lookup_findsucc_cb,
+				    blockID, cb));
 }
 
 void

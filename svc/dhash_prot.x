@@ -59,6 +59,7 @@ struct s_dhash_fetch_arg {
   chordID key;
   int32 start;
   int32 len;
+  bool usecachedsucc;
 };
 
 struct s_dhash_keystatus_arg {
@@ -171,11 +172,13 @@ struct dhash_insert_arg {
   chordID     blockID;    // the key
   dhash_value block;  // the data block
   dhash_ctype ctype;  // and type of the data block
+  bool usecachedsucc;
 };
 
 
 struct dhash_retrieve_arg {
   chordID blockID;
+  bool usecachedsucc;
 };
 
 union dhash_retrieve_res switch (dhash_stat status) {
@@ -196,7 +199,7 @@ program DHASHGATEWAY_PROGRAM {
 
                 dhash_retrieve_res
 		DHASHPROC_RETRIEVE (dhash_retrieve_arg) = 3;
-
+                
 		dhash_stat
          	DHASHPROC_ACTIVE (int32) = 4;
 		
