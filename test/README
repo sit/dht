@@ -29,7 +29,7 @@ options:
     -s <socket> : connect to lsd behind unix domain socket <socket>
     -p <port>   : listen to master on port <port>; default is 3344
 
-DTest master: link a test program with testmaster.o. You can then do:
+DTest master: link a test program with libdtest.a. You can then do:
 
 testmaster tm;
 tm.setup(...);         // tell it where the slaves are

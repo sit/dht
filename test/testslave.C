@@ -26,33 +26,146 @@
 
 #include "async.h"
 #include "testslave.h"
+#include <ctype.h>
 
-// fd : file descriptor that master is talking over
+void usage();
+
+// mfd : file descriptor that master is talking over
+// lfd : file descriptor that we are talking to lsd over
 // socket : unix domain socket to lsd
-testslave::testslave(const int fd, const str socket)
-  : _srvfd(-1), _sockfd(-1)
+// 
+testslave::testslave(int argc, char *argv[])
+  : _master_listener(-1), _masterfd(-1), _lsdsockfd(-1),
+    _lsd_listener(-1)
 {
-  // open raw connection to unix socket
-  _sockfd = unixsocket_connect(socket);
-  if(!_sockfd)
-    fatal << "couldn't connect to domain socket\n";
-  _srvfd = fd;
+  srand(time(NULL) & (getpid() + (getpid() << 15)));
 
-  // setup pipe between remove master and local unix domain socket
-  fdcb(_srvfd, selread, wrap(this, &testslave::pipe, _srvfd, _sockfd));
-  fdcb(_sockfd, selread, wrap(this, &testslave::pipe, _sockfd, _srvfd));
+  int opt_masterport = DEFAULT_PORT;
+  int opt_lsdport = -1;
+  char *opt_j = 0, *opt_l = 0, *opt_S = 0;
+  int ch;
+  while((ch = getopt(argc, argv, "hs:p:j:l:S:m:")) != -1)
+    switch(ch) {
+    case 'h':
+      usage();
+      break;
+    case 'm':   // port to listen for master (TCP)
+      opt_masterport = atoi(optarg);
+      break;
+    case 'p':   // port to listen for other lsd's (UDP)
+      opt_lsdport = atoi(optarg);
+      break;
+    case 'j':   // -j hostname:port option to lsd
+      opt_j = optarg;
+      break;
+    case 'l':   // -l hostname:port option to lsd
+      opt_l = optarg;
+      break;
+    case 'S':   // -S <socket> option to lsd
+      opt_S = optarg;
+      break;
+    default:
+      usage();
+      break;
+    }
+
+  argc -= optind;
+  argv += optind;
+
+  opt_S = opt_S ? opt_S : getenv("LSD_SOCKET");
+
+  bool do_lsd = false;
+  if(opt_l && opt_j && opt_S)
+    do_lsd = true;
+  else if(!(opt_l && opt_j && opt_S))
+    fatal << "you need to specify -l, -j, and -S to spin off your own lsd\n";
+
+  // listen for connection master
+  warn << "listening for master on port " << opt_masterport << "\n";
+  _master_listener = inetsocket(SOCK_STREAM, opt_masterport);
+  if(_master_listener < 0)
+    fatal << "inetsocket _master_listener, fd = " << _master_listener << ", errno = " << strerror(errno) << "\n";
+  make_async(_master_listener);
+  if(listen(_master_listener, 5))
+    fatal << "listen for master\n";
+  fdcb(_master_listener, selread, wrap(this, &testslave::accept_master));
+
+  // come up with some random port to run spun off lsd on
+  strbuf randstr;
+  unsigned rndport = 4096 + (int) (8192.0 * rand() / (RAND_MAX + 4096.0));
+  randstr << rndport;
+
+  warn << "random port is " << rndport << "\n";
+
+
+  // listen for connections from lsd's
+  warn << "listening for lsd on port " << opt_lsdport << "\n";
+  _lsd_listener = inetsocket(SOCK_DGRAM, opt_lsdport);
+  if(_lsd_listener < 0)
+    fatal << "_lsd_listener\n";
+  make_async(_lsd_listener);
+
+  // now return, let amain() be called and spin off lsd in a bit
+  if(do_lsd)
+    delaycb(2, wrap(this, &testslave::start_lsd, opt_j, opt_l, opt_S, str(randstr)));
 }
 
+void
+testslave::start_lsd(const char *j, const char *l, const char *S, const str p)
+{
+  if(!fork()) {
+    warn << "spinning off lsd\n";
+    /*
+    char self_j[32] = "127.0.0.1:";
+    if(!strcmp(j, "self")) {
+      strcat(self_j, p.cstr());
+      j = self_j;
+    }
+    */
+
+    execlp("lsd", "lsd", "-j", j, "-l", l, "-S", S, "-p", p.cstr(), 0);
+  }
+
+  // give lsd some time to settle down
+  delaycb(2, wrap(this, &testslave::start_lsd2, S, (u_int16_t) atoi(p.cstr())));
+}
+
+
+void
+testslave::start_lsd2(const char *S, const u_int16_t p)
+{
+  // open connection to local lsd socket. this lsd was either running already,
+  // or we just spun it off.
+  printf("opt_S = %s\n", S);
+  _lsdsockfd = unixsocket_connect(S);
+  if(_lsdsockfd < 0)
+    fatal << "couldn't connect to domain socket\n";
+  make_async(_lsdsockfd);
+
+  // WE are going to run on the port that was passed to lsd, and we are going to
+  // run lsd on some random other port. set up a pipe between thenm
+  fdcb(_lsd_listener, selread, wrap(this, &testslave::udppipe, _lsd_listener, p, -1));
+  // fdcb(_lsdportfd, selread, wrap(this, &testslave::udppipe, _lsdportfd, _lsd_listener));
+
+  // setup pipe between for master -> lsd communication
+  /*
+  warn << "fdcbw\n";
+  fdcb(_masterfd, selread, wrap(this, &testslave::tcppipe, _masterfd, _lsdsockfd));
+  warn << "fdcbw done 1\n";
+  fdcb(_lsdsockfd, selread, wrap(this, &testslave::tcppipe, _lsdsockfd, _masterfd));
+  warn << "fdcbw done 2\n";
+  */
+}
 
 testslave::~testslave()
 {
   DEBUG(2) << "testslave destructor\n";
-  fdcb(_srvfd, selread, 0);
-  fdcb(_sockfd, selread, 0);
+  fdcb(_masterfd, selread, 0);
+  fdcb(_lsdsockfd, selread, 0);
 }
 
 void
-testslave::pipe(const int from, const int to)
+testslave::tcppipe(const int from, const int to)
 {
   strbuf readbuf;
 
@@ -61,24 +174,53 @@ testslave::pipe(const int from, const int to)
     delete this;
     return;
   }
+
   readbuf.tosuio()->output(to);
 }
 
-
-int server = -1;
 void
-accept_connection(str socket)
+testslave::udppipe(const int fromfd, const u_int16_t toport, const int tofd)
+{
+  char buf[4096];
+  ssize_t n;
+  sockaddr_in sin;
+  socklen_t sinlen = sizeof (sin);
+  int tofiled = tofd;
+
+  bzero (&sin, sizeof (sin));
+  n = recvfrom(fromfd, reinterpret_cast<char *> (buf), sizeof (buf),
+                0, reinterpret_cast<sockaddr *> (&sin), &sinlen);
+  if(n < 0)
+    fatal << "error reading: " << strerror(errno) << "\n";
+
+  // open connection to send this message off
+  if(tofiled == -1) {
+    tofiled = inetsocket(SOCK_DGRAM);
+    if(tofiled < 0)
+      fatal << "couldn't open socket";
+
+    // create back pipe to remote lsd
+    fdcb(tofiled, selread, wrap(this, &testslave::udppipe, tofiled, ntohs(sin.sin_port), fromfd));
+  }
+
+  // write it to the specified port
+  sin.sin_port = htons(toport);
+  sin.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  n = sendto(tofiled, buf, n, 0, reinterpret_cast<sockaddr*> (&sin), sinlen);
+}
+
+
+void
+testslave::accept_master()
 {
   struct sockaddr_in sin;
   unsigned sinlen = sizeof(sin);
 
-  int fd = accept(server, (struct sockaddr *) &sin, &sinlen);
-  if(fd >= 0)
-    vNew testslave(fd, socket);
-  else if (errno != EAGAIN)
+  int fd = accept(_master_listener, (struct sockaddr *) &sin, &sinlen);
+  if(fd < 0 && errno != EAGAIN)
     fatal << "Could not accept slave connection, errno = " << errno << "\n";
+  _masterfd = fd;
 }
-
 
 
 void
@@ -89,6 +231,9 @@ usage()
   warnx << "\noptions:\n";
   warnx << "\t-s <socket> : connect to lsd behind unix domain socket <socket>\n";
   warnx << "\t-p <port>   : listen to master on port <port>; default is " << DEFAULT_PORT << "\n";
+  warnx << "\t-j <opt>    : pass <opt> as -j to lsd\n";
+  warnx << "\t-l <opt>    : pass <opt> as -l to lsd\n";
+  warnx << "\t-S <opt>    : pass <opt> as -S to lsd\n";
   warnx << "\nenvironment variables:\n";
   warnx << "\tLSD_SOCKET : default value for -s option\n";
   warnx << "\tTEST_DEBUG : verbosity\n";
@@ -96,45 +241,15 @@ usage()
 }
 
 
+#define MAX_ARG 64
+
 int
 main(int argc, char *argv[])
 {
   setprogname(argv[0]);
   test_init();
 
-  str opt_socket = getenv("LSD_SOCKET") ? getenv("LSD_SOCKET") : "";
-  int opt_port = DEFAULT_PORT;
-  int ch;
-  while((ch = getopt(argc, argv, "hs:p:")) != -1)
-    switch(ch) {
-    case 'h':
-      usage();
-      break;
-    case 's':
-      opt_socket = optarg;
-      break;
-    case 'p':
-      opt_port = atoi(optarg);
-      break;
-    default:
-      usage();
-      break;
-    }
-  argc -= optind;
-  argv += optind;
-
-  if(opt_socket == "")
-    fatal << "socket unknown. use -s <socket> option or set LSD_SOCKET\n";
-
-  // listen for master
-  server = inetsocket(SOCK_STREAM, opt_port);
-  if(server < 0)
-    fatal << "inetsocket\n";
-  make_async(server);
-  if(listen(server, 5))
-    fatal << "listen\n";
-  fdcb(server, selread, wrap(accept_connection, opt_socket));
-
   make_sync(1);
+  vNew testslave(argc, argv);
   amain();
 }

@@ -244,7 +244,9 @@ main (int argc, char **argv)
   p2psocket = "/tmp/chord-sock";
   str myname = my_addr ();
 
-  while ((ch = getopt (argc, argv, "B:cd:j:l:M:n:p:S:s:v:")) != -1)
+  while ((ch = getopt (argc, argv, "B:cd:j:l:M:n:p:S:s:v:")) != -1) {
+    printf("opt ch = %c\n", ch);
+    printf("opt arg = %s\n", optarg);
     switch (ch) {
     case 'B':
       cache_size = atoi (optarg);
@@ -312,6 +314,7 @@ main (int argc, char **argv)
     warn << "Requested vnodes (" << vnode << ") more than maximum allowed ("
 	 << chord::max_vnodes << ")\n";
     usage ();
+  }
   }
   
 #ifdef PNODE  

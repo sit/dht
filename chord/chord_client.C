@@ -43,8 +43,14 @@ chord::chord (str _wellknownhost, int _wellknownport,
 
   warnx << "chord: running on " << myname << ":" << myport << "\n";
   locations = New refcounted<locationtable> (mkref (this), max_cache);
+
+  // trick lsd into thinking it has a different own ID. test purposes.
+  chordID testID = make_chordID (myname, myport);
+  if(getenv("LSD_FAKEMYHOST") && getenv("LSD_FAKEMYPORT"))
+    testID = init_chordID(nvnode, getenv("LSD_FAKEMYHOST"), atoi(getenv("LSD_FAKEMYPORT")));
+
   // Special case the very first node: don't need to challenge yourself
-  if (wellknownID == make_chordID (myname, myport))
+  if (wellknownID == testID)
     locations->insertgood (wellknownID, myname, myport);
   else
     locations->insert (wellknownID, wellknownhost.hostname, wellknownhost.port,
@@ -138,7 +144,11 @@ chord::newvnode (cbjoin_t cb)
     fatal << "Maximum number of vnodes (" << max_vnodes << ") reached.\n";
     
   chordID newID = init_chordID (nvnode, myname, myport);
-  
+
+  // test hack
+  if(getenv("LSD_FAKEMYHOST") && getenv("LSD_FAKEMYPORT"))
+    newID = init_chordID(nvnode, getenv("LSD_FAKEMYHOST"), atoi(getenv("LSD_FAKEMYPORT")));
+
   if (newID != wellknownID)
     locations->insertgood (newID, myname, myport);
 

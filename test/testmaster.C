@@ -77,8 +77,9 @@ testmaster::pipe(const int from, const int to)
 
   int r = b.tosuio()->input(from);
   if(!r) {
-    warn << "connection broken\n";
-    // XXX: close connection
+    DEBUG(2) << "connection broken\n";
+    fdcb(from, selread, 0);
+    fdcb(to, selread, 0);
     return;
   }
 

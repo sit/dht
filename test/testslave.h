@@ -31,13 +31,23 @@
 #include <dhash.h>
 
 class testslave { public:
-  testslave(const int, const str);
+  testslave(int, char *argv[]);
   ~testslave();
 
+
+
 private:
-  int _srvfd;  // master --> slave
-  int _sockfd; // slave --> lsd
-  void pipe(const int, const int);
+  void tcppipe(const int, const int);
+  void udppipe(const int, const u_int16_t, const int tofd = -1);
+  void accept_master();
+  void start_lsd(const char *, const char *, const char *, const str);
+  void start_lsd2(const char *, const u_int16_t);
+
+  int _master_listener; // incoming connection from master
+  int _masterfd;  // master --> slave (dhash client protocol)
+  int _lsdsockfd; // slave --> lsd (dhash client protocol)
+
+  int _lsd_listener; // incoming data from remote lsd's
 };
 
 #endif // __TESTCLIENT_H
