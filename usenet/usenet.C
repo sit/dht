@@ -2,10 +2,9 @@
 #include <aios.h>
 #include <dbfe.h>
 #include <dhashclient.h>
-#include <nntp.h>
 
-#define USENET_PORT 11999 // xxx
-#define SYNCTM 5
+#include "nntp.h"
+#include "usenet.h"
 
 dbfe *group_db, *header_db;
 // in group_db, each key is a group name. each record contains artnum,messageID,chordID
@@ -13,13 +12,22 @@ dbfe *group_db, *header_db;
 dhashclient *dhash;
 
 void
-timemark(str foo)
+stop ()
 {
-  struct timeval tv;
-  gettimeofday(&tv, NULL);
-  warn << foo << " " << tv.tv_sec << " " << tv.tv_usec << "\n";
+  // XXX shutdown open connections cleanly....
+  warn << "Shutting down on signal.\n";
+  exit (1);
 }
 
+bool
+create_group (char *group)
+{
+  // xxx sanity check group name
+  static ref<dbrec> d = New refcounted<dbrec> ("", 0);
+  ref<dbrec> k = New refcounted<dbrec> (group, strlen (group));
+  group_db->insert (k, d);
+  return true;
+}
 
 // boring network accept code
 
@@ -34,7 +42,6 @@ tryaccept (int s)
   new_s = accept (s, addr, &addrlen);
   if (new_s > 0) {
     make_async (new_s);
-    //    timemark("new");
     vNew nntp (new_s);
   } else
     perror (progname);
@@ -44,7 +51,7 @@ tryaccept (int s)
 void
 startlisten (void)
 {
-  int s = inetsocket (SOCK_STREAM, USENET_PORT, INADDR_ANY);
+  int s = inetsocket (SOCK_STREAM, opt->listen_port, INADDR_ANY);
   if (s > 0) {
     make_async (s);
     listen (s, 5);
@@ -57,6 +64,13 @@ syncdb (void)
 {
   group_db->sync ();
   header_db->sync ();
+  delaycb (opt->sync_interval, wrap (&syncdb));
+}
+
+void
+usage ()
+{
+  fatal ("Usage: usenet -S chord_socket [-d rootdir] [-f conf] [-g]\n");
 }
 
 int
@@ -64,10 +78,40 @@ main (int argc, char *argv[])
 {
   setprogname (argv[0]);
 
-  if (argc < 2)
-    fatal ("Usage: usenet chord_socket [reset_group_db]\n");
+  char *sock = "/tmp/chord-sock";
+  char *dirbase = NULL;
+  char *cffile  = NULL;
+  char *root    = NULL;
+  bool create_groups = false;
 
-  dhash = New dhashclient(argv[1]);
+  int ch;
+
+  while ((ch = getopt (argc, argv, "d:f:gS:")) != -1) {
+    switch (ch) {
+    case 'd':
+      dirbase = optarg;
+      break;
+    case 'f':
+      cffile = optarg;
+      break;
+    case 'g':
+      create_groups = true;
+      break;
+    case 'S':
+      sock = optarg;
+      break;
+    default:
+      usage ();
+    }
+  }
+
+  if (dirbase && chdir (dirbase) < 0)
+    fatal << "chdir(" << dirbase << "): " << strerror (errno) << "\n";
+
+  if (cffile && !parseconfig (opt, cffile))
+    fatal << "errors parsing configuration file\n";
+
+  dhash = New dhashclient (sock);
 
   //set up the options we want
   dbOptions opts;
@@ -86,23 +130,19 @@ main (int argc, char *argv[])
     exit (-1);
   }
 
-  if (argc > 2) {
-    // construct dummy group
-    ref<dbrec> d = New refcounted<dbrec> ("", 0);
-    ref<dbrec> k = New refcounted<dbrec> ("foo", 3);
-    group_db->insert(k, d);
-    k = New refcounted<dbrec> ("bar", 3);
-    group_db->insert(k, d);
-    k = New refcounted<dbrec> ("baz", 3);
-    group_db->insert(k, d);
-    k = New refcounted<dbrec> ("rec.bicycles.misc", 17);
-    group_db->insert(k, d);
-    k = New refcounted<dbrec> ("alt.binaries.pictures.rail", 26);
-    group_db->insert(k, d);
+  if (create_groups) {
+    create_group ("foo");
+    create_group ("usenetdht.test");
+    
+    create_group ("rec.bicycles.misc");
+    create_group ("alt.binaries.pictures.rail");
   }
 
+  sigcb (SIGINT,  wrap (&stop));
+  sigcb (SIGTERM, wrap (&stop));
+
   startlisten ();
-  delaycb (SYNCTM, wrap (&syncdb));
+  delaycb (opt->sync_interval, wrap (&syncdb));
   amain ();
 
   return 0;

@@ -22,7 +22,7 @@ struct newsgroup {
 
   newsgroup ();
   int open (str);
-  int open (str, volatile unsigned long *, unsigned long *, unsigned long *);
+  int open (str, unsigned long *, unsigned long *, unsigned long *);
   str name (void) { return group_name; };
   
   void xover (unsigned long, unsigned long);

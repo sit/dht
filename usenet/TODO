@@ -34,6 +34,17 @@ store in DHash. plan:
 +   fetch header from header_db??
 +   use chordID to fetch article from dhash
 
+===
+Maybe switch to optionally storing with inodes.  Maybe add support for
+statistics... log size of articles.
+
+Need a good logging scheme.
+
+Add a hook to record an incoming NNTP stream? with timestamps for each
+command??  And then a tool to replay it.
+
+
+===
 garbage:
  send article plan:
   broadcast server public key once per day

@@ -41,11 +41,11 @@ newsgroup::newsgroup () :
 int
 newsgroup::open (str g)
 {
-  rec = group_db->lookup(New refcounted<dbrec> (g, g.len ()));
+  rec = group_db->lookup (New refcounted<dbrec> (g, g.len ()));
   if (rec == NULL)
     return -1;
 
-  warn << "rec len " << rec->len << "\n";
+  warn << "group " << g << " rec len " << rec->len << "\n";
 
   group_name = g;
   cur_art = 1;
@@ -54,7 +54,7 @@ newsgroup::open (str g)
 }
 
 int
-newsgroup::open (str g, volatile unsigned long *count,
+newsgroup::open (str g, unsigned long *count,
 	     unsigned long *first, unsigned long *last)
 {
   if (open (g) < 0)

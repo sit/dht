@@ -1,9 +1,7 @@
 #ifndef NNTP_H
 #define NNTP_H
 
-#include "group.h"
-
-struct nntp;
+struct newsgroup;
 
 typedef struct c_jmp_entry {
   const char *cmd;
@@ -15,18 +13,16 @@ typedef struct c_jmp_entry {
   };
 } c_jmp_entry_t;
 
-struct nntp {
+class nntp {
   int s;
   ptr<aios> aio;
 
   vec<str> lines; // buffer of lines to be processed
-  newsgroup cur_group;
+  ptr<newsgroup> cur_group;
   cbv process_input;
   bool posting;
   ptr<bool> deleted;
 
-  nntp (int _s);
-  ~nntp ();
   void died (void);
   void process_line (const str, int);
   void command (void);
@@ -50,6 +46,10 @@ struct nntp {
   void docontrol (str);
 
   vec<c_jmp_entry_t> cmd_table;
+
+public:
+  nntp (int _s);
+  ~nntp ();
 };
 
 #endif /* NNTP_H */
