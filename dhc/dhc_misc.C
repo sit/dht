@@ -41,7 +41,10 @@ void
 set_new_config (dhc_soft *b, ptr<dhc_propose_arg> arg, ptr<vnode> myNode, 
 		uint k)
 {
-  ptr<vec<chordID> > nodes = New refcounted<vec<chordID> >;
+  if (b->new_config.size () == k)
+    return; // Already setup new_config
+  else b->new_config.clear ();
+  
   vec<ptr<location> > replicas = myNode->succs ();
 
   if (replicas.size () < k) {
@@ -49,17 +52,13 @@ set_new_config (dhc_soft *b, ptr<dhc_propose_arg> arg, ptr<vnode> myNode,
     k = replicas.size ();
   }
 
-  if (b->new_config.size () > 0) {
-    warn << "Already a new_config??\n";
-    exit (-1);
-  }
-
+  arg->new_config.setsize (k);
+  
   for (uint i=0; i<k; i++) {
-    nodes->push_back (replicas[i]->id ());
-    // Also set the new_config in b's meta data.
+    arg->new_config[i] = replicas[i]->id ();
+    // Also set the new_config in b's meta data. 
     b->new_config.push_back (replicas[i]);
   }
-  arg->new_config.set (nodes->base (), nodes->size ());
 }
 
 void
@@ -76,10 +75,10 @@ set_locations (vec<ptr<location> > *locs, ptr<vnode> myNode, vec<chordID> ids)
 void
 set_new_config (ptr<dhc_newconfig_arg> arg, vec<ptr<location> > new_config)
 {
-  ptr<vec<chordID> > nodes = New refcounted<vec<chordID> >;
+  arg->new_config.setsize (new_config.size ());
+
   for (uint i=0; i<new_config.size (); i++)
-    nodes->push_back (new_config[i]->id ());
-  arg->new_config.set (nodes->base (), nodes->size ());
+    arg->new_config[i] = new_config[i]->id ();
 }
 
 int

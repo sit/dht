@@ -35,11 +35,11 @@ struct replica_t {
     offst += sizeof (uint);
     chordID id;
     for (uint i=0; i<nreplica; i++) {
-      warnx << "replica_t node[" << i << "]: ";
+      //warnx << "replica_t node[" << i << "]: ";
       ID_get (&id, bytes + offst);
       nodes.push_back (id);
       offst += ID_size;
-      warnx << nodes[i] << "\n";
+      //warnx << nodes[i] << "\n";
     }
   }
 
@@ -151,14 +151,14 @@ struct dhc_block {
 
   dhc_block (char *bytes, int sz) : buf (NULL)
   {
-    warnx << "dhc_block: " << sz << "\n";
+    //warnx << "dhc_block: " << sz << "\n";
     uint msize, offst = 0;
     ID_get (&id, bytes);
 
     offst += ID_size;
     bcopy (bytes + offst, &msize, sizeof (uint));
-    warnx << "dhc_block: msize " << msize << "\n";
-    warnx << "dhc_block: create meta at offst: " << offst << "\n";
+    //warnx << "dhc_block: msize " << msize << "\n";
+    //warnx << "dhc_block: create meta at offst: " << offst << "\n";
     meta = New keyhash_meta (bytes + offst);
     offst += msize;
     data = New keyhash_data;
@@ -179,6 +179,7 @@ struct dhc_block {
   {
     if (buf) free (buf);
     delete meta;
+    data->data.clear ();
     delete data;
   }
 
@@ -212,7 +213,7 @@ struct dhc_block {
   str to_str ()
   {
     strbuf ret;
-    ret << "DHC block " << id 
+    ret << "\n DHC block " << id 
 	<< "\n meta data: " << meta->to_str ()
 	<< "\n      data: " << data->data.base () 
 	<< "\n";
@@ -222,11 +223,14 @@ struct dhc_block {
 
 struct paxos_state_t {
   bool recon_inprogress;
+  bool proposed;
+  bool sent_newconfig;
   uint promise_recvd;
   uint accept_recvd;
   vec<chordID> acc_conf;
   
-  paxos_state_t () : recon_inprogress(false), promise_recvd(0), accept_recvd(0) {}
+  paxos_state_t () : recon_inprogress(false), proposed(false), 
+    sent_newconfig(false), promise_recvd(0), accept_recvd(0) {}
   
   ~paxos_state_t () { acc_conf.clear (); }
 
@@ -247,7 +251,7 @@ struct dhc_soft {
   chordID id;
   u_int64_t config_seqnum;
   vec<ptr<location> > config;
-  vec<ptr<location> > new_config;   //next accepted config
+  vec<ptr<location> > new_config;   //next accepted config. Do we need this???
   paxos_seqnum_t proposal;
   paxos_seqnum_t promised;
 
@@ -263,7 +267,7 @@ struct dhc_soft {
     proposal.seqnum = 0;
     bzero (&proposal.proposer, sizeof (chordID));    
     promised.seqnum = kb->meta->accepted.seqnum;
-    bcopy (&kb->meta->accepted.proposer, &promised.proposer, sizeof (chordID));
+    promised.proposer = kb->meta->accepted.proposer;
     
     pstat = New refcounted<paxos_state_t>;
   }
@@ -277,7 +281,7 @@ struct dhc_soft {
   str to_str () 
   {
     strbuf ret;
-    ret << "************ dhc_soft stat *************\n";
+    ret << "\n************ dhc_soft stat *************\n";
     ret << "Block ID:" << id << "\n config seqnum:" << config_seqnum 
 	<< "\n config IDs: ";
     for (uint i=0; i<config.size (); i++) 
