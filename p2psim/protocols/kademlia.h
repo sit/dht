@@ -161,11 +161,23 @@ public:
     NodeID rid;     // the guy who's replying
   };
   // }}}
+  // {{{ ping_args and ping_result
+  struct ping_args {
+    ping_args(NodeID id, IPAddress ip) : id(id), ip(ip) {}
+    NodeID id;
+    IPAddress ip;
+  };
+
+  struct ping_result {
+    NodeID rid;     // the guy who's replying
+  };
+  // }}}
 
   //
   // RPCable methods
   //
   void do_lookup(lookup_args*, lookup_result*);
+  void do_ping(ping_args*, ping_result*);
   void find_node(lookup_args*, lookup_result*);
 
 

@@ -130,7 +130,7 @@ ChordFinger::fix_fingers(bool restart)
       if (_recurs)
 	v = find_successors_recurs(finger, 1, 1, TYPE_FINGER_LOOKUP, NULL);
       else
-	v = find_successors(finger, 1, 1, TYPE_FINGER_LOOKUP, NULL);
+	v = find_successors(finger, 1, 1, TYPE_FINGER_LOOKUP, 0);
 
 #ifdef CHORD_DEBUG
       if (v.size() > 0)

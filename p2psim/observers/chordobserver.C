@@ -98,7 +98,7 @@ ChordObserver::init_state()
 void
 ChordObserver::kick(Observed *ob, ObserverInfo *oi)
 {
-  Time t = now();
+  // Time t = now();
   if(_initnodes){
     _initnodes = false;
     init_state();

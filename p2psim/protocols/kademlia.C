@@ -237,9 +237,37 @@ Kademlia::lookup(Args *args)
 
   Time before = now();
   do_lookup(&la, &lr);
+
+  // get best match
+  k_nodeinfo *ki = *lr.results.begin();
+
+  // now ping that node
+  ping_args pa(_id, ip());
+  ping_result pr;
+  if(!doRPC(ki->ip, &Kademlia::do_ping, &pa, &pr) && node()->alive()) {
+    KDEBUG(2) << "Kademlia::lookup: ping RPC to " << Kademlia::printbits(ki->id) << " failed " << endl;
+    if(flyweight.find(ki->id) != flyweight.end())
+      erase(ki->id);
+  }
+
   Time after = now();
   KDEBUG(2) << "lookup: " << printID(key) << " is on " << Kademlia::printbits(lr.rid) << endl;
   cout << "latency " << after - before << endl;
+}
+
+// }}}
+// {{{ Kademlia::do_ping
+void
+Kademlia::do_ping(ping_args *args, ping_result *result)
+{
+  // put the caller in the tree, but never ourselves
+  if(args->id != _id) {
+    if(flyweight.find(args->id) == flyweight.end())
+      insert(args->id, args->ip);
+    touch(args->ip);
+  }
+
+  result->rid = _id;
 }
 
 // }}}
