@@ -2,29 +2,30 @@
 
 use strict;
 
+my $BUILD_ROOT = $ENV{BUILD_ROOT} || "$ENV{HOME}/build/sfsnet/devel";
 my @node_ids;
 my %key_to_nodes;
 my %present;
 my @keys;
 
+my $usage = "args: host port nvnode [-m|-l]";
+
 my $nreplica = 14;
 
-my $host = shift;
-my $port = shift;
-my $maxvnode = shift;
-my $op = shift;
+my $host = shift || die $usage;
+my $port = shift || die $usage;
+my $maxvnode = shift || die $usage;
+my $op = shift || die $usage;
 
-die "args: host port nvnode" if (!defined $maxvnode);
 
 for (my $i = 0; $i < $maxvnode; $i++) {
-    open NQ, "/disk/su0/fdabek/build/sfsnet/devel/nodeq $host $port $i|";
+    open NQ, "$BUILD_ROOT/nodeq $host $port $i|";
     while (<NQ>) {
 	if (/^0\.[\ \t]+([a-f0-9]+)/) {
 	    push (@node_ids, convert($1));
-	    goto out;
+	    last;
 	}
     }
-  out:
 }
 
 print STDERR "found node IDs: @node_ids\n";
@@ -34,7 +35,7 @@ for (my $i = 0; $i < $maxvnode; $i++) {
     my $id = $node_ids[$i];
 
     #read the keys
-    open NQ, "/disk/su0/fdabek/build/sfsnet/devel/nodeq -l $host $port $i|";
+    open NQ, "$BUILD_ROOT/nodeq -l $host $port $i|";
     while (<NQ>) {
 	chomp;
 	my $kid = convert ($_);
@@ -62,7 +63,7 @@ my @sids = sort @node_ids;
 
 #print_ids ();
 &test_location () if ($op eq "-l");
-test_multiplicity () if ($op eq "-m");
+&test_multiplicity () if ($op eq "-m");
 
 sub print_ids ()
 {
@@ -92,11 +93,10 @@ sub test_location () {
 	    if ($n lt $sids[$i]) {
 		$succ_index = $i;
 		$succ = $sids[$i];
-		goto found;
+		last;
 	    } 
 	}
 #key belongs on last node, index is already 0
-      found:
 
 	#walk through the succs and make sure the key is on each as it should be
 	my $scount = 0;
