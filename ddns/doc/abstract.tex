@@ -1,20 +1,17 @@
 \begin{abstract}
 
-The traditional Domain Name Service (DNS) couples ownership
-of domains with the responsibility of servicing them.
-The result is lack of flexibility in designing the name
-resolution system. We propose an alternative system, DDNS,
-which separates authority and service in DNS using 
-Chord~\cite{chord:sigcomm}, a peer-to-peer
-lookup service. DDNS replaces the name server hierarchy in
-DNS, thus eliminating many administrative problems,
-and improving fault-tolerance in the DNS.
-Experiments XXX show XXX that DDNS achieve high performance
-through load balance, even when the load is
-dominated by a few very popular names.
-We also discuss the pros and cons that arise 
-when divorcing DNS data away from the hosts 
-that are responsible for them.
+The current domain name system (DNS) couples ownership
+of domains with the responsibility of serving data for them.
+The DNS security extensions (DNSSEC) allow verificaton of
+records obtained by alternate means, opening exploration
+of alternative storage systems for DNS records.
+We explore one such alternative, using Chord, a peer-to-peer
+network storage system.
+Our system inherits Chord's fault-tolerance and load balance
+properties, at the same time eliminating many administrative
+problems with the current DNS.
+Unfortunately, our system requires significantly more time
+per lookup.
 
 \end{abstract}
 
