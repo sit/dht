@@ -78,6 +78,7 @@ struct sfsro_indirect {
 
 struct sfsro_dirent {
   sfs_hash fh;
+  uint64 fileid;
   string name<>;
   sfsro_dirent *nextentry;
 };

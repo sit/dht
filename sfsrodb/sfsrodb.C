@@ -1,4 +1,4 @@
-/* $Id: sfsrodb.C,v 1.15 2001/10/30 16:44:13 cates Exp $ */
+/* $Id: sfsrodb.C,v 1.16 2001/10/30 22:44:13 cates Exp $ */
 
 /*
  * Copyright (C) 1999 Kevin Fu (fubob@mit.edu)
@@ -42,6 +42,7 @@
 #include "dhash.h"
 #include "dhash_prot.h"
 #include "sha1.h"
+#include "rxx.h"
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define LSD_SOCKET "/tmp/chord-sock"
@@ -571,6 +572,81 @@ twiddle_sort_dir (vec < char *>&file_list)
   }
 }
 
+// XXX keep in sync with same function in chordcd/server.C
+static uint64
+path2fileid(const str path)
+{
+  char buf[sha1::hashsize];
+  bzero(buf, sha1::hashsize);
+  sha1_hash (buf, path.cstr (), path.len ());
+  return gethyper (buf); // XXX not using all 160 bits of the hash
+}
+
+
+static void
+splitpath (vec<str> &out, str in)
+{
+  const char *p = in.cstr ();
+  const char *e = p + in.len ();
+  const char *n;
+
+  for (;;) {
+    while (*p == '/')
+      p++;
+    for (n = p; n < e && *n != '/'; n++)
+      ;
+    if (n == p)
+      return;
+    out.push_back (str (p, n - p));
+    p = n;
+  }
+    
+}
+
+/* Given a path, split it into two pieces:
+   the parent directory path and the filename.
+
+   Examples:
+
+   path      parent   filename
+   "/"       "/"      ""
+   "/a"      "/"      "a"
+   "/a/"     "/"      "a"
+   "/a/b"    "/a"     "b"
+   "/a/b/c"  "/a/b"   "c"
+*/
+static void
+parentpath (str &parent, str &filename, const str inpath)
+{
+  vec<str> ppv;
+  parent = str ("/");
+  filename = str ("");
+
+  splitpath (ppv, inpath);
+
+  if (ppv.size () == 0)
+    return;
+
+  filename = ppv.pop_back ();
+  if (ppv.size () == 0)
+    return;
+
+  // What a non-intuitive way to do concatenation!
+  parent = strbuf () << "/" << join (str("/"), ppv);
+}
+
+
+static str
+parentpath (const str fullpath)
+{
+  str p;
+  str c;
+  parentpath (p, c, fullpath);
+  return p;
+}
+
+
+
 /*
    Given: Path to file (any kind), an allocated fh, the inode
    number of the path's parent
@@ -634,16 +710,15 @@ recurse_path (const str path, sfs_hash * fh)
       (*direntp).alloc ();
       (*direntp)->name = file_list[i];
 
-      if (((*direntp)->name.cmp (".") == 0) ||
-	  ((*direntp)->name.cmp ("..") == 0)) {
-	continue;
-      }
+      if ((*direntp)->name.cmp (".") == 0) 
+	(*direntp)->fileid = path2fileid(path);
+      else if ((*direntp)->name.cmp ("..") == 0)
+	(*direntp)->fileid = path2fileid(parentpath(path));
       else {
-	recurse_path (path << "/" << (*direntp)->name,
-		      &(*direntp)->fh);
-
+	str childpath = path << "/" << (*direntp)->name;
+	(*direntp)->fileid = path2fileid(childpath);
+	recurse_path (childpath, &(*direntp)->fh);
       }
-
       direntp = &(*direntp)->nextentry;
     }
  

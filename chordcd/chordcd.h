@@ -92,10 +92,6 @@ class chord_server  {
   void namei_iter_cb (ref<namei_state> st, ptr<sfsro_data> data, chordID dataID, nfsstat3 status);
 
   void fetch_data (chordID ID, cbfetch_block_t cb);
-  //void fetch_buffer (chordID ID, cbfetch_buffer_t cb);
-  //void fetch_inode (chordID ID, cbfetch_inode_t cb);
-  //void convert_data_2_buffer (cbfetch_buffer_t cb, ptr<sfsro_data> data);
-  //void convert_data_2_inode (cbfetch_inode_t cb, ptr<sfsro_data> data);
 
   void read_file_data (size_t block, sfsro_inode_reg *inode, bool pfonly, cbgetdata_t cb);
   void read_file_data_bmap_cb (cbgetdata_t cb, bool pfonly, chordID ID, bool success);
