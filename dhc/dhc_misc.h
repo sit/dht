@@ -12,6 +12,8 @@ int paxos_cmp (paxos_seqnum_t, paxos_seqnum_t);
 int tag_cmp (tag_t, tag_t);
 void ID_put (char *, chordID);
 void ID_get (chordID, char *);
+bool is_primary (chordID, vec<chordID>);
+bool is_member (chordID, vec<chordID>);
 
 static inline ptr<dhc_block> 
 to_dhc_block (ptr<dbrec> rec)

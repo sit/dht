@@ -76,11 +76,12 @@ struct replica_t {
 
 struct keyhash_meta {
   replica_t config;
+  bool cvalid;
   paxos_seqnum_t accepted;
-  replica_t new_config;
+  //replica_t new_config;
   char *buf;
   
-  keyhash_meta () : buf (NULL)
+  keyhash_meta () : cvalid (false), buf (NULL)
   {
     accepted.seqnum = 0;
     bzero (&accepted.proposer, sizeof (accepted.proposer));
@@ -93,6 +94,8 @@ struct keyhash_meta {
     bcopy (bytes + offst, &csize, sizeof (uint));
     config = replica_t (bytes + offst);
     offst += csize;
+    bcopy (bytes + offst, &cvalid, sizeof (bool));
+    offst += sizeof (bool);
     bcopy (bytes + offst, &accepted.seqnum, sizeof (u_int64_t));
     offst += sizeof (u_int64_t);
     ID_get (&accepted.proposer, bytes + offst);
@@ -102,8 +105,8 @@ struct keyhash_meta {
 
   uint size ()
   {
-    return (sizeof (uint) + config.size () + sizeof (u_int64_t) + 
-	    ID_size);
+    return (sizeof (uint) + config.size () + sizeof (bool) + sizeof (u_int64_t) + 
+	    sizeof (chordID));
   }
 
   char *bytes ()
@@ -118,6 +121,7 @@ struct keyhash_meta {
     offst += sizeof (uint);
     bcopy (config.bytes (), buf + offst, config.size ());
     offst += config.size ();
+    bcopy (&cvalid, buf + offst, sizeof (bool));
     bcopy (&accepted.seqnum, buf + offst, sizeof (u_int64_t));
     offst += sizeof (u_int64_t);
     ID_put (buf + offst, accepted.proposer);
@@ -132,8 +136,10 @@ struct keyhash_meta {
 	<< "\n     config IDs: ";
     for (uint i=0; i<config.nodes.size (); i++)
       ret << config.nodes[i] << " ";
+    ret << "\n     cvalid: " << cvalid;
     ret << "\n     accepted proposal number: " 
 	<< "<" << accepted.seqnum << "," << accepted.proposer << ">";
+
     return str (ret);
   }
 
@@ -225,23 +231,23 @@ struct dhc_block {
 };
 
 struct paxos_state_t {
-  bool recon_inprogress;
+  //bool recon_inprogress;
   bool proposed;
   bool sent_newconfig;
   uint promise_recvd;
   uint accept_recvd;
+  uint newconfig_ack_recvd;
   vec<chordID> acc_conf;
   
-  paxos_state_t () : recon_inprogress(false), proposed(false), 
-    sent_newconfig(false), promise_recvd(0), accept_recvd(0) {}
+  paxos_state_t () : proposed(false), sent_newconfig(false), 
+    promise_recvd(0), accept_recvd(0), newconfig_ack_recvd (0) {}
   
   ~paxos_state_t () { acc_conf.clear (); }
 
   str to_str ()
   {
     strbuf ret;
-    ret << "\n recon_inprogress: " << (recon_inprogress ? "yes" : "no")
-	<< "\n promise msgs received: " << promise_recvd 
+    ret << "\n promise msgs received: " << promise_recvd 
 	<< "\n accept msgs received: " << accept_recvd
 	<< "\n accepted config: ";
     for (uint i=0; i<acc_conf.size (); i++)
@@ -250,8 +256,15 @@ struct paxos_state_t {
   }
 };
 
+enum stat_t {
+  IDLE = 0,
+  RECON_INPROG = 1,
+  RW_INPROG = 2
+};
+
 struct dhc_soft {
   chordID id;
+  stat_t status;
   u_int64_t config_seqnum;
   vec<ptr<location> > config;
   vec<ptr<location> > new_config;   //next accepted config. used during recon
@@ -265,6 +278,7 @@ struct dhc_soft {
   dhc_soft (ptr<vnode> myNode, ptr<dhc_block> kb)
   {
     id = kb->id;
+    status = IDLE;
     config_seqnum = kb->meta->config.seqnum;
     set_locations (&config, myNode, kb->meta->config.nodes);
     proposal.seqnum = 0;
@@ -302,15 +316,13 @@ struct dhc_soft {
 
 struct read_state {
   bool done;
-  uint blocks_rcvd;
   vec<keyhash_data> blocks;
   vec<uint> bcount;
 
-  read_state () : done (false), blocks_rcvd (0) {}
+  read_state () : done (false) {}
 
   void add (keyhash_data kd) 
   {
-    blocks_rcvd++;
     bool found = false;
     for (uint i=0; i<blocks.size (); i++) {
       if (tag_cmp (blocks[i].tag, kd.tag) == 0 &&
@@ -359,7 +371,7 @@ class dhc {
   void recv_propose (user_args *);
   void recv_accept (chordID, dhc_cb_t, ref<dhc_propose_res>, clnt_stat);
   void recv_newconfig (user_args *);
-  void recv_newconfig_ack (chordID, ref<dhc_newconfig_res>, clnt_stat);
+  void recv_newconfig_ack (chordID, dhc_cb_t cb, ref<dhc_newconfig_res>, clnt_stat);
   void recv_get (user_args *);
   void getblock_cb (user_args *, ptr<location>, ptr<read_state>, 
 		    ref<dhc_get_res>, clnt_stat);
