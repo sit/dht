@@ -1,14 +1,14 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.2 2001/01/30 22:59:30 fdabek Exp $
+# $Id: Makefile.am,v 1.3 2001/02/15 05:17:45 fdabek Exp $
 
 $(PROGRAMS): $(LDEPS)
 
 bin_PROGRAMS = lsd
 
 noinst_HEADERS = \
-sfsp2p.h
+chord.h chord_util.h chord_client.h
 
-lsd_SOURCES = lsd.C client.C
+lsd_SOURCES = chord.C chord_client.C chord_util.C server.C lsd.C
 
 lsd_LDADD = ../svc/libsvc.la ${LDADD} 
 

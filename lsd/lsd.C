@@ -60,7 +60,6 @@ client_accept (int fd)
 {
   if (fd < 0)
     fatal ("EOF\n");
-  //tcp_nodelay (fd);
   ref<axprt_stream> x = axprt_stream::alloc (fd);
   vNew sfsp2pclient (x);
 }
