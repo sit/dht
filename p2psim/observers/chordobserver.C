@@ -50,8 +50,7 @@ ChordObserver::Instance(Args *a)
 ChordObserver::ChordObserver(Args *a) : _type("Chord")
 {
   _instance = this;
-  assert(a);
-  _initnodes = atoi((*a)["initnodes"].c_str());
+  if (a) _initnodes = atoi((*a)["initnodes"].c_str());
   _totallivenodes = 0;
 
   assert(_type.find("Chord") == 0 || _type.find("Koorde") == 0);
@@ -61,7 +60,6 @@ ChordObserver::ChordObserver(Args *a) : _type("Chord")
   Chord::IDMap n;
   for(set<Node*>::iterator pos = l->begin(); pos != l->end(); ++pos) {
     Chord *t = dynamic_cast<Chord*>(*pos);
-    //t->registerObserver(this);
     n.ip = t->ip();
     n.id = t->id();
     n.choices = 1;
@@ -72,30 +70,17 @@ ChordObserver::ChordObserver(Args *a) : _type("Chord")
   for (uint i = 0; i < ids.size(); i++) 
     printf("%qx %u\n", ids[i].id, ids[i].ip);
 #endif
-  init_state();
 }
-
-
 
 vector<Chord::IDMap>
 ChordObserver::get_sorted_nodes()
 {
+  assert(ids.size()>0);
   return ids;
 }
 
 ChordObserver::~ChordObserver()
 {
-}
-
-void
-ChordObserver::init_state()
-{
-  const set<Node*> *l = Network::Instance()->getallnodes();
-  for(set<Node*>::iterator pos = l->begin(); pos != l->end(); ++pos) {
-    Chord *t = dynamic_cast<Chord*>(*pos);
-    t->init_state(ids);
-  }
-  delete l;
 }
 
 void
