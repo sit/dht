@@ -22,6 +22,7 @@ struct node {
 };
 
 vec<ptr<node> > successors;
+vec<ptr<node> > predecessors;
 vec<ptr<node> > fingers;
 
 void
@@ -60,6 +61,7 @@ printlist (str desc, vec<ptr<node> > &lst)
 void
 finish ()
 {
+  printlist ("predecessors", predecessors);
   printlist ("successors", successors);
   printlist ("fingers", fingers);
   exit (0);
@@ -129,6 +131,17 @@ print_fingers (const chord_node &dst)
   outstanding++;
 }
 
+void
+print_predecessors (const chord_node &dst)
+{
+  ptr<chordID> ga = New refcounted<chordID> (dst.x);
+  chord_nodelistextres *lst = New chord_nodelistextres ();
+  doRPC (dst, chord_program_1, CHORDPROC_GETPRED_EXT,
+	 ga, lst,
+	 wrap (processreslist_cb, "predecessors", &predecessors, lst));
+  outstanding++;
+}
+
 int
 main (int argc, char *argv[])
 {
@@ -168,6 +181,7 @@ main (int argc, char *argv[])
   
   make_sync (1);
   
+  print_predecessors (dst);
   print_successors (dst);
   print_fingers (dst);
 
