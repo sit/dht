@@ -174,7 +174,7 @@ class vnode : public virtual refcount {
   ~vnode (void);
   chordID my_ID () { return myID; };
   chordID my_pred () { return predecessor.n; };
-  chordID my_succ () { return finger_table[1].first.n; };
+  chordID my_succ ();
 
   // The API
   void stabilize (void);

@@ -774,3 +774,14 @@ vnode::dofindsucc_cb (cbroute_t cb, chordID n, chordID x,
   }
 }
 
+chordID
+vnode::my_succ () 
+{
+  if (finger_table[1].first.alive) return finger_table[1].first.n;
+  else {
+    int i = 0;
+    while ( (i < nsucc) && (!succlist[i].alive)) i++;
+    if (i == nsucc) return chordID (0);
+    else return succlist[i].n;
+  }
+}
