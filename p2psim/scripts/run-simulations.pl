@@ -22,7 +22,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-# $Id: run-simulations.pl,v 1.21 2004/02/02 22:21:14 jinyang Exp $
+# $Id: run-simulations.pl,v 1.22 2004/02/03 23:32:09 jinyang Exp $
 
 use strict;
 use Getopt::Long;
@@ -42,6 +42,7 @@ my $seed = "";
 my $nice = 0;
 my $randomize;
 my $withobserver = 0;
+my $dontdie = 0;
 
 sub usage {
     select(STDERR);
@@ -68,6 +69,7 @@ run-simulations [options]
     --observer                Use an observer
     --nice <n>                run p2psim nice
     --command <cmd>           p2psim or some other binary?
+    --dontdie<n>              dont die after seg faults
 
 EOUsage
     
@@ -83,7 +85,7 @@ my %options;
 &GetOptions( \%options, "help|?", "topology=s", "lookupmean=s", "protocol=s", 
 	     "lifemean=s", "deathmean=s", "exittime=s", "churnfile=s", 
 	     "argsfile=s", "logdir=s", "seed=s", "nice=i", "randomize=i",
-             "observer", "stattime=s", "command=s") 
+             "observer", "stattime=s", "command=s","dontdie=i") 
     or &usage;
 
 if( $options{"help"} ) {
@@ -193,6 +195,9 @@ if (defined $options{"command"}) {
   $p2psim_cmd .= "$script_dir/../p2psim/$options{\"command\"}";
 }else{
   $p2psim_cmd .= "$script_dir/../p2psim/p2psim";
+}
+if (defined $options{"dontdie"}) {
+  $dontdie = $options{"dontdie"};
 }
 
 #if( $seed ne "" ) {
@@ -450,9 +455,11 @@ sub run_command {
     print "# $arg_string randseed $randseed > $logfile \n";
     #print "$p2psim_cmd $protfile $topology $eventfile >> $logfile";
     my $before = time();
-    system( "$p2psim_cmd -e $randseed $protfile $topology $eventfile >> $logfile " .
-	    "2>> $logfile" )
-	and die( "$p2psim_cmd $protfile $topology $eventfile failed" );
+    my $failexit = system( "$p2psim_cmd -e $randseed $protfile $topology $eventfile >> $logfile " .
+	    "2>> $logfile" );
+    if (($failexit) && (!$dontdie)) {
+      die( "$p2psim_cmd $protfile $topology $eventfile failed" );
+    }
     my $complete_time = time() - $before;
     print "# completed in $complete_time seconds\n";
     
