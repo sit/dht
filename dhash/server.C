@@ -490,10 +490,22 @@ dhash_impl::dispatch (user_args *sbp)
 	bool present = db->lookup (kkk);
 	if (present) 
 	  res.resok->accepted[i] = DHASH_PRESENT;
-	else if (!present) 
-	  res.resok->accepted[i] = DHASH_ACCEPT;
-	else 
-	  res.resok->accepted[i] = DHASH_ACCEPT;
+	else if (!present) {
+	  if (preds.size () > 1 &&
+	      !betweenrightincl (preds[dhash::num_efrags () - 1]->id(), 
+				host_node->my_ID (),
+				arg->keys[i])) { 
+	    res.resok->accepted[i] = DHASH_REJECT;
+	    warn << "I shouldn't store " << arg->keys[i] << " not in [" <<
+	      preds[dhash::num_efrags () - 1]->id () << " , " 
+	         << host_node->my_ID () << "\n";
+	  } else {
+	    res.resok->accepted[i] = DHASH_ACCEPT;
+	    warn << "I should store " << arg->keys[i] << " in [" <<
+	      preds[dhash::num_efrags () - 1]->id () << " , " 
+	         << host_node->my_ID () << "\n";
+	  }
+	}
 
 	info << host_node->my_ID () << ": " << arg->keys[i]
 	     << (res.resok->accepted[i] == DHASH_ACCEPT ? " " : " not ") 
