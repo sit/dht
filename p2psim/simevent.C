@@ -21,7 +21,7 @@ void
 SimEvent::execute()
 {
   if(_op == "exit") {
-    cout << "simulation exits at the end of cycle " << now() << "." << endl;
+    DEBUG(1) << "simulation exits at the end of cycle " << now() << "." << endl;
     ThreadManager::Instance()->create(&::graceful_exit, (void *)0);
   } else
     cerr << "SimEvent::execute(): unknown op " << _op << "\n";

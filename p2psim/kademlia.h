@@ -48,11 +48,12 @@ public:
 
   // public, because k_bucket needs it.
   struct lookup_args {
-    lookup_args(NodeID xid, IPAddress xip, NodeID k = 0) :
-      id(xid), ip(xip), key(k) {};
+    lookup_args(NodeID xid, IPAddress xip, NodeID k = 0, bool b = false) :
+      id(xid), ip(xip), key(k), controlmsg(b) {};
     NodeID id;
     IPAddress ip;
     NodeID key;
+    bool controlmsg; // whether or not to count this as control overhead
   };
 
   struct lookup_result {
@@ -83,9 +84,11 @@ public:
   NodeID _id;                   // my id
   k_bucket_tree *_tree;         // the root of our k-bucket tree
   hash_map<NodeID, Value> _values;   // key/value pairs
-  IPAddress _wkn;               // well-known IP address
   peer_t *_me;
   static unsigned _joined;      // how many have joined
+
+  // statistics
+  static unsigned _controlmsg;  //
 
   void reschedule_stabilizer(void*);
   void stabilize();

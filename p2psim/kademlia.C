@@ -12,6 +12,7 @@ unsigned kdebugcounter = 1;
 unsigned Kademlia::_k = 0;
 unsigned Kademlia::_alpha = 0;
 unsigned Kademlia::_joined = 0;
+unsigned Kademlia::_controlmsg = 0;
 
 unsigned k_bucket::_k = 0;
 unsigned k_bucket_tree::_k = 0;
@@ -64,6 +65,8 @@ Kademlia::Kademlia(Node *n, Args a)
 // {{{ Kademlia::~Kademlia
 Kademlia::~Kademlia()
 {
+  if(ip() == (IPAddress) 1)
+    cout << _controlmsg << endl;
   delete _me;
   delete _tree;
 }
@@ -74,8 +77,6 @@ void
 Kademlia::join(Args *args)
 {
   IPAddress wkn = args->nget<IPAddress>("wellknown");
-  if(!_wkn)
-    _wkn = wkn;
 
   if(wkn == ip()) {
     KDEBUG(1) << "Node " << printID(_id) << " is wellknown." << endl;
@@ -184,7 +185,14 @@ Kademlia::do_insert(insert_args *iargs, insert_result *iresult)
 void
 Kademlia::lookup(Args *args)
 {
-  KDEBUG(1) << "Kademlia lookup" << endl;
+  NodeID key = args->nget<long long>("key", 0, 16);
+  KDEBUG(1) << "lookup: " << printID(key) << endl;
+
+  lookup_args la(_id, ip(), key, true);
+  lookup_result lr;
+
+  do_lookup(&la, &lr);
+  KDEBUG(1) << "lookup: " << printID(key) << " is on " << Kademlia::printbits(lr.rid) << endl;
 }
 
 // }}}
@@ -200,7 +208,6 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
   lookup_result *lr = 0;
   unsigned rpc = 0;
   deque<peer_t*> tasks;
-
 
   // store caller id and ip
   NodeID callerID = largs->id;
@@ -280,6 +287,8 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
       assert(toask);
       assert(toask->ip <= 512 && toask->ip > 0);
       KDEBUG(2) << "do_lookup: thread " << threadid() << " doing find_node asyncRPC to ip=" << toask->ip << ", " << Kademlia::printbits(toask->id) << endl;
+      if(la->controlmsg)
+        _controlmsg++;
       rpc = asyncRPC(toask->ip, &Kademlia::find_node, la, lr);
       KDEBUG(2) << "do_lookup: thread " << threadid() << " came back from find_node asyncRPC to " << toask->ip << ", " << Kademlia::printbits(toask->id) << endl;
       assert(rpc);
@@ -388,14 +397,18 @@ done:
 
 // wrapper around do_lookup(lookup_args *largs, lookup_result *lresult)
 // if use_ip == 0, use the well-known node
+//
+// called from stabilize()
 void
 Kademlia::do_lookup_wrapper(peer_t *p, Kademlia::NodeID key, 
     vector<peer_t*> *v)
 {
-  lookup_args la(_id, ip(), key);
+  lookup_args la(_id, ip(), key, true);
   lookup_result lr;
 
-  if(!doRPC(p->ip ? p->ip : _wkn, &Kademlia::do_lookup, &la, &lr))
+  _controlmsg++;
+  assert(p->ip);
+  if(!doRPC(p->ip, &Kademlia::do_lookup, &la, &lr))
     _tree->erase(p->id);
 
   if(v)
@@ -444,6 +457,7 @@ Kademlia::do_ping_wrapper(peer_t *p)
   ping_args pa(_id, ip());
   ping_result pr;
 
+  _controlmsg++;
   if(!doRPC(p->ip, &Kademlia::do_ping, &pa, &pr)) {
     _tree->erase(p->id);
     return false;

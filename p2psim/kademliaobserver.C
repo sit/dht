@@ -75,7 +75,7 @@ KademliaObserver::execute()
     assert(c);
     c->dump();
     if (!c->stabilized(lid)) {
-      cout << now() << " NOT STABILIZED" << endl;
+      DEBUG(1) << now() << " NOT STABILIZED" << endl;
       if (_reschedule > 0)
         reschedule(_reschedule);
       return;
@@ -83,8 +83,8 @@ KademliaObserver::execute()
 
   }
 
-  cout << now() << " STABILIZED" << endl;
-  cout << now() << " Kademlia finger tables" << endl;
+  DEBUG(1) << now() << " STABILIZED" << endl;
+  DEBUG(1) << now() << " Kademlia finger tables" << endl;
   for (pos = l.begin(); pos != l.end(); ++pos) {
     assert(c);
     c = (Kademlia *)(*pos);
