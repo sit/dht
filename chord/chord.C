@@ -214,6 +214,16 @@ vnode::findpredfinger (chordID &x)
   return p;
 }
 
+chordID
+vnode::lookup_closestpred (chordID &x)
+{
+#ifdef PNODE
+  chordID p = findpredfinger (x);
+#else
+  chordID p = locations->findpredloc (x);
+#endif
+  return p;
+}
 
 void
 vnode::stabilize (int f, int s)
@@ -475,11 +485,7 @@ vnode::dotestrange_findclosestpred (svccb *sbp, chord_testandfindarg *fa)
     delete res;
   } else {
     res = New chord_testandfindres (CHORD_NOTINRANGE);
-#ifdef PNODE
-    chordID p = findpredfinger (fa->x);
-#else
-    chordID p = locations->findpredloc (fa->x);
-#endif
+    chordID p = lookup_closestpred (fa->x);
     res->noderes->node = p;
     res->noderes->r = locations->getaddress (p);
     // warnx << "dotestrange_findclosestpred: " << myID << " closest pred of " 
@@ -495,11 +501,7 @@ void
 vnode::dofindclosestpred (svccb *sbp, chord_findarg *fa)
 {
   chord_noderes res(CHORD_OK);
-#ifdef PNODE
-    chordID p = findpredfinger (fa->x);
-#else
-    chordID p = locations->findpredloc (fa->x);
-#endif
+  chordID p = lookup_closestpred (fa->x);
   ndofindclosestpred++;
   res.resok->node = p;
   res.resok->r = locations->getaddress (p);

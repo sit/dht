@@ -200,6 +200,7 @@ class vnode : public virtual refcount  {
   int countrefs (chordID &x);
   void deletefingers (chordID &x);
   void stats (void);
+  chordID lookup_closestpred (chordID &x);
 
   searchcb_entry * registerSearchCallback(cbsearch_t cb);
   void removeSearchCallback(searchcb_entry *scb);
