@@ -38,32 +38,49 @@ really_done (int i, mud_stat stat)
   } 
 }
 
+float 
+get_random ()
+{
+  long rn = random ();
+  float rat = rn;
+  rat = rat / RAND_MAX;
+  return rat;
+}
+
 void 
 play (mud_stat stat)
 {
   assert (stat == 0);
   //pick from move (dest), look, and touch (sth)
-  bool look=0, touch=1, move=0;
+  bool look=0, touch=0, move=0;
+  float ratio = get_random ();
+  if (ratio < 0.5)
+    look = 1;
+  if (ratio >= 0.5 && ratio < 0.75)
+    touch = 1;
+  if (ratio >= 0.75)
+    move = 1;
   
   if (look)
     mud->lookup (a->loc (), wrap (&done_look));
   if (touch) {
+    cout << "Current room " << a->loc ()->to_str () << "\n";
     uint n = a->loc ()->things ().size ();
     if (n > 0) {
-      while (1) {
-	long rn = random ();
-	float rat = (rn / RAND_MAX);
-	int i = int (rat * n);
-	cout << "item to touch " << i << "\n";
-	ref<thing> t = New refcounted<thing> (a->loc ()->things ()[i]->get_name (),
-					      chordID (a->ID ()));
-	mud->insert (t, wrap (&done_touch, t));
-      }
-    } else 
+      int i = int (get_random () * n);
+      cout << "item to touch " << i << "\n";
+      ref<thing> t = New refcounted<thing> (a->loc ()->things ()[i]->get_name (),
+					    chordID (a->ID ()));
+      mud->insert (t, wrap (&done_touch, t));
+    } else {
       cout << "Nothing to touch.\n";
+      play (mud_stat (0));
+    }
   }
-  if (move)
-    ;
+  if (move) {
+    cout << "moving\n";
+    play (mud_stat (0));
+  }
 }
 
 void 
@@ -72,6 +89,7 @@ done_look (mud_stat stat, ptr<room> r)
   if (stat == MUD_OK) {
     a->enter (r);
     cout << "done_look at current room Received " << r->size () << " bytes\n";
+    play (mud_stat (0));
   } else 
     cout << "done_look err mud_stat: " << stat << "\n";
 }
@@ -82,6 +100,7 @@ done_touch (ref<thing> t, mud_stat stat)
   if (stat == MUD_OK) {
     cout << "done_touch object "<< t->get_name () 
 	 << "Inserted " << t->size () << " bytes\n";
+    play (mud_stat (0));
   } else 
     cout << "done_touch err mud_stat: " << stat << "\n"; 
 }
