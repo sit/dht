@@ -18,7 +18,6 @@ public:
   Time time() { return _time; }
   Channel* eventchan() { return _eventchan; }
   void go();
-  void end() { _end = true; }
 
 private:
   typedef list<Event*> Queue;
@@ -30,12 +29,10 @@ private:
   Channel *_gochan;
   unsigned _size; // because list.size() is so slow
 
-  bool _end;
-
   virtual void run();
   void add_event(Event*);
   void advance();
-  void graceful_exit();
+  bool should_exit();
 
   // for debuging
   void dump();

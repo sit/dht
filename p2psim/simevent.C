@@ -23,9 +23,8 @@ void
 SimEvent::execute()
 {
   if(_op == "exit") {
-    cout << "exiting at " << now() << ". bye." << endl;
-    EventQueue::Instance()->end();
-  } else {
+    cout << "simulation exits" << endl;
+    ::graceful_exit();
+  } else
     cerr << "SimEvent::execute(): unknown op " << _op << "\n";
-  }
 }

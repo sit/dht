@@ -24,6 +24,16 @@ ip2node(IPAddress a)
 void
 graceful_exit()
 {
+  extern int anyready();
+
+  // send an exit packet to the Network
+  send(EventQueue::Instance()->exitchan(), 0);
+  send(Network::Instance()->exitchan(), 0);
+
+  while(anyready())
+    yield();
+
   EventFactory::DeleteInstance();
   ProtocolFactory::DeleteInstance();
+  threadexitsall(0);
 }

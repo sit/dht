@@ -9,6 +9,8 @@ using namespace std;
 
 class Event {
 public:
+  friend class EventQueue;
+
   Event();
   Event(vector<string>*);
 

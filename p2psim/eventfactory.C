@@ -37,9 +37,9 @@ Event *
 EventFactory::create(string type, vector<string> *v, string proto)
 {
   Event *e = 0;
-  if (type == "node") {
+  if (type == "node")
     e = new P2PEvent(proto,v);
-  }else if(type == "simulator")
+  else if(type == "simulator")
     e = new SimEvent(v);
   else if(type == "observe")
     e = new ObserveEvent(proto,v);

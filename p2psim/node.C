@@ -31,9 +31,10 @@ Node::Node(IPAddress ip) : _ip(ip), _alive (true), _pktchan(0)
 
 Node::~Node()
 {
-  chanfree(_pktchan);
   _protmap.clear();
+  chanfree(_pktchan);
 }
+
 
 void
 Node::register_proto(Protocol *p)

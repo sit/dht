@@ -21,7 +21,7 @@ EventQueue::Instance()
 }
 
 
-EventQueue::EventQueue() : _time(0), _size(0), _end(false)
+EventQueue::EventQueue() : _time(0), _size(0)
 {
   _eventchan = chancreate(sizeof(Event*), 0);
   assert(_eventchan);
@@ -33,10 +33,11 @@ EventQueue::EventQueue() : _time(0), _size(0), _end(false)
 
 EventQueue::~EventQueue()
 {
-  // delete me
+  // delete the entire queue and say bye bye
+  for(Queue::iterator pos = _queue.begin(); pos != _queue.end(); ++pos)
+    delete *pos;
   chanfree(_eventchan);
   chanfree(_gochan);
-  threadexitsall(0);
 }
 
 // Signal to start processing events, main calls
@@ -57,9 +58,6 @@ EventQueue::run()
   recvp(_gochan);
 
   while(1){
-    if (_end) 
-      graceful_exit();
-
     // let others run
     while(anyready())
       yield();
@@ -75,7 +73,7 @@ EventQueue::run()
                                                                                   
     // no more events.  we're done!
     if(!_size)
-      graceful_exit();
+      ::graceful_exit();
                                                                                   
     // run events for next time in the queue
     advance();
@@ -83,24 +81,24 @@ EventQueue::run()
 }
 
 
-void
-EventQueue::graceful_exit()
+bool
+EventQueue::should_exit()
 {
-  extern int anyready();
-  cout << "End of simulation, chances are I'm going to segfault now.\n";
+  Alt a[2];
+  unsigned exit;
+  
+  a[0].c = _exitchan;
+  a[0].v = &exit;
+  a[0].op = CHANRCV;
+  a[1].op = CHANNOBLK;
 
-  // stop stuff
-  send(Network::Instance()->exitchan(), 0);
-
-  // give everyone a chance to clean up
-  while(anyready())
-    yield();
-
-  ::graceful_exit();
-
-  delete this;
+  unsigned i = 0;
+  if((i = alt(a)) < 0) {
+    cerr << "interrupted" << endl;
+    assert(false);
+  }
+  return i == 0;
 }
-
 
 // moves time forward to the next event
 void
@@ -116,7 +114,11 @@ EventQueue::advance()
   assert(e->ts >= _time && e->ts < _time + 100000000);
   _time = e->ts;
 
-  while(_size > 0){
+  while(_size > 0) {
+    // is there an exit event?
+    if(should_exit())
+      delete this;
+
     Event *first = _queue.front();
     if(first->ts > _time)
       break;

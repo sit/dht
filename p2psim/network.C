@@ -109,7 +109,6 @@ Network::run()
 
       // exit
       case 2:
-        // cout << "Network exit" << endl;
         for(NMCI p = _nodes.begin(); p != _nodes.end(); ++p)
           send(p->second->exitchan(), 0);
         delete this;

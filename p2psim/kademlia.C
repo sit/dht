@@ -577,6 +577,23 @@ void
 k_bucket_tree::get(NodeID key, vector<peer_t*> *v)
 {
   unsigned j=0;
+  /*
+  NodeID dist_lb = (NodeID) -1;
+
+  for(map<NodeID, peer_t*>::const_iterator i = _nodes.begin(); i != _nodes.end(); i++) {
+    if(v->size() < _k) {
+      v->push_back(*i);
+      if(distance((*i)->id, key) < dist_lb)
+        dist_lb = distance((*i)->id, key)
+      continue;
+    }
+
+    if(distance((*i)->id, key) < dist_lb) {
+      dist_lb = distance((*i)->id, key)
+    }
+  }
+  */
+
   // XXX heinously inefficient, but who cares for now.
   vector<peer_t*> tmp;
   KDEBUG(2) << "k_bucket_tree::get putting crap in tmp" << endl;

@@ -50,7 +50,6 @@ public:
 
 
   Channel *pktchan() { return _pktchan; }
-  Channel *protchan() { return _protchan; }
   void crash () { _alive = false; }
   bool alive () { return _alive; }
   void set_alive() { _alive = true;}
@@ -109,7 +108,6 @@ private:
   IPAddress _ip;        // my ip address
   bool _alive;
   Channel *_pktchan;    // for packets
-  Channel *_protchan;   // to register protocols
 
   typedef map<string, Protocol*> PM;
   typedef PM::const_iterator PMCI;
