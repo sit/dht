@@ -3,6 +3,7 @@
 #include <iostream>
 #include <typeinfo>
 #include <stdlib.h>
+#include <time.h>
 
 #include "chord.h"
 #include "network.h"
