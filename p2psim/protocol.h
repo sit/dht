@@ -3,8 +3,10 @@
 
 #include "protocolfactory.h"
 #include <string>
+#include <set>
 #include "event.h"
 #include "eventqueue.h"
+#include "rpchandle.h"
 #include "p2psim.h"
 using namespace std;
 
@@ -23,6 +25,7 @@ public:
   virtual string proto_name() = 0;
 
 protected:
+  typedef set<RPCHandle*> RPCSet;
 
   IPAddress ip() { return _node->ip(); }
 
@@ -68,6 +71,24 @@ protected:
                         dynamic_cast<BT*>(getpeer(dst)),
                         fn, args, ret);
   }
+
+  // Send an RPC from a Protocol on one Node to a method
+  // of the same Protocol sub-class on a different Node.
+  // This one is asynchronous
+  template<class BT, class AT, class RT>
+  RPCHandle* asyncRPC(IPAddress dst, void (BT::* fn)(AT *, RT *),
+               AT *args, RT *ret)
+  {
+    RPCHandle *rpch = _node->asyncRPC(dst, dynamic_cast<BT*>(getpeer(dst)),
+        fn, args, ret);
+    rpch->args = (void*) args;
+    rpch->ret = (void*) ret;
+    return rpch;
+  }
+
+  // returns one of the RPCHandle's for which a reply has arrived
+  RPCHandle* select(RPCSet*);
+
 
 private:
   Node *_node;

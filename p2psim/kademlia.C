@@ -68,7 +68,13 @@ Kademlia::join(Args *args)
   la.id = la.key = _id;
   la.ip = ip();
   KDEBUG(2) << "join: lookup my id.  included ip = " << la.ip << endl;
-  doRPC(wkn, &Kademlia::do_lookup, &la, &lr);
+  // doRPC(wkn, &Kademlia::do_lookup, &la, &lr);
+  RPCSet *rpcset = new RPCSet;
+  rpcset->insert(asyncRPC(wkn, &Kademlia::do_lookup, &la, &lr));
+  RPCHandle* rpch = select(rpcset);
+  assert(rpch->args == &la);
+  assert(rpch->ret == &lr);
+
   KDEBUG(2) << "join: lookup my id: node " << printID(lr.id) << endl;
 
   // put well known dude in table

@@ -10,6 +10,7 @@ using namespace std;
 #include "packet.h"
 #include "network.h"
 #include "protocol.h"
+#include "rpchandle.h"
 
 Node::Node(IPAddress ip) : _ip(ip), _alive (true), _pktchan(0)
 {
@@ -112,6 +113,13 @@ Node::run()
 bool
 Node::_doRPC(IPAddress dst, void (*fn)(void *), void *args)
 {
+  return _doRPC_receive(_doRPC_send(dst, fn, args));
+}
+
+
+RPCHandle*
+Node::_doRPC_send(IPAddress dst, void (*fn)(void *), void *args)
+{
   Packet *p = new Packet();
   p->_fn = fn;
   p->_args = args;
@@ -123,16 +131,21 @@ Node::_doRPC(IPAddress dst, void (*fn)(void *), void *args)
 
   // send it off. blocks, but Network reads constantly
   send(Network::Instance()->pktchan(), &p);
+  return new RPCHandle(c, p);
+}
 
+
+bool
+Node::_doRPC_receive(RPCHandle *rpch)
+{
   // block on reply
-  Packet *reply = (Packet *) recvp(c);
+  Packet *reply = (Packet *) recvp(rpch->channel());
   bool ok = reply->_ok;
   delete reply;
-  chanfree(c);
-  delete p;
-
+  delete rpch;
   return ok;
 }
+
 
 
 //
