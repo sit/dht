@@ -122,6 +122,27 @@ struct chord_gettoes_arg {
   int32_t level;
 };
 
+
+struct chord_debruinarg {
+  chordID v;
+  chordID x;
+  chordID d;
+};
+
+struct chord_debruinnoderes {
+  chord_node node;
+  chordID d;
+};
+
+union chord_debruinres switch (chordstat status) {
+ case CHORD_INRANGE:
+   chord_node inres;
+ case CHORD_NOTINRANGE:
+   chord_debruinnoderes noderes;
+ default:
+   void;
+};
+
 program CHORD_PROGRAM {
 	version CHORD_VERSION {
 		void
@@ -165,5 +186,8 @@ program CHORD_PROGRAM {
 
 		chord_nodelistextres
           	CHORDPROC_GETTOES (chord_gettoes_arg) = 13;
+
+		chord_debruinres
+		CHORDPROC_DEBRUIN (chord_debruinarg) = 14;
 	} = 1;
 } = 344447;

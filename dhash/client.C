@@ -232,6 +232,8 @@ protected:
 
   void lookup_cb (dhash_stat status, chordID destID)
   {
+    //    warn << "store " << blockID << " at " << destID << "\n";
+
     if (status != DHASH_OK)
       (*cb) (true, blockID); // failure
     else
@@ -376,7 +378,11 @@ dhashcli::lookup_iter_cb (chordID blockID, dhashcli_lookup_itercb_t cb,
       plast = path.back ();
       clntnode->alert (plast, last);
     } else {
+#ifdef FINGERS
       plast = clntnode->lookup_closestpred (blockID);
+#else
+      plast = clntnode->lookup_closestsucc (blockID);
+#endif
       path.push_back (plast);
     }
     if (plast == clntnode->clnt_ID ()) {

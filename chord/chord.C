@@ -41,16 +41,21 @@ vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
   server_selection_mode (server_sel_mode)
 {
   warnx << gettime () << " myID is " << myID << "\n";
-
+#ifdef FINGERS
   fingers = New refcounted<finger_table> (mkref (this), locations, myID);
+#endif
+  dutch = New refcounted<debruin> (mkref (this), locations, myID);
   successors = New refcounted<succ_list> (mkref (this), locations, myID);
   toes = New refcounted<toe_table> (locations, myID);
   stabilizer = New refcounted<stabilize_manager> (myID);
 
   stabilizer->register_client (successors);
   stabilizer->register_client (mkref (this));
+#ifdef FINGERS
   stabilizer->register_client (fingers);
+#endif
   stabilizer->register_client (toes);
+  stabilizer->register_client (dutch);
 #ifndef PNODE
   // If vnode's share a locationtable, then we don't need to register this
   // more than once.
@@ -140,7 +145,9 @@ vnode::stats ()
     }
   }
   warnx << "   # max hops for findsuccessor " << nmaxhops << "\n";
+#ifdef FINGERS
   fingers->stats ();
+#endif
   warnx << "# findpredecessor calls " << nfindpredecessor << "\n";
   warnx << "# findsuccessorrestart calls " << nfindsuccessorrestart << "\n";
   warnx << "# findpredecessorrestart calls " << nfindpredecessorrestart << "\n";
@@ -158,7 +165,9 @@ void
 vnode::print ()
 {
   warnx << "======== " << myID << "====\n";
+#ifdef FINGERS
   fingers->print ();
+#endif
   successors->print ();
 
   warnx << "pred : " << predecessor << "\n";
@@ -201,8 +210,8 @@ vnode::join (cbjoin_t cb)
     locations->stats ();
     (*cb) (NULL, CHORD_ERRNOENT);
   } else {
-    warnx << myID << ": joining at " << n << "\n";
-    find_successor (myID, wrap (mkref (this), &vnode::join_getsucc_cb, cb));
+    chordID s = myID + 1;
+    find_successor (s, wrap (mkref (this), &vnode::join_getsucc_cb, cb));
   }
 }
 
@@ -356,17 +365,23 @@ vnode::doalert_cb (svccb *sbp, chordID x, chordID s, net_address r,
 void
 vnode::dogetfingers (svccb *sbp)
 {
+#ifdef FINGERS
   chord_nodelistres res(CHORD_OK);
   ndogetfingers++;
   fingers->fill_getfingersres (&res);
   warnt("CHORD: dogetfingers_reply");
   sbp->reply (&res);
+#else
+  chord_nodelistres res(CHORD_ERRNOENT);
+  sbp->reply (&res);
+#endif
 }
 
 
 void
 vnode::dogetfingers_ext (svccb *sbp)
 {
+#ifdef FINGERS
   chord_nodelistextres res(CHORD_OK);
   ndogetfingers_ext++;
 
@@ -374,6 +389,10 @@ vnode::dogetfingers_ext (svccb *sbp)
 
   warnt("CHORD: dogetfingers_reply");
   sbp->reply (&res);
+#else
+  chord_nodelistres res(CHORD_ERRNOENT);
+  sbp->reply (&res);
+#endif
 }
 
 void
@@ -440,6 +459,40 @@ vnode::dogetsucclist (svccb *sbp)
     cursucc = locations->closestsuccloc (cursucc);
   }
   sbp->reply (&res);
+}
+
+void
+vnode::dodebruin (svccb *sbp, chord_debruinarg *da)
+{
+  ndodebruin++;
+  chord_debruinres *res;
+  chordID pred = locations->closestpredloc (myID);
+
+  warnx << myID << " dodebruin: pred " << pred << " x " << da->x << " d " 
+	<< da->d << "\n";
+
+  if (betweenrightincl (pred, myID, da->x)) {
+    res = New chord_debruinres (CHORD_INRANGE);
+    warnt("CHORD: debruin_inrangereply");
+    res->inres->x = myID;
+    res->inres->r = locations->getaddress (myID);
+    sbp->reply(res);
+    delete res;
+  } else {
+    res = New chord_debruinres (CHORD_NOTINRANGE);
+    if (betweenrightincl (pred, myID, da->d)) {
+      chordID nd = locations->closestsuccloc (doubleID(myID));
+      res->noderes->node.x = nd;
+      res->noderes->node.r = locations->getaddress (nd);
+      res->noderes->d = doubleID(da->d);
+    } else {
+      res->noderes->node.x = pred;
+      res->noderes->node.r = locations->getaddress (pred);
+      res->noderes->d = da->d;
+    }
+    sbp->reply(res);
+    delete res;
+  }
 }
 
 void

@@ -37,6 +37,7 @@
  chordID decID (const chordID &n);
  chordID successorID (const chordID &n, int p);
  chordID predecessorID (const chordID &n, int p);
+ chordID doubleID (const chordID &n);
  bool between          (const chordID &a, const chordID &b, const chordID &n);
  bool betweenleftincl  (const chordID &a, const chordID &b, const chordID &n);
  bool betweenrightincl (const chordID &a, const chordID &b, const chordID &n);

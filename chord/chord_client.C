@@ -371,6 +371,14 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
 	vnodep->dogettoes (sbp);
       }
       break;
+    case CHORDPROC_DEBRUIN:
+      {
+	warnt("CHORD: debruin");
+	chord_debruinarg *da = 
+	  sbp->template getarg<chord_debruinarg> ();
+	vnodep->dodebruin (sbp, da);
+      }
+      break;
     default:
       sbp->reject (PROC_UNAVAIL);
       break;

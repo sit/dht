@@ -122,6 +122,8 @@ void get_fingers_got_fingers (chordID ID, str host, unsigned short port,
 			      chord_nodelistextres *res,
 			      clnt_stat err);
 void get_cb (f_node *node_next);
+void add_succlist (chordID ID, str host, unsigned short port,
+		  chord_nodelistextres *res);
 void add_fingers (chordID ID, str host, unsigned short port,
 		  chord_nodelistextres *res);
 void update_fingers (f_node *n);
@@ -132,6 +134,8 @@ void update_toes (f_node *nu);
 void update_toes_got_toes (chordID ID, str host, unsigned short port, 
 			   chord_nodelistextres *res, clnt_stat err);
 
+void get_succ_got_succ (chordID n, str host, unsigned short port,
+		   chord_nodelistextres *res, clnt_stat err);
 void update_succlist (f_node *n);
 void update_succ_got_succ (chordID ID, str host, unsigned short port, 
 			   chord_nodelistextres *res,
@@ -222,6 +226,38 @@ get_aclnt (str host, unsigned short port)
 
 //----- update successors -----------------------------------------------------
 
+
+void
+get_succlist (str host, unsigned short port)
+{
+  chordID n = make_chordID (host, port);
+  ptr<aclnt> c = get_aclnt (host, port);
+  if (c == NULL) 
+    fatal << "update_succlist: couldn't aclnt::alloc\n";
+  
+  chord_nodelistextres *res = New chord_nodelistextres ();
+  c->timedcall (TIMEOUT, CHORDPROC_GETSUCC_EXT, &n, res,
+		wrap (&get_succ_got_succ, n, host, port, res));
+}
+
+void
+get_succ_got_succ (chordID ID, str host, unsigned short port,
+	      chord_nodelistextres *res, clnt_stat err)
+{
+  if (err || (res->status == CHORD_RPCFAILURE)) {
+    warn << "get succ failed, deleting: " << ID << "\n";
+    f_node *nu = nodes[ID];
+    if (nu) {
+      nodes.remove (nodes[ID]);
+      delete nu;
+    }
+    draw_ring ();
+  } else
+    if (res->status == CHORD_OK) {
+      add_succlist (ID, host, port, res);
+    }
+}
+
 void
 update_succlist (f_node *nu)
 {
@@ -240,19 +276,19 @@ void
 update_succ_got_succ (chordID ID, str host, unsigned short port, 
 		      chord_nodelistextres *res, clnt_stat err)
 {
-  f_node *nu = nodes[ID];
-  if (!nu) return;
-  if (err || res->status) {
-    warn << "(update succ) deleting " << ID << "\n";
-    if (nu) {
-      nodes.remove (nu);
-      delete nu;
-    }
-    return;
-  }
-
-  if (nu->successors) delete nu->successors;
-  nu->successors = res;
+   f_node *nu = nodes[ID];
+   if (!nu) return;
+   if (err || res->status) {
+     warn << "(update succ) deleting " << ID << "\n";
+     if (nu) {
+       nodes.remove (nu);
+       delete nu;
+     }
+     return;
+   }
+ 
+   if (nu->successors) delete nu->successors;
+   nu->successors = res;
 }
 
 //----- update predecessor -------------------------------------------------
@@ -313,7 +349,7 @@ update_fingers_got_fingers (chordID ID, str host, unsigned short port,
 {
   f_node *nu = nodes[ID];
   if (!nu) return;
-  if (err || res->status) {
+  if (err || (res->status == CHORD_RPCFAILURE)) {
     warn << "(update) deleting " << ID << "\n";
     if (nu) {
       nodes.remove (nu);
@@ -321,6 +357,8 @@ update_fingers_got_fingers (chordID ID, str host, unsigned short port,
     }
     return;
   }
+  if (res->status != CHORD_OK)
+    return;
 
   if (nu->fingers) delete nu->fingers;
   nu->fingers = res;
@@ -427,7 +465,7 @@ get_fingers_got_fingers (chordID ID, str host, unsigned short port,
 			 chord_nodelistextres *res,
 			 clnt_stat err) 
 {
-  if (err || res->status) {
+  if (err || (res->status == CHORD_RPCFAILURE)) {
     warn << "get fingers failed, deleting: " << ID << "\n";
     f_node *nu = nodes[ID];
     if (nu) {
@@ -436,25 +474,54 @@ get_fingers_got_fingers (chordID ID, str host, unsigned short port,
     }
     draw_ring ();
   } else
-    add_fingers (ID, host, port, res);
+    if (res->status == CHORD_OK) add_fingers (ID, host, port, res);
+}
+
+
+void 
+add_node (chordID ID, str host, unsigned short port)
+{
+  f_node *n = nodes[ID];
+
+  if (n) return;
+  if (!n) {
+    warn << "added " << ID << "\n";
+    n = New f_node (ID, host, port);
+    nodes.insert (n);
+  }
+  queue_node (ID, host, port);
+}
+
+void
+add_succlist (chordID ID, str host, unsigned short port,
+	     chord_nodelistextres *res) 
+{
+  add_node (ID, host, port);
+  f_node *n = nodes[ID];
+  n->successors = res;
+
+  for (unsigned int i = 0; i < res->resok->nlist.size (); i++) {
+    if (nodes[res->resok->nlist[i].x] == NULL) 
+      add_node (res->resok->nlist[i].x, res->resok->nlist[i].r.hostname,
+		  res->resok->nlist[i].r.port);
+  }
+  update_pred (n);
+  update_toes (n);
+  update_fingers (n);
+  draw_ring ();
 }
 
 void
 add_fingers (chordID ID, str host, unsigned short port,
 	     chord_nodelistextres *res) 
 {
+  add_node (ID, host, port);
   f_node *n = nodes[ID];
-
-  if (n && n->fingers) return;
-  if (!n) {
-    warn << "added " << ID << "\n";
-    n = New f_node (ID, host, port);
-    nodes.insert (n);
-  }
   n->fingers = res;
+
   for (unsigned int i = 0; i < res->resok->nlist.size (); i++) {
     if (nodes[res->resok->nlist[i].x] == NULL) 
-      queue_node (res->resok->nlist[i].x, res->resok->nlist[i].r.hostname,
+      add_node (res->resok->nlist[i].x, res->resok->nlist[i].r.hostname,
 		  res->resok->nlist[i].r.port);
   }
   update_pred (n);
@@ -746,6 +813,7 @@ lookup_cb (GtkWidget *widget, gpointer data)
   if (current_node == NULL)
     current_node = nodes.first ();
   
+#if 0
   // Clear selections and old search keys, etc.
   draw_nothing_cb (widget, data); // widget and data are ignored
 
@@ -775,6 +843,7 @@ lookup_cb (GtkWidget *widget, gpointer data)
   warnx << "Found a path of length " << search_path.size () << "\n";
   for (size_t i = 0; i < search_path.size (); i++)
     warnx << "  " << search_path[i]->ID << "\n";
+#endif
   draw_ring ();
 }
 
@@ -1204,10 +1273,10 @@ draw_ring ()
 		       IDs);
     }
 
-    if (n->fingers && ((n->draw & DRAW_IMMED_SUCC) == DRAW_IMMED_SUCC)) {
+    if (n->successors && ((n->draw & DRAW_IMMED_SUCC) == DRAW_IMMED_SUCC)) {
       int a,b;
-      set_foreground_lat (n->fingers->resok->nlist[1].a_lat); 
-      ID_to_xy (n->fingers->resok->nlist[1].x, &a, &b);
+      set_foreground_lat (n->successors->resok->nlist[1].a_lat); 
+      ID_to_xy (n->successors->resok->nlist[1].x, &a, &b);
       draw_arrow (x,y,a,b, draw_gc);
     }
 
@@ -1379,6 +1448,7 @@ main (int argc, char** argv)
 
   if (!simulated_input) {
     get_fingers (host, port);
+    get_succlist (host, port);
   } else
     get_fingers (sim_file);
 

@@ -137,6 +137,19 @@ predecessorID (const chordID &n, int p)
   return s;
 }
 
+chordID
+doubleID (const chordID &n)
+{
+  chordID s;
+  chordID b (1);
+  
+  b = b << NBIT;
+  s = n << 1;
+  if (s >= b) 
+    s = s - b;
+  return s;
+}
+
 // Check whether n in (a,b) on the circle.
 bool
 between (const chordID &a, const chordID &b, const chordID &n)

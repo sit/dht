@@ -123,21 +123,22 @@ vnode::find_successor_cb (chordID x, cbroute_t cb, chordID s,
 			  route search_path, chordstat status)
 {
   //  warnx << "find_successor_cb: succ of " << x << " is " << s << " pathlen "
-  //<< search_path.size () << "\n";
-  //for (unsigned i = 0; i < search_path.size (); i++) {
-  //warnx << search_path[i] << "\n";
-  //}
+  // << search_path.size () << "\n";
+  // for (unsigned i = 0; i < search_path.size (); i++) {
+  // warnx << search_path[i] << "\n";
+  // }
   nhops += search_path.size ();
   if (search_path.size () > nmaxhops)
     nmaxhops = search_path.size ();
   cb (s, search_path, status);
 }
 
+#ifdef FINGERS
 void
 vnode::find_route (chordID &x, cbroute_t cb) 
 {
   nfindpredecessor++;
-  if (myID == (*fingers)[0]) {    // is n the only node?
+  if (myID == lookup_closestsucc (myID)) {    // is myID the only node?
     route search_path;
     cb (myID, search_path, CHORD_OK);
   } else {
@@ -153,6 +154,7 @@ vnode::find_route (chordID &x, cbroute_t cb)
     testrange_findclosestpred (n, x, st);
   }
 }
+
 
 void
 vnode::testrange_findclosestpred (chordID n, chordID x, 
@@ -230,7 +232,7 @@ vnode::testrange_fcp_done_cb (findpredecessor_cbstate *st,
     //      the top-level?
     st->cb (st->search_path.back (), st->search_path, CHORD_RPCFAILURE);
   } else {
-    warnx << myID << ": testrange_findclosest_pred: last challenge for "
+    warnx << myID << ": testrange_fcp_done_cb: last challenge for "
 	  << s << " failed. (chordstat " << status << ")\n";
     assert (0); // XXX handle malice more intelligently
   }
@@ -256,12 +258,128 @@ vnode::testrange_fcp_step_cb (findpredecessor_cbstate *st,
     //      the top-level?
     st->cb (st->search_path.back (), st->search_path, CHORD_RPCFAILURE);
   } else {
-    warnx << myID << ": testrange_findclosest_pred: step challenge for "
+    warnx << myID << ": testrange_fcp_step_cb: step challenge for "
 	  << s << " failed. (chordstat " << status << ")\n";
     assert (0); // XXX handle malice more intelligently
   }
 }
   
+#else
+
+void
+vnode::find_route (chordID &x, cbroute_t cb) 
+{
+  nfindpredecessor++;
+  if (myID == lookup_closestsucc (myID)) {    // is myID the only node?
+    route search_path;
+    cb (myID, search_path, CHORD_OK);
+  } else {
+    route search_path;
+    chordID n = lookup_closestsucc (x);
+    search_path.push_back (n);
+    findpredecessor_cbstate *st = 
+      New findpredecessor_cbstate (x, search_path, cb);
+    warnx << myID << " find_route " << x << " @ " << n << "\n";
+    find_debruin_route (n, x, n, st);
+  }
+}
+
+void
+vnode::find_debruin_route (chordID n, chordID x, chordID d, 
+				  findpredecessor_cbstate *st)
+{
+  ptr<chord_debruinarg> arg = New refcounted<chord_debruinarg> ();
+  arg->v = n;
+  arg->x = x;
+  arg->d = d;
+  chord_debruinres *nres = New chord_debruinres (CHORD_OK);
+  doRPC (n, chord_program_1, CHORDPROC_DEBRUIN, arg, nres, 
+	 wrap (this, &vnode::debruin_cb, nres, st));
+
+}
+
+void
+vnode::debruin_cb (chord_debruinres *res,
+			     findpredecessor_cbstate *st,
+			     clnt_stat err)
+{
+  if (err) {
+    warnx << "find_debruin_cb: failure " << err << "\n";
+    chordID l = st->search_path.back ();
+    st->cb (l, st->search_path, CHORD_RPCFAILURE);
+    delete st;
+  } else if (res->status == CHORD_INRANGE) { 
+    // found the successor
+    locations->cacheloc (res->inres->x, res->inres->r,
+			 wrap (this, &vnode::debruin_fcp_done_cb, st));
+  } else if (res->status == CHORD_NOTINRANGE) {
+    // haven't found the successor yet; ask the new node
+    warnx << "debruin_cb: " << st->x << " next " << res->noderes->node.x 
+	  << " d " << res->noderes->d << ":";
+    for (unsigned i = 0; i < st->search_path.size (); i++) {
+      warnx << st->search_path[i] << "\n";
+    }
+
+    locations->cacheloc (res->noderes->node.x, res->noderes->node.r,
+			 wrap (this, &vnode::debruin_fcp_step_cb, 
+			       res->noderes->d, st));
+  } else {
+    warn("WTF");
+    delete st;
+  }
+  delete res;
+}
+
+
+void
+vnode::debruin_fcp_done_cb (findpredecessor_cbstate *st,
+			      chordID s, bool ok, chordstat status)
+{
+  if (ok && status == CHORD_OK) {
+    st->search_path.push_back (s);
+    warnx << "debruin_fcp_done_cb: path size " << st->search_path.size () 
+	  << "\n";
+    assert (st->search_path.size () < 1000);
+    st->cb (st->search_path.back (), st->search_path, CHORD_OK);
+    delete st;
+  } else if (status == CHORD_RPCFAILURE) {
+    // xxx? should we retry locally before failing all the way to
+    //      the top-level?
+    st->cb (st->search_path.back (), st->search_path, CHORD_RPCFAILURE);
+  } else {
+    warnx << myID << ": debruin_fcp_done_cb: last challenge for "
+	  << s << " failed. (chordstat " << status << ")\n";
+    assert (0); // XXX handle malice more intelligently
+  }
+}
+
+
+void
+vnode::debruin_fcp_step_cb (chordID e, findpredecessor_cbstate *st, chordID s, 
+      bool ok, chordstat status)
+{
+  if (ok && status == CHORD_OK) {
+    st->search_path.push_back (s);
+    if (st->search_path.size () >= 100) {
+      warnx << "PROBLEM: too long a search path: " << myID << " looking for "
+	    << st->x << "\n";
+      for (unsigned i = 0; i < st->search_path.size (); i++) {
+	warnx << st->search_path[i] << "\n";
+      }
+      assert (0);
+    }
+    find_debruin_route (s, st->x, e, st);
+  } else if (status == CHORD_RPCFAILURE) {
+    // xxx? should we retry locally before failing all the way to
+    //      the top-level?
+    st->cb (st->search_path.back (), st->search_path, CHORD_RPCFAILURE);
+  } else {
+    warnx << myID << ": debruin_fcp_step_cb: step challenge for "
+	  << s << " failed. (chordstat " << status << ")\n";
+    assert (0); // XXX handle malice more intelligently
+  }
+}
+#endif
 
 void
 vnode::notify (chordID &n, chordID &x)

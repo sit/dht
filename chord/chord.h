@@ -60,150 +60,12 @@ struct findpredecessor_cbstate {
     x (xi), search_path (spi), cb (cbi) {};
 };
 
+#define FINGERS 1
 
-// ================ TOE TABLE ================
-#define MAX_LEVELS 5
-
-class toe_table : public stabilizable {
-  static const int max_delay = 800; // ms
-
-  vec<chordID> toes;
-  ptr<locationtable> locations;
-  chordID myID;
-  
-  short target_size[MAX_LEVELS];
-  int in_progress;
-  
-  short last_level;
-
-  void add_toe_ping_cb (chordID id, int level, chordstat err);
-  void get_toes_rmt_cb (chord_nodelistextres *res, int level, clnt_stat err);
-
- public:
-  toe_table (ptr<locationtable> locs, chordID id);
-
-  vec<chordID> get_toes (int level);
-  void add_toe (chordID id, net_address r, int level);
-  int filled_level ();
-  int level_to_delay ();
-  void get_toes_rmt (int level);
-  void stabilize_toes ();
-  int level_to_delay (int level);
-  void dump ();
-  short get_last_level () { return last_level; };
-  void set_last_level (int l) { last_level = l; };
-  void bump_target (int l) { target_size[l] *= 2; };
-
-  // Stabilizable methods
-  bool backoff_stabilizing () { return in_progress > 0; }
-  void do_backoff () { stabilize_toes (); }
-  bool isstable () { return true; } // XXX
-};
-
-// ================ FINGER TABLE ================
-#define NBIT     160     // size of Chord identifiers in bits
-class finger_table : public stabilizable {
-  ptr<vnode> myvnode;
-  ptr<locationtable> locations;
-  
-  chordID starts[NBIT];
-  chordID fingers[NBIT]; // just for optimizing stabilization
-  chordID myID;
-
-  int f; // next finger to stabilize
-  bool stable_fingers;
-  bool stable_fingers2;
-  
-  u_int nout_backoff;
-  
-  u_long nslowfinger;
-  u_long nfastfinger;
-
-  void stabilize_finger_getpred_cb (chordID dn, int i, chordID p, 
-				    net_address r, chordstat status);
-  void stabilize_findsucc_cb (chordID dn,
-			      int i, chordID s, route path, chordstat status);
-
-  
- public:
-  finger_table (ptr<vnode> v, ptr<locationtable> locs, chordID myID);
-
-  chordID closestpredfinger (chordID &x);
-  chordID closestsuccfinger (chordID &x);
-
-  chordID finger (int i);
-  chordID operator[] (int i);
-  chordID start (int i) { return starts[i]; }
-
-  void print ();
-
-  void fill_getfingersres (chord_nodelistres *res);
-  void fill_getfingersresext (chord_nodelistextres *res);
-
-  void stabilize_finger ();
-
-  void stats ();
-
-  // Stabilize methods
-  bool backoff_stabilizing () { return nout_backoff > 0; }
-  void do_backoff () { stabilize_finger (); }
-  bool isstable () { return stable_fingers && stable_fingers2; }
-};
-
-// ================ SUCCESSOR LIST ================
-
-#define NSUCC    2*10     // 2 * log of # vnodes
-
-class succ_list : public stabilizable {
-  chordID myID;
-  ptr<vnode> myvnode;
-  ptr<locationtable> locations;
-  
-  u_long nnodes; // estimate of the number of chord nodes
-  
-  chordID oldsucc;  // last known successor to myID
-  bool stable_succlist;
-  bool stable_succlist2;
-  u_int nout_backoff;
-  u_int nout_continuous;
-
-  // Helpers for stabilize_succ
-  void stabilize_getpred_cb (chordID s, chordID p,
-			     net_address r, chordstat status);
-  void stabilize_getpred_cb_ok (chordID sd, 
-				chordID p, bool ok, chordstat status);
-
-  // Helpers for stabilize_succlist
-  void stabilize_getsucclist_cb (chordID s, vec<chord_node> nlist,
-				chordstat err);
-  void stabilize_getsucclist_check (chordID src, chordID chk, chordstat status);
-  void stabilize_getsucclist_ok (chordID source,
-				 chordID ns, bool ok, chordstat status);
-
-
- public:  
-  succ_list (ptr<vnode> v, ptr<locationtable> locs, chordID myID);
-  
-  chordID succ ();
-  chordID operator[] (int n);
-  
-  int num_succ ();
-  u_long estimate_nnodes ();
-  void print ();
-  
-  void fill_getsuccres (chord_nodelistextres *res);
-  
-  void stabilize_succ ();
-  void stabilize_succlist ();
-  
-  // Stabilizable methods
-  bool backoff_stabilizing () { return nout_backoff > 0; }
-  bool continuous_stabilizing () { return nout_continuous > 0; }
-  void do_continuous () { stabilize_succ (); }
-  void do_backoff () { stabilize_succlist (); }
-  bool isstable () { return stable_succlist && stable_succlist2; } // XXX
-};
-
+#include "toe_table.h"
+#include "finger_table.h"
+#include "succ_list.h"
+#include "debruin.h"
 
 // ================ VIRTUAL NODE ================
 
@@ -211,6 +73,7 @@ class vnode : public virtual refcount, public stabilizable {
   ptr<finger_table> fingers;
   ptr<succ_list> successors;
   ptr<toe_table> toes;
+  ptr<debruin> dutch;
   ptr<stabilize_manager> stabilizer;
 
   chordID predecessor;
@@ -245,6 +108,7 @@ class vnode : public virtual refcount, public stabilizable {
   u_long ndogetpred_ext;
   u_long ndochallenge;
   u_long ndogettoes;
+  u_long ndodebruin;
 
   u_long nout_continuous;
   void stabilize_pred (void);
@@ -257,12 +121,13 @@ class vnode : public virtual refcount, public stabilizable {
 			 clnt_stat err);
   void get_predecessor_cb (chordID n, cbchordID_t cb, chord_noderes *res, 
 			   clnt_stat err);
-  void find_route (chordID &x, cbroute_t cb);
   void find_successor_cb (chordID x, 
 			  cbroute_t cb, chordID s, route sp, chordstat status);
   void get_succlist_cb (cbchordIDlist_t cb, chord_nodelistres *res,
 			clnt_stat err);
 
+  void find_route (chordID &x, cbroute_t cb);
+#ifdef FINGERS
   void testrange_findclosestpred (chordID node, chordID x, 
 				  findpredecessor_cbstate *st);
   void testrange_findclosestpred_cb (chord_testandfindres *res, 
@@ -271,6 +136,16 @@ class vnode : public virtual refcount, public stabilizable {
 			      chordID s, bool ok, chordstat status);
   void testrange_fcp_step_cb (findpredecessor_cbstate *st,
 			      chordID s, bool ok, chordstat status);
+#else
+  void find_debruin_route (chordID n, chordID x, chordID d, 
+			   findpredecessor_cbstate *st);
+  void debruin_cb (chord_debruinres *res,
+		     findpredecessor_cbstate *st, clnt_stat err);
+  void debruin_fcp_done_cb (findpredecessor_cbstate *st,
+			    chordID s, bool ok, chordstat status);
+  void debruin_fcp_step_cb (chordID e, findpredecessor_cbstate *st, chordID s, 
+			    bool ok, chordstat status);
+#endif
   
   void notify_cb (chordID n, chordstat *res, clnt_stat err);
   void alert_cb (chordstat *res, clnt_stat err);
@@ -331,6 +206,7 @@ class vnode : public virtual refcount, public stabilizable {
   void dogetpred_ext (svccb *sbp);
   void dochallenge (svccb *sbp, chord_challengearg *ca);
   void dogettoes (svccb *sbp);
+  void dodebruin (svccb *sbp, chord_debruinarg *da);
 
   //RPC demux
   void addHandler (const rpc_program &prog, cbdispatch_t cb);
@@ -396,6 +272,9 @@ class chord : public virtual refcount {
 
   chordID lookup_closestpred (chordID k) { 
     return active->lookup_closestpred (k); 
+  };
+  chordID lookup_closestsucc (chordID k) { 
+    return active->lookup_closestsucc (k); 
   };
   void find_successor (chordID n, cbroute_t cb) {
     active->find_successor (n, cb);
