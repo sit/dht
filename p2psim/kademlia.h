@@ -13,7 +13,7 @@ extern unsigned kdebugcounter;
 
 class Kademlia : public Protocol {
 public:
-  typedef char NodeID;
+  typedef short NodeID;
   typedef unsigned Value;
   static const unsigned idsize = 8*sizeof(NodeID);
 
@@ -28,19 +28,21 @@ public:
 
   static string printbits(NodeID);
   static string printID(NodeID id);
-  void dumpfingers() { _fingers.dump(_id); };
   static NodeID distance(NodeID, NodeID);
 
   bool stabilized(vector<NodeID>);
-  void dump() { cout << "*** DUMP for " << printbits(_id) << " ***" <<endl;  _fingers.dump(_id); };
+  void dump() { cout << "*** DUMP for " << printbits(_id) << " ***" <<endl;  _root->dump(); };
   NodeID id () { return _id;}
 
   // bit twiddling utility functions
   static NodeID flipbitandmaskright(NodeID, unsigned);
   static NodeID maskright(NodeID, unsigned);
+  static unsigned getbit(NodeID, unsigned);
+  static unsigned k()   { return _k; }
 
 private:
   NodeID _id;
+  static unsigned _k;
 
 
   // join
@@ -94,22 +96,64 @@ private:
     map<NodeID, Value> values;
   };
   void do_transfer(void *args, void *result);
-                                                                                  
-  // finger table
-  class fingers_t { public:
-    fingers_t(NodeID id) : _id(id) {};
-    void set(unsigned i, NodeID id, IPAddress ip) {
+
+
+
+  //
+  //
+  // K-BUCKETS
+  //
+  //
+  // one entry in k_bucket's _nodes vector
+  struct peer_t {
+    peer_t(NodeID xid, IPAddress xip) : retries(0), id(xid), ip(xip) {}
+    unsigned retries;
+    NodeID id;
+    IPAddress ip;
+  };
+
+
+  // a k-bucket
+  class k_bucket {
+    public:
+      k_bucket();
+      ~k_bucket();
+
+      vector<peer_t*> _nodes;
+      k_bucket* _child[2]; // subtree
+
+      bool insert(NodeID node, IPAddress ip, NodeID prefix = 0, unsigned depth = 0);
+      void dump() {}
+
+    private:
+      static unsigned _k;
+      static k_bucket *_root;
+  };
+
+  k_bucket *_root;
+
+
+
+  /*
+  class bucket_t { public:
+    bucket_t(NodeID id) : _id(id) {};
+
+    void insert(NodeID id, IPAddress ip) {
+      if(_root.insert(id))
+        _id2ip[id] = ip;
+    }
+
+      *
       _ft[i].id = id;
       _ft[i].valid = true;
       _ft[i].retries = 0;
-      _id2ip[id] = ip;
       KDEBUG(5) << "set " << i << endl;
       KDEBUG(5) << "_id " << printbits(_id) << endl;
       KDEBUG(5) << " id " << printbits(id) << endl;
       KDEBUG(5) << " fp " << printbits(Kademlia::flipbitandmaskright(_id, i)) << endl;
       KDEBUG(5) << " mr " << printbits(Kademlia::maskright(id, i)) << endl;
       assert(Kademlia::flipbitandmaskright(_id, i) == Kademlia::maskright(id, i));
-    }
+      /
 
     void unset(unsigned i) { _ft[i].valid = false; }
     void dump(NodeID myid) {
@@ -123,6 +167,7 @@ private:
       }
     }
 
+
     bool valid(unsigned i)          { return _ft[i].valid; }
     unsigned retries(unsigned i)    { return _ft[i].retries; }
     IPAddress get_ip(unsigned i)    { return _id2ip[_ft[i].id]; }
@@ -130,17 +175,11 @@ private:
     IPAddress get_ipbyid(NodeID id) { return _id2ip[id]; }
 
   private:
+    k_bucket _root;
     map<NodeID, IPAddress> _id2ip;
-
-    class peer_t { public:
-      bool valid;
-      unsigned retries;
-      NodeID id;
-      peer_t() { valid = false; retries = 0; id = 0; };
-    } _ft[8*sizeof(NodeID)];
-
     NodeID _id;
-  } _fingers;
+  } _buckets;
+  */
 
   // this is what we're here for: being a NodeID -> value hashtable
   map<NodeID, Value> _values;

@@ -11,8 +11,9 @@ using namespace std;
 
 unsigned kdebugcounter = 1;
 Kademlia::NodeID Kademlia::_rightmasks[8*sizeof(Kademlia::NodeID)];
+unsigned Kademlia::_k = 8;
 
-Kademlia::Kademlia(Node *n) : Protocol(n), _id(ConsistentHash::ip2chid(n->ip()) & 0x000f), _fingers(_id)
+Kademlia::Kademlia(Node *n) : Protocol(n), _id(ConsistentHash::ip2chid(n->ip()))
 {
   KDEBUG(1) << "id: " << printbits(_id) << endl;
   _values.clear();
@@ -26,6 +27,9 @@ Kademlia::Kademlia(Node *n) : Protocol(n), _id(ConsistentHash::ip2chid(n->ip()) 
       _rightmasks[i] = ~mask;
     }
   }
+
+  _root = new k_bucket();
+  assert(_root);
 }
 
 Kademlia::~Kademlia()
@@ -48,48 +52,47 @@ Kademlia::stabilized(vector<NodeID> lid)
   //
   //
 
-  NodeID lower_mask = 0;
-  for (unsigned i=0; i<idsize; i++) {
-    // we're fine with filled entries
-    // XXX: we could still check this
-    if(_fingers.valid(i))
-      continue;
+  // NodeID lower_mask = 0;
+  // for (unsigned i=0; i<idsize; i++) {
+  //   // we're fine with filled entries
+  //   // XXX: we could still check this
+  //   if(_fingers.valid(i))
+  //     continue;
 
-    //
-    // Node claims there is no node to satisfy this entry in the finger table.
-    // Check whether that is true.
-    //
+  //   //
+  //   // Node claims there is no node to satisfy this entry in the finger table.
+  //   // Check whether that is true.
+  //   //
 
-    // On every iteration we add another bit.  lower_mask looks like 000...111,
-    // but we use it as 111...000 by ~-ing it.
-    if(i)
-      lower_mask |= (1<<(i-1));
+  //   // On every iteration we add another bit.  lower_mask looks like 000...111,
+  //   // but we use it as 111...000 by ~-ing it.
+  //   if(i)
+  //     lower_mask |= (1<<(i-1));
 
-    // flip the bit, and turn all bits to the right of the flipped bit into
-    // zeroes.
-    NodeID lower = _id ^ (1<<i);
-    lower &= ~lower_mask;
+  //   // flip the bit, and turn all bits to the right of the flipped bit into
+  //   // zeroes.
+  //   NodeID lower = _id ^ (1<<i);
+  //   lower &= ~lower_mask;
 
-    // upper bound is the id with one bit flipped and all bits to the right of
-    // that turned into ones.
-    NodeID upper = lower | lower_mask;
+  //   // upper bound is the id with one bit flipped and all bits to the right of
+  //   // that turned into ones.
+  //   NodeID upper = lower | lower_mask;
 
-    // yields the node with smallest id greater than lower
-    vector<NodeID>::const_iterator it = upper_bound(lid.begin(), lid.end(), lower);
+  //   // yields the node with smallest id greater than lower
+  //   vector<NodeID>::const_iterator it = upper_bound(lid.begin(), lid.end(), lower);
 
-    // check that this is smaller than upper.  if so, then this node would
-    // qualify for this entry in the finger table, so the node that says there
-    // is no such is WRONG.
-    if(it != lid.end() && *it <= upper) {
-      KDEBUG(4) << "not stabilized because node with ID " << printbits(_id) << ", entry " << i << " is invalid." << endl;
-      KDEBUG(4) << "lowermask = " << printbits(lower_mask) << endl;
-      KDEBUG(4) << "~lowermask = " << printbits(~lower_mask) << endl;
-      KDEBUG(4) << "lower = " << printbits(lower) << endl;
-      KDEBUG(4) << "upper = " << printbits(upper) << endl;
-      KDEBUG(4) << "existing = " << printbits(*it) << endl;
-      return false;
-    }
-  }
+  //   // check that this is smaller than upper.  if so, then this node would
+  //   // qualify for this entry in the finger table, so the node that says there
+  //   // is no such is WRONG.
+  //   if(it != lid.end() && *it <= upper) {
+  //     KDEBUG(4) << "stabilized: entry " << i << " is invalid, but " << printbits(*it) << " matches " << endl;
+  //     KDEBUG(4) << "stabilized: lowermask = " << printbits(lower_mask) << endl;
+  //     KDEBUG(4) << "stabilized: ~lowermask = " << printbits(~lower_mask) << endl;
+  //     KDEBUG(4) << "stabilized: lower = " << printbits(lower) << endl;
+  //     KDEBUG(4) << "stabilized: upper = " << printbits(upper) << endl;
+  //     return false;
+  //   }
+  // }
 
   return true;
 }
@@ -213,6 +216,64 @@ Kademlia::do_transfer(void *args, void *result)
 }
 
 
+//
+// Returns the i-th bit in n.  0 is the most significant bit.
+//
+inline
+unsigned
+Kademlia::getbit(NodeID n, unsigned i)
+{
+  return (n & (1<<((sizeof(NodeID)*8)-i-1))) ? 1 : 0;
+}
+
+void
+Kademlia::do_lookup(void *args, void *result)
+{
+  lookup_args *largs = (lookup_args*) args;
+  lookup_result *lresult = (lookup_result*) result;
+
+  KDEBUG(3) << "do_lookup: id = " << printbits(largs->id) << ", ip = " << largs->ip << ", key = " << printbits(largs->key) << endl;
+
+  // insert caller into our tree
+  _root->insert(largs->id, largs->ip);
+
+  // descend into the tree
+  k_bucket *kb = _root;
+  for(unsigned i=0; i<idsize; i++) {
+    unsigned b = getbit(largs->key, i);
+    KDEBUG(3) << "do_lookup: bit " << i << " of key is " << b << endl;
+    if(kb->_child[b]) {
+      KDEBUG(3) << "do_lookup: descending further down" << endl;
+      kb = kb->_child[b];
+      continue;
+    }
+    KDEBUG(3) << "do_lookup: found deepest level" << endl;
+    break;
+  }
+
+  // XXX: use alpha
+  assert(kb->_nodes.size());
+
+  // are we closer? 
+  // XXX: try for all in vector
+  peer_t *closenode = kb->_nodes[0];
+  if(distance(_id, largs->key) < distance(closenode->id, largs->key)) {
+    // i am the best
+    KDEBUG(3) << "do_lookup: i am the best match" << endl;
+    lresult->rid = _id;
+
+  // recursive lookup
+  } else {
+    largs->id = _id;
+    largs->ip = ip();
+    doRPC(kb->_nodes[0]->id, &Kademlia::do_lookup, args, result);
+  }
+
+  // set correct return data
+  lresult->rid = _id;
+}
+
+#if 0
 void
 Kademlia::do_lookup(void *args, void *result)
 {
@@ -268,11 +329,14 @@ done:
   lresult->rid = _id;
 }
 
+#endif
 
 
 unsigned
 Kademlia::merge_into_ftable(NodeID id, IPAddress ip)
 {
+  return 0;
+  /*
   KDEBUG(3) << "merge_into_ftable: id = " << printbits(id) << ", ip = " << ip << endl;
   assert(id != _id);
 
@@ -293,6 +357,7 @@ Kademlia::merge_into_ftable(NodeID id, IPAddress ip)
   if(verbose >= 4)
     dump();
   return entry;
+  */
 }
 
 
@@ -331,9 +396,9 @@ Kademlia::printbits(NodeID id)
 
   unsigned j=0;
   for(int i=idsize-1; i>=0; i--)
-    sprintf(&(buf[j++]), "%u", (char) (id >> i) & 0x1);
+    sprintf(&(buf[j++]), "%u", (id >> i) & 0x1);
   // sprintf(&(buf[j]), ":%llx", id);
-  sprintf(&(buf[j]), ":%hx", (char) id);
+  sprintf(&(buf[j]), ":%x", id);
 
   return string(buf);
 }
@@ -343,7 +408,7 @@ string
 Kademlia::printID(NodeID id)
 {
   char buf[128];
-  sprintf(buf, "%hx", id);
+  sprintf(buf, "%x", id);
   return string(buf);
 }
 
@@ -413,4 +478,72 @@ void
 Kademlia::lookup(Args *args)
 {
   cout << "Kademlia lookup" << endl;
+}
+
+
+/*
+ *
+ * K-BUCKET
+ *
+ */
+
+
+Kademlia::k_bucket *Kademlia::k_bucket::_root = 0;
+unsigned Kademlia::k_bucket::_k = Kademlia::k();
+
+Kademlia::k_bucket::k_bucket()
+{
+  _child[0] = _child[1] = 0;
+  if(_root == 0)
+    _root = this;
+}
+
+
+// depth-first delete
+Kademlia::k_bucket::~k_bucket()
+{
+  if(_child[0])
+    delete _child[0];
+  if(_child[1])
+    delete _child[1];
+  for(unsigned i=0; i<_nodes.size(); i++)
+    delete _nodes[i];
+}
+
+bool
+Kademlia::k_bucket::insert(NodeID node, IPAddress ip, NodeID prefix, unsigned depth)
+{
+  // descend to right level in tree
+  // if[child[0]], go left
+  // if[child[1]], go right
+  char leftmostbit = (node & (1<<((sizeof(NodeID)*8)-1))) ? 1 : 0;
+  if(_child[leftmostbit]) {
+    prefix = (prefix << 1) | (NodeID) leftmostbit;
+    return _child[leftmostbit]->insert(node, prefix, depth+1);
+  }
+
+  // if not full, just add the new id.
+  if(_nodes.size() < _k) {
+    _nodes.push_back(new peer_t(node, ip));
+    return true; // is this correct? do we not split on own ID?
+  }
+
+  // must be equal then.
+  assert(_nodes.size() == _k);
+  assert(_child[0] == 0);
+  assert(_child[1] == 0);
+
+  _child[0] = new k_bucket();
+  _child[1] = new k_bucket();
+
+  // now divide contents into separate buckets
+  for(unsigned i=0; i<_nodes.size(); i++) {
+    char bit = node & (1 << ((sizeof(NodeID)*8)-depth-1)) ? 1 : 0;
+    prefix = (prefix << 1) | (NodeID) bit;
+    _child[bit]->_nodes.push_back(new peer_t(_nodes[i]->id, _nodes[i]->ip));
+    _nodes[i] = 0;
+  }
+
+  // now insert the node
+  return _root->insert(node, ip);
 }

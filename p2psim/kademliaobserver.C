@@ -63,6 +63,7 @@ KademliaObserver::execute()
   for (pos = l.begin(); pos != l.end(); ++pos) {
     c = (Kademlia *)(*pos);
     assert(c);
+    c->dump();
     if (!c->stabilized(lid)) {
       cout << now() << " NOT STABILIZED" << endl;
       if (_reschedule > 0)
