@@ -151,7 +151,7 @@ merkle_tree::merkle_tree (dbfe *realdb)
   for (int i = 0; d; i++, d = it->nextElement()) {
     if (i == 0)
       warn << "Database is not empty.  Loading into merkle tree\n";
-    warn << "key[" << i << "] " << dhash::dbrec2id (d->key) << "\n";
+    warn << "key[" << i << "] " << dbrec2id (d->key) << "\n";
     block b (to_merkle_hash (d->key), FAKE_DATA);
     insert (0, &b, &root);
   }

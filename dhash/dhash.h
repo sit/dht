@@ -318,9 +318,6 @@ class dhash {
   void replica_maintenance_timer (u_int index);
   void partition_maintenance_timer ();
 
-  static ref<dbrec> id2dbrec(chordID id);
-  static chordID dbrec2id (ptr<dbrec> r);
-
   dhash (str dbname, ptr<vnode> node, ptr<route_factory> r_fact,
 	 u_int nreplica = 0, int ss_mode = 0);
   void accept(ptr<axprt_stream> x);
@@ -519,5 +516,6 @@ static inline str dhasherr2str (dhash_stat status)
 {
   return rpc_print (strbuf (), status, 0, NULL, NULL);
 }
+
 
 #endif

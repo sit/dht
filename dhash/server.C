@@ -40,7 +40,7 @@
 
 #include <merkle_sync_prot.h>
 static int MERKLE_ENABLED = getenv("MERKLE_ENABLED") ? atoi(getenv("MERKLE_ENABLED")) : 1;
-static int PARTITION_ENABLED = getenv("PARTITION_ENABLED") ? atoi(getenv("PARTITION_ENABLED")) : 0;
+static int PARTITION_ENABLED = getenv("PARTITION_ENABLED") ? atoi(getenv("PARTITION_ENABLED")) : 1;
 static int REPLICATE = getenv("REPLICATE") ? atoi(getenv("REPLICATE")) : 1;
 static int KEYHASHDB = getenv("KEYHASHDB") ? atoi(getenv("KEYHASHDB")) : 0;
 int JOSH = getenv("JOSH") ? atoi(getenv("JOSH")) : 0;
@@ -72,7 +72,7 @@ verifydb (dbfe *db)
   ptr<dbPair> d = it->firstElement();
   chordID p = -1;
   while (d) {
-    chordID k = dhash::dbrec2id (d->key);
+    chordID k = dbrec2id (d->key);
     if (k < 0 || k >= (bigint (1) << 160)) {
       warn << "key out of range: " << k << "\n";
       return 0;
@@ -228,8 +228,8 @@ keyhashdbagain:
     merkle_part_tcb =
       delaycb (PRTTM, wrap (this, &dhash::partition_maintenance_timer));
   } else {
-    install_replica_timer ();
-    transfer_initial_keys ();
+    // install_replica_timer ();
+    // transfer_initial_keys ();
   }
   if (KEYHASHDB) {
     keyhash_mgr_rpcs = 0;
@@ -1327,25 +1327,6 @@ dhash::store_repl_cb (cbstore cb, chord_node sender, chordID srcID, int32 nonce,
 
 
 // --------- utility
-
-// XXX move to merkle directory since the byte order must match
-//     the way merkle_hashes are converted into dbrecs  
-
-ref<dbrec>
-dhash::id2dbrec(chordID id) 
-{
-  char buf[sha1::hashsize];
-  bzero (buf, sha1::hashsize);
-  mpz_get_rawmag_be (buf, sha1::hashsize, &id);
-  return New refcounted<dbrec> (buf, sha1::hashsize);
-}
-
-chordID
-dhash::dbrec2id (ptr<dbrec> r)
-{
-  return tobigint (to_merkle_hash (r));
-}
-
 
 dhash_stat
 dhash::key_status(const chordID &n) 

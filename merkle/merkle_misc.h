@@ -57,7 +57,6 @@ todbrec (const merkle_hash &h)
   return ret;
 }
 
-
 static inline bigint
 tobigint (const merkle_hash &h)
 {
@@ -75,6 +74,23 @@ tobigint (const merkle_hash &h)
   return ret;
 #endif
 }
+
+static inline ref<dbrec>
+id2dbrec(chordID id) 
+{
+  char buf[sha1::hashsize];
+  bzero (buf, sha1::hashsize);
+  mpz_get_rawmag_be (buf, sha1::hashsize, &id);
+  return New refcounted<dbrec> (buf, sha1::hashsize);
+}
+
+
+static inline chordID
+dbrec2id (ptr<dbrec> r)
+{
+  return tobigint (to_merkle_hash (r));
+}
+
 
 
 static inline vec<merkle_hash>

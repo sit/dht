@@ -39,6 +39,31 @@ opendb()
 }
 
 
+ptr<dbrec>
+marshal_dhashblock (char *buf, size_t buflen)
+{
+  ptr<dbrec> ret = NULL;
+
+  long type = DHASH_CONTENTHASH;
+  xdrsuio x;
+  int size = buflen + 3 & ~3;
+  char *m_buf;
+  if (XDR_PUTLONG (&x, (long int *)&type) &&
+      XDR_PUTLONG (&x, (long int *)&buflen) &&
+      (m_buf = (char *)XDR_INLINE (&x, size))) {
+
+    memcpy (m_buf, buf, buflen);
+    
+    int m_len = x.uio ()->resid ();
+    char *m_dat = suio_flatten (x.uio ());
+    ret = New refcounted<dbrec> (m_dat, m_len);
+    xfree (m_dat);
+    return ret;
+  } else {
+    fatal << "Marshaling failed\n";
+  }
+}
+
 int
 main (int argc, char** argv) 
 {
@@ -80,7 +105,7 @@ main (int argc, char** argv)
     if (between (minID, maxID, ID)) {
       n++;
       ref<dbrec> key = New refcounted<dbrec> (&hash[0], sha1::hashsize);
-      ref<dbrec> data = New refcounted<dbrec> (&block[0], block_size);
+      ptr<dbrec> data = marshal_dhashblock (&block[0], block_size);
       db->insert (key, data);
     } 
   }
