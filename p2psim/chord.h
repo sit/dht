@@ -27,7 +27,7 @@ public:
   virtual void join(Args*);
   virtual void leave(Args*) {};
   virtual void crash(Args*) {};
-  virtual void lookup(Args*) {};
+  virtual void lookup(Args*);
   virtual void insert(Args*) {};
 
   struct get_predecessor_args {
@@ -70,16 +70,15 @@ public:
 
   string s();
 
+  void stabilize(void *);
 protected:
   LocTable *loctable;
   IDMap me;
 
-  virtual vector<IDMap> find_successors(CHID key, int m);
-  IDMap next(CHID n);
+  vector<IDMap> find_successors(CHID key, int m);
   void fix_predecessor();
   void fix_successor();
   void fix_successor_list();
-  void stabilize();
 };
 
 
@@ -115,6 +114,7 @@ class LocTable {
     Chord::IDMap pred(Chord::CHID n);
     Chord::IDMap pred();
     Chord::IDMap next(Chord::CHID n);
+    vector<Chord::IDMap> succ_for_key(Chord::CHID key);
 
     void add_node(Chord::IDMap n);
     void del_node(Chord::IDMap n);
