@@ -333,6 +333,9 @@ dhash_impl::keyhash_mgr_timer ()
       else {
         keyhash_mgr_rpcs ++;
         // otherwise, try to sync with the master node
+	//XX ATHICHA: Sending a PK block to the primary. 
+	//            Should ask the block's replicas first who the primary is.
+	//            Eliminate this once Paxos is running.
         cli->lookup
 	  (n, wrap (this, &dhash_impl::keyhash_mgr_lookup, n));
       }
@@ -761,6 +764,7 @@ dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
 
     switch (arg->ctype) {
     case DHASH_KEYHASH:
+      //XXX ATHICHA: Add Paxos+Primary prot for writes
       {
 	if (!verify_key_hash (arg->key, ss->buf, ss->size)) {
 	  stat = DHASH_STORE_NOVERIFY;

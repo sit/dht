@@ -64,6 +64,7 @@ struct pk_partial {
 
 struct keyhash_meta {
   long version;
+  //XXX ATHICHA this is not used anywhere.
 };
 
 struct missing_state {
