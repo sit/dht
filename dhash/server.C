@@ -286,13 +286,18 @@ dhash_impl::flush_outgoing_q ()
     assert (missing_outstanding_o >= 0);
 
     //check the whole block cache
-    //    ref<dbrec> kkk = id2dbrec (m->key);
-    //    bool present = cache_db->lookup (kkk);
-    
-
-    cli->retrieve (blockID(m->key, DHASH_CONTENTHASH, DHASH_FRAG),
-		   wrap (this, &dhash_impl::outgoing_retrieve_cb, m));
+    ref<dbrec> kkk = id2dbrec (m->key);
+    ptr<dbrec> hit = cache_db->lookup (kkk);
+    if (hit) {
+      trace << "CACHE HIT for " << m->key << "\n";
+      str blk (hit->value, hit->len);
+      send_frag (m, blk);
+    } else {
+      cli->retrieve (blockID(m->key, DHASH_CONTENTHASH, DHASH_FRAG),
+		     wrap (this, &dhash_impl::outgoing_retrieve_cb, m));
+    }
     m = missing_outgoing_q.next (m);
+    
   }
 }
 
@@ -315,21 +320,33 @@ dhash_impl::outgoing_retrieve_cb (missing_state *ms, dhash_stat err,
 
     //cache the whole block here so we don't  have to fetch it
     // next time
+    ref<dbrec> key = id2dbrec (ms->key);
+    ref<dbrec> data = New refcounted<dbrec> (b->data, b->len);
+    cache_db->insert (key, data);
 
-    //generate a new, unique fragment
+    //send it
     str blk (b->data, b->len);
-    u_long m = Ida::optimal_dfrag (b->len, dhash::dhash_mtu ());
-    if (m > num_dfrags ())
-      m = num_dfrags ();
-    str frag = Ida::gen_frag (m, blk);
-
-    //send it to the deserving host
-    cli->sendblock (ms->from,
-		    blockID (ms->key, DHASH_CONTENTHASH, DHASH_FRAG),
-		    frag, 
-		    wrap (this, &dhash_impl::outgoing_send_cb, ms));
+    send_frag (ms, blk);
   }
 
+}
+
+void
+dhash_impl::send_frag (missing_state *ms, str block)
+{
+
+  //generate a new, unique fragment
+  u_long m = Ida::optimal_dfrag (block.len(), dhash::dhash_mtu ());
+  if (m > num_dfrags ())
+    m = num_dfrags ();
+  str frag = Ida::gen_frag (m, block);
+
+  //send it to the deserving host
+  cli->sendblock (ms->from,
+		  blockID (ms->key, DHASH_CONTENTHASH, DHASH_FRAG),
+		  frag, 
+		  wrap (this, &dhash_impl::outgoing_send_cb, ms));
+  
 }
 
 void

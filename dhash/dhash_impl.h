@@ -197,7 +197,7 @@ class dhash_impl : public dhash {
   void outgoing_retrieve_cb (missing_state *m, dhash_stat err,
 			     ptr<dhash_block> b, route r);
   void outgoing_send_cb (missing_state *m, dhash_stat err, bool present);
-
+  void send_frag (missing_state *m, str block);
   
   vec<ptr<location> > replicas;
   timecb_t *merkle_rep_tcb;
