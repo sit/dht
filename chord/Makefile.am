@@ -8,11 +8,35 @@ test_skiplist_SOURCES = test_skiplist.C
 
 noinst_LIBRARIES = libchord.a
 
-noinst_HEADERS = chord.h chord_util.h skiplist.h comm.h location.h stabilize.h 
+noinst_HEADERS = aclnt_chord.h \
+	         chord.h \
+		 chord_impl.h \
+		 chord_util.h \
+		 comm.h \
+		 debruijn.h \
+		 finger_table.h \
+		 fingerlike.h \
+		 location.h \
+		 pred_list.h \
+		 route.h \
+		 skiplist.h \
+		 stabilize.h \
+		 succ_list.h \
+		 toe_table.h
 
-libchord_a_SOURCES = chord.C route.C stabilize.C chord_client.C \
-	chord_util.C server.C \
-	comm.C location.C toe_table.C finger_table.C succ_list.C debruijn.C 
+libchord_a_SOURCES = chord.C \
+		      route.C \
+		      stabilize.C \
+		      chord_client.C \
+		      chord_util.C \
+		      server.C \
+		      comm.C \
+		      location.C \
+		      toe_table.C \
+		      finger_table.C \
+		      succ_list.C \
+		      pred_list.C \
+		      debruijn.C
 
 EXTRA_DIST = .cvsignore
 CLEANFILES = core *.core *~ *.rpo

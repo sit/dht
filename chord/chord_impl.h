@@ -1,3 +1,4 @@
+
 #ifndef _CHORD_IMPL_H_
 #define _CHORD_IMPL_H_
 /*
@@ -36,6 +37,7 @@
 #include "toe_table.h"
 #include "finger_table.h"
 #include "succ_list.h"
+#include "pred_list.h"
 #include "debruijn.h"
 #include "fingerlike.h"
 #include "route.h"
@@ -58,15 +60,15 @@ struct upcall_record {
   upcall_record (int p, cbupcall_t c) : progno (p), cb (c) {};
 };
 
-class vnode_impl : public vnode, public stabilizable {
+class vnode_impl : public vnode {
   ptr<fingerlike> fingers;
   
   ptr<succ_list> successors;
+  ptr<pred_list> predecessors;
   ptr<toe_table> toes;
   ptr<stabilize_manager> stabilizer;
   
   int myindex;
-  chordID last_pred;		// for stabilize
   
   ihash<unsigned long, 
     dispatch_record, 
@@ -106,11 +108,9 @@ class vnode_impl : public vnode, public stabilizable {
   u_long ndogettoes;
   u_long ndodebruijn;
 
-  u_long nout_continuous;
   void stabilize_pred (void);
   void stabilize_getsucc_cb (chordID pred,
 			     chordID s, net_address r, chordstat status);
-  void updatepred_cb (chordID p, bool ok, chordstat status);
   
   void join_getsucc_cb (cbjoin_t cb, chordID s, route r, chordstat status);
   void get_successor_cb (chordID n, cbchordID_t cb, chord_noderes *res, 
@@ -128,9 +128,9 @@ class vnode_impl : public vnode, public stabilizable {
   
   void notify_cb (chordID n, chordstat *res, clnt_stat err);
   void alert_cb (chordstat *res, clnt_stat err);
-  void get_fingers (chordID &x);
-  void get_fingers_cb (chordID x, chord_nodelistres *res, clnt_stat err);
-  void get_fingers_chal_cb (chordID o, chordID x, bool ok, chordstat s);
+  
+  void get_fingers_cb (cbchordIDlist_t cb,
+		       chordID x, chord_nodelistres *res, clnt_stat err);
 
   void doalert_cb (chord_noderes *res, chordID x, clnt_stat err);
 
@@ -169,6 +169,7 @@ class vnode_impl : public vnode, public stabilizable {
   void get_successor (const chordID &n, cbchordID_t cb);
   void get_predecessor (const chordID &n, cbchordID_t cb);
   void get_succlist (const chordID &n, cbchordIDlist_t cb);
+  void get_fingers (const chordID &n, cbchordIDlist_t cb);
   void find_successor (const chordID &x, cbroute_t cb);
   void notify (const chordID &n, chordID &x);
   void alert (const chordID &n, chordID &x);
@@ -188,11 +189,6 @@ class vnode_impl : public vnode, public stabilizable {
   chordID lookup_closestpred (const chordID &x, vec<chordID> f);
   chordID lookup_closestpred (const chordID &x);
   chordID lookup_closestsucc (const chordID &x);
-
-  // For stabilization of the predecessor
-  bool continuous_stabilizing () { return nout_continuous > 0; }
-  void do_continuous () { stabilize_pred (); }
-  bool isstable () { return last_pred == my_pred(); };
   
   // The RPCs
   void doget_successor (svccb *sbp);
@@ -210,10 +206,6 @@ class vnode_impl : public vnode, public stabilizable {
   void dogettoes (svccb *sbp);
   void dodebruijn (svccb *sbp, chord_debruijnarg *da);
   void dofindroute (svccb *sbp, chord_findarg *fa);
-
-  //bogus
-  void fill_nodelistresext (chord_nodelistextres *res);
-  void fill_nodelistres (chord_nodelistres *res);
 
   //RPC demux
   void addHandler (const rpc_program &prog, cbdispatch_t cb);

@@ -21,6 +21,9 @@ succ_list::succ_list (ptr<vnode> v,
   stable_succlist2 = false;
   nout_backoff = 0;
   nout_continuous = 0;
+
+  locations->pinsucc (myID);
+  locations->pinsucclist (myID);
 }
    
 chordID 

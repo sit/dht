@@ -85,6 +85,7 @@ class vnode : public virtual refcount {
   virtual void get_successor (const chordID &n, cbchordID_t cb) = 0;
   virtual void get_predecessor (const chordID &n, cbchordID_t cb) = 0;
   virtual void get_succlist (const chordID &n, cbchordIDlist_t cb) = 0;
+  virtual void get_fingers (const chordID &n, cbchordIDlist_t cb) = 0;
   virtual void find_successor (const chordID &x, cbroute_t cb) = 0;
   virtual void notify (const chordID &n, chordID &x) = 0;
   virtual void alert (const chordID &n, chordID &x) = 0;

@@ -75,10 +75,11 @@ vnode_impl::vnode_impl (ptr<locationtable> _locations, ptr<fingerlike> stab,
   fingers->init (mkref(this), locations, myID);
 
   successors = New refcounted<succ_list> (mkref(this), locations, myID);
+  predecessors = New refcounted<pred_list> (mkref(this), locations, myID);
   stabilizer = New refcounted<stabilize_manager> (myID);
 
   stabilizer->register_client (successors);
-  stabilizer->register_client (mkref (this));
+  stabilizer->register_client (predecessors);
   stabilizer->register_client (fingers);
 
   if (lookup_mode == CHORD_LOOKUP_PROXIMITY) {
@@ -90,10 +91,6 @@ vnode_impl::vnode_impl (ptr<locationtable> _locations, ptr<fingerlike> stab,
   }
     
   locations->incvnodes ();
-
-  locations->pinpred (myID);
-  locations->pinsucc (myID);
-  locations->pinsucclist (myID);
 
   ngetsuccessor = 0;
   ngetpredecessor = 0;
@@ -122,8 +119,6 @@ vnode_impl::vnode_impl (ptr<locationtable> _locations, ptr<fingerlike> stab,
   ndogetpred_ext = 0;
   ndochallenge = 0;
   ndogettoes = 0;
-  
-  nout_continuous = 0;
 }
 
 vnode_impl::~vnode_impl ()
@@ -135,7 +130,7 @@ vnode_impl::~vnode_impl ()
 chordID
 vnode_impl::my_pred() const
 {
-  return locations->closestpredloc (myID);
+  return predecessors->pred ();
 }
 
 chordID
@@ -445,28 +440,10 @@ vnode_impl::dofindclosestpred (svccb *sbp, chord_findarg *fa)
 }
 
 void
-vnode_impl::updatepred_cb (chordID p, bool ok, chordstat status)
-{
-  if (status == CHORD_RPCFAILURE) {
-    warnx << myID << ": updatepred_cb: couldn't authenticate " << p << "\n";
-  } else if ((status == CHORD_OK) & ok) {
-    get_fingers (p);
-  }
-  // If !ok but status == CHORD_OK, then there's probably another
-  // outstanding call somewhere that is already testing this same
-  // node. We can ignore the failure and wait until the outstanding
-  // challenge returns. If they all fail, then we'll never get called
-  // and that's okay too.
-}
-
-void
 vnode_impl::donotify (svccb *sbp, chord_nodearg *na)
 {
   ndonotify++;
-  if (my_pred () == myID || between (my_pred (), myID, na->n.x)) {
-    locations->cacheloc (na->n.x, na->n.r,
-			 wrap (mkref (this), &vnode_impl::updatepred_cb));
-  }
+  predecessors->update_pred (na->n.x, na->n.r);
   sbp->replyref (chordstat (CHORD_OK));
 }
 
@@ -668,48 +645,3 @@ vnode_impl::stop (void)
   stabilizer->stop ();
 }
   
-
-void
-vnode_impl::stabilize_pred ()
-{
-  chordID p = my_pred ();
-
-  assert (nout_continuous == 0);
-
-  nout_continuous++;
-  get_successor (p, wrap (this, &vnode_impl::stabilize_getsucc_cb, p));
-}
-
-void
-vnode_impl::stabilize_getsucc_cb (chordID pred, 
-			     chordID s, net_address r, chordstat status)
-{
-  // receive successor from my predecessor; in stable case it is me
-  nout_continuous--;
-  if (status) {
-    warnx << myID << ": stabilize_pred: " << pred 
-	  << " failure " << status << "\n";
-  } else {
-    // maybe we're not stable. insert this guy's successor in
-    // location table; maybe he is our predecessor.
-    if (s != myID) { 
-      locations->cacheloc (s, r,
-			   wrap (this, &vnode_impl::updatepred_cb));
-    } else {
-      last_pred = pred;
-    }
-  }
-}
-
-
-void 
-vnode_impl::fill_nodelistresext (chord_nodelistextres *res)
-{
-}
-
-void 
-vnode_impl::fill_nodelistres (chord_nodelistres *res)
-{
-}
-
-

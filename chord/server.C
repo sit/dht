@@ -205,40 +205,33 @@ vnode_impl::alert_cb (chordstat *res, clnt_stat err)
 }
 
 void 
-vnode_impl::get_fingers (chordID &x)
+vnode_impl::get_fingers (const chordID &x, cbchordIDlist_t cb)
 {
   chord_nodelistres *res = New chord_nodelistres (CHORD_OK);
   ptr<chordID> v = New refcounted<chordID> (x);
   ngetfingers++;
   doRPC (x, chord_program_1, CHORDPROC_GETFINGERS, v, res,
-	 wrap (mkref (this), &vnode_impl::get_fingers_cb, x, res));
+	 wrap (mkref (this), &vnode_impl::get_fingers_cb, cb, x, res));
 }
 
 void
-vnode_impl::get_fingers_cb (chordID x, chord_nodelistres *res,  clnt_stat err) 
+vnode_impl::get_fingers_cb (cbchordIDlist_t cb,
+			    chordID x, chord_nodelistres *res, clnt_stat err) 
 {
+  vec<chord_node> nlist;
   if (err) {
     warnx << "get_fingers_cb: RPC failure " << err << "\n";
+    cb (nlist, CHORD_RPCFAILURE);
   } else if (res->status) {
     warnx << "get_fingers_cb: RPC error " << res->status << "\n";
+    cb (nlist, res->status);
   } else {
-    for (unsigned i = 0; i < res->resok->nlist.size (); i++)
-      locations->cacheloc (res->resok->nlist[i].x, 
-			   res->resok->nlist[i].r,
-			   wrap (this, &vnode_impl::get_fingers_chal_cb, x));
+    // xxx there must be something more intelligent to do here
+    for (unsigned int i = 0; i < res->resok->nlist.size (); i++)
+      nlist.push_back (res->resok->nlist[i]);
+    cb (nlist, CHORD_OK);
   }
   delete res;
-}
-
-void
-vnode_impl::get_fingers_chal_cb (chordID o, chordID x, bool ok, chordstat s)
-{
-  // Our successors and fingers are updated automatically.
-  if (s == CHORD_RPCFAILURE) {
-    // maybe test for something else??
-    // XXX alert o perhaps?
-    warnx << myID << ": get_fingers: received bad finger from " << o << "\n";
-  }
 }
 
 void
