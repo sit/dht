@@ -21,6 +21,7 @@ char *postgo = "340 send article to be posted. End with <CR-LF>.<CR-LF>\r\n";
 char *postok = "240 article posted ok\r\n";
 char *postbad = "441 posting failed\r\n";
 char *noarticle = "430 no such article found\r\n";
+char *help = "100 help text follow\r\n";
 
 nntp::nntp (int _s) : s (_s)
 {
@@ -38,6 +39,7 @@ nntp::nntp (int _s) : s (_s)
 
   add_cmd ("MODE READER", wrap (this, &nntp::cmd_hello));
   add_cmd ("QUIT", wrap (this, &nntp::cmd_quit));
+  add_cmd ("HELP", wrap (this, &nntp::cmd_help));
 }
 
 nntp::~nntp (void)
@@ -297,4 +299,12 @@ nntp::cmd_quit (str c)
   delete this;
 }
 
-
+void
+nntp::cmd_help (str c)
+{
+  warn << "help\n";
+  out << help;
+  for (unsigned int i = 0; i < cmd_table.size(); i++)
+    out << cmd_table[i].cmd << "\r\n";
+  out << period;
+}

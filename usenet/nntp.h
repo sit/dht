@@ -34,6 +34,7 @@ struct nntp {
   void cmd_post (str);
   void read_post (void);
   void cmd_quit (str);
+  void cmd_help (str);
 
   vec<c_jmp_entry_t> cmd_table;
 };
