@@ -2,6 +2,7 @@
 #include "packet.h"
 #include <iostream>
 #include <algorithm>
+#include <stdio.h>
 #include "p2psim.h"
 using namespace std;
 

@@ -23,10 +23,10 @@ public:
 
   void handle_join(void *args, void *result);
   void handle_join(NodeID id, IPAddress ip);
+  static string printbits(NodeID);
 
 private:
   static NodeID distance(NodeID, NodeID);
-  static string printbits(NodeID);
 
   NodeID _id;
 
