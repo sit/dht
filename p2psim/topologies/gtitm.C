@@ -112,8 +112,10 @@ gtitm::parse(ifstream &ifs)
   for (int i = 1; i <= _num; i++) {
     ip_addr = i;
     Node *p = ProtocolFactory::Instance()->create(ip_addr);
-    assert(!Network::Instance()->getnode(ip_addr));
+    // this assert doesn't work since the firstip stuff was added 
+    // assert(!Network::Instance()->getnode(ip_addr));
     send(Network::Instance()->nodechan(), &p);
+
   }
 }
 
