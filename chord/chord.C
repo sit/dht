@@ -211,6 +211,7 @@ vnode::stats ()
   warnx << "# estimated node in ring " << nnodes << "\n";
   warnx << "continuous_timer " << continuous_timer << " backoff " 
 	<< backoff_timer << "\n";
+  
   warnx << "# getsuccesor requests " << ndogetsuccessor << "\n";
   warnx << "# getpredecessor requests " << ndogetpredecessor << "\n";
   warnx << "# findclosestpred requests " << ndofindclosestpred << "\n";
@@ -235,9 +236,9 @@ vnode::stats ()
   warnx << "# findsuccessorrestart calls " << nfindsuccessorrestart << "\n";
   warnx << "# findpredecessorrestart calls " << nfindpredecessorrestart << "\n";
   warnx << "# rangandtest calls " << ntestrange << "\n";
-  warnx << "# notify calls " << ndonotify << "\n";  
-  warnx << "# alert calls " << ndoalert << "\n";  
-  warnx << "# getfingers calls " << ndogetfingers << "\n";
+  warnx << "# notify calls " << nnotify << "\n";  
+  warnx << "# alert calls " << nalert << "\n";  
+  warnx << "# getfingers calls " << ngetfingers << "\n";
   warnx << "# challenge calls " << nchallenge << "\n";
 }
 
