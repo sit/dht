@@ -52,6 +52,8 @@
 #endif
 #include <ida.h>
 
+static int SERVERSELECTION = getenv("SERVERSELECTION") ? atoi(getenv("SERVERSELECTION")) : 0;
+
 // ---------------------------------------------------------------------------
 // DHASH_STORE
 //     - store a give block of data on a give nodeID.
@@ -68,9 +70,8 @@ protected:
   dhash_stat status;
 
   chordID destID;
-  chordID predID;
+  chord_node pred_node;
   uint32 nonce;
-  net_address pred_addr;
   chordID blockID;
   dhash *dh;
   ptr<dhash_block> block;
@@ -190,8 +191,7 @@ protected:
     } 
     else if (res->status != DHASH_OK) {
       if (res->status == DHASH_RETRY) {
-	predID = res->pred->p.x;
-	pred_addr = res->pred->p.r;
+	pred_node =res->pred->p;
       }
       else if (res->status != DHASH_WAIT)
         warn << "dhash_store failed: " << blockID << ": "
@@ -216,10 +216,25 @@ protected:
 
     if (npending == 0) {
       if (status == DHASH_RETRY) {
-	npending ++;
-	clntnode->locations->cacheloc
-	  (predID, pred_addr,
-	   wrap (mkref(this), &dhash_store::retry_cachedloc));
+	bool ok = clntnode->locations->insert (pred_node);
+	if (!ok && !returned) {
+	  (*cb) (DHASH_CHORDERR, destID);
+	  returned = true;
+	  return;
+	}
+	num_retries++;
+	if (num_retries > 2) {
+	  if (!returned) {
+	    (*cb)(DHASH_RETRY, destID);
+	    returned = true;
+	    return;
+	  }
+	} else {
+	  warn << "retrying (" << num_retries << "): dest was " 
+	       << destID << " now is " << pred_node.x << "\n";
+	  destID = pred_node.x;
+	  start ();
+	}
       }
       else
 	done ();
@@ -251,32 +266,6 @@ protected:
     seqnos.push_back (rexmitid);
   }
   
-  void retry_cachedloc (chordID id, bool ok, chordstat stat) 
-  {
-    npending --;
-    if (!ok || stat) {
-      warn << "challenge of " << id << " failed\n";
-      if (!returned) {
-        (*cb) (DHASH_CHORDERR, destID);
-        returned = true;
-      }
-    }
-    else {
-      num_retries++;
-      if (num_retries > 2) {
-        if (!returned) {
-	  (*cb)(DHASH_RETRY, destID);
-          returned = true;
-	}
-      }
-      else {
-	warn << "retrying(" << num_retries << "): dest was " 
-	     << destID << " now is " << predID << "\n";
-	destID = predID;
-	start ();
-      }
-    }
-  }
 public:
   
   static void execute (ptr<vnode> clntnode, chordID destID, chordID blockID,
@@ -417,6 +406,9 @@ dhashcli::retrieve2_succs_cb (chordID blockID, vec<chord_node> succs, chordstat 
     rs = NULL;    
     return;
   }
+  
+  while (succs.size () > dhash::NUM_EFRAGS)
+    succs.pop_back ();
 
   if (succs.size () < dhash::NUM_DFRAGS) {
     trace << "retrieve (" << blockID << "): "
@@ -427,7 +419,7 @@ dhashcli::retrieve2_succs_cb (chordID blockID, vec<chord_node> succs, chordstat 
     return;
   }
 
-  if (1) {
+  if (SERVERSELECTION) {
     // Store list of successors ordered by expected distance.
     // fetch_frag will pull from this list in order.
     order_succs (clntnode->locations->get_coords (clntnode->my_ID ()),
@@ -470,14 +462,11 @@ dhashcli::retrieve2_fetch_cb (chordID blockID, u_int i,
   } else if (res->compl_res->attr.size > res->compl_res->res.size()) {
     warnx << "we requested too short of a block!\n";
     assert (0);
-  } else {
-    warnx << "fetch succeeded: " << blockID
-	  << " from successor " << i+1 << "\n";
   }
-
+  
   bigint h = compute_hash (res->compl_res->res.base (), res->compl_res->res.size ());
-  warnx << "Got frag: " << i << " " << h << " " << res->compl_res->res.size () << "\n";
-
+  warnx << "fetch (" << blockID << ") got frag " << i
+	<< " with hash " << h << " " << res->compl_res->res.size () << "\n";
 
   // strip off the 4 bytes header to get the fragment
   assert (res->compl_res->res.size () >= 4);
@@ -495,6 +484,10 @@ dhashcli::retrieve2_fetch_cb (chordID blockID, u_int i,
     str tmp (block);
     ptr<dhash_block> blk = 
       New refcounted<dhash_block> (tmp.cstr (), tmp.len ());
+    blk->ID = rs->key;
+    blk->hops = rs->r.size ();
+    blk->errors = rs->nextsucc - dhash::NUM_DFRAGS;
+    blk->retries = blk->errors;
     
     rcvs.remove (rs);
     rs->complete (DHASH_OK, blk);

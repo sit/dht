@@ -49,6 +49,7 @@ chord::chord (str _wellknownhost, int _wellknownport,
   wellknown_node.r.port = _wellknownport ? _wellknownport : myport;
   wellknown_node.x = make_chordID (wellknown_node.r.hostname,
 				   wellknown_node.r.port);
+  wellknown_node.coords.setsize (NCOORDS);
   
   warnx << "chord: running on " << myname << ":" << myport << "\n";
 
@@ -57,7 +58,7 @@ chord::chord (str _wellknownhost, int _wellknownport,
   locations = New refcounted<locationtable> (nrcv, max_cache);
 
   //BAD LOC (ok)
-  bool ok = locations->insert (wellknown_node.x, wellknown_node.r);
+  bool ok = locations->insert (wellknown_node);
   if (!ok) {
     warn << "Well known host failed to verify! Bailing.\n";
     exit (0);
@@ -139,12 +140,25 @@ chord::newvnode (cbjoin_t cb, ptr<fingerlike> fingers, ptr<route_factory> f)
     
   chordID newID = init_chordID (nvnode, myname, myport);
   warn << "creating new vnode: " << newID << "\n";
+
+  vec<float> coords;
+  warn << gettime () << " coords are: ";
+  for (int i = 0; i < NCOORDS; i++) {
+    coords.push_back (uniform_random_f (1000.0));
+    warnx << (int) coords[i] << " " ;
+  }
+  warnx << "\n";
+  locations->insert (newID, myname, myport, coords);
+
+
+#if 0  
   if (newID != wellknown_node.x) {
     // It's not yet strictly speaking useful to other nodes yet.
     ///BAD LOC (ok)
     bool ok = locations->insert (newID, myname, myport);
     assert (ok);
   }
+#endif /* 0 */
 
   ptr<vnode> vnodep = vnode::produce_vnode (locations, fingers, f,
 					    mkref (this), newID, 

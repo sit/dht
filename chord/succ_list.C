@@ -260,8 +260,7 @@ succ_list::stabilize_succ ()
 }
 
 void
-succ_list::stabilize_getpred_cb (chordID sd, chordID p, net_address r,
-				 chordstat status)
+succ_list::stabilize_getpred_cb (chordID sd, chord_node p, chordstat status)
 {
   nout_continuous--;
   // receive predecessor from my successor; in stable case it is me
@@ -275,14 +274,13 @@ succ_list::stabilize_getpred_cb (chordID sd, chordID p, net_address r,
     }
     // other failures we will address next round.
   } else {
-    if (myID == p) {
+    if (myID == p.x) {
       // Good, things are as we expect.
-    } else if (betweenleftincl (myID, sd, p)) {
+    } else if (betweenleftincl (myID, sd, p.x)) {
       // Did we get someone strictly better?
-      //BAD LOC
-      bool ok = locations->insert (p, r);
+      bool ok = locations->insert (p);
       if (ok)
-	oldsucc = p;
+	oldsucc = p.x;
     } else {
       // Our successor appears to be confused, better tell
       // him what we think.

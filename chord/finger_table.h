@@ -20,8 +20,8 @@ class finger_table : public fingerlike {
   u_long nslowfinger;
   u_long nfastfinger;
 
-  void stabilize_finger_getpred_cb (chordID dn, int i, chordID p, 
-				    net_address r, chordstat status);
+  void stabilize_finger_getpred_cb (chordID dn, int i, chord_node p,
+				    chordstat status);
   void stabilize_findsucc_cb (chordID dn,
 			      int i, chordID s, route path, chordstat status);
 

@@ -726,9 +726,10 @@ dhash_impl::route_upcall (int procno,void *args, cbupcalldone_t cb)
       arg->offset = 0;
       arg->source = host_node->my_ID ();
       arg->nonce = farg->nonce;
-      //could need caching...
-      host_node->locations->cacheloc (farg->from.x, farg->from.r,
-				      wrap (this, &dhash_impl::block_cached_loc, arg));
+      
+      dhash_stat *res = New dhash_stat ();
+      doRPC (farg->from, dhash_program_1, DHASHPROC_BLOCK,
+	     arg, res, wrap (this, &dhash_impl::sent_block_cb, res));  
       (*cb)(true);
     } 
   } else if (responsible (farg->key)) {
@@ -747,9 +748,9 @@ dhash_impl::route_upcall (int procno,void *args, cbupcalldone_t cb)
       arg->nodelist[i].x = succs[i].x;
       arg->nodelist[i].r = succs[i].r;
     }
-
-    host_node->locations->cacheloc (farg->from.x, farg->from.r,
-				    wrap (this, &dhash_impl::block_cached_loc, arg));
+    dhash_stat *res = New dhash_stat ();
+    doRPC (farg->from, dhash_program_1, DHASHPROC_BLOCK,
+	   arg, res, wrap (this, &dhash_impl::sent_block_cb, res));  
     (*cb)(true);
   } else {
     (*cb)(false);
@@ -817,24 +818,12 @@ dhash_impl::fetchiter_gotdata_cb (cbupcalldone_t cb, s_dhash_fetch_arg *a,
   arg->source = host_node->my_ID ();
   arg->nonce = a->nonce;
   arg->cookie = cookie;
-  //could need caching...
-  host_node->locations->cacheloc (a->from.x, a->from.r,
-				  wrap (this, &dhash_impl::block_cached_loc,	arg));
+  
+  dhash_stat *res = New dhash_stat ();
+  doRPC (a->from, dhash_program_1, DHASHPROC_BLOCK,
+	 arg, res, wrap (this, &dhash_impl::sent_block_cb, res));
+  
   (*cb) (true);
-}
-
-void
-dhash_impl::block_cached_loc (ptr<s_dhash_block_arg> arg, 
-			 chordID ID, bool ok, chordstat stat)
-{
-  if (!ok || stat) {
-    warn << "challenge of " << ID << " failed\n";
-    //just fail, the lookup will time out
-  } else {
-    dhash_stat *res = New dhash_stat ();
-    doRPC (ID, dhash_program_1, DHASHPROC_BLOCK,
-	   arg, res, wrap (this, &dhash_impl::sent_block_cb, res));  
-  }
 }
 
 void
@@ -1288,6 +1277,14 @@ void
 dhash_impl::doRPC_unbundler (chord_node dst, RPC_delay_args *args)
 {
   host_node->doRPC (dst, args->prog, args->procno, args->in, args->out, args->cb);
+}
+
+
+void
+dhash_impl::doRPC (const chord_node &n, const rpc_program &prog, int procno,
+	      ptr<void> in,void *out, aclnt_cb cb) 
+{
+  host_node->doRPC (n, prog, procno, in, out, cb);
 }
 
 void

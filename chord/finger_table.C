@@ -199,8 +199,8 @@ finger_table::stabilize_finger ()
 }
 
 void
-finger_table::stabilize_finger_getpred_cb (chordID dn, int i, chordID p, 
-					   net_address r, chordstat status)
+finger_table::stabilize_finger_getpred_cb (chordID dn, int i, chord_node p,
+					   chordstat status)
 {
   nout_backoff--;
   if (status) {
@@ -210,7 +210,7 @@ finger_table::stabilize_finger_getpred_cb (chordID dn, int i, chordID p,
     // Do not update f; next round we'll fix this finger correctly.
   } else {
     chordID s = start (i);
-    if (betweenrightincl (p, dn, s)) {
+    if (betweenrightincl (p.x, dn, s)) {
       // warnx << myID << ": stabilize_finger_getpred_cb: success at " 
       //       << i << "\n";
       // predecessor is too far back, no need to do anything for this

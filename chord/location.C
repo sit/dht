@@ -82,17 +82,9 @@ locationtable::prev (locwrap *lw)
   return lw;
 }
 
-static void
-ignore_challengeresp (chordID x, bool b, chordstat s)
-{
-  warnx << "Ignoring " << ((b && s == CHORD_OK) ? "good" : "bad")
-	<< " challenge response for " << x << "\n";
-}
-cbchallengeID_t cbchall_null (wrap (ignore_challengeresp));
-
 location::location (const chordID &_n, 
 		    const net_address &_r, 
-		    vec<float> i_coords) 
+		    const vec<float> &i_coords) 
   : n (_n), addr (_r), alive (true), checkdeadcb (NULL)
 {
   bzero(&saddr, sizeof(sockaddr_in));
@@ -203,7 +195,7 @@ locationtable::doRPC (const chord_node &n, const rpc_program &prog,
   ptr<location> l = lookup (n.x);
   if (!l) {
     //BAD LOC
-    insert (n.x, n.r.hostname, n.r.port);
+    insert (n);
   }
   return doRPC (n.x, prog, procno, in, out, cb);
 }
@@ -308,25 +300,10 @@ locationtable::insert (const chord_node &n)
 }
 
 bool
-locationtable::insert (const chordID &n, const net_address &r)
-{
-  vec<float> coords;
-  return insert (n, r.hostname, r.port, coords);
-}
-
-bool
-locationtable::insert (const chordID &n, sfs_hostname s, int p)
-{
-  vec<float> coords;
-  return insert (n, s, p, coords);
-}
-
-
-bool
 locationtable::insert (const chordID &n, 
 		       sfs_hostname s, 
 		       int p, 
-		       vec<float> coords)
+		       const vec<float> &coords)
 {
     
   ptr<location> loc = lookup (n);
@@ -342,35 +319,6 @@ locationtable::insert (const chordID &n,
     return false;
   realinsert (loc);
   return true;
-}
-
-void
-locationtable::insert (const chordID &n, sfs_hostname s, int p,
-		       cbchallengeID_t cb)
-{
-  net_address r;
-  r.hostname = s;
-  r.port = p;
-  cacheloc (n, r, cb);
-}
-
-void
-locationtable::cacheloc (const chordID &n, const net_address &r, cbchallengeID_t cb)
-{
-  ptr<location> loc = lookup (n);
-  if (loc) {
-    cb (n, loc->vnode >= 0, CHORD_OK);
-    return;
-  }
-
-  vec<float> coords;
-  loc = New refcounted<location> (n, r, coords);
-  if (loc->vnode < 0) {
-    cb (n, false, CHORD_OK);
-  } else {
-    realinsert (loc);
-    cb  (n, true, CHORD_OK);
-  }
 }
 
 void
@@ -765,7 +713,7 @@ locationtable::check_dead (ptr<location> l, unsigned int newwait)
   }
   
   // make sure we actually go out on the network and check if the node
-  // is alive. if we're allowed to challenge, do that as well.
+  // is alive.
   ping (l->n, wrap (this, &locationtable::check_dead_cb, l, newwait,
 		    l->n, false));
 }

@@ -274,11 +274,6 @@ route_dhash::timed_out ()
 
 // If the block isn't on the home node, walk down  
 // the home node's successors looking for the block
-//
-// IDEA: perhaps challenge all successors in parallel
-//       and down load the block off the first that 
-//       responds.  This should optimize transfer speed.
-
 void
 route_dhash::walk (vec<chord_node> succs)
 {
@@ -288,23 +283,20 @@ route_dhash::walk (vec<chord_node> succs)
     warn << "walk: No luck walking successors, retrying..\n";
     delaycb (5, wrap (mkref(this), &route_dhash::reexecute));
   } else {
-    chord_node s = succs.pop_front ();
-    cbchallengeID_t cb = wrap (mkref(this), &route_dhash::walk_cachedloc, succs);
-    f->get_vnode ()->locations->cacheloc (s.x, s.r, cb);
-  }
-}
-
-void
-route_dhash::walk_cachedloc (vec<chord_node> succs, chordID id, bool ok, chordstat stat)
-{
-  if (!ok || stat) {
-    warn << "walk: challenge of " << id << " failed\n";
-    walk (succs); // just go on to next successor
-  } else {
-    warn << "walk: challenge of " << id << " succeeded\n";
-    dhash_download::execute
-      (f->get_vnode (), id, blockID, NULL, 0, 0, 0,
-       wrap (mkref(this), &route_dhash::walk_gotblock, succs));
+    bool ok = false;
+    chord_node s;
+    while (!ok && succs.size () > 0) {
+      chord_node s = succs.pop_front ();
+      ok = f->get_vnode ()->locations->insert (s);
+    }
+    if (ok) {
+      dhash_download::execute
+	(f->get_vnode (), s.x, blockID, NULL, 0, 0, 0,
+	 wrap (mkref(this), &route_dhash::walk_gotblock, succs));
+    } else {
+      warn << "walk: No luck walking successors, retrying..\n";
+      delaycb (5, wrap (mkref(this), &route_dhash::reexecute));
+    }
   }
 }
 

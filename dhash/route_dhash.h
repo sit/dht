@@ -27,7 +27,6 @@ public:
   void reexecute ();
   void timed_out ();
   void walk (vec<chord_node> succs);
-  void walk_cachedloc (vec<chord_node> succs, chordID id, bool ok, chordstat stat);
   void walk_gotblock (vec<chord_node> succs, ptr<dhash_block> block);
   void gotblock (ptr<dhash_block> block);
 };

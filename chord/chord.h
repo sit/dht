@@ -54,7 +54,7 @@ class locationtable;
 struct user_args;
 
 typedef callback<void,ptr<vnode>,chordstat>::ref cbjoin_t;
-typedef callback<void,chordID,net_address,chordstat>::ref cbchordID_t;
+typedef callback<void,chord_node,chordstat>::ref cbchordID_t;
 typedef callback<void,vec<chord_node>,chordstat>::ref cbchordIDlist_t;
 typedef callback<void,chordID,route,chordstat>::ref cbroute_t;
 typedef callback<void, user_args *>::ref cbdispatch_t;

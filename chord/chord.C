@@ -71,16 +71,6 @@ vnode_impl::vnode_impl (ptr<locationtable> _locations, ptr<fingerlike> stab,
   locations = _locations;
   warnx << gettime () << " myID is " << myID << "\n";
 
-  vec<float> coords;
-  warn << gettime () << " coords are: ";
-
-  for (int i = 0; i < chord::NCOORDS; i++) {
-    coords.push_back (uniform_random_f (1000.0));
-    warnx << (int)coords.back () << " " ;
-  }
-  warnx << "\n";
-  locations->set_coords (myID, coords);
-
   fingers = stab;
   fingers->init (mkref(this), locations, myID);
 
@@ -572,7 +562,7 @@ void
 vnode_impl::donotify (user_args *sbp, chord_nodearg *na)
 {
   ndonotify++;
-  predecessors->update_pred (na->n.x, na->n.r);
+  predecessors->update_pred (na->n);
   chordstat res = CHORD_OK;
   sbp->reply (&res);
 }

@@ -48,15 +48,15 @@ vnode_impl::get_successor_cb (chordID n, cbchordID_t cb, chord_noderes *res,
 			      clnt_stat err) 
 {
   if (err) {
-    net_address dr;
+    chord_node bad;
     //    warnx << "get_successor_cb: RPC failure " << err << "\n";
-    cb (n, dr, CHORD_RPCFAILURE);
+    cb (bad, CHORD_RPCFAILURE);
   } else if (res->status) {
-    net_address dr;
+    chord_node bad;
     // warnx << "get_successor_cb: RPC error " << res->status << "\n";
-    cb (n, dr, res->status);
+    cb (bad, res->status);
   } else {
-    cb (res->resok->x, res->resok->r, CHORD_OK);
+    cb (*res->resok, CHORD_OK);
   }
   delete res;
 }
@@ -104,13 +104,13 @@ vnode_impl::get_predecessor_cb (chordID n, cbchordID_t cb, chord_noderes *res,
 		       clnt_stat err) 
 {
   if (err) {
-    net_address dr;
-    cb (n, dr, CHORD_RPCFAILURE);
+    chord_node bad;
+    cb (bad, CHORD_RPCFAILURE);
   } else if (res->status) {
-    net_address dr;
-    cb (n, dr, res->status);
+    chord_node bad;
+    cb (bad, res->status);
   } else {
-    cb (res->resok->x, res->resok->r, CHORD_OK);
+    cb (*res->resok, CHORD_OK);
   }
   delete res;
 }

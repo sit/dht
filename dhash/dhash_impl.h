@@ -126,6 +126,8 @@ class dhash_impl : public dhash {
 
   void doRPC (chordID ID, const rpc_program &prog, int procno,
 	      ptr<void> in, void *out, aclnt_cb cb);
+  void doRPC (const chord_node &n, const rpc_program &prog, int procno,
+	      ptr<void> in, void *out, aclnt_cb cb);
   void doRPC_reply (svccb *sbp, void *res, 
 		    const rpc_program &prog, int procno);
   void dispatch (user_args *a);
@@ -160,9 +162,6 @@ class dhash_impl : public dhash {
   void printkeys ();
   void printkeys_walk (const chordID &k);
   void printcached_walk (const chordID &k);
-
-  void block_cached_loc (ptr<s_dhash_block_arg> arg, 
-			 chordID ID, bool ok, chordstat stat);
 
   void dbwrite (ref<dbrec> key, ref<dbrec> data);
   void dbdelete (ref<dbrec> key);

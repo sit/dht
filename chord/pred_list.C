@@ -48,16 +48,16 @@ pred_list::preds ()
   
 
 void
-pred_list::update_pred (const chordID &p, const net_address &r)
+pred_list::update_pred (const chord_node &p)
 {
   chordID curp = pred ();
   
   bool ok = true;
-  if (!gotfingers_ || between (curp, myID, p))
-    ok = locations->insert (p, r);
+  if (!gotfingers_ || between (curp, myID, p.x))
+    ok = locations->insert (p);
   
   if (!gotfingers_ && ok)
-    v_->get_fingers (p, wrap (this, &pred_list::update_pred_fingers_cb));
+    v_->get_fingers (p.x, wrap (this, &pred_list::update_pred_fingers_cb));
 
   oldpred_ = pred ();
 }
@@ -85,8 +85,7 @@ pred_list::stabilize_pred ()
 }
 
 void
-pred_list::stabilize_getsucc_cb (chordID pred, 
-				 chordID s, net_address r, chordstat status)
+pred_list::stabilize_getsucc_cb (chordID pred, chord_node s, chordstat status)
 {
   // receive successor from my predecessor; in stable case it is me
   nout_continuous--;
@@ -96,8 +95,8 @@ pred_list::stabilize_getsucc_cb (chordID pred,
   } else {
     // maybe we're not stable. insert this guy's successor in
     // location table; maybe he is our predecessor.
-    if (!gotfingers_ || s != myID) {
-      update_pred (s, r);
+    if (!gotfingers_ || s.x != myID) {
+      update_pred (s);
     }
   }
 }

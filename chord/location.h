@@ -35,9 +35,6 @@
 #include "chord_util.h"
 
 typedef callback<void,chordstat>::ptr cbping_t;
-typedef callback<void,chordID,bool,chordstat>::ref cbchallengeID_t;
-
-extern cbchallengeID_t cbchall_null;
 
 struct location {
   chordID n;
@@ -52,7 +49,7 @@ struct location {
   float distance;
 
   timecb_t *checkdeadcb; // timer to check if this node has come back to life
-  location (const chordID &_n, const net_address &_r, vec<float> coords);
+  location (const chordID &_n, const net_address &_r, const vec<float> &coords);
   location (const chord_node &n);
   ~location ();
 };
@@ -139,20 +136,11 @@ class locationtable : public virtual refcount {
 
   // Inserts node into LT.  Returns true if node is now available.
   // Returns false of n is not a plausible chordID for s:p.
-  bool insert (const chordID &n, sfs_hostname s, int p);
-  bool insert (const chordID &n, const net_address &r);
   bool insert (const chord_node &n);
   bool insert (const chordID &n, 
 	       sfs_hostname s, 
 	       int p, 
-	       vec<float> coords);
-
-  // Insert node into LT.  Backwards compatibility for old code;
-  // Calls cb immediately with good or bad result.
-  void insert (const chordID &n, sfs_hostname s, int _p,
-	       cbchallengeID_t cb);
-  // Alternate interface for insert with stupid name change.
-  void cacheloc (const chordID &x, const net_address &r, cbchallengeID_t cb);
+	       const vec<float> &coords);
   
   void pinpredlist (const chordID &x);
   void pinsucclist (const chordID &x);

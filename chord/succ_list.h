@@ -17,8 +17,7 @@ class succ_list : public fingerlike {
   u_int nout_continuous;
 
   // Helpers for stabilize_succ
-  void stabilize_getpred_cb (chordID s, chordID p,
-			     net_address r, chordstat status);
+  void stabilize_getpred_cb (chordID s, chord_node p, chordstat status);
 
   // Helpers for stabilize_succlist
   void stabilize_getsucclist_cb (chordID s, vec<chord_node> nlist,

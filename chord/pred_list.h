@@ -29,8 +29,7 @@ class pred_list : public stabilizable {
   chordID backkey_; 
 
   void stabilize_pred ();
-  void stabilize_getsucc_cb (chordID sd, 
-			     chordID p, net_address r, chordstat status);
+  void stabilize_getsucc_cb (chordID sd, chord_node s, chordstat status);
 
   void stabilize_predlist ();
   void stabilize_predlist_gotpred (chordID p, route r, chordstat stat);
@@ -46,7 +45,7 @@ class pred_list : public stabilizable {
   
   vec<chord_node> preds ();
 
-  void update_pred (const chordID &p, const net_address &r);
+  void update_pred (const chord_node &p);
   
   // Stabilizable methods
   bool backoff_stabilizing () { return nout_backoff > 0; }
