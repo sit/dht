@@ -221,6 +221,7 @@ class dbfe {
   callback<ptr<dbEnumeration> >::ptr make_enumeration;
 
 #ifdef SLEEPYCAT
+  DB* db;
   int IMPL_open_sleepycat(char *filename, dbOptions opts);
   int IMPL_close_sleepycat();
   int IMPL_create_sleepycat(char *filename, dbOptions opts);
@@ -232,8 +233,6 @@ class dbfe {
   void IMPL_delete_async_sleepycat(ptr<dbrec> key, errReturn_cb cb);
   int IMPL_delete_sync_sleepycat(ptr<dbrec> key);
   void IMPL_sync ();
-
-  static int IMPL_compare_fcn_sleepycat (DB *db, const DBT *a, const DBT *b);
 
 #else
   #error ADB is marked broken
@@ -257,16 +256,6 @@ class dbfe {
   char closed;
   
  public:
-
-#ifdef SLEEPYCAT
-  DB* db; // needs to be public for the ihash
-  ihash_entry <dbfe> dbmap_link;
-
-
-  typedef callback<int, ref<dbrec>, ref<dbrec> >::ptr compare_fcn_t;
-  compare_fcn_t compare;
-  void set_compare_fcn (compare_fcn_t fn) { compare = fn; }
-#endif
 
   dbfe();
   ~dbfe();
