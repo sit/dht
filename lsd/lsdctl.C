@@ -184,11 +184,10 @@ lsdctl_nlist_printer (ptr<lsdctl_nodeinfolist> nl)
     out << nl->nlist[i].n << " "
         << nl->nlist[i].addr.hostname << " "
         << nl->nlist[i].addr.port << " "
-        << nl->nlist[i].vnode_num << " "
-        << nl->nlist[i].coords[0] << " "
-        << nl->nlist[i].coords[1] << " "
-        << nl->nlist[i].coords[2] << " "
-        << nl->nlist[i].a_lat << " "
+        << nl->nlist[i].vnode_num << " ";
+    for (size_t j = 0; j < nl->nlist[i].coords.size (); j++)
+      out << nl->nlist[i].coords[j] << " ";
+    out << nl->nlist[i].a_lat << " "
         << nl->nlist[i].a_var << " "
         << nl->nlist[i].nrpc << " "
         << nl->nlist[i].pinned << " "

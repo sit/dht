@@ -127,8 +127,10 @@ lsdctl_fillnodeinfo (lsdctl_nodeinfo &ni, ptr<location> l)
   ni.addr = l->address ();
   ni.vnode_num = l->vnode ();
   const Coord c = l->coords ();
-  for (int j = 0; j < 3; j++)
+  ni.coords.setsize (c.size () + 1);
+  for (size_t j = 0; j < c.size (); j++)
     ni.coords[j] = (int32_t) c.coords[j];
+  ni.coords[c.size ()] = (int32_t) c.ht;
   ni.a_lat = (u_int32_t) l->distance ();
   ni.a_var = (u_int32_t) l->a_var ();
   ni.nrpc = l->nrpc ();

@@ -10,7 +10,7 @@ struct lsdctl_nodeinfo {
   chordID n;
   net_address addr;
   int32_t vnode_num;
-  int32_t coords[3]; /* XXX hardcoded length of 3; cf NCOORD in chord.h */
+  int32_t coords<>;
   u_int32_t a_lat;
   u_int32_t a_var;
   u_int32_t nrpc;
