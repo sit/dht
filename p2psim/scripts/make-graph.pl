@@ -783,13 +783,14 @@ if( defined $options{"convex"} ) {
 		    if (!defined($uniqhash{"$conx $cony"})) {
 		      $uniqhash{"$conx $cony"} = 1;
 		    }else{
-		      #print STDERR "warning: duplicate values $conx $cony\n";
-		      $conx += rand() * 0.00001;
-		      # make sure it doesn't have too many digits, otherwise
-		      # python will return a different number
-		      my $tmpconx = int ($conx*10000000);
-		      $conx = ($tmpconx*1.0)/10000000.0;
-		      $uniqhash{"$conx $cony"} = 1;
+			while( defined($uniqhash{"$conx $cony"} ) ) {
+			    $conx += rand() * 0.00001;
+			    # make sure it doesn't have too many digits, otherwise
+			    # python will return a different number
+			    my $tmpconx = int ($conx*10000000);
+			    $conx = ($tmpconx*1.0)/10000000.0;
+			}
+			$uniqhash{"$conx $cony"} = 1;
 		    }
 		    # we might need to figure out what this line was later
 		    if (!defined($headerhash{"$conx $cony"})) {
