@@ -859,9 +859,11 @@ void stp_manager::stats ()
   u_int64_t now = getusec ();
   while (args) {
     rtp = &(args->prog.tbl[args->procno]);
-    assert (rtp);
     long diff = now - args->now;
-    warn << "  " << args->prog.name << "." << rtp->name << " for " << args->l->id () << " queued for " << diff << "\n";
+    if (rtp) 
+      warn << "  " << args->prog.name << "." << rtp->name << " for " << args->l->id() << " queued for " << diff << "\n";
+    else 
+      warn << "stp_manager::stats: WTF " << (u_int)&args->prog << "@" << args->procno << "\n";
     args = Q.next (args);
   }
 
