@@ -1,5 +1,6 @@
-Makefile.in
 aclocal.m4
+Makefile.in
+Makefile.incl
 config.guess
 config.h.in
 config.sub
