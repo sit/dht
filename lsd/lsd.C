@@ -198,6 +198,7 @@ usage ()
 {
   warnx << "Usage: " << progname 
 	<< " -d <dbfile> -j hostname:port -p port "
+    "[-l <locally bound IP>] "
     "[-S <sock>] [-v <nvnode>] [-c <cache?>] "
     "-B <cache size> "
     "[-s <server select mode>]\n";
