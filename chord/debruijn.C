@@ -8,55 +8,75 @@ debruijn::init (ptr<vnode> v, ptr<locationtable> locs, chordID ID)
   myvnode = v;
   locations = locs;
   myID = ID;
-  warn << myID << " debruijn: double " << mydoubleID[0] << "\n";
-  for (int i=0; i < LOGBASE; i++) 
-    mydoubleID[i] = doubleID (myID, i+1);
-  for (int i=0; i < LOGBASE; i++) 
-    locations->pinsucc (mydoubleID[i]);
+  mydoubleID = doubleID (myID, logbase);
+  locations->pinpred (mydoubleID);
+  warn << myID << " de bruijn: double :" << mydoubleID << "\n";
+}
+
+chordID
+debruijn::debruijnptr ()
+{
+  return locations->closestpredloc (mydoubleID);
 }
 
 chordID
 debruijn::closestsucc (const chordID &x)
 {
   chordID s = myID;
-  chordID pred = locations->closestpredloc (myID);
+  chordID succ = locations->closestsuccloc (myID + 1);
   chordID n;
 
-  if (betweenrightincl (pred, myID, x)) s = myID;
-  else s = pred;
+  if (betweenrightincl (myID, succ, x)) s = succ;
+  else s = myID;
 
-  for (int i = 0; i < LOGBASE; i++) {
-    n = locations->closestsuccloc (mydoubleID[i]);
+  for (int i = 1; i < logbase; i++) {
+    n = locations->closestsuccloc (succ + 1);
     if (betweenrightincl (myID, n, x) && between (x, s, n)) {
       s = n;
     }
+    succ = n;
   }
+
+  // use closestpred, because we pinned pred
+  n = locations->closestpredloc (mydoubleID); 
+  if (betweenrightincl (myID, n, x) && between (x, s, n)) {
+    s = n;
+  }
+
   return s;
 }
 
 chordID
 debruijn::closestpred (const chordID &x)
 {
-  chordID pred = locations->closestpredloc (myID);
+  chordID succ = locations->closestsuccloc (myID + 1);
   chordID p;
   chordID n;
 
-  if (betweenrightincl (pred, myID, x)) p = pred;
-  else p = myID;
+  if (betweenrightincl (myID, succ, x)) p = myID;
+  else p = succ;
 
-  for (int i = 0; i < LOGBASE; i++) {
-    n = locations->closestsuccloc (mydoubleID[i]);
-    if (between (myID, x, n) && between (p, x, n))
+  for (int i = 1; i < logbase; i++) {
+    n = locations->closestsuccloc (succ + 1);
+    if (between (myID, x, n) && between (p, x, n)) {
       p = n;
+    }
+    succ = n;
   }
+
+  // use closestpred, because we pinned pred
+  n = locations->closestpredloc (mydoubleID);
+  if (between (myID, x, n) && between (p, x, n)) {
+    p = n;
+  }
+
   return p;
 }
 
 void
 debruijn::stabilize ()
 {
-  for (int i = 0; i < LOGBASE; i++) 
-    myvnode->find_successor (mydoubleID[0], 
+  myvnode->find_successor (mydoubleID, 
 			   wrap (this, &debruijn::finddoublesucc_cb));
 }
 
@@ -74,8 +94,6 @@ debruijn::finddoublesucc_cb (chordID s, route search_path, chordstat status)
 void
 debruijn::print ()
 {
-  for (int i = 0; i < LOGBASE; i++) {
-    warnx << myID << ": double: " << mydoubleID[i]
-	  << " : succ " << locations->closestsuccloc (mydoubleID[i]) << "\n";
-  }
+  warnx << myID << ": double: " << mydoubleID
+	<< " : d " << locations->closestpredloc (mydoubleID) << "\n";
 }

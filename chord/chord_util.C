@@ -80,11 +80,9 @@ decID (const chordID &n)
 {
   chordID p = n - 1;
   chordID b (1);
-  b = b << NBIT;
-  if (p < 0)
-    return p + b;
-  else
-    return p;
+  b = (b << NBIT) - 1;
+  p = p & b;
+  return p;
 }
 
 chordID
@@ -94,12 +92,11 @@ successorID (const chordID &n, int p)
   chordID t (1);
   chordID b (1);
   
-  b = b << NBIT;
+  b = (b << NBIT) - 1;
   s = n;
   chordID t1 = t << p;
   s = s + t1;
-  if (s >= b)
-    s = s - b;
+  s = s & b;
   return s;
 }
 
@@ -110,12 +107,11 @@ predecessorID (const chordID &n, int p)
   chordID t (1);
   chordID b (1);
   
-  b = b << NBIT;
+  b = (b << NBIT) - 1;
   s = n;
   chordID t1 = t << p;
   s = s - t1;
-  if (s < 0)
-    s = s + b;
+  s = s & b;
   return s;
 }
 
@@ -125,10 +121,9 @@ doubleID (const chordID &n, int logbase)
   chordID s;
   chordID b (1);
   
-  b = b << NBIT;
+  b = (b << NBIT) - 1;
   s = n << logbase;
-  if (s >= b) 
-    s = s - b;
+  s = s & b;
   return s;
 }
 
@@ -194,11 +189,37 @@ diff (const chordID &a, const chordID &b)
 }
 
 u_long
-topbits (int n, const chordID &a)
+topbits (u_long n, const chordID &a)
 {
+  if (a == 0) return 0;
+
   assert (n <= 32);
-  chordID x = a >> (NBIT - n);
-  return x.getui ();
+  assert (n <= a.nbits ());
+  u_long m = NBIT - a.nbits ();
+  u_long r = 0;
+  m = MIN (m, n);
+  n = n - m;
+  if (n > 0) {
+    chordID x = a >> (a.nbits() - n);
+    r = x.getui ();
+  }
+  return r;
+}
+
+
+chordID
+shifttopbitout (u_long n, const chordID &a)
+{
+  if (a == 0) return a;
+
+  chordID r = a;
+  chordID mask = 1;
+  mask = (mask << (NBIT - n)) - 1;
+  r = r & mask;
+  r = r << n;
+  //  warnx << "shifttopbit " << n << " : a(" << a.nbits() << ") " << a 
+  // << " r(" << r.nbits() << ") " << r << "\n";
+  return r;
 }
 
 u_long
@@ -246,14 +267,15 @@ bitindexzeros (chordID p, int i, int nzero)
 }
 
 chordID
-createbits (chordID n, int b0, chordID x)
+createbits (chordID n, int pos, chordID x)
 {
-  chordID r = n + 1;
   chordID mask = 1;
-  mask = (mask << ((r.nbits () - b0) + 1)) - 1;
-  mask = mask << b0;
-  r = r & mask;
-  r = r | (x >> (x.nbits () - b0));
+  int b0x = NBIT - x.nbits ();
+  mask = (mask << ((n.nbits () - pos))) - 1;
+  mask = mask << (pos + 1);
+  chordID r = n & mask;
+  chordID xtop = x >> (x.nbits () - (pos + 1 - b0x));
+  r = r | xtop;
   return r;
 }
 

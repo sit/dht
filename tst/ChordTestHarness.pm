@@ -145,7 +145,7 @@ sub dbm {
     my $log = shift || "dbm.log";
     $log = "$self->{outdir}/$log" unless $log =~ m,^/,;
     my $s = system ("$self->{build}/devel/dbm", $vnode, $lsdsock,
-		    $count, $size, $log, $fetch, "128", $seed);
+		    $count, $size, $log, $fetch, "0", $seed);
     return $s;
 }
 

@@ -14,7 +14,7 @@ if ($> == 0) {
 my $SRC = abs_path (dirname ($0));
 
 sub usage {
-  print STDERR "Usage: $0 outputroot buildroot numnodes numvnodes [IP [wkp]]\n";
+  print STDERR "Usage: $0 outputroot buildroot numnodes numvnodes [routeprot logbase IP [wkp]]\n";
   print STDERR @_, "\n" if @_;
   exit (1);
 }
@@ -25,6 +25,8 @@ my $build  = shift || usage ("no build dir");
 
 my $n      = shift || usage ("how many nodes?");
 my $v      = shift || usage ("how many vnodes/node?");
+my $routeprot = shift || "chord";
+my $logbase = shift || 1;
 my $ip     = shift || guessip ();
 my $wkport = shift || 10903; # first prime after my uid
 
@@ -50,9 +52,13 @@ my @CONFS;
 # however, leave a mode where we can force all localhost behavior.
 my $conf = "a";
 my $i = 1;
-my @args = ("-j", "$ip:$wkport",
+my @args = ("-f",
+	    "-j", "$ip:$wkport",
 	    "-l", $ip,
-	    "-v", $v);
+	    "-v", $v,
+	    "-m", $routeprot,
+	    "-b", $logbase);
+
 # always start a well-known node running on a particular port.
 $harness->spawnlsd ($conf, @args, "-p", $wkport);
 push @CONFS, $conf;
@@ -78,7 +84,7 @@ while (1) {
 	last;
     }
     $waitcount++;
-    die "Took too long to stabilize.\n" if $waitcount > 5;
+    die "Took too long to stabilize.\n" if $waitcount > 15;
     # xxx dynamically compute waitcount based on $n??
 }
 

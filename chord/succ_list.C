@@ -205,6 +205,7 @@ succ_list::stabilize_getsucclist_ok (chordID source,
 void
 succ_list::stabilize_succ ()
 {
+  assert (nout_continuous == 0);
   chordID cursucc = succ ();
   if (cursucc != oldsucc) {
     warnx << myID << ": my successor changed from "

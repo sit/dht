@@ -3,13 +3,11 @@
 
 // N.G. de Bruijn (http://www.win.tue.nl/~wsdwnb/)
 
-#define LOGBASE   1   // base=2^LOGBASE
-
 class debruijn : public fingerlike {
   ptr<vnode> myvnode;
   ptr<locationtable> locations;
   chordID myID;  
-  chordID mydoubleID[LOGBASE];
+  chordID mydoubleID;
 
  public:
   debruijn ();
@@ -31,6 +29,7 @@ class debruijn : public fingerlike {
   void do_backoff () { return; };
   void do_continuous () { stabilize (); };
   void finddoublesucc_cb (chordID s, route path, chordstat status);
+  chordID debruijnptr (void);
 
   //fingerlike methods
   chordID closestsucc (const chordID &x);

@@ -62,6 +62,8 @@ typedef callback<void, int, void *, cbupcalldone_t>::ref cbupcall_t;
 #include "fingerlike.h"
 #include "route.h"
 
+extern int logbase;
+
 // ================ VIRTUAL NODE ================
 
 struct dispatch_record {
@@ -271,7 +273,7 @@ class chord : public virtual refcount {
     
   chord (str _wellknownhost, int _wellknownport,
 	 str _myname, int port, int max_cache, int server_selection_mode,
-	 int lookup_mode);
+	 int lookup_mode, int _logbase);
   ptr<vnode> newvnode (cbjoin_t cb, ptr<fingerlike> fingers,
 		       ptr<route_factory> f);
   void stats (void);

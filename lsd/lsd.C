@@ -51,6 +51,7 @@ EXITFN (cleanup);
 ptr<chord> chordnode;
 static str p2psocket;
 bool do_cache;
+int lbase;
 int cache_size;
 vec<dhash* > dh;
 int myport;
@@ -231,8 +232,10 @@ usage ()
   warnx << "Usage: " << progname 
 	<< " -d <dbfile> -j hostname:port -p port "
     "[-l <locally bound IP>] "
+    "[-m [chord|debruijn] "
     "[-S <sock>] [-v <nvnode>] [-c <cache?>] "
     "-B <cache size> "
+    "-b logbase "
     "[-s <server select mode>]\n";
   exit (1);
 }
@@ -255,6 +258,7 @@ main (int argc, char **argv)
 
   do_cache = false;
   int ss_mode = 0;
+  lbase = 1;
 
   myport = 0;
   cache_size = 2000;
@@ -270,7 +274,7 @@ main (int argc, char **argv)
   mode = MODE_CHORD;
   lookup_mode = CHORD_LOOKUP_LOCTABLE;
 
-  while ((ch = getopt (argc, argv, "PfB:cd:j:l:M:n:p:S:s:v:m:")) != -1)
+  while ((ch = getopt (argc, argv, "PfB:b:cd:j:l:M:n:p:S:s:v:m:")) != -1)
     switch (ch) {
     case 'm':
       if (strcmp (optarg, "debruijn") == 0)
@@ -281,15 +285,23 @@ main (int argc, char **argv)
 	fatal << "allowed modes are chord and debruijn\n";
       setmode = true;
       break;
+    case 'b':
+      lbase = atoi (optarg);
+      if (!((mode == MODE_DEBRUIJN) 
+	    || ((mode == MODE_CHORD) && (lbase == 1)))) {
+	fatal << "logbase 1 only supported in other routing modes\n";
+      }
+      break;
     case 'P':
       if ((!setmode) || (mode != MODE_CHORD))
 	fatal << "proximity only supported in mode chord\n";
       lookup_mode = CHORD_LOOKUP_PROXIMITY;
       break;
     case 'f':
-      if ((!setmode) || (mode != MODE_CHORD))
-	fatal << "fingers only is only supported in mode chord\n";
-      lookup_mode = CHORD_LOOKUP_FINGERLIKE;
+      if ((mode == MODE_DEBRUIJN) || (mode == MODE_CHORD))
+	  lookup_mode = CHORD_LOOKUP_FINGERLIKE;
+      else
+	  fatal << "fingers only is only supported in mode chord\n";
       break;
     case 'B':
       cache_size = atoi (optarg);
@@ -371,7 +383,7 @@ main (int argc, char **argv)
 				     myport,
 				     max_loccache,
 				     ss_mode,
-				     lookup_mode);
+				     lookup_mode, lbase);
 
   ptr<route_factory> f = get_factory (mode);
   ptr<fingerlike> fl = get_fingerlike (mode);

@@ -84,11 +84,16 @@ sub check {
 		$s = 0;
 	    }
 	}
-	if ($line =~ /double: (\d+) : ([a-f0-9]+) : succ ([a-f0-9]+)/) {
-	    $m = convert ($2);
+	if ($line =~ /double: ([a-f0-9]+) : d ([a-f0-9]+)/) {
+	    $m = convert ($1);
 	    $j = findsucc ($m);
-	    if ($ids[$j]->[2] ne $3) {
-		print "$1: expect succ(double) to be $ids[$j]->[2] instead of $3\n";
+	    if ($j > 0) {
+		$j = $j - 1;
+	    } else {
+		$j = $#ids;
+	    }
+	    if ($ids[$j]->[2] ne $2) {
+		print "expect pred double $1 to be $ids[$j]->[2] instead of $2\n";
 		$s = 0;
 	    }
 	}

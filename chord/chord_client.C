@@ -28,15 +28,18 @@
 #include <chord.h>
 #include <chord_util.h>
 
+int logbase;  // base = 2 ^ logbase
+
 chord::chord (str _wellknownhost, int _wellknownport, 
 	      str _myname, int port, int max_cache, 
 	      int server_selection_mode,
-	      int l_mode) :
+	      int l_mode, int _logbase) :
   myname (_myname), 
   ss_mode (server_selection_mode % 10),
   lookup_mode (l_mode),
   active (NULL)
 {
+  logbase = _logbase;
   myport = startchord (port);
   wellknownhost.hostname = _wellknownhost;
   wellknownhost.port = _wellknownport ? _wellknownport : myport;
@@ -171,7 +174,8 @@ chord::newvnode (cbjoin_t cb, ptr<fingerlike> fingers, ptr<route_factory> f)
 
   // Must block until at least one good node in table...
   while (!nlocations->challenged (wellknownID)) {
-    warnx << newID << ": Waiting for challenge of wellknown ID\n";
+    warnx << newID << ": Waiting for challenge of wellknown ID: " 
+	  << wellknownID << "\n";
     acheck ();
   }
   

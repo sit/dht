@@ -146,16 +146,9 @@ void
 vnode::find_route_hop_cb (cbroute_t cb, route_iterator *ri, bool done)
 {
   if (done) {
-    // warnx << "find_route_hop_cb " << ri->key () << " path: " 
-    //  << ri->path().size() << " at node " 
-    //  << ri->last_node () << "\n";
-    // ri->print ();
     cb (ri->last_node (), ri->path (), ri->status ());
     delete ri;
   } else {
-    // warnx << "find_route_hop_cb " << ri->key () << " hop "<<ri->last_node () 
-    //  << "\n";
-    // ri->print ();
     ri->next_hop ();
   }
 }

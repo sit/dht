@@ -207,14 +207,14 @@ toe_table::betterpred2 (chordID myID, chordID current, chordID target,
     } else if ((cur_nrpc == 0) || (proposed_nrpc == 0)) {
       if (between (current, target, newpred)) r = 2;
     } else {
-      int nbit;
+      u_long nbit;
       if (nnodes <= 1) nbit = 0;
       //else nbit = log2 (nnodes / log2 (nnodes));
       else {
 	float n = nnodes;
 	float log2_nnodes = logf(n)/logf(2.0);
 	float div = n / log2_nnodes;
-	nbit = (int)ceilf ( logf(div)/logf(2.0));
+	nbit = (u_long)ceilf ( logf(div)/logf(2.0));
       };
 
       u_long target_bits = topbits (nbit, target);
@@ -259,7 +259,7 @@ toe_table::betterpred3 (chordID myID, chordID current, chordID target,
     } else if ((locations->get_nrpc(current) == 0) || (locations->get_nrpc(newpred) == 0)) {
       r = between (current, target, newpred);
     } else {
-      int nbit;
+      u_long nbit;
       if (nnodes <= 1) nbit = 0;
       else {
 	float n = nnodes;

@@ -146,6 +146,7 @@ vnode::stats ()
   warnx << "# testrange requests " << ndotestrange << "\n";  
   warnx << "# getfingers requests " << ndogetfingers << "\n";
   warnx << "# dochallenge requests " << ndochallenge << "\n";
+  warnx << "# dodebruijn requests " << ndodebruijn << "\n";
 
   warnx << "# getsuccesor calls " << ngetsuccessor << "\n";
   warnx << "# getpredecessor calls " << ngetpredecessor << "\n";
@@ -178,6 +179,7 @@ void
 vnode::print ()
 {
   warnx << "======== " << myID << "====\n";
+  fingers->print ();
   successors->print ();
 
   warnx << "pred : " << my_pred () << "\n";
@@ -230,7 +232,6 @@ vnode::join (cbjoin_t cb)
 {
   chordID n;
 
-  warn << "in join\n";
   if (!locations->lookup_anyloc (myID, &n)) {
     warnx << myID << ": couldn't lookup anyloc for join\n";
     locations->stats ();
@@ -358,7 +359,6 @@ vnode::chord_upcall_done (chord_testandfindarg *fa,
   sbp->reply (res);
   delete res;
 }
-
 
 void
 vnode::dofindclosestpred (svccb *sbp, chord_findarg *fa)
@@ -515,8 +515,9 @@ vnode::dodebruijn (svccb *sbp, chord_debruijnarg *da)
   chord_debruijnres *res;
   chordID succ = my_succ ();
 
-  warnx << myID << " dodebruijn: succ " << succ << " x " << da->x << " d " 
-	<< da->d << " between " << betweenrightincl (myID, succ, da->d) << "\n";
+  //  warnx << myID << " dodebruijn: succ " << succ << " x " << da->x << " i " 
+  // << da->i << " between " << betweenrightincl (myID, succ, da->i) 
+  // << " k " << da->k << "\n";
 
   res = New chord_debruijnres ();
   if (betweenrightincl (myID, succ, da->x)) {
@@ -525,16 +526,22 @@ vnode::dodebruijn (svccb *sbp, chord_debruijnarg *da)
     res->inres->node.r = locations->getaddress (succ);
   } else {
     res->set_status (CHORD_NOTINRANGE);
-    if (betweenrightincl (myID, succ, da->d)) {
-      chordID nd = lookup_closestsucc (doubleID(myID, LOGBASE));
+    if (betweenrightincl (myID, succ, da->i)) {
+      // ptr<debruijn> d = dynamic_cast< ptr<debruijn> >(fingers);
+      // assert (d);  // XXXX return error
+      // chordID nd =  d->debruijnprt (); 
+      chordID nd = lookup_closestpred (doubleID (myID, logbase));
       res->noderes->node.x = nd;
       res->noderes->node.r = locations->getaddress (nd);
-      res->noderes->d = doubleID(da->d, LOGBASE);
+      res->noderes->i = doubleID (da->i, logbase);
+      res->noderes->i = res->noderes->i | topbits (logbase, da->k);
+      res->noderes->k = shifttopbitout (logbase, da->k);
     } else {
-      res->noderes->node.x = lookup_closestpred (da->d); // succ
+      res->noderes->node.x = lookup_closestpred (da->i); // succ
       assert (res->noderes->node.x != myID);
       res->noderes->node.r = locations->getaddress (res->noderes->node.x);
-      res->noderes->d = da->d;
+      res->noderes->i = da->i;
+      res->noderes->k = da->k;
     }
   }
 
@@ -595,6 +602,8 @@ void
 vnode::stabilize_pred ()
 {
   chordID p = my_pred ();
+
+  assert (nout_continuous == 0);
 
   nout_continuous++;
   get_successor (p, wrap (this, &vnode::stabilize_getsucc_cb, p));

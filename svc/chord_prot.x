@@ -134,9 +134,10 @@ struct chord_gettoes_arg {
 
 
 struct chord_debruijnarg {
-  chordID v;
+  chordID n;
   chordID x;
-  chordID d;
+  chordID i;
+  chordID k;
   unsigned upcall_prog;
   unsigned upcall_proc;
   opaque upcall_args<>;
@@ -144,7 +145,8 @@ struct chord_debruijnarg {
 
 struct chord_debruijnnoderes {
   chord_node node;
-  chordID d;
+  chordID i;
+  chordID k;
 };
 
 union chord_debruijnres switch (chordstat status) {

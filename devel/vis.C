@@ -324,9 +324,9 @@ update_debruijn (f_node *nu)
 {
   chordID n = nu->ID;
   ptr<chord_debruijnarg> arg = New refcounted<chord_debruijnarg> ();
-  arg->v = n;
+  arg->n = n;
   arg->x = n + 1;
-  arg->d = n + 1;
+  arg->i = n + 1;
   arg->upcall_prog = 0;
   
   chord_debruijnres *nres = New chord_debruijnres (CHORD_OK);
