@@ -203,7 +203,9 @@ struct dhash_retrieve_resok {
   dhash_value block;
   int hops;
   int errors;
+  int retries;
   int lease;
+  chordID path<>;
 };
 
 struct dhash_insert_resok {
