@@ -43,8 +43,9 @@ vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
   warnx << gettime () << " myID is " << myID << "\n";
 #ifdef FINGERS
   fingers = New refcounted<finger_table> (mkref (this), locations, myID);
-#endif
+#else
   dutch = New refcounted<debruijn> (mkref (this), locations, myID);
+#endif
   successors = New refcounted<succ_list> (mkref (this), locations, myID);
   toes = New refcounted<toe_table> (locations, myID);
   stabilizer = New refcounted<stabilize_manager> (myID);
@@ -53,9 +54,10 @@ vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
   stabilizer->register_client (mkref (this));
 #ifdef FINGERS
   stabilizer->register_client (fingers);
+#else
+  stabilizer->register_client (dutch);
 #endif
   stabilizer->register_client (toes);
-  stabilizer->register_client (dutch);
 #ifndef PNODE
   // If vnode's share a locationtable, then we don't need to register this
   // more than once.
@@ -185,14 +187,30 @@ vnode::print ()
 chordID
 vnode::lookup_closestsucc (const chordID &x)
 {
+#if 1
   chordID s = locations->closestsuccloc (x);
+#else
+#ifdef FINGERS
+  chordID s = fingers->closestsucc (x);
+#else
+  chordID s = dutch->closestsucc (x);
+#endif
+#endif
   return s;
 }
 
 chordID
 vnode::lookup_closestpred (const chordID &x)
 {
+#if 1
   chordID s = locations->closestpredloc (x);
+#else
+#ifdef FINGERS
+  chordID s = fingers->closestpred (x);
+#else
+  chordID s = dutch->closestpred (x);
+#endif
+#endif
   return s;
 }
 
@@ -281,8 +299,8 @@ vnode::dotestrange_findclosestpred (svccb *sbp, chord_testandfindarg *fa)
     chordID p = lookup_closestpred (fa->x);
     res->noderes->x = p;
     res->noderes->r = locations->getaddress (p);
-    // warnx << "dotestrange_findclosestpred: " << myID << " closest pred of " 
-    //      << fa->x << " is " << p << "\n";
+    //warnx << "dotestrange_findclosestpred: " << myID << " closest pred of " 
+    //    << fa->x << " is " << p << "\n";
     warnt("CHORD: testandfind_notinrangereply");
     sbp->reply(res);
     delete res;

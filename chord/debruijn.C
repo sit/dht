@@ -10,6 +10,21 @@ debruijn::debruijn (ptr<vnode> v,
   locations->pinsucc (mydoubleID);
 }
 
+
+chordID
+debruijn::closestsucc (const chordID &x)
+{
+  chordID s = locations->closestsuccloc (mydoubleID);
+  return s;
+}
+
+chordID
+debruijn::closestpred (const chordID &x)
+{
+  chordID s = locations->closestpredloc (mydoubleID);
+  return s;
+}
+
 void
 debruijn::stabilize ()
 {

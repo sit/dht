@@ -72,8 +72,10 @@ store_cb (bool error, chordID key)
 {
   out--;
 
-  if (error)
+  if (error) {
+    warn << "store_cb: " << key << " " << error << "\n";
     fprintf (outfile, "store error\n");
+  }
 }
 
 

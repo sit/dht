@@ -16,6 +16,9 @@ class debruijn : public stabilizable {
   // void stats ();
 
   void stabilize();
+  chordID closestsucc (const chordID &x);
+  chordID closestpred (const chordID &x);
+
   bool isstable () { return true; };
   bool continous_stabilizing () { return true; };
   bool backoff_stabilizing () { return false; };

@@ -122,14 +122,19 @@ void
 vnode::find_successor_cb (chordID x, cbroute_t cb, chordID s, 
 			  route search_path, chordstat status)
 {
-  //  warnx << "find_successor_cb: succ of " << x << " is " << s << " pathlen "
-  // << search_path.size () << "\n";
-  // for (unsigned i = 0; i < search_path.size (); i++) {
-  // warnx << search_path[i] << "\n";
-  // }
-  nhops += search_path.size ();
-  if (search_path.size () > nmaxhops)
-    nmaxhops = search_path.size ();
+  if (status != CHORD_OK) {
+    warnx << "find_successor_cb: find successor of " 
+	  << x << " failed: " << status << "\n";
+  } else {
+    //warnx << "find_successor_cb: succ of " << x << " is " << s << " pathlen "
+    //  << search_path.size () << "\n";
+    //    for (unsigned i = 0; i < search_path.size (); i++) {
+    //warnx << search_path[i] << "\n";
+    //}
+    //nhops += search_path.size ();
+    if (search_path.size () > nmaxhops)
+      nmaxhops = search_path.size ();
+  }
   cb (s, search_path, status);
 }
 
@@ -138,7 +143,7 @@ void
 vnode::find_route (chordID &x, cbroute_t cb) 
 {
   nfindpredecessor++;
-  if (myID == lookup_closestsucc (myID + 1)) {    // is myID the only node?
+  if (lookup_closestsucc (myID + 1) == myID) {    // is myID the only node?
     route search_path;
     cb (myID, search_path, CHORD_OK);
   } else {
@@ -160,7 +165,8 @@ void
 vnode::testrange_findclosestpred (chordID n, chordID x, 
 				  findpredecessor_cbstate *st)
 {
-  // warn << "looking for closestpred of " << n << " " << x << "\n";
+  //  warn << "looking for closestpred of " << n << " " << x << "\n";
+
   ptr<chord_testandfindarg> arg = New refcounted<chord_testandfindarg> ();
   arg->v = n;
   arg->x = x;

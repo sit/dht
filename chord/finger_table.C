@@ -65,6 +65,33 @@ finger_table::closestpredfinger (chordID &x)
   return p;
 }
 
+chordID
+finger_table::closestpred (const chordID &x)
+{
+  chordID p = myID;
+  chordID f;
+
+  for (int i = NBIT - 1; i >= 0; i--) {
+    p = finger (i);
+    if (between (myID, x, p))
+      return p;
+  }
+  return p;
+}
+
+chordID
+finger_table::closestsucc (const chordID &x)
+{
+  chordID s = myID;
+
+  for (int i = 0; i < NBIT; i++) {
+    s = finger (i);
+    if (between (myID, s, x))
+      return s;
+  }
+  return s;
+}
+
 void
 finger_table::print ()
 {
