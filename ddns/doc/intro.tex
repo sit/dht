@@ -1,96 +1,48 @@
-\section{Introduction}
+\section{Introduction and Related Work}
 
-The current DNS~\cite{dns, dns-concept:rfc} relies heavily on its
-thirteen root servers, which are responsbile for providing
-information about the root of the hierarchy and many top-level domains.
-The Internet Software Consortium, which runs one of the root servers,
-reported a load of 272 million queries per day in 2001~\cite{isc-root}.
-Recent reports~\cite{cert} have indicated that, just by running 
-older versions of the name resolution software (eg. ISC BIND), 
-name servers can set themselves up for denial-of-service attacks 
-(causing {\tt named} daemons to crash or go into infinite loop).
-If the root name servers were to be compromised, the Internet can 
-come to a halt especially when as much as 18\% of DNS lookups 
-can end up at the root servers. Breaking away from the heirarchical 
-pratice of serving DNS data can lessen impact of load and the severity 
-of security compromises faced by the root servers.
+In the beginnings of the internet, host names were kept
+in a centrally-administered text file, {\tt hosts.txt}, that
+all sites mirrored from the SRI Network Information Center.
+By the early 1980s the host database had become too large
+to disseminate in a cost-effective manner.
+In response, Mockapetris (et al?XXX) began the design and
+implementation of a distributed database that we now know
+as the internet domain name system (DNS).
+DNS started to replace {\tt hosts.txt} in 1985 and has remained
+substantially the same since then~\ref{dns-concept:rfc, dns}.
 
-%Leslie Lamport's supposed characterization of a
-%distributed system (as one in which you can't get work
-%done because of a machine you have never heard of is down)
-%is all too true in the current implementation of {DNS}.
-Jung {\it et al.}~\cite{dnscache:sigcommimw01} found that approximately
-35\% of DNS queries never receive an answer or receive
-a negative answer. Many of these failures are due to 
-improperly configured name servers or incorrect {\tt NS}-records).
-For example, {\tt NS}-records that point to non-existent 
-or non-authoritative name servers can cause lookups to fail
-or succeed only some of the times (if the server happens
-to have the record cached). 
-Configuring a name server can be an administrative nightmare.
-Poor network conditions are also to blame for failures in DNS lookups.
-Potential problems~\cite{dns-bind} that often arise include: 
-\begin{itemize}
-\item Forgetting to increment the serial number when updating the 
-zone's database file in the primary name server (causing slave name 
-servers not to reload the new zone data).
-\item Forgetting to signal the primary name server 
-(to reload new data) after 
-changing the configuration or database file. 
-\item Errors in the configuration or database file. 
-(Our system will eliminate errors in the config file, 
-and the ones in the database relating to {\tt NS}-records.) 
-\item Missing cache data either because the adminstrator 
-forgot to install the cache file or accidentally deleted it. 
-This will cause all lookups outside 
-of the name server's authoritative zone to fail. 
-\item Loss of network connectivity to a name server 
-can cause some DNS lookups to fail if the name server is
-the only one with the zone data. 
-\item A slave server can fail to load zone data 
-if it lost connectivity to the master server due to 
-network failure, has the wrong IP address for
-the master server in the config file, or if there is 
-a syntax error in the zone data file on the master server.
-%-missing or incorrect subdomain delegation.\\
-\end{itemize}
+Looking back at DNS in 1988, Mockapetris and Dunlap 
+listed what they believed to be the surprises, successes,
+and shortcomings of the system.  Of the six successes,
+three (variable depth hierarchy, organizational structure
+of names, and mail address cooperation) relate directly 
+to the adoption of an administrative hierarchy for the names~\ref{dns}.
+The administrative hierarchy of DNS is reflected in the 
+service of the database: in typical usage, an
+entity is responsible not only for information about its hosts
+but also for the service of that information.
 
-%Such failures can go undetected because of the hierarchical
-%nature of DNS: lookups within an administrative domain might
-%succeed but that domain is unknowningly cut off from the rest
-%of the hierarchy, so that lookups from outside will fail.
+In fact, the service structure {\em needed} to reflect the 
+administrative hierarchy: this provided a modicum of authentication
+for the returned data.
+Because servers were effectively authenticated by return address,
+the system was susceptible to DNS server impersonation by 
+IP spoofing or other means.
+In response to concerns about this and
+other attacks, the DNS security extensions (DNSSEC) were
+developed in the late 1990s.
+DNSSEC provides a mechanism for clients to verify that the
+records they retreive are authentic~\ref{dnssec}.
+Although DNSSEC is not yet in widespread use, its specification
+has stabilized, and it is supported by a variety of name server
+implementations.
 
-We propose a distributed domain name service, DDNS,
-using a robust peer-to-peer lookup service such as Chord~\cite{chord:sigcomm}.
-Chord balances load as a side effect of its lookup and storage 
-algorithms, thus avoiding such hot spots.
-DDNS acts as a replacement to name servers, so there is no need 
-to manage such servers, thereby eliminating all of 
-the configuration problems and incorrect name server mapping 
-({\tt NS}-records) mentioned above\footnote{It seems we will 
-no longer need {\tt NS}-records because all information is 
-stored and replicated on DDNS.}.
-The Chord protocol is robust against server failures 
-(host down or lost connection),
-hence DDNS can reduce errors due to poor network connectivity as well.
-
-Every DNS lookup is fed directly to a server that is part of 
-the Chord ring. Each key is treated as a flat name. DDNS
-will store/lookup a key independent of its administrative 
-affiliation. It will always return an answer 
-(positive or negative) to a lookup. 
- 
-Distributing DNS data in a peer-to-peer network does have some
-disadvantages. Separating enforcement of name-space control 
-policy from the mechanism to lookup DNS information 
-can increase performance and flexibility 
-in designing the name resolution system. Although it can open up 
-security holes. 
-In addition, we cannot easily dynamically 
-generate DNS responses. We further discuss these issues 
-in Section~\ref{sec:discuss}.
-%**How to control caching on others name servers...** --obsolete b/c we're 
-%replacing name servers.
-
-%The next section describes related work.
+Due to the advent of DNSSEC, the service structure no longer needs
+to reflect the administrative hierarchy.
+This observation enables the exploration of alternate service 
+structures to achieve desirable properties not possible
+with conventional DNS.  In this paper we explore one such
+alternate service structure: we store and retrieve
+DNS records using Chord~\ref{chord:sigcomm}, a peer-to-peer
+lookup service.
 
