@@ -1,3 +1,5 @@
+#include <dhash_impl.h>
+#include <block_status.h>
 #include "merkle_tree.h"
 
 void

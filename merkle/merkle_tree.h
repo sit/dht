@@ -5,9 +5,9 @@
 #include "sha1.h"
 #include "merkle_hash.h"
 #include "merkle_node.h"
-#include <dhash_impl.h>
-#include "block_status.h"
 
+class block_status_manager;
+class location;
 class merkle_tree;
 
 struct merkle_tree_stats {
