@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.14 2003/11/02 19:57:28 thomer Exp $ */
+/* $Id: tapestry.h,v 1.15 2003/11/03 06:55:52 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -275,15 +275,19 @@ private:
     repair_return *rr;
   };
 
-  void multi_add_to_rt(	vector<NodeInfo *> *nodes );
+  void multi_add_to_rt(	vector<NodeInfo *> *nodes, 
+			map<IPAddress, Time> *timing );
 
   void multi_add_to_rt_start( RPCSet *ping_rpcset, 
 			      map<unsigned, ping_callinfo*> *ping_resultmap,
-			      vector<NodeInfo *> *nodes, bool check_exists );
+			      vector<NodeInfo *> *nodes, 
+			      map<IPAddress, Time> *timing, 
+			      bool check_exists );
 
   void multi_add_to_rt_end( RPCSet *ping_rpcset,
 			    map<unsigned, ping_callinfo*> *ping_resultmap,
-			    Time before_ping, bool repair );
+			    Time before_ping, map<IPAddress, Time> *timing,
+			    bool repair );
   void have_joined();
 
 };

@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.20 2003/11/02 19:57:28 thomer Exp $ */
+/* $Id: tapestry.C,v 1.21 2003/11/03 06:55:52 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -319,7 +319,8 @@ Tapestry::join(Args *args)
     Time before_ping = now();
     TapDEBUG(3) << "initing level " << i << " out of " << init_level 
 		<< " size = " << initlist.size() << endl;
-    multi_add_to_rt_start( &ping_rpcset, &ping_resultmap, &initlist, true );
+    multi_add_to_rt_start( &ping_rpcset, &ping_resultmap, &initlist, 
+			   NULL, true );
 
     RPCSet nn_rpcset;
     map<unsigned, nn_callinfo*> nn_resultmap;
@@ -342,7 +343,8 @@ Tapestry::join(Args *args)
 
     }
 
-    multi_add_to_rt_end( &ping_rpcset, &ping_resultmap, before_ping, false );
+    multi_add_to_rt_end( &ping_rpcset, &ping_resultmap, before_ping, NULL, 
+			 false );
 
     for( uint j = 0; j < num_nncalls; j++ ) {
 
@@ -409,7 +411,8 @@ Tapestry::join(Args *args)
     bool closest_full = false;
 
     // add these guys to routing table
-    multi_add_to_rt( &seeds );
+    map< IPAddress, Time> timing;
+    multi_add_to_rt( &seeds, &timing );
 
     // make sure we haven't crashed and/or started another join
     if( !node()->alive() || _join_num != curr_join ) {
@@ -428,8 +431,8 @@ Tapestry::join(Args *args)
       TapDEBUG(3) << "about to get distance for " << currseed->_addr << endl;
       //add_to_rt( currseed->_addr, currseed->_id );
       TapDEBUG(3) << "added to rt for " << currseed->_addr << endl;
-      bool ok = false;
-      currseed->_distance = ping( currseed->_addr, currseed->_id, ok );
+      //bool ok = false;
+      currseed->_distance = timing[currseed->_addr];
       TapDEBUG(3) << "got distance for " << currseed->_addr << endl;
 
       // is there anyone on the list farther than you?  if so, replace
@@ -569,15 +572,8 @@ Tapestry::handle_join(join_args *args, join_return *ret)
       na.nodelist = thisrow;
       nodelist_return nr;
       record_stat(STAT_NODELIST, na.nodelist.size(), 0);
-      bool succ = doRPC( args->ip, &Tapestry::handle_nodelist, &na, &nr );
-      if( succ ) {
-	record_stat(STAT_NODELIST, 0, 0);
-      }
-      
-      // free the nodelist
-      for( uint i = 0; i < na.nodelist.size(); i++ ) {
-	delete na.nodelist[i];
-      }
+      unsigned rpc = asyncRPC( args->ip, &Tapestry::handle_nodelist, 
+			       &na, &nr );
       
       // start the multicast
       mc_args mca;
@@ -599,6 +595,20 @@ Tapestry::handle_join(join_args *args, join_return *ret)
       mca.watchlist = wl;
       
       handle_mc( &mca, &mcr );
+
+      // finish up the nodelist rpc
+      RPCSet rpcset;
+      rpcset.insert(rpc);
+      bool ok;
+      rcvRPC( &rpcset, ok );
+      if( ok ) {
+	record_stat(STAT_NODELIST, 0, 0);
+      }      
+      // free the nodelist
+      for( uint i = 0; i < na.nodelist.size(); i++ ) {
+	delete na.nodelist[i];
+      }
+
       
       // free the bools!
       for( int i = 0; i < alpha+1; i++ ) {
@@ -629,6 +639,7 @@ Tapestry::handle_join(join_args *args, join_return *ret)
   if( i == _redundant_lookup_num ) {
     ret->failed = true;
   }
+  delete ips;
 
   TapDEBUG(5) << "hj exit" << endl;
 
@@ -642,7 +653,7 @@ Tapestry::handle_nodelist(nodelist_args *args, nodelist_return *ret)
   TapDEBUG(3) << "handling a nodelist message" << endl;
 
   // add each to your routing table
-  multi_add_to_rt( &(args->nodelist) );
+  multi_add_to_rt( &(args->nodelist), NULL );
   /*
   for( uint i = 0; i < args->nodelist.size(); i++ ) {
     NodeInfo * curr_node = args->nodelist[i];
@@ -697,71 +708,52 @@ Tapestry::handle_mc(mc_args *args, mc_return *ret)
   mca.nodelist = nodelist;
 
   record_stat(STAT_MCNOTIFY, 1+nodelist.size(), 0);
-  bool succ = doRPC( args->new_ip, &Tapestry::handle_mcnotify, &mca, &mcr );
-  if( succ ) {
-    record_stat(STAT_MCNOTIFY, 0, 0);
-  }
-
-  // free the nodelist
-  for( uint i = 0; i < nodelist.size(); i++ ) {
-    delete nodelist[i];
-  }
-
-  if( !succ ) {
-    TapDEBUG(3) << "Notify to new node failed, abandoning mc!" << endl;
-    TapDEBUG(5) << "mc exit" << endl;
-    return;
-  }
+  unsigned mcnrpc = asyncRPC( args->new_ip, &Tapestry::handle_mcnotify, 
+			       &mca, &mcr );
 
   // don't go on if this is from a lock
-  if( args->from_lock ) {
-    // we won't be doing a multicast, so it's ok to add it now
-    add_to_rt( args->new_ip, args->new_id );
-    _rt->remove_lock( args->new_ip, args->new_id );
-    TapDEBUG(5) << "mc exit" << endl;
-    return;
-  }
+  if( !args->from_lock ) {
 
-  RPCSet rpcset;
-  map<unsigned, mc_callinfo*> resultmap;
-  unsigned int numcalls = 0;
-  // then, find any other node that shares this prefix and multicast
-  for( uint i = args->alpha; i < _digits_per_id; i++ ) {
-    for( uint j = 0; j < _base; j++ ) {
-      NodeInfo *ni = _rt->read( i, j );
-      // don't RPC to ourselves or to the new node
-      if( ni == NULL || ni->_addr == ip() || ni->_addr == args->new_ip ) {
-	if( ni != NULL ) {
+    RPCSet rpcset;
+    map<unsigned, mc_callinfo*> resultmap;
+    unsigned int numcalls = 0;
+    // then, find any other node that shares this prefix and multicast
+    for( uint i = args->alpha; i < _digits_per_id; i++ ) {
+      for( uint j = 0; j < _base; j++ ) {
+	NodeInfo *ni = _rt->read( i, j );
+	// don't RPC to ourselves or to the new node
+	if( ni == NULL || ni->_addr == ip() || ni->_addr == args->new_ip ) {
+	  if( ni != NULL ) {
+	    delete ni;
+	  }
+	  continue;
+	} else {
+	  mc_args *mca = New mc_args();
+	  mc_return *mcr = New mc_return();
+	  mca->new_ip = args->new_ip;
+	  mca->new_id = args->new_id;
+	  mca->alpha = i + 1;
+	  mca->from_lock = false;
+	  mca->watchlist = args->watchlist;
+	  TapDEBUG(2) << "multicasting info for " << args->new_ip << " to " << 
+	    ni->_addr << "/" << print_guid( ni->_id ) << endl;
+	  record_stat(STAT_MC, 1, 2+mca->watchlist.size()*_base);
+	  unsigned rpc = asyncRPC( ni->_addr, &Tapestry::handle_mc, mca, mcr );
+	  assert(rpc);
+	  resultmap[rpc] = New mc_callinfo(ni->_addr, mca, mcr);
+	  rpcset.insert(rpc);
+	  numcalls++;
 	  delete ni;
 	}
-	continue;
-      } else {
-	mc_args *mca = New mc_args();
-	mc_return *mcr = New mc_return();
-	mca->new_ip = args->new_ip;
-	mca->new_id = args->new_id;
-	mca->alpha = i + 1;
-	mca->from_lock = false;
-	mca->watchlist = args->watchlist;
-	TapDEBUG(2) << "multicasting info for " << args->new_ip << " to " << 
-	  ni->_addr << "/" << print_guid( ni->_id ) << endl;
-	record_stat(STAT_MC, 1, 2+mca->watchlist.size()*_base);
-	unsigned rpc = asyncRPC( ni->_addr, &Tapestry::handle_mc, mca, mcr );
-	assert(rpc);
-	resultmap[rpc] = New mc_callinfo(ni->_addr, mca, mcr);
-	rpcset.insert(rpc);
-	numcalls++;
-	delete ni;
+	
       }
-      
     }
-  }
-
-  // also, multicast to any locks that might need it
-  vector <NodeInfo *> * locks = _rt->get_locks( args->new_id );
-  for( uint i = 0; i < locks->size(); i++ ) {
-    NodeInfo *ni = (*locks)[i];
-    if( ni->_addr != args->new_ip ) {
+    
+    // also, multicast to any locks that might need it
+    vector <NodeInfo *> * locks = _rt->get_locks( args->new_id );
+    for( uint i = 0; i < locks->size(); i++ ) {
+      NodeInfo *ni = (*locks)[i];
+      if( ni->_addr != args->new_ip ) {
 	mc_args *mca = New mc_args();
 	mc_return *mcr = New mc_return();
 	mca->new_ip = args->new_ip;
@@ -777,20 +769,40 @@ Tapestry::handle_mc(mc_args *args, mc_return *ret)
 	resultmap[rpc] = New mc_callinfo(ni->_addr, mca, mcr);
 	rpcset.insert(rpc);
 	numcalls++;
+      }
+    }
+    
+    // wait for them all to return
+    for( unsigned int i = 0; i < numcalls; i++ ) {
+      bool ok;
+      unsigned donerpc = rcvRPC( &rpcset, ok );
+      if( ok ) {
+	record_stat(STAT_MC, 0, 0);
+      }
+      mc_callinfo *ci = resultmap[donerpc];
+      TapDEBUG(2) << "mc to " << ci->ip << " about " << args->new_ip << 
+	" is done.  ok = " << ok << endl;
+      delete ci;
     }
   }
 
-  // wait for them all to return
-  for( unsigned int i = 0; i < numcalls; i++ ) {
-    bool ok;
-    unsigned donerpc = rcvRPC( &rpcset, ok );
-    if( ok ) {
-      record_stat(STAT_MC, 0, 0);
-    }
-    mc_callinfo *ci = resultmap[donerpc];
-    TapDEBUG(2) << "mc to " << ci->ip << " about " << args->new_ip << 
-      " is done.  ok = " << ok << endl;
-    delete ci;
+  // finish up mcnotify
+  RPCSet mcnrpcset;
+  mcnrpcset.insert(mcnrpc);
+  bool ok;
+  rcvRPC( &mcnrpcset, ok );
+  if( ok ) {
+    record_stat(STAT_MCNOTIFY, 0, 0);
+  }
+  // free the nodelist
+  for( uint i = 0; i < nodelist.size(); i++ ) {
+    delete nodelist[i];
+  }
+  if( !ok ) {
+    _rt->remove_lock( args->new_ip, args->new_id );
+    TapDEBUG(3) << "Notify to new node failed, abandoning mc!" << endl;
+    TapDEBUG(5) << "mc exit" << endl;
+    return;
   }
 
   // we wait until here to add the new node to your table
@@ -990,8 +1002,8 @@ Tapestry::check_rt(void *x)
   RPCSet ping_rpcset;
   map<unsigned, ping_callinfo*> ping_resultmap;
   Time before_ping = now();
-  multi_add_to_rt_start( &ping_rpcset, &ping_resultmap, &nodes, false );
-  multi_add_to_rt_end( &ping_rpcset, &ping_resultmap, before_ping, true );
+  multi_add_to_rt_start( &ping_rpcset, &ping_resultmap, &nodes, NULL, false );
+  multi_add_to_rt_end( &ping_rpcset, &ping_resultmap, before_ping, NULL, true);
   TapDEBUG(2) << "finished checking routing table " << now() << " " << t << endl;
 
   // reschedule
@@ -1076,19 +1088,23 @@ Tapestry::ping( IPAddress other_node, GUID other_id, bool &ok )
 }
 
 void
-Tapestry::multi_add_to_rt( vector<NodeInfo *> *nodes )
+Tapestry::multi_add_to_rt( vector<NodeInfo *> *nodes, 
+			   map<IPAddress, Time> *timing )
 {
   RPCSet ping_rpcset;
   map<unsigned, ping_callinfo*> ping_resultmap;
   Time before_ping = now();
-  multi_add_to_rt_start( &ping_rpcset, &ping_resultmap, nodes, true );
-  multi_add_to_rt_end( &ping_rpcset, &ping_resultmap, before_ping, false );
+  multi_add_to_rt_start( &ping_rpcset, &ping_resultmap, nodes, timing, true );
+  multi_add_to_rt_end( &ping_rpcset, &ping_resultmap, before_ping, timing, 
+		       false );
 }
 
 void
 Tapestry::multi_add_to_rt_start( RPCSet *ping_rpcset, 
 				 map<unsigned, ping_callinfo*> *ping_resultmap,
-				 vector<NodeInfo *> *nodes, bool check_exist )
+				 vector<NodeInfo *> *nodes, 
+				 map<IPAddress, Time> *timing, 
+				 bool check_exist )
 {
   ping_args pa;
   ping_return pr;
@@ -1103,8 +1119,13 @@ Tapestry::multi_add_to_rt_start( RPCSet *ping_rpcset,
 			       &Tapestry::handle_ping, &pa, &pr );
       assert(rpc);
       (*ping_resultmap)[rpc] = New ping_callinfo(ni->_addr, 
-						ni->_id);
+						 ni->_id);
       ping_rpcset->insert(rpc);
+      if( timing != NULL ) {
+	(*timing)[ni->_addr] = 1000000;
+      }
+    } else if( check_exist && _rt->contains( ni->_id ) && timing != NULL ) {
+      (*timing)[ni->_addr] = _rt->get_time( ni->_id );
     }
   }
 }
@@ -1112,7 +1133,8 @@ Tapestry::multi_add_to_rt_start( RPCSet *ping_rpcset,
 void
 Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset, 
 			       map<unsigned, ping_callinfo*> *ping_resultmap,
-			       Time before_ping, bool repair )
+			       Time before_ping, map<IPAddress, Time> *timing,
+			       bool repair )
 {
   // check for done pings
   assert( ping_rpcset->size() == ping_resultmap->size() );
@@ -1130,6 +1152,9 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
       // TODO: ok, but now how do I call rt->add without it placing 
       // backpointers synchronously?
       pi->rtt = ping_time;
+      if( timing != NULL ) {
+	(*timing)[pi->ip] = _rt->get_time( pi->id );
+      }
     }
     TapDEBUG(3) << "multidone ip: " << pi->ip << " finished " << (j+1) << 
       " total " << setsize << endl;
@@ -1248,7 +1273,7 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
 	  delete rc;
       }
 
-      multi_add_to_rt( &toadd );
+      multi_add_to_rt( &toadd, NULL );
 
       // delete
       for( uint i = 0; i < toadd.size(); i++ ) {
