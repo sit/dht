@@ -148,6 +148,7 @@ Kademlia::Kademlia(IPAddress i, Args a)
 }
 
 Kademlia::NodeID Kademlia::closer::n = 0;
+Kademlia::NodeID Kademlia::closerRTT::n = 0;
 // }}}
 // {{{ Kademlia::~Kademlia
 Kademlia::~Kademlia()
@@ -301,7 +302,7 @@ Kademlia::initstate()
         Kademlia *k = (*_nodeid2kademlia)[*i];
         // KDEBUG(2) << "initstate: inserting candidate = " << Kademlia::printID(k->id()) << endl;
         // assert(k);
-        insert(k->id(), k->ip(), 0, true);
+        insert(k->id(), k->ip(), 0, 0, true);
       }
       continue;
     }
@@ -316,7 +317,7 @@ Kademlia::initstate()
       if(flyweight[k->id()])
         continue;
 
-      insert(k->id(), k->ip(), 0, true);
+      insert(k->id(), k->ip(), 0, 0, true);
       count++;
 
       // make a copy of candidates and remove the selected index
@@ -357,8 +358,10 @@ join_restart:
   la.stattype = Kademlia::STAT_JOIN;
   lookup_result lr;
   bool b = false;
+  Time before = 0;
   do {
     record_stat(STAT_JOIN, 1, 0);
+    before = now();
     b = doRPC(wkn, &Kademlia::do_lookup, &la, &lr, Kademlia::_default_timeout);
     record_stat(STAT_JOIN, lr.results.size(), 0);
   } while(!b);
@@ -368,16 +371,17 @@ join_restart:
 
   // put well known node in k-buckets
   // KDEBUG(2) << "join: lr.rid = " << printID(lr.rid) << endl;
-  update_k_bucket(lr.rid, wkn);
+  update_k_bucket(lr.rid, wkn, now() - before);
 
   // put all nodes that wkn told us in k-buckets
   // NB: it's questionable whether we can do a touch here.  we haven't
   // actually talked to the node.
-  for(set<k_nodeinfo, older>::const_iterator i = lr.results.begin(); i != lr.results.end(); ++i)
+  NODES_ITER(&lr.results) {
     if(!flyweight[i->id] && i->id != _id) {
-      insert(i->id, i->ip, i->timeouts);
+      insert(i->id, i->ip, 0, i->timeouts);
       touch(i->id);
     }
+  }
 
   // get our ``successor'' and compute length of prefix we have in common
   vector<k_nodeinfo*> successors;
@@ -412,7 +416,7 @@ join_restart:
     // fill our finger table
     NODES_ITER(&lr.results)
       if(!flyweight[i->id] && i->id != _id)
-        insert(i->id, i->ip, i->timeouts);
+        insert(i->id, i->ip, 0, i->timeouts);
         //  ... but not touch.  we didn't actually talk to the node.
   }
 
@@ -586,6 +590,7 @@ Kademlia::do_ping(ping_args *args, ping_result *result)
     record_stat(ARGS->stattype, 1, 0);                                                  \
     unsigned rpc = asyncRPC(x.ip, &Kademlia::find_node, fa, fr, Kademlia::_default_timeout); \
     callinfo *ci = New callinfo(x, fa, fr);                                             \
+    ci->before = now();                                                                 \
     rpcset->insert(rpc);                                                                \
     outstanding_rpcs->insert(rpc, ci);                                                  \
 }
@@ -621,13 +626,20 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
 
   // find alpha successors for this key
   closer::n = fargs->key;
-  set<k_nodeinfo, closer> successors;
+  closerRTT::n = fargs->key;
+  set<k_nodeinfo, closerRTT> successors;
   vector<k_nodeinfo*> tmp;
   _root->find_node(fargs->key, &tmp);
   for(unsigned i=0; i<tmp.size(); i++) {
-    successors.insert(tmp[i]);
+    successors.insert((*tmp[i]));
     hops.insert(tmp[i]->id, 0);
   }
+
+  // unsigned haha = 0;
+  // NODES_ITER(&successors) {
+  //   KDEBUG(0) << "dist between " << printID(fargs->key) << " and successors[ " << haha++ << "], " << printID(i->id) << " = " <<
+  //     printID(distance(fargs->key, i->id)) << ", cp = " << common_prefix(fargs->key, i->id) << ", RTT = " << i->RTT << endl;
+  // }
 
   // we can't do anything but return ourselves
   if(!successors.size()) {
@@ -686,6 +698,7 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
 
     // node was dead
     closer::n = fargs->key;
+    closerRTT::n = fargs->key;
     if(!ok) {
       if(flyweight[ci->ki.id] && !Kademlia::learn_stabilize_only)
         erase(ci->ki.id);
@@ -699,7 +712,7 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
     // node was ok
     record_stat(ci->fa->stattype, ci->fr->results.size(), 0);
     if(!Kademlia::learn_stabilize_only)
-      update_k_bucket(ci->ki.id, ci->ki.ip);
+      update_k_bucket(ci->ki.id, ci->ki.ip, now() - ci->before);
 
     // put all the ones better than what we knew so far in successors, provided
     // we haven't asked them already.
@@ -888,7 +901,7 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
     record_stat(largs->stattype, ci->fr->results.size(), 0);
     if(!Kademlia::learn_stabilize_only || largs->stattype == STAT_STABILIZE ||
                                           largs->stattype == STAT_LOOKUP)
-      update_k_bucket(ci->ki.id, ci->ki.ip);
+      update_k_bucket(ci->ki.id, ci->ki.ip, now() - ci->before);
 
     // j = 0;
     // NODES_ITER(&lresult->results) {
@@ -1098,7 +1111,7 @@ Kademlia::touch(NodeID id)
 // post: id->ip mapping in flyweight, and k-bucket
 //
 void
-Kademlia::insert(NodeID id, IPAddress ip, char timeouts, bool init_state)
+Kademlia::insert(NodeID id, IPAddress ip, Time RTT, char timeouts, bool init_state)
 {
   // KDEBUG(1) << "Kademlia::insert " << Kademlia::printID(id) << ", ip = " << ip << endl;
   static unsigned counter = 0;
@@ -1107,7 +1120,7 @@ Kademlia::insert(NodeID id, IPAddress ip, char timeouts, bool init_state)
   // assert(id && ip);
   // assert(!flyweight.find(id, 0));
 
-  k_nodeinfo *ni = Kademlia::pool->pop(id, ip, timeouts);
+  k_nodeinfo *ni = Kademlia::pool->pop(id, ip, RTT, timeouts);
   assert(ni);
   if(init_state)
     ni->lastts = counter++;
@@ -1132,12 +1145,11 @@ Kademlia::erase(NodeID id)
     Kademlia::pool->push(ki);
     return;
   }
-  ki->lasttry = now();
 }
 // }}}
 // {{{ Kademlia::update_k_bucket
 inline void
-Kademlia::update_k_bucket(NodeID id, IPAddress ip)
+Kademlia::update_k_bucket(NodeID id, IPAddress ip, Time RTT)
 {
   // KDEBUG(1) << "Kademlia::update_k_bucket" << endl;
 
@@ -1147,7 +1159,9 @@ Kademlia::update_k_bucket(NodeID id, IPAddress ip)
 
   if(!flyweight[id]) {
     // KDEBUG(2) << "Kademlia::update_k_bucket says " << printID(id) << " doesn't exist yet" << endl;
-    insert(id, ip);
+    insert(id, ip, RTT);
+  } else if(RTT) {
+    flyweight[id]->RTT = RTT;
   }
   touch(id);
 }
@@ -1307,7 +1321,6 @@ k_nodes::insert(Kademlia::NodeID n, bool touch = false)
   if(contained && touch && (ninfo->lastts != now())) {
     ninfo->lastts = now();
     ninfo->timeouts = 0;
-    ninfo->lasttry = 0;
     _redo = _redo ? _redo : RESORT;
     checkrep();
     return;
@@ -1477,14 +1490,15 @@ k_nodes::checkrep()
 // }}}
 
 // {{{ k_nodeinfo::k_nodeinfo
-k_nodeinfo::k_nodeinfo(NodeID id, IPAddress ip) : id(id), ip(ip)
+k_nodeinfo::k_nodeinfo(NodeID id, IPAddress ip, Time RTT) : id(id), ip(ip), RTT(RTT)
 {
   lastts = 0;
   checkrep();
 }
 // }}}
 // {{{ k_nodeinfo::k_nodeinfo
-k_nodeinfo::k_nodeinfo(k_nodeinfo *k) : id(k->id), ip(k->ip), lastts(k->lastts)
+k_nodeinfo::k_nodeinfo(k_nodeinfo *k) :
+  id(k->id), ip(k->ip), lastts(k->lastts), timeouts(timeouts), RTT(RTT)
 {
   checkrep();
 }

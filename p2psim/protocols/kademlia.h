@@ -38,15 +38,15 @@ using namespace std;
 class k_nodeinfo {
 public:
   typedef ConsistentHash::CHID NodeID;
-  k_nodeinfo() { id = 0; ip = 0; lastts = 0; timeouts = 0; lasttry = 0;}
-  k_nodeinfo(NodeID, IPAddress);
+  k_nodeinfo() { id = 0; ip = 0; lastts = 0; timeouts = 0; RTT = 0;}
+  k_nodeinfo(NodeID, IPAddress, Time = 0);
   k_nodeinfo(k_nodeinfo*);
   NodeID id;
   IPAddress ip;
   Time lastts;   // last time we know it was alive
 
   char timeouts; // how often we did not get a reply
-  Time lasttry;  // last time we tried
+  Time RTT;
 
   inline void checkrep() const;
 };
@@ -92,32 +92,17 @@ private:
       }
     }
 
-    k_nodeinfo* pop(Kademlia::NodeID id, IPAddress ip, char timeouts)
+    k_nodeinfo* pop(Kademlia::NodeID id, IPAddress ip, Time RTT, char timeouts)
     {
       if(!_count)
-        return New k_nodeinfo(id, ip);
+        return New k_nodeinfo(id, ip, RTT);
 
       k_nodeinfo *newki = _pop();
       newki->id = id;
       newki->ip = ip;
       newki->lastts = 0;
-      newki->lasttry = 0;
       newki->timeouts = timeouts;
-      _count--;
-      return newki;
-    }
-
-    k_nodeinfo* pop(k_nodeinfo *ki)
-    {
-      if(!_count)
-        return New k_nodeinfo(ki);
-
-      k_nodeinfo *newki = _pop();
-      newki->id = ki->id;
-      newki->ip = ki->ip;
-      newki->lastts = ki->lastts;
-      newki->timeouts = ki->timeouts;
-      newki->lasttry = ki->lasttry;
+      newki->RTT = RTT;
       _count--;
       return newki;
     }
@@ -145,7 +130,7 @@ private:
       ki->id = 0;
       ki->lastts = 0;
       ki->timeouts = 0;
-      ki->lasttry = 0;
+      ki->RTT = 0;
     }
 
   private:
@@ -171,19 +156,10 @@ public:
   virtual void lookup(Args*);
   virtual void initstate();
   virtual void nodeevent (Args *) {};
+
   //
   // functors
   //
-  class older { public:
-    bool operator()(const k_nodeinfo* p1, const k_nodeinfo* p2) const {
-      if(p1->id == p2->id)
-        return false;
-      if(p1->lastts == p2->lastts)
-        return p1->id < p2->id;
-      return p1->lastts < p2->lastts;
-    }
-  };
-
   class closer { public:
     bool operator()(const k_nodeinfo p1, const k_nodeinfo p2) const {
       if(p1.id == p2.id)
@@ -193,6 +169,33 @@ public:
       if(dist1 == dist2)
         return p1.id < p2.id;
       return dist1 < dist2;
+    }
+    static NodeID n;
+  };
+
+  //
+  // same as closer, but takes RTT into account
+  //
+  class closerRTT { public:
+    bool operator()(const k_nodeinfo p1, const k_nodeinfo p2) const {
+      if(p1.id == p2.id)
+        return false;
+      unsigned cp1 = Kademlia::common_prefix(p1.id, n);
+      unsigned cp2 = Kademlia::common_prefix(p2.id, n);
+      if(cp1 == cp2) {
+        if(p1.RTT == p2.RTT) {
+          return p1.id < p2.id;
+
+        // prefer non-zero over zero
+        } else if(p1.RTT == 0 && p2.RTT != 0) {
+          return false;
+        } else if(p1.RTT != 0 && p2.RTT == 0) {
+          return true;
+        } else {
+          return p1.RTT < p2.RTT;
+        }
+      }
+      return cp1 > cp2;
     }
     static NodeID n;
   };
@@ -348,7 +351,7 @@ public:
 // }}}
 // {{{ private
 private:
-  void insert(NodeID, IPAddress, char = 0, bool = false);
+  void insert(NodeID, IPAddress, Time = 0, char = 0, bool = false);
   void touch(NodeID);
   void erase(NodeID);
   void stabilize();
@@ -360,7 +363,7 @@ private:
 
   void record_stat(stat_type, unsigned, unsigned);
   friend class k_stabilizer;
-  void update_k_bucket(NodeID, IPAddress);
+  void update_k_bucket(NodeID, IPAddress, Time = 0);
   void clear();
   void lookup_wrapper(lookup_wrapper_args*);
 
@@ -402,7 +405,7 @@ private:
   //
   class callinfo { public:
     callinfo(k_nodeinfo ki, find_node_args *fa, find_node_result *fr)
-      : ki(ki), fa(fa), fr(fr) {}
+      : ki(ki), fa(fa), fr(fr) { before = 0; }
     ~callinfo() {
       delete fa;
       delete fr;
@@ -410,6 +413,7 @@ private:
     k_nodeinfo ki;
     find_node_args *fa;
     find_node_result *fr;
+    Time before;
   };
 
   struct reap_info {
