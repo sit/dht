@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.1 2003/07/18 06:25:20 strib Exp $ */
+/* $Id: tapestry.h,v 1.2 2003/07/27 05:05:47 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -9,6 +9,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <vector>
+#include <set>
 
 class NodeInfo;
 class RouteEntry;
@@ -44,6 +45,12 @@ public:
   uint get_digit( GUID id, uint digit );
   GUID id() { return _my_id; };
   IPAddress ip() { return DHTProtocol::ip(); };
+  void add_to_rt( IPAddress new_ip, GUID new_id );
+  // how many digits do these keys share
+  // returns -1 if they are the same
+  int guid_compare( GUID key1, GUID key2 ); 
+  void place_backpointer( IPAddress bpip, int level, bool remove );
+  bool stabilized(vector<GUID> lid);
 
   struct join_args {
     IPAddress ip;
@@ -51,17 +58,99 @@ public:
   };
 
   struct join_return {
-    int dummy;
+    GUID surr_id;
   };
 
   void handle_join(join_args *args, join_return *ret);
+
+  struct nodelist_args {
+    vector<NodeInfo *> nodelist;
+  };
+
+  struct nodelist_return {
+    int dummy;
+  };
+
+  void handle_nodelist(nodelist_args *args, nodelist_return *ret);
+
+  struct mc_args {
+    IPAddress new_ip;
+    GUID new_id;
+    uint alpha;
+    vector<bool *> watchlist;
+    bool from_lock;
+  };
+
+  struct mc_return {
+    int dummy;
+  };
+
+  void handle_mc(mc_args *args, mc_return *ret);
+
+  struct ping_args {
+    int dummy;
+  };
+
+  struct ping_return {
+    int dummy;
+  };
+
+  void handle_ping(ping_args *args, ping_return *ret);
+
+  struct backpointer_args {
+    IPAddress ip;
+    GUID id;
+    int level;
+    bool remove;
+  };
+
+  struct backpointer_return {
+    int dummy;
+  };
+
+  void handle_backpointer(backpointer_args *args, backpointer_return *ret);
+
+  struct mcnotify_args {
+    IPAddress ip;
+    GUID id;
+    vector<NodeInfo *> nodelist;
+  };
+
+  struct mcnotify_return {
+    int dummy;
+  };
+
+  void handle_mcnotify(mcnotify_args *args, mcnotify_return *ret);
+
+  struct nn_args {
+    IPAddress ip;
+    GUID id;
+    int alpha;
+  };
+
+  struct nn_return {
+    vector<NodeInfo> nodelist;
+  };
+
+  void handle_nn(nn_args *args, nn_return *ret);
+
 
 private:
 
   GUID _my_id;
 
+  // have we finished our join yet?
+  bool joined;
+
   // how else are we gonna route?
   RoutingTable *_rt;
+
+  // used during join to keep track of the next nodes to ping
+  // during nearest neighbor
+  vector<NodeInfo> initlist;
+
+  // how many nearest neighbors do we keep at every step?
+  static const uint _k = 16;
 
   /**
    * Convert a given IP address to an id in the Tapestry namespace
@@ -74,9 +163,7 @@ private:
   // finds the next hop toward the given key
   // returns ip() if we are the root
   IPAddress next_hop( GUID key );
-  // how many digits do these keys share
-  // returns -1 if they are the same
-  int guid_compare( GUID key1, GUID key2 ); 
+  Time ping( IPAddress other_node, GUID other_id );
 
 };
 
@@ -85,7 +172,7 @@ private:
 class NodeInfo {
  public:
   typedef Tapestry::GUID GUID;
-  NodeInfo( IPAddress addr, GUID id, uint distance = 1000 ) {
+  NodeInfo( IPAddress addr, GUID id, Time distance = 1000 ) {
     _id = id;
     _addr = addr;
     _distance = distance;
@@ -94,7 +181,7 @@ class NodeInfo {
   
   GUID _id;
   IPAddress _addr;
-  uint _distance;
+  Time _distance;
 
   
 };
@@ -130,7 +217,7 @@ class RouteEntry {
   
  private:
   
-  NodeInfo *_nodes[NODES_PER_ENTRY];
+  NodeInfo **_nodes;
   uint _size;
   
 };
@@ -147,18 +234,34 @@ class RoutingTable {
    * Add a new node to the table.  Return all the nodes that were kicked out
    * as a result.
    */
-  vector<IPAddress> add( IPAddress ip, GUID id, uint distance, bool *added );
+  bool add( IPAddress ip, GUID id, Time distance );
   /**
    * Read the primary neighbor at this position.
    */
   NodeInfo *read( uint i, uint j );
 
+  bool contains( GUID id );
+  Time get_time( GUID id );
+
   ostream& insertor( ostream &s ) const;
+
+  void add_backpointer( IPAddress ip, GUID id, uint level );
+  void remove_backpointer( IPAddress ip, GUID id, uint level );
+  vector<NodeInfo> *get_backpointers( uint level );
+
+  void set_lock( IPAddress ip, GUID id );
+  void remove_lock( IPAddress ip, GUID id );
+  // get the locked nodes that are associated with this node's id
+  vector<NodeInfo> *get_locks( GUID id );
 
  private:
 
+  static const Time MAXTIME = 1000;
+
   RouteEntry ***_table;
   Tapestry *_node;
+  vector<NodeInfo> **_backpointers;
+  vector<NodeInfo> ***_locks;
 
 };
 

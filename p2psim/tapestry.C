@@ -1,4 +1,4 @@
-/* $Id: tapestry.C,v 1.1 2003/07/18 06:25:20 strib Exp $ */
+/* $Id: tapestry.C,v 1.2 2003/07/27 05:05:47 strib Exp $ */
 
 #include "tapestry.h"
 #include "node.h"
@@ -7,6 +7,7 @@
 #include <iostream>
 #include <algorithm>
 #include <math.h>
+#include <vector.h>
 
 using namespace std;
 
@@ -16,6 +17,7 @@ Tapestry::Tapestry(Node *n)
     _bits_per_digit(log10(_base)/log10(2)),
     _digits_per_id((uint)8*sizeof(GUID)/_bits_per_digit)
 {
+  joined = false;
   _my_id = get_id_from_ip(ip());
   cout << "Tapestry Constructor for " << ip() << " and id: ";
   print_guid(_my_id);
@@ -54,6 +56,7 @@ Tapestry::join(Args *args)
 
   // if we're the well known node, we're done
   if( ip() == wellknown_ip ) {
+    joined = true;
     return;
   }
 
@@ -63,9 +66,102 @@ Tapestry::join(Args *args)
   ja.id = id();
   join_return jr;
 
-  bool ok = doRPC( wellknown_ip, &Tapestry::handle_join, &ja, &jr );
+  doRPC( wellknown_ip, &Tapestry::handle_join, &ja, &jr );
 
-  cout << ip() << " join done: " << ok << endl;
+  // now that the multicast is over, it's time for nearest neighbor
+  // ping everyone on the initlist
+  int init_level = guid_compare( id(), jr.surr_id ); 
+  vector<NodeInfo *> seeds;
+  cout << now() << ": " << ip() << " with init level of " << init_level << endl;
+  for( int i = init_level; i >= 0; i-- ) {
+    
+    // go through each member of the init list, add them to your routing 
+    // table, and ask them for their forward and backward pointers 
+    for( uint j = 0; j < initlist.size(); j++ ) {
+      NodeInfo ni = initlist[j];
+      cout << now() << ": " << ip() << " adding in join: " << ni._addr << endl;
+      add_to_rt( ni._addr, ni._id );
+      nn_args nna;
+      nna.ip = ip();
+      nna.id = id();
+      nna.alpha = i;
+      nn_return nnr;
+      doRPC( ni._addr, &Tapestry::handle_nn, &nna, &nnr );
+
+      for( uint k = 0; k < nnr.nodelist.size(); k++ ) {
+	// make sure this one isn't on there yet
+	// TODO: make this more efficient.  Maybe use a hash set or something
+	NodeInfo *currseed = &(nnr.nodelist[k]);
+
+	// don't add ourselves, duh
+	if( currseed->_id == id() ) {
+	  continue;
+	}
+	bool add = true;
+	for( uint l = 0; l < seeds.size(); l++ ) {
+	  if( *currseed == *(seeds[l]) ) {
+	    add = false;
+	    break;
+	  }
+	}
+	if( add ) {
+	  NodeInfo *newseed = new NodeInfo( currseed->_addr, currseed->_id );
+	  seeds.push_back( newseed );
+	  cout << ip() << " has a seed of " << newseed->_addr << " and ";
+	  print_guid( newseed->_id );
+	  cout << endl;
+	}
+      }
+
+    }
+
+    // now that we have all the seeds we want from this one, 
+    // see if they are in the closest k
+    NodeInfo * closestk[_k];
+    // initialize to NULL
+    for( uint k = 0; k < _k; k++ ) {
+      closestk[k] = NULL;
+    }
+    for( uint j = 0; j < seeds.size(); j++ ) {
+      NodeInfo *currseed = seeds[j];
+      // add them all to the routing table (this gets us the ping time for free
+      add_to_rt( currseed->_addr, currseed->_id );
+      currseed->_distance = ping( currseed->_addr, currseed->_id );
+
+      // is there anyone on the list farther than you?  if so, replace
+      bool added = false;
+      for( uint k = 0; k < _k; k++ ) {
+	NodeInfo * currclose = closestk[k];
+	if( currclose == NULL || currclose->_distance > currseed->_distance ) {
+	  closestk[k] = currseed;
+	  added = true;
+	  //	  cout << "close is " << currseed->_addr << endl;
+	  break;
+	}
+      }
+      if( !added ) {
+	// we're throwing this person away, so delete the memory
+	delete currseed;
+      }
+
+    }
+
+    // these k are the next initlist
+    initlist.clear();
+    seeds.clear();
+    for( uint k = 0; k < _k; k++ ) {
+      NodeInfo *currclose = closestk[k];
+      if( currclose != NULL ) {
+	//cout << "close is " << currclose->_addr << endl;
+	initlist.push_back( *currclose );
+      }
+    }
+  }
+
+
+  joined = true;
+  cout << now() << ": " << ip() << " join done" << endl;
+  cout << *_rt << endl;
 
 }
 
@@ -76,15 +172,328 @@ Tapestry::handle_join(join_args *args, join_return *ret)
   print_guid(args->id);
   cout << endl;
 
+  // if our join has not yet finished, we must delay the handling of this
+  // person's join.
+  while( !joined ) {
+    cout << ip() << " delaying join of " << args->ip << endl;
+    ping_args pa;
+    ping_return pr;
+    doRPC( args->ip, &Tapestry::handle_ping, &pa, &pr );    
+  }
+
   // route toward the root
   IPAddress next = next_hop( args->id );
   if( next == ip() ) {
     // we are the surrogate root for this node, start the integration
     
+    cout << now() << ": " << ip() << " is the surrogate root for " << 
+      args->ip << endl;
+
+    // start by sending the new node all of the nodes in your table
+    // up to the digit you share
+    int alpha = guid_compare( id(), args->id );
+    vector<NodeInfo *> thisrow;
+
+    bool stop = true;
+    for( int i = 0; i <= alpha; i++ ) {
+
+      for( uint j = 0; j < _base; j++ ) {
+	NodeInfo *ni = _rt->read( i, j );
+	if( ni != NULL ) {
+	  // keep going if there is someone else on this level
+	  if( ni->_addr != ip() ) {
+	    stop = false;
+	  }
+	  thisrow.push_back( ni );
+	}
+      }
+
+      if( stop ) break;
+      stop = true;
+
+    }
+
+    nodelist_args na;
+    na.nodelist = thisrow;
+    nodelist_return nr;
+    doRPC( args->ip, &Tapestry::handle_nodelist, &na, &nr );
+
+    // start the multicast
+    mc_args mca;
+    mca.new_ip = args->ip;
+    mca.new_id = args->id;
+    mca.alpha = alpha;
+    mca.from_lock = false;
+    mc_return mcr;
+
+    // make the watchlist
+    vector<bool *> wl;
+    for( int i = 0; i < alpha+1; i++ ) {
+      bool level[_base];
+      wl.push_back(level);
+      for( uint j = 0; j < _base; j++ ) {
+	wl[i][j] = false;
+      }
+    }
+    mca.watchlist = wl;
+
+    handle_mc( &mca, &mcr );
+
+    ret->surr_id = id();
+    
   } else {
+    // not the surrogate
     // recursive routing yo
     doRPC( next, &Tapestry::handle_join, args, ret );
   }
+
+}
+
+void 
+Tapestry::handle_nodelist(nodelist_args *args, nodelist_return *ret)
+{
+
+  cout << ip() << " is handling a nodelist message" << endl;
+
+  // add each to your routing table
+  for( uint i = 0; i < args->nodelist.size(); i++ ) {
+    NodeInfo * curr_node = args->nodelist[i];
+    add_to_rt( curr_node->_addr, curr_node->_id );
+  }
+
+}
+
+void
+Tapestry::handle_mc(mc_args *args, mc_return *ret)
+{
+
+  cout << now() << ": " << ip() << " got multicast message for " <<
+    args->new_ip << endl;
+
+  // lock this node
+  _rt->set_lock( args->new_ip, args->new_id );
+
+  // first off, add the new node to your table
+  add_to_rt( args->new_ip, args->new_id );
+
+  // make sure that it knows about you as well
+  mcnotify_args mca;
+  mca.ip = ip();
+  mca.id = id();
+  mcnotify_return mcr;
+
+  // check the watchlist and see if you know about any nodes that
+  // can fill those prefixes
+  vector<NodeInfo *> nodelist;
+  for( uint i = 0; i < args->watchlist.size(); i++ ) {
+    for( uint j = 0; j < _base; j++ ) {
+      if( !args->watchlist[i][j] ) {
+	NodeInfo * ni = _rt->read( i, j );
+	if( ni != NULL && ni->_addr != ip() && ni->_addr != args->new_ip ) {
+	  nodelist.push_back( ni );
+	  args->watchlist[i][j] = true;
+	}
+      }
+    }
+  }
+  mca.nodelist = nodelist;
+
+
+  doRPC( args->new_ip, &Tapestry::handle_mcnotify, &mca, &mcr );
+
+  // don't go on if this is from a lock
+  if( args->from_lock ) {
+    return;
+  }
+
+  // then, find any other node that shares this prefix and multicast
+  // TODO: asynchronous
+  for( uint i = args->alpha; i < _digits_per_id; i++ ) {
+    for( uint j = 0; j < _base; j++ ) {
+      NodeInfo *ni = _rt->read( i, j );
+      // don't RPC to ourselves or to the new node
+      if( ni == NULL || ni->_addr == ip() || ni->_addr == args->new_ip ) {
+	continue;
+      } else {
+	mc_args mca;
+	mca.new_ip = args->new_ip;
+	mca.new_id = args->new_id;
+	mca.alpha = i + 1;
+	mca.from_lock = false;
+	cout << ip() << " multicasting info for " << args->new_ip << " to " << 
+	  ni->_addr << "/";
+	print_guid( ni->_id );
+	cout << endl;
+	doRPC( ni->_addr, &Tapestry::handle_mc, &mca, ret );
+      }
+      
+    }
+  }
+
+  // also, multicast to any locks that might need it
+  vector <NodeInfo> * locks = _rt->get_locks( args->new_id );
+  for( uint i = 0; i < locks->size(); i++ ) {
+    NodeInfo ni = (*locks)[i];
+    if( ni._addr != args->new_ip ) {
+      	mc_args mca;
+	mca.new_ip = args->new_ip;
+	mca.new_id = args->new_id;
+	mca.alpha = args->alpha;
+	mca.from_lock = true;
+	cout << ip() << " multicasting info for " << args->new_ip << " to " << 
+	  ni._addr << "/";
+	print_guid( ni._id );
+	cout << " as a lock " << endl;
+	doRPC( ni._addr, &Tapestry::handle_mc, &mca, ret );
+    }
+  }
+
+
+  _rt->remove_lock( args->new_ip, args->new_id );
+
+  cout << now() << ": " << ip() << " multicast done for " << args->new_ip 
+       << endl;
+
+  // TODO: object pointer transferal
+
+}
+
+void 
+Tapestry::handle_nn(nn_args *args, nn_return *ret)
+{
+
+  // send back all backward pointers
+  vector<NodeInfo> nns;
+
+  vector<NodeInfo> *bps = _rt->get_backpointers( args->alpha );
+  for( uint i = 0; i < bps->size(); i++ ) {
+    nns.push_back( (*bps)[i] );
+  }
+
+  // do we really need to send the forward pointers?  The theory paper says to,
+  // but the Java implementation doesn't.  for now we won't.  TODO maybe.
+
+  // add yourself to the list
+  NodeInfo self( ip(), id() );
+  nns.push_back( self );
+
+  ret->nodelist = nns;
+
+  // finally, add this guy to our table
+  add_to_rt( args->ip, args->id );
+
+}
+
+void 
+Tapestry::handle_ping(ping_args *args, ping_return *ret)
+{
+  // do nothing
+}
+
+void 
+Tapestry::handle_mcnotify(mcnotify_args *args, mcnotify_return *ret)
+{
+
+  cout << now() << ": " << ip() << " got mcnotify from " << args->ip << endl;
+  NodeInfo mc_node( args->ip, args->id );
+  initlist.push_back( mc_node );
+
+  // add all the nodes on the nodelist as well
+  nodelist_args na;
+  na.nodelist = args->nodelist;
+  nodelist_return nr;
+  handle_nodelist( &na, &nr );
+
+}
+
+void 
+Tapestry::add_to_rt( IPAddress new_ip, GUID new_id )
+{
+
+  // first get the distance to this node
+  // TODO: asynchronous pings would be nice
+  // TODO: also, maybe a ping cache of some kind
+  Time distance = ping( new_ip, new_id );
+
+  // the RoutingTable takes care of placing (and removing) backpointers for us
+  _rt->add( new_ip, new_id, distance );
+
+  return;
+
+}
+
+bool
+Tapestry::stabilized(vector<GUID> lid)
+{
+  // for every GUID, make sure it either exists in your routing table,
+  // or someone else does
+
+  for( uint i = 0; i < lid.size(); i++ ) {
+
+    GUID currguid = lid[i];
+    if( !_rt->contains(currguid) ) {
+      int match = guid_compare( currguid, id() );
+      if( match == -1 ) {
+	cout << ip() << " doesn't have itself in the routing table!" << endl;
+	return false;
+      } else {
+	NodeInfo * ni = _rt->read( match, get_digit( currguid, match ) );
+	if( ni == NULL ) {
+	  cout << ip() << " has a hole in the routing table at (" << match <<
+	    "," << get_digit( currguid, match ) << ") where "; 
+	  print_guid( currguid ); 
+	  cout << " would fit." << endl;
+	    return false;
+	}
+      }
+    }
+
+  }
+  
+  return true;
+}
+
+Time
+Tapestry::ping( IPAddress other_node, GUID other_id )
+{
+  // if it's already in the table, don't worry about it
+  if( _rt->contains( other_id ) ) {
+    return _rt->get_time( other_id );
+  }
+
+  Time before = now();
+  ping_args pa;
+  ping_return pr;
+  doRPC( other_node, &Tapestry::handle_ping, &pa, &pr );
+  return now() - before;
+}
+
+void
+Tapestry::place_backpointer( IPAddress bpip, int level, bool remove )
+{
+  backpointer_args bpa;
+  cout << ip() << " sending bp to " << bpip << endl;
+  bpa.ip = ip();
+  bpa.id = id();
+  bpa.level = level;
+  bpa.remove = remove;
+  backpointer_return bpr;
+  doRPC( bpip, &Tapestry::handle_backpointer, &bpa, &bpr );
+}
+
+void 
+Tapestry::handle_backpointer(backpointer_args *args, backpointer_return *ret)
+{
+  cout << ip() << " got a bp msg from " << args->id << endl;
+
+  if( args->remove ) {
+    _rt->remove_backpointer( args->ip, args->id, args->level );
+  } else {
+    _rt->add_backpointer( args->ip, args->id, args->level );
+  }
+
+  // maybe this person should be in our table?
+  add_to_rt( args->ip, args->id );
 
 }
 
@@ -219,11 +628,13 @@ Tapestry::get_digit( GUID id, uint digit )
 RouteEntry::RouteEntry()
 {
   _size = 0;
+  _nodes = new NodeInfo *[NODES_PER_ENTRY];
 }
 
 RouteEntry::RouteEntry( NodeInfo *first_node )
 {
   assert( first_node );
+  _nodes = new NodeInfo *[NODES_PER_ENTRY];
   _nodes[0] = first_node;
   _size = 1;
 }
@@ -245,7 +656,6 @@ RouteEntry::get_first()
 NodeInfo *
 RouteEntry::get_at( uint pos )
 {
-  assert( pos > 0 );
   assert( pos < NODES_PER_ENTRY );
   return _nodes[pos];
 }
@@ -302,17 +712,22 @@ RouteEntry::add( NodeInfo *new_node, NodeInfo **kicked_out )
     if( new_node->_distance < _nodes[i]->_distance ) {
       NodeInfo *replacement = new_node;
       // insert the new node and shift the others down
-      for( uint j = i; j < _size; j++ ) {
+      for( uint j = i; j < NODES_PER_ENTRY; j++ ) {
 	NodeInfo *tmp = _nodes[j];
 	_nodes[j] = replacement;
 	replacement = tmp;
       }
+
+      if( _size == NODES_PER_ENTRY ) {
+	// this is the last one that got kicked out, and didn't get put back
+	*kicked_out = replacement;
+      }
+
       // did we add a new one?
       if( _size < NODES_PER_ENTRY ) {
 	_size++;
       }
-      // this is the last one that got kicked out (may be NULL)
-      *kicked_out = replacement;
+
       return true;
     }
   }
@@ -342,8 +757,15 @@ RoutingTable::RoutingTable( Tapestry *node )
   }
 
   // now we add ourselves to the table
-  bool a;
-  add( _node->ip(), _node->id(), 0, &a );
+  add( _node->ip(), _node->id(), 0 );
+
+  _backpointers = new vector<NodeInfo> *[_node->_digits_per_id];
+
+  // init the locks
+  _locks = new vector<NodeInfo> **[_node->_digits_per_id];
+  for( uint i = 0; i < _node->_digits_per_id; i++ ) {
+    _locks[i] = new vector<NodeInfo> *[_node->_base];
+  }
 
 }
 
@@ -358,8 +780,8 @@ RoutingTable::~RoutingTable()
   
 }
 
-vector<IPAddress>
-RoutingTable::add( IPAddress ip, GUID id, uint distance, bool* added )
+bool
+RoutingTable::add( IPAddress ip, GUID id, Time distance )
 {
   vector<IPAddress> kicked_out;
   bool in_added = false;
@@ -374,12 +796,22 @@ RoutingTable::add( IPAddress ip, GUID id, uint distance, bool* added )
       re = new RouteEntry( new_node );
       _table[i][j] = re;
       in_added = true;
+      if( ip != _node->ip() ) {
+	_node->place_backpointer( ip, i, false );
+      }
     } else {
       // add it to an existing one
       NodeInfo *kicked_out_node = NULL;
-      in_added = in_added | re->add( new_node, &kicked_out_node );
+      bool level_added = re->add( new_node, &kicked_out_node );
+      in_added = in_added | level_added;
       if( kicked_out_node != NULL ) {
-	kicked_out.push_back(kicked_out_node->_addr);
+	// tell the node we're no longer pointing to it at this level
+	//cout << kicked_out_node << endl;
+	_node->place_backpointer( kicked_out_node->_addr, i, true );
+      }
+      if( level_added && ip != _node->ip() ) {
+	// tell the node we are pointing to it
+	_node->place_backpointer( ip, i, false );
       }
     }
     // if the last digit wasn't a match, we're done
@@ -388,8 +820,7 @@ RoutingTable::add( IPAddress ip, GUID id, uint distance, bool* added )
     }
   }
   
-  *added = in_added;
-  return kicked_out;
+  return in_added;
 }
 
 NodeInfo *
@@ -401,6 +832,132 @@ RoutingTable::read( uint i, uint j )
   } else {
     return re->get_first();
   }
+}
+
+bool
+RoutingTable::contains( GUID id )
+{
+  int alpha = _node->guid_compare( _node->id(), id );  
+  if( alpha == -1 ) {
+    alpha = _node->_digits_per_id - 1;
+  }
+  RouteEntry *re = _table[alpha][_node->get_digit( id, alpha )];
+  if( re != NULL ) {
+    // see if it's in there anywhere
+    for( uint i = 0; i < re->size(); i++ ) {
+      NodeInfo *ni = re->get_at(i);
+      if( ni->_id == id ) {
+	return true;
+      }
+    }
+  }
+  return false;
+
+}
+
+Time
+RoutingTable::get_time( GUID id )
+{
+
+  uint alpha = _node->guid_compare( _node->id(), id );  
+  RouteEntry *re = _table[alpha][_node->get_digit( id, alpha )];
+  if( re != NULL ) {
+    // see if it's in there anywhere
+    for( uint i = 0; i < re->size(); i++ ) {
+      NodeInfo *ni = re->get_at(i);
+      if( ni->_id == id ) {
+	return ni->_distance;
+      }
+    }
+  }
+  // some maximum time (-1 won't work because it's unsigned)
+  return MAXTIME;
+
+}
+
+void 
+RoutingTable::add_backpointer( IPAddress ip, GUID id, uint level )
+{
+  vector<NodeInfo> * this_level = get_backpointers(level);
+  NodeInfo new_node( ip, id );
+  this_level->push_back( new_node );
+}
+
+void 
+RoutingTable::remove_backpointer( IPAddress ip, GUID id, uint level )
+{
+  // TODO
+  /*
+  vector<NodeInfo> * this_level = get_backpointers(level);
+  NodeInfo new_node( ip, id );
+  for( uint i = 0; i < this_level->size(); i++ ) {
+    NodeInfo curr_node = (*this_level)[i];
+    if( curr_node == new_node ) {
+      //this_level->erase(&curr_node);
+      // only erase the first occurance
+      return;
+    }
+  }
+  */
+
+}
+
+vector<NodeInfo> *
+RoutingTable::get_backpointers( uint level )
+{
+  vector<NodeInfo> * this_level = _backpointers[level];
+  if( this_level == NULL ) {
+    this_level = new vector<NodeInfo>;
+    _backpointers[level] = this_level;
+  }
+  return this_level;
+}
+
+void 
+RoutingTable::set_lock( IPAddress ip, GUID id )
+{
+  vector<NodeInfo> * this_level = get_locks(id);
+  if( this_level == NULL ) {
+    // can't lock yourself
+    return;
+  }
+  NodeInfo new_node( ip, id );
+  this_level->push_back( new_node );
+}
+
+void 
+RoutingTable::remove_lock( IPAddress ip, GUID id )
+{
+  // TODO
+  /*
+  vector<NodeInfo> * this_level = get_backpointers(level);
+  NodeInfo new_node( ip, id );
+  for( uint i = 0; i < this_level->size(); i++ ) {
+    NodeInfo curr_node = (*this_level)[i];
+    if( curr_node == new_node ) {
+      //this_level->erase(&curr_node);
+      // only erase the first occurance
+      return;
+    }
+  }
+  */
+
+}
+
+vector<NodeInfo> *
+RoutingTable::get_locks( GUID id )
+{
+  int match = _node->guid_compare( _node->id(), id );
+  if( match == -1 ) {
+    // can't lock yourself
+    return NULL;
+  }
+  vector<NodeInfo> * this_level = _locks[match][_node->get_digit(id, match)];
+  if( this_level == NULL ) {
+    this_level = new vector<NodeInfo>;
+    _locks[match][_node->get_digit(id, match)] = this_level;
+  }
+  return this_level;
 }
 
 ostream&
@@ -435,7 +992,6 @@ RoutingTable::insertor( ostream &s ) const
 
   return s;
 }
-
 
 ///// operator overloading ///////////
 
