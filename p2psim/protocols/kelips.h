@@ -23,6 +23,9 @@
 
 // To do:
 // fix churn generator to not lookup dead nodes?
+// hmm, we get a LOT of lookup failures in kx.pl runs, like 1/2 of lookups
+// init_state initialize _rtt
+// Indranil says joining nodes fetch huge state from wkn.
 
 // Does it stabilize after the expected number of rounds?
 // Gossip w/o favoring new nodes (nnodes: avg median):
@@ -87,8 +90,8 @@ public:
   static double _rpc_bytes; // total traffic
   static double _good_latency; // successful lookups
   static int _good_lookups;
-  static double _bad_latency;  // failed lookups
-  static int _bad_lookups;
+  static int _ok_failures;
+  static int _bad_failures;
 
   // Information about one other node.
   class Info {
@@ -125,13 +128,14 @@ public:
   vector<IPAddress> notgrouplist(int g);
   void check(bool doprint);
   void handle_join(IPAddress *caller, vector<Info> *ret);
-  vector<Info> gossip_msg(int g);
+  vector<Info> gossip_msg(int g, u_int, u_int);
   vector<IPAddress> randomize(vector<IPAddress> a);
   vector<IPAddress> newold(vector<IPAddress> a, bool xnew);
   void newold_msg(vector<Info> &msg, vector<IPAddress> l, u_int ration);
   void handle_lookup_final(ID *kp, bool *done);
   void handle_lookup1(ID *kp, IPAddress *res);
   bool lookup1(ID key, vector<IPAddress> &);
+  bool lookupvia(ID key, IPAddress via, vector<IPAddress> &history);
   bool lookup2(ID key, vector<IPAddress> &);
   bool lookup_loop(ID key, vector<IPAddress> &);
   void handle_lookup2(ID *kp, IPAddress *res);
@@ -143,6 +147,7 @@ public:
   void handle_ping(void *, void *);
   int contact_score(Info i);
   IPAddress closest_contact(int g);
+  bool node_key_alive(ID key);
 
   // RPC that records RTT.
   template<class AT, class RT>

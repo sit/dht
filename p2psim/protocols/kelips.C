@@ -37,8 +37,8 @@ int nsta;
 double Kelips::_rpc_bytes = 0;
 double Kelips::_good_latency = 0;
 int Kelips::_good_lookups = 0;
-double Kelips::_bad_latency = 0;
-int Kelips::_bad_lookups = 0;
+int Kelips::_ok_failures = 0;  // # legitimate lookup failures
+int Kelips::_bad_failures = 0; // lookup failed, but node was live
 
 Kelips::Kelips(Node *n, Args a)
   : P2Protocol(n)
@@ -70,7 +70,8 @@ Kelips::~Kelips()
 {
   if(ip() == 1){
     printf("rpc_bytes %.0f\n", _rpc_bytes);
-    printf("%d good, %d failed\n", _good_lookups, _bad_lookups);
+    printf("%d good, %d ok failures, %d bad failures\n",
+           _good_lookups, _ok_failures, _bad_failures);
     if(_good_lookups > 0){
       printf("avglat %.1f\n", _good_latency / _good_lookups);
     }
@@ -205,6 +206,21 @@ Kelips::crash(Args *a)
   assert(_info.size() == 0);
 }
 
+// Return whether the node corresponding to a given key is alive.
+// This is cheating, just for diagnostics.
+bool
+Kelips::node_key_alive(ID key)
+{
+  vector<IPAddress> ips = Network::Instance()->getallips();
+  for(u_int i = 0; i < ips.size(); i++){
+    if(ip2id(ips[i]) == key){
+      return Network::Instance()->getnode(ips[i])->alive();
+    }
+  }
+  assert(0);
+  return false;
+}
+
 // In real Kelips, the file with key K is stored in group
 // (K mod k), on a randomly chosen member of the group.
 // All nodes in the group learn that K is on that node via
@@ -231,23 +247,30 @@ Kelips::lookup(Args *args)
   bool ok = lookup_loop(key, history);
   Time t2 = now();
 
+  bool oops = false;
+  if(ok == false)
+    oops = node_key_alive(key);
+
   if(ok){
     _good_lookups += 1;
     _good_latency += t2 - t1;
+  } else if(oops){
+    _bad_failures += 1;
   } else {
-    _bad_lookups += 1;
-    _bad_latency += t2 - t1;
+    _ok_failures += 1;
   }
 
-  printf("%qd %d lat=%d lookup(%qd) ", now(), ip(), (int)(t2 - t1), key);
-  for(u_int i = 0; i < history.size(); i++)
-    printf("%d ", history[i]);
-  printf("%s   ", ok ? "OK" : "FAIL");
+  if(ok == false){
+    printf("%qd %d lat=%d lookup(%qd) ", now(), ip(), (int)(t2 - t1), key);
+    for(u_int i = 0; i < history.size(); i++)
+      printf("%d ", history[i]);
+    printf("%s%s   ", ok ? "OK" : "FAIL", (!ok && oops) ? " OOPS" : "");
 
-  vector<IPAddress> l = all();
-  for(u_int i = 0; i < l.size(); i++)
-    printf("%d/%d ", l[i], _info[l[i]]->_rtt);
-  printf("\n");
+    vector<IPAddress> l = all();
+    for(u_int i = 0; i < l.size(); i++)
+      printf("%d/%d ", l[i], _info[l[i]]->_rtt);
+    printf("\n");
+  }
 }
 
 // Keep trying to lookup.
@@ -258,19 +281,20 @@ Kelips::lookup_loop(ID key, vector<IPAddress> &history)
   if(key == id())
     return true;
 
-  // Ordinary lookup via a contact.
+  // Try an ordinary lookup via the closest contact.
   if(lookup1(key, history))
     return true;
 
-  // Try various random things a bunch of times.
+  // Try via each known contact.
+  vector<IPAddress> cl = grouplist(id2group(key));
+  for(u_int i = 0; i < cl.size(); i++)
+    if(lookupvia(key, cl[i], history))
+      return true;
+
+  // Try via random nodes a few times.
   for(int iter = 0; iter < 6; iter++){
-    if((random() % 2) == 0){
-      if(lookup1(key, history))
-        return true;
-    } else {
-      if(lookup2(key, history))
-        return true;
-    }
+    if(lookup2(key, history))
+      return true;
   }
 
   return false;
@@ -279,6 +303,8 @@ Kelips::lookup_loop(ID key, vector<IPAddress> &history)
 // Look up a key via closest contact.
 // The contact should return the IP address of
 // the lookup target, which we then try to talk to.
+// This is only suitable for the fast/ordinary
+// path, it doesn't try any alternate paths.
 bool
 Kelips::lookup1(ID key, vector<IPAddress> &history)
 {
@@ -301,6 +327,7 @@ Kelips::lookup1(ID key, vector<IPAddress> &history)
     bool ok = xRPC(ip, 3, &Kelips::handle_lookup1, &key, &ip1);
     if(!ok || ip1 == 0)
       return false;
+    assert(ip1 != ip);
   }
 
   bool done = false;
@@ -310,15 +337,32 @@ Kelips::lookup1(ID key, vector<IPAddress> &history)
   return(ok && done);
 }
 
-// Look up a key via a randomly member of our own group,
-// hoping that they will have better contact info.
+// Look up a key via a given contact.
+bool
+Kelips::lookupvia(ID key, IPAddress via, vector<IPAddress> &history)
+{
+  history.push_back(via);
+  IPAddress ip1 = 0;
+  bool ok = xRPC(via, 3, &Kelips::handle_lookup1, &key, &ip1);
+  if(ok == false || ip1 == 0)
+    return false;
+
+  bool done = false;
+  history.push_back(ip1);
+  ok = xRPC(ip1, 2, &Kelips::handle_lookup_final, &key, &done);
+
+  return(ok && done);
+}
+
+// Look up a key via a random nodes,
+// hoping that they will have better contact info than us.
 bool
 Kelips::lookup2(ID key, vector<IPAddress> &history)
 {
-  vector<IPAddress> gl = grouplist(group());
-  if(gl.size() < 1)
+  vector<IPAddress> l = all();
+  if(l.size() < 1)
     return false;
-  IPAddress ip = gl[random() % gl.size()];
+  IPAddress ip = l[random() % l.size()];
 
   IPAddress ip1 = 0;
   history.push_back(ip);
@@ -416,7 +460,9 @@ void
 Kelips::handle_join(IPAddress *caller, vector<Info> *ret)
 {
   gotinfo(Info(*caller, now())); // XXX caller should supply an Info
-  *ret = gossip_msg(ip2group(*caller));
+
+  // send a super-big ration on join, per Indranil's e-mail.
+  *ret = gossip_msg(ip2group(*caller), 20, 20);
 }
 
 // This node has just learned about another node.
@@ -558,7 +604,7 @@ Kelips::newold_msg(vector<Info> &msg, vector<IPAddress> l, u_int ration)
 // to avoid disconnection!
 // XXX ought to send newer heartbeats preferentially????
 vector<Kelips::Info>
-Kelips::gossip_msg(int g)
+Kelips::gossip_msg(int g, u_int gr, u_int cr)
 {
   vector<Info> msg;
 
@@ -566,12 +612,12 @@ Kelips::gossip_msg(int g)
   msg.push_back(Info(ip(), now()));
 
   // Add some nodes from our group.
-  newold_msg(msg, grouplist(g), _group_ration);
+  newold_msg(msg, grouplist(g), gr);
 
   // Add some contact nodes.
-  newold_msg(msg, notgrouplist(g), _contact_ration);
+  newold_msg(msg, notgrouplist(g), cr);
 
-  assert(msg.size() <= 1 + _group_ration + _contact_ration);
+  assert(msg.size() <= 1 + gr + cr);
 
   return msg;
 }
@@ -588,7 +634,7 @@ void
 Kelips::gossip(void *junk)
 {
   if(_live){
-    vector<Info> msg = gossip_msg(group());
+    vector<Info> msg = gossip_msg(group(), _group_ration, _contact_ration);
 
     {
       vector<IPAddress> gl = randomize(grouplist(group()));
