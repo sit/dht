@@ -68,6 +68,8 @@ class vnode_impl : public vnode {
   ptr<pred_list> predecessors;
   ptr<toe_table> toes;
   ptr<stabilize_manager> stabilizer;
+
+  ptr<route_factory> factory;
   
   int myindex;
   float timestep;
@@ -174,7 +176,6 @@ class vnode_impl : public vnode {
  public:
   chordID myID;
   ptr<chord> chordnode;
-  ptr<route_factory> factory;
   int server_selection_mode;
   int lookup_mode;
 
@@ -190,6 +191,8 @@ class vnode_impl : public vnode {
   chordID my_ID () const;
   ptr<location> my_pred () const;
   ptr<location> my_succ () const;
+
+  ptr<route_factory> get_factory ();
 
   // The API
   void stabilize (void);

@@ -122,6 +122,8 @@ class vnode : public virtual refcount {
   virtual ptr<location> my_pred () const = 0;
   virtual ptr<location> my_succ () const = 0;
 
+  virtual ptr<route_factory> get_factory () = 0;
+
   // The API
   virtual void stabilize (void) = 0;
   virtual void join (ptr<location> n, cbjoin_t cb) = 0;

@@ -83,10 +83,10 @@ vnode_impl::vnode_impl (ptr<locationtable> _locations,
 			chordID _myID, int _vnode, int server_sel_mode,
 			int l_mode) :
   rpcm (_rpcm),
+  factory (f),
   myindex (_vnode),
   myID (_myID), 
   chordnode (_chordnode),
-  factory (f),
   server_selection_mode (server_sel_mode),
   lookup_mode (l_mode)
 {
@@ -263,6 +263,13 @@ vnode_impl::my_succ () const
 {
   return successors->succ ();
 }
+
+ptr<route_factory>
+vnode_impl::get_factory ()
+{
+  return factory;
+}
+
 
 void
 vnode_impl::stats () const

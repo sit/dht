@@ -40,7 +40,6 @@
 
 class location;
 class vnode;
-class route_factory;
 class dhash_block;
 class dbrec;
 class blockID;
@@ -78,7 +77,7 @@ class dhash {
   virtual ~dhash () = 0;
   
   // XXX gross
-  virtual void init_after_chord (ptr<vnode> node, ptr<route_factory> r_fact) = 0;
+  virtual void init_after_chord (ptr<vnode> node) = 0;
 
   virtual void print_stats () = 0;
   virtual void stop () = 0;

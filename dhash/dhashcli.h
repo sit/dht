@@ -116,7 +116,7 @@ private:
   void sendblock_cb (callback<void, dhash_stat, bool>::ref cb, 
 		     dhash_stat err, chordID dest, bool present);
  public:
-  dhashcli (ptr<vnode> node, ptr<route_factory> r_factory, int ss);
+  dhashcli (ptr<vnode> node, int ss);
 
   void retrieve_from_cache (blockID blockID, cbretrieve_t cb);
 

@@ -86,7 +86,6 @@ class dhash_impl : public dhash {
   ptr<dbfe> keyhash_db;
   ptr<vnode> host_node;
   dhashcli *cli;
-  ptr<route_factory> r_factory;
 
   merkle_server *msrv;
   pmaint *pmaint_obj;
@@ -198,7 +197,7 @@ class dhash_impl : public dhash {
   void replica_maintenance_timer (u_int index);
   void partition_maintenance_timer ();
 
-  void init_after_chord (ptr<vnode> node, ptr<route_factory> r_fact);
+  void init_after_chord (ptr<vnode> node);
 
   void print_stats ();
   void stop ();

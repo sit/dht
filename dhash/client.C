@@ -67,9 +67,8 @@
 // DHASHCLI
 
  
-dhashcli::dhashcli (ptr<vnode> node, ptr<route_factory> r_factory, int ss = 1)
-                    
-  : clntnode (node), r_factory (r_factory), server_selection_mode (ss)
+dhashcli::dhashcli (ptr<vnode> node, int ss = 1)
+  : clntnode (node), r_factory (node->get_factory ()), server_selection_mode (ss)
 {
 }
 

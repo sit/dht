@@ -173,10 +173,8 @@ dhash_impl::dhash_impl (str dbname, u_int k, int _ss_mode)
 }
 
 void
-dhash_impl::init_after_chord (ptr<vnode> node, ptr<route_factory> _r_factory)
+dhash_impl::init_after_chord (ptr<vnode> node)
 {
-  this->r_factory = _r_factory;
-
   host_node = node;
   assert (host_node);
 
@@ -203,7 +201,7 @@ dhash_impl::init_after_chord (ptr<vnode> node, ptr<route_factory> _r_factory)
 
   //the client helper class (will use for get_key etc)
   //don't cache here: only cache on user generated requests
-  cli = New dhashcli (node, r_factory, 1); // XXX pick real server selection mode?
+  cli = New dhashcli (node, 1); // XXX pick real server selection mode?
 
   /* statistics */
   keys_stored = 0;

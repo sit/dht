@@ -95,23 +95,7 @@ client_accept (int fd)
   ref<axprt_stream> x = axprt_stream::alloc (fd, 1024*1025);
 
   // XXX these dhashgateway objects are leaked
-  //
-  ptr<route_factory> f;
-  switch (mode) {
-  case MODE_DEBRUIJN:
-    f = New refcounted<debruijn_route_factory> (chordnode->active);
-    break;
-  case MODE_CHORD:
-    f = New refcounted<chord_route_factory> (chordnode->active);
-    break;
-  case MODE_SECCHORD:
-    f = New refcounted<secchord_route_factory> (chordnode->active);
-    break;
-  default:
-    fatal << "bad route mode" << mode << "\n";
-  }
-
-  vNew dhashgateway (x, chordnode, dh[0], f, do_cache, ss_mode);
+  vNew dhashgateway (x, chordnode, do_cache, ss_mode);
 }
 
 static void
@@ -191,21 +175,20 @@ get_fingerlike (int mode)
 }
 
 static void
-newvnode_cb (int n, ptr<route_factory> f_old,
-	     ptr<vnode> my, chordstat stat)
+newvnode_cb (int n, ptr<vnode> my, chordstat stat)
 {  
   if (stat != CHORD_OK) {
     warnx << "newvnode_cb: status " << stat << "\n";
     fatal ("unable to join\n");
   }
-  dh[n]->init_after_chord(my, f_old);
+  dh[n]->init_after_chord (my);
 
   n += 1;
   initialized_dhash = n;
   if (n < vnodes) {
     ptr<route_factory> f = get_factory (mode);
     ptr<fingerlike> fl = get_fingerlike (mode);
-    chordnode->newvnode (wrap (newvnode_cb, n, f), fl, f);
+    chordnode->newvnode (wrap (newvnode_cb, n), fl, f);
   }
 }
 
@@ -693,7 +676,7 @@ main (int argc, char **argv)
 
   ptr<route_factory> f = get_factory (mode);
   ptr<fingerlike> fl = get_fingerlike (mode);
-  chordnode->newvnode (wrap (newvnode_cb, 0, f), fl, f);
+  chordnode->newvnode (wrap (newvnode_cb, 0), fl, f);
 
 
   time_t now = time (NULL);
