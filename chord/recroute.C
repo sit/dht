@@ -132,9 +132,11 @@ recroute<T>::dorecroute (user_args *sbp, recroute_route_arg *ra)
   recroute_route_stat rstat (RECROUTE_ACCEPTED);
 
   chordID myID = my_ID ();
+  strbuf header;
 
-  rtrace << myID << ": dorecroute (" << ra->routeid << ", "
-	 << ra->x << "): starting; desired = " << ra->succs_desired << "\n";
+  header << myID << ": dorecroute (" << ra->routeid << ", " << ra->x << "): ";
+  
+  rtrace << header << "starting; desired = " << ra->succs_desired << "\n";
   
   vec<ptr<location> > cs = succs ();
   u_long m = ra->succs_desired;
@@ -156,8 +158,7 @@ recroute<T>::dorecroute (user_args *sbp, recroute_route_arg *ra)
 	break;
       }
     }
-    rtrace << myID << ": dorecroute (" << ra->routeid << ", "
-	   << ra->x << "): overlap = " << overlap << " / m = " << m << "\n";
+    rtrace << header << "overlap = " << overlap << " / m = " << m << "\n";
 
     // Try to decide who to talk to next.
     if (overlap >= m) {
@@ -179,23 +180,24 @@ recroute<T>::dorecroute (user_args *sbp, recroute_route_arg *ra)
       size_t minind = 0;
 
       size_t start = m - overlap;
-      warn << "going to choose a distance from ";
+      strbuf distbuf;
+      distbuf << "going to choose a distance from ";
       for (size_t i = start; i < cs.size (); i++) {
 	float dist = Coord::distance_f (my_location ()->coords (),
 					cs[i]->coords ());
-	warn << cs[i]->id () << "at " << (int)dist << " ";
+	distbuf << cs[i]->id () << "(" << (int)dist << ") ";
 	if (mindist < 0 || dist < mindist) {
 	  mindist = dist;
 	  minind  = i;
 	}
       }
-      warn << " i chose " << cs[minind]->id () << " at " << (int)mindist << "\n";;
+      distbuf << "; i chose " << cs[minind]->id () << "(" << (int)mindist << ")\n";
+      rtrace << header << distbuf;
       if (minind < succind) {
 	p = cs[minind];
       } else {
 	ptr<location> nexthop = cs[minind];
-	rtrace << myID << ": dorecroute (" << ra->routeid << ", "
-	       << ra->x << "): going for penult from " << nexthop->id () << "\n";
+	rtrace << header << "going for penult from " << nexthop->id () << "\n";
 	cs.popn_front (succind); // just the overlap please
 	dorecroute_sendpenult (ra, nexthop, p, cs);
 	sbp->replyref (rstat);
