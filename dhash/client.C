@@ -185,12 +185,30 @@ dhashclient::lookup_iter_cb (svccb *sbp,
   if (err) {
     /* CASE I */
     chordID last;
+    chordID plast;
     nerror++;
     if (path.size () > 0)
       last = path.pop_back ();
     if (path.size () > 0) {
-      chordID plast = path.back ();
+      plast = path.back ();
       clntnode->alert (plast, last);
+    } else {
+      plast = clntnode->lookup_closestpred (rarg->key);
+      path.push_back (plast);
+    }
+    if (plast == clntnode->clnt_ID ()) {
+      /* No more predecessors; lets look for a replica */
+      vec<chord_node> succ;
+      for (int i = 0; i < NSUCC; i++) {
+	chord_node node;
+	node.x = clntnode->nth_successorID (i);
+	node.r = clntnode->locations->getlocation (node.x)->addr;
+	succ.push_back (node);
+      }
+
+      query_successors (succ, path.size () + 100*nerror, sbp, rarg, 
+			clntnode->clnt_ID ());
+    } else {
       dhash_fetchiter_res *nres = New dhash_fetchiter_res (DHASH_CONTINUE);
       /* assumes an in-order RPC transport, otherwise retry
 	 might reach prev before alert can update tables*/
@@ -198,15 +216,6 @@ dhashclient::lookup_iter_cb (svccb *sbp,
 		       rarg, nres,
 		       wrap(this, &dhashclient::lookup_iter_cb, 
 			    sbp, nres, path, nerror));
-    } else {
-      vec<chord_node> succ;
-      for (int i = 0; i < nreplica; i++) {
-	chord_node node;
-	node.x = clntnode->nth_successorID (i);
-	node.r = clntnode->locations->getlocation (node.x)->addr;
-	succ.push_back (node);
-      }
-      query_successors (succ, path.size () + 100*nerror, sbp, rarg, clntnode->clnt_ID ());
     }
   } else if (res->status == DHASH_COMPLETE) {
     /* CASE II */
@@ -223,6 +232,7 @@ dhashclient::lookup_iter_cb (svccb *sbp,
   } else if (res->status == DHASH_CONTINUE) {
     chordID next = res->cont_res->next.x;
     chordID prev = path.back ();
+    //    warn << "node " << prev << " returned " << next << "\n";
     if (next == prev) {
       if (res->cont_res->succ_list.size () == 0) 
 	/*CASE III.a */
