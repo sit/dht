@@ -47,6 +47,7 @@ rm -rf $RPM_BUILD_ROOT
 %{_bindir}/lsd
 %{_bindir}/lsdctl
 %{_bindir}/nodeq
+%{_bindir}/nodeq-filter
 %{_bindir}/sfsrodb
 %{_bindir}/usenet
 %{_bindir}/usenetlsdmon.py
@@ -68,6 +69,9 @@ rm -rf $RPM_BUILD_ROOT
 %changelog
 * Sun Feb 20 2005 Emil Sit <sit@mit.edu>
 - Add udbctl for usenet control
+
+* Wed Jan 26 2005 Emil Sit <sit@mit.edu>
+- Include nodeq-filter
 
 * Sat Jan 22 2005 Emil Sit <sit@mit.edu>
 - Add some python stuff
