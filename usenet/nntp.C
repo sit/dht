@@ -22,6 +22,10 @@ char *postok = "240 article posted ok\r\n";
 char *postbad = "441 posting failed\r\n";
 char *noarticle = "430 no such article found\r\n";
 char *help = "100 help text follow\r\n";
+char *ihavesend = "335 send article to be transferred.  End with <CR-LF>.<CR-LF>\r\n";
+char *ihaveok = "235 article transferred ok\r\n";
+char *ihaveno = "435 article not wanted - do not send it\r\n";
+char *ihavebad = "436 transfer failed - try again later\r\n";
 
 nntp::nntp (int _s) : s (_s)
 {
@@ -152,8 +156,8 @@ nntp::cmd_over (str c) {
     } while(cur_group.more ());
     out << period;
   } else {
-    // xxx er
-    warn << "ror\n";
+    out << syntax;
+    warn << "error\n";
   }
 }
 
@@ -182,13 +186,10 @@ nntp::cmd_article (str c) {
   str msgid;
   ptr<dbrec> key, d;
 
-  warn << "a1\n";
-
   if (!cur_group.loaded ()) {
     out << nogroup;
   } else if (artrx.search (c)) {
     if (artrx[2]) {
-  warn << "a2\n";
       msgid = cur_group.getid (strtoul (artrx[2], NULL, 10));
       cur_group.cur_art = strtoul (artrx[2], NULL, 10);
     } else if (artrx[1]) {
@@ -196,25 +197,28 @@ nntp::cmd_article (str c) {
     } else {
       msgid = cur_group.getid ();
     }
-  warn << "a3\n";
 
-  if (msgid) {
+    if (msgid) {
 
-    warn << "msgid " << msgid << "\n";
+      warn << "msgid " << msgid << "\n";
 
-    key = New refcounted<dbrec> (msgid, msgid.len ());
-    d = article_db->lookup (key);
+      key = New refcounted<dbrec> (msgid, msgid.len ());
+      d = article_db->lookup (key);
+      if (!d) {
+	out << noarticle;
+	return;
+      }
 
-    if (!artrx[1]) {
-      out << articleb << cur_group.cur_art << " " << msgid << articlee;
-    }
-    out << str (d->value, d->len) << "\r\n";
-    out << period;
-  } else
-    out << noarticle;
+      if (!artrx[1]) {
+	out << articleb << cur_group.cur_art << " " << msgid << articlee;
+      }
+      out << str (d->value, d->len) << "\r\n";
+      out << period;
+    } else
+      out << noarticle;
   } else {
-    // xxx er
-    warn << "ror\n";
+    out << syntax;
+    warn << "error\n";
   }
 }
 
@@ -223,7 +227,7 @@ nntp::cmd_post (str c)
 {
   warn << "post\n";
   out << postgo;
-  fdcb (s, selread, wrap (this, &nntp::read_post));
+  fdcb (s, selread, wrap (this, &nntp::read_post, postok, postbad));
 }
 
 static rxx postrx ("(.+\n)\\.\r\n", "ms");
@@ -232,7 +236,7 @@ static rxx postngrx ("Newsgroups: (.+)\r");
 static rxx postgrx (",?([^,]+)");
 
 void
-nntp::read_post (void)
+nntp::read_post (char *resp, char *bad)
 {
   int res;
   ptr<dbrec> k, d;
@@ -284,9 +288,9 @@ nntp::read_post (void)
   post.clear ();
 
   if (posted)
-    out << postok;
+    out << resp;
   else
-    out << postbad;
+    out << bad;
 
   fdcb (s, selwrite, wrap (this, &nntp::output));
   fdcb (s, selread, wrap (this, &nntp::command));
@@ -308,3 +312,23 @@ nntp::cmd_help (str c)
     out << cmd_table[i].cmd << "\r\n";
   out << period;
 }
+
+static rxx ihaverx ("^IHAVE (<.+?>)");
+
+void
+nntp::cmd_ihave (str c)
+{
+  warn << "ihave\n";
+  ptr<dbrec> key, d;
+
+  if (ihaverx.search (c)) {
+    key = New refcounted<dbrec> (ihaverx[1], ihaverx[1].len ());
+    d = article_db->lookup (key);
+    if (!d) {
+      out << ihavesend;
+      fdcb (s, selread, wrap (this, &nntp::read_post, ihaveok, ihavebad));
+    } else
+      out << ihaveno;
+  } else
+    out << syntax;
+}    
