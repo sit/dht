@@ -76,7 +76,7 @@ ChordFinger::fix_fingers()
   CHID finger;
   for (unsigned int i = i0; i < NBCHID; i++) {
     finger = ConsistentHash::successorID(me.id,i);
-    v = find_successors(finger, 1, true);
+    v = find_successors(finger, 1, false);
 #ifdef CHORD_DEBUG
     printf("%s fix_fingers %d finger (%qx) get (%u,%qx)\n", ts(), i, finger, v[0].ip, v[0].id);
 #endif

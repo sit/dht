@@ -143,7 +143,7 @@ protected:
   vector<uint> stat;
 
   IDMap find_successors_recurs(CHID key, bool intern, bool is_lookup = false);
-  virtual vector<IDMap> find_successors(CHID key, uint m, bool intern, bool is_lookup = false);
+  virtual vector<IDMap> find_successors(CHID key, uint m, bool is_lookup);
 
   void fix_successor();
   void fix_successor_list();

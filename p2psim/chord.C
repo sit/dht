@@ -115,7 +115,7 @@ Chord::lookup(Args *args)
 	result.ip, result.id, 2 * lat, now() - begin);
   } else {
     printf("%s lookup start\n",ts());
-    vector<IDMap> v = find_successors(k, 1, false, true); 
+    vector<IDMap> v = find_successors(k, 1, true); 
     if (v.size() == 0) {
       if (node()->alive()) {
 	printf("%s lookup failed %16qx interval %llu\n", ts(),k, 
@@ -155,7 +155,7 @@ void
 Chord::find_successors_handler(find_successors_args *args, find_successors_ret *ret)
 {
   check_static_init();
-  ret->v = find_successors(args->key, args->m, true);
+  ret->v = find_successors(args->key, args->m, false);
 }
 
 // Returns at least m successors of key.
@@ -163,7 +163,7 @@ Chord::find_successors_handler(find_successors_args *args, find_successors_ret *
 // A local call, use find_successors_handler for an RPC.
 // Not recursive.
 vector<Chord::IDMap>
-Chord::find_successors(CHID key, uint m, bool intern, bool is_lookup)
+Chord::find_successors(CHID key, uint m, bool is_lookup)
 {
   assert(m <= _nsucc);
 
@@ -171,7 +171,7 @@ Chord::find_successors(CHID key, uint m, bool intern, bool is_lookup)
 
   vector<IDMap> route;
 
-  if (vis && !intern) 
+  if (vis && is_lookup) 
     printf ("vis %llu search %16qx %16qx\n", now(), me.id, key);
 
   next_args na;
@@ -185,9 +185,10 @@ Chord::find_successors(CHID key, uint m, bool intern, bool is_lookup)
   route.clear();
   route.push_back(me);
 
+  uint timeout = 0;
   while(1){
     assert(count++ < 500);
-    if (vis && !intern) 
+    if (vis && is_lookup) 
       printf ("vis %llu step %16qx %16qx\n", now(), me.id, nprime.id);
 
     
@@ -210,7 +211,7 @@ Chord::find_successors(CHID key, uint m, bool intern, bool is_lookup)
       } else
 	r = doRPC(nr.v[0].ip, &Chord::null_handler, (void *)NULL, (void *)NULL);
 
-      if (vis && !intern) 
+      if (vis && is_lookup) 
 	printf ("vis %llu step %16qx %16qx\n", now(), me.id, nr.v[0].id);
 
       break;
@@ -225,7 +226,7 @@ Chord::find_successors(CHID key, uint m, bool intern, bool is_lookup)
 	nr.v.clear();
 	return nr.v;
       }
-      printf ("%s rpc to %u,%16qx failed %llu route sz %d, alive %d\n", ts(), nprime.ip, nprime.id, now (), route.size(), node()->alive()?1:0);
+      timeout++;
       assert(route.size() >=2 && route.size() < 15);
       if (route.size () > 1) {
 	route.pop_back (); 
@@ -241,17 +242,12 @@ Chord::find_successors(CHID key, uint m, bool intern, bool is_lookup)
       }
     }
   }
-
-  if (nr.v.size() == 0) {
-    printf("%s find_successor for %qx FAILED \n", ts(), key);
-  }
-
-  if (!intern) {
+  if (is_lookup) {
     printf ("find_successor for (id %qx, key %qx)", me.id, key);
     if (nr.v.size () == 0) {
       printf ("failed\n");
     } else {
-      printf ("is (%u, %qx) hops %d %d\n", nr.v[0].ip, nr.v[0].id, count+1, route.size());
+      printf ("is (%u, %qx) hops %d timeout %d\n", nr.v[0].ip, nr.v[0].id, count+1, timeout);
     }
   }
   return nr.v;

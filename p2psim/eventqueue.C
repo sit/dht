@@ -123,7 +123,7 @@ EventQueue::advance()
 void
 EventQueue::add_event(Event *e)
 {
-  assert(e->ts);
+//  assert(e->ts);
   assert(e->ts >= _time);
 
   eq_entry *ee = 0;
@@ -133,8 +133,8 @@ EventQueue::add_event(Event *e)
     bool b = _queue.insert(ee);
     assert(b);
   }
-  assert(ee->ts);
-  assert(e->ts);
+ // assert(ee->ts);
+  //assert(e->ts);
   ee->events.push_back(e);
 
 #if 0
