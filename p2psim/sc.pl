@@ -4,17 +4,19 @@ use strict;
 #
 # sc.pl <topfile> <eventfile> <protocolfile> (<seed>) < scenerio
 # 
-# takes as input a scenario and generates topology and an event file
+# takes as input a scenario and generates topology, event, and protocol file
 #
 # syntax of a scenario:
 #
 # protocol: <name>[,<variable>=<value>[ <variable>=<value>[ ...]]]
+#     notice that there's only one comma
 #     this line has to come first
 #
 # net: <number of nodes>, <topology>, <placement>
 #  <placement> ::= linear | random <number> <number>
 #
 # event: <node id>, <event-type>, <args>
+#
 # events: <number of events>, <start>, <interval>, <event-type>, <args>
 #
 
