@@ -200,7 +200,7 @@ class actor:
         self.going = 0
         if self.outstanding == 0 and self.f.eof() == True:
             #output root key and level
-	    print str(chord_types.bigint(self.f.root())) + ":" + str(self.f.rootlevel())
+	    print "file root key ", str(chord_types.bigint(self.f.root())) + ":" + str(self.f.rootlevel())
             self.client.close()
 
 # store a file (inherits from actor)
@@ -234,10 +234,10 @@ class storer (actor):
         end = time.time()
         self.outstanding -= 1
         self.complete += 1
-        print arg.blockID, int((end - start) * 1000),
         if res.status != dhash_types.DHASH_OK:
-            print "insert failed!"
+            print "Insert failed, key:", arg.blockID
         else:
+	    print "Inserted key:", arg.blockID, "in", int((end - start) * 1000), "msec path:",
             for id in res.resok.path:
                 print id,
             print
