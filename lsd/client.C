@@ -1,9 +1,19 @@
 #include <assert.h>
+#include <fstream.h> // added by Emma to do num_hops stuff
 #include "sfsp2p.h"
 #include <qhash.h>
 #include <sys/time.h>
 
+
 #define MAX_INT 0x7fffffff
+
+int lookupRPCs;
+int last_lookupRPCs;
+int min_lRPCs;
+int max_lRPCs;
+int lookups;
+
+int in_lookup; // global variable used to tell if doing a lookup
 
 static
 str gettime()
@@ -383,12 +393,25 @@ p2p::print ()
     wedge_print (predecessor[i]);
   }
 }
-
+p2p::~p2p()
+{
+  // upon exiting the function, print number of RPCs
+  warnx << "Number of RPC CALLS: " << lookupRPCs << "\n";
+  printf("NUM RPC CALLS= %d \n",lookupRPCs);
+}
 p2p::p2p (str host, int hostport, const sfs_ID &hostID,
 	  int port, const sfs_ID &ID) :
   wellknownhost (host), wellknownport (hostport), wellknownID (hostID),
   myport (port), myID (ID)
 {
+  // used for calculating num hops
+  in_lookup = 0;
+  lookups = 0; // no lookups yet
+  lookupRPCs = 0;
+  last_lookupRPCs = 0; 
+  min_lRPCs = 30000;
+  max_lRPCs = 0;
+
   namemyID = myname ();
   successor[0].start = successor[0].end = successor[0].first = myID;
   successor[0].alive = true;
@@ -426,8 +449,8 @@ p2p::p2p (str host, int hostport, const sfs_ID &hostID,
     locations.insert (l);
     join ();
   }
-  stabilize_tmo = delaycb (stabilize_timer, 
-			   wrap (mkref (this), &p2p::stabilize, 2));
+  //  stabilize_tmo = delaycb (stabilize_timer, 
+  //		   wrap (mkref (this), &p2p::stabilize, 2));
 }
 
 void
@@ -589,6 +612,8 @@ p2p::move ()
   sfsp2p_moveres *res = New sfsp2p_moveres (SFSP2P_OK);
 
   ma->x = myID;
+
+warnx << "RPC CALL: SFSP2PPROC_MOVE" << "\n";
   doRPC (successor[1].first, SFSP2PPROC_MOVE, ma, res, 
 	 wrap (mkref (this), &p2p::move_cb, res));
 }
@@ -704,6 +729,7 @@ p2p::notify (sfs_ID &n, sfs_ID &x)
   assert (l);
   na->x = x;
   na->r = l->r;
+warnx << "RPC CALL: SFSP2PPROC_NOTIFY" << "\n";
   doRPC (n, SFSP2PPROC_NOTIFY, na, res, wrap (mkref (this), 
 					      &p2p::notify_cb, res));
 }
@@ -728,6 +754,7 @@ p2p::alert (sfs_ID &n, sfs_ID &x)
   assert (l);
   na->x = x;
   na->r = l->r;
+warnx << "RPC CALL: SFSP2PPROC_ALERT" << "\n";
   doRPC (n, SFSP2PPROC_ALERT, na, res, wrap (mkref (this), 
 					      &p2p::notify_cb, res));
 }
@@ -765,6 +792,7 @@ p2p::insert_findsucc_cb (svccb *sbp, sfsp2p_insertarg *ia, sfs_ID x, route r,
     // warnx << "insert_findsucc_cb: do insert of " << ia->d << " at " << x 
     //  << "\n";
     sfsp2pstat *res = New sfsp2pstat;
+warnx << "RPC CALL: SFSP2PPROC_INSERT" << "\n";
     doRPC (x, SFSP2PPROC_INSERT, ia, res, wrap (mkref (this), 
 					      &p2p::insert_cb, sbp, res));
   }
@@ -782,14 +810,59 @@ p2p::insert_cb (svccb *sbp, sfsp2pstat *res, clnt_stat err)
   }
 }
 
+void // used by the client to see the routing tables
+p2p::routtables (svccb *sbp) 
+{
+  sfsp2p_routtablesres res = (SFSP2P_OK);
+  for (int i = 0; i <= NBIT; i++) {
+    res.resok->succ[i].start = successor[i].start;
+    res.resok->succ[i].end = successor[i].end;
+    res.resok->succ[i].first = successor[i].first;
+    res.resok->succ[i].alive = successor[i].alive;
+    res.resok->pre[i].start = predecessor[i].start;  
+    res.resok->pre[i].end = predecessor[i].end; 
+    res.resok->pre[i].first = predecessor[i].first; 
+    res.resok->pre[i].alive = predecessor[i].alive;  
+  }
+  sbp->reply (&res);
+}
+
+void // used by the client to get avg RPCs/lookup
+p2p::getstats (svccb *sbp)
+{
+  sfsp2p_getstatsres res = (SFSP2P_OK);
+  if(lookupRPCs - last_lookupRPCs > max_lRPCs)
+    max_lRPCs = lookupRPCs - last_lookupRPCs;
+  if(lookupRPCs - last_lookupRPCs < min_lRPCs)
+    min_lRPCs = lookupRPCs - last_lookupRPCs;
+  res.resok->total_lookups = lookups;
+  res.resok->total_lookup_RPCs = lookupRPCs;
+  res.resok->max_RPCs = max_lRPCs;
+  res.resok->min_RPCs = min_lRPCs;
+  last_lookupRPCs = lookupRPCs;
+  sbp->reply (&res);
+}
+
 void
 p2p::lookup (svccb *sbp, sfs_ID &n)
 {
+  char s[20];
+  sprintf(s,"nhops%d",myport);
+  /******** Used to track average number of hops per lookup ***/
+  ofstream outFile(s,ios::app);
+  outFile << "Lookup File : " << n.cstr() << "\n";
+  outFile.close();
+  warnx << "******************   INSIDE p2p::lookup!!!!!!!!!!!!! **********\n";
+  /**************************/
+  in_lookup = 1;
   int i = successor_wedge (n);
   if (!predecessor[i].alive) {
     set_closeloc (predecessor[i]);
   }
-  find_successor (successor[i].first, n,
+
+  lookups++; // one more lookup
+  lookupRPCs++;
+  find_successor (predecessor[i].first, n,
 		  wrap (mkref (this), &p2p::lookup_findsucc_cb, sbp, n));
 }
 
@@ -807,6 +880,8 @@ p2p::lookup_findsucc_cb (svccb *sbp, sfs_ID n, sfs_ID x, route r,
   } else {
     // warnx << "lookup_findsucc_cb: do lookup at " << x << "\n";
     sfsp2p_lookupres *res = New sfsp2p_lookupres (SFSP2P_OK);
+    warnx << "RPC CALL: SFSP2PPROC_LOOKUP" << "\n";
+    lookupRPCs++;
     doRPC (x, SFSP2PPROC_LOOKUP, &n, res, wrap (mkref (this), 
 					      &p2p::lookup_cb, sbp, res));
   }
@@ -820,6 +895,7 @@ p2p::lookup_cb (svccb *sbp, sfsp2p_lookupres *res, clnt_stat err)
   } else if (res->status) {
     sbp->replyref (res->status);
   } else {
+    warnx << "FINISHED LOOKUP SUCCESSFULLY I THINK---------------\n";
     sbp->reply (res);
   }
 }
@@ -829,6 +905,7 @@ void
 p2p::get_successor (sfs_ID n, cbsfsID_t cb)
 {
   sfsp2p_findres *res = New sfsp2p_findres (SFSP2P_OK);
+warnx << "RPC CALL: SFSP2PPROC_GETSUCCESSOR" << "\n";
   doRPC (n, SFSP2PPROC_GETSUCCESSOR, NULL, res,
 	 wrap (mkref (this), &p2p::get_successor_cb, n, cb, res));
 }
@@ -856,6 +933,7 @@ void
 p2p::get_predecessor (sfs_ID n, cbsfsID_t cb)
 {
   sfsp2p_findres *res = New sfsp2p_findres (SFSP2P_OK);
+warnx << "RPC CALL: SFSP2PPROC_GETPREDECESSOR" << "\n";
   doRPC (n, SFSP2PPROC_GETPREDECESSOR, NULL, res,
 	 wrap (mkref (this), &p2p::get_predecessor_cb, n, cb, res));
 }
@@ -891,6 +969,7 @@ p2p::lookup_closestsucc (sfs_ID &n, sfs_ID &x, cbsfsID_t cb)
   sfsp2p_findarg *fap = New sfsp2p_findarg;
   sfsp2p_findres *res = New sfsp2p_findres (SFSP2P_OK);
   fap->x = x;
+  warnx << "RPC CALL: SFSP2PPROC_FINDCLOSESTSUCC" << "\n";
   doRPC (n, SFSP2PPROC_FINDCLOSESTSUCC, fap, res,
 	 wrap (mkref (this), &p2p::lookup_closestsucc_cb, n, cb, res));
 }
@@ -909,15 +988,29 @@ p2p::lookup_closestsucc_cb (sfs_ID n, cbsfsID_t cb,
     warnx << "find_closestsucc_cb: RPC error" << res->status << "\n";
     cb (n, dr, res->status);
   } else if (n != res->resok->node) {
-    //warnx << "find_closestsucc_cb of " << res->resok->x
-    //  << " from " << n << " returns " << res->resok->node << "\n";
+
+    warnx << "TRYING TO DO LOOKUP:  find_closestsucc_cb of " << res->resok->x
+      << " from " << n << " returns " << res->resok->node << "\n";
+
     updateloc (res->resok->node, res->resok->r, n);
+
+  char s[20];
+  sprintf(s,"nh%d",myport);
+  /******** Used to track average number of hops per lookup ***/
+  ofstream outFile(s,ios::app);
+  outFile << "Lookup File : " << n.cstr() << " in lookup: " << in_lookup << "\n";
+  outFile.close();
+  /**************************/
+lookupRPCs++; 
     lookup_closestsucc (res->resok->node, res->resok->x, cb);
   } else {
+    warnx << "FINISHED WITH LOOKUP: find_closestsucc_cb of " << res->resok->x 
+	  << " from " << n << " returns " << res->resok->node << "\n";
     //warnx << "find_closestsucc_cb of " << res->resok->x 
     //  << " from " << n << " returns " << res->resok->node << "\n";
     updateloc (res->resok->node, res->resok->r, n);
     cb (res->resok->node, res->resok->r, SFSP2P_OK);
+    in_lookup = 0;
   }
 }
 
@@ -933,6 +1026,7 @@ p2p::lookup_closestpred (sfs_ID &n, sfs_ID &x, cbsfsID_t cb)
   sfsp2p_findarg *fap = New sfsp2p_findarg;
   sfsp2p_findres *res = New sfsp2p_findres (SFSP2P_OK);
   fap->x = x;
+warnx << "RPC CALL: SFSP2PPROC_FINDCLOSESTPRED" << "\n";
   doRPC (n, SFSP2PPROC_FINDCLOSESTPRED, fap, res,
 	 wrap (mkref (this), &p2p::lookup_closestpred_cb, n, cb, res));
 }
@@ -1216,6 +1310,16 @@ sfsp2pclient::dispatch (svccb *sbp)
       defp2p->insert (sbp, ia);
     }
     break;
+  case SFSP2PCLNTPROC_GETSTATS:
+    {
+      defp2p->getstats (sbp);
+    }
+    break;  
+  case SFSP2PCLNTPROC_ROUTTABLES:
+    {
+      defp2p->routtables (sbp);
+    }
+    break;  
   default:
     sbp->reject (PROC_UNAVAIL);
     break;
