@@ -46,25 +46,25 @@ foreach my $log (@logs) {
 	    $instats = 1;
 	} elsif( $instats and /\<-----ENDSTATS-----\>/ ) {
 	    $instats = 0;
-	}
 
+	    # this file had complete stats, so print out stuff
+	    if( !$headerdone ) {
+		print "@header\n";
+		$headerdone = 1;
+	    }
+	    
+	    $log =~ s/^.*\/([^\/]+)\.log$/$1/;
+	    my @logname = split( /\-/, $log );
+	    print "# ";
+	    for( my $i = 1; $i <= $#logname; $i++ ) {
+		my @s = split( /\./, $logname[$i] );
+		print $s[0] . " ";
+	    }
+	    print "\n";
+	    print "@log_stats\n";   
+	}
     }
 
     close( LOG );
-
-    if( !$headerdone ) {
-	print "@header\n";
-	$headerdone = 1;
-    }
-
-    $log =~ s/^.*\/([^\/]+)\.log$/$1/;
-    my @logname = split( /\-/, $log );
-    print "# ";
-    for( my $i = 1; $i <= $#logname; $i++ ) {
-	my @s = split( /\./, $logname[$i] );
-	print $s[0] . " ";
-    }
-    print "\n";
-    print "@log_stats\n";
 
 }
