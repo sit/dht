@@ -68,9 +68,9 @@ class rpc_manager {
   u_int64_t nrpcfailed;
   u_int64_t nsent;
   u_int64_t npending;
+  ptr<u_int32_t> nrcv;
 
   ptr<axprt_dgram> dgram_xprt;
-  ptr<chord> chordnode;
   
  public:
   virtual void stats ();
@@ -81,7 +81,7 @@ class rpc_manager {
   virtual float get_a_var (ptr<location> l); 
   virtual float get_avg_lat ();
   virtual float get_avg_var ();
-  rpc_manager (ptr<chord> c);
+  rpc_manager (ptr<u_int32_t> _nrcv);
   virtual ~rpc_manager () {};
 };
 
@@ -96,7 +96,7 @@ class tcp_manager : public rpc_manager {
  public:
   void doRPC (ptr<location> l, rpc_program prog, int procno,
 	      ptr<void> in, void *out, aclnt_cb cb);
-  tcp_manager (ptr<chord> c) : rpc_manager (c) {}
+  tcp_manager (ptr<u_int32_t> _nrcv) : rpc_manager (_nrcv) {}
   ~tcp_manager () {}
 };
 
@@ -168,7 +168,7 @@ class stp_manager : public rpc_manager {
   float get_avg_lat ();
   float get_avg_var ();
 
-  stp_manager (ptr<chord> c);
+  stp_manager (ptr<u_int32_t> _nrcv);
   ~stp_manager ();
 };
 

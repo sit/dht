@@ -28,9 +28,11 @@
  */
 
 
+#include "arpc.h"
 #include "aclnt_chord.h"
 #include "skiplist.h"
-#include "stabilize.h"
+#include "chord_prot.h"
+#include "chord_util.h"
 
 typedef callback<void,chordstat>::ptr cbping_t;
 typedef callback<void,chordID,bool,chordstat>::ref cbchallengeID_t;
@@ -83,7 +85,7 @@ class locationtable : public virtual refcount {
     bool good ();
   };
   
-  ptr<chord> chordnode;
+  ptr<u_int32_t> nrcv;
   ptr<rpc_manager> hosts;
 
   // Indices into our locations... for O(1) access, for expiring,
@@ -124,7 +126,7 @@ class locationtable : public virtual refcount {
   bool remove (locwrap *l);
   
  public:
-  locationtable (ptr<chord> _chordnode, int _max_connections);
+  locationtable (ptr<u_int32_t> _nrcv, int _max_connections);
   locationtable (const locationtable &src);
 
   size_t size ();

@@ -37,8 +37,8 @@
 
 // #define __J__ 1
 
-#include "chord.h"
 #include "dhash_prot.h"
+#include "chord_util.h"
 #include "location.h"
 
 // UTILITY FUNCTIONS
@@ -100,8 +100,8 @@ hostinfo::hostinfo (const net_address &r)
 
 // -----------------------------------------------------
 
-rpc_manager::rpc_manager (ptr<chord> c)
-  : nrpc (0), nrpcfailed (0), nsent (0), npending (0), chordnode (c)
+rpc_manager::rpc_manager (ptr<u_int32_t> _nrcv)
+  : nrpc (0), nrpcfailed (0), nsent (0), npending (0), nrcv (_nrcv)
 {
   int dgram_fd = inetsocket (SOCK_DGRAM);
   if (dgram_fd < 0) fatal << "Failed to allocate dgram socket\n";
@@ -202,8 +202,8 @@ tcp_manager::doRPC_tcp_cleanup (RPC_delay_args *args, int fd, clnt_stat err)
 }
 
 // -----------------------------------------------------
-stp_manager::stp_manager (ptr<chord> c)
-  : rpc_manager (c),
+stp_manager::stp_manager (ptr<u_int32_t> _nrcv)
+  : rpc_manager (_nrcv),
     a_lat (0.0),
     a_var (0.0),
     avg_lat (0.0),
@@ -257,14 +257,14 @@ void
 stp_manager::ratecb () {
 #if 0
   warnx << "sent " << nsent << " RPCs in the last second\n";
-  warnx << "received " << chordnode->nrcv << " RPCs in the last second\n";
+  warnx << "received " << *nrcv << " RPCs in the last second\n";
   warnx << npending << " RPCs are outstanding\n";
 #endif
   // do something if nsent (+ nrcv) is too high xxx?
 
   delaycb (1, 0, wrap (this, &stp_manager::ratecb));
   nsent = 0;
-  chordnode->nrcv = 0;
+  *nrcv = 0;
 }
 
 float

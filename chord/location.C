@@ -29,7 +29,7 @@
  */
 
 #include <math.h>
-#include "chord.h"
+#include "location.h"
 
 bool nochallenges;
 const int CHORD_RPC_STP (0);
@@ -81,17 +81,17 @@ void
 locationtable::initialize_rpcs ()
 {
   if (chord_rpc_style == CHORD_RPC_SFSU)
-    hosts = New refcounted<rpc_manager> (chordnode);
+    hosts = New refcounted<rpc_manager> (nrcv);
   else if (chord_rpc_style == CHORD_RPC_SFST)
-    hosts = New refcounted<tcp_manager> (chordnode);
+    hosts = New refcounted<tcp_manager> (nrcv);
   else
-    hosts = New refcounted<stp_manager> (chordnode);
+    hosts = New refcounted<stp_manager> (nrcv);
 
   // see also chord::startchord
 }
 
-locationtable::locationtable (ptr<chord> _chordnode, int _max_cache)
-  : chordnode (_chordnode),
+locationtable::locationtable (ptr<u_int32_t> _nrcv, int _max_cache)
+  : nrcv (_nrcv),
     good (0),
     size_cachedlocs (0),
     max_cachedlocs (_max_cache), 
@@ -105,7 +105,7 @@ locationtable::locationtable (ptr<chord> _chordnode, int _max_cache)
 
 locationtable::locationtable (const locationtable &src)
 {
-  chordnode = src.chordnode;
+  nrcv = src.nrcv;
   max_cachedlocs = src.max_cachedlocs;
 
   initialize_rpcs ();

@@ -46,7 +46,10 @@ chord::chord (str _wellknownhost, int _wellknownport,
   wellknownID  = make_chordID (wellknownhost.hostname, wellknownhost.port);
 
   warnx << "chord: running on " << myname << ":" << myport << "\n";
-  locations = New refcounted<locationtable> (mkref (this), max_cache);
+
+  nrcv = New refcounted<u_int32_t>;
+  *nrcv = 0;
+  locations = New refcounted<locationtable> (nrcv, max_cache);
 
   // Special case the very first node: don't need to challenge yourself
   if (wellknownID == make_chordID (myname, myport))
@@ -248,7 +251,7 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
     return;
   }
 
-  nrcv++;
+  (*nrcv)++;
   chordID *v = sbp->template getarg<chordID> ();
   vnode *vnodep = vnodes[*v];
   if (!vnodep) {

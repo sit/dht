@@ -267,7 +267,10 @@ class chord : public virtual refcount {
   void print_cb (const chordID &k, ptr<vnode> v);
   void stop_cb (const chordID &k, ptr<vnode> v);
   void checkwellknown_cb (chordID s, bool ok, chordstat status);
- 
+  
+  // Number of received RPCs, for locationtable comm stuff
+  ptr<u_int32_t> nrcv;
+
  public:
   // system wide default on the maximum number of vnodes/node.
   static const int max_vnodes;
@@ -331,11 +334,7 @@ class chord : public virtual refcount {
   };
   chordID clnt_ID () {
     return active->my_ID ();
-  };
-
-  //public stats
-  u_int64_t nrcv;
-    
+  };    
 };
 
 extern const int CHORD_LOOKUP_FINGERLIKE;
