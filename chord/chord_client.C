@@ -134,10 +134,22 @@ chord::newvnode (cbjoin_t cb)
     fatal << "Maximum number of vnodes (" << max_vnodes << ") reached.\n";
     
   chordID newID = init_chordID (nvnode, myname, myport);
+  
   if (newID != wellknownID)
     locations->insertgood (newID, myname, myport);
-  ptr<vnode> vnodep = New refcounted<vnode> (locations, mkref (this), newID, 
+
+  ptr<locationtable> nlocations = locations;
+#ifdef PNODE
+  // First vnode gets the regular table, other ones get a fresh copy.
+  if (nvnode > 0)
+    nlocations = New refcounted<locationtable> (*locations);
+#endif /* PNODE */  
+  
+  ptr<vnode> vnodep = New refcounted<vnode> (nlocations, mkref (this), newID, 
 					     nvnode, ss_mode);
+#ifdef PNODE
+  nlocations->setvnode (vnodep);
+#endif /* PNODE */
   if (!active) active = vnodep;
   nvnode++;
   warn << "insert: " << newID << "\n";
@@ -192,7 +204,9 @@ chord::stats ()
   warnx << "CHORD NODE STATS\n";
   warnx << "# vnodes: " << nvnode << "\n";
   vnodes.traverse (wrap (this, &chord::stats_cb));
+#ifndef PNODE  
   locations->stats ();
+#endif /* PNODE */ 
 }
 
 void

@@ -54,11 +54,7 @@ void
 succ_list::replace_succ (int j)
 {
   warnx << myID << ": replace succ " << j << "\n";
-#ifdef PNODE
-  succlist[j].n = closestsuccfinger (succlist[j].n);
-#else
   succlist[j].n = locations->closestsuccloc (succlist[j].n);
-#endif
   succlist[j].alive = true;  
   locations->increfcnt (succlist[j].n);
 }

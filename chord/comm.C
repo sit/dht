@@ -34,7 +34,6 @@
 #define USE_PERHOST_LATENCIES 1
 #define MIN_RPC_FAILURE_TIMER 3
 
-int seqno = 0;
 u_int64_t st = getusec ();
 
 const int aclnttrace (getenv ("ACLNT_TRACE")
@@ -61,7 +60,6 @@ locationtable::doRPC (chordID &ID,
 		      rpc_program prog, int procno, 
 		      ptr<void> in, void *out, aclnt_cb cb)
 {
-
   if (dhashtcp)
     doRPC_tcp (ID, prog, procno, in, out, cb);
   else
@@ -407,7 +405,7 @@ locationtable::stats ()
   warnx << buf << "  Per link avg. RPC latencies\n";
   for (location *l = locs.first (); l ; l = locs.next (l)) {
     warnx << "    link " << l->n << " : refcnt: " << l->refcnt << " # RPCs: "
-	  << l->nrpc << "\n";
+	  << l->nrpc << " challenged: " << l->challenged << "\n";
     sprintf (buf, "       Average latency: %f\n"
 	     "       Average variance: %f\n",
 	     l->a_lat, l->a_var);

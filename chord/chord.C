@@ -29,7 +29,6 @@
 #include <chord.h>
 #include <qhash.h>
 
-#define PNODE 
 //#define TOES 1
 
 vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
@@ -92,7 +91,8 @@ vnode::~vnode ()
 chordID
 vnode::my_succ () 
 {
-  if (fingers->succ_alive ()) return fingers->succ ();
+  if (fingers->succ_alive ())
+    return fingers->succ ();
   return successors->first_succ ();
 }
 
@@ -144,6 +144,10 @@ vnode::stats ()
   warnx << "# notify calls " << nnotify << "\n";  
   warnx << "# alert calls " << nalert << "\n";  
   warnx << "# getfingers calls " << ngetfingers << "\n";
+#ifdef PNODE
+  // Each node has its own location table in this case.
+  locations->stats ();
+#endif /* PNODE */  
 }
 
 void
@@ -166,33 +170,15 @@ vnode::print ()
 chordID
 vnode::lookup_closestsucc (chordID &x)
 {
-#ifdef PNODE
-  chordID f = fingers->closestsuccfinger (x);
-  chordID s = successors->closest_succ (x);
-  if (between (x, s, f)) 
-    return f;
-  else 
-    return s;
-#else
   chordID s = locations->closestsuccloc (x);
-#endif
   return s;
 }
 
 chordID
 vnode::lookup_closestpred (chordID &x)
 {
-#ifdef PNODE
-  chordID f = fingers->closestpredfinger (x);
-  chordID s = successors->closest_pred (x);
-  if (between (f, x, s)) 
-    return s;
-  else
-    return f;
-#else
-  return locations->closestpredloc (x);
-#endif
-
+  chordID s = locations->closestpredloc (x);
+  return s;
 }
 
 void
@@ -207,8 +193,11 @@ vnode::join (cbjoin_t cb)
   chordID n;
 
   if (!locations->lookup_anyloc (myID, &n)) {
+    warnx << myID << ": couldn't lookup anyloc for join\n";
+    locations->stats ();
     (*cb)(NULL, CHORD_ERRNOENT);
   } else {
+    warnx << myID << ": joining at " << n << "\n";
     fingers->updatefinger (n);
     find_successor (myID, wrap (mkref (this), &vnode::join_getsucc_cb, cb));
   }

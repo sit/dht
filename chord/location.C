@@ -3,6 +3,9 @@
  * Copyright (C) 2000 Frans Kaashoek (kaashoek@lcs.mit.edu)
  * Copyright (C) 2001 Frans Kaashoek (kaashoek@lcs.mit.edu) and 
  *                    Frank Dabek (fdabek@lcs.mit.edu).
+ * Copyright (C) 2002 Frans Kaashoek (kaashoek@lcs.mit.edu),
+ *                    Frank Dabek (fdabek@lcs.mit.edu) and
+ *                    Emil Sit (sit@lcs.mit.edu).
  *
  *  Permission is hereby granted, free of charge, to any person obtaining
  *  a copy of this software and associated documentation files (the
@@ -57,32 +60,9 @@ location::~location () {
   warnx << "~location: delete " << n << "\n";
 }
 
-locationtable::locationtable (ptr<chord> _chordnode, int _max_cache)
-  : chordnode (_chordnode), max_cachedlocs (_max_cache), 
-     rpcdelay (0)
+void
+locationtable::start_network ()
 {
-  nrpc = 0;
-  nrpcfailed = 0;
-  a_lat = 0.0;
-  a_var = 0.0;
-  bf_lat = 0.0;
-  bf_var = 0.0;
-  nsent = 0;
-  npending = 0;
-  nchallenge = 0;
-  size_cachedlocs = 0;
-  nvnodes = 0;
-  nnodes = 0;
-  nnodessum = 0;
-  cwind = 1;
-  ssthresh = 6;
-  left = 0;
-  cwind_cum = 0.0;
-  num_cwind_samples = 0;
-  num_qed = 0;
-
-  idle_timer = NULL;
-  
   int dgram_fd = inetsocket (SOCK_DGRAM);
   if (dgram_fd < 0) fatal << "Failed to allocate dgram socket\n";
   dgram_xprt = axprt_dgram::alloc (dgram_fd, sizeof(sockaddr), 230000);
@@ -92,6 +72,78 @@ locationtable::locationtable (ptr<chord> _chordnode, int _max_cache)
 
   reset_idle_timer ();
 }
+
+locationtable::locationtable (ptr<chord> _chordnode, int _max_cache)
+  : chordnode (_chordnode),
+    max_cachedlocs (_max_cache), 
+    rpcdelay (0),
+    nrpc (0),
+    a_lat (0.0),
+    a_var (0.0),
+    avg_lat (0.0),
+    bf_lat (0.0),
+    bf_var (0.0),
+    nrpcfailed (0),
+    nsent (0),
+    npending (0),
+    nnodessum (0),
+    nnodes (0),
+    nvnodes (0),
+    seqno (0),
+    cwind (1.0),
+    ssthresh (6.0),
+    left (0),
+    cwind_cum (0.0),
+    num_cwind_samples (0),
+    num_qed (0),
+    idle_timer (NULL)
+{
+  start_network ();
+}
+
+locationtable::locationtable (const locationtable &src)
+{
+  chordnode = src.chordnode;
+  myvnode = NULL;
+  max_cachedlocs = src.max_cachedlocs;
+
+  // State parameters will be zeroed in the copy
+  size_cachedlocs = 0; 
+  nrpc = 0;
+  nrpcfailed = 0;
+  a_lat = 0.0;
+  a_var = 0.0;
+  avg_lat = 0.0;
+  bf_lat = 0.0;
+  bf_var = 0.0;
+  nsent = 0;
+  npending = 0;
+  nchallenge = 0;
+  size_cachedlocs = 0;
+  nvnodes = 0;
+  nnodes = 0;
+  nnodessum = 0;
+  seqno = 0;
+  cwind = 1;
+  ssthresh = 6;
+  left = 0;
+  cwind_cum = 0.0;
+  num_cwind_samples = 0;
+  num_qed = 0;
+
+  idle_timer = NULL;
+
+  // Deep copy the list of locations, rezeroing all the refcnts.
+  for (location *l = src.locs.first (); l; l = src.locs.next (l)) {
+    location *loc = New location (l->n, l->addr);
+    loc->challenged = l->challenged;
+    locs.insert (loc);
+    add_cachedlocs (loc);
+  }
+  
+  start_network ();
+}
+
 
 void
 locationtable::ratecb () {
@@ -224,17 +276,26 @@ locationtable::closestpredloc (chordID x)
 void
 locationtable::cacheloc (chordID &x, net_address &r, cbchallengeID_t cb)
 {
+  // char *state;
   if (locs[x] == NULL) {
-    // warnx << "CACHELOC: " << x << " at port " << r.port << "\n";
+    // state = "new";    
     location *loc = New location (x, r);
     locs.insert (loc);
     add_cachedlocs (loc);
     challenge (x, cb);
+  } else if (locs[x]->challenged == false) {
+    // state = "pending";
+    challenge (x, cb); // queue up for additional callback
   } else {
-    // warnx << "CACHELOC (old): " << x << " at port " << r.port << "\n";
+    // state = "old";
     if (cb != cbchall_null)
       cb (x, locs[x]->challenged, CHORD_OK);
   }
+#ifdef PNODE
+  // if (myvnode)
+  //   warnx << myvnode->myID << " ";
+#endif /* PNODE */
+  // warnx << "CACHELOC (" << state << "): " << x << " at port " << r.port << "\n";
 }
 
 void
@@ -297,7 +358,11 @@ locationtable::checkrefcnt (int i)
 
   for (location *l = locs.first (); l != NULL; l = locs.next (l)) {
     x = l->n;
+#ifdef PNODE
+    n = myvnode->countrefs (x);
+#else /* PNODE */    
     n = chordnode->countrefs (x);
+#endif /* PNODE */    
     m = l->refcnt;
     if (n != m) {
       warnx << "checkrefcnt " << i << " for " << x << " : refcnt " 
@@ -373,36 +438,52 @@ locationtable::challenge (chordID &x, cbchallengeID_t cb)
     cb (x, true, chordstat (CHORD_OK));
     return;
   }
+  if (!locs[x]->outstanding_cbs.empty ()) {
+    // warnx << "challenge: adding cb to queue\n";
+    locs[x]->outstanding_cbs.push_back (cb);
+    return;
+  }
+  assert (locs[x]->outstanding_cbs.size () == 0);
+  
   int c = random ();
   ptr<chord_challengearg> ca = New refcounted<chord_challengearg>;
   chord_challengeres *res = New chord_challengeres (CHORD_OK);
   nchallenge++;
   ca->v.n = x;
   ca->challenge = c;
+  locs[x]->outstanding_cbs.push_back (cb);
   doRPC (x, chord_program_1, CHORDPROC_CHALLENGE, ca, res, 
-	 wrap (mkref (this), &locationtable::challenge_cb, c, x, cb, res));
+	 wrap (mkref (this), &locationtable::challenge_cb, c, x, res));
 }
 
 void
-locationtable::challenge_cb (int challenge, chordID x, cbchallengeID_t cb, 
+locationtable::challenge_cb (int challenge, chordID x,
 			     chord_challengeres *res, clnt_stat err)
 {
+  bool chalok = false;
+  chordstat status = res->status;
   if (err) {
     //    warnx << "challenge_cb: RPC failure " << err << "\n";
-    cb (x, false, CHORD_RPCFAILURE);
+    status = CHORD_RPCFAILURE;
   } else if (res->status) {
     //    warnx << "challenge_cb: error " << res->status << "\n";
-    cb (x, false, res->status);
   } else if (challenge != res->resok->challenge) {
     //    warnx << "challenge_cb: challenge mismatch\n";
-    cb (x, false, res->status);
   } else {
     net_address r = getaddress (x);
-    bool ok = is_authenticID (x, r.hostname, r.port, res->resok->index);
-    assert (locs[x]);
-    locs[x]->challenged = ok;
-    cb (x, ok, res->status);
+    chalok = is_authenticID (x, r.hostname, r.port, res->resok->index);
   }
+
+  location *l = locs[x];
+  assert (l);
+  l->challenged = chalok;
+  
+  cbchallengeID_t::ptr cb = NULL;;
+  while (!l->outstanding_cbs.empty ()) {
+    cb = l->outstanding_cbs.pop_front ();
+    cb (x, chalok, status);
+  }
+
   delete res;
 }
 

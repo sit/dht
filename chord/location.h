@@ -34,6 +34,7 @@ typedef callback<void,chordID,bool,chordstat>::ref cbchallengeID_t;
 extern cbchallengeID_t cbchall_null;
 
 class chord;
+class vnode;
 
 // the identifier for the ihash class
 struct hashID {
@@ -98,6 +99,7 @@ struct location {
   float a_lat;
   float a_var;
   bool challenged; // whether this node has been succesfully challenged
+  vec<cbchallengeID_t> outstanding_cbs;
 
   location (chordID &_n, net_address &_r);
   ~location ();
@@ -110,6 +112,10 @@ struct node {
 
 class locationtable : public virtual refcount {
   ptr<chord> chordnode;
+#ifdef PNODE
+  ptr<vnode> myvnode;
+#endif /* PNODE */
+  
   ihash<chordID,location,&location::n,&location::fhlink,hashID> locs;
   tailq<location, &location::cachelink> cachedlocs;  // the cached location
 
@@ -134,11 +140,12 @@ class locationtable : public virtual refcount {
   vec<float> cwind_cwind;
   vec<long> acked_seq;
   vec<float> acked_time;
-
+  
   u_long nnodessum;
   u_long nnodes;
   unsigned nvnodes;
 
+  int seqno;
   float cwind;
   float ssthresh;
   int left;
@@ -157,7 +164,9 @@ class locationtable : public virtual refcount {
   qhash<long, svccb *> octbl;
   
   locationtable ();
-  
+
+  void start_network ();
+
   void connect_cb (location *l, callback<void, ptr<axprt_stream> >::ref cb, 
 		   int fd);
   void doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err);
@@ -183,14 +192,19 @@ class locationtable : public virtual refcount {
   void timeout_cb (rpc_state *C);
 
   void ping_cb (cbv cb, clnt_stat err);
-  void challenge_cb (int challenge, chordID x, cbchallengeID_t cb, 
+  void challenge_cb (int challenge, chordID x,
 		     chord_challengeres *res, clnt_stat err);
 
   
  public:
   locationtable (ptr<chord> _chordnode, int _max_connections);
+  locationtable (const locationtable &src);
+  
   bool betterpred1 (chordID current, chordID target, chordID newpred);
 
+#ifdef PNODE
+  void setvnode (ptr<vnode> v) { myvnode = v; }
+#endif /* PNODE */  
   void incvnodes () { nvnodes++; };
   void replace_estimate (u_long o, u_long n);
   u_long estimate_nodes () { return nnodes; }

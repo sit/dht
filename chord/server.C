@@ -156,7 +156,7 @@ vnode::testrange_findclosestpred_cb (chord_testandfindres *res,
   if (err) {
     warnx << "testrange_findclosestpred_cb: failure " << err << "\n";
     chordID l = st->search_path.back ();
-    st->cb(l, st->search_path, CHORD_RPCFAILURE);
+    st->cb (l, st->search_path, CHORD_RPCFAILURE);
     delete st;
   } else if (res->status == CHORD_INRANGE) { 
     // found the successor
@@ -205,9 +205,13 @@ vnode::testrange_fcp_done_cb (findpredecessor_cbstate *st,
     assert (st->search_path.size () < 1000);
     st->cb (st->search_path.back (), st->search_path, CHORD_OK);
     delete st;
+  } else if (status == CHORD_RPCFAILURE) {
+    // xxx? should we retry locally before failing all the way to
+    //      the top-level?
+    st->cb (st->search_path.back (), st->search_path, CHORD_RPCFAILURE);
   } else {
     warnx << myID << ": testrange_findclosest_pred: last challenge for "
-	  << s << " failed.\n";
+	  << s << " failed. (chordstat " << status << ")\n";
     assert (0); // XXX handle malice more intelligently
   }
 }
@@ -227,9 +231,13 @@ vnode::testrange_fcp_step_cb (findpredecessor_cbstate *st,
       assert (0);
     }
     testrange_findclosestpred (s, st->x, st);
+  } else if (status == CHORD_RPCFAILURE) {
+    // xxx? should we retry locally before failing all the way to
+    //      the top-level?
+    st->cb (st->search_path.back (), st->search_path, CHORD_RPCFAILURE);
   } else {
     warnx << myID << ": testrange_findclosest_pred: step challenge for "
-	  << s << " failed.\n";
+	  << s << " failed. (chordstat " << status << ")\n";
     assert (0); // XXX handle malice more intelligently
   }
 }

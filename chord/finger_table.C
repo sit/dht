@@ -89,11 +89,7 @@ finger_table::replacefinger (int i)
   warnx << myID << ": replace finger " << i << "\n" ;
   if (i > 1)
     stable_fingers = false;
-#ifdef PNODE
-  fingers[i].first.n = closestsuccfinger (fingers[i].start);
-#else
   fingers[i].first.n = locations->closestsuccloc (fingers[i].start);
-#endif
   fingers[i].first.alive = true;
   locations->increfcnt (fingers[i].first.n);
   check ();

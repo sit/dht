@@ -985,8 +985,12 @@ void
 dhash::doRPC (chordID ID, rpc_program prog, int procno,
 	      ptr<void> in, void *out, aclnt_cb cb) 
 {
+#ifdef PNODE
+  host_node->doRPC (ID, prog, procno, in, out, cb);
+#else /* PNODE */  
   host_node->chordnode->doRPC(ID, prog, procno,
 			      in, out, cb);
+#endif /* PNODE */  
 }
 
 // ---------- debug ----
