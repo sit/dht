@@ -144,14 +144,14 @@ def convexHull(P):
 
     # Get a local list copy of the points and sort them lexically.
     points = map(None, P)
-    points.sort(col2_sort)
+#    points.sort(col2_sort)
 
     # Build upper half of the hull.
-    left = [points[0], points[1]]
-    for p in points[2:]:
-	left.append(p)
-	while len(left) > 2 and not _isRightTurn(left[-3:]):
-	    del left[-2]
+#    left = [points[0], points[1]]
+#    for p in points[2:]:
+#	left.append(p)
+#	while len(left) > 2 and not _isRightTurn(left[-3:]):
+#	    del left[-2]
 
 
     # Build lower half of the hull.
@@ -164,12 +164,16 @@ def convexHull(P):
 	    del lower[-2]
 
     # Remove duplicates.
-    while (lower[-1])[0] < (left[0])[0]:
-	del lower[-1]
+#    while (lower[-1])[0] < (left[0])[0]:
+#	del lower[-1]
+
+    # never go up as you move to the right of the hull . . . 
+    while len(lower) > 1 and (lower[0])[1] > (lower[1])[1]:
+	del lower[0]
 
 
     # Concatenate both halfs and return.
-    return tuple(lower + left)
+    return tuple(lower)# + left)
 
 def col2_sort(x, y):
      if x[1] > y[1]:
