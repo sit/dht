@@ -452,17 +452,19 @@ start_logs ()
 static void
 usage ()
 {
-  warnx << "Usage: " << progname 
-	<< " -d <dbfile> -j hostname:port -p port "
-    "[-l <locally bound IP>] "
-    "[-m [chord|debruijn] "
-    "[-S <sock>] [-v <nvnode>] [-c <cache?>] "
-    "-B <cache size> "
-    "-b logbase "
-    "[-s <server select mode>] "
-    "[-L <warn/fatal/panic output file name>] "
-    "[-T <trace file name (aka new log)>] "
-    "\n";
+  warnx << "Usage: " << progname << " -j hostname:port -p port\n"
+    "\t[-d <dbprefix>]\n" 
+    "\t[-v <number of vnodes>]\n"
+    "\t[-S <sock>]\n"
+    "\t[-C <ctlsock>]\n"
+    "\t[-l <locally bound IP>]\n"
+    "\t[-m [chord|debruijn]]\n"
+    "\t[-b <debruijn logbase>]\n"
+    "\t[-s <server select mode>]\n"
+    "\t[-L <warn/fatal/panic output file name>]\n"
+    "\t[-T <trace file name (aka new log)>]\n"
+    "\t[-O <config file>]\n"
+    ;
   exit (1);
 }
 
