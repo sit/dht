@@ -125,6 +125,9 @@ Network::gaussian()
 {
   float fac,rsq,v1,v2;
 
+  if(!_top->noise_variance())
+    return 0.0;
+
   do {
     v1=2.0*(random()/(RAND_MAX*1.0))-1.0;
     v2=2.0*(random()/(RAND_MAX*1.0))-1.0;
