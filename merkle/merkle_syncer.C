@@ -272,10 +272,9 @@ merkle_getkeyrange::getkeys_cb (ref<getkeys_arg> arg, ref<getkeys_res> res,
   for (u_int i = 0; i < res->resok->keys.size (); i++) {
     const merkle_hash &key = res->resok->keys[i];
     bigint key2  = tobigint (key);
-    if (!database_lookup (db, key)) {
-      warn << "2 [" << rngmin << "," << rngmax << "] => missing key "  << key << "\n";
+    if (!database_lookup (db, key)) 
       (*missing) (key2);
-    }
+    
     if (key2 >= current)
       current = key2 + 1;
   }
