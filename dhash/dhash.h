@@ -196,8 +196,6 @@ class dhash {
   void keyhash_mgr_timer ();
   void keyhash_mgr_lookup (chordID key, dhash_stat err, chordID host);
   void keyhash_sync_done ();
-  void replica_maintenance_timer (u_int index);
-  void partition_maintenance_timer ();
   void partition_maintenance_lookup_cb (dhash_stat err, chordID hostID);
   void partition_maintenance_pred_cb (chordID predID, net_address addr, chordstat stat);
   void doRPC_unbundler (chordID ID, RPC_delay_args *args);
@@ -205,7 +203,7 @@ class dhash {
 
   void route_upcall (int procno, void *args, cbupcalldone_t cb);
 
-  void doRPC (chordID ID, rpc_program prog, int procno,
+  void doRPC (chordID ID, const rpc_program &prog, int procno,
 	      ptr<void> in, void *out, aclnt_cb cb);
 
   void dispatch (svccb *sbp);
@@ -316,6 +314,10 @@ class dhash {
   long rpc_answered;
 
  public:
+  // these 2 are only public for testing purposes
+  void replica_maintenance_timer (u_int index);
+  void partition_maintenance_timer ();
+
   static ref<dbrec> id2dbrec(chordID id);
   static chordID dbrec2id (ptr<dbrec> r);
 
@@ -418,7 +420,7 @@ class dhashcli {
   ptr<route_factory> r_factory;
 
 private:
-  void doRPC (chordID ID, rpc_program prog, int procno, ptr<void> in, 
+  void doRPC (chordID ID, const rpc_program &prog, int procno, ptr<void> in, 
 	      void *out, aclnt_cb cb);
 
   void lookup_findsucc_cb (chordID blockID, dhashcli_lookupcb_t cb,

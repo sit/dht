@@ -183,7 +183,7 @@ rpc_manager::lookup_host (const net_address &r)
 
 long
 rpc_manager::doRPC (ptr<location> l,
-		    rpc_program prog, int procno, 
+		    const rpc_program &prog, int procno, 
 		    ptr<void> in, void *out, aclnt_cb cb,
 		    long fake_seqno /* = 0 */)
 {
@@ -196,7 +196,7 @@ rpc_manager::doRPC (ptr<location> l,
 
 long
 rpc_manager::doRPC_dead (ptr<location> l,
-			 rpc_program prog, int procno, 
+			 const rpc_program &prog, int procno, 
 			 ptr<void> in, void *out, aclnt_cb cb,
 			 long fake_seqno /* = 0 */)
 {
@@ -217,7 +217,7 @@ rpc_manager::doRPCcb (aclnt_cb realcb, clnt_stat err)
 // -----------------------------------------------------
 long
 tcp_manager::doRPC (ptr<location> l,
-		    rpc_program prog, int procno, 
+		    const rpc_program &prog, int procno, 
 		    ptr<void> in, void *out, aclnt_cb cb,
 		    long fake_seqno /* = 0 */)
 {
@@ -240,7 +240,7 @@ tcp_manager::doRPC (ptr<location> l,
 
 long
 tcp_manager::doRPC_dead (ptr<location> l,
-			 rpc_program prog, int procno, 
+			 const rpc_program &prog, int procno, 
 			 ptr<void> in, void *out, aclnt_cb cb,
 			 long fake_seqno /* = 0 */)
 {
@@ -390,7 +390,7 @@ stp_manager::get_avg_var ()
 
 long
 stp_manager::doRPC_dead (ptr<location> l,
-			 rpc_program prog, int procno, 
+			 const rpc_program &prog, int procno, 
 			 ptr<void> in, void *out, aclnt_cb cb,
 			 long fake_seqno /* = 0 */)
 {
@@ -405,7 +405,7 @@ stp_manager::doRPC_dead (ptr<location> l,
 
 long
 stp_manager::doRPC (ptr<location> l,
-		    rpc_program prog, int procno, 
+		    const rpc_program &prog, int procno, 
 		    ptr<void> in, void *out, aclnt_cb cb,
 		    long _fake_seqno /* = 0 */)
 {
@@ -844,7 +844,7 @@ rpccb_chord::alloc (ptr<aclnt> c,
 		    struct sockaddr *dest) {
 
   xdrsuio x (XDR_ENCODE);
-  rpc_program prog = c->rp;
+  const rpc_program &prog = c->rp;
   
   if (!aclnt::marshal_call (x, authnone_create (), prog.progno, 
 			    prog.versno, procno, 

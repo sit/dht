@@ -30,7 +30,7 @@ struct sent_elm {
 
 struct RPC_delay_args {
   ptr<location> l;
-  rpc_program prog;
+  const rpc_program &prog;
   int procno;
   ptr<void> in;
   void *out;
@@ -40,7 +40,7 @@ struct RPC_delay_args {
 
   tailq_entry<RPC_delay_args> q_link;
 
-  RPC_delay_args (ptr<location> _l, rpc_program _prog, int _procno,
+  RPC_delay_args (ptr<location> _l, const rpc_program &_prog, int _procno,
 		  ptr<void> _in, void *_out, aclnt_cb _cb) :
     l (_l), prog (_prog), procno (_procno), in (_in), 
     out (_out), cb (_cb), now (getusec ()) {};
@@ -104,9 +104,9 @@ class rpc_manager {
  public:
   virtual void rexmit (long seqno) {};
   virtual void stats ();
-  virtual long doRPC (ptr<location> l, rpc_program prog, int procno,
+  virtual long doRPC (ptr<location> l, const rpc_program &prog, int procno,
 		 ptr<void> in, void *out, aclnt_cb cb, long fake_seqno = 0);
-  virtual long doRPC_dead (ptr<location> l, rpc_program prog, int procno,
+  virtual long doRPC_dead (ptr<location> l, const rpc_program &prog, int procno,
 			   ptr<void> in, void *out, aclnt_cb cb, long fake_seqno = 0);
   // the following may not necessarily make sense for all implementations.
   virtual float get_a_lat (ptr<location> l);
@@ -119,10 +119,6 @@ class rpc_manager {
 
 // "dhashtcp" implementation.
 class tcp_manager : public rpc_manager {
-  void doRPC_tcp (ptr<location> l, rpc_program progno, 
-		  int procno, ptr<void> in, 
-		  void *out, aclnt_cb cb);
-
   void doRPC_tcp_connect_cb (RPC_delay_args *args, int fd);
   void doRPC_tcp_cleanup (ptr<aclnt> c, RPC_delay_args *args, clnt_stat err);
   void send_RPC (RPC_delay_args *args);
@@ -131,9 +127,9 @@ class tcp_manager : public rpc_manager {
 
  public:
   void rexmit (long seqno) {};
-  long doRPC (ptr<location> l, rpc_program prog, int procno,
+  long doRPC (ptr<location> l, const rpc_program &prog, int procno,
 	      ptr<void> in, void *out, aclnt_cb cb, long fake_seqno = 0);
-  long doRPC_dead (ptr<location> l, rpc_program prog, int procno,
+  long doRPC_dead (ptr<location> l, const rpc_program &prog, int procno,
 		   ptr<void> in, void *out, aclnt_cb cb, long fake_seqno = 0);
   tcp_manager (ptr<u_int32_t> _nrcv) : rpc_manager (_nrcv) {}
   ~tcp_manager () {}
@@ -198,9 +194,9 @@ class stp_manager : public rpc_manager {
   void stats ();
 		   
   void rexmit (long seqno);
-  long doRPC (ptr<location> l, rpc_program prog, int procno,
+  long doRPC (ptr<location> l, const rpc_program &prog, int procno,
 	      ptr<void> in, void *out, aclnt_cb cb, long fake_seqno = 0);
-  long doRPC_dead (ptr<location> l, rpc_program prog, int procno,
+  long doRPC_dead (ptr<location> l, const rpc_program &prog, int procno,
 		   ptr<void> in, void *out, aclnt_cb cb, long fake_seqno = 0);
   float get_a_lat (ptr<location> l);
   float get_a_var (ptr<location> l);

@@ -173,7 +173,7 @@ locationtable::resendRPC (long seqno)
 }
 
 long
-locationtable::doRPC (const chord_node &n, rpc_program progno,
+locationtable::doRPC (const chord_node &n, const rpc_program &prog,
 		      int procno, ptr<void> in,
 		      void *out, aclnt_cb cb)
 {
@@ -181,11 +181,11 @@ locationtable::doRPC (const chord_node &n, rpc_program progno,
   if (!l) {
     insert (n.x, n.r.hostname, n.r.port);
   }
-  return doRPC (n.x, progno, procno, in, out, cb);
+  return doRPC (n.x, prog, procno, in, out, cb);
 }
 
 long
-locationtable::doRPC (const chordID &n, rpc_program progno, 
+locationtable::doRPC (const chordID &n, const rpc_program &prog, 
 		      int procno, ptr<void> in, 
 		      void *out, aclnt_cb cb)
 {
@@ -193,10 +193,10 @@ locationtable::doRPC (const chordID &n, rpc_program progno,
   if (!l) panic << "location (" << n << ") is null.\n";
   l->nrpc++;
   if (l->alive)
-    return hosts->doRPC (l, progno, procno, in, out, 
+    return hosts->doRPC (l, prog, procno, in, out, 
 			 wrap (this, &locationtable::doRPCcb, l, cb));
   else
-    return hosts->doRPC_dead (l, progno, procno, in, out, 
+    return hosts->doRPC_dead (l, prog, procno, in, out, 
 			      wrap (this, &locationtable::doRPCcb, l, cb));
 
 }

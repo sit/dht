@@ -178,7 +178,7 @@ class vnode_impl : public vnode {
   void register_upcall (int progno, cbupcall_t cb);
 
   // For other modules
-  long doRPC (const chordID &ID, rpc_program prog, int procno, 
+  long doRPC (const chordID &ID, const rpc_program &prog, int procno, 
 	      ptr<void> in, void *out, aclnt_cb cb);
   void resendRPC (long seqno);
   void stats (void) const;

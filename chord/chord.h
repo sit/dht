@@ -94,7 +94,7 @@ class vnode : public virtual refcount {
   virtual void register_upcall (int progno, cbupcall_t cb) = 0;
 
   // For other modules
-  virtual long doRPC (const chordID &ID, rpc_program prog, int procno, 
+  virtual long doRPC (const chordID &ID, const rpc_program &prog, int procno, 
 		      ptr<void> in, void *out, aclnt_cb cb) = 0;
   virtual void resendRPC (long seqno) = 0;
   virtual void stats (void) const = 0;
@@ -207,7 +207,7 @@ class chord : public virtual refcount {
   void get_predecessor (chordID n, cbchordID_t cb) {
     active->get_predecessor (n, cb);
   };
-  long doRPC (chordID &n, rpc_program progno, int procno, ptr<void> in, 
+  long doRPC (chordID &n, const rpc_program &progno, int procno, ptr<void> in, 
 	      void *out, aclnt_cb cb) {
     return active->doRPC (n, progno, procno, in, out, cb);
   };

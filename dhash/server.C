@@ -43,6 +43,7 @@ static int MERKLE_ENABLED = getenv("MERKLE_ENABLED") ? atoi(getenv("MERKLE_ENABL
 static int PARTITION_ENABLED = getenv("PARTITION_ENABLED") ? atoi(getenv("PARTITION_ENABLED")) : 0;
 static int REPLICATE = getenv("REPLICATE") ? atoi(getenv("REPLICATE")) : 1;
 static int KEYHASHDB = getenv("KEYHASHDB") ? atoi(getenv("KEYHASHDB")) : 0;
+int JOSH = getenv("JOSH") ? atoi(getenv("JOSH")) : 0;
 
 #define SYNCTM    30
 #define KEYHASHTM 10
@@ -221,12 +222,11 @@ keyhashdbagain:
   update_replica_list ();
   delaycb (SYNCTM, wrap (this, &dhash::sync_cb));
 
-  if (MERKLE_ENABLED) {
+  if (MERKLE_ENABLED && !JOSH) {
     merkle_rep_tcb = 
       delaycb (REPTM, wrap (this, &dhash::replica_maintenance_timer, 0));
-    if (PARTITION_ENABLED)
-      merkle_part_tcb =
-	delaycb (PRTTM, wrap (this, &dhash::partition_maintenance_timer));
+    merkle_part_tcb =
+      delaycb (PRTTM, wrap (this, &dhash::partition_maintenance_timer));
   } else {
     install_replica_timer ();
     transfer_initial_keys ();
@@ -419,6 +419,9 @@ dhash::replica_maintenance_timer (u_int index)
 void
 dhash::partition_maintenance_timer ()
 {
+  if (!PARTITION_ENABLED)
+    return;
+
   merkle_part_tcb = NULL;
 #if 0
   warn << "** dhash::partition_maintenance_timer ()\n";
@@ -1386,7 +1389,7 @@ dhash::doRPC_unbundler (chordID ID, RPC_delay_args *args)
 }
 
 void
-dhash::doRPC (chordID ID, rpc_program prog, int procno,
+dhash::doRPC (chordID ID, const rpc_program &prog, int procno,
 	      ptr<void> in,void *out, aclnt_cb cb) 
 {
   host_node->doRPC (ID, prog, procno, in, out, cb);

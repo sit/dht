@@ -42,7 +42,6 @@
 // it off.)  This allows specific, user-controlled periods of time to
 // be profiled.  Program must be compiled with -pg for this to work.
 
-
 #ifdef PROFILING 
 extern "C" {
   void moncontrol(int);
@@ -204,9 +203,108 @@ toggle_profiling ()
 }
 #endif
 
+str
+tm ()
+{
+  timespec ts;
+  clock_gettime (CLOCK_REALTIME, &ts);
+  return strbuf (" %d.%06d", int (ts.tv_sec), int (ts.tv_nsec/1000));
+}
+
+void
+dump_progstats (const rpc_program &prog, bool hdr)
+{
+  // In arpc/rpctypes.h -- if defined
+#ifdef RPC_PROGRAM_STATS
+  str fmt1 ("%-40s %15s %15s %15s %15s %15s %15s\n");
+  str fmt2 ("%-40s %15d %15d %15d %15d %15d %15d\n");
+
+  if (hdr) {
+    warn.fmt (fmt1,
+	      "",
+	      "outcall_num","outcall_bytes",
+	      "outcall_numrex","outcall_bytesrex",
+	      "outreply_num","outreply_bytes");
+  }
+
+  rpc_program totals;
+  bzero (&totals, sizeof (totals));
+  for (size_t procno = 0; procno < prog.nproc; procno++) {
+    if (strlen (prog.tbl[procno].name) == 1)
+      continue;
+
+    warn.fmt (fmt2,
+	      prog.tbl[procno].name,
+	      prog.outcall_num[procno],
+	      prog.outcall_bytes[procno],
+	      prog.outcall_numrex[procno],
+	      prog.outcall_bytesrex[procno],
+	      prog.outreply_num[procno],
+	      prog.outreply_bytes[procno]);
+    
+    totals.outcall_num[0] += prog.outcall_num[procno];
+    totals.outcall_bytes[0] += prog.outcall_bytes[procno];
+    totals.outcall_numrex[0] += prog.outcall_numrex[procno];
+    totals.outcall_bytesrex[0] += prog.outcall_bytesrex[procno];
+    totals.outreply_num[0] += prog.outreply_num[procno];
+    totals.outreply_bytes[0] += prog.outreply_bytes[procno];
+  }
+  
+  str tmp = strbuf () << "TOTAL " << prog.name;
+  warn.fmt (fmt2,
+	    tmp.cstr (),
+	    totals.outcall_num[0],
+	    totals.outcall_bytes[0],
+	    totals.outcall_numrex[0],
+	    totals.outcall_bytesrex[0],
+	    totals.outreply_num[0],
+	    totals.outreply_bytes[0]);
+
+  warn << "\n";
+#endif
+}
+
+
+
+void
+bandwidth ()
+{
+  warnx << tm () << "bandwidth \n";
+  extern const rpc_program chord_program_1;
+  extern const rpc_program merklesync_program_1;
+  extern const rpc_program dhash_program_1;
+
+  dump_progstats (chord_program_1, true);
+  dump_progstats (dhash_program_1, false);
+  dump_progstats (merklesync_program_1, false);
+
+  delaycb (1, 0, wrap (bandwidth));
+}
+
+
 void
 stats () 
 {
+  extern int JOSH; // dhash/server.C
+
+  if (JOSH) {
+
+    // only execute once
+    static bool unleashed = false;
+    if (!unleashed) {
+      warn << tm () << " unleashing synchronization\n";
+      for (u_int i = 0 ; i < dh.size (); i++) {
+	dh[i]->replica_maintenance_timer (0);
+	dh[i]->partition_maintenance_timer ();
+      }
+
+      bandwidth ();
+
+      unleashed = true;
+      return;
+    }
+  }
+
 #ifdef PROFILING
   toggle_profiling ();
 #else
@@ -216,7 +314,6 @@ stats ()
   chordnode->print ();
 #endif
 }
-
 
 
 void
