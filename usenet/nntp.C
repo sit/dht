@@ -213,10 +213,13 @@ nntp::cmd_over (str c) {
   } else {
     vec<str> limits;
     int n = split (&limits, rxx("-"), c, (size_t) -1, true);
-    warn << s << ": xover " << c << " splits to " << n << "/" << limits.size();
-    for (size_t i = 0; i < limits.size (); i++)
-      warnx << " '" << limits[i] << "'";
-    warnx << "\n";
+    if (nntp_trace >= 8) {
+      warn << s << ": xover " << c << " splits to " 
+	   << n << "/" << limits.size();
+      for (size_t i = 0; i < limits.size (); i++)
+	warnx << " '" << limits[i] << "'";
+      warnx << "\n";
+    }
     if (n > 0) {
       // grab the first number...
       if (!convertint (limits[0], &start)) {
