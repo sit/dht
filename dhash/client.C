@@ -84,7 +84,6 @@ dhashcli_config_init::dhashcli_config_init ()
 
 // ---------------------------------------------------------------------------
 // DHASHCLI
-
  
 dhashcli::dhashcli (ptr<vnode> node, str dhcs, uint nreplica)
   : clntnode (node), ordersucc_ (true)
@@ -543,6 +542,8 @@ dhashcli::insert_succlist_cb (ref<dhash_block> block, cbinsert_path_t cb,
   insert_lookup_cb (block, cb, options, DHASH_OK, succs, r);
 }
 
+u_int64_t start_insert, end_insert, total_insert = 0;
+
 void
 dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb, int options, 
 			    dhash_stat status, vec<chord_node> succs, route r)
@@ -600,8 +601,12 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb, int opti
   ss->succs = succs;
 
   if (block->ctype == DHASH_KEYHASH) {
-    if (!DHC)
-      for (u_int i = 0; i < succs.size (); i++) {
+    if (!DHC) {
+      timeval tp;
+      gettimeofday (&tp, NULL);
+      start_insert = tp.tv_sec * (u_int64_t) 1000000 + tp.tv_usec;
+
+      for (u_int i = 0; i < dhash::num_efrags (); i++) {
 	// Count up for each RPC that will be dispatched
 	ss->out += 1;
 	
@@ -610,14 +615,18 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb, int opti
 			      blockID(block->ID, block->ctype, DHASH_BLOCK),
 			      block,
 			      wrap (this, &dhashcli::insert_store_cb,  
-				    ss, r, i, ss->succs.size (),
+				    ss, r, i, dhash::num_efrags (),
 				    // benjie: use dfrags as the number
 				    // of blocks we want to succeed when
 				    // storing whole keyhash blocks
 				    dhash::num_dfrags ()),
 			      i == 0 ? DHASH_STORE : DHASH_REPLICA);
       }
+    }
     else {
+      timeval tp;
+      gettimeofday (&tp, NULL);
+      start_insert = tp.tv_sec * (u_int64_t) 1000000 + tp.tv_usec;
       ptr<location> dest = clntnode->locations->lookup_or_create (succs[0]);
       ref<dhash_value> value = New refcounted<dhash_value>;
       value->set (block->data, block->len);
@@ -698,6 +707,14 @@ dhashcli::insert_store_cb (ref<sto_state> ss, route r, u_int i,
     
     for (unsigned int i = 0; i < r.size (); i++)
       r_ret.push_back (r[i]->id ());
+
+    timeval tp;
+    gettimeofday (&tp, NULL);
+    end_insert = tp.tv_sec * (u_int64_t) 1000000 + tp.tv_usec;
+    warn << "********End DHash insert 1 block " << end_insert - start_insert
+	 << " usec\n";
+    total_insert += end_insert - start_insert;
+    warn << "********DHash total insert " << total_insert << "\n";
     (*ss->cb) (DHASH_OK, r_ret);
   }
 }
@@ -710,7 +727,15 @@ dhashcli::insert_dhc_cb (ptr<location> dest, route r,
   if (!err) {
     for (uint i=0; i<r.size (); i++) 
       path.push_back (r[i]->id ());
-    //warn << "dhashcli:: Insert succeeded \n";
+
+    timeval tp;
+    gettimeofday (&tp, NULL);
+    end_insert = tp.tv_sec * (u_int64_t) 1000000 + tp.tv_usec;
+    warn << "********End DHC insert 1 block " << end_insert - start_insert
+	 << " usec\n";
+    total_insert += end_insert - start_insert;
+    warn << "********DHC total insert " << total_insert << "\n";
+
     (*cb) (DHASH_OK, path);
   } else {
     warning << clntnode->my_ID () << "dhc err: " << err << "\n";

@@ -746,12 +746,13 @@ dhash_impl::store (s_dhash_insertarg *arg, bool exists, cbstore cb)
     switch (arg->ctype) {
     case DHASH_KEYHASH:
       {
+#if 0
 	if (!verify_keyhash (arg->key, ss->buf, ss->size)) {
 	  warning << "keyhash: cannot verify " << ss->size << " bytes\n";
 	  stat = DHASH_STORE_NOVERIFY;
 	  break;
 	}
-
+#endif
 	ptr<dbrec> prev = keyhash_db->lookup (k);
 	if (prev) {
 	  if (is_keyhash_stale (prev, d)) {
