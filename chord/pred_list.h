@@ -20,12 +20,13 @@ class pred_list : public stabilizable {
   ptr<vnode> v_;
   ptr<locationtable> locations;
 
-  chordID oldpred;
-  chordID backkey_;
-  
-  bool stable_predlist;
-  u_int nout_backoff;
   u_int nout_continuous;
+  chordID oldpred_; // used to check if predecessor is stable
+  bool gotfingers_; // seed finger list from first predecessor acquired
+  
+  u_int nout_backoff;
+  bool stable_predlist;
+  chordID backkey_; 
 
   void stabilize_pred ();
   void stabilize_getsucc_cb (chordID sd, 

@@ -5,16 +5,15 @@
 pred_list::pred_list (ptr<vnode> v,
 		      ptr<locationtable> locs,
 		      chordID ID)
-  : myID (ID), v_ (v), locations (locs)
+  : myID (ID), v_ (v), locations (locs),
+    nout_continuous (0),
+    gotfingers_ (false),
+    nout_backoff (0),
+    stable_predlist (false)
 {
-  stable_predlist = false;
-
-  nout_backoff = 0;
-  nout_continuous = 0;
-
   backkey_ = 0;
 
-  oldpred = myID;
+  oldpred_ = myID;
   
   locations->pinpred (myID);
   locations->pinpredlist (myID);
@@ -30,13 +29,15 @@ void
 pred_list::update_pred (const chordID &p, const net_address &r)
 {
   chordID curp = pred ();
-  if (oldpred == myID || between (curp, myID, p)) {
-    bool ok = locations->insert (p, r);
-    if (ok && oldpred == myID) {
-      v_->get_fingers (p, wrap (this, &pred_list::update_pred_fingers_cb));
-    }
-  }
-  oldpred = pred ();
+  
+  bool ok = true;
+  if (!gotfingers_ || between (curp, myID, p))
+    ok = locations->insert (p, r);
+  
+  if (!gotfingers_ && ok)
+    v_->get_fingers (p, wrap (this, &pred_list::update_pred_fingers_cb));
+
+  oldpred_ = pred ();
 }
 
 void
@@ -44,7 +45,7 @@ pred_list::update_pred_fingers_cb (vec<chord_node> nlist, chordstat s)
 {
   if (s)
     return;
-    
+  gotfingers_ = true;
   for (unsigned i = 0; i < nlist.size (); i++)
     locations->insert (nlist[i].x, nlist[i].r);
 }
@@ -72,7 +73,7 @@ pred_list::stabilize_getsucc_cb (chordID pred,
   } else {
     // maybe we're not stable. insert this guy's successor in
     // location table; maybe he is our predecessor.
-    if (s != myID) {
+    if (!gotfingers_ || s != myID) {
       update_pred (s, r);
     }
   }
@@ -134,7 +135,8 @@ pred_list::do_backoff ()
 bool
 pred_list::isstable ()
 {
-  return oldpred == pred ();
+  // Won't be true until update_pred has been called once.
+  return oldpred_ == pred ();
   //  return stable_predlist;
 }
 
