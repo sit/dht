@@ -562,8 +562,6 @@ vnode_impl::doRPC (ref<location> l, const rpc_program &prog, int procno,
   arg->progno = prog.progno;
   arg->procno = procno;
 
-  rpc_pending_counts[prog.progno - 344447]++;
-  
   //marshall the args ourself
   xdrproc_t inproc = prog.tbl[procno].xdr_arg;
   xdrsuio x (XDR_ENCODE);

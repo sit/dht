@@ -78,8 +78,6 @@ class vnode_impl : public vnode {
  private:
   int myindex;
 
-  int rpc_pending_counts[128];
-
   ihash<unsigned long, 
     dispatch_record, 
     &dispatch_record::progno, 

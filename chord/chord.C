@@ -109,8 +109,6 @@ vnode_impl::vnode_impl (ref<chord> _chordnode,
   ndogetsucc_ext = 0;
   ndogetpred_ext = 0;
 
-  memset (rpc_pending_counts, 0, sizeof (rpc_pending_counts));
-
   int t;
   assert (Configurator::only ().get_int ("chord.checkdead_interval", t));
   assert (t > 0);
