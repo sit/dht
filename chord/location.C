@@ -325,7 +325,7 @@ locationtable::betterpred_distest (chordID myID, chordID current,
       if (logdist_p < 0.0) logdist_p = 0.0;
       double d_proposed = (logdist_p - 160.0)*D + new_delay;
 
-      if (d_proposed + 50000 < d_current) 
+      if (d_proposed < d_current) 
 	r = 3;
       if (1) {
 	char b[1024];

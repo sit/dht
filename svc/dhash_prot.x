@@ -52,6 +52,7 @@ struct dhash_recurs_arg {
   chord_node return_address;
   int32 start;
   int32 len;
+  int32 hops;
   int nonce;
 };
 
@@ -142,6 +143,7 @@ struct dhash_finish_recurs_arg {
   int32 nonce;
   dhash_stat status;
   chord_node source;
+  int32 hops;
   dhash_fetchiter_complete_res data;
 };
 

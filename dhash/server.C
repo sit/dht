@@ -128,7 +128,7 @@ dhash::dispatch (unsigned long procno,
 	  location *n;
 	  int lim = ((int)s_list.size () < nreplica) ? 
 	    s_list.size ():
-	    nreplica + 1;
+	    nreplica;
 	  for (int i = 1; i < lim; i++) {
 	    n = locations->getlocation(res->cont_res->succ_list[i].x);
 	    if (n->nrpc == 0) continue;
@@ -154,7 +154,6 @@ dhash::dispatch (unsigned long procno,
     
   case DHASHPROC_FETCHRECURS:
     {
-      warn << "hello from FETCHRECURS\n";
 
       dhash_recurs_arg *rarg = New dhash_recurs_arg ();
       if (!proc (x.xdrp (), rarg)) {
@@ -167,7 +166,6 @@ dhash::dispatch (unsigned long procno,
       chord_node return_address = rarg->return_address;
       if (nonce == 0) {
 	nonce = qnonce++;
-	warn << "got a new query, adding " << nonce << " to my table\n";
 	rqc.insert (nonce, rpc_id);
 	return_address.x = host_node->my_ID ();
 	return_address.r = 
@@ -176,14 +174,12 @@ dhash::dispatch (unsigned long procno,
 
       if (key_status (rarg->key) != DHASH_NOTPRESENT) {
 	// if we have the data, send an RPC to the return address
-	warn << "Will return data for " << rarg->key << "\n";
 	fetch (rarg->key, wrap (this, &dhash::fetchrecurs_havedata_cb,
 				rpc_id, rarg, nonce, return_address));
 
 	return;
       } else if (responsible (rarg->key))  {
 	//we should have the key, send an error RPC to the return address
-	warn << host_node->my_ID () << " should have been storing " << rarg->key << "\n";
 	
 	ptr<dhash_finish_recurs_arg> arg = 
 	  New refcounted<dhash_finish_recurs_arg>;
@@ -210,21 +206,34 @@ dhash::dispatch (unsigned long procno,
 	else 	// nope, look up the next best pred
 	  nid = host_node->lookup_closestpred (rarg->key);
 	
-	warn << host_node->my_ID () << " will forward a query for " << rarg->key << " to " << nid << "\n";
-
 	ptr<dhash_recurs_arg> arg = New refcounted<dhash_recurs_arg> ();
 	arg->key = rarg->key;
 	arg->start = rarg->start;
 	arg->len = rarg->len;
+	arg->hops = rarg->hops + 1;
 	arg->return_address = return_address;
 	arg->nonce = nonce;
 
-	if (nid == my_succ) {
-	  //pick the next node to forward the query to:
-	  // --> the fastest in my succ list
+	chordID best = nid;
+	if ( (ss_mode > 0) && (nid == my_succ)) {
+	  location *b = host_node->chordnode->locations->getlocation (nid);
+	  chordID last = nid;
+	  for (int i = 0; i < nreplica; i++) {
+	    chordID next = host_node->lookup_closestsucc (last);
+	    location *n = host_node->chordnode->locations->getlocation (last);
+	    if (n->nrpc == 0) continue;
+	    if (b->nrpc == 0) continue;
+	    double n_lat = (double)n->rpcdelay / n->nrpc;
+	    double b_lat = (double)b->rpcdelay / b->nrpc;
+	    if (n_lat + 50000 < b_lat) {
+	      b = n;
+	      best = next;
+	    }
+	    last = next;
+	  }
 	}
 	dhash_fetchrecurs_res *c_res = New dhash_fetchrecurs_res ();
-	doRPC (nid, dhash_program_1, DHASHPROC_FETCHRECURS, arg, c_res,
+	doRPC (best, dhash_program_1, DHASHPROC_FETCHRECURS, arg, c_res,
 	       wrap (this, &dhash::fetchrecurs_continue, c_res));
       }
 
@@ -249,7 +258,6 @@ dhash::dispatch (unsigned long procno,
       else {
 
 	//cache loc since we will probably do a TRANSFER to it next
-	warn << "caching location " << farg->source.x << "\n";
 	host_node->chordnode->locations->cacheloc (farg->source.x, 
 						   farg->source.r);
 
@@ -259,8 +267,9 @@ dhash::dispatch (unsigned long procno,
 		res->compl_res->res.size ());
 	res->compl_res->offset = farg->data.offset;
 	res->compl_res->attr.size = farg->data.attr.size;
-	res->compl_res->hops = 0;
+	res->compl_res->hops = farg->hops;
 	res->compl_res->source = farg->data.source;
+	
       }
       dhash_reply (*srpc_id, DHASHPROC_FETCHRECURS, res);
       delete res;
@@ -339,7 +348,7 @@ dhash::dispatch (unsigned long procno,
 void
 dhash::fetchrecurs_continue (dhash_fetchrecurs_res *res, clnt_stat err) 
 {
-  if (err) warn << "oh well\n";
+  if (err) warn << "frecurs_continue: err\n";
   else 
     assert (res->status != DHASH_RFETCHFORWARDED) ;
   delete res;
@@ -361,6 +370,7 @@ dhash::fetchrecurs_havedata_cb (unsigned long rpc_id,
   chordID myID = host_node->my_ID ();
   res_arg->source.r = host_node->chordnode->locations->getaddress (myID);
   res_arg->source.x = host_node->my_ID ();
+  res_arg->hops = rarg->hops + 1;
   host_node->chordnode->locations->cacheloc (return_address.x, 
 					     return_address.r);
   
@@ -393,7 +403,7 @@ dhash::fetchrecurs_havedata_cb (unsigned long rpc_id,
 void
 dhash::fetchrecurs_sent_data (dhash_stat *done_res, clnt_stat err)
 {
-  if (err || (*done_res != DHASH_OK)) warn << "oops\n";
+  if (err || (*done_res != DHASH_OK)) warn << "fr_sent_data: error\n";
   delete done_res;
 }
 

@@ -1,4 +1,4 @@
-/* $Id: sfsrodb.C,v 1.11 2001/08/30 14:16:52 fdabek Exp $ */
+/* $Id: sfsrodb.C,v 1.12 2001/09/10 01:21:59 fdabek Exp $ */
 
 /*
  * Copyright (C) 1999 Kevin Fu (fubob@mit.edu)
@@ -675,7 +675,6 @@ sfsrodb_main (const str root, const str keyfile)
   }
   else {
     str key = file2wstr (keyfile);
-    warn << key << "\n\n";
     if (!key) {
       warn << keyfile << ": " << strerror (errno) << "\n";
       fatal ("errors!\n");

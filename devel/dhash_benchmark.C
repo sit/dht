@@ -33,7 +33,7 @@ cp2p ()
   return p2pclnt;
 }
 
-#define MTU 1024
+#define DMTU 1024
 
 int
 store_block(chordID key, void *data, unsigned int datasize) 
@@ -43,7 +43,7 @@ store_block(chordID key, void *data, unsigned int datasize)
   dhash_storeres res;    
   dhash_insertarg *i_arg = New dhash_insertarg ();
   i_arg->key = key;  
-  int n = (MTU < datasize) ? MTU : datasize;
+  int n = (DMTU < datasize) ? DMTU : datasize;
   i_arg->data.setsize(n);
   i_arg->type = DHASH_STORE;
   i_arg->attr.size = datasize;
@@ -58,7 +58,7 @@ store_block(chordID key, void *data, unsigned int datasize)
   chordID source = res.resok->source;
 
   while (!res.resok->done) {
-    n = (written + MTU < datasize) ? MTU : datasize - written;
+    n = (written + DMTU < datasize) ? DMTU : datasize - written;
     dhash_send_arg *sarg = New dhash_send_arg();
     sarg->dest = source;
     sarg->iarg.key = key;
@@ -88,7 +88,7 @@ fetch_block(int i, chordID key, int datasize)
 
   dhash_fetch_arg arg;
   arg.key = key;
-  arg.len = MTU;
+  arg.len = DMTU;
   arg.start = 0;
   int err = cp2p ()->scall(DHASHPROC_LOOKUP, &arg, &res);
   assert (err == 0);
@@ -99,7 +99,7 @@ fetch_block(int i, chordID key, int datasize)
   unsigned int read = res.resok->res.size ();
   
   while (read < res.resok->attr.size) {
-    arg.len = (read + MTU < res.resok->attr.size) ? MTU : 
+    arg.len = (read + DMTU < res.resok->attr.size) ? DMTU : 
       res.resok->attr.size - read;
     arg.start = read;
     err = cp2p ()->scall(DHASHPROC_LOOKUP, &arg, &res);
@@ -133,10 +133,10 @@ fetch_block_async(int i, chordID key, int datasize)
 
   dhash_fetch_arg arg;
   arg.key = key;
-  arg.len = MTU;
+  arg.len = DMTU;
   arg.start = 0;
   out++;
-  cp2p ()->call(DHASHPROC_LOOKUP_R, &arg, res, wrap(&afetch_cb, res, key, buf, i, start));
+  cp2p ()->call(DHASHPROC_LOOKUP, &arg, res, wrap(&afetch_cb, res, key, buf, i, start));
   return 0;
 }
 
@@ -192,7 +192,7 @@ afetch_cb (dhash_res *res, chordID key, char *buf, int i, struct timeval start, 
     ptr<dhash_transfer_arg> arg = New refcounted<dhash_transfer_arg> ();
 
     arg->farg.key = key;
-    arg->farg.len = (off + MTU < res->resok->attr.size) ? MTU : 
+    arg->farg.len = (off + DMTU < res->resok->attr.size) ? DMTU : 
       res->resok->attr.size - off;
     arg->farg.start = off;
     arg->source = res->resok->source;
@@ -257,6 +257,7 @@ store(int num, int size) {
   for (int i = 0; i < num; i++) {
     int err = store_block(IDs[i], data[i], size);
     if (err) warn << "ERROR: " << err << "\n";
+    warn << i << "\n";
   }
 
   return 0;

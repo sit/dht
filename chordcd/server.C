@@ -4,9 +4,10 @@
 #include "xdr_suio.h"
 #include "afsnode.h"
 
-#define LSD_SOCKET "/tmp/chord-sock"
-#define MTU 1024
+#define LSD_SOCKET "/tmp/sock"
+#define CMTU 1024
 
+void ignore_me (char *data, unsigned int size);
 void ro2nfsattr (sfsro_inode *si, fattr3 *ni, chordID ID);
 static bool xdr_putentry3 (XDR *x, u_int64_t ino, 
 			   filename name, u_int32_t cookie);
@@ -23,7 +24,6 @@ chord_server::chord_server ()
 void
 chord_server::setrootfh (str root, callback<void, nfs_fh3 *>::ref rfh_cb) 
 {
-  warn << "root is " << root << "\n";
   //                       chord:ade58209f
   static rxx path_regexp ("chord:([0-9a-zA-Z]*)$"); 
 
@@ -32,7 +32,6 @@ chord_server::setrootfh (str root, callback<void, nfs_fh3 *>::ref rfh_cb)
   str dearm = dearmor64A (rootfhstr);
   chordID rootfh;
   mpz_set_rawmag_be (&rootfh, dearm.cstr (), dearm.len ());
-  warn << "root file handle is " << rootfh << "\n";
 
   //fetch the root file handle too..
   get_data (rootfh, wrap (this, &chord_server::getroot_fh, rfh_cb), false);
@@ -47,7 +46,6 @@ chord_server::getroot_fh (callback<void, nfs_fh3 *>::ref rfh_cb, sfsro_data *d)
     (*rfh_cb) (NULL);
   } else {
     // XXX verify file handle
-    warn << "returning true\n";
     fsinfo = *d->fsinfo;
     nfs_fh3 *fh = New nfs_fh3;
     chordid_to_nfsfh (&d->fsinfo->info.rootfh, fh);
@@ -59,7 +57,6 @@ void
 chord_server::dispatch (ref<nfsserv> ns, nfscall *sbp)
 {
 
-  warn << "dispatching " << sbp->proc () << "\n";
   switch(sbp->proc()) {
   case NFSPROC3_READLINK:
     {
@@ -152,7 +149,6 @@ chord_server::dispatch (ref<nfsserv> ns, nfscall *sbp)
     }
     break;
   case NFSPROC_CLOSE:
-    warn << "close?\n";
     break;
   default:
     {
@@ -208,7 +204,6 @@ chord_server::lookup_fetch_dirinode (nfscall *sbp, sfsro_inode *dir_i)
     if (dir_i->type != SFSRODIR && dir_i->type != SFSRODIR_OPAQ) 
       sbp->error (NFS3ERR_NOTDIR);
     else if (dir_i->reg->direct.size() <= 0) {
-      warn << "returning NOENT in lookupinode+lookupres\n";
       sbp->error (NFS3ERR_NOENT);
     } else 
       get_data (sfshash_to_chordid (&dir_i->reg->direct[0]),
@@ -317,16 +312,24 @@ chord_server::read_fetch_inode (nfscall *sbp, chordID ID,sfsro_inode *f_ip)
     //XXX if a read straddles two blocks we will do a short read 
     ///   i.e. only read the first block
     size_t block = ra->offset / fsinfo.info.blocksize;
-    warn << "reading from " << ra->offset << " thats block " << block << "\n";
     read_file_block (block, f_ip, false, wrap (this, 
 					     &chord_server::read_fetch_block,
 					     sbp, f_ip, ID));
 
-    // XXX prefetch here
+#define PF 8
+    size_t pf_lim = block + PF;
+    for (size_t b = block + 1; b < pf_lim ; b++)
+      if ((b+1)*fsinfo.info.blocksize < f_ip->reg->size) 
+	read_file_block (b, f_ip, true, wrap (&ignore_me));
   }
 
 }
 
+void
+ignore_me (char *data, unsigned int size) 
+{
+  
+}
 void
 chord_server::read_fetch_block (nfscall *sbp, sfsro_inode *f_ip, chordID ID,
 				char *data, size_t size)
@@ -338,10 +341,10 @@ chord_server::read_fetch_block (nfscall *sbp, sfsro_inode *f_ip, chordID ID,
   ro2nfsattr(f_ip, &fa, ID);
 
   unsigned int blocksize = (unsigned int)fsinfo.info.blocksize;
-  warn << "ended up with " << size << " bytes, block size was " << blocksize << "\n";
 
   size_t start = ra->offset % blocksize;
   size_t n = MIN (MIN (ra->count, size), size - start);
+
   nfsres.resok->count = n;
   nfsres.resok->eof = (fa.size >= ra->offset + n) ? 1 : 0;
   nfsres.resok->data.setsize(n);
@@ -542,7 +545,6 @@ chord_server::chordid_to_nfsfh (chordID *n, nfs_fh3 *nfh)
 {
   str raw = n->getraw ();
   nfh->data.setsize (raw.len ());
-  warn << "fh is " << raw.len () << " bytes long v. " << NFS3_FHSIZE - 4 << "\n";
   memcpy (nfh->data.base (), raw.cstr (), raw.len ());
 }
 
@@ -691,7 +693,6 @@ void
 chord_server::get_data (chordID ID, cbgetdata_t cb, bool pf_only) 
 {
 
-  warn << "get_data " << ID << "\n";
 
   //check for pending request for the same data
   wait_list *l;
@@ -710,11 +711,10 @@ chord_server::get_data (chordID ID, cbgetdata_t cb, bool pf_only)
     return;
   }
 
-  warn << ID << " not in cache\n";
 
   dhash_fetch_arg arg;
   arg.key = ID;
-  arg.len = MTU;
+  arg.len = CMTU;
   arg.start = 0;
   
   dhash_res *res = New dhash_res (DHASH_OK);
@@ -734,7 +734,6 @@ chord_server::get_data_initial_cb (dhash_res *res, cbgetdata_t cb, chordID ID,
     warn << "error fetching " << ID << "\n";
     finish_getdata (NULL, 0, cb, bigint (0));
   } else if (res->resok->attr.size == res->resok->res.size ()) {
-    warn << " block was smaller than MTU\n";
     finish_getdata (res->resok->res.base (), res->resok->res.size (), 
 		    cb, ID);
   } else {
@@ -746,14 +745,13 @@ chord_server::get_data_initial_cb (dhash_res *res, cbgetdata_t cb, chordID ID,
     while (offset < res->resok->attr.size) {
       ptr<dhash_transfer_arg> arg = New refcounted<dhash_transfer_arg> ();
       arg->farg.key = ID;
-      arg->farg.len = (offset + MTU < res->resok->attr.size) ? MTU :
+      arg->farg.len = (offset + CMTU < res->resok->attr.size) ? CMTU :
 	res->resok->attr.size - offset;
       arg->source = res->resok->source;
       arg->farg.start = offset;
 
       dhash_res *new_res = New dhash_res (DHASH_OK);
       
-      warn << "asking for " << arg->farg.len << " at " << offset << "\n";
       cclnt->call (DHASHPROC_TRANSFER, arg, new_res,
 		   wrap (this, &chord_server::get_data_partial_cb, 
 			 new_res, buf, read, cb, ID));
@@ -776,8 +774,8 @@ chord_server::get_data_partial_cb (dhash_res *res, char *buf,
     delete buf;
     delete read;
     (*cb) (NULL);
+    return;
   } else {
-    warn << "client: copying " << res->resok->res.size () << " at " << res->resok->offset << " of " << res->resok->attr.size << "\n";
     memcpy (buf + res->resok->offset, res->resok->res.base (),
 	    res->resok->res.size ());
     *read += res->resok->res.size ();
@@ -804,13 +802,27 @@ chord_server::finish_getdata (char *buf, unsigned int size, cbgetdata_t cb,
     xdrmem x (buf, size, XDR_DECODE);
     if (!xdr_sfsro_data (x.xdrp (), data)) {
       warn << "Couldn't unmarshall data\n";
+      delete buf;
       (*cb)(NULL);
     } else {
-      warn << "returning non-null (" << (int)data << ")\n";
       (*cb)(data);
-      // XXX - check prefetch list
+
       // add to cache
       data_cache.insert (ID, *data);
+      
+      // XXX - check prefetch list
+      wait_list *l;
+      if ( (l = pf_waiters[ID]) ) {
+	fetch_wait_state *w = l->first;
+	while (w) {
+	  (*w->cb) (data);
+	  fetch_wait_state *next = l->next (w);
+	  l->remove (w);
+	  w = next;
+	}
+      }
+      
+      delete buf;
     }
   }
 

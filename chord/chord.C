@@ -334,14 +334,17 @@ vnode::closestpredfinger_ss (chordID &x)
       else
 	better = locations->betterpred_greedy (myID, p, x, 
 					       finger_table[i].first.n);
+    
+      if ((finger_table[i].first.alive) && better) {
+	p = finger_table[i].first.n;
+	best = better;
+      }
     }
-    if ((finger_table[i].first.alive) && better) {
-      p = finger_table[i].first.n;
-      best = better;
-    }
+
   }
-  
-#if 0
+
+
+#ifdef VERYVERBOSE
   if (best) {
     warn << "chose " << p << " because ";
     switch (best) {
@@ -358,6 +361,19 @@ vnode::closestpredfinger_ss (chordID &x)
       warn << "there was a bug in my code\n";
     }
   }
+
+  location *choice = locations->getlocation (p);
+
+  char buf[1024];
+  if (choice->nrpc)
+    sprintf (buf, "%f", (float)choice->rpcdelay/choice->nrpc);
+  else
+    sprintf (buf, " (no latency info) ");
+
+  if (choice->nrpc && (float)choice->rpcdelay/choice->nrpc > 50000)
+    warn << "LONG HOP " << buf << "\n";
+  else
+    warn << "SHORT HOP " << buf << "\n";
 #endif
 
   if (p != myID) return p;
@@ -845,8 +861,6 @@ vnode::dofindclosestpred (svccb *sbp, chord_findarg *fa)
   ndofindclosestpred++;
   res.resok->node = p;
   res.resok->r = locations->getaddress (p);
-  warnx << "dofindclosestpred: " << myID << " closest pred of " << fa->x 
-	<< " is " << p << "\n";
   warnt("CHORD: dofindclosestpred_reply");
   sbp->reply (&res);
 }

@@ -1,4 +1,4 @@
-/* $Id: sfsrodb_core.C,v 1.14 2001/09/01 17:31:14 fdabek Exp $ */
+/* $Id: sfsrodb_core.C,v 1.15 2001/09/10 01:21:59 fdabek Exp $ */
 
 /*
  *
@@ -30,6 +30,8 @@
 
 long out=0;
 
+#define SMTU MTU
+
 void check_cbs ();
 
 bigint
@@ -49,17 +51,21 @@ sfsrodb_put (const void *keydata, size_t keylen,
   bigint n = fh2mpz(keydata, keylen);
   
   ptr<dhash_insertarg> arg = New refcounted<dhash_insertarg> ();
-  int remain = (MTU <= contentlen) ? MTU : contentlen;
+  int remain = (SMTU <= contentlen) ? SMTU : contentlen;
   arg->key = n;
   arg->data.setsize (remain);
   arg->offset = 0;
   arg->attr.size = contentlen;
+  memset(arg->data.base (), 'a', remain);
   memcpy(arg->data.base (), (char *)contentdata, remain);
   arg->type = DHASH_STORE;
 
   dhash_storeres *res = New dhash_storeres();
+  
+  void *cd = malloc(contentlen);
+  memcpy (cd, contentdata, contentlen);
   cclnt->call (DHASHPROC_INSERT, arg, res, wrap(&sfsrodb_put_cb, res,
-						contentdata, contentlen, n, remain));
+						cd, contentlen, n, remain));
   out++;
 
   check_cbs ();
@@ -84,7 +90,7 @@ sfsrodb_put_cb (dhash_storeres *res,
     dhash_send_arg *sarg = New dhash_send_arg ();
     sarg->dest = res->resok->source;
     sarg->iarg.key = n;
-    unsigned int s = (written + MTU < contentlen) ? MTU : contentlen - written;
+    unsigned int s = (written + SMTU < contentlen) ? SMTU : contentlen - written;
     sarg->iarg.data.setsize (s);
     memcpy (sarg->iarg.data.base (), (char *)contentdata + written, s);
     sarg->iarg.type = DHASH_STORE;
@@ -97,6 +103,7 @@ sfsrodb_put_cb (dhash_storeres *res,
     delete sarg;
   }
   delete res;
+  free (contentdata);
   //  check_cbs ();
 }
 
@@ -114,7 +121,7 @@ sfsrodb_put_finish_cb (dhash_storeres *res, clnt_stat err)
 void
 check_cbs () 
 {
-  while (out > 16) acheck();
+  while (out > 8) acheck();
 }
 
 
