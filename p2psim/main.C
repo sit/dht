@@ -15,7 +15,7 @@
 char *topology_file;
 char *event_file;
 bool vis = false;
-uint base = 1;  // XXX probably need something like a configuration file
+uint base = 2;  // XXX probably need something like a configuration file
 uint resilience = 1;
 uint successors = 1;
   

@@ -3,7 +3,7 @@
 use strict;
 
 #
-# sc.pl <topfile> <eventfile> < scenerio
+# sc.pl <topfile> <eventfile> (<seed>) < scenerio
 # 
 # takes as input a scenario and generates topology and an event file
 #
@@ -15,6 +15,9 @@ use strict;
 # event: <node id>,<event-type>,<args>
 # events: <number of events>,<start>,<interval>,<event-type>,<args>
 
+if ($#ARGV >= 2) {
+  srand($ARGV[2]);
+}
 open TOP, ">$ARGV[0]" || die "Could not open $ARGV[0]: $!\n";
 open EV, ">$ARGV[1]" || die "Could not open $ARGV[1]: $!\n";
 
@@ -24,9 +27,19 @@ my $time = 1;
 my $protocol;
 my @keys;
 my $nk = 0;
+my @allnodes;
 
 while ($line = <STDIN>) {
     chomp($line);
+
+    #this is an ugly hack
+    if ($line=~/wellknown=(\d+)/) {
+      die if $#allnodes < 0;
+      my $well;
+      $well = sprintf("%x",$allnodes[$1]);
+      $line=~s/wellknown=\d+/wellknown=$well/;
+    }
+
     if ($line =~/^net: (.*)/) {
 	donet (split(/,/ , $1));
     } elsif ($line =~/^event: (.*)/) {
@@ -51,11 +64,12 @@ sub donet {
     print TOP "topology $top\n\n";
     for (my $i = 1; $i <= $n; $i++) {
 	if ($place =~ /random (\d+) (\d+)/) {
+	    $allnodes[$i] = int (rand 4294967295);
 	    my $x = int(rand $1) + 1;
 	    my $y = int(rand $2) + 1;
-	    print TOP "$i $x,$y $node $pro\n";
+	    print TOP "$allnodes[$i] $x,$y $node $pro\n";
 	} elsif ($place == "linear") {
-	    print TOP "$i $i,0 $node $pro\n";
+	    print TOP "$allnodes[$i] $i,0 $node $pro\n";
 	} else {
 	    print STDERR "Unknown placement $place\n";
 	    exit (-1);
@@ -66,7 +80,7 @@ sub donet {
 sub doevent {
     my ($n,$type,@args) = @_;
     print "doevent: $n $type @args\n";
-    print EV "node $time $n $protocol:$type @args\n";
+    print EV "node $time $allnodes[$n] $protocol:$type @args\n";
 }
 
 sub doevents {
@@ -80,16 +94,16 @@ sub doevents {
 	} elsif ($distr =~ /constant/) {
 	    $node = 1;
 	} elsif ($distr =~ /random/) {
-	    $node =  int(rand ($nnodes-1)) + 2;
+	    $node =  int(rand ($nnodes-1)) + 2; # this will not ensure all nodes join the network
 	}
 	if ($type =~ /join/) {
-	    print EV "node $time $node $protocol:$type @args\n";
+	    print EV "node $time $allnodes[$node] $protocol:$type @args\n";
 	} elsif ($type =~ /lookup/) {
 	    $keys[$nk] = makekey();
-	    print EV "node $time $node $protocol:$type key=$keys[$nk]\n";
+	    print EV "node $time $allnodes[$node] $protocol:$type key=$keys[$nk]\n";
 	    $nk++;
 	} elsif ($type =~ /crash/) {
-	    print EV "node $time $node $protocol:$type\n";
+	    print EV "node $time $allnodes[$node] $protocol:$type\n";
 	}
 
 	$time = $time + $interval;
