@@ -1364,10 +1364,13 @@ draw_arrow (int fromx, int fromy,
 void
 draw_ring ()
 {
-  if (ggeo)
-    drawing_area = drawing_area_g;
-  else
-    drawing_area = drawing_area_r;
+
+  if (dual) {
+    if (ggeo)
+      drawing_area = drawing_area_g;
+    else
+      drawing_area = drawing_area_r;
+  }
 
   int x, y;
   GtkWidget *widget = drawing_area;
@@ -1440,56 +1443,56 @@ draw_ring ()
 		       IDs);
     }
 
-    if(!ggeo) {
+    if (!(ggeo && dual)) {
 
-    if (n->successors && ((n->draw & DRAW_IMMED_SUCC) == DRAW_IMMED_SUCC) &&
-	n->successors->resok->nlist.size () > 1) {
-      int a,b;
-      set_foreground_lat (n->successors->resok->nlist[1].a_lat); 
-      ID_to_xy (make_chordID (n->successors->resok->nlist[1].n), &a, &b);
-      draw_arrow (x,y,a,b, draw_gc);
-    }
-
-    if (n->fingers && ((n->draw & DRAW_FINGERS) == DRAW_FINGERS)) {
-      for (unsigned int i=1; i < n->fingers->resok->nlist.size (); i++) {
+      if (n->successors && ((n->draw & DRAW_IMMED_SUCC) == DRAW_IMMED_SUCC) &&
+	  n->successors->resok->nlist.size () > 1) {
 	int a,b;
-	set_foreground_lat (n->fingers->resok->nlist[i].a_lat); 
-	ID_to_xy (make_chordID (n->fingers->resok->nlist[i].n), &a, &b);
+	set_foreground_lat (n->successors->resok->nlist[1].a_lat); 
+	ID_to_xy (make_chordID (n->successors->resok->nlist[1].n), &a, &b);
 	draw_arrow (x,y,a,b, draw_gc);
       }
-    }
-
-    if (n->predecessor &&
-	((n->draw & DRAW_IMMED_PRED) == DRAW_IMMED_PRED)) {
-      int a,b;
-      set_foreground_lat (n->predecessor->resok->a_lat); 
-      ID_to_xy (make_chordID (n->predecessor->resok->n), &a, &b);
-      draw_arrow (x,y,a,b, draw_gc);
-    }
-
-    if (n->debruijn &&
-	((n->draw & DRAW_DEBRUIJN) == DRAW_DEBRUIJN)) {
-      int a,b;
-      set_foreground_lat (1); 
-      ID_to_xy (make_chordID (n->debruijn->noderes->node), &a, &b);
-      draw_arrow (x,y,a,b, draw_gc);
-    }
-
-    if (n->successors && ((n->draw & DRAW_SUCC_LIST) == DRAW_SUCC_LIST)) {
-      for (unsigned int i=1; i < n->successors->resok->nlist.size (); i++) {
-	draw_arc (n->ID, make_chordID (n->successors->resok->nlist[i].n),
-		  drawing_area->style->black_gc);
+      
+      if (n->fingers && ((n->draw & DRAW_FINGERS) == DRAW_FINGERS)) {
+	for (unsigned int i=1; i < n->fingers->resok->nlist.size (); i++) {
+	  int a,b;
+	  set_foreground_lat (n->fingers->resok->nlist[i].a_lat); 
+	  ID_to_xy (make_chordID (n->fingers->resok->nlist[i].n), &a, &b);
+	  draw_arrow (x,y,a,b, draw_gc);
+	}
       }
-    }
-
-    if (n->toes && ((n->draw & DRAW_TOES) == DRAW_TOES)) {
-      for (unsigned int i=0; i < n->toes->resok->nlist.size (); i++) {
+      
+      if (n->predecessor &&
+	  ((n->draw & DRAW_IMMED_PRED) == DRAW_IMMED_PRED)) {
 	int a,b;
-	ID_to_xy (make_chordID (n->toes->resok->nlist[i].n), &a, &b);
-	set_foreground_lat (n->toes->resok->nlist[i].a_lat); 
-	draw_arrow (x,y,a,b,draw_gc);
+	set_foreground_lat (n->predecessor->resok->a_lat); 
+	ID_to_xy (make_chordID (n->predecessor->resok->n), &a, &b);
+	draw_arrow (x,y,a,b, draw_gc);
       }
-    }
+      
+      if (n->debruijn &&
+	  ((n->draw & DRAW_DEBRUIJN) == DRAW_DEBRUIJN)) {
+	int a,b;
+	set_foreground_lat (1); 
+	ID_to_xy (make_chordID (n->debruijn->noderes->node), &a, &b);
+	draw_arrow (x,y,a,b, draw_gc);
+      }
+      
+      if (n->successors && ((n->draw & DRAW_SUCC_LIST) == DRAW_SUCC_LIST)) {
+	for (unsigned int i=1; i < n->successors->resok->nlist.size (); i++) {
+	  draw_arc (n->ID, make_chordID (n->successors->resok->nlist[i].n),
+		    drawing_area->style->black_gc);
+	}
+      }
+      
+      if (n->toes && ((n->draw & DRAW_TOES) == DRAW_TOES)) {
+	for (unsigned int i=0; i < n->toes->resok->nlist.size (); i++) {
+	  int a,b;
+	  ID_to_xy (make_chordID (n->toes->resok->nlist[i].n), &a, &b);
+	  set_foreground_lat (n->toes->resok->nlist[i].a_lat); 
+	  draw_arrow (x,y,a,b,draw_gc);
+	}
+      }
     }
     n = nodes.next (n);
   }
@@ -1498,7 +1501,7 @@ draw_ring ()
   if(dual && !ggeo) {
     ggeo = true;
     draw_ring ();
-  } else {
+  } else if (dual) {
     ggeo = false;
   }
 }
