@@ -17,22 +17,18 @@
 %
 %class bigint(long):
 %    def __new__(cls, val = None):
-%	tv = type(val)
-%	if tv == type('a'):
+%	if isinstance(val, str):
 %	    return long.__new__(cls, str2bigint(val))
-%	elif tv == type(1L) or tv == type(1):
-%	    return long.__new__(cls, val)
 %	else:
-%	    return long.__new__(cls, 0)
+%	    return long.__new__(cls, val)
 %
 %    def __hex__(self):
 %	return long.__hex__(self).lower()[2:-1]
 %    def __str__(self):
 %	return hex(self)
 %
-%def pack_bigint(p, o):
+%def pack_bigint(p, v):
 %    a = []
-%    v = o._v
 %    while v > 0:
 %	a.append(chr(v & 0xFF))
 %	v = v >> 8
