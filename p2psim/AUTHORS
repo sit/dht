@@ -4,10 +4,10 @@ Group.
 
 The following people contributed to this implementation:
 
-Thomer M. Gil (simulator core, Kademlia)
-Robert Morris (simulator core, Vivaldi)
-Jinyang Li (Chord and its variants)
-Frans Kaashoek (Chord and its variants)
-Jeremy Stribling (Tapestry)
+Thomer M. Gil
+Frans Kaashoek
+Jinyang Li
+Robert Morris
+Jeremy Stribling
 Frank?
 Anjali?
