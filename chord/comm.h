@@ -90,6 +90,7 @@ class tcp_manager : public rpc_manager {
 		  void *out, aclnt_cb cb);
 
   void doRPC_tcp_connect_cb (RPC_delay_args *args, int fd);
+  void doRPC_tcp_cleanup (RPC_delay_args *args, int fd, clnt_stat err);
  public:
   void doRPC (ptr<location> l, rpc_program prog, int procno,
 	      ptr<void> in, void *out, aclnt_cb cb);

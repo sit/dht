@@ -161,8 +161,17 @@ tcp_manager::doRPC_tcp_connect_cb (RPC_delay_args *args, int fd)
   assert (stream_xprt);
   ptr<aclnt> c = aclnt::alloc (stream_xprt, args->prog);
 
-  c->call (args->procno, args->in, args->out, args->cb);
-  delete args;    
+  c->call (args->procno, args->in, args->out, 
+	   wrap (this, &tcp_manager::doRPC_tcp_cleanup, args, fd));
+
+}
+
+void
+tcp_manager::doRPC_tcp_cleanup (RPC_delay_args *args, int fd, clnt_stat err)
+{
+  (*args->cb)(err);
+  tcp_abort (fd);
+  delete args;
 }
 
 // -----------------------------------------------------

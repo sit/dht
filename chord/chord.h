@@ -228,7 +228,7 @@ class chord : public virtual refcount {
   chordID wellknownID;
   int ss_mode;
   ptr<axprt> x_dgram;
-  vec<int> handledProgs;
+  vec<rpc_program> handledProgs;
 
   qhash<chordID, ref<vnode>, hashID> vnodes;
   ptr<vnode> active;
