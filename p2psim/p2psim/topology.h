@@ -40,11 +40,13 @@ public:
   virtual Time median_lat() { return _med_lat; } 
   virtual ~Topology();
   unsigned lossrate() { return _lossrate; }
+  unsigned noise_variance() { return _noise; }
 
 protected:
   Topology();
   Time _med_lat;
   unsigned _lossrate;
+  unsigned _noise;
 };
 
 #endif //  __TOPOLOGY_H

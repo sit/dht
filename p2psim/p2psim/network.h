@@ -54,6 +54,7 @@ private:
   Network(Topology*, FailureModel*);
 
   virtual void run();
+  float gaussian();
 
   static Network *_instance;
 

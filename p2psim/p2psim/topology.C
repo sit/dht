@@ -72,6 +72,16 @@ Topology::parse(char *filename)
       words.erase(words.begin());
       top = TopologyFactory::create(topology, &words);
 
+    // noise
+    } else if(words[0] == "noise") {
+      if(!top) {
+        cerr << "topology keyword must appear before noise keyword" << filename << endl;
+	continue;
+      }
+      top->_noise = (unsigned) (atof(words[1].c_str()) * 100);
+      cout << "noise = " << top->noise_variance() << endl;
+      assert(top->noise_variance() >= 0);
+
     // loss_rate
     } else if(words[0] == "loss_rate") {
       if(!top) {

@@ -26,6 +26,7 @@
 #include "network.h"
 #include "events/netevent.h"
 #include "failuremodels/failuremodelfactory.h"
+#include <cmath>
 #include <iostream>
 #include <cassert>
 using namespace std;
@@ -114,6 +115,24 @@ Network::avglatency()
   return (answer = (total_latency / n));
 }
 
+float
+Network::gaussian()
+{
+  float fac,rsq,v1,v2;
+
+  do {
+    v1=2.0*(random()/(RAND_MAX*1.0))-1.0;
+    v2=2.0*(random()/(RAND_MAX*1.0))-1.0;
+    rsq = v1*v1 + v2*v2;
+  } while (rsq >= 1.0 || rsq == 0.0);
+  fac = sqrt(-2.0*log(rsq)/rsq);
+
+  return (v2*fac) * (_top->noise_variance() / (100.00));
+}
+
+
+
+
 // Protocols should call send() to send a packet into the network.
 void
 Network::send(Packet *p)
@@ -158,7 +177,8 @@ Network::send(Packet *p)
 
   NetEvent *ne = New NetEvent();
   assert(ne);
-  ne->ts = now() + latency;
+  Time tmplat = (Time) (latency + gaussian());
+  ne->ts = now() + tmplat;
   ne->node = dst;
   ne->p = p;
   EventQueue::Instance()->add_event(ne);
