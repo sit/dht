@@ -322,6 +322,11 @@ nntp::cmd_group (str c) {
 }
 
 void
+nntp::cmd_article (str c) {
+}
+
+
+void
 nntp::cmd_quit (str c) {
   warn << "quit\n";
   delete this;
