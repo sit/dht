@@ -339,6 +339,37 @@ dhashcli::retrieve2_lookup_cb (chordID blockID,
   }
 }
 
+void
+dhashcli::fetch_frag (rcv_state *rs)
+{
+  register size_t i = rs->nextsucc;
+
+  if (i >= rs->succs.size ()) {
+    // Ugh. No more successors available.  Should we try harder?
+    // Should we force them to retry?  How do you do that?
+    rcvs.remove (rs);
+    rs->complete (DHASH_NOENT, NULL);
+    rs = NULL;
+    return;
+  }
+  
+  ref<dhash_fetchiter_res> res = New refcounted<dhash_fetchiter_res> (DHASH_OK);
+  ref<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg> ();
+  
+  clntnode->locations->get_node (clntnode->my_ID (), &arg->from);
+  arg->v      = rs->succs[i].x;
+  arg->key    = rs->key;
+  arg->start  = 0;
+  arg->len    = 65536; // 64K is about as big as an IP packet will go...
+  arg->cookie = 0;
+  arg->nonce  = 0;
+  
+  rs->incoming_rpcs += 1;
+  clntnode->doRPC (rs->succs[i], dhash_program_1, DHASHPROC_FETCHITER,
+		   arg, res,
+		   wrap (this, &dhashcli::retrieve2_fetch_cb, rs->key, i, res));  
+  rs->nextsucc += 1;
+}
 
 void
 dhashcli::retrieve2_succs_cb (chordID blockID, vec<chord_node> succs, chordstat err)
@@ -363,27 +394,13 @@ dhashcli::retrieve2_succs_cb (chordID blockID, vec<chord_node> succs, chordstat 
   }
   
   // Copy for future reference in case we need to make more RPCs later.
+  // We will extract out of this list in order until we reach the end.
+  // Later, this list should be filtered/reordered by server selection
+  // code to cause the fetch to proceed in order of best proximity.
   rs->succs = succs;
-  rs->usedsuccs.zsetsize (succs.size ());
 
-  for (u_int i = 0; i < NUM_DFRAGS; i++) {
-    ref<dhash_fetchiter_res> res = New refcounted<dhash_fetchiter_res> (DHASH_OK);
-    ref<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg> ();
-    
-    arg->v = succs[i].x;
-    arg->key = blockID;
-    clntnode->locations->get_node (clntnode->my_ID (), &arg->from);
-    arg->start = 0;
-    arg->len = 65536; // 64K is about as big as an IP packet will go...
-    arg->cookie = 0;
-    arg->nonce = 0;
-    
-    rs->incoming_rpcs += 1;
-    rs->usedsuccs[i] = true;
-    clntnode->doRPC (succs[i], dhash_program_1, DHASHPROC_FETCHITER,
-		     arg, res,
-		     wrap (this, &dhashcli::retrieve2_fetch_cb, blockID, i, res));
-  }
+  for (u_int i = 0; i < NUM_DFRAGS; i++)
+    fetch_frag (rs);
 }
 
 void
@@ -405,13 +422,13 @@ dhashcli::retrieve2_fetch_cb (chordID blockID, u_int i,
   if (err) {
     warnx << "fetch failed: " << blockID
 	  << " from successor " << i+1  << ": " << err << "\n";
-    // XXX dispatch to a new successor.
+    fetch_frag (rs);
     return;
   } else if (res->status != DHASH_COMPLETE) {
     warnx << "fetch failed: " << blockID
 	  << "from successor " << i+1 << ": " << dhasherr2str (res->status)
 	  << "\n";
-    // XXX dispatch to a new successor.
+    fetch_frag (rs);
     return;
   } else if (res->compl_res->attr.size > res->compl_res->res.size()) {
     warnx << "we requested too short of a block!\n";
@@ -434,7 +451,7 @@ dhashcli::retrieve2_fetch_cb (chordID blockID, u_int i,
     strbuf block;
     if (!Ida::reconstruct (rs->frags, block)) {
       warnx << "Reconstruction failed, blockID " << blockID << "\n";
-      // XXX get more fragments.
+      fetch_frag (rs);
     }
 
     str tmp (block);

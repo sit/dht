@@ -5,7 +5,6 @@
 #include <ihash.h>
 #include <refcnt.h>
 #include <vec.h>
-#include <bitvec.h>
 
 typedef callback<void, dhash_stat, chordID>::ref cbinsert_t;
 typedef callback<void, dhash_stat, chordID, route>::ref dhashcli_lookupcb_t;
@@ -32,7 +31,7 @@ class dhashcli {
     int incoming_rpcs;
     
     vec<chord_node> succs;
-    bitvec usedsuccs;
+    size_t nextsucc;
     
     vec<str> frags;
     vec<cb_ret> callbacks;
@@ -43,7 +42,7 @@ class dhashcli {
       delete this;
     }
       
-    rcv_state (chordID key) : key (key), incoming_rpcs (0) {}
+    rcv_state (chordID key) : key (key), incoming_rpcs (0), nextsucc (0) {}
   };
 
   ihash<chordID, rcv_state, &rcv_state::key, &rcv_state::link, hashID> rcvs;
@@ -76,13 +75,12 @@ private:
 			 ref<u_int> out, u_int i, ref<dhash_storeres> res,
 			 clnt_stat err);
 
+  void fetch_frag (rcv_state *rs);
+  
   void retrieve2_lookup_cb (chordID blockID,
 			    dhash_stat status, chordID destID, route r);
-
   void retrieve2_succs_cb (chordID blockID,
 			   vec<chord_node> succs, chordstat err);
-
-
   void retrieve2_fetch_cb (chordID blockID, u_int i,
 			   ref<dhash_fetchiter_res> res,
 			   clnt_stat err);
