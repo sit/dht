@@ -61,7 +61,6 @@ struct upcall_record {
   upcall_record (int p, cbupcall_t c) : progno (p), cb (c) {};
 };
 
-#define NCOORDS 2
 class vnode_impl : public vnode {
   ptr<fingerlike> fingers;
   

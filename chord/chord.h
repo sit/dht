@@ -179,6 +179,7 @@ class vnode : public virtual refcount {
 
 
 class chord : public virtual refcount {
+
   int nvnode;
   chord_node wellknown_node;
   int myport;
@@ -202,6 +203,8 @@ class chord : public virtual refcount {
   ptr<u_int32_t> nrcv;
 
  public:
+  enum { NCOORDS = 2 };
+
   // system wide default on the maximum number of vnodes/node.
   static const int max_vnodes;
   ptr<vnode> active;

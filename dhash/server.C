@@ -53,11 +53,6 @@
 static int KEYHASHDB = getenv("KEYHASHDB") ? atoi(getenv("KEYHASHDB")) : 0;
 int JOSH = getenv("JOSH") ? atoi(getenv("JOSH")) : 0;
 
-#define SYNCTM    30
-#define KEYHASHTM 10
-#define REPTM     10
-#define PRTTM     5
-
 
 // Pure virtual destructors still need definitions
 dhash::~dhash () {}
@@ -181,10 +176,25 @@ dhash_impl::init_after_chord(ptr<vnode> node, ptr<route_factory> _r_factory)
   }
 }
 
+
 void
 dhash_impl::missing (chord_node from, bigint key)
 {
-  warn << host_node->my_ID () << ": missing key " << key << ", from " << from.x << "\n"; // 
+#if 0
+  timespec ts;
+  clock_gettime (CLOCK_REALTIME, &ts);
+  str tm =  strbuf (" %d.%06d", int (ts.tv_sec), int (ts.tv_nsec/1000));
+
+  // calculate key range that we should be storing
+  vec<chord_node> preds = host_node->preds ();
+  assert (preds.size () > 0);
+  chordID p = preds.back ().x;
+  chordID m = host_node->my_ID ();
+
+  warn << tm << " "
+       << host_node->my_ID () << ": missing key " << key << ", from " << from.x << "\n"; // 
+  warn << "[" << p << "," << m << "]\n";
+#endif
   cli->retrieve2 (key, 0, wrap (this, &dhash_impl::missing_retrieve_cb, key));
 }
 
@@ -304,7 +314,6 @@ void
 dhash_impl::replica_maintenance_timer (u_int index)
 {
   merkle_rep_tcb = NULL;
-  return;
 
   vec<chord_node> succs = host_node->succs ();
 

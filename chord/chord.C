@@ -73,7 +73,7 @@ vnode_impl::vnode_impl (ptr<locationtable> _locations, ptr<fingerlike> stab,
 
   vec<float> coords;
   warn << gettime () << " coords are: ";
-  for (int i = 0; i < NCOORDS; i++) {
+  for (int i = 0; i < chord::NCOORDS; i++) {
     coords.push_back (uniform_random_f (1000.0));
     warnx << (int)coords.back () << " " ;
   }
@@ -491,7 +491,9 @@ vnode_impl::do_upcall (int upcall_prog, int upcall_proc,
   }
 
   const rpc_program *prog = chordnode->get_program (upcall_prog);
-  assert (prog);
+  if (!prog) 
+    fatal << "bad prog: " << upcall_prog << "\n";
+
   
   xdrmem x ((char *)uc_args, uc_args_len, XDR_DECODE);
   xdrproc_t proc = prog->tbl[upcall_proc].xdr_arg;
@@ -718,8 +720,10 @@ vnode_impl::dogetsucclist (user_args *sbp)
   res.resok->nlist[0] = self;
   for (u_int i = 0; i < s.size (); i++)
     res.resok->nlist[i + 1] = s[i];
+
   sbp->reply (&res);
 }
+
 void
 vnode_impl::dodebruijn (user_args *sbp, chord_debruijnarg *da)
 {

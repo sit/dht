@@ -48,8 +48,6 @@ class dbrec;
  * Include file for the distributed hash service
  */
 
-#define NUM_EFRAGS 16
-#define NUM_DFRAGS 8
 
 typedef callback<void, int, ptr<dbrec>, dhash_stat>::ptr cbvalue;
 typedef callback<void,dhash_stat>::ptr cbstore;
@@ -62,6 +60,15 @@ extern unsigned int MTU;
 
 class dhash {
  public:
+
+  enum { NUM_EFRAGS = 16 };
+  enum { NUM_DFRAGS = 8 };
+  enum { SYNCTM = 30 };
+  enum { KEYHASHTM = 10 };
+  enum { REPTM = 10 };
+  enum { PRTTM = 5 };
+
+
   // these 2 are only public for testing purposes
   virtual void replica_maintenance_timer (u_int index) = 0;
   virtual void partition_maintenance_timer () = 0;

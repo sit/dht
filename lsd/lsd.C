@@ -257,6 +257,8 @@ clear_stats (const rpc_program &prog)
 void
 dump_rpcstats (const rpc_program &prog, bool first, bool last)
 {
+  warn << "dump_rpcstats: " << (u_int)&prog << "\n";
+
   // In arpc/rpctypes.h -- if defined
 #ifdef RPC_PROGRAM_STATS
   static rpc_program total;
@@ -346,7 +348,7 @@ dump_rpcstats (const rpc_program &prog, bool first, bool last)
 void
 bandwidth ()
 {
-  warnx << tm () << " bandwidth\n";
+  warn << tm () << " bandwidth\n";
 
   static bool first_call = true;
   extern const rpc_program chord_program_1;
@@ -365,6 +367,7 @@ bandwidth ()
   clear_stats (dhash_program_1);
   clear_stats (merklesync_program_1);
 
+  warn << tm () << " bandwidth delaycb\n";
   delaycb (1, 0, wrap (bandwidth));
   first_call = false;
 }
@@ -373,18 +376,28 @@ bandwidth ()
 void
 stats () 
 {
+  warn << "STATS: " << JOSH << "\n";
+
   if (JOSH) {
     // only execute once
     static bool unleashed = false;
     if (!unleashed) {
       warn << tm () << " unleashing synchronization\n";
       for (u_int i = 0 ; i < initialized_dhash; i++) {
-	dh[i]->replica_maintenance_timer (0);
-	dh[i]->partition_maintenance_timer ();
+
+	u_int start_index = 0;
+	u_int start_delay = 0;
+	if (JOSH==2) {
+	  start_index = random_getword ()  % dhash::NUM_EFRAGS;
+	  start_delay = random_getword ()  % dhash::REPTM;
+	}
+	delaycb (start_delay, 0, 
+		 wrap (dh[i], &dhash::replica_maintenance_timer, start_index));
+	delaycb (start_delay, 0, 
+		 wrap (dh[i], &dhash::partition_maintenance_timer));
       }
 
       bandwidth ();
-
       unleashed = true;
       return;
     }

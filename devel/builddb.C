@@ -73,7 +73,7 @@ gen_frag (ptr<dbrec> block)
 {
   // see: dhashcli::insert2_succs_cb ()
   str blk (block->value, block->len);
-  str frag = Ida::gen_frag (NUM_DFRAGS, blk);
+  str frag = Ida::gen_frag (dhash::NUM_DFRAGS, blk);
   // prepend type of block onto fragment
   str res (strbuf (block->value, 4) << frag);
   return New refcounted<dbrec> (res.cstr (), res.len ());

@@ -217,6 +217,7 @@ chord::isHandled (int progno) {
 }
 void
 chord::handleProgram (const rpc_program &prog) {
+  warn << "chord::handleProgram: " << prog.progno << "\n";
   if (isHandled (prog.progno)) return;
   else {
     handledProgs.push_back (&prog);
@@ -266,6 +267,9 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
       
       //find the program
       const rpc_program *prog = get_program (arg->progno);
+      if (!prog) 
+	fatal << "bad prog: " << arg->progno << "\n";
+
       
       //unmarshall the args
       char *arg_base = (char *)(arg->args.base ());

@@ -379,6 +379,7 @@ struct orderer {
   }
 };
 
+
 static void
 order_succs (const vec<float> &me, const vec<chord_node> &succs,
 	     vec<chord_node> &out)
@@ -417,7 +418,7 @@ dhashcli::retrieve2_succs_cb (chordID blockID, vec<chord_node> succs, chordstat 
     return;
   }
 
-  if (succs.size () < NUM_DFRAGS) {
+  if (succs.size () < dhash::NUM_DFRAGS) {
     trace << "retrieve (" << blockID << "): "
 	  << "insufficient number of successors returned!\n";
     rcvs.remove (rs);
@@ -426,12 +427,16 @@ dhashcli::retrieve2_succs_cb (chordID blockID, vec<chord_node> succs, chordstat 
     return;
   }
 
-  // Store list of successors ordered by expected distance.
-  // fetch_frag will pull from this list in order.
-  order_succs (clntnode->locations->get_coords (clntnode->my_ID ()),
-	       succs, rs->succs);
+  if (1) {
+    // Store list of successors ordered by expected distance.
+    // fetch_frag will pull from this list in order.
+    order_succs (clntnode->locations->get_coords (clntnode->my_ID ()),
+		 succs, rs->succs);
+  } else {
+    rs->succs = succs;
+  }
 
-  for (u_int i = 0; i < NUM_DFRAGS; i++)
+  for (u_int i = 0; i < dhash::NUM_DFRAGS; i++)
     fetch_frag (rs);
 }
 
@@ -479,11 +484,12 @@ dhashcli::retrieve2_fetch_cb (chordID blockID, u_int i,
   str frag (res->compl_res->res.base () + 4, res->compl_res->res.size () - 4);
   rs->frags.push_back (frag);
 
-  if (rs->frags.size () >= NUM_DFRAGS) {
+  if (rs->frags.size () >= dhash::NUM_DFRAGS) {
     strbuf block;
     if (!Ida::reconstruct (rs->frags, block)) {
       warnx << "Reconstruction failed, blockID " << blockID << "\n";
       fetch_frag (rs);
+      return;
     }
 
     str tmp (block);
@@ -601,18 +607,18 @@ dhashcli::insert2_succs_cb (ref<dhash_block> block, cbinsert_t cb,
   ref<sto_state> ss = New refcounted<sto_state> (block, cb);
   ss->succs = succs;
   
-  if (NUM_EFRAGS > succs.size ()) {
+  if (dhash::NUM_EFRAGS > succs.size ()) {
     warn << "Not enough successors: |succs| " << succs.size ()
-	 << ", EFRAGS " << NUM_EFRAGS << "\n";
+	 << ", EFRAGS " << dhash::NUM_EFRAGS << "\n";
     (*cb) (DHASH_STOREERR, 0); // XXX Not the right error code...
     return;
   }
   
   str blk (block->data, block->len);
   
-  for (u_int i = 0; i < NUM_EFRAGS; i++) {
+  for (u_int i = 0; i < dhash::NUM_EFRAGS; i++) {
     assert (i < succs.size ());
-    str frag = Ida::gen_frag (NUM_DFRAGS, blk);
+    str frag = Ida::gen_frag (dhash::NUM_DFRAGS, blk);
     
     ref<s_dhash_insertarg> arg = New refcounted<s_dhash_insertarg> ();
     
@@ -653,7 +659,7 @@ dhashcli::insert2_store_cb (ref<sto_state> ss, u_int i, ref<dhash_storeres> res,
   ss->out -= 1;
   if (err) {
     warnx << "fragment store failed: " << ss->block->ID
-	  << " fragment " << i << "/" << NUM_EFRAGS
+	  << " fragment " << i << "/" << dhash::NUM_EFRAGS
 	  << ": " << err << "\n";
   } else {
     ss->good += 1;
@@ -661,10 +667,10 @@ dhashcli::insert2_store_cb (ref<sto_state> ss, u_int i, ref<dhash_storeres> res,
 
   // Count down until all outstanding RPCs have returned
   if (ss->out == 0) {
-    if (ss->good < NUM_EFRAGS) {
+    if (ss->good < dhash::NUM_EFRAGS) {
       trace << "store (" << ss->block->ID << "): only stored " << ss->good
-	    << " of " << NUM_EFRAGS << " encoded.\n";
-      if (ss->good < NUM_DFRAGS) {
+	    << " of " << dhash::NUM_EFRAGS << " encoded.\n";
+      if (ss->good < dhash::NUM_DFRAGS) {
 	trace << "store (" << ss->block->ID << "): failed;"
 	  " insufficient frags stored.\n";
 	(*ss->cb) (DHASH_STOREERR, ss->succs[0].x);
