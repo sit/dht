@@ -55,7 +55,7 @@ ProtocolFactory::create(string s, Node *n)
   if (s == "Pastry")
     p = new Pastry(n);
   if (s == "Koorde")
-    p = new Koorde(n, base, successors, resilience);
+    p = new Koorde(n, base, successors, resilience, fingers);
   if (s == "VivaldiTest")
     p = new VivaldiTest(n);
   if (s == "ChordFinger")

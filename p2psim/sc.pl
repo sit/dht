@@ -28,6 +28,7 @@ my $protocol;
 my @keys;
 my $nk = 0;
 my @allnodes;
+my @deadnodes;
 
 while ($line = <STDIN>) {
     chomp($line);
@@ -100,10 +101,14 @@ sub doevents {
 	if ($type =~ /join/) {
 	    print EV "node $time $allnodes[$node] $protocol:$type @args\n";
 	} elsif ($type =~ /lookup/) {
+	    while ($deadnodes[$node] == 1) {
+		$node = int(rand ($nnodes)) + 1;
+	    }
 	    $keys[$nk] = makekey();
 	    print EV "node $time $allnodes[$node] $protocol:$type key=$keys[$nk]\n";
 	    $nk++;
 	} elsif ($type =~ /crash/) {
+	    $deadnodes[$node] = 1;
 	    print EV "node $time $allnodes[$node] $protocol:$type\n";
 	}
 
@@ -138,5 +143,6 @@ sub generate_randnodes()
     }while (defined($h{$node}) || ($node == 0));
     $h{$node} = 1;
     $allnodes[$i] = $node;
+    $deadnodes[$i] = 0;
   }
 }

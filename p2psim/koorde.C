@@ -7,27 +7,31 @@ extern bool vis;
 
 #define INIT 1
 
-Koorde::Koorde(Node *n, uint base, uint ns, uint r) : 
+Koorde::Koorde(Node *n, uint base, uint ns, uint r, uint f) : 
   Chord(n, ns)
 {
   logbase = base;
   k = 1 << logbase; 
   resilience = r;
   nsucc = ns;
+  fingers = f;
   debruijn = me.id << logbase;
-  printf ("Koorde: (%u,%qx) debruijn=%qx base %u k %u nsucc %u res %u\n", 
-	  me.ip, me.id, debruijn, k, base, nsucc, resilience);
-  loctable->pin (debruijn, nsucc, 1);
+  printf ("Koorde(%u,%qx):debruijn=%qx base %u k %u nsucc %u res %u fing %u\n", 
+	  me.ip, me.id, debruijn, k, base, nsucc, resilience, fingers);
+  loctable->pin (debruijn, fingers-1, 1);
   isstable = true;
 }
 
-  
+
+#if 0  
 // Create an imaginary node i with as many bits from k as possible and
 // such that start < i <= succ.
 Chord::CHID 
 Koorde::firstimagin (CHID start, CHID succ, CHID k, CHID *kr) 
 {
   Chord::CHID i;
+
+  //  printf ("start %16qx succ %16qx k %16qx\n", start, succ, k);
 
   if (start == succ) {  // XXX yuck
     i = start + 1;
@@ -36,16 +40,16 @@ Koorde::firstimagin (CHID start, CHID succ, CHID k, CHID *kr)
     int bm = ConsistentHash::bitposmatch (start, succ) - 1;
     int bs = bm;
 
-    // skip the first 0 bit in start; result will be smaller than succ
+    // skip the first 0 bits in start; result will be smaller than succ
     for ( ; bs >= 0; bs--) {
-      if (ConsistentHash::getbit (start, bs) == 0)
+      if (ConsistentHash::getbit (start, bs, 1) == 0)
 	break;
     }
     bs--;
 
     // skip till the next 0 bit in start;
     for ( ; bs >= 0; bs--) {
-      if (ConsistentHash::getbit (start, bs) == 0)
+      if (ConsistentHash::getbit (start, bs, 1) == 0)
 	break;
     }
 
@@ -53,10 +57,11 @@ Koorde::firstimagin (CHID start, CHID succ, CHID k, CHID *kr)
     i = ConsistentHash::setbit (start, bs, 1);
     bs--;
     
-    int mod = bs % logbase;
-    bs = bs - mod - 1;
-    
+    int mod = ((NBCHID - 1) - bs) % logbase; 
+    if (mod != 0) bs = bs - logbase + mod;
+
     if (bs >= 0) {
+      assert (((NBCHID - 1 - bs) % logbase) == 0);
       // slap top bits from k into i at pos bs
       ConsistentHash::CHID mask = (((CHID) 1) << (bs+1)) - 1;
       mask = ~mask;
@@ -66,13 +71,60 @@ Koorde::firstimagin (CHID start, CHID succ, CHID k, CHID *kr)
       
       // shift bs top bits out k
       *kr = k << (bs + 1);
-      //      printf ("start %qx succ %qx i %qx k %qx bs %d kr %qx\n",
-      //           start, succ, i, k, bs, *kr);
+      // printf ("start %qx succ %qx i %qx k %qx bm %d bs %d kbits %d kr %qx\n",
+      //         start, succ, i, k, bm, bs, NBCHID - 1 - bs, *kr);
     } else {
       *kr = k;
     }
     assert (ConsistentHash::betweenrightincl (start, succ, i));
   }
+  // printf ("i %16qx kr %16qx\n", i, *kr);
+  return i;
+}
+#endif
+
+// Create an imaginary node i with as many bits from k as possible and
+// such that start < i <= succ.
+Chord::CHID 
+Koorde::firstimagin (CHID start, CHID succ, CHID k, CHID *kr) 
+{
+  Chord::CHID i = start + 1;
+
+  //  printf ("start %16qx succ %16qx k %16qx\n", start, succ, k);
+
+  if (start == succ) {  // XXX yuck
+    *kr = k;
+  } else {
+    uint bs;
+    ConsistentHash::CHID top;
+    ConsistentHash::CHID bot;
+    ConsistentHash::CHID j;
+    for (bs = NBCHID - logbase - 1; bs > 0; bs -= logbase) {
+      assert (((NBCHID - 1 - bs) % logbase) == 0);
+      top = start >> (bs + 1);
+      i = top << (bs + 1);
+      j = (top + 1) << (bs + 1);
+      bot = k >> (NBCHID - bs - 1);
+      i = i | bot;
+      j = j | bot;
+      if (ConsistentHash::betweenrightincl (start, succ, i)) {
+	break;
+      }
+      if (ConsistentHash::betweenrightincl (start, succ, j)) {
+	i = j;
+	break;
+      }
+    }
+    if (bs > 0) {
+      // shift bs top bits out k
+      *kr = k << (bs + 1);
+    } else {
+      *kr = k;
+    }
+    // printf ("start %qx succ %qx i %qx k %qx bs %d kbits %d kr %qx\n",
+    //      start, succ, i, k, bs, NBCHID - 1 - bs, *kr);
+  }
+  // printf ("i %16qx kr %16qx\n", i, *kr);
   return i;
 }
 
@@ -81,8 +133,8 @@ Koorde::nextimagin (CHID i, CHID kshift)
 {
   uint t = ConsistentHash::getbit (kshift, NBCHID - logbase, logbase);
   CHID r = (i << logbase) | t;
-  // printf ("nextimagin: kshift %qx topbit is %u, i is %qx new i is %qx\n",
-  //  kshift, t, i, r);
+  //printf ("nextimagin: kshift %qx topbit is %u, i is %qx new i is %qx\n",
+  //kshift, t, i, r);
   return r;
 }
 
@@ -112,7 +164,13 @@ Koorde::find_successors(CHID key, uint m, bool intern)
     printf ("vis %llu search %16qx %16qx %16qx\n", now(), me.id, key, r.i);
 
   while (1) {
-    assert (count++ < 5000);
+    if ((r.i == 0) || (count++ >= 1000)) {
+      printf ("find_successor: key = %16qx\n", key);
+      for (uint i = 0; i < path.size (); i++) {
+	printf ("  %16qx i %16qx k %16qx\n", path[i].id, ipath[i], kpath[i]);
+      }
+      assert (0);
+    }
 
     a.kshift = r.kshift;
     a.i = r.i;
@@ -165,15 +223,20 @@ Koorde::find_successors(CHID key, uint m, bool intern)
   if (!intern) {
     printf ("find_successor for (id %qx, key %qx):",  me.id, key);
     if (r.v.size () > 0) {
-      int cor = 0;
-      for (uint i = 0; i < path.size () - 1; i++) {
+      uint cor = 0;
+      uint debruijn = 0;
+      assert (path.size () >= 2);
+      for (uint i = 0; i < path.size () - 2; i++) {
 	if (ipath[i] == ipath[i+1]) cor++;
+	else debruijn++;
       }
-      printf (" is (%u,%qx) hops %d cor %d debruijn %d timeout %d\n", 
+      assert ((cor + debruijn) == (path.size () - 2));
+      printf (" is (%u,%qx) hops %u cor %u debruijn %u cor+debruijn %u timeout %d\n", 
 	      r.v[0].ip, 
-	      r.v[0].id, path.size (), cor, path.size () - cor, timeout);
+	      r.v[0].id, path.size () - 1, cor, debruijn, cor + debruijn, 
+	      timeout);
       for (uint i = 0; i < path.size (); i++) {
-	printf ("  %16qx i %16qx k %16qx\n", path[i].id, ipath[i], kpath[i]);
+       printf ("  %16qx i %16qx k %16qx\n", path[i].id, ipath[i], kpath[i]);
       }
       CHID s = r.v[0].id;
       assert ((me.id == mysucc.id) || (me.id == s) ||
@@ -226,7 +289,7 @@ void
 Koorde::fix_debruijn () 
 {
   //  printf ("fix_debruijn %u\n", isstable);
-  vector<IDMap> scs = find_successors (debruijn, k - 1, true);
+  vector<IDMap> scs = find_successors (debruijn, fingers - 1, true);
   assert (scs.size () > 0);
   loctable->add_node (last);
   for (uint i = 0; i < scs.size (); i++) {
@@ -240,12 +303,12 @@ Koorde::fix_debruijn ()
 	    scs[i].id);
   }
 #endif
-  assert (scs.size () <= k);
+  assert (scs.size () <= fingers);
   
   if (vis) {
     bool change = false;
     IDMap d = loctable->pred (debruijn);
-    vector<IDMap> sc = loctable->succs (d.id + 1, k - 1);
+    vector<IDMap> sc = loctable->succs (d.id + 1, fingers - 1);
     vector<IDMap> dfingers;
 
     dfingers.push_back (d);
@@ -300,7 +363,7 @@ Koorde::debruijn_stabilized (ConsistentHash::CHID finger, uint n,
   dfingers.push_back (d);
   for (uint i = 0; i < sc.size (); i++) {
     dfingers.push_back (sc[i]);
-    // printf ("succ finger %d is %qx\n", i, sc[i].id);
+    //   printf ("succ finger %d is %qx\n", i, sc[i].id);
   }
   assert (dfingers.size () <= n);
 
@@ -351,7 +414,7 @@ Koorde::stabilized (vector<ConsistentHash::CHID> lid)
 {
   bool r = Chord::stabilized (lid);
   if (!r) return false;
-  r = debruijn_stabilized (debruijn, k, lid);
+  r = debruijn_stabilized (debruijn, fingers, lid);
   if (r && (resilience > 0)) 
     r = debruijn_stabilized (debruijnpred, resilience, lid);
   return r;
@@ -369,7 +432,6 @@ Koorde::init_state(vector<IDMap> ids)
   x = (x / nnodes);
   x = x * y;
   debruijnpred = debruijn - x;
-  printf ("debruinpred is %16qx and x is %qx\n", debruijnpred, x);
 
   if (resilience > 0) {
     loctable->pin (debruijnpred, resilience, 1);
@@ -405,7 +467,7 @@ Koorde::dump ()
   isstable = true;
 
   Chord::dump ();
-  debruijn_dump (debruijn, k);
+  debruijn_dump (debruijn, fingers);
   if (resilience > 0) debruijn_dump (debruijnpred, resilience);
 }
 

@@ -18,7 +18,7 @@ bool vis = false;
 uint base = 2;  // XXX probably need something like a configuration file
 uint resilience = 1;
 uint successors = 1;
-uint fingers = 1000;
+uint fingers = 1;
   
 void parse_args(int argc, char *argv[]);
 void usage();
@@ -88,5 +88,5 @@ parse_args(int argc, char *argv[])
 void
 usage()
 {
-  cout << "Usage: p2psim [-v] [-b <degree>] [-r <resilience>] [-s <succ>] TOPOLOGY EVENTS" << endl;
+  cout << "Usage: p2psim [-v] [-b <degree>] [-f <fingers>] [-r <resilience>] [-s <succ>] TOPOLOGY EVENTS" << endl;
 }
