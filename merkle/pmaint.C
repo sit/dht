@@ -6,6 +6,9 @@
 #include <locationtable.h>
 #include <misc_utils.h>
 #include <modlogger.h>
+#ifdef DMALLOC
+#include <dmalloc.h>
+#endif
 
 #define warning modlogger ("pmaint", modlogger::WARNING)
 #define info    modlogger ("pmaint", modlogger::INFO)
@@ -148,6 +151,11 @@ pmaint::pmaint_offer ()
   // not totally necessary. worst case a key get pmainted twice
   // which could happen if someone joins in the successor list
   // while we are pmainting.
+
+  // worse case: nodes get stuck in the pmaint cycle they started out in
+  // this seems to be a combination of nodes accepting a key even if it
+  // doesn't belong to them and pmaint not updating the success or list.
+
 
   if (work.keys_outstanding () == 0) {
     trace << host_node->my_ID () << "PMAINT: no more keys, searching\n";
@@ -294,7 +302,7 @@ pmaint::handed_off_cb (chord_node dst,
     } else {
       //find the next accepted key
       while (k < keys.size ()) {
-	if (res->resok->accepted[k]) { 
+	if (res->resok->accepted[k] == DHASH_ACCEPT) { 
 	  if (work.handed_off (keys[k])) {
 	    fatal << host_node->my_ID () << " " << 
 	      keys[k] << " is handed off already?\n";
@@ -399,6 +407,13 @@ pmaint::get_keys (ptr<dbfe> db, bigint a, bigint b, u_int maxcount)
 void 
 offer_state::clear () 
 {
+  //Free all of the keys first
+  offer_state_item *i = keys.first ();
+  while (i) {
+    offer_state_item *tbd = i;
+    i = keys.next (i);
+    delete tbd;
+  }
   keys.clear ();
   outstanding = 0;
 }
