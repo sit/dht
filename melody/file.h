@@ -38,6 +38,8 @@
 /* simple interface for storing and retrieving files in dhash using
 the venti_blocks to keep track of the data.  */
 
+class venti_block;
+
 class melody_file : public virtual refcount {
  public:
   melody_file(str csock, callback<void, str>::ptr scb);
@@ -59,6 +61,7 @@ class melody_file : public virtual refcount {
   int blocks;
   callback<void, str>::ptr statuscb;
   bool readgo;
+  void sc(str foo);
 
  private:
   int size, wsize, venti_depth, outstanding, sent_bytes;
@@ -69,6 +72,7 @@ class melody_file : public virtual refcount {
   suio wbuf;
   callback<void>::ptr error_cb;
   ptr<retrieve_manager> rm;
+  bool dead;
 
   void find_venti_depth(int asize);
   void venti_cb(callback<void, int, str>::ref ready_cb, str filename, ptr<dhash_block> blk);

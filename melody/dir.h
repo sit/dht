@@ -50,7 +50,7 @@ class dir {
   suio buf, cbuf;
   unsigned int entry_index;
   int strip;
-  bool exist, noread;
+  bool exist, noread, error;
   callback<void, const char *, int, int>::ptr fileout;
   callback<void, int, str>::ptr filehead;
   callback<void>::ptr gotdir;
@@ -89,6 +89,7 @@ public:
   bool more(void);
   void readdir(struct dir_record *dr);
   bool exists() { return exist; }
+  bool errors() { return error; }
   void root_test();
 };
 

@@ -93,7 +93,7 @@ char *dp3a="<TR bgcolor=#d0ffe0><TD><a href=\"";
 char *dp4="\">";
 char *dp5="</a>";
 char *dp6="</TABLE></BODY></HTML>";
-char *dperr="</H3><P>does not exist. would you like to add?";
+char *dperr="HTTP/1.1 404 Not Found\r\nServer: melody\r\nPragma: no-cache\r\n\r\n404 not found\r\n";
 char *dphead="HTTP/1.1 200 OK\r\nServer: melody\r\nPragma: no-cache\r\n";
 char *dpfile="Content-Type: audio/x-mp3\r\nContent-Length: ";
 char *dphtml="Content-Type: text/html\r\nContent-Length: ";
@@ -196,10 +196,10 @@ dirpage::listdir(str path2) {
   }
   str path = paths;
 
-  out->take(dphead);
-  out->take(dp);
-  out->take(path);
-  if(d->exists()) {
+  if(!d->errors() && d->exists()) {
+    out->take(dphead);
+    out->take(dp);
+    out->take(path);
     out->take(dp1);
     struct timeval tv;
     gettimeofday(&tv, NULL);
@@ -219,9 +219,9 @@ dirpage::listdir(str path2) {
     qsort(lines.base(), lines.size(), sizeof(dirline), &dirline::comp);
     for(unsigned int i=0; i<lines.size(); i++)
       out->take(lines[i].cstr());
+    out->take(dp6);
   } else
     out->take(dperr);
-  out->take(dp6);
   delete(this);
 }
 

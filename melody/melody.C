@@ -301,6 +301,7 @@ cs_client::xfer_done(str status)
   warn << (int)this << " xfer_done " << "\n";
   warn << (int)this << " " << status << "\n";
   fdcb(s, selread, NULL);
+  out->done();
 }
 
 // should only be called once cs_output is done.

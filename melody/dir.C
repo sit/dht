@@ -85,14 +85,24 @@ dir::opendir(str path, callback<void>::ptr agotdir, bool anoread)
 {
   gotdir = agotdir;
   noread = anoread;
+  error = false;
   char tmp[sha1::hashsize] = DIRROOT;
   bigint root;
   mpz_set_rawmag_be(&root, tmp, sha1::hashsize);
+  warn << root << "\n";
 
   strbuf tmpath = path;
   while(pathrx.search(tmpath)) {
+    warn << " push " << pathrx[1] << "\n";
     pathelm.push_back(pathrx[1]);
     tmpath.tosuio()->rembytes(pathrx.end(0));
+  }
+
+  if((tmpath.tosuio()->resid() > 0) &&
+     !((tmpath.tosuio()->resid() == 1) &&
+       (((str)tmpath)[0] == '/'))) {
+    error = true;
+    warn << "extra " << tmpath << "\n";
   }
 
   opendir(root);
@@ -124,6 +134,8 @@ dir::opendir_got_venti(cbretrieve_t cbr, ptr<dhash_block> blk)
       warnx << pathelm.front();
     warnx << "\n";
     // FIXME error reporting
+      error = true;
+      gotdir();
     return;
   }
 
@@ -131,6 +143,8 @@ dir::opendir_got_venti(cbretrieve_t cbr, ptr<dhash_block> blk)
 
   if(mb->type != 2) {
     warn << (int)cs << " not venti type dir\n";
+      error = true;
+      gotdir();
     return;
   }
 
@@ -145,6 +159,8 @@ dir::opendir_got_venti_noread(ptr<dhash_block> blk)
   if(!blk) {
     warn << (int)cs << " no such path found\n";
     // FIXME error reporting
+      error = true;
+      gotdir();
     return;
   }
 
@@ -152,6 +168,8 @@ dir::opendir_got_venti_noread(ptr<dhash_block> blk)
 
   if(mb->type != 2) {
     warn << (int)cs << " not venti type dir\n";
+      error = true;
+      gotdir();
     return;
   }
 
@@ -163,6 +181,7 @@ dir::opendir_got_venti_noread(ptr<dhash_block> blk)
   char tmp[sha1::hashsize];
   cbuf.copyout(tmp, sha1::hashsize);
   mpz_set_rawmag_be(&dirhash, tmp, sha1::hashsize);
+  warn << "opened " << dirhash << ", " << vhash << "\n";
   exist = true;
   gotdir();
 }
@@ -173,6 +192,7 @@ dir::next_dirblk(cbretrieve_t cbr) {
   cbuf.copyout(tmp, sha1::hashsize);
   cbuf.rembytes(sha1::hashsize);
   mpz_set_rawmag_be(&dirhash, tmp, sha1::hashsize);
+  warn << "opened " << dirhash << ", " << vhash << "\n";
   cc->dhash->retrieve (dirhash, cbr);
 }
 
@@ -181,21 +201,26 @@ void
 dir::find_entry(ptr<dhash_block> blk)
 {
   unsigned int name_index = 0;
+  warn << "find_entry\n";
 
-  if(!blk) { warn << "D:find_entry no blk\n"; return; }
+  if(!blk) { warn << "D:find_entry no blk\n";       error = true;
+      gotdir();
+return; }
 
   while(name_index < blk->len) {
     struct dir_record *di = (struct dir_record *) (((char *)blk->data) + name_index);
     if(!namechashrx.search(pathelm.front())) {
       // FIXME error reporting
       warn << (int)cs << " bad path: " << pathelm.front() << "\n";
+      error = true;
+      gotdir();
       return;
     }
 
     bigint pathhash(namechashrx[2],16), dehash; // ??
     mpz_set_rawmag_be(&dehash, di->key, sha1::hashsize);
-    //    warn << (int)cs << " de " << di->entry << ":" << dehash << "\n";
-    //    warn << (int)cs << " d2 " << namechashrx[1] << ":" << pathhash << "\n";
+    //warn << (int)cs << " de " << di->entry << ":" << dehash << "\n";
+    //warn << (int)cs << " d2 " << namechashrx[1] << ":" << pathhash << "\n";
 
     if((namechashrx[1] == di->entry) &&
        (pathhash == dehash)) {
@@ -203,8 +228,11 @@ dir::find_entry(ptr<dhash_block> blk)
       if(pathelm.size() > 0) {
 	if(di->type == 0)
 	  opendir(dehash);
-	else
+	else {
 	  warn << (int)cs << " whaaa? trying to read non-dir type block\n";
+	  error = true;
+	  gotdir();
+	}
       } else {
 	mpz_set_rawmag_be(&dirhash, di->key, sha1::hashsize);
 	warn << (int)cs << " found " << dirhash << "\n";
@@ -221,8 +249,9 @@ dir::find_entry(ptr<dhash_block> blk)
 
   if(cbuf.resid() < sha1::hashsize) {
   // FIXME failure
-  //  exist = false;
-  //  gotdir();
+    exist = false;
+    error = true;
+    gotdir();
   } else
     next_dirblk(wrap(this, &dir::find_entry));
 }
@@ -232,6 +261,8 @@ dir::found_entry(ptr<dhash_block> blk)
 {
   if(!blk) {
     warn << (int)cs << " block gone\n"; // FIXME add mroe error recovery
+      error = true;
+      gotdir();
     return;
   }
   buf.copy(blk->data, blk->len);

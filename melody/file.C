@@ -141,7 +141,7 @@ melody_file::next_venti_cb(int index, callback<void, int, str>::ref ready_cb, st
 #endif
   index++;
   if(index < venti_depth)
-    vstack = New venti_block(dhash, wrap(rm, &retrieve_manager::retrieve), vstack, wrap(mkref(this), &melody_file::next_venti_cb, index, ready_cb, filename));
+    vstack = New venti_block(dhash, wrap(rm, &retrieve_manager::retrieve), vstack, wrap(mkref(this), &melody_file::next_venti_cb, index, ready_cb, filename), wrap(this, &melody_file::sc));
   else if(index == venti_depth)
     ready_cb(size, filename);
   else
@@ -158,7 +158,7 @@ melody_file::venti_cb(callback<void, int, str>::ref ready_cb, str filename, ptr<
   if(blk == NULL) { warn << "MF:venti_cb no venti blk\n"; return; }
   find_venti_depth(((struct melody_block *)blk->data)->offset);
 
-  vstack = New venti_block(dhash, wrap(rm, &retrieve_manager::retrieve), ((struct melody_block *)blk->data), NULL);
+  vstack = New venti_block(dhash, wrap(rm, &retrieve_manager::retrieve), ((struct melody_block *)blk->data), NULL, wrap(this, &melody_file::sc));
   next_venti_cb(0, ready_cb, filename);
 }
 
@@ -186,7 +186,8 @@ void
 melody_file::next()
 {
   while(((int)(sent_bytes + (rm->b_count * BLOCKPAYLOAD)) < size) && 
-	(rm->b_count < READAHEAD))
+	(rm->b_count < READAHEAD) &&
+	!dead)
     vstack->get_block(&cbuf, wrap(mkref(this), &melody_file::next_cb));
 }
 
@@ -197,12 +198,23 @@ melody_file::next_cb(int offset)
     (*read_cb)(cbuf.data, cbuf.size, offset);
     sent_bytes += cbuf.size;
   }
+  warn << "bc " << rm->b_count << "\n";
+  if(dead && (rm->b_count == 1)) {
+    (*statuscb) ("");
+  }
 }
 
 void
 melody_file::readstop()
 {
   readgo = false;
+}
+
+void
+melody_file::sc(str foo)
+{
+  warn << "dead\n";
+  dead = true;
 }
 
 melody_file::melody_file(str csock, callback<void, str>::ptr scb)
@@ -217,6 +229,7 @@ melody_file::melody_file(str csock, callback<void, str>::ptr scb)
   outstanding = 0;
   readgo = true;
   sent_bytes = 0;
+  dead = false;
 }
 
 melody_file::~melody_file()

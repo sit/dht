@@ -61,6 +61,7 @@ class venti_block {
   bool done;
   callback<void, int, bigint>::ptr done_cb;
   callback<void, bigint, callback<void, ptr<dhash_block> >::ptr >::ptr retrieve;
+  callback<void, str>::ptr statuscb;
 
   bool full();
   void reset(cbv after);
@@ -88,10 +89,10 @@ class venti_block {
   // for creating a vstack for existing files
   venti_block(dhashclient *dh, 
 	      callback<void, bigint, callback<void, ptr<dhash_block> >::ptr >::ptr retr,
-	      melody_block *bl, venti_block *ap);
+	      melody_block *bl, venti_block *ap, callback<void, str>::ptr sc);
   venti_block(dhashclient *dh, 
 	      callback<void, bigint, callback<void, ptr<dhash_block> >::ptr >::ptr retr,
-	      venti_block *ap, cbv acb);
+	      venti_block *ap, cbv acb, callback<void, str>::ptr sc);
 
   // fetch single block. can use sequentially
   void get_block (melody_block *bl, cbi);

@@ -31,7 +31,7 @@
 
 venti_block::venti_block(dhashclient *dh, 
 			 callback<void, bigint, callback<void, ptr<dhash_block> >::ptr >::ptr retr,
-			 melody_block *bl, venti_block *ap)
+			 melody_block *bl, venti_block *ap, callback<void, str>::ptr sc)
 {
 #ifdef DEBUG
   warn << "venti_block1\n";
@@ -40,11 +40,12 @@ venti_block::venti_block(dhashclient *dh,
   more_init(ap, 0);
   dhash = dh;
   retrieve = retr;
+  statuscb = sc;
 }
 
 venti_block::venti_block(dhashclient *dh, 
 			 callback<void, bigint, callback<void, ptr<dhash_block> >::ptr >::ptr retr,
-			 venti_block *ap, cbv acb)
+			 venti_block *ap, cbv acb, callback<void, str>::ptr sc)
 {
 #ifdef DEBUG
   warn << "venti_block2c\n";
@@ -53,6 +54,7 @@ venti_block::venti_block(dhashclient *dh,
   ap->get_block(&data, wrap(this, &venti_block::more_init_gb, ap, acb));
   dhash = dh;
   retrieve = retr;
+  statuscb = sc;
 }
 
 venti_block::venti_block(dhashclient *dh, 
@@ -120,9 +122,9 @@ venti_block::get_block (melody_block *bl, cbi cb)
 #endif
   if(empty()) {
     if(parent == NULL) { // no more data
-      //      strbuf foo;
-      //      foo << "retrieved";
-      //      (*conn->statuscb) (foo);
+      strbuf foo;
+      foo << "retrieved";
+      statuscb(foo);
     } else {
       parent->get_block(&data, wrap(this, &venti_block::get_block_rc, bl, cb, offset)); // need sync... what does this mean? FIXME
       offset += BLOCKPAYLOAD; // FIXME fixed?
