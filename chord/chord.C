@@ -410,19 +410,29 @@ vnode_impl::closestproxpred (const chordID &x, const vec<float> &n,
     return p;
     
   // No good toes?  Either we are too close, or they were all rejected.
-  // Fall back on making progress in ID space.
-  // XXX this is not what rtm had originally envisioned, which makes use
-  //     of knowledge of the successor list, but maybe it will do
-  //     for now.
-  {
-    chordID f = fingers->closestpred (x, failed);
-    chordID u = successors->closestpred (x, failed);
-    if (between (myID, f, u)) 
-      p = f;
-    else
-      p = u;
+  // If we happen to span the key in our successor _list_, then
+  // attempt to send to some close node in the last half of the
+  // successor list, so that for fetches, you will almost definitely win.
+  vec<chord_node> sl = succs ();
+  size_t sz = sl.size ();
+  if (sz > 1 && between (sl[0].x, sl[sz - 1].x, x)) {
+    for (u_int i = sz / 2; i < sz; i++) {
+      if (candidate_is_closer (sl[i].x, myID, x, failed, n, mindist, locations))
+	p = sl[i].x;
+    }
   }
+  if (mindist >= 0.0)
+    return p;
 
+  // Okay, we are just too far away, let's just go as far as we can
+  // with the fingers.
+  chordID f = fingers->closestpred (x, failed);
+  chordID u = successors->closestpred (x, failed);
+  if (between (myID, f, u)) 
+    p = f;
+  else
+    p = u;
+  
   return p;
 }
 
