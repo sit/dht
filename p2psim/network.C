@@ -5,6 +5,7 @@
 #include "eventqueue.h"
 #include <assert.h>
 #include <iostream>
+#include <stdio.h>
 using namespace std;
 
 Network *Network::_instance = 0;
@@ -17,6 +18,13 @@ Network::Instance(Topology *top)
   return (_instance = new Network(top));
 }
 
+void
+Network::DeleteInstance()
+{
+  if(_instance)
+    delete _instance;
+  _instance = 0;
+}
 
 Network::Network(Topology *top) : _top(0), _pktchan(0), _nodechan(0)
 {
@@ -36,6 +44,11 @@ Network::~Network()
 {
   chanfree(_pktchan);
   chanfree(_nodechan);
+  while(_nodelist.size() > 0){
+    Node *n = _nodelist.front();
+    _nodelist.pop_front();
+    delete n;
+  }
 }
 
 
@@ -83,6 +96,7 @@ Network::run()
         if(_nodes[node->ip()])
           cerr << "warning: " << node->ip() << " already in network" << endl;
         _nodes[node->ip()] = node;
+        _nodelist.push_back(node);
         break;
 
       default:

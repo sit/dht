@@ -16,6 +16,8 @@ Chord::Chord(Node *n) : Protocol(n)
 
 Chord::~Chord()
 {
+  printf("done %d %u\n",
+         me.ip, me.id);
   delete loctable;
 }
 
@@ -97,11 +99,15 @@ Chord::join(Args *args)
   IPAddress wkn = args->nget<IPAddress>("wellknown");
   assert(wkn);
   cout << s() + "::join" << endl;
+  Time before = now();
   find_successor_args fsa;
   find_successor_ret fsr;
   fsa.n = me.id;
   doRPC(wkn, &Chord::find_successor_handler, &fsa, &fsr);
-  printf("Chord(%u,%u)::join2 %u\n", me.ip, me.id, fsr.succ.id);
+  Time after = now();
+  printf("Chord(%u,%u)::join2 %u, elapsed %ld\n",
+         me.ip, me.id, fsr.succ.id,
+         after - before);
   loctable->add_node(fsr.succ);
   // stabilize();
 }

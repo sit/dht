@@ -2,6 +2,7 @@
 using namespace std;
 
 #include <assert.h>
+#include <stdio.h>
 
 #include "protocolfactory.h"
 #include "node.h"
@@ -20,6 +21,10 @@ Node::~Node()
 {
   chanfree(_pktchan);
   chanfree(_protchan);
+  typedef map<string,Protocol*>::const_iterator CI;
+  for(CI p = _protmap.begin(); p != _protmap.end(); ++p)
+    delete p->second;
+  _protmap.clear();
 }
 
 

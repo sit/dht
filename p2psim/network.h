@@ -2,6 +2,7 @@
 #define __NETWORK_H
 
 #include <map>
+#include <list>
 using namespace std;
 
 #include <lib9.h>
@@ -17,6 +18,7 @@ class Network : public Threaded {
 public:
   static Network* Instance() { return Instance(0); }
   static Network* Instance(Topology*);
+  static void DeleteInstance();
   Channel* pktchan() { return _pktchan; }
   Channel* nodechan() { return _nodechan; }
   Node* getnode(IPAddress id) { return _nodes[id]; }
@@ -30,6 +32,7 @@ private:
   static Network *_instance;
 
   map<IPAddress, Node*> _nodes;
+  list<Node*> _nodelist;
   Topology *_top;
 
   Channel *_pktchan;

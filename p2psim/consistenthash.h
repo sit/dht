@@ -24,7 +24,7 @@ public:
   }
 
   static CHID getRandID() {
-    return (CHID) rand();
+    return (CHID) ((random() << 16) ^ random());
   }
 };
 

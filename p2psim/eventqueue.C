@@ -54,6 +54,7 @@ EventQueue::run()
     if(_queue.empty()){
       // no more events.  we're done!
       cout << "End of simulation\n";
+      Network::DeleteInstance();
       threadexitsall(0);
     }
                                                                                   
