@@ -77,6 +77,7 @@ Kelips::~Kelips()
              _good_latency / _good_lookups,
              _good_hops / _good_lookups);
     }
+    print_stats();
   }
   if(ip() == 1 && nsta > 0){
     float sum = 0;
@@ -264,14 +265,25 @@ Kelips::lookup(Args *args)
   if(ok == false)
     oops = node_key_alive(key);
 
+  IPAddress lasthop;
+  if( history.size() > 0 ) {
+    lasthop = history[history.size()-1];
+  } else {
+    lasthop = ip();
+  }
+
   if(ok){
     _good_lookups += 1;
     _good_latency += t2 - t1;
     _good_hops += history.size();
+    assert( lasthop == key );
+    record_lookup_stat( ip(), lasthop, t2-t1, true, true );
   } else if(oops){
     _bad_failures += 1;
+    record_lookup_stat( ip(), lasthop, t2-t1, false, false ); //failed
   } else {
     _ok_failures += 1;
+    record_lookup_stat( ip(), lasthop, t2-t1, true, false ); //incorrect
   }
 
   if(0){
@@ -782,8 +794,11 @@ void
 Kelips::rpcstat(bool ok, IPAddress dst, int latency, int nitems)
 {
   _rpc_bytes += 20 + nitems * 4; // paper says 40 bytes per node entry
-  if(ok)
+  record_bw_stat( STAT_LOOKUP, nitems, 0 );
+  if(ok) {
     _rpc_bytes += 20;
+    record_bw_stat( STAT_LOOKUP, 0, 0 );
+  }
 
   if(ok)
     gotinfo(Info(dst, now()), latency);
