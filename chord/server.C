@@ -41,8 +41,6 @@
 #define info  modlogger ("vnode", modlogger::INFO)
 #define trace modlogger ("vnode", modlogger::TRACE)
 
-float gforce = 1000000;
-
 void 
 vnode_impl::get_successor (ptr<location> n, cbchordID_t cb)
 {

@@ -1,8 +1,6 @@
 class str;
 #include <vec.h>
 
-extern float gforce;
-
 // Perhaps this should be made a coordinate in the sort of standard
 // object-oriented sense of the word, instead of just a namespace
 // for some common functions.

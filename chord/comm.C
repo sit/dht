@@ -723,8 +723,7 @@ stp_manager::setup_rexmit_timer (ptr<location> from, ptr<location> l, long *sec,
   else 
     alat = 1000000;
 
-  if ((gforce < 50000.0)
-      && l
+  if (l
       && from
       && (l->coords ().size () > 0)
       && (from->coords ().size () > 0)) {
