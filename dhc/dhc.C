@@ -764,8 +764,9 @@ dhc::getblock_cb (user_args *sbp, ptr<location> dest, ptr<read_state> rs,
       else
 	if (res->status == DHC_RECON_INPROG ||
 	    res->status == DHC_BLOCK_NEXIST) {
+	  // Punt this case, DHash already issues retries.
 	  // wait and retry in 60 seconds
-	  delaycb (60, wrap (this, &dhc::getblock_retry_cb, sbp, dest, rs));
+	  // delaycb (60, wrap (this, &dhc::getblock_retry_cb, sbp, dest, rs));
 	} else {
 	  rs->done = true;
 	  dhc_get_res gres (res->status);
