@@ -53,7 +53,9 @@ vector<Time> Node::_time_timeouts;
 vector<uint> Node::_num_joins;
 vector<Time> Node::_last_joins;
 vector<Time> Node::_time_sessions;
-vector<double> Node::_per_node_avg;
+//vector<double> Node::_per_node_avg;
+vector<double> Node::_per_node_in;
+vector<double> Node::_per_node_out;
 
 Node::Node(IPAddress i) : _queue_len(0), _ip(i), _alive(true), _token(1) 
 {
@@ -66,7 +68,9 @@ Node::Node(IPAddress i) : _queue_len(0), _ip(i), _alive(true), _token(1)
   _first_ip = _ip;
 
   join_time = 0;
-  node_live_bytes = 0;
+  //node_live_bytes = 0;
+  node_live_inbytes = 0;
+  node_live_outbytes = 0;
 }
 
 Node::~Node()
@@ -185,6 +189,18 @@ Node::collect_stat()
     return false;
 }
 
+void
+Node::record_inout_bw_stat(IPAddress dst, uint num_ids, uint num_else)
+{
+  if (!collect_stat() || dst == ip()) 
+    return;
+  if (join_time)
+    node_live_outbytes += 20 + 4*num_ids + num_else;
+  Node *n = Network::Instance()->getnode(dst);
+  if (n && n->alive())
+    n->record_in_bytes(20 + 4*num_ids + num_else);
+}
+
 void 
 Node::record_bw_stat(stat_type type, uint num_ids, uint num_else)
 {
@@ -199,8 +215,10 @@ Node::record_bw_stat(stat_type type, uint num_ids, uint num_else)
   _bw_stats[type] += 20 + 4*num_ids + num_else;
   _bw_counts[type]++;
 
+  /*
   if (join_time)
     node_live_bytes += 20 + 4*num_ids + num_else;
+    */
 }
 
 void 
@@ -277,7 +295,9 @@ Node::record_join()
   }
 
   join_time = now();
-  node_live_bytes = 0;
+  //node_live_bytes = 0;
+  node_live_inbytes = 0;
+  node_live_outbytes = 0;
   assert( _num_joins[_num_joins_pos] == 0 || !_last_joins[_num_joins_pos] );
   _num_joins[_num_joins_pos]++;
   _last_joins[_num_joins_pos] = now();
@@ -296,8 +316,11 @@ Node::record_crash()
     Time duration = now() - join_time;
     //this is a hack, don't screw the distribution with nodes whose lifetime
     //is too short
-    if (duration >= 180000) 
-      _per_node_avg.push_back((double)1000.0*node_live_bytes/(double)duration);
+    if (duration >= 600000) { //old value is 180000  
+      //_per_node_avg.push_back((double)1000.0*node_live_bytes/(double)duration);
+      _per_node_out.push_back((double)1000.0*node_live_outbytes/(double)duration);
+      _per_node_in.push_back((double)1000.0*node_live_inbytes/(double)duration);
+    }
   }
   check_num_joins_pos();
   assert( _num_joins_pos >= 0 );
@@ -354,7 +377,7 @@ Node::print_stats()
 	  total_time, live_time_s/((double) num_nodes), num_nodes, 
 	  overall_bw, live_bw );
 
-  //print out b/w distribution
+  /*print out b/w distribution
   sort(_per_node_avg.begin(),_per_node_avg.end());
   uint sz = _per_node_avg.size();
   double allavg = 0;
@@ -366,6 +389,32 @@ Node::print_stats()
       _per_node_avg[sz/2], _per_node_avg[(uint)(sz*0.9)], 
       _per_node_avg[(uint)(sz*0.95)], _per_node_avg[(uint)(sz*0.99)], 
       _per_node_avg[sz-1], allavg/sz);
+  }
+  */
+
+  //print out b/w distribution of out b/w
+  sort(_per_node_in.begin(),_per_node_in.end());
+  uint sz = _per_node_in.size();
+  double allavg = 0.0;
+  for (uint i = 0; i < sz; i++)
+    allavg += _per_node_in[i];
+  if (sz > 0) {
+    printf("BW_PERNODE_IN:: 50p:%.3f 90p:%.3f 95p:%.3f 99p:%.3f 100p:%.3f avg:%.3f\n", 
+      _per_node_in[sz/2], _per_node_in[(uint)(sz*0.9)], 
+      _per_node_in[(uint)(sz*0.95)], _per_node_in[(uint)(sz*0.99)], 
+      _per_node_in[sz-1], allavg/sz);
+  }
+
+  sort(_per_node_out.begin(),_per_node_out.end());
+  sz = _per_node_out.size();
+  allavg = 0.0;
+  for (uint i = 0; i < sz; i++)
+    allavg += _per_node_out[i];
+  if (sz > 0) {
+    printf("BW_PERNODE:: 50p:%.3f 90p:%.3f 95p:%.3f 99p:%.3f 100p:%.3f avg:%.3f\n", 
+      _per_node_out[sz/2], _per_node_out[(uint)(sz*0.9)], 
+      _per_node_out[(uint)(sz*0.95)], _per_node_out[(uint)(sz*0.99)], 
+      _per_node_out[sz-1], allavg/sz);
   }
 
   // then do lookup stats

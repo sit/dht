@@ -13,7 +13,7 @@ class HashMap_Arena { public:
     void detach()		{ _detached = true; }
 
     void *alloc();
-    void free(void *);
+    void afree(void *);
     
   private:
 
@@ -86,7 +86,7 @@ HashMap_Arena::alloc()
 }
 
 inline void
-HashMap_Arena::free(void *v)
+HashMap_Arena::afree(void *v)
 {
     Link *link = reinterpret_cast<Link *>(v);
     link->next = _free;

@@ -106,7 +106,7 @@ HashMap<K, V>::~HashMap()
       Elt *next = e->next;
       e->key.~K();
       e->value.~V();
-      _arena->free(e);
+      _arena->afree(e);
       e = next;
     }
   delete[] _buckets;
@@ -253,7 +253,7 @@ HashMap<K, V>::remove(const K &key)
       _buckets[b] = e->next;
     e->key.~K();
     e->value.~V();
-    _arena->free(e);
+    _arena->afree(e);
     _n--;
     return true;
   } else
@@ -292,7 +292,7 @@ HashMap<K, V>::clear()
       Elt *next = e->next;
       e->key.~K();
       e->value.~V();
-      _arena->free(e);
+      _arena->afree(e);
       e = next;
     }
     _buckets[i] = 0;
@@ -468,7 +468,7 @@ HashMap<K, void *>::~HashMap()
     for (Elt *e = _buckets[i]; e; ) {
       Elt *next = e->next;
       e->key.~K();
-      _arena->free(e);
+      _arena->afree(e);
       e = next;
     }
   delete[] _buckets;
@@ -614,7 +614,7 @@ HashMap<K, void *>::remove(const K &key)
     else
       _buckets[b] = e->next;
     e->key.~K();
-    _arena->free(e);
+    _arena->afree(e);
     _n--;
     return true;
   } else
@@ -652,7 +652,7 @@ HashMap<K, void *>::clear()
     for (Elt *e = _buckets[i]; e; ) {
       Elt *next = e->next;
       e->key.~K();
-      _arena->free(e);
+      _arena->afree(e);
       e = next;
     }
     _buckets[i] = 0;
