@@ -61,7 +61,9 @@
 
 stabilize_manager::stabilize_manager (chordID _myID) :
   myID (_myID),
-  stable (false)
+  stable (false),
+  stabilize_continuous_tmo (NULL),
+  stabilize_backoff_tmo (NULL)
 {
 }
 
