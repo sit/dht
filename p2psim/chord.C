@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <iostream>
 
+#define PID(x) (x >> (NBCHID*8 - 10))
 
 using namespace std;
 
@@ -48,7 +49,7 @@ Chord::find_successors(CHID key, int m)
 
   IDMap nprime = me;
   int count = 0;
-  printf("Chord(%qu) find_successors key %qu\n", me.id, key);
+  printf("Chord(%u,%qu) find_successors key %qu\n", me.ip, PID(me.id), PID(key));
   while(1){
     assert(count++ < 100);
     next_args na;
@@ -60,7 +61,7 @@ Chord::find_successors(CHID key, int m)
     if(nr.done){
       return nr.v;
     } else {
-      printf("!!!Chord (%qu) node %u refers to next %qu for key %qu\n", me.id, nprime.id, nr.next.id);
+      printf("!!!Chord (%u,%qu) node %u refers to next %qu for key %qu\n", me.ip, PID(me.id), PID(nprime.id), PID(nr.next.id));
       nprime = nr.next;
     }
   }
@@ -83,13 +84,13 @@ Chord::next_handler(next_args *args, next_ret *ret)
     ret->done = true;
     ret->v.clear();
     ret->v.push_back(succ);
-    printf("Chord(%qu)::next_handler done key=%qu succ=%qu\n", me.id, args->key, succ.id);
+    printf("Chord(%u,%qu)::next_handler done key=%qu succ=%qu\n", me.ip, PID(me.id), PID(args->key), PID(succ.id));
  }else {
     ret->done = false;
     //ret->next = loctable->next(args->key);
     ret->next = succ;
     assert(ret->next.ip != me.ip);
-    printf("Chord(%qu)::next_handler NOT done key=%qu, goto next %qu\n", me.id, args->key, ret->next.id);
+    printf("Chord(%u,%qu)::next_handler NOT done key=%qu, goto next %qu\n", me.ip, PID(me.id), PID(args->key), PID(ret->next.id));
   }
 }
 
@@ -104,13 +105,13 @@ Chord::join(Args *args)
   wkn.id = ConsistentHash::ip2chid(wkn.ip);
   loctable->add_node (wkn);
 
-  cout << s() + "::join wellknown " << wkn.id << endl;
+  cout << s() + "::join wellknown " << PID(wkn.id) << endl;
   Time before = now();
   vector<IDMap> succs = find_successors (me.id + 1, 1);
   assert (succs.size () > 0);
   Time after = now();
   printf("Chord(%u,%qu)::join2 %qu, elapsed %ld\n",
-         me.ip, me.id, succs[0].id,
+         me.ip, PID(me.id), PID(succs[0].id),
          after - before);
   loctable->add_node(succs[0]);
 
@@ -136,12 +137,12 @@ Chord::stabilize(void *x)
     doRPC(succ.ip, &Chord::notify_handler, &na, &nr);
 
     Time after = now();
-    printf("Chord(%u,%qu)::stabilize(%qu) succ %qu pred %u elapsed %u\n", me.ip, me.id, before,succ.id, loctable->pred().ip, after-before);
+    printf("Chord(%u,%qu)::stabilize(%d) succ %qu pred %qu elapsed %u\n", me.ip, PID(me.id), before, PID(succ.id), PID(loctable->pred().id), after-before);
     fix_predecessor();
     //fix_successor();
     if (CHORD_SUCC_NUM > 1) fix_successor_list();
   }else{
-    printf("Chord(%u,%qu)::stabilize(%u) nothing succ %u\n", me.ip, me.id, before, succ.ip);
+    printf("Chord(%u,%qu)::stabilize(%d) nothing succ (%u,%qu)\n", me.ip, PID(me.id), before, succ.ip,PID(succ.id));
   }
   delaycb(20, Chord::stabilize, NULL);
 }
@@ -197,7 +198,7 @@ void
 Chord::notify_handler(notify_args *args, notify_ret *ret)
 {
   loctable->notify(args->me);
-  printf("Chord(%u,%qu) notified of %u succ %u pred %u\n", me.ip,me.id, args->me.id, loctable->succ(1).ip, loctable->pred().ip);
+  printf("Chord(%u,%qu) notified of %qu succ (xx,%qu) pred %qu\n", me.ip,PID(me.id), PID(args->me.id), PID(loctable->succ(1).id), PID(loctable->pred().id));
 }
 
 void
