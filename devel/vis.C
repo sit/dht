@@ -961,6 +961,7 @@ lookup_cb (GtkWidget *widget, gpointer data)
 
   chord_findarg fa;
   fa.x = search_key;
+  fa.return_succs = false;
   chord_nodelistres *res = New chord_nodelistres ();
   doRPC (current_node, chord_program_1, CHORDPROC_FINDROUTE, &fa, res,
 	 wrap (&lookup_complete_cb, current_node->ID, res));
