@@ -186,15 +186,14 @@ LocTable::succ(unsigned int m)
 Chord::IDMap
 LocTable::pred()
 {
-  assert(_end >=2 && _end < _max );
-  return ring[_end]; //the end of the ring array contains the predecessor node
+  return ring.back(); //the last element
 }
 
 Chord::IDMap
 LocTable::next(Chord::CHID n)
 {
   //no locality consideration
-  for (unsigned int i = 0; i < _end; i++) {
+  for (unsigned int i = 0; i < (ring.size()-1); i++) {
     if ((ring[i+1].ip == 0) || ConsistentHash::between(ring[i].id, ring[i+1].id, n)) {
       return ring[i];
     } 
@@ -205,10 +204,8 @@ LocTable::next(Chord::CHID n)
 void
 LocTable::add_node(Chord::IDMap n)
 {
-
-  assert(_end <= _max -1);
-
-  for (unsigned int i = 1; i < _end ; i++) {
+  int end = ring.size() -1;
+  for (unsigned int i = 1; i < end ; i++) {
 
     if (ring[i].ip == n.ip) {
       return;
@@ -217,22 +214,13 @@ LocTable::add_node(Chord::IDMap n)
       ring[i] = n;
     } else if (ConsistentHash::between(ring[i-1].id, ring[i].id, n.id)) {
 
-      if (_end < (_max -1)) {
-	//there is space to add more node in the ring
-	for (unsigned int j = _end; j >= i; j--) {
-	  ring[j+1] = ring[j];
-	}
-	ring[i] = n;
-	_end++;
+      if (end < (_max -1)) {
+	ring.insert(ring.begin() + i, n);
 	return;
-
       } else {
 	if (i <= _succ_num) {
-	  //evict the last one of the _succ_num succecessors??
-	  for (unsigned int j = _succ_num; j > i; j++) {
-	    ring[j] = ring[j-1];
-	  }
-	  ring[i] = n;
+	  ring.erase(ring.begin() + _succ_num);
+	  ring.insert(ring.begin() + i,n);
 	}else{
 	  //what should this eviction policy be? i do not know yet, just throw away this node for the moment
 	}
@@ -246,32 +234,21 @@ LocTable::add_node(Chord::IDMap n)
 void
 LocTable::notify(Chord::IDMap n)
 {
-  if ((ring[_end].ip == 0) || (ConsistentHash::between(ring[_end].id, ring[0].id, n.id))) {
-    ring[_end] = n;
+  if ((ring.back().ip == 0) || (ConsistentHash::between(ring.back().id, ring.front().id, n.id))) {
+    ring.pop_back();
+    ring.push_back(n);
   }
 }
 
 void
 LocTable::del_node(Chord::IDMap n)
 {
-  unsigned int i;
 
-  for (i = 0; i <= _end; i++) {
+  for (unsigned int i = 0; i <= ring.size(); i++) {
     if (ring[i].ip == n.ip) {
-      break;
+      ring.erase(ring.begin() + i); //STL will shift rest of elments leftwise
+      return;
     }
   }
-
-  if ((i == _end) || (_end <= 2)) {
-    ring[i].ip = 0; 
-    return;
-  }
-
-  while ( i < (_end-1)) {
-    ring[i] = ring[i+1];
-    i++;
-  }
-  ring[_end].ip = 0;
-  _end--;
 }
 
