@@ -595,7 +595,8 @@ vnode_impl::doRPC (ref<location> l, const rpc_program &prog, int procno,
       const rpcgen_table *rtp;
       rtp = &prog.tbl[procno];
       assert (rtp);
-      name = strbuf ("%s:%s fake_xid=%x", prog.name, rtp->name, xid);
+      name = strbuf ("%s:%s fake_xid=%x", prog.name, rtp->name, xid)
+	 	 << " on " << l->address () << ":" << l->vnode ();
       
       warn << "ACLNT_TRACE:" << tracetime () << " call " << name << "\n";
       if (aclnttrace >= 5 && rtp->print_arg)
@@ -621,7 +622,8 @@ vnode_impl::doRPC_cb (ptr<location> l, xdrproc_t proc,
   if (err) {
     ptr<location> reall = locations->lookup (l->id ());
     if (reall && reall->alive ()) {
-      warn << "got an error, but " << l->id () << " is still marked alive\n";
+      warn << "got error " << err << ", but " << l->id () 
+		   << " is still marked alive\n";
       reall->set_alive (false);
     } else if (!reall) {
       locations->insert (l);
