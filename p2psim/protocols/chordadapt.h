@@ -165,6 +165,7 @@ class ChordAdapt: public P2Protocol {
     Time _join_scheduled;
     uint _burst_sz;
     uint _bw_overhead;
+    bool _recurs;
     uint _stab_basic_timer;
     Time _last_joined_time;
     bool _stab_basic_running;

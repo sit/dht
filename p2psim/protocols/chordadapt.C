@@ -47,6 +47,7 @@ ChordAdapt::ChordAdapt(IPAddress i, Args& a) : P2Protocol(i)
   else
     _parallelism = 1;
 
+  _recurs = (bool) a.nget<uint>("recurs",1,10);
   _bw_overhead = a.nget<uint>("overhead_rate", 10, 10);
   _burst_sz = a.nget<uint>("burst_size",0,10);
   uint _burst;
@@ -477,7 +478,7 @@ ChordAdapt::lookup(Args *args)
 
   _outstanding_lookups.insert(la.key, now());
   NDEBUG(2) << "start lookup key " << printID(la.key) << endl;
-  if (0) 
+  if (_recurs) 
     next_recurs(&la,NULL);
   else 
     next_iter(&la,&lr);
