@@ -32,6 +32,7 @@ finger_table_pns::~finger_table_pns ()
   f = pnsfingers.first ();
   while (f != NULL) {
     nf = pnsfingers.next (f);
+    pnsfingers.remove (f->n_);
     delete f;
     f = nf;
   }
@@ -41,8 +42,19 @@ ptr<location>
 finger_table_pns::finger (int i)
 {
   pnsfinger *l = pnsfingers.closestsucc (starts[i]);
-  if (l && l->loc_->alive ())
+  int sz = pnsfingers.size ();
+  pnsfinger *nf;
+  if (l && !l->loc_->alive () && sz-- > 0) {
+    nf = pnsfingers.next (l);
+    if (nf == NULL)
+      nf = pnsfingers.first ();
+    pnsfingers.remove (l->n_);
+    delete l;
+    l = nf;
+  }
+  if (sz)
     return l->loc_;
+
   return finger_table::finger (i);
 }
 
@@ -98,7 +110,12 @@ finger_table_pns::getsucclist_cb (int l, int r, vec<chord_node> succs,
     vec<float> my_coords = myvnode->my_location ()->coords ();
 
     chordID left = starts[l];
-    chordID right = starts[r];
+    chordID right;
+    if (r == 0) {
+      right = myvnode->my_ID ();
+    } else {
+      right = starts[r];
+    }
     
     int real_lat = 0;
     
