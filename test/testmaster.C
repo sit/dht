@@ -26,13 +26,60 @@
 
 #include "async.h"
 #include "dns.h"
+#include "rxx.h"
 #include "testmaster.h"
 
-
-testmaster::testmaster() : _nhosts(0)
+testmaster::testmaster(const testslave slaves[]) : _nhosts(0), _slaves(slaves)
 {
   test_init();
 }
+
+testmaster::testmaster(char *filename) : _nhosts(0), _slaves(0)
+{
+  test_init();
+  FILE *f = fopen(filename, "r");
+  if(f <= 0)
+    fatal << "couldn't open " << filename << ": " << strerror(errno) << "\n";
+
+  int n = 0;
+  testslave *slaves = 0;
+  while(!feof(f)) {
+    char l[1024];
+    if(!fgets(l, sizeof(l), f))
+      fatal << "fgets";
+
+    str line = str(l);
+    free(l);
+
+    // comment
+    rxx commentrxx("^\\s*#");
+    if(commentrxx.search(line))
+      continue;
+
+    // XXX: very stupid
+    testslave *newslaves = New testslave[n+1];
+    memcpy(newslaves, slaves, n*sizeof(testslave));
+    free(slaves);
+    slaves = newslaves;
+
+    rxx linerxx("^\\s*(\\S+)\\s+(\\d+)\\s+(\\d+)\\s*$");
+    if(!linerxx.search(line))
+      break;
+
+    slaves[n].name = linerxx[1];
+    slaves[n].dhash_port = atoi(linerxx[2]) ? atoi(linerxx[2]) : DEFAULT_PORT;
+    slaves[n].control_port = atoi(linerxx[3]) ? atoi(linerxx[3]) : TESLA_CONTROL_PORT;
+    n++;
+  }
+  fclose(f);
+
+  // append an empty entry
+  slaves[n].name = str("");
+
+  _slaves = slaves;
+}
+
+
 
 testmaster::~testmaster()
 {
@@ -40,12 +87,13 @@ testmaster::~testmaster()
 
 
 void
-testmaster::setup(const testslave slaves[], callback<void>::ref cb)
+testmaster::setup(callback<void>::ref cb)
 {
+  assert(_slaves);
   _busy = true;
-  for(unsigned i = 0; slaves[i].name != ""; i++) {
+  for(unsigned i = 0; _slaves[i].name != ""; i++) {
     // create a unix socket
-    str p2psocket = strbuf() << "/tmp/" << slaves[i].name << ":" << slaves[i].port;
+    str p2psocket = strbuf() << "/tmp/" << _slaves[i].name << ":" << _slaves[i].dhash_port;
     unlink(p2psocket);
     int fd = unixsocket(p2psocket);
     if(!fd)
@@ -53,7 +101,7 @@ testmaster::setup(const testslave slaves[], callback<void>::ref cb)
     make_async(fd);
 
     // create a connection to the other side for this unix socket
-    addnode(i, p2psocket, &(slaves[i]), fd, cb);
+    addnode(i, p2psocket, &(_slaves[i]), fd, cb);
     _nhosts++;
   }
   _busy = false;
@@ -79,7 +127,7 @@ void
 testmaster::addnode(const unsigned id, const str p2psocket,
   const testslave *s, const int unixsocket_fd, callback<void>::ref cb)
 {
-  DEBUG(2) << "setting up " << s->name << ":" << s->port << "\n";
+  DEBUG(2) << "setting up " << s->name << ":" << s->dhash_port << "\n";
 
   // remove old entry
   client *c = _clients[id];
@@ -87,7 +135,7 @@ testmaster::addnode(const unsigned id, const str p2psocket,
     _clients.remove(c);
 
   conthunk tx = { id, p2psocket, s, unixsocket_fd, cb };
-  tcpconnect(s->name, s->port, wrap(this, &testmaster::addnode_cb, tx));
+  tcpconnect(s->name, s->dhash_port, wrap(this, &testmaster::addnode_cb, tx));
 }
 
 
@@ -116,10 +164,10 @@ testmaster::accept_connection(const int unixsocket_fd, const int there_fd)
 void
 testmaster::addnode_cb(conthunk tx, const int there_fd)
 {
-  DEBUG(2) << "connected to " << tx.s->name << ":" << tx.s->port << "\n";
+  DEBUG(2) << "connected to " << tx.s->name << ":" << tx.s->dhash_port << "\n";
 
   if(there_fd == -1) {
-    warn << "could not connect to " << tx.s->name << ":" << tx.s->port << "\n";
+    warn << "could not connect to " << tx.s->name << ":" << tx.s->dhash_port << "\n";
     return;
   }
 
@@ -147,66 +195,20 @@ testmaster::addnode_cb(conthunk tx, const int there_fd)
     tx.cb();
 }
 
-// tells <victim> to isolate itself from the network
+
+// cmd is a bunch of OR-ed flags.  see below.
 void
-testmaster::isolate(int victim, callback<void, int>::ref cb)
+testmaster::instruct(int blocker, int cmd, callback<void, int>::ref cb, int blockee)
 {
   instruct_thunk *tx = New instruct_thunk(cb);
-
-  tx->type = ISOLATE;
-  tx->blockee = victim;
-  tx->blocker = victim;
-
-  instruct(tx);
-}
-
-
-// tells <victim> to unisolate itself from the network
-void
-testmaster::unisolate(int victim, callback<void, int>::ref cb)
-{
-  instruct_thunk *tx = New instruct_thunk(cb);
-
-  tx->type = UNISOLATE;
-  tx->blockee = victim;
-  tx->blocker = victim;
-
-  instruct(tx);
-}
-
-
-// tells <blocker> to drop traffic coming from <blockee>
-void
-testmaster::block(int blocker, int blockee, callback<void, int>::ref cb)
-{
-  instruct_thunk *tx = New instruct_thunk(cb);
-
-  tx->type = BLOCK;
+  if(!tx)
+    fatal << "malloc!\n";
+  
+  tx->cmd = cmd;
   tx->blocker = blocker;
-  tx->blockee = blockee;
+  tx->blockee = blockee == -1 ? blocker : blockee;
 
-  instruct(tx);
-}
-
-
-// tells <blocker> to accept traffic coming from <blockee>
-void
-testmaster::unblock(int blocker, int blockee, callback<void, int>::ref cb)
-{
-  instruct_thunk *tx = New instruct_thunk(cb);
-
-  tx->type = UNBLOCK;
-  tx->blocker = blocker;
-  tx->blockee = blockee;
-
-  instruct(tx);
-}
-
-
-
-void
-testmaster::instruct(instruct_thunk *tx)
-{
+  warn << _slaves[tx->blockee].name << "\n";
   dns_hostbyname(_slaves[tx->blockee].name,
       wrap(this, &testmaster::instruct_cb, tx));
 }
@@ -214,6 +216,7 @@ testmaster::instruct(instruct_thunk *tx)
 void
 testmaster::instruct_cb(instruct_thunk *tx, ptr<hostent> h, int err)
 {
+
   if(!h) {
     warn << "dns_hostbyname failed\n";
     tx->cb(0);
@@ -223,7 +226,8 @@ testmaster::instruct_cb(instruct_thunk *tx, ptr<hostent> h, int err)
   tx->h = h;
   DEBUG(1) << "tcppconnect to " << _slaves[tx->blocker].name << ":" << TESLA_CONTROL_PORT << "\n";
 
-  int port = _slaves[tx->blocker].port ? _slaves[tx->blocker].port : TESLA_CONTROL_PORT;
+  int port = _slaves[tx->blocker].control_port ?
+      _slaves[tx->blocker].control_port : TESLA_CONTROL_PORT;
   tcpconnect(_slaves[tx->blocker].name, port,
       wrap(this, &testmaster::instruct_cb2, tx));
 }
@@ -246,9 +250,9 @@ testmaster::instruct_cb3(instruct_thunk *tx)
 {
   instruct_t ins;
 
-  ins.i.type = tx->type;
+  ins.i.cmd = tx->cmd;
   ins.i.host = (*(in_addr*)tx->h->h_addr).s_addr;
-  ins.i.port = htons(_slaves[tx->blockee].port);
+  ins.i.port = htons(_slaves[tx->blockee].control_port);
 
   // XXX
   if(write(tx->fd, ins.b, 12) < 0) 

@@ -31,10 +31,15 @@
 #define TESLA_CONTROL_PORT 8002
 
 
-typedef struct {
+class testslave { public:
+  testslave() {}
+  testslave(str n, int d, int c) : name(n), dhash_port(d), control_port(c) {}
+  ~testslave() {}
+
   str name;
-  int port;
-} testslave;
+  int dhash_port;
+  int control_port;
+};
 
 
 typedef struct {
@@ -47,19 +52,19 @@ typedef struct {
 
 
 class testmaster { public:
-  testmaster();
+  // hardcoded host names and ports
+  testmaster(const testslave slaves[]);
+
+  // testmaster with filename that contains hostname/port/port.  see
+  // config.txt.sample
+  testmaster(char *filename);
   ~testmaster();
 
-  // has to be done before anything else
-  void setup(const testslave slaves[], callback<void>::ref);
+  // has to be done if you want to do DHash operations
+  void setup(callback<void>::ref);
 
-  // un/isolate <victim> from the network
-  void isolate(int victim, callback<void, int>::ref);
-  void unisolate(int victim, callback<void, int>::ref);
-
-  // tell blocker to block traffic from blockee
-  void block(int blocker, int blockee, callback<void, int>::ref);
-  void unblock(int blocker, int blockee, callback<void, int>::ref);
+  // cmd is a bunch of OR-ed flags.  see below.
+  void instruct(int blocker, int cmd, callback<void, int>::ref cb, int blockee = -1);
 
   // returns dhash client for certain identifier
   dhashclient* dhash(const unsigned id)      { return _clients[id]->dhc; }
@@ -79,10 +84,19 @@ private:
   void accept_connection(const int unixsocket_fd, const int there_fd);
   void pipe(const int, const int);
 
+  // cmd is a bit string
+#define READ       0x001
+#define WRITE      0x002
+#define RW	   0x003 // utility
+#define BLOCK      0x010
+#define UNBLOCK    0x020
+#define ISOLATE    0x100
+#define UNISOLATE  0x200
+
   class instruct_thunk { public:
-    instruct_thunk(callback<void, int>::ref cb) : cb(cb) {}
+    instruct_thunk(callback<void, int>::ref cbx) : cb(cbx) {}
     ~instruct_thunk() {}
-    int type;
+    unsigned cmd;
     int blocker;
     int blockee;
     int fd;
@@ -95,16 +109,9 @@ private:
   void instruct_cb2(instruct_thunk*, int);
   void instruct_cb3(instruct_thunk*);
 
-  enum instruct_type {
-    BLOCK = 0,
-    UNBLOCK,
-    ISOLATE,
-    UNISOLATE
-  };
-
   typedef union {
     struct {
-      int type;
+      unsigned cmd;
       int host;
       int port;
     } i;

@@ -1,7 +1,17 @@
-Assume the setup consists of 3 lsd nodes; 2 on node X, 1 on node Y.  
-We're running the test from node Z.  The testslave is in test/ .
+Simple testing
+--------------
 
-On node X:
+The DHash testing suite allows you to initiate DHash operations from
+other nodes.  In addition, broken or asymmetric links, and even
+complete network partitions can be simulated.
+
+
+
+Assume the setup consists of 3 lsd nodes; 2 on a machine named nodeX, 1 on a
+machine named nodeY.  We're running the test from nodeZ.  The testslave is in
+test/ .
+
+On nodeX:
 
 nodeX $ lsd [your flags go here] -S /tmp/lsd_X1
 nodeX $ lsd [your flags go here] -S /tmp/lsd_X2
@@ -11,32 +21,61 @@ nodeX $ testslave -s /tmp/lsd_X2 -p 3345
 -p 3344 wasn't really necessary as it is the slave's default port
 -p 3345 _was_ necessary not to conflict with 3344
 
-On node Y:
+On nodeY:
 
 nodeY $ lsd [your flags go here] -S /tmp/lsd_X1
-nodeY $ testslave -S /tmp/lsd
+nodeY $ testslave -S /tmp/lsd_X1
 
 
-On node Z:
+On nodeZ:
 
-In your code, declare an array of testslave-s:
+Create a file, say, config.txt with the following lines:
 
-  testslave slaves[] = {
-    { "nodeX", 3344 }, 
-    { "nodeX", 3345 }, 
-    { "nodeY", 3344 },
-    { "", 0 }
-  };
+nodeX 3344 8002
+nodeX 3345 8003
+nodeY 3344 8002
+
+Ignore the last column for now.
 
 Create the testmaster:
 
-  testmaster tm;
-  tm.setup(slaves, <some callback>);
+  testmaster tm("config.txt");
+  tm.setup(wrap(do_it));
   
 Which allows you to do:
 
+void
+do_it(...)
+{
   tm[0]->insert(...);     // will issue insert from node X
   
   ...
   
   tm[2]->retrieve(...);   // will issue insert from node Y
+}
+
+
+
+Messing with connectivity
+-------------------------
+
+You need TESLA to do this.  Unpack the tesla tarball from the test/
+directory.  Run
+
+    ./configure --prefix=/some/dir/in/your/home
+    make all install
+
+Make sure that tesla is in your PATH.
+
+Now run lsd as follows:
+
+    tesla +dhashtest -port=XXXX lsd -j ... -S etc.
+
+Where XXXX is some free port number.  This should correspond with the
+third column in the config.txt file mentioned above.
+
+Using the instruct() call, or using the block command-line program you
+can now create partitions, block read/write from/to certain hosts,
+etc.  (See example2.C and the output of block -h.)
+
+vim: wm=1 tw=70

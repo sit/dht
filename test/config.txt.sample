@@ -1,0 +1,5 @@
+# host     slave port    control port
+#  slave port is the -p flag that testslave was started with
+#  control port is the -port flag to the dhash_test handler for tesla
+127.0.0.1 3344 8002
+127.0.0.1 3345 8003

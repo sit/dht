@@ -24,19 +24,30 @@ HANDLER_USAGE(dhashtest_handler,
 dhashtest_handler::dhashtest_handler(init_context& ctxt, bool plumb) :
     flow_handler(ctxt, plumb)
 {
-  int port = 8002;
+  string port;
+  get_arg("port", port, TESLA_CONTROL_PORT);
 
-  _blockhost.clear();
-  _blockhostport.clear();
+  _rblock.clear();
+  _wblock.clear();
 
   _srvfh = ctxt.plumb(*this, AF_INET, SOCK_STREAM);
-  sockaddr_in sin;
-  sin.sin_family = AF_INET;
-  sin.sin_addr.s_addr = INADDR_ANY;
-  sin.sin_port = htons(port);
-  _srvfh->bind(address(&sin, sizeof(sin)));
-  _srvfh->listen(5);
-  _srvfh->accept();
+
+  if(!_initialized) {
+    sockaddr_in sin;
+    sin.sin_family = AF_INET;
+    sin.sin_addr.s_addr = INADDR_ANY;
+    sin.sin_port = htons(atoi(port.c_str()));
+    if(_srvfh->bind(address(&sin, sizeof(sin))) < 0)
+      ts_fatal("bind failed, errno = %s", strerror(errno));
+
+    ts_debug_1("dhashtest_handler control port = %d", atoi(port.c_str()));
+    if(_srvfh->listen(5) == 1)
+      ts_fatal("listen failed");
+    if(_srvfh->accept() == 1)
+      ts_fatal("accept failed");
+
+    _initialized = true;
+  }
 }
 
 
@@ -45,53 +56,87 @@ dhashtest_handler::accept_ready(flow_handler *from)
 {
   assert(from == _srvfh);
   acceptret client = _srvfh->accept();
-  if(!client)
+  if(!client) {
+    ts_debug_1("client connection failed");
     return;
+  }
 
   _clients.insert(client.h);
   client.h->set_upstream(this);
-  // // upstream->accept_ready(from);
 }
 
-/*
+
+
 int
 dhashtest_handler::write(data d)
 {
-  ts_debug_1("write\n");
+  if(_wisolated ||
+      (_wblock.find( ((struct sockaddr_in*)d.addr())->sin_addr.s_addr) != _wblock.end())) {
+    ts_debug_1("write isolated: write was blocked.");
+    return 0;
+  }
+
   return flow_handler::write(d);
 }
-*/
+
+
 
 bool
 dhashtest_handler::handle_instruct(data d)
 {
   // handle
-  ts_debug_1("client sent %d bytes", d.length());
-
   instruct_t ins;
   memcpy(ins.b, d.bits(), 12);        // XXX: hack
 
-  if(ins.i.port) {
-    pair<int,int> p(ins.i.host, ins.i.port);
-    if(ins.i.type == BLOCK) {
-      _blockhostport.insert(p);
-      ts_debug_1("added %x:%d to blocked\n", ins.i.host, ins.i.port);
-    } else if(ins.i.type == UNBLOCK) {
-      ts_debug_1("removed %x:%d from blocked\n", ins.i.host, ins.i.port);
-      _blockhostport.erase(p);
+  // ISOLATE
+  if(ins.i.cmd & ISOLATE) {
+    if(ins.i.cmd & READ) {
+      ts_debug_1("read isolated!");
+      _risolated = true;
+    } else if (ins.i.cmd & WRITE) {
+      ts_debug_1("write isolated!");
+      _wisolated = true;
+    } else {
+      ts_debug_1("warning: ISOLATE without READ/WRITE. assuming both.");
+      _risolated = _wisolated = true;
     }
-    else
-      return false;
+    return true;
+  }
+  
+  // UNISOLATE
+  if(ins.i.cmd & UNISOLATE) {
+    if(ins.i.cmd & READ) {
+      ts_debug_1("read unisolated!");
+      _risolated = false;
+    } else if (ins.i.cmd & WRITE) {
+      ts_debug_1("write unisolated!");
+      _wisolated = false;
+    } else {
+      ts_debug_1("warning: UNISOLATE without READ/WRITE. assuming both");
+      _risolated = _wisolated = false;
+    }
+    return true;
+  }
+
+
+  // READ or WRITE?
+  set<int> *blockset = (set<int>*) 0;
+  if(ins.i.cmd & READ)
+    blockset = &_rblock;
+  else if(ins.i.cmd & WRITE)
+    blockset = &_wblock;
+  else {
+    ts_debug_1("BLOCK/UNBLOCK without READ/WRITE. doing nothing");
+    return false;
+  }
+
+  if(ins.i.cmd & BLOCK) {
+    blockset->insert(ins.i.host);
+  } else if(ins.i.cmd & UNBLOCK) {
+    blockset->erase(ins.i.host);
   } else {
-    if(ins.i.type == BLOCK) {
-      _blockhost.insert(ins.i.host);
-      ts_debug_1("added %x to blocked\n", ins.i.host);
-      ts_debug_1("size is now %d\n", _blockhost.size());
-    } else if(ins.i.type == UNBLOCK) {
-      ts_debug_1("removed %x from blocked\n", ins.i.host);
-      _blockhost.erase(ins.i.host);
-    } else
-      return false;
+    ts_debug_1("no command!");
+    return false;
   }
 
   return true;
@@ -105,11 +150,8 @@ dhashtest_handler::avail(flow_handler *h, data d)
   //
   if(_clients.find(h) != _clients.end()) {
     // close connection
-    if(d.length() == 0) {
-      ts_debug_1("closed connection");
+    if(d.length() == 0)
       return h->close();
-    }
-
     return handle_instruct(d);
   }
 
@@ -119,17 +161,12 @@ dhashtest_handler::avail(flow_handler *h, data d)
   //
   int host = ((sockaddr_in*) d.addr())->sin_addr.s_addr;
   int port = ((sockaddr_in*) d.addr())->sin_port;
-  pair<int,int> p(host, port);
-  ts_debug_1("host that sent = %x, port = %d\n", host, port);
-  ts_debug_1("_blockhost size = %d, _blockhostport size = %d\n",
-      _blockhost.size(), _blockhostport.size());
-  if((_blockhost.find(host) != _blockhost.end()) ||
-     (_blockhostport.find(p) != _blockhostport.end()))
-  {
+  ts_debug_2("host that sent = %x, port = %d", host, port);
+  if(_risolated || (_rblock.find(host) != _rblock.end())) {
     ts_debug_1("blocked data from %x", host);
     return true;
   }
 
-  ts_debug_1("allowed data from %x", host);
+  ts_debug_2("allowed data from %x", host);
   return upstream->avail(h, d);
 }

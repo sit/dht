@@ -7,20 +7,33 @@ void
 usage()
 {
   fprintf(stderr, "\
-To drop traffic from BLOCKEE in BLOCKER:\n\
+  block [flags] N[:P]\n\
 \n\
-  block [-u] BLOCKER[:P1] BLOCKEE[:P2]\n\
+  The following flags can be used:\n\
+   -r   : read\n\
+   -w   : write\n\
 \n\
-  BLOCKER/BLOCKEE are host names or IP addresses.\n\
-  P1 is the TESLA/lsd control port; default %d.\n\
-  If P2 is specified, only traffic from host/port combination is blocked.\n\
+   -b M : block reading from/writing to node M \n\
+   -u M : unblock, mutually exclusive with -b\n\
 \n\
-To isolate a machine completely:\n\
-  block -i BLOCKEE[:P1]\n\
+   -i   : disallow all reading/writing (isolate)\n\
+   -f   : unset isolation, mutually exclusive with -i\n\
 \n\
-To undo isolation:\n\
-  block -f BLOCKEE[:P1]\n\
-", TESLA_CONTROL_PORT);
+   -h   : show this help\n\
+\n\
+  N and M are hostnames or IP address, P is a port number\n\
+\n\
+  Examples:\n\
+\n\
+    block -r -b foo.mit.edu bar.mit.edu\n\
+      => tells bar.mit.edu to block all traffic from foo.mit.edu\n\
+\n\
+    block -rw -b foo.mit.edu bar.mit.edu\n\
+      => tells bar.mit.edu to block all traffic to and from foo.mit.edu\n\
+\n\
+    block -r -i bar.mit.edu:8003\n\
+      => tells bar.mit.edu to isolate itself off the network for reading,\n\
+         the control port is on port 8003");
   exit(-1);
 }
 
@@ -42,70 +55,94 @@ set(char *s, testslave *t)
 {
   char *c = 0;
 
-  t->port = 0;
+  t->control_port = TESLA_CONTROL_PORT;
   if((c = strchr(s, ':'))) {
     *c = 0;
-    t->port = atoi(c+1);
+    t->control_port = atoi(c+1);
   }
   t->name = s;
 }
 
 
-void
-do_block(testmaster *tm, int mode)
-{
-  if(mode == 0)
-    tm->block(0, 1, wrap(&done));
-  else if(mode == 1)
-    tm->unblock(0, 1, wrap(&done));
-  else if(mode == 2)
-    tm->isolate(0, wrap(&done));
-  else if(mode == 3)
-    tm->unisolate(0, wrap(&done));
-}
-
 
 int
 main(int argc, char *argv[])
 {
-  int mode = 0;
+  int cmd = 0;
   testslave slaves[2];
+  char *blockee = 0;
 
 
   char ch;
-  while((ch = getopt(argc, argv, "hifu")) != -1) {
+  while((ch = getopt(argc, argv, "hrwifb:u:")) != -1) {
     switch(ch) {
       case 'h':
         usage();
         break;
-      case 'u':
-        mode = 1;
+
+      case 'r':
+        cmd |= READ;
         break;
+
+      case 'w':
+        cmd |= WRITE;
+        break;
+
       case 'i':
-        mode = 2;
+        if(cmd & UNISOLATE)
+          fatal << "ISOLATE/UNISOLATE mutually exclusive";
+        cmd |= ISOLATE;
         break;
+
       case 'f':
-        mode = 3;
+        if(cmd & ISOLATE)
+          fatal << "ISOLATE/UNISOLATE mutually exclusive";
+        cmd |= UNISOLATE;
         break;
+
+      case 'b':
+        if(cmd & UNBLOCK)
+          fatal << "BLOCK/UNBLOCK mutually exclusive";
+        cmd |= BLOCK;
+        blockee = optarg;
+        break;
+
+      case 'u':
+        if(cmd & BLOCK)
+          fatal << "BLOCK/UNBLOCK mutually exclusive";
+        cmd |= UNBLOCK;
+        blockee = optarg;
+        break;
+
       default:
         usage();
     }
   }
 
-  if(argc < 3)
-    usage();
-
-  // BLOCKER
-  set(argv[optind++], &slaves[0]);
-  warn << "BLOCKER host = " << slaves[0].name << ", port = " << slaves[0].port << "\n";
-
-  // BLOCKEE
-  if(mode == 0 || mode == 1) {
-    set(argv[optind++], &slaves[1]);
-    warn << "BLOCKEE host = " << slaves[1].name << ", port = " << slaves[1].port << "\n";
+  if(!(cmd & (BLOCK|UNBLOCK|ISOLATE|UNISOLATE))) {
+    warn << "nothing to do\n";
+    exit(0);
   }
 
-  testmaster *tm = New testmaster();
-  tm->setup(slaves, wrap(do_block, tm, mode));
+  // BLOCKER
+  if(!argv[optind]) {
+    warn << "missing argument. use -h for help.\n";
+    exit(-1);
+  }
+
+  set(argv[optind++], &slaves[0]);
+  warn << "BLOCKER host = " << slaves[0].name << ", control_port = " << slaves[0].control_port << "\n";
+
+  // BLOCKEE
+  if(cmd & BLOCK || cmd & UNBLOCK) {
+    set(blockee, &slaves[1]);
+    warn << "BLOCKEE host = " << slaves[1].name << ", control_port = " << slaves[1].control_port << "\n";
+  }
+
+  testmaster *tm = New testmaster(slaves);
+  if(cmd & BLOCK || cmd & UNBLOCK)
+    tm->instruct(0, cmd, wrap(&done), 1);
+  else
+    tm->instruct(0, cmd, wrap(&done));
   amain();
 }

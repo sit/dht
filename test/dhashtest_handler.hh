@@ -10,7 +10,7 @@
  * version. For more information, see the `COPYING' file in the source
  * distribution.
  *
- * $Id: dhashtest_handler.hh,v 1.1 2002/11/08 05:15:51 thomer Exp $
+ * $Id: dhashtest_handler.hh,v 1.2 2002/11/22 07:46:41 thomer Exp $
  *
  */
 
@@ -23,29 +23,38 @@
 #include <utility>
 #include <set>
 
+#define TESLA_CONTROL_PORT "8002" // string, for stupid reasons
+
 class dhashtest_handler : public flow_handler { public:
   dhashtest_handler(init_context& ctxt, bool plumb = true);
   ~dhashtest_handler() {}
   bool avail(flow_handler*, data);
+  int write(data d);
   void accept_ready(flow_handler *);
 
 private:
-  static set<int> _blockhost;
-  static set<pair<int, int> > _blockhostport;
+  static set<int> _rblock;
+  static set<int> _wblock;
+  static bool _risolated;
+  static bool _wisolated;
+  static bool _initialized;
+
   set<flow_handler*> _clients;
   flow_handler *_srvfh;
   bool handle_instruct(data);
 
-  enum instruct_type {
-    BLOCK = 0,
-    UNBLOCK = 1
-  };
+#define READ       0x001
+#define WRITE      0x002
+#define BLOCK      0x010
+#define UNBLOCK    0x020
+#define ISOLATE    0x100
+#define UNISOLATE  0x200
 
   typedef union {
     struct {
-      int type;
+      unsigned cmd;
       int host;
-      int port;
+      int port; // ignored for now
     } i;
     char b[12];
   } instruct_t;
@@ -53,8 +62,11 @@ private:
   DECLARE_HANDLER;
 };
 
-set<int> dhashtest_handler::_blockhost;
-set<pair<int, int> > dhashtest_handler::_blockhostport;
+set<int> dhashtest_handler::_rblock;
+set<int> dhashtest_handler::_wblock;
+bool dhashtest_handler::_risolated = false;
+bool dhashtest_handler::_wisolated = false;
+bool dhashtest_handler::_initialized = false;
 
 
 #endif
