@@ -75,7 +75,7 @@ SillyEventGenerator::bullshit()
 {
   Args *a = New Args();
   char key[32]; sprintf(key, "%d", (unsigned) (random() % _ips->size())+1);
-  (*a)["ip"] = string(key);
+  (*a)["key"] = string(key);
   P2PEvent *e = New P2PEvent(now()+1, ((random() % _ips->size())+1), "lookup", a);
   add_event(e);
 }
