@@ -1,6 +1,5 @@
-/* Copyright (c) 2003 Lucent Technologies.  See LICENSE. */
-/* Copyright (c) 2003, 2004 Russ Cox.  See LICENSE. */
- 
+/* Copyright (c) 2005 Russ Cox, MIT; see COPYRIGHT */
+
 #include "taskimpl.h"
 
 int quiet;

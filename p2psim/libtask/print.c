@@ -1,4 +1,4 @@
-/* Copyright (c) 2004 Russ Cox.  See LICENSE. */
+/* Copyright (c) 2004 Russ Cox.  See COPYRIGHT. */
 
 #include "taskimpl.h"
 #include <stdio.h>	/* for strerror! */
@@ -26,56 +26,6 @@ printstr(char *dst, char *edst, char *s)
 		l = (edst-dst)-1;
 	memmove(dst, s, l);
 	return dst+l;
-}
-
-static char*
-printnum(char *dst, char *edst, uint fl, uint base, va_list *arg)
-{
-	static char digits[] = "0123456789abcdef";
-	char buf[30], *p;
-	int neg, zero;
-	uvlong luv;
-
-	if(fl&FlagLongLong){
-		if(fl&FlagUnsigned)
-			luv = va_arg(*arg, uvlong);
-		else
-			luv = va_arg(*arg, vlong);
-	}else{
-		if(fl&FlagLong){
-			if(fl&FlagUnsigned)
-				luv = va_arg(*arg, ulong);
-			else
-				luv = va_arg(*arg, long);
-		}else{
-			if(fl&FlagUnsigned)
-				luv = va_arg(*arg, uint);
-			else
-				luv = va_arg(*arg, int);
-		}
-	}
-
-	p = buf+sizeof buf;
-	neg = 0;
-	zero = 0;
-	if(!(fl&FlagUnsigned) && (vlong)luv < 0){
-		neg = 1;
-		luv = -luv;
-	}
-	if(luv == 0)
-		zero = 1;
-	*--p = 0;
-	while(luv){
-		*--p = digits[luv%base];
-		luv /= base;
-	}
-	if(base == 16){
-		*--p = 'x';
-		*--p = '0';
-	}
-	if(base == 8 || zero) 
-		*--p = '0';
-	return printstr(dst, edst, p);
 }
 	
 char*
@@ -115,8 +65,54 @@ vseprint(char *dst, char *edst, char *fmt, va_list arg)
 					base = 16;
 					goto num;
 				num:
-					w = printnum(w, edst, fl, base, &arg);
+				{
+					static char digits[] = "0123456789abcdef";
+					char buf[30], *p;
+					int neg, zero;
+					uvlong luv;
+				
+					if(fl&FlagLongLong){
+						if(fl&FlagUnsigned)
+							luv = va_arg(arg, uvlong);
+						else
+							luv = va_arg(arg, vlong);
+					}else{
+						if(fl&FlagLong){
+							if(fl&FlagUnsigned)
+								luv = va_arg(arg, ulong);
+							else
+								luv = va_arg(arg, long);
+						}else{
+							if(fl&FlagUnsigned)
+								luv = va_arg(arg, uint);
+							else
+								luv = va_arg(arg, int);
+						}
+					}
+				
+					p = buf+sizeof buf;
+					neg = 0;
+					zero = 0;
+					if(!(fl&FlagUnsigned) && (vlong)luv < 0){
+						neg = 1;
+						luv = -luv;
+					}
+					if(luv == 0)
+						zero = 1;
+					*--p = 0;
+					while(luv){
+						*--p = digits[luv%base];
+						luv /= base;
+					}
+					if(base == 16){
+						*--p = 'x';
+						*--p = '0';
+					}
+					if(base == 8 || zero) 
+						*--p = '0';
+					w = printstr(w, edst, p);
 					goto break2;
+				}
 				case 'c':
 					cbuf[0] = va_arg(arg, int);
 					cbuf[1] = 0;

@@ -1,14 +1,12 @@
 noinst_PROGRAMS = libtask.o
-libtask_o_SOURCES = 386.c\
-                 386label.s\
-                 channel.c\
-                 emalloc.c\
-                 idle.c\
-                 print.c\
-                 q.c\
-                 sched.c
+libtask_o_SOURCES = \
+	asm.S \
+	channel.c \
+	context.c \
+	print.c \
+	task.c \
 
-EXTRA_DIST = task.h taskimpl.h
+EXTRA_DIST = task.h taskimpl.h tprimes.c
 LIBS =
 libtask_o_LINK = $(LD) -r -o $@
 

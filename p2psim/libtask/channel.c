@@ -1,441 +1,385 @@
-/* Copyright (c) 2003 Lucent Technologies.  See LICENSE. */
+/* Copyright (c) 2005 Russ Cox, MIT; see COPYRIGHT */
 
 #include "taskimpl.h"
 
-static void enqueue(Alt*, Channel**);
-static void dequeue(Alt*);
-static int altexec(Alt*);
-
-static int
-canexec(Alt *a)
-{
-	int i, otherop;
-	Channel *c;
-
-	c = a->c;
-	/* are there senders or receivers blocked? */
-	otherop = (CHANSND+CHANRCV) - a->op;
-	for(i=0; i<c->nentry; i++)
-		if(c->qentry[i] && c->qentry[i]->op==otherop && *c->qentry[i]->tag==nil)
-			return 1;
-
-	/* is there room in the channel? */
-	if((a->op==CHANSND && c->n < c->s)
-	|| (a->op==CHANRCV && c->n > 0))
-		return 1;
-
-	return 0;
-}
-
-void
-chanfree(Channel *c)
-{
-	int i, inuse;
-
-	inuse = 0;
-	for(i = 0; i < c->nentry; i++)
-		if(c->qentry[i])
-			inuse = 1;
-	if(inuse)
-		c->freed = 1;
-	else{
-		if(c->qentry)
-			free(c->qentry);
-		free(c);
-	}
-}
-
-int
-chaninit(Channel *c, int elemsize, int elemcnt)
-{
-	if(elemcnt < 0 || elemsize <= 0 || c == nil)
-		return -1;
-	c->f = 0;
-	c->n = 0;
-	c->freed = 0;
-	c->e = elemsize;
-	c->s = elemcnt;
-	return 1;
-}
-
 Channel*
-chancreate(int elemsize, int elemcnt)
+chancreate(int elemsize, int bufsize)
 {
 	Channel *c;
 
-	if(elemcnt < 0 || elemsize <= 0)
-		return nil;
-	c = emalloc(sizeof(Channel)+elemsize*elemcnt);
-	c->e = elemsize;
-	c->s = elemcnt;
+	c = malloc(sizeof *c+bufsize*elemsize);
+	if(c == nil){
+		fprint(2, "chancreate malloc: %r");
+		exit(1);
+	}
+	memset(c, 0, sizeof *c);
+	c->elemsize = elemsize;
+	c->bufsize = bufsize;
+	c->nbuf = 0;
+	c->buf = (uchar*)(c+1);
 	return c;
 }
 
-int
-alt(Alt *alts)
+/* bug - work out races */
+void
+chanfree(Channel *c)
 {
-	Alt *a, *xa;
-	Channel *volatile c;
-	int n;
-	ulong r;
-	Task *t;
-
-	t = taskmach->t;
-	if(t->moribund)
-		yield();
-	t->alt = alts;
-	t->chan = Chanalt;
-
-	taskstate("alt %d", alts[0].op);
-	/* test whether any channels can proceed */
-	n = 0;
-	a = nil;
-
-	for(xa=alts; xa->op!=CHANEND && xa->op!=CHANNOBLK; xa++){
-		xa->entryno = -1;
-		if(xa->op == CHANNOP)
-			continue;
-		
-		c = xa->c;
-		if(c==nil){
-			t->chan = Channone;
-			taskstate("");
-			return -1;
-		}
-		if(canexec(xa))
-			if(rand()%++n == 0)
-				a = xa;
-	}
-
-	if(a==nil){
-		/* nothing can proceed */
-		if(xa->op == CHANNOBLK){
-			t->chan = Channone;
-			taskstate("");
-			return xa - alts;
-		}
-
-		/* enqueue on all channels. */
-		c = nil;
-		for(xa=alts; xa->op!=CHANEND; xa++){
-			if(xa->op==CHANNOP)
-				continue;
-			enqueue(xa, (Channel**)&c);
-		}
-
-		/*
-		 * wait for successful rendezvous.
-		 * we can't just give up if the rendezvous
-		 * is interrupted -- someone else might come
-		 * along and try to rendezvous with us, so
-		 * we need to be here.
-		 */
-	    Again:
-		r = taskrendezvous((ulong)&c, 0x98765);
-
-		if(r==~0){		/* interrupted */
-			if(c!=nil)		/* someone will meet us; go back */
-				goto Again;
-			c = (Channel*)~0;	/* so no one tries to meet us */
-		}
-
-		/* dequeue from channels, find selected one */
-		a = nil;
-		for(xa=alts; xa->op!=CHANEND; xa++){
-			if(xa->op==CHANNOP)
-				continue;
-			if(xa->c == c)
-				a = xa;
-			dequeue(xa);
-		}
-		if(a == nil){	/* we were interrupted */
-			assert(c==(Channel*)~0);
-			taskstate("");
-			return -1;
-		}
-	}else{
-		altexec(a);	/* unlocks chanlock, does splx */
-	}
-	t->chan = Channone;
-	taskstate("");
-	return a - alts;
+	if(c == nil)
+		return;
+	free(c->name);
+	free(c->arecv.a);
+	free(c->asend.a);
+	free(c);
 }
 
-static int
-runop(int op, Channel *c, void *v, int nb)
+static void
+addarray(Altarray *a, Alt *alt)
 {
-	int r;
-	Alt a[2];
+	if(a->n == a->m){
+		a->m += 16;
+		a->a = realloc(a->a, a->m*sizeof a->a[0]);
+	}
+	a->a[a->n++] = alt;
+}
 
-	/*
-	 * we could do this without calling alt,
-	 * but the only reason would be performance,
-	 * and i'm not convinced it matters.
-	 */
-	a[0].op = op;
-	a[0].c = c;
-	a[0].v = v;
-	a[1].op = CHANEND;
-	if(nb)
-		a[1].op = CHANNOBLK;
-	switch(r=alt(a)){
-	case -1:	/* interrupted */
-		return -1;
-	case 1:	/* nonblocking, didn't accomplish anything */
-		assert(nb);
-		return 0;
-	case 0:
-		return 1;
+static void
+delarray(Altarray *a, int i)
+{
+	--a->n;
+	a->a[i] = a->a[a->n];
+}
+
+/*
+ * doesn't really work for things other than CHANSND and CHANRCV
+ * but is only used as arg to chanarray, which can handle it
+ */
+#define otherop(op)	(CHANSND+CHANRCV-(op))
+
+static Altarray*
+chanarray(Channel *c, uint op)
+{
+	switch(op){
 	default:
-		fprint(2, "ERROR: channel alt returned %d\n", r);
-		abort();
-		return -1;
-	}
-}
-
-int
-recv(Channel *c, void *v)
-{
-	return runop(CHANRCV, c, v, 0);
-}
-
-int
-nbrecv(Channel *c, void *v)
-{
-	return runop(CHANRCV, c, v, 1);
-}
-
-int
-send(Channel *c, void *v)
-{
-	return runop(CHANSND, c, v, 0);
-}
-
-int
-nbsend(Channel *c, void *v)
-{
-	return runop(CHANSND, c, v, 1);
-}
-
-static void
-channelsize(Channel *c, int sz)
-{
-	if(c->e != sz){
-		fprint(2, "expected channel with elements of size %d, got size %d",
-			sz, c->e);
-		abort();
-	}
-}
-
-int
-sendul(Channel *c, ulong v)
-{
-	channelsize(c, sizeof(ulong));
-	return send(c, &v);
-}
-
-ulong
-recvul(Channel *c)
-{
-	ulong v;
-
-	channelsize(c, sizeof(ulong));
-	if(recv(c, &v) < 0)
-		return ~0;
-	return v;
-}
-
-int
-sendp(Channel *c, void *v)
-{
-	channelsize(c, sizeof(void*));
-	return send(c, &v);
-}
-
-void*
-recvp(Channel *c)
-{
-	void *v;
-
-	channelsize(c, sizeof(void*));
-	if(recv(c, &v) < 0)
 		return nil;
-	return v;
-}
-
-int
-nbsendul(Channel *c, ulong v)
-{
-	channelsize(c, sizeof(ulong));
-	return nbsend(c, &v);
-}
-
-ulong
-nbrecvul(Channel *c)
-{
-	ulong v;
-
-	channelsize(c, sizeof(ulong));
-	if(nbrecv(c, &v) == 0)
-		return 0;
-	return v;
-}
-
-int
-nbsendp(Channel *c, void *v)
-{
-	channelsize(c, sizeof(void*));
-	return nbsend(c, &v);
-}
-
-void*
-nbrecvp(Channel *c)
-{
-	void *v;
-
-	channelsize(c, sizeof(void*));
-	if(nbrecv(c, &v) == 0)
-		return nil;
-	return v;
+	case CHANSND:
+		return &c->asend;
+	case CHANRCV:
+		return &c->arecv;
+	}
 }
 
 static int
-emptyentry(Channel *c)
+altcanexec(Alt *a)
 {
-	int i, extra;
-
-	assert((c->nentry==0 && c->qentry==nil) || (c->nentry && c->qentry));
-
-	for(i=0; i<c->nentry; i++)
-		if(c->qentry[i]==nil)
-			return i;
-
-	extra = 16;
-	c->nentry += extra;
-	c->qentry = realloc((void*)c->qentry, c->nentry*sizeof(c->qentry[0]));
-	if(c->qentry == nil){
-		fprint(2, "realloc channel entries: %r");
-		abort();
-	}
-	memset(&c->qentry[i], 0, extra*sizeof(c->qentry[0]));
-	return i;
-}
-
-static void
-enqueue(Alt *a, Channel **c)
-{
-	int i;
-
-	a->tag = c;
-	i = emptyentry(a->c);
-	a->c->qentry[i] = a;
-}
-
-static void
-dequeue(Alt *a)
-{
-	int i;
+	Altarray *ar;
 	Channel *c;
 
+	if(a->op == CHANNOP)
+		return 0;
 	c = a->c;
-	for(i=0; i<c->nentry; i++)
-		if(c->qentry[i]==a){
-			c->qentry[i] = nil;
-			if(c->freed)
-				chanfree(c);
+	if(c->bufsize == 0){
+		ar = chanarray(c, otherop(a->op));
+		return ar && ar->n;
+	}else{
+		switch(a->op){
+		default:
+			return 0;
+		case CHANSND:
+			return c->nbuf < c->bufsize;
+		case CHANRCV:
+			return c->nbuf > 0;
+		}
+	}
+}
+
+static void
+altqueue(Alt *a)
+{
+	Altarray *ar;
+
+	ar = chanarray(a->c, a->op);
+	addarray(ar, a);
+}
+
+static void
+altdequeue(Alt *a)
+{
+	int i;
+	Altarray *ar;
+
+	ar = chanarray(a->c, a->op);
+	if(ar == nil){
+		fprint(2, "bad use of altdequeue op=%d\n", a->op);
+		abort();
+	}
+
+	for(i=0; i<ar->n; i++)
+		if(ar->a[i] == a){
+			delarray(ar, i);
 			return;
 		}
-}
-
-static void*
-altexecbuffered(Alt *a, int willreplace)
-{
-	uchar *v;
-	Channel *c;
-
-	c = a->c;
-	/* use buffered channel queue */
-	if(a->op==CHANRCV && c->n > 0){
-		v = c->v + c->e*(c->f%c->s);
-		if(!willreplace)
-			c->n--;
-		c->f++;
-		return v;
-	}
-	if(a->op==CHANSND && c->n < c->s){
-		v = c->v + c->e*((c->f+c->n)%c->s);
-		if(!willreplace)
-			c->n++;
-		return v;
-	}
+	fprint(2, "cannot find self in altdq\n");
 	abort();
-	return nil;
 }
 
 static void
-altcopy(void *dst, void *src, int sz)
+altalldequeue(Alt *a)
+{
+	int i;
+
+	for(i=0; a[i].op!=CHANEND && a[i].op!=CHANNOBLK; i++)
+		if(a[i].op != CHANNOP)
+			altdequeue(&a[i]);
+}
+
+static void
+amove(void *dst, void *src, uint n)
 {
 	if(dst){
-		if(src)
-			memmove(dst, src, sz);
+		if(src == nil)
+			memset(dst, 0, n);
 		else
-			memset(dst, 0, sz);
+			memmove(dst, src, n);
 	}
+}
+
+/*
+ * Actually move the data around.  There are up to three
+ * players: the sender, the receiver, and the channel itself.
+ * If the channel is unbuffered or the buffer is empty,
+ * data goes from sender to receiver.  If the channel is full,
+ * the receiver removes some from the channel and the sender
+ * gets to put some in.
+ */
+static void
+altcopy(Alt *s, Alt *r)
+{
+	Alt *t;
+	Channel *c;
+	uchar *cp;
+
+	/*
+	 * Work out who is sender and who is receiver
+	 */
+	if(s == nil && r == nil)
+		return;
+	assert(s != nil);
+	c = s->c;
+	if(s->op == CHANRCV){
+		t = s;
+		s = r;
+		r = t;
+	}
+	assert(s==nil || s->op == CHANSND);
+	assert(r==nil || r->op == CHANRCV);
+
+	/*
+	 * Channel is empty (or unbuffered) - copy directly.
+	 */
+	if(s && r && c->nbuf == 0){
+		amove(r->v, s->v, c->elemsize);
+		return;
+	}
+
+	/*
+	 * Otherwise it's always okay to receive and then send.
+	 */
+	if(r){
+		cp = c->buf + c->off*c->elemsize;
+		amove(r->v, cp, c->elemsize);
+		--c->nbuf;
+		if(++c->off == c->bufsize)
+			c->off = 0;
+	}
+	if(s){
+		cp = c->buf + (c->off+c->nbuf)%c->bufsize*c->elemsize;
+		amove(cp, s->v, c->elemsize);
+		++c->nbuf;
+	}
+}
+
+static void
+altexec(Alt *a)
+{
+	int i;
+	Altarray *ar;
+	Alt *other;
+	Channel *c;
+
+	c = a->c;
+	ar = chanarray(c, otherop(a->op));
+	if(ar && ar->n){
+		i = rand()%ar->n;
+		other = ar->a[i];
+		altcopy(a, other);
+		altalldequeue(other->xalt);
+		other->xalt[0].xalt = other;
+		taskready(other->task);
+	}else
+		altcopy(a, nil);
+}
+
+#define dbgalt 0
+int
+chanalt(Alt *a)
+{
+	int i, j, ncan, n, canblock;
+	Channel *c;
+	Task *t;
+
+	needstack(512);
+	for(i=0; a[i].op != CHANEND && a[i].op != CHANNOBLK; i++)
+		;
+	n = i;
+	canblock = a[i].op == CHANEND;
+
+	t = taskrunning;
+	for(i=0; i<n; i++){
+		a[i].task = t;
+		a[i].xalt = a;
+	}
+if(dbgalt) print("alt ");
+	ncan = 0;
+	for(i=0; i<n; i++){
+		c = a[i].c;
+if(dbgalt) print(" %c:", "esrnb"[a[i].op]);
+if(dbgalt) { if(c->name) print("%s", c->name); else print("%p", c); }
+		if(altcanexec(&a[i])){
+if(dbgalt) print("*");
+			ncan++;
+		}
+	}
+	if(ncan){
+		j = rand()%ncan;
+		for(i=0; i<n; i++){
+			if(altcanexec(&a[i])){
+				if(j-- == 0){
+if(dbgalt){
+c = a[i].c;
+print(" => %c:", "esrnb"[a[i].op]);
+if(c->name) print("%s", c->name); else print("%p", c);
+print("\n");
+}
+					altexec(&a[i]);
+					return i;
+				}
+			}
+		}
+	}
+if(dbgalt)print("\n");
+
+	if(!canblock)
+		return -1;
+
+	for(i=0; i<n; i++){
+		if(a[i].op != CHANNOP)
+			altqueue(&a[i]);
+	}
+
+	taskswitch();
+
+	/*
+	 * the guy who ran the op took care of dequeueing us
+	 * and then set a[0].alt to the one that was executed.
+	 */
+	return a[0].xalt - a;
 }
 
 static int
-altexec(Alt *a)
+_chanop(Channel *c, int op, void *p, int canblock)
 {
-	volatile Alt *b;
-	int i, n, otherop;
-	Channel *c;
-	void *me, *waiter, *buf;
+	Alt a[2];
 
-	c = a->c;
-
-	/* rendezvous with others */
-	otherop = (CHANSND+CHANRCV) - a->op;
-	n = 0;
-	b = nil;
-	me = a->v;
-	for(i=0; i<c->nentry; i++)
-		if(c->qentry[i] && c->qentry[i]->op==otherop && *c->qentry[i]->tag==nil)
-			if(rand()%++n == 0)
-				b = c->qentry[i];
-	if(b != nil){
-		waiter = b->v;
-		if(c->s && c->n){
-			/*
-			 * if buffer is full and there are waiters
-			 * and we're meeting a waiter,
-			 * we must be receiving.
-			 *
-			 * we use the value in the channel buffer,
-			 * copy the waiter's value into the channel buffer
-			 * on behalf of the waiter, and then wake the waiter.
-			 */
-			if(a->op!=CHANRCV)
-				abort();
-			buf = altexecbuffered(a, 1);
-			altcopy(me, buf, c->e);
-			altcopy(buf, waiter, c->e);
-		}else{
-			if(a->op==CHANRCV)
-				altcopy(me, waiter, c->e);
-			else
-				altcopy(waiter, me, c->e);
-		}
-		*b->tag = c;	/* commits us to rendezvous */
-		while(taskrendezvous((ulong)b->tag, 0x54321) == ~0)
-			;
-		return 1;
-	}
-
-	buf = altexecbuffered(a, 0);
-	if(a->op==CHANRCV)
-		altcopy(me, buf, c->e);
-	else
-		altcopy(buf, me, c->e);
-
+	a[0].c = c;
+	a[0].op = op;
+	a[0].v = p;
+	a[1].op = canblock ? CHANEND : CHANNOBLK;
+	if(chanalt(a) < 0)
+		return -1;
 	return 1;
 }
+
+int
+chansend(Channel *c, void *v)
+{
+	return _chanop(c, CHANSND, v, 1);
+}
+
+int
+channbsend(Channel *c, void *v)
+{
+	return _chanop(c, CHANSND, v, 0);
+}
+
+int
+chanrecv(Channel *c, void *v)
+{
+	return _chanop(c, CHANRCV, v, 1);
+}
+
+int
+channbrecv(Channel *c, void *v)
+{
+	return _chanop(c, CHANRCV, v, 0);
+}
+
+int
+chansendp(Channel *c, void *v)
+{
+	return _chanop(c, CHANSND, (void*)&v, 1);
+}
+
+void*
+chanrecvp(Channel *c)
+{
+	void *v;
+
+	_chanop(c, CHANRCV, (void*)&v, 1);
+	return v;
+}
+
+int
+channbsendp(Channel *c, void *v)
+{
+	return _chanop(c, CHANSND, (void*)&v, 0);
+}
+
+void*
+channbrecvp(Channel *c)
+{
+	void *v;
+
+	_chanop(c, CHANRCV, (void*)&v, 0);
+	return v;
+}
+
+int
+chansendul(Channel *c, ulong val)
+{
+	return _chanop(c, CHANSND, &val, 1);
+}
+
+ulong
+chanrecvul(Channel *c)
+{
+	ulong val;
+
+	_chanop(c, CHANRCV, &val, 1);
+	return val;
+}
+
+int
+channbsendul(Channel *c, ulong val)
+{
+	return _chanop(c, CHANSND, &val, 0);
+}
+
+ulong
+channbrecvul(Channel *c)
+{
+	ulong val;
+
+	_chanop(c, CHANRCV, &val, 0);
+	return val;
+}
+
