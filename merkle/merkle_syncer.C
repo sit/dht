@@ -177,12 +177,14 @@ merkle_syncer::sendblock (merkle_hash key, bool last)
   warn << (u_int)this << " sendblock >>>>>>> " << key << " last " << last << "\n";
 #endif
   num_sends_pending++;
-  (*sndblkfnc) (tobigint (key), last, wrap (this, &merkle_syncer::sendblock_cb));
+  (*sndblkfnc) (tobigint (key), last, wrap (this, &merkle_syncer::sendblock_cb, deleted));
 }
 
 void
-merkle_syncer::sendblock_cb ()
+merkle_syncer::sendblock_cb (ptr<bool> del)
 {
+  if (*del) return;
+
   idle = false;
 
 #ifdef MERKLE_SYNCE_TRACE
@@ -248,8 +250,8 @@ merkle_syncer::sync (bigint _rngmin, bigint _rngmax, mode_t m)
 
   // get remote hosts's root node
   getnode (0, 0);
-  idle = false; // setup the 
-  timeout ();   //   idle timer
+  idle = false;      // setup the 
+  timeout (deleted); //   idle timer
 }
 
 
@@ -519,14 +521,16 @@ merkle_syncer::error (str err)
 }
 
 void
-merkle_syncer::timeout ()
+merkle_syncer::timeout (ptr<bool> del)
 {
+  if (*del) return;
+
   tcb = NULL;
   if (idle)
     error (str ("No progress in last timer interval"));
   else {
     idle = true;
-    tcb = delaycb (IDLETIMEOUT, wrap (this, &merkle_syncer::timeout));
+    tcb = delaycb (IDLETIMEOUT, wrap (this, &merkle_syncer::timeout, del));
   }
 }
 

@@ -20,7 +20,7 @@ class merkle_syncer {
  private:
   void setdone ();
   void error (str err);
-  void timeout ();
+  void timeout (ptr<bool> del);
 
   enum { IDLETIMEOUT = 30 };
   bool idle;
@@ -61,7 +61,7 @@ class merkle_syncer {
   void send_some ();
   void next (void);
   void sendblock (merkle_hash key, bool last);
-  void sendblock_cb ();
+  void sendblock_cb (ptr<bool> del);
   void getblocklist (vec<merkle_hash> keys);
   void getblocklist_cb (ref<getblocklist_res> res, ptr<bool> del, 
 			clnt_stat err);
