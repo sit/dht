@@ -27,8 +27,8 @@ private:
   // the following fields can only be set by the Protocol layer
   Channel *_c;
   string _protocol;
-  void* (Protocol::*_fn)(void*);
-  void *_args;
+  void (Protocol::*_fn)(void*);  // method to invoke
+  void *_args;                   // arguments to pass
 
   // the following fields can only be set by the Network layer
   IPAddress _src;

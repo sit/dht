@@ -16,12 +16,12 @@ public:
   Chord(Node *n) : Protocol(n) {};
   ~Chord();
 
-  virtual void* join(void*) {};
-  virtual void* leave(void*) {};
-  virtual void* crash(void*) {};
-  virtual void* lookup(void*) {};
-  virtual void* insert_doc(void*) {};
-  virtual void* lookup_doc(void*) {};
+  virtual void join(void*) {};
+  virtual void leave(void*) {};
+  virtual void crash(void*) {};
+  virtual void lookup(void*) {};
+  virtual void insert_doc(void*) {};
+  virtual void lookup_doc(void*) {};
 
 protected:
   IDMap me;

@@ -25,8 +25,8 @@ Protocol::~Protocol()
 {
 }
 
-void*
-Protocol::doRPC(IPAddress dst, void* (Protocol::*fn)(void*))
+void
+Protocol::doRPC(IPAddress dst, void (Protocol::*fn)(void*))
 {
   Packet *p = new Packet();
   p->_dst = dst;
@@ -38,7 +38,7 @@ Protocol::doRPC(IPAddress dst, void* (Protocol::*fn)(void*))
   send(Network::Instance()->pktchan(), &p);
 
   // wait for reply. blocking.
-  return (void*) recvp(p->_c);
+  (void) recvp(p->_c);
 }
 
 
@@ -108,8 +108,8 @@ Protocol::Receive(void *p)
   Protocol *prot = (Protocol*) np->p;
   Packet *packet = (Packet*) np->packet;
 
-  // do upcall
-  void *ret = (prot->*packet->_fn)(packet->_args);
+  // do upcall using the function pointer in the packet. yuck.
+  (prot->*packet->_fn)(packet->_args);
 
   // send reply
   Packet *reply = new Packet();
@@ -118,7 +118,6 @@ Protocol::Receive(void *p)
   reply->_dst = origsrc;
   reply->_c = packet->_c;
   reply->_protocol = packet->_protocol;
-  reply->_reply = true;
   send(Network::Instance()->pktchan(), &reply);
 
   // this is somewhat scary

@@ -11,39 +11,38 @@ Kademlia::~Kademlia()
 {
 }
 
-void*
+void
 Kademlia::do_join(void*)
 {
   cout << "do_join!" << endl;
-  return 0;
 }
 
-void*
+void
 Kademlia::join(void*)
 {
   // send my id to next node in ring
   doRPC((IPAddress) ((id()+1) % 5), MEMBER_FUNC(Kademlia::do_join));
 }
 
-void*
+void
 Kademlia::leave(void*)
 {
   cout << "Kademlia leave" << endl;
 }
 
-void*
+void
 Kademlia::crash(void*)
 {
   cout << "Kademlia crash" << endl;
 }
 
-void*
+void
 Kademlia::insert_doc(void*)
 {
   cout << "Kademlia insert_doc" << endl;
 }
 
-void*
+void
 Kademlia::lookup_doc(void*)
 {
   cout << "Kademlia lookup_doc" << endl;

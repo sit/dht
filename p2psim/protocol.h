@@ -11,7 +11,7 @@ class P2PEvent;
 class Node;
 
 
-#define MEMBER_FUNC(X) (void*(Protocol::*)(void*))(&X)
+#define MEMBER_FUNC(X) (void(Protocol::*)(void*))(&X)
 
 class Protocol : public Threaded {
 public:
@@ -30,14 +30,14 @@ public:
   Channel *appchan() { return _appchan; }
   Channel *netchan() { return _netchan; }
 
-  virtual void* join(void*) = 0;
-  virtual void* leave(void*) = 0;
-  virtual void* crash(void*) = 0;
-  virtual void* insert_doc(void*) = 0;
-  virtual void* lookup_doc(void*) = 0;
+  virtual void join(void*) = 0;
+  virtual void leave(void*) = 0;
+  virtual void crash(void*) = 0;
+  virtual void insert_doc(void*) = 0;
+  virtual void lookup_doc(void*) = 0;
 
 protected:
-  void* doRPC(IPAddress, void* (Protocol::*)(void*));
+  void doRPC(IPAddress, void (Protocol::*)(void*));
 
   IPAddress id();
 
