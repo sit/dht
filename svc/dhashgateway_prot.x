@@ -3,8 +3,8 @@
 
 %#if 0
 %# Imports for Python
-%import chord_types
-%import dhash_types
+%from chord_types import *
+%from dhash_types import *
 %#endif /* 0 */
 
 /*  -------------------------------------------------------------------------- 

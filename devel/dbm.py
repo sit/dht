@@ -4,6 +4,7 @@ import RPC
 import socket
 import sys
 from traceback import print_exc
+from bigint import bigint
 import chord_types, dhash_types
 import dhashgateway_prot
 import time
@@ -48,10 +49,10 @@ class fetcher(actor):
         arg = dhashgateway_prot.dhash_retrieve_arg ()
         blk = make_block (data_size)
         sobj = sha.sha(blk)
-        arg.blockID = chord_types.bigint(sobj.digest())
+        arg.blockID = bigint(sobj.digest())
         arg.ctype   = dhash_types.DHASH_CONTENTHASH
         arg.options = 0
-        arg.guess   = chord_types.bigint(0)
+        arg.guess   = bigint(0)
         
         start = time.time()
         try:
@@ -96,12 +97,12 @@ class storer (actor):
         
         arg.block   = make_block (data_size)
         sobj = sha.sha(arg.block)
-        arg.blockID = chord_types.bigint(sobj.digest())
+        arg.blockID = bigint(sobj.digest())
         print "Inserting", arg.blockID
         arg.ctype   = dhash_types.DHASH_CONTENTHASH
         arg.len     = data_size
         arg.options = 0
-        arg.guess   = chord_types.bigint(0)
+        arg.guess   = bigint(0)
         
         start = time.time()
         try:
