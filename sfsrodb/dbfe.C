@@ -156,12 +156,8 @@ dbEnumeration::getElement(u_int32_t flags, ptr<dbrec> startkey)
   // nextElement doesn't return any data, just keys.
   // use the lookup routine if you want the data. 
   // Perhaps, change nextElement to only return a ptr<dbrec>!
-  unsigned char keydata[128];
   DBT key;
   bzero(&key, sizeof(key));
-  key.data = keydata;
-  key.ulen = sizeof(keydata);
-  key.flags = DB_DBT_USERMEM;
   if (startkey) {
     key.size = startkey->len;
     key.data = startkey->value;
