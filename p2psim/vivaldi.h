@@ -47,8 +47,6 @@ class Vivaldi {
 
   Vivaldi(IPAddress me);
   virtual ~Vivaldi();
-
-  void run() { };
 };
 
 // Make an RPC call, but time it and tell Vivaldi.

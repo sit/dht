@@ -5,9 +5,9 @@
 
 topology Euclidean
 
-1 0,0 Kademlia Chord
-2 5,5 Kademlia Chord
-3 8,8 Kademlia Chord
-4 12,6 Kademlia Chord
-5 13,8 Kademlia
-6 0,0 Pastry
+1 0,0 VivaldiNode Kademlia Chord
+2 5,5 VivaldiNode Kademlia Chord
+3 8,8 VivaldiNode Kademlia Chord
+4 12,6 VivaldiNode Kademlia Chord
+5 13,8 VivaldiNode Kademlia
+6 0,0 VivaldiNode Pastry

@@ -1,6 +1,7 @@
 #include "topology.h"
 #include "protocol.h"
 #include "protocolfactory.h"
+#include "nodefactory.h"
 #include "euclidean.h"
 #include "network.h"
 #include "parse.h"
@@ -44,7 +45,6 @@ Euclidean::parse(ifstream &ifs)
     IPAddress ipaddr = atoi(words[0].c_str());
     if(!ipaddr)
       cerr << "found node-id 0.  you're asking for trouble." << endl;
-    Node *n = new Node(ipaddr);
 
     // x,y coordinates
     vector<string> coords = split(words[1], ",");
@@ -52,8 +52,12 @@ Euclidean::parse(ifstream &ifs)
     c.first = atoi(coords[0].c_str());
     c.second = atoi(coords[1].c_str());
 
+    // what kind of node?
+    Node *n = NodeFactory::Instance()->create(words[2], ipaddr);
+
+
     // all the rest are protocols on this node
-    for(unsigned int i=2; i<words.size(); i++) {
+    for(unsigned int i=3; i<words.size(); i++) {
       // run the specified protocol on the node
       Protocol *p = ProtocolFactory::Instance()->create(words[i], n);
       send(n->protchan(), &(words[i]));

@@ -6,6 +6,7 @@ p2psim_SOURCES = main.C node.C network.C chord.C packet.C topology.C \
                  eventfactory.C simevent.C pastry.C chordfinger.C \
                  koorde.C anyready.C vivaldi.C observeevent.C \
                  observerfactory.C chordobserver.C observer.C \
-                 threadmanager.C vivalditest.C
+                 threadmanager.C vivalditest.C nodefactory.C \
+                 vivaldinode.C
 p2psim_LDADD = -L/usr/local/lib -lthread -l9 -lfmt -lutf -lgmp -lcrypto
 INCLUDES = -I/usr/local/include
