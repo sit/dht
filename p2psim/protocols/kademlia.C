@@ -118,7 +118,7 @@ Kademlia::Kademlia(IPAddress i, Args a)
   }
 
   if(!erase_count) {
-    erase_count = a.nget<unsigned>("erase_count", 1, 10);
+    erase_count = a.nget<unsigned>("erase_count", 5, 10);
   }
 
   if(!_default_timeout) {
@@ -654,26 +654,26 @@ Kademlia::do_ping(ping_args *args, ping_result *result)
 }
 
 #define CREATE_REAPER(STAT) {                                                           \
-      if(!outstanding_rpcs->size() && !deathmap->size()) {                              \
+      if(!outstanding_rpcs->size() && !is_dead->size() ) {                              \
         delete rpcset;                                                                  \
         delete outstanding_rpcs;                                                        \
-        delete deathrpcset;                                                             \
-        delete deathmap;                                                                \
+        if(Kademlia::death_notification) {                                              \
+          for( HashMap<NodeID, vector<IPAddress> *>::iterator i=who_told_me->begin(); i != who_told_me->end(); ++i ) {                                                 \
+            vector<IPAddress> *v = i.value();                                           \
+            if( v != NULL ) delete v;                                                   \
+          }                                                                             \
+        }                                                                               \
+        delete who_told_me;                                                             \
+        delete is_dead;                                                                 \
         return;                                                                         \
       }                                                                                 \
       reap_info *ri = New reap_info();                                                  \
       ri->k = this;                                                                     \
       ri->rpcset = rpcset;                                                              \
       ri->outstanding_rpcs = outstanding_rpcs;                                          \
-      ri->deathrpcset = deathrpcset;                                                    \
-      ri->deathmap = deathmap;                                                          \
+      ri->who_told_me = who_told_me;                                                    \
+      ri->is_dead = is_dead;                                                            \
       ri->stat = STAT;                                                                  \
-      if(Kademlia::death_notification) {                                                \
-        for( HashMap<NodeID, vector<IPAddress> *>::iterator i=who_told_me.begin(); i != who_told_me.end(); ++i ) {                                                     \
-          vector<IPAddress> *v = i.value();                                             \
-          if( v != NULL ) delete v;                                                     \
-        }                                                                               \
-      }                                                                                 \
       ThreadManager::Instance()->create(Kademlia::reap, (void*) ri);                    \
       return;                                                                           \
 }
@@ -729,11 +729,9 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
   }
 
   // data structures for death notifications:
-  HashMap<unsigned, erase_args*> *deathmap = 
-    New HashMap<unsigned, erase_args*>;
-  RPCSet *deathrpcset = New RPCSet;
-  HashMap<NodeID, vector<IPAddress> * > who_told_me;
-  HashMap<NodeID, bool> is_dead;
+  HashMap<NodeID, vector<IPAddress> * > *who_told_me = 
+    New HashMap<NodeID, vector<IPAddress> * >;
+  HashMap<NodeID, bool> *is_dead = New HashMap<NodeID, bool>;
 
   // now send out a new RPC for every single RPC that comes back
   unsigned useless_replies = 0;
@@ -762,18 +760,7 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
         erase(ci->ki.id);
       if(Kademlia::death_notification) {
 	// inform whoever sent me this person that they are dead.
-	is_dead.insert( ci->ki.id, true );
-	if( who_told_me[ci->ki.id] != NULL ) {
-	  for( unsigned i = 0; i < who_told_me[ci->ki.id]->size(); i++ ) {
-	    erase_args *ea = New erase_args(ci->ki.id);
-	    IPAddress informant = (*(who_told_me[ci->ki.id]))[i];
-	    record_stat(STAT_ERASE, 1, 0);
-	    unsigned rpc = asyncRPC(informant, &Kademlia::do_erase, ea, 
-				    (erase_result *) NULL, timeout(informant));
-	    deathrpcset->insert(rpc);
-	    deathmap->insert(rpc, ea);
-	  }
-	}
+	is_dead->insert( ci->ki.id, true );
       }
       timeouts.insert(last_returned_alpha, timeouts[last_returned_alpha]+1);
       delete ci;
@@ -797,21 +784,10 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
     for(unsigned i=0; i<ci->fr->results.size(); i++) {
       k_nodeinfo ki = ci->fr->results[i];
       if( Kademlia::death_notification ) {
-	if( is_dead[ki.id] ) {
-	  // we already know this node is dead, so inform the informant
-	  erase_args *ea = New erase_args(ki.id);
-	  IPAddress informant = ci->ki.ip;
-	  record_stat(STAT_ERASE, 1, 0);
-	  unsigned rpc = asyncRPC(informant, &Kademlia::do_erase, ea, 
-				  (erase_result *) NULL, timeout(informant));
-	  deathrpcset->insert(rpc);
-	  deathmap->insert(rpc, ea);
-	} else {
-	  if( who_told_me[ki.id] == NULL ) {
-	    who_told_me.insert( ki.id, New vector<IPAddress> );
-	  }
-	  (who_told_me[ki.id])->push_back( ci->ki.ip );
+	if( (*who_told_me)[ki.id] == NULL ) {
+	  who_told_me->insert( ki.id, New vector<IPAddress> );
 	}
+	((*who_told_me)[ki.id])->push_back( ci->ki.ip );
       }
       if(asked.find_pair(ki.id))
         continue;
@@ -925,11 +901,9 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
   // }
 
   // data structures for death notifications:
-  HashMap<unsigned, erase_args*> *deathmap = 
-    New HashMap<unsigned, erase_args*>;
-  RPCSet *deathrpcset = New RPCSet;
-  HashMap<NodeID, vector<IPAddress> * > who_told_me;
-  HashMap<NodeID, bool> is_dead;
+  HashMap<NodeID, vector<IPAddress> * > *who_told_me = 
+    New HashMap<NodeID, vector<IPAddress> * >;
+  HashMap<NodeID, bool> *is_dead = New HashMap<NodeID, bool>;
 
   // send an RPC back for each incoming reply.
   HashMap<NodeID, bool> replied;
@@ -956,18 +930,7 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
         erase(ci->ki.id);
       if(Kademlia::death_notification) {
 	// inform whoever sent me this person that they are dead.
-	is_dead.insert( ci->ki.id, true );
-	if( who_told_me[ci->ki.id] != NULL ) {
-	  for( unsigned i = 0; i < who_told_me[ci->ki.id]->size(); i++ ) {
-	    erase_args *ea = New erase_args(ci->ki.id);
-	    IPAddress informant = (*(who_told_me[ci->ki.id]))[i];
-	    record_stat(STAT_ERASE, 1, 0);
-	    unsigned rpc = asyncRPC(informant, &Kademlia::do_erase, ea, 
-				    (erase_result *) NULL, timeout(informant));
-	    deathrpcset->insert(rpc);
-	    deathmap->insert(rpc, ea);
-	  }
-	}
+	is_dead->insert( ci->ki.id, true );
       }
       delete ci;
 
@@ -1020,21 +983,10 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
     for(unsigned i=0; i<ci->fr->results.size(); i++) {
       k_nodeinfo ki = ci->fr->results[i];
       if( Kademlia::death_notification ) {
-	if( is_dead[ki.id] ) {
-	  // we already know this node is dead, so inform the informant
-	  erase_args *ea = New erase_args(ki.id);
-	  IPAddress informant = ci->ki.ip;
-	  record_stat(STAT_ERASE, 1, 0);
-	  unsigned rpc = asyncRPC(informant, &Kademlia::do_erase, ea, 
-				  (erase_result *) NULL, timeout(informant));
-	  deathrpcset->insert(rpc);
-	  deathmap->insert(rpc, ea);
-	} else {
-	  if( who_told_me[ki.id] == NULL ) {
-	    who_told_me.insert( ki.id, New vector<IPAddress> );
-	  }
-	  (who_told_me[ki.id])->push_back( ci->ki.ip );
+	if( (*who_told_me)[ki.id] == NULL ) {
+	  who_told_me->insert( ki.id, New vector<IPAddress> );
 	}
+	((*who_told_me)[ki.id])->push_back( ci->ki.ip );
       }
       if(distance(ki.id, largs->key) >= distance(worst, largs->key) ||
          lresult->results.find(ki) != lresult->results.end())
@@ -1271,8 +1223,11 @@ Kademlia::erase(NodeID id)
 void
 Kademlia::do_erase(erase_args *a, erase_result *r)
 {
-  if( flyweight.find(a->id, 0) ) {
-    erase(a->id);
+  for( unsigned i = 0; i < a->ids->size(); i++ ) {
+    NodeID n = (*(a->ids))[i];
+    if( flyweight.find(n, 0) ) {
+      erase(n);
+    }
   }
 }
 // }}}
@@ -1383,21 +1338,82 @@ Kademlia::reap(void *r)
         ri->k->erase(ci->ki.id);
     }
 
+    // Note that we're purposely not marking not-ok nodes as dead, because
+    // in real life we probably wouldn't have waited for these RPCs to come
+    // back.  Also, doing so seems to bring down the success rate slightly,
+    // for reasons unclear.
+
     ri->outstanding_rpcs->remove(donerpc);
     delete ci;
   }
 
-  // clean up any death notification state as well
-  while(ri->deathmap->size()) {
-    bool ok;
-    unsigned donerpc = ri->k->rcvRPC(ri->deathrpcset, ok);
-    erase_args *ea = ri->deathmap->find(donerpc);
-    // NOTE: there's a conscious decision here to not record_stat 
-    // the response.  The reason being that I don't care what the 
-    // response is, and in real life I wouldn't wait for it.  I only
-    // have to do so here to free the memory.
-    delete ea;
-    ri->deathmap->remove(donerpc);
+  // make vectors of dead-nodes sorted by the neighbor that told you.
+  HashMap<IPAddress, vector<NodeID> *> bad_info;
+  if( Kademlia::death_notification ) {
+
+    HashMap<unsigned, erase_args*> deathmap;
+    RPCSet deathrpcset;
+
+    for( HashMap<NodeID, bool>::iterator i=ri->is_dead->begin(); 
+	 i != ri->is_dead->end(); ++i ) {
+      NodeID dead_node = i.key();
+      vector<IPAddress> *v = (*(ri->who_told_me))[dead_node];
+      if( v != NULL ) {
+	for( unsigned j = 0; j < v->size(); j++ ) {
+	  if( bad_info[(*v)[j]] == NULL ) {
+	    bad_info.insert( (*v)[j], New vector<NodeID> );
+	  }
+	  (bad_info[(*v)[j]])->push_back( dead_node );	
+	}
+      }
+    }
+    
+    // cleanup who_told_me state
+    for( HashMap<NodeID, vector<IPAddress> *>::iterator i=
+	   ri->who_told_me->begin(); 
+	 i != ri->who_told_me->end(); ++i ) {
+      
+      vector<IPAddress> *v = i.value();
+      if( v != NULL ) delete v;
+      
+    }
+    
+    // notify neighbors about all the deaths
+    for( HashMap<IPAddress,vector<NodeID> *>::iterator i=bad_info.begin(); 
+	 i != bad_info.end(); ++i ) {
+      
+      IPAddress informant = i.key();
+      vector<NodeID> *v = i.value();
+      
+      erase_args *ea = New erase_args(v);
+      ri->k->record_stat(STAT_ERASE, v->size(), 0);
+      for( unsigned j = 0; j < v->size(); j++ ) {
+	cout << printID((*v)[j]) << ", ";
+      }
+      cout << endl;
+      
+      unsigned rpc = ri->k->asyncRPC(informant, &Kademlia::do_erase, ea, 
+				     (erase_result *) NULL, 
+				     ri->k->timeout(informant));
+      deathrpcset.insert(rpc);
+      deathmap.insert(rpc, ea);
+
+    }
+
+    // clean up any death notification state as well
+    while(deathmap.size()) {
+      bool ok;
+      unsigned donerpc = ri->k->rcvRPC(&deathrpcset, ok);
+      erase_args *ea = deathmap.find(donerpc);
+      // NOTE: there's a conscious decision here to not record_stat 
+      // the response.  The reason being that I don't care what the 
+      // response is, and in real life I wouldn't wait for it.  I only
+      // have to do so here to free the memory.
+      delete ea->ids;
+      delete ea;
+      deathmap.remove(donerpc);
+    }
+    
   }
 
   // ri->k->_riset.remove(ri);

@@ -308,8 +308,8 @@ public:
   // }}}
   // {{{ erase_args and erase_result
   struct erase_args {
-    erase_args(NodeID id) : id(id) {}
-    NodeID id;
+    erase_args(vector<NodeID> * ids) : ids(ids) {}
+    vector<NodeID> *ids;
   };
 
   struct erase_result {
@@ -442,15 +442,15 @@ private:
     ~reap_info() { 
       delete rpcset; 
       delete outstanding_rpcs; 
-      delete deathrpcset; 
-      delete deathmap; 
+      delete who_told_me;
+      delete is_dead;
     }
 
     Kademlia *k;
     RPCSet *rpcset;
     HashMap<unsigned, callinfo*>* outstanding_rpcs;
-    RPCSet *deathrpcset;
-    HashMap<unsigned, erase_args*>* deathmap;
+    HashMap<NodeID, vector<IPAddress> * > *who_told_me;
+    HashMap<NodeID, bool> *is_dead;
     stat_type stat;
   };
 
