@@ -288,7 +288,8 @@ dbfe::dbfe() {
 }
 
 dbfe::~dbfe() {
-  dbmap.remove (this);
+  if (compare)
+    dbmap.remove (this);
   closedb ();
 }
 
