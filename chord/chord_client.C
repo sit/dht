@@ -379,6 +379,13 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
 	vnodep->dodebruin (sbp, da);
       }
       break;
+    case CHORDPROC_FINDROUTE:
+      {
+	warnt("CHORD: findroute");
+	chord_findarg *fa = sbp->template getarg<chord_findarg> ();
+	vnodep->dofindroute (sbp, fa);
+      }
+      break;
     default:
       sbp->reject (PROC_UNAVAIL);
       break;

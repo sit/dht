@@ -499,6 +499,29 @@ vnode::dodebruin (svccb *sbp, chord_debruinarg *da)
 }
 
 void
+vnode::dofindroute (svccb *sbp, chord_findarg *fa)
+{
+  find_route (fa->x, wrap (this, &vnode::dofindroute_cb, sbp));
+}
+
+void
+vnode::dofindroute_cb (svccb *sbp, chordID s, route r, chordstat err)
+{
+  if (err) {
+    chord_nodelistres res (CHORD_RPCFAILURE);
+    sbp->reply (&res);
+  } else {
+    chord_nodelistres res (CHORD_OK);
+    res.resok->nlist.setsize (r.size ());
+    for (unsigned int i = 0; i < r.size (); i++) {
+      res.resok->nlist[i].x = r[i];
+      res.resok->nlist[i].r = locations->getaddress (r[i]);
+    }
+    sbp->reply (&res);
+  }
+}
+
+void
 vnode::stop (void)
 {
   stabilizer->stop ();

@@ -127,6 +127,8 @@ class vnode : public virtual refcount, public stabilizable {
 			clnt_stat err);
 
   void find_route (chordID &x, cbroute_t cb);
+  void dofindroute_cb (svccb *sbp, chordID s, route r, chordstat err);
+  
 #ifdef FINGERS
   void testrange_findclosestpred (chordID node, chordID x, 
 				  findpredecessor_cbstate *st);
@@ -207,6 +209,7 @@ class vnode : public virtual refcount, public stabilizable {
   void dochallenge (svccb *sbp, chord_challengearg *ca);
   void dogettoes (svccb *sbp);
   void dodebruin (svccb *sbp, chord_debruinarg *da);
+  void dofindroute (svccb *sbp, chord_findarg *fa);
 
   //RPC demux
   void addHandler (const rpc_program &prog, cbdispatch_t cb);

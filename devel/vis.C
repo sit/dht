@@ -104,7 +104,7 @@ static GdkColor search_color;
 void setup ();
 ptr<aclnt> get_aclnt (str host, unsigned short port);
 
-void add_node (str host, unsigned short port);
+f_node *add_node (str host, unsigned short port);
 void get_cb (chordID next);
 
 void update_fingers (f_node *n);
@@ -145,6 +145,7 @@ void select_none_cb (GtkWidget *widget, gpointer data);
 void draw_nothing_cb (GtkWidget *widget, gpointer data);
 
 void lookup_cb (GtkWidget *widget, gpointer data);
+void lookup_complete_cb (chordID n, chord_nodelistres *res, clnt_stat err);
 void quit_cb (GtkWidget *widget, gpointer data);
 void redraw_cb (GtkWidget *widget, gpointer data);
 void update_cb (GtkWidget *widget, gpointer data);
@@ -201,7 +202,7 @@ get_aclnt (str host, unsigned short port)
   return c;
 }
 
-void
+f_node *
 add_node (chordID ID, str host, unsigned short port)
 {
   f_node *nu = nodes[ID];
@@ -211,14 +212,16 @@ add_node (chordID ID, str host, unsigned short port)
     nodes.insert (nu);
   }
   get_queue.push_back (ID);
+  return nu;
 }
 
 
-void
+f_node *
 add_node (str host, unsigned short port)
 {
   chordID n = make_chordID (host, port);
-  add_node (n, host, port);
+  f_node *nu = add_node (n, host, port);
+  return nu;
 }
 
 void
@@ -706,7 +709,17 @@ lookup_cb (GtkWidget *widget, gpointer data)
 
   search_path.setsize (0);
   search_step = 0;
+  search_path.push_back (current_node);
 
+  chord_findarg fa;
+  fa.v = current_node->ID;
+  fa.x = search_key;
+  chord_nodelistres *res = New chord_nodelistres ();
+  doRPC (current_node, CHORDPROC_FINDROUTE, &fa, res,
+	 wrap (&lookup_complete_cb, current_node->ID, res));
+  // XXX display a dialog box for progress...
+
+#if 0	 
   // XXX one day this should make some sort of RPC into a chord node
   //     and call its find_route method.
   f_node *old_node = NULL;
@@ -718,11 +731,36 @@ lookup_cb (GtkWidget *widget, gpointer data)
   }
   current_node = nodes[current_node->successors->resok->nlist[1].x];
   search_path.push_back (current_node);
-
+  
   warnx << "Found a path of length " << search_path.size () << "\n";
   for (size_t i = 0; i < search_path.size (); i++)
     warnx << "  " << search_path[i]->ID << "\n";
+#endif /* 0 */
   draw_ring ();
+}
+
+void
+lookup_complete_cb (chordID n, chord_nodelistres *res, clnt_stat err)
+{
+  if (err || res->status != CHORD_OK) {
+    warnx << "WARNING! lookup to " << n << " of "
+	  << search_key << " failed!\n";
+    delete res;
+    return;
+  }
+
+  for (size_t i = 0; i < res->resok->nlist.size (); i++) {
+    f_node *f = nodes[res->resok->nlist[i].x];
+    if (!f) {
+      warnx << "WARNING! lookup includes a node we didn't know about!\n";
+      f = add_node (res->resok->nlist[i].x, res->resok->nlist[i].r.hostname,
+		    res->resok->nlist[i].r.port);
+    }
+    search_path.push_back (f);
+  }
+  warnx << "Found a path of length " << search_path.size () << "\n";
+  for (size_t i = 0; i < search_path.size (); i++)
+    warnx << "  " << search_path[i]->ID << "\n";
 }
 
 void

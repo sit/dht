@@ -189,5 +189,8 @@ program CHORD_PROGRAM {
 
 		chord_debruinres
 		CHORDPROC_DEBRUIN (chord_debruinarg) = 14;
+
+		chord_nodelistres
+		CHORDPROC_FINDROUTE (chord_findarg) = 15;
 	} = 1;
 } = 344447;
