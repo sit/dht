@@ -2,7 +2,6 @@
 #include <location.h>
 #include <locationtable.h>
 #include <comm.h>
-#include "transport_prot.h"
 
 // ---------------------------------------------------------------------------
 // merkle_server
