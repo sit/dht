@@ -50,6 +50,9 @@ foreach my $log (@logs) {
 		    }
 		}
 	    }
+	} elsif( /mystat (\d+)/ ) {
+	    push @stats_found, "MY:stat";
+	    push @log_stats, $1;
 	} elsif( /\<-----STATS-----\>/ ) {
 	    $instats = 1;
 	} elsif( $instats and /\<-----ENDSTATS-----\>/ ) {
