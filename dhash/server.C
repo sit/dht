@@ -802,12 +802,12 @@ dhash_impl::store (s_dhash_insertarg *arg, bool exists, cbstore cb)
 	break;
       }
     case DHASH_APPEND:
-      append (k, d, arg, cb);
       if (arg->type == DHASH_CACHE)
         pst_cache.remove (ss);
       else
 	pst.remove (ss);
       delete ss;
+      append (k, d, arg, cb);
       return;
     case DHASH_CONTENTHASH:
       if (arg->type == DHASH_CACHE) {
@@ -855,13 +855,13 @@ dhash_impl::store (s_dhash_insertarg *arg, bool exists, cbstore cb)
       bytes_stored += ss->size;
     }
 
-    cb (stat);
-
     if (arg->type == DHASH_CACHE)
       pst_cache.remove (ss);
-    else 
+    else
       pst.remove (ss);
     delete ss;
+
+    cb (stat);
   }
   else
     cb (DHASH_STORE_PARTIAL);
