@@ -202,9 +202,9 @@ Chord::check_correctness(CHID k, vector<IDMap> v)
 
   while (1) {
     if (pos >= idsz) pos = 0;
-    Node *node = Network::Instance()->getnode(ids[pos].ip);
-    assert(!static_sim || ((Chord *)getpeer(ids[pos].ip))->inited());
-    if ((node->alive() && ((Chord *)getpeer(ids[pos].ip))->inited()))
+    Chord *node = (Chord *)Network::Instance()->getnode(ids[pos].ip);
+    if (Network::Instance()->alive(ids[pos].ip)
+	&& node->inited())
       break;
     pos++;
   }
@@ -2096,6 +2096,7 @@ LocTable::LocTable()
 
 void LocTable::init(Chord::IDMap m)
 {
+  ring.repok();
   me = m;
   pin(me.id, 1, 0);
   idmapwrap *elm = New idmapwrap(me, now());

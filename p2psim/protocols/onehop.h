@@ -114,6 +114,7 @@ public:
   static bw lookup_bandwidth;
   static unsigned start;
   static Time old_time;
+  static int _publish_time;
   
   typedef Chord::IDMap IDMap;
   typedef ConsistentHash::CHID CHID;
@@ -185,6 +186,7 @@ public:
   OneHop(IPAddress i, Args& a);
   ~OneHop();
   string proto_name() { return "OneHop";}
+  Chord::IDMap idmap() { return me;}
   void record_stat(uint type, uint num_ids = 0, uint num_else = 0);
 
   // Functions callable from events file.
@@ -195,9 +197,10 @@ public:
   virtual void insert(Args*) {};
   virtual void nodeevent (Args *) {};
 
+  bool check_correctness(CHID k, IDMap n);
   void join_leader (IDMap la, IDMap sender, Args *args);
   void join_handler (join_leader_args *args, join_leader_ret *ret);
-  void init_state ();
+  void initstate ();
   //stabilize is called when a log message is received or after
   //period_keepalive which comes first
   void stabilize (void *x);
@@ -224,7 +227,7 @@ public:
     bool xRPC(IPAddress dst, bw data, void (OneHop::* fn)(AT *, RT *),
               AT *args, RT *ret ){
       
-    bool ok = doRPC(dst, fn, args, ret);
+    bool ok = doRPC(dst, fn, args, ret, TIMEOUT(me.ip,dst));
     if (!alive()) return ok;
     if (is_slice_leader(me.id, me.id)) {
       leader_bandwidth += 20 + data;

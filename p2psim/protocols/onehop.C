@@ -22,12 +22,21 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+/* jy: (main additions)
+ * for every xRPC and doRPC, record_stat were added to record statistics
+ * doRPC and xRPC has a TIMEOUT value
+ * for every lookup, check its correctness against global state
+ * to fix(?) currently failure_detection is done with the failure of one packet
+ */
 #include "onehop.h"
 #include "chord.h"
 #include "consistenthash.h"
-#include "observers/chordobserver.h"
+#include "observers/onehopobserver.h"
 #include <iostream>
-//#include "observers/onehopobserver.h"
+
+#define TESTPRINT(me,he,tag) if (me.ip==1159 && he.ip==2047) printf("WUWU now %llu tag %s\n", now(),tag);
+
+#define MAX_IDS_MSG 295
 
 //XXX:Strange bug - delaycb gives join a 0ed argument
 
@@ -61,6 +70,7 @@ bw OneHop::old_lookup_bandwidth = 0;
 bw OneHop::old_leader_bandwidth = 0;
 unsigned OneHop::start = 0;
 Time OneHop::old_time = 0;
+int OneHop::_publish_time = -1; //jy: control how frequently one publishes statistics
 
 OneHop::OneHop(IPAddress i , Args& a) : P2Protocol(i)
 {
@@ -96,16 +106,45 @@ OneHop::OneHop(IPAddress i , Args& a) : P2Protocol(i)
 void
 OneHop::record_stat(uint type, uint num_ids, uint num_else)
 {
+  assert(type <= 4);
+  if (num_ids > 300) 
+    printf("now %llu warning: %u sending too much %u\n", now(), me.ip, num_ids);
   //assert(num_ids < 300);
   if (Node::collect_stat()) {
     Node::record_bw_stat(type,num_ids,num_else);
   }
 }
 
+//jy: check correctness of lookups
+bool
+OneHop::check_correctness(CHID k, IDMap n)
+{
+  vector<IDMap> ids = OneHopObserver::Instance(NULL)->get_sorted_nodes();
+  IDMap tmp;
+  tmp.id = k;
+  uint idsz = ids.size();
+  uint pos = upper_bound(ids.begin(), ids.end(), tmp, Chord::IDMap::cmp) - ids.begin();
+  while (1) {
+    if (pos >= idsz) pos = 0;
+    if (Network::Instance()->alive(ids[pos].ip))
+      break;
+    pos++;
+  }
+
+  if (ids[pos].ip == n.ip) 
+    return true;
+  else
+    return false;
+}
+
 void
 OneHop::lookup(Args *args) {
   if (!alive()) return;
-  if (!_join_complete) return;
+  if (!_join_complete) {
+    //jy: this is a failure
+    record_lookup_stat(me.ip, me.ip, 0, false, false, 1, 0, 0);
+    return;
+  }
 
   Time before0 = now(); //jy: record the start of lookup
 
@@ -126,6 +165,7 @@ OneHop::lookup(Args *args) {
   record_stat(TYPE_USER_LOOKUP,2);
   bool ok = doRPC(succ_node.ip, &OneHop::lookup_handler, a, &r, TIMEOUT(me.ip,succ_node.ip)); //jy: add timeout
   Time before1 = now(); //jy: record the end of first lookup hop
+  if (!alive()) goto LOOKUP_DONE;
 
   if (ok) record_stat(TYPE_USER_LOOKUP,1);
 
@@ -144,7 +184,8 @@ OneHop::lookup(Args *args) {
 
     record_stat(TYPE_USER_LOOKUP,2);
     bool ok = doRPC(succ_node.ip, &OneHop::lookup_handler, a, &r, TIMEOUT(me.ip,succ_node.ip));//jy: add timeout
-    if (ok) record_stat(TYPE_USER_LOOKUP,0);
+    if (ok) record_stat(TYPE_USER_LOOKUP,1);
+    if (!alive()) goto LOOKUP_DONE;
     
     lookup_bandwidth += 24;
     if (!ok) {
@@ -156,7 +197,10 @@ OneHop::lookup(Args *args) {
       delete e;
     }
     else if (r.is_owner) {
-      record_lookup_stat(me.ip, succ_node.ip, now()-before0, true, true, 2, 1, now()-before1); //jy: record lookup stat
+      if (check_correctness(k,succ_node))
+	record_lookup_stat(me.ip, succ_node.ip, now()-before0, true, true, 2, 1, now()-before1); //jy: record lookup stat
+      else
+	record_lookup_stat(me.ip, succ_node.ip, now()-before0, false, false, 2, 1, now()-before1); //jy: record lookup stat
       two_failed--;
     }
   }
@@ -171,7 +215,8 @@ OneHop::lookup(Args *args) {
 
       record_stat(TYPE_USER_LOOKUP, 2);
       bool ok = doRPC(corr_owner.ip, &OneHop::lookup_handler, a, &r, TIMEOUT(me.ip, corr_owner.ip));
-      if (ok) record_stat(TYPE_USER_LOOKUP, 0);
+      if (ok) record_stat(TYPE_USER_LOOKUP, 1);
+      if (!alive()) goto LOOKUP_DONE;
 
       lookup_bandwidth += 48;
       if (ok && r.is_owner) {
@@ -180,7 +225,10 @@ OneHop::lookup(Args *args) {
         LogEntry *e = new LogEntry(corr_owner, ALIVE, now());
         leader_log.push_back(*e);
         delete e;
-	record_lookup_stat(me.ip, corr_owner.ip, now()-before0, true, true, 2, 0, 0); //jy: record lookup stat
+	if (check_correctness(k,corr_owner))
+	  record_lookup_stat(me.ip, corr_owner.ip, now()-before0, true, true, 2, 0, 0); //jy: record lookup stat
+	else
+	  record_lookup_stat(me.ip, corr_owner.ip, now()-before0, false, false, 2, 0, 0); //jy: record lookup stat
       }else if (!ok) {
        if (me.id != succ_node.id)
 	 loctable->del_node(corr_owner);
@@ -189,9 +237,13 @@ OneHop::lookup(Args *args) {
 	record_lookup_stat(me.ip, corr_owner.ip, now()-before0, false, false, 2, 0, 0); //jy: record lookup stat
       }
     }else{
-      record_lookup_stat(me.ip, succ_node.ip, now()-before0, true, true, 1, 0, 0); //jy: record lookup stat
+      if (check_correctness(k,succ_node))
+	record_lookup_stat(me.ip, succ_node.ip, now()-before0, true, true, 1, 0, 0); //jy: record lookup stat
+      else
+	record_lookup_stat(me.ip, succ_node.ip, now()-before0, false, false, 1, 0, 0); //jy: record lookup stat
     }
   }
+LOOKUP_DONE:
   delete a;
 }
 
@@ -219,10 +271,11 @@ OneHop::lookup_handler(lookup_args *a, lookup_ret *r) {
 void
 OneHop::join(Args *args)
 {
-  //OneHopObserver::Instance(NULL)->addnode();
+  me.ip = ip();
+  me.id = ConsistentHash::ip2chid(me.ip);
+  OneHopObserver::Instance(NULL)->addnode(me); //jy
+
   //the first node will start off a statistics publishing process
-  if (now() > 21600000) assert(0);
-  
   if (!alive())
     return;
   IDMap wkn;
@@ -236,13 +289,13 @@ OneHop::join(Args *args)
   assert(wkn.ip);
   wkn.id = ConsistentHash::ip2chid(wkn.ip);
 
-  me.ip = ip();
-  me.id = ConsistentHash::ip2chid(me.ip);
+  DEBUG(1) << "ip " << me.ip << " id "<< me.id << " joined at time " << now() << " loc " << loctable->size() << endl;
   loctable->init(me);
 
-  DEBUG(1) << "ip " << me.ip << " id "<< me.id << " joined at time " << now() << endl;
-
-  if (wkn.ip != ip()) {
+  if (args && args->nget<uint>("first",0,10)==1) { //jy: a dirty hack, one hop does not like many nodes join at once
+    _join_complete = true;
+    delaycb(_stab_timer/2, &OneHop::stabilize, (void *)0);
+  }else if (wkn.ip != ip()) {
     IDMap fr;
     fr.id = wkn.id;
     fr.ip = wkn.ip;
@@ -263,39 +316,39 @@ OneHop::publish(void *v)
   if ((((now() - 1) % 100000) == 0) || (now() > 2000000 && now() < 2500000)) {
 
   Time interval = (now() - old_time)/1000;
-  DEBUG(0) << "----------------------------------------------\n";
+  DEBUG(1) << "----------------------------------------------\n";
   DEBUG(1) << "GRAND STATS\n";
-  DEBUG(0) << "Total number of lookups in the last cycle:" << lookups - old_lookups << endl;
-  DEBUG(0) << "Total number of one hop failures in the last cycle:" << failed - old_failed<< endl;
-  DEBUG(0) << "Fraction of lookup failures:" << (double)(failed - old_failed)/(double)(lookups - old_lookups) << endl;
-  DEBUG(0) << "Fraction of two hop lookup failures:" << (double)(two_failed - old_two_failed)/(double)(lookups - old_lookups) << endl;
+  DEBUG(1) << "Total number of lookups in the last cycle:" << lookups - old_lookups << endl;
+  DEBUG(1) << "Total number of one hop failures in the last cycle:" << failed - old_failed<< endl;
+  DEBUG(1) << "Fraction of lookup failures:" << (double)(failed - old_failed)/(double)(lookups - old_lookups) << endl;
+  DEBUG(1) << "Fraction of two hop lookup failures:" << (double)(two_failed - old_two_failed)/(double)(lookups - old_lookups) << endl;
   DEBUG(1) << "Total number of same slice lookups:" << same_lookups << endl;
   DEBUG(1) << "Total number of same slice failures:" << same_failed << endl;
   DEBUG(1) << "Fraction of same slice failures:" << (double)same_failed/(double)same_lookups << endl;
   DEBUG(1) << "Number of intra-slice messages:" << tot_intraslice << endl;
   DEBUG(1) << "Number of intra-slice actually received:" << act_intraslice << endl;
   DEBUG(1) << "Exp number of received intra-slice mesgs:" << exp_intraslice << endl;
-  DEBUG(0) << "Avg number of intra-slice recepients:" << (double)act_intraslice/(double)tot_intraslice << endl;
+  DEBUG(1) << "Avg number of intra-slice recepients:" << (double)act_intraslice/(double)tot_intraslice << endl;
   DEBUG(1) << "Avg expected number of intra-slice recepients:" << (double)exp_intraslice/(double)tot_intraslice << endl;
-  DEBUG(0) << "Avg number of empty units:" << (double)total_empty/(double)total_count << endl;
+  DEBUG(1) << "Avg number of empty units:" << (double)total_empty/(double)total_count << endl;
   DEBUG(1) << "Number of inter-slice messages:" << tot_interslice << endl;
   DEBUG(1) << "Number of inter-slice actually received:" << act_interslice << endl;
-  DEBUG(0) << "Avg number of inter-slice recepients:" << (double)act_interslice/(double)tot_interslice << endl;
-  DEBUG(0) << "Total number of alive and functioning nodes:" << num_nodes << endl;
-  DEBUG(0) << "Total number of successful joins so far:" << joins << endl;
-  DEBUG(0) << "Total number of crashes so far:" << crashes << endl;
-  DEBUG(0) << "Total number of crashes with non-empty outers:" << nonempty_outers << endl;
-  DEBUG(0) << "Total number of crashes with non-empty leaders:" << nonempty_leaders << endl;
-  DEBUG(0) << "Average number of bytes used per second in the last cycle by normal nodes" << (double)(bandwidth - old_bandwidth)/(double)(num_nodes*interval) << endl;
-  DEBUG(0) << "Average number of bytes used per second in the last cycle by slice leaders" << (double)(leader_bandwidth - old_leader_bandwidth)/(double)(_k*interval) << endl;
-  DEBUG(0) << "Total maintenance traffic per second in the last cycle" << (double)(bandwidth + leader_bandwidth - old_bandwidth - old_leader_bandwidth)/(interval) << endl;
-  DEBUG(0) << "Total lookup traffic per second in the last cycle" << (double)(lookup_bandwidth - old_lookup_bandwidth)/interval << endl;
-  DEBUG(0) << "Average maintenance bandwidth so far " << (double) (bandwidth+leader_bandwidth)*1000/(double)now() << endl;
-  DEBUG(0) << "Average lookup bandwidth so far " << (double) (lookup_bandwidth)*1000/(double)now() << endl;
+  DEBUG(1) << "Avg number of inter-slice recepients:" << (double)act_interslice/(double)tot_interslice << endl;
+  DEBUG(1) << "Total number of alive and functioning nodes:" << num_nodes << endl;
+  DEBUG(1) << "Total number of successful joins so far:" << joins << endl;
+  DEBUG(1) << "Total number of crashes so far:" << crashes << endl;
+  DEBUG(1) << "Total number of crashes with non-empty outers:" << nonempty_outers << endl;
+  DEBUG(1) << "Total number of crashes with non-empty leaders:" << nonempty_leaders << endl;
+  DEBUG(1) << "Average number of bytes used per second in the last cycle by normal nodes" << (double)(bandwidth - old_bandwidth)/(double)(num_nodes*interval) << endl;
+  DEBUG(1) << "Average number of bytes used per second in the last cycle by slice leaders" << (double)(leader_bandwidth - old_leader_bandwidth)/(double)(_k*interval) << endl;
+  DEBUG(1) << "Total maintenance traffic per second in the last cycle" << (double)(bandwidth + leader_bandwidth - old_bandwidth - old_leader_bandwidth)/(interval) << endl;
+  DEBUG(1) << "Total lookup traffic per second in the last cycle" << (double)(lookup_bandwidth - old_lookup_bandwidth)/interval << endl;
+  DEBUG(1) << "Average maintenance bandwidth so far " << (double) (bandwidth+leader_bandwidth)*1000/(double)now() << endl;
+  DEBUG(1) << "Average lookup bandwidth so far " << (double) (lookup_bandwidth)*1000/(double)now() << endl;
   DEBUG(1) << "Average number of messages by normal nodes" << (double)messages*1000/((double)now()*num_nodes) << endl;
   DEBUG(1) << "Average number of messages by slice leaders" << (double)leader_messages*1000/((double)now()*_k) << endl;
 
-  DEBUG(0) << "----------------------------------------------\n";
+  DEBUG(1) << "----------------------------------------------\n";
 
   old_lookups = lookups;
   old_failed = failed;
@@ -305,33 +358,33 @@ OneHop::publish(void *v)
   old_lookup_bandwidth = lookup_bandwidth;
   old_time = now();
   }
-  delaycb(10000, &OneHop::publish, (void *)0);
+  if (_publish_time>0)
+    delaycb((Time)_publish_time, &OneHop::publish, (void *)0);
 
   
 }
 void
 OneHop::crash(Args *args) 
 {
-  if (now() > 21600000) 
-    assert(0);
+  OneHopObserver::Instance(NULL)->delnode(me);
   DEBUG(1) << "ip " << me.ip << " id "<< me.id << " crashed at time " << now() << endl;
   if (is_slice_leader(me.id, me.id))
-    DEBUG(0) << " -- Slice leader\n";
-  //else DEBUG(0) << "\n";
+    DEBUG(1) << " -- Slice leader\n";
+  //else DEBUG(1) << "\n";
   num_nodes--;
   crashes++;
-  delete loctable;
   if (outer_log.size() > 0)
     nonempty_outers++;
   if (leader_log.size() > 0)
     nonempty_leaders++;
 
-  /*jy: a new loctable is allocated without freeing the old one
-    will cause memory leak...
+  /*jy: don't delete old loctable
+  delete loctable;
   loctable = New OneHopLocTable(_k, _u);
   loctable->size();
   loctable->set_timeout(0); //no timeouts on loctable entries 
   */
+  loctable->del_all();
   leader_log.clear();
   outer_log.clear();
   _join_complete = false;
@@ -341,7 +394,7 @@ void
 OneHop::join_leader (IDMap la, IDMap sender, Args *args) {
 
   IPAddress leader_ip = la.ip;
-  DEBUG(1) << ip() <<":Trying to join " << leader_ip << " as " << id() << " in slice " << slice(id()) << endl; 
+  DEBUG(1) << ip() <<":Trying to join " << leader_ip << " as " << id() << " in slice " << slice(id()) << " at time " << now() << endl; 
   assert(leader_ip);
   join_leader_args ja;
   join_leader_ret* jr = new join_leader_ret (_k, _u);
@@ -351,7 +404,7 @@ OneHop::join_leader (IDMap la, IDMap sender, Args *args) {
   //send mesg to node, if it is slice leader will respond with
   //routing table, else will respond with correct slice leader
   record_stat(TYPE_JOIN_LOOKUP, 2);
-  bool ok = doRPC (leader_ip, &OneHop::join_handler, &ja, jr);
+  bool ok = doRPC (leader_ip, &OneHop::join_handler, &ja, jr, TIMEOUT(me.ip,leader_ip));
   if (ok) record_stat(TYPE_JOIN_LOOKUP,jr->table.size(),1);
 
   if (!alive()) return;
@@ -446,12 +499,17 @@ OneHop::join_handler(join_leader_args *args, join_leader_ret *ret)
 }
 
 OneHop::~OneHop() {
+
   if (alive() && _join_complete) {
     DEBUG(1) << ip() << ":In slice " << slice(id()) << endl;
     if (is_slice_leader(me.id, me.id)) {
       DEBUG(1) << ip() << ":Slice leader of slice " << slice(me.id) << endl;
     }
   }
+  if (me.ip == 1) {
+    Node::print_stats();
+  }
+
   delete loctable;
 }
   
@@ -460,19 +518,26 @@ OneHop::stabilize(void* x)
 {
   if (!alive()) return;
   if (!_join_complete) return;
- 
+
+  
+  DEBUG(1) << ip() << ":Stabilize time " << now() << " slice leader " 
+    << slice(id()) << " unit leader " << unit(id()) << endl;
+  /*
   //if (now() < 2000000)
   //  countertime = now();
   if ((now() >= 2000000) && (now() < 2100000))
     //if (((now() - countertime) % 5000) == 0) {
-    //  DEBUG(0) << ip() << "Stabilizing \n";
+    //  DEBUG(1) << ip() << "Stabilizing \n";
       if (is_slice_leader(me.id, me.id))
-          DEBUG(0) << ip() << ":Slice leader of slice "<< slice(id()) << endl;
+          DEBUG(1) << ip() << ":Slice leader of slice "<< slice(id()) << endl;
     //}
+    */
       
   if (is_slice_leader(me.id, me.id) || is_unit_leader(me.id, me.id))
     leader_stabilize((void *)0);
-  
+ 
+  if (!alive()) return;
+
   notifyevent_args na, piggyback;
   na.sender = me; 
   piggyback.sender = me;
@@ -480,16 +545,19 @@ OneHop::stabilize(void* x)
   bool ok = false;
   
   //I may have been slice leader some time, not any more. inform slice leader
-  while ((!is_slice_leader(me.id, me.id)) && (leader_log.size () > 0)) {
+  while ((!is_slice_leader(me.id, me.id)) && (leader_log.size () > 0)
+      && (na.log.size() < MAX_IDS_MSG)) { //jy: limit size of one msg
     na.log.push_back(leader_log.front());
     leader_log.pop_front();
   }
-  while ((!is_slice_leader(me.id, me.id)) && (outer_log.size () > 0)) {
+  while ((!is_slice_leader(me.id, me.id)) && (outer_log.size () > 0)
+      && (na.log.size() < MAX_IDS_MSG)) { //jy: limit size of one msg
     na.log.push_back(outer_log.front());
     outer_log.pop_front();
   }
   
-  while (low_to_high.size() > 0) {
+  while ((low_to_high.size() > 0) 
+      && (piggyback.log.size()< MAX_IDS_MSG)){ //jy: limit size of one msg
     piggyback.log.push_back(low_to_high.front());
     low_to_high.pop_front();
   }
@@ -502,9 +570,9 @@ OneHop::stabilize(void* x)
     piggyback.up = 1;
     bw data = 4*piggyback.log.size();
 
-    record_stat(TYPE_MISC,piggyback.log.size());
+    record_stat(ONEHOP_PING,piggyback.log.size());
     ok = xRPC(succ.ip, data,  &OneHop::ping_handler, &piggyback, &gr);
-    if (ok) record_stat(TYPE_MISC,0,1);
+    if (ok) record_stat(ONEHOP_PING,0,1);
 
     if (!alive()) return;
    
@@ -543,7 +611,8 @@ OneHop::stabilize(void* x)
     
   //predecessor ping and piggyback
   piggyback.log.clear();
-  while (high_to_low.size() > 0) {
+  while ((high_to_low.size() > 0) 
+      && (piggyback.log.size() < MAX_IDS_MSG)) {//jy: limit max ids in one msg
     piggyback.log.push_back(high_to_low.front());
     high_to_low.pop_front();
   }
@@ -555,9 +624,9 @@ OneHop::stabilize(void* x)
     piggyback.up = 0; 
     bw data = 20+ 4*piggyback.log.size();
 
-    record_stat(TYPE_MISC, piggyback.log.size());
+    record_stat(ONEHOP_PING, piggyback.log.size());
     ok = xRPC(pred.ip, 4*piggyback.log.size(), &OneHop::ping_handler, &piggyback, &gr);
-    record_stat(TYPE_MISC, 0,1);
+    record_stat(ONEHOP_PING, 0,1);
 
     if (!alive()) return;
     //very ugly hack to fix accouting -- change after deadline
@@ -598,9 +667,10 @@ OneHop::stabilize(void* x)
       IDMap sliceleader = loctable->slice_leader(me.id);
       general_ret gr;
 
-      record_stat(TYPE_MISC,na.log.size());
+      record_stat(ONEHOP_NOTIFY,na.log.size());
+      DEBUG(1) << ip() << ":stabilize time "<< now() << " notifyevent log sz " <<  na.log.size() << "to sliceleader "<<sliceleader.ip << endl;
       ok = xRPC(sliceleader.ip, 4*na.log.size(), &OneHop::notifyevent_handler, &na, &gr);
-      if (ok) record_stat(TYPE_MISC,0,1);
+      if (ok) record_stat(ONEHOP_NOTIFY,0,1);
 
       if (!alive()) return;
 
@@ -650,14 +720,14 @@ OneHop::leader_stabilize(void *x)
 
   notifyevent_args send_unit;
   send_unit.sender = me;
-  while (inner_log.size() > 0) {
+  while ((inner_log.size() > 0) 
+    && (send_unit.log.size() < MAX_IDS_MSG)) {
     send_unit.log.push_back(inner_log.front());
     inner_log.pop_front();
   }
 
   bool ok = false;
   if (send_unit.log.size() > 0) {
-
     while (!ok) {
       IDMap succ = loctable->succ(me.id+1);
       //ping the successor to see if it is alive and piggyback a log
@@ -766,12 +836,14 @@ OneHop::leader_stabilize(void *x)
     notifyevent_args send_in, send_out;
     send_in.sender = me;
     send_out.sender = me;
-    while (leader_log.size() > 0) {
+    while ((leader_log.size() > 0) 
+	&& (send_in.log.size() < MAX_IDS_MSG)) {
       send_in.log.push_back(leader_log.front());
       send_out.log.push_back(leader_log.front());
       leader_log.pop_front();
     }
-    while (outer_log.size() > 0) {
+    while ((outer_log.size() > 0) 
+	&& (send_in.log.size() < MAX_IDS_MSG)) {
       send_in.log.push_back(outer_log.front());
       outer_log.pop_front();
     }
@@ -952,8 +1024,7 @@ OneHop::notifyevent_handler(notifyevent_args *args, general_ret *ret)
   }
 
   
-  
-bool me_leader = is_slice_leader(me.id, me.id);
+  bool me_leader = is_slice_leader(me.id, me.id);
   general_ret gr;
   ret->act_sliceleader.id = 0;
   ret->act_sliceleader.ip = 0;
@@ -1337,9 +1408,9 @@ OneHopLocTable::print() {
 }
 
 void
-OneHop::init_state()
+OneHop::initstate()
 {
-  vector<IDMap> ids = ChordObserver::Instance(NULL)->get_sorted_nodes();
+  vector<IDMap> ids = OneHopObserver::Instance(NULL)->get_sorted_nodes();
   for (uint i = 0; i < ids.size(); i++) {
     loctable->add_node(ids[i]);
   }
