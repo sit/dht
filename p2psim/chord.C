@@ -98,7 +98,6 @@ Chord::find_successors(CHID key, uint m, bool intern)
 {
   assert(m <= nsucc);
 
-  IDMap nprime = me;
   int count = 0;
 
   vector<IDMap> route;
@@ -117,6 +116,8 @@ Chord::find_successors(CHID key, uint m, bool intern)
 #ifdef CHORD_DEBUG
   CHID diff = key - me.id;
 #endif
+
+  IDMap nprime = me;
 
   while(1){
     assert(count++ < 5000);
@@ -242,6 +243,19 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
     nargs.key = args->key;
     nargs.v = args->v;
 
+#ifdef CHORD_DEBUG
+    uint x = find(args->v.begin(), args->v.end(), me) - args->v.begin();
+    if (x != (args->v.size() - 1)) {
+      printf("%s error! back to me!\n", ts());
+      for (uint xx = 0; xx < args->v.size(); xx++) {
+	printf("route %u,%qx\n", args->v[xx].ip, args->v[xx].id);
+      }
+      abort();
+    }
+#endif
+
+    assert(nargs.v.size() < 100);
+
     while (!r) {
       IDMap next = loctable->next_hop(args->key, me);
       nargs.v.push_back(next);
@@ -252,6 +266,7 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
       } else
 	r = doRPC(next.ip, &Chord::next_recurs_handler, &nargs, &nret);
 
+      assert(r);
       if (!r) {
 	printf ("%16qx rpc to %16qx failed %llu\n", me.id, next.id, now ());
 	printf ("vis %llu delete %16qx %16qx\n", now (), me.id, next.id);

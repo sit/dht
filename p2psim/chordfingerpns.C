@@ -62,7 +62,7 @@ ChordFingerPNS::init_state(vector<IDMap> ids)
 	    if (t->latency(me.ip,ids[i].ip) < min_l) {
 	      min_f = ids[i];
 	      min_l = t->latency(me.ip, ids[i].ip);
-	      min_f_pred = ids[(s_pos + i - 1) % sz];
+	      min_f_pred = ids[(i - 1) % sz];
 	    }
 	  }
 	}
@@ -77,6 +77,7 @@ ChordFingerPNS::init_state(vector<IDMap> ids)
   }
 
   _inited = true;
+  nsucc = 1;
   //add successors and (each of the successor's predecessor)
   for (uint i = 1; i <= nsucc; i++) {
     loctable->add_node(ids[(my_pos + i) % sz]);

@@ -102,11 +102,19 @@ ChordObserver::init_nodes(unsigned int num)
     c->init_state(ids);
     if (++i == num) break;
   }
+  printf("ChordObserver finished initing %d nodes\n", num);
+  for (uint i = 0; i < ids.size(); i++) {
+    printf("%qx %u\n", ids[i].id, ids[i].ip);
+  }
 }
 
 void
 ChordObserver::execute()
 {
+  if (!_reschedule) {
+    return;
+  }
+
   list<Protocol*> l = Network::Instance()->getallprotocols(_type);
   list<Protocol*>::iterator pos;
 
@@ -125,9 +133,6 @@ ChordObserver::execute()
 
     vector<ConsistentHash::CHID>::iterator i;
     printf ("sorted nodes %d %d\n", lid.size (), _num_nodes);
-    for (i = lid.begin (); i != lid.end() ; ++i) {
-      printf ("%qx\n", *i);
-    }
   }
 
   for (pos = l.begin(); pos != l.end(); ++pos) {
@@ -140,7 +145,6 @@ ChordObserver::execute()
     }
 
   }
-
   cout << now() << " STABILIZED" << endl;
   cout << now() << " CHORD NODE STATS" << endl;
   for (pos = l.begin(); pos != l.end(); ++pos) {
