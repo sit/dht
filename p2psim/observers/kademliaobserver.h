@@ -2,7 +2,7 @@
 #define __KADEMLIA_OBSERVER_H
 
 #include "protocolobserver.h"
-#include "../protocols/kademlia.h"
+#include "protocols/kademlia.h"
 
 class KademliaObserver : ProtocolObserver {
 public:

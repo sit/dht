@@ -1,6 +1,6 @@
 #include "network.h"
-#include "../events/netevent.h"
-#include "../failuremodels/failuremodelfactory.h"
+#include "events/netevent.h"
+#include "failuremodels/failuremodelfactory.h"
 #include <iostream>
 #include <cassert>
 using namespace std;

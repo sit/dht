@@ -1,4 +1,4 @@
-#include "../protocols/chord.h"
+#include "protocols/chord.h"
 #include "gtk/gtk.h"
 #include "math.h"
 #include <stdio.h>

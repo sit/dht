@@ -1,6 +1,6 @@
 #include "threadmanager.h"
 #include "network.h"
-#include "../protocols/protocolfactory.h"
+#include "protocols/protocolfactory.h"
 #include <iostream>
 #include <cassert>
 using namespace std;

@@ -1,7 +1,7 @@
 #ifndef __VIVALDI_H
 #define __VIVALDI_H
 
-#include "../p2psim/network.h"
+#include "p2psim/network.h"
 #include <cassert>
 
 // Compute Vivaldi synthetic coordinates.

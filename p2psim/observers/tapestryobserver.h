@@ -1,8 +1,8 @@
 #ifndef __TAPESTRY_OBSERVER_H
 #define __TAPESTRY_OBSERVER_H
 
-#include "../p2psim/oldobserver.h"
-#include "../protocols/tapestry.h"
+#include "p2psim/oldobserver.h"
+#include "protocols/tapestry.h"
 
 class TapestryObserver : public Oldobserver {
 public:

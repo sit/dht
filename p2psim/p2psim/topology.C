@@ -1,5 +1,5 @@
-#include "../topologies/topologyfactory.h"
-#include "../failuremodels/failuremodelfactory.h"
+#include "topologies/topologyfactory.h"
+#include "failuremodels/failuremodelfactory.h"
 #include "network.h"
 #include "parse.h"
 #include <iostream>

@@ -1,7 +1,7 @@
 #include "parse.h"
 #include "network.h"
 #include "args.h"
-#include "../protocols/protocolfactory.h"
+#include "protocols/protocolfactory.h"
 #include <iostream>
 using namespace std;
 

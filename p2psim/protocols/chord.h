@@ -1,8 +1,8 @@
 #ifndef __CHORD_H
 #define __CHORD_H
 
-#include "../p2psim/dhtprotocol.h"
-#include "../misc/vivaldi.h"
+#include "p2psim/dhtprotocol.h"
+#include "misc/vivaldi.h"
 #include "consistenthash.h"
 
 #define CHORD_SUCC_NUM 3  // default number of successors maintained

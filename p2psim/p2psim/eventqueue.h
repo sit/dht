@@ -3,7 +3,7 @@
 
 #include "event.h"
 #include "observed.h"
-#include "../utils/skiplist.h"
+#include "utils/skiplist.h"
 using namespace std;
 
 class EventQueue : public Threaded, public Observed {
