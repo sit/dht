@@ -179,6 +179,7 @@ vnode::print ()
     }
   }
   for (int i = 1; i <= nsucc; i++) {
+    if (!succlist[i].alive) continue;
     warnx << "succ " << i << " : " << succlist[i].n << "\n";
   }
   warnx << "pred : " << predecessor.n << "\n";
@@ -209,11 +210,18 @@ chordID
 vnode::findpredfinger (chordID &x)
 {
   chordID p = myID;
-  for (int i = NBIT; i >= 0; i--) {
+  for (int i = NBIT; i >= 1; i--) {
     if ((finger_table[i].first.alive) && 
 	between (myID, x, finger_table[i].first.n)) {
       p = finger_table[i].first.n;
-      break;
+      return p;
+    }
+  }
+  // no good entries in my finger table (e.g., fingers are down); check succlist
+  for (int i = 1; i <= nsucc; i++) {
+    if ((succlist[i].alive) && between (p, x, succlist[i].n)) {
+      // warnx << "findpredfinger: take entry from succlist\n";
+      p = succlist[i].n;
     }
   }
   //  warnx << "findpredfinger: " << myID << " of " << x << " is " << p << "\n";
@@ -299,7 +307,6 @@ vnode::stabilize_getpred_cb (chordID p, net_address r, chordstat status)
       locations->changenode (&finger_table[1].first, p, r);
       updatefingers (p, r);
       stable = 0;
-      // print ();
     }
     notify (finger_table[1].first.n, myID);
   }
@@ -366,7 +373,6 @@ vnode::stabilize_findsucc_cb (int i, chordID s, route search_path,
 			     locations->getaddress(s));
       updatefingers (s, locations->getaddress(s));
       stable = 0;
-      // print ();
     }
   }
 }
@@ -466,7 +472,6 @@ vnode::join_getsucc_cb (cbjoin_t cb, chordID s, route r, chordstat status)
     //    warnx << "join_getsucc_cb: " << myID << " " << s << "\n";
     locations->changenode (&finger_table[1].first, s, locations->getaddress(s));
     updatefingers (s, locations->getaddress(s));
-    //    print ();
     stabilize (0, 0);
     (*cb) (this);
   }
@@ -560,7 +565,6 @@ vnode::donotify (svccb *sbp, chord_nodearg *na)
     locations->changenode (&predecessor, na->n.x, na->n.r);
     if (predecessor.n != myID) {
       updatefingers (predecessor.n, na->n.r);
-      // print ();
       get_fingers (predecessor.n); // XXX perhaps do this only once after join
     }
   }

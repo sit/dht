@@ -661,8 +661,8 @@ dhash::store_cb(store_status type, chordID id, cbstore cb, int stat)
   if (stat) warn << "DB3 gave the error : " << stat << "\n";
   if (stat != 0) 
     (*cb)(DHASH_STOREERR);
-  //  else if (type == DHASH_STORE)
-  //   replicate_key (id,  wrap (this, &dhash::store_repl_cb, cb));
+  else if (type == DHASH_STORE)
+     replicate_key (id,  wrap (this, &dhash::store_repl_cb, cb));
   else	   
     (*cb)(DHASH_OK);
   

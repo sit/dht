@@ -42,7 +42,6 @@ vnode::get_successor_cb (chordID n, cbsfsID_t cb, chord_noderes *res,
   if (err) {
     net_address dr;
     warnx << "get_successor_cb: RPC failure " << err << "\n";
-    chordnode->deletefingers (n);
     cb (n, dr, CHORD_RPCFAILURE);
   } else if (res->status) {
     net_address dr;
@@ -87,7 +86,6 @@ vnode::get_predecessor_cb (chordID n, cbsfsID_t cb, chord_noderes *res,
   if (err) {
     net_address dr;
     warnx << "get_predecessor_cb: RPC failure " << err << "\n";
-    chordnode->deletefingers (n);
     cb (n, dr, CHORD_RPCFAILURE);
   } else if (res->status) {
     net_address dr;
@@ -217,7 +215,6 @@ vnode::find_closestpred_cb (chordID n, findpredecessor_cbstate *st,
   //  warn << "looking for closestpred of " << res->resok->node << "\n";
   if (err) {
     warnx << "find_closestpred_cb: RPC failure " << err << "\n";
-    chordnode->deletefingers (n);
     st->cb (n, st->search_path, CHORD_RPCFAILURE);
     delete st;
   } else if (res->status) {
@@ -264,7 +261,6 @@ vnode::testrange_findclosestpred_cb (chord_testandfindres *res,
   warnt("CHORD: testrange_findclosestpred_cb");
   if (err) {
     warnx << "testrange_findclosestpred_cb: failure " << err << "\n";
-    chordnode->deletefingers(st->nprime);
     st->cb(st->nprime, st->search_path, CHORD_RPCFAILURE);
     delete st;
     warnt("CHORD: test_and_find RPC ERROR");
@@ -355,7 +351,6 @@ vnode::notify_cb (chordID n, chordstat *res, clnt_stat err)
 {
   if (err) {
     warnx << "notify_cb: RPC failure " << n << " " << err << "\n";
-    chordnode->deletefingers (n);
   } else if (*res != CHORD_OK) {
     warnx << "notify_cb: RPC error" << n << " " << *res << "\n";
   }
@@ -405,7 +400,6 @@ vnode::get_fingers_cb (chordID x, chord_getfingersres *res,  clnt_stat err)
   if (err) {
     net_address dr;
     warnx << "get_fingers_cb: RPC failure " << err << "\n";
-    chordnode->deletefingers (x);
   } else if (res->status) {
     net_address dr;
     warnx << "get_fingers_cb: RPC error " << res->status << "\n";

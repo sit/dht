@@ -2,6 +2,7 @@
 - test lookups during joins
 - test inserts during joins
 
+- determine when to run stabilize at runtime
 - server selection
 - implement nodeID identification
 - reimplement alert

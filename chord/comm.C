@@ -59,6 +59,7 @@ locationtable::doForeignRPC (rpc_program prog,
   } else {
     (*cb) (RPC_CANTSEND);
     delete_connections (l);
+    chordnode->deletefingers (ID);
   }
 }
 
@@ -70,8 +71,10 @@ locationtable::doForeignRPC_cb (chord_RPC_res *res,
 				aclnt_cb cb,
 				clnt_stat err)
 {
-  if ((err) || (res->status)) (*cb)(err);
-  else {
+  if ((err) || (res->status)) {
+    //    if (err) chordnode->deletefingers ();
+    (*cb)(err);
+  } else {
     char *mRes = res->resok->marshalled_res.base ();
     size_t reslen = res->resok->marshalled_res.size ();
     xdrmem x (mRes, reslen, XDR_DECODE);
@@ -121,6 +124,7 @@ locationtable::doRPC (chordID &ID, rpc_program prog, int procno,
     if (prog.progno == CHORD_PROGRAM) {
       ptr<aclnt> c = aclnt::alloc(l->x, prog);
       if (c == 0) {
+	chordnode->deletefingers (ID);
 	(*cb) (RPC_CANTSEND);
 	delete_connections (l);
       } else {
@@ -146,6 +150,7 @@ locationtable::doRPCcb (aclnt_cb cb, location *l, u_int64_t s, clnt_stat err)
 {
   if (err) {
     nrpcfailed++;
+    chordnode->deletefingers (l->n);
   } else {
     u_int64_t lat = getnsec () - s;
     l->rpcdelay += lat;
@@ -154,7 +159,6 @@ locationtable::doRPCcb (aclnt_cb cb, location *l, u_int64_t s, clnt_stat err)
     nrpc++;
     if (lat > l->maxdelay) l->maxdelay = lat;
   }
-  //  l->x = 0;
   (*cb) (err);
 }
 
@@ -168,9 +172,10 @@ locationtable::dorpc_connect_cb(location *l, ptr<axprt_stream> x)
     doRPC_cbstate *st, *st1;
     for (st = l->connectlist.first; st; st = st1) {
       st1 = l->connectlist.next (st);
+      chordnode->deletefingers (st->ID);
+      l->connectlist.remove(st);
       aclnt_cb cb = st->cb;
       (*cb) (RPC_FAILED);
-      l->connectlist.remove(st);
       delete st;
     }
     //    decrefcnt (l);
@@ -187,6 +192,7 @@ locationtable::dorpc_connect_cb(location *l, ptr<axprt_stream> x)
   for (st = l->connectlist.first; st; st = st1) {
     if (st->progno.progno == CHORD_PROGRAM) {
       ptr<aclnt> c = aclnt::alloc (x, st->progno);
+      assert (c);
       c->call (st->procno, st->in, st->out, st->cb);
     } else {
       doForeignRPC (st->progno, st->procno, st->in, st->out, st->ID, st->cb);
