@@ -479,7 +479,6 @@ main (int argc, char **argv)
   p2psocket = "/tmp/chord-sock";
   logfname = "lsd-trace.log";
   str myname = my_addr ();
-  bool setmode = false;
   mode = MODE_CHORD;
   lookup_mode = CHORD_LOOKUP_LOCTABLE;
   
@@ -494,7 +493,6 @@ main (int argc, char **argv)
 	mode = MODE_SECCHORD;
       else
 	fatal << "allowed modes are secchord, chord and debruijn\n";
-      setmode = true;
       break;
     case 'b':
       lbase = atoi (optarg);
@@ -504,16 +502,14 @@ main (int argc, char **argv)
       }
       break;
     case 'P':
-      if ((!setmode) || (mode != MODE_CHORD))
-	fatal << "proximity only supported in mode chord\n";
       lookup_mode = CHORD_LOOKUP_PROXIMITY;
       break;
     case 'f':
-	  lookup_mode = CHORD_LOOKUP_FINGERLIKE;
-	  break;
+      lookup_mode = CHORD_LOOKUP_FINGERLIKE;
+      break;
     case 'F':
-	  lookup_mode = CHORD_LOOKUP_FINGERSANDSUCCS;
-	  break;
+      lookup_mode = CHORD_LOOKUP_FINGERSANDSUCCS;
+      break;
     case 'B':
       cache_size = atoi (optarg);
       break;
@@ -593,6 +589,8 @@ main (int argc, char **argv)
 	 << chord::max_vnodes << ")\n";
     usage ();
   }
+  if ((mode != MODE_CHORD) && (lookup_mode == CHORD_LOOKUP_PROXIMITY))
+    fatal << "proximity only supported in mode chord\n";
 
   {
     int logfd = open (logfname, O_WRONLY|O_APPEND|O_CREAT, 0666);
