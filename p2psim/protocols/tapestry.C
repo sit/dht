@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.48 2004/01/28 22:22:04 strib Exp $ */
+/* $Id: tapestry.C,v 1.49 2004/01/29 02:34:49 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -65,6 +65,10 @@ Tapestry::Tapestry(IPAddress i, Args a) : P2Protocol(i),
   _lookup_learn = a.nget<bool>("lookuplearn", 1, 10);
   _direct_reply = a.nget<bool>("direct_reply", 1, 10);
 
+  if( _lookup_learn ) {
+    _cachebag = New RoutingTable(this, a.nget<uint>("redundancy", 3, 10));
+  }
+
   _max_lookup_time = a.nget<Time>("maxlookuptime", 4000, 10);
 
   _declare_dead_time = a.nget<Time>("declare_dead", 30000, 10);
@@ -90,6 +94,9 @@ Tapestry::~Tapestry()
 {
 
   delete _rt;
+  if( _lookup_learn ) {
+    delete _cachebag;
+  }
   delete _waiting_for_join;
   delete [] _my_id_digits;
 
@@ -188,6 +195,8 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
   la.key = args->key;
   la.looker = ip();
   la.starttime = args->starttime;
+  la.lasthop = ip();
+  la.lastrtt = 0;
 
   lookup_return lr;
     
@@ -205,7 +214,7 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
     return;
   }
 
-  args->hopcount += lr.hopcount;
+  args->hopcount += lr.hopcount + lr.num_timeouts; // args.hopcount is TOTAL
   args->num_timeouts += lr.num_timeouts;
   args->time_timeouts += lr.time_timeouts;
 
@@ -308,6 +317,20 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
 
   TapDEBUG(5) << "hl enter" << endl;
 
+  // if we're learning from lookups, learn about the last hop as well as
+  // the source of the query
+  if( _lookup_learn && args->lasthop != ip() ) {
+    GUID id1 = ((Tapestry *)Network::Instance()->getnode(args->looker))->id();
+    GUID id2 = ((Tapestry *)Network::Instance()->getnode(args->lasthop))->id();
+    if( !_rt->contains( id1 ) ) {
+      _cachebag->add( args->looker, id1, MAXTIME, false );
+    }
+    if( !_rt->contains( id2 ) ) {
+      _cachebag->add( args->lasthop, id2, args->lastrtt, false );
+    }
+
+  }
+
   // find the next hop for the key.  if it's me, i'm done
   IPAddress *ips = New IPAddress[_redundant_lookup_num];
   for( uint i = 0; i < _redundant_lookup_num; i++ ) {
@@ -343,6 +366,12 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
       record_stat(STAT_LOOKUP, 1, 0);
       Time before = now();
       GUID nextid = ((Tapestry *)Network::Instance()->getnode(next))->id();
+      // don't want to route to nodes who have recently timed out
+      if( _rt->get_timeout( nextid ) ) {
+	continue;
+      }
+      args->lasthop = ip();
+      args->lastrtt = _rt->get_time( nextid );
       bool succ = doRPC( next, &Tapestry::handle_lookup, args, ret, 
 			 _rtt_timeout_factor*_rt->get_time(nextid) );
       if( succ ) {
@@ -358,11 +387,9 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
 	}
       } else {
 	// remove it from our routing table
-	if( _lookup_learn ) {
-	  check_node_args *ca = New check_node_args();
-	  ca->ip = next;
-	  delaycb( 1, &Tapestry::check_node, ca );
-	}
+	check_node_args *ca = New check_node_args();
+	ca->ip = next;
+	delaycb( 1, &Tapestry::check_node, ca );
 
 	// record the timeout stats
 	// every unsuccessful RPC counts as a "timeout"
@@ -455,14 +482,32 @@ Tapestry::check_node(check_node_args *args)
 {
   ping_args pa;
   ping_return pr;
+  GUID dstid = ((Tapestry *)Network::Instance()->getnode(args->ip))->id();
+  _rt->set_timeout( dstid, true );
+
+  // now try to find a better node to put in your table from the cache
+  if( _lookup_learn ) {
+    int digit = guid_compare( id(), dstid );
+    assert( digit != -1 );
+    uint val = get_digit( dstid, digit );
+    NodeInfo *n = _cachebag->read( digit, val );
+    if( n != NULL ) {
+      _cachebag->remove( n->_id );
+      _rt->add( n->_addr, n->_id, n->_distance );
+      delete n;
+    }
+  }
+
+  Time dist = _rt->get_time( dstid );
   if(!retryRPC( args->ip, &Tapestry::handle_ping, &pa, &pr, STAT_PING, 0, 0 )){
     // this node is dead dude
-    GUID dstid = ((Tapestry *)Network::Instance()->getnode(args->ip))->id();
     _rt->remove( dstid, false );
     _rt->remove_backpointer( args->ip, dstid );
     _recently_dead.push_back(dstid);    
     TapDEBUG(2) << "Declaring (" << args->ip << "/" << print_guid(dstid) 
 		<< ") dead in check_node" << endl;
+  } else {
+    _rt->set_timeout( dstid, false );
   }
   delete args;
 }
@@ -1228,6 +1273,9 @@ Tapestry::add_to_rt( IPAddress new_ip, GUID new_id )
     // the RoutingTable takes care of placing (and removing) backpointers 
     // for us
     _rt->add( new_ip, new_id, distance );
+    if( _lookup_learn ) {
+      _cachebag->remove( new_id, false );
+    }
   }
 
   return;
@@ -1317,6 +1365,9 @@ Tapestry::oracle_node_died( IPAddress deadip, GUID deadid,
       bestnode->got_backpointer( ip(), id(), 
 				 match, 
 				 false );
+      if( _lookup_learn ) {
+	_cachebag->remove( bestnode->id(), false );
+      }
     }
   }
 }
@@ -1571,6 +1622,7 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
       if( timing != NULL ) {
 	(*timing)[pi->ip] = ping_time; //_rt->get_time( pi->id );
       }
+      _rt->set_timeout( pi->id, false );
     }
     TapDEBUG(3) << "multidone ip: " << pi->ip << 
       " total left " << ping_rpcset->size() << endl;
@@ -1604,6 +1656,9 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
       // make sure it's not the default (we actually pinged this one)
       if( pi->rtt != 87654 ) {
 	_rt->add( pi->ip, pi->id, pi->rtt );
+	if( _lookup_learn ) {
+	  _cachebag->remove( pi->id, false );
+	}
       }
     }
     delete pi;
@@ -1981,6 +2036,9 @@ Tapestry::crash(Args *args)
   // clear out routing table, and any other state that might be lying around
   uint r = _rt->redundancy();
   delete _rt;
+  if( _lookup_learn ) {
+    delete _cachebag;
+  }
   joined = false;
 
   // clear join state also
@@ -1991,6 +2049,9 @@ Tapestry::crash(Args *args)
   initlist.clear();
   _recently_dead.clear();
   _rt = New RoutingTable(this, r);
+  if( _lookup_learn ) {
+    _cachebag = New RoutingTable(this, r);
+  }
   // TODO: should be killing these waiting RPCs instead of allowing them
   // to finish normally.  bah.
   _waiting_for_join->notifyAll();
@@ -2526,6 +2587,62 @@ RoutingTable::get_time( GUID id )
   }
   // some maximum time (-1 won't work because it's unsigned)
   return MAXTIME;
+
+}
+
+void 
+RoutingTable::set_timeout( GUID id, bool timeout )
+{
+
+  // find the spots where it could fit and remove it
+  for( uint i = 0; i < _node->_digits_per_id; i++ ) {
+    uint j = _node->get_digit( id, i );
+    RouteEntry *re = _table[i][j];
+    if( re != NULL ) {
+
+      for( uint k = 0; k < re->size(); k++ ) {
+	NodeInfo *ni = re->get_at(k);
+	if( ni->_id == id ) {
+	  ni->_timeout = timeout;
+	  break;
+	}
+      }
+    }
+
+    // if the last digit wasn't a match, we're done
+    if( j != _node->get_digit( _node->id(), i ) ) {
+      break;
+    }
+  }
+
+}
+
+bool 
+RoutingTable::get_timeout( GUID id )
+{
+
+  // find the spots where it could fit and remove it
+  for( uint i = 0; i < _node->_digits_per_id; i++ ) {
+    uint j = _node->get_digit( id, i );
+    RouteEntry *re = _table[i][j];
+    if( re != NULL ) {
+
+      for( uint k = 0; k < re->size(); k++ ) {
+	NodeInfo *ni = re->get_at(k);
+	if( ni->_id == id ) {
+	  return ni->_timeout;
+	}
+      }
+    }
+
+    // if the last digit wasn't a match, we're done
+    if( j != _node->get_digit( _node->id(), i ) ) {
+      break;
+    }
+  }
+
+  // should this be the not-found default?
+  return false;
 
 }
 

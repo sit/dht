@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.37 2004/01/28 22:22:05 strib Exp $ */
+/* $Id: tapestry.h,v 1.38 2004/01/29 02:34:49 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -102,7 +102,10 @@ public:
   struct lookup_args {
     GUID key;
     IPAddress looker;
-    Time starttime; // not counted in stats since this is a hack
+    // none of the below are counted in bw stats -- they are hacks
+    IPAddress lasthop;
+    Time lastrtt; // an estimate of the lastguy's RTT to you
+    Time starttime; 
   };
 
   struct lookup_return {
@@ -281,6 +284,9 @@ private:
   // factor above rtt for timeouts
   uint _rtt_timeout_factor;
 
+  // nodes that we learned about from lookups
+  RoutingTable *_cachebag;
+
   // overall stats
   static unsigned long long _num_lookups;
   static unsigned long long _num_succ_lookups;
@@ -371,16 +377,19 @@ private:
 class NodeInfo {
  public:
   typedef Tapestry::GUID GUID;
-  NodeInfo( IPAddress addr, GUID id, Time distance = 1000 ) {
+  NodeInfo( IPAddress addr, GUID id, Time distance = 1000, 
+	    bool timeout = false ) {
     _id = id;
     _addr = addr;
     _distance = distance;
+    _timeout = timeout;
   };
   ~NodeInfo() {};
   
   GUID _id;
   IPAddress _addr;
   Time _distance;
+  bool _timeout;
 
 };
 
@@ -449,6 +458,8 @@ class RoutingTable {
 
   bool contains( GUID id );
   Time get_time( GUID id );
+  void set_timeout( GUID id, bool timeout );
+  bool get_timeout( GUID id );
 
   ostream& insertor( ostream &s ) const;
 
