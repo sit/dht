@@ -118,4 +118,21 @@ public:
   }
 };
 
+
+// XXX: this is the wrong ifdef
+#ifdef HAVE_EXT_HASH_MAP
+namespace __gnu_cxx {
+#else
+namespace std {
+#endif
+  // silently assume ConsistentHash::CHID is a 64-bit long long
+  template<> struct hash<ConsistentHash::CHID> {
+    size_t operator()(const ConsistentHash::CHID &x) const {
+      unsigned lh = (unsigned) (x & 0x00000000ffffffff);
+      unsigned uh = (unsigned) (x >> 32);
+      return hash<unsigned>()(lh ^ uh);
+    }
+  };
+}
+
 #endif // __CONSISTENTHASH_H
