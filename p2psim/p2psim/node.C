@@ -399,7 +399,8 @@ Node::print_stats()
   for (uint i = 0; i < sz; i++)
     allavg += _per_node_in[i];
   if (sz > 0) {
-    printf("BW_PERNODE_IN:: 50p:%.3f 90p:%.3f 95p:%.3f 99p:%.3f 100p:%.3f avg:%.3f\n", 
+    printf("BW_PERNODE_IN:: 1p:%.3f 5p:%.3f 10p:%.3f 50p:%.3f 90p:%.3f 95p:%.3f 99p:%.3f 100p:%.3f avg:%.3f\n", 
+      _per_node_in[(uint)sz*0.01], _per_node_in[(uint)(sz*0.05)],_per_node_in[(uint)(sz*0.1)],
       _per_node_in[sz/2], _per_node_in[(uint)(sz*0.9)], 
       _per_node_in[(uint)(sz*0.95)], _per_node_in[(uint)(sz*0.99)], 
       _per_node_in[sz-1], allavg/sz);
@@ -411,7 +412,8 @@ Node::print_stats()
   for (uint i = 0; i < sz; i++)
     allavg += _per_node_out[i];
   if (sz > 0) {
-    printf("BW_PERNODE:: 50p:%.3f 90p:%.3f 95p:%.3f 99p:%.3f 100p:%.3f avg:%.3f\n", 
+    printf("BW_PERNODE:: 1p:%.3f 5p:%.3f 10p:%.3f 50p:%.3f 90p:%.3f 95p:%.3f 99p:%.3f 100p:%.3f avg:%.3f\n", 
+      _per_node_out[(uint)sz*0.01], _per_node_out[(uint)(sz*0.05)],_per_node_out[(uint)(sz*0.1)],
       _per_node_out[sz/2], _per_node_out[(uint)(sz*0.9)], 
       _per_node_out[(uint)(sz*0.95)], _per_node_out[(uint)(sz*0.99)], 
       _per_node_out[sz-1], allavg/sz);
