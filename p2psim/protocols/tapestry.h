@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.18 2003/11/13 19:25:40 strib Exp $ */
+/* $Id: tapestry.h,v 1.19 2003/11/17 02:46:31 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -52,6 +52,7 @@ public:
   // print it to stdout
   string print_guid( GUID id );
   // print it in the stream
+  bool is_joined() { return joined; };
   void print_guid( GUID id, ostream &s );
   uint get_digit( GUID id, uint digit );
   GUID id() { return _my_id; };
@@ -62,6 +63,9 @@ public:
   int guid_compare( GUID key1, GUID key2 ); 
 
   bool stabilized(vector<GUID> lid);
+
+  void oracle_node_died( IPAddress ip, GUID id, set<Protocol*> );
+  void oracle_node_joined( Tapestry *t );
 
   void check_rt(void *x);
 
@@ -390,6 +394,7 @@ class RoutingTable {
   ostream& insertor( ostream &s ) const;
 
   void add_backpointer( IPAddress ip, GUID id, uint level );
+  void remove_backpointer( IPAddress ip, GUID id );
   void remove_backpointer( IPAddress ip, GUID id, uint level );
   vector<NodeInfo *> *get_backpointers( uint level );
 

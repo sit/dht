@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.25 2003/11/13 19:25:40 strib Exp $ */
+/* $Id: tapestry.C,v 1.26 2003/11/17 02:46:31 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -110,6 +110,10 @@ void
 Tapestry::lookup(Args *args) 
 {
 
+  if( !joined ) {
+    return;
+  }
+
   GUID key = args->nget<GUID>("key");
 
   TapDEBUG(0) << "Tapestry Lookup for key " << print_guid(key) << endl;
@@ -136,8 +140,14 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
   lr.hopcount = 0;
   lr.failed = false;
   
+  uint curr_join =_join_num;
   handle_lookup( &la, &lr );
-  
+  if( !node()->alive() || _join_num != curr_join ) {
+    delete args;
+    TapDEBUG(2) << "Lookup aborting in wrapper, dead or rejoined" << endl;
+    return;
+  }
+
   if( !lr.failed && lr.owner_id == lr.real_owner_id ) {
     TapDEBUG(0) << "Lookup complete for key " << print_guid(args->key) 
 		<< ": ip " << lr.owner_ip << ", id " 
@@ -147,7 +157,7 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
   } else {
     if( now() - args->starttime < 4000 ) {
       args->num_tries = args->num_tries+1;
-      TapDEBUG(1) << "one lookup failed or was incorrect for key " 
+      TapDEBUG(1) << "retrying failed or incorrect lookup for key " 
 		  << print_guid(args->key) << ", numtries " << args->num_tries 
 		  << endl;
       delaycb( 100, &Tapestry::lookup_wrapper, args );
@@ -174,6 +184,9 @@ void
 Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
 {
 
+  TapDEBUG(2) << "Looking up key " << 
+    print_guid(args->key) << " for node " << args->looker << endl;
+
   TapDEBUG(5) << "hl enter" << endl;
 
   // find the next hop for the key.  if it's me, i'm done
@@ -185,6 +198,7 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
   uint i = 0;
   for( ; i < _redundant_lookup_num; i++ ) {
     IPAddress next = ips[i];
+    TapDEBUG(3) << "Trying " << next << endl;
     if( next == 0 ) {
       continue;
     }
@@ -194,6 +208,7 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
       // this will be incremented at each hop backwards
       ret->hopcount = 0;
       ret->real_owner_id = lookup_cheat( args->key );
+      ret->failed = false;
       break;
     } else {
       // it's not me, so forward the query
@@ -202,6 +217,14 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
       if( succ ) {
 	record_stat( STAT_LOOKUP, 1, 2 );
       }
+      // since we're using recursive routing, looking for this is stupid
+      // make sure we haven't crashed and/or started another join
+      //if( !node()->alive() || _join_num != curr_join ) {
+      //ret->failed = true;
+      //TapDEBUG(2) << "Lookup aborting, dead or rejoined" << endl;
+      //delete ips;
+      //return;
+      //}
       if( succ && !ret->failed ) {
 	// don't need to try the next one
 	ret->hopcount++;
@@ -218,6 +241,8 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
 
   // if we were never successful, set the failed flag
   if( i == _redundant_lookup_num ) {
+    TapDEBUG(1) << "setting failed to true for key " << print_guid(args->key)
+		<< endl;
     ret->failed = true;
   }
 
@@ -239,7 +264,7 @@ Tapestry::have_joined()
    _joining = false;
    _waiting_for_join->notifyAll();
    TapDEBUG(0) << "Finishing joining." << endl;
-   if( !_stab_scheduled ) {
+   if( !_stab_scheduled && _stabtimer > 0 ) {
      delaycb( _stabtimer, &Tapestry::check_rt, (void *) 0 );
      _stab_scheduled = true;
    }
@@ -253,12 +278,18 @@ Tapestry::join(Args *args)
 
   TapDEBUG(5) << "j enter" << endl;
 
-  notifyObservers();
+  if( _join_num == 0 ) {
+    notifyObservers();
+  } else {
+    notifyObservers( (ObserverInfo *) "join" );
+  }
 
   if( _joining ) {
     TapDEBUG(0) << "Tried to join while joining -- ignoring" << endl;
     return;
   }
+
+  uint curr_join = ++_join_num;
 
   IPAddress wellknown_ip = args->nget<IPAddress>("wellknown");
   TapDEBUG(3) << ip() << " Wellknown: " << wellknown_ip << endl;
@@ -270,7 +301,6 @@ Tapestry::join(Args *args)
   }
 
   _joining = true;
-  uint curr_join = ++_join_num;
 
   TapDEBUG(0) << "Tapestry join " << curr_join << endl;
 
@@ -987,6 +1017,71 @@ Tapestry::stabilized(vector<GUID> lid)
 }
 
 void
+Tapestry::oracle_node_died( IPAddress deadip, GUID deadid, 
+			    set<Protocol *> lid )
+{
+
+  TapDEBUG(2) << "Oracle says node died: " << deadip << "/" 
+	      << print_guid( deadid ) << endl;
+
+  _rt->remove( deadid, false );
+  _rt->remove_backpointer( deadip, deadid );
+
+  int match = guid_compare( id(), deadid );
+  uint digit = get_digit( deadid, match );
+
+  // now find a replacement
+  vector<NodeInfo *> nodes;
+  Time bestrtt = 1000000;
+  Tapestry *bestnode = NULL;
+  for(set<Protocol*>::const_iterator i = lid.begin(); i != lid.end(); ++i) {
+
+    Tapestry *currnode = (Tapestry*) *i;
+    if( currnode->ip() != ip() && currnode->node()->alive() ) {
+
+      if( guid_compare( id(), currnode->id() ) == match &&
+	  get_digit( currnode->id(), match ) == digit ) {
+	Time rtt = 
+	  2*Network::Instance()->gettopology()->latency( ip(),
+							 currnode->ip() );
+	if( rtt < bestrtt ) {
+	  bestrtt = rtt;
+	  bestnode = currnode;
+	}
+      }
+    }
+
+  }
+  
+  if( bestnode != NULL ) {
+    if( _rt->add( bestnode->ip(), bestnode->id(), bestrtt, false ) ) {
+      bestnode->got_backpointer( ip(), id(), 
+				 match, 
+				 false );
+    }
+  }
+}
+
+void
+Tapestry::oracle_node_joined( Tapestry *t )
+{
+
+  TapDEBUG(2) << "Oracle says node joined: " << t->ip() << "/" 
+	      << print_guid( t->id() ) << endl;
+
+  Time rtt = 2*Network::Instance()->gettopology()->latency( ip(), t->ip() );
+  if( _rt->add( t->ip(), t->id(), rtt, false ) ) {
+      t->got_backpointer( ip(), id(), 
+			  guid_compare( id(), t->id() ), 
+			  false );
+      // for now don't worry about removing backpointers for other people,
+      // they don't really matter
+  }
+
+
+}
+
+void
 Tapestry::check_rt(void *x)
 {
 
@@ -1056,7 +1151,7 @@ Tapestry::init_state(set<Protocol *> lid)
   for(set<Protocol*>::const_iterator i = lid.begin(); i != lid.end(); ++i) {
 
     Tapestry *currnode = (Tapestry*) *i;
-    if( currnode->ip() == ip() ) {
+    if( currnode->ip() == ip() || !currnode->node()->alive() ) {
       continue;
     }
     
@@ -1073,7 +1168,7 @@ Tapestry::init_state(set<Protocol *> lid)
   for(set<Protocol*>::const_iterator i = lid.begin(); i != lid.end(); ++i) {
 
     Tapestry *currnode = (Tapestry*) *i;
-    if( currnode->ip() == ip() ) {
+    if( currnode->ip() == ip() || !currnode->node()->alive() ) {
       continue;
     }
 
@@ -1200,6 +1295,7 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
     if( pi->failed ) {
       // failed! remove! no need to send a backpointer remove message
       _rt->remove( pi->id, false );
+      _rt->remove_backpointer( pi->ip, pi->id );
       assert( !_rt->contains( pi->id ) );
       TapDEBUG(1) << "removing failed node " << pi->ip << endl;
       if( repair ) {
@@ -1542,6 +1638,8 @@ Tapestry::crash(Args *args)
   // to finish normally.  bah.
   _waiting_for_join->notifyAll();
   TapDEBUG(0) << "crash exit" << endl;
+
+  notifyObservers( (ObserverInfo *) "crash" );
 }
 
 string
@@ -1597,14 +1695,13 @@ Tapestry::lookup_cheat( GUID key )
   set<Protocol*>::iterator pos;
   vector<Tapestry::GUID> lid;
 
-  //i only want to sort it once after all nodes have joined! 
   Tapestry *c = 0;
   int maxmatch = -2;
   for (pos = l.begin(); pos != l.end(); ++pos) {
     c = (Tapestry *)(*pos);
     assert(c);
-    // only care about live nodes
-    if( c->node()->alive() ) {
+    // only care about live, joined nodes (or live nodes in our rt)
+    if( c->node()->alive() && (c->is_joined() || _rt->contains(c->id())) ) {
       int match = guid_compare( c->id(), key );
       if( match == -1 ) {
 	return c->id();
@@ -2057,6 +2154,17 @@ RoutingTable::add_backpointer( IPAddress ip, GUID id, uint level )
   vector<NodeInfo *> * this_level = get_backpointers(level);
   NodeInfo *new_node = New NodeInfo( ip, id );
   this_level->push_back( new_node );
+}
+
+void 
+RoutingTable::remove_backpointer( IPAddress ip, GUID id )
+{
+
+  int match = _node->guid_compare( _node->id(), id );
+  for( int i = 0; i <= match; i++ ) {
+    remove_backpointer( ip, id, i );
+  }
+
 }
 
 void 
