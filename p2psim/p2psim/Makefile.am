@@ -1,6 +1,7 @@
 bin_PROGRAMS = p2psim
 p2psim_SOURCES = main.C
 p2psim_LDADD = -L. -L.. \
+	       -L../p2psim -lp2psim \
 	       -L../events -levents \
 	       -L../topologies -ltopologies \
 	       -L../eventgenerators -leventgenerators \
