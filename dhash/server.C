@@ -101,15 +101,7 @@ dhash::dispatch (unsigned long procno,
 	res->set_status (DHASH_NOENT);
       } else {
 	res->set_status (DHASH_CONTINUE);
-	chordID succ = host_node->my_succ ();
-	chordID mID = host_node->my_ID ();
-	chordID nid;
-	if (betweenrightincl (mID,
-			      succ,
-			      farg->key)) 
-	  nid = succ;
-	else 
-	  nid = host_node->lookup_closestpred (farg->key);
+	chordID nid = host_node->lookup_closestpred (farg->key);
 	
 	res->cont_res->next.x = nid;
 	res->cont_res->next.r = 

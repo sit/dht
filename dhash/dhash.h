@@ -68,21 +68,23 @@ class dhashclient {
   ptr<chord> clntnode;
 
   int do_caching;
+  int nreplica;
 
   qhash<chordID, store_state, hashID> pst;
 
   void dispatch (svccb *sbp);
   void lookup_iter_cb (svccb *sbp, 
 		       dhash_fetchiter_res *res,
-		       chordID prev,
 		       route path,
 		       clnt_stat err);
 
   void query_successors (vec<chord_node> succ, 
+			 route path,
 			 svccb *sbp,
 			 ptr<dhash_fetch_arg> rarg);
   
   void query_successors_fetch_cb (vec<chord_node> succ,
+				  route path,
 				  svccb *sbp, 
 				  ptr<dhash_fetch_arg> rarg, 
 				  dhash_res *fres, 
@@ -119,7 +121,7 @@ class dhashclient {
 
  public:  
   void set_caching(char c) { do_caching = c;};
-  dhashclient (ptr<axprt_stream> x, ptr<chord> clnt);
+  dhashclient (ptr<axprt_stream> x, int nreplica, ptr<chord> clnt);
 };
 
 class dhash {

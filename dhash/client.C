@@ -14,8 +14,8 @@
  * Implementation of the distributed hash service.
  */
 
-dhashclient::dhashclient (ptr<axprt_stream> _x, ptr<chord> node)
-  : x (_x), clntnode(node), do_caching (0)
+dhashclient::dhashclient (ptr<axprt_stream> _x, int n, ptr<chord> node)
+  : x (_x), clntnode(node), do_caching (0), nreplica (n)
 {
   clntsrv = asrv::alloc (x, dhashclnt_program_1,
 			 wrap (this, &dhashclient::dispatch));
@@ -50,7 +50,7 @@ dhashclient::dispatch (svccb *sbp)
       path.push_back (next);
       clntnode->doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, arg, i_res,
 		       wrap(this, &dhashclient::lookup_iter_cb, 
-			    sbp, i_res, next, path));
+			    sbp, i_res, path));
 
     } 
     break;
@@ -172,7 +172,6 @@ dhashclient::insert_store_cb(svccb *sbp, dhash_storeres *res,
 void 
 dhashclient::lookup_iter_cb (svccb *sbp, 
 			     dhash_fetchiter_res *res,
-			     chordID prev,
 			     route path,
 			     clnt_stat err) 
 {
@@ -182,9 +181,13 @@ dhashclient::lookup_iter_cb (svccb *sbp,
   if (err) {
     /* CASE I */
     warn << "Case I\n";
-    chordID last = path.pop_back ();
+    chordID last;
+    if (path.size () > 0)
+      last = path.pop_back ();
     if (path.size () > 0) {
+      warn << "popped " << last << " off path\n";
       chordID plast = path.back ();
+      warn << plast << " was on back of path\n";
       clntnode->alert (plast, last);
       dhash_fetchiter_res *nres = New dhash_fetchiter_res (DHASH_CONTINUE);
       /* assumes an in-order RPC transport, otherwise retry
@@ -192,17 +195,17 @@ dhashclient::lookup_iter_cb (svccb *sbp,
       clntnode->doRPC (plast, dhash_program_1, DHASHPROC_FETCHITER, 
 		       rarg, nres,
 		       wrap(this, &dhashclient::lookup_iter_cb, 
-			    sbp, nres, prev, path));
+			    sbp, nres, path));
     } else {
       warn << "Case I (no succs)\n"; 
       vec<chord_node> succ;
-      for (int i = 0; i < 5; i++) {
+      for (int i = 0; i < nreplica; i++) {
 	chord_node node;
 	node.x = clntnode->nth_successorID (i);
 	node.r = clntnode->locations->getlocation (node.x)->addr;
 	succ.push_back (node);
       }
-      query_successors (succ, sbp, rarg);
+      query_successors (succ, path, sbp, rarg);
     }
   } else if (res->status == DHASH_COMPLETE) {
     /* CASE II */
@@ -213,11 +216,13 @@ dhashclient::lookup_iter_cb (svccb *sbp,
     fres->resok->offset = res->compl_res->offset;
     fres->resok->attr = res->compl_res->attr;
     fres->resok->hops = path.size ();
-    fres->resok->source = prev;
+    fres->resok->source = path.back ();
     cache_on_path (arg->key, path);
     sbp->reply (fres);
   } else if (res->status == DHASH_CONTINUE) {
     chordID next = res->cont_res->next.x;
+    chordID prev = path.back ();
+    warn << prev << " replied with " << next << "\n";
     if (next == prev) {
       warn << "Case III.a\n";
       if (res->cont_res->succ_list.size () == 0) 
@@ -227,11 +232,10 @@ dhashclient::lookup_iter_cb (svccb *sbp,
 	warn << "Case III.b\n";
 	/* CASE III.b */
 	vec<chord_node> succ;
-	for (unsigned int i = 0; i < res->cont_res->succ_list.size (); i++) {
-	  warn << "will query  " << res->cont_res->succ_list[i].x << "\n";
+	for (unsigned int i = 0; i < res->cont_res->succ_list.size (); i++) 
 	  succ.push_back (res->cont_res->succ_list[i]);
-	}
-	query_successors (succ, sbp, rarg);
+
+	query_successors (succ, path, sbp, rarg);
       }
     } else {
       warn << "Case IV\n";
@@ -239,11 +243,12 @@ dhashclient::lookup_iter_cb (svccb *sbp,
       clntnode->locations->cacheloc (next, res->cont_res->next.r);
       dhash_fetchiter_res *nres = New dhash_fetchiter_res (DHASH_CONTINUE);
       path.push_back (next);
+      warn << "pushed " << next << " on path\n";
       assert (path.size () < 1000);
       clntnode->doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, 
 		       rarg, nres,
 		       wrap(this, &dhashclient::lookup_iter_cb, 
-			    sbp, nres, next, path));
+			    sbp, nres, path));
     }
   } else 
     sbp->replyref (DHASH_NOENT);
@@ -253,6 +258,7 @@ dhashclient::lookup_iter_cb (svccb *sbp,
 
 void
 dhashclient::query_successors (vec<chord_node> succ, 
+			       route path,
 			       svccb *sbp,
 			       ptr<dhash_fetch_arg> rarg) 
 {
@@ -263,12 +269,13 @@ dhashclient::query_successors (vec<chord_node> succ,
   clntnode->doRPC (first_node.x, dhash_program_1, DHASHPROC_FETCH,
 		   rarg, fres,
 		   wrap (this, &dhashclient::query_successors_fetch_cb,
-			 succ, sbp, rarg, fres));
+			 succ, path, sbp, rarg, fres));
   
 }
 
 void
 dhashclient::query_successors_fetch_cb (vec<chord_node> succ,
+					route path,
 					svccb *sbp, 
 					ptr<dhash_fetch_arg> rarg, 
 					dhash_res *fres, 
@@ -284,6 +291,7 @@ dhashclient::query_successors_fetch_cb (vec<chord_node> succ,
     }
 
     chord_node next_succ = succ.pop_front ();
+    path.push_back (next_succ.x);
     clntnode->locations->cacheloc (next_succ.x,
 				   next_succ.r);
     
@@ -291,11 +299,11 @@ dhashclient::query_successors_fetch_cb (vec<chord_node> succ,
     clntnode->doRPC (next_succ.x, dhash_program_1, DHASHPROC_FETCH,
 		     rarg, nfres,
 		     wrap (this, &dhashclient::query_successors_fetch_cb,
-			   succ, sbp, rarg, nfres));
+			   succ, path, sbp, rarg, nfres));
     
   } else if (fres->status == DHASH_OK) {
     warnx << "qs: found it " << fres->resok->attr.size << " \n";
-    fres->resok->hops = succ.size ();
+    fres->resok->hops = path.size ();
     sbp->reply (fres);
   } else {
     fatal << "WTF\n";

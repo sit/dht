@@ -33,6 +33,7 @@ int do_cache;
 str db_name;
 dhash *dh[MAX_VNODES + 1];
 int ndhash = 0;
+int nreplica;
 
 void stats ();
 void print ();
@@ -43,7 +44,7 @@ client_accept (int fd)
   if (fd < 0)
     fatal ("EOF\n");
   ref<axprt_stream> x = axprt_stream::alloc (fd);
-  dhashclient *c = New dhashclient (x, chordnode);
+  dhashclient *c = New dhashclient (x, nreplica, chordnode);
   if (do_cache) c->set_caching (1);
   else c->set_caching (0);
 }
@@ -163,7 +164,6 @@ parseconfigfile (str cf, int nvnode, int set_rpcdelay)
   myport = 0;
   int max_connections = 400;
   int max_loccache = 250;
-  int nreplica = 0;
 
   while (pa.getline (&av, &line)) {
     if (!strcasecmp (av[0], "#")) {
