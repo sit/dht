@@ -99,27 +99,19 @@ struct store_state {
   bool iscomplete ();
 };
 
-struct dhash_lease {
-  chordID key;
-  time_t touch;
-  time_t lease;
-  ihash_entry <dhash_lease> link;
-  dhash_lease (chordID k) : key(k), touch(0), lease(0) { }
-};
-
 struct dhash_block {
   char *data;
   size_t len;
+  long version;
   int hops;
   int errors;
   int retries;
-  int lease;
   chordID source;
 
   ~dhash_block () {  delete [] data; }
 
   dhash_block (const char *buf, size_t buflen)
-    : data (New char[buflen]), len (buflen), lease (0)
+    : data (New char[buflen]), len (buflen)
   {
     if (buf)
       memcpy (data, buf, len);
@@ -135,6 +127,10 @@ struct pk_partial {
   pk_partial (ptr<dbrec> v, int c) : val (v), 
 		bytes_read (0),
 		cookie (c) {};
+};
+
+struct keyhash_meta {
+  long version;
 };
 
 class dhashcli;
@@ -165,6 +161,7 @@ class dhash {
   int pk_partial_cookie;
   
   ptr<dbfe> db;
+  ptr<dbfe> keyhash_db;
   ptr<vnode> host_node;
   dhashcli *cli;
   ptr<route_factory> r_factory;
@@ -187,16 +184,18 @@ class dhash {
   ihash<int, pk_partial, &pk_partial::cookie, 
     &pk_partial::link> pk_cache;
   
-  ihash<chordID, dhash_lease, &dhash_lease::key, 
-    &dhash_lease::link, hashID> leases;
-
   qhash<int, cbblockuc_t> bcpt;
   qhash<int, cbstorecbuc_t> scpt;
+
+  unsigned keyhash_mgr_rpcs;
 
   void sendblock_XXX (XXX_SENDBLOCK_ARGS *a);
   void sendblock (bigint destID, bigint blockID, bool last, callback<void>::ref cb);
   void sendblock_cb (callback<void>::ref cb, dhash_stat err, chordID blockID);
 
+  void keyhash_mgr_timer ();
+  void keyhash_mgr_lookup (chordID key, dhash_stat err, chordID host);
+  void keyhash_sync_done ();
   void replica_maintenance_timer (u_int index);
   void partition_maintenance_timer ();
   void partition_maintenance_lookup_cb (dhash_stat err, chordID hostID);
@@ -232,7 +231,7 @@ class dhash {
   
   void store (s_dhash_insertarg *arg, cbstore cb);
   void store_cb (store_status type, chord_node sender, chordID key, chordID srcID,
-                 int32 nonce, cbstore cb, int stat);
+                 int32 nonce, cbstore cb, dhash_stat stat);
   void store_repl_cb (cbstore cb, chord_node sender, chordID srcID,
                       int32 nonce, dhash_stat err);
   void send_storecb (chord_node sender, chordID srcID, uint32 nonce,
@@ -305,6 +304,7 @@ class dhash {
   timecb_t *check_replica_tcb;
   timecb_t *merkle_rep_tcb;
   timecb_t *merkle_part_tcb;
+  timecb_t *keyhash_mgr_tcb;
 
   /* statistics */
   long bytes_stored;
@@ -354,6 +354,12 @@ dhash_ctype block_type (ref<dhash_block> d);
 dhash_ctype block_type (ptr<dhash_block> d);
 dhash_ctype block_type (char *value, unsigned int len);
 
+long keyhash_version (ptr<dbrec> data);
+long keyhash_version (ref<dbrec> data);
+long keyhash_version (ptr<dhash_block> data);
+long keyhash_version (ref<dhash_block> data);
+long keyhash_version (char *value, unsigned int len);
+
 struct insert_info {
   chordID key;
   chordID destID;
@@ -368,16 +374,12 @@ typedef callback<void, dhash_stat, ptr<dhash_block>, route>::ptr cb_ret;
 typedef callback<void, dhash_stat, chordID>::ref dhashcli_lookupcb_t;
 typedef callback<void, dhash_stat, chordID, route>::ref dhashcli_routecb_t;
 
+#define DHASHCLIENT_USE_CACHED_SUCCESSOR 0x1
+#define DHASHCLIENT_NO_RETRY_ON_LOOKUP   0x2
 
 class route_dhash : public virtual refcount {
-  
 public:
-  route_dhash (ptr<route_factory> f,
-	       chordID key, 
-	       dhash *dh,
-	       bool lease = false,
-	       bool ucs = false);
-  
+  route_dhash (ptr<route_factory> f, chordID key, dhash *dh, int options = 0);
   ~route_dhash ();
 
   void execute (cb_ret cbi, chordID first_hop_guess, u_int retries = 10);
@@ -390,8 +392,7 @@ public:
   dhash *dh;
   u_int retries;
   route_iterator *chord_iterator;
-  bool ask_for_lease;
-  bool use_cached_succ;
+  int options;
   dhash_stat result;
   chordID blockID;
   cb_ret cb;
@@ -436,16 +437,15 @@ private:
  public:
   dhashcli (ptr<vnode> node, dhash *dh, ptr<route_factory> r_factory, 
 	    bool do_cache);
-  void retrieve (chordID blockID, bool askforlease, bool usecachedsucc, 
-		 cb_ret cb);
+  void retrieve (chordID blockID, int options, cb_ret cb);
 
   void retrieve (chordID source, chordID blockID, cb_ret cb);
   void insert (chordID blockID, ref<dhash_block> block, 
-               bool usecachedsucc, cbinsert_t cb);
+               int options, cbinsert_t cb);
   void storeblock (chordID dest, chordID blockID, ref<dhash_block> block,
 		   bool last, cbinsert_t cb, store_status stat = DHASH_STORE);
 
-  void lookup (chordID blockID, bool usecachedsucc, dhashcli_lookupcb_t cb);
+  void lookup (chordID blockID, int options, dhashcli_lookupcb_t cb);
 };
 
 
@@ -457,7 +457,7 @@ private:
   // inserts under the specified key
   // (buf need not remain involatile after the call returns)
   void insert (bigint key, const char *buf, size_t buflen, 
-	       cbinsertgw_t cb,  dhash_ctype t, bool usecachedsucc);
+	       cbinsertgw_t cb,  dhash_ctype t, int options);
   void insertcb (cbinsertgw_t cb, bigint key, 
 		 ptr<dhash_insert_res>, clnt_stat err);
   void retrievecb (cb_ret cb, bigint key,  
@@ -472,23 +472,20 @@ public:
 
   // inserts under the contents hash. 
   // (buf need not remain involatile after the call returns)
-  void insert (const char *buf, size_t buflen, cbinsertgw_t cb,
-               bool usecachedsucc = false);
+  void insert (const char *buf, size_t buflen, cbinsertgw_t cb, int options = 0);
   void insert (bigint key, const char *buf, size_t buflen, cbinsertgw_t cb,
-               bool usecachedsucc = false);
+               int options = 0);
 
   // insert under hash of public key
-  void insert (ptr<sfspriv> key, const char *buf, size_t buflen,
-               cbinsertgw_t cb, bool usecachedsucc = false);
-  void insert (sfs_pubkey2 pk, sfs_sig2 sig, const char *buf, size_t buflen, 
-	       cbinsertgw_t cb, bool usecachedsucc = false);
+  void insert (ptr<sfspriv> key, const char *buf, size_t buflen, long ver,
+               cbinsertgw_t cb, int options = 0);
+  void insert (sfs_pubkey2 pk, sfs_sig2 sig, const char *buf, size_t buflen,
+               long ver, cbinsertgw_t cb, int options = 0);
   void insert (bigint hash, sfs_pubkey2 pk, sfs_sig2 sig,
-               const char *buf, size_t buflen,
-	       cbinsertgw_t cb, bool usecachedsucc = false);
+               const char *buf, size_t buflen, long ver,
+	       cbinsertgw_t cb, int options = 0);
 
   // retrieve block and verify
-#define DHASHCLIENT_RETRIEVE_USE_CACHED_SUCCESSOR 0x1
-#define DHASHCLIENT_RETRIEVE_ASK_FOR_LEASE        0x2
   void retrieve (bigint key, cb_ret cb, int options = 0);
 
   // synchronouslly call setactive.

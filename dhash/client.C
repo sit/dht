@@ -280,30 +280,19 @@ public:
 // DHASHCLI
 
  
-dhashcli::dhashcli (ptr<vnode> node, dhash *dh, ptr<route_factory> r_factory,  bool do_cache) : 
-  clntnode (node), 
-  do_cache (do_cache),
-  dh (dh),
-  r_factory (r_factory)
+dhashcli::dhashcli (ptr<vnode> node, dhash *dh, ptr<route_factory> r_factory,
+                    bool do_cache)
+  : clntnode (node), do_cache (do_cache), dh (dh), r_factory (r_factory)
 {
-  
 }
 
 void
-dhashcli::retrieve (chordID blockID, bool askforlease, 
-		    bool usecachedsucc, cb_ret cb)
-
+dhashcli::retrieve (chordID blockID, int options, cb_ret cb)
 {
   ///warn << "dhashcli::retrieve\n";
-
-  ref<route_dhash> iterator = New refcounted<route_dhash>(r_factory, 
-							  blockID,
-							  dh,
-							  askforlease,
-							  usecachedsucc);
-  
-  iterator->execute (wrap (this, &dhashcli::retrieve_hop_cb, 
-			   cb, blockID));
+  ref<route_dhash> iterator =
+    New refcounted<route_dhash> (r_factory, blockID, dh, options);
+  iterator->execute (wrap (this, &dhashcli::retrieve_hop_cb, cb, blockID));
 }
 
 void
@@ -352,7 +341,6 @@ dhashcli::retrieve (chordID source, chordID blockID, cb_ret cb)
 {
   ref<route_dhash> iterator = New refcounted<route_dhash>(r_factory, 
 							 blockID, dh);
-
   iterator->execute (wrap (this, &dhashcli::retrieve_with_source_cb, cb), 
 		     source);  
 }
@@ -369,11 +357,10 @@ dhashcli::retrieve_with_source_cb (cb_ret cb, dhash_stat status,
 
 void
 dhashcli::insert (chordID blockID, ref<dhash_block> block, 
-                  bool usecachedsucc, cbinsert_t cb)
+                  int options, cbinsert_t cb)
 {
-  lookup (blockID, usecachedsucc, 
-	  wrap (this, &dhashcli::insert_lookup_cb,
-		blockID, block, cb, 0));
+  lookup (blockID, options,
+          wrap (this, &dhashcli::insert_lookup_cb, blockID, block, cb, 0));
 }
 
 void
@@ -415,18 +402,15 @@ dhashcli::storeblock (chordID dest, chordID ID, ref<dhash_block> block,
 
 
 void
-dhashcli::lookup (chordID blockID, bool usecachedsucc, 
-		     dhashcli_lookupcb_t cb)
+dhashcli::lookup (chordID blockID, int options, dhashcli_lookupcb_t cb)
 {
-  
-  if (usecachedsucc) {
+  if (options & DHASHCLIENT_USE_CACHED_SUCCESSOR) {
     chordID x = clntnode->lookup_closestsucc (blockID);
     (*cb) (DHASH_OK, x);
   }
   else
-    clntnode->find_successor (blockID,
-			      wrap (this, &dhashcli::lookup_findsucc_cb,
-				    blockID, cb));
+    clntnode->find_successor
+      (blockID, wrap (this, &dhashcli::lookup_findsucc_cb, blockID, cb));
 }
 
 void

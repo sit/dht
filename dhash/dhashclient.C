@@ -108,7 +108,7 @@ dhashclient::append (chordID to, const char *buf, size_t buflen,
 
 void
 dhashclient::insert (bigint key, const char *buf,
-                     size_t buflen, cbinsertgw_t cb, bool usecachedsucc)
+                     size_t buflen, cbinsertgw_t cb, int options)
 {
   long type = DHASH_CONTENTHASH;
   xdrsuio x;
@@ -122,7 +122,7 @@ dhashclient::insert (bigint key, const char *buf,
       
       int m_len = x.uio ()->resid ();
       char *m_dat = suio_flatten (x.uio ());
-      insert (key, m_dat, m_len, cb, DHASH_CONTENTHASH, usecachedsucc);
+      insert (key, m_dat, m_len, cb, DHASH_CONTENTHASH, options);
       xfree (m_dat);
     } else {
       (*cb) (DHASH_ERR, NULL); // marshalling failed.
@@ -131,10 +131,10 @@ dhashclient::insert (bigint key, const char *buf,
 
 void
 dhashclient::insert (const char *buf, size_t buflen, cbinsertgw_t cb,
-                     bool usecachedsucc)
+                     int options)
 {
   bigint key = compute_hash (buf, buflen);
-  insert(key, buf, buflen, cb, usecachedsucc);
+  insert(key, buf, buflen, cb, options);
 }
 
 
@@ -145,39 +145,39 @@ dhashclient::insert (const char *buf, size_t buflen, cbinsertgw_t cb,
  * long type;
  * sfs_pubkey2 pub_key
  * sfs_sig2 sig
+ * long version
  * long datalen
  * char block_data[datalen]
- *
  */
 void
-dhashclient::insert (ptr<sfspriv> key, const char *buf, size_t buflen,
-                     cbinsertgw_t cb, bool usecachedsucc)
+dhashclient::insert (ptr<sfspriv> key, const char *buf, size_t buflen, long ver,
+                     cbinsertgw_t cb, int options)
 {
   str msg (buf, buflen);
   sfs_sig2 s;
   key->sign (&s, msg);
   sfs_pubkey2 pk;
   key->export_pubkey (&pk);
-  insert(pk, s, buf, buflen, cb, usecachedsucc);
+  insert(pk, s, buf, buflen, ver, cb, options);
 }
 
 void
 dhashclient::insert (sfs_pubkey2 key, sfs_sig2 sig,
-                     const char *buf, size_t buflen, 
-		     cbinsertgw_t cb, bool usecachedsucc)
+                     const char *buf, size_t buflen, long ver,
+		     cbinsertgw_t cb, int options)
 {
   strbuf b;
   ptr<sfspub> pk = sfscrypt.alloc (key);
   pk->export_pubkey (b, false);
   str pk_raw = b;
   chordID hash = compute_hash (pk_raw.cstr (), pk_raw.len ());
-  insert (hash, key, sig, buf, buflen, cb, usecachedsucc);
+  insert (hash, key, sig, buf, buflen, ver, cb, options);
 }
 
 void
 dhashclient::insert (bigint hash, sfs_pubkey2 key, sfs_sig2 sig,
-                     const char *buf, size_t buflen, 
-		     cbinsertgw_t cb, bool usecachedsucc)
+                     const char *buf, size_t buflen, long ver,
+		     cbinsertgw_t cb, int options)
 {
   long type = DHASH_KEYHASH;
 
@@ -187,31 +187,33 @@ dhashclient::insert (bigint hash, sfs_pubkey2 key, sfs_sig2 sig,
   if (XDR_PUTLONG (&x, (long int *)&type) &&
       xdr_sfs_pubkey2 (&x, &key) &&
       xdr_sfs_sig2 (&x, &sig) &&
+      XDR_PUTLONG (&x, &ver) &&
       XDR_PUTLONG (&x, (long int *)&buflen) &&
       (m_buf = (char *)XDR_INLINE (&x, size)))
     {
       memcpy (m_buf, buf, buflen);
       int m_len = x.uio ()->resid ();
       char *m_dat = suio_flatten (x.uio ());
-      insert (hash, m_dat, m_len, cb, DHASH_KEYHASH, usecachedsucc);
+      insert (hash, m_dat, m_len, cb, DHASH_KEYHASH, options);
       xfree (m_dat);
     } else {
       ptr<insert_info> i = New refcounted<insert_info>(hash, bigint(0));
       cb (DHASH_ERR, i); // marshalling failed.
     }
 }
+
 // generic insert (called by above methods)
 void
 dhashclient::insert (bigint key, const char *buf, 
 		     size_t buflen, cbinsertgw_t cb,
-		     dhash_ctype t, bool usecachedsucc)
+		     dhash_ctype t, int options)
 {
   dhash_insert_arg arg;
   arg.blockID = key;
   arg.block.setsize (buflen);
   memcpy (arg.block.base (), buf, buflen);
   arg.ctype = t;
-  arg.usecachedsucc = usecachedsucc;
+  arg.options = options;
 
   ptr<dhash_insert_res> res = New refcounted<dhash_insert_res> ();
   gwclnt->call (DHASHPROC_INSERT, &arg, res, 
@@ -251,8 +253,7 @@ dhashclient::retrieve (bigint key, cb_ret cb, int options)
   ref<dhash_retrieve_res> res = New refcounted<dhash_retrieve_res> (DHASH_OK);
   dhash_retrieve_arg arg;
   arg.blockID = key;
-  arg.usecachedsucc = (options & DHASHCLIENT_RETRIEVE_USE_CACHED_SUCCESSOR);
-  arg.askforlease = (options & DHASHCLIENT_RETRIEVE_ASK_FOR_LEASE);
+  arg.options = options;
   gwclnt->call (DHASHPROC_RETRIEVE, &arg, res, 
 		wrap (this, &dhashclient::retrievecb, cb, key, res));
 }
@@ -281,7 +282,6 @@ dhashclient::retrievecb (cb_ret cb, bigint key,
       blk->hops = res->resok->hops;
       blk->errors = res->resok->errors;
       blk->retries = res->resok->retries;
-      blk->lease = res->resok->lease;
       route path;
       for (u_int i = 0; i < res->resok->path.size (); i++)
 	path.push_back (res->resok->path[i]);

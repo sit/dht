@@ -22,7 +22,8 @@ static int gnonce;
 
 class dhash_download {
 private:
-  typedef callback<void, ptr<dhash_fetchiter_res>, int, clnt_stat>::ptr gotchunkcb_t;
+  typedef callback<void, ptr<dhash_fetchiter_res>, int, clnt_stat>::ptr
+    gotchunkcb_t;
 
   ptr<vnode> clntnode;
   uint npending;
@@ -30,7 +31,6 @@ private:
   chordID sourceID;
   chordID blockID;
   cbretrieve_t cb;
-  bool askforlease;
 
   ptr<dhash_block> block;
   int nextchunk;     //  fast
@@ -39,15 +39,15 @@ private:
   bool didrexmit;
 
   dhash_download (ptr<vnode> clntnode, chordID sourceID, chordID blockID,
-		  char *data, u_int len, u_int totsz, int cookie, int lease, 
-		  bool askforlease, cbretrieve_t cb)
+		  char *data, u_int len, u_int totsz, int cookie,
+		  cbretrieve_t cb)
     : clntnode (clntnode),  npending (0), error (false), sourceID (sourceID), 
-      blockID (blockID), cb (cb), askforlease (askforlease), 
-      nextchunk (0), numchunks (0), didrexmit (false)
+      blockID (blockID), cb (cb), nextchunk (0), numchunks (0),
+      didrexmit (false)
   {
     // the first chunk of data may be passed in
     if (data) {
-      process_first_chunk (data, len, totsz, cookie, lease);
+      process_first_chunk (data, len, totsz, cookie);
       check_finish ();
     } else
       getchunk (0, MTU, 0, wrap (this,&dhash_download::first_chunk_cb));
@@ -62,7 +62,6 @@ private:
     arg->start = start;
     arg->len   = len;
     arg->cookie = cookie;
-    arg->lease = askforlease;
 
     npending++;
     ptr<dhash_fetchiter_res> res = New refcounted<dhash_fetchiter_res> ();
@@ -72,7 +71,8 @@ private:
   }
   
   void
-  gotchunk (gotchunkcb_t cb, ptr<dhash_fetchiter_res> res, int chunknum, clnt_stat err)
+  gotchunk (gotchunkcb_t cb, ptr<dhash_fetchiter_res> res,
+            int chunknum, clnt_stat err)
   {
     (*cb) (res, chunknum, err);
   }
@@ -90,22 +90,19 @@ private:
       size_t totsz   = res->compl_res->attr.size;
       size_t datalen = res->compl_res->res.size ();
       char  *data    = res->compl_res->res.base ();
-      process_first_chunk (data, datalen, totsz, cookie, 0);
+      process_first_chunk (data, datalen, totsz, cookie);
     }
     check_finish ();
   }
 
   void
-  process_first_chunk (char *data, size_t datalen, size_t totsz, int cookie, int lease)
+  process_first_chunk (char *data, size_t datalen, size_t totsz, int cookie)
   {
     block            = New refcounted<dhash_block> ((char *)NULL, totsz);
     block->source    = sourceID;
     block->hops      = 0;
     block->errors    = 0;
-    block->lease     = 0;
-    if (askforlease)
-      block->lease = lease;
-    
+
     add_data (data, datalen, 0);
 
     //issue the RPCs to get the other chunks
@@ -126,9 +123,6 @@ private:
     if (err || (res && res->status != DHASH_COMPLETE))
       fail (dhasherr2str (res->status));
     else {
-      if (askforlease && block->lease > res->compl_res->lease)
-	block->lease = res->compl_res->lease;
-      
       if (!didrexmit && (chunknum > nextchunk)) {
 	warn << "FAST retransmit: " << blockID << " chunk " << nextchunk << " being retransmitted\n";
 	clntnode->resendRPC(seqnos[nextchunk]);
@@ -173,10 +167,9 @@ private:
 
 public:
   static void execute (ptr<vnode> clntnode, chordID sourceID, chordID blockID,
-		       char *data, u_int len, u_int totsz, int cookie, int lease, 
-		       bool askforlease, cbretrieve_t cb)
+		       char *data, u_int len, u_int totsz, int cookie, cbretrieve_t cb)
   {
-    vNew dhash_download (clntnode, sourceID, blockID, data, len, totsz, cookie, lease, askforlease, cb);
+    vNew dhash_download (clntnode, sourceID, blockID, data, len, totsz, cookie, cb);
   }
 };
 
@@ -187,11 +180,9 @@ public:
 // route_dhash -- lookups and downloads a block.
 
 route_dhash::route_dhash (ptr<route_factory> f, chordID blockID, dhash *dh,
-			  bool lease, bool ucs)
-
-  : dh (dh), ask_for_lease (lease), use_cached_succ (ucs), 
-			    blockID (blockID), f (f), dcb (NULL), 
-			    retries_done (0)
+                          int options)
+  : dh (dh), options (options), blockID (blockID), f (f), dcb (NULL),
+    retries_done (0)
 {
   ptr<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg> ();
   arg->key = blockID;
@@ -200,7 +191,6 @@ route_dhash::route_dhash (ptr<route_factory> f, chordID blockID, dhash *dh,
   arg->len = MTU;
   arg->cookie = 0;
   arg->nonce = gnonce++;
-  arg->lease = ask_for_lease;
   nonce = arg->nonce;
 
   dh->register_block_cb (arg->nonce, wrap (mkref(this), &route_dhash::block_cb));
@@ -223,7 +213,7 @@ route_dhash::~route_dhash ()
 void
 route_dhash::reexecute ()
 {
-  if (retries == 0) {
+  if (retries == 0 || options & DHASHCLIENT_NO_RETRY_ON_LOOKUP) {
     warn << "route_dhash: no more retries...giving up\n";
     (*cb) (DHASH_NOENT, NULL, path ());
     dh->unregister_block_cb (nonce);
@@ -235,7 +225,7 @@ route_dhash::reexecute ()
     dcb = delaycb (LOOKUP_TIMEOUT, wrap (mkref(this), &route_dhash::timed_out));
     dh->register_block_cb 
       (nonce, wrap (mkref(this), &route_dhash::block_cb));
-    chord_iterator->send (use_cached_succ);
+    chord_iterator->send (options & DHASHCLIENT_USE_CACHED_SUCCESSOR);
   }
 }
 
@@ -254,7 +244,7 @@ route_dhash::execute (cb_ret cbi, u_int _retries)
   retries = _retries;
   cb = cbi;
   dcb = delaycb (LOOKUP_TIMEOUT, wrap (mkref(this), &route_dhash::timed_out));
-  chord_iterator->send (use_cached_succ);
+  chord_iterator->send (options & DHASHCLIENT_USE_CACHED_SUCCESSOR);
 }
 
 void
@@ -276,7 +266,9 @@ route_dhash::timed_out ()
 void
 route_dhash::walk (vec<chord_node> succs)
 {
-  if (succs.size() == 0) {
+  if (options & DHASHCLIENT_NO_RETRY_ON_LOOKUP)
+    reexecute (); // reexecute will call user callback
+  else if (succs.size() == 0) {
     warn << "walk: No luck walking successors, retrying..\n";
     delaycb (5, wrap (mkref(this), &route_dhash::reexecute));
   } else {
@@ -295,7 +287,7 @@ route_dhash::walk_cachedloc (vec<chord_node> succs, chordID id, bool ok, chordst
   } else {
     warn << "walk: challenge of " << id << " succeeded\n";
     dhash_download::execute
-      (f->get_vnode (), id, blockID, NULL, 0, 0, 0, 0, ask_for_lease,
+      (f->get_vnode (), id, blockID, NULL, 0, 0, 0,
        wrap (mkref(this), &route_dhash::walk_gotblock, succs));
   }
 }
@@ -330,8 +322,7 @@ route_dhash::block_cb (s_dhash_block_arg *arg)
   } else {
     dhash_download::execute (f->get_vnode (), arg->source, blockID,
 			     arg->res.base (), arg->res.size (), 
-			     arg->attr.size,
-			     arg->cookie, arg->lease, ask_for_lease,
+			     arg->attr.size, arg->cookie,
 			     wrap (mkref(this), &route_dhash::gotblock));
   }
 }

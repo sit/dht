@@ -158,7 +158,7 @@ sfsrodb_put (ptr<sfspriv> sk, void *data, size_t len)
   //warn << t() << " -- INSERT\n";
   timespec ts;
   clock_gettime (CLOCK_REALTIME, &ts);
-  dhash_cli->insert (sk, (char *)data, len, wrap (sfsrodb_put_cb, ts));
+  dhash_cli->insert (sk, (char *)data, len, 0, wrap (sfsrodb_put_cb, ts));
 }
 
 

@@ -42,13 +42,12 @@
 static int MERKLE_ENABLED = getenv("MERKLE_ENABLED") ? atoi(getenv("MERKLE_ENABLED")) : 1;
 static int PARTITION_ENABLED = getenv("PARTITION_ENABLED") ? atoi(getenv("PARTITION_ENABLED")) : 0;
 static int REPLICATE = getenv("REPLICATE") ? atoi(getenv("REPLICATE")) : 1;
+static int KEYHASHDB = getenv("KEYHASHDB") ? atoi(getenv("KEYHASHDB")) : 0;
 
-#define SYNCTM 30
-#define REPTM 10
-#define PRTTM 5
-
-#define LEASE_TIME 2
-#define LEASE_INACTIVE 60
+#define SYNCTM    30
+#define KEYHASHTM 10
+#define REPTM     10
+#define PRTTM     5
 
 EXITFN(close_databases);
 static vec<dbfe *> open_databases;
@@ -111,7 +110,7 @@ dhash::dhash(str dbname, ptr<vnode> node,
   pk_partial_cookie = 1;
 
   bool secondtry = false;
- dbagain:
+dbagain:
   db = New refcounted<dbfe>();
   
   //set up the options we want
@@ -125,7 +124,7 @@ dhash::dhash(str dbname, ptr<vnode> node,
     warn << "open returned: " << strerror(err) << "\n";
     exit (-1);
   }
-
+ 
   if (!verifydb (db)) {
     warn << "Database '" << dbname << "' is corrupt.  deleting it.\n"; 
     db = NULL; // refcounted
@@ -141,6 +140,40 @@ dhash::dhash(str dbname, ptr<vnode> node,
   }
 
   open_databases.push_back (db);
+
+  if (KEYHASHDB) {
+keyhashdbagain:
+    keyhash_db = New refcounted<dbfe>();
+    secondtry = false;
+
+    strbuf b = dbname;
+    b << ".m";
+    str s = b;
+    if (int err = keyhash_db->opendb(const_cast < char *>(s.cstr()), opts)) {
+      warn << "keyhash db file: " << s <<"\n";
+      warn << "open returned: " << strerror(err) << "\n";
+      exit (-1);
+    }
+
+    // XXX should check that every public key in db is also in
+    // keyhash_db
+
+    if (!verifydb (keyhash_db)) {
+      warn << "Database '" << s << "' is corrupt.  deleting it.\n"; 
+      keyhash_db = NULL; // refcounted
+      int ret = unlink (s);
+      if (ret < 0) 
+        warn << "unlink failed: " << strerror(errno) << "\n";
+      if (secondtry) {
+        warn << "Second database verification failed.  Bailing\n";
+        exit (-1);
+      }
+      secondtry = true;
+      goto keyhashdbagain;
+    }
+
+    open_databases.push_back (keyhash_db);
+  }
 
   host_node = node;
   assert (host_node);
@@ -160,6 +193,7 @@ dhash::dhash(str dbname, ptr<vnode> node,
   }
   merkle_rep_tcb = NULL;
   merkle_part_tcb = NULL;
+  keyhash_mgr_tcb = NULL;
 
   // RPC demux
   warn << host_node->my_ID () << " registered dhash_program_1\n";
@@ -197,6 +231,11 @@ dhash::dhash(str dbname, ptr<vnode> node,
     install_replica_timer ();
     transfer_initial_keys ();
   }
+  if (KEYHASHDB) {
+    keyhash_mgr_rpcs = 0;
+    keyhash_mgr_tcb =
+      delaycb (KEYHASHTM, wrap (this, &dhash::keyhash_mgr_timer));
+  }
 }
 
 void
@@ -208,7 +247,7 @@ dhash::sendblock_XXX (XXX_SENDBLOCK_ARGS *a)
 void
 dhash::sendblock (bigint destID, bigint blockID, bool last, callback<void>::ref cb)
 {
-  warnx << "sendblock: to " << destID << ", id " << blockID << ", last " << last << "\n";
+  // warnx << "sendblock: to " << destID << ", id " << blockID << ", last " << last << "\n";
 
 #if 0
   ptr<location> l = host_node->locations->lookup (destID);
@@ -232,10 +271,73 @@ void
 dhash::sendblock_cb (callback<void>::ref cb, dhash_stat err, chordID blockID)
 {
   // XXX don't assert, how propogate the error??
+#if 0
   if (err)
     fatal << "Error sending block: " << blockID << ", err " << err << "\n";
+#else
+  if (err)
+    warn << "error sending block: " << blockID << ", err " << err << "\n";
+#endif
 
   (*cb) ();
+}
+
+void
+dhash::keyhash_sync_done ()
+{
+  keyhash_mgr_rpcs --;
+}
+
+void
+dhash::keyhash_mgr_timer ()
+{
+  keyhash_mgr_tcb = NULL;
+  update_replica_list ();
+
+  if (keyhash_mgr_rpcs == 0) {
+    vec<chordID> keys;
+    ptr<dbEnumeration> iter = keyhash_db->enumerate ();
+    ptr<dbPair> entry = iter->nextElement (id2dbrec(0));
+    while (entry) {
+      chordID n = dbrec2id (entry->key);
+      keys.push_back (n);
+      entry = iter->nextElement ();
+    }
+  
+    for (unsigned i=0; i<keys.size(); i++) {
+      chordID n = keys[i];
+      if (responsible (n)) {
+        // replicate a block if we are responsible for it
+        for (unsigned j=0; j<replicas.size(); j++) {
+	  // warnx << "for " << n << ", replicate to " << replicas[j] << "\n";
+          keyhash_mgr_rpcs ++;
+          sendblock (replicas[j], n, false,
+	             wrap (this, &dhash::keyhash_sync_done));
+	}
+      }
+      else {
+        keyhash_mgr_rpcs ++;
+        // otherwise, try to sync with the master node
+        cli->lookup
+	  (n, 0, wrap (this, &dhash::keyhash_mgr_lookup, n));
+        // XXX if we are not a replica, should mark the block so we dont
+        // serve it again
+      }
+    }
+  }
+  keyhash_mgr_tcb =
+    delaycb (KEYHASHTM, wrap (this, &dhash::keyhash_mgr_timer));
+}
+
+void
+dhash::keyhash_mgr_lookup (chordID key, dhash_stat err, chordID host)
+{
+  keyhash_mgr_rpcs --;
+  if (!err) {
+    keyhash_mgr_rpcs ++;
+    // warnx << "for " << key << ", sending to " << host << "\n";
+    sendblock (host, key, false, wrap (this, &dhash::keyhash_sync_done));
+  }
 }
 
 void
@@ -261,10 +363,12 @@ dhash::replica_maintenance_timer (u_int index)
 	assert (replica_syncer->done());
 	assert (*active_syncers[replica_syncer_dstID] == replica_syncer);
 	active_syncers.remove (replica_syncer_dstID);
+	replica_syncer = NULL;
       }
 
       if (active_syncers[replicaID]) {
-	warnx << "replica_maint: already syncing with " << replicaID << ", skip\n";
+	warnx << "replica_maint: already syncing with "
+	      << replicaID << ", skip\n";
 	replica_syncer = NULL;
       }
       else {
@@ -289,7 +393,8 @@ dhash::replica_maintenance_timer (u_int index)
     }
   }
 
-  merkle_rep_tcb = delaycb (REPTM, wrap (this, &dhash::replica_maintenance_timer, index));
+  merkle_rep_tcb =
+    delaycb (REPTM, wrap (this, &dhash::replica_maintenance_timer, index));
 }
 
 #if 0
@@ -324,6 +429,7 @@ dhash::partition_maintenance_timer ()
       assert (partition_syncer->done());
       assert (*active_syncers[partition_right] == partition_syncer);
       active_syncers.remove (partition_right);
+      partition_syncer = NULL;
     }
 
     // handles initial condition (-1) and key space wrap around..
@@ -337,8 +443,7 @@ dhash::partition_maintenance_timer ()
       partition_left = dbrec2id(d->key);
       partition_right = -1;
       cli->lookup
-	(partition_left, true,
-	 wrap (this, &dhash::partition_maintenance_lookup_cb));
+	(partition_left, 0, wrap (this, &dhash::partition_maintenance_lookup_cb));
       return;
     } else {
       // database must be empty 
@@ -409,22 +514,6 @@ dhash::sync_cb ()
 {
   // warn << "** SYNC\n";
   db->sync ();
-
-  // benjie: remove stale entries from the lease table
-  vec<dhash_lease *> stale;
-  dhash_lease *l = leases.first ();
-  while (l) {
-    if (timenow-l->lease > LEASE_INACTIVE)
-      stale.push_back (l);
-    l = leases.next (l);
-  }
-  for (unsigned i=0; i<stale.size(); i++) {
-    dhash_lease *l = stale[i];
-    // warn << "SYNC: remove " << l->key << " from lease table\n";
-    leases.remove (l);
-    delete l;
-  }
-
   delaycb (SYNCTM, wrap (this, &dhash::sync_cb));
 }
 
@@ -449,7 +538,6 @@ dhash::route_upcall (int procno,void *args, cbupcalldone_t cb)
       arg->offset = 0;
       arg->source = host_node->my_ID ();
       arg->nonce = farg->nonce;
-      arg->lease = 0;
       //could need caching...
       host_node->locations->cacheloc (farg->from.x, farg->from.r,
 				      wrap (this, &dhash::block_cached_loc, arg));
@@ -463,7 +551,6 @@ dhash::route_upcall (int procno,void *args, cbupcalldone_t cb)
     arg->offset = -1;
     arg->source = host_node->my_ID ();
     arg->nonce = farg->nonce;
-    arg->lease = 0;
 
     // we don't have the block, but if we just joined,
     // it should be at one of our successors.
@@ -508,22 +595,6 @@ dhash::block_to_res (dhash_stat err, s_dhash_fetch_arg *arg,
     res->compl_res->offset = arg->start;
     res->compl_res->source = host_node->my_ID ();
     res->compl_res->cookie = cookie;
-    res->compl_res->lease = 0;
-    if (arg->lease) {
-      // benjie: return a lease if block has not been touched recently
-      dhash_lease *l = leases[arg->key];
-      if (!l) {
-        l = New dhash_lease (arg->key);
-        leases.insert(l);
-      }
-      if (timenow-l->touch > LEASE_INACTIVE) {
-        if (l->lease < timenow+LEASE_TIME)
-	  l->lease = timenow+LEASE_TIME;
-        // warn << "FETCH: block inactive, lease set to " << l->lease << "\n";
-        res->compl_res->lease = LEASE_TIME;
-      }
-    }
-    
     memcpy (res->compl_res->res.base (), (char *)val->value + arg->start, n);
     
     //free the cookie if we just read the last byte
@@ -555,22 +626,6 @@ dhash::fetchiter_gotdata_cb (cbupcalldone_t cb, s_dhash_fetch_arg *a,
   arg->source = host_node->my_ID ();
   arg->nonce = a->nonce;
   arg->cookie = cookie;
-  arg->lease = 0;
-  if (a->lease) {
-    // benjie: need to make sure no one has write request on this block
-    dhash_lease *l = leases[a->key];
-    if (!l) {
-      l = New dhash_lease (a->key);
-      leases.insert(l);
-    }
-    if (timenow-l->touch > LEASE_INACTIVE) {
-      if (l->lease < timenow+LEASE_TIME)
-        l->lease = timenow+LEASE_TIME;
-      // warn << "BLOCK: block inactive, lease set to " << l->lease << "\n";
-      arg->lease = LEASE_TIME;
-    }
-  }
-
   //could need caching...
   host_node->locations->cacheloc (a->from.x, a->from.r,
 				  wrap (this, &dhash::block_cached_loc,	arg));
@@ -609,7 +664,6 @@ dhash::dispatch (svccb *sbp)
 
   case DHASHPROC_FETCHITER:
     {
-
       //the only reason to get here is to fetch the 2-n chunks
       s_dhash_fetch_arg *farg = sbp->template getarg<s_dhash_fetch_arg> ();
       if ((key_status (farg->key) != DHASH_NOTPRESENT) && (farg->len > 0)) {
@@ -1092,25 +1146,9 @@ dhash::append_after_db_store (cbstore cb, chordID k, int stat)
   //replicate?
 }
 
-
 void 
 dhash::store (s_dhash_insertarg *arg, cbstore cb)
 {
-  // benjie: check if there is a lease on the block. if there is an
-  // active lease, tell client to wait. in either case, remember that
-  // a client has tried to write the block; server will reject future
-  // leases.
-  dhash_lease *l = leases[arg->key];
-  if (l) {
-    // warn << "STORE: found lease " << l->lease << " now " << timenow << "\n";
-    l->touch = timenow;
-    if (l->lease > timenow) {
-      // warn << "STORE: lease is active, cannot store\n";
-      cb (DHASH_WAIT);
-      return;
-    }
-  }
-
   store_state *ss = pst[arg->key];
 
   if (ss == NULL) {
@@ -1125,6 +1163,7 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
   }
 
   if (ss->iscomplete()) {
+    bool ignore = false;
     ref<dbrec> k = id2dbrec(arg->key);
     ref<dbrec> d = New refcounted<dbrec> (ss->buf, ss->size);
 
@@ -1135,49 +1174,79 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
 
     dhash_ctype ctype = block_type (d);
 
-    if (ctype == DHASH_APPEND) {
-      ptr<dhash_block> contents = get_block_contents(d, ctype);
-      ptr<dbrec> c = New refcounted<dbrec>(contents->data, contents->len);
-      append (k, c, arg, cb);
-      return;
-    }
-    
-    if (!verify (arg->key, ctype, (char *)d->value, d->len) ||
-	((ctype == DHASH_NOAUTH) 
-	 && key_status (arg->key) != DHASH_NOTPRESENT)) {
-
-      warn << "*** NO VERIFY\n";
-      cb (DHASH_STORE_NOVERIFY);
-      if (ss) {
-	pst.remove (ss);
-	delete ss;
+    if (KEYHASHDB && ctype == DHASH_KEYHASH) {
+      ptr<dbrec> prev = db->lookup (k);
+      if (prev) {
+        long v0 = keyhash_version (prev);
+	long v1 = keyhash_version (d);
+        // warn << "old version " << v0 << ", new version " << v1 << "\n";
+	if (v0 >= v1)
+	  ignore = true;
+	else
+	  warnx << "receiving new copy of " << arg->key << "\n";
       }
-      return;
     }
 
-    dhash_stat stat;
-    chordID id = arg->key;
-    if (arg->type == DHASH_STORE) {
-      stat = DHASH_STORED;
-      keys_stored += 1;
-    } else if (arg->type == DHASH_REPLICA) {
-      stat = DHASH_REPLICATED;
-      keys_replicated += 1;
-    } else {
-      stat = DHASH_CACHED;
-      keys_cached += 1;
+    if (!ignore) {
+      if (ctype == DHASH_APPEND) {
+        ptr<dhash_block> contents = get_block_contents(d, ctype);
+        ptr<dbrec> c = New refcounted<dbrec>(contents->data, contents->len);
+        append (k, c, arg, cb);
+        return;
+      }
+     
+      if (!verify (arg->key, ctype, (char *)d->value, d->len) ||
+	  ((ctype == DHASH_NOAUTH) 
+	   && key_status (arg->key) != DHASH_NOTPRESENT)) {
+  
+        warn << "*** NO VERIFY\n";
+        cb (DHASH_STORE_NOVERIFY);
+        if (ss) {
+	  pst.remove (ss);
+	  delete ss;
+        }
+        return;
+      }
+
+      dhash_stat stat;
+      chordID id = arg->key;
+      if (arg->type == DHASH_STORE) {
+        stat = DHASH_STORED;
+        keys_stored += 1;
+      } else if (arg->type == DHASH_REPLICA) {
+        stat = DHASH_REPLICATED;
+        keys_replicated += 1;
+      } else {
+        stat = DHASH_CACHED;
+        keys_cached += 1;
+      }
+
+      /* statistics */
+      if (ss)
+        bytes_stored += ss->size;
+      else
+        bytes_stored += arg->data.size ();
+
+      dbwrite (k, d);
+  
+      if (KEYHASHDB && ctype == DHASH_KEYHASH) {
+        assert (keyhash_db);
+        long n = keyhash_version (d);
+	ptr<dbrec> p = keyhash_db->lookup (k);
+	if (p)
+	  keyhash_db->del (k);
+        struct keyhash_meta m;
+        m.version = n;
+        ref<dbrec> v = New refcounted<dbrec> (&m, sizeof(m));
+        keyhash_db->insert (k, v);
+      }
     }
-
-
-    /* statistics */
-    if (ss)
-      bytes_stored += ss->size;
-    else
-      bytes_stored += arg->data.size ();
-
-    dbwrite (k, d);
-    store_cb (arg->type, arg->from, arg->key, arg->srcID, arg->nonce, cb, 0);
-  } else
+    dhash_stat stat = DHASH_OK;
+    if (ignore && arg->type == DHASH_STORE)
+      stat = DHASH_STALE;
+    store_cb (arg->type, arg->from, arg->key, arg->srcID, arg->nonce, cb, stat);
+  }
+  else
     cb (DHASH_STORE_PARTIAL);
 }
 
@@ -1218,12 +1287,9 @@ dhash::send_storecb (chord_node sender, chordID srcID, uint32 nonce, dhash_stat 
 
 void
 dhash::store_cb (store_status type, chord_node sender,
-                 chordID key, chordID srcID, int32 nonce, cbstore cb, int stat) 
+                 chordID key, chordID srcID, int32 nonce, cbstore cb, dhash_stat stat) 
 {
-  if (stat)
-    (*cb) (DHASH_STOREERR);
-  else
-    (*cb) (DHASH_OK);
+  (*cb) (stat);
 
   if (!stat && type == DHASH_STORE)
     replicate_key
@@ -1391,20 +1457,19 @@ dhash::stop ()
 void
 dhash::dbwrite (ref<dbrec> key, ref<dbrec> data)
 {
+  bool ismutable = (block_type (data) != DHASH_CONTENTHASH);
   if (MERKLE_ENABLED) {
     block blk (to_merkle_hash (key), data);
     bool exists = !!database_lookup (mtree->db, blk.key);
-    bool Mutable = (block_type(data) != DHASH_CONTENTHASH);
     if (!exists)
       mtree->insert (&blk);
-    else if (exists && Mutable) {
+    else if (exists && ismutable) {
       // update an existing mutable block
       mtree->remove (&blk);
       mtree->insert (&blk);
     }
-  } else {
+  } else
     db->insert (key, data);
-  }
 }
 
 static void

@@ -71,7 +71,7 @@ dhashgateway::dispatch (svccb *sbp)
 
       ref<dhash_block> block =
 	New refcounted<dhash_block> (arg->block.base (), arg->block.size ());
-      dhcli->insert (arg->blockID, block, arg->usecachedsucc,
+      dhcli->insert (arg->blockID, block, arg->options,
 	             wrap (this, &dhashgateway::insert_cb, sbp));
 
     }
@@ -80,9 +80,7 @@ dhashgateway::dispatch (svccb *sbp)
   case DHASHPROC_RETRIEVE:
     {
       dhash_retrieve_arg *arg = sbp->template getarg<dhash_retrieve_arg> ();
-      dhcli->retrieve (arg->blockID,
-	               arg->askforlease,
-	               arg->usecachedsucc,
+      dhcli->retrieve (arg->blockID, arg->options,
 	               wrap (this, &dhashgateway::retrieve_cb, sbp));
     }
     break;
@@ -119,7 +117,6 @@ dhashgateway::retrieve_cb (svccb *sbp, dhash_stat stat, ptr<dhash_block> block, 
     res.resok->hops = block->hops;
     res.resok->errors = block->errors;
     res.resok->retries = block->retries;
-    res.resok->lease = block->lease;
     res.resok->path.setsize (path.size ());
     for (u_int i = 0; i < path.size (); i++) 
       res.resok->path[i] = path[i];

@@ -5,17 +5,16 @@ typedef int32 dhash_hopcount;
 
 enum dhash_stat {
   DHASH_OK = 0,
-  DHASH_ERR = 7,
-  DHASH_CHORDERR = 8,
-  DHASH_RPCERR = 9,
-  DHASH_STOREERR = 10,
   DHASH_NOENT = 1,
   DHASH_NOTPRESENT = 2,
   DHASH_RETRY = 3,
   DHASH_STORED = 4,
   RPC_NOHANDLER = 5,
-  DHASH_CACHED = 19,
   DHASH_REPLICATED = 6,
+  DHASH_ERR = 7,
+  DHASH_CHORDERR = 8,
+  DHASH_RPCERR = 9,
+  DHASH_STOREERR = 10,
   DHASH_STORE_PARTIAL = 11,
   DHASH_COMPLETE = 12,
   DHASH_CONTINUE = 13,
@@ -23,8 +22,10 @@ enum dhash_stat {
   DHASH_RFETCHDONE = 15,
   DHASH_RFETCHFORWARDED = 16,
   DHASH_STORE_NOVERIFY = 17,
-  DHASH_WAIT = 18,
-  DHASH_TIMEDOUT = 20
+  DHASH_STALE = 18,
+  DHASH_CACHED = 19,
+  DHASH_WAIT = 20,
+  DHASH_TIMEDOUT = 21
 };
 
 enum store_status {
@@ -68,7 +69,6 @@ struct s_dhash_fetch_arg {
   int32 len;
   int32 cookie;
   int32 nonce;
-  bool lease;
 };
 
 struct s_dhash_keystatus_arg {
@@ -119,7 +119,6 @@ struct dhash_fetchiter_complete_res {
   dhash_valueattr attr;
   chordID source;
   int32 cookie;
-  int32 lease;
 };
 
 union dhash_fetchiter_res switch (dhash_stat status) {
@@ -142,7 +141,6 @@ struct s_dhash_block_arg {
   dhash_valueattr attr;
   chordID source;
   int32 cookie;
-  int32 lease;
   /* if a the sender of this RPC doesn't have the block 
    * then he sends back a list of successors.
    */
@@ -190,13 +188,12 @@ struct dhash_insert_arg {
   chordID     blockID;    /* the key */
   dhash_value block;      /* the data block */
   dhash_ctype ctype;      /* and type of the data block */
-  bool usecachedsucc;
+  int options;
 };
 
 struct dhash_retrieve_arg {
   chordID blockID;
-  bool usecachedsucc;
-  bool askforlease;
+  int options;
 };
 
 struct dhash_retrieve_resok {
@@ -204,7 +201,6 @@ struct dhash_retrieve_resok {
   int hops;
   int errors;
   int retries;
-  int lease;
   chordID path<>;
 };
 

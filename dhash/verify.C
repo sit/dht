@@ -56,12 +56,14 @@ verify_key_hash (chordID key, char *buf, int len)
   sfs_sig2 sig;
 
   long contentlen, type;
+  long v;
   xdrmem x1 (buf, (unsigned)len, XDR_DECODE);
 
   if (!XDR_GETLONG (&x1, &type)) return false;
   if (type != DHASH_KEYHASH) return false;
   if (!xdr_sfs_pubkey2 (&x1, &pubkey)) return false;
   if (!xdr_sfs_sig2 (&x1, &sig)) return false;
+  if (!XDR_GETLONG (&x1, &v)) return false;
   if (!XDR_GETLONG (&x1, &contentlen)) return false;
 
   char *content;
@@ -115,6 +117,7 @@ get_block_contents (char *data, unsigned int len, dhash_ctype t)
 {
   // XXX make this function shorter...
   long type;
+  long version = 0;
   long contentlen;
   char *content;
 
@@ -128,6 +131,8 @@ get_block_contents (char *data, unsigned int len, dhash_ctype t)
       sfs_pubkey2 k;
       sfs_sig2 s;
       if (!xdr_sfs_pubkey2 (&x1, &k) || !xdr_sfs_sig2 (&x1, &s))
+	return NULL;
+      if (!XDR_GETLONG (&x1, &version))
 	return NULL;
     }
     /* FALL THROUGH */
@@ -147,7 +152,9 @@ get_block_contents (char *data, unsigned int len, dhash_ctype t)
     return NULL;
   }
 
-  return New refcounted<dhash_block> (content, contentlen);
+  ptr<dhash_block> d = New refcounted<dhash_block> (content, contentlen);
+  d->version = version;
+  return d;
 }
 
 
@@ -183,3 +190,45 @@ block_type (char *value, unsigned int len)
   if (!XDR_GETLONG (&x1, &type)) return DHASH_UNKNOWN;
   else return (dhash_ctype)type;
 }
+
+long
+keyhash_version (ptr<dhash_block> data)
+{
+  return keyhash_version (data->data, data->len);
+}
+
+long
+keyhash_version (ref<dhash_block> data)
+{
+  return keyhash_version (data->data, data->len);
+}
+
+long
+keyhash_version (ref<dbrec> data)
+{
+  return keyhash_version (data->value, data->len);
+}
+
+long
+keyhash_version (ptr<dbrec> data)
+{
+  return keyhash_version (data->value, data->len);
+}
+
+long
+keyhash_version (char *value, unsigned int len)
+{
+  long type;
+  xdrmem x1 (value, len, XDR_DECODE);
+  if (!XDR_GETLONG (&x1, &type))
+    return -1;
+  sfs_pubkey2 k;
+  sfs_sig2 s;
+  if (!xdr_sfs_pubkey2 (&x1, &k) || !xdr_sfs_sig2 (&x1, &s))
+    return -1;
+  long v;
+  if (!XDR_GETLONG (&x1, &v))
+    return -1;
+  return v;
+}
+

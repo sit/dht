@@ -180,7 +180,7 @@ main (int argc, char **argv)
 
     str key = file2wstr (argv[4]);
     ptr<sfspriv> sk = sfscrypt.alloc_priv (key, SFS_SIGN);
-    dhash.insert (sk, data, datasize, wrap (&store_cb_pk, dhash));
+    dhash.insert (sk, data, datasize, 0, wrap (&store_cb_pk, dhash));
     break;
     }
   case NOAUTH:
