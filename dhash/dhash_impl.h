@@ -80,7 +80,6 @@ class dhash_impl : public dhash {
   int pk_partial_cookie;
   
   ptr<dbfe> db;
-  ptr<dbfe> cache_db;
   ptr<dbfe> keyhash_db;
   ptr<vnode> host_node;
   dhashcli *cli;
@@ -100,9 +99,6 @@ class dhash_impl : public dhash {
   ihash<chordID, store_state, &store_state::key, 
     &store_state::link, hashID> pst;
   
-  ihash<chordID, store_state, &store_state::key, 
-    &store_state::link, hashID> pst_cache;
-
   ihash<int, pk_partial, &pk_partial::cookie, 
     &pk_partial::link> pk_cache;
   

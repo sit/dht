@@ -484,35 +484,6 @@ dhashcli::retrieve_fetch_cb (ptr<rcv_state> rs, u_int i,
 }
 
 void
-dhashcli::retrieve_from_cache (blockID n, cbretrieve_t cb)
-{
-  chord_node s;
-  clntnode->my_location ()->fill_node (s);
-  dhash_download::execute (clntnode, s, n, NULL, 0, 0, 0, cb);
-}
-
-void
-dhashcli::insert_to_cache (ref<dhash_block> block, cbinsert_path_t cb)
-{
-  dhash_store::execute (clntnode, clntnode->my_location (),
-                        blockID (block->ID, block->ctype, DHASH_BLOCK),
-		        block,
-		        wrap (this, &dhashcli::insert_to_cache_cb, cb),
-			DHASH_CACHE);
-}
-
-void
-dhashcli::insert_to_cache_cb (cbinsert_path_t cb, dhash_stat err,
-                              chordID id, bool present)
-{
-  vec<chordID> ret;
-  if (err)
-    cb (err, ret);
-  else
-    cb (DHASH_OK, ret);
-}
-
-void
 dhashcli::insert (ref<dhash_block> block, cbinsert_path_t cb, 
 		  int options, ptr<chordID> guess)
 {

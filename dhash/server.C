@@ -190,14 +190,10 @@ dhash_impl::dhash_impl (str dbname, u_int k) :
   opts.addOption ("opt_nodesize", 4096);
 
   db = New refcounted<dbfe>();
-  cache_db = New refcounted<dbfe> ();
   keyhash_db = New refcounted<dbfe> ();
 
-  str cdbs = strbuf () << dbname << ".c";
   str kdbs = strbuf () << dbname << ".k";
-  
   open_worker (db, dbname, opts, "db file");
-  open_worker (cache_db, cdbs, opts, "cache db file");
   open_worker (keyhash_db, kdbs, opts, "keyhash db file");
 
   // merkle state
@@ -414,7 +410,6 @@ dhash_impl::sync_cb ()
 {
   // warn << "** SYNC\n";
   db->sync ();
-  cache_db->sync ();
   keyhash_db->sync ();
   delaycb (synctm (), wrap (this, &dhash_impl::sync_cb));
 }
@@ -496,30 +491,13 @@ dhash_impl::dispatch (user_args *sbp)
       s_dhash_fetch_arg *farg = sbp->template getarg<s_dhash_fetch_arg> ();
       blockID id (farg->key, farg->ctype, farg->dbtype);
 
-      if (farg->ctype == DHASH_CONTENTHASH && farg->dbtype == DHASH_BLOCK) {
-	// benjie: the only place we store data as both CONTENTHASH
-	// and BLOCK (as oppose to fragment) is in cache_db. also, we
-	// don't distinguish between cached or stored keyhash blocks
-	// (the store code will use the regular db to "cache" keyhash
-	// blocks). hence, we don't ever have to deal with keyhash
-	// blocks from cache_db.
-	ptr<dbrec> ret = cache_db->lookup (id2dbrec (farg->key));
-	if (ret)
-          fetchiter_sbp_gotdata_cb (sbp, farg, -1, ret, DHASH_OK);
-	else {
-	  dhash_fetchiter_res res (DHASH_NOENT);
-	  sbp->reply (&res);
-	}
-      }
-      else {
-        if ((key_status (id) != DHASH_NOTPRESENT) && (farg->len > 0)) {
-	  //fetch the key and return it, end of story
-	  fetch (id, farg->cookie,
-	         wrap (this, &dhash_impl::fetchiter_sbp_gotdata_cb, sbp, farg));
-        } else {
-	  dhash_fetchiter_res res (DHASH_NOENT);
-	  sbp->reply (&res);
-        }
+      if ((key_status (id) != DHASH_NOTPRESENT) && (farg->len > 0)) {
+        //fetch the key and return it, end of story
+        fetch (id, farg->cookie,
+               wrap (this, &dhash_impl::fetchiter_sbp_gotdata_cb, sbp, farg));
+      } else {
+        dhash_fetchiter_res res (DHASH_NOENT);
+        sbp->reply (&res);
       }
     }
     break;
@@ -546,11 +524,8 @@ dhash_impl::dispatch (user_args *sbp)
       } 
       else {
         ref<dbrec> k = id2dbrec(sarg->key);
-
-	bool exists = (sarg->type == DHASH_CACHE) 
-	  ? (cache_db->lookup (k)) 
-	  : (dblookup (blockID (sarg->key, sarg->ctype, sarg->dbtype)));
-	
+	bool exists =
+	  dblookup (blockID (sarg->key, sarg->ctype, sarg->dbtype));
 	store (sarg, exists,
 	       wrap(this, &dhash_impl::storesvc_cb, sbp, sarg, exists));	
       }
@@ -758,19 +733,11 @@ dhash_impl::store (s_dhash_insertarg *arg, bool exists, cbstore cb)
     return;
   }
 
-  store_state *ss;
+  store_state *ss = pst[arg->key];
  
-  if (arg->type == DHASH_CACHE)
-    ss = pst_cache[arg->key];
-  else
-    ss = pst[arg->key];
-
   if (ss == NULL) {
     ss = New store_state (arg->key, arg->attr.size);
-    if (arg->type == DHASH_CACHE)
-      pst_cache.insert(ss);
-    else
-      pst.insert(ss);
+    pst.insert(ss);
   }
 
   if (!ss->addchunk(arg->offset, arg->offset+arg->data.size (), 
@@ -797,9 +764,6 @@ dhash_impl::store (s_dhash_insertarg *arg, bool exists, cbstore cb)
 	  break;
 	}
 
-	// don't distinguish regular stored and cached keyhash blocks,
-	// since their dbtypes are both DHASH_BLOCK.
-
 	ptr<dbrec> prev = keyhash_db->lookup (k);
 	if (prev) {
 	  if (is_keyhash_stale (prev, d)) {
@@ -819,30 +783,12 @@ dhash_impl::store (s_dhash_insertarg *arg, bool exists, cbstore cb)
       }
 
     case DHASH_APPEND:
-      if (arg->type == DHASH_CACHE)
-        pst_cache.remove (ss);
-      else
-	pst.remove (ss);
+      pst.remove (ss);
       delete ss;
       append (k, d, arg, cb);
       return;
 
     case DHASH_CONTENTHASH:
-      if (arg->type == DHASH_CACHE) {
-	if (!verify_content_hash (arg->key, ss->buf, ss->size)) {
-	  warning << "cache: cannot verify " << ss->size << " bytes\n";
-	  stat = DHASH_STORE_NOVERIFY;
-	  break;
-	}
-        if (!cache_db->lookup (k)) {
-          cache_db->insert (k, d);
-	  info << "db write: " << host_node->my_ID ()
-	       << " C " << arg->key << " " << ss->size << "\n";
-	}
-	break;
-      }
-
-      // not a cache block, falls thru
     case DHASH_NOAUTH:
     case DHASH_UNKNOWN:
       {
@@ -874,10 +820,7 @@ dhash_impl::store (s_dhash_insertarg *arg, bool exists, cbstore cb)
       bytes_stored += ss->size;
     }
 
-    if (arg->type == DHASH_CACHE)
-      pst_cache.remove (ss);
-    else
-      pst.remove (ss);
+    pst.remove (ss);
     delete ss;
 
     cb (stat);

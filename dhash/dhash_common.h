@@ -7,6 +7,8 @@
 
 #define DHASHCLIENT_GUESS_SUPPLIED 0x1
 #define DHASHCLIENT_NO_RETRY_ON_LOOKUP 0x2
+// pls leave these two options here, proxy server currently uses them
+// - benjie
 #define DHASHCLIENT_USE_CACHE 0x4
 #define DHASHCLIENT_CACHE 0x8
 #define DHASHCLIENT_SUCCLIST_OPT 0x10

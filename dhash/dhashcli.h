@@ -88,8 +88,6 @@ class dhashcli {
   void insert_store_cb (ref<sto_state> ss, route r, u_int i, 
 			u_int nstores, u_int min_needed,
 			dhash_stat err, chordID id, bool present);
-  void insert_to_cache_cb (cbinsert_path_t cb, dhash_stat err,
-                           chordID id, bool present);
   
   void fetch_frag (ptr<rcv_state> rs);
 
@@ -116,13 +114,9 @@ class dhashcli {
 public:
   dhashcli (ptr<vnode> node);
 
-  void retrieve_from_cache (blockID blockID, cbretrieve_t cb);
-
   void retrieve (blockID blockID, cb_ret cb, 
 		 int options = 0, 
 		 ptr<chordID> guess = NULL);
-
-  void insert_to_cache (ref<dhash_block> block, cbinsert_path_t cb);
 
   void insert (ref<dhash_block> block, cbinsert_path_t cb, 
 	       int options = 0, 
