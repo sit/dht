@@ -8,7 +8,7 @@ RateControlQueue::RateControlQueue(Node *n, double rate, int burst, void (*fn)(v
 {
   _node = n;
   _rate = rate/1000.0;
-  _delay_interval = (uint)(200/_rate);
+  _delay_interval = (uint)(100/_rate);
   _burst = -1*burst;
   _running = false;
   _empty_cb = fn;
@@ -91,5 +91,7 @@ RateControlQueue::stop_queue()
   _running = false;
   _quota = 0;
   QDEBUG(4) << "stopped total bytes " << _total_bytes << " start time " << _start_time << 
-    " avg bytes " << (double)_total_bytes/(now()-_start_time) << endl;
+    " avg bytes " << (double)(_total_bytes*1000)/(now()-_start_time) << endl;
+  _total_bytes = 0;
+  _start_time = 0;
 }

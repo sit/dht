@@ -121,6 +121,8 @@ class RateControlQueue {
     bool _running;
     int _quota;
     Time _last_update;
+    Time _start_time;
+    unsigned long long _total_bytes;
     
 };
 

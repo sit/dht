@@ -72,11 +72,10 @@ ChordAdapt::~ChordAdapt()
       NDEBUG(2) << "done lookup key " << printID(i.key()) << "timeout failed" << endl;
       record_lookup_stat(_me.ip, _me.ip, now()-i.value(), false, false, 0, 0, 0);
     }
+    if (ids.size() == 0) 
+    Node::print_stats();
   }
   delete loctable;
-  if (ids.size() == 0) 
-    Node::print_stats();
-
 }
 
 /* -------------- initstate ---------------- */
@@ -347,9 +346,21 @@ ChordAdapt::next_recurs(lookup_args *la, lookup_ret *lr)
 
   IDMap succ = loctable->succ(_me.id+1);
   if (!succ.ip || succ.ip == _me.ip) {
+    NDEBUG(4) << "next_recurs not joined key " << printID(la->key) 
+      << "failed" << endl;
     if (!_join_scheduled) {
       delaycb(200,&ChordAdapt::join, (Args *)0); //join again
     }
+    lookup_args *lla = new lookup_args;
+    bcopy(la,lla,sizeof(lookup_args));
+    lla->from = _me;
+    lla->nexthop = lla->src;
+    lookup_ret *llr = new lookup_ret;
+    llr->done = true;
+    llr->v.clear();
+    _rate_queue->do_rpc(lla->src.ip, &ChordAdapt::donelookup_handler,
+	&ChordAdapt::null_cb, lla, llr, 1, lla->type, 
+	PKT_SZ(1,0), TIMEOUT(_me.ip,lla->src.ip));
     return;
   }
 
@@ -686,8 +697,10 @@ void
 ChordAdapt::empty_queue() 
 {
 
-  if (_join_scheduled)
+  if (_join_scheduled) {
+    NDEBUG(2) << "empty_queue not yet joined" << endl;
     return;
+  }
 
   //find the biggest gap and get nodes
   learn_args *la = new learn_args;
@@ -697,9 +710,7 @@ ChordAdapt::empty_queue()
   Time tt = 0;
 
   do {
-    assert(to < 21600000);
     tt = loctable->pred_biggest_gap(pred, next, to>0?0:_max_succ_gap, to);
-    assert(tt < 21600000);
     assert(tt <= to);
     to = tt/2;
   }while (pred.ip == _me.ip);
