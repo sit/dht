@@ -149,6 +149,7 @@ class vnode : public virtual refcount, public stabilizable {
   void do_upcall (int upcall_prog, int upcall_proc,
 		  void *uc_args, int uc_args_len,
 		  cbupcalldone_t app_cb);
+  void do_upcall_cb (char*, cbupcalldone_t, bool v);
 
  public:
   chordID myID;

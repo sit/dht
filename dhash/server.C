@@ -126,7 +126,7 @@ dhash::sync_cb ()
   }
   for (unsigned i=0; i<stale.size(); i++) {
     dhash_lease *l = stale[i];
-    warn << "SYNC: remove " << l->key << " from lease table\n";
+    // warn << "SYNC: remove " << l->key << " from lease table\n";
     leases.remove (l);
     delete l;
   }
@@ -189,6 +189,7 @@ dhash::sent_block_cb (dhash_stat *s, clnt_stat err)
 {
   if (err || !s || (s && *s))
     warn << "error sending block\n";
+  delete s;
 }
 
 dhash_fetchiter_res *
@@ -220,7 +221,7 @@ dhash::block_to_res (dhash_stat err, s_dhash_fetch_arg *arg,
       if (timenow-l->touch > LEASE_INACTIVE) {
         if (l->lease < timenow+LEASE_TIME)
 	  l->lease = timenow+LEASE_TIME;
-        warn << "FETCH: block inactive, lease set to " << l->lease << "\n";
+        // warn << "FETCH: block inactive, lease set to " << l->lease << "\n";
         res->compl_res->lease = LEASE_TIME;
       }
     }
@@ -267,7 +268,7 @@ dhash::fetchiter_gotdata_cb (cbupcalldone_t cb, s_dhash_fetch_arg *a,
     if (timenow-l->touch > LEASE_INACTIVE) {
       if (l->lease < timenow+LEASE_TIME)
         l->lease = timenow+LEASE_TIME;
-      warn << "BLOCK: block inactive, lease set to " << l->lease << "\n";
+      // warn << "BLOCK: block inactive, lease set to " << l->lease << "\n";
       arg->lease = LEASE_TIME;
     }
   }
@@ -796,10 +797,10 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
   // leases.
   dhash_lease *l = leases[arg->key];
   if (l) {
-    warn << "STORE: found lease " << l->lease << " now " << timenow << "\n";
+    // warn << "STORE: found lease " << l->lease << " now " << timenow << "\n";
     l->touch = timenow;
     if (l->lease > timenow) {
-      warn << "STORE: lease is active, cannot store\n";
+      // warn << "STORE: lease is active, cannot store\n";
       cb (DHASH_WAIT);
       return;
     }

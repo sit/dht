@@ -158,6 +158,7 @@ struct dbEnumeration {
 #ifdef SLEEPYCAT
   dbEnumeration(DB *db);
 #else
+  ~dbEnumeration ();
   dbEnumeration(btreeSync *adb);
   dbEnumeration(btreeDispatch *adb);
   void ne_cb(callback<void, ptr<dbPair> >::ref cb, tid_t, int, record *);

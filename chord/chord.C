@@ -263,6 +263,13 @@ vnode::doget_predecessor (svccb *sbp)
 }
 
 void
+vnode::do_upcall_cb (char *a, cbupcalldone_t done_cb, bool v)
+{
+  delete[] a;
+  done_cb (v);
+}
+
+void
 vnode::do_upcall (int upcall_prog, int upcall_proc,
 		  void *uc_args, int uc_args_len,
 		  cbupcalldone_t done_cb)
@@ -285,7 +292,8 @@ vnode::do_upcall (int upcall_prog, int upcall_proc,
     fatal << "upcall: error unmarshalling arguments\n";
   
   //run the upcall. It returns a pointer to its result and a length in the cb
-  (*cb)(upcall_proc, (void *)unmarshalled_args, done_cb);
+  (*cb)(upcall_proc, (void *)unmarshalled_args,
+	wrap (this, &vnode::do_upcall_cb, unmarshalled_args, done_cb));
 }
 
 void

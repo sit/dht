@@ -108,6 +108,9 @@ dbEnumeration::dbEnumeration(btreeDispatch *adb) {
   ADB_async = adb;
   ADB_sync = NULL;
 }
+dbEnumeration::~dbEnumeration() {
+  delete it;
+}
 #endif
 
 char dbEnumeration::hasMoreElements() {
