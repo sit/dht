@@ -206,7 +206,7 @@ public:
   ~OneHop();
   string proto_name() { return "OneHop";}
   Chord::IDMap idmap() { return me;}
-  void record_stat(uint type, uint num_ids = 0, uint num_else = 0);
+  void record_stat(IPAddress src, IPAddress dst, uint type, uint num_ids = 0, uint num_else = 0);
 
   // Functions callable from events file.
   virtual void join(Args*);
@@ -256,7 +256,7 @@ public:
     uint checks = 1;
     while (checks < FAILURE_DETECT_RETRY) {
       if (me.ip!=dst)
-	record_stat(type,num_args_id,num_args_else);
+	record_stat(me.ip,dst,type,num_args_id,num_args_else);
       r = doRPC(dst, fn, args, ret, retry_to);
       if (r) {
 	return true;

@@ -126,15 +126,10 @@ Chord::Chord(IPAddress i, Args& a, LocTable *l, const char *name) : P2Protocol(i
 }
 
 void
-Chord::record_stat(uint type, uint num_ids, uint num_else)
+Chord::record_stat(IPAddress src, IPAddress dst, uint type, uint num_ids, uint num_else)
 {
-  if (Node::collect_stat()) {
-    if (type == TYPE_USER_LOOKUP) {
-      assert(num_ids < 20);
-    }
-    Node::record_bw_stat(type,num_ids,num_else);
-  }
-
+  Node::record_bw_stat(type,num_ids,num_else);
+  Node::record_inout_bw_stat(src,dst,num_ids,num_else);
 }
 
 Chord::~Chord()
@@ -253,7 +248,7 @@ bool Chord::failure_detect(IDMap dst, void (BT::* fn)(AT *, RT *), AT *args, RT 
   //if (checks == -1) return false;
   //int tmp;
   while (checks < num_retry) {
-    record_stat(type,num_args_id,num_args_else);
+    record_stat(me.ip, dst.ip, type,num_args_id,num_args_else);
     r = doRPC(dst.ip, fn, args, ret, retry_to);
     if (r) {
       return true;
@@ -510,7 +505,7 @@ Chord::find_successors(CHID key, uint m, uint type, IDMap *lasthop, lookup_args 
       CDEBUG(2) << "key " << printID(key) << "sending to next hop node "<< h.to.ip
 	<< "," << printID(h.to.id) << endl;
 
-      record_stat(type,1+na.deadnodes.size(),0);
+      record_stat(me.ip,h.to.ip,type,1+na.deadnodes.size(),0);
       assert((h.to.ip == me.ip) || (h.to.ip!=h.from.ip));
       rpc = asyncRPC(h.to.ip, &Chord::next_handler, &na, &(p->ret), TIMEOUT(me.ip,h.to.ip));
       rpcset.insert(rpc);
@@ -544,7 +539,7 @@ Chord::find_successors(CHID key, uint m, uint type, IDMap *lasthop, lookup_args 
     if (!alive()) goto DONE;
 
     if (ok) {
-      record_stat(type,reuse->ret.done?reuse->ret.next.size():reuse->ret.v.size()); 
+      record_stat(reuse->link.to.ip,me.ip,type,reuse->ret.done?reuse->ret.next.size():reuse->ret.v.size()); 
       if (reuse->link.from.ip == me.ip) {
 	assert(reuse->ret.dst.ip == reuse->link.to.ip);
 	loctable->update_ifexists(reuse->ret.dst); 
@@ -649,7 +644,7 @@ Chord::find_successors(CHID key, uint m, uint type, IDMap *lasthop, lookup_args 
       //notify
       alert_args *aa = New alert_args;
       aa->n = reuse->link.to;
-      record_stat(type,1);
+      record_stat(me.ip,reuse->link.from.ip,type,1);
       assert(reuse->link.from.ip > 0 && reuse->link.from.ip < 3000);
       rpc = asyncRPC(reuse->link.from.ip, &Chord::alert_handler, aa,(void *)NULL);
       alertset.insert(rpc);
@@ -728,7 +723,7 @@ DONE:
     assert(rpc_i>=0 && rpc_i < parallel);
     reuse = rpcslots[rpc_i];
     if (ok) 
-      record_stat(type,reuse->ret.done?reuse->ret.next.size():reuse->ret.v.size());
+      record_stat(reuse->link.to.ip,me.ip,type,reuse->ret.done?reuse->ret.next.size():reuse->ret.v.size());
   }
 
   for (uint i = 0; i < parallel; i++) {
@@ -737,8 +732,9 @@ DONE:
 
   for (uint i = 0;i < alertoutstanding; i++) {
     donerpc = rcvRPC(&alertset, ok);
+    alert_args *aa = alertmap[donerpc];
     if (ok)
-      record_stat(type,0);
+      record_stat(aa->n.ip,me.ip,type,0);
     delete alertmap[donerpc];
   }
   return results;
@@ -861,7 +857,7 @@ Chord::find_successors_recurs(CHID key, uint m, uint type, IDMap *lasthop, looku
 	<< "via nexthop " << nexthop.ip << "," << printID(nexthop.id) 
 	<< "outstanding " << outstanding << " parallel " << parallel << endl;
 
-      record_stat(type,1);
+      record_stat(me.ip,nexthop.ip,type,1);
       p->nexthop = nexthop;
       p->prevhop = me;
       assert(!reuse);
@@ -876,7 +872,7 @@ Chord::find_successors_recurs(CHID key, uint m, uint type, IDMap *lasthop, looku
     reuse = resultmap[donerpc];
     if (ok) {
       loctable->update_ifexists(reuse->nexthop);
-      record_stat(type,resultmap[donerpc]->v.size());
+      record_stat(reuse->nexthop.ip,me.ip,type,resultmap[donerpc]->v.size());
       goto RECURS_DONE;
     }else{
       //do a long check to see if next hop is really dead
@@ -947,7 +943,7 @@ RECURS_DONE:
     donerpc = rcvRPC(&rpcset, ok);
     if (ok) {
       loctable->update_ifexists(resultmap[donerpc]->nexthop);
-      record_stat(type,resultmap[donerpc]->v.size());
+      record_stat(resultmap[donerpc]->nexthop.ip,me.ip,type,resultmap[donerpc]->v.size());
     }
     if ((_learn) && (resultmap[donerpc]->lasthop.ip))
       learn_info(resultmap[donerpc]->lasthop);
@@ -1028,10 +1024,10 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
       ret->correct = false;
       ret->lasthop = me;
       if (args->type==TYPE_USER_LOOKUP && _recurs_direct) {
-	record_stat(args->type,ret->v.size(),0);
+	record_stat(me.ip,args->src.ip,args->type,ret->v.size(),0);
 	r = doRPC(args->src.ip, &Chord::final_recurs_hop, args, ret);
 	if (r) 
-	  record_stat(args->type,0);
+	  record_stat(args->src.ip,me.ip,args->type,0);
 	else
 	  ret->finish_time=now(); //who cares about finishtime now
       }
@@ -1061,10 +1057,10 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
 
       ret->lasthop = me;
       if (_recurs_direct) {
-	record_stat(args->type,ret->v.size(),0);
+	record_stat(me.ip,args->src.ip,args->type,ret->v.size(),0);
 	r = doRPC(args->src.ip, &Chord::final_recurs_hop, args, ret);
 	if (r) 
-	  record_stat(args->type,0);
+	  record_stat(args->src.ip,me.ip,args->type,0);
 	else
 	  ret->finish_time=now(); //who cares about finishtime now
       }
@@ -1086,11 +1082,11 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
 	ret->correct = check_correctness(args->key,ret->v);
 	assert(ret->correct);
 	if (_recurs_direct) {
-	  record_stat(args->type,1,0); 
+	  record_stat(me.ip,args->src.ip,args->type,1,0); 
 	  assert(ret->v.size() >= args->m && args->m >= 7);
 	  r = doRPC(args->src.ip, &Chord::final_recurs_hop, args, ret);
 	  if (r) 
-	    record_stat(args->type,0);
+	    record_stat(args->src.ip,me.ip,args->type,0);
 	}
 	ret->nexthop = me;
 	return;
@@ -1148,11 +1144,11 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
 	  ret->correct = check_correctness(args->key,ret->v);
 	  assert(ret->correct);
 	  if (_recurs_direct) {
-	    record_stat(args->type,1,0);
+	    record_stat(me.ip,args->src.ip,args->type,1,0);
 	    assert(ret->v.size() >= args->m);
 	    r = doRPC(args->src.ip, &Chord::final_recurs_hop, args, ret);
 	    if (r)
-	      record_stat(args->type,0);
+	      record_stat(args->src.ip,me.ip,args->type,0);
 	  }
 	  ret->nexthop = me;
 	  return;
@@ -1181,7 +1177,7 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
     tmp.tout = 0;
     ret->path.push_back(tmp);
 
-    record_stat(args->type,1);
+    record_stat(me.ip,next.ip,args->type,1);
     ret->nexthop = next;
     ret->prevhop = me;
     r = doRPC(next.ip, &Chord::next_recurs_handler, args, ret, TIMEOUT(me.ip,next.ip));
@@ -1206,9 +1202,9 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
 
     if (r) {
       if (!_recurs_direct) {
-	record_stat(args->type,ret->v.size());
+	record_stat(next.ip,me.ip,args->type,ret->v.size());
       }else{
-	record_stat(args->type,0);
+	record_stat(next.ip,me.ip,args->type,0);
       }
       if (!static_sim) loctable->update_ifexists(ret->nexthop); 
       ret->nexthop = me;
@@ -1246,7 +1242,7 @@ void
 Chord::alert_delete(alert_args *aa)
 {
   if (aa->dst != me.ip) 
-    record_stat(TYPE_MISC,1);
+    record_stat(me.ip,aa->dst,TYPE_MISC,1);
   doRPC(aa->dst, &Chord::alert_handler, aa, (void *)NULL, TIMEOUT(me.ip,aa->dst));
   delete aa;
 }
@@ -1406,7 +1402,7 @@ Chord::join(Args *args)
   assert(_wkn.ip == fr.dst.ip);
   _wkn = fr.dst;
   joins++;
-  if (ok) record_stat(TYPE_JOIN_LOOKUP, fr.v.size());
+  if (ok) record_stat(_wkn.ip,me.ip,TYPE_JOIN_LOOKUP, fr.v.size());
 
   if (!alive()) {
     _join_scheduled--;
@@ -1647,7 +1643,7 @@ Chord::fix_predecessor()
   gpa.pred = false;
   gpa.m = 1;
   ok = failure_detect(pred, &Chord::get_predsucc_handler, &gpa, &gpr, TYPE_FIXPRED_UP);
-  if (ok) record_stat(TYPE_FIXPRED_UP,gpr.v.size());
+  if (ok) record_stat(pred.ip,me.ip,TYPE_FIXPRED_UP,gpr.v.size());
 
   if (!alive()) return;
   if (ok) {
@@ -1695,7 +1691,7 @@ Chord::fix_successor(void *x)
     }
 
     ok = failure_detect(succ1,&Chord::get_predsucc_handler, &gpa, &gpr, TYPE_FIXSUCC_UP,0);
-    if (ok) record_stat(TYPE_FIXSUCC_UP,2);
+    if (ok) record_stat(succ1.ip,me.ip,TYPE_FIXSUCC_UP,2);
 
     if (!alive()) return;
 
@@ -1730,7 +1726,7 @@ Chord::fix_successor(void *x)
 	  na.me = me;
 
 	  ok = failure_detect(succ1, &Chord::notify_handler, &na, &nr, TYPE_FIXSUCC_UP, 2, 0);
-	  if (ok) record_stat(TYPE_FIXSUCC_UP,0);
+	  if (ok) record_stat(succ1.ip,me.ip,TYPE_FIXSUCC_UP,0);
 
 	  if(!alive()) return;
       
@@ -1753,7 +1749,7 @@ Chord::fix_successor(void *x)
 	if (ok) {
 	  //i should not immediately stabilize new successor,  
 	  //i should wait for this new successor to discover the failure himself
-	  record_stat(TYPE_FIXSUCC_UP,0);
+	  record_stat(succ2.ip,me.ip,TYPE_FIXSUCC_UP,0);
 	} else {
 	  loctable->del_node(succ2,true);
 	}
@@ -1779,7 +1775,7 @@ Chord::fix_successor_list()
   gpr.v.clear();
 
   ok = failure_detect(succ, &Chord::get_predsucc_handler, &gpa, &gpr,TYPE_FIXSUCCLIST_UP);
-  if (ok) record_stat(TYPE_FIXSUCCLIST_UP, gpr.v.size());
+  if (ok) record_stat(succ.ip,me.ip,TYPE_FIXSUCCLIST_UP, gpr.v.size());
 
   if (!alive()) return;
 
@@ -1880,7 +1876,7 @@ Chord::alert_handler(alert_args *args, void *ret)
    CDEBUG(3) << "alert_handler del " << args->n.ip << "," 
      << printID(args->n.id) << endl;
   }else{
-    record_stat(TYPE_MISC,0,0);
+    record_stat(args->n.ip,me.ip,TYPE_MISC,0,0);
     loctable->update_ifexists(args->n);
   }
 }
@@ -1996,9 +1992,6 @@ LocTable::get_naked_node(ConsistentHash::CHID id)
 Chord::IDMap
 LocTable::succ(ConsistentHash::CHID id, int status)
 {
-  if (size() == 1) {
-    return me;
-  }
   vector<Chord::IDMap> v = succs(id, 1, status);
   uint vsz = v.size();
   if (vsz > 0) {
@@ -2049,9 +2042,6 @@ LocTable::succs(ConsistentHash::CHID id, unsigned int m, int status)
 Chord::IDMap
 LocTable::pred(Chord::CHID id, int status)
 {
-  if (size() == 1) {
-    return me;
-  }
   vector<Chord::IDMap> v = preds(id, 1, status);
   if (v.size() > 0) {
     return v[0];
@@ -2474,13 +2464,9 @@ LocTable::pred_biggest_gap(Chord::IDMap &start, Chord::IDMap &end, Time stabtime
 	ConsistentHash::CHID dist = ConsistentHash::distance(me.id,prev->n.id);
 	double scaled = (double)gap/(double)dist;
 	if ((scaled > maxgap) && (gap > prev->follower)) {
-	  if (me.ip == 598 && myprecious.ip && ConsistentHash::between(me.id,elm->n.id,myprecious.id))
-	    fprintf(stderr,"%llu %qx %qx replaced by %u.%qx\n",now(),prev->follower,ConsistentHash::distance(prev->n.id,elm->n.id),prev->n.ip, prev->n.id);
 	  maxgap = scaled;
 	  maxgap_n = prev->n;
 	  maxgap_end = elm->n;
-	  if (maxgap_n.ip == maxgap_end.ip)
-	    fprintf(stderr,"wierd!\n");
 	}
       }
       prev = elm;
@@ -2517,8 +2503,6 @@ LocTable::pred_biggest_gap(Chord::IDMap &start, Chord::IDMap &end, Time stabtime
     }
     end = elm->n;
   }
-  if (start.ip == 0) 
-    fprintf(stderr,"%llu %u sucks\n",now(),me.ip);
 
   return oldti;
 }
@@ -2610,10 +2594,13 @@ LocTable::next_close_hops(ConsistentHash::CHID key, uint n, double to)
 	      >= topo->latency(me.ip,(*iter).ip))
 	    break;
 	}
-	if (iter!=l.begin() || l.size() < n)  {
-	  l.insert(iter,elm->n);
+	if (n > 1 && l.size() == 1) { //if parallelism >1, always choose one as the closest to key
+	  l.insert(l.begin(),elm->n);
+	}else {
+	  if (iter!=l.begin() || l.size() < n)  {
+	    l.insert(iter,elm->n);
+	  }
 	}
-
 	if (l.size() > n)
 	  l.erase(l.begin());
       }

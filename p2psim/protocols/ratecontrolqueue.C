@@ -1,10 +1,8 @@
-#include <dmalloc.h>
 #include "chord.h"
 #include "ratecontrolqueue.h"
 
 
 bool operator< (const q_elm& a, const q_elm& b) { return (b._priority < a._priority); }
-unsigned long long RateControlQueue::haha = 0;
 
 RateControlQueue::RateControlQueue(Node *n, double rate, int burst, void (*fn)(void *))
 {
@@ -64,10 +62,8 @@ RateControlQueue::send_one_rpc(void *x)
   QDEBUG(5) << " sending rpc to " << qe->_dst << endl;
   if (_node->ip()!=qe->_dst) {
     _node->record_bw_stat(qe->_type,0,qe->_sz-PKT_OVERHEAD);
-    _node->record_inout_bw_stat(qe->_dst,0,qe->_sz-PKT_OVERHEAD);
+    Node::record_inout_bw_stat(_node->ip(),qe->_dst,0,qe->_sz-PKT_OVERHEAD);
     _total_bytes += qe->_sz;	
-    if (Node::collect_stat())
-      RateControlQueue::haha += qe->_sz;
   }
   bool b = _node->_doRPC(qe->_dst, qe->_fn, qe->_t, qe->_timeout);
 
@@ -81,10 +77,10 @@ RateControlQueue::send_one_rpc(void *x)
   if (_node->ip()!=qe->_dst) {
     _quota += (qe->_rsz-sz);
     _total_bytes += sz;
-    if (Node::collect_stat())
-      RateControlQueue::haha += sz;
-    if (sz > 0)
+    if (sz > PKT_OVERHEAD) {
       _node->record_bw_stat(qe->_type,0,sz-PKT_OVERHEAD);
+      Node::record_inout_bw_stat(qe->_dst,_node->ip(),0,sz-PKT_OVERHEAD);
+    }
     assert((_total_bytes + _quota) < (now()-_start_time)*_rate);
   }
   QDEBUG(5) << " (send_rpc) adding " << (qe->_rsz-sz) << " from old value " << oldq << endl;
@@ -103,7 +99,7 @@ RateControlQueue::stop_queue()
   }
   _running = false;
   QDEBUG(4) << " stopped total bytes " << _total_bytes << " live time " << (now()-_start_time) << 
-    " avg bytes " << (double)(_total_bytes*1000)/(now()-_start_time) << " total " << RateControlQueue::haha << endl;
+    " avg bytes " << (double)(_total_bytes*1000)/(now()-_start_time) << endl;
   _quota = 0;
   _total_bytes = 0;
   _start_time = 0;

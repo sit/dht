@@ -180,7 +180,7 @@ ChordFinger::fix_fingers(bool restart)
 	    ok = failure_detect(currf, &Chord::get_predsucc_handler, &gpa, &gpr, TYPE_FINGER_UP,0,0);
 	    if(ok) {
 	      valid_fingers++;
-	      record_stat(TYPE_FINGER_UP,1+gpr.v.size());
+	      record_stat(currf.ip,me.ip,TYPE_FINGER_UP,1+gpr.v.size());
 	      assert(gpr.dst.ip == currf.ip);
 	      loctable->add_node(gpr.dst);
 	      prevfpred = gpr.n;

@@ -126,11 +126,11 @@ Koorde::join(Args *args)
 
   fa.key = debruijn;
   fa.m = fingers-1;
-  record_stat(TYPE_JOIN_LOOKUP,1,0);
+  record_stat(me.ip,_wkn.ip,TYPE_JOIN_LOOKUP,1,0);
   bool ok = doRPC(wkn.ip, &Chord::find_successors_handler, &fa, &fr);
   if (!alive()) return;
   assert(ok);
-  record_stat(TYPE_JOIN_LOOKUP,fr.v.size(),0);
+  record_stat(_wkn.ip,me.ip,TYPE_JOIN_LOOKUP,fr.v.size(),0);
   if (fr.v.size() > 0) {
     loctable->add_node(fr.v[0]);
     if (fr.last.ip > 0) loctable->add_node(fr.last);
@@ -200,7 +200,7 @@ Koorde::find_successors(CHID key, uint m, uint type, IDMap *lasthop, lookup_args
     
     IDMap nextnode = r.next;
     if (nextnode.ip!=me.ip)
-      record_stat(type,3,0);
+      record_stat(me.ip,nextnode.ip,type,3,0);
 
 
     CDEBUG(3) << "find_successors key " << printID(a.k) << "begin to contact " 
@@ -266,7 +266,7 @@ Koorde::find_successors(CHID key, uint m, uint type, IDMap *lasthop, lookup_args
     }
 
     if (nextnode.ip!=me.ip)
-      record_stat(type,1,0);
+      record_stat(nextnode.ip,me.ip,type,1,0);
 
     if (vis && type == TYPE_USER_LOOKUP) 
       printf ("vis %llu step %16qx %16qx %16qx\n", now (), me.id, lasthop->id,
@@ -393,7 +393,7 @@ Koorde::fix_debruijn ()
     << printID(dpred.id) << "ok? " << (ok?1:0) << endl;
   if (!alive()) return;
   if (ok) { //&& gsr.v.size() > 0 && ConsistentHash::between(dpred.id, gsr.v[0].id, debruijnpred)) {
-    record_stat(TYPE_FINGER_UP,1+gsr.v.size(),0);
+    record_stat(dpred.ip,me.ip,TYPE_FINGER_UP,1+gsr.v.size(),0);
     loctable->add_node(dpred);
     loctable->add_node(gsr.n);
     for (uint i = 0; i < gsr.v.size(); i++) 
@@ -424,7 +424,7 @@ NEXT:
   if (!alive()) return;
   if (ok && gsr.v.size() > 0 && 
       ConsistentHash::betweenrightincl(dpred.id, gsr.v[gsr.v.size()-1].id, debruijn)) {
-    record_stat(TYPE_FINGER_UP,1+gsr.v.size(),0);
+    record_stat(dpred.ip,me.ip,TYPE_FINGER_UP,1+gsr.v.size(),0);
     loctable->add_node(dpred);
     loctable->add_node(gsr.n);
     for (uint i = 0; i < gsr.v.size(); i++) {

@@ -22,7 +22,6 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
  */
-#include <dmalloc.h>
 #include "chordadapt.h"
 #include <math.h>
 #include <stdio.h>
@@ -241,7 +240,8 @@ ChordAdapt::join_handler(lookup_args *la, lookup_ret *lr)
 	_max_succ_gap = gap;
     }
   }
-  if (loctable->size() < 3) {
+  IDMap succ = loctable->succ(_me.id+1);
+  if (!succ.ip) {
     NDEBUG(1) << "join_handler join failed sz " << lr->v.size() 
       << " locsz " << loctable->size() << endl;
     delaycb(5000, &ChordAdapt::join, (Args *)0);
@@ -264,10 +264,6 @@ ChordAdapt::join_handler(lookup_args *la, lookup_ret *lr)
       " scs: " << print_succs(lr->v)  << " pred " << la->from.ip 
       << "," << printID(la->from.id) << " mypred " << pred.ip << endl;
   }
-  _rate_queue->add_bytes(TYPE_JOIN_LOOKUP,PKT_SZ(0,1));
-  NDEBUG(5) << " join_handler reply " << PKT_SZ(0,1) << " bytes to " 
-    << la->from.ip << " quota " << _rate_queue->quota() << endl;
-  record_inout_bw_stat(la->from.ip,0,1);
 }
 
 void
@@ -306,7 +302,8 @@ ChordAdapt::find_successors_handler(lookup_args *la, lookup_ret *lr)
     la->nexthop.alivetime = now()-_last_joined_time;
   else
     abort();
-  if (loctable->size() < 3) {
+  IDMap succ = loctable->succ(_me.id+1);
+  if (!succ.ip) {
     /*
       lookup_args *lla = new lookup_args;
       lla->src = _me;
@@ -336,9 +333,6 @@ ChordAdapt::find_successors_handler(lookup_args *la, lookup_ret *lr)
 	<< lla.ori.ip << "," << printID(lla.ori.id) << endl;
       next_recurs(&lla,NULL);
     }
-  /*record bw_stat for rpc reply*/
-  record_inout_bw_stat(la->ori.ip,0,1);
-  _rate_queue->add_bytes(TYPE_JOIN_LOOKUP,PKT_SZ(0,1));
   NDEBUG(5) << " find_successors_handler reply " << PKT_SZ(0,1) << " bytes to " 
     << la->ori.ip << " quota " << _rate_queue->quota() << endl;
 }
@@ -377,7 +371,8 @@ ChordAdapt::crash(Args *args)
 void
 ChordAdapt::lookup(Args *args)
 {
-  if ((loctable->size() < 3)) {
+  IDMap succ = loctable->succ(_me.id+1);
+  if (!succ.ip) {
     if (!_join_scheduled || (now()-_join_scheduled) > 20000) 
       delaycb(0,&ChordAdapt::join,(Args *)0);
     NDEBUG(2) << "lookup key failed not yet joined" << endl;
@@ -418,12 +413,6 @@ ChordAdapt::donelookup_handler(lookup_args *la, lookup_ret *lr)
     la->from.timestamp = now();
     loctable->add_node(la->from);
   }
-
-  _rate_queue->add_bytes(la->type,PKT_SZ(0,1));
-  NDEBUG(5) << "donelookup_handler reply " << PKT_SZ(0,1) << " bytes to "
-    << la->from.ip << " quota " << _rate_queue->quota() << endl;
-  record_inout_bw_stat(la->from.ip,0,1);
-
   if (la->ori.ip) {
     lookup_args *lla = new lookup_args;
     bcopy(la,lla,sizeof(lookup_args));
@@ -501,10 +490,6 @@ ChordAdapt::next_recurs(lookup_args *la, lookup_ret *lr)
       lr->is_succ = false;
     }
   }
-  _rate_queue->add_bytes(la->type,lr?PKT_SZ(lr->v.size()*2,1):0);
-  NDEBUG(5) << " next_recurs reply " << (lr?PKT_SZ(lr->v.size()*2,1):0) << " bytes to "
-    << la->from.ip << " quota " << _rate_queue->quota() << endl;
-  record_inout_bw_stat(la->from.ip,lr?lr->v.size()*2:0,1);
 
   //if i have forwarded pkts for this key
   //and the packet is droppable
@@ -568,7 +553,10 @@ ChordAdapt::next_recurs(lookup_args *la, lookup_ret *lr)
   double ttt = est_timeout(ppp);
   //vector<IDMap> nexthops = loctable->preds(la->key, para, LOC_HEALTHY, ttt);
   vector<IDMap> nexthops = loctable->next_close_hops(la->key, para, ttt);
+  if (ppp > 0.5)
+    ttt = est_timeout(0.5);
   uint nsz = nexthops.size();
+
   assert(nsz>0 && nsz <= para);
   if ((nsz == 0) || (nexthops[0].ip == _me.ip))
     fprintf(stderr,"%llu shit! %u,%qx key %qx succ %qx\n", now(),_me.ip,_me.id, la->key, succ.id);
@@ -801,10 +789,6 @@ ChordAdapt::get_predsucc_handler(get_predsucc_args *gpa,
   gpa->src.timestamp = now();
   loctable->add_node(gpa->src);
 
-  _rate_queue->add_bytes(TYPE_FIXSUCC_UP,PKT_SZ((gpr->v.size()+1)*2,0));
-  NDEBUG(5) << "get_predsucc_handler reply " << PKT_SZ(gpr->v.size()*2,1) << " bytes to "
-    << gpa->src.ip << " quota " << _rate_queue->quota() << endl;
-  record_inout_bw_stat(gpa->src.ip,(gpr->v.size()+1)*2,0);
 }
 
 int
@@ -932,7 +916,7 @@ void
 ChordAdapt::empty_queue(void *a) 
 {
   IDMap succ = loctable->succ(_me.id+1);
-  if (loctable->size() < 3) {
+  if (!succ.ip){
     if (!_join_scheduled || (now()-_join_scheduled)>20000) {
       NDEBUG(4) << "empty_queue locsz " << loctable->size() 
 	<< " reschedule join" << endl;
@@ -946,7 +930,11 @@ ChordAdapt::empty_queue(void *a)
   _empty_times++;
 
   double ppp = _parallelism > 1?(exp(log(0.1)/(double)_parallelism)):0.1;
-  double timeout = est_timeout(ppp);
+  double timeout;
+  if (ppp > 0.5)
+    timeout = est_timeout(0.5);
+  else
+    timeout = est_timeout(ppp);
 
   IDMap pred, next;
   pred.ip = _me.ip;
@@ -1006,11 +994,6 @@ ChordAdapt::learn_handler(learn_args *la, learn_ret *lr)
   }else{
     lr->is_succ = false;
   }
-
-  _rate_queue->add_bytes(TYPE_FINGER_UP,PKT_SZ(2*lr->v.size(),1));
-  NDEBUG(5) << "learn_handler reply " << PKT_SZ(lr->v.size()*2,1) << " bytes to "
-    << la->src.ip << " quota " << _rate_queue->quota() << endl;
-  record_inout_bw_stat(la->src.ip,2*lr->v.size(),1);
 }
 
 int
@@ -1053,12 +1036,11 @@ ChordAdapt::learn_cb(bool b, learn_args *la, learn_ret *lr)
 
       ret_sz = PKT_SZ(2*lr->v.size()+1,0);
     }else{
-      uint bsz = loctable->size();
       loctable->del_node(la->n); //XXX: should not delete a finger after one failure
       NDEBUG(4) << " learn_cb quota " << _rate_queue->quota() << " node " << la->n.ip 
 	<< "," << printID(la->n.id)<< "," << (now()-la->n.timestamp) << "," << la->n.alivetime << "," <<
 	(double)(la->n.alivetime)/(double)(now()-la->n.timestamp+la->n.alivetime) << " dead! locsz " 
-	<< bsz << "," << loctable->size() << " livesz " << loctable->live_size() << endl;
+	<< loctable->size(LOC_HEALTHY,la->timeout) << " livesz " << loctable->live_size(la->timeout) << endl;
     }
     if (_rate_queue->empty()) 
       delaycb(0, &ChordAdapt::empty_queue, (void *)0);

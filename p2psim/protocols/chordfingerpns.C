@@ -479,7 +479,7 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
 	  ok = failure_detect(currf, &Chord::null_handler, (void *)NULL,&currf,TYPE_PNS_UP,0,0);
 	  if (!alive()) goto PNS_DONE;
 	  if(ok) {
-	    record_stat(TYPE_PNS_UP,0);
+	    record_stat(currf.ip,me.ip,TYPE_PNS_UP,0);
 	    loctable->update_ifexists(currf);//update timestamp
 	    valid_finger++;//testing
 	    continue;
@@ -503,11 +503,11 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
 	    gpa.pred = true;
 	    gpa.m=0;
 	    get_predsucc_ret gpr;
-	    record_stat(TYPE_PNS_UP,0);
+	    record_stat(me.ip,currf.ip,TYPE_PNS_UP,0);
 	    ok = doRPC(currf.ip, &Chord::get_predsucc_handler, &gpa, &gpr, TIMEOUT(me.ip,currf.ip));
 	    if (!alive()) goto PNS_DONE;
 	    if(ok) {
-	      record_stat(TYPE_PNS_UP,1);
+	      record_stat(currf.ip,me.ip,TYPE_PNS_UP,1);
 	      loctable->add_node(currf);//update timestamp
 	      prevfpred = gpr.n;
 	      if (ConsistentHash::between(gpr.n.id,currf.id, finger)) { //pred is beyond finger, there is no real missing finger
@@ -556,11 +556,11 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
 	    new_added_finger++; //testing
 	    assert(ConsistentHash::between(finger,finger+lap,min_f.id));
 	    //ping this node, coz it might have been dead
-	    record_stat(TYPE_PNS_UP,0); 
+	    record_stat(me.ip,min_f.ip,TYPE_PNS_UP,0); 
 	    ok = doRPC(min_f.ip, &Chord::null_handler, (void *)NULL, &min_f, TIMEOUT(me.ip,min_f.ip));
 	    if (!alive()) goto PNS_DONE;
 	    if (ok) {
-	      record_stat(TYPE_PNS_UP,0); 
+	      record_stat(min_f.ip,me.ip,TYPE_PNS_UP,0); 
 	      if (x == 0) {
 		loctable->add_node(min_f,false,true,finger,finger+lap);
 		tmp = loctable->succ(finger,LOC_HEALTHY);
@@ -569,8 +569,7 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
 		    loctable->del_node(tmp,true);
 		    new_deleted_finger++; //testing
 		  }else{
-		    fprintf(stderr,"newsucc sz %u (%u,%qx) last new succ (%u,%qx)\n",newsucc.size(),newsucc[0].ip,newsucc[0].id,newsucc[newsucc.size()-1].ip,newsucc[newsucc.size()-1].id);
-		    assert(0);
+		    break;
 		  }
 		  tmp = loctable->succ(finger,LOC_HEALTHY);
 		}

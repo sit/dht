@@ -112,18 +112,18 @@ OneHop::OneHop(IPAddress i , Args& a) : P2Protocol(i)
 }
 
 void
-OneHop::record_stat(uint type, uint num_ids, uint num_else)
+OneHop::record_stat(IPAddress src, IPAddress dst, uint type, uint num_ids, uint num_else)
 {
   assert(type <= 5);
   // printf("now %llu warning: %u sending too much %u\n", now(), me.ip, num_ids);
   //assert(num_ids < 300);
-  if (Node::collect_stat()) {
-    if (num_ids > 300) {
-      OneHop::num_violations += (num_ids/300);
-      Node::record_bw_stat(type,num_ids,40 * (num_ids/300));
-    }else{
-      Node::record_bw_stat(type,num_ids,num_else);
-    }
+  if (num_ids > 300) {
+    OneHop::num_violations += (num_ids/300);
+    Node::record_bw_stat(type,num_ids,40 * (num_ids/300) + num_else);
+    Node::record_inout_bw_stat(src,dst,num_ids,40 * (num_ids/300) + num_else);
+  }else{
+    Node::record_bw_stat(type,num_ids,num_else);
+    Node::record_inout_bw_stat(src,dst,num_ids,num_else);
   }
 }
 
@@ -202,10 +202,10 @@ OneHop::lookup_internal(lookup_internal_args *la)
     succ_node = loctable->succ(la->k);
     assert(succ_node.ip);
 
-    record_stat(TYPE_USER_LOOKUP,2);
+    record_stat(me.ip,succ_node.ip,TYPE_USER_LOOKUP,2);
     bool ok = doRPC(succ_node.ip,&OneHop::lookup_handler,&a,&r,
 	TIMEOUT(me.ip,succ_node.ip));
-    if (ok) record_stat(TYPE_USER_LOOKUP,r.is_owner?0:1,1);
+    if (ok) record_stat(succ_node.ip,me.ip,TYPE_USER_LOOKUP,r.is_owner?0:1,1);
 
     if (me.ip!=succ_node.ip)
       la->hops++;
@@ -533,10 +533,10 @@ OneHop::join_leader(IDMap la, IDMap sender, Args *args) {
 
   //send mesg to node, if it is slice leader will respond with
   //routing table, else will respond with correct slice leader
-  record_stat( ONEHOP_JOIN_LOOKUP,1);
+  record_stat( me.ip,leader_ip,ONEHOP_JOIN_LOOKUP,1);
   bool ok = doRPC (leader_ip, &OneHop::join_handler, &ja, jr, 
       TIMEOUT(me.ip,leader_ip));
-  if (ok) record_stat(ONEHOP_JOIN_LOOKUP,jr->table.size(),1);
+  if (ok) record_stat(leader_ip,me.ip,ONEHOP_JOIN_LOOKUP,jr->table.size(),1);
 
   if (!alive()) {
     delete jr;
@@ -721,7 +721,7 @@ OneHop::stabilize(void* x)
 
     ok = fd_xRPC(succ.ip,&OneHop::ping_handler,&piggyback,&gr, 
 	ONEHOP_PING, piggyback.log.size());
-    if (ok) record_stat(ONEHOP_PING,0,1);
+    if (ok) record_stat(succ.ip,me.ip,ONEHOP_PING,0,1);
 
     if (!alive()) return;
    
@@ -775,7 +775,7 @@ OneHop::stabilize(void* x)
 
     ok = fd_xRPC(pred.ip, &OneHop::ping_handler, &piggyback, &gr, 
 	ONEHOP_PING,piggyback.log.size());
-    record_stat(ONEHOP_PING, 0,1);
+    record_stat(pred.ip,me.ip,ONEHOP_PING, 0,1);
 
     if (!alive()) return;
     //very ugly hack to fix accouting -- change after deadline
@@ -819,7 +819,7 @@ OneHop::stabilize(void* x)
       DEBUG(1) << ip() << ":stabilize time "<< now() << " notifyevent log sz " <<  na.log.size() << "to sliceleader "<<sliceleader.ip << endl;
       ok = fd_xRPC(sliceleader.ip, &OneHop::notifyevent_handler,&na,&gr, 
 	  ONEHOP_NOTIFY,na.log.size());
-      if (ok) record_stat(ONEHOP_NOTIFY,0,1);
+      if (ok) record_stat(sliceleader.ip,me.ip,ONEHOP_NOTIFY,0,1);
 
       if (!alive()) return;
 
@@ -887,7 +887,7 @@ OneHop::leader_stabilize(void *x)
 
       ok = fd_xRPC(succ.ip, &OneHop::notify_rec_handler, &send_unit, &gr, 
 	  ONEHOP_LEADER_STAB, send_unit.log.size());
-      if (ok) record_stat(ONEHOP_LEADER_STAB,0,1);
+      if (ok) record_stat(succ.ip,me.ip,ONEHOP_LEADER_STAB,0,1);
 
       if (!alive()) return;
       //very ugly hack to fix accouting -- change after deadline
@@ -926,7 +926,7 @@ OneHop::leader_stabilize(void *x)
 
       ok = fd_xRPC(pred.ip, &OneHop::notify_rec_handler, &send_unit, &gr, 
 	  ONEHOP_LEADER_STAB, send_unit.log.size());
-      if (ok) record_stat(ONEHOP_LEADER_STAB,0,1);
+      if (ok) record_stat(pred.ip,me.ip,ONEHOP_LEADER_STAB,0,1);
 
       if (!alive()) return;
       //very ugly hack to fix accouting -- change after deadline
@@ -1019,7 +1019,7 @@ OneHop::leader_stabilize(void *x)
 
           ok = fd_xRPC(all_nodes[i].ip, &OneHop::notify_unit_leaders, &send_in, &gr, 
 	      ONEHOP_LEADER_STAB, send_in.log.size());
-	  if (ok) record_stat(ONEHOP_LEADER_STAB,0,1);
+	  if (ok) record_stat(all_nodes[i].ip,me.ip,ONEHOP_LEADER_STAB,0,1);
 
 	  if (!alive()) return;
           if (ok) {
@@ -1050,7 +1050,7 @@ OneHop::leader_stabilize(void *x)
 	      
               ok = fd_xRPC(all_nodes[i].ip, &OneHop::notify_other_leaders, &send_out, &gr, 
 		  ONEHOP_LEADER_STAB, send_out.log.size());
-	      if (ok) record_stat(ONEHOP_LEADER_STAB,0,1);
+	      if (ok) record_stat(all_nodes[i].ip,me.ip,ONEHOP_LEADER_STAB,0,1);
 
 	      if (!alive()) return;
               if (ok) {
@@ -1194,7 +1194,7 @@ OneHop::notifyevent_handler(notifyevent_args *args, general_ret *ret)
 
       ok = fd_xRPC(sliceleader.ip, &OneHop::notifyevent_handler, args, &gr, 
 	  ONEHOP_NOTIFY, args->log.size());
-      if (ok) record_stat(ONEHOP_NOTIFY, 0,1);
+      if (ok) record_stat(sliceleader.ip,me.ip,ONEHOP_NOTIFY, 0,1);
 
       if (!alive()) return;
       if (!ok) {
@@ -1395,7 +1395,7 @@ OneHop::test_dead_inform(test_inform_dead_args *a)
   bool ok = fd_xRPC (a->suspect.ip, &OneHop::test_dead_handler, 
       (void *)NULL, (void *)NULL, ONEHOP_INFORMDEAD,0);
   if (ok) {
-    record_stat(ONEHOP_INFORMDEAD,0);
+    record_stat(a->suspect.ip,me.ip,ONEHOP_INFORMDEAD,0);
     loctable->add_node(a->suspect);
     delete a;
     return;
@@ -1406,7 +1406,7 @@ OneHop::test_dead_inform(test_inform_dead_args *a)
   ia.key = a->suspect.id;
   ok = fd_xRPC(a->informed.ip,&OneHop::inform_dead_handler,
       &ia, (void *)NULL, ONEHOP_INFORMDEAD,1);
-  if ((ok)&&(a->informed.ip!=me.ip)) record_stat(ONEHOP_INFORMDEAD);
+  if ((ok)&&(a->informed.ip!=me.ip)) record_stat(a->informed.ip,me.ip,ONEHOP_INFORMDEAD);
   delete a;
 }
 
@@ -1425,7 +1425,7 @@ OneHop::inform_dead (IDMap dead, IDMap recv) {
 
   bool ok = fd_xRPC (recv_ip, &OneHop::inform_dead_handler, &ia, (void *)NULL, 
       ONEHOP_INFORMDEAD, 1);
-  if (ok) record_stat(ONEHOP_INFORMDEAD);
+  if (ok) record_stat(recv_ip,me.ip,ONEHOP_INFORMDEAD);
   return ok;
 }
 

@@ -118,9 +118,6 @@ class RateControlQueue {
     int quota() { return _quota;}
     uint size() { return _qq.size();}
     bool critical() { if (_qq.size() > 0 || _quota < (_burst/2)) return true; return false;}
-    void add_bytes(int t, uint sz) {
-    }
-
 
    protected :
     void (*_empty_cb)(void *);
@@ -134,7 +131,6 @@ class RateControlQueue {
     int _quota;
     Time _last_update;
     Time _start_time;
-    static unsigned long long haha;
     unsigned long long _total_bytes;
     
 };

@@ -266,7 +266,7 @@ protected:
   void fix_predecessor();
   void fix_successor_list();
   void check_static_init();
-  void record_stat(uint type, uint num_ids, uint num_else = 0);
+  void record_stat(IPAddress src, IPAddress dst, uint type, uint num_ids, uint num_else = 0);
   void record_lookupstat(uint num, uint type);
 
 private:
