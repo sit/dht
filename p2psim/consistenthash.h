@@ -1,10 +1,11 @@
 #ifndef __CONSISTENTHASH_H
 #define __CONSISTENTHASH_H 
 
-typedef unsigned CHID;
 
 class ConsistentHash {
-  public:
+public:
+  typedef unsigned CHID;
+
   static bool between(CHID a, CHID b, CHID n) {
     bool r;
     if (a == b) {
@@ -22,4 +23,4 @@ class ConsistentHash {
   }
 };
 
-#endif
+#endif // __CONSISTENTHASH_H

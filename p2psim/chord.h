@@ -8,15 +8,14 @@
 
 class LocTable;
 
-typedef struct{
-    CHID id; //consistent hashing ID for the node
-    IPAddress ip; //the IP address for the node
-}IDMap;
-
 class Chord : public Protocol {
 public:
+  typedef ConsistentHash::CHID CHID;
+  typedef struct {
+    CHID id; //consistent hashing ID for the node
+    IPAddress ip; //the IP address for the node
+  } IDMap;
 
-  
   Chord(Node *n);
   virtual ~Chord();
 
@@ -44,17 +43,19 @@ protected:
   void stabilize();
 };
 
+
 class LocTable {
 
   public:
 
-    LocTable(IDMap me) {
+    LocTable(Chord::IDMap me) {
       _max = 3; 
       _succ_num = 1;
 
-      ring = (IDMap *)malloc(sizeof(IDMap) * _max);
+      // XXX: shouldn't the just be a new?
+      ring = (Chord::IDMap *)malloc(sizeof(Chord::IDMap) * _max);
       assert(ring);
-      bzero(ring, sizeof(IDMap) * _max); //init 
+      bzero(ring, sizeof(Chord::IDMap) * _max); //init 
       ring[0] = me; //ring[0] is always be me, ring[1] is always succ
       _end = 2; 
 
@@ -68,20 +69,21 @@ class LocTable {
       _max = max;
       _succ_num = s;
       _finger_num = f;
-      ring = (IDMap *)realloc(ring, sizeof(IDMap) * _max); //this is not a general resize, it has to be called immediately after construction
+      ring = (Chord::IDMap *)realloc(ring, sizeof(Chord::IDMap) * _max); //this is not a general resize, it has to be called immediately after construction
       assert(ring);
     };
 
-    IDMap succ(unsigned int m);
-    IDMap pred();
-    IDMap next(CHID n);
+    Chord::IDMap succ(unsigned int m);
+    Chord::IDMap pred();
+    Chord::IDMap next(Chord::CHID n);
 
-    void add_node(IDMap n);
-    void del_node(IDMap n);
-    void notify(IDMap n);
+    void add_node(Chord::IDMap n);
+    void del_node(Chord::IDMap n);
+    void notify(Chord::IDMap n);
 
   private:
-    IDMap *ring; //forgive me for not using STL vector 
+    // XXX: why not a vector and void all this?
+    Chord::IDMap *ring; //forgive me for not using STL vector 
     unsigned int _succ_num;
     unsigned int _finger_num;
     unsigned int _max;

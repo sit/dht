@@ -30,12 +30,12 @@ Chord::find_successor_x(void *x)
 {
   printf("Chord(%u,%u)::find_successor_x(%u)\n", me.ip, me.id, (int) x);
 
-  CHID n = (CHID) x;
+  Chord::CHID n = (Chord::CHID) x;
   /*
   if (recursive) {
     nn = loctable->next(n);
     if (nn.ip == me.ip) {
-      IDMap *ret = (IDMap*) malloc(sizeof(IDMap)); //this result passing is nasty
+      Chord::IDMap *ret = (Chord::IDMap*) malloc(sizeof(Chord::IDMap)); //this result passing is nasty
       *ret = me;
       return (void *)ret;
     }else{
@@ -43,16 +43,16 @@ Chord::find_successor_x(void *x)
     }
   }else{
   */
-  IDMap tmp;
-  IDMap *nn, *cn;
+  Chord::IDMap tmp;
+  Chord::IDMap *nn, *cn;
   cn = &me;
   tmp = loctable->next(n);
   nn = &tmp;
   while (nn->ip != cn->ip) {
     cn = nn;
-    nn = (IDMap *) doRPC((cn->ip), Chord::lookup, n);
+    nn = (Chord::IDMap *) doRPC((cn->ip), Chord::lookup, n);
   }
-  IDMap *ret = (IDMap*)malloc(sizeof(IDMap));
+  Chord::IDMap *ret = (Chord::IDMap*)malloc(sizeof(Chord::IDMap));
   *ret = *cn;
   return (void *)ret;
 }
@@ -66,8 +66,8 @@ Chord::join(Args *args)
   if (!wkn) return;
   cout << s() + "::join" << endl;
   void *ret = doRPC(wkn, Chord::find_successor_x, me.id);
-  printf("Chord(%u,%u)::join2 %u\n", me.ip, me.id, (CHID) ret);
-  loctable->add_node(*(IDMap *)ret);
+  printf("Chord(%u,%u)::join2 %u\n", me.ip, me.id, (Chord::CHID) ret);
+  loctable->add_node(*(Chord::IDMap *)ret);
   free(ret); //nasty RPC results passing
   // stabilize();
 }
@@ -75,12 +75,12 @@ Chord::join(Args *args)
 void
 Chord::stabilize()
 {
-  IDMap succ = loctable->succ(1);
+  Chord::IDMap succ = loctable->succ(1);
   if (succ.ip == 0) return;
 
-  IDMap* ret = (IDMap *)doRPC(succ.ip, Chord::get_predecessor, (void *)0);
+  Chord::IDMap* ret = (Chord::IDMap *)doRPC(succ.ip, Chord::get_predecessor, (void *)0);
 
-  loctable->add_node(*(IDMap *)ret);
+  loctable->add_node(*(Chord::IDMap *)ret);
   free(ret);
 
   succ = loctable->succ(1);
@@ -95,7 +95,7 @@ void
 Chord::fix_predecessor()
 {
   /*
-  IDMap pred = loctable->pred();
+  Chord::IDMap pred = loctable->pred();
   if (pred.ip && Failed(pred.ip)) {
       loctable->del_node(pred);
   }
@@ -106,7 +106,7 @@ void
 Chord::fix_successor()
 {
   /*
-  IDMap succ = loctable->succ(1);
+  Chord::IDMap succ = loctable->succ(1);
   if (succ.ip && Failed(succ.ip)) {
     loctable->del_node(succ);
   }
@@ -116,7 +116,7 @@ Chord::fix_successor()
 void *
 Chord::notify(void *n)
 {
-  loctable->notify(*(IDMap *)n);
+  loctable->notify(*(Chord::IDMap *)n);
   return NULL;
 }
 
@@ -124,7 +124,7 @@ void *
 Chord::get_predecessor(void *)
 {
   //too ugly
-  IDMap *ret = (IDMap *)malloc(sizeof(IDMap));
+  Chord::IDMap *ret = (Chord::IDMap *)malloc(sizeof(Chord::IDMap));
   *ret = loctable->pred();
   return ret;
 }
@@ -143,7 +143,7 @@ Chord::crash()
 
 #endif
 
-IDMap
+Chord::IDMap
 LocTable::succ(unsigned int m)
 {
   assert(m == 1);
@@ -151,15 +151,15 @@ LocTable::succ(unsigned int m)
   return ring[1];
 }
 
-IDMap
+Chord::IDMap
 LocTable::pred()
 {
   assert(_end >=2 && _end < _max );
   return ring[_end]; //the end of the ring array contains the predecessor node
 }
 
-IDMap
-LocTable::next(CHID n)
+Chord::IDMap
+LocTable::next(Chord::CHID n)
 {
   //no locality consideration
   for (int i = 0; i < _end; i++) {
@@ -170,7 +170,7 @@ LocTable::next(CHID n)
 }
 
 void
-LocTable::add_node(IDMap n)
+LocTable::add_node(Chord::IDMap n)
 {
 
   assert(_end <= _max -1);
@@ -211,7 +211,7 @@ LocTable::add_node(IDMap n)
 
 //can this be part of add_node?
 void
-LocTable::notify(IDMap n)
+LocTable::notify(Chord::IDMap n)
 {
   if ((ring[_end].ip == 0) || (ConsistentHash::between(ring[_end].id, ring[0].id, n.id))) {
     ring[_end] = n;
@@ -219,7 +219,7 @@ LocTable::notify(IDMap n)
 }
 
 void
-LocTable::del_node(IDMap n)
+LocTable::del_node(Chord::IDMap n)
 {
   int i;
 
