@@ -62,7 +62,7 @@ ConstDistTopology::parse(ifstream &ifs)
     _latency = (Time) atoi(words[1].c_str());
 
     // create the nodes
-    for(unsigned ipaddr = 1; ipaddr < size; ipaddr++) {
+    for(unsigned ipaddr = 1; ipaddr <= size; ipaddr++) {
       Node *p = ProtocolFactory::Instance()->create((IPAddress) ipaddr);
       send(Network::Instance()->nodechan(), &p);
     }
