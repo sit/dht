@@ -32,10 +32,12 @@ struct nntp {
   void cmd_over (str);
   void cmd_article (str);
   void cmd_post (str);
-  void read_post (char *, char *);
+  void read_post (const char *, const char *);
   void cmd_quit (str);
   void cmd_help (str);
   void cmd_ihave (str);
+  void cmd_check (str);
+  void cmd_takethis (str);
 
   vec<c_jmp_entry_t> cmd_table;
 };

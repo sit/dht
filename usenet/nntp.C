@@ -26,14 +26,23 @@ char *ihavesend = "335 send article to be transferred.  End with <CR-LF>.<CR-LF>
 char *ihaveok = "235 article transferred ok\r\n";
 char *ihaveno = "435 article not wanted - do not send it\r\n";
 char *ihavebad = "436 transfer failed - try again later\r\n";
+char *stream = "203 Streaming is OK\r\n";
+char *checksend = "238 no such article found, please send it to me ";
+char *checkno = "438 already have it, please don't send it to me ";
+char *takethisok = "239 article transferred ok ";
+char *takethisbad = "439 article transfer failed ";
 
 nntp::nntp (int _s) : s (_s)
 {
   warn << "connect " << s << "\n";
   fdcb (s, selread, wrap (this, &nntp::command));
 
-  cmd_hello("\n");
+  cmd_hello("MODE READER");
   fdcb (s, selwrite, wrap (this, &nntp::output));
+
+  add_cmd ("CHECK", wrap (this, &nntp::cmd_check));
+  add_cmd ("TAKETHIS", wrap (this, &nntp::cmd_takethis));
+  add_cmd ("IHAVE", wrap (this, &nntp::cmd_ihave));
 
   add_cmd ("ARTICLE", wrap (this, &nntp::cmd_article));
   add_cmd ("XOVER", wrap (this, &nntp::cmd_over));
@@ -41,7 +50,7 @@ nntp::nntp (int _s) : s (_s)
   add_cmd ("LIST", wrap (this, &nntp::cmd_list));
   add_cmd ("POST", wrap (this, &nntp::cmd_post));
 
-  add_cmd ("MODE READER", wrap (this, &nntp::cmd_hello));
+  add_cmd ("MODE", wrap (this, &nntp::cmd_hello));
   add_cmd ("QUIT", wrap (this, &nntp::cmd_quit));
   add_cmd ("HELP", wrap (this, &nntp::cmd_help));
 }
@@ -97,10 +106,23 @@ nntp::command (void)
   out << unknown;
 }
 
+static rxx hellorx ("^MODE (READER)?(STREAM)?", "i");
+
 void
 nntp::cmd_hello (str c) {
   warn << "hello: " << c;
-  out << hello;
+
+  if (hellorx.search (c)) {
+    if (hellorx[1]) {
+      out << hello;
+      return;
+    }
+    if (hellorx[2]) {
+      out << stream;
+      return;
+    }
+  }
+  out << syntax;
 }
 
 // format:  foo 2 1 y\r\n
@@ -120,7 +142,7 @@ nntp::cmd_list (str c) {
   out << period;
 }
 
-static rxx overrx ("^XOVER( ((\\d+)-)?(\\d+)?)?");
+static rxx overrx ("^XOVER( ((\\d+)-)?(\\d+)?)?", "i");
 //( (\\d+)?((\\d+)-(\\d+)?)?)?");
 // ?(\\d+)?(-)?(\\d+)?");
 
@@ -161,7 +183,7 @@ nntp::cmd_over (str c) {
   }
 }
 
-static rxx grouprx ("^GROUP (.+)\r\n", "m");
+static rxx grouprx ("^GROUP (.+)\r\n", "mi");
 
 void
 nntp::cmd_group (str c) {
@@ -178,7 +200,7 @@ nntp::cmd_group (str c) {
     out << syntax;
 }
 
-static rxx artrx ("^ARTICLE ?(<.+?>)?(.+?)?");
+static rxx artrx ("^ARTICLE ?(<.+?>)?(.+?)?", "i");
 
 void
 nntp::cmd_article (str c) {
@@ -236,7 +258,7 @@ static rxx postngrx ("Newsgroups: (.+)\r");
 static rxx postgrx (",?([^,]+)");
 
 void
-nntp::read_post (char *resp, char *bad)
+nntp::read_post (const char *resp, const char *bad)
 {
   int res;
   ptr<dbrec> k, d;
@@ -313,7 +335,11 @@ nntp::cmd_help (str c)
   out << period;
 }
 
-static rxx ihaverx ("^IHAVE (<.+?>)");
+
+
+// News transfer commands:
+
+static rxx ihaverx ("^IHAVE (<.+?>)", "i");
 
 void
 nntp::cmd_ihave (str c)
@@ -332,3 +358,38 @@ nntp::cmd_ihave (str c)
   } else
     out << syntax;
 }    
+
+static rxx checkrx ("^CHECK (<.+?>)", "i");
+
+void
+nntp::cmd_check (str c)
+{
+  warn << "check\n";
+  ptr<dbrec> key, d;
+
+  if (checkrx.search (c)) {
+    key = New refcounted<dbrec> (checkrx[1], checkrx[1].len ());
+    d = article_db->lookup (key);
+    if (!d)
+      out << checksend << checkrx[1] << "\r\n";
+    else
+      out << checkno << checkrx[1] << "\r\n";
+  } else
+    out << syntax;
+}
+
+static rxx takethisrx ("^TAKETHIS (<.+?>)", "i");
+
+void
+nntp::cmd_takethis (str c)
+{
+  warn << "takethis\n";
+  str resp, bad;
+
+  if (takethisrx.search (c)) {
+    resp = strbuf () << takethisok << takethisrx[1] << "\r\n";
+    bad = strbuf () << takethisbad << takethisrx[1] << "\r\n";
+    fdcb (s, selread, wrap (this, &nntp::read_post, resp, bad));
+  } else
+    out << syntax;
+}
