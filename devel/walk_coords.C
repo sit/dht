@@ -4,14 +4,15 @@
 #include "math.h"
 #include "async.h"
 #include "transport_prot.h"
+#include "coord.h"
 
 #define TIMEOUT 10
 
 chordID wellknown_ID = -1;
 ptr<axprt_dgram> dgram_xprt;
 
-typedef callback<void, clnt_stat, vec<float> >::ptr aclnt_coords_cb;
-void getsucc_cb (chordID dest, str desthost, chord_nodelistextres *res, u_int64_t start, clnt_stat err, vec<float> coords);
+typedef callback<void, clnt_stat, vec<float>, float >::ptr aclnt_coords_cb;
+void getsucc_cb (chordID dest, str desthost, chord_nodelistextres *res, u_int64_t start, clnt_stat err, vec<float> coords, float e);
 void doRPCcb (chordID ID, int procno, dorpc_res *res, void *out, aclnt_coords_cb cb, 
 	      clnt_stat err);
 
@@ -100,7 +101,7 @@ doRPCcb (chordID ID, int procno, dorpc_res *res, void *out, aclnt_coords_cb cb,
   if (!proc (x.xdrp (), out)) {
     fatal << "failed to unmarshall result\n";
   } else 
-    cb (err, coords);
+    cb (err, coords, (float)res->resok->src.e);
 
   delete res;
 }
@@ -118,7 +119,7 @@ getsucc (const chord_node &n)
 
 void
 getsucc_cb (chordID dest, str desthost, 
-	    chord_nodelistextres *res, u_int64_t start, clnt_stat err, vec<float> coords)
+	    chord_nodelistextres *res, u_int64_t start, clnt_stat err, vec<float> coords, float e)
 {
   assert (err == 0 && res->status == CHORD_OK);
   assert (res->resok->nlist.size () >= 2);
@@ -127,7 +128,7 @@ getsucc_cb (chordID dest, str desthost,
     warnx << dest << " " << desthost << "\n";
   else {
     char s[1024];
-    sprintf (s, "%f %f %f", coords[0], coords[1], coords[2]);
+    sprintf (s, "%f %f %f e=%f", coords[0], coords[1], coords[2], e/PRED_ERR_MULT);
     warnx << dest << " " << desthost << " "
 	  << s << " "
 	  << (getusec () - start) << " "
