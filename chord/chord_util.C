@@ -53,25 +53,11 @@ convert_coords (dorpc_res *res, vec<float> &out)
 
 // XXX for testing purposes include port---in real life we shouldn't include it
 chordID
-init_chordID (int index, str addr, int port)
+make_chordID (str addr, int port, int index)
 {
   chordID ID;
   // XXX we probably should marshall this!
-  str ids = addr;
-  ids = ids << "." << port << "." << index;
-  char id[sha1::hashsize];
-  sha1_hash (id, ids, ids.len());
-  mpz_set_rawmag_be (&ID, id, sizeof (id));  // For big endian
-  //  warnx << "myid: " << ID << "\n";
-  return ID;
-}
-
-chordID
-make_chordID (str hostname, int port, int index)
-{
-  chordID ID;
-  // XXX we probably should marshall this!
-  str ids = strbuf () << hostname << "." << port << "." << index;
+  str ids = strbuf () << addr << "." << port << "." << index;
   char id[sha1::hashsize];
   sha1_hash (id, ids, ids.len());
   mpz_set_rawmag_be (&ID, id, sizeof (id));  // For big endian

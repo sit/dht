@@ -193,7 +193,7 @@ route_chord::make_hop_cb (ptr<bool> del,
     cb (done = true);
   } else if (res->status == CHORD_INRANGE) { 
     // found the successor
-    ptr<location> n0 = v->locations->insert (res->inrange->n[0]);
+    ptr<location> n0 = v->locations->insert (make_chord_node (res->inrange->n[0]));
     if (!n0) {
       warnx << v->my_ID () << ": make_hop_cb: inrange node ("
 	    << res->inrange->n[0] << ") not valid vnode!\n";
@@ -202,7 +202,7 @@ route_chord::make_hop_cb (ptr<bool> del,
     search_path.push_back (n0);
     successors_.clear ();
     for (size_t i = 0; i < res->inrange->n.size (); i++)
-      successors_.push_back (res->inrange->n[i]);
+      successors_.push_back (make_chord_node (res->inrange->n[i]));
     
     last_hop = true;
     if (stop) done = true; // XXX still needed??
@@ -210,7 +210,8 @@ route_chord::make_hop_cb (ptr<bool> del,
   } else if (res->status == CHORD_NOTINRANGE) {
     // haven't found the successor yet
     ptr<location> last = search_path.back ();
-    if (last->id () == res->notinrange->n.x) {   
+    chord_node n = make_chord_node (res->notinrange->n);
+    if (last->id () == n.x) {   
       warnx << v->my_ID() << ": make_hop_cb: node " << last->id ()
 	   << "returned itself as best pred, looking for "
 	   << x << "\n";
@@ -219,7 +220,7 @@ route_chord::make_hop_cb (ptr<bool> del,
     } else {
       // make sure that the new node sends us in the right direction,
       chordID olddist = distance (search_path.back ()->id (), x);
-      chordID newdist = distance (res->notinrange->n.x, x);
+      chordID newdist = distance (n.x, x);
       if (newdist > olddist) {
 	warnx << "XXXXXXXXXXXXXXXXXXX WRONG WAY XXXXXXXXXXXXX\n";
 	warnx << v->my_ID() << ": make_hop_cb: went in the wrong direction:"
@@ -227,13 +228,13 @@ route_chord::make_hop_cb (ptr<bool> del,
 	// xxx surely we can do something more intelligent here.
 	print ();
 	warnx << v->my_ID() << ": " << search_path.back ()->id ()
-	      << " sent me to " << res->notinrange->n.x
+	      << " sent me to " << n.x
 	      << " looking for " << x << "\n";
 	warnx << "XXXXXXXXXXXXXXXXXXX WRONG WAY XXXXXXXXXXXXX\n";
       }
       
       //BAD LOC (ok)
-      ptr<location> n0 = v->locations->insert (res->notinrange->n);
+      ptr<location> n0 = v->locations->insert (n);
       if (!n0) {
 	warnx << v->my_ID () << ": make_hop_cb: notinrange node ("
 	      << res->notinrange->n << ") not valid vnode!\n";
@@ -243,7 +244,7 @@ route_chord::make_hop_cb (ptr<bool> del,
       
       successors_.clear ();
       for (size_t i = 0; i < res->notinrange->succs.size (); i++)
-	successors_.push_back (res->notinrange->succs[i]);
+	successors_.push_back (make_chord_node (res->notinrange->succs[i]));
 
       assert (search_path.size () <= 1000);
       cb (done);
@@ -487,10 +488,10 @@ route_debruijn::make_hop_cb (ptr<bool> del, chord_debruijnres *res,
   } else if (res->status == CHORD_INRANGE) { 
     // found the successor
     //BAD LOC (ok)
-    ptr<location> n0 = v->locations->insert (res->inres->node);
+    ptr<location> n0 = v->locations->insert (make_chord_node (res->inres->node));
     if (!n0) {
       warnx << v->my_ID () << ": debruijn::make_hop_cb: inrange node ("
-	    << res->inres->node.x << "@" << res->inres->node.r.hostname
+	    << make_chordID (res->inres->node) << "@" << res->inres->node.r.hostname
 	    << ":" << res->inres->node.r.port << ") not valid vnode!\n";
       assert (0); // XXX handle malice more intelligently
     }
@@ -505,10 +506,10 @@ route_debruijn::make_hop_cb (ptr<bool> del, chord_debruijnres *res,
     cb (done);
   } else if (res->status == CHORD_NOTINRANGE) {
     // haven't found the successor yet
-    ptr<location> n0 = v->locations->insert (res->noderes->node);
+    ptr<location> n0 = v->locations->insert (make_chord_node (res->noderes->node));
     if (!n0) {
       warnx << v->my_ID () << ": debruijn::make_hop_cb: inrange node ("
-	    << res->noderes->node.x << "@" << res->noderes->node.r.hostname
+	    << make_chordID (res->noderes->node) << "@" << res->noderes->node.r.hostname
 	    << ":" << res->noderes->node.r.port << ") not valid vnode!\n";
       assert (0); // XXX handle malice more intelligently
     }
@@ -576,6 +577,6 @@ debruijn_route_factory::produce_iterator_ptr (chordID xi,
 }
 
 void 
-route_factory::get_node (chord_node *n) {
+route_factory::get_node (chord_node_wire *n) {
   vi->locations->lookup (vi->my_ID ())->fill_node (*n); 
 }

@@ -21,7 +21,7 @@ class location {
 
   void init ();
  public:
-  location (const chordID &_n, const net_address &_r, const vec<float> &coords);
+  location (const chordID &_n, const net_address &_r, const int v, const vec<float> &coords);
   location (const chord_node &n);
   ~location ();
 
@@ -38,6 +38,7 @@ class location {
   unsigned long nrpc () const { return nrpc_; };
 
   void fill_node (chord_node &data) const;
+  void fill_node (chord_node_wire &data) const;
   void fill_node_ext (chord_node_ext &data) const;
 
   // Mutators

@@ -20,11 +20,18 @@ struct net_address {
 struct chord_node {
   chordID x;
   net_address r;
+  int32_t vnode_num;
+  int32_t coords<>;
+};
+
+struct chord_node_wire {
+  net_address r;
+  int32_t vnode_num;
   int32_t coords<>;
 };
 
 struct chord_node_ext {
-  chord_node n;
+  chord_node_wire n;
   int32_t a_lat;
   int32_t a_var;
   u_int64_t nrpc;

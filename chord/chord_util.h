@@ -34,8 +34,10 @@
 vec<float> convert_coords (dorpc_arg *arg);
 void convert_coords (dorpc_res *res, vec<float> &out);
 
-chordID init_chordID (int index, str name, int p);
 chordID make_chordID (str hostname, int port, int index = 0);
+inline chordID make_chordID (const chord_node_wire &n) {
+  return make_chordID (n.r.hostname, n.r.port, n.vnode_num);
+}
 bool is_authenticID (const chordID &x, chord_hostname n, int p, int vnode);
 int is_authenticID (const chordID &x, chord_hostname n, int p);
 

@@ -180,13 +180,13 @@ locationtable::insert (const chord_node &n)
   vec<float> coords;
   for (unsigned int i = 0; i < n.coords.size (); i++)
     coords.push_back ((float)n.coords[i]);
-  return insert (n.x, n.r.hostname, n.r.port, coords);
+  return insert (n.x, n.r.hostname, n.r.port, n.vnode_num, coords);
 }
 
 ptr<location>
 locationtable::insert (const chordID &n, 
 		       const chord_hostname &s, 
-		       int p, 
+		       int p, int v,
 		       const vec<float> &coords)
 {
   ptr<location> loc = lookup (n);
@@ -199,7 +199,7 @@ locationtable::insert (const chordID &n,
   r.hostname = s;
   r.port = p;
   
-  loc = New refcounted<location> (n, r, coords);
+  loc = New refcounted<location> (n, r, v, coords);
   if (loc->vnode () < 0)
     return NULL;
   realinsert (loc);

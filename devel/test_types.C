@@ -125,7 +125,7 @@ fetch_cb_append_second (dhashclient dhash, dhash_stat stat, ptr<dhash_block> blk
   if (!blk)
     fatal << "append (second): error\n";
   
-  warn << "data (" << blk->len << " bytes) was " << blk->data << "\n";
+  warn << "data (" << blk->len << " bytes) was " << str(blk->data, blk->len) << "\n";
   exit (0);
 }
 

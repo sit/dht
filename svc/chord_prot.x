@@ -20,13 +20,13 @@ enum chordstat {
 
 union chord_noderes switch (chordstat status) {
  case CHORD_OK:
-   chord_node resok;
+   chord_node_wire resok;
  default: 
    void;
 };
 
 struct chord_nodelistresok {
-  chord_node nlist<>;
+  chord_node_wire nlist<>;
 };
 
 union chord_nodelistres switch (chordstat status) {
@@ -59,7 +59,7 @@ struct chord_findarg {
 };
 
 struct chord_nodearg {
-  chord_node n;
+  chord_node_wire n;
 };
 
 struct chord_testandfindarg {
@@ -71,12 +71,12 @@ struct chord_testandfindarg {
 };
 
 struct chord_testandfindres_inrange {
-  chord_node n<>;
+  chord_node_wire n<>;
 };
 
 struct chord_testandfindres_notinrange {
-  chord_node n;
-  chord_node succs<>;
+  chord_node_wire n;
+  chord_node_wire succs<>;
 };
 
 union chord_testandfindres switch (chordstat status) {
@@ -96,7 +96,7 @@ struct chord_gettoes_arg {
 
 struct chord_findtoes_arg {
   int32_t level;
-  chord_node n;
+  chord_node_wire n;
 };
 
 
@@ -111,7 +111,7 @@ struct chord_debruijnarg {
 };
 
 struct chord_debruijnnoderes {
-  chord_node node;
+  chord_node_wire node;
   chordID i;
   chordID k;
 };

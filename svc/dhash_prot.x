@@ -58,8 +58,7 @@ struct s_dhash_insertarg {
   chordID key;
   dhash_ctype ctype;
   dhash_dbtype dbtype;
-  chord_node from;
-  chordID srcID;  /* == from.x => redundant */
+  chord_node_wire from;
   dhash_value data;
   int offset;
   int32_t nonce;
@@ -72,7 +71,7 @@ struct s_dhash_fetch_arg {
   chordID key;
   dhash_ctype ctype;
   dhash_dbtype dbtype;
-  chord_node from;
+  chord_node_wire from;
   int32_t start;
   int32_t len;
   int32_t cookie;
@@ -85,7 +84,7 @@ struct s_dhash_keystatus_arg {
 
 
 struct dhash_pred {
-  chord_node p;
+  chord_node_wire p;
 };
 
 struct dhash_getkeys_ok {
@@ -150,7 +149,7 @@ struct s_dhash_block_arg {
   /* if a the sender of this RPC doesn't have the block 
    * then he sends back a list of successors.
    */
-  chord_node nodelist<>; 
+  chord_node_wire nodelist<>; 
 };
 
 

@@ -361,8 +361,9 @@ update_succ_got_succ (chordID ID, str host, unsigned short port,
   nu->successors = res;
   
   for (unsigned int i=0; i < res->resok->nlist.size (); i++) {
-    if (nodes[res->resok->nlist[i].n.x] == NULL) 
-      add_node (res->resok->nlist[i].n);
+    chord_node n = make_chord_node (res->resok->nlist[i].n);
+    if (nodes[n.x] == NULL) 
+      add_node (n);
   }
 }
 
@@ -390,8 +391,9 @@ update_pred_got_pred (chordID ID, str host, unsigned short port,
   if (nu->predecessor) delete nu->predecessor;
   nu->predecessor = res;
 
-  if (nodes[res->resok->n.x] == NULL) 
-    add_node (res->resok->n);
+  chord_node n = make_chord_node (res->resok->n);
+  if (nodes[n.x] == NULL) 
+    add_node (n);
 }
 
 //----- update debruijn finger -------------------------------------------------
@@ -425,8 +427,9 @@ update_debruijn_got_debruijn (chordID ID, chord_debruijnres *res, clnt_stat err)
   if (nu->debruijn) delete nu->debruijn;
   nu->debruijn = res;
 
-  if (nodes[res->noderes->node.x] == NULL) 
-    add_node (res->noderes->node);
+  chord_node n = make_chord_node (res->noderes->node);
+  if (nodes[n.x] == NULL) 
+    add_node (n);
 }
 
 
@@ -456,8 +459,9 @@ update_fingers_got_fingers (chordID ID, str host, unsigned short port,
   nu->fingers = res;
 
   for (unsigned int i=0; i < res->resok->nlist.size (); i++) {
-    if (nodes[res->resok->nlist[i].n.x] == NULL) 
-      add_node (res->resok->nlist[i].n);
+    chord_node n = make_chord_node (res->resok->nlist[i].n);
+    if (nodes[n.x] == NULL) 
+      add_node (n);
   }
 }
 
@@ -509,15 +513,11 @@ get_fingers (str file)
 	if (i == 1) {
 	  nfingers->resok->nlist.setsize (ids.size ());
 	  for (unsigned int i = 0; i < ids.size (); i++) {
-	    nfingers->resok->nlist[i].n.x = 
-	      bigint (ids[i]) * (bigint(1) << (160-24));
 	    nfingers->resok->nlist[i].a_lat = lats[i] * 1000;
 	  }
 	} else {
 	  ntoes->resok->nlist.setsize (ids.size ());
 	  for (unsigned int i = 0; i < ids.size (); i++) {
-	    ntoes->resok->nlist[i].n.x = 
-	      bigint (ids[i]) * (bigint(1) << (160-24));
 	    ntoes->resok->nlist[i].a_lat = lats[i] * 1000;
 	  }
 	}
@@ -589,8 +589,9 @@ update_toes_got_toes (chordID ID, str host, unsigned short port,
   nu->toes = res;
   
   for (unsigned int i=0; i < res->resok->nlist.size (); i++) {
-    if (nodes[res->resok->nlist[i].n.x] == NULL) 
-      add_node (res->resok->nlist[i].n);
+    chord_node n = make_chord_node (res->resok->nlist[i].n);
+    if (nodes[n.x] == NULL) 
+      add_node (n);
   }
 
 }
@@ -826,8 +827,9 @@ closestpredfinger (f_node *n, chordID &x)
 {
   chordID p = n->ID;
   for (int i = n->fingers->resok->nlist.size () - 1; i >= 1; i--) {
-    if (between (n->ID, x, n->fingers->resok->nlist[i].n.x)) {
-      p = n->fingers->resok->nlist[i].n.x;
+    chordID t = make_chordID (n->fingers->resok->nlist[i].n);
+    if (between (n->ID, x, t)) {
+      p = t;
       return p;
     }
   }
@@ -901,10 +903,11 @@ lookup_complete_cb (chordID n, chord_nodelistres *res, clnt_stat err)
   }
 
   for (size_t i = 0; i < res->resok->nlist.size (); i++) {
-    f_node *f = nodes[res->resok->nlist[i].x];
+    chord_node n = make_chord_node (res->resok->nlist[i]);
+    f_node *f = nodes[n.x];
     if (!f) {
       warnx << "WARNING! lookup includes a node we didn't know about!\n";
-      f = add_node (res->resok->nlist[i]);
+      f = add_node (n);
     }
     search_path.push_back (f);
   }
@@ -1352,7 +1355,7 @@ draw_ring ()
 	n->successors->resok->nlist.size () > 1) {
       int a,b;
       set_foreground_lat (n->successors->resok->nlist[1].a_lat); 
-      ID_to_xy (n->successors->resok->nlist[1].n.x, &a, &b);
+      ID_to_xy (make_chordID (n->successors->resok->nlist[1].n), &a, &b);
       draw_arrow (x,y,a,b, draw_gc);
     }
 
@@ -1360,7 +1363,7 @@ draw_ring ()
       for (unsigned int i=1; i < n->fingers->resok->nlist.size (); i++) {
 	int a,b;
 	set_foreground_lat (n->fingers->resok->nlist[i].a_lat); 
-	ID_to_xy (n->fingers->resok->nlist[i].n.x, &a, &b);
+	ID_to_xy (make_chordID (n->fingers->resok->nlist[i].n), &a, &b);
 	draw_arrow (x,y,a,b, draw_gc);
       }
     }
@@ -1369,7 +1372,7 @@ draw_ring ()
 	((n->draw & DRAW_IMMED_PRED) == DRAW_IMMED_PRED)) {
       int a,b;
       set_foreground_lat (n->predecessor->resok->a_lat); 
-      ID_to_xy (n->predecessor->resok->n.x, &a, &b);
+      ID_to_xy (make_chordID (n->predecessor->resok->n), &a, &b);
       draw_arrow (x,y,a,b, draw_gc);
     }
 
@@ -1377,13 +1380,13 @@ draw_ring ()
 	((n->draw & DRAW_DEBRUIJN) == DRAW_DEBRUIJN)) {
       int a,b;
       set_foreground_lat (1); 
-      ID_to_xy (n->debruijn->noderes->node.x, &a, &b);
+      ID_to_xy (make_chordID (n->debruijn->noderes->node), &a, &b);
       draw_arrow (x,y,a,b, draw_gc);
     }
 
     if (n->successors && ((n->draw & DRAW_SUCC_LIST) == DRAW_SUCC_LIST)) {
       for (unsigned int i=1; i < n->successors->resok->nlist.size (); i++) {
-	draw_arc (n->ID, n->successors->resok->nlist[i].n.x,
+	draw_arc (n->ID, make_chordID (n->successors->resok->nlist[i].n),
 		  drawing_area->style->black_gc);
       }
     }
@@ -1391,7 +1394,7 @@ draw_ring ()
     if (n->toes && ((n->draw & DRAW_TOES) == DRAW_TOES)) {
       for (unsigned int i=0; i < n->toes->resok->nlist.size (); i++) {
 	int a,b;
-	ID_to_xy (n->toes->resok->nlist[i].n.x, &a, &b);
+	ID_to_xy (make_chordID (n->toes->resok->nlist[i].n), &a, &b);
 	set_foreground_lat (n->toes->resok->nlist[i].a_lat); 
 	draw_arrow (x,y,a,b,draw_gc);
       }

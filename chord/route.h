@@ -174,7 +174,7 @@ public:
 						int uc_procno,
 						ptr<void> uc_args) = 0;
   ptr<vnode> get_vnode () {return vi;};
-  void get_node (chord_node *n);
+  void get_node (chord_node_wire *n);
 };
 
 class debruijn_route_factory : public route_factory {

@@ -71,7 +71,7 @@ class locationtable {
   ptr<location> insert (const chord_node &n);
   ptr<location> insert (const chordID &n, 
 			const chord_hostname &s, 
-			int p, 
+			int p, int v,
 			const vec<float> &coords);
   
   void pinpredlist (const chordID &x);

@@ -603,7 +603,7 @@ vnode_impl::join_getsucc_cb (ptr<location> n,
     status = CHORD_ERRNOENT;
   } else {
     for (size_t i = 0; i < route->resok->nlist.size(); i++) {
-      locations->insert (route->resok->nlist[i]);
+      locations->insert (make_chord_node (route->resok->nlist[i]));
     }
     stabilize ();
     notify (my_succ (), myID);
@@ -767,7 +767,7 @@ void
 vnode_impl::donotify (user_args *sbp, chord_nodearg *na)
 {
   ndonotify++;
-  predecessors->update_pred (na->n);
+  predecessors->update_pred (make_chord_node (na->n));
   chordstat res = CHORD_OK;
   sbp->reply (&res);
 }
@@ -776,12 +776,13 @@ void
 vnode_impl::doalert (user_args *sbp, chord_nodearg *na)
 {
   ndoalert++;
-  if (locations->cached (na->n.x)) {
+  chord_node n = make_chord_node (na->n);
+  if (locations->cached (n.x)) {
     // check whether we cannot reach x either
     chord_noderes *res = New chord_noderes (CHORD_OK);
-    ptr<chordID> v = New refcounted<chordID> (na->n.x);
-    doRPC (na->n, chord_program_1, CHORDPROC_GETSUCCESSOR, v, res,
-	   wrap (mkref (this), &vnode_impl::doalert_cb, res, na->n.x));
+    ptr<chordID> v = New refcounted<chordID> (n.x);
+    doRPC (n, chord_program_1, CHORDPROC_GETSUCCESSOR, v, res,
+	   wrap (mkref (this), &vnode_impl::doalert_cb, res, n.x));
   }
   chordstat res = CHORD_OK;
   sbp->reply (&res);
@@ -852,8 +853,8 @@ vnode_impl::dosecfindsucc (user_args *sbp, chord_testandfindarg *fa)
   //     in the location table???
   ptr<location> start = s;
 
-  vec<chord_node> answers;
-  chord_node n;
+  vec<chord_node_wire> answers;
+  chord_node_wire n;
   for (i = 0; i < static_cast<unsigned> (nsucc); i++) {
     s->fill_node (n);
     answers.push_back (n);
@@ -894,7 +895,7 @@ vnode_impl::dofindtoes (user_args *sbp, chord_findtoes_arg *ta)
   vec<chordID> r;
   vec<ptr<location> > rr;
   vec<float> coords;
-  chord_node n;
+  chord_node_wire n;
   unsigned int maxret;
 
   ndofindtoes++;

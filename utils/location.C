@@ -17,18 +17,15 @@ location::init ()
   saddr_.sin_family = AF_INET;
   inet_aton (addr_.hostname.cstr (), &saddr_.sin_addr);
   saddr_.sin_port = htons (addr_.port);
-  
-  vnode_ = is_authenticID (n_, addr_.hostname, addr_.port);
-  if (vnode_ < 0) 
-    trace << "badnode " << n_ << " " << addr_ << "\n";
 }
 
 location::location (const chordID &n, 
 		    const net_address &r, 
+		    const int v,
 		    const vec<float> &coords) 
   : n_ (n),
     addr_ (r),
-    vnode_ (-1),
+    vnode_ (v),
     a_lat_ (0.0),
     a_var_ (0.0),
     alive_ (true),
@@ -41,7 +38,7 @@ location::location (const chordID &n,
 location::location (const chord_node &node) 
   : n_ (node.x),
     addr_ (node.r),
-    vnode_ (-1),
+    vnode_ (node.vnode_num),
     a_lat_ (0.0),
     a_var_ (0.0),
     alive_ (true),
@@ -60,6 +57,17 @@ location::fill_node (chord_node &data) const
 {
   data.x = n_;
   data.r = addr_;
+  data.vnode_num = vnode_;
+  data.coords.setsize (coords_.size ());
+  for (unsigned int i = 0; i < coords_.size (); i++)
+    data.coords[i] = static_cast<int> (coords_[i]);
+}
+
+void
+location::fill_node (chord_node_wire &data) const
+{
+  data.r = addr_;
+  data.vnode_num = vnode_;
   data.coords.setsize (coords_.size ());
   for (unsigned int i = 0; i < coords_.size (); i++)
     data.coords[i] = static_cast<int> (coords_[i]);

@@ -192,7 +192,7 @@ protected:
     } 
     else if (res->status != DHASH_OK) {
       if (res->status == DHASH_RETRY) {
-	pred_node =res->pred->p;
+	pred_node = make_chord_node (res->pred->p);
       }
       else if (res->status != DHASH_WAIT)
         warn << "dhash_store failed: " << blockID << ": "
@@ -252,7 +252,6 @@ protected:
     arg->key     = blockID;
     arg->ctype   = ctype;
     arg->dbtype  = DHASH_BLOCK;
-    arg->srcID   = clntnode->my_ID ();
     clntnode->my_location ()->fill_node (arg->from);
     arg->data.setsize (len);
     memcpy (arg->data.base (), data, len);
@@ -686,7 +685,6 @@ dhashcli::insert2_lookup_cb (ref<dhash_block> block, cbinsert_t cb,
     arg->key = block->ID;  // frag stored under hash(block)
     arg->ctype = block->ctype;
     arg->dbtype = DHASH_FRAG;
-    arg->srcID = clntnode->my_ID ();
     clntnode->my_location ()->fill_node (arg->from);
     
     // prepend type of block onto fragment and copy into arg.

@@ -60,7 +60,7 @@ vnode_impl::get_successor_cb (chordID n, cbchordID_t cb, chord_noderes *res,
     // warnx << "get_successor_cb: RPC error " << res->status << "\n";
     cb (bad, res->status);
   } else {
-    cb (*res->resok, CHORD_OK);
+    cb (make_chord_node (*res->resok), CHORD_OK);
   }
   delete res;
 }
@@ -87,7 +87,7 @@ vnode_impl::get_succlist_cb (cbchordIDlist_t cb, chord_nodelistres *res,
   } else {
     // xxx there must be something more intelligent to do here
     for (unsigned int i = 0; i < res->resok->nlist.size (); i++)
-      nlist.push_back (res->resok->nlist[i]);
+      nlist.push_back (make_chord_node (res->resok->nlist[i]));
     cb (nlist, CHORD_OK);
   }
   delete res;
@@ -114,7 +114,7 @@ vnode_impl::get_predecessor_cb (chordID n, cbchordID_t cb, chord_noderes *res,
     chord_node bad;
     cb (bad, res->status);
   } else {
-    cb (*res->resok, CHORD_OK);
+    cb (make_chord_node (*res->resok), CHORD_OK);
   }
   delete res;
 }
@@ -233,7 +233,7 @@ vnode_impl::get_fingers_cb (cbchordIDlist_t cb,
   } else {
     // xxx there must be something more intelligent to do here
     for (unsigned int i = 0; i < res->resok->nlist.size (); i++)
-      nlist.push_back (res->resok->nlist[i]);
+      nlist.push_back (make_chord_node (res->resok->nlist[i]));
     cb (nlist, CHORD_OK);
   }
   delete res;
@@ -288,6 +288,7 @@ user_args::fill_from (chord_node *from)
   if (sa) {
     from->r.hostname = inet_ntoa (sa->sin_addr);
     from->r.port = t_arg->src_port;
+    from->vnode_num = myindex;
   } else { //connected sockets don't have the addr field set in the sbp
     /*    ref<axprt> x = (sbp->getsrv ())->xprt ();
     axprt *xs = x->get ();

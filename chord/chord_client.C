@@ -121,6 +121,7 @@ chord::chord (str _wellknownhost, int _wellknownport,
   wkn.r.port = _wellknownport ? _wellknownport : myport;
   wkn.x = make_chordID (wkn.r.hostname,
 				   wkn.r.port);
+  wkn.vnode_num = 0;
   wkn.coords.setsize (NCOORDS);
   // Make up some random initial information for this other node.
   for (int i = 0; i < NCOORDS; i++)
@@ -208,7 +209,7 @@ chord::newvnode (cbjoin_t cb, ptr<fingerlike> fingers, ptr<route_factory> f)
   if (nvnode > max_vnodes)
     fatal << "Maximum number of vnodes (" << max_vnodes << ") reached.\n";
     
-  chordID newID = init_chordID (nvnode, myname, myport);
+  chordID newID = make_chordID (myname, myport, nvnode);
   warnx << gettime () << ": creating new vnode: " << newID << "\n";
 
   vec<float> coords;
@@ -218,7 +219,7 @@ chord::newvnode (cbjoin_t cb, ptr<fingerlike> fingers, ptr<route_factory> f)
     warnx << (int) coords[i] << " " ;
   }
   warnx << "\n";
-  ptr<location> l = locations->insert (newID, myname, myport, coords);
+  ptr<location> l = locations->insert (newID, myname, myport, nvnode, coords);
   if (wellknown_node == NULL)
     wellknown_node = l;
 

@@ -46,6 +46,7 @@
 #include <misc_utils.h>
 #include <dbfe.h>
 #include <ida.h>
+#include <chord_util.h>
 
 #ifdef DMALLOC
 #include <dmalloc.h>
@@ -711,7 +712,6 @@ dhash_impl::pmaint_handoff (chord_node dst, bigint key)
   assert (blk);
 
   arg->key = key;   // frag stored under hash(block)
-  arg->srcID = host_node->my_ID ();
   host_node->my_location ()->fill_node (arg->from);
   arg->data.setsize (blk->len);
   memcpy (arg->data.base (), blk->value, blk->len);
@@ -721,7 +721,6 @@ dhash_impl::pmaint_handoff (chord_node dst, bigint key)
   arg->attr.size  = arg->data.size ();
   arg->last    = false;
 
-  // XXX use dst not dst.x
   doRPC (dst, dhash_program_1, DHASHPROC_STORE,
 	 arg, res, wrap (this, &dhash_impl::pmaint_handoff_cb, dst, key, res));
 }
@@ -1381,7 +1380,7 @@ dhash_impl::append (ref<dbrec> key, ptr<dbrec> data,
     //create a new record in the database
     xdrsuio x;
     char *m_buf;
-    if ((m_buf = (char *)XDR_INLINE (&x, data->len)))
+    if ((m_buf = (char *)XDR_INLINE (&x, data->len + 3 & ~3)))
       {
 	memcpy (m_buf, data->value, data->len);
 	int m_len = x.uio ()->resid ();
@@ -1596,6 +1595,13 @@ dhash_impl::doRPC (const chord_node &n, const rpc_program &prog, int procno,
 	      ptr<void> in,void *out, aclnt_cb cb) 
 {
   host_node->doRPC (n, prog, procno, in, out, cb);
+}
+
+void
+dhash_impl::doRPC (const chord_node_wire &n, const rpc_program &prog, int procno,
+	      ptr<void> in,void *out, aclnt_cb cb) 
+{
+  host_node->doRPC (make_chord_node (n), prog, procno, in, out, cb);
 }
 
 void

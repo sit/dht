@@ -135,7 +135,7 @@ getsucc_cb (chordID dest, str desthost,
   }
 
 
-  chordID n    = res->resok->nlist[1].n.x;
+  chordID n    = make_chordID (res->resok->nlist[1].n);
   str host     = res->resok->nlist[1].n.r.hostname;
   u_short port = res->resok->nlist[1].n.r.port;
 

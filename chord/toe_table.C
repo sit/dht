@@ -78,7 +78,7 @@ toe_table::get_toes_rmt_cb (chord_nodelistres *res, int level, clnt_stat err)
   in_progress--;
   if (!(err || res->status)){
     for (unsigned int i=0; i < res->resok->nlist.size (); i++) 
-      add_toe (res->resok->nlist[i], level);
+      add_toe (make_chord_node (res->resok->nlist[i]), level);
   }
   
   delete res;

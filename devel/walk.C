@@ -131,10 +131,10 @@ getsucc_cb (chord_nodelistextres *res, clnt_stat err)
   assert (err == 0 && res->status == CHORD_OK);
   assert (res->resok->nlist.size () >= 2);
 
-  chordID n    = res->resok->nlist[1].n.x;
+  chordID n    = make_chordID (res->resok->nlist[1].n);
   str host     = res->resok->nlist[1].n.r.hostname;
   u_short port = res->resok->nlist[1].n.r.port;
-  int index    = is_authenticID (n, host, port);
+  int index    = res->resok->nlist[1].n.vnode_num;
   assert (index >= 0);
   warnx << n << " " << host << " " << port << " " << index << "\n";
 

@@ -164,6 +164,8 @@ class dhash_impl : public dhash {
 	      ptr<void> in, void *out, aclnt_cb cb);
   void doRPC (const chord_node &n, const rpc_program &prog, int procno,
 	      ptr<void> in, void *out, aclnt_cb cb);
+  void doRPC (const chord_node_wire &n, const rpc_program &prog, int procno,
+	      ptr<void> in, void *out, aclnt_cb cb);
   void doRPC_reply (svccb *sbp, void *res, 
 		    const rpc_program &prog, int procno);
   void dispatch (user_args *a);

@@ -329,7 +329,7 @@ route_dhash::block_cb (s_dhash_block_arg *arg)
     warn << "Responsible node did not have block.  Walking\n";
     vec<chord_node> succs;
     for (u_int i = 0; i < arg->nodelist.size (); i++)
-      succs.push_back (arg->nodelist[i]);
+      succs.push_back (make_chord_node (arg->nodelist[i]));
     walk (succs);
   } else {
     dhash_download::execute (f->get_vnode (), arg->source, blockID,
