@@ -141,7 +141,8 @@ usage ()
 {
   warnx << "Usage: " << progname
         << " [-d <insert log>] "
-	<< "[-S <socket>] [-x <proxy_hostname:port>,<proxy_hostname:port>...]\n";
+	<< "[-S <socket>] "
+	<< "[-x <proxy_hostname:port>,<proxy_hostname:port>...]\n";
   exit (1);
 }
 

@@ -62,28 +62,34 @@ multiconnect_cb(ptr<multiconn_args> args, unsigned int n, int fd) {
   args->saw_response(n);
 
   if (fd < 0) {
-    warn << "connect to: " << args->hosts[n] << ":" << args->ports[n] << " failed.\n";
+    warn << "connect to: " << args->hosts[n]
+         << ":" << args->ports[n] << " failed.\n";
     if (args->all_responded()) {
       (args->cb)(-1);
     }
 
-  }  else if (args->connected != "") {
+  }
+  else if (args->connected != "") {
     // redundant connection established. Kill it.
     close(fd);
     return;
 
-  } else {
-    warn << "connect to: " << args->hosts[n] << ":" << args->ports[n] << " succeeded.\n";
+  }
+  else {
+    warn << "connect to: " << args->hosts[n] << ":"
+         << args->ports[n] << " succeeded.\n";
     args->connected = strbuf() <<  args->hosts[n] << ":" << args->ports[n];
     (args->cb)(fd);
   }
 }
 
 void 
-multiconnect_real(ptr<multiconn_args> args, unsigned int n) {
+multiconnect_real(ptr<multiconn_args> args, unsigned int n)
+{
   if (args->connected == "" && (n < args->hosts.size()-1) ) {
     delaycb(args->timeout, 0, wrap(&multiconnect_real, args, n+1) );
-  } else if (args->connected != "") {
+  }
+  else if (args->connected != "") {
     return;
   }
 
@@ -92,18 +98,17 @@ multiconnect_real(ptr<multiconn_args> args, unsigned int n) {
 }
 
 void
-multiconnect(vec<str> hosts, vec<int> ports, int timeout, cbi::ptr cb) {
-  // tries hosts/ports in sequence until one connects.  calls <cb>
-  // once the first connects, and closes all other successful
-  // connections. Connections are started <timeout> seconds apart.
+multiconnect(vec<str> hosts, vec<int> ports, int timeout, cbi::ptr cb)
+{
+  // tries hosts/ports in sequence until one connects. calls <cb> once
+  // the first connects, and closes all other successful connections.
+  // Connections are started <timeout> seconds apart.
   assert(hosts.size() == ports.size());
   assert(hosts.size() > 0);
-  ptr<multiconn_args> args = New refcounted<multiconn_args> (hosts, ports, timeout, cb);
+  ptr<multiconn_args> args =
+    New refcounted<multiconn_args> (hosts, ports, timeout, cb);
   multiconnect_real(args, 0);
 }
-
-
-
 
 proxygateway::proxygateway (ptr<axprt_stream> x, ptr<dbfe> cache,
                             ptr<dbfe> dl, vec<str> hosts, vec<int> ports)
@@ -115,9 +120,10 @@ proxygateway::proxygateway (ptr<axprt_stream> x, ptr<dbfe> cache,
   proxyhosts = hosts;
   proxyports = ports;
 
-  if (proxyhosts.size() > 0) {
-    multiconnect(proxyhosts, proxyports, 3, wrap (mkref (this), &proxygateway::proxy_connected, x));
-  } else {
+  if (proxyhosts.size() > 0)
+    multiconnect(proxyhosts, proxyports, 1,
+	         wrap (mkref (this), &proxygateway::proxy_connected, x));
+  else {
     proxy_connected(x, -1);
   }
 }
@@ -143,7 +149,9 @@ proxygateway::~proxygateway ()
 }
 
 void
-proxygateway::insert_to_localcache(chordID id, char* block, int32_t len, dhash_ctype ctype) {
+proxygateway::insert_to_localcache (chordID id, char* block,
+                                    int32_t len, dhash_ctype ctype)
+{
   // insert into DB
   ref<dbrec> k = id2dbrec(id);
   ref<dbrec> d = New refcounted<dbrec> (block, len);
@@ -158,9 +166,11 @@ proxygateway::insert_to_localcache(chordID id, char* block, int32_t len, dhash_c
   case DHASH_CONTENTHASH:
     if (!cache_db->lookup (k)) {
       cache_db->insert (k, d);
-      warn << "db write: " << ctype << " " << id << " " << len << "\n";
+      warn << "db write: " << ctype << " " << id
+	   << " " << len << "\n";
     } else {
-      warn << "db write: " << ctype << " " << id << " already in block cache.\n";
+      warn << "db write: " << ctype << " " << id
+	   << " already in block cache.\n";
     }
   case DHASH_KEYHASH: 
     prev = cache_db->lookup(k);
@@ -169,7 +179,8 @@ proxygateway::insert_to_localcache(chordID id, char* block, int32_t len, dhash_c
 	break;
       }
       else {
-	warn << "db write: " << ctype << " " << id << " with " << len << " bytes (replacing block).\n";
+	warn << "db write: " << ctype << " " << id << " with "
+	     << len << " bytes (replacing block).\n";
 	cache_db->del(k);
       }
     }
@@ -207,13 +218,15 @@ proxygateway::dispatch (svccb *sbp)
       dhash_insert_arg *arg = sbp->template getarg<dhash_insert_arg> ();
 
       if (arg->options & DHASHCLIENT_USE_CACHE) {
-	insert_to_localcache(arg->blockID, arg->block.base(), arg->block.size(), arg->ctype);
+	insert_to_localcache
+	  (arg->blockID, arg->block.base(), arg->block.size(), arg->ctype);
 	local_insert_done(false, sbp);
       }
 
       else if (proxyclnt == 0) {
 	arg->options = (arg->options | DHASHCLIENT_USE_CACHE);
-	insert_to_localcache(arg->blockID, arg->block.base(), arg->block.size(), arg->ctype);
+	insert_to_localcache
+	  (arg->blockID, arg->block.base(), arg->block.size(), arg->ctype);
 	local_insert_done(true, sbp);
       }
 
@@ -234,17 +247,18 @@ proxygateway::dispatch (svccb *sbp)
       dhash_retrieve_arg *arg = sbp->template getarg<dhash_retrieve_arg> ();
       ptr<dbrec> cache_ret;
 
-      if (arg->options & DHASHCLIENT_USE_CACHE) {
+      if ((arg->options & DHASHCLIENT_USE_CACHE) || proxyclnt == 0) {
 	cache_ret = cache_db->lookup (id2dbrec (arg->blockID));
       }
 
       if (cache_ret) {
-	warn << "using cached block " << cache_ret->len << " " << arg->blockID << "\n";
+	warn << "using cached block " << cache_ret->len
+	     << " " << arg->blockID << "\n";
 	ptr<dhash_retrieve_res> res = block_to_res (cache_ret, arg->ctype);
 	sbp->reply (res);
 	return;
-          
-      } else if (proxyclnt) {
+      }
+      else if (proxyclnt) {
 	int options = arg->options;
 	arg->options =
 	  (arg->options & (~DHASHCLIENT_USE_CACHE));
@@ -253,15 +267,14 @@ proxygateway::dispatch (svccb *sbp)
 	  (DHASHPROC_RETRIEVE, arg, res,
 	   wrap (mkref (this), &proxygateway::proxy_retrieve_cb,
 	         options, sbp, res));
-
-      }  else {
+      }
+      else {
 	dhash_retrieve_res res (DHASH_NOENT);
 	sbp->reply (&res);
       }
-
     }
     break;
-    
+
   default:
     sbp->reject (PROC_UNAVAIL);
     break;
