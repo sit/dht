@@ -21,7 +21,7 @@ EventQueue::Instance()
 }
 
 
-EventQueue::EventQueue() : _time(0), _end(false)
+EventQueue::EventQueue() : _time(0), _size(0), _end(false)
 {
   _eventchan = chancreate(sizeof(Event*), 0);
   assert(_eventchan);
@@ -57,7 +57,6 @@ EventQueue::run()
   recvp(_gochan);
 
   while(1){
-
     if (_end) 
       graceful_exit();
 
@@ -75,7 +74,7 @@ EventQueue::run()
     // must be time for the next event.
                                                                                   
     // no more events.  we're done!
-    if(_queue.empty())
+    if(!_size)
       graceful_exit();
                                                                                   
     // run events for next time in the queue
@@ -107,7 +106,7 @@ EventQueue::graceful_exit()
 void
 EventQueue::advance()
 {
-  if(_queue.empty()) {
+  if(!_size) {
     cerr << "queue is empty" << endl;
     exit(-1);
   }
@@ -117,11 +116,12 @@ EventQueue::advance()
   assert(e->ts >= _time && e->ts < _time + 100000000);
   _time = e->ts;
 
-  while(_queue.size() > 0){
+  while(_size > 0){
     Event *first = _queue.front();
     if(first->ts > _time)
       break;
     _queue.pop_front();
+    _size--;
     Event::Execute(first); // new thread, execute(), delete Event
   }
 }
@@ -133,8 +133,9 @@ EventQueue::add_event(Event *e)
   assert(e->ts >= _time);
 
   // empty queue
-  if(_queue.empty()) {
+  if(!_size) {
     _queue.push_back(e);
+    _size++;
     return;
   }
 
@@ -145,6 +146,7 @@ EventQueue::add_event(Event *e)
       break;
 
   _queue.insert(pos, e);
+  _size++;
 }
 
 
