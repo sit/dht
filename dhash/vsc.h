@@ -63,7 +63,9 @@ public:
   
   void remove (KEY& k) 
     {      
+      lrulist.remove (entries[k]);
       entries.remove(entries[k]);
+      num_cache_entries--;
     }
 
    VALUE *lookup (KEY& kk)
@@ -78,7 +80,6 @@ public:
   
    void traverse (callback<void, KEY>::ref cb ) 
      {
-       warn << "Will traverse " << num_cache_entries << "\n";
        cache_entry *e = entries.first ();
        while (e) 
 	 {

@@ -33,14 +33,16 @@ dhash::dhash(str dbname, ptr<vnode> node, int k, int ss, int cs) :
   
   assert(host_node);
 
-  key_store.set_flushcb(wrap(this, &dhash::store_flush));
-  key_cache.set_flushcb(wrap(this, &dhash::cache_flush));
+  key_store.set_flushcb (wrap (this, &dhash::store_flush));
+  key_replicate.set_flushcb (wrap (this, &dhash::store_flush));  
+  key_cache.set_flushcb (wrap (this, &dhash::cache_flush));
 
   update_replica_list ();
   install_replica_timer ();
   install_keycheck_timer ();
 
   delaycb (5, 0, wrap(this, &dhash::transfer_initial_keys));
+
   // RPC demux
   host_node->addHandler (DHASH_PROGRAM, wrap(this, &dhash::dispatch));
 }
@@ -314,8 +316,10 @@ dhash::fix_replicas_txerd (dhash_stat err)
 void
 dhash::check_keys_timer_cb () 
 {
-  key_store.traverse(wrap(this, &dhash::check_keys_traverse_cb));
-  key_cache.traverse(wrap(this, &dhash::check_keys_traverse_cb));
+  printkeys ();
+  key_store.traverse (wrap (this, &dhash::check_keys_traverse_cb));
+  key_replicate.traverse (wrap (this, &dhash::check_keys_traverse_cb));
+  key_cache.traverse (wrap (this, &dhash::check_keys_traverse_cb));
   install_keycheck_timer ();
 }
 
@@ -525,7 +529,7 @@ dhash::store (dhash_insertarg *arg, cbstore cb)
       key_store.enter (id, &stat);
     } else if (arg->type == DHASH_REPLICA) {
       stat = DHASH_REPLICATED;
-      key_store.enter (id, &stat);
+      key_replicate.enter (id, &stat);
     } else {
       stat = DHASH_CACHED;
       key_cache.enter (id, &stat);
@@ -594,26 +598,31 @@ dhash::id2dbrec(chordID id)
 void
 dhash::change_status (chordID key, dhash_stat newstat) 
 {
-  dhash_stat r = DHASH_REPLICATED;
-  dhash_stat c = DHASH_CACHED;
 
-  if ((key_status (key) == DHASH_STORED) || 
-      (key_status (key) == DHASH_REPLICATED)) {
+  if (key_status (key) == DHASH_STORED) 
     key_store.remove (key);
-    if (newstat == DHASH_REPLICATED)
-      key_store.enter (key, &r);
-    else if (newstat == DHASH_CACHED)
-      key_store.enter (key, &c);
-  } else if (newstat != DHASH_CACHED) {
+  else if (key_status (key) == DHASH_REPLICATED)
+    key_replicate.remove (key);
+  else
     key_cache.remove (key);
+
+  if (newstat == DHASH_STORED)
     key_store.enter (key, &newstat);
-  }
+  if (newstat == DHASH_REPLICATED)
+    key_replicate.enter (key, &newstat);
+  else if (newstat == DHASH_CACHED)
+    key_cache.enter (key, &newstat);
+
 }
 
 dhash_stat
 dhash::key_status(chordID n) 
 {
   dhash_stat * s_stat = key_store.peek (n);
+  if (s_stat != NULL)
+    return *s_stat;
+
+  s_stat = key_replicate.peek (n);
   if (s_stat != NULL)
     return *s_stat;
   
@@ -636,7 +645,8 @@ void
 dhash::store_flush (chordID key, dhash_stat value) {
   warn << "flushing element " << key << " from store\n";
   ptr<dbrec> k = id2dbrec(key);
-  key_cache.enter (key, &value);
+  dhash_stat c = DHASH_CACHED;
+  key_cache.enter (key, &c);
   db->del (k, wrap(this, &dhash::store_flush_cb));
 }
  
@@ -686,13 +696,22 @@ dhash::printkeys ()
 {
   warn << "ID: " << host_node->my_ID () << "\n";
   key_store.traverse (wrap (this, &dhash::printkeys_walk));
+  warn << "repliated:\n";
+  key_replicate.traverse (wrap (this, &dhash::printkeys_walk));
+  warn << "Cached:\n";
   key_cache.traverse (wrap (this, &dhash::printcached_walk));
 }
 
 void
 dhash::printkeys_walk (chordID k) 
 {
-  warn << k << " STORED\n";
+  dhash_stat status = key_status (k);
+  if (status == DHASH_STORED)
+    warn << k << " STORED\n";
+  else if (status == DHASH_REPLICATED)
+    warn << k << " REPLICATED\n";
+  else
+    warn << k << " UNKNOWN\n";
 }
 
 void

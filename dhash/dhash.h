@@ -174,6 +174,7 @@ class dhash {
   ptr<dbrec> id2dbrec(chordID id);
 
   vs_cache<chordID, dhash_stat> key_store;
+  vs_cache<chordID, dhash_stat> key_replicate;
   vs_cache<chordID, dhash_stat> key_cache;
   
   chordID pred;
