@@ -144,16 +144,19 @@ route_chord::make_hop (chordID &n)
 void
 route_chord::make_hop_cb (chord_testandfindres *res, clnt_stat err)
 {
-  if (res->status == CHORD_INRANGE)
-    stop = res->inrange->stop;
-  else
-    stop = res->notinrange->stop;
 
   if (err) {
     warnx << "make_hop_cb: failure " << err << "\n";
     r = CHORD_RPCFAILURE;
     cb (done = true);
-  } else if (last_hop) {
+    delete res;
+    return;
+  } 
+  if (res->status == CHORD_INRANGE)
+    stop = res->inrange->stop;
+  else
+    stop = res->notinrange->stop;
+  if (last_hop) {
     //talked to the successor
     r = CHORD_OK;
     cb (done = true);
@@ -403,16 +406,19 @@ route_debruijn::make_hop (chordID &n, chordID &x, chordID &d)
 void
 route_debruijn::make_hop_cb (chord_debruijnres *res, clnt_stat err)
 {
-  if (res->status == CHORD_INRANGE)
-    stop = res->inres->stop;
-  else
-    stop = res->noderes->stop;
 
   if (err) {
     warnx << "make_hop_cb: failure " << err << "\n";
     r = CHORD_RPCFAILURE;
     cb (done = true);
-  } else if (last_hop) {
+    delete res;
+    return;
+  } 
+  if (res->status == CHORD_INRANGE)
+    stop = res->inres->stop;
+  else
+    stop = res->noderes->stop;
+  if (last_hop) {
     r = CHORD_OK;
     cb (done = true);
   } else if (res->status == CHORD_INRANGE) { 
