@@ -1441,7 +1441,7 @@ Chord::join(Args *args)
 
   if (args) {
     me.heartbeat = now();
-    loctable->add_node(me);
+    loctable->update_ifexists(me);
     _last_join_time = now();
     ChordObserver::Instance(NULL)->addnode();
     _join_scheduled++;
@@ -2359,6 +2359,7 @@ LocTable::add_check(Chord::IDMap n)
 {
   idmapwrap *elm = ring.search(n.id);
   
+  
   if (!elm) 
     return -1;
 
@@ -2379,8 +2380,10 @@ LocTable::update_ifexists(Chord::IDMap n)
   idmapwrap *ptr = ring.search(n.id);
   if (!ptr) return false;
   ptr->timestamp = now();
-  if (n.heartbeat > ptr->n.heartbeat)
+  if (n.heartbeat > ptr->n.heartbeat) {
+    ptr->status = LOC_HEALTHY;
     ptr->n.heartbeat = n.heartbeat;
+  }
   return true;
 }
 void
@@ -2388,7 +2391,7 @@ LocTable::add_node(Chord::IDMap n, bool is_succ, bool assertadd, Chord::CHID fs,
 {
   Chord::IDMap succ1; 
   Chord::IDMap pred1; 
- 
+
   assert(n.ip > 0 && n.ip < 32000 && n.heartbeat < 86400000);
   if (vis) {
     succ1 = succ(me.id+1);
