@@ -69,7 +69,7 @@ tobigint (const merkle_hash &h)
   return ret;
 #else
   bigint ret = 0;
-  for (int i = h.size - 1; i >= 1; i--) {
+  for (int i = h.size - 1; i >= 0; i--) {
     ret <<= 8;
     ret += h.bytes[i];
   }
