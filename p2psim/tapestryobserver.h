@@ -2,6 +2,7 @@
 #define __TAPESTRY_OBSERVER_H
 
 #include "observer.h"
+#include "tapestry.h"
 
 class TapestryObserver : public Observer {
 public:
