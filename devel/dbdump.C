@@ -1,10 +1,11 @@
-#include "async.h"
-#include "dbfe.h"
-#include "merkle_misc.h"
-#include "merkle_hash.h"
+#include <async.h>
+#include <aios.h>
+#include <dbfe.h>
 
-#define MODE_ENV 1
-#define MODE_OLD 2
+enum {
+    MODE_ENV = 1,
+    MODE_OLD = 2
+} modes;
 
 int
 main (int argc, char *argv[])
@@ -21,8 +22,6 @@ main (int argc, char *argv[])
   DB_ENV* dbe = NULL;
   char cpath[MAXPATHLEN];
 
-  errfd = 1;
-
   if (mode == MODE_ENV) {
 
     r = db_env_create (&dbe, 0);
@@ -31,7 +30,7 @@ main (int argc, char *argv[])
     if (r == -1) fatal << "couldn't chdir to " << argv[2] << "\n";
     
     getcwd (cpath, MAXPATHLEN);
-    warn << "opening db in: " << cpath << "\n";
+    aout << "opening db in: " << cpath << "\n";
     r = dbe->set_data_dir (dbe, cpath);
     assert (!r);
     r = dbe->set_lg_dir (dbe, cpath);
@@ -87,22 +86,21 @@ main (int argc, char *argv[])
     int err = cursor->c_get(cursor, &key, &data, 
 			    ((i==0) ? DB_FIRST : DB_NEXT));
     if (err == DB_NOTFOUND) {
-      warn << "EOF.\n";
+      aout << "EOF.\n";
       break;
     } else if (err) {
       fatal << "err: " << err << " " << strerror (err) << "\n";
     }
-    warn << "key[" << i << "] " << hexdump (key.data, key.size) << "\n";
-    //   ptr<dbrec> kr = New refcounted<dbrec> (key.data, key.size);
-
-    //warn << "key[" << i << "] " << to_merkle_hash (kr) << "\n";
 
     bzero (&data, sizeof (data));
     err = db->get (db, NULL, &key, &data, 0);
     if (err)
       warn << "lookup err: " << err << " " << strerror (err) << "\n";
 
+    aout << "key[" << i << "] " << hexdump (key.data, key.size) 
+	 << " " << data.size << "\n";
     keys++;
+
     totalsz += data.size;
     
     err_flush ();
@@ -110,7 +108,7 @@ main (int argc, char *argv[])
 
   db->close (db, 0);
   dbe->close (dbe, 0);
-  warn << "total keys: " << keys << "\n";
-  warn << "total bytes: " << totalsz << "\n";
+  aout << "total keys: " << keys << "\n";
+  aout << "total bytes: " << totalsz << "\n";
 }
 
