@@ -231,9 +231,7 @@ dhashclient::insertcb (cbinsertgw_t cb, bigint key,
   } else {
     if (res->status != DHASH_OK) {
       errstr = dhasherr2str (res->status);
-      if (res->status != DHASH_WAIT)
-	warn << "2dhashclient::insert failed: " << key 
-	     << ": " << errstr << "\n";
+      warn << "2dhashclient::insert failed: " << key << ": " << errstr << "\n";
     }
     else {
       i->path.setsize (res->resok->path.size ());

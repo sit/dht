@@ -39,11 +39,9 @@ protected:
   ptr<vnode> clntnode;
 
   int num_retries;
-  int nextblock;
-  int numblocks;
-  vec<long> seqnos;
   timecb_t *dcb;
   bool returned;
+  bool present;
 
   dhash_store (ptr<vnode> clntnode, ptr<location> dest, blockID bid,
                ptr<dhash_block> _block, store_status store_type, 
@@ -54,10 +52,9 @@ protected:
       dest (dest), block (_block), bid (bid), cb (cb),
       ctype (_block->ctype), store_type (store_type),
       clntnode (clntnode), num_retries (0),
-      nextblock (0),
-      numblocks (0),
       dcb (NULL),
-      returned (false)
+      returned (false),
+      present (false)
   {
     start ();
   }

@@ -17,8 +17,6 @@ dhash_store::start ()
   error = false;
   status = DHASH_OK;
   npending = 0;
-  nextblock = 0;
-  numblocks = 0;
   int blockno = 0;
 
   unsigned int mtu;
@@ -44,7 +42,6 @@ dhash_store::start ()
     nstored += chunklen;
     blockno++;
   }
-  numblocks = blockno;
 }
 
 
@@ -55,31 +52,25 @@ dhash_store::finish (ptr<dhash_storeres> res, int num, clnt_stat err)
   chord_node pred_node;
 
   if (err) {
-    // XXX set status?
-    error = true;
     warn << "dhash_store failed: " << bid << ": RPC error" << "\n";
-  } 
-
+    error = true;
+    status = DHASH_RPCERR;
+  }
   else if (res->status != DHASH_OK) {
-    if (res->status == DHASH_RETRY) {
+    if (res->status == DHASH_RETRY)
       pred_node = make_chord_node (res->pred->p);
-    } else if (res->status != DHASH_WAIT)
-      warn << "dhash_store failed: " << bid << ": "
-	   << dhasherr2str(res->status) << "\n";
+    else
+      warn << "dhash_store failed: " << bid
+	   << ": " << dhasherr2str(res->status) << "\n";
     if (!error)
       status = res->status;
     error = true;
-  } else { 
-    if ((num > nextblock) && (numblocks - num > 1)) {
-      warn << "(store) FAST retransmit: " << bid << " got " 
-	   << num << " chunk " << nextblock << " of " << numblocks 
-	   << " being retransmitted\n";
-      clntnode->resendRPC(seqnos[nextblock]);
-      //only one per fetch; finding more is too much bookkeeping
-      numblocks = -1;
-    }
-    nextblock++;
   }
+  else {
+    if (res->resok->already_present)
+      present = res->resok->already_present;
+  }
+  // removed retransmit code - benjie, july 18 2003
 
   if (npending == 0) {
     if (status == DHASH_RETRY) {
@@ -105,7 +96,7 @@ dhash_store::finish (ptr<dhash_storeres> res, int num, clnt_stat err)
       }
     }
     else
-      done (res->resok->already_present);
+      done (present);
   }
 }
 
@@ -130,10 +121,9 @@ dhash_store::store (ptr<location> dest, blockID blockID, char *data,
   arg->attr.size     = totsz;
   //    arg->last    = last;
     
-  long rexmitid = clntnode->doRPC
+  clntnode->doRPC
     (dest, dhash_program_1, DHASHPROC_STORE, arg, res,
      wrap (mkref(this), &dhash_store::finish, res, num));
-  seqnos.push_back (rexmitid);
 }
 
 void 
