@@ -298,7 +298,7 @@ stp_manager::timeout (rpc_state *C)
   warnx << gettime() << " TIMEOUT " << 1 + C->seqno << " cwind " << (int)cwind << "\n";
 #endif
 
-  C->s = getusec ();
+  // C->s = getusec ();
   rpc_done (-1);
 }
 
