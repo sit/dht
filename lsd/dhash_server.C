@@ -109,7 +109,7 @@ dhash::fetchsvc_cb(svccb *sbp, ptr<dbrec> val, dhash_stat err)
 
 void
 dhash::storesvc_cb(store_cbstate *st, dhash_stat err) {
-  warnx << "storesvc_cb: " << st->r << "\n";
+  warnx << "storesvc_cb: " << st->r << " " << err << "\n";
   st->r--;
   if (st->r <= 0) {
     st->sbp->reply(&err);
@@ -121,7 +121,7 @@ dhash::storesvc_cb(store_cbstate *st, dhash_stat err) {
 void
 dhash::fetch(sfs_ID id, cbvalue cb) 
 {
-  //  warn << "FETCHING " << id << "\n";
+  warn << "FETCHING " << id << "\n";
   ptr<dbrec> q = id2dbrec(id);
   db->lookup(q, wrap(this, &dhash::fetch_cb, cb));
 }
@@ -139,11 +139,9 @@ dhash::fetch_cb(cbvalue cb, ptr<dbrec> ret)
 void 
 dhash::store(sfs_ID id, dhash_value data, store_status type, cbstore cb)
 {
-#if 0
   if (type == DHASH_STORE) warn << "STORING " << id << "\n";
   else if (type == DHASH_CACHE) warn << "CACHING " << id << "\n";
   else warn << "don't know what the hell I'm doing\n";
-#endif
 
   ptr<dbrec> k = id2dbrec(id);
   ptr<dbrec> d = New refcounted<dbrec> (data.base (), data.size ());
@@ -167,6 +165,7 @@ dhash::store(sfs_ID id, dhash_value data, store_status type, cbstore cb)
 void
 dhash::store_cb(cbstore cb, int stat) 
 {
+  warn << "store stat: " << stat << "\n";
   if (stat != 0) 
     (*cb)(DHASH_NOENT);
   else 
@@ -209,10 +208,11 @@ dhash::store_replica_cb(store_cbstate *st, dhash_stat *res, clnt_stat err)
 ptr<dbrec>
 dhash::id2dbrec(sfs_ID id) 
 {
-  void *key = (void *)id.getraw ().cstr ();
-  int len = id.getraw ().len ();
+  str whipme = id.getraw ();
+  void *key = (void *)whipme.cstr ();
+  int len = whipme.len ();
   
-
+  warn << "id2dbrec: " << id << "=" << hexdump(key, len) << "\n";
   ptr<dbrec> q = New refcounted<dbrec> (key, len);
   return q;
 }
