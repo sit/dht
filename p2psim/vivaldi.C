@@ -377,14 +377,11 @@ Vivaldi9::algorithm(Sample s)
 // so things look good with just a few neighbors. Easy to see
 // this with Euclidean cross layout.
 
-// general lesson from occasional jumps: they don't work.
+// general lesson from occasional jumps (i.e. annealing): they don't work.
 
-// spring relaxation doesn't seem to work any better than the
-// much stupider scheme of moving to eliminate 1/100th of the
-// error in the latency to each sample. I.e. not saving samples
-// at all.
-
-// maybe need periodic "jolt" as in simulated annealing.
+// accumulating 10 samples and calcuating net force doesn't seem
+// to do any better than just considering samples one at a time,
+// and not remembering anything about past samples.
 
 // when the real coordinates are all in a straight line, vivaldi
 // has trouble positioning some of the nodes, they end up scattered

@@ -17,8 +17,8 @@ typedef unsigned IPAddress;
 // mildly useful
 typedef unsigned latency_t;
 
-// time
-typedef unsigned long Time;
+// time, in milliseconds
+typedef unsigned long long Time;
 
 //
 // some utility functions
@@ -32,6 +32,11 @@ Node *ip2node(IPAddress);
 
 // tries to clean things up cleanly
 void graceful_exit();
+
+// FreeBSD libc doesn't have atoll.
+inline unsigned long long atoll(const char *p) {
+  return strtoull(p, NULL, 10);
+}
 
 #ifdef WITH_DMALLOC
 # include "dmalloc.h"

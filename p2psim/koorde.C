@@ -109,7 +109,7 @@ Koorde::find_successors(CHID key, uint m, bool intern)
   //  a.k,  r.i);
 
   if (vis && !intern) 
-    printf ("vis %lu search %16qx %16qx %16qx\n", now(), me.id, key, r.i);
+    printf ("vis %llu search %16qx %16qx %16qx\n", now(), me.id, key, r.i);
 
   while (1) {
     assert (count++ < 5000);
@@ -128,7 +128,7 @@ Koorde::find_successors(CHID key, uint m, bool intern)
 
     if (!doRPC (r.next.ip, &Koorde::koorde_next, &a, &r)) {
       timeout++;
-      printf ("rpc failure %16qx to %16qx at %lu\n", me.id, r.next.id,
+      printf ("rpc failure %16qx to %16qx at %llu\n", me.id, r.next.id,
 	      now ());
       loctable->del_node (path.back ());
       path.pop_back ();
@@ -149,7 +149,7 @@ Koorde::find_successors(CHID key, uint m, bool intern)
     }
 
     if (vis && !intern) 
-      printf ("vis %lu step %16qx %16qx %16qx\n", now (), me.id, last.id,
+      printf ("vis %llu step %16qx %16qx %16qx\n", now (), me.id, last.id,
 	      r.i);
     
     if (r.done) break;
@@ -260,7 +260,7 @@ Koorde::fix_debruijn ()
     }
 
     if (change) {
-      printf ( "vis %lu dfingers %16qx %16qx", now (), me.id, debruijn);
+      printf ( "vis %llu dfingers %16qx %16qx", now (), me.id, debruijn);
       for (uint i = 0; i < dfingers.size (); i++) {
 	printf ( " %16qx", dfingers[i].id);
       }
@@ -283,7 +283,7 @@ Koorde::reschedule_stabilizer(void *x)
 void
 Koorde::stabilize()
 {
-  printf ("stabilize %qx %lu\n", me.id, now ());
+  printf ("stabilize %qx %llu\n", me.id, now ());
   Chord::stabilize();
   fix_debruijn();
 }

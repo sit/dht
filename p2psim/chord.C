@@ -20,7 +20,7 @@ Chord::Chord(Node *n, uint numsucc) : Protocol(n), _isstable (false)
   loctable->pin(me.id - 1, 0, 1);
 
   if (vis) {
-    printf ("vis %lu node %16qx\n", now (), me.id);
+    printf ("vis %llu node %16qx\n", now (), me.id);
   }
 }
 
@@ -34,7 +34,7 @@ char *
 Chord::ts()
 {
   static char buf[50];
-  sprintf(buf, "%lu Chord(%5u,%16qx)", now(), me.ip, me.id);
+  sprintf(buf, "%llu Chord(%5u,%16qx)", now(), me.ip, me.id);
   return buf;
 }
 
@@ -71,7 +71,7 @@ Chord::find_successors(CHID key, uint m, bool intern)
   //printf("%s find_successors key %qu\n", ts(), PID(key));
 
   if (vis && !intern) 
-    printf ("vis %lu search %16qx %16qx\n", now(), me.id, key);
+    printf ("vis %llu search %16qx %16qx\n", now(), me.id, key);
 
   next_args na;
   next_ret nr;
@@ -83,7 +83,7 @@ Chord::find_successors(CHID key, uint m, bool intern)
   while(1){
     assert(count++ < 5000);
     if (vis && !intern) 
-      printf ("vis %lu step %16qx %16qx\n", now(), me.id, nprime.id);
+      printf ("vis %llu step %16qx %16qx\n", now(), me.id, nprime.id);
 
     bool r = doRPC(nprime.ip, &Chord::next_handler, &na, &nr);
     if(r && nr.done){
@@ -97,14 +97,14 @@ Chord::find_successors(CHID key, uint m, bool intern)
 #endif
 
       if (vis && !intern) 
-	printf ("vis %lu step %16qx %16qx\n", now(), me.id, nr.v[0].id);
+	printf ("vis %llu step %16qx %16qx\n", now(), me.id, nr.v[0].id);
 
       break;
     } else if (r) {
       route.push_back(nr.next);
       nprime = nr.next;
     } else {
-      printf ("%16qx rpc to %16qx failed %lu\n", me.id, nprime.id, now ());
+      printf ("%16qx rpc to %16qx failed %llu\n", me.id, nprime.id, now ());
       route.pop_back ();
       if (route.size () > 0) {
 	alert_args aa;
@@ -162,7 +162,7 @@ void
 Chord::join(Args *args)
 {
   if (vis) {
-    printf("vis %lu join %16qx\n", now (), me.id);
+    printf("vis %llu join %16qx\n", now (), me.id);
   }
 
   IDMap wkn;
@@ -180,7 +180,7 @@ Chord::join(Args *args)
   assert (ok);
   assert(fr.v.size() > 0);
   Time after = now();
-  printf("%s join2 %16qx, elapsed %ld\n",
+  printf("%s join2 %16qx, elapsed %llu\n",
          ts(), fr.v[0].id,
          after - before);
   loctable->add_node(fr.v[0]);
@@ -301,7 +301,7 @@ Chord::fix_successor_list()
       }
     }
     if (change) {
-      printf ( "vis %lu succlist %16qx", now (), me.id);
+      printf ( "vis %llu succlist %16qx", now (), me.id);
       for (uint i = 0; i < scs.size (); i++) {
 	printf ( " %16qx", scs[i].id);
       }
@@ -324,7 +324,7 @@ Chord::notify_handler(notify_args *args, notify_ret *ret)
 void
 Chord::alert_handler(alert_args *args, alert_ret *ret)
 {
-  printf ("vis %lu delete %16qx %16qx\n", now (), me.id, args->n.id);
+  printf ("vis %llu delete %16qx %16qx\n", now (), me.id, args->n.id);
   loctable->del_node(args->n);
 }
 
@@ -361,7 +361,7 @@ Chord::leave(Args *args)
 void
 Chord::crash(Args *args)
 {
-  printf ("vis %lu crash %16qx\n", now (), me.id);
+  printf ("vis %llu crash %16qx\n", now (), me.id);
   node()->crash ();
 }
 
@@ -509,11 +509,11 @@ LocTable::add_node(Chord::IDMap n)
 
   if (vis) {
     if(succ1.id != succ2.id) {
-      printf("vis %lu succ %16qx %16qx\n", now (), ring[0].id, succ2.id);
+      printf("vis %llu succ %16qx %16qx\n", now (), ring[0].id, succ2.id);
     }
 
     if(pred1.id != pred2.id) {
-      printf("vis %lu pred %16qx %16qx\n", now (), ring[0].id, pred2.id);
+      printf("vis %llu pred %16qx %16qx\n", now (), ring[0].id, pred2.id);
     }
   }
 }

@@ -23,7 +23,7 @@ VivaldiTest::join(Args *args)
 
   int vo = args->nget<int>("vivaldi-algorithm");
   int dim = args->nget<int>("model-dimension");
-  if (dim < 0) {
+  if (dim <= 0) {
     cerr << "dimension must be specified (and positive)\n";
     exit (0);
   }
@@ -63,7 +63,7 @@ char *
 VivaldiTest::ts()
 {
   static char buf[50];
-  sprintf(buf, "%lu Vivaldi(%u)", now(), node()->ip());
+  sprintf(buf, "%llu Vivaldi(%u)", now(), node()->ip());
   return buf;
 }
 
@@ -136,7 +136,7 @@ VivaldiTest::print_all_loc()
   Vivaldi::Coord vc;
   for (uint i = 0; i < n; i++) {
     vc = _all[i]->_vivaldi->my_location();
-    printf("COORD %u: ", (unsigned)now ());
+    printf("COORD %d %u: ", (int) _all[i]->ip(), (unsigned)now ());
     for (uint j = 0; j < vc._v.size(); j++)
       printf ("%.1f ", vc._v[j]);
     printf ("\n");
