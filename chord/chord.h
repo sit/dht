@@ -69,14 +69,14 @@ struct user_args {
   void *args;
   int procno;
   svccb *sbp;
-  rpc_program *prog;
+  const rpc_program *prog;
 
   //info about the vnode that will reply
   chordID myID;
   int myindex;
   vec<float> coords;
 
-  user_args (svccb *s, void *a, rpc_program *pr, int p) : args (a), procno (p), sbp (s), prog (pr) {};
+  user_args (svccb *s, void *a, const rpc_program *pr, int p) : args (a), procno (p), sbp (s), prog (pr) {};
 
   void *getvoidarg () { return args; };
   const void *getvoidarg () const { return args; };
@@ -186,7 +186,7 @@ class chord : public virtual refcount {
   int ss_mode;
   int lookup_mode;
   ptr<axprt> x_dgram;
-  vec<rpc_program> handledProgs;
+  vec<const rpc_program *> handledProgs;
 
   qhash<chordID, ref<vnode>, hashID> vnodes;
 
@@ -222,7 +222,7 @@ class chord : public virtual refcount {
   //RPC demux
   void handleProgram (const rpc_program &prog);
   bool isHandled (int progno);
-  void get_program (int progno, rpc_program **prog);
+  const rpc_program *get_program (int progno);
 
   //'wrappers' for vnode functions (to be called from higher layers)
   void set_active (int n) { 

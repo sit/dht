@@ -488,8 +488,7 @@ vnode_impl::do_upcall (int upcall_prog, int upcall_proc,
     return;
   }
 
-  rpc_program *prog;
-  chordnode->get_program (upcall_prog, &prog);
+  const rpc_program *prog = chordnode->get_program (upcall_prog);
   assert (prog);
   
   xdrmem x ((char *)uc_args, uc_args_len, XDR_DECODE);

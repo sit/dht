@@ -199,29 +199,27 @@ chord::stop () {
   vnodes.traverse (wrap (this, &chord::stop_cb));
 }
 
-void
-chord::get_program (int progno, rpc_program **prog)
+const rpc_program *
+chord::get_program (int progno)
 {
   for (unsigned int i = 0; i < handledProgs.size (); i++)
-    if (progno == (int)handledProgs[i].progno) {
-      *prog = &(handledProgs[i]);
-      return;
-    }
-  *prog = NULL;
+    if (progno == (int)handledProgs[i]->progno)
+      return handledProgs[i];
+  return NULL;
 }
 
 
 bool
 chord::isHandled (int progno) {
-  for (unsigned int i = 0; i < handledProgs.size (); i++)
-    if (progno == (int)handledProgs[i].progno) return true;
+  for (u_int i = 0; i < handledProgs.size (); i++)
+    if (progno == (int)handledProgs[i]->progno) return true;
   return false;
 }
 void
 chord::handleProgram (const rpc_program &prog) {
   if (isHandled (prog.progno)) return;
   else {
-    handledProgs.push_back (prog);
+    handledProgs.push_back (&prog);
   }
 }
 
@@ -267,8 +265,7 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
       }
       
       //find the program
-      rpc_program *prog;
-      get_program (arg->progno, &prog);
+      const rpc_program *prog = get_program (arg->progno);
       
       //unmarshall the args
       char *arg_base = (char *)(arg->args.base ());
