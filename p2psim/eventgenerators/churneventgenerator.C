@@ -60,6 +60,8 @@ ChurnEventGenerator::ChurnEventGenerator(Args *args)
     _exittime = args->nget( "exittime", 200000, 10 );
   }
 
+  Node::set_collect_stat_time(args->nget("stattime",0,10));
+
   _ipkeys = args->nget("ipkeys", 0, 10);
 
   EventQueue::Instance()->registerObserver(this);
