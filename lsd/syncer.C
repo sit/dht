@@ -151,8 +151,8 @@ syncer::sync_replicas_gotsucclist (ptr<location> pred,
   bigint rngmin = pred->id ();
   bigint rngmax = succs[0]->id ();
   
-  if (cur_succ >= succs.size ()) cur_succ = 0;
   cur_succ++; // start at 1 (0 is me)
+  if (cur_succ >= succs.size ()) cur_succ = 1;
 
   //sync with the next node
   if (tmptree) delete tmptree;
