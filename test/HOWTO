@@ -10,6 +10,8 @@ same directory as config.txt)
 
 And you're all set.
 
+[TODO: reap lsd and testslave after using them]
+
 
 config.txt syntax
 -----------------
@@ -90,9 +92,37 @@ Now run lsd as follows:
 Where XXXX is some free port number.  This should correspond with the
 third column in the config.txt file mentioned above.
 
-Using the instruct() call, or using the block command-line program you
-can now create partitions, block read/write from/to certain hosts,
-etc.  (See example2.C and the output of block -h.)
+See dhashclient_test.h for the available tricks.  Here's a summary:
+
+  isolate(rw_t flags, callback<void, int>::ref cb);
+
+    Isolate this node from the network for reading, writing, or both.
+    (flags contains READ, WRITE, or RW.)
+
+
+
+  unisolate(rw_t flags, callback<void, int>::ref cb);
+
+    Undo isolation.
+
+
+
+  block(rw_t flags, dhashclient_test *dht, callback<void, int>::ref cb);
+
+    This node should block all traffic from host dht.  If dht is 0, it
+    blocks all traffic from everywhere.  Same as isolate, but
+    settings don't influence each other.
+
+  unblock(rw_t flags, dhashclient_test *dht, callback<void, int>::ref cb);
+
+    See block.
+
+  drop(rw_t flags, dhashclient_test *dht, int percentage, callback<void, int>::ref cb);
+
+    Block <percentage> percent of all packets from/to dht.  from/to is
+    determined by flags.  If dht is 0, then for all other hosts.
+
+The block command-line program allows you to do all the above.
 
 How it works
 ------------

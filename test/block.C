@@ -101,9 +101,6 @@ set(char *s, vec<str> *names, vec<int> *tcp)
 
   tcp->push_back(control_port);
   names->push_back(s);
-
-  warn << "tcp size = " << tcp->size() << "\n";
-  warn << "names size = " << names->size() << "\n";
 }
 
 
@@ -114,8 +111,6 @@ char *dropfrom = 0;
 void
 start_test(int cmd, dhashclient_test::rw_t flags, testmaster *tm)
 {
-  warn << "start_test\n";
-
   if(cmd & BLOCK)
     (*tm)[0]->block(flags, (*tm)[1], wrap(&done));
   else if(cmd & UNBLOCK)
@@ -124,10 +119,8 @@ start_test(int cmd, dhashclient_test::rw_t flags, testmaster *tm)
     (*tm)[0]->isolate(flags, wrap(&done));
   else if(cmd & UNISOLATE)
     (*tm)[0]->unisolate(flags, wrap(&done));
-  else if(cmd & DROP) {
-    warn << "drop " << droprate << " from " << dropfrom << "\n";
+  else if(cmd & DROP)
     (*tm)[0]->drop(flags, 0, droprate, wrap(&done));
-  }
 }
 
 

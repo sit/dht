@@ -51,7 +51,7 @@ Usage: testwrapper.pl [-c ] [-d] [-h] [-k] [-q] [-s] [-v] CONFIG_FILE
 -c,--confsave / +c  :  don't delete generated conf file, default off
 -d,--dryrun   / +d  :  don't really do anything
 -h,--help           :  show this help
--k,--killall  / +k  :  killall testslaves first, default off. DANGEROUS.
+-k,--killall  / +k  :  killall testslaves first, default off. DOESN'T WORK.
 -q,--quiet    / +q  :  suppress stdout/stderr of tests, default on
 -s,--suppress / +s  :  suppress stdout/stderr of running processes, default on
 -v,--verbose  / +v  :  blah blah blah blah blah blah blah
@@ -154,7 +154,7 @@ sub main {
   # Start the lsd nodes
   #
   foreach my $h (@hosts) {
-    my $cmd = "$h->{TESLA} +dhashtest -port=$h->{TESLAPORT} $h->{LSD} -p $h->{LSDPORT} -j $master -l $h->{NAME} -S /tmp/lsd_socket-$$-$h->{LSDPORT}";
+    my $cmd = "$h->{TESLA} +dhashtest -port=$h->{TESLAPORT} $h->{LSD} -p $h->{LSDPORT} -j $master -l $h->{NAME} -S /tmp/lsd_socket-$$-$h->{LSDPORT} -d /tmp/db-lsd_tester";
     &do_execute($h->{NAME}, $cmd);
   }
 
@@ -163,8 +163,7 @@ sub main {
   #
   foreach my $h (@hosts) {
     $h->{SOCKETFILE} = "/tmp/lsd_socket-$$-$h->{LSDPORT}";
-    my $k = $killall ? "-k" : "";
-    my $cmd = "$h->{SLAVE} $k -p $h->{SLAVEPORT} -s $h->{SOCKETFILE}";
+    my $cmd = "$h->{SLAVE} -p $h->{SLAVEPORT} -s $h->{SOCKETFILE}";
     &do_execute($h->{NAME}, $cmd);
   }
 

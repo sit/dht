@@ -84,20 +84,11 @@ accept_connection(str socket)
 
 
 void
-do_kill()
-{
-  system("ps -ax | egrep \"lsd|testslave\" | awk '{print $1}' | xargs kill -9");
-}
-
-
-
-void
 usage()
 {
   warnx << "usage: " << progname << " [-s socket] [-p port]\n";
   warnx << "\twaits for commands from a test program and <more help>\n";
   warnx << "\noptions:\n";
-  warnx << "\t-k          : kill running lsd's and testslaves. DANGEROUS: WILL KILL ALL RUNNING LSD'S!.\n";
   warnx << "\t-s <socket> : connect to lsd behind unix domain socket <socket>\n";
   warnx << "\t-p <port>   : listen to master on port <port>; default is " << DEFAULT_PORT << "\n";
   warnx << "\nenvironment variables:\n";
@@ -119,13 +110,6 @@ main(int argc, char *argv[])
     switch(ch) {
     case 'h':
       usage();
-      break;
-    case 'k':
-      char savename[128];
-      strcpy(savename, argv[0]);
-      strcpy(argv[0], "");
-      do_kill();
-      strcpy(argv[0], savename);
       break;
     case 's':
       opt_socket = optarg;
