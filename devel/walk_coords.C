@@ -15,7 +15,6 @@ typedef callback<void, clnt_stat, vec<float> >::ptr aclnt_coords_cb;
 void getsucc_cb (chordID dest, str desthost, chord_nodelistextres *res, u_int64_t start, clnt_stat err, vec<float> coords);
 void doRPCcb (chordID ID, int procno, dorpc_res *res, void *out, aclnt_coords_cb cb, 
 	      clnt_stat err);
-int is_authenticID (const chordID &x, str n, int p);
 
 void
 setup () 
@@ -146,29 +145,6 @@ getsucc_cb (chordID dest, str desthost,
   }
 
   getsucc (n, host, port);
-}
-
-int
-is_authenticID (const chordID &x, str n, int p)
-{
-  chordID ID;
-  char id[sha1::hashsize];
-  
-  // xxx presumably there's really a smaller actual range
-  //     of valid ports.
-  if (p < 0 || p > 65535)
-    return -1;
-  
-  for (int i = 0; i < chord::max_vnodes; i++) {
-    // XXX i bet there's a faster way to construct these
-    //     string objects.
-    str ids = n << "." << p << "." << i;
-    sha1_hash (id, ids, ids.len ());
-    mpz_set_rawmag_be (&ID, id, sizeof (id));  // For big endian    
-
-    if (ID == x) return i;
-  }
-  return -1;
 }
 
 void 
