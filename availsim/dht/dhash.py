@@ -69,20 +69,18 @@ class dhash:
         # Find or create the node
         if id in my.allnodes:
             nnode = my.allnodes[id]
+	    if nnode.alive:
+		raise KeyError, "Duplicate insert of %d" % id
         else:
             nnode = node (id)
             my.allnodes[id] = nnode
+            bisect.insort (my.nodes, nnode)
 
         if not nnode.alive:
             # This might be a re-join of some sort
             nnode.start ()
             del my.deadnodes[id]
-            
-        # Maintain sorted order for nodes.            
-        if nnode not in my.nodes:
             bisect.insort (my.nodes, nnode)
-        else:
-            raise KeyError, "Duplicate insert of %d" % id
 
         if nnode not in my.now_nodes: my.now_nodes.append (nnode)
     
@@ -94,7 +92,7 @@ class dhash:
             else:
                 n.stop ()
             d = bisect.bisect (my.nodes, n)
-            assert my.nodes[d - 1] == n
+            assert my.nodes[d - 1] == n, "Expected %s got %s." % (n, my.nodes[d-1])
             my.nodes.pop (d - 1)
             my.deadnodes[n.id] = n
             if n not in my.now_nodes: my.now_nodes.append (n)
@@ -307,11 +305,11 @@ if __name__ == '__main__':
         start = n.id
 
     # Do blocks go to the right place?
-    assert gdh.insert_block (73, 8192).id == 4
-    assert gdh.insert_block (3, 8192).id == 4
-    assert gdh.insert_block (4, 8192).id == 4
-    assert gdh.insert_block (20, 8192).id == 23
-    assert gdh.insert_block (56, 8192).id == 63
+    assert gdh.insert_block (4, 73, 8192).id == 4
+    assert gdh.insert_block (4, 3, 8192).id == 4
+    assert gdh.insert_block (4, 4, 8192).id == 4
+    assert gdh.insert_block (4, 20, 8192).id == 23
+    assert gdh.insert_block (4, 56, 8192).id == 63
 
     assert gdh.find_predecessor_index (4) == 6
     assert gdh.find_predecessor_index (66) == 6
@@ -323,10 +321,10 @@ if __name__ == '__main__':
     assert len(gdh.succ(24, 3)) == 3
     assert len(gdh.succ(35, 3)) == 3
 
-    assert gdh.pred (5).id == 4
-    assert gdh.pred (31).id == 30
-    assert gdh.pred (30).id == 23
-    assert gdh.pred (3).id == 63
+    assert gdh.pred (5)[0].id == 4
+    assert gdh.pred (31)[0].id == 30
+    assert gdh.pred (30)[0].id == 23
+    assert gdh.pred (3)[0].id == 63
     assert len(gdh.pred(5, 3)) == 3
 
 
