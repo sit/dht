@@ -111,6 +111,7 @@ struct location {
   bool alive;
   long total_latency;
   long num_latencies;
+  int nout;
 
   location (sfs_ID &_n, route &_r, sfs_ID _source) : 
     n (_n), r (_r), source (_source) {
@@ -119,6 +120,7 @@ struct location {
     c = NULL;
     total_latency = 0;
     num_latencies = 0;
+    nout = 0;
   };
   location (sfs_ID &_n, sfs_hostname _s, int _p, sfs_ID &_source) : n (_n) {
     r.server = _s;
@@ -127,6 +129,7 @@ struct location {
     connecting = false;
     alive = true;
     c = NULL;
+    nout = 0;
   }
 };
 

@@ -317,16 +317,17 @@ p2p::connect_cb (location *l, int fd)
     }
     l->connecting = false;
   } else {
-    // warnx << "connect_cb: succeeded\n";
+    warnx << "connect_cb: connect to " << l->n << "succeeded (" << fd << ")\n";
     assert (l->alive);
     ptr<aclnt> c = aclnt::alloc (axprt_stream::alloc (fd), sfsp2p_program_1);
     l->c = c;
+    l->connecting = false;
     doRPC_cbstate *st, *st1;
     for (st = l->connectlist.first; st; st = st1) {
       st1 = l->connectlist.next (st);
       c->call (st->procno, st->in, st->out, st->cb);
+      l->connectlist.remove(st);
     }
-    l->connecting = false;
   }
 }
 
@@ -337,7 +338,16 @@ p2p::timing_cb(aclnt_cb cb, location *l, ptr<struct timeval> start, clnt_stat er
   gettimeofday(&now, NULL);
   l->total_latency += (now.tv_sec - start->tv_sec)*1000000 + (now.tv_usec - start->tv_usec);
   l->num_latencies++;
+  //free the aclnt
+  //  delete l->c;
+  l->nout--;
+  warn << "nout(tcb) " << l->n << " " << l->nout << "\n";
+  if (l->nout == 0) {
+    warn << "closed aclnt to " << l->n << "\n";
+    l->c = NULL;
+  }
   (*cb)(err);
+
 }
 
 void
@@ -350,13 +360,16 @@ p2p::doRPC (sfs_ID &ID, int procno, const void *in, void *out,
   location *l = locations[ID];
   assert (l);
   assert (l->alive);
+  ptr<struct timeval> start = new refcounted<struct timeval>();
+  gettimeofday(start, NULL);
+  l->nout++;
   if (l->c) {
-    ptr<struct timeval> start = new refcounted<struct timeval>();
-    gettimeofday(start, NULL);
-    l->c->call (procno, in, out, wrap(this, &p2p::timing_cb, cb, l, start));
+    warn << "found allocated aclnt " << l->nout << " ID: " << ID << "\n";
+    l->c->call (procno, in, out, wrap(mkref(this), &p2p::timing_cb, cb, l, start));
   } else {
     // If we are in the process of connecting; we should wait
-    doRPC_cbstate *st = New doRPC_cbstate (procno, in, out, cb);
+    warn << "going to connect to " << ID << " ; nout=" << l->nout << "\n";
+    doRPC_cbstate *st = New doRPC_cbstate (procno, in, out, wrap(mkref(this), &p2p::timing_cb, cb, l, start));
     l->connectlist.insert_tail (st);
     if (!l->connecting) {
       l->connecting = true;
