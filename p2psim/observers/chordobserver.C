@@ -50,9 +50,10 @@ ChordObserver::Instance(Args *a)
 ChordObserver::ChordObserver(Args *a) : _type("Chord")
 {
   _instance = this;
-  assert(a);
-  _oracle_num = a->nget( "oracle", 0, 10 );
-    
+  if (a)
+    _oracle_num = a->nget( "oracle", 0, 10 );
+  else
+    _oracle_num = 0;
 
   _totallivenodes = 0;
 
