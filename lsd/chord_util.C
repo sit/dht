@@ -14,6 +14,8 @@ warnt(char *msg) {
     char *filename = getenv("LOG_FILE");
     if (filename == NULL) 
       LOG = fopen("/tmp/dhash.log", "a");
+    else if (filename[0] == '-')
+      LOG = stdout;
     else
       LOG = fopen(filename, "a");
   }
