@@ -219,17 +219,18 @@ class dhash (chord):
     # XXX How long to wait until we do repair?
     def repair (my, affected_node):
         count = my.insert_pieces ()
+	runlen = my.look_ahead ()
         preds = my.pred (affected_node, count)
-        succs = my.succ (affected_node, 2 * count)
+        succs = my.succ (affected_node, runlen)
         # succ's does not include affected_node if it is dead.
         slice = preds + succs
 	k = my.blocks.keys ()
 	k.sort ()
 	# consider the predecessors who should be doing the repair
-        for i in range(1,len(slice) - 2 * count):
+        for i in range(1,len(slice) - runlen):
             p = slice[i - 1]
 	    # let them see further than they would have inserted.
-            s = slice[i:i+(2*count)]
+            s = slice[i:i+runlen]
 	    if (p.id <= s[0].id):
 		start = bisect.bisect_left (k, p.id)
 		stop  = bisect.bisect_right (k, s[0].id)
@@ -241,7 +242,7 @@ class dhash (chord):
             my._repair (affected_node, s, r)
     
     def available_blocks (my):
-	inserted = my.insert_pieces ()
+	scannable = my.look_ahead ()
         needed = my.read_pieces ()
 	k = my.blocks.keys ()
 	k.sort ()
@@ -250,7 +251,7 @@ class dhash (chord):
 	for b in k:
 	    extant = 0
 	    if not succs or b > succs[0].id:
-		succs = my.succ (b, 2 * inserted)
+		succs = my.succ (b, scannable)
 	    for s in succs:
 		if b in s.blocks:
 		    extant += 1
@@ -271,6 +272,9 @@ class dhash (chord):
     def read_pieces (my):
         """The number of pieces on different nodes needed to for successful read."""
         return 0
+    def look_ahead (my):
+	"""Number of nodes ahead to check to see if there are already fragments."""
+	return 0
     def insert_pieces (my):
         """The number of pieces to write into the system initially."""
         return 0
@@ -295,6 +299,8 @@ class dhash_replica_norepair (dhash):
 class dhash_replica (dhash_replica_norepair):
     def min_pieces (my):
         return my.replicas
+    def look_ahead (my):
+	return 3 * my.replicas
 
 class dhash_fragments (dhash):
     def __init__ (my, dfrags, efrags):
@@ -309,6 +315,8 @@ class dhash_fragments (dhash):
         return my.dfrags
     def insert_pieces (my):
         return my.efrags
+    def look_ahead (my):
+	return 3 * my.efrags
     def insert_piece_size (my, size):
         # A vague estimate of overhead from encoding... 2%-ish
         return int (1.02 * (size / my.dfrags))
