@@ -8,6 +8,38 @@
 class vnode;
 typedef callback<void, bool>::ptr cbhop_t;
 
+/**
+ * A base class for interfacing with different hop-based routing mechanisms.
+ *
+ * After receiving a route_iterator from a factory, clients call one of
+ * two methods:
+ * 1. The send method performs a lookup but does not return any result
+ *    (e.g.  giving back the route in a callback.)  It is usually used to
+ *    send an upcall to each of the nodes that appears on the lookup
+ *    path.  Typically, nodes on the path that receive the upcall will
+ *    then choose to respond to the upcall by making an explicit RPC back
+ *    to the origin.  Some external mechanism must be provided for
+ *    associating this new RPC as being a "reply" for the original
+ *    requesting RPC.
+ * 2. The first_hop method performs a lookup but calls back to the
+ *    calling layer at each hop, passing back the route iterator and
+ *    whether or not the route is complete.  The calling layer must
+ *    explicitly decide whether or not to continue the route by then
+ *    calling next_hop.
+ *
+ * Each of these two methods also has two variants.  One allows the caller
+ * to provide a guess for the first node to use.  The other gives the caller
+ * the option of proceeding as "normal" or by using a potential cached
+ * successor.
+ *
+ * XXX This could be made slightly cleaner in interface by just
+ *     providing send(chordID *guess) or some such.  The "ucs" code could
+ *     then be the same as the "guess" code where the caller looks up the
+ *     current successor as the guess. guess could default to NULL in
+ *     which case, we look up a guess.
+ *
+ * To cancel an in-progress lookup, users should delete the iterator.
+ */
 class route_iterator {
  protected:
   ptr<vnode> v;
@@ -43,7 +75,7 @@ class route_iterator {
     uc_procno (uc_procno), uc_args (uc_args), prog (prog),
     stop (false), last_hop (false) {};
 
-  virtual ~route_iterator () {};
+  virtual ~route_iterator () { *deleted = true; };
 
   chordID last_node () { return search_path.back (); };
   chordID key () { return x; };
@@ -85,7 +117,7 @@ class route_chord : public route_iterator {
 	       int uc_procno,
 	       ptr<void> uc_args);
 
-  ~route_chord () {*deleted = true;};
+  ~route_chord () {};
   virtual void first_hop (cbhop_t cb, bool ucs = false);
   virtual void first_hop (cbhop_t cb, chordID guess);
   void send (chordID guess);
@@ -111,7 +143,7 @@ class route_debruijn : public route_iterator {
 		  rpc_program uc_prog,
 		  int uc_procno,
 		  ptr<void> uc_args);
-  ~route_debruijn () {*deleted = true;};
+  ~route_debruijn () {};
   void send (chordID guess);
   void send (bool ucs);
   virtual void first_hop (cbhop_t cb, bool ucs = false);
