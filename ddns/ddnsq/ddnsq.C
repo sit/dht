@@ -248,6 +248,9 @@ printrr(ptr<ddnsRR> rr)
     case TXT:
       cout << rr->rdata.txt_data;
       break;
+    case ALL:
+      
+      break;
     case DNULL:
       break;
     default:
@@ -279,7 +282,7 @@ static struct {
 static void 
 usage ()
 {
-  warnx << "usage: ddnscmd\n";
+  warnx << "usage: ddnsq\n";
   exit (1);
 }
 
@@ -315,4 +318,18 @@ main (int argc, char **argv)
   }
   return 0;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

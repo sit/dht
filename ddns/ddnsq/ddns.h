@@ -124,9 +124,6 @@ struct ddnsRR {
 #define TTL_SIZE       sizeof (ttl_t)
 #define RDLENGTH_SIZE  sizeof (rdl_t)
 
-dns_type 
-get_dtype (const char *type);
-
 class ddns {
   typedef callback<void, ptr<ddnsRR> >::ref lcb_t;
   
@@ -150,6 +147,9 @@ class ddns {
 
 /* misc.C */
 
+dns_type get_dtype (const char *type);
+void copy2block (char *data, void *field, 
+		 int fieldlen, int &datalen, int &datasize);
 void block2soa (soa_data *, char *data, int datalen);
 void block2wks (wks_data *, char *data, int datalen);
 void block2hinfo (hinfo_data *, char *data, int datalen);

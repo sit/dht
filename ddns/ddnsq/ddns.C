@@ -3,44 +3,6 @@
 #include "ddns.h"
 #include "sfsmisc.h"
 
-dns_type 
-get_dtype (const char *type) 
-{
-  if (!strcasecmp (type, "A"))
-    return A;
-  if (!strcasecmp (type, "NS"))
-    return NS;
-  if (!strcasecmp (type, "MD"))
-    return MD;
-  if (!strcasecmp (type, "MF"))
-    return MF;
-  if (!strcasecmp (type, "CNAME"))
-    return CNAME;
-  if (!strcasecmp (type, "SOA"))
-    return SOA;
-  if (!strcasecmp (type, "MB"))
-    return MB;
-  if (!strcasecmp (type, "MG"))
-    return MG;
-  if (!strcasecmp (type, "MR"))
-    return MR;
-  if (!strcasecmp (type, "DNULL"))
-    return DNULL;
-  if (!strcasecmp (type, "WKS"))
-    return WKS;
-  if (!strcasecmp (type, "PTR"))
-    return PTR;
-  if (!strcasecmp (type, "HINFO"))
-    return HINFO;
-  if (!strcasecmp (type, "MINFO"))
-    return MINFO;
-  if (!strcasecmp (type, "MX"))
-    return MX;
-  if (!strcasecmp (type, "TXT"))
-    return TXT;
-  return DT_ERR;
-}
-
 ddns::ddns (const char *control_skt, int vnode) : 
   control_socket(control_skt), nlookup(0), nstore(0)
 {
@@ -68,22 +30,6 @@ ddns::get_dclnt ()
 
 ddns::~ddns () 
 {
-}
-
-void
-copy2block (char *data, void *field, 
-	    int fieldlen, int &datalen, int &datasize)
-{
-  if (datasize - datalen < fieldlen) {
-    datasize *= 2;
-    data = (char *) realloc (data, datasize);
-    assert(data);
-  }
-  memmove (data + datalen, (const char *) field, fieldlen);
-//  warn << "data + " << datalen << " (" << fieldlen << ") = ";
-//  write(2, data+datalen, fieldlen);
-//  warn << "\n";
-  datalen += fieldlen;
 }
 
 int 
@@ -245,15 +191,23 @@ ddns::store_cb (domain_name dname, chordID key,
 void
 ddns::lookup (domain_name dname, dns_type dt, ddns::lcb_t lcb)
 {
-  nlookup++;
-  ref<dhash_res> res = New refcounted<dhash_res> (DHASH_OK);
-  
-  dhash_fetch_arg arg;
-  arg.key = getcID (dname, dt);
-  arg.len = DMTU;
-  arg.start = 0;
-  dhash_clnt->call (DHASHPROC_LOOKUP, &arg, res, wrap(this, &ddns::lookup_cb, 
+  if (dt == ALL) {
+    for (dns_type t=A; t <= TXT; t = (dns_type)(t + 1)) {
+      warn << "looking up type: " << t << "\n";
+      lookup (dname, t, lcb);
+    }
+  }
+  else {
+    nlookup++;
+    ref<dhash_res> res = New refcounted<dhash_res> (DHASH_OK);
+    
+    dhash_fetch_arg arg;
+    arg.key = getcID (dname, dt);
+    arg.len = DMTU;
+    arg.start = 0;
+    dhash_clnt->call (DHASHPROC_LOOKUP, &arg, res, wrap(this, &ddns::lookup_cb, 
 							dname, arg.key, res, lcb));
+  }
   while (nlookup > 0)
     acheck ();
 }
@@ -342,7 +296,6 @@ ddns::lookup_cb (domain_name dname, chordID key,
     } else warn << "Not done: do more \n";
   }
 
-  free(dname);
   nlookup--;
 }
 

@@ -1,5 +1,59 @@
 #include "ddns.h"
 
+dns_type 
+get_dtype (const char *type) 
+{
+  if (!strcasecmp (type, "A"))
+    return A;
+  if (!strcasecmp (type, "NS"))
+    return NS;
+  if (!strcasecmp (type, "MD"))
+    return MD;
+  if (!strcasecmp (type, "MF"))
+    return MF;
+  if (!strcasecmp (type, "CNAME"))
+    return CNAME;
+  if (!strcasecmp (type, "SOA"))
+    return SOA;
+  if (!strcasecmp (type, "MB"))
+    return MB;
+  if (!strcasecmp (type, "MG"))
+    return MG;
+  if (!strcasecmp (type, "MR"))
+    return MR;
+  if (!strcasecmp (type, "DNULL"))
+    return DNULL;
+  if (!strcasecmp (type, "WKS"))
+    return WKS;
+  if (!strcasecmp (type, "PTR"))
+    return PTR;
+  if (!strcasecmp (type, "HINFO"))
+    return HINFO;
+  if (!strcasecmp (type, "MINFO"))
+    return MINFO;
+  if (!strcasecmp (type, "MX"))
+    return MX;
+  if (!strcasecmp (type, "TXT"))
+    return TXT;
+  if (!strcasecmp (type, "ALL"))
+    return ALL;
+  return DT_ERR;
+}
+
+void
+copy2block (char *data, void *field, 
+	    int fieldlen, int &datalen, int &datasize)
+{
+  if (datasize - datalen < fieldlen) {
+    datasize *= 2;
+    data = (char *) realloc (data, datasize);
+    assert(data);
+  }
+  memmove (data + datalen, (const char *) field, fieldlen);
+  //warn << "data + " << datalen << " = " << data+datalen << "\n";
+  datalen += fieldlen;
+}
+
 void 
 block2soa (soa_data *soa, char *data, int datalen)
 {
