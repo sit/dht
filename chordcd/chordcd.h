@@ -67,11 +67,7 @@ class chord_server  {
   sfsro_dirent *dirent_lookup (str name, sfsro_directory *dir);
 
   void readdir_inode_cb (nfscall *sbp, chordID ID, ptr<sfsro_data> data);
-  void readdir_dotdot_data_cb(nfscall *sbp, ptr<sfsro_data> dirdata, chordID dirID,
-			      ptr<sfsro_data> dirblk);
-  void readdir_dotdot_namei_cb(nfscall *sbp, ptr<sfsro_data> dirdata, chordID dirID, ptr<sfsro_data> dirblk,
-			       ptr<sfsro_data> data, chordID dataID, nfsstat3 status);
-  void readdir_fetch_dirdata_cb (nfscall *sbp, ptr<sfsro_data> dirdata, chordID dirID, chordID parentID,
+  void readdir_fetch_dirdata_cb (nfscall *sbp, ptr<sfsro_data> dirdata, chordID dirID,
 				 ptr<sfsro_data> dirblk);
   void readdirp_inode_cb (nfscall *sbp, chordID ID, ptr<sfsro_data> data);
   void readdirp_fetch_dir_data (nfscall *sbp, ptr<sfsro_data> dirdata,

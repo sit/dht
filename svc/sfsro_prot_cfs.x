@@ -35,7 +35,13 @@ struct cfs_fsinfo {
   sfs_sig sig;
 };
 
+/* XXX shouldn't all fields common to sfsro_inode_lnk and sfs_inode_reg
+ *     be stuck in sfs_inode?
+ *     --josh
+ */
+
 struct sfsro_inode_lnk {
+  nfspath3 path;
   uint32 nlink;
   nfstime3 mtime;
   nfstime3 ctime;
@@ -43,9 +49,10 @@ struct sfsro_inode_lnk {
 };
 
 struct sfsro_inode_reg {
+  nfspath3 path;
   uint32 nlink;
   uint64 size;
-  uint64 used; 
+  uint64 used;  /* XXX this field appears to be useless --josh */ 
   nfstime3 mtime;
   nfstime3 ctime;
  
@@ -56,12 +63,14 @@ struct sfsro_inode_reg {
 
 };
 
+
 union sfsro_inode switch (ftypero type) {
- case SFSROLNK:
-   sfsro_inode_lnk lnk;
- default:
-   sfsro_inode_reg reg;
+case SFSROLNK:
+  sfsro_inode_lnk lnk;
+default:
+  sfsro_inode_reg reg;
 };
+
 
 struct sfsro_indirect {
   sfs_hash handles<>;
@@ -74,7 +83,6 @@ struct sfsro_dirent {
 };
 
 struct sfsro_directory {
-  nfspath3 path;
   sfsro_dirent *entries;
   bool eof;
 };

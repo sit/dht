@@ -1,4 +1,4 @@
-/* $Id: sfsrodb.C,v 1.13 2001/10/06 23:42:45 cates Exp $ */
+/* $Id: sfsrodb.C,v 1.14 2001/10/08 09:13:58 cates Exp $ */
 
 /*
  * Copyright (C) 1999 Kevin Fu (fubob@mit.edu)
@@ -101,7 +101,7 @@ bool opaque_directory = false;
    .size, .used, and direct/indirect data pointers.   
  */
 void
-sfsrodb_setinode (const struct stat *st, sfsro_inode *inode)
+sfsrodb_setinode (const struct stat *st, str fspath, sfsro_inode *inode)
 {
 
   /*
@@ -129,6 +129,7 @@ sfsrodb_setinode (const struct stat *st, sfsro_inode *inode)
 
   if (inode->type == SFSROLNK) {
     rpc_clear (*inode->lnk);
+    inode->lnk->path = fspath;
 
     inode->lnk->nlink = st->st_nlink; // XXX bogus! cannot rely on this number
 
@@ -147,6 +148,7 @@ sfsrodb_setinode (const struct stat *st, sfsro_inode *inode)
   } else {
     rpc_clear (*inode->reg);
 
+    inode->reg->path = fspath;
     inode->reg->nlink = st->st_nlink;  // XXX bogus! cannot rely on this number
     inode->reg->size = 0;
     inode->reg->used = 0;
@@ -589,6 +591,14 @@ int
 recurse_path (const str path, sfs_hash * fh)
 {
   struct stat st;
+  str fspath; 
+
+  // Remove reference to local file system
+  if (path.len() ==  relpathlen)
+    fspath = str ("/");
+  else
+    fspath = substr (path, relpathlen);
+
 
   if (lstat (path, &st) < 0)
     return -1;
@@ -606,27 +616,20 @@ recurse_path (const str path, sfs_hash * fh)
       return -1;
     }
 
-    sfsrodb_setinode (&st, &inode);
+    sfsrodb_setinode (&st, fspath, &inode);
     inode.lnk->dest = nfspath3 (buf, nchars);
 
     delete[] buf;
 
   } else if (S_ISREG (st.st_mode)) {
-    sfsrodb_setinode (&st, &inode);
+    sfsrodb_setinode (&st, fspath, &inode);
     store_file (&inode, path);
   }
   else if (S_ISDIR (st.st_mode)) {
-    sfsrodb_setinode (&st, &inode);
+    sfsrodb_setinode (&st, fspath, &inode);
     vec < char *>file_list;
     sort_dir (path, file_list);
     sfsro_data directory (SFSRO_DIRBLK);
-
-    // XXXXX need to take of the prefix of path
-    if (path.len() ==  relpathlen)
-      directory.dir->path = str ("/");
-    else
-      directory.dir->path = substr (path, relpathlen);
-
     directory.dir->eof = true;
     rpc_ptr < sfsro_dirent > *direntp = &directory.dir->entries;
 
