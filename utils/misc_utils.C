@@ -34,7 +34,7 @@ uniform_random_f (float max)
 {
   float f;
   unsigned long c = random ();
-  f = 2*max*(((float)c)/((float)MAX_INT));
+  f = 2*max*(((float)c)/((float)RAND_MAX));
   f -= max;
   return f;
 }
