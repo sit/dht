@@ -164,6 +164,7 @@ struct dbEnumeration {
 #endif
 
   ptr<dbPair> nextElement();
+  ptr<dbPair> nextElement(ref<dbrec> startkey);
   void nextElement(callback<void, ptr<dbPair> >::ref cb);
   char hasMoreElements();
 
@@ -284,7 +285,6 @@ class dbfe {
 
 
   ptr<dbEnumeration> enumerate() { return (*make_enumeration)(); };
-
 };
 
 #endif

@@ -157,6 +157,21 @@ void dbEnumeration::nextElement(callback<void, ptr<dbPair> >::ref cb) {
   return;
 }
 
+ptr<dbPair> dbEnumeration::nextElement(ref<dbrec> startkey) {
+  DBT key, data;
+  bzero(&key, sizeof(key));
+  bzero(&data, sizeof(data));
+  key.size = startkey->len;
+  key.data = startkey->value;
+  int err = cursor->c_get(cursor, &key, &data, DB_SET_RANGE);
+  cursor_init = 1;
+  if (err) return NULL;
+  
+  ref<dbrec> keyrec = New refcounted<dbrec>(key.data, key.size);
+  ref<dbrec> valrec = New refcounted<dbrec>(data.data, data.size);
+  
+  return New refcounted<dbPair>(keyrec, valrec);
+}
 #else
 ptr<dbPair> dbEnumeration::nextElement() {
   assert(ADB_sync);
