@@ -1,5 +1,5 @@
 /*
- * testslave.{C,h} --- a slave that performs DHash actions for master
+ * testslave.{C,h} --- a slave that pipes DHash RPCs to lsd
  *
  * Copyright (C) 2002  Thomer M. Gil (thomer@lcs.mit.edu)
  *   		       Massachusetts Institute of Technology
@@ -36,14 +36,9 @@ testslave::testslave(const int fd, const str socket)
   _sockfd = unixsocket_connect(socket);
   if(!_sockfd)
     fatal << "couldn't connect to domain socket\n";
-
-  /*
-  _dhc = New dhashclient(getenv("LSD_SOCKET"));
-  if(!_dhc)
-    fatal << "couldn't start dhashslave. Is your LSD_SOCKET set?\n";
-  */
-
   _srvfd = fd;
+
+  // setup pipe between remove master and local unix domain socket
   fdcb(_srvfd, selread, wrap(this, &testslave::pipe, _srvfd, _sockfd));
   fdcb(_sockfd, selread, wrap(this, &testslave::pipe, _sockfd, _srvfd));
 }
@@ -66,8 +61,6 @@ testslave::pipe(const int from, const int to)
     delete this;
     return;
   }
-
-  // write that bullshit to lsd
   readbuf.tosuio()->output(to);
 }
 

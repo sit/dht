@@ -1,6 +1,5 @@
 /*
- * testmaster.{C,h} --- a class that provides functionality to instruct
- *    slaves to do nasty DHash things.
+ * testmaster.{C,h} --- provides functionality to instruct slaves to do RPCs.
  *
  * Copyright (C) 2002  Thomer M. Gil (thomer@lcs.mit.edu)
  *   		       Massachusetts Institute of Technology
@@ -37,14 +36,13 @@ testmaster::testmaster() : _nhosts(0)
 testmaster::~testmaster()
 {
   DEBUG(2) << "testmaster destructor\n";
-
-  // unregister callbacks
+  // XXX: unregister fdcb callbacks
 }
+
 
 void
 testmaster::setup(const testslave slaves[], callback<void>::ref cb)
 {
-  // XXX: possible race condition with _nhosts
   _busy = true;
   for(unsigned i = 0; slaves[i].name != ""; i++) {
     // create a unix socket
@@ -63,6 +61,7 @@ testmaster::setup(const testslave slaves[], callback<void>::ref cb)
   _busy = false;
 }
 
+
 // pipes from fake domain socket to remote lsd and back
 void
 testmaster::pipe(const int from, const int to)
@@ -72,19 +71,14 @@ testmaster::pipe(const int from, const int to)
   int r = b.tosuio()->input(from);
   if(!r) {
     warn << "connection broken\n";
-    // XXX: do something
+    // XXX: close connection
     return;
   }
 
   b.tosuio()->output(to);
-  DEBUG(2) << "piping done\n";
 }
 
 
-// Adds a new under id, removing old node under that id.
-//
-// id: id for connection
-// fd: fd for local unix socket
 void
 testmaster::addnode(const unsigned id, const str p2psocket,
   const testslave *s, const int unixsocket_fd, callback<void>::ref cb)
@@ -100,7 +94,7 @@ testmaster::addnode(const unsigned id, const str p2psocket,
   tcpconnect(s->name, s->port, wrap(this, &testmaster::addnode_cb, tx));
 }
 
-// accepts connection from dhashclient that we cfreated and sets up pipe
+// accepts connection from dhashclient that we just created and sets up pipe
 void
 testmaster::accept_connection(const int unixsocket_fd, const int there_fd)
 {
@@ -111,9 +105,8 @@ testmaster::accept_connection(const int unixsocket_fd, const int there_fd)
 
   int here_fd = accept(unixsocket_fd, (struct sockaddr *) &sin, &sinlen);
   if(here_fd >= 0) {
-    // when reading from dhashclient, send to testslave
+    // setup pipe between dhashclient and remote slave
     fdcb(here_fd, selread, wrap(this, &testmaster::pipe, here_fd, there_fd));
-    // when reading from testslave, send to dhashclient
     fdcb(there_fd, selread, wrap(this, &testmaster::pipe, there_fd, here_fd));
   } else if (errno != EAGAIN)
     fatal << "Could not accept slave connection, errno = " << errno << "\n";
@@ -130,7 +123,7 @@ testmaster::addnode_cb(conthunk tx, const int there_fd)
     return;
   }
 
-  // listen for incoming connections from dhashclient that we are about to
+  // listen for incoming connection from dhashclient that we are about to
   // create
   DEBUG(2) << "spawning server behind " << tx.p2psocket << "\n";
   if(listen(tx.unixsocket_fd, 5))
@@ -138,19 +131,18 @@ testmaster::addnode_cb(conthunk tx, const int there_fd)
   fdcb(tx.unixsocket_fd, selread, wrap(this, &testmaster::accept_connection, tx.unixsocket_fd, there_fd));
 
 
-  // we should listen for bullshit on that file descriptor and pipe it to the
-  // other side
+  // create DHash object
   DEBUG(2) << "creating dhashclient on " << tx.p2psocket << "\n";
   make_async(there_fd);
   ptr<dhashclient> dhc = New refcounted<dhashclient>(tx.p2psocket);
   if(!dhc)
     fatal << "couldn't create dhashclient on " << tx.p2psocket << "\n";
 
-  // now update value in hash
+  // update hash table
   client *c = New client(tx.id, tx.s, dhc);
   _clients.insert(c);
 
-  // call callback when master connected to all slaves
+  // call callback once all slaves are connected
   if(!(--_nhosts) && !_busy)
     tx.cb();
 }

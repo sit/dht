@@ -1,6 +1,5 @@
 /*
- * testmaster.{C,h} --- a class that provides functionality to instruct
- *    slaves to do nasty DHash things.
+ * testmaster.{C,h} --- provides functionality to instruct slaves to do RPCs.
  *
  * Copyright (C) 2002  Thomer M. Gil (thomer@lcs.mit.edu)
  *   		       Massachusetts Institute of Technology

@@ -1,5 +1,5 @@
 /*
- * testslave.{C,h} --- a slave that performs DHash actions for master
+ * testslave.{C,h} --- a slave that pipes DHash RPCs to lsd
  *
  * Copyright (C) 2002  Thomer M. Gil (thomer@lcs.mit.edu)
  *   		       Massachusetts Institute of Technology
@@ -35,8 +35,8 @@ class testslave { public:
   ~testslave();
 
 private:
-  int _srvfd;  // commands from master
-  int _sockfd; // bullshit to lsd
+  int _srvfd;  // master --> slave
+  int _sockfd; // slave --> lsd
   void pipe(const int, const int);
 };
 
