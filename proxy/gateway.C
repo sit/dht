@@ -118,7 +118,7 @@ proxygateway::insert_to_localcache(chordID id, char* block, int32_t len, dhash_c
 	break;
       }
       else {
-	warn << "replacing block " << id << " with " << len << " bytes.\n";
+	warn << "db write: " << ctype << " " << id << " with " << len << " bytes (replacing block).\n";
 	cache_db->del(k);
       }
     }

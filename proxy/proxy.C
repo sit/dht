@@ -31,11 +31,10 @@
 #include "proxy.h"
 
 static str proxy_socket;
-static str lsd_socket = "";
 
 ptr<aclnt> local = 0;
 ptr<dbfe> ilog = 0;
-str proxyhost;
+str proxyhost = "";
 int proxyport = 0;
 extern void proxy_sync ();
 
@@ -133,7 +132,7 @@ static void
 usage ()
 {
   warnx << "Usage: " << progname
-        << "[-d <insert log>] [-l <lsd socket>] "
+        << " [-d <insert log>] "
 	<< "[-S <socket>] [-x <proxy hostname:port>]\n";
   exit (1);
 }
@@ -152,9 +151,6 @@ main (int argc, char **argv)
     switch (ch) {
     case 'd':
       dbf = optarg;
-      break;
-    case 'l':
-      lsd_socket = optarg;
       break;
     case 'S':
       proxy_socket = optarg;
@@ -190,9 +186,11 @@ main (int argc, char **argv)
       usage ();
       break;
     }
+  
+  if (proxyhost == "") {
+    usage();
+  }
 
-  if (lsd_socket == "")
-    usage ();
 
   ilog = New refcounted<dbfe> ();
   dbOptions opts;
