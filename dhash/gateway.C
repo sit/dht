@@ -47,17 +47,24 @@
 
 dhashgateway::dhashgateway (ptr<axprt_stream> x, ptr<chord> node)
 {
-  clntsrv = asrv::alloc (x, dhashgateway_program_1, 
-			 wrap (mkref (this), &dhashgateway::dispatch));
+  clntsrv = asrv::alloc (x, dhashgateway_program_1,
+	                 wrap (mkref (this), &dhashgateway::dispatch));
   dhcli = New refcounted<dhashcli> (node->active);
 }
 
+dhashgateway::~dhashgateway ()
+{
+}
 
 void
 dhashgateway::dispatch (svccb *sbp)
 {
-  if (!sbp)
+  if (!sbp) {
+    // setting clntsrv to 0 removes the last reference to this gateway
+    // object, stored in the asrv object's callback.
+    clntsrv = 0;
     return;
+  }
 
   switch (sbp->proc ()) {
   case DHASHPROC_NULL:

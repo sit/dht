@@ -799,6 +799,7 @@ dhash_impl::store (s_dhash_insertarg *arg, bool exists, cbstore cb)
 	     << " U " << arg->key << " " << ss->size << "\n";
 	break;
       }
+
     case DHASH_APPEND:
       if (arg->type == DHASH_CACHE)
         pst_cache.remove (ss);
@@ -807,6 +808,7 @@ dhash_impl::store (s_dhash_insertarg *arg, bool exists, cbstore cb)
       delete ss;
       append (k, d, arg, cb);
       return;
+
     case DHASH_CONTENTHASH:
       if (arg->type == DHASH_CACHE) {
 	if (!verify_content_hash (arg->key, ss->buf, ss->size)) {
@@ -833,6 +835,7 @@ dhash_impl::store (s_dhash_insertarg *arg, bool exists, cbstore cb)
 	}
       }
       break;
+
     default:
       stat = DHASH_ERR;
       break;

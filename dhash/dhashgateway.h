@@ -23,4 +23,5 @@ class dhashgateway : public virtual refcount
   
 public:
   dhashgateway (ptr<axprt_stream> x, ptr<chord> clnt);
+  ~dhashgateway ();
 };
