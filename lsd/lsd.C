@@ -28,7 +28,7 @@
 #include "parseopt.h"
 #include <sys/types.h>
 
-#define PROFILING 
+//#define PROFILING 
 
 // When a process starts up profiling is not happening.  But by
 // sending a SIGUSR1, profiling is turned on.  (Another SIGUSR1 turns
