@@ -235,7 +235,8 @@ main (int argc, char **argv)
 
   myport = 0;
   cache_size = 2000;
-  int max_loccache = 100;
+  // ensure enough room for fingers and successors.
+  int max_loccache = (int) (1.2 * (NSUCC + NBIT));
   str wellknownhost;
   int wellknownport = 0;
   int nreplica = 0;
