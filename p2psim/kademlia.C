@@ -297,7 +297,8 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
         KDEBUG(2) << "outstanding ip = " << i->second->ip << endl;
       }
 
-      unsigned donerpc = rcvRPC(&rpcset);
+      bool ok;
+      unsigned donerpc = rcvRPC(&rpcset, ok);
       outstanding--;
       assert(donerpc);
       callinfo *ci = resultmap[donerpc];
