@@ -8,9 +8,6 @@
 #include <list>
 using namespace std;
 
-// russ hack
-extern int anyready();
-
 EventQueue *EventQueue::_instance = 0;
 
 EventQueue*
