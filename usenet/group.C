@@ -12,7 +12,7 @@ grouplist::grouplist ()
 static rxx listrx ("^(\\d+)(<.+?>)");
 
 void
-grouplist::next (str *f, int *i)
+grouplist::next (str *f, unsigned long *i)
 {
   ptr<dbrec> data = group_db->lookup (d->key);
   char *c = data->value;
@@ -29,13 +29,13 @@ grouplist::next (str *f, int *i)
 
 
 
-int
+unsigned long
 group::open (str g)
 {
   rec = group_db->lookup(New refcounted<dbrec> (g, g.len ()));
   if (rec == NULL) {
     warn << "can't find group " << g << " " << g.len () << "\n";
-    return -1;
+    return -1UL;
   }
   warn << "rec len " << rec->len << "\n";
 
@@ -45,11 +45,11 @@ group::open (str g)
   return 0;
 }
 
-int
-group::open (str g, int *first, int *last)
+unsigned long
+group::open (str g, unsigned long *first, unsigned long *last)
 {
   if (open (g) < 0)
-    return -1;
+    return -1UL;
 
   char *c = rec->value;
   int len = rec->len, i = 0;
@@ -59,9 +59,9 @@ group::open (str g, int *first, int *last)
   for (; listrx.search (str (c, len))
        ; c += listrx.len (0), len -= listrx.len (0) ) {
     if (i == 0)
-      *first = atoi (listrx[1]);
+      *first = strtoul (listrx[1], NULL, 10);
     i++;
-    *last = atoi (listrx[1]);
+    *last = strtoul (listrx[1], NULL, 10);
   }
 
   return i;
@@ -76,14 +76,10 @@ group::addid (str id)
   str old (rec->value, rec->len), updated;
   ptr<dbrec> k = New refcounted<dbrec> (group_name, group_name.len ());
 
-  if (listrxend.search (old)) {
-    //    warn << "addid append " << listrxend[2] << "\n";
-    updated = strbuf () << old << atoi (listrxend[1]) + 1 << id;
-  } else {
+  if (listrxend.search (old))
+    updated = strbuf () << old << strtoul (listrxend[1], NULL, 10) + 1 << id;
+  else
     updated = strbuf () << "1" << id;
-    //    warn << "addid old" << old << "\n";
-    //    warn << "addid " << updated << "\n";
-  }
 
   rec = New refcounted<dbrec> (updated, updated.len ());
   
@@ -91,21 +87,20 @@ group::addid (str id)
 }
 
 str
-group::getid (int index)
+group::getid (unsigned long index)
 {
   if (rec == NULL)
     return str ();
 
   char *c = rec->value;
   int len = rec->len;
-  //  warn << "rec len " << rec->len << "\n";
 
   for (; listrx.search (str (c, len))
        ; c += listrx.len (0), len -= listrx.len (0) ) {
     warn << "xv " << str (c, len) << "\n";
-    if (index == atoi (listrx[1]))
+    if (index == strtoul (listrx[1], NULL, 10))
       return listrx[2];
-    else if (index < atoi (listrx[1]))
+    else if (index < strtoul (listrx[1], NULL, 10))
       return str ();
   }
 
@@ -113,7 +108,7 @@ group::getid (int index)
 }
 
 void
-group::xover (int a, int b)
+group::xover (unsigned long a, unsigned long b)
 {
   start = a;
   stop = b;
@@ -122,9 +117,9 @@ group::xover (int a, int b)
   c = rec->value;
   len = rec->len;
   warn << "xv " << str (c, len) << "\n";
-  for (; listrx.search (str (c, len)) && (atoi (listrx[1]) < start)
-       ; c += listrx.len (0), len -= listrx.len (0) )
-    ;
+  while (listrx.search (str (c, len)) &&
+	 (strtoul (listrx[1], NULL, 10) < start))
+    c += listrx.len (0), len -= listrx.len (0);
 }
 
 static rxx oversub ("Subject: (.+)\r");

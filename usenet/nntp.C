@@ -81,7 +81,7 @@ nntp::command (void)
 
   str cmd (in);
   for (unsigned int i = 0; i < cmd_table.size(); i++) {
-    if (!strncmp (cmd, cmd_table[i].cmd, cmd_table[i].len)) {
+    if (!strncasecmp (cmd, cmd_table[i].cmd, cmd_table[i].len)) {
       cmd_table[i].fn (cmd);
       return;
     }
@@ -104,7 +104,7 @@ nntp::cmd_list (str c) {
   // foo 2 1 y\r\n
   grouplist g;
   str n;
-  int i;
+  unsigned long i;
 
   do {
     g.next (&n, &i);
@@ -126,7 +126,8 @@ nntp::cmd_over (str c) {
     // xxx can crash on bad input? XOVER -3
     if (overrx[3]) {
       // range
-      cur_group.xover (atoi (overrx[1]), atoi (overrx[3]));
+      cur_group.xover (strtoul (overrx[1], NULL, 10), 
+		       strtoul (overrx[3], NULL, 10));
     } else if (overrx[2]) {
       // endless
     } else if (overrx[1]) {
@@ -151,7 +152,7 @@ static rxx grouprx ("^GROUP (.+)\r\n", "m");
 void
 nntp::cmd_group (str c) {
   warn << "group " << c;
-  int i, first, last;
+  unsigned long i, first, last;
 
   if (grouprx.search (c)) {
     if ((i = cur_group.open (grouprx[1], &first, &last)) < 0) {
@@ -178,8 +179,8 @@ nntp::cmd_article (str c) {
   } else if (artrx.search (c)) {
     if (artrx[2]) {
   warn << "a2\n";
-      msgid = cur_group.getid (atoi (artrx[2]));
-      cur_group.cur_art = atoi (artrx[2]);
+      msgid = cur_group.getid (strtoul (artrx[2], NULL, 10));
+      cur_group.cur_art = strtoul (artrx[2], NULL, 10);
     } else if (artrx[1]) {
       msgid = artrx[1];
     } else {
