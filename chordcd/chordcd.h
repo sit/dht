@@ -8,6 +8,7 @@
 #include "dhash_prot.h"
 #include "lrucache.h"
 
+#include <dhashclient.h>
 
 typedef callback<void, ptr<sfsro_data> >::ref cbdata_t;
 typedef callback<void, sfsro_inode * >::ref cbinode_t;
@@ -35,7 +36,7 @@ struct fetch_wait_state {
 typedef list<fetch_wait_state, &fetch_wait_state::link> wait_list;
 
 class chord_server {
-  dhashclient dhash;
+  dhashclient dh;
 
   cfs_fsinfo fsinfo;
   ptr<sfsro_data> rootdir;

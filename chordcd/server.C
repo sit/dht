@@ -53,6 +53,7 @@
 // sfs_hash == chordID == nfs_fh3
 //
 
+#include <dhash_common.h>
 #include "chordcd.h"
 #include "rxx.h"
 #include "arpc.h"
@@ -79,7 +80,7 @@ path2fileid(const str path)
 
 
 chord_server::chord_server (u_int cache_maxsize)
-  : dhash (LSD_SOCKET), data_cache (cache_maxsize)
+  : dh (LSD_SOCKET), data_cache (cache_maxsize)
 {
 
 }
@@ -985,7 +986,7 @@ chord_server::fetch_data (bool pfonly, chordID ID, cbdata_t cb)
     wait_list *l = pf_waiters[ID];
     fetch_wait_state *w = New fetch_wait_state (cb);
     l->insert_head (w);
-    dhash.retrieve (ID, wrap (this, &chord_server::fetch_data_cb, ID, cb));
+    dh.retrieve (ID, wrap (this, &chord_server::fetch_data_cb, ID, cb));
   }
 }
 
