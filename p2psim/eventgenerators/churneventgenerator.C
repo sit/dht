@@ -89,6 +89,7 @@ ChurnEventGenerator::run()
 
     Args *a = New Args();
     (*a)["wellknown"] = _wkn_string;
+    (*a)["first"] = _wkn_string; //a hack
     u_int jointime;
     if( ip == _wkn ) {
       jointime = 1;
