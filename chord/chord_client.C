@@ -143,7 +143,7 @@ chord::newvnode (cbjoin_t cb, ptr<fingerlike> fingers, ptr<route_factory> f)
     fatal << "Maximum number of vnodes (" << max_vnodes << ") reached.\n";
     
   chordID newID = init_chordID (nvnode, myname, myport);
-  warn << "creating new vnode: " << newID << "\n";
+  warnx << gettime () << ": creating new vnode: " << newID << "\n";
 
   vec<float> coords;
   warn << gettime () << " coords are: ";
@@ -259,7 +259,7 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
     netaddr.port = ((sockaddr_in *)sa)->sin_port;
     str addrstr (inet_ntoa (((sockaddr_in *)sa)->sin_addr));
     netaddr.hostname = addrstr;
-    warn << "autocaching " << addrstr << ":" << netaddr.port << " in ::dispatch\n";
+    warnx << gettime () << ": autocaching " << addrstr << ":" << netaddr.port << " in ::dispatch\n";
     vec<float> coords = convert_coords (arg);
     locations->insert (arg->src_id, netaddr.hostname, netaddr.port, coords);
   }
@@ -302,17 +302,16 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
 	sbp->replyref (chordstat (CHORD_RPCFAILURE));
 	return;
       }
-      
-      user_args *ua = New user_args (sbp, unmarshalled_args, 
-				     prog, arg->procno);
-      vnodep->fill_user_args (ua);
 
       //call the handler
       if (!vnodep->progHandled (arg->progno)) {
 	warn << "program not handled!\n";
 	chordstat res = CHORD_NOHANDLER;
 	sbp->replyref (res);
-      } else {
+      } else {	      
+	user_args *ua = New user_args (sbp, unmarshalled_args, 
+				       prog, arg->procno);
+	vnodep->fill_user_args (ua);
 	cbdispatch_t dispatch = vnodep->getHandler(arg->progno);
 	(dispatch)(ua);
       }  
