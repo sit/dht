@@ -1,3 +1,27 @@
+/*
+ * Copyright (c) 2003 [Anjali Gupta]
+ *                    Massachusetts Institute of Technology
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining
+ * a copy of this software and associated documentation files (the
+ * "Software"), to deal in the Software without restriction, including
+ * without limitation the rights to use, copy, modify, merge, publish,
+ * distribute, sublicense, and/or sell copies of the Software, and to
+ * permit persons to whom the Software is furnished to do so, subject to
+ * the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+ * LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+ * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+ * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+
 #ifndef __ONEHOP_H
 #define __ONEHOP_H
 
@@ -13,6 +37,12 @@
 
 #define ALIVE 1
 #define DEAD 0
+
+#define ONEHOP_USER_LOOKUP 0
+#define ONEHOP_PING 1
+#define ONEHOP_LEADER_STAB 2
+#define ONEHOP_NOTIFY 3
+#define ONEHOP_INFORMDEAD 4
 
 typedef unsigned long long bw;
 
@@ -155,6 +185,7 @@ public:
   OneHop(IPAddress i, Args& a);
   ~OneHop();
   string proto_name() { return "OneHop";}
+  void record_stat(uint type, uint num_ids = 0, uint num_else = 0);
 
   // Functions callable from events file.
   virtual void join(Args*);
@@ -166,7 +197,7 @@ public:
 
   void join_leader (IDMap la, IDMap sender, Args *args);
   void join_handler (join_leader_args *args, join_leader_ret *ret);
-  void init_state (vector<IDMap>) {};
+  void init_state ();
   //stabilize is called when a log message is received or after
   //period_keepalive which comes first
   void stabilize (void *x);
@@ -227,6 +258,7 @@ public:
 
 protected:
   OneHopLocTable *loctable;
+  uint _to_multiplier; //jy: doRPC suffer from timeout if the dst is dead, the min of this value = 3
   uint _join_scheduled;
   uint _stab_timer;
   uint _retry_timer;

@@ -1026,8 +1026,16 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
 #endif
 
   while (1) {
-    succs = loctable->succs(me.id+1,_nsucc,LOC_HEALTHY);
 
+    if (!alive()) {
+      ret->v.clear();
+      ret->correct = false;
+      ret->finish_time = now();
+      ret->lasthop.ip = 0;
+      ret->nexthop = me;
+      return;
+    }
+    succs = loctable->succs(me.id+1,_nsucc,LOC_HEALTHY);
     if (succs.size() == 0) {
       //lookup failed
       //XXX do i need to backtrack?
@@ -2338,7 +2346,6 @@ LocTable::add_node(Chord::IDMap n, bool is_succ, bool assertadd, Chord::CHID fs,
     succ1 = succ(me.id+1);
     pred1 = pred(me.id-1);
   }
-  assert(n.heartbeat == 0);
   idmapwrap *elm = ring.closestsucc(n.id);
   if (elm->id == n.id) {
     if (n.heartbeat > elm->n.heartbeat) {
