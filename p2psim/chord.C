@@ -65,7 +65,7 @@ Chord::next_handler(next_args *args, next_ret *ret)
   IDMap succ = loctable->succ(args->m);
   printf("Chord(%u) next key=%u succ=%u\n",
          me.id, args->key, succ.id);
-  if(ConsistentHash::between(me.id, succ.id, args->key) ||
+  if(ConsistentHash::betweenrightincl(me.id, succ.id, args->key) ||
      succ.id == me.id){
     ret->done = true;
     ret->v.clear();
@@ -216,7 +216,7 @@ LocTable::pred(Chord::CHID n) {
   //no locality consideration
   for (unsigned int i = 0; i < (ring.size()-1); i++) {
     if ((ring[i+1].ip == 0) || 
-	ConsistentHash::between(n, ring[i].id, ring[i+1].id)) {
+	ConsistentHash::between(ring[i].id, ring[i+1].id, n)) {
       return ring[i];
     } 
   }
