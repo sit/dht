@@ -408,13 +408,14 @@ route_debruijn::make_hop (chordID &n, chordID &x, chordID &d)
 
   chord_debruijnres *nres = New chord_debruijnres (CHORD_OK);
   v->doRPC (n, chord_program_1, CHORDPROC_DEBRUIJN, arg, nres, 
-	 wrap (this, &route_debruijn::make_hop_cb, nres));
+	 wrap (this, &route_debruijn::make_hop_cb, deleted, nres));
 }
 
 void
-route_debruijn::make_hop_cb (chord_debruijnres *res, clnt_stat err)
+route_debruijn::make_hop_cb (ptr<bool> del,
+			     chord_debruijnres *res, clnt_stat err)
 {
-
+  if (*del) return;
   if (err) {
     warnx << "make_hop_cb: failure " << err << "\n";
     r = CHORD_RPCFAILURE;
