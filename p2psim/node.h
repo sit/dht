@@ -53,6 +53,7 @@ public:
   Channel *protchan() { return _protchan; }
   void crash () { _alive = false; }
   bool alive () { return _alive; }
+  void set_alive() { _alive = true;}
 
   // Parent of Thunk so that RPCHandle can call delete on a Thunk without the
   // template parameters

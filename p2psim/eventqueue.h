@@ -18,6 +18,7 @@ public:
   Time time() { return _time; }
   Channel* eventchan() { return _eventchan; }
   void go();
+  void graceful_exit();
 
 private:
   typedef list<Event*> Queue;
@@ -31,7 +32,6 @@ private:
   virtual void run();
   void add_event(Event*);
   void advance();
-  void graceful_exit();
 
   // for debuging
   void dump();

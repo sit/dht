@@ -1,3 +1,4 @@
+#include "eventqueue.h"
 #include "simevent.h"
 #include "p2psim.h"
 #include <lib9.h>
@@ -23,6 +24,7 @@ SimEvent::execute()
 {
   if(_op == "exit") {
     cout << "exiting at " << now() << ". bye." << endl;
+    EventQueue::Instance()->graceful_exit();
     threadexitsall(0);
   } else {
     cerr << "SimEvent::execute(): unknown op " << _op << "\n";

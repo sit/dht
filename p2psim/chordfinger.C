@@ -5,7 +5,7 @@
 using namespace std;
 extern bool static_sim;
 
-ChordFinger::ChordFinger(Node *n, Args a,
+ChordFinger::ChordFinger(Node *n, Args &a,
 			 LocTable *l) : Chord(n,a,l)  
 {
   //get base
@@ -87,6 +87,10 @@ ChordFinger::fix_fingers()
 void
 ChordFinger::reschedule_stabilizer(void *x)
 {
+  if (!node()->alive()) {
+    _stab_running = false;
+    return;
+  }
   assert(!static_sim);
   ChordFinger::stabilize();
   delaycb(_stabtimer, &ChordFinger::reschedule_stabilizer, (void *)0);

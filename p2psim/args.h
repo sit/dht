@@ -9,7 +9,8 @@ using namespace std;
 class Args : public map<string,string> {
 public:
   template<class T>
-  T nget(string s, unsigned base = 16) {
+  T nget(string s, T defaultv = (T)0, unsigned base = 16) {
+    if (this->find(s) == this->end()) return defaultv;
     return (T) strtoull((*this)[s].c_str(), NULL, base);
   }
 };

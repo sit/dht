@@ -37,7 +37,12 @@ G2Graph::parse(ifstream &ifs)
       continue;
 
     if (words.size() == 2) {
-      IPAddress ipaddr = atoi(words[0].c_str());
+
+      if (words[0] != "node") {
+	cerr << "wrong G2Graph format" << endl;
+      }
+
+      IPAddress ipaddr = atoi(words[1].c_str());
       assert(ipaddr > 0 && ipaddr <= _num);
 
       // what kind of node?

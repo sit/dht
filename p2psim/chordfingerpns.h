@@ -34,7 +34,7 @@ class LocTablePNS : public LocTable {
 
 class ChordFingerPNS: public Chord {
   public:
-    ChordFingerPNS(Node *n, Args a);
+    ChordFingerPNS(Node *n, Args& a);
     ~ChordFingerPNS() {};
     string proto_name() { return "ChordFingerPNS"; }
 

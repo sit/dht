@@ -33,12 +33,15 @@ ChordObserver::ChordObserver(Args *a)
   _num_nodes = atoi((*a)["numnodes"].c_str());
   assert(_num_nodes > 0);
 
-  _init_num = atoi((*a)["initnodes"].c_str());
-  if (_init_num > 0) {
-    init_nodes(_init_num);
+  _allsorted = get_sorted_nodes(_num_nodes);
+  printf("ChordObserver created %d nodes\n", _num_nodes);
+  for (uint i = 0; i < _allsorted.size(); i++) {
+    printf("%qx %u\n", _allsorted[i].id, _allsorted[i].ip);
   }
-  lid.clear();
-  _allsorted.clear();
+
+  _init_num = atoi((*a)["initnodes"].c_str());
+    lid.clear();
+
 }
 
 ChordObserver::~ChordObserver()
@@ -102,15 +105,16 @@ ChordObserver::init_nodes(unsigned int num)
     c->init_state(ids);
     if (++i == num) break;
   }
-  printf("ChordObserver finished initing %d nodes\n", num);
-  for (uint i = 0; i < ids.size(); i++) {
-    printf("%qx %u\n", ids[i].id, ids[i].ip);
-  }
 }
 
 void
 ChordObserver::execute()
 {
+  if (_init_num > 0) {
+    init_nodes(_init_num);
+    _init_num = 0;
+  }
+
   if (!_reschedule) return;
 
   list<Protocol*> l = Network::Instance()->getallprotocols(_type);
@@ -144,12 +148,14 @@ ChordObserver::execute()
 
   }
   cout << now() << " STABILIZED" << endl;
+  /*
   cout << now() << " CHORD NODE STATS" << endl;
   for (pos = l.begin(); pos != l.end(); ++pos) {
     assert(c);
     c = (Chord *)(*pos);
     c->dump();
   }
+  */
 }
 
 void

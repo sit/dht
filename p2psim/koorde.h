@@ -6,7 +6,7 @@
 // Koorde extends base Chord with k-degree debruijn routing
 class Koorde : public Chord {
 public:
-  Koorde(Node *n, Args a);
+  Koorde(Node *n, Args& a);
   ~Koorde() {};
   string proto_name() { return "Koorde"; }
 

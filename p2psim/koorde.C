@@ -7,7 +7,7 @@ extern bool vis;
 
 #define INIT 1
 
-Koorde::Koorde(Node *n, Args a) : Chord(n, a) 
+Koorde::Koorde(Node *n, Args &a) : Chord(n, a) 
 {
   if (a.find("base") != a.end()) {
     logbase = atoi(a["base"].c_str());

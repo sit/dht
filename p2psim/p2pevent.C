@@ -73,6 +73,9 @@ P2PEvent::execute()
   // and invoke the event
   DHTProtocol *proto = dynamic_cast<DHTProtocol*>(node->getproto(protocol));
   assert(proto);
+  if (fn == &DHTProtocol::join) 
+    node->set_alive();
+
   if (proto->node()->alive())
     (proto->*fn)(args);
 }

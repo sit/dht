@@ -30,7 +30,7 @@ public:
     bool operator==(const IDMap a) { return (a.id == id); }
   };
 
-  Chord(Node *n, Args a, LocTable *l = NULL); 
+  Chord(Node *n, Args& a, LocTable *l = NULL); 
   virtual ~Chord();
   string proto_name() { return "Chord"; }
 
@@ -127,12 +127,13 @@ public:
 protected:
   //chord parameters
   uint _nsucc;
-  bool _vivaldi_dim;
+  uint _vivaldi_dim;
   uint _timeout;
   uint _stabtimer;
+  bool _stab_running;
 
   LocTable *loctable;
-  IDMap me;
+  IDMap me, oldsucc;
   CHID _prev_succ;
   uint i0;
   vector<IDMap> lastscs;
