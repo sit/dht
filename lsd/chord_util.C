@@ -5,6 +5,22 @@
 
 #define MAX_INT 0x7fffffff
 
+static FILE *LOG = NULL;
+
+void
+warnt(char *msg) {
+  
+  if (LOG == NULL) {
+    char *filename = getenv("LOG_FILE");
+    if (filename == NULL) 
+      LOG = fopen("/tmp/dhash.log", "a");
+    else
+      LOG = fopen(filename, "a");
+  }
+  str time = gettime(); 
+  fprintf(LOG, "%s %s\n", time.cstr(), msg);
+
+}
 
 str 
 gettime()
@@ -12,7 +28,7 @@ gettime()
   str buf ("");
   timespec ts;
   clock_gettime (CLOCK_REALTIME, &ts);
-  buf = strbuf (" %d.%06d", int (ts.tv_sec), int (ts.tv_nsec/1000));
+  buf = strbuf (" %d:%06d", int (ts.tv_sec), int (ts.tv_nsec/1000));
   return buf;
 }
 

@@ -56,7 +56,8 @@ p2p::initialize_graph()
 
 void
 p2p::timeout(location *l) {
-  // warn << "timeout on " << l->n << " closing socket\n";
+  assert(l);
+  warn << "timeout on " << l->n << " closing socket\n";
   if (l->nout == 0) l->x = NULL;
   else
     {
@@ -66,11 +67,13 @@ p2p::timeout(location *l) {
 }
 
 void
-p2p::timing_cb(aclnt_cb cb, location *l, ptr<struct timeval> start, clnt_stat err) 
+p2p::timing_cb(aclnt_cb cb, location *l, ptr<struct timeval> start, int procno, rpc_program progno,  clnt_stat err) 
 {
+  assert(l);
   struct timeval now;
   gettimeofday(&now, NULL);
   long lat = ((now.tv_sec - start->tv_sec)*1000000 + (now.tv_usec - start->tv_usec))/1000;
+  //  warn << "Latency: " << lat << " type " << progno.progno << "," << procno << "\n";
   l->total_latency += lat;
   l->num_latencies++;
   if (lat > l->max_latency) l->max_latency = lat;
@@ -86,18 +89,12 @@ p2p::doRPC (sfs_ID &ID, rpc_program progno, int procno,
 	    aclnt_cb cb)
 {
   rpc_args *a = new rpc_args(ID,progno,procno,in,out,cb);
-#ifdef _SIM_ 
-  int time = 0;
-  int dist = *(edges+(int)myID.getsi()*numnodes+(int)ID.getsi());
-  time = dist*10; // Not sure how to scale time delay
-  delaycb(time, 0, wrap(mkref (this), &p2p::doRealRPC, a));
-#else
   if (insert_or_lookup && (rpcdelay > 0)) {
+    warn << "DELAYED \n";
     delaycb (0, rpcdelay, wrap(mkref(this), &p2p::doRealRPC, a)); 
   } else {
     doRealRPC (a);
   }
-#endif
 
 }
 
@@ -121,6 +118,11 @@ p2p::doRealRPC (rpc_args *a)
   if (lookups_outstanding > 0) lookup_RPCs++;
   
   location *l = locations[ID];
+  if (!l) { 
+    warn << "about to trip on " << ID << "\n";
+    sleep(1);
+    exit(12);
+  }
   assert (l);
   assert (l->alive);
   ptr<struct timeval> start = new refcounted<struct timeval>();
@@ -128,13 +130,13 @@ p2p::doRealRPC (rpc_args *a)
   l->nout++;
   if (l->x) {    
     timecb_remove(l->timeout_cb);
-    l->timeout_cb = delaycb(30,0,wrap(this, &p2p::timeout, l));
+    l->timeout_cb = delaycb(360,0,wrap(this, &p2p::timeout, l));
     ptr<aclnt> c = aclnt::alloc(l->x, progno);
-    c->call (procno, in, out, wrap(mkref(this), &p2p::timing_cb, cb, l, start));
+    c->call (procno, in, out, wrap(mkref(this), &p2p::timing_cb, cb, l, start, procno, progno));
   } else {
     doRPC_cbstate *st = 
       New doRPC_cbstate (progno, procno, in, out,  
-			 wrap(mkref(this), &p2p::timing_cb, cb, l, start));
+			 wrap(mkref(this), &p2p::timing_cb, cb, l, start, -procno, progno));
     l->connectlist.insert_tail (st);
     if (!l->connecting) {
       l->connecting = true;
@@ -146,6 +148,7 @@ p2p::doRealRPC (rpc_args *a)
 void
 p2p::dorpc_connect_cb(location *l, ptr<axprt_stream> x) {
 
+  assert(l);
   if (x == NULL) {
     warnx << "connect_cb: connect failed\n";
     doRPC_cbstate *st, *st1;
@@ -197,6 +200,7 @@ p2p::connect_cb (callback<void, ptr<axprt_stream> >::ref cb, int fd)
   if (fd < 0) {
     (*cb)(NULL);
   } else {
+    tcp_nodelay(fd);
     ptr<axprt_stream> x = axprt_stream::alloc(fd);
     (*cb)(x);
   }

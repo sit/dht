@@ -51,12 +51,18 @@ dhash::dispatch(ptr<asrv> dhashsrv, svccb *sbp)
   switch (sbp->proc ()) {
   case DHASHPROC_FETCH:
     {
+
+      warnt("DHASH: FETCH_request");
+
       sfs_ID *n = sbp->template getarg<sfs_ID> ();
       fetch(*n, wrap(this, &dhash::fetchsvc_cb, sbp, *n));
     }
     break;
   case DHASHPROC_STORE:
     {
+
+      warnt("DHASH: STORE_request");
+
       dhash_insertarg *arg = sbp->template getarg<dhash_insertarg> ();
       if (arg->type == DHASH_STORE) {
 	sfs_ID p = defp2p->my_pred ();
@@ -86,9 +92,15 @@ dhash::dispatch(ptr<asrv> dhashsrv, svccb *sbp)
     break;
   case DHASHPROC_CHECK:
     {
+
+      warnt("DHASH: CHECK_request");
+	    
       sfs_ID *n = sbp->template getarg<sfs_ID> ();
       dhash_stat status = key_status (*n);
       sbp->replyref ( status );
+      
+      warnt("DHASH: CHECK_done");
+      
     }
     break;
   default:
@@ -118,13 +130,17 @@ dhash::fetchsvc_cb(svccb *sbp, sfs_ID n, ptr<dbrec> val, dhash_stat err)
       res->pred->n = p;
     }
   }
+
+  warnt("DHASH: FETCH_replying");
   sbp->reply(res);
   delete res;  
 }
 
 void
 dhash::storesvc_cb(store_cbstate *st, dhash_stat err) {
-  warnx << "storesvc_cb: " << st->r << " " << err << "\n";
+  //  warnx << "storesvc_cb: " << st->r << " " << err << "\n";
+
+  warnt("DHASH: STORE_replying");
   st->r--;
   if (st->r <= 0) {
     dhash_storeres *res = New dhash_storeres();
@@ -138,14 +154,21 @@ dhash::storesvc_cb(store_cbstate *st, dhash_stat err) {
 void
 dhash::fetch(sfs_ID id, cbvalue cb) 
 {
-  warn << "FETCHING " << id << "\n";
+  //  warn << "FETCHING " << id << "\n";
   ptr<dbrec> q = id2dbrec(id);
-  db->lookup(q, wrap(this, &dhash::fetch_cb, cb));
+  struct timeval *tp = New struct timeval();
+  gettimeofday (tp, NULL);
+  warnt("DHASH: FETCH_before_db");
+  db->lookup(q, wrap(this, &dhash::fetch_cb, cb, tp));
 }
 
 void
-dhash::fetch_cb(cbvalue cb, ptr<dbrec> ret) 
+dhash::fetch_cb(cbvalue cb, struct timeval *tp, ptr<dbrec> ret) 
 {
+
+  warnt("DHASH: FETCH_after_db");
+
+  delete tp;
   if (ret == NULL) {
     (*cb)(NULL, DHASH_NOENT);
     warn << "key not found in DB\n";
@@ -156,12 +179,16 @@ dhash::fetch_cb(cbvalue cb, ptr<dbrec> ret)
 void 
 dhash::store(sfs_ID id, dhash_value data, store_status type, cbstore cb)
 {
-  if (type == DHASH_STORE) warn << "STORING " << id << "\n";
-  else if (type == DHASH_CACHE) warn << "CACHING " << id << "\n";
-  else if (type == DHASH_REPLICA) warn << "REPLICA " << id << "\n";
+
+  //  if (type == DHASH_STORE) warn << "STORING " << id << "\n";
+  //else if (type == DHASH_CACHE) warn << "CACHING " << id << "\n";
+  //else if (type == DHASH_REPLICA) warn << "REPLICA " << id << "\n";
+
 
   ptr<dbrec> k = id2dbrec(id);
   ptr<dbrec> d = New refcounted<dbrec> (data.base (), data.size ());
+
+  warnt("DHASH: STORE_before_db");
 
   db->insert(k, d, wrap(this, &dhash::store_cb, cb));
   dhash_stat stat;
@@ -177,7 +204,8 @@ dhash::store(sfs_ID id, dhash_value data, store_status type, cbstore cb)
 void
 dhash::store_cb(cbstore cb, int stat) 
 {
-  warn << "store stat: " << stat << "\n";
+  warnt("DHASH: STORE_after_db");
+
   if (stat != 0) 
     (*cb)(DHASH_NOENT);
   else 
@@ -192,8 +220,8 @@ dhash::find_replica_cb (store_cbstate *st, sfs_ID s,
     warnx << "find_replica_cb: failure " << status << "\n";
     st->cb (st, DHASH_NOTPRESENT);
   } else {
-    warnx << "find_replica_cb: replica " << st->nreplica 
-	  << " store at node " << s << "\n";
+    //    warnx << "find_replica_cb: replica " << st->nreplica 
+    //	  << " store at node " << s << "\n";
     st->nreplica--;
     dhash_storeres *res = New dhash_storeres ();
     st->item->type = DHASH_REPLICA;
@@ -210,7 +238,7 @@ dhash::store_replica_cb(store_cbstate *st, dhash_storeres *res, clnt_stat err)
   if (res->status) {
     warnx << "store_replica_cb: error " << res->status << "\n";
   } else {
-    warnx << "store_replica_cb: succeeded\n";
+    //    warnx << "store_replica_cb: succeeded\n";
   }
   st->cb (st, res->status);
 }
@@ -224,7 +252,7 @@ dhash::id2dbrec(sfs_ID id)
   void *key = (void *)whipme.cstr ();
   int len = whipme.len ();
   
-  warn << "id2dbrec: " << id << "=" << hexdump(key, len) << "\n";
+  //  warn << "id2dbrec: " << id << "=" << hexdump(key, len) << "\n";
   ptr<dbrec> q = New refcounted<dbrec> (key, len);
   return q;
 }

@@ -279,8 +279,10 @@ p2p::p2p (str host, int hostport, const sfs_ID &hostID,
     locations.insert (l);
     join ();
   }
+
   // stabilize_tmo = delaycb (stabilize_timer, 
   //  wrap (mkref (this), &p2p::stabilize, 2));
+
 }
 
 void
@@ -303,7 +305,7 @@ p2p::stabilize (int c)
 			  wrap (mkref (this), &p2p::stabilize_findsucc_cb, i));
   }
   int time = uniform_random (0.5 * stabilize_timer, 1.5 * stabilize_timer);
-  //warnx << "stabilize in " << time << " seconds\n";
+  warnx << "stabilize in " << time << " seconds\n";
   stabilize_tmo = delaycb (time, 
 			   wrap (mkref (this), &p2p::stabilize, i+1));
   if (!stable)
@@ -423,6 +425,7 @@ p2p::bootstrap ()
     if (!finger_table[i].alive) {
       set_closeloc (finger_table[i]);
     }
+
     find_successor (finger_table[i].first[0], finger_table[i].start, 
 		    wrap (mkref (this), &p2p::bootstrap_succ_cb, i, 
 			  finger_table[i].first[0]));
@@ -581,6 +584,7 @@ p2p::doget_successor (svccb *sbp)
   } else {
     sbp->replyref (sfsp2pstat (SFSP2P_ERRNOENT));
   }
+  warnt("CHORD: doget_successor_reply");
 }
 
 void
@@ -597,6 +601,54 @@ p2p::doget_predecessor (svccb *sbp)
   } else {
     sbp->replyref (sfsp2pstat (SFSP2P_ERRNOENT));
   }
+}
+
+void
+p2p::dotestandfind (svccb *sbp, sfsp2p_testandfindarg *fa) 
+{
+  sfs_ID x = fa->x;
+
+  sfsp2p_testandfindres *res;
+  
+
+  if (between(myID, finger_table[1].first[0], x) ) {
+
+    res = New sfsp2p_testandfindres (SFSP2P_INRANGE);
+    warnt("CHORD: testandfind_inrangereply");
+    res->inres->succ = finger_table[1].first[0];
+    location *l = locations[finger_table[1].first[0]];
+    assert (l);
+    res->inres->r = l->addr;
+    sbp->reply(res);
+    delete res;
+  } else {
+
+    res = New sfsp2p_testandfindres (SFSP2P_NOTINRANGE);
+
+    sfs_ID p = myID;
+    sfs_ID s = myID + 1;
+    
+    //  print ();
+    for (int i = NBIT; i >= 0; i--) {
+      if ((finger_table[i].alive) && 
+	  between (s, fa->x, finger_table[i].first[0])) {
+	p = finger_table[i].first[0];
+	break;
+      }
+    }
+    //  warnx << "dofindclosestpred of " << fa->x << " is " << p << "\n";
+    location *l = locations[p];
+    assert (l);
+    
+    res->findres->x = fa->x;
+    res->findres->node = p;
+    res->findres->r = l->addr;
+
+    warnt("CHORD: testandfind_notinrangereply");
+    sbp->reply(res);
+    delete res;
+  }
+  
 }
 
 void
@@ -620,6 +672,8 @@ p2p::dofindclosestpred (svccb *sbp, sfsp2p_findarg *fa)
   res.resok->x = fa->x;
   res.resok->node = p;
   res.resok->r = l->addr;
+  
+  warnt("CHORD: dofindclosestpred_reply");
   sbp->reply (&res);
 }
 

@@ -302,7 +302,7 @@ class p2p : public virtual refcount  {
   void find_pred_test_cache_cb (sfs_ID n, sfs_ID x, cbroute_t cb, int found);
   void find_closestpred_cb (sfs_ID n, cbroute_t cb, sfsp2p_findres *res, 
 			    route search_path, clnt_stat err);
-  
+  void test_and_find_cb (sfsp2p_testandfindres *res, findpredecessor_cbstate *st, clnt_stat err);
   void find_successor (sfs_ID &n, sfs_ID &x, cbroute_t cb);
   void find_successor_restart (sfs_ID &n, sfs_ID &x, route search_path, 
 			       cbroute_t cb);
@@ -338,13 +338,14 @@ class p2p : public virtual refcount  {
   void doget_predecessor (svccb *sbp);
   void dofindclosestsucc (svccb *sbp, sfsp2p_findarg *fa);  
   void dofindclosestpred (svccb *sbp, sfsp2p_findarg *fa);
+  void dotestandfind (svccb *sbp, sfsp2p_testandfindarg *fa);
   void donotify (svccb *sbp, sfsp2p_notifyarg *na);
   void doalert (svccb *sbp, sfsp2p_notifyarg *na);
   void dofindsucc (sfs_ID &n, cbroute_t cb);
   void dofindsucc_cb (cbroute_t cb, sfs_ID n, sfs_ID x,
 		      route search_path, sfsp2pstat status);
 
-  void timing_cb(aclnt_cb cb, location *l, ptr<struct timeval> start, clnt_stat err);
+  void timing_cb(aclnt_cb cb, location *l, ptr<struct timeval> start, int procno, rpc_program progno, clnt_stat err);
 
 
   searchcb_entry * registerSearchCallback(cbsearch_t cb);

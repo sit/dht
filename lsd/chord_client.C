@@ -1,4 +1,5 @@
 #include <chord.h>
+#include <chord_util.h>
 
 client::client (ptr<axprt_stream> x)
 {
@@ -20,6 +21,7 @@ client::dispatch (svccb *sbp)
     sbp->reply (NULL);
     break;
   case SFSP2PPROC_GETSUCCESSOR:
+    warnt("CHORD: getsuccessor_request");
     defp2p->doget_successor (sbp);
     break;
   case SFSP2PPROC_GETPREDECESSOR:
@@ -27,8 +29,17 @@ client::dispatch (svccb *sbp)
     break;
   case SFSP2PPROC_FINDCLOSESTPRED:
     {
+      warnt("CHORD: findclosestpred_request");
       sfsp2p_findarg *fa = sbp->template getarg<sfsp2p_findarg> ();
       defp2p->dofindclosestpred (sbp, fa);
+    }
+    break;
+  case SFSP2PPROC_TESTRANGE_FINDCLOSESTPRED:
+    {
+      warnt("CHORD: testandfindrequest");
+      sfsp2p_testandfindarg *fa = 
+	sbp->template getarg<sfsp2p_testandfindarg> ();
+      defp2p->dotestandfind (sbp, fa);
     }
     break;
   case SFSP2PPROC_NOTIFY:

@@ -34,7 +34,7 @@ dhashclient::dispatch (svccb *sbp)
     {
       sfs_ID *n = sbp->template getarg<sfs_ID> ();
 
-      warnx << "dhashproc_lookup: " << gettime () << "\n";
+      warnt("DHASH: lookup_request");
 
       searchcb_entry *scb = NULL;
       if (do_caching)
@@ -50,6 +50,7 @@ dhashclient::dispatch (svccb *sbp)
     break;
   case DHASHPROC_INSERT:
     {
+      warnt("DHASH: insert_request");
       dhash_insertarg *item = sbp->template getarg<dhash_insertarg> ();
       sfs_ID n = item->key;
       defp2p->insert_or_lookup = true;
@@ -74,8 +75,11 @@ dhashclient::insert_findsucc_cb(svccb *sbp, dhash_insertarg *item,
     sbp->reply(res);
   } else {
 
+    warn << "STORING " << item->key << " on " << succ << "\n";
+
+    warnt("DHASH: insert_after_dofindsucc|issue_STORE");
     //    for (unsigned int i = 0; i < path.size (); i++) warnx << path[i] << " ";
-    // warnx << "were touched to insert " << item->key << "\n";
+    //warnx << "were touched to insert " << item->key << "\n";
 
     int *num_entries = (*stats.balance)[succ];
     if (NULL == num_entries) {
@@ -84,7 +88,7 @@ dhashclient::insert_findsucc_cb(svccb *sbp, dhash_insertarg *item,
     } else {
       *num_entries += 1;
     }
-    
+
     stats.insert_path_len += path.size ();
     stats.insert_ops++;
 
@@ -101,11 +105,13 @@ dhashclient::insert_findsucc_cb(svccb *sbp, dhash_insertarg *item,
 void
 dhashclient::insert_store_cb(svccb *sbp, dhash_storeres *res, clnt_stat err) 
 {
+
+  warnt("DHASH: insert_after_STORE");
+
   if (res->status) {
     warnx << "insert_store_cb: failed " << res->status << "\n";
     sbp->replyref(dhash_stat (DHASH_NOENT));
   } else {
-    warnx << "insert_store_cb: ok\n";
     sbp->replyref(dhash_stat (DHASH_OK));
   }
   //  delete res;
@@ -153,7 +159,9 @@ dhashclient::lookup_findsucc_cb(svccb *sbp, sfs_ID n,
     res->set_status (DHASH_NOENT);
     sbp->reply (res);
   } else {
-    warnx << "dhashproc_lookup1: " << gettime () << "\n";
+
+    warnt("DHASH: lookup_after_dofindsucc");
+
     stats.lookup_path_len += path.size ();
     sfs_ID *m = New sfs_ID (n);
     dhash_res *res = New dhash_res();
@@ -179,9 +187,9 @@ dhashclient::lookup_fetch_cb(dhash_res *res, retry_state *st, clnt_stat err)
 	  << st->succ << "\n";
     defp2p->get_predecessor (st->succ, wrap (this, &dhashclient::retry, st));
   } else {
-    warnx << "dhashproc_lookup2: " << gettime () << " size " 
-	  << res->resok->res.size () << "\n";
-    warnx << "lookup_fetch_cb: FETCH: SUCCEEDED " << st->n << "\n";
+
+    warnt("DHASH: lookup_after_FETCH");
+
     struct timeval now;
     gettimeofday(&now, NULL);
     long lat = ((now.tv_sec - st->t.tv_sec)*1000000 + 

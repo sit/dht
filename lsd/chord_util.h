@@ -14,4 +14,5 @@
  bool between (sfs_ID &a, sfs_ID &b, sfs_ID &n);
  bool betweenabs (sfs_ID &a, sfs_ID &b, sfs_ID &n);
  sfs_ID diff(sfs_ID a, sfs_ID b);
+ void warnt(char *msg);
 #endif /* _CHORD_UTIL_H */

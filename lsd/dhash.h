@@ -90,7 +90,7 @@ class dhash {
   void storesvc_cb (store_cbstate *st, dhash_stat err);
   
   void fetch (sfs_ID id, cbvalue cb);
-  void fetch_cb (cbvalue cb, ptr<dbrec> ret);
+  void fetch_cb (cbvalue cb, struct timeval *tp, ptr<dbrec> ret);
   void store (sfs_ID id, dhash_value data, store_status type, cbstore cb);
   void store_cb (cbstore cb, int stat);
   void cache_store_cb(dhash_res *res, clnt_stat err);

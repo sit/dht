@@ -18,7 +18,6 @@ p2p::registerSearchCallback(cbsearch_t cb)
 void
 p2p::testSearchCallbacks(sfs_ID id, sfs_ID target, cbtest_t cb) 
 {
-  //  warn << "testing callbacks " << id << " " << target << "\n";
   tscb(id, target, searchCallbacks.first, cb);
 }
 
