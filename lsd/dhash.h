@@ -28,11 +28,9 @@ class dhashclient {
 
   void dispatch (svccb *sbp);
   void lookup_findsucc_cb (svccb *sbp, sfs_ID *n, sfs_ID succ, route path, sfsp2pstat err);
-  void lookup_connect_cb (svccb *sbp, sfs_ID *n, ptr<axprt_stream> x);
   void lookup_fetch_cb (svccb *sbp, dhash_res *res, clnt_stat err);
 
   void insert_findsucc_cb (svccb *sbp, dhash_insertarg *item, sfs_ID succ, route path, sfsp2pstat err);
-  void insert_connect_cb (svccb *sbp, dhash_insertarg *item, ptr<axprt_stream> x);
   void insert_store_cb (svccb *sbp, dhash_stat *res, clnt_stat err);
 
   

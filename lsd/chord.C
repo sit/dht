@@ -465,8 +465,8 @@ p2p::notify (sfs_ID &n, sfs_ID &x)
   assert (l);
   na->x = x;
   na->r = l->addr;
-  doRPC (n, SFSP2PPROC_NOTIFY, na, res, wrap (mkref (this), 
-					      &p2p::notify_cb, res));
+  doRPC (n, sfsp2p_program_1, SFSP2PPROC_NOTIFY, na, res, wrap (mkref (this), 
+								&p2p::notify_cb, res));
 }
 
 void
@@ -490,7 +490,7 @@ p2p::alert (sfs_ID &n, sfs_ID &x)
   na->x = x;
   na->r = l->addr;
   //warnx << "RPC CALL: SFSP2PPROC_ALERT" << "\n";
-  doRPC (n, SFSP2PPROC_ALERT, na, res, wrap (mkref (this), 
+  doRPC (n, sfsp2p_program_1, SFSP2PPROC_ALERT, na, res, wrap (mkref (this), 
 					      &p2p::notify_cb, res));
 }
 

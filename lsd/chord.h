@@ -87,14 +87,15 @@ public:
 struct location;
 
 struct doRPC_cbstate {
+  rpc_program progno;
   int procno;
   const void *in;
   void *out;
   aclnt_cb cb;
   tailq_entry<doRPC_cbstate> connectlink;
   
-  doRPC_cbstate (int pi, const void *ini, void *outi,
-		 aclnt_cb cbi) : procno (pi), in (ini),  
+  doRPC_cbstate (rpc_program ro, int pi, const void *ini, void *outi,
+		 aclnt_cb cbi) : progno (ro), procno (pi), in (ini),  
     out (outi), cb (cbi) {};
   
 };
@@ -184,8 +185,9 @@ class p2p : public virtual refcount  {
   int* edges; // holds array of edges
   int numnodes;
   void initialize_graph();
-  void doRealRPC (sfs_ID ID, int procno, const void *in, void *out,
-		      aclnt_cb cb);  
+  void doRealRPC (sfs_ID ID, rpc_program progno, int procno, 
+		  const void *in, void *out,
+		  aclnt_cb cb);  
   // end added to help simulate
 
   void deleteloc (sfs_ID &n);
@@ -202,8 +204,8 @@ class p2p : public virtual refcount  {
 
   void timeout(location *l);
   void connect_cb (callback<void, ptr<axprt_stream> >::ref cb, int fd);
-  void doRPC (sfs_ID &n, int procno, const void *in, void *out,
-       aclnt_cb cb);
+  void doRPC (sfs_ID &n, rpc_program progno, int procno, const void *in, void *out,
+	      aclnt_cb cb);
   void dorpc_connect_cb(location *l, ptr<axprt_stream> x);
   void chord_connect(sfs_ID ID, callback<void, ptr<axprt_stream> >::ref cb);
 

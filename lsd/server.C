@@ -14,7 +14,7 @@ void
 p2p::get_successor (sfs_ID n, cbsfsID_t cb)
 {
   sfsp2p_findres *res = New sfsp2p_findres (SFSP2P_OK);
-  doRPC (n, SFSP2PPROC_GETSUCCESSOR, NULL, res,
+  doRPC (n, sfsp2p_program_1, SFSP2PPROC_GETSUCCESSOR, NULL, res,
 	 wrap (mkref (this), &p2p::get_successor_cb, n, cb, res));
 }
 
@@ -41,7 +41,7 @@ void
 p2p::get_predecessor (sfs_ID n, cbsfsID_t cb)
 {
   sfsp2p_findres *res = New sfsp2p_findres (SFSP2P_OK);
-  doRPC (n, SFSP2PPROC_GETPREDECESSOR, NULL, res,
+  doRPC (n, sfsp2p_program_1, SFSP2PPROC_GETPREDECESSOR, NULL, res,
 	 wrap (mkref (this), &p2p::get_predecessor_cb, n, cb, res));
 }
 
@@ -100,7 +100,7 @@ p2p::find_predecessor (sfs_ID &n, sfs_ID &x, cbroute_t cb)
   fap->x = x;
 
   route search_path;
-  doRPC (n, SFSP2PPROC_FINDCLOSESTPRED, fap, res,
+  doRPC (n, sfsp2p_program_1, SFSP2PPROC_FINDCLOSESTPRED, fap, res,
 	 wrap (mkref (this), &p2p::find_closestpred_cb, n, cb, res, 
 	       search_path));
 }

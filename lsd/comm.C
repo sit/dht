@@ -76,8 +76,9 @@ p2p::timing_cb(aclnt_cb cb, location *l, ptr<struct timeval> start, clnt_stat er
 
 // just add a time delay to represent distance
 void
-p2p::doRPC (sfs_ID &ID, int procno, const void *in, void *out,
-		      aclnt_cb cb)
+p2p::doRPC (sfs_ID &ID, rpc_program progno, int procno, 
+	    const void *in, void *out,
+	    aclnt_cb cb)
 {
   // will IDs map to node numbers?? (ie. if ID is 
   // something diff then this may give weird results)
@@ -89,9 +90,11 @@ p2p::doRPC (sfs_ID &ID, int procno, const void *in, void *out,
   int dist = *(edges+(int)myID.getsi()*numnodes+(int)ID.getsi());
   time = dist*10; // Not sure how to scale time delay
   // should not be delayed if not simulating
-  timecb_t* decb =  delaycb (time, 0,wrap(mkref (this), &p2p::doRealRPC,ID,procno,in,out,cb));
+  timecb_t* decb =  delaycb (time, 0, 
+			     wrap(mkref (this), &p2p::doRealRPC, ID, 
+				  progno, procno, in, out, cb));
 #else
-  doRealRPC (ID, procno, in, out, cb);
+  doRealRPC (ID, progno, procno, in, out, cb);
 #endif
 }
 
@@ -101,12 +104,12 @@ p2p::doRPC (sfs_ID &ID, int procno, const void *in, void *out,
 // sfs_ID instead of a ptr
 
 void
-p2p::doRealRPC (sfs_ID ID, int procno, const void *in, void *out,
-		      aclnt_cb cb)
+p2p::doRealRPC (sfs_ID ID, rpc_program progno, int procno, const void *in, void *out,
+		aclnt_cb cb)
 {
-
+  
   if (lookups_outstanding > 0) lookup_RPCs++;
- 
+  
   location *l = locations[ID];
   assert (l);
   assert (l->alive);
@@ -116,12 +119,12 @@ p2p::doRealRPC (sfs_ID ID, int procno, const void *in, void *out,
   if (l->x) {    
     timecb_remove(l->timeout_cb);
     l->timeout_cb = delaycb(30,0,wrap(this, &p2p::timeout, l));
-    ptr<aclnt> c = aclnt::alloc(l->x, sfsp2p_program_1);
+    ptr<aclnt> c = aclnt::alloc(l->x, progno);
     c->call (procno, in, out, wrap(mkref(this), &p2p::timing_cb, cb, l, start));
   } else {
-    // If we are in the process of connecting; we should wait
-    // warn << "going to connect to " << ID << " ; nout=" << l->nout << "\n";
-    doRPC_cbstate *st = New doRPC_cbstate (procno, in, out, wrap(mkref(this), &p2p::timing_cb, cb, l, start));
+    doRPC_cbstate *st = 
+      New doRPC_cbstate (progno, procno, in, out,  
+			 wrap(mkref(this), &p2p::timing_cb, cb, l, start));
     l->connectlist.insert_tail (st);
     if (!l->connecting) {
       l->connecting = true;
@@ -151,10 +154,10 @@ p2p::dorpc_connect_cb(location *l, ptr<axprt_stream> x) {
   l->timeout_cb = delaycb(30,0,wrap(this, &p2p::timeout, l));
 
   doRPC_cbstate *st, *st1;
-  ptr<aclnt> c = aclnt::alloc (x, sfsp2p_program_1);
   for (st = l->connectlist.first; st; st = st1) {
-    st1 = l->connectlist.next (st);
+    ptr<aclnt> c = aclnt::alloc (x, st->progno);
     c->call (st->procno, st->in, st->out, st->cb);
+    st1 = l->connectlist.next (st);
     l->connectlist.remove(st);
   }
 }
