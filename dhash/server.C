@@ -67,7 +67,6 @@ struct dhash_config_init {
 
 dhash_config_init::dhash_config_init ()
 {
-  warnx << "dhash_config_init\n";
   bool ok = true;
 
 #define set_int Configurator::only ().set_int
