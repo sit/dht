@@ -13,4 +13,5 @@ EXTRA_DIST = Makefile.incl ../utils/skiplist.h \
 	    example/kademlia_args \
 	    example/kelips_args \
 	    example/koorde_args \
+	    example/onehop_args \
 	    scripts/run-simulations.pl

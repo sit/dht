@@ -1,0 +1,9 @@
+lifemean 3600000
+deathmean =lifemean 1
+lookupmean 600000
+exittime *lifemean 12
+stattime *exittime .5
+#one hop
+slices 5 10
+units 5 10
+stab 2000 4000 8000 16000 32000
