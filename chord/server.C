@@ -608,7 +608,9 @@ vnode_impl::update_coords (vec<float> uc, float ud)
     
     me_->set_coords (coords);
   } else {
-    printf ("COORD: ignored actual of %f\n", actual);
+    char b[32];
+    snprintf (b, 32, "%f", actual);
+    trace << "COORD: ignored actual of " << b << "\n";
   }
 }
 

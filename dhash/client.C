@@ -442,16 +442,17 @@ dhashcli::insert (ref<dhash_block> block, cbinsert_path_t cb,
 		  int options, ptr<chordID> guess)
 {
   if (!guess) {
-    vec<ptr<location> > sl = clntnode->succs ();
-    if ((options & DHASHCLIENT_SUCCLIST_OPT) && 
-	use_succlist (sl, clntnode->my_pred ())) {
-      sl.push_back (clntnode->my_location ());
-      vec<chord_node> s = get_succs_from_list (sl, block->ID);
-      route r;
-      insert_lookup_cb (block, cb, DHASH_OK, s, r);
-      return;
+    if (block->ctype == DHASH_CONTENTHASH) {
+      vec<ptr<location> > sl = clntnode->succs ();
+      if ((options & DHASHCLIENT_SUCCLIST_OPT) && 
+	  use_succlist (sl, clntnode->my_pred ())) {
+        sl.push_back (clntnode->my_location ());
+        vec<chord_node> s = get_succs_from_list (sl, block->ID);
+        route r;
+        insert_lookup_cb (block, cb, DHASH_OK, s, r);
+        return;
+      }
     }
-
     lookup (block->ID, wrap (this, &dhashcli::insert_lookup_cb, block, cb));
   }
   else { 

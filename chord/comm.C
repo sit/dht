@@ -353,6 +353,9 @@ tcp_manager::doRPC_tcp_cleanup (ptr<aclnt> c, RPC_delay_args *args,
 {
   long now = getusec ();
   long diff = now - args->now;
+  if (diff > 5000000)
+    warn << "long tcp latency to " << args->l->address ().hostname
+         << ": " << diff << "\n";
   update_latency (NULL, args->l, diff);
   (*args->cb)(err);
   delete args;
@@ -365,7 +368,7 @@ tcp_manager::stats ()
   rpc_manager::stats ();
   for (hostinfo *h = hosts.first (); h ; h = hosts.next (h)) {
     warnx << "  host " << h->host << ": rpcs " << h->nrpc;
-    sprintf (buf, ", lat %f, var %f\n", h->a_lat, h->a_var);
+    sprintf (buf, ", lat %9.1f, var %9.1f\n", h->a_lat/1000, h->a_var/1000);
     warnx << buf;
   }
 }
