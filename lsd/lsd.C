@@ -79,7 +79,8 @@ enum routing_mode_t {
   MODE_PROX,
   MODE_PROXREC,
   MODE_PNS,
-  MODE_PNSREC
+  MODE_PNSREC,
+  MODE_CHORDREC
 } mode;
 
 struct routing_mode_desc {
@@ -106,6 +107,8 @@ routing_mode_desc modes[] = {
     wrap (fingerroutepns::produce_vnode) },
   { MODE_PNSREC, "pnsrec", "g^2 pns recursive",
     wrap (recroute<fingerroutepns>::produce_vnode) },
+  { MODE_CHORDREC, "chordrec", "recursive routing with plain finger tables",
+    wrap (recroute<fingerroute>::produce_vnode) }
 };
 
 void stats ();
@@ -456,13 +459,9 @@ monitor_start (const char *monitor)
 void
 stop ()
 {
-#if 1
   chordnode->stop ();
   for (unsigned int i = 0 ; i < initialized_dhash; i++)
     dh[i]->stop ();
-#else
-  setenv ("LOG_FILE", "log", 1);
-#endif
 }
 
 static void
