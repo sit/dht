@@ -186,7 +186,7 @@ VivaldiTest::tick(void *)
 	status();
       }
 
-    if (_ticks % 50 == 0 || _vis) print_all_loc();
+    if (_ticks % 5 == 0 || _vis) print_all_loc();
   } else if (false && this->ip () >= 1000)
     {
       cout << this->ip () << " " << error () << "\n";
