@@ -54,7 +54,7 @@ Kademlia::stabilized(vector<NodeID> lid)
     // On every iteration we add another bit.  lower_mask looks like 000...111,
     // but we use it as 111...000 by ~-ing it.
     if(i)
-      lower_mask |= (1<<i-1);
+      lower_mask |= (1<<(i-1));
 
     // flip the bit, and turn all bits to the right of the flipped bit into
     // zeroes.
@@ -72,12 +72,12 @@ Kademlia::stabilized(vector<NodeID> lid)
     // qualify for this entry in the finger table, so the node that says there
     // is no such is WRONG.
     if(it != lid.end() && *it <= upper) {
-      cout << "not stabilized because node with ID " << printbits(_id) << ", entry " << i << " is invalid." << endl;
-      cout << "lowermask = " << printbits(lower_mask) << endl;
-      cout << "~lowermask = " << printbits(~lower_mask) << endl;
-      cout << "lower = " << printbits(lower) << endl;
-      cout << "upper = " << printbits(upper) << endl;
-      cout << "existing = " << printbits(*it) << endl;
+      KDEBUG(5) << "not stabilized because node with ID " << printbits(_id) << ", entry " << i << " is invalid." << endl;
+      KDEBUG(5) << "lowermask = " << printbits(lower_mask) << endl;
+      KDEBUG(5) << "~lowermask = " << printbits(~lower_mask) << endl;
+      KDEBUG(5) << "lower = " << printbits(lower) << endl;
+      KDEBUG(5) << "upper = " << printbits(upper) << endl;
+      KDEBUG(5) << "existing = " << printbits(*it) << endl;
       return false;
     }
   }
@@ -105,20 +105,25 @@ Kademlia::join(Args *args)
   // lookup my own key with well known node.
   lookup_args la;
   lookup_result lr;
+  la.id = _id;
+  la.ip = ip();
   la.key = _id;
   KDEBUG(1) << "Doing lookup for my ID." << endl;
   doRPC(wkn, &Kademlia::do_lookup, &la, &lr);
   KDEBUG(1) << "Result of lookup for " << printID(_id) << " is " << printID(lr.id) << ", which is node " << lr.ip << endl;
 
-  // now we know the closest node in our ID space.  add him to our finger table.
-  handle_join(lr.id, lr.ip);
-
+  // get the finger table and data of the guy with an ID closest to ours
   // ...and get his data
   transfer_args ta;
   transfer_result tr;
   ta.id = _id;
-  KDEBUG(1) << "Node " << printID(_id) << " initiating transfer." << endl;
+  ta.ip = ip();
+  KDEBUG(1) << "Node " << printbits(_id) << " initiating transfer from " << printbits(lr.id) << endl;
   doRPC(lr.ip, &Kademlia::do_transfer, &ta, &tr);
+
+  // now we know the closest node in our ID space.  add him to our finger table.
+  memcpy(&_fingers, tr.fingers, sizeof(fingers_t));
+  merge_into_ftable(lr.id, lr.ip);
 
   // merge that data in our _values table
   for(map<NodeID, Value>::const_iterator pos = tr.values.begin(); pos != tr.values.end(); ++pos)
@@ -132,7 +137,7 @@ Kademlia::join(Args *args)
   ja.ip = ip();
 
   // why are we using wkn for the first lookup?
-  IPAddress ip = wkn;
+  IPAddress thisip = wkn;
   for(unsigned i=0; i<idsize; i++) {
     NodeID key = _id ^ (1<<i);
     // now tell all the relevant nodes about me.
@@ -141,26 +146,28 @@ Kademlia::join(Args *args)
     lookup_args la;
     lookup_result lr;
 
+    la.id = _id;
+    la.ip = ip();
     la.key = key;
     do_lookup(&la, &lr);
 
     // send a join request to that guy
-    ip = lr.ip;
-    if(!doRPC(ip, &Kademlia::do_join, &ja, &jr))
+    thisip = lr.ip;
+    if(!doRPC(thisip, &Kademlia::do_join, &ja, &jr))
       _fingers.unset(i);
     else
-      _fingers.set(i, lr.id, ip);
+      _fingers.set(i, lr.id, thisip);
   }
 }
-
 
 void
 Kademlia::do_join(void *args, void *result)
 {
   join_args *jargs = (join_args*) args;
+  merge_into_ftable(jargs->id, jargs->ip);
 
   KDEBUG(1) << "do_join " << printbits(jargs->id) << " entering\n";
-  handle_join(jargs->id, jargs->ip);
+  merge_into_ftable(jargs->id, jargs->ip);
 }
 
 
@@ -169,6 +176,9 @@ Kademlia::do_transfer(void *args, void *result)
 {
   transfer_args *targs = (transfer_args*) args;
   transfer_result *tresult = (transfer_result*) result;
+  merge_into_ftable(targs->id, targs->ip);
+
+  tresult->fingers = &_fingers;
 
   KDEBUG(1) << "handle_transfer to node " << printID(targs->id) << "\n";
   if(_values.size() == 0) {
@@ -194,6 +204,7 @@ Kademlia::do_lookup(void *args, void *result)
 {
   lookup_args *largs = (lookup_args*) args;
   lookup_result *lresult = (lookup_result*) result;
+  merge_into_ftable(largs->id, largs->ip);
 
   NodeID bestID = _id;
   NodeID bestdist = distance(_id, largs->key);
@@ -230,14 +241,14 @@ Kademlia::do_lookup(void *args, void *result)
 
 
 void
-Kademlia::handle_join(NodeID id, IPAddress ip)
+Kademlia::merge_into_ftable(NodeID id, IPAddress ip)
 {
-  KDEBUG(2) << "handle_join (myid = " << printID(_id) << "), id = " << printID(id) << ", ip = " << ip << endl;
+  KDEBUG(2) << "merge_into_ftable (myid = " << printID(_id) << "), id = " << printID(id) << ", ip = " << ip << endl;
   for(unsigned i=0; i<idsize; i++) {
     NodeID newdist = distance(id, _id ^ (1<<i));
     NodeID curdist = distance(_fingers.get_id(i), _id ^ (1<<i));
     if(newdist < curdist) {
-      KDEBUG(2) << "handle_join " << printbits(id) << " is better than old " << printbits(_fingers.get_id(i)) << " for entry " << i << "\n";
+      KDEBUG(2) << "merge_into_ftable " << printbits(id) << " is better than old " << printbits(_fingers.get_id(i)) << " for entry " << i << "\n";
       _fingers.set(i, id, ip);
     }
   }
@@ -300,6 +311,9 @@ Kademlia::insert(Args *args)
   insert_args ia;
   insert_result ir;
 
+  ia.id = _id;
+  ia.ip = ip();
+
   ia.key = args->nget<NodeID>("key");
   ia.val = args->nget<Value>("val");
 
@@ -312,10 +326,12 @@ void
 Kademlia::do_insert(void *args, void *result)
 {
   insert_args *iargs = (insert_args*) args;
-  // insert_result *iresult = (insert_result*) result;
+  merge_into_ftable(iargs->id, iargs->ip);
 
   lookup_args la;
   lookup_result lr;
+  la.id = _id;
+  la.ip = ip();
   la.key = iargs->key;
   do_lookup(&la, &lr);
 

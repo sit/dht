@@ -41,10 +41,6 @@ KademliaObserver::execute()
 {
   list<Protocol*> l = Network::Instance()->getallprotocols(_type);
   list<Protocol*>::iterator pos;
-  // for(pos = l.begin(); pos != l.end(); ++pos) {
-  //   cout << "Calling dump on " << Kademlia::printID(((Kademlia*) *pos)->id()) << endl;
-  //   ((Kademlia*) *pos)->dump();
-  // }
 
   //i only want to sort it once after all nodes have joined! 
   Kademlia *c = 0;
@@ -58,12 +54,10 @@ KademliaObserver::execute()
 
     sort(lid.begin(), lid.end());
 
-    vector<Kademlia::NodeID>::iterator i;
-    printf ("sorted nodes %d %d\n", lid.size (), _num_nodes);
-    for (i = lid.begin (); i != lid.end() ; ++i) {
-      // printf ("%qx\n", *i);
-      printf ("%hx\n", *i);
-    }
+    // vector<Kademlia::NodeID>::iterator i;
+    // printf ("sorted nodes %d %d\n", lid.size (), _num_nodes);
+    // for (i = lid.begin (); i != lid.end() ; ++i)
+    //   printf ("%hx\n", *i);
   }
 
   for (pos = l.begin(); pos != l.end(); ++pos) {
@@ -71,14 +65,15 @@ KademliaObserver::execute()
     assert(c);
     if (!c->stabilized(lid)) {
       cout << now() << " NOT STABILIZED" << endl;
-      if (_reschedule > 0) reschedule(_reschedule);
+      if (_reschedule > 0)
+        reschedule(_reschedule);
       return;
     }
 
   }
 
   cout << now() << " STABILIZED" << endl;
-  cout << now() << " CHORD NODE STATS" << endl;
+  cout << now() << " Kademlia finger tables" << endl;
   for (pos = l.begin(); pos != l.end(); ++pos) {
     assert(c);
     c = (Kademlia *)(*pos);

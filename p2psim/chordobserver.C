@@ -83,7 +83,7 @@ ChordObserver::execute()
   list<Protocol*>::iterator pos;
 
   //i only want to sort it once after all nodes have joined! 
-  Chord* c;
+  Chord *c = 0;
   if (lid.size() != _num_nodes) {
     lid.clear();
     for (pos = l.begin(); pos != l.end(); ++pos) {

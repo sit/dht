@@ -31,7 +31,7 @@ public:
   static NodeID distance(NodeID, NodeID);
 
   bool stabilized(vector<NodeID>);
-  void dump() { KDEBUG(2) << "*** DUMP ***" <<endl;  _fingers.dump(_id); };
+  void dump() { cout << "*** DUMP for " << printbits(_id) << " ***" <<endl;  _fingers.dump(_id); };
   NodeID id () { return _id;}
 
 private:
@@ -47,11 +47,14 @@ private:
     int ok;
   };
   void do_join(void *args, void *result);
-  void handle_join(NodeID id, IPAddress ip);
+  void merge_into_ftable(NodeID id, IPAddress ip);
 
 
   // lookup
   struct lookup_args {
+    NodeID id;
+    IPAddress ip;
+
     NodeID key;
   };
   struct lookup_result {
@@ -63,6 +66,9 @@ private:
 
   // insert
   struct insert_args {
+    NodeID id;
+    IPAddress ip;
+
     NodeID key;
     Value val;
   };
@@ -72,15 +78,17 @@ private:
 
 
   // transfer
+  class fingers_t;
   struct transfer_args {
     NodeID id;
+    IPAddress ip;
   };
   struct transfer_result {
     map<NodeID, Value> values;
+    fingers_t *fingers;
   };
   void do_transfer(void *args, void *result);
                                                                                   
-
   // finger table
   class fingers_t { public:
     fingers_t() {};
