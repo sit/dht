@@ -2379,6 +2379,8 @@ LocTable::update_ifexists(Chord::IDMap n)
   idmapwrap *ptr = ring.search(n.id);
   if (!ptr) return false;
   ptr->timestamp = now();
+  if (n.heartbeat > ptr->n.heartbeat)
+    ptr->n.heartbeat = n.heartbeat;
   return true;
 }
 void

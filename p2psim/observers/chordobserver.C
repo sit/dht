@@ -104,26 +104,30 @@ ChordObserver::kick(Observed *o, ObserverInfo *oi)
   set<Node*>::iterator pos; 
   Chord *c = 0;
   const set<Node*> *l = Network::Instance()->getallnodes();
-  
+ 
+  ids.clear();
+
   if( event_s == "join" ) {
 #ifdef CHORD_DEBUG
     printf("ChordObserver oracle node %u,%qx joined\n", n->ip(), n->id());
 #endif
     //add this newly joined node to the sorted list of alive nodes
+    /*
     vector<Chord::IDMap>::iterator p;
     p = upper_bound(ids.begin(),ids.end(),n->idmap(),Chord::IDMap::cmp);
     if (p->ip != n->ip()) 
       ids.insert(p,1,n->idmap()); 
-
+      */
     for (pos = l->begin(); pos != l->end(); ++pos) {
       c = (Chord *)(*pos);
       assert(c);
-      if (c->alive() && c->ip() != n->ip()) 
+      if (c->alive() && c->ip() != n->ip()) {
+	ids.push_back(c->idmap());
 	c->oracle_node_joined(n->idmap());
-      else if (c->ip() == n->ip()) 
-	n->initstate();
+      }
     }
-
+    sort(ids.begin(),ids.end(),Chord::IDMap::cmp);
+    n->initstate();
   }else if (event_s == "crash") {
 #ifdef CHORD_DEBUG
     printf("%llu ChordObserver oracle node %u,%qx crashed\n", now(), n->ip(), n->id());
