@@ -42,7 +42,11 @@ dhashclient::dispatch (svccb *sbp)
 				wrap (this, &dhashclient::lookup_findsucc_cb, 
 				      sbp));
       */
-      ptr<dhash_fetch_arg> arg = New refcounted<dhash_fetch_arg> ();
+      dhash_fetch_arg *farg = sbp->template getarg<dhash_fetch_arg> ();
+
+      ptr<dhash_fetch_arg> arg = New refcounted<dhash_fetch_arg> (*farg);
+      
+      warn << "lookup request for " << arg->key << "\n";
       chordID next = clntnode->lookup_closestpred (arg->key);
       dhash_fetchiter_res *i_res = New dhash_fetchiter_res (DHASH_CONTINUE);
       

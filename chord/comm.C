@@ -137,7 +137,7 @@ locationtable::doRPC_gotaxprt (doRPC_cbstate *st,
     frpc_state *C = New frpc_state (res, st->out, st->procno, st->cb,
 				    l, getusec ());
     c->call (CHORDPROC_HOSTRPC, &farg, res, 
-	     wrap (this, &locationtable::doForeignRPC_cb, C, prog)); 
+	     wrap (mkref(this), &locationtable::doForeignRPC_cb, C, prog)); 
   }
 
 }

@@ -131,7 +131,7 @@ newvnode_cb (int nreplica, int n, vnode *my)
 {
   str db_name_prime = strbuf () << db_name << "-" << n;
   if (ndhash == MAX_VNODES) fatal << "Too many virtual nodes (1024)\n";
-  //  dh[ndhash++] = New dhash (db_name_prime, my, nreplica);
+  dh[ndhash++] = New dhash (db_name_prime, my, nreplica);
   if (n > 0) chordnode->newvnode (wrap (newvnode_cb, nreplica, n-1));
 }
 
@@ -186,7 +186,7 @@ parseconfigfile (str cf, int nvnode, int set_rpcdelay)
     } else if (!strcasecmp (av[0], "myID")) {
       if (av.size () != 2) {
         errors = true;
-        warn << cf << ":" << line << ": usage: myID <number>\n";
+       warn << cf << ":" << line << ": usage: myID <number>\n";
       } else {
 	initID (av[1], &myID);
 	myid = true;

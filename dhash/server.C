@@ -61,6 +61,8 @@ dhash::dispatch (unsigned long procno,
   char *marshalled_arg = arg->marshalled_args.base ();
   int arg_len = arg->marshalled_args.size ();
 
+  warn << "arg_len " << arg_len << "\n";
+
   xdrmem x (marshalled_arg, arg_len, XDR_DECODE);
   xdrproc_t proc = dhash_program_1.tbl[procno].xdr_arg;
 
@@ -90,6 +92,7 @@ dhash::dispatch (unsigned long procno,
 
       dhash_fetchiter_res *res = New dhash_fetchiter_res (DHASH_CONTINUE);
 
+      warn << "requst for " << farg->key << " at " << host_node->my_ID () << "\n";
       if (key_status (farg->key) != DHASH_NOTPRESENT) {
 	//fetch the key and return it, end of story
 	fetch (farg->key, wrap (this, &dhash::fetchiter_svc_cb,
