@@ -1041,10 +1041,10 @@ if( defined $yrange ) {
 }
 
 if( defined $epsfile ) {
-    print GP "set terminal postscript eps 'Times-Roman' $fontsize\n";
+    print GP "set terminal postscript eps $fontsize\n";
     print GP "set output \"$epsfile\"\n";
 } else {
-    print GP "set terminal postscript color 'Times-Roman' $fontsize\n";
+    print GP "set terminal postscript color $fontsize\n";
     print GP "set output \"/tmp/paramplot-$$.eps\"\n";
 }
 
