@@ -13,7 +13,6 @@ private:
   TapestryObserver(Args*);
   ~TapestryObserver();
   unsigned int _reschedule;
-  string _type;
   unsigned int _num_nodes;
   unsigned int _init_num;
 

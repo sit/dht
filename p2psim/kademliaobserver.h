@@ -14,8 +14,10 @@ private:
   KademliaObserver(Args*);
   ~KademliaObserver();
   unsigned int _reschedule;
-  string _type;
   unsigned int _num_nodes;
+  unsigned int _init_num;
+
+  void init_state();
 
   vector<Kademlia::NodeID> lid;
 };

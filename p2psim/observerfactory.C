@@ -30,6 +30,11 @@ ObserverFactory::create(string s, Args *a)
 {
   Observer *t = 0;
 
+  // add a "type" parameter to the argument so that the observer knows that
+  // protocol to observe
+  string type = OBSERVER_TYPE;
+  a->insert(make_pair(type, s));
+
   if((s == "Chord") ||
      (s == "ChordFinger") ||
      (s == "ChordFingerPNS") ||

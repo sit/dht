@@ -469,6 +469,15 @@ Kademlia::stabilize()
 }
 
 // }}}
+// {{{ Kademlia::init_state
+// NASTY HACK to stabilize faster
+void 
+Kademlia::init_state(list<Protocol*>)
+{
+  KDEBUG(1) << "init_state" << endl;
+}
+
+// }}}
 // {{{ Kademlia::reschedule_stabilizer
 void
 Kademlia::reschedule_stabilizer(void *x)

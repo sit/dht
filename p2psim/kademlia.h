@@ -29,6 +29,9 @@ public:
   static string printID(NodeID id);
   static NodeID distance(const NodeID, const NodeID);
 
+  void init_state(list<Protocol*>);
+
+// }}}
   bool stabilized(vector<NodeID>);
   void dump();
   NodeID id () { return _id;}

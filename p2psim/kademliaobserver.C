@@ -13,13 +13,15 @@ KademliaObserver::Instance(Args *a)
 }
 
 
-KademliaObserver::KademliaObserver(Args *a)
+KademliaObserver::KademliaObserver(Args *a) : Observer(a)
 {
   _reschedule = 0;
   _reschedule = atoi((*a)["reschedule"].c_str());
-  _type = (*a)["type"];
+
   _num_nodes = atoi((*a)["numnodes"].c_str());
   assert(_num_nodes > 0);
+
+  _init_num = atoi((*a)["initnodes"].c_str());
   lid.clear();
 }
 
@@ -27,9 +29,25 @@ KademliaObserver::~KademliaObserver()
 {
 }
 
+
+void
+KademliaObserver::init_state()
+{
+  list<Protocol*> l = Network::Instance()->getallprotocols(_type);
+  for(list<Protocol*>::iterator pos = l.begin(); pos != l.end(); ++pos) {
+    Kademlia *k = (Kademlia*) *pos;
+    k->init_state(l);
+  }
+}
+
 void
 KademliaObserver::execute()
 {
+  if(_init_num) {
+    init_state();
+    _init_num = 0;
+  }
+
   list<Protocol*> l = Network::Instance()->getallprotocols(_type);
   list<Protocol*>::iterator pos;
 

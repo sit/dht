@@ -20,8 +20,6 @@ ObserveEvent::ObserveEvent(string proto, vector<string> *v) : Event(v)
     vector<string> arg = split((*v)[i], "=");
     a->insert(make_pair(arg[0], arg[1]));
   }
-  string t = "type";
-  a->insert(make_pair(t, proto));
   this->_observer = ObserverFactory::Instance()->create(proto, a);
   delete a;
 }

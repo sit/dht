@@ -13,7 +13,7 @@ ChordObserver::Instance(Args *a)
 }
 
 
-ChordObserver::ChordObserver(Args *a)
+ChordObserver::ChordObserver(Args *a) : Observer(a)
 {
   if (!a)  {
     cout << now() << "ChordObserver created WRONGLY!" << endl;
@@ -21,7 +21,6 @@ ChordObserver::ChordObserver(Args *a)
   }
   _reschedule = 0;
   _reschedule = atoi((*a)["reschedule"].c_str());
-  _type = (*a)["type"];
   _num_nodes = atoi((*a)["numnodes"].c_str());
   assert(_num_nodes > 0);
 

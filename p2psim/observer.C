@@ -1,8 +1,9 @@
 #include "observeevent.h"
 #include "eventqueue.h"
 
-Observer::Observer()
+Observer::Observer(Args *a)
 {
+  _type = (*a)[OBSERVER_TYPE];
 }
 
 Observer::~Observer()
