@@ -159,9 +159,9 @@ VivaldiTest::tick(void *)
   _ticks++;
   IPAddress dst;
 
-  if (!_initial_triangulation || 
-      _initial_triangulation && _init_samples.size () >= _num_init_samples
-      && !_joined) {
+  if (!_joined && (!_initial_triangulation  || 
+		   (_initial_triangulation 
+		    && _init_samples.size () >= _num_init_samples))) {
     _all.push_back(this);
     _joined = true;
   }
