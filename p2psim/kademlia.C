@@ -9,7 +9,7 @@
 #include "p2psim.h"
 using namespace std;
 
-#define KADEMLIA_REFRESH 100000
+#define KADEMLIA_REFRESH 1000
 
 unsigned kdebugcounter = 1;
 unsigned Kademlia::_k = 1;
@@ -372,9 +372,9 @@ void
 Kademlia::dump()
 {
   cout << "*** DUMP FOR " << printbits(_id) << endl;
-  cout << "*** -------------------------- ***" << endl;
+  cout << "   *** -------------------------- ***" << endl;
   _tree->dump();
-  cout << "*** -------------------------- ***" << endl;
+  cout << "   *** -------------------------- ***" << endl;
 }
 
 // }}}
@@ -553,22 +553,35 @@ k_bucket::stabilize(string prefix, unsigned depth)
 {
   // go through tree depth-first and refresh buckets in the leaves of the tree.
   if(_child[0]) {
+    assert(!_nodes);
     assert(_child[1]);
     _child[0]->stabilize(prefix + "0", depth+1);
     _child[1]->stabilize(prefix + "1", depth+1);
     return;
   }
 
-  for(unsigned i=0; i<_nodes->size(); i++) {
-    if(now() - (*_nodes)[i]->lastts < KADEMLIA_REFRESH)
-      continue;
+  if(_nodes->size()) {
+    for(unsigned i=0; i<_nodes->size(); i++) {
+      if(now() - (*_nodes)[i]->lastts < KADEMLIA_REFRESH)
+        continue;
 
-    // XXX: where?
-    KDEBUG(1) << "stabilize: lookup for " << Kademlia::printbits((*_nodes)[i]->id) << endl;
-    pair<NodeID, IPAddress> pp = _self->do_lookup_wrapper(kademlia_wkn_ip, (*_nodes)[i]->id);
-    (*_nodes)[i]->id = pp.first;
-    (*_nodes)[i]->ip = pp.second;
+      // XXX: where?
+      KDEBUG(1) << "stabilize: lookup for " << Kademlia::printbits((*_nodes)[i]->id) << endl;
+      pair<NodeID, IPAddress> pp = _self->do_lookup_wrapper(kademlia_wkn_ip, (*_nodes)[i]->id);
+      (*_nodes)[i]->id = pp.first;
+      (*_nodes)[i]->ip = pp.second;
+    }
+    return;
   }
+
+  // now lookup a random key in this range
+  NodeID mask = 0;
+  for(unsigned i=0; i<depth; i++)
+    mask |= (1<<(Kademlia::idsize-depth-1));
+  NodeID random_key = _self->id() & mask;
+  KDEBUG(1) << "stabilize: random lookup for " << Kademlia::printbits(random_key) << endl;
+  pair<NodeID, IPAddress> pp = _self->do_lookup_wrapper(kademlia_wkn_ip, random_key);
+  _nodes->push_back(new peer_t(pp.first, pp.second, now()));
 }
 
 // }}}
@@ -592,7 +605,7 @@ k_bucket::stabilized(vector<NodeID> lid, string prefix, unsigned depth)
            _child[1]->stabilized(lid, prefix + "1", depth+1);
   }
 
-  if(_nodes->size())
+  if(!_nodes || _nodes->size())
     return true;
 
 
@@ -675,7 +688,7 @@ k_bucket::dump(string prefix, unsigned depth)
 
   for(unsigned i=0; i<_nodes->size(); i++)
     if((*_nodes)[i])
-      cout << "*** " << prefix << " [" << i << "] : " << Kademlia::printbits((*_nodes)[i]->id) << endl;
+      cout << "   *** " << prefix << " [" << i << "] : " << Kademlia::printbits((*_nodes)[i]->id) << endl;
 }
 
 // }}}
