@@ -36,7 +36,8 @@ merkle_tree::merkle_tree (ptr<dbfe> realdb)
       warn << "Database is not empty.  Loading into merkle tree\n";
     warn << "key[" << i << "] " << dbrec2id (d->key) << "\n";
     block b (to_merkle_hash (d->key), FAKE_DATA);
-    insert (0, &b, &root);
+    int ret = insert (0, &b, &root);
+    assert (!ret);
   }
 
   // Put the realdb under the merkle tree.  This works since it has
@@ -140,25 +141,27 @@ merkle_tree::remove (u_int depth, block *b, merkle_node *n)
 }
 
 
-void
+int
 merkle_tree::insert (u_int depth, block *b, merkle_node *n)
 {
-  
+  int ret = 0;
     
   if (n->isleaf () && n->leaf_is_full ())
     leaf2internal (depth, b->key, n);
   
   if (n->isleaf ()) {
     assert (!database_lookup (db, b->key));
-    database_insert (db, b);
-    assert (database_lookup (db, b->key));
+    ret = database_insert (db, b);
+    if (ret != 0)
+      n->count -= 1;
   } else {
     u_int32_t branch = b->key.read_slot (depth);
-    insert (depth+1, b, n->child (branch));
+    ret = insert (depth+1, b, n->child (branch));
   }
   
   n->count += 1;
   rehash (depth, b->key, n);
+  return ret;
 }
 
 
@@ -175,14 +178,14 @@ merkle_tree::remove (block *b)
   remove (0, b, &root);
 }
 
-void
+int
 merkle_tree::insert (block *b)
 {
 
   if (database_lookup (db, b->key))
     fatal << "merkle_tree::insert: key already exists " << b->key << "\n";
 
-  insert (0, b, &root);
+  return insert (0, b, &root);
 }
 
 

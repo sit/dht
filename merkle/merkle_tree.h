@@ -28,7 +28,7 @@ private:
 		     array<u_int64_t, 64> &nblocks);
   void leaf2internal (u_int depth, const merkle_hash &key, merkle_node *n);
   void remove (u_int depth, block *b, merkle_node *n);
-  void insert (u_int depth, block *b, merkle_node *n);
+  int insert (u_int depth, block *b, merkle_node *n);
   merkle_node *lookup (u_int *depth, u_int max_depth, 
 		       const merkle_hash &key, merkle_node *n);
 
@@ -41,7 +41,7 @@ public:
 
   merkle_tree (ptr<dbfe> db); 
   void remove (block *b);
-  void insert (block *b);
+  int insert (block *b);
   merkle_node *lookup_exact (u_int depth, const merkle_hash &key);
   merkle_node *lookup (u_int depth, const merkle_hash &key);
   merkle_node *lookup (u_int *depth, u_int max_depth, const merkle_hash &key);
