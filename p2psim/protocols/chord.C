@@ -732,6 +732,7 @@ Chord::find_successors_recurs(CHID key, uint m, uint type, IDMap *lasthop, looku
   bool ok;
   Time before = now();
   vector<IDMap> results;
+  results.clear();
   lookup_path tmp;
   
   unsigned rpc, donerpc;
@@ -756,6 +757,17 @@ Chord::find_successors_recurs(CHID key, uint m, uint type, IDMap *lasthop, looku
   while (1) {
 
     IDMap succ = loctable->succ(me.id+1,LOC_HEALTHY);
+    if (succ.ip == 0) {
+      if (!_join_scheduled) {
+	_join_scheduled++;
+#ifdef CHORD_DEBUG
+	printf("%s joincrash rejoin incorrect key %qx schedule rejoin\n", ts(), args->key); 
+#endif
+	delaycb(0, &Chord::join, (Args *)0);
+      }
+      if (lasthop) *lasthop = me;
+      return results;
+    }
 
     while (outstanding < parallel) {
       if (_stopearly_overshoot) 
@@ -811,6 +823,7 @@ Chord::find_successors_recurs(CHID key, uint m, uint type, IDMap *lasthop, looku
       resultmap[rpc] = p;
       outstanding++;
     }
+    assert(outstanding>0);
     donerpc = rcvRPC(&rpcset, ok);
     outstanding--;
     reuse = resultmap[donerpc];
@@ -820,6 +833,7 @@ Chord::find_successors_recurs(CHID key, uint m, uint type, IDMap *lasthop, looku
       goto RECURS_DONE;//mohaha! i am done
     }else{
       //do a long check to see if next hop is really dead
+      uint sz = reuse->path.size();
       IDMap n = reuse->path[reuse->path.size()-1].n;
 #ifdef CHORD_DEBUG
       printf("%s nexthop <%u,%qx,%u> failed outstanding %d parallel %u\n",ts(),a?a->ipkey:0,key,n.ip,n.id,n.heartbeat,outstanding,parallel);
