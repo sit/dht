@@ -55,10 +55,10 @@ TopologyFactory::create(string s, vector<string>* v)
   if (s == "G2Graph")
     t = New G2Graph(v);
 
-// #ifdef HAVE_SGB
-  // if (s == "gtitm")
-    // t = New gtitm (v);
-// #endif
+#ifdef HAVE_SGB
+  if (s == "gtitm")
+    t = New gtitm (v);
+#endif
 
   if (s == "E2EAsymGraph")
     t = New E2EAsymGraph(v);

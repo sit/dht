@@ -1,7 +1,7 @@
 noinst_PROGRAMS = protocols.o
 protocols_o_SOURCES = chord.C chordfinger.C chordfingerpns.C \
 		      chordonehop.C chordtoe.C kademlia.C \
-		      koorde.C pastry.C protocolfactory.C tapestry.C \
+		      koorde.C protocolfactory.C tapestry.C \
                       kelips.C sillyprotocol.C
 
 EXTRA_DIST = chord.h chordfinger.h chordfingerpns.h chordonehop.h \
