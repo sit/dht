@@ -279,6 +279,7 @@ class dhash {
   long keys_cached;
   long bytes_served;
   long keys_served;
+  long rpc_answered;
 
  public:
   dhash (str dbname, vnode *node, 
@@ -292,5 +293,6 @@ class dhash {
     
 };
 
+extern long globalhops;
 
 #endif

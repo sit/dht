@@ -72,6 +72,7 @@ dhash::dhash(str dbname, vnode *node, int k, int ss, int cs, int _ss_mode) :
   keys_cached = 0;
   keys_served = 0;
   bytes_served = 0;
+  rpc_answered = 0;
 
   init_key_status ();
   update_replica_list ();
@@ -95,6 +96,7 @@ dhash::dispatch (unsigned long procno,
   xdrmem x (marshalled_arg, arg_len, XDR_DECODE);
   xdrproc_t proc = dhash_program_1.tbl[procno].xdr_arg;
 
+  rpc_answered++;
   switch (procno) {
 
   case DHASHPROC_FETCHITER:
@@ -1119,6 +1121,7 @@ dhash::print_stats ()
   warnx << "  " << bytes_stored << " total bytes held\n";
   warnx << "  " << keys_served << " keys served\n";
   warnx << "  " << bytes_served << " bytes served\n";
+  warnx << "  " << rpc_answered << " rpc answered\n";
 
   printkeys ();
 }

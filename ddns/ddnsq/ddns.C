@@ -218,7 +218,7 @@ ddns::lookup_cb (domain_name dname, chordID key,
 {
   if (err || (res->status != DHASH_OK)) {
     if (res->status == DHASH_NOENT)
-      warn << "No entry for " << dname << "\n";
+      warn << globalhops << " hops: no entry for " << dname << "\n";
     else 
       warn << "lookup_cb: Err: " << strerror (err) 
 	   << " dhash_lookup status: " << res->status << "\n";

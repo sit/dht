@@ -203,6 +203,7 @@ printrr(ptr<ddnsRR> rr)
 {
   unsigned char *a;
 
+  cout << globalhops << "hops: ";
   cout << rr->dname << " " << typestr(rr->type);
   for(; rr; rr=rr->next){
     cout << " ";
@@ -292,11 +293,19 @@ main (int argc, char **argv)
   char line[256], *err, *f[20];
   int i, nf;
   
-  if(argc != 1)
-    usage ();
-		
+  const char *control_socket;
+  switch(argc){
+  case 1:
+    control_socket = "/tmp/chord-sock";
+    break;
+  case 2:
+    control_socket = argv[1];
+    break;
+  default:
+    usage();
+  }
+    
   sfsconst_init ();
-  const char *control_socket = "/tmp/chord-sock";
   ddns_clnt = New refcounted<ddns> (control_socket, 0);
   for(;;){
     cerr << ">>> ";

@@ -281,6 +281,7 @@ dhashclient::lookup_iter_cb (svccb *sbp,
       path.push_back (plast);
     }
     if (plast == clntnode->clnt_ID ()) {
+      globalhops = path.size();
       sbp->replyref (DHASH_NOENT);
     } else {
       dhash_fetchiter_res *nres = New dhash_fetchiter_res (DHASH_CONTINUE);
@@ -307,6 +308,7 @@ dhashclient::lookup_iter_cb (svccb *sbp,
     chordID next = res->cont_res->next.x;
     chordID prev = path.back ();
     if ((next == prev) || (straddled (path, arg->key))) {
+      globalhops = path.size();
       sbp->replyref (DHASH_NOENT);
     } else {
       clntnode->locations->cacheloc (next, res->cont_res->next.r);
@@ -323,6 +325,7 @@ dhashclient::lookup_iter_cb (svccb *sbp,
 
   } else {
     /* the last node queried was responbile but doesn't have it */
+    globalhops = path.size();
     sbp->replyref (DHASH_NOENT);
   }
 
@@ -489,3 +492,4 @@ dhashclient::doRPC (chordID ID, rpc_program prog, int procno,
 		   in, out, cb);
 }
 
+long globalhops;
