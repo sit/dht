@@ -78,7 +78,7 @@ ProtocolFactory::create(string s, Node *n)
   if (s == "Pastry")
     p = New Pastry(n);
   if (s == "Tapestry")
-    p = New Tapestry(n);
+    p = New Tapestry(n, a);
   if (s == "Koorde")
     p = New Koorde(n, a);
   if (s == "VivaldiTest")

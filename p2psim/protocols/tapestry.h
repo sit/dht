@@ -1,27 +1,4 @@
-/*
- * Copyright (c) 2003 [NAMES_GO_HERE]
- *                    Massachusetts Institute of Technology
- * 
- * Permission is hereby granted, free of charge, to any person obtaining
- * a copy of this software and associated documentation files (the
- * "Software"), to deal in the Software without restriction, including
- * without limitation the rights to use, copy, modify, merge, publish,
- * distribute, sublicense, and/or sell copies of the Software, and to
- * permit persons to whom the Software is furnished to do so, subject to
- * the following conditions:
- * 
- * The above copyright notice and this permission notice shall be
- * included in all copies or substantial portions of the Software.
- * 
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
- * LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
- * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
- */
-
-/* $Id: tapestry.h,v 1.2 2003/10/08 07:10:40 thomer Exp $ */
+/* $Id: tapestry.h,v 1.3 2003/10/08 21:32:05 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -47,7 +24,7 @@ public:
   const unsigned _digits_per_id;
 
 
-  Tapestry(Node *n);
+  Tapestry(Node *n, Args a);
   virtual ~Tapestry();
   string proto_name() { return "Tapestry"; }
 
@@ -71,6 +48,8 @@ public:
   int guid_compare( GUID key1, GUID key2 ); 
 
   bool stabilized(vector<GUID> lid);
+
+  void check_rt(void *x);
 
   struct join_args {
     IPAddress ip;
@@ -178,6 +157,12 @@ public:
 private:
 
 #define TapDEBUG(x) DEBUG(x) << now() << ": (" << ip() << "/" << print_guid(id()) << ") "
+  
+  // stabilization timer
+  uint _stabtimer;
+
+  // how many nodes to lookup at a time (at most)
+  uint _redundant_lookup_num;
 
   GUID _my_id;
 
@@ -208,6 +193,7 @@ private:
   // finds the next hop toward the given key
   // returns ip() if we are the root
   IPAddress next_hop( GUID key );
+  void next_hop( GUID key, IPAddress** ips, uint size );
   Time ping( IPAddress other_node, GUID other_id );
 
   class mc_callinfo { public:
@@ -221,11 +207,12 @@ private:
 
   class ping_callinfo { public:
     ping_callinfo(IPAddress xip, GUID xid)
-      : ip(xip), id(xid), rtt(87654) {}
+      : ip(xip), id(xid), rtt(87654), failed(false) {}
     ~ping_callinfo() {}
     IPAddress ip;
     GUID id;
     Time rtt;
+    bool failed;
   };
 
   class nn_callinfo { public:
@@ -241,12 +228,12 @@ private:
 
   void multi_add_to_rt_start( RPCSet *ping_rpcset, 
 			      map<unsigned, ping_callinfo*> *ping_resultmap,
-			      vector<NodeInfo *> *nodes );
+			      vector<NodeInfo *> *nodes, bool check_exists );
 
   void multi_add_to_rt_end( RPCSet *ping_rpcset,
 			    map<unsigned, ping_callinfo*> *ping_resultmap,
 			    Time before_ping );
-
+  void have_joined();
 
 };
 
@@ -291,13 +278,17 @@ class RouteEntry {
    * How many nodes is it storing?
    */
   uint size();
+  
+ private:
+
+  friend class RoutingTable;
+
   /**
    * Add a new node.  Indicate the node that's kicked out (if any).
    * Return true if the node was added to the entry
    */
   bool add( NodeInfo *new_node, NodeInfo **kicked_out );
-  
- private:
+  void remove_at( uint pos );
   
   NodeInfo **_nodes;
   uint _size;
@@ -318,10 +309,12 @@ class RoutingTable {
    */
   bool add( IPAddress ip, GUID id, Time distance );
   bool add( IPAddress ip, GUID id, Time distance, bool sendbp );
+  void remove( GUID id );
   /**
    * Read the primary neighbor at this position.
    */
   NodeInfo *read( uint i, uint j );
+  RouteEntry *get_entry( uint i, uint j );
 
   bool contains( GUID id );
   Time get_time( GUID id );
@@ -357,4 +350,5 @@ ostream& operator<< (ostream &s, RoutingTable const &rt);
 bool operator== ( const NodeInfo & one, const NodeInfo & two );
 
 #endif // __TAPESTRY_H
+
 

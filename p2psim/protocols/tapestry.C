@@ -21,7 +21,7 @@
  * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
  */
 
-/* $Id: tapestry.C,v 1.2 2003/10/08 07:10:40 thomer Exp $ */
+/* $Id: tapestry.C,v 1.3 2003/10/08 21:32:05 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -30,17 +30,22 @@
 #include <map>
 using namespace std;
 
-Tapestry::Tapestry(Node *n)
+Tapestry::Tapestry(Node *n, Args a)
   : DHTProtocol(n),
     _base(16),
     _bits_per_digit((uint) (log10(((double) _base))/log10((double) 2))),
-    _digits_per_id((uint) 8*sizeof(GUID)/_bits_per_digit)
+    _digits_per_id((uint) 8*sizeof(GUID)/_bits_per_digit),
+    _redundant_lookup_num(3)
 {
   joined = false;
   _my_id = get_id_from_ip(ip());
   TapDEBUG(2) << "Constructing" << endl;
   _rt = New RoutingTable(this);
   _waiting_for_join = New ConditionVar();
+
+  //stabilization timer
+  _stabtimer = a.nget<uint>("stabtimer", 10000, 10);
+
 }
 
 Tapestry::~Tapestry()
@@ -62,6 +67,7 @@ Tapestry::lookup(Args *args)
   la.key = key;
   
   lookup_return lr;
+  lr.hopcount = 0;
 
   handle_lookup( &la, &lr );
 
@@ -76,24 +82,53 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
 {
 
   // find the next hop for the key.  if it's me, i'm done
-  IPAddress next = next_hop( args->key );
-  if( next == ip() ) {
-    ret->owner_ip = ip();
-    ret->owner_id = id();
-    // this will be incremented at each hop backwards
-    ret->hopcount = 0;
-  } else {
-    // it's not me, so forward the query
-    doRPC( next, &Tapestry::handle_lookup, args, ret );
-    ret->hopcount++;
+  IPAddress *ips = new IPAddress[_redundant_lookup_num];
+  for( uint i = 0; i < _redundant_lookup_num; i++ ) {
+    ips[i] = NULL;
   }
- 
+  next_hop( args->key, &ips, _redundant_lookup_num );
+  for( uint i = 0; i < _redundant_lookup_num; i++ ) {
+    IPAddress next = ips[i];
+    if( next == NULL ) {
+      continue;
+    }
+    if( next == ip() ) {
+      ret->owner_ip = ip();
+      ret->owner_id = id();
+      // this will be incremented at each hop backwards
+      ret->hopcount = 0;
+      break;
+    } else {
+      // it's not me, so forward the query
+      bool succ = doRPC( next, &Tapestry::handle_lookup, args, ret );
+      if (succ) {
+	// don't need to try the next one
+	ret->hopcount++;
+	break;
+      } else {
+	// print out that a failure happened
+	TapDEBUG(1) << "Failure happened during the lookup of key " << 
+	  args->key << ", trying to reach node " << next << endl;
+      }
+    }
+  }
+
+  delete ips;
+
 }
 
 void
 Tapestry::insert(Args *args) 
 {
   TapDEBUG(2) << "Tapestry Insert" << endl;
+}
+
+void
+Tapestry::have_joined()
+{
+   joined = true;
+   _waiting_for_join->notifyAll();
+   delaycb( _stabtimer, &Tapestry::check_rt, (void *) 0 );
 }
 
 // External event that tells a node to contact the well-known node
@@ -113,8 +148,7 @@ Tapestry::join(Args *args)
 
   // if we're the well known node, we're done
   if( ip() == wellknown_ip ) {
-    joined = true;
-    _waiting_for_join->notifyAll();
+    have_joined();
     return;
   }
 
@@ -143,7 +177,7 @@ Tapestry::join(Args *args)
     RPCSet ping_rpcset;
     map<unsigned, ping_callinfo*> ping_resultmap;
     Time before_ping = now();
-    multi_add_to_rt_start( &ping_rpcset, &ping_resultmap, &initlist );
+    multi_add_to_rt_start( &ping_rpcset, &ping_resultmap, &initlist, true );
 
     RPCSet nn_rpcset;
     map<unsigned, nn_callinfo*> nn_resultmap;
@@ -273,8 +307,7 @@ Tapestry::join(Args *args)
     delete initlist[l];
   }
 
-  joined = true;
-  _waiting_for_join->notifyAll();
+  have_joined();
   TapDEBUG(2) << "join done" << endl;
   TapDEBUG(2) << *_rt << endl;
 
@@ -621,6 +654,62 @@ Tapestry::stabilized(vector<GUID> lid)
 }
 
 void
+Tapestry::check_rt(void *x)
+{
+
+  TapDEBUG(2) << "Checking the routing table" << endl;
+
+  Time t = now();
+
+  // do nothing if we should be dead or not fully alive
+  if( !joined ) {
+    return;
+  }
+
+  // ping everyone in the routing table to
+  //  - update latencies
+  //  - ensure they're still alive
+  
+  // the easy way to do this is just to make a vector of all the nodes
+  // in the routing table and simply try to add them all to the routing table.
+  vector<NodeInfo *> nodes;
+  for( uint i = 0; i < _digits_per_id; i++ ) {
+    for( uint j = 0; j < _base; j++ ) {
+      RouteEntry *re = _rt->get_entry( i, j );
+      if( re == NULL || re->get_first()->_addr == ip() ) {
+	// if this an entry with our own ip, don't bother delving further
+	// the backups of yourself will appear in later levels
+	// there should be no other duplicates though, so vector is safe
+	continue;
+      }
+      for( uint k = 0; k < re->size(); k++ ) {
+	nodes.push_back( re->get_at(k) );
+      }
+    }
+  }
+
+  RPCSet ping_rpcset;
+  map<unsigned, ping_callinfo*> ping_resultmap;
+  Time before_ping = now();
+  multi_add_to_rt_start( &ping_rpcset, &ping_resultmap, &nodes, false );
+  multi_add_to_rt_end( &ping_rpcset, &ping_resultmap, before_ping );
+  TapDEBUG(2) << "finished checking routing table " << now() << " " << t << endl;
+
+  // reschedule
+  if ( t + _stabtimer < now()) { 
+    //stabilizating has run past _stabtime seconds
+    // schedule it in one ms, to avoid recursion
+    TapDEBUG(2) << "rescheduling check_rt in 1" << endl;
+    delaycb( 1, &Tapestry::check_rt, (void *) 0 );
+  } else {
+    Time later = _stabtimer - (now() - t);
+    TapDEBUG(2) << "rescheduling check_rt in " << later << endl;
+    delaycb( later, &Tapestry::check_rt, (void *) 0 );
+  }
+
+}
+
+void
 Tapestry::init_state(list<Protocol *> lid)
 {
 
@@ -659,7 +748,7 @@ Tapestry::init_state(list<Protocol *> lid)
     }
   }
 
-  joined = true;
+  have_joined();
   TapDEBUG(2) << "init_state: finished adding everyone" << endl;
 
 }
@@ -687,14 +776,14 @@ Tapestry::multi_add_to_rt( vector<NodeInfo *> *nodes )
   RPCSet ping_rpcset;
   map<unsigned, ping_callinfo*> ping_resultmap;
   Time before_ping = now();
-  multi_add_to_rt_start( &ping_rpcset, &ping_resultmap, nodes );
+  multi_add_to_rt_start( &ping_rpcset, &ping_resultmap, nodes, true );
   multi_add_to_rt_end( &ping_rpcset, &ping_resultmap, before_ping );
 }
 
 void
 Tapestry::multi_add_to_rt_start( RPCSet *ping_rpcset, 
 				 map<unsigned, ping_callinfo*> *ping_resultmap,
-				 vector<NodeInfo *> *nodes )
+				 vector<NodeInfo *> *nodes, bool check_exist )
 {
   ping_args pa;
   ping_return pr;
@@ -703,7 +792,7 @@ Tapestry::multi_add_to_rt_start( RPCSet *ping_rpcset,
     // do an asynchronous RPC to each one, collecting the ping times in the
     // process
     // however, no need to ping if we already know the ping time, right?
-    if( !_rt->contains( ni->_id ) ) {
+    if( !check_exist || !_rt->contains( ni->_id ) ) {
       unsigned rpc = asyncRPC( ni->_addr, 
 			       &Tapestry::handle_ping, &pa, &pr );
       assert(rpc);
@@ -727,10 +816,16 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
     unsigned donerpc = rcvRPC( ping_rpcset, ok );
     Time ping_time = now() - before_ping;
     ping_callinfo *pi = (*ping_resultmap)[donerpc];
-    TapDEBUG(4) << "donerpc: " << donerpc << " ip: " << pi->ip << endl;
-    // TODO: ok, but now how do I call rt->add without it placing 
-    // backpointers synchronously?
-    pi->rtt = ping_time;
+    if( !ok ) {
+      // we failed to contact this node.  remove from rt.
+      pi->failed = true;
+    } else {
+      // TODO: ok, but now how do I call rt->add without it placing 
+      // backpointers synchronously?
+      pi->rtt = ping_time;
+    }
+    TapDEBUG(3) << "multidone ip: " << pi->ip << " finished " << (j+1) << 
+      " total " << setsize << endl;
   }
   
   // now that all the pings are done, we can add them to our routing table
@@ -741,9 +836,15 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
     ping_callinfo *pi = (*j).second;
     //assert( pi->rtt == ping( pi->ip, pi->id ) );
     TapDEBUG(4) << "ip: " << pi->ip << endl;
-    // make sure it's not the default (we actually pinged this one)
-    assert( pi->rtt != 87654 );
-    _rt->add( pi->ip, pi->id, pi->rtt );
+    if( pi->failed ) {
+      // failed! remove!
+      _rt->remove( pi->id );
+      TapDEBUG(1) << "removing failed node " << pi->ip << endl;
+    } else {
+      // make sure it's not the default (we actually pinged this one)
+      assert( pi->rtt != 87654 );
+      _rt->add( pi->ip, pi->id, pi->rtt );
+    }
     delete pi;
   }
   
@@ -810,24 +911,39 @@ Tapestry::got_backpointer( IPAddress bpip, GUID bpid, uint level, bool remove )
 IPAddress
 Tapestry::next_hop( GUID key )
 {
+  IPAddress *ip = New IPAddress[1];
+  ip[0] = NULL;
+  next_hop( key, &ip, 1 );
+  IPAddress rt = ip[0];
+  delete ip;
+  return rt;
+}
+
+void
+Tapestry::next_hop( GUID key, IPAddress** ips, uint size )
+{
   // first, figure out how many digits we share, and start looking at 
   // that level
   int level = guid_compare( id(), key );
   if( level == -1 ) {
     // it's us!
-    return ip();
+    if( size > 0 ) {
+      (*ips)[0] = ip();
+    }
+    return;
   }
 
-  NodeInfo *ni = _rt->read( level, get_digit( key, level ) );
+  RouteEntry *re = _rt->get_entry( level, get_digit( key, level ) );
 
   // if it has an entry, use it
-  if( ni != NULL ) {
+  if( re != NULL && re->get_first() != NULL ) {
     // this cannot be us, since this should be the entry where we differ
     // from the key, but just to be sure . . .
-     assert( ni->_id != id() );
-     IPAddress addr = ni->_addr;
-     delete ni;
-     return addr;
+     assert( re->get_first()->_addr != id() );
+     for( uint i = 0; i < re->size() && i < size; i++ ) {
+       (*ips)[i] = re->get_at(i)->_addr;
+     }
+     return;
   } else {
     // if there's no such entry, it's time to surrogate route.  yeah baby.
     // keep adding 1 to the digit until you find a match.  If it's us,
@@ -837,11 +953,11 @@ Tapestry::next_hop( GUID key )
     for( uint i = level; i < _digits_per_id; i++ ) {
 
       uint j = get_digit( key, i );
-      while( ni == NULL ) {
+      while( re == NULL || re->get_first() == NULL ) {
 
 	// NOTE: we can't start with looking at the j++ entry, since
 	// this might be the next level up, and we'd want to start at j
-	ni = _rt->read( i, j );
+	re = _rt->get_entry( i, j );
 
 	j++;
 	if( j == _base ) {
@@ -852,24 +968,20 @@ Tapestry::next_hop( GUID key )
 
       // if it is us, go around another time
       // otherwise, we've found the next hop
-      if( ni->_addr != ip() ) {
-	IPAddress addr = ni->_addr;
-	delete ni;
-	return addr;
-      } else {
-	if( ni != NULL ) {
-	  delete ni;
-	  ni = NULL;
+      if( re->get_first()->_addr != ip() ) {
+	for( uint k = 0; k < re->size() && k < size; k++ ) {
+	  (*ips)[k] = re->get_at(k)->_addr;
 	}
+	return;
       }
-
     }
     
   }
 
   // didn't find a better surrogate, so it must be us
-  return ip();
-
+  if( size > 0 ) {
+    (*ips)[0] = ip();
+  }
 }
 
 int
@@ -902,6 +1014,15 @@ void
 Tapestry::crash(Args *args)
 {
   TapDEBUG(2) << "Tapestry crash" << endl;
+  node()->crash();
+
+  // clear out routing table, and any other state that might be lying around
+  delete _rt;
+  delete _waiting_for_join;
+  joined = false;
+  _rt = New RoutingTable(this);
+  _waiting_for_join = New ConditionVar();
+
 }
 
 string
@@ -988,6 +1109,24 @@ RouteEntry::get_at( uint pos )
   return _nodes[pos];
 }
 
+void
+RouteEntry::remove_at( uint pos )
+{
+  assert( pos < NODES_PER_ENTRY );
+  if( pos < _size ) {
+    // don't even have this guy
+    return;
+  } else {
+    // bring everyone else up one
+    uint i = pos;
+    for( ; i+1 < _size; i++ ) {
+      _nodes[i] = _nodes[i+1];
+    }
+    _nodes[i] = NULL;
+    _size--;
+  }
+}
+
 uint
 RouteEntry::size()
 {
@@ -1021,9 +1160,6 @@ RouteEntry::add( NodeInfo *new_node, NodeInfo **kicked_out )
 	} else {
 	  // distance went down, make sure it's still bigger than what 
 	  // comes before
-	  if( i > 0 ) {
-	    cout << _nodes[i-1] << " " << endl;
-	  }
 	  while( i > 0 && 
 		 _nodes[i]->_distance < _nodes[i-1]->_distance ) {
 	    NodeInfo * tmp = _nodes[i];
@@ -1202,6 +1338,39 @@ RoutingTable::add( IPAddress ip, GUID id, Time distance, bool sendbp )
   return in_added;
 }
 
+void
+RoutingTable::remove( GUID id )
+{
+  Tapestry::RPCSet bp_rpcset;
+  map<unsigned,Tapestry::backpointer_args*> bp_resultmap;
+
+  // find the spots where it could fit and remove it
+  for( uint i = 0; i < _node->_digits_per_id; i++ ) {
+    uint j = _node->get_digit( id, i );
+    RouteEntry *re = _table[i][j];
+    if( re != NULL ) {
+
+      for( uint k = 0; k < re->size(); k++ ) {
+	NodeInfo *ni = re->get_at(k);
+	if( ni->_id == id ) {
+	  re->remove_at(k);
+	  _node->place_backpointer( &bp_rpcset, &bp_resultmap, 
+				    ni->_addr, i, true );
+	}
+      }
+    }
+
+    // if the last digit wasn't a match, we're done
+    if( j != _node->get_digit( _node->id(), i ) ) {
+      break;
+    }
+  }  
+
+  // wait for bp rpcs to finish
+  _node->place_backpointer_end( &bp_rpcset, &bp_resultmap );
+
+}
+
 NodeInfo *
 RoutingTable::read( uint i, uint j )
 {
@@ -1214,6 +1383,18 @@ RoutingTable::read( uint i, uint j )
     return NULL;
   } else {
     return New NodeInfo(re->get_first()->_addr, re->get_first()->_id);
+  }
+}
+
+RouteEntry *
+RoutingTable::get_entry( uint i, uint j )
+{
+    //  TapRTDEBUG(2) << "read " << _table << endl;
+  RouteEntry *re = _table[i][j];
+  if( re == NULL ) {
+    return NULL;
+  } else {
+    return re;
   }
 }
 
