@@ -77,7 +77,6 @@ vnode_impl::vnode_impl (ref<chord> _chordnode,
   myID (_l->id ()), 
   chordnode (_chordnode)
 {
-  timestep = 1.0;
   locations = _chordnode->locations;
 
   warnx << gettime () << " myID is " << myID << "\n";

@@ -12,14 +12,12 @@ noinst_HEADERS = aclnt_chord.h \
 		 finger_table.h \
 		 fingerroute.h \
 		 pred_list.h \
-		 proxroute.h \
 		 route.h \
 		 recroute.h \
 		 recroute.C \
 		 route_recchord.h \
 		 stabilize.h \
 		 succ_list.h \
-		 toe_table.h \
 		 finger_table_pns.h \
 		 fingerroutepns.h
 
@@ -30,7 +28,6 @@ libchord_a_SOURCES = chord.C \
 		      finger_table.C \
 		      fingerroute.C \
 		      pred_list.C \
-		      proxroute.C \
 		      route.C \
 		      route_chord.C \
 		      route_debruijn.C \
@@ -38,7 +35,6 @@ libchord_a_SOURCES = chord.C \
 		      server.C \
 		      stabilize.C \
 		      succ_list.C \
-		      toe_table.C \
 		      finger_table_pns.C \
 		      fingerroutepns.C  \
 		      stp_manager.C

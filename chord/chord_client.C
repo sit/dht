@@ -116,10 +116,11 @@ chord::chord (str _wellknownhost, int _wellknownport,
   wkn.r.port = _wellknownport ? _wellknownport : myport;
   wkn.x = make_chordID (wkn.r.hostname, wkn.r.port);
   wkn.vnode_num = 0;
-  wkn.coords.setsize (NCOORDS);
+
+  wkn.coords.setsize (NCOORD);
   // Make up some random initial information for this other node.
-  for (int i = 0; i < NCOORDS; i++)
-    wkn.coords[i] = (int) uniform_random_f (100000.0);
+  for (int i = 0; i < NCOORD; i++)
+    wkn.coords[i] = (int) 0.0;
 
   if (myname != _wellknownhost || myport != _wellknownport) {
     wellknown_node = locations->insert (wkn);
@@ -207,13 +208,7 @@ chord::newvnode (vnode_producer_t p, cbjoin_t cb)
   chordID newID = make_chordID (myname, myport, nvnode);
   warnx << gettime () << ": creating new vnode: " << newID << "\n";
 
-  vec<float> coords;
-  warn << gettime () << " coords are: ";
-  for (int i = 0; i < NCOORDS; i++) {
-    coords.push_back (uniform_random_f (1000000.0));
-    warnx << (int) coords[i] << " " ;
-  }
-  warnx << "\n";
+  Coord coords;
   ptr<location> l = locations->insert (newID, myname, myport, nvnode, coords);
   assert (l);
   if (wellknown_node == NULL)

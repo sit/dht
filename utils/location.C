@@ -28,7 +28,7 @@ location::init ()
 location::location (const chordID &n, 
 		    const net_address &r, 
 		    const int v,
-		    const vec<float> &coords) 
+		    const Coord &coords) 
   : n_ (n),
     addr_ (r),
     vnode_ (v),
@@ -52,8 +52,7 @@ location::location (const chord_node &node)
     dead_time_ (0),
     nrpc_ (0)
 {
-  for (unsigned int i = 0; i < node.coords.size (); i++)
-    coords_.push_back (node.coords[i]);
+  coords_.set (node);
   init ();
 }
 
@@ -66,9 +65,7 @@ location::fill_node (chord_node &data) const
   data.x = n_;
   data.r = addr_;
   data.vnode_num = vnode_;
-  data.coords.setsize (coords_.size ());
-  for (unsigned int i = 0; i < coords_.size (); i++)
-    data.coords[i] = static_cast<int> (coords_[i]);
+  coords_.fill_node (data);
 }
 
 void
@@ -77,9 +74,7 @@ location::fill_node (chord_node_wire &data) const
   /* saddr fields are in network byte order */
   data.machine_order_ipv4_addr = ntohl (saddr_.sin_addr.s_addr);
   data.machine_order_port_vnnum = (ntohs (saddr_.sin_port) << 16) | vnode_;
-  assert (coords_.size () == 3);
-  for (unsigned int i = 0; i < coords_.size (); i++)
-    data.coords[i] = static_cast<int> (coords_[i]);
+  coords_.fill_node (data);
 }
 
 void
@@ -103,9 +98,13 @@ location::set_alive (bool alive)
 }
 
 void
-location::set_coords (const vec<float> &coords)
+location::set_coords (const Coord &coords)
 {
-  coords_.clear ();
-  for (unsigned int i = 0; i < coords.size (); i++)
-    coords_.push_back(coords[i]);
+  coords_.set (coords);
+}
+
+void
+location::set_coords (const chord_node &n)
+{
+  coords_.set (n);
 }

@@ -93,7 +93,7 @@ finger_table_pns::getsucclist_cb (int l, int r, vec<chord_node> succs,
   } else {
     float mindist = -1;
     int best_succ = -1;
-    vec<float> my_coords = myvnode->my_location ()->coords ();
+    Coord my_coords = myvnode->my_location ()->coords ();
 
     chordID left = starts[l];
     chordID right;
@@ -115,9 +115,7 @@ finger_table_pns::getsucclist_cb (int l, int r, vec<chord_node> succs,
       }
       
       // this is a recursive closeness measure
-      vec<float> candidate_coords;
-      for (u_int c = 0; c < succs[i].coords.size (); c++)
-	candidate_coords.push_back (succs[i].coords[c]);
+      Coord candidate_coords (succs[i]);
       float curdist = Coord::distance_f (my_coords, candidate_coords);
       if (mindist < 0 || curdist < mindist) {
 	if (mindist < 0) real_lat = (int) curdist;

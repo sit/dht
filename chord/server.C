@@ -115,8 +115,7 @@ vnode_impl::get_succlist_cb (cbchordIDlist_t cb, chord_nodelistres *res,
       //update the coordinates if this node is in the location table
       ptr<location> l = locations->lookup (n.x);
       if (l) {
-	vec<float> c = get_coords (n);
-	l->set_coords (c);
+	l->set_coords (n);
       }
     }
     cb (nlist, CHORD_OK);
@@ -650,14 +649,11 @@ vnode_impl::doRPC_cb (ptr<location> l, xdrproc_t proc,
     cb (RPC_CANTRECV);
   else {
     float distance = l->distance ();
-    vec<float> u_coords;
-    chord_node n = make_chord_node (res->resok->src);
-    for (unsigned int i = 0; i < n.coords.size (); i++) {
-      float c = ((float)n.coords[i]);
-      u_coords.push_back (c);
-    }
 
-    l->set_coords (u_coords);
+    chord_node n = make_chord_node (res->resok->src);
+
+    l->set_coords (n);
+    Coord u_coords (n);
     update_coords (u_coords,
 		   distance);
 
@@ -674,63 +670,99 @@ vnode_impl::doRPC_cb (ptr<location> l, xdrproc_t proc,
   }
 }
 
+void
+vnode_impl::update_error (float actual, float expect, float rmt_err)
+{
+  if (actual < 0) return;
+  float rel_error = fabs (expect - actual)/actual;
+
+  
+  float pred_err = me_->coords ().err ();
+  float npe = -1.0;
+
+  if (pred_err < 0)
+    npe = rel_error;
+  else if (rmt_err < 0)
+    ;
+  else {
+    // ce is our pred error, he is the remote pred error
+    // squaring them punishes high error nodes relatively more.
+    float ce = pred_err*pred_err;
+    float he = rmt_err*rmt_err;
+    //this is our new prediction error found by combining our prediction
+    // error with the remote node's error
+    float new_pred_err = rel_error*(ce/(he + ce)) + pred_err*(he/(he + ce));
+
+    //don't just take the new prediction, EWMA it with old predictions
+    npe = (19*pred_err + new_pred_err)/20.0;
+
+    //cap it at 1.0
+    if (npe > 1.0) npe = 1.0;
+
+  }
+  me_->set_coords_err (npe);
+}
+
 #define MAXDIM 10
 void
-vnode_impl::update_coords (vec<float> uc, float ud)
+vnode_impl::update_coords (Coord uc, float ud)
 {
 
 
   //  warn << myID << " --- starting update -----\n";
-  vec<float> coords = me_->coords ();
-  vec<float> v = uc;
+  Coord coords = me_->coords ();
+  Coord v = uc;
+  float rmt_err = uc.err ();
+  
 
-  
   //init f
-  vec<float> f;
-  f.clear ();
-  for (int i = 0; i < chord::NCOORDS; i++) 
-    f.push_back (0.0);
-  
+  Coord f;
 
 
   float actual = ud;
-  float expect = Coord::distance_f (coords, uc);
+  float expect = coords.distance_f (uc);
 
 
   if (actual >= 0 && actual < 1000000) { //ignore timeouts
+
+    //track our prediction error
+    update_error (actual, expect, rmt_err);
+
     // force magnitude: > 0 --> stretched
     float grad = expect - actual;
-	  
-    Coord::vector_sub (v, coords);
+    v.vector_sub (coords);
     
-    float len = Coord::norm (v);
+    float len = v.norm ();
     while (len < 0.0001) {
-      for (int i = 0; i < chord::NCOORDS; i++)
-	v[i] = (double)(random () % 10 - 5) / 10.0;
-      len = Coord::norm (v);
+      for (int i = 0; i < NCOORD; i++)
+	v.coords[i] = (double)(random () % 100 - 50) / 10.0;
+      len = v.norm ();
     }
     float unit = 1.0/sqrtf(len);
 	  
     // scalar_mult(v, unit) is unit force vector
     // times grad gives the scaled force vector
-    Coord::scalar_mult (v, unit*grad);
+    v.scalar_mult (unit*grad);
     
     // add v into the overall force vector
-    Coord::vector_add (f, v);
+    f.vector_add (v);
     
-    timestep -= 0.0025;
-    timestep = (timestep < 0.05) ? 0.05 : timestep;
+    //timestep is the scaled ratio of our prediction error
+    // and the remote node's prediction error
+    float pred_err = me_->coords ().err ();
+    float timestep = 0.1 * (pred_err)/(pred_err + rmt_err);
 
-    Coord::scalar_mult(f, timestep);
-    Coord::vector_add (coords, f);
-  
+    f.scalar_mult(timestep);
+
+    coords.vector_add (f);
+
 #ifdef VIVALDI_DEBUG
     char b[1024];			       
-    snprintf (b, 1024, "coord hop: %f - %f = %f ; len=%f ts=%f\n", 
-	      expect, actual, grad, len, timestep);
+    snprintf (b, 1024, "coord hop: %f - %f = %f ; len=%f ts=%f (%f %f)\n", 
+	      expect, actual, grad, len, timestep, pred_err, rmt_err);
     warn << b;
-    Coord::print_vector ("coords ", coords);
-    Coord::print_vector ("uc ", uc);
+    coords.print ("coords ");
+    uc.print ("uc ");
     warn << "----------------\n";
 #endif 
     

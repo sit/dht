@@ -189,9 +189,7 @@ locationtable::insert (ptr<location> l)
 ptr<location>
 locationtable::insert (const chord_node &n)
 {
-  vec<float> coords;
-  for (unsigned int i = 0; i < n.coords.size (); i++)
-    coords.push_back ((float)n.coords[i]);
+  Coord coords (n);
   return insert (n.x, n.r.hostname, n.r.port, n.vnode_num, coords);
 }
 
@@ -199,7 +197,7 @@ ptr<location>
 locationtable::insert (const chordID &n, 
 		       const chord_hostname &s, 
 		       int p, int v,
-		       const vec<float> &coords)
+		       const Coord &coords)
 {
   net_address r;
   r.hostname = s;

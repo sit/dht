@@ -206,7 +206,6 @@ class chord : public virtual refcount {
   ptr<rpc_manager> rpcm;
 
  public:
-  enum { NCOORDS = 3 };
 
   ptr<vnode> active;
   ptr<locationtable> locations; 

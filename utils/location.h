@@ -3,6 +3,7 @@
 
 #include <vec.h>
 #include <chord_types.h>
+#include <coord.h>
 
 struct sockaddr_in;
 class location {
@@ -10,7 +11,7 @@ class location {
   const net_address addr_;
 
   int vnode_;
-  vec<float> coords_;
+  Coord coords_;
   float a_lat_;
   float a_var_;
   
@@ -22,7 +23,8 @@ class location {
 
   void init ();
  public:
-  location (const chordID &_n, const net_address &_r, const int v, const vec<float> &coords);
+  location (const chordID &_n, const net_address &_r, const int v, 
+	    const Coord &coords);
   location (const chord_node &n);
   ~location ();
 
@@ -30,8 +32,8 @@ class location {
   const chordID id () const { return n_; }
   const net_address &address () const { return addr_; };
   int vnode () const { return vnode_; }
-  const vec<float> &coords () const { return coords_; };
-  vec<float> coords () { return coords_; };
+  const Coord &coords () const { return coords_; };
+  Coord coords () { return coords_; };
   float distance () const { return a_lat_; };
   float a_var () const { return a_var_; };
   bool alive () const { return alive_; };
@@ -45,7 +47,9 @@ class location {
 
   // Mutators
   void set_alive (bool alive);
-  void set_coords (const vec<float> &coords);
+  void set_coords (const Coord &coords);
+  void set_coords_err (float x) { coords_.update_err (x); };
+  void set_coords (const chord_node &n);
   void set_distance (float dist) { a_lat_ = dist; };
   void set_variance (float variance) { a_var_ = variance; };
   void inc_nrpc () { nrpc_++; }

@@ -102,7 +102,6 @@ proxroute::dofindtoes (user_args *sbp, prox_findtoes_arg *ta)
   chord_nodelistres res (CHORD_OK);
   vec<chordID> r;
   vec<ptr<location> > rr;
-  vec<float> coords;
   chord_node_wire n;
   unsigned int maxret;
 
@@ -110,8 +109,6 @@ proxroute::dofindtoes (user_args *sbp, prox_findtoes_arg *ta)
     float maxd = toes->level_to_delay (ta->level);
     n = ta->n;
     maxret = toes->get_target_size(0);
-    for (unsigned int i = 0; i < n.coords.size (); i++)
-      coords.push_back ((float)n.coords[i]);
 
     //iterate through toe table and return at most distance away from n
     for (unsigned int l = 0; l < MAX_LEVELS; l++){
@@ -119,7 +116,7 @@ proxroute::dofindtoes (user_args *sbp, prox_findtoes_arg *ta)
       for (unsigned int i = 0; i < t.size(); i++){
 	if (in_vector(r, t[i]->id ()))
 	   continue;
-	if (Coord::distance_f (coords, t[i]->coords()) < maxd){ 
+	if (t[i]->coords().distance_f (n) < maxd){ 
 	  r.push_back (t[i]->id ());
 	  rr.push_back (t[i]);
 	  if (r.size() >= maxret)
@@ -232,14 +229,14 @@ greedy_speed (const vec<float> &qc, // querier coordinates
 	      const ptr<location> c,     // candidate
 	      const chordID &myID)
 {
-  vec<float> them = c->coords ();
+  Coord them = c->coords ();
   if (!them.size ()) {
     modlogger ("greedy_speed", modlogger::TRACE) << "No coordinates for "
 						 << c->id () << "\n";
     return 0; // XXX weird
   }
   chordID id_dist = distance (myID, c->id ());
-  float f = Coord::distance_f (qc, them);
+  float f = them.distance_f (qc, them);
   if (f < 1.0) f = 1.0;
   u_int32_t coord_dist = (u_int32_t) f;
   if (coord_dist == 0) {

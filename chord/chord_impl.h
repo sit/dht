@@ -32,6 +32,7 @@
 
 #include "route.h"
 #include "transport_prot.h"
+#include "coord.h"
 
 extern long outbytes;
 
@@ -76,7 +77,6 @@ class vnode_impl : public vnode {
 		    bool stop);
  private:
   int myindex;
-  float timestep;
 
   int rpc_pending_counts[128];
 
@@ -142,7 +142,8 @@ class vnode_impl : public vnode {
 		 ref<dorpc_res> res, clnt_stat err);
 
 
-  void update_coords (vec<float> uc, float ud);
+  void update_error (float actual, float expect, float e);
+  void update_coords (Coord uc, float ud);
   void check_dead_node_cb (ptr<location> l, time_t backoff, chordstat s);
   void check_dead_nodes ();
   

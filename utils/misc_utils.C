@@ -88,14 +88,8 @@ make_chord_node (const chord_node_wire &nl)
   n.vnode_num  = nl.machine_order_port_vnnum & 0xFFFF;
   n.x = make_chordID (n.r.hostname, n.r.port, n.vnode_num);
   n.coords = nl.coords;
+  n.e = nl.e;
   return n;
 }
 
-vec<float> 
-get_coords (const chord_node &n)
-{
-  vec<float> c;
-  for (int i = 0; i < chord::NCOORDS; i++)
-    c.push_back (n.coords[i]);
-  return c;
-}
+

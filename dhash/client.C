@@ -417,11 +417,10 @@ struct orderer {
 
 static void
 order_succs (ptr<locationtable> locations,
-	     const vec<float> &me, const vec<chord_node> &succs,
+	     const Coord &me, const vec<chord_node> &succs,
 	     vec<chord_node> &out)
 {
   orderer *d2me = New orderer [succs.size()];
-  vec<float> cursucc;
   for (size_t i = 0; i < succs.size (); i++) {
     ptr<location> l = NULL;
     if (locations) 
@@ -430,9 +429,7 @@ order_succs (ptr<locationtable> locations,
       // Have actual measured latencies, so might as well use them.
       d2me[i].d_ = l->distance ();
     } else {
-      cursucc.setsize (succs[i].coords.size ());
-      for (size_t j = 0; j < succs[i].coords.size (); j++) 
-	cursucc[j] = (float) succs[i].coords[j];
+      Coord cursucc (succs[i]);
       d2me[i].d_ = Coord::distance_f (me, cursucc);
     }
     d2me[i].i_ = i;

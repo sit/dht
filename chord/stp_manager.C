@@ -369,7 +369,7 @@ stp_manager::setup_rexmit_timer (ptr<location> from, ptr<location> l,
     float dist = Coord::distance_f (from->coords (), l->coords ());
     alat = dist + 6.0*c_err + 10*c_var + 15000; 
     //scale it to be safe. the 8 comes from an analysis for log files
-    // I also tried usssing the variance but average works better. 
+    // I also tried using the variance but average works better. 
     // With 8 we'll do about 1 percent spurious retransmits
   } else
     alat = 1000000;

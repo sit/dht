@@ -69,7 +69,7 @@ dhash_impl::dofetchrec (user_args *sbp, dhash_fetchrec_arg *arg)
   vec<ptr<location> > cs = host_node->succs ();
   
   chordID myID = host_node->my_ID ();
-  vec<float> mycoords = host_node->my_location ()->coords ();
+  Coord mycoords = host_node->my_location ()->coords ();
   u_long m = dhash::num_efrags ();
 
   vec<chordID> failed;

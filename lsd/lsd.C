@@ -40,7 +40,6 @@
 #include <debruijn.h>
 #include <fingerroute.h>
 #include <fingerroutepns.h>
-#include <proxroute.h>
 #include <recroute.h>
 #if 0
 #include "route_secchord.h"
@@ -106,10 +105,6 @@ routing_mode_desc modes[] = {
     wrap (fingerroute::produce_vnode) },
   { MODE_DEBRUIJN, "debruijn", "use debruijn routing",
     wrap (debruijn::produce_vnode) },
-  { MODE_PROX, "prox", "use toes in some ad hoc way to improve routing",
-    wrap (proxroute::produce_vnode) },
-  { MODE_PROXREC, "proxrec", "use toes in some ad hoc way recursively",
-    wrap (recroute<proxroute>::produce_vnode) },
   { MODE_PNS, "pns", "use proximity neighbor selection",
     wrap (fingerroutepns::produce_vnode) },
   { MODE_PNSREC, "pnsrec", "g^2 pns recursive",
@@ -131,9 +126,9 @@ lsdctl_fillnodeinfo (lsdctl_nodeinfo &ni, ptr<location> l)
   ni.n = l->id ();
   ni.addr = l->address ();
   ni.vnode_num = l->vnode ();
-  const vec<float> c = l->coords ();
+  const Coord c = l->coords ();
   for (int j = 0; j < 3; j++)
-    ni.coords[j] = (int32_t) c[j];
+    ni.coords[j] = (int32_t) c.coords[j];
   ni.a_lat = (u_int32_t) l->distance ();
   ni.a_var = (u_int32_t) l->a_var ();
   ni.nrpc = l->nrpc ();

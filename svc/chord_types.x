@@ -73,6 +73,7 @@ struct chord_node {
   net_address r;
   int32_t vnode_num;
   int32_t coords<>;
+  int32_t e;
 };
 
 /* Strict encoding to minimize wire length */
@@ -82,12 +83,14 @@ struct chord_node_wire {
   u_int32_t machine_order_ipv4_addr;
   u_int32_t machine_order_port_vnnum; /* (port << 16) | vnnum */
   int32_t coords[3];    /* XXX hardcoded length of 3; cf NCOORD in chord.h */
+  int32_t e; /* node's predicition error */
 };
 
 struct chord_node_ext {
   chord_node_wire n;
   int32_t a_lat;
   int32_t a_var;
+  int32_t pred_err;
   u_int64_t nrpc;
 };
 
