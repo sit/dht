@@ -1,4 +1,4 @@
-dnl $Id: acinclude.m4,v 1.3 2001/08/23 00:42:19 kaashoek Exp $
+dnl $Id: acinclude.m4,v 1.4 2001/11/08 16:47:41 fdabek Exp $
 dnl
 dnl Find full path to program
 dnl
@@ -773,11 +773,7 @@ else
 fi
 
 if test ! "${with_db3+set}"; then
-    if test "$DB3_DIR"; then
 	with_db3=yes
-    else
-	with_db3=no
-    fi
 fi
 
 if test "$with_db3" != no; then
