@@ -51,11 +51,15 @@ locationtable::doForeignRPC (rpc_program prog,
   location *l = getlocation (ID);
   assert (l);
   ptr<aclnt> c = aclnt::alloc (l->x, chord_program_1);
-  assert (c);
-  chord_RPC_res *res = New chord_RPC_res ();
-  c->call (CHORDPROC_HOSTRPC, &farg, res, 
+  if (c) {
+    chord_RPC_res *res = New chord_RPC_res ();
+    c->call (CHORDPROC_HOSTRPC, &farg, res, 
 	   wrap (this, &locationtable::doForeignRPC_cb, res, out, 
 		 prog, procno, cb)); 
+  } else {
+    (*cb) (RPC_CANTSEND);
+    delete_connections (l);
+  }
 }
 
 void
