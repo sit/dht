@@ -52,7 +52,7 @@ struct location {
   ~location ();
 };
 
-#include "comm.h"
+class rpc_manager;
 
 class locationtable : public virtual refcount {
   typedef unsigned short loctype;

@@ -29,6 +29,7 @@
  */
 
 #include <math.h>
+#include "comm.h"
 #include "location.h"
 
 // XXX should include succ_list.h but that's too much hassle.

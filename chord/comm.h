@@ -1,7 +1,13 @@
 #ifndef _SFSNET_COMM_H_
 #define _SFSNET_COMM_H_
 
-#include "async.h"
+#include "chord_prot.h"
+#include "ihash.h"
+#include "arpc.h"
+#include "chord_util.h"
+#include "aclnt_chord.h"
+
+class location;
 
 struct rpcstats {
   str key;
@@ -72,12 +78,7 @@ struct rpc_state {
   int rexmits;
   ihash_entry <rpc_state> h_link;
   
-  rpc_state (ref<location> l, aclnt_cb c, u_int64_t S, long s, int p)
-    : loc (l), cb (c),  s (S), progno (p), seqno (s),
-      b (NULL), rexmits (0)
-  {
-    ID = l->n;
-  };
+  rpc_state (ref<location> l, aclnt_cb c, u_int64_t S, long s, int p);
 };
 
 // Default implementation, udp aclnt

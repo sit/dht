@@ -39,6 +39,7 @@
 
 #include "dhash_prot.h"
 #include "chord_util.h"
+#include "comm.h"
 #include "location.h"
 
 long outbytes;
@@ -95,6 +96,14 @@ myselect (float *A, int p, int r, int i)
   else
     return myselect(A, q+1, r, i-k);
 }
+
+// -----------------------------------------------------
+rpc_state::rpc_state (ref<location> l, aclnt_cb c, u_int64_t S, long s, int p)
+  : loc (l), cb (c),  s (S), progno (p), seqno (s),
+    b (NULL), rexmits (0)
+{
+  ID = l->n;
+};
 
 // -----------------------------------------------------
 hostinfo::hostinfo (const net_address &r)
