@@ -3,7 +3,7 @@
 #include <locationtable.h>
 #include "route_secchord.h"
 
-#define NSUCC 16
+#include <configurator.h>
 
 route_secchord::node::node (ptr<location> l)
   : n_ (l->id ()), cn_ (l), count_ (0)
@@ -20,7 +20,13 @@ route_secchord::node::node (ptr<location> l)
 //
 route_secchord::route_secchord (ptr<vnode> vi, chordID xi) :
   route_iterator (vi, xi),
-  lasthop_ (false), bracketed_key_ (0), outstanding_ (0) {}
+  lasthop_ (false), bracketed_key_ (0), outstanding_ (0)
+{
+  int ns;
+  bool ok = Configurator::only ().get_int ("chord.nsucc", ns);
+  assert (ok && ns > 0);
+  nsucc_ = static_cast <size_t> (ns);
+}
 
 route_secchord::route_secchord (ptr<vnode> vi, chordID xi,
 			    rpc_program uc_prog,
@@ -29,6 +35,11 @@ route_secchord::route_secchord (ptr<vnode> vi, chordID xi,
   route_iterator (vi, xi, uc_prog, uc_procno, uc_args),
   lasthop_ (false), bracketed_key_ (0), outstanding_ (0)
 {
+  int ns;
+  bool ok = Configurator::only ().get_int ("chord.nsucc", ns);
+  assert (ok && ns > 0);
+  nsucc_ = static_cast <size_t> (ns);
+
   prog = uc_prog;
   this->uc_args = uc_args;
   this->uc_procno = uc_procno;
@@ -62,7 +73,7 @@ route_secchord::sufficient_successors ()
   
   // What if we are the only node in the whole network?
   // What if there are only two nodes in the network?
-  // What if there are fewer than NSUCC nodes in the network?
+  // What if there are fewer than nsucc nodes in the network?
 
   // We want to be sure that we have found the successor list of the
   // key so we must have some estimate of how many nodes are available
@@ -70,7 +81,7 @@ route_secchord::sufficient_successors ()
   // of nodes that are in nexthops_; they ought to have been cached
   // by next_hop_cb
   size_t available = v->locations->usablenodes ();
-  size_t desired = (available > NSUCC) ? NSUCC : available;
+  size_t desired = (available > nsucc_) ? nsucc_ : available;
 
   chordID myID = v->my_ID ();
   
@@ -140,9 +151,9 @@ route_secchord::next_hop ()
 {
   warnx << v->my_ID () << ": secchord::next_hop: " << x << "\n";
   node *n = nexthops_.first ();
-  // Send to the first NSUCC nodes that we've heard back from.
-  // XXX attempt to send to NSUCC different IP addresses?
-  while (n != NULL && (outstanding_ < NSUCC)) {
+  // Send to the first nsucc_ nodes that we've heard back from.
+  // XXX attempt to send to nsucc_ different IP addresses?
+  while (n != NULL && (outstanding_ < nsucc_)) {
     ref<chord_testandfindarg> arg = New refcounted<chord_testandfindarg> ();
     chord_nodelistres *res = New chord_nodelistres (CHORD_OK);
 
@@ -184,7 +195,7 @@ route_secchord::next_hop_cb (ptr<bool> deleted,
 {
   if (*deleted) return;
   outstanding_--;
-  assert (outstanding_ <= NSUCC && outstanding_ >= 0);
+  assert (outstanding_ <= nsucc_ && outstanding_ >= 0);
 
   if (err) {
     // Maybe we can just ignore this guy.

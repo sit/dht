@@ -27,6 +27,7 @@
 
 #include <assert.h>
 #include <qhash.h>
+
 #include "chord_impl.h"
 #include "comm.h"
 #include <coord.h>
@@ -35,6 +36,8 @@
 #include "chord_util.h"
 #include <location.h>
 #include <locationtable.h>
+
+#include <configurator.h>
 
 const int chord::max_vnodes = 1024;
 
@@ -838,6 +841,10 @@ vnode_impl::dogetpred_ext (user_args *sbp)
 void
 vnode_impl::dosecfindsucc (user_args *sbp, chord_testandfindarg *fa)
 {
+  int nsucc;
+  bool ok = Configurator::only ().get_int ("chord.nsucc", nsucc);
+  assert (ok);
+  
   size_t i = 0;
   chord_nodelistres *res = New chord_nodelistres (CHORD_OK);
   ptr<location> s = fingers->closestpred (fa->x);
@@ -847,7 +854,7 @@ vnode_impl::dosecfindsucc (user_args *sbp, chord_testandfindarg *fa)
 
   vec<chord_node> answers;
   chord_node n;
-  for (i = 0; i < NSUCC; i++) {
+  for (i = 0; i < static_cast<unsigned> (nsucc); i++) {
     s->fill_node (n);
     answers.push_back (n);
     s = locations->closestsuccloc (incID (s->id ()));

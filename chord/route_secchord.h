@@ -25,6 +25,9 @@ class route_secchord : public route_iterator {
     node (ptr<location> l);
   };
   skiplist<node, chordID, &node::n_, &node::sortlink_> nexthops_;
+
+  size_t nsucc_;
+  
   // An indicator used to ensure that any upcall is delivered to the
   // actual successor of a key.
   bool lasthop_;

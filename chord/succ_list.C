@@ -6,10 +6,12 @@
 #include <id_utils.h>
 #include <misc_utils.h>
 
+#include <configurator.h>
+
 /*
  * The idea of the succ_list class is to maintain a list of
  * immediate successors to the current node. The actual number
- * of successors needed is up to NSUCC. The location information
+ * of successors needed is up to nsucc. The location information
  * is maintained in locationtable.
  */
 succ_list::succ_list (ptr<vnode> v,
@@ -17,7 +19,10 @@ succ_list::succ_list (ptr<vnode> v,
   : myID (v->my_ID ()), myvnode (v), locations (locs)
 {
   nnodes = 0;
-
+  
+  bool ok = Configurator::only ().get_int ("chord.nsucc", nsucc_);
+  assert (ok);
+  
   oldsucc = v->my_location ();
   stable_succlist = false;
   stable_succlist2 = false;

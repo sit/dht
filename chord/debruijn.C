@@ -5,6 +5,17 @@
 #include <location.h>
 #include <locationtable.h>
 
+#include <configurator.h>
+
+struct debruijn_init {
+  debruijn_init ();
+} di;
+
+debruijn_init::debruijn_init ()
+{
+  Configurator::only ().set_int ("debruijn.logbase", 2);
+}
+
 debruijn::debruijn () {}
 
 void 

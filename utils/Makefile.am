@@ -1,9 +1,10 @@
 ## Process this file with automake to produce Makefile.in
-## $Id: Makefile.am,v 1.5 2003/04/10 20:28:08 sit Exp $
+## $Id: Makefile.am,v 1.6 2003/04/16 18:25:39 sit Exp $
 
 noinst_LIBRARIES = libutil.a
 
 noinst_HEADERS = \
+	configurator.h \
 	coord.h \
 	ida.h \
 	id_utils.h \
@@ -14,6 +15,7 @@ noinst_HEADERS = \
 	skiplist.h
 
 libutil_a_SOURCES = \
+	configurator.C \
 	coord.C \
 	ida.C \
 	id_utils.C \

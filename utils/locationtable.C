@@ -35,8 +35,20 @@
 #include "modlogger.h"
 #define loctrace modlogger ("loctable")
 
-// XXX should include succ_list.h but that's too much hassle.
+#include "configurator.h"
+
+// XXX should use configurator value??
 #define NSUCC 16
+
+struct locationtable_init {
+  locationtable_init ();
+} li;
+
+locationtable_init::locationtable_init ()
+{
+  Configurator::only ().set_int ("locationtable.maxcache",
+				 (160 + 16 + 16 + 16));
+}
 
 #if 0
 void

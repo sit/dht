@@ -38,6 +38,52 @@
 #include <modlogger.h>
 #define trace modlogger ("chord")
 
+#include <configurator.h>
+
+static struct chord_config_init {
+  chord_config_init ();
+} cci;
+
+chord_config_init::chord_config_init ()
+{
+  warnx << "chord_config_init\n";
+  bool ok = true;
+
+#define set_int Configurator::only ().set_int
+#define set_str Configurator::only ().set_str
+  ok = ok && set_int ("chord.nsucc", 16);
+  ok = ok && set_int ("chord.npred", 1);
+  ok = ok && set_int ("chord.ncoords", 3);
+
+  ok = ok && set_str ("chord.rpc_mode", "stp");
+  /**
+   * Hackish way of turning on and off various optimizations.
+   * The value of server_selection_mode is treated as a bitfield.
+   * Be sure to check the description here against the real usage....
+   *
+   * 1 => in dhash, sort successor lists based on coordinates to select
+   *      closest fragments for fetch.
+   * 2 => in chord, don't use the lookup_mode's lookup_closestsucc; use
+   *      the greedy metric instead.  Probably desirable if toes are
+   *      enabled.
+   * 4 => in dhash, try to terminate retrieves early if the hop has
+   *      returned a "sufficient" number of successors.
+   */
+  ok = ok && set_int ("chord.server_selection_mode", 5);
+  /**
+   * Determine how to find the "closest known predecessor to x".
+   * Legal values currently include:
+   *  fingerlike: only use fingerlike (e.g. finger table)
+   *  fingersandsuccs: look at all fingers + successors
+   *  loctable: look at any cached location
+   *  proximity: look at the nodes discovered by toes
+   *             (falling back to successors)
+   */
+  ok = ok && set_str ("chord.lookup_mode", "fingerlike");
+  assert (ok);
+#undef set_int
+#undef set_str
+}
 
 int logbase;  // base = 2 ^ logbase
 

@@ -9,6 +9,8 @@ class succ_list : public fingerlike {
   ptr<locationtable> locations;
   
   u_long nnodes; // estimate of the number of chord nodes
+
+  int nsucc_; // number of successors to maintain
   
   ptr<location> oldsucc;  // last known successor
   bool stable_succlist;

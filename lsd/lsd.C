@@ -24,6 +24,7 @@
  */
 
 #include <misc_utils.h>
+#include <configurator.h>
 
 #include "chord.h"
 #include "dhash.h"
@@ -36,7 +37,6 @@
 #include "fingerlike.h"
 #include "debruijn.h"
 #include "finger_table.h"
-#include "succ_list.h" // XXX only for NSUCC!
 
 #include "route_secchord.h"
 
@@ -465,18 +465,14 @@ main (int argc, char **argv)
 
   int ch;
   do_cache = false;
-  // Terrible, I know, but:
-  // ss_mode == 0 means no fragment or lookup server selection
-  // ss_mode == 1 means fragment server selection
-  // ss_mode >  1 means fragment server selection + finger lookup
-  // ss_mode overrides -P. 
   ss_mode = 1;
   lbase = 1;
 
   myport = 0;
   cache_size = 2000;
   // ensure enough room for fingers and successors.
-  int max_loccache = (int) (1.2 * (NSUCC + NBIT));
+  int max_loccache;
+  Configurator::only ().get_int ("locationtable.maxcache", max_loccache);
   str wellknownhost;
   int wellknownport = 0;
   int nreplica = 0;
@@ -486,18 +482,13 @@ main (int argc, char **argv)
   str myname = my_addr ();
   mode = MODE_CHORD;
   lookup_mode = CHORD_LOOKUP_LOCTABLE;
-  
-  while ((ch = getopt (argc, argv, "PfFB:b:cd:j:l:M:n:p:S:s:v:m:L:T:")) != -1)
+
+  char *cffile = NULL;
+
+  while ((ch = getopt (argc, argv, "B:b:cd:fFj:l:L:M:m:n:O:Pp:S:s:T:v:")) != -1)
     switch (ch) {
-    case 'm':
-      if (strcmp (optarg, "debruijn") == 0)
-	mode = MODE_DEBRUIJN;
-      else if (strcmp (optarg, "chord") == 0)
-	mode = MODE_CHORD;
-      else if (strcmp (optarg, "secchord") == 0)
-	mode = MODE_SECCHORD;
-      else
-	fatal << "allowed modes are secchord, chord and debruijn\n";
+    case 'B':
+      cache_size = atoi (optarg);
       break;
     case 'b':
       lbase = atoi (optarg);
@@ -506,23 +497,17 @@ main (int argc, char **argv)
 	lbase = 1;
       }
       break;
-    case 'P':
-      lookup_mode = CHORD_LOOKUP_PROXIMITY;
+    case 'c':
+      do_cache = true;
+      break;
+    case 'd':
+      db_name = optarg;
       break;
     case 'f':
       lookup_mode = CHORD_LOOKUP_FINGERLIKE;
       break;
     case 'F':
       lookup_mode = CHORD_LOOKUP_FINGERSANDSUCCS;
-      break;
-    case 'B':
-      cache_size = atoi (optarg);
-      break;
-    case 'c':
-      do_cache = true;
-      break;
-    case 'd':
-      db_name = optarg;
       break;
     case 'j': 
       {
@@ -547,6 +532,14 @@ main (int argc, char **argv)
 	*sep = ':'; // restore optarg for argv printing later.
 	break;
       }
+    case 'L':
+      {
+	int logfd = open (optarg, O_RDWR | O_CREAT, 0666);
+	if (logfd <= 0) fatal << "Could not open logfile " << optarg << " for appending\n";
+	lseek (logfd, 0, SEEK_END);
+	errfd = logfd;
+	break;
+      }
     case 'l':
       if (inet_addr (optarg) == INADDR_NONE)
 	fatal << "must specify bind address in dotted decimal form\n";
@@ -555,8 +548,24 @@ main (int argc, char **argv)
     case 'M':
       max_loccache = atoi (optarg);
       break;
+    case 'm':
+      if (strcmp (optarg, "debruijn") == 0)
+	mode = MODE_DEBRUIJN;
+      else if (strcmp (optarg, "chord") == 0)
+	mode = MODE_CHORD;
+      else if (strcmp (optarg, "secchord") == 0)
+	mode = MODE_SECCHORD;
+      else
+	fatal << "allowed modes are secchord, chord and debruijn\n";
+      break;
     case 'n':
       nreplica = atoi (optarg);
+      break;
+    case 'O':
+      cffile = optarg;
+      break;
+    case 'P':
+      lookup_mode = CHORD_LOOKUP_PROXIMITY;
       break;
     case 'p':
       myport = atoi (optarg);
@@ -567,21 +576,13 @@ main (int argc, char **argv)
     case 's':
       ss_mode = atoi(optarg);
       break;
+    case 'T':
+      logfname = optarg;
+      break;
     case 'v':
       vnodes = atoi (optarg);
       if (vnodes >= chord::max_vnodes)
 	fatal << "Too many virtual nodes (" << vnodes << ")\n";
-      break;
-    case 'L':
-      {
-	int logfd = open (optarg, O_RDWR | O_CREAT, 0666);
-	if (logfd <= 0) fatal << "Could not open logfile " << optarg << " for appending\n";
-	lseek (logfd, 0, SEEK_END);
-	errfd = logfd;
-	break;
-      }
-    case 'T':
-      logfname = optarg;
       break;
     default:
       usage ();
@@ -611,6 +612,12 @@ main (int argc, char **argv)
     x << "\n";
     lsdtrace << x;
   }
+
+  if (cffile) {
+    bool ok = Configurator::only ().parse (cffile);
+    assert (ok);
+  }
+  Configurator::only ().dump ();
   
   max_loccache = max_loccache * (vnodes + 1);
   chordnode = New refcounted<chord> (wellknownhost, wellknownport,

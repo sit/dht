@@ -58,6 +58,34 @@
 static int KEYHASHDB = getenv("KEYHASHDB") ? atoi(getenv("KEYHASHDB")) : 0;
 int JOSH = getenv("JOSH") ? atoi(getenv("JOSH")) : 0;
 
+#include <configurator.h>
+
+struct dhash_config_init {
+  dhash_config_init ();
+} dci;
+
+dhash_config_init::dhash_config_init ()
+{
+  warnx << "dhash_config_init\n";
+  bool ok = true;
+
+#define set_int Configurator::only ().set_int
+  /** Number of fragments to encode each block into */
+  ok = ok && set_int ("dhash.efrags", 14);
+  /** Number of fragments needed to reconstruct a given block */
+  ok = ok && set_int ("dhash.dfrags", 7);
+
+  // Josh magic....
+  ok = ok && set_int ("dhash.missing_outstanding_max", 15);
+  
+  ok = ok && set_int ("merkle.sync_timer", 30);
+  ok = ok && set_int ("merkle.keyhash_timer", 10);
+  ok = ok && set_int ("merkle.replica_timer", 3);
+  ok = ok && set_int ("merkle.prt_timer", 5);
+
+  assert (ok);
+#undef set_int
+}
 
 // Pure virtual destructors still need definitions
 dhash::~dhash () {}
