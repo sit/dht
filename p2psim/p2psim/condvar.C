@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: condvar.C,v 1.6 2003/11/04 22:15:48 thomer Exp $ */
+/* $Id: condvar.C,v 1.7 2004/01/31 03:26:33 strib Exp $ */
 
 #include "condvar.h"
 using namespace std;
@@ -52,20 +52,42 @@ ConditionVar::wait()
 }
 
 void
+ConditionVar::wait_noblock(Channel *c)
+{
+
+  // put the already created channel on the waiting list
+  (*_waiters).insert( c );
+  // doesn't block!!
+}
+
+void
 ConditionVar::notifyAll()
 {
 
+  uint sz = _waiters->size();
+  Channel * chans[sz];
+  uint j = 0;
+
   // wake all the sleeping guys
-  for(set<Channel*>::const_iterator i = _waiters->begin(); i != _waiters->end(); ++i) {
+  for(set<Channel*>::const_iterator i = _waiters->begin(); 
+      i != _waiters->end(); ++i) {
     Channel *c = (*i);
-    send(c, 0);
+    chans[j++] = c;
   }
   _waiters->clear();
+
+  // we wait til after to call send, since otherwise we'll yield and may
+  // end up altering waiters while we're still iterating.
+  for( uint i = 0; i < sz; i++ ) {
+    send(chans[i], 0);
+  }
+
 }
 
 void
 ConditionVar::notify()
 {
+
   if(!_waiters->size())
     return;
 

@@ -98,8 +98,14 @@ Node::rcvRPC(RPCSet *hset, bool &ok)
   assert(token);
   hset->erase(token);
   _deleteRPC(token);
-  ok = p->ok();
-  delete p;
+  if( !p ) {
+    // if there's no packet, then this must be a wakeup 
+    // from a non-network source (like a condition variable) 
+    ok = true;
+  } else {
+    ok = p->ok();
+    delete p;
+  }
   free(a);
   free(index2token);
   return token;

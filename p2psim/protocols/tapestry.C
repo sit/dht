@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.49 2004/01/29 02:34:49 strib Exp $ */
+/* $Id: tapestry.C,v 1.50 2004/01/31 03:26:33 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -55,6 +55,7 @@ Tapestry::Tapestry(IPAddress i, Args a) : P2Protocol(i),
   TapDEBUG(2) << "Constructing" << endl;
   _rt = New RoutingTable(this, a.nget<uint>("redundancy", 3, 10));
   _waiting_for_join = New ConditionVar();
+  _check_nodes_waiting = New ConditionVar();
 
   //stabilization timer
   _stabtimer = a.nget<uint>("stabtimer", 10000, 10);
@@ -73,6 +74,9 @@ Tapestry::Tapestry(IPAddress i, Args a) : P2Protocol(i),
 
   _declare_dead_time = a.nget<Time>("declare_dead", 30000, 10);
   _rtt_timeout_factor = a.nget<Time>("timeout_factor", 3, 10);
+  _max_repair_num = a.nget<uint>("max_repair_num", 5, 10);
+
+  _check_nodes = New vector<check_node_args *>;
 
   // init stats
   while (stat.size() < (uint) STAT_SIZE) {
@@ -88,6 +92,9 @@ Tapestry::Tapestry(IPAddress i, Args a) : P2Protocol(i),
 
   _recently_dead.clear();
 
+  // start the checking thread
+  delaycb( 0, &Tapestry::check_node_loop, (void *) 0 );
+
 }
 
 Tapestry::~Tapestry()
@@ -98,6 +105,8 @@ Tapestry::~Tapestry()
     delete _cachebag;
   }
   delete _waiting_for_join;
+  delete _check_nodes;
+  delete _check_nodes_waiting;
   delete [] _my_id_digits;
 
   TapDEBUG(2) << "Destructing" << endl;
@@ -387,9 +396,12 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
 	}
       } else {
 	// remove it from our routing table
-	check_node_args *ca = New check_node_args();
-	ca->ip = next;
-	delaycb( 1, &Tapestry::check_node, ca );
+	check_node_args *cna = New check_node_args();
+	cna->ip = next;
+	_check_nodes->push_back( cna );
+	_check_nodes_waiting->notifyAll();
+	TapDEBUG(2) << "Forking off check (due to lookup) of (" << cna->ip 
+		    << "/" << print_guid(nextid) << ")" << endl;
 
 	// record the timeout stats
 	// every unsuccessful RPC counts as a "timeout"
@@ -477,39 +489,138 @@ Tapestry::retryRPC(IPAddress dst, void (BT::* fn)(AT *, RT *),
   return false;
 }
 
-void 
-Tapestry::check_node(check_node_args *args)
+void
+Tapestry::check_node_loop(void * args)
 {
+
   ping_args pa;
   ping_return pr;
-  GUID dstid = ((Tapestry *)Network::Instance()->getnode(args->ip))->id();
-  _rt->set_timeout( dstid, true );
 
-  // now try to find a better node to put in your table from the cache
-  if( _lookup_learn ) {
-    int digit = guid_compare( id(), dstid );
-    assert( digit != -1 );
-    uint val = get_digit( dstid, digit );
-    NodeInfo *n = _cachebag->read( digit, val );
-    if( n != NULL ) {
-      _cachebag->remove( n->_id );
-      _rt->add( n->_addr, n->_id, n->_distance );
-      delete n;
+  // use ping callinfos 
+  RPCSet ping_rpcset;
+  HashMap<unsigned, ping_callinfo*> ping_resultmap;
+
+  bool waiting = false;
+  unsigned condvar_token = 1;
+
+  TapDEBUG(3) << "Entered check_node_loop" << endl;
+
+  while( true ) {
+
+    if( !waiting ) {
+      // initialize the Channel and add it to the condition variable
+      // add it to the rpc map right away so no one else takes the 1 token
+      Channel *c = chancreate(sizeof(int*), 0);
+      assert( !_rpcmap[condvar_token] );
+      _rpcmap.insert( condvar_token, New RPCHandle(c, New Packet()) );
+      _check_nodes_waiting->wait_noblock(c);
+      ping_rpcset.insert(condvar_token);
+      waiting = true;
+      // this RPCHandle, channel and packet will get deleted by
+      // Node::_deleteRPC, called from rcvRPC
+      TapDEBUG(3) << "Starting loop in check_node_loop" << endl;
+
+      // check for any new IDs
+      for( vector<check_node_args *>::iterator i=_check_nodes->begin();
+	   i != _check_nodes->end(); i++ ) {
+	
+	check_node_args *check = *i;
+	assert( check );
+	IPAddress checkip = check->ip;
+	
+	GUID checkid = 
+	  ((Tapestry *)Network::Instance()->getnode(checkip))->id();
+	Time timeout;
+	if( checkid != ip() && _rt->contains( checkid ) ) {
+	  timeout = _rtt_timeout_factor * _rt->get_time( checkid );
+	} else {
+	  timeout = MAXTIME;
+	}
+	
+	// start an asyncRPC and save the info
+	if( checkid != ip() ) {
+	  record_stat( STAT_PING, 0, 0);
+	}
+	unsigned rpc = asyncRPC( checkip, &Tapestry::handle_ping, &pa, &pr, 
+				 timeout );
+	assert(rpc);
+	ping_callinfo *pi = New ping_callinfo( checkip, checkid, now() );
+	pi->last_timeout = timeout;
+	ping_resultmap.insert(rpc, pi);
+	ping_rpcset.insert(rpc);
+	
+	_rt->set_timeout( pi->id, true );
+	
+	// now try to find a better node to put in your table from the cache
+	if( _lookup_learn ) {
+	  int digit = guid_compare( id(), pi->id );
+	  assert( digit != -1 );
+	  uint val = get_digit( pi->id, digit );
+	  NodeInfo *n = _cachebag->read( digit, val );
+	  if( n != NULL ) {
+	    _cachebag->remove( n->_id, false );
+	    _rt->add( n->_addr, n->_id, n->_distance, false);
+	    delete n;
+	  }
+	}
+	
+	delete check;
+	
+      }
+      _check_nodes->clear();
     }
+
+    // now be extremely clever and select over both the asyncRPCs and the
+    // channel that's waiting for new nodes to check
+    bool ok;
+    uint rpc = rcvRPC( &ping_rpcset, ok );
+    
+    // TODO: what happens if we get an RPC back after dying/re-joining???
+
+    // if it's not the condvar one, do some stuff, otherwise go directly
+    // to the top of the loop and add more nodes
+    if( rpc != condvar_token ) {
+      assert(rpc);
+      ping_callinfo *pi = ping_resultmap[rpc];
+      if( ok ) {
+	// this RPC succeeded, so this node wasn't dead after all.  apologize.
+	if( pi->ip != ip() ) {
+	  record_stat( STAT_PING, 0, 0);
+	}
+	_rt->set_timeout( pi->id, false );
+	delete pi;
+      } else if( now() - pi->pingstart >= _declare_dead_time ) {
+
+	// this node is officially dead.  make it so.
+	_rt->remove( pi->id, false );
+	_rt->remove_backpointer( pi->ip, pi->id );
+	_recently_dead.push_back(pi->id);    
+	TapDEBUG(2) << "Declaring (" << pi->ip << "/" << print_guid(pi->id) 
+		    << ") dead in check_node_loop" << endl;
+	delete pi;
+
+      } else {
+
+	// otherwise schedule this person again, doubling the timeout
+	pi->last_timeout *= 2;
+	if( pi->ip != ip() ) {
+	  record_stat( STAT_PING, 0, 0);
+	}
+	unsigned newrpc = asyncRPC( pi->ip, &Tapestry::handle_ping, &pa, &pr, 
+				    pi->last_timeout );
+	assert(newrpc);
+	ping_resultmap.insert(newrpc, pi);
+	ping_rpcset.insert(newrpc);
+	
+      }
+    } else {
+      TapDEBUG(3) << "Notified via condvar in check_node_loop" << endl;
+      waiting = false;
+    }
+
+
   }
 
-  Time dist = _rt->get_time( dstid );
-  if(!retryRPC( args->ip, &Tapestry::handle_ping, &pa, &pr, STAT_PING, 0, 0 )){
-    // this node is dead dude
-    _rt->remove( dstid, false );
-    _rt->remove_backpointer( args->ip, dstid );
-    _recently_dead.push_back(dstid);    
-    TapDEBUG(2) << "Declaring (" << args->ip << "/" << print_guid(dstid) 
-		<< ") dead in check_node" << endl;
-  } else {
-    _rt->set_timeout( dstid, false );
-  }
-  delete args;
 }
 
 void
@@ -941,6 +1052,8 @@ Tapestry::handle_join(join_args *args, join_return *ret)
 
       // not the surrogate
       // recursive routing yo
+      TapDEBUG(2) << "Forwarding join req for " << args->ip << " to " 
+		  << next << endl;
       bool succ = retryRPC( next, &Tapestry::handle_join, args, ret, 
 			    STAT_JOIN, 1, 0);
       if( succ ) {
@@ -1606,11 +1719,12 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
 	pi->failed = true;
       } else {
 	// put another shrimp on the barbie . . .
-	check_node_args *ca = New check_node_args();
-	ca->ip = pi->ip;
 	TapDEBUG(2) << "Forking off check of (" << pi->ip << "/" 
 		    << print_guid(pi->id) << ")" << endl;
-	delaycb( 1, &Tapestry::check_node, ca );
+	check_node_args *cna = New check_node_args();
+	cna->ip = pi->ip;
+	_check_nodes->push_back( cna );
+	_check_nodes_waiting->notifyAll();
       }
       
     } else {
@@ -1671,6 +1785,8 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
       RPCSet repair_rpcset;
       HashMap<unsigned, repair_callinfo*> repair_resultmap;
 
+      HashMap<GUID, unsigned> repair_numasked;
+
       for( uint j = _digits_per_id-1; j >= 0; j-- ) {
 	for( uint k = 0; k < _base; k++ ) {
 	  NodeInfo *ni = _rt->read( j, k );
@@ -1679,26 +1795,38 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
 	  }
 	  if( ni->_addr != ip() && removed.find(ni->_id) == removed.end() ) {
 	    
-	    repair_return *rr = New repair_return();
-	    repair_args *ra = New repair_args();
-	    ra->bad_ids = New vector<GUID>;
-	    ra->levels = New vector<uint>;
-	    ra->digits = New vector<uint>;
+	    bool send = false;
+	    repair_return *rr = NULL;
+	    repair_args *ra = NULL;
 
 	    for(set<GUID>::iterator i=removed.begin();i != removed.end();++i) {
+	      
+	      if( repair_numasked[*i] >= _max_repair_num ) {
+		continue;
+	      }
 
 	      int match = guid_compare( *i, id_digits() );
 	      assert( match >= 0 ); // shouldn't be me
 	      if( j < (uint) match ) continue;
 	      uint digit = get_digit( *i, match );
+	      repair_numasked.insert( *i, repair_numasked[*i]+1);
 
+	      if( ra == NULL ) {
+		rr = New repair_return();
+		ra = New repair_args();
+		ra->bad_ids = New vector<GUID>;
+		ra->levels = New vector<uint>;
+		ra->digits = New vector<uint>;
+		send = true;
+	      }
+	      
 	      ra->bad_ids->push_back(*i);
 	      ra->levels->push_back( (uint) match);
 	      ra->digits->push_back(digit);
 	      
 	    }
 
-	    if( ra->bad_ids->size() > 0 ) {
+	    if( send && ra->bad_ids->size() > 0 ) {
 	      record_stat(STAT_REPAIR, ra->bad_ids->size(), 
 			  2*ra->bad_ids->size());
 	      // just do these once, if we don't repair then oh well I guess...

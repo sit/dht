@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: condvar.h,v 1.5 2003/11/04 22:15:48 thomer Exp $ */
+/* $Id: condvar.h,v 1.6 2004/01/31 03:26:33 strib Exp $ */
 
 #ifndef __CONDVAR_H
 #define __CONDVAR_H
@@ -39,6 +39,7 @@ public:
   ~ConditionVar();
 
   void wait();
+  void wait_noblock(Channel *c);
   void notify();
   void notifyAll();
 

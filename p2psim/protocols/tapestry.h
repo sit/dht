@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.38 2004/01/29 02:34:49 strib Exp $ */
+/* $Id: tapestry.h,v 1.39 2004/01/31 03:26:33 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -85,7 +85,7 @@ public:
     IPAddress ip;
   };
 
-  void check_node(check_node_args *args);
+  void check_node_loop(void *args);
 
   struct join_args {
     IPAddress ip;
@@ -286,6 +286,13 @@ private:
 
   // nodes that we learned about from lookups
   RoutingTable *_cachebag;
+
+  // how many people do we ask about for each node?
+  uint _max_repair_num;
+
+  // nodes to check (in check_node_loop)
+  vector<check_node_args *> *_check_nodes;
+  ConditionVar *_check_nodes_waiting;
 
   // overall stats
   static unsigned long long _num_lookups;
