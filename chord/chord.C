@@ -119,6 +119,7 @@ vnode_impl::vnode_impl (ptr<locationtable> _locations, ptr<fingerlike> stab,
   ndogetpred_ext = 0;
   ndochallenge = 0;
   ndogettoes = 0;
+  ndodebruijn = 0;
 }
 
 vnode_impl::~vnode_impl ()
