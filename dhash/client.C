@@ -127,12 +127,13 @@ dhashcli::retrieve (blockID blockID, cb_ret cb, int options,
     } else if (options & DHASHCLIENT_SUCCLIST_OPT)
       warn << "cannot use succlist to find succs on retrieve\n";
 
-    // XXX jinyang won't say if 1.5 works in general, but for num_dfrags
-    //     of 7, this gives the "right" answer of getting 11 successors,
-    //     for optimal latency.
+    // Optimal number of successors to fetch is the number of
+    // extant fragments.  This ensures the maximal amount of choice
+    // for the expensive fetch phase.  As long as proximity routing
+    // is in use, the last few hops of the routing phase are cheap.
+    // Unfortunately, it's hard to know if we are proximity routing.
     clntnode->find_succlist (blockID.ID,
-			     dhash::num_dfrags () +
-			       (dhash::num_dfrags () + 1)/2,
+			     dhash::num_efrags (),
 			     wrap (this, &dhashcli::retrieve_lookup_cb, rs),
 			     guess);
   }
