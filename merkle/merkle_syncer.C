@@ -327,7 +327,8 @@ compare_keylists (vec<merkle_hash> lkeys,
     
   // do I have something he doesn't have?
   for (unsigned int i = 0; i < lkeys.size (); i++) {
-    if (!rkeys[lkeys[i]]) {
+    if (!rkeys[lkeys[i]] && 
+	betweenbothincl (rngmin, rngmax, tobigint(lkeys[i]))) {
 #ifdef MERKLE_SYNC_DETAILED_TRACE
     warn << "remote missing [" << rngmin << ", " << rngmax << "] key=" << lkeys[i] << "\n";
 #endif 
@@ -365,10 +366,8 @@ compare_nodes (merkle_tree *ltree, bigint rngmin, bigint rngmax,
     vec<merkle_hash> lkeys = database_get_keys (ltree->db, rnode->depth, rnode->prefix);
 
     vec<merkle_hash> rkeys;
-    for (u_int i = 0; i < rnode->child_hash.size (); i++) {
-      if (betweenbothincl (rngmin, rngmax, tobigint (rnode->child_hash[i])))
+    for (u_int i = 0; i < rnode->child_hash.size (); i++) 
 	rkeys.push_back (rnode->child_hash[i]);
-    }
 
     compare_keylists (lkeys, rkeys, rngmin, rngmax, missingfnc);    
 	
