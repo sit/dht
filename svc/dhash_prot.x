@@ -43,6 +43,11 @@ enum dhash_ctype {
   DHASH_UNKNOWN = 5
 };
 
+enum dhash_dbtype {
+  DHASH_BLOCK = 0,
+  DHASH_FRAG = 1
+};
+
 struct dhash_valueattr {
   unsigned size;
 };
@@ -50,6 +55,7 @@ struct dhash_valueattr {
 
 struct s_dhash_insertarg {
   chordID key;
+  dhash_dbtype dbtype;
   chord_node from;
   chordID srcID;  // == from.x => redundant
   dhash_value data;
@@ -62,6 +68,7 @@ struct s_dhash_insertarg {
 
 struct s_dhash_fetch_arg {
   chordID key;
+  dhash_dbtype dbtype;
   chord_node from;
   int32_t start;
   int32_t len;

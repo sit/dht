@@ -179,7 +179,7 @@ class dhash_impl : public dhash {
   void dbwrite (ref<dbrec> key, ref<dbrec> data);
   void dbdelete (ref<dbrec> key);
 
-
+  dhash_stat key_status(const chordID &n, dhash_dbtype dbtype);
 
   chordID pred;
   vec<chord_node> replicas;
@@ -208,7 +208,7 @@ class dhash_impl : public dhash {
 
   void print_stats ();
   void stop ();
-  void fetch (chordID id, int cookie, cbvalue cb);
+  void fetch (chordID id, dhash_dbtype dbtype, int cookie, cbvalue cb);
   void register_block_cb (int nonce, cbblockuc_t cb);
   void unregister_block_cb (int nonce);
   void register_storecb_cb (int nonce, cbstorecbuc_t cb);

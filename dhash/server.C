@@ -233,7 +233,7 @@ dhash_impl::missing_retrieve_cb (bigint key, dhash_stat err, ptr<dhash_block> b,
     str frag = Ida::gen_frag (dhash::NUM_DFRAGS, blk);
     str f = strbuf () << str (b->data, 4) << frag;
     ref<dbrec> d = New refcounted<dbrec> (f.cstr (), f.len ());
-    ref<dbrec> k = id2dbrec (key);
+    ref<dbrec> k = id2dbrec (key, DHASH_FRAG);
     dbwrite (k, d);
   }
 
@@ -257,7 +257,7 @@ dhash_impl::sendblock (chord_node dst, bigint blockID, bool last, callback<void>
   bool r = host_node->locations->insert (dst);
   assert (r == true);
 
-  ptr<dbrec> blk = db->lookup (id2dbrec (blockID));
+  ptr<dbrec> blk = db->lookup (id2dbrec (blockID, DHASH_BLOCK));
   assert (blk); // XXX: don't assert here, maybe just callback?
   ref<dhash_block> dhblk = New refcounted<dhash_block> (blk->value, blk->len);
 
@@ -540,7 +540,7 @@ dhash_impl::partition_maintenance_store2 (bigint key, vec<chord_node> succs, u_i
 {
   if (succs.size () == 0) {
     if (already_count == NUM_EFRAGS)
-      dbdelete (id2dbrec(key));
+      dbdelete (id2dbrec(key, DHASH_FRAG));
 
     merkle_part_tcb = delaycb (0, wrap (this, &dhash_impl::partition_maintenance_timer));
     return;
@@ -549,10 +549,11 @@ dhash_impl::partition_maintenance_store2 (bigint key, vec<chord_node> succs, u_i
   ref<dhash_storeres> res = New refcounted<dhash_storeres> (DHASH_OK);
   ref<s_dhash_insertarg> arg = New refcounted<s_dhash_insertarg> ();
   chord_node dst = succs.pop_front ();
-  ptr<dbrec> blk = db->lookup (id2dbrec (key));
+  ptr<dbrec> blk = db->lookup (id2dbrec (key, DHASH_FRAG));
   assert (blk);
 
   arg->key = key;   // frag stored under hash(block)
+  arg->dbtype = DHASH_FRAG;
   arg->srcID = host_node->my_ID ();
   host_node->locations->get_node (arg->srcID, &arg->from);
   arg->data.setsize (blk->len);
@@ -583,7 +584,7 @@ dhash_impl::partition_maintenance_store_cb2 (bigint key, vec<chord_node> succs,
   if (res->resok->already_present) 
     partition_maintenance_store2 (key, succs, already_count + 1);
   else {
-    dbdelete (id2dbrec(key));
+    dbdelete (id2dbrec(key, DHASH_FRAG));
     merkle_part_tcb = delaycb (0, wrap (this, &dhash_impl::partition_maintenance_timer));
   }
 }
@@ -737,7 +738,7 @@ dhash_impl::route_upcall (int procno,void *args, cbupcalldone_t cb)
   if (key_status (farg->key) != DHASH_NOTPRESENT) {
     if (farg->len > 0) {
       //fetch the key and return it, end of story
-      fetch (farg->key, 
+      fetch (farg->key, DHASH_BLOCK,
 	     farg->cookie,
 	     wrap (this, &dhash_impl::fetchiter_gotdata_cb, cb, farg));
     } else {
@@ -869,9 +870,9 @@ dhash_impl::dispatch (user_args *sbp)
       //the only reason to get here is to fetch the 2-n chunks
       s_dhash_fetch_arg *farg = sbp->template getarg<s_dhash_fetch_arg> ();
 
-      if ((key_status (farg->key) != DHASH_NOTPRESENT) && (farg->len > 0)) {
+      if ((key_status (farg->key, farg->dbtype) != DHASH_NOTPRESENT) && (farg->len > 0)) {
 	//fetch the key and return it, end of story
-	fetch (farg->key, 
+	fetch (farg->key, farg->dbtype,
 	       farg->cookie,
 	       wrap (this, &dhash_impl::fetchiter_sbp_gotdata_cb, sbp, farg));
       } else {
@@ -894,7 +895,7 @@ dhash_impl::dispatch (user_args *sbp)
         res.pred->p.r = host_node->locations->getaddress (pred);
 	sbp->reply (&res);
       } else {
-	bool already_present = !!db->lookup (id2dbrec (sarg->key));
+	bool already_present = !!db->lookup (id2dbrec (sarg->key, sarg->dbtype));
 	store (sarg, wrap(this, &dhash_impl::storesvc_cb, sbp, sarg, already_present));	
       }
 
@@ -1029,7 +1030,7 @@ dhash_impl::update_replica_list ()
 // --- node to database transfers --- 
 
 void
-dhash_impl::fetch(chordID id, int cookie, cbvalue cb) 
+dhash_impl::fetch(chordID id, dhash_dbtype dbtype, int cookie, cbvalue cb) 
 {
   //if the cookie is in the hash, return that value
   pk_partial *part = pk_cache[cookie];
@@ -1038,7 +1039,7 @@ dhash_impl::fetch(chordID id, int cookie, cbvalue cb)
     cb (cookie, part->val, DHASH_OK);
     //if done, free
   } else {
-    ptr<dbrec> q = id2dbrec(id);
+    ptr<dbrec> q = id2dbrec(id, dbtype);
     ptr<dbrec> ret = db->lookup(q);
     fetch_cb (cookie, cb, ret);
   }
@@ -1101,7 +1102,7 @@ dhash_impl::append (ref<dbrec> key, ptr<dbrec> data,
 	cb (DHASH_STOREERR);
       }
   } else {
-    fetch (arg->key, -1, wrap (this, &dhash_impl::append_after_db_fetch,
+    fetch (arg->key, DHASH_BLOCK, -1, wrap (this, &dhash_impl::append_after_db_fetch,
 			   key, data, arg, cb));
   }
 }
@@ -1176,7 +1177,7 @@ dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
 
   if (ss->iscomplete()) {
     bool ignore = false;
-    ref<dbrec> k = id2dbrec(arg->key);
+    ref<dbrec> k = id2dbrec(arg->key, arg->dbtype);
     ref<dbrec> d = New refcounted<dbrec> (ss->buf, ss->size);
 
 #if 0
@@ -1275,7 +1276,13 @@ dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
 dhash_stat
 dhash_impl::key_status(const chordID &n) 
 {
-  ptr<dbrec> val = db->lookup (id2dbrec (n));
+  return key_status(n, DHASH_BLOCK);
+}
+
+dhash_stat
+dhash_impl::key_status(const chordID &n, dhash_dbtype dbtype) 
+{
+  ptr<dbrec> val = db->lookup (id2dbrec (n, dbtype));
   if (!val)
     return DHASH_NOTPRESENT;
 
@@ -1326,6 +1333,7 @@ dhash_impl::printkeys ()
   ptr<dbEnumeration> it = db->enumerate();
   ptr<dbPair> d = it->nextElement();    
   while (d) {
+    // XXX now only prints BLOCKs
     chordID k = dbrec2id (d->key);
     printkeys_walk (k);
     d = it->nextElement();
@@ -1410,7 +1418,8 @@ dhash_impl::dbwrite (ref<dbrec> key, ref<dbrec> data)
   // Won't deal well if there's a magic expansion in the encoding
   // vector either.
   str x ("");
-  if (data->len > 9 + 2*NUM_DFRAGS)
+  if (key->isFrag() &&
+      data->len > 9 + 2*NUM_DFRAGS)
     x = strbuf () << " " << hexdump (data->value + 8, 2*(NUM_DFRAGS + 1));
   dhashtrace << "dbwrite: " << host_node->my_ID ()
 	     << " " << action << " " << dbrec2id(key) << x << "\n";

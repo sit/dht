@@ -4,6 +4,7 @@
 #include "qhash.h"
 #include "merkle_hash.h"
 #include "merkle_sync_prot.h"
+#include "dhash_prot.h"
 
 
 static inline str err2str (merkle_stat status)
@@ -29,7 +30,7 @@ struct block {
 static inline void
 reverse (u_char *buf, u_int size)
 {
-  assert (size == 20);
+  assert (size == 21);
 
   for (u_int i = 0; i < (size / 2); i++) {
     char tmp = buf[i];
@@ -67,12 +68,22 @@ tobigint (const merkle_hash &h)
   return ret;
 #else
   bigint ret = 0;
-  for (int i = h.size - 1; i >= 0; i--) {
+  for (int i = h.size - 1; i >= 1; i--) {
     ret <<= 8;
     ret += h.bytes[i];
   }
   return ret;
 #endif
+}
+
+static inline ref<dbrec>
+id2dbrec(chordID id, dhash_dbtype tpe) 
+{
+  char buf[sha1::hashsize+1];
+  bzero (buf, sha1::hashsize+1);
+  buf[sha1::hashsize] = (char)tpe;
+  mpz_get_rawmag_be (buf, sha1::hashsize, &id);
+  return New refcounted<dbrec> (buf, sha1::hashsize+1);
 }
 
 static inline ref<dbrec>
@@ -88,7 +99,7 @@ id2dbrec(chordID id)
 static inline chordID
 dbrec2id (ptr<dbrec> r)
 {
-  return tobigint (to_merkle_hash (r));
+  return tobigint (to_merkle_hash (r)) >> 8;
 }
 
 

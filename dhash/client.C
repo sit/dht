@@ -248,6 +248,7 @@ protected:
     ref<dhash_storeres> res = New refcounted<dhash_storeres> (DHASH_OK);
     ref<s_dhash_insertarg> arg = New refcounted<s_dhash_insertarg> ();
     arg->key     = blockID;
+    arg->dbtype  = DHASH_BLOCK;
     arg->srcID   = clntnode->my_ID ();
     clntnode->locations->get_node (arg->srcID, &arg->from);
     arg->data.setsize (len);
@@ -385,6 +386,7 @@ dhashcli::fetch_frag (rcv_state *rs)
   
   clntnode->locations->get_node (clntnode->my_ID (), &arg->from);
   arg->key    = rs->key;
+  arg->dbtype = DHASH_FRAG;
   arg->start  = 0;
   arg->len    = 65536; // 64K is about as big as an IP packet will go...
   arg->cookie = 0;
@@ -669,6 +671,7 @@ dhashcli::insert2_lookup_cb (ref<dhash_block> block, cbinsert_t cb,
     ref<s_dhash_insertarg> arg = New refcounted<s_dhash_insertarg> ();
     
     arg->key = block->ID;  // frag stored under hash(block)
+    arg->dbtype = DHASH_FRAG;
     arg->srcID = clntnode->my_ID ();
     clntnode->locations->get_node (arg->srcID, &arg->from);
     

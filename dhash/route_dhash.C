@@ -66,6 +66,7 @@ private:
   {
     ptr<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg>;
     arg->key   = blockID;
+    arg->dbtype = DHASH_BLOCK;
     arg->start = start;
     arg->len   = len;
     arg->cookie = cookie;
@@ -198,6 +199,7 @@ route_dhash::route_dhash (ptr<route_factory> f, chordID blockID, dhash *dh,
 {
   ptr<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg> ();
   arg->key = blockID;
+  arg->dbtype = DHASH_BLOCK;
   f->get_node (&arg->from);
   arg->start = 0;
   arg->len = MTU;

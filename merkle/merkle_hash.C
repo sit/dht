@@ -12,7 +12,8 @@ func_xdr_merkle_hash (register XDR *xdr, merkle_hash *obj)
   switch (xdr->x_op) {
   case XDR_ENCODE:
     {
-      void *p = xdr_inline (xdr, obj->size);
+      int size = obj->size + 3 & ~3;
+      void *p = xdr_inline (xdr, size);
       if (!p) 
 	return FALSE;
       bcopy (obj->bytes, p, obj->size);
@@ -21,7 +22,8 @@ func_xdr_merkle_hash (register XDR *xdr, merkle_hash *obj)
 
   case XDR_DECODE:
     {
-      void *p = xdr_inline (xdr, obj->size);
+      int size = obj->size + 3 & ~3;
+      void *p = xdr_inline (xdr, size);
       if (!p) 
 	return FALSE;
       bcopy (p, obj->bytes, obj->size);
