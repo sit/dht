@@ -190,6 +190,18 @@ LocTable::pred()
 }
 
 Chord::IDMap
+LocTable::pred(Chord::CHID n) {
+  //no locality consideration
+  for (unsigned int i = 0; i < (ring.size()-1); i++) {
+    if ((ring[i+1].ip == 0) || 
+	ConsistentHash::between(n, ring[i].id, ring[i+1].id)) {
+      return ring[i];
+    } 
+  }
+  assert(0);
+}
+
+Chord::IDMap
 LocTable::next(Chord::CHID n)
 {
   //no locality consideration

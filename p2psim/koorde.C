@@ -9,6 +9,11 @@ topbit (Chord::CHID n)
   return r;
 }
 
+Koorde::Koorde(Node *n) : Chord(n) {
+  cout << "Koorde " << me.id << endl;
+  debruijn = me.id << 1;
+};
+
 Chord::CHID
 Koorde::nextimagin (CHID i, CHID kshift)
 {
@@ -26,10 +31,11 @@ Koorde::koorde_lookup(koorde_lookup_arg *a, koorde_lookup_ret *r)
   } else if (ConsistentHash::between (a->i, me.id, succ.id)) {
     koorde_lookup_arg na;
     koorde_lookup_ret nr;
+    IDMap d = loctable->pred (debruijn);
     na.k = a->k;
     na.kshift = a->kshift << 1;
     na.i = nextimagin (a->i, a->kshift);
-    doRPC (debruijn.ip, &Koorde::koorde_lookup, &na, &nr);
+    doRPC (d.ip, &Koorde::koorde_lookup, &na, &nr);
     r->r = nr.r;
   } else {
     koorde_lookup_arg na = *a;

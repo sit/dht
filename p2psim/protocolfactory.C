@@ -2,6 +2,7 @@
 #include "chord.h"
 #include "kademlia.h"
 #include "pastry.h"
+#include "koorde.h"
 #include <typeinfo>
 #include <iostream>
 
@@ -38,6 +39,9 @@ ProtocolFactory::create(string s, Node *n)
   } else if (s == "Pastry") {
     p = new Pastry(n);
     _protnames[typeid(Pastry).name()] = s;
+  } else if (s == "Koorde") {
+    p = new Koorde(n);
+    _protnames[typeid(Koorde).name()] = s;
   } 
   return p;
 }

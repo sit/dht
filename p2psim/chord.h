@@ -105,6 +105,7 @@ class LocTable {
     };
 
     Chord::IDMap succ(unsigned int m);
+    Chord::IDMap pred(Chord::CHID n);
     Chord::IDMap pred();
     Chord::IDMap next(Chord::CHID n);
 

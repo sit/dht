@@ -6,7 +6,7 @@
 // Koorde extends base Chord with debruijn routing
 class Koorde : public Chord {
 public:
-  Koorde(Node *n) : Chord(n) {};
+  Koorde(Node *n);
   ~Koorde() {};
 
   struct koorde_lookup_arg {
@@ -23,7 +23,7 @@ public:
   void koorde_lookup (koorde_lookup_arg *, koorde_lookup_ret *);
 
 protected:
-  IDMap debruijn;
+  Chord::CHID debruijn;
 
   Chord::CHID nextimagin (CHID i, CHID kshift);
 };
