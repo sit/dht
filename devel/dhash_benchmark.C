@@ -42,6 +42,8 @@ static FILE *outfile;
 static FILE *bwfile;
 unsigned int datasize;
 
+ptr<axprt_stream> xprt;
+int fconnected = 0;
 int out = 0;
 int MAX_OPS_OUT = 1024;
 
@@ -105,11 +107,11 @@ store_cb (dhash_stat status, ptr<insert_info> i)
 
 
 int
-store (dhashclient &dhash, int num) 
+store (dhashclient *dhash, int num) 
 {
   for (int i = 0; i < num; i++) {
     out++;
-    dhash.insert ((char *)data[i], datasize, wrap (store_cb));
+    dhash->insert ((char *)data[i], datasize, wrap (store_cb));
     while (out > MAX_OPS_OUT) 
       acheck ();
   }
@@ -188,20 +190,11 @@ usage (char *progname)
 }
 
 
-
-int
-main (int argc, char **argv)
+void
+connected (dhashclient *dhash, int argc, char **argv) 
 {
-  setprogname (argv[0]);
 
-  if (argc < 9) {
-    usage (argv[0]);
-    exit (1);
-  }
-
-  control_socket = argv[2];
-  dhashclient dhash (control_socket);
-
+  fconnected = 1;
   int num = atoi(argv[3]);
   datasize = atoi(argv[4]);
 
@@ -227,10 +220,6 @@ main (int argc, char **argv)
     exit(1);
   }
 
-  //  int i = atoi(argv[1]);
-  //  bool err = dhash.sync_setactive (i);
-  //  assert (!err);
-
   unsigned int seed = strtoul (argv[8], NULL, 10);
   srandom (seed);
   prepare_test_data (num);
@@ -243,7 +232,7 @@ main (int argc, char **argv)
   if (argv[6][0] == 's')
     store (dhash, num);
   else
-    fetch (dhash, num);
+    fetch (*dhash, num);
   
   struct timeval end;
   gettimeofday (&end, NULL);
@@ -258,4 +247,46 @@ main (int argc, char **argv)
   }
 
   fclose (outfile);
+
+  delete dhash;
 }
+
+void
+tcp_connect_cb (int argc, char **argv, int fd)
+{
+  if (fd < 0) 
+    fatal << "connect failed\n";
+  warnx << "... connected!\n";
+  xprt = axprt_stream::alloc (fd);    
+  dhashclient *dhash = New dhashclient (xprt);
+  connected (dhash, argc, argv);
+}
+
+int
+main (int argc, char **argv)
+{
+  setprogname (argv[0]);
+
+  if (argc < 9) {
+    usage (argv[0]);
+    exit (1);
+  }
+
+  control_socket = argv[2];
+  char *cstr = (char *)control_socket.cstr ();
+  if (strchr (cstr, ':')) {
+    char *port = strchr (cstr, ':');
+    *port = 0; //isolate host
+    port++; // point at port
+    char *host = cstr;
+    short i_port = atoi (port);
+    warn << "Hi Russ, I'm connecting to " << host << ":" << i_port << "...";
+    tcpconnect (host, i_port, wrap (&tcp_connect_cb, argc, argv));
+    while (!fconnected) acheck ();
+  } else {
+    dhashclient *dhash = New dhashclient (control_socket);
+    connected (dhash, argc, argv);
+  }
+}
+
+
