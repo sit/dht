@@ -178,14 +178,17 @@ recroute<T>::dorecroute (user_args *sbp, recroute_route_arg *ra)
       size_t minind = 0;
 
       size_t start = m - overlap;
+      warn << "going to choose a distance from ";
       for (size_t i = start; i < cs.size (); i++) {
 	float dist = Coord::distance_f (my_location ()->coords (),
 					cs[i]->coords ());
+	warn << cs[i]->id () << "at " << (int)dist << " ";
 	if (mindist < 0 || dist < mindist) {
 	  mindist = dist;
 	  minind  = i;
 	}
       }
+      warn << " i chose " << cs[minind]->id () << " at " << (int)mindist << "\n";;
       if (minind < succind) {
 	p = cs[minind];
       } else {
@@ -214,7 +217,6 @@ recroute<T>::dorecroute_sendpenult (recroute_route_arg *ra,
 				    ptr<location> p,
 				    vec<ptr<location> > cs)
 {
-  recroute_route_stat rstat (RECROUTE_ACCEPTED);
   // Construct a new recroute_route_arg.
   chord_node_wire me;
   my_location ()->fill_node (me);
@@ -244,7 +246,7 @@ recroute<T>::dorecroute_sendpenult (recroute_route_arg *ra,
   }
 			    
   rtrace << my_ID () << ": dorecroute (" << ra->routeid << ", "
-	 << ra->x << "): penultforwarding to " << p->id () << "\n";
+	 << ra->x << "): penultforwarding to " << nexthop->id () << "\n";
 
   vec<chordID> failed;
   failed.push_back (nexthop->id ());
