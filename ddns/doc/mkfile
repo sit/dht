@@ -1,6 +1,0 @@
-default:V: thread.page
-
-</usr/rsc/harvard/mkfile
-
-thread.ps: chordmap.pic sieve.pic sieve2.pic rio.pic unix.pic
-

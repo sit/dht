@@ -1,3 +1,0 @@
-latex ddns.ltx
-dvips -t landscape ddns -o ddns.ps
-ps2pdf ddns.ps
