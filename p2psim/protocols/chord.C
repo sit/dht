@@ -133,8 +133,10 @@ Chord::Chord(IPAddress i, Args& a, LocTable *l) : P2Protocol(i), _isstable (fals
 void
 Chord::record_stat(uint bytes, uint type)
 {
-  assert(type <= TYPE_PNS_UP);
-  stat[type] += ((double) PKT_OVERHEAD+bytes);
+  if (Node::collect_stat()) {
+    assert(type <= TYPE_PNS_UP);
+    stat[type] += ((double) PKT_OVERHEAD+bytes);
+  }
 }
 
 Chord::~Chord()
@@ -263,16 +265,20 @@ Chord::lookup_internal(lookup_args *a)
     return;
   }
 
-  if (a->retrytimes.size() == 0) 
-    _lookup_raw_num += 1;
+  if (Node::collect_stat()) {
+    if (a->retrytimes.size() == 0) 
+      _lookup_raw_num += 1;
+  }
 
   if (v.size() > 0) {
     _lookup_success += 1;
 #ifdef CHORD_DEBUG
     printf("%s key %qx lookup correct interval ", ts(), a->key);
 #endif
-    if (a->retrytimes.size() == 0) 
-      _lookup_raw_success += 1;
+    if (Node::collect_stat()) {
+      if (a->retrytimes.size() == 0) 
+	_lookup_raw_success += 1;
+    }
   }else if (now()-a->start >= _max_lookup_time) {
 #ifdef CHORD_DEBUG
     printf("%s key %qx lookup incorrect interval ", ts(), a->key); 
@@ -286,16 +292,18 @@ Chord::lookup_internal(lookup_args *a)
 
   a->retrytimes.push_back((uint)(now()-a->start-extra_time));
 
-  _lookup_num += 1;
-  _lookup_interval += a->retrytimes[a->retrytimes.size()-1];
-  _lookup_retries +=  a->retrytimes.size();
-  if (_lookup_lat_v.size() < 10000) 
-    _lookup_lat_v.push_back((double)a->retrytimes[a->retrytimes.size()-1]);
-  else {
-    int k = random() % 10001;
-    //displace a random sample
-    if (k < 10000) 
-      _lookup_lat_v[k] = (double)a->retrytimes[a->retrytimes.size()-1];
+  if (Node::collect_stat()) {
+    _lookup_num += 1;
+    _lookup_interval += a->retrytimes[a->retrytimes.size()-1];
+    _lookup_retries +=  a->retrytimes.size();
+    if (_lookup_lat_v.size() < 10000) 
+      _lookup_lat_v.push_back((double)a->retrytimes[a->retrytimes.size()-1]);
+    else {
+      int k = random() % 10001;
+      //displace a random sample
+      if (k < 10000) 
+	_lookup_lat_v[k] = (double)a->retrytimes[a->retrytimes.size()-1];
+    }
   }
 
 #ifdef CHORD_DEBUG
@@ -559,10 +567,12 @@ DONE:
     if (lookup_int) 
       *lookup_int = now()-before;
 
-    _lookup_hops += lastfinished.hop;
-    _lookup_timeouts += totalto;
-    _lookup_int_num += 1;
-    _lookup_to_waste += wasted;
+    if (Node::collect_stat()) {
+      _lookup_hops += lastfinished.hop;
+      _lookup_timeouts += totalto;
+      _lookup_int_num += 1;
+      _lookup_to_waste += wasted;
+    }
 
 #ifdef CHORD_DEBUG
     printf("%s lookup key %qx, hops %d timeout %d wasted %d totalrpc %d\n", ts(), key, lastfinished.hop, totalto, wasted, totalrpc);
@@ -809,10 +819,12 @@ Chord::find_successors_recurs(CHID key, uint m, uint all, uint type, uint *recur
     if (!fr.correct)
       fr.v.clear();
 
-    _lookup_int_num += 1;
-    _lookup_hops += (psz - total_to);
-    _lookup_timeouts += total_to;
-    _lookup_to_waste += wasted;
+    if (Node::collect_stat()) {
+      _lookup_int_num += 1;
+      _lookup_hops += (psz - total_to);
+      _lookup_timeouts += total_to;
+      _lookup_to_waste += wasted;
+    }
   }
   assert(psz < 20);
   return fr.v;
@@ -1564,7 +1576,9 @@ Chord::alert_handler(alert_args *args, void *ret)
   bool b = doRPC(args->n.ip,&Chord::null_handler,(void *)NULL, (void *)NULL);
   if (!b) {
    loctable->del_node(args->n); 
+#ifdef CHORD_DEBUG
    printf("%s alert_handler delete %u,%qx\n", ts(), args->n.ip, args->n.id);
+#endif
   }
 }
 
