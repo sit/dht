@@ -500,27 +500,7 @@ stp_manager::doRPC (ptr<location> from, ptr<location> l,
 void
 stp_manager::timeout (rpc_state *C)
 {
-
-#if 0
-  u_int64_t now = getusec ();
-  warn << "stp_manager::timeout\n"; 
-  warn << "\t**now " << now << "\n";
-  warn << "\tID " << C->ID << "\n";
-  warn << "\tprogno.procno " << C->progno << "." << C->procno << "\n";
-  warn << "\tseqno " << C->seqno << "\n";
-  warn << "\trexmits " << C->rexmits << "\n";
-  warn << "\tcwind " << (int)cwind << "\n";
-  warn << "\tleft " << left << "\n";
-#endif
-
   C->rexmits++;
-#if 0  
-  warnx << gettime () << " resent an RPC (" 
-	<< C->progno << "." << C->procno << ") destined for " 
-	<< inet_ntoa (C->loc->saddr.sin_addr) << " seqno: " 
-	<< C->seqno << " retransmits: " << C->rexmits << "\n";
-#endif /* 0 */  
-
   update_cwind (-1);
 }
 
@@ -542,19 +522,7 @@ stp_manager::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
     if (now >= sent_time) {
       u_int64_t lat = now - sent_time;
       update_latency (C->from, C->loc, lat);
-      } else {
-	warn << "*** Ignoring timewarp: sent_time " << sent_time << " > now " << now << "\n";
-	warnx << " " << now       << "\n";
-	warnx << " " << getusec() << "\n";
-	warnx << " " << getusec() << "\n";
-	warnx << " " << getusec() << "\n";
-	warnx << " " << getusec() << "\n";
-	warnx << " " << getusec() << "\n";
-	warnx << " " << getusec() << "\n";
-	warnx << " " << getusec() << "\n";
-	warnx << " " << getusec() << "\n";
-	warnx << " " << getusec() << "\n";
-      }
+    } 
   }
 
 

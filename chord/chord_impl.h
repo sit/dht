@@ -115,7 +115,8 @@ class vnode_impl : public vnode {
   void stabilize_getsucc_cb (chordID pred,
 			     chordID s, net_address r, chordstat status);
   
-  void join_getsucc_cb (ptr<location> n, cbjoin_t cb, chord_nodelistres *r, clnt_stat err);
+  void join_getsucc_cb (ptr<location> n, cbjoin_t cb, chord_nodelistres *r, 
+			clnt_stat err);
   void get_successor_cb (chordID n, cbchordID_t cb, chord_noderes *res, 
 			 clnt_stat err);
   void get_predecessor_cb (chordID n, cbchordID_t cb, chord_noderes *res, 

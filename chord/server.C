@@ -290,18 +290,7 @@ user_args::fill_from (chord_node *from)
     from->r.port = t_arg->src_port;
     from->vnode_num = myindex;
   } else { //connected sockets don't have the addr field set in the sbp
-    /*    ref<axprt> x = (sbp->getsrv ())->xprt ();
-    axprt *xs = x->get ();
-    int fd = xs->getfd ();
-    
-    int len = size (addr);
-    sockaddr_in addr;
-    if (getpeername(fd,  (struct sockaddr *)&addr, &len)) {
-      from->r.hostname = inet_ntoa (addr.sin_addr);
-      from->r.port = ntohs (addr.sin_port);
-      warn << "connected socket " << from->r.hostname << " " << from->r.port << "\n";
-    }
-    */
+    warn << "XXX fill_from not supported on stream sockets\n";
   }
   
   from->x = t_arg->src_id;
