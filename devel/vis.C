@@ -5,8 +5,8 @@
 #include "rxx.h"
 #include "async.h"
 
-#define WINX 600
-#define WINY 600
+#define WINX 700
+#define WINY 700
 #define PI 3.14159
 #define TIMEOUT 10
 
@@ -702,6 +702,7 @@ lookup_cb (GtkWidget *widget, gpointer data)
   mpz_set_rawmag_be (&search_key, id, sizeof (id));  // For big endian
   warnx << "Searching for " << search_key << " from "
 	<< current_node->ID << "\n";
+  current_node->selected = true;
 
   search_path.setsize (0);
   search_step = 0;
@@ -729,7 +730,7 @@ draw_search_progress ()
 {
   GdkColor black;
   gdk_color_parse ("black", &black);
-  gdk_gc_set_line_attributes (draw_gc, 3,
+  gdk_gc_set_line_attributes (draw_gc, 5,
 			      GDK_LINE_SOLID,
 			      GDK_CAP_NOT_LAST,
 			      GDK_JOIN_MITER);
@@ -747,7 +748,7 @@ draw_search_progress ()
   if (search_step != search_path.size ())
     search_path[search_step - 1]->draw = DRAW_FINGERS;
 
-  gdk_gc_set_line_attributes (draw_gc, 1,
+  gdk_gc_set_line_attributes (draw_gc, 3,
 			      GDK_LINE_SOLID,
 			      GDK_CAP_NOT_LAST,
 			      GDK_JOIN_MITER);
@@ -926,6 +927,10 @@ init_color_list (char *filename)
   color_pair p;
   draw_gc = gdk_gc_new (drawing_area->window);
   assert (draw_gc);
+  gdk_gc_set_line_attributes (draw_gc, 3,
+			      GDK_LINE_SOLID,
+			      GDK_CAP_NOT_LAST,
+			      GDK_JOIN_MITER);
   cmap = gdk_colormap_get_system ();
 
   FILE *cf = fopen (filename, "r");
@@ -1077,6 +1082,9 @@ draw_ring ()
   int x, y;
   GtkWidget *widget = drawing_area;
 
+  GdkColor red;
+  gdk_color_parse ("red", &red);
+
   gdk_draw_rectangle (pixmap,
 		      widget->style->white_gc,
 		      TRUE,
@@ -1093,8 +1101,8 @@ draw_ring ()
     ID_to_xy (search_key, &x, &y);
     gdk_gc_set_foreground (draw_gc, &search_color);
     gdk_draw_arc (pixmap, draw_gc, TRUE,
-		  x - 6, y - 6,
-		  12, 12,
+		  x - 8, y - 8,
+		  16, 16,
 		  (gint16) 0, (gint16) 64*360);
     if (search_step > 0)
       draw_search_progress (); // updates state for below and draws some arrows
@@ -1102,11 +1110,11 @@ draw_ring ()
 
   f_node *n = nodes.first ();
   while (n) {
-    int radius = 4;
+    int radius = 5;
     ID_to_xy (n->ID, &x, &y);
     GdkGC *thisgc = widget->style->black_gc;
     if (n->highlight) {
-      radius = 6;
+      radius = 7;
       gdk_gc_set_foreground (draw_gc, &highlight_color);
       thisgc = draw_gc;
     }
@@ -1160,6 +1168,7 @@ draw_ring ()
 	((n->draw & DRAW_IMMED_PRED) == DRAW_IMMED_PRED) &&
 	n->res->resok->pred.alive) {
       int a,b;
+      set_foreground_lat (n->res->resok->pred.a_lat); 
       ID_to_xy (n->res->resok->pred.x, &a, &b);
       draw_arrow (x,y,a,b, draw_gc);
     }
@@ -1205,7 +1214,7 @@ ID_to_xy (chordID ID, int *x, int *y)
 {
  
   double angle = ID_to_angle (ID);
-  double radius = (WINX - 20)/2;
+  double radius = (WINX - 60)/2;
 
   *x = (int)(WINX/2 + sin (angle)*radius);
   *y = (int)(WINY/2 - cos (angle)*radius);
