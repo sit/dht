@@ -104,15 +104,13 @@ dhashcli::retrieve (blockID blockID, cb_ret cb, int options,
   ptr<rcv_state> rs = New refcounted<rcv_state> (blockID);
   rs->callbacks.push_back (cb);
   
-  route_iterator *ci = r_factory->produce_iterator_ptr (blockID.ID);
-
   if (blockID.ctype == DHASH_KEYHASH) {
+    route_iterator *ci = r_factory->produce_iterator_ptr (blockID.ID);
     ci->first_hop (wrap (this, &dhashcli::retrieve_block_hop_cb, rs, ci,
 			 options, 5, guess),
 		   guess);
-  } else {
-    delete ci;
-
+  }
+  else {
     vec<ptr<location> > sl = clntnode->succs ();
     if ((options & DHASHCLIENT_SUCCLIST_OPT) && 
 	use_succlist (sl, clntnode->my_pred ())) {
