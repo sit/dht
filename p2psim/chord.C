@@ -8,7 +8,7 @@
 using namespace std;
 extern bool vis;
 
-Chord::Chord(Node *n, uint numsucc) : Protocol(n)
+Chord::Chord(Node *n, uint numsucc) : Protocol(n), _isstable (false)
 {
   nsucc = numsucc;
   me.ip = n->ip();
@@ -66,9 +66,8 @@ Chord::find_successors(CHID key, uint m, bool intern)
   IDMap nprime = me;
   int count = 0;
 
-#ifdef CHORD_DEBUG
   vector<IDMap> route;
-#endif
+
   //printf("%s find_successors key %qu\n", ts(), PID(key));
 
   if (vis && !intern) 
@@ -86,10 +85,10 @@ Chord::find_successors(CHID key, uint m, bool intern)
     if (vis && !intern) 
       printf ("vis %lu step %16qx %16qx\n", now(), me.id, nprime.id);
 
-    doRPC(nprime.ip, &Chord::next_handler, &na, &nr);
-    if(nr.done){
-#ifdef CHORD_DEBUG
+    bool r = doRPC(nprime.ip, &Chord::next_handler, &na, &nr);
+    if(r && nr.done){
       route.push_back(nr.v[0]);
+#ifdef CHORD_DEBUG
       printf("%s find_successor %qx route: ",ts(), key);
       for (unsigned int i = 0; i < route.size(); i++) {
 	printf("(%u,%qx) ", route[i].ip, route[i].id);
@@ -101,17 +100,32 @@ Chord::find_successors(CHID key, uint m, bool intern)
 	printf ("vis %lu step %16qx %16qx\n", now(), me.id, nr.v[0].id);
 
       break;
-    } else {
-#ifdef CHORD_DEBUG
+    } else if (r) {
       route.push_back(nr.next);
-#endif
       nprime = nr.next;
+    } else {
+      printf ("%16qx rpc to %16qx failed %lu\n", me.id, nprime.id, now ());
+      route.pop_back ();
+      if (route.size () > 0) {
+	alert_args aa;
+	alert_ret ar;
+	aa.n = nprime;
+	nprime = route.back ();
+        doRPC (nprime.ip, &Chord::alert_handler, &aa, &ar);
+      } else {
+	nr.v.clear ();
+	break; 
+      }
     }
   }
 
   if (!intern) {
-    printf ("find_successor for (id %qx, key %qx) is (%u, %qx) hops %d\n", 
-	me.id, key, nr.v[0].ip, nr.v[0].id, count);
+    printf ("find_successor for (id %qx, key %qx)", me.id, key);
+    if (nr.v.size () == 0) {
+      printf ("failed\n");
+    } else {
+      printf ("is (%u, %qx) hops %d\n", nr.v[0].ip, nr.v[0].id, count);
+    }
   }
   return nr.v;
 }
@@ -130,24 +144,14 @@ Chord::next_handler(next_args *args, next_ret *ret)
     */
   //IDMap succ = loctable->succ(args->m);
   IDMap succ = loctable->succ(me.id+1);
-
-  /* The condition loctable->size()!=2 is a terrible hack. 
-     When a node first joins the system,
-     two entries (me and the wellknown node) are inserted into loctable
-     but we do not want to mis-use either as the successor answer during find_successor*/
   if(ConsistentHash::betweenrightincl(me.id, succ.id, args->key) ||
      succ.id == me.id){
     ret->done = true;
     ret->v.clear();
     ret->v.push_back(succ);
-    /*
-    printf("%s next_handler done key=%qu succ=%qu\n",
-           ts(), PID(args->key), PID(succ.id));
-	   */
- }else {
+ } else {
     ret->done = false;
     ret->next = loctable->pred(args->key);
-    //ret->next = succ;
     assert(ret->next.ip != me.ip);
  }
 }
@@ -186,8 +190,10 @@ Chord::join(Args *args)
 void
 Chord::reschedule_stabilizer(void *x)
 {
-  stabilize();
-  delaycb(STABLE_TIMER, &Chord::reschedule_stabilizer, (void *) 0);
+  if (!_isstable) {
+    stabilize();
+    delaycb(STABLE_TIMER, &Chord::reschedule_stabilizer, (void *) 0);
+  }
 }
 
 // Which paper is this code from? -- PODC 
@@ -309,8 +315,17 @@ Chord::fix_successor_list()
 void
 Chord::notify_handler(notify_args *args, notify_ret *ret)
 {
+  printf ("notify_handler %16qx: %16qx\n", me.id, args->me.id);
   IDMap p1 = loctable->pred();
   loctable->add_node(args->me);
+}
+
+
+void
+Chord::alert_handler(alert_args *args, alert_ret *ret)
+{
+  printf ("vis %lu delete %16qx %16qx\n", now (), me.id, args->n.id);
+  loctable->del_node(args->n);
 }
 
 void
@@ -323,6 +338,8 @@ Chord::get_predecessor_handler(get_predecessor_args *args,
 void
 Chord::dump()
 {
+  _isstable = true;
+
   printf("myID is %16qx %5u\n", me.id, me.ip);
   printf("===== %16qx =====\n", me.id);
 
@@ -466,8 +483,8 @@ LocTable::del_node(Chord::IDMap n)
   for (unsigned int i = 0; i < ring.size(); i++) {
     if (ring[i].id == n.id) {
       ring.erase(ring.begin() + i); //STL will shift rest of elments leftwise
+      break;
     }
-    return;
   }
 }
 

@@ -37,6 +37,7 @@ private:
   Channel *_c;            // where to send the reply
   IPAddress _src;
   IPAddress _dst;
+  bool _ok;
 };
 
 #endif // __PACKET_H

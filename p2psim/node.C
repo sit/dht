@@ -105,9 +105,6 @@ Node::sendPacket(IPAddress dst, Packet *p)
   p->_src = ip();
   p->_dst = dst;
 
-  Node *n = Network::Instance()->getnode(p->_dst);
-  if (!n->alive ()) return false;  // XXX simulate timeout
-
   // where to send the reply
   Channel *c = p->_c = chancreate(sizeof(Packet*), 0);
 
@@ -116,12 +113,12 @@ Node::sendPacket(IPAddress dst, Packet *p)
 
   // block on reply
   Packet *reply = (Packet *) recvp(c);
-
-  chanfree(c);
+  bool ok = reply->_ok;
   delete reply;
+  chanfree(c);
   delete p;
 
-  return true;
+  return ok;
 }
 
 
@@ -135,19 +132,24 @@ Node::Receive(void *px)
   Packet *p = (Packet *) px;
   Node *n = Network::Instance()->getnode(p->dst());
 
-  // get pointer to protocol
-  Protocol *proto = n->getproto(p->_proto);
-
-  // invoke function call
-  // send it up to the protocol
-  (proto->*(p->_fn))(p->_args, p->_ret);
-
   // make reply
   Packet *reply = new Packet();
   reply->_c = p->_c;
   reply->_src = p->_dst;
   reply->_dst = p->_src;
-  reply->_ret = p->_ret; // the reply for the layer above
+
+  if (n->alive ()) {
+    // get pointer to protocol
+    Protocol *proto = n->getproto(p->_proto);
+
+    // invoke function call
+    // send it up to the protocol
+    (proto->*(p->_fn))(p->_args, p->_ret);
+    reply->_ret = p->_ret; // the reply for the layer above
+    reply->_ok = true;
+  } else {
+    reply->_ok = false;  // XXX delete reply for timeout?
+  }
 
   // send it back
   send(Network::Instance()->pktchan(), &reply);

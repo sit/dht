@@ -4,7 +4,6 @@
 using namespace std;
 
 extern bool vis;
-#define STABILIZE 1
 
 Koorde::Koorde(Node *n) : Chord(n, k) 
 {
@@ -237,20 +236,18 @@ Koorde::fix_debruijn ()
 void
 Koorde::reschedule_stabilizer(void *x)
 {
-#if STABLIZE
-  Koorde::stabilize();
-  delaycb(STABLE_TIMER, &Koorde::reschedule_stabilizer, (void *)0);
-#endif
+  if (!isstable) {
+    Koorde::stabilize();
+    delaycb(STABLE_TIMER, &Koorde::reschedule_stabilizer, (void *)0);
+  }
 }
 
 void
 Koorde::stabilize()
 {
-  if (!isstable) {
-    printf ("stabilize %qx %lu\n", me.id, now ());
-    Chord::stabilize();
-    fix_debruijn();
-  }
+  printf ("stabilize %qx %lu\n", me.id, now ());
+  Chord::stabilize();
+  fix_debruijn();
 }
 
 bool

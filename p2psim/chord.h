@@ -62,6 +62,14 @@ public:
   struct notify_ret {
     int dummy;
   };
+
+  struct alert_args {
+    IDMap n;
+  };
+  struct alert_ret {
+    int dummy;
+  };
+
   struct next_args {
     CHID key;
     int m;
@@ -86,6 +94,7 @@ public:
   void get_successor_list_handler(get_successor_list_args *, get_successor_list_ret *);
   //void get_successor_list_handler(get_predecessor_args *, get_predecessor_ret *);
   void notify_handler(notify_args *, notify_ret *);
+  void alert_handler(alert_args *, alert_ret *);
   void next_handler(next_args *, next_ret *);
   void find_successors_handler(find_successors_args *, find_successors_ret *);
 
@@ -106,6 +115,7 @@ protected:
   CHID _prev_succ;
   uint i0;
   vector<IDMap> lastscs;
+  bool _isstable;
 
   virtual vector<IDMap> find_successors(CHID key, uint m, bool intern);
   void fix_successor();
