@@ -479,7 +479,7 @@ dhashcli::insert_to_cache_cb (cbinsert_path_t cb, dhash_stat err,
 {
   vec<chordID> ret;
   if (err)
-    cb (DHASH_STOREERR, ret);
+    cb (err, ret);
   else
     cb (DHASH_OK, ret);
 }
