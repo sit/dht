@@ -91,13 +91,13 @@ Kelips::~Kelips()
 
 // assign a score to a contact, to help decide which to keep.
 // lower is better. pretty ad-hoc.
-int
-Kelips::contact_score(Info i)
+inline int
+Kelips::contact_score(const Info &i)
 {
   int rtt = i._rtt;
   if(rtt < 1)
     rtt = 200; // make a guess on the high side.
-  int score = rtt + (i.age() / 100);
+  int score = rtt + (i.age() / 128);
   return score;
 }
 
@@ -219,10 +219,16 @@ Kelips::crash(Args *a)
 bool
 Kelips::node_key_alive(ID key)
 {
-  set<IPAddress> ips = Network::Instance()->getallips();
-  for(set<IPAddress>::const_iterator i = ips.begin(); i != ips.end(); ++i){
-    if(ip2id(*i) == key){
-      return Network::Instance()->getnode(*i)->alive();
+  if(ip2id((IPAddress) key) == key){
+    Node *n = Network::Instance()->getnode((IPAddress) key);
+    assert(n);
+    return n->alive();
+  } else {
+    set<IPAddress> ips = Network::Instance()->getallips();
+    for(set<IPAddress>::const_iterator i = ips.begin(); i != ips.end(); ++i){
+      if(ip2id(*i) == key){
+        return Network::Instance()->getnode(*i)->alive();
+      }
     }
   }
   assert(0);
@@ -270,7 +276,8 @@ Kelips::lookup(Args *args)
   }
 
   if(0){
-    printf("%qd %d lat=%d lookup(%qd) ", now(), ip(), (int)(t2 - t1), key);
+    printf("%qd %d lat=%d lookup(%qd) ", now(), ip(), (int)(t2 - t1),
+           (unsigned long long) key);
     for(u_int i = 0; i < history.size(); i++)
       printf("%d ", history[i]);
     printf("%s%s   ", ok ? "OK" : "FAIL", (!ok && oops) ? " OOPS" : "");
@@ -707,9 +714,11 @@ Kelips::purge(void *junk)
     int to =
       (ip2group(in->_ip) == group() ? _timeout : 2*_timeout);
     if(in->_heartbeat + to < now()){
+#if 0
       printf("%qd %d timed out %d %s\n",
              now(), ip(), in->_ip,
              node_key_alive(ip2id(in->_ip)) ? "oops" : "ok");
+#endif
       _info.erase(l[i]);
       delete in;
     }

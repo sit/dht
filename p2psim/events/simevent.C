@@ -24,6 +24,7 @@
 
 #include "p2psim/threadmanager.h"
 #include "simevent.h"
+#include "p2psim/eventqueue.h"
 #include <iostream>
 using namespace std;
 

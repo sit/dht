@@ -67,7 +67,8 @@ public:
   virtual void insert(Args*);
 
  private:
-  typedef ConsistentHash::CHID ID;
+  // typedef ConsistentHash::CHID ID;
+  typedef u_int ID;
 
   // Parameters, with defaults from Kelips paper.
 
@@ -113,7 +114,7 @@ public:
       _ip = ip; _heartbeat = hb; _rounds = 0; _rtt = -1;
     }
     Info() { _ip = 0; _heartbeat = 0; _rounds = 0; _rtt = -1; }
-    int age() { return now() - _heartbeat; }
+    int age() const { return now() - _heartbeat; }
   };
 
   // Set of nodes that this node knows about.
@@ -121,12 +122,12 @@ public:
   map<IPAddress, Info *> _info;
 
   void gotinfo(Info i, int rtt);
-  int id2group(ID id) { return(id % _k); }
-  int ip2group(IPAddress xip) { return(id2group(ip2id(xip))); }
   ID ip2id(IPAddress xip) {
     return xip;
     // return ConsistentHash::ip2chid(xip);
   }
+  int id2group(ID id) { return(id % _k); }
+  int ip2group(IPAddress xip) { return(id2group(ip2id(xip))); }
   ID id() { return ip2id(ip()); }
   int group() { return ip2group(ip()); }
   void gossip(void *);
@@ -154,7 +155,7 @@ public:
   void rpcstat(bool ok, IPAddress dst, int latency, int nitems);
   IPAddress victim(int g);
   void handle_ping(void *, void *);
-  int contact_score(Info i);
+  inline int contact_score(const Info &i);
   IPAddress closest_contact(int g);
   bool node_key_alive(ID key);
 

@@ -29,11 +29,6 @@
 
 unsigned verbose = 0;
 
-Time
-now() {
-  return EventQueue::Instance()->time();
-}
-
 // New plan for crash-free exit:
 // Goal:
 //   Call destructors before exit() so that they get

@@ -43,6 +43,7 @@ public:
   static EventQueue* Instance();
   void add_event(Event*);
   Time time() { return _time; }
+  static Time fasttime() { return _instance->time(); }
   void go();
 
 private:

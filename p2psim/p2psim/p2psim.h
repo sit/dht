@@ -53,7 +53,7 @@ typedef unsigned long long Time;
 //
 
 // returns the current time
-Time now();
+#define now() (EventQueue::fasttime())
 
 // tries to clean things up cleanly
 void graceful_exit(void*);

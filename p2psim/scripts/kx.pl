@@ -17,7 +17,7 @@ my $params =
      [ "timeout", 5000, 10000, 20000, 40000 ]
      ];
 
-my $nnodes = 100;
+my $nnodes = 256;
 my $k = int(sqrt($nnodes));
 my $diameter = 100; # diameter of Euclidean universe
 
