@@ -500,15 +500,17 @@ locationtable::closestpredloc (const chordID &x, vec<chordID> failed)
 ptr<location>
 locationtable::closestpredloc (const chordID &x) 
 {
+  int sz = size ();
   locwrap *l = locs[x];
   if (l) {
     l = prev (l);
   } else {
     l = loclist.closestpred (x);
   }
-  while (l && !l->good ())
+  while (l && !l->good () && sz-- > 0)
     l = prev (l);
-  
+
+  assert (sz > 0);
   // warnx << "findpredloc of " << x << " is " << n << "\n";
   return l->loc_;
 }
