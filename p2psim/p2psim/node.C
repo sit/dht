@@ -306,6 +306,7 @@ Node::print_lookup_stat_helper( vector<Time> times, vector<double> stretch,
   // sort first, ask questions later
   sort( times.begin(), times.end() );
   sort( stretch.begin(), stretch.end() );
+  sort( hops.begin(), hops.end() );
 
   Time time_med, time_10, time_90;
   double stretch_med, stretch_10, stretch_90;
