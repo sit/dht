@@ -51,8 +51,8 @@ my $param_lists = {
   "Kademlia" =>
     [
      [ "initstate", 1 ],
-     [ "alpha", 1 ],
-     [ "k", 8 ],
+     [ "alpha", 1, 2, 3, 4, 5 ],
+     [ "k", 8, 16, 32 ],
      [ "stabilize_timer", 32000 ],
      [ "refresh_rate", 32000 ],
      # [ "stabilize_timer", 2000, 4000, 8000, 16000, 32000 ],
