@@ -162,7 +162,7 @@ avatar::play ()
 	  !strncasecmp (command.cstr (), "EAST", 4) || 
 	  !strncasecmp (command.cstr (), "NORTH", 5) || 
 	  !strncasecmp (command.cstr (), "SOUTH", 5)) 
-	move (command);
+	; //move (command);
       else {
 	cout << "Huh??\n";
 	play ();
@@ -200,7 +200,7 @@ avatar::look_cb (dhash_stat stat, ptr<dhash_block> blk, vec<chordID> path)
 }
 
 void 
-avatar::move (str command)
+avatar::move (str command, av_cb_t cb)
 {
   ref<room> next = New refcounted<room> (str(""), dhash);
   if (!strncasecmp (command.cstr (), "WEST", 4) && 
@@ -226,16 +226,17 @@ avatar::move (str command)
   if (next->get_name ().len ()) {
     //TODO: change state to limbo
     dhash->retrieve (location->ID (), DHASH_NOAUTH, 
-		     wrap (this, &avatar::done_move_lookup, next));
+		     wrap (this, &avatar::done_move_lookup, next, cb));
   } else {
     cout << "You can't go that way!\n";
-    play ();
+    (*cb) (0);
+    //play ();
   }
 }
 
 void
-avatar::done_move_lookup (ref<room> next, dhash_stat stat, ptr<dhash_block> blk, 
-			  vec<chordID> path)
+avatar::done_move_lookup (ref<room> next, av_cb_t cb, dhash_stat stat, 
+			  ptr<dhash_block> blk, vec<chordID> path)
 {
   if (stat == DHASH_OK) {
     location = New refcounted<room> (blk->data, blk->len, dhash);
@@ -243,22 +244,28 @@ avatar::done_move_lookup (ref<room> next, dhash_stat stat, ptr<dhash_block> blk,
     location->leave (a);
   
     dhash->insert (location->ID (), location->bytes (), location->size (),
-		   wrap (this, &avatar::done_remove, next), NULL, DHASH_NOAUTH);
+		   wrap (this, &avatar::done_remove, next, cb), NULL, DHASH_NOAUTH);
+  } else {
+    cout << "avatar::done_move_lookup dhash err " << stat << "\n";
+    (*cb) (0);
   } 
 }
 
 void
-avatar::done_remove (ref<room> next, dhash_stat stat, ptr<insert_info> i)
+avatar::done_remove (ref<room> next, av_cb_t cb, dhash_stat stat, ptr<insert_info> i)
 {
   if (stat == DHASH_OK) {
     location = next;
     dhash->retrieve (next->ID (), DHASH_NOAUTH, 
-		     wrap (this, &avatar::done_enter_lookup));
-  }
+		     wrap (this, &avatar::done_enter_lookup, cb));
+  } else {
+    cout << "avatar::done_move_lookup dhash err " << stat << "\n";
+    (*cb) (0);
+  } 
 }
 
 void 
-avatar::done_enter_lookup (dhash_stat stat, ptr<dhash_block> blk, 
+avatar::done_enter_lookup (av_cb_t cb, dhash_stat stat, ptr<dhash_block> blk, 
 			   vec<chordID> path)
 {
   if (stat == DHASH_OK) {
@@ -267,23 +274,34 @@ avatar::done_enter_lookup (dhash_stat stat, ptr<dhash_block> blk,
     next->enter (a);
     location = next;
     dhash->insert (location->ID (), location->bytes (), location->size (),
-		   wrap (this, &avatar::done_enter), NULL, DHASH_NOAUTH);
-  }
+		   wrap (this, &avatar::done_enter, cb), NULL, DHASH_NOAUTH);
+  } else {
+    cout << "avatar::done_move_lookup dhash err " << stat << "\n";
+    (*cb) (0);
+  } 
 } 
 
 void
-avatar::done_enter (dhash_stat stat, ptr<insert_info> i)
+avatar::done_enter (av_cb_t cb, dhash_stat stat, ptr<insert_info> i)
 {
   if (stat == DHASH_OK)
     dhash->insert (ID (), bytes (), size (),
-		   wrap (this, &avatar::done_enter_cb), NULL, DHASH_NOAUTH);
+		   wrap (this, &avatar::done_enter_cb, cb), NULL, DHASH_NOAUTH);
+  else {
+    cout << "avatar::done_move_lookup dhash err " << stat << "\n";
+    (*cb) (0);
+  }
 }
 
 void
-avatar::done_enter_cb (dhash_stat stat, ptr<insert_info> i)
+avatar::done_enter_cb (av_cb_t cb, dhash_stat stat, ptr<insert_info> i)
 {
   if (stat == DHASH_OK)
-    play ();
+    (*cb) (1);
+  else {
+    cout << "avatar::done_move_lookup dhash err " << stat << "\n";
+    (*cb) (0);
+  }
 }
 
 void 

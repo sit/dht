@@ -14,6 +14,8 @@ void really_done (int, mud_stat);
 void play (mud_stat);
 void done_look (mud_stat, ptr<room>);
 void done_touch (ref<thing>, mud_stat);
+void done_move (ref<room> oldroom, int);
+void refresh_room (mud_stat, ptr<room>);
 
 void 
 done_insert (int i, mud_stat stat)
@@ -33,9 +35,16 @@ really_done (int i, mud_stat stat)
     char rname[50];
     sprintf (rname, "%s%d", "r", i);
     ref<room> l = New refcounted<room> (str (rname), dhash);
-    a->enter (l);
-    mud->insert (ref<avatar> (a), wrap (&play));
+    mud->lookup (l, wrap (&refresh_room));
   } 
+}
+
+void
+refresh_room (mud_stat stat, ptr<room> r) {
+  if (stat == MUD_OK) {
+    a->enter (r);
+    mud->insert (ref<avatar> (a), wrap (&play));
+  }
 }
 
 float 
@@ -47,12 +56,26 @@ get_random ()
   return rat;
 }
 
+bool
+there_is_a_door (int i) 
+{
+  if (i == 0)
+    return (a->loc ()->north.get_name ().len () > 0);
+  if (i == 1)
+    return (a->loc ()->south.get_name ().len () > 0);
+  if (i == 2)
+    return (a->loc ()->east.get_name ().len () > 0);
+  else 
+    return (a->loc ()->west.get_name ().len () > 0);
+}
+
 void 
 play (mud_stat stat)
 {
   assert (stat == 0);
   //pick from move (dest), look, and touch (sth)
   bool look=0, touch=0, move=0;
+
   float ratio = get_random ();
   if (ratio < 0.5)
     look = 1;
@@ -60,7 +83,7 @@ play (mud_stat stat)
     touch = 1;
   if (ratio >= 0.75)
     move = 1;
-  
+
   if (look)
     mud->lookup (a->loc (), wrap (&done_look));
   if (touch) {
@@ -78,9 +101,39 @@ play (mud_stat stat)
     }
   }
   if (move) {
-    cout << "moving\n";
-    play (mud_stat (0));
+    cout << "moving from " << a->loc ()->to_str ();
+    int i;
+    do {
+      i = int (get_random () * 4);      
+    } while (!there_is_a_door (i));
+
+    cout << "to " << i << "\n";
+
+    str nextroom;
+    if (i == 0)
+      nextroom = str ("NORTH");
+    if (i == 1)
+      nextroom = str ("SOUTH");
+    if (i == 2)
+      nextroom = str ("EAST");
+    if (i == 3)
+      nextroom = str ("WEST");
+
+    a->move (nextroom, wrap (&done_move, a->loc ()));
   }
+}
+
+void 
+done_move (ref<room> oldroom, int success)
+{
+  if (success) {
+    cout << "Moved from " << oldroom->get_name () 
+	 << " size " << oldroom->size () << " bytes\n"
+	 << "        to " << a->loc ()->get_name () 
+	 << " size " << a->loc ()->size () << " bytes\n";
+    mud->insert (ref<avatar> (a), wrap (&play));
+  } else
+    cout << "move failed\n";
 }
 
 void 
@@ -110,7 +163,7 @@ done_alook (mud_stat stat, ptr<avatar> av)
 {
   if (stat == MUD_OK) {
     a = av;
-    play (mud_stat (0));
+    mud->lookup (a->loc (), wrap (&refresh_room));
   } else 
     cout << "done_alook err mud_stat: " << stat << "\n";    
 }

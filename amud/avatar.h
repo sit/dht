@@ -8,6 +8,8 @@
 #include "thing.h"
 #include "mud_obj.h"
 
+typedef callback<void, int>::ref av_cb_t;
+
 class avatar: public mud_obj {
 
   ref<dhashclient> dhash;
@@ -19,14 +21,13 @@ class avatar: public mud_obj {
   uint inv_size ();
   void look_cb (dhash_stat, ptr<dhash_block>, vec<chordID>);
   void get (str);
-  void move (str);
-  void done_move_lookup (ref<room>, dhash_stat, ptr<dhash_block>, 
+  void done_move_lookup (ref<room>, av_cb_t, dhash_stat, ptr<dhash_block>, 
 			 vec<chordID>);
-  void done_remove (ref<room>, dhash_stat, ptr<insert_info>);
-  void done_enter_lookup (dhash_stat stat, ptr<dhash_block> blk, 
+  void done_remove (ref<room>, av_cb_t, dhash_stat, ptr<insert_info>);
+  void done_enter_lookup (av_cb_t, dhash_stat stat, ptr<dhash_block> blk, 
 			  vec<chordID> path);
-  void done_enter (dhash_stat, ptr<insert_info>);
-  void done_enter_cb (dhash_stat, ptr<insert_info>);
+  void done_enter (av_cb_t, dhash_stat, ptr<insert_info>);
+  void done_enter_cb (av_cb_t, dhash_stat, ptr<insert_info>);
 
  public:
   avatar (str, str, ref<dhashclient>, ptr<room> l=NULL);
@@ -41,6 +42,7 @@ class avatar: public mud_obj {
   void play ();
   //void look ();
   //void touch (ref<thing>);
+  void move (str, av_cb_t cb);
   str read_input ();
   str to_str ();
 };
