@@ -41,7 +41,7 @@
 #include <merkle_sync_prot.h>
 static int MERKLE_ENABLED = getenv("MERKLE_ENABLED") ? atoi(getenv("MERKLE_ENABLED")) : 0;
 static int MERKLE_TREE    = getenv("MERKLE_TREE") ? atoi(getenv("MERKLE_TREE")) : 0;
-static int DONT_REPLICATE  = getenv("DONT_REPLICATE") ? atoi(getenv("DONT_REPLICATE")) : 0;
+static int DONT_REPLICATE = getenv("DONT_REPLICATE") ? atoi(getenv("DONT_REPLICATE")) : 0;
 
 #define LEASE_TIME 2
 #define LEASE_INACTIVE 60
@@ -356,6 +356,16 @@ dhash::route_upcall (int procno,void *args, cbupcalldone_t cb)
     arg->source = host_node->my_ID ();
     arg->nonce = farg->nonce;
     arg->lease = 0;
+
+    // we don't have the block, but if we just joined,
+    // it should be at one of our successors.
+    vec<chordID> succs = host_node->succs ();
+    arg->nodelist.setsize (succs.size ());
+    for (u_int i = 0; i < succs.size (); i++) {
+      arg->nodelist[i].x = succs[i];
+      arg->nodelist[i].r = host_node->locations->getaddress (succs[i]);
+    }
+
     host_node->locations->cacheloc (farg->from.x, farg->from.r,
 				    wrap (this, &dhash::block_cached_loc, arg));
     (*cb)(true);

@@ -142,6 +142,10 @@ struct s_dhash_block_arg {
   chordID source;
   int32 cookie;
   int32 lease;
+  /* if a the sender of this RPC doesn't have the block 
+   * then he sends back a list of successors.
+   */
+  chord_node nodelist<>; 
 };
 
 program DHASH_PROGRAM {
