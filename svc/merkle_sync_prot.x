@@ -1,4 +1,4 @@
-%#include <merkle/merkle_hash.h>
+%#include <merkle_hash.h>
 
 enum merkle_stat {
   MERKLE_OK = 0,
