@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-## $Id: Makefile.am,v 1.2 2003/03/07 21:35:37 sit Exp $
+## $Id: Makefile.am,v 1.3 2003/03/12 15:58:57 sit Exp $
 
 noinst_LIBRARIES = libutil.a
 
@@ -19,7 +19,7 @@ TESTS = test_ida test_skiplist
 check_PROGRAMS = $(TESTS)
 
 test_ida_SOURCES = test_ida.C
-test_ida_LDADD = ./libutil.a $(LIBSFSCRYPT) $(LIBASYNC) $(LIBGMP)
+test_ida_LDADD = ./libutil.a $(LIBSFSCRYPT) $(LIBARPC) $(LIBASYNC) $(LIBGMP)
 
 test_skiplist_SOURCES = test_skiplist.C
 
