@@ -1,1 +1,9 @@
 Makefile.in
+Makefile
+.deps
+.libs
+block
+example1
+example2
+testslave
+

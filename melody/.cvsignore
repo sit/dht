@@ -1,1 +1,7 @@
 Makefile.in
+.deps
+.libs
+Makefile
+it
+melody
+

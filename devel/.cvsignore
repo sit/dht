@@ -1,1 +1,7 @@
 Makefile.in
+Makefile
+.deps
+.libs
+dbm
+typetest
+vis

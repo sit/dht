@@ -22,3 +22,14 @@ sfscd_prot.h
 stamp-svc-repo
 uvfs_prot.C
 uvfs_prot.h
+chord_prot.C
+chord_prot.h
+dhash_prot.C
+dhash_prot.h
+merkle_sync_prot.C
+merkle_sync_prot.h
+sfsro_prot_cfs.C
+sfsro_prot_cfs.h
+starfs_prot.C
+starfs_prot.h
+
