@@ -18,7 +18,7 @@ log_2(ConsistentHash::CHID gap)
 ChordFinger::ChordFinger(Node *n) : Chord(n) 
 {
   for (unsigned int i = 0; i < NBCHID; i++) {
-    loctable->pin(ConsistentHash::successorID(me.id, i));
+    loctable->pin(ConsistentHash::successorID(me.id, i), 1, 0);
   }
 }
 

@@ -92,9 +92,9 @@ protected:
 
 typedef struct {
   ConsistentHash::CHID id;
-  bool pin_succ; //false for pinning down predecessors, true for pinning down successors
-  unsigned int pin_num;
-}pin_entry;
+  uint pin_succ;
+  uint pin_pred;
+} pin_entry;
 
 class LocTable {
 
@@ -113,25 +113,14 @@ class LocTable {
     void add_node(Chord::IDMap n);
     void del_node(Chord::IDMap n);
     void notify(Chord::IDMap n);
-    void pin(Chord::CHID x, bool pin_succ = true, unsigned int pin_num = 1);
-/*
-    struct idmapwrap {
-      sklist_entry<idmapwrap> sortlink_;
-      Chord::CHID id_;
-      IPAddress ip_;
-    };
-    struct chidwrap {
-      sklist_entry<chidwrap> sortlink_;
-      Chord::CHID id_;
-    };
-    skiplist<idmapwrap, Chord::CHID, &idmapwrap::id_, &idmapwrap::sortlink_> loclist;  emil's skiplist needs sfs's keyfunc.h
-    skiplist<chidwrap, Chord::CHID, &chidwrap::id_, &chidwrap::sortlink_> pinlist;
-    */
+    void pin(Chord::CHID x, uint pin_succ, uint pin_pred);
+
   private:
     vector<Chord::IDMap> ring;
     vector<pin_entry> pinlist;
     unsigned int _max;
 
+    uint findsuccessor (ConsistentHash::CHID x);
     void evict(); //evict one node to make sure ring contains <= _max elements
 };
 
