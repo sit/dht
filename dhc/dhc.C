@@ -8,7 +8,6 @@
 
 int RECON_TM = getenv("DHC_RECON_TM") ? atoi(getenv("DHC_RECON_TM")) : 10;
 int dhc_debug = getenv("DHC_DEBUG") ? atoi(getenv("DHC_DEBUG")) : 0;
-//#define DHC_DEBUG 1
 
 dhc::dhc (ptr<vnode> node, str dbname, uint k) : 
   myNode (node), n_replica (k), recon_tm_rpcs (0)
@@ -60,11 +59,10 @@ dhc::recon_timer ()
       ptr<dbrec> rec = db->lookup (entry->key);
       if (rec) {
 	ref<dhc_block> kb = to_dhc_block (rec);
-	if (guilty = responsible (myNode, key)) {// || kb->meta->cvalid) {
-	  recon_tm_rpcs++;
-	  myNode->find_successor (key, wrap (this, &dhc::recon_tm_lookup, 
+	guilty = responsible (myNode, key); // || kb->meta->cvalid) {
+	recon_tm_rpcs++;
+	myNode->find_successor (key, wrap (this, &dhc::recon_tm_lookup, 
 					     kb, guilty));	
-	}
       } else 
 	warn << "did not find key = " << key << "\n";
       entry = iter->nextElement ();
@@ -82,14 +80,31 @@ dhc::recon_tm_lookup (ref<dhc_block> kb, bool guilty, vec<chord_node> succs,
 {
   recon_tm_rpcs--;
   if (!err) {
-    if (!up_to_date (kb->meta->config.nodes, succs)) {
+
+    if (dhc_debug) {
+      warn << " current config: \n";
+      for (uint i=0; i < kb->meta->config.nodes.size (); i++)
+	warnx << kb->meta->config.nodes[i] << "\n";
+      warnx << "\n";
+      warnx << " k immediate succs: \n";
+      for (uint i=0; i < n_replica; i++) 
+	warnx << succs[i].x << "\n";
+      warnx << "\n";
+    }
+
+    if (!up_to_date (n_replica, kb->meta->config.nodes, succs)) {
       if (guilty) {// Case 1 
+	if (dhc_debug)
+	  warn << myNode->my_ID () << ": I am guilty.\n";
 	timeval tp;
 	gettimeofday (&tp, NULL);
 	start_recon = tp.tv_sec * (u_int64_t)1000000 + tp.tv_usec;
 	warn << myNode->my_ID () << " Start RECON at " << start_recon << "\n";
 	recon (kb->id, wrap (this, &dhc::recon_tm_done));
       } else { // Case 2
+	if (dhc_debug)
+	  warn << myNode->my_ID () << ": I am NOT guilty.\n";
+
 	ref<location> l = myNode->locations->lookup_or_create (succs[0]);
 
 	ptr<dhc_newconfig_arg> arg = New refcounted<dhc_newconfig_arg>;
@@ -137,10 +152,9 @@ dhc::recon (chordID bID, dhc_cb_t cb)
     }
 #endif
     dhc_soft *b = dhcs[bID];
-    if (b) {
+    if (b)
       dhcs.remove (b);
-      delete b;
-    }
+
     b = New dhc_soft (myNode, kb);
     
     if (b->status == IDLE)
@@ -526,14 +540,6 @@ dhc::recv_newconfig (user_args *sbp)
     }    
     if (dhc_debug)
       warn << "\n\n dhc::recv_newconfig. " << kb->to_str ();
-
-    //It's fine to receive newer configs even if it skips the configs.
-    if (//kb->meta->config.seqnum != 0 &&
-	kb->meta->config.seqnum > newconfig->old_conf_seqnum) {
-      dhc_newconfig_res res; res.status = DHC_CONF_MISMATCH;
-      sbp->reply (&res);
-      return;      
-    }
   }
 
   kb->data->tag.ver = newconfig->data.tag.ver;
@@ -551,7 +557,7 @@ dhc::recv_newconfig (user_args *sbp)
 	 << kb->to_str () << "\n";
 
   db->insert (id2dbrec (kb->id), to_dbrec (kb));
-  db->sync (); 
+  //db->sync (); 
 
   if (b && !is_primary (newconfig->bID, 
 			myNode->my_ID (), kb->meta->config.nodes)) {

@@ -15,7 +15,7 @@ int paxos_cmp (paxos_seqnum_t, paxos_seqnum_t);
 int tag_cmp (tag_t, tag_t);
 void ID_put (char *, chordID);
 void ID_get (chordID, char *);
-bool up_to_date (vec<chordID>, vec<chord_node>);
+bool up_to_date (uint, vec<chordID>, vec<chord_node>);
 
 static inline ptr<dhc_block> 
 to_dhc_block (ptr<dbrec> rec)
@@ -39,7 +39,7 @@ set_ac (vec<chordID> *ap, dhc_prepare_resok res)
       ap->push_back (res.new_config[i]);
     return true;
   }
-  if (ap->size () != res.new_config.size ())
+  if (res.new_config.size () != 0 && ap->size () != res.new_config.size ())
     return false;
   for (uint i=0; i<ap->size (); i++) {
     if ((*ap)[i] != res.new_config[i])
