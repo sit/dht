@@ -96,6 +96,11 @@ class lrucache {
     return R::ret (NULL);
   }
 
+#if 0
+  // this code leaks memory, if you need to find out which is the
+  // oldest element and then remove it, you can define a callback that
+  // gets called when the oldest element is removed.
+  
   typename R::type remove_oldest () {
     lrucache_entry *e = lrulist.first;
     if (e) {
@@ -105,6 +110,17 @@ class lrucache {
     }
     return R::ret (NULL);
   }
+#else
+  
+  void remove_oldest () {
+    lrucache_entry *e = lrulist.first;
+    if (e) {
+      lrulist.remove(e);
+      entries.remove(e);
+      delete e;
+    }
+  }
+#endif
 
   //
   // add functions for in lru order traversal
