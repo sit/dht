@@ -1,5 +1,4 @@
-/* $Id: tapestry.C,v 1.6 2003/09/26 17:46:25 strib Exp $ */
-
+/* $Id: tapestry.C,v 1.7 2003/09/29 21:50:41 strib Exp $ */
 #include "tapestry.h"
 #include <stdio.h>
 #include <math.h>
@@ -29,6 +28,7 @@ void
 Tapestry::lookup(Args *args) 
 {
   TapDEBUG(2) << "Tapestry Lookup" << endl;
+  //__tmg_dmalloc_stats();
 }
 
 void
@@ -71,7 +71,7 @@ Tapestry::join(Args *args)
     // go through each member of the init list, add them to your routing 
     // table, and ask them for their forward and backward pointers 
     for( uint j = 0; j < initlist.size(); j++ ) {
-      NodeInfo ni = initlist[j];
+      NodeInfo ni = *(initlist[j]);
       TapDEBUG(3) << "adding in join: " << ni._addr << " " << i << endl;
       add_to_rt( ni._addr, ni._id );
       nn_args nna;
@@ -116,6 +116,7 @@ Tapestry::join(Args *args)
     for( uint k = 0; k < _k; k++ ) {
       closestk[k] = NULL;
     }
+    bool closest_full = false;
     for( uint j = 0; j < seeds.size(); j++ ) {
       NodeInfo *currseed = seeds[j];
       // add them all to the routing table (this gets us the ping time for free
@@ -129,9 +130,16 @@ Tapestry::join(Args *args)
       bool added = false;
       for( uint k = 0; k < _k; k++ ) {
 	NodeInfo * currclose = closestk[k];
-	if( currclose == NULL || currclose->_distance > currseed->_distance ) {
+	if( currclose == NULL || 
+	    (closest_full && currclose->_distance > currseed->_distance ) ) {
+	  if( currclose != NULL ) {
+	    delete currclose;
+	  }
 	  closestk[k] = currseed;
 	  added = true;
+	  if( k == _k - 1 ) {
+	    closest_full = true;
+	  }
 	  //TapDEBUG(2) << "close is " << currseed->_addr << endl;
 	  break;
 	}
@@ -146,17 +154,23 @@ Tapestry::join(Args *args)
     TapDEBUG(3) << "gathered closest for level " << i << endl;
 
     // these k are the next initlist
+    for( uint l = 0; l < initlist.size(); l++ ) {
+      delete initlist[l];
+    }
     initlist.clear();
     seeds.clear();
     for( uint k = 0; k < _k; k++ ) {
       NodeInfo *currclose = closestk[k];
       if( currclose != NULL ) {
 	TapDEBUG(3) << "close is " << currclose->_addr << endl;
-	initlist.push_back( *currclose );
+	initlist.push_back( currclose );
       }
     }
   }
 
+  for( uint l = 0; l < initlist.size(); l++ ) {
+    delete initlist[l];
+  }
 
   joined = true;
   TapDEBUG(2) << "join done" << endl;
@@ -219,6 +233,11 @@ Tapestry::handle_join(join_args *args, join_return *ret)
     na.nodelist = thisrow;
     nodelist_return nr;
     doRPC( args->ip, &Tapestry::handle_nodelist, &na, &nr );
+
+    // free the nodelist
+    for( uint i = 0; i < na.nodelist.size(); i++ ) {
+      delete na.nodelist[i];
+    }
 
     // start the multicast
     mc_args mca;
@@ -293,6 +312,10 @@ Tapestry::handle_mc(mc_args *args, mc_return *ret)
 	if( ni != NULL && ni->_addr != ip() && ni->_addr != args->new_ip ) {
 	  nodelist.push_back( ni );
 	  args->watchlist[i][j] = true;
+	} else {
+	  if( ni != NULL ) {
+	    delete ni;
+	  }
 	}
       }
     }
@@ -300,6 +323,11 @@ Tapestry::handle_mc(mc_args *args, mc_return *ret)
   mca.nodelist = nodelist;
 
   doRPC( args->new_ip, &Tapestry::handle_mcnotify, &mca, &mcr );
+
+  // free the nodelist
+  for( uint i = 0; i < nodelist.size(); i++ ) {
+    delete nodelist[i];
+  }
 
   // don't go on if this is from a lock
   if( args->from_lock ) {
@@ -316,10 +344,13 @@ Tapestry::handle_mc(mc_args *args, mc_return *ret)
       NodeInfo *ni = _rt->read( i, j );
       // don't RPC to ourselves or to the new node
       if( ni == NULL || ni->_addr == ip() || ni->_addr == args->new_ip ) {
+	if( ni != NULL ) {
+	  delete ni;
+	}
 	continue;
       } else {
-	mc_args *mca = new mc_args();
-	mc_return *mcr = new mc_return();
+	mc_args *mca = New mc_args();
+	mc_return *mcr = New mc_return();
 	mca->new_ip = args->new_ip;
 	mca->new_id = args->new_id;
 	mca->alpha = i + 1;
@@ -329,9 +360,10 @@ Tapestry::handle_mc(mc_args *args, mc_return *ret)
 	  ni->_addr << "/" << print_guid( ni->_id ) << endl;
 	unsigned rpc = asyncRPC( ni->_addr, &Tapestry::handle_mc, mca, mcr );
 	assert(rpc);
-	resultmap[rpc] = new mc_callinfo(ni->_addr, mca, mcr);
+	resultmap[rpc] = New mc_callinfo(ni->_addr, mca, mcr);
 	rpcset.insert(rpc);
 	numcalls++;
+	delete ni;
       }
       
     }
@@ -342,8 +374,8 @@ Tapestry::handle_mc(mc_args *args, mc_return *ret)
   for( uint i = 0; i < locks->size(); i++ ) {
     NodeInfo ni = (*locks)[i];
     if( ni._addr != args->new_ip ) {
-	mc_args *mca = new mc_args();
-	mc_return *mcr = new mc_return();
+	mc_args *mca = New mc_args();
+	mc_return *mcr = New mc_return();
 	mca->new_ip = args->new_ip;
 	mca->new_id = args->new_id;
 	mca->alpha = args->alpha;
@@ -353,7 +385,7 @@ Tapestry::handle_mc(mc_args *args, mc_return *ret)
 	  ni._addr << "/" << print_guid( ni._id ) << " as a lock " << endl;
 	unsigned rpc = asyncRPC( ni._addr, &Tapestry::handle_mc, mca, mcr );
 	assert(rpc);
-	resultmap[rpc] = new mc_callinfo(ni._addr, mca, mcr);
+	resultmap[rpc] = New mc_callinfo(ni._addr, mca, mcr);
 	rpcset.insert(rpc);
 	numcalls++;
     }
@@ -413,7 +445,7 @@ Tapestry::handle_mcnotify(mcnotify_args *args, mcnotify_return *ret)
 {
 
   TapDEBUG(3) << "got mcnotify from " << args->ip << endl;
-  NodeInfo mc_node( args->ip, args->id );
+  NodeInfo *mc_node = new NodeInfo( args->ip, args->id );
   initlist.push_back( mc_node );
 
   // add all the nodes on the nodelist as well
@@ -461,6 +493,8 @@ Tapestry::stabilized(vector<GUID> lid)
 	    "," << get_digit( currguid, match ) << ") where " << 
 	    print_guid( currguid ) << " would fit." << endl;
 	    return false;
+	} else {
+	  delete ni;
 	}
       }
     }
@@ -534,7 +568,9 @@ Tapestry::next_hop( GUID key )
     // this cannot be us, since this should be the entry where we differ
     // from the key, but just to be sure . . .
      assert( ni->_id != id() );
-     return ni->_addr;
+     IPAddress addr = ni->_addr;
+     delete ni;
+     return addr;
   } else {
     // if there's no such entry, it's time to surrogate route.  yeah baby.
     // keep adding 1 to the digit until you find a match.  If it's us,
@@ -560,7 +596,14 @@ Tapestry::next_hop( GUID key )
       // if it is us, go around another time
       // otherwise, we've found the next hop
       if( ni->_addr != ip() ) {
-	return ni->_addr;
+	IPAddress addr = ni->_addr;
+	delete ni;
+	return addr;
+      } else {
+	if( ni != NULL ) {
+	  delete ni;
+	  ni = NULL;
+	}
       }
 
     }
@@ -666,9 +709,13 @@ RouteEntry::RouteEntry( NodeInfo *first_node )
 RouteEntry::~RouteEntry()
 {
   for( uint i = 0; i < _size; i++ ) {
-    delete _nodes[i];
-    _nodes[i] = NULL;
+
+    if( _nodes[i] != NULL ) {
+      delete _nodes[i];
+      _nodes[i] = NULL;
+    }
   }
+  delete [] _nodes;
 }
 
 NodeInfo *
@@ -795,19 +842,40 @@ RoutingTable::RoutingTable( Tapestry *node )
 
 RoutingTable::~RoutingTable()
 {
-  // delete all route entries
+  TapRTDEBUG(3) << "rt destroyed\n" << endl;
+  //delete all route entries
   for( uint i = 0; i < _node->_digits_per_id; i++ ) {
+    for( uint j = 0; j < _node->_base; j++ ) {
+      if( _table[i][j] != NULL ) {
+	delete _table[i][j];
+	_table[i][j] = NULL;
+      }
+    }
     delete [] _table[i];
-    _table[i] = NULL;
   }
   delete [] _table;
-  
+  for( uint i = 0; i < _node->_digits_per_id; i++ ) {
+    for( uint j = 0; j < _node->_base; j++ ) {
+      if( _locks[i][j] != NULL ) {
+	delete _locks[i][j];
+	_locks[i][j] = NULL;
+      }
+    }
+    delete _locks[i];
+  }
+  delete [] _locks;
+  for( uint i = 0; i < _node->_digits_per_id; i++ ) {
+    if( _backpointers[i] != NULL ) {
+      delete _backpointers[i];
+    }
+  }
+  delete [] _backpointers;
+
 }
 
 bool
 RoutingTable::add( IPAddress ip, GUID id, Time distance )
 {
-  vector<IPAddress> kicked_out;
   bool in_added = false;
 
   // find the spots where it fits and add it
@@ -830,12 +898,15 @@ RoutingTable::add( IPAddress ip, GUID id, Time distance )
       in_added = in_added | level_added;
       if( kicked_out_node != NULL ) {
 	// tell the node we're no longer pointing to it at this level
-	//TapRTDEBUG(2) << kicked_out_node << endl;
 	_node->place_backpointer( kicked_out_node->_addr, i, true );
+	TapRTDEBUG(4) << "kicked out " << kicked_out_node->_addr << endl;
+	delete kicked_out_node;
       }
       if( level_added && ip != _node->ip() ) {
 	// tell the node we are pointing to it
 	_node->place_backpointer( ip, i, false );
+      } else {
+	delete new_node;
       }
     }
     // if the last digit wasn't a match, we're done
@@ -854,7 +925,7 @@ RoutingTable::read( uint i, uint j )
   if( re == NULL || re->get_first() == NULL ) {
     return NULL;
   } else {
-    return re->get_first();
+    return New NodeInfo(re->get_first()->_addr, re->get_first()->_id);
   }
 }
 

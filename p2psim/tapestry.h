@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.4 2003/09/26 17:46:25 strib Exp $ */
+/* $Id: tapestry.h,v 1.5 2003/09/29 21:50:41 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -144,7 +144,7 @@ private:
 
   // used during join to keep track of the next nodes to ping
   // during nearest neighbor
-  vector<NodeInfo> initlist;
+  vector<NodeInfo *> initlist;
 
   // how many nearest neighbors do we keep at every step?
   static const uint _k = 16;
