@@ -26,9 +26,10 @@
  *
  */
 
+#include <chord_prot.h>
 #include <chord.h>
 #include <dhash.h>
-#include <chord_prot.h>
+#include "location.h"
 #include "sfsmisc.h"
 #include "arpc.h"
 #include "crypt.h"

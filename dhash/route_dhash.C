@@ -1,5 +1,6 @@
 #include <dhash.h>
 #include <route.h>
+#include <location.h>
 #include <chord.h>
 #include <chord_prot.h>
 #include "sfsmisc.h"
