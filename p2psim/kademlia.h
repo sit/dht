@@ -16,7 +16,7 @@ public:
   virtual void lookup(Args*);
 
   void join_kademlia(void *);
-  void do_join(void*, void*);
+  void do_join(IPAddress *, void*);
 };
 
 #endif // __KADEMLIA_H

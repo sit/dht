@@ -52,7 +52,7 @@ Euclidean::parse(ifstream &ifs)
     c.second = atoi(coords[1].c_str());
 
     // all the rest are protocols on this node
-    for(int i=2; i<words.size(); i++) {
+    for(unsigned int i=2; i<words.size(); i++) {
       // run the specified protocol on the node
       Protocol *p = ProtocolFactory::Instance()->create(words[i], n);
       send(n->protchan(), &(words[i]));

@@ -8,8 +8,8 @@ Pastry::Pastry(Node *n) : Protocol(n),
   // suggested values in paper
   idlength(128),
   _b(4),
-  _M(2 << _b),
-  _L(2 << _b)
+  _L(2 << _b),
+  _M(2 << _b)
 {
   // create a random 128-bit ID
   _id = BN_new();

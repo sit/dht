@@ -43,7 +43,7 @@ Chord::find_successors(CHID key, int m)
     na.key = key;
     na.m = m;
     na.who = me;
-    doRPC(nprime.ip, Chord::next_handler, &na, &nr);
+    doRPC(nprime.ip, &Chord::next_handler, &na, &nr);
     if(nr.done){
       return nr.v;
     } else {
@@ -98,7 +98,7 @@ Chord::join(Args *args)
   find_successor_args fsa;
   find_successor_ret fsr;
   fsa.n = me.id;
-  doRPC(wkn, Chord::find_successor_handler, &fsa, &fsr);
+  doRPC(wkn, &Chord::find_successor_handler, &fsa, &fsr);
   printf("Chord(%u,%u)::join2 %u\n", me.ip, me.id, fsr.succ.id);
   loctable->add_node(fsr.succ);
   // stabilize();
@@ -112,14 +112,14 @@ Chord::stabilize()
 
   get_predecessor_args gpa;
   get_predecessor_ret gpr;
-  doRPC(succ.ip, Chord::get_predecessor_handler, &gpa, &gpr);
+  doRPC(succ.ip, &Chord::get_predecessor_handler, &gpa, &gpr);
   loctable->add_node(gpr.n);
 
   succ = loctable->succ(1);
   notify_args na;
   notify_ret nr;
   na.me = me;
-  doRPC(succ.ip, Chord::notify_handler, &na, &nr);
+  doRPC(succ.ip, &Chord::notify_handler, &na, &nr);
 
   //in chord pseudocode, fig 6 of ToN paper, this is a separate periodically called function
   fix_predecessor();
@@ -205,7 +205,7 @@ void
 LocTable::add_node(Chord::IDMap n)
 {
   int end = ring.size() -1;
-  for (unsigned int i = 1; i < end ; i++) {
+  for (int i = 1; i < end ; i++) {
 
     if (ring[i].ip == n.ip) {
       return;
