@@ -29,6 +29,8 @@ public:
 
   // RPC handlers.
   void *find_successor_x(void *);
+  void *get_predecessor(void *);
+  void *notify(void *);
 
   string s();
 
@@ -37,6 +39,9 @@ protected:
   IDMap me;
 
   IDMap next(CHID n);
+  void fix_predecessor();
+  void fix_successor();
+  void stabilize();
 };
 
 class LocTable {
@@ -69,6 +74,7 @@ class LocTable {
 
     IDMap succ(unsigned int m);
     IDMap pred();
+    IDMap next(CHID n);
 
     void add_node(IDMap n);
     void del_node(IDMap n);

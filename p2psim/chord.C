@@ -33,7 +33,7 @@ Chord::find_successor_x(void *x)
   CHID n = (CHID) x;
   /*
   if (recursive) {
-    nn = next(n);
+    nn = loctable->next(n);
     if (nn.ip == me.ip) {
       IDMap *ret = (IDMap*) malloc(sizeof(IDMap)); //this result passing is nasty
       *ret = me;
@@ -46,11 +46,11 @@ Chord::find_successor_x(void *x)
   IDMap tmp;
   IDMap *nn, *cn;
   cn = &me;
-  tmp = next(n);
+  tmp = loctable->next(n);
   nn = &tmp;
   while (nn->ip != cn->ip) {
     cn = nn;
-    nn = (IDMap *) doRPC((IPAddress)(cn->ip), Chord::lookup, n);
+    nn = (IDMap *) doRPC((cn->ip), Chord::lookup, n);
   }
   IDMap *ret = (IDMap*)malloc(sizeof(IDMap));
   *ret = *cn;
@@ -63,7 +63,7 @@ void
 Chord::join(Args *args)
 {
   IPAddress wkn = (IPAddress) atoi(((*args)["wellknown"]).c_str());
-
+  if (!wkn) return;
   cout << s() + "::join" << endl;
   void *ret = doRPC(wkn, Chord::find_successor_x, me.id);
   printf("Chord(%u,%u)::join2 %u\n", me.ip, me.id, (CHID) ret);
@@ -72,29 +72,19 @@ Chord::join(Args *args)
   // stabilize();
 }
 
-IDMap
-Chord::next(CHID n)
-{
-  if (ConsistentHash::between(loctable->pred().id, me.id, n)) { 
-    return me;
-  }else {
-    return loctable->succ(1);
-  }
-}
-
-
-#if 0
-
 void
 Chord::stabilize()
 {
-  if (successor == 0) return;
+  IDMap succ = loctable->succ(1);
+  if (succ.ip == 0) return;
 
-  IDMap x = doRPC(successor.ip, get_predecessor);
-  if (ConsistentHash::between(me.id, successor.id, x.id)) {
-    successor = x;
-  }
-  doRPC(successor.ip, notify, me);
+  IDMap* ret = (IDMap *)doRPC(succ.ip, Chord::get_predecessor, (void *)0);
+
+  loctable->add_node(*(IDMap *)ret);
+  free(ret);
+
+  succ = loctable->succ(1);
+  doRPC(succ.ip, Chord::notify, (void *)&me);
 
   //in chord pseudocode, fig 6 of ToN paper, this is a separate periodically called function
   fix_predecessor();
@@ -104,35 +94,42 @@ Chord::stabilize()
 void
 Chord::fix_predecessor()
 {
-  if (predecessor.ip && Failed(predecessor.ip)) {
-    predecessor.ip = 0;
+  /*
+  IDMap pred = loctable->pred();
+  if (pred.ip && Failed(pred.ip)) {
+      loctable->del_node(pred);
   }
+  */
 }
 
 void
 Chord::fix_successor()
 {
-  //in the absence of a successor list, 
-  // we are doomed
-  if (successor.ip && Failed(successor.ip)) {
-    successor.ip = 0;
+  /*
+  IDMap succ = loctable->succ(1);
+  if (succ.ip && Failed(succ.ip)) {
+    loctable->del_node(succ);
   }
+  */
 }
 
-void
-Chord::notify(IDMap nn)
+void *
+Chord::notify(void *n)
 {
-  if ((predecessor.ip == 0) || ConsistentHash::between(predecessor.id, me.id, nn.id)) {
-    predecessor = nn;
-  }
+  loctable->notify(*(IDMap *)n);
+  return NULL;
 }
 
-IDMap
-Chord::get_predecessor()
+void *
+Chord::get_predecessor(void *)
 {
-  return predecessor;
+  //too ugly
+  IDMap *ret = (IDMap *)malloc(sizeof(IDMap));
+  *ret = loctable->pred();
+  return ret;
 }
 
+#if 0
 void
 Chord::leave()
 {
@@ -161,18 +158,30 @@ LocTable::pred()
   return ring[_end]; //the end of the ring array contains the predecessor node
 }
 
+IDMap
+LocTable::next(CHID n)
+{
+  //no locality consideration
+  for (int i = 0; i < _end; i++) {
+    if ((ring[i+1].ip == 0) || ConsistentHash::between(ring[i].id, ring[i+1].id, n)) {
+      return ring[i];
+    } 
+  }
+}
+
 void
 LocTable::add_node(IDMap n)
 {
 
   assert(_end <= _max -1);
 
-  for (int i = 1; i <= _end ; i++) {
-
-    assert(ring[i].ip);
+  for (int i = 1; i < _end ; i++) {
 
     if (ring[i].ip == n.ip) {
       return;
+    } else if (ring[i].ip == 0) {
+      assert(i == 1);
+      ring[i] = n;
     } else if (ConsistentHash::between(ring[i-1].id, ring[i].id, n.id)) {
 
       if (_end < (_max -1)) {
@@ -220,14 +229,16 @@ LocTable::del_node(IDMap n)
     }
   }
 
-  if (i != _end) {
-    _end--;
+  if ((i == _end) || (_end <= 2)) {
+    ring[i].ip = 0; 
+    return;
   }
 
-  while ( i < _end ) {
+  while ( i < (_end-1)) {
     ring[i] = ring[i+1];
     i++;
   }
   ring[_end].ip = 0;
+  _end--;
 }
 
