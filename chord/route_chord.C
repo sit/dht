@@ -25,17 +25,14 @@ route_chord::first_hop (cbhop_t cbi, ptr<chordID> guess)
   cb = cbi;
 
   chordID myID = v->my_ID ();
-  ptr<location> succ = v->my_succ ();
-  if (betweenrightincl (myID, succ->id (), x) || myID == succ->id ()) {
-    search_path.push_back (succ);
-  } else  {
-    vec<chordID> failed_null;
-    ptr<location> l;
-    if (guess) l = v->locations->lookup (*guess);
-    // if the guess isn't cached, ignore it
-    if (!l) l = v->closestpred (x, failed_null);
-    search_path.push_back (l);
-  }
+  
+  vec<chordID> failed_null;
+  ptr<location> l;
+  if (guess) l = v->locations->lookup (*guess);
+  // if the guess isn't cached, ignore it
+  if (!l) l = v->closestpred (x, failed_null);
+  search_path.push_back (l);
+
   next_hop (); // deliver the upcall
 }
 
