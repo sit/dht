@@ -351,12 +351,12 @@ void
 tcp_manager::doRPC_tcp_cleanup (ptr<aclnt> c, RPC_delay_args *args,
                                 clnt_stat err)
 {
-  long diff;
+  u_int64_t diff;
   if (args->from && 
       args->from->address ().hostname == args->l->address ().hostname)
     diff = 5000;
   else {
-    long now = getusec ();
+    u_int64_t now = getusec ();
     diff = now - args->now;
     if (diff > 5000000)
       warn << "long tcp latency to " << args->l->address ().hostname
@@ -609,8 +609,8 @@ stp_manager::rpc_done (long acked_seqno)
       args = Q.next (args);
 
     //stats
-    long now = getusec ();
-    long diff = now - args->now;
+    u_int64_t now = getusec ();
+    u_int64_t diff = now - args->now;
     lat_inq.push_back (diff);
     if (lat_inq.size () > 1000) lat_inq.pop_back ();
 

@@ -37,7 +37,7 @@ struct RPC_delay_args {
   void *out;
   aclnt_cb cb;
   long fake_seqno;
-  long now;
+  u_int64_t now;
 
   tailq_entry<RPC_delay_args> q_link;
 
