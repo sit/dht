@@ -4,56 +4,7 @@
 
 #include "incl.h"
 
-static Node *NodeHashTable[HASH_SIZE];
-
-void deleteRefFromTables(Node *n1, int id, int leave);
-
-int getSuccessor(Node *n, int k)
-{
-  return n->successorId[k];
-}
-
-int getPredecessor(Node *n, int k)
-{
-  return n->predecessorId[k];
-}
-
-
-void setSuccessor(Node *n, int id, int k)
-{
-  n->successorId[k] = id;
-}
-
-void setPredecessor(Node *n, int id, int k)
-{
-  n->predecessorId[k] = id;
-}
-
-void updateSuccessor(Node *n, int succId) 
-{
-  int i;
-
-  for (i = 0; i < NUM_BITS; i++) {
-    if (between(succId, successorId(n->id, i), getSuccessor(n, i), 
-		NUM_BITS) || (successorId(n->id, i) == succId)) {
-      setSuccessor(n, succId, i);
-      if (i == 0)
-	updateDocList(n);
-    }
-  }
-}
-	
-void updatePredecessor(Node *n, int predId) 
-{
-  int i;
-
-  for (i = 0; i < NUM_BITS; i++) {
-    if (between(predId, getPredecessor(n, i), predecessorId(n->id, i),
-		NUM_BITS))
-      setPredecessor(n, predId, i);
-  }
-}
-
+Node *NodeHashTable[HASH_SIZE];
 
 Node *newNode(int id) 
 { 
@@ -65,8 +16,6 @@ Node *newNode(int id)
 
   return n;
 }
-
-
 
 
 /* add node n ad the head of the list */
@@ -83,12 +32,13 @@ Node *removeFromList(Node *head, Node *n)
   if (n == head)
     return n->next;
 
-  for (n1 = head; n1->next != n; n1 = n1->next) {
+  for (n1 = head; ((n1->next != n) && n1); n1 = n1->next) 
     n1 = n1->next;
-    return head;
-  }
 
-  printf("removeFromList: node not faound\n");
+  if (!n1)
+    panic("removeFromList: node not found\n");
+
+  n1->next = n->next;
   return head;
 }
 
@@ -111,10 +61,12 @@ Node *addNode(int id)
 
 void deleteNode(Node *n)
 {
+
   freeDocList(n);
+
   NodeHashTable[n->id % HASH_SIZE] = 
     removeFromList(NodeHashTable[n->id % HASH_SIZE], n);
-  free(n);
+  free(n); 
 }
 
 
@@ -150,6 +102,40 @@ int getRandomNodeId()
     if (NodeHashTable[i])
       return (NodeHashTable[i])->id;
   }
+  return -1;
+}
+
+
+/*******************************************************/
+/*      update node state
+/*******************************************************/
+
+void updateNodeState(Node *n, int idx, int id)
+{
+  int i;
+
+  for (i = idx; i < NUM_BITS; i++) 
+    if (!between(id, n->id, fingerStart(n, i), NUM_BITS))
+      break;
+  
+  for (; i < NUM_BITS; i++) {
+    if (id == fingerStart(n, i) || 
+	between(id, fingerStart(n, i), n->finger[i], NUM_BITS)) {
+      if (i == 0)
+	updateSuccessor(n, id);
+      else
+	n->finger[i] = id;
+    }
+  }
+  /*
+  if ((n->id == n->successor) || 
+      between(n->finger[0], n->id, n->successor, NUM_BITS)) 
+    n->successor = n->finger[0];
+  else
+    n->finger[0] = n->successor;
+  */    
+  if (n->predecessor == n->id || between(id, n->predecessor, n->id, NUM_BITS)) 
+    n->predecessor = id;
 }
 
 
@@ -161,9 +147,9 @@ int printNodeInfo(Node *n)
   printf("Node = %d | ", n->id);
 
   for (i = 0; i < NUM_BITS; i++) {
-    printf("<%d:%d/%d:%d> ", successorId(n->id, i), getSuccessor(n, i),
-	   predecessorId(n->id, i), getPredecessor(n, i));
+    printf("<%d:%d> ", fingerStart(n, i), n->finger[i]);
   }
+  printf("   predecessor = %d\n", n->predecessor);
   printf("\n");
   
   printf("   doc list: ");
@@ -192,56 +178,21 @@ void faultyNode(Node *n, int *dummy)
   for (i = 0; i < HASH_SIZE; i++) {
     for (n1 = NodeHashTable[i]; n1; n1 = n1->next) {
       if (n != n1)
-	deleteRefFromTables(n1, n->id, FALSE);
-    }
-  }
-  deleteNode(n);
-}
-
-void leaveNode(Node *n, int *dummy)
-{
-  int i;
-  Node *n1;
-
-  if (getSuccessor(n, 0) != n->id)
-    moveDocList(n, getNode(getSuccessor(n, 0)));
-
-  for (i = 0; i < HASH_SIZE; i++) {
-    for (n1 = NodeHashTable[i]; n1; n1 = n1->next) {
-      if (n != n1)
-	deleteRefFromTables(n1, n->id, TRUE);
+	deleteRefFromTables(n1, n->id);
     }
   }
   deleteNode(n);
 }
 
 
-void deleteRefFromTables(Node *n1, int id, int leave)
+void updateSuccessor(Node *n, int id)
 {
-  int i;
 
-  /*
-  if (leave && getPredecessor(n1, 0) == id) 
-    moveDocList(getNode(id), n1);
-  */
+  if (n->successor == id || n->id == id)
+    return;
 
-  for (i = NUM_BITS - 1; i >= 0; i--) {
-    if (getSuccessor(n1, i) == id) {
-      if (i == NUM_BITS - 1) 
-	setSuccessor(n1, n1->id, i);
-      else
-	setSuccessor(n1, getSuccessor(n1, i+1), i);
-    }
-  }
+  n->successor = n->finger[0] = id;
 
-  for (i = NUM_BITS - 1; i >= 0; i--) {
-    if (getPredecessor(n1, i) == id) {
-      if (i == NUM_BITS - 1) 
-	setPredecessor(n1, n1->id, i);
-      else
-	setPredecessor(n1, getPredecessor(n1, i+1), i);
-    }
-  }
+  updateDocList(n);
 }
-
 

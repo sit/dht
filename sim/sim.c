@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <malloc.h>
+#include <stdlib.h>
 
 #define DECL_VAR
 #include "incl.h"
@@ -11,17 +12,20 @@ int main(int argc, char **argv)
   Node  *n;
   int   i = 0;
 
-  if (argc != 2) {
-    printf("usage: %s input_file\n", argv[0]);
+
+  if (argc != 3) {
+    printf("usage: %s input_file seed\n", argv[0]);
     exit (-1);
   }
 
   EventQueue.q = initEventQueue();
   EventQueue.size = MAX_NUM_ENTRIES;
 
-  initRand(31);
+  initRand(atoi(argv[2]));
+  
 
   readInputFile(argv[1]);
+
 
   while (Clock < MAX_TIME) {
     ev = getEvent(&EventQueue, Clock);
@@ -35,10 +39,14 @@ int main(int argc, char **argv)
           tsec += 1.0;
 	}
       }
-      /* printf("time = %f\n", ev->time); */
+      /*
+      if ((ev->time) >= 30299020) {
+	printf("time = %f\n", ev->time);
+	exit (-1);
+      }*/
       if (n = getNode(ev->nodeId)) 
 	ev->fun(n, ev->params);
-      freeEvent(ev);
+      free(ev);
     }
   }
 

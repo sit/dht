@@ -1,101 +1,83 @@
-
 #include <stdlib.h>
-
 #include "incl.h"
 
-void join1(Node *n, FindArgStruct *p);
-void join2(Node *n, FindArgStruct *p);
-void updateSuccessor1(Node *n, FindArgStruct *p);
-void updatePredecessor1(Node *n, FindArgStruct *p);
+void join_entry(Node *n, Node *n1);
+void join_cont1(Node *n, Stack *stack);
+void join_cont2(Node *n, Stack *stack);
+void join_return(Node *n, Stack *stack);
 
-void join_ev(Node *n, int *nodeId)
-{
-  join(n, *nodeId);
-}
-
-/* node n joins through other node nodeId */
-void join(Node *n, int nodeId) {
+/* 
+ * n joins the network;
+ * nodeId is an arbitrary node in the network
+ */ 
+ 
+void join(Node *n, int *nodeId) {
   int i;
-
-if (n->id == 4)
-  printf("4444\n");
-
+  Node *n1 = getNode(*nodeId);
 
   /* initialize all entries */
-  for (i = 0; i < NUM_BITS; i++) {
-    setSuccessor(n, n->id, i);
-    setPredecessor(n, n->id, i);
-  }
-  if (nodeId != -1)
-    findPredecessor(n, nodeId, n->id, join1);
+  for (i = 0; i < NUM_BITS; i++) 
+    n->finger[i] = n->id;
+  n->predecessor = n->successor = n->id;
+
+  if (n1 && (*nodeId != -1)) 
+    join_entry(n, n1);
 
   /* invoke stabilize */
-  genEvent(n->id, stabilize, (void *)NULL, 
-	   Clock + unifRand(0.5*STABILIZE_PERIOD, 1.5*STABILIZE_PERIOD));
-
+  genEvent(n->id, stabilize_entry, (void *)NULL, 
+	   Clock + unifRand(0.5*STABILIZE_PERIOD, 1.5*STABILIZE_PERIOD)); 
 }
 
-void join1(Node *n, FindArgStruct *p) 
+
+void join_entry(Node *n, Node *n1)
 {
-  updatePredecessor(n, p->replyId);
-  findSuccessor(n, p->srcId, n->id, join2);
+  Stack *stack;
+
+  stack = pushStack(NULL, newStackItem(n->id, join_cont1));
+  stack->data.key = n->id;
+  CALL(n1->id, findPredecessor_entry, stack);
 }
 
-void join2(Node *n, FindArgStruct *p)
+
+void join_cont1(Node *n, Stack *stack)
 {
-  int predId = getPredecessor(n, 0);
+  Stack *top = topStack(stack);
+  Node  *p   = getNode(top->ret.nid);
 
-  /* 
-   * check wether n is between its predecessor (predId) and the 
-   * successor of predId (i.e., p->replyId) 
-   * if yes, p->replyId is n's successor
-   * otherwise, p->replyId is a better predecessor for n; update n's
-   * predecessor and iterate 
-   */
-  if (between(n->id, predId, p->replyId, NUM_BITS) || (predId == p->replyId)) {
+  if (!p) 
+    KILL_REQ(stack);
 
-    updateSuccessor(n, p->replyId);
-    boostrap(n, p->replyId);
-    boostrap(n, getPredecessor(n, 0));
-    genEvent(p->replyId, notify, newInt(n->id), Clock + intExp(AVG_PKT_DELAY));
-    genEvent(predId, notify, newInt(n->id), Clock + intExp(AVG_PKT_DELAY));
-    /* notify(getNode(p->replyId), n->id); */
-    /* notify(getNode(predId), n->id); */
+  if ((p->successor == p->id) ||
+      (between(n->id, p->id, p->successor, NUM_BITS) ||
+       p->successor == n->id)) {
 
-  } else {
-    /* p->replyId is still a predecessor of n->id; iterate */
-    updatePredecessor(n, predId);
-    findSuccessor(n, predId, n->id, join2);
-  }
+    updateSuccessor(n, p->successor);
+    n->predecessor = p->id;
+    top->fun = join_cont2;
+    top->data.nid = p->successor;
+
+    CALL(n->id, bootstrap_entry, stack);
+
+  } else 
+    CALL(p->id, getSuccessor, stack);
 }
 
 
-void boostrap(Node *n, int nodeId)
+void join_cont2(Node *n, Stack *stack)
 {
-  int i;
+  Stack *top = topStack(stack);
 
-  for (i = 1; i < NUM_BITS; i++) {
-    findSuccessor(n, nodeId, successorId(n->id, i), updateSuccessor1);
-    findPredecessor(n, nodeId, predecessorId(n->id, i), updatePredecessor1);
-  }
+  top->fun = join_return;
+  top->data.nid = n->id;
+  n->status = PRESENT;
+  CALL(n->id, notify_entry, stack);
 }
 
-void updateSuccessor1(Node *n, FindArgStruct *p) 
+void join_return(Node *n, Stack *stack)
 {
-  if (n->id != p->replyId) 
-    updateSuccessor(n, p->replyId);
+  updateDocList(n); 
+  RETURN(n->id, stack = popStack(stack));
 }
 
-void updatePredecessor1(Node *n, FindArgStruct *p) 
-{
-  if (n->id != p->replyId) 
-    updatePredecessor(n, p->replyId);
-}
-	
 
-/* notify node  */
-void notify(Node *n, int *nodeId)
-{
-  updateSuccessor(n, *nodeId);
-  updatePredecessor(n, *nodeId);
-}
+

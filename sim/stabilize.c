@@ -2,96 +2,87 @@
 
 #include "incl.h"
 
-void stabilize_src1(Node *n);
-void getSuccessor_dst(Node *n, NeighborArgStruct *p);
-void setPredecessor_src(Node *n, NeighborArgStruct *p);
-void getPredecessor_dst(Node *n, NeighborArgStruct *p);
-void setSuccessor_src(Node *n, NeighborArgStruct *p);
+void stabilize_loop(Node *n, Stack *stack);
+void stabilize_succ(Node *n, Stack *stack);
+void stabilize_pred(Node *n, Stack *stack);
 
-/* 
- *  Event diagram to implement stabilization protocol 
- *
- *
- *      (NODE N)              (SUCCESSOR/PREDECESSOR OF N)
- *      
- *       ---> stabilize   -
- *       |                  -  
- *       |                    -  
- *       |                      -> getSuccessor_dst
- *       |                    -
- *       |                  -
- *       | setPredecessor_src          
- *       |
- *       |
- *       ---> stabilize 
- *       |
- *       .
- *       .
- *       .
- */
 
-void stabilize(Node *n, void *dummy)
+/*******************************************************/
+/*       stabilize (always called by local node)
+/*******************************************************/
+  
+void stabilize(Node *n)
 {
-  NeighborArgStruct  *p;
-  int                 i;
+  notify_entry(n, NULL);
+}
 
-  for (i = 0; i < NUM_BITS; i++) {
+void stabilize_entry(Node *n, Stack *stack)
+{
+  Stack *top = topStack(stack);
 
-    if (i == 0 || (getPredecessor(n, i) != getPredecessor(n, i - 1))) {
-      if (n->id != getPredecessor(n, i)) {
-	p = newNeighborArgStruct(n->id, i, 0);
-	genEvent(getPredecessor(n, i), getSuccessor_dst, p, 
-		 Clock + intExp(AVG_PKT_DELAY));
-      }
-    }
-
-    if (i == 0 || (getSuccessor(n, i) != getSuccessor(n, i - 1))) {
-      if (n->id != getSuccessor(n, i)) {
-	p = newNeighborArgStruct(n->id, i, 0);
-	genEvent(getSuccessor(n, i), getPredecessor_dst, p, 
-		 Clock + intExp(AVG_PKT_DELAY));
-      }
-    }
+  if (n->status != PRESENT) {
+    Node *n1 = getNode(getRandomNodeId());
+    if (n1 && n1->status == PRESENT)
+      join_entry(n, n1);
+    return;
   }
 
-  genEvent(n->id, stabilize, NULL, 
-	   Clock + unifRand(0.5*STABILIZE_PERIOD, 1.5*STABILIZE_PERIOD));
+  stack = pushStack(stack, newStackItem(n->id, stabilize_loop));
+  topStack(stack)->data.i = 0;
+  CALL(n->id, stabilize_loop, stack);
+}
+
+void stabilize_loop(Node *n, Stack *stack)
+{
+  Stack *top = topStack(stack);
+  int      i = top->data.i;
+
+  /*
+  for (; i < NUM_BITS; i++)
+    if (n->finger[i] != n->id)
+      break;
+  */
+  if (i < NUM_BITS) {
+    top->data.i = i;
+    top->fun = stabilize_succ;
+    CALL(n->finger[i], getPredecessor, stack);
+  } else {
+    top->fun = stabilize_pred;
+    CALL(n->predecessor, getSuccessor, stack);
+  }
 }
 
 
-void getSuccessor_dst(Node *n, NeighborArgStruct *p)
-{
-  NeighborArgStruct *pnew = newNeighborArgStruct(n->id, p->k, 
-						 getSuccessor(n, 0 /*p->k*/));
+void stabilize_succ(Node *n, Stack *stack)
+{ 
+  Stack *top = topStack(stack);
+  int     id = top->ret.nid;
+  int      i = top->data.i;
 
-  /* XXX */
-  updatePredecessor(n, p->srcId);
-  updateSuccessor(n, p->srcId);
-
-  genEvent(p->srcId, setPredecessor_src, pnew, Clock + intExp(AVG_PKT_DELAY));
-}  
-
-
-void setPredecessor_src(Node *n, NeighborArgStruct *p)
-{
-  updatePredecessor(n, p->replyId);
+  if (id == fingerStart(n, i) || 
+      between(id, fingerStart(n, i), n->finger[i], NUM_BITS)) {
+    setFinger(n, i, id);
+  }
+  (top->data.i)++;
+  CALL(n->id, stabilize_loop, stack);
 }
 
-void getPredecessor_dst(Node *n, NeighborArgStruct *p)
-{
-  NeighborArgStruct *pnew = newNeighborArgStruct(n->id, p->k, 
-						 getPredecessor(n, 0 /*p->k*/));
+void stabilize_pred(Node *n, Stack *stack)
+{ 
+  Stack *top = topStack(stack);
+  int     id = top->ret.nid;
+ 
+  if (between(id, n->predecessor, n->id, NUM_BITS)) 
+    n->predecessor = id;
+  top->fun = stabilize_pred;
+  top->data.nid  = n->id;
 
-  /* XXX -- for fast convergence */
-  updatePredecessor(n, p->srcId);
-  updateSuccessor(n, p->srcId);
+  /* invoke stabilize */
+  if (n->status == PRESENT)
+    genEvent(n->id, stabilize_entry, (void *)NULL, 
+	     Clock + unifRand(0.5*STABILIZE_PERIOD, 1.5*STABILIZE_PERIOD));
 
-  genEvent(p->srcId, setSuccessor_src, pnew, Clock + intExp(AVG_PKT_DELAY));
-}  
-
-
-void setSuccessor_src(Node *n, NeighborArgStruct *p)
-{
-  updateSuccessor(n, p->replyId);
+  updateDocList(n);
+  RETURN(n->id, stack = popStack(stack));
 }
 

@@ -1,21 +1,22 @@
 #include "incl.h"
 
-NeighborArgStruct *newNeighborArgStruct(int srcId, int k, int replyId) 
+NeighborArgStruct *newNeighborArgStruct(int origId, int srcId, 
+				void (*fun)(), int replyId) 
 { 
   NeighborArgStruct *p;
 
   if (!(p = (NeighborArgStruct *)calloc(1, sizeof(NeighborArgStruct))))
     panic("newNeighborArgStruct: memory alloc. error.\n");
   
+  p->origId = origId;
   p->srcId = srcId;
-  p->k = k;
+  p->fun = fun;
   p->replyId = replyId;
 
   return p;
 }
 
-
-FindArgStruct *newFindArgStruct(int srcId, void (*fun)(), 
+FindArgStruct *newFindArgStruct(int origId, int srcId, void (*fun)(), 
 				int queryId, int replyId) 
 { 
   FindArgStruct *p;
@@ -23,6 +24,7 @@ FindArgStruct *newFindArgStruct(int srcId, void (*fun)(),
   if (!(p = (FindArgStruct *)calloc(1, sizeof(FindArgStruct))))
     panic("newFindArgStruct: memory alloc. error.\n");
   
+  p->origId = origId; 
   p->srcId = srcId;
   p->fun = fun;
   p->queryId = queryId;
@@ -30,6 +32,21 @@ FindArgStruct *newFindArgStruct(int srcId, void (*fun)(),
 
   return p;
 }
+
+
+NotifyArgStruct *newNotifyArgStruct(int fingerIdx, int id)
+{ 
+  NotifyArgStruct *p;
+
+  if (!(p = (NotifyArgStruct *)calloc(1, sizeof(NotifyArgStruct))))
+    panic("newNotifyArgStruct: memory alloc. error.\n");
+  
+  p->id = id; 
+  p->fingerIdx = fingerIdx;
+
+  return p;
+}
+
 
 int *newInt(int val) 
 { 
@@ -42,4 +59,5 @@ int *newInt(int val)
 
   return p;
 }
+
 

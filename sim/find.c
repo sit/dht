@@ -1,182 +1,162 @@
 #include "incl.h"
 
-void findSuccessor_dst(Node *n, FindArgStruct *p);
-void findSuccessor_src(Node *n, FindArgStruct *p);
-void findPredecessor_dst(Node *n, FindArgStruct *p);
-void findPredecessor_src(Node *n, FindArgStruct *p);
-void findSuccessor_end(Node *n, FindArgStruct *p);
-void findPredecessor_end(Node *n, FindArgStruct *p);
+void findSuccessor_return(Node *n, Stack *stack);
 
-/* 
- *  Event diagram to implement find successor protocol 
- *   (find predecessor is identical)
+void findPredecessor_return(Node *n, void *stack);
+void findPredecessor_remote(Node *n, void *stack);
+
+
+
+/*******************************************************
+ *       Find successor
  *
- *      (NODE N)                   (OTHER NODE M)
- *      
- *  findSuccessor     -
- *                      -   
- *                        -  
- *                          -> findSuccessor_dst
- *                         -
- *                       -
- *  findSuccessor_src <- 
- *                       -
- *                        -  
- *                          -> findSuccessor_dst
- *                         -
- *                        .
- *                       .
- * findSuccessor_end  <- 
- *                                       
- *                                            
- */
+ *      findSuccessor_entry
+ *             |
+ *             |
+ *             v
+ *      findPredecessor_entry
+ *             |  
+ *             |  
+ *             v  
+ *      findSuccessor_return
+ *
+ *******************************************************/
 
 
-/* get clossest id in idTable that preceeds x, if id is better than s */
-int getClosestSuccessor(int *idTable, int x, int s)
+void findSuccessor_entry(Node *n, Stack *stack)
+{
+  Stack *top = topStack(stack);
+
+  stack = pushStack(stack, newStackItem(n->id, findSuccessor_return));
+  topStack(stack)->data.key = top->data.key;
+  CALL(n->id, findPredecessor_entry, stack);
+}
+
+
+void findSuccessor_return(Node *n, Stack *stack)
+{
+  Stack *top = topStack(stack);
+
+  if (top->data.key == top->ret.nid)
+    top->next->ret.nid = top->ret.nid;
+  else 
+    top->next->ret.nid = top->ret.succ;
+  RETURN(n->id, stack = popStack(stack));
+}
+
+
+
+/*******************************************************
+ *       Find predecessor
+ *
+ *      findPredecessor_entry
+ *             |
+ *             |
+ *             v
+ *      findPredecessor_remote
+ *             |  ^
+ *             |  |
+ *             v  |
+ *      findPredecessor_return
+ *
+ *******************************************************/
+
+/* start looking for key at node n */
+void findPredecessor_entry(Node *n, Stack *stack)
+{
+  Stack *top =  topStack(stack);
+  int key = top->data.key;
+
+  if ((n->id == n->successor) || 
+       between(key, n->id, n->successor, NUM_BITS) || 
+       (key == n->id)) {
+    top->ret.nid = n->id;
+    top->ret.succ = n->successor;
+    top->ret.pred = n->predecessor;
+    top->ret.found = 1;
+    RETURN(n->id, stack);
+  } else {
+    stack = pushStack(stack, newStackItem(n->id, findPredecessor_return));
+    topStack(stack)->data.key = top->data.key;
+    CALL(closestPreceedingFinger(n, key), findPredecessor_remote, stack);
+  }
+}
+
+
+void findPredecessor_return(Node *n, void *stack)
+{
+  Stack *top = topStack(stack);
+  
+  if (top->ret.found) {
+    top->next->ret.nid = top->ret.nid;
+    top->next->ret.succ = top->ret.succ;
+    top->next->ret.pred = top->ret.pred;
+    RETURN(n->id, stack = popStack(stack));
+  } else 
+    CALL(top->ret.nid, findPredecessor_remote, stack);
+}
+    
+
+void findPredecessor_remote(Node *n, void *stack)
+{
+  Stack *top = topStack(stack);
+  int key = top->data.key;
+  
+  if (between(key, n->id, n->successor, NUM_BITS) || 
+      (key == n->id)) {
+    top->ret.nid = n->id;
+    top->ret.succ = n->successor;
+    top->ret.pred = n->predecessor;
+    top->ret.found   = TRUE;
+
+  } else {
+    top->ret.nid = closestPreceedingFinger(n, key);
+    top->ret.found   = FALSE;
+  }
+  RETURN(n->id, stack);
+}
+
+
+/*******************************************************/
+/*      Return closest preceeding finger
+/*******************************************************/
+
+
+/* return closest finger preceeding id */
+int closestPreceedingFinger(Node *n, int id)
 {
   int i;
-
-  for (i = 0; i < NUM_BITS; i++)
-    /* is idTable[i] a closest successor for x than s */
-    if (between(idTable[i], x, s, NUM_BITS)) {
-      s = idTable[i];
-      break;
-    }
-
-  if (i == 0)
-    return s;
-  else
-    return idTable[i-1];
-  return s;
-}
-
-
-/* get clossest id in idTable that preceeds x, if id is better than p */
-int getClosestPredecessor(int *idTable, int x, int p)
-{
-  int i;
-
-  for (i = 0; i < NUM_BITS; i++)
-    /* is idTable[i] a closest predecessor for x than p */
-    if (between(idTable[i], p, x, NUM_BITS)) {
-      p = idTable[i];
-      break;
-    }
-
-  if (i == 0)
-    return p;
-  else
-    return idTable[i-1];
-
-  return p;
-}
-
-int lookupClosestSuccessor(Node *n, int x)
-{
-  return getClosestSuccessor(n->successorId, x, n->id);
-}
-
-int lookupClosestPredecessor(Node *n, int x)
-{
-  return  getClosestPredecessor(n->predecessorId, x, n->id);
-}
-
-
-/* 
- * ask nodeId for successor of x
- * upon result return call fun()
- */
-void findSuccessor(Node *n, int nodeId, int x, void (*fun)())
-{
-  FindArgStruct *p = newFindArgStruct(n->id, fun, x, n->id);
-
-  /* generate event */
-  genEvent(nodeId, findSuccessor_dst, p, Clock + intExp(AVG_PKT_DELAY));
-}
-
-
-/* ask node id for successor of x */
-void findSuccessor_dst(Node *n, FindArgStruct *p)
-{
-  FindArgStruct *pnew;
-  int            succ = lookupClosestSuccessor(n, p->queryId);
   
-  pnew = newFindArgStruct(n->id, p->fun, p->queryId, succ);
+  if (id == n->id)
+    return n->id;
 
-  if (succ == n->id || between(p->queryId, n->id, succ, NUM_BITS))
-    genEvent(p->srcId, findSuccessor_end, pnew, 
-	     Clock + intExp(AVG_PKT_DELAY));
-  else
-    genEvent(p->srcId, findSuccessor_src, pnew, 
-	     Clock + intExp(AVG_PKT_DELAY));
-}
+  for (i = NUM_BITS - 1; i >= 0; i--)
+    if (between(n->finger[i], n->id, id, NUM_BITS) ||
+	(n->finger[i] == id))
+      return n->finger[i];
 
-/* ask node id for successor of x */
-void findSuccessor_src(Node *n, FindArgStruct *p)
-{
-  FindArgStruct *pnew;
-
-
-  pnew = newFindArgStruct(n->id, p->fun, p->queryId, p->replyId);
-
-  /* generate event */
-  genEvent(p->replyId, findSuccessor_dst, pnew, 
-	   Clock + intExp(AVG_PKT_DELAY));
+  return n->id;
 }
 
 
-/* ask node id for successor of x */
-void findSuccessor_end(Node *n, FindArgStruct *p)
+
+
+void getSuccessor(Node *n, void *stack)
 {
-  p->fun(n, p);
-}
+  Stack *top = topStack(stack);
 
-/******* predecessor ****/
-
-/* ask nodeId for predecessor of x */
-void findPredecessor(Node *n, int nodeId, int x, void (*fun)())
-{
-  FindArgStruct *p = newFindArgStruct(n->id, fun, x, n->id);
-
-  /* generate event */
-  genEvent(nodeId, findPredecessor_dst, p, Clock + intExp(AVG_PKT_DELAY));
+  top->ret.nid = n->successor;
+  RETURN(n->id, stack);
 }
 
 
-/* ask node id for predecessor of x */
-void findPredecessor_dst(Node *n, FindArgStruct *p)
+void getPredecessor(Node *n, void *stack)
 {
-  FindArgStruct *pnew;
-  int            pred = lookupClosestPredecessor(n, p->queryId);
-  
-  pnew = newFindArgStruct(n->id, p->fun, p->queryId, pred);
+  Stack *top = topStack(stack);
 
-  if (pred == n->id || between(p->queryId, pred, n->id, NUM_BITS))
-    genEvent(p->srcId, findPredecessor_end, pnew, 
-	     Clock + intExp(AVG_PKT_DELAY));
-  else
-    genEvent(p->srcId, findPredecessor_src, pnew, 
-	     Clock + intExp(AVG_PKT_DELAY));
-}
+  top->ret.nid = n->predecessor;
 
-/* ask node id for predecessor of x */
-void findPredecessor_src(Node *n, FindArgStruct *p)
-{
-  FindArgStruct *pnew;
-
-  pnew = newFindArgStruct(n->id, p->fun, p->queryId, p->replyId);
-
-  /* generate event */
-  genEvent(p->replyId, findPredecessor_dst, pnew, 
-	   Clock + intExp(AVG_PKT_DELAY));
-}
-
-
-/* ask node id for predecessor of x */
-void findPredecessor_end(Node *n, FindArgStruct *p)
-{
-  p->fun(n, p);
+  RETURN(n->id, stack);
 }
 
 

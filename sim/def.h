@@ -12,11 +12,11 @@
 
 #define NUM_BITS     24
 
-#define AVG_PKT_DELAY    5  /* in ms */
-#define STABILIZE_PERIOD 1000
+#define AVG_PKT_DELAY    50  /* in ms */
+#define STABILIZE_PERIOD 30000
 
 /* maximum simulation time */
-#define MAX_TIME     1e+07 /* in ms */   
+#define MAX_TIME     5e+07 /* in ms */   
 
 /* used in node.c */
 #define POWER_HASH_TABLE 10

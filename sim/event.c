@@ -30,12 +30,26 @@ Event *newEvent(int nodeId, void (*fun)(), void *params, double time)
 }
 
 
-void freeEvent(Event *ev)
+void removeEvent(CalQueue *evCal, Event *ev)
 {
-  if (ev) {
-    if (ev->params)
-      free (ev->params);
+  int idx;
+  Event *p;
+
+  /* compute entry where to insert the new event */
+  idx = ((int)ev->time/ENTRY_TUNIT) % evCal->size;
+
+  p = evCal->q[idx];
+
+  if (p == ev) {
+    evCal->q[idx] = ev->next;
     free(ev);
+  }
+
+  for (; p->next; p = p->next) {
+    if (p->next == ev) {
+      p->next = p->next->next;
+      free(ev);
+    }
   }
 }
 
@@ -58,11 +72,22 @@ void insertEvent(CalQueue *evCal, Event *ev, double time)
   if (idx >= evCal->size)
     panic("insertEvent: exceed calendar queue size\n");
 
-  /* insert event at the head of the queue in the corresponding entry */
+  ev->time = time;
+  ev->next = NULL;
+
+  /* insert event at the tail of the queue in the corresponding entry */
   p = evCal->q[idx];
+  if (!p) 
+    evCal->q[idx] = ev;
+  else {
+    for (p; p->next; p = p->next);
+    p->next = ev;
+  }
+  /*
   ev->next = p;
   ev->time = time;
   evCal->q[idx] = ev;
+  */
 }
 
 

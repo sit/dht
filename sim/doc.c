@@ -1,75 +1,90 @@
 #include <stdlib.h>
 #include "incl.h"
 
+extern Node *NodeHashTable[HASH_SIZE];
+
+void findDocument_return(Node *n, Stack *stack);
+void insertDocument_return(Node *n, Stack *stack);
+
 int insertDocInList(DocList *docList, Document *doc);
 Document *findDocInList(DocList *docList, DocId docId);
 void updateDocList(Node *n);
-void findReply(Node *n, FindArgStruct *p);
-void insertReply(Node *n, FindArgStruct *p);
+
 
 void findDocument(Node *n, int *docId)
 {
-  if (*docId == 783 && n->id == 330)
-    printf("-----\n");
+  Stack *stack;
 
-  findSuccessor(n, lookupClosestPredecessor(n, *docId), 
-		*docId, findReply);
+  if (n->status != PRESENT)
+    return;
+
+  stack = pushStack(NULL, newStackItem(n->id, findDocument_return));
+  stack->data.key = *docId;
+  CALL(n->id, findSuccessor_entry, stack);
 }
 
-void findReply(Node *n, FindArgStruct *p)
+void findDocument_return(Node *n, Stack *stack)
 {
-  Node  *n1  = getNode(p->replyId);
-  int docId  = p->queryId;
+  Stack *top = topStack(stack);
+
+  Node  *n1  = getNode(top->ret.nid);
+  int docId  = top->data.key;
   Document *doc;
 
+
   if (!n1) {
-    printf("findNode: node %d has been deleted in the meantime!\n", p->replyId);
+    printf("findNode: node %d has been deleted in the meantime!\n", 
+	   top->ret.nid);
     return;
   }
 
   if (findDocInList(n1->docList, docId))
-    printf("%f Document %d found on node %d (%d)\n", Clock, p->queryId, 
-	   p->replyId, n1->id);
+    printf("%f Document %d found on node %d\n", Clock, docId, n1->id);
   else 
-    printf("%f Document %d NOT found on node %d (%d)\n", Clock, p->queryId, 
-	   p->replyId, n1->id);
-    
+    printf("%f Document %d NOT found on node %d\n", Clock, docId, n1->id);
+
+  RETURN(n->id, stack = popStack(stack));
 }
 
 
 void insertDocument(Node *n, int *docId)
 {
-  findSuccessor(n, lookupClosestPredecessor(n, *docId), 
-		*docId, insertReply);
+  Stack *stack;
+
+  stack = pushStack(NULL, newStackItem(n->id, insertDocument_return));
+  stack->data.key = *docId;
+  CALL(n->id, findSuccessor_entry, stack);
 }
   
 
-void insertReply(Node *n, FindArgStruct *p)
+void insertDocument_return(Node *n, Stack *stack)
 {
-  Node  *n1  = getNode(p->replyId);
-  int docId  = p->queryId;
+  Stack *top = topStack(stack);
+  Node  *n1  = getNode(top->ret.nid);
+  int docId  = top->data.key;
   Document *doc;
 
   if (!n1) {
-    printf("insertReply: node %d has been deleted in the meantime!\n", p->replyId);
-    return;
-  }
-
-
-  /* allocate space for new document */
-  if ((doc = (Document *)calloc(1, sizeof(Document))) == NULL)
-    panic("insertReply: memory allocation error!\n");
-
-  doc->id = docId;
-
-  if (!insertDocInList(n1->docList, doc)) {
-    /* no room to insert document */
-    printf("cannot insert document %x at node %x\n", doc->id, n1->id); 
+    printf("insertReply: node has been deleted in the meantime!\n");
     free(doc);
-    return;
+    KILL_REQ(stack);
+  } else {
+    /* allocate space for new document */
+    if ((doc = (Document *)calloc(1, sizeof(Document))) == NULL)
+      panic("insertReply: memory allocation error!\n");
+    
+    doc->id = docId;
+    
+    if (!insertDocInList(n1->docList, doc)) {
+      /* no room to insert document */
+      printf("cannot insert document %x at node %x\n", doc->id, n1->id); 
+      free(doc);
+      return;
+    } else
+      printf("The document %d inserted on node %d\n", docId, n1->id);
   }
-  printf("The document %d inserted on node %d(%d)\n", p->queryId, 
-	p->replyId, n1->id);
+
+  RETURN(n->id, stack = popStack(stack));
 }
 
 
@@ -125,8 +140,11 @@ void *freeDocList(Node *n)
 void updateDocList(Node *n)
 {
   Document *doc, *d;
-  Node     *s = getNode(getSuccessor(n, 0));
+  Node     *s = getNode(n->successor);
   int       flag = FALSE;
+
+  if (n == s || n->status != PRESENT)
+    return;
 
   if (!s) {
     printf("updateDocList: node has been deleted in the meantime!\n");
@@ -139,8 +157,8 @@ void updateDocList(Node *n)
    */ 
   doc = s->docList->head;
   while (doc) {
-    /* check whether doc is between n and s ... */ 
-    if (!between(doc->id, n->id, s->id, NUM_BITS)) {
+    /* check whether doc is  [n, s) ... */ 
+    if (!between(doc->id, n->id, s->id, NUM_BITS) && doc->id != s->id) {
       /* ... if not, move document from s' document list to n's 
        * document list 
        */
@@ -155,7 +173,7 @@ void updateDocList(Node *n)
     return;
 
   while (doc = d->next) {
-    if (!between(doc->id, n->id, s->id, NUM_BITS)) {
+    if (!between(doc->id, n->id, s->id, NUM_BITS) && doc->id != s->id) {
       /* move document from s' document list to n's document list */
       d->next = d->next->next;
       insertDocInList(n->docList, doc);
@@ -169,6 +187,9 @@ void updateDocList(Node *n)
 void moveDocList(Node *n1, Node *n2)
 {
   Document *doc;
+
+  if (n1 == n2)
+    return;
 
   if (!n1) {
     printf("moveDocList: node has been deleted in the meantime!\n");

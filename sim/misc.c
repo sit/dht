@@ -1,5 +1,35 @@
 #include "incl.h"
 
+void setFinger(Node *n, int i, int id)
+{
+  for (; i >= 0; i--) 
+    if (id == fingerStart(n, i) ||
+	between(id, fingerStart(n, i), n->finger[i], NUM_BITS))
+      n->finger[i] = id;
+ 
+  n->successor = n->finger[0];
+}
+
+void replaceFinger(Node *n, int oldSucc, int newSucc)
+{
+  int i;
+
+  for (i = 0; i < NUM_BITS; i++) {
+    if (n->finger[i] == oldSucc) {
+      if (i == 0)
+	updateSuccessor(n, newSucc);
+      else
+	n->finger[i] = newSucc;
+    }
+  }
+}
+
+int fingerStart(Node *n, int i)
+{
+  return successorId(n->id, i);
+}
+
+
 /* compute (id + i) mod 2^NUM_BITS */
 int successorId(int id, int i)
 {
@@ -25,6 +55,8 @@ int predecessorId(int id, int i)
 /* 
  * check whether a is greater than b on circle; both a and b are 
  * represented on numBits bits
+ * if distance between a and b is larger or equal to 2^numBits,
+ * a is assumed to be smaller than b 
  */
 int isGreater(int a, int b, int numBits)
 {
@@ -38,8 +70,9 @@ int isGreater(int a, int b, int numBits)
 }
 
 /* 
- * check whether a is greater or equal than b on circle; both a and b are 
- * represented on numBits bits
+ * check whether a is greater or equal to b on circle; 
+ * if distance between a and b is larger or equal to 2^numBits,
+ * a is assumed to be smaller than b 
  */
 int isGreaterOrEqual(int a, int b, int numBits)
 {
@@ -52,21 +85,35 @@ int isGreaterOrEqual(int a, int b, int numBits)
   return FALSE;
 }
 
-/* check whether x is between a and b on the circle */
+/* check whether x in (a, b) on the circle */
 int between(int x, int a, int b, int numBits)
 {
   int flag = FALSE;
 
-  /* check whether distance between a and b is greater than 2^{numBits - 1} */
+  /* check whether distance between a and b is > 2^{numBits - 1} */
   if (isGreaterOrEqual(b, a, numBits)) 
-    /* distance between a and b greater than 2^{numBits - 1} */
+    /* distance between a and b > 2^{numBits - 1} */
     flag = TRUE;
 
   if ((!flag && 
-       (isGreaterOrEqual(b, x, numBits) || isGreater(x, a, numBits))) ||
-      (flag && isGreaterOrEqual(b, x, numBits) && 
-       isGreater(x, a, numBits)))
+       (isGreater(b, x, numBits) || isGreater(x, a, numBits))) ||
+      (flag && isGreater(b, x, numBits) && isGreater(x, a, numBits)))
     return TRUE;
 
   return FALSE;
 }
+
+
+int *newInt(int val) 
+{ 
+  int *p;
+
+  if (!(p = (int *)malloc(sizeof(int))))
+    panic("newInt: memory alloc. error.\n");
+  
+  *p = val;
+
+  return p;
+}
+
+

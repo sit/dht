@@ -9,6 +9,8 @@ typedef struct _document {
 } Document;
 
 
+
+
 typedef struct _docList {
   Document *head;
   int       size;
@@ -16,10 +18,13 @@ typedef struct _docList {
 
 typedef struct _node {
   int           id;    /* node identifier */
+#define PRESENT 1
+#define ABSENT  0
   int           status;
   DocList       docList[MAX_NUM_DOCS];
-  int           successorId[NUM_BITS];
-  int           predecessorId[NUM_BITS];
+  int           finger[NUM_BITS];
+  int           successor;
+  int           predecessor;
   struct _node *next;
 } Node;
 

@@ -1,24 +1,29 @@
 #ifndef INCL_EVENT_TYPES_
 #define INCL_EVENT_TYPES_
 
+
+typedef struct fcb_ {
+  int  nodeId;
+  void (*fun)();
+  struct fcb_ *prevfcb;
+} FCB;
+
 typedef struct {
-  int srcId;
-  int k;       
-  int replyId; /* return k-th successor/predecessor of current node to srcId */
-} NeighborArgStruct;
-
-
-
-typedef struct {
-  int   srcId;    /* node who triggered event */
-  void  (*fun)(); /* function which will be invoked when reply is received
-		     by requester */
-  int   queryId;
-  int   replyId;   /* result (successor/predecessor of queryId */
+  int  queryId;  /* request id */
+  int  replyId;  /* result (successor/predecessor of queryId) */
+  FCB *fcb;      /* fcb of function who invoked this event */ 
 } FindArgStruct;
 
 typedef struct {
-  int senderId;
+  int origId;
+  int srcId;
+  void (*fun)();       
+  int replyId; 
+} NeighborArgStruct;
+
+typedef struct {
+  int id;
+  int fingerIdx;
 } NotifyArgStruct;
 
 #endif /* INCL_EVENT_TYPES_ */ 

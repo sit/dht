@@ -33,23 +33,30 @@ void readLine(FILE *fp)
       
     } else {
       nodeId = getRandomNodeId(); /* this _should_ be done before addNode */
-      n = addNode(arg1);
-      genEvent(arg1, join_ev, (void *)newInt(nodeId), arg2);
+      if (!getNode(arg1)) {
+	n = addNode(arg1);
+	genEvent(arg1, join, (void *)newInt(nodeId), arg2);
+      } else
+	printf("join ignored %d\n", arg1);
     }
   } else if (strcmp(cmd, "fail") == 0) {
     /* arg1 - nodeId; arg2 - time */
-    genEvent(arg1, faultyNode, (void *)newInt(arg2), arg2);
+    if (getNode(arg1))
+      genEvent(arg1, faultyNode, (void *)newInt(arg2), arg2);
   } else if (strcmp(cmd, "leave") == 0) {
     /* arg1 - nodeId; arg2 - time */
-    genEvent(arg1, leaveNode, (void *)newInt(arg2), arg2);
+    if (getNode(arg1))
+      genEvent(arg1, leave, (void *)newInt(arg2), arg2);
   } else if (strcmp(cmd, "find") == 0) {
     fscanf(fp, "%d", &arg3);
     /* arg1 - nodeId; arg2 - argId; arg3 - time */
-    genEvent(arg1, findDocument, (void *)newInt(arg2), arg3);
+    if (getNode(arg1))
+      genEvent(arg1, findDocument, (void *)newInt(arg2), arg3);
   } else if (strcmp(cmd, "insert") == 0) {
     fscanf(fp, "%d", &arg3);
     /* arg1 - nodeId; arg2 - argId; arg3 - time */
-    genEvent(arg1, insertDocument, (void *)newInt(arg2), arg3);
+    if (getNode(arg1))
+      genEvent(arg1, insertDocument, (void *)newInt(arg2), arg3);
   } else {
     printf("command \"%s\" not known!\n", cmd);
     panic("");
