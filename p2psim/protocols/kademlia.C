@@ -743,17 +743,18 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
     delete ci;
 
 next_candidate:
-    assert((unsigned) outstanding_rpcs->size() == Kademlia::alpha - 1);
-    // while((outstanding_rpcs->size() < (int) Kademlia::alpha) && successors.size()) {
+    // assert((unsigned) outstanding_rpcs->size() == Kademlia::alpha - 1);
+    // XXX: wrong.  messes up last_alpha_rpc
+    while((outstanding_rpcs->size() < (int) Kademlia::alpha) && successors.size()) {
       k_nodeinfo front = *successors.begin();
       if(Kademlia::distance(front.id, fargs->key) < Kademlia::distance(fresult->succ.id, fargs->key))
         fresult->succ = front;
-      SEND_RPC(front, fargs, fresult, hops[front.id], timeouts[front.id]);
+      SEND_RPC(front, fargs, fresult, hops[front.id], timeouts[last_returned_alpha]);
 
       fresult->rpcs++;
       asked.insert(front.id, true);
       successors.erase(front);
-    // }
+    }
   }
 }
 
