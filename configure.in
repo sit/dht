@@ -1,4 +1,4 @@
-dnl $Id: configure.in,v 1.33 2003/03/07 21:35:36 sit Exp $
+dnl $Id: configure.in,v 1.34 2003/03/31 15:35:59 sit Exp $
 dnl
 dnl Process this file with autoconf to produce a configure script.
 dnl
@@ -13,6 +13,7 @@ dnl Checks for programs.
 AC_PROG_CC
 AC_PROG_CPP
 AC_PROG_CXX
+AC_PATH_PROGS(M4, gm4 gnum4 m4, '$(top_srcdir)/missing')
 
 dnl Check for GTK and allow conditional Makefile.am statements
 AM_PATH_GTK_FOO(1.2.0,,AC_MSG_WARN(gtk not available; vis will not be built))
