@@ -54,11 +54,12 @@ class dhc {
 
   uint n_replica;
 
-  void recv_prepare ();
+  void recv_prepare (user_args *);
   void recv_promise (ptr<dhc_block>, ref<dhc_prepare_res>, clnt_stat);
   void recv_propose ();
   void recv_accept (ptr<dhc_block>, ref<dhc_propose_res>, clnt_stat);
   void recv_newconfig ();
+  void recv_newconfig_ack (ptr<dhc_block>, ref<dhc_newconfig_res>, clnt_stat);
   
  public:
 
@@ -66,6 +67,7 @@ class dhc {
   ~dhc () {};
   
   void recon (chordID);
+  void dispatch (user_args *);
   
 };
 

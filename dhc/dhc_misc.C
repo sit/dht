@@ -45,4 +45,17 @@ set_new_config (ptr<dhc_newconfig_arg> arg, vec<ptr<location> > new_config)
   arg->new_config.set (nodes->base (), nodes->size ());
 }
 
+int
+paxos_cmp (paxos_seqnum_t a, paxos_seqnum_t b)
+{
+  if (a.seqnum > b.seqnum)
+    return 1;
+  if (a.seqnum < b.seqnum)
+    return -1;
+  if (a.proposer > b.proposer)
+    return 1;
+  if (a.proposer < b.proposer)
+    return -1;
+  return 0;
+}
 
