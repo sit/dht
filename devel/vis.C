@@ -1,17 +1,9 @@
 #include "chord.h"
-#include "gtk/gtk.h"
-#include "gdk/gdk.h"
 #include "math.h"
 #include "rxx.h"
 #include "async.h"
-#include "chord_prot.h"
-#include "debruijn_prot.h"
-#include "prox_prot.h"
-#include "fingers_prot.h"
-#include "transport_prot.h"
 #include "misc_utils.h"
-#include "id_utils.h"
-#include "dns.h"
+#include "vis.h"
 
 #define WINX 700
 #define WINY 700
@@ -48,9 +40,6 @@ static handler_info handlers[] = {
   { DRAW_TOP_FINGERS,    "top fingers",     NULL, GTK_SIGNAL_FUNC (draw_toggle_cb) }
 };
 
-unsigned int check_get_state (void);
-void check_set_state (unsigned int newstate);
-
 /* GTK stuff */
 static GdkPixmap *pixmap = NULL;
 static GtkWidget *window = NULL;
@@ -61,14 +50,10 @@ static GdkGC *draw_gc = NULL;
 static GdkColormap *cmap = NULL;
 static GdkFont *courier10 = NULL;
 
-static GtkWidget *lookup;
-static GtkWidget *total_nodes;
-
-static short interval = -1;
 static int glevel = 1;
 static char *color_file;
 static bool drawids = false;
-static bool simulated_input = false;
+bool simulated_input (false);
 
 static GdkColor highlight_color;
 static char *highlight = "cyan4"; // consistent with old presentations
@@ -92,103 +77,14 @@ struct color_pair {
 vec<color_pair> lat_map;
 
 char last_clicked[128] = "";
-
-struct f_node {
-  chordID ID;
-  vec<float> coords;
-
-  str host, hostname;
-  unsigned short port;
-  unsigned short vnode_num;
-  chord_nodelistextres *fingers;
-  chord_nodelistextres *predecessor;
-  debruijn_res *debruijn;
-  chord_nodelistextres *successors;
-  ihash_entry <f_node> link;
-  unsigned int draw;
-  bool selected;
-  bool highlight;
-
-  f_node (const chord_node &n) :
-    ID (n.x), host (n.r.hostname), hostname(""), port (n.r.port),
-    vnode_num (n.vnode_num),
-    fingers (NULL), predecessor (NULL), debruijn (NULL),
-    successors (NULL),
-    selected (true), highlight (false)
-  {
-    draw = check_get_state ();
-    for (u_int i = 0; i < n.coords.size (); i++)
-      coords.push_back (n.coords[i]);
-    dnslookup();
-  }
-
-  f_node (chordID i, str h, unsigned short p) :
-    ID (i), host (h), port (p), vnode_num (0), selected (true), highlight (false) { 
-    draw = check_get_state ();
-    fingers = NULL;
-    predecessor = NULL;
-    successors = NULL;
-    debruijn = NULL;
-    dnslookup();
-  };
-
-  void dnslookup (void) {
-    struct in_addr ar;
-    inet_aton (host, &ar);
-    dns_hostbyaddr (ar, wrap (this, &f_node::dnslookup_cb));
-    hostname = host;
-  }
-  
-  void dnslookup_cb (ptr<hostent> he, int err) {
-    if (err)
-      warn << "dns lookup error\n";
-    else
-      hostname = he->h_name;
-  }
-
-  ~f_node () { 
-    if (fingers) delete fingers;
-    if (predecessor) delete predecessor;
-    if (successors) delete successors;
-    if (debruijn) delete debruijn;
-  };
-};
-
-// Highlighting lookups
-static size_t search_step;
-static chordID search_key; // 0 means no search in progress
-static vec<f_node *> search_path;
-static vec<f_node *> alt_search_path;
 static GdkColor search_color;
 
 void recenter ();
 void setup ();
 ptr<aclnt> get_aclnt (str host, unsigned short port);
 
-f_node *add_node (const chord_node &n);
-void get_cb (chordID next);
-
-void update_fingers (f_node *n);
-void update_fingers_got_fingers (chordID ID, str host, unsigned short port, 
-				 chord_nodelistextres *res, clnt_stat err);
-
-void update_succlist (f_node *n);
-void update_succ_got_succ (chordID ID, str host, unsigned short port, 
-			   chord_nodelistextres *res, clnt_stat err);
-
-void update_pred (f_node *n);
-void update_pred_got_pred (chordID ID, str host, unsigned short port,
-			   chord_nodelistextres *res, clnt_stat err);
-
-void update_debruijn (f_node *nu);
-void update_debruijn_got_debruijn (chordID n, debruijn_res *res,
-			     clnt_stat err);
-void update ();
 void initgraf ();
 void init_color_list (char *filename);
-void draw_arrow (int fromx, int fromy, 
-		 int tox, int toy, GdkGC *draw_gc);
-void draw_arc (chordID from, chordID to, GdkGC *draw_gc);
 
 static gint configure_event (GtkWidget *widget, GdkEventConfigure *event);
 static gint expose_event (GtkWidget *widget, GdkEventExpose *event);
@@ -202,10 +98,7 @@ static gint button_down_event (GtkWidget *widget,
 
 void select_all_cb (GtkWidget *widget, gpointer data);
 void select_none_cb (GtkWidget *widget, gpointer data);
-void draw_nothing_cb (GtkWidget *widget, gpointer data);
 
-void lookup_cb (GtkWidget *widget, gpointer data);
-void lookup_complete_cb (chordID n, chord_nodelistres *res, clnt_stat err);
 void quit_cb (GtkWidget *widget, gpointer data);
 void redraw_cb (GtkWidget *widget, gpointer data);
 void update_cb (GtkWidget *widget, gpointer data);
@@ -213,19 +106,16 @@ void zoom_in_cb (GtkWidget *widget, gpointer data);
 void geo_cb (GtkWidget *widget, gpointer data);
 void dump_cb (GtkWidget *widget, gpointer data);
 void redraw();
-void draw_ring ();
-void ID_to_xy (chordID ID, int *x, int *y);
 chordID xy_to_ID (int sx, int sy);
 void xy_to_coord (int x, int y, float *cx, float *cy);
 void ID_to_string (chordID ID, char *str);
 double ID_to_angle (chordID ID);
 void set_foreground_lat (unsigned long lat);
-int main (int argc, char** argv);
+
 void gtk_poll ();
 
-vec<chordID> get_queue;
-ihash<chordID, f_node, &f_node::ID, &f_node::link, hashID> nodes;
 ptr<axprt_dgram> dgram_xprt;
+
 
 void
 setup () 
@@ -234,38 +124,6 @@ setup ()
   if (dgram_fd < 0) fatal << "Failed to allocate dgram socket\n";
   dgram_xprt = axprt_dgram::alloc (dgram_fd, sizeof(sockaddr), 230000);
   if (!dgram_xprt) fatal << "Failed to allocate dgram xprt\n";
-}
-
-void
-update (f_node *n)
-{
-  update_fingers (n);
-  update_pred (n);
-  update_debruijn (n);
-  update_succlist (n);
-}
-
-void
-update () 
-{
-  if (simulated_input) return;
-  f_node *n = nodes.first ();
-  while (n) {
-    update (n);
-    n = nodes.next (n);
-  }  
-}
-
-void
-update_highlighted ()
-{
-  if (simulated_input) return;
-  f_node *n = nodes.first ();
-  while (n) {
-    if (n->highlight)
-      update (n);
-    n = nodes.next (n);
-  }
 }
 
 ptr<aclnt>
@@ -279,40 +137,9 @@ get_aclnt (str host, unsigned short port)
 
   ptr<aclnt> c = aclnt::alloc (dgram_xprt, transport_program_1, 
 			       (sockaddr *)&(saddr));
-
   return c;
 }
 
-f_node *
-add_node (const chord_node &n)
-{
-  f_node *nu = nodes[n.x];
-  if (!nu) {
-    warn << "added " << n << "\n";
-    nu = New f_node (n);
-    nodes.insert (nu);
-
-    char nodess[1024];
-    sprintf (nodess, "%d nodes", nodes.size ());
-    gtk_label_set_text (GTK_LABEL (total_nodes), nodess);
-  }
-  get_queue.push_back (n.x);
-  return nu;
-}
-
-
-f_node *
-add_node (str host, unsigned short port)
-{
-  chord_node n;
-  n.x = make_chordID (host, port);
-  n.r.hostname = host;
-  n.r.port = port;
-  n.vnode_num = 0; // Only for initial node.
-  n.coords.clear ();
-  f_node *nu = add_node (n);
-  return nu;
-}
 
 void
 doRPCcb (chordID ID, xdrproc_t outproc, dorpc_res *res, void *out, aclnt_cb cb, clnt_stat err)
@@ -399,136 +226,6 @@ doRPC (f_node *nu, const rpc_program &prog,
   }
 }  
 
-//----- update successors -----------------------------------------------------
-
-void
-update_succlist (f_node *nu)
-{
-  chordID n = nu->ID;
-  chord_nodelistextres *res = New chord_nodelistextres ();
-  doRPC (nu, chord_program_1, CHORDPROC_GETSUCC_EXT, &n, res,
-	 wrap (&update_succ_got_succ, 
-	       nu->ID, nu->host, nu->port, res));
-}
-
-void
-update_succ_got_succ (chordID ID, str host, unsigned short port, 
-		      chord_nodelistextres *res, clnt_stat err)
-{
-  if (err || res->status != CHORD_OK) {
-    delete res;
-    return;
-  }
-  f_node *nu = nodes[ID]; // callback shouldn't be called if not in list.
-
-  if (nu->successors) delete nu->successors;
-  nu->successors = res;
-  
-  for (unsigned int i=0; i < res->resok->nlist.size (); i++) {
-    chord_node n = make_chord_node (res->resok->nlist[i].n);
-    if (nodes[n.x] == NULL) 
-      add_node (n);
-  }
-}
-
-//----- update predecessor -------------------------------------------------
-void
-update_pred (f_node *nu)
-{
-  chordID n = nu->ID;
-  chord_nodelistextres *res = New chord_nodelistextres ();
-  doRPC (nu, chord_program_1, CHORDPROC_GETPRED_EXT, &n, res,
-	 wrap (&update_pred_got_pred,
-	       nu->ID, nu->host, nu->port, res));
-}
-
-void
-update_pred_got_pred (chordID ID, str host, unsigned short port, 
-		      chord_nodelistextres *res, clnt_stat err)
-{
-  if (err || res->status != CHORD_OK) {
-    delete res;
-    return;
-  }
-  f_node *nu = nodes[ID];
-
-  if (nu->predecessor) delete nu->predecessor;
-  nu->predecessor = res;
-
-  chord_node n = make_chord_node (res->resok->nlist[0].n);
-  if (nodes[n.x] == NULL) 
-    add_node (n);
-}
-
-//----- update debruijn finger -------------------------------------------------
-
-void
-update_debruijn (f_node *nu)
-{
-  return;
-  chordID n = nu->ID;
-  ptr<debruijn_arg> arg = New refcounted<debruijn_arg> ();
-  arg->n = n;
-  arg->x = n + 1;
-  arg->i = n + 1;
-  arg->upcall_prog = 0;
-  
-  debruijn_res *nres = New debruijn_res (CHORD_OK);
-  doRPC (nu, debruijn_program_1, DEBRUIJNPROC_ROUTE, arg, nres, 
-	 wrap (&update_debruijn_got_debruijn, n, nres));
-}
-
-void
-update_debruijn_got_debruijn (chordID ID, debruijn_res *res, clnt_stat err)
-{
-  if (err  || res->status == CHORD_INRANGE) {
-    delete res;
-    return;
-  }
-  assert (res->status == CHORD_NOTINRANGE);
-  f_node *nu = nodes[ID];
-
-  if (nu->debruijn) delete nu->debruijn;
-  nu->debruijn = res;
-
-  chord_node n = make_chord_node (res->noderes->node);
-  if (nodes[n.x] == NULL) 
-    add_node (n);
-}
-
-
-//----- update fingers -----------------------------------------------------
-void
-update_fingers (f_node *nu)
-{
-  chordID n = nu->ID;
-  chord_nodelistextres *res = New chord_nodelistextres ();
-  doRPC (nu, fingers_program_1, FINGERSPROC_GETFINGERS_EXT, &n, res,
-	 wrap (&update_fingers_got_fingers, 
-	       nu->ID, nu->host, nu->port, res));
-  
-}
-
-void
-update_fingers_got_fingers (chordID ID, str host, unsigned short port, 
-			    chord_nodelistextres *res, clnt_stat err)
-{
-  if (err || res->status != CHORD_OK) {
-    delete res;
-    return;
-  }
-  f_node *nu = nodes[ID];
-
-  if (nu->fingers) delete nu->fingers;
-  nu->fingers = res;
-
-  for (unsigned int i=0; i < res->resok->nlist.size (); i++) {
-    chord_node n = make_chord_node (res->resok->nlist[i].n);
-    if (nodes[n.x] == NULL) 
-      add_node (n);
-  }
-}
-
 
 void
 get_fingers (str file) 
@@ -582,31 +279,6 @@ get_fingers (str file)
   draw_ring ();
 }
 
-void
-get_cb (chordID next) 
-{
-  draw_ring ();
-  if (get_queue.size ()) {
-    chordID n = get_queue.pop_front ();
-    f_node *nu = nodes[n];
-    if (nu)
-      update (nu);
-  } else {
-    f_node *node_next = nodes[next];
-    if (node_next == NULL)
-      node_next = nodes.first ();
-    if (node_next) {
-      update (node_next);
-      node_next = nodes.next (node_next);
-      if (node_next == NULL) 
-	node_next = nodes.first ();
-      next = node_next->ID;
-    } // else no nodes, keep calling get_cb until there are some
-  }
-
-  delaycb (0, 1000*1000*interval, wrap (&get_cb, next));
-}
-
 // ------- graphics and UI handlers -------------------------------------
 void
 initgraf ()
@@ -631,8 +303,6 @@ initgraf ()
   for (size_t i = 0; i < NELEM (handlers); i++)
     handlers[i].widget = gtk_check_button_new_with_label (handlers[i].name);
   GtkWidget *hsep3 = gtk_hseparator_new ();
-  lookup = gtk_button_new_with_label ("Visualize Lookup");
-  GtkWidget *hsep4 = gtk_hseparator_new ();
 
   GtkWidget *in = gtk_button_new_with_label ("Recenter");
   GtkWidget *refresh = gtk_button_new_with_label ("Refresh All");
@@ -651,8 +321,6 @@ initgraf ()
   for (size_t i = 0; i < NELEM (handlers); i++)
     gtk_box_pack_start (GTK_BOX (vbox), handlers[i].widget, FALSE, FALSE, 0);
   gtk_box_pack_start (GTK_BOX (vbox), hsep3, FALSE, TRUE, 0);
-  gtk_box_pack_start (GTK_BOX (vbox), lookup, FALSE, TRUE, 0);
-  gtk_box_pack_start (GTK_BOX (vbox), hsep4, FALSE, TRUE, 0);
   gtk_box_pack_start (GTK_BOX (vbox), total_nodes, FALSE, TRUE, 0);
 
   gtk_box_pack_end (GTK_BOX (vbox), quit, FALSE, FALSE, 0);
@@ -692,9 +360,6 @@ initgraf ()
   gtk_signal_connect_object (GTK_OBJECT (quit), "clicked",
 			       GTK_SIGNAL_FUNC (quit_cb),
 			       NULL);
-  gtk_signal_connect_object (GTK_OBJECT (lookup), "clicked",
-			     GTK_SIGNAL_FUNC (lookup_cb),
-			     NULL);
   gtk_signal_connect_object (GTK_OBJECT (geo), "clicked",
 			     GTK_SIGNAL_FUNC (geo_cb),
 			     NULL);
@@ -747,7 +412,6 @@ initgraf ()
   gtk_widget_show (draw_nothing);
   for (size_t i = 0; i < NELEM (handlers); i++)
     gtk_widget_show (handlers[i].widget);
-  gtk_widget_show (lookup);
   gtk_widget_show (total_nodes);
   gtk_widget_show (in);
   gtk_widget_show (dump_to_file);
@@ -758,7 +422,6 @@ initgraf ()
   gtk_widget_show (hsep1);
   gtk_widget_show (hsep2);
   gtk_widget_show (hsep3);
-  gtk_widget_show (hsep4);
   gtk_widget_show (hbox);
   gtk_widget_show (vbox);
   gtk_widget_show (window);
@@ -877,154 +540,6 @@ draw_toggle_cb (GtkWidget *widget, gpointer data)
   draw_ring ();
 }
 
-chordID 
-closestpredfinger (f_node *n, chordID &x)
-{
-  chordID p = n->ID;
-  if (!n->fingers) return n->ID;
-  for (int i = n->fingers->resok->nlist.size () - 1; i >= 1; i--) {
-    chordID t = make_chordID (n->fingers->resok->nlist[i].n);
-    if (between (n->ID, x, t)) {
-      p = t;
-      return p;
-    }
-  }
-
-  return p;
-}
-
-void
-lookup_cb (GtkWidget *widget, gpointer data)
-{
-  // Find a random selected node, or just a random one if necessary.
-  f_node *current_node = nodes.first ();
-  while (current_node) {
-    if (current_node->selected)
-      break;
-    current_node = nodes.next (current_node);
-  }
-  if (current_node == NULL)
-    current_node = nodes.first ();
-  
-  // Clear selections and old search keys, etc.
-  draw_nothing_cb (widget, data); // widget and data are ignored
-
-  char block[8192]; 
-  char id[sha1::hashsize];
-  sha1_hash (id, block, 8192);
-  mpz_set_rawmag_be (&search_key, id, sizeof (id));  // For big endian
-  warnx << "Searching for " << search_key << " from "
-	<< current_node->ID << "\n";
-  current_node->selected = true;
-
-  search_path.setsize (0);
-  search_step = 0;
-  search_path.push_back (current_node);
-
-  chord_findarg fa;
-  fa.x = search_key;
-  fa.return_succs = false;
-  chord_nodelistres *res = New chord_nodelistres ();
-  doRPC (current_node, chord_program_1, CHORDPROC_FINDROUTE, &fa, res,
-	 wrap (&lookup_complete_cb, current_node->ID, res));
-  // XXX display a dialog box for progress...
-
-#define SHOW_SLOW_LOOKUPS
-#ifdef SHOW_SLOW_LOOKUPS
-  alt_search_path.setsize (0);
-  f_node *old_node = NULL;
-  while (old_node != current_node) {
-    old_node = current_node;
-    alt_search_path.push_back (current_node);
-    chordID bestfinger = closestpredfinger (current_node, search_key);
-    current_node = nodes[bestfinger];
-  }
-  //  current_node = nodes[current_node->successors->resok->nlist[1].n.x];
-  //  search_path.push_back (current_node);
-  
-  warnx << "Found an alternate path of length " << alt_search_path.size () << "\n";
-  for (size_t i = 0; i < alt_search_path.size (); i++)
-    warnx << "  " << alt_search_path[i]->ID << "\n";
-#endif /* SHOW_SLOW_LOOKUPS */
-  draw_ring ();
-}
-
-void
-lookup_complete_cb (chordID n, chord_nodelistres *res, clnt_stat err)
-{
-  if (err || res->status != CHORD_OK) {
-    warnx << "WARNING! lookup to " << n << " of "
-	  << search_key << " failed!\n";
-    delete res;
-    return;
-  }
-
-  for (size_t i = 0; i < res->resok->nlist.size (); i++) {
-    chord_node n = make_chord_node (res->resok->nlist[i]);
-    f_node *f = nodes[n.x];
-    if (!f) {
-      warnx << "WARNING! lookup includes a node we didn't know about!\n";
-      f = add_node (n);
-    }
-    search_path.push_back (f);
-  }
-  warnx << "Found a path of length " << search_path.size () << "\n";
-  for (size_t i = 0; i < search_path.size (); i++)
-    warnx << "  " << search_path[i]->ID << "\n";
-}
-
-void
-draw_search_progress ()
-{
-  GdkColor black;
-  gdk_color_parse ("black", &black);
-
-  gdk_gc_set_line_attributes (draw_gc, 5,
-			      GDK_LINE_SOLID,
-			      GDK_CAP_NOT_LAST,
-			      GDK_JOIN_MITER);
-  gdk_gc_set_foreground (draw_gc, &black);
-  for (size_t i = 0; i < search_step; i++) {
-    search_path[i]->selected = false;
-    search_path[i]->highlight = true;
-    search_path[i]->draw = 0;
-  }
-
-  for (size_t i = 0; i < search_step && i < alt_search_path.size (); i++) {
-    alt_search_path[i]->selected = false;
-    alt_search_path[i]->highlight = true;
-    alt_search_path[i]->draw = 0;
-  }
-
-  for (size_t i = 1; i < search_step; i++)
-    if (1) {
-      int tox, toy, fromx, fromy;
-      ID_to_xy(search_path[i-1]->ID, &fromx, &fromy);
-      ID_to_xy(search_path[i]->ID, &tox, &toy);
-      draw_arrow (fromx, fromy, tox, toy, draw_gc);
-
-      gdk_gc_set_foreground (draw_gc, &lat_map[0].c);
-      if (i < alt_search_path.size ()) {
-	ID_to_xy(alt_search_path[i-1]->ID, &fromx, &fromy);
-	ID_to_xy(alt_search_path[i]->ID, &tox, &toy);
-	draw_arrow (fromx, fromy, tox, toy, draw_gc);
-      }
-      gdk_gc_set_foreground (draw_gc, &black);
-	
-    } else
-      draw_arc (search_path[0]->ID, search_path[i]->ID, draw_gc);
-
-  search_path[0]->selected = true;
-  //  if (search_step != search_path.size ())
-  //  search_path[search_step - 1]->draw = DRAW_FINGERS;
-
-  gdk_gc_set_line_attributes (draw_gc, 3,
-			      GDK_LINE_SOLID,
-			      GDK_CAP_NOT_LAST,
-			      GDK_JOIN_MITER);
-}
-
-
 void 
 select_all_cb (GtkWidget *widget,
 	       gpointer data) {
@@ -1067,9 +582,10 @@ draw_nothing_cb (GtkWidget *widget, gpointer data)
     n = nodes.next (n);
   }
   check_set_state (0);
-  search_key = 0;
+  // search_key = 0;
 
   last_clicked[0] = 0;
+  annotations.clear ();
   
   draw_ring ();
 }
@@ -1098,17 +614,6 @@ key_release_event (GtkWidget *widget,
     break;
   case 'n':
     {
-      if (search_key == 0)
-	break;
-
-      search_step++;
-      if (search_step > search_path.size ()) {
-	search_key = 0;
-	search_path.setsize (0);
-	draw_nothing_cb (NULL, NULL);
-	break;
-      }
-      draw_ring ();
       break;
     }
   case 'q':
@@ -1419,18 +924,6 @@ draw_ring ()
 		      0,0,
 		      WINX - 1, WINY - 1);
 
-  if (search_key != 0 && (!ggeo || search_path.size () > 1)) {
-    // Draw what we are looking for.
-    ID_to_xy (search_key, &x, &y);
-    gdk_gc_set_foreground (draw_gc, &search_color);
-    gdk_draw_arc (pixmap, draw_gc, TRUE,
-		  x - 8, y - 8,
-		  16, 16,
-		  (gint16) 0, (gint16) 64*360);
-    if (search_step > 0)
-      draw_search_progress (); // updates state for below and draws some arrows
-  }
-
   f_node *n = nodes.first ();
   while (n) {
     int radius = 5;
@@ -1533,6 +1026,10 @@ draw_ring ()
     }
     n = nodes.next (n);
   }
+
+  for (size_t i = 0; i < annotations.size (); i++) {
+    annotations[i]->draw (ggeo, drawing_area);
+  }
   
   gdk_draw_string (pixmap, courier10,
 		   widget->style->black_gc,
@@ -1612,8 +1109,6 @@ ID_to_xy (chordID ID, int *x, int *y)
   f_node *f = nodes[ID];
   
   if (ggeo) {
-    if (!f && search_path.size () > 0) // assume it is a lookup target
-      f = nodes[search_path[search_path.size () - 1]->ID];
     if (f && f->coords.size () > 0) {
       *x = (int)(WINX/2 + ((f->coords[xindex] - centerx)/zoomx)*WINX);
       *y = (int)(WINY/2 + ((f->coords[yindex] - centery)/zoomy)*WINY);
@@ -1664,13 +1159,19 @@ main (int argc, char** argv)
 
   str host = "not set";
   str sim_file = "network";
+  int cmd_port;
   unsigned short port = 0;
   interval = 100;
   color_file = ".viscolors";
 
   int ch;
-  while ((ch = getopt (argc, argv, "h:j:a:l:f:is:d")) != -1) {
+  while ((ch = getopt (argc, argv, "c:h:j:a:l:f:is:d")) != -1) {
     switch (ch) {
+    case 'c':
+      {
+	cmd_port = atoi (optarg);
+	break;
+      }
     case 's':
       {
 	simulated_input = true;
@@ -1737,6 +1238,10 @@ main (int argc, char** argv)
     usage ();
 
   initgraf ();
+
+  if (cmd_port > 0) {
+    setup_cmd (cmd_port);
+  }
 
   if (!simulated_input) {
     add_node (host, port);

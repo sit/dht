@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.36 2004/08/13 21:49:21 athicha Exp $
+# $Id: Makefile.am,v 1.37 2004/11/07 16:45:14 sit Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -46,7 +46,7 @@ pkc_SOURCES = pk_consistency.C
 pkc_LDADD = ../dhash/libdhashclient.a ../utils/libutil.a ../svc/libsvc.la $(LDADD)
 
 if GTK_AVAILABLE
-vis_SOURCES = vis.C
+vis_SOURCES = vis.C vis.h vis_update.C vis_cmd.C
 INCLUDES = $(GSTUFF_CFLAGS) 
 vis_LDADD =  ../chord/libchord.a ../svc/libsvc.la ../utils/libutil.a $(GSTUFF_LIBS) $(LDADD)
 endif
