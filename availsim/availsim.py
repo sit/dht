@@ -3,91 +3,11 @@
 from __future__ import generators	# only 2.2 or newer
 import sys
 
-from utils import str2chordID, size_rounder
+from utils import size_rounder
+from simulator import event, simulator, event_generator
 import dhash
 
 do_spread = 0
-
-def get_node_id (args):
-    try:
-	return long(args)
-    except:
-	try:
-	    return str2chordID (args)
-	except:
-	    raise SyntaxError, "Bad ID specification"
-        
-class event:
-    def ev_getnode (my, args):
-        id = get_node_id (args[0])
-        my.id = id
-
-    def ev_getblock (my, args):
-        my.id = get_node_id (args[0])
-        try:
-            id = long (args[1])
-        except:
-            id = str2chordID (args[1])
-        my.block = id
-        # size is optional
-        try:
-            my.size = int(args[2])
-        except:
-            my.size = 8192
-    
-    def __init__ (my, time, type, *args):
-        my.time = time
-        my.type = type
-                
-        etypes = {
-            'join'  : my.ev_getnode,
-            'fail'  : my.ev_getnode,
-            'crash' : my.ev_getnode,
-            'insert': my.ev_getblock
-        }
-        if type not in etypes:
-            raise TypeError, "Unknown event type"
-	apply (etypes[type], args)
-        
-    def __str__ (my):
-        return "%ld %s" % (time, type)
-
-    def __cmp__ (my, other):
-	return cmp (my.time, other.time)
-
-class simulator:
-    def __init__ (my, dht):
-        my.dh = dht
-        
-    def run (my, evgen, monitor, monint):
-        last_time = 0
-	do_monitor = 0
-	next_monitor_time = monint
-        for ev in evgen:
-            assert last_time <= ev.time, "Woah! Time can't go backwards %d > %d." % (last_time, ev.time)
-            if last_time != ev.time:
-		# Notify DHash of time change
-                my.dh.time_changed (last_time, ev.time)
-		# And call monitor periodically
-		if last_time > next_monitor_time or do_monitor:
-		    monitor (last_time, my.dh)
-		    next_monitor_time += monint
-		    # We expect a lot to happen in an hour...
-		do_monitor = 0
-
-            if ev.type == "join":
-                my.dh.add_node (ev.id)
-		do_monitor = 1
-            if ev.type == "fail":
-                my.dh.fail_node (ev.id)
-		do_monitor = 1
-            if ev.type == "crash":
-                my.dh.crash_node (ev.id)
-		do_monitor = 1
-            if ev.type == "insert":
-                my.dh.insert_block (ev.id, ev.block, ev.size)
-            last_time = ev.time
-        monitor (last_time + 1, my.dh)
 
 def file_evgen (fname):
     lineno = 0
@@ -108,8 +28,8 @@ def calc_spread (dh, stats):
        Adds spread_min, spread_max, and spread_avg keys to stats table.
     """
     ssum = 0
-    min = 64
-    max = -1
+    smin = 64
+    smax = -1
     for b in dh.blocks:
         succs = dh.succ (b, 2*dh.look_ahead())
         found = 0
@@ -121,16 +41,16 @@ def calc_spread (dh, stats):
                 if (found == dh.read_pieces()):
                     break
         ssum += examined
-        if examined < min: min = examined
-        if examined > max: max = examined
-    stats['spread_min'] = min
+        if examined < smin: smin = examined
+        if examined > smax: smax = examined
+    stats['spread_min'] = smin
     if (len(dh.blocks) > 0): stats['spread_avg'] = ssum/len(dh.blocks)
     else: stats['spread_avg'] = 0
-    stats['spread_max'] = max
+    stats['spread_max'] = smax
     
 sbkeys = ['insert', 'join_repair_write', 'join_repair_read',
 	  'failure_repair_write', 'failure_repair_read', 'pm']
-def _monitor (t, dh):
+def _monitor (dh):
     stats = {}
     allnodes = dh.allnodes.values ()
 
@@ -148,11 +68,15 @@ def _monitor (t, dh):
 	stats['sent_bytes::%s' % k] = \
 		sum ([n.sent_bytes_breakdown.get (k, 0) for n in allnodes])
 
-    blocks = {}
-    for n in dh.nodes:
-	for b in n.blocks:
-	    blocks[b] = blocks.get (b, 0) + 1
-    extant = blocks.values ()
+    extant = filter (lambda x: x > 0, dh.available.values ())
+    stats['avail_blocks'] = len (extant)
+#    assert stats['avail_blocks'] == dh.available_blocks ()
+
+#    blocks = {}
+#    for n in dh.nodes:
+#	for b in n.blocks:
+#	    blocks[b] = blocks.get (b, 0) + 1
+#    extant = blocks.values ()
     try: 
 	avg = sum (extant, 0.0) / len (extant)
 	minimum = min (extant)
@@ -168,7 +92,7 @@ def _monitor (t, dh):
     return stats
 
 def print_monitor (t, dh):
-    s = _monitor (t, dh)
+    s = _monitor (dh)
 
     print "%4d" % t, "%4d nodes;" % len(dh.nodes),
     print "%sB sent;" % size_rounder (s['sent_bytes']),
@@ -176,7 +100,7 @@ def print_monitor (t, dh):
     print "%sB avail;" % size_rounder (s['avail_bytes']),
     print "%sB stored;" % size_rounder (s['disk_bytes']),
     print "%d/%5.2f/%d extant;" % (s['extant_min'], s['extant_avg'], s['extant_max']),
-    print "%d/%d blocks avail" % (dh.available_blocks (), len (dh.blocks))
+    print "%d/%d blocks avail" % (s['avail_blocks'], len (dh.blocks))
     if do_spread:
 	print "%d/%d avg %5.2f block spread" % (s['spread_min'],
 						s['spread_max'],
@@ -185,12 +109,12 @@ def print_monitor (t, dh):
 	print "%sB sent[%s];" % (size_rounder(s['sent_bytes::%s' % k]), k)
 
 def parsable_monitor (t, dh):
-    s = _monitor (t, dh)
+    s = _monitor (dh)
 
     print t, len(dh.nodes), 
     print ' '.join(["%d" % s[k] for k in ['sent_bytes','usable_bytes','avail_bytes','disk_bytes']]),
     print s['extant_min'], "%5.2f" % s['extant_avg'], s['extant_max'],
-    print dh.available_blocks (), len (dh.blocks),
+    print s['avail_blocks'], len (dh.blocks),
     for k in sbkeys:
 	print "%d" % s['sent_bytes::%s' % k],
     print
@@ -204,19 +128,22 @@ def usage ():
 	sys.stderr.write ("\t%s\n" % t)
 
 if __name__ == '__main__':
-    import sys
     import getopt
+    # no threads or signals really
+    sys.setcheckinterval (10000000)
 
-    # default monitor
+    # default monitor, every 12 hours
     monitor = print_monitor
-    monint  = 60
+    monint  = 12 * 60 * 60
     try:
-	opts, cmdv = getopt.getopt (sys.argv[1:], "ims:")
+	opts, cmdv = getopt.getopt (sys.argv[1:], "b:i:ms")
     except getopt.GetoptError:
         usage ()
         sys.exit (1)
     for o, a in opts:
-	if o == '-i':
+	if o == '-b':
+	    dhash.BANDWIDTH_HACK = int (a)
+	elif o == '-i':
 	    monint = int (a)
         elif o == '-m':
             monitor = parsable_monitor
@@ -227,6 +154,8 @@ if __name__ == '__main__':
         usage ()
 	sys.exit (1)
 
+    print "# bw =", dhash.BANDWIDTH_HACK
+    print "# args =", cmdv
     evfile = cmdv[0]
     dtype  = cmdv[1]
     gdh = None
@@ -239,6 +168,6 @@ if __name__ == '__main__':
 	sys.exit (1)
 
     sim = simulator (gdh)
-    eg = file_evgen (evfile)
+    evfh = open (evfile)
+    eg = event_generator (evfh)
     sim.run (eg, monitor, monint)
-    
