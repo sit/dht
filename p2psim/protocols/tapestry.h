@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.9 2003/10/14 14:55:33 thomer Exp $ */
+/* $Id: tapestry.h,v 1.10 2003/10/16 18:32:24 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -79,6 +79,7 @@ public:
 
   struct lookup_args {
     GUID key;
+    IPAddress looker;
   };
 
   struct lookup_return {
@@ -213,6 +214,7 @@ private:
   
   // statitics per message
   vector<uint> stat;
+  vector<uint> num_msgs;
 
   bool _joining;
   bool _stab_scheduled;
@@ -231,7 +233,7 @@ private:
   void next_hop( GUID key, IPAddress** ips, uint size );
   Time ping( IPAddress other_node, GUID other_id, bool &ok );
   GUID lookup_cheat( GUID key );
-  void record_stat( stat_type type );
+  void record_stat( stat_type type, uint num_ids, uint num_else );
   void print_stats();
 
   class mc_callinfo { public:

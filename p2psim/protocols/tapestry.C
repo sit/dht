@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.13 2003/10/14 14:55:33 thomer Exp $ */
+/* $Id: tapestry.C,v 1.14 2003/10/16 18:32:24 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -52,6 +52,7 @@ Tapestry::Tapestry(Node *n, Args a)
   // init stats
   while (stat.size() < (uint) STAT_SIZE) {
     stat.push_back(0);
+    num_msgs.push_back(0);
   }
 
 }
@@ -73,11 +74,12 @@ Tapestry::~Tapestry()
 }
 
 void
-Tapestry::record_stat(stat_type type)
+Tapestry::record_stat(stat_type type, uint num_ids, uint num_else )
 {
 
   assert(stat.size() > (uint) type);
-  stat[type]++;
+  stat[type] += 20 + 4*num_ids + num_else;
+  num_msgs[type]++;
 
 }
 
@@ -86,15 +88,16 @@ Tapestry::print_stats()
 {
 
   TapDEBUG(0) << "STATS: " <<
-    "join " << stat[STAT_JOIN] <<
-    " lookup " << stat[STAT_LOOKUP] <<
-    " nodelist " << stat[STAT_NODELIST] <<
-    " mc " << stat[STAT_MC] <<
-    " ping " << stat[STAT_PING] <<
-    " backpointer " << stat[STAT_BACKPOINTER] <<
-    " mcnotify " << stat[STAT_MCNOTIFY] <<
-    " nn " << stat[STAT_NN] <<
-    " repair " << stat[STAT_REPAIR] <<
+    "join " << stat[STAT_JOIN] << " " << num_msgs[STAT_JOIN] <<
+    " lookup " << stat[STAT_LOOKUP] << " " << num_msgs[STAT_LOOKUP] <<
+    " nodelist " << stat[STAT_NODELIST] << " " << num_msgs[STAT_NODELIST] <<
+    " mc " << stat[STAT_MC] << " " << num_msgs[STAT_MC] <<
+    " ping " << stat[STAT_PING] << " " << num_msgs[STAT_PING] <<
+    " backpointer " << stat[STAT_BACKPOINTER] << " " 
+	      << num_msgs[STAT_BACKPOINTER] <<
+    " mcnotify " << stat[STAT_MCNOTIFY] << " " << num_msgs[STAT_MCNOTIFY] <<
+    " nn " << stat[STAT_NN] << " " << num_msgs[STAT_NN] <<
+    " repair " << stat[STAT_REPAIR] << " " << num_msgs[STAT_REPAIR] <<
     endl;
 }
 
@@ -104,11 +107,12 @@ Tapestry::lookup(Args *args)
 
   GUID key = args->nget<GUID>("key");
 
-  TapDEBUG(2) << "Tapestry Lookup for key " << key << endl;
+  TapDEBUG(0) << "Tapestry Lookup for key " << print_guid(key) << endl;
 
   lookup_args la;
   la.key = key;
-  
+  la.looker = ip();
+
   lookup_return lr;
   lr.hopcount = 0;
   lr.failed = false;
@@ -157,8 +161,11 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
       break;
     } else {
       // it's not me, so forward the query
-      record_stat(STAT_LOOKUP);
+      record_stat(STAT_LOOKUP, 1, 0);
       bool succ = doRPC( next, &Tapestry::handle_lookup, args, ret );
+      if( succ ) {
+	record_stat( STAT_LOOKUP, 1, 2 );
+      }
       if( succ && !ret->failed ) {
 	// don't need to try the next one
 	ret->hopcount++;
@@ -166,7 +173,8 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
       } else {
 	// print out that a failure happened
 	TapDEBUG(0) << "Failure happened during the lookup of key " << 
-	  args->key << ", trying to reach node " << next << endl;
+	  print_guid(args->key) << ", trying to reach node " << next << 
+	  " for node " << args->looker << endl;
 	ret->failed = false;
       }
     }
@@ -239,12 +247,14 @@ Tapestry::join(Args *args)
   do {
     attempts--;
     jr.failed = false;
-    record_stat(STAT_JOIN);
+    record_stat(STAT_JOIN, 1, 0);
     bool succ = doRPC( wellknown_ip, &Tapestry::handle_join, &ja, &jr );
     
     if( !succ ) {
       TapDEBUG(0) << "Well known ip died!  BAD!\n";
       return;
+    } else {
+      record_stat(STAT_JOIN, 1, 1);
     }
   } while( jr.failed && attempts >= 0 );
 
@@ -286,7 +296,7 @@ Tapestry::join(Args *args)
       na->id = id();
       na->alpha = i;
       nn_return *nr = New nn_return();
-      record_stat(STAT_NN);
+      record_stat(STAT_NN, 1, 1);
       unsigned rpc = asyncRPC( ni._addr, &Tapestry::handle_nn, na, nr );
       assert(rpc);
       nn_resultmap[rpc] = New nn_callinfo(ni._addr, na, nr);
@@ -306,6 +316,7 @@ Tapestry::join(Args *args)
       TapDEBUG(2) << "done with nn with " << ncall->ip << endl;
 
       if( ok ) {
+	record_stat( STAT_NN, nnr.nodelist.size(), 0 );
 	for( uint k = 0; k < nnr.nodelist.size(); k++ ) {
 	  // make sure this one isn't on there yet
 	  // TODO: make this more efficient.  Maybe use a hash set or something
@@ -476,8 +487,11 @@ Tapestry::handle_join(join_args *args, join_return *ret)
       nodelist_args na;
       na.nodelist = thisrow;
       nodelist_return nr;
-      record_stat(STAT_NODELIST);
-      doRPC( args->ip, &Tapestry::handle_nodelist, &na, &nr );
+      record_stat(STAT_NODELIST, na.nodelist.size(), 0);
+      bool succ = doRPC( args->ip, &Tapestry::handle_nodelist, &na, &nr );
+      if( succ ) {
+	record_stat(STAT_NODELIST, 0, 0);
+      }
       
       // free the nodelist
       for( uint i = 0; i < na.nodelist.size(); i++ ) {
@@ -516,8 +530,11 @@ Tapestry::handle_join(join_args *args, join_return *ret)
     } else {
       // not the surrogate
       // recursive routing yo
-      record_stat(STAT_JOIN);
+      record_stat(STAT_JOIN, 1, 0);
       bool succ = doRPC( next, &Tapestry::handle_join, args, ret );
+      if( succ ) {
+	record_stat(STAT_JOIN, 1, 1);
+      }
       if( succ && !ret->failed ) {
 	// success!
 	break;
@@ -586,8 +603,11 @@ Tapestry::handle_mc(mc_args *args, mc_return *ret)
   }
   mca.nodelist = nodelist;
 
-  record_stat(STAT_MCNOTIFY);
+  record_stat(STAT_MCNOTIFY, 1+nodelist.size(), 0);
   bool succ = doRPC( args->new_ip, &Tapestry::handle_mcnotify, &mca, &mcr );
+  if( succ ) {
+    record_stat(STAT_MCNOTIFY, 0, 0);
+  }
 
   // free the nodelist
   for( uint i = 0; i < nodelist.size(); i++ ) {
@@ -630,7 +650,7 @@ Tapestry::handle_mc(mc_args *args, mc_return *ret)
 	mca->watchlist = args->watchlist;
 	TapDEBUG(2) << "multicasting info for " << args->new_ip << " to " << 
 	  ni->_addr << "/" << print_guid( ni->_id ) << endl;
-	record_stat(STAT_MC);
+	record_stat(STAT_MC, 1, 2+mca->watchlist.size()*_base);
 	unsigned rpc = asyncRPC( ni->_addr, &Tapestry::handle_mc, mca, mcr );
 	assert(rpc);
 	resultmap[rpc] = New mc_callinfo(ni->_addr, mca, mcr);
@@ -656,7 +676,7 @@ Tapestry::handle_mc(mc_args *args, mc_return *ret)
 	mca->watchlist = args->watchlist;
 	TapDEBUG(2) << "multicasting info for " << args->new_ip << " to " << 
 	  ni->_addr << "/" << print_guid( ni->_id ) << " as a lock " << endl;
-	record_stat(STAT_MC);
+	record_stat(STAT_MC, 1, 2+mca->watchlist.size()*_base);
 	unsigned rpc = asyncRPC( ni->_addr, &Tapestry::handle_mc, mca, mcr );
 	assert(rpc);
 	resultmap[rpc] = New mc_callinfo(ni->_addr, mca, mcr);
@@ -669,6 +689,9 @@ Tapestry::handle_mc(mc_args *args, mc_return *ret)
   for( unsigned int i = 0; i < numcalls; i++ ) {
     bool ok;
     unsigned donerpc = rcvRPC( &rpcset, ok );
+    if( ok ) {
+      record_stat(STAT_MC, 0, 0);
+    }
     mc_callinfo *ci = resultmap[donerpc];
     TapDEBUG(2) << "mc to " << ci->ip << " about " << args->new_ip << 
       " is done.  ok = " << ok << endl;
@@ -938,8 +961,11 @@ Tapestry::ping( IPAddress other_node, GUID other_id, bool &ok )
   ping_args pa;
   ping_return pr;
   TapDEBUG(4) << "about to ping " << other_node << endl;
-  record_stat(STAT_PING);
+  record_stat(STAT_PING, 0, 0);
   ok = doRPC( other_node, &Tapestry::handle_ping, &pa, &pr );
+  if( ok ) {
+    record_stat(STAT_PING, 0, 0);
+  }
   TapDEBUG(4) << "done with ping " << other_node << endl;
   return now() - before;
 }
@@ -967,7 +993,7 @@ Tapestry::multi_add_to_rt_start( RPCSet *ping_rpcset,
     // process
     // however, no need to ping if we already know the ping time, right?
     if( !check_exist || !_rt->contains( ni->_id ) ) {
-      record_stat(STAT_PING);
+      record_stat(STAT_PING, 0, 0);
       unsigned rpc = asyncRPC( ni->_addr, 
 			       &Tapestry::handle_ping, &pa, &pr );
       assert(rpc);
@@ -995,6 +1021,7 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
       // we failed to contact this node.  remove from rt.
       pi->failed = true;
     } else {
+      record_stat( STAT_PING, 0, 0 );
       // TODO: ok, but now how do I call rt->add without it placing 
       // backpointers synchronously?
       pi->rtt = ping_time;
@@ -1048,7 +1075,7 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
 		  }
 		  assert( ni->_id != *i );
 		  if( ni->_addr != ip() ) {
-		      record_stat(STAT_REPAIR);
+		      record_stat(STAT_REPAIR, 1, 2);
 		      repair_return *rr = New repair_return();
 		      repair_args *ra = New repair_args();
 		      ra->bad_id = *i;
@@ -1079,6 +1106,7 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
 	  repair_callinfo *rc = repair_resultmap[donerpc];
 	  repair_return *rr = rc->rr;
 	  if( ok ) {
+	      record_stat( STAT_REPAIR, rr->nodelist.size(), 0 );
 	      for( vector<NodeInfo>::iterator j=rr->nodelist.begin();
 		   j != rr->nodelist.end(); j++ ) {
 
@@ -1139,7 +1167,7 @@ Tapestry::place_backpointer( RPCSet *bp_rpcset,
   bpa->remove = remove;
   backpointer_return bpr;
   TapDEBUG(3) << "sending bp to " << bpip << endl;
-  record_stat(STAT_BACKPOINTER);
+  record_stat(STAT_BACKPOINTER, 1, 2);
   unsigned rpc = asyncRPC( bpip, &Tapestry::handle_backpointer, bpa, &bpr );
   bp_rpcset->insert(rpc);
   (*bp_resultmap)[rpc] = bpa;
@@ -1156,6 +1184,9 @@ Tapestry::place_backpointer_end( RPCSet *bp_rpcset,
   for( unsigned int j = 0; j < setsize; j++ ) {
     bool ok;
     unsigned donerpc = rcvRPC( bp_rpcset, ok );
+    if( ok ) {
+      record_stat(STAT_BACKPOINTER, 0, 0);
+    }
     backpointer_args *bpa = (*bp_resultmap)[donerpc];
     delete bpa;
   }
