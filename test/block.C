@@ -50,6 +50,21 @@ set(char *s, testslave *t)
   t->name = s;
 }
 
+
+void
+do_block(testmaster *tm, int mode)
+{
+  if(mode == 0)
+    tm->block(0, 1, wrap(&done));
+  else if(mode == 1)
+    tm->unblock(0, 1, wrap(&done));
+  else if(mode == 2)
+    tm->isolate(0, wrap(&done));
+  else if(mode == 3)
+    tm->unisolate(0, wrap(&done));
+}
+
+
 int
 main(int argc, char *argv[])
 {
@@ -90,16 +105,7 @@ main(int argc, char *argv[])
     warn << "BLOCKEE host = " << slaves[1].name << ", port = " << slaves[1].port << "\n";
   }
 
-  testmaster tm(slaves);
-  if(mode == 0)
-    tm.block(0, 1, wrap(&done));
-  else if(mode == 1)
-    tm.unblock(0, 1, wrap(&done));
-  else if(mode == 2)
-    tm.isolate(0, wrap(&done));
-  else if(mode == 3)
-    tm.unisolate(0, wrap(&done));
-
-
+  testmaster *tm = New testmaster();
+  tm->setup(slaves, wrap(do_block, tm, mode));
   amain();
 }

@@ -25,6 +25,7 @@
  */
 
 #include "async.h"
+#include "dhash.h"
 #include "test.h"
 
 #define TESLA_CONTROL_PORT 8002
@@ -35,17 +36,48 @@ typedef struct {
   int port;
 } testslave;
 
+
+typedef struct {
+  unsigned id;
+  str p2psocket;
+  const testslave *s;
+  int unixsocket_fd;
+  callback<void>::ref cb;
+} conthunk;
+
+
 class testmaster { public:
-  testmaster(const testslave slaves[]);
+  testmaster();
   ~testmaster();
 
+  // has to be done before anything else
+  void setup(const testslave slaves[], callback<void>::ref);
+
+  // un/isolate <victim> from the network
   void isolate(int victim, callback<void, int>::ref);
   void unisolate(int victim, callback<void, int>::ref);
 
+  // tell blocker to block traffic from blockee
   void block(int blocker, int blockee, callback<void, int>::ref);
   void unblock(int blocker, int blockee, callback<void, int>::ref);
 
+  // returns dhash client for certain identifier
+  dhashclient* dhash(const unsigned id)      { return _clients[id]->dhc; }
+  dhashclient* operator[](const unsigned id) { return dhash(id); }
+
+
+
+
+
 private:
+  unsigned _nhosts;
+  bool _busy;
+
+  void addnode(const unsigned id, const str p2psocket, const testslave *s,
+      const int unixsocket_fd, callback<void>::ref cb);
+  void addnode_cb(conthunk tx, const int there_fd);
+  void accept_connection(const int unixsocket_fd, const int there_fd);
+  void pipe(const int, const int);
 
   class instruct_thunk { public:
     instruct_thunk(callback<void, int>::ref cb) : cb(cb) {}
@@ -80,4 +112,24 @@ private:
   } instruct_t;
 
   const testslave *_slaves;
+
+  typedef struct client {
+    unsigned id;
+    const testslave *slave;
+    str fname;
+    ptr<dhashclient> dhc;
+    ihash_entry<client> hash_link;
+
+    client(unsigned i, const testslave *s, str f, ptr<dhashclient> d)
+    {
+      id = i;
+      slave = s;
+      fname = f;
+      dhc = d;
+    }
+    ~client() {}
+  } client;
+
+  typedef ihash<unsigned, client, &client::id, &client::hash_link> clients_t;
+  clients_t _clients;
 };
