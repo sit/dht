@@ -108,7 +108,7 @@ dhc::recon_tm_lookup (ref<dhc_block> kb, bool guilty, vec<chord_node> succs,
 	gettimeofday (&tp, NULL);
 	start_recon = tp.tv_sec * (u_int64_t)1000000 + tp.tv_usec;
 	warn << myNode->my_ID () << " Start RECON at " << start_recon << "\n";
-	str buf = strbuf () << start_recon << " " << myNode->myID () 
+	str buf = strbuf () << start_recon << " " << myNode->my_ID () 
 			    << " RECON_START 1 0\n";
 	write (fd, buf.cstr (), buf.len ());
 	recon (kb->id, wrap (this, &dhc::recon_tm_done));
