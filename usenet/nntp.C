@@ -293,8 +293,7 @@ nntp::cmd_article_cb (ptr<bool> deleted, bool head, chordID msgkey,
   if (head) {
     aio << articleb << cur_group.cur_art << " " << msgkey << articlee;
   }
-  aio << str (blk->data, blk->len) << "\r\n";
-  aio << period;
+  aio << str (blk->data, blk->len) << period;
 }
 
 // --- post article
@@ -312,10 +311,10 @@ nntp::cmd_post (str c)
   process_input = wrap (this, &nntp::read_post, postok, postbad);
 }
 
-static rxx postmrx ("^Message-ID: (<.+>)\\s*$", "mi");
-static rxx postngrx ("^Newsgroups: (.+)\\s*$", "m");
+static rxx postmrx ("^Message-ID: (<.+>)\\s*$", "i");
+static rxx postngrx ("^Newsgroups: (.+?)\\s*$", "i");
 static rxx postgrx (",?([^,]+)");
-static rxx postcontrol ("^Control: (.+)\\s*$", "m");
+static rxx postcontrol ("^Control: (.+?)\\s*$", "m");
 static rxx postend ("^\\.$");
 static rxx postheadend ("^\\s?$");
 
@@ -330,6 +329,7 @@ nntp::read_post (str resp, str bad)
 
   if (!postend.search (lines.back())) 
     return;
+  lines.pop_back();
   
   int headerend  = 0;
   int msgid_line = 0;
@@ -345,11 +345,13 @@ nntp::read_post (str resp, str bad)
       docontrol (postcontrol[1]);
       lines.setsize(0);
       return;
-    }
-    if (postmrx.search (lines[i])) {
+    } else if (postmrx.search (lines[i])) {
       warn << "found msgid " << postmrx[1] << "\n";
       msgid = postmrx[1];
       msgid_line = i;
+    } else if (postngrx.search (lines[i])) {
+      warn << "found newsgroup list " << postngrx[1] << "\n";
+      ng = postngrx[1];
     }
   }
   int linecount = lines.size () - headerend;
@@ -380,10 +382,8 @@ nntp::read_post (str resp, str bad)
   header_db->insert(k, d);
   warnx << "----\n" << h << "----\n";
 
-  g = New refcounted<newsgroup> ();
-  if (postngrx.search (h)) {
-    ng = postngrx[1];
-
+  if (ng) { 
+    g = New refcounted<newsgroup> ();
     while (postgrx.search (ng)) {
       if (g->open (postgrx[1]) < 0)
 	warn << "tried to post unknown group " << postgrx[1] 
