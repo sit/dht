@@ -41,7 +41,7 @@
 #include <merkle_sync_prot.h>
 static int MERKLE_ENABLED = getenv("MERKLE_ENABLED") ? atoi(getenv("MERKLE_ENABLED")) : 1;
 static int PARTITION_ENABLED = getenv("PARTITION_ENABLED") ? atoi(getenv("PARTITION_ENABLED")) : 0;
-static int REPLICATE      = getenv("REPLICATE") ? atoi(getenv("REPLICATE")) : 1;
+static int REPLICATE = getenv("REPLICATE") ? atoi(getenv("REPLICATE")) : 1;
 
 #define SYNCTM 30
 #define REPTM 10
@@ -259,14 +259,14 @@ dhash::replica_maintenance_timer (u_int index)
 
       if (replica_syncer) {
 	assert (replica_syncer->done());
-	// assert (*active_syncers[replica_syncer_dstID] == replica_syncer);
-	if (active_syncers[replica_syncer_dstID] &&
-	    *active_syncers[replica_syncer_dstID] == replica_syncer)
-	  active_syncers.remove (replica_syncer_dstID);
+	assert (*active_syncers[replica_syncer_dstID] == replica_syncer);
+	active_syncers.remove (replica_syncer_dstID);
       }
 
-      if (active_syncers[replicaID])
-	warnx << "already syncing with " << replicaID << ", skip\n";
+      if (active_syncers[replicaID]) {
+	warnx << "replica_maint: already syncing with " << replicaID << ", skip\n";
+	replica_syncer = NULL;
+      }
       else {
         replica_syncer_dstID = replicaID;
         replica_syncer = New refcounted<merkle_syncer> 
@@ -322,10 +322,8 @@ dhash::partition_maintenance_timer ()
     // create a syncer when there is none or the existing one is done
     if (partition_syncer) {
       assert (partition_syncer->done());
-      // assert (*active_syncers[partition_right] == partition_syncer);
-      if (active_syncers[partition_right] &&
-	  *active_syncers[partition_right] == partition_syncer)
-        active_syncers.remove (partition_right);
+      assert (*active_syncers[partition_right] == partition_syncer);
+      active_syncers.remove (partition_right);
     }
 
     // handles initial condition (-1) and key space wrap around..
@@ -382,7 +380,8 @@ dhash::partition_maintenance_pred_cb (chordID predID, net_address addr,
     partition_left = incID(predID);
 
     if (active_syncers[partition_right]) {
-      // warn << "Strange: already syncing with " << partition_right << "\n";
+      warnx << "partition_maint: already syncing with " << partition_right << ", skip\n";
+      partition_syncer = NULL;
     }
     else {
       partition_syncer = New refcounted<merkle_syncer> 
@@ -852,7 +851,7 @@ void
 dhash::replicate_key (chordID key, cbstat_t cb)
 {
   if (!REPLICATE) {
-    warn << "\n\n\n****NOT REPLICATING KEY\n";
+    // warn << "\n\n\n****NOT REPLICATING KEY\n";
     (cb) (DHASH_OK);
   } else {
     update_replica_list ();
@@ -1092,6 +1091,7 @@ dhash::append_after_db_store (cbstore cb, chordID k, int stat)
   }
   //replicate?
 }
+
 
 void 
 dhash::store (s_dhash_insertarg *arg, cbstore cb)
