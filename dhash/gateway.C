@@ -177,8 +177,10 @@ dhashclient::append (chordID to, const char *buf, size_t buflen, cbinsert_t cb)
 
    key = HASH (data)
 */
+
 void
-dhashclient::insert (const char *buf, size_t buflen, cbinsert_t cb)
+dhashclient::insert (bigint key, const char *buf,
+                     size_t buflen, cbinsert_t cb)
 {
   long type = DHASH_CONTENTHASH;
   xdrsuio x;
@@ -192,12 +194,18 @@ dhashclient::insert (const char *buf, size_t buflen, cbinsert_t cb)
       
       int m_len = x.uio ()->resid ();
       char *m_dat = suio_flatten (x.uio ());
-      bigint key = compute_hash (buf, buflen);
       insert (key, m_dat, m_len, cb, DHASH_CONTENTHASH);      
       xfree (m_dat);
     } else {
       cb (true, bigint (0)); // marshalling failed.
     }
+}
+
+void
+dhashclient::insert (const char *buf, size_t buflen, cbinsert_t cb)
+{
+  bigint key = compute_hash (buf, buflen);
+  insert(key, buf, buflen, cb);
 }
 
 

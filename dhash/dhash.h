@@ -298,6 +298,7 @@ public:
   // inserts under the contents hash. 
   // (buf need not remain involatile after the call returns)
   void insert (const char *buf, size_t buflen, cbinsert_t cb);
+  void insert (bigint key, const char *buf, size_t buflen, cbinsert_t cb);
 
   //insert under hash of public key
   void insert (const char *buf, size_t buflen, rabin_priv key, cbinsert_t cb);
