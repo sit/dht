@@ -184,8 +184,7 @@ class dhash {
 
   merkle_server *msrv;
   merkle_tree *mtree;
-  qhash<chordID, ptr<merkle_syncer>, hashID> active_bi_syncers;
-  qhash<chordID, ptr<merkle_syncer>, hashID> active_uni_syncers;
+  qhash<chordID, ptr<merkle_syncer>, hashID> active_syncers;
 
   chordID replica_syncer_dstID;
   ptr<merkle_syncer> replica_syncer;
@@ -248,11 +247,15 @@ class dhash {
 			      int cookie, ptr<dbrec> data, dhash_stat err);
   
   void store (s_dhash_insertarg *arg, cbstore cb);
-  void store_cb (store_status type, chordID id, chordID srcID, int32 nonce,
-                 cbstore cb, int stat);
-  void store_repl_cb (cbstore cb, chordID id, chordID srcID, int32 nonce,
-                      dhash_stat err);
-  void send_storecb (chordID key, chordID srcID, uint32 nonce, dhash_stat stat);
+  void store_cb (store_status type, chord_node sender, chordID key, chordID srcID,
+                 int32 nonce, cbstore cb, int stat);
+  void store_repl_cb (cbstore cb, chord_node sender, chordID srcID,
+                      int32 nonce, dhash_stat err);
+  void send_storecb (chord_node sender, chordID srcID, uint32 nonce,
+                     dhash_stat stat);
+  void send_storecb_cacheloc (chordID srcID, uint32 nonce, dhash_stat status,
+	                      chordID ID, bool ok, chordstat stat);
+
   void sent_storecb_cb (dhash_stat *s, clnt_stat err);
   
   void get_keys_traverse_cb (ptr<vec<chordID> > vKeys,

@@ -204,11 +204,7 @@ dhash::sendblock_XXX (XXX_SENDBLOCK_ARGS *a)
 void
 dhash::sendblock (bigint destID, bigint blockID, bool last, callback<void>::ref cb)
 {
-#if 0
-  warn << "dhash::sendblock: destID " << destID
-       << ", blockID " << blockID
-       << ", last " << last << "\n";
-#endif
+  warnx << "sendblock: to " << destID << ", id " << blockID << ", last " << last << "\n";
 
   ptr<dbrec> blk = db->lookup (id2dbrec (blockID));
 
@@ -255,32 +251,30 @@ dhash::replica_maintenance_timer (u_int index)
 
       if (replica_syncer) {
 	assert (replica_syncer->done());
-	assert (*active_bi_syncers[replica_syncer_dstID] == replica_syncer);
-	active_bi_syncers.remove (replica_syncer_dstID);
+	assert (*active_syncers[replica_syncer_dstID] == replica_syncer);
+	active_syncers.remove (replica_syncer_dstID);
       }
 
-      if (active_bi_syncers[replicaID])
-	fatal << "strange: already syncing with " << replicaID << "\n";
-      else if (active_uni_syncers[replicaID]) {
-        warn << "change uni to bi sync\n";
-	active_uni_syncers.remove (replicaID);
-      }
-
-      replica_syncer_dstID = replicaID;
-      replica_syncer = New refcounted<merkle_syncer> 
-	(mtree, 
-	 wrap (this, &dhash::doRPC_unbundler, replicaID),
-	 wrap (this, &dhash::sendblock, replicaID));
-      active_bi_syncers.insert (replicaID, replica_syncer);
-      
-      bigint rngmin = host_node->my_pred ();
-      bigint rngmax = host_node->my_ID ();
+      if (active_syncers[replicaID])
+	warnx << "already syncing with " << replicaID << ", skip\n";
+      else {
+        replica_syncer_dstID = replicaID;
+        replica_syncer = New refcounted<merkle_syncer> 
+	  (mtree, 
+	   wrap (this, &dhash::doRPC_unbundler, replicaID),
+	   wrap (this, &dhash::sendblock, replicaID));
+        active_syncers.insert (replicaID, replica_syncer);
+        
+        bigint rngmin = host_node->my_pred ();
+        bigint rngmax = host_node->my_ID ();
      
 #if 0
-      warn << "biSYNC with " << replicas[index]
-	   << " range [" << rngmin << ", " << rngmax << "]\n";
+        warn << "biSYNC with " << replicas[index]
+	     << " range [" << rngmin << ", " << rngmax << "]\n";
 #endif
-      replica_syncer->sync (rngmin, rngmax, merkle_syncer::BIDIRECTIONAL);
+        replica_syncer->sync (rngmin, rngmax, merkle_syncer::BIDIRECTIONAL);
+      }
+
       index = (index + 1) % nreplica;
     }
   }
@@ -317,9 +311,8 @@ dhash::partition_maintenance_timer ()
     // create a syncer when there is none or the existing one is done
     if (partition_syncer) {
       assert (partition_syncer->done());
-      assert (active_uni_syncers[partition_right] == 0 ||
-              *active_uni_syncers[partition_right] == partition_syncer);
-      active_uni_syncers.remove (partition_right);
+      assert (*active_syncers[partition_right] == partition_syncer);
+      active_syncers.remove (partition_right);
     }
 
     // handles initial condition (-1) and key space wrap around..
@@ -368,14 +361,14 @@ dhash::partition_maintenance_pred_cb (chordID predID, net_address addr,
 {
   if (status) {
     warn << "dhash::partition_maintenance_pred_cb status " << status << "\n";
-  } else {
+  }
+  else {
     // incID because
     //   hostID is responsible for (pred, hostID]
     //   but we sync the range  [partition_left, partition_right]
     partition_left = incID(predID);
 
-    if (active_uni_syncers[partition_right] ||
-	active_bi_syncers[partition_right]) {
+    if (active_syncers[partition_right]) {
       // warn << "Strange: already syncing with " << partition_right << "\n";
     }
     else {
@@ -383,11 +376,11 @@ dhash::partition_maintenance_pred_cb (chordID predID, net_address addr,
 	(mtree, 
 	 wrap (this, &dhash::doRPC_unbundler, partition_right),
 	 wrap (this, &dhash::sendblock, partition_right));
-      active_uni_syncers.insert (partition_right, partition_syncer);
+      active_syncers.insert (partition_right, partition_syncer);
       
 #if 0
-      warn << "uniSYNC range [" 
-	   << partition_left << ", " << partition_right << "]\n";
+      warnx << "uniSYNC range [" 
+	    << partition_left << ", " << partition_right << "]\n";
 #endif
       partition_syncer->sync
 	(partition_left, partition_right, merkle_syncer::UNIDIRECTIONAL);
@@ -1122,12 +1115,8 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
     ref<dbrec> k = id2dbrec(arg->key);
     ref<dbrec> d = New refcounted<dbrec> (ss->buf, ss->size);
 
-    if (active_bi_syncers[arg->srcID]) {
-      ptr<merkle_syncer> syncer = *active_bi_syncers[arg->srcID];
-      syncer->recvblk (arg->key, arg->last);
-    }
-    else if (active_uni_syncers[arg->srcID]) {
-      ptr<merkle_syncer> syncer = *active_uni_syncers[arg->srcID];
+    if (active_syncers[arg->srcID]) {
+      ptr<merkle_syncer> syncer = *active_syncers[arg->srcID];
       syncer->recvblk (arg->key, arg->last);
     }
 
@@ -1177,10 +1166,10 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
 	    } else {
 	      reservation->reserved_until = timenow + 1;
 	    }
-	    store_cb (arg->type, arg->key, arg->srcID, arg->nonce,
+	    store_cb (arg->type, arg->from, arg->key, arg->srcID, arg->nonce,
 		      cb, DHASH_OK);
 	  } else {
-	    store_cb (arg->type, arg->key, arg->srcID, arg->nonce,
+	    store_cb (arg->type, arg->from, arg->key, arg->srcID, arg->nonce,
 		      cb, DHASH_STOREERR);
 	  }
 	  return;
@@ -1221,7 +1210,7 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
       bytes_stored += arg->data.size ();
 
     dbwrite (k, d);
-    store_cb (arg->type, id, arg->srcID, arg->nonce, cb, 0);
+    store_cb (arg->type, arg->from, arg->key, arg->srcID, arg->nonce, cb, 0);
   } else
     cb (DHASH_STORE_PARTIAL);
 }
@@ -1235,20 +1224,35 @@ dhash::sent_storecb_cb (dhash_stat *s, clnt_stat err)
 }
 
 void
-dhash::send_storecb (chordID key, chordID srcID, uint32 nonce, dhash_stat stat)
+dhash::send_storecb_cacheloc (chordID srcID, uint32 nonce, dhash_stat status,
+                              chordID ID, bool ok, chordstat stat)
 {
-  ptr<s_dhash_storecb_arg> arg = New refcounted<s_dhash_storecb_arg> ();
-  arg->v = srcID;
-  arg->nonce = nonce;
-  arg->status = stat;
-  dhash_stat *res = New dhash_stat ();
-  doRPC (srcID, dhash_program_1, DHASHPROC_STORECB,
-	 arg, res, wrap (this, &dhash::sent_storecb_cb, res));  
+  if (!ok || stat) {
+    warn << "challenge of " << ID << " failed\n";
+    // just fail, store will time out
+  }
+  else {
+    ptr<s_dhash_storecb_arg> arg = New refcounted<s_dhash_storecb_arg> ();
+    arg->v = ID;
+    arg->nonce = nonce;
+    arg->status = status;
+    dhash_stat *res = New dhash_stat ();
+    doRPC (ID, dhash_program_1, DHASHPROC_STORECB,
+	   arg, res, wrap (this, &dhash::sent_storecb_cb, res));
+  }
 }
 
 void
-dhash::store_cb (store_status type, chordID id, chordID srcID, int32 nonce,
-                 cbstore cb, int stat) 
+dhash::send_storecb (chord_node sender, chordID srcID, uint32 nonce, dhash_stat stat)
+{
+  host_node->locations->cacheloc (sender.x, sender.r,
+				  wrap (this, &dhash::send_storecb_cacheloc,
+				        srcID, nonce, stat));
+}
+
+void
+dhash::store_cb (store_status type, chord_node sender,
+                 chordID key, chordID srcID, int32 nonce, cbstore cb, int stat) 
 {
   if (stat)
     (*cb) (DHASH_STOREERR);
@@ -1257,12 +1261,12 @@ dhash::store_cb (store_status type, chordID id, chordID srcID, int32 nonce,
 
   if (!stat && type == DHASH_STORE)
     replicate_key
-      (id, wrap (this, &dhash::store_repl_cb, cb, id, srcID, nonce));
+      (key, wrap (this, &dhash::store_repl_cb, cb, sender, srcID, nonce));
 
   // don't need to send storecb RPC if type is NOT DHASH_STORE or if
   // there is an error
 
-  store_state *ss = pst[id];
+  store_state *ss = pst[key];
   if (ss) {
     pst.remove (ss);
     delete ss;
@@ -1270,13 +1274,13 @@ dhash::store_cb (store_status type, chordID id, chordID srcID, int32 nonce,
 }
 
 void
-dhash::store_repl_cb (cbstore cb, chordID id, chordID srcID, int32 nonce,
+dhash::store_repl_cb (cbstore cb, chord_node sender, chordID srcID, int32 nonce,
                       dhash_stat err) 
 {
   if (err)
-    send_storecb (id, srcID, nonce, DHASH_STOREERR);
+    send_storecb (sender, srcID, nonce, DHASH_STOREERR);
   else
-    send_storecb (id, srcID, nonce, DHASH_OK);
+    send_storecb (sender, srcID, nonce, DHASH_OK);
 }
 
 

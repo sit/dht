@@ -46,8 +46,9 @@
 //     - XXX don't really handle RACE conditions..
 
 static uint32 store_nonce = 0;
+#define STORE_TIMEOUT 60
 
-class dhash_store {
+class dhash_store : public virtual refcount {
 protected:
   uint npending;
   bool error;
@@ -70,12 +71,14 @@ protected:
   int numblocks;
   vec<long> seqnos;
   bool got_storecb;
+  timecb_t *dcb;
+  bool returned;
 
   void done ()
   {
-    if (got_storecb && npending == 0) {
+    if (!returned && got_storecb && npending == 0) {
       (*cb) (status, destID);
-      delete this;
+      returned = true;
     }
   }
 
@@ -100,17 +103,33 @@ protected:
       ctype (block_type(_block)), store_type (store_type),
       clntnode (clntnode), num_retries (0), last (last)
   {
+    returned = false;
+    dcb = NULL;
     if (store_type == DHASH_STORE) {
       nonce = store_nonce++;
-      dh->register_storecb_cb (nonce, wrap (this, &dhash_store::storecb_cb));
+      dh->register_storecb_cb
+	(nonce, wrap (mkref(this), &dhash_store::storecb_cb));
     }
     start ();
   }
   
   ~dhash_store ()
   {
+    if (dcb)
+      timecb_remove (dcb);
+    dcb = NULL;
     if (store_type == DHASH_STORE)
       dh->unregister_storecb_cb (nonce);
+  }
+
+  void timed_out ()
+  {
+    dcb = 0;
+    error = true;
+    status = DHASH_TIMEDOUT;
+    got_storecb = true;
+    npending = 0;
+    done ();
   }
     
   void start ()
@@ -124,7 +143,13 @@ protected:
     got_storecb = true;
     if (store_type == DHASH_STORE)
       got_storecb = false;
-    
+  
+    if (dcb)
+      timecb_remove (dcb);
+
+    dcb = delaycb
+      (STORE_TIMEOUT, wrap (mkref(this), &dhash_store::timed_out));
+
     size_t nstored = 0;
     while (nstored < block->len) {
       size_t chunklen = MIN (MTU, block->len - nstored);
@@ -176,9 +201,9 @@ protected:
     if (npending == 0) {
       if (status == DHASH_RETRY) {
 	npending ++;
-	clntnode->locations->cacheloc (predID, pred_addr, 
-				       wrap (this, 
-					     &dhash_store::retry_cachedloc));
+	clntnode->locations->cacheloc
+	  (predID, pred_addr,
+	   wrap (mkref(this), &dhash_store::retry_cachedloc));
       }
       else
 	done ();
@@ -195,6 +220,7 @@ protected:
     arg->v       = destID;
     arg->key     = blockID;
     arg->srcID   = clntnode->my_ID ();
+    clntnode->locations->get_node (arg->srcID, &arg->from);
     arg->data.setsize (len);
     memcpy (arg->data.base (), data, len);
     arg->offset  = off;
@@ -206,7 +232,7 @@ protected:
     
     long rexmitid = clntnode->doRPC
       (destID, dhash_program_1, DHASHPROC_STORE, arg, res,
-       wrap (this, &dhash_store::finish, res, num));
+       wrap (mkref(this), &dhash_store::finish, res, num));
     seqnos.push_back (rexmitid);
   }
   
@@ -215,14 +241,18 @@ protected:
     npending --;
     if (!ok || stat) {
       warn << "challenge of " << id << " failed\n";
-      (*cb) (DHASH_CHORDERR, destID);
-      delete this;
+      if (!returned) {
+        (*cb) (DHASH_CHORDERR, destID);
+        returned = true;
+      }
     }
     else {
       num_retries++;
       if (num_retries > 2) {
-	(*cb)(DHASH_RETRY, destID);
-	delete this;
+        if (!returned) {
+	  (*cb)(DHASH_RETRY, destID);
+          returned = true;
+	}
       }
       else {
 	warn << "retrying(" << num_retries << "): dest was " 
@@ -238,8 +268,8 @@ public:
                        dhash *dh, ref<dhash_block> block, bool last,
 		       cbinsert_t cb, store_status store_type = DHASH_STORE)
   {
-    vNew dhash_store (clntnode, destID, blockID, dh,
-	              block, store_type, last, cb);
+    ptr<dhash_store> d = New refcounted<dhash_store> 
+      (clntnode, destID, blockID, dh, block, store_type, last, cb);
   }
 };
 

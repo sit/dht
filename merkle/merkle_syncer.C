@@ -100,7 +100,7 @@ merkle_syncer::next (void)
 
   if (sync_done) {
     ///**/warn << (u_int)this << " ignoring extra callbacks\n";
-    assert (0);
+    //assert (0);
     return;
   }
 
@@ -384,7 +384,9 @@ merkle_syncer::getnode_cb (ref<getnode_arg> arg, ref<getnode_res> res,
 	 rngmin, rngmax);
       
       if (!sendblocks_iter->more ()) {
+#ifdef MERKLE_SYNCE_TRACE
 	warn << "DAMN IT\n";
+#endif
 	sendblocks_iter = NULL;
       }
     }

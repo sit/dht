@@ -51,6 +51,7 @@ struct dhash_valueattr {
 struct s_dhash_insertarg {
   chordID v;
   chordID key;
+  chord_node from;
   chordID srcID;
   dhash_value data;
   int offset;
