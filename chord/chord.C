@@ -350,6 +350,7 @@ vnode_impl::closestcoordpred (const chordID &x, const vec<float> &n,
     if (pcoords.size () > 0) {
       float ndist = Coord::distance_f (pcoords, n);
       if (dist < 0 || ndist < dist) {
+#if 0	
 	char dstr[24];
 	modlogger log = modlogger ("proximity-finger");
 	log << "improving " << x << " from ";
@@ -357,7 +358,7 @@ vnode_impl::closestcoordpred (const chordID &x, const vec<float> &n,
 	log << dstr << " to ";
 	sprintf (dstr, "%10.2f", ndist);
 	log << dstr << "\n";
-	
+#endif /* 0 */	
 	p = next;
 	dist = ndist;
       }
@@ -396,6 +397,7 @@ vnode_impl::closestproxpred (const chordID &x, const vec<float> &n,
       // Always pick the possibility with the lowest distance.
       float newdist = Coord::distance_f (n, them);
       if (mindist < 0 || newdist < mindist) {
+#if 0	
 	char dstr[24];
 	modlogger log = modlogger ("proximity-toe");
 	log << "improving " << x << " from ";
@@ -403,7 +405,7 @@ vnode_impl::closestproxpred (const chordID &x, const vec<float> &n,
 	log << dstr << " to ";
 	sprintf (dstr, "%10.2f", newdist);
 	log << dstr << "\n";
-	
+#endif /* 0 */	
 	mindist = newdist;
 	s = c;
       }
