@@ -28,6 +28,7 @@
 #include <arpc.h>
 
 #include <chord.h>
+#include <dbfe.h>
 
 #include "dhash_common.h"
 #include "dhash_impl.h"

@@ -30,8 +30,6 @@
 
 #include <sys/time.h>
 
-#include <qhash.h>
-
 #include <arpc.h>
 #include <async.h>
 
@@ -64,7 +62,6 @@ typedef callback<void, dhash_stat, ptr<dhash_block>, vec<ptr<location> > >::ptr 
 
 class dhash {
  public:
-  static u_long reptm ();
   static u_long keyhashtm ();
   static u_long synctm ();
   
@@ -73,8 +70,6 @@ class dhash {
   static u_long num_replica ();
   static u_long dhash_disable_db_env ();
   static u_long dhash_mtu ();
-
-  virtual void replica_maintenance_timer (u_int index) = 0;
 
   static ref<dhash> produce_dhash (str dbname);
 

@@ -26,6 +26,7 @@
  *
  */
 #include <arpc.h>
+#include <rpctypes.h>
 
 #include <chord.h>
 
@@ -33,23 +34,26 @@
 #include "dhash_impl.h"
 #include "dhashcli.h"
 #include "verify.h"
-#include "block_status.h"
+#include "pmaint.h"
 
 #include <merkle.h>
 #include <merkle_server.h>
 #include <merkle_misc.h>
+
+#include <dhc.h>
+
 #include <dhash_prot.h>
 #include <dhash_store.h>
 #include <chord.h>
 #include <chord_types.h>
 #include <comm.h>
-#include <location.h>
-#include <locationtable.h>
-#include <misc_utils.h>
+#include <block_status.h>
 #include <dbfe.h>
 #include <ida.h>
 #include <id_utils.h>
-#include <rpctypes.h>
+#include <location.h>
+#include <locationtable.h>
+#include <misc_utils.h>
 
 #ifdef DMALLOC
 #include <dmalloc.h>
@@ -60,7 +64,6 @@
 #define info  modlogger ("dhash", modlogger::INFO)
 #define trace modlogger ("dhash", modlogger::TRACE)
 
-#include <merkle_sync_prot.h>
 int DHC_SERVER = getenv("DHC") ? atoi(getenv("DHC")) : 0;
 
 #include <configurator.h>
@@ -86,13 +89,8 @@ dhash_config_init::dhash_config_init ()
   ok = ok && set_int ("dhash.sync_timer", 45);
   /** Should replication run initially? */
   ok = ok && set_int ("dhash.start_maintenance", 1);
-
-  // Josh magic....
-  ok = ok && set_int ("dhash.missing_outstanding_max", 15);
   
   ok = ok && set_int ("merkle.keyhash_timer", 10);
-  ok = ok && set_int ("merkle.replica_timer", 30);
-  ok = ok && set_int ("merkle.prt_timer", 30);
 
   //plab hacks
   ok = ok && set_int ("dhash.disable_db_env", 0);
@@ -115,7 +113,6 @@ dhash::name ()						\
   return v;						\
 }
 
-DECL_CONFIG_METHOD(reptm, "merkle.replica_timer")
 DECL_CONFIG_METHOD(keyhashtm, "merkle.keyhash_timer")
 DECL_CONFIG_METHOD(synctm, "dhash.sync_timer")
 DECL_CONFIG_METHOD(num_efrags, "dhash.efrags")
@@ -165,8 +162,7 @@ open_worker (ptr<dbfe> mydb, str name, dbOptions opts, str desc)
 }
 
 dhash_impl::dhash_impl (str dbname) :
-  missing_outstanding_o (0),
-  missing_outstanding_i (0),
+  repair_outstanding (0),
   pk_partial_cookie (1),
   db (NULL),
   keyhash_db (NULL),
@@ -178,10 +174,7 @@ dhash_impl::dhash_impl (str dbname) :
   msrv (NULL),
   pmaint_obj (NULL),
   mtree (NULL),
-  tmptree (NULL),
-  replica_syncer (NULL),
   keyhash_mgr_rpcs (0),
-  merkle_rep_tcb (NULL),
   keyhash_mgr_tcb (NULL),
   bytes_stored (0),
   keys_stored (0),
@@ -258,109 +251,14 @@ dhash_impl::init_after_chord (ptr<vnode> node)
     start ();
 }
 
-void
-dhash_impl::flush_outgoing_q ()
-{
-
-  missing_state *m = missing_outgoing_q.first ();
-  while (m && missing_outstanding_o <= MISSING_OUTSTANDING_MAX) {
-    trace << "sending " << m->key << " to " << m->from->id () << "\n";
-    missing_outstanding_o++;
-    assert (missing_outstanding_o >= 0);
-
-    //check the whole block cache
-    ref<dbrec> kkk = id2dbrec (m->key);
-    ptr<dbrec> hit = cache_db->lookup (kkk);
-    if (hit) {
-      trace << "CACHE HIT for " << m->key << "\n";
-      str blk (hit->value, hit->len);
-      send_frag (m, blk);
-    } else {
-      cli->retrieve (blockID(m->key, DHASH_CONTENTHASH, DHASH_FRAG),
-		     wrap (this, &dhash_impl::outgoing_retrieve_cb, m));
-    }
-    missing_state *next = missing_outgoing_q.next (m);
-    missing_outgoing_q.remove (m);
-    m = next;
-  }
-}
-
-void
-dhash_impl::outgoing_retrieve_cb (missing_state *ms, dhash_stat err,
-				  ptr<dhash_block> b, route r)
-{
-  assert (missing_outstanding_o >= 0);
-
-  if (err) {
-    trace << "retrieve missing out block " 
-	  << ms->key << " failed: " << err << "\n";
-    missing_outstanding_o--;
-    delete ms;
-  } else {
-    trace << host_node->my_ID () << " fetched key " << ms->key 
-	  << " so that I can send it to " << ms->from->id () << "\n";
-    assert (b);
-
-    //cache the whole block here so we don't  have to fetch it
-    // next time
-    ref<dbrec> key = id2dbrec (ms->key);
-    ref<dbrec> data = New refcounted<dbrec> (b->data, b->len);
-    cache_db->insert (key, data);
-
-    //send it
-    str blk (b->data, b->len);
-    send_frag (ms, blk);
-  }
-
-}
-
-void
-dhash_impl::send_frag (missing_state *ms, str block)
-{
-
-  //generate a new, unique fragment
-  u_long m = Ida::optimal_dfrag (block.len(), dhash::dhash_mtu ());
-  if (m > num_dfrags ())
-    m = num_dfrags ();
-  str frag = Ida::gen_frag (m, block);
-
-  //send it to the deserving host
-  cli->sendblock (ms->from,
-		  blockID (ms->key, DHASH_CONTENTHASH, DHASH_FRAG),
-		  frag, 
-		  wrap (this, &dhash_impl::outgoing_send_cb, ms));
-  
-}
-
-void
-dhash_impl::outgoing_send_cb (missing_state *m, dhash_stat err,
-			      bool present)
-{
-
-  missing_outstanding_o--;
-
-  if (!err) {
-    //mark it as being present
-    bsm->unmissing (m->from, m->key);
-    info << "repair: " << host_node->my_ID ()
-	 << " sent " << m->key << " to " << m->from->id () <<  ".\n";
-  } else
-    info << "repair: " << host_node->my_ID ()
-	 << " error sending " << m->key << " to " << m->from->id ()
-	 << " (" << err << ").\n";
-
-  delete m;
-}
-
 
 void
 dhash_impl::missing (ptr<location> from, bigint key, bool missingLocal)
 {
 
   if (missingLocal) {
-
     //XXX check the DB to make sure we really are missing this block
-    trace << host_node->my_ID () << " merkle says we should have block " << key << ", fetching.\n";
+    trace << host_node->my_ID () << " syncer says we should have block " << key << "\n";
     
     //XXX just note that we should have the block. don't get it
     // unless the replication level justifies it
@@ -374,15 +272,30 @@ dhash_impl::missing (ptr<location> from, bigint key, bool missingLocal)
     trace << host_node->my_ID () << ": " << key
 	  << " needed on " << from->id () << "\n";
   }
-
 }
 
 void
-dhash_impl::missing_retrieve_cb (bigint key, dhash_stat err,
-				 ptr<dhash_block> b, route r)
+dhash_impl::repair (blockID k)
 {
-  missing_outstanding_i--;
-  assert (missing_outstanding_i >= 0);
+  assert (repair_outstanding >= 0);
+  // throttle the block downloads
+  if (repair_outstanding > REPAIR_OUTSTANDING_MAX) {
+    if (repair_q[k.ID] == NULL) {
+      repair_state *s = New repair_state (k);
+      repair_q.insert (s);
+    }
+    return;
+  }
+  repair_outstanding++;
+  cli->retrieve (k, wrap (this, &dhash_impl::repair_retrieve_cb, k));
+}
+
+void
+dhash_impl::repair_retrieve_cb (blockID key, dhash_stat err,
+			        ptr<dhash_block> b, route r)
+{
+  repair_outstanding--;
+  assert (repair_outstanding >= 0);
 
   if (err) {
     trace << "retrieve missing block " << key << " failed: " << err << "\n";
@@ -396,20 +309,20 @@ dhash_impl::missing_retrieve_cb (bigint key, dhash_stat err,
       m = num_dfrags ();
     str frag = Ida::gen_frag (m, blk);
     ref<dbrec> d = New refcounted<dbrec> (frag.cstr (), frag.len ());
-    ref<dbrec> k = id2dbrec (key);
+    ref<dbrec> k = id2dbrec (key.ID);
     int ret = db_insert_immutable (k, d, DHASH_CONTENTHASH);
     if (ret != 0)
       warning << "merkle db_insert_immutable failure: "
 	      << db_strerror (ret) << "\n";
   }
 
-  while ((missing_outstanding_i <= MISSING_OUTSTANDING_MAX)
-	 && (missing_q.size () > 0)) {
-    missing_state *ms = missing_q.first ();
-    assert (ms);
-    missing_q.remove (ms);
-    missing (ms->from, ms->key, true);
-    delete ms;
+  while ((repair_outstanding <= REPAIR_OUTSTANDING_MAX)
+	 && (repair_q.size () > 0)) {
+    repair_state *s = repair_q.first ();
+    assert (s);
+    repair_q.remove (s);
+    repair (s->key);
+    delete s;
   }
 }
 
@@ -471,97 +384,6 @@ dhash_impl::keyhash_mgr_lookup (chordID key, dhash_stat err,
 }
 
 // ----------------------------------------------------------------------
-// replica maintenance
-
-
-// using succ list
-void
-dhash_impl::replica_maintenance_timer (u_int i)
-{
-  uint64_t start;
-  merkle_rep_tcb = NULL;
-  bigint rngmin = host_node->my_pred ()->id ();
-  bigint rngmax = host_node->my_ID ();
-  vec<ptr<location> > nmsuccs = host_node->succs ();
-  //don't assume we are holding the block
-  // i.e. -> put ourselves on this of nodes to check for the block
-  vec<ptr<location> > succs;
-  succs.push_back (host_node->my_location ());
-
-  for (unsigned int j = 0; j < nmsuccs.size (); j++)
-    succs.push_back(nmsuccs[j]);
-  
-  if (missing_outgoing_q.size () == 0) {
-    //check to see if any blocks are near critical replication levels
-    chordID first = bsm->first_block ();
-    chordID b = first;
-    do {
-      u_int count = bsm->pcount (b, succs);
-      if (count < num_efrags ())
-	{
-	  trace << host_node->my_ID () << ": adding " << b 
-		<< " to outgoing queue "
-		<< "count= " << count << "\n";
-
-	  //decide where to send it
-	  ptr<location> to = bsm->best_missing (b, succs);
-	  
-	  //put it on the queue
-	  missing_state *ms = New missing_state (b, to);
-	  missing_outgoing_q.insert (ms);
-	} 
-      b = bsm->next_block (b);
-    } while (b != first && b != 0);
-  } else 
-    flush_outgoing_q ();
-
-
-  if (succs.size() == 0)
-    goto out; // can't do anything
-  if (replica_syncer && !replica_syncer->done()) 
-    goto out; // replica syncer is still running.
-
-  if (i >= succs.size())
-    i = 1;
-
-  //we'll use a temporary tree for syncing
-  // the tree will be "rigged" to remove
-  // keys that we already know the other node
-  // is missing and to include keys we should
-  // have.
-
-  if (tmptree) delete tmptree;
-  
-  start = getusec ();
-  tmptree = New merkle_tree(mtree->db, bsm, 
-			    succs[i]->id (), 
-			    succs);
-  trace << host_node->my_ID () << " tree build: " << getusec () - start << " usecs\n";
-
-  trace << host_node->my_ID () << " syncing with " << succs[i]->id () << "\n";
-  replica_syncer = New refcounted<merkle_syncer> 
-    (tmptree, 
-     wrap (this, &dhash_impl::doRPC_unbundler, succs[i]),
-     wrap (this, &dhash_impl::missing, succs[i]));
-
-
-  replica_syncer->sync (rngmin, rngmax);
-
-  // go to the end of the succ list even if we don't have that many frags
-  // so that we keep track of extra frags
-  /*  if (succs.size () > 1)
-    i = (i + 1) % (succs.size () - 1);
-  else 
-    i = 0;
-  */
-
- out:
-  merkle_rep_tcb =
-    delaycb (reptm (), wrap (this, &dhash_impl::replica_maintenance_timer, i + 1));
-}
-
-
-
 
 void 
 dhash_impl::sync_cb () 
@@ -728,6 +550,33 @@ dhash_impl::dispatch (user_args *sbp)
 	store (sarg, exists,
 	       wrap(this, &dhash_impl::storesvc_cb, sbp, sarg, exists));	
       }
+    }
+    break;
+  case DHASHPROC_BSMUPDATE:
+    {
+      /** XXX Should make sure that only called from localhost! */
+      dhash_bsmupdate_arg *arg = sbp->template getarg<dhash_bsmupdate_arg> ();
+      chord_node n = make_chord_node (arg->n);
+      ptr<location> from = host_node->locations->lookup (n.x);
+      if (from) {
+	// Only care if we still know about this node.
+	switch (arg->t) {
+	case BSM_MISSING:
+	  missing (from, arg->key, arg->local);
+	  break;
+	case BSM_FOUND:
+	  bsm->unmissing (from, arg->key);
+	  break;
+	}
+      }
+      sbp->reply (NULL);
+    }
+    break;
+  case DHASHPROC_REPAIR:
+    {
+      dhash_repair_arg *arg = sbp->template getarg<dhash_repair_arg> ();
+      repair (blockID(arg->key, arg->ctype, arg->dbtype));
+      sbp->replyref (DHASH_OK);
     }
     break;
   default:
@@ -1024,14 +873,6 @@ dhash_impl::responsible(const chordID& n)
 }
 
 void
-dhash_impl::doRPC_unbundler (ptr<location> dst, RPC_delay_args *args)
-{
-  host_node->doRPC
-    (dst, args->prog, args->procno, args->in, args->out, args->cb);
-}
-
-
-void
 dhash_impl::doRPC (const chord_node &n, const rpc_program &prog, int procno,
 	           ptr<void> in,void *out, aclnt_cb cb,
 		   cbtmo_t cb_tmo) 
@@ -1140,11 +981,6 @@ dhash_impl::stop ()
     timecb_remove (keyhash_mgr_tcb);
     keyhash_mgr_tcb = NULL;
   }
-  if (merkle_rep_tcb) {
-    timecb_remove (merkle_rep_tcb);
-    merkle_rep_tcb = NULL;
-    warning << "stop merkle replication timer\n";
-  }
   if (pmaint_obj)
     pmaint_obj->stop ();
 }
@@ -1159,17 +995,6 @@ dhash_impl::start (bool randomize)
     keyhash_mgr_tcb =
       delaycb (keyhashtm () + delay, wrap (this, &dhash_impl::keyhash_mgr_timer));
   }
-  if (!merkle_rep_tcb) {
-    u_long index = 0;
-    if (randomize) {
-      delay = random_getword () % reptm ();
-      index = random_getword () % num_efrags ();
-    }
-    merkle_rep_tcb =
-      delaycb (reptm () + delay,
-	       wrap (this, &dhash_impl::replica_maintenance_timer, index));
-  }
-
   if (pmaint_obj)
     pmaint_obj->start ();
 }

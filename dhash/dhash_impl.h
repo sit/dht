@@ -2,21 +2,20 @@
 #define __DHASH_IMPL_H__
 
 #include "dhash.h"
-#include <pmaint.h>
-#include <dbfe.h>
-#include <dhc.h>
 
 // Forward declarations.
 class RPC_delay_args;
 
+struct dbrec;
 class dbfe;
+class dhc;
 
 class location;
 struct hashID;
 
 class merkle_server;
-class merkle_syncer;
 class merkle_tree;
+class pmaint;
 
 class dhashcli;
 
@@ -68,25 +67,18 @@ struct pk_partial {
 		cookie (c) {};
 };
 
-struct missing_state {
-  ihash_entry <missing_state> link;
-  bigint key;
-  ptr<location> from;
-  missing_state (bigint key, ptr<location> from) : key (key), from (from) {}
+struct repair_state {
+  ihash_entry <repair_state> link;
+  bigint hashkey;
+  const blockID key;
+  repair_state (blockID key) : hashkey (key.ID), key (key) {}
 };
 
 class dhash_impl : public dhash {
-  //blocks that I figured out I need and will fetch
-  ihash<bigint, missing_state,
-    &missing_state::key, &missing_state::link, hashID> missing_q;
-
-  //blocks that I am going to send to others
-  ihash<bigint, missing_state,
-    &missing_state::key, &missing_state::link, hashID> missing_outgoing_q;
-
-  enum { MISSING_OUTSTANDING_MAX = 15 };
-  u_int missing_outstanding_o;
-  u_int missing_outstanding_i;
+  // blocks that we need fetch
+  enum { REPAIR_OUTSTANDING_MAX = 15 };
+  u_int32_t repair_outstanding;
+  ihash<bigint, repair_state, &repair_state::hashkey, &repair_state::link, hashID> repair_q;
 
   int pk_partial_cookie;
   
@@ -102,10 +94,8 @@ class dhash_impl : public dhash {
 
   merkle_server *msrv;
   pmaint *pmaint_obj;
-  merkle_tree *mtree;
-  merkle_tree *tmptree;
 
-  ptr<merkle_syncer> replica_syncer;
+  merkle_tree *mtree;
 
   ihash<chordID, store_state, &store_state::key, 
     &store_state::link, hashID> pst;
@@ -113,24 +103,20 @@ class dhash_impl : public dhash {
   ihash<int, pk_partial, &pk_partial::cookie, 
     &pk_partial::link> pk_cache;
   
-  unsigned keyhash_mgr_rpcs;
-
   /* Called by merkle_syncer to notify of blocks we are succ to */
   void missing (ptr<location> from, bigint key, bool local);
-  void missing_retrieve_cb (bigint key, dhash_stat err, ptr<dhash_block> b,
-			    route r);
-  
-  void sendblock (ptr<location> dst, blockID blockID,
-		  callback<void, dhash_stat, bool>::ref cb);
 
+  void repair (blockID b);
+  void repair_retrieve_cb (blockID key, dhash_stat err, ptr<dhash_block> b,
+			   route r);
+
+  unsigned keyhash_mgr_rpcs;
+  vec<ptr<location> > replicas;
+  timecb_t *keyhash_mgr_tcb;
   void keyhash_mgr_timer ();
   void keyhash_mgr_lookup (chordID key, dhash_stat err,
 			   vec<chord_node> hostsl, route r);
   void keyhash_sync_done (dhash_stat stat, bool present);
-
-
-  void doRPC_unbundler (ptr<location> dst, RPC_delay_args *args);
-
 
   void route_upcall (int procno, void *args, cbupcalldone_t cb);
 
@@ -194,16 +180,6 @@ class dhash_impl : public dhash {
   void dofetchrec_assembler_cb (user_args *sbp, dhash_fetchrec_arg *arg,
 				dhash_stat s, ptr<dhash_block> b, route r);
 
-  void flush_outgoing_q ();
-  void outgoing_retrieve_cb (missing_state *m, dhash_stat err,
-			     ptr<dhash_block> b, route r);
-  void outgoing_send_cb (missing_state *m, dhash_stat err, bool present);
-  void send_frag (missing_state *m, str block);
-  
-  vec<ptr<location> > replicas;
-  timecb_t *merkle_rep_tcb;
-  timecb_t *keyhash_mgr_tcb;
-
   /* statistics */
   long bytes_stored;
   long keys_stored;
@@ -217,8 +193,6 @@ class dhash_impl : public dhash {
  public:
   dhash_impl (str dbname);
   ~dhash_impl ();
-
-  void replica_maintenance_timer (u_int index);
 
   void init_after_chord (ptr<vnode> node);
 

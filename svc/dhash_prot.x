@@ -139,9 +139,28 @@ union dhash_fetchrec_res switch (dhash_stat status) {
    dhash_fetchrec_resdefault resdef;
 };
 
-struct dhash_ineed_arg {
-  chordID needed<>;
-  /* Should this include vectors of dbtypes and ctypes too? ugh. */
+enum bsm_transition {
+   BSM_MISSING,
+   BSM_FOUND
+};
+
+struct dhash_bsmupdate_arg {
+  bsm_transition t;
+  /* If we're missing locally, n is the one who told us */
+  /* Else, n is where it is missing */
+  chord_node_wire n;
+  bool local;
+
+  chordID key;
+  /* Unused? */
+  dhash_ctype ctype;
+  dhash_dbtype dbtype;
+};
+
+struct dhash_repair_arg {
+  chordID key;
+  dhash_ctype ctype;
+  dhash_dbtype dbtype;
 };
 
 program DHASH_PROGRAM {
@@ -165,8 +184,14 @@ program DHASH_PROGRAM {
     dhash_offer_res
     DHASHPROC_OFFER (dhash_offer_arg) = 4;
 
+    /* For the syncer to update DHash's bsm.
+     * Should only be called from localhost.
+     */
     void
-    DHASHPROC_INEED (dhash_ineed_arg) = 5;
+    DHASHPROC_BSMUPDATE (dhash_bsmupdate_arg) = 5;
 
+    /* For the syncer to tell DHash it needs to repair a block. */
+    dhash_stat
+    DHASHPROC_REPAIR (dhash_repair_arg) = 6;
   } = 1;
 } = 344449;
