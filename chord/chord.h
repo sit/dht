@@ -182,7 +182,8 @@ class finger_table : public stabilizable {
   u_long nfastfinger;
 
   void check ();
-
+  int runlength (int i); // how many forward is fingers[i] repeated?
+  
   void stabilize_finger_getpred_cb (chordID dn, int i, chordID p, 
 				    net_address r, chordstat status);
   void stabilize_findsucc_cb (chordID dn,
@@ -378,7 +379,7 @@ class vnode : public virtual refcount, public stabilizable {
   // For stabilization of the predecessor
   bool continuous_stabilizing () { return nout_continuous > 0; }
   void do_continuous () { stabilize_pred (); }
-  bool isstable () { return true; }
+  bool isstable ();
   
   // The RPCs
   void doget_successor (svccb *sbp);

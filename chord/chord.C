@@ -480,3 +480,9 @@ vnode::stabilize_getsucc_cb (chordID pred,
     }
   }
 }
+
+bool
+vnode::isstable ()
+{
+  return predecessor.alive;
+}

@@ -71,7 +71,11 @@ finger_table::updatefinger (chordID &x, net_address &r)
   check ();
   for (int i = 1; i <= NBIT; i++) {
     if (better_ith_finger (i, x)) {
+      // warnx << myID << ": updatefinger " << i << "\n";
       locations->changenode (&fingers[i].first, x, r);
+      if (1 == i)
+	myvnode->notify (x, myID);
+
       stable_fingers = false;
     }
   }
@@ -82,6 +86,9 @@ void
 finger_table::replacefinger (int i)
 {  
   check ();
+  warnx << myID << ": replace finger " << i << "\n" ;
+  if (i > 1)
+    stable_fingers = false;
 #ifdef PNODE
   fingers[i].first.n = closestsuccfinger (fingers[i].start);
 #else
@@ -169,10 +176,13 @@ finger_table::check ()
   if (i > NBIT) return;
 
   for (i = 1; i <= NBIT; i++) {
+    // For each living finger...
     if (!fingers[i].first.alive) continue;
+    // Find the next living finger and...
     j = i+1;
     while ((j <= NBIT) && !fingers[j].first.alive) j++;
     if (j > NBIT) {
+      // if none exists, make sure that it is not after me
       if (!betweenrightincl (fingers[i].start, myID, 
                              fingers[i].first.n)) {
 	warnx << myID << ": finger_table " << i << " bad\n";
@@ -274,6 +284,15 @@ finger_table::stats ()
     nslowfinger << "\n";
 }
 
+int
+finger_table::runlength (int i)
+{
+  int runlen = 1;
+  while ((i + runlen < NBIT + 1) &&
+	 fingers[i + runlen].first.n == fingers[i].first.n)
+    runlen++;
+  return runlen;
+}
 
 void
 finger_table::stabilize_succ ()
@@ -281,7 +300,8 @@ finger_table::stabilize_succ ()
   if (!succ_alive ()) {   // notify() may result in failure
     replacefinger (1);
     chordID s = succ ();
-    myvnode->notify (s, myID); 
+    warnx << myID << ": stabilize_succ dead... new succ is " << s << "\n";
+    myvnode->notify (s, myID);
   }
   nout_continuous++;
   myvnode->get_predecessor
@@ -296,7 +316,7 @@ finger_table::stabilize_getpred_cb (chordID sd,
   // receive predecessor from my successor; in stable case it is me
   if (status) {
     warnx << myID << ": stabilize_getpred_cb " << sd
-	  << " failure " << status << "\n";
+	  << " failure status " << status << "\n";
     stable_fingers = false;
     if (status == CHORD_RPCFAILURE)
       myvnode->deletefingers (sd);
@@ -325,7 +345,7 @@ finger_table::stabilize_getpred_cb_ok (chordID sd,
   if ((status == CHORD_OK) && ok) {
     if (better_ith_finger (1, p)) {
       updatefinger (p);
-      myvnode->notify (sd, myID);
+      // myvnode->notify (sd, myID);
     }
   }
 }
@@ -363,39 +383,37 @@ void
 finger_table::stabilize_finger ()
 {
   int i = f % (NBIT+1);
-
+  
   if (i == 0) {
+    // warnx << myID << ": stabilize_finger i = " << i << " f = " << f << "\n";
     stable_fingers2 = stable_fingers;
     stable_fingers = true;
   }
+  f = i;
 
   if (i <= 1) i = 2;		// skip myself and immediate successor
 
+  nout_backoff++;
   if (!alive (i)) {
-    warnx << "finger_table::stabilize_finger: replace finger " << i << "\n" ;
+    // Find some sort of temporary replacement.
     replacefinger (i);
-    stable_fingers = false;
-  }
+    updatefinger (fingers[i].first.n);
 
-  if (i <= NBIT) {
-    nout_backoff++;
-    if (alive (i)) {
-      //        warnx << "stabilize: " << myID << " check finger " << i << "\n";
-      chordID n = fingers[i].first.n;
-      myvnode->get_predecessor
-	(n, wrap (this, &finger_table::stabilize_finger_getpred_cb, 
-		  n, i));
-    } else {
-      warnx << "stabilize: " << myID << " findsucc of finger " << i << "\n";
-      chordID n = start (i);
-      myvnode->find_successor
-	(n, wrap (this, &finger_table::stabilize_findsucc_cb,
-		  n, i));
-    }
-    i++;
+    // Now go forth and find the real finger
+    warnx << myID << ": stabilize_finger: findsucc of finger " << i << "\n";
+    chordID n = start (i);
+    myvnode->find_successor
+      (n, wrap (this, &finger_table::stabilize_findsucc_cb,
+  		n, i));
+  } else {
+    // warnx << myID << ": stabilize_finger: check finger " << i << "\n";    
+    chordID n = fingers[i].first.n;
+    myvnode->get_predecessor
+      (n, wrap (this, &finger_table::stabilize_finger_getpred_cb, 
+		n, i));
   }
-
-  f = i;
+  
+  // Update f in one of the above callbacks.
 }
 
 void
@@ -405,21 +423,26 @@ finger_table::stabilize_finger_getpred_cb (chordID dn, int i, chordID p,
   nout_backoff--;
   if (status) {
     warnx << myID << ": stabilize_finger_getpred_cb: " 
-	  << dn << " failure " << status << "\n";
+	  << dn << " failure status " << status << "\n";
     stable_fingers = false;
     if (status == CHORD_RPCFAILURE)
       myvnode->deletefingers (dn);
+    // Do not update f; next round we'll fix this finger correctly.
   } else {
     chordID n = fingers[i].first.n;
     chordID s = start (i);
     if (betweenrightincl (p, n, s)) {
-      //      warnx << "stabilize_finger_getpred_cb: " << myID << " success " 
-      //    << i << "\n";
+      // warnx << myID << ": stabilize_finger_getpred_cb: success at " 
+      //       << i << "\n";
+      // predecessor is too far back, no need to do anything for this
+      // or any of the other fingers for which n is the successor
       nfastfinger++;
+      f += runlength (i);
     } else {
+      // our finger is wrong; better fix it
+      warnx << myID << ": stabilize_finger_getpred_cb: "
+	    << "fixing finger " << i << "\n";
       nslowfinger++;
-      //      warnx << "stabilize_finger_getpred_cb: " << myID << " findsucc of finger "
-      //    << i << "\n";
       chordID n = start (i);
       nout_backoff++;
       myvnode->find_successor
@@ -436,13 +459,12 @@ finger_table::stabilize_findsucc_cb (chordID dn, int i, chordID s,
   nout_backoff--;
   if (status) {
     warnx << myID << ": stabilize_findsucc_cb: "
-	  << dn << " failure " << status << "\n";
+	  << dn << " failure status " << status << "\n";
     stable_fingers = false;
     if (status == CHORD_RPCFAILURE)
       myvnode->deletefingers (dn);
   } else {
-    if (better_ith_finger (i, s)) {
-      updatefinger (s);
-    }
+    updatefinger (s);
+    f += runlength (i);
   }
 }
