@@ -40,28 +40,28 @@ unsigned Kademlia::alpha = 0;
 unsigned Kademlia::stabilize_timer = 0;
 unsigned Kademlia::refresh_rate = 0;
 
-long unsigned Kademlia::_rpc_bytes = 0;
-long unsigned Kademlia::_good_rpcs = 0;
-long unsigned Kademlia::_bad_rpcs = 0;
-long unsigned Kademlia::_ok_by_reaper = 0;
-long unsigned Kademlia::_timeouts_by_reaper = 0;
+long long unsigned Kademlia::_rpc_bytes = 0;
+long long unsigned Kademlia::_good_rpcs = 0;
+long long unsigned Kademlia::_bad_rpcs = 0;
+long long unsigned Kademlia::_ok_by_reaper = 0;
+long long unsigned Kademlia::_timeouts_by_reaper = 0;
 
-long unsigned Kademlia::_good_lookups = 0;
-long unsigned Kademlia::_lookup_dead_node = 0;
-long unsigned Kademlia::_ok_failures = 0;
-long unsigned Kademlia::_bad_failures = 0;
+long long unsigned Kademlia::_good_lookups = 0;
+long long unsigned Kademlia::_lookup_dead_node = 0;
+long long unsigned Kademlia::_ok_failures = 0;
+long long unsigned Kademlia::_bad_failures = 0;
 
 Time Kademlia::_good_total_latency = 0;
 Time Kademlia::_good_lookup_latency = 0;
 Time Kademlia::_good_ping_latency = 0;
-long unsigned Kademlia::_good_timeouts = 0;
+long long unsigned Kademlia::_good_timeouts = 0;
 
-long unsigned Kademlia::_good_hops = 0;
+long long unsigned Kademlia::_good_hops = 0;
 Time Kademlia::_good_hop_latency = 0;
 
 Time Kademlia::_bad_lookup_latency = 0;
-long unsigned Kademlia::_bad_timeouts = 0;
-long unsigned Kademlia::_bad_hops = 0;
+long long unsigned Kademlia::_bad_timeouts = 0;
+long long unsigned Kademlia::_bad_hops = 0;
 Time Kademlia::_bad_hop_latency = 0;
 
 
@@ -178,7 +178,7 @@ Kademlia::~Kademlia()
 # 22: avg number of hops (bad)\n\
 # 23: avg latency per hop (bad)\n\
 #\n\
-%d %d %d %d    %ld %ld %ld %ld %ld    %ld %ld %ld %ld    %.2f %.2f %.2f %ld    %.2f %.2f   %.2f %ld %.2f %.2f\n",
+%u %u %u %u    %llu %llu %llu %llu %llu    %llu %llu %llu %llu    %.2f %.2f %.2f %llu    %.2f %.2f   %.2f %llu %.2f %.2f\n",
         Kademlia::k,
         Kademlia::alpha,
         Kademlia::stabilize_timer,
