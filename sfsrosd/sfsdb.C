@@ -2,6 +2,8 @@
 #include "sfsrosd.h"
 #include "sfsrodb_core.h"
 
+unsigned int mtu = 8192;
+
 sfsrodb::sfsrodb ()
 {
   dbp = NULL;
@@ -97,7 +99,7 @@ sfsrodb::getdata (sfsro_getarg *g_arg, sfsro_datares *res, callback<void>::ref c
     res->set_status (SFSRO_OK);
     res->resok->data.setsize (len);
     res->resok->offset = 0;
-    res->resok->size = len;
+    res->resok->attr.size = len;
     memcpy (res->resok->data.base (), dat, len);
     (*cb)();
     return;
@@ -105,11 +107,10 @@ sfsrodb::getdata (sfsro_getarg *g_arg, sfsro_datares *res, callback<void>::ref c
 
   bigint n = fh2mpz((const void *)fh->base (), fh->size ());
 
-  warn << "request for " << g_arg->len << " bytes at " << g_arg->offset << "\n";
   dhash_fetch_arg arg;
   arg.key = n;
   arg.start = g_arg->offset;
-  arg.len = (g_arg->len > 8192) ? 8192 : g_arg->len;
+  arg.len = (g_arg->len > mtu) ? mtu : g_arg->len;
   
   dhash_res *dres = New dhash_res();
   dbp->call(DHASHPROC_LOOKUP, &arg, dres, wrap(this, &sfsrodb::getdata_one_cb, cb, res, dres, n, g_arg));
@@ -131,7 +132,7 @@ sfsrodb::getdata_one_cb (callback<void>::ref cb, sfsro_datares *res, dhash_res *
    res->resok->offset = g_arg->offset;
    memcpy (res->resok->data.base (), dres->resok->res.base (), dres->resok->res.size ());
    if (dres->resok->res.size() <= g_arg->len) {
-     res->resok->size = dres->resok->attr.size;
+     res->resok->attr.size = dres->resok->attr.size;
      (*cb)();
    } else {
      dhash_fetch_arg arg;
@@ -140,11 +141,12 @@ sfsrodb::getdata_one_cb (callback<void>::ref cb, sfsro_datares *res, dhash_res *
      unsigned int *read = New unsigned int(offset);
      do {
        arg.start = offset;
-       arg.len = (8192 + offset < (g_arg->offset + g_arg->len) ) ? 8192 : (g_arg->offset + g_arg->len) - offset;
+       arg.len = (mtu + offset < (g_arg->offset + g_arg->len) ) ? mtu 
+	 : (g_arg->offset + g_arg->len) - offset;
        dhash_res *adres = New dhash_res();
        dbp->call(DHASHPROC_LOOKUP, &arg, res, wrap(this, &sfsrodb::getdata_cb, cb, res, adres, read, 
 						   g_arg->len));
-       offset += 8192;
+       offset += arg.len;
      } while (offset < dres->resok->attr.size);
    }
  }
@@ -166,7 +168,7 @@ sfsrodb::getdata_cb(callback<void>::ref cb, sfsro_datares *res, dhash_res *dres,
 	    dres->resok->res.base (), dres->resok->res.size ());
     *read += dres->resok->res.size ();
     if (*read == size) {
-      res->resok->size = size;
+      res->resok->attr.size = size;
       (*cb)();
       delete read;
     }

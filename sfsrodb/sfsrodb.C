@@ -1,4 +1,4 @@
-/* $Id: sfsrodb.C,v 1.9 2001/06/30 02:30:31 fdabek Exp $ */
+/* $Id: sfsrodb.C,v 1.10 2001/07/05 14:11:37 fdabek Exp $ */
 
 /*
  * Copyright (C) 1999 Kevin Fu (fubob@mit.edu)
@@ -198,17 +198,12 @@ store_inode (sfsro_inode *inode, sfs_hash *fh)
   create_sfsrofh (IV, SFSRO_IVSIZE, fh, callbuf, calllen);
 
   // Store the inode of this path in the database
-  if (!sfsrodb_put (sfsrodb, fh->base (), fh->size (), callbuf, calllen)) {
-    //    warn << "Found identical inode, compressing.\n";
-    identical_inode++;
-    identical_fh++;
-  } else {
-    fh_cnt++;
-    if (inode->type == SFSROLNK)
-      lnkinode_cnt++;
-    else
-      reginode_cnt++;
-  }
+  sfsrodb_put (sfsrodb, fh->base (), fh->size (), callbuf, calllen);
+  fh_cnt++;
+  if (inode->type == SFSROLNK)
+    lnkinode_cnt++;
+  else
+    reginode_cnt++;
 
   xfree (callbuf);
 }
@@ -235,14 +230,7 @@ store_file_block (sfs_hash *fh, const char *block, size_t size)
 
   create_sfsrofh (IV, SFSRO_IVSIZE, fh, callbuf, calllen);
 
-  if (!sfsrodb_put (sfsrodb, fh->base (), fh->size (), callbuf, calllen)) {
-    //    warnx << "Found identical block, compressing\n"; 
-    identical_block++;
-    identical_fh++;
-
-    xfree (callbuf);
-    return false;
-  }
+  sfsrodb_put (sfsrodb, fh->base (), fh->size (), callbuf, calllen);
 
   filedatablk_cnt++;
   fh_cnt++;
@@ -300,15 +288,12 @@ process_sindirect (int &fd, bool &wrote_stuff, sfsro_inode *inode,
     create_sfsrofh (IV, SFSRO_IVSIZE, fh, 
 		    callbuf, calllen);
 
-    if (!sfsrodb_put (sfsrodb, fh->base(), fh->size(),
-		      callbuf, calllen)) {
-      // warn << "Found identical sindirect, compressing.\n";
-      identical_sindir++;
-      identical_fh++;
-    } else {
-      sindir_cnt++;
-      fh_cnt++;
-    }
+    sfsrodb_put (sfsrodb, fh->base(), fh->size(),
+		 callbuf, calllen);
+    
+    sindir_cnt++;
+    fh_cnt++;
+    
     xfree (callbuf);
     wrote_stuff = true;
   } else {
@@ -358,16 +343,11 @@ process_dindirect (int &fd, bool &wrote_stuff, sfsro_inode *inode,
     create_sfsrofh (IV, SFSRO_IVSIZE, fh, 
 		    callbuf, calllen);
 
-    if (!sfsrodb_put (sfsrodb, fh->base(), fh->size(),
-		      callbuf, calllen)) {
-      // warn << "Found identical dindirect, compressing.\n";
-      identical_dindir++;
-      identical_fh++;
-    } else {
-      dindir_cnt++;
-      fh_cnt++;
-    }
-    
+    sfsrodb_put (sfsrodb, fh->base(), fh->size(),
+		 callbuf, calllen);
+  
+    dindir_cnt++;
+    fh_cnt++;
     xfree (callbuf);
     wrote_stuff = true;
   } else {
@@ -416,17 +396,11 @@ process_tindirect (int &fd, bool &wrote_stuff, sfsro_inode *inode,
     create_sfsrofh (IV, SFSRO_IVSIZE, fh, 
 		    callbuf, calllen);
 
-    if (!sfsrodb_put (sfsrodb, fh->base(),
-		      fh->size(),
-		      callbuf, calllen)) {
-      // warn << "Found identical tindirect, compressing.\n";
-      identical_tindir++;
-      identical_fh++;
-    } else {
-      tindir_cnt++;
-      fh_cnt++;
-    }
-    
+    sfsrodb_put (sfsrodb, fh->base(),
+		 fh->size(),
+		 callbuf, calllen);
+    tindir_cnt++;
+    fh_cnt++;
     xfree (callbuf);
     wrote_stuff = true;
   } else {
@@ -545,16 +519,10 @@ store_directory (sfsro_inode *inode, sfs_hash *fh,
 
   create_sfsrofh (IV, SFSRO_IVSIZE, fh, callbuf, calllen);
 
-  if (!sfsrodb_put (sfsrodb, fh->base (), fh->size (), callbuf, calllen)) {
-    //warn << "Found identical directory, compressing.\n";
-    identical_dir++;
-    identical_fh++;
-  } else {
-    directory_cnt++;
-    fh_cnt++;
-  }
+  sfsrodb_put (sfsrodb, fh->base (), fh->size (), callbuf, calllen);
 
-
+  directory_cnt++;
+  fh_cnt++;
   xfree (callbuf);
 
   // This is bogus, we're just using one data pointer regardless

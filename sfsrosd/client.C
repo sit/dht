@@ -1,4 +1,4 @@
-//Last modified by $Author: fdabek $ on $Date: 2001/06/30 02:30:32 $
+//Last modified by $Author: fdabek $ on $Date: 2001/07/05 14:11:38 $
 #include <sfsrosd.h>
 #include "sfsdb.h"
 #include "rxx.h"
@@ -126,11 +126,8 @@ sfsroclient::getdata_cb(svccb *sbp, sfsro_datares *res, ref<bool> d)
   if (res->status != SFSRO_OK) { 
     warn << "key not found\n";
     res->resok->offset = 0;
-    res->resok->size = 0;
+    res->resok->attr.size = 0;
   }
-
-  warn << "replying: " << res->status << "|" << res->resok->data.size () << " of " << res->resok->size
-       << " at " << res->resok->offset << "\n";
 
   sbp->reply(res);
   delete res;

@@ -249,14 +249,14 @@ dhash::transfer_fetch_cb (sfs_ID to, sfs_ID key, store_status stat, callback<voi
   if (err) {
     cb (err);
   } else {
-    int mtu = 1024;
+    unsigned int mtu = 1024;
     dhash_storeres *res = New dhash_storeres ();
-    int off = 0;
+    unsigned int off = 0;
     do {
       ptr<dhash_insertarg> i_arg = New refcounted<dhash_insertarg> ();
       i_arg->key = key;
       i_arg->offset = off;
-      int remain = (off + mtu <= data->len) ? mtu : data->len - off;
+      int remain = (off + mtu <= static_cast<unsigned long>(data->len)) ? mtu : data->len - off;
       i_arg->data.setsize (remain);
       i_arg->attr.size = data->len;
       i_arg->type = stat;
@@ -271,7 +271,7 @@ dhash::transfer_fetch_cb (sfs_ID to, sfs_ID key, store_status stat, callback<voi
 		    wrap(this, &dhash::transfer_store_cb, cb, res));
 
       off += remain;
-     } while (off < data->len);
+     } while (off < static_cast<unsigned long>(data->len));
   }
   
 }
@@ -296,13 +296,6 @@ dhash::fetch(sfs_ID id, cbvalue cb)
   ptr<dbrec> q = id2dbrec(id);
   db->lookup(q, wrap(this, &dhash::fetch_cb, cb));
 
-  if (key_status (id) == DHASH_REPLICATED) {
-    //a request for a replicated key implies the owner
-    // has departed. upgrade to onwer status
-    key_store.remove (id);
-    dhash_stat status = DHASH_STORED;
-    key_store.enter (id, &status);
-  }
 }
 
 void
@@ -322,12 +315,16 @@ void
 dhash::store (dhash_insertarg *arg, cbstore cb)
 {
 
+  warn << "store request for " << arg->data.size () << " of " << arg->attr.size << " at " << arg->offset << "\n";
   store_state *ss = pst[arg->key];
   if (arg->data.size () != arg->attr.size) {
     if (!ss) {
+      warn << "ss is null\n";
       store_state nss (arg->attr.size);
+      warn << nss.read << " " << nss.size << "\n";
       pst.insert(arg->key, nss);
       ss = pst[arg->key];
+      warn << ss->read << " " << ss->size << "\n";
     }
     ss->read += arg->data.size ();
     memcpy (ss->buf + arg->offset, arg->data.base (), arg->data.size ());
@@ -335,7 +332,7 @@ dhash::store (dhash_insertarg *arg, cbstore cb)
 
   if (store_complete(arg)) {
     ptr<dbrec> k = id2dbrec(arg->key);
-    ptr<dbrec> d;
+    ptr<dbrec> d = NULL;
     if (!ss)
       d = New refcounted<dbrec>(arg->data.base (), arg->data.size ());
     else 
@@ -366,7 +363,7 @@ dhash::store_complete (dhash_insertarg *arg)
   store_state *ss = pst[arg->key];
   if (!ss) return false;
   else
-    return (ss->read + arg->data.size () >= arg->attr.size);
+    return (ss->read >= arg->attr.size);
 }
 
 void
@@ -382,7 +379,10 @@ dhash::store_cb(store_status type, sfs_ID id, cbstore cb, int stat)
     (*cb)(DHASH_OK);
   
   store_state *ss = pst[id];
-  if (ss) pst.remove (id);
+  if (ss) {
+    if (ss) delete ss->buf;
+    pst.remove (id);
+  }
 }
 
 void

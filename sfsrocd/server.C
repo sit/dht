@@ -1,4 +1,4 @@
-/* $Id: server.C,v 1.15 2001/06/30 02:30:31 fdabek Exp $ */
+/* $Id: server.C,v 1.16 2001/07/05 14:11:37 fdabek Exp $ */
 
 /*
  *
@@ -28,6 +28,8 @@
 #include "sfsrodb_core.h"
 
 cache_stat cstat;
+
+#define cmtu 8192
 
 void
 server::sendreply (nfscall *sbp, void *res)
@@ -206,7 +208,7 @@ server::get_data (const sfs_hash *fh,
   sfsro_datares *res = New sfsro_datares ();
   sfsro_getarg arg;
   arg.fh = *fh;
-  arg.len = 8192;
+  arg.len = cmtu;
   arg.offset = 0;
 
   sfsroc->call (SFSROPROC_GETDATA, &arg, res, wrap(this, &server::get_data_one_cb, cb, res, fh));
@@ -219,20 +221,20 @@ server::get_data_one_cb (callback<void, sfsro_datares *, clnt_stat>::ref cb,
 {
   
   warn << "reply status " << res->status << "\n";
-  warn << res->resok->size << " " << res->resok->data.size () << 
+  warn << res->resok->attr.size << " " << res->resok->data.size () << 
     " " << res->resok->offset << "\n";
 
   if ((err) || (res->status != SFSRO_OK)) {
     res->set_status(SFSRO_ERRNOENT);
     (*cb)(res, RPC_FAILED);
-  } else if (res->resok->size == res->resok->data.size () ) {
+  } else if (res->resok->attr.size == res->resok->data.size () ) {
     (*cb)(res, RPC_SUCCESS);  
   }  else {
-    warn << res->resok->data.size () << " at " << res->resok->offset << " of " << res->resok->size << "\n";
+    warn << res->resok->data.size () << " at " << res->resok->offset << " of " << res->resok->attr.size << "\n";
 
     sfsro_datares *fres = New sfsro_datares ();
     fres->set_status (SFSRO_OK);
-    fres->resok->data.setsize(res->resok->size);
+    fres->resok->data.setsize(res->resok->attr.size);
     memcpy (fres->resok->data.base (), res->resok->data.base (), 
 	    res->resok->data.size ());
 
@@ -241,8 +243,8 @@ server::get_data_one_cb (callback<void, sfsro_datares *, clnt_stat>::ref cb,
     sfsro_getarg arg;
     arg.fh = *fh;
     do {
-      unsigned int n = (8192 + offset < res->resok->size) 
-	? 8192 : res->resok->size - offset;
+      unsigned int n = (cmtu + offset < res->resok->attr.size) 
+	? cmtu : res->resok->attr.size - offset;
       arg.offset = offset;
       arg.len = n;
       sfsro_datares *pres = New sfsro_datares();
@@ -250,7 +252,7 @@ server::get_data_one_cb (callback<void, sfsro_datares *, clnt_stat>::ref cb,
       sfsroc->call (SFSROPROC_GETDATA, &arg, res,
 		    wrap(this, &server::get_data_cb, cb, pres, fres, read));
       offset += n;
-    } while (offset < res->resok->size);
+    } while (offset < res->resok->attr.size);
     delete res;
   }
 
@@ -270,8 +272,10 @@ server::get_data_cb (callback<void, sfsro_datares *, clnt_stat>::ref cb,
 	   res->resok->data.size ());
     *read += res->resok->data.size ();
     
-    if (*read == res->resok->size) 
+    if (*read == res->resok->attr.size) {
+      delete read;
       cb (fres, RPC_SUCCESS);
+    }
   }
   delete res;
 }
@@ -1080,7 +1084,7 @@ server::setrootfh (const sfs_fsinfo *fsi)
   
   if (!sfsrocd_noverify
       && !verify_sfsrosig (&fsi->sfsro->v1->sig, &fsi->sfsro->v1->info,
-			   &servinfo.host.pubkey)) {
+			   &hinfo.pubkey)) {
     warn << "failed to verify signature " << path << "\n";
     return false;
   }

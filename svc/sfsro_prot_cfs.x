@@ -22,9 +22,13 @@ enum sfsrostat {
   SFSRO_ERRNOENT = 1
 };
 
+struct sfsro_blockattr {
+  unsigned size;
+};
+
 struct sfsro_dataresok {
   unsigned offset;
-  unsigned size; 
+  sfsro_blockattr attr; 
   opaque data<>;
 };
 

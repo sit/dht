@@ -1,4 +1,4 @@
-/* $Id: sfsrodb_core.C,v 1.11 2001/06/30 02:30:32 fdabek Exp $ */
+/* $Id: sfsrodb_core.C,v 1.12 2001/07/05 14:11:38 fdabek Exp $ */
 
 /*
  *
@@ -28,6 +28,7 @@
 #include "arpc.h"
 
 long out=0;
+#define mtu 8192
 
 bigint
 fh2mpz(const void *keydata, size_t keylen) 
@@ -37,32 +38,13 @@ fh2mpz(const void *keydata, size_t keylen)
   return n;
 }
 
-/* Return false if duplicate key */
+/* always returns true (regardless of whether key is duplicated) */
 bool
-sfsrodb_put (ptr<aclnt> db, const void *okeydata, size_t keylen, 
-	     void *ocontentdata, size_t contentlen)
+sfsrodb_put (ptr<aclnt> db, const void *keydata, size_t keylen, 
+	     void *contentdata, size_t contentlen)
 {
 
-#if 0
-  static int i=0;
-  char filename[128];
-  sprintf(filename, "key-%d", i++);
-
-  int fd = open (filename, O_WRONLY | O_CREAT, 0666);
-  write (fd, contentdata, contentlen);
-  close (fd);
-#endif
-
-  warn << "put " << contentlen << " bytes\n";
-
-  void *contentdata = malloc (contentlen);
-  void *keydata = malloc (keylen);
-  memcpy(contentdata, ocontentdata, contentlen);
-  memcpy(keydata, okeydata, keylen);
-
-  // warn << "inserting " << contentlen << "bytes of data under a " << keylen << " byte key\n";
   unsigned int offset = 0;
-  unsigned int mtu = 8192;
   bigint n = fh2mpz(keydata, keylen);
   do {
     ptr<dhash_insertarg> arg = New refcounted<dhash_insertarg> ();
@@ -81,20 +63,28 @@ sfsrodb_put (ptr<aclnt> db, const void *okeydata, size_t keylen,
     offset += mtu;
   } while (offset < contentlen);
 
-  //XXX - actually check errors?
   return true;
+}
+
+void
+check_cbs () 
+{
+  while (out > CONCUR_OPS) acheck();
+  if (out <= 0) exit(0);
 }
 
 void
 sfsrodb_put_cb(dhash_stat *res, clnt_stat err)
 {
 
-  if (err) 
-    warn << "insert returned " << err << strerror(err) << "\n";
+  if ((err) || (*res != DHASH_OK)) { 
+    warn << "insert failed: " << err << strerror(err) << "\n";
+    warn << "Aborting\n";
+    exit(1);
+  }
 
-  out--;
-  warn << out << "\n";
-  if (out <= 0) exit(0);
+  delete res;
+  check_cbs ();
 }
 
 /* Library SFRODB routines used by the database creation,

@@ -38,12 +38,11 @@ struct store_cbstate {
 };
 
 struct store_state {
-  int read;
-  int size;
+  unsigned int read;
+  unsigned int size;
   char *buf;
   
   store_state (int z) : read(0), size(z), buf(New char[z]) {};
-  ~store_state () { delete buf; };
 };
 
 struct retry_state {
