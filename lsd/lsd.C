@@ -69,10 +69,12 @@ u_int initialized_dhash = 0;
 static char *logfname;
 static char *tracefname;
 
-ptr<chord> chordnode;
+static bool p2pstarted (false);
 static str p2psocket;
+static bool ctlstarted (false);
 static str ctlsocket;
 
+ptr<chord> chordnode;
 vec<ptr<vnode> > vlist;
 vec<ref<dhash> > dh;
 int myport;
@@ -325,8 +327,10 @@ client_listen (int fd, acceptercb_t accepter)
 static void
 cleanup ()
 {
-  unlink (p2psocket);
-  unlink (ctlsocket);
+  if (p2pstarted)
+    unlink (p2psocket);
+  if (ctlstarted)
+    unlink (ctlsocket);
 }
 
 static void
@@ -337,12 +341,14 @@ startclntd()
   if (clntfd < 0) 
     fatal << "Error creating client socket (UNIX)" << strerror (errno) << "\n";
   client_listen (clntfd, wrap (gateway_accept));
-  
+
   int port = (myport == 0) ? 0 : myport + 1; 
   int tcp_clntfd = inetsocket (SOCK_STREAM, port);
   if (tcp_clntfd < 0)
     fatal << "Error creating client socket (TCP) " << strerror(errno) << "\n";
   client_listen (tcp_clntfd, wrap (gateway_accept));
+
+  p2pstarted = true;
 }
 
 static void
@@ -353,6 +359,8 @@ startcontroller ()
   if (ctlfd < 0)
     fatal << "Error creating control socket (UNIX)" << strerror (errno) << "\n";
   client_listen (ctlfd, wrap (control_accept));
+
+  ctlstarted = true;
 }
 
 
