@@ -44,7 +44,6 @@ public:
   static unsigned k()   { return _k; }
 
   pair<NodeID, IPAddress> do_lookup_wrapper(IPAddress, NodeID);
-  void do_insert_wrapper(NodeID, IPAddress);
 
   // public, because k_bucket needs it.
   struct lookup_args {
@@ -66,6 +65,8 @@ public:
   NodeID _id;                   // my id
   k_bucket_tree *_tree;         // the root of our k-bucket tree
   map<NodeID, Value> _values;   // key/value pairs
+  IPAddress _wkn;               // well-known IP address
+  bool _joined;                 // have I joined yet?  REMOVE ME.
 
   static NodeID _rightmasks[]; // for bitfucking
 
@@ -143,7 +144,7 @@ class k_bucket {
 public:
   typedef Kademlia::NodeID NodeID;
 
-  k_bucket(Kademlia*);
+  k_bucket(Kademlia*, k_bucket_tree*);
   ~k_bucket();
 
   pair<peer_t*, unsigned>
@@ -157,6 +158,7 @@ private:
   static unsigned _k;
   bool _leaf;                   // this should/can not be split further
   Kademlia *_self;              // the kademlia node that this tree is part of
+  k_bucket_tree *_root;         // root of the tree that I'm a part of
 
   // the following are mutually exclusive, they could go into a union.
   vector<peer_t*> *_nodes;      // for a leaf
