@@ -34,6 +34,10 @@ public:
   void dump() { cout << "*** DUMP for " << printbits(_id) << " ***" <<endl;  _fingers.dump(_id); };
   NodeID id () { return _id;}
 
+  // bit twiddling utility functions
+  static NodeID flipbitandmaskright(NodeID, unsigned);
+  static NodeID maskright(NodeID, unsigned);
+
 private:
   NodeID _id;
 
@@ -91,14 +95,17 @@ private:
                                                                                   
   // finger table
   class fingers_t { public:
-    fingers_t() {};
+    fingers_t(NodeID id) : _id(id) {};
     void set(unsigned i, NodeID id, IPAddress ip) {
       _ft[i].id = id;
       _ft[i].valid = true;
       _ft[i].retries = 0;
       _id2ip[id] = ip;
+
+      assert(Kademlia::flipbitandmaskright(_id, i) == Kademlia::maskright(id, i));
+
     }
-    void unset(unsigned i)          { _ft[i].valid = false; }
+    void unset(unsigned i) { _ft[i].valid = false; }
     void dump(NodeID myid) {
       string s;
       s = "i\tmyid permu\tnearest node\n";
@@ -121,10 +128,15 @@ private:
       NodeID id;
       peer_t() { valid = false; retries = 0; id = 0; };
     } _ft[8*sizeof(NodeID)];
+
+    NodeID _id;
   } _fingers;
 
   // this is what we're here for: being a NodeID -> value hashtable
   map<NodeID, Value> _values;
+
+
+  static NodeID _rightmasks[];
 };
 
 #endif // __KADEMLIA_H

@@ -9,14 +9,25 @@
 using namespace std;
 
 
-Kademlia::Kademlia(Node *n) : Protocol(n)
+Kademlia::NodeID Kademlia::_rightmasks[8*sizeof(Kademlia::NodeID)];
+
+Kademlia::Kademlia(Node *n) : Protocol(n), _id((NodeID) random()), _fingers(_id)
 {
   // _id = (((NodeID) random()) << 32) | random();
   // printf("id = %llx\n", _id);
-  _id = (NodeID) random();
-
+  // _id = (NodeID) random();
   KDEBUG(1) << "constructor: " << printbits(_id) << endl;
   _values.clear();
+
+  // precompute masks
+  if(!_rightmasks[0]) {
+    NodeID mask = 0;
+    _rightmasks[0] = (NodeID) -1;
+    for(unsigned i=1; i<idsize; i++) {
+      mask |= (1<<(i-1));
+      _rightmasks[i] = ~mask;
+    }
+  }
 }
 
 Kademlia::~Kademlia()
@@ -98,10 +109,6 @@ Kademlia::join(Args *args)
     return;
   }
 
-  // add myself in finger table
-  for(unsigned i=0; i<idsize; i++)
-    _fingers.set(i, _id, ip());
-
   // lookup my own key with well known node.
   lookup_args la;
   lookup_result lr;
@@ -112,24 +119,32 @@ Kademlia::join(Args *args)
   doRPC(wkn, &Kademlia::do_lookup, &la, &lr);
   KDEBUG(1) << "Result of lookup for " << printID(_id) << " is " << printID(lr.id) << ", which is node " << lr.ip << endl;
 
+
   // get the finger table and data of the guy with an ID closest to ours
-  // ...and get his data
-  transfer_args ta;
-  transfer_result tr;
-  ta.id = _id;
-  ta.ip = ip();
-  KDEBUG(1) << "Node " << printbits(_id) << " initiating transfer from " << printbits(lr.id) << endl;
-  doRPC(lr.ip, &Kademlia::do_transfer, &ta, &tr);
+  // merge his data into ours.
+  if(lr.id != _id) {
+    transfer_args ta;
+    transfer_result tr;
+    ta.id = _id;
+    ta.ip = ip();
+    KDEBUG(1) << "Node " << printbits(_id) << " initiating transfer from " << printbits(lr.id) << endl;
+    doRPC(lr.ip, &Kademlia::do_transfer, &ta, &tr);
 
-  // now we know the closest node in our ID space.  add him to our finger table.
-  memcpy(&_fingers, tr.fingers, sizeof(fingers_t));
-  merge_into_ftable(lr.id, lr.ip);
+    // put that guy in our finger table
+    merge_into_ftable(lr.id, lr.ip);
 
-  // merge that data in our _values table
-  for(map<NodeID, Value>::const_iterator pos = tr.values.begin(); pos != tr.values.end(); ++pos)
-    _values[pos->first] = pos->second;
+    // see which entries of his finger table are valid for ours
+    for(unsigned i=0; i<idsize; i++)
+      if(tr.fingers[i].valid(i))
+        merge_into_ftable(tr.fingers[i].get_id(i), tr.fingers[i].get_ip(i));
 
-  KDEBUG(1) << "Transfer done." << endl;
+    // merge that data in our _values table
+    for(map<NodeID, Value>::const_iterator pos = tr.values.begin(); pos != tr.values.end(); ++pos)
+      _values[pos->first] = pos->second;
+
+    KDEBUG(1) << "Transfer done." << endl;
+  }
+
 
   join_args ja;
   join_result jr;
@@ -137,27 +152,27 @@ Kademlia::join(Args *args)
   ja.ip = ip();
 
   // why are we using wkn for the first lookup?
-  IPAddress thisip = wkn;
-  for(unsigned i=0; i<idsize; i++) {
-    NodeID key = _id ^ (1<<i);
-    // now tell all the relevant nodes about me.
-    KDEBUG(2) << "*** Iteration " << i << ".  Doing lookup for " << printbits(key) << " to join\n";
+  // IPAddress thisip = wkn;
+  // for(unsigned i=0; i<idsize; i++) {
+  //   NodeID key = _id ^ (1<<i);
+  //   // now tell all the relevant nodes about me.
+  //   KDEBUG(2) << "*** Iteration " << i << ".  Doing lookup for " << printbits(key) << " to join\n";
 
-    lookup_args la;
-    lookup_result lr;
+  //   lookup_args la;
+  //   lookup_result lr;
 
-    la.id = _id;
-    la.ip = ip();
-    la.key = key;
-    do_lookup(&la, &lr);
+  //   la.id = _id;
+  //   la.ip = ip();
+  //   la.key = key;
+  //   do_lookup(&la, &lr);
 
-    // send a join request to that guy
-    thisip = lr.ip;
-    if(!doRPC(thisip, &Kademlia::do_join, &ja, &jr))
-      _fingers.unset(i);
-    else
-      _fingers.set(i, lr.id, thisip);
-  }
+  //   // send a join request to that guy
+  //   thisip = lr.ip;
+  //   if(!doRPC(thisip, &Kademlia::do_join, &ja, &jr))
+  //     _fingers.unset(i);
+  //   else
+  //     _fingers.set(i, lr.id, thisip);
+  // }
 }
 
 void
@@ -243,16 +258,51 @@ Kademlia::do_lookup(void *args, void *result)
 void
 Kademlia::merge_into_ftable(NodeID id, IPAddress ip)
 {
-  KDEBUG(2) << "merge_into_ftable (myid = " << printID(_id) << "), id = " << printID(id) << ", ip = " << ip << endl;
+  // never put own id in finger table
+  if(id == _id)
+    return;
+
+  KDEBUG(2) << "merge_into_ftable (_id = " << printbits(_id) << "), id = " << printbits(id) << ", ip = " << ip << endl;
+  unsigned called = 0;
   for(unsigned i=0; i<idsize; i++) {
-    NodeID newdist = distance(id, _id ^ (1<<i));
-    NodeID curdist = distance(_fingers.get_id(i), _id ^ (1<<i));
-    if(newdist < curdist) {
-      KDEBUG(2) << "merge_into_ftable " << printbits(id) << " is better than old " << printbits(_fingers.get_id(i)) << " for entry " << i << "\n";
+    if(flipbitandmaskright(_id, i) == maskright(id, i)) {
+      cout << "calling for _id " << printbits(_id) << endl;
+      cout << "calling for  id " << printbits(id) << endl;
+      cout << "calling for i = " << i << endl;
       _fingers.set(i, id, ip);
+      called++;
     }
   }
+  assert(called <= 1);
 }
+
+
+//
+// flips the i-th bit and zeroes out the ones right of it.
+//
+// for example:
+//
+//   n = 00110110, i = 3
+//                     |
+//                     v
+//       flip bit: 00111110
+//           mask: 11111000
+//         result: 00111000
+//
+inline
+Kademlia::NodeID
+Kademlia::flipbitandmaskright(NodeID n, unsigned i)
+{
+  return ((n ^ (1<<i)) & _rightmasks[i]);
+}
+
+inline
+Kademlia::NodeID
+Kademlia::maskright(NodeID n, unsigned i)
+{
+  return n & _rightmasks[i];
+}
+
 
 string
 Kademlia::printbits(NodeID id)
