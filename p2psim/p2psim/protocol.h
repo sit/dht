@@ -63,6 +63,7 @@ protected:
 
     class XEvent : public Event {
     public:
+      XEvent() : Event( "XEvent" ) {};
       BT *_target;
       void (BT::*_fn)(AT);
       AT _args;

@@ -82,9 +82,7 @@ EventQueue::run()
     while(anyready())
       yield();
 
-    // time is going to move forward. notify observers, who will not add events
-    // into the eventqueue using EventQueueObserver::add_event
-    notifyObservers((ObserverInfo*) _queue.size());
+    // time is going to move forward.
 
     // everyone else is quiet.
     // must be time for the next event.
@@ -113,6 +111,9 @@ EventQueue::advance()
     assert((*i)->ts == eqe->ts &&
            (*i)->ts >= _time &&
            (*i)->ts < _time + 100000000);
+    // notify observers, who will not add events
+    // into the eventqueue using EventQueueObserver::add_event
+    notifyObservers((ObserverInfo*) *i);
     Event::Execute(*i); // new thread, execute(), delete Event
   }
   delete eqe;

@@ -24,6 +24,7 @@
 
 #include "observerfactory.h"
 #include "kademliaobserver.h"
+#include "tapestryobserver.h"
 #include <iostream>
 using namespace std;
 
@@ -55,6 +56,8 @@ ObserverFactory::create(string s, Args *a)
 
   if(s == "KademliaObserver") {
     t = New KademliaObserver(a);
+  } else if(s == "TapestryObserver") {
+    t = New TapestryObserver(a);
   }
 
   _observers.insert(t);

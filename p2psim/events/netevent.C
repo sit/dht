@@ -25,7 +25,7 @@
 #include "netevent.h"
 
 NetEvent::NetEvent()
-  : Event(0, false)
+  : Event("NetEvent", 0, false)
 {
 }
 

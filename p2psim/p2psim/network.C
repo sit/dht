@@ -75,6 +75,16 @@ Network::getallprotocols(string proto)
   return pl;
 }
 
+list<IPAddress>
+Network::getallips()
+{
+  list<IPAddress> il; // XXX: should we just New this? return may be expensive
+
+  for(NMCI p = _nodes.begin(); p != _nodes.end(); ++p)
+    il.push_back(p->first);
+  return il;
+}
+
 // Protocols should call here() to send a packet into the network.
 void
 Network::send(Packet *p)

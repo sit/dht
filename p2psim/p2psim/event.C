@@ -28,26 +28,29 @@
 
 unsigned Event::_uniqueid = 0;
 
-Event::Event()
+Event::Event( string name )
 {
   _id = _uniqueid++;
   this->ts = 0;
   _fork = true;
+  _name = name;
 }
 
-Event::Event(Time ts, bool fork)
+Event::Event(string name, Time ts, bool fork)
 {
   _id = _uniqueid++;
   this->ts = ts;
   _fork = fork;
+  _name = name;
 }
 
-Event::Event(vector<string> *v)
+Event::Event(string name, vector<string> *v)
   : _fork(true)
 {
   _id = _uniqueid++;
   this->ts = (Time) strtoull((*v)[0].c_str(), NULL, 10);
   v->erase(v->begin());
+  _name = name;
 }
 
 

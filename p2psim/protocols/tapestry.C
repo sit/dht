@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.16 2003/10/24 22:35:13 strib Exp $ */
+/* $Id: tapestry.C,v 1.17 2003/10/28 22:40:54 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -239,6 +239,8 @@ Tapestry::have_joined()
 void
 Tapestry::join(Args *args)
 {
+
+  notifyObservers();
 
   if( _joining ) {
     TapDEBUG(0) << "Tried to join while joining -- ignoring" << endl;

@@ -28,7 +28,7 @@
 #include <iostream>
 using namespace std;
 
-P2PEvent::P2PEvent()
+P2PEvent::P2PEvent() : Event("P2PEvent")
 {
 }
 
@@ -39,12 +39,18 @@ P2PEvent::name2fn(string name)
   if(name == "insert" || name == "3" || name == "leave" || name == "1")
     assert(false);
 
-  if(name == "join" || name == "0")
+  if(name == "join" || name == "0") {
+    type = "join";
     return &P2Protocol::join;
-  if(name == "crash" || name == "2")
+  }
+  if(name == "crash" || name == "2") {
+    type = "crash";
     return &P2Protocol::crash;
-  if(name == "lookup" || name == "4")
+  }
+  if(name == "lookup" || name == "4") {
+    type = "lookup";
     return &P2Protocol::lookup;
+  }
   assert(0);
 }
 
@@ -52,7 +58,7 @@ P2PEvent::name2fn(string name)
 //
 // see Protocol::dispatch() for the mapping from operation-id to operation
 //
-P2PEvent::P2PEvent(string proto, vector<string> *v) : Event(v)
+P2PEvent::P2PEvent(string proto, vector<string> *v) : Event("P2PEvent", v)
 {
   // node-id
   IPAddress ip = (IPAddress) strtoull((*v)[0].c_str(), NULL, 10);
@@ -75,7 +81,7 @@ P2PEvent::P2PEvent(string proto, vector<string> *v) : Event(v)
 }
 
 P2PEvent::P2PEvent(Time ts, string proto, IPAddress ip, string operation,
-    Args *a) : Event(ts, true)
+    Args *a) : Event("P2PEvent", ts, true)
 {
   this->protocol = proto;
   this->node = Network::Instance()->getnode(ip);
@@ -84,7 +90,6 @@ P2PEvent::P2PEvent(Time ts, string proto, IPAddress ip, string operation,
     this->args = New Args();
     assert(this->args);
   }
-  cout << "p2pevent args wkn = " << (*this->args)["wkn"] << endl;
 }
 
 

@@ -24,8 +24,8 @@
 
 #include "oldobserverfactory.h"
 #include "chordobserver.h"
-#include "kademliaobserver.h"
-#include "tapestryobserver.h"
+//#include "kademliaobserver.h"
+//#include "tapestryobserver.h"
 #include "kelipsobserver.h"
 #include <iostream>
 using namespace std;
@@ -77,9 +77,11 @@ OldobserverFactory::create(string s, Args *a)
   }
   */
 
+  /*
   else if(s == "Tapestry") {
     t = TapestryObserver::Instance(a);
   }
+  */
 
   else if(s == "Kelips") {
     t = KelipsObserver::Instance(a);

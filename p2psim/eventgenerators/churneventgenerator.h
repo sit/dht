@@ -37,10 +37,20 @@ public:
   virtual void run();
 
 private:
-  unsigned _size;
   IPAddress _wkn;
+  string _wkn_string;
   string _proto;
-  IPAddress _current_ip;
+  unsigned _lifemean;
+  unsigned _deathmean;
+  unsigned _lookupmean;
+  string _exittime_string;
+  Time _exittime;
+  unsigned long _seed;
+
+  Time next_exponential( uint mean );
+  string get_lookup_key();
+
 };
 
 #endif // __CHURN_EVENT_GENERATOR_H
+

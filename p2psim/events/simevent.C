@@ -27,11 +27,11 @@
 #include <iostream>
 using namespace std;
 
-SimEvent::SimEvent()
+SimEvent::SimEvent() : Event( "SimEvent" )
 {
 }
 
-SimEvent::SimEvent(vector<string> *v) : Event(v)
+SimEvent::SimEvent(vector<string> *v) : Event("SimEvent", v)
 {
   this->_op = (*v)[0];
 }

@@ -37,6 +37,7 @@ public:
   string protocol;
   P2Protocol::event_f fn;
   Args *args;
+  string type;
 
  protected:
   ~P2PEvent();

@@ -26,17 +26,18 @@
 #include "observers/oldobserverfactory.h"
 #include "p2psim/parse.h"
 
-OldobserveEvent::OldobserveEvent()
+OldobserveEvent::OldobserveEvent() : Event( "OldObserveEvent" )
 {
 }
 
 
-OldobserveEvent::OldobserveEvent(Oldobserver *o)
+OldobserveEvent::OldobserveEvent(Oldobserver *o) : Event( "OldObserveEvent" )
 {
   this->_oldobserver = o;
 }
 
-OldobserveEvent::OldobserveEvent(string proto, vector<string> *v) : Event(v)
+OldobserveEvent::OldobserveEvent(string proto, vector<string> *v) 
+  : Event( "OldObserveEvent", v)
 {
   // create a map for the arguments
   Args *a = New Args;

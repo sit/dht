@@ -43,6 +43,7 @@ public:
   Node* getnode(IPAddress id) { return _nodes[id]; }
   Topology *gettopology() { return _top; }
   list<Protocol*> getallprotocols(string);
+  list<IPAddress> getallips();
 
   ~Network();
 

@@ -25,21 +25,22 @@
 #ifndef __TAPESTRY_OBSERVER_H
 #define __TAPESTRY_OBSERVER_H
 
-#include "p2psim/oldobserver.h"
+#include "p2psim/observer.h"
 #include "protocols/tapestry.h"
 
-class TapestryObserver : public Oldobserver {
+class TapestryObserver : public Observer {
 public:
+  TapestryObserver(Args*);
+  ~TapestryObserver();
   static TapestryObserver* Instance(Args*);
-  virtual void execute();
+  virtual void kick(Observed *, ObserverInfo *);
 
 private:
   static TapestryObserver *_instance;
-  TapestryObserver(Args*);
-  ~TapestryObserver();
-  unsigned int _reschedule;
   unsigned int _num_nodes;
   unsigned int _init_num;
+  bool _stabilized;
+  string _type;
 
   void init_state();
 
