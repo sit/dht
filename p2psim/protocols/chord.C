@@ -92,6 +92,7 @@ Chord::Chord(Node *n, Args& a, LocTable *l)
     loctable = New LocTable();
 
   loctable->set_timeout(5*_stab_basic_timer);
+  //loctable->set_timeout(0);
   loctable->set_evict(false);
 
   loctable->init (me);
@@ -513,7 +514,7 @@ DONE:
 #endif
   }
 
-  if (reuse->ret.done)
+  if ((reuse->ret.done) && (reuse->ret.correct))
     results = reuse->ret.v;
 
   delete reuse;
