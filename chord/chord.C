@@ -385,6 +385,12 @@ vnode::dogetfingers_ext (svccb *sbp)
   ndogetfingers_ext++;
 
   fingers->fill_getfingersresext (&res);
+  if (predecessor.alive) {
+    res.resok->pred.x = predecessor.n;
+    res.resok->pred.r = locations->getaddress (predecessor.n);
+  } else {
+    res.resok->pred.x = bigint (0);
+  }
 
   warnt("CHORD: dogetfingers_reply");
   sbp->reply (&res);

@@ -109,6 +109,7 @@ union chord_getsucc_ext_res switch (chordstat status) {
 
 struct chord_getfingers_ext_resok {
   chord_node_ext fingers<>;
+  chord_node_ext pred;
 };
 
 union chord_getfingers_ext_res switch (chordstat status) {

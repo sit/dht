@@ -16,6 +16,7 @@ static GdkGC *draw_gc = NULL;
 static GdkColormap *cmap = NULL;
 static short interval = -1;
 static GtkWidget *check_fingers;
+static GtkWidget *check_pred;
 static GtkWidget *check_immed_succ;
 static GtkWidget *check_succ_list;
 static GtkWidget *check_neighbors;
@@ -391,6 +392,7 @@ initgraf ()
   GtkWidget *draw_all = gtk_button_new_with_label ("Show All");
   GtkWidget *draw_none = gtk_button_new_with_label ("Show None");
   check_fingers = gtk_check_button_new_with_label ("fingers");
+  check_pred = gtk_check_button_new_with_label ("predecessor");
   check_immed_succ = 
     gtk_check_button_new_with_label ("immed. succ.");
   check_succ_list = gtk_check_button_new_with_label ("succ. list");
@@ -403,6 +405,7 @@ initgraf ()
   GtkWidget *vbox = gtk_vbox_new (FALSE, 0);
   gtk_box_pack_start (GTK_BOX (vbox), draw_all, TRUE, FALSE, 0);
   gtk_box_pack_start (GTK_BOX (vbox), check_fingers, TRUE, FALSE, 0);
+  gtk_box_pack_start (GTK_BOX (vbox), check_pred, TRUE, FALSE, 0);
   gtk_box_pack_start (GTK_BOX (vbox), check_immed_succ, TRUE, FALSE, 0);
   gtk_box_pack_start (GTK_BOX (vbox), check_succ_list, TRUE, FALSE, 0);
   gtk_box_pack_start (GTK_BOX (vbox), check_neighbors, TRUE, FALSE, 0);
@@ -431,6 +434,9 @@ initgraf ()
 			       NULL);
 
   gtk_signal_connect_object (GTK_OBJECT (check_fingers), "toggled",
+			     GTK_SIGNAL_FUNC (redraw_cb),
+			     NULL);
+  gtk_signal_connect_object (GTK_OBJECT (check_pred), "toggled",
 			     GTK_SIGNAL_FUNC (redraw_cb),
 			     NULL);
   gtk_signal_connect_object (GTK_OBJECT (check_immed_succ), "toggled",
@@ -464,6 +470,7 @@ initgraf ()
   gtk_widget_show (drawing_area);
   gtk_widget_show (draw_all);
   gtk_widget_show (check_fingers);
+  gtk_widget_show (check_pred);
   gtk_widget_show (check_succ_list);
   gtk_widget_show (check_neighbors);
   gtk_widget_show (check_immed_succ);
@@ -828,6 +835,14 @@ draw_ring ()
 	  ID_to_xy (n->res->resok->fingers[i].x, &a, &b);
 	  draw_arrow (x,y,a,b, draw_gc);
 	}
+      }
+
+      if (n->res && 
+	  gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (check_pred))) {
+	  int a,b;
+	  ID_to_xy (n->res->resok->pred.x, &a, &b);
+	  draw_arrow (x,y,a,b, draw_gc);
+
       }
 
       if (n->ressucc && 
