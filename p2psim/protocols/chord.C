@@ -827,7 +827,6 @@ Chord::find_successors_recurs(CHID key, uint m, uint type, IDMap *lasthop, looku
 	nexthop = me;
       else {
 	nexthop = loctable->next_hop(nexthop.id-1);
-	assert(nexthop.ip >= 0 && nexthop.ip <10000);
 	if(nexthop.ip == 0) {
 	  if (reuse) {
 	    delete reuse;
@@ -1390,14 +1389,6 @@ Chord::next_handler(next_args *args, next_ret *ret)
 void
 Chord::join(Args *args)
 {
-
-  if (static_sim) {
-    if ((args) && (!_inited))
-      notifyObservers((ObserverInfo *)"join");
-    _inited = true;
-    return;
-  }
-
   if (args) {
     me.ip = ip();
     if (_random_id)
@@ -1412,6 +1403,8 @@ Chord::join(Args *args)
 
     _last_join_time = now();
     ChordObserver::Instance(NULL)->addnode(me);
+    notifyObservers((ObserverInfo *)"join");
+
     _join_scheduled++;
     // XXX: Thomer says: not necessary
     // node()->set_alive(); //if args is NULL, it's an internal join
@@ -1506,7 +1499,6 @@ Chord::join(Args *args)
   printf("\n");
 #endif
  
-
   if (!_stab_basic_running) {
     _stab_basic_running = true;
     delaycb(0, &Chord::reschedule_basic_stabilizer, (void *) 0);
@@ -1693,7 +1685,7 @@ Chord::oracle_node_joined(IDMap n)
   //is the new node my predecessor?
   IDMap pred = loctable->pred(me.id-1);
   if (ConsistentHash::between(pred.id,me.id, n.id)) {
-    loctable->del_node(pred);
+//    loctable->del_node(pred);
     loctable->add_node(n);
 #ifdef CHORD_DEBUG
     printf("%s oracle_node_joined predecessor del %u,%qx, add %u,%qx\n",ts(),pred.ip,pred.id,n.ip,n.id);
@@ -1703,14 +1695,13 @@ Chord::oracle_node_joined(IDMap n)
  
   //is the new node one of my successor?
   vector<IDMap> succs = loctable->succs(me.id+1,_nsucc,LOC_ONCHECK);
-  uint ssz = succs.size();
-  assert(ssz==_nsucc);
-  if (ConsistentHash::between(me.id,succs[succs.size()-1].id,n.id)) {
-    loctable->del_node(succs[succs.size()-1]);
+  //uint ssz = succs.size();
+  if (succs.size() > 0 && ConsistentHash::between(me.id,succs[succs.size()-1].id,n.id)) {
+ //   loctable->del_node(succs[succs.size()-1]);
     loctable->add_node(n,true);
-    vector<IDMap> newsucc = loctable->succs(me.id+1,_nsucc,LOC_ONCHECK);
-    uint nssz = newsucc.size();
-    assert(nssz == _nsucc);
+  //  vector<IDMap> newsucc = loctable->succs(me.id+1,_nsucc,LOC_ONCHECK);
+   // uint nssz = newsucc.size();
+    //assert(nssz == _nsucc);
 #ifdef CHORD_DEBUG
     printf("%s oracle_node_joined successors del %u,%qx add %u,%qx succsz %d\n",ts(),succs[succs.size()-1].ip, succs[succs.size()-1].id,n.ip,n.id, succs.size());
 #endif

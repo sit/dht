@@ -117,6 +117,10 @@ public:
   static unsigned start;
   static Time old_time;
   static int _publish_time;
+  static unsigned num_violations;
+  static vector<double> sliceleader_bw_avg;
+  static unsigned debug_node;
+  Time last_stabilize;
   
   typedef Chord::IDMap IDMap;
   typedef ConsistentHash::CHID CHID;
@@ -196,6 +200,7 @@ public:
     Time start_time;
     Time timeout_lat;
     uint timeouts;
+    uint attempts;
   };
   OneHop(IPAddress i, Args& a);
   ~OneHop();

@@ -36,6 +36,8 @@
 
 #define TESTPRINT(me,he,tag) if (me.ip==1159 && he.ip==2047) printf("WUWU now %llu tag %s\n", now(),tag);
 
+#define DEBUG_MSG(n,msg,s) if (n.ip == OneHop::debug_node) printf("%llu %u,%qx %s knows debug from sender %u,%qx\n",now(), me.ip, me.id, msg, s.ip, s.id);
+
 #define MAX_IDS_MSG 295
 #define MAX_LOOKUP_TIME 4000
 
@@ -72,6 +74,9 @@ bw OneHop::old_leader_bandwidth = 0;
 unsigned OneHop::start = 0;
 Time OneHop::old_time = 0;
 int OneHop::_publish_time = -1; //jy: control how frequently one publishes statistics
+unsigned OneHop::num_violations = 0; //jy: anjali sends too many ids in one message, calculate how many violations there are
+vector<double> OneHop::sliceleader_bw_avg;
+unsigned OneHop::debug_node = 1;
 
 OneHop::OneHop(IPAddress i , Args& a) : P2Protocol(i)
 {
@@ -102,13 +107,17 @@ OneHop::OneHop(IPAddress i , Args& a) : P2Protocol(i)
   high_to_low.clear();
   sent_low = false;
   sent_high = false;
+  if (me.ip == 1)
+    OneHop::sliceleader_bw_avg.clear();
+  last_stabilize = 0;
 }
 
 void
 OneHop::record_stat(uint type, uint num_ids, uint num_else)
 {
   assert(type <= 5);
-  //if (num_ids > 300) 
+  if (num_ids > 300) 
+    OneHop::num_violations++;
    // printf("now %llu warning: %u sending too much %u\n", now(), me.ip, num_ids);
   //assert(num_ids < 300);
   if (Node::collect_stat()) {
@@ -131,11 +140,14 @@ OneHop::check_correctness(CHID k, IDMap n)
       break;
     pos++;
   }
-
-  if (ids[pos].ip == n.ip) 
+  if (ids[pos].ip == n.ip) {
+    if (n.ip == OneHop::debug_node)
+      printf("now %llu %u,%qx key %qx find correct node %u,%qx\n", now(),me.ip, me.id, k,n.ip, n.id);
     return true;
-  else
+  } else {
+    //printf("now %llu key %qx correct ip %u,%qx wrong ip %u,%qx\n", now(), k, ids[pos].ip, ids[pos].id, n.ip,n.id);
     return false;
+  }
 }
 
 void
@@ -149,12 +161,15 @@ OneHop::lookup(Args *args)
   la->hops = 0;
   la->timeouts = 0;
   la->timeout_lat = 0;
+  la->attempts = 0;
   lookup_internal(la);
 }
 
 void
 OneHop::lookup_internal(lookup_internal_args *la) 
 {
+
+  la->attempts++;
 
   if (!alive() || now()-la->start_time > MAX_LOOKUP_TIME) {
     record_lookup_stat(me.ip, me.ip, now()-la->start_time, false, false,
@@ -198,6 +213,7 @@ OneHop::lookup_internal(lookup_internal_args *la)
       if (r.is_owner) {
 	break;
       }else{
+	DEBUG_MSG(r.correct_owner, "lookup", succ_node);
 	loctable->add_node(r.correct_owner);
       }
     }else{
@@ -208,6 +224,7 @@ OneHop::lookup_internal(lookup_internal_args *la)
       aa->suspect= succ_node;
       aa->informed = me;
       delaycb(0,&OneHop::test_dead_inform,aa);
+      return;
     }
   }
 
@@ -217,7 +234,11 @@ OneHop::lookup_internal(lookup_internal_args *la)
     delete la;
     return;
   }else if (check_correctness(la->k,succ_node)) {
-    record_lookup_stat(me.ip, succ_node.ip, now()-la->start_time, true, true,
+    if (la->attempts == 1)
+      record_lookup_stat(me.ip, succ_node.ip, now()-la->start_time, true, true,
+	la->hops,la->timeouts,la->timeout_lat);
+    else
+      record_lookup_stat(me.ip, succ_node.ip, now()-la->start_time, false, false,
 	la->hops,la->timeouts,la->timeout_lat);
     delete la;
     return;
@@ -348,6 +369,7 @@ OneHop::lookup_handler(lookup_args *a, lookup_ret *r) {
   if (succ_node.id != a->sender.id) {
       if (!alive()) return;
       DEBUG(5) << ip() << ":Found new node " << a->sender.ip << " via lookup\n";
+      DEBUG_MSG(a->sender,"lookup_handler",a->sender);
       loctable->add_node(a->sender);
       LogEntry *e = new LogEntry(a->sender, ALIVE, now());
       leader_log.push_back(*e);
@@ -366,18 +388,19 @@ OneHop::lookup_handler(lookup_args *a, lookup_ret *r) {
 void
 OneHop::join(Args *args)
 {
+  if (!alive()) return;
   me.ip = ip();
   me.id = ConsistentHash::ip2chid(me.ip);
   OneHopObserver::Instance(NULL)->addnode(me); //jy
   last_join = now();
-  assert(alive());
   //jy: get a random alive node from observer
   IDMap wkn;
   wkn.ip = me.ip;
   while (wkn.ip == me.ip)
     wkn = OneHopObserver::Instance(NULL)->get_rand_alive_node();
-  
-  DEBUG(1) << me.ip << ": id "<< me.id << " start to join at time " << now() << " wkn " << wkn.ip << endl;
+ 
+  if (ip() == OneHop::debug_node) 
+    DEBUG(0) << now() << ": ip " << me.ip << " id "<< me.id << " start to join  wkn " << wkn.ip << endl;
   loctable->init(me);
 
   if (args && args->nget<uint>("first",0,10)==1) { //jy: a dirty hack, one hop does not like many nodes join at once
@@ -395,6 +418,13 @@ OneHop::join(Args *args)
     num_nodes++;
     stabilize((void *)0);
     publish((void *)0);
+  }
+
+  //who is my successor?
+  if (alive()) {
+    IDMap succ_node = loctable->succ(me.id+1);
+    DEBUG(1) << now() << ": ip " << me.ip << " id " << me.id << " succ_ip " 
+      << succ_node.ip << " succ_id " << succ_node.id << " join_complete " << _join_complete<< endl;
   }
 }
 
@@ -455,9 +485,19 @@ void
 OneHop::crash(Args *args) 
 {
   OneHopObserver::Instance(NULL)->delnode(me);
-  DEBUG(1) << "ip " << me.ip << " id "<< me.id << " crashed at time " << now() << endl;
-  if (is_slice_leader(me.id, me.id))
+  DEBUG(1) << now() << ": ip " << me.ip << " id "<< me.id << " crashed" << endl;
+  if (is_slice_leader(me.id, me.id)) {
     DEBUG(1) << " -- Slice leader\n";
+    if (join_time > 0 && Node::collect_stat() && ((now()-join_time) > 180000)) {
+      double avg = (double)1000.0*node_live_bytes/(double)(now()-join_time);
+      if (avg < 0.01) {
+	printf("%llu: me %u what?! avg %.2f too small last join %llu total_bytes_sent %u\n",
+	    now(),ip(),avg, join_time, node_live_bytes);
+      }else{
+	OneHop::sliceleader_bw_avg.push_back(avg);
+      }
+    }
+  }
   //else DEBUG(1) << "\n";
   num_nodes--;
   crashes++;
@@ -482,7 +522,7 @@ void
 OneHop::join_leader(IDMap la, IDMap sender, Args *args) {
 
   IPAddress leader_ip = la.ip;
-  DEBUG(1) << ip() <<":Trying to join " << leader_ip << " as " << id() << " in slice " << slice(id()) << " at time " << now() << endl; 
+  DEBUG(1) << now() << ": ip " << ip() << " id " << id() << " joining " << leader_ip << " in slice " << slice(id()) << endl;
   assert(leader_ip);
   join_leader_args ja;
   join_leader_ret* jr = new join_leader_ret (_k, _u);
@@ -496,10 +536,13 @@ OneHop::join_leader(IDMap la, IDMap sender, Args *args) {
       TIMEOUT(me.ip,leader_ip));
   if (ok) record_stat(ONEHOP_JOIN_LOOKUP,jr->table.size(),1);
 
-  if (!alive()) return;
+  if (!alive()) {
+    delete jr;
+    return;
+  }
   bool tmpok = false;
   if (ok && !jr->is_join_complete) {
-    DEBUG(5) << ip() << ":" << leader_ip << " is still in the join process\n"; 
+    DEBUG(1) << now()<< ": ip " << ip() << " the leader " << leader_ip << " is still in the join process\n"; 
     ok = false;
     tmpok = true;
   }
@@ -510,6 +553,7 @@ OneHop::join_leader(IDMap la, IDMap sender, Args *args) {
     if (jr->is_slice_leader) {
       //found correct slice leader or there is no leader, should have initial routing table
       for (uint i=0; i < jr->table.size(); i++) {
+	DEBUG_MSG(jr->table[i],"join",la);
         loctable->add_node(jr->table[i]);
       }
       _join_complete = true;
@@ -525,13 +569,14 @@ OneHop::join_leader(IDMap la, IDMap sender, Args *args) {
     else {
       //should contain updated slice leader info
       IDMap new_leader = jr->leader;
+      DEBUG(1) << now() << ": ip " << ip() << " join_leader again" << endl;
       join_leader(new_leader, la, args);
     }
   }
   else {
     //the process failed somewhere, try to contact well known node again
     //if it could successfully inform, good, else schedule after some time 
-    bool dead_ok = false;
+    //bool dead_ok = false;
     //node is really dead, not just in the process of joining,
     //inform redirecting node
     if (!tmpok) {
@@ -543,15 +588,9 @@ OneHop::join_leader(IDMap la, IDMap sender, Args *args) {
       aa->suspect = la;
       aa->informed = sender;
       delaycb(0,&OneHop::test_dead_inform,aa);
-      if (dead_ok) {
-	DEBUG(5) << ip() << ":Inform successful\n";
-	join(args);
-      }
     }
-    else {
-      DEBUG(1) << ip() << ":No inform or inform not successful, rescheduling join\n";
-      delaycb (_retry_timer, &OneHop::join, (Args *)0);
-    }
+    DEBUG(1) << now() << ": ip " << ip() << " rescheduling join" << endl;
+    delaycb (_retry_timer, &OneHop::join, (Args *)0);
   }
   delete jr;
 }
@@ -575,6 +614,7 @@ OneHop::join_handler(join_leader_args *args, join_leader_ret *ret)
     newnode.id = node;
     newnode.ip = args->ip;
     newnode.heartbeat = 0;
+    DEBUG_MSG(newnode,"join_handler",newnode);
     loctable->add_node(newnode);
     LogEntry *e = new LogEntry(newnode, ALIVE, now());
     leader_log.push_back(*e);
@@ -597,7 +637,21 @@ OneHop::~OneHop() {
     }
   }
   if (me.ip == 1) {
+    if (OneHop::num_violations > 0) 
+      printf("Number of violations of sending too big a message %u\n", OneHop::num_violations);
+
     Node::print_stats();
+
+    printf("<-----STATS----->\n");
+    sort(OneHop::sliceleader_bw_avg.begin(),OneHop::sliceleader_bw_avg.end());
+    uint sz = OneHop::sliceleader_bw_avg.size();
+    if (sz > 0)
+      printf("SLICELEADER_BW:: 50p:%.2f 90p:%.2f 95p:%.2f 99p:%.2f sz:%u\n",
+	  OneHop::sliceleader_bw_avg[(uint)(sz*0.5)],
+	  OneHop::sliceleader_bw_avg[(uint)(sz*0.9)],
+	  OneHop::sliceleader_bw_avg[(uint)(sz*0.95)],
+	  OneHop::sliceleader_bw_avg[(uint)(sz*0.99)],sz);
+    printf("<-----ENDSTATS----->\n");
   }
 
   delete loctable;
@@ -610,8 +664,9 @@ OneHop::stabilize(void* x)
   if (!_join_complete) return;
 
   
-  DEBUG(1) << ip() << ":Stabilize time " << now() << " slice leader " 
+  DEBUG(1) << now() << ": " << ip() << " stabilize last " << last_stabilize << " slice leader " 
     << slice(id()) << " unit leader " << unit(id()) << endl;
+  last_stabilize = now();
   /*
   //if (now() < 2000000)
   //  countertime = now();
@@ -637,17 +692,20 @@ OneHop::stabilize(void* x)
   //I may have been slice leader some time, not any more. inform slice leader
   while ((!is_slice_leader(me.id, me.id)) && (leader_log.size () > 0)
       && (na.log.size() < MAX_IDS_MSG)) { //jy: limit size of one msg
+    DEBUG_MSG(leader_log.front()._node,"stabilize non-leader leader->na log", me);
     na.log.push_back(leader_log.front());
     leader_log.pop_front();
   }
   while ((!is_slice_leader(me.id, me.id)) && (outer_log.size () > 0)
       && (na.log.size() < MAX_IDS_MSG)) { //jy: limit size of one msg
+    DEBUG_MSG(outer_log.front()._node,"stabilize non-leader outer->na log", me);
     na.log.push_back(outer_log.front());
     outer_log.pop_front();
   }
   
   while ((low_to_high.size() > 0) 
       && (piggyback.log.size()< MAX_IDS_MSG)){ //jy: limit size of one msg
+    DEBUG_MSG(low_to_high.front()._node,"stabilize non-leader low_to_high->piggyback log", me);
     piggyback.log.push_back(low_to_high.front());
     low_to_high.pop_front();
   }
@@ -778,8 +836,10 @@ OneHop::stabilize(void* x)
       }
       ok = ok && gr.has_joined;
       if (ok) { 
-        if (gr.act_sliceleader.ip)
+        if (gr.act_sliceleader.ip) {
+	  DEBUG_MSG(gr.act_sliceleader,"stabilize",sliceleader);
           loctable->add_node(gr.act_sliceleader);
+	}
       }
     }
   }
@@ -1037,6 +1097,7 @@ OneHop::ping_handler(notifyevent_args *args, general_ret *ret)
   if (succ_node.id != args->sender.id) {
       if (!alive()) return;
       DEBUG(5) << ip() << ":Found new node " << args->sender.ip << " via ping\n";
+      DEBUG_MSG(args->sender,"ping_handler directly add sender",args->sender);
       loctable->add_node(args->sender);
       LogEntry *e = new LogEntry(args->sender, ALIVE, now());
       leader_log.push_back(*e);
@@ -1054,25 +1115,28 @@ OneHop::ping_handler(notifyevent_args *args, general_ret *ret)
         sent_high = false;
       }
     
-  
-    if (args->log[i]._state == DEAD) {
-      if (args->log[i]._node.ip == ip()) {
-        DEBUG(3) << ip() << ":Panic! People think I am dead, but I'm not\n";
-        //exit(-1);
-        LogEntry *e = new LogEntry(me, ALIVE, now());
-        leader_log.push_back(*e);
-        delete e;
+    
+      if (args->log[i]._state == DEAD) {
+	if (args->log[i]._node.ip == ip()) {
+	  DEBUG(3) << ip() << ":Panic! People think I am dead, but I'm not\n";
+	  //exit(-1);
+	  LogEntry *e = new LogEntry(me, ALIVE, now());
+	  leader_log.push_back(*e);
+	  delete e;
 
-      if (args->sender.id >= me.id)
-        high_to_low.pop_back();
-      else low_to_high.pop_back();
+	if (args->sender.id >= me.id)
+	  high_to_low.pop_back();
+	else low_to_high.pop_back();
 
+	}
+	else {
+	  loctable->del_node(args->log[i]._node);
+	}
       }
       else {
-        loctable->del_node(args->log[i]._node);
+	DEBUG_MSG(args->log[i]._node, "ping_handler", args->sender);
+	loctable->add_node(args->log[i]._node); 
       }
-    }
-    else loctable->add_node(args->log[i]._node); 
     }
   }
   ret->correct = true;
@@ -1177,6 +1241,7 @@ OneHop::notifyevent_handler(notifyevent_args *args, general_ret *ret)
     }
     else {
       if (!alive()) return;
+      DEBUG_MSG(args->log[i]._node,"notifyevent_handler",args->sender);
       loctable->add_node(args->log[i]._node);
       if ((me_leader) || is_slice_leader(me.id, me.id)) {
         LogEntry *e = new LogEntry(args->log[i]._node, ALIVE, now());
@@ -1190,6 +1255,7 @@ OneHop::notifyevent_handler(notifyevent_args *args, general_ret *ret)
   if (succ_node.id != args->sender.id) {
       if (!alive()) return;
       DEBUG(5) << ip() << ":Found new node " << args->sender.ip << " via notify event\n";
+      DEBUG_MSG(args->sender,"notifyevent_handler directly add sender", args->sender);
       loctable->add_node(args->sender);
       LogEntry *e = new LogEntry(args->sender, ALIVE, now());
       leader_log.push_back(*e);
@@ -1205,7 +1271,8 @@ OneHop::notify_rec_handler(notifyevent_args *args, general_ret *ret)
     ret->has_joined = true;
   else ret->has_joined = false;
   if (!alive()) return;
-  
+ 
+  DEBUG_MSG(args->sender, "notify_rec_handler directly add sender", args->sender);
   loctable->add_node(args->sender);
  
     
@@ -1240,7 +1307,10 @@ OneHop::notify_rec_handler(notifyevent_args *args, general_ret *ret)
         loctable->del_node(args->log[i]._node);
       }
     }
-    else loctable->add_node(args->log[i]._node);
+    else {
+      DEBUG_MSG(args->log[i]._node,"notify_rec_handler",args->sender);
+      loctable->add_node(args->log[i]._node);
+    }
   }
 }
 
@@ -1255,6 +1325,7 @@ OneHop::notify_other_leaders(notifyevent_args *args, general_ret *ret)
   IDMap succ_node = loctable->succ(args->sender.id);
   if (succ_node.id != args->sender.id) {
     DEBUG(5) << ip() << ":Found new node " << args->sender.ip << " via slice leader ping\n";
+    DEBUG_MSG(args->sender,"notify_other_leaders directly add sender", args->sender);
     loctable->add_node(args->sender);
     LogEntry *e = new LogEntry(args->sender, ALIVE, now());
     outer_log.push_back(*e);
@@ -1286,6 +1357,7 @@ OneHop::notify_unit_leaders(notifyevent_args *args, general_ret *ret)
   IDMap succ_node = loctable->succ(args->sender.id);
   if (succ_node.id != args->sender.id) {
     DEBUG(5) << ip() << ":Found new node " << args->sender.ip << " via same slice leader/unit leader ping\n";
+    DEBUG_MSG(args->sender,"notify_unit_leader",args->sender);
     loctable->add_node(args->sender);
     LogEntry *e = new LogEntry(args->sender, ALIVE, now());
     leader_log.push_back(*e);
@@ -1311,6 +1383,7 @@ OneHop::notify_unit_leaders(notifyevent_args *args, general_ret *ret)
     }
     else {
       inner_log.push_back(args->log[i]);
+      DEBUG_MSG(args->log[i]._node,"notify_unit_leaders",args->sender);
       loctable->add_node(args->log[i]._node);
     }
   }

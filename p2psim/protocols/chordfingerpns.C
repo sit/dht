@@ -129,7 +129,7 @@ ChordFingerPNS::oracle_node_joined(IDMap n)
 	  //choose the closer one
 	  Topology *t = Network::Instance()->gettopology();
 	  if (t->latency(me.ip, n.ip) < t->latency(me.ip, s.ip)) {
-	    loctable->del_node(s);
+	    loctable->del_node(s,true);
 	    loctable->add_node(n);
 #ifdef CHORD_DEBUG
 	    printf("%s oracle_node_joined finger del %u,%qx add %u,%qx\n",ts(), s.ip,s.id,n.ip,n.id);
