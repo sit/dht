@@ -117,7 +117,7 @@ class RateControlQueue {
     void detect_empty(void *x);
     void send_one_rpc(void *x);
     void stop_queue();
-    bool empty() { return (_qq.size() == 0 && (_quota) > 0) ;}
+    bool empty() { return (_qq.size() == 0 && (_quota) > (-_burst/2)) ;}
     int quota() { return _quota;}
     uint total_bytes() { return _total_bytes;}
     uint size() { return _qq.size();}
@@ -130,6 +130,8 @@ class RateControlQueue {
 	return false;
     }
     bool very_critical() { 
+      return false;
+      //XXX what does _last_out do? seems like a bug
       if (_fixed_stab)
 	return false;
       if (_last_out_update) {

@@ -278,7 +278,7 @@ private:
 #define LOC_REPLACEMENT 0
 #define LOC_HEALTHY 1
 #define LOC_ONCHECK 2
-#define LOC_DEAD 3
+#define LOC_DEAD 6
 
 class LocTable {
 
@@ -328,7 +328,7 @@ class LocTable {
     void checkpoint();
     void print();
 
-    bool update_ifexists(Chord::IDMap n, ConsistentHash::CHID gap=0);
+    bool update_ifexists(Chord::IDMap n, bool replacement=false);
     bool add_node(Chord::IDMap n, bool is_succ=false, bool assertadd=false,Chord::CHID fs=0,Chord::CHID fe=0, bool replacement=false);
     int add_check(Chord::IDMap n);
     void add_sortednodes(vector<Chord::IDMap> l);
@@ -355,6 +355,7 @@ class LocTable {
     void dump();
     void stat();
     double pred_biggest_gap(Chord::IDMap &start, Chord::IDMap &end, Time stabtimer, double to = 0.0); //these two functions are too specialized
+    uint sample_smallworld(uint est_n, Chord::IDMap &start, Chord::IDMap &end, double tt = 0.9, ConsistentHash::CHID maxgap = 0);
     vector<Chord::IDMap> get_closest_in_gap(uint m, ConsistentHash::CHID end, Chord::IDMap src, Time stabtime, double to);
     vector<Chord::IDMap> next_close_hops(ConsistentHash::CHID key, uint n, Chord::IDMap src, double to = 0.0);
 

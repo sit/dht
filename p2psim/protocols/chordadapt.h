@@ -66,6 +66,7 @@ class ChordAdapt: public P2Protocol {
       vector<IDMap> v;
       bool is_succ;
       bool done;
+      bool loss;
     };
 
     struct alert_args {
@@ -105,6 +106,7 @@ class ChordAdapt: public P2Protocol {
     struct learn_ret {
       int stat;
       bool is_succ;
+      bool loss;
       vector<IDMap> v;
     };
 
@@ -186,12 +188,14 @@ class ChordAdapt: public P2Protocol {
     uint _to_multiplier;
     uint _learn_num;
     ConsistentHash::CHID _max_succ_gap;
+    double _tt;
     vector<Stat> _stat;
     static vector<uint> rtable_sz;
     unsigned long _last_bytes;
     Time _last_bytes_time;
     vector<double> _calculated_prob;
     Time _last_calculated;
+    uint _est_n;
     
     HashMap<ConsistentHash::CHID, Time> _outstanding_lookups;
     HashMap<ConsistentHash::CHID, Time> _forwarded;
