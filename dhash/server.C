@@ -661,7 +661,7 @@ dhash_impl::append (ref<dbrec> key, ptr<dbrec> data,
 	char *m_dat = suio_flatten (x.uio ());
 	ref<dbrec> marshalled_data = New refcounted<dbrec> (m_dat, m_len);
 
-	keys_stored += 1;
+	keys_others += 1;
 
 	int ret = dbwrite (key, marshalled_data, DHASH_APPEND);
 	assert (!ret);
@@ -780,6 +780,9 @@ dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
 	  }
 	}
 	keyhash_db->insert (k, d);
+  
+	info << "dbwrite: " << host_node->my_ID ()
+	     << " U " << arg->key << "\n";
 	break;
       }
     case DHASH_APPEND:
@@ -799,9 +802,11 @@ dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
 	  stat = DHASH_STORE_NOVERIFY;
 	  break;
 	}
-        bool exists = !!cache_db->lookup (k);
-	if (!exists)
+        if (!cache_db->lookup (k)) {
           cache_db->insert (k, d);
+	  info << "dbwrite: " << host_node->my_ID ()
+	       << " C " << arg->key << "\n";
+	}
 	break;
       }
 
@@ -823,7 +828,8 @@ dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
     }
 
     if (stat == DHASH_OK) {
-      if (arg->type == DHASH_STORE)
+      if (arg->type == DHASH_STORE ||
+	  arg->type == DHASH_FRAGMENT)
         keys_stored ++;
       else if (arg->type == DHASH_REPLICA)
         keys_replicated ++;
@@ -988,17 +994,21 @@ dhash_impl::dbwrite (ref<dbrec> key, ref<dbrec> data, dhash_ctype ctype)
   char *action;
   block blk (to_merkle_hash (key), data);
   chordID bid = dbrec2id(key);
-  bool exists = !!database_lookup (mtree->db, blk.key);
+  bool exists = (database_lookup (mtree->db, blk.key) != 0L);
   bool ismutable = (ctype != DHASH_CONTENTHASH);
   int ret = 0;
   if (!exists) {
     action = "N"; // New
     ret = mtree->insert (&blk);
-  } else if (exists && ismutable) {
+  }
+  // this code path is no longer used, because we add keyhash keys to
+  // its own database
+  else if (exists && ismutable) {
     action = "U"; // update an existing mutable block
     mtree->remove (&blk);
     ret = mtree->insert (&blk);
-  } else {
+  }
+  else {
     action = "R"; // Re-write
   }
 
