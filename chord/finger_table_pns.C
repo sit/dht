@@ -37,8 +37,10 @@ finger_table_pns::finger (int i)
   
   pnsfingers[i] = NULL;
   // XXX try to find some other PNS finger that is good enough.
+#if 0  
   warning << myvnode->my_ID () << ": falling through to real finger "
 	  << i << "\n";
+#endif /* 0 */  
 
   return finger_table::finger (i);
 }
