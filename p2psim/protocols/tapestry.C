@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.40 2004/01/07 23:36:53 strib Exp $ */
+/* $Id: tapestry.C,v 1.41 2004/01/15 22:39:32 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -64,6 +64,8 @@ Tapestry::Tapestry(IPAddress i, Args a) : P2Protocol(i),
   _verbose = a.nget<bool>("verbose", 0, 10);
   _lookup_learn = a.nget<bool>("lookuplearn", 1, 10);
   _direct_reply = a.nget<bool>("direct_reply", 1, 10);
+
+  _max_lookup_time = a.nget<Time>("maxlookuptime", 4000, 10);
 
   // init stats
   while (stat.size() < (uint) STAT_SIZE) {
@@ -112,7 +114,7 @@ void
 Tapestry::print_stats()
 {
 
-  TapDEBUG(0) << "STATS: " <<
+  TapDEBUG(1) << "STATS: " <<
     "join " << stat[STAT_JOIN] << " " << num_msgs[STAT_JOIN] <<
     " lookup " << stat[STAT_LOOKUP] << " " << num_msgs[STAT_LOOKUP] <<
     " nodelist " << stat[STAT_NODELIST] << " " << num_msgs[STAT_NODELIST] <<
@@ -167,6 +169,8 @@ Tapestry::lookup(Args *args)
   wla->key = key;
   wla->starttime = now();
   wla->num_tries = 1;
+  wla->num_timeouts = 0;
+  wla->time_timeouts = 0;
 
   lookup_wrapper( wla );
 
@@ -185,6 +189,8 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
   lr.hopcount = 0;
   lr.failed = false;
   lr.time_done = 0;
+  lr.num_timeouts = 0;
+  lr.time_timeouts = 0;
 
   uint curr_join = _join_num;
   handle_lookup( &la, &lr );
@@ -193,6 +199,9 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
     TapDEBUG(2) << "Lookup aborting in wrapper, dead or rejoined" << endl;
     return;
   }
+
+  args->num_timeouts += lr.num_timeouts;
+  args->time_timeouts += lr.time_timeouts;
 
   if( !lr.failed && lr.owner_id == lr.real_owner_id ) {
 
@@ -213,15 +222,15 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
     if( _direct_reply ) {
       _total_latency += ( lr.time_done - args->starttime );
       record_lookup_stat( ip(), lr.owner_ip, lr.time_done - args->starttime,
-			  true, true );
+			  true, true, args->num_timeouts, args->time_timeouts);
     } else {
       _total_latency += ( now() - args->starttime );
       record_lookup_stat( ip(), lr.owner_ip, now() - args->starttime,
-			  true, true );
+			  true, true, args->num_timeouts, args->time_timeouts);
     }
     delete args;
   } else {
-    if( now() - args->starttime < 4000 ) {
+    if( now() - args->starttime < _max_lookup_time ) {
       args->num_tries = args->num_tries+1;
       if( _verbose ) {
 	TapDEBUG(1) << "retrying failed or incorrect lookup for key " 
@@ -237,7 +246,8 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
 		      << endl;
 	}
 	record_lookup_stat( ip(), ip(), now() - args->starttime,
-			    false, false );
+			    false, false, args->num_timeouts, 
+			    args->time_timeouts );
 	_num_fail_lookups++;
       } else if( lr.owner_id != lr.real_owner_id ) {
 
@@ -255,7 +265,8 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
 		      << endl;
 	}
 	record_lookup_stat( ip(), ip(), now() - args->starttime,
-			    true, false );
+			    true, false, args->num_timeouts, 
+			    args->time_timeouts );
 	_num_inc_lookups++;
       } else {
 	assert(0); // this can't be!
@@ -325,6 +336,7 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
     } else {
       // it's not me, so forward the query
       record_stat(STAT_LOOKUP, 1, 0);
+      Time before = now();
       bool succ = doRPC( next, &Tapestry::handle_lookup, args, ret );
       if( succ ) {
 	_last_heard_map[next] = now();
@@ -343,6 +355,10 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
 	  _rt->remove_backpointer( next, deadid );
 	  _recently_dead.push_back(deadid);
 	}
+
+	// record the timeout stats
+	ret->num_timeouts++;
+	ret->time_timeouts += (now() - before);
 
       }
       if( succ && !ret->failed ) {

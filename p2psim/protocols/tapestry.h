@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.31 2004/01/07 23:36:53 strib Exp $ */
+/* $Id: tapestry.h,v 1.32 2004/01/15 22:39:33 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -99,6 +99,8 @@ public:
     int hopcount;
     GUID real_owner_id;
     Time time_done;
+    uint num_timeouts;
+    Time time_timeouts;
   };
 
   void handle_lookup(lookup_args *args, lookup_return *ret);
@@ -108,6 +110,8 @@ public:
     GUID key;
     Time starttime;
     uint num_tries;
+    uint num_timeouts;
+    Time time_timeouts;
   };
 
   void lookup_wrapper(wrap_lookup_args *args);
@@ -252,6 +256,9 @@ private:
   // statistics per message
   vector<uint> stat;
   vector<uint> num_msgs;
+
+  // timeout on lookups
+  Time _max_lookup_time;
 
   // overall stats
   static unsigned long long _num_lookups;

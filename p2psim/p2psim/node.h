@@ -67,7 +67,8 @@ public:
   const static stat_type STAT_LOOKUP = 0;
   static void record_bw_stat(stat_type type, uint num_ids, uint num_else);
   static void record_lookup_stat(IPAddress src, IPAddress dst, Time interval, 
-				 bool complete, bool correct);
+				 bool complete, bool correct, 
+				 uint num_timeouts= 0, Time time_timeouts = 0);
   static void print_stats();
 
 protected:
@@ -82,8 +83,11 @@ protected:
   static vector<double> _correct_stretch;
   static vector<double> _incorrect_stretch;
   static vector<double> _failed_stretch;
+  static vector<double> _num_timeouts;
+  static vector<Time> _time_timeouts;
   static void print_lookup_stat_helper( vector<Time> times, 
-					vector<double> stretch );
+					vector<double> stretch,
+					bool timeouts = false );
 
   // find peer protocol of my sub-type on a distant node.
   Node *getpeer(IPAddress);

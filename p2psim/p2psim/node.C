@@ -44,6 +44,8 @@ vector<Time> Node::_failed_lookups;
 vector<double> Node::_correct_stretch;
 vector<double> Node::_incorrect_stretch;
 vector<double> Node::_failed_stretch;
+vector<double> Node::_num_timeouts;
+vector<Time> Node::_time_timeouts;
 
 Node::Node(IPAddress i) : _ip(i), _alive(true), _token(1) 
 {
@@ -176,7 +178,8 @@ Node::record_bw_stat(stat_type type, uint num_ids, uint num_else)
 
 void 
 Node::record_lookup_stat(IPAddress src, IPAddress dst, Time interval, 
-			 bool complete, bool correct)
+			 bool complete, bool correct, uint num_timeouts,
+			 Time time_timeouts)
 {
 
   if( !collect_stat() ) {
@@ -215,6 +218,10 @@ Node::record_lookup_stat(IPAddress src, IPAddress dst, Time interval,
     _incorrect_lookups.push_back( interval );
     _incorrect_stretch.push_back( stretch );
   }
+
+  // timeout stuff
+  _num_timeouts.push_back( num_timeouts );
+  _time_timeouts.push_back( time_timeouts );
 
 }
 
@@ -257,7 +264,7 @@ Node::print_stats()
   print_lookup_stat_helper( _incorrect_lookups, _incorrect_stretch );
   cout << "FAILED_LOOKUPS:: ";
   print_lookup_stat_helper( _failed_lookups, _failed_stretch );
-  // now overall stats (put them all in one container
+  // now overall stats (put them all in one container)
   for( uint i = 0; i < _incorrect_lookups.size(); i++ ) {
     _correct_lookups.push_back( _incorrect_lookups[i] );
     _correct_stretch.push_back( _incorrect_stretch[i] );
@@ -269,12 +276,17 @@ Node::print_stats()
   cout << "OVERALL_LOOKUPS:: ";
   print_lookup_stat_helper( _correct_lookups, _correct_stretch );
 
+  cout << "TIMEOUTS_PER_LOOKUP:: ";
+  print_lookup_stat_helper( _time_timeouts, (vector<double>) _num_timeouts, 
+			    true );
+
   cout << "<-----ENDSTATS----->\n" << endl;
 
 }
 
 void 
-Node::print_lookup_stat_helper( vector<Time> times, vector<double> stretch )
+Node::print_lookup_stat_helper( vector<Time> times, vector<double> stretch,
+				bool timeouts )
 {
 
   assert( times.size() == stretch.size() );
@@ -322,13 +334,24 @@ Node::print_lookup_stat_helper( vector<Time> times, vector<double> stretch )
     stretch_mean = ((double) stretch_total)/((double) times.size());
   }
 
-  printf( "lookup_10th:%llu lookup_mean:%.3f lookup_median:%llu lookup_90th:%llu ",
-	  time_10, time_mean, time_med, time_90 );
+  if( timeouts ) {
+    printf( "time_timeout_10th:%llu time_timeout_mean:%.3f time_timeout_median:%llu time_timeout_90th:%llu ",
+	    time_10, time_mean, time_med, time_90 );
+    
+    printf( "num_timeout_10th:%.3f num_timeout_mean:%.3f num_timeout_median:%.3f num_timeout_90th:%.3f\n",
+	    stretch_10, stretch_mean, stretch_med, stretch_90 );
 
-  printf( "stretch_10th:%.3f stretch_mean:%.3f stretch_median:%.3f stretch_90th:%.3f ",
-	  stretch_10, stretch_mean, stretch_med, stretch_90 );
+  } else {
 
-  cout << " numlookups:" << times.size() << endl;
+    printf( "lookup_10th:%llu lookup_mean:%.3f lookup_median:%llu lookup_90th:%llu ",
+	    time_10, time_mean, time_med, time_90 );
+    
+    printf( "stretch_10th:%.3f stretch_mean:%.3f stretch_median:%.3f stretch_90th:%.3f ",
+	    stretch_10, stretch_mean, stretch_med, stretch_90 );
+    
+    cout << " numlookups:" << times.size() << endl;
+
+  }
 
 }
 
@@ -406,9 +429,9 @@ Node::Receive(void *px)
   reply->_dst = p->_src;
 
   if (proto->alive ()) {
-    // && 
-    //      Network::Instance()->gettopology()->latency(p->_src, 
-    //						  p->_dst) != 50000) {
+      // &&
+      //    Network::Instance()->gettopology()->latency(p->_src, 
+      //					  p->_dst) != 50000) {
     (p->_fn)(p->_args);
     reply->_ok = true;
   } else {
