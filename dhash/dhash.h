@@ -455,12 +455,10 @@ private:
     
   void insert2_lookup_cb (ref<dhash_block> block, cbinsert_t cb, 
 			  dhash_stat status, chordID destID, route r);
-
   void insert2_succs_cb (ref<dhash_block> block, cbinsert_t cb,
 			 vec<chord_node> succs, chordstat err);
-
   void insert2_store_cb (ref<dhash_block> block, cbinsert_t cb, 
-			 u_int i, ref<dhash_storeres> res,
+			 ref<u_int> out, u_int i, ref<dhash_storeres> res,
 			 clnt_stat err);
 
   void retrieve2_lookup_cb (chordID blockID, cb_ret cb, 
@@ -518,18 +516,10 @@ public:
   void insert (const char *buf, size_t buflen, cbinsertgw_t cb, int options = 0);
   void insert (bigint key, const char *buf, size_t buflen, cbinsertgw_t cb,
                int options = 0);
-#if 0
-  void insert2 (bigint key, const char *buf, size_t buflen, cbinsertgw_t cb, 
-		int options = 0);
-#endif
 
   // insert under hash of public key
   void insert (ptr<sfspriv> key, const char *buf, size_t buflen, long ver,
                cbinsertgw_t cb, int options = 0);
-#if 0
-  void insert2 (ptr<sfspriv> key, const char *buf, size_t buflen, long ver,
-		cbinsertgw_t cb, int options = 0);
-#endif
   void insert (sfs_pubkey2 pk, sfs_sig2 sig, const char *buf, size_t buflen,
                long ver, cbinsertgw_t cb, int options = 0);
   void insert (bigint hash, sfs_pubkey2 pk, sfs_sig2 sig,
