@@ -6,6 +6,8 @@
 
 #include "chord.h"
 
+#define USE_OVERLAP 1
+
 class LocTablePNS : public LocTable {
   public:
     LocTablePNS() : LocTable() {
@@ -25,23 +27,27 @@ class LocTablePNS : public LocTable {
 	vector<Chord::IDMap> succs = this->succs(me.id+1, nsucc);
 	bool seen_succ = false;
 	for (int i = ((int)succs.size()) - 1; i >= 0; i--) {
-	  assert(i >= 0 && i < (int)succs.size());
 	  if (ConsistentHash::betweenrightincl(me.id, succs[i].id,key)) {
 	    seen_succ = true;
-	  } else if (seen_succ) {
-	    if (num <= (nsucc-m)) {
-	      lat = t->latency(me.ip, succs[i].ip);
-	      if (min_lat > lat) {
-		min_lat = lat;
-		min_s = succs[i];
-	      }
-	    }else{
-	      break;
+	  } 
+	  if (seen_succ) {
+	    if (ConsistentHash::betweenrightincl(me.id,succs[i].id,key)) {
+	      if (!USE_OVERLAP) continue;
+	    }else {
+	      if (num > (nsucc - m)) goto DDONE;
+	      num++;
 	    }
-	    num++;
+	    lat = t->latency(me.ip, succs[i].ip);
+	    if (min_lat > lat) {
+	      min_lat = lat;
+	      min_s = succs[i];
+	    }
 	  }
 	}
-	*done = false;
+DDONE:
+	if (done) {
+	  *done = false;
+	}
 	if (seen_succ) {
 	  printf("%u,%qx shortcut query %qx to node %u,%qx (succ sz %d)\n", me.ip, me.id, key, min_s.ip, min_s.id,succs.size());
 	  assert(min_s.ip != me.ip);
@@ -58,9 +64,19 @@ class ChordFingerPNS: public Chord {
     ~ChordFingerPNS() {};
     string proto_name() { return "ChordFingerPNS"; }
 
+    struct pns_next_recurs_args {
+	bool is_lookup;
+	CHID key;
+	vector<IDMap> path;
+	uint m;
+	uint overlap;
+      };
+
+
     struct pns_next_recurs_ret {
       vector< pair<IDMap,IDMap> > v;
       vector<IDMap> path;
+      uint overlap;
     };
 
     bool stabilized(vector<CHID> lid);
@@ -68,7 +84,8 @@ class ChordFingerPNS: public Chord {
     void init_state(vector<IDMap> ids);
 
     vector<Chord::IDMap> find_successors_recurs(CHID key, uint m, bool is_lookup, uint *recurs_int);
-    void ChordFingerPNS::pns_next_recurs_handler(next_recurs_args *, pns_next_recurs_ret *);
+    vector<Chord::IDMap> find_successors(CHID key, uint m, bool is_lookup);
+    void ChordFingerPNS::pns_next_recurs_handler(pns_next_recurs_args *, pns_next_recurs_ret *);
 
   protected:
     uint _base;

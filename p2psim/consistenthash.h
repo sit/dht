@@ -35,7 +35,7 @@ public:
     return r;
   };
 
-  // return if n is in (a,b] on the circle
+  // return if n is in [a,b) on the circle
   static bool betweenleftincl(CHID a, CHID b, CHID n) {
     bool r;
     if ((a == b) && (n == a)) {

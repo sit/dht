@@ -43,7 +43,7 @@ ChordFingerPNS::init_state(vector<IDMap> ids)
       uint min_l = t->latency(me.ip,min_f.ip);
       if (_samples > 0 && candidates > 10 * _samples) {
 	//use a more efficient sampling technique
-	for (int j = 0; j < _samples; j++) {
+	for (int j = 1; j < _samples; j++) {
 	  uint i = uint ((((double)random()/(double)RAND_MAX) * candidates));
 	  assert(i>= 0 && i < (uint) candidates);
 	  if (t->latency(me.ip, ids[(s_pos + i) % sz].ip) < min_l) {
@@ -65,7 +65,7 @@ ChordFingerPNS::init_state(vector<IDMap> ids)
 	}
       }
       min_f.choices = ((candidates > 0)? candidates:1);
-      printf("%s finger shit %d %u,%qx distance %d candidates %d\n", ts(), ++f, min_f.ip, min_f.id, min_l, min_f.choices);
+      printf("%s finger %d %u,%qx distance %d candidates %d\n", ts(), ++f, min_f.ip, min_f.id, min_l, min_f.choices);
       loctable->add_node(min_f);
 //      ((LocTablePNS *)loctable)->add_finger(make_pair(min_f_pred, min_f));
       //Gummadi assumes the node knows the idspace each of the neighbors is 
@@ -93,32 +93,178 @@ ChordFingerPNS::stabilized(vector<CHID> lid)
   return true;
 }
 
+//the difference between this and vanilla chord is 
+//it might contact one of the successor of the key 
+//for successor lists to get more successors for the key
+vector<Chord::IDMap>
+ChordFingerPNS::find_successors(CHID key, uint m, bool is_lookup)
+{
+  assert(0); //this does not really work now, stop early?not stop early?
+  assert(m <= _nsucc);
+
+  int count = 0;
+
+  vector<IDMap> route;
+
+  next_args na;
+  next_ret nr;
+
+  na.key = key;
+  na.m = _asap; 
+
+  IDMap nprime = me;
+
+  route.clear();
+  route.push_back(me);
+
+  uint timeout = 0;
+
+  while(1){
+    assert(count++ < 500);
+
+    bool r;
+
+    record_stat(is_lookup?1:0);
+    if (_vivaldi) {
+      Chord *target = dynamic_cast<Chord *>(getpeer(nprime.ip));
+      r = _vivaldi->doRPC(nprime.ip, target, &Chord::next_handler, &na, &nr);
+    } else
+      r = doRPC(nprime.ip, &Chord::next_handler, &na, &nr);
+
+    if(nr.v.size() > 0){
+      
+      if (nr.v.size() < _asap) {
+	//get successor list from the best next candidate
+	uint i;
+	for (i = 0; i < nr.v.size(); i++) {
+	  if (nr.v[i].ip == nr.next.ip) {
+	    break;
+	  }
+	}
+	if (i == nr.v.size()) {
+	  //keep going
+	}else{
+	  get_successor_list_args gsa;
+	  get_successor_list_ret gsr;
+	  gsa.m = _nsucc;
+	  bool ok = doRPC(nr.next.ip, &Chord::get_successor_list_handler, &gsa, &gsr);
+	  assert(ok);
+	  IDMap last = nr.v[nr.v.size()-1];
+	  assert(gsr.v.size() == _nsucc);
+	  for (uint i = 0; i < gsr.v.size(); i++) {
+	    if (ConsistentHash::betweenleftincl(key, gsr.v[i].id, last.id)) {
+	      nr.v.push_back(gsr.v[i]);
+	      if (nr.v.size() == _allfrag) break;
+	    }
+	  }
+	if (nr.v.size() < m) {
+	  fprintf(stderr,"%s key %16qx return list: ",ts(), key);
+	  for (uint i = 0; i < nr.v.size(); i++) {
+	    fprintf(stderr," (%d,%16qx)", nr.v[i].ip,nr.v[i].id);
+	  }
+	  fprintf(stderr,"\n");
+
+	  fprintf(stderr,"%s last hop %d,%16qx (last %d): ",ts(), nr.next.ip, nr.next.id,last.ip);
+	  for (uint i = 0; i < gsr.v.size(); i++) {
+	    fprintf(stderr," (%d,%16qx)", gsr.v[i].ip,gsr.v[i].id);
+	  }
+	  fprintf(stderr,"\n");
+
+	  abort();
+	}
+	  goto DONE;
+	}
+      }else{
+	goto DONE;
+      }
+    }
+    
+    if (r) {
+
+      if (route.size() > 0) 
+	assert(nr.next.ip != route[route.size()-1].ip);
+
+      route.push_back(nr.next);
+      if (route.size() == 20) {
+	fprintf(stderr,"%s key %16qx \n route: ", ts(), key);
+	for (uint i = 0; i < route.size(); i++) {
+	  fprintf(stderr," (%d,%16qx)",route[i].ip,route[i].id);
+	}
+	fprintf(stderr,"\n");
+      }
+
+      assert(route.size() < 20);
+      nprime = nr.next;
+      
+    } else {
+      assert(0); //Chordpns does not handle failure yet
+    }
+  }
+
+DONE:
+  if (is_lookup) {
+    printf ("find_successor for (id %qx, key %qx)", me.id, key);
+    if (nr.v.size () == 0) {
+      printf ("failed\n");
+    } else {
+      printf ("is (%u, %qx) hops %d timeout %d\n", nr.v[0].ip, 
+	  nr.v[0].id, route.size(), timeout);
+    }
+  }
+
+#ifdef CHORD_DEBUG
+  Topology *t = Network::Instance()->gettopology();
+  if (nr.v.size() > 0) {
+    printf("%s find_successors %qx route: ", ts(), key);
+    for (uint i = 0; i < route.size(); i++) {
+      printf("(%u,%qx,%d,%d) ", route[i].ip, route[i].id, 2*t->latency(me.ip,route[i].ip), route[i].choices);
+    }
+    printf("\n");
+  }
+#endif
+  assert(nr.v.size() >= _asap);
+  return nr.v;
+}
+
+
 //damn!! play the optimal trick on lowest latency lookup+fetch
 vector<Chord::IDMap>
 ChordFingerPNS::find_successors_recurs(CHID key, uint m, bool is_lookup, uint *recurs_int)
 {
-  next_recurs_args fa;
+  if (_asap < 0) return Chord::find_successors_recurs(key,m,is_lookup, recurs_int);
+
+  pns_next_recurs_args fa;
   pns_next_recurs_ret fr;
   fr.v.clear();
+  fa.overlap = 0;
   fa.path.clear();
   fa.path.push_back(me);
   fa.key = key;
-  fa.m = m;
   fa.is_lookup = is_lookup;
+  fa.m = _asap;
 
   doRPC(me.ip, &ChordFingerPNS::pns_next_recurs_handler, &fa, &fr);
 
   Topology *t = Network::Instance()->gettopology();
 
   printf("%s pns_find_successors_recurs %qx route ",ts(),key);
+
   uint total_lat = 0;
   for (uint i = 0; i < fr.path.size(); i++) {
     IDMap n = fr.path[i];
-    IDMap np = (i == 0)? fr.path[fr.path.size()-1]:fr.path[i-1];
-    printf("(%u,%qx,%u,%u) ", n.ip, n.id, t->latency(np.ip, fr.path[i].ip), fr.path[i].choices);
-    if ((i+2) <= fr.path.size()) {
-      total_lat += 2 * t->latency(fr.path[i].ip,fr.path[i+1].ip);
-    }
+    printf("(%u,%qx,%u,%u) ", n.ip, n.id, t->latency(n.ip,fr.path[(i+1)%fr.path.size()].ip), fr.path[(i+1)%fr.path.size()].choices);
+    total_lat += t->latency(fr.path[i].ip, fr.path[(i+1)%fr.path.size()].ip);
+  }
+  printf("\n");
+
+  if (recurs_int) {
+    *recurs_int = total_lat;
+  }
+  
+  uint frsz = fr.path.size();
+  if (frsz > 1) {
+    printf("%s overlap %u last_hop %u\n", ts(), fr.overlap, 
+	(frsz>1)? t->latency(fr.path[frsz-2].ip,fr.path[frsz-1].ip):0);
   }
   printf("\n");
 
@@ -148,24 +294,49 @@ ChordFingerPNS::find_successors_recurs(CHID key, uint m, bool is_lookup, uint *r
 
   lat.clear();
   for (uint i = 0; i < fr.v.size(); i++) {
-    lat.push_back(t->latency(me.ip, fr.v[i].first.ip));
+    lat.push_back(2 * t->latency(me.ip, fr.v[i].first.ip));
   }
   sort(lat.begin(), lat.end());
 
   //now when is the lookup and when is the fetch is fuzzy
-  printf("%s pns_recurs INTERVAL %u %u %u\n", ts(), lat[m-1], total_lat - lat[m-1], total_lat - lat[m-1]);
+  if (is_lookup) {
+    printf("%s lookup key %qx,%d, hops %d\n", ts(), key, m, fr.path.size());
+    printf("%s pns_recurs INTERVAL %u %u %u\n", ts(), lat[m-1], total_lat - lat[m-1], total_lat - lat[m-1]);
+  }
 
   return results;
 }
 
 void
-ChordFingerPNS::pns_next_recurs_handler(next_recurs_args *args, pns_next_recurs_ret *ret)
+ChordFingerPNS::pns_next_recurs_handler(pns_next_recurs_args *args, pns_next_recurs_ret *ret)
 {
   check_static_init();
 
   vector<IDMap> succs = loctable->succs(me.id+1, _nsucc);
 
+  //if i am already one of the successors for key and 
+  //i just append my successor list and return
   pair<IDMap,IDMap> succ;
+
+  uint retsz = ret->v.size();
+  for (uint i = 0; i < retsz; i++) {
+    if (ret->v[i].first.ip  == me.ip) {
+      //i just append my successor list to 
+      if (retsz >= (i+2)) {
+	assert(ret->v[retsz-1].first.ip == succs[retsz-2-i].ip);
+      }
+      for (uint j = retsz - i - 1; j < succs.size(); j++) {
+	succ.first = succs[j];
+	succ.second = me;
+	ret->v.push_back(succ);
+	if (ret->v.size() == _allfrag) break;
+      } 
+      ret->overlap = args->overlap;
+      ret->path = args->path;
+      return; 
+    }
+  }
+
   for (uint i = 0; i < succs.size(); i++) {
     if (!ConsistentHash::betweenrightincl(me.id, succs[i].id, args->key)) {
     }else{
@@ -173,12 +344,19 @@ ChordFingerPNS::pns_next_recurs_handler(next_recurs_args *args, pns_next_recurs_
 	succ.first = succs[i];
 	succ.second = me;
 	ret->v.push_back(succ);
+	if (ret->v.size() == _allfrag) break;
       }
     }
   }
 
-  if ((ret->v.size() >= _nsucc) 
-      || (succs.size() < _nsucc)) { //this means there's < m nodes in the system 
+  assert(args->m <= _allfrag);
+  if (args->overlap == 0) {
+    args->overlap = ret->v.size();
+  }
+
+  if ((ret->v.size() >= args->m)
+      || (succs.size() < args->m)) { //this means there's < m nodes in the system 
+    ret->overlap = args->overlap;
     ret->path = args->path;
   }else {
 #ifdef CHORD_DEBUG
@@ -195,6 +373,9 @@ ChordFingerPNS::pns_next_recurs_handler(next_recurs_args *args, pns_next_recurs_
     assert(args->path.size() < 100);
 
     //XXX i never check if succ is dead or not
+    //XXX this will break during dynamism. 
+    // since next_hop assumes succ is on ret->v., when it breaks,
+    // it does not attempt to update ret->v
     bool r = false;
     while (!r) {
       bool done;
@@ -214,7 +395,6 @@ ChordFingerPNS::pns_next_recurs_handler(next_recurs_args *args, pns_next_recurs_
       }
     }
   }
-
 }
 
 void

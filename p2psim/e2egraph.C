@@ -24,10 +24,10 @@ E2EGraph::latency(IPAddress ip1, IPAddress ip2)
   assert(ip1 > 0 && ip1 <= _num);
   assert(ip2 > 0 && ip2 <= _num);
   if (ip1 < ip2)  {
-    assert(_pairwise[ip1-1][ip2-1] > 0);
+    assert(_pairwise[ip1-1][ip2-1] > 0 && _pairwise[ip1-1][ip2-1] <= 1000000);
     return (latency_t) _pairwise[ip1-1][ip2-1];
   } else if (ip1 > ip2) {
-    assert(_pairwise[ip2-1][ip1-1] > 0);
+    assert(_pairwise[ip2-1][ip1-1] > 0 && _pairwise[ip2-1][ip1-1] <= 1000000);
     return (latency_t) _pairwise[ip2-1][ip1-1];
   } else{
     return 0;

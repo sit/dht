@@ -23,6 +23,8 @@ SimEvent::execute()
   if(_op == "exit") {
     DEBUG(1) << "simulation exits at the end of cycle " << now() << "." << endl;
     ThreadManager::Instance()->create(&::graceful_exit, (void *)0);
+    //i like ugly exit
+    //exit(1);
   } else
     cerr << "SimEvent::execute(): unknown op " << _op << "\n";
 }

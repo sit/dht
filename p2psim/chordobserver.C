@@ -31,7 +31,10 @@ ChordObserver::ChordObserver(Args *a) : Observer(a)
   }
 
   _init_num = atoi((*a)["initnodes"].c_str());
-    lid.clear();
+  if (_init_num) 
+    init_nodes(_init_num);
+
+  lid.clear();
 
 }
 

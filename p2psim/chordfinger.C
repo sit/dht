@@ -5,12 +5,7 @@ extern bool static_sim;
 ChordFinger::ChordFinger(Node *n, Args &a,
 			 LocTable *l) : Chord(n,a,l)  
 {
-  //get base
-  if (a.find("base") != a.end()) {
-    _base = atoi(a["base"].c_str());
-  }else{
-    _base = 2;
-  }
+  _base = a.nget<uint>("base",2,10);
 
   CHID finger;
   CHID lap = (CHID) -1;
@@ -76,7 +71,7 @@ ChordFinger::fix_fingers()
 void
 ChordFinger::reschedule_stabilizer(void *x)
 {
-  // printf("%s start stabilizing\n",ts());
+  //printf("%s start stabilizing\n",ts());
   if (!node()->alive()) {
     _stab_running = false;
     return;
