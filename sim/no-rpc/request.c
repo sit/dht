@@ -5,6 +5,7 @@
 int processRequest1(Node *n, Request *r);
 
 void insertRequest_wait(Node *n, Request *r);
+void copySuccessorFingers(Node *n);
 
 // #define PREFIX_MATCH
 
@@ -65,7 +66,7 @@ void processRequest(Node *n)
   Request *r;
 
   // periodicall invoke process request
-  if (n->status == PRESENT)
+  if (n->status != ABSENT)
     genEvent(n->id, processRequest, (void *)NULL, 
 	     Clock + unifRand(0.5*PROC_REQ_PERIOD, 1.5*PROC_REQ_PERIOD));
 
@@ -76,6 +77,14 @@ void processRequest(Node *n)
       if (f) removeFinger(n->fingerList, f);
       r->del = -1;
     }
+
+//if (r->x == 16323724 && r->initiator == 16323723 && Clock > 7133176) {
+//   printf("xxx n=%d, x=%d, succ=%d, pred=%d at %f\n",
+//    n->id, r->x, r->succ, r->pred, Clock);
+//   printf("   xxx ");
+//   printFingerList(n);
+// }
+
 
     // update/refresh finger table
     insertFinger(n, r->initiator);
@@ -117,6 +126,10 @@ void processRequest(Node *n)
 	  insertFinger(n, r->succ);
 	  if (old_succ == getSuccessor(n)) {
 	    free(r);
+	    if (n->status == TO_JOIN) {
+	      copySuccessorFingers(n);
+	      n->status = PRESENT;
+	    }
 	    continue;
 	  } else {
 	    dst = r->succ;
@@ -188,13 +201,14 @@ int processRequest1(Node *n, Request *r)
   }
 #endif // OPTIMIZATION
 
-  if  (between(r->x, getPredecessor(n), n->id, NUM_BITS) || (r->x == n->id)) {
+  if  (between(r->x, n->id, getSuccessor(n), NUM_BITS) || 
+       (r->x == getSuccessor(n))) {
     switch (r->type) {
     case REQ_TYPE_INSERTDOC:
-      insertDocumentLocal(n, &r->x);
+      insertDocumentLocal(getNode(getSuccessor(n)), &r->x);
       return TRUE;
     case REQ_TYPE_FINDDOC:
-      findDocumentLocal(n, &r->x);
+      findDocumentLocal(getNode(getSuccessor(n)), &r->x);
       return TRUE;
     }
   }
@@ -207,7 +221,7 @@ void insertRequest_wait(Node *n, Request *r)
 {
   // send message to dst
   if (getNode(r->dst)->status != PRESENT) {
-    // printf("NOT_PRESENT=%d, %f\n", r->dst, Clock);
+    printf("NOT_PRESENT=%d, %f\n", r->dst, Clock);
     r->done = FALSE;
     r->succ = r->pred = r->initiator;
     r->del = r->dst; // delete node
@@ -219,7 +233,7 @@ void insertRequest_wait(Node *n, Request *r)
   else {
     pushNode(r, r->dst);
     genEvent(r->dst, insertRequest, (void *)r, Clock);
-    // printf("PRESENT\n");
+    printf("present\n");
   }
 }
 
@@ -243,6 +257,23 @@ void printReqList(Node *n)
 
 
 
+void copySuccessorFingers(Node *n)
+{
+  Node *s = getNode(getSuccessor(n));
+  Finger *f;
+  int    i;
 
+  f = n->fingerList->head;
+  for (i = 0; i < NUM_SUCCS; i++) {
+    if (!f)
+      break;
+    insertFinger(n, f->id);
+    f = f->next;
+  }
+}
+
+      
+    
+  
 
 

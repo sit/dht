@@ -9,7 +9,8 @@ typedef struct _node {
   ID             id;       // node identifier
 #define ABSENT   0
 #define PRESENT  1         
-#define TO_LEAVE 2
+#define TO_JOIN  2
+
   int            status;  
   int            fingerId; // id of the finger to be refreshed, where 
                            // id is of the form id + 2^{i-1}

@@ -8,9 +8,11 @@ void join(Node *n, int *nodeId) {
     // probably nodeId has been deleted in the meantime
     n1 = getNode(getRandomActiveNodeId());
 
-  if (n1)
+  if (n1) {
     insertFinger(n, n1->id);
-  n->status = PRESENT;
+    n->status = TO_JOIN;
+  } else
+    n->status = PRESENT;    
   stabilize(n);
   processRequest(n);
 }

@@ -35,6 +35,7 @@ typedef int ID;
 
 #define MAX_NUM_DOCS    1000
 #define MAX_NUM_FINGERS 20
+#define NUM_SUCCS 4
 
 #endif 
 

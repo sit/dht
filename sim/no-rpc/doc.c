@@ -27,7 +27,7 @@ void findDocument(Node *n, ID *docId)
   Request *r;
 
   if (n->status != PRESENT) {
-    printf("findDocument: n=%d was deleted in the meantime\n");
+    printf("findDocument: n=%d has not joined or has been deleted in the meantime\n");
     return;
   }
   r = newRequest(*docId, REQ_TYPE_FINDDOC, REQ_STYLE_ITERATIVE, n->id);
@@ -39,7 +39,7 @@ void findDocument(Node *n, ID *docId)
 void findDocumentLocal(Node *n, ID *docId)
 {
   if (n->status != PRESENT) {
-    printf("findDocumentLocal: node %d has been deleted in the meantime!\n", 
+    printf("findDocumentLocal: node %d has not joined or has been deleted in the meantime!\n", 
 	   n->id);
     return;
   }
@@ -56,9 +56,11 @@ void findDocumentLocal(Node *n, ID *docId)
     if (findDocInList(&PendingDocs, *docId)) 
       printf("%f Document %d not found on node %d (%d)\n", 
 	     Clock, *docId, n->id, i1++);
-    else
+    else {
       printf("%f Document %d NOT found on node %d (%d)\n", 
 	     Clock, *docId, n->id, i2++);
+      // exitSim();
+    }
   }
 }
 
@@ -67,7 +69,8 @@ void insertDocument(Node *n, ID *docId)
   Request *r;
 
   if (n->status != PRESENT) {
-    printf("insertDocument: n=%d was deleted in the meantime\n");
+    printf("insertDocument: n=%d has not joined or has been deleted in the meantime\n");
+    insertDocInList(&PendingDocs, newDoc(*docId));
     return;
   }
   r = newRequest(*docId, REQ_TYPE_INSERTDOC, REQ_STYLE_ITERATIVE, n->id);
@@ -83,8 +86,9 @@ void insertDocumentLocal(Node *n, ID *docId)
 {
   Document *doc;
 
+
   if (n->status != PRESENT) {
-    printf("insertReply: node has been deleted in the meantime!\n");
+    printf("insertReply: node has not joined or has been deleted in the meantime!\n");
   } else {
     // allocate space for new document 
     doc = newDoc(*docId);
@@ -201,8 +205,9 @@ void updateDocList(Node *n, Node *s)
       /* ... if not, move document from s' document list to n's 
        * document list 
        */
-if (doc->id == 573508)
-printf ("MOVE %d from %d to %d at %f\n", doc->id, s->id, n->id, Clock);
+//if (doc->id == 10049478)
+      //printf ("MOVE %d from %d to %d at %f\n", doc->id, s->id, n->id, Clock);
+
       s->docList->head = doc->next;
       insertDocInList(n->docList, doc);
     } else

@@ -14,7 +14,7 @@ void stabilize(Node *n)
   ID       x[2], dst;
   int      i;
 
-  if (n->status != PRESENT)
+  if (n->status == ABSENT)
     return;
 
 
@@ -35,8 +35,11 @@ void stabilize(Node *n)
 	  (n->fingerList->size <  MAX_NUM_FINGERS))
 	dst = getRandomActiveNodeId();
       if (dst != n->id) {
+
 	if (f = getFinger(n->fingerList, r->succ))
-	  f->expire = Clock + 2*PROC_REQ_PERIOD;
+	  f->expire = Clock + 4*PROC_REQ_PERIOD;
+
+
 	// insert request at r.x's successor
 	genEvent(dst, insertRequest, (void *)r, 
 	       Clock + intExp(AVG_PKT_DELAY));
@@ -68,7 +71,7 @@ ID chooseX(Node *n)
     // refresh an arbitrary finger in the list
     if (!n->fingerList->head)
       panic("chooseX: fingerList empty!\n");
-#define NUM_SUCCS 4
+
     next = 0;
     if ((n->fingerList->size >= NUM_SUCCS) && funifRand(0., 1.) < 0.5) {
       next = unifRand(0, 2);

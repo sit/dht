@@ -174,19 +174,25 @@ void cleanFingerList(FingerList *fList)
 }
 
 
-// evict the finger that was not refrerred for the longest time
+// evict the finger that has not been refrerred for the longest time
 // (it implements LRU)
 void evictFinger(FingerList *fList)
 {
   Finger *f, *ftemp;
+  int     i;
   double time = MAX_TIME;
 
-  for (f = fList->head; f; f = f->next) {
+
+  ftemp = fList->head;
+  for (i = 0; i < NUM_SUCCS - 1; i++)
+    ftemp = ftemp->next;
+
+  for (f = ftemp; f->next; f = f->next) {
     if (f->last < time)
       time = f->last;
   }
 
-  for (f = fList->head; f; f = f->next) {
+  for (f = ftemp; f->next; f = f->next) {
     if (f->last == time) {
       removeFinger(fList, f);
       return;
