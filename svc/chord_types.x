@@ -26,8 +26,10 @@ struct chord_node {
 
 /* Strict encoding to minimize wire length */
 struct chord_node_wire {
-  u_int32_t ipv4_addr;  /* IPV4 addr in network byte order */
-  u_int32_t port_vnnum; /* htons(port) << 16 | htons(vnnum) */
+  /* store everything in machine byte order, because xdr will
+   * translate them into byte order */
+  u_int32_t machine_order_ipv4_addr;
+  u_int32_t machine_order_port_vnnum; /* (port << 16) | vnnum */
   int32_t coords[3];    /* XXX hardcoded length of 3; cf NCOORD in chord.h */
 };
 

@@ -21,10 +21,10 @@ make_chord_node (const chord_node_wire &nl)
 {
   chord_node n;
   struct in_addr x;
-  x.s_addr = nl.ipv4_addr;
+  x.s_addr = htonl (nl.machine_order_ipv4_addr);
   n.r.hostname = inet_ntoa (x);
-  n.r.port     = ntohs (nl.port_vnnum >> 16);
-  n.vnode_num  = ntohs (nl.port_vnnum & 0xFFFF);
+  n.r.port     = nl.machine_order_port_vnnum >> 16;
+  n.vnode_num  = nl.machine_order_port_vnnum & 0xFFFF;
   n.x = make_chordID (n.r.hostname, n.r.port, n.vnode_num);
   n.coords = nl.coords;
   return n;

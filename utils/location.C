@@ -78,9 +78,9 @@ location::fill_node (chord_node &data) const
 void
 location::fill_node (chord_node_wire &data) const
 {
-  /* saddr fields are already in network byte order */
-  data.ipv4_addr = saddr_.sin_addr.s_addr;
-  data.port_vnnum = (saddr_.sin_port << 16) | htons (vnode_);
+  /* saddr fields are in network byte order */
+  data.machine_order_ipv4_addr = ntohl (saddr_.sin_addr.s_addr);
+  data.machine_order_port_vnnum = (ntohs (saddr_.sin_port) << 16) | vnode_;
   assert (coords_.size () == 3);
   for (unsigned int i = 0; i < coords_.size (); i++)
     data.coords[i] = static_cast<int> (coords_[i]);
