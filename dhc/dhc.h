@@ -77,12 +77,11 @@ struct replica_t {
 
 struct keyhash_meta {
   replica_t config;
-  bool cvalid;
+  //bool cvalid;
   paxos_seqnum_t accepted;
-  //replica_t new_config;
   char *buf;
   
-  keyhash_meta () : cvalid (false), buf (NULL)
+  keyhash_meta () : /*cvalid (false), */ buf (NULL)
   {
     accepted.seqnum = 0;
     bzero (&accepted.proposer, sizeof (accepted.proposer));
@@ -95,8 +94,10 @@ struct keyhash_meta {
     bcopy (bytes + offst, &csize, sizeof (uint));
     config = replica_t (bytes + offst);
     offst += csize;
+#if 0
     bcopy (bytes + offst, &cvalid, sizeof (bool));
     offst += sizeof (bool);
+#endif
     bcopy (bytes + offst, &accepted.seqnum, sizeof (u_int64_t));
     offst += sizeof (u_int64_t);
     ID_get (&accepted.proposer, bytes + offst);
@@ -106,8 +107,8 @@ struct keyhash_meta {
 
   uint size ()
   {
-    return (sizeof (uint) + config.size () + sizeof (bool) + sizeof (u_int64_t) + 
-	    sizeof (chordID));
+    return (sizeof (uint) + config.size () /*+ sizeof (bool)*/ 
+	    + sizeof (u_int64_t) + sizeof (chordID));
   }
 
   char *bytes ()
@@ -122,8 +123,10 @@ struct keyhash_meta {
     offst += sizeof (uint);
     bcopy (config.bytes (), buf + offst, config.size ());
     offst += config.size ();
+#if 0
     bcopy (&cvalid, buf + offst, sizeof (bool));
     offst += sizeof (bool);
+#endif
     bcopy (&accepted.seqnum, buf + offst, sizeof (u_int64_t));
     offst += sizeof (u_int64_t);
     ID_put (buf + offst, accepted.proposer);
@@ -138,7 +141,7 @@ struct keyhash_meta {
 	<< "\n     config IDs: ";
     for (uint i=0; i<config.nodes.size (); i++)
       ret << config.nodes[i] << " ";
-    ret << "\n     cvalid: " << cvalid;
+    //ret << "\n     cvalid: " << cvalid;
     ret << "\n     accepted proposal number: " 
 	<< "<" << accepted.seqnum << "," << accepted.proposer << ">";
 

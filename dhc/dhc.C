@@ -53,7 +53,7 @@ dhc::recon_timer ()
       ptr<dbrec> rec = db->lookup (entry->key);
       if (rec) {
 	ref<dhc_block> kb = to_dhc_block (rec);
-	if ((guilty = responsible (myNode, key)) || kb->meta->cvalid) {
+	if ((guilty = responsible (myNode, key))) {// || kb->meta->cvalid) {
 	  recon_tm_rpcs++;
 	  myNode->find_successor (key, wrap (this, &dhc::recon_tm_lookup, kb, guilty));	
 	}
@@ -283,7 +283,7 @@ dhc::recv_accept (chordID bID, dhc_cb_t cb,
       arg->data.tag.writer = kb->data->tag.writer;
       arg->data.data.set (kb->data->data.base (), kb->data->data.size ());
       arg->old_conf_seqnum = kb->meta->config.seqnum;
-      kb->meta->cvalid = false;
+      //kb->meta->cvalid = false;
 #if 0
       if (!set_ac (&kb->meta->new_config.nodes, b->pstat->acc_conf)) {
 	warn << "dhc::recv_accept Different accepted configs!!\n";
@@ -373,12 +373,13 @@ dhc::recv_prepare (user_args *sbp)
   ptr<dbrec> rec = db->lookup (id2dbrec (prepare->bID));
   if (rec) {
     ptr<dhc_block> kb = to_dhc_block (rec);
+#if 0
     if (!kb->meta->cvalid) {
       dhc_prepare_res res (DHC_NOT_A_REPLICA);
       sbp->reply (&res);
       return;
     }
-    
+#endif    
     if (kb->meta->config.seqnum != prepare->config_seqnum) {
       dhc_prepare_res res (DHC_CONF_MISMATCH);
       sbp->reply (&res);
@@ -392,6 +393,7 @@ dhc::recv_prepare (user_args *sbp)
 
     if (b->status == IDLE)
       b->status = RECON_INPROG;
+#if 0 //Allow multiple recons per config
     else 
       if (myNode->my_ID () != prepare->round.proposer) {
 	//Be more precise on what the status really is.
@@ -399,6 +401,7 @@ dhc::recv_prepare (user_args *sbp)
 	sbp->reply (&res);
 	return;
       }
+#endif
     
     if (paxos_cmp (prepare->round, b->promised) == 1) {
       b->promised.seqnum = prepare->round.seqnum;
@@ -612,7 +615,7 @@ dhc::get_result_cb (chordID bID, dhc_getcb_t cb, ptr<dhc_get_res> res,
       warn << "dhc::get_result_cb: clnt_stat " << err << "\n";
       (*cb) (0);
     } else {
-      warn << "dhc::get_result_cb: DHC err stat " << res->status << "\n";
+      warn << "dhc::get_result_cb: " << dhc_errstr (res->status) << "\n";
       (*cb) (0);
     }
 }
@@ -638,7 +641,7 @@ dhc::recv_get (user_args *sbp)
   }
 
   ptr<dhc_block> kb = to_dhc_block (rec);
-  if (!kb->meta->cvalid || 
+  if (//!kb->meta->cvalid || 
       !is_member (myNode->my_ID (), kb->meta->config.nodes)) {
     dhc_get_res res (DHC_NOT_A_REPLICA);
     sbp->reply (&res);
@@ -741,7 +744,7 @@ dhc::recv_getblock (user_args *sbp)
     return;
   }
 
-  if (!kb->meta->cvalid || !is_member (myNode->my_ID (), kb->meta->config.nodes)) {
+  if (/*!kb->meta->cvalid ||*/ !is_member (myNode->my_ID (), kb->meta->config.nodes)) {
     dhc_get_res res (DHC_NOT_A_REPLICA);
     sbp->reply (&res);
     return;
@@ -838,8 +841,8 @@ dhc::put_result_cb (chordID bID, dhc_cb_t cb, ptr<dhc_put_res> res, clnt_stat er
     if (res->status == DHC_OK)
       warn << myNode->my_ID () << "dhc::put_result_cb PUT succeeded\n";
     else 
-      warn << myNode->my_ID () << "dhc::put_result_cb dhc err " 
-	   << res->status << "\n";
+      warn << myNode->my_ID () << "dhc::put_result_cb " 
+	   << dhc_errstr (res->status) << "\n";
     (*cb) (res->status, clnt_stat (err));
   }
 }
@@ -868,11 +871,13 @@ dhc::recv_put (user_args *sbp)
   }
     
   ptr<dhc_block> kb = to_dhc_block (rec);
+#if 0
   if (!kb->meta->cvalid) {
     dhc_put_res res; res.status = DHC_NOT_A_REPLICA;
     sbp->reply (&res);
     return;
   }
+#endif
   if (!is_primary (put->bID, myNode->my_ID (), kb->meta->config.nodes)) {
     dhc_put_res res; res.status = DHC_NOT_PRIMARY;
     sbp->reply (&res);
@@ -938,7 +943,7 @@ dhc::putblock_cb (user_args *sbp, ptr<dhc_block> kb, ptr<location> dest, ptr<wri
 	if (dhc_debug)
 	  warn << myNode->my_ID () << " dhc::putblock_cb Some chord error.\n";
 	ws->done = true;
-	print_error ("dhc::putblock_cb", err, 0);
+	print_error ("dhc::putblock_cb", err, DHC_OK);
 	dhc_put_res pres; pres.status = DHC_CHORDERR;
 	sbp->reply (&pres);
       } else 
@@ -950,7 +955,8 @@ dhc::putblock_cb (user_args *sbp, ptr<dhc_block> kb, ptr<location> dest, ptr<wri
 	  delaycb (60, wrap (this, &dhc::putblock_retry_cb, sbp, kb, dest, ws));
 	} else {
 	  if (dhc_debug)
-	    warn << myNode->my_ID () << "dhc::putblock_cb DHC error " << res->status << "\n";
+	    warn << myNode->my_ID () << "dhc::putblock_cb " 
+		 << dhc_errstr (res->status) << "\n";
 	  ws->done = true;
 	  dhc_put_res pres; pres.status = res->status;
 	  sbp->reply (&pres);
@@ -1003,7 +1009,7 @@ dhc::recv_putblock (user_args *sbp)
     return;
   } 
 
-  if (!kb->meta->cvalid || !is_member (myNode->my_ID (), kb->meta->config.nodes)) {
+  if (/*!kb->meta->cvalid ||*/ !is_member (myNode->my_ID (), kb->meta->config.nodes)) {
     dhc_put_res res; res.status = DHC_NOT_A_REPLICA;
     sbp->reply (&res);
     return;    

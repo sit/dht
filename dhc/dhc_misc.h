@@ -4,7 +4,8 @@
 #include "dhc.h"
 
 void open_db (ptr<dbfe>, str, dbOptions, str);
-void print_error (str, int, int);
+strbuf dhc_errstr (dhc_stat);
+void print_error (str, int, dhc_stat);
 void set_new_config (dhc_soft *, ptr<dhc_propose_arg>, ptr<vnode>, uint);
 void set_new_config (ptr<dhc_newconfig_arg>, vec<chordID>);
 void set_new_config (ptr<dhc_newconfig_arg>, vec<ptr<location> > *, 

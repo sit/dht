@@ -25,11 +25,46 @@ open_db (ptr<dbfe> mydb, str name, dbOptions opts, str desc)
   }
 }
 
+strbuf 
+dhc_errstr (dhc_stat err)
+{
+  switch (err) {
+  case DHC_OK:
+    return strbuf ("DHC_OK");
+  case DHC_CONF_MISMATCH:
+    return strbuf ("DHC_CONF_MISMATCH");
+  case DHC_LOW_PROPOSAL:
+    return strbuf ("DHC_LOW_PROPOSAL");
+  case DHC_PROP_MISMATCH:
+    return strbuf ("DHC_PROP_MISMATCH");
+  case DHC_NOT_A_REPLICA:
+    return strbuf ("DHC_NOT_A_REPLICA");
+  case DHC_CHORDERR:
+    return strbuf ("DHC_CHORDERR");
+  case DHC_RECON_INPROG:
+    return strbuf ("DHC_RECON_INPROG");
+  case DHC_OLD_VER:
+    return strbuf ("DHC_OLD_VER");
+  case DHC_BLOCK_NEXIST:
+    return strbuf ("DHC_BLOCK_NEXIST");
+  case DHC_W_INPROG:
+    return strbuf ("DHC_W_INPROG");
+  case DHC_NOT_PRIMARY:
+    return strbuf ("DHC_NOT_PRIMARY");
+  case DHC_BLOCK_EXIST:
+    return strbuf ("DHC_BLOCK_EXIST");
+  case DHC_DHASHERR:
+    return strbuf ("DHC_DHASHERR");
+  default:
+    return strbuf ("DHC_UNDEFINED_ERR");
+  }
+}
+
 void 
-print_error (str where, int err, int dhc_err)
+print_error (str where, int err, dhc_stat dhc_err)
 {
   warn << where << ": clnt_stat " << err << "\n";
-  warn << where << ": dhc_stat " << dhc_err << "\n";
+  warn << where << ": dhc_stat " << dhc_errstr (dhc_err) << "\n";
   if (dhc_err)
     exit (-1);
 }
