@@ -7,7 +7,7 @@ void open_db (ptr<dbfe>, str, dbOptions, str);
 
 void print_error (str, int, int);
 
-void set_new_config (ptr<dhc_propose_arg>, ptr<vnode>, int);
+void set_new_config (ptr<dhc_block>, ptr<dhc_propose_arg>, ptr<vnode>, int);
 
 void set_new_config (ptr<dhc_newconfig_arg>, vec<ptr<location> >);
 

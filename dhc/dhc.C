@@ -83,7 +83,7 @@ dhc::recv_promise (ptr<dhc_block> b, ref<dhc_prepare_res> promise,
 	  New refcounted<vec<chordID> > (b->meta->pstat->acc_conf);
 	arg->new_config.set (nodes->base (), nodes->size ());
       } else 
-	set_new_config (arg, myNode, n_replica);
+	set_new_config (b, arg, myNode, n_replica);
       
       ptr<dhc_propose_res> res;
       for (uint i=0; i<b->meta->config->nodes.size (); i++) {
