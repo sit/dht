@@ -385,12 +385,14 @@ public:
 
   void execute (cb_ret cbi, chordID first_hop_guess);
   void execute (cb_ret cbi);
+  void reexecute ();
   dhash_stat status () { return result; }
   chordID key () {return blockID;}
   ptr<dhash_block> get_block () const { return block; }
   route path ();
   
  private:
+  dhash *dh;
   vec<long> seqnos;
   route_iterator *chord_iterator;
   bool ask_for_lease;
@@ -418,13 +420,13 @@ public:
   void nexthop_chalok_cb (chordID s, bool ok, chordstat status);  
   chordID lookup_next_hop (chordID k);
   
-  void add_data (char *data, int len, int off);
-  void finish_block_fetch (ptr<dhash_fetchiter_res> res, 
-			   int blocknum,
-			   clnt_stat err);
-  void fail (str errstr);
   void timed_out ();
   void timed_out_after_wait ();
+
+  void walk (vec<chord_node> succs);
+  void walk_cachedloc (vec<chord_node> succs, chordID id, bool ok, chordstat stat);
+  void walk_gotblock (vec<chord_node> succs, ptr<dhash_block> block);
+  void gotblock (ptr<dhash_block> block);
 };
 
 class dhashcli {
