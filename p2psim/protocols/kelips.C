@@ -293,7 +293,7 @@ Kelips::lookup_loop(ID key, vector<IPAddress> &history)
       return true;
 
   // Try via random nodes a few times.
-  for(int iter = 0; iter < 6; iter++){
+  for(int iter = 0; iter < 12; iter++){
     if(lookup2(key, history))
       return true;
   }
@@ -355,8 +355,9 @@ Kelips::lookupvia(ID key, IPAddress via, vector<IPAddress> &history)
   return(ok && done);
 }
 
-// Look up a key via a random nodes,
-// hoping that they will have better contact info than us.
+// ip: someone random we know about.
+// ip1: random contact of ip in the target group.
+// ip2: who ip1 thinks has the key.
 bool
 Kelips::lookup2(ID key, vector<IPAddress> &history)
 {
@@ -374,22 +375,28 @@ Kelips::lookup2(ID key, vector<IPAddress> &history)
   IPAddress ip2 = 0;
   history.push_back(ip1);
   ok = xRPC(ip1, 2, &Kelips::handle_lookup1, &key, &ip2);
+  if(ok)
+    gotinfo(Info(ip1, now()));
   if(!ok || ip2 == 0)
     return false;
 
   bool done = false;
   history.push_back(ip2);
   ok = xRPC(ip2, 2, &Kelips::handle_lookup_final, &key, &done);
+  if(ok)
+    gotinfo(Info(ip2, now()));
 
   return(ok && done);
 }
 
 // Someone in our group wants us to return them a
-// random contact that might be useful in finding
-// key *kp.
+// random contact in the key's group.
 void
 Kelips::handle_lookup2(ID *kp, IPAddress *res)
 {
+  if((*res = find_by_id(*kp)) != 0)
+    return;
+
   vector<IPAddress> cl = grouplist(id2group(*kp));
   if(cl.size() > 0)
     *res = cl[random() % cl.size()];
