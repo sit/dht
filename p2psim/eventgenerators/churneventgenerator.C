@@ -212,8 +212,10 @@ Time
 ChurnEventGenerator::next_pareto(u_int a, u_int b)
 {
   double x = ( (double)random() / (double)(RAND_MAX) );
-  u_int rt = (u_int) ((double)b/exp(log(1 - x)/(double)a));
-  return (Time) rt;
+  double xx = exp(log(1 - x)/(double)a);
+  Time rt = (Time) ((double)b/xx);
+  //printf("CHEESE %llu %.3f\n",rt,xx);
+  return rt;
 }
 
 Time
