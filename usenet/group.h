@@ -27,7 +27,7 @@ struct newsgroup {
   
   void xover (unsigned long, unsigned long);
   strbuf next (void);
-  bool more (void) { return start < stop; };
+  bool more (void) { return start < stop && len > 0; };
   bool loaded (void) { return rec; };
   chordID getid (unsigned long);
   chordID getid (void) { return getid (cur_art); };

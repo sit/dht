@@ -174,50 +174,52 @@ tabfilter (str f)
 strbuf
 newsgroup::next (void)
 {
-  ptr<dbrec> art;
+  ptr<dbrec> art (NULL);
   strbuf resp;
 
-  if (more () && len > 0 &&
-      listrx.search (str (c, len)))
+  while (more () &&
+	 listrx.search (str (c, len)) &&
+	 art == NULL)
   {
-    art = header_db->lookup(New refcounted<dbrec> (listrx[2],
-						   listrx[2].len ()));
-    if (art == NULL) {
-      warn << "missing article " << start << "\n";
-    } else {
-      str msg (art->value, art->len); // xxx
-      
-      if (oversub.search (msg) &&
-	  overfrom.search (msg) &&
-	  overdate.search (msg)) {
-	resp << start << "\t";
-	resp << tabfilter (oversub[1]) << "\t" 
-	     << tabfilter (overfrom[1]) << "\t";
-	resp << tabfilter (overdate[1]) << "\t";
-
-	if (overmsgid.search (msg))
-	  resp << tabfilter (overmsgid[1]) << "\t";
-	else
-	  resp << tabfilter (listrx[2]) << "\t";
-	if (overref.search (msg))
-	  resp << tabfilter (overref[1]);
-	resp << "\t" << art->len << "\t";
-	if (overlines.search (msg))
-	  resp << tabfilter (overlines[1]);
-	else
-	  resp << "0";
-      } else {
-	warn << "msg parse error\n";
-	warn << "msg " << listrx[2] << "\n";
-	warn << "header " << msg << "\n";
-      }
-    }
-
+    art = header_db->lookup (New refcounted<dbrec> (listrx[2],
+						    listrx[2].len ()));
     c += listrx.len (0);
     len -= listrx.len (0);
+    if (art == NULL)
+      warn << "missing article " << start << "\n";
+    start++;
+  }
+    
+  if (art == NULL)
+    return resp;
+  
+  str msg (art->value, art->len);
+  
+  if (oversub.search (msg) &&
+      overfrom.search (msg) &&
+      overdate.search (msg)) {
+    resp << start - 1 << "\t";
+    resp << tabfilter (oversub[1]) << "\t" 
+	 << tabfilter (overfrom[1]) << "\t";
+    resp << tabfilter (overdate[1]) << "\t";
+    
+    if (overmsgid.search (msg))
+      resp << tabfilter (overmsgid[1]) << "\t";
+    else
+      resp << tabfilter (listrx[2]) << "\t";
+    if (overref.search (msg))
+      resp << tabfilter (overref[1]);
+    resp << "\t" << art->len << "\t";
+    if (overlines.search (msg))
+      resp << tabfilter (overlines[1]);
+    else
+      resp << "0";
+    resp << "\t\r\n";
+  } else {
+    warn << "msg parse error\n";
+    warn << "msg " << listrx[2] << "\n";
+    warn << "header " << msg << "\n";
   }
   
-  start++;
-  resp << "\t\r\n";
   return resp;
 }

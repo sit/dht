@@ -209,7 +209,8 @@ nntp::cmd_over (str c) {
 	    return;
 	  }
 	} else {
-	  // get all until the end.
+	  // get all until the end; counter the plus one below...
+	  stop -= 1; 
 	}
       } else {
 	// single
