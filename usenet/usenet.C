@@ -4,12 +4,30 @@
 #include <dhashclient.h>
 
 #include "nntp.h"
+#include "newspeer.h"
 #include "usenet.h"
 
 dbfe *group_db, *header_db;
 // in group_db, each key is a group name. each record contains artnum,messageID,chordID
 // in header_db, each key is a messageID. each record is a header (plus lines and other info)
 dhashclient *dhash;
+
+str
+collect_stats ()
+{
+  strbuf s;
+  s << "nconn " << nntp::nconn () << "\r\n";
+  s << "fedinbytes " << nntp::fedinbytes () << "\r\n";
+  s << "dhashbytes " << nntp::dhashbytes () << "\r\n";
+  s << "npeers " << peers.size () << "\r\n";
+
+  u_int64_t totalout (0);
+  for (size_t i = 0; i < peers.size (); i++)
+    totalout += peers[i]->fedoutbytes ();
+  s << "fedoutbytes " << totalout << "\r\n";
+
+  return s;
+}
 
 void
 stop ()

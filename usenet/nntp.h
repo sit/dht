@@ -3,6 +3,8 @@
 
 struct newsgroup;
 
+extern u_int64_t fedinbytes;
+
 typedef struct c_jmp_entry {
   const char *cmd;
   int len;
@@ -14,6 +16,10 @@ typedef struct c_jmp_entry {
 } c_jmp_entry_t;
 
 class nntp {
+  static u_int64_t nconn_;
+  static u_int64_t fedinbytes_;
+  static u_int64_t dhashbytes_; // differs from above in \r\n, ., dupes, ...
+  
   int s;
   ptr<aios> aio;
 
@@ -22,7 +28,7 @@ class nntp {
   cbv process_input;
   bool posting;
   ptr<bool> deleted;
-
+  
   void process_line (const str, int);
   void command (void);
   void add_cmd (const char *, cbs);
@@ -39,10 +45,11 @@ class nntp {
   void cmd_ihave (str);
   void cmd_check (str);
   void cmd_takethis (bool, str);
+  void cmd_stats (str);
 
   void cmd_article_cb (ptr<bool>, bool, chordID, dhash_stat, ptr<dhash_block>,
 		       vec<chordID>);
-  void read_post_cb (ptr<dbrec>, vec<str>, dhash_stat, ptr<insert_info>);
+  void read_post_cb (size_t l, ptr<dbrec>, vec<str>, dhash_stat, ptr<insert_info>);
   void docontrol (str);
 
   vec<c_jmp_entry_t> cmd_table;
@@ -50,6 +57,10 @@ class nntp {
 public:
   nntp (int _s);
   ~nntp ();
+
+  static u_int64_t fedinbytes () { return fedinbytes_; }
+  static u_int64_t nconn () { return nconn_; }
+  static u_int64_t dhashbytes () { return dhashbytes_; }
 };
 
 #endif /* NNTP_H */

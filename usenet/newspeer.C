@@ -5,7 +5,7 @@
 #include "usenet.h"
 #include "newspeer.h"
 
-static vec<ptr<newspeer> > peers;
+vec<ptr<newspeer> > peers;
 
 void
 feed_article (str id, const vec<str> &groups)
@@ -28,7 +28,8 @@ newspeer::newspeer (str h, u_int16_t p) :
   conncb (NULL),
   state (HELLO_WAIT),
   dhtok (false),
-  streamok (false)
+  streamok (false),
+  fedoutbytes_ (0)
 {
   start_feed ();
 }
@@ -250,9 +251,19 @@ newspeer::send_article (str id)
   if (dhtok) {
     aio << "TAKEDHT " << id << "\r\n";
     aio << header << "\r\n.\r\n"; // need extra \r\n for feed parsing other side
+    fedoutbytes_ += id.len () + d->len + 15;
   } else {
     // dispatch a body fetch
     // aio << "TAKETHIS " << id << "\r\n";
     warn << hostname << ": would send " << id << " via TAKETHIS.\n";
   }
+}
+
+u_int64_t
+newspeer::fedoutbytes (bool reset)
+{
+  u_int64_t x = fedoutbytes_;
+  if (reset)
+    fedoutbytes_ = 0;
+  return x;
 }

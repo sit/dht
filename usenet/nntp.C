@@ -10,6 +10,9 @@
 #include "nntp.h"
 
 static int nntp_trace (getenv ("NNTP_TRACE") ? atoi (getenv ("NNTP_TRACE")) : 0);
+u_int64_t nntp::nconn_ (0);
+u_int64_t nntp::fedinbytes_ (0);
+u_int64_t nntp::dhashbytes_ (0);
 
 nntp::nntp (int _s) :
 	s (_s),
@@ -18,6 +21,7 @@ nntp::nntp (int _s) :
 	process_input (wrap (this, &nntp::command)),
         posting (false)
 {
+  nconn_++;
   if (nntp_trace >= 1)
     warn << s << ": connected\n";
   aio->settimeout (opt->client_timeout);
@@ -46,6 +50,8 @@ nntp::nntp (int _s) :
   add_cmd ("HELP", wrap (this, &nntp::cmd_help));
   add_cmd ("QUIT", wrap (this, &nntp::cmd_quit));
 
+  add_cmd ("STATS", wrap (this, &nntp::cmd_stats));
+
   aio->readline (wrap (this, &nntp::process_line));
 }
 
@@ -72,6 +78,9 @@ nntp::process_line (const str data, int err)
     return;
   }
   lines.push_back (data);
+  if (posting)
+    fedinbytes_ += data.len ();
+  
   ptr<bool> d = deleted;
   process_input ();
   if (!*d)
@@ -330,8 +339,11 @@ nntp::read_post (str resp, str bad, bool takedht)
 
   if (!postend.search (lines.back())) 
     return;
+
   lines.pop_back();
-  
+  posting = false;
+  process_input = wrap (this, &nntp::command);
+    
   int headerend  = 0;
 
   for (size_t i = 0; i < lines.size (); i++) {
@@ -346,8 +358,6 @@ nntp::read_post (str resp, str bad, bool takedht)
       docontrol (postcontrol[1]);
       lines.setsize (0);
       aio << resp;
-      posting = false;
-      process_input = wrap (this, &nntp::command);
       return;
     } else if (postmrx.search (lines[i])) {
       if (nntp_trace >= 4)
@@ -371,8 +381,6 @@ nntp::read_post (str resp, str bad, bool takedht)
   if (!msgid || !ng || linecount <= 0 || (takedht && !ID)) {
     aio << bad;
     lines.setsize (0);
-    posting = false;
-    process_input = wrap (this, &nntp::command);
     return;
   } else
     aio << resp;
@@ -426,21 +434,21 @@ nntp::read_post (str resp, str bad, bool takedht)
     ptr<dbrec> k = New refcounted<dbrec> (msgid, msgid.len ());
     ptr<dbrec> d = New refcounted<dbrec> (h, h.len ());
     header_db->insert (k, d);
-    if (!takedht)
+    if (!takedht) {
       dhash->insert (wholeart, wholeart.len (),
-		     wrap (this, &nntp::read_post_cb, k, groups));
+		     wrap (this, &nntp::read_post_cb,
+			   wholeart.len (), k, groups));
+    }
   }
-
-  posting = false;
-  process_input = wrap (this, &nntp::command);
 }
 
 void
-nntp::read_post_cb (ptr<dbrec> msgid, vec<str> groups,
+nntp::read_post_cb (size_t len, ptr<dbrec> msgid, vec<str> groups,
 		    dhash_stat status, ptr<insert_info> i)
 {
   str k (msgid->value, msgid->len);
   if (status == DHASH_OK) {
+    dhashbytes_ += len;
     feed_article (k, groups);
     return;
   }
@@ -521,4 +529,12 @@ nntp::cmd_takethis (bool takedht, str c)
     process_input = wrap (this, &nntp::read_post, resp, bad, takedht);
   } else
     aio << syntax;
+}
+
+void
+nntp::cmd_stats (str c)
+{
+  aio << "280 stats to follow\r\n";
+  aio << collect_stats ();
+  aio << period;
 }

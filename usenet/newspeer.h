@@ -28,6 +28,8 @@ class newspeer {
   // message ids of articles to send to peer
   vec<str> outq;
 
+  u_int64_t fedoutbytes_;
+
   void feed_connected (int t, int s);
   void process_line (const str data, int err);
 
@@ -46,6 +48,9 @@ class newspeer {
   
   void start_feed (int t = 60);
   void queue_article (str id);
+  u_int64_t fedoutbytes (bool reset = false);
 };
+
+extern vec<ptr<newspeer> > peers;
 
 #endif /* _NEWSPEER_H_ */
