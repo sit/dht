@@ -176,23 +176,21 @@ newsgroup::next (void)
 {
   ptr<dbrec> art;
   strbuf resp;
-  resp << start << "\t";
 
   if (more () && len > 0 &&
-      listrx.search (str (c, len))) {
+      listrx.search (str (c, len)))
+  {
     art = header_db->lookup(New refcounted<dbrec> (listrx[2],
 						   listrx[2].len ()));
-
-    warn << "mgs " << listrx[2] << "\n";
-    warn << "header " << str (art->value, art->len) << "\n";
-
-    if (art == NULL)
-      warn << "missing article\n";
-    else {
+    if (art == NULL) {
+      warn << "missing article " << start << "\n";
+    } else {
       str msg (art->value, art->len); // xxx
+      
       if (oversub.search (msg) &&
 	  overfrom.search (msg) &&
 	  overdate.search (msg)) {
+	resp << start << "\t";
 	resp << tabfilter (oversub[1]) << "\t" 
 	     << tabfilter (overfrom[1]) << "\t";
 	resp << tabfilter (overdate[1]) << "\t";
@@ -208,8 +206,11 @@ newsgroup::next (void)
 	  resp << tabfilter (overlines[1]);
 	else
 	  resp << "0";
-      } else
+      } else {
 	warn << "msg parse error\n";
+	warn << "msg " << listrx[2] << "\n";
+	warn << "header " << msg << "\n";
+      }
     }
 
     c += listrx.len (0);
