@@ -8,8 +8,7 @@
 using namespace std;
 
 extern unsigned kdebugcounter;
-#define KDEBUG(x) DEBUG(x) << kdebugcounter++ << ". " << printbits(_id) << " "
-
+class k_bucket;
 
 class Kademlia : public Protocol {
 public:
@@ -30,8 +29,8 @@ public:
   static string printID(NodeID id);
   static NodeID distance(NodeID, NodeID);
 
-  bool stabilized(vector<NodeID>);
-  void dump() { cout << "*** DUMP for " << printbits(_id) << " ***" <<endl;  _root->dump(); };
+  bool stabilized(vector<NodeID>, k_bucket* = 0, unsigned = 0);
+  void dump();
   NodeID id () { return _id;}
 
   // bit twiddling utility functions
@@ -97,38 +96,6 @@ private:
   void do_transfer(void *args, void *result);
 
 
-
-  //
-  //
-  // K-BUCKETS
-  //
-  //
-  // one entry in k_bucket's _nodes vector
-  struct peer_t {
-    peer_t(NodeID xid, IPAddress xip) : retries(0), id(xid), ip(xip) {}
-    unsigned retries;
-    NodeID id;
-    IPAddress ip;
-  };
-
-
-  // a k-bucket
-  class k_bucket {
-    public:
-      k_bucket();
-      ~k_bucket();
-
-      vector<peer_t*> _nodes;
-      k_bucket* _child[2]; // subtree
-
-      unsigned insert(NodeID node, IPAddress ip, NodeID prefix = 0, unsigned depth = 0);
-      void dump() {}
-
-    private:
-      static unsigned _k;
-      static k_bucket *_root;
-  };
-
   k_bucket *_root;
 
 
@@ -184,10 +151,50 @@ private:
   map<NodeID, Value> _values;
 
   void reschedule_stabilizer(void*);
-  void stabilize(void);
+  void stabilize(k_bucket*, NodeID = 0);
+
+  void _dump(k_bucket*, string, unsigned);
 
 
   static NodeID _rightmasks[];
 };
+
+
+//
+//
+// K-BUCKETS
+//
+//
+// one entry in k_bucket's _nodes vector
+class peer_t {
+public:
+  peer_t(Kademlia::NodeID xid, IPAddress xip, Time t) : retries(0), id(xid), ip(xip), lastts(t) {}
+  peer_t(const peer_t &p) : retries(0), id(p.id), ip(p.ip), lastts(p.lastts) {}
+  unsigned retries;
+  Kademlia::NodeID id;
+  IPAddress ip;
+  Time lastts;
+};
+
+
+// a k-bucket
+class k_bucket {
+public:
+  k_bucket(Kademlia::NodeID);
+  ~k_bucket();
+
+  vector<peer_t*> _nodes;
+  k_bucket* _child[2]; // subtree
+
+  unsigned insert(Kademlia::NodeID node, IPAddress ip, Kademlia::NodeID prefix = 0, unsigned depth = 0, k_bucket *root = 0);
+  void dump(k_bucket *, Kademlia::NodeID = 0);
+
+private:
+  static unsigned _k;
+  Kademlia::NodeID _id;
+};
+
+
+#define KDEBUG(x) DEBUG(x) << kdebugcounter++ << ". " << Kademlia::printbits(_id) << " "
 
 #endif // __KADEMLIA_H
