@@ -25,6 +25,6 @@ void
 CBEvent::Dispatch(void *ex)
 {
   CBEvent *e = (CBEvent*) ex;
-  (e->prot->*e->fn)(e->args);
+  (e->prot->*e->fn)(e->args, (void *) 0);
   threadexits(0);
 }

@@ -13,7 +13,7 @@ class Protocol;
 
 class Protocol : public Threaded {
 public:
-  typedef void*(Protocol::*member_f)(void*);
+  typedef void (Protocol::*member_f)(void*, void *);
   typedef map<string,string> Args;
   typedef enum {
     JOIN = 0,
@@ -35,8 +35,9 @@ public:
   virtual void lookup_doc(Args*) = 0;
 
 protected:
-#define doRPC(X, Y, Z) this->_doRPC((X), ((member_f)(&Y)), ((void*) (Z)))
-  void *_doRPC(IPAddress, member_f, void*);
+#define doRPC(X, Y, A, R) (this->_doRPC((X), ((member_f)&(Y)), \
+                                        ((void*) (A)), ((void*) R)))
+  bool _doRPC(IPAddress, member_f, void*, void*);
 
 #define delaycb(X, Y, Z) this->_delaycb(X, ((member_f)(&Y)), ((void*) (Z)))
   void _delaycb(Time, member_f, void*);

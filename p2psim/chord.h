@@ -11,10 +11,10 @@ class LocTable;
 class Chord : public Protocol {
 public:
   typedef ConsistentHash::CHID CHID;
-  typedef struct {
+  struct IDMap {
     CHID id; //consistent hashing ID for the node
     IPAddress ip; //the IP address for the node
-  } IDMap;
+  };
 
   Chord(Node *n);
   virtual ~Chord();
@@ -26,10 +26,37 @@ public:
   virtual void insert_doc(Args*) {};
   virtual void lookup_doc(Args*) {};
 
+  // Chord RPC argument/return types.
+  struct find_successor_args {
+    Chord::CHID n;
+  };
+  struct find_successor_ret {
+    Chord::IDMap succ;
+  };
+  struct get_predecessor_args {
+    int dummy;
+  };
+  struct get_predecessor_ret {
+    Chord::IDMap n;
+  };
+  struct lookup_args {
+    Chord::CHID key;
+  };
+  struct lookup_ret {
+    Chord::IDMap succ;
+  };
+  struct notify_args {
+    Chord::IDMap me;
+  };
+  struct notify_ret {
+    int dummy;
+  };
+
   // RPC handlers.
-  void *find_successor_x(void *);
-  void *get_predecessor(void *);
-  void *notify(void *);
+  void find_successor_handler(find_successor_args *, find_successor_ret *);
+  void get_predecessor_handler(get_predecessor_args *, get_predecessor_ret *);
+  void lookup_handler(lookup_args *, lookup_ret *);
+  void notify_handler(notify_args *, notify_ret *);
 
   string s();
 

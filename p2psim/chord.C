@@ -25,19 +25,24 @@ Chord::s()
   return string(buf);
 }
 
-void *
-Chord::find_successor_x(void *x)
+// Handle a find_successor RPC.
+void
+Chord::find_successor_handler(find_successor_args *args,
+                              find_successor_ret *ret)
 {
-  printf("Chord(%u,%u)::find_successor_x(%u)\n", me.ip, me.id, (int) x);
+  Chord::CHID n = args->n;
 
-  Chord::CHID n = (Chord::CHID) x;
+  printf("Chord(%u,%u)::find_successor_x(%u)\n", me.ip, me.id, (int) n);
+
+#if 1
+  ret->succ = me;
+#else
   /*
   if (recursive) {
     nn = loctable->next(n);
     if (nn.ip == me.ip) {
-      Chord::IDMap *ret = (Chord::IDMap*) malloc(sizeof(Chord::IDMap)); //this result passing is nasty
-      *ret = me;
-      return (void *)ret;
+      ret->succ = me;
+      return;
     }else{
       return doRPC((IPAddress)successor.ip, Chord::lookup, n, recursive);
     }
@@ -50,11 +55,15 @@ Chord::find_successor_x(void *x)
   nn = &tmp;
   while (nn->ip != cn->ip) {
     cn = nn;
-    nn = (Chord::IDMap *) doRPC((cn->ip), Chord::lookup, n);
+    struct lookup_args la;
+    struct lookup_ret lr;
+    la.key = n;
+    // Hmm, what is lookup? Why not find_successor?
+    doRPC((cn->ip), Chord::lookup_handler, &la, &lr);
+    nn = lr.succ;
   }
-  Chord::IDMap *ret = (Chord::IDMap*)malloc(sizeof(Chord::IDMap));
-  *ret = *cn;
-  return (void *)ret;
+  ret->succ = *cn;
+#endif
 }
 
 // External event that tells a node to contact the well-known node
@@ -63,12 +72,14 @@ void
 Chord::join(Args *args)
 {
   IPAddress wkn = (IPAddress) atoi(((*args)["wellknown"]).c_str());
-  if (!wkn) return;
+  assert(wkn);
   cout << s() + "::join" << endl;
-  void *ret = doRPC(wkn, Chord::find_successor_x, me.id);
-  printf("Chord(%u,%u)::join2 %u\n", me.ip, me.id, (Chord::CHID) ret);
-  loctable->add_node(*(Chord::IDMap *)ret);
-  free(ret); //nasty RPC results passing
+  find_successor_args fsa;
+  find_successor_ret fsr;
+  fsa.n = me.id;
+  doRPC(wkn, Chord::find_successor_handler, &fsa, &fsr);
+  printf("Chord(%u,%u)::join2 %u\n", me.ip, me.id, fsr.succ.ip);
+  loctable->add_node(fsr.succ);
   // stabilize();
 }
 
@@ -78,13 +89,16 @@ Chord::stabilize()
   Chord::IDMap succ = loctable->succ(1);
   if (succ.ip == 0) return;
 
-  Chord::IDMap* ret = (Chord::IDMap *)doRPC(succ.ip, Chord::get_predecessor, (void *)0);
-
-  loctable->add_node(*(Chord::IDMap *)ret);
-  free(ret);
+  get_predecessor_args gpa;
+  get_predecessor_ret gpr;
+  doRPC(succ.ip, Chord::get_predecessor_handler, &gpa, &gpr);
+  loctable->add_node(gpr.n);
 
   succ = loctable->succ(1);
-  doRPC(succ.ip, Chord::notify, (void *)&me);
+  notify_args na;
+  notify_ret nr;
+  na.me = me;
+  doRPC(succ.ip, Chord::notify_handler, &na, &nr);
 
   //in chord pseudocode, fig 6 of ToN paper, this is a separate periodically called function
   fix_predecessor();
@@ -113,20 +127,17 @@ Chord::fix_successor()
   */
 }
 
-void *
-Chord::notify(void *n)
+void
+Chord::notify_handler(notify_args *args, notify_ret *ret)
 {
-  loctable->notify(*(Chord::IDMap *)n);
-  return NULL;
+  loctable->notify(args->me);
 }
 
-void *
-Chord::get_predecessor(void *)
+void
+Chord::get_predecessor_handler(get_predecessor_args *args,
+                               get_predecessor_ret *ret)
 {
-  //too ugly
-  Chord::IDMap *ret = (Chord::IDMap *)malloc(sizeof(Chord::IDMap));
-  *ret = loctable->pred();
-  return ret;
+  ret->n = loctable->pred();
 }
 
 #if 0
@@ -167,6 +178,7 @@ LocTable::next(Chord::CHID n)
       return ring[i];
     } 
   }
+  assert(0);
 }
 
 void

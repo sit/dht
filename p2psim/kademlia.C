@@ -19,11 +19,11 @@ Kademlia::join_kademlia(void *x)
   IPAddress wkn = (IPAddress) atoi(((*a)["wellknown"]).c_str());
 
   IPAddress myip = ip();
-  doRPC(wkn, Kademlia::do_join, &myip);
+  doRPC(wkn, Kademlia::do_join, &myip, (void*) 0);
 }
 
 void
-Kademlia::do_join(void *ip)
+Kademlia::do_join(void *ip, void *ret)
 {
   cout << "Node with ip=" << *((IPAddress*)ip) << " just registed." << endl;
 }
