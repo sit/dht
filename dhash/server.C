@@ -1559,3 +1559,4 @@ store_state::addchunk(unsigned int start, unsigned int end,void *base)
   join(*l);
   return true;
 }
+
