@@ -42,6 +42,7 @@
 #include "location.h"
 
 long outbytes;
+ihash<str, rpcstats, &rpcstats::key, &rpcstats::h_link> rpc_stats_tab;
 // UTILITY FUNCTIONS
 
 const int shortstats (getenv ("SHORT_STATS") ? 1 : 0);
@@ -267,7 +268,6 @@ stp_manager::ratecb () {
 #endif
   // do something if nsent (+ nrcv) is too high xxx?
 
-  warn << "sent " << (outbytes - nsent) << " bytes in the last second\n";
   delaycb (1, 0, wrap (this, &stp_manager::ratecb));
   nsent = outbytes;
   *nrcv = 0;
@@ -666,6 +666,15 @@ void stp_manager::stats ()
     sprintf (buf, "%f", acked_time[i]);
     warnx << "at: " << buf << " " << acked_seq[i] << "\n";
   }
+
+  warnx << "per program bytes\n";
+  rpcstats *s = rpc_stats_tab.first ();
+  while (s) {
+    warnx << "  " << s->key << "\n";
+    warnx << "    bytes: " << s->bytes << "\n";
+    warnx << "    calls: " << s->calls << "\n";
+    s = rpc_stats_tab.next (s);
+  }
 }
 
 // ------------- rpccb_chord ----------------
@@ -719,7 +728,25 @@ rpccb_chord::alloc (ptr<aclnt> c,
     xid = txid;
   }
 
+  // per program/proc RPC stats
+  str key;
+  const rpcgen_table *rtp;
+  rtp = &prog.tbl[procno];
+  assert (rtp);
+  key = strbuf ("%s:%s", prog.name, rtp->name);
+
+  //  str key = strbuf () << prog.progno << ":" << procno;
+  rpcstats *stats = rpc_stats_tab[key];
+  if (!stats) {
+    stats = New rpcstats ();
+    stats->key = key;
+    stats->calls = 0;
+    stats->bytes = 0;
+    rpc_stats_tab.insert (stats);
+  }
   suio *s = x.uio ();
+  stats->bytes += s->resid ();
+  stats->calls++;
   outbytes += s->resid ();
 
   // Stolen (mostly) from aclnt::init_call

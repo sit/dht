@@ -227,7 +227,7 @@ route_chord::make_route_done_cb (chordID s, bool ok, chordstat status)
   } else {
     warnx << v->my_ID () << ": make_route_done_cb: last challenge for "
 	  << s << " failed. (chordstat " << status << ")\n";
-    assert (0); // XXX handle malice more intelligently
+    r = CHORD_RPCFAILURE;
   }
   if (stop) done = true;
   last_hop = true;

@@ -178,7 +178,7 @@ locationtable::doRPC (const chordID &n, rpc_program progno,
 		      void *out, aclnt_cb cb)
 {
   ptr<location> l = lookup (n);
-  if (!l) fatal << "location is null. forgot to call cacheloc\n?";
+  if (!l) fatal << "location (" << n << ") is null. forgot to call cacheloc\n?";
   l->nrpc++;
   return hosts->doRPC (l, progno, procno, in, out, 
 		       wrap (this, &locationtable::doRPCcb, l, cb));
@@ -731,7 +731,10 @@ locationtable::remove (locwrap *lw)
 	mygood++;
       foo = locs.next (foo);
     }
-    assert (good == mygood);
+    //    if (good != mygood) {
+    //   warn << "good(" << good << ") isn't == to mygood(" << mygood << ")\n";
+    //   good = mygood;
+    // }
   }
   delete lw;
   return true;

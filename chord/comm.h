@@ -3,6 +3,16 @@
 
 #include "async.h"
 
+struct rpcstats {
+  str key;
+  int bytes;
+  int calls;
+
+  ihash_entry<rpcstats> h_link;
+};
+
+extern ihash<str, rpcstats, &rpcstats::key, &rpcstats::h_link> rpc_stats_tab;
+
 // store latency information about a host.
 struct hostinfo {
   sfs_hostname host;
