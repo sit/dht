@@ -48,43 +48,69 @@ int Kademlia::_bad_failures = 0; // lookup failed, but node was live
 set<Kademlia::NodeID> *Kademlia::_all_kademlias = 0;
 hash_map<Kademlia::NodeID, Kademlia*> *Kademlia::_nodeid2kademlia = 0;
 
+#define NODES_ITER(x) for(set<k_nodeinfo*, Kademlia::closer>::const_iterator i = (x)->begin(); i != (x)->end(); ++i)
+
 
 // }}}
 // {{{ Kademlia::Kademlia
 Kademlia::Kademlia(Node *n, Args a)
   : P2Protocol(n), _id(ConsistentHash::ip2chid(n->ip()))
 {
-  KDEBUG(0) << "id: " << printID(_id) << ", ip: " << ip() << endl;
+  KDEBUG(1) << "id: " << printID(_id) << ", ip: " << ip() << endl;
   if(getenv("P2PSIM_CHECKREP"))
     docheckrep = strcmp(getenv("P2PSIM_CHECKREP"), "0") ? true : false;
 
   if(!k) {
     k = a.nget<unsigned>("k", 20, 10);
-    KDEBUG(0) << "k = " << k << endl;
+    KDEBUG(1) << "k = " << k << endl;
   }
 
   if(!alpha) {
     alpha = a.nget<unsigned>("alpha", 3, 10);
-    KDEBUG(0) << "alpha = " << alpha << endl;
+    KDEBUG(1) << "alpha = " << alpha << endl;
   }
 
   if(!stabilize_timer) {
     stabilize_timer = a.nget<unsigned>("stabilize_timer", 10000, 10);
-    KDEBUG(0) << "stabilize_timer = " << stabilize_timer << endl;
+    KDEBUG(1) << "stabilize_timer = " << stabilize_timer << endl;
   }
 
   if(!refresh_rate) {
     refresh_rate = a.nget<unsigned>("refresh_rate", 1000, 10);
-    KDEBUG(0) << "refresh_rate = " << refresh_rate << endl;
+    KDEBUG(1) << "refresh_rate = " << refresh_rate << endl;
   }
 
   if(!Kademlia::pool)
     Kademlia::pool = New k_nodeinfo_pool();
   _me = Kademlia::pool->pop(_id, ip());
-  char ptr[32]; sprintf(ptr, "%p", _me);
-  KDEBUG(2) << "Kademlia::Kademlia: _me = " << ptr << endl;
-  _root = New k_bucket(0, this);
   _joined = false;
+
+  _root = New k_bucket(0, this);
+  _root->leaf = false;
+
+  // build the entire k-bucket tree
+  k_bucket *b = _root;
+  unsigned bit;
+  for(unsigned i=0; ; i++) {
+    bit = Kademlia::getbit(_id, i);
+
+    // leafside
+    b->child[bit^1] = New k_bucket(b, this);
+    b->child[bit^1]->nodes = New k_nodes(b->child[bit^1]);
+    b->child[bit^1]->replacement_cache = New set<k_nodeinfo*, Kademlia::younger>;
+    b->child[bit^1]->leaf = true;
+
+    // nodeside
+    b->child[bit] = New k_bucket(b, this);
+    b = b->child[bit];
+    b->leaf = false;
+
+    if(i == Kademlia::idsize-2)
+      break;
+  }
+  b->nodes = New k_nodes(b);
+  b->replacement_cache = New set<k_nodeinfo*, Kademlia::younger>;
+  b->leaf = true;
 }
 
 Kademlia::NodeID Kademlia::closer::n = 0;
@@ -119,7 +145,7 @@ Kademlia::initstate(set<Protocol*> *l)
   KDEBUG(1) << "Kademlia::initstate" << endl;
 
   if(!_all_kademlias) {
-    KDEBUG(0) << "allocating all" << endl;
+    KDEBUG(1) << "allocating all" << endl;
     _all_kademlias = New set<NodeID>;
     _nodeid2kademlia = New hash_map<NodeID, Kademlia*>;
     for(set<Protocol*>::const_iterator i = l->begin(); i != l->end(); ++i) {
@@ -147,38 +173,53 @@ Kademlia::initstate(set<Protocol*> *l)
         upper |= (((Kademlia::NodeID) 1) << Kademlia::idsize-i-1);
     }
 
-    KDEBUG(2) << " initstate: lower = " << Kademlia::printbits(lower) << endl;
-    KDEBUG(2) << " initstate: upper = " << Kademlia::printbits(upper) << endl;
+    KDEBUG(2) << " initstate lower = " << Kademlia::printbits(lower) << endl;
+    KDEBUG(2) << " initstate upper = " << Kademlia::printbits(upper) << endl;
 
-    // yields the node with smallest id greater than lower
-    set<NodeID>::const_iterator it = upper_bound(_all_kademlias->begin(), _all_kademlias->end(), lower);
+    // create a set of canditates
+    vector<NodeID> candidates;
+    for(set<NodeID>::const_iterator i = _all_kademlias->begin(); i != _all_kademlias->end(); ++i) {
+      if(*i >= lower && *i <= upper)
+        candidates.push_back(*i);
+    }
 
-    // check that this is smaller than upper.  if so, then this node would
-    // qualify for this entry in the finger table, so the node that says there
-    // is no such is WRONG.
-    if(it != _all_kademlias->end() && *it <= upper) {
-      Kademlia *k = (*_nodeid2kademlia)[*it];
-      // KDEBUG(2) << "id = " << printbits(_id) << " initstate: inserting = " << Kademlia::printbits(k->id()) << endl;
+    // if candidate set size is less than k, then insert them all.
+    if(candidates.size() <= Kademlia::k) {
+      for(vector<NodeID>::const_iterator i = candidates.begin(); i != candidates.end(); ++i) {
+        Kademlia *k = (*_nodeid2kademlia)[*i];
+        assert(k);
+        insert(k->id(), k->node()->ip(), true);
+        touch(k->id());
+      }
+      continue;
+    }
+
+    // if candidate set is too large, pick k at random
+    unsigned count = 0;
+    while(count <= Kademlia::k && candidates.size()) {
+      unsigned index = random() % candidates.size();
+      Kademlia *k = (*_nodeid2kademlia)[candidates[index]];
       assert(k);
+
+      if(flyweight.find(k->id()) != flyweight.end())
+        continue;
 
       insert(k->id(), k->node()->ip(), true);
       touch(k->id());
+      count++;
+
+      // make a copy of candidates and remove the selected index
+      vector<NodeID> tmp;
+      for(unsigned i=0; i<candidates.size(); i++) {
+        if(i == index)
+          continue;
+        tmp.push_back(candidates[i]);
+      }
+      candidates.clear();
+      candidates = tmp;
     }
   }
-
   _joined = true;
-
-  //
-  // we should be stabilized now
-  //
-  vector<NodeID> copylid;
-  for(set<NodeID>::const_iterator i = _all_kademlias->begin(); i != _all_kademlias->end(); ++i)
-    if(*i != id())
-      copylid.push_back(*i);
-
-  k_stabilized stab(&copylid);
-  _root->traverse(&stab, this);
-  assert(stab.stabilized());
 }
 
 // }}}
@@ -186,7 +227,7 @@ Kademlia::initstate(set<Protocol*> *l)
 void
 Kademlia::join(Args *args)
 {
-  KDEBUG(0) << "Kademlia::join" << endl;
+  KDEBUG(1) << "Kademlia::join" << endl;
   if(_joined)
     return;
 
@@ -221,9 +262,8 @@ join_restart:
 
   // put all nodes that wkn told us in k-buckets
   KDEBUG(2) << "join: lr.results.size() = " << lr.results.size() << endl;
-  for(nodeinfo_set::const_iterator i = lr.results.begin(); i != lr.results.end(); ++i) {
-    char ptr[32]; sprintf(ptr, "%p", (*i));
-    KDEBUG(2) << "join: lr.results iterator *i = " << ptr << ", id = " << printID((*i)->id) << ", ip = " << (*i)->ip << endl;
+  for(set<k_nodeinfo*, older>::const_iterator i = lr.results.begin(); i != lr.results.end(); ++i) {
+    KDEBUG(2) << "join: lr.results iterator id = " << printID((*i)->id) << ", ip = " << (*i)->ip << endl;
     if(flyweight.find((*i)->id) == flyweight.end() && (*i)->id != _id) {
       // XXX: the touch is WRONG.  For all we know, the node is dead.
       insert((*i)->id, (*i)->ip);
@@ -259,9 +299,9 @@ join_restart:
     
     // if the RPC failed, or the node is now dead, start over
     k_nodeinfo *ki = flyweight[succ_id];
-    char ptr[32]; sprintf(ptr, "%p", ki);
-    KDEBUG(2) << "join: iteration " << i << ", ki = " << ptr << ", ki->id is " << printID(ki->id) << ", ip = " << ki->ip << ", cpl = " << cpl << ", ptr = " << ptr << endl;
+    KDEBUG(2) << "join: iteration " << i << ", ki->id is " << printID(ki->id) << ", ip = " << ki->ip << ", cpl = " << cpl << endl;
     record_stat(STAT_LOOKUP, 1, 0);
+    assert(ki->ip <= 1837);
     if(!doRPC(ki->ip, &Kademlia::do_lookup, &la, &lr)) {
       clear();
       goto join_restart;
@@ -271,7 +311,7 @@ join_restart:
     if(!node()->alive())
       return;
 
-    for(nodeinfo_set::const_iterator i = lr.results.begin(); i != lr.results.end(); ++i)
+    for(set<k_nodeinfo*, older>::const_iterator i = lr.results.begin(); i != lr.results.end(); ++i)
       if(flyweight.find((*i)->id) == flyweight.end() && (*i)->id != _id)
         insert((*i)->id, (*i)->ip);
         //  ... but not touch.  we didn't actually talk to the node.
@@ -287,14 +327,11 @@ void
 Kademlia::crash(Args *args)
 {
   // destroy k-buckets
-  KDEBUG(0) << "Kademlia::crash" << endl;
+  KDEBUG(1) << "Kademlia::crash" << endl;
   assert(node()->alive());
   node()->crash();
-  for(hash_map<NodeID, k_nodeinfo*>::iterator i = flyweight.begin(); i != flyweight.end(); ++i) {
-    char ptr[32]; sprintf(ptr, "%p", (*i).second);
-    KDEBUG(2) << "Kademlia::crash deleting " << ptr << endl;
+  for(hash_map<NodeID, k_nodeinfo*>::iterator i = flyweight.begin(); i != flyweight.end(); ++i)
     Kademlia::pool->push((*i).second);
-  }
 
   // prepare for coming back up
   flyweight.clear();
@@ -309,11 +346,8 @@ Kademlia::clear()
 {
   // destroy k-buckets
   KDEBUG(1) << "Kademlia::clear" << endl;
-  for(hash_map<NodeID, k_nodeinfo*>::iterator i = flyweight.begin(); i != flyweight.end(); ++i) {
-    char ptr[32]; sprintf(ptr, "%p", (*i).second);
-    KDEBUG(2) << "Kademlia::clear deleting " << ptr << endl;
+  for(hash_map<NodeID, k_nodeinfo*>::iterator i = flyweight.begin(); i != flyweight.end(); ++i)
     Kademlia::pool->push((*i).second);
-  }
 
   flyweight.clear();
   _root->collapse();
@@ -334,7 +368,7 @@ Kademlia::lookup(Args *args)
   Kademlia *k = (Kademlia*) Network::Instance()->getnode(key_ip)->getproto(proto_name());
   NodeID key = k->id();
 
-  KDEBUG(0) << "Kademlia::lookup: " << printID(key) << endl;
+  KDEBUG(1) << "Kademlia::lookup: " << printID(key) << endl;
   assert(node()->alive());
   assert(_nodeid2kademlia->find(key) != _nodeid2kademlia->end());
 
@@ -354,15 +388,17 @@ Kademlia::lookup(Args *args)
   // get best match
   k_nodeinfo *ki = *lr.results.begin();
   assert(lr.results.size());
-  char ptr[32]; sprintf(ptr, "%p", ki);
-  KDEBUG(2) << "Kademlia::lookup, best result = " << ptr << endl;
   assert(ki);
   ki->checkrep();
+
+  bool alive_and_joined = (*_nodeid2kademlia)[key]->node()->alive() &&
+                          (*_nodeid2kademlia)[key]->_joined;
 
   // now ping that node
   ping_args pa(ki->id, ki->ip);
   ping_result pr;
   record_stat(STAT_PING, 0, 0);
+  assert(ki->ip <= 1837);
   if(!doRPC(ki->ip, &Kademlia::do_ping, &pa, &pr) && node()->alive()) {
     KDEBUG(2) << "Kademlia::lookup: ping RPC to " << Kademlia::printID(ki->id) << " failed " << endl;
     if(flyweight.find(ki->id) != flyweight.end())
@@ -373,9 +409,6 @@ Kademlia::lookup(Args *args)
 
   KDEBUG(0) << "Kademlia::lookup, latency " << after - before << endl;
   
-  bool alive_and_joined = (*_nodeid2kademlia)[key]->node()->alive() &&
-                          (*_nodeid2kademlia)[key]->_joined;
-
   // did we find that node?
   if(key == ki->id){
     _good_lookups += 1;
@@ -402,14 +435,14 @@ Kademlia::do_ping(ping_args *args, ping_result *result)
 // }}}
 // {{{ Kademlia::do_lookup/find_value
 
-#define LOG_KDEBUG(x, y) { \
-  lresult->log << y;        \
-  KDEBUG(x) << y; }
+#define LOG_KDEBUG(x, y) KDEBUG(x) << y;
+
+// lresult->log << y;    
 
 void
 Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
 {
-  LOG_KDEBUG(1, "Kademlia::do_lookup: node " << printID(largs->id) << " does lookup for " << printID(largs->key) << ", flyweight.size() = " << flyweight.size() << endl);
+  LOG_KDEBUG(1, "Kademlia::do_lookup: node " << printbits(largs->id) << " does lookup for " << printbits(largs->key) << ", flyweight.size() = " << flyweight.size() << endl);
   assert(node()->alive());
 
   update_k_bucket(largs->id, largs->ip);
@@ -419,12 +452,10 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
   _root->traverse(&successors, this);
 
   // we can't do anything but return ourselves
+  closer::n = largs->key;
   if(!successors.results.size()) {
     LOG_KDEBUG(2, "do_lookup: my tree is empty; returning myself." << endl);
-    k_nodeinfo *me = Kademlia::pool->pop(_me);
-    char ptr[32]; sprintf(ptr, "%p", me);
-    LOG_KDEBUG(2, "me = " << Kademlia::printID(_me->id) << ", ptr = " << ptr << endl);
-    lresult->results.insert(me);
+    lresult->results.insert(Kademlia::pool->pop(_me));
     lresult->rid = _id;
     return;
   }
@@ -434,10 +465,10 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
   for(set<NodeID, IDcloser>::const_iterator i = successors.results.begin(); i != successors.results.end(); ++i) {
     assert(flyweight.find(*i) != flyweight.end());
     k_nodeinfo *ki = flyweight[*i];
+    assert(ki);
     k_nodeinfo *newki = Kademlia::pool->pop(ki);
     assert(newki);
-    char ptr[32]; sprintf(ptr, "%p", newki);
-    LOG_KDEBUG(2, "do_lookup: initializing resultset, adding = " << Kademlia::printID(newki->id) << ", dist = " << printID(distance(newki->id, largs->key)) << ", ptr = " << ptr << endl);
+    LOG_KDEBUG(2, "do_lookup: initializing resultset, adding = " << Kademlia::printbits(newki->id) << ", dist = " << printbits(distance(newki->id, largs->key)) << endl);
     lresult->results.insert(newki);
   }
 
@@ -445,16 +476,14 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
   // out of the set anyway, if it wasn't part of the answer.  this avoids
   // returning an empty set.
   k_nodeinfo *me = Kademlia::pool->pop(_me);
-  char ptr[32]; sprintf(ptr, "%p", me);
-  LOG_KDEBUG(2, "insert me = " << Kademlia::printID(_me->id) << ", ptr = " << ptr << " to be safe " << endl);
+  LOG_KDEBUG(2, "insert me = " << Kademlia::printbits(_me->id) << " to be safe " << endl);
   lresult->results.insert(me);
 
   // destroy all entries in results that are not part of the best k
   while(lresult->results.size() > Kademlia::k) {
     k_nodeinfo *i = *lresult->results.rbegin();
-    char ptr[32]; sprintf(ptr, "%p", i);
     lresult->results.erase(lresult->results.find(i));
-    LOG_KDEBUG(2, "do_lookup: deleting in truncate id = " << printID(i->id) << ", ip = " << i->ip << ", ptr = " << ptr << endl);
+    LOG_KDEBUG(2, "do_lookup: deleting in truncate id = " << printbits(i->id) << ", ip = " << i->ip << endl);
     Kademlia::pool->push(i);
   }
 
@@ -495,7 +524,7 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
     closer::n = largs->key;
     assert(lresult->results.size() <= Kademlia::k);
     for(set<k_nodeinfo*, closer>::const_iterator i = lresult->results.begin(); i != lresult->results.end(); ++i) {
-      LOG_KDEBUG(2, "do_lookup: finished? looking at " << printID((*i)->id) << endl);
+      LOG_KDEBUG(2, "do_lookup: finished? looking at " << printbits((*i)->id) << endl);
 
       // asked_all has to be false if there's any node in the resultset that we
       // haven't queried yet
@@ -512,7 +541,7 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
       }
 
       if(replied.find((*i)->id) == replied.end()) {
-        LOG_KDEBUG(2, "do_lookup: finished? haven't gotten a reply from " << printID((*i)->id) << " yet, so no." << endl);
+        LOG_KDEBUG(2, "do_lookup: finished? haven't gotten a reply from " << printbits((*i)->id) << " yet, so no." << endl);
         break;
       }
 
@@ -541,9 +570,7 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
         ri->outstanding_rpcs = outstanding_rpcs;
         LOG_KDEBUG(2, "do_lookup: we_are_done, reaper has the following crap." << endl);
         for(hash_map<unsigned, callinfo*>::const_iterator i = outstanding_rpcs->begin(); i != outstanding_rpcs->end(); ++i) {
-          char ptr[32]; sprintf(ptr, "%p", i->second);
-          char ptr2[32]; sprintf(ptr2, "%p", i->second->ki);
-          LOG_KDEBUG(2, "do_lookup: callinfo = " << ptr << ", callinfo->ki = " << ptr2 << ", callinfo->ki->id = " << printID(i->second->ki->id) << endl);
+          LOG_KDEBUG(2, "do_lookup: callinfo->ki->id = " << printbits(i->second->ki->id) << endl);
         }
         ThreadManager::Instance()->create(Kademlia::reap, (void*) ri);
       }
@@ -589,7 +616,7 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
     unsigned j = 0;
     for(set<k_nodeinfo*, closer>::const_iterator i = lresult->results.begin(); i != lresult->results.end(); ++i) {
       if(asked.find((*i)->id) == asked.end()) {
-        LOG_KDEBUG(2, "do_lookup: setting toask[" << j << "] to " << printID((*i)->id) << endl);
+        LOG_KDEBUG(2, "do_lookup: setting toask[" << j << "] to " << printbits((*i)->id) << endl);
         toask[j++] = *i;
       }
       if(++k_counter >= Kademlia::k || j >= effective_alpha)
@@ -605,8 +632,7 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
       if(toask[i] == 0)
         break;
 
-      char ptr[32]; sprintf(ptr, "%p", toask[i]);
-      LOG_KDEBUG(2, "do_lookup: toask[ " << i << "] = " << ptr << ", id = " << printID(toask[i]->id) << ", ip = " << toask[i]->ip << endl);
+      LOG_KDEBUG(2, "do_lookup: toask[ " << i << "] id = " << printbits(toask[i]->id) << ", ip = " << toask[i]->ip << endl);
 
 
       closer::n = largs->key;
@@ -617,7 +643,8 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
       // assert(toask[i]->ip <= 1024 && toask[i]->ip > 0);
 
       record_stat(STAT_LOOKUP, 1, 0);
-      LOG_KDEBUG(2, "do_lookup: asyncRPC to " << printID(toask[i]->id) << ", ip = " << toask[i]->ip << ", toask[" << i << "] = " << ptr << endl);
+      LOG_KDEBUG(2, "do_lookup: asyncRPC to " << printbits(toask[i]->id) << ", ip = " << toask[i]->ip << endl);
+      assert(toask[i]->ip <= 1837);
       unsigned rpc = asyncRPC(toask[i]->ip, &Kademlia::find_node, la, lr);
       callinfo *ci = New callinfo(Kademlia::pool->pop(toask[i]), la, lr);
       assert(ci);
@@ -632,6 +659,11 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
 
     // this was one more hop
     lresult->hops++;
+
+    LOG_KDEBUG(2, "do_lookup: results before rcvRPC loop" << endl);
+    closer::n = largs->key;
+    for(set<k_nodeinfo*, closer>::const_iterator i = lresult->results.begin(); i != lresult->results.end(); ++i)
+      LOG_KDEBUG(2, "do_lookup: id = " << printbits((*i)->id) << ", dist = " << printbits(distance(largs->key, (*i)->id)) << ", ip = " << (*i)->ip << endl);
 
     //
     // wait for all alpha RPCs to get back
@@ -652,13 +684,12 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
       // progress at all, we should give rcvRPC another chance.
       closer::n = largs->key;
       if(!ok) {
-        LOG_KDEBUG(2, "do_lookup: RPC to " << Kademlia::printID(ci->ki->id) << " failed" << endl);
+        LOG_KDEBUG(2, "do_lookup: RPC to " << Kademlia::printbits(ci->ki->id) << " failed" << endl);
         if(flyweight.find(ci->ki->id) != flyweight.end())
           erase(ci->ki->id);
         if(lresult->results.find(ci->ki) != lresult->results.end())
           lresult->results.erase(lresult->results.find(ci->ki));
-        char ptr[32]; sprintf(ptr, "%p", ci);
-        LOG_KDEBUG(2, "do_lookup: RPC to " << Kademlia::printID(ci->ki->id) << " failed, deleting ci = " << ptr << endl);
+        LOG_KDEBUG(2, "do_lookup: RPC to " << Kademlia::printbits(ci->ki->id) << " failed" << endl);
         delete ci;
         continue;
       }
@@ -666,36 +697,27 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
       //
       // RPC was ok
       //
-      LOG_KDEBUG(2, "do_lookup: " << Kademlia::printID(ci->ki->id) << " replied for lookup " << printID(largs->key) << endl);
+      LOG_KDEBUG(2, "do_lookup: " << Kademlia::printbits(ci->ki->id) << " replied for lookup " << printbits(largs->key) << endl);
       record_stat(STAT_LOOKUP, ci->lr->results.size(), 0);
       update_k_bucket(ci->lr->rid, ci->ki->ip);
 
       // put results that this node tells us in our results set
       closer::n = largs->key;
-      for(nodeinfo_set::const_iterator i = ci->lr->results.begin(); i != ci->lr->results.end(); ++i) {
-        char ptr[32]; sprintf(ptr, "%p", (*i));
-        LOG_KDEBUG(2, "do_lookup: RETURNED RESULT entry id = " << printID((*i)->id) << ", dist = " << printID(distance(largs->key, (*i)->id)) << ", ip = " << (*i)->ip << ", ptr = " << ptr << endl);
+      for(set<k_nodeinfo*, older>::const_iterator i = ci->lr->results.begin(); i != ci->lr->results.end(); ++i) {
+        LOG_KDEBUG(2, "do_lookup: RETURNED RESULT entry id = " << printbits((*i)->id) << ", dist = " << printbits(distance(largs->key, (*i)->id)) << ", ip = " << (*i)->ip << endl);
         k_nodeinfo *n = Kademlia::pool->pop(*i);
         assert(n);
-        sprintf(ptr, "%p", n);
-        LOG_KDEBUG(2, "do_lookup: RETURNED RESULT inserting as ptr = " << ptr << endl);
         pair<set<k_nodeinfo*, closer>::iterator, bool> rv = lresult->results.insert(n);
-        if(!rv.second) {
-          char ptr[32]; sprintf(ptr, "%p", n);
-          LOG_KDEBUG(2, "do_lookup: already in set, deleting " << ptr << endl);
+        if(!rv.second)
           Kademlia::pool->push(n);
-        }
       }
-      char ptr[32]; sprintf(ptr, "%p", ci);
-      LOG_KDEBUG(2, "do_lookup: bottom of loop, ci = " << ptr << endl);
       delete ci;
 
       // destroy all entries in results that are not part of the best k
       while(lresult->results.size() > Kademlia::k) {
         k_nodeinfo *i = *lresult->results.rbegin();
-        char ptr[32]; sprintf(ptr, "%p", i);
         lresult->results.erase(lresult->results.find(i));
-        LOG_KDEBUG(2, "do_lookup: deleting in truncate id = " << printID(i->id) << ", ip = " << i->ip << ", ptr = " << ptr << endl);
+        LOG_KDEBUG(2, "do_lookup: deleting in truncate id = " << printbits(i->id) << ", ip = " << i->ip << endl);
         Kademlia::pool->push(i);
       }
 
@@ -710,10 +732,9 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
     }
   }
 
-  LOG_KDEBUG(2, "do_lookup: results that I'm returning to " << printID(largs->id) << " who was looking key " << printID(largs->key) << endl);
-  for(set<k_nodeinfo*, closer>::const_iterator i = lresult->results.begin(); i != lresult->results.end(); ++i) {
-    char ptr[32]; sprintf(ptr, "%p", (*i));
-    LOG_KDEBUG(2, "do_lookup: result: id = " << printID((*i)->id) << ", lastts = " << (*i)->lastts << ", ip = " << (*i)->ip << ", ptr = " << ptr << endl);
+  LOG_KDEBUG(2, "do_lookup: results that I'm returning to " << printbits(largs->id) << " who was looking key " << printbits(largs->key) << endl);
+  NODES_ITER(&lresult->results) {
+    LOG_KDEBUG(2, "do_lookup: result: id = " << printbits((*i)->id) << ", lastts = " << (*i)->lastts << ", ip = " << (*i)->ip << endl);
   }
 
   // put ourselves as replier
@@ -726,48 +747,35 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
 void
 Kademlia::find_node(lookup_args *largs, lookup_result *lresult)
 {
-  char ptr[32]; sprintf(ptr, "%p", lresult);
-  KDEBUG(2) << "find_node invoked by " << printID(largs->id) << ", looking for " << printID(largs->key) << ", calling thread = " << largs->tid << ", inserting reply into lresult = " << ptr << endl;
+  KDEBUG(2) << "find_node invoked by " << printID(largs->id) << ", looking for " << printID(largs->key) << ", calling thread = " << largs->tid << ", inserting reply into lresult " << endl;
   assert(node()->alive());
 
   update_k_bucket(largs->id, largs->ip);
   lresult->rid = _id;
+
+
   closer::n = largs->key;
 
   // deal with the empty case
   if(!flyweight.size()) {
     k_nodeinfo *p = Kademlia::pool->pop(_id, ip());
     assert(p);
-    sprintf(ptr, "%p", p);
-    KDEBUG(2) << "find_node: tree is empty. returning myself, ip = " << ip() << ", ptr = " << ptr << endl;
+    KDEBUG(2) << "find_node: tree is empty. returning myself, ip = " << ip() << endl;
     pair<set<k_nodeinfo*, closer>::iterator, bool> rv = lresult->results.insert(p);
-    if(!rv.second) {
-      KDEBUG(2) << "find_node: insert failed, deleting ptr = " << ptr << endl;
+    if(!rv.second)
       Kademlia::pool->push(p);
-    }
     return;
   }
 
-  // fill result vector
-  k_collect_closest successors(largs->key);
-  _root->traverse(&successors, this);
-  for(set<NodeID, Kademlia::IDcloser>::const_iterator i = successors.results.begin(); i != successors.results.end(); ++i) {
-    KDEBUG(2) << "find_node: going to find " << printID(*i) << " in flyweight" << endl;
-    k_nodeinfo *p = Kademlia::pool->pop(flyweight[*i]);
-    assert(p);
-    sprintf(ptr, "%p", p);
-    KDEBUG(2) << "find_node: adding, id = " << Kademlia::printID(*i) << ", p->id = " << Kademlia::printID(p->id) << ", dist = " << Kademlia::printID(distance(largs->key, p->id)) << ", ip = " << p->ip << ", lastts = " << p->lastts << ", ptr = " << ptr << " to reply" << endl;
-    pair<set<k_nodeinfo*, closer>::iterator, bool> rv = lresult->results.insert(p);
-    if(!rv.second) {
-      KDEBUG(2) << "find_node: insert failed (2), deleting ptr = " << ptr << endl;
-      Kademlia::pool->push(p);
-    }
-  }
+  //
+  _root->find_node(largs->key, &lresult->results, 0);
 
   KDEBUG(2) << "find_node: returning:" << endl;
-  for(set<k_nodeinfo*, Kademlia::closer>::const_iterator i = lresult->results.begin(); i != lresult->results.end(); ++i)
-    KDEBUG(2) << "find_node: adding, id = " << Kademlia::printID((*i)->id) << ", dist = " << Kademlia::printID(distance(largs->key, (*i)->id)) << endl;
+  NODES_ITER(&lresult->results) {
+    KDEBUG(2) << "find_node: id = " << Kademlia::printID((*i)->id) << ", dist = " << Kademlia::printID(distance(largs->key, (*i)->id)) << endl;
+  }
 }
+
 
 // }}}
 // {{{ Kademlia::reschedule_stabilizer
@@ -870,8 +878,7 @@ Kademlia::insert(NodeID id, IPAddress ip, bool init_state)
   assert(flyweight.find(id) == flyweight.end());
 
   k_nodeinfo *ni = Kademlia::pool->pop(id, ip);
-  char ptr[32]; sprintf(ptr, "%p", ni);
-  KDEBUG(2) << "Kademlia::insert " << Kademlia::printID(id) << ", ip = " << ip << ", ptr = " << ptr << endl;
+  KDEBUG(2) << "Kademlia::insert " << Kademlia::printID(id) << ", ip = " << ip << endl;
   assert(ni);
   flyweight[id] = ni;
   _root->insert(id, false, init_state);
@@ -885,8 +892,7 @@ Kademlia::erase(NodeID id)
 
   assert(flyweight.find(id) != flyweight.end());
   _root->erase(id);
-  char ptr[32]; sprintf(ptr, "%p", flyweight[id]);
-  KDEBUG(2) << "Kademlia::erase deleting id = " << printID(id) << ", ip = " << flyweight[id]->ip << ", ptr = " << ptr << endl;
+  KDEBUG(2) << "Kademlia::erase deleting id = " << printID(id) << ", ip = " << flyweight[id]->ip << endl;
   Kademlia::pool->push(flyweight[id]);
   flyweight.erase(flyweight.find(id));
 }
@@ -980,8 +986,7 @@ Kademlia::reap(void *r)
     callinfo *ci = (*ri->outstanding_rpcs)[donerpc];
     assert(ci);
 
-    char ptr[32]; sprintf(ptr, "%p", (ci->ki));
-    KDEBUG(2) << "Kademlia::reap ok = " << ok << ", ki = " << ptr << endl;
+    KDEBUG(2) << "Kademlia::reap ok = " << ok << ", ki = " << endl;
     if(ok) {
       ri->k->update_k_bucket(ci->lr->rid, ci->ki->ip);
       ri->k->record_stat(STAT_LOOKUP, ci->lr->results.size(), 0);
@@ -989,8 +994,6 @@ Kademlia::reap(void *r)
       ri->k->erase(ci->ki->id);
 
     ri->outstanding_rpcs->erase(ri->outstanding_rpcs->find(donerpc));
-    sprintf(ptr, "%p", ci);
-    KDEBUG(2) << "Kademlia::reap deleting ci = " << ptr << endl;
     delete ci;
   }
 
@@ -1032,7 +1035,7 @@ k_nodes::insert(Kademlia::NodeID n, bool touch)
   assert(ninfo);
   // ninfo->checkrep();
 
-  // if already in set, and we're nog going to touch the timestamp, we're done.
+  // if already in set, and we're not going to touch the timestamp, we're done.
   nodeset_t::iterator pos = nodes.find(ninfo);
   if(pos != nodes.end() && !touch)
     return;
@@ -1053,7 +1056,6 @@ k_nodes::insert(Kademlia::NodeID n, bool touch)
   // truncate end
   if(nodes.size() > Kademlia::k) {
     k_nodeinfo *ninfo = *nodes.rbegin();
-    char ptr[32]; sprintf(ptr, "%p", ninfo);
     KDEBUG(2) << "k_nodes::insert truncating " << Kademlia::printID(ninfo->id) << endl;
     nodes.erase(nodes.find(ninfo));
     _nodes_by_id.erase(_nodes_by_id.find(ninfo));
@@ -1062,7 +1064,7 @@ k_nodes::insert(Kademlia::NodeID n, bool touch)
     if(_parent->replacement_cache->size() < Kademlia::k)
       _parent->replacement_cache->insert(ninfo);
     else {
-      KDEBUG(2) << "k_nodes::insert truncating " << Kademlia::printID(ninfo->id) << ", deleting " << ptr << endl;
+      KDEBUG(2) << "k_nodes::insert truncating " << Kademlia::printID(ninfo->id) << endl;
       _parent->kademlia()->flyweight.erase(_parent->kademlia()->flyweight.find(ninfo->id));
       Kademlia::pool->push(ninfo);
     }
@@ -1117,27 +1119,6 @@ k_nodes::contains(Kademlia::NodeID id) const
   return (nodes.find(kinfo) != nodes.end());
 }
 // }}}
-// {{{ k_nodes::inrange
-/*
- * pre: -
- * returns: whether or not this NodeID is within the range in nodes.
- */
-bool
-k_nodes::inrange(Kademlia::NodeID id) const
-{
-  // for KDEBUG purposes
-  // Kademlia::NodeID _id = _parent->kademlia()->id();
-
-  checkrep(false);
-
-  if(nodes.size() <= 1)
-    return false;
-  k_nodeinfo *first = *_nodes_by_id.begin();
-  k_nodeinfo *last = *_nodes_by_id.rbegin();
-  // KDEBUG(2) <<  "k_nodes::inrange " << Kademlia::printID(id) << " between " << Kademlia::printID(first->id) << " and " << Kademlia::printID(last->id) << endl;
-  return(id >= first->id && id <= last->id);
-}
-// }}}
 // {{{ k_nodes::checkrep
 void
 k_nodes::checkrep(bool rangecheck) const
@@ -1159,7 +1140,7 @@ k_nodes::checkrep(bool rangecheck) const
   // all nodes are unique
   // all nodes are also in _nodes_by_id
   hash_map<Kademlia::NodeID, bool> haveseen;
-  for(nodeset_t::const_iterator i = nodes.begin(); i != nodes.end(); ++i) {
+  NODES_ITER(&nodes) {
     assert(_parent->kademlia()->flyweight.find((*i)->id) != _parent->kademlia()->flyweight.end());
     assert(haveseen.find((*i)->id) == haveseen.end());
     assert(_nodes_by_id.find(*i) != _nodes_by_id.end());
@@ -1236,20 +1217,12 @@ k_nodeinfo::checkrep() const
 // }}}
 
 // {{{ k_bucket::k_bucket
-k_bucket::k_bucket(k_bucket *parent, Kademlia *k) : leaf(true), parent(parent)
+k_bucket::k_bucket(k_bucket *parent, Kademlia *k) : parent(parent), _kademlia(k)
 {
-  if(k) {
-    _kademlia = k;
-    _kademlia->setroot(this);
-  } else
-    _kademlia = parent->_kademlia;
-
   child[0] = child[1] = 0;
-  nodes = New k_nodes(this);
-  assert(nodes);
-  replacement_cache = New set<k_nodeinfo*, Kademlia::younger>;
-  assert(replacement_cache);
-  checkrep();
+  nodes = 0;
+  replacement_cache = 0;
+  leaf = false;
 }
 // }}}
 // {{{ k_bucket::~k_bucket
@@ -1269,9 +1242,9 @@ k_bucket::~k_bucket()
 void
 k_bucket::traverse(k_traverser *traverser, Kademlia *k, string prefix, unsigned depth, unsigned leftright)
 {
-  // Kademlia::NodeID _id = kademlia()->id();
+  Kademlia::NodeID _id = kademlia()->id();
   // if(!depth)
-    // KDEBUG(1) << "k_nodes::traverser for " << traverser->type() << endl;
+  KDEBUG(1) << "k_bucket::traverser for " << traverser->type() << ", prefix = " << prefix << endl;
   checkrep();
 
   if(!leaf) {
@@ -1297,6 +1270,49 @@ k_bucket::traverse(k_traverser *traverser, Kademlia *k, string prefix, unsigned 
   checkrep();
 }
 // }}}
+// {{{ k_bucket::find_node
+void
+k_bucket::find_node(Kademlia::NodeID key, set<k_nodeinfo*, Kademlia::closer> *v, unsigned depth)
+{
+  checkrep();
+
+  Kademlia::NodeID _id = kademlia()->id();
+
+  // recurse deeper in the right direction if we can
+  if(!leaf) {
+    unsigned leftmostbit = Kademlia::getbit(key, depth);
+    KDEBUG(1) << "k_bucket::insert heading towards " << leftmostbit << endl;
+    if(v->size() < Kademlia::k)
+      child[leftmostbit]->find_node(key, v, depth+1);
+    if(v->size() < Kademlia::k)
+      child[leftmostbit^1]->find_node(key, v, depth+1);
+    checkrep();
+    return;
+  }
+
+  // collect stuff from the k-bucket itself
+  NODES_ITER(&nodes->nodes) {
+    pair<set<k_nodeinfo*, Kademlia::closer>::iterator, bool> rv = v->insert(Kademlia::pool->pop(*i));
+    assert(rv.second);
+    if(v->size() >= Kademlia::k) {
+      checkrep();
+      return;
+    }
+  }
+
+  // XXX: collect stuff from replacement cache.  IS THIS OK?
+  for(set<k_nodeinfo*, Kademlia::younger>::const_iterator i = replacement_cache->begin(); i != replacement_cache->end(); ++i) {
+    pair<set<k_nodeinfo*, Kademlia::closer>::iterator, bool> rv = v->insert(Kademlia::pool->pop(*i));
+    assert(rv.second);
+    if(v->size() >= Kademlia::k) {
+      checkrep();
+      return;
+    }
+  }
+
+  checkrep();
+}
+// }}}
 // {{{ k_bucket::insert
 // pre: id is in flyweight, its timestamp (lastts) has been set.
 // post: if id was already in k-bucket, its position is updated.
@@ -1311,62 +1327,33 @@ k_bucket::insert(Kademlia::NodeID id, bool touch, bool init_state, string prefix
 
   // for KDEBUG
   Kademlia::NodeID _id = kademlia()->id();
-  k_nodeinfo *kinfo = kademlia()->flyweight[id];
 
-  if(depth == 0)
-    KDEBUG(2) << "k_bucket::insert: id = " << Kademlia::printID(id) << ", ip = " << kinfo->ip << ", prefix = " << prefix << endl;
+  KDEBUG(1) << "k_bucket::insert " << Kademlia::printbits(id) << ", prefix = " << prefix << endl;
 
-  unsigned leftmostbit = Kademlia::getbit(id, depth);
-  // KDEBUG(2) << "insert: leftmostbit = " << leftmostbit << ", depth = " << depth << endl;
-
-  //
-  // NON-LEAF: RECURSE DEEPER
-  //
+  // recurse deeper if we can
   if(!leaf) {
-    // KDEBUG(2) << "k_bucket::insert: child[" << leftmostbit << "] exists, descending" << endl;
-    return child[leftmostbit]->insert(id, touch, init_state, prefix + (leftmostbit ? "1" : "0"), depth+1);
-  }
-
-
-  //
-  // LEAF
-  //
-  // if this node is already in the k-bucket, update timestamp.
-  // if this node is not in the k-bucket, and there's still space, add it.
-  if(nodes->contains(id) || !nodes->full()) {
-    // KDEBUG(2) << "k_bucket::insert nodes contains " << Kademlia::printID(id) << " OR is not full." << endl;
-    assert(!nodes->inrange(kademlia()->id()));
-    nodes->insert(id, touch);
-    nodes->checkrep(false);
-    if(nodes->inrange(kademlia()->id())) {
-      divide(depth);
-      checkrep();
-    }
-    return;
-  }
-
-  // when we're initializing, we're trying to insert every id in everyone's
-  // k-buckets, so no need to put it in the replacement cache
-  if(init_state) {
+    unsigned leftmostbit = Kademlia::getbit(id, depth);
+    KDEBUG(1) << "k_bucket::insert heading towards " << leftmostbit << endl;
+    child[leftmostbit]->insert(id, touch, init_state, prefix + (leftmostbit ? "1" : "0"), depth+1);
     checkrep();
     return;
   }
 
-  // we're full already, just put in replacement cache, and truncate to
-  // Kademlia::k
-  //
-  // XXX: this is wrong.  we haven't heard from this guy yet.
-  // do we need a ping?
-  if(replacement_cache->find(kinfo) != replacement_cache->end()) {
-    // KDEBUG(2) << "k_bucket::insert removing " << Kademlia::printID(id) << " from replacement first." << endl;
-    replacement_cache->erase(replacement_cache->find(kinfo));
+  // if not in k-bucket yet, or there's more space: insert it.
+  if(nodes->contains(id) || !nodes->full()) {
+    nodes->insert(id, touch);
+    nodes->checkrep(false);
+    return;
   }
 
-  kinfo->lastts = now();
-  // KDEBUG(2) << "k_bucket::insert adding " << Kademlia::printID(id) << " to replacement cache." << endl;
-  replacement_cache->insert(kinfo);
-  // XXX: we can't really truncate the replacement cache.  it will break the
-  // invariant that everything in the flyweight has to be in a k-bucket
+  // we're full.  put in replacement_cache, remove old entry first.
+  if(replacement_cache->size() < Kademlia::k) {
+    k_nodeinfo *kinfo = kademlia()->flyweight[id];
+    if(replacement_cache->find(kinfo) != replacement_cache->end())
+      replacement_cache->erase(replacement_cache->find(kinfo));
+    kinfo->lastts = now();
+    replacement_cache->insert(kinfo);
+  }
 
   checkrep();
 }
@@ -1377,59 +1364,37 @@ k_bucket::erase(Kademlia::NodeID id, string prefix, unsigned depth)
 {
   checkrep();
 
-  // for KDEBUG
-  Kademlia::NodeID _id = kademlia()->id();
-  k_nodeinfo *kinfo = kademlia()->flyweight[id];
-
-  if(depth == 0)
-    KDEBUG(2) << "k_bucket::erase: node = " << Kademlia::printID(id) << ", ip = " << kinfo->ip << ", prefix = " << prefix << endl;
-
-  unsigned leftmostbit = Kademlia::getbit(id, depth);
-  // unsigned myleftmostbit = Kademlia::getbit(kademlia()->id(), depth);
-  KDEBUG(2) << "k_bucket::erase: leftmostbit = " << leftmostbit << ", depth = " << depth << endl;
-
-  //
-  // NODE WITH CHILD: recurse deeper.
-  //
+  // recurse deeper
   if(!leaf) {
-    // KDEBUG(2) << "k_bucket::erase: _child[" << leftmostbit << "] exists, descending" << endl;
+    unsigned leftmostbit = Kademlia::getbit(id, depth);
     child[leftmostbit]->erase(id, prefix + (leftmostbit ? "1" : "0"), depth+1);
     checkrep();
     return;
   }
 
-  //
-  // this is a leaf.  erase the node.
-  //
-  if(nodes->contains(id))
-    nodes->erase(id);
-  else {
-    // XXX: is true, but crashes...
-    // assert(replacement_cache->find(kinfo) != replacement_cache->end());
-    replacement_cache->erase(replacement_cache->find(kinfo));
-    return;
-  }
-
-  //
-  // get front guy from replacement cache
-  //
-  if(replacement_cache->size()) {
-    k_nodeinfo *ki = *(replacement_cache->begin());
-    nodes->insert(ki->id, false); // don't touch.  we're just moving it ove.r
-    replacement_cache->erase(replacement_cache->find(ki));
-  }
-
-  //
-  // Now if the range in this k-bucket includes my own ID, then split it,
-  // otherwise just return the peer_t we just inserted.
-  //
-  if(!nodes->inrange(kademlia()->id())) {
+  // if not in k-bucket itself, it must be in replacement_cache.  remove from
+  // there.
+  if(!nodes->contains(id)) {
+    k_nodeinfo *ki = kademlia()->flyweight[id];
+    set<k_nodeinfo*, Kademlia::younger>::const_iterator pos = replacement_cache->find(ki);
+    if(pos != replacement_cache->end())
+      replacement_cache->erase(replacement_cache->find(ki));
     checkrep();
     return;
   }
 
-  // divide contents of nodes over children
-  divide(depth);
+  // remove from k-bucket
+  nodes->erase(id);
+
+  // get latest from replacement_cache to nodes
+  if(!replacement_cache->size()) {
+    checkrep();
+    return;
+  }
+
+  k_nodeinfo *ki = *(replacement_cache->begin());
+  nodes->insert(ki->id, false);
+  replacement_cache->erase(replacement_cache->find(ki));
   checkrep();
 }
 // }}}
@@ -1445,65 +1410,10 @@ k_bucket::collapse()
   if(!leaf) {
     child[0]->collapse();
     child[1]->collapse();
-    leaf = true;
   } else {
     nodes->clear();
     replacement_cache->clear();
   }
-
-  checkrep();
-}
-// }}}
-//{{{ k_bucket::divide
-// pre: own ID is in range of nodes
-// post: this is turned into a non-leaf, contents divided over children.
-void
-k_bucket::divide(unsigned depth)
-{
-  assert(leaf);
-
-  // for KDEBUG
-  Kademlia::NodeID _id = kademlia()->id();
-  KDEBUG(2) << "k_bucket::divide" << endl;
-
-  // can't do full checkrep because inrange() is true
-  assert(nodes->inrange(kademlia()->id()));
-
-  // we are transforming from leaf to node.  allocate the children
-  leaf = false;
-  if(!child[0])
-    child[0] = New k_bucket(this);
-  child[0]->leaf = true;
-  child[0]->nodes->clear();
-  child[0]->replacement_cache->clear();
-  assert(child[0]);
-
-  if(!child[1])
-    child[1] = New k_bucket(this);
-  child[1]->leaf = true;
-  child[1]->nodes->clear();
-  child[1]->replacement_cache->clear();
-  assert(child[1]);
-
-  // divide k-bucket
-  for(k_nodes::nodeset_t::const_iterator i = nodes->nodes.begin(); i != nodes->nodes.end(); ++i) {
-    unsigned bit = Kademlia::getbit((*i)->id, depth);
-    child[bit]->nodes->insert((*i)->id, false);
-  }
-
-  // divide the replacement cache
-  for(set<k_nodeinfo*, Kademlia::younger>::const_iterator i = replacement_cache->begin(); i != replacement_cache->end(); ++i) {
-    unsigned bit = Kademlia::getbit((*i)->id, depth);
-    child[bit]->nodes->insert((*i)->id, false);
-  }
-
-  if(child[0]->nodes->inrange(kademlia()->id()))
-    child[0]->divide(depth+1);
-  if(child[1]->nodes->inrange(kademlia()->id()))
-    child[1]->divide(depth+1);
-
-  replacement_cache->clear();
-  nodes->clear();
 
   checkrep();
 }
@@ -1628,7 +1538,7 @@ k_stabilizer::execute(k_bucket *k, string prefix, unsigned depth, unsigned leftr
     return;
 
   // update our k-buckets
-  for(set<k_nodeinfo*, Kademlia::closer>::const_iterator i = lr.results.begin(); i != lr.results.end(); ++i) {
+  NODES_ITER(&lr.results) {
     KDEBUG(2) << "k_stabilizer: update_k_bucket " << Kademlia::printID((*i)->id) << ", ip = " << (*i)->ip << endl;
     mykademlia->update_k_bucket((*i)->id, (*i)->ip);
   }
@@ -1688,9 +1598,10 @@ k_finder::execute(k_bucket *k, string prefix, unsigned depth, unsigned leftright
     return;
 
   k->checkrep();
-  for(Kademlia::nodeinfo_set::const_iterator i = k->nodes->nodes.begin(); i != k->nodes->nodes.end(); ++i)
+  NODES_ITER(&k->nodes->nodes) {
     if((*i)->id == _n)
       _found++;
+  }
 
   for(set<k_nodeinfo*, Kademlia::younger>::const_iterator i = k->replacement_cache->begin(); i != k->replacement_cache->end(); ++i)
     if((*i)->id == _n)
@@ -1705,23 +1616,14 @@ k_dumper::execute(k_bucket *k, string prefix, unsigned depth, unsigned leftright
   for(unsigned i=0; i<depth; i++)
     spaces += "  ";
   cout << spaces << "prefix: " << prefix << ", depth " << depth << endl;
-  for(Kademlia::nodeinfo_set::const_iterator i = k->nodes->nodes.begin(); i != k->nodes->nodes.end(); ++i) {
-    char ptr[32]; sprintf(ptr, "%p", (*i));
-    cout << spaces << "  " << Kademlia::printID((*i)->id) << ", lastts = " << (*i)->lastts << ", ptr = " << ptr << endl;
+  NODES_ITER(&k->nodes->nodes) {
+    cout << spaces << "  " << Kademlia::printbits((*i)->id) << ", lastts = " << (*i)->lastts << endl;
   }
 
   cout << spaces << "prefix: " << prefix << ", depth " << depth << ", replacement cache: " << endl;
   for(set<k_nodeinfo*, Kademlia::younger>::const_iterator i = k->replacement_cache->begin(); i != k->replacement_cache->end(); ++i) {
-    char ptr[32]; sprintf(ptr, "%p", (*i));
-    cout << spaces << "  " << Kademlia::printID((*i)->id) << ", lastts = " << (*i)->lastts << ", ptr = " << ptr << endl;
+    cout << spaces << "  " << Kademlia::printID((*i)->id) << ", lastts = " << (*i)->lastts << endl;
   }
-}
-// }}}
-// {{{ k_delete::execute
-void
-k_delete::execute(k_bucket *k, string prefix, unsigned depth, unsigned leftright)
-{
-  delete k;
 }
 // }}}
 // {{{ k_check::execute
@@ -1736,7 +1638,7 @@ k_check::execute(k_bucket *k, string prefix, unsigned depth, unsigned leftright)
   set<Protocol*> l = Network::Instance()->getallprotocols(k->kademlia()->proto_name());
 
   // go through all pointers in node
-  for(Kademlia::nodeinfo_set::const_iterator i = k->nodes->nodes.begin(); i != k->nodes->nodes.end(); ++i) {
+  NODES_ITER(&k->nodes->nodes) {
     for(set<Protocol*>::iterator pos = l.begin(); pos != l.end(); ++pos) {
       Kademlia *kad = (Kademlia*) *pos;
       if(kad->id() == k->kademlia()->id())
@@ -1762,6 +1664,7 @@ k_check::execute(k_bucket *k, string prefix, unsigned depth, unsigned leftright)
 k_collect_closest::k_collect_closest(Kademlia::NodeID n) :
   k_traverser("k_collect_closest"), _node(n)
 {
+  DEBUG(2) << "k_collect_closest " << Kademlia::printbits(n) << endl;
   Kademlia::IDcloser::n = n;
   results.clear();
 }
@@ -1772,16 +1675,16 @@ k_collect_closest::execute(k_bucket *k, string prefix, unsigned depth, unsigned 
 {
   k->checkrep();
 
-  if(!k->leaf)
-    return;
-
   // for debugging purposes only
   Kademlia::NodeID _id = k->kademlia()->id();
   Kademlia::IDcloser::n = _node;
+  KDEBUG(2) << "k_collect_closest: prefix = " << prefix << endl;
 
-  for(Kademlia::nodeinfo_set::const_iterator i = k->nodes->nodes.begin(); i != k->nodes->nodes.end(); ++i) {
-    char ptr[32]; sprintf(ptr, "%p", (*i));
-    KDEBUG(2) << "k_collect_closest::execute: insert = " << Kademlia::printID((*i)->id) << ", lastts = " << (*i)->lastts << ", ip = " << (*i)->ip << ", ptr = " << ptr << " in resultset" << endl;
+  if(!k->leaf)
+    return;
+
+  NODES_ITER(&k->nodes->nodes) {
+    KDEBUG(2) << "k_collect_closest::execute: insert = " << Kademlia::printID((*i)->id) << ", lastts = " << (*i)->lastts << ", ip = " << (*i)->ip << " in resultset" << endl;
     results.insert((*i)->id);
   }
 

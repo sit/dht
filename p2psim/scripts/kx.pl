@@ -10,16 +10,16 @@ my $nnodes = 1837; # Jinyang uses mostly 1024, also 1837
 my $diameter = 100; # diameter of Euclidean universe
 my $prefix = ""; # prefix to executable
 my $observer = 1;
-my $king = "";
+my $king = undef;
 
 
 &process_args(@ARGV);
 @ARGV = ();
 
 # if defined, use this rather than random euclidean.
-if($king eq "" && $nnodes == 1024) {
+if(!defined $king && $nnodes == 1024) {
     $king = "/home/am4/jinyang/chord/sfsnet/p2psim/oldking1024-t";
-} elsif($king eq "" && $nnodes == 1837){
+} elsif(!defined $king && $nnodes == 1837){
     $king = "/home/am4/jinyang/chord/sfsnet/p2psim/oldking1837-t";
 } else {
     print STDERR "kx.pl: no king for $nnodes nodes\n";

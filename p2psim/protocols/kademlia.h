@@ -151,8 +151,6 @@ private:
 // }}}
 // {{{ public
 public:
-  class older;
-  typedef set<k_nodeinfo*, older> nodeinfo_set;
   Kademlia(Node*, Args);
   ~Kademlia();
 
@@ -188,10 +186,13 @@ public:
 
   class IDcloser { public:
     bool operator()(const NodeID &n1, const NodeID &n2) const {
+      DEBUG(2) << "IDcloser comparing " << Kademlia::printbits(n1) << " and " << Kademlia::printbits(n2) << ", with node = " << Kademlia::printbits(n) << endl;
       if(n1 == n2)
         return false;
       Kademlia::NodeID dist1 = Kademlia::distance(n1, n);
       Kademlia::NodeID dist2 = Kademlia::distance(n2, n);
+      DEBUG(2) << "dist1 = " << Kademlia::printbits(dist1) << endl;
+      DEBUG(2) << "dist2 = " << Kademlia::printbits(dist2) << endl;
       if(dist1 == dist2)
         return n1 < n2;
       return dist1 < dist2;
@@ -299,7 +300,6 @@ public:
   void init_state(list<Protocol*>);
   void reschedule_stabilizer(void*);
   friend class k_bucket;
-  void setroot(k_bucket *k) { _root = k; }
 
   //
   // member variables
@@ -411,13 +411,14 @@ private:
 class k_traverser;
 class k_bucket {
 public:
-  k_bucket(k_bucket*, Kademlia * = 0);
+  k_bucket(k_bucket*, Kademlia*);
   ~k_bucket();
 
   Kademlia *kademlia()  { return _kademlia; }
   void traverse(k_traverser*, Kademlia*, string = "", unsigned = 0, unsigned = 0);
   void insert(Kademlia::NodeID, bool, bool = false, string = "", unsigned = 0);
   void erase(Kademlia::NodeID, string = "", unsigned = 0);
+  void find_node(Kademlia::NodeID, set<k_nodeinfo*, Kademlia::closer> *, unsigned = 0);
   void checkrep();
 
   void divide(unsigned);
@@ -454,7 +455,7 @@ private:
 // }}}
 // {{{ class k_collect_closest
 class k_collect_closest : public k_traverser { public:
-  k_collect_closest(Kademlia::NodeID);
+  k_collect_closest(Kademlia::NodeID n);
   virtual ~k_collect_closest() {}
   virtual void execute(k_bucket*, string, unsigned, unsigned);
 
@@ -502,15 +503,6 @@ private:
 class k_dumper : public k_traverser { public:
   k_dumper() : k_traverser("k_dumper") {}
   virtual ~k_dumper() {}
-  virtual void execute(k_bucket*, string, unsigned, unsigned);
-
-private:
-};
-// }}}
-// {{{ class k_delete
-class k_delete : public k_traverser { public:
-  k_delete() : k_traverser("k_delete") {}
-  virtual ~k_delete() {}
   virtual void execute(k_bucket*, string, unsigned, unsigned);
 
 private:
