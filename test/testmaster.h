@@ -78,13 +78,15 @@ private:
   typedef struct client {
     unsigned id;
     const testslave *slave;
+    str fname;
     ptr<dhashclient> dhc;
     ihash_entry<client> hash_link;
 
-    client(unsigned i, const testslave *s, ptr<dhashclient> d)
+    client(unsigned i, const testslave *s, str f, ptr<dhashclient> d)
     {
       id = i;
       slave = s;
+      fname = f;
       dhc = d;
     }
     ~client() {}
@@ -92,6 +94,9 @@ private:
 
   typedef ihash<unsigned, client, &client::id, &client::hash_link> clients_t;
   clients_t _clients;
+
+  // for destructor
+  void traverse_cb(client *);
 
   unsigned _nhosts;
   bool _busy;

@@ -37,6 +37,13 @@ testmaster::~testmaster()
 {
   DEBUG(2) << "testmaster destructor\n";
   // XXX: unregister fdcb callbacks
+  _clients.traverse(wrap(mkref(this), &testmaster::traverse_cb));
+}
+
+void
+testmaster::traverse_cb(client *c)
+{
+  unlink(c->fname);
 }
 
 
@@ -139,7 +146,7 @@ testmaster::addnode_cb(conthunk tx, const int there_fd)
     fatal << "couldn't create dhashclient on " << tx.p2psocket << "\n";
 
   // update hash table
-  client *c = New client(tx.id, tx.s, dhc);
+  client *c = New client(tx.id, tx.s, tx.p2psocket, dhc);
   _clients.insert(c);
 
   // call callback once all slaves are connected
