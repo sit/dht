@@ -13,33 +13,48 @@ topbit (Chord::CHID n)
 vector<Chord::IDMap>
 Koorde::find_successors(CHID key, int m)
 {
-  cout << "Koorde find_successor(" << me.id << "): " << key << endl;
+  printf ("Koorde find_successor(ip %u,id %qx,key %qx)\n", me.ip, me.id, key);
+
   koorde_lookup_arg a;
   koorde_lookup_ret r;
   a.k = key;
   a.kshift = key;
   a.i = me.id;
   koorde_lookup (&a, &r);
-  cout << "Koorde find_successor(" << me.id << "): " << key 
-       << " = " << r.r.id << endl;
+
+  printf ("Koorde find_successor(%qx, %qx) = %qx\n", me.id, key, r.r.id);
   vector<Chord::IDMap> succs;
   succs.push_back (r.r);
   return succs;
 }
 
 void
-Koorde::stabilize (void *) 
+Koorde::fix_debruijn () 
 {
-  Chord::stabilize ();
-  cout << "Koorde::stabilzie\n";
+  cout << "Koorde::fix_debruijn\n";
   vector<IDMap> succs = find_successors (debruijn, 1);
   assert (succs.size () > 0);
   loctable->add_node(succs[0]);
 }
 
-Koorde::Koorde(Node *n) : Chord(n) {
+void
+Koorde::reschedule_stabilizer(void *x)
+{
+  Koorde::stabilize();
+  delaycb(STABLE_TIMER, &Koorde::reschedule_stabilizer, (void *)0);
+}
+
+void
+Koorde::stabilize()
+{
+  Chord::stabilize();
+  fix_debruijn();
+}
+
+Koorde::Koorde(Node *n) : Chord(n) 
+{
   debruijn = me.id << 1;
-  cout << "Koorde " << me.id << " debruijn " << debruijn << endl;
+  printf ("Koorde: %u, id=%qx debruijn=%qx\n", me.ip, me.id, debruijn);
 };
 
 Chord::CHID
@@ -54,10 +69,13 @@ void
 Koorde::koorde_lookup(koorde_lookup_arg *a, koorde_lookup_ret *r)
 {
   IDMap succ = loctable->succ(1);
-  printf ("Koorde (%qu) lookup key=%qx kshift=%qx i=%qx succ=%qu\n", 
+  printf ("Koorde_lookup (id=%qx, key=%qx, kshift=%qx, i=%qx) succ=%qx\n", 
 	  me.id, a->k, a->kshift, a->i, succ.id);
-  if (ConsistentHash::betweenrightincl (me.id, succ.id, a->k)) {
+  if (ConsistentHash::betweenrightincl (me.id, succ.id, a->k) ||
+      me.id == succ.id) {
     r->r = succ;
+    printf ("Koorde_lookup: done succ key = %qx: %u %qx\n", 
+	    a->k, succ.ip, succ.id);
   } else if (ConsistentHash::betweenrightincl (me.id, succ.id, a->i)) {
     koorde_lookup_arg na;
     koorde_lookup_ret nr;
@@ -65,11 +83,13 @@ Koorde::koorde_lookup(koorde_lookup_arg *a, koorde_lookup_ret *r)
     na.k = a->k;
     na.kshift = a->kshift << 1;
     na.i = nextimagin (a->i, a->kshift);
+    printf ("Koorde_lookup: contact de bruijn %u %qx\n", d.ip, d.id);
     doRPC (d.ip, &Koorde::koorde_lookup, &na, &nr);
     r->r = nr.r;
   } else {
     koorde_lookup_arg na = *a;
     koorde_lookup_ret nr;
+    printf ("Koorde_lookup: contact successor %u %qx\n", succ.ip, succ.id);
     doRPC (succ.ip,  &Koorde::koorde_lookup, &na, &nr);
     r->r = nr.r;
   }

@@ -84,12 +84,15 @@ Network::run()
       continue;
     }
 
-    Node *dstnode;
+    Node *dstnode, *srcnode;
     switch(i) {
       // get packet from network and schedule delivery
       case 0:
         dstnode = _nodes[p->dst()];
-        latency = _top->latency(_nodes[p->src()], dstnode);
+	srcnode = _nodes[p->src()];
+	assert (dstnode);
+	assert (srcnode);
+        latency = _top->latency(srcnode, dstnode);
         ne = new NetEvent();
         ne->ts = latency;
         ne->node = dstnode;

@@ -66,6 +66,7 @@ Protocol::_doRPC(IPAddress dst, member_f fn, void* args, void* ret)
   p->_fn = fn;
   p->_args = args;
   p->_ret = ret;
+  assert (dst);
   p->_proto = ProtocolFactory::Instance()->name(this);
   return _node->sendPacket(dst, p);
 }

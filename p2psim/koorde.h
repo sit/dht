@@ -22,13 +22,16 @@ public:
   // RPC handlers
   void koorde_lookup (koorde_lookup_arg *, koorde_lookup_ret *);
 
-  void stabilize (void *);
 protected:
   Chord::CHID debruijn;
 
   Chord::CHID nextimagin (CHID i, CHID kshift);
 
   vector<Chord::IDMap> Koorde::find_successors(CHID key, int m);
+
+  void fix_debruijn();
+  void stabilize();
+  void reschedule_stabilizer(void *x);
 
 };
 
