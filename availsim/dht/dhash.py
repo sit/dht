@@ -14,9 +14,15 @@ class node:
     """A subsidiary class for DHash nodes"""
     def __init__ (my, id):
         my.id = id
-        my.blocks = []
+        my.blocks = {}
         my.alive = 1
         my.bytes = 0
+
+        my.last_alive = 0
+        my.lifetime = 0
+        
+        my.nrpc = 0
+        my.sent_bytes = 0
 
     def start (my):
         my.alive = 1
@@ -25,29 +31,39 @@ class node:
     
     def crash (my):
         my.stop ()
-        my.blocks = []
+        my.blocks = {}
         my.bytes  = 0
 
     def store (my, block, size):
         assert my.alive
         if block not in my.blocks:
-            bisect.insort (my.blocks, block)
+            my.blocks[block] = size
             my.bytes += size
         
     def __cmp__ (my, other):
         return cmp (my.id, other.id)
+    def __repr__ (my):
+        return "%d" % my.id
     def __str__ (my):
-        return hex(long(my.id)).lower()[2:-1]
+        # return hex(long(my.id)).lower()[2:-1]
+        return "%d" % my.id
 
 class dhash:
     """A Global View DHash simulator.  Subclass to actually store stuff.
     Provides a simple paramterizable insert and lazy repair implementation.
     The repair implementation does not delete excess fragments from nodes.
+    Repair happens at the end of each observed time step.
+
+    Time is maintained by the external simulator.  The simulator calls
+    time_changed whenever time is updated because of an additional event.
     """
     def __init__ (my):
         my.nodes = []
         my.deadnodes = {}
         my.allnodes = {}
+        my.blocks = {}
+        
+        my.now_nodes = [] # nodes that changed liveness this time step.
 
     def add_node (my, id):
         # Find or create the node
@@ -67,8 +83,8 @@ class dhash:
             bisect.insort (my.nodes, nnode)
         else:
             raise KeyError, "Duplicate insert of %d" % id
-        
-        my.repair (nnode)
+
+        if nnode not in my.now_nodes: my.now_nodes.append (nnode)
     
     def _failure (my, id, crash):
         n = my.allnodes[id]
@@ -81,7 +97,7 @@ class dhash:
             assert my.nodes[d - 1] == n
             my.nodes.pop (d - 1)
             my.deadnodes[n.id] = n
-            my.repair (n)
+            if n not in my.now_nodes: my.now_nodes.append (n)
         
     def fail_node (my, id):
         my._failure (id, 0)
@@ -91,12 +107,14 @@ class dhash:
 
     def find_successor_index (my, id):
         # if id in my.nodes, returns the index of id.
-        n = bisect.bisect_left (map(lambda x: x.id, my.nodes), id)
+	dummy = node (id)
+        n = bisect.bisect_left (my.nodes, dummy)
         if n >= len(my.nodes):
             n = 0            
         return n
     def find_predecessor_index (my, id):
-        n = bisect.bisect_left (map(lambda x: x.id, my.nodes), id)
+	dummy = node (id)
+        n = bisect.bisect_left (my.nodes, dummy)
         if n == 0:
             n = len (my.nodes)
         n -= 1
@@ -109,8 +127,6 @@ class dhash:
         id = o
         if isinstance (o, node): id = o.id
         n = my.find_successor_index (id)
-        if num == 1:
-            return my.nodes[n]
         diff = n + num - len (my.nodes)
         if diff > 0:
             if diff > n: diff = n
@@ -118,12 +134,10 @@ class dhash:
         return my.nodes[n:n+num]
 
     def pred (my, o, num = 1):
-        """Returns num predecessor's of o, not including o if  o in nodes."""
+        """Returns num predecessor's of o, not including o if o in nodes."""
         id = o
         if isinstance (o, node): id = o.id
         n = my.find_predecessor_index (id)
-        if num == 1:
-            return my.nodes[n]
         diff = n - num
         if diff < 0:
             diff += len (my.nodes)
@@ -133,15 +147,19 @@ class dhash:
 
     # Subclass and redefine these methods to produce more interesting
     # storage and repair behavior.
-    def insert_block (my, block, size):
+    def insert_block (my, id, block, size):
         """Basic insertion code to store insert_pieces() pieces on
-        successors of key.  Returns the successor."""
+        successors of key, via id.  Returns the successor."""
         if block not in my.blocks:
             my.blocks[block] = size
         succs = my.succ (block, my.insert_pieces ())
         isz   = my.insert_piece_size (size)
         for s in succs:
             s.store (block, isz)
+        n = my.allnodes[id]
+        n.nrpc += len (succs)
+        n.sent_bytes += isz * len (succs)
+
         return succs[0]
 
     def _repair (my, an, succs, resp_blocks):
@@ -150,17 +168,22 @@ class dhash:
         for b in resp_blocks:
             # Check their availability
             avail = 0
+            fixer = None
             for s in succs:
-                if b in s.blocks: avail += 1
+                if b in s.blocks:
+                    if fixer is None: fixer = s
+                    avail += 1
             # Lazy repair waits until last possible moment.
             if avail == 0:
-                print "LOST block", b, "after", desc, "of", an
-            if avail < my.min_pieces ():
-                print "REPAIR block", b, "after", desc, "of", an
+                print "# LOST block", b, "after", desc, "of", an, "|", succs
+            elif avail < my.min_pieces ():
+                print "# REPAIR block", b, "after", desc, "of", an
                 isz = my.insert_piece_size (my.blocks[b])
                 for s in succs:
                     if b not in s.blocks:
                         s.store (b, isz)
+                        fixer.nrpc += 1
+                        fixer.sent_bytes += isz
 
     # XXX How long to wait until we do repair?
     def repair (my, affected_node):
@@ -169,28 +192,48 @@ class dhash:
         succs = my.succ (affected_node, count)
         # succ's does not include affected_node if it is dead.
         slice = preds + succs
+	k = my.blocks.keys ()
+	k.sort ()
         for i in range(1,len(slice) - count):
             p = slice[i - 1]
             s = slice[i:i+count]
-            r = filter (lambda b: between (b, p.id, s[0].id), my.blocks.keys ())
+	    if (p.id <= s[0].id):
+		start = bisect.bisect_left (k, p.id)
+		stop  = bisect.bisect_right (k, s[0].id)
+		r = k[start:stop]
+	    else:
+		start = bisect.bisect_right (k, p.id)
+		stop  = bisect.bisect_left  (k, s[0].id)
+		r = k[start:] + k[:stop]
             my._repair (affected_node, s, r)
     
-    def availability_summary (my):
-        blocks = {}
-        disk_bytes_used = 0
-        # XXX should really search in successors of block based on read
-        for n in my.nodes:
-            disk_bytes_used += n.bytes
-            for b in n.blocks:
-                blocks[b] = blocks.get (b, 0) + 1
-        avail = 0
-        for (b, c) in blocks.items ():
-            if c >= my.read_pieces ():
-                avail += 1
-        return "%d/%d blocks; %s bytes used" % (avail,
-                                                len(my.blocks),
-                                                size_rounder(disk_bytes_used))
-
+    def available_blocks (my):
+	inserted = my.insert_pieces ()
+        needed = my.read_pieces ()
+	k = my.blocks.keys ()
+	k.sort ()
+	avail = 0
+	succs = []
+	for b in k:
+	    extant = 0
+	    if not succs or b > succs[0].id:
+		succs = my.succ (b, inserted)
+	    for s in succs:
+		if b in s.blocks:
+		    extant += 1
+	    if extant >= needed:
+		avail += 1
+	return avail
+	    
+    def time_changed (my, last_time, new_time):
+        for n in my.now_nodes:
+            if n.alive:
+                n.last_alive = last_time
+            else:
+                n.lifetime += last_time - n.last_alive
+            my.repair (n)
+        my.now_nodes = []
+    
     # Subclass and redefine these methods to explore basic changes.
     def min_pieces (my):
         """The minimum number of pieces we need before repairing.
@@ -210,7 +253,6 @@ class dhash_replica_norepair (dhash):
     def __init__ (my, replicas = 3):
         dhash.__init__ (my)
         my.bytes = 0
-        my.blocks = {}
         my.replicas = replicas
     def min_pieces (my):
         return 0
@@ -230,7 +272,6 @@ class dhash_fragments (dhash):
         dhash.__init__ (my)
         my.dfrags = dfrags
         my.efrags = efrags
-        my.blocks = {}
 
     def min_pieces (my):
         # Should this by dfrags?
