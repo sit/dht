@@ -1,14 +1,20 @@
 # topology file must start with keyword topology
 #
-# topology Euclidean
-#   node-id x,y prot [prot [prot [...]]]
+# topology {TOPOLOGY} [KEY=VAL [KEY=VAL [...]]]
+# failure_model {FAILURE_MODEL} [KEY=VAL [KEY=VAL [...]]]
+#         <--- empty line
+# node-id x,y
+# node-id x,y
+# ...
+# node-id can't be 0
 
 topology Euclidean
+failure_model NullFailureModel
 
-1 0,0 Kademlia Chord
-2 5,5 Kademlia Chord
-3 8,8 Kademlia Chord
-4 12,6 Kademlia Chord Koorde
-5 13,8 Kademlia Koorde
-6 0,0 Koorde
-7 20,34 Koorde
+1 0,0
+2 5,5
+3 8,8
+4 12,6
+5 13,8
+6 0,0
+7 20,34

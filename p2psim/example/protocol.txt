@@ -1,0 +1,4 @@
+# describes which protocols to run on the node
+# Format:
+# {PROTOCOL} [KEY=VAL [KEY=VAL [...]]]
+Kademlia k=20 alpha=3
