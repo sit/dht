@@ -22,7 +22,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-# $Id: run-simulations.pl,v 1.14 2004/01/16 19:33:12 jinyang Exp $
+# $Id: run-simulations.pl,v 1.15 2004/01/21 06:54:51 jinyang Exp $
 
 use strict;
 use Getopt::Long;
@@ -232,7 +232,7 @@ if( $churnfile ne "" ) {
 }
 
 my $ipkeys = 0;
-if( $protocol eq "Kademlia" or $protocol eq "Kelips" ) {
+if( $protocol eq "Kademlia" or $protocol eq "Kelips" or $protocol eq "ChordFingerPNS") {
     $ipkeys = 1;
 }
 
