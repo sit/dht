@@ -65,7 +65,9 @@ merkle_server::dispatch (user_args *sbp)
 		     wrap (this, &merkle_server::doRPC, from));
 
       sendnode_res res (MERKLE_OK);
-      format_rpcnode (ltree, lnode_depth, lnode_prefix, lnode, res.node);
+      res.resok->rngmin = rngmin;
+      res.resok->rngmax = rngmax;
+      format_rpcnode (ltree, lnode_depth, lnode_prefix, lnode, &res.resok->node);
       sbp->reply (&res);
       break;
     }

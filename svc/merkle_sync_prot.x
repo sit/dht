@@ -111,14 +111,18 @@ union getkeys_res switch (merkle_stat status) {
 /* SENDNODE */
 
 struct sendnode_arg {
-  chord_node dst;
-  chord_node src;
+  merkle_rpc_node node;
+};
+
+struct sendnode_resok {
+  bigint rngmin;
+  bigint rngmax;
   merkle_rpc_node node;
 };
 
 union sendnode_res switch (merkle_stat status) {
  case MERKLE_OK:
-   merkle_rpc_node node;
+   sendnode_resok resok;
  default:
    void;
 };

@@ -32,8 +32,11 @@ class merkle_syncer {
   str fatal_err;
   bool sync_done;
 
-  bigint rngmin;
-  bigint rngmax;
+  bigint local_rngmin;
+  bigint local_rngmax;
+
+  bigint remote_rngmin;
+  bigint remote_rngmax;
 
   int pending_rpcs;
 
@@ -52,7 +55,7 @@ class merkle_syncer {
   void next (void);
 
   bool done () { return sync_done; }
-  void sync (bigint _rngmin, bigint _rngmax);
+  void sync (bigint rngmin, bigint rngmax);
   void sendnode (u_int depth, const merkle_hash &prefix);
   void sendnode_cb (ref<sendnode_arg> arg, ref<sendnode_res> res, 
 		    clnt_stat err);
