@@ -129,9 +129,20 @@ dhash::dispatch (svccb *sbp)
 	chordID my_succ = host_node->my_succ ();
 	if (betweenrightincl(myID, my_succ, farg->key))
 	  nid = my_succ;
-	else
+	else {
+	  // XXX closestpred boils down to a between() call.
+	  //     don't we really want a betweenleftincl() ???
+	  //     wouldn't this save one hop???
+	  //
+	  //     --josh
 	  nid = host_node->lookup_closestpred (farg->key);
-	
+	}
+
+	res.cont_res->next.x = nid;
+	res.cont_res->next.r = 
+	  host_node->chordnode->locations->getaddress (nid);
+
+#if 0
 	vec <chord_node> s_list;
 	chordID last = nid;
 	chord_node nsucc;
@@ -175,6 +186,8 @@ dhash::dispatch (svccb *sbp)
 	res.cont_res->next.x = best_succ;
 	res.cont_res->next.r = 
 	  host_node->chordnode->locations->getaddress (best_succ);
+#endif
+
       }
       
       sbp->reply (&res);
@@ -825,11 +838,13 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
       keys_cached += key_cache.enter (id, &stat);
     }
 
+#if 1
     /* statistics */
     if (ss)
       bytes_stored += ss->size;
     else
       bytes_stored += arg->data.size ();
+#endif
     
 #if 1
     db->insert (k, d, wrap(this, &dhash::store_cb, arg->type, id, cb));

@@ -136,7 +136,7 @@ union dhash_storeres switch (dhash_stat status) {
 
 struct dhash_fetchiter_continue_res {
   chord_node next;
-  chord_node succ_list<>;
+  /////chord_node succ_list<>;
 };
 
 struct dhash_fetchiter_complete_res {

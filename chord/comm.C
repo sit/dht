@@ -55,7 +55,6 @@ long geo_distance (chordID x, chordID y)
 #endif /* FAKE_DELAY */
 
 const int dhashtcp (getenv ("DHASHTCP") ? 1 : 0);
-int sorter (const void *, const void *);
 
 void
 locationtable::doRPC (chordID &ID, 
@@ -170,6 +169,10 @@ locationtable::rpc_done (long acked_seqno)
     return;
   }
 
+  // XXX this is all just debugging stuff... 
+  //     put i suspect it has a reasonable
+  //     performance impact.
+  // --josh
   if (acked_seqno > 0) {
     acked_seq.push_back (acked_seqno);
     acked_time.push_back ((getusec () - st)/1000000.0);
@@ -177,6 +180,10 @@ locationtable::rpc_done (long acked_seqno)
     if (acked_time.size () > 10000) acked_time.pop_front ();
   }
 
+  // Ideally sent_Q should be a lru ordered hash table.
+  // this might clean up the clode slight and provide
+  // a slight performance boost
+  // --josh
   sent_elm *s = sent_Q.first;
   while (s) {
     if (s->seqno == acked_seqno) {
@@ -300,6 +307,39 @@ locationtable::setup_rexmit_timer (chordID ID, long *sec, long *nsec)
 }
 
 
+static
+int partition (float *A, int p, int r)
+{
+  float x = A[p];
+  int i = p - 1;
+  int j = r + 1;
+
+  while (1) {
+    do {  j -= 1; } while (A[j] > x);
+    do {  i += 1; } while (A[i] < x);
+    if (i >= j)
+      return j;
+    float tmp = A[i];
+    A[i] = A[j];
+    A[j] = tmp;     
+  }
+}
+
+
+static float
+myselect (float *A, int p, int r, int i)
+{
+  if (p == r)
+    return A[p];
+  int q = partition (A, p, r);
+  int k = q - p + 1;
+  if (i <= k)
+    return myselect(A, p, q, i);
+  else
+    return myselect(A, q+1, r, i-k);
+}
+
+
 void
 locationtable::update_latency (chordID ID, u_int64_t lat, bool bf)
 {
@@ -335,11 +375,9 @@ locationtable::update_latency (chordID ID, u_int64_t lat, bool bf)
     host_lats[i] = cl->a_lat + 4*cl->a_var;
     cl = locs.next (cl);
   }
-  qsort (host_lats, i, sizeof(float), &sorter);
- 
-
   int which = (int)(PERCENTILE*i);
-  avg_lat = host_lats[which];
+  avg_lat = myselect (host_lats, 0, i - 1, which + 1);
+
   
   //update the recent 1K fetch latencies
   if (bf) {
@@ -461,13 +499,6 @@ locationtable::doRPC_tcp_connect_cb (RPC_delay_args *args, int fd)
   delete args;    
 }
 
-int sorter (const void *a, const void *b) {
-  float *i = (float *)a;
-  float *j = (float *)b;
-
-  if (*i < *j) return -1;
-  else return 1;
-}
 
 // ------------- rpccb_chord ----------------
 
