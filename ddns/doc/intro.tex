@@ -1,22 +1,22 @@
 \section{Introduction and Related Work}
 
-In the beginnings of the internet, host names were kept
+In the beginnings of the Internet, host names were kept
 in a centrally-administered text file, {\tt hosts.txt}, that
-all sites mirrored from the SRI Network Information Center.
+included all sites mirrored from the SRI Network Information Center.
 By the early 1980s the host database had become too large
 to disseminate in a cost-effective manner.
 In response, Mockapetris (et al?XXX) began the design and
 implementation of a distributed database that we now know
 as the internet domain name system (DNS).
 DNS started to replace {\tt hosts.txt} in 1985 and has remained
-substantially the same since then~\ref{dns-concept:rfc, dns}.
+substantially the same since then~\cite{dns-concept:rfc, dns}.
 
-Looking back at DNS in 1988, Mockapetris and Dunlap 
+Looking back at DNS in 1988, Mockapetris and Dunlap~\cite{dns}
 listed what they believed to be the surprises, successes,
 and shortcomings of the system.  Of the six successes,
 three (variable depth hierarchy, organizational structure
 of names, and mail address cooperation) relate directly 
-to the adoption of an administrative hierarchy for the names~\ref{dns}.
+to the adoption of an administrative hierarchy for the names.
 The administrative hierarchy of DNS is reflected in the 
 service of the database: in typical usage, an
 entity is responsible not only for information about its hosts
@@ -26,23 +26,42 @@ In fact, the service structure {\em needed} to reflect the
 administrative hierarchy: this provided a modicum of authentication
 for the returned data.
 Because servers were effectively authenticated by return address,
-the system was susceptible to DNS server impersonation by 
+a system was susceptible to DNS server impersonation by 
 IP spoofing or other means.
 In response to concerns about this and
-other attacks, the DNS security extensions (DNSSEC) were
-developed in the late 1990s.
+other attacks, the DNS Security Extensions~\cite{dnssec:rfc}
+ (DNSSEC) were developed in the late 1990s.
 DNSSEC provides a mechanism for clients to verify that the
-records they retreive are authentic~\ref{dnssec}.
+records they retreive are authentic.
 Although DNSSEC is not yet in widespread use, its specification
 has stabilized, and it is supported by a variety of name server
-implementations.
+implementations (eg. ISC BIND server software). 
 
+DNS performance studies have revealed some problems with the
+current DNS. In a study by Danzig {\it et al.}~\cite{dnsroot:sigcomm92},
+most DNS traffic was caused by misconfiguration and faulty implementation
+in the name servers. It also found that one third of the 
+traffic that traversed the NSFNet was directed to one of 
+(in 1992) seven root name servers. 
+Jung {\it et al.}~\cite{dnscache:sigcommimw01}
+found that approximately 35\% of DNS queries never receive
+an answer or receive a negative answer, and attributed
+many of these failures to 
+improperly configured name servers or incorrect name server (NS) records.
+The study (in 2000) also reported as much as 18\% of DNS lookups 
+reaching the root servers. 
+CERT~\cite{cert} issued warnings on recent 
+denial-of-service attacks on name 
+servers due to vulnerabilities in name server implementation.
+
+These reports have provoked us to rethink the current 
+implementation of the DNS. 
 Due to the advent of DNSSEC, the service structure no longer needs
-to reflect the administrative hierarchy.
+to reflect the administrative hierarchy. 
 This observation enables the exploration of alternate service 
 structures to achieve desirable properties not possible
-with conventional DNS.  In this paper we explore one such
-alternate service structure: we store and retrieve
-DNS records using Chord~\ref{chord:sigcomm}, a peer-to-peer
+with conventional DNS.  In this paper, we explore one such
+alternate service structure, DDNS--a system that stores and retrieves
+DNS records using Chord~\cite{chord:sigcomm}, a peer-to-peer
 lookup service.
 

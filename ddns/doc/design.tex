@@ -25,13 +25,13 @@ listed in the ({\em nytimes.com}, KEY)
 RRSet, and so on to the hierarchy root,
 which has a well-known public key.
 
-Our system stores and retrieves resource record sets using
-DHash~\cite{sfs:sosp01}, a Chord-based distributed hash table.
+DDNS stores and retrieves resource record sets using
+DHash~\cite{cfs:sosp01}, a Chord-based distributed hash table.
 DHash has two properties useful for this
 discussion: load balance and robustness.
 
 DHash uses consistent hashing to allocate keys to nodes evenly.
-Further, as each blocks is retrieved, it is cached along
+Further, as each block is retrieved, it is cached along
 the lookup path.
 If a particular record is looked up $n$ times in succession
 starting at random locations in a chord ring of size $m$, then with high probability
@@ -42,7 +42,7 @@ DHash is also robust: as servers come and go, DHash automatically
 moves data so that it is always stored on a fixed number of replicas
 (typically six).  Because the replicas that store a block are chosen
 in a pseudo-random fashion, a very large number of servers all have to
-fail simultaneously before data loss occurs.
+fail simultaneously before data loss occurs. 
 
 To create or update a DDNS RRSet, the owner of that set prepares
 the RRSet, signs it, and inserts it into DHash marked with type DNS RRSet.

@@ -23,13 +23,19 @@ We cannot perform a fair measurement of latency so we will do an
 analysis based on counting number of hops between servers
 and combining that with real latency to current root DNS servers.
 
+%XXAdding keys to resource records make them bigger
+XXPublic key cryptography is an expensive operation. 
+DDNS computes pub keys every time.
+
 DDNS is not going to disappear without an answer for a lookup,
 unlike current DNS. So we can't really compare this, but should
 mention about it.
 
-\subsection{Administration}
+\subsection{Discussion}
 
-In their 1988 retrospective, Mockapetris and Dunlap
+\subsubsection{DNS Administration Problems}
+
+In their 1988 retrospective~\cite{dns}, Mockapetris and Dunlap
 listed ``distribution of control vs. distribution of expertise
 or responsibility'' as one of the shortcomings of their system,
 lamenting:
@@ -44,7 +50,8 @@ compensate by technical means.
 To justify their point, they cited three failures:
 they did not require proof that administrators had set up
 truly redundant name servers without a single point of failure;
-in documentation, they used hour-long TTLs in the examples but suggested
+in the documentation, they used hour-long TTLs 
+in the examples but suggested
 day-long TTLs in the text, with the result that everyone used
 hour-long TTLs; debugging was made difficult by not requiring
 servers to identify their server version and type in an automated way.
@@ -52,22 +59,22 @@ DDNS provides technical compensation for their first concern,
 as well as for other problems.
 
 In their handbook for the Berkeley DNS server, BIND,
-Albitz and Liu~\ref{dns-bind} list what they believe to be
+Albitz and Liu~\cite{dns-bind} list what they believe to be
 thirteen of the most common problems in configuring
 a name server.
 Of these, our system addresses six of them:
-\begin{list}{}{}
-\item[2.] ``Forgot to signal primary master server.''
+\begin{description}
+\item[Forget to signal primary master server.]
 There are no primary servers in DDNS, so this cannot happen.
 Unfortunately, the analogue in our system could be ``forgot to
 insert modified records into DHash.''
-\item[3.] ``Slave server can't load zone data.''
+\item[Slave server can't load zone data.]
 There are no slave servers in DDNS, so this cannot happen.
 Further, replication is handled automatically, so there is no
 equivalent in our system.
-\item[7.] ``Missing cache data.''
+\item[Missing cache data.]
 DDNS handles caching automatically via DHash, so this cannot happen.
-\item[8.] ``Loss of network connectivity.''
+\item[Loss of network connectivity.]
 DDNS is robust against server failure or disconnection, so that loss of
 an individual server cannot cripple name service for any part of the
 hierarchy.
@@ -79,31 +86,34 @@ may not even be able to look up their own names!
 This could be addressed by having a local name ring as well
 as the global internet name ring, but such a solution seems half-baked:
 it brings back the hierarchy we eliminated.
-\item[9.] ``Missing subdomain delegation.''
+\item[Missing subdomain delegation.]
 In conventional DNS, if a domain's parent does not
 update the domain's name server records in a timely fashion,
 that domain will not be usable.  
-DDNS partially eliminates this problem, since there are no name server records.
+DDNS partially eliminates this problem, since there are 
+no need for name server records.
 The analogue in DDNS is the domain's parent providing a signature
 of that domain's public key RRSet.
 At least in this case, there is no propagation delay: once the
 parent sends you the signed public key, you can publish it yourself.
-\item[10.] ``Incorrect subdomain delegation.''
+\item[Incorrect subdomain delegation.]
 In conventional DNS, if a domain does not keep its parent informed
 when name servers change names or IP addresses, eventually 
 the number of correct name server entries held by the parent
 will reach zero, at which point the domain is effectively dead.
-DDNS partially eliminates this problem too, since there are no name server records.
+DDNS partially eliminates this problem too, since it 
+does not depend on name server records.
 Even the analogue in DDNS is less likely, since the key record
 cannot be changed without getting the changed signed by the parent.
 An inconsistent RRSet cannot be inserted.
-\end{list}
+\end{description}
 
-On a similar note, Jung {\it et al.}~\cite{dnscache:sigcommimw01}
-found that approximately 35\% of DNS queries never receive
-an answer or receive a negative answer, and attributed
-many of these failures to 
-improperly configured name servers or incorrect name server (NS) records.
+On a similar note, Jung {\it et al.}~\cite{dnscache:sigcommimw01} 
+reported 23\% of 
+DNS lookups failed to elicit any response, partially due to loops 
+in name server resolution. 13\% of lookups result in a negative 
+response, many of which are caused by NS records that point to 
+non-existent or inappropriate hosts.
 These can be quite subtle to detect; for example, an NS record that points
 at a non-existent or wrong name server can cause lookups to fail
 intermittently, depending on whether the server already has the 
@@ -114,6 +124,13 @@ configured public key records, which seem just as likely.
 Any solution that applies to one problem
 probably applies equally well to the other.
 
+DDNS does improve fault-tolerance in the current DNS due to 
+denial-of-service attacks. No longer is a few name servers need
+to be taken down, before the records from that zone 
+are inaccessible to others on the Internet. Because there is no 
+name server heirarchy, the attacker has bring down a diverse
+set of servers before data loss become apparent.
+
 In summary, we believe that using a peer-to-peer system for
 storing DNS records eliminates many common administrative
 problems, but adds others.
@@ -121,7 +138,7 @@ The problems caused by network partition are particularly troubling.
 It is not clear that DDNS is a net win over conventional DNS in
 this arena.  At the least, conventional DNS is well understood.
 
-\subsection{Dynamically-generated records}
+\subsubsection{Dynamically-generated records}
 
 Our system requires that all queries
 can be anticipated in advance and their answers stored.
@@ -129,7 +146,7 @@ Since the {\tt hosts.txt} approach required this property
 and the original DNS papers are silent on the topic,
 it seems likely that this requirement was never 
 explicitly intended to be relaxed.
-However, the conventional DNS system did relax the requirement:
+However, the conventional DNS did relax the requirement:
 since domains serve their own data, all possible queries need 
 not be anticipated in advance as long as there is some algorithm
 implemented in the server for responding to queries.
@@ -142,10 +159,10 @@ those that don't exist.
 Additionally, responses can be tailored according to factors
 other than the actual query.
 For example, it is standard practice to randomly order the results
-of a query to provide approximate load balancing~\ref{rfc1794}.
+of a query to provide approximate load balancing~\cite{dns-load:rfc}.
 As another example, content distribution networks like Akamai
 use custom DNS responses both for real-time load balancing and
-to route clients to nearby servers~\ref{akamai.rev.eng}.
+to route clients to nearby servers~\cite{akamai.rev.eng}.
 % http://www.cs.washington.edu/homes/ratul/akamai.html
 
 DDNS can provide none of these capabilities, which depend
