@@ -24,6 +24,21 @@ Coord::distance_f (const vec<float> &a, const vec<float> &b)
   return sqrtf (f);
 }
 
+float
+Coord::distance_f (const vec<float> &a, const chord_node &n)
+{
+
+  vec<float> b;
+  for (u_int i = 0; i < n.coords.size (); i++)
+    b.push_back (n.coords[i]);
+
+  float f = 0.0;
+  for (unsigned int i = 0; i < a.size (); i++)
+    f += (a[i] - b[i])*(a[i] - b[i]);
+
+  return sqrtf (f);
+}
+
 void
 Coord::vector_add (vec<float> &a, const vec<float> &b)
 {
