@@ -409,7 +409,6 @@ vnode_impl::update_coords (chordID u, vec<float> uc, float ud)
   //init f
   f.push_back (0.0);
   f.push_back (0.0);
-  f.push_back (0.0);
 
   //  Coord::print_vector ("current coords ", coords);
 
