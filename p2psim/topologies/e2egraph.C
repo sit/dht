@@ -137,7 +137,8 @@ E2EGraph::parse(ifstream &ifs)
 
       // latency between node1 and node2
       _pairwise[ip1 -1][ip2 -1] = (Time) lat;
-      tmp.push_back((Time)lat);
+      if (lat > 0) 
+	tmp.push_back((Time)lat);
     }
   }
   sort(tmp.begin(),tmp.end());

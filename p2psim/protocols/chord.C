@@ -170,7 +170,7 @@ string
 Chord::header()
 {
   char buf[128];
-  sprintf(buf, "%llu %s(%u,%qx,%u) ", now(),proto_name().c_str(),me.ip,me.id,me.heartbeat);
+  sprintf(buf, "%llu %s(%u,%qx,%u) ", now(),proto_name().c_str(),me.ip,me.id,first_ip());
   return string(buf);
 }
 
@@ -1438,6 +1438,7 @@ Chord::join(Args *args)
   for (uint i = 0; i < fr.v.size(); i++) {
     if (fr.v[i].ip != me.ip) 
       loctable->add_node(fr.v[i],true);
+    _inited = true;
   }
 
   if (fr.v.size()>1) 
@@ -1494,6 +1495,7 @@ void
 Chord::stabilize()
 {
   assert(!static_sim);
+  if (!_inited) return;
 
   IDMap pred1 = loctable->pred(me.id-1, LOC_ONCHECK);
   IDMap succ1 = loctable->succ(me.id+1, LOC_ONCHECK);
@@ -2217,7 +2219,7 @@ LocTable::add_node(Chord::IDMap n, bool is_succ, bool assertadd, Chord::CHID fs,
     pred1 = pred(me.id-1);
   }
   idmapwrap *elm = ring.closestsucc(n.id);
-  if (elm->id == n.id) {
+  if (elm && elm->id == n.id) {
     if (n.heartbeat > elm->n.heartbeat) {
       assert(n.heartbeat < 86400000);
       elm->n.heartbeat = n.heartbeat;
@@ -2235,7 +2237,7 @@ LocTable::add_node(Chord::IDMap n, bool is_succ, bool assertadd, Chord::CHID fs,
     elm->fe = fe;
   } else {
     idmapwrap *newelm = New idmapwrap(n,now());
-    if (elm->is_succ) 
+    if (elm && elm->is_succ) 
       newelm->is_succ = true;
     else
       newelm->is_succ = is_succ;

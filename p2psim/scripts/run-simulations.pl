@@ -22,7 +22,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-# $Id: run-simulations.pl,v 1.26 2004/07/06 20:48:12 fdabek Exp $
+# $Id: run-simulations.pl,v 1.27 2004/07/23 23:58:20 jinyang Exp $
 
 use strict;
 use Getopt::Long;
@@ -117,6 +117,9 @@ if( $options{"protocol"} ) {
     } elsif ($prot eq "datastore" or $prot eq "data" or $prot eq "DataStore") {
         $protocol = "DataStore";
 	$observer = "DataStoreObserver";
+    } elsif ($prot eq "Koorde" or $prot eq "koorde") {
+	$protocol = "Koorde";
+	$observer = "ChordObserver";
     } else {
 	die( "Unrecognized protocol: $prot" );
     }

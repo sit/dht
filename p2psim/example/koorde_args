@@ -1,0 +1,14 @@
+#setting lifemean and deathmean = 0 results in NO CHURN
+lifemean 3600000
+deathmean =lifemean 3600000
+lookupmean 600000
+exittime *lifemean 6
+stattime *exittime .5
+#Koorde args, logbase should divide 64 ideally, fingers should be on 
+#the order of 2^logbase
+logbase 1 2 4
+fingers 16
+successors 16
+basictimer 18000
+debruijntimer 18000
+recurs 0
