@@ -56,9 +56,11 @@ struct s_dhash_insertarg {
 struct s_dhash_fetch_arg {
   chordID v;
   chordID key;
+  chordID from;
   int32 start;
   int32 len;
   int32 cookie;
+  int32 nonce;
 };
 
 struct s_dhash_keystatus_arg {
@@ -122,6 +124,15 @@ union dhash_fetchiter_res switch (dhash_stat status) {
 };
 
 
+struct s_dhash_block_arg {
+  chordID v;
+  int32 nonce;
+  dhash_value res;
+  int32 offset;
+  dhash_valueattr attr;
+  chordID source;
+  int32 cookie;
+};
 
 program DHASH_PROGRAM {
   version DHASH_VERSION {
@@ -132,12 +143,11 @@ program DHASH_PROGRAM {
     dhash_getkeys_res
     DHASHPROC_GETKEYS (s_dhash_getkeys_arg) = 3;
 
-    dhash_stat
-    DHASHPROC_KEYSTATUS (s_dhash_keystatus_arg) = 4;
-
     dhash_fetchiter_res
-    DHASHPROC_FETCHITER (s_dhash_fetch_arg) = 5;
+    DHASHPROC_FETCHITER (s_dhash_fetch_arg) = 4;
 
+    dhash_stat
+    DHASHPROC_BLOCK (s_dhash_block_arg) = 5;
   } = 1;
 } = 344449;
 
