@@ -1,4 +1,4 @@
-/* $Id: sfsrodb_core.C,v 1.21 2002/02/14 22:14:30 cates Exp $ */
+/* $Id: sfsrodb_core.C,v 1.22 2002/03/18 23:33:36 fdabek Exp $ */
 
 /*
  *
@@ -104,14 +104,13 @@ sfsrodb_put (void *data, size_t len)
   create_sfsrofh (&h, (char *)data, len);
 
 
-  bigint key = compute_hash (data, len);
   check_cbs ();
   out++;
 
   //warn << t() << " -- INSERT\n";
   timespec ts;
   clock_gettime (CLOCK_REALTIME, &ts);
-  dhash->insert (key, (char *)data, len, wrap (sfsrodb_put_cb, ts));
+  dhash->insert ((char *)data, len, wrap (sfsrodb_put_cb, ts));
 
   return h;
 }
