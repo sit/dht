@@ -38,6 +38,7 @@ int ss_mode;
 
 void stats ();
 void stop ();
+void halt ();
 
 void
 client_accept (int fd)
@@ -241,6 +242,13 @@ parseconfigfile (str cf, int nvnode, int set_rpcdelay)
   chordnode->newvnode (wrap (newvnode_cb, nreplica, nvnode-1));
   sigcb(SIGUSR1, wrap (&stats));
   sigcb(SIGUSR2, wrap (&stop));
+  sigcb(SIGHUP, wrap (&halt));
+}
+
+void
+halt ()
+{
+  exit (0);
 }
 
 void
