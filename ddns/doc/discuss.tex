@@ -1,4 +1,4 @@
-\section{Why (or why not) Cooperative DNS?}
+\section{Why (not) Cooperative DNS?}
 
 Serving DNS data using peer-to-peer systems 
 frees the domain owners from having to configure
@@ -46,7 +46,7 @@ Our system addresses six of them.
 There are no primary servers in DDNS, so this cannot happen.
 Unfortunately, the analogue in our system could be ``forget to
 insert modified records into DDNS.''
-Ultimately, we can't protect against administrators
+Ultimately, we cannot protect against administrators
 forgetting to commit their changes.
 
 {\em Slave server cannot load zone data.}
@@ -74,7 +74,7 @@ This problem is not new, since a client machine with no
 knowledge of MIT will require access to the root name servers
 to get started.
 Both systems partially avoid this problem with caching:
-DNS data about popular local machines is likely to be cached
+popular DNS data about local machines is likely to be cached
 and thus available even after the partition.
 DDNS actually works better in this situation, since the remaining
 nodes will form a smaller Chord network and pool their caches.
@@ -159,7 +159,7 @@ use custom DNS responses both for real-time load balancing and
 to route clients to nearby servers~\cite{akamai.rev.eng}.
 % http://www.cs.washington.edu/homes/ratul/akamai.html
 
-The DDNS we have described
+The system we have described
 can provide none of these capabilities, which depend
 on the coupling of the administrative hierarchy and the service
 structure.
@@ -185,7 +185,7 @@ delay is not a bad price to pay for the consistency guarantee.
 DDNS has better fault-tolerance due to denial-of-service attacks 
 over the current DNS. 
 Because there is no name server hierarchy, the 
-attacker has to take down a large
+attacker has to take down a diverse
 set of servers before data loss becomes apparent.
 
 Another type of denial of service is caused by 

@@ -8,7 +8,7 @@ We did not simulate node failures,
 so the only effect of replication would be to serve
 as {\em a priori} caching.
 Since the network is a fair amount smaller than the expected
-size of a real Chord ring, we were afraid that replication would
+size of a real Chord ring, replication would
 bias the results in our favor because of the increased caching.
 
 We first inserted answers to all the successful queries into the Chord network
@@ -35,7 +35,7 @@ and only eight were executed more than a thousand times.
 The most common query, for {\em 39.246.224.209.in-addr.arpa}'s
 PTR record, was executed 82,000 times.
 
-Finally, to simulate popular entries, we ran what we call the ``slashdot test,''
+Finally, to simulate popular entries, we ran what we called the ``slashdot test,''
 inserting one record and then fetching it a hundred thousand times.
 
 All three tests began each lookup at a random node in the Chord network.
@@ -43,7 +43,7 @@ All three tests began each lookup at a random node in the Chord network.
 \begin{figure}
 \epsfig{file=figures/ok.store.eps}
 \caption{
-storage balance for 120,000 records later used as answers to
+Storage balance for 120,000 records later used as answers to
 260,000 queries.
 The graph shows a cumulative distribution for the number 
 of records stored on each node.
@@ -53,7 +53,7 @@ around 120.}
 \label{fig:store}
 \end{figure}
 
-For the successful query test, we inserted approximately 120,000
+For the successful queries test, we inserted approximately 120,000
 records to serve as answers to the 260,000 queries.
 Figure~\ref{fig:store} shows that the median number of
 records stored per node is about 120, as expected.
@@ -74,7 +74,7 @@ storage among the peers.
 
 \begin{figure}
 \epsfig{file=figures/both.fetch.eps}%,angle=270,width=3in}
-\caption{load balance for the three tests.
+\caption{Load balance for the three tests.
 The graph shows a cumulative distribution for the number
 of RPCs served by each node during the test.}
 \label{fig:both-rpc}
@@ -105,7 +105,7 @@ heavily loaded due to the 82,000 queries for that record.
 
 \begin{figure}
 \epsfig{file=figures/hops.eps}%,angle=270,width=3in}
-\caption{client work to perform lookups. 
+\caption{Client load to perform lookups. 
 The graph shows a cumulative distribution for the number
 of hops required for each lookup.}
 \label{fig:hops}
