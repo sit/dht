@@ -73,6 +73,7 @@ route_chord::first_hop (cbhop_t cbi, chordID guess)
 void
 route_chord::first_hop (cbhop_t cbi, bool ucs)
 {
+  //  warn << v->my_ID () << "; starting a lookup for " << x << "\n";
   cb = cbi;
   if (v->lookup_closestsucc (v->my_ID () + 1) 
       == v->my_ID ()) {  // is myID the only node?
@@ -159,7 +160,9 @@ void
 route_chord::make_hop_cb (ptr<bool> del,
 			  chord_testandfindres *res, clnt_stat err)
 {
+  //  warn << v->my_ID () << "; in make_hop_cb for " << x << "\n";
   if (*del) return;
+  //  warn << v->my_ID () << "; did a hop to " << last_node () << "\n";
   if (err) {
     //back up
     chordID last_node_tried = pop_back ();
@@ -171,20 +174,24 @@ route_chord::make_hop_cb (ptr<bool> del,
     warn << "alerting " << search_path.back () << "\n";
     v->alert (search_path.back (), last_node_tried);
     warn << " Now trying " << search_path.back () << "\n";
+    last_hop = false;
     next_hop ();
-
   } else if (res->status == CHORD_STOP) {
+    //    warn << v->my_ID () << "; got STOP\n";
     r = CHORD_OK;
     cb (done = true);
   } else if (last_hop) {
+    //    warn << v->my_ID () << "; last_hop is true\n";
     //talked to the successor
     r = CHORD_OK;
     cb (done = true);
   } else if (res->status == CHORD_INRANGE) { 
+    //    warn << v->my_ID () << "; in range, succ is " << res->inrange->n.x << "\n";
     // found the successor
     v->locations->cacheloc (res->inrange->n.x, res->inrange->n.r,
 			    wrap (this, &route_chord::make_route_done_cb));
   } else if (res->status == CHORD_NOTINRANGE) {
+    //    warn << v->my_ID () << "; not in range, suggestion is " << res->notinrange->n.x << "\n";
     // haven't found the successor yet
     chordID last = search_path.back ();
     if (last == res->notinrange->n.x) {   
@@ -206,7 +213,6 @@ route_chord::make_hop_cb (ptr<bool> del,
 	assert (0);
       }
       
-      // ask the new node for its best predecessor
       v->locations->cacheloc (res->notinrange->n.x, res->notinrange->n.r,
 			      wrap (this, &route_chord::make_hop_done_cb));
     }
@@ -220,31 +226,42 @@ route_chord::make_hop_cb (ptr<bool> del,
 void
 route_chord::make_route_done_cb (chordID s, bool ok, chordstat status)
 {
+  //  warn << "cached " << s << " trying to finish the route. Status is " << status << "\n";
   if (ok && status == CHORD_OK) {
     search_path.push_back (s);
+    last_hop = true;
   } else if (status == CHORD_RPCFAILURE) {
-    r = CHORD_RPCFAILURE;
+    failed_nodes.push_back (s);
+    //ask who_told_me for a new hint 
+    warn << v->my_ID () << ": (from challenge route) " << s << " is down. ";
+    warn << "alerting " << search_path.back () << "\n";
+    v->alert (search_path.back (), s);
+    warn << " Now trying " << search_path.back () << "\n";
+    next_hop ();
   } else {
     warnx << v->my_ID () << ": make_route_done_cb: last challenge for "
 	  << s << " failed. (chordstat " << status << ")\n";
     r = CHORD_RPCFAILURE;
   }
   if (stop) done = true;
-  last_hop = true;
   cb (done);
 }
 
 void
 route_chord::make_hop_done_cb (chordID s, bool ok, chordstat status)
 {
+  //  warn << "cached " << s << " status is " << status << "\n";
   if (ok && status == CHORD_OK) {
     search_path.push_back (s);
     assert (search_path.size () <= 1000);
   } else if (status == CHORD_RPCFAILURE) {
-    // xxx? should we retry locally before failing all the way to
-    //      the top-level?
-    r = CHORD_RPCFAILURE;
-    done = true;
+    failed_nodes.push_back (s);
+    //ask who_told_me for a new hint 
+    warn << v->my_ID () << ": (from challenge hop) " << s << " is down. ";
+    warn << "alerting " << search_path.back () << "\n";
+    v->alert (search_path.back (), s);
+    warn << " Now trying " << search_path.back () << "\n";
+    next_hop ();
   } else {
     warnx << v->my_ID () << ": make_hop_done_cb: step challenge for "
 	  << s << " failed. (chordstat " << status << ")\n";

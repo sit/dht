@@ -367,7 +367,7 @@ stp_manager::timeout (rpc_state *C)
   warnx << gettime() << " TIMEOUT " << 1 + C->seqno << " cwind " << (int)cwind << " ssthresh " << (int)ssthresh << "\n";
 #endif
 
-  C->s = getusec ();
+  C->s = 0;
   rpc_done (-1);
 }
 
@@ -836,8 +836,9 @@ rpccb_chord::timeout_cb (ptr<bool> del)
     if (nsec < 0 || sec < 0)
       panic ("1 timeout_cb: sec %ld, nsec %ld\n", sec, nsec);
 
-    warnx << gettime() << " REXMIT " << xid
-	  << " rexmits " << rexmits << ", timeout "<< sec << ":" << nsec << "\n";
+    /*        warnx << gettime() << " REXMIT " << xid
+	      << " rexmits " << rexmits << ", timeout "<< sec << ":" << nsec << "\n";*/
+
     xmit (rexmits);
     if (rexmits == MAX_REXMIT) {
       // XXX

@@ -251,6 +251,7 @@ locationtable::cacheloc (const chordID &x, net_address &r, cbchallengeID_t cb)
     challenge (x, cb);
   } else if (lx->loc_->alive == false || lx->loc_->challenged == false) {
     // state = "pending";
+    //    warn << "cacheloc " << x << " challenging\n";
     challenge (x, cb); // queue up for additional callback
   } else {
     // state = "old";
