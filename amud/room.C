@@ -205,6 +205,7 @@ room::leave (ref<mud_obj> a)
   for (i=0; i<alist.size (); i++)
     if (alist[i]->get_name () == a->get_name ())
       break;
+
   vec<ref<mud_obj> > tmp;
   for (uint j=alist.size ()-1; j>i; j--) {
     tmp.push_back (alist.pop_back ());

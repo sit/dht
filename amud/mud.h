@@ -8,6 +8,10 @@
 
 #define MUD_MAX_ROOMS 1000
 
+//This is for the test script
+#define T_MAX_ROOMS 100
+#define T_MAX_THINGS 3
+
 enum mud_stat {
   MUD_OK = 0,
   MUD_NAME_EXISTS = 1,

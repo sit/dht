@@ -242,7 +242,7 @@ avatar::done_move_lookup (ref<room> next, av_cb_t cb, dhash_stat stat,
     location = New refcounted<room> (blk->data, blk->len, dhash);
     ref<mud_obj> a = New refcounted<mud_obj> (get_name ());
     location->leave (a);
-  
+    cout << "here 1\n";
     dhash->insert (location->ID (), location->bytes (), location->size (),
 		   wrap (this, &avatar::done_remove, next, cb), NULL, DHASH_NOAUTH);
   } else {
@@ -255,9 +255,13 @@ void
 avatar::done_remove (ref<room> next, av_cb_t cb, dhash_stat stat, ptr<insert_info> i)
 {
   if (stat == DHASH_OK) {
-    location = next;
+    //location = next;
+    cout << "here 2\n";
+    warn << "next name: " << next->get_name () << "\n";
+    warn << "next ID: " << next->ID () << "\n";
     dhash->retrieve (next->ID (), DHASH_NOAUTH, 
 		     wrap (this, &avatar::done_enter_lookup, cb));
+    cout << "here 2.3\n";
   } else {
     cout << "avatar::done_move_lookup dhash err " << stat << "\n";
     (*cb) (0);
@@ -269,10 +273,12 @@ avatar::done_enter_lookup (av_cb_t cb, dhash_stat stat, ptr<dhash_block> blk,
 			   vec<chordID> path)
 {
   if (stat == DHASH_OK) {
+    cout << "here 2.5\n";
     ref<room> next = New refcounted<room> (blk->data, blk->len, dhash);
     ref<mud_obj> a = New refcounted<mud_obj> (get_name ());
     next->enter (a);
     location = next;
+    cout << "here 3\n";
     dhash->insert (location->ID (), location->bytes (), location->size (),
 		   wrap (this, &avatar::done_enter, cb), NULL, DHASH_NOAUTH);
   } else {
@@ -284,9 +290,11 @@ avatar::done_enter_lookup (av_cb_t cb, dhash_stat stat, ptr<dhash_block> blk,
 void
 avatar::done_enter (av_cb_t cb, dhash_stat stat, ptr<insert_info> i)
 {
-  if (stat == DHASH_OK)
+  if (stat == DHASH_OK) {
+    cout << "here 4\n";
     dhash->insert (ID (), bytes (), size (),
 		   wrap (this, &avatar::done_enter_cb, cb), NULL, DHASH_NOAUTH);
+  }
   else {
     cout << "avatar::done_move_lookup dhash err " << stat << "\n";
     (*cb) (0);
