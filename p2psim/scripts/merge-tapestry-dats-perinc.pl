@@ -33,9 +33,12 @@ foreach my $log (@logs) {
 
     my $total_time = 0;
     my $total_hops = 0;
+    my $total_failures = 0;
     my $num_lookups = 0;
     my $total_msgs = 0;
     my $num_incorrect = 0;
+    my @rtlevels;
+    my @rtcounts;
     while(<LOG>) {
 	if( /(\d+) \d+ [\w\-]+ (\d) (\d) -?(\d+) (\d+) .+ .+ .+/ ) {
 	    my $time = $1;
@@ -46,10 +49,20 @@ foreach my $log (@logs) {
 
 	    $total_time += $time;
 	    $total_hops += $hops;
+	    $total_failures += $failures;
 	    $num_lookups++;
 	    if( !($complete eq "1" and $correct eq "1") ) {
  		$num_incorrect++;
 	    }
+
+	} elsif( /(\d): average rtt=([\d\.]+)/ ) {
+
+	    if( !defined $rtlevels[$1] ) {
+		$rtlevels[$1] = 0;
+		$rtcounts[$1] = 0;
+	    }
+	    $rtlevels[$1] += $2;
+	    $rtcounts[$1]++;
 
 	} elsif( /(.+) (\d+) \d+$/ ) {
 
@@ -60,6 +73,15 @@ foreach my $log (@logs) {
 		$total_msgs += $msgs;
 	    }
 
+	} elsif( /average lookup latency: ([\d\.]+)$/ ) {
+	    $num_lookups = -1;
+	    $total_time = $1;
+	} elsif( /average hops: ([\d\.]+)$/ ) {
+	    $num_lookups = -1;
+	    $total_hops = $1;
+	} elsif( /success rate: ([\d\.]+)$/ ) {
+	    $num_lookups = -1;
+	    $num_incorrect = $1;
 	} else {
 #	    die( "unrecognized line: $_" );
 	    next;
@@ -69,13 +91,24 @@ foreach my $log (@logs) {
 
     my $av_hop = $total_hops/$num_lookups;
     my $av_time = $total_time/$num_lookups;
-    # only print it if this is an acceptable incorrectness rate
-    if( ($num_incorrect*100/$num_lookups) > $perinc_low and
-	($num_incorrect*100/$num_lookups) <= $perinc_high ) {
-	print "\# $base $redun $rln $stabtimer:\n";
-	print "$total_msgs $av_time $av_hop " . 
-	    (1-$num_incorrect/$num_lookups) . "\n";
+    my $av_fail = $total_failures/$num_lookups;
+    my $succ_rate = (1-$num_incorrect/$num_lookups);
+    if( $num_lookups == -1 ) {
+	$av_hop = $total_hops;
+	$av_time = $total_time;
+	$succ_rate = $num_incorrect;
     }
+    # only print it if this is an acceptable incorrectness rate
+#    if( ($num_incorrect*100/$num_lookups) > $perinc_low and
+#	($num_incorrect*100/$num_lookups) <= $perinc_high ) {
+	print "\# ";
+	for( my $i = 0; $i <= $#rtlevels; $i++ ) {
+	    print "$i:" . ($rtlevels[$i]/$rtcounts[$i]) . " ";
+	}
+	print "\n\# $base $redun $rln $stabtimer:\n";
+	print "$total_msgs $av_time $av_hop " . 
+	    " $succ_rate $av_fail $num_lookups\n";
+#    }
 
     close( LOG );
 

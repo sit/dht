@@ -22,14 +22,22 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.35 2003/12/08 21:28:49 jinyang Exp $ */
+/* $Id: tapestry.C,v 1.36 2003/12/14 23:28:10 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
 #include <math.h>
 #include <iostream>
 #include <map>
+#include "p2psim/bighashmap.hh"
 using namespace std;
+
+unsigned long long Tapestry::_num_lookups = 0;
+unsigned long long Tapestry::_num_succ_lookups = 0;
+unsigned long long Tapestry::_num_inc_lookups = 0;
+unsigned long long Tapestry::_num_fail_lookups = 0;
+unsigned long long Tapestry::_num_hops = 0;
+unsigned long long Tapestry::_total_latency = 0;
 
 Tapestry::Tapestry(IPAddress i, Args a) : P2Protocol(i),
     _base(a.nget<uint>("base", 16, 10)),
@@ -53,6 +61,7 @@ Tapestry::Tapestry(IPAddress i, Args a) : P2Protocol(i),
   _join_num = 0;
 
   _repair_backups = a.nget<uint>("repair_backups", 0, 10);
+  _verbose = a.nget<bool>("verbose", 0, 10);
 
   // init stats
   while (stat.size() < (uint) STAT_SIZE) {
@@ -69,9 +78,6 @@ Tapestry::~Tapestry()
   delete _waiting_for_join;
 
   TapDEBUG(2) << "Destructing" << endl;
-
-  TapDEBUG(0) << "PARAMS: base " << _base << " stabtimer " << _stabtimer <<
-    " redundant_lookup_num " << _redundant_lookup_num << endl;
 
   // print out statistics
   print_stats();
@@ -106,6 +112,27 @@ Tapestry::print_stats()
     " nn " << stat[STAT_NN] << " " << num_msgs[STAT_NN] <<
     " repair " << stat[STAT_REPAIR] << " " << num_msgs[STAT_REPAIR] <<
     endl;
+
+  // let's print out global lookup stats
+  if( _num_lookups > 0 ) {
+
+    cout << "PARAMS: base " << _base << " stabtimer " << _stabtimer <<
+      " redundant_lookup_num " << _redundant_lookup_num << endl;
+
+    cout << "total lookups: " << _num_lookups << endl;
+    cout << "average lookup latency: " 
+	 << (((double)_total_latency)/((double) _num_lookups)) << endl;
+    cout << "average hops: " 
+	 << (((double)_num_hops)/((double) _num_lookups)) << endl;
+    cout << "success rate: " 
+	 << (((double)_num_succ_lookups)/((double) _num_lookups)) << endl;
+    cout << "incorrect rate: " 
+	 << (((double)_num_inc_lookups)/((double) _num_lookups)) << endl;
+    cout << "fail rate: " 
+	 << (((double)_num_fail_lookups)/((double) _num_lookups)) << endl;
+    _num_lookups = 0;
+  }
+
 }
 
 void
@@ -118,7 +145,9 @@ Tapestry::lookup(Args *args)
 
   GUID key = args->nget<GUID>("key");
 
-  TapDEBUG(0) << "Tapestry Lookup for key " << print_guid(key) << endl;
+  if( _verbose ) {
+    TapDEBUG(0) << "Tapestry Lookup for key " << print_guid(key) << endl;
+  }
 
   wrap_lookup_args *wla = New wrap_lookup_args();
   wla->key = key;
@@ -151,32 +180,50 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
   }
 
   if( !lr.failed && lr.owner_id == lr.real_owner_id ) {
-    TapDEBUG(0) << "Lookup complete for key " << print_guid(args->key) 
-		<< ": ip " << lr.owner_ip << ", id " 
-		<< print_guid(lr.owner_id) << ", hops " << lr.hopcount
-		<< ", numtries " << args->num_tries << endl;
+    if( _verbose ) {
+      TapDEBUG(0) << "Lookup complete for key " << print_guid(args->key) 
+		  << ": ip " << lr.owner_ip << ", id " 
+		  << print_guid(lr.owner_id) << ", hops " << lr.hopcount
+		  << ", numtries " << args->num_tries << endl;
+    }
+    _num_lookups++;
+    _num_succ_lookups++;
+    _num_hops += lr.hopcount;
+    _total_latency += ( now() - args->starttime );
     delete args;
   } else {
     if( now() - args->starttime < 4000 ) {
       args->num_tries = args->num_tries+1;
-      TapDEBUG(1) << "retrying failed or incorrect lookup for key " 
-		  << print_guid(args->key) << ", numtries " << args->num_tries 
-		  << endl;
+      if( _verbose ) {
+	TapDEBUG(1) << "retrying failed or incorrect lookup for key " 
+		    << print_guid(args->key) << ", numtries " 
+		    << args->num_tries << endl;
+      }
       delaycb( 100, &Tapestry::lookup_wrapper, args );
     } else {
       
       if( lr.failed ) {
-	TapDEBUG(0) << "Lookup failed for key " << print_guid(args->key) 
-		    << endl;
+	if( _verbose ) {
+	  TapDEBUG(0) << "Lookup failed for key " << print_guid(args->key) 
+		      << endl;
+	}
+	_num_fail_lookups++;
       } else if( lr.owner_id != lr.real_owner_id ) {
-	TapDEBUG(0) << "Lookup incorrect for key " << print_guid(args->key) 
-		    << ": ip " << lr.owner_ip << ", id " 
-		    << print_guid(lr.owner_id) << ", real root " 
-		    << print_guid(lr.real_owner_id) << " hops " 
-		    << lr.hopcount << ", numtries " << args->num_tries << endl;
+	if( _verbose ) {
+	  TapDEBUG(0) << "Lookup incorrect for key " << print_guid(args->key) 
+		      << ": ip " << lr.owner_ip << ", id " 
+		      << print_guid(lr.owner_id) << ", real root " 
+		      << print_guid(lr.real_owner_id) << " hops " 
+		      << lr.hopcount << ", numtries " << args->num_tries 
+		      << endl;
+	}
+	_num_inc_lookups++;
       }
+      _num_lookups++;
+      _num_hops += lr.hopcount;
+      _total_latency += ( now() - args->starttime );
       delete args;
-
+      
     }
   }
 
@@ -236,9 +283,11 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
 	  return;
 	}
 	// print out that a failure happened
-	TapDEBUG(1) << "Failure happened during the lookup of key " << 
-	  print_guid(args->key) << ", trying to reach node " << next << 
-	  " for node " << args->looker << endl;
+	if( _verbose ) {
+	  TapDEBUG(1) << "Failure happened during the lookup of key " << 
+	    print_guid(args->key) << ", trying to reach node " << next << 
+	    " for node " << args->looker << endl;
+	}
 	ret->failed = false;
       }
     }
@@ -268,9 +317,11 @@ Tapestry::have_joined()
    joined = true;
    _joining = false;
    _waiting_for_join->notifyAll();
-   TapDEBUG(0) << "Finishing joining." << endl;
+   if( _verbose ) {
+     TapDEBUG(0) << "Finishing joining." << endl;
+   }
    if( !_stab_scheduled && _stabtimer > 0 ) {
-     delaycb( _stabtimer, &Tapestry::check_rt, (void *) 0 );
+     delaycb( random()%_stabtimer, &Tapestry::check_rt, (void *) 0 );
      _stab_scheduled = true;
    }
 }
@@ -307,7 +358,9 @@ Tapestry::join(Args *args)
 
   _joining = true;
 
-  TapDEBUG(0) << "Tapestry join " << curr_join << endl;
+  if( _verbose ) {
+    TapDEBUG(0) << "Tapestry join " << curr_join << endl;
+  }
 
   // if we're the well known node, we're done
   if( ip() == wellknown_ip ) {
@@ -364,7 +417,7 @@ Tapestry::join(Args *args)
     // neighbors.  these can't easily be combined since the nearest neighbor
     // call does a ping itself (so measured rtt would be double).
     RPCSet ping_rpcset;
-    map<unsigned, ping_callinfo*> ping_resultmap;
+    HashMap<unsigned, ping_callinfo*> ping_resultmap;
     Time before_ping = now();
     TapDEBUG(3) << "initing level " << i << " out of " << init_level 
 		<< " size = " << initlist.size() << endl;
@@ -372,7 +425,7 @@ Tapestry::join(Args *args)
 			   NULL, true );
 
     RPCSet nn_rpcset;
-    map<unsigned, nn_callinfo*> nn_resultmap;
+    HashMap<unsigned, nn_callinfo*> nn_resultmap;
     unsigned int num_nncalls = 0;
     for( uint j = 0; j < initlist.size(); j++ ) {
       NodeInfo ni = *(initlist[j]);
@@ -386,7 +439,7 @@ Tapestry::join(Args *args)
       record_stat(STAT_NN, 1, 1);
       unsigned rpc = asyncRPC( ni._addr, &Tapestry::handle_nn, na, nr );
       assert(rpc);
-      nn_resultmap[rpc] = New nn_callinfo(ni._addr, na, nr);
+      nn_resultmap.insert(rpc, New nn_callinfo(ni._addr, na, nr));
       nn_rpcset.insert(rpc);
       num_nncalls++;
 
@@ -766,7 +819,7 @@ Tapestry::handle_mc(mc_args *args, mc_return *ret)
   if( !args->from_lock ) {
 
     RPCSet rpcset;
-    map<unsigned, mc_callinfo*> resultmap;
+    HashMap<unsigned, mc_callinfo*> resultmap;
     unsigned int numcalls = 0;
     // then, find any other node that shares this prefix and multicast
     for( uint i = args->alpha; i < _digits_per_id; i++ ) {
@@ -791,7 +844,7 @@ Tapestry::handle_mc(mc_args *args, mc_return *ret)
 	  record_stat(STAT_MC, 1, 2+mca->watchlist.size()*_base);
 	  unsigned rpc = asyncRPC( ni->_addr, &Tapestry::handle_mc, mca, mcr );
 	  assert(rpc);
-	  resultmap[rpc] = New mc_callinfo(ni->_addr, mca, mcr);
+	  resultmap.insert(rpc, New mc_callinfo(ni->_addr, mca, mcr));
 	  rpcset.insert(rpc);
 	  numcalls++;
 	  delete ni;
@@ -817,7 +870,7 @@ Tapestry::handle_mc(mc_args *args, mc_return *ret)
 	record_stat(STAT_MC, 1, 2+mca->watchlist.size()*_base);
 	unsigned rpc = asyncRPC( ni->_addr, &Tapestry::handle_mc, mca, mcr );
 	assert(rpc);
-	resultmap[rpc] = New mc_callinfo(ni->_addr, mca, mcr);
+	resultmap.insert(rpc, New mc_callinfo(ni->_addr, mca, mcr));
 	rpcset.insert(rpc);
 	numcalls++;
       }
@@ -1124,7 +1177,7 @@ Tapestry::check_rt(void *x)
   }
 
   RPCSet ping_rpcset;
-  map<unsigned, ping_callinfo*> ping_resultmap;
+  HashMap<unsigned, ping_callinfo*> ping_resultmap;
   Time before_ping = now();
   multi_add_to_rt_start( &ping_rpcset, &ping_resultmap, &nodes, NULL, false );
   multi_add_to_rt_end( &ping_rpcset, &ping_resultmap, before_ping, NULL, true);
@@ -1231,7 +1284,7 @@ Tapestry::multi_add_to_rt( vector<NodeInfo *> *nodes,
 			   map<IPAddress, Time> *timing )
 {
   RPCSet ping_rpcset;
-  map<unsigned, ping_callinfo*> ping_resultmap;
+  HashMap<unsigned, ping_callinfo*> ping_resultmap;
   Time before_ping = now();
   multi_add_to_rt_start( &ping_rpcset, &ping_resultmap, nodes, timing, true );
   multi_add_to_rt_end( &ping_rpcset, &ping_resultmap, before_ping, timing, 
@@ -1240,7 +1293,7 @@ Tapestry::multi_add_to_rt( vector<NodeInfo *> *nodes,
 
 void
 Tapestry::multi_add_to_rt_start( RPCSet *ping_rpcset, 
-				 map<unsigned, ping_callinfo*> *ping_resultmap,
+				 HashMap<unsigned, ping_callinfo*> *ping_resultmap,
 				 vector<NodeInfo *> *nodes, 
 				 map<IPAddress, Time> *timing, 
 				 bool check_exist )
@@ -1258,8 +1311,8 @@ Tapestry::multi_add_to_rt_start( RPCSet *ping_rpcset,
       unsigned rpc = asyncRPC( ni->_addr, 
 			       &Tapestry::handle_ping, &pa, &pr );
       assert(rpc);
-      (*ping_resultmap)[rpc] = New ping_callinfo(ni->_addr, 
-						 ni->_id);
+      ping_resultmap->insert(rpc, New ping_callinfo(ni->_addr, 
+						    ni->_id));
       ping_rpcset->insert(rpc);
       if( timing != NULL ) {
 	(*timing)[ni->_addr] = 1000000;
@@ -1272,12 +1325,12 @@ Tapestry::multi_add_to_rt_start( RPCSet *ping_rpcset,
 
 void
 Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset, 
-			       map<unsigned, ping_callinfo*> *ping_resultmap,
+			       HashMap<unsigned, ping_callinfo*> *ping_resultmap,
 			       Time before_ping, map<IPAddress, Time> *timing,
 			       bool repair )
 {
   // check for done pings
-  assert( ping_rpcset->size() == ping_resultmap->size() );
+  assert( ping_rpcset->size() == (uint) ping_resultmap->size() );
   uint setsize = ping_rpcset->size();
   for( unsigned int j = 0; j < setsize; j++ ) {
     bool ok;
@@ -1304,9 +1357,9 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
   // (possibly sending synchronous backpointers around) without messing
   // up the measurements
   set<GUID> removed;
-  for(map<unsigned, ping_callinfo*>::iterator j=ping_resultmap->begin(); 
+  for(HashMap<unsigned, ping_callinfo*>::iterator j=ping_resultmap->begin(); 
       j != ping_resultmap->end(); ++j) {
-    ping_callinfo *pi = (*j).second;
+    ping_callinfo *pi = j.value();
     //assert( pi->rtt == ping( pi->ip, pi->id ) );
     TapDEBUG(4) << "ip: " << pi->ip << endl;
     if( pi->failed ) {
@@ -1331,7 +1384,7 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
   // the levels above the slot.
   if( repair ) {
       RPCSet repair_rpcset;
-      map<unsigned, repair_callinfo*> repair_resultmap;
+      HashMap<unsigned, repair_callinfo*> repair_resultmap;
 
       for( uint j = _digits_per_id-1; j >= 0; j-- ) {
 	for( uint k = 0; k < _base; k++ ) {
@@ -1367,7 +1420,7 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
 				       &Tapestry::handle_repair, 
 				       ra, rr );
 	      assert(rpc);
-	      repair_resultmap[rpc] = New repair_callinfo( ra, rr );
+	      repair_resultmap.insert(rpc, New repair_callinfo( ra, rr ));
 	      repair_rpcset.insert(rpc);
 	    }
 	    
@@ -1441,7 +1494,7 @@ Tapestry::multi_add_to_rt_end( RPCSet *ping_rpcset,
 
 void
 Tapestry::place_backpointer( RPCSet *bp_rpcset, 
-			     map<unsigned, backpointer_args*> *bp_resultmap, 
+			     HashMap<unsigned, backpointer_args*> *bp_resultmap, 
 			     IPAddress bpip, int level, 
 			     bool remove )
 {
@@ -1455,13 +1508,13 @@ Tapestry::place_backpointer( RPCSet *bp_rpcset,
   record_stat(STAT_BACKPOINTER, 1, 2);
   unsigned rpc = asyncRPC( bpip, &Tapestry::handle_backpointer, bpa, &bpr );
   bp_rpcset->insert(rpc);
-  (*bp_resultmap)[rpc] = bpa;
+  bp_resultmap->insert(rpc, bpa);
   // for now assume no failures
 }
 
 void
 Tapestry::place_backpointer_end( RPCSet *bp_rpcset,
-				 map<unsigned,backpointer_args*>*bp_resultmap) 
+				 HashMap<unsigned,backpointer_args*>*bp_resultmap) 
 {
 
   // wait for each to finish
@@ -1655,8 +1708,10 @@ Tapestry::leave(Args *args)
 void
 Tapestry::crash(Args *args)
 {
-  TapDEBUG(0) << "Tapestry crash" << endl;
-  
+  if( _verbose ) {
+    TapDEBUG(0) << "Tapestry crash" << endl;
+  }  
+
   // XXX: Thomer says: not necessary
   // crash();
 
@@ -2044,7 +2099,7 @@ bool
 RoutingTable::add( IPAddress ip, GUID id, Time distance, bool sendbp )
 {
   Tapestry::RPCSet bp_rpcset;
-  map<unsigned,Tapestry::backpointer_args*> bp_resultmap;
+  HashMap<unsigned,Tapestry::backpointer_args*> bp_resultmap;
   bool in_added = false;
 
   // find the spots where it fits and add it
@@ -2107,7 +2162,7 @@ void
 RoutingTable::remove( GUID id, bool sendbp )
 {
   Tapestry::RPCSet bp_rpcset;
-  map<unsigned,Tapestry::backpointer_args*> bp_resultmap;
+  HashMap<unsigned,Tapestry::backpointer_args*> bp_resultmap;
 
   // find the spots where it could fit and remove it
   for( uint i = 0; i < _node->_digits_per_id; i++ ) {

@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.26 2003/12/08 21:28:49 jinyang Exp $ */
+/* $Id: tapestry.h,v 1.27 2003/12/14 23:28:10 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -7,6 +7,7 @@
 #include "p2psim/p2psim.h"
 #include "p2psim/condvar.h"
 #include "p2psim/p2protocol.h"
+#include "p2psim/bighashmap.hh"
 #include <map>
 using namespace std;
 
@@ -157,11 +158,11 @@ public:
   void handle_backpointer(backpointer_args *args, backpointer_return *ret);
   void got_backpointer(IPAddress bpip, GUID bpid, uint level, bool remove);
   void place_backpointer( RPCSet *bp_rpcset, 
-			  map<unsigned,backpointer_args*> *bp_resultmap, 
+			  HashMap<unsigned,backpointer_args*> *bp_resultmap, 
 			  IPAddress bpip, 
 			  int level, bool remove );
   void place_backpointer_end( RPCSet *bp_rpcset, 
-			      map<unsigned,backpointer_args*> *bp_resultmap);
+			      HashMap<unsigned,backpointer_args*> *bp_resultmap);
 
   struct mcnotify_args {
     IPAddress ip;
@@ -238,9 +239,19 @@ private:
   // when's the last time I heard from this person?
   map<IPAddress, Time> _last_heard_map;
 
-  // statitics per message
+  // statistics per message
   vector<uint> stat;
   vector<uint> num_msgs;
+
+  // overall stats
+  static unsigned long long _num_lookups;
+  static unsigned long long _num_succ_lookups;
+  static unsigned long long _num_inc_lookups;
+  static unsigned long long _num_fail_lookups;
+  static unsigned long long _num_hops;
+  static unsigned long long _total_latency;
+  bool _verbose;
+
 
   bool _joining;
   bool _stab_scheduled;
@@ -302,13 +313,13 @@ private:
 			map<IPAddress, Time> *timing );
 
   void multi_add_to_rt_start( RPCSet *ping_rpcset, 
-			      map<unsigned, ping_callinfo*> *ping_resultmap,
+			      HashMap<unsigned, ping_callinfo*> *ping_resultmap,
 			      vector<NodeInfo *> *nodes, 
 			      map<IPAddress, Time> *timing, 
 			      bool check_exists );
 
   void multi_add_to_rt_end( RPCSet *ping_rpcset,
-			    map<unsigned, ping_callinfo*> *ping_resultmap,
+			    HashMap<unsigned, ping_callinfo*> *ping_resultmap,
 			    Time before_ping, map<IPAddress, Time> *timing,
 			    bool repair );
   void have_joined();

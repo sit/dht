@@ -70,7 +70,7 @@ foreach my $log (@logs) {
 			 $ht->{"failures"}, $oip, $owner, "NONE",
 			 $ht->{"starttime"});
 	    delete $lookups{"$ip-$key"};
-	} elsif( /(\d+): \((\d+)\/[\w\-]+\).*Lookup incorrect for key ([\w\-]+): ip (\d+), id ([\w\-]+), real root (\d+) hops (\d+)/ ) {
+	} elsif( /(\d+): \((\d+)\/[\w\-]+\).*Lookup incorrect for key ([\w\-]+): ip (\d+), id ([\w\-]+), real root ([\w\-]+) hops (\d+)/ ) {
 	    my $t = $1;
 	    my $ip = $2;
 	    my $key = $3;
@@ -119,6 +119,32 @@ foreach my $log (@logs) {
 		$stat_vals[$i] += $statar[$i*3+1];
 		$stat_nums[$i] += $statar[$i*3+2];
 	    }
+
+	} elsif( /^(\d): (.*)$/ ) {
+	    print STDERR $_;
+	    my $tot = 0;
+	    my $c = 0;
+	    my $index = $1;
+	    my @entries = split( /\s+/, $2 );
+	    foreach my $entry (@entries) {
+		my @ind = split( /\//, $entry );
+		if( $#ind < 2 or $ind[2] == 0 ) {
+		    next;
+		}
+		$tot += $ind[2];
+		if( $ind[2] > 50000 ) {
+		    print STDERR "#$index $ind[2]!\n";
+		}
+		$c++;
+	    }
+
+	    if( $c ) {
+		print "$index: average rtt=" . ($tot/$c) . "\n";
+	    }
+
+	} elsif( /lookup/ or /average/ or /rate/ ) {
+	    print $_;
+	} else {
 
 	}
 
