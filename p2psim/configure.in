@@ -1,4 +1,4 @@
-AC_INIT(protocol.h)
+AC_INIT(p2psim/p2psim.h)
 AM_INIT_AUTOMAKE(p2psim, 0.1)
 AM_CONFIG_HEADER(config.h)
 
@@ -7,6 +7,7 @@ AC_CANONICAL_HOST
 AC_PROG_CC
 AC_PROG_CPP
 AC_PROG_CXX
+AC_PROG_RANLIB
 AC_PATH_PROGS(M4, gm4 gnum4 m4, '$(top_srcdir)/missing')
 
 dnl Check for GTK and allow conditional Makefile.am statements
@@ -67,4 +68,13 @@ AM_WITH_TMGDMALLOC
 AC_PROG_INSTALL
 AC_PROG_LN_S
 
-AC_OUTPUT(Makefile)
+AC_OUTPUT(Makefile
+            vis/Makefile
+            eventgenerators/Makefile
+            p2psim/Makefile
+            observers/Makefile
+            protocols/Makefile
+            failuremodels/Makefile
+            topologies/Makefile
+            events/Makefile
+            misc/Makefile)

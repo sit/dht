@@ -1,0 +1,2 @@
+# CXXFLAGS = -g -Wall -fno-exceptions -fno-default-inline -fno-inline
+CXXFLAGS = -g -Wall -fno-exceptions -O2
