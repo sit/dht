@@ -27,6 +27,11 @@ fill_RR (domain_name dname, dns_type dt, dns_class cl,
     rr->rdata.address = (rr->rdata.address << 8) + 4;
     rr->rdata.address = (rr->rdata.address << 8) + 53;
     break;
+  case NS:
+    rr->rdlength = strlen (rr_data) + 1;
+    rr->rdata.nsdname = (string) malloc (rr->rdlength);
+    memmove (rr->rdata.nsdname, rr_data, rr->rdlength);
+    break;
   default:
     break;
   }    
@@ -36,9 +41,11 @@ static void
 store_it (domain_name dname, dns_type dt) 
 {
   ref<ddnsRR> rr = New refcounted<ddnsRR>;
-  fill_RR (dname, dt, IN, 23234, "18.26.4.33", rr);
+  //fill_RR (dname, dt, IN, 23234, "18.26.4.33", rr);
+  fill_RR (dname, dt, IN, 23234, "sth.sth.com", rr);
   rr->next = New refcounted<ddnsRR>;
-  fill_RR (dname, dt, IN, 54344, "34.5.3.2", rr->next);
+  //fill_RR (dname, dt, IN, 54344, "34.5.3.2", rr->next);
+  fill_RR (dname, dt, IN, 34242, "hello.org", rr->next);
   rr->next->next = NULL;
 
   ddns_clnt->store (dname, rr);
@@ -61,6 +68,9 @@ got_it (ptr<ddnsRR> rr)
 	   << "." << ((rr->rdata.address << 16) >> 24)
 	   << "." << ((rr->rdata.address << 24) >> 24) 
 	   << "\n";
+      break;
+    case NS:
+      warn << "rdata.nsdname = " << rr->rdata.nsdname << "\n";
       break;
     default:
       return;

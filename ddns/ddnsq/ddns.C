@@ -109,13 +109,17 @@ ddns::ddnsRR2block (ptr<ddnsRR> rr, char *data, int datasize)
       copy2block (data, (void *) &rr->rdata.address, 
 		  rr->rdlength, datalen, datasize);
       break;
+    case NS:
+      copy2block (data, (void *) rr->rdata.nsdname, 
+		  rr->rdlength, datalen, datasize);
+      break;
     default:
       return -1;
     }  
     rr = rr->next;
   }
 
-  return datalen; /* real datasize */
+  return datalen; /* actual datasize */
 }
 
 chordID 
@@ -196,30 +200,38 @@ ddns::lookup_cb (domain_name dname, chordID key,
     if (off == (int) res->resok->attr.size) {
       warn << "Done: " << "res->size = " << off << "\n";
       int offset = 0, dnamelen = strlen (dname) + 1;
+      char *data = (char *)res->resok->res.base ();
       ref<ddnsRR> rr = New refcounted<ddnsRR>;
       ptr<ddnsRR> rr_tmp = rr;
       while (off > 0) {
 	warn << "off = " << off << "\n";
 	rr_tmp->dname = (string) malloc (dnamelen);
-	memmove (rr_tmp->dname, res->resok->res.base () + offset, dnamelen);
-	offset += dnamelen;
-	memmove (&rr_tmp->type, res->resok->res.base () + offset, DNS_TYPE_SIZE);
-	offset += DNS_TYPE_SIZE;
-	memmove (&rr_tmp->cls, res->resok->res.base () + offset, DNS_CLASS_SIZE);
-	offset += DNS_CLASS_SIZE;
-	memmove (&rr_tmp->ttl, res->resok->res.base () + offset, TTL_SIZE);
-	offset += TTL_SIZE;
-	memmove (&rr_tmp->rdlength, res->resok->res.base () + offset, RDLENGTH_SIZE);
-	offset += RDLENGTH_SIZE;
+	memmove (rr_tmp->dname, data, dnamelen); 
+	data = data + dnamelen;
+	memmove (&rr_tmp->type, data, DNS_TYPE_SIZE);
+	data = data + DNS_TYPE_SIZE;
+	memmove (&rr_tmp->cls, data, DNS_CLASS_SIZE);
+	data = data + DNS_CLASS_SIZE;
+	memmove (&rr_tmp->ttl, data, TTL_SIZE);
+	data = data + TTL_SIZE;
+	memmove (&rr_tmp->rdlength, data, RDLENGTH_SIZE);
+	data = data + RDLENGTH_SIZE;
+	offset += dnamelen + DNS_TYPE_SIZE + DNS_CLASS_SIZE 
+	  + TTL_SIZE + RDLENGTH_SIZE;
 
 	switch (rr_tmp->type) {
 	case A:
-	  memmove (&rr_tmp->rdata.address, res->resok->res.base () + offset, rr_tmp->rdlength);
-	  offset += rr_tmp->rdlength;
+	  memmove (&rr_tmp->rdata.address, data, rr_tmp->rdlength);
+	  break;
+	case NS:
+	  rr_tmp->rdata.nsdname = (string) malloc (rr_tmp->rdlength);
+	  memmove (rr_tmp->rdata.nsdname, data, rr_tmp->rdlength);	
 	  break;
 	default:
 	  break;
 	}
+	data = data + rr_tmp->rdlength;
+	offset += rr_tmp->rdlength;
 	off -= offset;
 	if (off > 0)
 	  rr_tmp->next = New refcounted<ddnsRR>;
