@@ -139,13 +139,7 @@ union dhash_fetchrec_res switch (dhash_stat status) {
    dhash_fetchrec_resdefault resdef;
 };
 
-enum bsm_transition {
-   BSM_MISSING,
-   BSM_FOUND
-};
-
 struct dhash_bsmupdate_arg {
-  bsm_transition t;
   /* If we're missing locally, n is the one who told us */
   /* Else, n is where it is missing */
   chord_node_wire n;

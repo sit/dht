@@ -1,4 +1,5 @@
 #include <arpc.h>
+#include <crypt.h>
 #include <id_utils.h>
 #include <syncer.h>
 #include <location.h>
@@ -28,6 +29,7 @@ main (int argc, char **argv)
   host.r.port = 0;
 
   setprogname (argv[0]);
+  random_init ();
   
   while ((ch = getopt (argc, argv, "d:S:v:e:c:p:t:j:"))!=-1)
     switch (ch) {

@@ -647,14 +647,7 @@ dhash_impl::dispatch (user_args *sbp)
       ptr<location> from = host_node->locations->lookup (n.x);
       if (from) {
 	// Only care if we still know about this node.
-	switch (arg->t) {
-	case BSM_MISSING:
-	  missing (from, arg->key, arg->local);
-	  break;
-	case BSM_FOUND:
-	  bsm->unmissing (from, arg->key);
-	  break;
-	}
+	missing (from, arg->key, arg->local);
       }
       sbp->reply (NULL);
     }

@@ -37,7 +37,9 @@ syncer::syncer (ptr<locationtable> locations,
   
   replica_timer = 180;
   
-  delaycb (replica_timer, wrap(this, &syncer::sync_replicas)); 
+  // Initially randomize a little.
+  int delay = random_getword () % replica_timer;
+  delaycb (delay, wrap(this, &syncer::sync_replicas)); 
 };
 
 
@@ -70,6 +72,7 @@ syncer::update_pred_cb (cb_location cb, chord_noderes *res, clnt_stat err)
   } else {
     chord_node n = make_chord_node (*res->resok);
     ptr<location> x = locations->lookup_or_create (n);
+    locations->insert (x);
     cb (x);
   }
 }
@@ -92,8 +95,6 @@ syncer::get_succlist_cb (chord_nodelistres *res,
 		 clnt_stat status)
 {
   vec<ptr<location> > ret;
-  //push myself on the list of successors
-  ret.push_back (host_loc);
   if (status) {
     cb (ret);
   } else {
@@ -101,6 +102,7 @@ syncer::get_succlist_cb (chord_nodelistres *res,
     for (size_t i = 0; i < sz; i++) {
       chord_node n = make_chord_node (res->resok->nlist[i]);
       ptr<location> s = locations->lookup_or_create (n);
+      locations->insert (s);
       ret.push_back (s);
     }
   }
@@ -117,7 +119,7 @@ syncer::sync_replicas ()
     // still working on the last sync
     delaycb (replica_timer, wrap(this, &syncer::sync_replicas)); 
   } else {
-    warn << "sync_replica: starting\n";
+    warn << "sync_replicas: starting\n";
     update_pred (wrap (this, &syncer::sync_replicas_predupdated));		 
   } 
 
@@ -135,22 +137,18 @@ void
 syncer::sync_replicas_gotsucclist (ptr<location> pred,
 			   vec<ptr<location> > succs) 
 {
-  
   if (succs.size () == 0) {
     delaycb (replica_timer, wrap(this, &syncer::sync_replicas)); 
     return;
   }
     
-  warn << "sync_replicas: got succ list\n";
-
   // succs[0] is the vnode we are working for
   //  ptr<location> pred = locations->closestopredloc (succs[0]);
   bigint rngmin = pred->id ();
   bigint rngmax = succs[0]->id ();
   
-
-  cur_succ++; // start at 1 (0 is me)
   if (cur_succ >= succs.size ()) cur_succ = 0;
+  cur_succ++; // start at 1 (0 is me)
 
   //sync with the next node
   if (tmptree) delete tmptree;
@@ -158,7 +156,6 @@ syncer::sync_replicas_gotsucclist (ptr<location> pred,
   tmptree = New merkle_tree(db, bsm, 
 			    succs[cur_succ]->id (), 
 			    succs);
-
 
   warn << host_loc->id () << " tree build: " 
 	<< getusec () - start << " usecs\n";
@@ -199,11 +196,9 @@ syncer::missing (ptr<location> from,
   }
 
   dhash_bsmupdate_arg a;
-  a.t = BSM_MISSING;
   a.local = missingLocal;
   from->fill_node (a.n);
   a.key = key;
-  /* This stuff probably doesn't matter */
   a.ctype = DHASH_CONTENTHASH;
   a.dbtype = DHASH_FRAG;
   doRPC (dhash_program_1, DHASHPROC_BSMUPDATE, &a, NULL, aclnt_cb_null);
