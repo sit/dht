@@ -49,9 +49,18 @@ class Vivaldi {
   // algo2()
   double _damp;
 
+  // algo3()
+  double _jumpprob;
+
+  double randf() { return (random()%1000000000) / 1000000000.0; }
+  Sample wrongest(vector<Sample> v);
+  Sample lowest_latency(vector<Sample> v);
   Coord net_force(vector<Sample> v);
   void algo1(Sample);
   void algo2(Sample);
+  void algo3(Sample);
+  void algo4(Sample);
+  void algo5(Sample);
 };
 
 inline double
