@@ -350,6 +350,12 @@ user_args::fill_from (chord_node *from)
   from->x = t_arg->src_id;
 }
 
+void 
+user_args::replyref (const int &res)
+{
+  reply ((void *)&res);
+}
+
 void
 user_args::reply (void *res)
 {
@@ -457,14 +463,6 @@ vnode_impl::check_dead_nodes ()
 
 
 long
-vnode_impl::doRPC (const chordID &ID, const rpc_program &prog, int procno, 
-		   ptr<void> in, void *out, aclnt_cb cb)
-{
-  // XXX
-  assert (0);
-}
-
-long
 vnode_impl::doRPC (ref<location> l, const rpc_program &prog, int procno, 
 		   ptr<void> in, void *out, aclnt_cb cb)
 {
@@ -485,6 +483,8 @@ vnode_impl::doRPC (ref<location> l, const rpc_program &prog, int procno,
   
   arg->progno = prog.progno;
   arg->procno = procno;
+
+  rpc_pending_counts[prog.progno - 344447]++;
   
   //marshall the args ourself
   xdrproc_t inproc = prog.tbl[procno].xdr_arg;
@@ -568,15 +568,15 @@ vnode_impl::update_coords (vec<float> uc, float ud)
 
   //  warn << myID << " --- starting update -----\n";
   vec<float> coords = me_->coords ();
-  vec<float> f, v;
+  vec<float> v = uc;
 
   
   //init f
+  vec<float> f;
   f.clear ();
-  for (int i = 0; i < chord::NCOORDS; i++) {
+  for (int i = 0; i < chord::NCOORDS; i++) 
     f.push_back (0.0);
-    v.push_back (uc[i]);
-  }
+  
 
 
   float actual = ud;
@@ -610,8 +610,15 @@ vnode_impl::update_coords (vec<float> uc, float ud)
     Coord::scalar_mult(f, timestep);
     Coord::vector_add (coords, f);
   
-    //  Coord::print_vector ("COORD f ", f);
-    //Coord::print_vector("COORD coords ", coords);
+#ifdef VIVALDI_DEBUG
+    char b[1024];			       
+    snprintf (b, 1024, "coord hop: %f - %f = %f ; len=%f ts=%f\n", 
+	      expect, actual, grad, len, timestep);
+    warn << b;
+    Coord::print_vector ("coords ", coords);
+    Coord::print_vector ("uc ", uc);
+    warn << "----------------\n";
+#endif 
     
     me_->set_coords (coords);
   } else {

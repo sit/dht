@@ -91,7 +91,7 @@ struct user_args {
   void reject (auth_stat s) {sbp->reject (s); delete this; }
   void reject (accept_stat s) {sbp->reject (s); delete this; }
   void reply (void *res);
-  void replyref (const int &res) { sbp->replyref (res); delete this; }
+  void replyref (const int &res);
   
   dorpc_arg * transport_header () 
     { return sbp->template getarg<dorpc_arg> (); };
@@ -141,11 +141,9 @@ class vnode : public virtual refcount {
   virtual void register_upcall (int progno, cbupcall_t cb) = 0;
 
   // For other modules
-  virtual long doRPC (const chordID &ID, const rpc_program &prog, int procno, 
+  virtual long doRPC (const chord_node &ID, const rpc_program &prog, int procno, 
 		      ptr<void> in, void *out, aclnt_cb cb) = 0;
   virtual long doRPC (ref<location> l, const rpc_program &prog, int procno,
-		      ptr<void> in, void *out, aclnt_cb cb) = 0;
-  virtual long doRPC (const chord_node &ID, const rpc_program &prog, int procno, 
 		      ptr<void> in, void *out, aclnt_cb cb) = 0;
 
   virtual void resendRPC (long seqno) = 0;

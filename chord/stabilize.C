@@ -150,8 +150,8 @@ stabilize_manager::stabilize_backoff (u_int32_t t)
   }
   if (backoff_stabilizing ()) {
     t *= 2;
-    warnx << gettime () << " " << myID
-	  <<" stabilize_backoff: slow down " << t << "\n";
+    //    warnx << gettime () << " " << myID
+    //	  <<" stabilize_backoff: slow down " << t << "\n";
   } else {
     for (unsigned int i = 0; i < clients.size (); i++)
       clients[i]->do_backoff ();

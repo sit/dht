@@ -392,7 +392,6 @@ stp_manager::stp_manager (ptr<u_int32_t> _nrcv)
     cwind (1.0),
     cwind_ewma (1.0),
     ssthresh (6.0),
-    left (0),
     cwind_cum (0.0),
     num_cwind_samples (0),
     num_qed (0),
@@ -471,7 +470,6 @@ stp_manager::doRPC_dead (ptr<location> l,
 bool
 stp_manager::room_in_window () 
 {
-  //  return (left + cwind*CWIND_MULT >= seqno);
   return inflight < cwind*5;
 }
 
@@ -506,9 +504,6 @@ stp_manager::doRPC (ptr<location> from, ptr<location> l,
 			       procno, 
 			       (sockaddr *)&(l->saddr ()));
     
-    sent_elm *s = New sent_elm (seqno);
-    sent_Q.insert_tail (s);
-    
     long sec, nsec;
     setup_rexmit_timer (from, l, &sec, &nsec);
 
@@ -533,6 +528,7 @@ void
 stp_manager::timeout (rpc_state *C)
 {
   C->rexmits++;
+  inflight--;
   update_cwind (-1);
 }
 
@@ -569,32 +565,14 @@ stp_manager::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
 
   user_rexmit_table.remove (C);
   (C->cb) (err);
-  inflight--;
-  remove_from_sentq (C->seqno);
+  if (C->rexmits == 0)
+    inflight--;
   update_cwind (C->seqno);
   rpc_done (C->seqno);
   delete C;
 }
 
-void
-stp_manager::remove_from_sentq (long acked_seqno)
-{
-  
-  // Ideally sent_Q should be a lru ordered hash table.
-  // this might clean up the code slight and provide
-  // a slight performance boost
-  // --josh
-  sent_elm *s = sent_Q.first;
-  while (s) {
-    if (s->seqno == acked_seqno) {
-      sent_Q.remove (s);
-      delete s;
-      break;
-    }
-    s = sent_Q.next (s);
-  }
 
-}
 void
 stp_manager::rpc_done (long acked_seqno)
 {
@@ -671,12 +649,6 @@ stp_manager::update_cwind (int seq)
       cwind += 1.0; //slow start
     else
       cwind += 1.0/cwind; //AI
-    if (seq == left) {
-      if (sent_Q.first) 
-	left = sent_Q.first->seqno;
-      else
-	left = seqno;
-    }
   } else {
     ssthresh = cwind_ewma/2; // MD
     if (ssthresh < 1.0) ssthresh = 1.0;
@@ -712,7 +684,8 @@ stp_manager::enqueue_rpc (RPC_delay_args *args)
 
 
 void
-stp_manager::setup_rexmit_timer (ptr<location> from, ptr<location> l, long *sec, long *nsec)
+stp_manager::setup_rexmit_timer (ptr<location> from, ptr<location> l, 
+				 long *sec, long *nsec)
 {
 #define MIN_SAMPLES 10
 
@@ -729,8 +702,9 @@ stp_manager::setup_rexmit_timer (ptr<location> from, ptr<location> l, long *sec,
       && (l->coords ().size () > 0)
       && (from->coords ().size () > 0)) {
     float dist = Coord::distance_f (from->coords (), l->coords ());
-    alat = dist + 8.0*c_err + 5000; //scale it to be safe. the 8 comes from an analysis for log files
-    // I also tried using the variance but average works better. With 8 we'll do about 1 percent spurious retransmits
+    alat = dist + 8.0*c_err + 5000; 
+    //scale it to be safe. the 8 comes from an analysis for log files
+    // I also tried usssing the variance but average works better. With 8 we'll do about 1 percent spurious retransmits
   }
 
   //statistics
@@ -741,7 +715,6 @@ stp_manager::setup_rexmit_timer (ptr<location> from, ptr<location> l, long *sec,
   *nsec = ((long)alat % 1000000) * 1000;
   
   if (*nsec < 0 || *sec < 0) {
-    warn << "bad timer: " << (int)alat << " " << *sec << " " << *nsec << "\n";
     *sec = 1;
     *nsec = 0;
   }
@@ -867,15 +840,23 @@ void stp_manager::stats ()
 
   warnx << "current RPCs queued for transmission pending window: " << num_qed << "\n";
   RPC_delay_args *args = Q.first;
-  const rpcgen_table *rtp;
+  //  const rpcgen_table *rtp;
   u_int64_t now = getusec ();
   while (args) {
-    rtp = &(args->prog.tbl[args->procno]);
+    void *args_as_pointer = args->in.get ();
+
+    int real_prog = ((dorpc_arg *)args_as_pointer)->progno;
+    int real_procno = ((dorpc_arg *)args_as_pointer)->procno;
     long diff = now - args->now;
+
+    warn << "   " << real_prog << "." << real_procno << " for " << args->l->id() << " queued for " << diff << "\n";
+
+    /*    rtp = &(args->prog.tbl[args->procno]);
     if (rtp) 
       warn << "  " << args->prog.name << "." << rtp->name << " for " << args->l->id() << " queued for " << diff << "\n";
     else 
       warn << "stp_manager::stats: WTF " << (u_int)&args->prog << "@" << args->procno << "\n";
+    */
     args = Q.next (args);
   }
 

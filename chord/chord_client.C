@@ -127,7 +127,7 @@ chord::chord (str _wellknownhost, int _wellknownport,
   wkn.coords.setsize (NCOORDS);
   // Make up some random initial information for this other node.
   for (int i = 0; i < NCOORDS; i++)
-    wkn.coords[i] = (int) uniform_random_f (1000000.0);
+    wkn.coords[i] = (int) uniform_random_f (100000.0);
 
   if (myname != _wellknownhost || myport != _wellknownport) {
     wellknown_node = locations->insert (wkn);

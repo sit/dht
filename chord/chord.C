@@ -89,6 +89,7 @@ vnode_impl::vnode_impl (ptr<locationtable> _locations,
   chordnode (_chordnode),
   lookup_mode (l_mode)
 {
+  timestep = 1.0;
   locations = _locations;
   warnx << gettime () << " myID is " << myID << "\n";
   me_ = locations->lookup (myID);
@@ -141,6 +142,7 @@ vnode_impl::vnode_impl (ptr<locationtable> _locations,
   ndogettoes = 0;
   ndofindtoes = 0;
   ndodebruijn = 0;
+  memset (rpc_pending_counts, 0, 128*sizeof(int));
 
   delaycb (60, 0, wrap (this, &vnode_impl::check_dead_nodes));
 }

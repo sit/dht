@@ -19,15 +19,6 @@ struct rpcstats {
 
 extern ihash<str, rpcstats, &rpcstats::key, &rpcstats::h_link> rpc_stats_tab;
 
-
-
-struct sent_elm {
-  tailq_entry<sent_elm> q_link;
-  long seqno;
-  
-  sent_elm (long s) : seqno (s) {};
-};
-
 struct RPC_delay_args {
   ptr<location> l;
   ptr<location> from;
@@ -173,7 +164,6 @@ class stp_manager : public rpc_manager {
   float cwind;
   float cwind_ewma;
   float ssthresh;
-  int left;
   float cwind_cum;
   int num_cwind_samples;
   int num_qed;
@@ -185,7 +175,6 @@ class stp_manager : public rpc_manager {
   u_int64_t st;
 
   tailq<RPC_delay_args, &RPC_delay_args::q_link> Q;
-  tailq<sent_elm, &sent_elm::q_link> sent_Q;
   ihash<long, rpc_state, &rpc_state::rexmit_ID, &rpc_state::h_link> user_rexmit_table;
 
   timecb_t *idle_timer;

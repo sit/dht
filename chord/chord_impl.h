@@ -74,6 +74,8 @@ class vnode_impl : public vnode {
   int myindex;
   float timestep;
 
+  int rpc_pending_counts[128];
+
   ihash<unsigned long, 
     dispatch_record, 
     &dispatch_record::progno, 
@@ -160,7 +162,7 @@ class vnode_impl : public vnode {
 		     cbupcalldone_t, bool v);
 
   void doRPC_cb (ptr<location> l, xdrproc_t proc,
-		 void *out, aclnt_cb cb, 
+		 void *out, aclnt_cb cb,
 		 ref<dorpc_res> res, clnt_stat err);
 
 
@@ -230,10 +232,11 @@ class vnode_impl : public vnode {
   // For other modules
   long doRPC (ref<location> l, const rpc_program &prog, int procno,
 	      ptr<void> in, void *out, aclnt_cb cb);
-  long doRPC (const chordID &ID, const rpc_program &prog, int procno, 
-	      ptr<void> in, void *out, aclnt_cb cb);
+  /*  long doRPC (const chordID &ID, const rpc_program &prog, int procno, 
+      ptr<void> in, void *out, aclnt_cb cb); */
   long doRPC (const chord_node &ID, const rpc_program &prog, int procno, 
 	      ptr<void> in, void *out, aclnt_cb cb);
+
   void resendRPC (long seqno);
   void fill_user_args (user_args *a);
 
