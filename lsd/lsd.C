@@ -212,14 +212,17 @@ tm ()
 }
 
 void
-dump_progstats (const rpc_program &prog, bool hdr)
+dump_rpcstats (const rpc_program &prog, bool first, bool last)
 {
+  static rpc_program total;
+
   // In arpc/rpctypes.h -- if defined
 #ifdef RPC_PROGRAM_STATS
   str fmt1 ("%-40s %15s %15s %15s %15s %15s %15s\n");
   str fmt2 ("%-40s %15d %15d %15d %15d %15d %15d\n");
 
-  if (hdr) {
+  if (first) {
+    bzero (&total, sizeof (total));
     warn.fmt (fmt1,
 	      "",
 	      "outcall_num","outcall_bytes",
@@ -227,8 +230,8 @@ dump_progstats (const rpc_program &prog, bool hdr)
 	      "outreply_num","outreply_bytes");
   }
 
-  rpc_program totals;
-  bzero (&totals, sizeof (totals));
+  rpc_program subtotal;
+  bzero (&subtotal, sizeof (subtotal));
   for (size_t procno = 0; procno < prog.nproc; procno++) {
     if (strlen (prog.tbl[procno].name) == 1)
       continue;
@@ -242,26 +245,64 @@ dump_progstats (const rpc_program &prog, bool hdr)
 	      prog.outreply_num[procno],
 	      prog.outreply_bytes[procno]);
     
-    totals.outcall_num[0] += prog.outcall_num[procno];
-    totals.outcall_bytes[0] += prog.outcall_bytes[procno];
-    totals.outcall_numrex[0] += prog.outcall_numrex[procno];
-    totals.outcall_bytesrex[0] += prog.outcall_bytesrex[procno];
-    totals.outreply_num[0] += prog.outreply_num[procno];
-    totals.outreply_bytes[0] += prog.outreply_bytes[procno];
+    subtotal.outcall_num[0] += prog.outcall_num[procno];
+    subtotal.outcall_bytes[0] += prog.outcall_bytes[procno];
+    subtotal.outcall_numrex[0] += prog.outcall_numrex[procno];
+    subtotal.outcall_bytesrex[0] += prog.outcall_bytesrex[procno];
+    subtotal.outreply_num[0] += prog.outreply_num[procno];
+    subtotal.outreply_bytes[0] += prog.outreply_bytes[procno];
   }
   
-  str tmp = strbuf () << "TOTAL " << prog.name;
+  str tmp = strbuf () << "SUMMARY " << prog.name;
   warn.fmt (fmt2,
 	    tmp.cstr (),
-	    totals.outcall_num[0],
-	    totals.outcall_bytes[0],
-	    totals.outcall_numrex[0],
-	    totals.outcall_bytesrex[0],
-	    totals.outreply_num[0],
-	    totals.outreply_bytes[0]);
+	    subtotal.outcall_num[0],
+	    subtotal.outcall_bytes[0],
+	    subtotal.outcall_numrex[0],
+	    subtotal.outcall_bytesrex[0],
+	    subtotal.outreply_num[0],
+	    subtotal.outreply_bytes[0]);
+
+  warn << "TOTAL " << prog.name << "  out*_num " 
+	 << subtotal.outcall_num[0] + subtotal.outcall_numrex[0] + subtotal.outreply_num[0]
+	 << " out*_bytes " 
+	 << subtotal.outcall_bytes[0] + subtotal.outcall_bytesrex[0] + subtotal.outreply_bytes[0]
+	 << "\n";
 
   warn << "\n";
+
+  total.outcall_num[0] += subtotal.outcall_num[0];
+  total.outcall_bytes[0] += subtotal.outcall_bytes[0];
+  total.outcall_numrex[0] += subtotal.outcall_numrex[0];
+  total.outcall_bytesrex[0] += subtotal.outcall_bytesrex[0];
+  total.outreply_num[0] += subtotal.outreply_num[0];
+  total.outreply_bytes[0] += subtotal.outreply_bytes[0];
+  
+  if (last) {
+    warn.fmt (fmt2,
+	      "SUMMARY all protocols",
+	      total.outcall_num[0],
+	      total.outcall_bytes[0],
+	      total.outcall_numrex[0],
+	      total.outcall_bytesrex[0],
+	      total.outreply_num[0],
+	      total.outreply_bytes[0]);
+
+    warn << "TOTAL all protocols      out*_num " 
+	 << total.outcall_num[0] + total.outcall_numrex[0] + total.outreply_num[0]
+	 << " out*_bytes " 
+	 << total.outcall_bytes[0] + total.outcall_bytesrex[0] + total.outreply_bytes[0]
+	 << "\n";
+  }
 #endif
+
+  bzero (prog.outcall_num, sizeof (prog.outcall_num));
+  bzero (prog.outcall_bytes, sizeof (prog.outcall_bytes));
+  bzero (prog.outcall_numrex, sizeof (prog.outcall_numrex));
+  bzero (prog.outcall_bytesrex, sizeof (prog.outcall_bytesrex));
+  bzero (prog.outreply_num, sizeof (prog.outreply_num));
+  bzero (prog.outreply_bytes, sizeof (prog.outreply_bytes));
+
 }
 
 
@@ -274,9 +315,9 @@ bandwidth ()
   extern const rpc_program merklesync_program_1;
   extern const rpc_program dhash_program_1;
 
-  dump_progstats (chord_program_1, true);
-  dump_progstats (dhash_program_1, false);
-  dump_progstats (merklesync_program_1, false);
+  dump_rpcstats (chord_program_1, true, false);
+  dump_rpcstats (dhash_program_1, false, false);
+  dump_rpcstats (merklesync_program_1, false, true);
 
   delaycb (1, 0, wrap (bandwidth));
 }
