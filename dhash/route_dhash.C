@@ -226,10 +226,11 @@ route_dhash::reexecute ()
     warn << "route_dhash: no more retries...giving up\n";
     (*cb) (DHASH_NOENT, NULL, path ());
   } else {
-    ref<route_dhash> iterator = 
-      New refcounted<route_dhash>(f, blockID, dh, ask_for_lease, use_cached_succ);
     // XXX what if 'this' route_dhash was invoked with the other execute() ???
-    iterator->execute (cb, retries-1);
+    retries--;
+    timecb_remove (dcb);
+    dcb = delaycb (LOOKUP_TIMEOUT, wrap (mkref(this), &route_dhash::timed_out));
+    chord_iterator->send (use_cached_succ);
   }
 }
 
