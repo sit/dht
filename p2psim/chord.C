@@ -249,7 +249,6 @@ void
 Chord::init_state(vector<IDMap> ids)
 {
   loctable->add_sortednodes(ids);
-  printf("%s inited %d %d\n", ts(), ids.size(), loctable->size());
 }
 
 void
@@ -448,7 +447,7 @@ LocTable::add_sortednodes(vector<Chord::IDMap> l)
   int lsz = l.size();
   Chord::IDMap tmppin;
   tmppin.ip = 0;
-  uint pos;
+  int pos;
   int ptr;
   //Chord::IDMap n;
 //  pin_entry p;

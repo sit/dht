@@ -18,6 +18,7 @@ bool vis = false;
 uint base = 2;  // XXX probably need something like a configuration file
 uint resilience = 1;
 uint successors = 1;
+uint fingers = 1000;
   
 void parse_args(int argc, char *argv[]);
 void usage();
@@ -50,10 +51,13 @@ void
 parse_args(int argc, char *argv[])
 {
   int ch;
-  while ((ch = getopt (argc, argv, "b:r:s:v")) != -1) {
+  while ((ch = getopt (argc, argv, "b:f:r:s:v")) != -1) {
     switch (ch) {
     case 'b':
       base = atoi(optarg);
+      break;
+    case 'f':
+      fingers = atoi(optarg);
       break;
     case 'r':
       resilience = atoi(optarg);

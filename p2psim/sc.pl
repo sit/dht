@@ -62,9 +62,10 @@ sub donet {
     $protocol = $pro;
     $nnodes = $n;
     print TOP "topology $top\n\n";
+
+    generate_randnodes($n);
     for (my $i = 1; $i <= $n; $i++) {
 	if ($place =~ /random (\d+) (\d+)/) {
-	    $allnodes[$i] = int (rand 4294967295);
 	    my $x = int(rand $1) + 1;
 	    my $y = int(rand $2) + 1;
 	    print TOP "$allnodes[$i] $x,$y $node $pro\n";
@@ -126,4 +127,16 @@ sub makekey ()
     return $id;
 }
 
-
+sub generate_randnodes() 
+{
+  my ($n) = @_;
+  my %h;
+  my $node;
+  for (my $i = 1; $i <= $n; $i++) {
+    do {
+      $node = int (rand 4294967295);
+    }while (defined($h{$node}) || ($node == 0));
+    $h{$node} = 1;
+    $allnodes[$i] = $node;
+  }
+}

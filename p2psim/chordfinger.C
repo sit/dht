@@ -5,20 +5,58 @@
 using namespace std;
 
 
-ChordFinger::ChordFinger(Node *n, uint base, uint successors) : Chord(n, successors), _base(base)
+ChordFinger::ChordFinger(Node *n, uint base, uint successors, uint maxf) : Chord(n, successors), _base(base),_maxf(maxf)
 {
   uint level = (uint) ConsistentHash::log_b((CHID)-1, _base);
   CHID finger;
   CHID lap = 1;
-  uint num = 0;
+  _numf = 0;
   for (unsigned int i = 0; i < level; i++) {
     for (unsigned int j = 1; j <= (_base- 1); j++) {
       finger = lap * j + me.id;
       loctable->pin(finger, 1, 0);
-      num++;
+      _numf++;
     }
     lap = (lap * _base);
   }
+}
+
+void
+ChordFinger::init_state(vector<IDMap> ids)
+{
+
+  loctable->clear_pins();
+
+  loctable->pin(me.id,1,0);
+  loctable->pin(me.id+1,1,0);
+  loctable->pin(me.id-1,0,1);
+
+  /* estimates the size of the network by looking at how far away my successor is from me */
+  uint sz = ids.size();
+  uint my_pos = find(ids.begin(), ids.end(), me) - ids.begin();
+  assert(ids[my_pos].id == me.id);
+  CHID min_lap = ids[(my_pos+1) % sz].id - me.id;
+
+
+  uint level = (uint) ConsistentHash::log_b((CHID)-1, _base);
+  CHID lap = 1;
+
+  CHID finger;
+  uint numf = 0;
+  for (uint i = 0; i < level; i++) {
+    for (uint j = 1; j <= (_base - 1); j++) {
+      if (lap < min_lap) continue;
+      finger = lap * j + me.id;
+      loctable->pin(finger, 1, 0);
+      numf++;
+      if (numf >= _maxf) goto NEXT;
+    }
+    lap = (lap * _base);
+  }
+
+NEXT:
+  Chord::init_state(ids);
+  printf("%s inited %d %d %d %d %d %d\n", ts(), ids.size(), loctable->size(), _maxf, numf, _numf, loctable->psize());
 }
 
 void

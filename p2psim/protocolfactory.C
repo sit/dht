@@ -13,6 +13,7 @@ using namespace std;
 extern uint base;
 extern uint resilience;
 extern uint successors;
+extern uint fingers;
 
 ProtocolFactory *ProtocolFactory::_instance = 0;
 
@@ -58,7 +59,7 @@ ProtocolFactory::create(string s, Node *n)
   if (s == "VivaldiTest")
     p = new VivaldiTest(n);
   if (s == "ChordFinger")
-    p = new ChordFinger(n,base,(successors>resilience? successors:resilience));
+    p = new ChordFinger(n,base,(successors>resilience? successors:resilience), fingers);
 
   assert(p);
   _protnames[typeid(*p).name()] = s;

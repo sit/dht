@@ -48,7 +48,7 @@ Euclidean::parse(ifstream &ifs)
     }
 
     // node-id
-    IPAddress ipaddr = atoi(words[0].c_str());
+    IPAddress ipaddr = atoll(words[0].c_str());
     if(!ipaddr)
       cerr << "found node-id 0.  you're asking for trouble." << endl;
 
@@ -63,7 +63,7 @@ Euclidean::parse(ifstream &ifs)
 
     // add the new node it to the topology
     if(_nodes.find(n->ip()) != _nodes.end())
-      cerr << "warning: node " << ipaddr << " already added!" << endl;
+      cerr << "warning: node " << ipaddr << " already added! (" <<words[0]<<")" << endl;
     _nodes[n->ip()] = c;
 
     // all the rest are protocols on this node
