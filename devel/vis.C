@@ -27,6 +27,7 @@ static const unsigned int DRAW_IMMED_PRED = 1 << 2;
 static const unsigned int DRAW_DEBRUIJN   = 1 << 3;
 static const unsigned int DRAW_FINGERS    = 1 << 4;
 static const unsigned int DRAW_TOES       = 1 << 5;
+static const unsigned int DRAW_TOP_FINGERS       = 1 << 6;
 
 struct handler_info {
   unsigned int flag;
@@ -42,6 +43,7 @@ static handler_info handlers[] = {
   { DRAW_DEBRUIJN,  "debruijn node",  NULL, GTK_SIGNAL_FUNC (draw_toggle_cb) },
   { DRAW_IMMED_PRED, "immed. pred", NULL, GTK_SIGNAL_FUNC (draw_toggle_cb) },
   { DRAW_FINGERS,    "fingers",     NULL, GTK_SIGNAL_FUNC (draw_toggle_cb) },
+  { DRAW_TOP_FINGERS,    "top fingers",     NULL, GTK_SIGNAL_FUNC (draw_toggle_cb) },
   { DRAW_TOES,       "neighbors",   NULL, GTK_SIGNAL_FUNC (draw_toggle_cb) }
 };
 
@@ -1539,6 +1541,15 @@ draw_ring ()
 	  draw_arrow (x,y,a,b, draw_gc);
 	}
       }
+
+      if (n->fingers && ((n->draw & DRAW_TOP_FINGERS) == DRAW_TOP_FINGERS)) {
+	unsigned int i=n->fingers->resok->nlist.size () - 1;
+	int a,b;
+	set_foreground_lat (n->fingers->resok->nlist[i].a_lat); 
+	ID_to_xy (make_chordID (n->fingers->resok->nlist[i].n), &a, &b);
+	draw_arrow (x,y,a,b, draw_gc);
+      }
+
       
       if (n->predecessor &&
 	  ((n->draw & DRAW_IMMED_PRED) == DRAW_IMMED_PRED)) {
