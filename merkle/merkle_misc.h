@@ -94,21 +94,6 @@ database_get_keys (dbfe *db, u_int depth, const merkle_hash &prefix)
       break;
     ret.push_back (key);
     entry = iter->nextElement ();
- 
-    // XXX HACK 
-    //  This is sort of a hack.  The problem was that    
-    //  creating a merkle tree with a large database
-    //  was very close.  When each block was this function
-    //  returned essentially the entire database.
-    
-    //  The crux of the problem is that while a database
-    //  is being reloaded it is out-of-sync vis-a-vis 
-    //  the underlying database. 
-    
-    //  This problem should be fixed in a different way.
-    //  But this hack is easiest for now.
-    if (ret.size () == 64)
-      break;
   }
 
 #if 0

@@ -105,13 +105,9 @@ merkle_tree::insert (u_int depth, block *b, merkle_node *n)
     leaf2internal (depth, b->key, n);
   
   if (n->isleaf ()) {
-    // blocks with out data are inserted just so the merkle tree
-    // is updated.  They are assumed to already be in the db.
-    if (b->data) {
-      assert (!database_lookup (db, b->key));
-      database_insert (db, b);
-      assert (database_lookup (db, b->key));
-    }
+    assert (!database_lookup (db, b->key));
+    database_insert (db, b);
+    assert (database_lookup (db, b->key));
   } else {
     u_int32_t branch = b->key.read_slot (depth);
     ///warn << "depth " << depth << ", branch " << branch << "\n";
@@ -135,24 +131,34 @@ merkle_tree::lookup (u_int *depth, u_int max_depth, merkle_hash &key, merkle_nod
   return lookup (depth, max_depth, key, n->child (branch));
 }
 
-merkle_tree::merkle_tree (dbfe *db) 
-  : db (db)
+merkle_tree::merkle_tree (dbfe *realdb)
 {
-  // populate merkle tree from initial db contents
-  ptr<dbEnumeration> it = db->enumerate();
-  ptr<dbPair> d = it->firstElement();
-  if (d)
-    warn << "Database is not empty.  Loading into merkle tree\n";
+  // create a temporary in-memory database
+  ptr<dbfe> fakedb = New refcounted<dbfe> ();
+  // put the memory db "under" the merkle tree
+  db = fakedb;
 
-  //int i = 0;
-  while (d) {
-    //warn << "key[" << i++ << "] " << dhash::dbrec2id (d->key) << "\n";
-    // NULL data b/c we are updating the merkle tree only
-    // not writing to the underlying database
-    block b (to_merkle_hash (d->key), NULL);
+  dbOptions opts;
+  opts.addOption("opt_cachesize", 1000);
+  opts.addOption("opt_nodesize", 4096);
+  if (int err = fakedb->opendb(NULL, opts))
+    fatal << "merkle_tree::merkle_tree opendb failed: " << strerror(err);
+
+  // populate merkle tree/mem db from realdb
+  ptr<dbEnumeration> it = realdb->enumerate ();
+  ptr<dbPair> d = it->firstElement();
+  ptr<dbrec> FAKE_DATA = New refcounted<dbrec> ("", 1);
+  for (int i = 0; d; i++, d = it->nextElement()) {
+    if (i == 0)
+      warn << "Database is not empty.  Loading into merkle tree\n";
+    warn << "key[" << i << "] " << dhash::dbrec2id (d->key) << "\n";
+    block b (to_merkle_hash (d->key), FAKE_DATA);
     insert (0, &b, &root);
-    d = it->nextElement();
   }
+
+  // Put the realdb under the merkle tree.  This works since it has
+  // the same keys as the in-mem db.
+  db = realdb;
   //check_invariants ();
 }
 

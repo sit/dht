@@ -49,6 +49,37 @@ static int REPLICATE      = getenv("REPLICATE") ? atoi(getenv("REPLICATE")) : 1;
 #define LEASE_TIME 2
 #define LEASE_INACTIVE 60
 
+
+static int
+verifydb (dbfe *db)
+{
+  // populate merkle tree from initial db contents
+  ptr<dbEnumeration> it = db->enumerate ();
+  ptr<dbPair> d = it->firstElement();
+  chordID p = -1;
+  while (d) {
+    chordID k = dhash::dbrec2id (d->key);
+    if (k < 0 || k >= (bigint (1) << 160)) {
+      warn << "key out of range: " << k << "\n";
+      return 0;
+    }
+    if (p >= k) {
+      warn << "keys not sorted: " << p << " " << k << "\n";
+      return 0;
+    }
+    if (db->lookup (d->key)) {
+      warn << "lookup failed: " << k << "\n";
+      return 0;
+    }
+    p = k;
+    d = it->nextElement();
+  }
+
+  return 1; // OK -- db verified
+}
+
+
+
 dhash::dhash(str dbname, ptr<vnode> node, 
 	     ptr<route_factory> _r_factory,
 	     u_int k, int _ss_mode) 
@@ -64,8 +95,10 @@ dhash::dhash(str dbname, ptr<vnode> node,
   ss_mode = _ss_mode / 10;
   pk_partial_cookie = 1;
 
-  db = New dbfe();
-
+  bool secondtry = false;
+ dbagain:
+  db = New refcounted<dbfe>();
+  
   //set up the options we want
   dbOptions opts;
   opts.addOption("opt_async", 1);
@@ -73,9 +106,23 @@ dhash::dhash(str dbname, ptr<vnode> node,
   opts.addOption("opt_nodesize", 4096);
 
   if (int err = db->opendb(const_cast < char *>(dbname.cstr()), opts)) {
-    warn << "db file: " << dbname<<"\n";
-    warn << "open returned: " << strerror(err) << err << "\n";
+    warn << "db file: " << dbname <<"\n";
+    warn << "open returned: " << strerror(err) << "\n";
     exit (-1);
+  }
+
+  if (!verifydb (db)) {
+    warn << "Database '" << dbname << "' is corrupt.  deleting it.\n"; 
+    db = NULL; // refcounted
+    int ret = unlink (dbname);
+    if (ret < 0) 
+      warn << "unlink failed: " << strerror(errno) << "\n";
+    if (secondtry) {
+      warn << "Second database verification failed.  Bailing\n";
+      exit (-1);
+    }
+    secondtry = true;
+    goto dbagain;
   }
 
   host_node = node;

@@ -175,7 +175,7 @@ class dhash {
   int ss_mode;
   int pk_partial_cookie;
   
-  dbfe *db;
+  ptr<dbfe> db;
   ptr<vnode> host_node;
   dhashcli *cli;
   ptr<route_factory> r_factory;
