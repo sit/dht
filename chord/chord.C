@@ -142,7 +142,7 @@ vnode_impl::vnode_impl (ptr<locationtable> _locations,
   ndogettoes = 0;
   ndofindtoes = 0;
   ndodebruijn = 0;
-  memset (rpc_pending_counts, 0, 128*sizeof(int));
+  memset (rpc_pending_counts, 0, sizeof (rpc_pending_counts));
 
   delaycb (60, 0, wrap (this, &vnode_impl::check_dead_nodes));
 }
