@@ -262,11 +262,13 @@ int dbfe::IMPL_open_sleepycat(char *filename, dbOptions opts) {
  if (create == 0) flags |= DB_EXCL;
 
  
+#if 0
  if (compare) {
    db->app_private = this;
    r =  db->set_bt_compare (db, IMPL_compare_fcn_sleepycat);
    if (r != 0) return r;
  }
+#endif
 
  r = db->open(db, (const char *)filename, NULL, DB_BTREE, flags, mode);
  return r;
@@ -360,12 +362,17 @@ dbfe::IMPL_sync () {
 int
 dbfe::IMPL_compare_fcn_sleepycat (DB *db, const DBT *a, const DBT *b)
 {
+#if 0
   dbfe *dbf = (dbfe *)db->app_private;
 
   ref<dbrec> arec = New refcounted<dbrec>(a->data, a->size);
   ref<dbrec> brec = New refcounted<dbrec>(b->data, b->size);
 
   return dbf->compare (arec, brec);
+#else
+  assert (0);
+  return -1;
+#endif
 }
 
 
