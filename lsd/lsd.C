@@ -281,20 +281,13 @@ main (int argc, char **argv)
   int set_rpcdelay = 0;
   ss_mode = 0;
 
-  while ((ch = getopt (argc, argv, "d:S:v:f:cs:")) != -1)
+  while ((ch = getopt (argc, argv, "CS:cd:f:r:s:v:")) != -1)
     switch (ch) {
+    case 'C':
+      nochallenges = 1;
+      break;
     case 'S':
       p2psocket = optarg;
-      break;
-    case 'v':
-      vnode = atoi (optarg);
-      break;
-    case 'r':
-      set_rpcdelay = atoi(optarg);
-      break;
-    case 'f':
-      if (!set_name) fatal("must specify db name\n");
-      parseconfigfile (optarg, vnode, set_rpcdelay);
       break;
     case 'c':
       do_cache = 1;
@@ -303,8 +296,18 @@ main (int argc, char **argv)
       db_name = optarg;
       set_name = 1;
       break;
+    case 'f':
+      if (!set_name) fatal("must specify db name\n");
+      parseconfigfile (optarg, vnode, set_rpcdelay);
+      break;
+    case 'r':
+      set_rpcdelay = atoi(optarg);
+      break;
     case 's':
       ss_mode = atoi(optarg);
+      break;
+    case 'v':
+      vnode = atoi (optarg);
       break;
     default:
       usage ();
