@@ -369,10 +369,7 @@ bandwidth ()
 void
 stats () 
 {
-  extern int JOSH; // dhash/server.C
-
   if (JOSH) {
-
     // only execute once
     static bool unleashed = false;
     if (!unleashed) {

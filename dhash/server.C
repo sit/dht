@@ -44,6 +44,7 @@
 #include <merkle_sync_prot.h>
 static int KEYHASHDB = getenv("KEYHASHDB") ? atoi(getenv("KEYHASHDB")) : 0;
 int JOSH = getenv("JOSH") ? atoi(getenv("JOSH")) : 0;
+int CODING = getenv("CODING") ? atoi(getenv("CODING")) : 0;
 
 #define SYNCTM    30
 #define KEYHASHTM 10
@@ -239,7 +240,6 @@ dhash::init_after_chord(ptr<vnode> node, ptr<route_factory> _r_factory)
 void
 dhash::sendblock_XXX (XXX_SENDBLOCK_ARGS *a)
 {
-  // XXX fix this
   sendblock (a->dest, a->blockID, a->last, a->cb);
 }
 
@@ -326,7 +326,7 @@ dhash::keyhash_mgr_timer ()
 }
 
 void
-dhash::keyhash_mgr_lookup (chordID key, dhash_stat err, chordID host)
+dhash::keyhash_mgr_lookup (chordID key, dhash_stat err, chordID host, route r)
 {
   keyhash_mgr_rpcs --;
   if (!err) {
@@ -466,7 +466,7 @@ dhash::partition_maintenance_timer ()
 
 
 void
-dhash::partition_maintenance_lookup_cb (dhash_stat err, chordID hostID)
+dhash::partition_maintenance_lookup_cb (dhash_stat err, chordID hostID, route r)
 {
   if (err) {
     warn << "dhash::partition_maintenance_lookup_cb err " << err << "\n";
@@ -671,10 +671,9 @@ dhash::fetchiter_sbp_gotdata_cb (svccb *sbp, s_dhash_fetch_arg *arg,
 void
 dhash::dispatch (svccb *sbp) 
 {
-
   rpc_answered++;
   switch (sbp->proc ()) {
-
+    
   case DHASHPROC_FETCHITER:
     {
       //the only reason to get here is to fetch the 2-n chunks
@@ -694,7 +693,7 @@ dhash::dispatch (svccb *sbp)
   case DHASHPROC_STORE:
     {
       s_dhash_insertarg *sarg = sbp->template getarg<s_dhash_insertarg> ();
-     
+
       if ((sarg->type == DHASH_STORE) && 
 	  (!responsible (sarg->key)) && 
 	  (!pst[sarg->key])) {
@@ -705,6 +704,7 @@ dhash::dispatch (svccb *sbp)
 	sbp->reply (&res);
       } else
 	store (sarg, wrap(this, &dhash::storesvc_cb, sbp, sarg));	
+
     }
     break;
   case DHASHPROC_GETKEYS:
@@ -768,7 +768,6 @@ dhash::dispatch (svccb *sbp)
   }
 
   pred = host_node->my_pred ();
-  return;
 }
 
 void
@@ -1216,17 +1215,18 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
         return;
       }
      
-      if (!verify (arg->key, ctype, (char *)d->value, d->len) ||
-	  ((ctype == DHASH_NOAUTH) 
-	   && key_status (arg->key) != DHASH_NOTPRESENT)) {
-  
-        warn << "*** NO VERIFY\n";
-        cb (DHASH_STORE_NOVERIFY);
-        if (ss) {
-	  pst.remove (ss);
-	  delete ss;
-        }
-        return;
+      if (!CODING) {
+	if (!verify (arg->key, ctype, (char *)d->value, d->len) ||
+	    ((ctype == DHASH_NOAUTH) 
+	     && key_status (arg->key) != DHASH_NOTPRESENT)) {
+	  
+	  cb (DHASH_STORE_NOVERIFY);
+	  if (ss) {
+	    pst.remove (ss);
+	    delete ss;
+	  }
+	  return;
+	}
       }
 
       dhash_stat stat;

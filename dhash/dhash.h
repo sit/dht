@@ -54,6 +54,9 @@
  * Include file for the distributed hash service
  */
 
+#define NUM_EFRAGS 16
+#define NUM_DFRAGS 8
+
 struct store_cbstate;
 
 typedef callback<void, int, ptr<dbrec>, dhash_stat>::ptr cbvalue;
@@ -100,6 +103,7 @@ struct store_state {
 };
 
 struct dhash_block {
+  chordID ID;
   char *data;
   size_t len;
   long version;
@@ -194,9 +198,9 @@ class dhash {
   void sendblock_cb (callback<void>::ref cb, dhash_stat err, chordID blockID);
 
   void keyhash_mgr_timer ();
-  void keyhash_mgr_lookup (chordID key, dhash_stat err, chordID host);
+  void keyhash_mgr_lookup (chordID key, dhash_stat err, chordID host, route r);
   void keyhash_sync_done ();
-  void partition_maintenance_lookup_cb (dhash_stat err, chordID hostID);
+  void partition_maintenance_lookup_cb (dhash_stat err, chordID hostID, route r);
   void partition_maintenance_pred_cb (chordID predID, net_address addr, chordstat stat);
   void doRPC_unbundler (chord_node dst, RPC_delay_args *args);
 
@@ -370,7 +374,7 @@ typedef callback<void, dhash_stat, chordID>::ref cbinsert_t;
 typedef callback<void, dhash_stat, ptr<insert_info> >::ref cbinsertgw_t;
 typedef callback<void, ptr<dhash_block> >::ref cbretrieve_t;
 typedef callback<void, dhash_stat, ptr<dhash_block>, route>::ptr cb_ret;
-typedef callback<void, dhash_stat, chordID>::ref dhashcli_lookupcb_t;
+typedef callback<void, dhash_stat, chordID, route>::ref dhashcli_lookupcb_t;
 typedef callback<void, dhash_stat, chordID, route>::ref dhashcli_routecb_t;
 
 #define DHASHCLIENT_USE_CACHED_SUCCESSOR 0x1
@@ -416,6 +420,18 @@ class dhashcli {
   dhash *dh;
   ptr<route_factory> r_factory;
 
+  struct rcv_state {
+    ihash_entry <rcv_state> link;
+    chordID key;
+    int incoming_rpcs;
+    vec<str> frags;
+    vec<cb_ret> callbacks;
+    rcv_state (chordID key) : key (key), incoming_rpcs (0) {}
+  };
+
+  ihash<chordID, rcv_state, &rcv_state::key, &rcv_state::link, hashID> rcvs;
+
+
 private:
   void doRPC (chordID ID, const rpc_program &prog, int procno, ptr<void> in, 
 	      void *out, aclnt_cb cb);
@@ -430,19 +446,43 @@ private:
 				ptr<dhash_block> block, route path);
   void insert_lookup_cb (chordID blockID, ref<dhash_block> block,
 			 cbinsert_t cb, int trial,
-			 dhash_stat status, chordID destID);
+			 dhash_stat status, chordID destID, route r);
   void insert_stored_cb (chordID blockID, ref<dhash_block> block,
 			 cbinsert_t cb, int trial,
 			 dhash_stat stat, chordID retID);
     
+  void insert2_lookup_cb (ref<dhash_block> block, cbinsert_t cb, 
+			  dhash_stat status, chordID destID, route r);
+
+  void insert2_succs_cb (ref<dhash_block> block, cbinsert_t cb,
+			 vec<chord_node> succs, chordstat err);
+
+  void insert2_store_cb (ref<dhash_block> block, cbinsert_t cb, 
+			 u_int i, ref<dhash_storeres> res,
+			 clnt_stat err);
+
+  void retrieve2_lookup_cb (chordID blockID, cb_ret cb, 
+			    dhash_stat status, chordID destID, route r);
+
+  void retrieve2_succs_cb (chordID blockID, cb_ret cb,
+			   vec<chord_node> succs, chordstat err);
+
+
+  void retrieve2_fetch_cb (chordID blockID, cb_ret cb, u_int i,
+			   ref<dhash_fetchiter_res> res,
+			   clnt_stat err);
+
+
  public:
   dhashcli (ptr<vnode> node, dhash *dh, ptr<route_factory> r_factory, 
 	    bool do_cache);
   void retrieve (chordID blockID, int options, cb_ret cb);
 
+  void retrieve2 (chordID blockID, int options, cb_ret cb);
   void retrieve (chordID source, chordID blockID, cb_ret cb);
   void insert (chordID blockID, ref<dhash_block> block, 
                int options, cbinsert_t cb);
+  void insert2 (ref<dhash_block> block, int options, cbinsert_t cb);
   void storeblock (chordID dest, chordID blockID, ref<dhash_block> block,
 		   bool last, cbinsert_t cb, store_status stat = DHASH_STORE);
 
@@ -476,15 +516,25 @@ public:
   void insert (const char *buf, size_t buflen, cbinsertgw_t cb, int options = 0);
   void insert (bigint key, const char *buf, size_t buflen, cbinsertgw_t cb,
                int options = 0);
+#if 0
+  void insert2 (bigint key, const char *buf, size_t buflen, cbinsertgw_t cb, 
+		int options = 0);
+#endif
 
   // insert under hash of public key
   void insert (ptr<sfspriv> key, const char *buf, size_t buflen, long ver,
                cbinsertgw_t cb, int options = 0);
+#if 0
+  void insert2 (ptr<sfspriv> key, const char *buf, size_t buflen, long ver,
+		cbinsertgw_t cb, int options = 0);
+#endif
   void insert (sfs_pubkey2 pk, sfs_sig2 sig, const char *buf, size_t buflen,
                long ver, cbinsertgw_t cb, int options = 0);
   void insert (bigint hash, sfs_pubkey2 pk, sfs_sig2 sig,
                const char *buf, size_t buflen, long ver,
 	       cbinsertgw_t cb, int options = 0);
+
+
 
   // retrieve block and verify
   void retrieve (bigint key, cb_ret cb, int options = 0);
@@ -517,5 +567,8 @@ static inline str dhasherr2str (dhash_stat status)
   return rpc_print (strbuf (), status, 0, NULL, NULL);
 }
 
+// see dhash/server.C
+extern int JOSH;
+extern int CODING; 
 
 #endif

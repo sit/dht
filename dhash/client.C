@@ -38,6 +38,7 @@
 #ifdef DMALLOC
 #include "dmalloc.h"
 #endif
+#include "ida.h"
 
 
 // ---------------------------------------------------------------------------
@@ -288,6 +289,123 @@ dhashcli::dhashcli (ptr<vnode> node, dhash *dh, ptr<route_factory> r_factory,
 }
 
 void
+dhashcli::retrieve2 (chordID blockID, int options, cb_ret cb)
+{
+  lookup (blockID, options,
+          wrap (this, &dhashcli::retrieve2_lookup_cb, blockID, cb));
+
+}
+
+void
+dhashcli::retrieve2_lookup_cb (chordID blockID, cb_ret cb, 
+			       dhash_stat status, chordID destID, route r)
+{
+  if (status != DHASH_OK) {
+    warn << "insert2_lookup_cb: failure\n";
+    (*cb) (status, NULL, r); // failure
+  } else {
+    assert (r.size () >= 1);
+    clntnode->get_succlist (r.back (), 
+			    wrap (this, &dhashcli::retrieve2_succs_cb, blockID, cb));
+  }
+}
+
+
+void
+dhashcli::retrieve2_succs_cb (chordID blockID, cb_ret cb,
+			      vec<chord_node> succs, chordstat err)
+{
+  if (err)
+    (*cb) (DHASH_CHORDERR, NULL, route ());
+  else {
+    rcv_state *rs = New rcv_state (blockID);
+    rs->callbacks.push_back (cb);
+    rcvs.insert (rs);
+
+
+    for (u_int i = 0; i < NUM_DFRAGS; i++) {
+      assert (i < succs.size ());
+
+      ref<dhash_fetchiter_res> res = New refcounted<dhash_fetchiter_res> (DHASH_OK);
+      ref<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg> ();
+
+      arg->v = succs[i].x;
+      arg->key = blockID;
+      clntnode->locations->get_node (clntnode->my_ID (), &arg->from);
+      arg->start = 0;
+      arg->len = 1024;
+      arg->cookie = 0;
+      arg->nonce = 0;
+
+      rs->incoming_rpcs += 1;
+      clntnode->doRPC (succs[i], dhash_program_1, DHASHPROC_FETCHITER,
+		       arg, res,
+		       wrap (this, &dhashcli::retrieve2_fetch_cb, blockID, cb, i, res));
+    }
+  }
+}
+
+void
+dhashcli::retrieve2_fetch_cb (chordID blockID, cb_ret cb, u_int i,
+			      ref<dhash_fetchiter_res> res,
+			      clnt_stat err)
+{
+  // XXX collect fragments and decode block
+
+  if (rcvs[blockID])
+    rcvs[blockID]->incoming_rpcs -= 1;
+
+  if (err) {
+    warn << "fetch failed: " << blockID
+	 << " fragment " << i+1 << "/" << NUM_DFRAGS
+	 << ": RPC error" << "\n";
+    return; // XXX ???
+  } else if (res->status != DHASH_COMPLETE) {
+    warn << "fetch failed: " << blockID
+	 << " fragment " << i+1 << "/" << NUM_DFRAGS
+	 << ": " << dhasherr2str (res->status) << "\n";
+    return; // XXX ???
+  } else {
+    warn << "fetch succeeded: " << blockID
+	 << " fragment " << i+1 << "/" << NUM_DFRAGS << "\n";
+  }
+
+  rcv_state *rs = rcvs[blockID];
+  if (!rs) {
+    warn << "Unexpected fragment: " << blockID << "\n";
+    return; // XXX ???
+  }
+
+  bigint h = compute_hash (res->compl_res->res.base (), res->compl_res->res.size ());
+  warn << "Got frag: " << i << " " << h << "\n";
+
+  // strip off the 4 bytes header to get the fragment
+  assert (res->compl_res->res.size () >= 4);
+  str frag (res->compl_res->res.base () + 4, res->compl_res->res.size () - 4);
+  rs->frags.push_back (frag);
+
+  if (rs->frags.size () >= NUM_DFRAGS) {
+    strbuf block;
+    if (!Ida::reconstruct (rs->frags, block))
+      fatal << "Reconstruction failed, blockID " << blockID << "\n";
+
+    str tmp (block);
+    ptr<dhash_block> blk = 
+      New refcounted<dhash_block> (tmp.cstr (), tmp.len ());
+    
+    route r; // XXX totally fake.
+
+    for (u_int i = 0; i < rs->callbacks.size (); i++)
+      (*rs->callbacks[i]) (DHASH_OK, blk, r);
+
+    assert (rs->incoming_rpcs == 0);
+    rcvs.remove (rs);
+    delete rs;
+  }
+}
+
+
+void
 dhashcli::retrieve (chordID blockID, int options, cb_ret cb)
 {
   ///warn << "dhashcli::retrieve\n";
@@ -356,6 +474,96 @@ dhashcli::retrieve_with_source_cb (cb_ret cb, dhash_stat status,
     cb (status, block, path); 
 }
 
+
+/* Insert using coding */ 
+void
+dhashcli::insert2 (ref<dhash_block> block, int options, cbinsert_t cb)
+{
+  lookup (block->ID, options,
+          wrap (this, &dhashcli::insert2_lookup_cb, block, cb));
+}
+
+
+void
+dhashcli::insert2_lookup_cb (ref<dhash_block> block, cbinsert_t cb, 
+			     dhash_stat status, chordID destID, route r)
+{
+  if (status != DHASH_OK) {
+    warn << "insert2_lookup_cb: failure\n";
+    (*cb) (status, bigint(0)); // failure
+  } else {
+    assert (r.size () >= 1);
+    clntnode->get_succlist (r.back (), 
+			    wrap (this, &dhashcli::insert2_succs_cb, block, cb));
+  }
+}
+
+void
+dhashcli::insert2_succs_cb (ref<dhash_block> block, cbinsert_t cb,
+			    vec<chord_node> succs, chordstat err)
+{
+  if (err) 
+    (*cb) (DHASH_CHORDERR, 0);
+  else {
+    str blk (block->data, block->len);
+
+    for (u_int i = 0; i < NUM_EFRAGS; i++) {
+      if (i >= succs.size ())
+	fatal << "i " << i << ", |succs| " << succs.size ()
+	      << ", EFRAGS " << NUM_EFRAGS << "\n";
+
+      str frag = Ida::gen_frag (NUM_DFRAGS, blk);
+ 
+      // prepend type of block onto fragment
+      u_int fragtmplen = 4 + frag.len ();
+      char fragtmp[fragtmplen];
+      bcopy (block->data, fragtmp, 4); // get type
+      bcopy (frag.cstr (), fragtmp + 4, frag.len ()); // followed by data
+
+      ref<s_dhash_insertarg> arg = New refcounted<s_dhash_insertarg> ();
+
+      arg->v = succs[i].x;   // destination chordID
+      arg->key = block->ID;  // frag stored under hash(block)
+      arg->srcID = clntnode->my_ID ();
+      clntnode->locations->get_node (arg->srcID, &arg->from);
+      arg->data.setsize (fragtmplen);
+      memcpy (arg->data.base (), fragtmp, fragtmplen);
+      arg->offset  = 0;
+      arg->type    = DHASH_CACHE; // XXX bit of a hack..see server.C::dispatch()
+      arg->nonce   = 0;
+      arg->attr.size  = fragtmplen;
+      arg->last    = false;
+
+      warn << "Frag " << i << " to " << succs[i].x << "\n";
+      bigint h = compute_hash (fragtmp, fragtmplen);
+      warn << "Put frag: " << i << " " << h << "\n";
+
+
+      ref<dhash_storeres> res = New refcounted<dhash_storeres> (DHASH_OK);
+      clntnode->doRPC (succs[i], dhash_program_1, DHASHPROC_STORE, 
+		       arg, res,
+		       wrap (this, &dhashcli::insert2_store_cb, block, cb, i, res));
+    }
+  }
+}
+
+void
+dhashcli::insert2_store_cb (ref<dhash_block> block, cbinsert_t cb, 
+			    u_int i, ref<dhash_storeres> res,
+			    clnt_stat err)
+{
+  if (err)
+    fatal << "store failed: " << block->ID
+	  << " fragment " << i << "/" << NUM_EFRAGS
+	  << ": RPC error" << "\n";
+
+  // XXX not all the frags have been acked...
+  //  this just tests the last frag (doesn't account for reordering)..
+  if (i == NUM_EFRAGS - 1) 
+    (*cb) (DHASH_OK, block->ID);
+}
+
+
 void
 dhashcli::insert (chordID blockID, ref<dhash_block> block, 
                   int options, cbinsert_t cb)
@@ -367,10 +575,11 @@ dhashcli::insert (chordID blockID, ref<dhash_block> block,
 void
 dhashcli::insert_lookup_cb (chordID blockID, ref<dhash_block> block,
 			    cbinsert_t cb, int trial,
-			    dhash_stat status, chordID destID)
+			    dhash_stat status, chordID destID, route r)
 {
   if (status != DHASH_OK) {
     warn << "insert_lookup_cb: failure\n";
+    // XXX call dhashcli::insert_stored_cb() to retry
     (*cb) (status, bigint(0)); // failure
   } else 
     dhash_store::execute (clntnode, destID, blockID, dh, block, false, 
@@ -407,7 +616,7 @@ dhashcli::lookup (chordID blockID, int options, dhashcli_lookupcb_t cb)
 {
   if (options & DHASHCLIENT_USE_CACHED_SUCCESSOR) {
     chordID x = clntnode->lookup_closestsucc (blockID);
-    (*cb) (DHASH_OK, x);
+    (*cb) (DHASH_OK, x, route ());
   }
   else
     clntnode->find_successor
@@ -419,9 +628,9 @@ dhashcli::lookup_findsucc_cb (chordID blockID, dhashcli_lookupcb_t cb,
 			      chordID succID, route path, chordstat err)
 {
   if (err) 
-    (*cb) (DHASH_CHORDERR, 0);
+    (*cb) (DHASH_CHORDERR, 0, path);
   else
-    (*cb) (DHASH_OK, succID);
+    (*cb) (DHASH_OK, succID, path);
 }
 
 

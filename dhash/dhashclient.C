@@ -96,6 +96,62 @@ dhashclient::append (chordID to, const char *buf, size_t buflen,
 
 }
 
+
+// content hash
+
+#if 0
+void
+dhashclient::insert2 (bigint key, const char *buf,
+		      size_t buflen, cbinsertgw_t cb, int options)
+{
+  dhash_insert2_arg arg;
+  arg.block.set_ctype (DHASH_CONTENTHASH);
+  arg.block.chash->key = key;
+  arg.block.chash->block.setsize (buflen);
+  memcpy (arg.block.chash->block.base (), buf, buflen);
+
+
+
+  ptr<dhash_insert_res> res = New refcounted<dhash_insert_res> ();
+  gwclnt->call (DHASHPROC_INSERT2, &arg, res, 
+		wrap (this, &dhashclient::insertcb, cb, key, res));
+}
+
+// public key
+
+void
+dhashclient::insert2 (ptr<sfspriv> key, const char *buf, size_t buflen, long ver,
+		      cbinsertgw_t cb, int options)
+{
+  str msg (buf, buflen);
+  sfs_sig2 s;
+  key->sign (&s, msg);
+  sfs_pubkey2 pk;
+  key->export_pubkey (&pk);
+
+  // format RPC request 
+  dhash_insert2_arg arg;
+  arg.block.set_ctype (DHASH_KEYHASH);
+  arg.block.pkhash->pub_key = pk;
+  arg.block.pkhash->sig = s;
+  arg.block.pkhash->block.setsize (buflen);
+  memcpy (arg.block.pkhash->block.base (), buf, buflen);
+
+  // hash the public key    
+  strbuf b;
+  ptr<sfspub> pk2 = sfscrypt.alloc (pk);
+  pk2->export_pubkey (b, false);
+  str pk_raw = b;
+  chordID hash = compute_hash (pk_raw.cstr (), pk_raw.len ());
+
+  ptr<dhash_insert_res> res = New refcounted<dhash_insert_res> ();
+  gwclnt->call (DHASHPROC_INSERT2, &arg, res, 
+		wrap (this, &dhashclient::insertcb, cb, hash, res));
+}
+#endif
+
+
+
 //content-hash insert
 /* content hash convention
    
@@ -207,12 +263,12 @@ void
 dhashclient::insert (bigint key, const char *buf, 
 		     size_t buflen, cbinsertgw_t cb,
 		     dhash_ctype t, int options)
+  /* XXX delete t --  it isn't used */
 {
   dhash_insert_arg arg;
   arg.blockID = key;
   arg.block.setsize (buflen);
   memcpy (arg.block.base (), buf, buflen);
-  arg.ctype = t;
   arg.options = options;
 
   ptr<dhash_insert_res> res = New refcounted<dhash_insert_res> ();
