@@ -294,7 +294,7 @@ dump_rpcstats (const rpc_program &prog, bool first, bool last)
 	 << total.outcall_bytes[0] + total.outcall_bytesrex[0] + total.outreply_bytes[0]
 	 << "\n";
   }
-#endif
+
 
   bzero (prog.outcall_num, sizeof (prog.outcall_num));
   bzero (prog.outcall_bytes, sizeof (prog.outcall_bytes));
@@ -302,7 +302,7 @@ dump_rpcstats (const rpc_program &prog, bool first, bool last)
   bzero (prog.outcall_bytesrex, sizeof (prog.outcall_bytesrex));
   bzero (prog.outreply_num, sizeof (prog.outreply_num));
   bzero (prog.outreply_bytes, sizeof (prog.outreply_bytes));
-
+#endif
 }
 
 
