@@ -908,8 +908,21 @@ dhashcli::lookup_findsucc_cb (chordID blockID, dhashcli_lookupcb_t cb,
 
 
 void
+dhashcli::sendblock (ptr<location> dst, blockID bid, str data,
+		     sendblockcb_t cb)
+{
+  ref<dhash_block> dhblk = New refcounted<dhash_block> 
+    (data.cstr (), data.len (), bid.ctype);
+
+  dhash_store::execute 
+    (clntnode, dst, bid, dhblk,
+     wrap (this, &dhashcli::sendblock_cb, cb),
+     bid.dbtype == DHASH_BLOCK ? DHASH_REPLICA : DHASH_FRAGMENT);
+}
+
+void
 dhashcli::sendblock (ptr<location> dst, blockID bid_to_send, ptr<dbfe> from_db,
-		     callback<void, dhash_stat, bool>::ref cb)
+		     sendblockcb_t cb)
 {
   
   ptr<dbrec> blk = from_db->lookup (id2dbrec (bid_to_send.ID));

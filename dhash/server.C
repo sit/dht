@@ -91,8 +91,8 @@ dhash_config_init::dhash_config_init ()
   ok = ok && set_int ("dhash.missing_outstanding_max", 15);
   
   ok = ok && set_int ("merkle.keyhash_timer", 10);
-  ok = ok && set_int ("merkle.replica_timer", 5*60);
-  ok = ok && set_int ("merkle.prt_timer", 5);
+  ok = ok && set_int ("merkle.replica_timer", 10);
+  ok = ok && set_int ("merkle.prt_timer", 5000);
 
   //plab hacks
   ok = ok && set_int ("dhash.disable_db_env", 0);
@@ -165,10 +165,12 @@ open_worker (ptr<dbfe> mydb, str name, dbOptions opts, str desc)
 }
 
 dhash_impl::dhash_impl (str dbname) :
-  missing_outstanding (0),
+  missing_outstanding_o (0),
+  missing_outstanding_i (0),
   pk_partial_cookie (1),
   db (NULL),
   keyhash_db (NULL),
+  cache_db (NULL),
   host_node (NULL),
   cli (NULL),
   dhc_mgr (NULL),
@@ -201,14 +203,16 @@ dhash_impl::dhash_impl (str dbname) :
 
   db = New refcounted<dbfe>();
   keyhash_db = New refcounted<dbfe> ();
+  cache_db = New refcounted<dbfe> ();
 
   str kdbs = strbuf () << dbname << ".k";
   open_worker (db, dbname, opts, "db file");
   open_worker (keyhash_db, kdbs, opts, "keyhash db file");
+  str cdbs = strbuf () << dbname << ".c";
+  open_worker (cache_db, cdbs, opts, "whole block cache");
+
 
   dhcs = strbuf () << dbname;
-
-  bsm = New refcounted<block_status_manager> ();
 
   // merkle state
   mtree = New merkle_tree (db);
@@ -226,6 +230,9 @@ dhash_impl::init_after_chord (ptr<vnode> node)
 			    wrap (this, &dhash_impl::needed),
 			    host_node);
 
+  bsm = New refcounted<block_status_manager> (host_node->my_ID ());
+
+
   // RPC demux
   trace << host_node->my_ID () << " registered dhash_program_1\n";
   host_node->addHandler (dhash_program_1, wrap(this, &dhash_impl::dispatch));
@@ -241,6 +248,8 @@ dhash_impl::init_after_chord (ptr<vnode> node)
 
   update_replica_list ();
   delaycb (synctm (), wrap (this, &dhash_impl::sync_cb));
+
+  pmaint_obj = NULL;
   pmaint_obj = New pmaint (cli, host_node, db, 
 			   wrap (this, &dhash_impl::db_delete_immutable));
 
@@ -267,10 +276,82 @@ dhash_impl::needed (ptr<location> from, bigint key)
 }
 
 void
+dhash_impl::flush_outgoing_q ()
+{
+
+  missing_state *m = missing_outgoing_q.first ();
+  while (m && missing_outstanding_o <= MISSING_OUTSTANDING_MAX) {
+    trace << "sending " << m->key << " to " << m->from->id () << "\n";
+    missing_outstanding_o++;
+    assert (missing_outstanding_o >= 0);
+
+    //check the whole block cache
+    //    ref<dbrec> kkk = id2dbrec (m->key);
+    //    bool present = cache_db->lookup (kkk);
+    
+
+    cli->retrieve (blockID(m->key, DHASH_CONTENTHASH, DHASH_FRAG),
+		   wrap (this, &dhash_impl::outgoing_retrieve_cb, m));
+    m = missing_outgoing_q.next (m);
+  }
+}
+
+void
+dhash_impl::outgoing_retrieve_cb (missing_state *ms, dhash_stat err,
+				  ptr<dhash_block> b, route r)
+{
+  assert (missing_outstanding_o >= 0);
+
+  if (err) {
+    trace << "retrieve missing out block " 
+	  << ms->key << " failed: " << err << "\n";
+    missing_outstanding_o--;
+    /* XXX need to do something here? */
+  } else {
+    trace << " fetched key " << ms->key 
+	  << " so that I can send it to " << ms->from->id () << "\n";
+    assert (b);
+
+    //cache the whole block here so we don't  have to fetch it
+    // next time
+
+    //generate a new, unique fragment
+    str blk (b->data, b->len);
+    u_long m = Ida::optimal_dfrag (b->len, dhash::dhash_mtu ());
+    if (m > num_dfrags ())
+      m = num_dfrags ();
+    str frag = Ida::gen_frag (m, blk);
+
+    //send it to the deserving host
+    cli->sendblock (ms->from,
+		    blockID (ms->key, DHASH_CONTENTHASH, DHASH_FRAG),
+		    frag, 
+		    wrap (this, &dhash_impl::outgoing_send_cb, ms));
+  }
+
+}
+
+void
+dhash_impl::outgoing_send_cb (missing_state *m, dhash_stat err,
+			      bool present)
+{
+
+  missing_outstanding_o--;
+
+  if (err || present)
+    return;  //leave it on the queue, we'll try again
+  
+  //success
+  missing_outgoing_q.remove (m);
+  delete m;
+}
+
+
+void
 dhash_impl::missing (ptr<location> from, bigint key)
 {
   // throttle the block downloads
-  if (missing_outstanding > MISSING_OUTSTANDING_MAX) {
+  if (missing_outstanding_i > MISSING_OUTSTANDING_MAX) {
     if (missing_q[key] == NULL) {
       missing_state *ms = New missing_state (key, from);
       missing_q.insert (ms);
@@ -280,8 +361,8 @@ dhash_impl::missing (ptr<location> from, bigint key)
 
   trace << "merkle says we should have block " << key << ", fetching.\n";
 
-  missing_outstanding++;
-  assert (missing_outstanding >= 0);
+  missing_outstanding_i++;
+  assert (missing_outstanding_i >= 0);
   cli->retrieve (blockID(key, DHASH_CONTENTHASH, DHASH_FRAG),
 		 wrap (this, &dhash_impl::missing_retrieve_cb, key));
 }
@@ -290,8 +371,8 @@ void
 dhash_impl::missing_retrieve_cb (bigint key, dhash_stat err,
 				 ptr<dhash_block> b, route r)
 {
-  missing_outstanding--;
-  assert (missing_outstanding >= 0);
+  missing_outstanding_i--;
+  assert (missing_outstanding_i >= 0);
 
   if (err) {
     trace << "retrieve missing block " << key << " failed: " << err << "\n";
@@ -312,7 +393,7 @@ dhash_impl::missing_retrieve_cb (bigint key, dhash_stat err,
 	      << db_strerror (ret) << "\n";
   }
 
-  while ((missing_outstanding <= MISSING_OUTSTANDING_MAX)
+  while ((missing_outstanding_i <= MISSING_OUTSTANDING_MAX)
 	 && (missing_q.size () > 0)) {
     missing_state *ms = missing_q.first ();
     assert (ms);
@@ -394,6 +475,35 @@ dhash_impl::replica_maintenance_timer (u_int i)
 
   if (missing_q.size () > 0) 
     goto out; // don't find more missing keys, yet!
+
+  {
+    //check to see if any blocks are near critical replication levels
+    chordID first = bsm->first_block ();
+    chordID b = first;
+    do {
+      //missing on this many means at most num_dfrags + 2 are out there
+      if (bsm->mcount (b) > 0 &&
+	  bsm->mcount (b) > succs.size () - num_dfrags () - 2)
+	{
+	  trace << "adding " << b << " to outgoing queue\n";
+	  //decide where to send it
+	  ptr<location> to = bsm->best_missing (b);
+	  
+	  //put it on the queue
+	  missing_state *ms = New missing_state (b, to);
+	  missing_outgoing_q.insert (ms);
+	} 
+      b = bsm->next_block (b);
+    } while (b != first && b != 0);
+  }
+
+  if (missing_outgoing_q.size () > 0) {
+    //if the queue is not empty, kick off some sends.
+    flush_outgoing_q ();
+    //and don't bother adding any more blocks
+    goto out;
+  }
+
   if (succs.size() == 0)
     goto out; // can't do anything
   if (replica_syncer && !replica_syncer->done())
@@ -409,8 +519,10 @@ dhash_impl::replica_maintenance_timer (u_int i)
 
   replica_syncer->sync (rngmin, rngmax);
 
-  if (num_efrags () > 1)
-    i = (i + 1) % (num_efrags () - 1);
+  // go to the end of the succ list even if we don't have that many frags
+  // so that we keep track of extra frags
+  if (succs.size () > 1)
+    i = (i + 1) % (succs.size () - 1);
   else 
     i = 0;
 
@@ -591,6 +703,7 @@ dhash_impl::dispatch (user_args *sbp)
 	  warnx << host_node->my_ID () << ": " << arg->needed[i]
 		<< " needed on " << l->id () << "\n";
 	}
+	sbp->reply (NULL);
       }
     }
     break;
@@ -1031,6 +1144,7 @@ dhash_impl::start (bool randomize)
       delaycb (reptm () + delay,
 	       wrap (this, &dhash_impl::replica_maintenance_timer, index));
   }
+
   if (pmaint_obj)
     pmaint_obj->start ();
 }

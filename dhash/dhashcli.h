@@ -145,6 +145,10 @@ public:
   void sendblock (ptr<location> dst, blockID bid,
 		  ptr<dbfe> db, sendblockcb_t cb);
 
+  //send a specific fragment (not the one in the DB)
+  void sendblock (ptr<location> dst, blockID bid, str data,
+		  sendblockcb_t cb);
+
   void lookup (chordID blockID, dhashcli_lookupcb_t cb);
 };
 

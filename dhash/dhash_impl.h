@@ -73,15 +73,23 @@ struct missing_state {
 };
 
 class dhash_impl : public dhash {
+  //blocks that I figured out I need and will fetch
   ihash<bigint, missing_state,
     &missing_state::key, &missing_state::link, hashID> missing_q;
+
+  //blocks that I am going to send to others
+  ihash<bigint, missing_state,
+    &missing_state::key, &missing_state::link, hashID> missing_outgoing_q;
+
   enum { MISSING_OUTSTANDING_MAX = 15 };
-  u_int missing_outstanding;
+  u_int missing_outstanding_o;
+  u_int missing_outstanding_i;
 
   int pk_partial_cookie;
   
   ptr<dbfe> db;
   ptr<dbfe> keyhash_db;
+  ptr<dbfe> cache_db;
   ptr<vnode> host_node;
   dhashcli *cli;
   str dhcs;
@@ -184,6 +192,12 @@ class dhash_impl : public dhash {
 			     vec<ptr<location> > succs);
   void dofetchrec_assembler_cb (user_args *sbp, dhash_fetchrec_arg *arg,
 				dhash_stat s, ptr<dhash_block> b, route r);
+
+  void flush_outgoing_q ();
+  void outgoing_retrieve_cb (missing_state *m, dhash_stat err,
+			     ptr<dhash_block> b, route r);
+  void outgoing_send_cb (missing_state *m, dhash_stat err, bool present);
+
   
   vec<ptr<location> > replicas;
   timecb_t *merkle_rep_tcb;

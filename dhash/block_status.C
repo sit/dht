@@ -26,7 +26,7 @@ block_status::found_on (ptr<location> l)
     }
 }
 
-block_status_manager::block_status_manager ()
+block_status_manager::block_status_manager (chordID me) : my_id (me)
 {
 }
 
@@ -71,12 +71,22 @@ block_status_manager::unmissing (ptr<location> remote, const chordID &b)
 }
 
 chordID
+block_status_manager::first_block ()
+{
+  if (sblocks.size () == 0)
+    return chordID (0);
+  
+  block_status *bs = sblocks.closestsucc (my_id);
+  return bs->id;
+}
+
+chordID
 block_status_manager::next_block (const chordID &b)
 {
   if (sblocks.size () == 0)
     return chordID (0);
 
-  block_status *bs = sblocks.closestsucc (b);
+  block_status *bs = sblocks.closestsucc (incID(b));
   if (!bs)
     bs = sblocks.first ();
   return bs->id;
@@ -90,10 +100,28 @@ block_status_manager::where_missing (const chordID &b)
     vec<ptr<location> > nothing;
     return nothing; /* silently fail... */
   }
+
   return bs->missing;
 }
 
-int
+const ptr<location> 
+block_status_manager::best_missing (const chordID &b)
+{
+  vec<ptr<location> > m = where_missing (b);
+  assert (m.size () > 0);
+  chordID best  = m[0]->id ();
+  ptr<location> l = m[0];
+
+  for (u_int i = 0; i < m.size (); i++)
+    if (between (my_id, best, m[i]->id ())) {
+      best = m[i]->id ();
+      l = m[i];
+    }
+
+  return l;
+}
+
+u_int
 block_status_manager::mcount (const chordID &b)
 {
   block_status *bs = blocks[b];
