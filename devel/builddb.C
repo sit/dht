@@ -82,7 +82,6 @@ main (int argc, char** argv)
       ref<dbrec> key = New refcounted<dbrec> (&hash[0], sha1::hashsize);
       ref<dbrec> data = New refcounted<dbrec> (&block[0], block_size);
       db->insert (key, data);
-      warn << n << "\n";
     } 
   }
 
