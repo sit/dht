@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.34 2004/01/22 04:40:46 strib Exp $ */
+/* $Id: tapestry.h,v 1.35 2004/01/24 21:59:40 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -224,6 +224,8 @@ private:
 
 #define TapDEBUG(x) DEBUG(x) << now() << ": (" << ip() << "/" << print_guid(id()) << ") "
   
+  static const Time MAXTIME = 1000;
+
   // stabilization timer
   uint _stabtimer;
 

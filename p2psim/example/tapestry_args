@@ -7,3 +7,7 @@ redundancy 1 2 3 4
 redundant_lookup_num <=redundancy 1 2 3 4
 # how often to stabilize:
 stabtimer 2000 4000 8000 16000 32000
+# after how many ms is a node considered dead
+declare_dead 30000
+# how many times the rtt to set timeouts
+timeout_factor 3
