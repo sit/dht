@@ -14,8 +14,7 @@ starfs_new_SOURCES = \
 starfs_new.C quorum_read.C quorum_write.C
 
 # XXX - this should not be required!
-MYLDADD = ../dhash/libdhash.a ../merkle/libmerkle.a ../chord/libchord.a \
-         ../svc/libsvc.la ../sfsrodb/libsfsrodb.a $(DBLIB) $(LDADD)
+MYLDADD = ../dhash/libdhash.a ../svc/libsvc.la $(LDADD)
 starcd_LDADD = $(MYLDADD)
 starfs_new_LDADD = $(MYLDADD)
 
