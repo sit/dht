@@ -503,13 +503,13 @@ dhash_impl::replica_maintenance_timer (u_int i)
     chordID first = bsm->first_block ();
     chordID b = first;
     do {
-      //missing on this many means at most num_dfrags + 2 are out there
-      if (bsm->mcount (b) > 0 &&
-	  bsm->mcount (b) > succs.size () - num_efrags ())
+      //missing on this many means at most num_efrags are left
+      u_int count = bsm->pcount (b, succs);
+      if (count < num_efrags ())
 	{
 	  trace << "adding " << b << " to outgoing queue\n";
 	  //decide where to send it
-	  ptr<location> to = bsm->best_missing (b);
+	  ptr<location> to = bsm->best_missing (b, succs);
 	  
 	  //put it on the queue
 	  missing_state *ms = New missing_state (b, to);
@@ -628,20 +628,17 @@ dhash_impl::dispatch (user_args *sbp)
       dhash_offer_res res (DHASH_OK);
       res.resok->accepted.setsize (arg->keys.size ());
 
-      //we'll use the predecessor list to determine if we 
-      // should accept the key
-      vec<ptr<location> > preds = host_node->preds ();
-      
       for (u_int i = 0; i < arg->keys.size (); i++) {
 	chordID key = arg->keys[i];
-	u_int count = bsm->mcount (key);
-	if (count == 0 || 
-	    count > dhash::num_dfrags ()) {
+	u_int count = bsm->pcount (key, host_node->succs ());
+	if (count > dhash::num_efrags ()) {
+	  trace << "holding " << key << ": count=" << count << "\n";
 	  res.resok->accepted[i] = DHASH_HOLD;
 	} 
 	else {
 	  res.resok->accepted[i] = DHASH_SENDTO;
-	  ptr<location> l = bsm->best_missing (key);
+	  ptr<location> l = bsm->best_missing (key, host_node->succs ());
+	  trace << "sending " << key << ": count=" << count << " to=" << l->id () << "\n";
 	  l->fill_node (res.resok->dest[i]);
 	}
       }

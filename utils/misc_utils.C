@@ -14,6 +14,14 @@ in_vector (const vec<chordID> &v, chordID N)
   return false;
 }
 
+bool
+in_vector (const vec<ptr<location> > &l, chordID N)
+{
+  for (unsigned int i = 0; i < l.size (); i++)
+    if (l[i]->id () == N) return true;
+  return false;
+}
+
 str 
 gettime()
 {

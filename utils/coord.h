@@ -49,8 +49,5 @@ private:
 
 };
 
-#if defined (__ppc__)
-#define sqrtf sqrt
-#endif
 
 #endif

@@ -122,7 +122,7 @@ pmaint::pmaint_lookup (bigint key, dhash_stat err, vec<chord_node> sl, route r)
     
     pmaint_searching = false;
     
-    trace << host_node->my_ID () << " " << key << "\n";
+    trace << host_node->my_ID () << ": offering " << key << "\n";
 
     pmaint_offer (key, sl[0]);
   }
@@ -175,11 +175,13 @@ pmaint::pmaint_offer_cb (chord_node dst, bigint key,
     case DHASH_HOLD:
       {
 	//do nothing for now. delete if disk space is a problem
+	trace << host_node->my_ID () << ": holding " << key << "\n";
       }
       break;
     case DHASH_SENDTO:
       {
 	chord_node dst = make_chord_node (res->resok->dest[0]);
+	trace << host_node->my_ID () << ": sending " << key << " to " << dst.x << "\n";
 	pmaint_handoff (dst, key, wrap (this, &pmaint::handed_off_cb, key));
 	return;
       }

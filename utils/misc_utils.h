@@ -4,8 +4,10 @@
 #include <chord_types.h>
 #include <str.h>
 #include <vec.h>
+#include <location.h>
 
 bool in_vector (const vec<chordID> &v, chordID N);
+bool in_vector (const vec<ptr<location> > &l, chordID N);
 
 
 str gettime ();

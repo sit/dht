@@ -30,10 +30,11 @@ public:
   void add_block (const chordID &b);
   void del_block (const chordID &b);
   void missing (ptr<location> remote, const chordID &b);
-  const ptr<location> best_missing (const chordID &b);
+  const ptr<location> best_missing (const chordID &b, vec<ptr<location> > succs);
   void unmissing (ptr<location> remote, const chordID &b);
   chordID first_block ();
   chordID next_block (const chordID &b);
   const vec<ptr<location> > where_missing (const chordID &b);
   u_int mcount (const chordID &b);
+  u_int pcount (const chordID &b, vec<ptr<location> > succs);
 };
