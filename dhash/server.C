@@ -39,9 +39,8 @@
 #endif
 
 #include <merkle_sync_prot.h>
-static int MERKLE_ENABLED = getenv("MERKLE_ENABLED") ? atoi(getenv("MERKLE_ENABLED")) : 0;
-static int MERKLE_TREE    = getenv("MERKLE_TREE") ? atoi(getenv("MERKLE_TREE")) : 0;
-static int DONT_REPLICATE = getenv("DONT_REPLICATE") ? atoi(getenv("DONT_REPLICATE")) : 0;
+static int MERKLE_ENABLED = getenv("MERKLE_ENABLED") ? atoi(getenv("MERKLE_ENABLED")) : 1;
+static int REPLICATE      = getenv("REPLICATE") ? atoi(getenv("REPLICATE")) : 1;
 
 #define LEASE_TIME 2
 #define LEASE_INACTIVE 60
@@ -50,15 +49,8 @@ dhash::dhash(str dbname, ptr<vnode> node,
 	     ptr<route_factory> _r_factory,
 	     u_int k, int _ss_mode) 
 {
-  if (MERKLE_ENABLED)   warn << "MERKLE_ENABLED on\n";
-  if (MERKLE_TREE)      warn << "MERKLE_TREE on\n";
-  if (DONT_REPLICATE)   warn << "DONT_REPLICATE on\n";
-
-  if (MERKLE_ENABLED)
-    if (!MERKLE_TREE)
-      fatal << "if MERKLE_ENABLED is on, MERKLE_TREE must be too\n";
-
-
+  if (MERKLE_ENABLED) warn << "MERKLE_ENABLED on\n";
+  if (REPLICATE) warn << "REPLICATE on\n";
 
   warn << "In dhash constructor " << node->my_ID () << "\n";
   this->r_factory = _r_factory;
@@ -130,8 +122,6 @@ dhash::dhash(str dbname, ptr<vnode> node,
     delaycb (10, wrap (this, &dhash::replica_maintenance_timer, 0));
     //delaycb (5, wrap (this, &dhash::partition_maintenance_timer));
   }
-
-
 }
 
 void
@@ -713,7 +703,7 @@ dhash::fix_replicas_txerd (dhash_stat err)
 void
 dhash::replicate_key (chordID key, cbstat_t cb)
 {
-  if (DONT_REPLICATE) {
+  if (!REPLICATE) {
     warn << "\n\n\n****NOT REPLICATING KEY\n";
     (cb) (DHASH_OK);
   } else {
@@ -792,12 +782,8 @@ dhash::get_key_got_block (chordID key, cbstat_t cb, ptr<dhash_block> b)
     ref<dbrec> k = id2dbrec (key);
     ref<dbrec> d = New refcounted<dbrec> (b->data, b->len);
 
-#if 1 // MERKLE_TREE
     dbwrite (k, d);
     get_key_stored_block (cb, 0);
-#else
-    db->insert (k, d, wrap(this, &dhash::get_key_stored_block, cb));
-#endif
   }
 }
 
@@ -877,14 +863,8 @@ dhash::append (ref<dbrec> key, ptr<dbrec> data,
 	stat = DHASH_STORED;
 	keys_stored += 1;
 
-#if 1 //MERKLE_TREE
 	dbwrite (key, marshalled_data);
 	append_after_db_store (cb, arg->key, 0);
-#else
-	db->insert (key, marshalled_data, 
-		    wrap(this, &dhash::append_after_db_store, cb, arg->key));
-#endif
-
 	delete m_dat;
 	
       } else {
@@ -922,14 +902,8 @@ dhash::append_after_db_fetch (ref<dbrec> key, ptr<dbrec> new_data,
 	ptr<dbrec> marshalled_data =
 	  New refcounted<dbrec> (m_dat, m_len);
 
-#if 1 //MERKLE_TREE
 	dbwrite (key, marshalled_data);
 	append_after_db_store (cb, arg->key, 0);
-#else
-	db->insert (key, marshalled_data, 
-		    wrap(this, &dhash::append_after_db_store, cb, arg->key));
-#endif
-
 	delete m_dat;
       } else {
 	cb (DHASH_STOREERR);
@@ -1082,12 +1056,8 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
     else
       bytes_stored += arg->data.size ();
 
-#if 1 //MERKLE_TREE
     dbwrite (k, d);
     store_cb (arg->type, id, cb, 0);
-#else
-    db->insert (k, d, wrap(this, &dhash::store_cb, arg->type, id, cb));
-#endif
   } else
     cb (DHASH_STORE_PARTIAL);
 }
@@ -1249,7 +1219,7 @@ dhash::stop ()
 void
 dhash::dbwrite (ref<dbrec> key, ref<dbrec> data)
 {
-  if (MERKLE_TREE) {
+  if (MERKLE_ENABLED) {
     block blk (to_merkle_hash (key), data);
     // new mutable blocks overwrite their current entry in the database
     bool exists = !!database_lookup (mtree->db, blk.key);
