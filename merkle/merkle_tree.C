@@ -150,7 +150,6 @@ merkle_tree::insert (u_int depth, block *b, merkle_node *n)
     leaf2internal (depth, b->key, n);
   
   if (n->isleaf ()) {
-    assert (!database_lookup (db, b->key));
     ret = database_insert (db, b);
     if (ret != 0)
       n->count -= 1;
@@ -181,7 +180,6 @@ merkle_tree::remove (block *b)
 int
 merkle_tree::insert (block *b)
 {
-
   if (database_lookup (db, b->key))
     fatal << "merkle_tree::insert: key already exists " << b->key << "\n";
 
