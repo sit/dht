@@ -143,7 +143,7 @@ void
 dir::opendir_got_venti_noread(ptr<dhash_block> blk)
 {
   if(!blk) {
-    warn << (int)cs << " no such path found: " << pathelm.front() << "\n";
+    warn << (int)cs << " no such path found\n";
     // FIXME error reporting
     return;
   }
