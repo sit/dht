@@ -76,15 +76,16 @@ class dhashclient {
   void lookup_iter_cb (svccb *sbp, 
 		       dhash_fetchiter_res *res,
 		       route path,
+		       int nerror,
 		       clnt_stat err);
 
   void query_successors (vec<chord_node> succ, 
-			 route path,
+			 int pathlen,
 			 svccb *sbp,
 			 ptr<dhash_fetch_arg> rarg);
   
   void query_successors_fetch_cb (vec<chord_node> succ,
-				  route path,
+				  int pathlen,
 				  svccb *sbp, 
 				  ptr<dhash_fetch_arg> rarg, 
 				  dhash_res *fres, 

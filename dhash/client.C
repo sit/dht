@@ -53,7 +53,7 @@ dhashclient::dispatch (svccb *sbp)
       path.push_back (next);
       clntnode->doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, arg, i_res,
 		       wrap(this, &dhashclient::lookup_iter_cb, 
-			    sbp, i_res, path));
+			    sbp, i_res, path, 0));
 
     } 
     break;
@@ -176,6 +176,7 @@ void
 dhashclient::lookup_iter_cb (svccb *sbp, 
 			     dhash_fetchiter_res *res,
 			     route path,
+			     int nerror,
 			     clnt_stat err) 
 {
   dhash_fetch_arg *arg = sbp->template getarg<dhash_fetch_arg> ();
@@ -184,6 +185,7 @@ dhashclient::lookup_iter_cb (svccb *sbp,
   if (err) {
     /* CASE I */
     chordID last;
+    nerror++;
     if (path.size () > 0)
       last = path.pop_back ();
     if (path.size () > 0) {
@@ -195,7 +197,7 @@ dhashclient::lookup_iter_cb (svccb *sbp,
       clntnode->doRPC (plast, dhash_program_1, DHASHPROC_FETCHITER, 
 		       rarg, nres,
 		       wrap(this, &dhashclient::lookup_iter_cb, 
-			    sbp, nres, path));
+			    sbp, nres, path, nerror));
     } else {
       vec<chord_node> succ;
       for (int i = 0; i < nreplica; i++) {
@@ -204,7 +206,7 @@ dhashclient::lookup_iter_cb (svccb *sbp,
 	node.r = clntnode->locations->getlocation (node.x)->addr;
 	succ.push_back (node);
       }
-      query_successors (succ, path, sbp, rarg);
+      query_successors (succ, path.size () + 100*nerror, sbp, rarg);
     }
   } else if (res->status == DHASH_COMPLETE) {
     /* CASE II */
@@ -213,7 +215,7 @@ dhashclient::lookup_iter_cb (svccb *sbp,
     fres->resok->res = res->compl_res->res;
     fres->resok->offset = res->compl_res->offset;
     fres->resok->attr = res->compl_res->attr;
-    fres->resok->hops = path.size ();
+    fres->resok->hops = path.size () + nerror * 100;
     fres->resok->source = path.back ();
     cache_on_path (arg->key, path);
     sbp->reply (fres);
@@ -231,7 +233,8 @@ dhashclient::lookup_iter_cb (svccb *sbp,
 	for (unsigned int i = 0; i < res->cont_res->succ_list.size (); i++) 
 	  succ.push_back (res->cont_res->succ_list[i]);
 
-	query_successors (succ, path, sbp, rarg);
+	query_successors (succ, (int) path.size () + 100 * nerror, sbp, 
+			  rarg);
       }
     } else {
       /* CASE IV */
@@ -242,7 +245,7 @@ dhashclient::lookup_iter_cb (svccb *sbp,
       clntnode->doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, 
 		       rarg, nres,
 		       wrap(this, &dhashclient::lookup_iter_cb, 
-			    sbp, nres, path));
+			    sbp, nres, path, nerror));
     }
   } else 
     sbp->replyref (DHASH_NOENT);
@@ -252,9 +255,9 @@ dhashclient::lookup_iter_cb (svccb *sbp,
 
 void
 dhashclient::query_successors (vec<chord_node> succ, 
-			       route path,
+			       int pathlen,
 			       svccb *sbp,
-			       ptr<dhash_fetch_arg> rarg) 
+			       ptr<dhash_fetch_arg> rarg)
 {
   chord_node first_node = succ.pop_front ();
   clntnode->locations->cacheloc (first_node.x,
@@ -263,13 +266,13 @@ dhashclient::query_successors (vec<chord_node> succ,
   clntnode->doRPC (first_node.x, dhash_program_1, DHASHPROC_FETCH,
 		   rarg, fres,
 		   wrap (this, &dhashclient::query_successors_fetch_cb,
-			 succ, path, sbp, rarg, fres));
+			 succ, pathlen, sbp, rarg, fres));
   
 }
 
 void
 dhashclient::query_successors_fetch_cb (vec<chord_node> succ,
-					route path,
+					int pathlen,
 					svccb *sbp, 
 					ptr<dhash_fetch_arg> rarg, 
 					dhash_res *fres, 
@@ -282,8 +285,10 @@ dhashclient::query_successors_fetch_cb (vec<chord_node> succ,
       return;
     }
 
+    if (err) pathlen += 100;
+    else pathlen++;
+
     chord_node next_succ = succ.pop_front ();
-    path.push_back (next_succ.x);
     clntnode->locations->cacheloc (next_succ.x,
 				   next_succ.r);
     
@@ -291,10 +296,10 @@ dhashclient::query_successors_fetch_cb (vec<chord_node> succ,
     clntnode->doRPC (next_succ.x, dhash_program_1, DHASHPROC_FETCH,
 		     rarg, nfres,
 		     wrap (this, &dhashclient::query_successors_fetch_cb,
-			   succ, path, sbp, rarg, nfres));
+			   succ, pathlen, sbp, rarg, nfres));
     
   } else if (fres->status == DHASH_OK) {
-    fres->resok->hops = path.size ();
+    fres->resok->hops = pathlen;
     sbp->reply (fres);
   } else {
     fatal << "WTF\n";
