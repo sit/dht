@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.29 2003/11/09 01:06:56 athicha Exp $
+# $Id: Makefile.am,v 1.30 2004/01/16 13:43:22 sit Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -13,13 +13,11 @@ noinst_PROGRAMS = dbm typetest $(VIS) walk builddb dbdump findroute \
 
 noinst_HEADERS = rpclib.h
 
-MYLDADD =  ../dhash/libdhash.a ../dhc/libdhc.a ../merkle/libmerkle.a ../svc/libsvc.la
-
 walk_SOURCES = walk.C
-walk_LDADD = $(MYLDADD) ../chord/libchord.a ../utils/libutil.a ../svc/libsvc.la  $(LDADD) 
+walk_LDADD = ../chord/libchord.a ../utils/libutil.a ../svc/libsvc.la  $(LDADD) 
 
 coords_SOURCES = walk_coords.C
-coords_LDADD = $(MYLDADD) ../chord/libchord.a ../utils/libutil.a ../svc/libsvc.la  $(LDADD) 
+coords_LDADD = ../chord/libchord.a ../utils/libutil.a ../svc/libsvc.la  $(LDADD) 
 
 filestore_SOURCES = filestore.C
 filestore_LDADD = ../dhash/libdhashclient.a ../dhc/libdhc.a ../utils/libutil.a ../svc/libsvc.la  $(LDADD) 
