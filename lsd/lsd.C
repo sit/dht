@@ -41,9 +41,6 @@
 #include <fingerroute.h>
 #include <fingerroutepns.h>
 #include <recroute.h>
-#if 0
-#include "route_secchord.h"
-#endif
 
 #include <modlogger.h>
 #define info modlogger ("lsd")

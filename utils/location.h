@@ -55,4 +55,6 @@ class location {
   void inc_nrpc () { nrpc_++; }
 };
 
+const strbuf &strbuf_cat (const strbuf &sb, const ref<location> l);
+
 #endif /* _LOCATION_H */

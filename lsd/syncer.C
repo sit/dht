@@ -4,6 +4,7 @@
 
 #include <dhash_prot.h>
 #include <locationtable.h>
+#include <location.h>
 #include <block_status.h>
 #include <merkle_tree.h>
 #include <merkle_syncer.h>
@@ -169,7 +170,7 @@ syncer::sync_replicas_gotsucclist (ptr<location> pred,
   warn << host_loc->id () << " tree build: " 
 	<< getusec () - start << " usecs\n";
 
-  warn << host_loc->id () << " syncing with " << succs[cur_succ]->id () << "\n";
+  warn << host_loc->id () << " syncing with " << succs[cur_succ] << "\n";
 
   replica_syncer = New refcounted<merkle_syncer> 
     (tmptree, 
@@ -202,11 +203,11 @@ syncer::missing (ptr<location> from,
     bsm->unmissing (from, key);
     if (sync_trace) {
       warnx << host_loc->id () << ": " << key << " missing locally\n";
-      warnx << host_loc->id () << ": " << key << " found on " << from->id () << "\n";
+      warnx << host_loc->id () << ": " << key << " found on " << from << "\n";
     }
   } else {
     if (sync_trace) 
-      warnx << host_loc->id () << ": " << key << " missing on " << from->id () << "\n";
+      warnx << host_loc->id () << ": " << key << " missing on " << from << "\n";
     bsm->missing (from, key);
   }
 

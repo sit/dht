@@ -1,6 +1,7 @@
 #include "misc_utils.h"
 #include "id_utils.h"
 #include "chord.h"
+#include "location.h"
 
 #include <amisc.h>
 

@@ -108,3 +108,13 @@ location::set_coords (const chord_node &n)
 {
   coords_.set (n);
 }
+
+
+const strbuf &
+strbuf_cat (const strbuf &sb, const ref<location> l)
+{
+  chord_node n;
+  l->fill_node (n);
+  sb << n;
+  return sb;
+}

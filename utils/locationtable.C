@@ -33,7 +33,8 @@
 #include "locationtable.h"
 #include "misc_utils.h"
 #include "modlogger.h"
-#define loctrace modlogger ("loctable")
+#define loctrace modlogger ("loctable", modlogger::TRACE)
+#define locinfo  modlogger ("loctable", modlogger::INFO)
 
 #include "configurator.h"
 
@@ -157,12 +158,11 @@ locationtable::realinsert (ref<location> l)
       if (ts.tv_sec - loc->dead_time () > 60)
 	loc->set_alive (true);
       else
-	loctrace << "locationtable::insert: damping " << loc->id () << "\n";
+	locinfo << "locationtable::insert: damping " << loc << "\n";
     }
     return loc;
   } else {
-    loctrace << "insert " << l->id () << " " << l->address ()
-	     << " " << l->vnode () << "\n";
+    locinfo << "insert " << l << "\n";
     locwrap *lw = locs[l->id ()];
     assert (!lw);
   
@@ -539,8 +539,7 @@ locationtable::remove (locwrap *lw)
   if (!lw)
     return false;
   
-  loctrace << "delete " << lw->loc_->id () << " "
-	   << lw->loc_->address () << "\n";
+  locinfo << "delete " << lw->loc_ << "\n";
   
   pins_updated_ = false;
   

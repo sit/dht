@@ -4,11 +4,11 @@
 #include <chord_types.h>
 #include <str.h>
 #include <vec.h>
-#include <location.h>
+
+class location;
 
 bool in_vector (const vec<chordID> &v, chordID N);
 bool in_vector (const vec<ptr<location> > &l, chordID N);
-
 
 str gettime ();
 u_int64_t getusec ();
@@ -30,7 +30,7 @@ strbuf_cat (const strbuf &sb, const net_address &r)
 inline const strbuf &
 strbuf_cat (const strbuf &sb, const chord_node &n)
 {
-  sb << n.x << "@" << n.r;
+  sb << n.x << "," << n.r.hostname << "," << n.r.port << "," << n.vnode_num;
   return sb;
 }
 

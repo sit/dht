@@ -8,6 +8,7 @@
 #include <list.h>
 
 class location;
+struct Coord;
 struct hashID;
 
 class locationtable {
