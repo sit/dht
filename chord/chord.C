@@ -62,6 +62,8 @@ vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
   ngetsuccessor = 0;
   ngetpredecessor = 0;
   nfindsuccessor = 0;
+  nslowfinger = 0;
+  nfastfinger = 0;
   nhops = 0;
   nmaxhops = 0;
   nfindpredecessor = 0;
@@ -127,11 +129,15 @@ vnode::stats ()
   warnx << "# hops for findsuccessor " << nhops << "\n";
   {
     char buf[100];
-    if (nfindsuccessor)
+    if (nfindsuccessor) {
       sprintf (buf, "   Average # hops: %f\n", ((float) nhops)/nfindsuccessor);
-    warnx << buf;
+      warnx << buf;
+    }
   }
   warnx << "   # max hops for findsuccessor " << nmaxhops << "\n";
+  warnx << "# fast check in stabilize of finger table " << nfastfinger << "\n";
+  warnx << "# slow findsuccessor in stabilize of finger table " << 
+    nslowfinger << "\n";
   warnx << "# findpredecessor calls " << nfindpredecessor << "\n";
   warnx << "# findsuccessorrestart calls " << nfindsuccessorrestart << "\n";
   warnx << "# findpredecessorrestart calls " << nfindpredecessorrestart << "\n";
@@ -211,7 +217,6 @@ vnode::join_getsucc_cb (cbjoin_t cb, chordID s, route r, chordstat status)
     warnx << "join_getsucc_cb: " << myID << " " << status << "\n";
     join (cb);  // try again
   } else {
-    //    locations->cacheloc (na->n.x, na->n.r);
     challenge (s, wrap (mkref (this), &vnode::join_getsucc_ok, cb));
   }
 }

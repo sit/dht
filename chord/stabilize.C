@@ -29,6 +29,32 @@
 #include <chord.h>
 #include <qhash.h>
 
+// The code in this file deals with stabilization: a continuous
+// "process" that updates the various structures (finger table,
+// successor list, etc.)  maintained by chord.  Every so many
+// milliseconds two different functions are run:
+// 1. stabilize_continuous 2. stabilize_backoff
+//
+// Stabilize_continuous should be used for datastructures that need to
+// be checked frequently (e.g., successor) so that they can be
+// repaired quickly.  Stabilize_continous runs every stabilize_timer
+// milliseconds.  However, it will slows down exponentially if it
+// doesn't receive a response within stabilize_timer milliseconds
+// (i.e., before the next iteration starts).  Every iteration it will
+// try to speed up additively with stabilize_decrease_timer milliseconds.
+//
+// Stabilize_backoff is used to check datastructures for which it is
+// OK that they are out of date somewhat.  Stabilize_backoff runs
+// every stabilize_timer milliseconds until the ring is stable.  Then,
+// it slows than by a factor stabilize_slowdown_factor each iteration,
+// but never slower than stabilize_timer_max seconds; we want to make
+// sure that tables are checked with some minimum frequency.  When the
+// ring comes unstable, stabilize_backoff speeds up each iteration
+// with stabilize_decrease_timer until the ring is stable again; we
+// want to make sure that repairs happen with some urgency.  Like
+// stabilize_continuous, stabilize_backoff will slow down if it
+// doesn't receive a response before the next iteration starts.
+
 bool
 vnode::isstable (void) 
 {
@@ -43,7 +69,6 @@ vnode::hasbecomeunstable (void)
 	  (!stable_succlist && stable_succlist2));
 }
 
-
 void
 vnode::stabilize (void)
 {
@@ -55,17 +80,12 @@ void
 vnode::stabilize_continuous (u_int32_t t)
 {
   stabilize_continuous_tmo = NULL;
-  if (nout_continuous > 0) {
-    // stabilizing too fast
+  if (nout_continuous > 0) { // stabilizing too fast
     t = 2 * t;
   } else {
+    if (t >= stabilize_timer) t -= stabilize_decrease_timer;
     stabilize_succ ();
     stabilize_pred ();
-  }
-  if (hasbecomeunstable () && stabilize_backoff_tmo) {
-    timecb_remove (stabilize_backoff_tmo);
-    stabilize_backoff_tmo = 0;
-    stabilize_backoff (0, 0, stabilize_timer);
   }
   u_int32_t t1 = uniform_random (0.5 * t, 1.5 * t);
   u_int32_t sec = t1 / 1000;
@@ -112,7 +132,6 @@ vnode::stabilize_getpred_cb (chordID sd,
   }
 }
 
-
 void
 vnode::stabilize_getpred_cb_ok (chordID sd,
 				chordID p, bool ok, chordstat status)
@@ -158,16 +177,6 @@ vnode::stabilize_getsucc_cb (chordID pred,
   }
 }
 
-/*
- * RSC: I think that we should be using some sort of AI/MD so that
- * if things start changing we can adapt.  Right now once we get slow
- * we stay slow forever.  At the least, we need some sort of increase
- * (right now we're just MD).  However, if I turn on aimd, then the
- * Chord finger tables start dying, presumably because the increased
- * update frequency tickles a bug elsewhere.  That's a project for
- * another day.
- */
-#define aimd 0
 void
 vnode::stabilize_backoff (int f, int s, u_int32_t t)
 {
@@ -175,28 +184,23 @@ vnode::stabilize_backoff (int f, int s, u_int32_t t)
   if (!stable && isstable ()) {
     stable = true;
     warnx << gettime () << " stabilize: " << myID 
-	  << " stable! with estimate # nodes " << nnodes << "\n";
+	  << " stable! with estimate # nodes " << nnodes 
+	  << " stabilize timer " << t << "\n";
   } else if (!isstable ()) {
     stable = false;
   }
   if (nout_backoff > 0) {
-    if(aimd)
-      t = (int)(1.2 * t);
-    else
-     t *= 2;
-    // warnx << "stabilize_backoff: " << myID << " " << nout_backoff 
-    //  << " slow down " << t << "\n";
+    t *= 2;
+    warnx << "stabilize_backoff: " << myID << " " << nout_backoff 
+	  << " slow down " << t << "\n";
   } else {
     f = stabilize_finger (f);
     s = stabilize_succlist (s);
     stabilize_toes ();
     if (isstable () && (t <= stabilize_timer_max * 1000))
-      if(aimd)
-        t = (int)(1.2 * t);
-      else
-        t *= 2;
-    else if (aimd && t > 100)
-      t -= 100;
+      t = (int)(stabilize_slowdown_factor * t);
+    else if (t > stabilize_timer)  // ring is unstable; speed up stabilization
+      t -= stabilize_decrease_timer;
   }
   u_int32_t t1 = uniform_random (0.5 * t, 1.5 * t);
   u_int32_t sec = t1 / 1000;
@@ -228,20 +232,26 @@ vnode::stabilize_finger (int f)
   if (i > 1) {
     for (; i <= NBIT; i++) {
       if (!fingers->alive (i-1)) break;
-      //FED - don't understand this check
+      // the last finger we stabilized might be a better finger
+      // for the current finger under consideration. if so, we
+      // can skip this finger and go to the next.
       if (fingers->better_ith_finger (i-1, fingers->start(i))) {
 	chordID s = (*fingers)[i-1];
-	if ((*fingers)[i] != s) {
-	  fingers->updatefinger (s);
-	  stable_fingers = false;
-	}
+	fingers->updatefinger (s);   // update; it might be out of date
       } else break;
     }
     if (i <= NBIT) {
-      // warnx << "stabilize: " << myID << " findsucc of finger " << i << "\n";
       nout_backoff++;
-      chordID n = fingers->start (i);
-      find_successor (n, wrap (this, &vnode::stabilize_findsucc_cb, n, i));
+      if (fingers->alive (i)) {
+	//        warnx << "stabilize: " << myID << " check finger " << i << "\n";
+	chordID n = (*fingers)[i];
+	get_predecessor (n, wrap (this, &vnode::stabilize_finger_getpred_cb, 
+				  n, i));
+      } else {
+        warnx << "stabilize: " << myID << " findsucc of finger " << i << "\n";
+	chordID n = fingers->start (i);
+	find_successor (n, wrap (this, &vnode::stabilize_findsucc_cb, n, i));
+      }
       i++;
     }
   }
@@ -249,19 +259,50 @@ vnode::stabilize_finger (int f)
 }
 
 void
+vnode::stabilize_finger_getpred_cb (chordID dn, int i, chordID p, 
+				    net_address r, chordstat status)
+{
+  if (status) {
+    warnx << "stabilize_finger_getpred_cb: " << myID << " " 
+	  << dn << " failure " << status << "\n";
+    stable_fingers = false;
+    if (status == CHORD_RPCFAILURE)
+      deletefingers (dn);
+    nout_backoff--;
+  } else {
+    chordID n = (*fingers)[i];
+    chordID s = fingers->start (i);
+    if (betweenrightincl (p, n, s)) {
+      //      warnx << "stabilize_finger_getpred_cb: " << myID << " success " 
+      //    << i << "\n";
+      nfastfinger++;
+      nout_backoff--;
+    } else {
+      nslowfinger++;
+      //      warnx << "stabilize_finger_getpred_cb: " << myID << " findsucc of finger "
+      //    << i << "\n";
+      chordID n = fingers->start (i);
+      find_successor (n, wrap (this, &vnode::stabilize_findsucc_cb, n, i));
+    }
+  }
+}
+
+void
 vnode::stabilize_findsucc_cb (chordID dn, int i, chordID s, route search_path, 
 			      chordstat status)
 {
-  nout_backoff--;
   if (status) {
     warnx << "stabilize_findsucc_cb: " << myID << " " 
 	  << dn << " failure " << status << "\n";
     stable_fingers = false;
     if (status == CHORD_RPCFAILURE)
       deletefingers (dn);
+    nout_backoff--;
   } else {
     if (fingers->better_ith_finger (i, s)) {
       challenge (s, wrap (this, &vnode::stabilize_findsucc_ok, i));
+    } else {
+      nout_backoff--;
     }
   }
 }
@@ -269,6 +310,7 @@ vnode::stabilize_findsucc_cb (chordID dn, int i, chordID s, route search_path,
 void
 vnode::stabilize_findsucc_ok (int i, chordID s, bool ok, chordstat status)
 {
+  nout_backoff--;
   if ((status == CHORD_OK) && ok) {
     if (fingers->better_ith_finger (i, s)) {
       fingers->updatefinger (s);
@@ -392,6 +434,5 @@ vnode::stabilize_toes ()
   } else { //steady state
     
   }
-
   return;
 }

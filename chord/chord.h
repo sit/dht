@@ -163,9 +163,10 @@ class succ_list {
 };
 
 class vnode : public virtual refcount {
-  static const int stabilize_timer = 5000;  // milliseconds
-  static const int stabilize_timer_max = 500;      // seconds
-  static const int max_retry = 5;
+  static const u_int32_t stabilize_timer = 1000;  // milliseconds
+  static const u_int32_t stabilize_decrease_timer = 100; // milliseconds
+  static const float stabilize_slowdown_factor = 1.2;
+  static const u_int32_t stabilize_timer_max = 2; // seconds
   
   ptr<locationtable> locations;
   ptr<finger_table> fingers;
@@ -187,6 +188,8 @@ class vnode : public virtual refcount {
   u_long ngetsuccessor;
   u_long ngetpredecessor;
   u_long nfindsuccessor;
+  u_long nslowfinger;
+  u_long nfastfinger;
   u_long nhops;
   u_long nmaxhops;
   u_long nfindpredecessor;
@@ -231,6 +234,8 @@ class vnode : public virtual refcount {
   void stabilize_getpred_cb_ok (chordID sd, 
 				chordID p, bool ok, chordstat status);
   void stabilize_findsucc_ok (int i, chordID s, bool ok, chordstat status);
+  void stabilize_finger_getpred_cb (chordID dn, int i, chordID p, 
+				    net_address r, chordstat status);
   void stabilize_findsucc_cb (chordID dn,
 			      int i, chordID s, route path, chordstat status);
   void stabilize_getsucc_cb (chordID pred,
