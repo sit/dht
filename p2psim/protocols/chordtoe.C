@@ -29,12 +29,11 @@
 #define TOE_NOTGREEDY_LAT 3
 #define TOE_RTM 2
 Chord::IDMap 
-LocTableToe::next_hop(Chord::CHID key, bool *done) 
+LocTableToe::next_hop(Chord::CHID key) 
 {
 
   Topology *t = Network::Instance()->gettopology ();
 
-  *done = false;
   
   if (_style == TOE_GREEDY_LAT) {
     idmapwrap *e = ring.first ();
@@ -84,11 +83,11 @@ LocTableToe::next_hop(Chord::CHID key, bool *done)
       return b;
     } else
       //toes suck. just take something
-      return LocTable::next_hop (key, done);
+      return LocTable::next_hop (key);
 
       
   } else if (_style == TOE_GREEDY_ID) {
-    return LocTable::next_hop (key, done);
+    return LocTable::next_hop (key);
   } else if (_style == TOE_RTM) {
 
     ConsistentHash::CHID mindist = 0;
@@ -114,7 +113,7 @@ LocTableToe::next_hop(Chord::CHID key, bool *done)
       ret = b;
     } else {
       //toes suck. just take something
-      ret = LocTable::next_hop (key, done);
+      ret = LocTable::next_hop (key);
     }
 
     assert (ret.ip < 900);

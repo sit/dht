@@ -68,6 +68,7 @@ protected:
   uint resilience;  // resilience
   uint _stab_debruijn_outstanding;
   uint _stab_debruijn_running;
+  uint _stab_debruijn_timer;
 
   Chord::CHID debruijn;  // = k * me
   Chord::CHID debruijnpred;  // = k * me - x

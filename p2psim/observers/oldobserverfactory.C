@@ -57,7 +57,7 @@ OldobserverFactory::create(string s, Args *a)
   // protocol to oldobserve
   string type = OBSERVER_TYPE;
   a->insert(make_pair(type, s));
-
+/*
   if((s == "Chord") ||
      (s == "ChordFinger") ||
      (s == "ChordFingerPNS") ||
@@ -67,6 +67,7 @@ OldobserverFactory::create(string s, Args *a)
   {
     t = ChordObserver::Instance(a);
   }
+  */
 
   /*
   else if(s == "Kademlia") {
@@ -80,10 +81,10 @@ OldobserverFactory::create(string s, Args *a)
   }
   */
   
-  else {
+//  else {
     cerr << "No such oldobserver " << s << endl;
     assert(false);
-  }
+ // }
 
   _oldobservers.insert(t);
   return t;

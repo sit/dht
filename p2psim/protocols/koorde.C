@@ -35,7 +35,8 @@ Koorde::Koorde(Node *n, Args &a) : Chord(n, a)
   logbase = a.nget<uint>("base",2,10);
   resilience = a.nget<uint>("successors", 1, 10);
   fingers = a.nget<uint>("successors", 1, 10);
-  
+  _stab_debruijn_timer = a.nget<uint>("debruijntimer",10000,10); 
+
   k = 1 << logbase; 
   debruijn = me.id << logbase;
   printf ("Koorde(%u,%qx):debruijn=%qx base %u k %u nsucc %u res %u fing %u\n", 
@@ -463,7 +464,7 @@ Koorde::reschedule_debruijn_stabilizer(void *x)
     _stab_debruijn_outstanding--;
     assert(_stab_debruijn_outstanding == 0);
   }
-  delaycb(_stabtimer, &Koorde::reschedule_debruijn_stabilizer, (void *) 0);
+  delaycb(_stab_debruijn_timer, &Koorde::reschedule_debruijn_stabilizer, (void *) 0);
 }
 
 bool

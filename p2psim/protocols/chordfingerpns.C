@@ -34,6 +34,8 @@ ChordFingerPNS::ChordFingerPNS(Node *n, Args& a, LocTable *l)
 
   _stab_pns_running = false;
   _stab_pns_outstanding = 0;
+
+  _stab_pns_timer = a.nget<uint>("pnstimer",10000,10);
 }
 
 void
@@ -119,7 +121,7 @@ ChordFingerPNS::reschedule_pns_stabilizer(void *x)
     _stab_pns_outstanding--;
     assert(_stab_pns_outstanding == 0);
   }
-  delaycb(_stabtimer, &ChordFingerPNS::reschedule_pns_stabilizer, (void *) 0);
+  delaycb(_stab_pns_timer, &ChordFingerPNS::reschedule_pns_stabilizer, (void *) 0);
 }
 
 void
@@ -284,14 +286,15 @@ PNS_DONE:
   */
 }
 
-
+/*
 void
 ChordFingerPNS::my_next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
 {
   assert(args->type<=5);
   doRPC(me.ip, &ChordFingerPNS::pns_next_recurs_handler, args, ret);
 }
-
+*/
+/*
 void
 ChordFingerPNS::pns_next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
 {
@@ -328,24 +331,24 @@ ChordFingerPNS::pns_next_recurs_handler(next_recurs_args *args, next_recurs_ret 
       }
       return;
     }
-/*      
-  for (uint i = 0; i < ssz; i++) {
-    if (!ConsistentHash::betweenrightincl(me.id, succs[i].id, args->key)) {
-    }else{
-      if ((ret->v.size() == 0) || ConsistentHash::between(args->key, succs[i].id, ret->v.back().id)) {
-	ret->v.push_back(succs[i]);
-	if (ret->v.size() == _allfrag) break;
-      }
-    }
-  }
+// for (uint i = 0; i < ssz; i++) {
+//   if (!ConsistentHash::betweenrightincl(me.id, succs[i].id, args->key)) {
+//   }else{
+//     if ((ret->v.size() == 0) || ConsistentHash::between(args->key, succs[i].id, ret->v.back().id)) {
+//	ret->v.push_back(succs[i]);
+//	if (ret->v.size() == _allfrag) break;
+//     }
+//    }
+//  }
 
-  if ((ret->v.size() >= args->m) || (ConsistentHash::between(me.id, succs[0].id,args->key)))
-  */
+  //if ((ret->v.size() >= args->m) || (ConsistentHash::between(me.id, succs[0].id,args->key)))
+
     if (ConsistentHash::between(me.id, succs[0].id,args->key)) {
       for (i = 0; i < succs.size(); i++) {
 	ret->v.push_back(succs[i]);
 	if (ret->v.size() >= args->m) return;
       }
+      return;
     }else {
       if (args->path.size() > 20) {
 	printf("%s WRONG!!!!!! key %qx: ",ts(),args->key);
@@ -360,7 +363,7 @@ ChordFingerPNS::pns_next_recurs_handler(next_recurs_args *args, next_recurs_ret 
       // since next_hop assumes succ is on ret->v., when it breaks,
       // it does not attempt to update ret->v
 
-      next = loctable->next_hop(args->key, &done, args->m, args->all);
+      next = loctable->next_hop(args->key, &done, args->m, 1);
       assert(next.ip != me.ip);
       assert(!done);
       assert(ConsistentHash::between(me.id, args->key, next.id));
@@ -369,7 +372,7 @@ ChordFingerPNS::pns_next_recurs_handler(next_recurs_args *args, next_recurs_ret 
       tmp.tout = 0;
       args->path.push_back(tmp);
 
-      record_stat(4,args->type?1:0);
+      record_stat(4+1,args->type?1:0);
       bool r = doRPC(next.ip, &ChordFingerPNS::pns_next_recurs_handler, args, ret);
 
       if (!node()->alive()) {
@@ -392,6 +395,7 @@ ChordFingerPNS::pns_next_recurs_handler(next_recurs_args *args, next_recurs_ret 
     }
   }
 }
+*/
 
 void
 ChordFingerPNS::dump()

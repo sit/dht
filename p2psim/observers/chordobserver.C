@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 [NAMES_GO_HERE]
+ * Copyright (c) 2003 Jinyang Li
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -23,7 +23,17 @@
  */
 
 #include "chordobserver.h"
+#include "p2psim/protocol.h"
+#include "p2psim/args.h"
+#include "p2psim/network.h"
+#include "protocols/protocolfactory.h"
+
 #include <iostream>
+#include <set>
+#include <algorithm>
+#include <stdio.h>
+
+
 using namespace std;
 
 ChordObserver* ChordObserver::_instance = 0;
@@ -37,194 +47,58 @@ ChordObserver::Instance(Args *a)
 }
 
 
-ChordObserver::ChordObserver(Args *a) : Oldobserver(a)
+ChordObserver::ChordObserver(Args *a)
 {
-  if (!a)  {
-    cout << now() << "ChordObserver created WRONGLY!" << endl;
-    exit(1);
+  _instance = this;
+  assert(a);
+  _initnodes = atoi((*a)["initnodes"].c_str());
+
+  set<string> all = ProtocolFactory::Instance()->getnodeprotocols();
+  assert(all.size()==1);
+  for(set<string>::iterator pos=all.begin();pos!=all.end();++pos) {
+    _type = *pos;
   }
-  _reschedule = 0;
-  _reschedule = atoi((*a)["reschedule"].c_str());
-  _num_nodes = atoi((*a)["numnodes"].c_str());
-  assert(_num_nodes > 0);
+  assert(_type.find("Chord") == 0);
 
-  _allsorted = get_sorted_nodes(_num_nodes);
-  // printf("ChordObserver created %d nodes\n", _num_nodes);
-  for (uint i = 0; i < _allsorted.size(); i++) {
-     printf("%qx %u\n", _allsorted[i].id, _allsorted[i].ip);
+  ids.clear();
+  set<Protocol*> l = Network::Instance()->getallprotocols(_type);
+  Chord::IDMap n;
+  for(set<Protocol*>::iterator pos = l.begin(); pos != l.end(); ++pos) {
+    Chord *t = dynamic_cast<Chord*>(*pos);
+    t->registerObserver(this);
+    n.ip = t->node()->ip();
+    n.id = t->id();
+    n.choices = 1;
+    ids.push_back(n);
   }
+  sort(ids.begin(),ids.end(),Chord::IDMap::cmp);
+}
 
-  _init_num = atoi((*a)["initnodes"].c_str());
-  if (_init_num) 
-    init_nodes(_init_num);
-
-  lid.clear();
-
+vector<Chord::IDMap>
+ChordObserver::get_sorted_nodes()
+{
+  return ids;
 }
 
 ChordObserver::~ChordObserver()
 {
 }
 
-/*
- * if max = 0 or _num_nodes, then it returns all sorted nodes,
- otherwise, return max number of nodes */
-
-vector<Chord::IDMap>
-ChordObserver::get_sorted_nodes(unsigned int max)
-{
-  if ((!max || (max == _num_nodes)) && _allsorted.size() > 0) {
-    return _allsorted;
-  }
-
-  set<Protocol*> l = Network::Instance()->getallprotocols(_type);
-  set<Protocol*>::iterator pos;
-
-  vector<Chord::IDMap> ids;
-  ids.clear();
-  Chord *c;
-  Chord::IDMap n;
-  unsigned int i = 0;
-
-  for (pos = l.begin(); pos != l.end(); ++pos) {
-    c = (Chord *)(*pos);
-    assert(c);
-    n.ip = c->node()->ip();
-    n.id = c->id();
-    n.choices = 1;
-    ids.push_back(n);
-
-    if (++i == max) {
-      break;
-    }
-  }
-
-  sort(ids.begin(),ids.end(),Chord::IDMap::cmp);
-
-  if ((!max)|| (max == _num_nodes)) {
-    _allsorted = ids;
-  }
-  return ids;
-}
-
 void
-ChordObserver::init_nodes(unsigned int num)
+ChordObserver::init_state()
 {
-  vector<Chord::IDMap> ids;
-
   set<Protocol*> l = Network::Instance()->getallprotocols(_type);
-  set<Protocol*>::iterator pos;
-  Chord *c;
-  
-  ids = get_sorted_nodes(num);
-  unsigned int i = 0;
-  for (pos = l.begin(); pos != l.end(); ++pos) {
-    c = (Chord *)(*pos);
-    assert(c); 
-    c->init_state(ids);
-    if (++i == num) break;
+  for(set<Protocol*>::iterator pos = l.begin(); pos != l.end(); ++pos) {
+    Chord *t = dynamic_cast<Chord*>(*pos);
+    t->init_state(ids);
   }
 }
 
 void
-ChordObserver::execute()
+ChordObserver::kick(Observed *ob, ObserverInfo *oi)
 {
-  if (!_reschedule) return;
-
-  if (_init_num > 0) {
-    init_nodes(_init_num);
-    _init_num = 0;
-  }
-
-
-  set<Protocol*> l = Network::Instance()->getallprotocols(_type);
-  set<Protocol*>::iterator pos;
-
-  vivaldi_error ();
-  //i only want to sort it once after all nodes have joined! 
-  Chord *c = 0;
-  if (lid.size() != _num_nodes) {
-    lid.clear();
-    for (pos = l.begin(); pos != l.end(); ++pos) {
-      c = (Chord *)(*pos);
-      assert(c);
-      lid.push_back(c->id ());
-    }
-
-    sort(lid.begin(), lid.end());
-
-    // vector<ConsistentHash::CHID>::iterator i;
-    // printf ("sorted nodes %d %d\n", lid.size (), _num_nodes);
-  }
-
-  for (pos = l.begin(); pos != l.end(); ++pos) {
-    c = (Chord *)(*pos);
-    assert(c);
-    if (!c->stabilized(lid)) {
-      cout << now() << " NOT STABILIZED" << endl;
-      if (_reschedule > 0) reschedule(_reschedule);
-      return;
-    }
-
-  }
-  cout << now() << " STABILIZED" << endl;
-  /*
-  cout << now() << " CHORD NODE STATS" << endl;
-  for (pos = l.begin(); pos != l.end(); ++pos) {
-    assert(c);
-    c = (Chord *)(*pos);
-    c->dump();
-  }
-  */
-}
-
-void
-ChordObserver::vivaldi_error()
-{
-  Topology *t = (Network::Instance()->gettopology());
-  assert (t);
-  vector<double> avg_errs;
-
-  set<Protocol*> l = Network::Instance()->getallprotocols(_type);
-  set<Protocol*>::iterator outer, inner; 
-  for (outer = l.begin(); outer != l.end(); ++outer) {
-    double sum = 0;
-    uint sum_sz = 0;
-    Chord *c = (Chord *)(*outer);
-    assert (c);
-    if (!c->_vivaldi) continue;
-
-    cout << "COORD " <<  c->id() << " " << now () << ": ";
-    Vivaldi::Coord vc = c->get_coords();
-    for (uint j = 0; j < vc._v.size(); j++)
-      cout << vc._v[j] << " ";
-
-    cout << "\n";
-    for (inner = l.begin(); inner != l.end(); ++inner) {
-      Chord *h = (Chord *)(*inner);
-      assert (h);
-      if (!h->_vivaldi) continue;
-      Vivaldi::Coord vc1 = h->get_coords ();
-      double vd = dist(vc, vc1);
-      double rd = t->latency(c->node()->ip(), h->node()->ip());
-      if (rd > 0.0 && vd > 0.0) {
-	//	cout << c->id () << " to " << h->id () << ". Predicted: " << 
-	//vd << " real latency was " << rd << "\n";
-
-	sum += fabs(vd - rd);
-	sum_sz++;
-      }
-      
-    }
-    if (sum_sz)
-      cout << now() << " average error for " << c->id () << ": " << sum/sum_sz 
-      	   << " after " << c->_vivaldi->nsamples() << endl;
-      avg_errs.push_back (sum/sum_sz);
-  }
-
-  if (avg_errs.size() > 0) {
-    sort (avg_errs.begin(), avg_errs.end());
-    
-    cout << " vivaldi median error: " << avg_errs[avg_errs.size() / 2] << "\n";
+  if(_initnodes){
+    _initnodes = false;
+    init_state();
   }
 }

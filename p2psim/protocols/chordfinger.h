@@ -42,6 +42,7 @@ class ChordFinger: public Chord {
     virtual void join(Args *);
 
   protected:
+    uint _stab_finger_timer;
     void fix_fingers(bool restart=false);
     uint _base;
     uint _maxf;

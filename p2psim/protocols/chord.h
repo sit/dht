@@ -102,6 +102,13 @@ public:
     int dummy;
   };
 
+  struct hop_info {
+    IDMap from;
+    IDMap to;
+    uint hop;
+  };
+
+  
   struct next_args {
     CHID key;
     uint m;
@@ -110,7 +117,11 @@ public:
   struct next_ret {
     bool done;
     vector<IDMap> v;
-    IDMap next;
+  };
+
+  struct nextretinfo{
+    hop_info link;
+    next_ret ret;
   };
 
   struct find_successors_args {
@@ -158,6 +169,7 @@ public:
   CHID id () { return me.id; }
   virtual void init_state(vector<IDMap> ids);
   virtual bool stabilized(vector<CHID>);
+  void print_stat_check_correctness(CHID k, vector<IDMap> v, uint lookup_lat);
 
   virtual void dump();
   char *ts();
@@ -174,14 +186,16 @@ protected:
   uint _vivaldi_dim;
   uint _timeout;
   bool _stab_basic_running;
-  uint _stabtimer;
+  uint _stab_basic_timer;
   uint _stab_basic_outstanding;
   uint _frag;
+  uint _alpha;
   int _asap;
   uint _recurs;
   uint _stab_succ;
   IDMap _wkn;
   uint _join_scheduled;
+  uint _parallel;
 
   LocTable *loctable;
   IDMap me; 
@@ -251,8 +265,8 @@ class LocTable {
 
     Chord::IDMap succ(ConsistentHash::CHID id);
     vector<Chord::IDMap> succs(ConsistentHash::CHID id, unsigned int m);
-    Chord::IDMap pred();
-    Chord::IDMap pred(Chord::CHID n);
+    vector<Chord::IDMap> preds(Chord::CHID id, uint m);
+    Chord::IDMap pred(Chord::CHID id);
     void checkpoint();
     void print();
 
@@ -269,7 +283,7 @@ class LocTable {
     void set_timeout(uint to) {_timeout = to;}
 
     //pick the next hop for lookup;
-    virtual Chord::IDMap next_hop(Chord::CHID key, bool *done, uint m = 1, uint nsucc=1); 
+    virtual Chord::IDMap next_hop(Chord::CHID key, uint m = 1, uint nsucc=1); 
 
     vector<Chord::IDMap> get_all();
     Chord::IDMap first();

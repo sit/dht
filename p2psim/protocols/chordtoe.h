@@ -38,7 +38,7 @@ public:
   LocTableToe () : LocTable () {};
   virtual ~LocTableToe () {};
 
-  Chord::IDMap next_hop(Chord::CHID key, bool *done);
+  Chord::IDMap next_hop(Chord::CHID key);
 
   void set_style (int i) {_style = i;};
   void set_toes (vector<Chord::IDMap> t) { _toes = t; };

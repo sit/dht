@@ -63,7 +63,7 @@ ChordOneHop::reschedule_basic_stabilizer(void *x)
     _stab_basic_outstanding--;
     assert(_stab_basic_outstanding == 0);
   }
-  delaycb(_stabtimer, &ChordOneHop::reschedule_basic_stabilizer, (void *) 0);
+  delaycb(_stab_basic_timer, &ChordOneHop::reschedule_basic_stabilizer, (void *) 0);
 }
 
 void

@@ -45,6 +45,7 @@ ChordFinger::ChordFinger(Node *n, Args &a,
 
   _stab_finger_running = false;
   _stab_finger_outstanding = 0;
+  _stab_finger_timer = a.nget<uint>("fingertimer",10000,10);
 }
 
 void
@@ -174,7 +175,7 @@ ChordFinger::reschedule_finger_stabilizer(void *x)
     _stab_finger_outstanding--;
     assert(_stab_finger_outstanding == 0);
   }
-  delaycb(_stabtimer, &ChordFinger::reschedule_finger_stabilizer, (void *)0);
+  delaycb(_stab_finger_timer, &ChordFinger::reschedule_finger_stabilizer, (void *)0);
 }
 
 bool
