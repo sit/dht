@@ -86,7 +86,7 @@ my $con_cmd = "$script_dir/find_convexhull.py";
 # First parse options
 my %options;
 &GetOptions( \%options, "help|?", "x=s", "y=s@", "epsfile=s", 
-	     "param=i", "paramname=s", "datfile=s@", "label=s@", 
+	     "param=s", "paramname=s", "datfile=s@", "label=s@", 
 	     "xrange=s", "yrange=s", "xlabel=s", "ylabel=s@", "title=s", 
 	     "convex:s", "plottype=s", "grid", "rtmgraph" )
     or &usage;
@@ -153,9 +153,15 @@ if( defined $options{"epsfile"} ) {
     $epsfile = $options{"epsfile"};
 }
 if( defined $options{"param"} ) {
-    $param = $options{"param"} - 1;
-    if( $param < 0 ) {
-	die( "Bad param value: " . ($param+1) );
+    # could be numeric or a string
+    if( $options{"param"} =~ /^\d+$/ ) {
+	$param = $options{"param"} - 1;
+	if( $param < 0 ) {
+	    die( "Bad param value: " . ($param+1) );
+	}
+    } else {
+	$param = $options{"param"};
+	$paramname= $options{"param"};
     }
     if( defined $options{"paramname"} ) {
 	$paramname = $options{"paramname"};
@@ -291,6 +297,10 @@ foreach my $datfile (@indats) {
 	     $l =~ /^$xstat\)([^\(]*)(\(|$)/ ) ) {
 	    $xstat = $1;
 	    $xpos = $i;
+	} elsif( $l =~ /^param(\d+)\)($xstat)(\(|$)/ ) {
+	    # we have ourselves a parameter.
+	    $xparam = 1;
+	    $xpos = $1 - 1;
 	}
 	# if there's a stat in the op, check it against this guy as well
 	if( defined $xop && index( $xop, $stat ) != -1 ) {
@@ -303,6 +313,11 @@ foreach my $datfile (@indats) {
 		 $l =~ /^$ystat[$j]\)([^\(])*(\(|$)/ ) ) {
 		$ystat[$j] = $1;
 		$ypos[$j] = $i;
+	    } elsif( $l =~ /^param(\d+)\)($ystat[$j])(\(|$)/ ) {
+		# we have ourselves a parameter.
+		$ypos[$j] = $1 - 1;
+		$yparam[$j] = 1;
+		$yposes{"$j-$datfile"} = $ypos[$j];
 	    }
 	    if( defined $yop[$j] && index( $yop[$j], $stat ) != -1 ) {
 		$yposes{"$j-$index$stat"} = $i;
@@ -407,6 +422,23 @@ foreach my $datfile (@indats) {
 	
 	my $last_val = -1;
 	my %vals_used = ();
+
+	# if given the name of a parameter, find it's position now
+	my $parampos;
+	if( $param =~ /^\d+/ ) {
+	    $parampos = $param;
+	} else {
+	    @statlabels = split( /\s+/, $dat[0] );
+	    foreach my $label (@statlabels) {
+		if( $label =~ /^param(\d+)\)$param/ ) {
+		    $parampos = $1 - 1;
+		    last;
+		}
+	    }
+	    if( !defined $parampos ) {
+		die( "No parameter $param found in file $datfile" );
+	    }
+	}
 	
 	for( my $i = 1; $i <= $#dat; $i++ ) {
 	    
@@ -415,10 +447,10 @@ foreach my $datfile (@indats) {
 	    
 	    if( $line =~ /^\#\s*(\d[\d\s]+)\:?$/ ) {
 		my @params = split( /\s+/, $1 );
-		if( $#params < $param) {
+		if( $#params < $parampos ) {
 		    die( "Wrong param number $param for \"@params\"" );
 		}
-		$last_val = $params[$param];
+		$last_val = $params[$parampos];
 	    } elsif( $line =~ /^([^\#]*)$/ ) {
 		$vals_used{$last_val} = "true";
 		open( DAT, ">>$newfile" ) or 
@@ -637,7 +669,7 @@ if( defined $options{"convex"} ) {
 
 		open( DAT, "<$datfile" ) or die( "Couldn't open $datfile" );
 		my @dat = <DAT>;
-		shift @dat; # no need for stat names
+		my $statline = shift @dat; # no need for stat names
 		close( DAT );
 
 		# read in the convex hull file and find all the combos
@@ -657,28 +689,50 @@ if( defined $options{"convex"} ) {
 		}
 		close( CON );
 
+		# get the right parameter position
+		my $parampos;
+		if( $param =~ /^\d+/ ) {
+		    $parampos = $param;
+		} else {
+		    @statlabels = split( /\s+/, $statline );
+		    foreach my $label (@statlabels) {
+			if( $label =~ /^param(\d+)\)$param/ ) {
+			    $parampos = $1 - 1;
+			    last;
+			}
+		    }
+		    if( !defined $parampos ) {
+			die( "No parameter $param found in file $datfile" );
+		    }
+		}
+
 		# now we have all the headers, so for each one go through
 		# the dat file, pick out the right points
-		foreach my $h (@headers) {
+		my $num_h = 0;
+		my @sheaders = sort {$a <=> $b} @headers;
+		foreach my $h (@sheaders) {
 		    my @params = split( /\s+/, $h );
-		    if( $#params < $param ) {
+		    if( $#params < $parampos ) {
 			die( "Not enough params for rtmgraph" );
 		    }
 		    # now splice out the parameter we care about
 		    shift @params; # forget about the "#"
-		    splice( @params, $param, 1 );
+		    splice( @params, $parampos, 1 );
 		    $h =~ s/\s+/-/g;
 		    my $doit = 0;
 		    my $newfile = "/tmp/paramplot-$$-$j-$h.dat";
 		    open( OUT, ">$newfile" ) or 
 			die( "Couldn't open $newfile" );
+		    my %points = ();
+		    my $v;
 		    foreach my $d (@dat) {
 			if( $d =~ /^\#/ ) {
 			    $doit = 0;
 			    my @params2 = split( /\s+/, $d );
 			    shift @params2; # forget about the "#"
 			    # now splice out the parameter we care about
-			    splice( @params2, $param, 1 );
+			    $v = $params2[$parampos];
+			    splice( @params2, $parampos, 1 );
 			    my $p = 0;
 			    for( ; $p <= $#params; $p++ ) {
 				if( $params[$p] != $params2[$p] ) {
@@ -686,18 +740,25 @@ if( defined $options{"convex"} ) {
 				}
 			    }
 			    if( $p > $#params ) {
-				print OUT $d;
+				$points{$v} = $d; 
 				$doit = 1;
 			    }
 			} elsif( $doit ) {
-			    print OUT $d;
+			    $points{$v} .= $d; 
 			}
+		    }
+		    foreach my $v (sort(keys(%points))) {
+			print OUT $points{$v};
 		    }
 		    close( OUT );
 		    push @rtmfiles, $newfile;
 		    $xposes{"$newfile"} = $xposes{$datfile};
 		    for( my $k = 0; $k <= $#ystat; $k++ ) {
 			$yposes{"$k-$newfile"} = $yposes{"$k-$datfile"};
+		    }
+		    $num_h++;
+		    if( $num_h > 10 ) {
+			last;
 		    }
 		}
 		

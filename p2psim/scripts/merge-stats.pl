@@ -1,5 +1,14 @@
 #!/usr/bin/perl -w
 
+use strict;
+
+# check for args file first
+my $argsfile;
+if( $ARGV[0] eq "--args" ) {
+    shift(@ARGV);
+    $argsfile = shift(@ARGV);
+}
+
 my @logs = @ARGV;
 
 my @stats = qw( BW_PER_TYPE BW_TOTALS LOOKUP_RATES CORRECT_LOOKUPS 
@@ -80,6 +89,29 @@ print "# ";
 for( my $i = 0; $i <= $#final_stats; $i++ ) {
     print "$i)$final_stats[$i] ";
 }
+
+if( defined $argsfile ) {
+
+    my $i = 1;
+    open( ARGS, "<$argsfile" ) or die( "Couldn't open args file: $argsfile" );
+    while( <ARGS> ) {
+	
+	# skip comments
+	if( /^\#/ ) {
+	    next;
+	}
+	
+	my @args = split( /\s+/ );
+	my $argname = shift(@args);
+	
+	print "param$i)$argname ";
+	$i++;
+    }
+
+    close( ARGS );
+
+}
+
 print "\n";
 
 foreach my $h (@headers) {
