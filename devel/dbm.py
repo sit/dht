@@ -9,6 +9,7 @@ import dhashgateway_prot
 import time
 import sha
 import random
+import asyncore
 
 def make_block (sz):
     rd = ""
@@ -18,75 +19,112 @@ def make_block (sz):
         csz -= 1
     return rd
 
-def dofetch (client, num_trials, data_size, nops, seed):
-    complete = 0
-    while complete < num_trials:
-	try:
-	    arg = dhashgateway_prot.dhash_retrieve_arg ()
-	    blk = make_block (data_size)
-	    sobj = sha.sha(blk)
-	    arg.blockID = chord_types.bigint(sobj.digest())
-	    arg.ctype   = dhash_types.DHASH_CONTENTHASH
-	    arg.options = 0
-	    arg.guess   = chord_types.bigint(0)
+class actor:
+    def __init__ (self, client, num_trials, data_size, nops):
+        self.client = client
+        self.num_trials = num_trials
+        self.data_size = data_size
+        self.nops = nops
+        self.complete = 0
+        self.outstanding = 0
+        self.going = 0
 
-	    start = time.time()
-	    res   = client (dhashgateway_prot.DHASHPROC_RETRIEVE, arg)
-	    end   = time.time()
-	    if res.status != dhash_types.DHASH_OK:
-		print arg.blockID, "retrieve failed!"
-	    else:
-		err = ''
-		if blk != res.resok.block:
-		    err += "mismatched block, "
+    def go (self):
+        if self.going: return
+        # print "going out: %d comp: %d" % (self.outstanding, self.complete)
+        self.going = 1
+        while (self.outstanding < self.nops and
+               self.complete + self.outstanding < self.num_trials):
+            self.inject()
+            # print "injected out: %d comp: %d" % (self.outstanding, self.complete)
+        self.going = 0
+        # print "gone"
+        if self.outstanding == 0 and self.complete == self.num_trials:
+            #sys.exit(0)
+            self.client.close()
+
+class fetcher(actor):
+    def inject (self):
+        arg = dhashgateway_prot.dhash_retrieve_arg ()
+        blk = make_block (data_size)
+        sobj = sha.sha(blk)
+        arg.blockID = chord_types.bigint(sobj.digest())
+        arg.ctype   = dhash_types.DHASH_CONTENTHASH
+        arg.options = 0
+        arg.guess   = chord_types.bigint(0)
+        
+        start = time.time()
+        try:
+            self.outstanding += 1
+            res = self.client (dhashgateway_prot.DHASHPROC_RETRIEVE, arg,
+                               lambda x: self.process(start, arg, blk, x))
+            if res is not None:
+                self.process (start, arg, res)
+        except RPC.UnpackException, e:
+            print_exc ()
+
+    def process (self, start, arg, blk, res):
+        end = time.time()
+        self.outstanding -= 1
+        self.complete    += 1
+        if res.status != dhash_types.DHASH_OK:
+            print arg.blockID, "retrieve failed!"
+        else:
+            err = ''
+            if blk != res.resok.block:
+                err += "mismatched block, "
 		if arg.ctype != res.resok.ctype:
 		    err += "mismatched ctype, "
-		if data_size != res.resok.len:
-		    err += "incorrect length (%d not %d), " % (res.resok.len, data_size)
-		if len(err):
-		    err = err[:-2]
-		print arg.blockID, '/', int((end - start) * 1000), '/', 
-		for t in res.resok.times:
-		    print t,
-		print '/', res.resok.errors, res.resok.retries, '/',
-		print res.resok.hops,
-		for id in res.resok.path:
-		    print id,
-		print err
-	    pass
-	except RPC.UnpackException, e:
-	    print_exc()
-	complete += 1
+                if data_size != res.resok.len:
+                    err += "incorrect length (%d not %d), " % (res.resok.len, data_size)
+                if len(err):
+                    err = err[:-2]
+            print arg.blockID, '/', int((end - start) * 1000), '/', 
+            for t in res.resok.times:
+                print t,
+            print '/', res.resok.errors, res.resok.retries, '/',
+            print res.resok.hops,
+            for id in res.resok.path:
+                print id,
+            print err
+                
+        self.go()
 
-def dostore (client, num_trials, data_size, nops, seed):
-    complete = 0
-    while complete < num_trials:
-	try:
-	    arg = dhashgateway_prot.dhash_insert_arg ()
+class storer (actor):
+    def inject (self):
+        arg = dhashgateway_prot.dhash_insert_arg ()
+        
+        arg.block   = make_block (data_size)
+        sobj = sha.sha(arg.block)
+        arg.blockID = chord_types.bigint(sobj.digest())
+        print "Inserting", arg.blockID
+        arg.ctype   = dhash_types.DHASH_CONTENTHASH
+        arg.len     = data_size
+        arg.options = 0
+        arg.guess   = chord_types.bigint(0)
+        
+        start = time.time()
+        try:
+            self.outstanding += 1
+            res = self.client (dhashgateway_prot.DHASHPROC_INSERT, arg,
+                               lambda x: self.process(start, arg, x))
+            if res is not None:
+                self.process (start, arg, res)
+        except RPC.UnpackException, e:
+            print_exc ()
 
-	    arg.block   = make_block (data_size)
-	    sobj = sha.sha(arg.block)
-	    arg.blockID = chord_types.bigint(sobj.digest())
-	    print "Inserting", arg.blockID
-	    arg.ctype   = dhash_types.DHASH_CONTENTHASH
-	    arg.len     = data_size
-	    arg.options = 0
-	    arg.guess   = chord_types.bigint(0)
-
-            start = time.time()
-	    res = client (dhashgateway_prot.DHASHPROC_INSERT, arg)
-	    end   = time.time()
-	    if res.status != dhash_types.DHASH_OK:
-		print arg.blockID, "insert failed!"
-	    else:
-		print arg.blockID, int((end - start) * 1000),
-		for id in res.resok.path:
-		    print id,
-		print
-	except RPC.UnpackException, e:
-	    print_exc()
-	complete += 1
-
+    def process (self, start, arg, res):
+        end = time.time()
+        self.outstanding -= 1
+        self.complete += 1
+        print arg.blockID, int((end - start) * 1000),
+        if res.status != dhash_types.DHASH_OK:
+            print "insert failed!"
+        else:
+            for id in res.resok.path:
+                print id,
+            print
+        self.go()
 
 if __name__ == "__main__":
     if len(sys.argv) < 9:
@@ -109,28 +147,30 @@ if __name__ == "__main__":
     nops = int(sys.argv[7])
     seed = int(sys.argv[8])
     
-    if nops != 0:
-        sys.stderr.write ("nops is currently ignored.\n")
-
     random.seed (seed)
+
+    if mode not in ['f', 's']:
+        sys.stderr.write ("Unknown mode '%s'; bailing.\n" % (mode))
+        sys.exit (1)
     
     # XXX redirect stdout to point to whereever file wants you to go.
     try:
-        client = RPC.Client(dhashgateway_prot,
-                            dhashgateway_prot.DHASHGATEWAY_PROGRAM, 1,
-                            host, port)
-        print "Connected!"
+        client = RPC.AClient(dhashgateway_prot,
+                             dhashgateway_prot.DHASHGATEWAY_PROGRAM, 1,
+                             host, port)
+        if mode == 'f':
+            a = fetcher (client, num_trials, data_size, nops)
+        elif mode == 's':
+            a = storer (client, num_trials, data_size, nops)
     except (socket.error, EOFError, IOError), e:
         print_exc()
 	sys.exit (1)
-        
-    try:
-        if mode == 'f':
-            dofetch (client, num_trials, data_size, nops, seed)
-        elif mode == 's':
-            dostore (client, num_trials, data_size, nops, seed)
+
+    def connectcb(s):
+        if s is not None:
+            print "Connected."
+            a.go()
         else:
-            sys.stderr.write ("Unknown mode '%s'; bailing.\n" % (mode))
-            sys.exit (1)
-    except (socket.error, EOFError, IOError), e:
-        print_exc()
+            print "Connect failed."
+    client.start_connect(connectcb)
+    asyncore.loop()

@@ -1,6 +1,10 @@
-import struct
+import asynchat
+import errno
 import socket
+import struct
 import RPCProto
+import string
+import sys
 from xdrlib import Packer, Unpacker
 from traceback import print_exc
 from SocketServer import ThreadingTCPServer
@@ -36,6 +40,15 @@ NULL_AUTH = RPCProto.opaque_auth()
 NULL_AUTH.flavor = RPCProto.AUTH_NONE
 NULL_AUTH.body = ''
 
+
+def parse_frag_len(data):
+    if len(data) < 4:
+        raise EOFError, "no fraglen"
+    fraglen = struct.unpack('>L', data[:4])[0]
+    lastfrag = fraglen & 0x80000000
+    fraglen = fraglen & 0x7fffffff
+    return (fraglen, lastfrag)
+
 def writefrags(message, write):
     """Fragments message and writes the fragments using write.
 
@@ -45,7 +58,7 @@ def writefrags(message, write):
     # TODO: use StringIO
     while message:
         frag = message[0:0x7fffffff]
-        fraglen = int(len(frag))
+        fraglen = len(frag)
         message = message[fraglen:]
         if not message:
             fraglen = fraglen | 0x80000000
@@ -62,11 +75,7 @@ def readfrags(read):
     message = ''
     while 1:
         fraglen = read(4)
-        if len(fraglen) < 4:
-            raise EOFError, "no fraglen"
-        fraglen = struct.unpack('>L', fraglen)[0]
-        lastfrag = fraglen & 0x80000000
-        fraglen = fraglen & 0x7fffffff
+        (fraglen, lastfrag) = parse_frag_len(fraglen)
         frag = read(fraglen)
         if len(frag) < fraglen:
             raise EOFError, "frag too short"
@@ -351,11 +360,12 @@ class XidGenerator:
     def __init__(self):
         import random, sys
         self.xid = random.randint(0, sys.maxint/2)
+    # FIXME: should this randomize xids?
     def next(self):
         self.xid += 1
         return self.xid
 
-class Client:
+class ClientBase:
     def __init__(self, module, PROG, VERS, host, port):
         assert module is not None
         assert 'programs' in dir(module)
@@ -365,10 +375,25 @@ class Client:
         self.VERS = VERS
         self.module = module
         self.xidgen = XidGenerator()
+        self.host = host
+        self.port = port
+
+    def start_connect(self, host, port, cb = None):
+         raise AssertionError, "This method must be overridden."
+     
+    def __call__(self, pnum, arg, cb = None):
+        """Call proc number pnum with arg.
+           If answer is immediately available, it will be returned.
+           Otherwise, None is returned, and cb will be called later."""
+        raise AssertionError, "This method must be overridden."
+
+class SClient(ClientBase):
+    def start_connect(self, cb = None):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.connect((host, port))
+        self.sock.connect((self.host, self.port))
         self.rfile = self.sock.makefile('rb', -1)
         self.wfile = self.sock.makefile('wb', -1)
+        return self.sock
         # TODO: use exec to define methods on this object for each proc
         # in programs[PROG][VERS].  This requires that each generated
         # Procedure() object include the proc name as a string.
@@ -380,12 +405,106 @@ class Client:
         self.wfile.flush()
     def read_reply(self):
         return readfrags(self.rfile.read)
-    def __call__(self, pnum, arg):
+    def __call__(self, pnum, arg, cb = None):
         proc = self.module.programs[self.PROG][self.VERS][pnum]
         p = pack_call(self.xidgen.next(), self.PROG, self.VERS, pnum)
         proc.pack_arg(p, arg)
         request = p.get_buffer()
         self.write_request(request)
         reply = self.read_reply()
-        u = unpack_reply(reply)[-1]    
+        u = unpack_reply(reply)[-1]
         return proc.unpack_res(u)
+
+class strbuf:
+    """Unlike stringio, always append to the end of string, read from front."""
+    def __init__(self): self.s = ''
+    def write(self, s): self.s += s
+    def read(self, n):
+        # Slicing past the end of string returns '', working out well.
+        v = self.s[:n]
+        self.s = self.s[n:]
+        return v
+
+class AClient(ClientBase,asynchat.async_chat):
+    def __init__(self, module, PROG, VERS, host, port):
+        # A table of callbacks to be called, keyed by xid.
+        self.xidcbmap = {}
+        self.inbuffer = ''
+        self.fragments = []
+        self.bytesleft = 0 # until end of current fragment.
+        asynchat.async_chat.__init__(self)
+        ClientBase.__init__(self, module, PROG, VERS, host, port)
+
+    def handle_connect(self):
+        err = self.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+        if err == errno.ECONNREFUSED:
+            self.connect_cb(None)
+        else:
+            self.connect_cb(self)
+    
+    def start_connect(self, cb = None):
+        if cb is None:
+            raise TypeError, "Must pass cb to async client"
+        self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.connect((self.host, self.port))
+        self.set_terminator(None)
+        self.connect_cb = cb
+        return None
+
+    def handle_reply(self):
+        reply = ''.join(self.fragments)
+        self.fragments = []
+        u = unpack_reply(reply)
+        # print "Reply for xid %x" % u[0]
+        try:
+            (cb, proc) = self.xidcbmap[u[0]]
+            del self.xidcbmap[u[0]]
+        except KeyError:
+            sys.stderr.write("Reply for unknown xid %x received: %s" %
+                             (u[0], str(u[1:])))
+            return
+
+        if not cb:
+            return
+        # XXX should really return some useful info to cb if error case
+        #     either if denied, or if some weird bug like PROG_UNAVAIL.
+        if u[1] == RPCProto.MSG_ACCEPTED:
+            res = proc.unpack_res(u[-1])
+            cb(res)
+        else:
+            cb(None)
+
+    def collect_incoming_data(self, data):
+        if len(self.inbuffer) > 0:
+            data = self.inbuffer + data
+        (fraglen, lastfrag) = parse_frag_len(data)
+        # print "a", fraglen, lastfrag, len(data)
+        while 4 + fraglen <= len(data):
+            frag = data[4:4+fraglen]
+            self.fragments.append(frag)
+            if lastfrag:
+                self.handle_reply()
+            data = data[4+fraglen:]
+            if len(data) > 0:
+                (fraglen, lastfrag) = parse_frag_len(data)
+                # print "b", fraglen, lastfrag, len(data)
+            # else:
+                # print "c"
+
+        self.inbuffer = data
+            
+    def found_terminator(self):
+        raise AssertionError, "We don't use terminators."
+
+    def __call__(self, pnum, arg, cb = None):
+        proc = self.module.programs[self.PROG][self.VERS][pnum]
+        xid = self.xidgen.next()
+        # print "Call for xid %x" % xid
+        p = pack_call(xid, self.PROG, self.VERS, pnum)
+        proc.pack_arg(p, arg)
+        request = p.get_buffer()
+        val = strbuf()
+        writefrags(request, val.write)
+        self.push(val.s)
+        self.xidcbmap[xid] = (cb, proc)
+        return None
