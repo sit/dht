@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.15 2003/02/23 16:42:29 sit Exp $
+# $Id: Makefile.am,v 1.16 2003/03/07 21:35:37 sit Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -12,10 +12,10 @@ noinst_PROGRAMS = dbm typetest $(VIS) walk builddb dbdump findroute
 MYLDADD =  ../dhash/libdhash.a ../merkle/libmerkle.a ../svc/libsvc.la
 
 walk_SOURCES = walk.C
-walk_LDADD = $(MYLDADD) ../chord/libchord.a $(LDADD)
+walk_LDADD = $(MYLDADD) ../chord/libchord.a ../utils/libutil.a $(LDADD)
 
 builddb_SOURCES = builddb.C
-builddb_LDADD = ../chord/libchord.a ../sfsrodb/libsfsrodb.a $(DBLIB) $(MYLDADD) $(LDADD)
+builddb_LDADD = ../sfsrodb/libsfsrodb.a ../chord/libchord.a ../utils/libutil.a $(DBLIB) $(MYLDADD) $(LDADD)
 
 dbm_SOURCES = dhash_benchmark.C
 dbm_LDADD = $(MYLDADD) $(LDADD)
@@ -27,12 +27,12 @@ dbdump_SOURCES = dbdump.C
 dbdump_LDADD = ../sfsrodb/libsfsrodb.a $(DBLIB) $(LDADD)
 
 findroute_SOURCES = findroute.C
-findroute_LDADD = ../chord/libchord.a ../svc/libsvc.la $(LDADD)
+findroute_LDADD = ../chord/libchord.a ../svc/libsvc.la ../utils/libutil.a $(LDADD)
 
 if GTK_AVAILABLE
 vis_SOURCES = vis.C
 INCLUDES = $(GTK_CFLAGS)
-vis_LDADD =  ../chord/libchord.a ../svc/libsvc.la $(GTK_LIBS) $(LDADD)
+vis_LDADD =  ../chord/libchord.a ../svc/libsvc.la ../utils/libutil.a $(GTK_LIBS) $(LDADD)
 endif
 
 EXTRA_DIST = .cvsignore

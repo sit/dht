@@ -1,4 +1,4 @@
-dnl $Id: configure.in,v 1.32 2003/03/07 20:16:45 sit Exp $
+dnl $Id: configure.in,v 1.33 2003/03/07 21:35:36 sit Exp $
 dnl
 dnl Process this file with autoconf to produce a configure script.
 dnl
@@ -63,7 +63,7 @@ AC_EGREP_HEADER(sfspriv,
 )
 
 dnl let directories share header files
-for lib in merkle chord dhash sfsrodb svc lsd; do
+for lib in utils merkle chord dhash sfsrodb svc lsd; do
     CPPFLAGS="-I"'$(top_srcdir)'"/$lib $CPPFLAGS"
 done
     CPPFLAGS="-I"'$(top_builddir)'"/svc $CPPFLAGS"

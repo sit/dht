@@ -2,10 +2,6 @@
 
 $(PROGRAMS): $(LDEPS)
 
-TESTS = test_skiplist
-check_PROGRAMS = $(TESTS)
-test_skiplist_SOURCES = test_skiplist.C
-
 noinst_LIBRARIES = libchord.a
 
 noinst_HEADERS = aclnt_chord.h \
@@ -20,11 +16,9 @@ noinst_HEADERS = aclnt_chord.h \
 		 pred_list.h \
 		 route.h \
 		 route_secchord.h \
-		 skiplist.h \
 		 stabilize.h \
 		 succ_list.h \
-		 toe_table.h \
-		 modlogger.h
+		 toe_table.h
 
 libchord_a_SOURCES = chord.C \
 		      route.C \
@@ -39,8 +33,7 @@ libchord_a_SOURCES = chord.C \
 		      finger_table.C \
 		      succ_list.C \
 		      pred_list.C \
-		      debruijn.C \
-		      modlogger.C
+		      debruijn.C
 
 EXTRA_DIST = .cvsignore
 CLEANFILES = core *.core *~ *.rpo
