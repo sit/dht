@@ -22,7 +22,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-# $Id: run-simulations.pl,v 1.2 2003/11/29 20:09:44 strib Exp $
+# $Id: run-simulations.pl,v 1.3 2003/11/29 21:09:44 strib Exp $
 
 use strict;
 use Getopt::Long;
@@ -38,6 +38,7 @@ my $argsfile = "";
 my $logdir = "/tmp";
 my $observer = "";
 my $seed = "";
+my $randomize;
 
 sub usage {
     select(STDERR);
@@ -58,6 +59,8 @@ run-simulations [options]
                                 format of each line:<argname> <val1> ... <valN>
     --logdir                  Where to write the logs
     --seed                    Random seed to use in all simulations
+    --randomize               Randomizes the order of param combos.  The number
+	                        supplied specifies how many times to iterate.
 
 EOUsage
     
@@ -72,7 +75,7 @@ my %options;
 {;}
 &GetOptions( \%options, "help|?", "topology=s", "lookupmean=s", "protocol=s", 
 	     "lifemean=s", "deathmean=s", "exittime=s", "churnfile=s", 
-	     "argsfile=s", "logdir=s", "seed=s" ) or &usage;
+	     "argsfile=s", "logdir=s", "seed=s", "randomize=i" ) or &usage;
 
 if( $options{"help"} ) {
     &usage();
@@ -142,8 +145,12 @@ if( defined $options{"deathmean"} ) {
 if( defined $options{"exittime"} ) {
     $exittime = $options{"exittime"};
 }
+if( defined $options{"randomize"} ) {
+    $randomize = $options{"randomize"};
+}
 if( defined $options{"seed"} ) {
     $seed = $options{"seed"};
+    srand( $seed * $$ ); 
 }
 
 # now, figure out what directory we're in, and what
@@ -200,7 +207,9 @@ print EF "observer $observer initnodes=1\n";
 close( EF );
 
 # now run the simulation
-&run_sim( "", 0 );
+do {
+    &run_sim( "", 0 );
+} while( defined $randomize and $randomize > 0 );
 
 unlink( $eventfile );
 
@@ -214,50 +223,71 @@ sub run_sim {
 
     $arg_iter++;
 
-    foreach my $val (@args) {
+    if( !defined $randomize ) {
+	foreach my $val (@args) {
+	    my $arg_string = $args_so_far . "$argname=$val ";
+	    if( $arg_iter == $#argnames+1 ) {
+		# it's the last argument, so just run the test
+		&run_command( $arg_string );		
+	    } else {
+		# recurse again
+		&run_sim( $arg_string, $arg_iter );
+	    }
+	}
+    } else {
+	
+	# pick a random value and recurse
+	my $val = $args[int(rand($#args+1))];
 	my $arg_string = $args_so_far . "$argname=$val ";
 	if( $arg_iter == $#argnames+1 ) {
 	    # it's the last argument, so just run the test
-	    
-	    my $protfile = "$logdir/run-simulations-tmp-prot$$";
-	    open( PF, ">$protfile" ) or die( "Couldn't write to $protfile" );
-	    print PF "$protocol $arg_string\n";
-	    close( PF );
-
-	    my @splitargs = split( /\s+/, $arg_string );
-	    my $label = "";
-	    my $i = 0;
-	    foreach my $a (@splitargs) {
-		my @val = split( /=/, $a );
-		$label .= $val[1];
-		if( $i != $#splitargs ) {
-		    $label .= "-";
-		}
-		$i++;
-	    }
-
-	    # now run it
-	    my $logfile = "$logdir/$protocol-$label.log";
-
-	    open( LOG, ">$logfile" ) or die( "Couldn't open $logfile" );
-	    print LOG "# lookupmean=$lookupmean lifemean=$lifemean " . 
-		"deathmean=$deathmean file=$churnfile exit=$exittime\n";
-	    print LOG "# topology=$topology seed=$seed\n";
-	    close( LOG );
-
-	    print "# $arg_string > $logfile \n";
-	    #print "$p2psim_cmd $protfile $topology $eventfile >> $logfile";
-	    system( "$p2psim_cmd $protfile $topology $eventfile >> $logfile " .
-		    "2>> $logfile" )
-		and die( "$p2psim_cmd $protfile $topology $eventfile failed" );
-
-	    unlink( $protfile );
-
+	    $randomize--;
+	    &run_command( $arg_string );
 	} else {
 	    # recurse again
 	    &run_sim( $arg_string, $arg_iter );
 	}
+
     }
 
+}
 
+sub run_command {
+    
+    my $arg_string = shift;
+
+    my $protfile = "$logdir/run-simulations-tmp-prot$$";
+    open( PF, ">$protfile" ) or die( "Couldn't write to $protfile" );
+    print PF "$protocol $arg_string\n";
+    close( PF );
+    
+    my @splitargs = split( /\s+/, $arg_string );
+    my $label = "";
+    my $i = 0;
+    foreach my $a (@splitargs) {
+	my @val = split( /=/, $a );
+	$label .= $val[1];
+	if( $i != $#splitargs ) {
+	    $label .= "-";
+	}
+	$i++;
+    }
+    
+    # now run it
+    my $logfile = "$logdir/$protocol-$label.log";
+    
+    open( LOG, ">$logfile" ) or die( "Couldn't open $logfile" );
+    print LOG "# lookupmean=$lookupmean lifemean=$lifemean " . 
+	"deathmean=$deathmean file=$churnfile exit=$exittime\n";
+    print LOG "# topology=$topology seed=$seed\n";
+    close( LOG );
+    
+    print "# $arg_string > $logfile \n";
+    #print "$p2psim_cmd $protfile $topology $eventfile >> $logfile";
+    system( "$p2psim_cmd $protfile $topology $eventfile >> $logfile " .
+	    "2>> $logfile" )
+	and die( "$p2psim_cmd $protfile $topology $eventfile failed" );
+    
+    unlink( $protfile );
+    
 }
