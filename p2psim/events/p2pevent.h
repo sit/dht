@@ -25,7 +25,7 @@
 #ifndef __P2PEVENT_H
 #define __P2PEVENT_H
 
-#include "p2psim/dhtprotocol.h"
+#include "p2psim/p2protocol.h"
 
 class P2PEvent : public Event {
 public:
@@ -35,7 +35,7 @@ public:
 
   Node *node;
   string protocol;
-  DHTProtocol::event_f fn;
+  P2Protocol::event_f fn;
   Args *args;
 
  protected:
@@ -43,7 +43,7 @@ public:
 
  private:
   virtual void execute();
-  DHTProtocol::event_f name2fn(string name);
+  P2Protocol::event_f name2fn(string name);
 };
 
 #endif // __P2PEVENT_H

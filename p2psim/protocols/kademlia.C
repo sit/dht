@@ -61,7 +61,7 @@ k_bucket_tree::NodeID k_bucket_tree::DistCompare::_key;
 // }}}
 // {{{ Kademlia::Kademlia
 Kademlia::Kademlia(Node *n, Args a)
-  : DHTProtocol(n), _id(ConsistentHash::ip2chid(n->ip()))
+  : P2Protocol(n), _id(ConsistentHash::ip2chid(n->ip()))
 {
   KDEBUG(1) << "ip: " << ip() << endl;
   _values.clear();
@@ -506,7 +506,6 @@ Kademlia::init_state(list<Protocol*> l)
 void
 Kademlia::reschedule_stabilizer(void *x)
 {
-  // if stabilize blah.
   stabilize();
   delaycb(STABLE_TIMER, &Kademlia::reschedule_stabilizer, (void *) 0);
 }
@@ -741,16 +740,6 @@ k_bucket_tree::get(NodeID key, vector<peer_t*> *v, unsigned nbest)
 
 
 // }}}
-// {{{ k_bucket_tree::random_node
-peer_t*
-k_bucket_tree::random_node()
-{
-  unsigned r = 1 + (unsigned)(((float) _nodes.size())*rand() / (RAND_MAX+1.0));
-  return _nodes[r];
-}
-
-// }}}
-
 // {{{ k_bucket::k_bucket
 k_bucket::k_bucket(Kademlia *k, k_bucket_tree *root) : _leaf(false),
   _self(k), _root(root)
@@ -820,7 +809,7 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, bool init_state, string pr
   //
 
   // if this thing is already in the array, move to the right
-  // place and bail out
+  // place (time-stamp wise) and bail out
   for(set<peer_t*>::const_iterator it = _nodes->begin(); it != _nodes->end(); ++it) {
     if((*it)->id != node)
       continue;
@@ -852,6 +841,8 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, bool init_state, string pr
   assert(_child[0] == 0);
   assert(_child[1] == 0);
 
+  // when we're initializing, we're trying to insert every node in everyone's
+  // k-buckets, so no need to put it in the replacement cache
   if(init_state)
     return 0;
 

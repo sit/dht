@@ -25,10 +25,10 @@
 #ifndef __VIVALDITEST_H
 #define __VIVALDITEST_H
 
-#include "p2psim/dhtprotocol.h"
+#include "p2psim/p2protocol.h"
 #include "vivaldi.h"
 
-class VivaldiTest : public DHTProtocol {
+class VivaldiTest : public P2Protocol {
 public:
   VivaldiTest(Node*, Args &args);
   ~VivaldiTest();

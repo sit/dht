@@ -25,7 +25,7 @@
 #ifndef __CHORD_H
 #define __CHORD_H
 
-#include "p2psim/dhtprotocol.h"
+#include "p2psim/p2protocol.h"
 #include "misc/vivaldi.h"
 #include "consistenthash.h"
 
@@ -34,7 +34,7 @@
 
 class LocTable;
 
-class Chord : public DHTProtocol {
+class Chord : public P2Protocol {
 public:
   Vivaldi *_vivaldi;
   

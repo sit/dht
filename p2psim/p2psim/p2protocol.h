@@ -22,12 +22,26 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "dhtprotocol.h"
+#ifndef __DHTPROTOCOL_H
+#define __DHTPROTOCOL_H
 
-DHTProtocol::DHTProtocol(Node *n) : Protocol(n)
-{
-}
+#include "protocol.h"
+#include "args.h"
+using namespace std;
 
-DHTProtocol::~DHTProtocol()
-{
-}
+class Node;
+
+class P2Protocol : public Protocol {
+public:
+  P2Protocol(Node* n);
+  virtual ~P2Protocol();
+
+  typedef void (P2Protocol::*event_f)(Args*);
+  virtual void join(Args*) = 0;
+  virtual void leave(Args*) = 0;
+  virtual void crash(Args*) = 0;
+  virtual void insert(Args*) = 0;
+  virtual void lookup(Args*) = 0;
+};
+
+#endif // __DHTPROTOCOL_H

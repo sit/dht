@@ -1,5 +1,6 @@
+// {{{ headers
 /*
- * Copyright (c) 2003 [NAMES_GO_HERE]
+ * Copyright (c) 2003 Thomer M. Gil
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -30,9 +31,9 @@
 extern unsigned kdebugcounter;
 class k_bucket_tree;
 class peer_t;
-
+// }}}
 // {{{ Kademlia
-class Kademlia : public DHTProtocol {
+class Kademlia : public P2Protocol {
 // {{{ public
 public:
   typedef ConsistentHash::CHID NodeID;
@@ -55,7 +56,6 @@ public:
 
   void init_state(list<Protocol*>);
 
-// }}}
   bool stabilized(vector<NodeID>);
   void dump();
   NodeID id () { return _id;}
@@ -176,7 +176,6 @@ public:
   // }}}
 // }}}
 };
-
 // }}}
 // {{{ peer_t
 // one entry in k_bucket's _nodes vector
@@ -320,5 +319,4 @@ private:
 // }}}
 
 #define KDEBUG(x) DEBUG(x) << kdebugcounter++ << "(" << now() << "). " << Kademlia::printbits(_id) << " "
-
 #endif // __KADEMLIA_H

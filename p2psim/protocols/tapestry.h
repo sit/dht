@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.8 2003/10/12 22:16:16 strib Exp $ */
+/* $Id: tapestry.h,v 1.9 2003/10/14 14:55:33 thomer Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -12,7 +12,7 @@ class NodeInfo;
 class RouteEntry;
 class RoutingTable;
 
-class Tapestry : public DHTProtocol {
+class Tapestry : public P2Protocol {
 public:
 
   typedef unsigned long long GUID;
@@ -55,7 +55,7 @@ public:
   void print_guid( GUID id, ostream &s );
   uint get_digit( GUID id, uint digit );
   GUID id() { return _my_id; };
-  IPAddress ip() { return DHTProtocol::ip(); };
+  IPAddress ip() { return P2Protocol::ip(); };
   void add_to_rt( IPAddress new_ip, GUID new_id );
   // how many digits do these keys share
   // returns -1 if they are the same

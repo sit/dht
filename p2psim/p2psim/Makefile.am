@@ -11,7 +11,7 @@ p2psim_LDADD = p2psim_core.o \
                -L/usr/local/lib -lthread -l9 -lfmt -lutf -lgmp -lcrypto
 
 noinst_PROGRAMS = p2psim_core.o
-p2psim_core_o_SOURCES = anyready.C condvar.C dhtprotocol.C event.C \
+p2psim_core_o_SOURCES = anyready.C condvar.C p2protocol.C event.C \
 		        eventqueue.C \
 		        eventgenerator.C \
 		        eventqueueobserver.C \

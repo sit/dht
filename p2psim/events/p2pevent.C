@@ -32,19 +32,19 @@ P2PEvent::P2PEvent()
 {
 }
 
-DHTProtocol::event_f
+P2Protocol::event_f
 P2PEvent::name2fn(string name)
 {
   if(name == "join" || name == "0")
-    return &DHTProtocol::join;
+    return &P2Protocol::join;
   if(name == "leave" || name == "1")
-    return &DHTProtocol::leave;
+    return &P2Protocol::leave;
   if(name == "crash" || name == "2")
-    return &DHTProtocol::crash;
+    return &P2Protocol::crash;
   if(name == "insert" || name == "3")
-    return &DHTProtocol::insert;
+    return &P2Protocol::insert;
   if(name == "lookup" || name == "4")
-    return &DHTProtocol::lookup;
+    return &P2Protocol::lookup;
   assert(0);
 }
 
@@ -97,9 +97,9 @@ P2PEvent::execute()
 {
   // get node, protocol on that node, application interface for that protocol
   // and invoke the event
-  DHTProtocol *proto = dynamic_cast<DHTProtocol*>(node->getproto(protocol));
+  P2Protocol *proto = dynamic_cast<P2Protocol*>(node->getproto(protocol));
   assert(proto);
-  if (fn == &DHTProtocol::join) 
+  if (fn == &P2Protocol::join) 
     node->set_alive();
 
   if (proto->node()->alive())

@@ -29,7 +29,7 @@ bool static_sim;
 
 #define CHORD_DEBUG
 Chord::Chord(Node *n, Args& a, LocTable *l)
-  : DHTProtocol(n), _isstable (false)
+  : P2Protocol(n), _isstable (false)
 {
 
   if(a.find("static_sim") != a.end())

@@ -25,9 +25,9 @@
 #ifndef __PASTRY_H
 #define __PASTRY_H
 
-#include "p2psim/dhtprotocol.h"
+#include "p2psim/p2protocol.h"
 
-class Pastry : public DHTProtocol {
+class Pastry : public P2Protocol {
 public:
   const unsigned idlength;
   typedef long long NodeID;

@@ -34,7 +34,7 @@ class Node;
 // A Protocol is just a named object attached to a Node.
 // The point is, for example, to help the Chord object on
 // one node find the Chord on another node by calling
-// getpeer(IPAddress). DHTProtocol has the DHT-specific
+// getpeer(IPAddress). P2Protocol has the DHT-specific
 // abstract methods.
 class Protocol : public Observed {
 public:

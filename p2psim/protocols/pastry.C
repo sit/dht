@@ -27,7 +27,7 @@
 #include <iostream>
 using namespace std;
 
-Pastry::Pastry(Node *n) : DHTProtocol(n),
+Pastry::Pastry(Node *n) : P2Protocol(n),
   // suggested values in paper
   idlength(8*sizeof(NodeID)),
   _b(4),

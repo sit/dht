@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.12 2003/10/13 02:20:20 strib Exp $ */
+/* $Id: tapestry.C,v 1.13 2003/10/14 14:55:33 thomer Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -32,7 +32,7 @@
 using namespace std;
 
 Tapestry::Tapestry(Node *n, Args a)
-  : DHTProtocol(n),
+  : P2Protocol(n),
     _base(a.nget<uint>("base", 16, 10)),
     _bits_per_digit((uint) (log10(((double) _base))/log10((double) 2))),
     _digits_per_id((uint) 8*sizeof(GUID)/_bits_per_digit),

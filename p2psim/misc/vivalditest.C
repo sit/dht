@@ -33,7 +33,7 @@ using namespace std;
 vector<VivaldiTest*> VivaldiTest::_all;
 
 VivaldiTest::VivaldiTest(Node *n, Args &args)
-  : DHTProtocol(n), _next_neighbor(0), _neighbors(0)
+  : P2Protocol(n), _next_neighbor(0), _neighbors(0)
 {
   _vo = args.nget<int>("vivaldi-algorithm", 10);
   _dim = args.nget<int>("model-dimension", 10);
