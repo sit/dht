@@ -144,22 +144,47 @@ locationtable::replace_estimate (u_long o, u_long n)
   nnodes = nnodessum / nvnodes;
 }
 
-void
+ptr<location>
 locationtable::realinsert (ref<location> l)
 {
-  loctrace << "insert " << l->id () << " " << l->address ()
-	   << " " << l->vnode () << "\n";
-  locwrap *lw = locs[l->id ()];
-  assert (!lw);
-  
-  lw = New locwrap (l);
-  locs.insert (lw);
-  loclist.insert (lw);
-  cachedlocs.insert_tail (lw);
+  ptr<location> loc = lookup (l->id ());
+  if (loc != NULL) {
+    // Try to dampen node becoming alive so it only happens once
+    // a minute.
+    if (!loc->alive ()) {
+      timespec ts;
+      clock_gettime (CLOCK_REALTIME, &ts);
+      if (ts.tv_sec - loc->dead_time () > 60)
+	loc->set_alive (true);
+      else
+	loctrace << "locationtable::insert: damping " << loc->id () << "\n";
+    }
+    return loc;
+  } else {
 
-  pins_updated_ = false;
-  if (size () > max_cachedlocs)
-    evict (size () - max_cachedlocs);
+    loctrace << "insert " << l->id () << " " << l->address ()
+	     << " " << l->vnode () << "\n";
+    locwrap *lw = locs[l->id ()];
+    assert (!lw);
+  
+    lw = New locwrap (l);
+    locs.insert (lw);
+    loclist.insert (lw);
+    cachedlocs.insert_tail (lw);
+
+    pins_updated_ = false;
+    if (size () > max_cachedlocs)
+      evict (size () - max_cachedlocs);
+  }
+
+  return l;
+}
+
+
+ptr<location>
+locationtable::insert (ptr<location> l)
+{
+  return realinsert (l);
 }
 
 ptr<location>
@@ -177,26 +202,11 @@ locationtable::insert (const chordID &n,
 		       int p, int v,
 		       const vec<float> &coords)
 {
-  ptr<location> loc = lookup (n);
-  if (loc != NULL) {
-    // Try to dampen node becoming alive so it only happens once
-    // a minute.
-    if (!loc->alive ()) {
-      timespec ts;
-      clock_gettime (CLOCK_REALTIME, &ts);
-      if (ts.tv_sec - loc->dead_time () > 60)
-	loc->set_alive (true);
-      else
-	loctrace << "locationtable::insert: damping " << loc->id () << "\n";
-    }
-    return loc;
-  }
-    
   net_address r;
   r.hostname = s;
   r.port = p;
   
-  loc = New refcounted<location> (n, r, v, coords);
+  ptr<location> loc = New refcounted<location> (n, r, v, coords);
   if (loc->vnode () < 0)
     return NULL;
   realinsert (loc);

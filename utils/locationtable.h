@@ -52,7 +52,7 @@ class locationtable {
   
   void figure_pins ();
   void evict (size_t n);
-  void realinsert (ref<location> l);
+  ptr<location> realinsert (ref<location> l);
 
   // Circular, in-order traversal of all known nodes.
   locwrap *next (locwrap *lw);
@@ -77,6 +77,7 @@ class locationtable {
   // Inserts node into LT.  Returns true if node is now available.
   // Returns false of n is not a plausible chordID for s:p.
   ptr<location> insert (const chord_node &n);
+  ptr<location> insert (ptr<location> l);
   ptr<location> insert (const chordID &n, 
 			const chord_hostname &s, 
 			int p, int v,
