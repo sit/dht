@@ -69,6 +69,7 @@ void
 locationtable::insert (chordID &n, sfs_hostname s, int p)
 {
   location *l = New location (n, s, p);
+  assert (!locs[n]);
   locs.insert (l);
   add_cachedlocs (l);
 }
@@ -163,14 +164,12 @@ locationtable::betterpred2 (chordID myID, chordID current, chordID target,
       u_long t3 = topbits (nbit, newpred);
       u_long h1 = (t1 > t2) ? t1 - t2 : t2 - t1;
       u_long h2 = (t1 > t3) ? t1 - t3 : t3 - t1;
-
       if (n1bits (h2) < n1bits (h1)) {  // newpred corrects more bits
 	r = true;
       } else if (n1bits (h2) == n1bits (h1)) {
 	float cdelay = c->rpcdelay / c->nrpc;
 	float ndelay = n->rpcdelay / n->nrpc;
 	r = ndelay < cdelay;
-
 #if 0
 	if (r) {
 	  char b[1024];

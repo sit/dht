@@ -24,11 +24,15 @@
 #include <qhash.h>
 
 #define PNODE
-#define STOPSTABILIZE		// for testing purposes
+#define FASTSTABILIZE		// for testing purposes
+
+const int chord_server_select = (getenv ("CHORD_SERVER_SELECTION")
+			   ? atoi (getenv ("CHORD_SERVER_SELECTION")) : 0);
 
 vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
-	      chordID _myID) :
+	      chordID _myID, int _vnode) :
   locations (_locations),
+  myindex (_vnode),
   myID (_myID), 
   chordnode (_chordnode)
 {
@@ -73,6 +77,7 @@ vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
   nalert = 0;
   ntestrange = 0;
   ngetfingers = 0;
+  nchallenge = 0;
   ndogetsuccessor = 0;
   ndogetpredecessor = 0;
   ndofindclosestpred = 0;
@@ -80,12 +85,23 @@ vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
   ndoalert = 0;
   ndotestrange = 0;
   ndogetfingers = 0;
+  ndochallenge = 0;
 }
 
 vnode::~vnode ()
 {
   warnx << "vnode: destroyed\n";
   exit (0);
+}
+
+chordID
+vnode::my_succ () 
+{
+  if (finger_table[1].first.alive) return finger_table[1].first.n;
+  for (int i = 1; i <= nsucc; i++) {
+    if (succlist[i].alive) return succlist[i].n;
+  }
+  return myID;
 }
 
 int
@@ -102,20 +118,62 @@ vnode::countrefs (chordID &x)
   return n;
 }
 
-void 
-vnode::updatefingers (chordID &x, net_address &r)
+void
+vnode::checkfingers ()
 {
-  for (int i = 1; i <= NBIT; i++) {
-    if (between (finger_table[i].start, finger_table[i].first.n, x)) {
-      assert (finger_table[i].first.n != x);
-      locations->changenode (&finger_table[i].first, x, r);
+  int j;
+  int i;
+  for (i = 1; i <= NBIT; i++) {
+    if (finger_table[i].first.n == myID) continue;
+    else break;
+  }
+  if (i > NBIT) return;
+
+  for (i = 1; i <= NBIT; i++) {
+    if (!finger_table[i].first.alive) continue;
+    j = i+1;
+    while ((j <= NBIT) && !finger_table[j].first.alive) j++;
+    if (j > NBIT) {
+      if (!betweenrightincl (finger_table[i].start, myID, 
+                             finger_table[i].first.n)) {
+        warnx << "table " << i << " bad\n";
+        warnx << "start " << finger_table[i].start << "\n";
+        warnx << "first " << finger_table[i].first.n << "\n";
+        print ();
+        assert (0);
+      }
+    } else {
+      if (finger_table[j].first.n == myID) {
+        return;
+      }
+      if (!betweenrightincl (finger_table[i].start, finger_table[j].first.n,
+                 finger_table[i].first.n)) {
+        warnx << "table " << i << " bad\n";
+        print ();
+        assert (0);
+      }
     }
   }
 }
 
+
+void 
+vnode::updatefingers (chordID &x, net_address &r)
+{
+  checkfingers();
+  for (int i = 1; i <= NBIT; i++) {
+    if (betweenleftincl (finger_table[i].start, finger_table[i].first.n, x)) {
+      assert (finger_table[i].first.n != x);
+      locations->changenode (&finger_table[i].first, x, r);
+    }
+  }
+  checkfingers();
+}
+
 void
 vnode::replacefinger (node *n)
-{
+{  
+  checkfingers ();
 #ifdef PNODE
   n->n = findsuccfinger (n->n);
 #else
@@ -123,6 +181,7 @@ vnode::replacefinger (node *n)
 #endif
   n->alive = true;
   locations->increfcnt (n->n);
+  checkfingers ();
 }
 
 void 
@@ -181,6 +240,16 @@ vnode::stats ()
   warnx << "# notify calls " << ndonotify << "\n";  
   warnx << "# alert calls " << ndoalert << "\n";  
   warnx << "# getfingers calls " << ndogetfingers << "\n";
+}
+
+void
+vnode::stop ()
+{
+  if (stabilize_backoff_tmo) {
+    warnx << "stop " << myID << " switch off stabilize timer\n";
+    timecb_remove (stabilize_backoff_tmo);
+    stabilize_backoff_tmo = NULL;
+  }
 }
 
 void
@@ -294,11 +363,14 @@ chordID
 vnode::lookup_closestpred (chordID &x)
 {
 #ifdef PNODE
-  chordID p = findpredfinger2 (x);
+  if (chord_server_select) 
+    return findpredfinger2 (x);
+  else
+    return findpredfinger (x);
 #else
-  chordID p = locations->findpredloc (x);
+  return = locations->findpredloc (x);
 #endif
-  return p;
+
 }
 
 bool
@@ -325,7 +397,7 @@ vnode::stabilize (void)
 void
 vnode::stabilize_continuous (u_int32_t t)
 {
-#ifndef STOPSTABILIZE
+#ifndef FASTSTABILIZE
   if (nout_continuous > 0) {
     // stabilizing too fast
     t = 2 * t;
@@ -367,24 +439,49 @@ vnode::stabilize_succ ()
 }
 
 void
+vnode::stabilize_getpred_cb_ok (chordID p, bool ok, chordstat status)
+{
+  nout_continuous--;
+  if ((status == CHORD_OK) && ok) {
+    if (betweenleftincl (finger_table[1].start, finger_table[1].first.n, p)) {
+      // warnx << "stabilize_pred_cb_ok: " << myID << " new successor is "
+      //   << p << "\n";
+      net_address r = locations->getaddress (p);
+      locations->changenode (&finger_table[1].first, p, r);
+      updatefingers (p, r);
+      stable_fingers = false;
+      notify (finger_table[1].first.n, myID);
+    }
+  } else if (status == CHORD_OK) {
+    warnx << "stabilize_pred_cb_ok: " << myID << " couldn't authenticate "
+	  << p << "\n";
+  }
+}
+
+void
 vnode::stabilize_getpred_cb (chordID p, net_address r, chordstat status)
 {
   // receive predecessor from my successor; in stable case it is me
-  nout_continuous--;
   if (status) {
     warnx << "stabilize_getpred_cb: " << myID << " " 
 	  << finger_table[1].first.n << " failure " << status << "\n";
     stable_fingers = false;
+    nout_continuous--;
   } else {
-    if (!finger_table[1].first.alive || (finger_table[1].first.n == myID) ||
-	between (myID, finger_table[1].first.n, p)) {
-      // warnx << "stabilize_pred_cb: " << myID << " new successor is "
-      //   << p << "\n";
-      locations->changenode (&finger_table[1].first, p, r);
-      updatefingers (p, r);
-      stable_fingers = false;
+    //    warnx << "stabilize_pred_cb: s " << finger_table[1].start << " first "
+    //  << finger_table[1].first.n << " p " << p << "\n";
+    if (betweenleftincl (finger_table[1].start, finger_table[1].first.n, p)) {
+      //      warnx << "stabilize_pred_cb: " << myID << " check " << p 
+      //    << "'s identity\n";
+      locations->cacheloc (p, r);
+      challenge (p, wrap (mkref (this), &vnode::stabilize_getpred_cb_ok));
+      // locations->changenode (&finger_table[1].first, p, r);
+      // updatefingers (p, r);
+      // stable_fingers = false;
+    } else {
+      nout_continuous--;
+      notify (finger_table[1].first.n, myID);
     }
-    notify (finger_table[1].first.n, myID);
   }
 }
 
@@ -428,7 +525,7 @@ vnode::stabilize_backoff (int f, int s, u_int32_t t)
   } else if (!isstable ()) {
     stable = false;
   }
-#ifdef STOPSTABILIZE
+#ifdef FASTSTABILIZE
   stabilize_succ ();
   stabilize_pred ();
 #endif
@@ -439,15 +536,7 @@ vnode::stabilize_backoff (int f, int s, u_int32_t t)
   } else {
     f = stabilize_finger (f);
     s = stabilize_succlist (s);
-#ifdef STOPSTABILIZE
-    if (isstable ()) { 
-      t = 2 * t;
-      if (t >= 50000) {
-	warnx << "stabilize_backoff: " << myID << " stop stabilizing\n";
-	return;
-      }
-    }
-#else
+#ifndef FASTSTABILIZE
     if (isstable () && (t <= stabilize_timer_max * 1000)) {
       t = 2 * t;
     }
@@ -516,7 +605,7 @@ vnode::stabilize_findsucc_cb (int i, chordID s, route search_path,
 	  << finger_table[i].first.n << " failure " << status << "\n";
     stable_fingers = false;
   } else {
-    if (!finger_table[i].first.alive || (finger_table[i].first.n != s)) {
+    if (betweenleftincl (finger_table[i].start, finger_table[i].first.n, s)) {
       // warnx << "stabilize_findsucc_cb: " << myID << " " 
       //   << "new successor of " << finger_table[i].start 
       //    << " is " << s << "\n";
@@ -609,13 +698,13 @@ vnode::join_getsucc_cb (cbjoin_t cb, chordID s, route r, chordstat status)
     join (cb);  // try again
   } else {
     //    warnx << "join_getsucc_cb: " << myID << " " << s << "\n";
+    // XXX challenge s
     locations->changenode (&finger_table[1].first, s, locations->getaddress(s));
     updatefingers (s, locations->getaddress(s));
     stabilize ();
     (*cb) (this);
   }
 }
-
 
 void
 vnode::doget_successor (svccb *sbp)
@@ -694,18 +783,30 @@ vnode::dofindclosestpred (svccb *sbp, chord_findarg *fa)
 }
 
 void
+vnode::donotify_cb (chordID p, bool ok, chordstat status)
+
+{
+  if ((status == CHORD_OK) && ok) {
+    if ((!predecessor.alive) || between (predecessor.n, myID, p)) {
+      net_address r = locations->getaddress (p);
+      // warnx << "donotify_cb: updated predecessor: new pred is " << p << "\n";
+      locations->changenode (&predecessor, p, r);
+      updatefingers (predecessor.n, r);
+      get_fingers (predecessor.n); // XXX perhaps do this only once after join
+    }
+  } else if (status == CHORD_OK) {
+      warnx << "donotify_cb: couldn't authenticate " << p << "\n";
+  }
+}
+
+void
 vnode::donotify (svccb *sbp, chord_nodearg *na)
 {
   ndonotify++;
-  if ((!predecessor.alive) || (predecessor.n == myID) || 
-      between (predecessor.n, myID, na->n.x)) {
-    // warnx << "donotify: updated predecessor: new pred is " << na->n.x 
-    //       << "\n";
-    locations->changenode (&predecessor, na->n.x, na->n.r);
-    if (predecessor.n != myID) {
-      updatefingers (predecessor.n, na->n.r);
-      get_fingers (predecessor.n); // XXX perhaps do this only once after join
-    }
+  if ((!predecessor.alive) || between (predecessor.n, myID, na->n.x)) {
+      // warnx << "donotify: challenge: " << na->n.x << "\n";
+      locations->cacheloc (na->n.x, na->n.r);
+      challenge (na->n.x, wrap (mkref (this), &vnode::donotify_cb));
   }
   sbp->replyref (chordstat (CHORD_OK));
 }
@@ -749,45 +850,12 @@ vnode::dogetfingers (svccb *sbp)
 }
 
 void
-vnode::dofindsucc (chordID &n, cbroute_t cb)
+vnode::dochallenge (svccb *sbp, chord_challengearg *ca)
 {
-  // warn << "dofindsucc " << myID << " " << n << "\n";
-  find_successor (myID, n, wrap (mkref (this), &vnode::dofindsucc_cb, cb, n));
+  chord_challengeres res(CHORD_OK);
+  ndochallenge++;
+  res.resok->index = myindex;
+  res.resok->challenge = ca->challenge;
+  sbp->reply (&res);
 }
 
-void
-vnode::dofindsucc_cb (cbroute_t cb, chordID n, chordID x,
-                    route search_path, chordstat status) 
-{
-  if (status) {
-    warnx << "dofindsucc_cb for " << n << " returned " <<  status << "\n";
-    if (status == CHORD_RPCFAILURE) {
-      warnx << "dofindsucc_cb: try to recover\n";
-      chordID last = search_path.pop_back ();
-      chordID lastOK = search_path.back ();
-      warnx << "dofindsucc_cb: last node " << last << " contacted failed\n";
-      alert (lastOK, last);
-      find_successor_restart (lastOK, x, search_path,
-                              wrap (mkref (this), &vnode::dofindsucc_cb, cb, 
-				    n));
-    } else {
-      cb (x, search_path, CHORD_ERRNOENT);
-    }
-  } else {
-    // warnx << "dofindsucc_cb: " << myID << " done\n";
-    // for (unsigned i = 0; i < search_path.size (); i++) {
-    // warnx << search_path[i] << "\n";
-    // }
-    cb (x, search_path, CHORD_OK);
-  }
-}
-
-chordID
-vnode::my_succ () 
-{
-  if (finger_table[1].first.alive) return finger_table[1].first.n;
-  for (int i = 1; i <= nsucc; i++) {
-    if (succlist[i].alive) return succlist[i].n;
-  }
-  return myID;
-}

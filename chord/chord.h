@@ -46,13 +46,10 @@ typedef int cb_ID;
 class vnode;
 
 typedef vec<chordID> route;
+typedef callback<void,chordID,bool,chordstat>::ref cbchallengeID_t;
 typedef callback<void,vnode*>::ref cbjoin_t;
-typedef callback<void,chordID,net_address,chordstat>::ref cbsfsID_t;
+typedef callback<void,chordID,net_address,chordstat>::ref cbchordID_t;
 typedef callback<void,chordID,route,chordstat>::ref cbroute_t;
-typedef callback<void,chordID,char>::ref cbaction_t;
-typedef callback<void,chordID,chordID,callback<void,int>::ref>::ref cbsearch_t;
-typedef callback<void,int>::ref cbtest_t;
-typedef callback<void, ref<axprt_stream> >::ptr cbaxprt;
 typedef unsigned long cxid_t;
 typedef callback<void, unsigned long, chord_RPC_arg *, cxid_t>::ref cbdispatch_t;
 
@@ -84,6 +81,7 @@ class vnode : public virtual refcount {
   node succlist[NSUCC+1];
   int nsucc;
   node predecessor;
+  int myindex;
   bool stable;
   bool stable_fingers;
   bool stable_fingers2;
@@ -105,6 +103,7 @@ class vnode : public virtual refcount {
   u_long nnotify;
   u_long nalert;
   u_long ngetfingers;
+  u_long nchallenge;
 
   u_long ndogetsuccessor;
   u_long ndogetpredecessor;
@@ -113,12 +112,14 @@ class vnode : public virtual refcount {
   u_long ndoalert;
   u_long ndotestrange;
   u_long ndogetfingers;
+  u_long ndochallenge;
 
   timecb_t *stabilize_continuous_tmo;
   timecb_t *stabilize_backoff_tmo;
   u_int32_t continuous_timer;
   u_int32_t backoff_timer;
 
+  void checkfingers (void);
   void updatefingers (chordID &x, net_address &r);
   void replacefinger (node *n);
   u_long estimate_nnodes ();
@@ -134,6 +135,7 @@ class vnode : public virtual refcount {
   void stabilize_succ (void);
   void stabilize_pred (void);
   void stabilize_getpred_cb (chordID s, net_address r, chordstat status);
+  void stabilize_getpred_cb_ok (chordID p, bool ok, chordstat status);
   void stabilize_findsucc_cb (int i, chordID s, route path, chordstat status);
   void stabilize_getsucc_cb (chordID s, net_address r, chordstat status);
   void stabilize_getsucclist_cb (int i, chordID s, net_address r, 
@@ -152,28 +154,30 @@ class vnode : public virtual refcount {
 			 findpredecessor_cbstate *st, clnt_stat err);
   void find_closestpred_succ_cb (findpredecessor_cbstate *st, chordID s,
 				 net_address r, chordstat status);
-  void get_successor_cb (chordID n, cbsfsID_t cb, chord_noderes *res, 
+  void get_successor_cb (chordID n, cbchordID_t cb, chord_noderes *res, 
 			 clnt_stat err);
   void get_succ_cb (callback<void, chordID, chordstat>::ref cb, 
 		    chordID succ, net_address r, chordstat err);
-  void get_predecessor_cb (chordID n, cbsfsID_t cb, chord_noderes *res, 
+  void get_predecessor_cb (chordID n, cbchordID_t cb, chord_noderes *res, 
 			 clnt_stat err);
+  void donotify_cb (chordID p, bool ok, chordstat status);
   void notify_cb (chordID n, chordstat *res, clnt_stat err);
   void alert_cb (chordstat *res, clnt_stat err);
   void get_fingers (chordID &x);
   void get_fingers_cb (chordID x, chord_getfingersres *res, clnt_stat err);
-
+  void challenge (chordID &x, cbchallengeID_t cb);
+  void challenge_cb (int challenge, chordID x, cbchallengeID_t cb, 
+		     chord_challengeres *res, clnt_stat err);
   void dofindsucc_cb (cbroute_t cb, chordID n, chordID x,
 		      route search_path, chordstat status);
-  
   void doRPC (chordID &ID, rpc_program prog, int procno, 
 	      ptr<void> in, void *out, aclnt_cb cb);
  public:
   chordID myID;
-  //  ihash_entry<ref<vnode> > fhlink;
   ptr<chord> chordnode;
 
-  vnode (ptr<locationtable> _locations, ptr<chord> _chordnode, chordID _myID);
+  vnode (ptr<locationtable> _locations, ptr<chord> _chordnode, chordID _myID,
+	 int _vnode);
   ~vnode (void);
   chordID my_ID () { return myID; };
   chordID my_pred () { return predecessor.n; };
@@ -188,9 +192,9 @@ class vnode : public virtual refcount {
   void find_successor (chordID &n, chordID &x, cbroute_t cb);
   void find_successor_restart (chordID &n, chordID &x, route search_path, 
 			       cbroute_t cb);
-  void get_successor (chordID n, cbsfsID_t cb);
+  void get_successor (chordID n, cbchordID_t cb);
   void get_succ (chordID n, callback<void, chordID, chordstat>::ref cb);
-  void get_predecessor (chordID n, cbsfsID_t cb);
+  void get_predecessor (chordID n, cbchordID_t cb);
   void notify (chordID &n, chordID &x);
   void alert (chordID &n, chordID &x);
   void dofindsucc (chordID &n, cbroute_t cb);
@@ -205,6 +209,7 @@ class vnode : public virtual refcount {
   void donotify (svccb *sbp, chord_nodearg *na);
   void doalert (svccb *sbp, chord_nodearg *na);
   void dogetfingers (svccb *sbp);
+  void dochallenge (svccb *sbp, chord_challengearg *ca);
 
   // For other modules
   int countrefs (chordID &x);
@@ -212,6 +217,7 @@ class vnode : public virtual refcount {
   void deletefingers (chordID &x);
   void stats (void);
   void print (void);
+  void stop (void);
   bool hasbecomeunstable (void);
   bool isstable (void);
   chordID lookup_closestpred (chordID &x);
@@ -230,6 +236,7 @@ class vnode : public virtual refcount {
 class chord : public virtual refcount {
   int nvnode;
   net_address wellknownhost;
+  int myport;
   chordID wellknownID;
   qhash<chordID, ref<vnode>, hashID> vnodes;
   ptr<vnode> active;
@@ -244,26 +251,25 @@ class chord : public virtual refcount {
 
   void dispatch (ptr<asrv> s, ptr<axprt_dgram> x, svccb *sbp);
   int startchord (int myp);
-  chordID initID (int index);
   void deletefingers_cb (chordID x, const chordID &k, ptr<vnode> v);
   void stats_cb (const chordID &k, ptr<vnode> v);
   void print_cb (const chordID &k, ptr<vnode> v);
+  void stop_cb (const chordID &k, ptr<vnode> v);
  
  public:
   // locations contains all nodes that appear as fingers in vnodes plus
   // a number of cached nodes.  the cached nodes have refcnt = 0
   ptr<locationtable> locations; 
-  net_address myaddress;
     
   chord (str _wellknownhost, int _wellknownport, const chordID &_wellknownID,
-	 int port, str myhost, int set_rpcdelay, int max_cache, 
+	 int port, int set_rpcdelay, int max_cache, 
 	 int max_connections);
   ptr<vnode> newvnode (cbjoin_t cb);
-  ptr<vnode> newvnode (chordID &x, cbjoin_t cb);
   void deletefingers (chordID x);
   int countrefs (chordID &x);
   void stats (void);
   void print (void);
+  void stop (void);
 
   //support for demultiplexing RPCs to vnodes
   void register_handler (int progno, chordID dest, cbdispatch_t hand);
@@ -285,7 +291,7 @@ class chord : public virtual refcount {
   void find_successor (chordID n, cbroute_t cb) {
     active->dofindsucc (n, cb);
   };
-  void get_predecessor (chordID n, cbsfsID_t cb) {
+  void get_predecessor (chordID n, cbchordID_t cb) {
     active->get_predecessor (n, cb);
   };
   void doRPC (chordID &from, chordID &n, rpc_program progno, int procno, ptr<void> in, 

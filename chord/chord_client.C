@@ -23,16 +23,15 @@
 
 chord::chord (str _wellknownhost, int _wellknownport, 
 	      const chordID &_wellknownID,
-	      int port, str myhost, int set_rpcdelay, int max_cache, 
+	      int port, int set_rpcdelay, int max_cache, 
 	      int max_connections) :
   wellknownID (_wellknownID), active (NULL)
 {
-  myaddress.port = startchord (port);
-  myaddress.hostname = myhost;
+  myport = startchord (port);
   wellknownhost.hostname = _wellknownhost;
   wellknownhost.port = _wellknownport;
-  warnx << "chord: myport is " << myaddress.port << "\n";
-  warnx << "chord: myname is " << myaddress.hostname << "\n";
+  warnx << "chord: myport is " << myport << "\n";
+  warnx << "chord: myname is " << my_addr () << "\n";
   locations = New refcounted<locationtable> (mkref (this), set_rpcdelay, 
 					     max_cache, max_connections);
   locations->insert (wellknownID, wellknownhost.hostname, wellknownhost.port);
@@ -70,62 +69,22 @@ chord::startchord (int myp)
 }
 
 
-chordID
-chord::initID (int index)
-{
-  chordID ID;
-  vec<in_addr> addrs;
-  if (!myipaddrs (&addrs))
-    fatal ("cannot find my IP address.\n");
-
-  in_addr *addr = addrs.base ();
-  while (addr < addrs.lim () && ntohl (addr->s_addr) == INADDR_LOOPBACK)
-    addr++;
-  if (addr >= addrs.lim ())
-    fatal ("cannot find my IP address.\n");
-
-  str ids = inet_ntoa (*addr);
-  ids = ids << "." << myaddress.port << "." << index;
-  warnx << "my address: " << ids << "\n";
-  char id[sha1::hashsize];
-  sha1_hash (id, ids, ids.len());
-  mpz_set_rawmag_be (&ID, id, sizeof (id));  // For big endian
-  //  warnx << "myid: " << ID << "\n";
-  return ID;
-}
-
-
 ptr<vnode>
 chord::newvnode (cbjoin_t cb)
 {
-  chordID newID = initID (nvnode);
-  locations->insert (newID, myaddress.hostname, myaddress.port);
-  ptr<vnode> vnodep = New refcounted<vnode> (locations, mkref (this), newID);
+  chordID newID = init_chordID (nvnode, myport);
+  if (newID != wellknownID)
+    locations->insert (newID, my_addr (), myport);
+  ptr<vnode> vnodep = New refcounted<vnode> (locations, mkref (this), newID, 
+					     nvnode);
   if (!active) active = vnodep;
   nvnode++;
   warn << "insert: " << newID << "\n";
   vnodes.insert (newID, vnodep);
-  vnodep->join (cb);
 
-  return vnodep;
-}
-
-ptr<vnode>
-chord::newvnode (chordID &x, cbjoin_t cb)
-{
-  if (x != wellknownID) 
-    locations->insert (x, myaddress.hostname, myaddress.port);
-  ptr<vnode> vnodep = New refcounted<vnode> (locations, mkref (this), x);
-  if (!active) active = vnodep;
-
-  nvnode++;
-  warn << "insert: " << x << "@" << myaddress.hostname << "(" 
-       << myaddress.port << ")\n";
-  vnodes.insert (x, vnodep);
-  if (x != wellknownID) {
+  if (newID != wellknownID) {
     vnodep->join (cb);
   } else {
-    route r;
     vnodep->stabilize ();
     (*cb) (vnodep);
   }
@@ -186,6 +145,16 @@ chord::print () {
   vnodes.traverse (wrap (this, &chord::print_cb));
 }
 
+void
+chord::stop_cb (const chordID &k, ptr<vnode> v) {
+  v->stop ();
+}
+
+void
+chord::stop () {
+  vnodes.traverse (wrap (this, &chord::stop_cb));
+}
+
 void 
 chord::register_handler (int progno, chordID dest, cbdispatch_t hand)
 {
@@ -217,14 +186,12 @@ chord::dispatch (ptr<asrv> s, ptr<axprt_dgram> x, svccb *sbp)
   case CHORDPROC_GETSUCCESSOR:
     {
       warnt("CHORD: getsuccessor_request");
-      ngetsuccessor++;
       vnodep->doget_successor (sbp);
     }
     break;
   case CHORDPROC_GETPREDECESSOR:
     {
       warnt("CHORD: getpredecessor_request");
-      ngetpredecessor++;
       vnodep->doget_predecessor (sbp);
     }
     break;
@@ -233,7 +200,6 @@ chord::dispatch (ptr<asrv> s, ptr<axprt_dgram> x, svccb *sbp)
       chord_findarg *fa = sbp->template getarg<chord_findarg> ();
       warn << "(find_pred) looking for " << fa->v.n << "\n";
       warnt("CHORD: findclosestpred_request");
-      nfindclosestpred++;
       vnodep->dofindclosestpred (sbp, fa);
     }
     break;
@@ -241,14 +207,13 @@ chord::dispatch (ptr<asrv> s, ptr<axprt_dgram> x, svccb *sbp)
     {
       chord_nodearg *na = sbp->template getarg<chord_nodearg> ();
       warnt("CHORD: donotify");
-      nnotify++;
       vnodep->donotify (sbp, na);
     }
     break;
   case CHORDPROC_ALERT:
     {
       chord_nodearg *na = sbp->template getarg<chord_nodearg> ();
-      nalert++;
+      warnt("CHORD: alert");
       vnodep->doalert (sbp, na);
     }
     break;
@@ -257,18 +222,21 @@ chord::dispatch (ptr<asrv> s, ptr<axprt_dgram> x, svccb *sbp)
       warnt("CHORD: testandfindrequest");
       chord_testandfindarg *fa = 
         sbp->template getarg<chord_testandfindarg> ();
-      ntestrange++;
       vnodep->dotestrange_findclosestpred (sbp, fa);
     }
     break;
   case CHORDPROC_GETFINGERS: 
     {
-      chord_vnode *v = sbp->template getarg<chord_vnode> ();
-      vnode *vnodep = vnodes[v->n];
-      assert (vnodep);
       warnt("CHORD: getfingers_request");
-      ngetfingers++;
       vnodep->dogetfingers (sbp);
+    }
+    break;
+  case CHORDPROC_CHALLENGE:
+    {
+      warnt("CHORD: challenge");
+      chord_challengearg *ca = 
+        sbp->template getarg<chord_challengearg> ();
+      vnodep->dochallenge (sbp, ca);
     }
     break;
   case CHORDPROC_HOSTRPC:

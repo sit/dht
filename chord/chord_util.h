@@ -39,5 +39,9 @@
  u_long topbits (int n, chordID a);
  u_long n1bits (u_long n);
  u_long log2 (u_long n);
+ sfs_hostname my_addr ();
+ chordID init_chordID (int index, int p);
+ bool is_authenticID (chordID &x, sfs_hostname n, int p, int vnode);
+
  void warnt(char *msg);
 #endif /* _CHORD_UTIL_H */

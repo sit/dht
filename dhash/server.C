@@ -11,6 +11,9 @@
 
 #define DGRAM_LIMIT 64000
 
+const int dh_server_select = (getenv ("DHASH_SERVER_SELECTION")
+			   ? atoi (getenv ("DHASH_SERVER_SELECTION")) : 0);
+
 dhash::dhash(str dbname, vnode *node, int k, int ss, int cs) :
   host_node (node), key_store(ss), key_cache(cs) {
 
@@ -98,41 +101,47 @@ dhash::dispatch (unsigned long procno,
 	else
 	  nid = host_node->lookup_closestpred (farg->key);
 	
-	res->cont_res->succ_list.setsize (NSUCC + 1);
 
+	vec <chord_node> s_list;
 	chordID last = nid;
 	chord_node nsucc;
 	nsucc.x = nid;
 	nsucc.r = host_node->chordnode->locations->getaddress (nsucc.x);
-	res->cont_res->succ_list[0] = nsucc;
-	for (int i = 1; i < NSUCC + 1; i++) {
-	  chord_node nsucc;
-	  nsucc.x = host_node->lookup_closestsucc (last);
+	s_list.push_back (nsucc);
+	for (int i = 0; i < NSUCC; i++) {
+	  chordID next = host_node->lookup_closestsucc (last);
+	  if (next > s_list[0].x) break;
+	  nsucc.x = next;
 	  nsucc.r = host_node->chordnode->locations->getaddress (nsucc.x);
-	  res->cont_res->succ_list[i] = nsucc;
+	  s_list.push_back (nsucc);
 	  last = nsucc.x;
 	}
 
-	chordID best_succ = res->cont_res->succ_list[0].x;
+	res->cont_res->succ_list.setsize (s_list.size ());
+	for (unsigned int i = 0; i < s_list.size (); i++)
+	  res->cont_res->succ_list[i] = s_list[i];
 
-	locationtable *locations = host_node->chordnode->locations;
-	location *c = locations->getlocation (best_succ);
-	location *n;
-	for (int i = 0; i < nreplica; i++) {
-	  n = locations->getlocation(res->cont_res->succ_list[i+1].x);
-	  if (n->nrpc == 0) break;
-	  if ((n->rpcdelay/n->nrpc) < (c->rpcdelay/c->nrpc)) {
-	    c = n;
-	    best_succ = res->cont_res->succ_list[i + 1].x;
+	chordID best_succ = res->cont_res->succ_list[0].x;
+	if (dh_server_select && (nid == my_succ)) {
+	  //returning a node which will hold the key, pick the fastest
+	  locationtable *locations = host_node->chordnode->locations;
+	  location *c = locations->getlocation (best_succ);
+	  location *n;
+	  for (int i = 0; i < nreplica; i++) {
+	    n = locations->getlocation(res->cont_res->succ_list[i+1].x);
+	    if (n->nrpc == 0) break;
+	    if ((!c->nrpc) || (n->rpcdelay/n->nrpc) < (c->rpcdelay/c->nrpc)) {
+	      c = n;
+	      best_succ = res->cont_res->succ_list[i + 1].x;
+	    }
 	  }
 	}
+	
 	res->cont_res->next.x = best_succ;
 	res->cont_res->next.r = 
 	  host_node->chordnode->locations->getaddress (best_succ);
-	
-	
       }
-
+      
       dhash_reply (rpc_id, DHASHPROC_FETCHITER, res);
       delete res;
       delete farg;
@@ -330,7 +339,7 @@ dhash::update_replica_list ()
 {
   replicas.clear ();
   for (int i = 1; i < nreplica+1; i++) 
-    if (host_node->nth_successorID (i) != 0)
+    if (host_node->nth_successorID (i) != host_node->my_ID ())
       replicas.push_back(host_node->nth_successorID (i));
 }
 
@@ -885,3 +894,12 @@ dhash::print_stats ()
     
 }
 
+void
+dhash::stop ()
+{
+  if (check_replica_tcb) {
+    warnx << "stop replica timer\n";
+    timecb_remove (check_replica_tcb);
+    check_replica_tcb = NULL;
+  }
+}

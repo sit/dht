@@ -23,7 +23,7 @@
  */
 
 void 
-vnode::get_successor (chordID n, cbsfsID_t cb)
+vnode::get_successor (chordID n, cbchordID_t cb)
 {
   //  warn << "get successor of " << n << "\n";
   ngetsuccessor++;
@@ -36,7 +36,7 @@ vnode::get_successor (chordID n, cbsfsID_t cb)
 }
 
 void
-vnode::get_successor_cb (chordID n, cbsfsID_t cb, chord_noderes *res, 
+vnode::get_successor_cb (chordID n, cbchordID_t cb, chord_noderes *res, 
 		       clnt_stat err) 
 {
   if (err) {
@@ -69,7 +69,7 @@ vnode::get_succ_cb (callback<void, chordID, chordstat>::ref cb,
 }
 
 void 
-vnode::get_predecessor (chordID n, cbsfsID_t cb)
+vnode::get_predecessor (chordID n, cbchordID_t cb)
 {
   ptr<chord_vnode> v = New refcounted<chord_vnode>;
   v->n = n;
@@ -80,7 +80,7 @@ vnode::get_predecessor (chordID n, cbsfsID_t cb)
 }
 
 void
-vnode::get_predecessor_cb (chordID n, cbsfsID_t cb, chord_noderes *res, 
+vnode::get_predecessor_cb (chordID n, cbchordID_t cb, chord_noderes *res, 
 		       clnt_stat err) 
 {
   if (err) {
@@ -100,7 +100,7 @@ vnode::get_predecessor_cb (chordID n, cbsfsID_t cb, chord_noderes *res,
 chordID
 vnode::nth_successorID (int n) 
 {
-  if (n > nsucc) return chordID(0);
+  if (n > nsucc) return myID;
   return succlist[n].n;
 }
 
@@ -391,9 +391,75 @@ vnode::get_fingers_cb (chordID x, chord_getfingersres *res,  clnt_stat err)
 }
 
 void
+vnode::challenge (chordID &x, cbchallengeID_t cb)
+{
+  ptr<chord_challengearg> ca = New refcounted<chord_challengearg>;
+  chord_challengeres *res = New chord_challengeres (CHORD_OK);
+  nchallenge++;
+  // warnx << "challenge: " << myID << " : " << x << "\n";
+  ca->v.n = x;
+  ca->challenge = 1;
+  doRPC (x, chord_program_1, CHORDPROC_CHALLENGE, ca, res, 
+		    wrap (mkref (this), &vnode::challenge_cb, 1, x, cb, res));
+}
+
+void
+vnode::challenge_cb (int challenge, chordID x, cbchallengeID_t cb, 
+		     chord_challengeres *res, clnt_stat err)
+{
+  if (err) {
+    warnx << "challenge_cb: RPC failure " << err << "\n";
+    cb (x, false, CHORD_RPCFAILURE);
+  } else if (res->status) {
+    warnx << "challenge_cb: error " << res->status << "\n";
+    cb (x, false, res->status);
+  } else if (challenge != res->resok->challenge) {
+    warnx << "challenge_cb: challenge mismatch\n";
+    cb (x, false, res->status);
+  } else {
+    net_address r = locations->getaddress (x);
+    bool ok = is_authenticID (x, r.hostname, r.port, res->resok->index);
+    cb (x, ok, res->status);
+  }
+  delete res;
+}
+
+void
 vnode::doRPC (chordID &ID, rpc_program prog, int procno, 
 	      ptr<void> in, void *out, aclnt_cb cb) {
   locations->doRPC (myID, ID, prog, procno, in, out, cb, getusec ());
 }
 
+void
+vnode::dofindsucc (chordID &n, cbroute_t cb)
+{
+  // warn << "dofindsucc " << myID << " " << n << "\n";
+  find_successor (myID, n, wrap (mkref (this), &vnode::dofindsucc_cb, cb, n));
+}
 
+void
+vnode::dofindsucc_cb (cbroute_t cb, chordID n, chordID x,
+                    route search_path, chordstat status) 
+{
+  if (status) {
+    warnx << "dofindsucc_cb for " << n << " returned " <<  status << "\n";
+    if (status == CHORD_RPCFAILURE) {
+      warnx << "dofindsucc_cb: try to recover\n";
+      chordID last = search_path.pop_back ();
+      chordID lastOK = search_path.back ();
+      warnx << "dofindsucc_cb: last node " << last << " contacted failed\n";
+      alert (lastOK, last);
+      find_successor_restart (lastOK, x, search_path,
+                              wrap (mkref (this), &vnode::dofindsucc_cb, cb, 
+				    n));
+    } else {
+      cb (x, search_path, CHORD_ERRNOENT);
+    }
+  } else {
+    // warnx << "dofindsucc_cb: " << myID << " done\n";
+    // for (unsigned i = 0; i < search_path.size (); i++) {
+    // warnx << search_path[i] << "\n";
+    // }
+    cb (x, search_path, CHORD_OK);
+  }
+}

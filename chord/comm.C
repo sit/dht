@@ -22,26 +22,13 @@
 #include "chord.h"
 #include "math.h"
 
-#define TIMEOUT 60
+#define TIMEOUT 5
 
 #ifdef FAKE_DELAY
 long geo_distance (chordID x, chordID y) 
 {
   u_long xl = x.getui ();
   u_long yl = y.getui ();
-
-#if 0
-  unsigned int x_lat = (xl & 0xFF00) >> 8;
-  unsigned int x_long = (xl & 0x00FF);
-  unsigned int y_lat = (yl & 0xFF00) >> 8;
-  unsigned int y_long = (yl & 0x00FF);
-
-  long dist = (long)::sqrt((x_lat - y_lat)*(x_lat - y_lat) + 
-		     (y_long - x_long)*(y_long - x_long));
-  if (dist > 150) return 300;
-  else if (dist > 0) return 20;
-  else return 0;
-#endif
 
   if (x == y) return 0;
   if ((xl & 0x1) && (yl & 0x1)) return 20;
@@ -230,14 +217,13 @@ locationtable::stats ()
   warnx << "LOCATION TABLE STATS: estimate # nodes " << nnodes << "\n";
   warnx << "total # of RPCs: good " << nrpc << " failed " << nrpcfailed << "\n";
   warnx << "       RPCs in last second (send/recv): (" << nsent << "/" 
-	<< chordnode->nrcv << "\n";
-  warnx << buf;
+	<< chordnode->nrcv << ")\n";
   warnx <<  "       RPCs outstanding: " <<  npending << "\n";
-  warnx << buf;
-  fprintf(stderr, "       Average latency: %f\n", ((float) (rpcdelay/nrpc)));
-  warnx << "  Per link avg. RPC latencies\n";
+  sprintf(buf, "       Average latency: %f\n", ((float) (rpcdelay/nrpc)));
+  warnx << buf << "  Per link avg. RPC latencies\n";
   for (location *l = locs.first (); l ; l = locs.next (l)) {
-    warnx << "    link " << l->n << " : # RPCs: " << l->nrpc << "\n";
+    warnx << "    link " << l->n << " : refcnt: " << l->refcnt << " # RPCs: "
+	  << l->nrpc << "\n";
     sprintf (buf, "       Average latency: %f\n", 
 	     ((float)(l->rpcdelay))/l->nrpc);
     warnx << buf;

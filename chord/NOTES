@@ -9,3 +9,4 @@
 - use refcnted locations.
 
 - fix assert when nodeID is not there (dispatch)
+- replacefinger shouldn't replace first by finding succ of start (ipv first)

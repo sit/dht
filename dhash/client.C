@@ -44,12 +44,14 @@ dhashclient::dispatch (svccb *sbp)
       ptr<dhash_fetch_arg> arg = New refcounted<dhash_fetch_arg> (*farg);
 
       chordID next = clntnode->lookup_closestpred (arg->key);
-      warn << "looking for " << arg->key << "; hop is " << next << "\n";
+      //      warn << "looking for " << arg->key << "; hop is " << next << "\n";
 
       dhash_fetchiter_res *i_res = New dhash_fetchiter_res (DHASH_CONTINUE);
       
       route path;
       path.push_back (next);
+
+      warnx << "disptach: looking for " << arg->key << " at " << next << "\n";
       doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, arg,i_res,
 		       wrap(this, &dhashclient::lookup_iter_cb, 
 			    sbp, i_res, path, 0));
@@ -216,21 +218,13 @@ dhashclient::lookup_iter_cb (svccb *sbp,
       path.push_back (plast);
     }
     if (plast == clntnode->clnt_ID ()) {
-      /* No more predecessors; lets look for a replica */
-      vec<chord_node> succ;
-      for (int i = 1; i < NSUCC; i++) {
-	chord_node node;
-	node.x = clntnode->nth_successorID (i);
-	node.r = clntnode->locations->getlocation (node.x)->addr;
-	succ.push_back (node);
-      }
-
-      query_successors (succ, path.size () + 100*nerror, sbp, rarg, 
-			clntnode->clnt_ID ());
+      sbp->replyref (DHASH_NOENT);
     } else {
       dhash_fetchiter_res *nres = New dhash_fetchiter_res (DHASH_CONTINUE);
       /* assumes an in-order RPC transport, otherwise retry
 	 might reach prev before alert can update tables*/
+
+      warnx << "I: looking for " << arg->key << " at " << plast << "\n";
       doRPC (plast, dhash_program_1, DHASHPROC_FETCHITER, 
 		       rarg, nres,
 		       wrap(this, &dhashclient::lookup_iter_cb, 
@@ -256,16 +250,7 @@ dhashclient::lookup_iter_cb (svccb *sbp,
       if (res->cont_res->succ_list.size () == 0) {
 	/*CASE III.a */
 	sbp->replyref (DHASH_NOENT);
-      } else {
-	/* CASE III.b */
-	vec<chord_node> succ;
-	for (unsigned int i = 0; i < res->cont_res->succ_list.size (); i++) 
-	  succ.push_back (res->cont_res->succ_list[i]);
-
-	query_successors (succ, (int) path.size () + 100 * nerror, sbp, 
-			  rarg, prev);
-      }
-    } else {
+      } 
       /* CASE IV */
       if (straddled (path, arg->key)) {
 	sbp->replyref (DHASH_NOENT);
@@ -274,6 +259,9 @@ dhashclient::lookup_iter_cb (svccb *sbp,
 	dhash_fetchiter_res *nres = New dhash_fetchiter_res (DHASH_CONTINUE);
 	path.push_back (next);
 	assert (path.size () < 1000);
+
+	warnx << "IV: looking for " << arg->key << " at " << next << "\n";
+
 	doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, 
 			 rarg, nres,
 			 wrap(this, &dhashclient::lookup_iter_cb, 
@@ -289,26 +277,6 @@ dhashclient::lookup_iter_cb (svccb *sbp,
 }
 
 void
-dhashclient::query_successors (vec<chord_node> succ, 
-			       int pathlen,
-			       svccb *sbp,
-			       ptr<dhash_fetch_arg> rarg,
-			       chordID source)
-{
-  chord_node first_node = succ.pop_front ();
-  clntnode->locations->cacheloc (first_node.x,
-				 first_node.r);
-  dhash_fetchiter_res *fres = New dhash_fetchiter_res (DHASH_COMPLETE);
-  query_succ_state *st = New query_succ_state (succ, pathlen, sbp, rarg, source);
-  doRPC (first_node.x, dhash_program_1, DHASHPROC_FETCHITER,
-		   rarg, fres,
-		   wrap (this, &dhashclient::query_successors_fetch_cb,
-			 st, first_node.x, fres));
-  
-}
-
-
-void
 iterres2res (dhash_fetchiter_res *ires, dhash_res *res) 
 {
     res->resok->offset = ires->compl_res->offset;
@@ -316,48 +284,6 @@ iterres2res (dhash_fetchiter_res *ires, dhash_res *res)
     res->resok->source = ires->compl_res->source;
     res->resok->res = ires->compl_res->res;
     res->resok->hops = 0;
-}
-
-void
-dhashclient::query_successors_fetch_cb (query_succ_state *st,
-					chordID prev,
-					dhash_fetchiter_res *fres, 
-					clnt_stat err) 
-{
-  if ((err) || (fres->status != DHASH_COMPLETE)) {
-
-    if (st->succ.size () == 0) {
-      st->sbp->replyref (DHASH_NOENT);
-      return;
-    } else if (err) {
-      st->pathlen += 100;
-      clntnode->alert (st->source, prev);
-    } else 
-      st->pathlen++;
-
-    chord_node next_succ = st->succ.pop_front ();
-    clntnode->locations->cacheloc (next_succ.x,
-				   next_succ.r);
-    
-    dhash_fetchiter_res *nfres = New dhash_fetchiter_res (DHASH_OK);
-    doRPC (next_succ.x, dhash_program_1, DHASHPROC_FETCHITER,
-		     st->rarg, nfres,
-		     wrap (this, &dhashclient::query_successors_fetch_cb,
-			   st, next_succ.x, nfres));
-    
-  } else if (fres->status == DHASH_COMPLETE) {
-    fres->compl_res->hops =  st->pathlen;
-    dhash_res *res = New dhash_res (DHASH_OK);
-    iterres2res (fres, res);
-    st->sbp->reply (res);
-    delete res;
-    delete st;
-  } else {
-    warn << "status was " << fres->status << "\n";
-    fatal << "WTF\n";
-  }
-
-  delete fres;
 }
 
 void

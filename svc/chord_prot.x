@@ -88,6 +88,23 @@ union chord_getfingersres switch (chordstat status) {
     void;
 };
 
+struct chord_challengearg {
+  chord_vnode v;
+  int challenge;
+};
+
+struct chord_challengeresok {
+  int challenge;
+  int index;
+};
+
+union chord_challengeres switch (chordstat status) {
+ case CHORD_OK:
+   chord_challengeresok resok;
+ default:
+   void;
+};
+
 struct chord_RPC_arg {
   chord_vnode v;
   unsigned host_prog;
@@ -135,7 +152,10 @@ program CHORD_PROGRAM {
 		chord_getfingersres
 		CHORDPROC_GETFINGERS (chord_vnode) = 8;
 		
+		chord_challengeres 
+	        CHORDPROC_CHALLENGE (chord_challengearg) = 9;
+
 		chord_RPC_res
-		CHORDPROC_HOSTRPC (chord_RPC_arg) = 9;
+		CHORDPROC_HOSTRPC (chord_RPC_arg) = 10;
 	} = 1;
 } = 344447;

@@ -148,7 +148,7 @@ between (chordID &a, chordID &b, chordID &n)
 }
 
 bool
-betweenlefincl (chordID &a, chordID &b, chordID &n)
+betweenleftincl (chordID &a, chordID &b, chordID &n)
 {
   bool r;
   if ((a == b) && (n == a)) {
@@ -224,4 +224,57 @@ log2 (u_long n)
     n = n >> 1;
   }
   return l;
+}
+
+// XXX for testing purposes include port---in real life we shouldn't include it
+
+sfs_hostname
+my_addr () {
+  vec<in_addr> addrs;
+  if (!myipaddrs (&addrs))
+    fatal ("my_addr: cannot find my IP address.\n");
+
+  in_addr *addr = addrs.base ();
+  in_addr *loopback = 0;
+  while (addr < addrs.lim ()) {
+    if (ntohl (addr->s_addr) == INADDR_LOOPBACK) loopback = addr;
+    else break;
+    addr++;
+  }
+  if (addr >= addrs.lim () && (loopback == NULL))
+    fatal ("my_addr: cannot find my IP address.\n");
+  if (addr >= addrs.lim ()) {
+    warnx << "my_addr: use loopback address as my address\n";
+    addr = loopback;
+  }
+  str ids = inet_ntoa (*addr);
+  return ids;
+}
+
+chordID
+init_chordID (int index, int port)
+{
+  chordID ID;
+  // XXX we probably should marshall this!
+  str ids = my_addr ();
+  ids = ids << "." << port << "." << index;
+  warnx << "init_chordID: my address: " << ids << "\n";
+  char id[sha1::hashsize];
+  sha1_hash (id, ids, ids.len());
+  mpz_set_rawmag_be (&ID, id, sizeof (id));  // For big endian
+  //  warnx << "myid: " << ID << "\n";
+  return ID;
+}
+
+bool
+is_authenticID (chordID &x, sfs_hostname n, int p, int vnode)
+{
+  chordID ID;
+  str ids = n << "." << p << "." << vnode;
+  // warnx << "is_authenticID: " << ids << "\n";
+  char id[sha1::hashsize];
+  sha1_hash (id, ids, ids.len());
+  mpz_set_rawmag_be (&ID, id, sizeof (id));  // For big endian
+  if (ID == x) return true;
+  else return false;
 }

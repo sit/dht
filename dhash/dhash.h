@@ -235,6 +235,7 @@ class dhash {
   void accept(ptr<axprt_stream> x);
 
   void print_stats ();
+  void stop ();
   void fetch (chordID id, cbvalue cb);
   dhash_stat key_status(chordID n);
     

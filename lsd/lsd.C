@@ -36,7 +36,7 @@ int ndhash = 0;
 int nreplica;
 
 void stats ();
-void print ();
+void stop ();
 
 void
 client_accept (int fd)
@@ -156,8 +156,6 @@ parseconfigfile (str cf, int nvnode, int set_rpcdelay)
   str myhost;
   str wellknownhost;
   int wellknownport;
-  bool myid = false;
-  chordID myID;
   chordID wellknownID;
   int ss = 10000;
   int cs = 1000;
@@ -172,24 +170,10 @@ parseconfigfile (str cf, int nvnode, int set_rpcdelay)
         errors = true;
         warn << cf << ":" << line << ": usage: myport <number>\n";
       }
-    } else if (!strcasecmp (av[0], "myname")) {
-      if (av.size () != 2) {
-        errors = true;
-        warn << cf << ":" << line << ": usage: myname <string>\n";
-      }
-      myhost = av[1];
     } else if (!strcasecmp (av[0], "wellknownport")) {
       if (av.size () != 2 || !convertint (av[1], &wellknownport)) {
         errors = true;
         warn << cf << ":" << line << ": usage: wellknownport <number>\n";
-      }
-    } else if (!strcasecmp (av[0], "myID")) {
-      if (av.size () != 2) {
-        errors = true;
-       warn << cf << ":" << line << ": usage: myID <number>\n";
-      } else {
-	initID (av[1], &myID);
-	myid = true;
       }
     } else if (!strcasecmp (av[0], "wellknownID")) {
       if (av.size () != 2) {
@@ -240,17 +224,16 @@ parseconfigfile (str cf, int nvnode, int set_rpcdelay)
   if (errors) {
     fatal ("errors in config file\n");
   }
-  if (!myhost) {
-    myhost = myname ();
+  if (!wellknownhost) {
+    fatal ("specify wellknownhost\n");
   }
   max_loccache = max_loccache * (nvnode + 1);
   chordnode = New refcounted<chord> (wellknownhost, wellknownport, 
-				     wellknownID, myport, myhost, set_rpcdelay,
+				     wellknownID, myport, set_rpcdelay,
 				     max_loccache, max_connections);
-  if (myid) chordnode->newvnode (myID, wrap (newvnode_cb, nreplica, nvnode-1));
-  else chordnode->newvnode (wrap (newvnode_cb, nreplica, nvnode-1));
+  chordnode->newvnode (wrap (newvnode_cb, nreplica, nvnode-1));
   sigcb(SIGUSR1, wrap (&stats));
-  sigcb(SIGUSR2, wrap (&print));
+  sigcb(SIGUSR2, wrap (&stop));
 }
 
 void
@@ -259,12 +242,15 @@ stats ()
   chordnode->stats ();
   for (int i = 0 ; i < ndhash; i++)
     dh[i]->print_stats ();
+  chordnode->print ();
 }
 
 void
-print ()
+stop ()
 {
-  chordnode->print ();
+  chordnode->stop ();
+  for (int i = 0 ; i < ndhash; i++)
+    dh[i]->stop ();
 }
 static void
 usage ()

@@ -87,11 +87,12 @@ struct location {
     rpcdelay = 0;
     nrpc = 0;
     maxdelay = 0;
-    struct hostent *h = gethostbyname (_r.hostname.cstr ());
     bzero(&saddr, sizeof(sockaddr_in));
     saddr.sin_family = AF_INET;
-    saddr.sin_addr.s_addr = *(u_int32_t *)(h->h_addr);
+    inet_aton (_r.hostname.cstr (), &saddr.sin_addr);
     saddr.sin_port = htons (addr.port);
+    // struct hostent *h = gethostbyname (_r.hostname.cstr ());
+    // saddr.sin_addr.s_addr = *(u_int32_t *)(h->h_addr);
   };
 
   location (chordID &_n, sfs_hostname _s, int _p) : n (_n) {
@@ -101,10 +102,9 @@ struct location {
     rpcdelay = 0;
     nrpc = 0;
     maxdelay = 0;
-    struct hostent *h = gethostbyname (_s.cstr ());
     bzero(&saddr, sizeof(sockaddr_in));
     saddr.sin_family = AF_INET;
-    saddr.sin_addr.s_addr = *(u_int32_t *)(h->h_addr);
+    inet_aton (_s.cstr (), &saddr.sin_addr);
     saddr.sin_port = htons (addr.port);
   };
   ~location () {
