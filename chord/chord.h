@@ -277,6 +277,9 @@ class chord : public virtual refcount {
 	      void *out, aclnt_cb cb) {
     locations->doRPC (n, progno, procno, in, out, cb);
   };
+  void alert (chordID &n, chordID &x) {
+    vnodes.first()->value->alert (n, x);
+  };
 
 };
 

@@ -50,7 +50,7 @@ dhashclient::dispatch (svccb *sbp)
       path.push_back (next);
       clntnode->doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, arg, i_res,
 		       wrap(this, &dhashclient::lookup_iter_cb, 
-			    sbp, i_res, next, path));
+			    sbp, i_res, chordID(0), next, path));
 
     } 
     break;
@@ -139,17 +139,59 @@ dhashclient::insert_store_cb(svccb *sbp, dhash_storeres *res,
   delete res;
 }
 
+
+/* This callback is responsible for finding data in the distributed store. 
+   The basic operation of the lookup procedure is as follows:
+   - query local node for prediction of key K's successor, call prediction N
+   - query N for either a) the data associated with K or b) a new prediction
+   - recurse on new prediction
+
+
+   A case-by-case analysis of its behavior follows:
+
+   CASE I: An RPC error has occurred; the node that we were directed to is 
+   down, unbeknownst to the node that routed us there. Alert previous node to 
+   the failure and retry the iteration
+
+   CASE II: The remote node has returned the data associated with key either
+   because it is responsible for storing the data or because it has cached
+   or replicated the data. Return the data to the caller.
+
+   CASE III: Case three encompasses situations in which the remote node does
+   not store the requested data and has instead returned a new prediction
+   CASE III.b: The remote node is unable to return a better prediction than 
+   its own ID. In this case we query, one by one, the R successors that the 
+   node also returns. The hope being that one of these successors replicates
+   the data; this is likely since replicas are stored on the R successors
+   of a node.
+   CASE III.a: The remote node is not able to return a better guess and
+   is also not able to return a better prediction. Return failure.
+
+   CASE IV: The remote node's prediction is different than its ID. Recurse.
+*/
 void 
 dhashclient::lookup_iter_cb (svccb *sbp, 
 			     dhash_fetchiter_res *res,
+			     chordID pprev,
 			     chordID prev,
 			     route path,
 			     clnt_stat err) 
 {
   dhash_fetch_arg *arg = sbp->template getarg<dhash_fetch_arg> ();
+  ptr<dhash_fetch_arg> rarg = New refcounted<dhash_fetch_arg>(*arg);
+
   if (err) {
-    sbp->replyref (DHASH_RPCERR);
+    /* CASE I */
+    clntnode->alert (pprev, prev);
+    dhash_fetchiter_res *nres = New dhash_fetchiter_res ();
+    /* assumes an in-order RPC transport, otherwise retry
+     might reach prev before alert can update tables*/
+    clntnode->doRPC (prev, dhash_program_1, DHASHPROC_FETCHITER, 
+		     rarg, nres,
+		     wrap(this, &dhashclient::lookup_iter_cb, 
+			  sbp, nres, pprev, prev, path));
   } else if (res->status == DHASH_COMPLETE) {
+    /* CASE II */
     memorize_block (arg->key, res);
     dhash_res *fres = New dhash_res (DHASH_OK);
     fres->resok->res = res->compl_res->res;
@@ -162,17 +204,31 @@ dhashclient::lookup_iter_cb (svccb *sbp,
   } else if (res->status == DHASH_CONTINUE) {
     chordID next = res->cont_res->next.x;
     if (next == prev) {
-      sbp->replyref (DHASH_NOENT);
+      if (res->cont_res->succ_list.size () == 0) 
+	/*CASE III.a */
+	sbp->replyref (DHASH_NOENT);
+      else {
+	/* CASE III.b */
+	chordID first_succ = res->cont_res->succ_list[0].x;
+	clntnode->locations->cacheloc (first_succ,
+				       res->cont_res->succ_list[0].r,
+				       prev);
+	dhash_res *fres = New dhash_res ();
+	clntnode->doRPC (first_succ, dhash_program_1, DHASHPROC_FETCH,
+			 rarg, fres,
+			 wrap (this, &dhashclient::query_successors,
+			       sbp, res, 0, rarg, fres));
+      }
     } else {
+      /* CASE IV */
       clntnode->locations->cacheloc (next, res->cont_res->next.r, prev);
       dhash_fetchiter_res *nres = New dhash_fetchiter_res;
       path.push_back (next);
       assert (path.size () < 1000);
-      ptr<dhash_fetch_arg> rarg = New refcounted<dhash_fetch_arg>(*arg);
       clntnode->doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, 
 		       rarg, nres,
 		       wrap(this, &dhashclient::lookup_iter_cb, 
-			    sbp, nres, next, path));
+			    sbp, nres, prev, next, path));
     }
   } else 
     sbp->replyref (DHASH_NOENT);
@@ -180,6 +236,32 @@ dhashclient::lookup_iter_cb (svccb *sbp,
   delete res;
 }
 
+void
+dhashclient::query_successors (svccb *sbp, dhash_fetchiter_res *res, 
+			       unsigned int n,
+			       ptr<dhash_fetch_arg> rarg, 
+			       dhash_res *fres, clnt_stat err) 
+{
+  if (fres->status == DHASH_OK) {
+    fres->resok->hops = 100 + n;
+    sbp->reply (fres);
+  } else if (res->cont_res->succ_list.size () == n + 1) {
+    sbp->replyref (DHASH_NOENT);
+  } else {
+    chordID prev_succ = res->cont_res->succ_list[n].x;
+    chordID next_succ = res->cont_res->succ_list[n + 1].x;
+    clntnode->locations->cacheloc (next_succ,
+				   res->cont_res->succ_list[n + 1].r,
+				   prev_succ);
+
+    dhash_res *fres = New dhash_res ();
+    clntnode->doRPC (next_succ, dhash_program_1, DHASHPROC_FETCH,
+		     rarg, fres,
+		     wrap (this, &dhashclient::query_successors,
+			   sbp, res, n + 1, rarg, fres));
+  }
+  delete res;
+}
 void
 dhashclient::transfer_cb (svccb *sbp, dhash_res *res, clnt_stat err)
 {
