@@ -100,7 +100,7 @@ class chord:
 
     # Event handling functions
     def process (my, ev):
-	newevs = []
+	newevs = None
 	if ev.type == "join":
 	    newevs = my.add_node (ev.time, ev.id)
 	elif ev.type == "fail":
@@ -124,14 +124,13 @@ class chord:
             nnode = node (id)
             my.allnodes[id] = nnode
             bisect.insort (my.nodes, nnode)
-
-	return []
+	return None
     
     def _failure (my, t, id, crash):
 	try:
 	    n = my.allnodes[id]
 	except KeyError:
-	    return []
+	    return None
         if n.alive:
             if crash:
                 n.crash (t)
@@ -141,7 +140,7 @@ class chord:
             assert my.nodes[d - 1] == n, "Expected %s got %s." % (n, my.nodes[d-1])
             my.nodes.pop (d - 1)
             my.deadnodes[n.id] = n
-	return []
+	return None
         
     def fail_node (my, t, id):
         return my._failure (t, id, 0)
@@ -262,14 +261,14 @@ class dhash (chord):
         n.nrpc += len (succs)
         n.sent_bytes += isz * len (succs)
 	n.sent_bytes_breakdown['insert'] += isz * len (succs)
-        return []
+        return None
 
     def copy_block (my, src, dst, block, size, desc):
 	"""."""
 	# Typically used for repairs so should already know about this
 	assert block in my.blocks
 	if src in my.deadnodes or dst in my.deadnodes:
-	    return []
+	    return None
 
 	s = my.allnodes[src]
 	d = my.allnodes[dst]
@@ -279,7 +278,7 @@ class dhash (chord):
 	real_succs = my.succ (block, my.look_ahead ())
 	if d in real_succs:
 	    my.available[block] += 1
-	return []
+	return None
 
     def _repair (my, t, an, succs, resp_blocks):
 	"""Helper to repair that does real work"""
@@ -381,7 +380,8 @@ class dhash (chord):
 		    av[b] -= 1
 	    return chord.fail_node (my, t, id)
 	except:
-	    return []
+	    pass
+	return None
     def crash_node (my, t, id):
 	try:
 	    n = my.allnodes[id]
@@ -394,25 +394,38 @@ class dhash (chord):
 		    av[b] -= 1
 	    return chord.crash_node (my, t, id)
 	except:
-	    return []
+	    pass
+	return None
 
     # Alternate implementations that are called if do_repair == 1
     # Block availability is tracked via repair instead.
     def add_node_repair (my, t, id):
 	newevs = chord.add_node (my, t, id)
-	newevs += my.repair (t, my.allnodes[id])
+	evs = my.repair (t, my.allnodes[id])
+	if newevs is not None:
+	    newevs += evs
+	else:
+	    newevs = evs
 	return newevs
     def fail_node_repair (my, t, id):
 	newevs = chord.fail_node (my, t, id)
 	try: 
-	    newevs += my.repair (t, my.allnodes[id])
+	    evs = my.repair (t, my.allnodes[id])
+	    if newevs is not None:
+		newevs += evs
+	    else:
+		newevs = evs
 	except KeyError:
 	    pass
 	return newevs
     def crash_node_repair (my, t, id):
 	newevs = chord.crash_node (my, t, id)
 	try:
-	    newevs += my.repair (t, my.allnodes[id])
+	    evs = my.repair (t, my.allnodes[id])
+	    if newevs is not None:
+		newevs += evs
+	    else:
+		newevs = evs
 	except KeyError:
 	    pass
 	return newevs
@@ -498,7 +511,11 @@ class dhash_cates (dhash):
     def add_node (my, t, id):
 	newevs = dhash.add_node (my, t, id)
 	if len (my.nodes) >= 16:
-	    newevs += my._pmaint_join (my.allnodes[id])
+	    evs = my._pmaint_join (my.allnodes[id])
+	    if newevs is not None:
+		newevs += evs
+	    else:
+		newevs = evs
 	return newevs
 
     def _pmaint_join (my, n):
@@ -573,13 +590,13 @@ class dhash_oracle (dhash):
 		    haves[0].sent_bytes_breakdown['join_repair_write'] += isz
 		else:
 		    haves[0].sent_bytes_breakdown['failure_repair_write'] += isz
-	return []
+	return None
 
     def add_node (my, t, id):
 	newevs = dhash.add_node (my, t, id)
 	assert (len (newevs) == 0)
 	my.repair (t, my.allnodes[id])
-	return []
+	return None
 
     def min_pieces (my):
         return 1
@@ -601,10 +618,10 @@ class durability_oracle (dhash_oracle):
 	try:
 	    n = my.allnodes[id]
 	except KeyError:
-	    return []
+	    return None
 	my.repair (t, n)
         my._failure (t, id, 1)
-	return []
+	return None
 
 class availability_oracle (durability_oracle):
     """
@@ -615,10 +632,10 @@ class availability_oracle (durability_oracle):
 	try:
 	    n = my.allnodes[id]
 	except KeyError:
-	    return []
+	    return None
 	my.repair (t, n)
         my._failure (t, id, 0)
-	return []
+	return None
 
 # For automatic use by availsim
 known_types = {'chord': chord,

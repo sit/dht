@@ -105,8 +105,9 @@ class simulator:
 	    # It may ask us to pass it back events at some point
 	    # in the future too.
 	    newevs = my.dh.process (ev)
-	    for newev in newevs:
-		evgen.add (newev)
+	    if newevs is not None:
+		for newev in newevs:
+		    evgen.add (newev)
 
 	    # Be sure to check what happened after an interesting event
 	    if ev.type in ["join", "fail", "crash"]: 

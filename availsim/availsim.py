@@ -68,7 +68,7 @@ def _monitor (dh):
 	stats['sent_bytes::%s' % k] = \
 		sum ([n.sent_bytes_breakdown.get (k, 0) for n in allnodes])
 
-    extant = filter (lambda x: x > 0, dh.available.values ())
+    extant = [x for x in dh.available.values () if x > 0]
     stats['avail_blocks'] = len (extant)
 #    assert stats['avail_blocks'] == dh.available_blocks ()
 
