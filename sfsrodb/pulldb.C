@@ -78,7 +78,7 @@ struct dbstate {
   ptr<dbrec> si_res;
   ptr<dbrec> con_res;
 
-  dbstate (str dbfile, int s=0, int l=64);
+  dbstate (str dbfile, int is_init=0);
 
   void getfsinfo_cb (sfs_fsinfo *si, ptr<dbrec> res);
   void getfsinfo ();
@@ -112,7 +112,7 @@ fhdbstate *fhdb;
 char null[SFSRO_FHSIZE];
 sfs_hash nullfh;
 int nout;
-int s, l;
+char init;
 
 static int 
 opendb (dbfe **dbp, str dbfile, int create)
@@ -152,19 +152,18 @@ void done ()
   fhdb->buildnewdb (db);
 }
 
-dbstate::dbstate (str dbfile, int start = 0, int len = 64)
+dbstate::dbstate (str dbfile, int is_init=0)
 {
 
+  init = is_init;
   if (!opendb (&dbp, dbfile, 1)) {
     warn << "error opening database " << dbfile << "\n";
     exit (-1);
   }
   name = dbfile;
   tname = name << "#";
+  if (!init) getfsinfo();
 
-  s = start; l = len;
-  // XXX - partial fetch hack
-  //  getfsinfo ();
 }
 
 void
@@ -252,7 +251,7 @@ constate::getfd (int fd)
     warnx << hostname << ": " << strerror (errno);
     exit (1);
   }
-  // why use crypt? --FED 
+
   x = axprt_stream::alloc (fd);
   sfsc = aclnt::alloc (x, sfs_program_1);
   sfsroc = aclnt::alloc (x, sfsro_program_1);
@@ -303,19 +302,8 @@ fhdbstate::eleminsert_cb (int err)
 void
 fhdbstate::elemlookup_cb (dbstate *db, ptr<dbrec> key, ptr<dbrec> dat)
 {
-  if (dat != NULL) {
-    
-    //FED fragment data here
-    int fragLen = (dat->len)/64;
-    int rem = dat->len % 64;
-    int numUnder = ((rem - s) > 0) ? (rem - s) : 0;
-    if (numUnder > l) numUnder = l;
-    int recLen = fragLen*l + numUnder;
-    int offoff = (s > rem) ? rem : s;
-    
-    ptr<dbrec> data_slice = 
-      new refcounted<dbrec>((void *)( (char *)(dat->value) + s*fragLen + offoff), recLen);
-    db->newdbp->insert(key, data_slice, wrap (this, &fhdbstate::eleminsert_cb));
+  if (dat != NULL) {        
+    db->newdbp->insert(key, dat, wrap (this, &fhdbstate::eleminsert_cb));
   } else {
     warnx << "elemlookup_cb: weird the data for this key should be present: " << hexdump(key->value, key->len) << "\n";
     exit (-1);
@@ -335,7 +323,6 @@ fhdbstate::nextelem_cb (dbstate *db, ptr<dbPair> res)
 void
 fhdbstate::final ()
 {
-  warn << nout << completed << "\n";
   if (!completed || (nout > 0)) return;
 
   ref<dbrec> key = new refcounted<dbrec>((void *)"fsinfo", 6);
@@ -403,15 +390,16 @@ constate::getconres (enum clnt_stat err)
 
   // check whether the public key supplied by host can verify
   // the sfsro info structure stored in the database.
-  /*  if (!verify_sfsrosig (&db->si.sfsro->v1->sig, &db->si.sfsro->v1->info, 
-			&cres.reply->servinfo.host.pubkey)) {
+  if (!init) {
+    if (!verify_sfsrosig (&db->si.sfsro->v1->sig, &db->si.sfsro->v1->info, 
+			  &cres.reply->servinfo.host.pubkey)) {
       warnx << "SIGNATURE DOESN'T MATCH\n";
-      //      exit(-1);
-  } else {
-    warnx << "SIGNATURE MATCHES FOR HOSTINFO IN DB\n";
-  }
-  */
-  warnx << "disabled SIGNATURE checking\n";
+      exit(-1); 
+    } else { 
+      warnx << "SIGNATURE MATCHES FOR HOSTINFO IN DB\n";
+    }  
+  } else
+    warnx << "disabled SIGNATURE checking when creating new database\n";
 
   // marshal cres so that we can stick it in the database.
   xdrsuio x (XDR_ENCODE);
@@ -433,25 +421,25 @@ constate::getfsinfo (enum clnt_stat err)
     exit (1);
   }
 
-  /* 
- // check whether the public key supplied by host can verify
+  
+  // check whether the public key supplied by host can verify
   // the sfsro info structure returned by host.
-  if (!verify_sfsrosig (&si.sfsro->v1->sig, &si.sfsro->v1->info, 
-			&cres.reply->servinfo.host.pubkey)) {
+  if (!init) {
+    if (!verify_sfsrosig (&si.sfsro->v1->sig, &si.sfsro->v1->info, 
+			  &cres.reply->servinfo.host.pubkey)) {
       warnx << "SIGNATURE DOESN'T MATCH\n";
-      //      exit(-1);
+      exit(-1);
+    } else {
+      warnx << "SIGNATURE MATCHES FOR FSINO AT SERVER\n";
+    }
   } else {
-    warnx << "SIGNATURE MATCHES FOR FSINO AT SERVER\n";
+    warnx << "disabled signature checking when creating new database\n";
   }
-  */
-  warnx << "disabled signature checking\n";
 
   memcpy (IV, si.sfsro->v1->info.iv.base (), SFSRO_IVSIZE);
   vec<sfsro_mirrorarg> defaultMirrors;
   sfsro_mirrorarg ma;
   ma.host = "localhost";
-  ma.start = s;
-  ma.len = l;
   defaultMirrors.push_back(ma);
   si.sfsro->v1->mirrors.set (defaultMirrors.base(), defaultMirrors.size (), freemode::NOFREE);
   
@@ -473,16 +461,14 @@ constate::getfsinfo (enum clnt_stat err)
 void
 constate::updatedb ()
 {
-  /*  if (si.sfsro->v1->info.start < db->si.sfsro->v1->info.start) {
+  if (!init) {
+    if (si.sfsro->v1->info.start < db->si.sfsro->v1->info.start) {
       warnx << "updatedb: error new data is less fresh\n";
       exit (-1);
-  }
-  */
-  warnx << "disabled freshness checking\n";
+    }
+  } else
+    warnx << "disabled freshness checking for new database\n";
 
-  // Add fsinfo and conres to fhdb database so that we copy them later
-  //  fhdb->addkey ((void *) "fsinfo", 6);
-  // fhdb->addkey ((void *) "conres", 6);
   recurse (&si.sfsro->v1->info.rootfh);
   done ();
 }
@@ -616,22 +602,22 @@ constate::doindir (sfsro_indirect *indir)
 int
 main(int argc, char **argv) 
 {
-  if ((argc < 3) || (argc > 5))
+  if ((argc < 3) || (argc > 4))
     {
-      warnx << "Usage: " << argv[0] << " <rodb> <hostname> <start> <len>\n";
+      warnx << "Usage: " << argv[0] << " [-n] rodb hostname\n";
       exit (1);
     }
   
   sfsconst_init();
   
   constate *sc = New constate;
-  sc->hostname = argv[2];
   
-  if (argc == 3)
-    db = New dbstate (str (argv[1]));
-  else
-    db = New dbstate (str (argv[1]), atoi(argv[3]), atoi(argv[4]));
-      fhdb = New fhdbstate (db->name);
+  int create_db = 0;
+  if (strcmp(argv[1], "-n") == 0) create_db = 1;
+  sc->hostname = argv[2 + create_db];  
+  db = New dbstate (str (argv[1 + create_db]), create_db);
+  
+  fhdb = New fhdbstate (db->name);
 
   memcpy (nullfh.base(), null, nullfh.size());
 
@@ -642,4 +628,5 @@ main(int argc, char **argv)
 
   return 0;
 }
+
 

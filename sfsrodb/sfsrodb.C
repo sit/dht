@@ -1,4 +1,4 @@
-/* $Id: sfsrodb.C,v 1.1 2001/01/16 22:00:08 fdabek Exp $ */
+/* $Id: sfsrodb.C,v 1.2 2001/01/25 21:36:22 fdabek Exp $ */
 
 /*
  * Copyright (C) 1999 Kevin Fu (fubob@mit.edu)
@@ -829,8 +829,7 @@ sfsrodb_main (const str root, const str keyfile, const char *dbfile)
   vec<sfsro_mirrorarg> defaultMirrors;
   sfsro_mirrorarg ma;
   ma.host = "localhost";
-  ma.start = 0;
-  ma.len = 64;
+
   defaultMirrors.push_back(ma);
   res.sfsro->v1->mirrors.set (defaultMirrors.base(), defaultMirrors.size (), freemode::NOFREE); 
   end = start + sfsro_duration;
