@@ -102,6 +102,7 @@ def _monitor (t, dh):
     allb = sum (dh.blocks.values ())
     sb   = sum ([n.sent_bytes for n in dh.allnodes.values ()])
     ub   = sum ([n.bytes      for n in dh.allnodes.values ()])
+    avb  = sum ([n.bytes      for n in dh.nodes])
 
     blocks = {}
     for n in dh.nodes:
@@ -114,22 +115,23 @@ def _monitor (t, dh):
 	maximum = max (extant)
     except:
 	avg, minimum, maximum = 0, 0, 0
-    return allb, sb, ub, avg, minimum, maximum
+    return allb, sb, ub, avb, avg, minimum, maximum
 
 def print_monitor (t, dh):
-    allb, sb, ub, avg, minimum, maximum = _monitor (t, dh)
+    allb, sb, ub, avb, avg, minimum, maximum = _monitor (t, dh)
 
     print "%4d" % t, "%4d nodes;" % len(dh.nodes), 
     print "%sB sent;" % size_rounder (sb),
     print "%sB put;" % size_rounder (allb),
-    print "%sB used;" % size_rounder (ub),
+    print "%sB avail;" % size_rounder (avb),
+    print "%sB stored;" % size_rounder (ub),
     print "%d/%5.2f/%d extant;" % (minimum, avg, maximum),
     print "%d/%d blocks avail" % (dh.available_blocks (), len (dh.blocks))
 
 def parsable_monitor (t, dh):
-    allb, sb, ub, avg, minimum, maximum = _monitor (t, dh)
+    allb, sb, ub, avb, avg, minimum, maximum = _monitor (t, dh)
 
-    print t, len(dh.nodes), sb, allb, ub, minimum, "%.2f" % avg, maximum,
+    print t, len(dh.nodes), sb, allb, avb, ub, minimum, "%.2f" % avg, maximum,
     print dh.available_blocks (), len (dh.blocks)
 
 if __name__ == '__main__':
