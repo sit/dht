@@ -17,51 +17,77 @@ my $params =
      [ "timeout", 5000, 10000, 20000, 40000 ]
      ];
 
-my $nnodes = 256;
+my $nnodes = 1837; # Jinyang uses mostly 1024, also 1837
 my $k = int(sqrt($nnodes));
 my $diameter = 100; # diameter of Euclidean universe
+
+# if defined, use this rather than random euclidean.
+my $king;
+if($nnodes == 1024){
+    $king = "/home/am4/jinyang/chord/sfsnet/p2psim/oldking1024-t";
+} elsif($nnodes == 1837){
+    $king = "/home/am4/jinyang/chord/sfsnet/p2psim/oldking1837-t";
+} else {
+    print STDERR "kx.pl: no king for $nnodes nodes\n";
+}
 
 # for ChurnEventGenerator
 my $lifemean = 100000;
 my $deathmean = $lifemean;
-my $lookupmean = 10000;
+my $lookupmean = 10000; # 10000 for churn, 100 for lookup
 my $exittime = 200000;
 
 my $pf = "pf$$";
-my $tf = "tf$$";
+my $tf = defined($king) ? $king : "tf$$";
 my $ef = "ef$$";
 
 $| = 1;
 
+
 print "# n $nnodes k $k dia $diameter life $lifemean ";
 print "death $deathmean lookup $lookupmean exit $exittime\n";
+if(defined($king)){
+    print "# king $king\n";
+}
+
+print "# cols: bytes/node/second lat hops ";
+my $pi;
+for($pi = 0; $pi <= $#$params; $pi++){
+    my $name = $params->[$pi][0];
+    print "$name ";
+}
+print "\n";
 
 my $iters;
-for($iters = 0; $iters < 200; $iters++){
+for($iters = 0; $iters < 500; $iters++){
     print "# ";
     open(PF, ">$pf");
     print PF "Kelips k=$k ";
     my $pi;
+    my %pv;
     for($pi = 0; $pi <= $#$params; $pi++){
         my $name = $params->[$pi][0];
         my $np = $#{$params->[$pi]};
         my $x = $params->[$pi][1 + int(rand($np))];
         print PF "$name=$x ";
         print "$name=$x ";
+        $pv{$name} = $x;
     }
     print PF "\n";
     print "\n";
     close(PF);
 
-    open(TF, ">$tf");
-    print TF "topology Euclidean\n";
-    print TF "failure_model NullFailureModel\n";
-    print TF "\n";
-    my $ni;
-    for($ni = 1; $ni <= $nnodes; $ni++){
-        printf(TF "$ni %d,%d\n", int(rand($diameter)), int(rand($diameter)));
+    if(!defined($king)){
+        open(TF, ">$tf");
+        print TF "topology Euclidean\n";
+        print TF "failure_model NullFailureModel\n";
+        print TF "\n";
+        my $ni;
+        for($ni = 1; $ni <= $nnodes; $ni++){
+            printf(TF "$ni %d,%d\n", int(rand($diameter)), int(rand($diameter)));
+        }
+        close(TF);
     }
-    close(TF);
 
     open(EF, ">$ef");
     print EF "generator ChurnEventGenerator proto=Kelips ipkeys=1 lifemean=$lifemean deathmean=$deathmean lookupmean=$lookupmean exittime=$exittime\n";
@@ -93,5 +119,10 @@ for($iters = 0; $iters < 200; $iters++){
         print STDERR "kx.pl: p2psim no output\n";
     }
 
-    print "$bytes $lat $hops\n";
+    printf("%f $lat $hops ", $bytes / ($nnodes * $exittime));
+    for($pi = 0; $pi <= $#$params; $pi++){
+        my $name = $params->[$pi][0];
+        printf("%s ", $pv{$name});
+    }
+    print "\n";
 }

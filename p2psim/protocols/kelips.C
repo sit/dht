@@ -44,7 +44,6 @@ int Kelips::_bad_failures = 0; // lookup failed, but node was live
 Kelips::Kelips(Node *n, Args a)
   : P2Protocol(n)
 {
-  _rounds = 0;
   _started = false;
   _live = false;
 
@@ -153,7 +152,7 @@ Kelips::closest_contact(int g)
     if(ip2group(in->_ip) == g){
       if(best == 0 ||
          (in->_rtt != -1 && best->_rtt != -1 && in->_rtt < best->_rtt) ||
-         (in->_heartbeat > best->_heartbeat)){
+         (in->_rtt != 9999 && in->_heartbeat > best->_heartbeat)){
         best = in;
       }
     }
@@ -524,6 +523,10 @@ Kelips::gotinfo(Info i, int rtt)
     }
   } else if (i._heartbeat > _info[i._ip]->_heartbeat){
     _info[i._ip]->_heartbeat = i._heartbeat;
+    if(_info[i._ip]->_rtt == 9999){
+      // we once got an RPC timeout, but node seems to have restarted.
+      _info[i._ip]->_rtt = -1;
+    }
   }
 
   if(rtt != -1 && _info.find(i._ip) != _info.end())
@@ -609,6 +612,7 @@ Kelips::newold_msg(vector<Info> &msg, vector<IPAddress> l, u_int ration)
     vector<IPAddress> nl = randomize(newold(l, true));
     for(u_int i = 0; n <= ration / 2 && i < nl.size(); i++, n++){
       Info *ip = _info[nl[i]];
+      assert(ip->_rounds > 0);
       ip->_rounds -= 1;
       msg.push_back(*ip);
     }
@@ -618,6 +622,7 @@ Kelips::newold_msg(vector<Info> &msg, vector<IPAddress> l, u_int ration)
     vector<IPAddress> ol = randomize(newold(l, false));
     for(u_int i = 0; n < ration && i < ol.size(); i++, n++){
       Info *ip = _info[ol[i]];
+      assert(ip->_rounds == 0);
       msg.push_back(*ip);
     }
   }
@@ -686,8 +691,6 @@ Kelips::gossip(void *junk)
         }
       }
     }
-
-    _rounds++;
   }
 
   delaycb(random() % (2 *_round_interval), &Kelips::gossip, (void *) 0);
@@ -787,6 +790,5 @@ Kelips::rpcstat(bool ok, IPAddress dst, int latency, int nitems)
 
   if(ok == false && _info.find(dst) != _info.end()){
     _info[dst]->_rtt = 9999;
-    _info[dst]->_heartbeat = 1;
   }
 }

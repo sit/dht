@@ -3,7 +3,6 @@
 
 // Differences from Kelips as described in IPTPS 2003 paper:
 // I look up IDs, not files.
-// Not clear who you gossip to across groups, and what you say.
 // When/how do you learn RTT to a new node? So you know whether to
 //   keep it in your contacts list.
 // How often does a node generate a new heartbeat value?
@@ -93,7 +92,6 @@ public:
 
   bool _started; // are our timers ticking?
   bool _live;    // are we joined but not crashed?
-  int _rounds;   // how many gossip rounds have we run?
 
   // global statistics
   static double _rpc_bytes; // total traffic
