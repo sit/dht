@@ -22,7 +22,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-# $Id: run-simulations.pl,v 1.20 2004/01/27 22:30:50 thomer Exp $
+# $Id: run-simulations.pl,v 1.21 2004/02/02 22:21:14 jinyang Exp $
 
 use strict;
 use Getopt::Long;
@@ -96,6 +96,9 @@ if( $options{"protocol"} ) {
 	$observer = "TapestryObserver";
     } elsif( $prot eq "Chord" or $prot eq "chord" ) {
 	$protocol = "ChordFingerPNS";
+	$observer = "ChordObserver";
+    } elsif ($prot eq "ChordFinger") {
+	$protocol = "ChordFinger";
 	$observer = "ChordObserver";
     } elsif( $prot eq "Kademlia" or $prot eq "kademlia" ) {
 	$protocol = "Kademlia";
@@ -477,7 +480,7 @@ sub write_events_file {
     
     my $ipkeys = 0;
     if( $protocol eq "Kademlia" or $protocol eq "Kelips" or $protocol 
-	eq "ChordFingerPNS") {
+	eq "ChordFingerPNS" or $protocol eq "ChordFinger") {
 	$ipkeys = 1;
     }
     
