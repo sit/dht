@@ -10,6 +10,8 @@ database *db = NULL;
 #define DBNAME "tmpdb"
 #endif
 
+ptr<dbrec> FAKE_DATA = New refcounted<dbrec> ("FAKE", strlen ("FAKE"));
+
 void
 dumpdb ()
 {
@@ -32,11 +34,13 @@ void
 insert_blocks (merkle_tree *mtree, int upto, bool random)
 {
   for (int i = 1; i <= upto; i++) {
-    if (random)
-      mtree->insert (New block ());
+    merkle_hash key;
+    if (random) 
+      key.randomize ();
     else
-      mtree->insert (New block (i));
+      key = i;
 
+    mtree->insert (New block (key, FAKE_DATA));
     //mtree->dump ();
 
     if (i % 1000 == 0) {
@@ -73,7 +77,7 @@ remove_all (merkle_tree *mtree)
   ref<dbrec> zero = todbrec(merkle_hash(0));
   ptr<dbPair> entry = iter->nextElement (zero);
   while (entry) {
-    block b (to_merkle_hash (entry->key));
+    block b (to_merkle_hash (entry->key), FAKE_DATA);
     // XXX change remove's interface to take just the key
     mtree->remove (&b);
     entry = iter->nextElement ();
