@@ -8,6 +8,9 @@
 #include <list>
 using namespace std;
 
+// russ hack
+extern int anyready();
+
 EventQueue *EventQueue::_instance = 0;
 
 EventQueue*
@@ -42,6 +45,10 @@ EventQueue::run()
   a[0].op = CHANRCV;
 
   while(1) {
+    // XXX: BIG FUCKING SCARY HACK
+    for(int i=0; i<10; i++)
+      yield();
+
     // NB: this is pretty essential.
     // block, (i.e., yield) if the queue is empty.
     // if the queue is empty
@@ -87,11 +94,10 @@ EventQueue::advance()
   // now process all events with this timestamp
   Queue::iterator pos;
   for(pos = _queue.begin(); pos != _queue.end(); ++pos) {
-    if(_time > (*pos)->ts)
+    if((*pos)->ts > _time)
       break;
     (*pos)->execute();
   }
-
   // remove processed events from queue
   _queue.erase(_queue.begin(), pos);
 }
