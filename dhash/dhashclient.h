@@ -36,6 +36,10 @@ class dhashclient {
   // to communicate to lsd. 
   dhashclient(str sockname);
 
+  //this version connects to the dhash service on TCP
+  // this is for RSC
+  dhashclient(ptr<axprt_stream> xprt);
+
   void append (chordID to, const char *buf, size_t buflen, cbinsertgw_t cb);
 
   // inserts under the contents hash. 
@@ -58,7 +62,4 @@ class dhashclient {
   void retrieve (bigint key, dhash_ctype ct, cb_cret cb, 
 		 ptr<option_block> options = NULL);
 
-  // synchronouslly call setactive.
-  // Returns true on error, and false on success.
-  bool sync_setactive (int32 n);
 };

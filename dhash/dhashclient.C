@@ -66,6 +66,11 @@ dhashclient::dhashclient(str sockname)
   gwclnt = aclnt::alloc (axprt_unix::alloc (fd), dhashgateway_program_1);
 }
 
+dhashclient::dhashclient (ptr<axprt_stream> xprt)
+{
+  gwclnt = aclnt::alloc (xprt, dhashgateway_program_1);
+}
+
 //append
 /* block layout 
  * long type = DHASH_APPEND
@@ -316,18 +321,3 @@ dhashclient::retrievecb (cb_cret cb, bigint key,
   (*cb) (res->status, NULL, e_path); // failure
 }
 
-
-
-bool
-dhashclient::sync_setactive (int32 n)
-{
-  dhash_stat res;
-  clnt_stat err = gwclnt->scall (DHASHPROC_ACTIVE, &n, &res);
-
-  if (err)
-    warn << "sync_setactive: rpc error " << err << "\n";
-  else if (res != DHASH_OK)
-    warn << "sync_setactive: dhash error " << dhasherr2str (res) << "\n";
-  
-  return (err || res != DHASH_OK);
-}
