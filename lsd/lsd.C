@@ -394,8 +394,6 @@ stats ()
 	}
 	delaycb (start_delay, 0, 
 		 wrap (dh[i], &dhash::replica_maintenance_timer, start_index));
-	delaycb (start_delay, 0, 
-		 wrap (dh[i], &dhash::partition_maintenance_timer));
       }
 
       bandwidth ();
