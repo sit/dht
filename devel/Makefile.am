@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.7 2002/02/22 18:05:59 fdabek Exp $
+# $Id: Makefile.am,v 1.8 2002/10/21 18:56:37 fdabek Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -11,7 +11,7 @@ noinst_PROGRAMS = dbm typetest $(VIS)
 
 
 dbm_SOURCES = dhash_benchmark.C
-dbm_LDADD = ../dhash/libdhash.a ../chord/libchord.a ../svc/libsvc.la $(LDADD)
+dbm_LDADD = ../dhash/libdhash.a ../chord/libchord.a ../svc/libsvc.la ../sfsrodb/libsfsrodb.a $(DBLIB) $(LDADD)
 
 typetest_SOURCES = test_types.C
 typetest_LDADD = ../dhash/libdhash.a ../chord/libchord.a ../svc/libsvc.la $(LDADD)

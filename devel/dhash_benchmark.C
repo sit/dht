@@ -50,8 +50,8 @@ make_block (void *data, int g)
   
   char *rd = (char *)data;
   for (unsigned int i = 0; i < datasize; i++) 
-    //    rd[i] = random();
-    rd[i] = (char)('a' + g);
+        rd[i] = random();
+    //rd[i] = (char)('a' + g);
   rd[datasize - 1] = 0;
 
   return compute_hash (rd, datasize);
@@ -178,9 +178,9 @@ main (int argc, char **argv)
     exit(1);
   }
 
-  int i = atoi(argv[1]);
-  bool err = dhash.sync_setactive (i);
-  assert (!err);
+  //  int i = atoi(argv[1]);
+  //  bool err = dhash.sync_setactive (i);
+  //  assert (!err);
 
   unsigned int seed = strtoul (argv[8], NULL, 10);
   srandom (seed);
