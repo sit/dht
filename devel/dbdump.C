@@ -1,5 +1,7 @@
 #include "async.h"
 #include "dbfe.h"
+#include "merkle_misc.h"
+#include "merkle_hash.h"
 
 int
 main (int argc, char *argv[])
@@ -9,9 +11,32 @@ main (int argc, char *argv[])
   
   int r;
   DB *db;
-  r = db_create(&db, NULL, 0);
+  DB_ENV* dbe;
+  char cpath[MAXPATHLEN];
+
+  r = db_env_create (&dbe, 0);
+  assert (!r);
+  r = chdir (argv[1]);
+  if (r == -1) fatal << "couldn't chdir to " << argv[1] << "\n";
+
+  getcwd (cpath, MAXPATHLEN);
+  warn << "opening db in: " << cpath << "\n";
+  r = dbe->set_data_dir (dbe, cpath);
+  assert (!r);
+  r = dbe->set_lg_dir (dbe, cpath);
+  assert (!r);
+  r = dbe->set_tmp_dir (dbe, cpath);
+  assert (!r);
+
+  r = dbe->open (dbe, NULL, 
+		 DB_CREATE| DB_INIT_MPOOL | DB_INIT_LOCK | 
+		 DB_INIT_LOG | DB_INIT_TXN | DB_RECOVER , 0);
+  assert (!r);
+  
+  r = db_create(&db, dbe, 0);
   assert (r==0);
-  r = db->open(db, argv[1], NULL, DB_BTREE, 0, 0664);
+
+  r = db->open(db, "db", NULL, DB_BTREE, 0, 0664);
   assert (r == 0);
 
   DBC *cursor;
@@ -31,7 +56,9 @@ main (int argc, char *argv[])
       fatal << "err: " << err << " " << strerror (err) << "\n";
     }
     warn << "key[" << i << "] " << hexdump (key.data, key.size) << "\n";
-    warn << "data[" << i << "] " << hexdump (data.data, data.size) << "\n";
+    ptr<dbrec> kr = New refcounted<dbrec> (key.data, key.size);
+
+    warn << "key[" << i << "] " << to_merkle_hash (kr) << "\n";
     
     bzero (&data, sizeof (data));
     err = db->get (db, NULL, &key, &data, 0);
