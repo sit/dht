@@ -69,6 +69,7 @@ def _monitor (dh):
 		sum ([n.sent_bytes_breakdown.get (k, 0) for n in allnodes])
 
     stats['avail_blocks'], extant = dh.available_blocks ()
+    stats['total_unavailability'] = dh.total_unavailability
 
     try: 
 	avg = sum (extant, 0.0) / len (extant)
@@ -102,15 +103,15 @@ def print_monitor (t, dh):
 	print "%sB sent[%s];" % (size_rounder(s['sent_bytes::%s' % k]), k)
 
 def parsable_monitor (t, dh):
+    print t, len(dh.nodes), 
     s = _monitor (dh)
 
-    print t, len(dh.nodes), 
     print ' '.join(["%d" % s[k] for k in ['sent_bytes','usable_bytes','avail_bytes','disk_bytes']]),
     print s['extant_min'], "%5.2f" % s['extant_avg'], s['extant_max'],
     print s['avail_blocks'], len (dh.blocks),
     for k in sbkeys:
 	print "%d" % s['sent_bytes::%s' % k],
-    print
+    print s['total_unavailability']
 
 def usage ():
     sys.stderr.write ("%s [-i] [-m] [-s] events.txt type args\n" % sys.argv[0])

@@ -15,6 +15,7 @@ And source code provided by the authors.
 
 import math
 from random import sample	# python 2.3 and later
+import random
 
 from utils import random_id
 from chord import chord
@@ -63,6 +64,11 @@ class totalrecall_base (chord):
 	    my.longt = int (args.pop (0))
 	except:
 	    my.longt = 4
+	my.available = {}
+	# block -> (time of last unavailability) mapping 
+	my.unavailable_time = {}
+	# The total number of seconds that blocks are unavailable.
+	my.total_unavailability = 0
 	chord.__init__ (my, args)
 
 	# Mapping from blocks to size
@@ -71,24 +77,39 @@ class totalrecall_base (chord):
 	# XXX should really be stored with eager replication
 	#     on successor nodes, but this is easier.
 	my.inodes = {}
-	# Number of available copes of each block
+	# Number of available copies of each block
 	my.available = {}
+	# The time at which a block became unavailable.
+	my.unavailable_time = {}
+	my.total_unavailability = 0
+	# For debugging
+	# random.seed (0)
 
     def process (my, ev):
 	if ev.type == "insert":
 	    return my.insert_block (ev.id, ev.block, ev.size)
 	elif ev.type == "copy":
-	    return my.copy_block (ev.src_id, ev.id, ev.src_time, ev.block, ev.size, ev.desc)
+	    return my.copy_block (ev.time, ev.src_id, ev.id, ev.src_time, ev.block, ev.size, ev.desc)
 	return chord.process (my, ev)
 
-    def available_blocks (my):
+    def _available_blocks_check (my):
 	needed = my.read_pieces ()
+	available = my.available
 	extants = []
 	for b in my.inodes:
 	    hosts = my.inodes[b]
 	    extants.append (len([n for n in hosts if n.alive and b in n.blocks]))
+	    # XXX check to see if our book keeping is correct
+	    assert extants[-1] == available[b], "%d %d %s" % (extants[-1], available[b], hosts)
 	avail = len ([b for b in extants if b >= needed])
 	return avail, extants
+
+    def available_blocks (my):
+	"""Number of readable blocks"""
+	needed = my.read_pieces ()
+	counts = my.available.values ()
+	extant = [x for x in counts if x >= needed]
+	return len (extant), counts
 
     def insert_block (my, id, block, size):
 	# 1. Figure out desired redundancy of block
@@ -105,13 +126,13 @@ class totalrecall_base (chord):
 	for i in insnodes:
 	    i.store (block, isz)
 	my.inodes[block] = insnodes
-
+	my.available[block] = len (insnodes)
         n = my.allnodes[id]
         n.nrpc += ninsert
         n.sent_bytes += isz * ninsert
 	n.sent_bytes_breakdown['insert'] += isz * ninsert
 
-    def copy_block (my, src, dst, lastsrc, block, size, desc):
+    def copy_block (my, t, src, dst, lastsrc, block, size, desc):
 	# Typically used for repairs so should already know about this
 	assert block in my.blocks
 	if src in my.deadnodes or dst in my.deadnodes:
@@ -120,10 +141,18 @@ class totalrecall_base (chord):
 	if s.last_alive != lastsrc:
 	    print "# Source failed to copy", block
 	    return None
-	d = my.allnodes[dst]
+	s.nrpc += 1
 	s.sent_bytes += size
 	s.sent_bytes_breakdown['%s_repair_write' % desc] += size
-	d.store (block, size)
+
+	d = my.allnodes[dst]
+	needed = my.read_pieces ()
+	if block not in d.blocks and d in my.inodes[block]:
+	    d.store (block, size)
+	    my.available[block] += 1
+	    if my.available[block] == needed:
+		my.total_unavailability += t - my.unavailable_time[block]
+		del my.unavailable_time[block]
 	return None
 
     def repair (my, t, blocks):
@@ -142,20 +171,24 @@ class totalrecall_base (chord):
 	    #        may be short term, but too bad, we can't tell.
 	    livenodes, deadnodes = [], []
 	    rfactor = 0.0
-	    for n in my.inodes[b]:
+	    hosts = my.inodes[b]
+	    for n in hosts:
 		if n.alive and b in n.blocks:
 		    rfactor += n.blocks[b]
 		    livenodes.append (n)
 		else:
 		    deadnodes.append (n)
+	    my.available[b] = len (livenodes)
 	    if len (livenodes) == 0:
-		print "# LOST", b
+		my.unavailable_time[b] = t
+		# print "# LOST", b
 		continue
 	    rfactor /= my.blocks[b]
 	    if rfactor < my.shortt:
 		(ninsert, isz) = my.insert_pieces (my.blocks[b])
 		ninsert -= len (livenodes)
-		newnodes = sample (my.nodes, ninsert)
+		othernodes = [n for n in my.nodes if n not in hosts]
+		newnodes = sample (othernodes, ninsert)
 		# Who fixes?  Someone with a copy, preferably.
 		fixer = livenodes[0]
 		for i in livenodes:
@@ -167,6 +200,9 @@ class totalrecall_base (chord):
 		    nt = int (fixer.sendremote (t, isz) + 0.5)
 		    events.append (event (nt, "copy", 
 			["failure", fixer.id, fixer.last_alive, s.id, b, isz]))
+		    if b in s.blocks:
+			# already there!
+			my.available[b] += 1
 		if b not in fixer.cached_blocks:
 		    # Account for bytes needed to reassemble the block
 		    # XXX but not for the _time_
@@ -185,6 +221,25 @@ class totalrecall_base (chord):
     # Because TR tracks explicitly the nodes that hold
     # a block, joins never cause any action.  Only failures.
     # XXX (not strictly true; joins require eager replication of inodes.)
+    def add_node (my, t, id):
+	chord.add_node (my, t, id)
+	# Track some statistics about block availability
+	n = my.allnodes[id]
+	inodes = my.inodes
+	avail  = my.available
+	uat    = my.unavailable_time
+	needed = my.read_pieces ()
+	for b in n.blocks: 
+	    if n in inodes[b]:
+		avail[b] += 1
+		if avail[b] == needed:
+		    my.total_unavailability += t - uat[b]
+		    del uat[b]
+	    else:
+		# print "#", n, "not in inodes for" ,b,
+		# print "but they are:", inodes[b]
+		pass
+	
     def fail_node (my, t, id):
 	try:
 	    n = my.allnodes[id]

@@ -19,6 +19,10 @@ class dhash (chord):
 	# Incrementally maintained mapping from blocks->num of copies
 	# in look_ahead () of successor.
 	my.available = {}
+	# block -> (time of last unavailability) mapping 
+	my.unavailable_time = {}
+	# The total number of seconds that blocks are unavailable.
+	my.total_unavailability = 0
 	for a in args: 
 	    if a == 'repair':
 		my.do_repair = 1
@@ -34,7 +38,7 @@ class dhash (chord):
 	if ev.type == "insert":
 	    return my.insert_block (ev.id, ev.block, ev.size)
 	elif ev.type == "copy":
-	    return my.copy_block (ev.src_id, ev.id, ev.src_time, ev.block, ev.size, ev.desc)
+	    return my.copy_block (ev.time, ev.src_id, ev.id, ev.src_time, ev.block, ev.size, ev.desc)
 	return chord.process (my, ev)
 
     def _extant_counts_check (my):
@@ -97,8 +101,7 @@ class dhash (chord):
 	n.sent_bytes_breakdown['insert'] += isz * len (succs)
         return None
 
-    def copy_block (my, src, dst, lastsrc, block, size, desc):
-	"""."""
+    def copy_block (my, t, src, dst, lastsrc, block, size, desc):
 	# Typically used for repairs so should already know about this
 	assert block in my.blocks
 	if src in my.deadnodes or dst in my.deadnodes:
@@ -112,10 +115,14 @@ class dhash (chord):
 	s.sent_bytes_breakdown['%s_repair_write' % desc] += size
 
 	d = my.allnodes[dst]
+	needed = my.read_pieces ()
 	real_succs = my.succ (block, my.look_ahead ())
 	if block not in d.blocks and d in real_succs:
 	    d.store (block, size)
 	    my.available[block] += 1
+	    if my.available[block] == needed:
+		my.total_unavailability += t - my.unavailable_time[block]
+		del my.unavailable_time[block]
 	return None
 
     def _repair_join (my, t, an, succs, resp_blocks):
@@ -159,9 +166,9 @@ class dhash (chord):
 		    donthaves.append (s)
 	    avail = len (haves)
 	    my.available[b] = avail
-            if avail == 0:
-		print "# LOST block", b, "after failure of", an, "|", succs
-		pass
+            if avail < read_pieces:
+		my.unavailable_time[b] = t
+		# print "# LOST block", b, "after failure of", an, "|", succs
 	    elif avail < min_pieces:
 		# print "# REPAIR block", b, "after failure of", an
 		needed = min_pieces - avail
@@ -193,6 +200,7 @@ class dhash (chord):
 	"""aka partition maintenance"""
 	events = []
 	runlen = min (my.look_ahead ()+ 1, len (my.nodes))
+	needed = my.read_pieces ()
 	getsucclist = my.succ
 	for b in an.blocks:
 	    # Need to call getsucclist for n == an, since an
@@ -211,6 +219,11 @@ class dhash (chord):
 			events.append (event (nt, "copy",
 			    ["pmaint", an.id, an.last_alive, s.id, b, isz]))
 			break
+	    else:
+		my.available[b] += 1
+		if my.available[b] == needed:
+		    my.total_unavailability += t - my.unavailable_time[b]
+		    del my.unavailable_time[b]
 	return events
 
     def repair (my, t, affected_node):
@@ -248,8 +261,10 @@ class dhash (chord):
     # available incrementally.
     def add_node (my, t, id):
 	newevs = chord.add_node (my, t, id)
+	needed = my.read_pieces ()
 	n = my.allnodes[id]
 	av = my.available
+	uat = my.unavailable_time
 	la = my.look_ahead ()
 	getsucclist = my.succ
 	for b in n.blocks:
@@ -257,19 +272,25 @@ class dhash (chord):
 	    real_succs = getsucclist (b, la + 1)
 	    if n in real_succs[:-1]:
 		av[b] += 1
+		if av[b] == needed:
+		    my.total_unavailability += t - uat[b]
+		    del uat[b]
 	    if b in real_succs[-1].blocks:
 		av[b] -= 1
+		if av[b] == 0: uat[b] = t
 	return newevs
     def fail_node (my, t, id):
 	try:
 	    n = my.allnodes[id]
 	    av = my.available
+	    uat = my.unavailable_time
 	    la = my.look_ahead ()
 	    getsucclist = my.succ
 	    for b in n.blocks:
 		real_succs = getsucclist (b, la)
 		if n in real_succs:
 		    av[b] -= 1
+		    if av[b] == 0: uat[b] = t
 	    return chord.fail_node (my, t, id)
 	except:
 	    pass
@@ -278,12 +299,14 @@ class dhash (chord):
 	try:
 	    n = my.allnodes[id]
 	    av = my.available
+	    uat = my.unavailable_time
 	    la = my.look_ahead ()
 	    getsucclist = my.succ
 	    for b in n.blocks:
 		real_succs = getsucclist (b, la)
 		if n in real_succs:
 		    av[b] -= 1
+		    if av[b] == 0: uat[b] = t
 	    return chord.crash_node (my, t, id)
 	except:
 	    pass
