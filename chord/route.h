@@ -16,6 +16,7 @@ class route_iterator {
   chordstat r;
   bool done;
   cbhop_t cb;
+  ptr<bool> deleted;
 
   bool do_upcall;
   int uc_procno;
@@ -27,13 +28,16 @@ class route_iterator {
 
  public:
   route_iterator (ptr<vnode> vi, chordID xi) :
-    v (vi), x (xi), r (CHORD_OK), done (false), do_upcall (false), 
-    stop (false), last_hop (false) {};
+    v (vi), x (xi), r (CHORD_OK), done (false), 
+    deleted (New refcounted<bool> (false)),
+    do_upcall (false), stop (false), last_hop (false) {};
   route_iterator (ptr<vnode> vi, chordID xi,
 		  rpc_program uc_prog,
 		  int uc_procno,
 		  ptr<void> uc_args) :
-    v (vi), x (xi), r (CHORD_OK), done (false), do_upcall (true),
+    v (vi), x (xi), r (CHORD_OK), done (false), 
+    deleted (New refcounted<bool> (false)),
+    do_upcall (true),
     uc_procno (uc_procno), uc_args (uc_args), prog (prog),
     stop (false), last_hop (false) {};
 
@@ -66,7 +70,7 @@ class route_iterator {
 
 class route_chord : public route_iterator {
   void make_hop (chordID &n);
-  void make_hop_cb (chord_testandfindres *res, clnt_stat err);
+  void make_hop_cb (ptr<bool> del, chord_testandfindres *res, clnt_stat err);
   void make_route_done_cb (chordID s, bool ok, chordstat status);
   void make_hop_done_cb (chordID s, bool ok, chordstat status);
   void send_hop_cb (bool done);
@@ -78,6 +82,7 @@ class route_chord : public route_iterator {
 	       int uc_procno,
 	       ptr<void> uc_args);
 
+  ~route_chord () {*deleted = true;};
   virtual void first_hop (cbhop_t cb, bool ucs = false);
   virtual void first_hop (cbhop_t cb, chordID guess);
   void send (chordID guess);

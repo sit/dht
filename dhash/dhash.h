@@ -334,6 +334,7 @@ public:
 	       bool lease = false,
 	       bool ucs = false);
   
+  ~route_dhash ();
 
   void execute (cb_ret cbi, chordID first_hop_guess);
   void execute (cb_ret cbi);
@@ -343,7 +344,7 @@ public:
   route path ();
 
  private:
-  ptr<route_iterator> chord_iterator;
+  route_iterator *chord_iterator;
   bool ask_for_lease;
   bool use_cached_succ;
   int npending;

@@ -138,15 +138,16 @@ route_chord::make_hop (chordID &n)
 
   chord_testandfindres *nres = New chord_testandfindres (CHORD_OK);
   v->doRPC (n, chord_program_1, CHORDPROC_TESTRANGE_FINDCLOSESTPRED, 
-	    arg, nres, wrap (this, &route_chord::make_hop_cb, nres));
+	    arg, nres, wrap (this, &route_chord::make_hop_cb, deleted, nres));
 
 }
 
 
 void
-route_chord::make_hop_cb (chord_testandfindres *res, clnt_stat err)
+route_chord::make_hop_cb (ptr<bool> del,
+			  chord_testandfindres *res, clnt_stat err)
 {
-
+  if (*del) return;
   if (err) {
     warnx << "make_hop_cb: failure " << err << "\n";
     r = CHORD_RPCFAILURE;

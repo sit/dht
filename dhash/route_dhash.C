@@ -42,9 +42,13 @@ route_dhash::route_dhash (ptr<route_factory> f,
   arg->lease = ask_for_lease;
 
   dh->register_block_cb (arg->nonce, wrap (this, &route_dhash::block_cb));
-  chord_iterator = f->produce_iterator (xi, dhash_program_1, DHASHPROC_FETCHITER, arg);
+  chord_iterator = f->produce_iterator_ptr (xi, dhash_program_1, DHASHPROC_FETCHITER, arg);
 };
 
+route_dhash::~route_dhash () 
+{
+  delete chord_iterator;
+}
 void
 route_dhash::execute (cb_ret cbi, chordID first_hop)
 {
