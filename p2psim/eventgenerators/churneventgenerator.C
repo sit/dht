@@ -47,8 +47,8 @@ ChurnEventGenerator::ChurnEventGenerator(Args *args)
 
   _proto = (*args)["proto"];
   assert( _proto != "" );
-  _lifemean = args->nget( "lifemean", 100000, 10 );
-  _deathmean = args->nget( "deathmean", _lifemean, 10 );
+  _lifemean = args->nget( "lifemean", 100000, 10 ); //0 means no failure
+  _deathmean = args->nget( "deathmean", _lifemean, 10 ); //0 means no failure
   _lookupmean = args->nget( "lookupmean", 10000, 10 );
 
   if( (*args)["exittime"] == "" ) {
@@ -111,7 +111,6 @@ ChurnEventGenerator::run()
     }
 
   }
-
   EventQueue::Instance()->go();
 }
 
@@ -135,8 +134,8 @@ ChurnEventGenerator::kick(Observed *o, ObserverInfo *oi)
   IPAddress ip = p2p_observed->node->ip();
   if( p2p_observed->type == "join" ) {
 
-    // the wellknown can't crash (***TODO: fix this?***)
-    if( ip != _wkn ) {
+    // the wellknown can't crash (***TODO: fix this?***) also if lifemean is zero, this node won't die
+    if (( ip != _wkn ) && ( _lifemean > 0)) {
 
       // pick a time for this node to die
       Time todie = next_exponential( _lifemean );
