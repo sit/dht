@@ -1,4 +1,4 @@
-/* $Id: server.C,v 1.7 2001/03/02 04:15:10 fdabek Exp $ */
+/* $Id: server.C,v 1.8 2001/03/09 04:23:49 fdabek Exp $ */
 
 /*
  *
@@ -187,78 +187,24 @@ server::read_block (const sfs_hash *fh, nfscall *sbp, cbblock_t cb)
 }
 
 void
-mi_timestamp(mirror_info *mi) {
-  
-  struct timeval tp;
-  gettimeofday(&tp, NULL);
-  mi->start_sec = tp.tv_sec;
-  mi->start_usec = tp.tv_usec;
-
-}
-
-long
-mi_elapsedtime(mirror_info *mi) {
-  
-  struct timeval tp;
-  gettimeofday(&tp, NULL);
-  return (tp.tv_sec - mi->start_sec)*1000000 + (tp.tv_usec - mi->start_usec);
-}
-
-void
 server::get_data (const sfs_hash *fh, 
 		  callback<void, sfsro_datares *, clnt_stat>::ref cb) 
 {
 
   warn << "getting data for " << hexdump(fh, 20) << "\n";
 
-  ptr<vec<sfsro_datares* > > ress (New refcounted<vec<sfsro_datares *> >());
-  ress->setsize(numMirrors);
-  ptr<int> recvd = New refcounted<int> (0);
-  
+ 
+  sfsro_datares *res = New sfsro_datares (SFSRO_OK);
+  sfsroc->call (SFSROPROC_GETDATA, fh, res, wrap(this, &server::get_data_cb, cb, res));
 
-  for (int currentMirror = 0; currentMirror < mo_size; currentMirror++) {
-    ptr<aclnt> target = mirrors[mo[currentMirror].aclnt_index];
-    sfsro_datares *res = New sfsro_datares (SFSRO_OK);
-    
-    ptr<sfsro_partialgetarg> arg = New refcounted<sfsro_partialgetarg>();      
-    arg->key = *fh;
-    arg->offset = mo[currentMirror].slice_start;
-    arg->len = mo[currentMirror].slice_len;
-    
-    mi_timestamp(&(mo[currentMirror]));
-    target->call (SFSROPROC_GETDATA_PARTIAL, arg, res, wrap(mkref (this),
-							    &server::get_data_cb,
-							    ress, res, currentMirror,
-							    recvd, cb));
-  }
-  
-  
 }
 
 void
-server::get_data_cb(ptr<vec< sfsro_datares * > > ress, sfsro_datares *res, 
-		    int offset, ptr<int> recvd, callback<void, sfsro_datares *, clnt_stat>::ref cb,
-		    clnt_stat err) {
-  
-  // char buf[100000];
-
-  //update performance info
-  long ticks = mi_elapsedtime(&(mo[offset]));
-  mo[offset].total_bytes += res->resok->data.size ();
-  mo[offset].total_ticks += ticks;
-  mo[offset].performance = 1000000.0*(res->resok->data.size ())/ticks;
-  mo[offset].total_performance = (int)(1000*mo[offset].total_bytes/mo[offset].total_ticks);
-
-  warn << "performance[" << offset << "]: " << (int)mo[offset].performance/1000 << "KB/s\n";
-  warn << "total performance[" << offset << "]: " << (int)(1000*mo[offset].total_bytes/mo[offset].total_ticks) << "KB/s\n";
-  
-  (*ress)[offset] = res;
-  ++*recvd;
-
+server::get_data_cb( callback<void, sfsro_datares *, clnt_stat>::ref cb,
+		     sfsro_datares *res, clnt_stat err) {
   (*cb)(res, err);
-
+  
 }
-
 void 
 server::read_indir (const sfs_hash *fh, nfscall *sbp, cbindir_t cb)
 {
@@ -1047,53 +993,7 @@ server::setrootfh (const sfs_fsinfo *fsi)
 
   warn << "root fh is " << hexdump(&fsi->sfsro->v1->info.rootfh, 20) << "\n";
 
-  // FED - STRIPING HACK
-  mirrors.setsize (0);
-  mirrors.push_back (sfsroc);
-  mi[0].aclnt_index = 0;
-  mi[0].slice_start = 0;
-  mi[0].slice_len = STRIPE_BASE;
-  numMirrors = 1;
-  updateMirrorDivision ();
-  
-  /* warn << "attempting to contact " << fsi->sfsro->v1->mirrors.size () << " mirrors\n";
-     for (unsigned int i = 0; i < fsi->sfsro->v1->mirrors.size (); i++) {
-     warn << "trying Mirror " << i << "\n";
-     warn << fsi->sfsro->v1->mirrors[i].host << "is mirroring.";
-     warn << "size = " << fsi->sfsro->v1->mirrors.size () << " > " << i << "\n";
-     tcpconnect (fsi->sfsro->v1->mirrors[i].host, 
-     sfs_port,  //FED - should be SFS_PORT or something
-     wrap(this, &server::setrootfh_1));
-     warn << "did tcpconnect for i = " << i << "\n";
-     }
-     */
   return true;
-}
-void
-server::setrootfh_1 (int fd) {
-  
-  if (fd < 0) { 
-    warn << "unable to contact mirror\n";
-    return;
-  }
-  warn << "added mirror number " << numMirrors + 1 << "\n";
-  ptr<axprt_stream> x1 = axprt_stream::alloc (fd);
-  ptr<aclnt> sfsroc1 = aclnt::alloc (x1, sfsro_program_1);
-
-  //this table holds the aclnts
-  mirrors.push_back(sfsroc1);
-  
-  //this table holds info about spans etc.
-  mi[numMirrors].aclnt_index = numMirrors;
-
-  numMirrors++;
-
-  //update the block division strategy
-  updateMirrorDivision();
-  for (int i = 0; i < mo_size; i++) {
-    warn << mo[i].aclnt_index << ": " << mo[i].slice_start << " -> " << mo[i].slice_len << "\n";
-  }
-  
 }
 
 /* Assumes name is not . or .. */
@@ -1321,66 +1221,3 @@ server::lookup_parent_rofh_lookupres2 (nfscall *sbp,
 } else
     lookup_parent_rofh (sbp, &dirent->fh, pathvec, cb);
 }
-
-//FED -- striping hack
-int
-compare_mirrors(const void *a, const void *b) {
-  mirror_info *A = (mirror_info *)a;
-  mirror_info *B = (mirror_info *)b;
-  if (A->slice_start < B->slice_start) return -1;
-  else if (A->slice_start > B->slice_start) return 1;
-  else {
-    if (A->aclnt_index < B->aclnt_index) return -1;
-    else return 1;
-  }
-  
-}
-
-void
-sort_mirrors(mirror_info *mi, int num_in) {
-  //added by ECP because linux libc doesn't have mergesort
-  qsort(mi, num_in, sizeof(mirror_info), compare_mirrors);
-  //mergesort(mi, num_in, sizeof(mirror_info), compare_mirrors);
-}
-
-
-
-#define END(x) (x.slice_start + x.slice_len)
-
-void
-server::updateMirrorDivision() {
-
-
-
-  /*
-    //coral snake like stuff
-  int denom = 0;
-  for (int i = 0; i < numMirrors; i++) 
-    denom += mo[i].performance;
-
-  int slices_allocated = 0;
-  for (int i = 0; i < numMirrors; i++) {
-    mo[i].aclnt_index = mi[i].aclnt_index;
-    mo[i].slice_start = slices_allocated;
-    int current_allocation = mo[i].performance/denom;
-    mo[i].slice_len = current_allocation;
-    slices_allocated += current_allocation;
-    mo[i].performance = 0;
-    mo[i].total_bytes = 0;
-    mo[i].total_ticks = 0;
-  }
-
-  */
-  
-  // XXX - bogus division for starters
-  mo_size = numMirrors;
-  for (int i = 0; i < mo_size; i++) {
-    mo[i].aclnt_index = mi[i].aclnt_index;
-    mo[i].slice_start = 0;
-    mo[i].slice_len = STRIPE_BASE;
-  }
-
-}
-
-
-

@@ -1,5 +1,5 @@
 // -*-c++-*-
-/* $Id: sfsrocd.h,v 1.3 2001/02/23 04:44:47 fdabek Exp $ */
+/* $Id: sfsrocd.h,v 1.4 2001/03/09 04:23:50 fdabek Exp $ */
 
 /*
  *
@@ -137,18 +137,6 @@ public:
 
 };
 
-struct mirror_info {
-  int aclnt_index;
-  int slice_start;
-  int slice_len;
-  long start_sec;
-  long start_usec;
-  long total_bytes;
-  float total_ticks;
-  float performance;
-  long total_performance;
-};
-
 struct server : sfsserver {
   typedef callback<void, const sfsro_inode * >::ref cbinode_t;
   typedef callback<void, const sfsro_directory *>::ref cbdirent_t;
@@ -160,15 +148,6 @@ private:
   cache<sfs_hash, sfsro_inode, 512> ic;             // inode cache
   cache<sfs_hash, sfsro_indirect, 512> ibc;         // Indirect block cache
   cache<sfs_hash, sfsro_directory, 512> dc;         // Directory block cache
-
-  //the aclnts themselves
-  vec<ptr<aclnt> > mirrors;
-
-  //all the mirrors w/ span info (mirror in)
-  mirror_info mi[64];
-  //the spans we should fetch from each mirror to get the whole block (mirror out)
-  mirror_info mo[64];
-  int mo_size;
 
   // we need to reduce the miss penalty here.  required if
   // we want "compression"
@@ -246,13 +225,9 @@ private:
 				      const sfsro_directory *dir);
   void get_data (const sfs_hash *fh, 
 		 callback<void, sfsro_datares *, clnt_stat>::ref cb);
-  void get_data_cb(ptr<vec< sfsro_datares * > >ress,
-		   sfsro_datares *res,		   int offset, ptr<int> recvd, 
-		   callback<void, sfsro_datares *, clnt_stat>::ref cb,
-		   clnt_stat err);    
-
-  ///FED - mirror hack
-  void updateMirrorDivision();
+  void
+  get_data_cb( callback<void, sfsro_datares *, clnt_stat>::ref cb,
+	       sfsro_datares *res, clnt_stat err);
 
   void lookup_mount(nfscall *sbp, sfsro_datares *res, clnt_stat err);
 protected:
@@ -263,7 +238,6 @@ public:
   char IV[SFSRO_IVSIZE];
 
   ptr<aclnt> sfsroc;
-  int numMirrors;
 
   static void sendreply (nfscall *sbp, void *res);
   int getreply (nfscall *sbp, sfsro_datares *rores, clnt_stat err,
@@ -274,7 +248,6 @@ public:
   static void fh2fileid (const sfs_hash *fh, uint64 *fileid);
 
   bool setrootfh (const sfs_fsinfo *fsi);
-  void setrootfh_1 (int fd);
   void dispatch (nfscall *sbp);
 };
 
