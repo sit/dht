@@ -239,6 +239,7 @@ dhash::key_status(sfs_ID n) {
 
 void
 dhash::store_flush (sfs_ID key, dhash_stat value) {
+  warn << "flushing element " << key << " from store\n";
   ptr<dbrec> k = id2dbrec(key);
   key_cache.enter (key, &value);
   db->del (k, wrap(this, &dhash::store_flush_cb));
@@ -251,6 +252,7 @@ dhash::store_flush_cb (int err) {
 
 void
 dhash::cache_flush (sfs_ID key, dhash_stat value) {
+  warn << "flushing element " << key << " from cache\n";
   ptr<dbrec> k = id2dbrec(key);
   db->del (k, wrap(this, &dhash::cache_flush_cb));
 }

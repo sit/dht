@@ -144,12 +144,15 @@ dhashclient::lookup_findsucc_cb(svccb *sbp, sfs_ID *n, struct timeval *start,
 
     dhash_res *res = New dhash_res();
     defp2p->doRPC(succ, dhash_program_1, DHASHPROC_FETCH, n, res, 
-		  wrap(this, &dhashclient::lookup_fetch_cb, sbp, res, start));
+		  wrap(this, &dhashclient::lookup_fetch_cb, sbp, 
+		       res, start, path, n));
   }
 }
 
 void
-dhashclient::lookup_fetch_cb(svccb *sbp, dhash_res *res, struct timeval *start, clnt_stat err) 
+dhashclient::lookup_fetch_cb(svccb *sbp, dhash_res *res, 
+			     struct timeval *start, route path, sfs_ID *n,
+			     clnt_stat err) 
 {
 
 
@@ -160,6 +163,13 @@ dhashclient::lookup_fetch_cb(svccb *sbp, dhash_res *res, struct timeval *start, 
     stats.lookup_lat += lat;
     if (lat > stats.lookup_max_lat) stats.lookup_max_lat = lat;
     if (!err) stats.lookup_bytes_fetched += res->resok->res.size();
+
+    if (do_caching) {
+      dhash_insertarg *di = New dhash_insertarg ();
+      di->key = *n;
+      di->data = res->resok->res;
+      di->type = DHASH_CACHE;
+    }
 
     if (err) 
       sbp->reject (SYSTEM_ERR);
