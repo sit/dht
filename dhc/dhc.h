@@ -225,25 +225,34 @@ struct dhc_block {
     ret << "\n DHC block " << id 
 	<< "\n meta data: " << meta->to_str ()
 	<< "\n data size: " << data->data.size ()
-      //<< "\n      data: " << data->data.base () 
 	<< "\n";
     return str(ret);
   }
 };
 
 struct paxos_state_t {
-  //bool recon_inprogress;
   bool proposed;
   bool sent_newconfig;
+  bool sent_reply;
   uint promise_recvd;
   uint accept_recvd;
   uint newconfig_ack_recvd;
   vec<chordID> acc_conf;
   
-  paxos_state_t () : proposed(false), sent_newconfig(false), 
+  paxos_state_t () : proposed(false), sent_newconfig(false), sent_reply(false), 
     promise_recvd(0), accept_recvd(0), newconfig_ack_recvd (0) {}
   
   ~paxos_state_t () { acc_conf.clear (); }
+
+  void init () 
+  {
+    proposed = false;
+    sent_newconfig = false;
+    sent_reply = false;
+    promise_recvd = 0;
+    accept_recvd = 0;
+    newconfig_ack_recvd = 0;
+  }
 
   str to_str ()
   {
@@ -327,19 +336,32 @@ struct read_state {
 
   read_state () : done (false) {}
 
-  void add (keyhash_data kd) 
+  ~read_state () 
+  {
+    blocks.clear ();
+    bcount.clear ();
+  }
+
+  void add (keyhash_data kd)
   {
     bool found = false;
-    for (uint i=0; i<blocks.size (); i++) {
+    for (uint i=0; i<blocks.size (); i++)
       if (tag_cmp (blocks[i].tag, kd.tag) == 0 &&
-	  bcmp (blocks[i].data.base (), kd.data.base (), kd.data.size ()) == 0)
+	  bcmp (blocks[i].data.base (), kd.data.base (), kd.data.size ()) == 0) {
+	found = true;
 	bcount[i]++;
-    }
+	break;
+      }
     if (!found) {
       blocks.push_back (kd);
       bcount.push_back (1);
+#if DHC_DEBUG
+      warn << "read_state: size = " << blocks.back().data.size () 
+	   << " value = " << blocks.back().data.base () << "\n";
+#endif      
     }
   }
+
 };
 
 struct write_state {
@@ -410,3 +432,14 @@ class dhc {
 };
 
 #endif /*_DHC_H_*/
+
+
+
+
+
+
+
+
+
+
+

@@ -109,23 +109,3 @@ tag_cmp (tag_t a, tag_t b)
   return 0;
 }
 
-bool 
-is_member (chordID id, vec<chordID> config)
-{
-  bool in = false;
-  for (uint i=0; i<config.size (); i++)
-    if (id == config[i])
-      in = true;
-  return in;
-}
-
-bool 
-is_primary (chordID id, vec<chordID> config)
-{
-  bool smallest = true;
-  for (uint i=0; i<config.size (); i++)
-    if (id > config[i])
-      smallest = false;
-  return (smallest && is_member (id, config));
-}
-

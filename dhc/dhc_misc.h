@@ -12,8 +12,6 @@ int paxos_cmp (paxos_seqnum_t, paxos_seqnum_t);
 int tag_cmp (tag_t, tag_t);
 void ID_put (char *, chordID);
 void ID_get (chordID, char *);
-bool is_primary (chordID, vec<chordID>);
-bool is_member (chordID, vec<chordID>);
 
 static inline ptr<dhc_block> 
 to_dhc_block (ptr<dbrec> rec)
@@ -79,7 +77,47 @@ set_ac (vec<chordID> *ap, vec<chordID> src)
   }
   return true;  
 }
+
+static inline bool 
+is_member (chordID id, vec<chordID> config)
+{
+  bool in = false;
+  for (uint i=0; i<config.size (); i++)
+    if (id == config[i])
+      in = true;
+  return in;
+}
+
+static inline bool 
+is_primary (chordID id, vec<chordID> config)
+{
+  bool smallest = true;
+  for (uint i=0; i<config.size (); i++)
+    if (id > config[i])
+      smallest = false;
+  return (smallest && is_member (id, config));
+}
+
+
 #endif /* _DHC_MISC_H */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

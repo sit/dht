@@ -46,6 +46,7 @@ dhc::recon (chordID bID, dhc_cb_t cb)
     
     if (b->status == IDLE) {
       b->status = RECON_INPROG;
+      b->pstat->init ();
       b->proposal.seqnum = (b->promised.seqnum > b->proposal.seqnum) ?
 	b->promised.seqnum + 1 : b->proposal.seqnum + 1;
       b->proposal.proposer = myNode->my_ID ();
@@ -218,17 +219,14 @@ dhc::recv_newconfig_ack (chordID bID, dhc_cb_t cb, ref<dhc_newconfig_res> ack,
 #if DHC_DEBUG    
     warn << "dhc::recv_newconfig_ack: " << b->to_str ();
 #endif
-    if (b->status == RECON_INPROG)
-      b->pstat->newconfig_ack_recvd++;
+
+    b->pstat->newconfig_ack_recvd++;
     
-    if (b->pstat->newconfig_ack_recvd > n_replica/2) {
+    if (b->pstat->newconfig_ack_recvd > n_replica/2 && 
+	!b->pstat->sent_reply) {
       //Mark the end of the recon protocol
       b->status = IDLE;
-      b->pstat->proposed = false;
-      b->pstat->sent_newconfig = false;
-      b->pstat->promise_recvd = 0;
-      b->pstat->accept_recvd = 0;
-      b->pstat->newconfig_ack_recvd = 0;
+      b->pstat->sent_reply = true;
       dhcs.insert (b);
       (*cb) (DHC_OK);
     }    
@@ -335,7 +333,7 @@ dhc::recv_propose (user_args *sbp)
     sbp->reply (&res);
   } else {
     if (set_ac (&b->pstat->acc_conf, *propose)) {
-      //b->status = IDLE;
+      b->status = IDLE;
       kb->meta->cvalid = false;
       kb->meta->accepted.seqnum = propose->round.seqnum;
       kb->meta->accepted.proposer = propose->round.proposer;
@@ -348,8 +346,7 @@ dhc::recv_propose (user_args *sbp)
       sbp->reply (&res);
     }
   }
-  //dhcs.insert (b);
-      
+  dhcs.insert (b);    
 }
 
 void 
@@ -426,26 +423,42 @@ dhc::recv_newconfig (user_args *sbp)
 void 
 dhc::get (chordID bID, dhc_getcb_t cb)
 {
+#if DHC_DEBUG
+  warn << "\n\n" << myNode->my_ID () << " get block " << bID << "\n";
+#endif
+
   ptr<location> l = myNode->locations->lookup (bID);
   if (l) {
     ptr<dhc_get_arg> arg = New refcounted<dhc_get_arg>;
     arg->bID = bID;
-    ptr<dhc_get_res> res = New refcounted<dhc_get_res>;
+    ptr<dhc_get_res> res = New refcounted<dhc_get_res> (DHC_OK);
+#if DHC_DEBUG
+    warn << "dhc::get " << myNode->my_ID () << " sending GET\n";
+#endif
     myNode->doRPC (l, dhc_program_1, DHCPROC_GET, arg, res,
 		   wrap (this, &dhc::get_result_cb, bID, cb, res));
-  } else
+  } else {
     myNode->find_successor (bID, wrap (this, &dhc::get_lookup_cb, bID, cb));
+  }
 }
 
 void 
-dhc::get_lookup_cb (chordID bID, dhc_getcb_t cb, vec<chord_node> succ, 
-		    route path, chordstat err)
+dhc::get_lookup_cb (chordID bID, dhc_getcb_t cb, 
+		    vec<chord_node> succ, route path, chordstat err)
 {
+#if DHC_DEBUG
+  warn << "dhc::get_lookup_cb " << myNode->my_ID () << "\n";
+#endif
+
   if (!err) {
     ptr<location> l = myNode->locations->lookup (succ[0].x); 
     ptr<dhc_get_arg> arg = New refcounted<dhc_get_arg>;
     arg->bID = bID;
     ptr<dhc_get_res> res = New refcounted<dhc_get_res>;
+#if DHC_DEBUG
+    warn << "dhc::get_lookup_cb " << myNode->my_ID () << " sending GET to " 
+	 << l->id () << "\n";
+#endif
     myNode->doRPC (l, dhc_program_1, DHCPROC_GET, arg, res,
 		   wrap (this, &dhc::get_result_cb, bID, cb, res));    
   } else
@@ -460,6 +473,10 @@ dhc::get_result_cb (chordID bID, dhc_getcb_t cb, ptr<dhc_get_res> res, clnt_stat
     data->tag.ver = res->resok->data.tag.ver;
     data->tag.writer = res->resok->data.tag.writer;
     data->data.set (res->resok->data.data.base (), res->resok->data.data.size ());
+#if DHC_DEBUG
+    warn << "dhc::get_result_cb: size = " << data->data.size () 
+	 << " value = " << data->data.base () << "\n";
+#endif
     (*cb) (DHC_OK, data);
   } else 
     if (err)
@@ -478,35 +495,42 @@ dhc::recv_get (user_args *sbp)
     dhc_get_res res (DHC_BLOCK_NEXIST);
     sbp->reply (&res);
     return;
-  } else {
-    dhc_soft *b = dhcs[get->bID];
-    if (b && b->status != IDLE) {
-      dhc_get_res res (DHC_RECON_INPROG);
-      sbp->reply (&res);
-      return;
-    }
+  } 
 
-    ptr<dhc_block> kb = to_dhc_block (rec);
-    if (!kb->meta->cvalid || 
-	!is_member (myNode->my_ID (), kb->meta->config.nodes)) {
-      dhc_get_res res (DHC_NOT_A_REPLICA);
-      sbp->reply (&res);
-      return;
-    }
+  dhc_soft *b = dhcs[get->bID];
+  if (b && b->status != IDLE) {
+    dhc_get_res res (DHC_RECON_INPROG);
+    sbp->reply (&res);
+    return;
+  }
 
-    if (!b)
-      b = New dhc_soft (myNode, kb);
-    b->status = RW_INPROG;
-    dhcs.insert (b);
+  ptr<dhc_block> kb = to_dhc_block (rec);
+  if (!kb->meta->cvalid || 
+      !is_member (myNode->my_ID (), kb->meta->config.nodes)) {
+    dhc_get_res res (DHC_NOT_A_REPLICA);
+    sbp->reply (&res);
+    return;
+  }
 
-    ptr<dhc_get_arg> arg = New refcounted<dhc_get_arg>;
-    arg->bID = get->bID;
-    ptr<read_state> rs = New refcounted<read_state>;
-    for (uint i=0; i<b->config.size (); i++) {
-      ptr<dhc_get_res> res = New refcounted<dhc_get_res>;
-      myNode->doRPC (b->config[i], dhc_program_1, DHCPROC_GETBLOCK, arg, res,
-		     wrap (this, &dhc::getblock_cb, sbp, b->config[i], rs, res));
-    }
+  if (!b)
+    b = New dhc_soft (myNode, kb);
+
+#if DHC_DEBUG
+  warn << "dhc::recv_get: " << b->to_str ();
+#endif
+
+  b->status = RW_INPROG;
+  dhcs.insert (b);
+  
+  ptr<dhc_get_arg> arg = New refcounted<dhc_get_arg>;
+  arg->bID = get->bID;
+  ptr<read_state> rs = New refcounted<read_state>;
+  ptr<dhc_get_res> res;
+  for (uint i=0; i<b->config.size (); i++) {
+    res = New refcounted<dhc_get_res> (DHC_OK);
+    ptr<location> dest = New refcounted<location> (*(b->config[i]));
+    myNode->doRPC (b->config[i], dhc_program_1, DHCPROC_GETBLOCK, arg, res,
+		   wrap (this, &dhc::getblock_cb, sbp, dest, rs, res));
   }
 }
 
@@ -517,25 +541,30 @@ dhc::getblock_cb (user_args *sbp, ptr<location> dest, ptr<read_state> rs,
   if (!rs->done) {
     if (!err && res->status == DHC_OK) {
       rs->add (res->resok->data);
-      if (!rs->done) {// && rs->blocks_rcvd > n_replica/2) {
+      if (!rs->done) {
 	uint i;
 	for (i=0; i<rs->blocks.size (); i++)
-	  if (rs->bcount[i] > n_replica/2)
+	  if (rs->bcount[i] > n_replica/2) 
 	    break;
-	if (rs->bcount[i] > n_replica/2) {
+	if (i<rs->blocks.size () && rs->bcount[i] > n_replica/2) {
 	  rs->done = true;
 	  dhc_get_res gres (DHC_OK);
-	  (*gres.resok).data.tag.ver = rs->blocks[i].tag.ver;
-	  (*gres.resok).data.tag.writer = rs->blocks[i].tag.writer;
-	  (*gres.resok).data.data.set (rs->blocks[i].data.base (), rs->blocks[i].data.size ());
+	  gres.resok->data.tag.ver = rs->blocks[i].tag.ver;
+	  gres.resok->data.tag.writer = rs->blocks[i].tag.writer;
+	  gres.resok->data.data.set (rs->blocks[i].data.base (), 
+				     rs->blocks[i].data.size ());
+#if DHC_DEBUG
+	  warn << "dhc::getblock_cb: size = " << gres.resok->data.data.size () 
+	       << " value = " << gres.resok->data.data.base () << "\n";
+#endif
 	  sbp->reply (&gres);
 	}
       }
     } else 
       if (err) {
+	rs->done = true;
 	dhc_get_res gres (DHC_CHORDERR);
 	sbp->reply (&gres);
-	rs->done = true;
       }
       else
 	if (res->status == DHC_RECON_INPROG ||
@@ -543,11 +572,12 @@ dhc::getblock_cb (user_args *sbp, ptr<location> dest, ptr<read_state> rs,
 	  // wait and retry in 60 seconds
 	  delaycb (60, wrap (this, &dhc::getblock_retry_cb, sbp, dest, rs));
 	} else {
+	  rs->done = true;
 	  dhc_get_res gres (res->status);
 	  sbp->reply (&gres);
-	  rs->done = true;
 	}
   }
+
 }
 
 void 
@@ -556,7 +586,7 @@ dhc::getblock_retry_cb (user_args *sbp, ptr<location> dest, ptr<read_state> rs)
   dhc_get_arg *get = sbp->template getarg<dhc_get_arg> ();
   ptr<dhc_get_arg> arg = New refcounted<dhc_get_arg>;
   arg->bID = get->bID; 
-  ptr<dhc_get_res> res = New refcounted<dhc_get_res>;
+  ptr<dhc_get_res> res = New refcounted<dhc_get_res> (DHC_OK);
   myNode->doRPC (dest, dhc_program_1, DHCPROC_GETBLOCK, arg, res,
 		 wrap (this, &dhc::getblock_cb, sbp, dest, rs, res));
 }
@@ -573,13 +603,14 @@ dhc::recv_getblock (user_args *sbp)
   } 
   
   dhc_soft *b = dhcs[getblock->bID];
-  if (b && b->status == IDLE) {
+  ptr<dhc_block> kb = to_dhc_block (rec);
+  if (b && b->status != IDLE && 
+      !is_primary (myNode->my_ID (), kb->meta->config.nodes)) {
     dhc_get_res res (DHC_RECON_INPROG);
     sbp->reply (&res);
     return;
   }
 
-  ptr<dhc_block> kb = to_dhc_block (rec);
   if (!kb->meta->cvalid || !is_member (myNode->my_ID (), kb->meta->config.nodes)) {
     dhc_get_res res (DHC_NOT_A_REPLICA);
     sbp->reply (&res);
@@ -596,13 +627,16 @@ dhc::recv_getblock (user_args *sbp)
     return;
   }
   delete from;
-  
+
   dhc_get_res res (DHC_OK);
-  (*res.resok).data.tag.ver = kb->data->tag.ver;
-  (*res.resok).data.tag.writer = kb->data->tag.writer;
-  (*res.resok).data.data.set (kb->data->data.base (), kb->data->data.size ());
-  sbp->reply (&res);
-  
+  res.resok->data.tag.ver = kb->data->tag.ver;
+  res.resok->data.tag.writer = kb->data->tag.writer;
+  res.resok->data.data.set (kb->data->data.base (), kb->data->data.size ());
+#if DHC_DEBUG
+  warn << "dhc::recv_getblock: size = " << res.resok->data.data.size () 
+       << " value = " << res.resok->data.data.base () << "\n";
+#endif
+  sbp->reply (&res);  
 }
 
 void 
