@@ -1,5 +1,5 @@
-#ifndef __CHORDFINGER_H
-#define __CHORDFINGER_H
+#ifndef __CHORDSUCCLIST_H
+#define __CHORDSUCCLIST_H
 
 #include "chord.h"
 

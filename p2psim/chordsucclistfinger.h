@@ -1,13 +1,13 @@
-#ifndef __CHORDFINGER_H
-#define __CHORDFINGER_H
+#ifndef __CHORDSUCCLISTFINGER_H
+#define __CHORDSUCCLISTFINGER_H
 
-#include "chord.h"
+#include "chordsucclist.h"
 
 /* ChordSuccListFinger implements finger table in addition to ChordSuccList*/
 
 class ChordSuccListFinger: public ChordSuccList {
   public:
-    ChordSuccListFinger(Node *n) : Chord(n) {};
+    ChordSuccListFinger(Node *n) : ChordSuccList(n) {};
     ~ChordSuccListFinger() {};
 
   protected:
