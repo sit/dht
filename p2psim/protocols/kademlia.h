@@ -164,11 +164,8 @@ public:
   struct lookup_result {
     lookup_result() { results.clear(); hops = 0; }
     ~lookup_result() {
-      for(set<k_nodeinfo*, closer>::const_iterator i = results.begin(); i != results.end(); ++i) {
-        char ptr[32]; sprintf(ptr, "%p", *i);
-        DEBUG(2) << "~lookup_result deleting " << ptr << endl;
+      for(set<k_nodeinfo*, closer>::const_iterator i = results.begin(); i != results.end(); ++i)
         delete *i;
-      }
     }
     set<k_nodeinfo*, closer> results;
     NodeID rid;     // the guy who's replying
@@ -226,6 +223,7 @@ private:
   NodeID _id;           // my id
   k_nodeinfo *_me;      // info about me
   k_bucket *_root;
+  bool _joined;
 
   // statistics
   enum stat_type {
@@ -256,8 +254,6 @@ private:
     callinfo(k_nodeinfo *ki, lookup_args *la, lookup_result *lr)
       : ki(ki), la(la), lr(lr) {}
     ~callinfo() {
-      char ptr[32]; sprintf(ptr, "%p", ki);
-      DEBUG(2) << "~callinfo deleting " << ptr << endl;
       delete ki;
       delete la;
       delete lr;

@@ -10,10 +10,22 @@ my $nnodes = 1837; # Jinyang uses mostly 1024, also 1837
 my $diameter = 100; # diameter of Euclidean universe
 my $prefix = ""; # prefix to executable
 my $observer = 1;
+my $king = "";
 
 
 &process_args(@ARGV);
 @ARGV = ();
+
+# if defined, use this rather than random euclidean.
+if($king eq "" && $nnodes == 1024) {
+    $king = "/home/am4/jinyang/chord/sfsnet/p2psim/oldking1024-t";
+} elsif($king eq "" && $nnodes == 1837){
+    $king = "/home/am4/jinyang/chord/sfsnet/p2psim/oldking1837-t";
+} else {
+    print STDERR "kx.pl: no king for $nnodes nodes\n";
+}
+
+
 
 # Run $protocol with many different parameter settings on the
 # standard ChurnGenerator workload.
@@ -46,16 +58,6 @@ my $param_lists = {
 };
 
 my $params = $param_lists->{$protocol};
-
-# if defined, use this rather than random euclidean.
-my $king;
-if($nnodes == 1024){
-    $king = "/home/am4/jinyang/chord/sfsnet/p2psim/oldking1024-t";
-} elsif($nnodes == 1837){
-    $king = "/home/am4/jinyang/chord/sfsnet/p2psim/oldking1837-t";
-} else {
-    print STDERR "kx.pl: no king for $nnodes nodes\n";
-}
 
 my $pf = "pf$$";
 my $tf = defined($king) ? $king : "tf$$";
@@ -156,24 +158,28 @@ sub process_args {
 
   while(@args) {
     $_ = shift @args;
-    if(/^-l$/ || /^--lifemean$/) { $lifemean = shift @args; next; }
     if(/^-d$/ || /^--deathmean$/){ $deathmean = shift @args; next; }
+    if(/^-e$/ || /^--exittime$/) { $exittime = shift @args; next; }
+    if(/^-h$/ || /^--help$/)     { &usage(); exit; }
+    if(/^-k$/ || /^--king$/)     { $king = shift @args; next; }
+    if(/^-l$/ || /^--lifemean$/) { $lifemean = shift @args; next; }
+    if(/^-n$/ || /^--nnodes$/)   { $nnodes = shift @args; next; }
     if(/^-o$/ || /^--observer$/) { $observer = 0; next; }
     if(/^-p$/ || /^--protocol$/) { $protocol = shift @args; next; }
-    if(/^-n$/ || /^--nnodes$/)   { $nnodes = shift @args; next; }
     if(/^-x$/ || /^--prefix$/)   { $prefix = shift @args; next; }
-    if(/^-h$/ || /^--help$/)     { &usage(); exit; }
   }
 }
 
 sub usage {
   print <<EOF;
--h : help
--l : lifemean
 -d : deathmean
--p : protocol
+-e : exittime
+-h : help
+-k : king file
+-l : lifemean
 -n : nnodes
 -o : NO observer
+-p : protocol
 -x : prefix
 EOF
 }

@@ -50,7 +50,6 @@ public:
   bool Node::doRPC(IPAddress dst, BT *target, void (BT::*fn)(AT*, RT*),
       AT *args, RT *ret)
   {
-    assert(dst>0 && dst<=1024);
     Thunk<BT, AT, RT> *t = _makeThunk(dst, target, fn, args, ret);
     bool ok = _doRPC(dst, Thunk<BT, AT, RT>::thunk, (void *) t);
     delete t;
