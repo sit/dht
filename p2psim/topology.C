@@ -40,7 +40,7 @@ Topology::parse(char *filename)
       exit(-1);
     }
 
-    string topology = words[0];
+    string topology = words[1];
     words.erase(words.begin());
     top = TopologyFactory::create(topology, &words);
     break;
