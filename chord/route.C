@@ -424,7 +424,7 @@ route_debruijn::make_hop_cb (ptr<bool> del,
   } else if (res->status == CHORD_STOP) {
     r = CHORD_OK;
     cb (done = true);
-  } if (last_hop) {
+  } else if (last_hop) {
     r = CHORD_OK;
     cb (done = true);
   } else if (res->status == CHORD_INRANGE) { 
