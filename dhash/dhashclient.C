@@ -63,7 +63,7 @@ dhashclient::dhashclient (ptr<axprt_stream> xprt)
  * append block layout 
  *
  * long contentlen
- * char data[contentlen}
+ * char data[contentlen]
  *
  * key = whatever you say
  */
@@ -76,48 +76,55 @@ dhashclient::append (chordID to, const char *buf, size_t buflen,
   xdrsuio x;
   int size = buflen + 3 & ~3;
   char *m_buf;
-  if ((m_buf = (char *)XDR_INLINE (&x, size)))
-    {
-      memcpy (m_buf, buf, buflen);
-      
-      int m_len = x.uio ()->resid ();
-      char *m_dat = suio_flatten (x.uio ());
-      insert (to, m_dat, m_len, cb, DHASH_APPEND, buflen, NULL);
-      xfree (m_dat);
-    } else {
-      (*cb) (DHASH_ERR, NULL); // marshalling failed.
-    }
-
+  if ((m_buf = (char *)XDR_INLINE (&x, size))) {
+    memcpy (m_buf, buf, buflen);
+    
+    int m_len = x.uio ()->resid ();
+    char *m_dat = suio_flatten (x.uio ());
+    insert_togateway (to, m_dat, m_len, cb, DHASH_APPEND, buflen, NULL);
+    xfree (m_dat);
+  } else {
+    (*cb) (DHASH_ERR, NULL); // marshalling failed.
+  }
 }
 
 
 /*
- * content hash block layout
- * 
+ * nopk block layout
+ *
  * long contentlen
  * char data[contentlen]
  *
- * key = HASH (data)
+ * key = provided by user or hash of data depending on type of insert
  */
 void
-dhashclient::insert (bigint key, const char *buf,
-                     size_t buflen, cbinsertgw_t cb, 
-		     ptr<option_block> options)
+dhashclient::insert_worker_nopk (bigint key, const char *buf,
+                                 size_t buflen, cbinsertgw_t cb, 
+                                 dhash_ctype t, ptr<option_block> options)
 {
   xdrsuio x;
   int size = buflen + 3 & ~3;
   char *m_buf;
-  if ((m_buf = (char *)XDR_INLINE (&x, size)))
-    {
-      memcpy (m_buf, buf, buflen);
-      
-      int m_len = x.uio ()->resid ();
-      char *m_dat = suio_flatten (x.uio ());
-      insert (key, m_dat, m_len, cb, DHASH_CONTENTHASH, buflen, options);
-      xfree (m_dat);
-    } else {
-      (*cb) (DHASH_ERR, NULL); // marshalling failed.
-    }
+  if ((m_buf = (char *)XDR_INLINE (&x, size))) {
+    memcpy (m_buf, buf, buflen);
+    
+    int m_len = x.uio ()->resid ();
+    char *m_dat = suio_flatten (x.uio ());
+    insert_togateway (key, m_dat, m_len, cb, t, buflen, options);
+    xfree (m_dat);
+  } else {
+    (*cb) (DHASH_ERR, NULL); // marshalling failed.
+  }
+}
+
+void
+dhashclient::insert (bigint key, const char *buf,
+                     size_t buflen, cbinsertgw_t cb,
+		     ptr<option_block> options,
+		     dhash_ctype c)
+{
+  assert (c == DHASH_CONTENTHASH || c == DHASH_NOAUTH);
+  insert_worker_nopk (key, buf, buflen, cb, c, options);
 }
 
 void
@@ -127,7 +134,6 @@ dhashclient::insert (const char *buf, size_t buflen, cbinsertgw_t cb,
   bigint key = compute_hash (buf, buflen);
   insert (key, buf, buflen, cb, options);
 }
-
 
 /* 
  * keyhash block convention:
@@ -160,7 +166,8 @@ dhashclient::insert (bigint hash, sfs_pubkey2 key, sfs_sig2 sig,
 
   int m_len = x.uio ()->resid ();
   char *m_dat = suio_flatten (x.uio ());
-  insert (hash, m_dat, m_len, cb, DHASH_KEYHASH, x.uio()->resid(), options);
+  insert_togateway (hash, m_dat, m_len, cb, DHASH_KEYHASH, 
+                    x.uio()->resid(), options);
   xfree (m_dat);
 }
 
@@ -169,10 +176,10 @@ dhashclient::insert (bigint hash, sfs_pubkey2 key, sfs_sig2 sig,
  * generic insert (called by above methods)
  */
 void
-dhashclient::insert (bigint key, const char *buf, 
-		     size_t buflen, cbinsertgw_t cb,
-		     dhash_ctype t, size_t realsize,
-		     ptr<option_block> options)
+dhashclient::insert_togateway (bigint key, const char *buf, 
+                               size_t buflen, cbinsertgw_t cb,
+                               dhash_ctype t, size_t realsize,
+                               ptr<option_block> options)
 {
   dhash_insert_arg arg;
   arg.blockID = key;
@@ -204,12 +211,12 @@ dhashclient::insertcb (cbinsertgw_t cb, bigint key,
   ptr<insert_info> i = New refcounted<insert_info>(key, r);
   if (err) {
     errstr = strbuf () << "rpc error " << err;
-    warn << "dhashclient::insert failed: " << key << ": " << errstr << "\n";
+    warn << "dhashclient::insert failed (1): " << key << ": " << errstr << "\n";
     (*cb) (DHASH_RPCERR, i); //RPC failure
   } else {
     if (res->status != DHASH_OK) {
       errstr = dhasherr2str (res->status);
-      warn << "dhashclient::insert failed: " << key << ": " << errstr << "\n";
+      warn << "dhashclient::insert failed (2): " << key << ": " << errstr << "\n";
     }
     else {
       i->path.setsize (res->resok->path.size ());
@@ -254,6 +261,7 @@ dhashclient::retrievecb (cb_cret cb, bigint key,
 			 clnt_stat err)
 {
   str errstr;
+  bool verify_failed = false;
   if (err)
     errstr = strbuf () << "rpc error " << err;
   else if (res->status != DHASH_OK)
@@ -263,20 +271,27 @@ dhashclient::retrievecb (cb_cret cb, bigint key,
 		      res->resok->len)) {
       errstr = strbuf () << "data did not verify. len: " << res->resok->len
 	                 << " ctype " << res->resok->ctype;
+      verify_failed = true;
     } else {
       // success
       ptr<dhash_block> blk = get_block_contents (res->resok->block.base(), 
 						 res->resok->block.size(), 
 						 res->resok->ctype);
+      vec<chordID> path;
+      for (u_int i = 0; i < res->resok->path.size (); i++)
+	path.push_back (res->resok->path[i]);
+  
+      if (!blk) {
+        (*cb) (DHASH_RETRIEVE_NOVERIFY, NULL, path);
+        return;
+      }
+
       blk->hops = res->resok->hops;
       blk->errors = res->resok->errors;
       blk->retries = res->resok->retries;
       for (u_int i = 0; i < res->resok->times.size (); i++)
 	blk->times.push_back (res->resok->times[i]);
       
-      vec<chordID> path;
-      for (u_int i = 0; i < res->resok->path.size (); i++)
-	path.push_back (res->resok->path[i]);
       (*cb) (DHASH_OK, blk, path);
       return;
     } 
@@ -284,6 +299,7 @@ dhashclient::retrievecb (cb_cret cb, bigint key,
 
   warn << "dhashclient::retrieve failed: " << key << ": " << errstr << "\n";
   vec<chordID> e_path;
-  (*cb) (res->status, NULL, e_path); // failure
+  // failure
+  (*cb) (verify_failed ? DHASH_RETRIEVE_NOVERIFY : res->status, NULL, e_path); 
 }
 

@@ -22,7 +22,8 @@ enum dhash_stat {
   DHASH_STORE_NOVERIFY = 17,
   DHASH_STALE = 18,
   DHASH_CACHED = 19,
-  DHASH_TIMEDOUT = 20
+  DHASH_TIMEDOUT = 20,
+  DHASH_RETRIEVE_NOVERIFY = 21
 };
 
 enum dhash_ctype {

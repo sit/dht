@@ -25,17 +25,25 @@ struct option_block
   chordID guess;
 };
 
-
 class dhashclient
 {
 private:
   ptr<aclnt> gwclnt;
 
-  // inserts under the specified key
-  // (buf need not remain involatile after the call returns)
-  void insert (bigint key, const char *buf, size_t buflen, 
-	       cbinsertgw_t cb,  dhash_ctype t, 
-	       size_t realsize, ptr<option_block> options = NULL);
+  // inserts under the specified chordid
+  // (buf need not remain involatile after the call returns). renamed
+  // to insert_togateway() from insert() b/c it seemed confusing to have
+  // so many insert methods floating around, some of which are private and
+  // some public. --MW
+  void insert_togateway (bigint chordid, const char *buf, size_t buflen, 
+	                 cbinsertgw_t cb,  dhash_ctype t, 
+	                 size_t realsize, ptr<option_block> options = NULL);
+
+  // represents insert functions common to NOAUTH blocks and CONTENT_HASH
+  // blocks
+  void insert_worker_nopk (bigint key, const char* buf, size_t buflen,
+                           cbinsertgw_t cb, dhash_ctype t,
+                           ptr<option_block> options = NULL);
 
   void insertcb (cbinsertgw_t cb, bigint key, 
 		 ptr<dhash_insert_res>, clnt_stat err);
@@ -45,21 +53,26 @@ private:
 public:
   // sockname is the unix path (ex. /tmp/chord-sock) used to
   // communicate to lsd. 
-  dhashclient(str sockname);
+  dhashclient (str sockname);
 
-  //this version connects to the dhash service on TCP this is for RSC
-  dhashclient(ptr<axprt_stream> xprt);
+  // this version connects to the dhash service on TCP
+  dhashclient (ptr<axprt_stream> xprt);
 
   void append (chordID to, const char *buf, size_t buflen, cbinsertgw_t cb);
 
-  // inserts under the contents hash.  (buf need not remain involatile
-  // after the call returns)
-  void insert (const char *buf, size_t buflen, cbinsertgw_t cb, 
+  // insert using key = hash(buf).  (buf need not remain involatile
+  // after the call returns). 
+  void insert (const char *buf, size_t buflen, cbinsertgw_t cb,
 	       ptr<option_block> options = NULL);
+  // Insert under the provided key.  User can specify own key by using
+  // c = DHASH_NOAUTH.
   void insert (bigint key, const char *buf, size_t buflen, cbinsertgw_t cb,
-               ptr<option_block> options = NULL);
+               ptr<option_block> options = NULL,
+	       dhash_ctype c = DHASH_CONTENTHASH);
 
-  // insert under hash of public key
+  // insert under hash of (public key,salt). users of this function are
+  // responsible for constructing a keyhash_payload object. This object
+  // encapsulates the (salt,version,actual_payload) triple.
   void insert (bigint hash, sfs_pubkey2 pk, sfs_sig2 sig,
                keyhash_payload &p,
 	       cbinsertgw_t cb, ptr<option_block> options = NULL);
