@@ -26,7 +26,7 @@ p2p::timeout(location *l) {
 
 void
 p2p::doRPC (sfs_ID &ID, rpc_program progno, int procno, 
-	    const void *in, void *out,
+	    ptr<void> in, void *out,
 	    aclnt_cb cb)
 
 {

@@ -49,7 +49,7 @@ p2p::registerActionCallback(cbaction_t cb)
 void
 p2p::doActionCallbacks(sfs_ID id, char action) 
 {
-  //  warn << "\n\n\n\n ACTION CALLBACKS " << actionCallbacks.size() << "\n";
+  warnt("CHORD: doActionCallbacks");
   for (unsigned int i=0; i < actionCallbacks.size (); i++)
     actionCallbacks[i] (id, action);
 }

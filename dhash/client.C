@@ -50,10 +50,11 @@ dhashclient::dispatch (svccb *sbp)
     {
       warnt("DHASH: insert_request");
       dhash_insertarg *item = sbp->template getarg<dhash_insertarg> ();
+      ptr<dhash_insertarg> p_item = New refcounted<dhash_insertarg> (*item);
       sfs_ID n = item->key;
       defp2p->insert_or_lookup = true;
       defp2p->dofindsucc (n, wrap(this, &dhashclient::insert_findsucc_cb, 
-				  sbp, item));
+				  sbp, p_item));
     }
     break;
   default:
@@ -63,7 +64,7 @@ dhashclient::dispatch (svccb *sbp)
 }
 
 void
-dhashclient::insert_findsucc_cb(svccb *sbp, dhash_insertarg *item,
+dhashclient::insert_findsucc_cb(svccb *sbp, ptr<dhash_insertarg> item,
 				sfs_ID succ, route path,
 				sfsp2pstat err) {
   if (err) {
@@ -77,7 +78,7 @@ dhashclient::insert_findsucc_cb(svccb *sbp, dhash_insertarg *item,
 
     dhash_storeres *res = New dhash_storeres();
     defp2p->doRPC(succ, dhash_program_1, DHASHPROC_STORE, item, res,
-		  wrap(this, &dhashclient::insert_replicate_cb, sbp, res, succ, item, num_replicas));
+		  wrap(this, &dhashclient::insert_store_cb, sbp, res));
 
     if (do_caching) 
       cache_on_path(item, path);
@@ -86,49 +87,24 @@ dhashclient::insert_findsucc_cb(svccb *sbp, dhash_insertarg *item,
 }
 
 void
-dhashclient::insert_replicate_cb(svccb *sbp,  dhash_storeres *res, 
-				 sfs_ID succ, dhash_insertarg *item,
-				 int n,
-				 clnt_stat err) 
+dhashclient::insert_store_cb(svccb *sbp,  dhash_storeres *res, 
+			     clnt_stat err )
 {
 
-  warnt("DHASH: insert_after_STORE_replicate");
+  warnt("DHASH: insert_after_STORE");
 
   if (res->status) {
     // error in insertion/replication: return to caller
-    warnx << "insert_replicate_cb: failed " << res->status << "\n";
+    warnx << "insert_store_cb: failed " << res->status << "\n";
     sbp->replyref(dhash_stat (DHASH_STOREERR));
-  } else if (n == 0) {
-    //replication complete: return to caller
+  } else 
     sbp->replyref(dhash_stat (DHASH_OK));
-  } else {
-    // continue replication
-    defp2p->get_successor (succ, wrap(this, &dhashclient::insert_repl_succ_cb,
-			   sbp, item, n));
-  }
+
   delete res;
-}
-
-void
-dhashclient::insert_repl_succ_cb (svccb *sbp, dhash_insertarg *item, int n,
-				  sfs_ID succ, net_address r,
-				  sfsp2pstat err) {			 
-
-  if (err) {
-    //error finding next successor, return to caller
-    sbp->replyref(dhash_stat (DHASH_NOENT));
-  } else {
-    // do the store
-    dhash_storeres *res = New dhash_storeres();
-    item->type = DHASH_REPLICA;
-    defp2p->doRPC(succ, dhash_program_1, DHASHPROC_STORE, item, res,
-		  wrap(this, &dhashclient::insert_replicate_cb, sbp, 
-		       res, succ, item, n - 1));
-  }
 }
    
 void
-dhashclient::cache_on_path(dhash_insertarg *item, route path) 
+dhashclient::cache_on_path(ptr<dhash_insertarg> item, route path) 
 {
 
   for (unsigned int i = 0; i < path.size (); i++) {
@@ -171,7 +147,7 @@ dhashclient::lookup_findsucc_cb(svccb *sbp, sfs_ID n,
 
     warnt("DHASH: lookup_after_dofindsucc");
 
-    sfs_ID *m = New sfs_ID (n);
+    ptr<sfs_ID> m = New refcounted<sfs_ID> (n);
     dhash_res *res = New dhash_res(DHASH_OK);
 
     retry_state *st = New retry_state (n, sbp, succ, path, scb);
@@ -201,7 +177,7 @@ dhashclient::lookup_fetch_cb(dhash_res *res, retry_state *st, clnt_stat err)
 
 
     if (do_caching) {
-      dhash_insertarg *di = New dhash_insertarg ();
+      ptr<dhash_insertarg> di = New refcounted<dhash_insertarg> ();
       di->key = st->n;
       di->data = res->resok->res;
       cache_on_path(di, st->path);
@@ -227,7 +203,8 @@ dhashclient::retry (retry_state *st, sfs_ID p, net_address a, sfsp2pstat stat)
   } else {
     dhash_res *r = New dhash_res();
     warnx << "retry: " << st->n << " at " << p << "\n";
-    defp2p->doRPC(p, dhash_program_1, DHASHPROC_FETCH, &st->n, r, 
+    ptr<sfs_ID> p_n = New refcounted<sfs_ID> (st->n);
+    defp2p->doRPC(p, dhash_program_1, DHASHPROC_FETCH, p_n, r, 
 		  wrap(this, &dhashclient::lookup_fetch_cb, r,st));
   }
 }
@@ -242,7 +219,7 @@ dhashclient::search_cb(sfs_ID my_target, sfs_ID node, sfs_ID target, cbi cb) {
 
   if (my_target == target) {
     dhash_stat *status = New dhash_stat();
-    sfs_ID *target_h = New sfs_ID();
+    ptr<sfs_ID> target_h = New refcounted<sfs_ID>();
     *target_h = target;
     defp2p->doRPC (node, dhash_program_1, DHASHPROC_CHECK, target_h, status,
 		   wrap(this, &dhashclient::search_cb_cb, status, cb));
@@ -267,4 +244,5 @@ dhashclient::search_cb_cb (dhash_stat *res, cbi cb, clnt_stat err) {
   } else
     cb (0);
 }
+
 

@@ -38,15 +38,15 @@ extern chord_stats stats;
 template<class KEY, class VALUE>
 class vs_cache {
   struct cache_entry {
-    vs_cache *const c;
-    const KEY    k;
+    vs_cache    *c;
+     KEY    k;
     VALUE        v;
 
     ihash_entry<cache_entry> fhlink;
     tailq_entry<cache_entry> lrulink;
 
     cache_entry (vs_cache<KEY, VALUE> *cc,
-	       const KEY &kk, const VALUE *vv)
+	        KEY &kk,  VALUE *vv)
       : c (cc), k (kk)
     {      v = *vv;
     c->lrulist.insert_tail (this);
@@ -76,7 +76,7 @@ class vs_cache {
   
 private:
   friend class cache_entry;   //XXX hashid is a hack that ruins the generic nature of the cache
-  ihash<const KEY, cache_entry, &cache_entry::k, &cache_entry::fhlink, hashID> entries;
+  ihash<KEY, cache_entry, &cache_entry::k, &cache_entry::fhlink, hashID> entries;
   u_int num_cache_entries;
   tailq<cache_entry, &cache_entry::lrulink> lrulist;
   u_int max_cache_entries;
@@ -88,20 +88,44 @@ public:
 
   ~vs_cache () { entries.deleteall (); }
   void flush () { entries.deleteall (); }
-  void enter (const KEY& kk, const VALUE *vv)
+  void enter ( KEY& kk,  VALUE *vv)
     {
-    cache_entry *ad = entries[kk];
-    if (!ad)
-      vNew cache_entry (this, kk, vv);
-    else 
-      ad->touch ();
-  }
+      cache_entry *ad = entries[kk];
+      if (!ad)
+	vNew cache_entry (this, kk, vv);
+      else 
+	ad->touch ();
+    }
   
-  const VALUE *lookup (const KEY& kk)
-  {
-    cache_entry *ad = entries[kk];
+  void remove ( KEY& k) 
+    {
+      
+      entries.remove(entries[k]);
+    }
+
+   VALUE *lookup ( KEY& kk)
+    {
+      cache_entry *ad = entries[kk];
+      if (ad) {
+	ad->touch ();
+	return &ad->v;
+      }
+      return NULL;
+    }
+  
+   void traverse ( callback<void, KEY>::ref cb ) 
+     {
+       cache_entry *e = entries.first ();
+       while (e) 
+	 {
+	   cb (e->k);
+	   e = entries.next (e);
+	 }
+     }
+
+   VALUE *peek ( KEY& k) {
+    cache_entry *ad = entries[k];
     if (ad) {
-      ad->touch ();
       return &ad->v;
     }
     return NULL;
@@ -130,12 +154,12 @@ struct location;
 struct doRPC_cbstate {
   rpc_program progno;
   int procno;
-  const void *in;
+  ptr<void> in;
   void *out;
   aclnt_cb cb;
   tailq_entry<doRPC_cbstate> connectlink;
   
-  doRPC_cbstate (rpc_program ro, int pi, const void *ini, void *outi,
+  doRPC_cbstate (rpc_program ro, int pi, ptr<void> ini, void *outi,
 		 aclnt_cb cbi) : progno (ro), procno (pi), in (ini),  
     out (outi), cb (cbi) {};
   
@@ -255,18 +279,11 @@ class p2p : public virtual refcount  {
 
   ~p2p(); // added to help do RPCs/lookup & simulate
   
-  // added to help simulate
-  int* edges; // holds array of edges
-  int numnodes; //XXX - why is this a public field?
-
-  void initialize_graph();
-  void doRealRPC (sfs_ID ID, rpc_program progno, int procno, 
-		  const void *in, void *out,
-		  aclnt_cb cb);  
-  // end added to help simulate
 
   sfs_ID my_ID () { return myID; };
   sfs_ID my_pred () { return predecessor.first[0]; };
+  sfs_ID my_succ () { return finger_table[1].first[0]; };
+
   void deleteloc (sfs_ID &n);
   void updateloc (sfs_ID &x, net_address &r, sfs_ID &source);
   bool lookup_anyloc (sfs_ID &n, sfs_ID *r);
@@ -281,7 +298,7 @@ class p2p : public virtual refcount  {
 
   void timeout(location *l);
   void connect_cb (callback<void, ptr<axprt_stream> >::ref cb, int fd);
-  void doRPC (sfs_ID &n, rpc_program progno, int procno, const void *in, 
+  void doRPC (sfs_ID &n, rpc_program progno, int procno, ptr<void> in, 
 	      void *out, aclnt_cb cb);
   void doRealRPC (rpc_args *a);
   void dorpc_connect_cb(location *l, ptr<axprt_stream> x);
@@ -318,6 +335,13 @@ class p2p : public virtual refcount  {
   void get_successor (sfs_ID n, cbsfsID_t cb);
   void get_successor_cb (sfs_ID n, cbsfsID_t cb, sfsp2p_findres *res, 
 			 clnt_stat err);
+
+  void get_succ (sfs_ID n, callback<void, sfs_ID, sfsp2pstat>::ref cb);
+  void get_succ_cb (callback<void, sfs_ID, sfsp2pstat>::ref cb, 
+		    sfs_ID succ,
+		    net_address r,
+		    sfsp2pstat err);
+
   void get_predecessor (sfs_ID n, cbsfsID_t cb);
   void get_predecessor_cb (sfs_ID n, cbsfsID_t cb, sfsp2p_findres *res, 
 			 clnt_stat err);

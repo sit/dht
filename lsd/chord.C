@@ -17,8 +17,6 @@ p2p::updatepred (wedge &w, sfs_ID &x)
   if (w.first[0] == x)
     return false;
 
-  doActionCallbacks(x, ACT_NODE_JOIN);
-
   if (!between (w.start, w.end, w.first[0])) {
     if (between (w.start, w.end, x)) {
       w.first[0] = x;
@@ -40,7 +38,6 @@ p2p::updatesucc (wedge &w, sfs_ID &x)
   if (w.first[0] == x)
     return false;
 
-  doActionCallbacks(x, ACT_NODE_JOIN);
   if (!between (w.start, w.end, w.first[0])) {
     if (between (w.start, w.end, x)) {
       w.first[0] = x;
@@ -132,7 +129,6 @@ p2p::set_closeloc (wedge &w)
   // warnx << "set_closeloc: replace " << w.first[0] << " with " << n << "\n";
   w.first[0] = n;
   w.alive = true;
-  doActionCallbacks(n, ACT_NODE_JOIN);
 }
 
 
@@ -140,15 +136,16 @@ void
 p2p::updateloc (sfs_ID &x, net_address &r, sfs_ID &source)
 {
   if (locations[x] == NULL) {
-     warnx << "add: " << x << " at port " << r.port << " source: " 
+      
+    warnx << "add: " << x << " at port " << r.port << " source: " 
     	  << source << "\n";
     location *loc = New location (x, r, source);
     locations.insert (loc);
     doActionCallbacks(x, ACT_NODE_JOIN);
+
   } else {
     // warnx << "update: " << x << " at port " << r.port << " source "
     //	  << source << "\n";
-    doActionCallbacks(x, ACT_NODE_UPDATE);
     locations[x]->addr = r;
     locations[x]->source = source;
   }
@@ -159,6 +156,7 @@ p2p::deleteloc (sfs_ID &n)
 {
   warnx << "deleteloc: " << n << "\n";
   assert (n != myID);
+
   if (predecessor.first[0] == n)
     predecessor.alive = false;
   for (int i = 0; i <= NBIT; i++) {
@@ -181,8 +179,9 @@ p2p::deleteloc (sfs_ID &n)
     //    alert (l->source, n);
     l->alive = false;
     locations.remove (l);
-    doActionCallbacks(n, ACT_NODE_LEAVE);
   }
+  doActionCallbacks(n, ACT_NODE_LEAVE);
+    
 }
 
 
@@ -291,7 +290,7 @@ p2p::stabilize (int c)
   int i = c % (NBIT+1);
   bool stable = true;
 
-  warnx << "stabilize " << i << "\n";
+  warnt("CHORD: stabilize");
 
   if (!predecessor.alive) stable = false;
   else get_successor (predecessor.first[0],
@@ -457,7 +456,7 @@ p2p::bootstrap_done (int r)
 		   wrap (mkref (this), &p2p::bootstrap_getsucc_cb, r, i));
     }
   } else {
-    print ();
+    //    print ();
   }
 }
 
@@ -505,15 +504,15 @@ p2p::bootstrap_getsucc_cb (int r, int i, sfs_ID s, net_address a,
   if (status) {
     warnx << "bootstrap_getsucc_cb: failure " << status << "\n";
   } else {
-    warnx << "bootstrap_getsucc_cb: " << i << " successor of " 
-	  << finger_table[i].first[r-1] << " is " << s << "\n";
+    //    warnx << "bootstrap_getsucc_cb: " << i << " successor of " 
+    //	  << finger_table[i].first[r-1] << " is " << s << "\n";
     finger_table[i].first[r] = s;
     finger_table[i].nentry = r + 1;
     if (nbootstrap <= 0) {
       warnx << "boostrap_getsucc_cb: round " << r << " complete\n";
       if (!stable) bootstrap ();
       else {
-	print ();
+	//	print ();
 	bootstrap_done (r);
       }
     }
@@ -523,13 +522,14 @@ p2p::bootstrap_getsucc_cb (int r, int i, sfs_ID s, net_address a,
 void
 p2p::notify (sfs_ID &n, sfs_ID &x)
 {
-  sfsp2p_notifyarg *na = New sfsp2p_notifyarg;
+  ptr<sfsp2p_notifyarg> na = New refcounted<sfsp2p_notifyarg>;
   sfsp2pstat *res = New sfsp2pstat;
 
   location *l = locations[x];
   assert (l);
   na->x = x;
   na->r = l->addr;
+
   doRPC (n, sfsp2p_program_1, SFSP2PPROC_NOTIFY, na, res, 
 	 wrap (mkref (this), &p2p::notify_cb, res));
 }
@@ -547,7 +547,7 @@ p2p::notify_cb (sfsp2pstat *res, clnt_stat err)
 void
 p2p::alert (sfs_ID &n, sfs_ID &x)
 {
-  sfsp2p_notifyarg *na = New sfsp2p_notifyarg;
+  ptr<sfsp2p_notifyarg> na = New refcounted<sfsp2p_notifyarg>;
   sfsp2pstat *res = New sfsp2pstat;
 
   warnx << "alert: " << x << " died; notify " << n << "\n";
@@ -680,7 +680,7 @@ p2p::dofindclosestpred (svccb *sbp, sfsp2p_findarg *fa)
 void
 p2p::donotify (svccb *sbp, sfsp2p_notifyarg *na)
 {
-  warnx << "donotify: " << na->x << "\n";
+  warnt("CHORD: donotify");
   updateloc (na->x, na->r, na->x);
   if (notice (1, na->x, na->r)) {
     bootstrap ();
@@ -691,7 +691,8 @@ p2p::donotify (svccb *sbp, sfsp2p_notifyarg *na)
 void
 p2p::doalert (svccb *sbp, sfsp2p_notifyarg *na)
 {
-  warnx << "doalert: " << na->x << "\n";
+  warnt("CHORD: doalert");
+
   // perhaps less aggressive and check status of x first
   deleteloc (na->x);
   // bootstrap ();

@@ -19,6 +19,7 @@
  * Include file for the distributed hash service
  */
 
+
 struct store_cbstate;
 
 typedef callback<void, ptr<dbrec>, dhash_stat>::ptr cbvalue;
@@ -58,7 +59,7 @@ class dhashclient {
 
 
   void dispatch (svccb *sbp);
-  void cache_on_path(dhash_insertarg *item, route path);
+  void cache_on_path(ptr<dhash_insertarg> item, route path);
 
   void lookup_findsucc_cb (svccb *sbp, sfs_ID n,
 			   searchcb_entry *scb,
@@ -66,15 +67,10 @@ class dhashclient {
   void lookup_fetch_cb (dhash_res *res, retry_state *st,  clnt_stat err);
   void retry (retry_state *st, sfs_ID p, net_address r, sfsp2pstat stat);
   
-  void insert_findsucc_cb (svccb *sbp, dhash_insertarg *item, sfs_ID succ, 
+  void insert_findsucc_cb (svccb *sbp, ptr<dhash_insertarg> item, sfs_ID succ, 
 			   route path, sfsp2pstat err);
-  void insert_replicate_cb(svccb *sbp,  dhash_storeres *res, 
-			   sfs_ID succ, dhash_insertarg *item,
-			   int n,
-			   clnt_stat err);
-  void insert_repl_succ_cb (svccb *sbp, dhash_insertarg *item, int n,
-			    sfs_ID succ, net_address r,
-			    sfsp2pstat err);
+  void insert_store_cb(svccb *sbp,  dhash_storeres *res, 
+		       clnt_stat err);
 
   void cache_store_cb(dhash_stat *res, clnt_stat err);
 
@@ -100,11 +96,25 @@ class dhash {
   
   void fetch (sfs_ID id, cbvalue cb);
   void fetch_cb (cbvalue cb,  ptr<dbrec> ret);
+
   void store (sfs_ID id, dhash_value data, store_status type, cbstore cb);
-  void store_cb (cbstore cb, int stat);
+  void store_cb(store_status type, sfs_ID id, cbstore cb, int stat);
+  void store_repl_cb (cbstore cb, dhash_stat err);
+
+  void replicate_key (sfs_ID key, int degree, callback<void, dhash_stat>::ref cb);
+  void replicate_key_succ_cb (sfs_ID key, int degree_remaining, callback<void, dhash_stat>::ref cb,
+			      vec<sfs_ID> repls, sfs_ID succ, sfsp2pstat err);
+  void replicate_key_transfer_cb (sfs_ID key, int degree_remaining, callback<void, dhash_stat>::ref cb,
+				  sfs_ID succ, vec<sfs_ID> repls, dhash_stat err);
+
   void cache_store_cb(dhash_res *res, clnt_stat err);
   
   dhash_stat key_status(sfs_ID n);
+  void transfer_key (sfs_ID to, sfs_ID key, store_status stat, callback<void, dhash_stat>::ref cb);
+  void transfer_fetch_cb (sfs_ID to, sfs_ID key, store_status stat, callback<void, dhash_stat>::ref cb,
+			  ptr<dbrec> data, dhash_stat err);
+  void transfer_store_cb (callback<void, dhash_stat>::ref cb, 
+			  dhash_storeres *res, clnt_stat err);
 
   void store_flush (sfs_ID key, dhash_stat value);
   void store_flush_cb (int err);
@@ -112,6 +122,13 @@ class dhash {
   void cache_flush_cb (int err);
 
   void act_cb(sfs_ID id, char action);
+  void walk_cb(sfs_ID succ, sfs_ID id, sfs_ID key);
+
+  void transfer_key_cb (sfs_ID key, dhash_stat err);
+  void fix_replicas_cb (sfs_ID id, sfs_ID k);
+  void fix_replicas_transfer_cb (dhash_stat err);
+  void rereplicate_cb (sfs_ID k);
+  void rereplicate_replicate_cb (dhash_stat err);
 
   char responsible(sfs_ID n);
 
@@ -119,7 +136,9 @@ class dhash {
 
   vs_cache<sfs_ID, dhash_stat> key_store;
   vs_cache<sfs_ID, dhash_stat> key_cache;
-
+  
+  sfs_ID pred;
+  vec<sfs_ID> replicas;
 
  public:
   dhash (str dbname, int nreplica, int ss = 10000, int cs = 1000);

@@ -38,6 +38,23 @@ p2p::get_successor_cb (sfs_ID n, cbsfsID_t cb, sfsp2p_findres *res,
   }
 }
 
+//short hand version of get_successor to avoid passing net_address around 
+// if we don't need it
+void
+p2p::get_succ (sfs_ID n, callback<void, sfs_ID, sfsp2pstat>::ref cb) 
+{
+  get_successor (n, wrap(this, &p2p::get_succ_cb, cb));
+}
+
+void
+p2p::get_succ_cb (callback<void, sfs_ID, sfsp2pstat>::ref cb, 
+		  sfs_ID succ,
+		  net_address r,
+		  sfsp2pstat err) 
+{
+  cb (succ, err);
+}
+
 void 
 p2p::get_predecessor (sfs_ID n, cbsfsID_t cb)
 {
@@ -134,7 +151,7 @@ void
 p2p::find_predecessor_restart (sfs_ID &n, sfs_ID &x, route search_path,
 			       cbroute_t cb)
 {
-  sfsp2p_findarg *fap = New sfsp2p_findarg;
+  ptr<sfsp2p_findarg> fap = New refcounted<sfsp2p_findarg>;
   sfsp2p_findres *res = New sfsp2p_findres (SFSP2P_OK);
   fap->x = x;
   doRPC (n, sfsp2p_program_1, SFSP2PPROC_FINDCLOSESTPRED, fap, res,
@@ -148,7 +165,7 @@ p2p::find_pred_test_cache_cb (sfs_ID n, sfs_ID x, cbroute_t cb, int found)
   route search_path;
   search_path.push_back(n);
   if (!found) {
-    sfsp2p_findarg *fap = New sfsp2p_findarg;
+    ptr<sfsp2p_findarg> fap = New refcounted<sfsp2p_findarg>;
     sfsp2p_findres *res = New sfsp2p_findres (SFSP2P_OK);
     fap->x = x;
     warnt("CHORD: issued_FINDCLOSESTPRED_RPC");
@@ -195,7 +212,7 @@ p2p::find_closestpred_test_cache_cb (sfs_ID node, findpredecessor_cbstate *st, i
   if (!found)
     {
 
-      sfsp2p_testandfindarg *arg = New sfsp2p_testandfindarg ();
+      ptr<sfsp2p_testandfindarg> arg = New refcounted<sfsp2p_testandfindarg> ();
       arg->x = st->x;
       sfsp2p_testandfindres *res = New sfsp2p_testandfindres (SFSP2P_OK);
       warnt("CHORD: issued_testandfind");
@@ -222,7 +239,9 @@ p2p::test_and_find_cb (sfsp2p_testandfindres *res, findpredecessor_cbstate *st, 
   warnt("CHORD: test_and_find_cb");
 
   if (err) {
+    deleteloc(st->nprime);
     st->cb(st->nprime, st->search_path, SFSP2P_RPCFAILURE);
+    warnt("CHORD: test_and_find RPC ERROR");
   } else if (res->status == SFSP2P_INRANGE) {
     st->search_path.push_back(res->inres->succ);
     updateloc (res->inres->succ, res->inres->r, st->nprime);
@@ -273,7 +292,7 @@ p2p::find_closestpred_succ_cb (findpredecessor_cbstate *st,
     } else if (!between (st->nprime, s, st->x)) {
       //      warnx << "find_closestpred_succ_cb: " << st->x << " is not between " 
       //    << st->nprime << " and " << s << "\n";
-      sfsp2p_findarg *fap = New sfsp2p_findarg;
+      ptr<sfsp2p_findarg> fap = New refcounted<sfsp2p_findarg>;
       sfsp2p_findres *res = New sfsp2p_findres (SFSP2P_OK);
       fap->x = st->x;
       warnt("CHORD: issued_FINDCLOSESTPRED_RPC");
