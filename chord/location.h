@@ -30,6 +30,7 @@
 
 #include "aclnt_chord.h"
 #include "skiplist.h"
+#include "stabilize.h"
 
 typedef callback<void,chordstat>::ptr cbping_t;
 typedef callback<void,chordID,bool,chordstat>::ref cbchallengeID_t;
@@ -60,7 +61,7 @@ struct location {
 
 #include "comm.h"
 
-class locationtable : public virtual refcount {
+class locationtable : public virtual refcount, public stabilizable {
   typedef unsigned short loctype;
   static const loctype LOC_REGULAR = 1 << 0;
   static const loctype LOC_PINSUCC = 1 << 1;
@@ -117,6 +118,10 @@ class locationtable : public virtual refcount {
 
   void printloc (locwrap *l);
   void doRPCcb (ptr<location> l, aclnt_cb realcb, clnt_stat err);
+
+  u_int nout_continuous;
+  void check_dead ();
+  void check_dead_cb (chordID x, bool b, chordstat s);
   
  public:
   locationtable (ptr<chord> _chordnode, int _max_connections);
@@ -159,6 +164,12 @@ class locationtable : public virtual refcount {
   net_address & getaddress (const chordID &x);
   float get_a_lat (const chordID &x);
   void fill_getnodeext (chord_node_ext &data, const chordID &x);
+
+  // stabilization --- check to see if dead nodes are still dead; does
+  // not really affect the true stabilization of anything.
+  bool continuous_stabilizing () { return nout_continuous > 0; }
+  void do_continuous ();
+  bool isstable () { return true; }
 };
 
 extern bool nochallenges;

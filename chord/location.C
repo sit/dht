@@ -509,10 +509,10 @@ locationtable::challenge (const chordID &x, cbchallengeID_t cb)
   ptr<chord_challengearg> ca = New refcounted<chord_challengearg>;
   chord_challengeres *res = New chord_challengeres (CHORD_OK);
   nchallenge++;
-  ca->v.n = x;
+  ca->v.n = l->n;
   ca->challenge = c;
   l->outstanding_cbs.push_back (cb);
-  doRPC (x, chord_program_1, CHORDPROC_CHALLENGE, ca, res, 
+  doRPC (l->n, chord_program_1, CHORDPROC_CHALLENGE, ca, res, 
 	 wrap (mkref (this), &locationtable::challenge_cb, c, l, res));
 }
 
@@ -617,4 +617,39 @@ void
 locationtable::stats ()
 {
   hosts->stats ();
+}
+
+void
+locationtable::do_continuous ()
+{
+  check_dead ();
+}
+
+void
+locationtable::check_dead ()
+{
+  for (locwrap *l = cachedlocs.first; l != NULL; l = cachedlocs.next (l)) {
+    if ((l->type_ & LOC_REGULAR) && !l->loc_->alive) {
+#ifdef PNODE
+      if (myvnode)
+	warnx << myvnode->myID << " ";
+#endif /* PNODE */
+      warnx << "check_dead: " << l->loc_->n << "\n";
+      nout_continuous++;
+      // make sure we actually go out on the network and check if the node
+      // is alive. if we're allowed to challenge, do that as well.
+      if (nochallenges)
+	ping (l->loc_->n, wrap (this, &locationtable::check_dead_cb,
+				l->loc_->n, false));
+      else
+	challenge (l->loc_->n, wrap (this, &locationtable::check_dead_cb));
+      return;
+    }
+  }
+}
+
+void
+locationtable::check_dead_cb (chordID x, bool b, chordstat s)
+{
+  nout_continuous--;
 }

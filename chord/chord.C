@@ -51,6 +51,12 @@ vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
   stabilizer->register_client (mkref (this));
   stabilizer->register_client (fingers);
   stabilizer->register_client (toes);
+#ifndef PNODE
+  // If vnode's share a locationtable, then we don't need to register this
+  // more than once.
+  if (myindex == 0)
+#endif /* PNODE */    
+    stabilizer->register_client (locations);
     
   locations->incvnodes ();
 
