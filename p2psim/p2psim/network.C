@@ -115,6 +115,11 @@ Network::avglatency()
   return (answer = (total_latency / n));
 }
 
+
+// 
+// taken from http://www-math.mit.edu/~spielman/ECC/randGen.c, which notes the
+// source as the book "Numerical Recipies in C".
+// 
 float
 Network::gaussian()
 {
