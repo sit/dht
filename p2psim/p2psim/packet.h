@@ -55,7 +55,7 @@ private:
 
   friend class Node;
   friend class Network;
-  int _queue_delay;
+  Time _queue_delay;
 
   Channel *_c;            // where to send the reply
   IPAddress _src;

@@ -47,7 +47,7 @@ vector<double> Node::_failed_stretch;
 vector<double> Node::_num_timeouts;
 vector<Time> Node::_time_timeouts;
 
-Node::Node(IPAddress i) : _ip(i), _alive(true), _token(1) 
+Node::Node(IPAddress i) : _queue_len(0), _ip(i), _alive(true), _token(1) 
 {
 }
 
