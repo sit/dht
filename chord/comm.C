@@ -125,6 +125,7 @@ locationtable::doRPC (chordID &ID, rpc_program prog, int procno,
   location *l = getlocation (ID);
   assert (l);
   assert (l->refcnt >= 0);
+  touchlru (l);
   l->nout++;
   if (l->x) {    
     timecb_remove(l->timeout_cb);
@@ -139,8 +140,7 @@ locationtable::doRPC (chordID &ID, rpc_program prog, int procno,
 	c->call (procno, in, out, wrap (mkref (this), &locationtable::doRPCcb,
 				      cb, l, s));
       }
-    } else 
-      doForeignRPC (prog, procno, in, out, ID, cb);
+    } else doForeignRPC (prog, procno, in, out, ID, cb);
     
   } else {
     doRPC_cbstate *st = New doRPC_cbstate (prog, procno, in, out, cb, ID);
@@ -183,7 +183,7 @@ locationtable::dorpc_connect_cb(location *l, ptr<axprt_stream> x)
       l->connectlist.remove(st);
       delete st;
     }
-    decrefcnt (l);
+    //    decrefcnt (l);
     return;
   }
 
@@ -193,19 +193,16 @@ locationtable::dorpc_connect_cb(location *l, ptr<axprt_stream> x)
   l->timeout_cb = delaycb (360, 0, wrap(this, &locationtable::timeout, l));
   doRPC_cbstate *st, *st1;
   for (st = l->connectlist.first; st; st = st1) {
-
     if (st->progno.progno == CHORD_PROGRAM) {
       ptr<aclnt> c = aclnt::alloc (x, st->progno);
       c->call (st->procno, st->in, st->out, st->cb);
     } else {
       doForeignRPC (st->progno, st->procno, st->in, st->out, st->ID, st->cb);
     }
-    
-      st1 = l->connectlist.next (st);
+    st1 = l->connectlist.next (st);
     l->connectlist.remove(st);
     delete st;
   }
-  //  decrefcnt (l);
 }
 
 void
@@ -216,7 +213,7 @@ locationtable::chord_connect(chordID ID, callback<void,
   assert (l);
   assert (l->refcnt >= 0);
   l->connecting = true;
-  increfcnt (ID);
+  //  increfcnt (ID);
   ptr<struct timeval> start = new refcounted<struct timeval>();
   gettimeofday(start, NULL);
   if (l->x) {    
@@ -225,7 +222,7 @@ locationtable::chord_connect(chordID ID, callback<void,
     					 &locationtable::timeout, l));
     (*cb)(l->x);
   } else {
-    //    warnx << "tcpconnect: " << l->addr.hostname << " " << l->addr.port << "\n";
+    warnx << "tcpconnect: " << l->addr.hostname << " " << l->addr.port << "\n";
     tcpconnect (l->addr.hostname, l->addr.port, 
 		wrap (mkref (this), &locationtable::connect_cb, cb));
   }

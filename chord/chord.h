@@ -246,7 +246,7 @@ class chord : public virtual refcount {
   // a number of cached nodes.  the cached nodes have refcnt = 0
   ptr<locationtable> locations; 
   chord (str _wellknownhost, int _wellknownport, const chordID &_wellknownID,
-	 int port, str myhost, int set_rpcdelay);
+	 int port, str myhost, int set_rpcdelay, int max_cache);
   ptr<vnode> newvnode (cbjoin_t cb);
   ptr<vnode> newvnode (chordID &x, cbjoin_t cb);
   void deletefingers (chordID &x);

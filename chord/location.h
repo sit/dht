@@ -63,7 +63,7 @@ struct doRPC_cbstate {
 };
 
 struct location {
-  int refcnt;
+  int refcnt;	// locs w. refcnt == 0 are in the cache; refcnt > 0 are fingers
   chordID n;
   net_address addr;
   chordID source;
@@ -71,6 +71,7 @@ struct location {
   bool connecting;
   tailq<doRPC_cbstate, &doRPC_cbstate::connectlink> connectlist;
   ihash_entry<location> fhlink;
+  tailq_entry<location> lrulink;
   u_int64_t rpcdelay;
   u_int64_t nrpc;
   u_int64_t maxdelay;
@@ -103,9 +104,9 @@ struct location {
     
     
   }
-
   ~location () {
     warnx << "~location: delete " << n << "\n";
+    x = NULL;
   }
 };
 
@@ -115,8 +116,11 @@ struct node {
 };
 
 class locationtable : public virtual refcount {
-  ihash<chordID,location,&location::n,&location::fhlink,hashID> locs;
   ptr<chord> chordnode;
+  ihash<chordID,location,&location::n,&location::fhlink,hashID> locs;
+  tailq<location, &location::lrulink> lrulist;  // the cached locations
+  int size_lrulist;
+  int max_lrulist;
   u_int64_t rpcdelay;
   u_int64_t nrpc;
   u_int64_t nrpcfailed;
@@ -132,10 +136,14 @@ class locationtable : public virtual refcount {
   void chord_connect(chordID ID, callback<void, ptr<axprt_stream> >::ref cb);
   void timeout(location *l);
   void decrefcnt (location *l);
+  void touchlru (location *l);
+  void addlru (location *l);
+  void deletelru (void);
+  void removelru (location *l);
  public:
   bool betterpred1 (chordID current, chordID target, chordID newpred);
   bool betterpred2 (chordID current, chordID target, chordID newpred);
-  locationtable (ptr<chord> _chordnode, int set_rpcdelay);
+  locationtable (ptr<chord> _chordnode, int set_rpcdelay, int _max_cache);
   void insert (chordID &_n, sfs_hostname _s, int _p, chordID &_source);
   location *getlocation (chordID &x);
   void deleteloc (chordID &n);

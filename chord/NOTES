@@ -1,10 +1,8 @@
 - test lookups during failures (don't run stabilize)
 - test lookups during joins
-- size of location table (clean out entries with refcnt == 0)
+- test inserts during joins
+
 - smart implementation of location table
 - recursive lookup
-
-
-- bad: multiple vnodes start all at the same time
-- does dhash move files?
-- why does lsd consume so much cycles?
+- out of fd
+- keep max hops ever seen

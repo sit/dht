@@ -22,12 +22,14 @@
 #include <math.h>
 #include "chord.h"
 
-locationtable::locationtable (ptr<chord> _chordnode, int set_rpcdelay)
-  : chordnode (_chordnode), rpcdelay (set_rpcdelay)
+locationtable::locationtable (ptr<chord> _chordnode, int set_rpcdelay, 
+			      int _max_cache)
+  : chordnode (_chordnode), max_lrulist (_max_cache), rpcdelay (set_rpcdelay)
 {
   nrpc = 0;
   nrpcfailed = 0;
   rpcdelay = 0;
+  size_lrulist = 0;
 }
 
 void
@@ -35,6 +37,7 @@ locationtable::insert (chordID &n, sfs_hostname s, int p, chordID &source)
 {
   location *l = New location (n, s, p, source);
   locs.insert (l);
+  addlru (l);
 }
 
 location *
@@ -152,7 +155,7 @@ locationtable::cacheloc (chordID &x, net_address &r, chordID &source)
     //  << source << "\n";
     location *loc = New location (x, r, source);
     locs.insert (loc);
-    // doActionCallbacks(x, ACT_NODE_JOIN);
+    addlru (loc);
   }
 }
 
@@ -165,9 +168,8 @@ locationtable::updateloc (chordID &x, net_address &r, chordID &source)
     location *loc = New location (x, r, source);
     loc->refcnt++;
     locs.insert (loc);
-    //    defp2p->doActionCallbacks(x, ACT_NODE_JOIN);
   } else {
-    locs[x]->refcnt++;
+    increfcnt (x);
     // XXX check whether address hasn't changed.
   }
 }
@@ -184,13 +186,8 @@ void
 locationtable::decrefcnt (location *l)
 {
   l->refcnt--;
-  if (l->refcnt <= 0) {
-    //    assert (n != defp2p->my_ID ());
-    warnx << "REMOVE: " << l->n << "\n";
-    assert (!l->connecting);
-    locs.remove (l);
-    delete l;
-  }
+  assert (l->refcnt >= 0);
+  if (l->refcnt == 0) addlru (l);
 }
 
 void
@@ -199,6 +196,9 @@ locationtable::increfcnt (chordID &n)
   location *l = locs[n];
   assert (l);
   l->refcnt++;
+  if (l->refcnt == 1) {
+    removelru (l);
+  }
 }
 
 void
@@ -208,15 +208,57 @@ locationtable::checkrefcnt (int i)
   int m;
   chordID x;
 
-  // warnx << "checkrefcnt: " << i << "\n";
   for (location *l = locs.first (); l != NULL; l = locs.next (l)) {
     x = l->n;
     n = chordnode->countrefs (x);
     m = l->connecting ? l->refcnt - 1 : l->refcnt;
     if (n != m) {
-      //      warnx << "checkrefcnt " << i << " for " << x << " : refcnt " 
-      //	      << l->refcnt << " appearances " << n << "\n";
+      warnx << "checkrefcnt " << i << " for " << x << " : refcnt " 
+            << l->refcnt << " appearances " << n << "\n";
+      assert (0);
     }
   }
 }
 
+void
+locationtable::touchlru (location *l)
+{
+  if (l->refcnt > 0) return;
+  assert (l->refcnt == 0);
+  lrulist.remove (l);
+  lrulist.insert_tail (l);
+}
+
+void
+locationtable::addlru (location *l)
+{
+  warnx << "addlru : add " << l->n << " size lru " << size_lrulist 
+	<< " max lru " << max_lrulist << "\n";
+  if (size_lrulist >= max_lrulist) {
+    deletelru ();
+  }
+  lrulist.insert_tail (l);
+  size_lrulist++;
+}
+
+void
+locationtable::deletelru (void)
+{
+  location *l = lrulist.first;
+  assert (l);
+  assert (l->refcnt == 0);
+  warnx << "DELETE: " << l->n << "\n";
+  assert (!l->connecting);
+  locs.remove (l);
+  lrulist.remove (l);
+  size_lrulist--;
+  delete l;
+}
+
+void
+locationtable::removelru (location *l)
+{
+  assert (l->refcnt > 0);
+  lrulist.remove (l);
+  size_lrulist--;
+}

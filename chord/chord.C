@@ -569,7 +569,7 @@ vnode::dogetfingers (svccb *sbp)
 void
 vnode::dofindsucc (chordID &n, cbroute_t cb)
 {
-  // warn << "dofindsucc " << myID << " " << n << "\n";
+  warn << "dofindsucc " << myID << " " << n << "\n";
   find_successor (myID, n, wrap (mkref (this), &vnode::dofindsucc_cb, cb, n));
 }
 
@@ -592,10 +592,10 @@ vnode::dofindsucc_cb (cbroute_t cb, chordID n, chordID x,
       cb (x, search_path, CHORD_ERRNOENT);
     }
   } else {
-    // warnx << "dofindsucc_cb: " << myID << " done\n";
-    // for (unsigned i = 0; i < search_path.size (); i++) {
-    // warnx << search_path[i] << "\n";
-    // }
+    warnx << "dofindsucc_cb: " << myID << " done\n";
+    for (unsigned i = 0; i < search_path.size (); i++) {
+     warnx << search_path[i] << "\n";
+    }
     cb (x, search_path, CHORD_OK);
   }
 }

@@ -71,7 +71,7 @@ chord::startchord (int myp)
 
 chord::chord (str _wellknownhost, int _wellknownport, 
 	      const chordID &_wellknownID,
-	      int port, str myhost, int set_rpcdelay) :
+	      int port, str myhost, int set_rpcdelay, int max_cache) :
   wellknownID (_wellknownID)
 {
   myaddress.port = startchord (port);
@@ -80,7 +80,8 @@ chord::chord (str _wellknownhost, int _wellknownport,
   wellknownhost.port = _wellknownport;
   warnx << "chord: myport is " << myaddress.port << "\n";
   warnx << "chord: myname is " << myaddress.hostname << "\n";
-  locations = New refcounted<locationtable> (mkref (this), set_rpcdelay);
+  locations = New refcounted<locationtable> (mkref (this), set_rpcdelay, 
+					     max_cache);
   locations->insert (wellknownID, wellknownhost.hostname, wellknownhost.port, 
 		     wellknownID);
   nvnode = 0;

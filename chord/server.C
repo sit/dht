@@ -228,6 +228,7 @@ vnode::find_closestpred_cb (chordID n, findpredecessor_cbstate *st,
     //  << res->resok->node << "\n";
     locations->cacheloc (res->resok->node, res->resok->r, n);
     st->search_path.push_back(res->resok->node);
+    assert (st->search_path.size () < 1000);
 #ifdef UNOPT
     get_successor (res->resok->node, 
 		   wrap (mkref (this), &vnode::find_closestpred_succ_cb, st));
@@ -268,6 +269,7 @@ vnode::testrange_findclosestpred_cb (chord_testandfindres *res,
     warnt("CHORD: test_and_find RPC ERROR");
   } else if (res->status == CHORD_INRANGE) { 
     st->search_path.push_back(res->inres->x);
+    assert (st->search_path.size () < 1000);
     locations->cacheloc (res->inres->x, res->inres->r, st->nprime);
     //    warn << "testrange_findclosestpred_cb: " << myID << " succ of " 
     // << st->nprime << " is " << res->inres->x << "\n";
@@ -283,6 +285,7 @@ vnode::testrange_findclosestpred_cb (chord_testandfindres *res,
       chord_noderes *fres = New chord_noderes ();
       fres->resok->node = res->noderes->node;
       fres->resok->r = res->noderes->r;
+      assert (st->search_path.size () < 1000);
       find_closestpred_cb (st->nprime, st, fres, RPC_SUCCESS);
       delete fres;
     }

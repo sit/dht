@@ -121,12 +121,9 @@ newvnode_cb (int n, vnode *my)
 {
   warnx << "joincb: succeeded\n";
 
-  if (n > 0) {
-    str db_name_prime = strbuf () << db_name << "-" << n;
-    vNew dhash (db_name_prime, 
-		chordnode->newvnode (wrap (newvnode_cb, n-1)), 
-		5);
-  }
+  str db_name_prime = strbuf () << db_name << "-" << n;
+  vNew dhash (db_name_prime, my);
+  if (n > 0) chordnode->newvnode (wrap (newvnode_cb, n-1));
 }
 
 static void
@@ -140,7 +137,7 @@ initID (str s, chordID *ID)
 }
 
 static void
-parseconfigfile (str cf, int nvnode, int set_rpcdelay)
+parseconfigfile (str cf, int nvnode, int set_rpcdelay, int max_cache)
 {  
   parseargs pa (cf);
   bool errors = false;
@@ -226,12 +223,11 @@ parseconfigfile (str cf, int nvnode, int set_rpcdelay)
     fatal ("errors in config file\n");
   }
   chordnode = New refcounted<chord> (wellknownhost, wellknownport, 
-				     wellknownID, myport, myhost, set_rpcdelay);
+				     wellknownID, myport, myhost, set_rpcdelay,
+				     max_cache);
 
-  if (myid) vNew dhash (db_name, chordnode->newvnode (myID, 
-						      wrap (newvnode_cb, 
-							    nvnode-1)));
-  else vNew dhash (db_name, chordnode->newvnode (wrap (newvnode_cb, nvnode-1)));
+  if (myid) chordnode->newvnode (myID, wrap (newvnode_cb, nvnode-1));
+  else chordnode->newvnode (wrap (newvnode_cb, nvnode-1));
 
   sigcb(SIGUSR1, wrap (chordnode, &chord::stats));
 }
@@ -240,7 +236,7 @@ static void
 usage ()
 {
   warnx << "Usage: " << progname 
-	<< "-d <dbfile> -S <sock> -v <nvnode> -f <conffile> -c <cache?>\n"; 
+	<< "-d <dbfile> -S <sock> -v <nvnode> -l <max-loc-cache> -f <conffile> -c <cache?>\n"; 
   exit (1);
 }
 
@@ -255,8 +251,9 @@ main (int argc, char **argv)
   do_cache = 0;
   int set_name = 0;
   int set_rpcdelay = 0;
+  int max_cache = 250;
   
-  while ((ch = getopt (argc, argv, "d:S:v:f:c")) != -1)
+  while ((ch = getopt (argc, argv, "d:S:v:f:c:l:")) != -1)
     switch (ch) {
     case 'S':
       p2psocket = optarg;
@@ -269,10 +266,13 @@ main (int argc, char **argv)
       break;
     case 'f':
       if (!set_name) fatal("must specify db name\n");
-      parseconfigfile (optarg, vnode, set_rpcdelay);
+      parseconfigfile (optarg, vnode, set_rpcdelay, max_cache);
       break;
     case 'c':
       do_cache = 1;
+      break;
+    case 'l':
+      max_cache = atoi (optarg);
       break;
     case 'd':
       db_name = optarg;
