@@ -5,6 +5,7 @@
 #include <merkle_misc.h>
 #include <location.h>
 #include <locationtable.h>
+#include <dhash.h>
 
 int RECON_TM = getenv("DHC_RECON_TM") ? atoi(getenv("DHC_RECON_TM")) : 10;
 int dhc_debug = getenv("DHC_DEBUG") ? atoi(getenv("DHC_DEBUG")) : 0;
@@ -18,6 +19,10 @@ dhc::dhc (ptr<vnode> node, str dbname, uint k) :
   opts.addOption ("opt_async", 1);
   opts.addOption ("opt_cachesize", 1000);
   opts.addOption ("opt_nodesize", 4096);
+  if (dhash::dhash_disable_db_env ())
+    opts.addOption ("opt_dbenv", 0);
+  else
+    opts.addOption ("opt_dbenv", 1);
 
   db = New refcounted<dbfe> ();
   str dbs = strbuf () << dbname << ".dhc";
@@ -52,13 +57,14 @@ dhc::recon_timer ()
     ptr<dbPair> entry = iter->nextElement (id2dbrec (0));
     while (entry) {
       chordID key = dbrec2id (entry->key);
-      warn << "lookup up key = " << key << "\n";
+      warn << myNode->my_ID () << ": lookup up key = " << key << "\n";
       ptr<dbrec> rec = db->lookup (entry->key);
       if (rec) {
 	ref<dhc_block> kb = to_dhc_block (rec);
 	if (guilty = responsible (myNode, key)) {// || kb->meta->cvalid) {
 	  recon_tm_rpcs++;
-	  myNode->find_successor (key, wrap (this, &dhc::recon_tm_lookup, kb, guilty));	
+	  myNode->find_successor (key, wrap (this, &dhc::recon_tm_lookup, 
+					     kb, guilty));	
 	}
       } else 
 	warn << "did not find key = " << key << "\n";
@@ -132,8 +138,11 @@ dhc::recon (chordID bID, dhc_cb_t cb)
     }
 #endif
     dhc_soft *b = dhcs[bID];
-    if (!b)
-      b = New dhc_soft (myNode, kb);
+    if (b) {
+      dhcs.remove (b);
+      delete b;
+    }
+    b = New dhc_soft (myNode, kb);
     
     if (b->status == IDLE)
       b->status = RECON_INPROG;
@@ -341,8 +350,10 @@ dhc::recv_newconfig_ack (chordID bID, dhc_cb_t cb, ref<dhc_newconfig_res> ack,
     
     if (b->pstat->newconfig_ack_recvd > n_replica/2 && 
 	!b->pstat->sent_reply) {
-      //Mark the end of the recon protocol
-      //b->status = IDLE; status should remain still be RECON so no rw can processd
+      //Might have to change so that primary who is also the next primary
+      //updates its db locally first.
+      if (is_primary (bID, myNode->my_ID (), b->pstat->acc_conf)) 
+	b->status = IDLE; 
       b->pstat->sent_reply = true;
       dhcs.insert (b);
       if (dhc_debug)
@@ -543,6 +554,12 @@ dhc::recv_newconfig (user_args *sbp)
   db->insert (id2dbrec (kb->id), to_dbrec (kb));
   db->sync (); 
 
+  if (b && !is_primary (newconfig->bID, 
+			myNode->my_ID (), kb->meta->config.nodes)) {
+    b->status = IDLE;
+    dhcs.insert (b);
+  }
+
 #if 0
   // TODO: Handle simutaneous recons better.
   dhc_soft *b = dhcs[newconfig->bID];
@@ -646,8 +663,13 @@ dhc::recv_get (user_args *sbp)
 
   dhc_soft *b = dhcs[get->bID];
   if (b && b->status != IDLE) {
-    dhc_get_res res (DHC_RECON_INPROG);
-    sbp->reply (&res);
+    if (b->status == RECON_INPROG) {
+      dhc_get_res res (DHC_RECON_INPROG);
+      sbp->reply (&res);
+    } else { 
+      dhc_get_res res (DHC_W_INPROG);
+      sbp->reply (&res);
+    }
     return;
   }
 
