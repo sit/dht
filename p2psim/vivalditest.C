@@ -2,7 +2,6 @@
 #include "packet.h"
 #include <iostream>
 #include "p2psim.h"
-#include "rpc.h"
 using namespace std;
 
 VivaldiTest::VivaldiTest(Node *n) : Protocol(n)

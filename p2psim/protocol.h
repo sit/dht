@@ -9,7 +9,6 @@
 #include <map>
 #include <typeinfo>
 #include "p2psim.h"
-#include "rpc.h"
 using namespace std;
 
 class Node;
