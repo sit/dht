@@ -215,6 +215,14 @@ public:
   k_bucket *root() { return _root; }
   bool stabilized(vector<NodeID>*);
 
+  // statistics
+  enum stat_type {
+    STAT_LOOKUP = 0,
+    STAT_FIND_VALUE,
+    STAT_PING,
+    STAT_STABILIZE
+  };
+
   //
   // RPC arguments
   // 
@@ -266,7 +274,8 @@ public:
   // {{{ lookup_args and lookup_result
   struct lookup_args {
     lookup_args(NodeID xid, IPAddress xip, NodeID k = 0, bool ri = false) :
-      id(xid), ip(xip), key(k), tid(threadid()) {}
+      stattype(STAT_LOOKUP), id(xid), ip(xip), key(k), tid(threadid()) {}
+    stat_type stattype;
     NodeID id;
     IPAddress ip;
     NodeID key;
@@ -356,13 +365,6 @@ private:
   k_bucket *_root;
   bool _joined;
 
-  // statistics
-  enum stat_type {
-    STAT_LOOKUP = 0,
-    STAT_FIND_VALUE,
-    STAT_PING,
-    STAT_SIZE
-  };
   void record_stat(stat_type, unsigned, unsigned);
   friend class k_stabilizer;
   void update_k_bucket(NodeID, IPAddress);

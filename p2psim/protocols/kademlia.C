@@ -473,6 +473,9 @@ Kademlia::lookup(Args *args)
     return;
 
   IPAddress key_ip = args->nget<NodeID>("key");
+  if(!Network::Instance()->getnode(key_ip)->alive())
+    return;
+
   // find node with this IP
   Kademlia *k = (Kademlia*) Network::Instance()->getnode(key_ip);
   NodeID key = k->id();
@@ -830,7 +833,7 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
 
     if(!alive()) {
       delete ci;
-      CREATE_REAPER(STAT_LOOKUP); // returns
+      CREATE_REAPER(largs->stattype); // returns
     }
 
     // node was dead
@@ -840,13 +843,13 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
         erase(ci->ki.id);
       delete ci;
       if(!successors.size()) {
-        CREATE_REAPER(STAT_LOOKUP); // returns
+        CREATE_REAPER(largs->stattype); // returns
       }
       goto next_candidate;
     }
 
     // node was ok
-    record_stat(STAT_LOOKUP, ci->fr->results.size(), 0);
+    record_stat(largs->stattype, ci->fr->results.size(), 0);
     update_k_bucket(ci->ki.id, ci->ki.ip);
 
     // put in successors list if:
@@ -873,7 +876,7 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
         }
       }
       if(we_are_done) {
-        CREATE_REAPER(STAT_LOOKUP); // returns
+        CREATE_REAPER(largs->stattype); // returns
       }
     }
 
@@ -1094,7 +1097,7 @@ void
 Kademlia::record_stat(stat_type type, uint num_ids, uint num_else )
 {
   _rpc_bytes += 20 + num_ids * 4 + num_else; // paper says 40 bytes per node entry
-  record_bw_stat(STAT_LOOKUP, num_ids, num_else);
+  record_bw_stat(type, num_ids, num_else);
 }
 // }}}
 // {{{ Kademlia::distance
@@ -1703,6 +1706,7 @@ k_stabilizer::execute(k_bucket *k, string prefix, unsigned depth, unsigned leftr
 
   // lookup the random key and update this k-bucket with what we learn
   Kademlia::lookup_args la(mykademlia->id(), mykademlia->ip(), random_key);
+  la.stattype = Kademlia::STAT_STABILIZE;
   Kademlia::lookup_result lr;
 
   mykademlia->do_lookup(&la, &lr);
