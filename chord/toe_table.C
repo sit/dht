@@ -29,6 +29,27 @@ void toe_table::init (ptr<vnode> v, ptr<locationtable> locs, chordID ID)
   
 }
 
+void
+toe_table::prune_toes (int level)
+{
+  int removeindex = -1;
+  chordID id;
+  //look for stale entries and remove one if it's no good no more
+  for(unsigned int i = 0 ; i < toes[level]->size()  && removeindex < 0 ; i++){
+    id = (*toes[level])[i];
+    if(locations->get_a_lat (id) >= level_to_delay (level))
+      removeindex = i;
+  }
+
+  if(removeindex >= 0){
+    for(unsigned int i = removeindex ; i < toes[level]->size() - 1 ; i++){
+      (*toes[level])[i] = (*toes[level])[i+1];
+    }
+    toes[level]->pop_back();
+  }
+  
+}
+
 //get toes to fill level level
 void
 toe_table::get_toes_rmt (int level) 
@@ -41,7 +62,7 @@ toe_table::get_toes_rmt (int level)
     arg->level = max(level - 2, 0);
     
     chord_nodelistextres *res = New chord_nodelistextres ();
-    locations->doRPC (donors[i], chord_program_1,
+    myvnode->doRPC (donors[i], chord_program_1,
 		      CHORDPROC_GETTOES,
 		      arg, res, 
 		      wrap (this, &toe_table::get_toes_rmt_cb, res, level));
@@ -56,6 +77,7 @@ toe_table::get_toes_rmt_cb (chord_nodelistextres *res, int level, clnt_stat err)
     for (unsigned int i=0; i < res->resok->nlist.size (); i++) 
       add_toe (res->resok->nlist[i].x, res->resok->nlist[i].r, level);
   }
+  
   in_progress--;
   delete res;
 }
@@ -95,7 +117,7 @@ toe_table::add_toe (chordID id, net_address r, int level)
   in_progress++;
   
   //does this do anything?????
-  locations->cacheloc (id, r, cbchall_null); // XXX
+  //locations->cacheloc (id, r, cbchall_null); // XXX
 
   locations->ping (id, wrap (this, &toe_table::add_toe_ping_cb, id, level));
 }
@@ -103,7 +125,7 @@ toe_table::add_toe (chordID id, net_address r, int level)
 void
 toe_table::add_toe_ping_cb (chordID id, int level, chordstat err)
 {
-  
+
   if (!err && locations->get_a_lat (id) < level_to_delay (level)) {
 
   
@@ -174,11 +196,6 @@ toe_table::add_toe_ping_cb (chordID id, int level, chordstat err)
       }
       
     }
-
-  }
-
-  //look for stale entries and remove one if it's no good no more
-  for(unsigned int i = 0 ; i < toes[level]->size() ; i++){
 
   }
 
@@ -276,22 +293,15 @@ toe_table::stabilize_toes ()
       ith_succ = locations->closestsuccloc (ith_succ + 1); //XXX ith_succ + 1?
       add_toe (ith_succ, locations->getaddress (ith_succ), 0);
       //warnx << "add_toe called with " << ith_succ << "\n";
-      stable_toes = false;
+      //stable_toes = false;
     }
-  } else if (level < MAX_LEVELS - 1) { //building table
+  } else {
     //contact level (level) nodes and get their level (level) toes
+    prune_toes(level);
     get_toes_rmt (level + 1);
-    stable_toes = false;
     //warnx << "toes unstable! " << stable_toes << "\n";
-  } else { //steady state
-    
-  }
+  } 
   
-  if(filled_level() == MAX_LEVELS){
-    //warn << "STABLE!\n";
-    stable_toes = true;
-  }
-
 
   //warnx << "stabilize done\n";
   return;
@@ -518,7 +528,7 @@ chordID
 toe_table::closestsucc (const chordID &x)
 {
 
-  warnx << "doing a toe table lookup\n";
+  //warnx << "doing a toe table lookup\n";
   return locations->closestsuccloc(x);
 
 }
@@ -527,7 +537,7 @@ chordID
 toe_table::closestpred (const chordID &x, vec<chordID> failed)
 {
 
-  warnx << "doing a toe table closestpred (with failures)\n";
+  //warnx << "doing a toe table closestpred (with failures)\n";
   return locations->closestpredloc(x, failed);
 }
 
@@ -536,6 +546,6 @@ chordID
 toe_table::closestpred (const chordID &x)
 {
 
-  warnx << "doing a toe table closestpred\n";
+  //warnx << "doing a toe table closestpred\n";
   return locations->closestpredloc(x);
 }

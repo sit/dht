@@ -50,6 +50,7 @@ class toe_table : public fingerlike {
   short get_last_level () { return last_level; };
   void set_last_level (int l) { last_level = l; };
   void bump_target (int l) { target_size[l] *= 2; };
+  void prune_toes (int level);
 
   // Stabilizable methods
   bool backoff_stabilizing () { return in_progress > 0; }
