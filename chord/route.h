@@ -82,8 +82,6 @@ class route_iterator {
 class route_chord : public route_iterator {
   void make_hop (chordID &n);
   void make_hop_cb (ptr<bool> del, chord_testandfindres *res, clnt_stat err);
-  void make_route_done_cb (chordID s, bool ok, chordstat status);
-  void make_hop_done_cb (chordID s, bool ok, chordstat status);
   void send_hop_cb (bool done);
 
  public:
@@ -111,9 +109,6 @@ class route_debruijn : public route_iterator {
   route k_path;
   void make_hop (chordID &n, chordID &x, chordID &k, chordID &i);
   void make_hop_cb (ptr<bool> del, chord_debruijnres *res, clnt_stat err);
-  void make_route_done_cb (chordID s, bool ok, chordstat status);
-  void make_hop_done_cb (chordID i, chordID k, chordID d, bool ok, 
-			 chordstat status);
   void send_hop_cb (bool done);
 
  public:

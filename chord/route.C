@@ -212,14 +212,23 @@ route_chord::make_hop_cb (ptr<bool> del,
   } else if (res->status == CHORD_INRANGE) { 
     //    warn << v->my_ID () << "; in range, succ is " << res->inrange->n.x << "\n";
     // found the successor
-    v->locations->cacheloc (res->inrange->n.x, res->inrange->n.r,
-			    wrap (this, &route_chord::make_route_done_cb));
+    bool ok = v->locations->insert (res->inrange->n.x, res->inrange->n.r);
+    if (!ok) {
+      warnx << v->my_ID () << ": make_hop_cb: inrange node ("
+	    << res->inrange->n.x << "@" << res->inrange->n.r.hostname
+	    << ":" << res->inrange->n.r.port << ") not valid vnode!\n";
+      assert (0);
+    }
+    search_path.push_back (res->inrange->n.x);
+    last_hop = true;
+    if (stop) done = true; // XXX still needed??
+    cb (done);
   } else if (res->status == CHORD_NOTINRANGE) {
     //    warn << v->my_ID () << "; not in range, suggestion is " << res->notinrange->n.x << "\n";
     // haven't found the successor yet
     chordID last = search_path.back ();
     if (last == res->notinrange->n.x) {   
-      warnx << v->my_ID() << ": make_route_cb: node " << last
+      warnx << v->my_ID() << ": make_hop_cb: node " << last
 	   << "returned itself as best pred, looking for "
 	   << x << "\n";
       r = CHORD_ERRNOENT;
@@ -230,7 +239,7 @@ route_chord::make_hop_cb (ptr<bool> del,
       chordID newdist = distance (res->notinrange->n.x, x);
       if (newdist > olddist) {
 	warnx << "XXXXXXXXXXXXXXXXXXX WRONG WAY XXXXXXXXXXXXX\n";
-	warnx << v->my_ID() << ": make_route_cb: went in the wrong direction:"
+	warnx << v->my_ID() << ": make_hop_cb: went in the wrong direction:"
 	      << " looking for " << x << "\n";
 	// xxx surely we can do something more intelligent here.
 	print ();
@@ -238,49 +247,21 @@ route_chord::make_hop_cb (ptr<bool> del,
 	warnx << "XXXXXXXXXXXXXXXXXXX WRONG WAY XXXXXXXXXXXXX\n";
       }
       
-      v->locations->cacheloc (res->notinrange->n.x, res->notinrange->n.r,
-			      wrap (this, &route_chord::make_hop_done_cb));
+      bool ok = v->locations->insert (res->notinrange->n.x, res->notinrange->n.r);
+      if (!ok) {
+	warnx << v->my_ID () << ": make_hop_cb: notinrange node ("
+	      << res->inrange->n.x << "@" << res->inrange->n.r.hostname
+	      << ":" << res->inrange->n.r.port << ") not valid vnode!\n";
+	assert (0);
+      }
+      search_path.push_back (res->notinrange->n.x);
+      assert (search_path.size () <= 1000);
+      cb (done);
     }
   } else {
     warn("WTF");
   }
   delete res;
-}
-
-
-void
-route_chord::make_route_done_cb (chordID s, bool ok, chordstat status)
-{
-  //  warn << "cached " << s << " trying to finish the route. Status is " << status << "\n";
-  if (ok && status == CHORD_OK) {
-    search_path.push_back (s);
-    last_hop = true;
-  } else if (status == CHORD_RPCFAILURE) {
-    on_failure (s);
-  } else {
-    warnx << v->my_ID () << ": make_route_done_cb: last challenge for "
-	  << s << " failed. (chordstat " << status << ")\n";
-    assert (0);
-  }
-  if (stop) done = true;
-  cb (done);
-}
-
-void
-route_chord::make_hop_done_cb (chordID s, bool ok, chordstat status)
-{
-  //  warn << "cached " << s << " status is " << status << "\n";
-  if (ok && status == CHORD_OK) {
-    search_path.push_back (s);
-    assert (search_path.size () <= 1000);
-  } else if (status == CHORD_RPCFAILURE) {
-    on_failure (s);
-  } else {
-    warnx << v->my_ID () << ": make_hop_done_cb: step challenge for "
-	  << s << " failed. (chordstat " << status << ")\n";
-    assert (0);
-  }
-  cb (done);
 }
 
 
@@ -488,6 +469,15 @@ route_debruijn::make_hop (chordID &n, chordID &x, chordID &k, chordID &i)
 	 wrap (this, &route_debruijn::make_hop_cb, deleted, nres));
 }
 
+static int 
+uniquepathsize (route path) {
+  int n = 1;
+  for (unsigned int i = 1; i < path.size (); i++) {
+    if (path[i] != path[i-1]) n++;
+  }
+  return n;
+}
+
 void
 route_debruijn::make_hop_cb (ptr<bool> del, chord_debruijnres *res, 
 			     clnt_stat err)
@@ -505,83 +495,52 @@ route_debruijn::make_hop_cb (ptr<bool> del, chord_debruijnres *res,
     cb (done = true);
   } else if (res->status == CHORD_INRANGE) { 
     // found the successor
-    v->locations->cacheloc (res->inres->node.x, res->inres->node.r,
-			    wrap (this, &route_debruijn::make_route_done_cb));
+    bool ok = v->locations->insert (res->inres->node.x, res->inres->node.r);
+    if (!ok) {
+      warnx << v->my_ID () << ": debruijn::make_hop_cb: inrange node ("
+	    << res->inres->node.x << "@" << res->inres->node.r.hostname
+	    << ":" << res->inres->node.r.port << ") not valid vnode!\n";
+      assert (0); // XXX handle malice more intelligently
+    }
+    search_path.push_back (res->inres->node.x); // the next debruijn hop
+    virtual_path.push_back (x);   // push some virtual path node on
+    k_path.push_back (0);  // k is shifted
+    if (stop) done = true;
+    last_hop = true;
+    warnx << "make_hop_cb: x " << x << " path " << search_path.size() - 1
+	  << " ipath " << uniquepathsize (virtual_path) - 1 << " :\n";
+    print ();
+    cb (done);
   } else if (res->status == CHORD_NOTINRANGE) {
     // haven't found the successor yet
-    v->locations->cacheloc (res->noderes->node.x, res->noderes->node.r,
-			    wrap (this, &route_debruijn::make_hop_done_cb,
-				  res->noderes->i, res->noderes->k));
+    bool ok = v->locations->insert (res->noderes->node.x, res->noderes->node.r);
+    if (!ok) {
+      warnx << v->my_ID () << ": debruijn::make_hop_cb: inrange node ("
+	    << res->noderes->node.x << "@" << res->noderes->node.r.hostname
+	    << ":" << res->noderes->node.r.port << ") not valid vnode!\n";
+      assert (0); // XXX handle malice more intelligently
+    }
+    
+    chordID i = res->noderes->i;
+    chordID k = res->noderes->k;
+    if (i != virtual_path.back ()) hops++;
+    search_path.push_back (res->noderes->node.x);
+    virtual_path.push_back (i);
+    k_path.push_back (k);
+    
+    if ((hops > NBIT) || (search_path.size() > 400) ) {
+      warnx << "make_hop_cb: too long a search path: " << v->my_ID() 
+	    << " looking for " << x << " k = " << k << "\n";
+      print ();
+      assert (0);
+    }
+    if (stop) done = true;
+    cb (done);
   } else {
     warn("WTF");
   }
   delete res;
 }
-
-
-static int 
-uniquepathsize (route path) {
-  int n = 1;
-  for (unsigned int i = 1; i < path.size (); i++) {
-    if (path[i] != path[i-1]) n++;
-  }
-  return n;
-}
-
-void
-route_debruijn::make_route_done_cb (chordID d, bool ok, chordstat status)
-{
-  if (ok && status == CHORD_OK) {
-    search_path.push_back (d);     // d is the next debruijn hop
-    virtual_path.push_back (x);   // push some virtual path node on
-    k_path.push_back (0);  // k is shifted
-  } else if (status == CHORD_RPCFAILURE) {
-    // xxx? should we retry locally before failing all the way to
-    //      the top-level?
-    r = CHORD_RPCFAILURE;
-  } else {
-    warnx << v->my_ID () << ": make_route_done_cb: last challenge for "
-	  << d << " failed. (chordstat " << status << ")\n";
-    assert (0); // XXX handle malice more intelligently
-  }
-  if (stop) done = true;
-  last_hop = true;
-  warnx << "make_route_done_cb: x " << x << " path " << search_path.size() - 1
-	<< " ipath " << uniquepathsize (virtual_path) - 1 << " :\n";
-  print ();
-  cb (done);
-}
-
-void
-route_debruijn::make_hop_done_cb (chordID i, chordID k,
-				  chordID d, bool ok, chordstat status)
-{
-  if (ok && status == CHORD_OK) {
-    if (i != virtual_path.back ()) hops++;
-    search_path.push_back (d);
-    virtual_path.push_back (i);
-    k_path.push_back (k);
-
-    if ((hops > 160) || (search_path.size() > 400) ) {
-      warnx << "make_hop_done_cb: too long a search path: " << v->my_ID() 
-	    << " looking for " << x << " k = " << k << "\n";
-      print ();
-      assert (0);
-    }
-  } else if (status == CHORD_RPCFAILURE) {
-    // xxx? should we retry locally before failing all the way to
-    //      the top-level?
-    r = CHORD_RPCFAILURE;
-    done = true;
-  } else {
-    warnx << v->my_ID () << ": make_hop_done_cb: step challenge for "
-	  << d << " failed. (chordstat " << status << ")\n";
-    assert (0); // XXX handle malice more intelligently
-  }
-  if (stop) done = true;
-  cb (done);
-}
-
 
 chordID
 route_debruijn::pop_back ()
