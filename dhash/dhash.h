@@ -351,16 +351,20 @@ public:
   dhashclient(str sockname);
 
   void append (chordID to, const char *buf, size_t buflen, cbinsert_t cb);
+
   // inserts under the contents hash. 
   // (buf need not remain involatile after the call returns)
   //
   void insert (const char *buf, size_t buflen, cbinsert_t cb);
+  void insert (bigint hash, const char *buf, size_t buflen, cbinsert_t cb);
 
   //inert under hash of public key
   void insert (const char *buf, size_t buflen, 
-		 bigint sig, rabin_pub key, cbinsert_t cb);
-  void insert (const char *buf, size_t buflen, 
 		 rabin_priv key, cbinsert_t cb);
+  void insert (const char *buf, size_t buflen, 
+		 bigint sig, rabin_pub key, cbinsert_t cb);
+  void insert (bigint hash, const char *buf, size_t buflen, 
+		 bigint sig, rabin_pub key, cbinsert_t cb);
 
 
   // retrieve block and verify

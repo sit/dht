@@ -872,6 +872,14 @@ dhashclient::append (chordID to, const char *buf, size_t buflen, cbinsert_t cb)
 void
 dhashclient::insert (const char *buf, size_t buflen, cbinsert_t cb)
 {
+  bigint key = compute_hash (buf, buflen);
+  insert(key, buf, buflen, cb);
+}
+
+void
+dhashclient::insert (bigint hash, const char *buf,
+                     size_t buflen, cbinsert_t cb)
+{
   long type = DHASH_CONTENTHASH;
   xdrsuio x;
   int size = buflen + 3 & ~3;
@@ -881,16 +889,13 @@ dhashclient::insert (const char *buf, size_t buflen, cbinsert_t cb)
       (m_buf = (char *)XDR_INLINE (&x, size)))
     {
       memcpy (m_buf, buf, buflen);
-      
       int m_len = x.uio ()->resid ();
       char *m_dat = suio_flatten (x.uio ());
-      bigint key = compute_hash (buf, buflen);
-      insert (key, m_dat, m_len, cb, DHASH_CONTENTHASH);      
+      insert (hash, m_dat, m_len, cb, DHASH_CONTENTHASH);      
       xfree (m_dat);
     } else {
       cb (true, bigint (0)); // marshalling failed.
     }
-
 }
 
 
@@ -917,10 +922,18 @@ void
 dhashclient::insert (const char *buf, size_t buflen, 
 		     bigint sig, rabin_pub key, cbinsert_t cb)
 {
-  long type = DHASH_KEYHASH;
   bigint pubkey = key.n;
   str pk_raw = pubkey.getraw ();
   chordID pkID = compute_hash (pk_raw.cstr (), pk_raw.len ());
+  insert (pkID, buf, buflen, sig, key, cb);
+}
+
+void
+dhashclient::insert (bigint hash, const char *buf, size_t buflen, 
+		     bigint sig, rabin_pub key, cbinsert_t cb)
+{
+  long type = DHASH_KEYHASH;
+  bigint pubkey = key.n;
 
   xdrsuio x;
   int size = buflen + 3 & ~3;
@@ -935,10 +948,10 @@ dhashclient::insert (const char *buf, size_t buflen,
       
       int m_len = x.uio ()->resid ();
       char *m_dat = suio_flatten (x.uio ());
-      insert (pkID, m_dat, m_len, cb, DHASH_KEYHASH);
+      insert (hash, m_dat, m_len, cb, DHASH_KEYHASH);
       xfree (m_dat);
     } else {
-      cb (true, pkID); // marshalling failed.
+      cb (true, hash); // marshalling failed.
     }
 }
 
