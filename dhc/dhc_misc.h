@@ -7,7 +7,7 @@ void open_db (ptr<dbfe>, str, dbOptions, str);
 void print_error (str, int, int);
 void set_new_config (dhc_soft *, ptr<dhc_propose_arg>, ptr<vnode>, uint);
 void set_new_config (ptr<dhc_newconfig_arg>, vec<ptr<location> >);
-void set_locations (vec<ptr<location> >, ptr<vnode>, vec<chordID>);
+void set_locations (vec<ptr<location> > *, ptr<vnode>, vec<chordID>);
 int paxos_cmp (paxos_seqnum_t, paxos_seqnum_t);
 int tag_cmp (tag_t, tag_t);
 void ID_put (char *, chordID);
@@ -28,34 +28,34 @@ to_dbrec (ptr<dhc_block> block)
 };
 
 static inline bool
-set_ac (vec<chordID> ap, dhc_prepare_resok res)
+set_ac (vec<chordID> *ap, dhc_prepare_resok res)
 {
-  if (ap.size () == 0) {
+  if (ap->size () == 0) {
     for (uint i=0; i<res.new_config.size (); i++) 
-      ap.push_back (res.new_config[i]);
+      ap->push_back (res.new_config[i]);
     return true;
   }
-  if (ap.size () != res.new_config.size ())
+  if (ap->size () != res.new_config.size ())
     return false;
-  for (uint i=0; i<ap.size (); i++) {
-    if (ap[i] != res.new_config[i])
+  for (uint i=0; i<ap->size (); i++) {
+    if ((*ap)[i] != res.new_config[i])
       return false;
   }
   return true;
 };
 
 static inline bool
-set_ac (vec<chordID> ap, dhc_propose_arg arg)
+set_ac (vec<chordID> *ap, dhc_propose_arg arg)
 {
-  if (ap.size () == 0) {
+  if (ap->size () == 0) {
     for (uint i=0; i<arg.new_config.size (); i++) 
-      ap.push_back (arg.new_config[i]);
+      ap->push_back (arg.new_config[i]);
     return true;
   }
-  if (ap.size () != arg.new_config.size ())
+  if (ap->size () != arg.new_config.size ())
     return false;
-  for (uint i=0; i<ap.size (); i++) {
-    if (ap[i] != arg.new_config[i])
+  for (uint i=0; i<ap->size (); i++) {
+    if ((*ap)[i] != arg.new_config[i])
       return false;
   }
   return true;

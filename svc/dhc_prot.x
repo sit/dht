@@ -7,7 +7,7 @@ enum dhc_stat {
    DHC_LOW_PROPOSAL = 2, 
    DHC_PROP_MISMATCH = 3,
    DHC_NOT_A_REPLICA = 4,
-   DHC_ACCEPTED_PROP = 5,
+   /* DHC_ACCEPTED_PROP = 5, */
    DHC_RECON_INPROG = 6,
    DHC_OLD_VER = 7
 };
@@ -31,7 +31,7 @@ struct dhc_prepare_resok {
 
 /* promise message */
 union dhc_prepare_res switch (dhc_stat status) {	
-   case DHC_ACCEPTED_PROP:
+   case DHC_OK:
 	dhc_prepare_resok resok;
    default:	
 	void;

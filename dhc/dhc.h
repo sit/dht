@@ -12,7 +12,7 @@
 #define ID_size sha1::hashsize
 #define DHC_DEBUG 1
 
-extern void set_locations (vec<ptr<location> >, ptr<vnode>, vec<chordID>);
+extern void set_locations (vec<ptr<location> > *, ptr<vnode>, vec<chordID>);
 extern void ID_put (char *, chordID);
 extern void ID_get (chordID *, char *);
 
@@ -29,14 +29,10 @@ struct replica_t {
   {
     uint offst = sizeof (uint);
     bcopy (bytes + offst, &seqnum, sizeof (u_int64_t));
-    //warnx << "replica_t seqnum: " << seqnum << "\n"; 
     offst += sizeof (u_int64_t);
     uint nreplica; 
     bcopy (bytes + offst, &nreplica, sizeof (uint));
-    //warnx << "replica_t nreplica: " << nreplica << "\n";
     offst += sizeof (uint);
-    //warnx << "replica_t about to assign chordIDs. offset: " << offst << "\n";
-    //warnx << "replica_t ID_size: " << ID_size << "\n";
     chordID id;
     for (uint i=0; i<nreplica; i++) {
       warnx << "replica_t node[" << i << "]: ";
@@ -93,8 +89,6 @@ struct keyhash_meta {
     uint offst = sizeof (uint);
     uint csize;
     bcopy (bytes + offst, &csize, sizeof (uint));
-    //warnx << "keyhash_meta: csize " << csize << "\n";
-    //warnx << "keyhash_meta: create config at offset: " << offst << "\n";
     config = replica_t (bytes + offst);
     offst += csize;
     bcopy (bytes + offst, &accepted.seqnum, sizeof (u_int64_t));
@@ -204,7 +198,6 @@ struct dhc_block {
     ID_put (buf, id);
     offst += ID_size;
 
-    warnx << "msize " << meta->size () << "\n";
     bcopy (meta->bytes (), buf + offst, meta->size ());
     offst += meta->size ();
     bcopy (&data->tag.ver, buf + offst, sizeof (u_int64_t));
@@ -269,7 +262,7 @@ struct dhc_soft {
 #if DHC_DEBUG
     warn << "status in dhc_soft constructor\n " << kb->to_str ();
 #endif
-    set_locations (config, myNode, kb->meta->config.nodes);
+    set_locations (&config, myNode, kb->meta->config.nodes);
     proposal.seqnum = 0;
     bzero (&proposal.proposer, sizeof (chordID));    
     promised.seqnum = kb->meta->accepted.seqnum;
@@ -287,6 +280,7 @@ struct dhc_soft {
   str to_str () 
   {
     strbuf ret;
+    ret << "************ dhc_soft stat *************\n";
     ret << "Block ID:" << id << "\n config seqnum:" << config_seqnum 
 	<< "\n config IDs: ";
     for (uint i=0; i<config.size (); i++) 

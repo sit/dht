@@ -38,9 +38,6 @@ dhc::recon (chordID bID)
     if (!b)
       b = New dhc_soft (myNode, kb);
     
-#if DHC_DEBUG
-    warn << "status 1\n" << b->to_str ();
-#endif
     if (!b->pstat->recon_inprogress) {
       b->pstat->recon_inprogress = true;
       b->proposal.seqnum = (b->promised.seqnum > b->proposal.seqnum) ?
@@ -49,10 +46,10 @@ dhc::recon (chordID bID)
       b->pstat->promise_recvd = 0;
       b->pstat->accept_recvd = 0;
       dhcs.insert (b);
+
 #if DHC_DEBUG
       warn << "status 2\n" << b->to_str ();
 #endif
-      
       ref<dhc_prepare_arg> arg = New refcounted<dhc_prepare_arg> ();
       arg->bID = bID;
       arg->round.seqnum = b->proposal.seqnum;
@@ -60,22 +57,20 @@ dhc::recon (chordID bID)
       arg->config_seqnum = b->config_seqnum;
 
 #if DHC_DEBUG
-      warn << myNode->my_ID () << "sending proposal <" << arg->round.seqnum
+      warn << myNode->my_ID () << " sending proposal <" << arg->round.seqnum
 	   << "," << arg->round.proposer << ">\n";
 #endif
       ptr<dhc_prepare_res> res; 
 
-#if 0
       for (uint i=0; i<b->config.size (); i++) {
 	ptr<location> dest = b->config[i];
-	res = New refcounted<dhc_prepare_res> ();
 #if DHC_DEBUG
 	warn << "to node " << dest->id () << "\n";
 #endif
+	res = New refcounted<dhc_prepare_res> ();
 	myNode->doRPC (dest, dhc_program_1, DHCPROC_PREPARE, arg, res, 
 		       wrap (this, &dhc::recv_promise, b->id, res)); 
       }
-#endif 
     } else
       warn << "dhc:recon. Another recon is still in progress.\n";
 
@@ -90,8 +85,8 @@ void
 dhc::recv_promise (chordID bID, ref<dhc_prepare_res> promise, 
 		   clnt_stat err)
 {
-  if (!err && (promise->status == DHC_OK || 
-	       promise->status == DHC_ACCEPTED_PROP)) {
+  if (!err && (promise->status == DHC_OK)) {
+	       //promise->status == DHC_ACCEPTED_PROP)) {
 
     dhc_soft *b = dhcs[bID];
     if (!b) {
@@ -101,11 +96,11 @@ dhc::recv_promise (chordID bID, ref<dhc_prepare_res> promise,
       
     b->pstat->promise_recvd++;
 
-    if (promise->status == DHC_ACCEPTED_PROP) 
-      if (!set_ac (b->pstat->acc_conf, *promise->resok)) {
-	warn << "dhc:recv_promise Different conf accepted. Something's wrong!!\n";
-	exit (-1);
-      }
+    //if (promise->status == DHC_ACCEPTED_PROP) 
+    if (!set_ac (&b->pstat->acc_conf, *promise->resok)) {
+      warn << "dhc:recv_promise Different conf accepted. Something's wrong!!\n";
+      exit (-1);
+    }
     
     if (b->pstat->promise_recvd > n_replica/2) {
       ptr<dhc_propose_arg> arg = New refcounted<dhc_propose_arg>;
@@ -116,7 +111,7 @@ dhc::recv_promise (chordID bID, ref<dhc_prepare_res> promise,
 #endif 
       if (b->pstat->acc_conf.size () > 0) {
 	arg->new_config.set (b->pstat->acc_conf.base (), b->pstat->acc_conf.size ());
-	set_locations (b->new_config, myNode, b->pstat->acc_conf);
+	set_locations (&b->new_config, myNode, b->pstat->acc_conf);
       } else 
 	set_new_config (b, arg, myNode, n_replica);
       
@@ -250,7 +245,7 @@ dhc::recv_propose (user_args *sbp)
     dhc_propose_res res (DHC_PROP_MISMATCH);
     sbp->reply (&res);
   } else {
-    if (set_ac (b->pstat->acc_conf, *propose)) {
+    if (set_ac (&b->pstat->acc_conf, *propose)) {
       b->pstat->recon_inprogress = false;
       //set block's new config
       dhcs.insert (b);

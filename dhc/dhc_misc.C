@@ -62,13 +62,13 @@ set_new_config (dhc_soft *b, ptr<dhc_propose_arg> arg, ptr<vnode> myNode,
 }
 
 void
-set_locations (vec<ptr<location> > locs, ptr<vnode> myNode, vec<chordID> ids)
+set_locations (vec<ptr<location> > *locs, ptr<vnode> myNode, vec<chordID> ids)
 {
   ptr<location> l;
-  locs.clear ();
+  locs->clear ();
   for (uint i=0; i<ids.size (); i++)
     if (l = myNode->locations->lookup (ids[i]))
-      locs.push_back (l);
+      locs->push_back (l);
     else warn << "Node " << ids[i] << " does not exist !!!!\n";
 }
 
