@@ -6,23 +6,22 @@
 use strict;
 use Getopt::Long;
 
-my $xstat = "BW_TOTALS:overall_bw";
+my $xstat = "BW_TOTALS:live_bw";
 my $ystat = "CORRECT_LOOKUPS:lookup_median";
 my $con_cmd = "find_convexhull.py";
 my $datfile = "haha"; #haha is my favorate crap file name
 my $xpos = -1;
 my $ypos = -1;
-my $xmin = 10000;
-my $xminy = 10000;
-my $xmax = -1;
-my $xmaxy = -1;
-my $xrange = "";
-my $yrange = "";
+my $xlimitmin;
+my $xlimitminy;
+my $xlimitmax;
+my $xlimitmaxy;
 my $expr = 0;
+my $tmpfilename = "haha";
 
 my %options;
-&GetOptions(\%options,"x=s","y=s","xrange=s","yrange=s","datfile=s") or 
-    die "usage: bestparam.pl --xrange ?? --yrange ?? --datfile ?? --x ?? --y ??\n";
+&GetOptions(\%options,"x=s","y=s","xrange=s","datfile=s") or 
+    die "usage: bestparam.pl --xrange ?? --datfile ?? --x ?? --y ??\n";
 
 if( defined $options{"x"} ) {
     $xstat = $options{"x"};
@@ -38,17 +37,36 @@ if( defined $options{"y"} ) {
 
 if (defined $options{"datfile"}) {
     $datfile = $options{"datfile"};
+    my @items = split(/\//,$datfile);
+    $tmpfilename = $items[$#items];
+}
+
+if (defined $options{"xrange"}) {
+    my $xrange = $options{"xrange"};
+    if( !($xrange =~ /^([\.\d]+)\:([\.\d]+)$/ ) ) {
+	die( "xrange not in valid format: $xrange" );
+    } else {
+	if( $2 <= $1 ) {
+	    die( "max in xrange is bigger than min: $xrange" );
+	}
+	$xlimitmin = $1;
+	$xlimitmax = $2;
+    }
+
 }
 open DAT, "<$datfile" or die "cannot read from file $datfile\n";
 my @dat = <DAT>;
 close DAT;
 
+my @pos2name;
 my @statlabels = split(/\s+/,$dat[0]);
 for (my $i = 0; $i <= $#statlabels; $i++) {
     if ($statlabels[$i]=~/(\d+)\)$xstat\(.*\)/) {
 	$xpos = $i-1;
     }elsif ($statlabels[$i]=~/(\d+)\)$ystat\(?.*\)?/) {
 	$ypos = $i-1;
+    }elsif ($statlabels[$i]=~/^param(\d+)\)(.*)?/) {
+	$pos2name[$1]=$2;
     }
 }
 if ($xpos < 0) {
@@ -61,6 +79,7 @@ if ($ypos < 0) {
 my $name;
 my @params;
 my $alldat = "";
+my %uniqval;
 for (my $i = 1; $i <= $#dat; $i++) {
     chop $dat[$i];
     if ($dat[$i]=~/^#\ (.*)$/) {
@@ -71,123 +90,120 @@ for (my $i = 1; $i <= $#dat; $i++) {
 	my $xval = $items[$xpos];
 	my $yval = $items[$ypos];
 	if ($expr!=0) {
+	  my $oldval = $yval;
 	  $yval = $expr - $yval;
+	  $yval=~s/(\d+)\.(\d\d\d)\d+/$1\.$2/;
 	  die "y value is negative $yval ($expr-$items[$ypos]) ystat $ystat ypos $ypos \n" if ($yval < 0);
 	}
 	die "corrupt file\n" if (!defined($name));
-	if (!defined($options{"xrange"})) {
-	    if ($xmin > $xval) {
-		$xmin = $xval;
-		$xminy = $yval;
-	    }elsif ($xmax < $xval) {
-		$xmax = $xval;
-		$xmaxy = $yval;
-	    }
+
+	if (!defined($uniqval{"$xval $yval"})) {
+	    $uniqval{"$xval $yval"} = 1;
+	}else{
+	    print STDERR "warning: duplicate values $xval $yval\n";
+	    $xval += 0.001;
+	    $uniqval{"$xval $yval"} = 1;
 	}
+
 	my @p = split(/\s+/,$name);
 	for (my $j = 0; $j <= $#p; $j++) {
 	    $params[$j]->{$p[$j]} .= "$xval $yval\n";
 	}
+
 	$alldat .= "$xval $yval\n";
 	undef $name;
     }
 }
 
-#see if user has any requirement for xmin and ymin
-# this must come after we calculate xminy and xmaxy
-if (defined $options{"xrange"}) {
-    $xrange = $options{"xrange"};
-    if( !($xrange =~ /^([\.\d]+)\:([\.\d]+)$/ ) ) {
-	die( "xrange not in valid format: $xrange" );
-    } else {
-	if( $2 <= $1 ) {
-	    die( "max in xrange is bigger than min: $xrange" );
-	}
-	$xmin = $1;
-	$xmax = $2;
-    }
-
-}
-
-if (defined $options{"yrange"}) {
-    $yrange = $options{"yrange"};
-    if( !($yrange =~ /^([\.\d]+)\:([\.\d]+)$/ ) ) {
-	die( "yrange not in valid format: $yrange" );
-    } else {
-	if( $2 <= $1 ) {
-	    die( "max in yrange is bigger than min: $yrange" );
-	}
-    }
-}
-
-
 #firstly calculate the overall hull
-open FILE, ">/tmp/$datfile-all.con" or die "cannot open /tmp/$datfile-all.con\n";
+open FILE, ">/tmp/$tmpfilename-all.con" or die "cannot open /tmp/$tmpfilename-all.con\n";
 print FILE "$alldat";
 close FILE;
 
-system("sort -n /tmp/$datfile-all.con > /tmp/$datfile-all.con.sorted");
-system("$con_cmd /tmp/$datfile-all.con.sorted > /tmp/$datfile-all.convex") and 
-    die "could not run $con_cmd /tmp/$datfile-all.con\n";
+system("sort -n /tmp/$tmpfilename-all.con > /tmp/$tmpfilename-all.con.sorted");
+system("$con_cmd /tmp/$tmpfilename-all.con.sorted > /tmp/$tmpfilename-all.convex") and 
+    die "could not run $con_cmd /tmp/$tmpfilename-all.con.sorted\n";
 
-open FILE, "/tmp/$datfile-all.convex" or die "cannot open /tmp/$datfile-all.convex\n";
+open FILE, "/tmp/$tmpfilename-all.convex" or die "cannot open /tmp/$tmpfilename-all.convex\n";
 my @allpts = <FILE>;
-my $base_area = get_hull_area(\@allpts);
-print STDERR "base_area $base_area xmin ($xmin,$xminy) xmax ($xmax,$xmaxy)\n";
+
+#get the max and min of this thing
+for (my $i = 1; $i <= $#allpts; $i++) {
+    my ($prevx,$prevy) = split(/\s+/,$allpts[$i-1]);
+    my ($x, $y) = split(/\s+/,$allpts[$i]);
+    if (defined($xlimitmin) && ($x < $xlimitmin)) {
+	if ($prevx > $xlimitmin) {
+	    $xlimitminy = $prevy + ($y-$prevy)*($xlimitmin-$x)/($prevx-$x);
+	}
+    }elsif (defined($xlimitmax) && ($prevx > $xlimitmax)) {
+	if ($x < $xlimitmax) {
+	    $xlimitmaxy = $prevy + ($y-$prevy)*($xlimitmax-$prevx)/($prevx-$x);
+	}
+    }elsif (!defined($xlimitmin) && ($i==$#allpts)){
+	$xlimitmin = $x;
+	$xlimitminy = $y;
+    }elsif (!defined($xlimitmax) && ($i == 1)) {
+	$xlimitmax = $prevx;
+	$xlimitmaxy = $prevy;
+    }
+}
+die if ((!defined($xlimitmin)) || (!defined($xlimitmax)) ||
+	(!defined($xlimitminy)) || (!defined($xlimitmaxy)));
+
+print "limits: <$xlimitmin,$xlimitminy> <$xlimitmax,$xlimitmaxy>\n";
+my ($base_area,$xmin,$xminy,$xmax,$xmaxy) = get_hull_area(\@allpts);
+print "base_area $base_area xmin <$xmin,$xminy> xmax <$xmax,$xmaxy>\n";
+print "--------------------\n";
 close FILE;
 
-unlink("/tmp/$datfile-all.con");
-unlink("/tmp/$datfile-all.convex");
-unlink("/tmp/$datfile-all.con.sorted");
+unlink("/tmp/$tmpfilename-all.con");
+unlink("/tmp/$tmpfilename-all.convex");
+unlink("/tmp/$tmpfilename-all.con.sorted");
 
-my @paramdiffs;
-my @paramnames;
 for (my $i = 0; $i <= $#params; $i++) {
     my $paramhash = $params[$i];
     my @paramvalues = keys %$paramhash;
+    my $whichparam = $i+1;
+    my @allarea;
     if ($#paramvalues > 0) {
 	my $mindiff = 10000000;
-	my $mindiff_name = "??";
+	my $maxdiff = 0.0;
+	my $mindiff_val = -1;
+	my $maxdiff_val = -1;
 	for (my $j = 0; $j <= $#paramvalues; $j++) {
-	    open FILE, ">/tmp/$datfile-$i.con" or die "cannot write /tmp/$datfile-$i.con\n";
+	    open FILE, ">/tmp/$tmpfilename-$i.con" or die "cannot write /tmp/$tmpfilename-$i.con\n";
 	    my $tmpdat = $paramhash->{$paramvalues[$j]};
 	    print FILE "$tmpdat";
 	    close FILE;
 
-	    system("sort -n /tmp/$datfile-$i.con > /tmp/$datfile-$i.con.sorted");
-	    system("$con_cmd /tmp/$datfile-$i.con.sorted > /tmp/$datfile-$i.convex") and 
-		die "could not run $con_cmd /tmp/$datfile-$i.con\n";
+	    system("sort -n /tmp/$tmpfilename-$i.con > /tmp/$tmpfilename-$i.con.sorted");
+	    system("$con_cmd /tmp/$tmpfilename-$i.con.sorted > /tmp/$tmpfilename-$i.convex") and 
+		die "cannot not run $con_cmd /tmp/$tmpfilename-$i.con.sorted\n";
 
-	    open FILE, "/tmp/$datfile-$i.convex" or die "cannot read /tmp/$datfile-$i.convex\n";
+	    open FILE, "/tmp/$tmpfilename-$i.convex" or die "cannot read /tmp/$tmpfilename-$i.convex\n";
 	    my @pts = <FILE>;
 	    close FILE;
-	    unlink("/tmp/$datfile-$i.con");
-	    unlink("/tmp/$datfile-$i.conex");
-	    unlink("/tmp/$datfile-$i.con.sorted");
+	    unlink("/tmp/$tmpfilename-$i.con");
+	    unlink("/tmp/$tmpfilename-$i.conex");
+	    unlink("/tmp/$tmpfilename-$i.con.sorted");
 
 	    #what is the difference between the two hulls???
-	    my $area = get_hull_area(\@pts);
-	    die "area $area how can this be possible?\n" if ($area <= $base_area);
-	    if ($mindiff > ($area-$base_area)) {
-		$mindiff = $area-$base_area;
-		my $whichparam = $i+1;
-		$mindiff_name = "param $whichparam value $paramvalues[$j] ";
+	    my ($area,$xmin,$xminy,$xmax,$xmaxy) = get_hull_area(\@pts);
+	    die "area $area param $pos2name[$whichparam] how can this be possible?\n" if ($area < $base_area);
+	    my $diff = $area - $base_area;
+	    if ($mindiff > ($diff)) {
+		$mindiff = $diff;
+		$mindiff_val= "$paramvalues[$j] ";
 	    }
+	    if ($maxdiff < ($diff)) {
+		$maxdiff = $diff;
+		$maxdiff_val= "$paramvalues[$j] ";
+	    }
+	    push @allarea,$diff;
 	}
-	push @paramdiffs, $mindiff;
-	push @paramnames, $mindiff_name;
+	my $numvalues = $#paramvalues+1;
+	print "param $pos2name[$whichparam] (#$numvalues) $mindiff ($mindiff_val) $maxdiff ($maxdiff_val)\n";
     }
-}
-
-my @index;
-for (my $i = 0; $i <= $#paramdiffs; $i++) {
-    push @index, $i;
-}
-my @sorted = sort {$paramdiffs[$b] <=> $paramdiffs[$a]} @index;
-
-for (my $i = 0; $i <= $#index; $i++) {
-    my $ind = $sorted[$i];
-    print "$paramnames[$ind] ($paramdiffs[$ind])\n";
 }
 
 sub get_hull_area {
@@ -198,19 +214,45 @@ sub get_hull_area {
     my $area = 0.0;
     my @ptsx;
     my @ptsy;
+    my ($xmin, $xminy, $xmaxy, $xmax);
     for (my $i = 0; $i <= $#$pts; $i++) {
 	my ($x, $y) = split(/\s+/,$pts->[$i]);
 	push @ptsx,$x;
 	push @ptsy,$y;
     }
-    for (my $i = $#ptsx-1; $i >= 0; $i--) {
-	$area += 0.5 * ($ptsy[$i] + $ptsy[$i+1]) * ($ptsx[$i]-$ptsx[$i+1]);
+    $xmax = $ptsx[0];
+    $xmin = $ptsx[$#ptsx];
+    $xmaxy = $ptsy[0];
+    $xminy = $ptsy[$#ptsx];
+    for (my $i = 1; $i <=$#ptsx; $i++) {
+	if ($ptsx[$i] < $xlimitmin) {
+	    if ($ptsx[$i-1] > $xlimitmin) {
+		$xmin = $xlimitmin;
+		$xminy = $ptsy[$i-1] + ($ptsy[$i]-$ptsy[$i-1])*($ptsx[$i-1]-$xlimitmin)/($ptsx[$i-1]-$ptsx[$i]);
+		$area += 0.5*($xminy+$ptsy[$i-1])*($ptsx[$i-1]-$xlimitmin);
+	    }
+	}elsif ($ptsx[$i-1] > $xlimitmax) {
+	    if ($ptsx[$i] < $xlimitmax) {
+		$xmax = $xlimitmax;
+		$xmaxy = $ptsy[$i] - ($ptsy[$i]-$ptsy[$i-1])*($xlimitmax-$ptsx[$i])/($ptsx[$i-1]-$ptsx[$i]);
+		$area += 0.5*($xmaxy+$ptsy[$i])*($xlimitmax-$ptsx[$i]);
+	    }
+	}else {
+	    $area += 0.5 * ($ptsy[$i] + $ptsy[$i-1]) * ($ptsx[$i-1]-$ptsx[$i]);
+	}
+#	if ($i == 1) {
+#	    print "$ptsx[0] $ptsy[0]\n";
+#	}
+#	print "$ptsx[$i] $ptsy[$i] $area\n";
     }
-    if ($ptsx[$#ptsx] > $xmin) {
-	$area += ($ptsx[$#ptsx] - $xmin) * $xminy;
+    if ($xmin > $xlimitmin) {
+	$area += 0.5*($xmin-$xlimitmin) * ($xlimitminy+$xminy);
+#	print ">>$xmin $xlimitmin $xlimitminy $area\n";
     }
-    if ($ptsx[0] < $xmax) {
-	$area += ($xmax - $ptsx[0]) * $ptsy[0];
+    if ($xmax < $xlimitmax) {
+	$area += 0.5*($xlimitmax-$xmax)*($xlimitmaxy+$xmaxy);
+#print ">>$xmax $xlimitmax $xlimitmaxy $area\n";
     }
-    $area;
+    die if ($area < 0);
+    ($area,$xmin,$xminy,$xmax,$xmaxy);
 }
