@@ -64,6 +64,7 @@ sfs_hostname my_addr ();
 chordID init_chordID (int index, str name, int p);
 chordID make_chordID (str hostname, int port, int index = 0);
 bool is_authenticID (const chordID &x, sfs_hostname n, int p, int vnode);
+int is_authenticID (const chordID &x, sfs_hostname n, int p);
 
 void warnt(char *msg);
 

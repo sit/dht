@@ -389,3 +389,25 @@ is_authenticID (const chordID &x, sfs_hostname n, int p, int vnode)
   else return false;
 }
 
+int
+is_authenticID (const chordID &x, sfs_hostname n, int p)
+{
+  chordID ID;
+  char id[sha1::hashsize];
+  
+  // xxx presumably there's really a smaller actual range
+  //     of valid ports.
+  if (p < 0 || p > 65535)
+    return -1;
+  
+  for (int i = 0; i < chord::max_vnodes; i++) {
+    // XXX i bet there's a faster way to construct these
+    //     string objects.
+    str ids = n << "." << p << "." << i;
+    sha1_hash (id, ids, ids.len ());
+    mpz_set_rawmag_be (&ID, id, sizeof (id));  // For big endian    
+
+    if (ID == x) return i;
+  }
+  return -1;
+}

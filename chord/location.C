@@ -35,7 +35,6 @@
 // XXX should include succ_list.h but that's too much hassle.
 #define NSUCC 10
 
-bool nochallenges;
 const int CHORD_RPC_STP (0);
 const int CHORD_RPC_SFSU (1);
 const int CHORD_RPC_SFST (2);
@@ -53,8 +52,7 @@ locationtable::printloc (locwrap *l)
   warnx << "Locwrap " << l->n_;
   warnx << " type " << l->type_;
   if (l->type_ & LOC_REGULAR)
-    warnx << " (A=" << l->loc_->alive
-	  << ", C=" << l->loc_->challenged << ")\n";
+    warnx << " (A=" << l->loc_->alive << ")\n";
 }
 #endif /* 0 */
 
@@ -89,12 +87,15 @@ ignore_challengeresp (chordID x, bool b, chordstat s)
 cbchallengeID_t cbchall_null (wrap (ignore_challengeresp));
 
 location::location (const chordID &_n, const net_address &_r) 
-  : n (_n), addr (_r), alive (true), checkdeadcb (NULL), challenged (false)
+  : n (_n), addr (_r), alive (true), checkdeadcb (NULL)
 {
   bzero(&saddr, sizeof(sockaddr_in));
   saddr.sin_family = AF_INET;
   inet_aton (_r.hostname.cstr (), &saddr.sin_addr);
   saddr.sin_port = htons (addr.port);
+  vnode = is_authenticID (n, addr.hostname, addr.port);
+  warnx << "new location " << n << "@" << addr.hostname << ":"
+	<< addr.port << " is vnode " << vnode << ".\n";
 };
 
 location::~location () {
@@ -125,38 +126,9 @@ locationtable::locationtable (ptr<u_int32_t> _nrcv, int _max_cache)
     max_cachedlocs (_max_cache), 
     nnodessum (0),
     nnodes (0),
-    nvnodes (0),
-    nchallenge (0)
+    nvnodes (0)
 {
   initialize_rpcs ();
-}
-
-locationtable::locationtable (const locationtable &src)
-{
-  nrcv = src.nrcv;
-  max_cachedlocs = src.max_cachedlocs;
-
-  initialize_rpcs ();
-
-  // State parameters will be zeroed in the copy
-  good = 0;
-  size_cachedlocs = 0; 
-  nvnodes = 0;
-  nnodes = 0;
-  nnodessum = 0;
-  nchallenge = 0;
-
-  // Deep copy the list of locations. Do not copy pins because those
-  // reflect the needs of the individual vnodes; each vnode should
-  // insert its own pins into the table. (Maybe this should change.)
-  for (locwrap *l = src.locs.first (); l; l = src.locs.next (l)) {
-    if ((l->type_ & LOC_REGULAR) == 0) continue; 
-    if (!l->loc_->alive) continue;
-    ref<location> loc = New refcounted<location> (l->loc_->n, l->loc_->addr);
-    loc->challenged = l->loc_->challenged;
-    realinsert (loc);
-    if (loc->challenged) good++;
-  }
 }
 
 bool
@@ -165,7 +137,7 @@ locationtable::locwrap::good ()
   return ((type_ & LOC_REGULAR) &&
 	  loc_ &&
 	  loc_->alive &&
-	  loc_->challenged);
+	  loc_->vnode >= 0);
 }
 
 size_t
@@ -201,12 +173,24 @@ locationtable::resendRPC (long seqno)
 }
 
 long
+locationtable::doRPC (const chord_node &n, rpc_program progno,
+		      int procno, ptr<void> in,
+		      void *out, aclnt_cb cb)
+{
+  ptr<location> l = lookup (n.x);
+  if (!l) {
+    insert (n.x, n.r.hostname, n.r.port);
+  }
+  return doRPC (n.x, progno, procno, in, out, cb);
+}
+
+long
 locationtable::doRPC (const chordID &n, rpc_program progno, 
 		      int procno, ptr<void> in, 
 		      void *out, aclnt_cb cb)
 {
   ptr<location> l = lookup (n);
-  if (!l) panic << "location (" << n << ") is null. forgot to call cacheloc\n?";
+  if (!l) panic << "location (" << n << ") is null.\n";
   l->nrpc++;
   if (l->alive)
     return hosts->doRPC (l, progno, procno, in, out, 
@@ -228,12 +212,7 @@ locationtable::doRPCcb (ptr<location> l, aclnt_cb realcb, clnt_stat err)
   
   if (err) {
     if (l->alive) {
-      // xxx should really kill all nodes that share the same ip/port.
-      //     maybe should increase granularity of hostinfo cache for
-      //     stp from per-host to per ip/port... but this is no worse
-      //     than before.
-      if (l->challenged)
-	good--;
+      good--;
       l->alive = false;
       if (!l->checkdeadcb)
 	l->checkdeadcb = delaycb (60, 0,
@@ -242,8 +221,7 @@ locationtable::doRPCcb (ptr<location> l, aclnt_cb realcb, clnt_stat err)
   } else {
     if (!l->alive) {
       l->alive = true;
-      if (l->challenged)
-	good++;
+      good++;
     }
   }
 
@@ -251,40 +229,62 @@ locationtable::doRPCcb (ptr<location> l, aclnt_cb realcb, clnt_stat err)
 }
 
 void
-locationtable::insertgood (const chordID &n, sfs_hostname s, int p)
+locationtable::realinsert (ref<location> l)
 {
-  locwrap *lw;
-  if ((lw = locs[n])) {
-    warnx << "re-INSERT (good): " << n << "\n";
-    if (lw->type_ & LOC_REGULAR) {
-      if (!lw->good ()) {
-      lw->loc_->challenged = true;
-      lw->loc_->alive = true;
-      good++;
-      return;
-      }
-      // if already good, nothing to do.
-    }
-    // if it was here as part of a pin, then the fall
-    // through path will finish the insert (via realinsert).
+  if (size_cachedlocs >= max_cachedlocs) {
+    delete_cachedlocs ();
   }
+  locwrap *lw = locs[l->n];
+  if (lw) {
+    if (lw->type_ & LOC_REGULAR) {
+      warnx << "locationtable::realinsert: duplicate insertion of "
+	    << l->n << "\n";
+      cachedlocs.remove (lw);
+      cachedlocs.insert_tail (lw);
+      return;
+    }
+    lw->type_ |= LOC_REGULAR;
+    lw->loc_ = l;
+  } else {
+    lw = New locwrap (l, LOC_REGULAR);
+    locs.insert (lw);
+    loclist.insert (lw);
+  }
+  if (l->vnode >= 0)
+    good++;
+  cachedlocs.insert_tail (lw);
+  size_cachedlocs++;
+  return;
+}
 
-  net_address r;
-  r.hostname = s; r.port = p;
-
-  ref<location> loc = New refcounted<location> (n, r);
-  loc->challenged = true; // force goodness
+bool
+locationtable::insert (const chordID &n, const net_address &r)
+{
+  ptr<location> loc = lookup (n);
+  if (loc != NULL)
+    return true;
+  
+  loc = New refcounted<location> (n, r);
+  if (loc->vnode < 0)
+    return false;
+  
   realinsert (loc);
-  good++;
-  // warnx << "INSERT (good): " << n << "\n";
+  return true;
+}
+
+bool
+locationtable::insert (const chordID &n, sfs_hostname s, int p)
+{
+  net_address r;
+  r.hostname = s;
+  r.port = p;
+  insert (n, r);
 }
 
 void
 locationtable::insert (const chordID &n, sfs_hostname s, int p,
 		       cbchallengeID_t cb)
 {
-  assert (!locs[n]);
-  
   net_address r;
   r.hostname = s;
   r.port = p;
@@ -292,25 +292,21 @@ locationtable::insert (const chordID &n, sfs_hostname s, int p,
 }
 
 void
-locationtable::cacheloc (const chordID &x, const net_address &r, cbchallengeID_t cb)
+locationtable::cacheloc (const chordID &n, const net_address &r, cbchallengeID_t cb)
 {
-  // char *state;
-  locwrap *lx = locs[x];
-  if (lx == NULL) {
-    // state = "new";
-    ref<location> loc = New refcounted<location> (x, r);
-    realinsert (loc);
-    challenge (x, cb);
-  } else if (lx->loc_->alive == false || lx->loc_->challenged == false) {
-    // state = "pending";
-    //    warn << "cacheloc " << x << " challenging\n";
-    challenge (x, cb); // queue up for additional callback
-  } else {
-    // state = "old";
-    if (cb != cbchall_null)
-      cb (x, lx->loc_->challenged, CHORD_OK);
+  ptr<location> loc = lookup (n);
+  if (loc) {
+    cb (n, loc->vnode >= 0, CHORD_OK);
+    return;
   }
-  // warnx << "CACHELOC (" << state << "): " << x << " at port " << r.port << "\n";
+
+  loc = New refcounted<location> (n, r);
+  if (loc->vnode < 0) {
+    cb (n, false, CHORD_OK);
+  } else {
+    realinsert (loc);
+    cb  (n, true, CHORD_OK);
+  }
 }
 
 void
@@ -321,8 +317,7 @@ locationtable::delete_cachedlocs (void)
 
   // First, try to find a bad node
   locwrap *lw = cachedlocs.first;
-  while (lw &&
-	 (lw->good () || (lw->loc_ && lw->loc_->outstanding_cbs.size ()))) {
+  while (lw && lw->good ()) {
       lw = cachedlocs.next (lw);
       continue;
   }
@@ -338,10 +333,8 @@ locationtable::delete_cachedlocs (void)
   unsigned int n = NSUCC;
   locwrap *c = NULL;
   while (lw) {
-    // Continue to skip over those that are being challenged or
-    // are directly pinned
-    if (lw->loc_->outstanding_cbs.size () ||
-	(prev (lw) && prev (lw)->type_ & LOC_PINSUCC) ||
+    // Continue to skip over those that are directly pinned
+    if ((prev (lw) && prev (lw)->type_ & LOC_PINSUCC) ||
 	(next (lw) && next (lw)->type_ & LOC_PINPRED)) {
       goto nextcandidate;
     }
@@ -412,27 +405,6 @@ locationtable::pinsucclist (const chordID &x)
 }
 
 void
-locationtable::realinsert (ref<location> l)
-{
-  if (size_cachedlocs >= max_cachedlocs) {
-    delete_cachedlocs ();
-  }
-  locwrap *lw = locs[l->n];
-  if (lw) {
-    if (lw->type_ & LOC_REGULAR) 
-      warnx << "locationtable::realinsert: duplicate insertion.\n";
-    lw->type_ |= LOC_REGULAR;
-    lw->loc_ = l;
-  } else {
-    lw = New locwrap (l, LOC_REGULAR);
-    locs.insert (lw);
-    loclist.insert (lw);
-  }
-  cachedlocs.insert_tail (lw);
-  size_cachedlocs++;
-}
-
-void
 locationtable::get_node (const chordID &x, chord_node *n)
 {
   ptr<location> loc = lookup (x);
@@ -491,7 +463,7 @@ locationtable::closestsuccloc (const chordID &x) {
     if (!l->
     if ((l->type_ & LOC_REGULAR) == 0) continue;
     if (!l->loc_->alive) continue;
-    if (!l->loc_->challenged) continue;
+    if (l->loc_->vnode < 0) continue;
     if ((x == nbar) || between (x, nbar, l->loc_->n)) nbar = l->loc_->n;
   }
   if (n != nbar) {
@@ -529,7 +501,7 @@ locationtable::closestpredloc (const chordID &x, vec<chordID> failed)
   for (l = locs.first (); l; l = locs.next (l)) {
     if ((l->type_ & LOC_REGULAR) == 0) continue;
     if (!l->loc_->alive) continue;
-    if (!l->loc_->challenged) continue;
+    if (l->loc_->vnode < 0) continue;
     if ((x == nbar) || betterpred1 (nbar, x, l->loc_->n)) nbar = l->loc_->n;
   }
   if (n != nbar) {
@@ -583,73 +555,6 @@ locationtable::ping_cb (cbping_t cb, clnt_stat err)
 }
 
 void
-locationtable::challenge (const chordID &x, cbchallengeID_t cb)
-{
-  ptr<location> l = lookup (x);
-  if (!l) {
-    warn << "locationtable::challenge() l is NULL\n";
-    cb (x, false, chordstat (CHORD_ERRNOENT));
-  }
-
-  if (nochallenges) {
-    if (!l->challenged)
-      good++;
-    l->challenged = true;
-    cb (x, true, chordstat (CHORD_OK));
-    return;
-  }
-  if (!l->outstanding_cbs.empty ()) {
-    // warnx << "challenge: adding cb to queue\n";
-    l->outstanding_cbs.push_back (cb);
-    return;
-  }
-  assert (l->outstanding_cbs.size () == 0);
-  
-  int c = random ();
-  ptr<chord_challengearg> ca = New refcounted<chord_challengearg>;
-  chord_challengeres *res = New chord_challengeres (CHORD_OK);
-  nchallenge++;
-  ca->v = l->n;
-  ca->challenge = c;
-  l->outstanding_cbs.push_back (cb);
-  doRPC (l->n, chord_program_1, CHORDPROC_CHALLENGE, ca, res, 
-	 wrap (mkref (this), &locationtable::challenge_cb, c, l, res));
-}
-
-void
-locationtable::challenge_cb (int challenge, ptr<location> l,
-			     chord_challengeres *res, clnt_stat err)
-{
-  bool chalok = false;
-  chordstat status = res->status;
-  if (err) {
-    //    warnx << "challenge_cb: RPC failure " << err << "\n";
-    status = CHORD_RPCFAILURE;
-  } else if (res->status) {
-    //    warnx << "challenge_cb: error " << res->status << "\n";
-  } else if (challenge != res->resok->challenge) {
-    //    warnx << "challenge_cb: challenge mismatch\n";
-  } else {
-    net_address r = l->addr;
-    chalok = is_authenticID (l->n, r.hostname, r.port, res->resok->index);
-  }
-
-  if (chalok && !l->challenged) // if not alive, chalok is false
-    good++;
-  l->challenged = chalok;
-  if (chalok && !l->alive)
-    l->alive = true;
-  
-  cbchallengeID_t::ptr cb = NULL;;
-  while (!l->outstanding_cbs.empty ()) {
-    cb = l->outstanding_cbs.pop_front ();
-    cb (l->n, chalok, status);
-  }
-
-  delete res;
-}
-
-void
 locationtable::fill_getnodeext (chord_node_ext &data, const chordID &x)
 {
   locwrap *lw = locs[x];
@@ -683,7 +588,7 @@ locationtable::challenged (const chordID &x)
 {
   locwrap *l = locs[x];
   if (l && l->type_ & LOC_REGULAR)
-    return l->loc_->challenged;
+    return l->loc_->vnode >= 0;
   return false;
 }
 
@@ -760,20 +665,17 @@ locationtable::check_dead (ptr<location> l, unsigned int newwait)
   
   // make sure we actually go out on the network and check if the node
   // is alive. if we're allowed to challenge, do that as well.
-  if (nochallenges)
-    ping (l->n, wrap (this, &locationtable::check_dead_cb, l, newwait,
-			    l->n, false));
-  else
-    challenge (l->n, wrap (this, &locationtable::check_dead_cb, l, newwait));
+  ping (l->n, wrap (this, &locationtable::check_dead_cb, l, newwait,
+		    l->n, false));
 }
 
 void
 locationtable::check_dead_cb (ptr<location> l, unsigned int newwait,
 			      chordID x, bool b, chordstat s)
 {
-  // the challenge_cb and doRPCcb has already fixed up the
-  // the cases where the node is alive. We're just here to
-  // reschedule a check in case the node was still unreachable.
+  // doRPCcb has already fixed up the the cases where the node is
+  // alive. We're just here to reschedule a check in case the node was
+  // still unreachable.
   
   if (s == CHORD_OK)
     return;

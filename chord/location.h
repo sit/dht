@@ -44,10 +44,11 @@ struct location {
   net_address addr;
   sockaddr_in saddr;
   unsigned int nrpc;
+
+  int vnode;  // the vnode # that will make this node legit.
   bool alive; // whether this node responded to its last RPC
+
   timecb_t *checkdeadcb; // timer to check if this node has come back to life
-  bool challenged; // whether this node has been succesfully challenged
-  vec<cbchallengeID_t> outstanding_cbs;
   location (const chordID &_n, const net_address &_r);
   ~location ();
 };
@@ -93,9 +94,7 @@ class locationtable : public virtual refcount {
   u_long nnodessum;
   u_long nnodes;
   unsigned nvnodes;
-  unsigned nchallenge;
   
-  locationtable ();
   void initialize_rpcs ();
   
   void delete_cachedlocs ();
@@ -105,8 +104,6 @@ class locationtable : public virtual refcount {
   bool betterpred1 (chordID current, chordID target, chordID newpred);
 
   void ping_cb (cbping_t cb, clnt_stat err);
-  void challenge_cb (int challenge, ptr<location> l,
-		     chord_challengeres *res, clnt_stat err);
 
   // Circular, in-order traversal of all known nodes.
   locwrap *next (locwrap *lw);
@@ -122,10 +119,12 @@ class locationtable : public virtual refcount {
 
   bool remove (locwrap *l);
   void pin (const chordID &x, loctype pt);
-  
+
+  // NOT IMPLEMENTED (copy constructor)
+  locationtable (const locationtable &src);
+
  public:
   locationtable (ptr<u_int32_t> _nrcv, int _max_connections);
-  locationtable (const locationtable &src);
 
   size_t size ();
   size_t usablenodes ();
@@ -133,11 +132,21 @@ class locationtable : public virtual refcount {
   void replace_estimate (u_long o, u_long n);
 
   void incvnodes () { nvnodes++; };
-  
-  void insertgood (const chordID &n, sfs_hostname s, int p);
+
+  // Inserts node into LT.  Returns true if node is now available.
+  // Returns false of n is not a plausible chordID for s:p.
+  bool insert (const chordID &n, sfs_hostname s, int p);
+  bool insert (const chordID &n, const net_address &r);
+  bool insert (const chord_node &n) {
+    return insert (n.x, n.r);
+  }
+  // Insert node into LT.  Backwards compatibility for old code;
+  // Calls cb immediately with good or bad result.
   void insert (const chordID &n, sfs_hostname s, int _p,
 	       cbchallengeID_t cb);
+  // Alternate interface for insert with stupid name change.
   void cacheloc (const chordID &x, const net_address &r, cbchallengeID_t cb);
+  
   void pinpredlist (const chordID &x);
   void pinsucclist (const chordID &x);
   void pinsucc (const chordID &x);
@@ -147,14 +156,17 @@ class locationtable : public virtual refcount {
   chordID closestsuccloc (const chordID &x);
   chordID closestpredloc (const chordID &x, vec<chordID> failed);
   chordID closestpredloc (const chordID &x);
-
+  
+  long doRPC (const chord_node &n, rpc_program progno, 
+	      int procno, ptr<void> in, 
+	      void *out, aclnt_cb cb);
   long doRPC (const chordID &n, rpc_program progno, 
 	      int procno, ptr<void> in, 
 	      void *out, aclnt_cb cb);
   void resendRPC (long seqno);
 
   void ping (const chordID &x, cbping_t cb);
-  void challenge (const chordID &x, cbchallengeID_t cb);
+
   void get_node (const chordID &x, chord_node *n);
     
   // info about a particular location...
@@ -173,7 +185,6 @@ class locationtable : public virtual refcount {
   void stats ();
 };
 
-extern bool nochallenges;
 extern int chord_rpc_style;
 extern const int CHORD_RPC_STP;  // our own rpc style
 extern const int CHORD_RPC_SFSU; // libarpc over UDP

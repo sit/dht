@@ -54,12 +54,12 @@ chord::chord (str _wellknownhost, int _wellknownport,
   *nrcv = 0;
   locations = New refcounted<locationtable> (nrcv, max_cache);
 
-  // Special case the very first node: don't need to challenge yourself
-  if (wellknownID == make_chordID (myname, myport))
-    locations->insertgood (wellknownID, myname, myport);
-  else
-    locations->insert (wellknownID, wellknownhost.hostname, wellknownhost.port,
-		       wrap (this, &chord::checkwellknown_cb));
+  bool ok = locations->insert (wellknownID, wellknownhost);
+  if (!ok) {
+    warn << "Well known host failed to verify! Bailing.\n";
+    exit (0);
+  }
+
   nvnode = 0;
   srandom ((unsigned int) (getusec() & 0xFFFFFFFF));
 }
@@ -156,7 +156,8 @@ chord::newvnode (cbjoin_t cb, ptr<fingerlike> fingers, ptr<route_factory> f)
   warn << "creating new vnode: " << newID << "\n";
   if (newID != wellknownID) {
     // It's not yet strictly speaking useful to other nodes yet.
-    locations->insertgood (newID, myname, myport);
+    bool ok = locations->insert (newID, myname, myport);
+    assert (ok);
   }
 
   ptr<vnode> vnodep = vnode::produce_vnode (locations, fingers, f,

@@ -37,6 +37,7 @@
 
 // #define __J__ 1
 
+#include <crypt.h>
 #include "dhash_prot.h"
 #include "chord_util.h"
 #include "comm.h"
@@ -117,11 +118,13 @@ hostinfo::hostinfo (const net_address &r)
 rpc_manager::rpc_manager (ptr<u_int32_t> _nrcv)
   : nrpc (0), nrpcfailed (0), nsent (0), npending (0), nrcv (_nrcv)
 {
-  warn << "CREATED RPC MANANGER\n";
+  warn << "CREATED RPC MANAGER\n";
   int dgram_fd = inetsocket (SOCK_DGRAM);
   if (dgram_fd < 0) fatal << "Failed to allocate dgram socket\n";
   dgram_xprt = axprt_dgram::alloc (dgram_fd, sizeof(sockaddr), 230000);
   if (!dgram_xprt) fatal << "Failed to allocate dgram xprt\n";
+
+  next_xid = &random_getword;
 }
 
 float

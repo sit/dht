@@ -30,28 +30,13 @@ void
 pred_list::update_pred (const chordID &p, const net_address &r)
 {
   chordID curp = pred ();
-  if (curp == myID || between (curp, myID, p)) {
-    locations->cacheloc (p, r,
-			 wrap (this, &pred_list::update_pred_cb));
-  }
-}
-
-void
-pred_list::update_pred_cb (chordID p, bool ok, chordstat status)
-{
-  if ((status == CHORD_OK) && ok) {
-    if (oldpred == myID) {
-      // When we first join, initially seed our finger table with
-      // fingers from our predecessor.
+  if (oldpred == myID || between (curp, myID, p)) {
+    bool ok = locations->insert (p, r);
+    if (ok && oldpred == myID) {
       v_->get_fingers (p, wrap (this, &pred_list::update_pred_fingers_cb));
     }
-    oldpred = p;
   }
-  // If !ok but status == CHORD_OK, then there's probably another
-  // outstanding call somewhere that is already testing this same
-  // node. We can ignore the failure and wait until the outstanding
-  // challenge returns. If they all fail, then we'll never get called
-  // and that's okay too.
+  oldpred = pred ();
 }
 
 void
@@ -61,9 +46,7 @@ pred_list::update_pred_fingers_cb (vec<chord_node> nlist, chordstat s)
     return;
     
   for (unsigned i = 0; i < nlist.size (); i++)
-    locations->cacheloc (nlist[i].x, 
-			 nlist[i].r,
-			 cbchall_null);
+    locations->insert (nlist[i].x, nlist[i].r);
 }
 
 void
@@ -129,7 +112,7 @@ pred_list::stabilize_predlist_gotsucclist (vec<chord_node> sl, chordstat s)
       continue;
     stable_predlist = false;
     warnx << myID << ": stabilize_predlist adding " << sl[i].x << "\n";
-    locations->cacheloc (sl[i].x, sl[i].r, cbchall_null);
+    locations->insert (sl[i].x, sl[i].r);
   }
 }
 
