@@ -19,16 +19,11 @@ class succ_list : public fingerlike {
   // Helpers for stabilize_succ
   void stabilize_getpred_cb (chordID s, chordID p,
 			     net_address r, chordstat status);
-  void stabilize_getpred_cb_ok (chordID sd, 
-				chordID p, bool ok, chordstat status);
 
   // Helpers for stabilize_succlist
   void stabilize_getsucclist_cb (chordID s, vec<chord_node> nlist,
 				chordstat err);
   void stabilize_getsucclist_check (chordID src, chordID chk, chordstat status);
-  void stabilize_getsucclist_ok (chordID source,
-				 chordID ns, bool ok, chordstat status);
-
 
  public:  
   succ_list (ptr<vnode> v, ptr<locationtable> locs, chordID myID);
