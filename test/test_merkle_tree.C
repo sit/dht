@@ -1,15 +1,8 @@
 #include "merkle.h"
-#define NEWDB
 
-#ifdef NEWDB
 ptr<dbfe> db = NULL;
-#else
-database *db = NULL;
-#endif
 
-#ifdef NEWDB
 #define DBNAME "tmpdb"
-#endif
 
 ptr<dbrec> FAKE_DATA = New refcounted<dbrec> ("FAKE", strlen ("FAKE"));
 
@@ -70,7 +63,6 @@ insert_rand (merkle_tree *mtree, int upto)
 }
 
 
-#ifdef NEWDB
 void
 remove_all (merkle_tree *mtree)
 {
@@ -84,28 +76,6 @@ remove_all (merkle_tree *mtree)
     entry = iter->nextElement ();
   }
 }
-
-#else
-void
-remove_all (merkle_tree *mtree)
-{
-  u_int i = 0;
-  block *b;
-  while (1) {
-    b = mtree->db->cursor (0);
-    if (!b)
-      break;
-    mtree->remove (b);
-    delete b;
-    i++;
-    if (i % 1000 == 0) {
-      warn << "removed " << i << " blocks..\n";
-      mtree->check_invariants ();
-    }
-  }
-}
-#endif
-
 
 void
 test_incr (int upto)
@@ -131,24 +101,18 @@ test_rand (int upto)
 static void
 create_database ()
 {
-#ifdef NEWDB
   unlink (DBNAME);
 
   db = New refcounted<dbfe> ();
 
   //set up the options we want
   dbOptions opts;
-  opts.addOption("opt_async", 1);
-  opts.addOption("opt_cachesize", 1000);
-  opts.addOption("opt_nodesize", 4096);
+  opts.addOption("opt_dbenv", 0);
 
   if (int err = db->opendb(DBNAME, opts)) {
     warn << "open returned: " << strerror(err) << err << "\n";
     exit (-1);
   }
-#else
-  db = New database ();
-#endif
 }
 
 
@@ -179,8 +143,6 @@ main ()
   } while (0);
 
 
-#ifdef NEWDB
   unlink (DBNAME);
-#endif
 }
 
