@@ -469,7 +469,7 @@ Kademlia::do_ping(ping_args *args, ping_result *result)
 void
 Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
 {
-  // KDEBUG(1) << "Kademlia::find_value: node " << printID(fargs->id) << " does find_value for " << printID(fargs->key) << ", flyweight.size() = " << endl;
+  // KDEBUG(1) << "Kademlia::find_value: node " << printID(fargs->id) << " does find_value for " << printID(fargs->key) << endl;
   // assert(alive());
   update_k_bucket(fargs->id, fargs->ip);
   fresult->rid = _id;
@@ -482,15 +482,25 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
   for(unsigned i=0; i<tmp.size(); i++)
     successors.insert(tmp[i]);
 
+  // {
+    // unsigned j = 0;
+    // NODES_ITER(&successors) {
+      // KDEBUG(2) << "Kademlia::find_value successor[" << j++ << "] is " << printID((*i).id) << ", dist to key = " << printID(distance((*i).id, fargs->key)) << endl;
+    // }
+  // }
+
   // we can't do anything but return ourselves
   if(!successors.size()) {
+    // KDEBUG(2) << "Kademlia::find_value successor list empty. bye." << endl;
     fresult->succ = _me;
+    fresult->hops = 0;
     return;
   }
 
   // return if we're done already
   fresult->succ = *successors.begin();
   if(fresult->succ.id == fargs->key) {
+    // KDEBUG(2) << "Kademlia::find_value finished in 0 hops. bye." << endl;
     fresult->hops = 0;
     return;
   }
@@ -503,6 +513,7 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
     unsigned alpha_counter = 0;
     NODES_ITER(&successors) {
       k_nodeinfo ki = *i;
+      // KDEBUG(2) << "Kademlia::find_value SEND_RPC to " << printID(ki.id) << endl;
       SEND_RPC(ki, fargs);
       successors.erase(ki);
       last_rpcs.insert(ki.id, true);
@@ -515,25 +526,40 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
   // now send out a new RPC for every single RPC that comes back
   unsigned useless_replies = 0;
   while(true) {
+    // {
+      // unsigned i=0;
+      // for(HashMap<NodeID, bool>::const_iterator j=last_rpcs.begin(); j; j++)
+        // KDEBUG(2) << "Kademlia::find_value before rcvRPC last_rpcs[" << i++ << "] = " << printID(j.key()) << endl;
+    // }
+
     bool ok;
     unsigned donerpc = rcvRPC(rpcset, ok);
     callinfo *ci = (*outstanding_rpcs)[donerpc];
+    // KDEBUG(2) << "Kademlia::find_value " << printID(ci->fr->rid) << " replied." << endl;
     outstanding_rpcs->remove(donerpc);
-    if(last_rpcs[ci->fr->rid])
+    if(last_rpcs[ci->fr->rid]) {
       last_rpcs.remove(ci->fr->rid);
+      // KDEBUG(2) << "Kademlia::find_value removing " << printID(ci->fr->rid) << " from last_rpcs." << endl;
+    }
 
     k_nodeinfo ki;
     if(!alive()) {
       delete ci;
+      // KDEBUG(2) << "Kademlia::find_value oops. i died. bye." << endl;
       CREATE_REAPER(STAT_FIND_VALUE); // returns
     }
 
     // node was dead
     closer::n = fargs->key;
     if(!ok) {
+      // KDEBUG(2) << "Kademlia::find_value reply from " << printID(ci->ki.id) << " wasn't good." << endl;
       if(flyweight[ci->ki.id])
         erase(ci->ki.id);
       delete ci;
+      if(!successors.size()) {
+        // KDEBUG(2) << "Kademlia::find_value nobody left to ask. bye." << endl;
+        CREATE_REAPER(STAT_FIND_VALUE); // returns
+      }
       goto next_candidate;
     }
 
@@ -541,43 +567,72 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
     record_stat(STAT_FIND_VALUE, ci->fr->results.size(), 0);
     update_k_bucket(ci->fr->rid, ci->ki.ip);
 
-    ki = ci->fr->results[0];
-    if(ki.id == fargs->key) {
-      fresult->succ = ki;
-      delete ci;
-      CREATE_REAPER(STAT_FIND_VALUE); // returns
-    }
-
     // put all the ones better than what we knew so far in successors
     useless_replies++;
     closer::n = fargs->key;
+    // KDEBUG(2) << "Kademlia::find_value best before merge = " << printID(fresult->succ.id) << ", dist = " << printID(distance(fresult->succ.id, fargs->key)) << endl;
     for(unsigned i=0; i<ci->fr->results.size(); i++) {
       k_nodeinfo ki = ci->fr->results[i];
+      // KDEBUG(2) << "Kademlia::find_value result[" << i << "] from " << printID(ci->fr->rid) << " = " << printID(ki.id) << ", dist = " << printID(distance(ki.id, fargs->key)) << endl;
       if(Kademlia::distance(ki.id, fargs->key) >= Kademlia::distance(fresult->succ.id, fargs->key))
         break;
       successors.insert(ki);
+      // KDEBUG(2) << "Kademlia::find_value inserted " << printID(ki.id) << " in successors, dist = " << printID(distance(ki.id, fargs->key)) << endl;
       useless_replies = 0;
     }
     delete ci;
 
+    // found the key
+    if(successors.size()) {
+      ki = *successors.begin();
+      if(ki.id == fargs->key) {
+        // KDEBUG(2) << "Kademlia::find_value " << printID(ci->fr->rid) << " gave us the answer. bye." << endl;
+        fresult->succ = ki;
+        CREATE_REAPER(STAT_FIND_VALUE); // returns
+      }
+    }
+
+
+    // XXX: is useless_replies correct?
+    // XXX: this isn't really fair, because we're going to
+    // increase a hop on every RPC reply that improves anything, even if
+    // they were sent out at the same time.
     // if we improved, that's a hop
     if(useless_replies != 0)
       fresult->hops++;
+    // else
+      // KDEBUG(2) << "Kademlia::find_value that was a useless reply, we're now at " << endl;
+
+    // {
+      // unsigned j = 0;
+      // NODES_ITER(&successors) {
+        // KDEBUG(2) << "Kademlia::find_value after merge successor[" << j++ << "] is " << printID((*i).id) << ", dist to key = " << printID(distance((*i).id, fargs->key)) << endl;
+      // }
+    // }
+
+    // {
+      // unsigned i=0;
+      // for(HashMap<NodeID, bool>::const_iterator j=last_rpcs.begin(); j; j++)
+        // KDEBUG(2) << "Kademlia::find_value before check last_rpcs[" << i++ << "] = " << printID(j.key()) << endl;
+    // }
 
     if(!successors.size() || (!last_rpcs.size() && useless_replies >= Kademlia::alpha)) {
+      // KDEBUG(2) << "Kademlia::find_value successors empty or too many useless_replies. bye." << endl;
       CREATE_REAPER(STAT_FIND_VALUE); // returns
     }
 
 next_candidate:
-    if(!successors.size()) {
-      CREATE_REAPER(STAT_FIND_VALUE); // returns
-    }
     k_nodeinfo front = *successors.begin();
-    if(Kademlia::distance(front.id, fargs->key) < Kademlia::distance(fresult->succ.id, fargs->key))
+    if(Kademlia::distance(front.id, fargs->key) < Kademlia::distance(fresult->succ.id, fargs->key)) {
       fresult->succ = front;
+      // KDEBUG(2) << "Kademlia::find_value best is now " << printID(fresult->succ.id) << ", dist = " << printID(distance(fresult->succ.id, fargs->key)) << endl;
+    }
     SEND_RPC(front, fargs);
-    if(last_rpcs.size() < (int) Kademlia::alpha)
+    // KDEBUG(2) << "Kademlia::find_value SEND_RPC to " << printID(front.id) << endl;
+    if(last_rpcs.size() < (int) Kademlia::alpha) {
+      // KDEBUG(2) << "Kademlia::find_value adding " << printID(front.id) << " to last_rpcs" << endl;
       last_rpcs.insert(front.id, true);
+    }
     successors.erase(front);
   }
 }
@@ -593,6 +648,7 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
   lresult->rid = _id;
 
   // find successors of this key
+  closer::n = largs->key;
   set<k_nodeinfo, closer> successors;
   vector<k_nodeinfo*> tmp;
   _root->find_node(largs->key, &tmp);
