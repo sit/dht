@@ -1,6 +1,7 @@
 # Kademlia args file, for input into scripts/run-simulations.pl
-alpha 1 2 3 4 5 6 7
+alpha 1 2 4 8 
 k 1 2 4 8 16 32
+k_tell =k
 stabilize_timer 300000 600000 1200000 2400000 3600000
 stablearn_only 0 1
 rcache 1
