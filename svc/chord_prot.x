@@ -18,7 +18,8 @@ enum chordstat {
   CHORD_INRANGE = 3,
   CHORD_NOTINRANGE = 4,
   CHORD_NOHANDLER = 5,
-  CHORD_UNKNOWNNODE = 6
+  CHORD_UNKNOWNNODE = 6,
+  CHORD_STOP = 7
 };
 
 struct net_address {
@@ -96,7 +97,6 @@ struct chord_testandfindarg {
 
 struct chord_testandfindres_resok {
   chord_node n;
-  bool stop;
 };
 
 union chord_testandfindres switch (chordstat status) {
@@ -104,6 +104,8 @@ union chord_testandfindres switch (chordstat status) {
    chord_testandfindres_resok inrange;
  case CHORD_NOTINRANGE:
    chord_testandfindres_resok notinrange;
+ case CHORD_STOP:
+   void;
  default:
    void;
 };
@@ -143,7 +145,6 @@ struct chord_debruijnarg {
 struct chord_debruijnnoderes {
   chord_node node;
   chordID d;
-  bool stop;
 };
 
 union chord_debruijnres switch (chordstat status) {
@@ -151,6 +152,8 @@ union chord_debruijnres switch (chordstat status) {
    chord_debruijnnoderes inres;
  case CHORD_NOTINRANGE:
    chord_debruijnnoderes noderes;
+ case CHORD_STOP:
+   void;
  default:
    void;
 };

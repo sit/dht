@@ -28,6 +28,7 @@
 #include "parseopt.h"
 #include <sys/types.h>
 #include "route.h"
+#include "crypt.h"
 
 //#define PROFILING 
 
@@ -230,6 +231,7 @@ main (int argc, char **argv)
 
   int vnode = 1;
   setprogname (argv[0]);
+  mp_clearscrub ();
   // sfsconst_init ();
   random_init ();
 

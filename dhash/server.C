@@ -161,8 +161,6 @@ dhash::route_upcall (int procno,void *args, cbupcalldone_t cb)
       //could need caching...
       host_node->locations->cacheloc (farg->from.x, farg->from.r,
 				      wrap (this, &dhash::block_cached_loc, arg));
-      //      doRPC (farg->from, dhash_program_1, DHASHPROC_BLOCK,
-      //	     arg, res, wrap (this, &dhash::sent_block_cb, res));
       (*cb)(true);
     } 
   } else if (responsible (farg->key)) {
@@ -176,8 +174,6 @@ dhash::route_upcall (int procno,void *args, cbupcalldone_t cb)
     arg->lease = 0;
     host_node->locations->cacheloc (farg->from.x, farg->from.r,
 				    wrap (this, &dhash::block_cached_loc, arg));
-    //    doRPC (farg->from, dhash_program_1, DHASHPROC_BLOCK,
-    //   arg, res, wrap (this, &dhash::sent_block_cb, res));
     (*cb)(true);
   } else {
     (*cb)(false);
@@ -383,7 +379,7 @@ dhash::dispatch (svccb *sbp)
 	(*cb) (arg);
 	bcpt.remove (arg->nonce);
       } else
-	warn << "no callback registered\n";
+	warn << "no callback for " << arg->nonce << "\n";
 
       sbp->replyref (DHASH_OK);
     }

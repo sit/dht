@@ -46,14 +46,14 @@ route_dhash::route_dhash (ptr<route_factory> f,
 };
 
 void
-route_dhash::execute (cbhop_t cbi, chordID first_hop)
+route_dhash::execute (cb_ret cbi, chordID first_hop)
 {
   cb = cbi;
   chord_iterator->send (first_hop);
 }
 
 void
-route_dhash::execute (cbhop_t cbi)
+route_dhash::execute (cb_ret cbi)
 {
   cb = cbi;
   chord_iterator->send (use_cached_succ);
@@ -64,8 +64,7 @@ route_dhash::block_cb (s_dhash_block_arg *arg)
 {
 
   if (arg->offset == -1) {
-    result = DHASH_NOENT;
-    (*cb)(true);
+    (*cb)(DHASH_NOENT, NULL, path ());
     return;
   }
 
@@ -127,11 +126,10 @@ route_dhash::check_finish ()
   /* got the last chunk */
   if (npending == 0) {
     if (fetch_error) {
+      (*cb) (DHASH_NOENT, NULL, path ());
       block = NULL;
-      result = DHASH_NOENT;
     }
-    result = DHASH_OK;
-    cb (true);
+    cb (DHASH_OK, block, path ());
   }
 }
 

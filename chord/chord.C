@@ -294,6 +294,7 @@ vnode::do_upcall (int upcall_prog, int upcall_proc,
   //run the upcall. It returns a pointer to its result and a length in the cb
   (*cb)(upcall_proc, (void *)unmarshalled_args,
 	wrap (this, &vnode::do_upcall_cb, unmarshalled_args, done_cb));
+
 }
 
 void
@@ -324,9 +325,6 @@ vnode::dotestrange_findclosestpred (svccb *sbp, chord_testandfindarg *fa)
 	       wrap (this, &vnode::chord_upcall_done, fa, res, sbp));
 
   } else {
-    if (res->status == CHORD_INRANGE) res->inrange->stop = false;
-    else res->inrange->stop = false;
-
     sbp->reply(res);
     delete res;
   }
@@ -339,9 +337,7 @@ vnode::chord_upcall_done (chord_testandfindarg *fa,
 			  bool stop)
 {
   
-  if (res->status == CHORD_INRANGE) res->inrange->stop = stop;
-  else res->notinrange->stop = stop;
-
+  if (stop) res->set_status (CHORD_STOP);
   sbp->reply (res);
   delete res;
 }
@@ -537,9 +533,6 @@ vnode::dodebruijn (svccb *sbp, chord_debruijnarg *da)
 	       wrap (this, &vnode::debruijn_upcall_done, da, res, sbp));
     
   } else {
-    if (res->status == CHORD_INRANGE) res->inres->stop = false;
-    else res->noderes->stop = false;
-    
     sbp->reply (res);
     delete res;
   }
@@ -552,9 +545,7 @@ vnode::debruijn_upcall_done (chord_debruijnarg *da,
 			     bool stop)
 {
   
-  if (res->status == CHORD_INRANGE) res->inres->stop = stop;
-  else res->noderes->stop = stop;
-
+  if (stop) res->set_status (CHORD_STOP);
   sbp->reply (res);
   delete res;
 }

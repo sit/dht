@@ -149,14 +149,10 @@ route_chord::make_hop_cb (chord_testandfindres *res, clnt_stat err)
     warnx << "make_hop_cb: failure " << err << "\n";
     r = CHORD_RPCFAILURE;
     cb (done = true);
-    delete res;
-    return;
-  } 
-  if (res->status == CHORD_INRANGE)
-    stop = res->inrange->stop;
-  else
-    stop = res->notinrange->stop;
-  if (last_hop) {
+  } else if (res->status == CHORD_STOP) {
+    r = CHORD_OK;
+    cb (done = true);
+  } else if (last_hop) {
     //talked to the successor
     r = CHORD_OK;
     cb (done = true);
@@ -218,12 +214,7 @@ route_chord::make_hop_done_cb (chordID s, bool ok, chordstat status)
 {
   if (ok && status == CHORD_OK) {
     search_path.push_back (s);
-    if (search_path.size () >= 1000) {
-      warnx << "make_hop_done_cb: too long a search path: " << v->my_ID() 
-	    << " looking for " << x << "\n";
-      print ();
-      assert (0);
-    }
+    assert (search_path.size () <= 1000);
   } else if (status == CHORD_RPCFAILURE) {
     // xxx? should we retry locally before failing all the way to
     //      the top-level?
@@ -234,7 +225,6 @@ route_chord::make_hop_done_cb (chordID s, bool ok, chordstat status)
 	  << s << " failed. (chordstat " << status << ")\n";
     assert (0); // XXX handle malice more intelligently
   }
-  if (stop) done = true;
   cb (done);
 }
 
@@ -412,13 +402,10 @@ route_debruijn::make_hop_cb (chord_debruijnres *res, clnt_stat err)
     r = CHORD_RPCFAILURE;
     cb (done = true);
     delete res;
-    return;
-  } 
-  if (res->status == CHORD_INRANGE)
-    stop = res->inres->stop;
-  else
-    stop = res->noderes->stop;
-  if (last_hop) {
+  } else if (res->status == CHORD_STOP) {
+    r = CHORD_OK;
+    cb (done = true);
+  } if (last_hop) {
     r = CHORD_OK;
     cb (done = true);
   } else if (res->status == CHORD_INRANGE) { 

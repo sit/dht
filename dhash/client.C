@@ -164,30 +164,31 @@ dhashcli::retrieve (chordID blockID, bool askforlease,
 {
   ///warn << "dhashcli::retrieve\n";
 
-  ptr<route_dhash> iterator = 
-    New refcounted<route_dhash>(r_factory, 
-				blockID,
-				dh,
-				askforlease,
-				usecachedsucc);
+  route_dhash *iterator = New route_dhash(r_factory, 
+					  blockID,
+					  dh,
+					  askforlease,
+					  usecachedsucc);
   
 
-  iterator->execute (wrap (this, &dhashcli::retrieve_hop_cb, iterator, cb));
+  iterator->execute (wrap (this, &dhashcli::retrieve_hop_cb, 
+			   iterator, cb, blockID));
 }
 
 void
-dhashcli::retrieve_hop_cb (ptr<route_dhash> iterator, cbretrieve_t cb,
-			      bool done) 
+dhashcli::retrieve_hop_cb (route_dhash *iterator, cbretrieve_t cb, chordID key,
+			   dhash_stat status, 
+			   ptr<dhash_block> blk, 
+			   route path) 
 {
-  assert (done);
-  if (iterator->status ()) {
+  if (status) {
     warn << "iterator exiting w/ status\n";
     (*cb) (NULL);
   } else {
-    ptr<dhash_block> res = iterator->get_block ();
-    cb (res); 
-    cache_block (res, iterator->path (), iterator->key ());
+    cb (blk); 
+    cache_block (blk, path, key);
   }
+  delete iterator;
 }
 
 void
@@ -219,22 +220,24 @@ dhashcli::finish_cache (dhash_stat status, chordID dest)
 void
 dhashcli::retrieve (chordID source, chordID blockID, cbretrieve_t cb)
 {
-  ptr<route_dhash> iterator = New refcounted<route_dhash>(r_factory, 
-							  blockID, dh);
+  route_dhash *iterator = New route_dhash(r_factory, 
+					  blockID, dh);
 
   iterator->execute (wrap (this, &dhashcli::retrieve_with_source_cb, 
-			   iterator, cb), source);  
+			   iterator, cb), 
+		     source);  
 }
 
 void
-dhashcli::retrieve_with_source_cb (ptr<route_dhash> iterator,
-				   cbretrieve_t cb, bool done)
+dhashcli::retrieve_with_source_cb (route_dhash *iterator, cbretrieve_t cb, 
+				   dhash_stat status, 
+				   ptr<dhash_block> block, route path)
 {
-  assert (done);
-  if (iterator->status ()) 
+  if (status) 
     (*cb) (NULL);
   else 
-    cb (iterator->get_block ()); 
+    cb (block); 
+  delete iterator;
 }
 
 void

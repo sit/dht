@@ -303,6 +303,7 @@ struct insert_info {
 typedef callback<void, dhash_stat, chordID>::ref cbinsert_t;
 typedef callback<void, dhash_stat, ptr<insert_info> >::ref cbinsertgw_t;
 typedef callback<void, ptr<dhash_block> >::ref cbretrieve_t;
+typedef callback<void, dhash_stat, ptr<dhash_block>, route>::ptr cb_ret;
 typedef callback<void, dhash_stat, chordID>::ref dhashcli_lookupcb_t;
 typedef callback<void, dhash_stat, chordID, route>::ref dhashcli_routecb_t;
 
@@ -317,8 +318,8 @@ public:
 	       bool ucs = false);
   
 
-  void execute (cbhop_t cbi, chordID first_hop_guess);
-  void execute (cbhop_t cbi);
+  void execute (cb_ret cbi, chordID first_hop_guess);
+  void execute (cb_ret cbi);
   dhash_stat status () { return result; }
   chordID key () {return xi;}
   ptr<dhash_block> get_block () const { return block; }
@@ -334,7 +335,7 @@ public:
   dhash_stat result;
   bool last_hop;
   chordID xi;
-  cbhop_t cb;
+  cb_ret cb;
   ptr<route_factory> f;
 
   void check_finish ();
@@ -364,17 +365,21 @@ private:
 
   void lookup_findsucc_cb (chordID blockID, dhashcli_lookupcb_t cb,
 			   chordID succID, route path, chordstat err);
-  void retrieve_hop_cb (ptr<route_dhash> iterator, cbretrieve_t cb, bool done);
+  void retrieve_hop_cb (route_dhash *iterator, 
+			cbretrieve_t cb, chordID key, dhash_stat status,
+			ptr<dhash_block> block, route path);
   void cache_block (ptr<dhash_block> block, route search_path, chordID key);
   void finish_cache (dhash_stat status, chordID dest);
-  void retrieve_with_source_cb (ptr<route_dhash> iterator,
-  				cbretrieve_t cb, bool done);
+  void retrieve_with_source_cb (route_dhash *iterator, cbretrieve_t cb, dhash_stat status, 
+				ptr<dhash_block> block, route path);
   void insert_lookup_cb (chordID blockID, ref<dhash_block> block,
 			 cbinsert_t cb, dhash_stat status, chordID destID);
 
  public:
-  dhashcli (ptr<chord> node, dhash *dh, ptr<route_factory> r_factory, bool do_cache);
-  void retrieve (chordID blockID, bool askforlease, bool usecachedsucc, cbretrieve_t cb);
+  dhashcli (ptr<chord> node, dhash *dh, ptr<route_factory> r_factory, 
+	    bool do_cache);
+  void retrieve (chordID blockID, bool askforlease, bool usecachedsucc, 
+		 cbretrieve_t cb);
 
   void retrieve (chordID source, chordID blockID, cbretrieve_t cb);
   void insert (chordID blockID, ref<dhash_block> block, 

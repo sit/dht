@@ -798,10 +798,8 @@ rpccb_chord::timeout_cb (ptr<bool> del)
     if (nsec < 0 || sec < 0)
       panic ("1 timeout_cb: sec %ld, nsec %ld\n", sec, nsec);
 
-#ifdef __J__
     warnx << gettime() << " REXMIT " << xid
 	  << " rexmits " << rexmits << ", timeout "<< sec << ":" << nsec << "\n";
-#endif
     xmit (rexmits);
     if (rexmits == MAX_REXMIT) {
       // XXX
