@@ -274,7 +274,7 @@ main (int argc, char **argv)
   mode = MODE_CHORD;
   lookup_mode = CHORD_LOOKUP_LOCTABLE;
 
-  while ((ch = getopt (argc, argv, "PfB:b:cd:j:l:M:n:p:S:s:v:m:")) != -1)
+  while ((ch = getopt (argc, argv, "PfFB:b:cd:j:l:M:n:p:S:s:v:m:")) != -1)
     switch (ch) {
     case 'm':
       if (strcmp (optarg, "debruijn") == 0)
@@ -298,11 +298,11 @@ main (int argc, char **argv)
       lookup_mode = CHORD_LOOKUP_PROXIMITY;
       break;
     case 'f':
-      if ((mode == MODE_DEBRUIJN) || (mode == MODE_CHORD))
 	  lookup_mode = CHORD_LOOKUP_FINGERLIKE;
-      else
-	  fatal << "fingers only is only supported in mode chord\n";
-      break;
+	  break;
+    case 'F':
+	  lookup_mode = CHORD_LOOKUP_FINGERSANDSUCCS;
+	  break;
     case 'B':
       cache_size = atoi (optarg);
       break;
