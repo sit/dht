@@ -58,6 +58,9 @@ EXITFN (cleanup);
 #define STORE_SIZE 2000000 //size of block store per vnode (in blocks)
 
 int vnodes = 1;
+u_int initialized_dhash = 0;
+
+static char *logfname;
 
 ptr<chord> chordnode;
 static str p2psocket;
@@ -187,8 +190,7 @@ get_fingerlike (int mode)
 static void
 newvnode_cb (int n, ptr<route_factory> f_old,
 	     ptr<vnode> my, chordstat stat)
-{
-  
+{  
   if (stat != CHORD_OK) {
     warnx << "newvnode_cb: status " << stat << "\n";
     fatal ("unable to join\n");
@@ -196,6 +198,7 @@ newvnode_cb (int n, ptr<route_factory> f_old,
   dh[n]->init_after_chord(my, f_old);
 
   n += 1;
+  initialized_dhash = n;
   if (n < vnodes) {
     ptr<route_factory> f = get_factory (mode);
     ptr<fingerlike> fl = get_fingerlike (mode);
@@ -374,7 +377,7 @@ stats ()
     static bool unleashed = false;
     if (!unleashed) {
       warn << tm () << " unleashing synchronization\n";
-      for (u_int i = 0 ; i < dh.size (); i++) {
+      for (u_int i = 0 ; i < initialized_dhash; i++) {
 	dh[i]->replica_maintenance_timer (0);
 	dh[i]->partition_maintenance_timer ();
       }
@@ -390,7 +393,7 @@ stats ()
   toggle_profiling ();
 #else
   chordnode->stats ();
-  for (unsigned int i = 0 ; i < dh.size (); i++)
+  for (unsigned int i = 0 ; i < initialized_dhash; i++)
     dh[i]->print_stats ();
   chordnode->print ();
 #endif
@@ -402,7 +405,7 @@ stop ()
 {
 #if 1
   chordnode->stop ();
-  for (unsigned int i = 0 ; i < dh.size (); i++)
+  for (unsigned int i = 0 ; i < initialized_dhash; i++)
     dh[i]->stop ();
 #else
   setenv ("LOG_FILE", "log", 1);
@@ -454,6 +457,7 @@ main (int argc, char **argv)
   int nreplica = 0;
   str db_name = "/var/tmp/db";
   p2psocket = "/tmp/chord-sock";
+  logfname = "lsd-trace.log";
   str myname = my_addr ();
   bool setmode = false;
   mode = MODE_CHORD;
@@ -555,13 +559,8 @@ main (int argc, char **argv)
 	break;
       }
     case 'T':
-      {
-	int logfd = open (optarg, O_WRONLY|O_APPEND|O_CREAT, 0666);
-	if (logfd < 0)
-	  fatal << "Couldn't open " << optarg << " for append.\n";
-	modlogger::setlogfd (logfd);
-	break;
-      }
+      logfname = optarg;
+      break;
     default:
       usage ();
       break;
@@ -574,8 +573,13 @@ main (int argc, char **argv)
 	 << chord::max_vnodes << ")\n";
     usage ();
   }
-  
-  max_loccache = max_loccache * (vnodes + 1);
+
+  {
+    int logfd = open (logfname, O_WRONLY|O_APPEND|O_CREAT, 0666);
+    if (logfd < 0)
+      fatal << "Couldn't open " << optarg << " for append.\n";
+    modlogger::setlogfd (logfd);
+  }
   
   {
     strbuf x = strbuf ("starting: ");
@@ -583,7 +587,8 @@ main (int argc, char **argv)
     x << "\n";
     lsdtrace << x;
   }
-
+  
+  max_loccache = max_loccache * (vnodes + 1);
   chordnode = New refcounted<chord> (wellknownhost, wellknownport,
 				     myname,
 				     myport,
