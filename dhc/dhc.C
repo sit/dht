@@ -1,5 +1,4 @@
 #include <sys/time.h>
-#include <iostream.h>
 #include "dhc.h"
 #include "dhc_misc.h"
 #include <merkle_misc.h>
