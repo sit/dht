@@ -238,7 +238,7 @@ Chord::lookup_internal(lookup_args *a)
   Time before = now();
 
   //now() - before includes some extra garbage collection time that needs to be subtracted.
-  uint extra_time = 0; 
+  int extra_time = 0; 
 
 
   if (_recurs) {
@@ -727,7 +727,9 @@ Chord::find_successors_recurs(CHID key, uint m, uint all, uint type, uint *recur
     *recurs_int = total_lat + t->latency(fa.path[psz-1].n.ip, me.ip);
 
   if (type == TYPE_USER_LOOKUP) {
+#ifdef CHORD_DEBUG
     printf("%s lookup key %qx,%d, hops %d timeout %d wasted %d\n", ts(), key, m, psz-total_to, total_to, wasted);
+#endif
     if (!fr.correct) 
       fr.v.clear();
   }
