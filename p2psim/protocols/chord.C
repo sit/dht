@@ -1389,6 +1389,14 @@ Chord::next_handler(next_args *args, next_ret *ret)
 void
 Chord::join(Args *args)
 {
+
+  if (static_sim) {
+    if ((args) && (!_inited))
+      notifyObservers((ObserverInfo *)"join");
+    _inited = true;
+    return;
+  }
+
   if (args) {
     me.ip = ip();
     if (_random_id)
