@@ -161,7 +161,7 @@ parseconfigfile (str cf, int nvnode, int set_rpcdelay)
   int ss = 10000;
   int cs = 1000;
   myport = 0;
-  int max_connections = 100;
+  int max_connections = 400;
   int max_loccache = 250;
   int nreplica = 0;
 

@@ -74,8 +74,8 @@ struct finger {
 };
 
 class vnode : public virtual refcount {
-  static const int stabilize_timer = 1000;      // milliseconds
-  static const int stabilize_timer_max = 500000;      // milliseconds
+  static const int stabilize_timer = 1000;  // millseconds
+  static const int stabilize_timer_max = 500;      // seconds
   static const int max_retry = 5;
   
   ptr<locationtable> locations;
@@ -113,8 +113,8 @@ class vnode : public virtual refcount {
   u_long ndotestrange;
   u_long ndogetfingers;
 
-  timecb_t *stabilize_tmo;
-  vec<cbaction_t> actionCallbacks;
+  timecb_t *stabilize_continuous_tmo;
+  timecb_t *stabilize_backoff_tmo;
 
   void updatefingers (chordID &x, net_address &r);
   void replacefinger (node *n);
@@ -204,8 +204,10 @@ class vnode : public virtual refcount {
   void deletefingers (chordID &x);
   void stats (void);
   void print (void);
+  bool hasbecomeunstable (void);
   bool isstable (void);
   chordID lookup_closestpred (chordID &x);
+  chordID lookup_closestsucc (chordID &x);
 
   //RPC demux
   void addHandler (unsigned long prog, cbdispatch_t cb) {

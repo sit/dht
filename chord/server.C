@@ -374,7 +374,6 @@ vnode::notify_cb (chordID n, chordstat *res, clnt_stat err)
 void
 vnode::alert (chordID &n, chordID &x)
 {
-  assert (0);
   ptr<chord_nodearg> na = New refcounted<chord_nodearg>;
   chordstat *res = New chordstat;
   nalert++;
@@ -382,7 +381,6 @@ vnode::alert (chordID &n, chordID &x)
   na->v.n = n;
   na->n.x = x;
   na->n.r = locations->getaddress (x);
-  // na->r = l->addr;
   locations->doRPC (n, chord_program_1, CHORDPROC_ALERT, na, res, 
 		    wrap (mkref (this), &vnode::alert_cb, res));
 }

@@ -54,7 +54,7 @@ locationtable::doForeignRPC (rpc_program prog,
   if (c) {
     chord_RPC_res *res = New chord_RPC_res ();
     frpc_state *C = New frpc_state (res, out, prog, procno, cb,
-				   l, getnsec ());
+				   l, getusec ());
     c->call (CHORDPROC_HOSTRPC, &farg, res, 
 	   wrap (this, &locationtable::doForeignRPC_cb, C)); 
   } else {
@@ -72,7 +72,7 @@ locationtable::doForeignRPC_cb (frpc_state *C,  clnt_stat err)
     chordnode->deletefingers (C->l->n);
     (C->cb)(err);
   } else {
-    u_int64_t lat = getnsec () - C->s;
+    u_int64_t lat = getusec () - C->s;
     C->l->rpcdelay += lat;
     C->l->nrpc++;
     rpcdelay += lat;
@@ -133,7 +133,7 @@ locationtable::doRPC (chordID &ID, rpc_program prog, int procno,
 	(*cb) (RPC_CANTSEND);
 	delete_connections (l);
       } else {
-	u_int64_t s = getnsec ();
+	u_int64_t s = getusec ();
 	touch_connections (l);
 	c->call (procno, in, out, wrap (mkref (this), &locationtable::doRPCcb,
 				      cb, l, s));
@@ -157,7 +157,7 @@ locationtable::doRPCcb (aclnt_cb cb, location *l, u_int64_t s, clnt_stat err)
     nrpcfailed++;
     chordnode->deletefingers (l->n);
   } else {
-    u_int64_t lat = getnsec () - s;
+    u_int64_t lat = getusec () - s;
     l->rpcdelay += lat;
     l->nrpc++;
     rpcdelay += lat;

@@ -56,14 +56,14 @@ gettime()
 }
 
 u_int64_t
-getnsec ()
+getusec ()
 {
   timeval tv;
   gettimeofday (&tv, NULL);
   return tv.tv_sec * INT64(1000000) + tv.tv_usec;
 }
 
-int 
+u_int32_t
 uniform_random(double a, double b)
 {
   double f;
@@ -72,7 +72,7 @@ uniform_random(double a, double b)
   if (c == MAX_INT) c--;
   f = (b - a)*((double)c)/((double)MAX_INT);
 
-  return (int)(a + f);
+  return (u_int32_t)(a + f);
 }
 
 chordID

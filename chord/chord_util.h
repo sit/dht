@@ -25,8 +25,8 @@
 #define _CHORD_UTIL_H
 
  str gettime ();
- u_int64_t getnsec ();
- int uniform_random(double a, double b);
+ u_int64_t getusec ();
+ u_int32_t uniform_random(double a, double b);
  chordID incID (chordID &n);
  chordID decID (chordID &n);
  chordID successorID (chordID &n, int p);
