@@ -165,37 +165,50 @@ class dhash:
         if an.alive: desc = "join"
         for b in resp_blocks:
             # Check their availability
-            avail = 0
-            fixer = None
+	    haves = []
+	    donthaves = []
             for s in succs:
                 if b in s.blocks:
-                    if fixer is None: fixer = s
-                    avail += 1
-            # Lazy repair waits until last possible moment.
+		    haves.append (s)
+		else:
+		    donthaves.append (s)
+	    avail = len (haves)
             if avail == 0:
 		# print "# LOST block", b, "after", desc, "of", an, "|", succs
 		pass
             elif avail < my.min_pieces ():
 		# print "# REPAIR block", b, "after", desc, "of", an
+		needed = my.min_pieces () - avail
                 isz = my.insert_piece_size (my.blocks[b])
-                for s in succs:
-                    if b not in s.blocks:
-                        s.store (b, isz)
-                        fixer.nrpc += 1
-                        fixer.sent_bytes += isz
+		fixer = haves.pop (0)
+                for s in donthaves:
+		    s.store (b, isz)
+		    fixer.nrpc += 1
+		    fixer.sent_bytes += isz
+		    needed -= 1
+		    if needed <= 0: break
+		# Account for bytes needed to reassemble the block.
+		nread = my.read_pieces () 
+		for s in haves:
+		    # the fixer has his own copy
+		    nread -= 1
+		    if nread <= 0: break
+		    s.sent_bytes += isz
 
     # XXX How long to wait until we do repair?
     def repair (my, affected_node):
         count = my.insert_pieces ()
         preds = my.pred (affected_node, count)
-        succs = my.succ (affected_node, count)
+        succs = my.succ (affected_node, 2 * count)
         # succ's does not include affected_node if it is dead.
         slice = preds + succs
 	k = my.blocks.keys ()
 	k.sort ()
-        for i in range(1,len(slice) - count):
+	# consider the predecessors who should be doing the repair
+        for i in range(1,len(slice) - 2 * count):
             p = slice[i - 1]
-            s = slice[i:i+count]
+	    # let them see further than they would have inserted.
+            s = slice[i:i+(2*count)]
 	    if (p.id <= s[0].id):
 		start = bisect.bisect_left (k, p.id)
 		stop  = bisect.bisect_right (k, s[0].id)
@@ -216,7 +229,7 @@ class dhash:
 	for b in k:
 	    extant = 0
 	    if not succs or b > succs[0].id:
-		succs = my.succ (b, inserted)
+		succs = my.succ (b, 2 * inserted)
 	    for s in succs:
 		if b in s.blocks:
 		    extant += 1
