@@ -9,6 +9,12 @@ ObserveEvent::ObserveEvent()
 {
 }
 
+
+ObserveEvent::ObserveEvent(Observer *o)
+{
+  this->_observer = o;
+}
+
 ObserveEvent::ObserveEvent(vector<string> *v) : Event(v)
 {
   // first word is what kind of observer we are

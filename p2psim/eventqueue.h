@@ -7,6 +7,8 @@
 using namespace std;
 
 class EventQueue : public Threaded {
+  friend class Observer; // are executed in EventQueue's thread, so allowed.
+
 public:
   static EventQueue* Instance();
 
