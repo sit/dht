@@ -51,13 +51,22 @@ int bps = 0;
 int sec = 0;
 timecb_t *measurer = NULL;
 
+u_int64_t
+getusec ()
+{
+  timeval tv;
+  gettimeofday (&tv, NULL);
+  return tv.tv_sec * INT64(1000000) + tv.tv_usec;
+}
+
 void
 measure_bw (void)
 {
   float bw = datasize * bps; // we get called every second
   bw /= 1024; // convert to K.
   sec++;
-  fprintf (bwfile, "%d\t%6.2f KB/s\n", sec, bw);
+  unsigned long long usecs = (getusec ()/1000);
+  fprintf (bwfile, "%llu\t%6.2f KB/s\n", usecs, bw);
   bps = 0;
   measurer = delaycb (1, wrap (&measure_bw));
 }
@@ -208,10 +217,11 @@ connected (dhashclient *dhash, int argc, char **argv)
   if (argc > 9) {
     bwoutput = argv[9];
     if (strcmp (bwoutput, "-") == 0)
-      bwfile = stderr;
+      bwfile = stdout;
     else
       bwfile = fopen (bwoutput, "w");
 
+    fflush (bwfile);
     measurer = delaycb (1, wrap (&measure_bw));
   }
 
