@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.51 2004/06/09 23:21:43 strib Exp $ */
+/* $Id: tapestry.C,v 1.52 2004/06/17 23:58:23 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -66,6 +66,9 @@ Tapestry::Tapestry(IPAddress i, Args a) : P2Protocol(i),
   _verbose = a.nget<bool>("verbose", 0, 10);
   _lookup_learn = a.nget<bool>("lookuplearn", 1, 10);
   _direct_reply = a.nget<bool>("direct_reply", 1, 10);
+  _lookup_cheat = a.nget<bool>("lookupcheat", 1, 10);
+  _check_backpointers = a.nget<bool>("checkbp", 0, 10);
+  _nn_random = a.nget<bool>("nnrandom", 0, 10);
 
   if( _lookup_learn ) {
     _cachebag = New RoutingTable(this, _redundancy);
@@ -229,7 +232,7 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
   args->num_timeouts += lr.num_timeouts;
   args->time_timeouts += lr.time_timeouts;
 
-  if( !lr.failed && lr.owner_id == lr.real_owner_id &&
+  if( !lr.failed && (!_lookup_cheat || (lr.owner_id == lr.real_owner_id)) &&
       now() - args->starttime < _max_lookup_time ) {
 
     if( _direct_reply && lr.time_done == 0 ) {
@@ -269,7 +272,8 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
       delaycb( 100, &Tapestry::lookup_wrapper, args );
     } else {
 
-      if( lr.failed || lr.owner_id == lr.real_owner_id ) {
+      // failed or timed out
+      if( lr.failed || !_lookup_cheat || lr.owner_id == lr.real_owner_id ) {
 	if( _verbose ) {
 	  TapDEBUG(0) << "Lookup failed for key " << print_guid(args->key) 
 		      << endl;
@@ -278,7 +282,7 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
 			    false, false, args->hopcount, args->num_timeouts, 
 			    args->time_timeouts );
 	_num_fail_lookups++;
-      } else if( lr.owner_id != lr.real_owner_id ) {
+      } else if( _lookup_cheat && lr.owner_id != lr.real_owner_id ) {
 
 	if( _direct_reply && lr.time_done == 0 ) {
 	  // I was dead when this recursive query got to me.  Ignore;
@@ -298,6 +302,13 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
 			    args->time_timeouts );
 	_num_inc_lookups++;
       } else {
+	if( _verbose ) {
+	  TapDEBUG(0) << "failed: " << lr.failed << ", lookupcheat " 
+		      << _lookup_cheat << ", owner " << lr.owner_id 
+		      << ", real owner " << lr.real_owner_id << ", start " 
+		      << args->starttime << ", key " << print_guid(args->key) 
+		      <<  endl;
+	}
 	assert(0); // this can't be!
       }
 
@@ -359,7 +370,9 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
     if( next == ip() ) {
       ret->owner_ip = ip();
       ret->owner_id = id();
-      ret->real_owner_id = lookup_cheat( args->key );
+      if( _lookup_cheat ) {
+	ret->real_owner_id = lookup_cheat( args->key );
+      }
       ret->failed = false;
       if( _direct_reply ) {
 	bool succ = retryRPC( args->looker, 
@@ -1257,6 +1270,10 @@ Tapestry::handle_mc(mc_args *args, mc_return *ret)
 	if( _rt->contains( ci_id ) ) {
 	  timeout = _rtt_timeout_factor*_rt->get_time( ci_id );
 	}
+	if( timeout == 0 ) {
+	  TapDEBUG(2) << "Timeout of 0 for node " << ci->ip << "/"
+		      << print_guid(ci_id) << "; why?" << endl;
+	}
 	record_stat(STAT_MC, 1, 2+ci->ma->watchlist.size()*_base);
 	unsigned rpc = asyncRPC( ci->ip, &Tapestry::handle_mc, ci->ma, 
 				 ci->mr, timeout );
@@ -1316,8 +1333,39 @@ Tapestry::handle_nn(nn_args *args, nn_return *ret)
   vector<NodeInfo *> nns;
 
   vector<NodeInfo *> *bps = _rt->get_backpointers( args->alpha );
-  for( uint i = 0; i < bps->size(); i++ ) {
-    NodeInfo *newnode = New NodeInfo( ((*bps)[i])->_addr, ((*bps)[i])->_id ); 
+  for( uint i = 0; i < bps->size() && (!_nn_random || i < _k); i++ ) {
+
+    uint index = i;
+    // pick the nodes randomly
+    if( _nn_random ) {
+      bool chosen;
+      do {
+	chosen = true;
+	index = random()%bps->size();
+	for( uint j = 0; j < nns.size(); j++ ) {
+	  if( nns[j]->_id == (*bps)[index]->_id ) {
+	    chosen = false;
+	    break;
+	  }
+	}
+	if( !chosen ) {
+	  TapDEBUG(5) << "Couldn't choose " << index << "(" 
+		      << (*bps)[index]->_addr << "/" 
+		      << print_guid((*bps)[index]->_id) 
+		      << ") for element " << i
+		      << " out of " << bps->size() << "; trying again" << endl;
+	} else {
+	  TapDEBUG(5) << "Chose " << index << "(" 
+		      << (*bps)[index]->_addr << "/" 
+		      << print_guid((*bps)[index]->_id) 
+		      << ") for element " << i << endl;
+	}
+      } while( !chosen );
+    }
+    
+
+    NodeInfo *newnode = New NodeInfo( ((*bps)[index])->_addr, 
+				      ((*bps)[index])->_id ); 
     nns.push_back( newnode );
   }
 
@@ -1566,6 +1614,18 @@ Tapestry::check_rt(void *x)
       }
       for( uint k = 0; k < re->size() && k <= _repair_backups; k++ ) {
 	nodes.push_back( re->get_at(k) );
+      }
+    }
+  }
+
+  // maybe we want to check backpointers too
+  if( _check_backpointers ) {
+    for( uint i = 0; i < _digits_per_id; i++ ) {
+      vector<NodeInfo *> *bps = _rt->get_backpointers( i );
+      for( uint j = 0; j < bps->size(); j++ ) {
+	if( !_rt->contains( ((*bps)[j])->_id ) ) {
+	  nodes.push_back( (*bps)[j] );
+	}
       }
     }
   }
@@ -2592,6 +2652,10 @@ RoutingTable::add( IPAddress ip, GUID id, Time distance, bool sendbp )
   // find the spots where it fits and add it
   for( uint i = 0; i < _node->_digits_per_id; i++ ) {
     uint j = _node->get_digit( id, i );
+    if( distance == 0 ) {
+      TapRTDEBUG(2) << "Adding node " << ip << "/" << _node->print_guid(id) 
+		    << " with a distance of " << distance << endl;
+    }
     NodeInfo *new_node = New NodeInfo( ip, id, distance );
     RouteEntry *re = _table[i][j];
     if( re == NULL ) {
@@ -2813,8 +2877,19 @@ void
 RoutingTable::add_backpointer( IPAddress ip, GUID id, uint level )
 {
   vector<NodeInfo *> * this_level = get_backpointers(level);
-  NodeInfo *new_node = New NodeInfo( ip, id );
-  this_level->push_back( new_node );
+  bool to_add = true;
+  for( uint i = 0; i < this_level->size(); i++ ) {
+    if( (*this_level)[i]->_id == id ) {
+      // we already have a backpointer at this level for this person.
+      // so ignore.
+      to_add = false;
+      break;
+    }
+  }
+  if( to_add ) {
+    NodeInfo *new_node = New NodeInfo( ip, id );
+    this_level->push_back( new_node );
+  }
 }
 
 void 

@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.40 2004/06/09 23:21:43 strib Exp $ */
+/* $Id: tapestry.h,v 1.41 2004/06/17 23:58:23 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -272,6 +272,16 @@ private:
 
   // with recursive routing, we probably want to reply directly to the source
   bool _direct_reply;
+
+  // bother looking up global correctness
+  bool _lookup_cheat;
+
+  // should we check the liveness of backpointers?
+  bool _check_backpointers;
+
+  // should we send back all the backpointers on a handle_nn, or
+  // just a random _k?
+  bool _nn_random;
 
   // statistics per message
   vector<uint> stat;
