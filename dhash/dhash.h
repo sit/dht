@@ -260,6 +260,11 @@ class dhashcli {
   void lookup_iter_with_source_cb (ptr<dhash_fetchiter_res> fres, dhashcli_lookup_itercb_t cb, clnt_stat err);
   void lookup_iter_cb (chordID blockID, dhashcli_lookup_itercb_t cb, ref<dhash_fetchiter_res> res, 
 		       route path, int nerror,  clnt_stat err);
+  void lookup_iter_chalok_cb (ptr<s_dhash_fetch_arg> arg,
+			      dhashcli_lookup_itercb_t cb,
+			      route path,
+			      int nerror,
+			      chordID next, bool ok, chordstat s);
   void lookup_findsucc_cb (chordID blockID, dhashcli_lookupcb_t cb, chordID succID, route path, chordstat err);
   void store_cb (dhashcli_storecb_t cb, ref<dhash_storeres> res,  clnt_stat err);
 

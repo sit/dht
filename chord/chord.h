@@ -360,8 +360,6 @@ class chord : public virtual refcount {
   // system wide default on the maximum number of vnodes/node.
   static const int max_vnodes;
 
-  // locations contains all nodes that appear as fingers in vnodes plus
-  // a number of cached nodes.  the cached nodes have refcnt = 0
   ptr<locationtable> locations; 
     
   chord (str _wellknownhost, int _wellknownport,
@@ -398,6 +396,9 @@ class chord : public virtual refcount {
   void get_predecessor (chordID n, cbchordID_t cb) {
     active->get_predecessor (n, cb);
   };
+  void cacheloc (chordID &x, net_address &r, cbchallengeID_t cb) {
+    active->locations->cacheloc (x, r, cb);
+  }
   void doRPC (chordID &n, rpc_program progno, int procno, ptr<void> in, 
 	      void *out, aclnt_cb cb) {
     active->locations->doRPC (n, progno, procno, in, out, cb);

@@ -415,19 +415,31 @@ dhashcli::lookup_iter_cb (chordID blockID, dhashcli_lookup_itercb_t cb,
     if ((next == prev) || (straddled (path, blockID))) {
       (*cb) (New refcounted<dhash_res> (DHASH_NOENT));
     } else {
-      // XXX challenge
-      clntnode->locations->cacheloc (next, res->cont_res->next.r, cbchall_null);
-      path.push_back (next);
-      assert (path.size () < 1000);
-
-      arg->v.n = next;
-      ptr<dhash_fetchiter_res> nres = New refcounted<dhash_fetchiter_res> (DHASH_CONTINUE);
-      doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, arg, nres,
-	     wrap(this, &dhashcli::lookup_iter_cb, blockID, cb, nres, path, nerror));
+      clntnode->cacheloc
+	(next, res->cont_res->next.r,
+	 wrap (this, &dhashcli::lookup_iter_chalok_cb, arg, cb, path, nerror));
     }
   } else {
     /* the last node queried was responbile but doesn't have it */
     (*cb) (New refcounted<dhash_res> (DHASH_NOENT));
+  }
+}
+
+void dhashcli::lookup_iter_chalok_cb (ptr<s_dhash_fetch_arg> arg,
+				      dhashcli_lookup_itercb_t cb,
+				      route path,
+				      int nerror,
+				      chordID next, bool ok, chordstat s)
+{
+  if (ok && s == CHORD_OK) {
+    path.push_back (next);
+    assert (path.size () < 1000);
+
+    arg->v.n = next;
+    ptr<dhash_fetchiter_res> nres = New refcounted<dhash_fetchiter_res> (DHASH_CONTINUE);
+    doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, arg, nres,
+	   wrap (this, &dhashcli::lookup_iter_cb,
+		 arg->key, cb, nres, path, nerror));
   }
 }
 
