@@ -525,8 +525,7 @@ dhash::transfer_store_cb (callback<void, dhash_stat>::ref cb,
   else if (res->status == DHASH_RETRY) {
     dhash_storeres *nres = New dhash_storeres ();
     host_node->chordnode->locations->cacheloc (res->pred->p.x, 
-					       res->pred->p.r,
-					       to);
+					       res->pred->p.r);
 					       
     host_node->chordnode->doRPC(res->pred->p.x, 
 				dhash_program_1, DHASHPROC_STORE, 

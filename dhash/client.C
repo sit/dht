@@ -128,7 +128,7 @@ dhashclient::insert_store_cb(svccb *sbp, dhash_storeres *res,
   warnt("DHASH: insert_after_STORE");
   if (res->status == DHASH_RETRY) {
     dhash_storeres *nres = New dhash_storeres();
-    clntnode->locations->cacheloc (res->pred->p.x, res->pred->p.r, source);
+    clntnode->locations->cacheloc (res->pred->p.x, res->pred->p.r);
     clntnode->doRPC(res->pred->p.x, dhash_program_1, 
 		    DHASHPROC_STORE, item, nres,
 		    wrap(this, &dhashclient::insert_store_cb, sbp, nres, item, source));
@@ -195,7 +195,14 @@ dhashclient::lookup_iter_cb (svccb *sbp,
 			    sbp, nres, prev, path));
     } else {
       warn << "Case I (no succs)\n"; 
-      sbp->replyref (DHASH_NOENT);
+      vec<chord_node> succ;
+      for (int i = 0; i < 5; i++) {
+	chord_node node;
+	node.x = clntnode->nth_successorID (i);
+	node.r = clntnode->locations->getlocation (node.x)->addr;
+	succ.push_back (node);
+      }
+      query_successors (succ, sbp, rarg);
     }
   } else if (res->status == DHASH_COMPLETE) {
     /* CASE II */
@@ -219,21 +226,16 @@ dhashclient::lookup_iter_cb (svccb *sbp,
       else {
 	warn << "Case III.b\n";
 	/* CASE III.b */
-	chordID first_succ = res->cont_res->succ_list[0].x;
-	clntnode->locations->cacheloc (first_succ,
-				       res->cont_res->succ_list[0].r,
-				       prev);
-	dhash_res *fres = New dhash_res ();
-	clntnode->doRPC (first_succ, dhash_program_1, DHASHPROC_FETCH,
-			 rarg, fres,
-			 wrap (this, &dhashclient::query_successors,
-			       sbp, res, 0, rarg, fres));
+	vec<chord_node> succ;
+	for (unsigned int i = 0; i < res->cont_res->succ_list.size (); i++)
+	  succ.push_back (res->cont_res->succ_list[i]);
+	query_successors (succ, sbp, rarg);
 	return;
       }
     } else {
       warn << "Case IV\n";
       /* CASE IV */
-      clntnode->locations->cacheloc (next, res->cont_res->next.r, prev);
+      clntnode->locations->cacheloc (next, res->cont_res->next.r);
       dhash_fetchiter_res *nres = New dhash_fetchiter_res;
       path.push_back (next);
       assert (path.size () < 1000);
@@ -249,34 +251,50 @@ dhashclient::lookup_iter_cb (svccb *sbp,
 }
 
 void
-dhashclient::query_successors (svccb *sbp, dhash_fetchiter_res *res, 
-			       unsigned int n,
-			       ptr<dhash_fetch_arg> rarg, 
-			       dhash_res *fres, clnt_stat err) 
+dhashclient::query_successors (vec<chord_node> succ, 
+			       svccb *sbp,
+			       ptr<dhash_fetch_arg> rarg) 
+{
+  chord_node first_node = succ.pop_front ();
+  clntnode->locations->cacheloc (first_node.x,
+				 first_node.r);
+  dhash_res *fres = New dhash_res ();
+  clntnode->doRPC (first_node.x, dhash_program_1, DHASHPROC_FETCH,
+		   rarg, fres,
+		   wrap (this, &dhashclient::query_successors_fetch_cb,
+			 succ, sbp, rarg, fres));
+  
+}
+
+void
+dhashclient::query_successors_fetch_cb (vec<chord_node> succ,
+					svccb *sbp, 
+					ptr<dhash_fetch_arg> rarg, 
+					dhash_res *fres, 
+					clnt_stat err) 
 {
   if (fres->status == DHASH_OK) {
     warnx << "qs: found it " << fres->resok->attr.size << " \n";
-    fres->resok->hops = 100 + n;
+    fres->resok->hops = succ.size ();
     sbp->reply (fres);
-  } else if (res->cont_res->succ_list.size () == n + 1) {
+  } else if (succ.size () == 0) {
     warn << "qs: no more succs\n";
     sbp->replyref (DHASH_NOENT);
   } else {
     warnx << "qs: loop\n";
-    chordID prev_succ = res->cont_res->succ_list[n].x;
-    chordID next_succ = res->cont_res->succ_list[n + 1].x;
-    clntnode->locations->cacheloc (next_succ,
-				   res->cont_res->succ_list[n + 1].r,
-				   prev_succ);
+    chord_node next_succ = succ.pop_front ();
+    clntnode->locations->cacheloc (next_succ.x,
+				   next_succ.r);
 
     dhash_res *nfres = New dhash_res ();
-    clntnode->doRPC (next_succ, dhash_program_1, DHASHPROC_FETCH,
+    clntnode->doRPC (next_succ.x, dhash_program_1, DHASHPROC_FETCH,
 		     rarg, nfres,
-		     wrap (this, &dhashclient::query_successors,
-			   sbp, res, n + 1, rarg, nfres));
+		     wrap (this, &dhashclient::query_successors_fetch_cb,
+			   succ, sbp, rarg, nfres));
   }
   delete fres;
 }
+
 void
 dhashclient::transfer_cb (svccb *sbp, dhash_res *res, clnt_stat err)
 {
@@ -297,7 +315,7 @@ dhashclient::send_cb (svccb *sbp, dhash_storeres *res,
     ptr<dhash_insertarg> iarg = 
       New refcounted<dhash_insertarg> (sarg->iarg);
     dhash_storeres *nres = New dhash_storeres ();
-    clntnode->locations->cacheloc (nres->pred->p.x, nres->pred->p.r, source);
+    clntnode->locations->cacheloc (nres->pred->p.x, nres->pred->p.r);
     clntnode->doRPC (nres->pred->p.x, dhash_program_1, DHASHPROC_FETCH,
 		     iarg, nres, wrap (this, &dhashclient::send_cb,
 				       sbp, nres, sarg->dest));

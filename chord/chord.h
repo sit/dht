@@ -280,11 +280,15 @@ class chord : public virtual refcount {
   void alert (chordID &n, chordID &x) {
     vnodes.first()->value->alert (n, x);
   };
+  chordID nth_successorID (int n) {
+    return vnodes.first()->value->nth_successorID (n);
+  };
 
 };
 
 extern ptr<chord> chordnode;
 
 #endif _CHORD_H_
+
 
 

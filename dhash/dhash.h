@@ -78,10 +78,15 @@ class dhashclient {
 		       route path,
 		       clnt_stat err);
 
-  void query_successors (svccb *sbp, dhash_fetchiter_res *res, 
-			 unsigned int n,
-			 ptr<dhash_fetch_arg> rarg, 
-			 dhash_res *fres, clnt_stat err);
+  void query_successors (vec<chord_node> succ, 
+			 svccb *sbp,
+			 ptr<dhash_fetch_arg> rarg);
+  
+  void query_successors_fetch_cb (vec<chord_node> succ,
+				  svccb *sbp, 
+				  ptr<dhash_fetch_arg> rarg, 
+				  dhash_res *fres, 
+				  clnt_stat err);
 
   void insert_findsucc_cb (svccb *sbp, ptr<dhash_insertarg> item, chordID succ,
 			   route path, chordstat err);
