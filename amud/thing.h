@@ -2,17 +2,17 @@
 #define _THING_H_
 
 #include "mud_obj.h"
-#include "room.h"
+//#include "room.h"
 
 class thing: public mud_obj {
   
-  ptr<room> location;
+  //ptr<room> location;
   char *buf;
 
  public:
   tag_t ctag; //current version, for rmw updates
 
-  thing (str n, chordID writer, uint64 ver=0, ptr<room> l=NULL) : 
+  thing (str n, chordID writer, uint64 ver=0) : //, ptr<room> l=NULL) : 
     mud_obj (n), buf (NULL) {
     ctag.ver = ver;
     ctag.writer = writer;
@@ -37,7 +37,7 @@ class thing: public mud_obj {
   };
 
   uint size () {
-    return ( 3*USZ + ID_SIZE + get_name ().len () + describe ().len ());
+    return (3*USZ + ID_SIZE + get_name ().len () + describe ().len ());
   }; 
 
   char *bytes () {

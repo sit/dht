@@ -6,7 +6,7 @@ avatar::avatar (str n, str p, ref<dhashclient> d, ptr<room> l=NULL) :
   mud_obj (n), dhash (d), passwd (p), buf (NULL), location (l)
 {
   if (!location)
-    location = New refcounted <room> (str("First room"));
+    location = New refcounted <room> (str("First room"), dhash);
 }
 
 avatar::avatar (char *bytes, uint size, ref<dhashclient> d) : 
@@ -49,7 +49,7 @@ avatar::avatar (char *bytes, uint size, ref<dhashclient> d) :
   bcopy (bytes + offst, &slen, USZ);
   offst += USZ;
   str n (bytes + offst, slen);
-  location = New refcounted<room> (n);
+  location = New refcounted<room> (n, dhash);
 }
 
 char *
@@ -138,11 +138,13 @@ avatar::to_str ()
   return str (ret);
 }
 
+#if 0 
 void
 avatar::enter (ref<room> r)
 {
   location = r;
 }
+#endif 
 
 void 
 avatar::play ()
@@ -176,7 +178,7 @@ avatar::look (dhash_stat stat, ptr<dhash_block> blk, vec<chordID> path)
   //and cache is refreshed often.
 
   if (stat == DHASH_OK) {
-    location = New refcounted<room> (blk->data, blk->len);
+    location = New refcounted<room> (blk->data, blk->len, dhash);
     cout << "You are in the " << location->get_name () << ".\n";
     if (location->north.get_name ().len () > 0)
       cout << "To the north, is the " << location->north.get_name () << "\n";    
@@ -202,7 +204,7 @@ avatar::look (dhash_stat stat, ptr<dhash_block> blk, vec<chordID> path)
 void 
 avatar::move (str command)
 {
-  ref<room> next = New refcounted<room> (str(""));
+  ref<room> next = New refcounted<room> (str(""), dhash);
   if (!strncasecmp (command.cstr (), "WEST", 4) && 
       location->west.get_name ().len ())
     next->set_name (location->west.get_name ().cstr (), 
@@ -238,7 +240,7 @@ avatar::done_move_lookup (ref<room> next, dhash_stat stat, ptr<dhash_block> blk,
 			  vec<chordID> path)
 {
   if (stat == DHASH_OK) {
-    location = New refcounted<room> (blk->data, blk->len);
+    location = New refcounted<room> (blk->data, blk->len, dhash);
     ref<mud_obj> a = New refcounted<mud_obj> (get_name ());
     location->leave (a);
   
@@ -262,7 +264,7 @@ avatar::done_enter_lookup (dhash_stat stat, ptr<dhash_block> blk,
 			   vec<chordID> path)
 {
   if (stat == DHASH_OK) {
-    ref<room> next = New refcounted<room> (blk->data, blk->len);
+    ref<room> next = New refcounted<room> (blk->data, blk->len, dhash);
     ref<mud_obj> a = New refcounted<mud_obj> (get_name ());
     next->enter (a);
     location = next;

@@ -1,8 +1,8 @@
 #ifndef _MUD_OBJ_H_
 #define _MUD_OBJ_H_
 
-#include "chord.h"
-#include "verify.h"
+#include <chord.h>
+#include <verify.h>
 
 #define ID_SIZE sha1::hashsize
 #define USZ sizeof (uint)

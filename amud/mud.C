@@ -145,12 +145,13 @@ ref<room> insert_things ()
   ref<thing> t2 = New refcounted <thing> (str("Boston Creme Pie"), chordID(0));
   mud->insert (t2, wrap (&done_insert_object, t2));
 
-  ref<room> r1 = New refcounted <room> (str("First room"));
+  ref<room> r1 = New refcounted <room> (str("First room"), dhash);
+
   r1->place (t1);
   r1->place (t2);
   //cout << r1->to_str ();
 
-  ref<room> r2 = New refcounted <room> (str("Second room"));
+  ref<room> r2 = New refcounted <room> (str("Second room"), dhash);
   r2->east.set_name (r1->get_name ().cstr (), r1->get_name ().len ());
   r1->west.set_name (r2->get_name ().cstr (), r2->get_name ().len ());  
 
@@ -230,7 +231,7 @@ main (int argc, char **argv)
     display_welcome_msg ();
     main_loop ();
   } else {
-    ref<room> mr = New refcounted<room> (str("First room"));
+    ref<room> mr = New refcounted<room> (str("First room"), dhash);
     mud->lookup (mr, wrap (&start_game));
   }
 

@@ -1,6 +1,6 @@
 #include "room.h"
 
-room::room (char *bytes, uint size) : buf (NULL) {
+room::room (char *bytes, uint size, ref<dhashclient> d) : dhash (d), buf (NULL) {
   uint offst = 0;
   uint slen;
   bcopy (bytes, &slen, USZ);
@@ -11,7 +11,7 @@ room::room (char *bytes, uint size) : buf (NULL) {
   offst += USZ;
   set_desc (bytes + offst, slen);
   offst += slen;
-
+#if 1
   uint n;
   bcopy (bytes + offst, &n, USZ);
   offst += USZ;
@@ -34,7 +34,8 @@ room::room (char *bytes, uint size) : buf (NULL) {
     alist.push_back (a);
     offst += slen;
   }
-  
+#endif
+
   bcopy (bytes + offst, &slen, USZ);
   offst += USZ;
   north.set_name (bytes + offst, slen);
@@ -53,7 +54,13 @@ room::room (char *bytes, uint size) : buf (NULL) {
   bcopy (bytes + offst, &slen, USZ);
   offst += USZ;
   west.set_name (bytes + offst, slen);
-
+#if 0
+  str tname, aname;
+  tname << this->get_name () << ".tlist";
+  tID = compute_hash (tname.cstr (), tname.len ());
+  aname << this->get_name () << ".alist";
+  aID = compute_hash (aname.cstr (), aname.len ());
+#endif
 }
 
 char *
@@ -75,7 +82,7 @@ room::bytes () {
   offst += USZ;
   bcopy (describe ().cstr (), buf + offst, slen);
   offst += slen;
-
+#if 1
   slen = tlist.size ();
   bcopy (&slen, buf + offst, USZ);
   offst += USZ;
@@ -99,7 +106,7 @@ room::bytes () {
     bcopy (alist[i]->get_name ().cstr (), buf + offst, slen);
     offst += slen;
   }    
-    
+#endif    
   slen = north.get_name ().len ();
   bcopy (&slen, buf + offst, USZ);
   offst += USZ;
@@ -126,7 +133,32 @@ room::bytes () {
 
   return buf;
 }
-  
+
+void 
+room::init (lookup_cb_t cb)
+{
+  //fetch tlist and alist
+  dhash->retrieve (tID, DHASH_NOAUTH, 
+		   wrap (this, &room::init_tlist_lookup_cb, cb));
+}
+ 
+void 
+room::init_tlist_lookup_cb (lookup_cb_t cb, dhash_stat stat, ptr<dhash_block> b,
+			    vec<chordID> path)
+{
+  if (stat == DHASH_OK) {
+    
+  } else {
+
+  }
+}
+#if 0
+void 
+room::init_alist_lookup_cb ()
+{
+
+}
+#endif 
 str 
 room::to_str () 
 {
@@ -145,6 +177,19 @@ room::to_str ()
     ret << "       kid " << i << ": " << alist[i]->get_name () << "\n";
   
   return str (ret);
+}
+
+void 
+room::place (ref<mud_obj> t)
+{
+  //insert object into tlist in DHash first
+  tlist.push_back (t);
+}
+
+void 
+room::remove (ref<mud_obj> t)
+{
+  //remove object from tlist in DHash first
 }
 
 void
@@ -167,3 +212,8 @@ room::leave (ref<mud_obj> a)
 
   //warn << "Room after delete: " << to_str ();
 }
+
+
+
+
+

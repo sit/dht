@@ -56,7 +56,7 @@ game_engine::room_lookup_cb (mud_rlookup_cb_t cb, dhash_stat stat, ptr<dhash_blo
 			     vec<chordID> path)
 {
   if (stat == DHASH_OK) {
-    ptr<room> r = New refcounted<room> (blk->data, blk->len);
+    ptr<room> r = New refcounted<room> (blk->data, blk->len, dhash);
     (*cb) (MUD_OK, r);
   } else 
     if (stat == DHASH_NOENT) 
@@ -80,7 +80,7 @@ void
 game_engine::insert (ref<thing> t, mud_cb_t cb)
 {
   ptr<option_block> opt = New refcounted <option_block>;
-  opt->flags = DHASHCLIENT_NEWBLOCK + DHASHCLIENT_RMW;
+  opt->flags = DHASHCLIENT_NEWBLOCK; // + DHASHCLIENT_RMW;
 
   //warn << "game_engine::insert" << t->to_str ();
 
@@ -113,7 +113,7 @@ void
 game_engine::done_enter_player (ref<avatar> a, dhash_stat stat, ptr<insert_info> i)
 {
   if (stat == DHASH_OK) { 
-    a->enter (main_room);
+    //a->enter (main_room);
     a->play ();
   } else {
     //should have latest version of room returned

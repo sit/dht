@@ -36,7 +36,7 @@ class avatar: public mud_obj {
   uint size ();
 
   str pw () { return passwd; };
-  void enter (ref<room>);
+  //void enter (ref<room>); unnecessary, already have move()
   void play ();
   str read_input ();
   str to_str ();
