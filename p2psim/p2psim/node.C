@@ -54,7 +54,7 @@ Node::rcvRPC(RPCSet *hset, bool &ok)
   int na = hset->size() + 1;
   Alt *a = (Alt *) malloc(sizeof(Alt) * na); // might be big, take off stack!
   Packet *p;
-  hash_map<unsigned, unsigned> index2token;
+  unsigned *index2token = (unsigned*) malloc(sizeof(unsigned) * hset->size());
 
   int i = 0;
   for(RPCSet::const_iterator j = hset->begin(); j != hset->end(); j++) {
@@ -80,6 +80,7 @@ Node::rcvRPC(RPCSet *hset, bool &ok)
   ok = p->ok();
   delete p;
   free(a);
+  free(index2token);
   return token;
 }
 
