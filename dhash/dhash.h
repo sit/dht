@@ -332,6 +332,7 @@ class dhash {
   void stop ();
   void fetch (chordID id, int cookie, cbvalue cb);
   void register_block_cb (int nonce, cbblockuc_t cb);
+  void unregister_block_cb (int nonce);
 
   dhash_stat key_status(const chordID &n);
 
@@ -377,52 +378,34 @@ class route_dhash : public virtual refcount {
 public:
   route_dhash (ptr<route_factory> f,
 	       chordID key, 
-	       dhash *dh, 
+	       dhash *dh,
 	       bool lease = false,
 	       bool ucs = false);
   
   ~route_dhash ();
 
-  void execute (cb_ret cbi, chordID first_hop_guess);
-  void execute (cb_ret cbi);
-  void reexecute ();
+  void execute (cb_ret cbi, chordID first_hop_guess, u_int retries = 10);
+  void execute (cb_ret cbi, u_int retries = 10);
   dhash_stat status () { return result; }
-  chordID key () {return blockID;}
-  ptr<dhash_block> get_block () const { return block; }
+  chordID key () { return blockID; }
   route path ();
   
  private:
   dhash *dh;
-  vec<long> seqnos;
+  u_int retries;
   route_iterator *chord_iterator;
   bool ask_for_lease;
   bool use_cached_succ;
-  int npending;
-  bool fetch_error;
-  ptr<dhash_block> block;
   dhash_stat result;
-  bool last_hop;
   chordID blockID;
   cb_ret cb;
   ptr<route_factory> f;
   timecb_t *dcb;
-  bool ignore_block;
+  int nonce;
 
-  int nextblock;
-  int numblocks;
-
-  void check_finish ();
   void block_cb (s_dhash_block_arg *arg);
-  void hop_cb (bool done);
-  void make_hop (chordID &n);
-  void make_hop_cb (ptr<dhash_fetchiter_res> res, 
-		    clnt_stat err);
-  void nexthop_chalok_cb (chordID s, bool ok, chordstat status);  
-  chordID lookup_next_hop (chordID k);
-  
+  void reexecute ();
   void timed_out ();
-  void timed_out_after_wait ();
-
   void walk (vec<chord_node> succs);
   void walk_cachedloc (vec<chord_node> succs, chordID id, bool ok, chordstat stat);
   void walk_gotblock (vec<chord_node> succs, ptr<dhash_block> block);

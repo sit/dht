@@ -502,7 +502,9 @@ dhash::dispatch (svccb *sbp)
 	       farg->cookie,
 	       wrap (this, &dhash::fetchiter_sbp_gotdata_cb, sbp, farg));
       } else {
-	fatal << "Try the upcall instead\n";
+        dhash_fetchiter_res *res = New dhash_fetchiter_res (DHASH_NOENT);
+        sbp->reply (res);
+        delete res;
       }
     }
     break;
@@ -581,6 +583,13 @@ void
 dhash::register_block_cb (int nonce, cbblockuc_t cb)
 {
   bcpt.insert (nonce, cb);
+}
+
+void
+dhash::unregister_block_cb (int nonce)
+{
+  if (bcpt[nonce])
+    bcpt.remove (nonce);
 }
 
 void

@@ -11,112 +11,78 @@
 #include "dmalloc.h"
 #endif
 
-unsigned int MTU = (getenv ("DHASH_MTU") ?
-		   atoi (getenv ("DHASH_MTU")) :
-		   1024);
-
+u_int MTU = (getenv ("DHASH_MTU") ? atoi (getenv ("DHASH_MTU")) : 1024);
+#define LOOKUP_TIMEOUT 30
 static int gnonce;
 
-#define LOOKUP_TIMEOUT 30
 
 // ---------------------------------------------------------------------------
-// dhash_retrieve
+// dhash_download -- downloads a block of a specific chord node.  That node
+//                   should already be in the location table.
 
-class dhash_retrieve {
+class dhash_download {
 private:
+  typedef callback<void, ptr<dhash_fetchiter_res>, int, clnt_stat>::ptr gotchunkcb_t;
+
   ptr<vnode> clntnode;
   uint npending;
   bool error;
   chordID sourceID;
   chordID blockID;
-  cbretrieve_t cb;  
+  cbretrieve_t cb;
   bool askforlease;
 
-
   ptr<dhash_block> block;
-  int nextblock;
-  int numblocks;
-  vec<long> seqnos;
+  int nextchunk;     //  fast
+  int numchunks;     //   retransmit
+  vec<long> seqnos;  //   parameters
+  bool didrexmit;
 
-
-  dhash_retrieve (ptr<vnode> clntnode, chordID sourceID, chordID blockID,
+  dhash_download (ptr<vnode> clntnode, chordID sourceID, chordID blockID,
 		  char *data, u_int len, u_int totsz, int cookie, int lease, 
 		  bool askforlease, cbretrieve_t cb)
-    : clntnode (clntnode),
-      sourceID (sourceID),
-      blockID (blockID),
-      cb (cb),
-      askforlease (askforlease)
+    : clntnode (clntnode),  npending (0), error (false), sourceID (sourceID), 
+      blockID (blockID), cb (cb), askforlease (askforlease), 
+      nextchunk (0), numchunks (0), didrexmit (false)
   {
-    block            = New refcounted<dhash_block> ((char *)NULL, totsz);
-    block->source    = sourceID;
-    block->hops      = 0;
-    block->errors    = 0;
-    block->lease     = 0;
-
-    if (askforlease)
-      block->lease = lease;
-
-    npending = 0;
-    error = false;
-    nextblock = 1;
-    numblocks = 1;
-    seqnos.push_back (0);
-
+    // the first chunk of data may be passed in
     if (data) {
-      get_remaining_chunks (len, totsz, cookie);
-      add_data (data, len, 0);
-    } else {
-      ptr<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg>;
-      arg->v     = sourceID;
-      arg->key   = blockID;
-      arg->start = 0;
-      arg->len   = MTU;
-      arg->cookie = 0;
-      arg->lease = askforlease;
-      
-      ptr<dhash_fetchiter_res> res = New refcounted<dhash_fetchiter_res> ();
-      long seqno = clntnode->doRPC (sourceID, dhash_program_1, 
-				    DHASHPROC_FETCHITER, 
-				    arg, res,
-				    wrap (this,&dhash_retrieve::first_chunk_cb,
-					  res, numblocks++));
-      seqnos.push_back (seqno);
-    } 
+      process_first_chunk (data, len, totsz, cookie, lease);
+      check_finish ();
+    } else
+      getchunk (0, MTU, 0, wrap (this,&dhash_download::first_chunk_cb));
   }
 
-  void
-  get_remaining_chunks (size_t nread, size_t totsz, int cookie)
+  long
+  getchunk (u_int start, u_int len, int cookie, gotchunkcb_t cb)
   {
-    //issue the RPCs to get the other chunks
-    while (nread < totsz) {
-      int length = MIN (MTU, totsz - nread);
-      npending++;
-      
-      ptr<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg>;
-      arg->v     = sourceID;
-      arg->key   = blockID;
-      arg->start = nread;
-      arg->len   = length;
-      arg->cookie = cookie;
-      arg->lease = askforlease;
-      
-      ptr<dhash_fetchiter_res> res = New refcounted<dhash_fetchiter_res> ();
-      long seqno = clntnode->doRPC (sourceID, dhash_program_1, 
-				    DHASHPROC_FETCHITER, 
-				    arg, res,
-				    wrap (this,&dhash_retrieve::finish_block_fetch, 
-					  res, numblocks++));
-      
-      seqnos.push_back (seqno);
-      nread += length;
-    }
+    ptr<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg>;
+    arg->v     = sourceID;
+    arg->key   = blockID;
+    arg->start = start;
+    arg->len   = len;
+    arg->cookie = cookie;
+    arg->lease = askforlease;
+
+    npending++;
+    ptr<dhash_fetchiter_res> res = New refcounted<dhash_fetchiter_res> ();
+    return clntnode->doRPC 
+      (sourceID, dhash_program_1, DHASHPROC_FETCHITER, arg, res, 
+       wrap (this, &dhash_download::gotchunk, cb, res, numchunks++));
+  }
+  
+  void
+  gotchunk (gotchunkcb_t cb, ptr<dhash_fetchiter_res> res, int chunknum, clnt_stat err)
+  {
+    (*cb) (res, chunknum, err);
   }
 
+
   void
-  first_chunk_cb  (ptr<dhash_fetchiter_res> res, int blocknum,
-		   clnt_stat err)
+  first_chunk_cb  (ptr<dhash_fetchiter_res> res, int chunknum, clnt_stat err)
   {
+    npending--;
+
     if (err || (res && res->status != DHASH_COMPLETE))
       fail (dhasherr2str (res->status));
     else {
@@ -124,19 +90,63 @@ private:
       size_t totsz   = res->compl_res->attr.size;
       size_t datalen = res->compl_res->res.size ();
       char  *data    = res->compl_res->res.base ();
-      size_t dataoff = res->compl_res->offset;
-
-      get_remaining_chunks (datalen, totsz, cookie);
-      add_data (data, datalen, dataoff);
-      check_finish ();
+      process_first_chunk (data, datalen, totsz, cookie, 0);
     }
+    check_finish ();
+  }
+
+  void
+  process_first_chunk (char *data, size_t datalen, size_t totsz, int cookie, int lease)
+  {
+    block            = New refcounted<dhash_block> ((char *)NULL, totsz);
+    block->source    = sourceID;
+    block->hops      = 0;
+    block->errors    = 0;
+    block->lease     = 0;
+    if (askforlease)
+      block->lease = lease;
+    
+    add_data (data, datalen, 0);
+
+    //issue the RPCs to get the other chunks
+    size_t nread = datalen;
+    while (nread < totsz) {
+      int length = MIN (MTU, totsz - nread);
+      long seqno = getchunk (nread, length, cookie, wrap (this, &dhash_download::later_chunk_cb));
+      seqnos.push_back (seqno);
+      nread += length;
+    }
+  }
+
+  void
+  later_chunk_cb (ptr<dhash_fetchiter_res> res, int chunknum, clnt_stat err)
+  {
+    npending--;
+    
+    if (err || (res && res->status != DHASH_COMPLETE))
+      fail (dhasherr2str (res->status));
+    else {
+      if (askforlease && block->lease > res->compl_res->lease)
+	block->lease = res->compl_res->lease;
+      
+      if (!didrexmit && (chunknum > nextchunk)) {
+	warn << "FAST retransmit: " << blockID << " chunk " << nextchunk << " being retransmitted\n";
+	clntnode->resendRPC(seqnos[nextchunk]);
+	didrexmit = true;  // be conservative: only fast rexmit once per block
+      }
+
+      nextchunk++;
+      add_data (res->compl_res->res.base (), res->compl_res->res.size (), 
+		res->compl_res->offset);
+    }
+    check_finish ();
   }
 
   void
   add_data (char *data, int len, int off)
   {
     if ((unsigned)(off + len) > block->len)
-      fail (strbuf ("bad fragment: off %d, len %d, block %d", 
+      fail (strbuf ("bad chunk: off %d, len %d, block %d", 
 		    off, len, block->len));
     else
       memcpy (&block->data[off], data, len);
@@ -155,36 +165,9 @@ private:
   }
 
   void
-  finish_block_fetch (ptr<dhash_fetchiter_res> res, int blocknum,
-		      clnt_stat err)
-  {
-    npending--;
-    
-    if (err || (res && res->status != DHASH_COMPLETE)) 
-      fail (dhasherr2str (res->status));
-    else {
-      if (askforlease && block->lease > res->compl_res->lease)
-	block->lease = res->compl_res->lease;
-      
-      if ((blocknum > nextblock) && (numblocks - blocknum > 1)) {
-	warn << "FAST retransmit: " << blockID << " chunk " << nextblock << " being retransmitted\n";
-	
-	clntnode->resendRPC(seqnos[nextblock]);
-	//only one per fetch; finding more is too much bookkeeping
-	numblocks = 0;
-      }
-      
-      nextblock++;
-      add_data (res->compl_res->res.base (), res->compl_res->res.size (), 
-		res->compl_res->offset);
-    }
-    check_finish ();
-  }
-
-  void
   fail (str errstr)
   {
-    warn << "dhash_store failed: " << blockID << ": " << errstr << "\n";
+    warn << "dhash_download failed: " << blockID << ": " << errstr << "\n";
     error = true;
   }
 
@@ -193,7 +176,7 @@ public:
 		       char *data, u_int len, u_int totsz, int cookie, int lease, 
 		       bool askforlease, cbretrieve_t cb)
   {
-    vNew dhash_retrieve (clntnode, sourceID, blockID, data, len, totsz, cookie, lease, askforlease, cb);
+    vNew dhash_download (clntnode, sourceID, blockID, data, len, totsz, cookie, lease, askforlease, cb);
   }
 };
 
@@ -201,24 +184,14 @@ public:
 
 
 // ---------------------------------------------------------------------------
-// route_dhash
+// route_dhash -- lookups and downloads a block.
 
-route_dhash::route_dhash (ptr<route_factory> f,
-			  chordID blockID,
-			  dhash *dh,
-			  bool lease,
-			  bool ucs) 
+route_dhash::route_dhash (ptr<route_factory> f, chordID blockID, dhash *dh,
+			  bool lease, bool ucs)
 
-  : dh (dh),
-    ask_for_lease (lease),
-    use_cached_succ (ucs), 
-    npending (0), fetch_error (false),
-    blockID (blockID),
-    f (f),
-    ignore_block (false)
+  : dh (dh), ask_for_lease (lease), use_cached_succ (ucs), 
+    blockID (blockID), f (f)
 {
-
-  last_hop = false;
   ptr<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg> ();
   arg->key = blockID;
   f->get_node (&arg->from);
@@ -228,7 +201,6 @@ route_dhash::route_dhash (ptr<route_factory> f,
   arg->nonce = gnonce++;
   arg->lease = ask_for_lease;
 
-  // XXX on timeout this never gets unregistered !!!
   dh->register_block_cb (arg->nonce, wrap (mkref(this), &route_dhash::block_cb));
 
   // Along the chord lookup path, 'arg' will get upcalled to each dhash server (dhash::do_upcall).
@@ -240,53 +212,40 @@ route_dhash::route_dhash (ptr<route_factory> f,
 
 route_dhash::~route_dhash () 
 {
+  dh->unregister_block_cb (nonce);
   delete chord_iterator;
+  chord_iterator = NULL;
+  timecb_remove (dcb);
+  dcb = NULL;
 }
 
 void
 route_dhash::reexecute ()
 {
-  // XXX ugly code... duplicates the constructor
-  delete chord_iterator;
-
-  timecb_remove (dcb);
-  dcb = NULL;
-
-  last_hop = false;
-  ptr<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg> ();
-  arg->key = blockID;
-  f->get_node (&arg->from);
-  arg->start = 0;
-  arg->len = MTU;
-  arg->cookie = 0;
-  arg->nonce = gnonce++;
-  arg->lease = ask_for_lease;
-
-  // XXX on timeout this never gets unregistered !!!
-  dh->register_block_cb (arg->nonce, wrap (mkref(this), &route_dhash::block_cb));
-
-  // Along the chord lookup path, 'arg' will get upcalled to each dhash server (dhash::do_upcall).
-  // The dhash server will respond back by sending an RPC *request* to us.  We'll associate the
-  // incoming RPC request with 'arg' via gnonce.  We'll field the RPC request in 
-  // route_dhash::block_cb. Our RPC response is essentially ignored.
-  chord_iterator = f->produce_iterator_ptr (blockID, dhash_program_1, DHASHPROC_FETCHITER, arg);
-
-  dcb = delaycb (LOOKUP_TIMEOUT, wrap (mkref(this), &route_dhash::timed_out));
-  chord_iterator->send (use_cached_succ);
+  if (retries == 0) {
+    warn << "route_dhash: no more retries...giving up\n";
+    (*cb) (DHASH_NOENT, NULL, path ());
+  } else {
+    ref<route_dhash> iterator = 
+      New refcounted<route_dhash>(f, blockID, dh, ask_for_lease, use_cached_succ);
+    // XXX what if 'this' route_dhash was invoked with the other execute() ???
+    iterator->execute (cb, retries-1);
+  }
 }
 
-
 void
-route_dhash::execute (cb_ret cbi, chordID first_hop)
+route_dhash::execute (cb_ret cbi, chordID first_hop, u_int _retries)
 {
+  retries = _retries;
   cb = cbi;
   dcb = delaycb (LOOKUP_TIMEOUT, wrap (mkref(this), &route_dhash::timed_out));
   chord_iterator->send (first_hop);
 }
 
 void
-route_dhash::execute (cb_ret cbi)
+route_dhash::execute (cb_ret cbi, u_int _retries)
 {
+  retries = _retries;
   cb = cbi;
   dcb = delaycb (LOOKUP_TIMEOUT, wrap (mkref(this), &route_dhash::timed_out));
   chord_iterator->send (use_cached_succ);
@@ -296,25 +255,16 @@ void
 route_dhash::timed_out ()
 {
   warn << "lookup TIMED OUT\n";
-  // give the network a bit to heal, then retry the block fetch
-  delaycb (5, wrap (mkref(this), &route_dhash::timed_out_after_wait));
-
-#if 0
- (*cb)(DHASH_TIMEDOUT, NULL, path ());
-  //XXX what happens if the request comes back
-  //    after we've given up on it?
-  // gotta do something, the timecb_remove below is causing a panic
-  // once the block comes in after the timer has timed_out. ignore it?
-  ignore_block = true;
-#endif
+  reexecute ();
 }
 
-void
-route_dhash::timed_out_after_wait ()
-{
-  // retry the block fetch
-  execute (cb);
-}
+
+// If the block isn't on the home node, walk down  
+// the home node's successors looking for the block
+//
+// IDEA: perhaps challenge all successors in parallel
+//       and down load the block off the first that 
+//       responds.  This should optimize transfer speed.
 
 void
 route_dhash::walk (vec<chord_node> succs)
@@ -334,30 +284,20 @@ route_dhash::walk_cachedloc (vec<chord_node> succs, chordID id, bool ok, chordst
 {
   if (!ok || stat) {
     warn << "walk: challenge of " << id << " failed\n";
-    walk (succs);
+    walk (succs); // just go on to next successor
   } else {
     warn << "walk: challenge of " << id << " succeeded\n";
-    dhash_retrieve::execute (f->get_vnode (),
-			     id,
-			     blockID,
-			     NULL,
-			     0,
-			     0,
-			     0,
-			     0,
-			     ask_for_lease,
-			     wrap (mkref(this), &route_dhash::walk_gotblock, succs));
-    // cb (DHASH_OK, block, path ());
-    // assert (0);
-    // try_fetch_block (id, wrap (mkref<>));
+    dhash_download::execute
+      (f->get_vnode (), id, blockID, NULL, 0, 0, 0, 0, ask_for_lease,
+       wrap (mkref(this), &route_dhash::walk_gotblock, succs));
   }
 }
 
 void
 route_dhash::walk_gotblock (vec<chord_node> succs, ptr<dhash_block> block)
 {
-  if (block)
-    cb (DHASH_OK, block, path ());
+  if (block) 
+    gotblock (block);
   else {
     warn << "walk_gotblock failed\n";
     walk (succs);
@@ -366,44 +306,34 @@ route_dhash::walk_gotblock (vec<chord_node> succs, ptr<dhash_block> block)
 
 
 
-
-//  A node along the lookup path will send an RPC (request!) to us
-//  if it has (or should have) the block we request.  This request
+//  A node along the lookup path will send an RPC *REQUEST* to us
+//  if it responsible for the block we requested.  This RPC *REQUEST*
 //  is dispatched from dhash::dispatch DHASHPROC_BLOCK to here.
 void
 route_dhash::block_cb (s_dhash_block_arg *arg)
 {
-  if (ignore_block)
-    return;
   timecb_remove (dcb);
   dcb = NULL;
   if (arg->offset == -1) {
+    warn << "Responsible node did not have block.  Walking\n";
     vec<chord_node> succs;
     for (u_int i = 0; i < arg->nodelist.size (); i++)
       succs.push_back (arg->nodelist[i]);
-    warn << "Responsible node did not have block.  Walking\n";
     walk (succs);
     return;
   }
 
-  dhash_retrieve::execute (f->get_vnode (),
-			   arg->source,
-			   blockID,
-			   arg->res.base (),
-			   arg->res.size (),
-			   arg->attr.size,
-			   arg->cookie,
-			   arg->lease,
-			   ask_for_lease,
+  dhash_download::execute (f->get_vnode (), arg->source, blockID,
+			   arg->res.base (), arg->res.size (), arg->attr.size,
+			   arg->cookie, arg->lease, ask_for_lease,
 			   wrap (mkref(this), &route_dhash::gotblock));
 }
 
 void
 route_dhash::gotblock (ptr<dhash_block> block)
 {
-  // XXX fix the path, we might have got the block off a replica
+  // XXX fix the path, we might have fetched the block off a replica
   block->hops = path ().size ();
-
   if (block) 
     cb (DHASH_OK, block, path ());
   else
