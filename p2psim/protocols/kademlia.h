@@ -213,7 +213,7 @@ public:
 
   Kademlia *kademlia()  { return _kademlia; }
   void traverse(k_traverser*, Kademlia*, string = "", unsigned = 0);
-  void insert(Kademlia::NodeID, bool = false, string = "", unsigned = 0);
+  void insert(Kademlia::NodeID, bool, bool = false, string = "", unsigned = 0);
   void erase(Kademlia::NodeID, string = "", unsigned = 0);
   inline virtual void checkrep() const;
 
@@ -261,7 +261,7 @@ public:
   typedef set<k_nodeinfo*, Kademlia::older> nodeset_t;
   k_nodes(k_bucket_leaf *parent);
   ~k_nodes();
-  void insert(Kademlia::NodeID);
+  void insert(Kademlia::NodeID, bool);
   void erase(Kademlia::NodeID);
   bool contains(Kademlia::NodeID) const;
   bool inrange(Kademlia::NodeID) const;
