@@ -1,4 +1,4 @@
-dnl $Id: configure.in,v 1.49 2005/01/22 21:41:07 sit Exp $
+dnl $Id: configure.in,v 1.50 2005/03/31 04:26:51 sit Exp $
 dnl
 dnl Process this file with autoconf to produce a configure script.
 dnl
@@ -37,7 +37,7 @@ SFS_CFLAGS
 CHORD_BUILDALL
 
 dnl setup db3
-SFS_SLEEPYCAT(4.2 4 3, no)
+SFS_SLEEPYCAT(4.3 4.2 4.0 4 3, no)
 AC_SUBST(DBLIB)
 AC_SUBST(DBDEPS)
 DBLIB='$(top_builddir)/sfsrodb/libsfsrodb.a'
