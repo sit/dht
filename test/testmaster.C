@@ -1,5 +1,5 @@
 /*
- * testmaster.{C,h} --- provides functionality to instruct slaves to do RPCs.
+ * testmaster.{C,h}
  *
  * Copyright (C) 2002  Thomer M. Gil (thomer@lcs.mit.edu)
  *   		       Massachusetts Institute of Technology
@@ -25,170 +25,100 @@
  */
 
 #include "async.h"
-#include "test.h"
-#include "test_prot.h"
+#include "dns.h"
 #include "testmaster.h"
 
-testmaster::testmaster() : _nhosts(0)
+
+testmaster::testmaster(const testslave slaves[])
 {
   test_init();
-
-  // set up RPC channel for master
-  _ss = inetsocket(SOCK_DGRAM);
-  if(_ss < 0){
-    fprintf(stderr, "ticker-server: inetsocket failed\n");
-    exit(1);
-  }
-  _sx = axprt_dgram::alloc(_ss);
-  _c = aclnt::alloc(_sx, dhash_test_prog_1);
-
-
-  /*
-  test_result *res = new test_result;
-  c->call(TEST_BLOCK, 0, res,
-          wrap(this, &test_result::rpc_done, res),
-          (AUTH *) 0,
-          (xdrproc_t) 0, (xdrproc_t) 0,
-          (u_int32_t) 0, (u_int32_t) 0,
-          (struct sockaddr *) sin);
-  */
+  _slaves = slaves;
 }
 
 testmaster::~testmaster()
 {
-  DEBUG(2) << "testmaster destructor\n";
-  // XXX: unregister fdcb callbacks
-  _clients.traverse(wrap(mkref(this), &testmaster::traverse_cb));
 }
 
+// tells <blocker> to drop traffic coming from <blockee>
 void
-testmaster::rpc_done(test_result *res, clnt_stat err)
+testmaster::block(int blocker, int blockee, callback<void, int>::ref cb)
 {
-  if(err || res->ok != 1)
-    warn << "RPC failed: err=" << err << ", ok=" << res->ok << ", errno=" << errno << "\n";
-  delete res;
-}
+  instruct_thunk *tx = New instruct_thunk(cb);
 
+  tx->type = BLOCK;
+  tx->blocker = blocker;
+  tx->blockee = blockee;
 
-void
-testmaster::traverse_cb(client *c)
-{
-  unlink(c->fname);
+  instruct(tx);
 }
 
 
+// tells <blocker> to accept traffic coming from <blockee>
 void
-testmaster::setup(const testslave slaves[], callback<void>::ref cb)
+testmaster::unblock(int blocker, int blockee, callback<void, int>::ref cb)
 {
-  _busy = true;
-  for(unsigned i = 0; slaves[i].name != ""; i++) {
-    // translate their name
-    if (inet_addr (slaves[i].name.cstr()) == INADDR_NONE) {
-      struct hostent *h = gethostbyname (slaves[i].name.cstr());
-      if (!h)
-        warn << "Invalid address or hostname: " << slaves[i].name << "\n";
-    }
+  instruct_thunk *tx = New instruct_thunk(cb);
 
+  tx->type = UNBLOCK;
+  tx->blocker = blocker;
+  tx->blockee = blockee;
 
-    // create a unix socket
-    strbuf p2psocket;
-    p2psocket << "/tmp/" << slaves[i].name << ":" << slaves[i].port;
-    unlink(str(p2psocket));
-    int fd = unixsocket(str(p2psocket));
-    if(!fd)
-      fatal << "couldn't open unix socket " << p2psocket << "\n";
-    make_async(fd);
-
-    // create a connection to the other side for this unix socket
-    addnode(i, str(p2psocket), &(slaves[i]), fd, cb);
-    _nhosts++;
-  }
-  _busy = false;
+  instruct(tx);
 }
 
 
-// pipes from fake domain socket to remote lsd and back
-void
-testmaster::pipe(const int from, const int to)
-{
-  strbuf b;
 
-  int r = b.tosuio()->input(from);
-  if(!r) {
-    DEBUG(2) << "connection broken\n";
-    fdcb(from, selread, 0);
-    fdcb(to, selread, 0);
+void
+testmaster::instruct(instruct_thunk *tx)
+{
+  dns_hostbyname(_slaves[tx->blockee].name,
+      wrap(this, &testmaster::instruct_cb, tx));
+}
+
+void
+testmaster::instruct_cb(instruct_thunk *tx, ptr<hostent> h, int err)
+{
+  if(!h) {
+    warn << "dns_hostbyname failed\n";
+    tx->cb(0);
     return;
   }
 
-  b.tosuio()->output(to);
+  tx->h = h;
+  DEBUG(1) << "tcppconnect to " << _slaves[tx->blocker].name << ":" << TESLA_CONTROL_PORT << "\n";
+
+  int port = _slaves[tx->blocker].port ? _slaves[tx->blocker].port : TESLA_CONTROL_PORT;
+  tcpconnect(_slaves[tx->blocker].name, port,
+      wrap(this, &testmaster::instruct_cb2, tx));
 }
 
-
 void
-testmaster::addnode(const unsigned id, const str p2psocket,
-  const testslave *s, const int unixsocket_fd, callback<void>::ref cb)
+testmaster::instruct_cb2(instruct_thunk *tx, int fd)
 {
-  DEBUG(2) << "setting up " << s->name << ":" << s->port << "\n";
-
-  // remove old entry
-  client *c = _clients[id];
-  if(c)
-    _clients.remove(c);
-
-  conthunk tx = { id, p2psocket, s, unixsocket_fd, cb };
-  tcpconnect(s->name, s->port, wrap(this, &testmaster::addnode_cb, tx));
-}
-
-// accepts connection from dhashclient that we just created and sets up pipe
-void
-testmaster::accept_connection(const int unixsocket_fd, const int there_fd)
-{
-  struct sockaddr_in sin;
-  unsigned sinlen = sizeof(sin);
-
-  DEBUG(2) << "accept_connection from dhashclient\n";
-
-  int here_fd = accept(unixsocket_fd, (struct sockaddr *) &sin, &sinlen);
-  if(here_fd >= 0) {
-    // setup pipe between dhashclient and remote slave
-    fdcb(here_fd, selread, wrap(this, &testmaster::pipe, here_fd, there_fd));
-    fdcb(there_fd, selread, wrap(this, &testmaster::pipe, there_fd, here_fd));
-  } else if (errno != EAGAIN)
-    fatal << "Could not accept slave connection, errno = " << errno << "\n";
-}
-
-
-void
-testmaster::addnode_cb(conthunk tx, const int there_fd)
-{
-  DEBUG(2) << "connected to " << tx.s->name << ":" << tx.s->port << "\n";
-
-  if(there_fd == -1) {
-    warn << "could not connect to " << tx.s->name << ":" << tx.s->port << "\n";
+  if(fd < 0) {
+    warn << "tcpconnect failed\n";
+    tx->cb(0);
     return;
   }
 
-  // listen for incoming connection from dhashclient that we are about to
-  // create
-  DEBUG(2) << "spawning server behind " << tx.p2psocket << "\n";
-  if(listen(tx.unixsocket_fd, 5))
-    fatal << "listen\n";
-  fdcb(tx.unixsocket_fd, selread, wrap(this, &testmaster::accept_connection, tx.unixsocket_fd, there_fd));
+  tx->fd = fd;
+  fdcb(fd, selwrite, wrap(this, &testmaster::instruct_cb3, tx));
+}
 
+void
+testmaster::instruct_cb3(instruct_thunk *tx) 
+{
+  instruct_t ins;
 
-  // create DHash object
-  DEBUG(2) << "creating dhashclient on " << tx.p2psocket << "\n";
-  make_async(there_fd);
-  ptr<dhashclient> dhc = New refcounted<dhashclient>(tx.p2psocket);
-  if(!dhc)
-    fatal << "couldn't create dhashclient on " << tx.p2psocket << "\n";
+  ins.i.type = tx->type;
+  ins.i.host = (*(in_addr*)tx->h->h_addr).s_addr;
+  ins.i.port = htons(_slaves[tx->blockee].port);
 
-  // update hash table
-  client *c = New client(tx.id, tx.s, tx.p2psocket, dhc);
-  _clients.insert(c);
+  // XXX
+  if(write(tx->fd, ins.b, 12) < 0) 
+    fatal << "write\n";
 
-  // call callback once all slaves are connected
-  if(!(--_nhosts) && !_busy)
-    tx.cb();
+  fdcb(tx->fd, selwrite, 0);
+  close(tx->fd);
+  tx->cb(1);
 }

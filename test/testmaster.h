@@ -24,89 +24,55 @@
  *  WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "dhash.h"
-#include "test_prot.h"
-#include "ihash.h"
+#include "async.h"
+#include "test.h"
+
+#define TESLA_CONTROL_PORT 8002
 
 
 typedef struct {
   str name;
   int port;
-  int rpc_port;
 } testslave;
 
-
-typedef struct {
-  unsigned id;
-  str p2psocket;
-  const testslave *s;
-  int unixsocket_fd;
-  callback<void>::ref cb;
-} conthunk;
-
-
-class testmaster : public virtual refcount { public:
-  testmaster();
+class testmaster { public:
+  testmaster(const testslave slaves[]);
   ~testmaster();
 
-  // sets up all local unix domain sockets and remote slaves
-  void setup(const testslave[], callback<void>::ref);
-
-  // returns dhash client for certain identifier
-  dhashclient* dhash(const unsigned id) {
-    return _clients[id]->dhc;
-  }
-
-  // returns dhash client for certain identifier
-  dhashclient* operator[](const unsigned id) {
-    return dhash(id);
-  }
+  void block(int blocker, int blockee, callback<void, int>::ref);
+  void unblock(int blocker, int blockee, callback<void, int>::ref);
 
 private:
-  // pipes stuff from unix domain socket to testslave and vice versa
-  void pipe(const int, const int);
 
-  // adds a new node
-  void addnode(const unsigned, const str, const testslave *,
-      const int, callback<void>::ref);
+  class instruct_thunk { public:
+    instruct_thunk(callback<void, int>::ref cb) : cb(cb) {}
+    ~instruct_thunk() {}
+    int type;
+    int blocker;
+    int blockee;
+    int fd;
+    callback<void, int>::ref cb;
+    ptr<hostent> h;
+  };
 
-  // callback for addnode
-  void addnode_cb(conthunk, const int there_fd);
+  void instruct(instruct_thunk*);
+  void instruct_cb(instruct_thunk*, ptr<hostent>, int);
+  void instruct_cb2(instruct_thunk*, int);
+  void instruct_cb3(instruct_thunk*);
 
-  // accepts connection from dhashclient
-  void accept_connection(const int, const int);
+  enum instruct_type {
+    BLOCK = 0,
+    UNBLOCK = 1
+  };
 
+  typedef union {
+    struct {
+      int type;
+      int host;
+      int port;
+    } i;
+    char b[12];
+  } instruct_t;
 
-  typedef struct client {
-    unsigned id;
-    const testslave *slave;
-    str fname;
-    ptr<dhashclient> dhc;
-    ihash_entry<client> hash_link;
-
-    client(unsigned i, const testslave *s, str f, ptr<dhashclient> d)
-    {
-      id = i;
-      slave = s;
-      fname = f;
-      dhc = d;
-    }
-    ~client() {}
-  } client;
-
-  typedef ihash<unsigned, client, &client::id, &client::hash_link> clients_t;
-  clients_t _clients;
-
-  // for destructor
-  void traverse_cb(client *);
-
-  unsigned _nhosts;
-  bool _busy;
-
-  int _ss;
-  ptr<axprt> _sx;
-  ptr<aclnt> _c;
-  void rpc_done(test_result*, clnt_stat);
-
-  void refcount_call_finalize() {}
+  const testslave *_slaves;
 };
