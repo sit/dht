@@ -6,6 +6,14 @@
 
 /* ChordFinger implements finger table in addition to Chord with succ list*/
 
+class LocTableToe : public LocTable {
+public:
+  LocTableToe () : LocTable () {};
+  virtual ~LocTableToe () {};
+
+  Chord::IDMap next_hop(Chord::CHID key); 
+};
+
 class ChordToe : public Chord {
 public:
   ChordToe(Node *n, uint base, uint successors, uint maxf);

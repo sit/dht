@@ -14,14 +14,20 @@ extern bool vis;
 extern bool static_sim;
 
 #define CHORD_DEBUG
-Chord::Chord(Node *n, uint numsucc)
+Chord::Chord(Node *n, uint numsucc, LocTable *l)
   : DHTProtocol(n), _isstable (false)
 {
   _vivaldi = NULL;
   nsucc = numsucc;
   me.ip = n->ip();
   me.id = ConsistentHash::ip2chid(me.ip); 
-  loctable = new LocTable(me);
+  if (l) 
+    loctable = l;
+  else
+    loctable = new LocTable();
+
+  loctable->init (me);
+
   //pin down nsucc for successor list
   loctable->pin(me.id + 1, nsucc, 0);
   //pin down 1 predecessor
@@ -539,16 +545,20 @@ Chord::crash(Args *args)
 
 /*************** LocTable ***********************/
 
-LocTable::LocTable(Chord::IDMap me) {
+LocTable::LocTable() 
+{
+  rsz = 0;
+} 
 
+void LocTable::init (Chord::IDMap me)
+{
   myid = me.id;
   pin(me.id, 1, 0);
   idmapwrap *elm = new idmapwrap(me);
 
   ring.insert(elm);
   rsz = 1;
-} 
-
+}
 LocTable::~LocTable()
 {
   idmapwrap *next;

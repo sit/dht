@@ -31,7 +31,7 @@ public:
     bool operator==(const IDMap a) { return (a.id == id); }
   };
 
-  Chord(Node *n, uint numsucc = CHORD_SUCC_NUM);
+  Chord(Node *n, uint numsucc = CHORD_SUCC_NUM, LocTable *l = NULL);
   virtual ~Chord();
   string proto_name() { return "Chord"; }
 
@@ -172,8 +172,9 @@ class LocTable {
     };
 
 
-    LocTable(Chord::IDMap me);
-    ~LocTable();
+    LocTable();
+  void init (Chord::IDMap me);
+  virtual ~LocTable();
 
     Chord::IDMap succ(ConsistentHash::CHID id);
     vector<Chord::IDMap> succs(ConsistentHash::CHID id, unsigned int m);
@@ -192,7 +193,7 @@ class LocTable {
     unsigned int psize() { return pinlist.size();}
     void set_evict(bool v) { _evict = v; }
 
-    Chord::IDMap next_hop(Chord::CHID key); //pick the next hop for lookup;
+  virtual Chord::IDMap next_hop(Chord::CHID key); //pick the next hop for lookup;
 
   private:
     bool _evict;

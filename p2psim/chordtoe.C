@@ -7,8 +7,15 @@
 
 using namespace std;
 
+Chord::IDMap LocTableToe::next_hop(Chord::CHID key)
+{
+  return pred (key);
+}
+
 ChordToe::ChordToe (Node *n, uint base, uint successors, uint maxf) : 
-  Chord (n, successors),  _numtoes (16){};
+  Chord (n, successors, new LocTableToe ()),  _numtoes (16)
+{
+};
 
 
 int
