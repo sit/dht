@@ -107,20 +107,41 @@ class dhash (chord):
 	if s.last_alive != lastsrc:
 	    print "# Source failed to copy", block
 	    return None
-	d = my.allnodes[dst]
+	s.nrpc += 1
 	s.sent_bytes += size
 	s.sent_bytes_breakdown['%s_repair_write' % desc] += size
-	d.store (block, size)
 
+	d = my.allnodes[dst]
 	real_succs = my.succ (block, my.look_ahead ())
-	if d in real_succs:
+	if block not in d.blocks and d in real_succs:
+	    d.store (block, size)
 	    my.available[block] += 1
 	return None
 
-    def _repair (my, t, an, succs, resp_blocks):
-	"""Helper to repair that does real work"""
-        desc = "failure"
-        if an.alive: desc = "join"
+    def _repair_join (my, t, an, succs, resp_blocks):
+	if an == succs[-1]:
+	    # Blocks that someone else is responsible for
+	    # should go back to that person because the next
+	    # join might push me out of place.
+	    # XXX perhaps should only do this when we're actually
+	    #     out of place, a la pmaint.
+	    for b in resp_blocks:
+		try:
+		    # If not stored on an, raise KeyError
+		    sz = an.blocks[b]
+		except KeyError:
+		    continue
+		for s in succs:
+		    if b not in s.blocks:
+			nt = int (an.sendremote (t, sz) + 0.5)
+			# XXX should move fragments, or
+			# possibly reconstruct and make a new one.
+			events.append (event (nt, "copy",
+			    ["pmaint", an.id, s.id, b, sz]))
+			break
+
+    def _repair_fail (my, t, an, succs, resp_blocks):
+	"""Helper to repair_fail that does real work"""
 	events = []
 	read_pieces = my.read_pieces ()
 	min_pieces = my.min_pieces ()
@@ -137,10 +158,10 @@ class dhash (chord):
 	    avail = len (haves)
 	    my.available[b] = avail
             if avail == 0:
-		# print "# LOST block", b, "after", desc, "of", an, "|", succs
+		print "# LOST block", b, "after failure of", an, "|", succs
 		pass
 	    elif avail < min_pieces:
-		# print "# REPAIR block", b, "after", desc, "of", an
+		# print "# REPAIR block", b, "after failure of", an
 		needed = min_pieces - avail
                 isz = insert_piece_size (my.blocks[b])
 		fixer = haves.pop (0)
@@ -150,7 +171,7 @@ class dhash (chord):
 		    # Round event time up to the next whole unit
 		    nt = int (fixer.sendremote (t, isz) + 0.5)
 		    events.append (event (nt, "copy",
-			[desc, fixer.id, fixer.last_alive, s.id, b, isz]))
+			["failure", fixer.id, fixer.last_alive, s.id, b, isz]))
 		    needed -= 1
 		    if needed <= 0: break
 		if b not in fixer.cached_blocks:
@@ -161,9 +182,33 @@ class dhash (chord):
 			nread -= 1
 			if nread <= 0: break
 			s.sent_bytes += isz
-			s.sent_bytes_breakdown['%s_repair_read' % desc] += isz
+			s.sent_bytes_breakdown['failure_repair_read'] += isz
 		    fixer.cached_blocks[b] = 1
 		    # XXX account for disk used by cache
+	return events
+
+    def repair_pmaint (my, t, an):
+	"""aka partition maintenance"""
+	events = []
+	runlen = min (my.look_ahead ()+ 1, len (my.nodes))
+	getsucclist = my.succ
+	for b in an.blocks:
+	    # Need to call getsucclist for n == an, since an
+	    # might be really far out of place or really old,
+	    # but for the other nodes, it will be sort of
+	    # repeated overlapping so more of a waste of time.
+	    succs = getsucclist (b, runlen)
+	    if an not in succs:
+		# We're not in the successor list so pmaint
+		for s in succs:
+		    if b not in s.blocks:
+			isz = an.blocks[b]
+			nt = int (n.sendremote (t, isz) + 0.5)
+			# XXX should move fragments, or
+			# possibly reconstruct and make a new one.
+			events.append (event (nt, "copy",
+			    ["pmaint", an.id, s.id, b, isz]))
+			break
 	return events
 
     def repair (my, t, affected_node):
@@ -171,6 +216,11 @@ class dhash (chord):
 	runlen = min (my.look_ahead (), len (my.nodes))
         preds = my.pred (affected_node, runlen)
         succs = my.succ (affected_node, runlen)
+	if affected_node.alive:
+	    newevs = my.repair_pmaint (t, affected_node)
+	    repair = my._repair_join
+	else:
+	    repair = my._repair_fail
         # succ's does not include affected_node if it is dead.
         span = preds + succs
 	k = my.block_keys
@@ -187,7 +237,7 @@ class dhash (chord):
 		start = bisect.bisect_right (k, p.id)
 		stop  = bisect.bisect_left  (k, s[0].id)
 		r = k[start:] + k[:stop]
-	    evs = my._repair (t, affected_node, s, r)
+	    evs = repair (t, affected_node, s, r)
 	    if evs is not None:
 		newevs += evs
 	return newevs
@@ -308,7 +358,7 @@ class dhash_replica (dhash):
     def insert_piece_size (my, size):
         return size
     def look_ahead (my):
-	return 32
+	return 16
 
 class dhash_fragments (dhash):
     def __init__ (my, args = []):
@@ -358,20 +408,56 @@ class dhash_cates (dhash):
 		newevs = evs
 	return newevs
 
-    def _XXX_pmaint_join (my, t, n):
-	runlen = my.look_ahead ()
-        preds = my.pred (n, runlen)
-        succs = my.succ (n, runlen)
-        span = preds + succs
-	# consider the predecessors who should be doing the repair
-        for i in range(1,len(span) - runlen + 1):
-            p = span[i - 1]
-	    # let them see further than they would have inserted.
-            s = span[i:i+runlen]
+    def _repair_join_check (my, t, n, b, succs):
+	if n not in succs:
+	    # We're not in the successor list so pmaint
+	    for s in succs:
+		if b not in s.blocks:
+		    sz = n.blocks[b]
+		    nt = int (n.sendremote (t, sz) + 0.5)
+		    # XXX should move fragments, or
+		    # possibly reconstruct and make a new one.
+		    return event (nt, "copy",
+			["pmaint", n.id, s.id, b, sz])
 
-	    pid = p.id
-	    nid = s[0].id
-
+    def _pmaint_join_XXX (my, t, id):
+	"""aka partition maintenance"""
+	events = []
+	runlen = min (my.look_ahead () + 1, len (my.nodes))
+	getsucclist = my.succ
+	# Fix blocks that we're no longer in the succlist for.
+	for b in n.blocks:
+	    # Need to call getsucclist for n == an, since an
+	    # might be really far out of place or really old,
+	    succs = getsucclist (b, runlen)
+	    e = my._repair_join_check (t, n, b, succs)
+	    if e: events.append (e)
+	ansucclist = getsucclist (an, runlen)
+	assert ansucclist[0] == an
+	anpredlist = my.pred (an, runlen - 1)
+	neighborhood = anpredlist + ansucclist
+	assert runlen == len (anpredlist)
+	# Index of an's successor
+	#  i = len (anpredlist) + 1
+	# Each of an's successors has just been bumped off 
+	# a successor list, so they'd better do some moving.
+	for i in range (runlen + 1, len(neighborhood)):
+	    pid = neighborhood[i - runlen - 1].id
+	    sid = neighborhood[i - 1].id
+	    for b in neighborhood[i].blocks:
+		if not between (b, pid, sid):
+		    isz = n.blocks[b]
+		    # We're not in the successor list so pmaint
+		    for s in neighborhood[0]: # XXX BOGUS!!!
+			if b not in s.blocks:
+			    nt = int (n.sendremote (t, isz) + 0.5)
+			    # XXX should move fragments, or
+			    # possibly reconstruct and make a new one.
+			    events.append (event (nt, "copy",
+				["pmaint", n.id, s.id, b, isz]))
+			    break
+	return events
+      
     def _pmaint_join (my, t, n):
 	events = []
 	preds = my.pred (n, 16)
@@ -407,6 +493,6 @@ class dhash_cates (dhash):
 		    isz = my.insert_piece_size (my.blocks[b])
 		    n.store (b, isz)
 		    s.sent_bytes += isz
-		    s.sent_bytes_breakdown['pmaint'] += isz
+		    s.sent_bytes_breakdown['pmaint_repair_write'] += isz
 		s.unstore (b)
 	return events
