@@ -322,6 +322,7 @@ LocTable::pred(Chord::CHID n) {
     } 
   }
   assert(0);
+  return ring[0];
 }
 
 Chord::IDMap
@@ -443,6 +444,7 @@ LocTable::evict() //evict one node
     }
   }
   assert(0);
+  return 0;
 }
 
 void

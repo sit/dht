@@ -26,12 +26,12 @@ while ($line = <STDIN>) {
     chomp($line);
     if ($line =~/^net: (.*)/) {
 	donet (split(/,/ , $1));
-    }
-    if ($line =~/^event: (.*)/) {
+    } elsif ($line =~/^event: (.*)/) {
 	doevent (split(/,/, $1));
-    }
-    if ($line =~/^events: (.*)/) {
+    } elsif ($line =~/^events: (.*)/) {
 	doevents (split(/,/, $1));
+    } else {
+	print EV "$line\n";
     }
 }
 

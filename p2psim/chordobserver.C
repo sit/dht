@@ -6,6 +6,7 @@
 #include <list>
 
 #include "chord.h"
+#include "koorde.h"
 
 using namespace std;
 

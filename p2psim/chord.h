@@ -71,7 +71,7 @@ public:
   void next_handler(next_args *, next_ret *);
 
   bool stabilized();
-  void dump();
+  virtual void dump();
   char *ts();
 
   virtual void stabilize();
