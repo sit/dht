@@ -41,6 +41,7 @@
 #include <chord_util.h>
 #include <location.h>
 #include <dbfe.h>
+#include <ida.h>
 
 #ifdef DMALLOC
 #include <dmalloc.h>
@@ -205,11 +206,14 @@ dhash_impl::missing_retrieve_cb (bigint key, dhash_stat err, ptr<dhash_block> b,
     warn << "Could not retrieve key " << key << "\n";
     return;
   } 
-
   assert (b);
-  ref<dbrec> k = id2dbrec (key);
-  ref<dbrec> d = New refcounted<dbrec> (b->data, b->len);
 
+  // Oh, the memory copies.
+  str blk (b->data, b->len);
+  str frag = Ida::gen_frag (dhash::NUM_DFRAGS, blk);
+  str f = strbuf () << str (b->data, 4) << frag;
+  ref<dbrec> d = New refcounted<dbrec> (f.cstr (), f.len ());
+  ref<dbrec> k = id2dbrec (key);
   dbwrite (k, d);
 }
 
