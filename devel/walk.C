@@ -11,6 +11,9 @@
 chordID wellknown_ID = -1;
 ptr<axprt_dgram> dgram_xprt;
 
+bool verify = false;
+vec<chord_node> sequential;
+
 void getsucc_cb (chord_nodelistextres *res, clnt_stat err);
 void doRPCcb (chordID ID, int procno, dorpc_res *res, void *out, aclnt_cb cb, 
 	      clnt_stat err);
@@ -73,7 +76,6 @@ doRPC (chordID to, str host, u_short port, int procno, const void *in, void *out
 		  arg, res, wrap (&doRPCcb, to, procno, res, out, cb));
     
   }
-
 }  
 
 
@@ -90,8 +92,62 @@ doRPCcb (chordID ID, int procno, dorpc_res *res, void *out, aclnt_cb cb,
     cb (RPC_CANTSEND);
   } else 
     cb (err);
+}
 
+void
+verify_succlist (const vec<chord_node> &zs)
+{
+  size_t sz = zs.size ();
+  chord_node x = sequential.pop_front ();
+  // ensure we talked to who we think we should be talking to.
+  assert (x.x == zs[0].x);
 
+  if (sequential.size () == 0) {
+    for (size_t i = 1; i < sz; i++) {
+      sequential.push_back (zs[i]);
+    }
+  } else {
+    bool bad = false;
+    vec<chord_node> newseq;
+    size_t i = 1, j = 0;
+    while (i < sz && j < sequential.size ()) {
+      if (sequential[j].x == zs[i].x) {
+	newseq.push_back (sequential[j]);
+	j++; i++;
+      } else {
+	bad = true;
+	strbuf s;
+	s << "  sequential[" << j << "] = " << sequential[j] << "\n";
+	s << "  nlist[" << i << "] = " << zs[i] << "\n";
+	if (sequential[j].x < zs[i].x) {
+	  warnx << "nlist missing a successor!\n";
+	  newseq.push_back (sequential[j]);
+	  j++;
+	} else {
+	  warnx << "sequential missing a successor!\n";
+	  newseq.push_back (zs[i]);
+	  i++;
+	}
+	warnx << s;
+      }
+    }
+    while (i < sz) {
+      newseq.push_back (zs[i++]);
+    }
+    if (j < sequential.size ()) {
+      bad = true;
+      newseq.push_back (sequential[j++]);
+    }
+    if (bad) {
+      for (size_t k = 0; k < zs.size (); k++)
+	warnx << "nlist[" << k << "]: " << zs[k] << "\n";
+      for (size_t k = 0; k < sequential.size (); k++)
+	warnx << "sequential[" << k << "]: " << sequential[k] << "\n";
+      warnx << "\n";
+    }
+    sequential.clear ();
+    sequential = newseq;
+  }
 }
 
 void
@@ -102,38 +158,49 @@ getsucc (chordID n, str host, u_short port)
 	 wrap (&getsucc_cb, res));
 }
 
-
 void
 getsucc_cb (chord_nodelistextres *res, clnt_stat err)
 {
   assert (err == 0 && res->status == CHORD_OK);
   assert (res->resok->nlist.size () >= 2);
 
-  chord_node z = make_chord_node (res->resok->nlist[1].n);
-  chordID n    = z.x;
-  str host     = z.r.hostname;
-  u_short port = z.r.port;
-  int index    = z.vnode_num;
+  size_t sz = res->resok->nlist.size ();
+  vec<chord_node> zs;
+  for (size_t i = 0; i < sz; i++) {
+    chord_node z = make_chord_node (res->resok->nlist[i].n);
+    zs.push_back (z);
+  }
+  delete res;
+
+  chord_node next;
+  if (verify) {
+    verify_succlist (zs);
+    next = sequential[0];
+  } else {
+    next = zs[1];
+  }
+
+  // Print the "next" node we are going to contact.
+  chordID n    = next.x;
+  str host     = next.r.hostname;
+  u_short port = next.r.port;
+  int index    = next.vnode_num;
   assert (index >= 0);
   warnx << n << " " << host << " " << port << " " << index << "\n";
 
-  for (u_int i = 0; i < res->resok->nlist.size ();i++) 
-    {
-      chord_node y = make_chord_node (res->resok->nlist[i].n);
-      warn << "      succ (" << i << "): " << y.x << "\n";
-    }
-
   // wrapped around ring. done.
-  if (n == wellknown_ID)
+  if (next.x == wellknown_ID)
     exit (0);
-
-  getsucc (n, host, port);
+  
+  if (next.x != zs[1].x)
+    warnx << "XXX succlist had wrong successor!!!\n";
+  getsucc (next.x, next.r.hostname, next.r.port);
 }
 
 void 
 usage ()
 {
-  fatal << "walk -j <host>:<port>\n";
+  fatal << "walk [-v] -j <host>:<port>\n";
 }
 
 int
@@ -147,7 +214,7 @@ main (int argc, char** argv)
   unsigned short port = 0;
 
   int ch;
-  while ((ch = getopt (argc, argv, "h:j:a:l:f:is:")) != -1) {
+  while ((ch = getopt (argc, argv, "j:v")) != -1) {
     switch (ch) {
     case 'j': 
       {
@@ -171,13 +238,25 @@ main (int argc, char** argv)
 
 	break;
       }
-    };
+    case 'v':
+      verify = true;
+      break;
+    default:
+      usage ();
+      break;
+    }
   }
 
   if (host == "not set")
     usage ();
     
   wellknown_ID = make_chordID (host, port, 0);
+  chord_node wellknown_node;
+  wellknown_node.x = wellknown_ID;
+  wellknown_node.r.hostname = host;
+  wellknown_node.r.port = port;
+  wellknown_node.vnode_num = 0;
+  sequential.push_back (wellknown_node);
   getsucc (wellknown_ID, host, port);
 
 
