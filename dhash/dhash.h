@@ -174,6 +174,21 @@ class dhashgateway {
   dhashgateway (ptr<axprt_stream> x, ptr<chord> clnt);
 };
 
+
+struct dhash_block {
+  char *data;
+  size_t len;
+
+  ~dhash_block () {  delete [] data; }
+
+  dhash_block (const char *buf, size_t buflen)
+    : data (New char[buflen]), len (buflen)
+  {
+    if (buf)
+      memcpy (data, buf, len);
+  }
+};
+
 class dhash {
 
   int nreplica;
@@ -199,6 +214,13 @@ class dhash {
   void fetchiter_svc_cb (svccb *sbp, s_dhash_fetch_arg *farg,
 			 ptr<dbrec> val, dhash_stat stat);
 
+  void append (ptr<dbrec> key, ptr<dbrec> data,
+	       s_dhash_insertarg *arg,
+	       cbstore cb);
+  void append_after_db_store (cbstore cb, chordID k, int stat);
+  void append_after_db_fetch (ptr<dbrec> key, ptr<dbrec> new_data,
+			      s_dhash_insertarg *arg, cbstore cb,
+			      ptr<dbrec> data, dhash_stat err);
 
   void store (s_dhash_insertarg *arg, cbstore cb);
   void store_cb(store_status type, chordID id, cbstore cb, int stat);
@@ -298,25 +320,13 @@ class dhash {
   static bool verify_content_hash (chordID key,  char *buf, int len);
   static bool verify_key_hash (chordID key, char *buf, int len);
   static bool verify_dnssec ();
+  static ptr<dhash_block> get_block_contents (ptr<dhash_block> block,
+					      dhash_ctype t);
+  static ptr<dhash_block> get_block_contents (ptr<dbrec> d, dhash_ctype t);
+  static dhash_ctype block_type (ptr<dbrec> d);
 
 };
 
-
-
-
-struct dhash_block {
-  char *data;
-  size_t len;
-
-  ~dhash_block () {  delete [] data; }
-
-  dhash_block (const char *buf, size_t buflen)
-    : data (New char[buflen]), len (buflen)
-  {
-    if (buf)
-      memcpy (data, buf, len);
-  }
-};
 
 
 typedef callback<void, bool, chordID>::ref cbinsert_t;
@@ -333,6 +343,7 @@ public:
   //
   dhashclient(str sockname);
 
+  void append (chordID to, const char *buf, size_t buflen, cbinsert_t cb);
   // inserts under the contents hash. 
   // (buf need not remain involatile after the call returns)
   //

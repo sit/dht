@@ -661,11 +661,102 @@ dhash::fetch_cb (cbvalue cb, ptr<dbrec> ret)
 
   if (!ret) {
     (*cb)(NULL, DHASH_NOENT);
-    warn << "key not found in DB\n";
   } else
     (*cb)(ret, DHASH_OK);
 }
 
+void
+dhash::append (ptr<dbrec> key, ptr<dbrec> data,
+	       s_dhash_insertarg *arg,
+	       cbstore cb)
+{
+  if (key_status (arg->key) == DHASH_NOTPRESENT) {
+    //create a new record in the database
+    long type = DHASH_APPEND;
+    long buflen = data->len;
+    xdrsuio x;
+    int size = buflen + 3 & ~3;
+    char *m_buf;
+    if (XDR_PUTLONG (&x, (long int *)&type) &&
+	XDR_PUTLONG (&x, (long int *)&buflen) &&
+	(m_buf = (char *)XDR_INLINE (&x, size)))
+      {
+	memcpy (m_buf, data->value, buflen);
+	int m_len = x.uio ()->resid ();
+	char *m_dat = suio_flatten (x.uio ());
+	ptr<dbrec> marshalled_data = 
+	  New refcounted<dbrec> (m_dat, m_len);
+
+	dhash_stat stat;
+	chordID id = arg->key;
+	stat = DHASH_STORED;
+	keys_stored += key_store.enter (id, &stat);
+
+	db->insert (key, marshalled_data, 
+		    wrap(this, &dhash::append_after_db_store, cb, arg->key));
+
+	delete m_dat;
+	
+      } else {
+	cb (DHASH_STOREERR);
+      }
+  } else {
+    fetch (arg->key, wrap (this, &dhash::append_after_db_fetch,
+			   key, data, arg, cb));
+  }
+}
+
+void
+dhash::append_after_db_fetch (ptr<dbrec> key, ptr<dbrec> new_data,
+			      s_dhash_insertarg *arg, cbstore cb,
+			      ptr<dbrec> data, dhash_stat err)
+{
+  if (dhash::block_type (data) != DHASH_APPEND) {
+    cb (DHASH_STORE_NOVERIFY);
+  } else {
+    long type = DHASH_APPEND;
+    ptr<dhash_block> b = dhash::get_block_contents (data, DHASH_APPEND);
+    long buflen = b->len + new_data->len;
+    xdrsuio x;
+    int size = buflen + 3 & ~3;
+    char *m_buf;
+    if (XDR_PUTLONG (&x, (long int *)&type) &&
+	XDR_PUTLONG (&x, (long int *)&buflen) &&
+	(m_buf = (char *)XDR_INLINE (&x, size)))
+      {
+	memcpy (m_buf, b->data, b->len);
+	memcpy (m_buf + b->len, new_data->value, new_data->len);
+	int m_len = x.uio ()->resid ();
+	char *m_dat = suio_flatten (x.uio ());
+	ptr<dbrec> marshalled_data = 
+	  New refcounted<dbrec> (m_dat, m_len);
+
+	db->insert (key, marshalled_data, 
+		    wrap(this, &dhash::append_after_db_store, cb, arg->key));
+
+	delete m_dat;
+      } else {
+	cb (DHASH_STOREERR);
+      }
+  }
+
+}
+
+void
+dhash::append_after_db_store (cbstore cb, chordID k, int stat)
+{
+  if (stat)
+    cb (DHASH_STOREERR);
+  else
+    cb (DHASH_OK);
+
+  store_state *ss = pst[k];
+  if (ss) {
+    pst.remove (ss);
+    delete ss;
+  }
+  //replicate?
+}
 
 void 
 dhash::store (s_dhash_insertarg *arg, cbstore cb)
@@ -687,15 +778,19 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
     ptr<dbrec> k = id2dbrec(arg->key);
     ptr<dbrec> d = NULL;
     if (!ss)
-      d = New refcounted<dbrec>(arg->data.base (), arg->data.size ());
+      d = New refcounted<dbrec> (arg->data.base (), arg->data.size ());
     else 
-      d = New refcounted<dbrec>(ss->buf, ss->size);
+      d = New refcounted<dbrec> (ss->buf, ss->size);
 
+    if (arg->attr.ctype == DHASH_APPEND) {
+      append (k, d, arg, cb);
+      return;
+    }
+    
     if (!dhash::verify (arg->key, arg->attr.ctype, (char *)d->value, d->len) ||
 	((arg->attr.ctype == DHASH_NOAUTH) 
 	 && key_status (arg->key) != DHASH_NOTPRESENT)) {
 
-      warn << "verification error " << arg->key << " " << arg->attr.ctype << "\n";
       cb (DHASH_STORE_NOVERIFY);
       if (ss) {
 	pst.remove (ss);

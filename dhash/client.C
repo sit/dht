@@ -802,7 +802,7 @@ protected:
 	fail (strbuf() << "data did not verify " << key);
 	(*cb) (NULL);
       } else {
-	ptr<dhash_block> contents = get_block_contents (block, t);
+	ptr<dhash_block> contents = dhash::get_block_contents (block, t);
 	(*cb) (contents);
       }
       delete this;
@@ -815,38 +815,6 @@ protected:
     error = true;
   }
 
-  ptr<dhash_block> 
-  get_block_contents (ptr<dhash_block> block, dhash_ctype t) 
-  {
-    switch (t) {
-    case DHASH_CONTENTHASH:
-    case DHASH_NOAUTH:
-      return block;
-      break;
-    case DHASH_KEYHASH:
-      {
-	bigint a,b;
-
-	long contentlen;
-	xdrmem x1 (block->data, (unsigned)block->len, XDR_DECODE);
-	if (!xdr_getbigint (&x1, a) || 
-	    !xdr_getbigint (&x1, b) ||
-	    !XDR_GETLONG (&x1, &contentlen))
-	return NULL;
-	
-	char *content;
-	if (!(content = (char *)XDR_INLINE (&x1, contentlen)))
-	  return NULL;
-	
-	ptr<dhash_block> ret = New refcounted<dhash_block>
-	  (content, contentlen);
-	return ret;
-      }
-      break;
-    default:
-      return NULL;
-    }
-  }
 
 public:
 
@@ -869,17 +837,59 @@ dhashclient::dhashclient(str sockname)
   gwclnt = aclnt::alloc (axprt_unix::alloc (fd), dhashgateway_program_1);
 }
 
+//append
+/* block layout [in db, not on the upload]
+ * long type
+ * long contentlen
+ * char data[contentlen}
+ *
+ * key = whatever you say
+ */
+void
+dhashclient::append (chordID to, const char *buf, size_t buflen, cbinsert_t cb)
+{
+  //just insert this at the right node, the server has to do all of the work
+  insert (to, buf, buflen, cb, DHASH_APPEND);
+}
+
+//content-hash insert
+/* content hash convention
+   
+   long type
+   long contentlen
+   char data[contentlen]
+
+   key = HASH (data)
+*/
 void
 dhashclient::insert (const char *buf, size_t buflen, cbinsert_t cb)
 {
-  bigint key = compute_hash (buf, buflen);
-  insert (key, buf, buflen, cb, DHASH_CONTENTHASH);
+  long type = DHASH_CONTENTHASH;
+  xdrsuio x;
+  int size = buflen + 3 & ~3;
+  char *m_buf;
+  if (XDR_PUTLONG (&x, (long int *)&type) &&
+      XDR_PUTLONG (&x, (long int *)&buflen) &&
+      (m_buf = (char *)XDR_INLINE (&x, size)))
+    {
+      memcpy (m_buf, buf, buflen);
+      
+      int m_len = x.uio ()->resid ();
+      char *m_dat = suio_flatten (x.uio ());
+      bigint key = compute_hash (buf, buflen);
+      insert (key, m_dat, m_len, cb, DHASH_CONTENTHASH);      
+      xfree (m_dat);
+    } else {
+      cb (true, bigint (0)); // marshalling failed.
+    }
+
 }
 
 
 /* 
  * Public Key convention:
  * 
+ * long type;
  * bigint pub_key
  * bigint sig
  * long datalen
@@ -890,6 +900,7 @@ void
 dhashclient::insert (const char *buf, size_t buflen, 
 		     rabin_priv key, cbinsert_t cb)
 {
+  long type = DHASH_KEYHASH;
   bigint pubkey = key.n;
   str pk_raw = pubkey.getraw ();
   chordID pkID = compute_hash (pk_raw.cstr (), pk_raw.len ());
@@ -900,7 +911,8 @@ dhashclient::insert (const char *buf, size_t buflen,
   xdrsuio x;
   int size = buflen + 3 & ~3;
   char *m_buf;
-  if (xdr_putbigint (&x, pubkey) &&
+  if (XDR_PUTLONG (&x, (long int *)&type) &&
+      xdr_putbigint (&x, pubkey) &&
       xdr_putbigint (&x, sig) &&
       XDR_PUTLONG (&x, (long int *)&buflen) &&
       (m_buf = (char *)XDR_INLINE (&x, size)))
@@ -916,7 +928,7 @@ dhashclient::insert (const char *buf, size_t buflen,
     }
 }
 
-
+//generic insert (called by above methods)
 void
 dhashclient::insert (bigint key, const char *buf, 
 		     size_t buflen, cbinsert_t cb,
@@ -944,4 +956,5 @@ dhashclient::sync_setactive (int32 n)
   
   return (err || res != DHASH_OK);
 }
+
 
