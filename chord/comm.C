@@ -224,15 +224,19 @@ locationtable::chord_connect(chordID ID, callback<void,
   } else {
     warnx << "tcpconnect: " << l->addr.hostname << " " << l->addr.port << "\n";
     tcpconnect (l->addr.hostname, l->addr.port, 
-		wrap (mkref (this), &locationtable::connect_cb, cb));
+		wrap (mkref (this), &locationtable::connect_cb, l, cb));
   }
 }
 
 void
-locationtable::connect_cb (callback<void, ptr<axprt_stream> >::ref cb, int fd)
+locationtable::connect_cb (location *l, 
+			   callback<void, ptr<axprt_stream> >::ref cb, int fd)
 {
   if (fd < 0) {
-    warn ("connect failed: %m\n");
+    assert (l);
+    warnx << "connect failed: " << l->addr.hostname << " " 
+	    << l->addr.port << "\n";
+    warn (" connect failed %m\n");
     (*cb)(NULL);
   } else {
     tcp_nodelay(fd);
@@ -266,7 +270,6 @@ locationtable::delete_connections (location *l)
   assert (l);
   assert (!l->connecting);
   if (l->x) {
-    warnx << "delete_connections: delete stream to " << l->n << "\n";
     connections.remove (l);
     size_connections--;
     l->x = NULL;

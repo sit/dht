@@ -236,10 +236,6 @@ vnode::findpredfinger (chordID &x)
       break;
     }
   }
-  if (p == myID) {
-    warnx << "findpredfinger: " << myID << " of " << x << " is " << p << "\n";
-    print ();
-  }
   return p;
 }
 
