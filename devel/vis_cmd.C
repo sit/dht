@@ -70,20 +70,24 @@ dispatch (ptr<aios> aio, str cmd, vec<str> args)
     chordID id;
     if (args.size () && str2chordID (args[0], id)) {
       f_node *n = nodes[id];
-      bool on (true);
-      if (args.size () > 1)
-	on = atoi (args[1]) == 1;
-      n->highlight = on;
+      if (n) {
+	bool on (true);
+	if (args.size () > 1)
+	  on = atoi (args[1]) == 1;
+	n->highlight = on;
+      }
     }
   }
   else if (cmd == "select") {
     chordID id;
     if (args.size () && str2chordID (args[0], id)) {
       f_node *n = nodes[id];
-      bool on (true);
-      if (args.size () > 1)
-	on = atoi (args[1]) == 1;
-      n->selected = on;
+      if (n) {
+	bool on (true);
+	if (args.size () > 1)
+	  on = atoi (args[1]) == 1;
+	n->selected = on;
+      }
     }
   }
   else if (cmd == "arc") {
