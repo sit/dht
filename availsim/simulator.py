@@ -1,9 +1,12 @@
 from __future__ import generators	# only 2.2 or newer
 from heapq import heappush, heappop	# only 2.3 or newer
+from random import randint
 import sys
 
-from utils import str2chordID
+from utils import str2chordID, make_chordID
 
+default_port = randint (1024, 65535)
+hostcache = {}
 def get_node_id (args):
     try:
 	return long(args)
@@ -11,7 +14,9 @@ def get_node_id (args):
 	try:
 	    return str2chordID (args)
 	except ValueError, e:
-	    raise SyntaxError, "Bad ID specification", e
+	    return hostcache.setdefault (args, 
+		    str2chordID (make_chordID (args, default_port, 0)))
+
         
 class event:
     def ev_getnode (my, args):

@@ -4,7 +4,7 @@ from __future__ import generators	# only 2.2 or newer
 import sys
 
 from utils import size_rounder
-from simulator import event, simulator, event_generator
+import simulator
 import dht
 
 do_spread = 0
@@ -18,7 +18,7 @@ def file_evgen (fname):
         if l[0] == '#': continue
         a = l.strip ().split ()
         try:
-            ev = event (int(a[0]), a[1].lower (), a[2:])
+            ev = simulator.event (int(a[0]), a[1].lower (), a[2:])
             yield ev
         except Exception, e:
             sys.stderr.write ("Bad event at line %d: %s\n" % (lineno, e))
@@ -130,7 +130,7 @@ if __name__ == '__main__':
     monitor = print_monitor
     monint  = 12 * 60 * 60
     try:
-	opts, cmdv = getopt.getopt (sys.argv[1:], "b:i:ms")
+	opts, cmdv = getopt.getopt (sys.argv[1:], "b:i:mp:s")
     except getopt.GetoptError:
         usage ()
         sys.exit (1)
@@ -141,6 +141,8 @@ if __name__ == '__main__':
 	    monint = int (a)
         elif o == '-m':
             monitor = parsable_monitor
+	elif o == '-p':
+	    simulator.default_port = int (a)
 	elif o == '-s':
 	    do_spread = 1
             
@@ -150,6 +152,7 @@ if __name__ == '__main__':
 
     print "# bw =", dht.node.BANDWIDTH_HACK
     print "# args =", cmdv
+    print "# port =", simulator.default_port
     evfile = cmdv[0]
     dtype  = cmdv[1]
     gdh = None
@@ -161,7 +164,7 @@ if __name__ == '__main__':
         usage ()
 	sys.exit (1)
 
-    sim = simulator (gdh)
+    sim = simulator.simulator (gdh)
     evfh = open (evfile)
-    eg = event_generator (evfh)
+    eg = simulator.event_generator (evfh)
     sim.run (eg, monitor, monint)

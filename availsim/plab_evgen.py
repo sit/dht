@@ -67,12 +67,12 @@ for line in fh.readlines ():
     t = int (t)
     if not firsttime:
 	firsttime = t
-	nnode = make_chordID (ip, 11977, 0)
+	nnode = ip
     t = t - firsttime
 
     if e == 'join':
 	count += 1
-	onode = make_chordID (ip, 11977, 0)
+	onode = ip
     elif count > 0 and e == 'fail':
 	count -= 1
     if count > nodesforjoin:
@@ -89,6 +89,6 @@ for line in fh.readlines ():
 		    ni -= 1
 		    maxblocks -= 1
 	lasttime = t
-    print t, e, make_chordID (ip, 11977, 0)
+    print t, e, ip
     nnode = onode
 
