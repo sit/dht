@@ -29,7 +29,7 @@
 using namespace std;
 extern bool static_sim;
 
-ChordOneHop::ChordOneHop(Node *n, Args &a): Chord(n,a)
+ChordOneHop::ChordOneHop(IPAddress i, Args &a): Chord(i, a)
 {
 }
 
@@ -50,7 +50,7 @@ ChordOneHop::reschedule_basic_stabilizer(void *x)
 {
   assert(!static_sim);
   printf("%s start stabilizing\n",ts());
-  if (!node()->alive()) {
+  if (!alive()) {
     _stab_basic_running = false;
     return;
   }
@@ -140,7 +140,7 @@ void
 ChordOneHop::join(Args *args)
 {
   if (_vivaldi_dim > 0) {
-    _vivaldi = New Vivaldi10(node(), _vivaldi_dim, 0.05, 1); 
+    _vivaldi = New Vivaldi10(this, _vivaldi_dim, 0.05, 1); 
   }
 
   _inited = true;
@@ -212,7 +212,7 @@ ChordOneHop::find_successors(CHID k, uint m, uint all, bool is_lookup)
     succ = loctable->succ(k);
     //record_stat(is_lookup?1:0);
     ok = doRPC(succ.ip, &Chord::null_handler, (void *)NULL, (void *)NULL);
-    if ((!ok) && (node()->alive())) {
+    if ((!ok) && (alive())) {
       timeout++;
       loctable->del_node(succ);
     }else{

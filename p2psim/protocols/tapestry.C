@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.31 2003/11/27 21:24:00 strib Exp $ */
+/* $Id: tapestry.C,v 1.32 2003/12/06 16:32:35 thomer Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -31,8 +31,7 @@
 #include <map>
 using namespace std;
 
-Tapestry::Tapestry(Node *n, Args a)
-  : P2Protocol(n),
+Tapestry::Tapestry(IPAddress i, Args a) : P2Protocol(i),
     _base(a.nget<uint>("base", 16, 10)),
     _bits_per_digit((uint) (log10(((double) _base))/log10((double) 2))),
     _digits_per_id((uint) 8*sizeof(GUID)/_bits_per_digit),
@@ -145,7 +144,7 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
   
   uint curr_join = _join_num;
   handle_lookup( &la, &lr );
-  if( !node()->alive() || _join_num != curr_join ) {
+  if( !alive() || _join_num != curr_join ) {
     delete args;
     TapDEBUG(2) << "Lookup aborting in wrapper, dead or rejoined" << endl;
     return;
@@ -230,7 +229,7 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
 	// since we're using recursive routing, we only do this check in the
 	// case of non-success.
 	// make sure we haven't crashed and/or started another join
-	if( !node()->alive() || _join_num != curr_join ) {
+	if( !alive() || _join_num != curr_join ) {
 	  ret->failed = true;
 	  TapDEBUG(2) << "Lookup aborting, dead or rejoined" << endl;
 	  delete ips;
@@ -332,7 +331,7 @@ Tapestry::join(Args *args)
     bool succ = doRPC( wellknown_ip, &Tapestry::handle_join, &ja, &jr );
 
     // make sure we haven't crashed and/or started another join
-    if( !node()->alive() || _join_num != curr_join ) {
+    if( !alive() || _join_num != curr_join ) {
       TapDEBUG(0) << "Old join " << curr_join << " aborting" << endl;
       return;
     }
@@ -441,7 +440,7 @@ Tapestry::join(Args *args)
     }
 
     // make sure we haven't crashed and/or started another join
-    if( !node()->alive() || _join_num != curr_join ) {
+    if( !alive() || _join_num != curr_join ) {
       TapDEBUG(0) << "Old join " << curr_join << " aborting" << endl;
       // need to delete all the seeds
       for( uint j = 0; j < seeds.size(); j++ ) {
@@ -465,7 +464,7 @@ Tapestry::join(Args *args)
     multi_add_to_rt( &seeds, &timing );
 
     // make sure we haven't crashed and/or started another join
-    if( !node()->alive() || _join_num != curr_join ) {
+    if( !alive() || _join_num != curr_join ) {
       TapDEBUG(0) << "Old join " << curr_join << " aborting" << endl;
       // need to delete all the seeds
       for( uint j = 0; j < seeds.size(); j++ ) {
@@ -511,7 +510,7 @@ Tapestry::join(Args *args)
     }
 
     // make sure we haven't crashed and/or started another join
-    if( !node()->alive() || _join_num != curr_join ) {
+    if( !alive() || _join_num != curr_join ) {
       TapDEBUG(0) << "Old join " << curr_join << " aborting" << endl;
       // need to delete all the currclose now
       for( uint j = 0; j < _k; j++ ) {
@@ -570,7 +569,7 @@ Tapestry::handle_join(join_args *args, join_return *ret)
   while( !joined ) {
     _waiting_for_join->wait();
     // hmmm. if we're now dead, indicate some kind of timeout probably
-    if( !node()->alive() ) {
+    if( !alive() ) {
       ret->failed = true;
       TapDEBUG(5) << "hj exit" << endl;
       return; //TODO: ????
@@ -1024,7 +1023,7 @@ Tapestry::stabilized(vector<GUID> lid)
 
 void
 Tapestry::oracle_node_died( IPAddress deadip, GUID deadid, 
-			    set<Protocol *> lid )
+			    const set<Node *> *lid )
 {
 
   TapDEBUG(2) << "Oracle says node died: " << deadip << "/" 
@@ -1040,10 +1039,10 @@ Tapestry::oracle_node_died( IPAddress deadip, GUID deadid,
   vector<NodeInfo *> nodes;
   Time bestrtt = 1000000;
   Tapestry *bestnode = NULL;
-  for(set<Protocol*>::const_iterator i = lid.begin(); i != lid.end(); ++i) {
+  for(set<Node*>::const_iterator i = lid->begin(); i != lid->end(); ++i) {
 
     Tapestry *currnode = (Tapestry*) *i;
-    if( currnode->ip() != ip() && currnode->node()->alive() ) {
+    if( currnode->ip() != ip() && currnode->alive() ) {
 
       if( guid_compare( id(), currnode->id() ) == match &&
 	  get_digit( currnode->id(), match ) == digit ) {
@@ -1146,12 +1145,12 @@ Tapestry::check_rt(void *x)
 }
 
 void
-Tapestry::init_state(set<Protocol *> lid)
+Tapestry::init_state(const set<Node *> *lid)
 {
 
   // TODO: we shouldn't need locking in here, right?
 
-  if( !node()->alive() ) {
+  if( !alive() ) {
     _join_num++;
     TapDEBUG(3) << "My alive is false" << endl;
     return;
@@ -1160,10 +1159,10 @@ Tapestry::init_state(set<Protocol *> lid)
   TapDEBUG(2) << "init_state: about to add everyone" << endl;
   // for every node but this own, add them all to your routing table
   vector<NodeInfo *> nodes;
-  for(set<Protocol*>::const_iterator i = lid.begin(); i != lid.end(); ++i) {
+  for(set<Node*>::const_iterator i = lid->begin(); i != lid->end(); ++i) {
 
     Tapestry *currnode = (Tapestry*) *i;
-    if( currnode->ip() == ip() || !currnode->node()->alive() ) {
+    if( currnode->ip() == ip() || !currnode->alive() ) {
       continue;
     }
     
@@ -1177,10 +1176,10 @@ Tapestry::init_state(set<Protocol *> lid)
   // now that everyone's been added, place backpointers on everyone 
   // who is still in the table
   uint known_nodes = 0;
-  for(set<Protocol*>::const_iterator i = lid.begin(); i != lid.end(); ++i) {
+  for(set<Node*>::const_iterator i = lid->begin(); i != lid->end(); ++i) {
 
     Tapestry *currnode = (Tapestry*) *i;
-    if( currnode->ip() == ip() || !currnode->node()->alive() ) {
+    if( currnode->ip() == ip() || !currnode->alive() ) {
       continue;
     }
 
@@ -1654,7 +1653,7 @@ Tapestry::crash(Args *args)
   TapDEBUG(0) << "Tapestry crash" << endl;
   
   // XXX: Thomer says: not necessary
-  // node()->crash();
+  // crash();
 
   // clear out routing table, and any other state that might be lying around
   uint r = _rt->redundancy();
@@ -1747,8 +1746,8 @@ Tapestry::lookup_cheat( GUID key )
 
   // using global knowledge, figure out who the owner of this key should
   // be, given the set of live nodes
-  set<Protocol*> l = Network::Instance()->getallprotocols("Tapestry");
-  set<Protocol*>::iterator pos;
+  const set<Node*> *l = Network::Instance()->getallnodes();
+  set<Node*>::iterator pos;
   vector<Tapestry::GUID> lid;
 
   // get the keys digits
@@ -1759,11 +1758,11 @@ Tapestry::lookup_cheat( GUID key )
 
   Tapestry *c = 0;
   int maxmatch = -2;
-  for (pos = l.begin(); pos != l.end(); ++pos) {
+  for (pos = l->begin(); pos != l->end(); ++pos) {
     c = (Tapestry *)(*pos);
     assert(c);
     // only care about live, joined nodes (or live nodes in our rt)
-    if( c->node()->alive() && (c->is_joined() || _rt->contains(c->id())) ) {
+    if( c->alive() && (c->is_joined() || _rt->contains(c->id())) ) {
       int match = guid_compare( c->id(), key_digits );
       if( match == -1 ) {
 	return c->id();

@@ -26,8 +26,8 @@
 #include <stdio.h>
 
 /* Gummadi's Chord PNS algorithm  (static) */
-ChordFingerPNS::ChordFingerPNS(Node *n, Args& a, LocTable *l) 
-  : Chord(n, a, New LocTablePNS()) 
+ChordFingerPNS::ChordFingerPNS(IPAddress i, Args& a, LocTable *l) 
+  : Chord(i, a, New LocTablePNS()) 
 { 
   _base = a.nget<uint>("base",2,10);
   _samples = a.nget<uint>("samples",_nsucc,10);
@@ -119,7 +119,7 @@ ChordFingerPNS::join(Args *args)
 void
 ChordFingerPNS::reschedule_pns_stabilizer(void *x)
 {
-  if (!node()->alive()) {
+  if (!alive()) {
     _stab_pns_running = false;
     return;
   }
@@ -174,7 +174,7 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
     lap = lap/_base;
     for (uint j = (_base-1); j >= 1; j--) {
       finger = lap * j + me.id;
-      if ((ConsistentHash::betweenrightincl(finger,finger+lap,scs[scs.size()-1].id)) || (!node()->alive()))
+      if ((ConsistentHash::betweenrightincl(finger,finger+lap,scs[scs.size()-1].id)) || (!alive()))
 	goto PNS_DONE;
       currf = loctable->succ(finger, &currf_ts);
       testf.push_back(currf);//testing
@@ -252,7 +252,7 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
       else
 	v = find_successors(finger, _samples, _samples, TYPE_FINGER_LOOKUP);
 
-      if (!node()->alive()) return;
+      if (!alive()) return;
 
       if (v.size() > 0) {
 	new_finger++; //testing
@@ -404,7 +404,7 @@ ChordFingerPNS::pns_next_recurs_handler(next_recurs_args *args, next_recurs_ret 
       record_stat(4+1,args->type?1:0);
       bool r = doRPC(next.ip, &ChordFingerPNS::pns_next_recurs_handler, args, ret);
 
-      if (!node()->alive()) {
+      if (!alive()) {
 	ret->v.clear();
 	return;
       }

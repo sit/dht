@@ -1,3 +1,4 @@
+#if 0
 /*
  * Copyright (c) 2003 [NAMES_GO_HERE]
  *                    Massachusetts Institute of Technology
@@ -183,3 +184,4 @@ Pastry::route(NodeID *D, void *msg)
 done:
   doRPC(nexthop, &Pastry::route, D, (void*)0);
 }
+#endif

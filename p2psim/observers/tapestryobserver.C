@@ -23,7 +23,7 @@
  */
 
 #include "tapestryobserver.h"
-#include "p2psim/protocol.h"
+#include "p2psim/node.h"
 #include "p2psim/args.h"
 #include "p2psim/network.h"
 #include "events/p2pevent.h"
@@ -55,15 +55,14 @@ TapestryObserver::TapestryObserver(Args *a) : _type( "Tapestry" )
   _oracle_num = a->nget( "oracle", 0, 10 );
   lid.clear();
 
-  set<Protocol*> l = Network::Instance()->getallprotocols(_type);
+  const set<Node*> *l = Network::Instance()->getallnodes();
   DEBUG(1) << "TapestryObserver::init_state " << now() << endl;
-  for(set<Protocol*>::iterator pos = l.begin(); pos != l.end(); ++pos) {
+  for(set<Node*>::iterator pos = l->begin(); pos != l->end(); ++pos) {
     Tapestry *t = (Tapestry*) *pos;
     t->registerObserver(this);
   }
   _stabilized = false;
   lid.clear();
-
 }
 
 TapestryObserver::~TapestryObserver()
@@ -73,9 +72,9 @@ TapestryObserver::~TapestryObserver()
 void
 TapestryObserver::init_state()
 {
-  set<Protocol*> l = Network::Instance()->getallprotocols(_type);
+  const set<Node*> *l = Network::Instance()->getallnodes();
   DEBUG(1) << "TapestryObserver::init_state " << now() << endl;
-  for(set<Protocol*>::iterator pos = l.begin(); pos != l.end(); ++pos) {
+  for(set<Node*>::iterator pos = l->begin(); pos != l->end(); ++pos) {
     Tapestry *t = (Tapestry*) *pos;
     t->init_state(l);
   }
@@ -93,18 +92,18 @@ TapestryObserver::kick(Observed *o, ObserverInfo *oi )
   if( !_stabilized ) {
 
     DEBUG(1) << "TapestryObserver executing" << endl;
-    set<Protocol*> l = Network::Instance()->getallprotocols(_type);
-    set<Protocol*>::iterator pos;
+    const set<Node*> *l = Network::Instance()->getallnodes();
+    set<Node*>::iterator pos;
     
     //i only want to sort it once after all nodes have joined! 
     Tapestry *c = 0;
     if (!lid.empty()) {
       lid.clear();
-      for (pos = l.begin(); pos != l.end(); ++pos) {
+      for (pos = l->begin(); pos != l->end(); ++pos) {
 	c = (Tapestry *)(*pos);
 	assert(c);
 	// only care about live nodes
-	if( c->node()->alive() ) {
+	if( c->alive() ) {
 	  lid.push_back(c->id ());
 	}
       }
@@ -112,10 +111,10 @@ TapestryObserver::kick(Observed *o, ObserverInfo *oi )
       sort(lid.begin(), lid.end());
     }
     
-    for (pos = l.begin(); pos != l.end(); ++pos) {
+    for (pos = l->begin(); pos != l->end(); ++pos) {
       c = (Tapestry *)(*pos);
       assert(c);
-      if (c->node()->alive() && !c->stabilized(lid)) {
+      if (c->alive() && !c->stabilized(lid)) {
 	DEBUG(1) << now() << " NOT STABILIZED" << endl;
 	return;
       }
@@ -124,42 +123,40 @@ TapestryObserver::kick(Observed *o, ObserverInfo *oi )
   
     _stabilized = true;
     DEBUG(0) << now() << " STABILIZED" << endl;
-  } else {
-
-    if( !oi ) return;
-    char *event = (char *) oi;
-    assert( event );
-    string event_s(event);
-
-    if( _oracle_num > 0 ) {
-      Tapestry *n = (Tapestry *) o;
-      assert( n );
-
-      set<Protocol*> l = Network::Instance()->getallprotocols(_type);
-      set<Protocol*>::iterator pos;
-      Tapestry *c = 0;
-      if( event_s == "join" ) {
-	n->init_state(l);
-      }
-      for (pos = l.begin(); pos != l.end(); ++pos) {
-	c = (Tapestry *)(*pos);
-	assert(c);
-	// only care about live nodes
-	if( c->node()->alive() && c->ip() != n->ip() ) {
-	  if( event_s == "crash" ) {
-	    c->oracle_node_died( n->ip(), n->id(), l );
-	  } else if( event_s == "join" ) {
-	    c->oracle_node_joined(n);
-	  } else {
-	    cout << event << " die!" << endl;
-	    assert( false ); // unknown event type
-	  }
-	}
-      }
-
-    }
+    return;
   }
 
+  if( !oi )
+    return;
+
+  char *event = (char *) oi;
+  assert( event );
+  string event_s(event);
+
+  if( _oracle_num > 0 ) {
+    Tapestry *n = (Tapestry *) o;
+    assert( n );
+
+    const set<Node*> *l = Network::Instance()->getallnodes();
+    set<Node*>::iterator pos;
+    Tapestry *c = 0;
+    if( event_s == "join" ) {
+      n->init_state(l);
+    }
+    for (pos = l->begin(); pos != l->end(); ++pos) {
+      c = (Tapestry *)(*pos);
+      assert(c);
+      // only care about live nodes
+      if( c->alive() && c->ip() != n->ip() ) {
+        if( event_s == "crash" ) {
+          c->oracle_node_died( n->ip(), n->id(), l );
+        } else if( event_s == "join" ) {
+          c->oracle_node_joined(n);
+        } else {
+          cout << event << " die!" << endl;
+          assert( false ); // unknown event type
+        }
+      }
+    }
+  }
 }
-
-

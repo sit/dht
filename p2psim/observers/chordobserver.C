@@ -23,7 +23,7 @@
  */
 
 #include "chordobserver.h"
-#include "p2psim/protocol.h"
+#include "p2psim/node.h"
 #include "p2psim/args.h"
 #include "p2psim/network.h"
 #include "protocols/protocolfactory.h"
@@ -47,27 +47,22 @@ ChordObserver::Instance(Args *a)
 }
 
 
-ChordObserver::ChordObserver(Args *a)
+ChordObserver::ChordObserver(Args *a) : _type("Chord")
 {
   _instance = this;
   assert(a);
   _initnodes = atoi((*a)["initnodes"].c_str());
   _totallivenodes = 0;
 
-  set<string> all = ProtocolFactory::Instance()->getnodeprotocols();
-  assert(all.size()==1);
-  for(set<string>::iterator pos=all.begin();pos!=all.end();++pos) {
-    _type = *pos;
-  }
   assert(_type.find("Chord") == 0 || _type.find("Koorde") == 0);
 
   ids.clear();
-  set<Protocol*> l = Network::Instance()->getallprotocols(_type);
+  const set<Node*> *l = Network::Instance()->getallnodes();
   Chord::IDMap n;
-  for(set<Protocol*>::iterator pos = l.begin(); pos != l.end(); ++pos) {
+  for(set<Node*>::iterator pos = l->begin(); pos != l->end(); ++pos) {
     Chord *t = dynamic_cast<Chord*>(*pos);
     //t->registerObserver(this);
-    n.ip = t->node()->ip();
+    n.ip = t->ip();
     n.id = t->id();
     n.choices = 1;
     ids.push_back(n);
@@ -95,11 +90,12 @@ ChordObserver::~ChordObserver()
 void
 ChordObserver::init_state()
 {
-  set<Protocol*> l = Network::Instance()->getallprotocols(_type);
-  for(set<Protocol*>::iterator pos = l.begin(); pos != l.end(); ++pos) {
+  const set<Node*> *l = Network::Instance()->getallnodes();
+  for(set<Node*>::iterator pos = l->begin(); pos != l->end(); ++pos) {
     Chord *t = dynamic_cast<Chord*>(*pos);
     t->init_state(ids);
   }
+  delete l;
 }
 
 void

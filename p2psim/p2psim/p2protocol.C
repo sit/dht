@@ -24,7 +24,7 @@
 
 #include "p2protocol.h"
 
-P2Protocol::P2Protocol(Node *n) : Protocol(n)
+P2Protocol::P2Protocol(IPAddress i) : Node(i)
 {
 }
 

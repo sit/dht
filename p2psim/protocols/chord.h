@@ -60,7 +60,7 @@ public:
     bool operator==(const IDMap a) { return (a.id == id); }
   };
 
-  Chord(Node *n, Args& a, LocTable *l = NULL); 
+  Chord(IPAddress i, Args& a, LocTable *l = NULL); 
   virtual ~Chord();
   string proto_name() { return "Chord"; }
 

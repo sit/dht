@@ -24,12 +24,11 @@
 
 #include "vivaldi.h"
 
-Vivaldi::Vivaldi(Node *n, int d)
-  : Protocol(n)
+Vivaldi::Vivaldi(Node *p, int d) : Node(p->ip())
 {
   _nsamples = 0;
   _dim = d;
-  n->register_proto(this);
+  // p->register_proto(this);
 
   // Start out at a random point.
   // Units are the same as Euclidean::Coords, presumably

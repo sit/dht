@@ -29,7 +29,7 @@
 class EventFactory {
 public:
   static EventFactory* Instance();
-  Event *create(string type, vector<string>* v, string proto="");
+  Event *create(string type, vector<string>* v);
   ~EventFactory();
 
 private:

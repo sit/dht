@@ -1,5 +1,9 @@
 /*
- * Copyright (c) 2003 [NAMES_GO_HERE]
+ * Copyright (c) 2003 Thomer M. Gil (thomer@csail.mit.edu)
+ *                    Jinyang Li (jinyang@csail.mit.edu)
+ *                    Robert Morris (rtm@csail.mit.edu)
+ *                    Frans Kaashoek (kaashoek@csail.mit.edu)
+ *                    Jeremy Stribling (strib@csail.mit.edu)
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -58,60 +62,36 @@ ProtocolFactory::~ProtocolFactory()
 }
 
 
-Protocol *
-ProtocolFactory::create(string s, Node *n)
+Node *
+ProtocolFactory::create(IPAddress i)
 {
-  Protocol *p = 0;
-  Args a;
-  if(_protargs.find(s) != _protargs.end())
-    a = _protargs[s];
+  Node *p = 0;
+  string s = Node::protocol();
+  Args a = Node::args();
 
   if(s == "Chord")
-    p = New Chord(n, a);
+    p = New Chord(i, a);
   if (s == "ChordFinger")
-    p = New ChordFinger(n, a);
+    p = New ChordFinger(i, a);
   if (s == "ChordFingerPNS")
-    p = New ChordFingerPNS(n, a);
+    p = New ChordFingerPNS(i, a);
   if (s == "ChordToe")
-    p = New ChordToe(n, a);
+    p = New ChordToe(i, a);
   if (s == "ChordOneHop") 
-    p = New ChordOneHop(n,a);
+    p = New ChordOneHop(i, a);
   if (s == "Kademlia")
-    p = New Kademlia(n, a);
-  if (s == "Pastry")
-    p = New Pastry(n);
+    p = New Kademlia(i, a);
   if (s == "Tapestry")
-    p = New Tapestry(n, a);
+    p = New Tapestry(i, a);
   if (s == "Kelips")
-    p = New Kelips(n, a);
+    p = New Kelips(i, a);
   if (s == "Koorde")
-    p = New Koorde(n, a);
+    p = New Koorde(i, a);
   if (s == "SillyProtocol")
-    p = New SillyProtocol(n, a);
+    p = New SillyProtocol(i, a);
   if (s == "VivaldiTest")
-    p = New VivaldiTest(n,a);
+    p = New VivaldiTest(i, a);
   
-  _allprotocols.insert(p);
   assert(p);
-
   return p;
-}
-
-void
-ProtocolFactory::setprotargs(string p, Args a)
-{
-  _protargs[p] = a;
-  _protocols.insert(p);
-}
-
-const set<string>
-ProtocolFactory::getnodeprotocols()
-{
-  return _protocols;
-}
-
-const set<Protocol*>
-ProtocolFactory::getallprotocols()
-{
-  return _allprotocols;
 }

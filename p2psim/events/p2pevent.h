@@ -30,11 +30,10 @@
 class P2PEvent : public Event {
 public:
   P2PEvent();
-  P2PEvent(string, vector<string>*);
-  P2PEvent(Time, string, IPAddress, string, Args * = 0);
+  P2PEvent(vector<string>*);
+  P2PEvent(Time, IPAddress, string, Args * = 0);
 
   Node *node;
-  string protocol;
   P2Protocol::event_f fn;
   Args *args;
   string type;

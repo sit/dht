@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2003 [NAMES_GO_HERE]
+ * Copyright (c) 2003 Thomer M. Gil (thomer@csail.mit.edu)
+ *                    Robert Morris (rtm@csail.mit.edu)
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -26,6 +27,7 @@
 #define __NETEVENT_H
 
 #include "p2psim/event.h"
+#include "p2psim/node.h"
 
 class NetEvent : public Event {
 public:

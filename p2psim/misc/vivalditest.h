@@ -30,7 +30,7 @@
 
 class VivaldiTest : public P2Protocol {
 public:
-  VivaldiTest(Node*, Args &args);
+  VivaldiTest(IPAddress i, Args &args);
   ~VivaldiTest();
   string proto_name() { return "VivaldiTest"; }
 

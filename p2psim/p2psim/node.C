@@ -23,46 +23,122 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "threadmanager.h"
+#include "parse.h"
 #include "network.h"
+#include "args.h"
 #include "protocols/protocolfactory.h"
+#include "p2psim/threadmanager.h"
 #include <iostream>
-#include <cassert>
 using namespace std;
 
-Node::Node(IPAddress ip) : _ip(ip), _alive (true)
+string Node::_protocol = ""; 
+Args Node::_args;
+
+Node::Node(IPAddress i) : _ip(i), _alive(true), _token(1) 
 {
-  // add all the protocols
-  set<string> allprotos = ProtocolFactory::Instance()->getnodeprotocols();
-  for(set<string>::const_iterator i = allprotos.begin(); i != allprotos.end(); ++i) {
-    Protocol *prot = ProtocolFactory::Instance()->create(*i, this);
-    register_proto(prot);
-  }
 }
 
 Node::~Node()
 {
-  for(PMCI p = _protmap.begin(); p != _protmap.end(); ++p)
-    delete p->second;
-  _protmap.clear();
+}
+
+Node *
+Node::getpeer(IPAddress a)
+{
+  return Network::Instance()->getnode(a);
+}
+
+unsigned
+Node::rcvRPC(RPCSet *hset, bool &ok)
+{
+  int na = hset->size() + 1;
+  Alt *a = (Alt *) malloc(sizeof(Alt) * na); // might be big, take off stack!
+  Packet *p;
+  hash_map<unsigned, unsigned> index2token;
+
+  int i = 0;
+  for(RPCSet::const_iterator j = hset->begin(); j != hset->end(); j++) {
+    assert(_rpcmap[*j]);
+    a[i].c = _rpcmap[*j]->channel();
+    a[i].v = &p;
+    a[i].op = CHANRCV;
+    index2token[i] = *j;
+    i++;
+  }
+  a[i].op = CHANEND;
+
+  if((i = alt(a)) < 0) {
+    cerr << "interrupted" << endl;
+    assert(false);
+  }
+  assert(i < (int) hset->size());
+
+  unsigned token = index2token[i];
+  assert(token);
+  hset->erase(token);
+  _deleteRPC(token);
+  ok = p->ok();
+  delete p;
+  free(a);
+  return token;
 }
 
 
 void
-Node::register_proto(Protocol *p)
+Node::_deleteRPC(unsigned token)
 {
-  string name = p->proto_name();
-  if(_protmap[name]){
-    cerr << "warning: " << name << " already running on node " << ip() << endl;
-    delete _protmap[name];
-  }
-  _protmap[name] = p;
+  assert(_rpcmap.find(token) != _rpcmap.end());
+  delete _rpcmap[token];
+  _rpcmap.erase(token);
 }
+
+
+void
+Node::parse(char *filename)
+{
+  ifstream in(filename);
+  if(!in) {
+    cerr << "no such file " << filename << endl;
+    threadexitsall(0);
+  }
+
+  string line;
+
+  hash_map<string, Args> xmap;
+  while(getline(in,line)) {
+    vector<string> words = split(line);
+
+    // skip empty lines and commented lines
+    if(words.empty() || words[0][0] == '#')
+      continue;
+
+    // read protocol string
+    _protocol = words[0];
+    words.erase(words.begin());
+
+    // if it has no arguments, you still need to register the prototype
+    // if(!words.size())
+      // xmap[protocol];
+
+    // this is a variable assignment
+    while(words.size()) {
+      vector<string> xargs = split(words[0], "=");
+      words.erase(words.begin());
+      _args.insert(make_pair(xargs[0], xargs[1]));
+    }
+
+    break;
+  }
+
+  in.close();
+}
+
+
 
 // Called by NetEvent::execute() to deliver a packet to a Node,
 // after Network processing (i.e. delays and failures).
 void
-Node::got_packet(Packet *p)
+Node::packet_handler(Packet *p)
 {
   if(p->reply()){
     // RPC reply, give to waiting thread.
@@ -115,8 +191,6 @@ Node::_doRPC_receive(RPCHandle *rpch)
   return ok;
 }
 
-
-
 //
 // Node::got_packet() invokes Receive() when an RPC request arrives.
 // The reply goes back directly to the appropriate channel.
@@ -125,8 +199,8 @@ void
 Node::Receive(void *px)
 {
   Packet *p = (Packet *) px;
-  Node *n = Network::Instance()->getnode(p->dst());
-  assert(n);
+  Node *proto = Network::Instance()->getnode(p->dst());
+  assert(proto);
 
   // make reply
   Packet *reply = New Packet;
@@ -134,7 +208,7 @@ Node::Receive(void *px)
   reply->_src = p->_dst;
   reply->_dst = p->_src;
 
-  if (n->alive ()) {
+  if (proto->alive ()) {
     (p->_fn)(p->_args);
     reply->_ok = true;
   } else {

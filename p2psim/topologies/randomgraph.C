@@ -25,6 +25,7 @@
 #include "randomgraph.h"
 #include "p2psim/network.h"
 #include "p2psim/parse.h"
+#include "protocols/protocolfactory.h"
 #include <iostream>
 using namespace std;
 
@@ -61,11 +62,11 @@ RandomGraph::parse(ifstream &ifs)
     }
 
     // add the node to the network
-    Node *n = New Node(ipaddr);
-    send(Network::Instance()->nodechan(), &n);
+    Node *p = ProtocolFactory::Instance()->create(ipaddr);
+    send(Network::Instance()->nodechan(), &p);
 
     // remember the new node in DVGraph's tables
-    add_node(n->ip());
+    add_node(p->ip());
   }
 
   // Initalize links.

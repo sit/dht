@@ -25,6 +25,7 @@
 #include "p2psim/topology.h"
 #include "p2psim/network.h"
 #include "p2psim/parse.h"
+#include "protocols/protocolfactory.h"
 #include "e2egraph.h"
 
 E2EGraph::E2EGraph(vector<string> *v)
@@ -77,12 +78,11 @@ E2EGraph::parse(ifstream &ifs)
       assert(ipaddr > 0 && ipaddr <= _num);
 
       // what kind of node?
-      Node *n = New Node(ipaddr);
-
+      Node *p = ProtocolFactory::Instance()->create(ipaddr);
       assert(!Network::Instance()->getnode(ipaddr));
 
       // add the node to the network
-      send(Network::Instance()->nodechan(), &n);
+      send(Network::Instance()->nodechan(), &p);
 
     } else {
 

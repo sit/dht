@@ -49,11 +49,6 @@ FileEventGenerator::run()
 
   string line;
 
-  set<string> allprotos = ProtocolFactory::Instance()->getnodeprotocols();
-  if (allprotos.size() > 1) {
-    cerr << "warning: running two diffferent protocols on the same node" << endl;
-  }
-
   while(getline(in,line)) {
     vector<string> words = split(line);
 
@@ -65,11 +60,10 @@ FileEventGenerator::run()
     // and let that event parse the rest of the line
     string event_type = words[0];
     words.erase(words.begin());
-    for (set<string>::const_iterator i = allprotos.begin(); i != allprotos.end(); ++i) {
-      Event *e = EventFactory::Instance()->create(event_type, &words, *i);
-      assert(e);
-      add_event(e);
-    }
+
+    Event *e = EventFactory::Instance()->create(event_type, &words);
+    assert(e);
+    add_event(e);
   }
 
   EventQueue::Instance()->go();

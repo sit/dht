@@ -51,7 +51,10 @@ Network::Network(Topology *top, FailureModel *fm) : _top(0),
   _failure_model = fm;
   assert(_failure_model);
 
-  _all_protos = NULL;
+  _all_ips = New set<IPAddress>;
+  assert(_all_ips);
+  _all_nodes = New set<Node*>;
+  assert(_all_nodes);
 
   // get the nodes
   thread();
@@ -60,41 +63,32 @@ Network::Network(Topology *top, FailureModel *fm) : _top(0),
 
 Network::~Network()
 {
-  for(NMCI p = _nodes.begin(); p != _nodes.end(); ++p)
+  for(hash_map<IPAddress, Node*>::const_iterator p = _nodes.begin(); p != _nodes.end(); ++p)
     delete p->second;
   chanfree(_nodechan);
   delete _top;
-  delete _all_protos;
   delete _failure_model;
+  delete _all_ips;
+  delete _all_nodes;
 }
 
 
-set<Protocol*>
-Network::getallprotocols(string proto)
+const set<Node*> *
+Network::getallnodes()
 {
-
-  // NOTE: Caching this completely breaks the outdated assumption that we
-  // might use this simulator for simulating different types of protocols 
-  // at a time.  We could make a hash table here, but that would just 
-  // be reinforcing this deprecated idea.
-
-  if( _all_protos == NULL ) {
-    _all_protos = New set<Protocol *>;
-    assert( _all_protos );
-    for(NMCI p = _nodes.begin(); p != _nodes.end(); ++p)
-      _all_protos->insert(p->second->getproto(proto));
-  }
-  return *_all_protos;
+  if(!_all_nodes->size())
+    for(hash_map<IPAddress, Node*>::const_iterator p = _nodes.begin(); p != _nodes.end(); ++p)
+      _all_nodes->insert(p->second);
+  return _all_nodes;
 }
 
-set<IPAddress>
+const set<IPAddress> *
 Network::getallips()
 {
-  set<IPAddress> il; // XXX: should we just New this? return may be expensive
-
-  for(NMCI p = _nodes.begin(); p != _nodes.end(); ++p)
-    il.insert(p->first);
-  return il;
+  if(!_all_ips->size())
+    for(hash_map<IPAddress, Node*>::const_iterator p = _nodes.begin(); p != _nodes.end(); ++p)
+      _all_ips->insert(p->first);
+  return _all_ips;
 }
 
 // Protocols should call send() to send a packet into the network.
@@ -103,12 +97,12 @@ Network::send(Packet *p)
 {
   extern bool with_failure_model;
 
-  Node *dstnode = _nodes[p->dst()];
-  Node *srcnode = _nodes[p->src()];
-  assert (dstnode);
-  assert (srcnode);
+  Node *dst = _nodes[p->dst()];
+  Node *src = _nodes[p->src()];
+  assert (dst);
+  assert (src);
 
-  Time latency = _top->latency(srcnode->ip(), dstnode->ip(), p->reply());
+  Time latency = _top->latency(src->ip(), dst->ip(), p->reply());
 
   // p->ok is set on the receiving side, so if it's false, this must be a
   // reply.  punish the packet by delaying it according to the failure model.
@@ -118,7 +112,7 @@ Network::send(Packet *p)
   NetEvent *ne = New NetEvent();
   assert(ne);
   ne->ts = now() + latency;
-  ne->node = dstnode;
+  ne->node = dst;
   ne->p = p;
   EventQueue::Instance()->add_event(ne);
 }

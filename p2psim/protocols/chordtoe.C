@@ -126,8 +126,8 @@ LocTableToe::next_hop(Chord::CHID key)
 
 }
 
-ChordToe::ChordToe (Node *n, Args &a) : 
-    ChordFingerPNS (n, a, New LocTableToe ()),  _numtoes (16)
+ChordToe::ChordToe (IPAddress i, Args &a) : 
+    ChordFingerPNS (i, a, New LocTableToe ()),  _numtoes (16)
 
 {
   _lookup_style = a.nget<uint>("lookup_style",0,10);

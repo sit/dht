@@ -25,7 +25,6 @@
 #include "eventfactory.h"
 #include "p2pevent.h"
 #include "simevent.h"
-#include "p2psim/oldobserveevent.h"
 #include <iostream>
 using namespace std;
 
@@ -49,22 +48,17 @@ EventFactory::~EventFactory()
 
 
 Event *
-EventFactory::create(string type, vector<string> *v, string proto)
+EventFactory::create(string type, vector<string> *v)
 {
   Event *e = 0;
-  if (type == "node") {
-    assert(proto != "");
-    e = New P2PEvent(proto, v);
-  }
+  if (type == "node")
+    e = New P2PEvent(v);
   
-  else if(type == "simulator") {
+  else if(type == "simulator")
     e = New SimEvent(v);
-  }
 
-  else if(type == "observe") {
-    assert(proto != "");
-    e = New OldobserveEvent(proto, v);
-  }
+  // else if(type == "observe")
+    // e = New OldobserveEvent(v);
   
   else
     cerr << "unknown event type" << endl;

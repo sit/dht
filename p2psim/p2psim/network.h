@@ -27,7 +27,7 @@
 #define __NETWORK_H
 
 #include "topology.h"
-#include "protocol.h"
+#include "node.h"
 #include "failuremodel.h"
 #include <list>
 using namespace std;
@@ -42,8 +42,9 @@ public:
   // observers
   Node* getnode(IPAddress id) { return _nodes[id]; }
   Topology *gettopology() { return _top; }
-  set<Protocol*> getallprotocols(string = "");
-  set<IPAddress> getallips();
+  const set<Node*> *getallnodes();
+  const set<IPAddress> *getallips();
+  unsigned size() { return _nodes.size(); }
 
   ~Network();
 
@@ -53,13 +54,13 @@ private:
   virtual void run();
 
   static Network *_instance;
-  typedef hash_map<IPAddress, Node*> NM;
-  typedef NM::const_iterator NMCI;
-  NM _nodes;
+
+  hash_map<IPAddress, Node*> _nodes;
   Topology *_top;
   FailureModel *_failure_model;
 
-  set<Protocol*> *_all_protos;
+  set<Node*> *_all_nodes;
+  set<IPAddress> *_all_ips;
 
   Channel *_nodechan;
 };

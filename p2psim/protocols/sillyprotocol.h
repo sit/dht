@@ -30,7 +30,7 @@ using namespace std;
 
 class SillyProtocol : public P2Protocol {
 public:
-  SillyProtocol(Node*, Args);
+  SillyProtocol(IPAddress, Args);
   ~SillyProtocol();
 
   string proto_name() { return "SillyProtocol"; }

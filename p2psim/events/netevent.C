@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2003 [NAMES_GO_HERE]
+ * Copyright (c) 2003 Thomer M. Gil (thomer@csail.mit.edu)
+ *                    Robert Morris (rtm@csail.mit.edu)
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -36,5 +37,5 @@ NetEvent::~NetEvent()
 void
 NetEvent::execute()
 {
-  node->got_packet(p);
+  node->packet_handler(p);
 }

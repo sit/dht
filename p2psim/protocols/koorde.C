@@ -30,7 +30,7 @@ extern bool static_sim;
 
 #define INIT 1
 
-Koorde::Koorde(Node *n, Args &a) : Chord(n, a) 
+Koorde::Koorde(IPAddress i, Args &a) : Chord(i, a) 
 {
   logbase = a.nget<uint>("base",2,10);
   resilience = a.nget<uint>("successors", 1, 10);
@@ -184,7 +184,7 @@ Koorde::find_successors(CHID key, uint m, uint all, uint type, uint *lookup_int,
     bool ok = doRPC(r.next.ip, &Koorde::koorde_next, &a, &r);
 
     if ((!ok) || (r.next.ip == 0)) {
-      if (!node()->alive()) {
+      if (!alive()) {
 	r.v.clear();
 	break;
       }
@@ -367,7 +367,7 @@ Koorde::fix_debruijn ()
   gsa.m = _nsucc;
   //record_stat();
   ok = doRPC(dpred.ip, &Chord::get_successor_list_handler, &gsa,&gsr);
-  if (!node()->alive()) return;
+  if (!alive()) return;
   if ( ok && gsr.v.size() > 0 && ConsistentHash::between(dpred.id, gsr.v[0].id, debruijnpred)) {
     loctable->add_node(dpred);
     for (uint i = 0; i < gsr.v.size(); i++) 
@@ -389,7 +389,7 @@ NEXT:
   assert(fingers <= _nsucc);
   //record_stat();
   ok = doRPC(dpred.ip, &Chord::get_successor_list_handler, &gsa, &gsr);
-  if (!node()->alive()) return;
+  if (!alive()) return;
   if (ok && gsr.v.size() > 0 && ConsistentHash::betweenrightincl(dpred.id, gsr.v[0].id, debruijn)) {
     loctable->add_node(dpred);
     for (uint i = 0; i < gsr.v.size(); i++) {
@@ -451,7 +451,7 @@ void
 Koorde::reschedule_debruijn_stabilizer(void *x)
 {
   assert(!static_sim);
-  if (!node()->alive()) {
+  if (!alive()) {
     _stab_debruijn_running = false;
     return;
   }

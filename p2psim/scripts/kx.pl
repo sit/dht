@@ -52,8 +52,10 @@ my $param_lists = {
     [
      [ "alpha", 1, 2, 3, 4, 5 ],
      [ "k", 8, 16, 32 ],
-     [ "stabilize_timer", 2000, 4000, 8000, 16000, 32000 ],
-     [ "refresh_rate",   2000, 4000, 8000, 16000, 32000 ],
+     [ "stabilize_timer", 32000 ],
+     [ "refresh_rate", 32000 ],
+     # [ "stabilize_timer", 2000, 4000, 8000, 16000, 32000 ],
+     # [ "refresh_rate",   2000, 4000, 8000, 16000, 32000 ],
     ],
 };
 
@@ -111,7 +113,7 @@ for($iters = 0; $iters < 500; $iters++){
     }
 
     open(EF, ">$ef");
-    print EF "generator ChurnEventGenerator proto=$protocol ipkeys=1 lifemean=$lifemean deathmean=$deathmean lookupmean=$lookupmean exittime=$exittime\n";
+    print EF "generator ChurnEventGenerator ipkeys=1 lifemean=$lifemean deathmean=$deathmean lookupmean=$lookupmean exittime=$exittime\n";
     $observer and print EF "observer $protocol" . "Observer initnodes=1\n";
     close(EF);
 

@@ -154,14 +154,14 @@ private:
 // }}}
 // {{{ public
 public:
-  Kademlia(Node*, Args);
+  Kademlia(IPAddress, Args);
   ~Kademlia();
 
   string proto_name() { return "Kademlia"; }
   virtual void join(Args*);
   virtual void crash(Args*);
   virtual void lookup(Args*);
-  virtual void initstate(set<Protocol*>*);
+  virtual void initstate(const set<Node*>*);
 
   //
   // functors
@@ -299,7 +299,6 @@ public:
   //
 
   // hack to pre-initialize k-buckets
-  void init_state(list<Protocol*>);
   void reschedule_stabilizer(void*);
   friend class k_bucket;
 

@@ -34,6 +34,7 @@ using namespace std;
 class SillyEventGenerator : public EventGenerator {
 public:
   SillyEventGenerator(Args *);
+  ~SillyEventGenerator();
   virtual void kick(Observed *, ObserverInfo*);
   virtual void run();
 
@@ -41,7 +42,7 @@ private:
   void bullshit();
   string _proto;
   string _exittime;
-  set<IPAddress> _ips;
+  const set<IPAddress> *_ips;
   Time _prevtime;
 };
 

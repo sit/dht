@@ -26,8 +26,7 @@
 
 extern bool static_sim;
 
-ChordFinger::ChordFinger(Node *n, Args &a,
-			 LocTable *l) : Chord(n,a,l)  
+ChordFinger::ChordFinger(IPAddress i, Args &a, LocTable *l) : Chord(i, a, l)  
 {
   _base = a.nget<uint>("base",2,10);
 
@@ -162,7 +161,7 @@ void
 ChordFinger::reschedule_finger_stabilizer(void *x)
 {
   //printf("%s start stabilizing\n",ts());
-  if (!node()->alive()) {
+  if (!alive()) {
     _stab_finger_running = false;
     return;
   }

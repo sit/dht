@@ -30,14 +30,14 @@
 #include <cassert>
 
 // Compute Vivaldi synthetic coordinates.
-// Protocol-independent: doesn't care where the measurements
+// Node-independent: doesn't care where the measurements
 // come from.
 // Indexed by IPAddress.
 // Anyone can create a Vivaldi, call sample() after each
 // RPC, and then call my_location().
 // Or you can use Vivaldi::doRPC.
 
-class Vivaldi : Protocol {
+class Vivaldi : Node {
  public:
   Vivaldi(Node *n, int d);
   virtual ~Vivaldi();
@@ -241,7 +241,7 @@ bool Vivaldi::doRPC(IPAddress dst, BT *target, void (BT::*fn)(AT*, RT*),
   assert(t->_vtarget);
   
   Time before = now();
-  bool ok = node()->_doRPC(dst, Thunk::thunk, (void *) t);
+  bool ok = _doRPC(dst, Thunk::thunk, (void *) t);
   if(ok)
     sample(dst, t->_c, (now() - before));
 

@@ -22,7 +22,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-# $Id: run-simulations.pl,v 1.6 2003/12/02 20:11:53 strib Exp $
+# $Id: run-simulations.pl,v 1.7 2003/12/06 16:32:35 thomer Exp $
 
 use strict;
 use Getopt::Long;
@@ -221,7 +221,7 @@ if( $protocol eq "Kademlia" or $protocol eq "Kelips" ) {
     $ipkeys = 1;
 }
 
-print EF "generator $eg_type proto=$protocol ipkeys=$ipkeys " .
+print EF "generator $eg_type ipkeys=$ipkeys " .
     "lifemean=$lifemean deathmean=$deathmean lookupmean=$lookupmean " . 
     "exittime=$exittime ";
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 [NAMES_GO_HERE]
+ * Copyright (c) 2003 Thomer M. Gil
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -33,17 +33,12 @@ using namespace std;
 class ProtocolFactory {
 public:
   static ProtocolFactory* Instance();
-  Protocol *create(string, Node*);
-  void setprotargs(string, Args);
-  const set<string> getnodeprotocols();
-  const set<Protocol*> getallprotocols();
+  Node *create(IPAddress);
   ~ProtocolFactory();
 
 private:
   static ProtocolFactory *_instance;
-  hash_map<string, Args> _protargs;
   set<string> _protocols;
-  set<Protocol*> _allprotocols;
 
   ProtocolFactory();
 };

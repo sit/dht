@@ -30,8 +30,8 @@ using namespace std;
 KademliaObserver::KademliaObserver(Args *a) : _type("Kademlia")
 {
   // register as an observer of all Kadmelia instances
-  set<Protocol*> l = Network::Instance()->getallprotocols(_type);
-  for(set<Protocol*>::iterator pos = l.begin(); pos != l.end(); ++pos) {
+  const set<Node*> *l = Network::Instance()->getallnodes();
+  for(set<Node*>::iterator pos = l->begin(); pos != l->end(); ++pos) {
     Kademlia *k = (Kademlia*) *pos;
     k->registerObserver(this);
     DEBUG(1) << "KademliaObserver registered with " << k->id() << endl;
@@ -53,20 +53,22 @@ KademliaObserver::kick(Observed *, ObserverInfo *)
 bool
 KademliaObserver::stabilized()
 {
-  set<Protocol*> allprotos = Network::Instance()->getallprotocols(_type);
-  set<Protocol*> liveprotos;
+  const static set<Node*> *allprotos = 0;
+  set<Node*> liveprotos;
   vector<Kademlia::NodeID> liveIDs;
 
-  for(set<Protocol*>::const_iterator i = allprotos.begin(); i != allprotos.end(); ++i) {
+  if(!allprotos)
+    allprotos = Network::Instance()->getallnodes();
+
+  for(set<Node*>::const_iterator i = allprotos->begin(); i != allprotos->end(); ++i) {
     Kademlia *k = (Kademlia *)(*i);
-    if(k->node()->alive()) {
+    if(k->alive()) {
       liveprotos.insert(*i);
       liveIDs.push_back(k->id());
     }
   }
 
-
-  for(set<Protocol*>::const_iterator i = liveprotos.begin(); i != liveprotos.end(); ++i) {
+  for(set<Node*>::const_iterator i = liveprotos.begin(); i != liveprotos.end(); ++i) {
     Kademlia *k = (Kademlia *)(*i);
     if (!k->stabilized(&liveIDs)) {
       DEBUG(1) << now() << " NOT STABILIZED" << endl;

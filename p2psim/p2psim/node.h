@@ -23,58 +23,125 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef __NODE_H
-#define __NODE_H
+#ifndef __PROTOCOL_H
+#define __PROTOCOL_H
 
-#include <assert.h>
+#include "eventqueue.h"
 #include "rpchandle.h"
 #include "observed.h"
-#include "p2psim_hashmap.h"
+#include "p2psim/args.h"
+#include <assert.h>
+#include <stdio.h>
 
-class Protocol;
-
-class Node {
+// A Node is the superclass of
+// The point is, for example, to help the Chord object on
+// one node find the Chord on another node by calling
+// getpeer(IPAddress). P2Node has the DHT-specific
+// abstract methods.
+class Node : public Observed {
 public:
   Node(IPAddress);
   virtual ~Node();
+  static void Node::parse(char*);
+  virtual void initstate(const set<Node*>*) {};
 
   IPAddress ip() { return _ip; }
-  void register_proto(Protocol *);
-  Protocol *getproto(string p) { return _protmap[p]; }
-  bool _doRPC(IPAddress, void (*fn)(void *), void *args);
+  void set_alive(bool a) { _alive = a;}
+  bool alive () { return _alive; }
+  void packet_handler(Packet *);
+  static void Receive(void*);
+
+  // the One Node that we're running and its arguments
+  static string protocol() { return _protocol; }
+  static Args args() { return _args; }
+
+protected:
+  typedef set<unsigned> RPCSet;
+
+  // find peer protocol of my sub-type on a distant node.
+  Node *getpeer(IPAddress);
+
+  // Why are we forbidding non-Nodes from using delaycb()?
+  // Use of a template allows us to type-check the argument
+  // to fn(), and to check fn() is a member
+  // of the same sub-class of Node as the caller.
+  template<class BT, class AT>
+    void delaycb(int d, void (BT::*fn)(AT), AT args) {
+    // Compile-time check: does BT inherit from Node?
+    Node *dummy = (BT *) 0; dummy = dummy;
+
+    class XEvent : public Event {
+    public:
+      XEvent() : Event( "XEvent" ) {};
+      BT *_target;
+      void (BT::*_fn)(AT);
+      AT _args;
+    private:
+      void execute() {
+        (_target->*_fn)(_args);
+      };
+    };
+
+    XEvent *e = New XEvent;
+    e->ts = now() + d;
+    e->_target = dynamic_cast<BT*>(this);
+    assert(e->_target);
+    e->_fn = fn;
+    e->_args = args;
+
+    EventQueue::Instance()->add_event(e);
+  }
 
 
-  // This doRPC is not tied to Protocols, but it does require you
-  // to specify the target object on the remote node.
+  // Send an RPC from a Node on one Node to a method
+  // of the same Node sub-class with a different ip.
   template<class BT, class AT, class RT>
-  bool Node::doRPC(IPAddress dst, BT *target, void (BT::*fn)(AT*, RT*),
-      AT *args, RT *ret)
+  bool doRPC(IPAddress dst, void (BT::* fn)(AT *, RT *), AT *args, RT *ret)
   {
-    Thunk<BT, AT, RT> *t = _makeThunk(dst, target, fn, args, ret);
+    assert(dst > 0);
+    Thunk<BT, AT, RT> *t = _makeThunk(dst, dynamic_cast<BT*>(getpeer(dst)), fn, args, ret);
     bool ok = _doRPC(dst, Thunk<BT, AT, RT>::thunk, (void *) t);
     delete t;
     return ok;
   }
-  
-  // This doRPC is not tied to Protocols, but it does require you
-  // to specify the target object on the remote node.
-  // It's asynchronous
+
+  // Same as doRPC, but this one is asynchronous
   template<class BT, class AT, class RT>
-  RPCHandle* asyncRPC(IPAddress dst, BT *target, void (BT::*fn)(AT*, RT*),
-      AT *args, RT *ret)
+  unsigned asyncRPC(IPAddress dst,
+      void (BT::* fn)(AT *, RT *), AT *args, RT *ret, unsigned token = 0)
   {
-    Thunk<BT, AT, RT> *t = _makeThunk(dst, target, fn, args, ret);
+    assert(dst);
+    if(token)
+      assert(_rpcmap.find(token) == _rpcmap.end());
+    else
+      while(!token || _rpcmap.find(token) != _rpcmap.end())
+        token = _token++;
+
+    Thunk<BT, AT, RT> *t = _makeThunk(dst, dynamic_cast<BT*>(getpeer(dst)), fn, args, ret);
     RPCHandle *rpch = _doRPC_send(dst, Thunk<BT, AT, RT>::thunk, Thunk<BT, AT, RT>::killme, (void *) t);
-    return rpch;
+
+    if(!rpch)
+      return 0;
+
+    _rpcmap[token] = rpch;
+    return token;
   }
 
-  void set_alive(bool a) { _alive = a;}
-  bool alive () { return _alive; }
-  void got_packet(Packet *);
-  static void Receive(void*);
+  // returns one of the RPCHandle's for which a reply has arrived. BLOCKING.
+  unsigned rcvRPC(RPCSet*, bool&);
 
 private:
+  IPAddress _ip;
+  bool _alive;
 
+  hash_map<unsigned, RPCHandle*> _rpcmap;
+  unsigned _token;
+  void _deleteRPC(unsigned);
+
+
+  //
+  // RPC machinery
+  //
   template<class BT, class AT, class RT>
   class Thunk {
   public:
@@ -94,9 +161,10 @@ private:
   };
 
   // implements _doRPC
+  friend class Vivaldi;
+  bool _doRPC(IPAddress, void (*fn)(void *), void *args);
   RPCHandle* _doRPC_send(IPAddress, void (*)(void *), void (*)(void*), void *);
   bool _doRPC_receive(RPCHandle*);
-
 
   // creates a Thunk object with the necessary croft for an RPC
   template<class BT, class AT, class RT>
@@ -116,12 +184,9 @@ private:
     return t;
   }
 
-  IPAddress _ip;        // my ip address
-  bool _alive;
-
-  typedef hash_map<string, Protocol*> PM;
-  typedef PM::const_iterator PMCI;
-  PM _protmap;
+  // The One Protocol and Its Arguments
+  static string _protocol;
+  static Args _args;
 };
 
-#endif // __NODE_H
+#endif // __PROTOCOL_H

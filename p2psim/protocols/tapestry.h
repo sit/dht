@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.22 2003/11/27 21:24:00 strib Exp $ */
+/* $Id: tapestry.h,v 1.23 2003/12/06 16:32:35 thomer Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -41,7 +41,7 @@ public:
     STAT_SIZE
   };
 
-  Tapestry(Node *n, Args a);
+  Tapestry(IPAddress i, Args a);
   virtual ~Tapestry();
   string proto_name() { return "Tapestry"; }
 
@@ -68,7 +68,7 @@ public:
 
   bool stabilized(vector<GUID> lid);
 
-  void oracle_node_died( IPAddress ip, GUID id, set<Protocol*> );
+  void oracle_node_died( IPAddress ip, GUID id, const set<Node*>* );
   void oracle_node_joined( Tapestry *t );
 
   void check_rt(void *x);
@@ -198,7 +198,7 @@ public:
 
   void handle_repair(repair_args *args, repair_return *ret);
 
-  void init_state( set<Protocol*> );
+  void init_state( const set<Node*>* );
 
 private:
 

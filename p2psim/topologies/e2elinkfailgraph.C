@@ -26,6 +26,7 @@
 #include "p2psim/topology.h"
 #include "p2psim/network.h"
 #include "p2psim/parse.h"
+#include "protocols/protocolfactory.h"
 
 #include "e2elinkfailgraph.h"
 #include <math.h>
@@ -116,13 +117,13 @@ E2ELinkFailGraph::parse(ifstream &ifs)
       assert(ipaddr > 0 && ipaddr <= _num_nodes);
       
       // what kind of node?
-      Node *n = New Node(ipaddr);
+      Node *p = ProtocolFactory::Instance()->create(ipaddr);
       
       // make sure node doesn't exist already
       assert(!Network::Instance()->getnode(ipaddr));
       
       // add the node to the network
-      send(Network::Instance()->nodechan(), &n);
+      send(Network::Instance()->nodechan(), &p);
       
       // otherwise, line is a link record
     } else {

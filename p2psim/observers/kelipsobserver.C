@@ -23,7 +23,7 @@
  */
 
 #include "kelipsobserver.h"
-#include "p2psim/protocol.h"
+#include "p2psim/node.h"
 #include "p2psim/args.h"
 #include "p2psim/network.h"
 #include <iostream>
@@ -51,8 +51,8 @@ KelipsObserver::KelipsObserver(Args *a)
 {
   _initnodes = atoi((*a)["initnodes"].c_str());
 
-  set<Protocol*> l = Network::Instance()->getallprotocols(_type);
-  for(set<Protocol*>::iterator pos = l.begin(); pos != l.end(); ++pos) {
+  const set<Node*> *l = Network::Instance()->getallnodes();
+  for(set<Node*>::iterator pos = l->begin(); pos != l->end(); ++pos) {
     Kelips *t = (Kelips*) *pos;
     t->registerObserver(this);
   }
@@ -65,8 +65,8 @@ KelipsObserver::~KelipsObserver()
 void
 KelipsObserver::init_state()
 {
-  set<Protocol*> l = Network::Instance()->getallprotocols(_type);
-  for(set<Protocol*>::iterator pos = l.begin(); pos != l.end(); ++pos) {
+  const set<Node*> *l = Network::Instance()->getallnodes();
+  for(set<Node*>::iterator pos = l->begin(); pos != l->end(); ++pos) {
     Kelips *k = dynamic_cast<Kelips*>(*pos);
     k->init_state(l);
   }

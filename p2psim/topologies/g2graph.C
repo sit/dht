@@ -25,6 +25,7 @@
 #include "g2graph.h"
 #include "p2psim/topology.h"
 #include "p2psim/network.h"
+#include "protocols/protocolfactory.h"
 #include "p2psim/parse.h"
 #include <iostream>
 using namespace std;
@@ -63,10 +64,10 @@ G2Graph::parse(ifstream &ifs)
       assert(ipaddr > 0 && ipaddr <= _num);
 
       // what kind of node?
-      Node *n = New Node(ipaddr);
+      Node *p = ProtocolFactory::Instance()->create(ipaddr);
 
       // add the node to the network
-      send(Network::Instance()->nodechan(), &n);
+      send(Network::Instance()->nodechan(), &p);
 
     } else { 
       int lat = atoi(words[0].c_str());

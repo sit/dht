@@ -32,15 +32,17 @@ using namespace std;
 
 SillyEventGenerator::SillyEventGenerator(Args *args)
 {
-  _proto = (*args)["proto"];
-  assert(_proto != "");
-
   _exittime = (*args)["exittime"];
   assert(_exittime != "");
 
   _ips = Network::Instance()->getallips();
   EventQueue::Instance()->registerObserver(this);
   _prevtime = 0;
+}
+
+SillyEventGenerator::~SillyEventGenerator()
+{
+  delete _ips;
 }
 
 void
@@ -72,8 +74,8 @@ void
 SillyEventGenerator::bullshit()
 {
   Args *a = New Args();
-  char key[32]; sprintf(key, "%d", (unsigned) (random() % _ips.size())+1);
+  char key[32]; sprintf(key, "%d", (unsigned) (random() % _ips->size())+1);
   (*a)["ip"] = string(key);
-  P2PEvent *e = New P2PEvent(now()+1, _proto, ((random() % _ips.size())+1), "lookup", a);
+  P2PEvent *e = New P2PEvent(now()+1, ((random() % _ips->size())+1), "lookup", a);
   add_event(e);
 }

@@ -63,7 +63,6 @@ public:
 private:
   IPAddress _wkn;
   string _wkn_string;
-  string _proto;
   unsigned _lifemean;
   unsigned _deathmean;
   unsigned _lookupmean;

@@ -25,6 +25,7 @@
 #include "p2psim/network.h"
 #include "p2psim/parse.h"
 #include "p2psim/topology.h"
+#include "protocols/protocolfactory.h"
 #include "euclidean.h"
 #include <cmath>
 #include <iostream>
@@ -81,14 +82,14 @@ Euclidean::parse(ifstream &ifs)
     c.second = atoi(coords[1].c_str());
 
     // what kind of node?
-    Node *n = New Node(ipaddr);
+    Node *p = ProtocolFactory::Instance()->create(ipaddr);
 
     // add the new node it to the topology
-    if(_nodes.find(n->ip()) != _nodes.end())
+    if(_nodes.find(p->ip()) != _nodes.end())
       cerr << "warning: node " << ipaddr << " already added! (" <<words[0]<<")" << endl;
-    _nodes[n->ip()] = c;
+    _nodes[p->ip()] = c;
 
     // add the node to the network
-    send(Network::Instance()->nodechan(), &n);
+    send(Network::Instance()->nodechan(), &p);
   }
 }

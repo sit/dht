@@ -32,8 +32,8 @@ using namespace std;
 
 vector<VivaldiTest*> VivaldiTest::_all;
 
-VivaldiTest::VivaldiTest(Node *n, Args &args)
-  : P2Protocol(n), _next_neighbor(0), _neighbors(0)
+VivaldiTest::VivaldiTest(IPAddress i, Args &args)
+  : P2Protocol(i), _next_neighbor(0), _neighbors(0)
 {
   _vo = args.nget<int>("vivaldi-algorithm", 10);
   _dim = args.nget<int>("model-dimension", 10);
@@ -58,18 +58,18 @@ VivaldiTest::join(Args *args)
 
 
   switch(_vo){
-  case 1: _vivaldi = New Vivaldi1(node(),_dim); break;
-  case 2: _vivaldi = New Vivaldi2(node(),_dim); break;
-  case 3: _vivaldi = New Vivaldi3(node(),_dim); break;
-  case 4: _vivaldi = New Vivaldi4(node(),_dim); break;
-  case 5: _vivaldi = New Vivaldi5(node(),_dim); break;
-  case 6: _vivaldi = New Vivaldi6(node(),_dim); break;
-  case 7: _vivaldi = New Vivaldi7(node(),_dim); break;
-  case 8: _vivaldi = New Vivaldi8(node(),_dim); break;
-  case 9: _vivaldi = New Vivaldi9(node(),_dim); break;
+  case 1: _vivaldi = New Vivaldi1(this,_dim); break;
+  case 2: _vivaldi = New Vivaldi2(this,_dim); break;
+  case 3: _vivaldi = New Vivaldi3(this,_dim); break;
+  case 4: _vivaldi = New Vivaldi4(this,_dim); break;
+  case 5: _vivaldi = New Vivaldi5(this,_dim); break;
+  case 6: _vivaldi = New Vivaldi6(this,_dim); break;
+  case 7: _vivaldi = New Vivaldi7(this,_dim); break;
+  case 8: _vivaldi = New Vivaldi8(this,_dim); break;
+  case 9: _vivaldi = New Vivaldi9(this,_dim); break;
   case 10: {
     cout << ip() << " joined: " << " t = " << _timestep << "\n";
-    _vivaldi = New Vivaldi10(node(), _dim, _timestep, _adaptive); 
+    _vivaldi = New Vivaldi10(this, _dim, _timestep, _adaptive); 
     break;
   }
   default:
@@ -93,11 +93,11 @@ VivaldiTest::addNeighbors ()
     
   _nip.clear ();
   
-  uint next_index = node()->ip() + 1;
-  //  cerr << node()->ip() << "'s neighbors are ";
+  uint next_index = this->ip() + 1;
+  //  cerr << this->ip() << "'s neighbors are ";
   while ((int)_nip.size () < _neighbors) {
     if (next_index >= _all.size ()) next_index = 0;
-    _nip.push_back(_all[random () % _all.size ()]->node()->ip());
+    _nip.push_back(_all[random () % _all.size ()]->ip());
     //    cerr << _nip.back () << " ";
     next_index++;
   }
@@ -108,7 +108,7 @@ char *
 VivaldiTest::ts()
 {
   static char buf[50];
-  sprintf(buf, "%llu Vivaldi(%u)", now(), node()->ip());
+  sprintf(buf, "%llu Vivaldi(%u)", now(), this->ip());
   return buf;
 }
 
@@ -118,10 +118,10 @@ VivaldiTest::real()
   Vivaldi::Coord c;
   Topology *t = Network::Instance()->gettopology();
   if(Euclidean *xt = dynamic_cast<Euclidean*>(t)){
-    Euclidean::Coord rc = xt->getcoords(node()->ip());
+    Euclidean::Coord rc = xt->getcoords(this->ip());
     c.init2d(rc.first, rc.second);
   } else  if(EuclideanGraph *xt = dynamic_cast<EuclideanGraph*>(t)){
-    EuclideanGraph::Coord rc = xt->getcoords(node()->ip());
+    EuclideanGraph::Coord rc = xt->getcoords(this->ip());
     c.init2d(rc._x, rc._y);
   } else {
     c.init2d(0,0);
@@ -141,7 +141,7 @@ VivaldiTest::error()
   for(unsigned i = 0; i < _all.size(); i++){
     Vivaldi::Coord vc1 = _all[i]->_vivaldi->my_location();
     double vd = dist(vc, vc1);
-    double rd = 2*t->latency(node()->ip(), _all[i]->node()->ip());
+    double rd = 2*t->latency(this->ip(), _all[i]->ip());
     double e = fabs(vd - rd);
     a.push_back (e);
     sum_sz++;
@@ -166,14 +166,14 @@ VivaldiTest::total_error(double &e05, double &e50, double &e95)
   Topology *t = (Network::Instance()->gettopology());
   for(unsigned i = 0; i < n; i++){
     Vivaldi::Coord vc = _all[i]->_vivaldi->my_location();
-    double ei = _all[i]->error();
+    // double ei = _all[i]->error();
     //    printf ("IERR %d %f\n", i, ei);
 
     for (uint j = 0; j < n; j++) {
       if (i != j) {
 	Vivaldi::Coord vc1 = _all[j]->_vivaldi->my_location();
 	double vd = dist(vc, vc1);
-	double rd = 2*t->latency(_all[i]->node()->ip(), _all[j]->node()->ip());
+	double rd = 2*t->latency(_all[i]->ip(), _all[j]->ip());
 	double e = fabs(vd - rd);
 	a.push_back(e);
 	errpts++;
@@ -223,7 +223,7 @@ VivaldiTest::status()
   total_error(e05, e50, e95);
   printf("vivaldi %u %u %d %.5f %.5f %.5f\n",
          (unsigned) now(),
-         node()->ip(),
+         this->ip(),
          _vivaldi->nsamples(),
          e05,
          e50,
@@ -241,10 +241,10 @@ VivaldiTest::tick(void *)
         dst = _nip[random() % _neighbors];
     // dst = _nip[_next_neighbor++ % _nip.size()];
   } else {
-    dst = _all[random() % _all.size()]->node()->ip();
+    dst = _all[random() % _all.size()]->ip();
   }
 
-  if(node()->ip() == 1) {
+  if(this->ip() == 1) {
         status();
 	if (_vivaldi->nsamples() % 100 == 0) print_all_loc();
   }

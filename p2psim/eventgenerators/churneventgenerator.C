@@ -48,8 +48,6 @@ ChurnEventGenerator::ChurnEventGenerator(Args *args)
     _wkn = args->nget<IPAddress>("wkn", 1, 10);
   }
 
-  _proto = (*args)["proto"];
-  assert( _proto != "" );
   _lifemean = args->nget( "lifemean", 100000, 10 ); //0 means no failure
   _deathmean = args->nget( "deathmean", _lifemean, 10 ); //0 means no failure
   _lookupmean = args->nget( "lookupmean", 10000, 10 );
@@ -79,8 +77,8 @@ ChurnEventGenerator::run()
 
   // start all nodes at a random time between 1 and n (except the wkn, who
   // starts at 1)
-  set<IPAddress> tmpips = Network::Instance()->getallips();
-  for(set<IPAddress>::const_iterator i = tmpips.begin(); i != tmpips.end(); ++i)
+  const set<IPAddress> *tmpips = Network::Instance()->getallips();
+  for(set<IPAddress>::const_iterator i = tmpips->begin(); i != tmpips->end(); ++i)
     _ips.push_back(*i);
 
 
@@ -99,7 +97,7 @@ ChurnEventGenerator::run()
       jointime = (random()%(_ips.size()+1)) + 1;
     }
     if( now() + jointime < _exittime ) {
-      P2PEvent *e = New P2PEvent(now() + jointime, _proto, ip, "join", a);
+      P2PEvent *e = New P2PEvent(now() + jointime, ip, "join", a);
       add_event(e);
     } else {
       delete a;
@@ -111,8 +109,7 @@ ChurnEventGenerator::run()
     Time tolookup = next_exponential( _lookupmean );
     (*a)["key"] = get_lookup_key();
     if( now() + jointime + tolookup < _exittime ) {
-      P2PEvent *e = New P2PEvent(now() + jointime + tolookup, _proto, 
-				 ip, "lookup", a);
+      P2PEvent *e = New P2PEvent(now() + jointime + tolookup, ip, "lookup", a);
       add_event(e);
     } else {
       delete a;
@@ -148,7 +145,7 @@ ChurnEventGenerator::kick(Observed *o, ObserverInfo *oi)
       // pick a time for this node to die
       Time todie = next_exponential( _lifemean );
       if( now() + todie < _exittime ) {
-	P2PEvent *e = New P2PEvent(now() + todie, _proto, ip, "crash", a);
+	P2PEvent *e = New P2PEvent(now() + todie, ip, "crash", a);
 	add_event(e);
       }
 
@@ -161,7 +158,7 @@ ChurnEventGenerator::kick(Observed *o, ObserverInfo *oi)
     Time tojoin = next_exponential( _deathmean );
     (*a)["wellknown"] = _wkn_string;
     if( now() + tojoin < _exittime ) {
-      P2PEvent *e = New P2PEvent(now() + tojoin, _proto, ip, "join", a);
+      P2PEvent *e = New P2PEvent(now() + tojoin, ip, "join", a);
       add_event(e);
     } else {
       delete a;
@@ -172,7 +169,7 @@ ChurnEventGenerator::kick(Observed *o, ObserverInfo *oi)
     Time tolookup = next_exponential( _lookupmean );
     (*a)["key"] = get_lookup_key();
     if( now() + tolookup < _exittime ) {
-      P2PEvent *e = New P2PEvent(now() + tolookup, _proto, ip, "lookup", a);
+      P2PEvent *e = New P2PEvent(now() + tolookup, ip, "lookup", a);
       add_event(e);
     } else {
       delete a;

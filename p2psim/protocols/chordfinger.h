@@ -31,7 +31,7 @@
 
 class ChordFinger: public Chord {
   public:
-    ChordFinger(Node *n, Args& a, LocTable *l = NULL);
+    ChordFinger(IPAddress i, Args& a, LocTable *l = NULL);
     ~ChordFinger() {};
     string proto_name() { return "ChordFinger"; }
 

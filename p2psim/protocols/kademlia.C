@@ -54,8 +54,8 @@ hash_map<Kademlia::NodeID, Kademlia*> *Kademlia::_nodeid2kademlia = 0;
 
 // }}}
 // {{{ Kademlia::Kademlia
-Kademlia::Kademlia(Node *n, Args a)
-  : P2Protocol(n), _id(ConsistentHash::ip2chid(n->ip()))
+Kademlia::Kademlia(IPAddress i, Args a)
+  : P2Protocol(i), _id(ConsistentHash::ip2chid(ip()))
 {
   KDEBUG(1) << "id: " << printID(_id) << ", ip: " << ip() << endl;
   if(getenv("P2PSIM_CHECKREP"))
@@ -152,18 +152,15 @@ Kademlia::~Kademlia()
 // }}}
 // {{{ Kademlia::initstate
 void 
-Kademlia::initstate(set<Protocol*> *l)
+Kademlia::initstate(const set<Node*> *l)
 {
-  KDEBUG(1) << "Kademlia::initstate" << endl;
+  KDEBUG(1) << "Kademlia::initstate l->size = " << l->size() << endl;
 
   if(!_all_kademlias) {
     KDEBUG(1) << "allocating all" << endl;
     _all_kademlias = New set<NodeID>;
     _nodeid2kademlia = New hash_map<NodeID, Kademlia*>;
-    for(set<Protocol*>::const_iterator i = l->begin(); i != l->end(); ++i) {
-      if((*i)->proto_name() != proto_name())
-        continue;
-
+    for(set<Node*>::const_iterator i = l->begin(); i != l->end(); ++i) {
       Kademlia *k = (Kademlia *) *i;
       _all_kademlias->insert(k->id());
       (*_nodeid2kademlia)[k->id()] = k;
@@ -200,7 +197,7 @@ Kademlia::initstate(set<Protocol*> *l)
       for(vector<NodeID>::const_iterator i = candidates.begin(); i != candidates.end(); ++i) {
         Kademlia *k = (*_nodeid2kademlia)[*i];
         assert(k);
-        insert(k->id(), k->node()->ip(), true);
+        insert(k->id(), k->ip(), true);
         touch(k->id());
       }
       continue;
@@ -216,7 +213,7 @@ Kademlia::initstate(set<Protocol*> *l)
       if(flyweight.find(k->id()) != flyweight.end())
         continue;
 
-      insert(k->id(), k->node()->ip(), true);
+      insert(k->id(), k->ip(), true);
       touch(k->id());
       count++;
 
@@ -245,7 +242,7 @@ Kademlia::join(Args *args)
 
   IPAddress wkn = args->nget<IPAddress>("wellknown");
   assert(wkn);
-  assert(node()->alive());
+  assert(alive());
 
   // I am the well-known node
   if(wkn == ip()) {
@@ -265,7 +262,7 @@ join_restart:
   assert(b);
   record_stat(STAT_LOOKUP, lr.results.size(), 0);
 
-  if(!node()->alive())
+  if(!alive())
     return;
 
   // put well known node in k-buckets
@@ -300,7 +297,7 @@ join_restart:
     lookup_result lr;
 
     // are we dead?  bye.
-    if(!node()->alive())
+    if(!alive())
       return;
 
     // if we believe our successor died, then start again
@@ -321,7 +318,7 @@ join_restart:
     }
     record_stat(STAT_LOOKUP, lr.results.size(), 0);
 
-    if(!node()->alive())
+    if(!alive())
       return;
 
     for(set<k_nodeinfo*, older>::const_iterator i = lr.results.begin(); i != lr.results.end(); ++i)
@@ -341,7 +338,7 @@ Kademlia::crash(Args *args)
 {
   // destroy k-buckets
   KDEBUG(1) << "Kademlia::crash" << endl;
-  assert(node()->alive());
+  assert(alive());
   for(hash_map<NodeID, k_nodeinfo*>::iterator i = flyweight.begin(); i != flyweight.end(); ++i)
     Kademlia::pool->push((*i).second);
 
@@ -377,11 +374,11 @@ Kademlia::lookup(Args *args)
 
   IPAddress key_ip = args->nget<NodeID>("key");
   // find node with this IP
-  Kademlia *k = (Kademlia*) Network::Instance()->getnode(key_ip)->getproto(proto_name());
+  Kademlia *k = (Kademlia*) Network::Instance()->getnode(key_ip);
   NodeID key = k->id();
 
   KDEBUG(1) << "Kademlia::lookup: " << printID(key) << endl;
-  assert(node()->alive());
+  assert(alive());
   assert(_nodeid2kademlia->find(key) != _nodeid2kademlia->end());
 
   // return_immediately = true because we're doing actually FIND_VALUE
@@ -391,7 +388,7 @@ Kademlia::lookup(Args *args)
   Time before = now();
   do_lookup(&la, &lr);
 
-  bool alive_and_joined = (*_nodeid2kademlia)[key]->node()->alive() &&
+  bool alive_and_joined = (*_nodeid2kademlia)[key]->alive() &&
                           (*_nodeid2kademlia)[key]->_joined;
 
   // XXX: this shouldn't happen :(
@@ -414,7 +411,7 @@ Kademlia::lookup(Args *args)
   ping_result pr;
   // record_stat(STAT_PING, 0, 0);
   assert(ki->ip <= 1837);
-  if(!doRPC(ki->ip, &Kademlia::do_ping, &pa, &pr) && node()->alive()) {
+  if(!doRPC(ki->ip, &Kademlia::do_ping, &pa, &pr) && alive()) {
     KDEBUG(2) << "Kademlia::lookup: ping RPC to " << Kademlia::printID(ki->id) << " failed " << endl;
     if(flyweight.find(ki->id) != flyweight.end())
       erase(ki->id);
@@ -454,7 +451,7 @@ void
 Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
 {
   KDEBUG(1) << "Kademlia::do_lookup: node " << printID(largs->id) << " does lookup for " << printID(largs->key) << ", flyweight.size() = " << endl;
-  assert(node()->alive());
+  assert(alive());
 
   update_k_bucket(largs->id, largs->ip);
 
@@ -773,7 +770,7 @@ void
 Kademlia::find_node(lookup_args *largs, lookup_result *lresult)
 {
   KDEBUG(2) << "find_node invoked by " << printID(largs->id) << ", looking for " << printID(largs->key) << ", calling thread = " << largs->tid << endl;
-  assert(node()->alive());
+  assert(alive());
 
   update_k_bucket(largs->id, largs->ip);
   lresult->rid = _id;
@@ -808,7 +805,7 @@ void
 Kademlia::reschedule_stabilizer(void *x)
 {
   KDEBUG(1) << "Kademlia::reschedule_stabilizer" << endl;
-  if(!node()->alive()) {
+  if(!alive()) {
     KDEBUG(2) << "Kademlia::reschedule_stabilizer returning because I'm dead." << endl;
     return;
   }
@@ -822,7 +819,7 @@ void
 Kademlia::stabilize()
 {
   KDEBUG(1) << "Kademlia::stabilize" << endl;
-  assert(node()->alive());
+  assert(alive());
 
   if(Kademlia::docheckrep) {
     k_check check;
@@ -1274,20 +1271,20 @@ k_bucket::traverse(k_traverser *traverser, Kademlia *k, string prefix, unsigned 
   checkrep();
 
   if(!leaf) {
-    if(!k->node()->alive() || !child[0])
+    if(!k->alive() || !child[0])
       return;
     child[0]->traverse(traverser, k, prefix + "0", depth+1, 0);
-    if(!k->node()->alive() || !child[1] || leaf)
+    if(!k->alive() || !child[1] || leaf)
       return;
     child[1]->traverse(traverser, k, prefix + "1", depth+1, 1);
-    if(!k->node()->alive())
+    if(!k->alive())
       return;
     checkrep();
     return;
   }
 
 
-  if(!k->node()->alive())
+  if(!k->alive())
     return;
 
   // we're a leaf
@@ -1514,7 +1511,7 @@ k_stabilizer::execute(k_bucket *k, string prefix, unsigned depth, unsigned leftr
   Kademlia *mykademlia = k->kademlia();
   Kademlia::NodeID _id = mykademlia->id();
 
-  if(!k->leaf || !mykademlia->node()->alive())
+  if(!k->leaf || !mykademlia->alive())
     return;
 
   // return if any entry in this k-bucket is fresh
@@ -1557,11 +1554,11 @@ k_stabilizer::execute(k_bucket *k, string prefix, unsigned depth, unsigned leftr
     return;
 
   // lookup the random key and update this k-bucket with what we learn
-  Kademlia::lookup_args la(mykademlia->id(), mykademlia->node()->ip(), random_key);
+  Kademlia::lookup_args la(mykademlia->id(), mykademlia->ip(), random_key);
   Kademlia::lookup_result lr;
 
   mykademlia->do_lookup(&la, &lr);
-  if(!mykademlia->node()->alive())
+  if(!mykademlia->alive())
     return;
 
   // update our k-buckets
@@ -1662,11 +1659,11 @@ k_check::execute(k_bucket *k, string prefix, unsigned depth, unsigned leftright)
 
   k->checkrep();
 
-  set<Protocol*> l = Network::Instance()->getallprotocols(k->kademlia()->proto_name());
+  const set<Node*> *l = Network::Instance()->getallnodes();
 
   // go through all pointers in node
   NODES_ITER(&k->nodes->nodes) {
-    for(set<Protocol*>::iterator pos = l.begin(); pos != l.end(); ++pos) {
+    for(set<Node*>::iterator pos = l->begin(); pos != l->end(); ++pos) {
       Kademlia *kad = (Kademlia*) *pos;
       if(kad->id() == k->kademlia()->id())
         continue;
@@ -1676,7 +1673,7 @@ k_check::execute(k_bucket *k, string prefix, unsigned depth, unsigned leftright)
   }
 
   for(set<k_nodeinfo*, Kademlia::younger>::const_iterator i = k->replacement_cache->begin(); i != k->replacement_cache->end(); ++i) {
-    for(set<Protocol*>::iterator pos = l.begin(); pos != l.end(); ++pos) {
+    for(set<Node*>::iterator pos = l->begin(); pos != l->end(); ++pos) {
       Kademlia *kad = (Kademlia*) *pos;
       if(kad->id() == k->kademlia()->id())
         continue;

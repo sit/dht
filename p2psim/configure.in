@@ -13,10 +13,10 @@ AC_PATH_PROGS(M4, gm4 gnum4 m4, '$(top_srcdir)/missing')
 dnl Check for GTK and allow conditional Makefile.am statements
 dnl AM_PATH_GTK(1.2.0,,AC_MSG_WARN(gtk not available; vis will not be built))
 
-PKG_CHECK_MODULES(GSTUFF, gtk+-2.0 >= 2.0, AC_MSG_WARN([Found GTK...]), AC_MSG_WARN([You don't have GTK. Vis won't be built]))
-AM_CONDITIONAL(GTK_AVAILABLE, test "$GSTUFF_CFLAGS")
-AC_SUBST(GSTUFF_CFLAGS)
-AC_SUBST(GSTUFF_LIBS)
+dnl PKG_CHECK_MODULES(GSTUFF, gtk+-2.0 >= 2.0, AC_MSG_WARN([Found GTK...]), AC_MSG_WARN([You don't have GTK. Vis won't be built]))
+dnl AM_CONDITIONAL(GTK_AVAILABLE, test "$GSTUFF_CFLAGS")
+dnl AC_SUBST(GSTUFF_CFLAGS)
+dnl AC_SUBST(GSTUFF_LIBS)
 
 dnl Available from the GNU Autoconf Macro Archive at:
 dnl http://www.gnu.org/software/ac-archive/htmldoc/ac_cxx_namespaces.html
@@ -87,7 +87,6 @@ AC_LANG_RESTORE
 
 
 AC_OUTPUT(Makefile
-            vis/Makefile
             eventgenerators/Makefile
             p2psim/Makefile
             observers/Makefile

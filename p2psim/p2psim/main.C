@@ -26,9 +26,10 @@
  */
 
 #include "protocols/protocolfactory.h"
-#include "protocol.h"
+#include "node.h"
 #include "topology.h"
 #include "eventgenerator.h"
+#include "network.h"
 #include <time.h>
 #include <iostream>
 using namespace std;
@@ -53,15 +54,18 @@ threadmain(int argc, char *argv[])
   parse_args(argc, argv);
 
   // Put a protocol on all these nodes.
-  Protocol::parse(protocol_file);
+  Node::parse(protocol_file);
 
-  // Creates a network with the appropriate underlying topology.
+  // Creates a network with the appropriate underlying topology and give Network
+  // a chance to eat them all.
   Topology::parse(topology_file);
+  while(anyready())
+    yield();
 
   // Initialize all protocols
-  set<Protocol*> all = ProtocolFactory::Instance()->getallprotocols();
-  for(set<Protocol*>::const_iterator i = all.begin(); i != all.end(); ++i)
-    (*i)->initstate(&all);
+  const set<Node*> *all = Network::Instance()->getallnodes();
+  for(set<Node*>::const_iterator i = all->begin(); i != all->end(); ++i)
+    (*i)->initstate(all);
 
   // make sure the network ate all the nodes
   while(anyready())

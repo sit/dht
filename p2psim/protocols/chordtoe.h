@@ -46,7 +46,7 @@ public:
 
 class ChordToe : public ChordFingerPNS {
 public:
-  ChordToe(Node *n, Args& a);
+  ChordToe(IPAddress i, Args& a);
   ChordToe ();
   ~ChordToe() {};
   string proto_name() { return "ChordToe"; }

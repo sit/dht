@@ -41,8 +41,7 @@ int Kelips::_good_lookups = 0;
 int Kelips::_ok_failures = 0;  // # legitimate lookup failures
 int Kelips::_bad_failures = 0; // lookup failed, but node was live
 
-Kelips::Kelips(Node *n, Args a)
-  : P2Protocol(n)
+Kelips::Kelips(IPAddress i, Args a) : P2Protocol(i)
 {
   _started = false;
   _live = false;
@@ -224,8 +223,8 @@ Kelips::node_key_alive(ID key)
     assert(n);
     return n->alive();
   } else {
-    set<IPAddress> ips = Network::Instance()->getallips();
-    for(set<IPAddress>::const_iterator i = ips.begin(); i != ips.end(); ++i){
+    const set<IPAddress> *ips = Network::Instance()->getallips();
+    for(set<IPAddress>::const_iterator i = ips->begin(); i != ips->end(); ++i){
       if(ip2id(*i) == key){
         return Network::Instance()->getnode(*i)->alive();
       }
@@ -735,9 +734,9 @@ Kelips::purge(void *junk)
 // of nodes to help us initialize our routing tables faster (i.e. cheat).
 // So in most nodes it's called before join().
 void
-Kelips::init_state(set<Protocol*> lid)
+Kelips::init_state(const set<Node*> *lid)
 {
-  for(set<Protocol*>::const_iterator i = lid.begin(); i != lid.end(); ++i) {
+  for(set<Node*>::const_iterator i = lid->begin(); i != lid->end(); ++i) {
     Kelips *k = dynamic_cast<Kelips*>(*i);
     assert(k);
     if(k->ip() == ip())

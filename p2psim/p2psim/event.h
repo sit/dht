@@ -26,8 +26,12 @@
 #ifndef __EVENT_H
 #define __EVENT_H
 
-#include "node.h"
+#include "p2psim.h"
+#include <string>
+#include <vector>
 using namespace std;
+
+class Event;
 
 class Event {
 public:

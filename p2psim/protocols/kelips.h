@@ -60,7 +60,7 @@
 
 class Kelips : public P2Protocol {
 public:
-  Kelips(Node *n, Args a);
+  Kelips(IPAddress i, Args a);
   virtual ~Kelips();
   string proto_name() { return "Kelips"; }
 
@@ -154,7 +154,7 @@ public:
   bool lookup_loop(ID key, vector<IPAddress> &);
   void handle_lookup2(ID *kp, IPAddress *res);
   IPAddress find_by_id(ID key);
-  void init_state(set<Protocol*>);
+  void init_state(const set<Node*>*);
   bool stabilized(vector<ID> lid);
   void rpcstat(bool ok, IPAddress dst, int latency, int nitems);
   IPAddress victim(int g);

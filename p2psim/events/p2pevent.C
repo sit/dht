@@ -54,22 +54,19 @@ P2PEvent::name2fn(string name)
   assert(0);
 }
 
-// expects: timestamp node-id protocol:operation-id [arguments]
+// expects: timestamp node-id node:operation-id [arguments]
 //
-// see Protocol::dispatch() for the mapping from operation-id to operation
+// see Node::dispatch() for the mapping from operation-id to operation
 //
-P2PEvent::P2PEvent(string proto, vector<string> *v) : Event("P2PEvent", v)
+P2PEvent::P2PEvent(vector<string> *v) : Event("P2PEvent", v)
 {
   // node-id
   IPAddress ip = (IPAddress) strtoull((*v)[0].c_str(), NULL, 10);
   this->node = Network::Instance()->getnode(ip);
   if(!this->node) {
-    cerr << "can't execute event on non-exiting node with id " << ip << endl;
+    cerr << "can't execute event on non-existing node with id " << ip << endl;
     return;
   }
-
-  // protocol
-  this->protocol = proto;
 
   // operation-id
   //this->fn = name2fn(proto_action[1]);
@@ -80,10 +77,9 @@ P2PEvent::P2PEvent(string proto, vector<string> *v) : Event("P2PEvent", v)
   assert(this->args);
 }
 
-P2PEvent::P2PEvent(Time ts, string proto, IPAddress ip, string operation,
-    Args *a) : Event("P2PEvent", ts, true)
+P2PEvent::P2PEvent(Time ts, IPAddress ip, string operation, Args *a) :
+    Event("P2PEvent", ts, true)
 {
-  this->protocol = proto;
   this->node = Network::Instance()->getnode(ip);
   this->fn = name2fn(operation);
   if(!(this->args = a)) {
@@ -101,19 +97,19 @@ P2PEvent::~P2PEvent()
 void
 P2PEvent::execute()
 {
-  // get node, protocol on that node, application interface for that protocol
+  // get node, node on that node, application interface for that node
   // and invoke the event
-  P2Protocol *proto = dynamic_cast<P2Protocol*>(node->getproto(protocol));
+  P2Protocol *proto = dynamic_cast<P2Protocol*>(node);
   assert(proto);
 
-  // if join: set node-alive flag
+  // if join: set proto-alive flag
   if (fn == &P2Protocol::join) 
-    node->set_alive(true);
+    proto->set_alive(true);
 
-  if (proto->node()->alive())
+  if (proto->alive())
     (proto->*fn)(args);
 
-  // if this was a crash: set node-dead flag
+  // if this was a crash: set proto-dead flag
   if (fn == &P2Protocol::crash) 
-    node->set_alive(false);
+    proto->set_alive(false);
 }

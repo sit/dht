@@ -25,15 +25,15 @@
 #ifndef __DHTPROTOCOL_H
 #define __DHTPROTOCOL_H
 
-#include "protocol.h"
+#include "node.h"
 #include "args.h"
 using namespace std;
 
 class Node;
 
-class P2Protocol : public Protocol {
+class P2Protocol : public Node {
 public:
-  P2Protocol(Node* n);
+  P2Protocol(IPAddress);
   virtual ~P2Protocol();
 
   typedef void (P2Protocol::*event_f)(Args*);

@@ -92,7 +92,7 @@ DDONE:
 
 class ChordFingerPNS: public Chord {
   public:
-    ChordFingerPNS(Node *n, Args& a, LocTable *l = NULL);
+    ChordFingerPNS(IPAddress i, Args& a, LocTable *l = NULL);
     ~ChordFingerPNS() {};
     string proto_name() { return "ChordFingerPNS"; }
 

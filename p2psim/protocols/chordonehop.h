@@ -29,7 +29,7 @@
 
 class ChordOneHop: public Chord {
   public:
-    ChordOneHop(Node *n, Args& a);
+    ChordOneHop(IPAddress i, Args& a);
     ~ChordOneHop();
     string proto_name() { return "ChordOneHop";}
 

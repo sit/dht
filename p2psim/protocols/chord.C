@@ -41,8 +41,7 @@ double Chord::_lookup_retries = 0;
 
 #define DNODE 33
 
-Chord::Chord(Node *n, Args& a, LocTable *l)
-  : P2Protocol(n), _isstable (false)
+Chord::Chord(IPAddress i, Args& a, LocTable *l) : P2Protocol(i), _isstable (false)
 {
 
   if(a.find("static_sim") != a.end())
@@ -84,7 +83,7 @@ Chord::Chord(Node *n, Args& a, LocTable *l)
 
   assert(_frag <= _nsucc);
 
-  me.ip = n->ip();
+  me.ip = ip();
   me.id = ConsistentHash::ip2chid(me.ip); 
   me.choices = 0;
 
@@ -193,8 +192,8 @@ Chord::check_correctness(CHID k, vector<IDMap> v)
 
   while (1) {
     if (pos >= idsz) pos = 0;
-    Node *n = Network::Instance()->getnode(ids[pos].ip);
-    if ((n->alive() && ((Chord *)getpeer(ids[pos].ip))->inited()))
+    Node *node = Network::Instance()->getnode(ids[pos].ip);
+    if ((node->alive() && ((Chord *)getpeer(ids[pos].ip))->inited()))
       break;
     pos++;
   }
@@ -251,7 +250,7 @@ Chord::lookup_internal(lookup_args *a)
     assert(extra_time >=0);
   }
 
-  if (!node()->alive()) {
+  if (!alive()) {
     delete a;
     return;
   }else if (v.size() > 0) {
@@ -414,7 +413,7 @@ Chord::find_successors(CHID key, uint m, uint all, uint type, uint *lookup_int, 
       assert(wasted > 0 || reuse->link.to.ip == me.ip);
       lastwasted = 0;
     }
-    if (!node()->alive()) goto DONE;
+    if (!alive()) goto DONE;
     if (ok) {
       record_stat(resultmap[donerpc]->ret.done?resultmap[donerpc]->ret.next.size()*4:resultmap[donerpc]->ret.v.size()*4,type);
 
@@ -487,7 +486,7 @@ DONE:
 
   //jesus christ i'm done, however, i need to clean up my shit
   assert(reuse);
-  if ((type == TYPE_USER_LOOKUP) && (node()->alive())) {
+  if ((type == TYPE_USER_LOOKUP) && (alive())) {
 
     if (lookup_int) 
       *lookup_int = now()-before;
@@ -593,7 +592,7 @@ Chord::find_successors(CHID key, uint m, uint all, uint type, IDMap *last)
     if (ok) record_stat(nr.done?(nr.v.size()*4):4,type);
 
 
-    if (!node()->alive()) break;
+    if (!alive()) break;
 
     if(ok && nr.done){
       break;
@@ -688,7 +687,7 @@ Chord::find_successors_recurs(CHID key, uint m, uint all, uint type, uint *recur
   //no overhead for sending to myself
   my_next_recurs_handler(&fa,&fr);
 
-  if (!node()->alive()) return fr.v;
+  if (!alive()) return fr.v;
 
   Topology *t = Network::Instance()->gettopology();
 #ifdef CHORD_DEBUG
@@ -755,7 +754,7 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
   Chord* target;
 
   check_static_init();
-  assert(node()->alive());
+  assert(alive());
 
   while (1) {
     succs = loctable->succs(me.id+1,_nsucc);
@@ -810,7 +809,7 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
       } else
 	r = doRPC(next.ip, &Chord::next_recurs_handler, args, ret);
 
-      if (!node()->alive()) {
+      if (!alive()) {
 	printf("%s lost lookup request %qx\n", ts(), args->key);
 	ret->v.clear();
 	return;
@@ -923,7 +922,7 @@ Chord::join(Args *args)
 #endif
   }else{
 
-    if (!node()->alive()) {
+    if (!alive()) {
       _join_scheduled--;
       return;
     }
@@ -937,7 +936,7 @@ Chord::join(Args *args)
   }
 
   if (_vivaldi_dim > 0) {
-    _vivaldi = New Vivaldi10(node(), _vivaldi_dim, 0.05, 1); 
+    _vivaldi = New Vivaldi10(this, _vivaldi_dim, 0.05, 1); 
   }
 
   if (!_wkn.ip) {
@@ -960,7 +959,7 @@ Chord::join(Args *args)
   bool ok = doRPC(_wkn.ip, &Chord::find_successors_handler, &fa, &fr);
   if (ok) record_stat(4*fr.v.size(), TYPE_JOIN_LOOKUP);
 
-  if (!node()->alive()) {
+  if (!alive()) {
     _join_scheduled--;
     return;
   }
@@ -1006,7 +1005,7 @@ Chord::join(Args *args)
 #endif
   }
 
-  if ((loctable->size() < 2)  && (node()->alive())) {
+  if ((loctable->size() < 2)  && (alive())) {
 #ifdef CHORD_DEBUG
     fprintf(stderr,"%s join failed! return %u\n", ts(), fr.v.size());
 #endif
@@ -1030,7 +1029,7 @@ Chord::reschedule_basic_stabilizer(void *x)
   }
 #endif
   assert(!static_sim);
-  if (!node()->alive()) {
+  if (!alive()) {
     _stab_basic_running = false;
     printf("%s node dead cancel stabilizing\n",ts());
     return;
@@ -1070,7 +1069,7 @@ Chord::stabilize()
 #endif
 
   fix_successor();
-  if (!node()->alive()) return;
+  if (!alive()) return;
 
   succs = loctable->succs(me.id+1, _nsucc);
 
@@ -1079,10 +1078,10 @@ Chord::stabilize()
     fix_successor_list();
   }
 
-  if (!node()->alive()) return;
+  if (!alive()) return;
 
   fix_predecessor();
-  if (!node()->alive()) return;
+  if (!alive()) return;
 
 #ifdef CHORD_DEBUG
   IDMap pred = loctable->pred(me.id-1);
@@ -1164,7 +1163,7 @@ Chord::fix_predecessor()
 
   if (ok) record_stat(4, TYPE_FIXPRED_UP);
 
-  if (!node()->alive()) return;
+  if (!alive()) return;
 
   if (ok) {
     loctable->add_node(pred); //refresh timestamp
@@ -1194,7 +1193,7 @@ Chord::fix_successor(void *x)
   Chord *target;
   alert_args aa;
 
-  assert(node()->alive());
+  assert(alive());
 
   while (1) {
 
@@ -1219,7 +1218,7 @@ Chord::fix_successor(void *x)
   
     if (ok) record_stat(4, TYPE_FIXSUCC_UP);
 
-    if (!node()->alive()) return;
+    if (!alive()) return;
 
     if (!ok) {
 #ifdef CHORD_DEBUG
@@ -1260,7 +1259,7 @@ Chord::fix_successor(void *x)
 	    ok = doRPC(succ1.ip, &Chord::notify_handler, &na, &nr);
 	  if (ok) record_stat(0, TYPE_FIXSUCC_UP);
 
-	  if(!node()->alive()) return;
+	  if(!alive()) return;
       
 	  if (!ok) {
 #ifdef CHORD_DEBUG
@@ -1318,7 +1317,7 @@ Chord::fix_successor_list()
     ok = doRPC(succ.ip, &Chord::get_successor_list_handler, &gsa, &gsr);
   if (ok) record_stat(gsr.v.size()*4, TYPE_FIXSUCCLIST_UP);
 
-  if (!node()->alive()) return;
+  if (!alive()) return;
 
 #ifdef CHORD_DEBUG
   vector<IDMap> v = loctable->succs(me.id+1,_nsucc);

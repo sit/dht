@@ -1,3 +1,4 @@
+#if 0
 /*
  * Copyright (c) 2003 [NAMES_GO_HERE]
  *                    Massachusetts Institute of Technology
@@ -132,3 +133,4 @@ private:
 };
 
 #endif // __PASTRY_H
+#endif // 0

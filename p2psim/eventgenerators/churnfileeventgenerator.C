@@ -79,7 +79,7 @@ ChurnFileEventGenerator::run()
     if( state == "alive" || ip == _wkn ) {
       Args *a = New Args();
       (*a)["wellknown"] = _wkn_string;
-      P2PEvent *e = New P2PEvent(1, _proto, ip, "join", a);
+      P2PEvent *e = New P2PEvent(1, ip, "join", a);
       add_event(e);
 
       // also, start its first lookup
@@ -87,8 +87,7 @@ ChurnFileEventGenerator::run()
       Time tolookup = next_exponential( _lookupmean );
       if( 1 + tolookup < _exittime ) {
 	(*a)["key"] = get_lookup_key();
-	P2PEvent *e = New P2PEvent(1 + tolookup, _proto, 
-				   ip, "lookup", a);
+	P2PEvent *e = New P2PEvent(1 + tolookup, ip, "lookup", a);
 	add_event(e);
 	did_lookup = true;
       } else {
@@ -112,7 +111,7 @@ ChurnFileEventGenerator::run()
 
 	// make a crash event
 	if( time < _exittime ) {
-	  P2PEvent *e = New P2PEvent(time, _proto, ip, "crash", a);
+	  P2PEvent *e = New P2PEvent(time, ip, "crash", a);
 	  add_event(e);
 	  state = "dead";
 	} else {
@@ -124,7 +123,7 @@ ChurnFileEventGenerator::run()
 	// make a join event
 	if( time < _exittime ) {
 	  (*a)["wellknown"] = _wkn_string;
-	  P2PEvent *e = New P2PEvent(time, _proto, ip, "join", a);
+	  P2PEvent *e = New P2PEvent(time, ip, "join", a);
 	  add_event(e);
 	  state = "alive";
 	} else {
@@ -137,8 +136,7 @@ ChurnFileEventGenerator::run()
 	  Time tolookup = next_exponential( _lookupmean );
 	  if( time + tolookup < _exittime ) {
 	    (*a)["key"] = get_lookup_key();
-	    P2PEvent *e = New P2PEvent(time + tolookup, _proto, 
-				       ip, "lookup", a);
+	    P2PEvent *e = New P2PEvent(time + tolookup, ip, "lookup", a);
 	    add_event(e);
 	    did_lookup = true;
 	  } else {
@@ -181,7 +179,7 @@ ChurnFileEventGenerator::kick(Observed *o, ObserverInfo* oi)
     Time tolookup = next_exponential( _lookupmean );
     (*a)["key"] = get_lookup_key();
     if( now() + tolookup < _exittime ) {
-      P2PEvent *e = New P2PEvent(now() + tolookup, _proto, ip, "lookup", a);
+      P2PEvent *e = New P2PEvent(now() + tolookup, ip, "lookup", a);
       add_event(e);
     } else {
       delete a;
