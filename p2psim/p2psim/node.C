@@ -192,12 +192,16 @@ Node::collect_stat()
 }
 
 void
-Node::record_inout_bw_stat(IPAddress dst, uint num_ids, uint num_else)
+Node::record_inout_bw_stat(IPAddress src, IPAddress dst, uint num_ids, uint num_else)
 {
-  if (dst == ip()) 
+  if (src == dst) 
     return;
-  node_live_outbytes += 20 + 4*num_ids + num_else;
-  Node *n = Network::Instance()->getnode(dst);
+
+  Node *n = Network::Instance()->getnode(src);
+  if (n && n->alive())
+    n->record_out_bytes(20 + 4*num_ids + num_else);
+
+  n = Network::Instance()->getnode(dst);
   if (n && n->alive())
     n->record_in_bytes(20 + 4*num_ids + num_else);
 }
