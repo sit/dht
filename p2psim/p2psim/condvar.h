@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: condvar.h,v 1.7 2004/02/24 17:15:39 rsc Exp $ */
+/* $Id: condvar.h,v 1.8 2004/04/22 15:41:58 strib Exp $ */
 
 #ifndef __CONDVAR_H
 #define __CONDVAR_H
@@ -30,6 +30,7 @@
 #include "libtask/task.h"
 #include "p2psim.h"
 #include <set>
+#include <unistd.h>
 using namespace std;
 
 class ConditionVar {

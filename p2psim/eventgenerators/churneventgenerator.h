@@ -49,6 +49,7 @@ means given above.
 #include "p2psim/eventgenerator.h"
 #include "p2psim/p2psim.h"
 #include "p2psim/args.h"
+#include <unistd.h>
 using namespace std;
 
 class ChurnEventGenerator : public EventGenerator {
