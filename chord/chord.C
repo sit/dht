@@ -748,6 +748,8 @@ vnode_impl::dofindtoes (user_args *sbp, chord_findtoes_arg *ta)
   chord_node n;
   unsigned int maxret;
 
+  ndofindtoes++;
+
   if(toes){
     float maxd = toes->level_to_delay(ta->level);
     n = ta->n;
@@ -773,7 +775,6 @@ vnode_impl::dofindtoes (user_args *sbp, chord_findtoes_arg *ta)
 
     //warn << "find toes found " << r.size() << "\n";
     
-    ndofindtoes++;
     res.resok->nlist.setsize (r.size ());
     for (unsigned int i = 0; i < r.size (); i++)
       locations->get_node(r[i], &res.resok->nlist[i]);
@@ -794,10 +795,9 @@ vnode_impl::dogettoes (user_args *sbp, chord_gettoes_arg *ta)
 {
 
   chord_nodelistextres res (CHORD_OK);
+  ndogettoes++;
   if(toes){
     vec<chordID> t = toes->get_toes (ta->level);      
-    
-    ndogettoes++;
     res.resok->nlist.setsize (t.size ());
     for (unsigned int i = 0; i < t.size (); i++) {
       locations->fill_getnodeext (res.resok->nlist[i], t[i]);

@@ -16,8 +16,7 @@ toe_table::toe_table ()
     toes[i] = new vec<chordID>;
   }
   
-  last_level = -2;
-  //warnx << "toe table created\n";
+  last_level = MAX_LEVELS; // will start at 0
 
   stable_toes = false;
 }
@@ -27,7 +26,6 @@ void toe_table::init (ptr<vnode> v, ptr<locationtable> locs, chordID ID)
   locations = locs;
   myID = ID;
   myvnode = v;
-
   
 }
 
@@ -42,7 +40,7 @@ toe_table::prune_toes (int level)
     if(locations->get_a_lat (id) >= level_to_delay (level))
       removeindex = i;
   }
-
+  
   if(removeindex >= 0){
     for(unsigned int i = removeindex ; i < toes[level]->size() - 1 ; i++){
       (*toes[level])[i] = (*toes[level])[i+1];
@@ -52,11 +50,11 @@ toe_table::prune_toes (int level)
   
 }
 
-//get toes to fill level level
+//the nodes that will likely fill level are in our level-2 row
 void
 toe_table::get_toes_rmt (int level) 
 {
-  vec<chordID> donors = get_toes (max(level - 1, 0));
+  vec<chordID> donors = get_toes (max(level - 2, 0));
   for (unsigned int i = 0; i < donors.size (); i++) {
     in_progress++;
     ptr<chord_findtoes_arg> arg = New refcounted<chord_findtoes_arg> ();
@@ -182,7 +180,6 @@ toe_table::real_add_toe (const chord_node &n, int level)
   if(newset && id != toes[level]->front()){
     //need to expand?
     if((int) toes[level]->size() < target_size[level]){
-      //warn << "expanding level " << level << "\n";
       toes[level]->push_back(toes[level]->back());
       //warn << "done expanding " << level << "\n";
     }
@@ -225,38 +222,26 @@ toe_table::add_toe_ping_cb (chord_node n, int level, chordstat err)
 vec<chordID> 
 toe_table::get_toes (int level)
 {
-  int up = level_to_delay (level);
+  //int up = level_to_delay (level);
   vec<chordID> res;
   for (unsigned int i = 0; i < toes[level]->size (); i++) {
     //warn << "get toes " << level << " " << toes[level]->size () << "\n";
-    if (locations->get_a_lat ((*toes[level])[i]) < up)
-      res.push_back ((*toes[level])[i]);
+    //if (locations->get_a_lat ((*toes[level])[i]) < up)
+    res.push_back ((*toes[level])[i]);
   }
   return res;
 }
 
-//returns the first non-filled level, not first filled level
+//returns the first filled level, not first nonempty level
 int
 toe_table::filled_level () 
 {
-  //only warn if level 0 is filled and others are not
-  bool empty=false;
-
-  for (int level = 0; level < MAX_LEVELS; level++) {
-    vec<chordID> res = get_toes (level);
-
-    if(level == 0){
-      empty = res.size() == 0;
-    }
-
-    if (res.size () < (unsigned short)target_size[level]) {
-      //if(!empty) warn << res.size () << " of "
-      //	      << target_size[level] << " at " 
-      //	      << level << "\n";
-      return level - 1;
+  for (int level = MAX_LEVELS - 1; level >= 0; level--) {
+    if (toes[level]->size() == (unsigned short)target_size[level]) {
+      return level;
     }
   }
-  return MAX_LEVELS;
+  return 0;
 }
 
 void
@@ -274,23 +259,22 @@ toe_table::print ()
 
 }
 
-
 void
 toe_table::stabilize_toes ()
 {
   stable_toes = true;
 
   int level = get_last_level () + 1;
-  //warn << "stabilizing toes at level " << level << "\n";
 
-  if(level >= MAX_LEVELS - 1)
-    level = -1;
+  if(level >= MAX_LEVELS)
+    level = 0;
 
+  //warn << "toe stabilize level " << level << "\n";
   
+#if 0
   if ((level < MAX_LEVELS) 
       && (level == get_last_level ())
-      && (level > 0)
-      && 0 ) {
+      && (level > 0)) {
     //we failed to find enough nodes to fill the last level we tried
     //go back and get more donors and try again
     
@@ -298,24 +282,20 @@ toe_table::stabilize_toes ()
     warn << "bumped " << level - 1 << " and retrying\n";
     level = filled_level ();
   }
+#endif 
 
   set_last_level (level);
-  if (level < 0) { //bootstrap off succ list
+  prune_toes(level);
+  if (level == 0) { 
     // grab the succlist and stick it in the toe table
     vec<chord_node> succs = myvnode->succs ();
     for (u_int i = 0; i < succs.size (); i++) {
       add_toe (succs[i], 0);
-      //warnx << "add_toe called with " << ith_succ << "\n";
-      //stable_toes = false;
     }
   } else {
-    //contact level (level) nodes and get their level (level) toes
-    prune_toes(level);
-    get_toes_rmt (level + 1);
-    //warnx << "toes unstable! " << stable_toes << "\n";
+    get_toes_rmt (level);
   } 
   
-
   //warnx << "stabilize done\n";
   return;
 }
@@ -574,6 +554,6 @@ ref<fingerlike_iter>
 toe_table::get_iter ()
 {
   ref<toeiter> iter = New refcounted<toeiter> ();
-  iter->nodes = get_toes ((get_last_level () < 0) ? 0 : get_last_level ());
+  iter->nodes = get_toes (filled_level ());
   return iter;
 }
