@@ -35,6 +35,7 @@ my $deathmean = $lifemean;
 my $lookupmean = 10000; # 10000 for churn, 100 for lookup
 my $exittime = 200000;
 
+$| = 1;
 
 sub generate_topology
 {
@@ -65,13 +66,12 @@ sub run_kademlia
 {
   my ($nnodes) = @_;
 
-  # system "p2psim/p2psim -e 1 kademlia-prot.txt oldking1024-t kademlia-events.txt > /tmp/sim-$$";
-  system "p2psim/p2psim -e 1 kademlia-prot.txt kademlia-top.txt kademlia-events.txt > /tmp/sim-$$";
   my $totlatency = 0;
   my $nlatencies = 0;
   my $bytes = 0;
-  my $fh = new FileHandle("</tmp/sim-$$") or die "$!";
-  while(<$fh>){
+
+  open(P, "p2psim/p2psim -e 1 kademlia-prot-$$.txt oldking1024-t kademlia-events.txt|");
+  while(<P>){
       if(/^latency ([0-9]+)/){
           $totlatency += $1;
           $nlatencies++;
@@ -83,8 +83,7 @@ sub run_kademlia
           print "Seed = $1\n";
       }
   }
-  $fh->close();
-  # unlink "/tmp/sim-$$";
+  close P;
 
   if(!$bytes || !$totlatency){
       print STDERR "kadx.pl: p2psim $$ no output\n";
@@ -104,7 +103,7 @@ sub generate_prot
       my $alpha = $params->{ALPHA}->{MIN};
       while($alpha <= $params->{ALPHA}->{MAX}) {
       print "nnodes=$nnodes, stabtimer=$stabtimer, k=$k, alpha=$alpha: ";
-        my $pf = new FileHandle(">kademlia-prot.txt") or die "$!";
+        my $pf = new FileHandle(">kademlia-prot-$$.txt") or die "$!";
         print $pf "Kademlia k=$k alpha=$alpha stabilize_timer=$stabtimer\n";
         $pf->close();
 
