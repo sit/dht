@@ -2,7 +2,7 @@
 use strict;
 
 #
-# sc.pl <topfile> <eventfile> <protocolfile> (<seed>) < scenerio
+# sc.pl <protocolfile> <topology file> <event file> (<seed>) < scenerio
 # 
 # takes as input a scenario and generates topology, event, and protocol file
 #
@@ -145,7 +145,7 @@ sub doevents {
 
 
 sub doobserve {
-   my ($start,@args) = @_;
+   my ($start, @args) = @_;
    print EV "observe $start numnodes=$nnodes @args\n";
 }
 
