@@ -63,7 +63,7 @@ public:
   // statistic collection
   typedef uint stat_type;
   const static stat_type STAT_LOOKUP = 0;
-  static void record_bw_stat(stat_type type, uint num_ids, uint num_else);
+  void record_bw_stat(stat_type type, uint num_ids, uint num_else);
   static void record_lookup_stat(IPAddress src, IPAddress dst, Time interval, 
 				 bool complete, bool correct, 
 				 uint num_hops = 0, uint num_timeouts = 0, 
@@ -104,6 +104,7 @@ protected:
   static vector<uint> _num_joins;
   static vector<Time> _last_joins;
   static vector<Time> _time_sessions;
+  static vector<double> _per_node_avg;
   int _num_joins_pos;
   static void print_lookup_stat_helper( vector<Time> times, 
 					vector<double> stretch,
@@ -111,6 +112,8 @@ protected:
 					bool timeouts = false );
   void check_num_joins_pos();
   int _queue_len;
+  Time join_time;
+  uint node_live_bytes;
 
   // find peer protocol of my sub-type on a distant node.
   Node *getpeer(IPAddress);

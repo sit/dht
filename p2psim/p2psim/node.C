@@ -53,6 +53,7 @@ vector<Time> Node::_time_timeouts;
 vector<uint> Node::_num_joins;
 vector<Time> Node::_last_joins;
 vector<Time> Node::_time_sessions;
+vector<double> Node::_per_node_avg;
 
 Node::Node(IPAddress i) : _queue_len(0), _ip(i), _alive(true), _token(1) 
 {
@@ -63,6 +64,9 @@ Node::Node(IPAddress i) : _queue_len(0), _ip(i), _alive(true), _token(1)
   _num_joins_pos = -1;
   _prev_ip = 0;
   _first_ip = _ip;
+
+  join_time = 0;
+  node_live_bytes = 0;
 }
 
 Node::~Node()
@@ -195,6 +199,8 @@ Node::record_bw_stat(stat_type type, uint num_ids, uint num_else)
   _bw_stats[type] += 20 + 4*num_ids + num_else;
   _bw_counts[type]++;
 
+  if (join_time)
+    node_live_bytes += 20 + 4*num_ids + num_else;
 }
 
 void 
@@ -270,9 +276,12 @@ Node::record_join()
     return;
   }
 
+  join_time = now();
+  node_live_bytes = 0;
   assert( _num_joins[_num_joins_pos] == 0 || !_last_joins[_num_joins_pos] );
   _num_joins[_num_joins_pos]++;
   _last_joins[_num_joins_pos] = now();
+
 }
 
 void
@@ -283,6 +292,13 @@ Node::record_crash()
     return;
   }
 
+  if (join_time > 0) {
+    Time duration = now() - join_time;
+    //this is a hack, don't screw the distribution with nodes whose lifetime
+    //is too short
+    if (duration >= 180000) 
+      _per_node_avg.push_back((double)1000.0*node_live_bytes/(double)duration);
+  }
   check_num_joins_pos();
   assert( _num_joins_pos >= 0 );
   Time session = now() - _last_joins[_num_joins_pos];
@@ -337,6 +353,18 @@ Node::print_stats()
   printf( "BW_TOTALS:: time(s):%.3f live_time(s/node):%.3f nodes:%d overall_bw(bytes/node/s):%.3f live_bw(bytes/node/s):%.3f\n", 
 	  total_time, live_time_s/((double) num_nodes), num_nodes, 
 	  overall_bw, live_bw );
+
+  //print out b/w distribution
+  sort(_per_node_avg.begin(),_per_node_avg.end());
+  uint sz = _per_node_avg.size();
+  double allavg = 0;
+  for (uint i = 0; i < sz; i++) 
+    allavg += _per_node_avg[i];
+
+  printf("BW_PERNODE: 50-p:%.3f 90-p:%.3f 95-p:%.3f 99-p:%.3f 100-p:%.3f avg:%.3f\n", 
+      _per_node_avg[sz/2], _per_node_avg[(uint)(sz*0.9)], 
+      _per_node_avg[(uint)(sz*0.95)], _per_node_avg[(uint)(sz*0.99)], 
+      _per_node_avg[sz-1], allavg/sz);
 
   // then do lookup stats
   double total_lookups = _correct_lookups.size() + _incorrect_lookups.size() +
