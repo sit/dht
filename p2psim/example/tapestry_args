@@ -1,0 +1,9 @@
+# Tapestry args file, for input into scripts/run-simulations.pl
+# base of each digit in the GUID:
+base 2 4 16 32 64 128
+# how many nodes per routing table entry:
+redundancy 1 2 3 4 
+# how many different entries to try during a lookup with failures:
+redundant_lookup_num <=redundancy 1 2 3 4
+# how often to stabilize:
+stabtimer 2000 4000 8000 16000 32000

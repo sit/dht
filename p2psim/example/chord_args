@@ -1,0 +1,9 @@
+# Chord args file, for input into scripts/run-simulations.pl
+base 2 4 16 32 64 128
+successors 8 16 32
+pnstimer 2000 4000 8000 16000 32000
+basictimer <=pnstimer 2000 4000 8000 16000 32000
+succlisttimer =pnstimer 1
+m 1 
+allfrag 1 
+recurs 1 0

@@ -21,6 +21,35 @@ Look at example/events.txt for the syntax and an example of an events file.
 
 p2psim/p2psim [protocolfile] [topologyfile] [eventsfile]
 
+Scripts
+-------
+
+- run-simulations.pl:
+
+scripts/run-simulations.pl allows you to iterate (randomly or sequentially)
+through different parameter configurations of a particular protocol.  To run,
+make a file containing the names of all the parameters to test, and the
+values those parameters should take.  For example:
+
+base 1 2 3 4
+timer 200 400 600
+bigtimer *timer 2 4
+littlebase <=base 1 2 3 4
+
+base can take on values 1 through 4, and timer can take on 200, 400, or 600.
+bigtimer will be equal to either twice or 4 times the timer value, and 
+littlebase can be 1 through 4, but is constrained to be less than or equal to
+the value of base.  Other modifiers include "=", "+", "<", 
+and ">".  For examples of some parameter files, see the 
+{tapestry, chord, kademlia, kelips}_args files in example/.
+
+Run 'scripts/run-simulations.pl --help' to see the available options.  It uses
+the ChurnEventGenerator to generate events.  An example execution might be:
+
+scripts/run-simulations.pl --protocol tapestry --topology example/silly-top.txt --lookupmean 1000 --lifemean 100000 --deathmean 100000 --exittime 200000 --args example/tapestry_args --logdir /tmp/p2psimtest --randomize 100
+
+Your logs will be in the directory /tmp/p2psimtest, which will be created if
+it doesn't already exist.
 
 Questions?
 ----------

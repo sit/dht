@@ -22,7 +22,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-# $Id: run-simulations.pl,v 1.7 2003/12/06 16:32:35 thomer Exp $
+# $Id: run-simulations.pl,v 1.8 2003/12/09 20:29:39 strib Exp $
 
 use strict;
 use Getopt::Long;
@@ -379,7 +379,7 @@ sub run_command {
 
     my $protfile = "$logdir/run-simulations-tmp-prot$$";
     open( PF, ">$protfile" ) or die( "Couldn't write to $protfile" );
-    print PF "$protocol $arg_string\n";
+    print PF "$protocol $arg_string initstate=1\n";
     close( PF );
     
     my @splitargs = split( /\s+/, $arg_string );

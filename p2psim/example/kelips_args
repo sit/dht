@@ -1,0 +1,9 @@
+# Kelips args file, for input into scripts/run-simulations.pl
+round_interval 125 500 2000 8000 24000
+group_targets 1 4 16 64
+contact_targets 1 4 16
+group_ration 1 4 16 64
+contact_ration 1 4 16
+n_contacts 2 4 8
+item_rounds 0 1 4
+timeout 5000 10000 20000 40000
