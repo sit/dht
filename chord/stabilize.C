@@ -179,8 +179,9 @@ stabilize_manager::continuous_stabilizing ()
 {
   // if anyone is stabilizing, we're still in progress
   bool ok = false;
-  for (unsigned int i = 0; i < clients.size (); i++)
+  for (unsigned int i = 0; i < clients.size (); i++) {
     ok = clients[i]->continuous_stabilizing () || ok;
+  }
   return ok;
 }
 
@@ -189,7 +190,8 @@ stabilize_manager::backoff_stabilizing ()
 {
   // if anyone is stabilizing, we're still in progress
   bool ok = false;
-  for (unsigned int i = 0; i < clients.size (); i++)
+  for (unsigned int i = 0; i < clients.size (); i++) {
     ok = clients[i]->backoff_stabilizing () || ok;
+  }
   return ok;
 }

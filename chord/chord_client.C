@@ -303,6 +303,9 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
   dorpc_arg *arg = sbp->template getarg<dorpc_arg> ();
 
   switch (sbp->proc ()) {
+  case TRANSPORTPROC_NULL:
+    sbp->reply (NULL);
+    break;
   case TRANSPORTPROC_DORPC:
     {
       //v (the destination chordID) is at the top of the header
@@ -334,7 +337,8 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
       void *unmarshalled_args = prog->tbl[arg->procno].alloc_arg ();
       if (!proc (x.xdrp (), unmarshalled_args)) {
 	warn << "dispatch: error unmarshalling arguments: "
-	     << arg->progno << "." << arg->procno << "\n";
+	     << arg->progno << "." << arg->procno 
+	     << " from " << *v <<"\n";
         xdr_delete (prog->tbl[arg->procno].xdr_arg, unmarshalled_args);
 	sbp->replyref (rpcstat (DORPC_MARSHALLERR));
 	return;

@@ -40,6 +40,7 @@
 #include <id_utils.h>
 #include <chord_prot.h>
 #include <transport_prot.h>
+#include <misc_utils.h>
 
 typedef int cb_ID;
 
@@ -57,6 +58,7 @@ struct user_args;
 typedef vec<ptr<location> > route;
 class route_iterator;
 
+typedef callback<void, chord_node, int>::ptr cbtmo_t;
 typedef callback<void,ptr<vnode>,chordstat>::ref cbjoin_t;
 typedef callback<void,chord_node,chordstat>::ref cbchordID_t;
 typedef callback<void,vec<chord_node>,chordstat>::ref cbchordIDlist_t;
@@ -76,6 +78,7 @@ struct user_args {
   svccb *sbp;
   const rpc_program *prog;
   u_int64_t send_time;
+  u_int64_t init_time;
 
   //info about the vnode that will reply
   chordID myID;
@@ -83,7 +86,8 @@ struct user_args {
   vec<float> coords;
 
   user_args (svccb *s, void *a, const rpc_program *pr, int p, u_int64_t st) : 
-    args (a), procno (p), sbp (s), prog (pr), send_time (st) {};
+    args (a), procno (p), sbp (s), prog (pr), send_time (st), 
+    init_time (getusec()) {};
 
   void *getvoidarg () { return args; };
   const void *getvoidarg () const { return args; };
@@ -148,10 +152,16 @@ class vnode : public virtual refcount {
   virtual void register_upcall (int progno, cbupcall_t cb) = 0;
 
   // For other modules
-  virtual long doRPC (const chord_node &ID, const rpc_program &prog, int procno, 
-		      ptr<void> in, void *out, aclnt_cb cb) = 0;
+  virtual long doRPC (const chord_node &ID, 
+		      const rpc_program &prog, 
+		      int procno, 
+		      ptr<void> in, 
+		      void *out, 
+		      aclnt_cb cb,
+		      cbtmo_t cb_tmo = NULL) = 0;
   virtual long doRPC (ref<location> l, const rpc_program &prog, int procno,
-		      ptr<void> in, void *out, aclnt_cb cb) = 0;
+		      ptr<void> in, void *out, aclnt_cb cb,
+		      cbtmo_t cb_tmo = NULL) = 0;
 
   virtual void resendRPC (long seqno) = 0;
   virtual void fill_user_args (user_args *a) = 0;
@@ -242,8 +252,9 @@ class chord : public virtual refcount {
     active->get_predecessor (n, cb);
   };
   long doRPC (ptr<location> n, const rpc_program &progno, int procno,
-	      ptr<void> in, void *out, aclnt_cb cb) {
-    return active->doRPC (n, progno, procno, in, out, cb);
+	      ptr<void> in, void *out, aclnt_cb cb,
+	      cbtmo_t cb_tmo = NULL) {
+    return active->doRPC (n, progno, procno, in, out, cb, cb_tmo);
   };
   void alert (ptr<location> n, ptr<location> x) {
     active->alert (n, x);

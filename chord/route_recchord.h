@@ -15,13 +15,19 @@ struct recroute_complete_arg;
 class route_recchord : public route_iterator {
   timespec start_time_;
   u_long desired_;
-  
+
   static u_long get_nonce ();
   void first_hop_cb (ptr<bool> del,
 		     ptr<recroute_route_arg> ra,
 		     recroute_route_stat *res,
 		     ptr<location> p,
 		     clnt_stat status);
+
+  void timeout_cb (ptr<bool> del,
+		   ptr<recroute_route_arg> ra,
+		   ptr<location> p,
+		   chord_node n,
+		   int retries);
 
  public:
   // must be public for ihash??

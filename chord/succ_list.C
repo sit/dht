@@ -202,7 +202,8 @@ succ_list::stabilize_getsucclist_cb (chordID s, vec<chord_node> nlist,
 			  s, succlist[i]->id ()));
     i++;
   }
-  while (j < newnsucc) {
+
+  while (j < newnsucc && curnsucc < (u_int)nsucc_) {
     assert (!check);
     ptr<location> newsucc = locations->insert (nlist[j]);
     if (!newsucc) {
@@ -210,8 +211,9 @@ succ_list::stabilize_getsucclist_cb (chordID s, vec<chord_node> nlist,
 	    << nlist[j].x << " from " << s << "\n";
       // XXX do something about it?
     } else {
+      curnsucc++;
       stable_succlist = false;
-      warnx << myID << ": stabilize_succlist: received new successor "
+      warnx << myID << ": stabilize_succlist (2): received new successor "
 	    << nlist[j].x << " from " << s << "\n";
     }
     j++;

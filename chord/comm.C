@@ -58,11 +58,13 @@ int chord_rpc_style = CHORD_RPC_STP;
 
 
 // -----------------------------------------------------
-rpc_state::rpc_state (ptr<location> from, ref<location> l, aclnt_cb c, long s, int p, void *out)
+rpc_state::rpc_state (ptr<location> from, ref<location> l, aclnt_cb c, 
+		      cbtmo_t _cb_tmo, long s, int p, void *out)
   : loc (l), from (from), cb (c), progno (p), seqno (s),
-    b (NULL), rexmits (0), out (out)
+    b (NULL), rexmits (0), cb_tmo (_cb_tmo), out (out)
 {
   ID = l->id ();
+  in_window = true;
 };
 
 // -----------------------------------------------------
@@ -119,6 +121,7 @@ rpc_manager::lookup_host (const net_address &r)
     if (hosts.size () > max_host_cache) {
       hostinfo *o = hostlru.first;
       hostlru.remove (o);
+      hosts.remove (o);
       remove_host (o);
       delete (o);
     }
@@ -139,6 +142,7 @@ long
 rpc_manager::doRPC (ptr<location> from, ptr<location> l,
 		    const rpc_program &prog, int procno, 
 		    ptr<void> in, void *out, aclnt_cb cb,
+		    cbtmo_t cb_tmo,
 		    long fake_seqno /* = 0 */)
 {
   ref<aclnt> c = aclnt::alloc (dgram_xprt, prog, 
@@ -159,7 +163,7 @@ rpc_manager::doRPC_dead (ptr<location> l,
 			 ptr<void> in, void *out, aclnt_cb cb,
 			 long fake_seqno /* = 0 */)
 {
-  return doRPC (NULL, l, prog, procno, in, out, cb, fake_seqno);
+  return doRPC (NULL, l, prog, procno, in, out, cb, NULL, fake_seqno);
 }
 
 void
@@ -192,11 +196,12 @@ long
 tcp_manager::doRPC (ptr<location> from, ptr<location> l,
 		    const rpc_program &prog, int procno, 
 		    ptr<void> in, void *out, aclnt_cb cb,
+		    cbtmo_t cb_tmo,
 		    long fake_seqno /* = 0 */)
 {
   // hack to avoid limit on wrap()'s number of arguments
   RPC_delay_args *args = New RPC_delay_args (from, l, prog, procno,
-					     in, out, cb);
+					     in, out, cb, NULL);
   if (chord_rpc_style == CHORD_RPC_SFSBT) {
     tcpconnect (l->saddr ().sin_addr, ntohs (l->saddr ().sin_port),
 		wrap (this, &tcp_manager::doRPC_tcp_connect_cb, args));
@@ -223,7 +228,7 @@ tcp_manager::doRPC_dead (ptr<location> l,
 			 ptr<void> in, void *out, aclnt_cb cb,
 			 long fake_seqno /* = 0 */)
 {
-  return doRPC (NULL, l, prog, procno, in, out, cb, fake_seqno);
+  return doRPC (NULL, l, prog, procno, in, out, cb, NULL, fake_seqno);
 }
 
 void

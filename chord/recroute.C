@@ -59,7 +59,8 @@ recroute<T>::sweeper ()
   timespec now;
   clock_gettime (CLOCK_REALTIME, &now);
   timespec maxtime;
-  maxtime.tv_sec = 60; // XXX hardcoded constant. let all return w/i 60s.
+  maxtime.tv_sec = 60; // XXX hardcoded constant.
+  maxtime.tv_nsec = 0;
 
   route_recchord *r = routers.first ();
   route_recchord *rn = NULL;
@@ -121,9 +122,12 @@ template<class T>
 void
 recroute<T>::dorecroute (user_args *sbp, recroute_route_arg *ra)
 {
+
   recroute_route_stat rstat (RECROUTE_ACCEPTED);
   bool complete = false;
 
+  rtrace << my_ID () << ": dorecroute (" << ra->routeid << ", "
+	 << ra->x << "): starting\n";
   // XXX check to see if I am actually the successor?
   //     an optimization that may be wrong because of lagging
   //     predecessor updates...
@@ -141,7 +145,7 @@ recroute<T>::dorecroute (user_args *sbp, recroute_route_arg *ra)
     if (cs.size () < m)
       left = cs.size ();
     else
-    left = cs.size () - m;
+      left = cs.size () - m;
     for (i = 1; i < left; i++) {
       if (betweenrightincl (cs[i-1]->id (), cs[i]->id (), ra->x)) {
 	rtrace << my_ID () << ": dorecroute (" << ra->routeid << ", "
@@ -151,6 +155,7 @@ recroute<T>::dorecroute (user_args *sbp, recroute_route_arg *ra)
 	break;
       }
     }
+
   }
   chord_node_wire me;
   my_location ()->fill_node (me);
@@ -165,10 +170,11 @@ recroute<T>::dorecroute (user_args *sbp, recroute_route_arg *ra)
     ca->routeid = ra->routeid;
     
     ca->path.setsize (ra->path.size () + 1);
-    for (size_t i = 0; i < ra->path.size (); i++)
+    for (size_t i = 0; i < ra->path.size (); i++) {
       ca->path[i] = ra->path[i];
+    }
     ca->path[ra->path.size ()] = me;
-    
+
     u_long tofill = (cs.size () < m) ? cs.size () : m;
     ca->body.robody->successors.setsize (tofill);
     for (size_t i = 0; i < tofill; i++)
@@ -176,14 +182,6 @@ recroute<T>::dorecroute (user_args *sbp, recroute_route_arg *ra)
 
     ca->retries = ra->retries;
 
-#if 0
-    const rpcgen_table *rtp;
-    rtp = &recroute_program_1.tbl[RECROUTEPROC_COMPLETE];
-    assert (rtp);
-
-    if (rtp->print_arg)
-      rtp->print_arg (ca, NULL, 6, "ARGS", "");
-#endif /* 0 */    
     
     ptr<location> l = locations->lookup_or_create (make_chord_node (ra->origin));
     doRPC (l, recroute_program_1, RECROUTEPROC_COMPLETE,
@@ -197,31 +195,32 @@ recroute<T>::dorecroute (user_args *sbp, recroute_route_arg *ra)
     ptr<recroute_route_arg> nra = New refcounted<recroute_route_arg> ();
     *nra = *ra;
     nra->path.setsize (ra->path.size () + 1);
-    for (size_t i = 0; i < ra->path.size (); i++)
+    for (size_t i = 0; i < ra->path.size (); i++) {
       nra->path[i] = ra->path[i];
+    }
     nra->path[ra->path.size ()] = me;
-    
+
     vec<chordID> failed;
     ptr<location> p = closestpred (ra->x, failed);
-    recroute_route_stat *res = New recroute_route_stat (RECROUTE_ACCEPTED);
-    doRPC (p, recroute_program_1, RECROUTEPROC_ROUTE,
-	   nra, res,
-	   wrap (this, &recroute<T>::recroute_hop_cb, nra, p, failed, res));
+    if (p->id () != my_ID ()) {
+      recroute_route_stat *res = New recroute_route_stat (RECROUTE_ACCEPTED);
+
+      rtrace << my_ID () << ": dorecroute (" << ra->routeid << ", "
+	     << ra->x << "): forwarding to " << p->id () << "\n";
+      
+      doRPC (p, recroute_program_1, RECROUTEPROC_ROUTE,
+	     nra, res,
+	     wrap (this, &recroute<T>::recroute_hop_cb, nra, p, failed, res),
+	     wrap (this, &recroute<T>::recroute_hop_timeout_cb, nra, p, failed));
+    } else {
+      //XXX we're dropping this (instead of sending a failure message)
+      //    since I'm sending a bunch of crazy parallel lookups and we're
+      //    guessing that maybe another one will succeed.
+      //    worst case: the lookup fails when the sweeper goes off.
+      rtrace << my_ID () << " next hop is me. dropping\n";
+    }
   }
 
-#if 0
-  // XXX I think will need to have customized up call handling, if we
-  //     want to support this.
-  // XXX will also need to forward the RPC later on, or decide what to
-  //     do about CHORD_STOP type behavior.
-  if (ra->upcall_prog)  {
-    do_upcall (ra->upcall_prog, ra->upcall_proc,
-	       ra->upcall_args.base (), ra->upcall_args.size (),
-	       wrap (this, &vnode_impl::upcall_done, fa, res, sbp));
-  } else {
-    sbp->replyref (rstat);
-  }
-#endif /* 0 */
   sbp->replyref (rstat);
 }
 
@@ -235,14 +234,19 @@ recroute<T>::recroute_hop_cb (ptr<recroute_route_arg> nra,
 {
   if (!status && *res == RECROUTE_ACCEPTED) {
     delete res; res = NULL;
+    rtrace << my_ID () << ": dorecroute (" << nra->routeid << ", "
+	   << nra->x << "): message accepted\n";
     return;
   }
   rtrace << my_ID () << ": dorecroute (" << nra->routeid << ", " << nra->x
 	 << ") forwarding to "
 	 << p->id () << " failed (" << status << "," << *res << ").\n";
+
+  delete res;
   if (failed.size () > 3) {    // XXX hardcoded constant
     rtrace << my_ID () << ": dorecroute (" << nra->routeid << ", " << nra->x
 	   << ") failed too often. Discarding.\n";
+    
     
     ptr<recroute_complete_arg> ca = New refcounted<recroute_complete_arg> ();
     ca->body.set_status (RECROUTE_ROUTE_FAILED);
@@ -259,18 +263,47 @@ recroute<T>::recroute_hop_cb (ptr<recroute_route_arg> nra,
 	   wrap (this, &recroute<T>::recroute_sent_complete_cb));
     // We don't really care if this is lost beyond the RPC system's
     // retransmits.
-    delete res; res = NULL;
     return;
   }
   nra->retries++;
   failed.push_back (p->id ());
   p = closestpred (nra->x, failed);
 
+  rtrace << my_ID () << ": dorecroute (" << nra->routeid << ", "
+	 << nra->x << "): now forwarding to " << p->id () << "\n";
+  recroute_route_stat *nres = New recroute_route_stat (RECROUTE_ACCEPTED);
   doRPC (p, recroute_program_1, RECROUTEPROC_ROUTE,
-	 nra, res,
-	 wrap (this, &recroute<T>::recroute_hop_cb, nra, p, failed, res));
+	 nra, nres,
+	 wrap (this, &recroute<T>::recroute_hop_cb, nra, p, failed, nres),
+	 wrap (this, &recroute<T>::recroute_hop_timeout_cb, nra, p, failed));
 }
 
+template<class T>
+void
+recroute<T>::recroute_hop_timeout_cb (ptr<recroute_route_arg> nra,
+				      ptr<location> p,
+				      vec<chordID> failed,
+				      chord_node n,
+				      int rexmit_number)
+{
+  if (rexmit_number == 1) {
+    nra->retries++;
+    failed.push_back (p->id ());
+    ptr<location> l = closestpred (nra->x, failed);
+
+    if (l->id () != my_ID ()) {
+      
+      rtrace << my_ID () << ": dorecroute (" << nra->routeid << ", "
+	     << nra->x << "): TIMEOUT now forwarding to " << l->id () << "\n";
+      recroute_route_stat *nres = New recroute_route_stat (RECROUTE_ACCEPTED);
+      doRPC (p, recroute_program_1, RECROUTEPROC_ROUTE,
+	     nra, nres,
+	     wrap (this, &recroute<T>::recroute_hop_cb, nra, l, failed, nres),
+	     wrap (this, &recroute<T>::recroute_hop_timeout_cb, nra, p, failed));
+    }
+  }
+
+}
 template<class T>
 void
 recroute<T>::recroute_sent_complete_cb (clnt_stat status)
@@ -292,10 +325,13 @@ recroute<T>::docomplete (user_args *sbp, recroute_complete_arg *ca)
     sbp->reply (NULL);
     return;
   }
-  rtrace << "docomplete: routeid " << ca->routeid << " has returned!\n";
+  rtrace << "docomplete: routeid " << ca->routeid << " for key " <<
+    router->key () << " has returned! || ";
+  rtrace << " retries: " << ca->retries << "\n";
+  
   routers.remove (router);
   router->handle_complete (sbp, ca);
-  // XXX Print out something about ca->retries?
+
 }
 
 template<class T>

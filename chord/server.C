@@ -45,6 +45,10 @@
 #define info  modlogger ("vnode", modlogger::INFO)
 #define trace modlogger ("vnode", modlogger::TRACE)
 
+const int aclnttrace (getenv ("ACLNT_TRACE")
+		      ? atoi (getenv ("ACLNT_TRACE")) : 0);
+const bool aclnttime (getenv ("ACLNT_TIME"));
+
 void 
 vnode_impl::get_successor (ptr<location> n, cbchordID_t cb)
 {
@@ -389,6 +393,8 @@ user_args::reply (void *res)
 
   assert (rpc_res->status == DORPC_OK);
 
+  //  u_int64_t diff = getusec () - init_time;
+  //  warn << "user_args: replying after processing time of " <<  diff << "\n";
   //reply
   sbp->reply (rpc_res);
   delete rpc_res;
@@ -398,14 +404,20 @@ user_args::reply (void *res)
 void
 vnode_impl::ping (ptr<location>x, cbping_t cb)
 {
-  //close enough
-  get_successor (x, wrap (this, &vnode_impl::ping_cb, cb));
+  //talk directly to the RPC manger to get the dead behaviour
+  
+  rpcm->doRPC_dead (x, transport_program_1, TRANSPORTPROC_NULL, 
+		    NULL, NULL, 
+		    wrap (this, &vnode_impl::ping_cb, cb));
 }
 
 void
-vnode_impl::ping_cb (cbping_t cb, chord_node n, chordstat status) 
+vnode_impl::ping_cb (cbping_t cb, clnt_stat status) 
 {
-  cb (status);
+  if (status)
+    cb (CHORD_RPCFAILURE);
+  else
+    cb (CHORD_OK);
 }
 
 void
@@ -460,10 +472,59 @@ vnode_impl::check_dead_nodes ()
 }
 
 
+
+static inline const char *
+tracetime ()
+{
+  static str buf ("");
+  if (aclnttime) {
+    timespec ts;
+    clock_gettime (CLOCK_REALTIME, &ts);
+    buf = strbuf (" %d.%06d", int (ts.tv_sec), int (ts.tv_nsec/1000));
+  }
+  return buf;
+}
+
+// Stolen from aclnt::init_call
+static void
+printreply (aclnt_cb cb, str name, void *res,
+	    void (*print_res) (const void *, const strbuf *, int,
+			       const char *, const char *),
+	    clnt_stat err)
+{
+  if (aclnttrace >= 3) {
+    if (err)
+      warn << "ACLNT_TRACE:" << tracetime () 
+	   << " reply " << name << ": " << err << "\n";
+    else if (aclnttrace >= 4) {
+      warn << "ACLNT_TRACE:" << tracetime ()
+	   << " reply " << name << "\n";
+      if (aclnttrace >= 5 && print_res)
+	print_res (res, NULL, aclnttrace - 4, "REPLY", "");
+    }
+  }
+  (*cb) (err);
+}
+
+void
+err_cb (aclnt_cb cb)
+{
+  cb (RPC_CANTSEND);
+}
 long
 vnode_impl::doRPC (ref<location> l, const rpc_program &prog, int procno, 
-		   ptr<void> in, void *out, aclnt_cb cb)
+		   ptr<void> in, void *out, aclnt_cb cb,
+		   cbtmo_t cb_tmo)
 {
+
+  //check to see if this is alive
+  ptr<location> loc = locations->lookup (l->id ());
+  if (loc && !loc->alive()) {
+    warn << "doRPC on dead node " << l->id () << "\n";
+    delaycb (0, wrap (&err_cb, cb));
+    return -1;
+  }
+
   //form the transport RPC
   ptr<dorpc_arg> arg = New refcounted<dorpc_arg> ();
 
@@ -498,17 +559,33 @@ vnode_impl::doRPC (ref<location> l, const rpc_program &prog, int procno,
     memcpy (arg->args.base (), marshalled_args, args_len);
     xfree (marshalled_args);
 
-#ifdef RPC_PROGRAM_STATS
-    prog.outcall_num[procno] += 1;
-    prog.outcall_bytes[procno] += args_len;
-#endif
 
     ref<dorpc_res> res = New refcounted<dorpc_res> (DORPC_OK);
     xdrproc_t outproc = prog.tbl[procno].xdr_res;
+    u_int32_t xid = random_getword ();
+    aclnt_cb cbw = wrap (this, &vnode_impl::doRPC_cb, 
+			l, outproc, out, cb, res);
+
+    // Stolen (mostly) from aclnt::init_call
+    if (aclnttrace >= 2) {
+      str name;
+      const rpcgen_table *rtp;
+      rtp = &prog.tbl[procno];
+      assert (rtp);
+      name = strbuf ("%s:%s fake_xid=%x", prog.name, rtp->name, xid);
+      
+      warn << "ACLNT_TRACE:" << tracetime () << " call " << name << "\n";
+      if (aclnttrace >= 5 && rtp->print_arg)
+	rtp->print_arg (in, NULL, aclnttrace - 4, "ARGS", "");
+      if (aclnttrace >= 3 && cb != aclnt_cb_null)
+	cbw = wrap (printreply, cbw, name, out, rtp->print_res);
+    }
+  
+
+
     return rpcm->doRPC (me_, l, transport_program_1, TRANSPORTPROC_DORPC, 
-			arg, res, 
-			wrap (this, &vnode_impl::doRPC_cb, 
-			      l, outproc, out, cb, res));
+			arg, res, cbw, cb_tmo);
+			
   }
 }
 
@@ -519,12 +596,20 @@ vnode_impl::doRPC_cb (ptr<location> l, xdrproc_t proc,
 		      ref<dorpc_res> res, clnt_stat err) 
 {
   if (err) {
+    ptr<location> reall = locations->lookup (l->id ());
+    if (reall && reall->alive ()) {
+      warn << "got an error, but " << l->id () << " is still marked alive\n";
+      reall->set_alive (false);
+    } else if (!reall) {
+      locations->insert (l);
+      l->set_alive (false);
+    }
     if (!l->alive ()) {
       // benjie: no longer alive, put it on the dead_nodes list so
       // we can try to contact it periodically
       unsigned i=0;
       for (i=0; i<dead_nodes.size (); i++)
-      if (dead_nodes[i]->id () == l->id ())
+	if (dead_nodes[i]->id () == l->id ())
           break;
       if (i == dead_nodes.size ())
         dead_nodes.push_back (l);
@@ -628,10 +713,11 @@ vnode_impl::update_coords (vec<float> uc, float ud)
 
 long
 vnode_impl::doRPC (const chord_node &n, const rpc_program &prog, int procno, 
-	      ptr<void> in, void *out, aclnt_cb cb)
+		   ptr<void> in, void *out, aclnt_cb cb, 		    
+		   cbtmo_t cb_tmo)
 {
   ptr<location> l = locations->lookup_or_create (n);
-  return doRPC (l, prog, procno, in, out, cb);
+  return doRPC (l, prog, procno, in, out, cb, cb_tmo);
 }
 
 void

@@ -8,24 +8,24 @@ class rpccb_chord : public rpccb_msgbuf {
 	       ptr<bool> del, ptr<void> in, int procno) :
     rpccb_msgbuf (c, x, wrap (this, &rpccb_chord::finish_cb, _cb, del), out, 
 		  outproc, d), 
-    utmo (u_tmo), deleted (del), c (c), procno (procno), in (in) {};
+    utmo (u_tmo), deleted (del), c (c), procno (procno), in (in), s(*d) {};
 
   int rexmits;
   timecb_t *tmo;
   long sec, nsec;
   cbv utmo;
   ptr<bool> deleted;
-
-
   ptr<aclnt> c;
   int procno;
   ptr<void> in;
+  const sockaddr s;
 
 private:
   void timeout_cb (ptr<bool> del);
   void finish_cb (aclnt_cb cb, ptr<bool> del, clnt_stat err);
 
  public:
+  void reset_tmo ();
   void timeout () { finish (RPC_TIMEDOUT); };
   void user_rexmit ();
   static rpccb_chord *alloc (ptr<aclnt> c,

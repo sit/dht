@@ -10,58 +10,9 @@
 
 long outbytes;
 const int shortstats (getenv ("SHORT_STATS") ? 1 : 0);
-const int aclnttrace (getenv ("ACLNT_TRACE")
-		      ? atoi (getenv ("ACLNT_TRACE")) : 0);
-const bool aclnttime (getenv ("ACLNT_TIME"));
 
 
-#define CWIND_MULT 10
-
-// UTILITY FUNCTIONS
-
-static
-int partition (float *A, int p, int r)
-{
-  float x = A[p];
-  int i = p - 1;
-  int j = r + 1;
-
-  while (1) {
-    do {  j -= 1; } while (A[j] > x);
-    do {  i += 1; } while (A[i] < x);
-    if (i >= j)
-      return j;
-    float tmp = A[i];
-    A[i] = A[j];
-    A[j] = tmp;     
-  }
-}
-
-static float
-myselect (float *A, int p, int r, int i)
-{
-  if (p == r)
-    return A[p];
-  int q = partition (A, p, r);
-  int k = q - p + 1;
-  if (i <= k)
-    return myselect(A, p, q, i);
-  else
-    return myselect(A, q+1, r, i-k);
-}
-
-
-static inline const char *
-tracetime ()
-{
-  static str buf ("");
-  if (aclnttime) {
-    timespec ts;
-    clock_gettime (CLOCK_REALTIME, &ts);
-    buf = strbuf (" %d.%06d", int (ts.tv_sec), int (ts.tv_nsec/1000));
-  }
-  return buf;
-}
+#define CWIND_MULT 5
 
 stp_manager::stp_manager (ptr<u_int32_t> _nrcv)
   : rpc_manager (_nrcv),
@@ -128,12 +79,13 @@ long
 stp_manager::doRPC (ptr<location> from, ptr<location> l,
 		    const rpc_program &prog, int procno, 
 		    ptr<void> in, void *out, aclnt_cb cb,
+		    cbtmo_t cb_tmo,
 		    long _fake_seqno /* = 0 */)
 {
   reset_idle_timer ();
   if (!room_in_window ()) {
     RPC_delay_args *args = New RPC_delay_args (from, l, prog, procno,
-					       in, out, cb);
+					       in, out, cb, cb_tmo);
     args->fake_seqno = fake_seqno;
     enqueue_rpc (args);
     fake_seqno--;
@@ -144,7 +96,8 @@ stp_manager::doRPC (ptr<location> from, ptr<location> l,
 
     ref<aclnt> c = aclnt::alloc (dgram_xprt, prog, 
 				 (sockaddr *)&(l->saddr ()));
-    rpc_state *C = New rpc_state (from, l, cb, seqno, prog.progno, out);
+    rpc_state *C = New rpc_state (from, l, cb, cb_tmo, seqno, 
+				  prog.progno, out);
     C->procno = procno;
    
     C->b = rpccb_chord::alloc (c, 
@@ -158,8 +111,11 @@ stp_manager::doRPC (ptr<location> from, ptr<location> l,
     long sec, nsec;
     setup_rexmit_timer (from, l, &sec, &nsec);
 
+    //insert into the Q of RPCs in flight
+    pending.insert_tail (C);
     inflight++;
 
+    C->sendtime = getusec ();
     C->b->send (sec, nsec);
     seqno++;
     nsent++;
@@ -178,9 +134,50 @@ stp_manager::doRPC (ptr<location> from, ptr<location> l,
 void
 stp_manager::timeout (rpc_state *C)
 {
+
+  //run through the list of pending RPCs and bump
+  // the retransmit timers of any RPCs that are
+  // bound for the same destination.
+
+  warn << "timeout for RPC pending on " << C->loc->id ()
+       << " " << inet_ntoa (C->loc->saddr().sin_addr) << "\n";
+
+  warn << "window: " << (int)cwind << " ssthresh " << (int)ssthresh << "\n";
+#if 0
+  rpc_state *O = pending.first;
+  while (O) {
+    if (O->loc->id () == C->loc->id () &&
+	O != C) {
+      warn << "bumping timer on host " << C->loc->id () << "\n";
+      O->b->reset_tmo (); 
+
+      if ((getusec () - O->sendtime) > 1000000000 && O->in_window) {
+	//this RPC is almost certainlly destined for a dead host
+	// get it out of the window
+	O->in_window = false;
+	inflight--;
+      }
+      
+    }
+    O = pending.next (O);
+  }
+
+
+  if (C->rexmits > 1 && C->in_window) {
+    C->in_window = false;
+    inflight--;
+  }
+#endif
+
+  if (C->cb_tmo) {
+    chord_node n;
+    C->loc->fill_node (n);
+    (C->cb_tmo)(n, C->rexmits);
+  }
+
   C->rexmits++;
-  inflight--;
-  update_cwind (-1);
+  if (C->from->id () != C->loc->id ())
+    update_cwind (-1);
 }
 
 void
@@ -192,6 +189,8 @@ stp_manager::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
     C->loc->set_alive (false);
     warnx << gettime () << " RPC failure: " << err
           << " destined for " << C->ID << " seqno " << C->seqno << "\n";
+
+
   } else if (res->status == DORPC_MARSHALLERR) {
     nrpcfailed++;
     err = RPC_CANTDECODEARGS;
@@ -219,11 +218,11 @@ stp_manager::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
     } 
   }
 
-
+  
+  pending.remove (C);
   user_rexmit_table.remove (C);
   (C->cb) (err);
-  if (C->rexmits == 0)
-    inflight--;
+  if (C->in_window) inflight--;
   update_cwind (C->seqno);
   rpc_done (C->seqno);
   delete C;
@@ -261,6 +260,7 @@ stp_manager::rpc_done (long acked_seqno)
 	   args->in,
 	   args->out,
 	   args->cb,
+	   args->cb_tmo,
 	   args->fake_seqno);
     delete args;
     num_qed--;
@@ -342,18 +342,24 @@ stp_manager::setup_rexmit_timer (ptr<location> from, ptr<location> l,
 
   float alat;
   
-  if (l
-      && from
-      && (l->coords ().size () > 0)
-      && (from->coords ().size () > 0)) {
+  //talking to ourself, don't bother; load tends to make for hefty delays. 
+  // don't retransmit these as they certainly won't be lost
+  if (false && l &&   //if we've got a measurement, use it
+      l->nrpc () > 50) {
+    //      warn << l->id () << ": using " << l->nrpc () << "measurments: " << (int)l->distance () << " + 4*" << (int)l->a_var () << "\n";
+    alat = 1.5*(l->distance() + 6*l->a_var () + 5000);
+  } else if (l
+	     && from
+	     && (l->coords ().size () > 0)
+	     && (from->coords ().size () > 0)) {
     float dist = Coord::distance_f (from->coords (), l->coords ());
-    alat = dist + 8.0*c_err + 5000; 
+    alat = dist + 10.0*c_err + 5000; 
     //scale it to be safe. the 8 comes from an analysis for log files
     // I also tried usssing the variance but average works better. 
     // With 8 we'll do about 1 percent spurious retransmits
   } else
-    alat = 10000000;
-
+    alat = 1000000;
+  
   //statistics
   timers.push_back (alat);
   if (timers.size () > 1000) timers.pop_front ();
@@ -403,10 +409,13 @@ rpc_manager::update_latency (ptr<location> from, ptr<location> l, u_int64_t lat)
   if (from && l && from->coords ().size () > 0 && l->coords ().size () > 0) {
     float predicted = Coord::distance_f (from->coords (), l->coords ());
     float sample_err = (lat - predicted);
-    //    warn << "To " << l->id () << " " << (int)sample_err << " " << (int)lat 
-    //	 << " " << (int)predicted << " " 
-    //	 << (int)c_err << " " << (int)c_var << " " 
-    //	 << (int)(c_err_rel*1000) << "\n";
+    
+    /*
+      warn << "To " << l->id () << " " << (int)sample_err << " " << (int)lat 
+      << " " << (int)predicted << " " 
+      << (int)c_err << " " << (int)c_var << " " 
+      << (int)(c_err_rel*1000) << "\n";
+    */
 
     if (sample_err < 0) sample_err = -sample_err;
     float rel_err = sample_err/lat;
@@ -510,28 +519,6 @@ void stp_manager::stats ()
 
 // ------------- rpccb_chord ----------------
 
-
-// Stolen from aclnt::init_call
-static void
-printreply (aclnt_cb cb, str name, void *res,
-	    void (*print_res) (const void *, const strbuf *, int,
-			       const char *, const char *),
-	    clnt_stat err)
-{
-  if (aclnttrace >= 3) {
-    if (err)
-      warn << "ACLNT_TRACE:" << tracetime () 
-	   << " reply " << name << ": " << err << "\n";
-    else if (aclnttrace >= 4) {
-      warn << "ACLNT_TRACE:" << tracetime ()
-	   << " reply " << name << "\n";
-      if (aclnttrace >= 5 && print_res)
-	print_res (res, NULL, aclnttrace - 4, "REPLY", "");
-    }
-  }
-  (*cb) (err);
-}
-
 rpccb_chord *
 rpccb_chord::alloc (ptr<aclnt> c,
 		    aclnt_cb cb,
@@ -584,21 +571,6 @@ rpccb_chord::alloc (ptr<aclnt> c,
   stats->bytes += s->resid ();
   stats->calls++;
   outbytes += s->resid ();
-
-  // Stolen (mostly) from aclnt::init_call
-  if (aclnttrace >= 2) {
-    str name;
-    const rpcgen_table *rtp;
-    rtp = &prog.tbl[procno];
-    assert (rtp);
-    name = strbuf ("%s:%s x=%x", prog.name, rtp->name, xid);
-
-    warn << "ACLNT_TRACE:" << tracetime () << " call " << name << "\n";
-    if (aclnttrace >= 5 && rtp->print_arg)
-      rtp->print_arg (in, NULL, aclnttrace - 4, "ARGS", "");
-    if (aclnttrace >= 3 && cb != aclnt_cb_null)
-      cb = wrap (printreply, cb, name, out, rtp->print_res);
-  }
   
   ptr<bool> deleted  = New refcounted<bool> (false);
 
@@ -632,13 +604,32 @@ rpccb_chord::send (long _sec, long _nsec)
 }
 
 
+//do the exponential backoff on tmo
+void
+rpccb_chord::reset_tmo ()
+{
+  long oldsec = sec;
+  long oldnsec = nsec;
+  nsec *= 2;
+  sec *= 2;
+  while (nsec >= 1000000000) {
+    nsec -= 1000000000;
+    sec += 1;
+  }
+  if (sec > 1) sec = 1;
+  
+  warn << inet_ntoa (((sockaddr_in *)&s)->sin_addr) << ": timer was " << oldsec << "." << oldnsec << " now is " << sec << "." << nsec << "; rexmits is " << rexmits << "\n";
+  if (tmo) timecb_remove (tmo);
+  tmo = delaycb (sec, nsec, wrap (this, &rpccb_chord::timeout_cb, deleted));
+}
+
 void 
 rpccb_chord::user_rexmit ()
 {
   //this function does an immediate retransmit.
   //it doesn't cost you a rexmit counter bump
   //and doesn't bump the exponential either (but does reset the timeout timer)
-  timecb_remove (tmo);
+  if (tmo) timecb_remove (tmo);
   xmit (rexmits);
   tmo = delaycb (sec, nsec, wrap (this, &rpccb_chord::timeout_cb, deleted));
 }
@@ -648,18 +639,11 @@ rpccb_chord::timeout_cb (ptr<bool> del)
 {
   if (*del) return;
 
+  tmo = NULL;
   if (utmo)
     utmo ();
 
   if (rexmits > MAX_REXMIT) {
-
-#if 0
-    u_int64_t now = getusec ();
-    warn << "rpccb_chord::timeout_cb\n"; 
-    warn << "\t**now " << now << "\n";
-    warn << "\trexmits " << rexmits << "\n";
-#endif
-    tmo = NULL;
     timeout ();
     return;
   } else {
@@ -667,12 +651,15 @@ rpccb_chord::timeout_cb (ptr<bool> del)
       panic ("1 timeout_cb: sec %ld, nsec %ld\n", sec, nsec);
 
     sockaddr_in *s = (sockaddr_in *)dest;
+    dorpc_arg *args = (dorpc_arg *)in.get ();
 
     warnx << gettime() << " REXMIT " << xid
-	  << " rexmits " << rexmits << ", timeout "<< sec*1000 + nsec/(1000*1000) << " ms, destined for " << inet_ntoa (s->sin_addr) << "\n";
+	  << " " << args->progno << ":" << args->procno << 
+	  " rexmits " << rexmits << ", timeout " 
+	  << sec*1000 + nsec/(1000*1000) << " ms, destined for " 
+	  << inet_ntoa (s->sin_addr) << "\n";
 
     //re-write the timestamp
-    dorpc_arg *args = (dorpc_arg *)in.get ();
     args->send_time = getusec ();
 
     //remarshall the args
@@ -700,34 +687,16 @@ rpccb_chord::timeout_cb (ptr<bool> del)
 
     //send it
     xmit (rexmits);
-
-
-
-    if (rexmits == MAX_REXMIT) {
-      // XXX
-      // The intent of this code path is to do a conservative last
-      // ditch effort. However, if backed off value in <sec,nsec>
-      // exceeds MIN_RPC_FAILURE_TIMER then this doesn't happen.
-      // --josh
+    
+    
+    if (rexmits == MAX_REXMIT && sec < MIN_RPC_FAILURE_TIMER) {
       sec = MIN_RPC_FAILURE_TIMER;
       nsec = 0;
-    } else {
-      sec *= 2;
-      nsec *= 2;
-      while (nsec >= 1000000000) {
-	nsec -= 1000000000;
-	sec += 1;
-      }
-    }
+    } 
+    reset_tmo ();
+    rexmits++;
   }
-
-  if (nsec < 0 || sec < 0)
-    panic ("timeout_cb: sec %ld, nsec %ld\n", sec, nsec);
-
-  tmo = delaycb (sec, nsec, wrap (this, &rpccb_chord::timeout_cb, deleted));
-  rexmits++;
 }
-
 
 void
 rpccb_chord::finish_cb (aclnt_cb cb, ptr<bool> del, clnt_stat err) 

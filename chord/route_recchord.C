@@ -79,6 +79,7 @@ route_recchord::handle_timeout ()
 void
 route_recchord::handle_complete (user_args *sbp, recroute_complete_arg *ca)
 {
+  assert (!done);
   // fill router with successor list and path from ca.
   search_path.clear ();
   for (size_t i = 0; i < ca->path.size (); i++) {
@@ -129,6 +130,8 @@ route_recchord::first_hop (cbhop_t cbi, ptr<chordID> guess)
 {
   cb = cbi;
 
+  trace << "in first hop for " << x << "\n";
+
   ptr<recroute_route_arg> ra = New refcounted<recroute_route_arg> ();
 
   ra->routeid = routeid_;
@@ -157,9 +160,31 @@ route_recchord::first_hop (cbhop_t cbi, ptr<chordID> guess)
   recroute_route_stat *res = New recroute_route_stat (RECROUTE_ACCEPTED);
   v->doRPC (p, recroute_program_1, RECROUTEPROC_ROUTE,
 	    ra, res,
-	    wrap (this, &route_recchord::first_hop_cb, deleted, ra, res, p));
+	    wrap (this, &route_recchord::first_hop_cb, deleted, ra, res, p),
+	    wrap (this, &route_recchord::timeout_cb, deleted, ra, p));
   
   clock_gettime (CLOCK_REALTIME, &start_time_);
+}
+
+void
+route_recchord::timeout_cb (ptr<bool> del,
+			    ptr<recroute_route_arg> ra,
+			    ptr<location> p,
+			    chord_node n,
+			    int retries)
+{
+  if (*del) return;
+  
+  if (retries == 1) {
+    trace << "timeout: sending another copy\n";
+    failed_nodes.push_back (p->id ());
+    p = v->closestpred (x, failed_nodes);
+    recroute_route_stat *res = New recroute_route_stat (RECROUTE_ACCEPTED);
+    v->doRPC (p, recroute_program_1, RECROUTEPROC_ROUTE,
+	      ra, res,
+	      wrap (this, &route_recchord::first_hop_cb, deleted, ra, res, p),
+	      wrap (this, &route_recchord::timeout_cb, deleted, ra, p));  
+  }
 }
 
 void
@@ -169,12 +194,15 @@ route_recchord::first_hop_cb (ptr<bool> del,
 			      ptr<location> p,
 			      clnt_stat status)
 {
+
   // XXX what a pain; this is rather similar to recroute::recroute_hop_cb
   //     should figure out if there is a clean way to abstract code.
-  if (del || (!status && *res == RECROUTE_ACCEPTED)) {
-    delete res; res = NULL;
+  if (*del || ((status == RPC_SUCCESS) && (*res == RECROUTE_ACCEPTED))) {
+    delete res;
     return;
   }
+  delete res;
+
   chordID myID = v->my_ID ();
   trace << myID << ": first_hop (" << routeid_ << ", " << x
 	<< ") forwarding to "
@@ -183,18 +211,29 @@ route_recchord::first_hop_cb (ptr<bool> del,
   if (failed_nodes.size () > 3) {    // XXX hardcoded constant
     trace << myID << ": first_hop (" << routeid_ << ", " << x
 	  << ") failed too often. Discarding.\n";
-    r = CHORD_RPCFAILURE;
-    cb (done = true);
+    
+    //Send myself a "complete" RPC indicating failure
+    ptr<location> me = v->my_location ();
+    ptr<recroute_complete_arg> ca = New refcounted<recroute_complete_arg> ();
+    ca->body.set_status (RECROUTE_ROUTE_FAILED);
+    me->fill_node (ca->body.rfbody->failed_hop);
+    ca->body.rfbody->failed_stat = CHORD_RPCFAILURE;
+    ca->routeid = routeid_;
+    ca->retries = failed_nodes.size ();
+    
+    v->doRPC (me, recroute_program_1, RECROUTEPROC_COMPLETE,
+	      ca, NULL, aclnt_cb_null);
     return;
   }
 
   ra->retries++;
   failed_nodes.push_back (p->id ());
   p = v->closestpred (x, failed_nodes);
-
+  recroute_route_stat *nres = New recroute_route_stat (RECROUTE_ACCEPTED);
   v->doRPC (p, recroute_program_1, RECROUTEPROC_ROUTE,
 	    ra, res,
-	    wrap (this, &route_recchord::first_hop_cb, del, ra, res, p));
+	    wrap (this, &route_recchord::first_hop_cb, del, ra, nres, p),
+	    wrap (this, &route_recchord::timeout_cb, deleted, ra, p));  
 }
 
 void

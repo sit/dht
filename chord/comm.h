@@ -2,12 +2,13 @@
 #define _SFSNET_COMM_H_
 
 #include "chord_types.h"
+#include "chord.h"
 #include "ihash.h"
 #include "arpc.h"
 #include <misc_utils.h>
 #include "aclnt_chord.h"
 
-#define max_host_cache 1000
+#define max_host_cache 10
 
 class location;
 
@@ -29,20 +30,24 @@ struct RPC_delay_args {
   ptr<void> in;
   void *out;
   aclnt_cb cb;
+  cbtmo_t cb_tmo;
   long fake_seqno;
   u_int64_t now;
 
   tailq_entry<RPC_delay_args> q_link;
 
-  RPC_delay_args (ptr<location> _from, ptr<location> _l, const rpc_program &_prog, int _procno,
-		  ptr<void> _in, void *_out, aclnt_cb _cb) :
+  RPC_delay_args (ptr<location> _from, ptr<location> _l, 
+		  const rpc_program &_prog, int _procno,
+		  ptr<void> _in, void *_out, aclnt_cb _cb,
+		  cbtmo_t _cb_tmo) :
     l (_l), from (_from), prog (_prog), procno (_procno), in (_in), 
-    out (_out), cb (_cb), now (getusec ()) {};
+    out (_out), cb (_cb), cb_tmo (_cb_tmo), now (getusec ()) {};
 
   RPC_delay_args (const rpc_program &_prog, int _procno,
-		  ptr<void> _in, void *_out, aclnt_cb _cb) :
+		  ptr<void> _in, void *_out, aclnt_cb _cb,
+		  cbtmo_t _cb_tmo) :
     l (NULL), from (NULL), prog (_prog), procno (_procno), in (_in), 
-    out (_out), cb (_cb), now (getusec ()) {};
+    out (_out), cb (_cb), cb_tmo (_cb_tmo), now (getusec ()) {};
 };
 
 struct rpc_state {
@@ -54,14 +59,21 @@ struct rpc_state {
   int procno;
   long seqno;
   long rexmit_ID;
+  bool in_window;
 
   rpccb_chord *b;
   int rexmits;
+  u_int64_t sendtime;
+  cbtmo_t cb_tmo;
+
   ihash_entry <rpc_state> h_link;
+  tailq_entry <rpc_state> q_link;
 
   void *out;
 
-  rpc_state (ptr<location> from, ref<location> l, aclnt_cb c,  long s, int p, void *out);
+  rpc_state (ptr<location> from, ref<location> l, aclnt_cb c,  
+	     cbtmo_t cb_tmo,
+	     long s, int p, void *out);
 };
 
 // store latency information about a host.
@@ -117,10 +129,18 @@ class rpc_manager {
  public:
   virtual void rexmit (long seqno) {};
   virtual void stats ();
-  virtual long doRPC (ptr<location> from, ptr<location> l, const rpc_program &prog, int procno,
-		 ptr<void> in, void *out, aclnt_cb cb, long fake_seqno = 0);
-  virtual long doRPC_dead (ptr<location> l, const rpc_program &prog, int procno,
-			   ptr<void> in, void *out, aclnt_cb cb, long fake_seqno = 0);
+  virtual long doRPC (ptr<location> from, ptr<location> l, 
+		      const rpc_program &prog, int procno,
+		      ptr<void> in, void *out, aclnt_cb cb, 
+		      cbtmo_t cb_tmo = NULL,
+		      long fake_seqno = 0);
+  virtual long doRPC_dead (ptr<location> l, 
+			   const rpc_program &prog, 
+			   int procno,
+			   ptr<void> in, 
+			   void *out, 
+			   aclnt_cb cb, 
+			   long fake_seqno = 0);
   // the following may not necessarily make sense for all implementations.
   virtual float get_a_lat (ptr<location> l);
   virtual float get_a_var (ptr<location> l); 
@@ -139,8 +159,11 @@ class tcp_manager : public rpc_manager {
  public:
   void rexmit (long seqno) {};
   void stats ();
-  long doRPC (ptr<location> from, ptr<location> l, const rpc_program &prog, int procno,
-	      ptr<void> in, void *out, aclnt_cb cb, long fake_seqno = 0);
+  long doRPC (ptr<location> from, ptr<location> l, 
+	      const rpc_program &prog, int procno,
+	      ptr<void> in, void *out, aclnt_cb cb, 
+	      cbtmo_t cb_tmo = NULL,
+	      long fake_seqno = 0);
   long doRPC_dead (ptr<location> l, const rpc_program &prog, int procno,
 		   ptr<void> in, void *out, aclnt_cb cb, long fake_seqno = 0);
   tcp_manager (ptr<u_int32_t> _nrcv) : rpc_manager (_nrcv) {}
@@ -175,6 +198,8 @@ class stp_manager : public rpc_manager {
   u_int64_t st;
 
   tailq<RPC_delay_args, &RPC_delay_args::q_link> Q;
+  tailq<rpc_state, &rpc_state::q_link> pending;
+
   ihash<long, rpc_state, &rpc_state::rexmit_ID, &rpc_state::h_link> user_rexmit_table;
 
   timecb_t *idle_timer;
@@ -197,8 +222,11 @@ class stp_manager : public rpc_manager {
   void stats ();
 
   void rexmit (long seqno);
-  long doRPC (ptr<location> from, ptr<location> l, const rpc_program &prog, int procno,
-	      ptr<void> in, void *out, aclnt_cb cb, long fake_seqno = 0);
+  long doRPC (ptr<location> from, ptr<location> l, 
+	      const rpc_program &prog, int procno,
+	      ptr<void> in, void *out, aclnt_cb cb, 
+	      cbtmo_t cb_tmo = NULL,
+	      long fake_seqno = 0);
   long doRPC_dead (ptr<location> l, const rpc_program &prog, int procno,
 		   ptr<void> in, void *out, aclnt_cb cb, long fake_seqno = 0);
 

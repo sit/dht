@@ -31,6 +31,11 @@ class recroute : public T {
 
   void sweeper ();
   
+  void recroute_hop_timeout_cb (ptr<recroute_route_arg> nra,
+				ptr<location> p,
+				vec<chordID> failed,
+				chord_node n,
+				int rexmit_number);
  public:
   static ref<vnode> produce_vnode (ref<chord> _chordnode,
 				   ref<rpc_manager> _rpcm,

@@ -128,7 +128,7 @@ class vnode_impl : public vnode {
   
   void notify_cb (chordID n, chordstat *res, clnt_stat err);
   void alert_cb (chordstat *res, clnt_stat err);
-  void ping_cb (cbping_t cb, chord_node n, chordstat status);
+  void ping_cb (cbping_t cb, clnt_stat status);
   
   void doalert_cb (chord_noderes *res, chordID x, clnt_stat err);
 
@@ -197,11 +197,11 @@ class vnode_impl : public vnode {
 
   // For other modules
   long doRPC (ref<location> l, const rpc_program &prog, int procno,
-	      ptr<void> in, void *out, aclnt_cb cb);
-  /*  long doRPC (const chordID &ID, const rpc_program &prog, int procno, 
-      ptr<void> in, void *out, aclnt_cb cb); */
+	      ptr<void> in, void *out, aclnt_cb cb,
+	      cbtmo_t cb_tmo = NULL);
   long doRPC (const chord_node &ID, const rpc_program &prog, int procno, 
-	      ptr<void> in, void *out, aclnt_cb cb);
+	      ptr<void> in, void *out, aclnt_cb cb,
+	      cbtmo_t cb_tmo = NULL);
 
   void resendRPC (long seqno);
   void fill_user_args (user_args *a);
