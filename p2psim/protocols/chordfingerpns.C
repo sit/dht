@@ -301,7 +301,7 @@ ChordFingerPNS::initstate()
 	k++;
 	if (_samples > 0 && k>= _samples) break;
       }
-      loctable->add_node(min_f);//add pns finger
+      loctable->add_node(min_f,false,true,tmpf.id,tmpf.id+lap);
     }
   }
 
@@ -322,6 +322,13 @@ ChordFingerPNS::join(Args *args)
 {
 
   Chord::join(args);
+
+  if (me.ip!=_wkn.ip) {
+    CHID fs,fe;
+    which_finger(_base, _wkn.id, me.id, fs, fe);
+    loctable->add_node(_wkn,false,true,fs,fe);
+  }
+
   if ((static_sim) || (!alive())) return;
 #ifdef CHORD_DEBUG
   if (me.ip == DNODE) 
@@ -331,9 +338,11 @@ ChordFingerPNS::join(Args *args)
   //schedule pns stabilizer, no finger stabilizer
   if (!_stab_pns_running) {
     _stab_pns_running = true;
-    //reschedule_pns_stabilizer((void *)1);
+    if (!_learn)
+      reschedule_pns_stabilizer((void *)1);
   }else if (_join_scheduled == 0){ //successfully joined
-//    ChordFingerPNS::fix_pns_fingers(true);
+    if (!_learn)
+      ChordFingerPNS::fix_pns_fingers(true);
   }
 }
 
@@ -392,6 +401,7 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
   prevf.ip = 0;
   prevfpred.ip = 0;
 
+  IDMap pred = loctable->pred(me.id-1);
   while (1) {
     lap = lap/_base;
     for (uint j = (_base-1); j >= 1; j--) {
@@ -404,14 +414,19 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
 #endif
       total_finger++;//testing
       //
+      if (currf.ip == pred.ip) currf.ip = me.ip;
       //if (currf.ip == me.ip) continue;
 
       if ((!restart) && (currf.ip) && (currf.ip!=me.ip)) { 
 
 	if (ConsistentHash::between(finger, finger + lap, currf.id)) {
 	  idmapwrap *naked = loctable->get_naked_node(currf.id);
+	  if (naked->is_succ) goto PNS_DONE;
 	  assert(naked);
-	  assert(naked->fs == finger && naked->fe == (finger+lap));
+	  if (!naked->fs) {
+	    naked->fs = finger;
+	    naked->fe = finger+lap;
+	  }
 	  //if lookup has updated the timestamp of this finger, ignore it
 	  if ((now() - naked->timestamp) < _stab_pns_timer) {
 	    skipped_finger++; //testing

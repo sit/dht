@@ -141,6 +141,7 @@ public:
   struct find_successors_ret {
     vector<IDMap> v;
     IDMap last;
+    IDMap dst;
   };
 
   struct lookup_path {

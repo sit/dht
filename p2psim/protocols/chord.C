@@ -393,6 +393,7 @@ Chord::find_successors_handler(find_successors_args *args,
   if (ret->v.size() > 0) 
     printf("%s find_successors_handler key %qx succ %u,%qx\n",ts(),args->key,ret->v[0].ip,ret->v[0].id);
 #endif
+  ret->dst = me;
 }
 
 vector<Chord::IDMap>
@@ -546,7 +547,7 @@ Chord::find_successors(CHID key, uint m, uint type, IDMap *lasthop, lookup_args 
       record_stat(type,resultmap[donerpc]->ret.done?resultmap[donerpc]->ret.next.size():resultmap[donerpc]->ret.v.size()); //counting for heartbeat timer
       if (resultmap[donerpc]->link.from.ip == me.ip) {
 	assert(resultmap[donerpc]->ret.dst.ip == resultmap[donerpc]->link.to.ip);
-	loctable->add_node(resultmap[donerpc]->ret.dst); //update the timestamp if node contacted exists in my own routing table as well as heartbeat timer
+	loctable->update_ifexists(resultmap[donerpc]->ret.dst); //update the timestamp if node contacted exists in my own routing table as well as heartbeat timer
       }
 #ifdef CHORD_DEBUG
       printf("%s debug key %qx, outstanding %d deadsz %d from (%u,%qx,%u) done? %d nextsz %d savefinishedsz %u\n", ts(), key, outstanding, na.deadnodes.size(),
@@ -555,7 +556,7 @@ Chord::find_successors(CHID key, uint m, uint type, IDMap *lasthop, lookup_args 
 #endif
 
       if ((resultmap[donerpc]->link.from.ip == me.ip) && (!static_sim))
-	loctable->add_node(resultmap[donerpc]->link.to); //update timestamp of MY neighbors
+	loctable->update_ifexists(resultmap[donerpc]->link.to); //update timestamp of MY neighbors
 
       if (resultmap[donerpc]->ret.done) {
 	lastfinished = resultmap[donerpc]->link;
@@ -849,7 +850,7 @@ Chord::find_successors_recurs(CHID key, uint m, uint type, IDMap *lasthop, looku
     outstanding--;
     reuse = resultmap[donerpc];
     if (ok) {
-      loctable->add_node(reuse->nexthop);
+      loctable->update_ifexists(reuse->nexthop);
       record_stat(type,resultmap[donerpc]->v.size());
       goto RECURS_DONE;//mohaha! i am done
     }else{
@@ -939,7 +940,7 @@ RECURS_DONE:
   for (uint i = 0; i < outstanding; i++) {
     donerpc = rcvRPC(&rpcset, ok);
     if (ok) {
-      loctable->add_node(resultmap[donerpc]->nexthop);
+      loctable->update_ifexists(resultmap[donerpc]->nexthop);
       record_stat(type,resultmap[donerpc]->v.size());
     }
     if ((_learn) && (resultmap[donerpc]->lasthop.ip))
@@ -1074,7 +1075,6 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
   assert(alive());
 
   if (_learn) {
-    uint sz = ret->path.size();
     assert(args->src.ip>0 && args->src.ip < 100000);
     learn_info(args->src);
     if (ret->prevhop.ip!=args->src.ip) 
@@ -1262,7 +1262,7 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
 	record_stat(args->type,0);
       }
       assert(ret->nexthop.ip==next.ip);
-      if (!static_sim) loctable->add_node(ret->nexthop); //update timestamp
+      if (!static_sim) loctable->update_ifexists(ret->nexthop); //update timestamp
       ret->nexthop = me;
       return;
     }else{
@@ -1491,6 +1491,8 @@ Chord::join(Args *args)
 #endif
 
   bool ok = failure_detect(_wkn, &Chord::find_successors_handler, &fa, &fr, TYPE_JOIN_LOOKUP,1,0);
+  assert(_wkn.ip == fr.dst.ip);
+  _wkn = fr.dst;
   joins++;
   if (ok) record_stat(TYPE_JOIN_LOOKUP, fr.v.size());
 
@@ -1790,7 +1792,7 @@ Chord::fix_predecessor()
 
   if (!alive()) return;
   if (ok) {
-    loctable->add_node(gpr.dst); //refresh timestamp
+    loctable->update_ifexists(gpr.dst); //refresh timestamp
     if (gpr.v.size() > 0) {
       IDMap tmp = gpr.v[0];
       loctable->add_node(gpr.v[0]);
@@ -1857,7 +1859,7 @@ Chord::fix_successor(void *x)
       aa.n = succ1;
     } else {
       assert(gpr.dst.ip == succ1.ip);
-      loctable->add_node(gpr.dst,true); //refresh timestamp
+      loctable->update_ifexists(gpr.dst); //refresh timestamp
 #ifdef CHORD_DEBUG
       printf("%s fix_successor successor (%u,%qx,%u)'s predecessor is (%u, %qx,%u)\n", 
 	ts(), succ1.ip, succ1.id, gpr.dst.heartbeat, gpr.n.ip, gpr.n.id,gpr.n.heartbeat);
@@ -1940,7 +1942,7 @@ Chord::fix_successor_list()
     loctable->del_node(succ,true);
   }else{
 
-    loctable->add_node(gpr.dst,true);//update timestamp
+    loctable->update_ifexists(gpr.dst);//update timestamp
 
     //scs[0] might not be succ anymore
     vector<IDMap> scs = loctable->succs(me.id + 1, _nsucc, LOC_DEAD);
@@ -2048,7 +2050,7 @@ Chord::alert_handler(alert_args *args, void *ret)
 #endif
   }else{
     record_stat(TYPE_MISC,0,0);
-    loctable->add_node(args->n);
+    loctable->update_ifexists(args->n);
   }
 }
 
@@ -2384,8 +2386,7 @@ LocTable::add_node(Chord::IDMap n, bool is_succ, bool assertadd, Chord::CHID fs,
 {
   Chord::IDMap succ1; 
   Chord::IDMap pred1; 
-
-  
+ 
   assert(n.ip > 0 && n.ip < 32000 && n.heartbeat < 86400000);
   if (vis) {
     succ1 = succ(me.id+1);
