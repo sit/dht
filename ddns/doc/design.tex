@@ -1,5 +1,8 @@
 \section{Design and Implementation}
 
+We have implemented a prototype of our system,
+which we call DDNS.
+
 Our system handles lookups at the granularity of resource record sets (RRSets),
 as in conventional DNS.
 An RRSet is a list of all the records matching a
@@ -45,7 +48,7 @@ moves data so that it is always stored on a fixed number of replicas
 in a pseudo-random fashion, a very large number of servers must
 fail simultaneously before data loss occurs. 
 
-To create or update a DDNS RRSet, the owner of that set prepares
+To create or update a DDNS RRSet, the owner prepares
 the RRSet, signs it, and inserts it into DHash.
 The key for the RRSet is the SHA1 hash of the domain name and the RRSet query type
 ({\em e.g.}, SHA1({\em www.nytimes.com}, A)).
@@ -55,12 +58,18 @@ the signature before using the data.
 
 Naively verifying a DNS RRSet for a name with $n$ 
 path elements requires $n$ KEY lookups.
-We eliminate this problem by requiring the owner to
-present all the relevant KEYs. To avoid inflating 
-the responses, we can omit KEYs of popular domains
-(e.g. {\tt .com}) on the assumption that they would be 
-widely cached. Every DHash node will already have the
-root KEY.
+We address this problem by allowing the owner to
+present additional relevant KEYs in the RRSet.
+To avoid inflating the responses, we can omit KEY RRSets
+for popular names.
+For example, the record containing the ({\em www.nytimes.com}, A) RRSet
+might also include the ({\em www.nytimes.com}, KEY) RRSet 
+and the ({\em nytimes.com}, KEY) RRSet but omit
+the ({\em .com}, KEY) RRSet on the assumption that
+it would be widely cached.
+The key for the root of the hierarchy is assumed to be
+known by all DDNS servers, just as the IP addresses of the
+root servers are known in the current DNS.
 
 To ease transition from conventional DNS to our system,
 a simple loopback server listening on 127.1 could accept

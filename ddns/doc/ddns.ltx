@@ -1,81 +1,27 @@
-%\documentclass[12pt]{article}
 \documentclass[twocolumn,11pt]{article}
 
 \usepackage{epsfig}
 \usepackage{color}
 
 % Postscript fonts
+\usepackage{lucmtime}
 \renewcommand{\rmdefault}{ptm}
 \renewcommand{\sfdefault}{phv}
 \renewcommand{\ttdefault}{pcr}
 
-% margins
-\setlength{\topmargin}{-.5in}
-\setlength{\textheight}{9in}
-\setlength{\oddsidemargin}{-.25in}
-\setlength{\textwidth}{7in}
-\setlength{\columnsep}{.333in}
+\input{style}
 
-% section styles - ACM bastards
+\iffalse
 \makeatletter
-\renewcommand\section{\@startsection {section}{1}{\z@}%
-                                   {-3ex \@plus -1ex \@minus -.2ex}%
-                                   {1.5ex \@plus.2ex}%
-                                   {\normalfont\fontsize{12}{14}\bfseries}}
-\renewcommand\subsection{\@startsection{subsection}{2}{\z@}%
-                                     {-3ex\@plus -1ex \@minus -.2ex}%
-                                     {1.5ex \@plus .2ex}%
-                                     {\normalfont\fontsize{12}{14}\bfseries}}
-\renewcommand\subsubsection{\@startsection{subsubsection}{3}{\z@}%
-                                     {-3ex\@plus -1ex \@minus -.2ex}%
-                                     {1.5ex \@plus .2ex}%
-                                     {\normalfont\fontsize{11}{13}%
-                                        \bfseries}}
-
-% \caption fixes
-\ifx\abovecaptionskip\@undefined\newskip\abovecaptionskip\fi
-
-\long\def\@makecaption#1#2{%
-  \vskip\abovecaptionskip
-  \sbox\@tempboxa{{\small\textbf{#1}: #2}}%
-  \ifdim \wd\@tempboxa >\hsize
-    {\small\textbf{#1}: #2}\par
-  \else
-    \global \@minipagefalse
-    \hb@xt@\hsize{\hfil\box\@tempboxa\hfil}%
-  \fi
-  \vskip\belowcaptionskip}
-
-
-\def\@maketitle{%
-  \newpage
-  \begin{center}%
-  \let \footnote \thanks
-\expandafter\ifx\csname acmdescription\endcsname\relax
-  \null
-\else
-  {\setbox0\hbox{\vbox{\begin{flushright}%
-   \begin{tabular}[t]{r@{}}%
-    \acmdescription
-    \\ \noalign{\vskip0.25in}%
-  \end{tabular}\end{flushright}\null}}\ht0=0pt\dp0=0pt\box0%
-  }%
+\renewcommand\normalsize{%
+  \@setfontsize\normalsize{11.0}{12.1}%
+    \abovedisplayskip 10\p@ \@plus2\p@ \@minus5\p@
+   \abovedisplayshortskip \z@ \@plus3\p@
+    \belowdisplayshortskip 6\p@ \@plus3.5\p@ \@minus3\p@
+   \belowdisplayskip \abovedisplayskip
+   \let\@listi\@listI}
+ \makeatother
 \fi
-    \vskip -.25em%
-    {\LARGE \@title \par}%
-    \vskip 1.25em%
-    {\large
-      \lineskip .5em%
-      \begin{tabular}[t]{c}%
-        \@author
-      \end{tabular}\par}%
-    \vskip 1em%
-    {\large \@date}%
-  \end{center}%
-  \par
-  \vskip 3.5em}
-
-\makeatother
 
 %%%
 %%%
@@ -86,7 +32,7 @@
 \newcommand{\np}{{\penalty 0}}
 
 
-\title{\sffamily\bfseries Separating Authority and Service in DNS using Chord}
+\title{\sffamily\bfseries Serving domain name data using Chord}
 \author{\sffamily Russ Cox, Athicha Muthitacharoen \\
 \sffamily\normalsize MIT Laboratory for Computer Science \\
 \sffamily \{rsc,athicha\}@lcs.mit.edu}
@@ -137,7 +83,7 @@
 % % $\copyright$ 2000 ACM 1-58113-140-2/99/0012 \dots \$5.00
 % }}
 
-\input{abstract}
+% \input{abstract}
 \input{intro}
 \input{design}
 \input{discuss}
