@@ -26,6 +26,7 @@
 #include "network.h"
 #include "observers/observerfactory.h"
 #include "eventgenerators/eventgeneratorfactory.h"
+#include "protocols/protocolfactory.h"
 #include "threadmanager.h"
 
 unsigned p2psim_verbose = 0;
@@ -45,6 +46,7 @@ graceful_exit(void*)
   delete Network::Instance(); // deletes nodes, protocols
   delete ThreadManager::Instance();
   delete EventGeneratorFactory::Instance();
+  delete ProtocolFactory::Instance();
   delete EventQueue::Instance();
   __tmg_dmalloc_stats();
 

@@ -49,14 +49,18 @@ EventQueue::EventQueue() : _time(0)
 EventQueue::~EventQueue()
 {
   // delete the entire queue and say bye bye
+  unsigned n = 0;
   eq_entry *next = 0;
   for(eq_entry *cur = _queue.first(); cur; cur = next) {
     next = _queue.next(cur);
-    for(vector<Event*>::const_iterator i = cur->events.begin(); i != cur->events.end(); ++i)
+    for(vector<Event*>::const_iterator i = cur->events.begin(); i != cur->events.end(); ++i) {
       delete (*i);
+      n++;
+    }
     delete cur;
   }
   chanfree(_gochan);
+  DEBUG(1) << "There were " << n << " outstanding events in the EventQueue." << endl;
 }
 
 

@@ -49,7 +49,7 @@ int Kademlia::_bad_failures = 0; // lookup failed, but node was live
 Kademlia::NodeID *Kademlia::_all_kademlias = 0;
 HashMap<Kademlia::NodeID, Kademlia*> *Kademlia::_nodeid2kademlia = 0;
 
-#define NODES_ITER(x) for(set<k_nodeinfo*, Kademlia::closer>::const_iterator i = (x)->begin(); i != (x)->end(); ++i)
+#define NODES_ITER(x) for(set<k_nodeinfo, Kademlia::closer>::const_iterator i = (x)->begin(); i != (x)->end(); ++i)
 
 
 // }}}
@@ -83,7 +83,7 @@ Kademlia::Kademlia(IPAddress i, Args a)
 
   if(!Kademlia::pool)
     Kademlia::pool = New k_nodeinfo_pool();
-  _me = Kademlia::pool->pop(_id, ip());
+  _me = k_nodeinfo(_id, ip());
   _joined = false;
 
   _root = New k_bucket(0, this);
@@ -120,12 +120,16 @@ Kademlia::NodeID Kademlia::closer::n = 0;
 Kademlia::NodeID Kademlia::IDcloser::n = 0;
 // }}}
 // {{{ Kademlia::~Kademlia
+static unsigned total_flyweight = 0;
 Kademlia::~Kademlia()
 {
   // KDEBUG(1) << "Kademlia::~Kademlia" << endl;
+  // cout << "flyweight size = " << flyweight.size() << endl;
+  total_flyweight += flyweight.size();
   for(HashMap<NodeID, k_nodeinfo*>::iterator i = flyweight.begin(); i != flyweight.end(); ++i)
     Kademlia::pool->push(i.value());
-  Kademlia::pool->push(_me);
+  flyweight.clear();
+
   delete _root;
 
   if(ip() == 1){
@@ -144,10 +148,37 @@ Kademlia::~Kademlia()
     _all_kademlias = 0;
   }
 
+  if(_nodeid2kademlia) {
+    delete _nodeid2kademlia;
+    _nodeid2kademlia = 0;
+  }
+
+
   if(--_nkademlias == 0) {
     delete pool;
     pool = 0;
+    KDEBUG(1) << "find_node_args = " << sizeof(find_node_args) << endl;
+    KDEBUG(1) << "find_node_result = " << sizeof(find_node_result) << endl;
+    KDEBUG(1) << "callinfo = " << sizeof(callinfo) << endl;
+    KDEBUG(1) << "total_flyweight = " << total_flyweight << endl;
   }
+
+  // delete outstanding crap
+  /*
+  for(HashMap<reap_info*, bool>::const_iterator i = _riset.begin(); i; i++) {
+    for(HashMap<unsigned, callinfo*>::const_iterator j = i.key()->outstanding_rpcs->begin(); j; j++)
+      delete j.value();
+    delete i.key();
+  }
+
+  for(HashMap<RPCSet*, bool>::const_iterator i = _rpcset.begin(); i; i++)
+    delete i.key();
+  for(HashMap<HashMap<unsigned, callinfo*>*, bool>::const_iterator i = _orpcset.begin(); i; i++) {
+    for(HashMap<unsigned, callinfo*>::const_iterator j = i.key()->begin(); j; j++)
+      delete j.value();
+    delete i.key();
+  }
+  */
 }
 // }}}
 // {{{ Kademlia::initstate
@@ -212,7 +243,7 @@ Kademlia::initstate()
       Kademlia *k = (*_nodeid2kademlia)[candidates[index]];
       // assert(k);
 
-      if(flyweight.find(k->id(), 0))
+      if(flyweight[k->id()])
         continue;
 
       insert(k->id(), k->ip(), true);
@@ -272,12 +303,12 @@ join_restart:
 
   // put all nodes that wkn told us in k-buckets
   // KDEBUG(2) << "join: lr.results.size() = " << lr.results.size() << endl;
-  for(set<k_nodeinfo*, older>::const_iterator i = lr.results.begin(); i != lr.results.end(); ++i) {
+  for(set<k_nodeinfo, older>::const_iterator i = lr.results.begin(); i != lr.results.end(); ++i) {
     // KDEBUG(2) << "join: lr.results iterator id = " << printID((*i)->id) << ", ip = " << (*i)->ip << endl;
-    if(!flyweight.find((*i)->id, 0) && (*i)->id != _id) {
+    if(!flyweight[i->id] && i->id != _id) {
       // XXX: the touch is WRONG.  For all we know, the node is dead.
-      insert((*i)->id, (*i)->ip);
-      touch((*i)->id);
+      insert(i->id, i->ip);
+      touch(i->id);
     }
   }
 
@@ -302,7 +333,7 @@ join_restart:
       return;
 
     // if we believe our successor died, then start again
-    if(!flyweight.find(succ_id, 0)) {
+    if(!flyweight[succ_id]) {
       // KDEBUG(2) << " restarting join" << endl;
       clear();
       goto join_restart;
@@ -322,9 +353,9 @@ join_restart:
     if(!alive())
       return;
 
-    for(set<k_nodeinfo*, older>::const_iterator i = lr.results.begin(); i != lr.results.end(); ++i)
-      if(!flyweight.find((*i)->id, 0) && (*i)->id != _id)
-        insert((*i)->id, (*i)->ip);
+    for(set<k_nodeinfo, older>::const_iterator i = lr.results.begin(); i != lr.results.end(); ++i)
+      if(!flyweight[i->id] && i->id != _id)
+        insert(i->id, i->ip);
         //  ... but not touch.  we didn't actually talk to the node.
   }
 
@@ -356,7 +387,6 @@ Kademlia::clear()
   // KDEBUG(1) << "Kademlia::clear" << endl;
   for(HashMap<NodeID, k_nodeinfo*>::iterator i = flyweight.begin(); i; i++)
     Kademlia::pool->push(i.value());
-
   flyweight.clear();
   _root->collapse();
 }
@@ -391,7 +421,7 @@ Kademlia::lookup(Args *args)
                           (*_nodeid2kademlia)[key]->_joined;
 
   // XXX: this shouldn't happen :(
-  if(!fr.succ) {
+  if(!fr.succ.id) {
     if(alive_and_joined)
       _bad_failures++;
     else
@@ -400,17 +430,17 @@ Kademlia::lookup(Args *args)
   }
 
   // get best match
-  fr.succ->checkrep();
+  fr.succ.checkrep();
 
-  // now ping that node
-  ping_args pa(fr.succ->id, fr.succ->ip);
+  // now ping that nod.
+  ping_args pa(fr.succ.id, fr.succ.ip);
   ping_result pr;
   // record_stat(STAT_PING, 0, 0);
   // assert(fr.succ->ip <= 1837);
-  if(!doRPC(fr.succ->ip, &Kademlia::do_ping, &pa, &pr) && alive()) {
+  if(!doRPC(fr.succ.ip, &Kademlia::do_ping, &pa, &pr) && alive()) {
     // KDEBUG(2) << "Kademlia::lookup: ping RPC to " << Kademlia::printID(fr.succ->id) << " failed " << endl;
-    if(flyweight.find(fr.succ->id, 0))
-      erase(fr.succ->id);
+    if(flyweight[fr.succ.id])
+      erase(fr.succ.id);
   }
   // record_stat(STAT_PING, 0, 0);
   Time after = now();
@@ -418,7 +448,7 @@ Kademlia::lookup(Args *args)
   // KDEBUG(0) << "Kademlia::lookup, latency " << after - before << endl;
   
   // did we find that node?
-  if(key == fr.succ->id){
+  if(key == fr.succ.id){
     _good_lookups += 1;
     _good_latency += (after - before);
     _good_hops += fr.hops;
@@ -452,53 +482,73 @@ Kademlia::do_ping(ping_args *args, ping_result *result)
     find_node_args *fa = New find_node_args(_id, ip(), fargs->key);                     \
     find_node_result *fr = New find_node_result;                                        \
     record_stat(STAT_LOOKUP, 1, 0);                                                     \
-    unsigned rpc = asyncRPC((x)->ip, &Kademlia::find_node, fa, fr);                     \
+    unsigned rpc = asyncRPC(x.ip, &Kademlia::find_node, fa, fr);                        \
     callinfo *ci = New callinfo(x, fa, fr);                                             \
     rpcset->insert(rpc);                                                                \
     outstanding_rpcs->insert(rpc, ci);                                                  \
 }
+
+#define CREATE_REAPER {                                                                 \
+      if(!outstanding_rpcs->size()) {                                                   \
+        delete rpcset;                                                                  \
+        delete outstanding_rpcs;                                                        \
+        return;                                                                         \
+      }                                                                                 \
+      reap_info *ri = New reap_info();                                                  \
+      ri->k = this;                                                                     \
+      ri->rpcset = rpcset;                                                              \
+      ri->outstanding_rpcs = outstanding_rpcs;                                          \
+      ThreadManager::Instance()->create(Kademlia::reap, (void*) ri);                    \
+}
+      // _rpcset.remove(rpcset);
+      // _orpcset.remove(outstanding_rpcs);
+      // _orpcset.remove(outstanding_rpcs);
+      // _rpcset.remove(rpcset);
+      // _riset.insert(ri, true);
 
 void
 Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
 {
   // KDEBUG(1) << "Kademlia::find_value: node " << printID(fargs->id) << " does find_value for " << printID(fargs->key) << ", flyweight.size() = " << endl;
   // assert(alive());
+  //
+  // static unsigned tmgcounter = 0;
+  // if(++tmgcounter >= 10000) {
+  //   __tmg_dmalloc_stats();
+  //   tmgcounter = 0;
+  // }
 
   update_k_bucket(fargs->id, fargs->ip);
   fresult->rid = _id;
 
   // find alpha successors for this key
   closer::n = fargs->key;
-  set<k_nodeinfo*, closer> successors;
+  set<k_nodeinfo, closer> successors;
   vector<k_nodeinfo*> tmp;
   _root->find_node(fargs->key, &tmp);
-  for(unsigned i=0; i<tmp.size(); i++) {
-    // assert(tmp[i]->id);
-    // assert(tmp[i]->ip > 0 && tmp[i]->ip <= 1837);
-    successors.insert(Kademlia::pool->pop(tmp[i]));
-  }
+  for(unsigned i=0; i<tmp.size(); i++)
+    successors.insert(tmp[i]);
 
   // we can't do anything but return ourselves
   if(!successors.size()) {
-    fresult->succ = Kademlia::pool->pop(_me);
-    NODES_ITER(&successors) {
-      Kademlia::pool->push(*i);
-    }
+    fresult->succ = _me;
     return;
   }
 
   // keep track of best answer so far
-  fresult->succ = Kademlia::pool->pop(*successors.begin());
+  fresult->succ = *successors.begin();
 
   // send out the first alpha RPCs
   HashMap<unsigned, callinfo*> *outstanding_rpcs = New HashMap<unsigned, callinfo*>;
+  // _orpcset.insert(outstanding_rpcs, true);
   // assert(outstanding_rpcs);
   RPCSet *rpcset = New RPCSet;
+  // _rpcset.insert(rpcset, true);
   // assert(rpcset);
   unsigned alpha_counter = 0;
   NODES_ITER(&successors) {
-    SEND_RPC(*i);
-    successors.erase(*i);
+    k_nodeinfo ki = *i;
+    SEND_RPC(ki);
     if(++alpha_counter >= Kademlia::alpha)
       break;
   }
@@ -509,13 +559,13 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
     bool ok;
     unsigned donerpc = rcvRPC(rpcset, ok);
     callinfo *ci = (*outstanding_rpcs)[donerpc];
-    // assert(ci);
     outstanding_rpcs->remove(donerpc);
 
-    k_nodeinfo *ki = 0;
+    k_nodeinfo ki;
     if(!alive()) {
-      // KDEBUG(2) << "Kademlia::find_value: no longer alive after rcvRPC" << endl;
-      goto reap_and_return;
+      delete ci;
+      CREATE_REAPER;
+      return;
     }
 
 
@@ -524,79 +574,54 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
     // at all, we should give rcvRPC another chance.
     closer::n = fargs->key;
     if(!ok) {
-      if(flyweight.find_pair(ci->ki->id))
-        erase(ci->ki->id);
+      if(flyweight[ci->ki.id])
+        erase(ci->ki.id);
       delete ci;
-      ci = 0;
-
-      // I guess the best we can do now is send an RPC to the next best
-      // candidate, if possible.
       goto next_candidate;
     }
 
     // RPC was ok
     record_stat(STAT_LOOKUP, ci->fr->results.size(), 0);
-    update_k_bucket(ci->fr->rid, ci->ki->ip);
+    update_k_bucket(ci->fr->rid, ci->ki.ip);
 
     // we're done. start reaper thread for outstanding RPCs and quit.
     ki = ci->fr->results[0];
-    if(ki->id == fargs->key) {
-      Kademlia::pool->push(fresult->succ);
-      fresult->succ = Kademlia::pool->pop(ki);
-reap_and_return:
-      NODES_ITER(&successors) {
-        Kademlia::pool->push(*i);
-      }
-      if(ci)
-        delete ci;
-      if(!outstanding_rpcs->size()) {
-        delete rpcset;
-        delete outstanding_rpcs;
-        return;
-      }
-      reap_info *ri = New reap_info();
-      ri->k = this;
-      ri->rpcset = rpcset;
-      ri->outstanding_rpcs = outstanding_rpcs;
-      ThreadManager::Instance()->create(Kademlia::reap, (void*) ri);
+    if(ki.id == fargs->key) {
+      fresult->succ = ki;
+      delete ci;
+      CREATE_REAPER;
       return;
     }
 
     // put all the ones better than what we knew so far in successors
     closer::n = fargs->key;
     for(unsigned i=0; i<ci->fr->results.size(); i++) {
-      k_nodeinfo *ki = ci->fr->results[i];
-      if(Kademlia::distance(ki->id, fargs->key) < Kademlia::distance(fresult->succ->id, fargs->key)) {
+      k_nodeinfo ki = ci->fr->results[i];
+      if(Kademlia::distance(ki.id, fargs->key) < Kademlia::distance(fresult->succ.id, fargs->key)) {
         successors.insert(ki);
         useless_replies = 0;
-      } else
-        Kademlia::pool->push(ki);
+      }
     }
-
-    // last few replies didn't return anything that improved the score.
-    //   or
-    // we have nobody else to ask
-    // give up.
-    if(!successors.size() || useless_replies++ >= Kademlia::alpha)
-      goto reap_and_return;
-
-    // 
     delete ci;
-    ci = 0;
+
+    if(!successors.size() || useless_replies++ >= Kademlia::alpha) {
+      CREATE_REAPER;
+      return;
+    }
 
     // send out a new RPC to what we now
 next_candidate:
-    if(!successors.size())
-      goto reap_and_return;
-    k_nodeinfo *front = *successors.begin();
+    if(!successors.size()) {
+      CREATE_REAPER;
+      return;
+    }
+    k_nodeinfo front = *successors.begin();
     // assert(front);
     // assert(front->id);
     // assert(fresult->succ);
     // assert(fresult->succ->id);
-    if(Kademlia::distance(front->id, fargs->key) < Kademlia::distance(fresult->succ->id, fargs->key)) {
-      Kademlia::pool->push(fresult->succ);
-      fresult->succ = Kademlia::pool->pop(front);
-    }
+    if(Kademlia::distance(front.id, fargs->key) < Kademlia::distance(fresult->succ.id, fargs->key))
+      fresult->succ = front;
     SEND_RPC(front);
     successors.erase(front);
   }
@@ -614,7 +639,7 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
   update_k_bucket(largs->id, largs->ip);
 
   // get a list of nodes sorted on distance to largs->key
-  set<k_nodeinfo*, closer> successors;
+  set<k_nodeinfo, closer> successors;
   vector<k_nodeinfo*> tmp;
   _root->find_node(largs->key, &tmp);
   for(unsigned i=0; i<tmp.size(); i++)
@@ -623,7 +648,7 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
   // we can't do anything but return ourselves
   if(!successors.size()) {
     // KDEBUG(2) << "do_lookup: my tree is empty; returning myself." << endl;
-    lresult->results.insert(Kademlia::pool->pop(_me));
+    lresult->results.insert(_me);
     lresult->rid = _id;
     return;
   }
@@ -631,25 +656,21 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
   // initialize result set with the successors of largs->key
   closer::n = largs->key;
   NODES_ITER(&successors) {
-    k_nodeinfo *newki = Kademlia::pool->pop(*i);
-    // assert(newki);
     // KDEBUG(2) << "do_lookup: initializing resultset, adding = " << Kademlia::printID(newki->id) << ", dist = " << Kademlia::printID(distance(largs->key, newki->id)) << endl;
-    lresult->results.insert(newki);
+    lresult->results.insert(*i);
   }
 
   // also insert ourselves.  this can't really hurt, because it will be thrown
   // out of the set anyway, if it wasn't part of the answer.  this avoids
   // returning an empty set.
-  k_nodeinfo *me = Kademlia::pool->pop(_me);
   // KDEBUG(2) << "insert me = " << Kademlia::printID(_me->id) << " to be safe " << endl;
-  lresult->results.insert(me);
+  lresult->results.insert(_me);
 
   // destroy all entries in results that are not part of the best k
   while(lresult->results.size() > Kademlia::k) {
-    k_nodeinfo *i = *lresult->results.rbegin();
+    k_nodeinfo i = *lresult->results.rbegin();
     lresult->results.erase(lresult->results.find(i));
     // KDEBUG(2) << "do_lookup: deleting in truncate id = " << printID(i->id) << ", ip = " << i->ip << endl;
-    Kademlia::pool->push(i);
   }
 
   // asked: one entry for each node we sent an RPC to
@@ -692,24 +713,24 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
 
     closer::n = largs->key;
     // assert(lresult->results.size() <= Kademlia::k);
-    for(set<k_nodeinfo*, closer>::const_iterator i = lresult->results.begin(); i != lresult->results.end(); ++i) {
+    for(set<k_nodeinfo, closer>::const_iterator i = lresult->results.begin(); i != lresult->results.end(); ++i) {
       // KDEBUG(2) << "do_lookup: finished? looking at " << printID((*i)->id) << endl;
 
       // asked_all has to be false if there's any node in the resultset that we
       // haven't queried yet
-      if(!asked.find((*i)->id, 0))
+      if(!asked.find(i->id, 0))
         asked_all = false;
 
       // Did we find the key?
       //
       // If we bail out here, we're actually implementing Kademlia's FIND_VALUE,
       // not LOOKUP, which is indicated by largs->return_immediately.
-      if((*i)->id == largs->key && largs->return_immediately) {
+      if(i->id == largs->key && largs->return_immediately) {
         we_are_done = true;
         break;
       }
 
-      if(!replied.find((*i)->id)) {
+      if(!replied.find(i->id)) {
         // KDEBUG(2) << "do_lookup: finished? haven't gotten a reply from " << printID((*i)->id) << " yet, so no." << endl;
         break;
       }
@@ -791,14 +812,12 @@ reap_and_exit:
     // provided we didn't already ask them, and, to the best of our knowledge,
     // they're still alive.
     //
-    k_nodeinfo* toask[effective_alpha];
-    for(unsigned i=0; i<effective_alpha; i++)
-      toask[i] = 0;
+    k_nodeinfo toask[effective_alpha];
 
     k_counter = 0;
     unsigned j = 0;
-    for(set<k_nodeinfo*, closer>::const_iterator i = lresult->results.begin(); i != lresult->results.end(); ++i) {
-      if(!asked.find((*i)->id)) {
+    for(set<k_nodeinfo, closer>::const_iterator i = lresult->results.begin(); i != lresult->results.end(); ++i) {
+      if(!asked.find(i->id)) {
         // KDEBUG(2) << "do_lookup: setting toask[" << j << "] to " << endl;
         toask[j++] = *i;
       }
@@ -812,7 +831,7 @@ reap_and_exit:
     //
     // last_alpha_round.clear();
     for(unsigned i=0; i<effective_alpha; i++) {
-      if(toask[i] == 0)
+      if(toask[i].id == 0)
         break;
 
       // KDEBUG(2) << "do_lookup: toask[ " << i << "] id = " << printID(toask[i]->id) << ", ip = " << endl;
@@ -828,12 +847,12 @@ reap_and_exit:
       record_stat(STAT_LOOKUP, 1, 0);
       // KDEBUG(2) << "do_lookup: asyncRPC to " << printID(toask[i]->id) << ", ip = " << endl;
       // assert(toask[i]->ip <= 1837);
-      unsigned rpc = asyncRPC(toask[i]->ip, &Kademlia::find_node, la, lr);
-      callinfo *ci = New callinfo(Kademlia::pool->pop(toask[i]), la, lr);
+      unsigned rpc = asyncRPC(toask[i].ip, &Kademlia::find_node, la, lr);
+      callinfo *ci = New callinfo(toask[i], la, lr);
       // assert(ci);
       // assert(rpc);
       rpcset->insert(rpc);
-      asked.insert(toask[i]->id, true);
+      asked.insert(toask[i].id, true);
       // last_alpha_round.insert(toask[i]->id);
 
       // record this outstanding RPC
@@ -845,20 +864,20 @@ reap_and_exit:
 
     // KDEBUG(2) << "do_lookup: results before rcvRPC loop" << endl;
     closer::n = largs->key;
-    for(set<k_nodeinfo*, closer>::const_iterator i = lresult->results.begin(); i != lresult->results.end(); ++i)
+    for(set<k_nodeinfo, closer>::const_iterator i = lresult->results.begin(); i != lresult->results.end(); ++i)
       // KDEBUG(2) << "do_lookup: id = " << printID((*i)->id) << ", dist = " << printID(distance(largs->key, (*i)->id)) << ", ip = " << endl;
 
     //
     // wait for an RPC to get back
     //
-    last_in_set = (*lresult->results.rbegin())->id;
+    last_in_set = (*lresult->results.rbegin()).id;
     // KDEBUG(2) << "do_lookup: thread " << threadid() << " going into rcvRPC, outstanding = " << outstanding_rpcs->size() << endl;
 
     bool ok;
     unsigned donerpc = rcvRPC(rpcset, ok);
     callinfo *ci = (*outstanding_rpcs)[donerpc];
     // assert(ci);
-    replied.insert(ci->ki->id, true);
+    replied.insert(ci->ki.id, true);
     outstanding_rpcs->remove(donerpc);
 
     // oh shit...
@@ -873,8 +892,8 @@ reap_and_exit:
     closer::n = largs->key;
     if(!ok) {
       // KDEBUG(2) << "do_lookup: RPC to " << Kademlia::printID(ci->ki->id) << " failed" << endl;
-      if(flyweight.find(ci->ki->id, 0))
-        erase(ci->ki->id);
+      if(flyweight[ci->ki.id])
+        erase(ci->ki.id);
       if(lresult->results.find(ci->ki) != lresult->results.end())
         lresult->results.erase(lresult->results.find(ci->ki));
       // KDEBUG(2) << "do_lookup: RPC to " << Kademlia::printID(ci->ki->id) << " failed" << endl;
@@ -887,33 +906,28 @@ reap_and_exit:
     //
     // KDEBUG(2) << "do_lookup: " << Kademlia::printID(ci->ki->id) << " replied for lookup " << endl;
     record_stat(STAT_LOOKUP, ci->fr->results.size(), 0);
-    update_k_bucket(ci->fr->rid, ci->ki->ip);
+    update_k_bucket(ci->fr->rid, ci->ki.ip);
 
     // put results that this node tells us in our results set
     closer::n = largs->key;
     for(unsigned i=0; i < ci->fr->results.size(); i++) {
-      k_nodeinfo *ki = ci->fr->results[i];
+      k_nodeinfo n = ci->fr->results[i];
       // KDEBUG(2) << "do_lookup: RETURNED RESULT entry id = " << printID(ki->id) << ", dist = " << printID(distance(largs->key, ki->id)) << ", ip = " << endl;
-      k_nodeinfo *n = Kademlia::pool->pop(ki);
-      // assert(n);
-      pair<set<k_nodeinfo*, closer>::iterator, bool> rv = lresult->results.insert(n);
-      if(!rv.second)
-        Kademlia::pool->push(n);
+      lresult->results.insert(n);
     }
     delete ci;
 
     // destroy all entries in results that are not part of the best k
     while(lresult->results.size() > Kademlia::k) {
-      k_nodeinfo *i = *lresult->results.rbegin();
+      k_nodeinfo i = *lresult->results.rbegin();
       lresult->results.erase(lresult->results.find(i));
       // KDEBUG(2) << "do_lookup: deleting in truncate id = " << printID(i->id) << ", ip = " << endl;
-      Kademlia::pool->push(i);
     }
 
     // little improvement on Kademlia!  we don't have to wait for the
     // remaining RPCs if the resultset already changed.  we can break out
     // immediately
-    if((*lresult->results.rbegin())->id != last_in_set) {
+    if((*lresult->results.rbegin()).id != last_in_set) {
       // KDEBUG(2) << "do_lookup: this RPC caused last to change.  breaking out." << endl;
       unchanging_replies = 0;
     } else {
@@ -946,21 +960,17 @@ Kademlia::find_node(find_node_args *largs, find_node_result *lresult)
 
   // deal with the empty case
   if(!flyweight.size()) {
-    k_nodeinfo *p = Kademlia::pool->pop(_id, ip());
     // assert(p);
     // KDEBUG(2) << "find_node: tree is empty. returning myself, ip = " << ip() << endl;
-    lresult->results.push_back(p);
+    lresult->results.push_back(_me);
     return;
   }
 
   vector<k_nodeinfo*> tmpset;
   _root->find_node(largs->key, &tmpset);
   // KDEBUG(2) << "find_node: returning:" << endl;
-  for(unsigned i=0; i<tmpset.size(); i++) {
-    k_nodeinfo *ki = tmpset[i];
-    lresult->results.push_back(Kademlia::pool->pop(ki));
-    // KDEBUG(2) << "find_node: id = " << Kademlia::printID(ki->id) << ", dist = " << Kademlia::printID(distance(largs->key, ki->id)) << endl;
-  }
+  for(unsigned i=0; i<tmpset.size(); i++)
+    lresult->results.push_back(tmpset[i]);
 }
 
 
@@ -1068,12 +1078,12 @@ Kademlia::insert(NodeID id, IPAddress ip, bool init_state)
   // assert(!flyweight.find(id, 0));
 
   k_nodeinfo *ni = Kademlia::pool->pop(id, ip);
-  // assert(ni);
+  assert(ni);
   if(init_state)
     ni->firstts = ni->lastts = counter++;
   // assert(id == ni->id);
-  bool rv = flyweight.insert(id, ni);
-  assert(rv);
+  bool b = flyweight.insert(id, ni);
+  assert(b);
   _root->insert(id, false, init_state);
 }
 // }}}
@@ -1086,8 +1096,9 @@ Kademlia::erase(NodeID id)
   // assert(flyweight.find(id, 0));
   _root->erase(id);
   // KDEBUG(2) << "Kademlia::erase deleting id = " << printID(id) << ", ip = " << flyweight[id]->ip << endl;
-  Kademlia::pool->push(flyweight[id]);
+  k_nodeinfo *ki = flyweight[id];
   flyweight.remove(id);
+  Kademlia::pool->push(ki);
 }
 // }}}
 // {{{ Kademlia::update_k_bucket
@@ -1100,7 +1111,7 @@ Kademlia::update_k_bucket(NodeID id, IPAddress ip)
   if(id == _id)
     return;
 
-  if(!flyweight.find(id, 0)) {
+  if(!flyweight[id]) {
     // KDEBUG(2) << "Kademlia::update_k_bucket says " << printID(id) << " doesn't exist yet" << endl;
     insert(id, ip);
   }
@@ -1174,29 +1185,30 @@ Kademlia::reap(void *r)
   reap_info *ri = (reap_info *) r;
   // NodeID _id = ri->k->id();
 
-  // KDEBUG(1) << "Kademlia::reap" << endl;
-  // assert((int) ri->rpcset->size() == ri->outstanding_rpcs->size());
+  // cout << "Kademlia::reap" << endl;
+  assert((int) ri->rpcset->size() == ri->outstanding_rpcs->size());
 
   while(ri->outstanding_rpcs->size()) {
     bool ok;
     unsigned donerpc = ri->k->rcvRPC(ri->rpcset, ok);
-    callinfo *ci = (*ri->outstanding_rpcs)[donerpc];
-    // assert(ci);
+    callinfo *ci = ri->outstanding_rpcs->find(donerpc);
 
-    // KDEBUG(2) << "Kademlia::reap ok = " << ok << ", ki = " << endl;
+    // cout << "Kademlia::reap ok = " << ok << ", ki = " << endl;
     if(ok) {
       if(ri->k->alive())
-        ri->k->update_k_bucket(ci->fr->rid, ci->ki->ip);
+        ri->k->update_k_bucket(ci->fr->rid, ci->ki.ip);
       ri->k->record_stat(STAT_LOOKUP, ci->fr->results.size(), 0);
-    } else if(ri->k->flyweight.find(ci->ki->id, 0))
+    } else if(ri->k->flyweight[ci->ki.id])
       if(ri->k->alive())
-        ri->k->erase(ci->ki->id);
+        ri->k->erase(ci->ki.id);
 
     ri->outstanding_rpcs->remove(donerpc);
     delete ci;
   }
 
+  ri->k->_riset.remove(ri);
   delete ri;
+  // cout << "reaper done" << endl;
   threadexits(0);
 }
 // }}}
@@ -1223,7 +1235,9 @@ k_nodes::k_nodes(k_bucket *parent) : _parent(parent)
 // {{{ k_nodes::~k_nodes
 k_nodes::~k_nodes()
 {
-  delete _nodes;
+  if(_nodes)
+    delete _nodes;
+  _map.clear();
 }
 // }}}
 // {{{ k_nodes::insert
@@ -1294,7 +1308,7 @@ k_nodes::erase(Kademlia::NodeID n)
 
   // assert(n);
   // assert(_parent->kademlia()->flyweight.find(n, 0));
-  k_nodeinfo *ninfo = _parent->kademlia()->flyweight[n];
+  k_nodeinfo* ninfo = _parent->kademlia()->flyweight[n];
   ninfo->checkrep();
   // assert(_map.find(ninfo, false) || _parent->replacement_cache->contains(ninfo->id));
 
@@ -1309,7 +1323,7 @@ bool
 k_nodes::contains(Kademlia::NodeID n)
 {
   checkrep();
-  k_nodeinfo *ki = _parent->kademlia()->flyweight.find(n, 0);
+  k_nodeinfo *ki = _parent->kademlia()->flyweight[n];
   // assert(ki);
   return _map.find(ki, false);
 }
@@ -1323,16 +1337,16 @@ k_nodes::rebuild()
   // KDEBUG(2) << "k_nodes::rebuild" << endl;
 
   if(_nodes)
-    free(_nodes);
+    delete _nodes;
   _nodes = New k_nodeinfo*[_map.size()];
   // assert(_nodes);
 
   unsigned j = 0;
-  for(HashMap<k_nodeinfo*, bool>::const_iterator i = _map.begin(); i; i++)
+  for(HashMap<k_nodeinfo*, bool>::iterator i = _map.begin(); i; i++)
     _nodes[j++] = i.key();
   _redo = 1;
 
-  if(_rebuild++ < 1000)
+  if(_rebuild++ < 10)
     return;
 
   // once in a while throw entries beyond index k out of the set into the
@@ -1344,12 +1358,10 @@ k_nodes::rebuild()
     k_nodeinfo *ki = _nodes[i];
     _map.remove(ki);
     if(i_am_replacement_cache) {
-      // KDEBUG(2) << "k_nodes::rebuild removing " << Kademlia::printID(ki->id) << " from flyweight" << endl;
       _parent->kademlia()->flyweight.remove(ki->id);
       Kademlia::pool->push(ki);
-    } else {
+    } else
       _parent->replacement_cache->insert(ki->id);
-    }
   }
   _rebuild = 0;
   rebuild(); // after cleanup, rebuild _nodes again.
@@ -1538,7 +1550,7 @@ k_bucket::find_node(Kademlia::NodeID key, vector<k_nodeinfo*> *v,
 
   // XXX: collect stuff from replacement cache.  IS THIS OK?
   for(int i = replacement_cache->size()-1; i >= 0; i--) {
-    v->push_back(Kademlia::pool->pop(replacement_cache->get(i)));
+    v->push_back(replacement_cache->get(i));
     if(v->size() >= nhits) {
       checkrep();
       return;
@@ -1689,7 +1701,7 @@ k_stabilizer::execute(k_bucket *k, string prefix, unsigned depth, unsigned leftr
     // it doesn't really, really matter that we're not completing this round of
     // stabilization.  better than crashing the simulator, anyway.
     k_nodeinfo *ki = k->nodes->get(i);
-    if(!mykademlia->flyweight.find(ki->id, 0))
+    if(!mykademlia->flyweight[ki->id])
       return;
 
     if(now() - ki->lastts < Kademlia::refresh_rate)
@@ -1710,7 +1722,7 @@ k_stabilizer::execute(k_bucket *k, string prefix, unsigned depth, unsigned leftr
   mykademlia->root()->find_node(random_key, &successors);
   k_nodeinfo *ki = 0;
   for(unsigned i=0; i<successors.size(); i++) {
-    if(!mykademlia->flyweight.find(successors[i]->id, 0))
+    if(!mykademlia->flyweight[successors[i]->id])
       continue;
     ki = mykademlia->flyweight[successors[i]->id];
     break;
@@ -1734,7 +1746,7 @@ k_stabilizer::execute(k_bucket *k, string prefix, unsigned depth, unsigned leftr
   // update our k-buckets
   NODES_ITER(&lr.results) {
     // KDEBUG(2) << "k_stabilizer: update_k_bucket " << Kademlia::printID((*i)->id) << ", ip = " << (*i)->ip << endl;
-    mykademlia->update_k_bucket((*i)->id, (*i)->ip);
+    mykademlia->update_k_bucket(i->id, i->ip);
   }
 }
 // }}}
