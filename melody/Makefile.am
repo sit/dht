@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.12 2003/02/19 22:42:56 sit Exp $
+# $Id: Makefile.am,v 1.13 2003/05/02 01:33:01 jsr Exp $
 
 $(PROGRAMS): $(LDEPS) 
 
@@ -17,7 +17,7 @@ it_SOURCES = it.C cs_output.C
 googleit_SOURCES = googleit.C
 if GTK_AVAILABLE
 donation_plugin_SOURCES = donation_plugin.C
-INCLUDES = $(GTK_CFLAGS)
+INCLUDES = $(GSTUFF_CFLAGS)
 donation_plugin_LDFLAGS = -pthread
 donation_plugin_LDADD = -lxmms $(GTK_LIBS) $(LDADD)
 endif
