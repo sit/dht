@@ -105,7 +105,7 @@ void setup ();
 ptr<aclnt> get_aclnt (str host, unsigned short port);
 
 void add_node (str host, unsigned short port);
-void get_cb (f_node *node_next);
+void get_cb (chordID next);
 
 void update_fingers (f_node *n);
 void update_fingers_got_fingers (chordID ID, str host, unsigned short port, 
@@ -406,7 +406,7 @@ get_fingers (str file)
 }
 
 void
-get_cb (f_node *node_next) 
+get_cb (chordID next) 
 {
   draw_ring ();
   if (get_queue.size ()) {
@@ -419,19 +419,23 @@ get_cb (f_node *node_next)
       update_toes (nu);
     }
   } else {
-    if (node_next == NULL) 
+    f_node *node_next = nodes[next];
+    if (node_next == NULL)
       node_next = nodes.first ();
     if (node_next) {
       update_fingers (node_next);
       update_pred (node_next);
       update_succlist (node_next);
       update_toes (node_next);
-
+      
       node_next = nodes.next (node_next);
-    }
+      if (node_next == NULL) 
+	node_next = nodes.first ();
+      next = node_next->ID;
+    } // else no nodes, keep calling get_cb until there are some
   }
 
-  delaycb (0, 1000*1000*interval, wrap (&get_cb, node_next));
+  delaycb (0, 1000*1000*interval, wrap (&get_cb, next));
 }
 //----- update toes -----------------------------------------------------
 
