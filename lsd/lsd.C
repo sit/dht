@@ -26,15 +26,14 @@
 EXITFN (cleanup);
 
 #define MAX_VNODES 1024
+#define STORE_SIZE 10000 //size of block store per vnode (in blocks)
 
 ptr<chord> chordnode;
 static str p2psocket;
 int do_cache;
-str db_name;
+int cache_size;
 dhash *dh[MAX_VNODES + 1];
 int ndhash = 0;
-int nreplica;
-int ss_mode;
 
 void stats ();
 void stop ();
@@ -46,7 +45,7 @@ client_accept (int fd)
   if (fd < 0)
     fatal ("EOF\n");
   ref<axprt_stream> x = axprt_stream::alloc (fd);
-  dhashclient *c = New dhashclient (x, nreplica, chordnode);
+  dhashclient *c = New dhashclient (x, chordnode);
   if (do_cache) c->set_caching (1);
   else c->set_caching (0);
 }
@@ -101,149 +100,38 @@ startclntd()
   sun.sun_family = AF_UNIX;
   strcpy (sun.sun_path, p2psocket);
 
-#if 0
-  pid_t pid = afork ();
-  if (pid == -1) {
-    warn ("not listening on socket: fork: %m\n");
-    return;
-  }
-  else if (!pid) {
-#endif
-    umask (077);
+  umask (077);
+  if (bind (clntfd, (sockaddr *) &sun, sizeof (sun)) < 0) {
+    if (errno == EADDRINUSE)
+      unlink (sun.sun_path);
     if (bind (clntfd, (sockaddr *) &sun, sizeof (sun)) < 0) {
-      if (errno == EADDRINUSE)
-	unlink (sun.sun_path);
-      if (bind (clntfd, (sockaddr *) &sun, sizeof (sun)) < 0) {
-	warn ("not listening on socket: %s: %m\n", sun.sun_path);
-	err_flush ();
-	_exit (1);
-      }
+      warn ("not listening on socket: %s: %m\n", sun.sun_path);
+      err_flush ();
+      _exit (1);
     }
-#if 0
-    err_flush ();
-    _exit (0);
   }
-  chldcb (pid, wrap (start_listening_cb, clntfd));
-#endif
+  
   client_listening_cb (clntfd, 0);
 }
 
 static void
-newvnode_cb (int nreplica, int n, vnode *my, chordstat stat)
+newvnode_cb (int nreplica, str db_name, int ss_mode, int n, vnode *my,
+	     chordstat stat)
 {
   if (stat != CHORD_OK) {
     warnx << "newvnode_cb: status " << stat << "\n";
     fatal ("unable to join\n");
   }
   str db_name_prime = strbuf () << db_name << "-" << n;
-  if (ndhash == MAX_VNODES) fatal << "Too many virtual nodes (1024)\n";
-  dh[ndhash++] = New dhash (db_name_prime, my, nreplica, 10000, 1000, ss_mode);
-  if (n > 0) chordnode->newvnode (wrap (newvnode_cb, nreplica, n-1));
+  if (ndhash >= MAX_VNODES) fatal << "Too many virtual nodes (1024)\n";
+  dh[ndhash++] = New dhash (db_name_prime, my, nreplica, 
+			    STORE_SIZE, 
+			    cache_size, 
+			    ss_mode);
+  if (n > 0) chordnode->newvnode (wrap (newvnode_cb, nreplica, db_name, 
+					ss_mode, n-1));
 }
 
-static void
-initID (str s, chordID *ID)
-{
-  chordID n (s);
-  chordID b (1);
-  b = b << NBIT;
-  b = b - 1;
-  *ID = n & b;
-}
-
-static void
-parseconfigfile (str cf, int nvnode, int set_rpcdelay)
-{  
-  parseargs pa (cf);
-  bool errors = false;
-  int line;
-  vec<str> av;
-  int myport;
-  str myhost;
-  str wellknownhost;
-  int wellknownport;
-  chordID wellknownID;
-  int ss = 10000;
-  int cs = 1000;
-  myport = 0;
-  int max_connections = 400;
-  int max_loccache = 100;
-
-  while (pa.getline (&av, &line)) {
-    if (!strcasecmp (av[0], "#")) {
-    } else if (!strcasecmp (av[0], "myport")) {
-      if (av.size () != 2 || !convertint (av[1], &myport)) {
-        errors = true;
-        warn << cf << ":" << line << ": usage: myport <number>\n";
-      }
-    } else if (!strcasecmp (av[0], "wellknownport")) {
-      if (av.size () != 2 || !convertint (av[1], &wellknownport)) {
-        errors = true;
-        warn << cf << ":" << line << ": usage: wellknownport <number>\n";
-      }
-    } else if (!strcasecmp (av[0], "wellknownID")) {
-      if (av.size () != 2) {
-        errors = true;
-        warn << cf << ":" << line << ": usage: wellknownID <number>\n";
-      } else {
-	initID (av[1], &wellknownID);
-      }
-    } else if (!strcasecmp (av[0], "wellknownport")) {
-      if (av.size () != 2 || !convertint (av[1], &wellknownport)) {
-        errors = true;
-        warn << cf << ":" << line << ": usage: wellknownport <number>\n";
-      }
-    } else if (!strcasecmp (av[0], "nreplica")) {
-      if (av.size () != 2 || !convertint (av[1], &nreplica)) {
-        errors = true;
-        warn << cf << ":" << line << ": usage: nreplica <number>\n";
-      }
-   } else if (!strcasecmp (av[0], "wellknownhost")) {
-      if (av.size () != 2 || inet_addr (av[1]) == INADDR_NONE) {
-        errors = true;
-        warn << cf << ":" << line << ": usage: wellknownhost <ip address>\n";
-      }
-      else {
-        wellknownhost = av[1];
-      }
-   } else if (!strcasecmp (av[0], "storesize")) {
-     if (av.size () != 2 || !convertint (av[1], &ss)) {
-       errors = true;
-       warn << cf << ":" << line << ": usage: storesize <size in elements>\n";
-     }
-   } else if (!strcasecmp (av[0], "cachesize")) {
-     if (av.size () != 2 || !convertint (av[1], &cs)) {
-       errors = true;
-       warn << cf << ":" << line << ": usage: cachesize <size in elements>\n";
-     }
-   } else if (!strcasecmp (av[0], "maxopenconnections")) {
-     if (av.size () != 2 || !convertint (av[1], &max_connections)) {
-       errors = true;
-       warn << cf << ":" << line << ": usage: maxopenconnections <number>\n";
-     }
-   } else if (!strcasecmp (av[0], "maxlocationcache")) {
-     if (av.size () != 2 || !convertint (av[1], &max_loccache)) {
-       errors = true;
-       warn << cf << ":" << line << ": usage: maxlocationcache <number>\n";
-     }
-   }
-  }
-  if (errors) {
-    fatal ("errors in config file\n");
-  }
-  if (!wellknownhost) {
-    fatal ("specify wellknownhost\n");
-  }
-  max_loccache = max_loccache * (nvnode + 1);
-  chordnode = New refcounted<chord> (wellknownhost, wellknownport, 
-				     wellknownID, myport, set_rpcdelay,
-				     max_loccache, max_connections,
-				     ss_mode);
-  chordnode->newvnode (wrap (newvnode_cb, nreplica, nvnode-1));
-  sigcb(SIGUSR1, wrap (&stats));
-  sigcb(SIGUSR2, wrap (&stop));
-  sigcb(SIGHUP, wrap (&halt));
-}
 
 void
 halt ()
@@ -271,8 +159,10 @@ static void
 usage ()
 {
   warnx << "Usage: " << progname 
-	<< "-d <dbfile> -S <sock> -v <nvnode> -c <cache?> -f <conffile>"
-	<< "-s <server select mode>\n";
+	<< " -d <dbfile> -j hostname:port -p port "
+    "[-S <sock>] [-v <nvnode>] [-c <cache?>] "
+    "-B <cache size> "
+    "[-s <server select mode>]\n";
   exit (1);
 }
 
@@ -283,16 +173,53 @@ main (int argc, char **argv)
   setprogname (argv[0]);
   sfsconst_init ();
   random_init ();
-  int ch;
-  do_cache = 0;
-  int set_name = 0;
-  int set_rpcdelay = 0;
-  ss_mode = 0;
 
-  while ((ch = getopt (argc, argv, "CS:cd:f:r:s:v:")) != -1)
+  int ch;
+
+  do_cache = 0;
+  int ss_mode = 0;
+
+  int myport = 0;
+  cache_size = 2000;
+  int max_loccache = 100;
+  str wellknownhost;
+  int wellknownport = 0;
+  int nreplica = 0;
+  str db_name = "/var/tmp/db";
+  p2psocket = "/tmp/chord-sock";
+
+  while ((ch = getopt (argc, argv, "S:cd:s:v:j:p:B:n:")) != -1)
     switch (ch) {
-    case 'C':
-      nochallenges = 1;
+    case 'n':
+      nreplica = atoi (optarg);
+      break;
+    case 'p':
+      myport = atoi (optarg);
+      break;
+    case 'j': 
+      {
+	char *bs_port = strchr(optarg, ':');
+	*bs_port = 0;
+	bs_port++;
+	if (inet_addr (optarg) == INADDR_NONE) {
+	  //yep, this blocks
+	  struct hostent *h = gethostbyname (optarg);
+	  if (!h) {
+	    warn << "Invalid address or hostname: " << optarg << "\n";
+	    usage ();
+	  }
+	  struct in_addr *ptr = (struct in_addr *)h->h_addr;
+	  wellknownhost = inet_ntoa (*ptr);
+	} else
+	  wellknownhost = optarg;
+
+	if (bs_port)
+	  wellknownport = atoi (bs_port);
+	
+	break;
+      }
+    case 'B':
+      cache_size = atoi (optarg);
       break;
     case 'S':
       p2psocket = optarg;
@@ -302,14 +229,6 @@ main (int argc, char **argv)
       break;
     case 'd':
       db_name = optarg;
-      set_name = 1;
-      break;
-    case 'f':
-      if (!set_name) fatal("must specify db name\n");
-      parseconfigfile (optarg, vnode, set_rpcdelay);
-      break;
-    case 'r':
-      set_rpcdelay = atoi(optarg);
       break;
     case 's':
       ss_mode = atoi(optarg);
@@ -322,8 +241,20 @@ main (int argc, char **argv)
       break;
     }
 
-  if (!chordnode) 
-    fatal ("Specify config file\n");
+  if (wellknownport == 0) usage ();
+
+  max_loccache = max_loccache * (vnode + 1);
+  chordnode = New refcounted<chord> (wellknownhost, wellknownport, 
+				     myport,
+				     max_loccache,
+				     ss_mode);
+  chordnode->newvnode (wrap (newvnode_cb, nreplica, db_name, ss_mode, 
+			     vnode-1));
+
+  sigcb(SIGUSR1, wrap (&stats));
+  sigcb(SIGUSR2, wrap (&stop));
+  sigcb(SIGHUP, wrap (&halt));
+
   if (p2psocket) 
     startclntd();
   amain ();
