@@ -38,9 +38,9 @@
 #endif
 
 #include <merkle_sync_prot.h>
-static int MERKLE_ENABLED = !!getenv("MERKLE_ENABLED");
-static int MERKLE_TREE    = !!getenv("MERKLE_TREE");
-static int DONT_REPLICATE  = !!getenv("DONT_REPLICATE");
+static int MERKLE_ENABLED = getenv("MERKLE_ENABLED") ? atoi(getenv("MERKLE_ENABLED")) : 0;
+static int MERKLE_TREE    = getenv("MERKLE_TREE") ? atoi(getenv("MERKLE_TREE")) : 0;
+static int DONT_REPLICATE  = getenv("DONT_REPLICATE") ? atoi(getenv("DONT_REPLICATE")) : 0;
 
 #define LEASE_TIME 2
 #define LEASE_INACTIVE 60
@@ -130,7 +130,6 @@ dhash::dhash(str dbname, ptr<vnode> node,
   partition_enumeration = db->enumerate();
   partition_dbpair = NULL;
 
-
   // RPC demux
   warn << host_node->my_ID () << " registered dhash_program_1\n";
   host_node->addHandler (dhash_program_1, wrap(this, &dhash::dispatch));
@@ -160,9 +159,11 @@ dhash::dhash(str dbname, ptr<vnode> node,
 
   delaycb (30, wrap (this, &dhash::sync_cb));
   if (MERKLE_ENABLED) {
-    delaycb (5, wrap (this, &dhash::replica_maintenance_timer, 0));
+    delaycb (10, wrap (this, &dhash::replica_maintenance_timer, 0));
     //delaycb (5, wrap (this, &dhash::partition_maintenance_timer));
   }
+
+
 }
 
 void
@@ -224,7 +225,6 @@ dhash::replica_maintenance_timer (u_int index)
       if (active_syncers[replicaID])
 	fatal << "Strange: already syncing with " << replicaID << "\n";
 
-
       replica_syncer_dstID = replicaID;
       replica_syncer = New refcounted<merkle_syncer> 
 	(mtree, 
@@ -245,6 +245,22 @@ dhash::replica_maintenance_timer (u_int index)
   delaycb (5, wrap (this, &dhash::replica_maintenance_timer, index));
 }
 
+#if 0
+   // maintenance is continual
+   while (1) 
+      // get the HIGHEST key (assumes database is sorted by keys)
+      key = database.last ()
+      while (1) 
+          node = chord_lookup (key)
+          pred = chord_get_predecessor (node)
+          // don't sync with self
+          if (node.id != myID)
+            synchronize (node, database[pred.id ... node.id]
+          // skip over entire database range which was synchronized 
+          key = database.previous (pred_node.id)
+          if (key == NO_MORE_KEYS)
+             break;
+#endif
 void
 dhash::partition_maintenance_timer ()
 {
@@ -273,32 +289,9 @@ dhash::partition_maintenance_timer ()
   } else {
     delaycb (5, wrap (this, &dhash::partition_maintenance_timer));
   }
-
-  
-#if 0
-   // maintenance is continual
-   while (1) {
-      // get the HIGHEST key (assumes database is sorted by keys)
-      key = database.last ()
-       
-      while (1) {
-          node = chord_lookup (key)
-          pred = chord_get_predecessor (node)
-     
-          // don't sync with self
-          if (node.id != myID)
-            synchronize (node, database[pred.id ... node.id]
-
-          // skip over entire database range which was synchronized 
-          key = database.previous (pred_node.id)
-          if (key == NO_MORE_KEYS)
-             break;
-      }
-   }
-#endif
-
-
 }
+  
+
 
 
 void
@@ -821,7 +814,7 @@ dhash::get_key_got_block (chordID key, cbstat_t cb, ptr<dhash_block> b)
     ref<dbrec> k = id2dbrec (key);
     ref<dbrec> d = New refcounted<dbrec> (b->data, b->len);
 
-#if MERKLE_TREE
+#if 1 // MERKLE_TREE
     dbwrite (k, d);
     get_key_stored_block (cb, 0);
 #else
@@ -906,7 +899,7 @@ dhash::append (ref<dbrec> key, ptr<dbrec> data,
 	stat = DHASH_STORED;
 	keys_stored += 1;
 
-#if MERKLE_TREE
+#if 1 //MERKLE_TREE
 	dbwrite (key, marshalled_data);
 	append_after_db_store (cb, arg->key, 0);
 #else
@@ -951,7 +944,7 @@ dhash::append_after_db_fetch (ref<dbrec> key, ptr<dbrec> new_data,
 	ptr<dbrec> marshalled_data =
 	  New refcounted<dbrec> (m_dat, m_len);
 
-#if MERKLE_TREE
+#if 1 //MERKLE_TREE
 	dbwrite (key, marshalled_data);
 	append_after_db_store (cb, arg->key, 0);
 #else
@@ -1111,7 +1104,7 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
     else
       bytes_stored += arg->data.size ();
 
-#if MERKLE_TREE
+#if 1 //MERKLE_TREE
     dbwrite (k, d);
     store_cb (arg->type, id, cb, 0);
 #else
@@ -1316,21 +1309,21 @@ dhash::stop ()
 void
 dhash::dbwrite (ref<dbrec> key, ref<dbrec> data)
 {
-#if MERKLE_TREE
-  block blk (to_merkle_hash (key), data);
-  // new mutable blocks overwrite their current entry in the database
-  bool exists = !!database_lookup (mtree->db, blk->key);
-  bool Mutable = (block_type(data) != DHASH_CONTENTHASH);
-  if (exists && Mutable) {
-    mtree->remove (blk->key);
-    exists = false;
+  if (MERKLE_TREE) {
+    block blk (to_merkle_hash (key), data);
+    // new mutable blocks overwrite their current entry in the database
+    bool exists = !!database_lookup (mtree->db, blk.key);
+    bool Mutable = (block_type(data) != DHASH_CONTENTHASH);
+    if (exists && Mutable) {
+      mtree->remove (&blk);
+      exists = false;
+    }
+    
+    if (!exists)
+      mtree->insert (&blk);
+  } else {
+    db->insert (key, data);
   }
-
-  if (!exists)
-    mtree->insert (&blk);
-#else
-  db->insert (key, data);
-#endif
 }
 
 static void

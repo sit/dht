@@ -86,10 +86,8 @@ void
 merkle_tree::remove (u_int depth, block *b, merkle_node *n)
 {
   if (n->isleaf ()) {
-    if (db) {
-      database_remove (db, b);
-      assert (!database_lookup (db, b->key));
-    }
+    database_remove (db, b);
+    assert (!database_lookup (db, b->key));
   } else {
     u_int32_t branch = b->key.read_slot (depth);
     remove (depth+1, b, n->child (branch));
@@ -164,7 +162,6 @@ void
 merkle_tree::remove (block *b)
 {
   // assert block must exist..
-  assert (db);
   if (!database_lookup (db, b->key)) {
     warn << "merkle_tree::remove: key does not exists " << b->key << "\n";
     return;

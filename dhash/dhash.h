@@ -188,7 +188,7 @@ class dhash {
   chordID partition_syncer_predID;
   chordID partition_syncer_dstID;
   ptr<merkle_syncer> partition_syncer;
-
+  bigint partition_position;
   ptr<dbEnumeration> partition_enumeration;
   ptr<dbPair> partition_dbpair;
 
