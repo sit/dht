@@ -92,7 +92,7 @@ void
 game_engine::insert (ref<room> r, mud_cb_t cb)
 {
   ptr<option_block> opt = New refcounted <option_block>;
-  opt->flags = DHASHCLIENT_NEWBLOCK;
+  opt->flags = DHASHCLIENT_NEWBLOCK; // + DHASHCLIENT_RMW;
 
   warn << "game_engine::insert" << r->to_str ();
 
