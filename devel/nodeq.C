@@ -8,62 +8,104 @@
 #include <async.h>
 #include <dns.h>
 
+char *usage = "Usage: nodeq [-r] host port vnode\n";
+
 int outstanding = 0;
 bool do_reverse_lookup = false;
 
+struct node {
+  int i;
+  chord_node_ext y;
+  str hostname;
+
+  node (int i_, chord_node_ext n) : i (i_), y (n), hostname ("") {}
+};
+
+vec<ptr<node> > successors;
+vec<ptr<node> > fingers;
 
 void
-dns_lookup_cb (int i, chord_node z, chord_node_ext y,
-	       ptr<hostent> he, int err) {
+printlist (str desc, vec<ptr<node> > &lst)
+{
+  if (lst.size () == 0)
+    return;
 
-  if (!err) z.r.hostname = he->h_name;
+  strbuf out;
 
-  warnx << i << ".\t"
+  out << "=== " << desc << "\n";
+  for (size_t i = 0; i < lst.size (); i++) {
+    chord_node z = make_chord_node (lst[i]->y.n);
+    str h;
+    if (lst[i]->hostname.len () > 0)
+      h = lst[i]->hostname;
+    else
+      h = z.r.hostname;
+    out << i << ".\t"
 	<< z.x << " "
-	<< z.r.hostname << " "
+	<< h << " "
 	<< z.r.port << " "
 	<< z.vnode_num << " "
-	<< y.a_lat << " "
-	  << y.a_var << " "
-	<< y.nrpc
+	<< lst[i]->y.a_lat << " "
+	<< lst[i]->y.a_var << " "
+	<< lst[i]->y.nrpc << " "
+	<< z.coords[0] << " "
+	<< z.coords[1] << " "
+	<< z.coords[2] << " "
 	<< "\n";
-  if (do_reverse_lookup) {
-    outstanding--;
-    if (outstanding == 0)
-      exit (0);
   }
+  
+  out.tosuio ()->output (1);
 }
 
 void
-printreslist_cb (str desc, chord_nodelistextres *res, clnt_stat status)
+finish ()
 {
+  printlist ("successors", successors);
+  printlist ("fingers", fingers);
+  exit (0);
+}
+
+void
+dns_lookup_cb (ptr<node> nn, ptr<hostent> he, int err)
+{
+  if (!err)
+    nn->hostname = he->h_name;
+  
+  outstanding--;
+  if (outstanding == 0)
+    finish ();
+}
+
+void
+processreslist_cb (str desc, vec<ptr<node> > *list,
+		   chord_nodelistextres *res, clnt_stat status)
+{
+  outstanding--;
   if (status) {
     warnx << "no " << desc << ": " << status << "\n";
+    if (outstanding == 0)
+      finish ();
     return;
   }
 
-  warnx << "=== " << desc << "\n";
   size_t sz = res->resok->nlist.size ();
   vec<chord_node> zs;
   for (size_t i = 0; i < sz; i++) {
-    struct in_addr ar;
-    chord_node_ext y = res->resok->nlist[i];
-    chord_node z = make_chord_node (y.n);
-    inet_aton (z.r.hostname, &ar);
+    ptr<node> nn = New refcounted<node> (i, res->resok->nlist[i]);
+    list->push_back (nn);
+    
     if (do_reverse_lookup) {
       outstanding++;
-      dns_hostbyaddr (ar, wrap (&dns_lookup_cb, i, z, y));
-    } else 
-      dns_lookup_cb (i, z, y, NULL, 1);
+      struct in_addr ar;
+      ar.s_addr = htonl (res->resok->nlist[i].n.machine_order_ipv4_addr);
+      dns_hostbyaddr (ar, wrap (&dns_lookup_cb, nn));
+    }
   }
   delete res;
-  outstanding--;
+  
   if (outstanding == 0)
-    exit (0);
+    finish ();
 }
-
-
-
 
 void
 print_successors (const chord_node &dst)
@@ -72,7 +114,7 @@ print_successors (const chord_node &dst)
   chord_nodelistextres *lst = New chord_nodelistextres ();
   doRPC (dst, chord_program_1, CHORDPROC_GETSUCC_EXT,
 	 ga, lst,
-	 wrap (printreslist_cb, "successors", lst));
+	 wrap (processreslist_cb, "successors", &successors, lst));
   outstanding++;
 }
 
@@ -83,38 +125,50 @@ print_fingers (const chord_node &dst)
   chord_nodelistextres *lst = New chord_nodelistextres ();
   doRPC (dst, fingers_program_1, FINGERSPROC_GETFINGERS_EXT,
 	 ga, lst,
-	 wrap (printreslist_cb, "fingers", lst));
+	 wrap (processreslist_cb, "fingers", &fingers, lst));
   outstanding++;
 }
 
 int
 main (int argc, char *argv[])
 {
+  int ch;
+  while ((ch = getopt (argc, argv, "r")) != -1)
+    switch (ch) {
+    case 'r':
+      do_reverse_lookup = true;
+      break;
+    default:
+      fatal << usage;
+      break;
+    }
+
+  argc -= optind;
+  argv += optind;
+  
+  if (argc != 3)
+    fatal << usage;
+
   chord_node dst;
-  if (argc != 4) {
-    if (strcmp(argv[4], "-r") == 0) do_reverse_lookup = true;
-    else
-      fatal << "Usage: nodeq host port vnode\n";
-  }
-  if (inet_addr (argv[1]) == INADDR_NONE) {
+
+  if (inet_addr (argv[0]) == INADDR_NONE) {
     // yep, this still blocks.
-    struct hostent *h = gethostbyname (argv[1]);
+    struct hostent *h = gethostbyname (argv[0]);
     if (!h)
-      fatal << "Invalid address or hostname: " << argv[1] << "\n";
+      fatal << "Invalid address or hostname: " << argv[0] << "\n";
     struct in_addr *ptr = (struct in_addr *) h->h_addr;
     dst.r.hostname = inet_ntoa (*ptr);
   } else {
-    dst.r.hostname = argv[1];
+    dst.r.hostname = argv[0];
   }
-  
-  dst.r.port = atoi (argv[2]);
-  dst.vnode_num = atoi (argv[3]);
-  dst.x = make_chordID (dst.r.hostname, dst.r.port, dst.vnode_num);
 
-  outstanding++;
+  dst.r.port = atoi (argv[1]);
+  dst.vnode_num = atoi (argv[2]);
+  dst.x = make_chordID (dst.r.hostname, dst.r.port, dst.vnode_num);
+  
+  make_sync (1);
+  
   print_successors (dst);
-  while (outstanding > 1) acheck ();
-  outstanding = 0;
   print_fingers (dst);
 
   amain ();
