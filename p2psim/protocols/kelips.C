@@ -83,13 +83,15 @@ Kelips::check(bool doprint)
   if(gc[group()] != _k - 1)
     stable = false;
   for(int i = 0; i < _k; i++)
-    if(i != group() && gc[i] != 2)
+    if(i != group() && gc[i] != _n_contacts)
       stable = false;
 
   if(_stable == false && stable){
     sta[nsta++] = _rounds;
     _stable = true;
+#if 0
     cout << now() << " " << ip() << " stable after " << _rounds << " rounds\n";
+#endif
   }
 
   if(doprint && stable == false){
@@ -110,7 +112,9 @@ void
 Kelips::join(Args *a)
 {
   IPAddress wkn = a->nget<IPAddress>("wellknown");
+#if 0
   cout << "Kelips::join ip=" << ip() << " wkn=" << wkn << "\n";
+#endif
   assert(wkn != 0);
 
   if(wkn != ip()){
@@ -139,9 +143,157 @@ Kelips::crash(Args *a)
 {
 }
 
+// In real Kelips, the file with key K is stored in group
+// (K mod k), on a randomly chosen member of the group.
+// All nodes in the group learn that K is on that node via
+// gossiping filetuples. The Kelips paper doesn't talk about
+// replicating files. Kelips has no direction notion
+// of lookup(key).
+//
+// This implementation of lookup just looks for the host
+// with a given key. I believe this is indistinguishable from
+// looking for a file with a given key. It actually contacts
+// the target host.
+//
+// Assuming iterative lookup, though not specified in the paper.
+// XXX should send lookup to contact with lowest RTT.
+// XXX should retry in various clever ways.
 void
-Kelips::lookup(Args *a)
+Kelips::lookup(Args *args)
 {
+  ID key = args->nget<ID>("key");
+  printf("%qd %d lookup(%qd)\n", now(), ip(), key);
+
+  if(lookup_loop(key)){
+    printf("%qd %d lookup(%qd) ok\n", now(), ip(), key);
+  } else {
+    printf("%qd %d lookup(%qd) FAILED\n", now(), ip(), key);
+  }
+}
+
+// Keep trying to lookup.
+bool
+Kelips::lookup_loop(ID key)
+{
+  // First try ordinary lookup via a contact.
+  if(lookup1(key))
+    return true;
+
+  // Try various random things a bunch of times.
+  for(int iter = 0; iter < 6; iter++){
+    if((random() % 2) == 0){
+      if(lookup1(key))
+        return true;
+    } else {
+      if(lookup2(key))
+        return true;
+    }
+  }
+
+  return false;
+}
+
+// Look up a key via a randomly chosen contact.
+// The contact should return the IP address of
+// the lookup target, which we then try to talk to.
+// XXX Try closer contact first.
+bool
+Kelips::lookup1(ID key)
+{
+  vector<IPAddress> cl = grouplist(id2group(key));
+  if(cl.size() < 1)
+    return false;
+  IPAddress ip = cl[random() % cl.size()];
+
+  IPAddress ip1 = 0;
+  bool ok = doRPC(ip, &Kelips::handle_lookup1, &key, &ip1);
+  if(!ok || ip1 == 0)
+    return false;
+
+  bool done = false;
+  ok = doRPC(ip1, &Kelips::handle_lookup_final, &key, &done);
+
+  return(ok && done);
+}
+
+// Look up a key via a randomly member of our own group,
+// hoping that they will have better contact info.
+bool
+Kelips::lookup2(ID key)
+{
+  vector<IPAddress> gl = grouplist(group());
+  if(gl.size() < 1)
+    return false;
+  IPAddress ip = gl[random() % gl.size()];
+
+  IPAddress ip1 = 0;
+  bool ok = doRPC(ip, &Kelips::handle_lookup2, &key, &ip1);
+  if(!ok || ip1 == 0)
+    return false;
+
+  IPAddress ip2 = 0;
+  ok = doRPC(ip1, &Kelips::handle_lookup1, &key, &ip2);
+  if(!ok || ip2 == 0)
+    return false;
+
+  bool done = false;
+  ok = doRPC(ip2, &Kelips::handle_lookup_final, &key, &done);
+
+  return(ok && done);
+}
+
+// Someone in our group wants us to return them a
+// random contact that might be useful in finding
+// key *kp.
+void
+Kelips::handle_lookup2(ID *kp, IPAddress *res)
+{
+  vector<IPAddress> cl = grouplist(id2group(*kp));
+  if(cl.size() > 0)
+    *res = cl[random() % cl.size()];
+  else
+    *res = 0;
+  printf("%qd %d handle_lookup2(%qd) %d\n",
+         now(), ip(), *kp, *res);
+}
+
+// Someone outside the group is asking us which node is
+// responsible for the given key.
+void
+Kelips::handle_lookup1(ID *kp, IPAddress *res)
+{
+  ID key = *kp;
+
+  assert(id2group(key) == group());
+
+  if(id() == key){
+    *res = ip();
+    return;
+  }
+
+  *res = 0;
+  vector<IPAddress> gl = grouplist(group());
+  for(u_int i = 0; i < gl.size(); i++){
+    if(ip2id(gl[i]) == key){
+      *res = gl[i];
+      break;
+    }
+  }
+
+  if(*res == 0)
+    printf("%qd %d handle_lookup1(%qd) failed\n", now(), ip(), key);
+}
+
+void
+Kelips::handle_lookup_final(ID *kp, bool *done)
+{
+  if(*kp == id()){
+    *done = true;
+  } else {
+    *done = false;
+  }
+  printf("%qd %d handle_lookup_final(%qd) %s\n",
+         now(), ip(), *kp, *done == true ? "ok" : "OOPS");
 }
 
 void
@@ -165,6 +317,7 @@ Kelips::handle_join(IPAddress *caller, vector<Info> *ret)
 // Enforce the invariant that we have at most 2 contacts
 // for each foreign group.
 // XXX should choose closest contacts.
+// XXX actually favors contacts with newer heartbeats. not in paper...
 void
 Kelips::gotinfo(Info i)
 {
@@ -173,7 +326,17 @@ Kelips::gotinfo(Info i)
 
   if(_info.find(i._ip) == _info.end()){
     int g = ip2group(i._ip);
-    if(g == group() || grouplist(g).size() < 2){
+    vector<IPAddress> gl = randomize(grouplist(g));
+    bool add = false;
+    if(g == group() || gl.size() < 2){
+      add = true;
+    } else if(i._heartbeat > _info[gl[0]]->_heartbeat){
+      Info *in = _info[gl[0]];
+      _info.erase(gl[0]);
+      delete in;
+      add = true;
+    }
+    if(add){
       _info[i._ip] = new Info(i);
       _info[i._ip]->_rounds = _item_rounds;
     }
@@ -213,7 +376,7 @@ Kelips::grouplist(int g)
 
 // Return the list of the IP addresses *not* in our group.
 vector<IPAddress>
-Kelips::contactlist(int g)
+Kelips::notgrouplist(int g)
 {
   vector<IPAddress> l;
   for(map<IPAddress, Info *>::const_iterator ii = _info.begin();
@@ -294,7 +457,7 @@ Kelips::gossip_msg(int g)
   newold_msg(msg, grouplist(g), _group_ration);
 
   // Add some contact nodes.
-  newold_msg(msg, contactlist(g), _contact_ration);
+  newold_msg(msg, notgrouplist(g), _contact_ration);
 
   assert(msg.size() <= 1 + _group_ration + _contact_ration);
 
@@ -317,7 +480,7 @@ Kelips::gossip(void *junk)
   }
 
   {
-    vector<IPAddress> cl = randomize(contactlist(group()));
+    vector<IPAddress> cl = randomize(notgrouplist(group()));
     for(u_int i = 0; i < _contact_targets && i < cl.size(); i++){
       doRPC(cl[i], &Kelips::handle_gossip, &msg, (void *) 0);
     }
@@ -338,12 +501,22 @@ Kelips::handle_gossip(vector<Info> *msg, void *ret)
   }
 }
 
-// Periodically get rid of irrelevant _info entries.
-// Retains only fresh-looking entries from the same
-// group, plus two contacts in each other group.
-// XXX
+// Periodically get rid of _info entries that have
+// expired heartbeats.
 void
 Kelips::purge(void *junk)
 {
-  delaycb(_purge_interval, &Kelips::purge, (void *) 0);
+  vector<IPAddress> l = all();
+  for(u_int i = 0; i < l.size(); i++){
+    Info *in = _info[l[i]];
+    int to =
+      (ip2group(in->_ip) == group() ? _group_timeout : _contact_timeout);
+    if(in->_heartbeat + to < now()){
+      cout << now() << " " << ip() << " timed out " << in->_ip << "\n";
+      _info.erase(l[i]);
+      delete in;
+    }
+  }
+
+  delaycb(1000, &Kelips::purge, (void *) 0);
 }

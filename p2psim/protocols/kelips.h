@@ -14,6 +14,12 @@
 //   For group vs contact, and also new vs old.
 // Pull at join and then all push often leaves isolated nodes,
 //   since maybe nobody pushes to me. So what happens at join?
+// ***
+// What heartbeat timeout values?
+// The contacts tend to time out a lot...
+// Replacing contacts with newer heartbeat helps convergence a lot.
+//   As well as reducing contact timeout dramatically.
+// Are lookups iterative or recursive? Who controls various retries?
 
 // Does it stabilize after the expected number of rounds?
 // Gossip w/o favoring new nodes (nnodes: avg median):
@@ -22,6 +28,10 @@
 // With gossiping new nodes first for 1 round:
 //   100: 10 11
 //   400: 25 29
+// Replacing contacts with newer heartbeat, _item_rounds = 1:
+//   100:  6  5
+//   400: 13 14
+// Oy, _item_rounds=0 beats this by a lot.
 
 #include "p2psim/p2protocol.h"
 #include "consistenthash.h"
@@ -63,8 +73,9 @@ public:
   // how many times to gossip a new item. XXX not specified in paper.
   static const int _item_rounds = 1;
 
-  // how often to think about deleting nodes w/ expired heartbeats.
-  static const int _purge_interval = 5000;
+  // hearbeat timeouts. XXX not specified in paper.
+  static const int _group_timeout = (_round_interval * 25);
+  static const int _contact_timeout = (_round_interval * 50);
 
   int _k; // number of affinity groups, should be sqrt(n)
 
@@ -86,7 +97,8 @@ public:
   bool _stable;
 
   void gotinfo(Info i);
-  int ip2group(IPAddress xip) { return(ip2id(xip) % _k); }
+  int id2group(ID id) { return(id % _k); }
+  int ip2group(IPAddress xip) { return(id2group(ip2id(xip))); }
   ID ip2id(IPAddress xip) {
     return xip;
     // return ConsistentHash::ip2chid(xip);
@@ -98,13 +110,19 @@ public:
   void purge(void *);
   vector<IPAddress> all();
   vector<IPAddress> grouplist(int g);
-  vector<IPAddress> contactlist(int g);
+  vector<IPAddress> notgrouplist(int g);
   void check(bool doprint);
   void handle_join(IPAddress *caller, vector<Info> *ret);
   vector<Info> gossip_msg(int g);
   vector<IPAddress> randomize(vector<IPAddress> a);
   vector<IPAddress> newold(vector<IPAddress> a, bool xnew);
   void newold_msg(vector<Info> &msg, vector<IPAddress> l, u_int ration);
+  void handle_lookup_final(ID *kp, bool *done);
+  void handle_lookup1(ID *kp, IPAddress *res);
+  bool lookup1(ID key);
+  bool lookup2(ID key);
+  bool lookup_loop(ID key);
+  void handle_lookup2(ID *kp, IPAddress *res);
 };
 
 #endif

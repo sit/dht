@@ -2,7 +2,7 @@
 use strict;
 
 #
-# sc.pl <protocolfile> <topology file> <event file> (<seed>) < scenerio
+# sc.pl <protocolfile> <topology file> <event file> (<seed>) < scenario
 # 
 # takes as input a scenario and generates topology, event, and protocol file
 #
@@ -16,6 +16,8 @@ use strict;
 #  <placement> ::= linear | random <number> <number>
 #
 # event: <node id>, <event-type>, <args>
+#
+# eventat: <time>, <node id>, <event-type>, <args>
 #
 # events: <# of events>, <start>, <interval>, <distrib>, <event-type>, <args>
 #
@@ -45,8 +47,9 @@ sub main {
   while ($line = <STDIN>) {
     chomp($line);
 
-    # skip empty lines
-    next if $line =~ /\s*#/;
+    next if $line =~ /^#/;
+    $line =~ s/  *#.*//;
+    next if $line =~ /^$/;
 
     #this is an ugly hack
     if ($line =~ /wellknown\s*=\s*(\d+)/) {
@@ -60,6 +63,8 @@ sub main {
       &donet(split(/,\s*/ , $1));
     } elsif ($line =~/^\s*event:\s*(.*)/) {
       &doevent(split(/,\s*/, $1));
+    } elsif ($line =~/^\s*eventat:\s*(.*)/) {
+      &doeventat(split(/,\s*/, $1));
     } elsif ($line =~/^\s*events:\s*(.*)/) {
       &doevents(split(/,\s*/, $1));
     } elsif ($line =~/^\s*observe:\s*(.*)/) {
@@ -118,7 +123,11 @@ sub doevent {
   print EVOLD "node $time $allnodes[$n] $type @args\n";
 }
 
-
+sub doeventat {
+  my ($at, $n, $type, @args) = @_;
+  print "doeventat: $at $n $type @args\n";
+  print EVOLD "node $at $allnodes[$n] $type @args\n";
+}
 
 sub doevents {
   my ($n, $start, $interval, $distr, $type, @args) = @_;
