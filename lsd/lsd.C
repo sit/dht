@@ -368,7 +368,7 @@ main (int argc, char **argv)
       {
 	int logfd = open (optarg, O_RDWR | O_CREAT, 0666);
 	if (logfd <= 0) fatal << "Could not open logfile " << optarg << " for appending\n";
-	lseek (logfd, SEEK_END, 0);
+	lseek (logfd, 0, SEEK_END);
 	errfd = logfd;
 	break;
       }
