@@ -170,27 +170,35 @@ locationtable::betterpred2 (chordID myID, chordID current, chordID target,
   // #estimate the number of nodes to figure how many bits to compare
   bool r = false;
   if (between (myID, target, newpred)) { // is newpred a possible pred?
-    location *c = getlocation (current);
-    location *n = getlocation (newpred);
+
+    location *cur_loc = getlocation (current);
+    location *proposed_loc = getlocation (newpred);
+
     if ((current == myID) && (newpred != myID)) {
       r = true;
-    } else if ((c->nrpc == 0) || (n->nrpc == 0)) {
+    } else if ((cur_loc->nrpc == 0) || (proposed_loc->nrpc == 0)) {
       r = between (current, target, newpred);
     } else {
       u_long nbit = 2;
       //      if (nnodes <= 1) nbit = 0;
       // else nbit = log2 (nnodes / log2 (nnodes));
-      u_long t1 = topbits (nbit, target);
-      u_long t2 = topbits (nbit, current);
-      u_long t3 = topbits (nbit, newpred);
-      u_long h1 = (t1 > t2) ? t1 - t2 : t2 - t1;
-      u_long h2 = (t1 > t3) ? t1 - t3 : t3 - t1;
-      if (n1bits (h2) < n1bits (h1)) {  // newpred corrects more bits
+
+      u_long target_bits = topbits (nbit, target);
+      u_long current_bits = topbits (nbit, current);
+      u_long prop_bits = topbits (nbit, newpred);
+
+      u_long cur_diff = (target_bits > current_bits) ? 
+	target_bits - current_bits :
+	current_bits - target_bits;
+      u_long prop_diff = (target_bits > prop_bits) ? 
+	target_bits - prop_bits : 
+	prop_bits - target_bits;
+      if (n1bits (cur_diff) > n1bits (prop_diff)) { 
 	r = true;
-      } else if (n1bits (h2) == n1bits (h1)) {
-	float cdelay = c->rpcdelay / c->nrpc;
-	float ndelay = n->rpcdelay / n->nrpc;
-	r = ndelay < cdelay;
+      } else if (n1bits (cur_diff) == n1bits (prop_diff)) {
+	float cur_delay = cur_loc->rpcdelay / cur_loc->nrpc;
+	float proposed_delay = proposed_loc->rpcdelay / proposed_loc->nrpc;
+	r = proposed_delay < cur_delay;
 #if 0
 	if (r) {
 	  char b[1024];
@@ -262,6 +270,21 @@ locationtable::betterpred3 (chordID myID, chordID current, chordID target,
   }
   
   
+  return r;
+}
+
+bool
+locationtable::betterpred_greedy (chordID myID, chordID current, 
+				  chordID target, chordID newpred) 
+{
+  bool r = false;
+  if (between (myID, target, newpred)) { 
+    location *c = getlocation (current);
+    location *n = getlocation (newpred);
+    float cur_delay = c->rpcdelay / c->nrpc;
+    float new_delay = n->rpcdelay / n->nrpc;
+    r = (new_delay < cur_delay);
+  }
   return r;
 }
 

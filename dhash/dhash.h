@@ -125,6 +125,7 @@ class dhash {
   int nreplica;
   int kc_delay;
   int rc_delay;
+  int ss_mode;
 
   dbfe *db;
   vnode *host_node;
@@ -231,7 +232,7 @@ class dhash {
 
  public:
   dhash (str dbname, vnode *node, 
-	 int nreplica = 0, int ss = 10000, int cs = 1000);
+	 int nreplica = 0, int ss = 10000, int cs = 1000, int ss_mode = 0);
   void accept(ptr<axprt_stream> x);
 
   void print_stats ();

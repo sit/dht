@@ -34,6 +34,7 @@ str db_name;
 dhash *dh[MAX_VNODES + 1];
 int ndhash = 0;
 int nreplica;
+int ss_mode;
 
 void stats ();
 void stop ();
@@ -131,7 +132,7 @@ newvnode_cb (int nreplica, int n, vnode *my)
 {
   str db_name_prime = strbuf () << db_name << "-" << n;
   if (ndhash == MAX_VNODES) fatal << "Too many virtual nodes (1024)\n";
-  dh[ndhash++] = New dhash (db_name_prime, my, nreplica);
+  dh[ndhash++] = New dhash (db_name_prime, my, nreplica, 10000, 1000, ss_mode);
   if (n > 0) chordnode->newvnode (wrap (newvnode_cb, nreplica, n-1));
 }
 
@@ -230,7 +231,8 @@ parseconfigfile (str cf, int nvnode, int set_rpcdelay)
   max_loccache = max_loccache * (nvnode + 1);
   chordnode = New refcounted<chord> (wellknownhost, wellknownport, 
 				     wellknownID, myport, set_rpcdelay,
-				     max_loccache, max_connections);
+				     max_loccache, max_connections,
+				     ss_mode);
   chordnode->newvnode (wrap (newvnode_cb, nreplica, nvnode-1));
   sigcb(SIGUSR1, wrap (&stats));
   sigcb(SIGUSR2, wrap (&stop));
@@ -256,7 +258,8 @@ static void
 usage ()
 {
   warnx << "Usage: " << progname 
-	<< "-d <dbfile> -S <sock> -v <nvnode> -c <cache?> -f <conffile>\n"; 
+	<< "-d <dbfile> -S <sock> -v <nvnode> -c <cache?> -f <conffile>"
+	<< "-s <server select mode>\n";
   exit (1);
 }
 
@@ -271,8 +274,9 @@ main (int argc, char **argv)
   do_cache = 0;
   int set_name = 0;
   int set_rpcdelay = 0;
+  ss_mode = 0;
 
-  while ((ch = getopt (argc, argv, "d:S:v:f:c")) != -1)
+  while ((ch = getopt (argc, argv, "d:S:v:f:cs:")) != -1)
     switch (ch) {
     case 'S':
       p2psocket = optarg;
@@ -293,6 +297,9 @@ main (int argc, char **argv)
     case 'd':
       db_name = optarg;
       set_name = 1;
+      break;
+    case 's':
+      ss_mode = atoi(optarg);
       break;
     default:
       usage ();

@@ -22,7 +22,7 @@
  *
  */
 
-//#define FAKE_DELAY
+#define FAKE_DELAY
 
 class chord;
 
@@ -144,6 +144,8 @@ class locationtable : public virtual refcount {
 		    chordID newpred);
   bool betterpred3 (chordID myID, chordID current, chordID target, 
 		    chordID newpred);
+  bool betterpred_greedy (chordID myID, chordID current, chordID target, 
+			  chordID newpred); 
   void incvnodes () { nvnodes++; };
   void replace_estimate (u_long o, u_long n);
   void insert (chordID &_n, sfs_hostname _s, int _p);

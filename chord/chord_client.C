@@ -24,8 +24,9 @@
 chord::chord (str _wellknownhost, int _wellknownport, 
 	      const chordID &_wellknownID,
 	      int port, int set_rpcdelay, int max_cache, 
-	      int max_connections) :
-  wellknownID (_wellknownID), active (NULL)
+	      int max_connections, int server_selection_mode) :
+  wellknownID (_wellknownID), ss_mode (server_selection_mode % 10), 
+  active (NULL)
 {
   myport = startchord (port);
   wellknownhost.hostname = _wellknownhost;
@@ -69,7 +70,7 @@ chord::newvnode (cbjoin_t cb)
   if (newID != wellknownID)
     locations->insert (newID, my_addr (), myport);
   ptr<vnode> vnodep = New refcounted<vnode> (locations, mkref (this), newID, 
-					     nvnode);
+					     nvnode, ss_mode);
   if (!active) active = vnodep;
   nvnode++;
   warn << "insert: " << newID << "\n";

@@ -124,7 +124,7 @@ class vnode : public virtual refcount {
   void replacefinger (chordID &s, node *n);
   u_long estimate_nnodes ();
   chordID findpredfinger (chordID &x);
-  chordID findpredfinger2 (chordID &x);
+  chordID findpredfinger_ss (chordID &x);
 
   u_int nout_backoff;
   u_int nout_continuous;
@@ -180,9 +180,10 @@ class vnode : public virtual refcount {
  public:
   chordID myID;
   ptr<chord> chordnode;
+  int server_selection_mode;
 
   vnode (ptr<locationtable> _locations, ptr<chord> _chordnode, chordID _myID,
-	 int _vnode);
+	 int _vnode, int server_sel_mode);
   ~vnode (void);
   chordID my_ID () { return myID; };
   chordID my_pred () { return predecessor.n; };
@@ -243,6 +244,8 @@ class chord : public virtual refcount {
   net_address wellknownhost;
   int myport;
   chordID wellknownID;
+  int ss_mode;
+
   qhash<chordID, ref<vnode>, hashID> vnodes;
   ptr<vnode> active;
 
@@ -260,7 +263,7 @@ class chord : public virtual refcount {
     
   chord (str _wellknownhost, int _wellknownport, const chordID &_wellknownID,
 	 int port, int set_rpcdelay, int max_cache, 
-	 int max_connections);
+	 int max_connections, int server_selection_mode);
   ptr<vnode> newvnode (cbjoin_t cb);
   void deletefingers (chordID x);
   int countrefs (chordID &x);

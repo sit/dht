@@ -25,15 +25,14 @@
 
 #define PNODE
 
-const int chord_server_select = (getenv ("CHORD_SERVER_SELECTION")
-			   ? atoi (getenv ("CHORD_SERVER_SELECTION")) : 0);
 
 vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
-	      chordID _myID, int _vnode) :
+	      chordID _myID, int _vnode, int server_sel_mode) :
   locations (_locations),
   myindex (_vnode),
   myID (_myID), 
-  chordnode (_chordnode)
+  chordnode (_chordnode),
+  server_selection_mode (server_sel_mode)
 {
   warnx << gettime () << " myID is " << myID << "\n";
   nout_continuous = 0;
@@ -317,16 +316,23 @@ vnode::findpredfinger (chordID &x)
 }
 
 chordID 
-vnode::findpredfinger2 (chordID &x)
+vnode::findpredfinger_ss (chordID &x)
 {
   chordID p = myID;
   for (int i = 1; i <= NBIT; i++) {
-    if ((finger_table[i].first.alive) && 
-	locations->betterpred3 (myID, p, x, finger_table[i].first.n)) {
+    bool better;
+    if (server_selection_mode == 1)
+      better = locations->betterpred2 (myID, p, x, finger_table[i].first.n);
+    else if (server_selection_mode == 2)
+      better = locations->betterpred3 (myID, p, x, finger_table[i].first.n);
+    else 
+      better = locations->betterpred_greedy (myID, p, x, 
+					     finger_table[i].first.n);
+    if ((finger_table[i].first.alive) && better)
       p = finger_table[i].first.n;
-    }
   }
-
+  
+  
   if (p != myID) return p;
 
   for (int i = nsucc; i >= 1; i--) {
@@ -368,8 +374,11 @@ chordID
 vnode::lookup_closestpred (chordID &x)
 {
 #ifdef PNODE
-  if (chord_server_select) return findpredfinger2 (x);
-  else return findpredfinger (x);
+  if (server_selection_mode) 
+    return findpredfinger_ss (x);
+  else
+    return findpredfinger (x);
+
 #else
   return  locations->findpredloc (x);
 #endif

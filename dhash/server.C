@@ -9,13 +9,9 @@
 #include <dmalloc.h>
 #endif
 
-#define DGRAM_LIMIT 64000
 
-const int dh_server_select = (getenv ("DHASH_SERVER_SELECTION")
-			   ? atoi (getenv ("DHASH_SERVER_SELECTION")) : 0);
-
-dhash::dhash(str dbname, vnode *node, int k, int ss, int cs) :
-  host_node (node), key_store(ss), key_cache(cs) {
+dhash::dhash(str dbname, vnode *node, int k, int ss, int cs, int _ss_mode) :
+  ss_mode (_ss_mode / 10), host_node (node), key_store(ss), key_cache(cs) {
 
   db = New dbfe();
   nreplica = k;
@@ -123,7 +119,7 @@ dhash::dispatch (unsigned long procno,
 
 	chordID best_succ = res->cont_res->succ_list[0].x;
 
-	if (dh_server_select && (nid == my_succ)) {
+	if ((ss_mode > 0) && (nid == my_succ)) {
 	  //returning a node which will hold the key, pick the fastest
 	  locationtable *locations = host_node->chordnode->locations;
 	  location *c = locations->getlocation (best_succ);
@@ -133,9 +129,9 @@ dhash::dispatch (unsigned long procno,
 	    nreplica + 1;
 	  for (int i = 1; i < lim; i++) {
 	    n = locations->getlocation(res->cont_res->succ_list[i].x);
-	    if (n->nrpc == 0) {
-	    } else if ((c->nrpc == 0) || 
-		       (n->rpcdelay/n->nrpc) < (c->rpcdelay/c->nrpc)) {
+	    if (n->nrpc == 0) continue;
+	    if ((c->nrpc == 0) || 
+		(n->rpcdelay/n->nrpc) < (c->rpcdelay/c->nrpc)) {
 	      c = n;
 	      best_succ = res->cont_res->succ_list[i].x;
 	    }
