@@ -77,6 +77,7 @@ vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
   nalert = 0;
   ntestrange = 0;
   ngetfingers = 0;
+  
   ndogetsuccessor = 0;
   ndogetpredecessor = 0;
   ndofindclosestpred = 0;
@@ -85,6 +86,9 @@ vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
   ndogetsucclist = 0;
   ndotestrange = 0;
   ndogetfingers = 0;
+  ndogetfingers_ext = 0;
+  ndogetsucc_ext = 0;
+  ndogetpred_ext = 0;
   ndochallenge = 0;
   ndogettoes = 0;
   
@@ -222,7 +226,7 @@ vnode::doget_successor (svccb *sbp)
   
   chordID s = successors->succ ();
   chord_noderes res(CHORD_OK);
-  res.resok->node = s;
+  res.resok->x = s;
   res.resok->r = locations->getaddress (s);
   sbp->reply (&res);
 
@@ -236,7 +240,7 @@ vnode::doget_predecessor (svccb *sbp)
   if (locations->alive (predecessor)) {
     chordID p = predecessor;
     chord_noderes res(CHORD_OK);
-    res.resok->node = p;
+    res.resok->x = p;
     res.resok->r = locations->getaddress (p);
     sbp->reply (&res);
   } else {
@@ -264,7 +268,7 @@ vnode::dotestrange_findclosestpred (svccb *sbp, chord_testandfindarg *fa)
   } else {
     res = New chord_testandfindres (CHORD_NOTINRANGE);
     chordID p = lookup_closestpred (fa->x);
-    res->noderes->node = p;
+    res->noderes->x = p;
     res->noderes->r = locations->getaddress (p);
     // warnx << "dotestrange_findclosestpred: " << myID << " closest pred of " 
     //      << fa->x << " is " << p << "\n";
@@ -281,7 +285,7 @@ vnode::dofindclosestpred (svccb *sbp, chord_findarg *fa)
   chord_noderes res(CHORD_OK);
   chordID p = lookup_closestpred (fa->x);
   ndofindclosestpred++;
-  res.resok->node = p;
+  res.resok->x = p;
   res.resok->r = locations->getaddress (p);
   warnt("CHORD: dofindclosestpred_reply");
   sbp->reply (&res);
@@ -352,7 +356,7 @@ vnode::doalert_cb (svccb *sbp, chordID x, chordID s, net_address r,
 void
 vnode::dogetfingers (svccb *sbp)
 {
-  chord_getfingersres res(CHORD_OK);
+  chord_nodelistres res(CHORD_OK);
   ndogetfingers++;
   fingers->fill_getfingersres (&res);
   warnt("CHORD: dogetfingers_reply");
@@ -363,13 +367,10 @@ vnode::dogetfingers (svccb *sbp)
 void
 vnode::dogetfingers_ext (svccb *sbp)
 {
-  chord_getfingers_ext_res res(CHORD_OK);
+  chord_nodelistextres res(CHORD_OK);
   ndogetfingers_ext++;
 
   fingers->fill_getfingersresext (&res);
-  res.resok->pred.alive = locations->alive (predecessor);
-  if (locations->alive (predecessor))
-    locations->fill_getnodeext (res.resok->pred, predecessor);
 
   warnt("CHORD: dogetfingers_reply");
   sbp->reply (&res);
@@ -378,10 +379,21 @@ vnode::dogetfingers_ext (svccb *sbp)
 void
 vnode::dogetsucc_ext (svccb *sbp)
 {
-  chord_getsucc_ext_res res(CHORD_OK);
+  chord_nodelistextres res(CHORD_OK);
   ndogetsucc_ext++;
   successors->fill_getsuccres (&res);
   warnt("CHORD: dogetsucc_reply");
+  sbp->reply (&res);
+}
+
+void
+vnode::dogetpred_ext (svccb *sbp)
+{
+  chord_nodeextres res(CHORD_OK);
+  ndogetpred_ext++;
+  res.resok->alive = locations->alive (predecessor);
+  if (locations->alive (predecessor))
+    locations->fill_getnodeext (*res.resok, predecessor);
   sbp->reply (&res);
 }
 
@@ -400,13 +412,13 @@ vnode::dogettoes (svccb *sbp)
 {
   chord_gettoes_arg *ta = 
     sbp->template getarg<chord_gettoes_arg> ();
-  chord_gettoes_res res (CHORD_OK);
+  chord_nodelistextres res (CHORD_OK);
   vec<chordID> t = toes->get_toes (ta->level);
   
   ndogettoes++;
-  res.resok->toes.setsize (t.size ());
+  res.resok->nlist.setsize (t.size ());
   for (unsigned int i = 0; i < t.size (); i++) {
-    locations->fill_getnodeext (res.resok->toes[i], t[i]);
+    locations->fill_getnodeext (res.resok->nlist[i], t[i]);
   }
   
   warnt ("CHORD: dogettoes_reply");

@@ -293,7 +293,7 @@ dhash::transfer_initial_keys ()
 
   ptr<s_dhash_getkeys_arg> arg = New refcounted<s_dhash_getkeys_arg>;
   arg->pred_id = host_node->my_ID ();
-  arg->v.n = succ;
+  arg->v = succ;
 
   dhash_getkeys_res *res = New dhash_getkeys_res (DHASH_OK);
   doRPC(succ, dhash_program_1, DHASHPROC_GETKEYS, 
@@ -463,7 +463,7 @@ dhash::transfer_fetch_cb (chordID to, chordID key, store_status stat,
     do {
       dhash_storeres *res = New dhash_storeres (DHASH_OK);
       ptr<s_dhash_insertarg> i_arg = New refcounted<s_dhash_insertarg> ();
-      i_arg->v.n = to;
+      i_arg->v = to;
       i_arg->key = key;
       i_arg->offset = off;
       int remain = (off + mtu <= static_cast<unsigned long>(data->len)) ? 
@@ -520,7 +520,7 @@ dhash::get_key (chordID source, chordID key, cbstat_t cb)
   arg->key = key; 
   arg->len = MTU;  
   arg->start = 0;
-  arg->v.n = source;
+  arg->v = source;
 
   doRPC(source, dhash_program_1, DHASHPROC_FETCHITER, 
 			      arg, res,
@@ -546,7 +546,7 @@ dhash::get_key_initread_cb (cbstat_t cb, dhash_fetchiter_res *res,
     unsigned int offset = *read;
     do {
       ptr<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg>;
-      arg->v.n = source;
+      arg->v = source;
       arg->key = key;
       arg->len = (offset + MTU < res->compl_res->attr.size) ? 
 	MTU : res->compl_res->attr.size - offset;

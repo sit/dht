@@ -21,10 +21,6 @@ enum chordstat {
   CHORD_UNKNOWNNODE = 6
 };
 
-struct chord_vnode {
-  chordID n;
-};
-
 struct net_address {
   sfs_hostname hostname;
   int32_t port;
@@ -35,14 +31,9 @@ struct chord_node {
   net_address r;
 };
 
-struct chord_noderesok {
-  chordID node;
-  net_address r;
-};
-
 union chord_noderes switch (chordstat status) {
  case CHORD_OK:
-   chord_noderesok resok;
+   chord_node resok;
  default: 
    void;
 };
@@ -58,11 +49,6 @@ union chord_nodelistres switch (chordstat status) {
    void;
 };
 
-struct chord_findarg {
-  chord_vnode v;
-  chordID x;
-};
-
 struct chord_node_ext {
   chordID x;
   net_address r;
@@ -72,19 +58,36 @@ struct chord_node_ext {
   bool alive;
 };
 
+union chord_nodeextres switch (chordstat status) {
+ case CHORD_OK:
+   chord_node_ext resok;
+ default:
+   void;
+};
+
+struct chord_nodelistextresok {
+  chord_node_ext nlist<>;
+};
+
+union chord_nodelistextres switch (chordstat status) {
+ case CHORD_OK:
+   chord_nodelistextresok resok;
+ default:
+   void;
+};
+
+struct chord_findarg {
+  chordID v;
+  chordID x;
+};
+
 struct chord_nodearg {
-  chord_vnode v;
+  chordID v;
   chord_node n;
 };
 
-struct chord_cachearg {
-  chord_vnode v;
-  chordID key;
-  chordID node;
-};
-
 struct chord_testandfindarg {
-  chord_vnode v;
+  chordID v;
   chordID x;
 };
 
@@ -92,47 +95,13 @@ union chord_testandfindres switch (chordstat status) {
  case CHORD_INRANGE:
    chord_node inres;
  case CHORD_NOTINRANGE:
-   chord_noderesok noderes;
+   chord_node noderes;
  default:
    void;
 };
 
-struct chord_getfingersresok {
-  chord_node fingers<>;
-};
-
-union chord_getfingersres switch (chordstat status) {
-  case CHORD_OK:
-    chord_getfingersresok resok;
-  default:
-    void;
-};
-
-struct chord_getsucc_ext_resok {
-  chord_node_ext succ<>;
-};
-
-union chord_getsucc_ext_res switch (chordstat status) {
-  case CHORD_OK:
-    chord_getsucc_ext_resok resok;
-  default:
-    void;
-};
-
-struct chord_getfingers_ext_resok {
-  chord_node_ext fingers<>;
-  chord_node_ext pred;
-};
-
-union chord_getfingers_ext_res switch (chordstat status) {
-  case CHORD_OK:
-    chord_getfingers_ext_resok resok;
-  default:
-    void;
-};
-
 struct chord_challengearg {
-  chord_vnode v;
+  chordID v;
   int challenge;
 };
 
@@ -148,50 +117,21 @@ union chord_challengeres switch (chordstat status) {
    void;
 };
 
-struct chord_RPC_arg {
-  chord_vnode v;
-  unsigned host_prog;
-  unsigned host_proc;
-  opaque marshalled_args<>;
-};
-
-struct chord_RPC_resok {
-  opaque marshalled_res<>;
-};
-
-union chord_RPC_res switch (chordstat status) {
- case CHORD_OK:
-   chord_RPC_resok resok;
- default:
-   void;
-};
-
 struct chord_gettoes_arg {
-  chord_vnode v;
+  chordID v;
   int32_t level;
-};
-
-struct chord_gettoes_resok {
-  chord_node_ext toes<>;
-};
-
-union chord_gettoes_res switch (chordstat status ){
- case CHORD_OK:
-   chord_gettoes_resok resok;
- default:
-   void;
 };
 
 program CHORD_PROGRAM {
 	version CHORD_VERSION {
 		void
-		CHORDPROC_NULL (chord_vnode) = 0;
+		CHORDPROC_NULL (chordID) = 0;
 
 		chord_noderes 
-		CHORDPROC_GETSUCCESSOR (chord_vnode) = 1;
+		CHORDPROC_GETSUCCESSOR (chordID) = 1;
 
 		chord_noderes 
-		CHORDPROC_GETPREDECESSOR (chord_vnode) = 2;
+		CHORDPROC_GETPREDECESSOR (chordID) = 2;
 
 	  	chord_noderes
 		CHORDPROC_FINDCLOSESTPRED (chord_findarg) = 3;
@@ -203,27 +143,27 @@ program CHORD_PROGRAM {
 		CHORDPROC_ALERT (chord_nodearg) = 5;
 
 		chord_nodelistres
-        	CHORDPROC_GETSUCCLIST (chord_vnode) = 6;
+        	CHORDPROC_GETSUCCLIST (chordID) = 6;
 
 		chord_testandfindres
                 CHORDPROC_TESTRANGE_FINDCLOSESTPRED (chord_testandfindarg) = 7;
 
- 		chord_getfingersres
-		CHORDPROC_GETFINGERS (chord_vnode) = 8;
+ 		chord_nodelistres
+		CHORDPROC_GETFINGERS (chordID) = 8;
 
 		chord_challengeres 
 	        CHORDPROC_CHALLENGE (chord_challengearg) = 9;
 
-		chord_RPC_res
-		CHORDPROC_HOSTRPC (chord_RPC_arg) = 10;
+		chord_nodeextres
+		CHORDPROC_GETPRED_EXT (chordID) = 10;
 
-		chord_getfingers_ext_res
-		CHORDPROC_GETFINGERS_EXT (chord_vnode) = 11;
+		chord_nodelistextres
+		CHORDPROC_GETFINGERS_EXT (chordID) = 11;
 
-		chord_getsucc_ext_res
-		CHORDPROC_GETSUCC_EXT (chord_vnode) = 12;
+		chord_nodelistextres
+		CHORDPROC_GETSUCC_EXT (chordID) = 12;
 
-		chord_gettoes_res
+		chord_nodelistextres
           	CHORDPROC_GETTOES (chord_gettoes_arg) = 13;
 	} = 1;
 } = 344447;

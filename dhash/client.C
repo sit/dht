@@ -305,7 +305,7 @@ dhashcli::lookup_iter (chordID sourceID, chordID blockID, uint32 off, uint32 len
 {
   warnt ("DHASH: lookup_iter");
   ptr<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg>;
-  arg->v.n   = sourceID;
+  arg->v     = sourceID;
   arg->key   = blockID;
   arg->start = off;
   arg->len   = len;
@@ -339,7 +339,7 @@ dhashcli::lookup_iter (chordID blockID, uint32 off, uint32 len, dhashcli_lookup_
   arg->key   = blockID;
   arg->start = off;
   arg->len   = len;
-  arg->v.n   = clntnode->clnt_ID ();
+  arg->v     = clntnode->clnt_ID ();
   
   route path;
   path.push_back (clntnode->clnt_ID ());
@@ -385,7 +385,7 @@ dhashcli::lookup_iter_cb (chordID blockID, dhashcli_lookup_itercb_t cb,
       // XXX Assumes an in-order RPC transport, otherwise retry
       //     might reach prev before alert can update tables.
       //     Warning.....................the transport is UDP!!
-      arg->v.n = plast;
+      arg->v = plast;
       ref<dhash_fetchiter_res> nres = New refcounted<dhash_fetchiter_res> (DHASH_CONTINUE);
       doRPC (plast, dhash_program_1, DHASHPROC_FETCHITER, arg, nres,
 	     wrap(this, &dhashcli::lookup_iter_cb, blockID, cb, nres, path, nerror));
@@ -435,7 +435,7 @@ void dhashcli::lookup_iter_chalok_cb (ptr<s_dhash_fetch_arg> arg,
     path.push_back (next);
     assert (path.size () < 1000);
 
-    arg->v.n = next;
+    arg->v = next;
     ptr<dhash_fetchiter_res> nres = New refcounted<dhash_fetchiter_res> (DHASH_CONTINUE);
     doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, arg, nres,
 	   wrap (this, &dhashcli::lookup_iter_cb,
@@ -450,7 +450,7 @@ dhashcli::store (chordID destID, chordID blockID, char *data, size_t len, size_t
 {
   ref<dhash_storeres> res = New refcounted<dhash_storeres> (DHASH_OK);
   ref<s_dhash_insertarg> arg = New refcounted<s_dhash_insertarg> ();
-  arg->v.n     = destID;
+  arg->v       = destID;
   arg->key     = blockID;
   arg->data.setsize (len);
   memcpy (arg->data.base (), data, len);

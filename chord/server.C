@@ -33,8 +33,7 @@ vnode::get_successor (chordID n, cbchordID_t cb)
   //  warn << "get successor of " << n << "\n";
   ngetsuccessor++;
   chord_noderes *res = New chord_noderes (CHORD_OK);
-  ptr<chord_vnode> v = New refcounted<chord_vnode>;
-  v->n = n;
+  ptr<chordID> v = New refcounted<chordID> (n);
   warnt("CHORD: issued_GET_SUCCESSOR");
   doRPC (n, chord_program_1, CHORDPROC_GETSUCCESSOR, v, res,
 	 wrap (mkref (this), &vnode::get_successor_cb, n, cb, res));
@@ -53,7 +52,7 @@ vnode::get_successor_cb (chordID n, cbchordID_t cb, chord_noderes *res,
     // warnx << "get_successor_cb: RPC error " << res->status << "\n";
     cb (n, dr, res->status);
   } else {
-    cb (res->resok->node, res->resok->r, CHORD_OK);
+    cb (res->resok->x, res->resok->r, CHORD_OK);
   }
   delete res;
 }
@@ -63,8 +62,7 @@ vnode::get_succlist (const chordID &n, cbchordIDlist_t cb)
 {
   ngetsucclist++;
   chord_nodelistres *res = New chord_nodelistres (CHORD_OK);
-  ptr<chord_vnode> v = New refcounted<chord_vnode>;
-  v->n = n;
+  ptr<chordID> v = New refcounted<chordID> (n);
   doRPC (n, chord_program_1, CHORDPROC_GETSUCCLIST, v, res,
 	 wrap (mkref (this), &vnode::get_succlist_cb, cb, res));
 }
@@ -90,8 +88,7 @@ vnode::get_succlist_cb (cbchordIDlist_t cb, chord_nodelistres *res,
 void 
 vnode::get_predecessor (chordID n, cbchordID_t cb)
 {
-  ptr<chord_vnode> v = New refcounted<chord_vnode>;
-  v->n = n;
+  ptr<chordID> v = New refcounted<chordID> (n);
   ngetpredecessor++;
   chord_noderes *res = New chord_noderes (CHORD_OK);
   doRPC (n, chord_program_1, CHORDPROC_GETPREDECESSOR, v, res,
@@ -109,18 +106,10 @@ vnode::get_predecessor_cb (chordID n, cbchordID_t cb, chord_noderes *res,
     net_address dr;
     cb (n, dr, res->status);
   } else {
-    cb (res->resok->node, res->resok->r, CHORD_OK);
+    cb (res->resok->x, res->resok->r, CHORD_OK);
   }
   delete res;
 }
-
-#if 0
-chordID
-vnode::nth_successorID (int n) 
-{
-  return (*successors)[n];
-}
-#endif /* 0 */
 
 void
 vnode::find_successor (chordID &x, cbroute_t cb)
@@ -171,7 +160,7 @@ vnode::testrange_findclosestpred (chordID n, chordID x,
 {
   // warn << "looking for closestpred of " << n << " " << x << "\n";
   ptr<chord_testandfindarg> arg = New refcounted<chord_testandfindarg> ();
-  arg->v.n = n;
+  arg->v = n;
   arg->x = x;
   chord_testandfindres *nres = New chord_testandfindres (CHORD_OK);
   ntestrange++;
@@ -196,7 +185,7 @@ vnode::testrange_findclosestpred_cb (chord_testandfindres *res,
   } else if (res->status == CHORD_NOTINRANGE) {
     // haven't found the successor yet
     chordID last = st->search_path.back ();
-    if (last == res->noderes->node) {   
+    if (last == res->noderes->x) {   
       // last returns itself as best predecessor, but doesn't know
       // what its immediate successor is---higher layer should use
       // succlist to make forward progress
@@ -205,7 +194,7 @@ vnode::testrange_findclosestpred_cb (chord_testandfindres *res,
     } else {
       // make sure that the new node sends us in the right direction,
       chordID olddist = distance (st->search_path.back (), st->x);
-      chordID newdist = distance (res->noderes->node,      st->x);
+      chordID newdist = distance (res->noderes->x,         st->x);
       if (newdist > olddist) {
 	warnx << "PROBLEM: went in the wrong direction: " << myID
 	      << "looking for " << st->x << "\n";
@@ -217,7 +206,7 @@ vnode::testrange_findclosestpred_cb (chord_testandfindres *res,
       }
       
       // ask the new node for its best predecessor
-      locations->cacheloc (res->noderes->node, res->noderes->r,
+      locations->cacheloc (res->noderes->x, res->noderes->r,
 			   wrap (this, &vnode::testrange_fcp_step_cb, st));
     }
   } else {
@@ -281,7 +270,7 @@ vnode::notify (chordID &n, chordID &x)
   chordstat *res = New chordstat;
   nnotify++;
   // warnx << "notify " << n << " about " << x << "\n";
-  na->v.n = n;
+  na->v   = n;
   na->n.x = x;
   na->n.r = locations->getaddress (x);
   doRPC (n, chord_program_1, CHORDPROC_NOTIFY, na, res, 
@@ -307,7 +296,7 @@ vnode::alert (chordID &n, chordID &x)
   chordstat *res = New chordstat;
   nalert++;
   warnx << "alert: " << x << " died; notify " << n << "\n";
-  na->v.n = n;
+  na->v   = n;
   na->n.x = x;
   na->n.r = locations->getaddress (x);
   doRPC (n, chord_program_1, CHORDPROC_ALERT, na, res, 
@@ -328,25 +317,24 @@ vnode::alert_cb (chordstat *res, clnt_stat err)
 void 
 vnode::get_fingers (chordID &x)
 {
-  chord_getfingersres *res = New chord_getfingersres (CHORD_OK);
-  ptr<chord_vnode> v = New refcounted<chord_vnode>;
+  chord_nodelistres *res = New chord_nodelistres (CHORD_OK);
+  ptr<chordID> v = New refcounted<chordID> (x);
   ngetfingers++;
-  v->n = x;
   doRPC (x, chord_program_1, CHORDPROC_GETFINGERS, v, res,
 	 wrap (mkref (this), &vnode::get_fingers_cb, x, res));
 }
 
 void
-vnode::get_fingers_cb (chordID x, chord_getfingersres *res,  clnt_stat err) 
+vnode::get_fingers_cb (chordID x, chord_nodelistres *res,  clnt_stat err) 
 {
   if (err) {
     warnx << "get_fingers_cb: RPC failure " << err << "\n";
   } else if (res->status) {
     warnx << "get_fingers_cb: RPC error " << res->status << "\n";
   } else {
-    for (unsigned i = 0; i < res->resok->fingers.size (); i++)
-      locations->cacheloc (res->resok->fingers[i].x, 
-			   res->resok->fingers[i].r,
+    for (unsigned i = 0; i < res->resok->nlist.size (); i++)
+      locations->cacheloc (res->resok->nlist[i].x, 
+			   res->resok->nlist[i].r,
 			   wrap (this, &vnode::get_fingers_chal_cb, x));
   }
   delete res;
@@ -375,4 +363,3 @@ vnode::doRPC (const chordID &ID, rpc_program prog, int procno,
 	      ptr<void> in, void *out, aclnt_cb cb) {
   locations->doRPC (ID, prog, procno, in, out, cb);
 }
-

@@ -81,7 +81,7 @@ finger_table::print ()
 }
 
 void
-finger_table::fill_getfingersres (chord_getfingersres *res)
+finger_table::fill_getfingersres (chord_nodelistres *res)
 {
   int n = 1; // number of valid entries in curfingers
   chordID curfingers[NBIT + 1]; // current unique fingers (plus me)
@@ -98,15 +98,15 @@ finger_table::fill_getfingersres (chord_getfingersres *res)
     }
   }
   
-  res->resok->fingers.setsize (n);
+  res->resok->nlist.setsize (n);
   for (int i = 0; i < n; i++) {
-    res->resok->fingers[i].x = curfingers[i];
-    res->resok->fingers[i].r = locations->getaddress (curfingers[i]);
+    res->resok->nlist[i].x = curfingers[i];
+    res->resok->nlist[i].r = locations->getaddress (curfingers[i]);
   }
 }
 
 void
-finger_table::fill_getfingersresext (chord_getfingers_ext_res *res)
+finger_table::fill_getfingersresext (chord_nodelistextres *res)
 {
   // XXX code duplication with fill_getfingersres
   int n = 1; // number of valid entries in curfingers
@@ -124,9 +124,9 @@ finger_table::fill_getfingersresext (chord_getfingers_ext_res *res)
     }
   }
     
-  res->resok->fingers.setsize (n);
+  res->resok->nlist.setsize (n);
   for (int i = 0; i < n; i++)
-    locations->fill_getnodeext (res->resok->fingers[i], curfingers[i]);
+    locations->fill_getnodeext (res->resok->nlist[i], curfingers[i]);
 }
 
 void

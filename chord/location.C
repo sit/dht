@@ -487,8 +487,7 @@ locationtable::closestpredloc (const chordID &x)
 void
 locationtable::ping (const chordID &x, cbping_t cb) 
 {
-  ptr<chord_vnode> v = New refcounted<chord_vnode> ();
-  v->n = x;
+  ptr<chordID> v = New refcounted<chordID> (x);
   doRPC (x, chord_program_1, CHORDPROC_NULL,
 	 v, NULL,
 	 wrap (this, &locationtable::ping_cb, cb));
@@ -529,7 +528,7 @@ locationtable::challenge (const chordID &x, cbchallengeID_t cb)
   ptr<chord_challengearg> ca = New refcounted<chord_challengearg>;
   chord_challengeres *res = New chord_challengeres (CHORD_OK);
   nchallenge++;
-  ca->v.n = l->n;
+  ca->v = l->n;
   ca->challenge = c;
   l->outstanding_cbs.push_back (cb);
   doRPC (l->n, chord_program_1, CHORDPROC_CHALLENGE, ca, res, 

@@ -77,7 +77,7 @@ class toe_table : public stabilizable {
   short last_level;
 
   void add_toe_ping_cb (chordID id, int level, chordstat err);
-  void get_toes_rmt_cb (chord_gettoes_res *res, int level, clnt_stat err);
+  void get_toes_rmt_cb (chord_nodelistextres *res, int level, clnt_stat err);
 
  public:
   toe_table (ptr<locationtable> locs, chordID id);
@@ -137,8 +137,8 @@ class finger_table : public stabilizable {
 
   void print ();
 
-  void fill_getfingersres (chord_getfingersres *res);
-  void fill_getfingersresext (chord_getfingers_ext_res *res);
+  void fill_getfingersres (chord_nodelistres *res);
+  void fill_getfingersresext (chord_nodelistextres *res);
 
   void stabilize_finger ();
 
@@ -191,7 +191,7 @@ class succ_list : public stabilizable {
   u_long estimate_nnodes ();
   void print ();
   
-  void fill_getsuccres (chord_getsucc_ext_res *res);
+  void fill_getsuccres (chord_nodelistextres *res);
   
   void stabilize_succ ();
   void stabilize_succlist ();
@@ -242,6 +242,7 @@ class vnode : public virtual refcount, public stabilizable {
   u_long ndogetfingers;
   u_long ndogetfingers_ext;
   u_long ndogetsucc_ext;
+  u_long ndogetpred_ext;
   u_long ndochallenge;
   u_long ndogettoes;
 
@@ -274,7 +275,7 @@ class vnode : public virtual refcount, public stabilizable {
   void notify_cb (chordID n, chordstat *res, clnt_stat err);
   void alert_cb (chordstat *res, clnt_stat err);
   void get_fingers (chordID &x);
-  void get_fingers_cb (chordID x, chord_getfingersres *res, clnt_stat err);
+  void get_fingers_cb (chordID x, chord_nodelistres *res, clnt_stat err);
   void get_fingers_chal_cb (chordID o, chordID x, bool ok, chordstat s);
 
   void doalert_cb (svccb *sbp, chordID x, chordID s, net_address r, 
@@ -327,6 +328,7 @@ class vnode : public virtual refcount, public stabilizable {
   void dogetfingers (svccb *sbp);
   void dogetfingers_ext (svccb *sbp);
   void dogetsucc_ext (svccb *sbp);
+  void dogetpred_ext (svccb *sbp);
   void dochallenge (svccb *sbp, chord_challengearg *ca);
   void dogettoes (svccb *sbp);
 

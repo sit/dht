@@ -46,7 +46,7 @@ struct dhash_valueattr {
 
 
 struct s_dhash_insertarg {
-  chord_vnode v;
+  chordID v;
   chordID key;
   dhash_value data;
   int offset;
@@ -55,14 +55,14 @@ struct s_dhash_insertarg {
 };
 
 struct s_dhash_fetch_arg {
-  chord_vnode v;
+  chordID v;
   chordID key;
   int32 start;
   int32 len;
 };
 
 struct s_dhash_keystatus_arg {
-  chord_vnode v;
+  chordID v;
   chordID key;
 };
 
@@ -83,7 +83,7 @@ default:
 };
 
 struct s_dhash_getkeys_arg {
-  chord_vnode v;
+  chordID v;
   chordID pred_id;
 };
 

@@ -269,11 +269,11 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
   }
 
   nrcv++;
-  chord_vnode *v = sbp->template getarg<chord_vnode> ();
-  vnode *vnodep = vnodes[v->n];
+  chordID *v = sbp->template getarg<chordID> ();
+  vnode *vnodep = vnodes[*v];
   if (!vnodep) {
     warnx << "CHORD: unknown node processing procedure " << sbp->proc ()
-	  << " request " << v->n << "\n";
+	  << " request " << *v << "\n";
     sbp->replyref (chordstat (CHORD_UNKNOWNNODE));
     return;
   }
@@ -300,7 +300,7 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
     case CHORDPROC_FINDCLOSESTPRED:
       {
 	chord_findarg *fa = sbp->template getarg<chord_findarg> ();
-	warn << "(find_pred) looking for " << fa->v.n << "\n";
+	warn << "(find_pred) looking for " << fa->v << "\n";
 	warnt("CHORD: findclosestpred_request");
 	vnodep->dofindclosestpred (sbp, fa);
       }
@@ -345,6 +345,12 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
 	vnodep->dogetfingers_ext (sbp);
       }
       break;
+    case CHORDPROC_GETPRED_EXT:
+      {
+	warnt("CHORD: getpred_ext_request");
+	vnodep->dogetpred_ext (sbp);
+      }
+      break;
     case CHORDPROC_GETSUCC_EXT:
       {
 	warnt("CHORD: getfingers_ext_request");
@@ -374,8 +380,7 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
     if (dispatch) {
       (dispatch)(sbp);
     } else {
-      chord_RPC_res res;
-      res.set_status (CHORD_NOHANDLER);
+      chordstat res = CHORD_NOHANDLER;
       sbp->replyref (res);
     }
   }

@@ -19,10 +19,10 @@ toe_table::get_toes_rmt (int level)
   vec<chordID> donors = get_toes (level - 1);
   for (unsigned int i = 0; i < donors.size (); i++) {
     ptr<chord_gettoes_arg> arg = New refcounted<chord_gettoes_arg> ();
-    arg->v.n = donors[i];
+    arg->v = donors[i];
     arg->level = level - 1;
     
-    chord_gettoes_res *res = New chord_gettoes_res ();
+    chord_nodelistextres *res = New chord_nodelistextres ();
     locations->doRPC (donors[i], chord_program_1,
 		      CHORDPROC_GETTOES,
 		      arg, res, 
@@ -32,11 +32,11 @@ toe_table::get_toes_rmt (int level)
 }
 
 void
-toe_table::get_toes_rmt_cb (chord_gettoes_res *res, int level, clnt_stat err)
+toe_table::get_toes_rmt_cb (chord_nodelistextres *res, int level, clnt_stat err)
 {
   if (err || res->status) return;
-  for (unsigned int i=0; i < res->resok->toes.size (); i++) 
-    add_toe (res->resok->toes[i].x, res->resok->toes[i].r, level);
+  for (unsigned int i=0; i < res->resok->nlist.size (); i++) 
+    add_toe (res->resok->nlist[i].x, res->resok->nlist[i].r, level);
   
   in_progress--;
   delete res;

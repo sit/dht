@@ -81,9 +81,10 @@ struct f_node {
   chordID ID;
   str host;
   unsigned short port;
-  chord_getfingers_ext_res *res;
-  chord_getsucc_ext_res *ressucc;
-  chord_gettoes_res *restoes;
+  chord_nodelistextres *fingers;
+  chord_nodeextres *predecessor;
+  chord_nodelistextres *successors;
+  chord_nodelistextres *toes;
   ihash_entry <f_node> link;
   unsigned int draw;
   bool selected;
@@ -92,14 +93,16 @@ struct f_node {
   f_node (chordID i, str h, unsigned short p) :
     ID (i), host (h), port (p), selected (true), highlight (false) { 
     draw = check_get_state ();
-    res = NULL; 
-    ressucc = NULL; 
-    restoes = NULL;
+    fingers = NULL;
+    predecessor = NULL;
+    successors = NULL;
+    toes = NULL;
   };
   ~f_node () { 
-    if (res) delete res; 
-    if (ressucc) delete ressucc; 
-    if (restoes) delete restoes;
+    if (fingers) delete fingers;
+    if (predecessor) delete predecessor;
+    if (successors) delete successors;
+    if (toes) delete toes;
   };
 };
 
@@ -116,23 +119,28 @@ void queue_node (chordID ID, str hostname, unsigned short port);
 void get_fingers (str host, unsigned short port);
 void get_fingers (chordID ID, str host, unsigned short port);
 void get_fingers_got_fingers (chordID ID, str host, unsigned short port, 
-			      chord_getfingers_ext_res *res,
+			      chord_nodelistextres *res,
 			      clnt_stat err);
 void get_cb (f_node *node_next);
-void add_fingers (chordID ID, str host, unsigned short port, chord_getfingers_ext_res *res);
+void add_fingers (chordID ID, str host, unsigned short port,
+		  chord_nodelistextres *res);
 void update_fingers (f_node *n);
 void update_fingers_got_fingers (chordID ID, str host, unsigned short port, 
-				 chord_getfingers_ext_res *res,
-				 clnt_stat err);
+				 chord_nodelistextres *res, clnt_stat err);
 
 void update_toes (f_node *nu);
 void update_toes_got_toes (chordID ID, str host, unsigned short port, 
-			   chord_gettoes_res *res, clnt_stat err);
+			   chord_nodelistextres *res, clnt_stat err);
 
 void update_succlist (f_node *n);
 void update_succ_got_succ (chordID ID, str host, unsigned short port, 
-				 chord_getsucc_ext_res *res,
-				 clnt_stat err);
+			   chord_nodelistextres *res,
+			   clnt_stat err);
+
+void update_pred (f_node *n);
+void update_pred_got_pred (chordID ID, str host, unsigned short port,
+			   chord_nodeextres *res, clnt_stat err);
+
 void update ();
 void initgraf ();
 void init_color_list (char *filename);
@@ -189,6 +197,7 @@ update ()
   f_node *n = nodes.first ();
   while (n) {
     update_fingers (n);
+    update_pred (n);
     update_succlist (n);
     update_toes (n);
     n = nodes.next (n);
@@ -218,20 +227,18 @@ update_succlist (f_node *nu)
 {
   ptr<aclnt> c = get_aclnt (nu->host, nu->port);
   if (c == NULL) 
-    fatal << "locationtable::doRPC: couldn't aclnt::alloc\n";
+    fatal << "update_succlist: couldn't aclnt::alloc\n";
   
-  chord_vnode n;
-  n.n = nu->ID;
-  chord_getsucc_ext_res *res = New chord_getsucc_ext_res ();
+  chordID n = nu->ID;
+  chord_nodelistextres *res = New chord_nodelistextres ();
   c->timedcall (TIMEOUT, CHORDPROC_GETSUCC_EXT, &n, res,
 		wrap (&update_succ_got_succ, 
 		      nu->ID, nu->host, nu->port, res));
 }
 
-
 void
 update_succ_got_succ (chordID ID, str host, unsigned short port, 
-			    chord_getsucc_ext_res *res, clnt_stat err)
+		      chord_nodelistextres *res, clnt_stat err)
 {
   f_node *nu = nodes[ID];
   if (!nu) return;
@@ -244,10 +251,44 @@ update_succ_got_succ (chordID ID, str host, unsigned short port,
     return;
   }
 
-  if (nu->ressucc) delete nu->ressucc;
-  nu->ressucc = res;
-  
+  if (nu->successors) delete nu->successors;
+  nu->successors = res;
 }
+
+//----- update predecessor -------------------------------------------------
+void
+update_pred (f_node *nu)
+{
+  ptr<aclnt> c = get_aclnt (nu->host, nu->port);
+  if (c == NULL)
+    fatal << "update_pred: couldn't aclnt::alloc\n";
+  chordID n = nu->ID;
+  chord_nodeextres *res = New chord_nodeextres ();
+  c->timedcall (TIMEOUT, CHORDPROC_GETPRED_EXT, &n, res,
+		wrap (&update_pred_got_pred,
+		      nu->ID, nu->host, nu->port, res));
+}
+
+void
+update_pred_got_pred (chordID ID, str host, unsigned short port, 
+		      chord_nodeextres *res, clnt_stat err)
+{
+  f_node *nu = nodes[ID];
+  if (!nu) return;
+  if (err || res->status) {
+    warn << "(update pred) deleting " << ID << "\n";
+    if (nu) {
+      nodes.remove (nu);
+      delete nu;
+    }
+    return;
+  }
+
+  if (nu->predecessor) delete nu->predecessor;
+  nu->predecessor = res;
+}
+
+
 
 
 //----- update fingers -----------------------------------------------------
@@ -257,11 +298,10 @@ update_fingers (f_node *nu)
 {
   ptr<aclnt> c = get_aclnt (nu->host, nu->port);
   if (c == NULL) 
-    fatal << "locationtable::doRPC: couldn't aclnt::alloc\n";
+    fatal << "update_fingers: couldn't aclnt::alloc\n";
   
-  chord_vnode n;
-  n.n = nu->ID;
-  chord_getfingers_ext_res *res = New chord_getfingers_ext_res ();
+  chordID n = nu->ID;
+  chord_nodelistextres *res = New chord_nodelistextres ();
   c->timedcall (TIMEOUT, CHORDPROC_GETFINGERS_EXT, &n, res,
 		wrap (&update_fingers_got_fingers, 
 		      nu->ID, nu->host, nu->port, res));
@@ -269,7 +309,7 @@ update_fingers (f_node *nu)
 
 void
 update_fingers_got_fingers (chordID ID, str host, unsigned short port, 
-			    chord_getfingers_ext_res *res, clnt_stat err)
+			    chord_nodelistextres *res, clnt_stat err)
 {
   f_node *nu = nodes[ID];
   if (!nu) return;
@@ -282,13 +322,13 @@ update_fingers_got_fingers (chordID ID, str host, unsigned short port,
     return;
   }
 
-  if (nu->res) delete nu->res;
-  nu->res = res;
+  if (nu->fingers) delete nu->fingers;
+  nu->fingers = res;
 
-  for (unsigned int i=0; i < res->resok->fingers.size (); i++) {
-    if ( nodes[res->resok->fingers[i].x] == NULL) 
-      queue_node (res->resok->fingers[i].x, res->resok->fingers[i].r.hostname,
-		  res->resok->fingers[i].r.port);
+  for (unsigned int i=0; i < res->resok->nlist.size (); i++) {
+    if (nodes[res->resok->nlist[i].x] == NULL) 
+      queue_node (res->resok->nlist[i].x, res->resok->nlist[i].r.hostname,
+		  res->resok->nlist[i].r.port);
   }
 }
 
@@ -300,8 +340,8 @@ get_fingers (str file)
   char s[1024];
 
   strbuf data = strbuf () << file2str (file);
-  chord_getfingers_ext_res *res = NULL;
-  chord_gettoes_res *nres = NULL;
+  chord_nodelistextres *nfingers = NULL;
+  chord_nodelistextres *ntoes = NULL;
   while (str line = suio_getline(data.tosuio ())) {
     f_node *n;
     switch (i) {
@@ -311,10 +351,10 @@ get_fingers (str file)
 	n = New f_node (bigint (ID) * (bigint(1) << (160-24)),
 			file, 0);
 	nodes.insert (n);
-	res = New chord_getfingers_ext_res (CHORD_OK);
-	nres = New chord_gettoes_res (CHORD_OK);
-	n->res = res;
-	n->restoes = nres;
+	nfingers = New chord_nodelistextres (CHORD_OK);
+	ntoes = New chord_nodelistextres (CHORD_OK);
+	n->fingers = nfingers;
+	n->toes = ntoes;
       }
       break;
     case 1:
@@ -338,18 +378,18 @@ get_fingers (str file)
 	  start = end;
 	}
 	if (i == 1) {
-	  res->resok->fingers.setsize (ids.size ());
+	  nfingers->resok->nlist.setsize (ids.size ());
 	  for (unsigned int i = 0; i < ids.size (); i++) {
-	    res->resok->fingers[i].x = 
+	    nfingers->resok->nlist[i].x = 
 	      bigint (ids[i]) * (bigint(1) << (160-24));
-	    res->resok->fingers[i].a_lat = lats[i] * 1000;
+	    nfingers->resok->nlist[i].a_lat = lats[i] * 1000;
 	  }
 	} else {
-	  nres->resok->toes.setsize (ids.size ());
+	  ntoes->resok->nlist.setsize (ids.size ());
 	  for (unsigned int i = 0; i < ids.size (); i++) {
-	    nres->resok->toes[i].x = 
+	    ntoes->resok->nlist[i].x = 
 	      bigint (ids[i]) * (bigint(1) << (160-24));
-	    nres->resok->toes[i].a_lat = lats[i] * 1000;
+	    ntoes->resok->nlist[i].a_lat = lats[i] * 1000;
 	  }
 	}
       }
@@ -372,11 +412,10 @@ get_fingers (chordID ID, str host, unsigned short port)
 {
   ptr<aclnt> c = get_aclnt (host, port);
   if (c == NULL) 
-    fatal << "locationtable::doRPC: couldn't aclnt::alloc\n";
+    fatal << "get_fingers: couldn't aclnt::alloc\n";
 
-  chord_vnode n;
-  n.n = ID;
-  chord_getfingers_ext_res *res = New chord_getfingers_ext_res ();
+  chordID n = ID;
+  chord_nodelistextres *res = New chord_nodelistextres ();
   c->timedcall (TIMEOUT, CHORDPROC_GETFINGERS_EXT, &n, res,
 		wrap (&get_fingers_got_fingers, 
 		      ID, host, port, res));
@@ -385,7 +424,7 @@ get_fingers (chordID ID, str host, unsigned short port)
 
 void
 get_fingers_got_fingers (chordID ID, str host, unsigned short port, 
-			 chord_getfingers_ext_res *res,
+			 chord_nodelistextres *res,
 			 clnt_stat err) 
 {
   if (err || res->status) {
@@ -401,22 +440,24 @@ get_fingers_got_fingers (chordID ID, str host, unsigned short port,
 }
 
 void
-add_fingers (chordID ID, str host, unsigned short port, chord_getfingers_ext_res *res) 
+add_fingers (chordID ID, str host, unsigned short port,
+	     chord_nodelistextres *res) 
 {
   f_node *n = nodes[ID];
 
-  if (n && n->res) return;
+  if (n && n->fingers) return;
   if (!n) {
     warn << "added " << ID << "\n";
     n = New f_node (ID, host, port);
     nodes.insert (n);
   }
-  n->res = res;
-  for (unsigned int i=0; i < res->resok->fingers.size (); i++) {
-    if ( nodes[res->resok->fingers[i].x] == NULL) 
-      queue_node (res->resok->fingers[i].x, res->resok->fingers[i].r.hostname,
-		  res->resok->fingers[i].r.port);
+  n->fingers = res;
+  for (unsigned int i = 0; i < res->resok->nlist.size (); i++) {
+    if (nodes[res->resok->nlist[i].x] == NULL) 
+      queue_node (res->resok->nlist[i].x, res->resok->nlist[i].r.hostname,
+		  res->resok->nlist[i].r.port);
   }
+  update_pred (n);
   update_toes (n);
   update_succlist (n);
   draw_ring ();
@@ -444,6 +485,7 @@ get_cb (f_node *node_next)
       node_next = nodes.first ();
     if (node_next) {
       update_fingers (node_next);
+      update_pred (node_next);
       update_succlist (node_next);
       update_toes (node_next);
 
@@ -460,12 +502,12 @@ update_toes (f_node *nu)
 {
   ptr<aclnt> c = get_aclnt (nu->host, nu->port);
   if (c == NULL) 
-    fatal << "locationtable::doRPC: couldn't aclnt::alloc\n";
+    fatal << "update_toes: couldn't aclnt::alloc\n";
   
   chord_gettoes_arg n;
-  n.v.n = nu->ID;
+  n.v = nu->ID;
   n.level = glevel;
-  chord_gettoes_res *res = New chord_gettoes_res ();
+  chord_nodelistextres *res = New chord_nodelistextres ();
   c->timedcall (TIMEOUT, CHORDPROC_GETTOES, &n, res,
 		wrap (&update_toes_got_toes, 
 		      nu->ID, nu->host, nu->port, res));
@@ -473,7 +515,7 @@ update_toes (f_node *nu)
 
 void
 update_toes_got_toes (chordID ID, str host, unsigned short port, 
-		      chord_gettoes_res *res, clnt_stat err)
+		      chord_nodelistextres *res, clnt_stat err)
 {
   f_node *nu = nodes[ID];
   if (!nu) return;
@@ -486,8 +528,8 @@ update_toes_got_toes (chordID ID, str host, unsigned short port,
     return;
   }
 
-  if (nu->restoes) delete nu->restoes;
-  nu->restoes = res;
+  if (nu->toes) delete nu->toes;
+  nu->toes = res;
   draw_ring ();
 }
 
@@ -681,9 +723,9 @@ chordID
 closestpredfinger (f_node *n, chordID &x)
 {
   chordID p = n->ID;
-  for (int i = n->res->resok->fingers.size () - 1; i >= 1; i--) {
-    if (between (n->ID, x, n->res->resok->fingers[i].x)) {
-      p = n->res->resok->fingers[i].x;
+  for (int i = n->fingers->resok->nlist.size () - 1; i >= 1; i--) {
+    if (between (n->ID, x, n->fingers->resok->nlist[i].x)) {
+      p = n->fingers->resok->nlist[i].x;
       return p;
     }
   }
@@ -727,7 +769,7 @@ lookup_cb (GtkWidget *widget, gpointer data)
     chordID bestfinger = closestpredfinger (current_node, search_key);
     current_node = nodes[bestfinger];
   }
-  current_node = nodes[current_node->ressucc->resok->succ[1].x];
+  current_node = nodes[current_node->successors->resok->nlist[1].x];
   search_path.push_back (current_node);
 
   warnx << "Found a path of length " << search_path.size () << "\n";
@@ -1162,43 +1204,43 @@ draw_ring ()
 		       IDs);
     }
 
-    if (n->res && ((n->draw & DRAW_IMMED_SUCC) == DRAW_IMMED_SUCC)) {
+    if (n->fingers && ((n->draw & DRAW_IMMED_SUCC) == DRAW_IMMED_SUCC)) {
       int a,b;
-      set_foreground_lat (n->res->resok->fingers[1].a_lat); 
-      ID_to_xy (n->res->resok->fingers[1].x, &a, &b);
+      set_foreground_lat (n->fingers->resok->nlist[1].a_lat); 
+      ID_to_xy (n->fingers->resok->nlist[1].x, &a, &b);
       draw_arrow (x,y,a,b, draw_gc);
     }
 
-    if (n->res && ((n->draw & DRAW_FINGERS) == DRAW_FINGERS)) {
-      for (unsigned int i=1; i < n->res->resok->fingers.size (); i++) {
+    if (n->fingers && ((n->draw & DRAW_FINGERS) == DRAW_FINGERS)) {
+      for (unsigned int i=1; i < n->fingers->resok->nlist.size (); i++) {
 	int a,b;
-	set_foreground_lat (n->res->resok->fingers[i].a_lat); 
-	ID_to_xy (n->res->resok->fingers[i].x, &a, &b);
+	set_foreground_lat (n->fingers->resok->nlist[i].a_lat); 
+	ID_to_xy (n->fingers->resok->nlist[i].x, &a, &b);
 	draw_arrow (x,y,a,b, draw_gc);
       }
     }
 
-    if (n->res &&
+    if (n->predecessor &&
 	((n->draw & DRAW_IMMED_PRED) == DRAW_IMMED_PRED) &&
-	n->res->resok->pred.alive) {
+	n->predecessor->resok->alive) {
       int a,b;
-      set_foreground_lat (n->res->resok->pred.a_lat); 
-      ID_to_xy (n->res->resok->pred.x, &a, &b);
+      set_foreground_lat (n->predecessor->resok->a_lat); 
+      ID_to_xy (n->predecessor->resok->x, &a, &b);
       draw_arrow (x,y,a,b, draw_gc);
     }
 
-    if (n->ressucc && ((n->draw & DRAW_SUCC_LIST) == DRAW_SUCC_LIST)) {
-      for (unsigned int i=1; i < n->ressucc->resok->succ.size (); i++) {
-	draw_arc (n->ID, n->ressucc->resok->succ[i].x,
+    if (n->successors && ((n->draw & DRAW_SUCC_LIST) == DRAW_SUCC_LIST)) {
+      for (unsigned int i=1; i < n->successors->resok->nlist.size (); i++) {
+	draw_arc (n->ID, n->successors->resok->nlist[i].x,
 		  drawing_area->style->black_gc);
       }
     }
 
-    if (n->restoes && ((n->draw & DRAW_TOES) == DRAW_TOES)) {
-      for (unsigned int i=0; i < n->restoes->resok->toes.size (); i++) {
+    if (n->toes && ((n->draw & DRAW_TOES) == DRAW_TOES)) {
+      for (unsigned int i=0; i < n->toes->resok->nlist.size (); i++) {
 	int a,b;
-	ID_to_xy (n->restoes->resok->toes[i].x, &a, &b);
-	set_foreground_lat (n->restoes->resok->toes[i].a_lat); 
+	ID_to_xy (n->toes->resok->nlist[i].x, &a, &b);
+	set_foreground_lat (n->toes->resok->nlist[i].a_lat); 
 	draw_arrow (x,y,a,b,draw_gc);
       }
     }
