@@ -1,0 +1,106 @@
+#!/usr/bin/perl -w
+
+use strict;
+use POSIX qw(:signal_h);
+use Cwd qw(abs_path);
+use File::Basename;
+
+use ChordTestHarness;
+
+if ($> == 0) {
+  warn "You probably don't want to run this as root. Hit Ctrl-C now to cancel.\n";
+  sleep 5;
+}
+my $SRC = abs_path (dirname ($0));
+
+sub usage {
+  print STDERR "Usage: $0 outputroot buildroot numnodes numvnodes [IP [wkp]]\n";
+  print STDERR @_, "\n" if @_;
+  exit (1);
+}
+
+
+my $r      = shift || usage ("no output dir");
+my $build  = shift || usage ("no build dir");
+
+my $n      = shift || usage ("how many nodes?");
+my $v      = shift || usage ("how many vnodes/node?");
+my $ip     = shift || guessip ();
+my $wkport = shift || 10903; # first prime after my uid
+
+
+my $harness = ChordTestHarness->new ($build, $r);
+
+# Make sure we'll clean up after ourselves properly. Or at least, try.
+$SIG{"INT"} = sub { exit (1); };
+END {
+    if (defined ($harness)) {
+	$harness->reaplsds ();
+	$harness = undef
+    }
+}
+
+######
+
+# Shift to directory where we will store our working files and results.
+warn "Old $r exists; may lead to incorrect results!\n" if (-d $r);
+mkdir $r, 0755;
+
+my @CONFS;
+# however, leave a mode where we can force all localhost behavior.
+my $conf = "a";
+my $i = 1;
+my @args = ("-j", "$ip:$wkport",
+	    "-l", $ip,
+	    "-v", $v);
+# always start a well-known node running on a particular port.
+$harness->spawnlsd ($conf, @args, "-p", $wkport);
+push @CONFS, $conf;
+
+# Start up the rest of the nodes.
+while ($i < $n) {
+  $conf++; # automagic incrementor!
+  $i++;
+  # use a random port, to encourage interesting results.
+  $harness->spawnlsd ($conf, @args);
+  push @CONFS, $conf;
+}
+
+# wait stable
+print "Waiting for nodes to go stable...\n";
+my $waitcount = 0;
+while (1) {
+    sleep 20;
+    kill SIGUSR1, $harness->pids (); # what stat.pl does
+    sleep 10;
+    my $s = system ("$SRC/stable.pl $r/lsd-*/log"); # yeah, shell globbing.
+    if ((($s >> 8) & 0xFF) == 17) {
+	last;
+    }
+    $waitcount++;
+    die "Took too long to stabilize.\n" if $waitcount > 5;
+    # xxx dynamically compute waitcount based on $n??
+}
+
+print "Storing.\n";
+$harness->store ("a", 0, "store.log");
+sleep 5;
+print "Fetching.\n";
+$harness->fetch ("a", 0, "fetch.log");
+{
+    my $randconf = $CONFS[rand @CONFS];
+    while ($randconf eq "a") {
+	$randconf = $CONFS[rand @CONFS];
+    }
+    print "Fetching again from node $randconf.\n";
+    $harness->fetch ($randconf, 0, "fetch2.log");
+}
+sleep 10;
+
+$harness->reaplsds ();
+
+foreach $conf (@CONFS) {
+    my $s = "============= NODE $conf ============";
+    system ("echo $s >> $r/dump-$n-$v");
+    system ("cat $r/lsd-$conf/log >> $r/dump-$n-$v");
+}
