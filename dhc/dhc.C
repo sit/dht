@@ -196,7 +196,8 @@ dhc::recv_getblock (user_args *sbp)
     return;
   }
 
-  //check if sender is primary!!
+#if 0
+  //XXXXXXXXXX check if sender is primary!!
   chord_node *from = New chord_node;
   sbp->fill_from (from);
   if (!is_primary (getblock->bID, from->x, kb->meta->config.nodes)) {
@@ -206,6 +207,7 @@ dhc::recv_getblock (user_args *sbp)
     return;
   }
   delete from;
+#endif
 
   dhc_get_res res (DHC_OK);
   sbp->reply (&res);  
