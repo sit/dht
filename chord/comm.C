@@ -39,17 +39,28 @@
 
 #include <crypt.h>
 #include <chord_prot.h>
-#include "chord_util.h"
+#include <misc_utils.h>
 #include "comm.h"
-#include "location.h"
+#include <location.h>
 #include "modlogger.h"
 #include "coord.h"
+#include <transport_prot.h>
 
 long outbytes;
 ihash<str, rpcstats, &rpcstats::key, &rpcstats::h_link> rpc_stats_tab;
 
 #define max_host_cache 1000
 #define CWIND_MULT 10
+
+const int CHORD_RPC_STP (0);
+const int CHORD_RPC_SFSU (1);
+const int CHORD_RPC_SFST (2);
+const int CHORD_RPC_SFSBT (3);
+const int CHORD_RPC_DEFAULT (CHORD_RPC_STP);
+
+int chord_rpc_style (getenv ("CHORD_RPC_STYLE") ?
+                     atoi (getenv ("CHORD_RPC_STYLE")) :
+                     CHORD_RPC_DEFAULT);
 
 // UTILITY FUNCTIONS
 
@@ -106,7 +117,7 @@ rpc_state::rpc_state (ptr<location> from, ref<location> l, aclnt_cb c, long s, i
   : loc (l), from (from), cb (c), progno (p), seqno (s),
     b (NULL), rexmits (0), out (out)
 {
-  ID = l->n;
+  ID = l->id ();
 };
 
 // -----------------------------------------------------
@@ -172,10 +183,10 @@ rpc_manager::doRPC (ptr<location> from, ptr<location> l,
 		    long fake_seqno /* = 0 */)
 {
   ref<aclnt> c = aclnt::alloc (dgram_xprt, prog, 
-			       (sockaddr *)&(l->saddr));
+			       (sockaddr *)&(l->saddr ()));
 
   // Make sure that there is an entry in the table for this guy.
-  (void) lookup_host (l->addr);
+  (void) lookup_host (l->address ());
   
   u_int64_t sent = getusec ();
   c->call (procno, in, out,
@@ -196,9 +207,10 @@ void
 rpc_manager::doRPCcb (aclnt_cb realcb, ptr<location> l, u_int64_t sent,
 		      clnt_stat err)
 {
-  if (err)
+  if (err) {
     nrpcfailed++;
-  else {
+    l->set_alive (false);
+  } else {
     nrpc++;
     // Only update latency on successful RPC.
     // This probably includes time needed for rexmits.
@@ -226,14 +238,14 @@ tcp_manager::doRPC (ptr<location> from, ptr<location> l,
   RPC_delay_args *args = New RPC_delay_args (from, l, prog, procno,
 					     in, out, cb);
   if (chord_rpc_style == CHORD_RPC_SFSBT) {
-    tcpconnect (l->saddr.sin_addr, ntohs (l->saddr.sin_port),
+    tcpconnect (l->saddr ().sin_addr, ntohs (l->saddr ().sin_port),
 		wrap (this, &tcp_manager::doRPC_tcp_connect_cb, args));
   } else {
-    hostinfo *hi = lookup_host (l->addr);
+    hostinfo *hi = lookup_host (l->address ());
     if (hi->fd == -2) { //no connect initiated
       // wierd: tcpconnect wants the address in NBO, and port in HBO
       hi->fd = -1; // signal pending connect
-      tcpconnect (l->saddr.sin_addr, ntohs (l->saddr.sin_port),
+      tcpconnect (l->saddr ().sin_addr, ntohs (l->saddr ().sin_port),
 		  wrap (this, &tcp_manager::doRPC_tcp_connect_cb, args));
     } else if (hi->fd == -1) { //connect pending, add to waiters
       hi->connect_waiters.push_back (args);
@@ -268,7 +280,7 @@ void
 tcp_manager::send_RPC (RPC_delay_args *args)
 {
 
-  hostinfo *hi = lookup_host (args->l->addr);
+  hostinfo *hi = lookup_host (args->l->address ());
   if (!hi->xp) {
     delaycb (0, 0, wrap (this, &tcp_manager::send_RPC_ateofcb, args));
   } else if (hi->xp->ateof()) {
@@ -292,7 +304,7 @@ tcp_manager::send_RPC_ateofcb (RPC_delay_args *args)
 void
 tcp_manager::doRPC_tcp_connect_cb (RPC_delay_args *args, int fd)
 {
-  hostinfo *hi = lookup_host (args->l->addr);
+  hostinfo *hi = lookup_host (args->l->address ());
   if (fd < 0) {
     warn << "locationtable: connect failed: " << strerror (errno) << "\n";
     (args->cb) (RPC_CANTSEND);
@@ -384,14 +396,14 @@ stp_manager::ratecb () {
 float
 rpc_manager::get_a_lat (ptr<location> l)
 {
-  hostinfo *h = lookup_host (l->addr);
+  hostinfo *h = lookup_host (l->address ());
   return h->a_lat;
 }
 
 float
 rpc_manager::get_a_var (ptr<location> l)
 {
-  hostinfo *h = lookup_host (l->addr);
+  hostinfo *h = lookup_host (l->address ());
   return h->a_var;
 }
 
@@ -414,10 +426,11 @@ stp_manager::doRPC_dead (ptr<location> l,
 			 long fake_seqno /* = 0 */)
 {
 #ifdef VERBOSE_LOG  
-  modlogger ("stp_manager") << "dead_rpc " << l->n << " " << l->addr << "\n";
+  modlogger ("stp_manager") << "dead_rpc "
+			    << l->id () << " " << l->address () << "\n";
 #endif /* VERBOSE_LOG */  
   ref<aclnt> c = aclnt::alloc (dgram_xprt, prog, 
-			       (sockaddr *)&(l->saddr));
+			       (sockaddr *)&(l->saddr ()));
   
   c->call (procno, in, out, cb); 
   return 0;
@@ -449,7 +462,7 @@ stp_manager::doRPC (ptr<location> from, ptr<location> l,
   } else {
 
     ref<aclnt> c = aclnt::alloc (dgram_xprt, prog, 
-				 (sockaddr *)&(l->saddr));
+				 (sockaddr *)&(l->saddr ()));
     rpc_state *C = New rpc_state (from, l, cb, seqno, prog.progno, out);
     C->procno = procno;
    
@@ -459,7 +472,7 @@ stp_manager::doRPC (ptr<location> from, ptr<location> l,
 			       in,
 			       out,
 			       procno, 
-			       (sockaddr *)&(l->saddr));
+			       (sockaddr *)&(l->saddr ()));
     
     sent_elm *s = New sent_elm (seqno);
     sent_Q.insert_tail (s);
@@ -517,6 +530,7 @@ stp_manager::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
   dorpc_res *res = (dorpc_res *)C->out;
   if (err) {
     nrpcfailed++;
+    C->loc->set_alive (false);
     warn << gettime () << " RPC failure: " << err << " destined for " << C->ID << " seqno " << C->seqno << "\n";
   } else if (res->status != DORPC_OK) {
     warn << gettime () << " Higher-level RPC Failure " << res->status << "\n";
@@ -586,7 +600,7 @@ stp_manager::rpc_done (long acked_seqno)
     //if there is an earlier RPC bound for the same destination, send that
     //this preserves our use of data-driven retransmissions
     RPC_delay_args *args = Q.first;
-    while ((args != next_arg) && (args->l->n != next_arg->l->n))
+    while ((args != next_arg) && (args->l->id () != next_arg->l->id ()))
       args = Q.next (args);
 
     //stats
@@ -701,8 +715,12 @@ stp_manager::setup_rexmit_timer (ptr<location> from, ptr<location> l, long *sec,
   else 
     alat = 1000000;
 
-  if ((gforce < 50000.0) && l && from && (l->coords.size () > 0) && (from->coords.size () > 0)) {
-    float dist = Coord::distance_f (from->coords, l->coords);
+  if ((gforce < 50000.0)
+      && l
+      && from
+      && (l->coords ().size () > 0)
+      && (from->coords ().size () > 0)) {
+    float dist = Coord::distance_f (from->coords (), l->coords ());
     alat = dist + 8.0*c_err + 5000; //scale it to be safe. the 8 comes from an analysis for log files
     // I also tried using the variance but average works better. With 8 we'll do about 1 percent spurious retransmits
   }
@@ -734,7 +752,7 @@ rpc_manager::update_latency (ptr<location> from, ptr<location> l, u_int64_t lat)
   a_var = a_var + GAIN*(err - a_var);
 
   //update per-host latency
-  hostinfo *h = lookup_host (l->addr);
+  hostinfo *h = lookup_host (l->address ());
   if (h) {
     h->nrpc++;
     err = (lat - h->a_lat);
@@ -742,6 +760,11 @@ rpc_manager::update_latency (ptr<location> from, ptr<location> l, u_int64_t lat)
     if (err < 0) err = -err;
     h->a_var = h->a_var + GAIN*(err - h->a_var);
     if (lat > h->maxdelay) h->maxdelay = lat;
+
+    // Copy info over to just this location
+    l->inc_nrpc ();
+    l->set_distance (h->a_lat);
+    l->set_variance (h->a_var);
   }
 
   //update the 9xth percentile latencies from the recent per-host averages
@@ -759,8 +782,8 @@ rpc_manager::update_latency (ptr<location> from, ptr<location> l, u_int64_t lat)
   if (lat_history.size () > 1000) lat_history.pop_front ();
 
   //do the coordinate variance if available
-  if (from && l && from->coords.size () > 0 && l->coords.size () > 0) {
-    float predicted = Coord::distance_f (from->coords, l->coords);
+  if (from && l && from->coords ().size () > 0 && l->coords ().size () > 0) {
+    float predicted = Coord::distance_f (from->coords (), l->coords ());
     float sample_err = (lat - predicted);
     //    warn << "To " << l->n << " " << (int)sample_err << " " << (int)lat << " " << (int)predicted << " " 
     //    	 << (int)c_err << " " << (int)c_var << "\n";
@@ -838,7 +861,7 @@ void stp_manager::stats ()
     rtp = &(args->prog.tbl[args->procno]);
     assert (rtp);
     long diff = now - args->now;
-    warn << "  " << args->prog.name << "." << rtp->name << " for " << args->l->n << " queued for " << diff << "\n";
+    warn << "  " << args->prog.name << "." << rtp->name << " for " << args->l->id () << " queued for " << diff << "\n";
     args = Q.next (args);
   }
 

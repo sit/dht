@@ -21,7 +21,7 @@ class pred_list : public stabilizable {
   ptr<locationtable> locations;
 
   u_int nout_continuous;
-  chordID oldpred_; // used to check if predecessor is stable
+  ptr<location> oldpred_; // used to check if predecessor is stable
   bool gotfingers_; // seed finger list from first predecessor acquired
   
   u_int nout_backoff;
@@ -37,12 +37,11 @@ class pred_list : public stabilizable {
   void update_pred_fingers_cb (vec<chord_node> nlist, chordstat s);
   
  public:  
-  pred_list (ptr<vnode> v, ptr<locationtable> locs, chordID myID);
+  pred_list (ptr<vnode> v, ptr<locationtable> locs);
   
-  chordID pred ();
-  chordID operator[] (unsigned int n);
+  ptr<location> pred ();
   
-  vec<chord_node> preds ();
+  vec<ptr<location> > preds ();
 
   void update_pred (const chord_node &p);
   

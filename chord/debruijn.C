@@ -2,40 +2,41 @@
 
 #include "fingerlike.h"
 #include "debruijn.h"
-#include "location.h"
+#include <location.h>
+#include <locationtable.h>
 
 debruijn::debruijn () {}
 
 void 
-debruijn::init (ptr<vnode> v, ptr<locationtable> locs, chordID ID)
+debruijn::init (ptr<vnode> v, ptr<locationtable> locs)
 {
   myvnode = v;
   locations = locs;
-  myID = ID;
+  myID = v->my_ID ();
+
   mydoubleID = doubleID (myID, logbase);
   locations->pinpred (mydoubleID);
   warn << myID << " de bruijn: double :" << mydoubleID << "\n";
 }
 
-chordID
+ptr<location>
 debruijn::debruijnptr ()
 {
   return locations->closestpredloc (mydoubleID);
 }
 
-chordID
+ptr<location>
 debruijn::closestsucc (const chordID &x)
 {
-  chordID s = myID;
-  chordID succ = locations->closestsuccloc (myID + 1);
-  chordID n;
+  ptr<location> s = myvnode->my_location ();
+  ptr<location> succ = locations->closestsuccloc (myID + 1);
+  ptr<location> n;
 
-  if (betweenrightincl (myID, succ, x)) s = succ;
-  else s = myID;
+  if (betweenrightincl (myID, succ->id (), x)) s = succ;
 
   for (int i = 1; i < logbase; i++) {
-    n = locations->closestsuccloc (succ + 1);
-    if (betweenrightincl (myID, n, x) && between (x, s, n)) {
+    n = locations->closestsuccloc (succ->id () + 1);
+    if (betweenrightincl (myID, n->id (), x) && between (x, s->id (), n->id ())) {
       s = n;
     }
     succ = n;
@@ -43,7 +44,7 @@ debruijn::closestsucc (const chordID &x)
 
   // use closestpred, because we pinned pred
   n = locations->closestpredloc (mydoubleID); 
-  if (betweenrightincl (myID, n, x) && between (x, s, n)) {
+  if (betweenrightincl (myID, n->id (), x) && between (x, s->id (), n->id ())) {
     s = n;
   }
 
@@ -51,19 +52,19 @@ debruijn::closestsucc (const chordID &x)
 }
 
 //XXX ignores failed node list.
-chordID
+ptr<location>
 debruijn::closestpred (const chordID &x, vec<chordID> f)
 {
-  chordID succ = locations->closestsuccloc (myID + 1);
-  chordID p;
-  chordID n;
+  ptr<location> succ = locations->closestsuccloc (myID + 1);
+  ptr<location> p;
+  ptr<location> n;
 
-  if (betweenrightincl (myID, succ, x)) p = myID;
+  if (betweenrightincl (myID, succ->id (), x)) p = myvnode->my_location ();
   else p = succ;
 
   for (int i = 1; i < logbase; i++) {
-    n = locations->closestsuccloc (succ + 1);
-    if (between (myID, x, n) && between (p, x, n)) {
+    n = locations->closestsuccloc (succ->id () + 1);
+    if (between (myID, x, n->id ()) && between (p->id (), x, n->id ())) {
       p = n;
     }
     succ = n;
@@ -71,26 +72,26 @@ debruijn::closestpred (const chordID &x, vec<chordID> f)
 
   // use closestpred, because we pinned pred
   n = locations->closestpredloc (mydoubleID);
-  if (between (myID, x, n) && between (p, x, n)) {
+  if (between (myID, x, n->id ()) && between (p->id (), x, n->id ())) {
     p = n;
   }
 
   return p;
 }
 
-chordID
+ptr<location>
 debruijn::closestpred (const chordID &x)
 {
-  chordID succ = locations->closestsuccloc (myID + 1);
-  chordID p;
-  chordID n;
+  ptr<location> succ = locations->closestsuccloc (myID + 1);
+  ptr<location> p;
+  ptr<location> n;
 
-  if (betweenrightincl (myID, succ, x)) p = myID;
+  if (betweenrightincl (myID, succ->id (), x)) p = myvnode->my_location ();
   else p = succ;
 
   for (int i = 1; i < logbase; i++) {
-    n = locations->closestsuccloc (succ + 1);
-    if (between (myID, x, n) && between (p, x, n)) {
+    n = locations->closestsuccloc (succ->id () + 1);
+    if (between (myID, x, n->id ()) && between (p->id (), x, n->id ())) {
       p = n;
     }
     succ = n;
@@ -98,7 +99,7 @@ debruijn::closestpred (const chordID &x)
 
   // use closestpred, because we pinned pred
   n = locations->closestpredloc (mydoubleID);
-  if (between (myID, x, n) && between (p, x, n)) {
+  if (between (myID, x, n->id ()) && between (p->id (), x, n->id ())) {
     p = n;
   }
 
@@ -127,7 +128,7 @@ void
 debruijn::print ()
 {
   warnx << myID << ": double: " << mydoubleID
-	<< " : d " << locations->closestpredloc (mydoubleID) << "\n";
+	<< " : d " << locations->closestpredloc (mydoubleID)->id () << "\n";
 }
 
 

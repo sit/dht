@@ -27,12 +27,17 @@
 
 #include "chord.h"
 #include "chord_util.h"
-#include "location.h"
-#include "route.h"
-#include "transport_prot.h"
 
-#include "modlogger.h"
+#include <misc_utils.h>
+#include <location.h>
+#include <locationtable.h>
+#include "comm.h"
+#include "route.h"
+#include <transport_prot.h>
+
+#include <modlogger.h>
 #define trace modlogger ("chord")
+
 
 int logbase;  // base = 2 ^ logbase
 
@@ -43,6 +48,8 @@ chord::chord (str _wellknownhost, int _wellknownport,
   myname (_myname),
   ss_mode (server_selection_mode % 10),
   lookup_mode (l_mode),
+  nrcv (NULL),
+  rpcm (NULL),
   active (NULL)
 {
   logbase = _logbase;
@@ -52,20 +59,30 @@ chord::chord (str _wellknownhost, int _wellknownport,
 
   nrcv = New refcounted<u_int32_t>;
   *nrcv = 0;
-  locations = New refcounted<locationtable> (nrcv, max_cache);
-  
-  wellknown_node.r.hostname = _wellknownhost;
-  wellknown_node.r.port = _wellknownport ? _wellknownport : myport;
-  wellknown_node.x = make_chordID (wellknown_node.r.hostname,
-				   wellknown_node.r.port);
-  wellknown_node.coords.setsize (NCOORDS);
+  if (chord_rpc_style == CHORD_RPC_SFSU)
+    rpcm = New refcounted<rpc_manager> (nrcv);
+  else if ((chord_rpc_style == CHORD_RPC_SFST) || (chord_rpc_style == CHORD_RPC_SFSBT))
+    rpcm = New refcounted<tcp_manager> (nrcv);
+  else if (chord_rpc_style == CHORD_RPC_STP)
+    rpcm = New refcounted<stp_manager> (nrcv);
+  else
+    fatal << "bad chord_rpc_style value: " << chord_rpc_style << "\n";
+
+  locations = New refcounted<locationtable> (max_cache);
+
+  chord_node wkn;
+  wkn.r.hostname = _wellknownhost;
+  wkn.r.port = _wellknownport ? _wellknownport : myport;
+  wkn.x = make_chordID (wkn.r.hostname,
+				   wkn.r.port);
+  wkn.coords.setsize (NCOORDS);
   // Make up some random initial information for this other node.
   for (int i = 0; i < NCOORDS; i++)
-    wellknown_node.coords[i] = (int) uniform_random_f (1000.0);
+    wkn.coords[i] = (int) uniform_random_f (1000.0);
 
   if (myname != _wellknownhost || myport != _wellknownport) {
-    bool ok = locations->insert (wellknown_node);
-    if (!ok) {
+    wellknown_node = locations->insert (wkn);
+    if (!wellknown_node) {
       warn << "Well known host failed to verify! Bailing.\n";
       exit (0);
     }
@@ -155,18 +172,11 @@ chord::newvnode (cbjoin_t cb, ptr<fingerlike> fingers, ptr<route_factory> f)
     warnx << (int) coords[i] << " " ;
   }
   warnx << "\n";
-  locations->insert (newID, myname, myport, coords);
+  ptr<location> l = locations->insert (newID, myname, myport, coords);
+  if (wellknown_node == NULL)
+    wellknown_node = l;
 
-#if 0  
-  if (newID != wellknown_node.x) {
-    // It's not yet strictly speaking useful to other nodes yet.
-    ///BAD LOC (ok)
-    bool ok = locations->insert (newID, myname, myport);
-    assert (ok);
-  }
-#endif /* 0 */
-
-  ptr<vnode> vnodep = vnode::produce_vnode (locations, fingers, f,
+  ptr<vnode> vnodep = vnode::produce_vnode (locations, rpcm, fingers, f,
 					    mkref (this), newID, 
 					    nvnode, ss_mode,
 					    lookup_mode);
@@ -176,7 +186,7 @@ chord::newvnode (cbjoin_t cb, ptr<fingerlike> fingers, ptr<route_factory> f)
   nvnode++;
   vnodes.insert (newID, vnodep);
   
-  if (newID != wellknown_node.x) {
+  if (newID != wellknown_node->id ()) {
     vnodep->join (wellknown_node, cb);
   } else {
     vnodep->stabilize ();
@@ -196,7 +206,7 @@ chord::stats ()
   warnx << "CHORD NODE STATS\n";
   warnx << "# vnodes: " << nvnode << "\n";
   vnodes.traverse (wrap (this, &chord::stats_cb));
-  locations->stats ();
+  rpcm->stats ();
 }
 
 void

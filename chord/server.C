@@ -25,24 +25,26 @@
  *
  */
 
-#include "chord_util.h"
 #include "chord_impl.h"
 #include "route.h"
 #include <transport_prot.h>
 #include <coord.h>
+#include "comm.h"
+#include <location.h>
+#include <locationtable.h>
 #include <math.h>
 
 float gforce = 1000000;
 
 void 
-vnode_impl::get_successor (const chordID &n, cbchordID_t cb)
+vnode_impl::get_successor (ptr<location> n, cbchordID_t cb)
 {
   //  warn << "get successor of " << n << "\n";
   ngetsuccessor++;
   chord_noderes *res = New chord_noderes (CHORD_OK);
-  ptr<chordID> v = New refcounted<chordID> (n);
+  ptr<chordID> v = New refcounted<chordID> (n->id ());
   doRPC (n, chord_program_1, CHORDPROC_GETSUCCESSOR, v, res,
-	 wrap (mkref (this), &vnode_impl::get_successor_cb, n, cb, res));
+	 wrap (mkref (this), &vnode_impl::get_successor_cb, n->id (), cb, res));
 }
 
 void
@@ -64,18 +66,18 @@ vnode_impl::get_successor_cb (chordID n, cbchordID_t cb, chord_noderes *res,
 }
 
 void
-vnode_impl::get_succlist (const chordID &n, cbchordIDlist_t cb)
+vnode_impl::get_succlist (ptr<location> n, cbchordIDlist_t cb)
 {
   ngetsucclist++;
   chord_nodelistres *res = New chord_nodelistres (CHORD_OK);
-  ptr<chordID> v = New refcounted<chordID> (n);
+  ptr<chordID> v = New refcounted<chordID> (n->id ());
   doRPC (n, chord_program_1, CHORDPROC_GETSUCCLIST, v, res,
 	 wrap (mkref (this), &vnode_impl::get_succlist_cb, cb, res));
 }
 
 void
 vnode_impl::get_succlist_cb (cbchordIDlist_t cb, chord_nodelistres *res,
-			clnt_stat err)
+			     clnt_stat err)
 {
   vec<chord_node> nlist;
   if (err) {
@@ -92,18 +94,18 @@ vnode_impl::get_succlist_cb (cbchordIDlist_t cb, chord_nodelistres *res,
 }
 
 void 
-vnode_impl::get_predecessor (const chordID &n, cbchordID_t cb)
+vnode_impl::get_predecessor (ptr<location> n, cbchordID_t cb)
 {
-  ptr<chordID> v = New refcounted<chordID> (n);
+  ptr<chordID> v = New refcounted<chordID> (n->id ());
   ngetpredecessor++;
   chord_noderes *res = New chord_noderes (CHORD_OK);
   doRPC (n, chord_program_1, CHORDPROC_GETPREDECESSOR, v, res,
-	 wrap (mkref (this), &vnode_impl::get_predecessor_cb, n, cb, res));
+	 wrap (mkref (this), &vnode_impl::get_predecessor_cb, n->id (), cb, res));
 }
 
 void
 vnode_impl::get_predecessor_cb (chordID n, cbchordID_t cb, chord_noderes *res, 
-		       clnt_stat err) 
+				clnt_stat err) 
 {
   if (err) {
     chord_node bad;
@@ -159,17 +161,16 @@ vnode_impl::find_route_hop_cb (cbroute_t cb, route_iterator *ri, bool done)
 }
 
 void
-vnode_impl::notify (const chordID &n, chordID &x)
+vnode_impl::notify (ptr<location> n, chordID &x)
 {
   ptr<chord_nodearg> na = New refcounted<chord_nodearg>;
   chordstat *res = New chordstat;
   nnotify++;
   // warnx << gettime () << ": notify " << n << " about " << x << "\n";
-  bool ok = locations->get_node (x, &na->n);
-  assert (ok);
+  locations->lookup (x)->fill_node (na->n);
   
   doRPC (n, chord_program_1, CHORDPROC_NOTIFY, na, res, 
-	 wrap (mkref (this), &vnode_impl::notify_cb, n, res));
+	 wrap (mkref (this), &vnode_impl::notify_cb, n->id (), res));
 }
 
 void
@@ -185,17 +186,16 @@ vnode_impl::notify_cb (chordID n, chordstat *res, clnt_stat err)
 }
 
 void
-vnode_impl::alert (const chordID &n, chordID &x)
+vnode_impl::alert (ptr<location> n, chordID &x)
 {
   ptr<chord_nodearg> na = New refcounted<chord_nodearg>;
   chordstat *res = New chordstat;
   nalert++;
-  warnx << "alert: " << x << " died; notify " << n << "\n";
-  bool ok = locations->get_node (x, &na->n);
-  assert (ok);
+  warnx << "alert: " << x << " died; notify " << n->id () << "\n";
+  locations->lookup (x)->fill_node (na->n);
 
   doRPC (n, chord_program_1, CHORDPROC_ALERT, na, res, 
-		    wrap (mkref (this), &vnode_impl::alert_cb, res));
+	 wrap (mkref (this), &vnode_impl::alert_cb, res));
 }
 
 void
@@ -210,13 +210,13 @@ vnode_impl::alert_cb (chordstat *res, clnt_stat err)
 }
 
 void 
-vnode_impl::get_fingers (const chordID &x, cbchordIDlist_t cb)
+vnode_impl::get_fingers (ptr<location> n, cbchordIDlist_t cb)
 {
   chord_nodelistres *res = New chord_nodelistres (CHORD_OK);
-  ptr<chordID> v = New refcounted<chordID> (x);
+  ptr<chordID> v = New refcounted<chordID> (n->id ());
   ngetfingers++;
-  doRPC (x, chord_program_1, CHORDPROC_GETFINGERS, v, res,
-	 wrap (mkref (this), &vnode_impl::get_fingers_cb, cb, x, res));
+  doRPC (n, chord_program_1, CHORDPROC_GETFINGERS, v, res,
+	 wrap (mkref (this), &vnode_impl::get_fingers_cb, cb, n->id (), res));
 }
 
 void
@@ -273,7 +273,7 @@ vnode_impl::fill_user_args (user_args *a)
 {
   a->myID = myID;
   a->myindex = myindex;
-  a->coords = locations->get_coords (myID);
+  a->coords = me_->coords ();
 }
 
 user_args::~user_args () { 
@@ -348,7 +348,7 @@ user_args::reply (void *res)
 }
 
 void
-vnode_impl::ping (const chordID &x, cbping_t cb)
+vnode_impl::ping (ptr<location>x, cbping_t cb)
 {
   //close enough
   get_successor (x, wrap (this, &vnode_impl::ping_cb, cb));
@@ -360,20 +360,29 @@ vnode_impl::ping_cb (cbping_t cb, chord_node n, chordstat status)
   cb (status);
 }
 
+
 long
 vnode_impl::doRPC (const chordID &ID, const rpc_program &prog, int procno, 
-	      ptr<void> in, void *out, aclnt_cb cb) {
+		   ptr<void> in, void *out, aclnt_cb cb)
+{
+  // XXX
+  assert (0);
+}
 
+long
+vnode_impl::doRPC (ref<location> l, const rpc_program &prog, int procno, 
+		   ptr<void> in, void *out, aclnt_cb cb)
+{
   //form the transport RPC
   ptr<dorpc_arg> arg = New refcounted<dorpc_arg> ();
 
   //header
-  arg->dest_id = ID;
+  arg->dest_id = l->id ();
   arg->src_id = myID;
   arg->src_port = chordnode->get_port ();
   arg->src_vnode_num = myindex;
   
-  vec<float> me = locations->get_coords (my_ID ());
+  vec<float> me = me_->coords ();
   assert (me.size ());
   arg->src_coords.setsize (me.size());
   for (size_t i = 0; i < me.size (); i++)
@@ -402,10 +411,10 @@ vnode_impl::doRPC (const chordID &ID, const rpc_program &prog, int procno,
 #endif
 
     ref<dorpc_res> res = New refcounted<dorpc_res> (DORPC_OK);
-    return locations->doRPC (myID, ID, transport_program_1, TRANSPORTPROC_DORPC, 
-			     arg, res, 
-			     wrap (this, &vnode_impl::doRPC_cb, 
-				   prog, procno, out, cb, res));
+    return rpcm->doRPC (me_, l, transport_program_1, TRANSPORTPROC_DORPC, 
+			arg, res, 
+			wrap (this, &vnode_impl::doRPC_cb, 
+			      prog, procno, out, cb, res));
   }
 }
 
@@ -420,8 +429,7 @@ vnode_impl::doRPC_cb (const rpc_program prog, int procno,
   } else if (res->status != DORPC_OK) {
     cb (RPC_CANTRECV);
   } else {
-    
-    float distance = locations->get_a_lat (res->resok->src_id);
+    float distance = locations->lookup (res->resok->src_id)->distance ();
     vec<float> u_coords;
     for (unsigned int i = 0; i < res->resok->src_coords.size (); i++) {
       float c = ((float)res->resok->src_coords[i]);
@@ -454,10 +462,10 @@ vnode_impl::update_coords (chordID u, vec<float> uc, float ud)
 
   //  warn << myID << " --- starting update -----\n";
   //update the node's coords in the locatoin table
-  locations->set_coords (u, uc);
+  locations->lookup (u)->set_coords (uc);
   int iterations = 0;
   float ftot = 0.0;
-  vec<float> coords = locations->get_coords (myID);
+  vec<float> coords = me_->coords ();
   vec<float> f;
 
   do {
@@ -474,21 +482,22 @@ vnode_impl::update_coords (chordID u, vec<float> uc, float ud)
     int cit = 0;
 
     while (l) {
-      if ((l->coords.size () > 0) && (l->n != myID)) {
+      if ((l->coords ().size () > 0) && (l->id () != myID)) {
 
 	//  warn << myID << " setting a spring to " << l->n << "\n";
 	// print_vector ("l->coords", l->coords);
+	
+	vec<float> v = l->coords ();
 
-	float actual = l->distance;
-	float expect = Coord::distance_f (coords, l->coords);
+	float actual = l->distance ();
+	float expect = Coord::distance_f (coords, v);
 
 
 	if (actual >= 0)
 	  {
 	    //force magnitude: > 0 --> stretched
 	    float grad = expect - actual;
-	    
-	    vec<float> v = l->coords;
+
 	    Coord::vector_sub (v, coords);
 	
 	    float len = Coord::norm (v);
@@ -506,7 +515,7 @@ vnode_impl::update_coords (chordID u, vec<float> uc, float ud)
 	    cit++;
 	  }
       } 
-      l = locations->next_loc(l->n);
+      l = locations->next_loc(l->id ());
     }
     
     //print_vector ("f", f);
@@ -534,20 +543,20 @@ vnode_impl::update_coords (chordID u, vec<float> uc, float ud)
     iterations++;
   } while (false);
 
-  locations->set_coords (myID, coords);
+  me_->set_coords (coords);
 }
 
 long
 vnode_impl::doRPC (const chord_node &n, const rpc_program &prog, int procno, 
-	      ptr<void> in, void *out, aclnt_cb cb) {
-
+	      ptr<void> in, void *out, aclnt_cb cb)
+{
   //BAD LOC (ok)
-  locations->insert (n);
-  return doRPC (n.x, prog, procno, in, out, cb);
+  ptr<location> l = locations->insert (n);
+  return doRPC (l, prog, procno, in, out, cb);
 }
 
 void
 vnode_impl::resendRPC (long seqno)
 {
-  locations->resendRPC (seqno);
+  rpcm->rexmit (seqno);
 }

@@ -12,7 +12,6 @@ noinst_HEADERS = aclnt_chord.h \
 		 debruijn.h \
 		 finger_table.h \
 		 fingerlike.h \
-		 location.h \
 		 pred_list.h \
 		 route.h \
 		 route_secchord.h \
@@ -28,7 +27,6 @@ libchord_a_SOURCES = chord.C \
 		      chord_util.C \
 		      server.C \
 		      comm.C \
-		      location.C \
 		      toe_table.C \
 		      finger_table.C \
 		      succ_list.C \

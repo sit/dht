@@ -2,7 +2,8 @@
 #include "qhash.h"
 #include "async.h"
 #include "bigint.h"
-#include "chord_util.h"
+#include <id_utils.h>
+#include <comm.h>
 
 //#define MERKLE_SYNC_TRACE
 //#define MERKLE_SYNC_DETAILED_TRACE

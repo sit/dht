@@ -1,4 +1,3 @@
-
 #ifndef _CHORD_IMPL_H_
 #define _CHORD_IMPL_H_
 /*
@@ -31,9 +30,7 @@
 
 #include "chord.h"
 
-#include "location.h"
 #include "stabilize.h"
-
 #include "toe_table.h"
 #include "finger_table.h"
 #include "succ_list.h"
@@ -44,6 +41,8 @@
 #include "transport_prot.h"
 
 extern long outbytes;
+
+class rpc_manager;
 
 // ================ VIRTUAL NODE ================
 
@@ -62,8 +61,9 @@ struct upcall_record {
 };
 
 class vnode_impl : public vnode {
+  ptr<location> me_;
+  ptr<rpc_manager> rpcm;
   ptr<fingerlike> fingers;
-  
   ptr<succ_list> successors;
   ptr<pred_list> predecessors;
   ptr<toe_table> toes;
@@ -115,7 +115,7 @@ class vnode_impl : public vnode {
   void stabilize_getsucc_cb (chordID pred,
 			     chordID s, net_address r, chordstat status);
   
-  void join_getsucc_cb (const chord_node n, cbjoin_t cb, chord_nodelistres *r, clnt_stat err);
+  void join_getsucc_cb (ptr<location> n, cbjoin_t cb, chord_nodelistres *r, clnt_stat err);
   void get_successor_cb (chordID n, cbchordID_t cb, chord_noderes *res, 
 			 clnt_stat err);
   void get_predecessor_cb (chordID n, cbchordID_t cb, chord_noderes *res, 
@@ -161,10 +161,10 @@ class vnode_impl : public vnode {
 		 ref<dorpc_res> res, clnt_stat err);
 
   void update_coords (chordID u, vec<float> uc, float ud);
-  chordID closestcoordpred (const chordID &x, const vec<float> &n,
-			    const vec<chordID> &failed);
-  chordID closestproxpred  (const chordID &x, const vec<float> &n,
-			    const vec<chordID> &failed);
+  ptr<location> closestgreedpred (const chordID &x, const vec<float> &n,
+				  const vec<chordID> &failed);
+  ptr<location> closestproxpred  (const chordID &x, const vec<float> &n,
+				  const vec<chordID> &failed);
 
  public:
   chordID myID;
@@ -173,31 +173,37 @@ class vnode_impl : public vnode {
   int server_selection_mode;
   int lookup_mode;
 
-  vnode_impl (ptr<locationtable> _locations, ptr<fingerlike> stab, 
+  vnode_impl (ptr<locationtable> _locations,
+	      ptr<rpc_manager> _rpcm,
+	      ptr<fingerlike> stab, 
 	      ptr<route_factory> f, ptr<chord> _chordnode, 
 	      chordID _myID, int _vnode, int server_sel_mode,
 	      int lookup_mode);
   ~vnode_impl (void);
+  
+  ref<location> my_location ();
   chordID my_ID () const;
-  chordID my_pred () const;
-  chordID my_succ () const;
+  ptr<location> my_pred () const;
+  ptr<location> my_succ () const;
 
   // The API
   void stabilize (void);
-  void join (const chord_node &n, cbjoin_t cb);
-  void get_successor (const chordID &n, cbchordID_t cb);
-  void get_predecessor (const chordID &n, cbchordID_t cb);
-  void get_succlist (const chordID &n, cbchordIDlist_t cb);
-  void get_fingers (const chordID &n, cbchordIDlist_t cb);
+  void join (ptr<location> n, cbjoin_t cb);
+  void get_successor (ptr<location> n, cbchordID_t cb);
+  void get_predecessor (ptr<location> n, cbchordID_t cb);
+  void get_succlist (ptr<location> n, cbchordIDlist_t cb);
+  void get_fingers (ptr<location> n, cbchordIDlist_t cb);
+  void notify (ptr<location> n, chordID &x);
+  void alert (ptr<location> n, chordID &x);
+  void ping (ptr<location> n, cbping_t cb);
   void find_successor (const chordID &x, cbroute_t cb);
-  void notify (const chordID &n, chordID &x);
-  void alert (const chordID &n, chordID &x);
-  void ping (const chordID &x, cbping_t cb);
 
   //upcall
   void register_upcall (int progno, cbupcall_t cb);
 
   // For other modules
+  long doRPC (ref<location> l, const rpc_program &prog, int procno,
+	      ptr<void> in, void *out, aclnt_cb cb);
   long doRPC (const chordID &ID, const rpc_program &prog, int procno, 
 	      ptr<void> in, void *out, aclnt_cb cb);
   long doRPC (const chord_node &ID, const rpc_program &prog, int procno, 
@@ -209,12 +215,12 @@ class vnode_impl : public vnode {
   void stats (void) const;
   void print (void) const;
   void stop (void);
-  vec<chord_node> succs () { return successors->succs (); };
-  vec<chord_node> preds () { return predecessors->preds (); };
+  vec<ptr<location> > succs () { return successors->succs (); };
+  vec<ptr<location> > preds () { return predecessors->preds (); };
 
-  chordID lookup_closestpred (const chordID &x, const vec<chordID> &f);
-  chordID lookup_closestpred (const chordID &x);
-  chordID lookup_closestsucc (const chordID &x);
+  ptr<location> lookup_closestpred (const chordID &x, const vec<chordID> &f);
+  ptr<location> lookup_closestpred (const chordID &x);
+  ptr<location> lookup_closestsucc (const chordID &x);
   
   // The RPCs
   void doget_successor (user_args *sbp);

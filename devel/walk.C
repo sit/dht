@@ -1,4 +1,5 @@
 #include "chord.h"
+#include "chord_util.h"
 #include "math.h"
 #include "rxx.h"
 #include "async.h"

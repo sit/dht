@@ -37,6 +37,7 @@
 #include <chord.h>
 #include <route.h>
 #include <location.h>
+#include <locationtable.h>
 
 #include "dhash_common.h"
 #include "dhash.h"
@@ -45,6 +46,7 @@
 #include "route_dhash.h"
 
 #include <coord.h>
+#include <misc_utils.h>
 #include <modlogger.h>
 #define trace modlogger ("dhashcli")
 
@@ -68,7 +70,7 @@ protected:
   bool error;
   dhash_stat status;
 
-  chordID destID;
+  ptr<location> dest;
   chord_node pred_node;
   uint32 nonce;
   chordID blockID;
@@ -91,7 +93,7 @@ protected:
   void done ()
   {
     if (!returned && got_storecb && npending == 0) {
-      (*cb) (status, destID);
+      (*cb) (status, dest->id ());
       returned = true;
     }
   }
@@ -110,10 +112,10 @@ protected:
     done ();
   }
 
-  dhash_store (ptr<vnode> clntnode, chordID destID, chordID blockID,
+  dhash_store (ptr<vnode> clntnode, ptr<location> dest, chordID blockID,
                dhash *dh, ptr<dhash_block> _block, store_status store_type, 
 	       bool last, cbinsert_t cb)
-    : destID (destID), blockID (blockID), dh (dh), block (_block), cb (cb),
+    : dest (dest), blockID (blockID), dh (dh), block (_block), cb (cb),
       ctype (block_type(_block)), store_type (store_type),
       clntnode (clntnode), num_retries (0), last (last)
   {
@@ -171,7 +173,7 @@ protected:
       char  *chunkdat = &block->data[nstored];
       size_t chunkoff = nstored;
       npending++;
-      store (destID, blockID, chunkdat, chunklen, chunkoff, 
+      store (dest, blockID, chunkdat, chunklen, chunkoff, 
 	     block->len, blockno, ctype, store_type);
       nstored += chunklen;
       blockno++;
@@ -215,23 +217,23 @@ protected:
 
     if (npending == 0) {
       if (status == DHASH_RETRY) {
-	bool ok = clntnode->locations->insert (pred_node);
-	if (!ok && !returned) {
-	  (*cb) (DHASH_CHORDERR, destID);
+	ptr<location> pn = clntnode->locations->insert (pred_node);
+	if (!pn && !returned) {
+	  (*cb) (DHASH_CHORDERR, dest->id ());
 	  returned = true;
 	  return;
 	}
 	num_retries++;
 	if (num_retries > 2) {
 	  if (!returned) {
-	    (*cb)(DHASH_RETRY, destID);
+	    (*cb)(DHASH_RETRY, dest->id ());
 	    returned = true;
 	    return;
 	  }
 	} else {
 	  warn << "retrying (" << num_retries << "): dest was " 
-	       << destID << " now is " << pred_node.x << "\n";
-	  destID = pred_node.x;
+	       << dest->id () << " now is " << pred_node.x << "\n";
+	  dest = pn;
 	  start ();
 	}
       }
@@ -241,7 +243,7 @@ protected:
   }
 
 
-  void store (chordID destID, chordID blockID, char *data, size_t len,
+  void store (ptr<location> dest, chordID blockID, char *data, size_t len,
 	      size_t off, size_t totsz, int num, dhash_ctype ctype, 
 	      store_status store_type)
   {
@@ -250,7 +252,7 @@ protected:
     arg->key     = blockID;
     arg->dbtype  = DHASH_BLOCK;
     arg->srcID   = clntnode->my_ID ();
-    clntnode->locations->get_node (arg->srcID, &arg->from);
+    clntnode->my_location ()->fill_node (arg->from);
     arg->data.setsize (len);
     memcpy (arg->data.base (), data, len);
     arg->offset  = off;
@@ -261,19 +263,19 @@ protected:
     
     //    warn << blockID << "(store timing) store RPC for " << num << " at " << (getusec () - startt) << "\n";
     long rexmitid = clntnode->doRPC
-      (destID, dhash_program_1, DHASHPROC_STORE, arg, res,
+      (dest, dhash_program_1, DHASHPROC_STORE, arg, res,
        wrap (mkref(this), &dhash_store::finish, res, num));
     seqnos.push_back (rexmitid);
   }
   
 public:
   
-  static void execute (ptr<vnode> clntnode, chordID destID, chordID blockID,
+  static void execute (ptr<vnode> clntnode, ptr<location> dest, chordID blockID,
                        dhash *dh, ref<dhash_block> block, bool last,
 		       cbinsert_t cb, store_status store_type = DHASH_STORE)
   {
     ptr<dhash_store> d = New refcounted<dhash_store> 
-      (clntnode, destID, blockID, dh, block, store_type, last, cb);
+      (clntnode, dest, blockID, dh, block, store_type, last, cb);
   }
 };
 
@@ -384,7 +386,7 @@ dhashcli::fetch_frag (rcv_state *rs)
   ref<dhash_fetchiter_res> res = New refcounted<dhash_fetchiter_res> (DHASH_OK);
   ref<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg> ();
   
-  clntnode->locations->get_node (clntnode->my_ID (), &arg->from);
+  clntnode->my_location ()->fill_node (arg->from);
   arg->key    = rs->key;
   arg->dbtype = DHASH_FRAG;
   arg->start  = 0;
@@ -479,7 +481,7 @@ dhashcli::retrieve2_lookup_cb (chordID blockID,
 #ifdef VERBOSE_LOG    
     modlogger ("orderer") << "ordering for block " << blockID << "\n";
 #endif /* VERBOSE_LOG */    
-    order_succs (clntnode->locations->get_coords (clntnode->my_ID ()),
+    order_succs (clntnode->my_location ()->coords (),
 		 succs, rs->succs);
   } else {
     rs->succs = succs;
@@ -569,9 +571,14 @@ void
 dhashcli::retrieve (chordID blockID, int options, cb_ret cb)
 {
   ///warn << "dhashcli::retrieve\n";
+  /* XXX we need to fix the route iterator code later anyway.
+   *     not worth fixing right now. */
+  assert (0);
+#ifdef ROUTE_DHASH  
   ref<route_dhash> iterator =
     New refcounted<route_dhash> (r_factory, blockID, dh, options);
   iterator->execute (wrap (this, &dhashcli::retrieve_hop_cb, cb, blockID));
+#endif /* 0 */  
 }
 
 void
@@ -597,7 +604,7 @@ dhashcli::cache_block (ptr<dhash_block> block, route search_path, chordID key)
       (block_type (block) == DHASH_CONTENTHASH)) {
     unsigned int path_size = search_path.size ();
     if (path_size > 1) {
-      chordID cache_dest = search_path[path_size - 2];
+      ptr<location> cache_dest = search_path[path_size - 2];
       dhash_store::execute (clntnode, cache_dest, key, dh, block, false,
 			    wrap (this, &dhashcli::finish_cache),
 			    DHASH_CACHE);
@@ -618,10 +625,14 @@ dhashcli::finish_cache (dhash_stat status, chordID dest)
 void
 dhashcli::retrieve (chordID source, chordID blockID, cb_ret cb)
 {
+  assert (0);
+  // This seems like a terrible terrible function.
+#ifdef ROUTE_DHASH
   ref<route_dhash> iterator = New refcounted<route_dhash>(r_factory, 
 							 blockID, dh);
   iterator->execute (wrap (this, &dhashcli::retrieve_with_source_cb, cb), 
-		     source);  
+		     source);
+#endif /* ROUTE_DHASH */  
 }
 
 void
@@ -673,7 +684,7 @@ dhashcli::insert2_lookup_cb (ref<dhash_block> block, cbinsert_t cb,
     arg->key = block->ID;  // frag stored under hash(block)
     arg->dbtype = DHASH_FRAG;
     arg->srcID = clntnode->my_ID ();
-    clntnode->locations->get_node (arg->srcID, &arg->from);
+    clntnode->my_location ()->fill_node (arg->from);
     
     // prepend type of block onto fragment and copy into arg.
     int realfraglen = frag.len () + 4;
@@ -746,15 +757,16 @@ dhashcli::insert_lookup_cb (chordID blockID, ref<dhash_block> block,
 			    cbinsert_t cb, int trial,
 			    dhash_stat status, vec<chord_node> succs, route r)
 {
-  chordID destID = succs[0].x;
   if (status != DHASH_OK) {
     warn << "insert_lookup_cb: failure\n";
     // XXX call dhashcli::insert_stored_cb() to retry
     (*cb) (status, bigint(0)); // failure
-  } else 
-    dhash_store::execute (clntnode, destID, blockID, dh, block, false, 
+  } else {
+    ptr<location> dest = clntnode->locations->insert (succs[0]);
+    dhash_store::execute (clntnode, dest, blockID, dh, block, false, 
 			  wrap (this, &dhashcli::insert_stored_cb, 
 				blockID, block, cb, trial));
+  }
 }
 
 void
@@ -774,7 +786,7 @@ dhashcli::insert_stored_cb (chordID blockID, ref<dhash_block> block,
 }
 //like insert, but doesn't do lookup. used by transfer_key
 void
-dhashcli::storeblock (chordID dest, chordID ID, ref<dhash_block> block, 
+dhashcli::storeblock (ptr<location> dest, chordID ID, ref<dhash_block> block, 
 		      bool last, cbinsert_t cb, store_status stat)
 {
   dhash_store::execute (clntnode, dest, ID, dh, block, last, cb, stat);
@@ -785,9 +797,9 @@ void
 dhashcli::lookup (chordID blockID, int options, dhashcli_lookupcb_t cb)
 {
   if (options & DHASHCLIENT_USE_CACHED_SUCCESSOR) {
-    chordID x = clntnode->lookup_closestsucc (blockID);
+    ptr<location> x = clntnode->lookup_closestsucc (blockID);
     vec<chord_node, 1> y;
-    clntnode->locations->get_node (x, &y[0]);
+    x->fill_node (y[0]);
     (*cb) (DHASH_OK, y, route ());
   }
   else

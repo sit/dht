@@ -1,10 +1,11 @@
 #include <math.h>
 #include "chord.h"
-
-#include "location.h"
 #include "toe_table.h"
 
 #include <coord.h>
+#include <location.h>
+#include <locationtable.h>
+#include <misc_utils.h>
 #include <modlogger.h>
 #define trace modlogger ("toes")
 
@@ -13,7 +14,7 @@ toe_table::toe_table ()
 {
   for (int i=0; i < MAX_LEVELS; i++) {
     target_size[i] = 5; //must be less than nsucc to bootstrap
-    toes[i] = new vec<chordID>;
+    toes[i] = New vec<ptr<location> >;
   }
   
   last_level = MAX_LEVELS; // will start at 0
@@ -21,10 +22,10 @@ toe_table::toe_table ()
   stable_toes = false;
 }
 
-void toe_table::init (ptr<vnode> v, ptr<locationtable> locs, chordID ID)
+void toe_table::init (ptr<vnode> v, ptr<locationtable> locs)
 {
   locations = locs;
-  myID = ID;
+  myID = v->my_ID ();
   myvnode = v;
   
 }
@@ -34,11 +35,11 @@ toe_table::prune_toes (int level)
 {
   int removeindex = -1;
   //look for stale entries and remove one
-  vec<float> us = locations->get_coords(myID);
+  vec<float> us = myvnode->my_location ()->coords ();
   for(unsigned int i = 0 ; i < toes[level]->size() && removeindex < 0 ; i++){
-    chordID id = (*toes[level])[i];
+    ptr<location> id = (*toes[level])[i];
     //do based on coords instead
-    vec<float> them = locations->get_coords(id);
+    vec<float> them = id->coords ();
     if(Coord::distance_f(us, them) >= level_to_delay (level))
       removeindex = i;
   }
@@ -56,18 +57,18 @@ toe_table::prune_toes (int level)
 void
 toe_table::get_toes_rmt (int level) 
 {
-  vec<chordID> donors = get_toes (max(level - 1, 0));
+  vec<ptr<location> > donors = get_toes (max(level - 1, 0));
   for (unsigned int i = 0; i < donors.size (); i++) {
     in_progress++;
     ptr<chord_findtoes_arg> arg = New refcounted<chord_findtoes_arg> ();
     arg->level = level;
-    locations->get_node (myID, &arg->n);
+    myvnode->my_location ()->fill_node (arg->n);
 
     chord_nodelistres *res = New chord_nodelistres ();
     myvnode->doRPC (donors[i], chord_program_1,
-		      CHORDPROC_FINDTOES,
-		      arg, res, 
-		      wrap (this, &toe_table::get_toes_rmt_cb, res, level));
+		    CHORDPROC_FINDTOES,
+		    arg, res, 
+		    wrap (this, &toe_table::get_toes_rmt_cb, res, level));
   }
 }
 
@@ -95,7 +96,7 @@ toe_table::present (chordID id)
 {
   for (unsigned int level = 0; level < MAX_LEVELS; level++)
     for (unsigned int i = 0; i < toes[level]->size (); i++) 
-      if ((*toes[level])[i] == id) return true;
+      if ((*toes[level])[i]->id () == id) return true;
   return false;
 }
 
@@ -103,7 +104,7 @@ bool
 toe_table::present (chordID id, int level) 
 {
   for (unsigned int i = 0; i < toes[level]->size (); i++) 
-    if ((*toes[level])[i] == id) return true;
+    if ((*toes[level])[i]->id () == id) return true;
   return false;
 }
 
@@ -123,14 +124,14 @@ toe_table::add_toe (const chord_node &n, int level)
   vec<float> them;
   for (u_int i = 0; i < n.coords.size (); i++)
     them.push_back ((float)n.coords[i]);
-  vec<float> us = locations->get_coords (myID);
+  vec<float> us = myvnode->my_location ()->coords ();
   dist = Coord::distance_f (them, us);
 
   //verify donors distance agrees with ours
   if (dist >= level_to_delay (level) || dist <= 0)
     return;
 
-  locations->insert (n);
+  ptr<location> nl = locations->insert (n);
   
   //bubble through the list looking for out of date and where to place
   //the new id.  alternative would be to use a llist instead
@@ -142,13 +143,13 @@ toe_table::add_toe (const chord_node &n, int level)
   if (toes[level]->size () == 0){
     newindex = 0;
     newset = true;
-    toes[level]->push_back (id);
+    toes[level]->push_back (nl);
     //warn << "stuck to empty front\n";
   }
     
   //stick in middle?
   while(!newset && i < toes[level]->size ()){
-    if(between(myID, (*toes[level])[i], id)){
+    if(between(myID, (*toes[level])[i]->id (), id)){
       newindex = i;
       newset = true;
       //warn << "stick in middle\n";
@@ -163,7 +164,7 @@ toe_table::add_toe (const chord_node &n, int level)
     //warn << "adding to end\n";
   }
 
-  if(newset && id != toes[level]->front()){
+  if(newset && id != toes[level]->front()->id ()){
     //need to expand?
     if((int) toes[level]->size() < target_size[level]){
       toes[level]->push_back();
@@ -172,7 +173,7 @@ toe_table::add_toe (const chord_node &n, int level)
       (*toes[level])[i] = (*toes[level])[i-1];
     //warn << "done shifting\n";
       
-    (*toes[level])[newindex] = id;
+    (*toes[level])[newindex] = nl;
   }
 
 	  
@@ -190,11 +191,11 @@ toe_table::add_toe (const chord_node &n, int level)
 
 }
   
-vec<chordID> 
+vec<ptr<location> > 
 toe_table::get_toes (int level)
 {
   //int up = level_to_delay (level);
-  vec<chordID> res;
+  vec<ptr<location> > res;
   if(level < 0 || level >= MAX_LEVELS)
     return res;
   for (unsigned int i = 0; i < toes[level]->size (); i++)
@@ -221,10 +222,10 @@ toe_table::count_unique ()
 {
   vec<chordID> nodes;
   for (int level=0; level < MAX_LEVELS; level++) {
-    vec<chordID> vl = get_toes (level);
+    vec<ptr<location> > vl = get_toes (level);
     for (unsigned int i=0; i < vl.size (); i++) {
-      if(!in_vector(nodes, vl[i]))
-	nodes.push_back(vl[i]);
+      if(!in_vector(nodes, vl[i]->id ()))
+	nodes.push_back(vl[i]->id ());
     }
   }
   return nodes.size();
@@ -235,11 +236,11 @@ void
 toe_table::print ()
 {
   for (int level=0; level < MAX_LEVELS; level++) {
-    vec<chordID> vl = get_toes (level);
+    vec<ptr<location> > vl = get_toes (level);
     warn << "Toes at level " << level << ":\n";
     for (unsigned int i=0; i < vl.size (); i++) {
-      warn << "     " << vl[i] << " latency: "
-	   << (int)locations->get_a_lat (vl[i])
+      warn << "     " << vl[i]->id () << " latency: "
+	   << (int)vl[i]->distance ()
 	   << " max " << level_to_delay(level) << "\n";
     }
   }
@@ -277,9 +278,11 @@ toe_table::stabilize_toes ()
   prune_toes(level);
   if (level == 0) { 
     // grab the succlist and stick it in the toe table
-    vec<chord_node> succs = myvnode->succs ();
+    vec<ptr<location> > succs = myvnode->succs ();
     for (u_int i = 0; i < succs.size (); i++) {
-      add_toe (succs[i], 0);
+      chord_node n;
+      succs[i]->fill_node (n);
+      add_toe (n, 0);
     }
   } else {
     get_toes_rmt (level);
@@ -289,6 +292,7 @@ toe_table::stabilize_toes ()
   return;
 }
 
+#if 0
 bool
 toe_table::betterpred1 (chordID current, chordID target, chordID candidate)
 {
@@ -349,7 +353,6 @@ toe_table::betterpred2 (chordID myID, chordID current, chordID target,
 
   return r;
 }
-
 
 // assumes some of form of the triangle equality!
 bool
@@ -493,7 +496,7 @@ toe_table::betterpred_greedy (chordID myID, chordID current,
   }
   return r;
 }
-
+#endif /* 0 */
 
 void toe_table::fill_nodelistresext (chord_nodelistextres *res)
 {
@@ -507,16 +510,15 @@ toe_table::fill_nodelistres (chord_nodelistres *res)
 }
 
 
-chordID
+ptr<location>
 toe_table::closestsucc (const chordID &x)
 {
-
   //warnx << "doing a toe table lookup\n";
   return locations->closestsuccloc(x);
 
 }
 
-chordID
+ptr<location>
 toe_table::closestpred (const chordID &x, vec<chordID> failed)
 {
 
@@ -525,7 +527,7 @@ toe_table::closestpred (const chordID &x, vec<chordID> failed)
 }
 
 
-chordID
+ptr<location>
 toe_table::closestpred (const chordID &x)
 {
 

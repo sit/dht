@@ -1,12 +1,13 @@
 #include "chord.h"
 #include "pred_list.h"
-#include "chord_util.h"
-#include "location.h"
+#include <id_utils.h>
+#include <location.h>
+#include <locationtable.h>
+#include <misc_utils.h>
 
 pred_list::pred_list (ptr<vnode> v,
-		      ptr<locationtable> locs,
-		      chordID ID)
-  : myID (ID), v_ (v), locations (locs),
+		      ptr<locationtable> locs)
+  : myID (v->my_ID ()), v_ (v), locations (locs),
     nout_continuous (0),
     gotfingers_ (false),
     nout_backoff (0),
@@ -14,34 +15,32 @@ pred_list::pred_list (ptr<vnode> v,
 {
   backkey_ = 0;
 
-  oldpred_ = myID;
+  oldpred_ = v->my_location ();
   
   locations->pinpred (myID);
   locations->pinpredlist (myID);
 }
 
-chordID
+ptr<location>
 pred_list::pred ()
 {
   return locations->closestpredloc (myID);
 }
 
-vec<chord_node>
+vec<ptr<location> >
 pred_list::preds ()
 {
-  vec<chord_node> ret;
-  chordID cur = pred ();
-  chordID start = cur;
-  chord_node n;
+  vec<ptr<location> > ret;
+  
+  ptr<location> cur = pred ();
+  ptr<location> start = cur;
+  ret.push_back (cur);
 
-  locations->get_node (cur, &n);
-  ret.push_back (n);
-
-  cur = locations->closestpredloc (decID (cur));
+  // XXX it's not always safe to go backwards. Nodes we run
+  //     into going backwards might point off the ring!
   for (u_int i = 1; i < NPRED && cur != start; i++) {
-    locations->get_node (cur, &n);
-    ret.push_back (n);
-    cur = locations->closestpredloc (decID (cur));
+    cur = locations->closestpredloc (decID (cur->id ()));
+    ret.push_back (cur);
   }
   return ret;
 }
@@ -50,14 +49,14 @@ pred_list::preds ()
 void
 pred_list::update_pred (const chord_node &p)
 {
-  chordID curp = pred ();
+  ptr<location> curp = pred ();
   
-  bool ok = true;
-  if (!gotfingers_ || between (curp, myID, p.x))
-    ok = locations->insert (p);
+  ptr<location> ploc;
+  if (!gotfingers_ || between (curp->id (), myID, p.x))
+    ploc = locations->insert (p);
   
-  if (!gotfingers_ && ok)
-    v_->get_fingers (p.x, wrap (this, &pred_list::update_pred_fingers_cb));
+  if (!gotfingers_ && ploc)
+    v_->get_fingers (ploc, wrap (this, &pred_list::update_pred_fingers_cb));
 
   oldpred_ = pred ();
 }
@@ -76,12 +75,12 @@ pred_list::update_pred_fingers_cb (vec<chord_node> nlist, chordstat s)
 void
 pred_list::stabilize_pred ()
 {
-  chordID p = pred ();
+  ptr<location> p = pred ();
 
   assert (nout_continuous == 0);
 
   nout_continuous++;
-  v_->get_successor (p, wrap (this, &pred_list::stabilize_getsucc_cb, p));
+  v_->get_successor (p, wrap (this, &pred_list::stabilize_getsucc_cb, p->id ()));
 }
 
 void
@@ -165,34 +164,40 @@ bool
 pred_list::isstable ()
 {
   // Won't be true until update_pred has been called once.
-  return oldpred_ == pred () && stable_predlist;
+  return oldpred_ == pred ();
+  // return oldpred_ == pred () && stable_predlist;
 }
 
 void
 pred_list::fill_nodelistresext (chord_nodelistextres *res)
 {
+  fatal << "not implemented.\n";
+#if 0  
   // XXX it's not always safe to go backwards. Nodes we run
   //     into going backwards might point off the ring!
   u_int i = 0;
   res->resok->nlist.setsize (NPRED); // over allocate
   chordID curpred = locations->closestsuccloc (backkey_);
   for (i = 0; (i < NPRED) && curpred != myID; i++) {
-    locations->fill_getnodeext (res->resok->nlist[i], curpred);
+    locations->lookup (curpred)->fill_node_ext (res->resok->nlist[i]);
     curpred = locations->closestsuccloc (incID (curpred));
   }
   res->resok->nlist.setsize (i + 1);
+#endif /* 0 */
 }
 
 void
 pred_list::fill_nodelistres (chord_nodelistres *res)
 {
+  fatal << "not implemented.\n";
+#if 0  
   u_int i = 0;
   res->resok->nlist.setsize (NPRED); // over allocate
   chordID curpred = locations->closestsuccloc (backkey_);
   for (i = 0; (i < NPRED) && curpred != myID; i++) {
-    bool ok = locations->get_node (curpred, &res->resok->nlist[i]);
-    assert (ok);
+    locations->lookup (curpred)->fill_node (res->resok->nlist[i]);
     curpred = locations->closestsuccloc (incID (curpred));
   }
   res->resok->nlist.setsize (i + 1);
+#endif /* 0 */  
 }

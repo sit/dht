@@ -59,7 +59,7 @@ class dhashcli {
   // State for a fragment store
   struct sto_state {
     ref<dhash_block> block;
-    route r;
+    // route r;
     vec<chord_node> succs;
     cbinsert_t cb;
     
@@ -115,7 +115,7 @@ private:
   void insert (chordID blockID, ref<dhash_block> block, 
                int options, cbinsert_t cb);
   void insert2 (ref<dhash_block> block, int options, cbinsert_t cb);
-  void storeblock (chordID dest, chordID blockID, ref<dhash_block> block,
+  void storeblock (ptr<location> l, chordID blockID, ref<dhash_block> block,
 		   bool last, cbinsert_t cb, store_status stat = DHASH_STORE);
 
   void lookup (chordID blockID, int options, dhashcli_lookupcb_t cb);

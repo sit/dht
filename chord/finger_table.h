@@ -8,7 +8,7 @@ class finger_table : public fingerlike {
   ptr<locationtable> locations;
   
   chordID starts[NBIT];
-  chordID fingers[NBIT]; // just for optimizing stabilization
+  ptr<location> fingers[NBIT]; // just for optimizing stabilization
   chordID myID;
 
   int f; // next finger to stabilize
@@ -29,8 +29,8 @@ class finger_table : public fingerlike {
  public:
   finger_table ();
 
-  chordID finger (int i);
-  chordID operator[] (int i);
+  ptr<location> finger (int i);
+  ptr<location> operator[] (int i);
   chordID start (int i) { return starts[i]; }
 
   void stabilize_finger ();
@@ -45,10 +45,10 @@ class finger_table : public fingerlike {
   void stats ();
 
   //fingerlike methods
-  void init (ptr<vnode> v, ptr<locationtable> locs, chordID ID);
-  chordID closestpred (const chordID &x, vec<chordID> fail);
-  chordID closestpred (const chordID &x);
-  chordID closestsucc (const chordID &x);
+  void init (ptr<vnode> v, ptr<locationtable> locs);
+  ptr<location> closestpred (const chordID &x, vec<chordID> fail);
+  ptr<location> closestpred (const chordID &x);
+  ptr<location> closestsucc (const chordID &x);
 
   ref<fingerlike_iter> get_iter ();
 };

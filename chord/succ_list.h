@@ -10,14 +10,14 @@ class succ_list : public fingerlike {
   
   u_long nnodes; // estimate of the number of chord nodes
   
-  chordID oldsucc;  // last known successor to myID
+  ptr<location> oldsucc;  // last known successor
   bool stable_succlist;
   bool stable_succlist2;
   u_int nout_backoff;
   u_int nout_continuous;
 
   // Helpers for stabilize_succ
-  void stabilize_getpred_cb (chordID s, chord_node p, chordstat status);
+  void stabilize_getpred_cb (ptr<location> sd, chord_node p, chordstat status);
 
   // Helpers for stabilize_succlist
   void stabilize_getsucclist_cb (chordID s, vec<chord_node> nlist,
@@ -25,10 +25,9 @@ class succ_list : public fingerlike {
   void stabilize_getsucclist_check (chordID src, chordID chk, chordstat status);
 
  public:  
-  succ_list (ptr<vnode> v, ptr<locationtable> locs, chordID myID);
+  succ_list (ptr<vnode> v, ptr<locationtable> locs);
   
-  chordID succ ();
-  chordID operator[] (unsigned int n);
+  ptr<location> succ ();
   
   unsigned int num_succ ();
   u_long estimate_nnodes ();
@@ -36,7 +35,7 @@ class succ_list : public fingerlike {
   void stabilize_succ ();
   void stabilize_succlist ();
   
-  vec<chord_node> succs ();
+  vec<ptr<location> > succs ();
 
   // Stabilizable methods
   bool backoff_stabilizing () { return nout_backoff > 0; }
@@ -50,10 +49,10 @@ class succ_list : public fingerlike {
   void stats () { warn << "stats go here\n"; };
 
   // Fingerlike methods
-  chordID closestpred (const chordID &x);
-  chordID closestpred (const chordID &x, vec<chordID> fail);
-  chordID closestsucc (const chordID &x);
-  void init (ptr<vnode> v, ptr<locationtable> locs, chordID ID) { warn << "not needed\n";};
+  ptr<location> closestpred (const chordID &x);
+  ptr<location> closestpred (const chordID &x, vec<chordID> fail);
+  ptr<location> closestsucc (const chordID &x);
+  void init (ptr<vnode> v, ptr<locationtable> locs) { warn << "not needed\n";};
 
   ref<fingerlike_iter> get_iter (); 
 };

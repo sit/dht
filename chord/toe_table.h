@@ -8,7 +8,7 @@
 class toe_table : public fingerlike {
   static const int max_delay = 800; // ms
 
-  vec<vec<chordID>*, MAX_LEVELS> toes;
+  vec<vec<ptr<location> >*, MAX_LEVELS> toes;
   ptr<locationtable> locations;
   chordID myID;
   ptr<vnode> myvnode;
@@ -24,7 +24,8 @@ class toe_table : public fingerlike {
 
  public:
   toe_table ();
-  
+
+#if 0  
   //these will probably not stay here
   bool betterpred1 (chordID current, chordID target, chordID newpred);
   char betterpred2 (chordID myID, chordID current, chordID target, 
@@ -36,10 +37,11 @@ class toe_table : public fingerlike {
   char betterpred_distest (chordID myID, chordID current, 
 			   chordID target, 
 			   chordID newpred);
-
+#endif /* 0 */
+  
   bool present (chordID id);
   bool present (chordID id, int level);
-  vec<chordID> get_toes (int level);
+  vec<ptr<location> > get_toes (int level);
   void add_toe (const chord_node &n, int level);
   int filled_level ();
   void get_toes_rmt (int level);
@@ -62,10 +64,10 @@ class toe_table : public fingerlike {
   void fill_nodelistres (chord_nodelistres *res);
 
   //fingerlike methods
-  void init (ptr<vnode> v, ptr<locationtable> locs, chordID ID);
-  chordID closestpred (const chordID &x, vec<chordID> fail);
-  chordID closestpred (const chordID &x);
-  chordID closestsucc (const chordID &x);
+  void init (ptr<vnode> v, ptr<locationtable> locs);
+  ptr<location> closestpred (const chordID &x, vec<chordID> fail);
+  ptr<location> closestpred (const chordID &x);
+  ptr<location> closestsucc (const chordID &x);
   void print ();
   void stats () { warn << "I'm a toe table\n";};
 

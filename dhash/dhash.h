@@ -37,8 +37,10 @@
 
 #include <chord_types.h>
 #include <dhash_prot.h>
-#include <route.h>
 
+class location;
+class vnode;
+class route_factory;
 class dhash_block;
 class dbrec;
 
@@ -54,7 +56,7 @@ typedef callback<void,dhash_stat>::ptr cbstore;
 typedef callback<void,dhash_stat>::ptr cbstat_t;
 typedef callback<void, s_dhash_block_arg *>::ptr cbblockuc_t;
 typedef callback<void, s_dhash_storecb_arg *>::ptr cbstorecbuc_t;
-typedef callback<void, dhash_stat, ptr<dhash_block>, route>::ptr cb_ret;
+typedef callback<void, dhash_stat, ptr<dhash_block>, vec<ptr<location> > >::ptr cb_ret;
 
 extern unsigned int MTU;
 

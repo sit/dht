@@ -1,7 +1,10 @@
 #include "chord.h"
 #include "fingerlike.h"
 #include "succ_list.h"
-#include "location.h"
+#include <location.h>
+#include <locationtable.h>
+#include <id_utils.h>
+#include <misc_utils.h>
 
 /*
  * The idea of the succ_list class is to maintain a list of
@@ -10,13 +13,12 @@
  * is maintained in locationtable.
  */
 succ_list::succ_list (ptr<vnode> v,
-		      ptr<locationtable> locs,
-		      chordID ID)
-  : myID (ID), myvnode (v), locations (locs)
+		      ptr<locationtable> locs)
+  : myID (v->my_ID ()), myvnode (v), locations (locs)
 {
   nnodes = 0;
 
-  oldsucc = myID;
+  oldsucc = v->my_location ();
   stable_succlist = false;
   stable_succlist2 = false;
   nout_backoff = 0;
@@ -26,38 +28,23 @@ succ_list::succ_list (ptr<vnode> v,
   locations->pinsucclist (myID);
 }
    
-chordID 
+ptr<location>
 succ_list::succ ()
 {
-  return locations->closestsuccloc (myID + 1);
+  return locations->closestsuccloc (incID (myID));
 }
 
-//succ_list[0] is the immediate successor
-chordID
-succ_list::operator[] (unsigned int n) 
-{
-  assert (n < num_succ ());
-  chordID ret = succ ();
-  for (u_int i = 0; i < n; i++) 
-    ret = locations->closestsuccloc (ret + 1);
-
-  return ret;
-}
-
-vec<chord_node>
+vec<ptr<location> >
 succ_list::succs ()
 {
-  vec<chord_node> ret;
-  chordID cur = succ ();
-  chord_node n;
-
-  locations->get_node (cur, &n);
-  ret.push_back (n);
+  vec<ptr<location> > ret;
+  
+  ptr<location> cur = succ ();
+  ret.push_back (cur);
 
   for (u_int i = 1; i < num_succ (); i++) {
-    cur = locations->closestsuccloc (cur + 1);
-    locations->get_node (cur, &n);
-    ret.push_back (n);
+    cur = locations->closestsuccloc (incID (cur->id ()));
+    ret.push_back (cur);
   }
   return ret;
 }
@@ -78,22 +65,21 @@ succ_list::num_succ ()
 void
 succ_list::print ()
 {
-  chordID id = myID;
-  for (u_int i = 0; i < num_succ (); i++) {
-    id = locations->closestsuccloc (id + 1);
-    warnx << myID << ": succ " << i + 1 << " : " << id << "\n";
-  }
+  vec<ptr<location> > s = succs ();
+  for (u_int i = 0; i < s.size (); i++)
+    warnx << myID << ": succ " << i + 1 << " : " << s[i]->id () << "\n";
 }
 
 u_long
 succ_list::estimate_nnodes ()
 {
   u_long n;
-  chordID lastsucc = myID;
+  ptr<location> lastsucc = myvnode->my_location ();
   int nsucc = num_succ ();
   for (int i = 0; i < nsucc; i++)
-    lastsucc = locations->closestsuccloc (lastsucc + 1);
-  chordID d = diff (myID, lastsucc);
+    lastsucc = locations->closestsuccloc (incID (lastsucc->id ()));
+  
+  chordID d = diff (myID, lastsucc->id ());
   if ((d > 0) && (nsucc > 0)) {
     chordID s = d / nsucc;
     chordID c = bigint (1) << NBIT;
@@ -109,18 +95,25 @@ succ_list::fill_nodelistresext (chord_nodelistextres *res)
 {
   // succ[0] is me. the rest are our actual successors.
   int curnsucc = num_succ ();
-  chordID cursucc = myID;
+  ptr<location> cursucc = myvnode->my_location ();
   res->resok->nlist.setsize (curnsucc + 1);
   for (int i = 0; i <= curnsucc; i++) {
-    locations->fill_getnodeext (res->resok->nlist[i], cursucc);
-    cursucc = locations->closestsuccloc (cursucc + 1);
+    cursucc->fill_node_ext (res->resok->nlist[i]);
+    cursucc = locations->closestsuccloc (incID (cursucc->id ()));
   }
 }
 
 void
 succ_list::fill_nodelistres (chord_nodelistres *res)
 {
-  res->resok->nlist.setsize (0);
+  // succ[0] is me. the rest are our actual successors.
+  int curnsucc = num_succ ();
+  ptr<location> cursucc = myvnode->my_location ();
+  res->resok->nlist.setsize (curnsucc + 1);
+  for (int i = 0; i <= curnsucc; i++) {
+    cursucc->fill_node (res->resok->nlist[i]);
+    cursucc = locations->closestsuccloc (incID (cursucc->id ()));
+  }
 }
 
 void
@@ -140,9 +133,9 @@ succ_list::stabilize_succlist ()
   nnodes = n;
 
   nout_backoff++;
-  chordID s = succ ();
+  ptr<location> s = succ ();
   myvnode->get_succlist
-    (s, wrap (this, &succ_list::stabilize_getsucclist_cb, s));
+    (s, wrap (this, &succ_list::stabilize_getsucclist_cb, s->id ()));
 }
 
 void
@@ -162,34 +155,29 @@ succ_list::stabilize_getsucclist_cb (chordID s, vec<chord_node> nlist,
   // We're going to merge his succlist with our succlist and make sure
   // deletions and insertions are accurate from our POV.
   unsigned int i, j;
-  vec<chordID> succlist;
-  unsigned int curnsucc = num_succ ();
-  chordID cursucc = succ ();
-  for (i = 0; i < curnsucc; i++) {
-    succlist.push_back (cursucc);
-    cursucc = locations->closestsuccloc (cursucc + 1);
-  }
+  vec<ptr<location> > succlist = succs ();
+  size_t curnsucc = succlist.size ();
 
   i = 0; j = 0;
   unsigned int newnsucc = nlist.size () - 1; // drop last guy.
   while ((i < curnsucc) && (j < newnsucc)) {    
-    if (succlist[i] == nlist[j].x) { i++; j++; continue; }
-    if (between (myID, nlist[j].x, succlist[i])) {
+    if (succlist[i]->id () == nlist[j].x) { i++; j++; continue; }
+    if (between (myID, nlist[j].x, succlist[i]->id ())) {
       // if succlist[i] < nlist[j].x
       // then, maybe someone we knew about is dead now. best be sure.
       nout_backoff++;
       myvnode->ping
 	(succlist[i], wrap (this, &succ_list::stabilize_getsucclist_check,
-			    s, succlist[i]));
+			    s, succlist[i]->id ()));
       i++;
       continue;
     }
-    if (between (myID, succlist[i], nlist[j].x)) {
+    if (between (myID, succlist[i]->id (), nlist[j].x)) {
       // if succlist[i] > nlist[j].x
       // then maybe a new node joined. check it out.
       //BAD LOC (ok)
-      bool ok = locations->insert (nlist[j]);
-      if (!ok) {
+      ptr<location> newsucc = locations->insert (nlist[j]);
+      if (!newsucc) {
 	warnx << myID << ": stabilize_succlist: received bad successor "
 	      << nlist[j].x << " from " << s << "\n";
 	// XXX do something about it?
@@ -208,14 +196,14 @@ succ_list::stabilize_getsucclist_cb (chordID s, vec<chord_node> nlist,
     nout_backoff++;
     myvnode->ping
       (succlist[i], wrap (this, &succ_list::stabilize_getsucclist_check,
-			  s, succlist[i]));
+			  s, succlist[i]->id ()));
     i++;
   }
   while (j < newnsucc) {
     assert (!check);
     //BAD LOC
-    bool ok = locations->insert (nlist[j]);
-    if (!ok) {
+    ptr<location> newsucc = locations->insert (nlist[j]);
+    if (!newsucc) {
       warnx << myID << ": stabilize_succlist: received bad successor "
 	    << nlist[j].x << " from " << s << "\n";
       // XXX do something about it?
@@ -245,10 +233,10 @@ void
 succ_list::stabilize_succ ()
 {
   assert (nout_continuous == 0);
-  chordID cursucc = succ ();
+  ptr<location> cursucc = succ ();
   if (cursucc != oldsucc) {
     warnx << myID << ": my successor changed from "
-	  << oldsucc << " to " << cursucc << "\n";
+	  << oldsucc->id () << " to " << cursucc->id () << "\n";
     myvnode->notify (cursucc, myID);
     oldsucc = cursucc;
     // Wait until next round to check on this guy.
@@ -260,15 +248,15 @@ succ_list::stabilize_succ ()
 }
 
 void
-succ_list::stabilize_getpred_cb (chordID sd, chord_node p, chordstat status)
+succ_list::stabilize_getpred_cb (ptr<location> sd, chord_node p, chordstat status)
 {
   nout_continuous--;
   // receive predecessor from my successor; in stable case it is me
   if (status) {
-    warnx << myID << ": stabilize_getpred_cb " << sd
+    warnx << myID << ": stabilize_getpred_cb " << sd->id ()
     	  << " failure status " << status << "\n";
     if (status == CHORD_ERRNOENT) {
-      warnx << myID << ": stabilize_getpred_cb " << sd
+      warnx << myID << ": stabilize_getpred_cb " << sd->id ()
 	    << " doesn't know about his predecessor?? notifying...\n";
       myvnode->notify (sd, myID);
     }
@@ -276,11 +264,11 @@ succ_list::stabilize_getpred_cb (chordID sd, chord_node p, chordstat status)
   } else {
     if (myID == p.x) {
       // Good, things are as we expect.
-    } else if (betweenleftincl (myID, sd, p.x)) {
+    } else if (betweenleftincl (myID, sd->id (), p.x)) {
       // Did we get someone strictly better?
-      bool ok = locations->insert (p);
-      if (ok)
-	oldsucc = p.x;
+      ptr<location> newsucc = locations->insert (p);
+      if (newsucc)
+	oldsucc = newsucc;
     } else {
       // Our successor appears to be confused, better tell
       // him what we think.
@@ -291,31 +279,31 @@ succ_list::stabilize_getpred_cb (chordID sd, chord_node p, chordstat status)
 
 // ===== fingerlike methods ======
 // XXX currently an exhaustive search of the successors
-chordID
+ptr<location>
 succ_list::closestpred (const chordID &x, vec<chordID> failed)
 {
-  chordID best = myID;
+  ptr<location> best = myvnode->my_location ();
   for (u_int i = 0; i < num_succ (); i++) {
-    chordID n = locations->closestsuccloc (best + 1);
-    if (between (myID, x, n) && (!in_vector (failed, n)))
+    ptr<location> n = locations->closestsuccloc (incID (best->id ()));
+    if (between (myID, x, n->id ()) && (!in_vector (failed, n->id ())))
       best = n;
   }
   return best;
 }
 
-chordID 
+ptr<location>
 succ_list::closestpred (const chordID &x)
 {
-  chordID best = myID;
+  ptr<location> best = myvnode->my_location ();
   for (u_int i = 0; i < num_succ (); i++) {
-    chordID n = locations->closestsuccloc (best + 1);
-    if (between (myID, x, n))
+    ptr<location> n = locations->closestsuccloc (incID (best->id ()));
+    if (between (myID, x, n->id ()))
       best = n;
   }
   return best;
 }
 
-chordID 
+ptr<location>
 succ_list::closestsucc (const chordID &x) 
 {
   fatal << "not implemented\n";
@@ -333,7 +321,7 @@ succ_list::get_iter ()
 {
   ref<succiter> iter = New refcounted<succiter> ();
 
-  chordID id = myID;
+  ptr<location> id = myvnode->my_location ();
   u_int ns = num_succ ();
   if (ns == 0) {
     iter->nodes.push_back (id);
@@ -341,7 +329,7 @@ succ_list::get_iter ()
   }
   
   for (u_int i = 0; i < ns; i++) {
-    id = locations->closestsuccloc (id + 1);  
+    id = locations->closestsuccloc (id->id () + 1);  
     iter->nodes.push_back (id);
   }
 

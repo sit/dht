@@ -30,14 +30,14 @@ class debruijn : public fingerlike {
   bool backoff_stabilizing () { return false; };
   void do_backoff () { return; };
   void do_continuous () { stabilize (); };
-  chordID debruijnptr (void);
+  ptr<location> debruijnptr (void);
 
   //fingerlike methods
-  chordID closestsucc (const chordID &x);
-  chordID closestpred (const chordID &x, vec<chordID> failed);
-  chordID closestpred (const chordID &x);
+  ptr<location> closestsucc (const chordID &x);
+  ptr<location> closestpred (const chordID &x, vec<chordID> failed);
+  ptr<location> closestpred (const chordID &x);
 
-  void init (ptr<vnode> v, ptr<locationtable> locs, chordID ID);
+  void init (ptr<vnode> v, ptr<locationtable> locs);
   void print ();
   void stats () { warn << "stats go here\n";};
   

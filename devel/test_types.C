@@ -36,12 +36,12 @@ void store_cb_pk (dhashclient dhash, dhash_stat status, ptr<insert_info> i);
 void store_cb_ch (dhashclient dhash, dhash_stat status, ptr<insert_info> i);
 void store_cb_noauth (dhashclient dhash, dhash_stat status, ptr<insert_info> i);
 void store_cb_append (dhashclient dhash, dhash_stat status, ptr<insert_info> i);
-void fetch_cb_append (dhashclient dhash, dhash_stat stat, ptr<dhash_block> blk, route path);
+void fetch_cb_append (dhashclient dhash, dhash_stat stat, ptr<dhash_block> blk, vec<chordID> path);
 void store_cb_append_second (dhashclient dhash, dhash_stat status, 
 			     ptr<insert_info> i);
-void fetch_cb_append_second (dhashclient dhash, dhash_stat stat, ptr<dhash_block> blk, route path);
+void fetch_cb_append_second (dhashclient dhash, dhash_stat stat, ptr<dhash_block> blk, vec<chordID> path);
 
-void fetch_cb (dhash_stat stat, ptr<dhash_block> blk, route path);
+void fetch_cb (dhash_stat stat, ptr<dhash_block> blk, vec<chordID> path);
 
 char *data_one = "This is some test data";
 char *data_too = " so is this.";
@@ -100,7 +100,7 @@ store_cb_append (dhashclient dhash, dhash_stat status, ptr<insert_info> i)
 }
 
 void
-fetch_cb_append (dhashclient dhash, dhash_stat stat, ptr<dhash_block> blk, route path) 
+fetch_cb_append (dhashclient dhash, dhash_stat stat, ptr<dhash_block> blk, vec<chordID> path) 
 {
   if (!blk)
     fatal << "append: error\n";
@@ -120,7 +120,7 @@ store_cb_append_second (dhashclient dhash, dhash_stat status,
 }
 
 void
-fetch_cb_append_second (dhashclient dhash, dhash_stat stat, ptr<dhash_block> blk, route path) 
+fetch_cb_append_second (dhashclient dhash, dhash_stat stat, ptr<dhash_block> blk, vec<chordID> path) 
 {
   if (!blk)
     fatal << "append (second): error\n";
@@ -130,7 +130,7 @@ fetch_cb_append_second (dhashclient dhash, dhash_stat stat, ptr<dhash_block> blk
 }
 
 void
-fetch_cb (dhash_stat stat, ptr<dhash_block> blk, route path)
+fetch_cb (dhash_stat stat, ptr<dhash_block> blk, vec<chordID> path)
 {
 
   if (!blk) {

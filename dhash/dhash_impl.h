@@ -6,6 +6,9 @@ class RPC_delay_args;
 
 class dbfe;
 
+class location;
+struct hashID;
+
 class merkle_server;
 class merkle_syncer;
 class merkle_tree;
@@ -27,7 +30,6 @@ struct store_state {
   unsigned int size;
   store_chunk *have;
   char *buf;
-  route path;
 
   ihash_entry <store_state> link;
    
@@ -65,8 +67,8 @@ struct keyhash_meta {
 struct missing_state {
   ihash_entry <missing_state> link;
   bigint key;
-  chord_node from;
-  missing_state (bigint key, chord_node from) : key (key), from (from) {}
+  ptr<location> from;
+  missing_state (bigint key, ptr<location> from) : key (key), from (from) {}
 };
 
 class dhash_impl : public dhash {
@@ -112,10 +114,11 @@ class dhash_impl : public dhash {
 
   unsigned keyhash_mgr_rpcs;
 
-  void missing (chord_node from, bigint key);
-  void missing_retrieve_cb (bigint key, dhash_stat err, ptr<dhash_block> b, route r);
+  void missing (ptr<location> from, bigint key);
+  void missing_retrieve_cb (bigint key, dhash_stat err, ptr<dhash_block> b,
+			    route r);
   
-  void sendblock (chord_node dst, bigint blockID, bool last, callback<void>::ref cb);
+  void sendblock (ptr<location> dst, bigint blockID, bool last, callback<void>::ref cb);
   void sendblock_cb (callback<void>::ref cb, dhash_stat err, chordID blockID);
 
   void keyhash_mgr_timer ();
@@ -132,12 +135,12 @@ class dhash_impl : public dhash {
 					u_int already_count, ref<dhash_storeres> res,
 					clnt_stat err);
   
-  void doRPC_unbundler (chord_node dst, RPC_delay_args *args);
+  void doRPC_unbundler (ptr<location> dst, RPC_delay_args *args);
 
 
   void route_upcall (int procno, void *args, cbupcalldone_t cb);
 
-  void doRPC (chordID ID, const rpc_program &prog, int procno,
+  void doRPC (ptr<location> n, const rpc_program &prog, int procno,
 	      ptr<void> in, void *out, aclnt_cb cb);
   void doRPC (const chord_node &n, const rpc_program &prog, int procno,
 	      ptr<void> in, void *out, aclnt_cb cb);
@@ -182,7 +185,7 @@ class dhash_impl : public dhash {
   dhash_stat key_status(const chordID &n, dhash_dbtype dbtype);
 
   chordID pred;
-  vec<chord_node> replicas;
+  vec<ptr<location> > replicas;
   timecb_t *check_replica_tcb;
   timecb_t *merkle_rep_tcb;
   timecb_t *merkle_part_tcb;

@@ -123,7 +123,7 @@ store (dhashclient &dhash, int num)
 
 
 void
-fetch_cb (int i, struct timeval start, dhash_stat stat, ptr<dhash_block> blk, route path)
+fetch_cb (int i, struct timeval start, dhash_stat stat, ptr<dhash_block> blk, vec<chordID> path)
 {
   out--;
 

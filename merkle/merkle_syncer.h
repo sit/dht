@@ -7,10 +7,9 @@
 #include "merkle_server.h"
 #include "merkle_sync_prot.h"
 #include <bigint.h>
-#include <chord.h>
 
 // see comment in merkle_syncer::doRPC for this work around.
-#include "comm.h"
+struct RPC_delay_args;
 typedef callback<void, RPC_delay_args *>::ref rpcfnc_t;
 typedef callback<void, bigint>::ref missingfnc_t;
 

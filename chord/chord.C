@@ -28,8 +28,13 @@
 #include <assert.h>
 #include <qhash.h>
 #include "chord_impl.h"
+#include "comm.h"
 #include <coord.h>
 #include <modlogger.h>
+#include <misc_utils.h>
+#include "chord_util.h"
+#include <location.h>
+#include <locationtable.h>
 
 const int chord::max_vnodes = 1024;
 
@@ -39,13 +44,16 @@ const int CHORD_LOOKUP_PROXIMITY (2);
 const int CHORD_LOOKUP_FINGERSANDSUCCS (3);
 
 ref<vnode>
-vnode::produce_vnode (ptr<locationtable> _locations, ptr<fingerlike> stab,
-			ptr<route_factory> f,
-			ptr<chord> _chordnode,
-			chordID _myID, int _vnode, int server_sel_mode,
-			int l_mode)
+vnode::produce_vnode (ptr<locationtable> _locations,
+		      ptr<rpc_manager> _rpcm,
+		      ptr<fingerlike> stab,
+		      ptr<route_factory> f,
+		      ptr<chord> _chordnode,
+		      chordID _myID, int _vnode, int server_sel_mode,
+		      int l_mode)
 {
-  return New refcounted<vnode_impl> (_locations, stab, f, _chordnode, _myID,
+  return New refcounted<vnode_impl> (_locations, _rpcm,
+				     stab, f, _chordnode, _myID,
 				     _vnode, server_sel_mode, l_mode);
 }
 
@@ -58,11 +66,20 @@ vnode_impl::my_ID () const
   return myID;
 }
 
-vnode_impl::vnode_impl (ptr<locationtable> _locations, ptr<fingerlike> stab,
+ref<location>
+vnode_impl::my_location ()
+{
+  return me_;
+}
+
+vnode_impl::vnode_impl (ptr<locationtable> _locations,
+			ptr<rpc_manager> _rpcm,
+			ptr<fingerlike> stab,
 			ptr<route_factory> f,
 			ptr<chord> _chordnode,
 			chordID _myID, int _vnode, int server_sel_mode,
 			int l_mode) :
+  rpcm (_rpcm),
   myindex (_vnode),
   myID (_myID), 
   chordnode (_chordnode),
@@ -72,12 +89,13 @@ vnode_impl::vnode_impl (ptr<locationtable> _locations, ptr<fingerlike> stab,
 {
   locations = _locations;
   warnx << gettime () << " myID is " << myID << "\n";
+  me_ = locations->lookup (myID);
 
   fingers = stab;
-  fingers->init (mkref(this), locations, myID);
+  fingers->init (mkref(this), locations);
 
-  successors = New refcounted<succ_list> (mkref(this), locations, myID);
-  predecessors = New refcounted<pred_list> (mkref(this), locations, myID);
+  successors = New refcounted<succ_list> (mkref(this), locations);
+  predecessors = New refcounted<pred_list> (mkref(this), locations);
   stabilizer = New refcounted<stabilize_manager> (myID);
 
   stabilizer->register_client (successors);
@@ -86,7 +104,7 @@ vnode_impl::vnode_impl (ptr<locationtable> _locations, ptr<fingerlike> stab,
 
   if (lookup_mode == CHORD_LOOKUP_PROXIMITY) {
     toes = New refcounted<toe_table> ();
-    toes->init (mkref(this), locations, myID);
+    toes->init (mkref(this), locations);
     stabilizer->register_client (toes);
   } else {
     toes = NULL;
@@ -233,13 +251,13 @@ vnode_impl::dispatch (user_args *a)
   }
 }
 
-chordID
+ptr<location>
 vnode_impl::my_pred() const
 {
   return predecessors->pred ();
 }
 
-chordID
+ptr<location>
 vnode_impl::my_succ () const
 {
   return successors->succ ();
@@ -296,7 +314,7 @@ vnode_impl::print () const
   fingers->print ();
   successors->print ();
 
-  warnx << "pred : " << my_pred () << "\n";
+  warnx << "pred : " << my_pred ()->id () << "\n";
   if (toes) {
     warnx << "------------- toes ----------------------------------\n";
     toes->print ();
@@ -307,10 +325,10 @@ vnode_impl::print () const
 
 }
 
-chordID
+ptr<location>
 vnode_impl::lookup_closestsucc (const chordID &x)
 {
-  chordID s;
+  ptr<location> s;
 
   switch (lookup_mode) {
   case CHORD_LOOKUP_PROXIMITY:
@@ -330,20 +348,19 @@ vnode_impl::lookup_closestsucc (const chordID &x)
 }
 
 static inline
-bool candidate_is_closer (const chordID &c, // new candidate node
+bool candidate_is_closer (const ptr<location> &c, // new candidate node
 			  const chordID &myID,
 			  const chordID &x, // target
 			  const vec<chordID> &failed, // avoid these
 			  const vec<float> &qc, // their coords
-			  float &mindist,   // previous best dist
-			  const ref<locationtable> locations)
+			  float &mindist)   // previous best dist
 {
   // Don't give back nodes that querier doesn't want.
-  if (in_vector (failed, c)) return false;
+  if (in_vector (failed, c->id ())) return false;
   // Do not overshoot, do not go backwards.
-  if (!between (myID, x, c)) return false;
+  if (!between (myID, x, c->id ())) return false;
       
-  vec<float> them = locations->get_coords (c);
+  vec<float> them = c->coords ();
   if (!them.size ())
     return false; // XXX weird.
       
@@ -365,22 +382,60 @@ bool candidate_is_closer (const chordID &c, // new candidate node
   return false;
 }
 
-chordID
-vnode_impl::closestcoordpred (const chordID &x, const vec<float> &n,
+static inline chordID
+greedy_speed (const vec<float> &qc, // querier coordinates
+	      const ptr<location> c,     // candidate
+	      const chordID &myID)
+{
+  vec<float> them = c->coords ();
+  if (!them.size ()) {
+    modlogger ("greedy_speed") << "No coordinates for " << c->id () << "\n";
+    return 0; // XXX weird
+  }
+  chordID id_dist = distance (myID, c->id ());
+  float f = Coord::distance_f (qc, them);
+  if (f < 1.0) f = 1.0;
+  u_int32_t coord_dist = (u_int32_t) f;
+  if (coord_dist == 0) {
+    char buf[32];
+    sprintf (buf, "%f", f);
+    modlogger ("greedy_speed") << "dist " << buf << " gave cd = 0\n";
+    return 0;
+  }
+  
+  return id_dist / coord_dist;
+}
+
+ptr<location>
+vnode_impl::closestgreedpred (const chordID &x, const vec<float> &n,
 			      const vec<chordID> &failed)
 {
-  chordID p = lookup_closestpred (x, failed);
-  vec<float> pcoords = locations->get_coords (p);
-  float dist = -1.0;
-  if (pcoords.size () > 0)
-    dist = Coord::distance_f (pcoords, n);
-  // XXX think about how to better software engineer this.
-  // search the next few successors for the best choice for the querier.
-  for (int i = 0; i < 3; i++) {
-    chordID next = locations->closestsuccloc (incID (p));
-    if (candidate_is_closer (next, myID, x, failed, n, dist, locations))
-      p = next;
+  ptr<location> p = lookup_closestpred (x, failed); // fallback
+  chordID bestspeed = 0;
+  
+  // the real "location table"
+  vec<ref<fingerlike> > sources;
+  sources.push_back (toes);
+  sources.push_back (fingers);
+  sources.push_back (successors);
+  while (sources.size () > 0) {
+    ref<fingerlike_iter> iter = sources.pop_front ()->get_iter ();
+    while (!iter->done ()) {
+      ptr<location> c = iter->next ();
+      
+      // Don't give back nodes that querier doesn't want.
+      if (in_vector (failed, c->id ())) continue;
+      // Do not overshoot, do not go backwards.
+      if (!between (myID, x, c->id ())) continue;
+
+      chordID speed = greedy_speed (n, c, myID);
+      if (speed > bestspeed) {
+	p = c;
+	bestspeed = speed;
+      }
+    }
   }
+  
   return p;
 }
 
@@ -391,18 +446,18 @@ vnode_impl::closestcoordpred (const chordID &x, const vec<float> &n,
  * This code assumes that myID is not the predecessor of x; in this
  * case, testrange should be "inrange" and not doing this stuff.
  */
-chordID
+ptr<location>
 vnode_impl::closestproxpred (const chordID &x, const vec<float> &n,
 			     const vec<chordID> &failed)
 {
-  chordID p = myID;
+  ptr<location> p = me_;
   
   float mindist = -1.0;
 
   ref<fingerlike_iter> iter = toes->get_iter ();
   while (!iter->done ()) {
-    chordID c = iter->next ();
-    if (candidate_is_closer (c, myID, x, failed, n, mindist, locations))
+    ptr<location> c = iter->next ();
+    if (candidate_is_closer (c, myID, x, failed, n, mindist))
       p = c;
   }
   // We have a toe that makes progress and is acceptable to the
@@ -414,12 +469,12 @@ vnode_impl::closestproxpred (const chordID &x, const vec<float> &n,
   // If we happen to span the key in our successor _list_, then
   // attempt to send to some close node in the last half of the
   // successor list, so that for fetches, you will almost definitely win.
-  vec<chord_node> sl = succs ();
+  vec<ptr<location> > sl = succs ();
   size_t sz = sl.size ();
-  if (sz > 1 && between (sl[0].x, sl[sz - 1].x, x)) {
-    for (u_int i = sz / 2; i < sz; i++) {
-      if (candidate_is_closer (sl[i].x, myID, x, failed, n, mindist, locations))
-	p = sl[i].x;
+  if (sz > 1 && between (sl[0]->id (), sl[sz - 1]->id (), x)) {
+    for (u_int i = 0; i < sz; i++) {
+      if (candidate_is_closer (sl[i], myID, x, failed, n, mindist))
+	p = sl[i];
     }
   }
   if (mindist >= 0.0)
@@ -427,9 +482,9 @@ vnode_impl::closestproxpred (const chordID &x, const vec<float> &n,
 
   // Okay, we are just too far away, let's just go as far as we can
   // with the fingers.
-  chordID f = fingers->closestpred (x, failed);
-  chordID u = successors->closestpred (x, failed);
-  if (between (myID, f, u)) 
+  ptr<location> f = fingers->closestpred (x, failed);
+  ptr<location> u = successors->closestpred (x, failed);
+  if (between (myID, f->id (), u->id ())) 
     p = f;
   else
     p = u;
@@ -437,16 +492,15 @@ vnode_impl::closestproxpred (const chordID &x, const vec<float> &n,
   return p;
 }
 
-chordID
+ptr<location> 
 vnode_impl::lookup_closestpred (const chordID &x, const vec<chordID> &failed)
 {
-  chordID s;
+  ptr<location> s;
   
   switch (lookup_mode) {
   case CHORD_LOOKUP_PROXIMITY:
     {
-      vec<float> me = locations->get_coords (my_ID ());
-      s = closestproxpred (x, me, failed);
+      s = closestproxpred (x, me_->coords (), failed);
       break;
     }
   case CHORD_LOOKUP_FINGERLIKE:
@@ -454,9 +508,9 @@ vnode_impl::lookup_closestpred (const chordID &x, const vec<chordID> &failed)
     break;
   case CHORD_LOOKUP_FINGERSANDSUCCS:
     {
-      chordID f = fingers->closestpred (x, failed);
-      chordID u = successors->closestpred (x, failed);
-      if (between (myID, f, u)) 
+      ptr<location> f = fingers->closestpred (x, failed);
+      ptr<location> u = successors->closestpred (x, failed);
+      if (between (myID, f->id (), u->id ())) 
 	s = f;
       else
 	s = u;
@@ -473,17 +527,16 @@ vnode_impl::lookup_closestpred (const chordID &x, const vec<chordID> &failed)
 }
 
 
-chordID
+ptr<location>
 vnode_impl::lookup_closestpred (const chordID &x)
 {
-  chordID s;
+  ptr<location> s;
   
   switch (lookup_mode) {
   case CHORD_LOOKUP_PROXIMITY:
     {
       vec<chordID> failed;
-      vec<float> me = locations->get_coords (my_ID ());
-      s = closestproxpred (x, me, failed);
+      s = closestproxpred (x, me_->coords (), failed);
       break;
     }
   case CHORD_LOOKUP_FINGERLIKE:
@@ -491,9 +544,9 @@ vnode_impl::lookup_closestpred (const chordID &x)
     break;
   case CHORD_LOOKUP_FINGERSANDSUCCS:
     {
-      chordID f = fingers->closestpred (x);
-      chordID u = successors->closestpred (x);
-      if (between (myID, f, u)) 
+      ptr<location> f = fingers->closestpred (x);
+      ptr<location> u = successors->closestpred (x);
+      if (between (myID, f->id (), u->id ())) 
 	s = f;
       else
 	s = u;
@@ -516,7 +569,7 @@ vnode_impl::stabilize (void)
 }
 
 void
-vnode_impl::join (const chord_node &n, cbjoin_t cb)
+vnode_impl::join (ptr<location> n, cbjoin_t cb)
 {
   ptr<chord_findarg> fa = New refcounted<chord_findarg> ();
   fa->x = incID (myID);
@@ -526,7 +579,7 @@ vnode_impl::join (const chord_node &n, cbjoin_t cb)
 }
 
 void 
-vnode_impl::join_getsucc_cb (const chord_node n,
+vnode_impl::join_getsucc_cb (ptr<location> n,
 			     cbjoin_t cb, chord_nodelistres *route,
 			     clnt_stat err)
 {
@@ -567,10 +620,9 @@ vnode_impl::doget_successor (user_args *sbp)
 {
   ndogetsuccessor++;
   
-  chordID s = successors->succ ();
+  ptr<location> s = my_succ ();
   chord_noderes res(CHORD_OK);
-  bool ok = locations->get_node (s, res.resok);
-  assert (ok);
+  s->fill_node (*res.resok);
   sbp->reply (&res);
 }
 
@@ -578,10 +630,9 @@ void
 vnode_impl::doget_predecessor (user_args *sbp)
 {
   ndogetpredecessor++;
-  chordID p = my_pred ();
+  ptr<location> p = my_pred ();
   chord_noderes res(CHORD_OK);
-  bool ok = locations->get_node (p, res.resok);
-  assert (ok);
+  p->fill_node (*res.resok);
   sbp->reply (&res);
 }
 
@@ -635,7 +686,7 @@ vnode_impl::dotestrange_findclosestpred (user_args *sbp, chord_testandfindarg *f
 {
   ndotestrange++;
   chordID x = fa->x;
-  chordID succ = my_succ ();
+  chordID succ = my_succ ()->id ();
 
   chord_testandfindres *res = New chord_testandfindres ();  
   if (betweenrightincl(myID, succ, x) ) {
@@ -644,18 +695,17 @@ vnode_impl::dotestrange_findclosestpred (user_args *sbp, chord_testandfindarg *f
     res->inrange->n.setsize (iter->size ());
     size_t i = 0;
     while (!iter->done ()) {
-      chordID n = iter->next ();
-      bool ok = locations->get_node (n, &res->inrange->n[i++]);
-      assert (ok);
+      ptr<location> n = iter->next ();
+      n->fill_node (res->inrange->n[i++]);
     }
   } else {
     res->set_status (CHORD_NOTINRANGE);
     vec<chordID> f;
     for (unsigned int i=0; i < fa->failed_nodes.size (); i++)
       f.push_back (fa->failed_nodes[i]);
-    chordID p;
+    ptr<location> p;
     if (server_selection_mode & 2) {
-      p = closestcoordpred (fa->x, convert_coords (sbp->transport_header ()),
+      p = closestgreedpred (fa->x, convert_coords (sbp->transport_header ()),
 			    f);
     } else if (lookup_mode == CHORD_LOOKUP_PROXIMITY) {
       // Don't use lookup_closestpred which returns things from the
@@ -665,16 +715,14 @@ vnode_impl::dotestrange_findclosestpred (user_args *sbp, chord_testandfindarg *f
     } else {
       p = lookup_closestpred (fa->x, f);
     }
-    bool ok = locations->get_node (p, &res->notinrange->n);
-    assert (ok);
+    p->fill_node (res->notinrange->n);
     
     ref<fingerlike_iter> iter = successors->get_iter ();
     res->notinrange->succs.setsize (iter->size ());
     size_t i = 0;
     while (!iter->done ()) {
-      chordID n = iter->next ();
-      bool ok = locations->get_node (n, &res->notinrange->succs[i++]);
-      assert (ok);
+      ptr<location> n = iter->next ();
+      n->fill_node (res->notinrange->succs[i++]);
     }
   }
 
@@ -705,10 +753,9 @@ void
 vnode_impl::dofindclosestpred (user_args *sbp, chord_findarg *fa)
 {
   chord_noderes res(CHORD_OK);
-  chordID p = lookup_closestpred (fa->x);
+  ptr<location> p = lookup_closestpred (fa->x);
   ndofindclosestpred++;
-  bool ok = locations->get_node (p, res.resok);
-  assert (ok);
+  p->fill_node (*res.resok);
   assert (0);
   //  sbp->reply (&res);
 }
@@ -730,7 +777,7 @@ vnode_impl::doalert (user_args *sbp, chord_nodearg *na)
     // check whether we cannot reach x either
     chord_noderes *res = New chord_noderes (CHORD_OK);
     ptr<chordID> v = New refcounted<chordID> (na->n.x);
-    doRPC (na->n.x, chord_program_1, CHORDPROC_GETSUCCESSOR, v, res,
+    doRPC (na->n, chord_program_1, CHORDPROC_GETSUCCESSOR, v, res,
 	   wrap (mkref (this), &vnode_impl::doalert_cb, res, na->n.x));
   }
   chordstat res = CHORD_OK;
@@ -783,7 +830,8 @@ vnode_impl::dogetpred_ext (user_args *sbp)
 {
   ndogetpred_ext++;
   chord_nodeextres res(CHORD_OK);
-  locations->fill_getnodeext (*res.resok, my_pred ());
+  ptr<location> p = my_pred ();
+  p->fill_node_ext(*res.resok);
   sbp->reply (&res);
 }
 
@@ -792,17 +840,17 @@ vnode_impl::dosecfindsucc (user_args *sbp, chord_testandfindarg *fa)
 {
   size_t i = 0;
   chord_nodelistres *res = New chord_nodelistres (CHORD_OK);
-  chordID s = fingers->closestpred (fa->x);
+  ptr<location> s = fingers->closestpred (fa->x);
   // XXX what if there aren't that many truely maintained successors
   //     in the location table???
-  chordID start = s;
+  ptr<location> start = s;
 
   vec<chord_node> answers;
   chord_node n;
   for (i = 0; i < NSUCC; i++) {
-    locations->get_node (s, &n);
+    s->fill_node (n);
     answers.push_back (n);
-    s = locations->closestsuccloc (incID (s));
+    s = locations->closestsuccloc (incID (s->id ()));
     if (s == start) break;
   }
   res->resok->nlist.setsize (answers.size ());
@@ -837,6 +885,7 @@ vnode_impl::dofindtoes (user_args *sbp, chord_findtoes_arg *ta)
 {
   chord_nodelistres res (CHORD_OK);
   vec<chordID> r;
+  vec<ptr<location> > rr;
   vec<float> coords;
   chord_node n;
   unsigned int maxret;
@@ -852,12 +901,13 @@ vnode_impl::dofindtoes (user_args *sbp, chord_findtoes_arg *ta)
 
     //iterate through toe table and return at most distance away from n
     for(unsigned int l = 0; l < MAX_LEVELS; l++){
-      vec<chordID> t = toes->get_toes(l);      
+      vec<ptr<location> > t = toes->get_toes(l);      
       for(unsigned int i = 0; i < t.size(); i++){
-	if(in_vector(r, t[i]))
+	if(in_vector(r, t[i]->id ()))
 	   continue;
-	if(Coord::distance_f(coords, locations->get_coords(t[i])) < maxd){ 
-	  r.push_back(t[i]);
+	if (Coord::distance_f (coords, t[i]->coords()) < maxd){ 
+	  r.push_back(t[i]->id ());
+	  rr.push_back (t[i]);
 	  if(r.size() >= maxret)
 	    break;
 	}
@@ -870,8 +920,7 @@ vnode_impl::dofindtoes (user_args *sbp, chord_findtoes_arg *ta)
     
     res.resok->nlist.setsize (r.size ());
     for (unsigned int i = 0; i < r.size (); i++)
-      locations->get_node(r[i], &res.resok->nlist[i]);
-    
+      rr[i]->fill_node (res.resok->nlist[i]);
   } 
   
   //for(unsigned int i = 0 ; i < res.resok->nlist.size() ; i++){
@@ -890,10 +939,10 @@ vnode_impl::dogettoes (user_args *sbp, chord_gettoes_arg *ta)
   chord_nodelistextres res (CHORD_OK);
   ndogettoes++;
   if(toes){
-    vec<chordID> t = toes->get_toes (ta->level);      
+    vec<ptr<location> > t = toes->get_toes (ta->level);      
     res.resok->nlist.setsize (t.size ());
     for (unsigned int i = 0; i < t.size (); i++) {
-      locations->fill_getnodeext (res.resok->nlist[i], t[i]);
+      t[i]->fill_node_ext (res.resok->nlist[i]);
     }
   } 
 
@@ -905,18 +954,7 @@ vnode_impl::dogetsucclist (user_args *sbp)
 {
   ndogetsucclist++;
   chord_nodelistres res (CHORD_OK);
-
-  vec<chord_node> s = succs ();
-  chord_node self;
-  bool ok = locations->get_node (my_ID (), &self);
-  assert (ok);
-
-  // the succs we send back starts with 'us'
-  res.resok->nlist.setsize (1 + s.size ());
-  res.resok->nlist[0] = self;
-  for (u_int i = 0; i < s.size (); i++)
-    res.resok->nlist[i + 1] = s[i];
-
+  successors->fill_nodelistres (&res);
   sbp->reply (&res);
 }
 
@@ -925,33 +963,30 @@ vnode_impl::dodebruijn (user_args *sbp, chord_debruijnarg *da)
 {
   ndodebruijn++;
   chord_debruijnres *res;
-  chordID succ = my_succ ();
+  ptr<location> succ = my_succ ();
 
   //  warnx << myID << " dodebruijn: succ " << succ << " x " << da->x << " i " 
   // << da->i << " between " << betweenrightincl (myID, succ, da->i) 
   // << " k " << da->k << "\n";
 
   res = New chord_debruijnres ();
-  if (betweenrightincl (myID, succ, da->x)) {
+  if (betweenrightincl (myID, succ->id (), da->x)) {
     res->set_status(CHORD_INRANGE);
-    bool ok = locations->get_node (succ, &res->inres->node);
-    assert (ok);
+    succ->fill_node (res->inres->node);
   } else {
     res->set_status (CHORD_NOTINRANGE);
-    if (betweenrightincl (myID, succ, da->i)) {
+    if (betweenrightincl (myID, succ->id (), da->i)) {
       // ptr<debruijn> d = dynamic_cast< ptr<debruijn> >(fingers);
       // assert (d);  // XXXX return error
       // chordID nd =  d->debruijnprt (); 
-      chordID nd = lookup_closestpred (doubleID (myID, logbase));
-      bool ok = locations->get_node (nd, &res->noderes->node);
-      assert (ok);
+      ptr<location> nd = lookup_closestpred (doubleID (myID, logbase));
+      nd->fill_node (res->noderes->node);
       res->noderes->i = doubleID (da->i, logbase);
       res->noderes->i = res->noderes->i | topbits (logbase, da->k);
       res->noderes->k = shifttopbitout (logbase, da->k);
     } else {
-      chordID x = lookup_closestpred (da->i); // succ
-      bool ok = locations->get_node (x, &res->noderes->node);
-      assert (ok);
+      ptr<location> x = lookup_closestpred (da->i); // succ
+      x->fill_node (res->noderes->node);
       res->noderes->i = da->i;
       res->noderes->k = da->k;
     }
@@ -996,10 +1031,8 @@ vnode_impl::dofindroute_cb (user_args *sbp, chord_findarg *fa,
   } else {
     chord_nodelistres res (CHORD_OK);
     res.resok->nlist.setsize (r.size ());
-    for (unsigned int i = 0; i < r.size (); i++) {
-      bool ok = locations->get_node (r[i], &res.resok->nlist[i]);
-      assert (ok);
-    }
+    for (unsigned int i = 0; i < r.size (); i++)
+      r[i]->fill_node (res.resok->nlist[i]);
     sbp->reply (&res);
   }
 }

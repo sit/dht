@@ -28,6 +28,7 @@
 
 #include <chord.h>
 #include <chord_types.h>
+#include <location.h>
 
 #include "dhash_common.h"
 #include "dhash.h"
@@ -135,7 +136,7 @@ dhashgateway::retrieve_cb (svccb *sbp, dhash_stat stat, ptr<dhash_block> block, 
     res.resok->retries = block->retries;
     res.resok->path.setsize (path.size ());
     for (u_int i = 0; i < path.size (); i++) 
-      res.resok->path[i] = path[i];
+      res.resok->path[i] = path[i]->id ();
     res.resok->times.setsize (block->times.size ());
     for (u_int i = 0; i < block->times.size (); i++)
       res.resok->times[i] = block->times[i];

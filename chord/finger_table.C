@@ -1,6 +1,9 @@
 #include "chord.h"
 #include "finger_table.h"
-#include "location.h"
+#include <id_utils.h>
+#include <misc_utils.h>
+#include <location.h>
+#include <locationtable.h>
 
 // fingers are now zero-indexed!
 finger_table::finger_table ()  
@@ -16,85 +19,85 @@ finger_table::finger_table ()
 }
 
 void 
-finger_table::init (ptr<vnode> v, ptr<locationtable> locs, chordID ID)
+finger_table::init (ptr<vnode> v, ptr<locationtable> locs)
 {
-  locations  = locs;
   myvnode = v;
-  myID = ID;
+  locations = locs;
+  myID = v->my_ID ();
   
   for (int i = 0; i < NBIT; i++) {
     starts[i] = successorID (myID, i);
-    fingers[i] = myID;
+    fingers[i] = NULL;
     locations->pinsucc (starts[i]);
     // locations->pinsucclist (starts[i]);
   }
 
 }
 
-chordID
+ptr<location>
 finger_table::finger (int i)
 {
   // adjusts in "real time"
   return locations->closestsuccloc (starts[i]);
 }
 
-chordID
+ptr<location>
 finger_table::operator[] (int i)
 {
   return finger (i);
 }
 
-chordID
+ptr<location>
 finger_table::closestsucc (const chordID &x)
 {
-  chordID n;
+  ptr<location> n;
 
   for (int i = 0; i < NBIT; i++) {
     n = finger (i);
-    if (between (myID, n, x))
+    if (between (myID, n->id (), x))
       return n;
   }
-  return myID;
+  return myvnode->my_location ();
 }
 
-chordID
+ptr<location>
 finger_table::closestpred (const chordID &x, vec<chordID> failed)
 {
-  chordID n;
+  ptr<location> n;
 
   for (int i = NBIT - 1; i >= 0; i--) {
     n = finger (i);
-    if (between (myID, x, n) && (!in_vector (failed, n)))
+    if (between (myID, x, n->id ()) && (!in_vector (failed, n->id ())))
       return n;
   }
   // warn << "no good fingers, returning myID = " << myID << "\n";
-  return myID;
+  return myvnode->my_location ();
 }
 
 
-chordID
+ptr<location>
 finger_table::closestpred (const chordID &x)
 {
-  chordID n;
+  ptr<location> n;
 
   for (int i = NBIT - 1; i >= 0; i--) {
     n = finger (i);
-    if (between (myID, x, n))
+    if (between (myID, x, n->id ()))
       return n;
   }
-  return myID;
+  return myvnode->my_location ();
 }
 
 void
 finger_table::print ()
 {
-  chordID curfinger = myID;
-  chordID prevfinger = myID;
+  ptr<location> curfinger = myvnode->my_location ();
+  ptr<location> prevfinger = curfinger;
   for (int i = 0; i < NBIT; i++) {
     curfinger = finger (i);
     if (curfinger != prevfinger) {
       warnx << myID << ": finger: " << i << " : " << starts[i]
-	    << " : succ " << finger (i) << "\n";
+	    << " : succ " << curfinger->id () << "\n";
       prevfinger = curfinger;
     }
   }
@@ -106,12 +109,10 @@ finger_table::fill_nodelistres (chord_nodelistres *res)
   ref<fingerlike_iter> iter = get_iter ();
   res->resok->nlist.setsize (iter->size () + 1);
 
-  bool ok = locations->get_node (myID, &res->resok->nlist[0]);
-  assert (ok);
+  myvnode->my_location ()->fill_node (res->resok->nlist[0]);
   for (size_t i = 1; i <= iter->size (); i++) {
-    chordID f = iter->next ();
-    ok = locations->get_node (f, &res->resok->nlist[i]);
-    assert (ok);
+    ptr<location> f = iter->next ();
+    f->fill_node (res->resok->nlist[i]);
   }
 }
 
@@ -121,10 +122,10 @@ finger_table::fill_nodelistresext (chord_nodelistextres *res)
   ref<fingerlike_iter> iter = get_iter ();
   res->resok->nlist.setsize (iter->size () + 1);
 
-  locations->fill_getnodeext (res->resok->nlist[0], myID);
+  myvnode->my_location ()->fill_node_ext (res->resok->nlist[0]);
   for (size_t i = 1; i <= iter->size (); i++) {
-    chordID f = iter->next ();
-    locations->fill_getnodeext (res->resok->nlist[i], f);
+    ptr<location> f = iter->next ();
+    f->fill_node_ext (res->resok->nlist[i]);
   }
 }
 
@@ -169,10 +170,10 @@ finger_table::stabilize_finger ()
       (n, wrap (this, &finger_table::stabilize_findsucc_cb, n, i));
   } else {
     // warnx << myID << ": stabilize_finger: check finger " << i << "\n";    
-    chordID n = fingers[i];
+    ptr<location> n = fingers[i];
     myvnode->get_predecessor
       (n, wrap (this, &finger_table::stabilize_finger_getpred_cb, 
-		n, i));
+		n->id (), i));
   }  
   // Update f in one of the above callbacks.
 }
@@ -195,7 +196,7 @@ finger_table::stabilize_finger_getpred_cb (chordID dn, int i, chord_node p,
       // predecessor is too far back, no need to do anything for this
       // or any of the other fingers for which n is the successor
       nfastfinger++;
-      while (i < NBIT && finger (i) == dn)
+      while (i < NBIT && finger (i)->id () == dn)
 	i++;
       f = i;
     } else {
@@ -223,7 +224,7 @@ finger_table::stabilize_findsucc_cb (chordID dn, int i,
     stable_fingers = false;
     // Next round, check this finger again.
   } else {
-    while (i < NBIT && finger (i) == succs[0].x)
+    while (i < NBIT && finger (i)->id () == succs[0].x)
       i++;
     f = i;
 #if 0
@@ -245,8 +246,8 @@ ref<fingerlike_iter>
 finger_table::get_iter ()
 {
   ref<ftiter> iter = New refcounted<ftiter> ();
-  chordID curfinger = myID;
-  chordID prevfinger = myID;
+  ptr<location> curfinger = myvnode->my_location ();
+  ptr<location> prevfinger = curfinger;
 
   for (int i = 0; i < NBIT; i++) {
     curfinger = finger (i);

@@ -58,7 +58,7 @@ class route_iterator {
   bool stop;
   bool last_hop;
 
-  route failed_nodes;
+  vec<chordID> failed_nodes;
 
  public:
   route_iterator (ptr<vnode> vi, chordID xi) :
@@ -78,10 +78,10 @@ class route_iterator {
   virtual ~route_iterator () { *deleted = true; };
 
   vec<chord_node> successors () { return successors_; }
-  chordID last_node () { return search_path.back (); };
+  ptr<location> last_node () { return search_path.back (); };
   chordID key () { return x; };
   route path () { return search_path; };
-  route failed_path () { return failed_nodes; };
+  vec<chordID> failed_path () { return failed_nodes; };
 
   chordstat status () { return r; };
 
@@ -92,7 +92,7 @@ class route_iterator {
   virtual void send (chordID guess) = 0;
   virtual void send (bool ucs) = 0;
 
-  virtual chordID pop_back () = 0;
+  virtual ptr<location> pop_back () = 0;
 
   static char * marshall_upcall_args (rpc_program *prog, 
 				      int uc_procno,
@@ -107,7 +107,7 @@ class route_iterator {
 };
 
 class route_chord : public route_iterator {
-  void make_hop (chordID &n);
+  void make_hop (ptr<location> n);
   void make_hop_cb (ptr<bool> del, chord_testandfindres *res, clnt_stat err);
   void send_hop_cb (bool done);
 
@@ -127,14 +127,14 @@ class route_chord : public route_iterator {
   void next_hop ();
 
   void on_failure (chordID f);
-  chordID pop_back ();
+  ptr<location> pop_back ();
 };
 
 class route_debruijn : public route_iterator {
   int hops;
-  route virtual_path;
-  route k_path;
-  void make_hop (chordID &n, chordID &x, chordID &k, chordID &i);
+  vec<chordID> virtual_path;
+  vec<chordID> k_path;
+  void make_hop (ptr<location> n, chordID &x, chordID &k, chordID &i);
   void make_hop_cb (ptr<bool> del, chord_debruijnres *res, clnt_stat err);
   void send_hop_cb (bool done);
 
@@ -151,7 +151,7 @@ class route_debruijn : public route_iterator {
   virtual void first_hop (cbhop_t cb, chordID guess);
   void print ();
   void next_hop ();
-  chordID pop_back ();
+  ptr<location> pop_back ();
 };
 
 class route_factory {

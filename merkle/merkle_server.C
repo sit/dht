@@ -1,4 +1,5 @@
 #include "merkle_server.h"
+#include <location.h>
 #include <comm.h>
 #include "transport_prot.h"
 
@@ -14,13 +15,13 @@ merkle_server::merkle_server (merkle_tree *ltree, addHandler_t addHandler,
 
 
 void
-merkle_server::missing (chord_node n, bigint key)
+merkle_server::missing (ptr<location> n, bigint key)
 {
   (*missingfnc) (n, key);
 }
 
 void
-merkle_server::doRPC (chord_node dst, RPC_delay_args *args)
+merkle_server::doRPC (ptr<location> dst, RPC_delay_args *args)
 {
   host_node->doRPC (dst, args->prog, args->procno, args->in, args->out, args->cb);
 }
@@ -49,10 +50,11 @@ merkle_server::dispatch (user_args *sbp)
       // Get remote sides ip:port and chordID
       chord_node from;
       sbp->fill_from (&from);
+      ptr<location> l = New refcounted<location> (from);
 
       compare_nodes (ltree, arg->rngmin, arg->rngmax, lnode, rnode,
-		     wrap (this, &merkle_server::missing, from),
-		     wrap (this, &merkle_server::doRPC, from));
+		     wrap (this, &merkle_server::missing, l),
+		     wrap (this, &merkle_server::doRPC, l));
 
       sendnode_res res (MERKLE_OK);
       format_rpcnode (ltree, lnode_depth, lnode_prefix, lnode, &res.resok->node);

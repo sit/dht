@@ -4,7 +4,7 @@
 #include "chord_types.h"
 #include "ihash.h"
 #include "arpc.h"
-#include "chord_util.h"
+#include <misc_utils.h>
 #include "aclnt_chord.h"
 
 class location;
@@ -204,7 +204,7 @@ class stp_manager : public rpc_manager {
   bool room_in_window ();
  public:
   void stats ();
-		   
+
   void rexmit (long seqno);
   long doRPC (ptr<location> from, ptr<location> l, const rpc_program &prog, int procno,
 	      ptr<void> in, void *out, aclnt_cb cb, long fake_seqno = 0);
@@ -215,7 +215,10 @@ class stp_manager : public rpc_manager {
   ~stp_manager ();
 };
 
+extern int chord_rpc_style;
+extern const int CHORD_RPC_STP;  // our own rpc style
+extern const int CHORD_RPC_SFSU; // libarpc over UDP
+extern const int CHORD_RPC_SFST; // libarpc over TCP
+extern const int CHORD_RPC_SFSBT; // libarpc over TCP, no caching
+
 #endif /* _SFSNET_COMM_H_ */
-
-
-

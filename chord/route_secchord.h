@@ -5,6 +5,8 @@
 #include "route.h"
 #include "skiplist.h"
 
+class location;
+
 /**
  * A secure variant of Chord routing, utilizing successor lists at each hop.
  * The route returned by path contains a subset of the actual nodes contacted.
@@ -16,13 +18,11 @@
 class route_secchord : public route_iterator {
   struct node {
     chordID n_;
-    chord_node cn_;
+    ptr<location> cn_;
     u_int count_;
     sklist_entry<node> sortlink_;
 
-    node (const chord_node &n) : n_ (n.x), cn_ (n), count_ (0) {};
-    node (const chordID &n, const net_address &r) :
-      n_ (n), count_ (0) { cn_.x = n; cn_.r = r; };
+    node (ptr<location> l);
   };
   skiplist<node, chordID, &node::n_, &node::sortlink_> nexthops_;
   // An indicator used to ensure that any upcall is delivered to the
@@ -36,8 +36,7 @@ class route_secchord : public route_iterator {
   void clear_nexthops ();
 
   u_int outstanding_; // number of outstanding RPCs for this hop.
-  void next_hop_cb (ptr<bool> del, chord_node dst,
-		    chord_nodelistres *res, clnt_stat err);
+  void next_hop_cb (ptr<bool> del, chord_nodelistres *res, clnt_stat err);
   void send_hop_cb (bool done);
   
  public:
@@ -53,7 +52,7 @@ class route_secchord : public route_iterator {
   void first_hop (cbhop_t cb, bool ucs = false);
   void first_hop (cbhop_t cb, chordID guess);
   void next_hop ();
-  chordID pop_back ();
+  ptr<location> pop_back ();
 };
 
 class secchord_route_factory : public route_factory {

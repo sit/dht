@@ -23,6 +23,8 @@
  *  WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+#include <misc_utils.h>
+
 #include "chord.h"
 #include "dhash.h"
 #include "dhashgateway.h"

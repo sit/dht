@@ -1,8 +1,14 @@
 #include "chord.h"
-#include "location.h"
+#include <location.h>
+#include <locationtable.h>
 #include "route_secchord.h"
 
 #define NSUCC 16
+
+route_secchord::node::node (ptr<location> l)
+  : n_ (l->id ()), cn_ (l), count_ (0)
+{
+}
 
 // XXX should timeout if outstanding is too high for too long? maybe
 //     can tolerate a few failures.
@@ -119,9 +125,9 @@ route_secchord::first_hop (cbhop_t cbi, bool ucs)
   cb = cbi;
 
   clear_nexthops ();
-  vec<chord_node> sl = v->succs ();
+  vec<ptr<location> > sl = v->succs ();
   for (u_int i = 0; i < sl.size (); i++) {
-    node *n = New node (sl[i].x, sl[i].r);
+    node *n = New node (sl[i]);
     nexthops_.insert (n); // disregard return val; no dupes in first hop
     warnx << v->my_ID () << ": secchord::first_hop: inserting " << n->n_ << "\n";
   }
@@ -163,7 +169,7 @@ route_secchord::next_hop ()
 	  << " send secfindsucc to " << n->n_ << "\n";
     v->doRPC (n->cn_, chord_program_1, CHORDPROC_SECFINDSUCC,
 	      arg, res,
-	      wrap (this, &route_secchord::next_hop_cb, deleted, n->cn_, res));
+	      wrap (this, &route_secchord::next_hop_cb, deleted, res));
     n = nexthops_.next (n);
   }
   // Now we can forget about these guys, in preparation for receiving
@@ -173,7 +179,7 @@ route_secchord::next_hop ()
 }
 
 void
-route_secchord::next_hop_cb (ptr<bool> deleted, chord_node dst,
+route_secchord::next_hop_cb (ptr<bool> deleted, 
 			     chord_nodelistres *res, clnt_stat err)
 {
   if (*deleted) return;
@@ -195,10 +201,13 @@ route_secchord::next_hop_cb (ptr<bool> deleted, chord_node dst,
 	continue; // XXX one bad node in reply ==> untrustworthy source??
       node *n = nexthops_.search (res->resok->nlist[i].x);
       if (!n) {
-	n = New node (res->resok->nlist[i]);
-	warnx << v->my_ID () <<  ": secchord::next_hop: " << x << " attempting to insert " << n->n_ << "\n";
-	bool ok = nexthops_.insert (n);
-	assert (ok);
+	ptr<location> l = New refcounted<location> (res->resok->nlist[i]);
+	if (l->vnode () >= 0) {
+	  n = New node (l);
+	  warnx << v->my_ID () <<  ": secchord::next_hop: " << x << " attempting to insert " << n->n_ << "\n";
+	  bool ok = nexthops_.insert (n);
+	  assert (ok);
+	}
       } else {
 	n->count_++;
       }
@@ -238,14 +247,14 @@ route_secchord::next_hop_cb (ptr<bool> deleted, chord_node dst,
     }
     // XXX only need to check to see if pushing the same last guy again?
     for (size_t i = search_path.size (); i > 0; i--)
-      if (s->n_ == search_path[i - 1]) {
+      if (s->cn_ == search_path[i - 1]) {
 	warnx << "+++++ but already done??? XXX\n";
 	print ();
 	cb (true);
 	return;
       }
     warnx << "+++++ route search " << x << " push back " << s->n_ <<"\n";
-    search_path.push_back (s->n_);
+    search_path.push_back (s->cn_);
     print ();
 
     cb (done);
@@ -271,7 +280,7 @@ route_secchord::send_hop_cb (bool done)
   if (!done) next_hop ();
 }
 
-chordID
+ptr<location>
 route_secchord::pop_back () 
 {
   return search_path.pop_back ();
@@ -282,7 +291,7 @@ route_secchord::print ()
 {
   warnx << v->my_ID () << " searching for " << x << "\n";
   for (unsigned i = 0; i < search_path.size (); i++) {
-    warnx << " " << search_path[i] << "\n";
+    warnx << " " << search_path[i]->id () << "\n";
   }
   warnx << "++++++\n";
 }

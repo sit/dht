@@ -6,6 +6,8 @@
 #include "async.h"
 #include "chord_prot.h"
 #include "transport_prot.h"
+#include "misc_utils.h"
+#include "chord_util.h"
 
 #define WINX 700
 #define WINY 700
@@ -1145,7 +1147,7 @@ init_color_list (char *filename)
 	!gdk_colormap_alloc_color (cmap, &c, FALSE, TRUE))
       fatal << "couldn't get the color I wanted\n";
     p.c = c;
-    p.lat = lat * 1000 * 100; //convert from ms
+    p.lat = lat * 1000; //convert from ms to microsec
     lat_map.push_back (p);
   }
   assert (lat_map.size () != 0);

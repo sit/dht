@@ -30,7 +30,7 @@
 
 #include <assert.h>
 #include <async.h>
-#include "chord_util.h"
+#include <misc_utils.h>
 #include "stabilize.h"
 
 // The code in this file deals with stabilization: a continuous

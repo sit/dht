@@ -1,15 +1,15 @@
 #include "dhash_common.h"
 #include <dhash.h>
+#include <chord_types.h>
 #include <route.h>
 #include "route_dhash.h"
-#include <location.h>
+#include <locationtable.h>
 #include <chord.h>
-#include <chord_types.h>
-#include "sfsmisc.h"
-#include "arpc.h"
-#include "crypt.h"
+#include <sfsmisc.h>
+#include <arpc.h>
+#include <crypt.h>
 #include <sys/time.h>
-#include "chord_util.h"
+#include <misc_utils.h>
 #ifdef DMALLOC
 #include "dmalloc.h"
 #endif
