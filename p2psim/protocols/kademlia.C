@@ -40,28 +40,28 @@ unsigned Kademlia::alpha = 0;
 unsigned Kademlia::stabilize_timer = 0;
 unsigned Kademlia::refresh_rate = 0;
 
-unsigned Kademlia::_rpc_bytes = 0;
-unsigned Kademlia::_good_rpcs = 0;
-unsigned Kademlia::_bad_rpcs = 0;
-unsigned Kademlia::_ok_by_reaper = 0;
-unsigned Kademlia::_timeouts_by_reaper = 0;
+double Kademlia::_rpc_bytes = 0;
+double Kademlia::_good_rpcs = 0;
+double Kademlia::_bad_rpcs = 0;
+double Kademlia::_ok_by_reaper = 0;
+double Kademlia::_timeouts_by_reaper = 0;
 
-unsigned Kademlia::_good_lookups = 0;
-unsigned Kademlia::_lookup_dead_node = 0;
-unsigned Kademlia::_ok_failures = 0;
-unsigned Kademlia::_bad_failures = 0;
+double Kademlia::_good_lookups = 0;
+double Kademlia::_lookup_dead_node = 0;
+double Kademlia::_ok_failures = 0;
+double Kademlia::_bad_failures = 0;
 
 Time Kademlia::_good_total_latency = 0;
 Time Kademlia::_good_lookup_latency = 0;
 Time Kademlia::_good_ping_latency = 0;
-unsigned Kademlia::_good_timeouts = 0;
+double Kademlia::_good_timeouts = 0;
 
-unsigned Kademlia::_good_hops = 0;
+double Kademlia::_good_hops = 0;
 Time Kademlia::_good_hop_latency = 0;
 
 Time Kademlia::_bad_lookup_latency = 0;
-unsigned Kademlia::_bad_timeouts = 0;
-unsigned Kademlia::_bad_hops = 0;
+double Kademlia::_bad_timeouts = 0;
+double Kademlia::_bad_hops = 0;
 Time Kademlia::_bad_hop_latency = 0;
 
 
@@ -195,18 +195,18 @@ Kademlia::~Kademlia()
         _ok_failures,
         _bad_failures,
 
-        (double) _good_total_latency / _good_lookups,
-        (double) _good_lookup_latency / _good_lookups,
-        (double) _good_ping_latency / _good_lookups,
+        _good_total_latency / _good_lookups,
+        _good_lookup_latency / _good_lookups,
+        _good_ping_latency / _good_lookups,
         _good_timeouts,
 
-        (double) _good_hops / _good_lookups,
-        (double) _good_hop_latency / _good_hops,
+        _good_hops / _good_lookups,
+        _good_hop_latency / _good_hops,
 
-        (double) _bad_lookup_latency / (_ok_failures + _bad_failures),
+        _bad_lookup_latency / (_ok_failures + _bad_failures),
         _bad_timeouts,
-        (double) _bad_hops / (_ok_failures + _bad_failures),
-        (double) _bad_hop_latency / (_ok_failures + _bad_failures));
+        _bad_hops / (_ok_failures + _bad_failures),
+        _bad_hop_latency / (_ok_failures + _bad_failures));
   }
 
   if(_all_kademlias) {
