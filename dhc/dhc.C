@@ -485,15 +485,18 @@ dhc::recv_newblock_ack (user_args *sbp, ptr<uint> ack_rcvd,
       dhc_put_res res; res.status = DHC_OK;
       sbp->reply (&res);
     }
-  } else {
-    print_error ("dhc:recv_newblock_ack", err, ack->status);
-    dhc_put_res res; 
-    if (err) 
-      res.status = DHC_CHORDERR;
-    else 
-      res.status = ack->status;
-    sbp->reply (&res);
-  }
+  } else
+    if (dhash_stat (err) == DHASH_RETRY)
+      recv_newblock (sbp);
+    else {
+      print_error ("dhc:recv_newblock_ack", err, ack->status);
+      dhc_put_res res; 
+      if (err) 
+	res.status = DHC_CHORDERR;
+      else 
+	res.status = ack->status;
+      sbp->reply (&res);
+    }
 }
 
 void 
