@@ -66,6 +66,8 @@ E2EGraph::latency(IPAddress ip1x, IPAddress ip2x, bool reply)
   }
   if (t < 0) {
     t = _med_lat; //a missing measurement, subsitute with median latency
+  }else if ((t == 0) &&(ip1!=ip2)) {
+    t = 1;
   }
   return (Time)t;
 }
