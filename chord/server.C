@@ -275,6 +275,10 @@ vnode_impl::doRPC_reply (svccb *sbp, void *res, const rpc_program &prog,
   int res_len = x.uio ()->resid ();
   void *marshalled_res = suio_flatten (x.uio ());
 
+#ifdef RPC_PROGRAM_STATS
+  prog.outreply_num[procno] += 1;
+  prog.outreply_bytes[procno] += res_len;
+#endif
 
   //stuff into a transport wrapper
   dorpc_res *rpc_res = New dorpc_res (DORPC_OK);
@@ -325,6 +329,11 @@ vnode_impl::doRPC (const chordID &ID, const rpc_program &prog, int procno,
     void *marshalled_args = suio_flatten (x.uio ());
     memcpy (arg->args.base (), marshalled_args, args_len);
     free (marshalled_args);
+
+#ifdef RPC_PROGRAM_STATS
+    prog.outcall_num[procno] += 1;
+    prog.outcall_bytes[procno] += args_len;
+#endif
 
     ref<dorpc_res> res = New refcounted<dorpc_res> (DORPC_OK);
     return locations->doRPC (ID, transport_program_1, TRANSPORTPROC_DORPC, 
