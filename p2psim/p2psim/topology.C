@@ -31,6 +31,7 @@ using namespace std;
 
 Topology::Topology()
 {
+  _med_lat = 0;
 }
 
 Topology::~Topology()

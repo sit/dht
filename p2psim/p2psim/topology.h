@@ -37,10 +37,12 @@ public:
   virtual void parse(ifstream&) = 0;
 
   virtual Time latency(IPAddress, IPAddress, bool = false) = 0;
+  virtual Time median_lat() { return _med_lat; } 
   virtual ~Topology();
 
 protected:
   Topology();
+  Time _med_lat;
 };
 
 #endif //  __TOPOLOGY_H
